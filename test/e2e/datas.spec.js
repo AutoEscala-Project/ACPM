@@ -20,22 +20,23 @@ async function mudarData(page, data) {
 }
 
 test.describe('Escala por data', () => {
-  test('cada data tem a sua escala; a nova data copia a demanda do dia anterior', async ({ page }) => {
+  // Retorno da operação (14/11): a demanda é zerada a cada dia; a agenda é o centro dos agendamentos
+  test('cada data tem a sua escala; a nova data começa com a demanda vazia', async ({ page }) => {
     await abrirComExemplo(page);
     await abrirEscala(page);
     const escalaDia11 = await lerEscala(page);
 
-    // A nova data já mostra a escala calculada com a demanda copiada
+    // A nova data começa sem ninguém voando: a demanda vem da agenda ("Importar da agenda")
     await mudarData(page, DEPOIS);
-    await expect(page.locator('#out .st')).toBeVisible();
-    expect((await lerEscala(page)).linhas.length).toBeGreaterThan(20);
+    await expect(page.locator('#out')).toContainText('Nenhum voo nesta data.');
     await irPara(page, 'dem');
-    await expect(page.locator('#dem tr[data-k="d"][data-mid="0"]')).toHaveCount(20);
-    await expect(page.locator('#cnt')).toContainText('20 aluno(s)');
+    await expect(page.locator('#cnt')).toContainText('0 missão(ões) marcada(s)');
 
-    await page.locator('#dem tr[data-k="d"][data-mid="0"]').first().locator('[data-f="fly"]').uncheck();
+    await page.locator('#onlyfly').uncheck();
+    await page.locator('#dem tr[data-k="d"][data-mid="0"]').first().locator('[data-f="fly"]').check();
     await abrirEscala(page);
     const escalaDia12 = await lerEscala(page);
+    expect(escalaDia12.linhas.length).toBeGreaterThan(0);
     expect(escalaDia12.linhas).not.toEqual(escalaDia11.linhas);
 
     await mudarData(page, AMANHA);
@@ -117,11 +118,15 @@ test.describe('Escala por data', () => {
     await abrirComExemplo(page);
     await abrirEscala(page);
     await exportar();
+    // A data nova começa com a demanda vazia (retorno da operação, 14/11): um aluno (um voo de 1 h) entra à mão
     await mudarData(page, DEPOIS);
+    await irPara(page, 'dem');
+    await page.locator('#onlyfly').uncheck();
+    await page.locator('#dem tr[data-k="d"][data-mid="0"]').first().locator('[data-f="fly"]').check();
     await abrirEscala(page);
     await exportar();
     await irPara(page, 'bi');
-    await expect(page.locator('#bi-content .st > div').nth(1)).toContainText('44 h');
+    await expect(page.locator('#bi-content .st > div').nth(1)).toContainText('23 h');
     await expect(page.locator('#bi-content .st > div').nth(2)).toContainText('2 dias registrados');
   });
 

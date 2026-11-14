@@ -84,7 +84,7 @@ test.describe('Site publicado (login real)', () => {
     expect(linhasLidas).toEqual({ documentos: 0, dias: 0, historico: 0, solicitacoes: 0, dados_pessoais: 0 });
   });
 
-  test('gestor abre uma data sem escala: vê a cópia do dia anterior, sem gravar', async ({ page }) => {
+  test('gestor abre uma data sem escala: vê a data nova (demanda vazia), sem gravar', async ({ page }) => {
     const conta = CONTAS.gestor;
     await page.goto('./');
     await page.locator('#login-email').fill(conta.email);
@@ -98,7 +98,7 @@ test.describe('Site publicado (login real)', () => {
     await page.locator('#dt').dispatchEvent('change');
     // A data base do BI só muda quando a nova data termina de carregar
     await expect(page.locator('#bi-dt')).toHaveValue('2099-01-01');
-    // A data nova mostra a escala calculada com a demanda copiada do dia anterior (vazia se a prévia não tiver alunos)
+    // A data nova começa com a demanda vazia (retorno da operação, 14/11): a disponibilidade vem do dia anterior
     await expect(page.locator('#out')).toContainText(/Nenhum voo nesta data|missões pedidas/);
     await expect(page.locator('#inst .cd')).toHaveCount(instrutores);
     await abrirMenuDaConta(page);

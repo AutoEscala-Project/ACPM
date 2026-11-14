@@ -8,6 +8,7 @@ import { ApiClient } from '../../js/storage.js';
 import { gerarCenario } from '../helpers/cenarios.js';
 import { aluno, instrutor, missaoExtra } from '../helpers/montar.js';
 import { estadoSintetico } from '../helpers/estado.js';
+import { blank } from '../../js/rules.js';
 
 const goldens = JSON.parse(readFileSync(new URL('../fixtures/motor-goldens.json', import.meta.url), 'utf8'));
 const normalizado = estado => ApiClient.normalizeAndMigrateState(structuredClone(estado));
@@ -139,7 +140,7 @@ describe('Separar e juntar', () => {
 });
 
 describe('Nova data', () => {
-  it('copia do dia anterior a disponibilidade e a demanda, sem status dos voos nem escala gerada', () => {
+  it('copia do dia anterior a disponibilidade, sem a demanda (zerada a cada dia), sem status dos voos nem escala gerada', () => {
     const estado = normalizado({ ...estadoSintetico(), stu: [aluno(1000, {}, { extra: [missaoExtra(1001, { mis: 'IFR', eq: 'C172' })] })] });
     estado.av['PR-BTB'] = false;
     estado.fStatus = { '1000_0_1': 'Cancelado' };
@@ -152,16 +153,8 @@ describe('Nova data', () => {
     assert.deepEqual(novo.hangar, anterior.hangar, 'a ordem do hangar continua a da data anterior');
     assert.deepEqual(novo.criterios, anterior.criterios, 'os critérios da compactação continuam os da data anterior');
     assert.equal(novo.av['PR-BTB'], false);
-    assert.deepEqual(novo.pedidos[1000], anterior.pedidos[1000]);
-    novo.pedidos[1000].extra[0].p1 = 7;
-    // A missão do curso é a do dia (revisão de 14/11): a cópia não a leva
-    const comEtapa = structuredClone(anterior);
-    comEtapa.pedidos[1000].etapa = 'PP-07';
-    comEtapa.pedidos[1000].extra[0].etapa = 'PP-08';
-    comEtapa.pedidos[1000].solicitacao = 7;
-    const copia = diaParaCopiar(comEtapa).pedidos[1000];
-    assert.deepEqual([copia.etapa, copia.extra[0].etapa, copia.solicitacao], [undefined, undefined, undefined]);
-    assert.notEqual(anterior.pedidos[1000].extra[0].p1, 7, 'a cópia é independente');
+    // A demanda começa vazia (retorno da operação, 14/11): a agenda é o centro dos agendamentos; ninguém voa, sem extras
+    assert.deepEqual(novo.pedidos[1000], { ...blank(), extra: [] });
   });
 
   it('dia sem disponibilidade nem demanda (importado do BI) copia como dia padrão', () => {

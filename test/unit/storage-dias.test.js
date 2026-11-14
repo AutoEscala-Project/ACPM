@@ -89,7 +89,7 @@ describe('Carregar e salvar uma data', () => {
     assert.deepEqual(backend.gravacoes, ['cadastro', 'dia:2026-11-11', 'dia:2026-11-11', 'cadastro', 'dia:2026-11-11']);
   });
 
-  it('data nova começa com uma cópia do dia anterior (sem status e sem escala) e não grava nada', async () => {
+  it('data nova começa com uma cópia do dia anterior (sem status, sem escala e com a demanda vazia) e não grava nada', async () => {
     const estado = ApiClient.normalizeAndMigrateState({ ...estadoSintetico(), stu: [aluno(1000)] });
     estado.av['PR-BTB'] = false;
     estado.fStatus = { '1000_0_1': 'Cancelado' };
@@ -100,7 +100,8 @@ describe('Carregar e salvar uma data', () => {
     assert.equal(ehNovo, true);
     assert.equal(escala, null);
     assert.equal(novo.av['PR-BTB'], false);
-    assert.deepEqual(novo.stu, estado.stu);
+    // O cadastro é o mesmo; a demanda começa vazia (retorno da operação, 14/11)
+    assert.deepEqual(novo.stu.map(s => [s.id, s.nm, s.kg, s.fly, s.extra]), estado.stu.map(s => [s.id, s.nm, s.kg, false, []]));
     assert.deepEqual(novo.fStatus, {});
     assert.deepEqual(backend.gravacoes, []);
   });
