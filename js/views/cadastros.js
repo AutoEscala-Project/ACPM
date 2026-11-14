@@ -26,7 +26,7 @@ function resumoNaGrade(x) {
 export const GRUPOS_DE_HABILITACAO = [
   ['Ground e simulador', ['grounds', 'ground_pa34', 'sim_mono', 'sim_multi']],
   ['Voo', ['tgl', 'local', 'navegacao', 'solo', 'parafuso', 'ifr', 'noturno']],
-  ['Aviões', ['c172', 'mlte']],
+  ['Aviões', ['c152', 'c172', 'mlte']],
   ['Checador', ['checador_vfr', 'checador_ifr', 'checador_mlte']]
 ];
 

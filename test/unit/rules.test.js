@@ -60,7 +60,7 @@ describe('Regras de missão', () => {
     assert.equal(isGroundMission('constructor'), false);
     assert.equal(migrateLegacyMissionName('constructor'), 'Voo Local');
     assert.equal(migrateLegacyMissionName('__proto__'), 'Voo Local');
-    assert.equal(descreverExigencias('toString', 'C152'), 'Voo Local');
+    assert.equal(descreverExigencias('toString', 'C152'), 'Voo Local + C152');
     assert.equal(descreverExigencias('Simulador', 'constructor'), 'Simulador (Mono)');
     assert.equal(podeFazer({ hab: ['local'] }, 'Voo Local', 'constructor'), true);
     assert.equal(doesGroundGateFlight('constructor', { mis: 'Voo Local', eq: 'C152' }), false);

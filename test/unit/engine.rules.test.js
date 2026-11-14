@@ -111,9 +111,10 @@ describe('Habilitações exigidas (os instrutores migrados fazem o mesmo que os 
     ['Simulador', 'Sim. Multi', 2, 'Simulador (Multi)'],
     ['Voo Local', 'C172', 7, 'Voo Local + C172'],
     ['Voo Local', 'PA-34', 9, 'Voo Local + MLTE (PA-34)'],
-    ['Navegação', 'C152', 4, 'Voo de Navegação'],
-    ['Voo Solo', 'C152', 5, 'Voo para liberação de Solo'],
-    ['Parafuso', 'C152', 6, 'Voo de Parafuso (SPIN)'],
+    // O C152 também é uma habilitação do avião (retorno da operação, 14/11)
+    ['Navegação', 'C152', 4, 'Voo de Navegação + C152'],
+    ['Voo Solo', 'C152', 5, 'Voo para liberação de Solo + C152'],
+    ['Parafuso', 'C152', 6, 'Voo de Parafuso (SPIN) + C152'],
     ['Noturno', 'C172', 7, 'Voo Noturno + C172'],
     ['IFR', 'C172', 8, 'Voo IFR + C172'],
     ['IFR', 'PA-34', 9, 'Voo IFR + MLTE (PA-34)'],
@@ -147,7 +148,7 @@ describe('Habilitações exigidas (os instrutores migrados fazem o mesmo que os 
   });
 
   it('TGL (TMA): só o instrutor com a habilitação TGL (TMA)', () => {
-    const ins = [instrutor(1, 1, { hab: ['local'] }), instrutor(2, 1, { hab: ['local', 'tgl'] })];
+    const ins = [instrutor(1, 1, { hab: ['local', 'c152'] }), instrutor(2, 1, { hab: ['local', 'c152', 'tgl'] })];
     assert.equal(alocar({ ins, stu: [aluno(1000, { mis: 'TGL (TMA)', eq: 'C152' })] }).out[0].insId, 2);
   });
 
@@ -171,7 +172,7 @@ describe('Habilitações exigidas (os instrutores migrados fazem o mesmo que os 
     const ins = [instrutor(1, 1), instrutor(2, 1)];
     assert.equal(alocar({ ins, stu: [aluno(1000, {}, { bl: [1] })] }).out[0].insId, 2);
     assert.deepEqual(alocar({ ins, stu: [aluno(1000, {}, { bl: [1, 2] })] }).al, [
-      { t: 'err', s: 'Aluno 1000', m: 'Rejeitado: os instrutores habilitados (Voo Local) e livres estão em “Não escalar com” deste aluno.', codigo: 'bloqueio' }
+      { t: 'err', s: 'Aluno 1000', m: 'Rejeitado: os instrutores habilitados (Voo Local + C152) e livres estão em “Não escalar com” deste aluno.', codigo: 'bloqueio' }
     ]);
   });
 
@@ -323,7 +324,7 @@ describe('Rodízio', () => {
   });
 
   it('voos fora das categorias (local no C152) não seguem fila: vai quem tem menos habilitações', () => {
-    const ins = [instrutor(1, 1, { hab: ['local', 'c172', 'tgl'] }), instrutor(2, 1, { hab: ['local', 'c172'] })];
+    const ins = [instrutor(1, 1, { hab: ['local', 'c152', 'c172', 'tgl'] }), instrutor(2, 1, { hab: ['local', 'c152', 'c172'] })];
     assert.equal(comFilas({ ins, stu: [aluno(1000)] }, { c172: [1, 2] }).out[0].insId, 2);
   });
 });

@@ -237,16 +237,19 @@ test.describe('Instrutores', () => {
     const linha = page.locator('#inst .cd').last();
     await expect(page.locator('#inst .cd')).toHaveCount(41);
     await expect(linha.locator('.nm')).toHaveValue('Novo instrutor');
-    await expect(linha).toHaveAttribute('data-hab', 'grounds ground_pa34 local');
+    await expect(linha).toHaveAttribute('data-hab', 'grounds ground_pa34 local c152');
     await expect(linha.locator('[data-f="kg"]')).toHaveClass(/\bfalta\b/);
 
     await linha.locator('[data-act="editar-habs"]').click();
     const painel = page.locator('#painel-instrutor');
     await expect(painel).toBeVisible();
     await expect(painel.locator('h2')).toContainText('Novo instrutor');
+    // Os aviões: C152, C172 e PA-34 (retorno da operação, 14/11)
+    await expect(painel.locator('fieldset', { hasText: 'Aviões' }).locator('label')).toHaveText(['C152', 'C172', 'MLTE (PA-34)']);
+    await expect(painel.locator('[data-f="hab"][data-h="c152"]')).toBeChecked();
     await painel.locator('[data-f="hab"][data-h="c172"]').check();
     await painel.locator('[data-f="hab"][data-h="local"]').uncheck();
-    await expect(page.locator('#inst .cd').last()).toHaveAttribute('data-hab', 'grounds ground_pa34 c172');
+    await expect(page.locator('#inst .cd').last()).toHaveAttribute('data-hab', 'grounds ground_pa34 c152 c172');
     await page.locator('#btn-fechar-painel-instrutor').click();
     await expect(painel).toBeHidden();
 

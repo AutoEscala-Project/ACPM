@@ -7,7 +7,7 @@ import { GLOSSARIO, ABAS_DO_GLOSSARIO } from '../../js/glossario.js';
 
 describe('Manual', () => {
   it('quem pode dar cada missão, com os rótulos da grade de habilitações (e o que o avião acrescenta)', () => {
-    assert.equal(quemPodeDar('Voo Local', ['C152', 'C172', 'PA-34']), 'Local (+ C172 no C172, + MLTE (PA-34) no PA-34)');
+    assert.equal(quemPodeDar('Voo Local', ['C152', 'C172', 'PA-34']), 'Local (+ C152 no C152, + C172 no C172, + MLTE (PA-34) no PA-34)');
     assert.equal(quemPodeDar('Noturno', ['C172']), 'Noturno + C172');
     assert.equal(quemPodeDar('Multimotor', ['PA-34']), 'MLTE (PA-34)');
     assert.equal(quemPodeDar('Cheque PP', ['C152', 'C172']), 'Checador VFR, Checador IFR ou Checador MLTE IFR');

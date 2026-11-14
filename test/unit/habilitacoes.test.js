@@ -27,8 +27,8 @@ describe('Habilitações individuais', () => {
   });
 
   it('o que cada nível recebe; quem tem mais nível tem mais habilitações (os checadores começam desmarcados)', () => {
-    assert.deepEqual(habilitacoesDoNivel(1), ['grounds', 'ground_pa34', 'local']);
-    assert.deepEqual(habilitacoesDoNivel(3), ['grounds', 'ground_pa34', 'sim_mono', 'sim_multi', 'tgl', 'local']);
+    assert.deepEqual(habilitacoesDoNivel(1), ['grounds', 'ground_pa34', 'local', 'c152']);
+    assert.deepEqual(habilitacoesDoNivel(3), ['grounds', 'ground_pa34', 'sim_mono', 'sim_multi', 'tgl', 'local', 'c152']);
     assert.deepEqual(habilitacoesDoNivel(9), HABILITACOES.map(h => h.id).filter(h => !h.startsWith('checador')));
     assert.deepEqual(habilitacoesDoNivel('x'), habilitacoesDoNivel(1), 'nível inválido conta como A01');
     for (let lv = 2; lv <= 9; lv++) assert.ok(habilitacoesDoNivel(lv).length > habilitacoesDoNivel(lv - 1).length);
@@ -53,8 +53,17 @@ describe('Habilitações individuais', () => {
     assert.deepEqual(normalizarHabilitacoes('local'), []);
   });
 
+  // Retorno da operação (14/11): o C152 também é uma habilitação do avião, como o C172 e o PA-34
+  it('o C152 exige a habilitação do avião', () => {
+    assert.equal(podeFazer(com('local'), 'Voo Local', 'C152'), false);
+    assert.equal(podeFazer(com('local', 'c152'), 'Voo Local', 'C152'), true);
+    assert.equal(podeFazer(com('local', 'c172'), 'Voo Local', 'C152'), false, 'o C172 não habilita o C152');
+    assert.equal(descreverExigencias('Voo Local', 'C152'), 'Voo Local + C152');
+  });
+
   it('TGL (TMA) exige a habilitação TGL (TMA) e a do avião', () => {
-    assert.equal(podeFazer(com('tgl'), 'TGL (TMA)', 'C152'), true);
+    assert.equal(podeFazer(com('tgl', 'c152'), 'TGL (TMA)', 'C152'), true);
+    assert.equal(podeFazer(com('tgl'), 'TGL (TMA)', 'C152'), false);
     assert.equal(podeFazer(com('tgl'), 'TGL (TMA)', 'C172'), false);
     assert.equal(podeFazer(com('tgl', 'c172'), 'TGL (TMA)', 'C172'), true);
     assert.equal(podeFazer(com('local'), 'TGL (TMA)', 'C152'), false);
