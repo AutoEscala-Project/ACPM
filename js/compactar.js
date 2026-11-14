@@ -8,7 +8,7 @@
 // continuam valendo; a soma dos quadrados das horas não cresce (a divisão das horas não piora) e o combustível não
 // piora. Ficam como estão os voos fixos e os que já têm status (Atrasado, Em Voo, Cancelado), o instrutor dos voos do
 // rodízio, o Noturno, o Parafuso no C152 e o horário das turmas de Ground.
-import { AIRCRAFT_EQ_TYPES, GROUND_EQ_TYPE, T, NI, PESOS_DA_COMPACTACAO, LIMITES_DA_COMPACTACAO } from './config.js';
+import { AIRCRAFT_EQ_TYPES, GROUND_EQ_TYPE, T, NI, PESOS_DA_COMPACTACAO, LIMITES_DA_COMPACTACAO, MISSOES_LOCAIS, LIMITE_DE_VOOS_LOCAIS } from './config.js';
 import { FROTA_INICIAL, matriculasDoTipo } from './frota.js';
 import { podeFazer } from './habilitacoes.js';
 import { categoriaDoRodizio } from './rodizio.js';
@@ -217,6 +217,12 @@ export function compactar(out, state, { saldo = () => Infinity, posicao = () => 
       }
       if (mudouHorario) {
         for (const s of u.alunos) if (!livre(intervalosDe(doAluno.get(s), movidas), a, b)) return false;
+        // No máximo 6 voos locais saindo no mesmo horário (retorno da operação, 14/11)
+        if (MISSOES_LOCAIS.includes(u.mis)) {
+          const ficam = unidades.filter(w => !movidas.includes(w) && w.a === a && MISSOES_LOCAIS.includes(w.mis)).length;
+          const chegam = mudancas.filter(n => n.a === a && MISSOES_LOCAIS.includes(n.u.mis)).length;
+          if (ficam + chegam > LIMITE_DE_VOOS_LOCAIS) return false;
+        }
       }
       if ((mudouHorario || m.r !== u.r) && !u.isGround && !recursoServe(u, m.r, a, b, movidas)) return false;
     }

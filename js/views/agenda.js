@@ -39,6 +39,7 @@ const disponibilidade = p => (p.janela === 'horario'
   : (JANELAS_DA_AGENDA.find(([j]) => j === p.janela) || [, p.janela])[1]);
 
 // Os pedidos (não cancelados) de um aluno numa data, para o aviso de voo já marcado
+export const pedidosCarregados = () => pedidos;
 export const pedidosDoAluno = (aluno, dia) => pedidos.filter(p => p.aluno === aluno && p.data === dia && !p.cancelada_em);
 export const descreverPedido = p => `${p.missao} às ${p.horario || disponibilidade(p)}`;
 

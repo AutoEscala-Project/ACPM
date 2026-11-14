@@ -238,6 +238,12 @@ export function criarSupabaseFalso({ documentos = {}, dias = {}, historico: hist
           horas = String(args.p_missao).startsWith('Ground') ? 1.5 : Math.round(+args.p_horas * 10) / 10;
           if (!(horas > 0 && horas <= 5)) return responder(400, { code: '22023', message: 'a duração vai de 0,1 h a 5 h' });
         }
+        // No máximo 6 voos locais no mesmo horário (retorno da operação, 14/11)
+        const locais = ['Voo Local', 'Voo Solo', 'TGL (TMA)'];
+        if (Object.hasOwn(args, 'p_horas') && locais.includes(args.p_missao)
+            && solicitacoes.filter(s => s.data === args.p_data && !s.cancelada_em && s.horario === args.p_horario && locais.includes(s.missao)).length >= 6) {
+          return responder(400, { code: 'PT422', message: 'já há 6 voos locais no horário', hint: 'locais' });
+        }
         const noPrazo = prazoDaAgendaPermite(args.p_data, agora);
         if (!noPrazo && !args.p_excecao) return responder(403, { code: 'PT403', message: 'prazo encerrado' });
         if (!noPrazo && !['operador', 'administrador'].includes(conta.perfil)) return responder(403, { code: '42501', message: 'exceção só para operadores' });

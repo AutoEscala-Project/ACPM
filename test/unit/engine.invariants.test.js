@@ -31,6 +31,13 @@ function emTodos(verificar) {
 }
 
 describe('Invariantes do motor de alocação', () => {
+  // Retorno da operação (14/11): no máximo 6 voos locais (Voo Local, Voo Solo e TGL) saindo no mesmo horário
+  it('no máximo 6 voos locais saindo no mesmo horário', () => emTodos(({ out }) => {
+    const porHorario = new Map();
+    out.filter(o => ['Voo Local', 'Voo Solo', 'TGL (TMA)'].includes(o.mis) && o.status !== 'Cancelado').forEach(o => porHorario.set(o.a, (porHorario.get(o.a) || 0) + 1));
+    for (const [a, n] of porHorario) assert.ok(n <= 6, `${n} voos locais às ${a}`);
+  }));
+
   // Revisão de 14/11: a rejeição diz onde resolver
   it('toda rejeição tem um código da lista', () => emTodos(({ al }) => {
     for (const a of al.filter(x => x.t === 'err')) assert.ok(CODIGOS_DE_REJEICAO.includes(a.codigo), `${a.m} (${a.codigo})`);

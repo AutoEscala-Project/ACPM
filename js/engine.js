@@ -1,6 +1,6 @@
 // Motor de alocação determinístico da escala do dia e utilitários de horas e de ocupação.
 // runAllocationEngine é uma função pura: recebe o estado e devolve { out, al, tot } sem alterá-lo.
-import { T, NI, DAY, NIGHT_OK, MIS, DEFAULT_LIM, GROUND_EQ_TYPE, GROUND_REG, GROUND_DURATION_MIN, GROUND_DURATION_H, REVISAO_H, MENOR_VOO_H, AIRCRAFT_EQ_TYPES } from './config.js';
+import { T, NI, DAY, NIGHT_OK, MIS, DEFAULT_LIM, GROUND_EQ_TYPE, GROUND_REG, GROUND_DURATION_MIN, GROUND_DURATION_H, REVISAO_H, MENOR_VOO_H, AIRCRAFT_EQ_TYPES, MISSOES_LOCAIS, LIMITE_DE_VOOS_LOCAIS } from './config.js';
 import { FROTA_INICIAL, matriculasDoTipo } from './frota.js';
 import { hm, fmtH } from './format.js';
 import { isGroundMission, doesGroundGateFlight, disponibilidadeDoAluno, rotuloDaDisponibilidade, duracaoValida } from './rules.js';
@@ -325,6 +325,8 @@ export function runAllocationEngine(state, opcoes = {}) {
   // O voo fixo de um pedido (a chave aluno_missão_1), ou null
   const chaveFixa = item => (Object.hasOwn(fixos, `${item.stuId}_${item.mid}_1`) ? `${item.stuId}_${item.mid}_1` : null);
   const ocupacoesDeAtraso = [];
+  // Os voos locais (Voo Local, Voo Solo e TGL) que saem em cada horário (retorno da operação, 14/11)
+  const locaisNoHorario = {};
   for (const item of act) {
     const fKey = chaveFixa(item);
     if (fKey) {
@@ -391,6 +393,7 @@ export function runAllocationEngine(state, opcoes = {}) {
         };
         if (efetivo.a === a) ocupar(efetivo);
         else ocupacoesDeAtraso.push(() => ocupar(efetivo));
+        if (!ground && MISSOES_LOCAIS.includes(d.mis)) locaisNoHorario[efetivo.a] = (locaisNoHorario[efetivo.a] || 0) + 1;
         if (!daMesmaTurma) {
           if (x) load[x.id] = (load[x.id] || 0) + h;
           eu[ground ? GROUND_REG : r] = (eu[ground ? GROUND_REG : r] || 0) + h;
@@ -631,6 +634,7 @@ export function runAllocationEngine(state, opcoes = {}) {
     const H = duracaoValida(d.nb);
     const night = d.mis === 'Noturno';
     const isParafuso = d.mis === 'Parafuso';
+    const local = MISSOES_LOCAIS.includes(d.mis);
     const exige = descreverExigencias(d.mis, d.eq);
     // Voo de categoria do rodízio: primeiro quem ainda não voou nela hoje, depois a ordem da fila
     const categoria = categoriaDoRodizio(d.mis, d.eq);
@@ -682,9 +686,11 @@ export function runAllocationEngine(state, opcoes = {}) {
     const reducao = x => reducaoNecessaria({ stuKg: stu.kg, insKg: x.kg, tipo: d.eq, minutos: dur, mis: d.mis });
     const prev = stuLastPick[stuId] || null;
     for (const comMenosCombustivel of [false, true]) {
-      fc = { stu_busy: 0, eq: 0, revisao: 0, disp: 0, busy: 0, bloq: 0, limite: 0, peso: 0 };
+      fc = { locais: 0, stu_busy: 0, eq: 0, revisao: 0, disp: 0, busy: 0, bloq: 0, limite: 0, peso: 0 };
       if (comMenosCombustivel && !lim) break;
       for (const p of inicios) {
+        // No máximo 6 voos locais saindo no mesmo horário (retorno da operação, 14/11)
+        if (local && (locaisNoHorario[p.a] || 0) >= LIMITE_DE_VOOS_LOCAIS) { fc.locais++; continue; }
         if (!free(stuBusy, stuId, p.a, p.b)) { fc.stu_busy++; continue; }
 
         const livres = fleetPool.filter(r => state.av[r] && free(used, r, p.a, p.b));
@@ -765,6 +771,7 @@ export function runAllocationEngine(state, opcoes = {}) {
       });
 
       eu[r] = (eu[r] || 0) + hh;
+      if (local) locaisNoHorario[p.a] = (locaisNoHorario[p.a] || 0) + 1;
       load[x.id] = (load[x.id] || 0) + hh;
       if (categoria) voosNaCategoria[`${categoria}:${x.id}`] = voosHoje(x) + 1;
 
@@ -802,6 +809,7 @@ export function runAllocationEngine(state, opcoes = {}) {
           busy: ['instrutores-ocupados', `os instrutores habilitados (${exige}) já têm outro compromisso nos horários possíveis`],
           bloq: ['bloqueio', `os instrutores habilitados (${exige}) e livres estão em “Não escalar com” deste aluno`],
           limite: ['limite-da-lei', 'nenhum instrutor dentro dos limites da Lei do Aeronauta (horas de voo, jornada ou repouso) nos horários possíveis'],
+          locais: ['limite-de-locais', `já há ${LIMITE_DE_VOOS_LOCAIS} voos locais (Voo Local, Voo Solo e TGL) em todos os horários possíveis, o máximo no mesmo horário`],
           peso: ['peso', `peso aluno + instrutor acima do limite de ${lim} kg do ${d.eq}, mesmo com o mínimo de combustível`]
         }[key];
       }

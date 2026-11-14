@@ -13,7 +13,7 @@
  *   js/views/       Renderização das abas (recursos, cadastros, demanda, escala, BI e navegação)
  *   js/export.js    Exportação CSV e PDF
  */
-import { WIN, NI, T, GROUND_EQ_TYPE, GROUND_REG, GROUND_DURATION_MIN, GROUND_DURATION_H, MIS, PRE, DURACAO_MAXIMA_H, REVISAO_H } from './config.js';
+import { WIN, NI, T, GROUND_EQ_TYPE, GROUND_REG, GROUND_DURATION_MIN, GROUND_DURATION_H, MIS, PRE, DURACAO_MAXIMA_H, REVISAO_H, LIMITE_DE_VOOS_LOCAIS } from './config.js';
 import { novoRecurso, matriculasDoTipo } from './frota.js';
 import { HORARIOS_PADRAO, DE_30_EM_30, horariosDaMissao, ajustarPreferencias, paraMinuto } from './horarios.js';
 import { hm, fmtH, fmtDurLabel, pad, amanhaISO, isoMenosDias, nomeLimpo, dataIsoValida } from './format.js';
@@ -51,8 +51,8 @@ import { rRodizio } from './views/rodizio.js';
 import { abrirConta, carregarContas, gerarSenha, mensagem } from './views/conta.js';
 import { rManual } from './views/manual.js';
 import { atualizarSelosDaEscala, lerPedidosDaData } from './views/selos.js';
-import { importarSolicitacoes, disponibilidadeDaSolicitacao } from './agenda.js';
-import { abrirAgenda, carregarMes, mudarMes, escolherDia, diaDaAgenda, lembrarRegistradoPor, podeEditarAgenda, rAgenda, preencherHorariosDaAgenda, pedidosDoAluno, descreverPedido } from './views/agenda.js';
+import { importarSolicitacoes, disponibilidadeDaSolicitacao, vagaDeVooLocal } from './agenda.js';
+import { abrirAgenda, carregarMes, mudarMes, escolherDia, diaDaAgenda, lembrarRegistradoPor, podeEditarAgenda, rAgenda, preencherHorariosDaAgenda, pedidosDoAluno, descreverPedido, pedidosCarregados } from './views/agenda.js';
 import { ESQUEMA } from './migracoes.js';
 import { iniciarSessaoSupabase } from './sessao.js';
 import { iniciarDicas } from './dicas.js';
@@ -585,8 +585,12 @@ async function registrarPedido(excecao) {
     $('#ag-erro').textContent = `A duração vai de 0,1 h a ${DURACAO_MAXIMA_H} h.`;
     return;
   }
-  // O aluno que já tem voo marcado na data: pode ser um reagendamento feito por outra pessoa; o segundo clique confirma
   const dia = diaDaAgenda(), confirmacao = `${aluno.id}|${dia}`;
+  // No máximo 6 voos locais no mesmo horário (retorno da operação, 14/11): o horário está indisponível, com o próximo
+  const pedido = { data: dia, horario: $('#ag-horario').value, missao: $('#ag-missao').value };
+  const vaga = vagaDeVooLocal(pedidosCarregados(), pedido, S.horarios);
+  if (!vaga.ok) { $('#ag-erro').textContent = semVagaDeVooLocal(pedido, vaga.proximo); return; }
+  // O aluno que já tem voo marcado na data: pode ser um reagendamento feito por outra pessoa; o segundo clique confirma
   const marcados = pedidosDoAluno(aluno.id, dia);
   if (marcados.length && $('#form-agenda').dataset.confirmado !== confirmacao) {
     $('#form-agenda').dataset.confirmado = confirmacao;
@@ -604,7 +608,9 @@ async function registrarPedido(excecao) {
       PT403: 'Prazo encerrado: pedido para o dia seguinte só até as 13:00 do dia anterior.',
       42501: 'Esta conta não pode registrar este pedido (a Exceção da Coordenação é só para operadores).',
       23514: 'Pedido incompleto: confira aluno, missão, horário e quem anotou.',
-      22023: `Pedido inválido: o horário é obrigatório, e a duração vai de 0,1 h a ${DURACAO_MAXIMA_H} h.`
+      22023: `Pedido inválido: o horário é obrigatório, e a duração vai de 0,1 h a ${DURACAO_MAXIMA_H} h.`,
+      // Outra pessoa agendou o 6º local no mesmo horário enquanto isso: o servidor recusou
+      PT422: semVagaDeVooLocal(pedido, vagaDeVooLocal([...pedidosCarregados(), ...Array.from({ length: LIMITE_DE_VOOS_LOCAIS }, () => ({ ...pedido, janela: 'horario', cancelada_em: null }))], pedido, S.horarios).proximo)
     }[err.code] || 'Não foi possível registrar o pedido. Verifique a conexão e tente de novo.';
     return;
   }
@@ -616,6 +622,12 @@ async function registrarPedido(excecao) {
   await carregarMes();
   lerPedidosDaData();
 }
+// O horário sem vaga de voo local: o motivo e o próximo horário possível
+function semVagaDeVooLocal({ horario, missao }, proximo) {
+  const depois = missao === 'Voo Solo' ? 'O Voo Solo sai sempre às 06:30.' : proximo ? `Próximo horário possível: ${proximo}.` : 'Nenhum horário mais tarde tem vaga.';
+  return `Horário indisponível: já há ${LIMITE_DE_VOOS_LOCAIS} voos locais (Voo Local, Voo Solo e TGL) às ${horario}, o máximo no mesmo horário (determinação da diretoria). ${depois}`;
+}
+
 // Trocar o aluno desfaz a confirmação do voo já marcado
 function desarmarConfirmacaoDaAgenda() {
   delete $('#form-agenda').dataset.confirmado;

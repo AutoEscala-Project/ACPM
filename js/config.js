@@ -71,6 +71,10 @@ export const MIS = {
 // Revisão obrigatória dos aviões a cada 50 horas de voo (o avião para quando não tem saldo para mais 1 h)
 export const REVISAO_H = 50;
 export const MENOR_VOO_H = 1;
+// No máximo 6 voos locais (Voo Local, Voo Solo e TGL) saindo no mesmo horário (retorno da operação, 14/11: determinação
+// da diretoria do aeroclube)
+export const MISSOES_LOCAIS = ['Voo Local', 'Voo Solo', 'TGL (TMA)'];
+export const LIMITE_DE_VOOS_LOCAIS = 6;
 // A duração de um voo da demanda (retorno da operação, 14/11): fracionada, em décimos de hora, até 5 h
 export const DURACAO_MAXIMA_H = 5;
 

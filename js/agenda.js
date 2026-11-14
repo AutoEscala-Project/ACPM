@@ -1,8 +1,9 @@
 // Agenda de solicitações da secretaria: a regra do prazo (a mesma do servidor, no horário de São Paulo) e o pedido
 // da demanda que cada solicitação vira ao ser importada.
-import { MIS } from './config.js';
+import { MIS, MISSOES_LOCAIS, LIMITE_DE_VOOS_LOCAIS } from './config.js';
 import { disponibilidadeAtual, disponibilidadeDoAluno, normalizeMissionFields, proximoMid, duracaoValida } from './rules.js';
 import { horariosDaMissao, preferenciasPadrao, paraMinuto } from './horarios.js';
+import { hm } from './format.js';
 import { normalizarCursos } from './cursos.js';
 import { situacaoPorMissao, proximaMissao } from './resultados.js';
 
@@ -103,4 +104,16 @@ export function importarSolicitacoes(estado, solicitacoes, { situacao = [] } = {
     }
   }
   return resumo;
+}
+
+// No máximo 6 voos locais (Voo Local, Voo Solo e TGL) saindo no mesmo horário (retorno da operação, 14/11: determinação
+// da diretoria). Ao agendar mais um local num horário que já tem 6 (pedidos não cancelados da data), não há vaga: o
+// próximo horário possível é o primeiro mais tarde, entre os horários da missão, que ainda tem vaga (null: nenhum)
+export function vagaDeVooLocal(pedidos, { data, horario, missao }, horarios) {
+  if (!MISSOES_LOCAIS.includes(missao)) return { ok: true };
+  const noHorario = h => pedidos.filter(p => p.data === data && !p.cancelada_em && p.janela === 'horario' && p.horario === h && MISSOES_LOCAIS.includes(p.missao)).length;
+  if (noHorario(horario) < LIMITE_DE_VOOS_LOCAIS) return { ok: true };
+  const regra = Object.hasOwn(MIS, missao) ? MIS[missao] : MIS['Voo Local'];
+  const depois = horariosDaMissao(horarios, missao, regra.defEq).map(hm).filter(h => h > horario);
+  return { ok: false, proximo: depois.find(h => noHorario(h) < LIMITE_DE_VOOS_LOCAIS) || null };
 }

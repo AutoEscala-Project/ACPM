@@ -106,6 +106,13 @@ describe('Backend local: agenda de solicitações', () => {
     assert.equal((await backendLocal.listarSolicitacoes('2026-11-11', '2026-11-11'))[0].horas, 1.5);
   });
 
+  // Retorno da operação (14/11): no máximo 6 voos locais no mesmo horário, como no servidor
+  it('o 7º voo local no mesmo horário é recusado (PT422); outra missão passa', async () => {
+    for (let i = 0; i < 6; i++) await backendLocal.registrarSolicitacao(pedido({ aluno: 2000 + i, missao: ['Voo Local', 'Voo Solo', 'TGL (TMA)'][i % 3], horario: '08:20' }), antesDas13);
+    await assert.rejects(backendLocal.registrarSolicitacao(pedido({ aluno: 2010, horario: '08:20' }), antesDas13), e => e.code === 'PT422');
+    await backendLocal.registrarSolicitacao(pedido({ aluno: 2011, missao: 'Navegação', horario: '08:20' }), antesDas13);
+  });
+
   it('cancela guardando quem cancelou (uma vez só); o pedido continua na agenda', async () => {
     const id = await backendLocal.registrarSolicitacao(pedido(), antesDas13);
     await backendLocal.cancelarSolicitacao(id, ' Maria ', antesDas13);

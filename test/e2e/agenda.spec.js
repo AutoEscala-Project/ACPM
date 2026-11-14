@@ -83,6 +83,20 @@ test.describe('Agenda de Solicitações', () => {
     await expect(page.locator('#form-agenda [type="submit"]')).toHaveText('Registrar pedido');
   });
 
+  // Retorno da operação (14/11): no máximo 6 voos locais (Voo Local, Voo Solo e TGL) no mesmo horário
+  test('o 7º voo local no mesmo horário: horário indisponível, com o motivo e o próximo horário possível', async ({ page }) => {
+    const alunos = Array.from({ length: 8 }, (_, i) => aluno(1000 + i));
+    await abrir(page, { estado: cenario({ stu: alunos }) });
+    await irPara(page, 'age');
+    for (let i = 0; i < 6; i++) await registrar(page, { aluno: `Aluno ${1000 + i}`, missao: ['Voo Local', 'TGL (TMA)'][i % 2], horario: '08:20' });
+    await expect(page.locator('#agenda-lista tbody tr')).toHaveCount(6);
+    await registrar(page, { aluno: 'Aluno 1006', horario: '08:20' });
+    await expect(page.locator('#ag-erro')).toHaveText('Horário indisponível: já há 6 voos locais (Voo Local, Voo Solo e TGL) às 08:20, o máximo no mesmo horário (determinação da diretoria). Próximo horário possível: 10:10.');
+    await expect(page.locator('#agenda-lista tbody tr')).toHaveCount(6);
+    await registrar(page, { aluno: 'Aluno 1006', missao: 'Navegação', horario: '08:20' });
+    await expect(page.locator('#agenda-lista tbody tr')).toHaveCount(7);
+  });
+
   test('"Registrado por" é obrigatório', async ({ page }) => {
     await abrir(page, { estado: comAlunos() });
     await irPara(page, 'age');
