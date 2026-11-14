@@ -52,6 +52,9 @@ test.describe('Agenda de Solicitações', () => {
     await expect(page.locator('#agenda-lista tbody tr').first()).toContainText('07:30');
     await page.locator('#ag-missao').selectOption('Noturno');
     await expect(page.locator('#ag-horario option')).toHaveText(['17:30']);
+    // O Voo Solo sai sempre às 06:30 (retorno da operação, 14/11)
+    await page.locator('#ag-missao').selectOption('Voo Solo');
+    await expect(page.locator('#ag-horario option')).toHaveText(['06:30']);
   });
 
   test('a duração: fracionada, até 5 h; o Ground tem 01h30', async ({ page }) => {

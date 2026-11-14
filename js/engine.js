@@ -239,8 +239,9 @@ function equalizarHoras(out, state, limites, historico) {
   }
 }
 
-// opcoes.compactar: false monta a escala sem a compactação; opcoes.dividirHoras: false, sem a divisão igual das horas
-// (para comparar, medir e testar)
+// opcoes.compactar: false monta a escala sem a compactação; opcoes.dividirHoras: false, sem a divisão igual das horas;
+// opcoes.trocarMatriculas: false, sem a troca de matrículas para o instrutor ficar no mesmo avião (para comparar, medir
+// e testar)
 export function runAllocationEngine(state, opcoes = {}) {
   const used = {}, busy = {}, stuBusy = {}, stuLastPick = {}, load = {}, eu = {}, out = [], al = [];
   // A frota vem do cadastro (fase 7); sem ela (estados de teste antigos), a frota inicial
@@ -812,12 +813,13 @@ export function runAllocationEngine(state, opcoes = {}) {
   // Compactação (fase 13): a escala compactada vale quando, já com as matrículas trocadas, custa menos pelo critério do
   // dia do que a escala sem compactar (a troca de matrículas mexe no tempo parado dos aviões)
   const compactada = opcoes.compactar === false ? null : out.map(o => ({ ...o }));
+  const trocarMatriculas = lista => { if (opcoes.trocarMatriculas !== false) manterInstrutorNoMesmoAviao(lista, state, saldo, frota, posicao); };
   if (compactada && compactar(compactada, state, { saldo, posicao, limites, historico })) {
-    manterInstrutorNoMesmoAviao(compactada, state, saldo, frota, posicao);
-    manterInstrutorNoMesmoAviao(out, state, saldo, frota, posicao);
+    trocarMatriculas(compactada);
+    trocarMatriculas(out);
     if (custoDaEscala(compactada, state) < custoDaEscala(out, state) - 1e-9) out.splice(0, out.length, ...compactada);
   } else {
-    manterInstrutorNoMesmoAviao(out, state, saldo, frota, posicao);
+    trocarMatriculas(out);
   }
   al.push(...avisosDeLimite(out, state, limites, historico));
 

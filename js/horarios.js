@@ -31,8 +31,10 @@ export function horariosDoTipo(horarios, tipo) {
   return Array.isArray(lista) && lista.length ? lista : HORARIOS_PADRAO;
 }
 
-// Os horários de uma missão: o Noturno sai às 17:30; as demais, na lista do tipo pedido (o Ground, nas janelas do dia)
-export const horariosDaMissao = (horarios, mis, tipo) => (mis === 'Noturno' ? [T[NI]] : horariosDoTipo(horarios, tipo));
+// Os horários de uma missão: o Noturno sai às 17:30 e o Voo Solo, sempre às 06:30 (retorno da operação, 14/11: local ou
+// navegação); as demais, na lista do tipo pedido (o Ground, nas janelas do dia)
+export const HORARIO_DO_SOLO = 390;
+export const horariosDaMissao = (horarios, mis, tipo) => (mis === 'Noturno' ? [T[NI]] : mis === 'Voo Solo' ? [HORARIO_DO_SOLO] : horariosDoTipo(horarios, tipo));
 
 // O período (janela de operação) em que um horário cai: a última janela que começa até ele
 export function periodoDoMinuto(minuto) {

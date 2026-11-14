@@ -257,7 +257,8 @@ describe('Invariantes da escala aprovada com atrasos e cancelamentos', () => {
 
 // Revisão de 14/11 (decisão do Pedro): fora das preferências, o voo vai para o horário mais perto da 1ª. Sem a
 // compactação e sem a divisão das horas (que trocam o instrutor depois), nenhum horário mais perto (ou à mesma
-// distância e mais cedo) servia ao mesmo avião, ao mesmo instrutor e ao aluno
+// distância e mais cedo) servia ao mesmo avião, ao mesmo instrutor e ao aluno (sem a troca de matrículas também: ela
+// muda o avião de outros voos depois)
 describe('O horário mais perto da preferência, em 300 cenários', async () => {
   const { horariosDaMissao, minutoDaPreferencia } = await import('../../js/horarios.js');
   const { cobre } = await import('../../js/viabilidade.js');
@@ -269,7 +270,7 @@ describe('O horário mais perto da preferência, em 300 cenários', async () => 
     const falhas = [];
     for (const seed of SEEDS) {
       const estado = gerarCenario(seed);
-      const { out } = runAllocationEngine(estado, { compactar: false, dividirHoras: false });
+      const { out } = runAllocationEngine(estado, { compactar: false, dividirHoras: false, trocarMatriculas: false });
       for (const o of out.filter(v => !v.isGround && v.baseTag === 'Próximo livre' && v.status !== 'Cancelado')) {
         const { d } = pedidoDe(estado, o);
         const p1 = minutoDaPreferencia(d.p1), p2 = minutoDaPreferencia(d.p2);
@@ -289,7 +290,7 @@ describe('O horário mais perto da preferência, em 300 cenários', async () => 
           if (!outros.filter(v => v.r === o.r).every(livre) || !outros.filter(v => v.insId === o.insId).every(livre) || !outros.filter(v => v.stuId === o.stuId).every(livre)) continue;
           if (!cobre(x.aw, m, m + dur)) continue;
           const compromissos = unicos(outros.filter(v => v.insId === o.insId)).map(v => ({ a: v.a, b: v.b, voo: AIRCRAFT_EQ_TYPES.includes(v.eqType) }));
-          if (!dentroDosLimites({ compromissos, novo: { a: m, b: m + dur, voo: AIRCRAFT_EQ_TYPES.includes(o.eqType) }, historico: null, limites: normalizarLimites(estado.limites) }).ok) continue;
+          if (!dentroDosLimites({ compromissos, novo: { a: m, b: m + dur, voo: AIRCRAFT_EQ_TYPES.includes(o.eqType) }, historico: (estado.horasDosInstrutores || {})[o.insId] || null, limites: normalizarLimites(estado.limites) }).ok) continue;
           falhas.push(`seed ${seed}: ${o.fKey} às ${o.a}, mas ${m} servia (âncora ${ancora})`);
         }
       }

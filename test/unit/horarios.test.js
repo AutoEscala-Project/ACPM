@@ -165,3 +165,19 @@ describe('Horários pela distância da preferência', () => {
     assert.deepEqual(ordenarPelaPreferencia([390, 500, 610], 450, -1), [500, 390, 610]);
   });
 });
+
+// Retorno da operação (14/11): o Voo Solo sai sempre às 06:30 (local ou navegação)
+describe('O Voo Solo às 06:30', () => {
+  it('a missão Voo Solo só tem o horário das 06:30, em qualquer avião', async () => {
+    const { horariosDaMissao, HORARIOS_INICIAIS } = await import('../../js/horarios.js');
+    assert.deepEqual(horariosDaMissao(HORARIOS_INICIAIS, 'Voo Solo', 'C152'), [390]);
+    assert.deepEqual(horariosDaMissao(HORARIOS_INICIAIS, 'Voo Solo', 'PA-34'), [390]);
+  });
+
+  it('o motor põe o Solo às 06:30, mesmo com outra preferência', async () => {
+    const { runAllocationEngine } = await import('../../js/engine.js');
+    const { aluno, cenario, instrutor } = await import('../helpers/montar.js');
+    const { out } = runAllocationEngine(cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, { mis: 'Voo Solo', p1: 760, p2: 870 })] }));
+    assert.equal(out[0].a, 390);
+  });
+});

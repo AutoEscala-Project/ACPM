@@ -37,7 +37,7 @@ describe('Agenda de solicitações', () => {
     assert.deepEqual(pedidoDaSolicitacao({ missao: 'IFR', janela: 'horario', horario: '14:30' }),
       { fly: true, mis: 'IFR', eq: 'C172', p1: 870, p2: 870, nb: 1, ss: 1, pr: 3, jan: 'h870' });
     assert.deepEqual(pedidoDaSolicitacao({ missao: 'Noturno', janela: 'noite' }),
-      { fly: true, mis: 'Noturno', eq: 'C172', p1: 1050, p2: 1050, nb: 1, ss: 1, pr: 3, jan: 'noite' });
+      { fly: true, mis: 'Noturno', eq: 'C172', p1: 1050, p2: -1, nb: 1, ss: 1, pr: 3, jan: 'noite' });
     const ground = pedidoDaSolicitacao({ missao: 'Ground C152', janela: 'manha' });
     assert.deepEqual([ground.eq, ground.nb, ground.p1, ground.p2, ground.jan], ['Sala Ground', 1.5, 390, 500, 'manha']);
     // O PA-34 tem horários de 30 em 30 minutos
