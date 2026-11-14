@@ -106,12 +106,13 @@ test.describe('Agenda de Solicitações', () => {
     await irPara(page, 'dem');
     await expect(page.locator('#dem tr[data-k="d"][data-id="1001"] [data-f="fly"]')).toBeChecked();
 
-    // Outra data (não é a aberta no topo): sem situação e sem importar
+    // Outro dia escolhido na agenda vira a data aberta no app (retorno da operação, 14/11): situação e importar dele
     await irPara(page, 'age');
     await page.locator('#agenda-cal [data-dia="2026-11-12"]').click();
+    await expect(page.locator('#dt')).toHaveValue('2026-11-12');
     await registrar(page, { aluno: 'Aluno 1000' });
-    await expect(situacao).toHaveText(['']);
-    await expect(importar).toBeHidden();
+    await expect(situacao).toHaveText(['Ainda não importado']);
+    await expect(importar).toHaveText('Importar 1 pedido para a demanda');
   });
 
   test('"Importar Solicitações da Agenda" põe os pedidos da data na demanda, prontos para a escala', async ({ page }) => {
@@ -144,5 +145,32 @@ test.describe('Agenda de Solicitações', () => {
     await irPara(page, 'age');
     await expect(page.locator('#agenda-data')).toHaveText('quinta-feira, 12/11/2026');
     await expect(page.locator('#agenda-prazo')).toContainText('Prazo para amanhã (11/11) encerrado às 13:00');
+  });
+
+  // Retorno da operação (14/11): trabalhando numa data à frente, a agenda e as outras abas ficam nela
+  test('a agenda abre na data aberta no topo; escolher um dia na agenda abre aquela data no app', async ({ page }) => {
+    await abrir(page, { estado: comAlunos() });
+    await page.locator('#dt-prox').click();
+    await page.locator('#dt-prox').click();
+    await expect(page.locator('#dt')).toHaveValue('2026-11-13');
+    await irPara(page, 'age');
+    await expect(page.locator('#agenda-data')).toContainText('13/11/2026');
+    await irPara(page, 'dem');
+    await expect(page.locator('#dt')).toHaveValue('2026-11-13');
+    await irPara(page, 'age');
+    await page.locator('#agenda-cal [data-dia="2026-11-16"]').click();
+    await expect(page.locator('#dt')).toHaveValue('2026-11-16');
+    await expect(page.locator('#agenda-data')).toContainText('16/11/2026');
+    await irPara(page, 'esc');
+    await expect(page.locator('#dt')).toHaveValue('2026-11-16');
+  });
+
+  test('recarregar a página continua na data aberta', async ({ page }) => {
+    await abrir(page, { estado: comAlunos() });
+    await page.locator('#dt-prox').click();
+    await expect(page.locator('#dt')).toHaveValue('2026-11-12');
+    await expect(page).toHaveURL(/[?&]data=2026-11-12/);
+    await page.reload();
+    await expect(page.locator('#dt')).toHaveValue('2026-11-12');
   });
 });

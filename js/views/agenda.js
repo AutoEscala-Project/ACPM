@@ -44,7 +44,10 @@ function gradeDoMes(mes) {
   return [inicio, fim];
 }
 
-export async function abrirAgenda(dia = diaEscolhido || primeiraDataAberta()) {
+// A agenda abre na data aberta no topo (retorno da operação, 14/11); quando ela já fechou para pedidos (amanhã, depois
+// das 13:00), no primeiro dia que ainda aceita pedidos
+const diaPadrao = () => (DATA && DATA >= primeiraDataAberta() ? DATA : primeiraDataAberta());
+export async function abrirAgenda(dia = diaPadrao()) {
   diaEscolhido = dia;
   mesVisivel = dia.slice(0, 7);
   await carregarMes();

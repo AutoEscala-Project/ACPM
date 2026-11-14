@@ -528,8 +528,12 @@ async function excluirConta(b) {
 document.addEventListener('click', e => {
   const cal = e.target.closest('[data-cal]');
   if (!cal) return;
-  if (cal.dataset.cal === 'mes') mudarMes(+cal.dataset.delta);
-  else escolherDia(cal.dataset.dia);
+  if (cal.dataset.cal === 'mes') { mudarMes(+cal.dataset.delta); return; }
+  escolherDia(cal.dataset.dia);
+  // O dia escolhido na agenda abre no app inteiro (retorno da operação, 14/11: trocar de aba voltava para outra data)
+  if (cal.dataset.dia !== DATA && dataIsoValida(cal.dataset.dia)) {
+    carregarData(cal.dataset.dia).catch(() => showToast('Não foi possível abrir essa data. Verifique a conexão e tente de novo.'));
+  }
 });
 
 // Demanda e Agenda: traz os pedidos da agenda da secretaria para a data aberta (só acrescenta; não importa o mesmo
@@ -1249,10 +1253,11 @@ window.addEventListener('beforeunload', e => {
   iniciarDicas();
   iniciarSomenteLeitura();
 
+  // O endereço é lido antes: abrir uma data põe a data nele
+  const params = new URLSearchParams(window.location.search);
   const amanha = amanhaISO();
   abrirData(amanha);
 
-  const params = new URLSearchParams(window.location.search);
   // O link antigo da fase 2 levava a escala inteira no endereço (share=): não vale mais, e sai do endereço
   if (params.has('share')) {
     const url = new URL(window.location.href);

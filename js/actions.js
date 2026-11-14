@@ -17,6 +17,14 @@ import { atualizarSelosDaEscala, atualizarSeloDaAgenda, lerPedidosDaData } from 
 // Abre uma data na tela (a data da escala e a data base do BI)
 export function abrirData(data) {
   setData(data);
+  // A data fica no endereço: recarregar a página continua nela (retorno da operação, 14/11)
+  try {
+    const url = new URL(window.location.href);
+    if (url.searchParams.get('data') !== data) {
+      url.searchParams.set('data', data);
+      window.history.replaceState(window.history.state, '', url);
+    }
+  } catch (e) {}
   $('#dt').value = data;
   $('#bi-dt').value = data;
   // No topo: "quarta-feira, 11/11" e "amanhã"
