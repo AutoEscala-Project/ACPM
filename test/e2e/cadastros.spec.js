@@ -29,13 +29,13 @@ test.describe('Recursos', () => {
     await expect(page.locator('#log-cnt')).toHaveText('1');
   });
 
-  test('uma tabela da frota: saldo até a revisão de 50 horas e o que o avião voa no dia', async ({ page }) => {
+  test('uma tabela da frota: as horas disponíveis até a revisão de 50 horas e o que o avião voa no dia', async ({ page }) => {
     await abrir(page, { estado: cenario({ stu: [aluno(1000, { p1: 1, p2: 1 })], semAeronaves: apenas('C152', 'PP-LJV'), horas: { 'PP-LJV': 42 } }) });
     await irPara(page, 'rec');
     const linha = page.locator('#eqs tr[data-r="PP-LJV"]');
-    await expect(linha.locator('.saldo')).toHaveText('8 h');
+    await expect(linha.locator('input[data-a="horas"]')).toHaveValue('8');
     await expect(linha.locator('.barra')).toHaveClass(/\bwa\b/);
-    await expect(linha).toContainText('1 h na escala · termina com 43 h');
+    await expect(linha).toContainText('1 h na escala · termina com 7 h disponíveis');
     await expect(page.locator('#eqs tr.grupo').first()).toContainText('1 de 13 disponíveis');
     await expect(page.locator('#eqs tr[data-r="SIM-MONO-A"] input[data-a="horas"]')).toHaveCount(0);
   });

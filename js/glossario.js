@@ -59,13 +59,9 @@ export const GLOSSARIO = {
   // Recursos
   janelas: { aba: 'Recursos', termo: 'Janelas de operação', texto: 'Os períodos do dia em que a escola opera nesta data. Período fechado não recebe voo nem Ground.' },
   'horarios-de-decolagem': { aba: 'Recursos', termo: 'Horários de decolagem', texto: 'Os horários em que cada categoria pode decolar (o PA-34 tem os seus). Valem para todas as datas.' },
-  'horas-desde-a-revisao': {
-    aba: 'Recursos', termo: 'Horas desde a revisão',
-    texto: `As horas que o avião voou desde a última revisão de ${REVISAO_H} horas, no início desta data. A data seguinte soma os voos que não foram cancelados.`
-  },
-  'saldo-da-revisao': {
-    aba: 'Recursos', termo: `Saldo até ${REVISAO_H} h`,
-    texto: `Quanto o avião ainda pode voar até a revisão. Sem saldo para um voo de ${MENOR_VOO_H} h, ele para e a escala avisa.`
+  'horas-disponiveis': {
+    aba: 'Recursos', termo: 'Horas disponíveis',
+    texto: `Quanto o avião ainda pode voar até a revisão de ${REVISAO_H} horas, no início desta data. Sem horas para um voo de ${MENOR_VOO_H} h, ele para e a escala avisa.`
   },
   hangar: { aba: 'Recursos', termo: 'Ordem no hangar', texto: 'Da frente para o fundo: entre aviões livres, o da frente sai primeiro.' },
   'so-parafuso': { aba: 'Recursos', termo: 'Só Parafuso', texto: 'Avião reservado para a missão de Parafuso no C152: as outras missões não usam ele, e o Parafuso só voa nele.' },

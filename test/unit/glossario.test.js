@@ -35,8 +35,8 @@ describe('Glossário', () => {
   });
 
   it('os números das regras vêm da configuração', () => {
-    assert.match(GLOSSARIO['horas-desde-a-revisao'].texto, new RegExp(`revisão de ${REVISAO_H} horas`));
-    assert.match(GLOSSARIO['saldo-da-revisao'].texto, new RegExp(`voo de ${MENOR_VOO_H} h`));
+    assert.match(GLOSSARIO['horas-disponiveis'].texto, new RegExp(`revisão de ${REVISAO_H} horas`));
+    assert.match(GLOSSARIO['horas-disponiveis'].texto, new RegExp(`voo de ${MENOR_VOO_H} h`));
     assert.match(GLOSSARIO['tempo-parado'].texto, new RegExp(`${INTERVALO_DO_HANGAR / 60} h ou mais`));
     assert.match(GLOSSARIO['limites-da-lei'].texto, new RegExp(`${LIMITES_DA_LEI.vooMesH} h no mês`));
     assert.match(GLOSSARIO['limites-da-lei'].texto, new RegExp(`${LIMITES_DA_LEI.vooAnoH} h no ano`));

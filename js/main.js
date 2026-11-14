@@ -13,7 +13,7 @@
  *   js/views/       Renderização das abas (recursos, cadastros, demanda, escala, BI e navegação)
  *   js/export.js    Exportação CSV e PDF
  */
-import { WIN, NI, T, GROUND_EQ_TYPE, GROUND_REG, GROUND_DURATION_MIN, GROUND_DURATION_H, MIS, PRE, DURACAO_MAXIMA_H } from './config.js';
+import { WIN, NI, T, GROUND_EQ_TYPE, GROUND_REG, GROUND_DURATION_MIN, GROUND_DURATION_H, MIS, PRE, DURACAO_MAXIMA_H, REVISAO_H } from './config.js';
 import { novoRecurso, matriculasDoTipo } from './frota.js';
 import { HORARIOS_PADRAO, DE_30_EM_30, horariosDaMissao, ajustarPreferencias, paraMinuto } from './horarios.js';
 import { hm, fmtH, fmtDurLabel, pad, amanhaISO, isoMenosDias, nomeLimpo, dataIsoValida } from './format.js';
@@ -838,7 +838,7 @@ document.addEventListener('click', e => {
   if (a === 'revisao') {
     if (isGestor() || !confirmado(b, 'Confirmar revisão')) return;
     S.horas[b.dataset.id] = 0;
-    logChange('mod', `${b.dataset.id}: revisão de 50 horas feita (horas zeradas)`);
+    logChange('mod', `${b.dataset.id}: revisão de 50 horas feita (${REVISAO_H} h disponíveis)`);
     save(); rRec();
     return;
   }
@@ -1128,12 +1128,18 @@ document.addEventListener('change', e => {
         kind: 'setAv', reg, val: !t.checked, label: '↶ Reverter'
       });
     } else if (a === 'horas') {
-      // Horas desde a última revisão de 50 horas; vazio: sem controle para o avião
+      // As horas disponíveis até a revisão de 50 horas (retorno da operação, 14/11); o dia guarda as horas desde a
+      // revisão (50 menos as disponíveis). Vazio: sem controle para o avião
       const reg = t.dataset.horas;
-      const horas = t.value === '' ? null : Math.round(Math.max(0, +t.value) * 10) / 10;
-      if (horas === null || Number.isNaN(horas)) delete S.horas[reg];
-      else S.horas[reg] = horas;
-      logChange('mod', `${reg}: ${horas === null || Number.isNaN(horas) ? 'horas desde a revisão não informadas' : fmtH(horas) + ' desde a última revisão de 50 horas'}`);
+      const disponiveis = t.value === '' ? null : Math.round(parseFloat(String(t.value).replace(',', '.')) * 10) / 10;
+      if (disponiveis !== null && !(disponiveis >= 0 && disponiveis <= REVISAO_H)) {
+        showToast(`As horas disponíveis vão de 0 a ${REVISAO_H}.`);
+        rRec();
+        return;
+      }
+      if (disponiveis === null) delete S.horas[reg];
+      else S.horas[reg] = Math.round((REVISAO_H - disponiveis) * 10) / 10;
+      logChange('mod', `${reg}: ${disponiveis === null ? 'horas disponíveis não informadas' : `${fmtH(disponiveis)} disponíveis até a revisão de 50 horas`}`);
     }
     save(); rRec();
     return;

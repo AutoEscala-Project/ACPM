@@ -1,4 +1,5 @@
-// Revisão de 50 horas na aba Recursos: horas desde a última revisão, o avião que para na escala e a nova data.
+// Revisão de 50 horas na aba Recursos: as horas disponíveis até a revisão (retorno da operação, 14/11: a operadora
+// lança as horas disponíveis, não as horas desde a revisão), o avião que para na escala e a nova data.
 import { test, expect, abrir, irPara, abrirEscala, lerEscala } from './fixtures.js';
 import { aluno, apenas, cenario, instrutor } from '../helpers/montar.js';
 
@@ -17,10 +18,13 @@ async function informarHoras(page, matricula, horas) {
 }
 
 test.describe('Revisão de 50 horas', () => {
-  test('o avião voa até completar as 50 horas e para; "Revisão feita" (com confirmação) zera as horas', async ({ page }) => {
+  test('o avião voa as horas disponíveis e para; "Revisão feita" (com confirmação) volta para 50 h disponíveis', async ({ page }) => {
     await abrir(page, { estado: tresVoosNoPPLJV() });
-    await informarHoras(page, 'PP-LJV', '48');
-    await expect(page.locator('#revisao tr[data-r="PP-LJV"]')).toContainText('2 h');
+    await expect(page.locator('#eqs thead')).toContainText('Horas disponíveis');
+    await expect(page.locator('#eqs thead')).not.toContainText('desde a revisão');
+    await informarHoras(page, 'PP-LJV', '2');
+    await expect(page.locator('#revisao tr[data-r="PP-LJV"] .barra')).toHaveCount(1);
+    await expect(page.locator('#audit-log-list')).toContainText('PP-LJV: 2 h disponíveis até a revisão de 50 horas');
     await abrirEscala(page);
     expect((await lerEscala(page)).linhas.filter(l => l.includes('PP-LJV'))).toHaveLength(2);
     await expect(page.locator('#out .al.warn')).toContainText('Aeronave parou para revisão de 50 horas às 11:10 (50 h desde a última revisão).');
@@ -31,21 +35,28 @@ test.describe('Revisão de 50 horas', () => {
     await botao.click();
     await expect(botao).toHaveText('Confirmar revisão');
     await botao.click();
-    await expect(page.locator('#revisao input[data-horas="PP-LJV"]')).toHaveValue('0');
-    await expect(page.locator('#audit-log-list')).toContainText('PP-LJV: revisão de 50 horas feita (horas zeradas)');
+    await expect(page.locator('#revisao input[data-horas="PP-LJV"]')).toHaveValue('50');
+    await expect(page.locator('#audit-log-list')).toContainText('PP-LJV: revisão de 50 horas feita (50 h disponíveis)');
     await irPara(page, 'esc');
     expect((await lerEscala(page)).linhas.filter(l => l.includes('PP-LJV'))).toHaveLength(3);
   });
 
-  test('a nova data começa com as horas do dia anterior mais os voos dele', async ({ page }) => {
+  test('a nova data começa com as horas disponíveis do dia anterior menos os voos dele', async ({ page }) => {
     await abrir(page, { estado: tresVoosNoPPLJV() });
-    await informarHoras(page, 'PP-LJV', '10');
+    await informarHoras(page, 'PP-LJV', '40');
     await abrirEscala(page);
     await page.locator('#dt').fill('2026-11-12');
     await page.locator('#dt').dispatchEvent('change');
     await expect(page.locator('#bi-dt')).toHaveValue('2026-11-12');
     await irPara(page, 'rec');
-    await expect(page.locator('#revisao input[data-horas="PP-LJV"]')).toHaveValue('13');
+    await expect(page.locator('#revisao input[data-horas="PP-LJV"]')).toHaveValue('37');
     await expect(page.locator('#revisao input[data-horas="PR-BTB"]')).toHaveValue('', { timeout: 1000 });
+  });
+
+  test('horas disponíveis fora de 0 a 50: o campo não aceita', async ({ page }) => {
+    await abrir(page, { estado: tresVoosNoPPLJV() });
+    await informarHoras(page, 'PP-LJV', '60');
+    await expect(page.locator('.toast').last()).toHaveText('As horas disponíveis vão de 0 a 50.');
+    await expect(page.locator('#revisao input[data-horas="PP-LJV"]')).toHaveValue('');
   });
 });

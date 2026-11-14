@@ -29,15 +29,19 @@ function situacao(r, voadas, revisao) {
     return `<span class="tag er">Parou para revisão de 50 horas ${revisao.voadas ? 'às ' + hm(revisao.paraAs) : '(sem saldo hoje)'}</span>`;
   }
   if (!voadas) return '<span class="sm">—</span>';
-  return `${fmtH(voadas)} na escala${revisao ? ` · termina com ${fmtH(revisao.fim)}` : ''}`;
+  return `${fmtH(voadas)} na escala${revisao ? ` · termina com ${fmtH(horasDisponiveis(revisao.fim))} disponíveis` : ''}`;
 }
 
-// Saldo até a revisão, com uma barra: âmbar abaixo de 10 h e vermelha abaixo de 5 h
-function saldo(horas) {
-  const resta = Math.max(0, REVISAO_H - horas);
+// As horas disponíveis até a revisão (retorno da operação, 14/11: a operadora lança as disponíveis; o dia guarda as
+// horas desde a revisão, 50 menos as disponíveis)
+export const horasDisponiveis = horas => Math.round(Math.max(0, REVISAO_H - horas) * 10) / 10;
+
+// A barra das horas disponíveis: âmbar abaixo de 10 h e vermelha abaixo de 5 h
+function barra(horas) {
+  const resta = horasDisponiveis(horas);
   const cor = resta < 5 ? 'er' : resta < 10 ? 'wa' : '';
   const largura = Math.max(2, Math.min(100, (resta / REVISAO_H) * 100)).toFixed(0);
-  return `<span class="saldo">${fmtH(resta)}</span><span class="barra ${cor}"><i style="width:${largura}%"></i></span>`;
+  return `<span class="barra ${cor}"><i style="width:${largura}%"></i></span>`;
 }
 
 function linha({ reg: r, tipo, soParafuso }, grupo, voadas, revisao) {
@@ -48,8 +52,7 @@ function linha({ reg: r, tipo, soParafuso }, grupo, voadas, revisao) {
   return `<tr data-r="${esc(r)}" data-grupo="${grupo}"${S.av[r] ? '' : ' class="manutencao"'}${recolhidos.has(grupo) ? ' hidden' : ''}>
     <td><label class="alvo"><input type="checkbox" class="sw" data-a="av" data-id="${esc(r)}"${S.av[r] ? ' checked' : ''} aria-label="${esc(r)} disponível"></label></td>
     <td><b>${esc(r)}</b>${aviao ? '' : ` <small class="sm">${tipo}</small>`}${parafuso}</td>
-    <td>${aviao ? `<input type="number" class="horas" min="0" max="60" step="0.1" inputmode="decimal" data-a="horas" data-horas="${esc(r)}" value="${temHoras ? horas : ''}" placeholder="—" aria-label="Horas do ${esc(r)} desde a última revisão"> h` : ''}</td>
-    <td>${aviao && temHoras ? saldo(horas) : ''}</td>
+    <td>${aviao ? `<span class="horas-disp"><input type="number" class="horas" min="0" max="${REVISAO_H}" step="0.1" inputmode="decimal" data-a="horas" data-horas="${esc(r)}" value="${temHoras ? horasDisponiveis(horas) : ''}" placeholder="—" aria-label="Horas disponíveis do ${esc(r)} até a revisão"> h${temHoras ? barra(horas) : ''}</span>` : ''}</td>
     <td>${situacao(r, voadas, revisao)}</td>
     <td class="edit-only acoes-frota">${aviao ? `<button class="btn quiet rev" data-act="revisao" data-id="${esc(r)}">Revisão feita</button>` : ''}<button class="btn quiet rev ret" data-act="retirar-recurso" data-id="${esc(r)}" aria-label="Retirar ${esc(r)} da frota">Retirar</button></td>
   </tr>`;
@@ -66,7 +69,7 @@ export function rRevisao() {
     const recursos = tipos.flatMap(tipo => (S.frota || []).filter(f => f.tipo === tipo));
     if (!recursos.length) return '';
     const disponiveis = recursos.filter(f => S.av[f.reg]).length;
-    return `<tr class="grupo"><td colspan="6"><button type="button" class="grupo-btn" data-recolher-grupo="${id}" aria-expanded="${!recolhidos.has(id)}"><svg class="ico seta" aria-hidden="true"><use href="#i-baixo"/></svg>${rotulo} <small>${disponiveis} de ${recursos.length} disponíveis</small></button></td></tr>` +
+    return `<tr class="grupo"><td colspan="5"><button type="button" class="grupo-btn" data-recolher-grupo="${id}" aria-expanded="${!recolhidos.has(id)}"><svg class="ico seta" aria-hidden="true"><use href="#i-baixo"/></svg>${rotulo} <small>${disponiveis} de ${recursos.length} disponíveis</small></button></td></tr>` +
       recursos.map(f => linha(f, id, voadas[f.reg] || 0, resumo[f.reg])).join('');
   }).join('');
 }

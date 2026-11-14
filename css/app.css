@@ -1269,3 +1269,6 @@ dl.glossario dd { margin: 0; }
 @media (max-width: 640px) { dl.glossario { grid-template-columns: 1fr; gap: 2px; } dl.glossario dd { margin-bottom: 8px; } }
 /* A duração digitada na Demanda (horas, fracionadas) */
 #s-dem input.duracao { width: 5.5em; }
+/* As horas disponíveis com a barra ao lado (Recursos) */
+.horas-disp { display: inline-flex; align-items: center; gap: 6px; }
+.horas-disp .barra { width: 90px; }
