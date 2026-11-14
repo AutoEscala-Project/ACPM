@@ -51,7 +51,7 @@ import { rRodizio } from './views/rodizio.js';
 import { abrirConta, carregarContas, gerarSenha, mensagem } from './views/conta.js';
 import { rManual } from './views/manual.js';
 import { atualizarSelosDaEscala, lerPedidosDaData } from './views/selos.js';
-import { importarSolicitacoes, disponibilidadeDaSolicitacao, vagaDeVooLocal } from './agenda.js';
+import { importarSolicitacoes, disponibilidadeDaSolicitacao, vagaDeVooLocal, ehDomingo, somarDias } from './agenda.js';
 import { abrirAgenda, carregarMes, mudarMes, escolherDia, diaDaAgenda, lembrarRegistradoPor, podeEditarAgenda, rAgenda, preencherHorariosDaAgenda, pedidosDoAluno, descreverPedido, pedidosCarregados } from './views/agenda.js';
 import { ESQUEMA } from './migracoes.js';
 import { iniciarSessaoSupabase } from './sessao.js';
@@ -248,13 +248,22 @@ $('#btn-clear-log').onclick = async () => {
   showToast('Histórico limpo.', 'ok');
 };
 
+// O aviso do domingo (o app abre a segunda)
+const avisoDeDomingo = segunda => `O aeroclube não opera aos domingos: abrimos segunda-feira, ${segunda.slice(8, 10)}/${segunda.slice(5, 7)}.`;
+
 // Cada data tem a sua escala: trocar a data abre a escala daquela data (o gestor do modo compartilhado também navega).
 // Data vazia ou que não carregou: o campo volta para a data aberta
 $('#dt').onchange = e => {
-  const data = e.target.value;
+  let data = e.target.value;
   if ((isGestor() && !modoCompartilhado()) || !dataIsoValida(data)) {
     e.target.value = DATA;
     return;
+  }
+  // Domingo não tem escala (retorno da operação, 14/11): abre a segunda
+  if (ehDomingo(data)) {
+    data = somarDias(data, 1);
+    e.target.value = data;
+    showToast(avisoDeDomingo(data));
   }
   carregarData(data).catch(() => {
     if (e.target.value === data) e.target.value = DATA;
@@ -262,10 +271,13 @@ $('#dt').onchange = e => {
   });
 };
 // ‹ e ›: o dia anterior e o seguinte. Um clique no rótulo da data abre o calendário do navegador
+// O domingo fica de fora: o aeroclube não opera (retorno da operação, 14/11)
 const irParaDia = dias => {
   const dt = $('#dt');
   if (dt.disabled) return;
-  dt.value = isoMenosDias(DATA, -dias);
+  let destino = isoMenosDias(DATA, -dias);
+  if (ehDomingo(destino)) destino = isoMenosDias(destino, -dias);
+  dt.value = destino;
   dt.dispatchEvent(new Event('change'));
 };
 $('#dt-ant').onclick = () => irParaDia(-1);
@@ -530,8 +542,9 @@ document.addEventListener('click', e => {
   if (!cal) return;
   if (cal.dataset.cal === 'mes') { mudarMes(+cal.dataset.delta); return; }
   escolherDia(cal.dataset.dia);
-  // O dia escolhido na agenda abre no app inteiro (retorno da operação, 14/11: trocar de aba voltava para outra data)
-  if (cal.dataset.dia !== DATA && dataIsoValida(cal.dataset.dia)) {
+  // O dia escolhido na agenda abre no app inteiro (retorno da operação, 14/11: trocar de aba voltava para outra data);
+  // o domingo não tem escala
+  if (cal.dataset.dia !== DATA && dataIsoValida(cal.dataset.dia) && !ehDomingo(cal.dataset.dia)) {
     carregarData(cal.dataset.dia).catch(() => showToast('Não foi possível abrir essa data. Verifique a conexão e tente de novo.'));
   }
 });
@@ -605,7 +618,7 @@ async function registrarPedido(excecao) {
     });
   } catch (err) {
     $('#ag-erro').textContent = {
-      PT403: 'Prazo encerrado: pedido para o dia seguinte só até as 13:00 do dia anterior.',
+      PT403: 'Prazo encerrado para esta data: os pedidos vão até as 13:00 do dia anterior (a segunda, até sábado às 10:00).',
       42501: 'Esta conta não pode registrar este pedido (a Exceção da Coordenação é só para operadores).',
       23514: 'Pedido incompleto: confira aluno, missão, horário e quem anotou.',
       22023: `Pedido inválido: o horário é obrigatório, e a duração vai de 0,1 h a ${DURACAO_MAXIMA_H} h.`,
@@ -1310,7 +1323,8 @@ window.addEventListener('beforeunload', e => {
 
   // O endereço é lido antes: abrir uma data põe a data nele
   const params = new URLSearchParams(window.location.search);
-  const amanha = amanhaISO();
+  // Amanhã, ou a segunda quando amanhã é domingo
+  const amanha = ehDomingo(amanhaISO()) ? somarDias(amanhaISO(), 1) : amanhaISO();
   abrirData(amanha);
 
   // O link antigo da fase 2 levava a escala inteira no endereço (share=): não vale mais, e sai do endereço
@@ -1322,7 +1336,9 @@ window.addEventListener('beforeunload', e => {
   }
   // A data do link (?data=); uma data que não existe abre amanhã, com o aviso
   const pedida = params.get('data');
-  const data = dataIsoValida(pedida) ? pedida : amanha;
+  // O aeroclube não opera aos domingos (retorno da operação, 14/11): um link para um domingo abre a segunda
+  const domingo = dataIsoValida(pedida) && ehDomingo(pedida);
+  const data = dataIsoValida(pedida) ? (domingo ? somarDias(pedida, 1) : pedida) : amanha;
 
   // Sessão e dados. Se algo falhar (sem conexão, conversão pela metade), o app não abre com dados incompletos:
   // fica o aviso para recarregar (nada se perde; o que faltou é retomado na próxima abertura)
@@ -1344,7 +1360,8 @@ window.addEventListener('beforeunload', e => {
     setRES(escala || escalaCalculada());
     marcarEscalaSoCalculada(!escala);
     setAuditLog(await historicoParaPainel(data));
-    if (pedida && data !== pedida) showToast(`A data do link não existe (${pedida.slice(0, 20)}). A escala aberta é a de amanhã.`);
+    if (domingo) showToast(avisoDeDomingo(data));
+    else if (pedida && data !== pedida) showToast(`A data do link não existe (${pedida.slice(0, 20)}). A escala aberta é a de amanhã.`);
   } catch (e) {
     console.warn(e);
     if (avisoAberto() !== 'conflito') mostrarAviso('falha', 'Não foi possível preparar os dados da escala. Verifique a conexão e recarregue a página; nada foi perdido.');

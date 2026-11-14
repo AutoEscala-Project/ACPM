@@ -22,15 +22,29 @@ function emSaoPaulo(instante) {
 export const somarDias = (iso, dias) => new Date(Date.parse(iso + 'T12:00:00Z') + dias * 864e5).toISOString().slice(0, 10);
 export const hojeEmSaoPaulo = (agora = new Date()) => emSaoPaulo(agora).data;
 
-// Pedido para o dia seguinte só até as 13:00; depois disso, a partir de dois dias
+// O aeroclube não opera aos domingos (retorno da operação, 14/11)
+export const ehDomingo = iso => new Date(iso + 'T12:00:00Z').getUTCDay() === 0;
+
+// O prazo para os pedidos de uma data: até as 13:00 do dia de operação anterior; a segunda, até sábado às 10:00 (o
+// domingo não opera). Domingo não recebe pedido. Devolve { dia, hora } (São Paulo) ou null (domingo)
+export function prazoDaData(data) {
+  if (ehDomingo(data)) return null;
+  const anterior = somarDias(data, ehDomingo(somarDias(data, -1)) ? -2 : -1);
+  return { dia: anterior, hora: new Date(anterior + 'T12:00:00Z').getUTCDay() === 6 ? '10:00' : '13:00' };
+}
+
 export function prazoDaAgendaPermite(data, agora = new Date()) {
+  const prazo = prazoDaData(data);
+  if (!prazo) return false;
   const { data: hoje, hora } = emSaoPaulo(agora);
-  return data >= somarDias(hoje, 2) || (data === somarDias(hoje, 1) && hora < '13:00');
+  return hoje < prazo.dia || (hoje === prazo.dia && hora < prazo.hora);
 }
 
 export const primeiraDataAberta = (agora = new Date()) => {
   const { data: hoje } = emSaoPaulo(agora);
-  return prazoDaAgendaPermite(somarDias(hoje, 1), agora) ? somarDias(hoje, 1) : somarDias(hoje, 2);
+  let data = somarDias(hoje, 1);
+  while (!prazoDaAgendaPermite(data, agora)) data = somarDias(data, 1);
+  return data;
 };
 
 export const horaEmSaoPaulo = (agora = new Date()) => emSaoPaulo(agora).hora;

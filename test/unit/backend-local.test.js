@@ -82,9 +82,9 @@ describe('Backend local: agenda de solicitações', () => {
 
   it('registra no prazo com quem anotou, a hora e a duração; lista por período em ordem', async () => {
     const id = await backendLocal.registrarSolicitacao(pedido(), antesDas13);
-    await backendLocal.registrarSolicitacao(pedido({ data: '2026-11-15', aluno: 1001, horario: '14:30', horas: 2.64, observacao: ' PP-ABP ' }), antesDas13);
+    await backendLocal.registrarSolicitacao(pedido({ data: '2026-11-16', aluno: 1001, horario: '14:30', horas: 2.64, observacao: ' PP-ABP ' }), antesDas13);
     const lista = await backendLocal.listarSolicitacoes('2026-11-01', '2026-11-30');
-    assert.deepEqual(lista.map(s => [s.data, s.aluno]), [['2026-11-11', 1000], ['2026-11-15', 1001]]);
+    assert.deepEqual(lista.map(s => [s.data, s.aluno]), [['2026-11-11', 1000], ['2026-11-16', 1001]]);
     assert.deepEqual([lista[0].id, lista[0].aluno_nome, lista[0].registrado_por, lista[0].excecao, lista[0].registrado_em], [id, 'Aluno 1000', 'Maria', false, antesDas13.toISOString()]);
     assert.deepEqual([lista[1].horario, lista[1].horas, lista[1].observacao], ['14:30', 2.6, 'PP-ABP']);
     assert.deepEqual(await backendLocal.listarSolicitacoes('2026-11-12', '2026-11-14'), []);

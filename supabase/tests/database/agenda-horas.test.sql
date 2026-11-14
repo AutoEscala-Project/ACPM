@@ -20,19 +20,19 @@ select has_function('public', 'registrar_solicitacao', array['date', 'integer', 
 
 set local role authenticated;
 select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-d100-000000000001","role":"authenticated"}', true);
-select isnt(public.registrar_solicitacao(current_date + 5, 1000, 'Aluno 1000', 'Navegação', 'horario', '10:10', 2.6, 'Maria', null, false), null,
+select isnt(public.registrar_solicitacao((current_date + 5 + case when extract(isodow from current_date + 5) = 7 then 1 else 0 end), 1000, 'Aluno 1000', 'Navegação', 'horario', '10:10', 2.6, 'Maria', null, false), null,
   'registra o pedido com a duração');
 select is((select horas from public.solicitacoes where aluno = 1000), 2.6::numeric, 'guarda a duração fracionada');
-select isnt(public.registrar_solicitacao(current_date + 5, 1001, 'Aluno 1001', 'Ground C152', 'horario', '06:30', 3, 'Maria', null, false), null,
+select isnt(public.registrar_solicitacao((current_date + 5 + case when extract(isodow from current_date + 5) = 7 then 1 else 0 end), 1001, 'Aluno 1001', 'Ground C152', 'horario', '06:30', 3, 'Maria', null, false), null,
   'registra um Ground');
 select is((select horas from public.solicitacoes where aluno = 1001), 1.5::numeric, 'o Ground tem sempre 01h30');
-select throws_ok($$ select public.registrar_solicitacao(current_date + 5, 1000, 'Aluno', 'Voo Local', 'manha', null, 1, 'Maria', null, false) $$,
+select throws_ok($$ select public.registrar_solicitacao((current_date + 5 + case when extract(isodow from current_date + 5) = 7 then 1 else 0 end), 1000, 'Aluno', 'Voo Local', 'manha', null, 1, 'Maria', null, false) $$,
   '22023', null, 'o pedido novo é num horário específico (não por período)');
-select throws_ok($$ select public.registrar_solicitacao(current_date + 5, 1000, 'Aluno', 'Voo Local', 'horario', '10:10', 5.5, 'Maria', null, false) $$,
+select throws_ok($$ select public.registrar_solicitacao((current_date + 5 + case when extract(isodow from current_date + 5) = 7 then 1 else 0 end), 1000, 'Aluno', 'Voo Local', 'horario', '10:10', 5.5, 'Maria', null, false) $$,
   '22023', null, 'a duração vai até 5 h');
-select throws_ok($$ select public.registrar_solicitacao(current_date + 5, 1000, 'Aluno', 'Voo Local', 'horario', '10:10', 0, 'Maria', null, false) $$,
+select throws_ok($$ select public.registrar_solicitacao((current_date + 5 + case when extract(isodow from current_date + 5) = 7 then 1 else 0 end), 1000, 'Aluno', 'Voo Local', 'horario', '10:10', 0, 'Maria', null, false) $$,
   '22023', null, 'a duração é maior que zero');
-select throws_ok($$ select public.registrar_solicitacao(current_date + 5, 1000, 'Aluno', 'Voo Local', 'horario', '10:10', null, 'Maria', null, false) $$,
+select throws_ok($$ select public.registrar_solicitacao((current_date + 5 + case when extract(isodow from current_date + 5) = 7 then 1 else 0 end), 1000, 'Aluno', 'Voo Local', 'horario', '10:10', null, 'Maria', null, false) $$,
   '22023', null, 'a duração é obrigatória');
 
 select * from finish();

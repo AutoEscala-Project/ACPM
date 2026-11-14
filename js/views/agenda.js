@@ -8,7 +8,7 @@ import { ApiClient } from '../storage.js';
 import { $ } from '../dom.js';
 import { esc, opts, hm, fmtH } from '../format.js';
 import { registraNaAgenda, operaEscala } from '../perfis.js';
-import { JANELAS_DA_AGENDA, FUSO_DO_AEROCLUBE, prazoDaAgendaPermite, primeiraDataAberta, hojeEmSaoPaulo, horaEmSaoPaulo, somarDias } from '../agenda.js';
+import { JANELAS_DA_AGENDA, FUSO_DO_AEROCLUBE, prazoDaAgendaPermite, prazoDaData, primeiraDataAberta, hojeEmSaoPaulo, somarDias } from '../agenda.js';
 
 const SEMANA = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
 const CHAVE_REGISTRADO_POR = 'acpm_agenda_registrado_por';
@@ -93,15 +93,21 @@ export function lembrarRegistradoPor(nome) {
   try { localStorage.setItem(CHAVE_REGISTRADO_POR, nome); } catch (e) {}
 }
 
+// O prazo do dia escolhido (retorno da operação, 14/11): até as 13:00 do dia de operação anterior; a segunda, até sábado
+// às 10:00; o domingo não opera
+const DIAS_DA_SEMANA = ['domingo', 'segunda-feira', 'terça-feira', 'quarta-feira', 'quinta-feira', 'sexta-feira', 'sábado'];
+const diaDaSemana = iso => DIAS_DA_SEMANA[new Date(iso + 'T12:00:00Z').getUTCDay()];
 function prazoDoDia() {
-  const hoje = hojeEmSaoPaulo(), amanha = somarDias(hoje, 1);
+  const prazo = prazoDaData(diaEscolhido);
+  if (!prazo) return 'O aeroclube não opera aos domingos: não há escala nem pedidos.';
+  const hoje = hojeEmSaoPaulo();
+  const quando = prazo.dia === hoje ? 'hoje' : prazo.dia === somarDias(hoje, 1) ? `amanhã (${ddmm(prazo.dia)})` : `${diaDaSemana(prazo.dia)} (${ddmm(prazo.dia)})`;
+  const dia = diaEscolhido === somarDias(hoje, 1) ? `amanhã (${ddmm(diaEscolhido)})` : `${diaDaSemana(diaEscolhido)} (${ddmm(diaEscolhido)})`;
   if (!prazoDaAgendaPermite(diaEscolhido)) {
-    return `Prazo encerrado para ${ddmm(diaEscolhido)}: pedidos para o dia seguinte só até as 13:00 do dia anterior.` +
+    return `Prazo encerrado para ${ddmm(diaEscolhido)}: os pedidos iam até ${quando === 'hoje' ? 'hoje' : quando} às ${prazo.hora}.` +
       (podeUsarExcecao() ? ' Se for estritamente necessário, use a Exceção da Coordenação.' : '');
   }
-  return horaEmSaoPaulo() < '13:00'
-    ? `Pedidos para amanhã (${ddmm(amanha)}) até hoje às 13:00.`
-    : `Prazo para amanhã (${ddmm(amanha)}) encerrado às 13:00: pedidos a partir de ${ddmm(somarDias(hoje, 2))}.`;
+  return `Pedidos para ${dia} até ${quando} às ${prazo.hora}.`;
 }
 
 function calendarioHTML() {
