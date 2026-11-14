@@ -496,7 +496,7 @@
       <p>A cada alteração, o sistema refaz a escala inteira, nesta ordem:</p>
       <ol>
         <li>Primeiro os <b>Grounds</b>, que definem a partir de que horário o voo do aluno pode começar.</li>
-        <li>Depois os voos e simuladores, por <b>prioridade</b> (5 primeiro) e, empatados, na ordem do cadastro dos alunos.</li>
+        <li>Depois os voos e simuladores, por <b>prioridade</b> (5 primeiro); com a mesma prioridade, quem <b>agendou primeiro</b> na agenda sai primeiro, e o pedido posto à mão na Demanda vem depois dos agendados; empatados, na ordem do cadastro dos alunos.</li>
         <li>Para cada pedido, tenta a 1ª preferência, depois a 2ª e depois o horário livre mais perto da 1ª, entre os horários de decolagem da categoria, sempre dentro da disponibilidade do aluno e das janelas abertas.</li>
         <li>O <b>avião</b>: o instrutor fica no mesmo avião durante o dia; fora isso, o voo vai para um avião que já saiu (o de menor folga até o voo, para não deixar buraco no meio do dia) e, quando precisa de outro, sai o da frente do <i>hangar</i> (a ordem em Recursos).</li>
       </ol>
@@ -570,7 +570,7 @@
         <dt>Fiz uma alteração sem querer. Como volto?</dt>
         <dd>Altere de novo, no próprio campo: a escala é refeita na hora. Algumas alterações também podem ser revertidas pelo <i>Histórico</i>.</dd>
         <dt>Como dar preferência a um aluno?</dt>
-        <dd>Na Demanda, aumente a prioridade dele (5 é a mais alta).</dd>
+        <dd>Na Demanda, aumente a prioridade dele (5 é a mais alta): ela passa à frente da ordem dos agendamentos.</dd>
         <dt>O aluno tem Ground e voo no mesmo dia. O que acontece?</dt>
         <dd>O sistema marca o Ground primeiro, e o voo do mesmo tema só começa depois que o Ground termina.</dd>
         <dt>As horas de um Ground em turma contam por aluno?</dt>

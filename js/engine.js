@@ -297,13 +297,16 @@ export function runAllocationEngine(state, opcoes = {}) {
    * 1º: Missões de Ground School SEMPRE antes de missões de Voo/Simulador (garante a criação das turmas
    *     coletivas e define o horário de término do Ground antes de alocar o voo dependente do aluno).
    * 2º: Maior prioridade (5 a 1).
-   * 3º: Ordem de cadastro do aluno e ordem da missão.
+   * 3º: A ordem dos agendamentos (retorno da operação, 14/11): o pedido da agenda que foi registrado antes (o id do
+   *     pedido cresce com o registro) vem antes; o pedido posto à mão, sem a agenda, vem depois dos agendados.
+   * 4º: Ordem de cadastro do aluno e ordem da missão.
    */
+  const ordemDoAgendamento = item => (Number.isInteger(item.ref.solicitacao) ? item.ref.solicitacao : Infinity);
   act.sort((a, b) => {
     const gA = isGroundMission(a.ref.mis) ? 1 : 0;
     const gB = isGroundMission(b.ref.mis) ? 1 : 0;
     if (gA !== gB) return gB - gA;
-    return b.ref.pr - a.ref.pr || a.stuOrder - b.stuOrder || a.misOrder - b.misOrder;
+    return b.ref.pr - a.ref.pr || menorPrimeiro(ordemDoAgendamento(a), ordemDoAgendamento(b)) || a.stuOrder - b.stuOrder || a.misOrder - b.misOrder;
   });
 
   const free = (mp, id, s, e) => livre(mp[id], s, e);

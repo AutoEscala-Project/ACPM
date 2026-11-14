@@ -221,6 +221,26 @@ describe('Peso da tripulação', () => {
   });
 });
 
+// Retorno da operação (14/11): quem agendou primeiro sai primeiro; a Prioridade continua passando à frente, e o pedido
+// posto à mão (sem a agenda) vem depois dos agendados
+describe('A ordem dos agendamentos', () => {
+  const umLugar = stu => alocar({ ins: [instrutor(1, 9)], stu, semAeronaves: SO_PP_LJV }).out.find(o => o.a === 390);
+  it('com a mesma prioridade, quem agendou primeiro fica com o horário', () => {
+    const voo = umLugar([aluno(1000, { p1: 390, p2: -1, solicitacao: 9 }), aluno(1001, { p1: 390, p2: -1, solicitacao: 5 })]);
+    assert.equal(voo.stuId, 1001);
+  });
+
+  it('o pedido posto à mão vem depois dos agendados', () => {
+    const voo = umLugar([aluno(1000, { p1: 390, p2: -1 }), aluno(1001, { p1: 390, p2: -1, solicitacao: 5 })]);
+    assert.equal(voo.stuId, 1001);
+  });
+
+  it('a prioridade maior passa à frente da ordem dos agendamentos', () => {
+    const voo = umLugar([aluno(1000, { p1: 390, p2: -1, pr: 5 }), aluno(1001, { p1: 390, p2: -1, solicitacao: 5 })]);
+    assert.equal(voo.stuId, 1000);
+  });
+});
+
 // Revisão de 14/11 (decisão do Pedro): sem vaga na 1ª nem na 2ª preferência, o horário mais perto da 1ª
 describe('O horário mais perto da preferência', () => {
   it('voo: o horário livre mais perto da 1ª preferência, não o primeiro do dia', () => {
