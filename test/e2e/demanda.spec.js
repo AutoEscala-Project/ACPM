@@ -76,6 +76,23 @@ test.describe('Demanda', () => {
     await expect(page.locator('#audit-log-list')).toContainText('Missão extra removida de Aluno 09');
   });
 
+  // Retorno da operação (14/11): o aluno que não vai voar não voa nem as missões extras
+  test('tirar o "Voa" do aluno tira também as missões extras; reverter volta todas', async ({ page }) => {
+    await abrirComExemplo(page);
+    await irPara(page, 'dem');
+    const extras = page.locator('#dem tr.extra-row[data-nm="aluno 01"] [data-f="fly"]');
+    await expect(extras).toHaveCount(2);
+    for (const caixa of await extras.all()) await expect(caixa).toBeChecked();
+    await linhaDoAluno(page, 'Aluno 01').locator('[data-f="fly"]').uncheck();
+    for (const caixa of await extras.all()) await expect(caixa).not.toBeChecked();
+    await page.locator('#btn-open-log').click();
+    await expect(page.locator('#audit-log-list')).toContainText('Aluno 01 retirado (Ground PA-34 · Sala Ground · 01h30 (1,5 h)), com as 2 missões extras');
+    await page.locator('#audit-log-list [data-act="rev-log"]').first().click();
+    await page.keyboard.press('Escape');
+    await expect(linhaDoAluno(page, 'Aluno 01').locator('[data-f="fly"]')).toBeChecked();
+    for (const caixa of await extras.all()) await expect(caixa).toBeChecked();
+  });
+
   test('trocar a missão ajusta equipamento, duração e horários', async ({ page }) => {
     await abrirSintetico(page);
     await irPara(page, 'alu');

@@ -708,6 +708,7 @@ document.addEventListener('click', e => {
       const target = getMissionTarget(rev.stuId, rev.mid || 0);
       if (st && target) {
         target.fly = rev.val;
+        (rev.extras || []).forEach(m => { const ex = getMissionTarget(rev.stuId, m); if (ex) ex.fly = rev.val; });
         logChange(rev.val ? 'inc' : 'exc', `Revertido: ${st.nm} (${target.mis})`, null, entry.id);
         save(); rDem();
       }
@@ -1182,11 +1183,15 @@ document.addEventListener('change', e => {
       if (!target) return;
       if (f === 'fly') {
         target.fly = t.checked;
+        // O aluno que não vai voar não voa as missões extras (retorno da operação, 14/11); reverter volta todas
+        const extras = !mid && !target.fly ? (s.extra || []).filter(ex => ex.fly) : [];
+        extras.forEach(ex => { ex.fly = false; });
         logChange(
           target.fly ? 'inc' : 'exc',
-          `${s.nm} ${target.fly ? 'incluído' : 'retirado'} (${target.mis} · ${target.eq} · ${fmtDurLabel(target.nb)})`,
-          { kind: 'setFly', stuId: s.id, mid, val: !target.fly, label: target.fly ? '✕ Excluir' : '↶ Restaurar' }
+          `${s.nm} ${target.fly ? 'incluído' : 'retirado'} (${target.mis} · ${target.eq} · ${fmtDurLabel(target.nb)})${extras.length ? `, com ${extras.length === 1 ? 'a missão extra' : `as ${extras.length} missões extras`}` : ''}`,
+          { kind: 'setFly', stuId: s.id, mid, val: !target.fly, ...(extras.length ? { extras: extras.map(ex => ex.mid) } : {}), label: target.fly ? '✕ Excluir' : '↶ Restaurar' }
         );
+        if (extras.length) rDem();
       } else if (f === 'jan') {
         // Disponibilidade do aluno: o voo só começa nessas janelas (vazio: qualquer horário)
         if (t.value) target.jan = t.value;
