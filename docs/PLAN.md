@@ -302,6 +302,13 @@ A full review of the app (engine, data and security, usability and accessibility
    - **Agenda**: requests are at a specific time only, with a duration (migration `agenda_com_duracao`: column `horas` and a 10-argument `registrar_solicitacao`; the old function stays until this PR is live); a student already booked that day needs "Registrar mesmo assim".
    - **C152 qualification**: missions in the C152 require it, like the C172 and the PA-34; every instructor gets it (data format **19**).
    - **Recursos**: the operator types the available hours (0–50) next to the bar; the day still stores hours since the revision.
+6. [x] **The agenda as the hub** (branch `revisao-6`, on top of `revisao-5`).
+   - **Empty demand each day**: a new date copies the availability, aircraft, windows, hangar order, criteria and aircraft hours, but nobody flies; "Importar da agenda" builds the day's demand.
+   - **Booking order**: with the same Prioridade, the request booked first (the booking id grows with registration) is scheduled first; hand-added requests come after the booked ones; a higher Prioridade still jumps the queue.
+   - **Voo Solo at 06:30** (local or navigation): the mission's only take-off time, and its preference (like the Noturno at 17:30).
+   - **At most 6 local flights per take-off time** (Voo Local, Voo Solo, TGL; `MISSOES_LOCAIS`, `LIMITE_DE_VOOS_LOCAIS`): the engine and compaction respect it (rejection code `limite-de-locais`); booking a 7th says the time is unavailable and gives the next possible one; the server refuses it too (migration `agenda_limite_de_locais`, PT422, with an advisory lock per date and time).
+   - **No Sundays**: a date's bookings close at 13:00 of the previous operating day, Monday's at Saturday 10:00, Sunday takes none (migration `agenda_sem_domingo`); the app skips Sunday (default date, arrows, links, the date picker, the agenda calendar).
+   - The engine got `trocarMatriculas: false` (for the nearest-preference invariant). New invariant: never more than 6 local flights at one time.
 
 ### Phase 16: Later (nice to have)
 - [ ] Track instructor and student currency: last flight, medical/CMA expiry. The engine then checks these too (the course phase is Phase 14).
