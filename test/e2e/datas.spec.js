@@ -46,6 +46,23 @@ test.describe('Escala por data', () => {
     expect(await lerEscala(page)).toEqual(escalaDia12);
   });
 
+  test('sem espaço neste navegador: o aviso diz que a alteração não foi salva (revisão de 14/11)', async ({ page }) => {
+    await abrirSintetico(page);
+    await page.evaluate(() => {
+      const gravar = Storage.prototype.setItem;
+      Storage.prototype.setItem = function (chave, valor) {
+        if (chave.startsWith('acpm4_')) throw new DOMException('O espaço acabou', 'QuotaExceededError');
+        return gravar.call(this, chave, valor);
+      };
+    });
+    await irPara(page, 'rec');
+    await page.locator('#eqs input[data-id="PR-BTB"]').uncheck();
+    await expect(page.locator('#aviso-sync-texto')).toHaveText(
+      'Não foi possível salvar neste navegador (o espaço de armazenamento pode ter acabado): a última alteração não foi salva. Exporte o CSV para não perder a escala.');
+    await page.locator('#btn-open-log').click();
+    await expect(page.locator('#audit-log-list .audit-item').filter({ hasText: 'PR-BTB' }).locator('.audit-estado')).toHaveText('não gravada');
+  });
+
   test('o histórico é separado por data', async ({ page }) => {
     await abrirSintetico(page);
     await irPara(page, 'rec');
@@ -71,6 +88,14 @@ test.describe('Escala por data', () => {
     await page.locator('#btn-open-log').click();
     await expect(page.locator('#audit-log-list [data-act="rev-log"]')).toHaveCount(0);
     await expect(page.locator('#log-cnt')).toHaveText('1');
+  });
+
+  test('o link com ?data= abre aquela data; uma data que não existe abre amanhã, com o aviso', async ({ page }) => {
+    await abrir(page, { url: `./?data=${DEPOIS}` });
+    await expect(page.locator('#dt')).toHaveValue(DEPOIS);
+    await page.goto('./?data=2026-02-30');
+    await expect(page.locator('#dt')).toHaveValue(AMANHA);
+    await expect(page.locator('#toast-box')).toContainText('A data do link não existe (2026-02-30). A escala aberta é a de amanhã.');
   });
 
   test('com o campo de data vazio, a tela volta para a data aberta e as alterações continuam indo para ela', async ({ page }) => {

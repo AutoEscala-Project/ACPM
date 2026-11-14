@@ -16,12 +16,12 @@
 import { WIN, NI, T, GROUND_EQ_TYPE, GROUND_REG, GROUND_DURATION_MIN, GROUND_DURATION_H, MIS, PRE } from './config.js';
 import { novoRecurso, matriculasDoTipo } from './frota.js';
 import { HORARIOS_PADRAO, DE_30_EM_30, horariosDaMissao, ajustarPreferencias, paraMinuto } from './horarios.js';
-import { hm, fmtH, fmtDurLabel, pad, amanhaISO, isoMenosDias } from './format.js';
-import { isGroundMission, blank, rotuloDaDisponibilidade, normalizeMissionFields } from './rules.js';
+import { hm, fmtH, fmtDurLabel, pad, amanhaISO, isoMenosDias, nomeLimpo, dataIsoValida } from './format.js';
+import { isGroundMission, blank, rotuloDaDisponibilidade, normalizeMissionFields, proximoMid } from './rules.js';
 import { habilitacoesDoNivel, normalizarHabilitacoes, nomeDaHabilitacao, podeFazer } from './habilitacoes.js';
 import { ApiClient } from './storage.js';
 import { S, RES, AUDIT_LOG, DATA, setS, setRES, setAuditLog, setTLMode, isGestor, insBy, stuBy, getMissionTarget } from './state.js';
-import { $, showToast, focusLast, mostrarAviso, avisoAberto } from './dom.js';
+import { $, showToast, focusLast, mostrarAviso, avisoAberto, avisarDoLink } from './dom.js';
 import { show } from './views/tabs.js';
 import { rBI, alternarTodosDoBI } from './views/bi.js';
 import { renderAuditPanel, rOut, alternarTempo, abrirPopupDoMapa, fecharPopupDoMapa, popupDoMapaAberto, reposicionarPopupDoMapa } from './views/escala.js';
@@ -36,13 +36,14 @@ import { rCursos, mostrarVistaDosAlunos, podeEditarCursos, atualizarLinhaDoProgr
 import { proximaDoPedido } from './views/etapas.js';
 import { STATUS_COM_DETALHE, textoParaOHistorico } from './status.js';
 import { pinoDoVoo, normalizarFixos } from './fixos.js';
+import { validarReversao } from './reversoes.js';
 import { singleDemandRowHTML, cnt, rDem, applyDemandFilters } from './views/demanda.js';
 import { rIns, rAlu, applyInstructorFilters, preencherFiltroDeHabilitacoes, mostrarVistaDosInstrutores, abrirPainelDoInstrutor, fecharPainelDoInstrutor, atualizarLinhaDoCadastro, atualizarLinhaDoAluno, rPainelDoInstrutor, rLimites, podeEditarLimites } from './views/cadastros.js';
 import { LIMITES_DA_LEI, normalizarLimites, comHorasExternas } from './limites.js';
 import { rRec, rRevisao, rHangar, alternarGrupoDaFrota, NOMES_DAS_CATEGORIAS } from './views/recursos.js';
 import { normalizarHangar, moverNoHangar } from './hangar.js';
 import { opcoesDeCategoria, categoriaDoTipo } from './categorias.js';
-import { setRole, save, logChange, refazerEscala, escalaCalculada, marcarEscalaSoCalculada, gravarEscalaCalculada, abrirData, historicoParaPainel, carregarData, carregarBI } from './actions.js';
+import { setRole, save, logChange, escalaCalculada, marcarEscalaSoCalculada, gravarEscalaCalculada, abrirData, historicoParaPainel, carregarData, carregarBI, avisarDadosIndisponiveis, lerDadosDeNovo, mostrarNoHistorico } from './actions.js';
 import { exp, pdf } from './export.js';
 import { projetoSupabase } from './config-supabase.js';
 import { CATEGORIAS_DO_RODIZIO, ajustarFilas } from './rodizio.js';
@@ -137,7 +138,7 @@ document.addEventListener('submit', async e => {
   if (!salvo) return;
   fecharPainelDeDados(true);
   showToast(`Dados pessoais de ${salvo.nome} salvos.`, 'ok');
-  if (salvo.alterados.length) logChange('mod', `Dados pessoais de ${salvo.nome} atualizados: ${salvo.alterados.join(', ')}`);
+  if (salvo.historico && salvo.data === DATA) mostrarNoHistorico(salvo.historico);
 });
 
 // Painel das habilitações de um instrutor: ✕ e Esc fecham (o foco volta para o botão que abriu)
@@ -205,14 +206,19 @@ function linkDaData(data) {
   return url.toString();
 }
 
+// Sem o servidor, a escala fica só neste navegador (o link que levava a escala inteira no endereço, com nomes, pesos e
+// horas, saiu na revisão de 14/11)
 $('#btn-share-link').onclick = async () => {
-  const compartilhado = modoCompartilhado();
-  const url = compartilhado ? linkDaData(DATA) : ApiClient.encodeShareableURL(S, DATA);
+  if (!modoCompartilhado()) {
+    showToast('Sem o servidor, a escala fica só neste navegador: o link da escala é do app publicado, com login.');
+    return;
+  }
+  const url = linkDaData(DATA);
   try {
     await navigator.clipboard.writeText(url);
-    showToast(compartilhado ? 'Link da escala copiado (quem abrir entra com a própria conta).' : 'Link de Gestor (somente leitura) copiado!', 'ok');
+    showToast('Link da escala copiado (quem abrir entra com a própria conta).', 'ok');
   } catch (e) {
-    prompt(compartilhado ? 'Copie o link da escala:' : 'Copie o link abaixo (abre bloqueado no perfil Gestor):', url);
+    prompt('Copie o link da escala:', url);
   }
 };
 
@@ -244,7 +250,7 @@ $('#btn-clear-log').onclick = async () => {
 // Data vazia ou que não carregou: o campo volta para a data aberta
 $('#dt').onchange = e => {
   const data = e.target.value;
-  if ((isGestor() && !modoCompartilhado()) || !/^\d{4}-\d{2}-\d{2}$/.test(data)) {
+  if ((isGestor() && !modoCompartilhado()) || !dataIsoValida(data)) {
     e.target.value = DATA;
     return;
   }
@@ -528,11 +534,17 @@ document.addEventListener('click', e => {
 // pedido de novo)
 async function importarDaAgenda() {
   if (isGestor()) return;
+  const data = DATA;
   let solicitacoes;
   try {
-    solicitacoes = await ApiClient.agenda(DATA, DATA);
+    solicitacoes = await ApiClient.agenda(data, data);
   } catch (e) {
     showToast('Não foi possível ler a agenda. Verifique a conexão e tente de novo.');
+    return;
+  }
+  // A resposta chegou depois de trocar de data: os pedidos são de outra data (revisão de 14/11)
+  if (DATA !== data) {
+    showToast('A data mudou durante a importação da agenda: nada foi importado. Importe de novo na data certa.');
     return;
   }
   const pendentes = solicitacoes.filter(s => !s.cancelada_em && !S.importadas.includes(s.id));
@@ -631,7 +643,7 @@ document.addEventListener('click', e => {
     if (!s) return;
     if (!Array.isArray(s.extra)) s.extra = [];
     const newEx = {
-      mid: S.nid++,
+      mid: proximoMid(S, s),
       fly: true,
       mis: 'Voo Local',
       eq: 'C152',
@@ -685,8 +697,9 @@ document.addEventListener('click', e => {
   if (a === 'rev-log') {
     const logId = +b.dataset.logid;
     const entry = AUDIT_LOG.find(x => x.id === logId);
-    if (!entry || !entry.revert) return;
-    const rev = entry.revert;
+    // A reversão gravada só vale no formato que o app produz (revisão de 14/11)
+    const rev = entry ? validarReversao(entry.revert, S.frota) : null;
+    if (!rev) return;
 
     if (rev.kind === 'setFly') {
       const st = stuBy(rev.stuId);
@@ -707,12 +720,12 @@ document.addEventListener('click', e => {
         logChange(rev.val ? 'inc' : 'exc', `Revertido: ${ins.nm} ${rev.val ? 'disponível' : 'indisponível'}`, null, entry.id);
         save(); rIns();
       }
-    } else if (rev.kind === 'restaurarFixos' && rev.fixos && typeof rev.fixos === 'object') {
+    } else if (rev.kind === 'restaurarFixos') {
       // Um reparo desfeito: os voos voltam a ser fixos como antes dele
       S.fixos = normalizarFixos({ ...(S.fixos || {}), ...rev.fixos });
       logChange('mod', `Revertido: ${entry.desc}`, null, entry.id);
       save();
-    } else if (rev.kind === 'readicionarRecurso' && rev.recurso && !S.frota.some(f => f.reg === rev.recurso.reg)) {
+    } else if (rev.kind === 'readicionarRecurso') {
       // Um recurso retirado volta para a frota, como estava
       S.frota.push({ ...rev.recurso });
       S.av[rev.recurso.reg] = rev.av !== false;
@@ -957,8 +970,13 @@ document.addEventListener('change', async e => {
     const novo = { id, ...registro, registrado_em: new Date().toISOString(), registrado_por: ApiClient.autorAtual || null };
     const atual = S.resultados || { situacao: [], doDia: [] };
     const mesmaMissao = r => r.aluno === novo.aluno && r.curso === novo.curso && r.missao === novo.missao;
-    S.resultados = { situacao: [...atual.situacao.filter(r => !mesmaMissao(r)), novo], doDia: [...atual.doDia, novo] };
-    logChange('mod', `Resultado de ${o.s} em ${o.etapa}: ${sel.value}`);
+    // A situação de cada missão vale para todas as datas; os registros do dia e o histórico, só para a data do voo (a
+    // resposta pode chegar depois de trocar de data: revisão de 14/11)
+    const mesmaData = DATA === registro.data;
+    S.resultados = { situacao: [...atual.situacao.filter(r => !mesmaMissao(r)), novo], doDia: mesmaData ? [...atual.doDia, novo] : atual.doDia };
+    const descricao = `Resultado de ${o.s} em ${o.etapa}: ${registro.resultado}`;
+    if (mesmaData) logChange('mod', descricao);
+    else ApiClient.registrarHistorico(registro.data, { tipo: 'mod', descricao });
   } catch (err) {
     showToast('Não foi possível registrar o resultado. Verifique a conexão e tente de novo.');
   }
@@ -1096,7 +1114,7 @@ document.addEventListener('change', e => {
       });
     } else if (f === 'nm') {
       const old = x.nm;
-      x.nm = t.value.trim() || x.nm;
+      x.nm = nomeLimpo(t.value, x.nm);
       logChange('mod', `Instrutor: ${old} → ${x.nm}`);
     } else if (f === 'kg') {
       x.kg = +t.value || 0;
@@ -1133,7 +1151,7 @@ document.addEventListener('change', e => {
     if (k === 's') {
       if (f === 'nm') {
         const old = s.nm;
-        s.nm = t.value.trim() || s.nm;
+        s.nm = nomeLimpo(t.value, s.nm);
         logChange('mod', `Aluno: ${old} → ${s.nm}`);
       } else if (f === 'kg') {
         s.kg = +t.value || 0;
@@ -1194,6 +1212,19 @@ document.addEventListener('change', e => {
   }
 });
 
+// As horas dos instrutores ou os resultados dos cursos que não foram lidos: "Tentar de novo" lê outra vez
+$('#btn-tentar-dados').onclick = async e => {
+  e.target.disabled = true;
+  try { await lerDadosDeNovo(); } finally { e.target.disabled = false; }
+};
+
+// Fechar ou recarregar a página com alterações esperando a conexão pede confirmação (elas se perderiam)
+window.addEventListener('beforeunload', e => {
+  if (!ApiClient.temGravacoesPendentes()) return;
+  e.preventDefault();
+  e.returnValue = '';
+});
+
 // Inicialização Assíncrona
 (async function bootstrap() {
   try {
@@ -1206,8 +1237,16 @@ document.addEventListener('change', e => {
   abrirData(amanha);
 
   const params = new URLSearchParams(window.location.search);
+  // O link antigo da fase 2 levava a escala inteira no endereço (share=): não vale mais, e sai do endereço
+  if (params.has('share')) {
+    const url = new URL(window.location.href);
+    url.searchParams.delete('share');
+    window.history.replaceState(window.history.state, '', url);
+    avisarDoLink('Este link antigo levava a escala no próprio endereço e não vale mais. Peça um link novo a quem compartilhou.', 'erro');
+  }
+  // A data do link (?data=); uma data que não existe abre amanhã, com o aviso
   const pedida = params.get('data');
-  const data = /^\d{4}-\d{2}-\d{2}$/.test(pedida || '') ? pedida : amanha;
+  const data = dataIsoValida(pedida) ? pedida : amanha;
 
   // Sessão e dados. Se algo falhar (sem conexão, conversão pela metade), o app não abre com dados incompletos:
   // fica o aviso para recarregar (nada se perde; o que faltou é retomado na próxima abertura)
@@ -1222,29 +1261,22 @@ document.addEventListener('change', e => {
     await ApiClient.atualizarFormatoGravado();
 
     abrirData(data);
-    const { estado, escala, horasBase, horasDosInstrutores, resultados } = await ApiClient.carregarDia(data);
-    setS({ ...estado, horasBase, horasDosInstrutores, resultados });
+    const { estado, escala, horasBase, horasDosInstrutores, resultados, indisponiveis } = await ApiClient.carregarDia(data);
+    setS({ ...estado, horasBase, horasDosInstrutores, resultados, indisponiveis });
+    avisarDadosIndisponiveis();
     // Data sem escala gravada: a escala calculada aparece na hora (é gravada junto com a primeira alteração)
     setRES(escala || escalaCalculada());
     marcarEscalaSoCalculada(!escala);
     setAuditLog(await historicoParaPainel(data));
+    if (pedida && data !== pedida) showToast(`A data do link não existe (${pedida.slice(0, 20)}). A escala aberta é a de amanhã.`);
   } catch (e) {
     console.warn(e);
     if (avisoAberto() !== 'conflito') mostrarAviso('falha', 'Não foi possível preparar os dados da escala. Verifique a conexão e recarregue a página; nada foi perdido.');
     return;
   }
 
-  // No modo compartilhado os dados vêm do servidor e o perfil vem da conta: share= e role= da URL não valem
-  const compartilhado = modoCompartilhado();
-  const hasShare = !compartilhado && params.has('share');
-  const sharedDate = compartilhado ? null : ApiClient.applySharedURLIfPresent(S);
-
-  // Se aberto via link compartilhado, força bloqueio estrito no perfil Gestor sem permitir troca para Operador
-  if (hasShare) {
-    setRole('gestor', true);
-  } else if (!compartilhado && params.get('role')) {
-    setRole(params.get('role'), false);
-  }
+  // No modo compartilhado o perfil vem da conta: role= da URL não vale
+  if (!modoCompartilhado() && params.get('role')) setRole(params.get('role'), false);
 
   rRec(); rIns(); rAlu(); rDem(); renderAuditPanel();
   document.body.dataset.agenda = podeEditarAgenda() ? 'edita' : 'consulta';
@@ -1257,14 +1289,7 @@ document.addEventListener('change', e => {
     abrirAgenda();
   }
 
-  if (sharedDate) {
-    abrirData(sharedDate);
-    refazerEscala();
-    show('esc');
-    showToast('Escala compartilhada carregada (Modo Gestor Somente Leitura).');
-  } else {
-    rOut();
-  }
+  rOut();
   atualizarSelosDaEscala();
   lerPedidosDaData();
   carregarBI();

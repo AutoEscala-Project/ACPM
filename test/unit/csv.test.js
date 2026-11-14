@@ -53,7 +53,7 @@ describe('CSV da escala por avião', () => {
     const obs = (fStatus, fObs) => linhasDoCsv(escala([voo('PR-BTB', 'C152', 610, { fKey: 'k', stuKg: 0 })]), fStatus, fObs)[0][5];
     assert.match(obs({ k: 'Atrasado' }, { k: { novoInicio: 640 } }), /^Status: Atrasado: nova decolagem 10:40 · /);
     assert.match(obs({ k: 'Cancelado' }, { k: { motivo: 'Meteorologia' } }), /^Status: Cancelado: Meteorologia · /);
-    assert.match(obs({ k: 'Cancelado' }, { k: { motivo: 'Outro', texto: 'Pista interditada' } }), /^Status: Cancelado: Pista interditada · /);
+    assert.match(obs({ k: 'Cancelado' }, { k: { motivo: 'Outro', texto: 'Aluno com febre' } }), /^Status: Cancelado: Outro · /, 'o texto livre não sai do app');
     assert.match(obs({ k: 'Cancelado' }, {}), /^Status: Cancelado · /);
   });
 
@@ -75,6 +75,21 @@ describe('CSV da escala por avião', () => {
     const linhas = csv.slice(1).split('\r\n');
     assert.equal(linhas[1].split(';')[2], '"Ana ""Aninha"""');
     assert.deepEqual(linhas.slice(2), ['', '"Alertas";"Aluno";"Mensagem"', '"Rejeitado";"Bia";"Rejeitado: sem avião."']);
+  });
+
+  // Revisão de 14/11: um nome gravado como "=HYPERLINK(...)" viraria uma fórmula ao abrir o arquivo no Excel
+  it('um texto que o Excel leria como fórmula vai com um apóstrofo na frente', () => {
+    const csv = montarCsv(escala(
+      [voo('PR-BTB', 'C152', 390, { s: '=HYPERLINK("http://x","Clique")', ins: '+Instrutor', mis: '@SOMA(1)' })],
+      [{ t: 'warn', s: '-2+3', m: '\tAviso' }, { t: 'warn', s: '\rAluna', m: 'Peso: 70 kg' }]
+    ));
+    const linhas = csv.slice(1).split('\r\n');
+    const celulas = linhas[1].split(/;(?=")/);
+    assert.equal(celulas[2], `"'=HYPERLINK(""http://x"",""Clique"")"`);
+    assert.equal(celulas[3], `"'@SOMA(1)"`);
+    assert.equal(celulas[4], `"'+Instrutor"`);
+    assert.equal(linhas.at(-2), `"Aviso";"'-2+3";"'\tAviso"`);
+    assert.ok(csv.endsWith(`"Aviso";"'\rAluna";"Peso: 70 kg"`));
   });
 
   it('o arquivo leva a data da escala no nome', () => {

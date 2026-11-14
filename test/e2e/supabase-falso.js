@@ -5,7 +5,7 @@
 import { separar } from '../../js/dias.js';
 import { migrarCadastro, migrarDia } from '../../js/migracoes.js';
 import { prazoDaAgendaPermite } from '../../js/agenda.js';
-import { gravarDadosPessoais } from '../../js/dados-pessoais.js';
+import { gravarDadosPessoais, semQuemSaiu } from '../../js/dados-pessoais.js';
 import { quadroDoDia } from '../../js/quadro.js';
 import { acumularHoras } from '../../js/limites.js';
 import { situacaoPorMissao, validarRegistro } from '../../js/resultados.js';
@@ -57,16 +57,19 @@ function consultar(linhas, url) {
     const comparar = (a, b, [coluna, sentido]) => (a[coluna] < b[coluna] ? -1 : a[coluna] > b[coluna] ? 1 : 0) * (sentido === 'desc' ? -1 : 1);
     resultado = [...resultado].sort((a, b) => criterios.reduce((r, c) => r || comparar(a, b, c), 0));
   }
-  const limite = url.searchParams.get('limit');
-  return limite ? resultado.slice(0, Number(limite)) : resultado;
+  // Como no Supabase, uma consulta devolve no máximo 1000 linhas
+  const limite = Math.min(Number(url.searchParams.get('limit') || LINHAS_POR_CONSULTA), LINHAS_POR_CONSULTA);
+  return resultado.slice(0, limite);
 }
+const LINHAS_POR_CONSULTA = 1000;
 
 // Um servidor pode atender vários contextos do navegador (ex.: operador e gestor vendo os mesmos dados)
 // agora: o relógio do servidor para o prazo da agenda (o mesmo instante do relógio fixo das páginas)
-export function criarSupabaseFalso({ documentos = {}, dias = {}, agora = new Date('2026-11-10T12:00:00-03:00') } = {}) {
+export function criarSupabaseFalso({ documentos = {}, dias = {}, historico: historicoInicial = [], agora = new Date('2026-11-10T12:00:00-03:00') } = {}) {
   const banco = new Map(Object.entries(documentos).map(([chave, conteudo]) => [chave, { conteudo, versao: 1 }]));
   const tabelaDias = new Map(Object.entries(dias).map(([data, conteudo]) => [data, { conteudo, versao: 1 }]));
-  const historico = [];
+  // As entradas do histórico já gravadas (no formato da tabela historico)
+  const historico = historicoInicial.map(h => ({ ...h }));
   const solicitacoes = [];
   // Dados pessoais ('aluno:1000' → campos, atualizado_em e atualizado_por): operadores e secretaria leem e gravam
   const dadosPessoais = new Map();
@@ -91,13 +94,24 @@ export function criarSupabaseFalso({ documentos = {}, dias = {}, agora = new Dat
   const saidas = [];
   const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': '*', 'Access-Control-Allow-Methods': '*' };
   let falhasDeGravacao = 0;
+  let gravacoesDeDados = 0;
+  let statusDaFalha = 503;
   let leiturasDeDiasSeguras = null;
+  let gravacoesSeguras = null;
+  let desconectado = false;
+  const seguradas = new Map();
+  const falhas = new Map();
 
   // Versão do formato do conteúdo (campo esquema); o servidor não aceita voltar a um formato mais antigo
   const esquema = conteudo => (conteudo && typeof conteudo.esquema === 'number' ? Math.floor(conteudo.esquema) : 0);
-  const salvar = (mapa, chave, conteudo, versaoLida) => {
+  const STATUS = ['Pendente', 'Confirmado', 'Atrasado', 'Em Voo', 'Cancelado', 'Pousou'];
+  const statusValidos = conteudo => !conteudo || !Object.hasOwn(conteudo, 'fStatus') || (conteudo.fStatus && typeof conteudo.fStatus === 'object' &&
+    !Array.isArray(conteudo.fStatus) && Object.entries(conteudo.fStatus).every(([fKey, st]) => /^\d+_\d+_\d+$/.test(fKey) && STATUS.includes(st)));
+  const salvar = (mapa, chave, conteudo, versaoLida, { formatoMinimo = 0 } = {}) => {
     const atual = mapa.get(chave);
-    if (atual && esquema(conteudo) < esquema(atual.conteudo)) return [409, { code: 'PT409', message: `${chave} está num formato mais novo` }];
+    if (esquema(conteudo) < Math.max(atual ? esquema(atual.conteudo) : 0, formatoMinimo)) {
+      return [409, { code: 'PT409', message: `${chave} está num formato mais antigo que o dos dados; recarregue a página`, hint: 'formato' }];
+    }
     const versaoAtual = atual ? atual.versao : 0;
     if (versaoLida !== versaoAtual) return [409, { code: 'PT409', message: `${chave} foi alterado por outra pessoa` }];
     mapa.set(chave, { conteudo, versao: versaoAtual + 1 });
@@ -110,8 +124,20 @@ export function criarSupabaseFalso({ documentos = {}, dias = {}, agora = new Dat
     const responder = (status, corpo) => route.fulfill({
       status, headers: { ...cors, 'Content-Type': 'application/json' }, body: corpo === undefined ? '' : JSON.stringify(corpo)
     });
+    if (desconectado) return route.abort('internetdisconnected');
     if (req.method() === 'OPTIONS') return route.fulfill({ status: 204, headers: cors });
-    const conta = sessoes.get((req.headers().authorization || '').replace(/^Bearer /, ''));
+    for (const [caminho, espera] of seguradas) if (url.pathname.endsWith(caminho)) await espera;
+    for (const [caminho, n] of falhas) {
+      if (!url.pathname.endsWith(caminho) || n <= 0) continue;
+      falhas.set(caminho, n - 1);
+      return route.fulfill({ status: 503, headers: { ...cors, 'Content-Type': 'application/json' }, body: JSON.stringify({ message: 'Service Unavailable' }) });
+    }
+    const portador = (req.headers().authorization || '').replace(/^Bearer /, '');
+    const conta = sessoes.get(portador);
+    // Um token de sessão (JWT) que o servidor não conhece mais: sessão expirada
+    if (!conta && portador.split('.').length === 3 && url.pathname.startsWith('/rest/v1/')) {
+      return route.fulfill({ status: 401, headers: { ...cors, 'Content-Type': 'application/json' }, body: JSON.stringify({ code: 'PGRST301', message: 'JWT expired' }) });
+    }
     const comPerfil = conta && conta.perfil;
     const operador = conta && ['operador', 'administrador'].includes(conta.perfil);
     const veDados = conta && ['operador', 'administrador', 'secretaria'].includes(conta.perfil);
@@ -168,11 +194,12 @@ export function criarSupabaseFalso({ documentos = {}, dias = {}, agora = new Dat
       const funcao = url.pathname.slice('/rest/v1/rpc/'.length);
       const args = req.postDataJSON();
       if (funcao === 'salvar_documento' || funcao === 'salvar_dia') {
+        await gravacoesSeguras;
         const chave = funcao === 'salvar_dia' ? `dia:${args.p_data}` : args.p_chave;
         gravacoes.push({ chave, versaoLida: args.p_versao_lida, por: conta && conta.email });
         if (falhasDeGravacao > 0) {
           falhasDeGravacao--;
-          return responder(503, { message: 'Service Unavailable' });
+          return responder(statusDaFalha, statusDaFalha === 503 ? { message: 'Service Unavailable' } : { code: '23514', message: 'conteúdo recusado' });
         }
       }
       // Contas: só o administrador lista, cria e exclui (ninguém exclui a própria conta)
@@ -232,22 +259,46 @@ export function criarSupabaseFalso({ documentos = {}, dias = {}, agora = new Dat
       if (funcao === 'salvar_dados_pessoais') {
         if (!veDados) return responder(403, { code: '42501', message: 'somente operadores e a secretaria alteram dados pessoais' });
         try {
-          const tabela = gravarDadosPessoais(Object.fromEntries(dadosPessoais), args.p_tipo, args.p_id, args.p_dados,
-            { hoje: agora.toISOString().slice(0, 10), autor: conta.nome, agora: agora.toISOString() });
+          const cadastro = banco.get('cadastro');
+          // Cada gravação com a sua data (como o clock_timestamp do banco)
+          const quando = new Date(agora.getTime() + gravacoesDeDados++).toISOString();
+          const r = gravarDadosPessoais(Object.fromEntries(dadosPessoais), args.p_tipo, args.p_id, args.p_dados,
+            { hoje: agora.toISOString().slice(0, 10), autor: conta.nome, agora: quando, atualizadoEmLido: args.p_atualizado_em, cadastro: cadastro && cadastro.conteudo });
           dadosPessoais.clear();
-          Object.entries(tabela).forEach(([chave, d]) => dadosPessoais.set(chave, d));
-          return responder(204);
+          Object.entries(r.tabela).forEach(([chave, d]) => dadosPessoais.set(chave, d));
+          let entrada = null;
+          if (r.descricao) {
+            const id = historico.length + 1;
+            historico.push({ id, data: args.p_data, registrado_em: quando, usuario: conta.id, autor: conta.nome, tipo: 'mod', descricao: r.descricao, reverter: null, reverte: null, importado: false });
+            entrada = { id, descricao: r.descricao };
+          }
+          return responder(200, { atualizado_em: r.atualizado_em, atualizado_por: conta.nome, historico: entrada });
         } catch (e) {
-          return responder(e.code === '23505' ? 409 : 400, { code: e.code, message: e.message.replace(/\.$/, ''), hint: e.campo });
+          return responder({ 23505: 409, PT409: 409, P0002: 404 }[e.code] || 400, { code: e.code, message: e.message.replace(/\.$/, ''), hint: e.campo });
         }
       }
       if (!operador) return responder(403, { code: '42501', message: 'somente operadores podem alterar a escala' });
       if (funcao === 'salvar_documento') {
         // Depois da conversão (o cadastro existe), os documentos da fase 2 ficam só como cópia
-        if (args.p_chave !== 'cadastro' && banco.has('cadastro')) return responder(409, { code: 'PT409', message: `${args.p_chave} é da versão anterior do app` });
-        return responder(...salvar(banco, args.p_chave, args.p_conteudo, args.p_versao_lida));
+        if (args.p_chave !== 'cadastro' && banco.has('cadastro')) return responder(409, { code: 'PT409', message: `${args.p_chave} é da versão anterior do app`, hint: 'formato' });
+        const resposta = salvar(banco, args.p_chave, args.p_conteudo, args.p_versao_lida);
+        // Quem sai do cadastro leva os dados pessoais junto
+        if (resposta[0] === 200 && args.p_chave === 'cadastro') {
+          const ficam = semQuemSaiu(Object.fromEntries(dadosPessoais), args.p_conteudo);
+          for (const chave of [...dadosPessoais.keys()]) if (!Object.hasOwn(ficam, chave)) dadosPessoais.delete(chave);
+        }
+        return responder(...resposta);
       }
-      if (funcao === 'salvar_dia') return responder(...salvar(tabelaDias, args.p_data, args.p_conteudo, args.p_versao_lida));
+      if (funcao === 'salvar_dia') {
+        // Um dia não nasce num formato mais antigo que o do cadastro, e só leva os status da lista
+        const cadastro = banco.get('cadastro');
+        if (!statusValidos(args.p_conteudo)) return responder(400, { code: '23514', message: 'status de voo fora da lista' });
+        return responder(...salvar(tabelaDias, args.p_data, args.p_conteudo, args.p_versao_lida, { formatoMinimo: cadastro ? esquema(cadastro.conteudo) : 0 }));
+      }
+      if (funcao === 'dias_em_formato_antigo') {
+        if (!operador) return responder(403, { code: '42501', message: 'somente operadores atualizam o formato dos dados' });
+        return responder(200, [...tabelaDias].filter(([, d]) => esquema(d.conteudo) < args.p_esquema).map(([data]) => data).sort());
+      }
       if (funcao === 'registrar_resultado') {
         try {
           const r = validarRegistro({ aluno: args.p_aluno, curso: args.p_curso, missao: args.p_missao, resultado: args.p_resultado, data: args.p_data, voo: args.p_voo });
@@ -298,7 +349,27 @@ export function criarSupabaseFalso({ documentos = {}, dias = {}, agora = new Dat
       return `#access_token=${emitirToken(conta)}&expires_at=${expira}&expires_in=3600&refresh_token=renovar-${conta.id}&token_type=bearer&type=email_change`;
     },
     // Simula indisponibilidade do servidor nas próximas gravações
-    falharGravacoes(n) { falhasDeGravacao = n; },
+    // (503: fora do ar, o app tenta de novo; 400: recusa definitiva)
+    falharGravacoes(n, status = 503) { falhasDeGravacao = n; statusDaFalha = status; },
+    // As próximas n requisições a um caminho recebem 503 (servidor fora do ar)
+    falhar(caminho, n = 1) { falhas.set(caminho, n); },
+    // Segura as requisições a um caminho (ex.: '/rpc/registrar_resultado') até chamar a função devolvida
+    segurar(caminho) {
+      let liberar;
+      seguradas.set(caminho, new Promise(resolve => { liberar = resolve; }));
+      return () => { seguradas.delete(caminho); liberar(); };
+    },
+    // As sessões abertas expiram (quem estava conectado precisa entrar de novo)
+    expirarSessoes() { sessoes.clear(); },
+    // Sem conexão: nenhuma requisição chega ao servidor até reconectar
+    desconectar() { desconectado = true; },
+    reconectar() { desconectado = false; },
+    // Segura as gravações (do cadastro e dos dias) até chamar a função devolvida (uma gravação que demora)
+    segurarGravacoes() {
+      let liberar;
+      gravacoesSeguras = new Promise(resolve => { liberar = resolve; });
+      return () => { gravacoesSeguras = null; liberar(); };
+    },
     // Segura as leituras da tabela dias até chamar a função devolvida (uma data que demora a carregar)
     segurarLeiturasDeDias() {
       let liberar;

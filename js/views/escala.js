@@ -3,15 +3,16 @@ import { FLIGHT_STATUSES, GROUND_REG } from '../config.js';
 import { hm, WLB, fmtH, esc } from '../format.js';
 import { isGroundMission } from '../rules.js';
 import { categoriaDoTipo, nomeDoRecurso } from '../categorias.js';
-import { textoDoDetalhe } from '../status.js';
-import { linhasDoQuadro } from '../quadro.js';
+import { textoDoDetalhe, classeDoStatus } from '../status.js';
+import { validarReversao } from '../reversoes.js';
+import { linhasDoQuadro, quadroDoDia } from '../quadro.js';
 import { painelDaEscala } from './painel-aeroporto.js';
 import { atualizarPainelDeReparo } from './reparo.js';
 import { resultadoNaEscala } from './etapas.js';
 import { OPCOES_DE_BURACOS, OPCOES_DE_HORARIOS, normalizarCriterios } from '../criterios.js';
 import { metricasDaEscala } from '../metricas.js';
 import { sumUniqueOperationalHours, consolidateTimelineSlots } from '../engine.js';
-import { S, RES, AUDIT_LOG, TL_MODE, DATA, isGestor } from '../state.js';
+import { S, RES, AUDIT_LOG, TL_MODE, DATA, isGestor, dadoIndisponivel } from '../state.js';
 import { $ } from '../dom.js';
 
 export const HT = o => (o.isGround || isGroundMission(o.mis) ? '01h30 (1,5 h)' : o.h + ' h' + (o.ss !== '1/1' ? ` (sessão ${o.ss})` : ''));
@@ -46,13 +47,13 @@ function conteudoDoPopup(o) {
       ${o.comb ? `<span>Combustível:</span><span>${textoDoCombustivel(o.comb)}</span>` : ''}
       <span>Status:</span>
       <span>
-        <select class="st-sel st-${st.replace(/\s+/g, '')}" data-f="fstatus" data-fkey="${principal.fKey}" aria-label="Status do voo"${isGestor() ? ' disabled' : ''}>
+        <select class="st-sel st-${classeDoStatus(st)}" data-f="fstatus" data-fkey="${esc(principal.fKey)}" aria-label="Status do voo"${isGestor() ? ' disabled' : ''}>
           ${FLIGHT_STATUSES.map(v => `<option value="${v}"${v === st ? ' selected' : ''}>${v}</option>`).join('')}
         </select>
         ${detalheDoStatus(principal)}
       </span>
     </div>
-    ${!turma && o.stuId ? `<button type="button" class="tl-pop-btn edit-only" data-act="rm-fly" data-id="${o.stuId}" data-mid="${o.mid || 0}">✕ Excluir da escala</button>` : ''}`;
+    ${!turma && o.stuId ? `<button type="button" class="tl-pop-btn edit-only" data-act="rm-fly" data-id="${esc(o.stuId)}" data-mid="${esc(o.mid || 0)}">✕ Excluir da escala</button>` : ''}`;
 }
 
 // Acima da barra (ou abaixo, quando não cabe), sempre inteiro na tela; a seta aponta para o meio da barra
@@ -135,7 +136,7 @@ export function buildTimelineGroup(out, groupKey, subLabelFn, barLine1Fn, barLin
 
       // Turma coletiva: cancelada só quando todos os alunos estão cancelados
       const activeItems = o.items.filter(it => statusDe(it) !== 'Cancelado');
-      const stKey = (activeItems.length ? statusDe(activeItems[0]) : 'Cancelado').replace(/\s+/g, '');
+      const stKey = classeDoStatus(activeItems.length ? statusDe(activeItems[0]) : 'Cancelado');
       const chave = o.classKey || o.fKey || `${groupKey}:${key}:${o.a}`;
       VOOS_DO_MAPA.set(chave, o);
 
@@ -219,15 +220,20 @@ export function renderAuditPanel() {
       logListEl.innerHTML = `<div class="audit-item"><span class="h">Sem alterações registradas nesta data.</span></div>`;
     } else {
       logListEl.innerHTML = historico.map(item => {
-        const lbl = item.type === 'inc' ? 'Inclusão' : item.type === 'exc' ? 'Exclusão' : 'Edição';
-        const podeReverter = item.revert && item.id !== null && item.id !== undefined;
-        const btnRevert = podeReverter
-          ? `<button class="x edit-only" data-act="rev-log" data-logid="${item.id}">${esc(item.revert.label || '↶ Reverter')}</button>`
+        const tipo = ['inc', 'exc', 'mod'].includes(item.type) ? item.type : 'mod';
+        const lbl = tipo === 'inc' ? 'Inclusão' : tipo === 'exc' ? 'Exclusão' : 'Edição';
+        // Só a reversão no formato que o app grava vira botão (revisão de 14/11)
+        const reversao = item.id !== null && item.id !== undefined ? validarReversao(item.revert, S.frota) : null;
+        const btnRevert = reversao
+          ? `<button class="x edit-only" data-act="rev-log" data-logid="${esc(item.id)}">${esc(reversao.label)}</button>`
           : '';
-        const autor = item.autor ? ` <span class="sm">${esc(item.autor)}</span>` : '';
+        const autor = item.autor ? ` <span class="sm audit-autor">${esc(item.autor)}</span>` : '';
         const importado = item.importado ? ' <span class="sm">(importado)</span>' : '';
+        // A alteração ainda sendo gravada, ou recusada pelo servidor (revisão de 14/11)
+        const estado = item.estado === 'gravando' ? ' <span class="sm audit-estado">gravando…</span>'
+          : item.estado === 'nao-gravada' ? ' <span class="sm audit-estado nao-gravada">não gravada</span>' : '';
         return `<div class="audit-item">
-          <div><span class="sm">[${esc(item.ts)}]</span>${autor} <span class="audit-badge ${item.type}">${lbl}</span> <span>${esc(item.desc)}</span>${importado}</div>
+          <div><span class="sm">[${esc(item.ts)}]</span>${autor} <span class="audit-badge ${tipo}">${lbl}</span> <span class="audit-desc">${esc(item.desc)}</span>${importado}${estado}</div>
           ${btnRevert}
         </div>`;
       }).join('');
@@ -262,7 +268,7 @@ const seloDoCombustivel = o => (o.comb ? ` <span class="tag comb" title="${texto
 
 function seletorDeStatus(o) {
   const st = statusDe(o);
-  return `<select class="st-sel st-${st.replace(/\s+/g, '')}" data-f="fstatus" data-fkey="${o.fKey}" aria-label="Status de ${esc(o.s)}"${isGestor() ? ' disabled' : ''}>
+  return `<select class="st-sel st-${classeDoStatus(st)}" data-f="fstatus" data-fkey="${esc(o.fKey)}" aria-label="Status de ${esc(o.s)}"${isGestor() ? ' disabled' : ''}>
     ${FLIGHT_STATUSES.map(v => `<option value="${v}"${v === st ? ' selected' : ''}>${v}</option>`).join('')}
   </select>${detalheDoStatus(o)}`;
 }
@@ -273,11 +279,11 @@ function detalheDoStatus(o) {
   if (!texto) return '';
   return isGestor()
     ? `<span class="st-detalhe">${esc(texto)}</span>`
-    : `<button type="button" class="st-detalhe" data-act="detalhe-status" data-fkey="${o.fKey}" title="Alterar o detalhe do status">${esc(texto)}</button>`;
+    : `<button type="button" class="st-detalhe" data-act="detalhe-status" data-fkey="${esc(o.fKey)}" title="Alterar o detalhe do status">${esc(texto)}</button>`;
 }
 
 const acao = o => (o.stuId
-  ? `<button class="x" data-act="rm-fly" data-id="${o.stuId}" data-mid="${o.mid || 0}" aria-label="Tirar ${esc(o.s)} da escala" title="Tirar da escala">✕</button>`
+  ? `<button class="x" data-act="rm-fly" data-id="${esc(o.stuId)}" data-mid="${esc(o.mid || 0)}" aria-label="Tirar ${esc(o.s)} da escala" title="Tirar da escala">✕</button>`
   : '');
 
 // Escala aprovada (fase 12): o selo diz quando (e quem) aprovou e o botão reabre; sem aprovação, o botão aprova
@@ -292,7 +298,10 @@ function rAprovacao(temVoos) {
     selo.innerHTML = `<svg class="ico" aria-hidden="true"><use href="#i-cadeado"/></svg>Aprovada às ${hora}${S.aprovacao.por ? ` por ${esc(S.aprovacao.por)}` : ''}`;
     lugar.innerHTML = `<button type="button" class="btn sec edit-only" id="btn-reabrir" title="Os voos deixam de ser fixos e a escala volta a ser refeita inteira a cada alteração">Reabrir</button>`;
   } else {
-    lugar.innerHTML = temVoos ? `<button type="button" class="btn edit-only" id="btn-aprovar" title="Fixa os voos: depois disso, as alterações não tiram ninguém do lugar">Aprovar escala</button>` : '';
+    // Sem as horas dos instrutores, os limites do mês e do ano não foram conferidos: não aprova (revisão de 14/11)
+    const semHoras = dadoIndisponivel('horas');
+    const dica = semHoras ? 'As horas de voo dos instrutores não foram lidas: os limites do mês e do ano não foram conferidos' : 'Fixa os voos: depois disso, as alterações não tiram ninguém do lugar';
+    lugar.innerHTML = temVoos ? `<button type="button" class="btn edit-only" id="btn-aprovar" title="${dica}"${semHoras ? ' disabled' : ''}>Aprovar escala</button>` : '';
   }
 }
 
@@ -425,10 +434,11 @@ function tabela(voos) {
   return h + '</tbody></table></div>';
 }
 
-// Painel: partidas e chegadas no estilo dos aeroportos, com os voos dos filtros (js/views/painel-aeroporto.js)
+// Painel: partidas e chegadas no estilo dos aeroportos, com os voos dos filtros (js/views/painel-aeroporto.js). Feito para
+// um monitor ou uma TV: as mesmas reduções da TV da recepção (o aluno abreviado e só a categoria do motivo)
 function painelDoDia(voos) {
-  const fStatus = S.fStatus || {}, fObs = S.fObs || {}, data = DATA;
-  return `<div class="painel-dia">${painelDaEscala(() => ({ linhas: linhasDoQuadro(voos, fStatus, fObs), data }))}</div>`;
+  const quadro = quadroDoDia({ resultado: { out: voos }, fStatus: S.fStatus, fObs: S.fObs });
+  return `<div class="painel-dia">${painelDaEscala(() => ({ linhas: linhasDoQuadro(quadro.voos || [], quadro.fStatus, quadro.fObs), data: DATA }))}</div>`;
 }
 
 // A escala é refeita a cada alteração (save em actions.js): aqui ela só é desenhada, na visão escolhida na barra
@@ -454,7 +464,7 @@ export function rOut() {
   if (!usados.includes(curEqFilter)) curEqFilter = '';
   if (eqFilterEl) {
     eqFilterEl.innerHTML = '<option value="">Todos</option>' +
-      usados.map(r => `<option value="${r}"${r === curEqFilter ? ' selected' : ''}>${esc(nomeDoRecurso(r))}</option>`).join('');
+      usados.map(r => `<option value="${esc(r)}"${r === curEqFilter ? ' selected' : ''}>${esc(nomeDoRecurso(r))}</option>`).join('');
   }
   const qFilter = ($('#flt-esc-q') && $('#flt-esc-q').value || '').toLowerCase();
   const voos = out.filter(o => {

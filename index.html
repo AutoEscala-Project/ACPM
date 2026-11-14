@@ -4,6 +4,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<!-- Política de segurança de conteúdo (revisão de 14/11): só os scripts e estilos abaixo e os servidores do Supabase do
+     app (js/config-supabase.js). Uma biblioteca nova, ou uma versão nova, precisa entrar aqui (test/unit/csp.test.js). -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdnjs.cloudflare.com/ajax/libs/jspdf/4.2.1/ https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/5.0.9/ https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/; style-src 'self' https://fonts.googleapis.com 'unsafe-inline'; style-src-elem 'self' https://fonts.googleapis.com; style-src-attr 'unsafe-inline'; font-src https://fonts.gstatic.com; img-src 'self'; connect-src 'self' https://iszaomkinojwxymyglmh.supabase.co https://llylkdgfuagzdaualvqa.supabase.co https://acpm-teste.supabase.invalid; object-src 'none'; base-uri 'self'; form-action 'self'">
 <title>AutoEscala - ACPM</title>
 <meta name="application-name" content="AutoEscala - ACPM">
 <meta name="apple-mobile-web-app-title" content="AutoEscala">
@@ -108,6 +111,12 @@
   <div class="aviso-link" id="aviso-link" role="status" hidden>
     <span id="aviso-link-texto"></span>
     <button class="btn" type="button" id="btn-fechar-aviso-link">OK</button>
+  </div>
+
+  <!-- DADOS LIDOS À PARTE QUE NÃO VIERAM: as horas dos instrutores (limites da lei) e os resultados dos cursos -->
+  <div class="aviso-link erro" id="aviso-dados" role="status" hidden>
+    <span id="aviso-dados-texto"></span>
+    <button class="btn" type="button" id="btn-tentar-dados">Tentar de novo</button>
   </div>
 
   <!-- LOGIN (modo compartilhado: dados no Supabase) -->
@@ -307,7 +316,7 @@
       <label class="flt-rotulo"><span>Categoria</span> <select id="flt-esc-cat" class="flt-ctrl"></select></label>
       <label class="flt-rotulo"><span>Recurso</span> <select id="flt-esc-eq" class="flt-ctrl"><option value="">Todos</option></select></label>
       <input type="search" id="flt-esc-q" class="flt-ctrl" placeholder="Buscar aluno, instrutor ou missão…" aria-label="Filtrar na escala">
-      <button class="btn sec" id="btn-share-link" title="Copiar link compartilhável da escala (abre bloqueado como Gestor)"><svg class="ico"><use href="#i-compartilhar"/></svg>Compartilhar</button>
+      <button class="btn sec" id="btn-share-link" title="Copiar o link da escala desta data (no app publicado, com login)"><svg class="ico"><use href="#i-compartilhar"/></svg>Compartilhar</button>
       <button class="btn sec" id="exp" title="Exportar o CSV para o lançamento no portal">CSV</button>
       <button class="btn sec" id="pdf" title="Emitir o PDF da escala para impressão">PDF</button>
     </div>
@@ -470,7 +479,7 @@
       <h4>Alunos</h4>
       <p>Nome, CANAC, curso e peso de cada aluno; embaixo do curso, as missões aprovadas do programa e a próxima (por exemplo, <i>12/40 · próxima PP-13</i>). O peso entra no limite de peso de cada avião (sem o peso, a escala avisa que não conferiu). Em <i>Não escalar com</i>, escolha os instrutores que não devem voar com o aluno.</p>
       <p><b>Cursos</b> (o botão ao lado de <i>Alunos</i>): o programa do PP, do PC e do INVA, na ordem em que o aluno voa. Cada missão tem um código (por exemplo, PP-07, até 15 letras, números, pontos e hífens, sem repetir no curso), um nome, o tipo de missão da escala, o recurso e as horas (o Ground é sempre na sala, com 1h30). <i>+ Missão</i> inclui com o próximo número livre; as setas mudam a ordem e o ✕ tira (pede confirmação). Só o Administrador muda o programa; os outros perfis consultam.</p>
-      <p><b>Dados pessoais</b> (o botão na linha do aluno ou do instrutor): CPF, CANAC (o código da ANAC, 6 dígitos), nascimento, celular (com DDD) e e-mail. O app confere o CPF pelos dígitos verificadores e não aceita o mesmo CPF ou CANAC em dois alunos; deixar tudo vazio apaga os dados da pessoa. Só operadores, administradores e a secretaria veem esses dados: eles ficam fora da escala e não vão para o CSV, o PDF nem o link compartilhado, e o Histórico registra só quais campos mudaram, nunca os valores.</p>
+      <p><b>Dados pessoais</b> (o botão na linha do aluno ou do instrutor): CPF, CANAC (o código da ANAC, 6 dígitos), nascimento, celular (com DDD) e e-mail. O app confere o CPF pelos dígitos verificadores e não aceita o mesmo CPF ou CANAC em dois alunos; deixar tudo vazio apaga os dados da pessoa. Só operadores, administradores e a secretaria veem esses dados: eles ficam fora da escala e não vão para o CSV, o PDF nem o link compartilhado, e o Histórico registra só quais campos mudaram, nunca os valores (também as alterações da secretaria). Excluir um aluno ou instrutor apaga os dados pessoais dele. Se outra pessoa alterou os dados enquanto o painel estava aberto, o app avisa em vez de gravar por cima: feche e abra de novo.</p>
 
       <h4 id="manual-aba-rodizio">Rodízio</h4>
       <p>Filas para dividir com justiça, entre os instrutores habilitados, os voos que remuneram melhor:</p>
@@ -536,7 +545,7 @@
       <p>A TV mostra o painel de partidas e chegadas de hoje, na tela toda, como nos aeroportos: o mesmo da visão <i>Painel</i> da Escala, com o aluno abreviado (o primeiro nome e a inicial do último) e, no cancelamento, só a categoria do motivo.</p>
       <ol>
         <li>Um Administrador cria a conta da TV em <i>Usuários</i>, com o perfil <i>Painel (TV da recepção)</i>. Essa conta não vê mais nada do app.</li>
-        <li>No navegador da TV, abra o endereço do app com <code>painel.html</code> no fim (o mesmo endereço, trocando o final) e entre uma vez com a conta da TV. Se a TV abrir o app comum, ela vai direto para o painel.</li>
+        <li>No navegador da TV, abra o endereço do app com <code>painel.html</code> no fim (o mesmo endereço, trocando o final) e entre uma vez com a conta da TV. Se a TV abrir o app comum, ela vai direto para o painel. A página da TV só aceita a conta da TV, e a conexão dela vale só para o painel: quem usar a TV não abre o app.</li>
         <li>Deixe o navegador em tela cheia. O painel busca as mudanças a cada minuto, recarrega sozinho de madrugada e mantém a tela acesa. Sem conexão por mais de 3 minutos, mostra desde quando.</li>
       </ol>
       <p>O painel mostra a escala de hoje que já foi gravada (a escala é gravada a cada alteração do operador ou quando ele exporta o CSV ou o PDF).</p>
@@ -611,6 +620,18 @@
     <div class="dlg-acoes">
       <button type="button" class="btn sec" id="st-voltar">Voltar</button>
       <button type="submit" class="btn" id="st-confirmar">Confirmar</button>
+    </div>
+  </form>
+</dialog>
+<!-- Sessão expirada no modo compartilhado (js/sessao.js): entrar de novo com a mesma conta, sem perder as alterações -->
+<dialog class="dlg" id="dlg-sessao" aria-labelledby="dlg-sessao-titulo">
+  <form id="form-sessao" novalidate>
+    <h2 id="dlg-sessao-titulo">Entre de novo</h2>
+    <p class="h">A sua sessão expirou. Entre de novo com <b id="sessao-email"></b> para gravar as alterações que estão esperando (nada foi perdido).</p>
+    <label class="campo">Senha <input type="password" id="sessao-senha" autocomplete="current-password" required></label>
+    <p class="erro-campo" id="sessao-erro" role="alert"></p>
+    <div class="dlg-acoes">
+      <button type="submit" class="btn" id="sessao-entrar">Entrar</button>
     </div>
   </form>
 </dialog>

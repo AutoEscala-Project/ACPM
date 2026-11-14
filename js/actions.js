@@ -1,9 +1,10 @@
 // Ações que alteram o estado: perfil de acesso, data da escala, histórico de alterações, geração da escala e BI.
-import { isoMenosDias, fimDoMes, rotuloDaData, hojeISO } from './format.js';
+import { isoMenosDias, fimDoMes, rotuloDaData, hojeISO, LIMITE_DO_NOME } from './format.js';
 import { runAllocationEngine } from './engine.js';
 import { ApiClient } from './storage.js';
-import { S, RES, AUDIT_LOG, BI_HISTORY, DATA, setS, setRES, setAuditLog, setBIHistory, setData, isGestor } from './state.js';
-import { $ } from './dom.js';
+import { S, RES, AUDIT_LOG, BI_HISTORY, DATA, setS, setRES, setAuditLog, setBIHistory, setData, isGestor, dadoIndisponivel } from './state.js';
+import { $, mostrarAviso, avisoAberto, showToast } from './dom.js';
+import { comHorasExternas } from './limites.js';
 import { rBI } from './views/bi.js';
 import { renderAuditPanel, rOut } from './views/escala.js';
 import { rDem } from './views/demanda.js';
@@ -53,17 +54,94 @@ export function setRole(role, lockShared = false) {
   atualizarSeloDaAgenda();
 }
 
+// As horas dos instrutores ou os resultados dos cursos que não foram lidos (revisão de 14/11): o aviso fica até a leitura
+// dar certo, e o que depende disso fica desligado (Aprovar escala; a próxima missão e o resultado)
+const SEM_OS_DADOS = {
+  horas: 'Não foi possível ler as horas de voo dos instrutores: os limites do mês e do ano não estão sendo conferidos, e Aprovar escala fica desligado.',
+  resultados: 'Não foi possível ler os resultados das missões dos cursos: a próxima missão e o registro de resultados ficam desligados.'
+};
+export function avisarDadosIndisponiveis() {
+  const partes = (S.indisponiveis || []).filter(p => Object.hasOwn(SEM_OS_DADOS, p));
+  $('#aviso-dados').hidden = !partes.length;
+  $('#aviso-dados-texto').textContent = partes.map(p => SEM_OS_DADOS[p]).join(' ');
+}
+
+// "Tentar de novo": lê de novo o que faltou; a escala é refeita com as horas (o voo além do limite do mês aparece)
+export async function lerDadosDeNovo() {
+  const data = DATA;
+  const { horasBase, resultados } = await ApiClient.lerDadosAParte(data);
+  if (DATA !== data) return;
+  if (horasBase && dadoIndisponivel('horas')) {
+    S.horasBase = horasBase;
+    S.horasDosInstrutores = comHorasExternas(horasBase, S.ins, data);
+  }
+  if (resultados && dadoIndisponivel('resultados')) S.resultados = resultados;
+  S.indisponiveis = (S.indisponiveis || []).filter(p => (p === 'horas' ? !horasBase : p === 'resultados' ? !resultados : true));
+  avisarDadosIndisponiveis();
+  if (!S.indisponiveis.length) showToast('Dados lidos.', 'ok');
+  if (horasBase && !isGestor()) save();
+  rIns(); rAlu(); rDem(); rOut();
+}
+
+// Uma gravação que não deu certo (revisão de 14/11). Sem conexão, o aviso conta as alterações esperando (as entradas
+// "gravando…" do histórico), que são gravadas sozinhas; uma recusa definitiva do servidor pede para recarregar
+export function avisarFalhaDeGravacao(erro, documento, { definitivo = false } = {}) {
+  if (avisoAberto() === 'conflito') return;
+  if (definitivo) {
+    const motivo = erro && erro.code === '42501' ? 'a sua conta não tem permissão' : (erro && erro.message) || 'erro desconhecido';
+    mostrarAviso('erro', documento === 'historico'
+      ? `O servidor recusou o registro da última alteração no histórico (${motivo}).`
+      : `O servidor recusou a última alteração (${motivo}): ela não foi salva. Recarregue a página para voltar à escala gravada.`);
+    return;
+  }
+  avisarAlteracoesEsperando();
+}
+
+function avisarAlteracoesEsperando() {
+  const n = AUDIT_LOG.filter(e => e.estado === 'gravando').length;
+  // Sem alteração do operador esperando (ex.: a atualização dos dados ao abrir), o aviso não conta alterações
+  if (!n) {
+    mostrarAviso('espera', 'Sem conexão com o servidor: gravando de novo assim que a conexão voltar; não feche esta página.', { recarregar: false });
+    return;
+  }
+  mostrarAviso('espera', n > 1
+    ? `Sem conexão com o servidor: ${n} alterações esperando para serem gravadas. Elas são gravadas sozinhas quando a conexão voltar; não feche esta página.`
+    : 'Sem conexão com o servidor: 1 alteração esperando para ser gravada. Ela é gravada sozinha quando a conexão voltar; não feche esta página.',
+  { recarregar: false });
+}
+
+// Depois de um conflito nada mais é gravado (revisão de 14/11): a tela fica só para consulta até recarregar, com o aviso
+export function travarAposConflito({ formato = false } = {}) {
+  setRole('gestor', true);
+  rRec(); rIns(); rAlu(); rDem();
+  if (RES) rOut();
+  mostrarAviso('conflito', formato
+    ? 'O app foi atualizado. Recarregue a página para continuar (a sua última alteração não foi salva).'
+    : 'Outra pessoa alterou a escala enquanto você editava. A tela ficou só para consulta: recarregue para ver a versão atual e continuar (a sua última alteração não foi salva).');
+}
+
 // A escala acompanha os dados: cada alteração do operador refaz a escala da data (o motor leva milissegundos) e
 // grava os dados e a escala juntos. Ao abrir a aba Escala, ela já está pronta
+// A gravação mais recente da escala: as entradas do histórico esperam por ela
+let gravacaoAtual = Promise.resolve(true);
+
+// Refaz e grava a escala; responde se a gravação deu certo
 export function save() {
-  if (isGestor()) return;
+  if (isGestor()) return Promise.resolve(false);
   refazerEscala();
-  ApiClient.salvarDia(DATA, S, RES);
+  gravacaoAtual = ApiClient.salvarDia(DATA, S, RES);
+  // Neste navegador (sem servidor), a gravação só falha quando o armazenamento recusa (o espaço pode ter acabado)
+  if (document.body.dataset.backend !== 'supabase') {
+    gravacaoAtual.then(gravou => {
+      if (!gravou) mostrarAviso('erro', 'Não foi possível salvar neste navegador (o espaço de armazenamento pode ter acabado): a última alteração não foi salva. Exporte o CSV para não perder a escala.', { recarregar: false });
+    });
+  }
   escalaSoCalculada = false;
   // A barra da escala mostra quando ela foi refeita
   const agora = new Date();
   $('#escala-atualizada-texto').textContent = `Atualizada às ${String(agora.getHours()).padStart(2, '0')}:${String(agora.getMinutes()).padStart(2, '0')}`;
   $('#escala-atualizada').hidden = false;
+  return gravacaoAtual;
 }
 
 // Escala só calculada (data aberta ainda sem escala gravada): é gravada na primeira alteração ou quando é exportada
@@ -74,10 +152,17 @@ export function gravarEscalaCalculada() {
   if (escalaSoCalculada) save();
 }
 
-// A entrada aparece na hora; o id (que permite reverter) chega quando o registro é gravado.
+// A descrição de uma entrada do histórico tem até 500 caracteres, ao gravar e ao abrir (revisão de 14/11)
+const LIMITE_DA_DESCRICAO = 500;
+const textoAte = (texto, limite) => (texto === null || texto === undefined ? texto : String(texto).slice(0, limite));
+
+// A entrada aparece na hora, "gravando…". Ela só vai para o servidor depois da gravação que leva a alteração (a que
+// acabou de sair ou a que sai logo depois, no mesmo evento): uma alteração recusada não entra no histórico e fica
+// "não gravada". O id (que permite reverter) chega quando o registro é gravado.
 // reverte: id da entrada que esta alteração desfaz (ela deixa de aparecer no painel)
-export function logChange(type, desc, revertAction = null, reverte = null) {
+export function logChange(type, texto, revertAction = null, reverte = null) {
   if (isGestor()) return;
+  const desc = textoAte(texto, LIMITE_DA_DESCRICAO);
   const entry = {
     id: null,
     ts: new Date().toTimeString().slice(0, 8),
@@ -86,15 +171,22 @@ export function logChange(type, desc, revertAction = null, reverte = null) {
     revert: revertAction,
     reverte,
     autor: ApiClient.autorAtual,
-    importado: false
+    importado: false,
+    estado: 'gravando'
   };
   AUDIT_LOG.unshift(entry);
   renderAuditPanel();
-  ApiClient.registrarHistorico(DATA, { tipo: type, descricao: desc, reverter: revertAction, reverte }).then(id => {
-    if (id === null || id === undefined) return;
-    entry.id = id;
+  if (avisoAberto() === 'espera') avisarAlteracoesEsperando();
+  const data = DATA;
+  queueMicrotask(() => gravacaoAtual.then(async gravou => {
+    const id = gravou ? await ApiClient.registrarHistorico(data, { tipo: type, descricao: desc, reverter: revertAction, reverte }) : null;
+    if (id === null || id === undefined) entry.estado = 'nao-gravada';
+    else {
+      entry.id = id;
+      delete entry.estado;
+    }
     renderAuditPanel();
-  });
+  }));
 }
 
 // Entradas importadas (anteriores à fase 3) mostram também o dia em que foram feitas
@@ -104,15 +196,21 @@ function horario(iso, importado) {
   return importado ? `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')} ${hora.slice(0, 5)}` : hora;
 }
 
+// Uma entrada que o servidor já registrou (os dados pessoais: a própria função registra os campos que mudaram)
+export function mostrarNoHistorico({ id, descricao }) {
+  AUDIT_LOG.unshift({ id, ts: new Date().toTimeString().slice(0, 8), type: 'mod', desc: descricao, revert: null, reverte: null, autor: ApiClient.autorAtual, importado: false });
+  renderAuditPanel();
+}
+
 export async function historicoParaPainel(data) {
   return (await ApiClient.historicoDoDia(data)).map(e => ({
     id: e.id,
     ts: horario(e.registrado_em, e.importado),
     type: e.tipo,
-    desc: e.descricao,
+    desc: textoAte(e.descricao, LIMITE_DA_DESCRICAO),
     revert: e.importado ? null : e.reverter,
     reverte: e.reverte,
-    autor: e.autor,
+    autor: textoAte(e.autor, LIMITE_DO_NOME),
     importado: e.importado
   }));
 }
@@ -121,11 +219,12 @@ export async function historicoParaPainel(data) {
 let pedidoDeData = 0;
 export async function carregarData(data) {
   const pedido = ++pedidoDeData;
-  const { estado, escala, horasBase, horasDosInstrutores, resultados } = await ApiClient.carregarDia(data);
+  const { estado, escala, horasBase, horasDosInstrutores, resultados, indisponiveis } = await ApiClient.carregarDia(data);
   const historico = await historicoParaPainel(data);
   if (pedido !== pedidoDeData) return;
   abrirData(data);
-  setS({ ...estado, horasBase, horasDosInstrutores, resultados });
+  setS({ ...estado, horasBase, horasDosInstrutores, resultados, indisponiveis });
+  avisarDadosIndisponiveis();
   // Data sem escala gravada (por exemplo, uma data nova, copiada da anterior): a escala calculada aparece na hora
   // e é gravada junto com a primeira alteração
   setRES(escala || escalaCalculada());

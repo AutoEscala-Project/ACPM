@@ -7,7 +7,7 @@ import {
 } from '../../js/config.js';
 import {
   MOTIVOS_DE_CANCELAMENTO, LIMITE_DO_TEXTO, STATUS_COM_DETALHE, validarDetalhe, normalizarDetalhes, textoDoDetalhe, textoDoStatus, textoParaOHistorico,
-  intervaloEfetivo, conflitosDeAtraso
+  intervaloEfetivo, conflitosDeAtraso, normalizarStatus, classeDoStatus
 } from '../../js/status.js';
 import { runAllocationEngine } from '../../js/engine.js';
 import { aluno, cenario, instrutor, GROUND_C152 } from '../helpers/montar.js';
@@ -45,6 +45,20 @@ describe('Status do voo: a lista e os detalhes', () => {
     for (const st of ['Pendente', 'Confirmado', 'Em Voo']) assert.deepEqual(validarDetalhe(st, { motivo: 'Meteorologia' }, 610), { detalhe: null });
   });
 
+  it('status guardados: só os da lista, em chaves de voo (o resto, gravado fora do formato, sai)', () => {
+    const ataque = 'x"><img/src/onerror=window.__xss=1>';
+    assert.deepEqual(normalizarStatus({ '1000_0_1': 'Em Voo', '1001_0_1': ataque, [ataque]: 'Cancelado', '1002_0_1': 'Atrasado', '1003_0_1': 7 }),
+      { '1000_0_1': 'Em Voo', '1002_0_1': 'Atrasado' });
+    assert.deepEqual(normalizarStatus(undefined), {});
+    assert.deepEqual(normalizarStatus(['Cancelado']), {});
+  });
+
+  it('a classe CSS de cada status vem de uma lista fixa (o desconhecido vale como Confirmado)', () => {
+    assert.deepEqual(FLIGHT_STATUSES.map(classeDoStatus), ['Pendente', 'Confirmado', 'Atrasado', 'EmVoo', 'Cancelado']);
+    assert.equal(classeDoStatus('x"><img/src/onerror=1>'), 'Confirmado');
+    assert.equal(classeDoStatus(undefined), 'Confirmado');
+  });
+
   it('detalhes guardados: só os do status atual de cada voo e nos formatos válidos', () => {
     const fStatus = { '1000_0_1': 'Cancelado', '1001_0_1': 'Atrasado', '1002_0_1': 'Confirmado', '1003_0_1': 'Cancelado', '1004_0_1': 'Cancelado', '1005_0_1': 'Atrasado' };
     const fObs = {
@@ -73,6 +87,9 @@ describe('Status do voo: a lista e os detalhes', () => {
     assert.equal(textoDoStatus('Cancelado', { motivo: 'Outro', texto: 'Pista interditada' }), 'Cancelado: Pista interditada');
     assert.equal(textoDoStatus('Cancelado', { motivo: 'Outro' }), 'Cancelado: Outro');
     assert.equal(textoDoStatus('Cancelado', undefined), 'Cancelado');
+    // No CSV, no PDF e no que sai do app, só a categoria do motivo (o texto livre pode ter dados pessoais)
+    assert.equal(textoDoStatus('Cancelado', { motivo: 'Outro', texto: 'Aluno com febre' }, { textoLivre: false }), 'Cancelado: Outro');
+    assert.equal(textoDoStatus('Atrasado', { novoInicio: 640 }, { textoLivre: false }), 'Atrasado: nova decolagem 10:40');
     assert.equal(textoDoStatus('Em Voo', undefined), 'Em Voo');
     assert.deepEqual([textoDoDetalhe('Atrasado', { novoInicio: 640 }), textoDoDetalhe('Cancelado', { motivo: 'Outro', texto: 'Pista interditada' }),
       textoDoDetalhe('Cancelado', { motivo: 'Aluno ausente' }), textoDoDetalhe('Em Voo', { motivo: 'Aluno ausente' })],

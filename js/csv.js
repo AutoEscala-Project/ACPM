@@ -13,12 +13,12 @@ export const CABECALHO = ['Avião / Equipamento', 'Horário', 'Aluno', 'Fase / M
 
 export const nomeDoCsv = data => `escala-acpm-${data}.csv`;
 
-// Observações pertinentes ao lançamento: status diferente de confirmado (com o novo horário do atraso ou o motivo do
-// cancelamento), turma de Ground, o peso da tripulação (aluno + instrutor) contra o limite do avião e o avião que para
-// para a revisão de 50 horas naquele dia
+// Observações pertinentes ao lançamento: status diferente de confirmado (com o novo horário do atraso ou a categoria do
+// motivo do cancelamento; o texto livre não sai do app), turma de Ground, o peso da tripulação (aluno + instrutor) contra
+// o limite do avião e o avião que para para a revisão de 50 horas naquele dia
 function observacoes(o, status, detalhe, revisao) {
   const notas = [];
-  if (status !== 'Confirmado') notas.push(`Status: ${textoDoStatus(status, detalhe)}`);
+  if (status !== 'Confirmado') notas.push(`Status: ${textoDoStatus(status, detalhe, { textoLivre: false })}`);
   if (o.isGround && o.groupSize > 1) notas.push(`Turma de Ground com ${o.groupSize} alunos`);
   if (o.limKg) {
     if (!o.stuKg) notas.push(`Peso do aluno não informado: limite de ${o.limKg} kg do ${o.eqType} não verificado`);
@@ -48,8 +48,13 @@ export function linhasDoCsv(res, fStatus = {}, fObs = {}) {
     });
 }
 
+// Um texto que o Excel leria como fórmula (começando com =, +, -, @, tabulação ou retorno) vai com um apóstrofo na
+// frente (revisão de 14/11: um nome gravado como "=HYPERLINK(...)" viraria um link no arquivo)
+const PARECE_FORMULA = /^[=+\-@\t\r]/;
+const celula = v => { const texto = String(v); return '"' + (PARECE_FORMULA.test(texto) ? `'${texto}` : texto).replace(/"/g, '""') + '"'; };
+
 export function montarCsv(res, fStatus = {}, fObs = {}) {
-  const q = v => '"' + String(v).replace(/"/g, '""') + '"';
+  const q = celula;
   const linhas = [CABECALHO, ...linhasDoCsv(res, fStatus, fObs)].map(l => l.map(q).join(';'));
   if (res.al.length) {
     linhas.push('');

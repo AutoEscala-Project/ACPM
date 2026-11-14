@@ -20,6 +20,7 @@ function clienteFalso(documentos = {}, { atraso = 0, dias = {} } = {}) {
   const rpcs = [];
   const chamadas = [];
   let falhasDeRede = 0;
+  let recusas = [];
 
   const linhasDe = tabela => {
     if (tabela === 'documentos') return [...banco].map(([chave, d]) => ({ chave, ...d }));
@@ -34,7 +35,7 @@ function clienteFalso(documentos = {}, { atraso = 0, dias = {} } = {}) {
   const esquema = conteudo => (conteudo && typeof conteudo.esquema === 'number' ? Math.floor(conteudo.esquema) : 0);
   const salvar = (mapa, chave, conteudo, versaoLida) => {
     const atual = mapa.get(chave);
-    if (atual && esquema(conteudo) < esquema(atual.conteudo)) return { data: null, error: { code: 'PT409', message: 'formato mais novo' } };
+    if (atual && esquema(conteudo) < esquema(atual.conteudo)) return { data: null, error: { code: 'PT409', message: 'formato mais novo', hint: 'formato' } };
     const versaoAtual = atual ? atual.versao : 0;
     if (versaoLida !== versaoAtual) return { data: null, error: { code: 'PT409', message: 'alterado por outra pessoa' } };
     mapa.set(chave, { conteudo, versao: versaoAtual + 1 });
@@ -48,6 +49,8 @@ function clienteFalso(documentos = {}, { atraso = 0, dias = {} } = {}) {
     rpcs,
     chamadas,
     falharProximas(n) { falhasDeRede = n; },
+    // As próximas gravações recebem este erro do servidor (ex.: { code: '42501' } com status 403)
+    recusarProximas(n, erro, status) { recusas = Array.from({ length: n }, () => ({ erro, status })); },
     contas,
     atualizacoes,
     auth: {
@@ -92,7 +95,11 @@ function clienteFalso(documentos = {}, { atraso = 0, dias = {} } = {}) {
       chamadas.push([nome, structuredClone(args)]);
       if (nome === 'salvar_documento' || nome === 'salvar_dia') rpcs.push(structuredClone(args));
       await espera(atraso);
-      if (falhasDeRede > 0) { falhasDeRede--; return { data: null, error: { message: 'Failed to fetch', code: '' } }; }
+      if (falhasDeRede > 0) { falhasDeRede--; return { data: null, error: { message: 'Failed to fetch', code: '' }, status: 0 }; }
+      if (recusas.length && (nome === 'salvar_documento' || nome === 'salvar_dia')) {
+        const { erro, status } = recusas.shift();
+        return { data: null, error: erro, status };
+      }
       if (nome === 'salvar_documento') {
         // Depois da conversão (o cadastro existe), os documentos da fase 2 ficam só como cópia
         if (args.p_chave !== 'cadastro' && banco.has('cadastro')) return { data: null, error: { code: 'PT409', message: 'versão anterior do app' } };
@@ -120,6 +127,9 @@ function clienteFalso(documentos = {}, { atraso = 0, dias = {} } = {}) {
         } catch (e) {
           return { data: null, error: { code: e.code, message: e.message } };
         }
+      }
+      if (nome === 'dias_em_formato_antigo') {
+        return { data: [...tabelaDias].filter(([, d]) => esquema(d.conteudo) < args.p_esquema).map(([data]) => data).sort(), error: null };
       }
       if (nome === 'situacao_das_missoes') return { data: [...situacaoPorMissao(resultados).values()].map(({ id, ...r }) => r), error: null };
       if (nome === 'listar_contas') return { data: contas.map(({ senha, ...c }) => c), error: null };
@@ -193,33 +203,90 @@ describe('Backend Supabase', () => {
   it('conflito: avisa, não grava mais nada e responde false', async () => {
     const cliente = clienteFalso({ estado: { conteudo: 'meu', versao: 4 } });
     const conflitos = [];
-    const backend = criarBackendSupabase(cliente, { aoConflito: doc => conflitos.push(doc) });
+    const backend = criarBackendSupabase(cliente, { aoConflito: (doc, motivo) => conflitos.push([doc, motivo]) });
     await backend.ler('estado');
     cliente.banco.set('estado', { conteudo: 'do colega', versao: 5 });
 
     assert.equal(await backend.gravar('estado', 'minha alteração'), false);
-    assert.deepEqual(conflitos, ['estado']);
+    assert.deepEqual(conflitos, [['estado', { formato: false }]]);
     assert.equal(await backend.gravar('historico', []), false);
     assert.equal(cliente.rpcs.length, 1, 'depois do conflito nada mais é enviado');
     assert.deepEqual(cliente.banco.get('estado'), { conteudo: 'do colega', versao: 5 });
   });
 
-  it('erro de rede: avisa e a próxima alteração tenta de novo', async () => {
+  it('recusa pelo formato (uma versão mais nova do app atualizou os dados): o conflito diz que é o formato', async () => {
+    const cliente = clienteFalso({ cadastro: { conteudo: { esquema: 19 }, versao: 2 } });
+    const conflitos = [];
+    const backend = criarBackendSupabase(cliente, { aoConflito: (doc, motivo) => conflitos.push([doc, motivo]) });
+    await backend.ler('cadastro');
+    assert.equal(await backend.gravar('cadastro', { esquema: 18 }), false);
+    assert.deepEqual(conflitos, [['cadastro', { formato: true }]]);
+  });
+
+  // Revisão de 14/11: sem conexão, a alteração não se perde; a gravação tenta de novo sozinha
+  it('erro de rede: avisa a cada falha e tenta de novo sozinho, esperando cada vez mais, até gravar', async () => {
     const cliente = clienteFalso();
-    const erros = [];
-    const gravados = [];
+    const erros = [], gravados = [], esperas = [];
     const backend = criarBackendSupabase(cliente, {
-      aoErro: (erro, doc) => erros.push([doc, erro.message]),
-      aoGravar: doc => gravados.push(doc)
+      aoErro: (erro, doc, { definitivo }) => erros.push([doc, erro.message, definitivo]),
+      aoGravar: doc => gravados.push(doc),
+      esperar: tentativa => { esperas.push(tentativa); return espera(1); }
     });
     await backend.ler('estado');
-    cliente.falharProximas(1);
-    assert.equal(await backend.gravar('estado', 'A'), false);
-    assert.deepEqual(erros, [['estado', 'Failed to fetch']]);
-    assert.deepEqual(gravados, []);
-    assert.equal(await backend.gravar('estado', 'B'), true);
+    cliente.falharProximas(2);
+    assert.equal(await backend.gravar('estado', 'A'), true);
+    assert.deepEqual(erros, [['estado', 'Failed to fetch', false], ['estado', 'Failed to fetch', false]]);
+    assert.deepEqual(esperas, [1, 2], 'cada tentativa espera mais');
     assert.deepEqual(gravados, ['estado'], 'avisa quando volta a gravar');
+    assert.deepEqual(cliente.banco.get('estado'), { conteudo: 'A', versao: 1 });
+  });
+
+  it('enquanto espera para tentar de novo, a alteração mais recente toma o lugar da anterior', async () => {
+    const cliente = clienteFalso();
+    let liberar;
+    const backend = criarBackendSupabase(cliente, { esperar: () => new Promise(r => { liberar = r; }) });
+    await backend.ler('estado');
+    cliente.falharProximas(1);
+    const primeira = backend.gravar('estado', 'A');
+    await espera(5);
+    assert.equal(backend.temGravacoesPendentes(), true);
+    const segunda = backend.gravar('estado', 'B');
+    liberar();
+    assert.deepEqual([await primeira, await segunda], [true, true]);
     assert.deepEqual(cliente.banco.get('estado'), { conteudo: 'B', versao: 1 });
+    assert.equal(cliente.rpcs.length, 2, 'uma tentativa que falhou e uma com o conteúdo mais recente');
+    assert.equal(backend.temGravacoesPendentes(), false);
+  });
+
+  it('sessão expirada (401): a alteração espera o novo login (um pedido só) e é gravada depois, com o histórico', async () => {
+    const cliente = clienteFalso();
+    const pedidos = [];
+    let renovar;
+    const renovada = new Promise(r => { renovar = r; });
+    const backend = criarBackendSupabase(cliente, { aoSessaoExpirada: () => { pedidos.push('login'); return renovada; }, esperar: () => espera(1) });
+    await backend.ler('estado');
+    cliente.recusarProximas(2, { code: 'PGRST301', message: 'JWT expired' }, 401);
+    const gravacao = backend.gravar('estado', 'A');
+    const outra = backend.gravar('dia:2026-11-11', { v: 1 });
+    await espera(5);
+    assert.deepEqual(pedidos, ['login', 'login'], 'cada gravação pede (o app mostra um diálogo só)');
+    assert.equal(backend.temGravacoesPendentes(), true);
+    renovar();
+    assert.deepEqual([await gravacao, await outra], [true, true]);
+    assert.deepEqual(cliente.banco.get('estado'), { conteudo: 'A', versao: 1 });
+  });
+
+  it('recusa definitiva (sem permissão, dado inválido): avisa e não tenta de novo', async () => {
+    const cliente = clienteFalso();
+    const erros = [];
+    const backend = criarBackendSupabase(cliente, { aoErro: (erro, doc, { definitivo }) => erros.push([doc, erro.code, definitivo]), esperar: () => espera(1) });
+    await backend.ler('estado');
+    cliente.recusarProximas(1, { code: '23514', message: 'status de voo fora da lista' }, 400);
+    assert.equal(await backend.gravar('estado', 'A'), false);
+    assert.deepEqual(erros, [['estado', '23514', true]]);
+    assert.equal(cliente.rpcs.length, 1);
+    assert.equal(backend.temGravacoesPendentes(), false);
+    assert.equal(await backend.gravar('estado', 'B'), true, 'a alteração seguinte grava normalmente');
   });
 
   it('erro na leitura é repassado para quem chamou', async () => {
@@ -295,6 +362,14 @@ describe('Backend Supabase: escala por data e histórico', () => {
     ]);
     assert.deepEqual(await backend.diaAnterior('2026-11-12'), { data: '2026-11-01', conteudo: { d: '2026-11-01' } });
     assert.equal(await backend.diaAnterior('2026-10-30'), null);
+  });
+
+  it('as datas num formato anterior vêm do servidor (dias_em_formato_antigo), sem baixar os dias', async () => {
+    const dias = { '2026-11-10': { conteudo: { esquema: 17 }, versao: 1 }, '2026-11-11': { conteudo: { esquema: 18 }, versao: 1 }, '2026-11-12': { conteudo: {}, versao: 1 } };
+    const cliente = clienteFalso({}, { dias });
+    const backend = criarBackendSupabase(cliente);
+    assert.deepEqual(await backend.diasEmFormatoAntigo(18), ['2026-11-10', '2026-11-12']);
+    assert.deepEqual(cliente.chamadas.at(-1), ['dias_em_formato_antigo', { p_esquema: 18 }]);
   });
 
   it('histórico: registra pela função (com o que reverter), lista por data e importa', async () => {

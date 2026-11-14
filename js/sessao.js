@@ -3,11 +3,12 @@
 import { ApiClient } from './storage.js';
 import { criarBackendSupabase } from './backends/supabase.js';
 import { backendLocal } from './backends/local.js';
-import { setRole } from './actions.js';
-import { $, mostrarAviso, avisoAberto, fecharAviso } from './dom.js';
+import { setRole, travarAposConflito, avisarFalhaDeGravacao } from './actions.js';
+import { $, mostrarAviso, avisoAberto, fecharAviso, avisarDoLink } from './dom.js';
 import { amanhaISO, esc } from './format.js';
 import { ROTULOS, operaEscala, gerenciaContas, soPainel } from './perfis.js';
 import { retornoDoLink } from './retorno-do-link.js';
+import { chaveDaSessao, passarSessaoParaATV } from './config-supabase.js';
 
 
 function pedirLogin(cliente) {
@@ -69,11 +70,35 @@ const AVISOS_DO_LINK = {
   invalido: 'Este link de confirmação expirou ou já foi usado. Se a troca de e-mail não foi concluída, peça de novo em Minha conta.'
 };
 
-function avisarDoLink(texto, tipo) {
-  $('#aviso-link-texto').textContent = texto;
-  $('#aviso-link').className = `aviso-link ${tipo}`;
-  $('#aviso-link').hidden = false;
-  $('#btn-fechar-aviso-link').onclick = () => { $('#aviso-link').hidden = true; };
+// Sessão expirada (revisão de 14/11): um diálogo só, com a conta fixa, enquanto as alterações esperam. Devolve quando a
+// pessoa entrou de novo (as gravações continuam sozinhas)
+let novoLogin = null;
+function pedirNovoLogin(cliente) {
+  if (novoLogin) return novoLogin;
+  const dlg = $('#dlg-sessao'), form = $('#form-sessao'), senha = $('#sessao-senha'), erro = $('#sessao-erro');
+  const email = ApiClient.emailAtual;
+  $('#sessao-email').textContent = email;
+  erro.textContent = '';
+  senha.value = '';
+  novoLogin = new Promise(resolve => {
+    // Esc não fecha: sem entrar de novo, nada é gravado
+    dlg.oncancel = e => e.preventDefault();
+    form.onsubmit = async e => {
+      e.preventDefault();
+      erro.textContent = '';
+      const { error } = await cliente.auth.signInWithPassword({ email, password: senha.value });
+      if (error) {
+        erro.textContent = error.status === 400 ? 'Senha incorreta.' : 'Não foi possível entrar. Verifique a conexão e tente de novo.';
+        return;
+      }
+      dlg.close();
+      novoLogin = null;
+      resolve();
+    };
+  });
+  dlg.showModal();
+  senha.focus();
+  return novoLogin;
 }
 
 // Iniciais do primeiro e do último nome (ou a primeira letra do e-mail)
@@ -92,7 +117,7 @@ export async function iniciarSessaoSupabase(projeto) {
     window.history.replaceState(window.history.state, '', window.location.pathname + window.location.search);
     avisarDoLink(AVISOS_DO_LINK[retorno], retorno === 'invalido' ? 'erro' : 'ok');
   }
-  const cliente = window.supabase.createClient(projeto.url, projeto.chave, { auth: { storageKey: `acpm-${projeto.nome}` } });
+  const cliente = window.supabase.createClient(projeto.url, projeto.chave, { auth: { storageKey: chaveDaSessao(projeto) } });
   const { data } = await cliente.auth.getSession();
   const sessao = data.session || await pedirLogin(cliente);
   if (retorno === 'concluida') avisarDoLink(`Troca de e-mail concluída: agora você entra com ${sessao.user.email}.`, 'ok');
@@ -108,17 +133,19 @@ export async function iniciarSessaoSupabase(projeto) {
     return false;
   }
 
-  // A conta da TV da recepção só vê o painel: vai direto para ele (a sessão é a mesma)
+  // A conta da TV da recepção só vê o painel: vai direto para ele, com a sessão (o app não fica conectado com ela)
   if (soPainel(perfil.perfil)) {
+    passarSessaoParaATV(projeto);
     window.location.replace(`painel.html${window.location.search}`);
     return false;
   }
 
   delete document.body.dataset.login;
   ApiClient.backend = criarBackendSupabase(cliente, {
-    aoConflito: () => mostrarAviso('conflito', 'Outra pessoa alterou a escala enquanto você editava. Recarregue para ver a versão atual; a sua última alteração não foi salva.'),
-    aoErro: () => { if (avisoAberto() !== 'conflito') mostrarAviso('erro', 'Não foi possível salvar a última alteração. Verifique a conexão: a próxima alteração tentará salvar de novo.'); },
-    aoGravar: () => fecharAviso('erro')
+    aoConflito: (documento, motivo) => travarAposConflito(motivo),
+    aoErro: avisarFalhaDeGravacao,
+    aoSessaoExpirada: () => pedirNovoLogin(cliente),
+    aoGravar: () => fecharAviso('espera')
   });
   $('#btn-share-link').title = 'Copiar o link da escala desta data (quem abrir entra com a própria conta)';
   // No menu da conta: o nome e o perfil (o texto continua "Nome · Perfil"), as iniciais e os itens da conta

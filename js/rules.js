@@ -48,6 +48,17 @@ export function doesGroundGateFlight(gMis, flightReq) {
   return false;
 }
 
+// O número da próxima missão extra de um aluno (revisão de 14/11): depois das missões dele e do que o dia ainda guarda
+// para ele (voo fixo, status ou detalhe de uma missão retirada), para não herdar o voo de outra missão. Numerada no
+// aluno, a missão extra não muda o cadastro (o número do cadastro, nid, fica para as pessoas novas)
+export function proximoMid(estado, aluno) {
+  const prefixo = `${aluno.id}_`;
+  const doDia = [estado.fixos, estado.fStatus, estado.fObs].flatMap(m => Object.keys(m && typeof m === 'object' ? m : {}))
+    .filter(fKey => fKey.startsWith(prefixo)).map(fKey => Number(fKey.split('_')[1]));
+  const doAluno = (aluno.extra || []).map(ex => ex.mid).filter(Number.isInteger);
+  return Math.max(0, ...doAluno, ...doDia.filter(Number.isInteger)) + 1;
+}
+
 export const blank = () => ({ fly: false, mis: 'Voo Local', eq: 'C152', p1: T[1], p2: T[2], nb: 1, ss: 1, pr: 3 });
 
 export function migrateLegacyMissionName(mis) {
@@ -77,6 +88,9 @@ export function normalizeMissionFields(target) {
   }
   target.p1 = preferenciaValida(target.p1);
   target.p2 = preferenciaValida(target.p2);
+  // Prioridade de 1 a 5 e "voa" sim ou não (revisão de 14/11: valores gravados fora do formato voltam ao padrão)
+  if (Object.hasOwn(target, 'pr')) target.pr = Number.isInteger(+target.pr) && +target.pr >= 1 && +target.pr <= 5 ? +target.pr : 3;
+  if (Object.hasOwn(target, 'fly')) target.fly = Boolean(target.fly);
   // O código da missão do curso (fase 14), quando o pedido veio do programa
   if (Object.hasOwn(target, 'etapa') && !(typeof target.etapa === 'string' && codigoValido(target.etapa))) delete target.etapa;
   const mRule = missionRule(target.mis) || MIS['Voo Local'];
