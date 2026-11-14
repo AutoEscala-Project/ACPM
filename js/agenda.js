@@ -62,8 +62,9 @@ export function pedidoDaSolicitacao(solicitacao, horarios, { eq } = {}) {
 }
 
 // Importa para a demanda da data as solicitações ativas ainda não importadas. Só acrescenta: o aluno sem voo no dia
-// recebe o pedido como missão principal; quem já voa a mesma missão só ganha a disponibilidade pedida; senão, o
-// pedido entra como missão extra. As solicitações vistas ficam anotadas no dia (estado.importadas) para não repetir.
+// recebe o pedido como missão principal; a mesma missão copiada da data anterior dá lugar ao pedido; senão, o pedido
+// entra como missão extra (cada pedido é um voo, marcado com o id dele em solicitacao). As solicitações vistas ficam
+// anotadas no dia (estado.importadas) para não repetir.
 // Aluno de um curso (fase 14): quando a próxima missão dele no programa é do tipo pedido, o pedido entra como ela (o
 // código, o recurso e as horas do programa); situacao: o último resultado de cada missão
 export function importarSolicitacoes(estado, solicitacoes, { situacao = [] } = {}) {
@@ -82,11 +83,14 @@ export function importarSolicitacoes(estado, solicitacoes, { situacao = [] } = {
     // A missão do curso: o recurso do programa, com os horários e as preferências dele
     const pedido = pedidoDaSolicitacao(solicitacao, estado.horarios, doCurso ? { eq: proxima.eq } : {});
     if (doCurso) Object.assign(pedido, { etapa: proxima.id, nb: proxima.nb });
-    const mesmaMissao = [aluno, ...(aluno.extra || [])].find(m => m.fly && m.mis === pedido.mis);
-    if (mesmaMissao) {
-      Object.assign(mesmaMissao, { p1: pedido.p1, p2: pedido.p2 });
-      if (pedido.jan) mesmaMissao.jan = pedido.jan;
-      else delete mesmaMissao.jan;
+    // Cada pedido da agenda vira um voo (revisão de 14/11: dois pedidos da mesma missão viravam um só, no horário do
+    // último). Só a missão que veio da data anterior (sem pedido da agenda) dá lugar ao pedido, para não duplicar
+    pedido.solicitacao = solicitacao.id;
+    const copiada = [aluno, ...(aluno.extra || [])].find(m => m.fly && m.mis === pedido.mis && m.solicitacao === undefined);
+    if (copiada) {
+      delete copiada.jan;
+      delete copiada.etapa;
+      Object.assign(copiada, pedido);
       resumo.atualizados++;
     } else if (!aluno.fly) {
       Object.assign(aluno, pedido);

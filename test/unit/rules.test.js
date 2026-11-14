@@ -103,4 +103,17 @@ describe('Número da missão extra', () => {
     assert.equal(proximoMid(estado, estado.stu[1]), 2001);
     assert.equal(estado.nid, 5000, 'o número do cadastro não muda');
   });
+
+  // Revisão de 14/11: o pedido que veio da agenda guarda o id da solicitação
+  it('o id da solicitação da agenda: inteiro positivo; o resto sai', async () => {
+    const { normalizeMissionFields } = await import('../../js/rules.js');
+    const ok = { mis: 'Voo Local', eq: 'C152', p1: 390, p2: -1, nb: 1, solicitacao: 12 };
+    normalizeMissionFields(ok);
+    assert.equal(ok.solicitacao, 12);
+    for (const ruim of ['12', -1, 1.5, null]) {
+      const p = { mis: 'Voo Local', eq: 'C152', p1: 390, p2: -1, nb: 1, solicitacao: ruim };
+      normalizeMissionFields(p);
+      assert.equal(Object.hasOwn(p, 'solicitacao'), false, String(ruim));
+    }
+  });
 });

@@ -93,6 +93,8 @@ export function normalizeMissionFields(target) {
   if (Object.hasOwn(target, 'fly')) target.fly = Boolean(target.fly);
   // O código da missão do curso (fase 14), quando o pedido veio do programa
   if (Object.hasOwn(target, 'etapa') && !(typeof target.etapa === 'string' && codigoValido(target.etapa))) delete target.etapa;
+  // O id do pedido da agenda que virou este voo (revisão de 14/11)
+  if (Object.hasOwn(target, 'solicitacao') && !(Number.isInteger(target.solicitacao) && target.solicitacao > 0)) delete target.solicitacao;
   const mRule = missionRule(target.mis) || MIS['Voo Local'];
   if (!mRule.eq.includes(target.eq)) target.eq = mRule.defEq;
   if (mRule.isGround) {

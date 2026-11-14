@@ -69,11 +69,21 @@ describe('Importar as solicitações da agenda para a demanda', () => {
     assert.equal(e.nid, 2000);
   });
 
-  it('aluno já voando a mesma missão: só atualiza a disponibilidade (sem duplicar)', () => {
+  it('aluno já voando a mesma missão (copiada da data anterior, sem pedido da agenda): o pedido toma o lugar dela', () => {
     const e = estado();
     const resumo = importarSolicitacoes(e, [pedido(3, 1002)]);
     assert.deepEqual(resumo, { novos: 0, atualizados: 1, semAluno: 0 });
-    assert.deepEqual([e.stu[2].jan, e.stu[2].p1, e.stu[2].extra], ['tarde', 760, []]);
+    assert.deepEqual([e.stu[2].jan, e.stu[2].p1, e.stu[2].solicitacao, e.stu[2].extra], ['tarde', 760, 3, []]);
+  });
+
+  // Revisão de 14/11 (retorno da operação): dois voos do mesmo aluno no dia viravam um só, no horário do último
+  it('dois pedidos da mesma missão para o mesmo aluno: dois voos, cada um no seu horário', () => {
+    const e = estado();
+    const pedidos = [pedido(10, 1002, { janela: 'horario', horario: '10:10' }), pedido(11, 1002, { janela: 'horario', horario: '14:30' })];
+    const resumo = importarSolicitacoes(e, pedidos);
+    assert.deepEqual(resumo, { novos: 1, atualizados: 1, semAluno: 0 });
+    const voos = [e.stu[2], ...e.stu[2].extra];
+    assert.deepEqual(voos.map(v => [v.mis, v.jan, v.solicitacao, v.fly]), [['Voo Local', 'h610', 10, true], ['Voo Local', 'h870', 11, true]]);
   });
 
   it('aluno de um curso: quando a próxima missão dele é do tipo pedido, o pedido já entra como ela (código, recurso e horas)', () => {

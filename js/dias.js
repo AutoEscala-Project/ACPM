@@ -13,8 +13,9 @@ import { normalizarFixos, normalizarAprovacao } from './fixos.js';
 import { CRITERIOS_PADRAO, normalizarCriterios } from './criterios.js';
 import { normalizarCursos } from './cursos.js';
 
-// jan: disponibilidade do aluno (só quando o pedido tem uma); etapa: o código da missão do curso (fase 14)
-const CAMPOS_DO_PEDIDO = ['fly', 'mis', 'eq', 'p1', 'p2', 'nb', 'ss', 'pr', 'jan', 'etapa'];
+// jan: disponibilidade do aluno (só quando o pedido tem uma); etapa: o código da missão do curso (fase 14);
+// solicitacao: o id do pedido da agenda que virou este voo (revisão de 14/11)
+const CAMPOS_DO_PEDIDO = ['fly', 'mis', 'eq', 'p1', 'p2', 'nb', 'ss', 'pr', 'jan', 'etapa', 'solicitacao'];
 const DATA_ISO = /^\d{4}-\d{2}-\d{2}$/;
 
 // Cada recurso da frota começa disponível; o dia guarda só o que muda
@@ -109,11 +110,12 @@ export function juntar(cadastro, dia = diaPadrao()) {
 export function diaParaCopiar(anterior, instrutores = []) {
   if (!anterior || !anterior.ins || !anterior.pedidos) return diaPadrao();
   const { win, av, ins, pedidos, hangar = null, criterios } = structuredClone(anterior);
-  // A missão do curso é a do dia (revisão de 14/11): a data nova começa sem ela
+  // A missão do curso e o pedido da agenda são os do dia (revisão de 14/11): a data nova começa sem eles
   for (const p of Object.values(pedidos)) {
     if (!p || typeof p !== 'object') continue;
     delete p.etapa;
-    (Array.isArray(p.extra) ? p.extra : []).forEach(ex => { if (ex && typeof ex === 'object') delete ex.etapa; });
+    delete p.solicitacao;
+    (Array.isArray(p.extra) ? p.extra : []).forEach(ex => { if (ex && typeof ex === 'object') { delete ex.etapa; delete ex.solicitacao; } });
   }
   return { win, av, ins, pedidos, fStatus: {}, fObs: {}, horas: horasDoDiaSeguinte(anterior), filas: filasDoDiaSeguinte(anterior, instrutores), hangar: hangar || normalizarHangar(null, FROTA_INICIAL), fixos: {}, aprovacao: null, criterios: normalizarCriterios(criterios), importadas: [] };
 }
