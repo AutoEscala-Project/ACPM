@@ -231,13 +231,20 @@ export function criarSupabaseFalso({ documentos = {}, dias = {}, historico: hist
           Object.assign(s, { cancelada_em: agora.toISOString(), cancelada_por: args.p_cancelada_por.trim() });
           return responder(204);
         }
+        // A função nova (com a duração; retorno da operação, 14/11): só horário específico e duração de 0,1 a 5 h
+        let horas = null;
+        if (Object.hasOwn(args, 'p_horas')) {
+          if (args.p_janela !== 'horario' || !args.p_horario) return responder(400, { code: '22023', message: 'o pedido é num horário específico' });
+          horas = String(args.p_missao).startsWith('Ground') ? 1.5 : Math.round(+args.p_horas * 10) / 10;
+          if (!(horas > 0 && horas <= 5)) return responder(400, { code: '22023', message: 'a duração vai de 0,1 h a 5 h' });
+        }
         const noPrazo = prazoDaAgendaPermite(args.p_data, agora);
         if (!noPrazo && !args.p_excecao) return responder(403, { code: 'PT403', message: 'prazo encerrado' });
         if (!noPrazo && !['operador', 'administrador'].includes(conta.perfil)) return responder(403, { code: '42501', message: 'exceção só para operadores' });
         const id = solicitacoes.length + 1;
         solicitacoes.push({
           id, data: args.p_data, aluno: args.p_aluno, aluno_nome: args.p_aluno_nome.trim(), missao: args.p_missao, janela: args.p_janela,
-          horario: args.p_horario, observacao: (args.p_observacao || '').trim() || null, registrado_por: args.p_registrado_por.trim(),
+          horario: args.p_horario, horas, observacao: (args.p_observacao || '').trim() || null, registrado_por: args.p_registrado_por.trim(),
           registrado_em: agora.toISOString(), usuario: conta.id, conta: conta.nome, excecao: !noPrazo, cancelada_em: null, cancelada_por: null
         });
         return responder(200, id);

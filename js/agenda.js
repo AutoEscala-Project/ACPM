@@ -1,7 +1,7 @@
 // Agenda de solicitações da secretaria: a regra do prazo (a mesma do servidor, no horário de São Paulo) e o pedido
 // da demanda que cada solicitação vira ao ser importada.
 import { MIS } from './config.js';
-import { disponibilidadeAtual, disponibilidadeDoAluno, normalizeMissionFields, proximoMid } from './rules.js';
+import { disponibilidadeAtual, disponibilidadeDoAluno, normalizeMissionFields, proximoMid, duracaoValida } from './rules.js';
 import { horariosDaMissao, preferenciasPadrao, paraMinuto } from './horarios.js';
 import { normalizarCursos } from './cursos.js';
 import { situacaoPorMissao, proximaMissao } from './resultados.js';
@@ -83,6 +83,8 @@ export function importarSolicitacoes(estado, solicitacoes, { situacao = [] } = {
     // A missão do curso: o recurso do programa, com os horários e as preferências dele
     const pedido = pedidoDaSolicitacao(solicitacao, estado.horarios, doCurso ? { eq: proxima.eq } : {});
     if (doCurso) Object.assign(pedido, { etapa: proxima.id, nb: proxima.nb });
+    // A duração registrada na agenda vale (retorno da operação, 14/11); o Ground continua com 01h30
+    if (solicitacao.horas !== null && solicitacao.horas !== undefined && !MIS[pedido.mis]?.isGround) pedido.nb = duracaoValida(+solicitacao.horas);
     // Cada pedido da agenda vira um voo (revisão de 14/11: dois pedidos da mesma missão viravam um só, no horário do
     // último). Só a missão que veio da data anterior (sem pedido da agenda) dá lugar ao pedido, para não duplicar
     pedido.solicitacao = solicitacao.id;

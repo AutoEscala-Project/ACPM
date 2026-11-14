@@ -52,7 +52,7 @@ import { abrirConta, carregarContas, gerarSenha, mensagem } from './views/conta.
 import { rManual } from './views/manual.js';
 import { atualizarSelosDaEscala, lerPedidosDaData } from './views/selos.js';
 import { importarSolicitacoes, disponibilidadeDaSolicitacao } from './agenda.js';
-import { abrirAgenda, carregarMes, mudarMes, escolherDia, diaDaAgenda, lembrarRegistradoPor, podeEditarAgenda, rAgenda, preencherHorariosDaAgenda } from './views/agenda.js';
+import { abrirAgenda, carregarMes, mudarMes, escolherDia, diaDaAgenda, lembrarRegistradoPor, podeEditarAgenda, rAgenda, preencherHorariosDaAgenda, pedidosDoAluno, descreverPedido } from './views/agenda.js';
 import { ESQUEMA } from './migracoes.js';
 import { iniciarSessaoSupabase } from './sessao.js';
 import { iniciarDicas } from './dicas.js';
@@ -560,7 +560,7 @@ async function importarDaAgenda() {
   }
   const resumo = importarSolicitacoes(S, pendentes, { situacao: (S.resultados && S.resultados.situacao) || [] });
   pendentes.filter(s => S.stu.some(x => x.id === s.aluno)).forEach(s => {
-    logChange('inc', `Agenda: ${s.aluno_nome} incluído (${s.missao} · ${rotuloDaDisponibilidade(disponibilidadeDaSolicitacao(s))})`);
+    logChange('inc', `Agenda: ${s.aluno_nome} incluído (${s.missao} · ${rotuloDaDisponibilidade(disponibilidadeDaSolicitacao(s))}${s.horas ? ` · ${fmtH(+s.horas)}` : ''})`);
   });
   save(); rDem(); rAgenda();
   showToast(`${resumo.novos + resumo.atualizados} pedido(s) da agenda na demanda` +
@@ -579,30 +579,51 @@ async function registrarPedido(excecao) {
     $('#ag-erro').textContent = 'Escolha o aluno e informe quem anotou o pedido (“Registrado por”).';
     return;
   }
-  const janela = $('#ag-janela').value;
+  // A duração: de 0,1 h a 5 h, em décimos (o Ground tem 01h30; retorno da operação, 14/11)
+  const horas = Math.round(parseFloat(String($('#ag-horas').value).replace(',', '.')) * 10) / 10;
+  if (!(horas > 0 && horas <= DURACAO_MAXIMA_H)) {
+    $('#ag-erro').textContent = `A duração vai de 0,1 h a ${DURACAO_MAXIMA_H} h.`;
+    return;
+  }
+  // O aluno que já tem voo marcado na data: pode ser um reagendamento feito por outra pessoa; o segundo clique confirma
+  const dia = diaDaAgenda(), confirmacao = `${aluno.id}|${dia}`;
+  const marcados = pedidosDoAluno(aluno.id, dia);
+  if (marcados.length && $('#form-agenda').dataset.confirmado !== confirmacao) {
+    $('#form-agenda').dataset.confirmado = confirmacao;
+    $('#form-agenda [type="submit"]').textContent = 'Registrar mesmo assim';
+    $('#ag-erro').textContent = `${aluno.nm} já tem voo marcado em ${dia.slice(8, 10)}/${dia.slice(5, 7)}: ${marcados.map(descreverPedido).join('; ')}. É um reagendamento ou mais um voo? Para registrar mais este, clique em “Registrar mesmo assim”.`;
+    return;
+  }
   try {
     await ApiClient.registrarSolicitacao({
-      data: diaDaAgenda(), aluno: aluno.id, aluno_nome: aluno.nm, missao: $('#ag-missao').value, janela,
-      horario: janela === 'horario' ? $('#ag-horario').value : null, observacao: $('#ag-obs').value, registrado_por: por, excecao
+      data: dia, aluno: aluno.id, aluno_nome: aluno.nm, missao: $('#ag-missao').value, janela: 'horario',
+      horario: $('#ag-horario').value, horas, observacao: $('#ag-obs').value, registrado_por: por, excecao
     });
   } catch (err) {
     $('#ag-erro').textContent = {
       PT403: 'Prazo encerrado: pedido para o dia seguinte só até as 13:00 do dia anterior.',
       42501: 'Esta conta não pode registrar este pedido (a Exceção da Coordenação é só para operadores).',
-      23514: 'Pedido incompleto: confira aluno, missão, disponibilidade e quem anotou.'
+      23514: 'Pedido incompleto: confira aluno, missão, horário e quem anotou.',
+      22023: `Pedido inválido: o horário é obrigatório, e a duração vai de 0,1 h a ${DURACAO_MAXIMA_H} h.`
     }[err.code] || 'Não foi possível registrar o pedido. Verifique a conexão e tente de novo.';
     return;
   }
   lembrarRegistradoPor(por);
+  desarmarConfirmacaoDaAgenda();
   $('#ag-obs').value = '';
   $('#ag-aluno').value = '';
   showToast(excecao ? 'Pedido registrado pela Exceção da Coordenação.' : 'Pedido registrado.', 'ok');
   await carregarMes();
   lerPedidosDaData();
 }
+// Trocar o aluno desfaz a confirmação do voo já marcado
+function desarmarConfirmacaoDaAgenda() {
+  delete $('#form-agenda').dataset.confirmado;
+  $('#form-agenda [type="submit"]').textContent = 'Registrar pedido';
+}
 $('#form-agenda').onsubmit = e => { e.preventDefault(); registrarPedido(false); };
 $('#ag-excecao').onclick = () => registrarPedido(true);
-$('#ag-janela').onchange = () => { $('#ag-horario-rotulo').hidden = $('#ag-janela').value !== 'horario'; };
+$('#ag-aluno').addEventListener('change', () => { desarmarConfirmacaoDaAgenda(); $('#ag-erro').textContent = ''; });
 $('#ag-missao').onchange = preencherHorariosDaAgenda;
 
 async function cancelarPedido(b) {

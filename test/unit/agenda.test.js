@@ -104,6 +104,14 @@ describe('Importar as solicitações da agenda para a demanda', () => {
     assert.deepEqual(e.importadas, [5]);
   });
 
+  // Retorno da operação (14/11): a agenda guarda a duração; o pedido de antes (sem ela) fica com 1 h ou as horas do curso
+  it('a duração do pedido vai para a demanda (vale mais que as horas do programa do curso)', () => {
+    const programa = { PP: [{ id: 'PP-01', nome: 'A', mis: 'Voo Local', eq: 'C152', nb: 2 }], PC: [], INVA: [] };
+    const e = { ...estado(), cursos: programa, stu: [aluno(1000, { fly: false }, { curso: 'PP' }), aluno(1001, { fly: false }, { curso: 'PP' })] };
+    importarSolicitacoes(e, [pedido(20, 1000, { janela: 'horario', horario: '10:10', horas: 2.6 }), pedido(21, 1001, { janela: 'horario', horario: '10:10', horas: null })]);
+    assert.deepEqual([e.stu[0].nb, e.stu[0].etapa, e.stu[1].nb, e.stu[1].etapa], [2.6, 'PP-01', 2, 'PP-01']);
+  });
+
   it('missão do curso noutro recurso: as preferências são os horários desse recurso, na disponibilidade pedida', () => {
     const programa = { PP: [], PC: [{ id: 'PC-01', nome: 'A', mis: 'IFR', eq: 'PA-34', nb: 1 }], INVA: [] };
     const e = { ...estado(), cursos: programa, stu: [aluno(1000, { fly: false }, { curso: 'PC' })] };

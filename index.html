@@ -244,11 +244,11 @@
       <div class="pn" id="agenda-cal"></div>
       <div class="pn">
         <h3 id="agenda-data"></h3>
-        <form id="form-agenda" autocomplete="off">
+        <form id="form-agenda" autocomplete="off" novalidate>
           <label>Aluno<select id="ag-aluno" class="agenda-campo" required></select></label>
           <label>Fase / missão<select id="ag-missao" class="agenda-campo"></select></label>
-          <label>Disponibilidade<select id="ag-janela" class="agenda-campo"></select></label>
-          <label id="ag-horario-rotulo" hidden>Horário<select id="ag-horario" class="agenda-campo"></select></label>
+          <label>Horário<select id="ag-horario" class="agenda-campo"></select></label>
+          <label>Duração (h)<input type="number" id="ag-horas" class="agenda-campo" min="0.1" max="5" step="0.1" inputmode="decimal" value="1"></label>
           <label>Registrado por<input id="ag-por" class="agenda-campo" maxlength="80" required placeholder="Quem anotou o pedido"></label>
           <label>Observação<input id="ag-obs" class="agenda-campo" maxlength="300" placeholder="Opcional"></label>
           <button class="btn" type="submit">Registrar pedido</button>
@@ -451,14 +451,14 @@
         <li><b>Missão</b> e <b>Recurso</b> (só aparecem os permitidos para a missão; deixe o mouse sobre a missão para ver as habilitações que ela exige);</li>
         <li><b>1ª e 2ª preferência:</b> os horários preferidos, entre os da categoria do avião (o PA-34 tem os seus); sem vaga neles, o sistema usa o horário livre mais perto da 1ª preferência (sem ela, da 2ª; empatados, o mais cedo). Trocar a missão ou o avião leva as preferências para o horário mais próximo da lista nova;</li>
         <li><b>Disponibilidade:</b> quando o aluno pode voar (qualquer horário, manhã, tarde, noite ou um horário só);</li>
-        <li><b>Duração:</b> as horas da missão, num voo só (para dividir em dois voos no dia, use <i>+ missão</i>);</li>
+        <li><b>Duração:</b> as horas da missão, digitadas e fracionadas (1,2 h; 2,6 h), até 5 h, num voo só (para dividir em dois voos no dia, use <i>+ missão</i>);</li>
         <li><b>Prioridade:</b> de 1 a 5; quem tem 5 é atendido primeiro.</li>
       </ul>
       <p><i>Só quem voa</i> (ligado) esconde quem não voa na data. <i>+ missão</i> (aparece com o mouse ou o foco do teclado na linha; no celular, fica à vista) acrescenta outra missão ao mesmo aluno no dia, por exemplo Ground de manhã e voo à tarde. <i>Importar pedidos da agenda</i> traz os pedidos da data: só acrescenta, nunca apaga nem repete. <i>Pôr um aluno na demanda</i> inclui um aluno que ainda não voa na data. <i>Limpar demanda</i> fica no menu <i>Mais</i> e pede confirmação.</p>
       <p><b>Alunos de um curso</b> (o curso fica em Alunos): ao lado do nome aparece a próxima missão do programa, por exemplo <i>Próxima: PP-07 · Usar</i> (deixe o mouse em cima para ver a missão, as horas e o recurso). <i>Usar</i> põe essa missão no pedido (o tipo de missão, o recurso e as horas do programa), liga <i>Voa</i>, e o código aparece no lugar do botão. Na <i>+ missão</i> do mesmo aluno, a sugestão é a missão seguinte. Mudar à mão a missão, o recurso ou a duração tira o código. Na importação da agenda, quando a próxima missão do aluno é do tipo pedido, o pedido já entra como ela.</p>
 
       <h4>Agenda</h4>
-      <p>A agenda de pedidos da secretaria, com um calendário. Cada pedido tem o aluno, a missão, a disponibilidade do aluno (no horário específico, os horários da missão: o Multimotor, por exemplo, tem os do PA-34) e quem anotou. O pedido para o dia seguinte só pode ser registrado até as 13:00 (horário de Brasília); depois disso, só para os próximos dias. Operadores e Administradores podem registrar fora do prazo com a <i>Exceção da Coordenação</i>, que fica marcada no pedido.</p>
+      <p>A agenda de pedidos da secretaria, com um calendário. Cada pedido tem o aluno, a missão, o horário (os horários da missão: o Multimotor, por exemplo, tem os do PA-34), a duração (fracionada, até 5 h; o Ground tem 01h30) e quem anotou. Se o aluno já tem voo marcado na data, o app avisa (pode ser um reagendamento feito por outra pessoa) e só registra mais um com “Registrar mesmo assim”. Cada pedido vira um voo na demanda, com o horário e a duração dele. O pedido para o dia seguinte só pode ser registrado até as 13:00 (horário de Brasília); depois disso, só para os próximos dias. Operadores e Administradores podem registrar fora do prazo com a <i>Exceção da Coordenação</i>, que fica marcada no pedido.</p>
       <p>Na data aberta no topo, a coluna <i>Situação</i> diz se o pedido já está na demanda (“Na demanda”) ou não (“Ainda não importado”), e o operador pode importar por ali mesmo. O pedido cancelado continua na lista, esmaecido; deixe o mouse sobre “Cancelado” para ver quem cancelou e quando.</p>
 
       <h4>Recursos</h4>
