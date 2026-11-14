@@ -9,7 +9,7 @@ export const fmtH = v => {
   const n = Math.round((+v || 0) * 10) / 10;
   return Number.isInteger(n) ? `${n} h` : `${String(n).replace('.', ',')} h`;
 };
-export const fmtDurLabel = h => (+h === 1.5 ? '01h30 (1,5 h)' : `${h} h`);
+export const fmtDurLabel = h => (+h === 1.5 ? '01h30 (1,5 h)' : fmtH(h));
 
 export const pad = i => 'Aluno ' + String(i + 1).padStart(2, '0');
 

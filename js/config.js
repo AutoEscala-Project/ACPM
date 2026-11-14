@@ -71,6 +71,8 @@ export const MIS = {
 // Revisão obrigatória dos aviões a cada 50 horas de voo (o avião para quando não tem saldo para mais 1 h)
 export const REVISAO_H = 50;
 export const MENOR_VOO_H = 1;
+// A duração de um voo da demanda (retorno da operação, 14/11): fracionada, em décimos de hora, até 5 h
+export const DURACAO_MAXIMA_H = 5;
 
 // Limites máximos de peso implícitos ao equipamento (fixos na regra operacional), aluno + instrutor com os tanques cheios
 export const DEFAULT_LIM = { 'C152': 170, 'C172': 222, 'PA-34': 250 };

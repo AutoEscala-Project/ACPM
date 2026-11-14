@@ -1267,3 +1267,5 @@ dl.glossario { display: grid; grid-template-columns: minmax(140px, max-content) 
 dl.glossario dt { font-weight: 600; }
 dl.glossario dd { margin: 0; }
 @media (max-width: 640px) { dl.glossario { grid-template-columns: 1fr; gap: 2px; } dl.glossario dd { margin-bottom: 8px; } }
+/* A duração digitada na Demanda (horas, fracionadas) */
+#s-dem input.duracao { width: 5.5em; }

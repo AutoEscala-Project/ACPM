@@ -16,7 +16,7 @@ import { S, RES, AUDIT_LOG, TL_MODE, DATA, isGestor, dadoIndisponivel } from '..
 import { motivoDoFixo } from '../fixos.js';
 import { $, posicionarJunto } from '../dom.js';
 
-export const HT = o => (o.isGround || isGroundMission(o.mis) ? '01h30 (1,5 h)' : o.h + ' h' + (o.ss !== '1/1' ? ` (sessão ${o.ss})` : ''));
+export const HT = o => (o.isGround || isGroundMission(o.mis) ? '01h30 (1,5 h)' : fmtH(o.h) + (o.ss !== '1/1' ? ` (sessão ${o.ss})` : ''));
 
 export function missionColorClass(mis) {
   if (isGroundMission(mis)) return 'm-gnd';

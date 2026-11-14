@@ -1,7 +1,7 @@
 // Cursos (fase 14), em Alunos › Cursos: o programa de cada curso, uma tabela por curso. O Administrador (neste
 // navegador, o Operador) inclui, muda, reordena e tira missões; os outros perfis só consultam. Os campos mudam no
 // lugar, para o foco do teclado continuar onde estava.
-import { MIS } from '../config.js';
+import { MIS, DURACAO_MAXIMA_H } from '../config.js';
 import { CURSOS, normalizarCursos } from '../cursos.js';
 import { ApiClient } from '../storage.js';
 import { gerenciaContas } from '../perfis.js';
@@ -17,9 +17,7 @@ export function mostrarVistaDosAlunos(vista) {
   if (vista === 'cursos') rCursos();
 }
 
-const HORAS = Array.from({ length: 11 }, (_, i) => [i + 1, `${i + 1} h`]);
 const opcoesDoRecurso = m => opts(MIS[m.mis].eq.map(e => [e, e]), m.eq);
-const opcoesDasHoras = m => (MIS[m.mis].isGround ? '<option value="1.5">1h30</option>' : opts(HORAS, m.nb));
 
 function linha(curso, m, i, total, edita) {
   const ground = Boolean(MIS[m.mis].isGround), d = edita ? '' : ' disabled';
@@ -29,7 +27,7 @@ function linha(curso, m, i, total, edita) {
     <td><input data-cf="nome" value="${esc(m.nome)}" maxlength="80" aria-label="Nome de ${esc(m.id)}"${d}></td>
     <td><select data-cf="mis" aria-label="Missão de ${esc(m.id)}"${d}>${opts(Object.keys(MIS).map(k => [k, k]), m.mis)}</select></td>
     <td><select data-cf="eq" aria-label="Recurso de ${esc(m.id)}"${ground || !edita ? ' disabled' : ''}>${opcoesDoRecurso(m)}</select></td>
-    <td><select data-cf="nb" aria-label="Horas de ${esc(m.id)}"${ground || !edita ? ' disabled' : ''}>${opcoesDasHoras(m)}</select></td>
+    <td><input type="number" class="duracao" data-cf="nb" min="0.1" max="${DURACAO_MAXIMA_H}" step="0.1" inputmode="decimal" value="${esc(m.nb)}" aria-label="Horas de ${esc(m.id)}"${ground || !edita ? ' disabled' : ''}></td>
     <td class="acoes">${edita ? `<button type="button" class="x" data-act="curso-subir" aria-label="Subir ${esc(m.id)}"${i === 0 ? ' disabled' : ''}>↑</button><button type="button" class="x" data-act="curso-descer" aria-label="Descer ${esc(m.id)}"${i === total - 1 ? ' disabled' : ''}>↓</button><button type="button" class="x" data-act="curso-remover" aria-label="Tirar ${esc(m.id)} do programa">✕</button>` : ''}</td>
   </tr>`;
 }
@@ -56,7 +54,7 @@ export function atualizarLinhaDoPrograma(tr, m) {
   tr.querySelector('[data-cf="nome"]').value = m.nome;
   const eq = tr.querySelector('[data-cf="eq"]'), nb = tr.querySelector('[data-cf="nb"]');
   eq.innerHTML = opcoesDoRecurso(m);
-  nb.innerHTML = opcoesDasHoras(m);
+  nb.value = m.nb;
   eq.disabled = nb.disabled = ground;
   [['nome', 'Nome de'], ['mis', 'Missão de'], ['eq', 'Recurso de'], ['nb', 'Horas de']].forEach(([cf, rotulo]) => tr.querySelector(`[data-cf="${cf}"]`).setAttribute('aria-label', `${rotulo} ${m.id}`));
   [['curso-subir', 'Subir'], ['curso-descer', 'Descer'], ['curso-remover', 'Tirar']].forEach(([act, rotulo]) => {

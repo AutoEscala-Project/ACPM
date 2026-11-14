@@ -55,6 +55,11 @@ describe('Voos: janelas preferidas e encaixe', () => {
 
   // Revisão de 14/11: um pedido é um voo só, com as horas pedidas (para dividir no dia, "+ missão"); o número de
   // sessões dos dados antigos não conta
+  it('a duração fracionada: 1,2 h são 72 minutos', () => {
+    const { out } = alocar({ ins: [instrutor(1, 9)], stu: [aluno(1000, { nb: 1.2, p1: 390, p2: -1 })] });
+    assert.deepEqual([out[0].a, out[0].b, out[0].h], [390, 462, 1.2]);
+  });
+
   it('um pedido é um voo só, com as horas pedidas', () => {
     const { out } = alocar({ ins: [instrutor(1, 1), instrutor(2, 1)], stu: [aluno(1000, { nb: 3, ss: 2, p1: 0, p2: 2 })] });
     assert.deepEqual(out.map(o => [o.fKey, o.ss, o.a, o.b, o.h, o.tag]), [['1000_0_1', '1/1', 390, 570, 3, 'Pref. 1']]);

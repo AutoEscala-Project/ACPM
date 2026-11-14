@@ -1,6 +1,6 @@
 // Aba Demanda: pedidos de missão por aluno (inclusive missões extras) e filtros. Os campos são discretos (parecem
 // texto até o mouse passar ou o foco chegar); o que a missão exige do instrutor fica na dica do campo da missão.
-import { MIS, GROUND_EQ_TYPE, T, NI } from '../config.js';
+import { MIS, GROUND_EQ_TYPE, T, NI, DURACAO_MAXIMA_H } from '../config.js';
 import { matriculasDoTipo } from '../frota.js';
 import { esc, opts, hm } from '../format.js';
 import { isGroundMission, opcoesDeDisponibilidade } from '../rules.js';
@@ -40,7 +40,8 @@ export const singleDemandRowHTML = (stu, d, mid = 0) => {
 
   const nbOpts = isGnd
     ? `<select data-f="nb" disabled title="Ground School tem duração fixa de 01h30" aria-label="Duração de ${esc(stu.nm)}"><option value="1.5" selected>1h30</option></select>`
-    : `<select data-f="nb" aria-label="Duração de ${esc(stu.nm)}">${opts(Array.from({ length: 11 }, (_, i) => [i + 1, (i + 1) + ' h']), d.nb)}</select>`;
+    // A duração digitada, fracionada, até 5 h (retorno da operação, 14/11)
+    : `<input type="number" class="duracao" data-f="nb" min="0.1" max="${DURACAO_MAXIMA_H}" step="0.1" inputmode="decimal" value="${esc(d.nb)}" aria-label="Duração de ${esc(stu.nm)}, em horas">`;
 
   return `<tr data-k="d" data-id="${stu.id}" data-mid="${mid}" data-nm="${esc(stu.nm.toLowerCase())}" data-mis="${esc(d.mis)}" class="${trCls}">
     <td>${firstCell}</td>

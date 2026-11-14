@@ -13,7 +13,7 @@
  *   js/views/       Renderização das abas (recursos, cadastros, demanda, escala, BI e navegação)
  *   js/export.js    Exportação CSV e PDF
  */
-import { WIN, NI, T, GROUND_EQ_TYPE, GROUND_REG, GROUND_DURATION_MIN, GROUND_DURATION_H, MIS, PRE } from './config.js';
+import { WIN, NI, T, GROUND_EQ_TYPE, GROUND_REG, GROUND_DURATION_MIN, GROUND_DURATION_H, MIS, PRE, DURACAO_MAXIMA_H } from './config.js';
 import { novoRecurso, matriculasDoTipo } from './frota.js';
 import { HORARIOS_PADRAO, DE_30_EM_30, horariosDaMissao, ajustarPreferencias, paraMinuto } from './horarios.js';
 import { hm, fmtH, fmtDurLabel, pad, amanhaISO, isoMenosDias, nomeLimpo, dataIsoValida } from './format.js';
@@ -941,8 +941,13 @@ document.addEventListener('change', e => {
       : lista.some((o, j) => j !== i && o.id === id) ? `O código ${id} já existe no ${curso}.` : '';
     if (erro) { showToast(erro); campo.value = m.id; return; }
     m.id = id;
+  } else if (cf === 'nb') {
+    // As horas: de 0,1 h a 5 h, em décimos (retorno da operação, 14/11); fora disso, não vale
+    const h = Math.round(parseFloat(String(campo.value).replace(',', '.')) * 10) / 10;
+    if (!(h > 0 && h <= DURACAO_MAXIMA_H)) { showToast(`A duração vai de 0,1 h a ${DURACAO_MAXIMA_H} h.`); campo.value = m.nb; return; }
+    m.nb = h;
   } else {
-    m[cf] = cf === 'nb' ? +campo.value : campo.value;
+    m[cf] = campo.value;
   }
   lista[i] = m;
   gravarPrograma(curso, lista);
@@ -1202,6 +1207,17 @@ document.addEventListener('change', e => {
         else delete target.jan;
         logChange('mod', `Pedido ${s.nm}: disponibilidade ${rotuloDaDisponibilidade(target.jan)} (${target.mis})`);
       } else {
+        // A duração digitada: de 0,1 h a 5 h, em décimos (retorno da operação, 14/11); fora disso, não vale
+        if (f === 'nb') {
+          const h = Math.round(parseFloat(String(t.value).replace(',', '.')) * 10) / 10;
+          if (!(h > 0 && h <= DURACAO_MAXIMA_H)) {
+            showToast(`A duração vai de 0,1 h a ${DURACAO_MAXIMA_H} h.`);
+            c.outerHTML = singleDemandRowHTML(s, target, mid);
+            return;
+          }
+          t.value = h;
+        }
+        const eraGround = isGroundMission(target.mis);
         target[f] = (f === 'mis' || f === 'eq') ? t.value : +t.value;
         // Missão, recurso ou horas mudados à mão: o pedido deixa de ser a missão do curso (fase 14)
         if (['mis', 'eq', 'nb'].includes(f)) delete target.etapa;
@@ -1213,7 +1229,7 @@ document.addEventListener('change', e => {
           if (mRule.isGround) {
             target.eq = GROUND_EQ_TYPE;
             target.nb = GROUND_DURATION_H;
-          } else if (+target.nb === GROUND_DURATION_H || !Number.isInteger(+target.nb)) {
+          } else if (eraGround) {
             target.nb = 1;
           }
         }

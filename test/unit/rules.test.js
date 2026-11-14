@@ -44,10 +44,16 @@ describe('Regras de missão', () => {
     assert.deepEqual(pedido, { mis: 'Navegação', eq: 'C152', p1: 500, p2: 610, nb: 3, ss: 1 });
   });
 
-  it('normaliza pedidos de voo: equipamento permitido, horas inteiras e preferências em minutos', () => {
+  it('normaliza pedidos de voo: equipamento permitido e preferências em minutos', () => {
     const pedido = { mis: 'Multi', eq: 'C152', p1: 1, p2: 2, nb: 1.5, ss: 1 };
     normalizeMissionFields(pedido);
-    assert.deepEqual(pedido, { mis: 'Multimotor', eq: 'PA-34', p1: 500, p2: 610, nb: 1, ss: 1 });
+    assert.deepEqual(pedido, { mis: 'Multimotor', eq: 'PA-34', p1: 500, p2: 610, nb: 1.5, ss: 1 });
+  });
+
+  // Retorno da operação (14/11): a duração pode ser fracionada (1,2 h; 2,6 h), até 5 h
+  it('a duração do voo: de 0,1 h a 5 h, em décimos; acima de 5 h fica 5; fora disso, 1 h', () => {
+    const nb = valor => { const p = { mis: 'Voo Local', eq: 'C152', p1: 390, p2: -1, nb: valor }; normalizeMissionFields(p); return p.nb; };
+    assert.deepEqual([nb(1.2), nb(2.6), nb(2.64), nb(5), nb(7), nb(0), nb(-1), nb('x'), nb('2.5')], [1.2, 2.6, 2.6, 5, 5, 1, 1, 1, 2.5]);
   });
 
   it('nomes herdados do Object (constructor, __proto__, toString) não são missões nem equipamentos', () => {

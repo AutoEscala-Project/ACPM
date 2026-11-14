@@ -93,6 +93,24 @@ test.describe('Demanda', () => {
     for (const caixa of await extras.all()) await expect(caixa).toBeChecked();
   });
 
+  // Retorno da operação (14/11): a duração é digitada, fracionada, até 5 h
+  test('a duração é um número de horas, fracionado, até 5 h; acima disso, não vale', async ({ page }) => {
+    await abrirComExemplo(page);
+    await irPara(page, 'dem');
+    const duracao = page.locator('#dem tr[data-k="d"][data-id="1011"] [data-f="nb"]');
+    await expect(duracao).toHaveAttribute('type', 'number');
+    await duracao.fill('2.6');
+    await duracao.press('Enter');
+    await expect(page.locator('#audit-log-list')).toContainText('2,6 h');
+    await abrirEscala(page);
+    await expect(page.locator('#out tbody tr:not(.win)', { hasText: 'Aluno 12' }).locator('.c-hr')).toContainText('2,6 h');
+    await irPara(page, 'dem');
+    await duracao.fill('6');
+    await duracao.press('Enter');
+    await expect(page.locator('.toast').last()).toHaveText('A duração vai de 0,1 h a 5 h.');
+    await expect(duracao).toHaveValue('2.6');
+  });
+
   test('trocar a missão ajusta equipamento, duração e horários', async ({ page }) => {
     await abrirSintetico(page);
     await irPara(page, 'alu');
