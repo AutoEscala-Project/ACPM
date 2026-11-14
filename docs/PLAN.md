@@ -292,6 +292,17 @@ A full review of the app (engine, data and security, usability and accessibility
    - **Hover-only controls** also show on focus within the row and on touch screens (`pointer: coarse`).
    - **Manual**: a Glossário section generated from the glossary; the "passe o mouse" passages rewritten; the date control shows keyboard focus.
 
+**Field feedback of 2026-11-14 (13 items) re-plans the rest.** Pedro's choices: the feedback goes first. PR 5 = the bugs and quick fixes; PR 6 = the agenda as the hub (the demand starts empty each day, no Sunday operation with Monday bookings until Saturday 10:00, booking order decides who goes first and Prioridade can still override, at most 6 local flights per take-off time counting Voo Local, Voo Solo and TGL with a warning and the next possible time at booking, Solo always at 06:30); PR 7 = checker qualifications split (a check is course PP/PC/INVA + engine MNTE/MLTE + rules VFR/IFR, and the instructor needs all three marks); the TV "EMBARQUE IMEDIATO, PROSSIGA PARA SALA DE BRIEFING" carousel 35 minutes before departure goes with the TV/Pousou PR. The original PRs 5–9 (take-off times "Resumo + Editar", Pousou, server permissions, undo, accessibility) follow.
+
+5. [x] **Field feedback: bugs and quick fixes** (branch `revisao-5`, on top of `revisao-4`).
+   - **Agenda import**: each request becomes its own flight (two requests of the same mission used to collapse into one, at the last one's time and with the old duration); only a mission copied from the previous day gives way to the first request. The request id is kept on the flight (`solicitacao`).
+   - **Voa**: unchecking a student's main mission also unchecks the extra missions; the revert brings them all back.
+   - **Duration**: typed, in tenths of an hour, up to 5 h (`DURACAO_MAXIMA_H`), in Demanda and in the course programme; the engine schedules in minutes.
+   - **The open date stays**: the Agenda opens on the date at the top (unless it's already closed for bookings), picking a day in the Agenda opens it in the whole app, and the date is kept in the address (`?data=`) so a reload stays on it.
+   - **Agenda**: requests are at a specific time only, with a duration (migration `agenda_com_duracao`: column `horas` and a 10-argument `registrar_solicitacao`; the old function stays until this PR is live); a student already booked that day needs "Registrar mesmo assim".
+   - **C152 qualification**: missions in the C152 require it, like the C172 and the PA-34; every instructor gets it (data format **19**).
+   - **Recursos**: the operator types the available hours (0–50) next to the bar; the day still stores hours since the revision.
+
 ### Phase 16: Later (nice to have)
 - [ ] Track instructor and student currency: last flight, medical/CMA expiry. The engine then checks these too (the course phase is Phase 14).
 - [ ] Integrate with the Google Calendar that students already use, publishing each student's missions.
