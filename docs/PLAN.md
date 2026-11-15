@@ -319,6 +319,11 @@ A full review of the app (engine, data and security, usability and accessibility
    - **Rest after a delay**: the end of yesterday's last duty uses the delayed end, in the app and on the server (migration `repouso_conta_o_atraso`).
    - **Boarding call** (field feedback; Pedro's choices): from 35 minutes before take-off (the new one, if delayed) until take-off, an aircraft flight that hasn't left shows "EMBARQUE IMEDIATO · Sala de briefing" in its Partidas row, on the TV and in the Escala's Painel view. Ground and simulator don't call; no extra carousel screen.
    - Left for later from the original plan: aircraft hours computed on read (`horas_dos_avioes`), the single "voou" rule for conflicted flights, and the tag kept in the pin.
+9. [x] **Take-off times "Resumo + Editar" and Recursos in two parts** (branch `revisao-9`, on top of `revisao-8`).
+   - Each category shows a summary (`descreverHorarios`: "Janelas do dia", "De 30 em 30 min, 06:30–16:30" or runs like "07:00–08:30 de 30 em 30 min, 14:00"), the count, and the morning and afternoon times; a time in a window closed on this date is struck through with a tip. One button per category in the summary (57 before).
+   - "Editar" opens the list inline (`js/views/horarios.js`): model, chips with ✕, a time field where Enter adds (06:00–16:30), and the effect before saving (`impactoDosHorarios`: who changes preference, who loses "Só às"). Nothing changes until Salvar; Cancelar and Esc discard; focus returns to Editar. Saving writes one history entry that reverts the list and the adjusted requests (`restaurarHorarios`).
+   - Recursos: "Nesta data" (windows, availability and hours, hangar order) and "Vale para todas as datas" (take-off times and the fleet, with + Novo recurso, Retirar and Só Parafuso as compact chips).
+   - Left for the next PR: the time vocabulary (the Escala list and PDF grouped by exact departure time, "Aplicar período").
 
 ### Phase 16: Later (nice to have)
 - [ ] Track instructor and student currency: last flight, medical/CMA expiry. The engine then checks these too (the course phase is Phase 14).
