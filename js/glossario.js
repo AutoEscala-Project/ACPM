@@ -70,6 +70,7 @@ export const GLOSSARIO = {
   'vem-nesta-data': { aba: 'Instrutores', termo: 'Hoje', texto: 'Marcado, o instrutor vem nesta data e pode ser escalado nos períodos marcados ao lado.' },
   'voos-do-instrutor': { aba: 'Instrutores', termo: 'Voos', texto: 'Voos e aulas do instrutor na escala desta data, sem os cancelados (a turma de Ground conta uma vez).' },
   'horas-do-mes': { aba: 'Instrutores', termo: 'Mês', texto: 'As horas de voo do instrutor no mês, com a escala desta data. A partir de 90% do limite da lei, a escala avisa.' },
+  checador: { aba: 'Instrutores', termo: 'Checador', texto: 'O voo de cheque exige três marcas do checador: o curso (PP ou PC), o motor (MNTE ou MLTE) e as regras (VFR ou IFR). O Cheque PC MLTE IFR, por exemplo, pede PC, MLTE e IFR.' },
   turno: { aba: 'Instrutores', termo: 'Turno', texto: 'Marca de uma vez os períodos do instrutor nesta data: manhã, tarde, noturno, o dia inteiro ou o dia mais o noturno.' },
   'fora-do-app': { aba: 'Instrutores', termo: 'Fora do app', texto: 'Horas de voo do instrutor em outro lugar (outra escola, por exemplo). Entram nos limites da lei do mês e do ano.' },
   'limites-da-lei': {

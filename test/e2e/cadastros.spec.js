@@ -228,6 +228,38 @@ test.describe('Instrutores', () => {
     await expect(page.locator(`#inst-dia tr[data-id="${id}"] [data-f="aw"][data-w="7"]`)).toBeFocused();
   });
 
+  // Retorno da operação (14/11): o checador é credenciado por partes, e o cheque exige as três
+  test('o checador por partes: o curso, o motor e as regras; o cheque vai para quem tem as três', async ({ page }) => {
+    const estado = cenario({
+      ins: [instrutor(1, 9, { hab: ['local', 'c152', 'checa_pp', 'checa_mnte'] }), instrutor(2, 9, { hab: ['local', 'c152'] })],
+      stu: [aluno(1000, { mis: 'Cheque PP', eq: 'C152' })]
+    });
+    await abrir(page, { estado });
+    await irPara(page, 'ins');
+    // Na grade do dia, as marcas de checador contam como uma
+    await expect(page.locator('#inst-dia tr[data-k="i"][data-id="1"] .habs-resumo')).toHaveText('Checador · Local');
+    await page.locator('#s-ins [data-vista-ins="cadastro"]').click();
+    const linha = page.locator('#inst .cd[data-id="1"]');
+    await linha.locator('[data-act="editar-habs"]').click();
+    const painel = page.locator('#painel-instrutor');
+    const grupo = nome => painel.locator('fieldset', { has: page.locator('legend', { hasText: nome }) }).locator('label');
+    await expect(grupo('Checador: curso')).toHaveText(['Checador do curso PP', 'Checador do curso PC', 'Checador do curso INVA']);
+    await expect(grupo('Checador: motor')).toHaveText(['Checador MNTE', 'Checador MLTE']);
+    await expect(grupo('Checador: regras')).toHaveText(['Checador VFR', 'Checador IFR']);
+    await expect(painel.locator('.dica-btn[data-dica="checador"]')).toHaveCount(1);
+    // Sem as regras (VFR), o instrutor ainda não dá o Cheque PP
+    await abrirEscala(page);
+    expect((await lerEscala(page)).linhas.filter(l => l.includes('Aluno 1000'))).toHaveLength(0);
+    await irPara(page, 'ins');
+    await painel.locator('[data-f="hab"][data-h="checa_vfr"]').check();
+    await expect(linha).toHaveAttribute('data-hab', 'local c152 checa_pp checa_mnte checa_vfr');
+    await page.locator('#btn-fechar-painel-instrutor').click();
+    await abrirEscala(page);
+    const voos = (await lerEscala(page)).linhas.filter(l => l.includes('Aluno 1000'));
+    expect(voos).toHaveLength(1);
+    expect(voos[0]).toContain('| Instrutor 01 |');
+  });
+
   test('cadastra instrutor e altera habilitações (no painel), peso e turno', async ({ page }) => {
     await abrirSintetico(page);
     await irPara(page, 'ins');
