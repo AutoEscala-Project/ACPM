@@ -313,6 +313,12 @@ A full review of the app (engine, data and security, usability and accessibility
    - The three checker qualifications (VFR, IFR, MLTE IFR) become seven marks in three groups: the course (PP, PC, INVA), the engine (MNTE, MLTE) and the rules (VFR, IFR). A check flight needs one mark of each, matching its name (Cheque PC MLTE IFR: PC + MLTE + IFR); it still needs no aircraft qualification. No check flight uses INVA yet: the mark is recorded for when one exists.
    - **Data format 20**: each old checker gets exactly the marks that gave the same checks, plus INVA (it was in all three names). The rotation's check queue holds whoever can give at least one check.
    - Instrutores: the drawer shows the three groups with a "?"; the day grid shows the marks as one "Checador". The Manual merges what every aircraft shares ("Checador PP + Checador MNTE + Checador VFR").
+8. [x] **"Pousou" and the boarding call** (branch `revisao-8`, on top of `revisao-7`).
+   - **Pousou**: after Em Voo; shown as "Concluída" on Ground and simulator rows (list, map, padlock, history, CSV, PDF; the stored value is the same). It pins the flight, Reabrir keeps it, it can't be released, compaction leaves it, and it leaves the arrivals board at once. **Data format 21** (no data change): an older tab, which would drop the status, is refused.
+   - **The delay's new take-off stays through Em Voo and Pousou** ("decolou às 10:40", not editable): the flight keeps its new interval, the board keeps "Previsto", and the delay conflict still counts; Pendente or Confirmado clear it.
+   - **Rest after a delay**: the end of yesterday's last duty uses the delayed end, in the app and on the server (migration `repouso_conta_o_atraso`).
+   - **Boarding call** (field feedback; Pedro's choices): from 35 minutes before take-off (the new one, if delayed) until take-off, an aircraft flight that hasn't left shows "EMBARQUE IMEDIATO · Sala de briefing" in its Partidas row, on the TV and in the Escala's Painel view. Ground and simulator don't call; no extra carousel screen.
+   - Left for later from the original plan: aircraft hours computed on read (`horas_dos_avioes`), the single "voou" rule for conflicted flights, and the tag kept in the pin.
 
 ### Phase 16: Later (nice to have)
 - [ ] Track instructor and student currency: last flight, medical/CMA expiry. The engine then checks these too (the course phase is Phase 14).
