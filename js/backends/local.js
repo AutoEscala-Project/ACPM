@@ -144,6 +144,11 @@ export const backendLocal = {
       throw erroDaAgenda('23514', 'pedido incompleto: confira aluno, missão, horário e quem anotou');
     }
     const lista = lerJson(CHAVE_AGENDA) || [];
+    // No máximo 6 voos locais no mesmo horário, como no servidor (retorno da operação, 14/11)
+    const locais = ['Voo Local', 'Voo Solo', 'TGL (TMA)'];
+    if (locais.includes(missao) && lista.filter(s => s.data === data && !s.cancelada_em && s.horario === horario && locais.includes(s.missao)).length >= 6) {
+      throw erroDaAgenda('PT422', `já há 6 voos locais às ${horario}`);
+    }
     const id = proximoId(lista);
     lista.push({
       id, data, aluno, aluno_nome: aluno_nome.trim(), missao, janela, horario, horas: h,

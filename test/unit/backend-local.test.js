@@ -82,9 +82,9 @@ describe('Backend local: agenda de solicitações', () => {
 
   it('registra no prazo com quem anotou, a hora e a duração; lista por período em ordem', async () => {
     const id = await backendLocal.registrarSolicitacao(pedido(), antesDas13);
-    await backendLocal.registrarSolicitacao(pedido({ data: '2026-11-15', aluno: 1001, horario: '14:30', horas: 2.64, observacao: ' PP-ABP ' }), antesDas13);
+    await backendLocal.registrarSolicitacao(pedido({ data: '2026-11-16', aluno: 1001, horario: '14:30', horas: 2.64, observacao: ' PP-ABP ' }), antesDas13);
     const lista = await backendLocal.listarSolicitacoes('2026-11-01', '2026-11-30');
-    assert.deepEqual(lista.map(s => [s.data, s.aluno]), [['2026-11-11', 1000], ['2026-11-15', 1001]]);
+    assert.deepEqual(lista.map(s => [s.data, s.aluno]), [['2026-11-11', 1000], ['2026-11-16', 1001]]);
     assert.deepEqual([lista[0].id, lista[0].aluno_nome, lista[0].registrado_por, lista[0].excecao, lista[0].registrado_em], [id, 'Aluno 1000', 'Maria', false, antesDas13.toISOString()]);
     assert.deepEqual([lista[1].horario, lista[1].horas, lista[1].observacao], ['14:30', 2.6, 'PP-ABP']);
     assert.deepEqual(await backendLocal.listarSolicitacoes('2026-11-12', '2026-11-14'), []);
@@ -104,6 +104,13 @@ describe('Backend local: agenda de solicitações', () => {
     await assert.rejects(backendLocal.registrarSolicitacao(pedido({ horas: 0 }), antesDas13), e => e.code === '22023');
     await backendLocal.registrarSolicitacao(pedido({ missao: 'Ground C152', horas: 3 }), antesDas13);
     assert.equal((await backendLocal.listarSolicitacoes('2026-11-11', '2026-11-11'))[0].horas, 1.5);
+  });
+
+  // Retorno da operação (14/11): no máximo 6 voos locais no mesmo horário, como no servidor
+  it('o 7º voo local no mesmo horário é recusado (PT422); outra missão passa', async () => {
+    for (let i = 0; i < 6; i++) await backendLocal.registrarSolicitacao(pedido({ aluno: 2000 + i, missao: ['Voo Local', 'Voo Solo', 'TGL (TMA)'][i % 3], horario: '08:20' }), antesDas13);
+    await assert.rejects(backendLocal.registrarSolicitacao(pedido({ aluno: 2010, horario: '08:20' }), antesDas13), e => e.code === 'PT422');
+    await backendLocal.registrarSolicitacao(pedido({ aluno: 2011, missao: 'Navegação', horario: '08:20' }), antesDas13);
   });
 
   it('cancela guardando quem cancelou (uma vez só); o pedido continua na agenda', async () => {

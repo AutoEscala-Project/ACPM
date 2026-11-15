@@ -150,4 +150,34 @@ describe('Migrações do formato dos dados', () => {
     assert.equal(novo.esquema, ESQUEMA);
     assert.ok(ESQUEMA >= 19);
   });
+
+  // Versão 20 (retorno da operação, 14/11): o checador é credenciado por partes (o curso, o motor e as regras)
+  it('versão 20: cada checador antigo recebe as marcas que davam os mesmos cheques; o resto não muda', () => {
+    const cadastro = {
+      esquema: 19, nid: 4, stu: [],
+      ins: [
+        { id: 1, nm: 'A', hab: ['local', 'c152', 'checador_vfr'] },
+        { id: 2, nm: 'B', hab: ['c172', 'checador_ifr'] },
+        { id: 3, nm: 'C', hab: ['mlte', 'checador_mlte', 'checador_vfr'] },
+        { id: 4, nm: 'D', hab: ['local', 'c152'] }
+      ]
+    };
+    const novo = migrarCadastro(cadastro);
+    assert.deepEqual(novo.ins.map(x => x.hab), [
+      ['local', 'c152', 'checa_pp', 'checa_pc', 'checa_inva', 'checa_mnte', 'checa_vfr'],
+      ['c172', 'checa_pp', 'checa_pc', 'checa_inva', 'checa_mnte', 'checa_vfr', 'checa_ifr'],
+      ['mlte', 'checa_pp', 'checa_pc', 'checa_inva', 'checa_mnte', 'checa_mlte', 'checa_vfr', 'checa_ifr'],
+      ['local', 'c152']
+    ]);
+    assert.equal(novo.esquema, ESQUEMA);
+    assert.ok(ESQUEMA >= 20);
+  });
+
+  // Versão 21 (revisão de 14/11): o status "Pousou". Nada muda nos dados; o número novo faz a aba da versão anterior
+  // (que não conhece o Pousou e o apagaria ao abrir o dia) recusar o dia e pedir para recarregar
+  it('versão 21: o dia e o cadastro não mudam, só o número do formato', () => {
+    const dia = { esquema: 20, fStatus: { '1000_0_1': 'Pousou' }, fObs: { '1000_0_1': { novoInicio: 640 } } };
+    assert.deepEqual(migrarDia(dia), { ...dia, esquema: ESQUEMA });
+    assert.ok(ESQUEMA >= 21);
+  });
 });

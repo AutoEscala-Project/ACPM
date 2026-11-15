@@ -2,7 +2,7 @@
 // e normalização de pedidos (inclusive nomes de missão de versões anteriores).
 import { MIS, NI, T, PRE, GROUND_EQ_TYPE, GROUND_DURATION_H, DURACAO_MAXIMA_H } from './config.js';
 import { hm } from './format.js';
-import { periodoDoMinuto, minutoDaPreferencia, preferenciaValida } from './horarios.js';
+import { periodoDoMinuto, minutoDaPreferencia, preferenciaValida, HORARIO_DO_SOLO } from './horarios.js';
 import { codigoValido } from './cursos.js';
 
 // Disponibilidade do aluno para o pedido (da agenda da secretaria ou escolhida na demanda): o voo só começa nesses
@@ -113,4 +113,6 @@ export function normalizeMissionFields(target) {
   } else {
     target.nb = duracaoValida(target.nb);
   }
+  // Missão de horário fixo (o Noturno às 17:30; o Voo Solo às 06:30, retorno da operação, 14/11): a preferência é ele
+  if (target.mis === 'Noturno' || target.mis === 'Voo Solo') { target.p1 = target.mis === 'Noturno' ? T[NI] : HORARIO_DO_SOLO; target.p2 = -1; }
 }

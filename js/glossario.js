@@ -18,7 +18,7 @@ export const GLOSSARIO = {
   'segunda-preferencia': { aba: 'Escala', termo: '2ª preferência', texto: 'O voo ficou na 2ª preferência do aluno: na 1ª não havia avião, instrutor ou horário livre.' },
   'horario-ajustado': { aba: 'Escala', termo: 'Horário ajustado', texto: 'A compactação mudou o horário para fechar um buraco do dia, dentro da regra de Horários escolhida nos critérios.' },
   conflito: { aba: 'Escala', termo: 'Conflito', texto: 'O voo da escala aprovada não vale mais: o instrutor, o avião, o horário ou o pedido mudou. Ele fica no lugar até ser resolvido em Sugestões.' },
-  'voo-fixo': { aba: 'Escala', termo: 'Voo fixo (cadeado)', texto: 'O voo não muda quando a escala é refeita. Fica fixo pela escala aprovada ou pelo status Em Voo, Atrasado ou Cancelado.' },
+  'voo-fixo': { aba: 'Escala', termo: 'Voo fixo (cadeado)', texto: 'O voo não muda quando a escala é refeita. Fica fixo pela escala aprovada ou pelo status Atrasado, Em Voo, Pousou ou Cancelado.' },
   'reduzir-combustivel': {
     aba: 'Escala', termo: 'Reduzir combustível',
     texto: `Aluno e instrutor passam do limite de peso do avião com o tanque cheio: o avião sai com menos combustível, o bastante para o voo, o táxi e a reserva (${reservaDaMissao('Voo Local')} min; ${reservaDaMissao('Noturno')} à noite e em IFR).`
@@ -27,7 +27,7 @@ export const GLOSSARIO = {
   turma: { aba: 'Escala', termo: 'Turma', texto: `Alunos do mesmo Ground, no mesmo horário e com o mesmo instrutor: uma aula só, de ${duracao(GROUND_DURATION_MIN)}, na sala de Ground.` },
   'missao-do-curso': { aba: 'Escala', termo: 'Missão do curso', texto: 'O código da missão no programa do curso (por exemplo, PP-07): a próxima que o aluno ainda não aprovou.' },
   resultado: { aba: 'Escala', termo: 'Resultado', texto: 'Aprovado ou Reprovado na missão do curso. A reprovada volta a ser a próxima; Pendente desfaz um engano.' },
-  status: { aba: 'Escala', termo: 'Status', texto: 'Pendente, Confirmado, Atrasado (pede a nova decolagem), Em Voo ou Cancelado (pede o motivo). Em Voo, Atrasado e Cancelado fixam o voo.' },
+  status: { aba: 'Escala', termo: 'Status', texto: 'Pendente, Confirmado, Atrasado (pede a nova decolagem), Em Voo, Pousou (no Ground e no simulador, Concluída) ou Cancelado (pede o motivo). Os quatro últimos fixam o voo.' },
   'tempo-parado': {
     aba: 'Escala', termo: 'Tempo parado',
     texto: `O tempo entre um voo e o seguinte de cada instrutor e de cada avião, sem os cancelados. Parado ${INTERVALO_DO_HANGAR / 60} h ou mais, o avião volta para o hangar (uma saída).`
@@ -51,12 +51,13 @@ export const GLOSSARIO = {
   preferencias: { aba: 'Demanda', termo: 'Preferências', texto: 'Os horários que o aluno prefere, entre os da categoria do avião. Sem vaga neles, a escala usa o horário livre mais perto da 1ª.' },
   disponibilidade: { aba: 'Demanda', termo: 'Disponibilidade', texto: 'Quando o aluno pode voar: manhã, tarde, noite ou um horário exato. O voo só começa dentro dela.' },
   duracao: { aba: 'Demanda', termo: 'Duração', texto: `As horas do voo, de uma vez. O Ground tem ${duracao(GROUND_DURATION_MIN)}. Para dois voos do aluno no mesmo dia, use “+ missão”.` },
-  prioridade: { aba: 'Demanda', termo: 'Prioridade', texto: 'De 1 a 5: o pedido de prioridade maior é escalado antes e escolhe primeiro o horário, o avião e o instrutor.' },
+  prioridade: { aba: 'Demanda', termo: 'Prioridade', texto: 'De 1 a 5: o pedido de prioridade maior é escalado antes. Com a mesma prioridade, quem agendou primeiro vai antes; o pedido posto à mão, depois.' },
 
   // Agenda
-  excecao: { aba: 'Agenda', termo: 'Exceção da Coordenação', texto: 'Registra o pedido depois do prazo das 13:00 da véspera. O pedido fica marcado como exceção, para auditoria.' },
+  excecao: { aba: 'Agenda', termo: 'Exceção da Coordenação', texto: 'Registra o pedido depois do prazo (13:00 da véspera; a segunda, sábado às 10:00). O pedido fica marcado como exceção, para auditoria.' },
 
   // Recursos
+  'horario-em-janela-fechada': { aba: 'Recursos', termo: 'Horário apagado', texto: 'O horário cai numa janela de operação fechada nesta data: nesta data, nenhum voo sai nele. Ele continua na lista para as outras datas.' },
   janelas: { aba: 'Recursos', termo: 'Janelas de operação', texto: 'Os períodos do dia em que a escola opera nesta data. Período fechado não recebe voo nem Ground.' },
   'horarios-de-decolagem': { aba: 'Recursos', termo: 'Horários de decolagem', texto: 'Os horários em que cada categoria pode decolar (o PA-34 tem os seus). Valem para todas as datas.' },
   'horas-disponiveis': {
@@ -70,6 +71,7 @@ export const GLOSSARIO = {
   'vem-nesta-data': { aba: 'Instrutores', termo: 'Hoje', texto: 'Marcado, o instrutor vem nesta data e pode ser escalado nos períodos marcados ao lado.' },
   'voos-do-instrutor': { aba: 'Instrutores', termo: 'Voos', texto: 'Voos e aulas do instrutor na escala desta data, sem os cancelados (a turma de Ground conta uma vez).' },
   'horas-do-mes': { aba: 'Instrutores', termo: 'Mês', texto: 'As horas de voo do instrutor no mês, com a escala desta data. A partir de 90% do limite da lei, a escala avisa.' },
+  checador: { aba: 'Instrutores', termo: 'Checador', texto: 'O voo de cheque exige três marcas do checador: o curso (PP ou PC), o motor (MNTE ou MLTE) e as regras (VFR ou IFR). O Cheque PC MLTE IFR, por exemplo, pede PC, MLTE e IFR.' },
   turno: { aba: 'Instrutores', termo: 'Turno', texto: 'Marca de uma vez os períodos do instrutor nesta data: manhã, tarde, noturno, o dia inteiro ou o dia mais o noturno.' },
   'fora-do-app': { aba: 'Instrutores', termo: 'Fora do app', texto: 'Horas de voo do instrutor em outro lugar (outra escola, por exemplo). Entram nos limites da lei do mês e do ano.' },
   'limites-da-lei': {

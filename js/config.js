@@ -45,7 +45,7 @@ export const EQT = {
  * - Multimotor: exclusivamente PA-34
  * - TGL (TMA): treinamento de toque e arremetida na TMA
  * - Voos de cheque: PP e PC MNTE VFR (C152 ou C172), PC MNTE IFR (C172), PC MLTE VFR e IFR (PA-34), com o
- *     checador credenciado para cada cheque
+ *     checador com as três marcas do cheque (o curso, o motor e as regras)
  */
 export const MIS = {
   'Ground C152':      { defEq: GROUND_EQ_TYPE, eq: [GROUND_EQ_TYPE], isGround: true, gatesEq: 'C152' },
@@ -71,6 +71,10 @@ export const MIS = {
 // Revisão obrigatória dos aviões a cada 50 horas de voo (o avião para quando não tem saldo para mais 1 h)
 export const REVISAO_H = 50;
 export const MENOR_VOO_H = 1;
+// No máximo 6 voos locais (Voo Local, Voo Solo e TGL) saindo no mesmo horário (retorno da operação, 14/11: determinação
+// da diretoria do aeroclube)
+export const MISSOES_LOCAIS = ['Voo Local', 'Voo Solo', 'TGL (TMA)'];
+export const LIMITE_DE_VOOS_LOCAIS = 6;
 // A duração de um voo da demanda (retorno da operação, 14/11): fracionada, em décimos de hora, até 5 h
 export const DURACAO_MAXIMA_H = 5;
 
@@ -106,4 +110,5 @@ export const PRE = {
 };
 
 // Status do voo, na ordem do dia; Atrasado leva o novo horário e Cancelado, o motivo (js/status.js)
-export const FLIGHT_STATUSES = ['Pendente', 'Confirmado', 'Atrasado', 'Em Voo', 'Cancelado'];
+// "Pousou" (revisão de 14/11): o fim do voo; no Ground e no simulador aparece como "Concluída" (js/status.js)
+export const FLIGHT_STATUSES = ['Pendente', 'Confirmado', 'Atrasado', 'Em Voo', 'Pousou', 'Cancelado'];

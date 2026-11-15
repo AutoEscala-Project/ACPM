@@ -4,7 +4,8 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   HORARIOS_PADRAO, HORARIOS_INICIAIS, normalizarHorarios, horariosDoTipo, periodoDoMinuto, minutoDaPreferencia, preferenciaValida, paraMinuto,
-  preferenciasPadrao
+  preferenciasPadrao, DE_30_EM_30, modeloDosHorarios, descreverHorarios, porPeriodo, impactoDosHorarios, resumoDoImpacto,
+  PRIMEIRO_HORARIO, ULTIMO_HORARIO
 } from '../../js/horarios.js';
 import { hm } from '../../js/format.js';
 
@@ -163,5 +164,68 @@ describe('Horários pela distância da preferência', () => {
   it('a preferência fora da lista não entra, mas a distância conta a partir dela', async () => {
     const { ordenarPelaPreferencia } = await import('../../js/horarios.js');
     assert.deepEqual(ordenarPelaPreferencia([390, 500, 610], 450, -1), [500, 390, 610]);
+  });
+});
+
+// Retorno da operação (14/11): o Voo Solo sai sempre às 06:30 (local ou navegação)
+describe('O Voo Solo às 06:30', () => {
+  it('a missão Voo Solo só tem o horário das 06:30, em qualquer avião', async () => {
+    const { horariosDaMissao, HORARIOS_INICIAIS } = await import('../../js/horarios.js');
+    assert.deepEqual(horariosDaMissao(HORARIOS_INICIAIS, 'Voo Solo', 'C152'), [390]);
+    assert.deepEqual(horariosDaMissao(HORARIOS_INICIAIS, 'Voo Solo', 'PA-34'), [390]);
+  });
+
+  it('o motor põe o Solo às 06:30, mesmo com outra preferência', async () => {
+    const { runAllocationEngine } = await import('../../js/engine.js');
+    const { aluno, cenario, instrutor } = await import('../helpers/montar.js');
+    const { out } = runAllocationEngine(cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, { mis: 'Voo Solo', p1: 760, p2: 870 })] }));
+    assert.equal(out[0].a, 390);
+  });
+});
+
+// Revisão de 14/11 (Pedro: "Resumo + Editar"): o painel mostra um resumo de cada lista e edita numa caixa só
+describe('O resumo dos horários e o efeito de uma lista nova', () => {
+  const h = texto => paraMinuto(texto);
+
+  it('o modelo da lista: as janelas do dia, de 30 em 30 minutos, ou personalizada', () => {
+    assert.equal(modeloDosHorarios(HORARIOS_PADRAO), 'janelas');
+    assert.equal(modeloDosHorarios(DE_30_EM_30), 'de30');
+    assert.equal(modeloDosHorarios([390, 450]), 'personalizado');
+    assert.equal(modeloDosHorarios([...HORARIOS_PADRAO].reverse()), 'janelas', 'a ordem não importa');
+  });
+
+  it('a descrição: o nome do modelo, ou as sequências de mesmo intervalo resumidas e os horários soltos', () => {
+    assert.equal(descreverHorarios(HORARIOS_PADRAO), 'Janelas do dia');
+    assert.equal(descreverHorarios(DE_30_EM_30), 'De 30 em 30 min, 06:30–16:30');
+    assert.equal(descreverHorarios([h('07:00'), h('07:30'), h('08:00'), h('08:30'), h('14:00'), h('15:10')]), '07:00–08:30 de 30 em 30 min, 14:00, 15:10');
+    assert.equal(descreverHorarios([h('07:00'), h('09:00')]), '07:00, 09:00', 'dois horários não fazem sequência');
+    assert.equal(descreverHorarios([h('06:30'), h('07:30'), h('08:30'), h('12:00'), h('12:20'), h('12:40')]), '06:30–08:30 de 1 em 1 h, 12:00–12:40 de 20 em 20 min');
+  });
+
+  it('manhã (antes das 12:00) e tarde', () => {
+    assert.deepEqual(porPeriodo(HORARIOS_PADRAO), { manha: [390, 500, 610, 690], tarde: [760, 820, 870, 980] });
+    assert.deepEqual(porPeriodo([720]), { manha: [], tarde: [720] });
+  });
+
+  it('o efeito nos pedidos da categoria: quem muda de preferência e quem perde o "Só às"', () => {
+    const pedidos = [
+      { nome: 'Ana', pedido: { mis: 'Voo Local', eq: 'C152', p1: 390, p2: 610 } },
+      { nome: 'Bia', pedido: { mis: 'Voo Local', eq: 'C152', p1: 500, p2: -1, jan: 'h500' } },
+      { nome: 'Caio', pedido: { mis: 'Voo Local', eq: 'C172', p1: 500, p2: -1 } },
+      { nome: 'Davi', pedido: { mis: 'Noturno', eq: 'C152', p1: 1050, p2: -1 } }
+    ];
+    const efeito = impactoDosHorarios(pedidos, HORARIOS_INICIAIS, 'C152', [390, 610, 760]);
+    assert.deepEqual(efeito, { mudam: ['Bia'], perdemSo: [{ nome: 'Bia', minuto: 500 }] });
+    assert.equal(resumoDoImpacto(efeito), '1 pedido muda de preferência; 1 perde “Só às 08:20”.');
+    assert.equal(resumoDoImpacto(impactoDosHorarios(pedidos, HORARIOS_INICIAIS, 'C152', [...HORARIOS_PADRAO])), 'Nenhum pedido muda.');
+    const dois = impactoDosHorarios(pedidos, HORARIOS_INICIAIS, 'C152', [400]);
+    assert.deepEqual(dois.mudam, ['Ana', 'Bia']);
+    assert.equal(resumoDoImpacto(dois), '2 pedidos mudam de preferência; 1 perde “Só às 08:20”.');
+    // Os pedidos não mudam (o efeito só calcula)
+    assert.equal(pedidos[1].pedido.jan, 'h500');
+  });
+
+  it('no editor, os horários vão das 06:00 às 16:30 (o último que cabe um voo de 1 h antes do noturno)', () => {
+    assert.deepEqual([PRIMEIRO_HORARIO, ULTIMO_HORARIO].map(hm), ['06:00', '16:30']);
   });
 });

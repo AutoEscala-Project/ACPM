@@ -131,10 +131,12 @@ describe('Sugestões para um conflito', () => {
     assert.ok(voo.a >= 450);
   });
 
-  it('o voo em andamento (Em Voo ou Atrasado) não é solto', () => {
+  it('o voo em andamento (Em Voo, Atrasado ou Pousou) não é solto', () => {
     const base = cenario({ ins: [instrutor(1, 9), instrutor(2, 9)], stu: [aluno(1000, { p1: 390, p2: -1 })] });
-    const { estado, resultado } = aprovadoEMudado(base, e => ({ ...semInstrutor(e.fixos['1000_0_1'].insId)(e), fStatus: { '1000_0_1': 'Em Voo' } }));
-    assert.ok(!sugerirReparos(estado, resultado, '1000_0_1').some(o => o.tipo === 'soltar'));
+    for (const status of ['Em Voo', 'Pousou']) {
+      const { estado, resultado } = aprovadoEMudado(base, e => ({ ...semInstrutor(e.fixos['1000_0_1'].insId)(e), fStatus: { '1000_0_1': status } }));
+      assert.ok(!sugerirReparos(estado, resultado, '1000_0_1').some(o => o.tipo === 'soltar'), status);
+    }
   });
 
   it('a escala gravada antes dos códigos: as sugestões vêm do texto, como antes', () => {

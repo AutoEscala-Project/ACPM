@@ -3,7 +3,7 @@
 // Escala e, depois, à tela da recepção.
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { linhasDoQuadro, quadroDePartidas, quadroDeChegadas, minutoDoQuadro, paginar, telasDoPainel } from '../../js/quadro.js';
+import { linhasDoQuadro, quadroDePartidas, quadroDeChegadas, minutoDoQuadro, paginar, telasDoPainel, EMBARQUE_ANTES_MIN } from '../../js/quadro.js';
 
 const voo = (fKey, a, extra = {}) => ({
   fKey, classKey: fKey, isGround: false, a, b: a + 60, o: 0, r: 'PR-VOB', eqType: 'C152', s: `Aluno ${fKey.split('_')[0]}`,
@@ -65,6 +65,31 @@ describe('Quadro de partidas', () => {
     ]);
   });
 
+  // Retorno da operação (14/11): 35 minutos antes da decolagem, a TV chama o aluno para a sala de briefing
+  it('embarque: dos 35 minutos antes até a decolagem, o voo no avião chama para a sala de briefing', () => {
+    const out = [voo('1000_0_1', 760), voo('1001_0_1', 760, { r: 'SIM-MONO-A', eqType: 'Sim. Mono', mis: 'Simulador' }), ...turma([1002], 760)];
+    const obs = (agora, fStatus = {}, fObs = {}) => quadroDePartidas(linhasDoQuadro(out, fStatus, fObs), agora)
+      .map(l => [l.aluno, l.observacao, l.classe]);
+    assert.equal(EMBARQUE_ANTES_MIN, 35);
+    assert.deepEqual(obs(725), [
+      ['Aluno 1000', 'EMBARQUE IMEDIATO · Sala de briefing', 'Embarque'],
+      ['Aluno 1001', 'Confirmado', 'Confirmado'],
+      ['1 aluno', 'Confirmado', 'Confirmado']
+    ], 'o simulador e o Ground não chamam');
+    const local = (agora, fStatus, fObs) => obs(agora, fStatus, fObs).find(([aluno]) => aluno === 'Aluno 1000')[1];
+    assert.equal(local(724), 'Confirmado', '36 minutos antes, ainda não');
+    assert.equal(local(759), 'EMBARQUE IMEDIATO · Sala de briefing');
+    assert.equal(local(760), 'Confirmado', 'na hora da decolagem, para');
+    assert.equal(local(740, { '1000_0_1': 'Pendente' }), 'EMBARQUE IMEDIATO · Sala de briefing');
+    for (const status of ['Em Voo', 'Pousou', 'Cancelado']) assert.notEqual(local(740, { '1000_0_1': status }), 'EMBARQUE IMEDIATO · Sala de briefing', status);
+    // O atrasado chama 35 minutos antes da nova decolagem
+    assert.equal(local(740, { '1000_0_1': 'Atrasado' }, { '1000_0_1': { novoInicio: 800 } }), 'Atrasado');
+    assert.equal(local(770, { '1000_0_1': 'Atrasado' }, { '1000_0_1': { novoInicio: 800 } }), 'EMBARQUE IMEDIATO · Sala de briefing');
+    // Sem o minuto (o dia que não é hoje), ninguém é chamado
+    assert.equal(quadroDePartidas(linhasDoQuadro(out))[0].observacao, 'Confirmado');
+    assert.equal(local(-Infinity), 'Confirmado');
+  });
+
   it('Ground sem os nomes dos alunos (só quantos são) e com a sala; simulador com o modelo dele', () => {
     const out = [...turma([1000, 1001, 1002]), voo('1003_0_1', 500, { r: 'SIM-MONO-A', eqType: 'Sim. Mono', mis: 'Simulador' }), ...turma([1004], 610)
       .map(o => ({ ...o, classKey: 'GND_Ground C152_2_1' }))];
@@ -94,6 +119,18 @@ describe('Quadro de chegadas', () => {
     assert.deepEqual(chegadas(830).map(l => l.aluno), ['Aluno 1001', 'Aluno 1004']);
     assert.equal(chegadas(-Infinity).length, 5);
     assert.equal(chegadas(Infinity).length, 0);
+  });
+
+  // Revisão de 14/11: o voo que pousou sai das chegadas na hora (antes, ficava até o horário do pouso passar)
+  it('o voo que pousou sai das chegadas; nas partidas, a observação é "Pousou" (no Ground e no simulador, "Concluída")', () => {
+    const dia = [voo('1000_0_1', 610), voo('1001_0_1', 610, { eqType: 'Sim. Mono', r: 'SIM-MONO-E', mis: 'Simulador' }), ...turma([1002, 1003], 610)];
+    const linhas = linhasDoQuadro(dia, { '1000_0_1': 'Pousou', '1001_0_1': 'Pousou', '1002_0_1': 'Pousou', '1003_0_1': 'Pousou' }, { '1000_0_1': { novoInicio: 620 } });
+    assert.deepEqual(quadroDeChegadas(linhas, 640), []);
+    const partidas = quadroDePartidas(linhas);
+    assert.deepEqual(partidas.map(l => l.observacao).sort(), ['Concluída', 'Concluída', 'Pousou']);
+    assert.ok(partidas.every(l => l.classe === 'Pousou'));
+    // O atraso continua no quadro depois da decolagem: o previsto fica
+    assert.equal(partidas.find(l => l.aluno === 'Aluno 1000').previsto, 620);
   });
 
   it('o minuto do quadro: o de agora no dia de hoje; antes de tudo num dia futuro; depois de tudo num dia passado', () => {

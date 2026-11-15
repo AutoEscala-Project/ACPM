@@ -31,8 +31,10 @@ export function horariosDoTipo(horarios, tipo) {
   return Array.isArray(lista) && lista.length ? lista : HORARIOS_PADRAO;
 }
 
-// Os horários de uma missão: o Noturno sai às 17:30; as demais, na lista do tipo pedido (o Ground, nas janelas do dia)
-export const horariosDaMissao = (horarios, mis, tipo) => (mis === 'Noturno' ? [T[NI]] : horariosDoTipo(horarios, tipo));
+// Os horários de uma missão: o Noturno sai às 17:30 e o Voo Solo, sempre às 06:30 (retorno da operação, 14/11: local ou
+// navegação); as demais, na lista do tipo pedido (o Ground, nas janelas do dia)
+export const HORARIO_DO_SOLO = 390;
+export const horariosDaMissao = (horarios, mis, tipo) => (mis === 'Noturno' ? [T[NI]] : mis === 'Voo Solo' ? [HORARIO_DO_SOLO] : horariosDoTipo(horarios, tipo));
 
 // O período (janela de operação) em que um horário cai: a última janela que começa até ele
 export function periodoDoMinuto(minuto) {
@@ -82,4 +84,73 @@ export function ordenarPelaPreferencia(lista, p1, p2) {
   const ancora = p1 >= 0 ? p1 : p2 >= 0 ? p2 : null;
   const resto = ancora === null ? [...lista] : [...lista].sort((a, b) => Math.abs(a - ancora) - Math.abs(b - ancora) || a - b);
   return [...new Set([p1, p2, ...resto])].filter(m => lista.includes(m));
+}
+
+// O resumo dos horários e o efeito de uma lista nova (revisão de 14/11, decisão do Pedro: "Resumo + Editar"). No editor,
+// os horários vão das 06:00 às 16:30, o último em que cabe um voo de 1 h antes do noturno (a lista guardada continua
+// aceitando até as 17:00)
+export const PRIMEIRO_HORARIO = 6 * 60;
+export const ULTIMO_HORARIO = 16 * 60 + 30;
+
+const emOrdem = lista => [...new Set(lista)].sort((a, b) => a - b);
+const mesmaLista = (a, b) => a.length === b.length && a.every((m, i) => m === b[i]);
+
+export function modeloDosHorarios(lista) {
+  const ordenada = emOrdem(lista);
+  if (mesmaLista(ordenada, HORARIOS_PADRAO)) return 'janelas';
+  if (mesmaLista(ordenada, DE_30_EM_30)) return 'de30';
+  return 'personalizado';
+}
+
+const doisDigitos = n => String(n).padStart(2, '0');
+const hora = m => `${doisDigitos(Math.floor(m / 60))}:${doisDigitos(m % 60)}`;
+const intervalo = passo => (passo % 60 === 0 ? `de ${passo / 60} em ${passo / 60} h` : `de ${passo} em ${passo} min`);
+
+// O nome do modelo, ou a lista resumida: três ou mais horários com o mesmo intervalo viram "07:00–08:30 de 30 em 30 min"
+export function descreverHorarios(lista) {
+  const l = emOrdem(lista);
+  const modelo = modeloDosHorarios(l);
+  if (modelo === 'janelas') return 'Janelas do dia';
+  if (modelo === 'de30') return `De 30 em 30 min, ${hora(l[0])}–${hora(l[l.length - 1])}`;
+  const partes = [];
+  for (let i = 0; i < l.length;) {
+    let fim = i;
+    if (i + 2 < l.length) {
+      const passo = l[i + 1] - l[i];
+      while (fim + 1 < l.length && l[fim + 1] - l[fim] === passo) fim++;
+      if (fim - i >= 2) { partes.push(`${hora(l[i])}–${hora(l[fim])} ${intervalo(passo)}`); i = fim + 1; continue; }
+    }
+    partes.push(hora(l[i]));
+    i++;
+  }
+  return partes.join(', ');
+}
+
+// Manhã (antes das 12:00) e tarde
+export const porPeriodo = lista => {
+  const l = emOrdem(lista);
+  return { manha: l.filter(m => m < 12 * 60), tarde: l.filter(m => m >= 12 * 60) };
+};
+
+// O que a lista nova de uma categoria faz com os pedidos dela (sem mudar os pedidos): quem muda de preferência e quem
+// perde o "Só às" (o horário exato que a lista nova não tem). pedidos: [{ nome, pedido }]
+export function impactoDosHorarios(pedidos, horarios, cat, lista) {
+  const novos = { ...horarios, [cat]: emOrdem(lista) };
+  const mudam = [], perdemSo = [];
+  for (const { nome, pedido } of pedidos) {
+    if (categoriaDoTipo(pedido.eq) !== cat) continue;
+    const depois = { ...pedido };
+    ajustarPreferencias(depois, horariosDaMissao(novos, pedido.mis, pedido.eq));
+    if (depois.p1 !== pedido.p1 || depois.p2 !== pedido.p2 || depois.jan !== pedido.jan) mudam.push(nome);
+    if (pedido.jan !== undefined && depois.jan === undefined) perdemSo.push({ nome, minuto: +pedido.jan.slice(1) });
+  }
+  return { mudam, perdemSo };
+}
+
+export function resumoDoImpacto({ mudam, perdemSo }) {
+  if (!mudam.length) return 'Nenhum pedido muda.';
+  const partes = [`${mudam.length} ${mudam.length === 1 ? 'pedido muda' : 'pedidos mudam'} de preferência`];
+  if (perdemSo.length === 1) partes.push(`1 perde “Só às ${hora(perdemSo[0].minuto)}”`);
+  else if (perdemSo.length > 1) partes.push(`${perdemSo.length} perdem o “Só às”`);
+  return `${partes.join('; ')}.`;
 }

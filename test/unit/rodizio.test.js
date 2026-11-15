@@ -24,8 +24,9 @@ describe('Rodízio', () => {
     const ins = [
       instrutor(1, 'local', 'c172', 'noturno'),
       instrutor(2, 'local', 'c172'),
-      instrutor(3, 'local', 'mlte', 'checador_mlte'),
-      instrutor(4, 'checador_vfr'),
+      instrutor(3, 'local', 'mlte', 'checa_pc', 'checa_mlte', 'checa_ifr'),
+      instrutor(4, 'checa_pp', 'checa_mnte', 'checa_vfr'),
+      instrutor(6, 'checa_pp', 'checa_mnte'),
       instrutor(5, 'local')
     ];
     assert.deepEqual(ajustarFilas(undefined, ins), { cheque: [3, 4], mlte: [3], noturno: [1], c172: [1, 2] }, 'sem fila: na ordem do cadastro');

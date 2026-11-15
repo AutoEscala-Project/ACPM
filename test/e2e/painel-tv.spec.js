@@ -45,6 +45,28 @@ test.describe('TV da recepção', () => {
     expect(caixa.height).toBeGreaterThanOrEqual(tela.height - 1);
   });
 
+  // Retorno da operação (14/11): 35 minutos antes da decolagem, a linha do voo chama o aluno para a sala de briefing
+  test('embarque: o voo no avião que sai em até 35 minutos chama para a sala de briefing; o simulador não', async ({ page }) => {
+    const e = cenario({
+      ins: [instrutor(1, 9), instrutor(2, 9), instrutor(3, 9)],
+      stu: [aluno(1000, { p1: 760, p2: -1 }, { nm: 'Ana Lima' }), aluno(1001, { mis: 'Simulador', eq: 'Sim. Mono', p1: 760, p2: -1 }, { nm: 'Bruno Melo' }),
+        aluno(1002, { p1: 820, p2: -1 }, { nm: 'Carla Dias' })]
+    });
+    const docs = documentosAtuais(e, HOJE);
+    const dia = { ...docs.dias[HOJE], resultado: runAllocationEngine(e) };
+    await page.addInitScript(([cadastro, d]) => {
+      localStorage.setItem('acpm4_cadastro', cadastro);
+      localStorage.setItem('acpm4_dia_2026-11-10', d);
+    }, [JSON.stringify(docs.documentos.cadastro), JSON.stringify(dia)]);
+    await page.clock.setFixedTime(new Date('2026-11-10T12:10:00-03:00'));
+    await page.goto('./painel.html');
+    const linhaDe = nome => linhas(page).filter({ hasText: nome });
+    await expect(linhaDe('Ana L.').locator('.f-obs')).toHaveText('EMBARQUE IMEDIATO · Sala de briefing');
+    await expect(linhaDe('Ana L.')).toHaveClass(/\bfids-Embarque\b/);
+    await expect(linhaDe('Bruno M.').locator('.f-obs')).toHaveText('Confirmado');
+    await expect(linhaDe('Carla D.').locator('.f-obs')).toHaveText('Confirmado');
+  });
+
   test('sem a escala de hoje gravada, o painel avisa', async ({ page }) => {
     await page.goto('./painel.html');
     await expect(page.locator('.fids .fids-nada')).toHaveText('A escala de hoje ainda não foi publicada.');

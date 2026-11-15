@@ -52,6 +52,9 @@ test.describe('Agenda de Solicitações', () => {
     await expect(page.locator('#agenda-lista tbody tr').first()).toContainText('07:30');
     await page.locator('#ag-missao').selectOption('Noturno');
     await expect(page.locator('#ag-horario option')).toHaveText(['17:30']);
+    // O Voo Solo sai sempre às 06:30 (retorno da operação, 14/11)
+    await page.locator('#ag-missao').selectOption('Voo Solo');
+    await expect(page.locator('#ag-horario option')).toHaveText(['06:30']);
   });
 
   test('a duração: fracionada, até 5 h; o Ground tem 01h30', async ({ page }) => {
@@ -78,6 +81,20 @@ test.describe('Agenda de Solicitações', () => {
     await page.locator('#form-agenda [type="submit"]').click();
     await expect(page.locator('#agenda-lista tbody tr')).toHaveCount(2);
     await expect(page.locator('#form-agenda [type="submit"]')).toHaveText('Registrar pedido');
+  });
+
+  // Retorno da operação (14/11): no máximo 6 voos locais (Voo Local, Voo Solo e TGL) no mesmo horário
+  test('o 7º voo local no mesmo horário: horário indisponível, com o motivo e o próximo horário possível', async ({ page }) => {
+    const alunos = Array.from({ length: 8 }, (_, i) => aluno(1000 + i));
+    await abrir(page, { estado: cenario({ stu: alunos }) });
+    await irPara(page, 'age');
+    for (let i = 0; i < 6; i++) await registrar(page, { aluno: `Aluno ${1000 + i}`, missao: ['Voo Local', 'TGL (TMA)'][i % 2], horario: '08:20' });
+    await expect(page.locator('#agenda-lista tbody tr')).toHaveCount(6);
+    await registrar(page, { aluno: 'Aluno 1006', horario: '08:20' });
+    await expect(page.locator('#ag-erro')).toHaveText('Horário indisponível: já há 6 voos locais (Voo Local, Voo Solo e TGL) às 08:20, o máximo no mesmo horário (determinação da diretoria). Próximo horário possível: 10:10.');
+    await expect(page.locator('#agenda-lista tbody tr')).toHaveCount(6);
+    await registrar(page, { aluno: 'Aluno 1006', missao: 'Navegação', horario: '08:20' });
+    await expect(page.locator('#agenda-lista tbody tr')).toHaveCount(7);
   });
 
   test('"Registrado por" é obrigatório', async ({ page }) => {
@@ -172,7 +189,7 @@ test.describe('Agenda de Solicitações', () => {
     await abrir(page, { estado: comAlunos() });
     await irPara(page, 'age');
     await expect(page.locator('#agenda-data')).toHaveText('quinta-feira, 12/11/2026');
-    await expect(page.locator('#agenda-prazo')).toContainText('Prazo para amanhã (11/11) encerrado às 13:00');
+    await expect(page.locator('#agenda-prazo')).toHaveText('Pedidos para quinta-feira (12/11) até amanhã (11/11) às 13:00.');
   });
 
   // Retorno da operação (14/11): trabalhando numa data à frente, a agenda e as outras abas ficam nela
@@ -200,5 +217,30 @@ test.describe('Agenda de Solicitações', () => {
     await expect(page).toHaveURL(/[?&]data=2026-11-12/);
     await page.reload();
     await expect(page.locator('#dt')).toHaveValue('2026-11-12');
+  });
+
+  // Retorno da operação (14/11): o aeroclube não opera aos domingos; os voos de segunda são agendados até sábado às 10:00
+  test('sábado: o app abre na segunda; a agenda aceita pedidos para segunda até as 10:00; domingo não existe', async ({ page, context }) => {
+    await context.clock.setFixedTime(new Date('2026-11-14T09:00:00-03:00'));
+    await abrir(page, { estado: comAlunos() });
+    await expect(page.locator('#dt')).toHaveValue('2026-11-16');
+    await irPara(page, 'age');
+    await expect(page.locator('#agenda-prazo')).toHaveText('Pedidos para segunda-feira (16/11) até hoje às 10:00.');
+    await expect(page.locator('#agenda-cal [data-dia="2026-11-15"]')).toHaveClass(/\bfechado\b/);
+    await page.locator('#agenda-cal [data-dia="2026-11-15"]').click();
+    await expect(page.locator('#agenda-prazo')).toHaveText('O aeroclube não opera aos domingos: não há escala nem pedidos.');
+    await expect(page.locator('#form-agenda [type="submit"]')).toBeDisabled();
+    await expect(page.locator('#dt')).toHaveValue('2026-11-16');
+    // ‹ da segunda vai para o sábado (pula o domingo)
+    await page.locator('#dt-ant').click();
+    await expect(page.locator('#dt')).toHaveValue('2026-11-14');
+    await page.locator('#dt-prox').click();
+    await expect(page.locator('#dt')).toHaveValue('2026-11-16');
+  });
+
+  test('um link para um domingo abre a segunda, com o aviso', async ({ page }) => {
+    await abrir(page, { estado: comAlunos(), url: './?data=2026-11-15' });
+    await expect(page.locator('#dt')).toHaveValue('2026-11-16');
+    await expect(page.locator('#toast-box')).toContainText('O aeroclube não opera aos domingos: abrimos segunda-feira, 16/11.');
   });
 });

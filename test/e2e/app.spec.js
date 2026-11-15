@@ -128,7 +128,7 @@ test.describe('Aplicação', () => {
 
     // As tabelas de regras saem do código (missões, janelas, pesos e rodízio)
     await expect(page.locator('#manual-missoes tbody tr')).toHaveCount(18);
-    await expect(page.locator('#manual-missoes tbody tr', { hasText: 'Cheque PC MLTE IFR' })).toContainText('Checador MLTE IFR');
+    await expect(page.locator('#manual-missoes tbody tr', { hasText: 'Cheque PC MLTE IFR' })).toContainText('Checador PC + Checador MLTE + Checador IFR');
     await expect(page.locator('#manual-janelas li')).toHaveCount(9);
     await expect(page.locator('#manual-pesos')).toContainText('C152: 170 kg');
     await expect(page.locator('#manual-rodizio li')).toHaveText(['Voos de cheque', 'Voo MLTE (PA-34)', 'Voo noturno', 'Voo C172']);

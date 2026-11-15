@@ -1,11 +1,11 @@
 // Rodízio justo nas escalas que remuneram melhor (o instrutor recebe por hora voada): uma fila por categoria de voo
 // entre os instrutores habilitados. O motor oferece cada voo da categoria na ordem da fila; quem voou na categoria
 // vai para o fim da fila dela na data seguinte. As filas guardadas são as do início de cada data.
-import { podeFazer, ehCheque } from './habilitacoes.js';
+import { podeFazer, podeAlgumCheque, ehCheque } from './habilitacoes.js';
 
 // Em ordem de peso na remuneração: cada voo conta na primeira categoria que se aplica
 export const CATEGORIAS_DO_RODIZIO = [
-  { id: 'cheque', nome: 'Voos de cheque', participa: x => podeFazer(x, 'Cheque PP', 'C152') },
+  { id: 'cheque', nome: 'Voos de cheque', participa: podeAlgumCheque },
   { id: 'mlte', nome: 'Voo MLTE (PA-34)', participa: x => podeFazer(x, 'Multimotor', 'PA-34') },
   { id: 'noturno', nome: 'Voo noturno', participa: x => podeFazer(x, 'Noturno', 'C172') },
   { id: 'c172', nome: 'Voo C172', participa: x => Array.isArray(x.hab) && x.hab.includes('c172') }

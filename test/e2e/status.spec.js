@@ -1,7 +1,7 @@
 // Status do voo com detalhes (fase 8): Cancelado pede o motivo e Atrasado, a nova decolagem. O detalhe aparece junto
 // do status, vai para o CSV e fica guardado no dia; o histórico registra só a categoria do motivo.
 import { test, expect, abrir, abrirEscala } from './fixtures.js';
-import { aluno, cenario, instrutor } from '../helpers/montar.js';
+import { aluno, cenario, instrutor, GROUND_C152 } from '../helpers/montar.js';
 
 // Dois voos seguidos do mesmo instrutor (e no mesmo avião): 10:10 e 11:30
 const doisVoos = () => cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, { p1: 610, p2: -1 }), aluno(1001, { p1: 690, p2: -1 })] });
@@ -110,7 +110,7 @@ test.describe('Status do voo com detalhes', () => {
     await expect(page.locator('#log-cnt')).toHaveText('0');
   });
 
-  test('o detalhe continua depois de recarregar; um clique nele permite alterar; outro status o apaga', async ({ page }) => {
+  test('o detalhe continua depois de recarregar; um clique nele permite alterar; o horário novo segue até o pouso', async ({ page }) => {
     await abrir(page, { estado: doisVoos() });
     await abrirEscala(page);
     await linha(page, 'Aluno 1001').locator('.st-sel').selectOption('Atrasado');
@@ -128,9 +128,36 @@ test.describe('Status do voo com detalhes', () => {
     await expect(detalhe).toHaveText('nova decolagem 12:10');
     await expect(linha(page, 'Aluno 1001').locator('.st-sel')).toHaveValue('Atrasado');
 
+    // Revisão de 14/11: o horário novo continua no Em Voo e no Pousou (o quadro e o descanso usam o pouso de verdade); só
+    // aparece, sem o clique para alterar. Voltar a Confirmado o apaga
     await linha(page, 'Aluno 1001').locator('.st-sel').selectOption('Em Voo');
     await expect(dialogo(page)).toBeHidden();
+    await expect(detalhe).toHaveText('decolou às 12:10');
+    await expect(linha(page, 'Aluno 1001').locator('button.st-detalhe')).toHaveCount(0);
+    await linha(page, 'Aluno 1001').locator('.st-sel').selectOption('Pousou');
+    await expect(detalhe).toHaveText('decolou às 12:10');
+    await linha(page, 'Aluno 1001').locator('.st-sel').selectOption('Confirmado');
     await expect(linha(page, 'Aluno 1001').locator('.st-detalhe')).toHaveCount(0);
+  });
+
+  // Revisão de 14/11: "Pousou" fecha o voo; no Ground e no simulador, o mesmo status aparece como "Concluída"
+  test('Pousou: fixa o voo e vai para o histórico; no Ground, a opção se chama "Concluída"', async ({ page }) => {
+    await abrir(page, { estado: cenario({ ins: [instrutor(1, 9), instrutor(2, 9)], stu: [aluno(1000, { p1: 610, p2: -1 }), aluno(1001, GROUND_C152)] }) });
+    await abrirEscala(page);
+    const voo = linha(page, 'Aluno 1000');
+    expect(await voo.locator('.st-sel option').allTextContents()).toEqual(['Pendente', 'Confirmado', 'Atrasado', 'Em Voo', 'Pousou', 'Cancelado']);
+    await voo.locator('.st-sel').selectOption('Pousou');
+    await expect(dialogo(page)).toBeHidden();
+    await expect(voo.locator('.st-sel')).toHaveClass(/\bst-Pousou\b/);
+    await expect(voo.locator('.fixo')).toHaveAttribute('aria-label', 'Voo fixo: Pousou');
+    await expect(await abrirHistorico(page)).toContainText('Status de Aluno 1000 (10:10–11:10): Pousou');
+    await page.keyboard.press('Escape');
+
+    const ground = linha(page, 'Aluno 1001');
+    expect(await ground.locator('.st-sel option').allTextContents()).toEqual(['Pendente', 'Confirmado', 'Atrasado', 'Em Voo', 'Concluída', 'Cancelado']);
+    await ground.locator('.st-sel').selectOption('Pousou');
+    await expect(ground.locator('.st-sel option:checked')).toHaveText('Concluída');
+    await expect(ground.locator('.fixo')).toHaveAttribute('aria-label', 'Voo fixo: Concluída');
   });
 
   test('no popup do mapa: o mesmo diálogo, e o popup mostra o detalhe', async ({ page }) => {

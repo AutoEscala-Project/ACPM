@@ -46,7 +46,7 @@ function telasAgora() {
   const { linhas, data } = estado.fonte();
   const agora = new Date();
   const minuto = minutoDoQuadro(data, hojeISO(), agora.getHours() * 60 + agora.getMinutes());
-  const todas = telasDoPainel(quadroDePartidas(linhas), quadroDeChegadas(linhas, minuto), porPagina());
+  const todas = telasDoPainel(quadroDePartidas(linhas, minuto), quadroDeChegadas(linhas, minuto), porPagina());
   return estado.modo === 'alternar' ? todas : todas.filter(t => t.quadro === estado.modo);
 }
 

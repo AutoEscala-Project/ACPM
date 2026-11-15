@@ -122,4 +122,15 @@ describe('Número da missão extra', () => {
       assert.equal(Object.hasOwn(p, 'solicitacao'), false, String(ruim));
     }
   });
+
+  // Retorno da operação (14/11): o Voo Solo sai sempre às 06:30 e o Noturno às 17:30; a preferência é esse horário
+  it('missão de horário fixo: a 1ª preferência é o horário dela, sem 2ª', async () => {
+    const { normalizeMissionFields } = await import('../../js/rules.js');
+    const solo = { mis: 'Voo Solo', eq: 'C152', p1: 760, p2: 870, nb: 2 };
+    normalizeMissionFields(solo);
+    assert.deepEqual([solo.p1, solo.p2], [390, -1]);
+    const noturno = { mis: 'Noturno', eq: 'C172', p1: 500, p2: 610, nb: 1 };
+    normalizeMissionFields(noturno);
+    assert.deepEqual([noturno.p1, noturno.p2], [1050, -1]);
+  });
 });

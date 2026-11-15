@@ -1,13 +1,13 @@
 // Motor de alocação determinístico da escala do dia e utilitários de horas e de ocupação.
 // runAllocationEngine é uma função pura: recebe o estado e devolve { out, al, tot } sem alterá-lo.
-import { T, NI, DAY, NIGHT_OK, MIS, DEFAULT_LIM, GROUND_EQ_TYPE, GROUND_REG, GROUND_DURATION_MIN, GROUND_DURATION_H, REVISAO_H, MENOR_VOO_H, AIRCRAFT_EQ_TYPES } from './config.js';
+import { T, NI, DAY, NIGHT_OK, MIS, DEFAULT_LIM, GROUND_EQ_TYPE, GROUND_REG, GROUND_DURATION_MIN, GROUND_DURATION_H, REVISAO_H, MENOR_VOO_H, AIRCRAFT_EQ_TYPES, MISSOES_LOCAIS, LIMITE_DE_VOOS_LOCAIS } from './config.js';
 import { FROTA_INICIAL, matriculasDoTipo } from './frota.js';
 import { hm, fmtH } from './format.js';
 import { isGroundMission, doesGroundGateFlight, disponibilidadeDoAluno, rotuloDaDisponibilidade, duracaoValida } from './rules.js';
 import { HORARIOS_INICIAIS, horariosDaMissao, periodoDoMinuto, minutoDaPreferencia, ordenarPelaPreferencia } from './horarios.js';
 import { podeFazer, descreverExigencias } from './habilitacoes.js';
 import { categoriaDoRodizio, ajustarFilas } from './rodizio.js';
-import { avisosDeAtraso, intervaloEfetivo } from './status.js';
+import { avisosDeAtraso, intervaloEfetivo, STATUS_EM_ANDAMENTO } from './status.js';
 import { sobrepoe, livre, cobre, pesoCabe, cabeNoSaldo } from './viabilidade.js';
 import { reducaoNecessaria, combustivelDoVoo, pesoECombustivel } from './combustivel.js';
 import { LIMITE_DO_MOTIVO } from './conflitos.js';
@@ -85,7 +85,7 @@ function manterInstrutorNoMesmoAviao(out, state, saldo, frota, posicao) {
   const soParafuso = matriculasDoTipo(frota, 'C152', { parafuso: true });
   for (const tipo of TIPOS_DE_AVIAO) {
     // O voo com status de andamento fica no avião dele, como o fixo
-    const preso = o => o.fixo || ['Atrasado', 'Em Voo', 'Cancelado'].includes(statusDe(o));
+    const preso = o => o.fixo || [...STATUS_EM_ANDAMENTO, 'Cancelado'].includes(statusDe(o));
     const voos = out.filter(o => o.eqType === tipo && !soParafuso.includes(o.r) && !preso(o));
     // Os voos fixos (escala aprovada) ficam no avião deles e ocupam o horário (o atrasado, o horário novo); o cancelado
     // não ocupa nada
@@ -183,7 +183,7 @@ function equalizarHoras(out, state, limites, historico) {
     const v = voos.find(o => statusDe(o) !== 'Cancelado');
     return {
       voos, ...intervaloEfetivo(v, statusDe(v), (state.fObs || {})[v.fKey]), h: v.h, mis: v.mis, eqType: v.eqType, isGround: v.isGround,
-      presa: voos.some(o => o.fixo || ['Atrasado', 'Em Voo'].includes(statusDe(o)))
+      presa: voos.some(o => o.fixo || STATUS_EM_ANDAMENTO.includes(statusDe(o)))
     };
   });
   const instrutorDa = u => u.voos[0].insId;
@@ -239,8 +239,9 @@ function equalizarHoras(out, state, limites, historico) {
   }
 }
 
-// opcoes.compactar: false monta a escala sem a compactação; opcoes.dividirHoras: false, sem a divisão igual das horas
-// (para comparar, medir e testar)
+// opcoes.compactar: false monta a escala sem a compactação; opcoes.dividirHoras: false, sem a divisão igual das horas;
+// opcoes.trocarMatriculas: false, sem a troca de matrículas para o instrutor ficar no mesmo avião (para comparar, medir
+// e testar)
 export function runAllocationEngine(state, opcoes = {}) {
   const used = {}, busy = {}, stuBusy = {}, stuLastPick = {}, load = {}, eu = {}, out = [], al = [];
   // A frota vem do cadastro (fase 7); sem ela (estados de teste antigos), a frota inicial
@@ -297,13 +298,16 @@ export function runAllocationEngine(state, opcoes = {}) {
    * 1º: Missões de Ground School SEMPRE antes de missões de Voo/Simulador (garante a criação das turmas
    *     coletivas e define o horário de término do Ground antes de alocar o voo dependente do aluno).
    * 2º: Maior prioridade (5 a 1).
-   * 3º: Ordem de cadastro do aluno e ordem da missão.
+   * 3º: A ordem dos agendamentos (retorno da operação, 14/11): o pedido da agenda que foi registrado antes (o id do
+   *     pedido cresce com o registro) vem antes; o pedido posto à mão, sem a agenda, vem depois dos agendados.
+   * 4º: Ordem de cadastro do aluno e ordem da missão.
    */
+  const ordemDoAgendamento = item => (Number.isInteger(item.ref.solicitacao) ? item.ref.solicitacao : Infinity);
   act.sort((a, b) => {
     const gA = isGroundMission(a.ref.mis) ? 1 : 0;
     const gB = isGroundMission(b.ref.mis) ? 1 : 0;
     if (gA !== gB) return gB - gA;
-    return b.ref.pr - a.ref.pr || a.stuOrder - b.stuOrder || a.misOrder - b.misOrder;
+    return b.ref.pr - a.ref.pr || menorPrimeiro(ordemDoAgendamento(a), ordemDoAgendamento(b)) || a.stuOrder - b.stuOrder || a.misOrder - b.misOrder;
   });
 
   const free = (mp, id, s, e) => livre(mp[id], s, e);
@@ -321,6 +325,8 @@ export function runAllocationEngine(state, opcoes = {}) {
   // O voo fixo de um pedido (a chave aluno_missão_1), ou null
   const chaveFixa = item => (Object.hasOwn(fixos, `${item.stuId}_${item.mid}_1`) ? `${item.stuId}_${item.mid}_1` : null);
   const ocupacoesDeAtraso = [];
+  // Os voos locais (Voo Local, Voo Solo e TGL) que saem em cada horário (retorno da operação, 14/11)
+  const locaisNoHorario = {};
   for (const item of act) {
     const fKey = chaveFixa(item);
     if (fKey) {
@@ -387,6 +393,7 @@ export function runAllocationEngine(state, opcoes = {}) {
         };
         if (efetivo.a === a) ocupar(efetivo);
         else ocupacoesDeAtraso.push(() => ocupar(efetivo));
+        if (!ground && MISSOES_LOCAIS.includes(d.mis)) locaisNoHorario[efetivo.a] = (locaisNoHorario[efetivo.a] || 0) + 1;
         if (!daMesmaTurma) {
           if (x) load[x.id] = (load[x.id] || 0) + h;
           eu[ground ? GROUND_REG : r] = (eu[ground ? GROUND_REG : r] || 0) + h;
@@ -627,6 +634,7 @@ export function runAllocationEngine(state, opcoes = {}) {
     const H = duracaoValida(d.nb);
     const night = d.mis === 'Noturno';
     const isParafuso = d.mis === 'Parafuso';
+    const local = MISSOES_LOCAIS.includes(d.mis);
     const exige = descreverExigencias(d.mis, d.eq);
     // Voo de categoria do rodízio: primeiro quem ainda não voou nela hoje, depois a ordem da fila
     const categoria = categoriaDoRodizio(d.mis, d.eq);
@@ -678,9 +686,11 @@ export function runAllocationEngine(state, opcoes = {}) {
     const reducao = x => reducaoNecessaria({ stuKg: stu.kg, insKg: x.kg, tipo: d.eq, minutos: dur, mis: d.mis });
     const prev = stuLastPick[stuId] || null;
     for (const comMenosCombustivel of [false, true]) {
-      fc = { stu_busy: 0, eq: 0, revisao: 0, disp: 0, busy: 0, bloq: 0, limite: 0, peso: 0 };
+      fc = { locais: 0, stu_busy: 0, eq: 0, revisao: 0, disp: 0, busy: 0, bloq: 0, limite: 0, peso: 0 };
       if (comMenosCombustivel && !lim) break;
       for (const p of inicios) {
+        // No máximo 6 voos locais saindo no mesmo horário (retorno da operação, 14/11)
+        if (local && (locaisNoHorario[p.a] || 0) >= LIMITE_DE_VOOS_LOCAIS) { fc.locais++; continue; }
         if (!free(stuBusy, stuId, p.a, p.b)) { fc.stu_busy++; continue; }
 
         const livres = fleetPool.filter(r => state.av[r] && free(used, r, p.a, p.b));
@@ -761,6 +771,7 @@ export function runAllocationEngine(state, opcoes = {}) {
       });
 
       eu[r] = (eu[r] || 0) + hh;
+      if (local) locaisNoHorario[p.a] = (locaisNoHorario[p.a] || 0) + 1;
       load[x.id] = (load[x.id] || 0) + hh;
       if (categoria) voosNaCategoria[`${categoria}:${x.id}`] = voosHoje(x) + 1;
 
@@ -798,6 +809,7 @@ export function runAllocationEngine(state, opcoes = {}) {
           busy: ['instrutores-ocupados', `os instrutores habilitados (${exige}) já têm outro compromisso nos horários possíveis`],
           bloq: ['bloqueio', `os instrutores habilitados (${exige}) e livres estão em “Não escalar com” deste aluno`],
           limite: ['limite-da-lei', 'nenhum instrutor dentro dos limites da Lei do Aeronauta (horas de voo, jornada ou repouso) nos horários possíveis'],
+          locais: ['limite-de-locais', `já há ${LIMITE_DE_VOOS_LOCAIS} voos locais (Voo Local, Voo Solo e TGL) em todos os horários possíveis, o máximo no mesmo horário`],
           peso: ['peso', `peso aluno + instrutor acima do limite de ${lim} kg do ${d.eq}, mesmo com o mínimo de combustível`]
         }[key];
       }
@@ -809,12 +821,13 @@ export function runAllocationEngine(state, opcoes = {}) {
   // Compactação (fase 13): a escala compactada vale quando, já com as matrículas trocadas, custa menos pelo critério do
   // dia do que a escala sem compactar (a troca de matrículas mexe no tempo parado dos aviões)
   const compactada = opcoes.compactar === false ? null : out.map(o => ({ ...o }));
+  const trocarMatriculas = lista => { if (opcoes.trocarMatriculas !== false) manterInstrutorNoMesmoAviao(lista, state, saldo, frota, posicao); };
   if (compactada && compactar(compactada, state, { saldo, posicao, limites, historico })) {
-    manterInstrutorNoMesmoAviao(compactada, state, saldo, frota, posicao);
-    manterInstrutorNoMesmoAviao(out, state, saldo, frota, posicao);
+    trocarMatriculas(compactada);
+    trocarMatriculas(out);
     if (custoDaEscala(compactada, state) < custoDaEscala(out, state) - 1e-9) out.splice(0, out.length, ...compactada);
   } else {
-    manterInstrutorNoMesmoAviao(out, state, saldo, frota, posicao);
+    trocarMatriculas(out);
   }
   al.push(...avisosDeLimite(out, state, limites, historico));
 

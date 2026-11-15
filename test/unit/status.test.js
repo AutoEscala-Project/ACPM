@@ -7,7 +7,7 @@ import {
 } from '../../js/config.js';
 import {
   MOTIVOS_DE_CANCELAMENTO, LIMITE_DO_TEXTO, STATUS_COM_DETALHE, validarDetalhe, normalizarDetalhes, textoDoDetalhe, textoDoStatus, textoParaOHistorico,
-  intervaloEfetivo, conflitosDeAtraso, normalizarStatus, classeDoStatus
+  intervaloEfetivo, conflitosDeAtraso, normalizarStatus, classeDoStatus, rotuloDoStatus, detalheAoMudarStatus
 } from '../../js/status.js';
 import { runAllocationEngine } from '../../js/engine.js';
 import { aluno, cenario, instrutor, GROUND_C152 } from '../helpers/montar.js';
@@ -15,8 +15,8 @@ import { aluno, cenario, instrutor, GROUND_C152 } from '../helpers/montar.js';
 const voo = (fKey, a, extra = {}) => ({ fKey, classKey: fKey, a, b: a + 60, r: 'PR-VOB', insId: 1, ins: 'Instrutor 01', stuId: +fKey.split('_')[0], s: `Aluno ${fKey.split('_')[0]}`, status: 'Confirmado', ...extra });
 
 describe('Status do voo: a lista e os detalhes', () => {
-  it('cinco status: Pendente, Confirmado, Atrasado, Em Voo e Cancelado; Atrasado e Cancelado pedem detalhe', () => {
-    assert.deepEqual(FLIGHT_STATUSES, ['Pendente', 'Confirmado', 'Atrasado', 'Em Voo', 'Cancelado']);
+  it('seis status: Pendente, Confirmado, Atrasado, Em Voo, Pousou e Cancelado; Atrasado e Cancelado pedem detalhe', () => {
+    assert.deepEqual(FLIGHT_STATUSES, ['Pendente', 'Confirmado', 'Atrasado', 'Em Voo', 'Pousou', 'Cancelado']);
     assert.deepEqual(STATUS_COM_DETALHE, ['Atrasado', 'Cancelado']);
     assert.deepEqual(MOTIVOS_DE_CANCELAMENTO, ['Meteorologia', 'Manutenção da aeronave', 'Aluno ausente', 'Instrutor indisponível', 'Operacional', 'Outro']);
   });
@@ -57,7 +57,7 @@ describe('Status do voo: a lista e os detalhes', () => {
   });
 
   it('a classe CSS de cada status vem de uma lista fixa (o desconhecido vale como Confirmado)', () => {
-    assert.deepEqual(FLIGHT_STATUSES.map(classeDoStatus), ['Pendente', 'Confirmado', 'Atrasado', 'EmVoo', 'Cancelado']);
+    assert.deepEqual(FLIGHT_STATUSES.map(classeDoStatus), ['Pendente', 'Confirmado', 'Atrasado', 'EmVoo', 'Pousou', 'Cancelado']);
     assert.equal(classeDoStatus('x"><img/src/onerror=1>'), 'Confirmado');
     assert.equal(classeDoStatus(undefined), 'Confirmado');
   });
@@ -107,6 +107,46 @@ describe('Status do voo: a lista e os detalhes', () => {
     assert.deepEqual(intervaloEfetivo({ a: 610, b: 730 }, 'Atrasado', { novoInicio: 640 }), { a: 640, b: 760 });
     assert.deepEqual(intervaloEfetivo({ a: 610, b: 730 }, 'Confirmado', { novoInicio: 640 }), { a: 610, b: 730 });
     assert.deepEqual(intervaloEfetivo({ a: 610, b: 730 }, 'Atrasado', undefined), { a: 610, b: 730 });
+  });
+});
+
+// "Pousou" (revisão de 14/11): o fim do voo. No Ground e no simulador, o mesmo status aparece como "Concluída"
+describe('Pousou e o atraso até o pouso', () => {
+  it('"Pousou" aparece como "Concluída" no Ground e no simulador; os outros status, como são', () => {
+    const local = voo('1000_0_1', 610, { mis: 'Voo Local', eqType: 'C152' });
+    const ground = voo('1001_0_1', 390, { mis: 'Ground C152', eqType: 'Sala Ground', isGround: true });
+    const sim = voo('1002_0_1', 610, { mis: 'Simulador', eqType: 'Sim. Mono' });
+    assert.deepEqual([local, ground, sim].map(v => rotuloDoStatus('Pousou', v)), ['Pousou', 'Concluída', 'Concluída']);
+    assert.equal(rotuloDoStatus('Em Voo', ground), 'Em Voo');
+    assert.equal(rotuloDoStatus('Pousou', { mis: 'Ground Navegação' }), 'Concluída');
+    assert.equal(rotuloDoStatus('Pousou', undefined), 'Pousou');
+  });
+
+  it('o novo horário do atraso continua no Em Voo e no Pousou; voltar a Pendente ou Confirmado o apaga', () => {
+    const atraso = { novoInicio: 640 };
+    assert.deepEqual(detalheAoMudarStatus(atraso, 'Em Voo'), atraso);
+    assert.deepEqual(detalheAoMudarStatus(atraso, 'Pousou'), atraso);
+    assert.equal(detalheAoMudarStatus(atraso, 'Confirmado'), null);
+    assert.equal(detalheAoMudarStatus(atraso, 'Pendente'), null);
+    assert.equal(detalheAoMudarStatus({ motivo: 'Meteorologia' }, 'Em Voo'), null, 'o motivo do cancelamento não vai junto');
+    assert.equal(detalheAoMudarStatus(undefined, 'Pousou'), null);
+    // Guardado: o novo horário vale no Em Voo e no Pousou
+    assert.deepEqual(normalizarDetalhes({ '1000_0_1': atraso, '1001_0_1': atraso, '1002_0_1': { motivo: 'Meteorologia' } },
+      { '1000_0_1': 'Em Voo', '1001_0_1': 'Pousou', '1002_0_1': 'Pousou' }), { '1000_0_1': atraso, '1001_0_1': atraso });
+  });
+
+  it('o voo que decolou atrasado continua no horário novo (até o pouso), e o texto diz quando decolou', () => {
+    assert.deepEqual(intervaloEfetivo({ a: 610, b: 730 }, 'Em Voo', { novoInicio: 640 }), { a: 640, b: 760 });
+    assert.deepEqual(intervaloEfetivo({ a: 610, b: 730 }, 'Pousou', { novoInicio: 640 }), { a: 640, b: 760 });
+    assert.equal(textoDoStatus('Em Voo', { novoInicio: 640 }), 'Em Voo: decolou às 10:40');
+    assert.equal(textoDoStatus('Pousou', { novoInicio: 640 }), 'Pousou: decolou às 10:40');
+    assert.equal(textoDoStatus('Pousou', null), 'Pousou');
+    assert.equal(textoDoStatus('Pousou', null, { voo: { mis: 'Ground C152', isGround: true } }), 'Concluída');
+  });
+
+  it('o voo em voo depois do atraso ainda conflita no horário novo', () => {
+    const out = [voo('1000_0_1', 610), voo('1001_0_1', 680)];
+    assert.deepEqual(conflitosDeAtraso(out, { '1000_0_1': 'Em Voo' }, { '1000_0_1': { novoInicio: 640 } }).map(c => c.com), ['1001_0_1']);
   });
 });
 

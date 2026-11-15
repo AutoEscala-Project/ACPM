@@ -312,8 +312,8 @@ describe('O cadeado do voo', () => {
   it('Reabrir mantém só os voos fixados pelo status', async () => {
     const { fixosAoReabrir } = await import('../../js/fixos.js');
     const fixos = { '1000_0_1': PINO, '1001_0_1': PINO, '1002_0_1': PINO, '1003_0_1': PINO };
-    const fStatus = { '1000_0_1': 'Em Voo', '1001_0_1': 'Confirmado', '1002_0_1': 'Cancelado' };
-    assert.deepEqual(Object.keys(fixosAoReabrir(fixos, fStatus)), ['1000_0_1', '1002_0_1']);
+    const fStatus = { '1000_0_1': 'Em Voo', '1001_0_1': 'Confirmado', '1002_0_1': 'Cancelado', '1003_0_1': 'Pousou' };
+    assert.deepEqual(Object.keys(fixosAoReabrir(fixos, fStatus)), ['1000_0_1', '1002_0_1', '1003_0_1']);
   });
 
   it('o motivo do cadeado', async () => {
@@ -321,5 +321,8 @@ describe('O cadeado do voo', () => {
     assert.equal(motivoDoFixo('1000_0_1', { fStatus: {}, aprovacao: { em: '2026-11-10T21:05:00.000Z', por: 'Rayane' } }), 'Voo fixo: escala aprovada');
     assert.equal(motivoDoFixo('1000_0_1', { fStatus: { '1000_0_1': 'Em Voo' }, aprovacao: null }), 'Voo fixo: Em Voo');
     assert.equal(motivoDoFixo('1000_0_1', { fStatus: { '1000_0_1': 'Cancelado' }, aprovacao: { em: 'x' } }), 'Voo fixo: Cancelado');
+    assert.equal(motivoDoFixo('1000_0_1', { fStatus: { '1000_0_1': 'Pousou' }, aprovacao: null }), 'Voo fixo: Pousou');
+    // No Ground e no simulador, o Pousou aparece como "Concluída"
+    assert.equal(motivoDoFixo('1000_0_1', { fStatus: { '1000_0_1': 'Pousou' }, aprovacao: null, voo: { mis: 'Ground C152', isGround: true } }), 'Voo fixo: Concluída');
   });
 });

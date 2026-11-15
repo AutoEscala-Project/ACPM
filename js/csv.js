@@ -18,7 +18,7 @@ export const nomeDoCsv = data => `escala-acpm-${data}.csv`;
 // o limite do avião e o avião que para para a revisão de 50 horas naquele dia
 function observacoes(o, status, detalhe, revisao) {
   const notas = [];
-  if (status !== 'Confirmado') notas.push(`Status: ${textoDoStatus(status, detalhe, { textoLivre: false })}`);
+  if (status !== 'Confirmado') notas.push(`Status: ${textoDoStatus(status, detalhe, { textoLivre: false, voo: o })}`);
   if (o.isGround && o.groupSize > 1) notas.push(`Turma de Ground com ${o.groupSize} alunos`);
   if (o.limKg) {
     if (!o.stuKg) notas.push(`Peso do aluno não informado: limite de ${o.limKg} kg do ${o.eqType} não verificado`);

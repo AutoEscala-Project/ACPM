@@ -3,14 +3,14 @@
 // que faltam, então o app sempre trabalha no formato atual; no primeiro acesso de um operador depois de uma mudança,
 // os dados guardados são regravados no formato atual (ApiClient.atualizarFormatoGravado).
 // Sem o campo "esquema": formato da fase 3 (versão 4).
-import { habilitacoesDoNivel } from './habilitacoes.js';
+import { habilitacoesDoNivel, marcasDoChecadorAntigo } from './habilitacoes.js';
 import { FROTA_INICIAL } from './frota.js';
 import { HORARIOS_INICIAIS, minutoDaPreferencia, ajustarPreferencias } from './horarios.js';
 import { disponibilidadeAtual } from './rules.js';
 import { LIMITES_DA_LEI } from './limites.js';
 import { cursosVazios } from './cursos.js';
 
-export const ESQUEMA = 19;
+export const ESQUEMA = 21;
 
 // Um pedido do dia com as preferências em minutos e a disponibilidade no formato atual (formato 12)
 function pedidoEmMinutos(pedido) {
@@ -149,6 +149,23 @@ const PASSOS = {
         ? cadastro.ins.map(x => (x && typeof x === 'object' ? { ...x, hab: [...new Set([...(Array.isArray(x.hab) ? x.hab : []), 'c152'])] } : x))
         : cadastro.ins
     }),
+    dia: dia => dia
+  },
+  // Versão 20 (retorno da operação, 14/11): o checador é credenciado por partes (o curso PP, PC ou INVA; o motor MNTE ou
+  // MLTE; as regras VFR ou IFR), e o cheque exige as três. Cada checador antigo recebe as marcas que davam os mesmos cheques
+  20: {
+    cadastro: cadastro => ({
+      ...cadastro,
+      ins: Array.isArray(cadastro.ins)
+        ? cadastro.ins.map(x => (x && typeof x === 'object' && Array.isArray(x.hab) ? { ...x, hab: marcasDoChecadorAntigo(x.hab) } : x))
+        : cadastro.ins
+    }),
+    dia: dia => dia
+  },
+  // Versão 21 (revisão de 14/11): o status "Pousou". Os dados não mudam; o número novo faz a aba da versão anterior (que
+  // não conhece o Pousou e o tiraria do dia ao abrir) recusar o dia e pedir para recarregar
+  21: {
+    cadastro: cadastro => cadastro,
     dia: dia => dia
   }
 };

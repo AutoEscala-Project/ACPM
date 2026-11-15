@@ -13,9 +13,9 @@
  *   js/views/       Renderização das abas (recursos, cadastros, demanda, escala, BI e navegação)
  *   js/export.js    Exportação CSV e PDF
  */
-import { WIN, NI, T, GROUND_EQ_TYPE, GROUND_REG, GROUND_DURATION_MIN, GROUND_DURATION_H, MIS, PRE, DURACAO_MAXIMA_H, REVISAO_H } from './config.js';
+import { WIN, NI, T, GROUND_EQ_TYPE, GROUND_REG, GROUND_DURATION_MIN, GROUND_DURATION_H, MIS, PRE, DURACAO_MAXIMA_H, REVISAO_H, LIMITE_DE_VOOS_LOCAIS } from './config.js';
 import { novoRecurso, matriculasDoTipo } from './frota.js';
-import { HORARIOS_PADRAO, DE_30_EM_30, horariosDaMissao, ajustarPreferencias, paraMinuto } from './horarios.js';
+import { horariosDaMissao, ajustarPreferencias, descreverHorarios } from './horarios.js';
 import { hm, fmtH, fmtDurLabel, pad, amanhaISO, isoMenosDias, nomeLimpo, dataIsoValida } from './format.js';
 import { isGroundMission, blank, rotuloDaDisponibilidade, normalizeMissionFields, proximoMid } from './rules.js';
 import { habilitacoesDoNivel, normalizarHabilitacoes, nomeDaHabilitacao, podeFazer } from './habilitacoes.js';
@@ -34,13 +34,17 @@ import { OPCOES_DE_BURACOS, OPCOES_DE_HORARIOS, normalizarCriterios } from './cr
 import { normalizarCursos, normalizarCursoDoAluno, novaMissaoDoCurso, codigoValido } from './cursos.js';
 import { rCursos, mostrarVistaDosAlunos, podeEditarCursos, atualizarLinhaDoPrograma } from './views/cursos.js';
 import { proximaDoPedido } from './views/etapas.js';
-import { STATUS_COM_DETALHE, textoParaOHistorico } from './status.js';
+import { STATUS_COM_DETALHE, textoParaOHistorico, detalheAoMudarStatus, rotuloDoStatus } from './status.js';
 import { pinoDoVoo, normalizarFixos, fixosAoMudarStatus, fixosAoReabrir } from './fixos.js';
 import { validarReversao } from './reversoes.js';
 import { singleDemandRowHTML, cnt, rDem, applyDemandFilters } from './views/demanda.js';
 import { rIns, rAlu, applyInstructorFilters, preencherFiltroDeHabilitacoes, mostrarVistaDosInstrutores, abrirPainelDoInstrutor, fecharPainelDoInstrutor, atualizarLinhaDoCadastro, atualizarLinhaDoAluno, rPainelDoInstrutor, rLimites, podeEditarLimites } from './views/cadastros.js';
 import { LIMITES_DA_LEI, normalizarLimites, comHorasExternas } from './limites.js';
-import { rRec, rRevisao, rHangar, alternarGrupoDaFrota, NOMES_DAS_CATEGORIAS } from './views/recursos.js';
+import { rRec, rRevisao, rHangar, alternarGrupoDaFrota } from './views/recursos.js';
+import {
+  NOMES_DAS_CATEGORIAS, abrirEditorDosHorarios, fecharEditorDosHorarios, tirarDoRascunho, porNoRascunho, escolherModelo, rascunhoDosHorarios,
+  editorDosHorariosAberto
+} from './views/horarios.js';
 import { normalizarHangar, moverNoHangar } from './hangar.js';
 import { opcoesDeCategoria, categoriaDoTipo } from './categorias.js';
 import { setRole, save, logChange, escalaCalculada, marcarEscalaSoCalculada, gravarEscalaCalculada, abrirData, historicoParaPainel, carregarData, carregarBI, avisarDadosIndisponiveis, lerDadosDeNovo, mostrarNoHistorico } from './actions.js';
@@ -51,8 +55,8 @@ import { rRodizio } from './views/rodizio.js';
 import { abrirConta, carregarContas, gerarSenha, mensagem } from './views/conta.js';
 import { rManual } from './views/manual.js';
 import { atualizarSelosDaEscala, lerPedidosDaData } from './views/selos.js';
-import { importarSolicitacoes, disponibilidadeDaSolicitacao } from './agenda.js';
-import { abrirAgenda, carregarMes, mudarMes, escolherDia, diaDaAgenda, lembrarRegistradoPor, podeEditarAgenda, rAgenda, preencherHorariosDaAgenda, pedidosDoAluno, descreverPedido } from './views/agenda.js';
+import { importarSolicitacoes, disponibilidadeDaSolicitacao, vagaDeVooLocal, ehDomingo, somarDias } from './agenda.js';
+import { abrirAgenda, carregarMes, mudarMes, escolherDia, diaDaAgenda, lembrarRegistradoPor, podeEditarAgenda, rAgenda, preencherHorariosDaAgenda, pedidosDoAluno, descreverPedido, pedidosCarregados } from './views/agenda.js';
 import { ESQUEMA } from './migracoes.js';
 import { iniciarSessaoSupabase } from './sessao.js';
 import { iniciarDicas } from './dicas.js';
@@ -248,13 +252,22 @@ $('#btn-clear-log').onclick = async () => {
   showToast('Histórico limpo.', 'ok');
 };
 
+// O aviso do domingo (o app abre a segunda)
+const avisoDeDomingo = segunda => `O aeroclube não opera aos domingos: abrimos segunda-feira, ${segunda.slice(8, 10)}/${segunda.slice(5, 7)}.`;
+
 // Cada data tem a sua escala: trocar a data abre a escala daquela data (o gestor do modo compartilhado também navega).
 // Data vazia ou que não carregou: o campo volta para a data aberta
 $('#dt').onchange = e => {
-  const data = e.target.value;
+  let data = e.target.value;
   if ((isGestor() && !modoCompartilhado()) || !dataIsoValida(data)) {
     e.target.value = DATA;
     return;
+  }
+  // Domingo não tem escala (retorno da operação, 14/11): abre a segunda
+  if (ehDomingo(data)) {
+    data = somarDias(data, 1);
+    e.target.value = data;
+    showToast(avisoDeDomingo(data));
   }
   carregarData(data).catch(() => {
     if (e.target.value === data) e.target.value = DATA;
@@ -262,10 +275,13 @@ $('#dt').onchange = e => {
   });
 };
 // ‹ e ›: o dia anterior e o seguinte. Um clique no rótulo da data abre o calendário do navegador
+// O domingo fica de fora: o aeroclube não opera (retorno da operação, 14/11)
 const irParaDia = dias => {
   const dt = $('#dt');
   if (dt.disabled) return;
-  dt.value = isoMenosDias(DATA, -dias);
+  let destino = isoMenosDias(DATA, -dias);
+  if (ehDomingo(destino)) destino = isoMenosDias(destino, -dias);
+  dt.value = destino;
   dt.dispatchEvent(new Event('change'));
 };
 $('#dt-ant').onclick = () => irParaDia(-1);
@@ -530,8 +546,9 @@ document.addEventListener('click', e => {
   if (!cal) return;
   if (cal.dataset.cal === 'mes') { mudarMes(+cal.dataset.delta); return; }
   escolherDia(cal.dataset.dia);
-  // O dia escolhido na agenda abre no app inteiro (retorno da operação, 14/11: trocar de aba voltava para outra data)
-  if (cal.dataset.dia !== DATA && dataIsoValida(cal.dataset.dia)) {
+  // O dia escolhido na agenda abre no app inteiro (retorno da operação, 14/11: trocar de aba voltava para outra data);
+  // o domingo não tem escala
+  if (cal.dataset.dia !== DATA && dataIsoValida(cal.dataset.dia) && !ehDomingo(cal.dataset.dia)) {
     carregarData(cal.dataset.dia).catch(() => showToast('Não foi possível abrir essa data. Verifique a conexão e tente de novo.'));
   }
 });
@@ -585,8 +602,12 @@ async function registrarPedido(excecao) {
     $('#ag-erro').textContent = `A duração vai de 0,1 h a ${DURACAO_MAXIMA_H} h.`;
     return;
   }
-  // O aluno que já tem voo marcado na data: pode ser um reagendamento feito por outra pessoa; o segundo clique confirma
   const dia = diaDaAgenda(), confirmacao = `${aluno.id}|${dia}`;
+  // No máximo 6 voos locais no mesmo horário (retorno da operação, 14/11): o horário está indisponível, com o próximo
+  const pedido = { data: dia, horario: $('#ag-horario').value, missao: $('#ag-missao').value };
+  const vaga = vagaDeVooLocal(pedidosCarregados(), pedido, S.horarios);
+  if (!vaga.ok) { $('#ag-erro').textContent = semVagaDeVooLocal(pedido, vaga.proximo); return; }
+  // O aluno que já tem voo marcado na data: pode ser um reagendamento feito por outra pessoa; o segundo clique confirma
   const marcados = pedidosDoAluno(aluno.id, dia);
   if (marcados.length && $('#form-agenda').dataset.confirmado !== confirmacao) {
     $('#form-agenda').dataset.confirmado = confirmacao;
@@ -601,10 +622,12 @@ async function registrarPedido(excecao) {
     });
   } catch (err) {
     $('#ag-erro').textContent = {
-      PT403: 'Prazo encerrado: pedido para o dia seguinte só até as 13:00 do dia anterior.',
+      PT403: 'Prazo encerrado para esta data: os pedidos vão até as 13:00 do dia anterior (a segunda, até sábado às 10:00).',
       42501: 'Esta conta não pode registrar este pedido (a Exceção da Coordenação é só para operadores).',
       23514: 'Pedido incompleto: confira aluno, missão, horário e quem anotou.',
-      22023: `Pedido inválido: o horário é obrigatório, e a duração vai de 0,1 h a ${DURACAO_MAXIMA_H} h.`
+      22023: `Pedido inválido: o horário é obrigatório, e a duração vai de 0,1 h a ${DURACAO_MAXIMA_H} h.`,
+      // Outra pessoa agendou o 6º local no mesmo horário enquanto isso: o servidor recusou
+      PT422: semVagaDeVooLocal(pedido, vagaDeVooLocal([...pedidosCarregados(), ...Array.from({ length: LIMITE_DE_VOOS_LOCAIS }, () => ({ ...pedido, janela: 'horario', cancelada_em: null }))], pedido, S.horarios).proximo)
     }[err.code] || 'Não foi possível registrar o pedido. Verifique a conexão e tente de novo.';
     return;
   }
@@ -616,6 +639,12 @@ async function registrarPedido(excecao) {
   await carregarMes();
   lerPedidosDaData();
 }
+// O horário sem vaga de voo local: o motivo e o próximo horário possível
+function semVagaDeVooLocal({ horario, missao }, proximo) {
+  const depois = missao === 'Voo Solo' ? 'O Voo Solo sai sempre às 06:30.' : proximo ? `Próximo horário possível: ${proximo}.` : 'Nenhum horário mais tarde tem vaga.';
+  return `Horário indisponível: já há ${LIMITE_DE_VOOS_LOCAIS} voos locais (Voo Local, Voo Solo e TGL) às ${horario}, o máximo no mesmo horário (determinação da diretoria). ${depois}`;
+}
+
 // Trocar o aluno desfaz a confirmação do voo já marcado
 function desarmarConfirmacaoDaAgenda() {
   delete $('#form-agenda').dataset.confirmado;
@@ -753,6 +782,17 @@ document.addEventListener('click', e => {
       S.fixos = normalizarFixos({ ...(S.fixos || {}), ...rev.fixos });
       logChange('mod', `Revertido: ${entry.desc}`, null, entry.id);
       save();
+    } else if (rev.kind === 'restaurarHorarios') {
+      // Os horários de uma categoria voltam como estavam, e os pedidos que mudaram com eles também
+      S.horarios = { ...S.horarios, [rev.cat]: [...rev.lista] };
+      rev.pedidos.forEach(({ stuId, mid, p1, p2, jan }) => {
+        const alvo = getMissionTarget(stuId, mid);
+        if (!alvo) return;
+        Object.assign(alvo, { p1, p2 });
+        if (jan !== undefined) alvo.jan = jan;
+      });
+      logChange('mod', `Revertido: ${entry.desc}`, null, entry.id);
+      save(); rRec(); rDem();
     } else if (rev.kind === 'readicionarRecurso') {
       // Um recurso retirado volta para a frota, como estava
       S.frota.push({ ...rev.recurso });
@@ -763,36 +803,14 @@ document.addEventListener('click', e => {
     return;
   }
 
-  // Horários de decolagem de uma categoria (Recursos); os pedidos dela acompanham (o horário mais próximo da lista nova)
-  if (a === 'remover-horario' || a === 'adicionar-horario' || a === 'horarios-padrao' || a === 'horarios-30') {
-    const cat = b.dataset.cat;
-    const nome = NOMES_DAS_CATEGORIAS[cat];
-    const atual = (S.horarios && S.horarios[cat]) || [];
-    let lista, descricao;
-    if (a === 'remover-horario') {
-      if (atual.length <= 1) { showToast('Cada categoria precisa de pelo menos um horário.'); return; }
-      lista = atual.filter(m => m !== +b.dataset.min);
-      descricao = `sem ${hm(+b.dataset.min)}`;
-    } else if (a === 'adicionar-horario') {
-      const minuto = paraMinuto(b.closest('.horarios-cat').querySelector('.hr-novo').value);
-      if (minuto === null || minuto < 6 * 60 || minuto > 17 * 60) { showToast('Escolha um horário entre 06:00 e 17:00.'); return; }
-      lista = [...new Set([...atual, minuto])].sort((x, y) => x - y);
-      descricao = `com ${hm(minuto)}`;
-    } else if (a === 'horarios-padrao') {
-      lista = [...HORARIOS_PADRAO];
-      descricao = 'as janelas do dia';
-    } else {
-      lista = [...DE_30_EM_30];
-      descricao = 'de 30 em 30 minutos';
-    }
-    S.horarios = { ...S.horarios, [cat]: lista };
-    S.stu.forEach(s => [s, ...(s.extra || [])].forEach(p => {
-      if (categoriaDoTipo(p.eq) === cat) ajustarPreferencias(p, horariosDaMissao(S.horarios, p.mis, p.eq));
-    }));
-    logChange('mod', `Horários de decolagem do ${nome}: ${descricao}`);
-    save(); rRec(); rDem();
-    return;
-  }
+  // Horários de decolagem (Recursos; revisão de 14/11: "Resumo + Editar"). O editor trabalha num rascunho; só "Salvar"
+  // muda a lista, e os pedidos da categoria acompanham (o horário mais próximo da lista nova). Uma entrada no histórico
+  // desfaz a lista e os pedidos que mudaram
+  if (a === 'editar-horarios') { abrirEditorDosHorarios(b.dataset.cat); return; }
+  if (a === 'rascunho-tirar') { tirarDoRascunho(+b.dataset.min); return; }
+  if (a === 'rascunho-por') { porNoRascunho(); return; }
+  if (a === 'cancelar-horarios') { fecharEditorDosHorarios(); return; }
+  if (a === 'salvar-horarios') { salvarHorarios(); return; }
 
   // Retirar um recurso da frota (pede confirmação; o histórico desfaz)
   if (a === 'retirar-recurso') {
@@ -904,7 +922,7 @@ document.addEventListener('click', e => {
     showToast('Escala aprovada: os voos ficam fixos.', 'ok');
   } else {
     if (!confirmado(reabrir, 'Confirmar reabertura')) return;
-    // Os voos em andamento (Em Voo, Atrasado, Cancelado) continuam fixos
+    // Os voos em andamento (Em Voo, Atrasado, Pousou, Cancelado) continuam fixos
     S.fixos = fixosAoReabrir(S.fixos, S.fStatus);
     S.aprovacao = null;
     save();
@@ -1048,6 +1066,38 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Escape' && painelDeReparoAberto() && !dialogoDeStatusAberto()) fecharPainelDeReparo(true);
 });
 
+// Salvar os horários do editor: a lista nova da categoria, os pedidos dela ajustados e uma entrada no histórico que desfaz
+// os dois. Sem mudança, só fecha
+function salvarHorarios() {
+  const rascunho = rascunhoDosHorarios();
+  if (!rascunho) return;
+  const { cat, lista } = rascunho;
+  const anterior = [...((S.horarios && S.horarios[cat]) || [])];
+  if (anterior.length === lista.length && anterior.every((m, i) => m === lista[i])) { fecharEditorDosHorarios(); return; }
+  S.horarios = { ...S.horarios, [cat]: lista };
+  const pedidos = [];
+  S.stu.forEach(s => [s, ...(s.extra || [])].forEach(p => {
+    if (categoriaDoTipo(p.eq) !== cat) return;
+    const antes = { p1: p.p1, p2: p.p2, jan: p.jan };
+    ajustarPreferencias(p, horariosDaMissao(S.horarios, p.mis, p.eq));
+    if (p.p1 === antes.p1 && p.p2 === antes.p2 && p.jan === antes.jan) return;
+    pedidos.push({ stuId: s.id, mid: p === s ? 0 : p.mid, p1: antes.p1, p2: antes.p2, ...(antes.jan === undefined ? {} : { jan: antes.jan }) });
+  }));
+  logChange('mod', `Horários de decolagem do ${NOMES_DAS_CATEGORIAS[cat]}: ${descreverHorarios(lista)}`,
+    { kind: 'restaurarHorarios', cat, lista: anterior, pedidos, label: '↶ Reverter' });
+  save(); rRec(); rDem();
+  fecharEditorDosHorarios();
+}
+// O modelo escolhido no editor troca a lista do rascunho; Enter no campo põe o horário; Esc descarta o rascunho
+document.addEventListener('change', e => {
+  if (e.target.name === 'hr-modelo' && e.target.closest('#horarios')) escolherModelo(e.target.value);
+});
+document.addEventListener('keydown', e => {
+  if (!editorDosHorariosAberto() || !e.target.closest || !e.target.closest('#horarios')) return;
+  if (e.key === 'Enter' && e.target.classList.contains('hr-novo')) { e.preventDefault(); porNoRascunho(); }
+  else if (e.key === 'Escape') fecharEditorDosHorarios();
+});
+
 // Status do voo: Atrasado e Cancelado pedem o detalhe (a nova decolagem ou o motivo) antes de valer; desistir deixa o
 // status anterior. O histórico registra só a categoria do motivo
 const vooDaChave = fKey => (RES && Array.isArray(RES.out) ? RES.out.find(o => o.fKey === fKey) : null);
@@ -1055,16 +1105,19 @@ function aplicarStatus(fKey, status, detalhe) {
   if (!S.fStatus) S.fStatus = {};
   if (!S.fObs) S.fObs = {};
   S.fStatus[fKey] = status;
-  if (detalhe) S.fObs[fKey] = detalhe;
+  // Sem o diálogo, o novo horário do atraso segue no Em Voo e no Pousou (revisão de 14/11); nos outros, o detalhe sai
+  const novo = detalhe || detalheAoMudarStatus(S.fObs[fKey], status);
+  if (novo) S.fObs[fKey] = novo;
   else delete S.fObs[fKey];
   const voo = vooDaChave(fKey);
   if (voo) voo.status = status;
-  // Em Voo, Atrasado e Cancelado fixam o voo (fase 12; o cancelado desde a revisão de 14/11): uma alteração na escala
+  // Em Voo, Atrasado, Pousou e Cancelado fixam o voo (fase 12; o cancelado desde a revisão de 14/11): uma alteração na escala
   // não o tira do lugar (o cancelado fica onde estava, sem ocupar nada). Fora da escala aprovada, Pendente ou
   // Confirmado o soltam
   if (voo) S.fixos = fixosAoMudarStatus(S.fixos, voo, status, { aprovada: Boolean(S.aprovacao) });
   save();
-  logChange('mod', `Status de ${voo ? `${voo.s} (${hm(voo.a)}–${hm(voo.b)})` : fKey}: ${textoParaOHistorico(status, detalhe)}`);
+  const textoDoStatus = status === 'Pousou' ? rotuloDoStatus(status, voo) : textoParaOHistorico(status, detalhe);
+  logChange('mod', `Status de ${voo ? `${voo.s} (${hm(voo.a)}–${hm(voo.b)})` : fKey}: ${textoDoStatus}`);
 }
 function mudarStatus(fKey, status) {
   const voo = vooDaChave(fKey);
@@ -1298,7 +1351,8 @@ window.addEventListener('beforeunload', e => {
 
   // O endereço é lido antes: abrir uma data põe a data nele
   const params = new URLSearchParams(window.location.search);
-  const amanha = amanhaISO();
+  // Amanhã, ou a segunda quando amanhã é domingo
+  const amanha = ehDomingo(amanhaISO()) ? somarDias(amanhaISO(), 1) : amanhaISO();
   abrirData(amanha);
 
   // O link antigo da fase 2 levava a escala inteira no endereço (share=): não vale mais, e sai do endereço
@@ -1310,7 +1364,9 @@ window.addEventListener('beforeunload', e => {
   }
   // A data do link (?data=); uma data que não existe abre amanhã, com o aviso
   const pedida = params.get('data');
-  const data = dataIsoValida(pedida) ? pedida : amanha;
+  // O aeroclube não opera aos domingos (retorno da operação, 14/11): um link para um domingo abre a segunda
+  const domingo = dataIsoValida(pedida) && ehDomingo(pedida);
+  const data = dataIsoValida(pedida) ? (domingo ? somarDias(pedida, 1) : pedida) : amanha;
 
   // Sessão e dados. Se algo falhar (sem conexão, conversão pela metade), o app não abre com dados incompletos:
   // fica o aviso para recarregar (nada se perde; o que faltou é retomado na próxima abertura)
@@ -1332,7 +1388,8 @@ window.addEventListener('beforeunload', e => {
     setRES(escala || escalaCalculada());
     marcarEscalaSoCalculada(!escala);
     setAuditLog(await historicoParaPainel(data));
-    if (pedida && data !== pedida) showToast(`A data do link não existe (${pedida.slice(0, 20)}). A escala aberta é a de amanhã.`);
+    if (domingo) showToast(avisoDeDomingo(data));
+    else if (pedida && data !== pedida) showToast(`A data do link não existe (${pedida.slice(0, 20)}). A escala aberta é a de amanhã.`);
   } catch (e) {
     console.warn(e);
     if (avisoAberto() !== 'conflito') mostrarAviso('falha', 'Não foi possível preparar os dados da escala. Verifique a conexão e recarregue a página; nada foi perdido.');

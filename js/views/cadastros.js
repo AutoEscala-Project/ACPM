@@ -16,18 +16,23 @@ import { progressoDoAluno } from './etapas.js';
 
 const ROTULO = new Map(HABILITACOES.map(h => [h.id, h.curto]));
 // No cadastro, todas na ordem do painel; na grade do dia, só as que mais distinguem o instrutor
-const ORDEM_DA_GRADE = ['checador_mlte', 'checador_ifr', 'checador_vfr', 'mlte', 'c172', 'ifr', 'noturno', 'parafuso', 'solo',
-  'navegacao', 'local', 'tgl', 'sim_multi', 'sim_mono', 'ground_pa34', 'grounds'];
+const ORDEM_DA_GRADE = ['mlte', 'c172', 'ifr', 'noturno', 'parafuso', 'solo', 'navegacao', 'local', 'tgl', 'sim_multi', 'sim_mono',
+  'ground_pa34', 'grounds'];
 const resumoDasHabilitacoes = x => x.hab.map(h => ROTULO.get(h)).join(' · ');
+// Na grade do dia, as marcas de checador (o curso, o motor e as regras) contam como uma, na frente
 function resumoNaGrade(x) {
-  const rotulos = ORDEM_DA_GRADE.filter(h => x.hab.includes(h)).map(h => ROTULO.get(h));
+  const checador = x.hab.some(h => h.startsWith('checa_')) ? ['Checador'] : [];
+  const rotulos = [...checador, ...ORDEM_DA_GRADE.filter(h => x.hab.includes(h)).map(h => ROTULO.get(h))];
   return rotulos.length > 3 ? `${rotulos.slice(0, 3).join(' · ')} · +${rotulos.length - 3}` : rotulos.join(' · ');
 }
 export const GRUPOS_DE_HABILITACAO = [
   ['Ground e simulador', ['grounds', 'ground_pa34', 'sim_mono', 'sim_multi']],
   ['Voo', ['tgl', 'local', 'navegacao', 'solo', 'parafuso', 'ifr', 'noturno']],
   ['Aviões', ['c152', 'c172', 'mlte']],
-  ['Checador', ['checador_vfr', 'checador_ifr', 'checador_mlte']]
+  // O voo de cheque exige uma marca de cada grupo do checador (o "?" do primeiro explica)
+  ['Checador: curso', ['checa_pp', 'checa_pc', 'checa_inva'], 'checador'],
+  ['Checador: motor', ['checa_mnte', 'checa_mlte']],
+  ['Checador: regras', ['checa_vfr', 'checa_ifr']]
 ];
 
 let vistaDosInstrutores = 'dia';
@@ -165,9 +170,9 @@ export function rPainelDoInstrutor() {
       <h2 id="painel-instrutor-titulo">Habilitações <small>${esc(x.nm)}</small></h2>
       <button class="x" type="button" id="btn-fechar-painel-instrutor" aria-label="Fechar o painel">✕</button>
     </div>
-    <p class="h">Marque o que o instrutor pode fazer. No C172 e no PA-34, a missão exige também a habilitação do avião.</p>
+    <p class="h">Marque o que o instrutor pode fazer. Nos aviões (C152, C172 e PA-34), a missão exige também a habilitação do avião; o voo de cheque exige uma marca de cada grupo do checador.</p>
     <div class="habs-painel" data-k="i" data-id="${x.id}">
-      ${GRUPOS_DE_HABILITACAO.map(([titulo, ids]) => `<fieldset><legend>${titulo}</legend>${ids.map(h =>
+      ${GRUPOS_DE_HABILITACAO.map(([titulo, ids, dica]) => `<fieldset><legend>${titulo}${dica ? botaoDeDica(dica, 'checador') : ''}</legend>${ids.map(h =>
         `<label class="hab"><input type="checkbox" class="sw" data-f="hab" data-h="${h}"${x.hab.includes(h) ? ' checked' : ''}>${esc(nomeDaHabilitacao(h))}</label>`).join('')}</fieldset>`).join('')}
       ${horasDoInstrutor(x)}
     </div>`;

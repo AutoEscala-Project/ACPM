@@ -105,18 +105,14 @@ export function juntar(cadastro, dia = diaPadrao()) {
   };
 }
 
-// Nova data: começa com a disponibilidade, a demanda, a ordem do hangar e os critérios da compactação do dia anterior, sem status dos voos (nem os detalhes) nem escala gerada; as horas
-// até a revisão e as filas do rodízio já contam os voos do dia anterior (instrutores: o cadastro, para as filas)
+// Nova data: começa com a disponibilidade, a ordem do hangar e os critérios da compactação do dia anterior, sem status
+// dos voos (nem os detalhes) nem escala gerada; as horas até a revisão e as filas do rodízio já contam os voos do dia
+// anterior (instrutores: o cadastro, para as filas). A demanda começa vazia (retorno da operação, 14/11): a agenda é o
+// centro dos agendamentos, e a demanda do dia vem de "Importar da agenda"
 export function diaParaCopiar(anterior, instrutores = []) {
   if (!anterior || !anterior.ins || !anterior.pedidos) return diaPadrao();
-  const { win, av, ins, pedidos, hangar = null, criterios } = structuredClone(anterior);
-  // A missão do curso e o pedido da agenda são os do dia (revisão de 14/11): a data nova começa sem eles
-  for (const p of Object.values(pedidos)) {
-    if (!p || typeof p !== 'object') continue;
-    delete p.etapa;
-    delete p.solicitacao;
-    (Array.isArray(p.extra) ? p.extra : []).forEach(ex => { if (ex && typeof ex === 'object') { delete ex.etapa; delete ex.solicitacao; } });
-  }
+  const { win, av, ins, pedidos: anteriores, hangar = null, criterios } = structuredClone(anterior);
+  const pedidos = Object.fromEntries(Object.keys(anteriores).map(id => [id, { ...blank(), extra: [] }]));
   return { win, av, ins, pedidos, fStatus: {}, fObs: {}, horas: horasDoDiaSeguinte(anterior), filas: filasDoDiaSeguinte(anterior, instrutores), hangar: hangar || normalizarHangar(null, FROTA_INICIAL), fixos: {}, aprovacao: null, criterios: normalizarCriterios(criterios), importadas: [] };
 }
 

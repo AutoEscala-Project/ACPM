@@ -10,8 +10,8 @@ describe('Manual', () => {
     assert.equal(quemPodeDar('Voo Local', ['C152', 'C172', 'PA-34']), 'Local (+ C152 no C152, + C172 no C172, + MLTE (PA-34) no PA-34)');
     assert.equal(quemPodeDar('Noturno', ['C172']), 'Noturno + C172');
     assert.equal(quemPodeDar('Multimotor', ['PA-34']), 'MLTE (PA-34)');
-    assert.equal(quemPodeDar('Cheque PP', ['C152', 'C172']), 'Checador VFR, Checador IFR ou Checador MLTE IFR');
-    assert.equal(quemPodeDar('Cheque PC MLTE IFR', ['PA-34']), 'Checador MLTE IFR');
+    assert.equal(quemPodeDar('Cheque PP', ['C152', 'C172']), 'Checador PP + Checador MNTE + Checador VFR');
+    assert.equal(quemPodeDar('Cheque PC MLTE IFR', ['PA-34']), 'Checador PC + Checador MLTE + Checador IFR');
     assert.equal(quemPodeDar('Simulador', ['Sim. Mono', 'Sim. Multi']), 'Sim. Mono no Sim. Mono; Sim. Multi no Sim. Multi');
     assert.equal(quemPodeDar('Ground PA-34', ['Sala Ground']), 'Ground PA-34');
   });

@@ -13,6 +13,7 @@ import { reducaoNecessaria } from './combustivel.js';
 import { normalizarLimites, dentroDosLimites } from './limites.js';
 import { normalizarHangar, posicaoNoHangar } from './hangar.js';
 import { HORARIOS_INICIAIS, horariosDaMissao, periodoDoMinuto } from './horarios.js';
+import { STATUS_EM_ANDAMENTO } from './status.js';
 import { disponibilidadeDoAluno, doesGroundGateFlight } from './rules.js';
 import { nomeDoRecurso } from './categorias.js';
 import { hm } from './format.js';
@@ -118,7 +119,7 @@ export function sugerirReparos(estado, resultado, fKey, { maximo = 3, depoisDe =
   }
 
   // Soltar: o voo deixa de ser fixo e o motor o escala de novo, em volta dos outros (não vale para o voo em andamento)
-  const emAndamento = grupo.some(v => ['Em Voo', 'Atrasado'].includes(statusDe(v)));
+  const emAndamento = grupo.some(v => STATUS_EM_ANDAMENTO.includes(statusDe(v)));
   const soltar = emAndamento ? [] : [{ tipo: 'soltar', texto: 'Soltar o voo: o app escolhe de novo o horário, o avião e o instrutor', mudancas: null, soltar: true }];
   return [...opcoes.slice(0, maximo), ...soltar, { tipo: 'cancelar', texto: 'Cancelar o voo (pede o motivo)', mudancas: null, motivo: motivoDoConflito(voo.conflito) }];
 }

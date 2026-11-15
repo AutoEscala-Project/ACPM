@@ -38,4 +38,15 @@ describe('Reversões do histórico', () => {
     assert.equal(validarReversao({ kind: 'setInsOn', insId: 3, val: true, label: 'x'.repeat(200) }, FROTA_INICIAL).label, '↶ Reverter');
     assert.equal(validarReversao({ kind: 'setInsOn', insId: 3, val: true }, FROTA_INICIAL).label, '↶ Reverter');
   });
+
+  // Revisão de 14/11: os horários de uma categoria e os pedidos que mudaram com eles
+  it('os horários: a categoria da lista, horários do dia e os pedidos nos formatos do app', () => {
+    const rev = { kind: 'restaurarHorarios', cat: 'PA-34', lista: [390, 450], pedidos: [{ stuId: 1000, mid: 0, p1: 450, p2: -1 }, { stuId: 1001, mid: 2, p1: 500, p2: 610, jan: 'h500' }], label: '↶ Reverter' };
+    assert.deepEqual(validarReversao(rev, FROTA_INICIAL), rev);
+    assert.deepEqual(validarReversao({ ...rev, pedidos: [] }, FROTA_INICIAL), { ...rev, pedidos: [] });
+    for (const ruim of [{ cat: 'Sala' }, { lista: [390, 2000] }, { lista: 'x' }, { pedidos: [{ stuId: 0, mid: 0, p1: 1, p2: 1 }] },
+      { pedidos: [{ stuId: 1, mid: 0, p1: 450, p2: -1, jan: '<img>' }] }, { pedidos: 'x' }]) {
+      assert.equal(validarReversao({ ...rev, ...ruim }, FROTA_INICIAL), null, JSON.stringify(ruim));
+    }
+  });
 });

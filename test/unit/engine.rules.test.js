@@ -152,14 +152,18 @@ describe('Habilitações exigidas (os instrutores migrados fazem o mesmo que os 
     assert.equal(alocar({ ins, stu: [aluno(1000, { mis: 'TGL (TMA)', eq: 'C152' })] }).out[0].insId, 2);
   });
 
-  it('voos de cheque vão para o checador credenciado (cheque PC MNTE IFR: checador IFR ou MLTE IFR, nunca o VFR)', () => {
-    const ins = [instrutor(1, 9, { hab: ['checador_vfr'] }), instrutor(2, 9, { hab: ['checador_ifr'] }), instrutor(3, 9, { hab: ['checador_mlte'] })];
+  it('voos de cheque vão para o checador com as três marcas do cheque (o curso, o motor e as regras)', () => {
+    const ins = [
+      instrutor(1, 9, { hab: ['checa_pp', 'checa_mnte', 'checa_vfr'] }),
+      instrutor(2, 9, { hab: ['checa_pc', 'checa_mnte', 'checa_ifr'] }),
+      instrutor(3, 9, { hab: ['checa_pc', 'checa_mlte', 'checa_ifr'] })
+    ];
     const cheque = (mis, eq) => alocar({ ins, stu: [aluno(1000, { mis, eq })] });
     assert.equal(cheque('Cheque PP', 'C152').out[0].insId, 1);
     assert.equal(cheque('Cheque PC MNTE IFR', 'C172').out[0].insId, 2);
     assert.equal(cheque('Cheque PC MLTE IFR', 'PA-34').out[0].insId, 3);
     const semChecador = alocar({ ins: [instrutor(1, 9)], stu: [aluno(1000, { mis: 'Cheque PC MLTE VFR', eq: 'PA-34' })] });
-    assert.deepEqual(semChecador.al.map(a => a.m), ['Rejeitado: nenhum instrutor ativo tem a habilitação de Cheque PC MLTE VFR no PA-34 (Checador PP, PC, MLTE, MNTE, INVA, IFR).']);
+    assert.deepEqual(semChecador.al.map(a => a.m), ['Rejeitado: nenhum instrutor ativo tem a habilitação de Cheque PC MLTE VFR no PA-34 (Checador do curso PC + Checador MLTE + Checador VFR).']);
   });
 
   it('missão em equipamento não permitido é rejeitada', () => {
@@ -218,6 +222,55 @@ describe('Peso da tripulação', () => {
     assert.deepEqual(soInstrutor.al, [{ t: 'warn', s: 'Aluno 1000', m: 'Peso de Instrutor 01 não informado (0 kg): verificação de limite (170 kg) no C152 não realizada.' }]);
     const osDois = alocar({ ins: [instrutor(1, 1, { kg: 0 })], stu: [aluno(1000, {}, { kg: 0 })] });
     assert.deepEqual(osDois.al, [{ t: 'warn', s: 'Aluno 1000', m: 'Pesos do aluno e de Instrutor 01 não informados (0 kg): verificação de limite (170 kg) no C152 não realizada.' }]);
+  });
+});
+
+// Retorno da operação (14/11): a diretoria permite no máximo 6 voos locais (Voo Local, Voo Solo e TGL) no mesmo horário
+describe('No máximo 6 voos locais no mesmo horário', () => {
+  const instrutores = Array.from({ length: 9 }, (_, i) => instrutor(i + 1, 9));
+  it('o 7º voo local das 08:20 vai para outro horário; os de outras missões não contam', () => {
+    const stu = [
+      ...[0, 1, 2, 3].map(i => aluno(1000 + i, { p1: 500, p2: -1 })),
+      aluno(1004, { mis: 'TGL (TMA)', p1: 500, p2: -1 }), aluno(1005, { mis: 'TGL (TMA)', p1: 500, p2: -1 }),
+      aluno(1006, { p1: 500, p2: -1 }), aluno(1007, { mis: 'Navegação', p1: 500, p2: -1 })
+    ];
+    const { out } = alocar({ ins: instrutores, stu });
+    assert.equal(out.filter(o => o.a === 500 && ['Voo Local', 'Voo Solo', 'TGL (TMA)'].includes(o.mis)).length, 6);
+    assert.notEqual(out.find(o => o.stuId === 1006).a, 500, 'o 7º local sai em outro horário');
+    assert.equal(out.find(o => o.stuId === 1007).a, 500, 'a Navegação não conta');
+  });
+
+  it('o Solo só sai às 06:30: com 6 locais às 06:30, o 7º é rejeitado dizendo por quê', () => {
+    const stu = [...[0, 1, 2, 3, 4, 5].map(i => aluno(1000 + i, { mis: 'Voo Solo' })), aluno(1006, { mis: 'Voo Solo' })];
+    const { out, al } = alocar({ ins: instrutores, stu });
+    assert.equal(out.length, 6);
+    assert.deepEqual(al.filter(a => a.t === 'err'), [{ t: 'err', s: 'Aluno 1006', m: 'Rejeitado: já há 6 voos locais (Voo Local, Voo Solo e TGL) em todos os horários possíveis, o máximo no mesmo horário.', codigo: 'limite-de-locais' }]);
+  });
+
+  it('a compactação também respeita o limite', () => {
+    const stu = [...[0, 1, 2, 3, 4, 5].map(i => aluno(1000 + i, { p1: 500, p2: -1 })), aluno(1006, { p1: 610, p2: 500 })];
+    const { out } = runAllocationEngine(cenario({ ins: instrutores, stu }));
+    assert.ok(out.filter(o => o.a === 500).length <= 6);
+  });
+});
+
+// Retorno da operação (14/11): quem agendou primeiro sai primeiro; a Prioridade continua passando à frente, e o pedido
+// posto à mão (sem a agenda) vem depois dos agendados
+describe('A ordem dos agendamentos', () => {
+  const umLugar = stu => alocar({ ins: [instrutor(1, 9)], stu, semAeronaves: SO_PP_LJV }).out.find(o => o.a === 390);
+  it('com a mesma prioridade, quem agendou primeiro fica com o horário', () => {
+    const voo = umLugar([aluno(1000, { p1: 390, p2: -1, solicitacao: 9 }), aluno(1001, { p1: 390, p2: -1, solicitacao: 5 })]);
+    assert.equal(voo.stuId, 1001);
+  });
+
+  it('o pedido posto à mão vem depois dos agendados', () => {
+    const voo = umLugar([aluno(1000, { p1: 390, p2: -1 }), aluno(1001, { p1: 390, p2: -1, solicitacao: 5 })]);
+    assert.equal(voo.stuId, 1001);
+  });
+
+  it('a prioridade maior passa à frente da ordem dos agendamentos', () => {
+    const voo = umLugar([aluno(1000, { p1: 390, p2: -1, pr: 5 }), aluno(1001, { p1: 390, p2: -1, solicitacao: 5 })]);
+    assert.equal(voo.stuId, 1000);
   });
 });
 

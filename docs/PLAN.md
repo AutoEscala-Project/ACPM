@@ -302,6 +302,28 @@ A full review of the app (engine, data and security, usability and accessibility
    - **Agenda**: requests are at a specific time only, with a duration (migration `agenda_com_duracao`: column `horas` and a 10-argument `registrar_solicitacao`; the old function stays until this PR is live); a student already booked that day needs "Registrar mesmo assim".
    - **C152 qualification**: missions in the C152 require it, like the C172 and the PA-34; every instructor gets it (data format **19**).
    - **Recursos**: the operator types the available hours (0–50) next to the bar; the day still stores hours since the revision.
+6. [x] **The agenda as the hub** (branch `revisao-6`, on top of `revisao-5`).
+   - **Empty demand each day**: a new date copies the availability, aircraft, windows, hangar order, criteria and aircraft hours, but nobody flies; "Importar da agenda" builds the day's demand.
+   - **Booking order**: with the same Prioridade, the request booked first (the booking id grows with registration) is scheduled first; hand-added requests come after the booked ones; a higher Prioridade still jumps the queue.
+   - **Voo Solo at 06:30** (local or navigation): the mission's only take-off time, and its preference (like the Noturno at 17:30).
+   - **At most 6 local flights per take-off time** (Voo Local, Voo Solo, TGL; `MISSOES_LOCAIS`, `LIMITE_DE_VOOS_LOCAIS`): the engine and compaction respect it (rejection code `limite-de-locais`); booking a 7th says the time is unavailable and gives the next possible one; the server refuses it too (migration `agenda_limite_de_locais`, PT422, with an advisory lock per date and time).
+   - **No Sundays**: a date's bookings close at 13:00 of the previous operating day, Monday's at Saturday 10:00, Sunday takes none (migration `agenda_sem_domingo`); the app skips Sunday (default date, arrows, links, the date picker, the agenda calendar).
+   - The engine got `trocarMatriculas: false` (for the nearest-preference invariant). New invariant: never more than 6 local flights at one time.
+7. [x] **Checkers by parts** (branch `revisao-7`, on top of `revisao-6`).
+   - The three checker qualifications (VFR, IFR, MLTE IFR) become seven marks in three groups: the course (PP, PC, INVA), the engine (MNTE, MLTE) and the rules (VFR, IFR). A check flight needs one mark of each, matching its name (Cheque PC MLTE IFR: PC + MLTE + IFR); it still needs no aircraft qualification. No check flight uses INVA yet: the mark is recorded for when one exists.
+   - **Data format 20**: each old checker gets exactly the marks that gave the same checks, plus INVA (it was in all three names). The rotation's check queue holds whoever can give at least one check.
+   - Instrutores: the drawer shows the three groups with a "?"; the day grid shows the marks as one "Checador". The Manual merges what every aircraft shares ("Checador PP + Checador MNTE + Checador VFR").
+8. [x] **"Pousou" and the boarding call** (branch `revisao-8`, on top of `revisao-7`).
+   - **Pousou**: after Em Voo; shown as "Concluída" on Ground and simulator rows (list, map, padlock, history, CSV, PDF; the stored value is the same). It pins the flight, Reabrir keeps it, it can't be released, compaction leaves it, and it leaves the arrivals board at once. **Data format 21** (no data change): an older tab, which would drop the status, is refused.
+   - **The delay's new take-off stays through Em Voo and Pousou** ("decolou às 10:40", not editable): the flight keeps its new interval, the board keeps "Previsto", and the delay conflict still counts; Pendente or Confirmado clear it.
+   - **Rest after a delay**: the end of yesterday's last duty uses the delayed end, in the app and on the server (migration `repouso_conta_o_atraso`).
+   - **Boarding call** (field feedback; Pedro's choices): from 35 minutes before take-off (the new one, if delayed) until take-off, an aircraft flight that hasn't left shows "EMBARQUE IMEDIATO · Sala de briefing" in its Partidas row, on the TV and in the Escala's Painel view. Ground and simulator don't call; no extra carousel screen.
+   - Left for later from the original plan: aircraft hours computed on read (`horas_dos_avioes`), the single "voou" rule for conflicted flights, and the tag kept in the pin.
+9. [x] **Take-off times "Resumo + Editar" and Recursos in two parts** (branch `revisao-9`, on top of `revisao-8`).
+   - Each category shows a summary (`descreverHorarios`: "Janelas do dia", "De 30 em 30 min, 06:30–16:30" or runs like "07:00–08:30 de 30 em 30 min, 14:00"), the count, and the morning and afternoon times; a time in a window closed on this date is struck through with a tip. One button per category in the summary (57 before).
+   - "Editar" opens the list inline (`js/views/horarios.js`): model, chips with ✕, a time field where Enter adds (06:00–16:30), and the effect before saving (`impactoDosHorarios`: who changes preference, who loses "Só às"). Nothing changes until Salvar; Cancelar and Esc discard; focus returns to Editar. Saving writes one history entry that reverts the list and the adjusted requests (`restaurarHorarios`).
+   - Recursos: "Nesta data" (windows, availability and hours, hangar order) and "Vale para todas as datas" (take-off times and the fleet, with + Novo recurso, Retirar and Só Parafuso as compact chips).
+   - Left for the next PR: the time vocabulary (the Escala list and PDF grouped by exact departure time, "Aplicar período").
 
 ### Phase 16: Later (nice to have)
 - [ ] Track instructor and student currency: last flight, medical/CMA expiry. The engine then checks these too (the course phase is Phase 14).

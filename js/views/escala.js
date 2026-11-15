@@ -3,7 +3,7 @@ import { FLIGHT_STATUSES, GROUND_REG } from '../config.js';
 import { hm, WLB, fmtH, esc } from '../format.js';
 import { isGroundMission } from '../rules.js';
 import { categoriaDoTipo, nomeDoRecurso } from '../categorias.js';
-import { textoDoDetalhe, classeDoStatus } from '../status.js';
+import { textoDoDetalhe, classeDoStatus, rotuloDoStatus, STATUS_COM_DETALHE } from '../status.js';
 import { validarReversao } from '../reversoes.js';
 import { linhasDoQuadro, quadroDoDia } from '../quadro.js';
 import { painelDaEscala } from './painel-aeroporto.js';
@@ -49,7 +49,7 @@ function conteudoDoPopup(o) {
       <span>Status:</span>
       <span>
         <select class="st-sel st-${classeDoStatus(st)}" data-f="fstatus" data-fkey="${esc(principal.fKey)}" aria-label="Status do voo"${isGestor() ? ' disabled' : ''}>
-          ${FLIGHT_STATUSES.map(v => `<option value="${v}"${v === st ? ' selected' : ''}>${v}</option>`).join('')}
+          ${FLIGHT_STATUSES.map(v => `<option value="${v}"${v === st ? ' selected' : ''}>${rotuloDoStatus(v, principal)}</option>`).join('')}
         </select>
         ${detalheDoStatus(principal)}
       </span>
@@ -256,15 +256,16 @@ const seloDoCombustivel = o => (o.comb ? ` <span class="tag comb" data-dica="red
 function seletorDeStatus(o) {
   const st = statusDe(o);
   return `<select class="st-sel st-${classeDoStatus(st)}" data-f="fstatus" data-fkey="${esc(o.fKey)}" aria-label="Status de ${esc(o.s)}" data-dica="status"${isGestor() ? ' disabled' : ''}>
-    ${FLIGHT_STATUSES.map(v => `<option value="${v}"${v === st ? ' selected' : ''}>${v}</option>`).join('')}
+    ${FLIGHT_STATUSES.map(v => `<option value="${v}"${v === st ? ' selected' : ''}>${rotuloDoStatus(v, o)}</option>`).join('')}
   </select>${detalheDoStatus(o)}`;
 }
 
-// O detalhe do status (o motivo do cancelamento ou a nova decolagem do atraso): um clique permite alterá-lo
+// O detalhe do status (o motivo do cancelamento ou a nova decolagem do atraso): um clique permite alterá-lo. Em voo e
+// depois do pouso, a decolagem do atraso só aparece
 function detalheDoStatus(o) {
   const texto = textoDoDetalhe(statusDe(o), S.fObs && S.fObs[o.fKey]);
   if (!texto) return '';
-  return isGestor()
+  return isGestor() || !STATUS_COM_DETALHE.includes(statusDe(o))
     ? `<span class="st-detalhe">${esc(texto)}</span>`
     : `<button type="button" class="st-detalhe" data-act="detalhe-status" data-fkey="${esc(o.fKey)}" title="Alterar o detalhe do status">${esc(texto)}</button>`;
 }
@@ -410,7 +411,7 @@ function tabela(voos) {
       return classes.length ? ` class="${classes.join(' ')}"` : '';
     };
     // O cadeado diz por que o voo está fixo: o status de andamento ou a escala aprovada (revisão de 14/11)
-    const motivo = esc(motivoDoFixo(o.fKey, { fStatus: S.fStatus, aprovacao: S.aprovacao }));
+    const motivo = esc(motivoDoFixo(o.fKey, { fStatus: S.fStatus, aprovacao: S.aprovacao, voo: o }));
     const fixo = o.fixo ? ` <svg class="ico fixo" role="img" aria-label="${motivo}" data-dica="voo-fixo" data-dica-termo="${motivo}"><use href="#i-cadeado"/></svg>` : '';
     const doTempo = ` data-w="${o.w}"${recolhido ? ' hidden' : ''}`;
     h += `<tr${cancelado(o)}${doTempo}>
