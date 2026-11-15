@@ -2,7 +2,7 @@
 // e turnos.
 
 export const WIN = ['06:30','08:20','10:10','11:30','12:40','13:40','14:30','16:20','17:30'];
-export const NI = 8, DAY = [0,1,2,3,4,5,6,7], NIGHT_OK = [NI];
+export const NI = 8, DAY = [0,1,2,3,4,5,6,7];
 export const T = WIN.map(w => w.split(':')[0] * 60 + +w.split(':')[1]);
 
 // Frotas físicas exibidas na Aba 1 (Recursos)
@@ -23,14 +23,6 @@ export const SIM_EQ_TYPES = ['Sim. Mono', 'Sim. Multi'];
 export const AIRCRAFT_EQ_TYPES = ['C152', 'C172', 'PA-34'];
 export const ALL_EQ_TYPES = [...Object.keys(EQ), GROUND_EQ_TYPE];
 export const ACROBAT_REG = 'PR-JPL'; // Exclusivo para missão de Parafuso
-
-export const EQT = {
-  'Sim. Mono': 'Sim. Mono',
-  'Sim. Multi': 'Sim. Multi',
-  'C152': 'C152',
-  'C172': 'C172',
-  'PA-34': 'PA-34'
-};
 
 /**
  * Fases / Missões do CIAC (incluindo Ground School de 01h30 e Missões de Voo/Simulador). Quem pode ministrar cada

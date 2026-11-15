@@ -1,6 +1,6 @@
 // Dados pessoais de alunos e instrutores (fase 9): CPF, CANAC (o código da ANAC), nascimento, celular e e-mail. Ficam
 // fora do cadastro, numa tabela que só operadores, administradores e a secretaria leem (o servidor valida tudo de
-// novo), e nunca vão para o link compartilhado, o CSV, o PDF ou o BI. O histórico registra só quais campos mudaram.
+// novo), e nunca vão para o CSV, o PDF ou o BI. O histórico registra só quais campos mudaram.
 export const CAMPOS_PESSOAIS = [
   { id: 'cpf', rotulo: 'CPF' },
   { id: 'canac', rotulo: 'CANAC' },

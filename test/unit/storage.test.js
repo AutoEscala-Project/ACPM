@@ -2,8 +2,8 @@
 import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { ApiClient } from '../../js/storage.js';
+import { CHAVE_LEGADA } from '../../js/backends/local.js';
 import { habilitacoesDoNivel } from '../../js/habilitacoes.js';
-import { DEFAULT_LIM } from '../../js/config.js';
 import { simularNavegador } from '../helpers/navegador.js';
 import { aluno, instrutor, missaoExtra } from '../helpers/montar.js';
 
@@ -19,7 +19,6 @@ describe('Estado inicial', () => {
     assert.deepEqual(s.win, Array(9).fill(true));
     assert.equal(Object.keys(s.av).length, 26);
     assert.ok(Object.values(s.av).every(Boolean));
-    assert.deepEqual(s.lim, DEFAULT_LIM);
     assert.equal(s.nid, 1000);
     assert.deepEqual(s.stu, []);
     assert.deepEqual(s.fStatus, {});
@@ -60,11 +59,9 @@ describe('Migração de estado', () => {
 
   it('schema v4: preserva o cadastro e normaliza os pedidos', () => {
     const estado = ApiClient.createFreshState();
-    estado.lim = { C152: 999 };
     estado.nid = 5;
     estado.stu = [aluno(1000, { mis: 'PP Local', eq: 'PA-34' }, { extra: [{ ...missaoExtra(undefined, { mis: 'Ground de Navegação', eq: 'C152', p1: 8, p2: 8 }) }] })];
     const x = ApiClient.normalizeAndMigrateState(estado);
-    assert.deepEqual(x.lim, DEFAULT_LIM);
     assert.equal(x.nid, 1000, 'o número do cadastro vai a 1000 e não muda com a missão extra');
     assert.deepEqual([x.stu[0].mis, x.stu[0].eq], ['Voo Local', 'PA-34']);
     // A missão extra sem número recebe o próximo do aluno (revisão de 14/11)
@@ -135,7 +132,7 @@ describe('Persistência local (escala por data)', () => {
   });
 
   it('migra o formato acpm2 (7 janelas) para as 9 janelas atuais', async () => {
-    localStorage.setItem(ApiClient.KEY_LEGACY, JSON.stringify({
+    localStorage.setItem(CHAVE_LEGADA, JSON.stringify({
       win: [true, true, false, true, true, true, false],
       lim: {},
       ins: [{ id: 1, nm: 'Instrutor 01', on: true, lv: 3, kg: 80, aw: [true, false, true, true, false, true, true] }],

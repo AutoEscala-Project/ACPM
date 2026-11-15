@@ -1,11 +1,11 @@
 // Camada de acesso a dados: estado inicial, migrações de schema e persistência por um backend (localStorage ou
 // Supabase).
-import { WIN, DEFAULT_LIM } from './config.js';
+import { WIN } from './config.js';
 import { FROTA_INICIAL, normalizarFrota } from './frota.js';
 import { pad, LIMITE_DO_NOME } from './format.js';
 import { normalizeMissionFields, proximoMid } from './rules.js';
 import { HORARIOS_INICIAIS, normalizarHorarios } from './horarios.js';
-import { backendLocal, CHAVES_LOCAIS, CHAVE_LEGADA } from './backends/local.js';
+import { backendLocal } from './backends/local.js';
 import { separar, juntar, diaPadrao, diaParaCopiar, converterLegado, biDosDias } from './dias.js';
 import { ESQUEMA, migrarCadastro, migrarDia, precisaMigrar, renomearSimulador } from './migracoes.js';
 import { habilitacoesDoNivel, normalizarHabilitacoes } from './habilitacoes.js';
@@ -19,17 +19,13 @@ import { normalizarCriterios } from './criterios.js';
 import { normalizarCursos, normalizarCursoDoAluno } from './cursos.js';
 
 export const ApiClient = {
-  KEY_STATE: CHAVES_LOCAIS.estado,
-  KEY_LEGACY: CHAVE_LEGADA,
-  KEY_RESULT: CHAVES_LOCAIS.escala,
-  KEY_AUDIT: CHAVES_LOCAIS.historico,
-  KEY_BI: CHAVES_LOCAIS.bi,
   KEY_THEME: 'acpm3_theme',
   // Onde os documentos ficam: backend local (localStorage) ou Supabase (login)
   backend: backendLocal,
   // Nome de quem está alterando (modo compartilhado), mostrado no histórico
   autorAtual: null,
-  // Link compartilhado: nada é gravado e a interface fica travada no perfil Gestor
+  // Somente consulta (o Gestor e a Secretaria no modo compartilhado, ou a tela travada depois de um conflito): nada é
+  // gravado e a tela fica no perfil Gestor
   readOnly: false,
   // Perfil e e-mail da conta no modo compartilhado (operador, gestor, secretaria ou administrador); null no modo local
   perfil: null,
@@ -40,7 +36,6 @@ export const ApiClient = {
       schemaVer: 4,
       win: WIN.map(() => true),
       av: {},
-      lim: { ...DEFAULT_LIM },
       nid: 1000,
       // Sem cadastro: no modo compartilhado os instrutores e alunos vêm do servidor
       ins: [],
@@ -60,7 +55,9 @@ export const ApiClient = {
 
   normalizeAndMigrateState(x) {
     if (!x || !Array.isArray(x.stu) || !Array.isArray(x.ins)) return this.createFreshState();
-    x.lim = { ...DEFAULT_LIM };
+    // Os limites de peso de cada avião não ficam no estado (o motor usa os da configuração): um estado antigo com eles
+    // fica sem
+    delete x.lim;
     // Revisão de 14/11: o que vem gravado pode ter sido escrito fora do app (pela API); só os status da lista valem
     x.fStatus = normalizarStatus(x.fStatus);
     // Detalhes do status (fase 8): só os que valem para o status atual de cada voo
@@ -282,14 +279,6 @@ export const ApiClient = {
   registrarResultado(registro) {
     if (this.readOnly) return Promise.reject(Object.assign(new Error('somente leitura'), { code: '42501' }));
     return this.backend.registrarResultado(registro, { autor: this.autorAtual || null });
-  },
-
-  situacaoDasMissoes() {
-    return this.backend.situacaoDasMissoes();
-  },
-
-  resultadosDoDia(data) {
-    return this.backend.resultadosDoDia(data);
   },
 
   async biDoPeriodo(de, ate) {

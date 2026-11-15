@@ -14,8 +14,6 @@ export const FROTA_POR_TIPO = {
 
 export const FROTA = Object.values(FROTA_POR_TIPO).flat();
 
-export const LIMITES = { 'C152': 170, 'C172': 222, 'PA-34': 250 };
-
 export const dois = n => String(n).padStart(2, '0');
 
 // 40 instrutores fictícios com a mesma distribuição de níveis do estado inicial da aplicação (A01–A09 em ciclo),
@@ -37,7 +35,6 @@ export function estadoSintetico() {
     schemaVer: 4,
     win: Array(JANELAS).fill(true),
     av: Object.fromEntries(FROTA.map(r => [r, true])),
-    lim: { ...LIMITES },
     nid: 1000,
     ins: rosterSintetico(),
     stu: [],

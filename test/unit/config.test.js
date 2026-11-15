@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { WIN, T, NI, DAY, NIGHT_OK, EQ, MIS, DEFAULT_LIM, ACROBAT_REG, ALL_EQ_TYPES, PRE } from '../../js/config.js';
+import { WIN, T, NI, DAY, EQ, MIS, DEFAULT_LIM, ACROBAT_REG, ALL_EQ_TYPES, PRE } from '../../js/config.js';
 
 describe('Configuração operacional', () => {
   it('nove janelas de instrução, a última noturna', () => {
@@ -8,7 +8,6 @@ describe('Configuração operacional', () => {
     assert.deepEqual(T, [390, 500, 610, 690, 760, 820, 870, 980, 1050]);
     assert.equal(NI, 8);
     assert.deepEqual(DAY, [0, 1, 2, 3, 4, 5, 6, 7]);
-    assert.deepEqual(NIGHT_OK, [8]);
   });
 
   it('frota com 26 recursos e o PR-JPL no C152', () => {

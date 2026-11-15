@@ -12,7 +12,7 @@ const DADOS = { aluno: {}, instrutor: {} };
 const pessoa = (tipo, id) => (tipo === 'aluno' ? stuBy(id) : insBy(id));
 
 // No modo compartilhado, pelo perfil; no modo local, fora do perfil Gestor (e do link compartilhado)
-export const podeVerDadosPessoais = () => (ApiClient.perfil ? veDadosPessoais(ApiClient.perfil) : !isGestor());
+const podeVerDadosPessoais = () => (ApiClient.perfil ? veDadosPessoais(ApiClient.perfil) : !isGestor());
 export const canacDe = (tipo, id) => (DADOS[tipo][id] && DADOS[tipo][id].canac) || '';
 
 function atualizarColunas() {

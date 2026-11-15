@@ -18,7 +18,7 @@ import { $, posicionarJunto } from '../dom.js';
 
 export const HT = o => (o.isGround || isGroundMission(o.mis) ? '01h30 (1,5 h)' : fmtH(o.h) + (o.ss !== '1/1' ? ` (sessão ${o.ss})` : ''));
 
-export function missionColorClass(mis) {
+function missionColorClass(mis) {
   if (isGroundMission(mis)) return 'm-gnd';
   if (mis === 'Simulador') return 'm-sim';
   if (mis === 'Voo Local' || mis === 'Voo Solo') return 'm-pp';
@@ -101,7 +101,7 @@ function reancorarPopupDoMapa() {
   if (popupDe === chave && foco) { const campo = $(`#tl-pop [data-f="${foco}"]`); if (campo) campo.focus(); }
 }
 
-export function buildTimelineGroup(out, groupKey, subLabelFn, barLine1Fn, barLine2Fn, minStart, maxEnd) {
+function buildTimelineGroup(out, groupKey, subLabelFn, barLine1Fn, barLine2Fn, minStart, maxEnd) {
   const span = maxEnd - minStart;
   const groups = {};
   out.forEach(o => (groups[o[groupKey]] = groups[o[groupKey]] || []).push(o));
@@ -141,7 +141,7 @@ export function buildTimelineGroup(out, groupKey, subLabelFn, barLine1Fn, barLin
   return `<div class="tl-wrap"><div class="tl-axis">${ticks.join('')}</div>${rowsHTML}</div>`;
 }
 
-export function renderVisualTimeline(out) {
+function renderVisualTimeline(out) {
   VOOS_DO_MAPA.clear();
   if (!out.length) return '';
   const minStart = 360; // 06:00

@@ -1,7 +1,7 @@
 // Escala por data. O estado da aplicação (o mesmo formato usado pelo motor e pelas telas) é guardado em
 // duas partes: o cadastro, igual em todas as datas (instrutores, alunos e a frota), e o dia, com o que muda de
 // uma data para outra (janelas, aeronaves, disponibilidade dos instrutores, demanda e status dos voos).
-import { WIN, DEFAULT_LIM, AIRCRAFT_EQ_TYPES } from './config.js';
+import { WIN, AIRCRAFT_EQ_TYPES } from './config.js';
 import { blank } from './rules.js';
 import { normalizarStatus } from './status.js';
 import { filasDoDiaSeguinte } from './rodizio.js';
@@ -82,7 +82,6 @@ export function juntar(cadastro, dia = diaPadrao()) {
     ...(cadastro.cursos ? { cursos: normalizarCursos(cadastro.cursos) } : {}),
     win: Array.isArray(dia.win) ? [...dia.win] : WIN.map(() => true),
     av: { ...avDaFrota(frota), ...(dia.av || {}) },
-    lim: { ...DEFAULT_LIM },
     nid: cadastro.nid,
     ins: cadastro.ins.map(x => {
       const d = disponibilidade[x.id];

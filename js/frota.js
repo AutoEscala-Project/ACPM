@@ -26,7 +26,7 @@ export const matriculasDoTipo = (frota, tipo, { parafuso = false } = {}) => frot
   .filter(f => f.tipo === tipo && Boolean(f.soParafuso) === (parafuso && tipo === 'C152'))
   .map(f => f.reg);
 
-export const recursoDaFrota = (frota, r) => frota.find(f => f.reg === r) || null;
+const recursoDaFrota = (frota, r) => frota.find(f => f.reg === r) || null;
 
 // Um recurso novo (aba Recursos): devolve o recurso pronto ou o motivo para não aceitar
 export function novoRecurso(frota, { reg, tipo, soParafuso }) {

@@ -8,7 +8,7 @@ import { categoriaDoTipo, nomeDoRecurso } from '../categorias.js';
 import { $ } from '../dom.js';
 
 // Renderizador do Dashboard Business Intelligence (BI)
-export function getDaysDiff(d1Str, d2Str) {
+function getDaysDiff(d1Str, d2Str) {
   const d1 = new Date(d1Str + 'T12:00:00');
   const d2 = new Date(d2Str + 'T12:00:00');
   return Math.round((d1 - d2) / 86400000);

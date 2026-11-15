@@ -11,7 +11,6 @@ const LIMITE_DE_MISSOES = 200, LIMITE_DO_NOME = 80;
 export const cursosVazios = () => Object.fromEntries(CURSOS.map(([id]) => [id, []]));
 // O código de uma missão: letras maiúsculas, números, ponto e hífen, até 15
 export const codigoValido = id => CODIGO.test(id);
-export const nomeDoCurso = id => (CURSOS.find(([c]) => c === id) || [])[1] || id;
 
 // Uma missão do programa, nos formatos certos; null quando não serve (sem código ou missão desconhecida)
 function normalizarMissao(m) {

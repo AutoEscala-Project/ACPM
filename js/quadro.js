@@ -51,7 +51,7 @@ const NO_QUADRO = { 'Em Voo': 'Em voo' };
 // O embarque (retorno da operação, 14/11): dos 35 minutos antes da decolagem (a nova, no atraso) até ela, o voo no avião
 // que ainda não decolou chama o aluno para a sala de briefing. O Ground e o simulador não chamam
 export const EMBARQUE_ANTES_MIN = 35;
-export const TEXTO_DO_EMBARQUE = 'EMBARQUE IMEDIATO · Sala de briefing';
+const TEXTO_DO_EMBARQUE = 'EMBARQUE IMEDIATO · Sala de briefing';
 const AINDA_NO_CHAO = ['Pendente', 'Confirmado', 'Atrasado'];
 const emEmbarque = (l, agora) => !l.ground && !/^Sim\./.test(l.modelo) && AINDA_NO_CHAO.includes(l.status)
   && Number.isFinite(agora) && agora >= l.inicio - EMBARQUE_ANTES_MIN && agora < l.inicio;

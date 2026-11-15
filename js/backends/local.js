@@ -6,7 +6,7 @@ import { acumularHoras } from '../limites.js';
 import { hojeISO } from '../format.js';
 import { situacaoPorMissao, validarRegistro } from '../resultados.js';
 
-export const CHAVES_LOCAIS = { cadastro: 'acpm4_cadastro', estado: 'acpm3', escala: 'acpm3_res', historico: 'acpm3_audit', bi: 'acpm3_bi' };
+const CHAVES_LOCAIS = { cadastro: 'acpm4_cadastro', estado: 'acpm3', escala: 'acpm3_res', historico: 'acpm3_audit', bi: 'acpm3_bi' };
 export const CHAVE_LEGADA = 'acpm2';
 const PREFIXO_DIA = 'acpm4_dia_';
 const CHAVE_HISTORICO = 'acpm4_historico';

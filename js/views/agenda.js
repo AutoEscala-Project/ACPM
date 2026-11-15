@@ -20,7 +20,7 @@ let pedidos = [];
 // Quem pode registrar e cancelar: no modo local, quem não está no perfil Gestor; no compartilhado, operadores,
 // administradores e a secretaria. A exceção da coordenação é de quem opera a escala (o servidor confere de novo)
 export const podeEditarAgenda = () => (ApiClient.perfil ? registraNaAgenda(ApiClient.perfil) : !isGestor());
-export const podeUsarExcecao = () => (ApiClient.perfil ? operaEscala(ApiClient.perfil) : !isGestor());
+const podeUsarExcecao = () => (ApiClient.perfil ? operaEscala(ApiClient.perfil) : !isGestor());
 // Importar para a demanda também é de quem opera a escala
 const podeImportar = podeUsarExcecao;
 export const diaDaAgenda = () => diaEscolhido;

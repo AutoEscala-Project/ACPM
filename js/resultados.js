@@ -4,7 +4,7 @@
 // as aprovadas do programa. As regras do registro são as do servidor (supabase/migrations/…_resultados_de_missao.sql).
 import { CURSOS, codigoValido } from './cursos.js';
 
-export const RESULTADOS = ['aprovado', 'reprovado', 'pendente'];
+const RESULTADOS = ['aprovado', 'reprovado', 'pendente'];
 const CHAVE_DO_VOO = /^\d+_\d+_\d+$/;
 const DATA = /^\d{4}-\d{2}-\d{2}$/;
 const chave = (aluno, curso, missao) => `${aluno}|${curso}|${missao}`;

@@ -5,7 +5,7 @@
 import { hm, esc, hojeISO, rotuloDaData, minutoDoDia } from '../format.js';
 import { quadroDePartidas, quadroDeChegadas, minutoDoQuadro, telasDoPainel } from '../quadro.js';
 
-export const TROCA_MS = 10000;
+const TROCA_MS = 10000;
 const POR_PAGINA = 12;
 const QUADROS = {
   partidas: { titulo: 'Partidas', icone: 'i-decolagem', vazio: 'Nenhuma partida' },

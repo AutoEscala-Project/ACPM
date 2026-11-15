@@ -218,7 +218,7 @@ h3 { font: 600 15px 'Barlow Semi Condensed', sans-serif; margin: 10px 0 6px; col
 
 /* Os controles que aparecem com o mouse também aparecem com o foco em qualquer campo da linha (:focus-within) e em
    telas de toque (pointer: coarse, como um notebook com tela de toque; revisão de 14/11) */
-/* Regras de Somente Visualização Estrita para o Perfil Gestor e Links Compartilhados */
+/* O perfil Gestor só consulta: os campos ficam apagados (desligados por js/somente-leitura.js) */
 body[data-role="gestor"] .edit-only { display: none !important; }
 /* Dados pessoais: só operadores, administradores e a secretaria (que no resto entra como consulta) */
 body[data-role="gestor"]:not([data-perfil="secretaria"]) .so-dados { display: none !important; }
@@ -232,11 +232,6 @@ body[data-role="gestor"] .st-sel,
 body[data-role="gestor"] main input:not(.flt-ctrl):not(.agenda-campo):not(.conta-campo):not(#onlyfly):not(#bi-dt):not(#dt),
 body[data-role="gestor"] main select:not(.flt-ctrl):not(.agenda-campo):not(.conta-campo) {
   opacity: 0.82;
-}
-body[data-shared="true"] #role-sel {
-  pointer-events: none !important;
-  cursor: default !important;
-  border-color: var(--ye);
 }
 
 /* ==========================================================================

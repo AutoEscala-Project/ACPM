@@ -1,5 +1,5 @@
 // Escala aprovada (fase 12): os voos fixos (horário, avião e instrutor de cada voo, pela chave aluno_missão_sessão) e
-// quem aprovou. Os dados vêm do dia guardado ou do link compartilhado: só valem nos formatos certos.
+// quem aprovou. Os dados vêm do dia guardado, que pode ter sido gravado fora do app (pela API): só valem nos formatos certos.
 import { rotuloDoStatus } from './status.js';
 
 const CHAVE_DO_VOO = /^\d+_\d+_\d+$/;
@@ -25,7 +25,7 @@ export const pinoDoVoo = o => ({ a: o.a, b: o.b, r: o.r, insId: o.insId, ...(o.i
 
 // O ciclo do cadeado (revisão de 14/11). Em Voo, Atrasado, Pousou e Cancelado fixam o voo onde ele está (o pino que já havia
 // continua); fora da escala aprovada, Pendente ou Confirmado o soltam. Reabrir a escala mantém os fixados pelo status
-export const STATUS_QUE_FIXAM = ['Em Voo', 'Atrasado', 'Pousou', 'Cancelado'];
+const STATUS_QUE_FIXAM = ['Em Voo', 'Atrasado', 'Pousou', 'Cancelado'];
 
 export function fixosAoMudarStatus(fixos, voo, status, { aprovada }) {
   const atuais = fixos || {};

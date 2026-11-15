@@ -5,7 +5,7 @@
  *   js/rules.js     Regras das missões (Ground School, nível mínimo, precedência, normalização)
  *   js/format.js    Formatação de horários, durações e opções de seleção
  *   js/engine.js    Motor de alocação determinístico (função pura)
- *   js/storage.js   Camada de dados (migrações, link compartilhado) sobre js/backends/ (local ou Supabase)
+ *   js/storage.js   Camada de dados (estado inicial e migrações) sobre js/backends/ (local ou Supabase)
  *   js/sessao.js    Login e perfil de acesso no modo compartilhado (Supabase)
  *   js/state.js     Estado compartilhado entre os módulos
  *   js/actions.js   Perfil de acesso, data, histórico e escala
@@ -195,10 +195,6 @@ $('#exp').onclick = () => { gravarEscalaCalculada(); exp(); };
 $('#pdf').onclick = () => { gravarEscalaCalculada(); pdf(); };
 
 $('#role-sel').onchange = e => {
-  if (ApiClient.readOnly) {
-    setRole('gestor', true);
-    return;
-  }
   setRole(e.target.value);
   if (RES) rOut();
 };
@@ -1122,7 +1118,6 @@ function aplicarStatus(fKey, status, detalhe) {
   if (novo) S.fObs[fKey] = novo;
   else delete S.fObs[fKey];
   const voo = vooDaChave(fKey);
-  if (voo) voo.status = status;
   // Em Voo, Atrasado, Pousou e Cancelado fixam o voo (fase 12; o cancelado desde a revisão de 14/11): uma alteração na escala
   // não o tira do lugar (o cancelado fica onde estava, sem ocupar nada). Fora da escala aprovada, Pendente ou
   // Confirmado o soltam
@@ -1163,7 +1158,7 @@ document.addEventListener('click', e => {
   rLimites();
 });
 
-// Sincronização em tempo real de alterações (com trava estrita para Perfil Gestor e Links Compartilhados)
+// As alterações nos campos das abas
 document.addEventListener('change', e => {
   const t = e.target, f = t.dataset.f, a = t.dataset.a;
   if (t.id === 'onlyfly') { $('#dem').classList.toggle('only', t.checked); return; }

@@ -41,7 +41,7 @@ export async function lerPedidosDaData() {
   atualizarSeloDaAgenda();
 }
 
-export const pedidosPendentes = () => (pedidosDaData.data === DATA
+const pedidosPendentes = () => (pedidosDaData.data === DATA
   ? pedidosDaData.lista.filter(s => !s.cancelada_em && !(S.importadas || []).includes(s.id))
   : []);
 
