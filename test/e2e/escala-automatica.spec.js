@@ -1,18 +1,10 @@
 // A escala acompanha os dados: é refeita a cada alteração do operador e já está pronta ao abrir a aba Escala.
-import { test, expect, abrirSintetico, abrirComExemplo, irPara, lerEscala, AMANHA } from './fixtures.js';
+import { test, expect, abrirSintetico, abrirComExemplo, irPara, lerEscala, AMANHA, entrar } from './fixtures.js';
 import { instalarSupabaseFalso, documentosAtuais, CONTAS } from './supabase-falso.js';
 import { estadoSintetico } from '../helpers/estado.js';
 import { comExemplo } from '../helpers/exemplo.js';
 
 const MATRICULA = /\b(P[PRT]-[A-Z]{3})\b/;
-
-async function entrar(page, conta) {
-  await page.goto('./?supabase=teste');
-  await page.locator('#login-email').fill(conta.email);
-  await page.locator('#login-senha').fill(conta.senha);
-  await page.locator('#btn-entrar').click();
-  await expect(page.locator('#usuario')).toBeVisible();
-}
 
 test.describe('Escala automática', () => {
   test('a escala já está pronta ao abrir a aba, sem botão de gerar', async ({ page }) => {

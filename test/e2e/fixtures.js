@@ -67,6 +67,24 @@ export async function abrir(page, { estado = null, url = './' } = {}) {
 
 export const abrirSintetico = (page, opts = {}) => abrir(page, { estado: estadoSintetico(), ...opts });
 
+// O app no modo compartilhado (o servidor falso dos testes, test/e2e/supabase-falso.js)
+export const URL_APP = './?supabase=teste';
+
+// Preenche e envia o login, sem esperar o app carregar
+export async function preencherLogin(page, conta, senha = conta.senha) {
+  await page.locator('#login-email').fill(conta.email);
+  await page.locator('#login-senha').fill(senha);
+  await page.locator('#btn-entrar').click();
+}
+
+// Abre o app no modo compartilhado e entra com a conta. Volta quando o app terminou de carregar os dados da data
+// (body[data-pronto]): antes disso, a tela ainda pode mudar sozinha (a Secretaria, por exemplo, vai para a Agenda)
+export async function entrar(page, conta, { url = URL_APP } = {}) {
+  await page.goto(url);
+  await preencherLogin(page, conta);
+  await expect(page.locator('body[data-pronto]')).toBeAttached();
+}
+
 export async function irPara(page, aba) {
   await page.locator(`#nav button[data-t="${aba}"]`).click();
   await expect(page.locator(`#s-${aba}`)).toBeVisible();

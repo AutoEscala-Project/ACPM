@@ -21,6 +21,15 @@ test.describe('Histórico', () => {
     await expect(page.locator('#historico')).toBeHidden();
   });
 
+  test('com o histórico aberto, trocar a data troca também a data do histórico', async ({ page }) => {
+    await abrirSintetico(page);
+    await page.locator('#btn-open-log').click();
+    await expect(page.locator('#historico-data')).toHaveText('quarta-feira, 11/11');
+    await page.locator('#dt-prox').click();
+    await expect(page.locator('#dt')).toHaveValue('2026-11-12');
+    await expect(page.locator('#historico-data')).toHaveText('quinta-feira, 12/11');
+  });
+
   test('sem a lista "Inclusões na Escala": a tabela da escala já tem a ação de tirar o voo', async ({ page }) => {
     await abrirComExemplo(page);
     await expect(page.locator('#audit-panel, #inc-active-list')).toHaveCount(0);

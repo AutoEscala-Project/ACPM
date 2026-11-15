@@ -1,9 +1,8 @@
-import { test, expect, irPara } from './fixtures.js';
+import { test, expect, irPara, preencherLogin, URL_APP } from './fixtures.js';
 import { instalarSupabaseFalso, documentosAtuais, CONTAS } from './supabase-falso.js';
 import { estadoSintetico } from '../helpers/estado.js';
 import { aluno } from '../helpers/montar.js';
 
-const URL_APP = './?supabase=teste';
 
 // Dados que o operador já tinha no navegador (modo local) antes de existir o servidor
 function dadosLocais() {
@@ -25,17 +24,11 @@ async function abrirComDadosLocais(page, dados) {
   await page.goto(URL_APP);
 }
 
-async function entrar(page, conta) {
-  await page.locator('#login-email').fill(conta.email);
-  await page.locator('#login-senha').fill(conta.senha);
-  await page.locator('#btn-entrar').click();
-}
-
 test.describe('Envio dos dados do navegador para o servidor', () => {
   test('operador com dados no navegador e servidor vazio: envia e passa a usar os dados do servidor', async ({ page, context }) => {
     const servidor = await instalarSupabaseFalso(context);
     await abrirComDadosLocais(page, dadosLocais());
-    await entrar(page, CONTAS.operador);
+    await preencherLogin(page, CONTAS.operador);
 
     await expect(page.locator('#envio-local')).toBeVisible();
     await expect(page.locator('#envio-local')).toContainText('40 instrutores e 3 alunos');
@@ -54,7 +47,7 @@ test.describe('Envio dos dados do navegador para o servidor', () => {
   test('"Começar sem eles" não envia nada', async ({ page, context }) => {
     const servidor = await instalarSupabaseFalso(context);
     await abrirComDadosLocais(page, dadosLocais());
-    await entrar(page, CONTAS.operador);
+    await preencherLogin(page, CONTAS.operador);
     await page.locator('#btn-ignorar-local').click();
     await expect(page.locator('#nav')).toBeVisible();
     await irPara(page, 'alu');
@@ -65,7 +58,7 @@ test.describe('Envio dos dados do navegador para o servidor', () => {
   test('servidor que já tem a escala: não pergunta e usa os dados do servidor', async ({ page, context }) => {
     const servidor = await instalarSupabaseFalso(context, documentosAtuais(estadoSintetico(), '2026-11-11'));
     await abrirComDadosLocais(page, dadosLocais());
-    await entrar(page, CONTAS.operador);
+    await preencherLogin(page, CONTAS.operador);
     await expect(page.locator('#nav')).toBeVisible();
     await expect(page.locator('#envio-local')).toBeHidden();
     await irPara(page, 'alu');
@@ -76,7 +69,7 @@ test.describe('Envio dos dados do navegador para o servidor', () => {
   test('gestor não recebe a pergunta (não pode gravar)', async ({ page, context }) => {
     const servidor = await instalarSupabaseFalso(context);
     await abrirComDadosLocais(page, dadosLocais());
-    await entrar(page, CONTAS.gestor);
+    await preencherLogin(page, CONTAS.gestor);
     await expect(page.locator('#nav')).toBeVisible();
     await expect(page.locator('#envio-local')).toBeHidden();
     expect(servidor.gravacoes).toEqual([]);

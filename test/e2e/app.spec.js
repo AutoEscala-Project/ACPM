@@ -36,13 +36,13 @@ test.describe('Aplicação', () => {
 
   test('a data em uso fica no topo, em todas as abas; os botões ‹ e › trocam o dia', async ({ page }) => {
     await abrir(page);
-    await expect(page.locator('#dt-rotulo')).toHaveText('quarta-feira, 11/11');
+    await expect(page.locator('#dt-rotulo')).toHaveText('quarta-feira, 11/11', { useInnerText: true });
     await expect(page.locator('#dt-rel')).toHaveText('amanhã');
     await irPara(page, 'dem');
     await expect(page.locator('#dt-rotulo')).toBeVisible();
     await page.locator('#dt-prox').click();
     await expect(page.locator('#dt')).toHaveValue('2026-11-12');
-    await expect(page.locator('#dt-rotulo')).toHaveText('quinta-feira, 12/11');
+    await expect(page.locator('#dt-rotulo')).toHaveText('quinta-feira, 12/11', { useInnerText: true });
     await expect(page.locator('#dt-rel')).toBeHidden();
     await page.locator('#dt-ant').click();
     await expect(page.locator('#dt')).toHaveValue('2026-11-11');

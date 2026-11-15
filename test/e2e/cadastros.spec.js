@@ -224,12 +224,83 @@ test.describe('Recursos: horários de decolagem por categoria', () => {
     await editor(page).locator('[data-act="rascunho-tirar"]').first().click();
     await expect(editor(page).locator('.hr-chip')).toHaveCount(1);
     await expect(editor(page).locator('[role="alert"]')).toHaveText('Cada categoria precisa de pelo menos um horário.');
+    // O erro não é do campo do horário novo: ele não fica marcado como inválido
+    await expect(editor(page).locator('.hr-novo')).toHaveAttribute('aria-invalid', 'false');
     await page.keyboard.press('Escape');
     await expect(editor(page)).toHaveCount(0);
     await expect(c152.locator('.horarios-qtd')).toHaveText('8 horários');
 
     await page.locator('#role-sel').selectOption('gestor');
     await expect(page.locator('#horarios [data-act="editar-horarios"]').first()).toBeHidden();
+  });
+});
+
+test.describe('Recursos: o editor dos horários pelo teclado e no leitor de tela', () => {
+  test('as setas no modelo mantêm o foco; o efeito e o erro continuam no mesmo lugar e o erro fica ligado ao campo', async ({ page }) => {
+    await abrirSintetico(page);
+    await irPara(page, 'rec');
+    await page.locator('#horarios [data-cat="C152"] [data-act="editar-horarios"]').click();
+    const editor = page.locator('#horarios .horarios-editor');
+    await editor.getByLabel('Janelas do dia').focus();
+    await page.keyboard.press('ArrowRight');
+    await expect(editor.getByLabel('De 30 em 30 min')).toBeFocused();
+    await expect(editor.getByLabel('De 30 em 30 min')).toBeChecked();
+    await expect(editor.locator('.hr-chip')).toHaveCount(21);
+
+    // O efeito é uma região viva: o mesmo elemento recebe o texto novo (um elemento novo não seria anunciado)
+    await editor.locator('.horarios-efeito').evaluate(el => { el.dataset.marca = '1'; });
+    await page.keyboard.press('ArrowLeft');
+    await expect(editor.getByLabel('Janelas do dia')).toBeFocused();
+    await expect(editor.locator('.horarios-efeito[data-marca="1"]')).toHaveText('Nenhum pedido muda.');
+
+    const campo = editor.locator('.hr-novo');
+    const erro = editor.locator('[role="alert"]');
+    await erro.evaluate(el => { el.dataset.marca = '1'; });
+    await campo.fill('17:00');
+    await campo.press('Enter');
+    await expect(editor.locator('[role="alert"][data-marca="1"]')).toHaveText('Escolha um horário entre 06:00 e 16:30.');
+    await expect(campo).toBeFocused();
+    await expect(campo).toHaveAttribute('aria-invalid', 'true');
+    await expect(campo).toHaveAttribute('aria-describedby', new RegExp(`\\b${await erro.getAttribute('id')}\\b`));
+    // O mesmo erro de novo também é anunciado: o alerta é escrito outra vez
+    const escritas = await erro.evaluate(el => {
+      window.__escritasNoAlerta = 0;
+      new MutationObserver(m => { window.__escritasNoAlerta += m.length; }).observe(el, { childList: true, characterData: true, subtree: true });
+    });
+    await campo.press('Enter');
+    await expect(erro).toHaveText('Escolha um horário entre 06:00 e 16:30.');
+    await expect.poll(() => page.evaluate(() => window.__escritasNoAlerta)).toBeGreaterThan(0);
+    expect(escritas).toBeUndefined();
+    await campo.fill('07:15');
+    await campo.press('Enter');
+    await expect(campo).toHaveAttribute('aria-invalid', 'false');
+    await expect(campo).toHaveValue('');
+    await expect(erro).toHaveText('');
+    // Vazio, o alerta continua na árvore de acessibilidade (escondido, não seria anunciado quando aparecer), sem ocupar
+    // espaço: entre o campo e o efeito fica só o espaço normal do editor
+    expect(await erro.evaluate(el => getComputedStyle(el).display)).not.toBe('none');
+    const espaco = await editor.evaluate(ed => {
+      const campo = ed.querySelector('.horarios-novo').getBoundingClientRect();
+      const efeito = ed.querySelector('.horarios-efeito').getBoundingClientRect();
+      return { entre: efeito.top - campo.bottom, normal: parseFloat(getComputedStyle(ed).rowGap) };
+    });
+    expect(Math.abs(espaco.entre - espaco.normal)).toBeLessThan(1);
+
+    // Um horário digitado (sem pôr) continua no campo quando a aba é redesenhada por outra alteração
+    await campo.fill('09:15');
+    await page.locator('#wins input[data-a="win"][data-i="1"]').uncheck();
+    await expect(editor.locator('.hr-novo')).toHaveValue('09:15');
+    // e não passa para o editor de outra categoria
+    await page.locator('#horarios [data-cat="PA-34"] [data-act="editar-horarios"]').click();
+    await expect(page.locator('#horarios [data-cat="PA-34"] .hr-novo')).toHaveValue('');
+    await page.locator('#horarios [data-cat="PA-34"] [data-act="cancelar-horarios"]').click();
+    await page.locator('#horarios [data-cat="C152"] [data-act="editar-horarios"]').click();
+
+    // O ✕ de um horário leva o foco para o horário seguinte (tirar vários em sequência). O editor reaberto começa da
+    // lista salva: o 07:15 do rascunho anterior não está nela
+    await editor.locator('[data-act="rascunho-tirar"][data-min="390"]').focus();
+    await page.keyboard.press('Enter');
+    await expect(editor.locator('[data-act="rascunho-tirar"][data-min="500"]')).toBeFocused();
   });
 });
 

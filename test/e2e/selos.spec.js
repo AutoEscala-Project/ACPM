@@ -1,17 +1,9 @@
 // Selos de atenção nas abas: avisos da escala, aviões parados ou perto da revisão de 50 horas e pedidos da agenda
 // que ainda não estão na demanda.
-import { test, expect, abrir, irPara, AMANHA } from './fixtures.js';
+import { test, expect, abrir, irPara, AMANHA, entrar } from './fixtures.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
 import { instalarSupabaseFalso, documentosAtuais, CONTAS } from './supabase-falso.js';
 import { estadoSintetico } from '../helpers/estado.js';
-
-async function entrar(page, conta) {
-  await page.goto('./?supabase=teste');
-  await page.locator('#login-email').fill(conta.email);
-  await page.locator('#login-senha').fill(conta.senha);
-  await page.locator('#btn-entrar').click();
-  await expect(page.locator('#usuario')).toBeVisible();
-}
 
 const pedido = (id, data = AMANHA) => ({
   id, data, aluno: 1000, aluno_nome: 'Aluno 1000', missao: 'Voo Local', janela: 'manha', horario: null, observacao: null,

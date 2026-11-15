@@ -1,6 +1,6 @@
 // Escala por data no modo compartilhado: migração dos documentos da fase 2 no servidor, gestor navegando
 // entre as datas sem gravar e autor das alterações no histórico.
-import { test, expect, prepararContexto, vigiarErros, irPara, AMANHA } from './fixtures.js';
+import { test, expect, prepararContexto, vigiarErros, irPara, AMANHA, entrar, preencherLogin, URL_APP } from './fixtures.js';
 import { instalarSupabaseFalso, documentosAtuais, documentosFase3, CONTAS } from './supabase-falso.js';
 import { comNomesAntigos } from '../helpers/formato.js';
 import { ESQUEMA } from '../../js/migracoes.js';
@@ -10,17 +10,7 @@ import { runAllocationEngine } from '../../js/engine.js';
 import { ApiClient } from '../../js/storage.js';
 import { separar } from '../../js/dias.js';
 
-const URL_APP = './?supabase=teste';
 const DEPOIS = '2026-11-12';
-
-async function entrar(page, conta) {
-  await page.goto(URL_APP);
-  await page.locator('#login-email').fill(conta.email);
-  await page.locator('#login-senha').fill(conta.senha);
-  await page.locator('#btn-entrar').click();
-  await expect(page.locator('#usuario')).toBeVisible();
-  await expect(page.locator('#wins input[data-a="win"]').first()).toBeAttached();
-}
 
 // O campo de data fica na aba 6 · Escala
 async function mudarData(page, data) {
@@ -64,9 +54,7 @@ test.describe('Escala por data (modo compartilhado)', () => {
     const erros = vigiarErros(page, { statusEsperados: [400] });
     servidor.falharGravacoes(1, 400);
     await page.goto(URL_APP);
-    await page.locator('#login-email').fill(CONTAS.operador.email);
-    await page.locator('#login-senha').fill(CONTAS.operador.senha);
-    await page.locator('#btn-entrar').click();
+    await preencherLogin(page, CONTAS.operador);
     await expect(page.locator('#aviso-sync-texto')).toContainText('Não foi possível preparar os dados');
     await expect(page.locator('#inst .cd')).toHaveCount(0);
     expect(servidor.banco.has('cadastro')).toBe(false);
@@ -89,9 +77,7 @@ test.describe('Escala por data (modo compartilhado)', () => {
     const erros = vigiarErros(page, { statusEsperados: [503] });
     servidor.falharGravacoes(1);
     await page.goto(URL_APP);
-    await page.locator('#login-email').fill(CONTAS.operador.email);
-    await page.locator('#login-senha').fill(CONTAS.operador.senha);
-    await page.locator('#btn-entrar').click();
+    await preencherLogin(page, CONTAS.operador);
     await expect(page.locator('#aviso-sync-texto')).toHaveText('Sem conexão com o servidor: gravando de novo assim que a conexão voltar; não feche esta página.');
     await expect(page.locator('#inst .cd').first()).toBeAttached({ timeout: 10000 });
     await expect(page.locator('#aviso-sync')).toBeHidden();

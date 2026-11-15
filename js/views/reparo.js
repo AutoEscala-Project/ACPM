@@ -5,12 +5,11 @@ import { S, RES, DATA } from '../state.js';
 import { sugerirReparos } from '../reparo.js';
 import { GRUPO_DO_CONFLITO } from '../conflitos.js';
 import { nomeDoRecurso } from '../categorias.js';
-import { esc, hm, hojeISO } from '../format.js';
+import { esc, hm, hojeISO, minutoDoDia } from '../format.js';
 import { $ } from '../dom.js';
 
 let opcoesAbertas = [];
 
-const minutoDeAgora = () => { const agora = new Date(); return agora.getHours() * 60 + agora.getMinutes(); };
 const vooDaChave = fKey => (RES && Array.isArray(RES.out) ? RES.out.find(o => o.fKey === fKey) : null);
 
 export const painelDeReparoAberto = () => Boolean($('#painel-reparo') && !$('#painel-reparo').hidden);
@@ -19,7 +18,7 @@ export function abrirPainelDeReparo(fKey, { focar = true } = {}) {
   const voo = vooDaChave(fKey);
   if (!voo || !voo.conflito) return;
   const painel = $('#painel-reparo');
-  opcoesAbertas = sugerirReparos(S, RES, fKey, { depoisDe: DATA === hojeISO() ? minutoDeAgora() : null });
+  opcoesAbertas = sugerirReparos(S, RES, fKey, { depoisDe: DATA === hojeISO() ? minutoDoDia() : null });
   painel.dataset.fkey = fKey;
   const sugestoes = opcoesAbertas.filter(o => o.mudancas);
   const pedidoMudou = (voo.conflitoCodigos || []).some(c => GRUPO_DO_CONFLITO[c] === 'pedido');

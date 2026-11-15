@@ -1,17 +1,10 @@
-import { test, expect, prepararContexto, vigiarErros, irPara, confirmar, AMANHA, abrirMenuDaConta } from './fixtures.js';
+import { test, expect, prepararContexto, vigiarErros, irPara, confirmar, AMANHA, abrirMenuDaConta, preencherLogin, URL_APP } from './fixtures.js';
 import { instalarSupabaseFalso, documentosAtuais, CONTAS } from './supabase-falso.js';
 import { estadoSintetico } from '../helpers/estado.js';
 
 const comDados = () => documentosAtuais(estadoSintetico(), AMANHA);
 
 // Em localhost, ?supabase=teste liga o app ao servidor Supabase falso (supabase-falso.js)
-const URL_APP = './?supabase=teste';
-
-async function entrar(page, conta) {
-  await page.locator('#login-email').fill(conta.email);
-  await page.locator('#login-senha').fill(conta.senha);
-  await page.locator('#btn-entrar').click();
-}
 
 test.describe('Login e perfis (modo compartilhado)', () => {
   test('sem sessão, mostra só o login', async ({ page, context }) => {
@@ -30,7 +23,7 @@ test.describe('Login e perfis (modo compartilhado)', () => {
     const page = await contexto.newPage();
     const erros = vigiarErros(page, { statusEsperados: [400] });
     await page.goto(URL_APP);
-    await entrar(page, { ...CONTAS.operador, senha: 'senha-errada' });
+    await preencherLogin(page, CONTAS.operador, 'senha-errada');
     await expect(page.locator('#login-erro')).toHaveText('E-mail ou senha incorretos.');
     await expect(page.locator('#form-login')).toBeVisible();
     await expect(page.locator('#nav')).toBeHidden();
@@ -41,7 +34,7 @@ test.describe('Login e perfis (modo compartilhado)', () => {
   test('operador entra, vê os dados do banco e as alterações são gravadas com a versão lida', async ({ page, context }) => {
     const servidor = await instalarSupabaseFalso(context, comDados());
     await page.goto(URL_APP);
-    await entrar(page, CONTAS.operador);
+    await preencherLogin(page, CONTAS.operador);
     await expect(page.locator('#s-esc')).toBeVisible();
     await expect(page.locator('#usuario')).toHaveText('Operador de Teste · Operador');
     await expect(page.locator('#inst .cd')).toHaveCount(40);
@@ -58,7 +51,7 @@ test.describe('Login e perfis (modo compartilhado)', () => {
   test('gestor entra somente para leitura e nada é gravado', async ({ page, context }) => {
     const servidor = await instalarSupabaseFalso(context, comDados());
     await page.goto(URL_APP);
-    await entrar(page, CONTAS.gestor);
+    await preencherLogin(page, CONTAS.gestor);
     await expect(page.locator('#usuario')).toHaveText('Gestor de Teste · Gestor');
     await expect(page.locator('body')).toHaveAttribute('data-role', 'gestor');
     await expect(page.locator('#inst .cd')).toHaveCount(40);
@@ -72,7 +65,7 @@ test.describe('Login e perfis (modo compartilhado)', () => {
   test('conta sem perfil vê o aviso e pode sair', async ({ page, context }) => {
     await instalarSupabaseFalso(context);
     await page.goto(URL_APP);
-    await entrar(page, CONTAS.semPerfil);
+    await preencherLogin(page, CONTAS.semPerfil);
     await expect(page.locator('#sem-acesso')).toBeVisible();
     await expect(page.locator('#sem-acesso')).toContainText(CONTAS.semPerfil.email);
     await expect(page.locator('#form-login')).toBeHidden();
@@ -84,7 +77,7 @@ test.describe('Login e perfis (modo compartilhado)', () => {
   test('a sessão continua depois de recarregar e "Sair" volta para o login (só neste navegador)', async ({ page, context }) => {
     const servidor = await instalarSupabaseFalso(context, comDados());
     await page.goto(URL_APP);
-    await entrar(page, CONTAS.operador);
+    await preencherLogin(page, CONTAS.operador);
     await expect(page.locator('#usuario')).toBeVisible();
     await page.reload();
     await expect(page.locator('#usuario')).toHaveText('Operador de Teste · Operador');

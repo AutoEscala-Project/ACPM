@@ -1,22 +1,51 @@
 // Agenda de Solicitações no modo compartilhado: a Secretaria registra pedidos (a escala ela só consulta), o
 // Operador usa a exceção da coordenação e o Gestor só consulta. O servidor falso aplica o mesmo prazo do banco.
-import { test, expect } from './fixtures.js';
+import { test, expect, entrar, preencherLogin, irPara, abrirMenuDaConta, AMANHA, URL_APP } from './fixtures.js';
 import { instalarSupabaseFalso, documentosAtuais, CONTAS } from './supabase-falso.js';
 import { estadoSintetico } from '../helpers/estado.js';
 import { aluno } from '../helpers/montar.js';
-import { AMANHA } from './fixtures.js';
 
 const comAlunos = () => documentosAtuais({ ...estadoSintetico(), stu: [aluno(1000), aluno(1001)] }, AMANHA);
 
-async function entrar(page, conta) {
-  await page.goto('./?supabase=teste');
-  await page.locator('#login-email').fill(conta.email);
-  await page.locator('#login-senha').fill(conta.senha);
-  await page.locator('#btn-entrar').click();
-  await expect(page.locator('#usuario')).toBeVisible();
-}
-
 test.describe('Agenda de Solicitações (modo compartilhado)', () => {
+  // A Secretaria vai para a Agenda quando os dados terminam de carregar, a menos que já tenha saído da Escala
+  const enquantoCarrega = async (page, context, escolher, conta = CONTAS.secretaria) => {
+    const servidor = await instalarSupabaseFalso(context, comAlunos());
+    const liberar = servidor.segurarLeiturasDeDias();
+    await page.goto(URL_APP);
+    await preencherLogin(page, conta);
+    await expect(page.locator('#usuario')).toBeVisible();
+    await escolher();
+    liberar();
+    await expect(page.locator('body[data-pronto]')).toBeAttached();
+  };
+  for (const [nome, secao, escolher] of [
+    ['Alunos', '#s-alu', page => irPara(page, 'alu')],
+    ['o Manual', '#s-manual', page => page.locator('#btn-manual').click()],
+    ['Minha conta', '#s-conta', async page => { await abrirMenuDaConta(page); await page.locator('#btn-conta').click(); }]
+  ]) {
+    test(`a Secretaria que abriu ${nome} enquanto os dados carregavam continua lá`, async ({ page, context }) => {
+      await enquantoCarrega(page, context, () => escolher(page));
+      await expect(page.locator(secao)).toBeVisible();
+      await expect(page.locator('#s-age')).toBeHidden();
+    });
+  }
+
+  test('a Agenda aberta enquanto os dados carregavam é lida de novo quando eles chegam (com os alunos)', async ({ page, context }) => {
+    await enquantoCarrega(page, context, () => irPara(page, 'age'));
+    await expect(page.locator('#s-age')).toBeVisible();
+    await expect(page.locator('#ag-aluno option', { hasText: 'Aluno 1001' })).toHaveCount(1);
+  });
+
+  test('o dia escolhido na Agenda enquanto os dados carregavam continua escolhido, na Agenda e no app', async ({ page, context }) => {
+    await enquantoCarrega(page, context, async () => {
+      await irPara(page, 'age');
+      await page.locator('[data-cal][data-dia="2026-11-13"]').click();
+    }, CONTAS.operador);
+    await expect(page.locator('#agenda-data')).toContainText('13/11');
+    await expect(page.locator('#dt')).toHaveValue('2026-11-13');
+  });
+
   test('a Secretaria abre na agenda, registra pedidos e só consulta a escala', async ({ page, context }) => {
     const servidor = await instalarSupabaseFalso(context, comAlunos());
     await entrar(page, CONTAS.secretaria);

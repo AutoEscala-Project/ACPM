@@ -1,17 +1,8 @@
 // Minha conta (trocar a senha e o e-mail) e Usuários (o administrador cria e exclui contas), no modo compartilhado.
-import { test, expect, prepararContexto, vigiarErros, abrirMenuDaConta, AMANHA, irPara } from './fixtures.js';
+import { test, expect, prepararContexto, vigiarErros, abrirMenuDaConta, AMANHA, irPara, entrar, preencherLogin, URL_APP } from './fixtures.js';
 import { instalarSupabaseFalso, documentosAtuais, CONTAS } from './supabase-falso.js';
 import { estadoSintetico } from '../helpers/estado.js';
 
-const URL_APP = './?supabase=teste';
-
-async function entrar(page, conta, senha = conta.senha) {
-  await page.goto(URL_APP);
-  await page.locator('#login-email').fill(conta.email);
-  await page.locator('#login-senha').fill(senha);
-  await page.locator('#btn-entrar').click();
-  await expect(page.locator('#usuario')).toBeVisible();
-}
 
 async function abrirMinhaConta(page) {
   await abrirMenuDaConta(page);
@@ -50,9 +41,7 @@ test.describe('Minha conta', () => {
     await abrirMenuDaConta(page);
     await page.locator('#btn-sair').click();
     await expect(page.locator('#form-login')).toBeVisible();
-    await page.locator('#login-email').fill(CONTAS.operador.email);
-    await page.locator('#login-senha').fill('uma senha nova bem longa');
-    await page.locator('#btn-entrar').click();
+    await preencherLogin(page, CONTAS.operador, 'uma senha nova bem longa');
     await expect(page.locator('#usuario')).toBeVisible();
     expect(erros).toEqual([]);
     await context.close();

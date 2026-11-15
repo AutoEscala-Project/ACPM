@@ -27,9 +27,10 @@ export function abrirData(data) {
   } catch (e) {}
   $('#dt').value = data;
   $('#bi-dt').value = data;
-  // No topo: "quarta-feira, 11/11" e "amanhã"
-  const { dia, relativo } = rotuloDaData(data, hojeISO());
-  $('#dt-rotulo').textContent = dia;
+  // No topo: "quarta-feira, 11/11" e "amanhã"; na tela estreita, "qua., 11/11" (o CSS mostra um dos dois nomes)
+  const { semana, semanaCurta, data: diaMes, relativo } = rotuloDaData(data, hojeISO());
+  const parte = (classe, texto) => Object.assign(document.createElement('span'), { className: classe, textContent: texto });
+  $('#dt-rotulo').replaceChildren(parte('dt-semana', semana), parte('dt-semana-curta', semanaCurta), `, ${diaMes}`);
   $('#dt-rel').textContent = relativo;
   $('#dt-rel').hidden = !relativo;
 }

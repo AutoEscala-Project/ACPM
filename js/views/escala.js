@@ -1,6 +1,6 @@
 // Aba Escala: resumo do dia, a lista dos voos (ou o mapa por recurso ou por instrutor) e o histórico da data.
 import { FLIGHT_STATUSES, GROUND_REG } from '../config.js';
-import { hm, WLB, fmtH, esc } from '../format.js';
+import { hm, WLB, fmtH, esc, rotuloDaData, hojeISO } from '../format.js';
 import { isGroundMission } from '../rules.js';
 import { categoriaDoTipo, nomeDoRecurso } from '../categorias.js';
 import { textoDoDetalhe, classeDoStatus, rotuloDoStatus, STATUS_COM_DETALHE } from '../status.js';
@@ -192,8 +192,10 @@ export function renderVisualTimeline(out) {
   </div>`;
 }
 
-// Histórico da data (na gaveta lateral) e o número de alterações no botão do topo
+// Histórico da data (na gaveta lateral, com a data no título) e o número de alterações no botão do topo
 export function renderAuditPanel() {
+  const titulo = $('#historico-data');
+  if (titulo) titulo.textContent = rotuloDaData(DATA, hojeISO()).dia;
   // Entradas revertidas (apontadas por uma reversão) não aparecem no painel
   const revertidas = new Set(AUDIT_LOG.map(e => e.reverte).filter(id => id !== null && id !== undefined));
   const historico = AUDIT_LOG.filter(e => !revertidas.has(e.id));

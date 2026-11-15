@@ -21,11 +21,16 @@ export const isoMenosDias = (iso, dias) => new Date(Date.parse(iso + 'T12:00:00Z
 
 // Rótulo da data em uso no topo: "quarta-feira, 11/11" (com o ano quando não é o de hoje) e "hoje", "amanhã" ou "ontem"
 const DIAS_DA_SEMANA = ['domingo', 'segunda-feira', 'terça-feira', 'quarta-feira', 'quinta-feira', 'sexta-feira', 'sábado'];
+// O minuto do dia (0 a 1439) no relógio do navegador
+export const minutoDoDia = (data = new Date()) => data.getHours() * 60 + data.getMinutes();
+
 export function rotuloDaData(data, hoje) {
   const [ano, mes, dia] = data.split('-');
   const semana = DIAS_DA_SEMANA[new Date(Date.parse(data + 'T12:00:00Z')).getUTCDay()];
   const relativo = data === hoje ? 'hoje' : data === isoMenosDias(hoje, -1) ? 'amanhã' : data === isoMenosDias(hoje, 1) ? 'ontem' : '';
-  return { dia: `${semana}, ${dia}/${mes}${ano === hoje.slice(0, 4) ? '' : '/' + ano}`, relativo };
+  const diaMes = `${dia}/${mes}${ano === hoje.slice(0, 4) ? '' : '/' + ano}`;
+  // semanaCurta ("qua."): para a tela estreita, onde o nome inteiro não cabe
+  return { dia: `${semana}, ${diaMes}`, semana, semanaCurta: `${semana.slice(0, 3)}.`, data: diaMes, relativo };
 }
 export const fimDoMes = iso => new Date(Date.UTC(+iso.slice(0, 4), +iso.slice(5, 7), 0)).toISOString().slice(0, 10);
 

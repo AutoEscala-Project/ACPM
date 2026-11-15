@@ -1,21 +1,10 @@
-import { test, expect, prepararContexto, vigiarErros, irPara, abrirEscala, lerEscala, AMANHA } from './fixtures.js';
+import { test, expect, prepararContexto, vigiarErros, irPara, abrirEscala, lerEscala, AMANHA, entrar, URL_APP } from './fixtures.js';
 import { criarSupabaseFalso, instalarSupabaseFalso, documentosAtuais, CONTAS } from './supabase-falso.js';
 import { estadoSintetico } from '../helpers/estado.js';
 import { comExemplo } from '../helpers/exemplo.js';
 
 const comDados = () => documentosAtuais(estadoSintetico(), AMANHA);
 
-const URL_APP = './?supabase=teste';
-
-async function entrar(page, conta, url = URL_APP) {
-  await page.goto(url);
-  await page.locator('#login-email').fill(conta.email);
-  await page.locator('#login-senha').fill(conta.senha);
-  await page.locator('#btn-entrar').click();
-  await expect(page.locator('#usuario')).toBeVisible();
-  // Espera os dados do servidor serem carregados (os instrutores aparecem depois da leitura)
-  await expect(page.locator('#inst .cd').first()).toBeAttached();
-}
 
 async function novoContexto(browser) {
   const contexto = await browser.newContext({ baseURL: test.info().project.use.baseURL, locale: 'pt-BR', timezoneId: 'America/Sao_Paulo' });
@@ -269,7 +258,7 @@ test.describe('Modo compartilhado: gravação, conflitos e link da escala', () =
     await servidor.instalar(gestor);
     const pgGestor = await gestor.newPage();
     const erros = vigiarErros(pgGestor);
-    await entrar(pgGestor, CONTAS.gestor, link);
+    await entrar(pgGestor, CONTAS.gestor, { url: link });
     await expect(pgGestor.locator('#dt')).toHaveValue(AMANHA);
     await irPara(pgGestor, 'esc');
     const escalaGestor = await lerEscala(pgGestor);
@@ -284,7 +273,7 @@ test.describe('Modo compartilhado: gravação, conflitos e link da escala', () =
     await instalarSupabaseFalso(context, comDados());
     const payload = { d: AMANHA, fly: [[1000, 'Aluno do Link', 70, [], 1, 'Voo Local', 'C152', 1, 2, 1, 1, 3, []]] };
     const share = encodeURIComponent(Buffer.from(JSON.stringify(payload), 'utf8').toString('base64'));
-    await entrar(page, CONTAS.operador, `${URL_APP}&share=${share}`);
+    await entrar(page, CONTAS.operador, { url: `${URL_APP}&share=${share}` });
     await expect(page.locator('#aviso-link-texto')).toHaveText(/^Este link antigo levava a escala no próprio endereço e não vale mais/);
     await expect(page.locator('body')).toHaveAttribute('data-role', 'operador');
     await expect(page.locator('body')).not.toHaveAttribute('data-shared', 'true');
