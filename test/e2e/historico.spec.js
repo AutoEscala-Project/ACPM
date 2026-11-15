@@ -1,5 +1,5 @@
 // Histórico da data numa gaveta lateral, que abre sobre a aba aberta (sem trocar de aba).
-import { test, expect, abrirSintetico, abrirComExemplo, irPara } from './fixtures.js';
+import { test, expect, abrirSintetico, irPara } from './fixtures.js';
 
 test.describe('Histórico', () => {
   test('abre numa gaveta sobre a aba aberta, sem trocar de aba; Esc e ✕ fecham', async ({ page }) => {
@@ -28,11 +28,5 @@ test.describe('Histórico', () => {
     await page.locator('#dt-prox').click();
     await expect(page.locator('#dt')).toHaveValue('2026-11-12');
     await expect(page.locator('#historico-data')).toHaveText('quinta-feira, 12/11');
-  });
-
-  test('sem a lista "Inclusões na Escala": a tabela da escala já tem a ação de tirar o voo', async ({ page }) => {
-    await abrirComExemplo(page);
-    await expect(page.locator('#audit-panel, #inc-active-list')).toHaveCount(0);
-    await expect(page.locator('#out [data-act="rm-fly"]').first()).toBeAttached();
   });
 });

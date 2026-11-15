@@ -244,7 +244,6 @@ body[data-role="gestor"] main select:not(.flt-ctrl):not(.agenda-campo):not(.cont
   padding: 12px 14px;
   margin-bottom: 12px;
 }
-.chips { display: flex; flex-wrap: wrap; gap: 8px; }
 .chip {
   display: flex;
   align-items: center;
@@ -258,14 +257,6 @@ body[data-role="gestor"] main select:not(.flt-ctrl):not(.agenda-campo):not(.cont
   user-select: none;
 }
 .chip.off { opacity: .55; text-decoration: line-through; }
-.chip-sub {
-  font-size: 11.5px;
-  font-weight: 600;
-  color: var(--wa);
-  background: var(--wa-bg);
-  border-radius: 10px;
-  padding: 0 7px;
-}
 
 select, input:not([type=checkbox]) {
   font: inherit;
@@ -447,7 +438,6 @@ table.fids-tabela { width: 100%; min-width: 860px; border-collapse: collapse; fo
 .hr-chip button { display: inline-grid; place-items: center; border: 0; background: transparent; color: var(--mu); border-radius: 50%; padding: 2px; cursor: pointer; }
 .hr-chip button:hover { color: var(--er); }
 .hr-chip .ico { width: 12px; height: 12px; }
-.horarios-acoes { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px; }
 .hr-novo { width: 110px; }
 /* Recurso novo: matrícula, categoria e, no C152, "Só Parafuso" */
 .form-recurso { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px 12px; margin: 0 0 10px; }
@@ -918,25 +908,6 @@ a { color: var(--ac); }
 /* ==========================================================================
    4. MAPA VISUAL INTERATIVO DE OCUPAÇÃO (SINCRONIZADO COM STATUS)
    ========================================================================== */
-.tl-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-bottom: 10px;
-}
-.tl-switch { display: inline-flex; border: 1px solid var(--ln); border-radius: 5px; overflow: hidden; background: var(--bg); }
-.tl-switch button {
-  border: 0;
-  background: transparent;
-  color: var(--ink);
-  padding: 6px 12px;
-  font: 600 13px 'Barlow Semi Condensed', sans-serif;
-  cursor: pointer;
-}
-.tl-switch button.on { background: var(--ac); color: var(--acT); }
-
 .tl-legend { display: flex; gap: 12px; flex-wrap: wrap; font-size: 12px; color: var(--mu); align-items: center; margin-bottom: 8px; }
 .tl-dot { width: 10px; height: 10px; border-radius: 2px; display: inline-block; margin-right: 4px; vertical-align: middle; }
 .tl-dot-emvoo { border: 2px solid var(--ye); }
@@ -1236,7 +1207,7 @@ body[data-backend="supabase"] #btn-bi-clr { display: none !important; }
 .aviso-link.ok { border-color: var(--ok); }
 
 @media print {
-  header, .bar, nav, section:not(#s-esc), #audit-panel, #toast-box { display: none !important; }
+  header, .bar, nav, section:not(#s-esc), #toast-box { display: none !important; }
   section#s-esc { display: block; }
   body { background: #fff; color: #000; }
 }

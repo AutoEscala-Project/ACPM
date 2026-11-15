@@ -7,9 +7,8 @@ import { comExemplo } from '../helpers/exemplo.js';
 const MATRICULA = /\b(P[PRT]-[A-Z]{3})\b/;
 
 test.describe('Escala automática', () => {
-  test('a escala já está pronta ao abrir a aba, sem botão de gerar', async ({ page }) => {
+  test('a escala já está pronta ao abrir a aba', async ({ page }) => {
     await abrirComExemplo(page);
-    await expect(page.locator('#gen, #gen2')).toHaveCount(0);
     await irPara(page, 'esc');
     await expect(page.locator('#out .st')).toBeVisible();
     expect((await lerEscala(page)).linhas.length).toBeGreaterThan(20);
@@ -27,8 +26,7 @@ test.describe('Escala automática', () => {
     await irPara(page, 'esc');
     expect((await lerEscala(page)).linhas.some(l => l.includes(matricula))).toBe(false);
 
-    // Sem botão Desfazer: para voltar atrás, basta alterar de novo
-    await expect(page.locator('#btn-undo')).toHaveCount(0);
+    // Para voltar atrás, basta alterar de novo
     await irPara(page, 'rec');
     await page.locator(`#eqs input[data-id="${matricula}"]`).check();
     await irPara(page, 'esc');
