@@ -4,6 +4,7 @@
 // próxima alteração). Os campos desconhecidos saem.
 import { ALL_EQ_TYPES, MIS, FLIGHT_STATUSES, NI } from './config.js';
 import { codigoValido } from './cursos.js';
+import { CODIGOS_DE_CONFLITO, CODIGOS_DE_REJEICAO } from './conflitos.js';
 
 const CHAVE_DO_VOO = /^\d+_\d+_\d+$/;
 // A chave da turma de Ground: GND_<missão>_<período>_<instrutor> (com um número no fim quando repete)
@@ -53,6 +54,7 @@ const CAMPOS = {
   groupSize: v => inteiro(v, 1, 100),
   fixo: v => v === true,
   conflito: v => Array.isArray(v) && v.length <= 20 && v.every(m => texto(m, 200)),
+  conflitoCodigos: v => Array.isArray(v) && v.length <= 20 && v.every(c => CODIGOS_DE_CONFLITO.includes(c)),
   etapa: v => typeof v === 'string' && codigoValido(v)
 };
 // Só a chave do voo é obrigatória: os dias importados do BI antigo têm linhas com poucos campos
@@ -65,7 +67,7 @@ export function normalizarLinhaGravada(o) {
   for (const [c, v] of Object.entries(o)) {
     if (!Object.hasOwn(CAMPOS, c) || v === undefined) continue;
     if (!CAMPOS[c](v)) return null;
-    limpa[c] = c === 'comb' ? { ...v } : c === 'conflito' ? [...v] : v;
+    limpa[c] = c === 'comb' ? { ...v } : c === 'conflito' || c === 'conflitoCodigos' ? [...v] : v;
   }
   return limpa.a === undefined || limpa.b === undefined || limpa.a < limpa.b ? limpa : null;
 }
@@ -73,7 +75,8 @@ export function normalizarLinhaGravada(o) {
 function alerta(a) {
   if (!objeto(a) || !TIPOS_DE_ALERTA.includes(a.t) || !texto(a.s, 200) || !texto(a.m, 1000)) return null;
   if (a.fKey !== undefined && !CAMPOS.fKey(a.fKey)) return null;
-  return { t: a.t, s: a.s, ...(a.fKey !== undefined ? { fKey: a.fKey } : {}), m: a.m };
+  if (a.codigo !== undefined && !CODIGOS_DE_REJEICAO.includes(a.codigo)) return null;
+  return { t: a.t, s: a.s, ...(a.fKey !== undefined ? { fKey: a.fKey } : {}), m: a.m, ...(a.codigo !== undefined ? { codigo: a.codigo } : {}) };
 }
 
 function revisaoDoAviao(r) {

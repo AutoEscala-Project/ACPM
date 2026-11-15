@@ -141,4 +141,13 @@ describe('Migrações do formato dos dados', () => {
     assert.deepEqual(['SIM-MONO-1', 'SIM-MONO-2', 'SIM-MULTI-1', 'SIM-MULTI-2'].map(renomearSimulador), [...EQ['Sim. Mono'], ...EQ['Sim. Multi']]);
     assert.equal(renomearSimulador('PR-BTB'), 'PR-BTB');
   });
+
+  // Versão 19 (retorno da operação, 14/11): o C152 vira uma habilitação; todos os instrutores de antes a recebem
+  it('versão 19: todo instrutor do cadastro recebe a habilitação do C152', () => {
+    const cadastro = { esquema: 18, nid: 3, ins: [{ id: 1, nm: 'A', hab: ['local'] }, { id: 2, nm: 'B', hab: ['mlte', 'c152'] }, { id: 3, nm: 'C' }], stu: [] };
+    const novo = migrarCadastro(cadastro);
+    assert.deepEqual(novo.ins.map(x => x.hab), [['local', 'c152'], ['mlte', 'c152'], ['c152']]);
+    assert.equal(novo.esquema, ESQUEMA);
+    assert.ok(ESQUEMA >= 19);
+  });
 });

@@ -51,7 +51,7 @@ describe('Divisão igual das horas entre os instrutores', () => {
   it('os voos do rodízio ficam com quem a fila escolheu; o equilíbrio usa os outros', () => {
     // O instrutor 1 é o primeiro da fila do C172 e, com menos habilitações, também recebe o voo no C152
     const { out } = escala({
-      ins: [instrutor(1, 1, { hab: ['local', 'c172'] }), instrutor(2, 1, { hab: ['local', 'c172', 'navegacao', 'ifr'] })],
+      ins: [instrutor(1, 1, { hab: ['local', 'c152', 'c172'] }), instrutor(2, 1, { hab: ['local', 'c152', 'c172', 'navegacao', 'ifr'] })],
       stu: [aluno(1000, { eq: 'C172', p1: 390 }), aluno(1001, { eq: 'C152', p1: 500 })]
     });
     assert.equal(out.find(o => o.stuId === 1000).insId, 1, 'o voo do rodízio continua com o primeiro da fila');

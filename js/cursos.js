@@ -2,6 +2,7 @@
 // aluno. Cada missão do programa tem um código (PP-07), um nome, o tipo de missão do app, o recurso e as horas; a ordem
 // do programa é a ordem em que o aluno voa.
 import { MIS, GROUND_DURATION_H } from './config.js';
+import { duracaoValida } from './rules.js';
 
 export const CURSOS = [['PP', 'Piloto Privado'], ['PC', 'Piloto Comercial'], ['INVA', 'Instrutor de Voo']];
 const CODIGO = /^[A-Z0-9][A-Z0-9.-]{0,14}$/;
@@ -19,7 +20,8 @@ function normalizarMissao(m) {
   if (!CODIGO.test(id) || !Object.hasOwn(MIS, m.mis)) return null;
   const regra = MIS[m.mis];
   const nome = typeof m.nome === 'string' ? m.nome.trim().replace(/\s+/g, ' ').slice(0, LIMITE_DO_NOME) : '';
-  const nb = regra.isGround ? GROUND_DURATION_H : Number.isInteger(+m.nb) && +m.nb >= 1 && +m.nb <= 11 ? +m.nb : 1;
+  // As horas fracionadas, até 5 h, como na Demanda (retorno da operação, 14/11)
+  const nb = regra.isGround ? GROUND_DURATION_H : duracaoValida(m.nb);
   return { id, nome: nome || id, mis: m.mis, eq: regra.eq.includes(m.eq) ? m.eq : regra.defEq, nb };
 }
 

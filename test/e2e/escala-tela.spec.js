@@ -38,11 +38,18 @@ test.describe('Tela da Escala', () => {
     const erros = page.locator('#out details.caixa.erros');
     await expect(erros).toHaveAttribute('open', '');
     await expect(erros.locator('summary')).toHaveText('1 missão não entrou na escala: Aluno 1000');
-    await expect(erros.locator('.al.err')).toContainText('nenhum instrutor ativo habilitado');
+    await expect(erros.locator('.al.err')).toContainText('nenhum instrutor ativo tem a habilitação');
     const avisos = page.locator('#out details.caixa.avisos');
     await expect(avisos).not.toHaveAttribute('open', '');
     await expect(avisos.locator('summary')).toHaveText('2 avisos: 2 alunos sem peso');
     await expect(avisos.locator('.al.warn')).toHaveCount(2);
+  });
+
+  // Revisão de 14/11: o aviso de peso diz de quem é o peso que falta; o resumo conta alunos e instrutores
+  test('resumo dos avisos: alunos e instrutores sem peso', async ({ page }) => {
+    await abrir(page, { estado: cenario({ ins: [instrutor(1, 1, { kg: 0 })], stu: [aluno(1000, { p1: 390, p2: -1 }), aluno(1001, { p1: 500, p2: -1 }, { kg: 0 })] }) });
+    await abrirEscala(page);
+    await expect(page.locator('#out details.caixa.avisos summary')).toHaveText('2 avisos: 1 aluno sem peso · 1 instrutor sem peso');
   });
 
   test('uma linha por voo: duração junto do horário, preferência só quando não é a 1ª, peso com o limite e status discreto', async ({ page }) => {
@@ -69,7 +76,9 @@ test.describe('Tela da Escala', () => {
     await expect(linha.locator('.c-peso')).toContainText('180 / 170 kg');
     const selo = linha.locator('.c-peso .tag.comb');
     await expect(selo).toHaveText('reduzir 4 gal');
-    await expect(selo).toHaveAttribute('title', 'Abastecer até 22 gal (4 a menos que o tanque cheio); o voo, o táxi e a reserva pedem 11 gal; autonomia de 3h23.');
+    // A dica diz o caso deste voo antes da explicação (revisão de 14/11)
+    await selo.click();
+    await expect(page.locator('#dica')).toContainText('Reduzir combustível Abastecer até 22 gal (4 a menos que o tanque cheio); o voo, o táxi e a reserva pedem 11 gal; autonomia de 3h23.');
   });
 
   test('turma de Ground: horário, missão, sala e instrutor uma vez só; cada aluno com o seu status e a sua ação', async ({ page }) => {

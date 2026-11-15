@@ -29,13 +29,13 @@ test.describe('Recursos', () => {
     await expect(page.locator('#log-cnt')).toHaveText('1');
   });
 
-  test('uma tabela da frota: saldo até a revisão de 50 horas e o que o avião voa no dia', async ({ page }) => {
+  test('uma tabela da frota: as horas disponíveis até a revisão de 50 horas e o que o avião voa no dia', async ({ page }) => {
     await abrir(page, { estado: cenario({ stu: [aluno(1000, { p1: 1, p2: 1 })], semAeronaves: apenas('C152', 'PP-LJV'), horas: { 'PP-LJV': 42 } }) });
     await irPara(page, 'rec');
     const linha = page.locator('#eqs tr[data-r="PP-LJV"]');
-    await expect(linha.locator('.saldo')).toHaveText('8 h');
+    await expect(linha.locator('input[data-a="horas"]')).toHaveValue('8');
     await expect(linha.locator('.barra')).toHaveClass(/\bwa\b/);
-    await expect(linha).toContainText('1 h na escala · termina com 43 h');
+    await expect(linha).toContainText('1 h na escala · termina com 7 h disponíveis');
     await expect(page.locator('#eqs tr.grupo').first()).toContainText('1 de 13 disponíveis');
     await expect(page.locator('#eqs tr[data-r="SIM-MONO-A"] input[data-a="horas"]')).toHaveCount(0);
   });
@@ -237,16 +237,19 @@ test.describe('Instrutores', () => {
     const linha = page.locator('#inst .cd').last();
     await expect(page.locator('#inst .cd')).toHaveCount(41);
     await expect(linha.locator('.nm')).toHaveValue('Novo instrutor');
-    await expect(linha).toHaveAttribute('data-hab', 'grounds ground_pa34 local');
+    await expect(linha).toHaveAttribute('data-hab', 'grounds ground_pa34 local c152');
     await expect(linha.locator('[data-f="kg"]')).toHaveClass(/\bfalta\b/);
 
     await linha.locator('[data-act="editar-habs"]').click();
     const painel = page.locator('#painel-instrutor');
     await expect(painel).toBeVisible();
     await expect(painel.locator('h2')).toContainText('Novo instrutor');
+    // Os aviões: C152, C172 e PA-34 (retorno da operação, 14/11)
+    await expect(painel.locator('fieldset', { hasText: 'Aviões' }).locator('label')).toHaveText(['C152', 'C172', 'MLTE (PA-34)']);
+    await expect(painel.locator('[data-f="hab"][data-h="c152"]')).toBeChecked();
     await painel.locator('[data-f="hab"][data-h="c172"]').check();
     await painel.locator('[data-f="hab"][data-h="local"]').uncheck();
-    await expect(page.locator('#inst .cd').last()).toHaveAttribute('data-hab', 'grounds ground_pa34 c172');
+    await expect(page.locator('#inst .cd').last()).toHaveAttribute('data-hab', 'grounds ground_pa34 c152 c172');
     await page.locator('#btn-fechar-painel-instrutor').click();
     await expect(painel).toBeHidden();
 
@@ -284,7 +287,7 @@ test.describe('Instrutores', () => {
     await page.locator('#inst .cd[data-id="2"] [data-act="editar-habs"]').click();
     await page.locator('#painel-instrutor [data-f="hab"][data-h="sim_mono"]').uncheck();
     await irPara(page, 'esc');
-    await expect(page.locator('#out')).toContainText('nenhum instrutor ativo habilitado para Simulador em Sim. Mono (Simulador (Mono))');
+    await expect(page.locator('#out')).toContainText('nenhum instrutor ativo tem a habilitação de Simulador no Sim. Mono (Simulador (Mono))');
   });
 
   test('instrutor indisponível pode ser revertido pelo histórico', async ({ page }) => {

@@ -1,6 +1,6 @@
 // Regras das missões: Ground School, precedência Ground → voo
 // e normalização de pedidos (inclusive nomes de missão de versões anteriores).
-import { MIS, NI, T, PRE, GROUND_EQ_TYPE, GROUND_DURATION_H } from './config.js';
+import { MIS, NI, T, PRE, GROUND_EQ_TYPE, GROUND_DURATION_H, DURACAO_MAXIMA_H } from './config.js';
 import { hm } from './format.js';
 import { periodoDoMinuto, minutoDaPreferencia, preferenciaValida } from './horarios.js';
 import { codigoValido } from './cursos.js';
@@ -75,6 +75,14 @@ export function migrateLegacyMissionName(mis) {
   return Object.hasOwn(map, mis) ? map[mis] : 'Voo Local';
 }
 
+// A duração do voo (retorno da operação, 14/11): em décimos de hora, de 0,1 h a DURACAO_MAXIMA_H (acima, o máximo);
+// fora disso, 1 h
+export function duracaoValida(valor) {
+  const h = Math.round(+valor * 10) / 10;
+  if (!Number.isFinite(h) || h <= 0) return 1;
+  return Math.min(h, DURACAO_MAXIMA_H);
+}
+
 export function normalizeMissionFields(target) {
   target.mis = migrateLegacyMissionName(target.mis);
   // Uma sessão por missão: a coluna Sessões saiu da Demanda (para dividir o voo no dia, "+ missão"). O campo
@@ -93,6 +101,8 @@ export function normalizeMissionFields(target) {
   if (Object.hasOwn(target, 'fly')) target.fly = Boolean(target.fly);
   // O código da missão do curso (fase 14), quando o pedido veio do programa
   if (Object.hasOwn(target, 'etapa') && !(typeof target.etapa === 'string' && codigoValido(target.etapa))) delete target.etapa;
+  // O id do pedido da agenda que virou este voo (revisão de 14/11)
+  if (Object.hasOwn(target, 'solicitacao') && !(Number.isInteger(target.solicitacao) && target.solicitacao > 0)) delete target.solicitacao;
   const mRule = missionRule(target.mis) || MIS['Voo Local'];
   if (!mRule.eq.includes(target.eq)) target.eq = mRule.defEq;
   if (mRule.isGround) {
@@ -100,7 +110,7 @@ export function normalizeMissionFields(target) {
     target.nb = GROUND_DURATION_H;
     if (target.p1 === T[NI]) target.p1 = T[0];
     if (target.p2 === T[NI]) target.p2 = T[1];
-  } else if (+target.nb === GROUND_DURATION_H || !Number.isInteger(+target.nb)) {
-    target.nb = 1;
+  } else {
+    target.nb = duracaoValida(target.nb);
   }
 }

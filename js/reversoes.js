@@ -14,7 +14,11 @@ export function validarReversao(rev, frota) {
   const label = rotulo(rev.label);
   if (rev.kind === 'setFly') {
     const mid = rev.mid === undefined ? 0 : rev.mid;
-    return idValido(rev.stuId) && Number.isInteger(mid) && mid >= 0 && typeof rev.val === 'boolean' ? { kind: 'setFly', stuId: rev.stuId, mid, val: rev.val, label } : null;
+    // extras: as missões extras que saíram junto com a principal (revisão de 14/11)
+    const extras = Array.isArray(rev.extras) && rev.extras.length <= 20 && rev.extras.every(m => Number.isInteger(m) && m > 0) ? rev.extras : null;
+    if (rev.extras !== undefined && !extras) return null;
+    return idValido(rev.stuId) && Number.isInteger(mid) && mid >= 0 && typeof rev.val === 'boolean'
+      ? { kind: 'setFly', stuId: rev.stuId, mid, val: rev.val, ...(extras ? { extras: [...extras] } : {}), label } : null;
   }
   if (rev.kind === 'setAv') {
     return typeof rev.reg === 'string' && MATRICULA.test(rev.reg) && typeof rev.val === 'boolean' ? { kind: 'setAv', reg: rev.reg, val: rev.val, label } : null;

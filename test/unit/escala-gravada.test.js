@@ -40,7 +40,7 @@ describe('Escala gravada', () => {
       ['stuId', ATAQUE], ['mid', 1.5], ['insId', '1'], ['eqType', ATAQUE], ['s', 7], ['ins', { nm: 1 }], ['mis', ATAQUE],
       ['h', ATAQUE], ['ss', ATAQUE], ['r', ATAQUE], ['stuKg', ATAQUE], ['insKg', -5], ['limKg', ATAQUE], ['kg', ATAQUE],
       ['comb', { reduzirGal: ATAQUE, abastecerGal: 7, minimoGal: 11, autonomiaMin: 60 }], ['baseTag', ATAQUE], ['tag', ATAQUE],
-      ['status', ATAQUE], ['groupSize', ATAQUE], ['fixo', 'sim'], ['conflito', ATAQUE], ['conflito', [ATAQUE, 3]], ['etapa', ATAQUE]
+      ['status', ATAQUE], ['groupSize', ATAQUE], ['fixo', 'sim'], ['conflito', ATAQUE], ['conflito', [ATAQUE, 3]], ['conflitoCodigos', [ATAQUE]], ['conflitoCodigos', 'peso'], ['etapa', ATAQUE]
     ];
     for (const [campo, valor] of ruins) assert.equal(normalizarEscalaGravada(adulterar(campo, valor)), null, `${campo} = ${JSON.stringify(valor)}`);
     assert.equal(normalizarEscalaGravada({ ...base, out: [{ ...base.out[0], a: 450, b: 390 }] }), null, 'termina antes de começar');
@@ -50,6 +50,9 @@ describe('Escala gravada', () => {
     const base = saidas[0];
     assert.equal(normalizarEscalaGravada({ ...base, al: [{ t: ATAQUE, s: 'x', m: 'y' }] }), null);
     assert.equal(normalizarEscalaGravada({ ...base, al: [{ t: 'warn', s: 'x', m: 'y', fKey: ATAQUE }] }), null);
+    // O código da rejeição (revisão de 14/11): só os da lista
+    assert.deepEqual(normalizarEscalaGravada({ ...base, al: [{ t: 'err', s: 'x', m: 'y', codigo: 'bloqueio' }] }).al, [{ t: 'err', s: 'x', m: 'y', codigo: 'bloqueio' }]);
+    assert.equal(normalizarEscalaGravada({ ...base, al: [{ t: 'err', s: 'x', m: 'y', codigo: ATAQUE }] }), null);
     assert.equal(normalizarEscalaGravada({ ...base, tot: ATAQUE }), null);
     assert.equal(normalizarEscalaGravada({ ...base, revisao: { [ATAQUE]: { inicio: 1, voadas: 1, fim: 2, paraAs: null } } }), null);
     assert.equal(normalizarEscalaGravada({ ...base, revisao: { 'PR-VOB': { inicio: ATAQUE, voadas: 1, fim: 2, paraAs: null } } }), null);

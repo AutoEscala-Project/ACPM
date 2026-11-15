@@ -3,13 +3,14 @@
 import { T, NI, DAY, NIGHT_OK, MIS, DEFAULT_LIM, GROUND_EQ_TYPE, GROUND_REG, GROUND_DURATION_MIN, GROUND_DURATION_H, REVISAO_H, MENOR_VOO_H, AIRCRAFT_EQ_TYPES } from './config.js';
 import { FROTA_INICIAL, matriculasDoTipo } from './frota.js';
 import { hm, fmtH } from './format.js';
-import { isGroundMission, doesGroundGateFlight, disponibilidadeDoAluno, rotuloDaDisponibilidade } from './rules.js';
-import { HORARIOS_INICIAIS, horariosDaMissao, periodoDoMinuto, minutoDaPreferencia } from './horarios.js';
+import { isGroundMission, doesGroundGateFlight, disponibilidadeDoAluno, rotuloDaDisponibilidade, duracaoValida } from './rules.js';
+import { HORARIOS_INICIAIS, horariosDaMissao, periodoDoMinuto, minutoDaPreferencia, ordenarPelaPreferencia } from './horarios.js';
 import { podeFazer, descreverExigencias } from './habilitacoes.js';
 import { categoriaDoRodizio, ajustarFilas } from './rodizio.js';
-import { avisosDeAtraso } from './status.js';
+import { avisosDeAtraso, intervaloEfetivo } from './status.js';
 import { sobrepoe, livre, cobre, pesoCabe, cabeNoSaldo } from './viabilidade.js';
-import { reducaoNecessaria, combustivelDoVoo } from './combustivel.js';
+import { reducaoNecessaria, combustivelDoVoo, pesoECombustivel } from './combustivel.js';
+import { LIMITE_DO_MOTIVO } from './conflitos.js';
 import { normalizarHangar, posicaoNoHangar } from './hangar.js';
 import { normalizarLimites, dentroDosLimites } from './limites.js';
 import { compactar, custoDaEscala } from './compactar.js';
@@ -79,12 +80,17 @@ function redistribuirTipo(voos, matriculas, saldo, fixos = []) {
 }
 
 function manterInstrutorNoMesmoAviao(out, state, saldo, frota, posicao) {
+  const statusDe = o => (state.fStatus && state.fStatus[o.fKey]) || o.status || 'Confirmado';
   // Os aviões "Só Parafuso" ficam de fora: o Parafuso no C152 só pode ir para eles
   const soParafuso = matriculasDoTipo(frota, 'C152', { parafuso: true });
   for (const tipo of TIPOS_DE_AVIAO) {
-    const voos = out.filter(o => o.eqType === tipo && !soParafuso.includes(o.r) && !o.fixo);
-    // Os voos fixos (escala aprovada) ficam no avião deles e ocupam o horário
-    const fixosDoTipo = out.filter(o => o.eqType === tipo && o.fixo && o.status !== 'Cancelado');
+    // O voo com status de andamento fica no avião dele, como o fixo
+    const preso = o => o.fixo || ['Atrasado', 'Em Voo', 'Cancelado'].includes(statusDe(o));
+    const voos = out.filter(o => o.eqType === tipo && !soParafuso.includes(o.r) && !preso(o));
+    // Os voos fixos (escala aprovada) ficam no avião deles e ocupam o horário (o atrasado, o horário novo); o cancelado
+    // não ocupa nada
+    const fixosDoTipo = out.filter(o => o.eqType === tipo && preso(o) && statusDe(o) !== 'Cancelado')
+      .map(o => ({ ...o, ...intervaloEfetivo(o, statusDe(o), (state.fObs || {})[o.fKey]) }));
     const matriculas = matriculasDoTipo(frota, tipo).filter(r => state.av[r]).sort((a, b) => posicao(a) - posicao(b));
     const nova = redistribuirTipo(voos, matriculas, saldo, fixosDoTipo);
     // A distribuição nova vale quando tem menos trocas de avião; com as mesmas trocas, menos aviões fora do hangar e,
@@ -116,13 +122,17 @@ function manterInstrutorNoMesmoAviao(out, state, saldo, frota, posicao) {
   }
 }
 
+// A duração (em minutos) do voo de um pedido: o Ground tem 01h30; o voo, as horas do pedido
+const duracaoDoPedido = (d, ground) => (ground ? GROUND_DURATION_MIN : Math.round(duracaoValida(d.nb) * 60));
+
 // Comparação de chaves de ordenação: a primeira posição diferente decide
 const vemAntes = (a, b) => { const i = a.findIndex((v, k) => v !== b[k]); return i >= 0 && a[i] < b[i]; };
 
 // Avisos dos limites da lei: com a escala do dia, o instrutor chega a 90% das horas de voo do mês, do semestre ou do ano
 function avisosDeLimite(out, state, limites, historico) {
   const horasHoje = {};
-  new Map(out.map(o => [o.classKey || o.fKey, o])).forEach(o => {
+  // O voo cancelado não voa (revisão de 14/11)
+  new Map(out.filter(o => o.status !== 'Cancelado').map(o => [o.classKey || o.fKey, o])).forEach(o => {
     if (AIRCRAFT_EQ_TYPES.includes(o.eqType)) horasHoje[o.insId] = (horasHoje[o.insId] || 0) + o.h;
   });
   const avisos = [];
@@ -155,18 +165,27 @@ function paradoDasUnidades(unidades) {
 // horas para o com menos, enquanto todas as regras continuam valendo: a habilitação, a disponibilidade durante todo o
 // voo, o horário livre, o bloqueio do aluno, o peso e o aluno não repetir o instrutor no dia. Os voos do rodízio
 // (cheque, MLTE, noturno e C172) ficam com quem a fila escolheu; a turma de Ground se move inteira e conta 1h30 uma
-// vez. Cada troca diminui a soma dos quadrados das horas, então a repetição termina. O status dos voos não conta: o
-// equilíbrio não muda quando um voo é cancelado
+// vez. Cada troca diminui a soma dos quadrados das horas, então a repetição termina. O voo cancelado não conta nem
+// ocupa o instrutor, o atrasado ocupa o horário novo, e o voo com status de andamento não muda de instrutor (revisão de
+// 14/11)
 function equalizarHoras(out, state, limites, historico) {
   const ativos = state.ins.filter(x => x.on);
   const alunos = new Map(state.stu.map(s => [s.id, s]));
+  const statusDe = o => (state.fStatus && state.fStatus[o.fKey]) || o.status || 'Confirmado';
   const grupos = new Map();
   out.forEach(o => {
     const chave = o.classKey || o.fKey;
     if (!grupos.has(chave)) grupos.set(chave, []);
     grupos.get(chave).push(o);
   });
-  const unidades = [...grupos.values()].map(voos => ({ voos, a: voos[0].a, b: voos[0].b, h: voos[0].h, mis: voos[0].mis, eqType: voos[0].eqType, isGround: voos[0].isGround }));
+  // A unidade cancelada (todos os alunos dela) fica de fora; o aluno cancelado de uma turma acompanha a turma
+  const unidades = [...grupos.values()].filter(voos => voos.some(v => statusDe(v) !== 'Cancelado')).map(voos => {
+    const v = voos.find(o => statusDe(o) !== 'Cancelado');
+    return {
+      voos, ...intervaloEfetivo(v, statusDe(v), (state.fObs || {})[v.fKey]), h: v.h, mis: v.mis, eqType: v.eqType, isGround: v.isGround,
+      presa: voos.some(o => o.fixo || ['Atrasado', 'Em Voo'].includes(statusDe(o)))
+    };
+  });
   const instrutorDa = u => u.voos[0].insId;
   const daQuem = id => unidades.filter(u => instrutorDa(u) === id);
 
@@ -195,7 +214,7 @@ function equalizarHoras(out, state, limites, historico) {
     let troca = null;
     for (const doador of [...horas.keys()].sort((p, q) => horas.get(q) - horas.get(p) || p - q)) {
       const meus = daQuem(doador);
-      for (const u of meus.filter(o => !categoriaDoRodizio(o.mis, o.eqType) && !o.voos.some(v => v.fixo))) {
+      for (const u of meus.filter(o => !categoriaDoRodizio(o.mis, o.eqType) && !o.presa)) {
         const semEle = paradoDasUnidades(meus.filter(o => o !== u)) - paradoDasUnidades(meus);
         for (const x of ativos) {
           if (!(horas.get(x.id) + u.h < horas.get(doador) - 1e-9) || !podeReceber(x, u)) continue;
@@ -220,7 +239,8 @@ function equalizarHoras(out, state, limites, historico) {
   }
 }
 
-// opcoes.compactar: false monta a escala sem a compactação (para comparar e medir)
+// opcoes.compactar: false monta a escala sem a compactação; opcoes.dividirHoras: false, sem a divisão igual das horas
+// (para comparar, medir e testar)
 export function runAllocationEngine(state, opcoes = {}) {
   const used = {}, busy = {}, stuBusy = {}, stuLastPick = {}, load = {}, eu = {}, out = [], al = [];
   // A frota vem do cadastro (fase 7); sem ela (estados de teste antigos), a frota inicial
@@ -298,12 +318,12 @@ export function runAllocationEngine(state, opcoes = {}) {
   // Escala aprovada (fase 12): os voos fixos entram primeiro, no mesmo horário, avião e instrutor; o resto é encaixado
   // em volta. O fixo que ficou impossível continua onde está, em conflito (com o motivo); o cancelado não ocupa nada
   const fixos = state.fixos && typeof state.fixos === 'object' ? state.fixos : {};
-  // As sessões fixas de um pedido (as chaves aluno_missão_sessão), em ordem
-  const sessoesFixas = item => Object.keys(fixos).filter(k => k.startsWith(`${item.stuId}_${item.mid}_`) && /^\d+$/.test(k.slice(`${item.stuId}_${item.mid}_`.length)))
-    .sort((p, q) => +p.split('_')[2] - +q.split('_')[2]);
+  // O voo fixo de um pedido (a chave aluno_missão_1), ou null
+  const chaveFixa = item => (Object.hasOwn(fixos, `${item.stuId}_${item.mid}_1`) ? `${item.stuId}_${item.mid}_1` : null);
+  const ocupacoesDeAtraso = [];
   for (const item of act) {
-    const chaves = sessoesFixas(item);
-    for (const [j, fKey] of chaves.entries()) {
+    const fKey = chaveFixa(item);
+    if (fKey) {
       const pino = fixos[fKey];
       const { stu, stuId, mid, ref: d, stuOrder } = item;
       const ground = isGroundMission(d.mis);
@@ -311,35 +331,66 @@ export function runAllocationEngine(state, opcoes = {}) {
       const classKey = ground ? pino.classKey || fKey : fKey;
       const x = state.ins.find(i => i.id === insId);
       const status = (state.fStatus && state.fStatus[fKey]) || 'Confirmado';
+      const efetivo = intervaloEfetivo({ a, b }, status, (state.fObs || {})[fKey]);
       const tipo = ground ? GROUND_EQ_TYPE : d.eq;
-      const daMesmaTurma = ground && out.some(o => o.classKey === classKey && o.stuId !== stuId);
-      const conflito = [];
+      // A turma ocupa a sala e o instrutor pelo primeiro aluno dela que não foi cancelado
+      const daMesmaTurma = ground && out.some(o => o.classKey === classKey && o.stuId !== stuId && o.status !== 'Cancelado');
+      // Conferido de novo com as regras do motor (revisão de 14/11): cada conflito com o texto e o código
+      const conflito = [], conflitoCodigos = [];
+      const marcar = (codigo, texto) => { conflito.push(texto); conflitoCodigos.push(codigo); };
+      // Pedido que passou de voo para Ground (ou o contrário): o pino é de outro tipo de recurso
+      const mudouDeTipo = ground !== (r === GROUND_REG);
       if (status !== 'Cancelado') {
-        if (!x) conflito.push('o instrutor saiu do cadastro');
+        if (!x) marcar('instrutor-saiu', 'o instrutor saiu do cadastro');
         else {
-          if (!x.on || !cobre(x.aw, a, b)) conflito.push('o instrutor não está disponível');
-          if (!podeFazer(x, d.mis, tipo)) conflito.push('o instrutor não tem a habilitação da missão');
-          if (!daMesmaTurma && !free(busy, x.id, a, b)) conflito.push('o instrutor já tem outro compromisso neste horário');
-        }
-        if (!ground) {
-          const recurso = frota.find(f => f.reg === r);
-          if (!recurso || recurso.tipo !== d.eq) conflito.push('a missão ou o avião do pedido mudou');
-          else if (!state.av[r]) conflito.push('o avião está indisponível');
-          if (!free(used, r, a, b)) conflito.push('o avião já está ocupado neste horário');
-        } else if (!daMesmaTurma && !free(used, GROUND_REG, a, b)) conflito.push('a sala de Ground já está ocupada neste horário');
-        if (!free(stuBusy, stuId, a, b)) conflito.push('o aluno já tem outro voo neste horário');
-        // Ocupa o avião (ou a sala), o instrutor e o aluno; a turma ocupa a sala e o instrutor uma vez só
-        const h = ground ? GROUND_DURATION_H : (b - a) / 60;
-        if (!daMesmaTurma) {
-          (used[ground ? GROUND_REG : r] = used[ground ? GROUND_REG : r] || []).push([a, b]);
-          if (x) {
-            (busy[x.id] = busy[x.id] || []).push([a, b]);
-            (compromissos[x.id] ||= []).push({ a, b, voo: AIRCRAFT_EQ_TYPES.includes(tipo) });
-            load[x.id] = (load[x.id] || 0) + h;
+          if (!x.on || !cobre(x.aw, a, b)) marcar('instrutor-indisponivel', 'o instrutor não está disponível');
+          if (!podeFazer(x, d.mis, tipo)) marcar('habilitacao', 'o instrutor não tem a habilitação da missão');
+          if (!daMesmaTurma && !free(busy, x.id, a, b)) marcar('instrutor-ocupado', 'o instrutor já tem outro compromisso neste horário');
+          if ((stu.bl || []).includes(x.id)) marcar('bloqueio', 'o aluno não voa com este instrutor');
+          if (!daMesmaTurma) {
+            const lei = dentroDosLimites({ compromissos: compromissos[x.id] || [], novo: { ...efetivo, voo: AIRCRAFT_EQ_TYPES.includes(tipo) }, historico: historico(x.id), limites });
+            if (!lei.ok) marcar('limite-da-lei', `o instrutor passaria do limite da lei (${LIMITE_DO_MOTIVO[lei.motivo] || lei.motivo})`);
           }
+          if (!ground && !mudouDeTipo && !pesoECombustivel({ stuKg: stu.kg, insKg: x.kg, tipo: d.eq, minutos: b - a, mis: d.mis }).cabe) {
+            marcar('peso', 'o peso do aluno e do instrutor passa do limite do avião, mesmo com o mínimo de combustível');
+          }
+        }
+        if (mudouDeTipo) marcar('ground-ou-voo', ground ? 'o pedido passou de voo para Ground' : 'o pedido passou de Ground para voo');
+        else if (!ground) {
+          const recurso = frota.find(f => f.reg === r);
+          if (!recurso || recurso.tipo !== d.eq) marcar('tipo-de-aviao', 'a missão ou o avião do pedido mudou');
+          else if (!state.av[r]) marcar('aviao-indisponivel', 'o avião está indisponível');
+          if (!free(used, r, a, b)) marcar('aviao-ocupado', 'o avião já está ocupado neste horário');
+          if (recurso && recurso.tipo === d.eq && d.eq === 'C152' && Boolean(recurso.soParafuso) !== (d.mis === 'Parafuso')) {
+            marcar('so-parafuso', d.mis === 'Parafuso' ? `o Parafuso só voa no ${nomesSoParafuso}` : `o ${r} é só para o Parafuso`);
+          }
+          if (!cabeNoSaldo(eu[r] || 0, (b - a) / 60, saldo(r))) marcar('revisao', 'o avião passaria da revisão de 50 horas');
+        } else if (!daMesmaTurma && !free(used, GROUND_REG, a, b)) marcar('sala-ocupada', 'a sala de Ground já está ocupada neste horário');
+        if (!free(stuBusy, stuId, a, b)) marcar('aluno-ocupado', 'o aluno já tem outro voo neste horário');
+        if (!state.win[periodoDoMinuto(a)]) marcar('horario-fechado', 'o horário está fechado nesta data');
+        const permitidas = disponibilidadeDoAluno(d.jan);
+        if (permitidas && !permitidas(a)) marcar('disponibilidade', 'o horário está fora da disponibilidade do aluno');
+        if (!mudouDeTipo && b - a !== duracaoDoPedido(d, ground)) marcar('duracao', 'a duração do pedido mudou');
+        // Ocupa o avião (ou a sala), o instrutor e o aluno; a turma ocupa a sala e o instrutor uma vez só. O voo atrasado
+        // ocupa o horário novo (revisão de 14/11), depois de conferidos os outros fixos: o atraso que invade outro voo
+        // fixo é um aviso de atraso, não um conflito dele
+        const h = ground ? GROUND_DURATION_H : (b - a) / 60;
+        const ocupar = ({ a: ia, b: ib }) => {
+          if (!daMesmaTurma) {
+            (used[ground ? GROUND_REG : r] = used[ground ? GROUND_REG : r] || []).push([ia, ib]);
+            if (x) {
+              (busy[x.id] = busy[x.id] || []).push([ia, ib]);
+              (compromissos[x.id] ||= []).push({ a: ia, b: ib, voo: AIRCRAFT_EQ_TYPES.includes(tipo) });
+            }
+          }
+          (stuBusy[stuId] = stuBusy[stuId] || []).push([ia, ib]);
+        };
+        if (efetivo.a === a) ocupar(efetivo);
+        else ocupacoesDeAtraso.push(() => ocupar(efetivo));
+        if (!daMesmaTurma) {
+          if (x) load[x.id] = (load[x.id] || 0) + h;
           eu[ground ? GROUND_REG : r] = (eu[ground ? GROUND_REG : r] || 0) + h;
         }
-        (stuBusy[stuId] = stuBusy[stuId] || []).push([a, b]);
         if (x && !ground) {
           const avioes = (insAircraft[x.id] = insAircraft[x.id] || []);
           if (!avioes.includes(r)) avioes.push(r);
@@ -348,9 +399,10 @@ export function runAllocationEngine(state, opcoes = {}) {
           if (categoria) voosNaCategoria[`${categoria}:${x.id}`] = (voosNaCategoria[`${categoria}:${x.id}`] || 0) + 1;
         }
         if (ground) {
-          // A turma fixa fica aberta: um aluno novo do mesmo Ground pode entrar nela
+          // A turma fixa fica aberta: um aluno novo do mesmo Ground pode entrar nela, se ela não está em conflito (sem o
+          // instrutor, por exemplo)
           const turmas = (openGroundClasses[d.mis] = openGroundClasses[d.mis] || []);
-          if (x && !turmas.some(c => c.classKey === classKey)) turmas.push({ classKey, mis: d.mis, w: T.indexOf(a), a, b, x, count: 0 });
+          if (x && !daMesmaTurma && !conflito.length && !turmas.some(c => c.classKey === classKey)) turmas.push({ classKey, mis: d.mis, w: T.indexOf(a), a, b, x, count: 0 });
           const turma = turmas.find(c => c.classKey === classKey);
           if (turma) turma.count++;
           const gRec = (stuGroundStatus[stuId] || []).find(g => g.mis === d.mis && g.allocatedEnd === null);
@@ -364,20 +416,22 @@ export function runAllocationEngine(state, opcoes = {}) {
         fKey, classKey, isGround: ground,
         w: ground && T.indexOf(a) >= 0 ? T.indexOf(a) : periodoDoMinuto(a), a, b,
         o: stuOrder, stuId, mid, insId, eqType: tipo,
-        s: stu.nm, mis: d.mis, h: ground ? GROUND_DURATION_H : (b - a) / 60, ss: `${j + 1}/${chaves.length}`,
+        s: stu.nm, mis: d.mis, h: ground ? GROUND_DURATION_H : (b - a) / 60, ss: '1/1',
         ...(d.etapa ? { etapa: d.etapa } : {}),
         r: ground ? GROUND_REG : r, ins: x ? x.nm : 'Instrutor fora do cadastro',
         stuKg: stu.kg || 0, insKg: (x && x.kg) || 0, limKg: lim, kg: stu.kg && x && x.kg ? stu.kg + x.kg : 0,
         ...(ground || !x ? {} : combustivelDoVoo(stu.kg, x.kg, d.eq, b - a, d.mis)),
         baseTag, tag: baseTag, status, fixo: true,
-        ...(conflito.length ? { conflito } : {})
+        ...(conflito.length ? { conflito, conflitoCodigos } : {})
       });
       if (conflito.length) al.push({ t: 'conf', s: mid ? `${stu.nm} (${d.mis})` : stu.nm, fKey, m: `Conflito na escala aprovada: ${conflito.join('; ')}.` });
     }
   }
 
+  ocupacoesDeAtraso.forEach(ocupar => ocupar());
+
   for (const item of act) {
-    if (sessoesFixas(item).length) continue;
+    if (chaveFixa(item)) continue;
     const { stu, stuId, mid, ref: d, stuOrder } = item;
     const m = MIS[d.mis] || MIS['Voo Local'];
     const nm = stu.nm;
@@ -401,12 +455,17 @@ export function runAllocationEngine(state, opcoes = {}) {
 
       // Se o aluno também tem um voo dependente hoje com horário preferido, prioriza janelas que terminem antes do voo
       const dependentFlights = act.filter(other => other.stuId === stuId && doesGroundGateFlight(d.mis, other.ref));
-      const earliestFlightPrefMin = dependentFlights.reduce((minT, flt) => {
+      // O voo dependente que já está fixo (revisão de 14/11) é um prazo: o Ground termina antes dele
+      const prazoFixo = Math.min(Infinity, ...out.filter(o => o.stuId === stuId && o.fixo && !o.isGround && o.status !== 'Cancelado'
+        && doesGroundGateFlight(d.mis, { mis: o.mis, eq: o.eqType })).map(o => o.a));
+      const earliestFlightPrefMin = Math.min(prazoFixo, dependentFlights.reduce((minT, flt) => {
         const fp1 = minutoDaPreferencia(flt.ref.p1);
         return (fp1 >= 0 && fp1 < minT) ? fp1 : minT;
-      }, Infinity);
+      }, Infinity));
 
-      const candidateWins = [...new Set([...pf.filter(w => w >= 0), ...starts])].filter(w => starts.includes(w));
+      // A 1ª e a 2ª preferência, depois os outros horários pela distância da 1ª (revisão de 14/11, decisão do Pedro)
+      const semPrazo = ordenarPelaPreferencia(starts.map(w => T[w]), preferidos[0], preferidos[1]).map(m => T.indexOf(m));
+      const candidateWins = semPrazo.filter(w => T[w] + durMin <= prazoFixo);
       // Prioriza janelas que terminam antes do voo preferido do aluno, mantendo a cascata Pref.1 -> Pref.2 -> Próximo livre
       candidateWins.sort((w1, w2) => {
         const ok1 = T[w1] + durMin <= earliestFlightPrefMin ? 0 : 1;
@@ -418,9 +477,11 @@ export function runAllocationEngine(state, opcoes = {}) {
       let chosenClass = null;
 
       // 1ª Tentativa: Unir-se a uma turma já aberta da mesma temática de Ground (mesmo horário e mesmo instrutor)
-      const orderedExisting = [...existingClasses].sort((c1, c2) => {
-        const inPref1 = pf.includes(c1.w) ? 0 : 1;
-        const inPref2 = pf.includes(c2.w) ? 0 : 1;
+      // A turma da 1ª preferência, depois a da 2ª, depois as outras
+      const ordemDaPreferencia = c => { const i = pf.indexOf(c.w); return i < 0 ? 2 : i; };
+      const orderedExisting = [...existingClasses].filter(c => c.b <= prazoFixo).sort((c1, c2) => {
+        const inPref1 = ordemDaPreferencia(c1);
+        const inPref2 = ordemDaPreferencia(c2);
         if (inPref1 !== inPref2) return inPref1 - inPref2;
         const okFlt1 = c1.b <= earliestFlightPrefMin ? 0 : 1;
         const okFlt2 = c2.b <= earliestFlightPrefMin ? 0 : 1;
@@ -479,7 +540,11 @@ export function runAllocationEngine(state, opcoes = {}) {
           );
 
           const pickedIns = f2[0];
-          const classKey = `GND_${d.mis}_${w}_${pickedIns.id}`;
+          // A chave da turma não repete a de outra (uma turma fixa passada para outro horário guarda a chave de antes)
+          const usadas = new Set([...out.map(o => o.classKey), ...Object.values(fixos).map(p => p.classKey).filter(Boolean)]);
+          const base = `GND_${d.mis}_${w}_${pickedIns.id}`;
+          let classKey = base;
+          for (let n = 2; usadas.has(classKey); n++) classKey = `${base}_${n}`;
           chosenClass = { classKey, mis: d.mis, w, a, b, x: pickedIns, count: 0 };
           (openGroundClasses[d.mis] = openGroundClasses[d.mis] || []).push(chosenClass);
 
@@ -528,25 +593,28 @@ export function runAllocationEngine(state, opcoes = {}) {
           status: (state.fStatus && state.fStatus[fKey]) || 'Confirmado'
         });
       } else {
-        let why;
+        // O motivo, com o código (revisão de 14/11: o código diz onde resolver)
+        let codigo, why;
         if (!state.ins.some(x => x.on && habilitado(x))) {
-          why = `nenhum instrutor ativo habilitado para ministrar ${d.mis} (${descreverExigencias(d.mis, GROUND_EQ_TYPE)})`;
+          [codigo, why] = ['sem-instrutor-habilitado', `nenhum instrutor ativo tem a habilitação de ${d.mis} (${descreverExigencias(d.mis, GROUND_EQ_TYPE)})`];
+        } else if (semPrazo.length && !candidateWins.length) {
+          [codigo, why] = ['ground-antes-do-voo-fixo', `o Ground precisa terminar antes do voo fixo das ${hm(prazoFixo)}, e não há horário para ele antes disso`];
         } else if (!starts.length) {
-          why = permitidas
-            ? `não há horário habilitado na disponibilidade do aluno (${rotuloDaDisponibilidade(d.jan)}) para 01h30 de Ground`
-            : `nenhuma janela diurna habilitada comporta 01h30 de Ground até ${hm(endMax)}`;
+          [codigo, why] = permitidas
+            ? ['disponibilidade-do-aluno', `nenhum horário aberto na disponibilidade do aluno (${rotuloDaDisponibilidade(d.jan)}) comporta 01h30 de Ground`]
+            : ['sem-horario', `nenhum período aberto comporta 01h30 de Ground até as ${hm(endMax)}`];
         } else {
           const key = Object.keys(fcGnd).sort((a, b) => fcGnd[b] - fcGnd[a])[0];
-          why = {
-            stu_busy: `conflito de horário com outra missão do próprio aluno (${nm})`,
-            sala: `a sala de Ground já está ocupada por outra turma nos horários testados`,
-            disp: `nenhum instrutor disponível durante todo o período de 01h30`,
-            busy: `todos os instrutores disponíveis já estão ocupados nos horários testados`,
-            bloq: `os instrutores disponíveis no horário estão bloqueados por este aluno`,
-            limite: `nenhum instrutor dentro dos limites da Lei do Aeronauta (horas de voo, jornada ou repouso) nos horários testados`
+          [codigo, why] = {
+            stu_busy: ['aluno-ocupado', 'o aluno já tem outra missão nos horários possíveis'],
+            sala: ['sala-ocupada', 'a sala de Ground já está ocupada por outra turma nos horários possíveis'],
+            disp: ['instrutores-indisponiveis', 'nenhum instrutor habilitado está disponível durante as 01h30 nos horários possíveis'],
+            busy: ['instrutores-ocupados', 'os instrutores habilitados já têm outro compromisso nos horários possíveis'],
+            bloq: ['bloqueio', 'os instrutores habilitados e livres estão em “Não escalar com” deste aluno'],
+            limite: ['limite-da-lei', 'nenhum instrutor dentro dos limites da Lei do Aeronauta (horas de voo, jornada ou repouso) nos horários possíveis']
           }[key];
         }
-        al.push({ t: 'err', s: labelStu, m: `Rejeitado: ${why}.` });
+        al.push({ t: 'err', s: labelStu, m: `Rejeitado: ${why}.`, codigo });
       }
       continue;
     }
@@ -555,7 +623,8 @@ export function runAllocationEngine(state, opcoes = {}) {
     // RAMO B: ALOCAÇÃO DE MISSÕES DE VOO E SIMULADOR
     // ========================================================================
     const lim = DEFAULT_LIM[d.eq] || 0;
-    const H = Math.max(1, Math.round(+d.nb || 1)), K = Math.min(Math.max(+d.ss || 1, 1), H);
+    // Um voo por pedido, com as horas pedidas (revisão de 14/11: as sessões saíram; para dividir no dia, "+ missão")
+    const H = duracaoValida(d.nb);
     const night = d.mis === 'Noturno';
     const isParafuso = d.mis === 'Parafuso';
     const exige = descreverExigencias(d.mis, d.eq);
@@ -569,7 +638,8 @@ export function runAllocationEngine(state, opcoes = {}) {
       al.push({
         t: 'err',
         s: labelStu,
-        m: `Rejeitado: a missão “${d.mis}” é realizada apenas em ${m.eq.join(' ou ')} (selecionado: ${d.eq}).`
+        m: `Rejeitado: a missão “${d.mis}” só voa em ${m.eq.join(' ou ')} (o pedido está no ${d.eq}).`,
+        codigo: 'equipamento-da-missao'
       });
       continue;
     }
@@ -581,7 +651,8 @@ export function runAllocationEngine(state, opcoes = {}) {
       al.push({
         t: 'err',
         s: labelStu,
-        m: `Rejeitado: o pré-requisito “${unallocatedGround.mis}” agendado para hoje não pôde ser alocado antes deste voo.`
+        m: `Rejeitado: o “${unallocatedGround.mis}” de hoje, que vem antes deste voo, não entrou na escala.`,
+        codigo: 'ground-pendente'
       });
       continue;
     }
@@ -590,17 +661,13 @@ export function runAllocationEngine(state, opcoes = {}) {
     // Os horários de decolagem da categoria (o noturno, às 17:30), com o período aberto e na disponibilidade do aluno
     const starts = horariosDaMissao(horarios, d.mis, d.eq).filter(m => state.win[periodoDoMinuto(m)] && naDisponibilidade(m));
     const endMax = night ? 1440 : T[NI];
+    const dur = Math.round(H * 60);
+    // Os horários possíveis: a 1ª e a 2ª preferência, depois os outros pela distância da 1ª (revisão de 14/11, decisão
+    // do Pedro); w é o período (a janela de operação em que o voo começa), para agrupar a escala
     const pf = preferidos;
-    const len = Array.from({ length: K }, (_, j) => (Math.floor(H / K) + (j < H % K ? 1 : 0)) * 60);
-    const plans = [];
-
-    (function rec(j, from, pl) {
-      if (j === K) { plans.push(pl); return; }
-      // Horários em minutos; w é o período (a janela de operação em que o voo começa), para agrupar a escala
-      const c = [...new Set([...(j < 2 ? [pf[j]] : []), ...(j == 0 ? [pf[1]] : []), ...starts])]
-        .filter(m => starts.includes(m) && m >= from && m + len[j] <= endMax);
-      for (const m of c) rec(j + 1, m + len[j], [...pl, { w: periodoDoMinuto(m), a: m, b: m + len[j] }]);
-    })(0, minStartAfterGround, []);
+    const inicios = ordenarPelaPreferencia(starts, pf[0], pf[1])
+      .filter(m => m >= minStartAfterGround && m + dur <= endMax)
+      .map(m => ({ w: periodoDoMinuto(m), a: m, b: m + dur }));
 
     // Filtra a frota candidata respeitando a exclusividade do C152 PR-JPL (Acrobat) para Parafuso
     const fleetPool = matriculasDoTipo(frota, d.eq, { parafuso: isParafuso });
@@ -608,41 +675,39 @@ export function runAllocationEngine(state, opcoes = {}) {
     // Duas tentativas: com o tanque cheio em todos os horários; só se nenhum par couber assim, com menos combustível
     // (o par que precisa reduzir menos vem antes)
     let fc, ch = null;
-    const reducao = x => reducaoNecessaria({ stuKg: stu.kg, insKg: x.kg, tipo: d.eq, minutos: len[0], mis: d.mis });
+    const reducao = x => reducaoNecessaria({ stuKg: stu.kg, insKg: x.kg, tipo: d.eq, minutos: dur, mis: d.mis });
+    const prev = stuLastPick[stuId] || null;
     for (const comMenosCombustivel of [false, true]) {
-    fc = { stu_busy: 0, eq: 0, revisao: 0, disp: 0, busy: 0, bloq: 0, limite: 0, peso: 0 };
-    if (comMenosCombustivel && !lim) break;
-    for (const pl of plans) {
-      const pick = [];
-      const horasNoPlano = {};
-      let prev = stuLastPick[stuId] || null, bad = null;
-
-      for (const [j, p] of pl.entries()) {
-        if (!free(stuBusy, stuId, p.a, p.b)) { bad = 'stu_busy'; break; }
+      fc = { stu_busy: 0, eq: 0, revisao: 0, disp: 0, busy: 0, bloq: 0, limite: 0, peso: 0 };
+      if (comMenosCombustivel && !lim) break;
+      for (const p of inicios) {
+        if (!free(stuBusy, stuId, p.a, p.b)) { fc.stu_busy++; continue; }
 
         const livres = fleetPool.filter(r => state.av[r] && free(used, r, p.a, p.b));
-        if (!livres.length) { bad = 'eq'; break; }
-        const eqs = livres.filter(r => cabeNoSaldo((eu[r] || 0) + (horasNoPlano[r] || 0), len[j] / 60, saldo(r)));
-        if (!eqs.length) { bad = 'revisao'; break; }
+        if (!livres.length) { fc.eq++; continue; }
+        const eqs = livres.filter(r => cabeNoSaldo(eu[r] || 0, dur / 60, saldo(r)));
+        if (!eqs.length) { fc.revisao++; continue; }
 
         const q = state.ins.filter(x => x.on && podeFazer(x, d.mis, d.eq) && cobre(x.aw, p.a, p.b));
-        if (!q.length) { bad = 'disp'; break; }
+        if (!q.length) { fc.disp++; continue; }
 
         const f1 = q.filter(x => free(busy, x.id, p.a, p.b));
-        if (!f1.length) { bad = 'busy'; break; }
+        if (!f1.length) { fc.busy++; continue; }
 
         const naoBloqueados = f1.filter(x => !stu.bl.includes(x.id));
-        if (!naoBloqueados.length) { bad = 'bloq'; break; }
+        if (!naoBloqueados.length) { fc.bloq++; continue; }
 
         const ehVoo = AIRCRAFT_EQ_TYPES.includes(d.eq);
-        const f2 = naoBloqueados.filter(x => cabeNosLimites(x, p.a, p.b, ehVoo,
-          pick.flatMap((s, k) => (s.x.id === x.id ? [{ a: pl[k].a, b: pl[k].b, voo: ehVoo }] : []))));
-        if (!f2.length) { bad = 'limite'; break; }
+        const f2 = naoBloqueados.filter(x => cabeNosLimites(x, p.a, p.b, ehVoo));
+        if (!f2.length) { fc.limite++; continue; }
 
         const ins = f2.filter(x => (comMenosCombustivel ? reducao(x) < Infinity : pesoCabe(stu.kg, x.kg, lim)));
-        if (!ins.length) { bad = 'peso'; break; }
+        if (!ins.length) { fc.peso++; continue; }
 
-        ins.sort((a, b) => (comMenosCombustivel && reducao(a) - reducao(b)) || (prev && (a.id === prev.x.id) - (b.id === prev.x.id)) ||
+        // Quando o peso importa (o avião tem limite e o aluno, o peso), o instrutor com o peso informado vem antes: sem
+        // ele, o limite não é conferido (revisão de 14/11)
+        const pesoImporta = Boolean(lim && stu.kg);
+        ins.sort((a, b) => (comMenosCombustivel && reducao(a) - reducao(b)) || (pesoImporta && !a.kg - !b.kg) || (prev && (a.id === prev.x.id) - (b.id === prev.x.id)) ||
           voosHoje(a) - voosHoje(b) || naFila(a) - naFila(b) ||
           qtdHabilitacoes(a) - qtdHabilitacoes(b) || (load[a.id] || 0) - (load[b.id] || 0));
 
@@ -654,101 +719,93 @@ export function runAllocationEngine(state, opcoes = {}) {
         eqs.sort((a, b) => menorPrimeiro(ordemNoInstrutor(a), ordemNoInstrutor(b)) || (prev && (a === prev.r) - (b === prev.r)) ||
           menorPrimeiro(folgaAte(used[a] || [], p.a, p.b), folgaAte(used[b] || [], p.a, p.b)) || posicao(a) - posicao(b));
 
-        prev = { r: eqs[0], x };
-        pick.push(prev);
-        horasNoPlano[eqs[0]] = (horasNoPlano[eqs[0]] || 0) + len[j] / 60;
+        ch = { p, r: eqs[0], x };
+        break;
       }
-
-      if (bad) { fc[bad]++; continue; }
-      ch = { pl, pick };
-      break;
-    }
-    if (ch || !fc.peso) break;
+      if (ch || !fc.peso) break;
     }
 
     if (ch) {
-      const { pl, pick } = ch;
-      let warned = false;
-      pl.forEach((p, j) => {
-        const { r, x } = pick[j], hh = len[j] / 60;
-        (used[r] = used[r] || []).push([p.a, p.b]);
-        (busy[x.id] = busy[x.id] || []).push([p.a, p.b]);
-        (compromissos[x.id] ||= []).push({ a: p.a, b: p.b, voo: AIRCRAFT_EQ_TYPES.includes(d.eq) });
-        (stuBusy[stuId] = stuBusy[stuId] || []).push([p.a, p.b]);
-        stuLastPick[stuId] = { r, x };
-        const avioesDoInstrutor = (insAircraft[x.id] = insAircraft[x.id] || []);
-        if (!avioesDoInstrutor.includes(r)) avioesDoInstrutor.push(r);
+      const { p, r, x } = ch, hh = dur / 60;
+      (used[r] = used[r] || []).push([p.a, p.b]);
+      (busy[x.id] = busy[x.id] || []).push([p.a, p.b]);
+      (compromissos[x.id] ||= []).push({ a: p.a, b: p.b, voo: AIRCRAFT_EQ_TYPES.includes(d.eq) });
+      (stuBusy[stuId] = stuBusy[stuId] || []).push([p.a, p.b]);
+      stuLastPick[stuId] = { r, x };
+      const avioesDoInstrutor = (insAircraft[x.id] = insAircraft[x.id] || []);
+      if (!avioesDoInstrutor.includes(r)) avioesDoInstrutor.push(r);
 
-        const fKey = `${stuId}_${mid}_${j + 1}`;
-        const baseTag = p.a === pf[0] ? 'Pref. 1' : p.a === pf[1] ? 'Pref. 2' : 'Próximo livre';
-        out.push({
-          fKey,
-          classKey: fKey,
-          isGround: false,
-          w: p.w, a: p.a, b: p.b,
-          o: stuOrder,
-          stuId,
-          mid,
-          insId: x.id,
-          eqType: d.eq,
-          s: nm, mis: d.mis, h: hh, ss: `${j + 1}/${K}`,
-          ...(d.etapa ? { etapa: d.etapa } : {}),
-          r, ins: x.nm,
-          stuKg: stu.kg || 0,
-          insKg: x.kg || 0,
-          limKg: lim,
-          kg: stu.kg && x.kg ? stu.kg + x.kg : 0,
-          ...combustivelDoVoo(stu.kg, x.kg, d.eq, len[j], d.mis),
-          baseTag,
-          tag: baseTag,
-          status: (state.fStatus && state.fStatus[fKey]) || 'Confirmado'
-        });
-
-        eu[r] = (eu[r] || 0) + hh;
-        load[x.id] = (load[x.id] || 0) + hh;
-        if (categoria) voosNaCategoria[`${categoria}:${x.id}`] = voosHoje(x) + 1;
-
-        if (lim && !warned && (!stu.kg || !x.kg)) {
-          warned = true;
-          al.push({ t: 'warn', s: labelStu, m: `Peso do aluno não informado (0 kg): verificação de limite (${lim} kg) no ${d.eq} não realizada.` });
-        }
+      const fKey = `${stuId}_${mid}_1`;
+      const baseTag = p.a === pf[0] ? 'Pref. 1' : p.a === pf[1] ? 'Pref. 2' : 'Próximo livre';
+      out.push({
+        fKey,
+        classKey: fKey,
+        isGround: false,
+        w: p.w, a: p.a, b: p.b,
+        o: stuOrder,
+        stuId,
+        mid,
+        insId: x.id,
+        eqType: d.eq,
+        s: nm, mis: d.mis, h: hh, ss: '1/1',
+        ...(d.etapa ? { etapa: d.etapa } : {}),
+        r, ins: x.nm,
+        stuKg: stu.kg || 0,
+        insKg: x.kg || 0,
+        limKg: lim,
+        kg: stu.kg && x.kg ? stu.kg + x.kg : 0,
+        ...combustivelDoVoo(stu.kg, x.kg, d.eq, dur, d.mis),
+        baseTag,
+        tag: baseTag,
+        status: (state.fStatus && state.fStatus[fKey]) || 'Confirmado'
       });
+
+      eu[r] = (eu[r] || 0) + hh;
+      load[x.id] = (load[x.id] || 0) + hh;
+      if (categoria) voosNaCategoria[`${categoria}:${x.id}`] = voosHoje(x) + 1;
+
+      if (lim && (!stu.kg || !x.kg)) {
+        // O aviso diz de quem é o peso que falta (revisão de 14/11)
+        const quem = !stu.kg && !x.kg ? `Pesos do aluno e de ${x.nm} não informados` : !stu.kg ? 'Peso do aluno não informado' : `Peso de ${x.nm} não informado`;
+        al.push({ t: 'warn', s: labelStu, m: `${quem} (0 kg): verificação de limite (${lim} kg) no ${d.eq} não realizada.` });
+      }
     } else {
-      let why;
+      // O motivo, com o código (revisão de 14/11: o código diz onde resolver)
+      let codigo, why;
       if (isParafuso && d.eq === 'C152' && !soParafuso.some(r => state.av[r])) {
-        why = soParafuso.length
-          ? `a aeronave acrobática ${nomesSoParafuso} (exclusiva para Parafuso no C152) está indisponível/em manutenção`
-          : 'não há na frota um C152 marcado como “Só Parafuso” (aba Recursos)';
+        [codigo, why] = ['so-parafuso', soParafuso.length
+          ? `o ${nomesSoParafuso} (só para Parafuso no C152) está em manutenção`
+          : 'não há na frota um C152 marcado como “Só Parafuso” (aba Recursos)'];
       } else if (!fleetPool.some(r => state.av[r])) {
-        why = `nenhum equipamento ${d.eq} compatível disponível (manutenção/indisponível)`;
+        [codigo, why] = ['sem-aviao', `nenhum ${d.eq} disponível (todos em manutenção)`];
       } else if (!state.ins.some(x => x.on && podeFazer(x, d.mis, d.eq))) {
-        why = `nenhum instrutor ativo habilitado para ${d.mis} em ${d.eq} (${exige})`;
-      } else if (!plans.length && permitidas) {
-        why = `não há horário habilitado na disponibilidade do aluno (${rotuloDaDisponibilidade(d.jan)}) para encaixar ${H} h`;
-      } else if (!plans.length) {
-        why = minStartAfterGround > 0
-          ? `não há janela disponível após o término do Ground School (${hm(minStartAfterGround)}) para encaixar ${H} h antes das ${hm(endMax)}`
-          : `não há como encaixar ${H} h${K > 1 ? ' em ' + K + ' sessões' : ' contínuas'} ${night ? 'a partir da janela noturna (17:30)' : 'dentro do horário diurno (término até ' + hm(T[NI]) + ')'} com as janelas habilitadas`;
+        [codigo, why] = ['sem-instrutor-habilitado', `nenhum instrutor ativo tem a habilitação de ${d.mis} no ${d.eq} (${exige})`];
+      } else if (!inicios.length && permitidas) {
+        [codigo, why] = ['disponibilidade-do-aluno', `nenhum horário aberto na disponibilidade do aluno (${rotuloDaDisponibilidade(d.jan)}) comporta ${fmtH(H)}`];
+      } else if (!inicios.length) {
+        [codigo, why] = minStartAfterGround > 0
+          ? ['depois-do-ground', `nenhum horário aberto depois do Ground (${hm(minStartAfterGround)}) comporta ${fmtH(H)} até as ${hm(endMax)}`]
+          : ['sem-horario', `nenhum horário aberto comporta ${fmtH(H)} ${night ? 'a partir das 17:30' : `até as ${hm(T[NI])}`}`];
       } else {
         const key = Object.keys(fc).sort((a, b) => fc[b] - fc[a])[0];
-        why = {
-          stu_busy: `conflito de horário com outra missão/Ground do próprio aluno (${nm}) já agendada neste dia`,
-          eq: isParafuso && d.eq === 'C152'
-            ? `a aeronave acrobática ${nomesSoParafuso} (exclusiva para Parafuso) já está ocupada nos horários testados`
-            : `falta de ${d.eq} livre nos horários testados (ocupado por voos de maior prioridade)`,
-          revisao: `os ${d.eq} livres estão sem saldo até a revisão de 50 horas`,
-          disp: `nenhum instrutor habilitado (${exige}) disponível durante todo o voo nos horários testados`,
-          busy: `instrutores habilitados (${exige}) já ocupados em algum trecho do voo (conflito de horário)`,
-          bloq: `os instrutores habilitados (${exige}) livres estão bloqueados por este aluno`,
-          limite: `nenhum instrutor dentro dos limites da Lei do Aeronauta (horas de voo, jornada ou repouso) nos horários testados`,
-          peso: `peso aluno + instrutor acima do limite de ${lim} kg do ${d.eq}, mesmo com o mínimo de combustível`
+        [codigo, why] = {
+          stu_busy: ['aluno-ocupado', 'o aluno já tem outra missão nos horários possíveis'],
+          eq: ['avioes-ocupados', isParafuso && d.eq === 'C152'
+            ? `o ${nomesSoParafuso} (só para Parafuso) já está ocupado nos horários possíveis`
+            : `nenhum ${d.eq} livre nos horários possíveis (ocupados por pedidos de prioridade maior)`],
+          revisao: ['revisao', `os ${d.eq} livres estão sem saldo até a revisão de 50 horas`],
+          disp: ['instrutores-indisponiveis', `nenhum instrutor habilitado (${exige}) está disponível durante o voo inteiro nos horários possíveis`],
+          busy: ['instrutores-ocupados', `os instrutores habilitados (${exige}) já têm outro compromisso nos horários possíveis`],
+          bloq: ['bloqueio', `os instrutores habilitados (${exige}) e livres estão em “Não escalar com” deste aluno`],
+          limite: ['limite-da-lei', 'nenhum instrutor dentro dos limites da Lei do Aeronauta (horas de voo, jornada ou repouso) nos horários possíveis'],
+          peso: ['peso', `peso aluno + instrutor acima do limite de ${lim} kg do ${d.eq}, mesmo com o mínimo de combustível`]
         }[key];
       }
-      al.push({ t: 'err', s: labelStu, m: `Rejeitado: ${why}.` });
+      al.push({ t: 'err', s: labelStu, m: `Rejeitado: ${why}.`, codigo });
     }
   }
 
-  equalizarHoras(out, state, limites, historico);
+  if (opcoes.dividirHoras !== false) equalizarHoras(out, state, limites, historico);
   // Compactação (fase 13): a escala compactada vale quando, já com as matrículas trocadas, custa menos pelo critério do
   // dia do que a escala sem compactar (a troca de matrículas mexe no tempo parado dos aviões)
   const compactada = opcoes.compactar === false ? null : out.map(o => ({ ...o }));
@@ -765,7 +822,8 @@ export function runAllocationEngine(state, opcoes = {}) {
   const revisao = {};
   for (const r of Object.keys(horas)) {
     if (typeof horas[r] !== 'number' || !frota.some(f => f.reg === r)) continue;
-    const meus = out.filter(o => o.r === r);
+    // Sem os cancelados; o atrasado para no horário novo (revisão de 14/11)
+    const meus = out.filter(o => o.r === r && o.status !== 'Cancelado').map(o => ({ ...o, ...intervaloEfetivo(o, o.status, (state.fObs || {})[o.fKey]) }));
     const voadas = Math.round(meus.reduce((total, o) => total + o.h, 0) * 10) / 10;
     const fim = Math.round((horas[r] + voadas) * 10) / 10;
     const para = state.av[r] !== false && REVISAO_H - fim < MENOR_VOO_H;
@@ -781,16 +839,16 @@ export function runAllocationEngine(state, opcoes = {}) {
     }
   }
 
-  // Atualiza a tag das turmas coletivas de Ground com a quantidade de alunos na mesma sala/horário
+  // Atualiza a tag das turmas coletivas de Ground com a quantidade de alunos na mesma sala/horário (sem os cancelados)
   const classCounts = {};
   out.forEach(o => {
-    if (o.isGround && o.classKey) {
+    if (o.isGround && o.classKey && o.status !== 'Cancelado') {
       classCounts[o.classKey] = (classCounts[o.classKey] || 0) + 1;
     }
   });
   out.forEach(o => {
     if (o.isGround && o.classKey) {
-      const c = classCounts[o.classKey] || 1;
+      const c = Math.max(1, classCounts[o.classKey] || 0);
       o.groupSize = c;
       o.tag = c > 1 ? `${o.baseTag} · Turma (${c})` : o.baseTag;
     }

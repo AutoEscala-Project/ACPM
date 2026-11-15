@@ -1,6 +1,6 @@
 // Habilitações individuais dos instrutores (fase 4). No aeroclube as funções não são cumulativas: há instrutor
 // de C172 que não dá simulador e instrutor de PA-34 que não faz parafuso. Cada instrutor tem a lista do que pode
-// fazer; uma missão exige a habilitação da missão e, no C172 e no PA-34, também a do avião.
+// fazer; uma missão exige a habilitação da missão e, no C152, no C172 e no PA-34, também a do avião.
 
 // Ordem da grade na aba Instrutores (curto: rótulo da grade; nome: o nome completo, na dica e nas mensagens)
 export const HABILITACOES = [
@@ -15,6 +15,7 @@ export const HABILITACOES = [
   { id: 'parafuso', nome: 'Voo de Parafuso (SPIN)', curto: 'Parafuso (SPIN)' },
   { id: 'ifr', nome: 'Voo IFR', curto: 'IFR' },
   { id: 'noturno', nome: 'Voo Noturno', curto: 'Noturno' },
+  { id: 'c152', nome: 'C152', curto: 'C152' },
   { id: 'c172', nome: 'C172', curto: 'C172' },
   { id: 'mlte', nome: 'MLTE (PA-34)', curto: 'MLTE (PA-34)' },
   { id: 'checador_vfr', nome: 'Checador PP, PC, MNTE, INVA (VFR)', curto: 'Checador VFR' },
@@ -55,7 +56,8 @@ const CHEQUES = {
   'Cheque PC MLTE IFR': ['checador_mlte']
 };
 export const ehCheque = mis => Object.hasOwn(CHEQUES, mis);
-const DO_AVIAO = { 'C172': 'c172', 'PA-34': 'mlte' };
+// O C152 também (retorno da operação, 14/11): todo instrutor de antes recebeu a habilitação (formato 19)
+const DO_AVIAO = { 'C152': 'c152', 'C172': 'c172', 'PA-34': 'mlte' };
 
 // Só as chaves do próprio mapa (nomes como "constructor" ou "toString" não contam)
 const doMapa = (mapa, chave, padrao) => (Object.hasOwn(mapa, chave) ? mapa[chave] : padrao);
@@ -78,7 +80,7 @@ export const descreverExigencias = (mis, eq) => exigencias(mis, eq).map(g => g.m
 // Migração dos níveis cumulativos A01–A09: o instrutor recebe exatamente o que o nível permitia
 // (checadores não existiam: começam desmarcados)
 const POR_NIVEL = [
-  [1, ['grounds', 'ground_pa34', 'local']],
+  [1, ['grounds', 'ground_pa34', 'local', 'c152']],
   [2, ['sim_mono', 'sim_multi']],
   [3, ['tgl']],
   [4, ['navegacao']],

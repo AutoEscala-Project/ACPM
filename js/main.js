@@ -13,7 +13,7 @@
  *   js/views/       Renderização das abas (recursos, cadastros, demanda, escala, BI e navegação)
  *   js/export.js    Exportação CSV e PDF
  */
-import { WIN, NI, T, GROUND_EQ_TYPE, GROUND_REG, GROUND_DURATION_MIN, GROUND_DURATION_H, MIS, PRE } from './config.js';
+import { WIN, NI, T, GROUND_EQ_TYPE, GROUND_REG, GROUND_DURATION_MIN, GROUND_DURATION_H, MIS, PRE, DURACAO_MAXIMA_H, REVISAO_H } from './config.js';
 import { novoRecurso, matriculasDoTipo } from './frota.js';
 import { HORARIOS_PADRAO, DE_30_EM_30, horariosDaMissao, ajustarPreferencias, paraMinuto } from './horarios.js';
 import { hm, fmtH, fmtDurLabel, pad, amanhaISO, isoMenosDias, nomeLimpo, dataIsoValida } from './format.js';
@@ -35,7 +35,7 @@ import { normalizarCursos, normalizarCursoDoAluno, novaMissaoDoCurso, codigoVali
 import { rCursos, mostrarVistaDosAlunos, podeEditarCursos, atualizarLinhaDoPrograma } from './views/cursos.js';
 import { proximaDoPedido } from './views/etapas.js';
 import { STATUS_COM_DETALHE, textoParaOHistorico } from './status.js';
-import { pinoDoVoo, normalizarFixos } from './fixos.js';
+import { pinoDoVoo, normalizarFixos, fixosAoMudarStatus, fixosAoReabrir } from './fixos.js';
 import { validarReversao } from './reversoes.js';
 import { singleDemandRowHTML, cnt, rDem, applyDemandFilters } from './views/demanda.js';
 import { rIns, rAlu, applyInstructorFilters, preencherFiltroDeHabilitacoes, mostrarVistaDosInstrutores, abrirPainelDoInstrutor, fecharPainelDoInstrutor, atualizarLinhaDoCadastro, atualizarLinhaDoAluno, rPainelDoInstrutor, rLimites, podeEditarLimites } from './views/cadastros.js';
@@ -52,9 +52,11 @@ import { abrirConta, carregarContas, gerarSenha, mensagem } from './views/conta.
 import { rManual } from './views/manual.js';
 import { atualizarSelosDaEscala, lerPedidosDaData } from './views/selos.js';
 import { importarSolicitacoes, disponibilidadeDaSolicitacao } from './agenda.js';
-import { abrirAgenda, carregarMes, mudarMes, escolherDia, diaDaAgenda, lembrarRegistradoPor, podeEditarAgenda, rAgenda, preencherHorariosDaAgenda } from './views/agenda.js';
+import { abrirAgenda, carregarMes, mudarMes, escolherDia, diaDaAgenda, lembrarRegistradoPor, podeEditarAgenda, rAgenda, preencherHorariosDaAgenda, pedidosDoAluno, descreverPedido } from './views/agenda.js';
 import { ESQUEMA } from './migracoes.js';
 import { iniciarSessaoSupabase } from './sessao.js';
+import { iniciarDicas } from './dicas.js';
+import { iniciarSomenteLeitura } from './somente-leitura.js';
 
 const activeTimers = new WeakMap();
 
@@ -526,8 +528,12 @@ async function excluirConta(b) {
 document.addEventListener('click', e => {
   const cal = e.target.closest('[data-cal]');
   if (!cal) return;
-  if (cal.dataset.cal === 'mes') mudarMes(+cal.dataset.delta);
-  else escolherDia(cal.dataset.dia);
+  if (cal.dataset.cal === 'mes') { mudarMes(+cal.dataset.delta); return; }
+  escolherDia(cal.dataset.dia);
+  // O dia escolhido na agenda abre no app inteiro (retorno da operação, 14/11: trocar de aba voltava para outra data)
+  if (cal.dataset.dia !== DATA && dataIsoValida(cal.dataset.dia)) {
+    carregarData(cal.dataset.dia).catch(() => showToast('Não foi possível abrir essa data. Verifique a conexão e tente de novo.'));
+  }
 });
 
 // Demanda e Agenda: traz os pedidos da agenda da secretaria para a data aberta (só acrescenta; não importa o mesmo
@@ -554,11 +560,11 @@ async function importarDaAgenda() {
   }
   const resumo = importarSolicitacoes(S, pendentes, { situacao: (S.resultados && S.resultados.situacao) || [] });
   pendentes.filter(s => S.stu.some(x => x.id === s.aluno)).forEach(s => {
-    logChange('inc', `Agenda: ${s.aluno_nome} incluído (${s.missao} · ${rotuloDaDisponibilidade(disponibilidadeDaSolicitacao(s))})`);
+    logChange('inc', `Agenda: ${s.aluno_nome} incluído (${s.missao} · ${rotuloDaDisponibilidade(disponibilidadeDaSolicitacao(s))}${s.horas ? ` · ${fmtH(+s.horas)}` : ''})`);
   });
   save(); rDem(); rAgenda();
   showToast(`${resumo.novos + resumo.atualizados} pedido(s) da agenda na demanda` +
-    (resumo.semAluno ? ` · ${resumo.semAluno} de aluno que não está mais no cadastro` : '') + '.', 'ok');
+    (resumo.semAluno ? ` · ${resumo.semAluno} de aluno que não está no cadastro (entra depois de cadastrado)` : '') + '.', 'ok');
 }
 $('#importar-agenda').onclick = importarDaAgenda;
 $('#agenda-importar').onclick = importarDaAgenda;
@@ -573,30 +579,51 @@ async function registrarPedido(excecao) {
     $('#ag-erro').textContent = 'Escolha o aluno e informe quem anotou o pedido (“Registrado por”).';
     return;
   }
-  const janela = $('#ag-janela').value;
+  // A duração: de 0,1 h a 5 h, em décimos (o Ground tem 01h30; retorno da operação, 14/11)
+  const horas = Math.round(parseFloat(String($('#ag-horas').value).replace(',', '.')) * 10) / 10;
+  if (!(horas > 0 && horas <= DURACAO_MAXIMA_H)) {
+    $('#ag-erro').textContent = `A duração vai de 0,1 h a ${DURACAO_MAXIMA_H} h.`;
+    return;
+  }
+  // O aluno que já tem voo marcado na data: pode ser um reagendamento feito por outra pessoa; o segundo clique confirma
+  const dia = diaDaAgenda(), confirmacao = `${aluno.id}|${dia}`;
+  const marcados = pedidosDoAluno(aluno.id, dia);
+  if (marcados.length && $('#form-agenda').dataset.confirmado !== confirmacao) {
+    $('#form-agenda').dataset.confirmado = confirmacao;
+    $('#form-agenda [type="submit"]').textContent = 'Registrar mesmo assim';
+    $('#ag-erro').textContent = `${aluno.nm} já tem voo marcado em ${dia.slice(8, 10)}/${dia.slice(5, 7)}: ${marcados.map(descreverPedido).join('; ')}. É um reagendamento ou mais um voo? Para registrar mais este, clique em “Registrar mesmo assim”.`;
+    return;
+  }
   try {
     await ApiClient.registrarSolicitacao({
-      data: diaDaAgenda(), aluno: aluno.id, aluno_nome: aluno.nm, missao: $('#ag-missao').value, janela,
-      horario: janela === 'horario' ? $('#ag-horario').value : null, observacao: $('#ag-obs').value, registrado_por: por, excecao
+      data: dia, aluno: aluno.id, aluno_nome: aluno.nm, missao: $('#ag-missao').value, janela: 'horario',
+      horario: $('#ag-horario').value, horas, observacao: $('#ag-obs').value, registrado_por: por, excecao
     });
   } catch (err) {
     $('#ag-erro').textContent = {
       PT403: 'Prazo encerrado: pedido para o dia seguinte só até as 13:00 do dia anterior.',
       42501: 'Esta conta não pode registrar este pedido (a Exceção da Coordenação é só para operadores).',
-      23514: 'Pedido incompleto: confira aluno, missão, disponibilidade e quem anotou.'
+      23514: 'Pedido incompleto: confira aluno, missão, horário e quem anotou.',
+      22023: `Pedido inválido: o horário é obrigatório, e a duração vai de 0,1 h a ${DURACAO_MAXIMA_H} h.`
     }[err.code] || 'Não foi possível registrar o pedido. Verifique a conexão e tente de novo.';
     return;
   }
   lembrarRegistradoPor(por);
+  desarmarConfirmacaoDaAgenda();
   $('#ag-obs').value = '';
   $('#ag-aluno').value = '';
   showToast(excecao ? 'Pedido registrado pela Exceção da Coordenação.' : 'Pedido registrado.', 'ok');
   await carregarMes();
   lerPedidosDaData();
 }
+// Trocar o aluno desfaz a confirmação do voo já marcado
+function desarmarConfirmacaoDaAgenda() {
+  delete $('#form-agenda').dataset.confirmado;
+  $('#form-agenda [type="submit"]').textContent = 'Registrar pedido';
+}
 $('#form-agenda').onsubmit = e => { e.preventDefault(); registrarPedido(false); };
 $('#ag-excecao').onclick = () => registrarPedido(true);
-$('#ag-janela').onchange = () => { $('#ag-horario-rotulo').hidden = $('#ag-janela').value !== 'horario'; };
+$('#ag-aluno').addEventListener('change', () => { desarmarConfirmacaoDaAgenda(); $('#ag-erro').textContent = ''; });
 $('#ag-missao').onchange = preencherHorariosDaAgenda;
 
 async function cancelarPedido(b) {
@@ -706,6 +733,7 @@ document.addEventListener('click', e => {
       const target = getMissionTarget(rev.stuId, rev.mid || 0);
       if (st && target) {
         target.fly = rev.val;
+        (rev.extras || []).forEach(m => { const ex = getMissionTarget(rev.stuId, m); if (ex) ex.fly = rev.val; });
         logChange(rev.val ? 'inc' : 'exc', `Revertido: ${st.nm} (${target.mis})`, null, entry.id);
         save(); rDem();
       }
@@ -810,7 +838,7 @@ document.addEventListener('click', e => {
   if (a === 'revisao') {
     if (isGestor() || !confirmado(b, 'Confirmar revisão')) return;
     S.horas[b.dataset.id] = 0;
-    logChange('mod', `${b.dataset.id}: revisão de 50 horas feita (horas zeradas)`);
+    logChange('mod', `${b.dataset.id}: revisão de 50 horas feita (${REVISAO_H} h disponíveis)`);
     save(); rRec();
     return;
   }
@@ -876,7 +904,8 @@ document.addEventListener('click', e => {
     showToast('Escala aprovada: os voos ficam fixos.', 'ok');
   } else {
     if (!confirmado(reabrir, 'Confirmar reabertura')) return;
-    S.fixos = {};
+    // Os voos em andamento (Em Voo, Atrasado, Cancelado) continuam fixos
+    S.fixos = fixosAoReabrir(S.fixos, S.fStatus);
     S.aprovacao = null;
     save();
     logChange('mod', 'Escala reaberta: volta a ser refeita a cada alteração');
@@ -933,8 +962,13 @@ document.addEventListener('change', e => {
       : lista.some((o, j) => j !== i && o.id === id) ? `O código ${id} já existe no ${curso}.` : '';
     if (erro) { showToast(erro); campo.value = m.id; return; }
     m.id = id;
+  } else if (cf === 'nb') {
+    // As horas: de 0,1 h a 5 h, em décimos (retorno da operação, 14/11); fora disso, não vale
+    const h = Math.round(parseFloat(String(campo.value).replace(',', '.')) * 10) / 10;
+    if (!(h > 0 && h <= DURACAO_MAXIMA_H)) { showToast(`A duração vai de 0,1 h a ${DURACAO_MAXIMA_H} h.`); campo.value = m.nb; return; }
+    m.nb = h;
   } else {
-    m[cf] = cf === 'nb' ? +campo.value : campo.value;
+    m[cf] = campo.value;
   }
   lista[i] = m;
   gravarPrograma(curso, lista);
@@ -946,7 +980,7 @@ document.addEventListener('change', e => {
 // Critérios da compactação (fase 13): a escala é refeita com o critério novo (com a escala aprovada, não mudam)
 document.addEventListener('click', e => {
   const b = e.target.closest('[data-criterio]');
-  if (!b || b.disabled || isGestor() || S.aprovacao) return;
+  if (!b || b.getAttribute('aria-disabled') === 'true' || isGestor() || S.aprovacao) return;
   const campo = b.dataset.criterio, antes = normalizarCriterios(S.criterios);
   if (antes[campo] === b.dataset.valor) return;
   S.criterios = normalizarCriterios({ ...antes, [campo]: b.dataset.valor });
@@ -984,8 +1018,8 @@ document.addEventListener('change', async e => {
 });
 
 // Sugestões para um conflito (fase 12): a gaveta abre pelo botão do conflito. "Aplicar" muda o voo fixo (na turma de
-// Ground, a turma inteira) e o histórico guarda os fixos de antes, para reverter; cancelar abre o diálogo do status, já
-// com o motivo do conflito marcado
+// Ground, a turma inteira) e "Soltar" o tira dos fixos; o histórico guarda os fixos de antes, para reverter. Cancelar
+// abre o diálogo do status, já com o motivo do conflito marcado
 document.addEventListener('click', e => {
   const abrirSugestoes = e.target.closest('[data-reparo]');
   if (abrirSugestoes) { if (!isGestor()) abrirPainelDeReparo(abrirSugestoes.dataset.reparo); return; }
@@ -996,18 +1030,19 @@ document.addEventListener('click', e => {
   if (!escolha) return;
   const { fKey, voo, opcao } = escolha;
   fecharPainelDeReparo();
-  if (!opcao.mudancas) {
+  if (!opcao.mudancas && !opcao.soltar) {
     pedirDetalheDoStatus({ voo, status: 'Cancelado', detalhe: opcao.motivo ? { motivo: opcao.motivo } : null, aoConfirmar: detalhe => aplicarStatus(fKey, 'Cancelado', detalhe) });
     return;
   }
   const antes = S.fixos || {};
   S.fixos = aplicarReparo(antes, RES, fKey, opcao);
-  const mudados = Object.keys(S.fixos).filter(k => S.fixos[k] !== antes[k]);
+  // Os voos que mudaram ou saíram dos fixos (soltar): o histórico guarda como estavam
+  const mudados = Object.keys(antes).filter(k => S.fixos[k] !== antes[k]);
   save();
-  logChange('mod', `Reparo: ${voo.s} (${hm(voo.a)}–${hm(voo.b)}): ${opcao.texto}`, {
+  logChange('mod', `Reparo: ${voo.s} (${hm(voo.a)}–${hm(voo.b)}): ${opcao.soltar ? 'Soltar o voo' : opcao.texto}`, {
     kind: 'restaurarFixos', fixos: Object.fromEntries(mudados.map(k => [k, antes[k]])), label: '↶ Reverter'
   });
-  showToast('Sugestão aplicada: o voo continua fixo.', 'ok');
+  showToast(opcao.soltar ? 'Voo solto: o app escalou de novo.' : 'Sugestão aplicada: o voo continua fixo.', 'ok');
 });
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape' && painelDeReparoAberto() && !dialogoDeStatusAberto()) fecharPainelDeReparo(true);
@@ -1024,8 +1059,10 @@ function aplicarStatus(fKey, status, detalhe) {
   else delete S.fObs[fKey];
   const voo = vooDaChave(fKey);
   if (voo) voo.status = status;
-  // Em Voo e Atrasado fixam o voo (fase 12): uma alteração na escala não o tira do lugar
-  if (voo && (status === 'Em Voo' || status === 'Atrasado')) S.fixos = { ...(S.fixos || {}), [fKey]: S.fixos && S.fixos[fKey] ? S.fixos[fKey] : pinoDoVoo(voo) };
+  // Em Voo, Atrasado e Cancelado fixam o voo (fase 12; o cancelado desde a revisão de 14/11): uma alteração na escala
+  // não o tira do lugar (o cancelado fica onde estava, sem ocupar nada). Fora da escala aprovada, Pendente ou
+  // Confirmado o soltam
+  if (voo) S.fixos = fixosAoMudarStatus(S.fixos, voo, status, { aprovada: Boolean(S.aprovacao) });
   save();
   logChange('mod', `Status de ${voo ? `${voo.s} (${hm(voo.a)}–${hm(voo.b)})` : fKey}: ${textoParaOHistorico(status, detalhe)}`);
 }
@@ -1044,8 +1081,10 @@ document.addEventListener('change', e => {
   if (!campo || !podeEditarLimites()) return;
   const chave = campo.dataset.limite, divisor = +campo.dataset.divisor;
   const antes = normalizarLimites(S.limites);
-  const valor = campo.value.trim() === '' ? null : Math.max(0, +campo.value) * divisor;
+  const valor = campo.value.trim() === '' ? null : +campo.value * divisor;
   if (valor !== null && !Number.isFinite(valor)) { rLimites(); return; }
+  // O limite é maior que zero (revisão de 14/11); vazio é sem limite
+  if (valor !== null && valor <= 0) { showToast('O limite precisa ser maior que zero (vazio é sem limite).'); rLimites(); return; }
   S.limites = normalizarLimites({ ...antes, [chave]: valor });
   logChange('mod', `Limites da lei: ${ROTULOS_DOS_LIMITES[chave]} ${emHoras(chave, antes[chave])} → ${emHoras(chave, S.limites[chave])}`);
   save();
@@ -1089,12 +1128,18 @@ document.addEventListener('change', e => {
         kind: 'setAv', reg, val: !t.checked, label: '↶ Reverter'
       });
     } else if (a === 'horas') {
-      // Horas desde a última revisão de 50 horas; vazio: sem controle para o avião
+      // As horas disponíveis até a revisão de 50 horas (retorno da operação, 14/11); o dia guarda as horas desde a
+      // revisão (50 menos as disponíveis). Vazio: sem controle para o avião
       const reg = t.dataset.horas;
-      const horas = t.value === '' ? null : Math.round(Math.max(0, +t.value) * 10) / 10;
-      if (horas === null || Number.isNaN(horas)) delete S.horas[reg];
-      else S.horas[reg] = horas;
-      logChange('mod', `${reg}: ${horas === null || Number.isNaN(horas) ? 'horas desde a revisão não informadas' : fmtH(horas) + ' desde a última revisão de 50 horas'}`);
+      const disponiveis = t.value === '' ? null : Math.round(parseFloat(String(t.value).replace(',', '.')) * 10) / 10;
+      if (disponiveis !== null && !(disponiveis >= 0 && disponiveis <= REVISAO_H)) {
+        showToast(`As horas disponíveis vão de 0 a ${REVISAO_H}.`);
+        rRec();
+        return;
+      }
+      if (disponiveis === null) delete S.horas[reg];
+      else S.horas[reg] = Math.round((REVISAO_H - disponiveis) * 10) / 10;
+      logChange('mod', `${reg}: ${disponiveis === null ? 'horas disponíveis não informadas' : `${fmtH(disponiveis)} disponíveis até a revisão de 50 horas`}`);
     }
     save(); rRec();
     return;
@@ -1174,17 +1219,32 @@ document.addEventListener('change', e => {
       if (!target) return;
       if (f === 'fly') {
         target.fly = t.checked;
+        // O aluno que não vai voar não voa as missões extras (retorno da operação, 14/11); reverter volta todas
+        const extras = !mid && !target.fly ? (s.extra || []).filter(ex => ex.fly) : [];
+        extras.forEach(ex => { ex.fly = false; });
         logChange(
           target.fly ? 'inc' : 'exc',
-          `${s.nm} ${target.fly ? 'incluído' : 'retirado'} (${target.mis} · ${target.eq} · ${fmtDurLabel(target.nb)})`,
-          { kind: 'setFly', stuId: s.id, mid, val: !target.fly, label: target.fly ? '✕ Excluir' : '↶ Restaurar' }
+          `${s.nm} ${target.fly ? 'incluído' : 'retirado'} (${target.mis} · ${target.eq} · ${fmtDurLabel(target.nb)})${extras.length ? `, com ${extras.length === 1 ? 'a missão extra' : `as ${extras.length} missões extras`}` : ''}`,
+          { kind: 'setFly', stuId: s.id, mid, val: !target.fly, ...(extras.length ? { extras: extras.map(ex => ex.mid) } : {}), label: target.fly ? '✕ Excluir' : '↶ Restaurar' }
         );
+        if (extras.length) rDem();
       } else if (f === 'jan') {
         // Disponibilidade do aluno: o voo só começa nessas janelas (vazio: qualquer horário)
         if (t.value) target.jan = t.value;
         else delete target.jan;
         logChange('mod', `Pedido ${s.nm}: disponibilidade ${rotuloDaDisponibilidade(target.jan)} (${target.mis})`);
       } else {
+        // A duração digitada: de 0,1 h a 5 h, em décimos (retorno da operação, 14/11); fora disso, não vale
+        if (f === 'nb') {
+          const h = Math.round(parseFloat(String(t.value).replace(',', '.')) * 10) / 10;
+          if (!(h > 0 && h <= DURACAO_MAXIMA_H)) {
+            showToast(`A duração vai de 0,1 h a ${DURACAO_MAXIMA_H} h.`);
+            c.outerHTML = singleDemandRowHTML(s, target, mid);
+            return;
+          }
+          t.value = h;
+        }
+        const eraGround = isGroundMission(target.mis);
         target[f] = (f === 'mis' || f === 'eq') ? t.value : +t.value;
         // Missão, recurso ou horas mudados à mão: o pedido deixa de ser a missão do curso (fase 14)
         if (['mis', 'eq', 'nb'].includes(f)) delete target.etapa;
@@ -1196,7 +1256,7 @@ document.addEventListener('change', e => {
           if (mRule.isGround) {
             target.eq = GROUND_EQ_TYPE;
             target.nb = GROUND_DURATION_H;
-          } else if (+target.nb === GROUND_DURATION_H || !Number.isInteger(+target.nb)) {
+          } else if (eraGround) {
             target.nb = 1;
           }
         }
@@ -1232,11 +1292,15 @@ window.addEventListener('beforeunload', e => {
     if (savedTheme) document.documentElement.setAttribute('data-theme', savedTheme);
   } catch (e) {}
   mostrarTema();
+  // As dicas dos termos e a tela só de consulta do Gestor (revisão de 14/11)
+  iniciarDicas();
+  iniciarSomenteLeitura();
 
+  // O endereço é lido antes: abrir uma data põe a data nele
+  const params = new URLSearchParams(window.location.search);
   const amanha = amanhaISO();
   abrirData(amanha);
 
-  const params = new URLSearchParams(window.location.search);
   // O link antigo da fase 2 levava a escala inteira no endereço (share=): não vale mais, e sai do endereço
   if (params.has('share')) {
     const url = new URL(window.location.href);

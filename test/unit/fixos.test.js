@@ -4,7 +4,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { runAllocationEngine } from '../../js/engine.js';
-import { aluno, cenario, instrutor, apenas, GROUND_C152 } from '../helpers/montar.js';
+import { aluno, cenario, instrutor, apenas, missaoExtra, GROUND_C152 } from '../helpers/montar.js';
 
 const pino = o => ({ a: o.a, b: o.b, r: o.r, insId: o.insId, ...(o.isGround ? { classKey: o.classKey } : {}) });
 const fixarTudo = out => Object.fromEntries(out.map(o => [o.fKey, pino(o)]));
@@ -77,6 +77,197 @@ describe('Voos fixos', () => {
   });
 });
 
+// Revisão de 14/11: o voo fixo é conferido de novo a cada cálculo, com as mesmas regras do motor. O que não vale mais
+// vira conflito, com o texto e o código (o código decide as sugestões de reparo)
+describe('Voos fixos conferidos de novo', () => {
+  const VOO = { a: 390, b: 450, r: 'PR-VOB', insId: 1 };
+  const fixado = (pedido = {}, extra = {}, pinoDoVoo = VOO) => ({
+    ...cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, { p1: 390, p2: -1, ...pedido })] }),
+    fixos: { '1000_0_1': pinoDoVoo }, ...extra
+  });
+  const conflitoDe = estado => {
+    const [voo] = runAllocationEngine(estado).out;
+    return { conflito: voo.conflito, codigos: voo.conflitoCodigos };
+  };
+
+  it('o voo fixo que continua valendo fica sem conflito', () => {
+    assert.deepEqual(conflitoDe(fixado()), { conflito: undefined, codigos: undefined });
+  });
+
+  it('Parafuso fora do avião "Só Parafuso", e outra missão nele', () => {
+    assert.deepEqual(conflitoDe(fixado({ mis: 'Parafuso' })),
+      { conflito: ['o Parafuso só voa no PR-JPL'], codigos: ['so-parafuso'] });
+    assert.deepEqual(conflitoDe(fixado({}, {}, { ...VOO, r: 'PR-JPL' })),
+      { conflito: ['o PR-JPL é só para o Parafuso'], codigos: ['so-parafuso'] });
+  });
+
+  it('peso do aluno e do instrutor acima do limite, mesmo com o mínimo de combustível', () => {
+    assert.deepEqual(conflitoDe(fixado({}, { stu: [aluno(1000, { p1: 390, p2: -1 }, { kg: 160 })] })),
+      { conflito: ['o peso do aluno e do instrutor passa do limite do avião, mesmo com o mínimo de combustível'], codigos: ['peso'] });
+  });
+
+  it('o avião passaria da revisão de 50 horas', () => {
+    assert.deepEqual(conflitoDe(fixado({}, { horas: { 'PR-VOB': 49.5 } })),
+      { conflito: ['o avião passaria da revisão de 50 horas'], codigos: ['revisao'] });
+  });
+
+  it('o instrutor passaria dos limites da lei (o repouso depois de ontem)', () => {
+    const horasDosInstrutores = { 1: { mes: 0, semestre: 0, ano: 0, fimAnterior: 1410 } };
+    assert.deepEqual(conflitoDe(fixado({}, { horasDosInstrutores })),
+      { conflito: ['o instrutor passaria do limite da lei (repouso)'], codigos: ['limite-da-lei'] });
+  });
+
+  it('o aluno não voa com o instrutor', () => {
+    assert.deepEqual(conflitoDe(fixado({}, { stu: [aluno(1000, { p1: 390, p2: -1 }, { bl: [1] })] })),
+      { conflito: ['o aluno não voa com este instrutor'], codigos: ['bloqueio'] });
+  });
+
+  it('o período fechado nesta data e fora da disponibilidade do aluno', () => {
+    const fechado = fixado();
+    fechado.win = fechado.win.map((v, w) => (w === 0 ? false : v));
+    assert.deepEqual(conflitoDe(fechado), { conflito: ['o horário está fechado nesta data'], codigos: ['horario-fechado'] });
+    assert.deepEqual(conflitoDe(fixado({ jan: 'tarde' })),
+      { conflito: ['o horário está fora da disponibilidade do aluno'], codigos: ['disponibilidade'] });
+  });
+
+  it('a duração do pedido mudou', () => {
+    assert.deepEqual(conflitoDe(fixado({ nb: 2 })), { conflito: ['a duração do pedido mudou'], codigos: ['duracao'] });
+  });
+
+  it('o pedido passou de voo para Ground, e de Ground para voo', () => {
+    assert.deepEqual(conflitoDe(fixado(GROUND_C152)), { conflito: ['o pedido passou de voo para Ground'], codigos: ['ground-ou-voo'] });
+    const turma = { a: 390, b: 480, r: 'SALA-GROUND', insId: 1, classKey: 'GND_Ground C152_0_1' };
+    assert.deepEqual(conflitoDe(fixado({}, {}, turma)), { conflito: ['o pedido passou de Ground para voo'], codigos: ['ground-ou-voo'] });
+  });
+
+  it('os conflitos de antes ganham código', () => {
+    assert.deepEqual(conflitoDe(fixado({}, { ins: [{ ...instrutor(1, 9), on: false }] })),
+      { conflito: ['o instrutor não está disponível'], codigos: ['instrutor-indisponivel'] });
+    assert.deepEqual(conflitoDe(fixado({ eq: 'C172' })), { conflito: ['a missão ou o avião do pedido mudou'], codigos: ['tipo-de-aviao'] });
+  });
+
+  it('o voo fixo cancelado não é conferido', () => {
+    assert.deepEqual(conflitoDe(fixado({ nb: 2 }, { fStatus: { '1000_0_1': 'Cancelado' } })), { conflito: undefined, codigos: undefined });
+  });
+});
+
+// Revisão de 14/11: a turma de Ground fixa
+describe('Turma de Ground fixa', () => {
+  const TURMA = { a: 390, b: 480, r: 'SALA-GROUND', insId: 1, classKey: 'GND_Ground C152_0_1' };
+  const ground = (id, pedido = {}, extra = {}) => aluno(id, { ...GROUND_C152, p1: 390, p2: -1, ...pedido }, extra);
+
+  it('com o primeiro aluno cancelado, a turma continua ocupando a sala e o instrutor', () => {
+    const estado = {
+      ...cenario({ ins: [instrutor(1, 9)], stu: [ground(1000), ground(1001), aluno(1002, { mis: 'Ground PA-34', eq: 'Sala Ground', nb: 1.5, p1: 390, p2: -1 })] }),
+      fixos: { '1000_0_1': TURMA, '1001_0_1': TURMA }, fStatus: { '1000_0_1': 'Cancelado' }
+    };
+    const { out } = runAllocationEngine(estado);
+    assert.equal(doAluno(out, 1001).conflito, undefined);
+    assert.ok(doAluno(out, 1002).a >= 480, `a outra turma às ${doAluno(out, 1002).a}`);
+  });
+
+  it('turma fixa sem o instrutor: um aluno novo não entra nela', () => {
+    const estado = {
+      ...cenario({ ins: [instrutor(1, 9, { on: false }), instrutor(2, 9)], stu: [ground(1000), ground(1001)] }),
+      fixos: { '1000_0_1': TURMA }
+    };
+    const { out } = runAllocationEngine(estado);
+    assert.deepEqual(doAluno(out, 1000).conflitoCodigos, ['instrutor-indisponivel']);
+    const novo = doAluno(out, 1001);
+    assert.notEqual(novo.classKey, TURMA.classKey);
+    assert.deepEqual([novo.insId, novo.conflito], [2, undefined]);
+  });
+
+  it('a chave de uma turma nova não repete a de uma turma fixa', () => {
+    // A turma fixa foi passada para as 08:20 (a chave continua a do período 0); o aluno novo só pode às 06:30
+    const estado = {
+      ...cenario({ ins: [instrutor(1, 9)], stu: [ground(1000), ground(1001, { jan: 'h390' })] }),
+      fixos: { '1000_0_1': { ...TURMA, a: 500, b: 590 } }
+    };
+    const { out } = runAllocationEngine(estado);
+    assert.equal(doAluno(out, 1001).a, 390);
+    assert.notEqual(doAluno(out, 1001).classKey, doAluno(out, 1000).classKey);
+  });
+
+  it('o voo fixo que depende do Ground é um prazo: o Ground termina antes dele', () => {
+    // O voo está fixo às 08:20, mas o pedido ainda diz 12:40; o Ground prefere as 10:10
+    const voo = { a: 500, b: 560, r: 'PR-VOB', insId: 1 };
+    const estado = {
+      ...cenario({ ins: [instrutor(1, 9), instrutor(2, 9)], stu: [ground(1000, { p1: 610 }, { extra: [missaoExtra(1, { p1: 760, p2: -1 })] })] }),
+      fixos: { '1000_1_1': voo }
+    };
+    const { out, al } = runAllocationEngine(estado, { compactar: false });
+    const turma = out.find(o => o.isGround);
+    assert.ok(turma && turma.b <= 500, JSON.stringify({ turma, al }));
+  });
+
+  it('sem horário para o Ground antes do voo fixo, a rejeição diz por quê', () => {
+    const voo = { a: 390, b: 450, r: 'PR-VOB', insId: 1 };
+    const estado = {
+      ...cenario({ ins: [instrutor(1, 9), instrutor(2, 9)], stu: [ground(1000, { p1: 610 }, { extra: [missaoExtra(1, { p1: 390, p2: -1 })] })] }),
+      fixos: { '1000_1_1': voo }
+    };
+    const { al } = runAllocationEngine(estado);
+    assert.deepEqual(al, [{ t: 'err', s: 'Aluno 1000', m: 'Rejeitado: o Ground precisa terminar antes do voo fixo das 06:30, e não há horário para ele antes disso.', codigo: 'ground-antes-do-voo-fixo' }]);
+  });
+});
+
+// Revisão de 14/11: o voo atrasado ocupa o horário novo; o cancelado não ocupa nada nem conta nas horas
+describe('Voos fixos atrasados e cancelados', () => {
+  const VOO = { a: 390, b: 450, r: 'PP-LJV', insId: 1 };
+
+  it('o voo fixo atrasado ocupa o horário novo (e deixa o de antes)', () => {
+    const estado = {
+      ...cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, { p1: 390, p2: -1 }), aluno(1001, { p1: 500, p2: -1 })], semAeronaves: apenas('C152', 'PP-LJV') }),
+      fixos: { '1000_0_1': VOO }, fStatus: { '1000_0_1': 'Atrasado' }, fObs: { '1000_0_1': { novoInicio: 500 } }
+    };
+    const { out, al } = runAllocationEngine(estado);
+    const novo = doAluno(out, 1001);
+    assert.ok(novo.b <= 500 || novo.a >= 560, `o voo novo às ${novo.a}`);
+    assert.deepEqual(al.filter(a => /Atraso/.test(a.m)), []);
+  });
+
+  it('o atraso conta no limite da lei do instrutor (o horário novo)', () => {
+    // O voo das 06:30 atrasado para as 16:30: com a jornada de 10 h (até 18:00 com o encerramento), o voo novo do
+    // instrutor só cabe a partir das 10:10 (pelo horário de antes, caberia às 08:20)
+    const estado = {
+      ...cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, { p1: 390, p2: -1 }), aluno(1001, { p1: 390, p2: -1 })] }),
+      fixos: { '1000_0_1': VOO }, fStatus: { '1000_0_1': 'Atrasado' }, fObs: { '1000_0_1': { novoInicio: 990 } },
+      limites: { jornadaMin: 600 }
+    };
+    const { out } = runAllocationEngine(estado, { compactar: false });
+    assert.equal(doAluno(out, 1001).a, 610);
+  });
+
+  it('o voo cancelado não conta na revisão de 50 horas, no limite da lei nem na turma', () => {
+    const turma = { a: 500, b: 590, r: 'SALA-GROUND', insId: 1, classKey: 'GND_Ground C152_1_1' };
+    const estado = {
+      ...cenario({
+        ins: [instrutor(1, 9)],
+        stu: [aluno(1000, { p1: 390, p2: -1 }), aluno(1001, { ...GROUND_C152, p1: 500, p2: -1 }), aluno(1002, { ...GROUND_C152, p1: 500, p2: -1 })],
+        horas: { 'PP-LJV': 49 }
+      }),
+      fixos: { '1000_0_1': VOO, '1001_0_1': turma, '1002_0_1': turma },
+      fStatus: { '1000_0_1': 'Cancelado', '1001_0_1': 'Cancelado' },
+      horasDosInstrutores: { 1: { mes: 99, semestre: 0, ano: 0, fimAnterior: null } }
+    };
+    const { out, al, revisao } = runAllocationEngine(estado);
+    assert.deepEqual(revisao['PP-LJV'], { inicio: 49, voadas: 0, fim: 49, paraAs: null });
+    assert.deepEqual(al.filter(a => /Limite da lei/.test(a.m)), []);
+    assert.deepEqual([doAluno(out, 1002).groupSize, doAluno(out, 1002).tag], [1, 'Pref. 1']);
+  });
+
+  it('o voo fixo cancelado não conta nas horas da divisão igual', () => {
+    // O instrutor 1 (menos habilitações) tem o voo das 08:20 e um cancelado; com o cancelado contando, o voo iria para o 2
+    const estado = {
+      ...cenario({ ins: [instrutor(1, 1), instrutor(2, 9)], stu: [aluno(1000, { p1: 390, p2: -1 }), aluno(1001, { p1: 500, p2: -1 })] }),
+      fixos: { '1000_0_1': VOO }, fStatus: { '1000_0_1': 'Cancelado' }
+    };
+    const { out } = runAllocationEngine(estado, { compactar: false });
+    assert.equal(doAluno(out, 1001).insId, 1);
+  });
+});
+
 describe('Voos fixos: em 100 dias gerados', async () => {
   const { gerarCenario } = await import('../helpers/cenarios.js');
 
@@ -93,5 +284,42 @@ describe('Voos fixos: em 100 dias gerados', async () => {
         assert.equal(igual.conflito, undefined, `seed ${seed}: ${o.fKey} em conflito sem motivo`);
       }
     }
+  });
+});
+
+// Revisão de 14/11: o ciclo do cadeado. Em Voo, Atrasado e Cancelado fixam o voo; Pendente ou Confirmado o soltam fora
+// da escala aprovada; Reabrir mantém os fixados pelo status; o cadeado diz por que o voo está fixo
+describe('O cadeado do voo', () => {
+  const VOO = { fKey: '1000_0_1', a: 390, b: 450, r: 'PR-VOB', insId: 1 };
+  const PINO = { a: 390, b: 450, r: 'PR-VOB', insId: 1 };
+
+  it('o status de andamento fixa o voo (mantém o pino que já havia)', async () => {
+    const { fixosAoMudarStatus } = await import('../../js/fixos.js');
+    for (const status of ['Em Voo', 'Atrasado', 'Cancelado']) {
+      assert.deepEqual(fixosAoMudarStatus({}, VOO, status, { aprovada: false }), { '1000_0_1': PINO });
+    }
+    const antigo = { '1000_0_1': { ...PINO, r: 'PR-VOC' } };
+    assert.deepEqual(fixosAoMudarStatus(antigo, VOO, 'Em Voo', { aprovada: true }), antigo);
+  });
+
+  it('Pendente ou Confirmado soltam o voo fora da escala aprovada; na aprovada, ele continua fixo', async () => {
+    const { fixosAoMudarStatus } = await import('../../js/fixos.js');
+    const fixos = { '1000_0_1': PINO, '1001_0_1': { ...PINO, a: 500, b: 560 } };
+    assert.deepEqual(fixosAoMudarStatus(fixos, VOO, 'Confirmado', { aprovada: false }), { '1001_0_1': fixos['1001_0_1'] });
+    assert.deepEqual(fixosAoMudarStatus(fixos, VOO, 'Pendente', { aprovada: true }), fixos);
+  });
+
+  it('Reabrir mantém só os voos fixados pelo status', async () => {
+    const { fixosAoReabrir } = await import('../../js/fixos.js');
+    const fixos = { '1000_0_1': PINO, '1001_0_1': PINO, '1002_0_1': PINO, '1003_0_1': PINO };
+    const fStatus = { '1000_0_1': 'Em Voo', '1001_0_1': 'Confirmado', '1002_0_1': 'Cancelado' };
+    assert.deepEqual(Object.keys(fixosAoReabrir(fixos, fStatus)), ['1000_0_1', '1002_0_1']);
+  });
+
+  it('o motivo do cadeado', async () => {
+    const { motivoDoFixo } = await import('../../js/fixos.js');
+    assert.equal(motivoDoFixo('1000_0_1', { fStatus: {}, aprovacao: { em: '2026-11-10T21:05:00.000Z', por: 'Rayane' } }), 'Voo fixo: escala aprovada');
+    assert.equal(motivoDoFixo('1000_0_1', { fStatus: { '1000_0_1': 'Em Voo' }, aprovacao: null }), 'Voo fixo: Em Voo');
+    assert.equal(motivoDoFixo('1000_0_1', { fStatus: { '1000_0_1': 'Cancelado' }, aprovacao: { em: 'x' } }), 'Voo fixo: Cancelado');
   });
 });

@@ -28,7 +28,8 @@ test.describe('Cursos', () => {
     await linhas(page, 'PP').nth(0).locator('[data-cf="nome"]').fill('Familiarização');
     await linhas(page, 'PP').nth(0).locator('[data-cf="nome"]').press('Tab');
     await linhas(page, 'PP').nth(1).locator('[data-cf="mis"]').selectOption('Navegação');
-    await linhas(page, 'PP').nth(1).locator('[data-cf="nb"]').selectOption('2');
+    await linhas(page, 'PP').nth(1).locator('[data-cf="nb"]').fill('2');
+    await linhas(page, 'PP').nth(1).locator('[data-cf="nb"]').press('Enter');
     await linhas(page, 'PP').nth(1).getByRole('button', { name: 'Subir PP-02' }).click();
     await expect(linhas(page, 'PP').nth(0).locator('[data-cf="id"]')).toHaveValue('PP-02');
 

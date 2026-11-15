@@ -11,6 +11,9 @@ describe('Reversões do histórico', () => {
   it('as que o app grava passam, com o rótulo', () => {
     assert.deepEqual(validarReversao({ kind: 'setFly', stuId: 1000, mid: 0, val: false, label: '↶ Reverter' }, FROTA_INICIAL),
       { kind: 'setFly', stuId: 1000, mid: 0, val: false, label: '↶ Reverter' });
+    // As missões extras que saíram com a principal (revisão de 14/11)
+    assert.deepEqual(validarReversao({ kind: 'setFly', stuId: 1000, mid: 0, val: true, extras: [1001, 1002], label: '↶ Restaurar' }, FROTA_INICIAL),
+      { kind: 'setFly', stuId: 1000, mid: 0, val: true, extras: [1001, 1002], label: '↶ Restaurar' });
     assert.deepEqual(validarReversao({ kind: 'setAv', reg: 'PR-VOB', val: true, label: '↶ Reverter' }, FROTA_INICIAL),
       { kind: 'setAv', reg: 'PR-VOB', val: true, label: '↶ Reverter' });
     assert.deepEqual(validarReversao({ kind: 'setInsOn', insId: 3, val: true, label: '↶ Reverter' }, FROTA_INICIAL),
@@ -23,7 +26,7 @@ describe('Reversões do histórico', () => {
 
   it('fora do formato, ou um recurso que já voltou à frota, não vale', () => {
     const ruins = [
-      null, 'x', { kind: ATAQUE }, { kind: 'setFly', stuId: ATAQUE, val: true }, { kind: 'setFly', stuId: 1000, mid: 0, val: 'sim' },
+      null, 'x', { kind: ATAQUE }, { kind: 'setFly', stuId: ATAQUE, val: true }, { kind: 'setFly', stuId: 1000, mid: 0, val: 'sim' }, { kind: 'setFly', stuId: 1000, mid: 0, val: true, extras: [ATAQUE] },
       { kind: 'setAv', reg: ATAQUE, val: true }, { kind: 'setAv', reg: '__proto__', val: true }, { kind: 'setInsOn', insId: 1.5, val: true },
       { kind: 'restaurarFixos', fixos: { [ATAQUE]: { a: 1 } } }, { kind: 'readicionarRecurso', recurso: { reg: ATAQUE, tipo: 'C152' } },
       { kind: 'readicionarRecurso', recurso: { reg: 'PR-VOB', tipo: 'C152' } }

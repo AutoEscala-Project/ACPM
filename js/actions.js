@@ -1,5 +1,6 @@
 // Ações que alteram o estado: perfil de acesso, data da escala, histórico de alterações, geração da escala e BI.
 import { isoMenosDias, fimDoMes, rotuloDaData, hojeISO, LIMITE_DO_NOME } from './format.js';
+import { aplicarSomenteLeitura } from './somente-leitura.js';
 import { runAllocationEngine } from './engine.js';
 import { ApiClient } from './storage.js';
 import { S, RES, AUDIT_LOG, BI_HISTORY, DATA, setS, setRES, setAuditLog, setBIHistory, setData, isGestor, dadoIndisponivel } from './state.js';
@@ -16,6 +17,14 @@ import { atualizarSelosDaEscala, atualizarSeloDaAgenda, lerPedidosDaData } from 
 // Abre uma data na tela (a data da escala e a data base do BI)
 export function abrirData(data) {
   setData(data);
+  // A data fica no endereço: recarregar a página continua nela (retorno da operação, 14/11)
+  try {
+    const url = new URL(window.location.href);
+    if (url.searchParams.get('data') !== data) {
+      url.searchParams.set('data', data);
+      window.history.replaceState(window.history.state, '', url);
+    }
+  } catch (e) {}
   $('#dt').value = data;
   $('#bi-dt').value = data;
   // No topo: "quarta-feira, 11/11" e "amanhã"
@@ -52,6 +61,8 @@ export function setRole(role, lockShared = false) {
   // Agenda: quem pode registrar pedidos (operadores e secretaria; no modo local, fora do perfil Gestor)
   document.body.dataset.agenda = podeEditarAgenda() ? 'edita' : 'consulta';
   atualizarSeloDaAgenda();
+  // Os campos da tela, desligados ou ligados conforme o perfil (revisão de 14/11)
+  aplicarSomenteLeitura();
 }
 
 // As horas dos instrutores ou os resultados dos cursos que não foram lidos (revisão de 14/11): o aviso fica até a leitura

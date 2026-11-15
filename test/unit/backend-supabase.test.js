@@ -402,9 +402,9 @@ describe('Backend Supabase: escala por data e histórico', () => {
   it('agenda: registra e cancela pelas funções do banco, lista por período e repassa o código do erro', async () => {
     const cliente = clienteFalso();
     const backend = criarBackendSupabase(cliente);
-    const id = await backend.registrarSolicitacao({ data: '2026-11-12', aluno: 1000, aluno_nome: 'Aluno 1000', missao: 'IFR', janela: 'horario', horario: '14:30', registrado_por: 'Maria' });
+    const id = await backend.registrarSolicitacao({ data: '2026-11-12', aluno: 1000, aluno_nome: 'Aluno 1000', missao: 'IFR', janela: 'horario', horario: '14:30', horas: 2.6, registrado_por: 'Maria' });
     assert.deepEqual(cliente.chamadas.at(-1), ['registrar_solicitacao', {
-      p_data: '2026-11-12', p_aluno: 1000, p_aluno_nome: 'Aluno 1000', p_missao: 'IFR', p_janela: 'horario', p_horario: '14:30',
+      p_data: '2026-11-12', p_aluno: 1000, p_aluno_nome: 'Aluno 1000', p_missao: 'IFR', p_janela: 'horario', p_horario: '14:30', p_horas: 2.6,
       p_registrado_por: 'Maria', p_observacao: null, p_excecao: false
     }]);
     await backend.registrarSolicitacao({ data: '2026-11-11', aluno: 1001, aluno_nome: 'Aluno 1001', missao: 'Voo Local', janela: 'manha', registrado_por: 'Maria' });

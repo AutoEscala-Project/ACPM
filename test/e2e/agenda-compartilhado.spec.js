@@ -25,7 +25,8 @@ test.describe('Agenda de Solicitações (modo compartilhado)', () => {
     await expect(page.locator('#ag-aluno option', { hasText: 'Aluno 1001' })).toHaveCount(1);
 
     await page.locator('#ag-aluno').selectOption({ label: 'Aluno 1001' });
-    await page.locator('#ag-janela').selectOption('tarde');
+    await page.locator('#ag-horario').selectOption('12:40');
+    await page.locator('#ag-horas').fill('2.5');
     await page.locator('#ag-por').fill('Maria');
     await page.locator('#form-agenda [type="submit"]').click();
     await expect(page.locator('#agenda-lista tbody tr')).toHaveCount(1);
@@ -34,7 +35,7 @@ test.describe('Agenda de Solicitações (modo compartilhado)', () => {
     await expect(pedido.locator('.por')).toHaveAttribute('title', 'Conta: Secretaria de Teste');
     await expect(pedido.locator('.situacao')).toHaveText('Ainda não importado');
     await expect(page.locator('#agenda-importar')).toBeHidden();
-    expect(servidor.solicitacoes.map(s => [s.data, s.aluno, s.janela, s.registrado_por, s.usuario])).toEqual([[AMANHA, 1001, 'tarde', 'Maria', CONTAS.secretaria.id]]);
+    expect(servidor.solicitacoes.map(s => [s.data, s.aluno, s.janela, s.horario, s.horas, s.registrado_por, s.usuario])).toEqual([[AMANHA, 1001, 'horario', '12:40', 2.5, 'Maria', CONTAS.secretaria.id]]);
 
     await page.locator('#agenda-cal [data-dia="2026-11-10"]').click();
     await expect(page.locator('#form-agenda [type="submit"]')).toBeDisabled();

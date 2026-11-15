@@ -136,7 +136,10 @@ export async function iniciarSessaoSupabase(projeto) {
   // A conta da TV da recepção só vê o painel: vai direto para ele, com a sessão (o app não fica conectado com ela)
   if (soPainel(perfil.perfil)) {
     passarSessaoParaATV(projeto);
-    window.location.replace(`painel.html${window.location.search}`);
+    // A TV mostra sempre o dia de hoje: a data aberta no app não vai junto
+    const params = new URLSearchParams(window.location.search);
+    params.delete('data');
+    window.location.replace(`painel.html${params.size ? `?${params}` : ''}`);
     return false;
   }
 

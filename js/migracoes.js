@@ -10,7 +10,7 @@ import { disponibilidadeAtual } from './rules.js';
 import { LIMITES_DA_LEI } from './limites.js';
 import { cursosVazios } from './cursos.js';
 
-export const ESQUEMA = 18;
+export const ESQUEMA = 19;
 
 // Um pedido do dia com as preferências em minutos e a disponibilidade no formato atual (formato 12)
 function pedidoEmMinutos(pedido) {
@@ -138,6 +138,17 @@ const PASSOS = {
       const { esquema, ...resto } = cadastro;
       return { ...resto, cursos: cursosVazios(), ...(esquema === undefined ? {} : { esquema }) };
     },
+    dia: dia => dia
+  },
+  // Versão 19 (retorno da operação, 14/11): o C152 vira uma habilitação do avião, como o C172 e o PA-34; todo instrutor
+  // do cadastro a recebe (todos voavam o C152)
+  19: {
+    cadastro: cadastro => ({
+      ...cadastro,
+      ins: Array.isArray(cadastro.ins)
+        ? cadastro.ins.map(x => (x && typeof x === 'object' ? { ...x, hab: [...new Set([...(Array.isArray(x.hab) ? x.hab : []), 'c152'])] } : x))
+        : cadastro.ins
+    }),
     dia: dia => dia
   }
 };

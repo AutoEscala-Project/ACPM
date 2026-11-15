@@ -13,9 +13,10 @@ import { OPCOES_DE_BURACOS, OPCOES_DE_HORARIOS, normalizarCriterios } from '../c
 import { metricasDaEscala } from '../metricas.js';
 import { sumUniqueOperationalHours, consolidateTimelineSlots } from '../engine.js';
 import { S, RES, AUDIT_LOG, TL_MODE, DATA, isGestor, dadoIndisponivel } from '../state.js';
-import { $ } from '../dom.js';
+import { motivoDoFixo } from '../fixos.js';
+import { $, posicionarJunto } from '../dom.js';
 
-export const HT = o => (o.isGround || isGroundMission(o.mis) ? '01h30 (1,5 h)' : o.h + ' h' + (o.ss !== '1/1' ? ` (sessão ${o.ss})` : ''));
+export const HT = o => (o.isGround || isGroundMission(o.mis) ? '01h30 (1,5 h)' : fmtH(o.h) + (o.ss !== '1/1' ? ` (sessão ${o.ss})` : ''));
 
 export function missionColorClass(mis) {
   if (isGroundMission(mis)) return 'm-gnd';
@@ -56,21 +57,6 @@ function conteudoDoPopup(o) {
     ${!turma && o.stuId ? `<button type="button" class="tl-pop-btn edit-only" data-act="rm-fly" data-id="${esc(o.stuId)}" data-mid="${esc(o.mid || 0)}">✕ Excluir da escala</button>` : ''}`;
 }
 
-// Acima da barra (ou abaixo, quando não cabe), sempre inteiro na tela; a seta aponta para o meio da barra
-const MARGEM = 8, DISTANCIA = 10;
-function posicionarPopup(pop, barra) {
-  const r = barra.getBoundingClientRect();
-  const { offsetWidth: largura, offsetHeight: altura } = pop;
-  const acima = r.top - DISTANCIA - altura >= MARGEM || r.bottom + DISTANCIA + altura > innerHeight - MARGEM && r.top > innerHeight - r.bottom;
-  const topo = Math.min(Math.max(acima ? r.top - DISTANCIA - altura : r.bottom + DISTANCIA, MARGEM), innerHeight - altura - MARGEM);
-  const meio = r.left + r.width / 2;
-  const esquerda = Math.min(Math.max(meio - largura / 2, MARGEM), innerWidth - largura - MARGEM);
-  pop.style.top = `${Math.round(topo)}px`;
-  pop.style.left = `${Math.round(esquerda)}px`;
-  pop.style.setProperty('--seta', `${Math.round(Math.min(Math.max(meio - esquerda, 14), largura - 14))}px`);
-  pop.classList.toggle('abaixo', !acima);
-}
-
 const barraDoPopup = () => (popupDe === null ? null : document.querySelector(`#out .tl-bar[data-pop="${CSS.escape(popupDe)}"]`));
 
 export function abrirPopupDoMapa(barra) {
@@ -81,7 +67,7 @@ export function abrirPopupDoMapa(barra) {
   pop.hidden = false;
   barra.setAttribute('aria-expanded', 'true');
   popupDe = barra.dataset.pop;
-  posicionarPopup(pop, barra);
+  posicionarJunto(pop, barra);
 }
 
 export function fecharPopupDoMapa({ devolverFoco = false } = {}) {
@@ -99,7 +85,7 @@ export const popupDoMapaAberto = () => popupDe !== null;
 export function reposicionarPopupDoMapa() {
   if (popupDe === null) return;
   const barra = barraDoPopup();
-  if (barra && barra.checkVisibility()) posicionarPopup($('#tl-pop'), barra);
+  if (barra && barra.checkVisibility()) posicionarJunto($('#tl-pop'), barra);
   else fecharPopupDoMapa();
 }
 
@@ -248,27 +234,28 @@ const statusDe = o => (S.fStatus && S.fStatus[o.fKey]) || o.status || 'Confirmad
 
 // A preferência só aparece quando o voo não ficou na 1ª
 function preferencia(o) {
-  if (o.baseTag === 'Pref. 2') return ' <span class="tag">2ª preferência</span>';
-  if (o.baseTag === 'Próximo livre') return ' <span class="tag fb">horário livre</span>';
-  if (o.baseTag === 'Horário ajustado') return ' <span class="tag fb" title="A compactação mudou o horário para fechar um buraco do dia (pela regra dos horários escolhida)">horário ajustado</span>';
+  if (o.baseTag === 'Pref. 2') return ' <span class="tag" data-dica="segunda-preferencia">2ª preferência</span>';
+  if (o.baseTag === 'Próximo livre') return ' <span class="tag fb" data-dica="horario-livre">horário livre</span>';
+  if (o.baseTag === 'Horário ajustado') return ' <span class="tag fb" data-dica="horario-ajustado">horário ajustado</span>';
   return '';
 }
 
 // Peso da tripulação só nos aviões, contra o limite (em destaque a menos de 10 kg dele)
 function peso(o) {
   if (!o.limKg) return '';
-  if (!o.kg) return '<span class="tag fb">sem peso</span>';
+  if (!o.kg) return '<span class="tag fb" data-dica="sem-peso">sem peso</span>';
   return `<span class="${o.kg > o.limKg - PERTO_DO_LIMITE_KG ? 'perto' : ''}">${o.kg}</span> <span class="sm">/ ${o.limKg} kg</span>${seloDoCombustivel(o)}`;
 }
 
 // Acima do limite com os tanques cheios, o voo sai com menos combustível: quanto reduzir (e, na dica, quanto abastecer)
 const horasEMinutos = min => `${Math.floor(min / 60)}h${String(Math.round(min) % 60).padStart(2, '0')}`;
 const textoDoCombustivel = c => `Abastecer até ${c.abastecerGal} gal (${c.reduzirGal} a menos que o tanque cheio); o voo, o táxi e a reserva pedem ${c.minimoGal} gal; autonomia de ${horasEMinutos(c.autonomiaMin)}.`;
-const seloDoCombustivel = o => (o.comb ? ` <span class="tag comb" title="${textoDoCombustivel(o.comb)}">reduzir ${o.comb.reduzirGal} gal</span>` : '');
+// A dica diz o caso deste voo (quanto abastecer) antes da explicação (revisão de 14/11)
+const seloDoCombustivel = o => (o.comb ? ` <span class="tag comb" data-dica="reduzir-combustivel" data-dica-caso="${textoDoCombustivel(o.comb)}">reduzir ${o.comb.reduzirGal} gal</span>` : '');
 
 function seletorDeStatus(o) {
   const st = statusDe(o);
-  return `<select class="st-sel st-${classeDoStatus(st)}" data-f="fstatus" data-fkey="${esc(o.fKey)}" aria-label="Status de ${esc(o.s)}"${isGestor() ? ' disabled' : ''}>
+  return `<select class="st-sel st-${classeDoStatus(st)}" data-f="fstatus" data-fkey="${esc(o.fKey)}" aria-label="Status de ${esc(o.s)}" data-dica="status"${isGestor() ? ' disabled' : ''}>
     ${FLIGHT_STATUSES.map(v => `<option value="${v}"${v === st ? ' selected' : ''}>${v}</option>`).join('')}
   </select>${detalheDoStatus(o)}`;
 }
@@ -294,14 +281,15 @@ function rAprovacao(temVoos) {
   if (S.aprovacao) {
     const em = new Date(S.aprovacao.em);
     const hora = `${String(em.getHours()).padStart(2, '0')}:${String(em.getMinutes()).padStart(2, '0')}`;
-    selo.title = 'Os voos estão fixos: uma alteração não tira ninguém do lugar; o pedido novo entra em volta. Voo que ficar impossível aparece em conflito.';
+    selo.dataset.dica = 'aprovar-escala';
     selo.innerHTML = `<svg class="ico" aria-hidden="true"><use href="#i-cadeado"/></svg>Aprovada às ${hora}${S.aprovacao.por ? ` por ${esc(S.aprovacao.por)}` : ''}`;
-    lugar.innerHTML = `<button type="button" class="btn sec edit-only" id="btn-reabrir" title="Os voos deixam de ser fixos e a escala volta a ser refeita inteira a cada alteração">Reabrir</button>`;
+    lugar.innerHTML = '<button type="button" class="btn sec edit-only" id="btn-reabrir" data-dica="reabrir">Reabrir</button>';
   } else {
     // Sem as horas dos instrutores, os limites do mês e do ano não foram conferidos: não aprova (revisão de 14/11)
     const semHoras = dadoIndisponivel('horas');
-    const dica = semHoras ? 'As horas de voo dos instrutores não foram lidas: os limites do mês e do ano não foram conferidos' : 'Fixa os voos: depois disso, as alterações não tiram ninguém do lugar';
-    lugar.innerHTML = temVoos ? `<button type="button" class="btn edit-only" id="btn-aprovar" title="${dica}"${semHoras ? ' disabled' : ''}>Aprovar escala</button>` : '';
+    // Desligado (sem as horas), o title do navegador explica; ligado, a dica do glossário
+    const explicacao = semHoras ? ' title="As horas de voo dos instrutores não foram lidas: os limites do mês e do ano não foram conferidos" disabled' : ' data-dica="aprovar-escala"';
+    lugar.innerHTML = temVoos ? `<button type="button" class="btn edit-only" id="btn-aprovar"${explicacao}>Aprovar escala</button>` : '';
   }
 }
 
@@ -313,35 +301,41 @@ function rCompactacao(out) {
   lugar.hidden = !out.length && !S.aprovacao;
   const criterios = normalizarCriterios(S.criterios);
   const travado = isGestor() || Boolean(S.aprovacao);
-  const grupo = (campo, rotulo, opcoes) => `<span class="flt-rotulo"><span>${rotulo}</span> <span class="seg" role="group" aria-label="${rotulo}">${opcoes.map(([id, nome, dica]) =>
-    `<button type="button" data-criterio="${campo}" data-valor="${id}" aria-pressed="${criterios[campo] === id}"${criterios[campo] === id ? ' class="on"' : ''} title="${esc(dica)}"${travado ? ' disabled' : ''}>${esc(nome)}</button>`).join('')}</span></span>`;
-  $('#criterios').title = S.aprovacao && !isGestor() ? 'Com a escala aprovada, os voos fixos não mudam: reabra a escala para mudar os critérios.' : '';
-  $('#criterios').innerHTML = grupo('buracos', 'Buracos', OPCOES_DE_BURACOS) + grupo('horarios', 'Horários', OPCOES_DE_HORARIOS);
+  // Cada critério e cada opção com a dica do glossário (revisão de 14/11)
+  // Travados, os botões ficam com aria-disabled (o foco e a dica continuam); na escala aprovada, a dica diz por quê
+  const dicaDa = id => (S.aprovacao && !isGestor() ? 'criterios-travados' : `criterio-${id}`);
+  const grupo = (campo, rotulo, dica, opcoes) => `<span class="flt-rotulo"><span>${rotulo}</span><button type="button" class="dica-btn" data-dica="${dica}" aria-label="O que é ${rotulo}?" aria-expanded="false"></button> <span class="seg" role="group" aria-label="${rotulo}">${opcoes.map(([id, nome]) =>
+    `<button type="button" data-criterio="${campo}" data-valor="${id}" data-dica="${dicaDa(id)}" aria-pressed="${criterios[campo] === id}"${criterios[campo] === id ? ' class="on"' : ''}${travado ? ' aria-disabled="true"' : ''}>${esc(nome)}</button>`).join('')}</span></span>`;
+  $('#criterios').innerHTML = grupo('buracos', 'Buracos', 'buracos', OPCOES_DE_BURACOS) + grupo('horarios', 'Horários', 'horarios', OPCOES_DE_HORARIOS);
 }
 
 // O tempo parado que sobra na escala (sem os voos cancelados), ao lado do resumo: o efeito dos critérios da compactação
 function tempoParado(out) {
   const m = metricasDaEscala(out.filter(o => statusDe(o) !== 'Cancelado'));
-  return `<div class="parado" id="tempo-parado" title="Tempo entre um voo e o seguinte de cada instrutor e de cada avião (sem os voos cancelados); parado 2 h ou mais, o avião volta para o hangar">
+  return `<div class="parado" id="tempo-parado" data-dica="tempo-parado">
       <div><strong>${horasEMinutos(m.instrutoresParadoMin)}</strong> INVAs parados</div>
       <div><strong>${horasEMinutos(m.avioesParadoMin)}</strong> aviões parados</div>
       <div><strong>${m.saidasDoHangar}</strong> ${m.saidasDoHangar === 1 ? 'saída' : 'saídas'} do hangar</div>
     </div>`;
 }
 
-// Avisos agrupados por tipo: alunos sem peso, aviões que param para a revisão e outros
+// Avisos agrupados por tipo: alunos e instrutores sem peso, aviões que param para a revisão e outros. O aviso de peso
+// diz de quem é o peso que falta (revisão de 14/11): "Peso do aluno", "Peso de Instrutor 01" ou "Pesos do aluno e de…"
+const INSTRUTOR_SEM_PESO = /^Pesos? (?:do aluno e )?de (.+?) não informados? \(/;
 function resumoDosAvisos(avisos) {
-  const ehPeso = a => a.m.startsWith('Peso do aluno não informado');
+  const ehPeso = a => /^Pesos? d/.test(a.m);
   const ehRevisao = a => a.m.startsWith('Aeronave parou');
   const ehAtraso = a => a.m.startsWith('Atraso:');
   const ehLimite = a => a.m.startsWith('Limite da lei:');
-  const semPeso = new Set(avisos.filter(ehPeso).map(a => a.s.replace(/ \(.*\)$/, ''))).size;
+  const semPeso = new Set(avisos.filter(a => ehPeso(a) && /^Pesos? do aluno/.test(a.m)).map(a => a.s.replace(/ \(.*\)$/, ''))).size;
+  const instrutoresSemPeso = new Set(avisos.filter(ehPeso).map(a => (INSTRUTOR_SEM_PESO.exec(a.m) || [])[1]).filter(Boolean)).size;
   const revisao = avisos.filter(ehRevisao).length;
   const atrasos = avisos.filter(ehAtraso).length;
   const limites = new Set(avisos.filter(ehLimite).map(a => a.s)).size;
   const outros = avisos.filter(a => !ehPeso(a) && !ehRevisao(a) && !ehAtraso(a) && !ehLimite(a)).length;
   const partes = [
     semPeso && `${semPeso} ${semPeso === 1 ? 'aluno sem peso' : 'alunos sem peso'}`,
+    instrutoresSemPeso && `${instrutoresSemPeso} ${instrutoresSemPeso === 1 ? 'instrutor sem peso' : 'instrutores sem peso'}`,
     revisao && `${revisao} ${revisao === 1 ? 'avião para' : 'aviões param'} para a revisão de 50 horas`,
     atrasos && `${atrasos} ${atrasos === 1 ? 'atraso com conflito' : 'atrasos com conflito'}`,
     limites && `${limites} ${limites === 1 ? 'instrutor perto' : 'instrutores perto'} do limite da lei`,
@@ -415,12 +409,14 @@ function tabela(voos) {
       const classes = [statusDe(voo) === 'Cancelado' ? 'st-Cancelado' : '', voo.conflito ? 'em-conflito' : ''].filter(Boolean);
       return classes.length ? ` class="${classes.join(' ')}"` : '';
     };
-    const fixo = o.fixo ? ' <svg class="ico fixo" role="img" aria-label="Voo fixo (escala aprovada)"><title>Voo fixo (escala aprovada)</title><use href="#i-cadeado"/></svg>' : '';
+    // O cadeado diz por que o voo está fixo: o status de andamento ou a escala aprovada (revisão de 14/11)
+    const motivo = esc(motivoDoFixo(o.fKey, { fStatus: S.fStatus, aprovacao: S.aprovacao }));
+    const fixo = o.fixo ? ` <svg class="ico fixo" role="img" aria-label="${motivo}" data-dica="voo-fixo" data-dica-termo="${motivo}"><use href="#i-cadeado"/></svg>` : '';
     const doTempo = ` data-w="${o.w}"${recolhido ? ' hidden' : ''}`;
     h += `<tr${cancelado(o)}${doTempo}>
-      <td class="c-hr hr"${rs}>${hm(o.a)}–${hm(o.b)} <small>${duracao(o)}</small>${fixo}${preferencia(o)}${o.conflito ? ' <span class="tag er">conflito</span>' : ''}</td>
+      <td class="c-hr hr"${rs}>${hm(o.a)}–${hm(o.b)} <small>${duracao(o)}</small>${fixo}${preferencia(o)}${o.conflito ? ' <span class="tag er" data-dica="conflito">conflito</span>' : ''}</td>
       <td class="c-aluno"><b>${esc(o.s)}</b></td>
-      <td class="c-missao"${rs}>${esc(o.mis)}${grupo.length > 1 ? ` <small>Turma de ${grupo.length} alunos</small>` : ''}</td>
+      <td class="c-missao"${rs}>${esc(o.mis)}${grupo.length > 1 ? ` <small data-dica="turma">Turma de ${grupo.length} alunos</small>` : ''}</td>
       <td class="c-aviao nw"${rs}>${esc(nomeDoRecurso(o.r))}${ehGround(o) ? '' : ` <small>${esc(o.eqType || '')}</small>`}</td>
       <td class="c-instr nw"${rs}>${esc(o.ins)}</td>
       <td class="c-peso nw"${rs}>${peso(o)}</td>

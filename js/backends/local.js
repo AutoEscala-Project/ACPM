@@ -41,7 +41,6 @@ const proximoId = lista => Math.max(Date.now(), ...lista.map(e => e.id + 1));
 // Erros da agenda com o mesmo código do servidor (PT403: fora do prazo; 23514: dado inválido; P0002: não achado)
 const erroDaAgenda = (code, message) => Object.assign(new Error(message), { code });
 const textoObrigatorio = (valor, max) => typeof valor === 'string' && valor.trim().length >= 1 && valor.trim().length <= max;
-const JANELAS = ['manha', 'tarde', 'noite', 'horario'];
 
 // Formato acpm2 (7 janelas) convertido para as 9 janelas atuais
 function converterAcpm2(o) {
@@ -133,17 +132,21 @@ export const backendLocal = {
       .sort((a, b) => ordem(a.data, b.data) || ordem(a.registrado_em, b.registrado_em));
   },
 
-  async registrarSolicitacao({ data, aluno, aluno_nome, missao, janela, horario = null, observacao = null, registrado_por, excecao = false }, agora = new Date()) {
+  // O pedido é num horário específico, com a duração de 0,1 a 5 h (o Ground, 01h30): como no servidor (retorno da
+  // operação, 14/11)
+  async registrarSolicitacao({ data, aluno, aluno_nome, missao, janela, horario = null, horas, observacao = null, registrado_por, excecao = false }, agora = new Date()) {
+    if (janela !== 'horario' || !/^[0-2][0-9]:[0-5][0-9]$/.test(horario || '')) throw erroDaAgenda('22023', 'o pedido é num horário específico');
+    const h = String(missao).startsWith('Ground') ? 1.5 : Math.round(+horas * 10) / 10;
+    if (!(h > 0 && h <= 5)) throw erroDaAgenda('22023', 'a duração vai de 0,1 h a 5 h');
     const noPrazo = prazoDaAgendaPermite(data, agora);
     if (!noPrazo && !excecao) throw erroDaAgenda('PT403', 'prazo encerrado: pedido para o dia seguinte só até as 13:00');
-    if (!textoObrigatorio(registrado_por, 80) || !textoObrigatorio(aluno_nome, 80) || !textoObrigatorio(missao, 60) ||
-        !JANELAS.includes(janela) || (janela === 'horario') !== /^[0-2][0-9]:[0-5][0-9]$/.test(horario || '')) {
-      throw erroDaAgenda('23514', 'pedido incompleto: confira aluno, missão, disponibilidade e quem anotou');
+    if (!textoObrigatorio(registrado_por, 80) || !textoObrigatorio(aluno_nome, 80) || !textoObrigatorio(missao, 60)) {
+      throw erroDaAgenda('23514', 'pedido incompleto: confira aluno, missão, horário e quem anotou');
     }
     const lista = lerJson(CHAVE_AGENDA) || [];
     const id = proximoId(lista);
     lista.push({
-      id, data, aluno, aluno_nome: aluno_nome.trim(), missao, janela, horario: janela === 'horario' ? horario : null,
+      id, data, aluno, aluno_nome: aluno_nome.trim(), missao, janela, horario, horas: h,
       observacao: (observacao || '').trim().slice(0, 300) || null, registrado_por: registrado_por.trim(),
       registrado_em: agora.toISOString(), conta: null, excecao: !noPrazo, cancelada_em: null, cancelada_por: null
     });

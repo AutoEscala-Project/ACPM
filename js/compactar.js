@@ -14,11 +14,12 @@ import { podeFazer } from './habilitacoes.js';
 import { categoriaDoRodizio } from './rodizio.js';
 import { livre, cobre, cabeNoSaldo } from './viabilidade.js';
 import { reducaoNecessaria, combustivelDoVoo } from './combustivel.js';
-import { dentroDosLimites } from './limites.js';
+import { dentroDosLimites, normalizarLimites } from './limites.js';
 import { HORARIOS_INICIAIS, horariosDaMissao, periodoDoMinuto, minutoDaPreferencia } from './horarios.js';
 import { disponibilidadeDoAluno, doesGroundGateFlight } from './rules.js';
 import { INTERVALO_DO_HANGAR } from './metricas.js';
 import { normalizarCriterios } from './criterios.js';
+import { intervaloEfetivo } from './status.js';
 
 // Um voo que muda de instrutor junto com o horário vai para quem já voa até esta distância (minutos) dele
 const ENCOSTA = 60;
@@ -27,6 +28,18 @@ const EPS = 1e-9;
 const STATUS_QUE_MUDAM = ['Confirmado', 'Pendente'];
 
 const soma = lista => lista.reduce((total, v) => total + v, 0);
+
+// Os voos que ocupam o dia (sem os cancelados; o aluno cancelado de uma turma acompanha a turma), o atrasado no
+// horário novo (revisão de 14/11). Os voos de out ficam os mesmos objetos, menos o atrasado (uma cópia, que nunca muda:
+// o voo com status fica onde está)
+function ocupando(out, estado) {
+  const statusDe = v => (estado.fStatus && estado.fStatus[v.fKey]) || v.status || 'Confirmado';
+  const ativas = new Set(out.filter(o => statusDe(o) !== 'Cancelado').map(o => o.classKey || o.fKey));
+  return out.filter(o => ativas.has(o.classKey || o.fKey)).map(o => {
+    const efetivo = intervaloEfetivo(o, statusDe(o), (estado.fObs || {})[o.fKey]);
+    return efetivo.a === o.a ? o : { ...o, ...efetivo };
+  });
+}
 const menorPrimeiro = (a, b) => (a === b ? 0 : a - b);
 
 // As paradas (minutos) entre os blocos de uma lista de intervalos [início, fim]; os que se encostam ou se sobrepõem
@@ -70,7 +83,7 @@ const agrupar = (lista, chave) => lista.reduce((grupos, o) => grupos.set(chave(o
 export function custoDaEscala(out, estado) {
   const pesos = PESOS_DA_COMPACTACAO[normalizarCriterios(estado.criterios).buracos];
   const pedidoDe = pedidosDo(estado);
-  const unidades = [...new Map(out.map(o => [o.classKey || o.fKey, o])).values()];
+  const unidades = [...new Map(ocupando(out, estado).map(o => [o.classKey || o.fKey, o])).values()];
   const intervalos = lista => lista.map(o => [o.a, o.b]);
   return soma([...agrupar(unidades, o => o.insId).values()].map(l => custoDoInstrutor(intervalos(l), pesos)))
     + soma([...agrupar(unidades.filter(o => AIRCRAFT_EQ_TYPES.includes(o.eqType)), o => o.r).values()].map(l => custoDoAviao(intervalos(l), pesos)))
@@ -79,7 +92,9 @@ export function custoDaEscala(out, estado) {
 
 // A busca. Muda os voos de out no lugar (horário, período, instrutor, peso, combustível, avião e a etiqueta da
 // preferência) e devolve quantos movimentos fez
-export function compactar(out, state, { saldo = () => Infinity, posicao = () => 0, limites, historico = () => null, limitesDaBusca = LIMITES_DA_COMPACTACAO } = {}) {
+export function compactar(out, state, { saldo = () => Infinity, posicao = () => 0, limites: limitesDados, historico = () => null, limitesDaBusca = LIMITES_DA_COMPACTACAO } = {}) {
+  // Sem os limites, os do estado (revisão de 14/11)
+  const limites = limitesDados || normalizarLimites(state.limites);
   const { buracos, horarios: regra } = normalizarCriterios(state.criterios);
   const pesos = PESOS_DA_COMPACTACAO[buracos], pesosDaPreferencia = PESOS_DA_COMPACTACAO.preferencia;
   const frota = Array.isArray(state.frota) ? state.frota : FROTA_INICIAL;
@@ -90,15 +105,15 @@ export function compactar(out, state, { saldo = () => Infinity, posicao = () => 
   const pedidoDe = pedidosDo(state);
   const statusDe = v => (state.fStatus && state.fStatus[v.fKey]) || v.status || 'Confirmado';
 
-  // As unidades: um voo, ou uma turma de Ground inteira (1h30 uma vez só)
-  const unidades = [...agrupar(out, o => o.classKey || o.fKey).values()].map(voos => {
+  // As unidades: um voo, ou uma turma de Ground inteira (1h30 uma vez só). O voo cancelado não ocupa nada e o atrasado
+  // ocupa o horário novo (revisão de 14/11); os dois ficam onde estão
+  const unidades = [...agrupar(ocupando(out, state), o => o.classKey || o.fKey).values()].map(voos => {
     const v = voos[0];
     const presa = voos.some(o => o.fixo || !STATUS_QUE_MUDAM.includes(statusDe(o))) || v.mis === 'Noturno' || (v.mis === 'Parafuso' && v.eqType === 'C152');
-    const i = v.fKey.lastIndexOf('_');
     return {
       chave: v.classKey || v.fKey, voos, a: v.a, b: v.b, dur: v.b - v.a, h: v.h, insId: v.insId, r: v.r, mis: v.mis,
       tipo: v.isGround ? GROUND_EQ_TYPE : v.eqType, isGround: v.isGround, aviao: AIRCRAFT_EQ_TYPES.includes(v.eqType),
-      alunos: voos.map(o => o.stuId), pedido: v.fKey.slice(0, i), sessao: +v.fKey.slice(i + 1), original: v.a,
+      alunos: voos.map(o => o.stuId), original: v.a,
       mudaHorario: !presa && !v.isGround && regra !== 'fixos',
       mudaInstrutor: !presa && !categoriaDoRodizio(v.mis, v.eqType)
     };
@@ -115,7 +130,6 @@ export function compactar(out, state, { saldo = () => Infinity, posicao = () => 
       && (!permitidas || permitidas(m)) && (regra !== 'preferencias' || preferidos.includes(m)));
     if (!u.inicios.length) u.mudaHorario = false;
   }
-  const irmas = agrupar(unidades.filter(u => !u.isGround), u => u.pedido);
 
   // Quem está onde: os dias dos instrutores, dos recursos (aviões e simuladores) e dos alunos, e as horas de cada instrutor
   const doInstrutor = new Map(), doRecurso = new Map(), doAluno = new Map(), cargas = new Map(ativos.map(x => [x.id, 0]));
@@ -174,8 +188,8 @@ export function compactar(out, state, { saldo = () => Infinity, posicao = () => 
   }
 
   // As regras da escala com as mudanças: o instrutor (habilitado, disponível, livre, dentro da lei; o novo, sem
-  // bloqueio do aluno, sem já voar com ele no dia, com o peso conferido e sem piorar o combustível), o aluno livre, a
-  // ordem das sessões e o recurso
+  // bloqueio do aluno, sem já voar com ele no dia, com o peso conferido e sem piorar o combustível), o aluno livre e o
+  // recurso
   function viavel(mudancas) {
     verificacoes++;
     const movidas = mudancas.map(m => m.u);
@@ -203,7 +217,6 @@ export function compactar(out, state, { saldo = () => Infinity, posicao = () => 
       }
       if (mudouHorario) {
         for (const s of u.alunos) if (!livre(intervalosDe(doAluno.get(s), movidas), a, b)) return false;
-        for (const w of irmas.get(u.pedido) || []) if (w !== u && (w.sessao < u.sessao ? w.b > a : w.a < b)) return false;
       }
       if ((mudouHorario || m.r !== u.r) && !u.isGround && !recursoServe(u, m.r, a, b, movidas)) return false;
     }

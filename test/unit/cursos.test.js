@@ -16,7 +16,7 @@ describe('Programa dos cursos', () => {
   it('só missões válidas: código curto e único no curso, missão do app, recurso da missão e horas inteiras de 1 a 11', () => {
     const cursos = normalizarCursos({
       PP: [missao('PP-01'), missao('pp-02 ', { nome: '  Navegação  ', mis: 'Navegação', nb: 2 }), missao('PP-01'), missao('', {}), missao('PP 03'),
-        missao('PP-04', { mis: 'Inexistente' }), missao('PP-05', { eq: 'PA-34', mis: 'Noturno' }), missao('PP-06', { nb: 40 })],
+        missao('PP-04', { mis: 'Inexistente' }), missao('PP-05', { eq: 'PA-34', mis: 'Noturno' }), missao('PP-06', { nb: 40 }), missao('PP-07', { nb: 1.2 })],
       PC: 'x',
       XYZ: [missao('X-1')]
     });
@@ -24,7 +24,9 @@ describe('Programa dos cursos', () => {
       ['PP-01', 'Missão PP-01', 'Voo Local', 'C152', 1],
       ['PP-02', 'Navegação', 'Navegação', 'C152', 2],
       ['PP-05', 'Missão PP-05', 'Noturno', 'C172', 1],
-      ['PP-06', 'Missão PP-06', 'Voo Local', 'C152', 1]
+      // As horas fracionadas, até 5 h (retorno da operação, 14/11)
+      ['PP-06', 'Missão PP-06', 'Voo Local', 'C152', 5],
+      ['PP-07', 'Missão PP-07', 'Voo Local', 'C152', 1.2]
     ]);
     assert.deepEqual([cursos.PC, cursos.INVA, Object.keys(cursos)], [[], [], ['PP', 'PC', 'INVA']]);
   });

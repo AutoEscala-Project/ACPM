@@ -6,7 +6,7 @@ import { horariosDaMissao } from '../horarios.js';
 import { S, DATA, isGestor } from '../state.js';
 import { ApiClient } from '../storage.js';
 import { $ } from '../dom.js';
-import { esc, opts, hm } from '../format.js';
+import { esc, opts, hm, fmtH } from '../format.js';
 import { registraNaAgenda, operaEscala } from '../perfis.js';
 import { JANELAS_DA_AGENDA, FUSO_DO_AEROCLUBE, prazoDaAgendaPermite, primeiraDataAberta, hojeEmSaoPaulo, horaEmSaoPaulo, somarDias } from '../agenda.js';
 
@@ -33,7 +33,14 @@ const dataPorExtenso = iso => {
 const quando = instante => new Intl.DateTimeFormat('pt-BR', {
   timeZone: FUSO_DO_AEROCLUBE, day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23'
 }).format(new Date(instante)).replace(',', '');
-const disponibilidade = p => (p.janela === 'horario' ? `às ${p.horario}` : (JANELAS_DA_AGENDA.find(([j]) => j === p.janela) || [, p.janela])[1]);
+// O horário e a duração do pedido (retorno da operação, 14/11); os pedidos de antes por período mostram o período
+const disponibilidade = p => (p.janela === 'horario'
+  ? `${p.horario} · ${fmtH(p.horas === null || p.horas === undefined ? 1 : +p.horas)}`
+  : (JANELAS_DA_AGENDA.find(([j]) => j === p.janela) || [, p.janela])[1]);
+
+// Os pedidos (não cancelados) de um aluno numa data, para o aviso de voo já marcado
+export const pedidosDoAluno = (aluno, dia) => pedidos.filter(p => p.aluno === aluno && p.data === dia && !p.cancelada_em);
+export const descreverPedido = p => `${p.missao} às ${p.horario || disponibilidade(p)}`;
 
 // Semanas inteiras (de domingo a sábado) que cobrem o mês
 function gradeDoMes(mes) {
@@ -44,7 +51,10 @@ function gradeDoMes(mes) {
   return [inicio, fim];
 }
 
-export async function abrirAgenda(dia = diaEscolhido || primeiraDataAberta()) {
+// A agenda abre na data aberta no topo (retorno da operação, 14/11); quando ela já fechou para pedidos (amanhã, depois
+// das 13:00), no primeiro dia que ainda aceita pedidos
+const diaPadrao = () => (DATA && DATA >= primeiraDataAberta() ? DATA : primeiraDataAberta());
+export async function abrirAgenda(dia = diaPadrao()) {
   diaEscolhido = dia;
   mesVisivel = dia.slice(0, 7);
   await carregarMes();
@@ -131,7 +141,7 @@ function listaHTML() {
   if (!doDia.length) return '<p class="h">Nenhum pedido para esta data.</p>';
   // Uma linha por pedido: a observação fica sob o nome do aluno e a conta que registrou, na dica de "Registrado por"
   // (quase sempre é a mesma em todas as linhas)
-  return `<table><thead><tr><th>Registrado em</th><th>Aluno</th><th>Fase / missão</th><th>Disponibilidade</th><th>Registrado por</th><th>Situação</th><th></th></tr></thead>
+  return `<table><thead><tr><th>Registrado em</th><th>Aluno</th><th>Fase / missão</th><th>Horário</th><th>Registrado por</th><th>Situação</th><th></th></tr></thead>
     <tbody>${doDia.map(p => `<tr${p.cancelada_em ? ' class="cancel"' : ''}>
       <td>${quando(p.registrado_em)}</td>
       <td><b>${esc(p.aluno_nome)}</b>${p.observacao ? `<small class="obs">${esc(p.observacao)}</small>` : ''}</td>
@@ -147,6 +157,10 @@ function listaHTML() {
 export function preencherHorariosDaAgenda() {
   const missao = $('#ag-missao').value || 'Voo Local';
   const regra = MIS[missao] || MIS['Voo Local'];
+  // O Ground tem sempre 01h30
+  const horas = $('#ag-horas');
+  if (regra.isGround) { horas.dataset.antes = horas.dataset.antes || horas.value; horas.value = '1.5'; horas.disabled = true; }
+  else if (horas.disabled) { horas.value = horas.dataset.antes || '1'; delete horas.dataset.antes; horas.disabled = false; }
   const lista = horariosDaMissao(S.horarios, missao, regra.defEq).map(hm);
   const atual = $('#ag-horario').value;
   $('#ag-horario').innerHTML = opts(lista.map(h => [h, h]), lista.includes(atual) ? atual : lista[0]);
@@ -169,11 +183,9 @@ export function rAgenda() {
   $('#ag-aluno').value = aluno;
   if (!$('#ag-missao').options.length) {
     $('#ag-missao').innerHTML = opts(Object.keys(MIS).map(m => [m, m]), 'Voo Local');
-    $('#ag-janela').innerHTML = opts(JANELAS_DA_AGENDA, 'manha');
     preencherHorariosDaAgenda();
     try { $('#ag-por').value = localStorage.getItem(CHAVE_REGISTRADO_POR) || ''; } catch (e) {}
   }
-  $('#ag-horario-rotulo').hidden = $('#ag-janela').value !== 'horario';
   const aberto = prazoDaAgendaPermite(diaEscolhido);
   $('#form-agenda [type="submit"]').disabled = !aberto;
   $('#ag-excecao').hidden = aberto || !podeUsarExcecao();

@@ -4,7 +4,7 @@
 import { WIN, NI, AIRCRAFT_EQ_TYPES, SIM_EQ_TYPES, REVISAO_H } from '../config.js';
 import { normalizarHangar } from '../hangar.js';
 import { FROTA_INICIAL } from '../frota.js';
-import { S, RES } from '../state.js';
+import { S, RES, voosQueVoam } from '../state.js';
 import { $ } from '../dom.js';
 import { hm, fmtH, esc } from '../format.js';
 import { CATEGORIAS_COM_HORARIOS } from '../horarios.js';
@@ -29,27 +29,30 @@ function situacao(r, voadas, revisao) {
     return `<span class="tag er">Parou para revisão de 50 horas ${revisao.voadas ? 'às ' + hm(revisao.paraAs) : '(sem saldo hoje)'}</span>`;
   }
   if (!voadas) return '<span class="sm">—</span>';
-  return `${fmtH(voadas)} na escala${revisao ? ` · termina com ${fmtH(revisao.fim)}` : ''}`;
+  return `${fmtH(voadas)} na escala${revisao ? ` · termina com ${fmtH(horasDisponiveis(revisao.fim))} disponíveis` : ''}`;
 }
 
-// Saldo até a revisão, com uma barra: âmbar abaixo de 10 h e vermelha abaixo de 5 h
-function saldo(horas) {
-  const resta = Math.max(0, REVISAO_H - horas);
+// As horas disponíveis até a revisão (retorno da operação, 14/11: a operadora lança as disponíveis; o dia guarda as
+// horas desde a revisão, 50 menos as disponíveis)
+export const horasDisponiveis = horas => Math.round(Math.max(0, REVISAO_H - horas) * 10) / 10;
+
+// A barra das horas disponíveis: âmbar abaixo de 10 h e vermelha abaixo de 5 h
+function barra(horas) {
+  const resta = horasDisponiveis(horas);
   const cor = resta < 5 ? 'er' : resta < 10 ? 'wa' : '';
   const largura = Math.max(2, Math.min(100, (resta / REVISAO_H) * 100)).toFixed(0);
-  return `<span class="saldo">${fmtH(resta)}</span><span class="barra ${cor}"><i style="width:${largura}%"></i></span>`;
+  return `<span class="barra ${cor}"><i style="width:${largura}%"></i></span>`;
 }
 
 function linha({ reg: r, tipo, soParafuso }, grupo, voadas, revisao) {
   const aviao = AIRCRAFT_EQ_TYPES.includes(tipo);
   const horas = S.horas[r];
   const temHoras = typeof horas === 'number';
-  const parafuso = soParafuso ? ' <span class="tag fb" title="Exclusivo para a missão de Parafuso">Só Parafuso</span>' : '';
+  const parafuso = soParafuso ? ' <span class="tag fb" data-dica="so-parafuso">Só Parafuso</span>' : '';
   return `<tr data-r="${esc(r)}" data-grupo="${grupo}"${S.av[r] ? '' : ' class="manutencao"'}${recolhidos.has(grupo) ? ' hidden' : ''}>
     <td><label class="alvo"><input type="checkbox" class="sw" data-a="av" data-id="${esc(r)}"${S.av[r] ? ' checked' : ''} aria-label="${esc(r)} disponível"></label></td>
     <td><b>${esc(r)}</b>${aviao ? '' : ` <small class="sm">${tipo}</small>`}${parafuso}</td>
-    <td>${aviao ? `<input type="number" class="horas" min="0" max="60" step="0.1" inputmode="decimal" data-a="horas" data-horas="${esc(r)}" value="${temHoras ? horas : ''}" placeholder="—" aria-label="Horas do ${esc(r)} desde a última revisão"> h` : ''}</td>
-    <td>${aviao && temHoras ? saldo(horas) : ''}</td>
+    <td>${aviao ? `<span class="horas-disp"><input type="number" class="horas" min="0" max="${REVISAO_H}" step="0.1" inputmode="decimal" data-a="horas" data-horas="${esc(r)}" value="${temHoras ? horasDisponiveis(horas) : ''}" placeholder="—" aria-label="Horas disponíveis do ${esc(r)} até a revisão"> h${temHoras ? barra(horas) : ''}</span>` : ''}</td>
     <td>${situacao(r, voadas, revisao)}</td>
     <td class="edit-only acoes-frota">${aviao ? `<button class="btn quiet rev" data-act="revisao" data-id="${esc(r)}">Revisão feita</button>` : ''}<button class="btn quiet rev ret" data-act="retirar-recurso" data-id="${esc(r)}" aria-label="Retirar ${esc(r)} da frota">Retirar</button></td>
   </tr>`;
@@ -59,14 +62,14 @@ function linha({ reg: r, tipo, soParafuso }, grupo, voadas, revisao) {
 export function rRevisao() {
   const resumo = (RES && RES.revisao) || {};
   const voadas = {};
-  ((RES && RES.out) || []).forEach(o => { voadas[o.r] = (voadas[o.r] || 0) + o.h; });
+  voosQueVoam().forEach(o => { voadas[o.r] = (voadas[o.r] || 0) + o.h; });
   const categoria = ($('#flt-rec-cat') && $('#flt-rec-cat').value) || '';
   $('#revisao').innerHTML = GRUPOS.filter(g => !categoria || g.id === categoria).map(({ id, rotulo, tipos }) => {
     // A frota do cadastro, na ordem de cada tipo (uma categoria sem recursos não aparece)
     const recursos = tipos.flatMap(tipo => (S.frota || []).filter(f => f.tipo === tipo));
     if (!recursos.length) return '';
     const disponiveis = recursos.filter(f => S.av[f.reg]).length;
-    return `<tr class="grupo"><td colspan="6"><button type="button" class="grupo-btn" data-recolher-grupo="${id}" aria-expanded="${!recolhidos.has(id)}"><svg class="ico seta" aria-hidden="true"><use href="#i-baixo"/></svg>${rotulo} <small>${disponiveis} de ${recursos.length} disponíveis</small></button></td></tr>` +
+    return `<tr class="grupo"><td colspan="5"><button type="button" class="grupo-btn" data-recolher-grupo="${id}" aria-expanded="${!recolhidos.has(id)}"><svg class="ico seta" aria-hidden="true"><use href="#i-baixo"/></svg>${rotulo} <small>${disponiveis} de ${recursos.length} disponíveis</small></button></td></tr>` +
       recursos.map(f => linha(f, id, voadas[f.reg] || 0, resumo[f.reg])).join('');
   }).join('');
 }
@@ -104,7 +107,7 @@ export function rHangar() {
   if (!lista) return;
   const frota = S.frota || FROTA_INICIAL;
   const hangar = normalizarHangar(S.hangar, frota);
-  const voos = (RES && RES.out) || [];
+  const voos = voosQueVoam();
   lista.innerHTML = hangar.map((r, i) => {
     const tipo = (frota.find(f => f.reg === r) || {}).tipo || '';
     const naEscala = voos.filter(o => o.r === r).length;

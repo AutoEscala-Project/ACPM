@@ -44,17 +44,23 @@ describe('Regras de missão', () => {
     assert.deepEqual(pedido, { mis: 'Navegação', eq: 'C152', p1: 500, p2: 610, nb: 3, ss: 1 });
   });
 
-  it('normaliza pedidos de voo: equipamento permitido, horas inteiras e preferências em minutos', () => {
+  it('normaliza pedidos de voo: equipamento permitido e preferências em minutos', () => {
     const pedido = { mis: 'Multi', eq: 'C152', p1: 1, p2: 2, nb: 1.5, ss: 1 };
     normalizeMissionFields(pedido);
-    assert.deepEqual(pedido, { mis: 'Multimotor', eq: 'PA-34', p1: 500, p2: 610, nb: 1, ss: 1 });
+    assert.deepEqual(pedido, { mis: 'Multimotor', eq: 'PA-34', p1: 500, p2: 610, nb: 1.5, ss: 1 });
+  });
+
+  // Retorno da operação (14/11): a duração pode ser fracionada (1,2 h; 2,6 h), até 5 h
+  it('a duração do voo: de 0,1 h a 5 h, em décimos; acima de 5 h fica 5; fora disso, 1 h', () => {
+    const nb = valor => { const p = { mis: 'Voo Local', eq: 'C152', p1: 390, p2: -1, nb: valor }; normalizeMissionFields(p); return p.nb; };
+    assert.deepEqual([nb(1.2), nb(2.6), nb(2.64), nb(5), nb(7), nb(0), nb(-1), nb('x'), nb('2.5')], [1.2, 2.6, 2.6, 5, 5, 1, 1, 1, 2.5]);
   });
 
   it('nomes herdados do Object (constructor, __proto__, toString) não são missões nem equipamentos', () => {
     assert.equal(isGroundMission('constructor'), false);
     assert.equal(migrateLegacyMissionName('constructor'), 'Voo Local');
     assert.equal(migrateLegacyMissionName('__proto__'), 'Voo Local');
-    assert.equal(descreverExigencias('toString', 'C152'), 'Voo Local');
+    assert.equal(descreverExigencias('toString', 'C152'), 'Voo Local + C152');
     assert.equal(descreverExigencias('Simulador', 'constructor'), 'Simulador (Mono)');
     assert.equal(podeFazer({ hab: ['local'] }, 'Voo Local', 'constructor'), true);
     assert.equal(doesGroundGateFlight('constructor', { mis: 'Voo Local', eq: 'C152' }), false);
@@ -102,5 +108,18 @@ describe('Número da missão extra', () => {
     assert.equal(proximoMid(estado, estado.stu[0]), 13, 'não reaproveita o número de uma missão retirada que o dia ainda guarda');
     assert.equal(proximoMid(estado, estado.stu[1]), 2001);
     assert.equal(estado.nid, 5000, 'o número do cadastro não muda');
+  });
+
+  // Revisão de 14/11: o pedido que veio da agenda guarda o id da solicitação
+  it('o id da solicitação da agenda: inteiro positivo; o resto sai', async () => {
+    const { normalizeMissionFields } = await import('../../js/rules.js');
+    const ok = { mis: 'Voo Local', eq: 'C152', p1: 390, p2: -1, nb: 1, solicitacao: 12 };
+    normalizeMissionFields(ok);
+    assert.equal(ok.solicitacao, 12);
+    for (const ruim of ['12', -1, 1.5, null]) {
+      const p = { mis: 'Voo Local', eq: 'C152', p1: 390, p2: -1, nb: 1, solicitacao: ruim };
+      normalizeMissionFields(p);
+      assert.equal(Object.hasOwn(p, 'solicitacao'), false, String(ruim));
+    }
   });
 });
