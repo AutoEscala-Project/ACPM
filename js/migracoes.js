@@ -10,7 +10,7 @@ import { disponibilidadeAtual } from './rules.js';
 import { LIMITES_DA_LEI } from './limites.js';
 import { cursosVazios } from './cursos.js';
 
-export const ESQUEMA = 20;
+export const ESQUEMA = 21;
 
 // Um pedido do dia com as preferências em minutos e a disponibilidade no formato atual (formato 12)
 function pedidoEmMinutos(pedido) {
@@ -160,6 +160,12 @@ const PASSOS = {
         ? cadastro.ins.map(x => (x && typeof x === 'object' && Array.isArray(x.hab) ? { ...x, hab: marcasDoChecadorAntigo(x.hab) } : x))
         : cadastro.ins
     }),
+    dia: dia => dia
+  },
+  // Versão 21 (revisão de 14/11): o status "Pousou". Os dados não mudam; o número novo faz a aba da versão anterior (que
+  // não conhece o Pousou e o tiraria do dia ao abrir) recusar o dia e pedir para recarregar
+  21: {
+    cadastro: cadastro => cadastro,
     dia: dia => dia
   }
 };

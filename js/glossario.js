@@ -18,7 +18,7 @@ export const GLOSSARIO = {
   'segunda-preferencia': { aba: 'Escala', termo: '2ª preferência', texto: 'O voo ficou na 2ª preferência do aluno: na 1ª não havia avião, instrutor ou horário livre.' },
   'horario-ajustado': { aba: 'Escala', termo: 'Horário ajustado', texto: 'A compactação mudou o horário para fechar um buraco do dia, dentro da regra de Horários escolhida nos critérios.' },
   conflito: { aba: 'Escala', termo: 'Conflito', texto: 'O voo da escala aprovada não vale mais: o instrutor, o avião, o horário ou o pedido mudou. Ele fica no lugar até ser resolvido em Sugestões.' },
-  'voo-fixo': { aba: 'Escala', termo: 'Voo fixo (cadeado)', texto: 'O voo não muda quando a escala é refeita. Fica fixo pela escala aprovada ou pelo status Em Voo, Atrasado ou Cancelado.' },
+  'voo-fixo': { aba: 'Escala', termo: 'Voo fixo (cadeado)', texto: 'O voo não muda quando a escala é refeita. Fica fixo pela escala aprovada ou pelo status Atrasado, Em Voo, Pousou ou Cancelado.' },
   'reduzir-combustivel': {
     aba: 'Escala', termo: 'Reduzir combustível',
     texto: `Aluno e instrutor passam do limite de peso do avião com o tanque cheio: o avião sai com menos combustível, o bastante para o voo, o táxi e a reserva (${reservaDaMissao('Voo Local')} min; ${reservaDaMissao('Noturno')} à noite e em IFR).`
@@ -27,7 +27,7 @@ export const GLOSSARIO = {
   turma: { aba: 'Escala', termo: 'Turma', texto: `Alunos do mesmo Ground, no mesmo horário e com o mesmo instrutor: uma aula só, de ${duracao(GROUND_DURATION_MIN)}, na sala de Ground.` },
   'missao-do-curso': { aba: 'Escala', termo: 'Missão do curso', texto: 'O código da missão no programa do curso (por exemplo, PP-07): a próxima que o aluno ainda não aprovou.' },
   resultado: { aba: 'Escala', termo: 'Resultado', texto: 'Aprovado ou Reprovado na missão do curso. A reprovada volta a ser a próxima; Pendente desfaz um engano.' },
-  status: { aba: 'Escala', termo: 'Status', texto: 'Pendente, Confirmado, Atrasado (pede a nova decolagem), Em Voo ou Cancelado (pede o motivo). Em Voo, Atrasado e Cancelado fixam o voo.' },
+  status: { aba: 'Escala', termo: 'Status', texto: 'Pendente, Confirmado, Atrasado (pede a nova decolagem), Em Voo, Pousou (no Ground e no simulador, Concluída) ou Cancelado (pede o motivo). Os quatro últimos fixam o voo.' },
   'tempo-parado': {
     aba: 'Escala', termo: 'Tempo parado',
     texto: `O tempo entre um voo e o seguinte de cada instrutor e de cada avião, sem os cancelados. Parado ${INTERVALO_DO_HANGAR / 60} h ou mais, o avião volta para o hangar (uma saída).`

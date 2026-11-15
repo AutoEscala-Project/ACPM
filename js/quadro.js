@@ -5,7 +5,7 @@
 import { GROUND_EQ_TYPE } from './config.js';
 import { nomeDoRecurso } from './categorias.js';
 import { isGroundMission } from './rules.js';
-import { intervaloEfetivo, textoDoDetalhe, classeDoStatus, normalizarStatus, MOTIVOS_DE_CANCELAMENTO } from './status.js';
+import { intervaloEfetivo, textoDoDetalhe, classeDoStatus, normalizarStatus, rotuloDoStatus, MOTIVOS_DE_CANCELAMENTO } from './status.js';
 import { normalizarLinhaGravada } from './escala-gravada.js';
 
 // Uma linha por voo (a turma de Ground, uma só: cancelada só quando todos os alunos estão), no horário efetivo
@@ -64,7 +64,7 @@ function linhaDoAeroporto(l, momento) {
     aeronave: l.recurso,
     aluno: l.ground ? `${n} ${n === 1 ? 'aluno' : 'alunos'}` : l.alunos.join(', '),
     instrutor: l.instrutor,
-    observacao: [NO_QUADRO[l.status] || l.status, l.motivo].filter(Boolean).join(' · '),
+    observacao: [NO_QUADRO[l.status] || rotuloDoStatus(l.status, { isGround: l.ground, eqType: l.modelo }), l.motivo].filter(Boolean).join(' · '),
     classe: classeDoStatus(l.status)
   };
 }
@@ -74,10 +74,10 @@ const peloEfetivo = (x, y) => x.efetivo - y.efetivo;
 // Partidas: todas as do dia
 export const quadroDePartidas = linhas => linhas.map(l => linhaDoAeroporto(l, 'partida')).sort(peloEfetivo);
 
-// Chegadas: as pendentes no minuto do quadro (o pouso ainda não passou). O voo em voo continua até mudar de status, e o
-// cancelado fica até o horário dele passar
+// Chegadas: as pendentes no minuto do quadro (o pouso ainda não passou). O voo em voo continua até mudar de status, o
+// que pousou sai na hora, e o cancelado fica até o horário dele passar
 export const quadroDeChegadas = (linhas, agora) => linhas
-  .filter(l => l.fim > agora || (l.status === 'Em Voo' && Number.isFinite(agora)))
+  .filter(l => l.status !== 'Pousou' && (l.fim > agora || (l.status === 'Em Voo' && Number.isFinite(agora))))
   .map(l => linhaDoAeroporto(l, 'chegada'))
   .sort(peloEfetivo);
 

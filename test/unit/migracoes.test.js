@@ -172,4 +172,12 @@ describe('Migrações do formato dos dados', () => {
     assert.equal(novo.esquema, ESQUEMA);
     assert.ok(ESQUEMA >= 20);
   });
+
+  // Versão 21 (revisão de 14/11): o status "Pousou". Nada muda nos dados; o número novo faz a aba da versão anterior
+  // (que não conhece o Pousou e o apagaria ao abrir o dia) recusar o dia e pedir para recarregar
+  it('versão 21: o dia e o cadastro não mudam, só o número do formato', () => {
+    const dia = { esquema: 20, fStatus: { '1000_0_1': 'Pousou' }, fObs: { '1000_0_1': { novoInicio: 640 } } };
+    assert.deepEqual(migrarDia(dia), { ...dia, esquema: ESQUEMA });
+    assert.ok(ESQUEMA >= 21);
+  });
 });

@@ -7,7 +7,7 @@ import { isGroundMission, doesGroundGateFlight, disponibilidadeDoAluno, rotuloDa
 import { HORARIOS_INICIAIS, horariosDaMissao, periodoDoMinuto, minutoDaPreferencia, ordenarPelaPreferencia } from './horarios.js';
 import { podeFazer, descreverExigencias } from './habilitacoes.js';
 import { categoriaDoRodizio, ajustarFilas } from './rodizio.js';
-import { avisosDeAtraso, intervaloEfetivo } from './status.js';
+import { avisosDeAtraso, intervaloEfetivo, STATUS_EM_ANDAMENTO } from './status.js';
 import { sobrepoe, livre, cobre, pesoCabe, cabeNoSaldo } from './viabilidade.js';
 import { reducaoNecessaria, combustivelDoVoo, pesoECombustivel } from './combustivel.js';
 import { LIMITE_DO_MOTIVO } from './conflitos.js';
@@ -85,7 +85,7 @@ function manterInstrutorNoMesmoAviao(out, state, saldo, frota, posicao) {
   const soParafuso = matriculasDoTipo(frota, 'C152', { parafuso: true });
   for (const tipo of TIPOS_DE_AVIAO) {
     // O voo com status de andamento fica no avião dele, como o fixo
-    const preso = o => o.fixo || ['Atrasado', 'Em Voo', 'Cancelado'].includes(statusDe(o));
+    const preso = o => o.fixo || [...STATUS_EM_ANDAMENTO, 'Cancelado'].includes(statusDe(o));
     const voos = out.filter(o => o.eqType === tipo && !soParafuso.includes(o.r) && !preso(o));
     // Os voos fixos (escala aprovada) ficam no avião deles e ocupam o horário (o atrasado, o horário novo); o cancelado
     // não ocupa nada
@@ -183,7 +183,7 @@ function equalizarHoras(out, state, limites, historico) {
     const v = voos.find(o => statusDe(o) !== 'Cancelado');
     return {
       voos, ...intervaloEfetivo(v, statusDe(v), (state.fObs || {})[v.fKey]), h: v.h, mis: v.mis, eqType: v.eqType, isGround: v.isGround,
-      presa: voos.some(o => o.fixo || ['Atrasado', 'Em Voo'].includes(statusDe(o)))
+      presa: voos.some(o => o.fixo || STATUS_EM_ANDAMENTO.includes(statusDe(o)))
     };
   });
   const instrutorDa = u => u.voos[0].insId;

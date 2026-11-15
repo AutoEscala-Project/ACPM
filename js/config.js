@@ -110,4 +110,5 @@ export const PRE = {
 };
 
 // Status do voo, na ordem do dia; Atrasado leva o novo horário e Cancelado, o motivo (js/status.js)
-export const FLIGHT_STATUSES = ['Pendente', 'Confirmado', 'Atrasado', 'Em Voo', 'Cancelado'];
+// "Pousou" (revisão de 14/11): o fim do voo; no Ground e no simulador aparece como "Concluída" (js/status.js)
+export const FLIGHT_STATUSES = ['Pendente', 'Confirmado', 'Atrasado', 'Em Voo', 'Pousou', 'Cancelado'];

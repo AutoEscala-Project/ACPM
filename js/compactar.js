@@ -6,7 +6,7 @@
 // duração entre dois instrutores. Cada rodada aplica o movimento que mais diminui o custo, numa ordem fixa (a mesma
 // escala dá sempre o mesmo resultado), até nenhum diminuir ou até os limites da busca. Todas as regras da escala
 // continuam valendo; a soma dos quadrados das horas não cresce (a divisão das horas não piora) e o combustível não
-// piora. Ficam como estão os voos fixos e os que já têm status (Atrasado, Em Voo, Cancelado), o instrutor dos voos do
+// piora. Ficam como estão os voos fixos e os que já têm status (Atrasado, Em Voo, Pousou, Cancelado), o instrutor dos voos do
 // rodízio, o Noturno, o Parafuso no C152 e o horário das turmas de Ground.
 import { AIRCRAFT_EQ_TYPES, GROUND_EQ_TYPE, T, NI, PESOS_DA_COMPACTACAO, LIMITES_DA_COMPACTACAO, MISSOES_LOCAIS, LIMITE_DE_VOOS_LOCAIS } from './config.js';
 import { FROTA_INICIAL, matriculasDoTipo } from './frota.js';
@@ -24,7 +24,7 @@ import { intervaloEfetivo } from './status.js';
 // Um voo que muda de instrutor junto com o horário vai para quem já voa até esta distância (minutos) dele
 const ENCOSTA = 60;
 const EPS = 1e-9;
-// Os status em que o voo ainda pode mudar (Atrasado e Em Voo já estão no dia; Cancelado não voa)
+// Os status em que o voo ainda pode mudar (Atrasado, Em Voo e Pousou já estão no dia; Cancelado não voa)
 const STATUS_QUE_MUDAM = ['Confirmado', 'Pendente'];
 
 const soma = lista => lista.reduce((total, v) => total + v, 0);

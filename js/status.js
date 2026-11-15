@@ -8,6 +8,18 @@ import { nomeDoRecurso } from './categorias.js';
 export const MOTIVOS_DE_CANCELAMENTO = ['Meteorologia', 'Manutenção da aeronave', 'Aluno ausente', 'Instrutor indisponível', 'Operacional', 'Outro'];
 export const LIMITE_DO_TEXTO = 140;
 export const STATUS_COM_DETALHE = ['Atrasado', 'Cancelado'];
+// O voo em andamento (atrasado, em voo ou já pousado): fica onde está, e o novo horário do atraso vale até o fim
+export const STATUS_EM_ANDAMENTO = ['Atrasado', 'Em Voo', 'Pousou'];
+const temNovoInicio = detalhe => Boolean(detalhe) && Number.isInteger(detalhe.novoInicio);
+
+// O nome do status na tela: "Pousou" vira "Concluída" no Ground e no simulador (o valor guardado é o mesmo)
+const semVoo = voo => Boolean(voo) && (voo.isGround || /^Ground/.test(voo.mis || '') || voo.mis === 'Simulador' || /^Sim\./.test(voo.eqType || ''));
+export const rotuloDoStatus = (status, voo) => (status === 'Pousou' && semVoo(voo) ? 'Concluída' : status);
+
+// O detalhe que segue o voo quando o status muda sem o diálogo: o novo horário do atraso continua no Em Voo e no
+// Pousou (o quadro mostra o previsto e o descanso conta do pouso de verdade); voltar a Pendente ou Confirmado o apaga
+export const detalheAoMudarStatus = (detalhe, status) =>
+  (['Em Voo', 'Pousou'].includes(status) && temNovoInicio(detalhe) ? { novoInicio: detalhe.novoInicio } : null);
 
 const FIM_DO_DIA = 24 * 60;
 const CHAVE_DO_VOO = /^\d+_\d+_\d+$/;
@@ -46,7 +58,7 @@ export function normalizarStatus(fStatus) {
 }
 
 // A classe CSS de cada status vem de uma lista fixa (o texto do status nunca entra no HTML como classe)
-const CLASSES_DOS_STATUS = { Pendente: 'Pendente', Confirmado: 'Confirmado', Atrasado: 'Atrasado', 'Em Voo': 'EmVoo', Cancelado: 'Cancelado' };
+const CLASSES_DOS_STATUS = { Pendente: 'Pendente', Confirmado: 'Confirmado', Atrasado: 'Atrasado', 'Em Voo': 'EmVoo', Pousou: 'Pousou', Cancelado: 'Cancelado' };
 export const classeDoStatus = st => (Object.hasOwn(CLASSES_DOS_STATUS, st) ? CLASSES_DOS_STATUS[st] : 'Confirmado');
 
 // Os detalhes guardados que valem: os do status atual de cada voo, nos formatos válidos ("Outro" sem o texto vale:
@@ -60,7 +72,7 @@ export function normalizarDetalhes(fObs, fStatus) {
       const texto = d.motivo === 'Outro' ? limparTexto(d.texto).slice(0, LIMITE_DO_TEXTO) : '';
       return [[fKey, texto ? { motivo: d.motivo, texto } : { motivo: d.motivo }]];
     }
-    if (status[fKey] === 'Atrasado' && Number.isInteger(d.novoInicio) && d.novoInicio > 0 && d.novoInicio < FIM_DO_DIA) {
+    if (STATUS_EM_ANDAMENTO.includes(status[fKey]) && Number.isInteger(d.novoInicio) && d.novoInicio > 0 && d.novoInicio < FIM_DO_DIA) {
       return [[fKey, { novoInicio: d.novoInicio }]];
     }
     return [];
@@ -69,16 +81,19 @@ export function normalizarDetalhes(fObs, fStatus) {
 
 // O detalhe sozinho, como aparece ao lado do status na escala: "nova decolagem 10:40" ou o motivo (vazio sem detalhe)
 export function textoDoDetalhe(status, detalhe) {
-  if (status === 'Atrasado' && detalhe && Number.isInteger(detalhe.novoInicio)) return `nova decolagem ${hm(detalhe.novoInicio)}`;
+  if (status === 'Atrasado' && temNovoInicio(detalhe)) return `nova decolagem ${hm(detalhe.novoInicio)}`;
+  if (STATUS_EM_ANDAMENTO.includes(status) && temNovoInicio(detalhe)) return `decolou às ${hm(detalhe.novoInicio)}`;
   if (status === 'Cancelado' && detalhe && detalhe.motivo) return detalhe.motivo === 'Outro' && detalhe.texto ? detalhe.texto : detalhe.motivo;
   return '';
 }
 
 // O status com o detalhe, como aparece no CSV, no PDF e no painel. textoLivre: false deixa só a categoria do motivo (o
 // que sai do app: o texto livre pode ter dados pessoais)
-export function textoDoStatus(status, detalhe, { textoLivre = true } = {}) {
+// voo: o voo da linha ("Pousou" vira "Concluída" no Ground e no simulador)
+export function textoDoStatus(status, detalhe, { textoLivre = true, voo } = {}) {
   const texto = textoDoDetalhe(status, textoLivre || !detalhe ? detalhe : { ...detalhe, texto: undefined });
-  return texto ? `${status}: ${texto}` : status;
+  const nome = rotuloDoStatus(status, voo);
+  return texto ? `${nome}: ${texto}` : nome;
 }
 
 // No histórico, só a categoria do motivo (o texto livre pode ter dados pessoais)
@@ -88,9 +103,9 @@ export function textoParaOHistorico(status, detalhe) {
   return status;
 }
 
-// O voo atrasado sai no novo horário, com a mesma duração
+// O voo atrasado sai no novo horário, com a mesma duração (e continua nele em voo e depois do pouso)
 export function intervaloEfetivo(o, status, detalhe) {
-  if (status !== 'Atrasado' || !detalhe || !Number.isInteger(detalhe.novoInicio)) return { a: o.a, b: o.b };
+  if (!STATUS_EM_ANDAMENTO.includes(status) || !temNovoInicio(detalhe)) return { a: o.a, b: o.b };
   return { a: detalhe.novoInicio, b: detalhe.novoInicio + (o.b - o.a) };
 }
 
@@ -102,7 +117,7 @@ export function conflitosDeAtraso(out, fStatus = {}, fObs = {}) {
   const ativos = out.filter(o => statusDe(o) !== 'Cancelado').map(o => ({ o, ...intervaloEfetivo(o, statusDe(o), fObs[o.fKey]) }));
   const conflitos = [];
   for (const x of ativos) {
-    if (statusDe(x.o) !== 'Atrasado' || !fObs[x.o.fKey]) continue;
+    if (!STATUS_EM_ANDAMENTO.includes(statusDe(x.o)) || !temNovoInicio(fObs[x.o.fKey])) continue;
     const atingidos = new Set();
     for (const y of ativos) {
       if (y === x || (x.o.classKey && x.o.classKey === y.o.classKey) || !(x.a < y.b && y.a < x.b)) continue;
@@ -125,7 +140,7 @@ export function avisosDeAtraso(out, fStatus = {}, fObs = {}) {
   const porChave = new Map(out.map(o => [o.fKey, o]));
   return conflitosDeAtraso(out, fStatus, fObs).map(({ fKey, com, motivos }) => {
     const x = porChave.get(fKey), y = porChave.get(com);
-    const { a, b } = intervaloEfetivo(x, 'Atrasado', fObs[fKey]);
+    const { a, b } = intervaloEfetivo(x, fStatus[fKey] || x.status, fObs[fKey]);
     const outro = intervaloEfetivo(y, fStatus[com] || y.status, fObs[com]);
     const mesmo = motivos.map(m => (m === 'recurso' ? `mesmo recurso (${nomeDoRecurso(x.r)})` : m === 'instrutor' ? `mesmo instrutor (${x.ins})` : 'mesmo aluno'));
     return {

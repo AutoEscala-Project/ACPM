@@ -55,6 +55,10 @@ describe('CSV da escala por avião', () => {
     assert.match(obs({ k: 'Cancelado' }, { k: { motivo: 'Meteorologia' } }), /^Status: Cancelado: Meteorologia · /);
     assert.match(obs({ k: 'Cancelado' }, { k: { motivo: 'Outro', texto: 'Aluno com febre' } }), /^Status: Cancelado: Outro · /, 'o texto livre não sai do app');
     assert.match(obs({ k: 'Cancelado' }, {}), /^Status: Cancelado · /);
+    assert.match(obs({ k: 'Pousou' }, { k: { novoInicio: 640 } }), /^Status: Pousou: decolou às 10:40 · /);
+    // "Pousou" no Ground e no simulador: "Concluída"
+    const ground = linhasDoCsv(escala([voo('SALA-GROUND', 'Sala Ground', 390, { fKey: 'g', isGround: true, mis: 'Ground C152', groupSize: 1, limKg: 0 })]), { g: 'Pousou' })[0][5];
+    assert.equal(ground, 'Status: Concluída');
   });
 
   it('observações: acima do limite com os tanques cheios, quanto abastecer e quanto o voo pede (fase 10)', () => {

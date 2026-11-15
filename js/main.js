@@ -34,7 +34,7 @@ import { OPCOES_DE_BURACOS, OPCOES_DE_HORARIOS, normalizarCriterios } from './cr
 import { normalizarCursos, normalizarCursoDoAluno, novaMissaoDoCurso, codigoValido } from './cursos.js';
 import { rCursos, mostrarVistaDosAlunos, podeEditarCursos, atualizarLinhaDoPrograma } from './views/cursos.js';
 import { proximaDoPedido } from './views/etapas.js';
-import { STATUS_COM_DETALHE, textoParaOHistorico } from './status.js';
+import { STATUS_COM_DETALHE, textoParaOHistorico, detalheAoMudarStatus, rotuloDoStatus } from './status.js';
 import { pinoDoVoo, normalizarFixos, fixosAoMudarStatus, fixosAoReabrir } from './fixos.js';
 import { validarReversao } from './reversoes.js';
 import { singleDemandRowHTML, cnt, rDem, applyDemandFilters } from './views/demanda.js';
@@ -929,7 +929,7 @@ document.addEventListener('click', e => {
     showToast('Escala aprovada: os voos ficam fixos.', 'ok');
   } else {
     if (!confirmado(reabrir, 'Confirmar reabertura')) return;
-    // Os voos em andamento (Em Voo, Atrasado, Cancelado) continuam fixos
+    // Os voos em andamento (Em Voo, Atrasado, Pousou, Cancelado) continuam fixos
     S.fixos = fixosAoReabrir(S.fixos, S.fStatus);
     S.aprovacao = null;
     save();
@@ -1080,16 +1080,19 @@ function aplicarStatus(fKey, status, detalhe) {
   if (!S.fStatus) S.fStatus = {};
   if (!S.fObs) S.fObs = {};
   S.fStatus[fKey] = status;
-  if (detalhe) S.fObs[fKey] = detalhe;
+  // Sem o diálogo, o novo horário do atraso segue no Em Voo e no Pousou (revisão de 14/11); nos outros, o detalhe sai
+  const novo = detalhe || detalheAoMudarStatus(S.fObs[fKey], status);
+  if (novo) S.fObs[fKey] = novo;
   else delete S.fObs[fKey];
   const voo = vooDaChave(fKey);
   if (voo) voo.status = status;
-  // Em Voo, Atrasado e Cancelado fixam o voo (fase 12; o cancelado desde a revisão de 14/11): uma alteração na escala
+  // Em Voo, Atrasado, Pousou e Cancelado fixam o voo (fase 12; o cancelado desde a revisão de 14/11): uma alteração na escala
   // não o tira do lugar (o cancelado fica onde estava, sem ocupar nada). Fora da escala aprovada, Pendente ou
   // Confirmado o soltam
   if (voo) S.fixos = fixosAoMudarStatus(S.fixos, voo, status, { aprovada: Boolean(S.aprovacao) });
   save();
-  logChange('mod', `Status de ${voo ? `${voo.s} (${hm(voo.a)}–${hm(voo.b)})` : fKey}: ${textoParaOHistorico(status, detalhe)}`);
+  const textoDoStatus = status === 'Pousou' ? rotuloDoStatus(status, voo) : textoParaOHistorico(status, detalhe);
+  logChange('mod', `Status de ${voo ? `${voo.s} (${hm(voo.a)}–${hm(voo.b)})` : fKey}: ${textoDoStatus}`);
 }
 function mudarStatus(fKey, status) {
   const voo = vooDaChave(fKey);
