@@ -406,10 +406,29 @@ table.fids-tabela { width: 100%; min-width: 860px; border-collapse: collapse; fo
 .flt-rotulo { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--mu); }
 .frota-cab { margin: 16px 0 8px; }
 /* Horários de decolagem por categoria: uma linha por categoria, com os horários em etiquetas */
-.horarios { display: flex; flex-direction: column; gap: 10px; }
-.horarios-cat { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.horarios { display: flex; flex-direction: column; gap: 12px; }
+/* Revisão de 14/11 ("Resumo + Editar"): uma linha de resumo por categoria; o editor abre na própria linha */
+.horarios-cat { display: flex; flex-direction: column; gap: 4px; padding-bottom: 10px; border-bottom: 1px solid var(--ln); }
+.horarios-cat:last-child { border-bottom: 0; padding-bottom: 0; }
+.horarios-cab { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+.horarios-cab .btn { margin-left: auto; }
 .horarios-nome { min-width: 80px; font: 600 14px 'Barlow Semi Condensed', sans-serif; }
-.horarios-lista { display: flex; flex-wrap: wrap; gap: 4px; flex: 1; }
+.horarios-modelo { font-weight: 600; }
+.horarios-qtd { color: var(--mu); }
+.horarios-periodos { display: flex; flex-direction: column; gap: 2px; }
+.horarios-periodo { display: flex; align-items: baseline; gap: 8px; }
+.horarios-periodo > small { min-width: 44px; color: var(--mu); }
+.horarios-lista { display: flex; flex-wrap: wrap; gap: 2px 10px; flex: 1; }
+.horarios-cat .hr { font-variant-numeric: tabular-nums; font-size: 13.5px; }
+.horarios-cat .hr.fechado { color: var(--mu); text-decoration: line-through; opacity: .7; cursor: help; }
+.horarios-editor { display: flex; flex-direction: column; gap: 8px; padding: 10px; border: 1px solid var(--ln2); border-radius: 8px; background: var(--pn2); }
+.horarios-editor .horarios-lista { gap: 4px; }
+.horarios-modelos { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 0; padding: 0; border: 0; }
+.horarios-modelos legend { padding: 0; margin-bottom: 2px; font-weight: 600; }
+.horarios-novo { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.horarios-efeito { margin: 0; font-weight: 600; }
+.horarios-botoes { display: flex; gap: 8px; }
+.horarios-editor .erro-campo:empty { display: none; }
 .hr-chip { display: inline-flex; align-items: center; gap: 2px; padding: 1px 2px 1px 8px; border: 1px solid var(--ln2); border-radius: 12px; font-size: 13.5px; font-variant-numeric: tabular-nums; }
 .hr-chip button { display: inline-grid; place-items: center; border: 0; background: transparent; color: var(--mu); border-radius: 50%; padding: 2px; cursor: pointer; }
 .hr-chip button:hover { color: var(--er); }
@@ -635,6 +654,24 @@ label.alvo { display: inline-flex; align-items: center; justify-content: center;
 .janela small { color: var(--mu); font-weight: 500; }
 .janela.off { color: var(--mu); }
 .frota-titulo { margin-top: 16px; }
+/* Recursos em duas partes (revisão de 14/11): nesta data e para todas as datas */
+.rec-parte { display: flex; flex-direction: column; gap: 12px; margin-bottom: 24px; }
+.rec-parte > .pn { margin: 0; }
+/* Os filhos do flex encolhem (a tabela larga rola dentro da caixa dela, e a página não rola de lado) */
+.rec-parte > * { min-width: 0; }
+.rec-parte-titulo { margin: 4px 0 0; padding-bottom: 4px; border-bottom: 2px solid var(--ln2); font-size: 18px; }
+.rec-parte-titulo small { font: 400 13px 'Barlow', sans-serif; color: var(--mu); margin-left: 6px; }
+.rec-parte h4 { margin: 0 0 8px; font: 600 15px 'Barlow Semi Condensed', sans-serif; }
+.rec-parte .frota-cab h4 { margin: 0; }
+.frota-cadastro { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.frota-cadastro h5 { margin: 0 0 4px; font: 600 14px 'Barlow Semi Condensed', sans-serif; }
+.frota-cadastro h5 small { color: var(--mu); font-weight: 500; margin-left: 6px; }
+.frota-itens { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.frota-item { display: inline-flex; align-items: center; gap: 6px; padding: 2px 4px 2px 10px; border: 1px solid var(--ln2); border-radius: 8px; font-size: 14px; }
+/* Retirar aparece com o mouse ou o foco no recurso (na tela de toque, sempre) */
+.frota-item .ret { padding: 2px 8px; opacity: 0; transition: opacity .1s; }
+.frota-item:hover .ret, .frota-item:focus-within .ret, .frota-item .ret[data-arm="1"] { opacity: 1; }
+@media (hover: none), (pointer: coarse) { .frota-item .ret { opacity: 1; } }
 .frota-titulo small { font: 400 13px 'Barlow', sans-serif; color: var(--mu); margin-left: 6px; }
 table.frota { min-width: 640px; font-size: 14.5px; }
 table.frota td { padding: 6px 10px; }

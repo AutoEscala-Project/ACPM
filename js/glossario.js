@@ -57,6 +57,7 @@ export const GLOSSARIO = {
   excecao: { aba: 'Agenda', termo: 'Exceção da Coordenação', texto: 'Registra o pedido depois do prazo (13:00 da véspera; a segunda, sábado às 10:00). O pedido fica marcado como exceção, para auditoria.' },
 
   // Recursos
+  'horario-em-janela-fechada': { aba: 'Recursos', termo: 'Horário apagado', texto: 'O horário cai numa janela de operação fechada nesta data: nesta data, nenhum voo sai nele. Ele continua na lista para as outras datas.' },
   janelas: { aba: 'Recursos', termo: 'Janelas de operação', texto: 'Os períodos do dia em que a escola opera nesta data. Período fechado não recebe voo nem Ground.' },
   'horarios-de-decolagem': { aba: 'Recursos', termo: 'Horários de decolagem', texto: 'Os horários em que cada categoria pode decolar (o PA-34 tem os seus). Valem para todas as datas.' },
   'horas-disponiveis': {

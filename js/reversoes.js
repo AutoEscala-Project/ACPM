@@ -3,6 +3,8 @@
 // nem é aplicada. Um recurso retirado volta pela mesma validação do "+ Novo recurso".
 import { novoRecurso } from './frota.js';
 import { normalizarFixos } from './fixos.js';
+import { CATEGORIAS_COM_HORARIOS, normalizarHorarios } from './horarios.js';
+import { disponibilidadeValida } from './rules.js';
 
 const MATRICULA = /^[A-Z0-9][A-Z0-9-]{1,14}$/;
 const idValido = v => Number.isInteger(v) && v > 0;
@@ -27,6 +29,17 @@ export function validarReversao(rev, frota) {
   if (rev.kind === 'restaurarFixos') {
     const fixos = rev.fixos && typeof rev.fixos === 'object' ? normalizarFixos(rev.fixos) : {};
     return Object.keys(fixos).length ? { kind: 'restaurarFixos', fixos, label } : null;
+  }
+  // Os horários de uma categoria e os pedidos que mudaram com eles (revisão de 14/11)
+  if (rev.kind === 'restaurarHorarios') {
+    if (!CATEGORIAS_COM_HORARIOS.includes(rev.cat) || !Array.isArray(rev.lista) || !Array.isArray(rev.pedidos) || rev.pedidos.length > 500) return null;
+    const lista = normalizarHorarios({ [rev.cat]: rev.lista })[rev.cat];
+    if (lista.length !== rev.lista.length) return null;
+    const preferencia = v => Number.isInteger(v) && v >= -1 && v <= 1440;
+    const pedidos = rev.pedidos.map(p => (p && typeof p === 'object' && idValido(p.stuId) && Number.isInteger(p.mid) && p.mid >= 0
+      && preferencia(p.p1) && preferencia(p.p2) && (p.jan === undefined || disponibilidadeValida(p.jan))
+      ? { stuId: p.stuId, mid: p.mid, p1: p.p1, p2: p.p2, ...(p.jan === undefined ? {} : { jan: p.jan }) } : null));
+    return pedidos.every(Boolean) ? { kind: 'restaurarHorarios', cat: rev.cat, lista, pedidos, label } : null;
   }
   if (rev.kind === 'readicionarRecurso') {
     const { recurso } = novoRecurso(frota, rev.recurso && typeof rev.recurso === 'object' ? rev.recurso : {});
