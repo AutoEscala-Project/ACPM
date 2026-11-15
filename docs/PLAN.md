@@ -309,6 +309,10 @@ A full review of the app (engine, data and security, usability and accessibility
    - **At most 6 local flights per take-off time** (Voo Local, Voo Solo, TGL; `MISSOES_LOCAIS`, `LIMITE_DE_VOOS_LOCAIS`): the engine and compaction respect it (rejection code `limite-de-locais`); booking a 7th says the time is unavailable and gives the next possible one; the server refuses it too (migration `agenda_limite_de_locais`, PT422, with an advisory lock per date and time).
    - **No Sundays**: a date's bookings close at 13:00 of the previous operating day, Monday's at Saturday 10:00, Sunday takes none (migration `agenda_sem_domingo`); the app skips Sunday (default date, arrows, links, the date picker, the agenda calendar).
    - The engine got `trocarMatriculas: false` (for the nearest-preference invariant). New invariant: never more than 6 local flights at one time.
+7. [x] **Checkers by parts** (branch `revisao-7`, on top of `revisao-6`).
+   - The three checker qualifications (VFR, IFR, MLTE IFR) become seven marks in three groups: the course (PP, PC, INVA), the engine (MNTE, MLTE) and the rules (VFR, IFR). A check flight needs one mark of each, matching its name (Cheque PC MLTE IFR: PC + MLTE + IFR); it still needs no aircraft qualification. No check flight uses INVA yet: the mark is recorded for when one exists.
+   - **Data format 20**: each old checker gets exactly the marks that gave the same checks, plus INVA (it was in all three names). The rotation's check queue holds whoever can give at least one check.
+   - Instrutores: the drawer shows the three groups with a "?"; the day grid shows the marks as one "Checador". The Manual merges what every aircraft shares ("Checador PP + Checador MNTE + Checador VFR").
 
 ### Phase 16: Later (nice to have)
 - [ ] Track instructor and student currency: last flight, medical/CMA expiry. The engine then checks these too (the course phase is Phase 14).
