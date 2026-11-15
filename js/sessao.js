@@ -4,7 +4,7 @@ import { ApiClient } from './storage.js';
 import { criarBackendSupabase } from './backends/supabase.js';
 import { backendLocal } from './backends/local.js';
 import { setRole, travarAposConflito, avisarFalhaDeGravacao } from './actions.js';
-import { $, mostrarAviso, avisoAberto, fecharAviso, avisarDoLink } from './dom.js';
+import { $, fecharAviso, avisarDoLink } from './dom.js';
 import { amanhaISO, esc } from './format.js';
 import { ROTULOS, operaEscala, gerenciaContas, soPainel } from './perfis.js';
 import { retornoDoLink } from './retorno-do-link.js';

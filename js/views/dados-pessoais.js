@@ -27,7 +27,7 @@ export async function carregarDadosPessoais() {
     DADOS.aluno = alunos;
     DADOS.instrutor = instrutores;
     atualizarColunas();
-  } catch (e) {
+  } catch {
     // Sem os dados pessoais, as tabelas continuam funcionando (a coluna fica vazia)
   }
 }
@@ -61,7 +61,7 @@ export async function abrirPainelDeDados(tipo, id, botao) {
   let dados;
   try {
     dados = await ApiClient.lerDadosPessoais(tipo, id);
-  } catch (e) {
+  } catch {
     if (pedido !== leitura.pedido) return;
     habilitarPainel(false, 'Não foi possível ler os dados pessoais. Feche e tente de novo.');
     return;

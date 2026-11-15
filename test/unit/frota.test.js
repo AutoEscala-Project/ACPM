@@ -8,7 +8,7 @@ import { separar, juntar } from '../../js/dias.js';
 import { ApiClient } from '../../js/storage.js';
 import { runAllocationEngine } from '../../js/engine.js';
 import { simularNavegador } from '../helpers/navegador.js';
-import { aluno, cenario, instrutor } from '../helpers/montar.js';
+import { aluno, cenario } from '../helpers/montar.js';
 
 beforeEach(() => {
   simularNavegador();

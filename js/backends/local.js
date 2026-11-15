@@ -23,7 +23,7 @@ const chaveLocal = documento => {
 };
 
 const lerJson = chave => {
-  try { return JSON.parse(localStorage.getItem(chave)); } catch (e) { return null; }
+  try { return JSON.parse(localStorage.getItem(chave)); } catch { return null; }
 };
 
 function datasGuardadas() {
@@ -63,7 +63,7 @@ export const backendLocal = {
       const x = JSON.parse(localStorage.getItem(chave));
       if (x || documento !== 'estado') return x;
       return converterAcpm2(JSON.parse(localStorage.getItem(CHAVE_LEGADA)));
-    } catch (e) { return null; }
+    } catch { return null; }
   },
 
   async gravar(documento, conteudo) {
@@ -76,7 +76,7 @@ export const backendLocal = {
         if (dados) localStorage.setItem(CHAVE_DADOS_PESSOAIS, JSON.stringify(semQuemSaiu(dados, conteudo)));
       }
       return true;
-    } catch (e) { return false; }
+    } catch { return false; }
   },
 
   // As datas guardadas num formato anterior (a atualização do formato lê só essas); o dia ilegível também

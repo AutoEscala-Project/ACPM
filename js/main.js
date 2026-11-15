@@ -13,7 +13,7 @@
  *   js/views/       Renderização das abas (recursos, cadastros, demanda, escala, BI e navegação)
  *   js/export.js    Exportação CSV e PDF
  */
-import { WIN, NI, T, GROUND_EQ_TYPE, GROUND_REG, GROUND_DURATION_MIN, GROUND_DURATION_H, MIS, PRE, DURACAO_MAXIMA_H, REVISAO_H, LIMITE_DE_VOOS_LOCAIS } from './config.js';
+import { WIN, T, GROUND_EQ_TYPE, GROUND_REG, GROUND_DURATION_MIN, GROUND_DURATION_H, MIS, PRE, DURACAO_MAXIMA_H, REVISAO_H, LIMITE_DE_VOOS_LOCAIS } from './config.js';
 import { novoRecurso, matriculasDoTipo } from './frota.js';
 import { horariosDaMissao, ajustarPreferencias, descreverHorarios } from './horarios.js';
 import { hm, fmtH, fmtDurLabel, pad, amanhaISO, isoMenosDias, nomeLimpo, dataIsoValida } from './format.js';
@@ -74,7 +74,7 @@ document.addEventListener('click', e => {
     show(aba);
     if (aba === 'bi') carregarBI();
     if (aba === 'age') abrirAgenda();
-    try { window.scrollTo(0, 0); } catch (x) {}
+    window.scrollTo(0, 0);
     return;
   }
   const tlBtn = e.target.closest('[data-tl]');
@@ -191,8 +191,8 @@ const armed = (id, txt, fn) => {
 };
 
 // Exportar é usar a escala: a escala só calculada fica gravada (quem só consulta não grava)
-$('#exp').onclick = () => { gravarEscalaCalculada(); return exp(); };
-$('#pdf').onclick = () => { gravarEscalaCalculada(); return pdf(); };
+$('#exp').onclick = () => { gravarEscalaCalculada(); exp(); };
+$('#pdf').onclick = () => { gravarEscalaCalculada(); pdf(); };
 
 $('#role-sel').onchange = e => {
   if (ApiClient.readOnly) {
@@ -226,7 +226,7 @@ $('#btn-share-link').onclick = async () => {
   try {
     await navigator.clipboard.writeText(url);
     showToast('Link da escala copiado (quem abrir entra com a própria conta).', 'ok');
-  } catch (e) {
+  } catch {
     prompt('Copie o link da escala:', url);
   }
 };
@@ -288,7 +288,13 @@ const irParaDia = dias => {
 };
 $('#dt-ant').onclick = () => irParaDia(-1);
 $('#dt-prox').onclick = () => irParaDia(1);
-$('#dt').addEventListener('click', e => { try { e.target.showPicker(); } catch (x) {} });
+$('#dt').addEventListener('click', e => {
+  try {
+    e.target.showPicker();
+  } catch {
+    // Sem showPicker (navegador antigo) ou sem permissão: o campo da data abre do jeito normal
+  }
+});
 
 // Menus suspensos (conta e "Mais" da Demanda): abrem e fecham no botão; Esc ou um clique fora fecham
 function ligarMenu(botao, menu, { fecharAoEscolher = true } = {}) {
@@ -390,7 +396,11 @@ const mostrarTema = () => $('#btn-theme').setAttribute('aria-checked', String(te
 $('#btn-theme').onclick = () => {
   const proximo = temaEscuro() ? 'light' : 'dark';
   document.documentElement.setAttribute('data-theme', proximo);
-  try { localStorage.setItem(ApiClient.KEY_THEME, proximo); } catch (e) {}
+  try {
+    localStorage.setItem(ApiClient.KEY_THEME, proximo);
+  } catch {
+    // Sem o armazenamento do navegador (navegação privada, por exemplo), o tema vale só nesta visita
+  }
   mostrarTema();
 };
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change', mostrarTema);
@@ -468,7 +478,7 @@ armed('#btn-bi-clr', 'Confirmar limpeza', async () => {
 rManual();
 $('#btn-manual').onclick = () => {
   show('manual');
-  try { window.scrollTo(0, 0); } catch (x) {}
+  window.scrollTo(0, 0);
 };
 
 $('#btn-conta').onclick = () => { show('conta'); abrirConta(); };
@@ -563,7 +573,7 @@ async function importarDaAgenda() {
   let solicitacoes;
   try {
     solicitacoes = await ApiClient.agenda(data, data);
-  } catch (e) {
+  } catch {
     showToast('Não foi possível ler a agenda. Verifique a conexão e tente de novo.');
     return;
   }
@@ -667,7 +677,7 @@ async function cancelarPedido(b) {
   try {
     await ApiClient.cancelarSolicitacao(+b.dataset.id, por);
     showToast('Pedido cancelado.', 'ok');
-  } catch (err) {
+  } catch {
     $('#ag-erro').textContent = 'Não foi possível cancelar o pedido. Verifique a conexão e tente de novo.';
   }
   await carregarMes();
@@ -1031,7 +1041,7 @@ document.addEventListener('change', async e => {
     const descricao = `Resultado de ${o.s} em ${o.etapa}: ${registro.resultado}`;
     if (mesmaData) logChange('mod', descricao);
     else ApiClient.registrarHistorico(registro.data, { tipo: 'mod', descricao });
-  } catch (err) {
+  } catch {
     showToast('Não foi possível registrar o resultado. Verifique a conexão e tente de novo.');
   }
   rOut(); rAlu(); rDem();
@@ -1345,7 +1355,9 @@ window.addEventListener('beforeunload', e => {
   try {
     const savedTheme = localStorage.getItem(ApiClient.KEY_THEME);
     if (savedTheme) document.documentElement.setAttribute('data-theme', savedTheme);
-  } catch (e) {}
+  } catch {
+    // Sem o armazenamento do navegador, o tema segue o do sistema
+  }
   mostrarTema();
   // As dicas dos termos e a tela só de consulta do Gestor (revisão de 14/11)
   iniciarDicas();

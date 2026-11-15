@@ -8,7 +8,7 @@ import { S, DATA, insBy, isGestor, voosQueVoam } from '../state.js';
 import { $ } from '../dom.js';
 import { botaoDeDica } from '../dicas.js';
 import { canacDe } from './dados-pessoais.js';
-import { normalizarLimites, LIMITES_DA_LEI, comHorasExternas } from '../limites.js';
+import { normalizarLimites } from '../limites.js';
 import { ApiClient } from '../storage.js';
 import { gerenciaContas } from '../perfis.js';
 import { CURSOS } from '../cursos.js';

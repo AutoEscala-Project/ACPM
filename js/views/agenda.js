@@ -36,7 +36,7 @@ const quando = instante => new Intl.DateTimeFormat('pt-BR', {
 // O horário e a duração do pedido (retorno da operação, 14/11); os pedidos de antes por período mostram o período
 const disponibilidade = p => (p.janela === 'horario'
   ? `${p.horario} · ${fmtH(p.horas === null || p.horas === undefined ? 1 : +p.horas)}`
-  : (JANELAS_DA_AGENDA.find(([j]) => j === p.janela) || [, p.janela])[1]);
+  : JANELAS_DA_AGENDA.find(([j]) => j === p.janela)?.[1] ?? p.janela);
 
 // Os pedidos (não cancelados) de um aluno numa data, para o aviso de voo já marcado
 export const pedidosCarregados = () => pedidos;
@@ -65,7 +65,7 @@ export async function carregarMes() {
   const [inicio, fim] = gradeDoMes(mesVisivel);
   try {
     pedidos = await ApiClient.agenda(inicio, fim);
-  } catch (e) {
+  } catch {
     pedidos = [];
     $('#ag-erro').textContent = 'Não foi possível carregar a agenda. Verifique a conexão.';
   }
@@ -90,7 +90,11 @@ export function escolherDia(dia) {
 }
 
 export function lembrarRegistradoPor(nome) {
-  try { localStorage.setItem(CHAVE_REGISTRADO_POR, nome); } catch (e) {}
+  try {
+    localStorage.setItem(CHAVE_REGISTRADO_POR, nome);
+  } catch {
+    // Sem o armazenamento do navegador, o nome só não fica lembrado para o próximo pedido
+  }
 }
 
 // O prazo do dia escolhido (retorno da operação, 14/11): até as 13:00 do dia de operação anterior; a segunda, até sábado
@@ -191,7 +195,11 @@ export function rAgenda() {
   if (!$('#ag-missao').options.length) {
     $('#ag-missao').innerHTML = opts(Object.keys(MIS).map(m => [m, m]), 'Voo Local');
     preencherHorariosDaAgenda();
-    try { $('#ag-por').value = localStorage.getItem(CHAVE_REGISTRADO_POR) || ''; } catch (e) {}
+    try {
+      $('#ag-por').value = localStorage.getItem(CHAVE_REGISTRADO_POR) || '';
+    } catch {
+      // Sem o armazenamento do navegador, o campo começa vazio
+    }
   }
   const aberto = prazoDaAgendaPermite(diaEscolhido);
   $('#form-agenda [type="submit"]').disabled = !aberto;

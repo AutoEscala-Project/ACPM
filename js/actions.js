@@ -24,7 +24,9 @@ export function abrirData(data) {
       url.searchParams.set('data', data);
       window.history.replaceState(window.history.state, '', url);
     }
-  } catch (e) {}
+  } catch {
+    // O navegador que não deixa mudar o endereço (a página dentro de um iframe, por exemplo): a data só não vai para o link
+  }
   $('#dt').value = data;
   $('#bi-dt').value = data;
   // No topo: "quarta-feira, 11/11" e "amanhã"; na tela estreita, "qua., 11/11" (o CSS mostra um dos dois nomes)
@@ -260,7 +262,7 @@ export async function carregarBI() {
   let bi;
   try {
     bi = await ApiClient.biDoPeriodo(inicioSemana < inicioMes ? inicioSemana : inicioMes, fimDoMes(ref));
-  } catch (e) {
+  } catch {
     return;
   }
   if (pedido !== pedidoDeBI) return;

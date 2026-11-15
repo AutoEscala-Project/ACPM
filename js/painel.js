@@ -29,7 +29,7 @@ async function atualizar(buscar) {
     const novo = await buscar();
     quadro = { data: novo.data || hojeISO(), voos: novo.voos, fStatus: novo.fStatus || {}, fObs: novo.fObs || {} };
     ultimaBusca = Date.now();
-  } catch (e) {
+  } catch {
     // o aviso aparece depois de 3 minutos sem resposta
   }
   atualizarPainel();

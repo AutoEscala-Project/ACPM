@@ -4,7 +4,6 @@ import assert from 'node:assert/strict';
 import { ApiClient } from '../../js/storage.js';
 import { habilitacoesDoNivel } from '../../js/habilitacoes.js';
 import { DEFAULT_LIM } from '../../js/config.js';
-import { rosterSintetico } from '../helpers/estado.js';
 import { simularNavegador } from '../helpers/navegador.js';
 import { aluno, instrutor, missaoExtra } from '../helpers/montar.js';
 

@@ -34,10 +34,10 @@ let pedidosDaData = { data: null, lista: [] };
 
 export async function lerPedidosDaData() {
   const data = DATA;
-  let lista = [];
-  try { lista = await ApiClient.agenda(data, data); } catch (e) { lista = []; }
+  // Sem a agenda (sem conexão), nenhum pedido pendente aparece no selo
+  const lista = await ApiClient.agenda(data, data).catch(() => []);
   if (data !== DATA) return;
-  pedidosDaData = { data, lista: Array.isArray(lista) ? lista : [] };
+  pedidosDaData = { data, lista };
   atualizarSeloDaAgenda();
 }
 

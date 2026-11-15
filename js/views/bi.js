@@ -47,7 +47,7 @@ export function rBI() {
   Object.keys(MIS).forEach(m => { misStats[m] = { mis: m, d: 0, w: 0, m: 0 }; });
 
   let totH_D = 0, totH_W = 0, totH_M = 0;
-  let totF_D = 0, totF_W = 0, totF_M = 0;
+  let totF_D = 0, totF_W = 0;
   let daysRecordedInMonth = 0;
 
   Object.entries(BI_HISTORY).forEach(([dt, record]) => {
@@ -76,7 +76,7 @@ export function rBI() {
 
       if (isDay) { totH_D += h; totF_D++; }
       if (isWeek) { totH_W += h; totF_W++; }
-      if (isMonth) { totH_M += h; totF_M++; }
+      if (isMonth) totH_M += h;
 
       if (!eqStats[o.r]) eqStats[o.r] = { reg: o.r, type: o.eqType || 'Outro', d: 0, w: 0, m: 0, flightsM: 0 };
       if (isDay) eqStats[o.r].d += h;
