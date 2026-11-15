@@ -25,7 +25,9 @@ export function rotuloDaData(data, hoje) {
   const [ano, mes, dia] = data.split('-');
   const semana = DIAS_DA_SEMANA[new Date(Date.parse(data + 'T12:00:00Z')).getUTCDay()];
   const relativo = data === hoje ? 'hoje' : data === isoMenosDias(hoje, -1) ? 'amanhã' : data === isoMenosDias(hoje, 1) ? 'ontem' : '';
-  return { dia: `${semana}, ${dia}/${mes}${ano === hoje.slice(0, 4) ? '' : '/' + ano}`, relativo };
+  const diaMes = `${dia}/${mes}${ano === hoje.slice(0, 4) ? '' : '/' + ano}`;
+  // semanaCurta ("qua."): para a tela estreita, onde o nome inteiro não cabe
+  return { dia: `${semana}, ${diaMes}`, semana, semanaCurta: `${semana.slice(0, 3)}.`, data: diaMes, relativo };
 }
 export const fimDoMes = iso => new Date(Date.UTC(+iso.slice(0, 4), +iso.slice(5, 7), 0)).toISOString().slice(0, 10);
 

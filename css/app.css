@@ -90,9 +90,18 @@ header.topo {
   padding: 4px 10px; border-radius: 6px; font: 600 15.5px 'Barlow Semi Condensed', sans-serif; white-space: nowrap; cursor: pointer;
 }
 #dt-rotulo { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.dt-semana-curta { display: none; }
+@media (max-width: 400px) {
+  .dt-semana { display: none; }
+  .dt-semana-curta { display: inline; }
+  /* Com o ano e o "amanhã" (na virada do ano), a data quebra a linha em vez de ser cortada */
+  .topo-data-campo { white-space: normal; }
+  #dt-rotulo { overflow: visible; text-overflow: clip; text-align: center; }
+}
 .topo-data-campo:hover { background: rgba(255,255,255,.1); }
-/* O campo da data é transparente por cima do rótulo: o foco do teclado aparece no rótulo (revisão de 14/11) */
-.topo-data-campo:has(#dt:focus-visible) { outline: 2px solid #fff; outline-offset: 2px; background: rgba(255,255,255,.1); }
+/* O campo da data é transparente por cima do rótulo: o foco aparece no rótulo. :focus-within, porque o botão do
+   calendário dentro do campo recebe o foco sem que o campo tenha :focus ou :focus-visible */
+.topo-data-campo:focus-within { outline: 2px solid #fff; outline-offset: 2px; background: rgba(255,255,255,.1); }
 .topo-data-rel { font: 700 12px 'Barlow', sans-serif; background: var(--ye); color: #12263A; border-radius: 10px; padding: 1px 8px; }
 /* O campo de data cobre o rótulo: um clique abre o calendário do navegador */
 #dt { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; padding: 0; border: 0; cursor: pointer; }
@@ -164,6 +173,8 @@ nav#nav button {
 }
 nav#nav button:hover:not(.on) { color: #fff; }
 nav#nav button.on { color: #fff; border-bottom-color: var(--ye); }
+/* As abas rolam de lado (overflow): o anel desenhado fora da aba seria cortado em cima e embaixo; fica por dentro */
+nav#nav button:focus-visible { outline-offset: -4px; }
 .aba-sep { width: 1px; height: 18px; background: rgba(255,255,255,.15); margin: 0 6px; flex: none; }
 .aba-selo { min-width: 18px; height: 18px; border-radius: 9px; padding: 0 5px; font: 700 11px/18px 'Barlow', sans-serif; background: rgba(255,255,255,.18); color: #fff; text-align: center; }
 .aba-selo.aviso { background: var(--ye); color: #12263A; }
@@ -180,7 +191,8 @@ body[data-perfil="secretaria"] #btn-share-link { display: none !important; }
   .hd-sel { max-width: 110px; }
   .topo-marca { font-size: 18px; }
   .topo-logo { height: 20px; }
-  .topo-data { justify-content: space-between; }
+  /* A data ocupa a linha dela: a largura fixa da tela grande faria a página rolar de lado a 320 px */
+  .topo-data-campo { width: auto; flex: 1; min-width: 0; }
   .hd-txt, .hd-usuario, .hd-seta { display: none; }
   .hd-conta { padding: 3px; }
   .hd-btn { padding: 6px 8px; }
@@ -193,6 +205,10 @@ button:focus-visible, select:focus-visible, input:focus-visible {
   outline: 2px solid var(--ac);
   outline-offset: 2px;
 }
+/* Na barra do topo, azul-escura nos dois temas, o azul de destaque não contrasta (2,4:1): o anel é branco. O menu da
+   conta, claro, fica dentro da barra e mantém o azul */
+header.topo :focus-visible { outline-color: #fff; }
+header.topo .menu-itens :focus-visible { outline-color: var(--ac); }
 
 main { max-width: 1280px; margin: 0 auto; padding: 16px 16px 60px; }
 section { display: none; }

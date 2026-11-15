@@ -237,7 +237,6 @@ function mostrarHistorico(abrir) {
   gavetaDoHistorico.hidden = !abrir;
   $('#btn-open-log').setAttribute('aria-expanded', String(abrir));
   if (!abrir) return;
-  $('#historico-data').textContent = $('#dt-rotulo').textContent;
   $('#btn-fechar-historico').focus();
 }
 $('#btn-open-log').onclick = () => mostrarHistorico(gavetaDoHistorico.hidden);
