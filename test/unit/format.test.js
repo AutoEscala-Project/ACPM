@@ -1,6 +1,6 @@
 import { describe, it, mock } from 'node:test';
 import assert from 'node:assert/strict';
-import { hm, fmtH, fmtDurLabel, WLB, pad, esc, opts, amanhaISO, hojeISO, isoMenosDias, fimDoMes, rotuloDaData, nomeLimpo, LIMITE_DO_NOME, dataIsoValida } from '../../js/format.js';
+import { hm, fmtH, fmtDurLabel, WLB, pad, esc, opts, amanhaISO, hojeISO, isoMenosDias, fimDoMes, rotuloDaData, nomeLimpo, LIMITE_DO_NOME, dataIsoValida, minutoDoDia } from '../../js/format.js';
 
 describe('Formatação', () => {
   it('minutos do dia em HH:MM', () => {
@@ -69,5 +69,11 @@ describe('Formatação', () => {
     assert.equal(rotuloDaData('2027-01-02', '2026-11-10').dia, 'sábado, 02/01/2027', 'outro ano: com o ano');
     assert.deepEqual(rotuloDaData('2027-01-04', '2026-12-31'), { dia: 'segunda-feira, 04/01/2027', semana: 'segunda-feira', semanaCurta: 'seg.', data: '04/01/2027', relativo: '' });
     assert.deepEqual(rotuloDaData('2027-01-01', '2026-12-31'), { dia: 'sexta-feira, 01/01/2027', semana: 'sexta-feira', semanaCurta: 'sex.', data: '01/01/2027', relativo: 'amanhã' });
+  });
+
+  it('o minuto do dia no relógio local', () => {
+    assert.equal(minutoDoDia(new Date(2026, 10, 11, 12, 30)), 750);
+    assert.equal(minutoDoDia(new Date(2026, 10, 11, 0, 0)), 0);
+    assert.equal(minutoDoDia(new Date(2026, 10, 11, 23, 59)), 1439);
   });
 });

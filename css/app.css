@@ -400,6 +400,7 @@ table.fids-tabela { width: 100%; min-width: 860px; border-collapse: collapse; fo
 .fids-Embarque .f-obs { color: #FFC233; font-weight: 700; animation: fids-embarque 1.6s ease-in-out infinite; }
 @keyframes fids-embarque { 50% { opacity: .45; } }
 @media (prefers-reduced-motion: reduce) { .fids-Embarque .f-obs { animation: none; } }
+.fids.pausado .fids-Embarque .f-obs { animation: none; }
 .fids-nada td { color: #DCE7FF; font-weight: 600; }
 .fids-relogio .fids-aviso { color: #FFC233; }
 .fids-relogio .fids-aviso:empty { display: none; }

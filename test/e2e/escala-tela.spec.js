@@ -270,6 +270,84 @@ test.describe('Painel: partidas e chegadas como no aeroporto', () => {
   const titulo = page => page.locator('#out .fids .fids-titulo');
   const linhas = page => page.locator('#out .fids tbody tr:not(.fids-vazia)');
 
+  // O quadro só é refeito quando muda: na troca de página, na virada do minuto e com dados novos. Refazê-lo a cada
+  // segundo reinicia a animação do embarque e tira o leitor de tela do lugar
+  test('o quadro muda só com a página ou o minuto; Pausar para a troca e o pisca, e o quadro continua seguindo a hora', async ({ page }) => {
+    await abrir(page, { estado: cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, { mis: 'Multimotor', eq: 'PA-34', p1: 750, p2: -1 })] }) });
+    // A data aberta (amanhã, 11/11) vira hoje, ao meio-dia: o PA-34 das 12:30 está em embarque
+    await page.clock.install({ time: new Date('2026-11-11T12:00:00-03:00') });
+    await abrirPainel(page);
+    const chamada = page.locator('#out .fids .fids-Embarque .f-obs');
+    const marcar = () => page.locator('#out .fids-tabela').evaluate(el => { el.dataset.marca = '1'; });
+    const marcada = page.locator('#out .fids-tabela[data-marca="1"]');
+    await expect(chamada).toHaveText('EMBARQUE IMEDIATO · Sala de briefing');
+    expect(await chamada.evaluate(el => getComputedStyle(el).animationName)).toBe('fids-embarque');
+
+    await marcar();
+    await page.clock.runFor(2000);
+    await expect(marcada).toHaveCount(1);
+    // A troca de página (Partidas e Chegadas se alternam a cada 10 s) refaz o quadro
+    await page.clock.runFor(8000);
+    await expect(titulo(page)).toHaveText('Chegadas');
+    await expect(marcada).toHaveCount(0);
+
+    // Um quadro só, de uma página: nada para trocar
+    await page.locator('#out [data-fids="partidas"]').click();
+    await marcar();
+    await page.clock.runFor(11000);
+    await expect(marcada).toHaveCount(1);
+
+    await page.locator('#out [data-fids="pausar"]').click();
+    await expect(page.locator('#out .fids')).toHaveClass(/\bpausado\b/);
+    expect(await chamada.evaluate(el => getComputedStyle(el).animationName)).toBe('none');
+    // A pausa continua quando a escala é redesenhada (outra visão e de volta ao painel)
+    await page.locator('#s-esc [data-tl="lista"]').click();
+    await page.locator('#s-esc [data-tl="painel"]').click();
+    await expect(page.locator('#out .fids')).toHaveClass(/\bpausado\b/);
+    expect(await chamada.evaluate(el => getComputedStyle(el).animationName)).toBe('none');
+    // Pausado, o quadro continua seguindo a hora: às 12:31 o PA-34 já saiu do embarque
+    await page.clock.fastForward('31:00');
+    await expect(page.locator('#out .fids .fids-relogio b')).toHaveText('12:31');
+    await expect(page.locator('#out .fids .fids-Embarque')).toHaveCount(0);
+  });
+
+  test('a página que aparece fica os 10 s inteiros, mesmo depois de um tempo com uma página só', async ({ page }) => {
+    await abrirComExemplo(page);
+    await page.clock.install({ time: new Date('2026-11-10T12:00:00-03:00') });
+    await abrirPainel(page);
+    await page.locator('#out [data-fids="partidas"]').click();
+    const pagina = page.locator('#out .fids .fids-relogio small').first();
+    await expect(pagina).toHaveText(/^página 1\/[2-9]/);
+    // Um filtro deixa uma página só por um tempo; sem ele, a página 1 aparece e fica os 10 s
+    await page.locator('#flt-esc-q').fill('Instrutor 01');
+    await expect(pagina).toHaveText('página 1/1');
+    await page.clock.runFor(30000);
+    await page.locator('#flt-esc-q').fill('');
+    await expect(pagina).toHaveText(/^página 1\/[2-9]/);
+    await page.clock.runFor(8000);
+    await expect(pagina).toHaveText(/^página 1\//);
+    await page.clock.runFor(3000);
+    await expect(pagina).toHaveText(/^página 2\//);
+  });
+
+  test('pausado e sem mudança, o quadro não é tocado; na virada do minuto, só a hora muda', async ({ page }) => {
+    await abrirComExemplo(page);
+    await page.clock.install({ time: new Date('2026-11-10T12:00:00-03:00') });
+    await abrirPainel(page);
+    await page.locator('#out [data-fids="pausar"]').click();
+    const contar = () => page.locator('#out .fids').evaluate(el => {
+      window.__mudancas = [];
+      new MutationObserver(m => window.__mudancas.push(...m.map(x => (x.target.closest ? x.target.closest('b, small, table, div')?.className || x.target.tagName : x.target.parentElement?.tagName)))).observe(el, { childList: true, characterData: true, subtree: true });
+    });
+    await contar();
+    await page.clock.runFor(30000);
+    expect(await page.evaluate(() => window.__mudancas)).toEqual([]);
+    await page.locator('#out .fids-tabela').evaluate(el => { el.dataset.marca = '1'; });
+    await page.clock.runFor(31000);
+    await expect(page.locator('#out .fids .fids-relogio b')).toHaveText('12:01');
+    await expect(page.locator('#out .fids-tabela[data-marca="1"]')).toHaveCount(1);
+  });
+
   test('como na TV da recepção: o aluno abreviado e, no cancelamento, só a categoria do motivo', async ({ page }) => {
     const estado = { ...dia(), fObs: { '1000_0_1': { novoInicio: 660 }, '1002_0_1': { motivo: 'Outro', texto: 'Aluno com febre' } } };
     estado.stu = estado.stu.map(s => (s.id === 1001 ? { ...s, nm: 'Maria Silva Santos' } : s));

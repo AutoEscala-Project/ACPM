@@ -2,7 +2,7 @@
 // Chegadas (as que ainda não pousaram) se alternam página a página a cada 10 segundos, com o relógio e a página no
 // canto. O operador pode deixar um quadro só, pausar a troca e abrir em tela cheia (para um monitor ou TV). Só mostra:
 // o status muda na Lista e no mapa. A TV da recepção (painel.html) usa o mesmo painel, na tela toda e sem os botões.
-import { hm, esc, hojeISO, rotuloDaData } from '../format.js';
+import { hm, esc, hojeISO, rotuloDaData, minutoDoDia } from '../format.js';
 import { quadroDePartidas, quadroDeChegadas, minutoDoQuadro, telasDoPainel } from '../quadro.js';
 
 export const TROCA_MS = 10000;
@@ -15,7 +15,7 @@ const COLUNAS = ['Horário', 'Missão', 'Modelo', 'Aeronave', 'Aluno', 'Instruto
 
 // modo: 'alternar' (os dois quadros) ou um quadro só; tela: a posição na sequência; fonte: de onde vêm as linhas;
 // seletor: onde está o painel; inteiro: na tela toda (a TV), com as linhas que couberem
-const estado = { modo: 'alternar', tela: 0, pausado: false, fonte: null, relogio: null, ultimaTroca: 0, seletor: '#out .fids', inteiro: false };
+const estado = { modo: 'alternar', tela: 0, telas: 0, pausado: false, fonte: null, relogio: null, ultimaTroca: 0, minuto: null, chave: null, seletor: '#out .fids', inteiro: false };
 
 const MODELOS = { 'Sim. Mono': 'SIM MONO', 'Sim. Multi': 'SIM MULTI' };
 const classeDoModelo = modelo => modelo.replace(/[^A-Za-z0-9]/g, '');
@@ -45,13 +45,14 @@ function porPagina() {
 function telasAgora() {
   const { linhas, data } = estado.fonte();
   const agora = new Date();
-  const minuto = minutoDoQuadro(data, hojeISO(), agora.getHours() * 60 + agora.getMinutes());
+  const minuto = minutoDoQuadro(data, hojeISO(), minutoDoDia(agora));
   const todas = telasDoPainel(quadroDePartidas(linhas, minuto), quadroDeChegadas(linhas, minuto), porPagina());
   return estado.modo === 'alternar' ? todas : todas.filter(t => t.quadro === estado.modo);
 }
 
 function quadroHtml() {
   const telas = telasAgora();
+  estado.telas = telas.length;
   estado.tela = estado.tela % telas.length;
   const tela = telas[estado.tela];
   const { titulo, icone } = QUADROS[tela.quadro];
@@ -68,13 +69,21 @@ function quadroHtml() {
       <img class="fids-logo" src="img/acpm-aguia.png" alt="ACPM">
       <div class="fids-nome"><h3 class="fids-titulo">${titulo}</h3>${data === hoje ? '' : `<small class="fids-data">${esc(rotuloDaData(data, hoje).dia)}</small>`}</div>
       <svg class="fids-aviao" aria-hidden="true"><use href="#${icone}"/></svg>
-      <div class="fids-relogio"><b>${hm(agora.getHours() * 60 + agora.getMinutes())}</b><small>página ${tela.pagina}/${tela.paginas}</small>${aviso === null ? '' : `<small class="fids-aviso">${esc(aviso)}</small>`}</div>
+      <div class="fids-relogio"><b class="fids-hora">${hm(minutoDoDia(agora))}</b><small>página ${tela.pagina}/${tela.paginas}</small>${aviso === null ? '' : `<small class="fids-aviso">${esc(aviso)}</small>`}</div>
     </div>
     <table class="fids-tabela">
       <caption class="sr">${titulo}${tela.paginas > 1 ? `, página ${tela.pagina} de ${tela.paginas}` : ''}</caption>
       <thead><tr>${COLUNAS.map(c => `<th scope="col">${c}</th>`).join('')}</tr></thead>
       <tbody>${linhas}${vazias}</tbody>
     </table>`;
+}
+
+// O que o quadro mostra, sem a hora: um quadro igual ao que está na tela não é trocado (a hora muda à parte)
+const semHora = html => html.replace(/<b class="fids-hora">[^<]*<\/b>/, '');
+function quadroNovo() {
+  const html = quadroHtml();
+  estado.chave = semHora(html);
+  return html;
 }
 
 const botaoDoModo = (modo, rotulo) => `<button type="button" data-fids="${modo}" aria-pressed="${estado.modo === modo}"${estado.modo === modo ? ' class="on"' : ''}>${rotulo}</button>`;
@@ -92,12 +101,19 @@ export function painelDaEscala(fonte) {
       <button type="button" class="btn sec" data-fids="pausar" aria-pressed="${estado.pausado}">${estado.pausado ? 'Continuar' : 'Pausar'}</button>
       <button type="button" class="btn sec" data-fids="tela-cheia">Tela cheia</button>
     </div>
-    <div class="fids" role="region" aria-label="Painel de partidas e chegadas">${quadroHtml()}</div>`;
+    <div class="fids${estado.pausado ? ' pausado' : ''}" role="region" aria-label="Painel de partidas e chegadas">${quadroNovo()}</div>`;
 }
 
 function redesenhar() {
   const quadro = document.querySelector(estado.seletor);
-  if (quadro && estado.fonte) quadro.innerHTML = quadroHtml();
+  if (!quadro || !estado.fonte) return;
+  const html = quadroHtml();
+  if (semHora(html) === estado.chave) {
+    atualizarRelogio();
+    return;
+  }
+  estado.chave = semHora(html);
+  quadro.innerHTML = html;
 }
 
 // A TV da recepção: o painel na tela toda, sem os botões (alterna sempre). atualizarPainel redesenha na hora (dados novos)
@@ -108,27 +124,40 @@ export function painelNaTela(elemento, fonte) {
   elemento.classList.add('fids', 'inteiro');
   elemento.setAttribute('role', 'region');
   elemento.setAttribute('aria-label', 'Painel de partidas e chegadas');
-  elemento.innerHTML = quadroHtml();
+  elemento.innerHTML = quadroNovo();
   ligarRelogio();
 }
 export const atualizarPainel = redesenhar;
 
-// O relógio do painel: a cada segundo, a hora; a cada 10 segundos, a próxima página (se não estiver pausado). Para
-// sozinho quando o painel sai da tela
+function atualizarRelogio() {
+  const relogio = document.querySelector(`${estado.seletor} .fids-hora`);
+  const hora = hm(minutoDoDia());
+  if (relogio && relogio.textContent !== hora) relogio.textContent = hora;
+}
+
+// O relógio do painel, a cada segundo. O quadro é conferido na troca de página (a cada 10 segundos, fora da pausa e só
+// quando há outra página) e na virada do minuto, pausado ou não (as chegadas e o embarque dependem da hora), e só é
+// trocado se o que ele mostra mudou: refazê-lo sem mudança reiniciaria a animação do embarque e tiraria o leitor de
+// tela do lugar. Para sozinho quando o painel sai da tela
 function ligarRelogio() {
   if (estado.relogio) return;
   estado.ultimaTroca = Date.now();
+  estado.minuto = minutoDoDia();
   estado.relogio = setInterval(() => {
     if (!document.querySelector(estado.seletor) || !estado.fonte) {
       clearInterval(estado.relogio);
       estado.relogio = null;
       return;
     }
-    if (!estado.pausado && Date.now() - estado.ultimaTroca >= TROCA_MS) {
-      estado.tela += 1;
-      estado.ultimaTroca = Date.now();
+    const trocar = !estado.pausado && estado.telas > 1 && Date.now() - estado.ultimaTroca >= TROCA_MS;
+    // Com uma página só, o tempo da página recomeça: quando o quadro passa a ter duas, a primeira fica os 10 s inteiros
+    if (trocar || estado.telas <= 1) estado.ultimaTroca = Date.now();
+    if (trocar) estado.tela += 1;
+    const minuto = minutoDoDia();
+    if (trocar || minuto !== estado.minuto) {
+      estado.minuto = minuto;
+      redesenhar();
     }
-    redesenhar();
   }, 1000);
 }
 
@@ -140,6 +169,9 @@ export function acaoDoPainel(acao) {
     const botao = document.querySelector('#out [data-fids="pausar"]');
     botao.setAttribute('aria-pressed', String(estado.pausado));
     botao.textContent = estado.pausado ? 'Continuar' : 'Pausar';
+    // Na pausa, o pisca do embarque também para (WCAG 2.2.2)
+    const quadro = document.querySelector('#out .fids');
+    if (quadro) quadro.classList.toggle('pausado', estado.pausado);
     return;
   }
   if (acao === 'tela-cheia') {

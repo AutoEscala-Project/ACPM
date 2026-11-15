@@ -8,14 +8,14 @@ import { soPainel } from './perfis.js';
 import { backendLocal } from './backends/local.js';
 import { linhasDoQuadro, quadroDoDia } from './quadro.js';
 import { painelNaTela, atualizarPainel } from './views/painel-aeroporto.js';
-import { hm, hojeISO } from './format.js';
+import { hm, hojeISO, minutoDoDia } from './format.js';
 
 const BUSCA_MS = 60000;
 const SEM_CONEXAO_MS = 3 * 60000;
 let quadro = { data: hojeISO(), voos: null, fStatus: {}, fObs: {} };
 let ultimaBusca = null;
 
-const horaDe = instante => { const d = new Date(instante); return hm(d.getHours() * 60 + d.getMinutes()); };
+const horaDe = instante => hm(minutoDoDia(new Date(instante)));
 const fonte = () => ({
   linhas: quadro.voos ? linhasDoQuadro(quadro.voos, quadro.fStatus, quadro.fObs) : [],
   data: quadro.data,
