@@ -357,6 +357,13 @@ details.caixa.avisos summary { color: var(--wa); }
    na cor do status. Em tela cheia, ocupa a tela toda e as letras crescem com ela */
 .painel-dia { display: flex; flex-direction: column; gap: 10px; }
 .fids-controles { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+/* Pausar apertado: o fundo do quadro escolhido e uma marca (✓), que vale também sem cor */
+.fids-controles .btn[aria-pressed="true"] { background: var(--hd); color: #fff; border-color: var(--hd); }
+.fids-controles .btn[aria-pressed="false"] .ico { display: none; }
+/* Com as cores forçadas do sistema, o fundo some: o botão apertado usa a cor de destaque do sistema */
+@media (forced-colors: active) {
+  .fids-controles .btn[aria-pressed="true"], .seg button.on { forced-color-adjust: none; background: Highlight; color: HighlightText; border-color: Highlight; }
+}
 .fids {
   --fids-fs: 17px; --fids-linha: 34px; --fids-amarelo: #FFD23F; --fids-branco: #F4F7FF;
   overflow-x: auto; background: #07122B; border: 6px solid #0A0F1A; border-radius: 8px; box-shadow: 0 8px 22px rgba(0,0,0,.35);

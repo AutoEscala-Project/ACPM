@@ -98,7 +98,7 @@ export function painelDaEscala(fonte) {
       <div class="seg" role="group" aria-label="Quadros do painel">
         ${botaoDoModo('alternar', 'Partidas e chegadas')}${botaoDoModo('partidas', 'Partidas')}${botaoDoModo('chegadas', 'Chegadas')}
       </div>
-      <button type="button" class="btn sec" data-fids="pausar" aria-pressed="${estado.pausado}">${estado.pausado ? 'Continuar' : 'Pausar'}</button>
+      <button type="button" class="btn sec" data-fids="pausar" aria-pressed="${estado.pausado}"><svg class="ico" aria-hidden="true"><use href="#i-ok"/></svg>Pausar</button>
       <button type="button" class="btn sec" data-fids="tela-cheia">Tela cheia</button>
     </div>
     <div class="fids${estado.pausado ? ' pausado' : ''}" role="region" aria-label="Painel de partidas e chegadas">${quadroNovo()}</div>`;
@@ -166,9 +166,8 @@ export function acaoDoPainel(acao) {
   if (acao === 'pausar') {
     estado.pausado = !estado.pausado;
     estado.ultimaTroca = Date.now();
-    const botao = document.querySelector('#out [data-fids="pausar"]');
-    botao.setAttribute('aria-pressed', String(estado.pausado));
-    botao.textContent = estado.pausado ? 'Continuar' : 'Pausar';
+    // Um botão de alternar: o nome fica, e o estado vai no aria-pressed (o leitor de tela anuncia "pressionado")
+    document.querySelector('#out [data-fids="pausar"]').setAttribute('aria-pressed', String(estado.pausado));
     // Na pausa, o pisca do embarque também para (WCAG 2.2.2)
     const quadro = document.querySelector('#out .fids');
     if (quadro) quadro.classList.toggle('pausado', estado.pausado);
