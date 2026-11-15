@@ -5,7 +5,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions;
 
-select plan(7);
+select plan(8);
 
 insert into auth.users (id, email, created_at, updated_at) values
   ('00000000-0000-4000-a000-000000000041', 'operador@limites.acpm.invalid', now(), now()),
@@ -30,7 +30,13 @@ insert into public.dias (data, conteudo) values
     'resultado', jsonb_build_object('out', jsonb_build_array(
       pg_temp.voo(1, 980), pg_temp.voo(2, 1050, 1, 'C172'),
       pg_temp.voo(2, 610, 1, 'C152', 'cancelado'), pg_temp.voo(1, 700, 1, 'Sim. Mono'))))),
-  ('2099-11-10', jsonb_build_object('resultado', jsonb_build_object('out', jsonb_build_array(pg_temp.voo(1, 390)))));
+  ('2099-11-10', jsonb_build_object('resultado', jsonb_build_object('out', jsonb_build_array(pg_temp.voo(1, 390))))),
+  -- Revisão de 14/11: o atrasado (também em voo e pousado) termina na nova decolagem mais a duração
+  ('2099-11-20', jsonb_build_object(
+    'fStatus', jsonb_build_object('1_980_1', 'Pousou', '2_900_1', 'Atrasado', '3_900_1', 'Confirmado'),
+    'fObs', jsonb_build_object('1_980_1', jsonb_build_object('novoInicio', 1100), '2_900_1', jsonb_build_object('novoInicio', 950),
+      '3_900_1', jsonb_build_object('novoInicio', 950)),
+    'resultado', jsonb_build_object('out', jsonb_build_array(pg_temp.voo(1, 980), pg_temp.voo(2, 900), pg_temp.voo(3, 900)))));
 
 select has_function('public', 'horas_dos_instrutores', array['date'], 'função horas_dos_instrutores existe');
 
@@ -42,6 +48,9 @@ select is(public.horas_dos_instrutores('2099-11-10'),
 select is(public.horas_dos_instrutores('2099-01-01'), '{}'::jsonb, '1º de janeiro: o ano começa do zero (e a véspera não tem escala)');
 select is(public.horas_dos_instrutores('2098-12-31'), '{"1": {"mes": 1, "semestre": 1, "ano": 1, "fimAnterior": 450}}'::jsonb,
   'o último dia do ano conta o ano todo e a véspera');
+
+select is((select jsonb_object_agg(k, v->'fimAnterior') from jsonb_each(public.horas_dos_instrutores('2099-11-21')) e(k, v)),
+  '{"1": 1160, "2": 1010, "3": 960}'::jsonb, 'o repouso conta do pouso de verdade: o atraso também em voo e pousado; o confirmado não');
 
 select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-a000-000000000042","role":"authenticated"}', true);
 select is((public.horas_dos_instrutores('2099-11-10')->'1'->'ano')::numeric, 5::numeric, 'o gestor também vê');

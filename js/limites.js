@@ -3,6 +3,7 @@
 // mudá-los (o acordo coletivo dos instrutores pode ter outros). As horas passadas saem das escalas gravadas (só voo em
 // avião, sem os cancelados) e das horas de voo fora do app informadas no cadastro (horasExternas).
 import { AIRCRAFT_EQ_TYPES } from './config.js';
+import { intervaloEfetivo } from './status.js';
 
 export const LIMITES_DA_LEI = {
   vooPorJornadaMin: 570,  // 9h30 de voo numa jornada (tripulação mínima: Lei 13.475, art. 32, I; RBAC 117, A117.13)
@@ -40,8 +41,10 @@ export function horasDeVooDoDia(dia) {
   return horas;
 }
 
-// O fim do último compromisso (voo, simulador ou Ground) de cada instrutor no dia, sem os cancelados
-const fimDosCompromissos = dia => voosDoDia(dia).reduce((fins, o) => ({ ...fins, [o.insId]: Math.max(fins[o.insId] ?? 0, o.b) }), {});
+// O fim do último compromisso (voo, simulador ou Ground) de cada instrutor no dia, sem os cancelados. O atrasado termina
+// na nova decolagem mais a duração, também em voo e depois do pouso (revisão de 14/11)
+const fimDe = (dia, o) => intervaloEfetivo(o, (dia.fStatus || {})[o.fKey] || o.status, (dia.fObs || {})[o.fKey]).b;
+const fimDosCompromissos = dia => voosDoDia(dia).reduce((fins, o) => ({ ...fins, [o.insId]: Math.max(fins[o.insId] ?? 0, fimDe(dia, o)) }), {});
 
 const semestreDe = data => `${data.slice(0, 4)}-${+data.slice(5, 7) <= 6 ? 1 : 2}`;
 const vespera = data => new Date(Date.parse(`${data}T12:00:00Z`) - 864e5).toISOString().slice(0, 10);

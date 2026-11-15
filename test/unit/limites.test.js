@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { LIMITES_DA_LEI, normalizarLimites, horasDeVooDoDia, acumularHoras, comHorasExternas, jornadaMin, dentroDosLimites } from '../../js/limites.js';
 
 const voo = (insId, a, extra = {}) => ({ fKey: `${insId}${a}_0_1`, classKey: `${insId}${a}_0_1`, insId, eqType: 'C152', a, b: a + 60, h: 1, ...extra });
-const dia = (data, out, fStatus = {}) => ({ data, conteudo: { fStatus, resultado: { out } } });
+const dia = (data, out, fStatus = {}, fObs = {}) => ({ data, conteudo: { fStatus, fObs, resultado: { out } } });
 
 describe('Limites da lei', () => {
   it('os padrões: 9h30 de voo e 11 h de jornada por dia, 100 h no mês, 960 h no ano, 12 h de repouso; sem limite semestral', () => {
@@ -48,6 +48,16 @@ describe('Horas passadas', () => {
       1: { mes: 3, semestre: 4, ano: 5, fimAnterior: 1040 },
       2: { mes: 1, semestre: 2, ano: 2, fimAnterior: 1110 }
     });
+  });
+
+  // Revisão de 14/11: o voo atrasado termina mais tarde; o repouso conta do pouso de verdade (também em voo e pousado)
+  it('o fim do último compromisso da véspera conta o atraso (Atrasado, Em Voo ou Pousou com a nova decolagem)', () => {
+    const ontem = (status, fObs) => acumularHoras([dia('2026-11-09', [voo(1, 980)], { '1980_0_1': status }, fObs)], '2026-11-10')[1].fimAnterior;
+    assert.equal(ontem('Atrasado', { '1980_0_1': { novoInicio: 1100 } }), 1160);
+    assert.equal(ontem('Em Voo', { '1980_0_1': { novoInicio: 1100 } }), 1160);
+    assert.equal(ontem('Pousou', { '1980_0_1': { novoInicio: 1100 } }), 1160);
+    assert.equal(ontem('Confirmado', { '1980_0_1': { novoInicio: 1100 } }), 1040, 'sem status de atraso, o horário da escala');
+    assert.equal(ontem('Pousou', {}), 1040);
   });
 
   it('as horas de voo fora do app entram no mês e no ano (antes deste mês: só no ano)', () => {
