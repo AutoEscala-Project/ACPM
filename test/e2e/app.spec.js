@@ -48,7 +48,8 @@ test.describe('Aplicação', () => {
     await expect(page.locator('#dt-rel')).toHaveText('hoje');
   });
 
-  test('o controle da data tem tamanho fixo: as setas não saem do lugar quando o texto muda', async ({ page }) => {
+  for (const largura of [1280, 560, 360]) test(`o controle da data tem tamanho fixo: as setas não saem do lugar quando o texto muda (${largura} px)`, async ({ page }) => {
+    await page.setViewportSize({ width: largura, height: 800 });
     await abrir(page);
     const caixas = () => page.evaluate(() => ['.topo-data', '#dt-ant', '#dt-prox'].map(s => {
       const r = document.querySelector(s).getBoundingClientRect();

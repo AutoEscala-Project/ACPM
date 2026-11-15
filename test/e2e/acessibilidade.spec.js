@@ -1,6 +1,9 @@
 // Acessibilidade: cada botão e cada campo tem um nome para o leitor de tela, e nenhum se chama só "✕" (que o leitor
 // lê como "multiplicação"). Vale para todas as abas, o Histórico e o painel de habilitações.
-import { test, expect, abrirComExemplo, irPara } from './fixtures.js';
+import { test, expect, abrirComExemplo, irPara, entrar } from './fixtures.js';
+import { instalarSupabaseFalso, documentosAtuais, CONTAS } from './supabase-falso.js';
+import { comExemplo } from '../helpers/exemplo.js';
+import { estadoSintetico } from '../helpers/estado.js';
 import { razaoDeContraste } from '../helpers/contraste.js';
 
 // Nome acessível, do jeito simples: aria-label, aria-labelledby, o rótulo do campo, o texto do botão ou a dica
@@ -170,4 +173,71 @@ test('na tela grande, o dia da semana aparece por extenso', async ({ page }) => 
   await expect(page.locator('#dt-rotulo .dt-semana')).toBeVisible();
   await expect(page.locator('#dt-rotulo .dt-semana')).toHaveText('quarta-feira');
   await expect(page.locator('#dt-rotulo .dt-semana-curta')).toBeHidden();
+});
+
+// Entre o celular e a tela grande, a barra do topo não pode sobrepor a data e as ferramentas. No modo compartilhado, as
+// ferramentas levam o nome da conta (mais largas)
+test.describe('A barra do topo nas larguras intermediárias', () => {
+  for (const [largura, modo] of [[641, 'local'], [700, 'local'], [820, 'local'], [900, 'local'], [1024, 'local'], [1029, 'compartilhado'],
+    [1030, 'compartilhado'], [1110, 'local'], [1280, 'local'], [1289, 'compartilhado'], [1290, 'compartilhado']]) {
+    test(`a ${largura} px (modo ${modo}), nada na barra cobre a marca, as setas da data ou as ferramentas`, async ({ page, context }) => {
+      await page.setViewportSize({ width: largura, height: 800 });
+      if (modo === 'local') await abrirComExemplo(page);
+      else {
+        await instalarSupabaseFalso(context, documentosAtuais(comExemplo(estadoSintetico()), '2026-11-11'));
+        await entrar(page, CONTAS.operador);
+      }
+      // O que está no meio de cada um é ele mesmo (nada por cima): a marca, as setas da data e as ferramentas
+      for (const seletor of ['.topo-titulo', '#dt-ant', '#dt-prox', '#btn-open-log', '#btn-manual', '#btn-menu-conta']) {
+        const noMeio = await page.locator(seletor).evaluate(el => {
+          const r = el.getBoundingClientRect();
+          return el.contains(document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2));
+        });
+        expect(noMeio, seletor).toBe(true);
+      }
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(largura);
+    });
+  }
+});
+
+// No celular, os botões do topo mostram só o ícone: o nome continua o da palavra escondida (e não só o número do selo)
+test.describe('Os botões do topo no celular', () => {
+  test.use({ viewport: { width: 360, height: 780 } });
+  test('o Histórico e o Manual mantêm o nome para o leitor de tela', async ({ page }) => {
+    await abrirComExemplo(page);
+    await expect(page.locator('#btn-open-log')).toHaveAccessibleName(/^Histórico/);
+    await expect(page.locator('#btn-manual')).toHaveAccessibleName('Manual');
+    await expect(page.locator('#btn-open-log .hd-txt')).not.toBeInViewport({ ratio: 0.5 });
+  });
+});
+
+// Da tela média para cima, o Tab passa pelos controles da barra na ordem em que eles aparecem, linha por linha
+test.describe('A ordem do Tab na barra do topo', () => {
+  for (const largura of [700, 900, 1029, 1100, 1400]) {
+    test(`a ${largura} px, cada controle da barra fica na mesma linha ou abaixo do anterior`, async ({ page }) => {
+      await page.setViewportSize({ width: largura, height: 800 });
+      await abrirComExemplo(page);
+      const linhas = await page.locator('header.topo').evaluate(topo => [...topo.querySelectorAll('button, select, input')]
+        .filter(el => el.checkVisibility() && !el.closest('#menu-conta, nav')).map(el => [el.id || el.className, Math.round(el.getBoundingClientRect().top)]));
+      for (let i = 1; i < linhas.length; i++) expect(linhas[i][1], `${linhas[i][0]} depois de ${linhas[i - 1][0]}`).toBeGreaterThanOrEqual(linhas[i - 1][1] - 6);
+    });
+  }
+});
+
+// Um nome de conta longo termina em reticências e não empurra as ferramentas para cima da marca
+test.describe('Um nome de conta longo', () => {
+  for (const largura of [1030, 1289]) {
+    test(`a ${largura} px, o nome é cortado e a marca continua à vista`, async ({ page, context }) => {
+      await page.setViewportSize({ width: largura, height: 800 });
+      const nome = 'Maria Aparecida dos Santos Albuquerque de Oliveira Figueiredo Pereira da Silva';
+      await instalarSupabaseFalso(context, { ...documentosAtuais(comExemplo(estadoSintetico()), '2026-11-11'), nomes: { [CONTAS.operador.id]: nome } });
+      await entrar(page, CONTAS.operador);
+      await expect(page.locator('#usuario b')).toHaveText(nome);
+      expect(await page.locator('#usuario b').evaluate(el => el.scrollWidth > el.clientWidth)).toBe(true);
+      expect(await page.locator('.topo-titulo').evaluate(el => {
+        const r = el.getBoundingClientRect();
+        return el.contains(document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2));
+      })).toBe(true);
+    });
+  }
 });

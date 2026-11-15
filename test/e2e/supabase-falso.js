@@ -65,7 +65,7 @@ const LINHAS_POR_CONSULTA = 1000;
 
 // Um servidor pode atender vários contextos do navegador (ex.: operador e gestor vendo os mesmos dados)
 // agora: o relógio do servidor para o prazo da agenda (o mesmo instante do relógio fixo das páginas)
-export function criarSupabaseFalso({ documentos = {}, dias = {}, historico: historicoInicial = [], agora = new Date('2026-11-10T12:00:00-03:00') } = {}) {
+export function criarSupabaseFalso({ documentos = {}, dias = {}, historico: historicoInicial = [], agora = new Date('2026-11-10T12:00:00-03:00'), nomes = {} } = {}) {
   const banco = new Map(Object.entries(documentos).map(([chave, conteudo]) => [chave, { conteudo, versao: 1 }]));
   const tabelaDias = new Map(Object.entries(dias).map(([data, conteudo]) => [data, { conteudo, versao: 1 }]));
   // As entradas do histórico já gravadas (no formato da tabela historico)
@@ -170,7 +170,7 @@ export function criarSupabaseFalso({ documentos = {}, dias = {}, historico: hist
     }
 
     if (req.method() === 'GET') {
-      if (url.pathname === '/rest/v1/perfis') return responder(200, comPerfil ? [{ perfil: conta.perfil, nome: conta.nome }] : []);
+      if (url.pathname === '/rest/v1/perfis') return responder(200, comPerfil ? [{ perfil: conta.perfil, nome: nomes[conta.id] || conta.nome }] : []);
       if (!comPerfil) return responder(200, []);
       if (!leEscala && ['/rest/v1/documentos', '/rest/v1/dias', '/rest/v1/historico', '/rest/v1/solicitacoes'].includes(url.pathname)) return responder(200, []);
       if (url.pathname === '/rest/v1/documentos') {
