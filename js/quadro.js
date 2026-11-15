@@ -48,9 +48,17 @@ export function linhasDoQuadro(out, fStatus = {}, fObs = {}) {
 
 const NO_QUADRO = { 'Em Voo': 'Em voo' };
 
+// O embarque (retorno da operação, 14/11): dos 35 minutos antes da decolagem (a nova, no atraso) até ela, o voo no avião
+// que ainda não decolou chama o aluno para a sala de briefing. O Ground e o simulador não chamam
+export const EMBARQUE_ANTES_MIN = 35;
+export const TEXTO_DO_EMBARQUE = 'EMBARQUE IMEDIATO · Sala de briefing';
+const AINDA_NO_CHAO = ['Pendente', 'Confirmado', 'Atrasado'];
+const emEmbarque = (l, agora) => !l.ground && !/^Sim\./.test(l.modelo) && AINDA_NO_CHAO.includes(l.status)
+  && Number.isFinite(agora) && agora >= l.inicio - EMBARQUE_ANTES_MIN && agora < l.inicio;
+
 // A linha como aparece no quadro: o horário programado (da decolagem nas partidas, do pouso nas chegadas), o previsto
-// quando atrasado e a observação (o status; o cancelado com o motivo)
-function linhaDoAeroporto(l, momento) {
+// quando atrasado e a observação (o status; o cancelado com o motivo; nas partidas, o embarque)
+function linhaDoAeroporto(l, momento, agora) {
   const efetivo = momento === 'partida' ? l.inicio : l.fim;
   const programado = l.original ? (momento === 'partida' ? l.original.inicio : l.original.fim) : efetivo;
   const n = l.alunos.length;
@@ -64,15 +72,16 @@ function linhaDoAeroporto(l, momento) {
     aeronave: l.recurso,
     aluno: l.ground ? `${n} ${n === 1 ? 'aluno' : 'alunos'}` : l.alunos.join(', '),
     instrutor: l.instrutor,
-    observacao: [NO_QUADRO[l.status] || rotuloDoStatus(l.status, { isGround: l.ground, eqType: l.modelo }), l.motivo].filter(Boolean).join(' · '),
-    classe: classeDoStatus(l.status)
+    ...(momento === 'partida' && emEmbarque(l, agora)
+      ? { observacao: TEXTO_DO_EMBARQUE, classe: 'Embarque' }
+      : { observacao: [NO_QUADRO[l.status] || rotuloDoStatus(l.status, { isGround: l.ground, eqType: l.modelo }), l.motivo].filter(Boolean).join(' · '), classe: classeDoStatus(l.status) })
   };
 }
 
 const peloEfetivo = (x, y) => x.efetivo - y.efetivo;
 
-// Partidas: todas as do dia
-export const quadroDePartidas = linhas => linhas.map(l => linhaDoAeroporto(l, 'partida')).sort(peloEfetivo);
+// Partidas: todas as do dia (agora: o minuto do quadro, para o embarque)
+export const quadroDePartidas = (linhas, agora) => linhas.map(l => linhaDoAeroporto(l, 'partida', agora)).sort(peloEfetivo);
 
 // Chegadas: as pendentes no minuto do quadro (o pouso ainda não passou). O voo em voo continua até mudar de status, o
 // que pousou sai na hora, e o cancelado fica até o horário dele passar

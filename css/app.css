@@ -380,6 +380,10 @@ table.fids-tabela { width: 100%; min-width: 860px; border-collapse: collapse; fo
 .fids-Cancelado .f-obs { color: #FF7B7B; }
 .fids-EmVoo .f-obs { color: #74D7FF; }
 .fids-Pousou .f-obs { color: #DCE7FF; }
+/* Embarque: a chamada para a sala de briefing pisca devagar, como no aeroporto (sem piscar com a animação reduzida) */
+.fids-Embarque .f-obs { color: #FFC233; font-weight: 700; animation: fids-embarque 1.6s ease-in-out infinite; }
+@keyframes fids-embarque { 50% { opacity: .45; } }
+@media (prefers-reduced-motion: reduce) { .fids-Embarque .f-obs { animation: none; } }
 .fids-nada td { color: #DCE7FF; font-weight: 600; }
 .fids-relogio .fids-aviso { color: #FFC233; }
 .fids-relogio .fids-aviso:empty { display: none; }
