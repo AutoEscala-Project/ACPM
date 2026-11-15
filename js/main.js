@@ -63,10 +63,13 @@ import { iniciarDicas } from './dicas.js';
 import { iniciarSomenteLeitura } from './somente-leitura.js';
 
 const activeTimers = new WeakMap();
+// Uma aba escolhida pela pessoa enquanto os dados carregam não é trocada pela aba inicial do perfil
+let abaEscolhida = false;
 
 document.addEventListener('click', e => {
   const g = e.target.closest('[data-t],[data-go]');
   if (g) {
+    abaEscolhida = true;
     const aba = g.dataset.t || g.dataset.go;
     show(aba);
     if (aba === 'bi') carregarBI();
@@ -1404,14 +1407,16 @@ window.addEventListener('beforeunload', e => {
   // Dados pessoais (para a coluna CANAC das tabelas), para quem pode vê-los
   carregarDadosPessoais();
 
-  // A Secretaria trabalha na agenda: o app abre nela
-  if (ApiClient.perfil === 'secretaria') {
-    show('age');
-    abrirAgenda();
-  }
+  // A Secretaria trabalha na agenda: o app abre nela, a menos que ela já tenha saído da Escala (uma aba, o Manual, Minha
+  // conta) ou escolhido uma aba enquanto os dados carregavam. A Agenda aberta, por ela ou pela abertura, é lida agora,
+  // com os alunos, no dia que já estiver escolhido nela
+  if (ApiClient.perfil === 'secretaria' && !abaEscolhida && $('#s-esc').classList.contains('on')) show('age');
+  if ($('#s-age').classList.contains('on')) abrirAgenda(diaDaAgenda() || undefined);
 
   rOut();
   atualizarSelosDaEscala();
   lerPedidosDaData();
   carregarBI();
+  // Fim da abertura: daqui em diante, só a pessoa muda a aba. Os testes E2E esperam por esta marca (fixtures.js, entrar)
+  document.body.dataset.pronto = '1';
 })();

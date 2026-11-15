@@ -1,7 +1,7 @@
 // A TV da recepção (fase 9): painel.html mostra o mesmo painel de partidas e chegadas da Escala, na tela toda e sem
 // botões, com o quadro de hoje e o aluno abreviado. No modo compartilhado, a conta da TV (perfil "painel") só vê o
 // quadro, que ela busca de novo a cada minuto.
-import { test, expect, prepararContexto, vigiarErros } from './fixtures.js';
+import { test, expect, prepararContexto, vigiarErros, preencherLogin, URL_APP } from './fixtures.js';
 import { instalarSupabaseFalso, documentosAtuais, CONTAS } from './supabase-falso.js';
 import { runAllocationEngine } from '../../js/engine.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
@@ -80,9 +80,7 @@ test.describe('TV da recepção', () => {
     const erros = vigiarErros(page);
     await page.clock.install({ time: new Date('2026-11-10T12:00:00-03:00') });
     await page.goto('./painel.html?supabase=teste');
-    await page.locator('#login-email').fill(CONTAS.painel.email);
-    await page.locator('#login-senha').fill(CONTAS.painel.senha);
-    await page.locator('#btn-entrar').click();
+    await preencherLogin(page, CONTAS.painel);
     await expect(linhas(page).locator('.f-aluno')).toHaveText(['Maria S.', 'João']);
     await expect(page.locator('.fids .fids-aviso')).toHaveText('');
 
@@ -99,11 +97,11 @@ test.describe('TV da recepção', () => {
 
   test('a conta da TV que abre o app vai direto para o painel; o app não fica conectado com ela', async ({ browser }) => {
     const { context, page, erros } = await novaTV(browser);
-    await page.goto('./?supabase=teste');
-    await entrar(page, CONTAS.painel);
+    await page.goto(URL_APP);
+    await preencherLogin(page, CONTAS.painel);
     await expect(page).toHaveURL(/painel\.html\?supabase=teste$/);
     await expect(linhas(page).locator('.f-aluno')).toHaveText(['Maria S.', 'João']);
-    await page.goto('./?supabase=teste');
+    await page.goto(URL_APP);
     await expect(page.locator('#form-login')).toBeVisible();
     expect(erros).toEqual([]);
     await context.close();
@@ -114,12 +112,12 @@ test.describe('TV da recepção', () => {
   test('outra conta não entra na TV: a página pede a conta da TV', async ({ browser }) => {
     const { context, page, erros } = await novaTV(browser);
     await page.goto('./painel.html?supabase=teste');
-    await entrar(page, CONTAS.operador);
+    await preencherLogin(page, CONTAS.operador);
     await expect(page.locator('#login-erro')).toHaveText('Esta conta não é a da TV. Entre com a conta da TV (perfil Painel).');
     await expect(page.locator('#quadro')).toBeHidden();
     await page.reload();
     await expect(page.locator('#form-login')).toBeVisible();
-    await entrar(page, CONTAS.painel);
+    await preencherLogin(page, CONTAS.painel);
     await expect(linhas(page).locator('.f-aluno')).toHaveText(['Maria S.', 'João']);
     expect(erros).toEqual([]);
     await context.close();
@@ -127,15 +125,15 @@ test.describe('TV da recepção', () => {
 
   test('a sessão do app não vale na TV, e a da TV não abre o app', async ({ browser }) => {
     const { context, page, erros } = await novaTV(browser);
-    await page.goto('./?supabase=teste');
-    await entrar(page, CONTAS.operador);
+    await page.goto(URL_APP);
+    await preencherLogin(page, CONTAS.operador);
     await expect(page.locator('#usuario')).toContainText(CONTAS.operador.nome);
     await page.goto('./painel.html?supabase=teste');
     await expect(page.locator('#form-login')).toBeVisible();
-    await entrar(page, CONTAS.painel);
+    await preencherLogin(page, CONTAS.painel);
     await expect(linhas(page)).toHaveCount(2);
     // O app continua com a conta do operador
-    await page.goto('./?supabase=teste');
+    await page.goto(URL_APP);
     await expect(page.locator('#usuario')).toContainText(CONTAS.operador.nome);
     expect(erros).toEqual([]);
     await context.close();
@@ -144,7 +142,7 @@ test.describe('TV da recepção', () => {
   test('a TV que entrou antes desta versão (com a sessão na chave do app) continua conectada', async ({ browser }) => {
     const { context, page, erros } = await novaTV(browser);
     await page.goto('./painel.html?supabase=teste');
-    await entrar(page, CONTAS.painel);
+    await preencherLogin(page, CONTAS.painel);
     await expect(linhas(page)).toHaveCount(2);
     // Como a versão anterior guardava: na chave do app
     await page.evaluate(() => {
@@ -153,7 +151,7 @@ test.describe('TV da recepção', () => {
     });
     await page.reload();
     await expect(linhas(page)).toHaveCount(2);
-    await page.goto('./?supabase=teste');
+    await page.goto(URL_APP);
     await expect(page.locator('#form-login')).toBeVisible();
     expect(erros).toEqual([]);
     await context.close();
@@ -168,8 +166,3 @@ async function novaTV(browser) {
   return { context, page, erros: vigiarErros(page) };
 }
 
-async function entrar(page, conta) {
-  await page.locator('#login-email').fill(conta.email);
-  await page.locator('#login-senha').fill(conta.senha);
-  await page.locator('#btn-entrar').click();
-}

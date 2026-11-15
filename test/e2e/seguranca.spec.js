@@ -1,7 +1,7 @@
 // Conteúdo gravado malicioso (revisão de 14/11): quem tem uma conta de operador consegue gravar qualquer coisa no
 // cadastro, no dia, na escala salva e no histórico pela API. Nada disso pode virar HTML ou script em nenhuma tela: o
 // app escapa tudo o que mostra (texto e atributos) e, ao abrir, só aceita os valores que ele mesmo produz.
-import { test, expect, irPara, prepararContexto, vigiarErros, AMANHA } from './fixtures.js';
+import { test, expect, irPara, prepararContexto, vigiarErros, AMANHA, preencherLogin, URL_APP } from './fixtures.js';
 import { documentosAtuais, instalarSupabaseFalso, CONTAS } from './supabase-falso.js';
 import { runAllocationEngine } from '../../js/engine.js';
 import { aluno, cenario, instrutor, missaoExtra, GROUND_C152 } from '../helpers/montar.js';
@@ -171,14 +171,12 @@ test.describe('Conteúdo gravado malicioso', () => {
       dias: { [AMANHA]: docs[`acpm4_dia_${AMANHA}`], '2026-11-10': docs['acpm4_dia_2026-11-10'] },
       historico: docs.acpm4_historico
     });
-    for (const [url, conta] of [['./?supabase=teste', CONTAS.operador], ['./painel.html?supabase=teste', CONTAS.painel]]) {
+    for (const [url, conta] of [[URL_APP, CONTAS.operador], ['./painel.html?supabase=teste', CONTAS.painel]]) {
       const page = await contexto.newPage();
       const erros = vigiarErros(page);
       await vigiarPolitica(page);
       await page.goto(url);
-      await page.locator('#login-email').fill(conta.email);
-      await page.locator('#login-senha').fill(conta.senha);
-      await page.locator('#btn-entrar').click();
+      await preencherLogin(page, conta);
       if (conta === CONTAS.operador) await percorrer(page);
       else await expect(page.locator('.fids tbody tr:not(.fids-vazia):not(.fids-nada)').first()).toBeVisible();
       await nada(page);

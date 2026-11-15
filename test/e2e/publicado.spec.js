@@ -3,7 +3,7 @@
 // Roda só quando as senhas das contas estão no ambiente; os demais testes E2E usam o modo local.
 //   BASE_URL=https://thephfernandes.github.io/ACPM/ ACPM_SENHA_OPERADOR=... ACPM_SENHA_GESTOR=... ACPM_SENHA_SECRETARIA=... ACPM_SENHA_ADMIN=... ACPM_SENHA_PAINEL=... \
 //     npx playwright test test/e2e/publicado.spec.js --workers=1
-import { test, expect, abrirMenuDaConta, AMANHA } from './fixtures.js';
+import { test, expect, abrirMenuDaConta, AMANHA, preencherLogin } from './fixtures.js';
 
 const CONTAS = {
   operador: { email: process.env.ACPM_EMAIL_OPERADOR || 'operador.previa@example.com', senha: process.env.ACPM_SENHA_OPERADOR, rotulo: 'Operador' },
@@ -16,9 +16,7 @@ test.describe('Site publicado (login real)', () => {
   for (const [perfil, conta] of Object.entries(CONTAS)) {
     test(`${perfil} entra e vê a escala compartilhada`, async ({ page }) => {
       await page.goto('./');
-      await page.locator('#login-email').fill(conta.email);
-      await page.locator('#login-senha').fill(conta.senha);
-      await page.locator('#btn-entrar').click();
+      await preencherLogin(page, conta);
       await expect(page.locator('#usuario')).toContainText(`· ${conta.rotulo}`);
       await expect(page.locator('body')).toHaveAttribute('data-role', perfil);
       // No primeiro acesso de um operador depois de uma mudança de formato, o app regrava todos os dias antes de abrir
@@ -33,9 +31,7 @@ test.describe('Site publicado (login real)', () => {
   test('secretaria entra direto na agenda de solicitações (a escala ela só consulta)', async ({ page }) => {
     test.skip(!process.env.ACPM_SENHA_SECRETARIA, 'defina ACPM_SENHA_SECRETARIA');
     await page.goto('./');
-    await page.locator('#login-email').fill(process.env.ACPM_EMAIL_SECRETARIA || 'secretaria.previa@example.com');
-    await page.locator('#login-senha').fill(process.env.ACPM_SENHA_SECRETARIA);
-    await page.locator('#btn-entrar').click();
+    await preencherLogin(page, { email: process.env.ACPM_EMAIL_SECRETARIA || 'secretaria.previa@example.com', senha: process.env.ACPM_SENHA_SECRETARIA });
     await expect(page.locator('#usuario')).toContainText('· Secretaria');
     await expect(page.locator('#s-age')).toBeVisible();
     await expect(page.locator('#form-agenda')).toBeVisible();
@@ -48,9 +44,7 @@ test.describe('Site publicado (login real)', () => {
   test('administrador vê as contas em Minha conta › Usuários', async ({ page }) => {
     test.skip(!process.env.ACPM_SENHA_ADMIN, 'defina ACPM_SENHA_ADMIN');
     await page.goto('./');
-    await page.locator('#login-email').fill(process.env.ACPM_EMAIL_ADMIN || 'admin.previa@example.com');
-    await page.locator('#login-senha').fill(process.env.ACPM_SENHA_ADMIN);
-    await page.locator('#btn-entrar').click();
+    await preencherLogin(page, { email: process.env.ACPM_EMAIL_ADMIN || 'admin.previa@example.com', senha: process.env.ACPM_SENHA_ADMIN });
     await expect(page.locator('#usuario')).toContainText('· Administrador');
     await abrirMenuDaConta(page);
     await page.locator('#btn-conta').click();
@@ -63,9 +57,7 @@ test.describe('Site publicado (login real)', () => {
   test('a conta da TV da recepção vai do app para o painel de hoje e não lê nenhuma tabela da escala', async ({ page }) => {
     test.skip(!process.env.ACPM_SENHA_PAINEL, 'defina ACPM_SENHA_PAINEL');
     await page.goto('./');
-    await page.locator('#login-email').fill(process.env.ACPM_EMAIL_PAINEL || 'tv.previa@example.com');
-    await page.locator('#login-senha').fill(process.env.ACPM_SENHA_PAINEL);
-    await page.locator('#btn-entrar').click();
+    await preencherLogin(page, { email: process.env.ACPM_EMAIL_PAINEL || 'tv.previa@example.com', senha: process.env.ACPM_SENHA_PAINEL });
     await expect(page).toHaveURL(/painel\.html/, { timeout: 20000 });
     await expect(page.locator('.fids .fids-titulo')).toHaveText(/^(Partidas|Chegadas)$/, { timeout: 20000 });
     const linhasLidas = await page.evaluate(async () => {
@@ -87,9 +79,7 @@ test.describe('Site publicado (login real)', () => {
   test('gestor abre uma data sem escala: vê a data nova (demanda vazia), sem gravar', async ({ page }) => {
     const conta = CONTAS.gestor;
     await page.goto('./');
-    await page.locator('#login-email').fill(conta.email);
-    await page.locator('#login-senha').fill(conta.senha);
-    await page.locator('#btn-entrar').click();
+    await preencherLogin(page, conta);
     await expect(page.locator('#inst .cd').first()).toBeAttached();
     await expect(page.locator('#dt')).toHaveValue(AMANHA);
     const instrutores = await page.locator('#inst .cd').count();

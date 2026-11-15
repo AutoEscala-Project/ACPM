@@ -1,6 +1,6 @@
 // Cursos (fase 14): o programa de cada curso (PP, PC e INVA) fica em Alunos › Cursos. O Administrador inclui, muda,
 // reordena e tira missões; os outros perfis só consultam. Cada aluno tem o curso dele.
-import { test, expect, abrir, irPara, confirmar, abrirEscala, prepararContexto, vigiarErros, AMANHA } from './fixtures.js';
+import { test, expect, abrir, irPara, confirmar, abrirEscala, prepararContexto, vigiarErros, AMANHA, entrar as entrarNoApp } from './fixtures.js';
 import { criarSupabaseFalso, documentosAtuais, CONTAS } from './supabase-falso.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
 
@@ -137,11 +137,7 @@ test.describe('Cursos no servidor (modo compartilhado)', () => {
     await servidor.instalar(contexto);
     const page = await contexto.newPage();
     const erros = vigiarErros(page);
-    await page.goto('./?supabase=teste');
-    await page.locator('#login-email').fill(conta.email);
-    await page.locator('#login-senha').fill(conta.senha);
-    await page.locator('#btn-entrar').click();
-    await expect(page.locator('#usuario')).toBeVisible();
+    await entrarNoApp(page, conta);
     return { contexto, page, erros };
   }
 
