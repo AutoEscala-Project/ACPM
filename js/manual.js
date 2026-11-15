@@ -17,8 +17,11 @@ export function quemPodeDar(mis, equipamentos) {
   if (new Set(porEquipamento.map(([, grupos]) => grupos[0])).size > 1) {
     return porEquipamento.map(([eq, grupos]) => `${grupos.join(' + ')} no ${eq}`).join('; ');
   }
-  const extras = porEquipamento.filter(([, grupos]) => grupos.length > 1).map(([eq, grupos]) => `+ ${grupos.slice(1).join(' + ')} no ${eq}`);
-  const base = porEquipamento[0][1][0];
+  // O que vale em todos os equipamentos vem primeiro; o que cada avião acrescenta, entre parênteses
+  const comuns = porEquipamento[0][1].filter(g => porEquipamento.every(([, grupos]) => grupos.includes(g)));
+  const extras = porEquipamento.map(([eq, grupos]) => [eq, grupos.filter(g => !comuns.includes(g))])
+    .filter(([, grupos]) => grupos.length).map(([eq, grupos]) => `+ ${grupos.join(' + ')} no ${eq}`);
+  const base = comuns.join(' + ');
   return extras.length ? `${base} (${extras.join(', ')})` : base;
 }
 

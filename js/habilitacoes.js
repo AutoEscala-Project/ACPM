@@ -18,9 +18,14 @@ export const HABILITACOES = [
   { id: 'c152', nome: 'C152', curto: 'C152' },
   { id: 'c172', nome: 'C172', curto: 'C172' },
   { id: 'mlte', nome: 'MLTE (PA-34)', curto: 'MLTE (PA-34)' },
-  { id: 'checador_vfr', nome: 'Checador PP, PC, MNTE, INVA (VFR)', curto: 'Checador VFR' },
-  { id: 'checador_ifr', nome: 'Checador PP, PC, MNTE, INVA, IFR', curto: 'Checador IFR' },
-  { id: 'checador_mlte', nome: 'Checador PP, PC, MLTE, MNTE, INVA, IFR', curto: 'Checador MLTE IFR' }
+  // O checador é credenciado por partes (retorno da operação, 14/11): o curso, o motor e as regras do voo
+  { id: 'checa_pp', nome: 'Checador do curso PP', curto: 'Checador PP' },
+  { id: 'checa_pc', nome: 'Checador do curso PC', curto: 'Checador PC' },
+  { id: 'checa_inva', nome: 'Checador do curso INVA', curto: 'Checador INVA' },
+  { id: 'checa_mnte', nome: 'Checador MNTE', curto: 'Checador MNTE' },
+  { id: 'checa_mlte', nome: 'Checador MLTE', curto: 'Checador MLTE' },
+  { id: 'checa_vfr', nome: 'Checador VFR', curto: 'Checador VFR' },
+  { id: 'checa_ifr', nome: 'Checador IFR', curto: 'Checador IFR' }
 ];
 const ORDEM = new Map(HABILITACOES.map((h, i) => [h.id, i]));
 const NOME = new Map(HABILITACOES.map(h => [h.id, h.nome]));
@@ -47,15 +52,23 @@ const DA_MISSAO = {
 };
 const DO_SIMULADOR = { 'Sim. Mono': 'sim_mono', 'Sim. Multi': 'sim_multi' };
 
-// Voos de cheque: basta um dos checadores credenciados para o cheque, em qualquer avião permitido
+// Voos de cheque: o checador precisa das três marcas do cheque (o curso, o motor e as regras), em qualquer avião permitido
 const CHEQUES = {
-  'Cheque PP': ['checador_vfr', 'checador_ifr', 'checador_mlte'],
-  'Cheque PC MNTE VFR': ['checador_vfr', 'checador_ifr', 'checador_mlte'],
-  'Cheque PC MNTE IFR': ['checador_ifr', 'checador_mlte'],
-  'Cheque PC MLTE VFR': ['checador_mlte'],
-  'Cheque PC MLTE IFR': ['checador_mlte']
+  'Cheque PP': ['checa_pp', 'checa_mnte', 'checa_vfr'],
+  'Cheque PC MNTE VFR': ['checa_pc', 'checa_mnte', 'checa_vfr'],
+  'Cheque PC MNTE IFR': ['checa_pc', 'checa_mnte', 'checa_ifr'],
+  'Cheque PC MLTE VFR': ['checa_pc', 'checa_mlte', 'checa_vfr'],
+  'Cheque PC MLTE IFR': ['checa_pc', 'checa_mlte', 'checa_ifr']
 };
 export const ehCheque = mis => Object.hasOwn(CHEQUES, mis);
+// Até o formato 19, três habilitações de checador; cada uma vira as marcas que davam exatamente os mesmos cheques
+// (o INVA, que estava no nome de todas, também)
+const CHECADOR_ANTIGO = {
+  checador_vfr: ['checa_pp', 'checa_pc', 'checa_inva', 'checa_mnte', 'checa_vfr'],
+  checador_ifr: ['checa_pp', 'checa_pc', 'checa_inva', 'checa_mnte', 'checa_vfr', 'checa_ifr'],
+  checador_mlte: ['checa_pp', 'checa_pc', 'checa_inva', 'checa_mnte', 'checa_mlte', 'checa_vfr', 'checa_ifr']
+};
+export const marcasDoChecadorAntigo = hab => [...new Set(hab.flatMap(h => (Object.hasOwn(CHECADOR_ANTIGO, h) ? CHECADOR_ANTIGO[h] : [h])))];
 // O C152 também (retorno da operação, 14/11): todo instrutor de antes recebeu a habilitação (formato 19)
 const DO_AVIAO = { 'C152': 'c152', 'C172': 'c172', 'PA-34': 'mlte' };
 
@@ -64,7 +77,7 @@ const doMapa = (mapa, chave, padrao) => (Object.hasOwn(mapa, chave) ? mapa[chave
 
 // Exigências da missão no equipamento: todos os grupos, e em cada grupo basta uma das habilitações
 export function exigencias(mis, eq) {
-  if (ehCheque(mis)) return [[...CHEQUES[mis]]];
+  if (ehCheque(mis)) return CHEQUES[mis].map(h => [h]);
   const grupos = [[mis === 'Simulador' ? doMapa(DO_SIMULADOR, eq, 'sim_mono') : doMapa(DA_MISSAO, mis, 'local')]];
   if (Object.hasOwn(DO_AVIAO, eq) && !grupos.some(g => g.includes(DO_AVIAO[eq]))) grupos.push([DO_AVIAO[eq]]);
   return grupos;
@@ -74,6 +87,9 @@ export const podeFazer = (instrutor, mis, eq) => {
   const hab = Array.isArray(instrutor.hab) ? instrutor.hab : [];
   return exigencias(mis, eq).every(grupo => grupo.some(h => hab.includes(h)));
 };
+
+// Quem pode dar ao menos um dos voos de cheque (a fila do rodízio dos cheques)
+export const podeAlgumCheque = instrutor => Object.keys(CHEQUES).some(mis => podeFazer(instrutor, mis));
 
 export const descreverExigencias = (mis, eq) => exigencias(mis, eq).map(g => g.map(h => NOME.get(h)).join(' ou ')).join(' + ');
 

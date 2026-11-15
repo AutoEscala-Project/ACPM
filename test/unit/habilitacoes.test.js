@@ -1,7 +1,7 @@
 // Habilitações individuais dos instrutores: substituem os níveis cumulativos A01–A09.
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { HABILITACOES, habilitacoesDoNivel, normalizarHabilitacoes, podeFazer, descreverExigencias } from '../../js/habilitacoes.js';
+import { HABILITACOES, habilitacoesDoNivel, normalizarHabilitacoes, podeFazer, podeAlgumCheque, descreverExigencias, marcasDoChecadorAntigo } from '../../js/habilitacoes.js';
 import { MIS } from '../../js/config.js';
 
 // Regra dos níveis cumulativos (até a fase 3), congelada aqui: a migração não pode mudar quem pode fazer o quê
@@ -29,7 +29,7 @@ describe('Habilitações individuais', () => {
   it('o que cada nível recebe; quem tem mais nível tem mais habilitações (os checadores começam desmarcados)', () => {
     assert.deepEqual(habilitacoesDoNivel(1), ['grounds', 'ground_pa34', 'local', 'c152']);
     assert.deepEqual(habilitacoesDoNivel(3), ['grounds', 'ground_pa34', 'sim_mono', 'sim_multi', 'tgl', 'local', 'c152']);
-    assert.deepEqual(habilitacoesDoNivel(9), HABILITACOES.map(h => h.id).filter(h => !h.startsWith('checador')));
+    assert.deepEqual(habilitacoesDoNivel(9), HABILITACOES.map(h => h.id).filter(h => !h.startsWith('checa_')));
     assert.deepEqual(habilitacoesDoNivel('x'), habilitacoesDoNivel(1), 'nível inválido conta como A01');
     for (let lv = 2; lv <= 9; lv++) assert.ok(habilitacoesDoNivel(lv).length > habilitacoesDoNivel(lv - 1).length);
   });
@@ -69,15 +69,41 @@ describe('Habilitações individuais', () => {
     assert.equal(podeFazer(com('local'), 'TGL (TMA)', 'C152'), false);
   });
 
-  it('voos de cheque exigem o checador credenciado para aquele cheque (só a habilitação de checador)', () => {
-    const vfr = com('checador_vfr'), ifr = com('checador_ifr'), mlte = com('checador_mlte');
-    const pode = (mis, eq) => [vfr, ifr, mlte].map(x => podeFazer(x, mis, eq));
-    assert.deepEqual(pode('Cheque PP', 'C152'), [true, true, true]);
-    assert.deepEqual(pode('Cheque PC MNTE VFR', 'C172'), [true, true, true], 'no C172 também não exige a habilitação C172');
-    assert.deepEqual(pode('Cheque PC MNTE IFR', 'C172'), [false, true, true]);
-    assert.deepEqual(pode('Cheque PC MLTE VFR', 'PA-34'), [false, false, true]);
-    assert.deepEqual(pode('Cheque PC MLTE IFR', 'PA-34'), [false, false, true]);
+  // Retorno da operação (14/11): o checador é credenciado por partes; o cheque exige as três (o curso, o motor e as regras)
+  it('voos de cheque exigem as três marcas do checador: o curso, o motor e as regras (só as de checador)', () => {
+    const exige = {
+      'Cheque PP': ['checa_pp', 'checa_mnte', 'checa_vfr'],
+      'Cheque PC MNTE VFR': ['checa_pc', 'checa_mnte', 'checa_vfr'],
+      'Cheque PC MNTE IFR': ['checa_pc', 'checa_mnte', 'checa_ifr'],
+      'Cheque PC MLTE VFR': ['checa_pc', 'checa_mlte', 'checa_vfr'],
+      'Cheque PC MLTE IFR': ['checa_pc', 'checa_mlte', 'checa_ifr']
+    };
+    for (const [mis, marcas] of Object.entries(exige)) {
+      for (const eq of MIS[mis].eq) {
+        assert.equal(podeFazer(com(...marcas), mis, eq), true, `${mis} no ${eq}`);
+        for (const falta of marcas) assert.equal(podeFazer(com(...marcas.filter(h => h !== falta)), mis, eq), false, `${mis} sem ${falta}`);
+      }
+    }
+    assert.equal(podeFazer(com('checa_pc', 'checa_mnte', 'checa_vfr'), 'Cheque PP', 'C152'), false, 'checador do PC não checa o PP');
+    assert.equal(podeFazer(com('checa_pp', 'checa_mlte', 'checa_ifr'), 'Cheque PP', 'C152'), false, 'o PP é monomotor e VFR');
     assert.equal(podeFazer(com('local', 'ifr', 'c172', 'mlte'), 'Cheque PP', 'C152'), false, 'sem checador, não faz cheque');
+    assert.equal(podeAlgumCheque(com('checa_pc', 'checa_mlte', 'checa_ifr')), true);
+    assert.equal(podeAlgumCheque(com('checa_inva', 'checa_mnte', 'checa_vfr')), false, 'não há cheque de INVA na escala');
+  });
+
+  it('as habilitações de checador antigas (VFR, IFR e MLTE IFR) viram as marcas que davam os mesmos cheques', () => {
+    const cheques = Object.keys(MIS).filter(m => m.startsWith('Cheque'));
+    const antes = {
+      checador_vfr: ['Cheque PP', 'Cheque PC MNTE VFR'],
+      checador_ifr: ['Cheque PP', 'Cheque PC MNTE VFR', 'Cheque PC MNTE IFR'],
+      checador_mlte: cheques
+    };
+    for (const [antiga, podia] of Object.entries(antes)) {
+      const x = com(...marcasDoChecadorAntigo([antiga]));
+      for (const mis of cheques) for (const eq of MIS[mis].eq) assert.equal(podeFazer(x, mis, eq), podia.includes(mis), `${antiga}: ${mis} no ${eq}`);
+      assert.ok(x.hab.includes('checa_inva'), `${antiga}: o nome dizia INVA`);
+    }
+    assert.deepEqual(marcasDoChecadorAntigo(['local', 'c152']), ['local', 'c152']);
   });
 
   it('descreve o que a missão exige', () => {
@@ -86,6 +112,6 @@ describe('Habilitações individuais', () => {
     assert.equal(descreverExigencias('Simulador', 'Sim. Multi'), 'Simulador (Multi)');
     assert.equal(descreverExigencias('Ground Navegação', 'Sala Ground'), 'Grounds (C152, C172 e Navegação)');
     assert.equal(descreverExigencias('TGL (TMA)', 'C172'), 'TGL (TMA) + C172');
-    assert.equal(descreverExigencias('Cheque PC MNTE IFR', 'C172'), 'Checador PP, PC, MNTE, INVA, IFR ou Checador PP, PC, MLTE, MNTE, INVA, IFR');
+    assert.equal(descreverExigencias('Cheque PC MNTE IFR', 'C172'), 'Checador do curso PC + Checador MNTE + Checador IFR');
   });
 });

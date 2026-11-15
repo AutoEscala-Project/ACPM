@@ -138,7 +138,7 @@ test.describe('Demanda', () => {
 
   test('TGL (TMA) e voos de cheque na demanda: equipamentos do cheque e o checador credenciado', async ({ page }) => {
     const estado = cenario({
-      ins: [instrutor(1, 9, { hab: ['local', 'c172', 'checador_vfr'] }), instrutor(2, 9, { hab: ['local', 'c172', 'checador_ifr'] })],
+      ins: [instrutor(1, 9, { hab: ['local', 'c172', 'checa_pp', 'checa_pc', 'checa_mnte', 'checa_vfr'] }), instrutor(2, 9, { hab: ['local', 'c172', 'checa_pc', 'checa_mnte', 'checa_ifr'] })],
       stu: [aluno(1000)]
     });
     await abrir(page, { estado });
@@ -149,7 +149,7 @@ test.describe('Demanda', () => {
 
     await linha.locator('[data-f="mis"]').selectOption('Cheque PC MNTE IFR');
     expect(await linha.locator('[data-f="eq"] option').allTextContents()).toEqual(['C172']);
-    await expect(linha.locator('[data-f="mis"]')).toHaveAttribute('title', 'Exige Checador PP, PC, MNTE, INVA, IFR ou Checador PP, PC, MLTE, MNTE, INVA, IFR');
+    await expect(linha.locator('[data-f="mis"]')).toHaveAttribute('title', 'Exige Checador do curso PC + Checador MNTE + Checador IFR');
     await abrirEscala(page);
     const voos = (await lerEscala(page)).linhas.filter(l => l.includes('Aluno 1000'));
     expect(voos).toHaveLength(1);

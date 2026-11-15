@@ -45,7 +45,7 @@ export const EQT = {
  * - Multimotor: exclusivamente PA-34
  * - TGL (TMA): treinamento de toque e arremetida na TMA
  * - Voos de cheque: PP e PC MNTE VFR (C152 ou C172), PC MNTE IFR (C172), PC MLTE VFR e IFR (PA-34), com o
- *     checador credenciado para cada cheque
+ *     checador com as três marcas do cheque (o curso, o motor e as regras)
  */
 export const MIS = {
   'Ground C152':      { defEq: GROUND_EQ_TYPE, eq: [GROUND_EQ_TYPE], isGround: true, gatesEq: 'C152' },

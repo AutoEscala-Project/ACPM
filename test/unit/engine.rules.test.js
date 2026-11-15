@@ -152,14 +152,18 @@ describe('Habilitações exigidas (os instrutores migrados fazem o mesmo que os 
     assert.equal(alocar({ ins, stu: [aluno(1000, { mis: 'TGL (TMA)', eq: 'C152' })] }).out[0].insId, 2);
   });
 
-  it('voos de cheque vão para o checador credenciado (cheque PC MNTE IFR: checador IFR ou MLTE IFR, nunca o VFR)', () => {
-    const ins = [instrutor(1, 9, { hab: ['checador_vfr'] }), instrutor(2, 9, { hab: ['checador_ifr'] }), instrutor(3, 9, { hab: ['checador_mlte'] })];
+  it('voos de cheque vão para o checador com as três marcas do cheque (o curso, o motor e as regras)', () => {
+    const ins = [
+      instrutor(1, 9, { hab: ['checa_pp', 'checa_mnte', 'checa_vfr'] }),
+      instrutor(2, 9, { hab: ['checa_pc', 'checa_mnte', 'checa_ifr'] }),
+      instrutor(3, 9, { hab: ['checa_pc', 'checa_mlte', 'checa_ifr'] })
+    ];
     const cheque = (mis, eq) => alocar({ ins, stu: [aluno(1000, { mis, eq })] });
     assert.equal(cheque('Cheque PP', 'C152').out[0].insId, 1);
     assert.equal(cheque('Cheque PC MNTE IFR', 'C172').out[0].insId, 2);
     assert.equal(cheque('Cheque PC MLTE IFR', 'PA-34').out[0].insId, 3);
     const semChecador = alocar({ ins: [instrutor(1, 9)], stu: [aluno(1000, { mis: 'Cheque PC MLTE VFR', eq: 'PA-34' })] });
-    assert.deepEqual(semChecador.al.map(a => a.m), ['Rejeitado: nenhum instrutor ativo tem a habilitação de Cheque PC MLTE VFR no PA-34 (Checador PP, PC, MLTE, MNTE, INVA, IFR).']);
+    assert.deepEqual(semChecador.al.map(a => a.m), ['Rejeitado: nenhum instrutor ativo tem a habilitação de Cheque PC MLTE VFR no PA-34 (Checador do curso PC + Checador MLTE + Checador VFR).']);
   });
 
   it('missão em equipamento não permitido é rejeitada', () => {
