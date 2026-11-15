@@ -428,7 +428,9 @@ table.fids-tabela { width: 100%; min-width: 860px; border-collapse: collapse; fo
 .horarios-novo { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
 .horarios-efeito { margin: 0; font-weight: 600; }
 .horarios-botoes { display: flex; gap: 8px; }
-.horarios-editor .erro-campo:empty { display: none; }
+/* O alerta vazio continua na árvore de acessibilidade (escondido com display: none, não seria anunciado quando o erro
+   aparecer), mas sem ocupar espaço no editor */
+.horarios-editor .erro-campo:empty { display: block; position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 .hr-chip { display: inline-flex; align-items: center; gap: 2px; padding: 1px 2px 1px 8px; border: 1px solid var(--ln2); border-radius: 12px; font-size: 13.5px; font-variant-numeric: tabular-nums; }
 .hr-chip button { display: inline-grid; place-items: center; border: 0; background: transparent; color: var(--mu); border-radius: 50%; padding: 2px; cursor: pointer; }
 .hr-chip button:hover { color: var(--er); }
