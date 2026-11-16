@@ -21,6 +21,7 @@ import { INTERVALO_DO_HANGAR } from './metricas.js';
 import { normalizarCriterios } from './criterios.js';
 import { intervaloEfetivo } from './status.js';
 import { statusDoVoo, unidadeDoVoo, umPorUnidade, pedidosDosVoos } from './voo.js';
+import { soma, agrupar, menorPrimeiro, paradasEntre } from './util.js';
 
 // Um voo que muda de instrutor junto com o horário vai para quem já voa até esta distância (minutos) dele
 const ENCOSTA = 60;
@@ -28,7 +29,6 @@ const EPS = 1e-9;
 // Os status em que o voo ainda pode mudar (Atrasado, Em Voo e Pousou já estão no dia; Cancelado não voa)
 const STATUS_QUE_MUDAM = ['Confirmado', 'Pendente'];
 
-const soma = lista => lista.reduce((total, v) => total + v, 0);
 
 // Os voos que ocupam o dia (sem os cancelados; o aluno cancelado de uma turma acompanha a turma), o atrasado no
 // horário novo. Os voos de out ficam os mesmos objetos, menos o atrasado (uma cópia, que nunca muda:
@@ -40,29 +40,15 @@ function ocupando(out, estado) {
     return efetivo.a === o.a ? o : { ...o, ...efetivo };
   });
 }
-const menorPrimeiro = (a, b) => (a === b ? 0 : a - b);
-
-// As paradas (minutos) entre os blocos de uma lista de intervalos [início, fim]; os que se encostam ou se sobrepõem
-// formam um bloco só
-function paradas(intervalos) {
-  intervalos.sort((p, q) => p[0] - q[0] || p[1] - q[1]);
-  const lista = [];
-  let fim = null;
-  for (const [a, b] of intervalos) {
-    if (fim !== null && a > fim) lista.push(a - fim);
-    fim = fim === null ? b : Math.max(fim, b);
-  }
-  return lista;
-}
 
 // O custo do dia de um instrutor e do dia de um avião, pelo critério
 function custoDoInstrutor(intervalos, pesos) {
-  const p = paradas(intervalos);
+  const p = paradasEntre(intervalos);
   return pesos.quadrado ? soma(p.map(g => g * g)) * pesos.quadrado : soma(p) * pesos.invaParado;
 }
 function custoDoAviao(intervalos, pesos) {
   if (!intervalos.length) return 0;
-  const p = paradas(intervalos);
+  const p = paradasEntre(intervalos);
   if (pesos.quadrado) return soma(p.map(g => g * g)) * pesos.quadrado;
   return soma(p) * pesos.aviaoParado + (1 + p.filter(g => g >= INTERVALO_DO_HANGAR).length) * pesos.saida;
 }
@@ -72,7 +58,6 @@ function custoDaPreferencia(a, pedido, pesos) {
   return (a === minutoDaPreferencia(pedido.p2) ? pesos.p2 : pesos.outro) * (+pedido.pr || 3) / 3;
 }
 
-const agrupar = (lista, chave) => lista.reduce((grupos, o) => grupos.set(chave(o), [...(grupos.get(chave(o)) || []), o]), new Map());
 
 // O custo da escala pelo critério do dia (o mesmo que a busca diminui): os dias dos instrutores, os dos aviões e as
 // preferências perdidas

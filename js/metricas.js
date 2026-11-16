@@ -3,25 +3,15 @@
 // regras do motor (scripts/medir-escalas.mjs); a Escala mostra o tempo parado e as saídas do hangar.
 import { AIRCRAFT_EQ_TYPES } from './config.js';
 import { unidadeDoVoo } from './voo.js';
+import { soma, agrupar, paradasEntre } from './util.js';
 
 // Parado por 2 h ou mais entre dois voos, o avião volta para o hangar (uma saída a mais no dia)
 export const INTERVALO_DO_HANGAR = 120;
+// O instrutor parado duas horas seguidas ou mais entra na contagem das paradas longas
+const PARADA_LONGA_DO_INSTRUTOR = 2 * 60;
 
-// Os intervalos em ordem, juntando os que se sobrepõem ou se encostam (a turma de Ground é um intervalo só)
-function juntar(lista) {
-  const ordenados = lista.map(({ a, b }) => [a, b]).sort((x, y) => x[0] - y[0] || x[1] - y[1]);
-  const blocos = [];
-  for (const [a, b] of ordenados) {
-    const ultimo = blocos.at(-1);
-    if (ultimo && a <= ultimo[1]) ultimo[1] = Math.max(ultimo[1], b);
-    else blocos.push([a, b]);
-  }
-  return blocos;
-}
-// As paradas entre um bloco e o seguinte (em minutos)
-const paradas = blocos => blocos.slice(1).map(([a], i) => a - blocos[i][1]);
-const soma = lista => lista.reduce((total, v) => total + v, 0);
-const agrupar = (lista, chave) => lista.reduce((grupos, o) => grupos.set(chave(o), [...(grupos.get(chave(o)) || []), o]), new Map());
+// As paradas de uma lista de voos (a turma de Ground, que se sobrepõe, conta como um intervalo só)
+const paradas = voos => paradasEntre(voos.map(({ a, b }) => [a, b]));
 
 // O pico de voos ao mesmo tempo (o mínimo de aviões para a escala de um tipo)
 function pico(voos) {
@@ -42,13 +32,13 @@ function distanciaMedia(out, preferenciaDe) {
 export function metricasDaEscala(out, { ativos = [], preferenciaDe = () => -1 } = {}) {
   const avioes = out.filter(o => AIRCRAFT_EQ_TYPES.includes(o.eqType));
   const porAviao = agrupar(avioes, o => o.r);
-  const paradasDosAvioes = [...porAviao.values()].map(voos => paradas(juntar(voos)));
+  const paradasDosAvioes = [...porAviao.values()].map(voos => paradas(voos));
   const avioesMinimo = soma([...agrupar(avioes, o => o.eqType).values()].map(pico));
 
   // Cada unidade conta uma vez (a turma de Ground tem um item por aluno)
   const unidades = [...agrupar(out, unidadeDoVoo).values()].map(itens => itens[0]);
   const porInstrutor = agrupar(unidades, o => o.insId);
-  const paradasDosInstrutores = [...porInstrutor.values()].map(itens => soma(paradas(juntar(itens))));
+  const paradasDosInstrutores = [...porInstrutor.values()].map(itens => soma(paradas(itens)));
   const horasPorInstrutor = Object.fromEntries([...new Set([...ativos, ...porInstrutor.keys()])]
     .map(id => [id, Math.round(soma((porInstrutor.get(id) || []).map(o => +o.h || 0)) * 10) / 10]));
   const horas = Object.values(horasPorInstrutor);
@@ -63,7 +53,7 @@ export function metricasDaEscala(out, { ativos = [], preferenciaDe = () => -1 } 
     avioesParadoMin: soma(paradasDosAvioes.flat()),
     saidasDoHangar: soma(paradasDosAvioes.map(lista => 1 + lista.filter(p => p >= INTERVALO_DO_HANGAR).length)),
     instrutoresParadoMin: soma(paradasDosInstrutores),
-    instrutoresComDuasHorasParado: paradasDosInstrutores.filter(p => p >= 120).length,
+    instrutoresComDuasHorasParado: paradasDosInstrutores.filter(p => p >= PARADA_LONGA_DO_INSTRUTOR).length,
     horasPorInstrutor,
     diferencaDeHoras: horas.length ? Math.round((Math.max(...horas) - Math.min(...horas)) * 10) / 10 : 0,
     somaDosQuadrados: Math.round(soma(horas.map(h => h * h)) * 100) / 100,

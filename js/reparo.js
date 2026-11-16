@@ -19,8 +19,8 @@ import { nomeDoRecurso } from './categorias.js';
 import { hm } from './format.js';
 import { gruposDoConflito } from './conflitos.js';
 import { statusDoVoo, umPorUnidade, pedidosDosVoos } from './voo.js';
+import { menorPrimeiro } from './util.js';
 
-const menorPrimeiro = (a, b) => (a === b ? 0 : a - b);
 // A turma de Ground muda inteira; o voo, sozinho
 const doGrupo = (resultado, voo) => (voo.isGround ? resultado.out.filter(o => o.classKey === voo.classKey) : [voo]);
 

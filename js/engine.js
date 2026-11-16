@@ -15,6 +15,7 @@ import { normalizarHangar, posicaoNoHangar } from './hangar.js';
 import { normalizarLimites, dentroDosLimites } from './limites.js';
 import { compactar, custoDaEscala } from './compactar.js';
 import { chaveDoVoo, statusDoVoo, unidadeDoVoo, umPorUnidade } from './voo.js';
+import { menorPrimeiro, soma, paradasEntre } from './util.js';
 
 // Entre os instrutores possíveis, primeiro os que têm menos habilitações: os mais versáteis ficam livres
 const qtdHabilitacoes = x => (Array.isArray(x.hab) ? x.hab.length : 0);
@@ -26,23 +27,15 @@ const qtdHabilitacoes = x => (Array.isArray(x.hab) ? x.hab.length : 0);
 // (aluno, instrutor e horário continuam); o PR-JPL continua só para o Parafuso e aviões em manutenção não entram.
 // A redistribuição só vale quando diminui as trocas de avião (senão, ou se algum voo não couber, fica a original).
 // Por último, quem ainda estiver em duas matrículas passa para uma que esteja livre em todos os horários dele.
-const TIPOS_DE_AVIAO = ['C152', 'C172', 'PA-34'];
 
 // A folga entre um voo e o que o avião já voa (0 se encosta; Infinity se o avião ainda está no hangar)
 const folgaAte = (ocupados, a, b) => ocupados.reduce((menor, [x, y]) => Math.min(menor, y <= a ? a - y : x >= b ? x - b : 0), Infinity);
-const menorPrimeiro = (fa, fb) => (fa === fb ? 0 : fa - fb);
 
 // O tempo parado dos aviões (minutos entre um voo e o seguinte de cada matrícula)
 function paradoDosAvioes(voos, matricula) {
   const porMatricula = new Map();
   voos.forEach(o => (porMatricula.get(matricula(o)) || porMatricula.set(matricula(o), []).get(matricula(o))).push([o.a, o.b]));
-  let total = 0;
-  for (const lista of porMatricula.values()) {
-    lista.sort((x, y) => x[0] - y[0]);
-    let fim = lista[0][1];
-    for (const [a, b] of lista.slice(1)) { if (a > fim) total += a - fim; fim = Math.max(fim, b); }
-  }
-  return total;
+  return soma([...porMatricula.values()].flatMap(paradasEntre));
 }
 
 // Matrículas a mais (do mesmo tipo) por instrutor no dia
@@ -83,7 +76,7 @@ function redistribuirTipo(voos, matriculas, saldo, fixos = []) {
 function manterInstrutorNoMesmoAviao(out, state, saldo, frota, posicao) {
   // Os aviões "Só Parafuso" ficam de fora: o Parafuso no C152 só pode ir para eles
   const soParafuso = matriculasDoTipo(frota, 'C152', { parafuso: true });
-  for (const tipo of TIPOS_DE_AVIAO) {
+  for (const tipo of AIRCRAFT_EQ_TYPES) {
     // O voo com status de andamento fica no avião dele, como o fixo
     const preso = o => o.fixo || [...STATUS_EM_ANDAMENTO, 'Cancelado'].includes(statusDoVoo(o, state.fStatus));
     const voos = out.filter(o => o.eqType === tipo && !soParafuso.includes(o.r) && !preso(o));
@@ -152,13 +145,7 @@ function avisosDeLimite(out, state, limites, historico) {
 
 // O tempo parado de um instrutor (minutos entre um compromisso e o seguinte), pelas unidades dele no dia
 function paradoDasUnidades(unidades) {
-  const intervalos = unidades.map(u => [u.a, u.b]).sort((p, q) => p[0] - q[0]);
-  let total = 0, fim = null;
-  for (const [a, b] of intervalos) {
-    if (fim !== null && a > fim) total += a - fim;
-    fim = fim === null ? b : Math.max(fim, b);
-  }
-  return total;
+  return soma(paradasEntre(unidades.map(u => [u.a, u.b])));
 }
 
 // Divisão igual das horas do dia: depois de montada a escala, voos e aulas passam do instrutor com mais
