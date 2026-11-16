@@ -24,7 +24,7 @@ describe('Agenda de solicitações', () => {
     assert.equal(primeiraDataAberta(em('2026-12-31T14:00:00-03:00')), '2027-01-02');
   });
 
-  // Retorno da operação (14/11): o aeroclube não opera aos domingos; os voos de segunda são agendados até sábado às 10:00
+  // O aeroclube não opera aos domingos; os voos de segunda são agendados até sábado às 10:00
   it('domingo não tem voo; segunda até sábado às 10:00; os outros dias até 13:00 do dia anterior', () => {
     const sabado = h => em(`2026-11-14T${h}:00-03:00`);
     assert.equal(prazoDaAgendaPermite('2026-11-15', sabado('08:00')), false, 'domingo nunca');
@@ -86,7 +86,7 @@ describe('Importar as solicitações da agenda para a demanda', () => {
     const e = estado();
     importarSolicitacoes(e, [pedido(2, 1001)]);
     assert.equal(e.stu[1].mis, 'IFR', 'a missão que ele já tinha continua');
-    // A missão extra é numerada no aluno (revisão de 14/11): o número do cadastro (nid) não muda
+    // A missão extra é numerada no aluno: o número do cadastro (nid) não muda
     assert.deepEqual(e.stu[1].extra.map(x => [x.mid, x.mis, x.jan]), [[1, 'Voo Local', 'tarde']]);
     assert.equal(e.nid, 2000);
   });
@@ -98,7 +98,6 @@ describe('Importar as solicitações da agenda para a demanda', () => {
     assert.deepEqual([e.stu[2].jan, e.stu[2].p1, e.stu[2].solicitacao, e.stu[2].extra], ['tarde', 760, 3, []]);
   });
 
-  // Revisão de 14/11 (retorno da operação): dois voos do mesmo aluno no dia viravam um só, no horário do último
   it('dois pedidos da mesma missão para o mesmo aluno: dois voos, cada um no seu horário', () => {
     const e = estado();
     const pedidos = [pedido(10, 1002, { janela: 'horario', horario: '10:10' }), pedido(11, 1002, { janela: 'horario', horario: '14:30' })];
@@ -122,11 +121,11 @@ describe('Importar as solicitações da agenda para a demanda', () => {
     const resumo = importarSolicitacoes(e, [pedido(4, 1000, { cancelada_em: '2026-11-10T13:00:00Z' }), pedido(5, 1000), pedido(6, 9999)]);
     assert.deepEqual(resumo, { novos: 0, atualizados: 0, semAluno: 1 });
     assert.equal(e.stu[0].fly, false);
-    // Revisão de 14/11: o pedido de quem não está no cadastro não conta como visto (entra quando o aluno for cadastrado)
+    // O pedido de quem não está no cadastro não conta como visto (entra quando o aluno for cadastrado)
     assert.deepEqual(e.importadas, [5]);
   });
 
-  // Retorno da operação (14/11): a agenda guarda a duração; o pedido de antes (sem ela) fica com 1 h ou as horas do curso
+  // A agenda guarda a duração; o pedido sem ela fica com 1 h ou as horas do curso
   it('a duração do pedido vai para a demanda (vale mais que as horas do programa do curso)', () => {
     const programa = { PP: [{ id: 'PP-01', nome: 'A', mis: 'Voo Local', eq: 'C152', nb: 2 }], PC: [], INVA: [] };
     const e = { ...estado(), cursos: programa, stu: [aluno(1000, { fly: false }, { curso: 'PP' }), aluno(1001, { fly: false }, { curso: 'PP' })] };
@@ -142,7 +141,7 @@ describe('Importar as solicitações da agenda para a demanda', () => {
   });
 });
 
-// Retorno da operação (14/11): no máximo 6 voos locais (Voo Local, Voo Solo e TGL) no mesmo horário; ao agendar o 7º,
+// No máximo 6 voos locais (Voo Local, Voo Solo e TGL) no mesmo horário; ao agendar o 7º,
 // o horário está indisponível, e o app diz o próximo possível
 describe('Agenda: o limite de voos locais no mesmo horário', async () => {
   const { vagaDeVooLocal } = await import('../../js/agenda.js');

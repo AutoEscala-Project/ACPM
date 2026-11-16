@@ -18,8 +18,8 @@ export function projetoSupabase(endereco = window.location) {
   return nome && Object.hasOwn(PROJETOS, nome) ? { nome, ...PROJETOS[nome] } : null;
 }
 
-// Onde cada página guarda a sessão (revisão de 14/11): o app numa chave, a TV da recepção em outra. A TV fica numa tela
-// pública: quem usar a TV não abre o app com a conta dela, e uma conta do app não fica conectada na TV
+// Onde cada página guarda a sessão: o app numa chave, a TV da recepção em outra. A TV fica numa tela pública:
+// quem usar a TV não abre o app com a conta dela, e uma conta do app não fica conectada na TV
 export const chaveDaSessao = (projeto, { painel = false } = {}) => `acpm-${projeto.nome}${painel ? '-painel' : ''}`;
 
 // A conta da TV que entrou pelo app: a sessão passa para a chave da TV (o app não fica conectado com ela)

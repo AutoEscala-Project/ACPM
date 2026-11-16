@@ -29,7 +29,7 @@ test.describe('Modo compartilhado: gravação, conflitos e link da escala', () =
     await expect(page.locator('#aviso-sync')).toBeVisible();
     await expect(page.locator('#aviso-sync-texto')).toHaveText(
       'Outra pessoa alterou a escala enquanto você editava. A tela ficou só para consulta: recarregue para ver a versão atual e continuar (a sua última alteração não foi salva).');
-    // Só para consulta (revisão de 14/11): sem os controles de edição
+    // Só para consulta: sem os controles de edição
     await expect(page.locator('body')).toHaveAttribute('data-role', 'gestor');
     await expect(page.locator('[data-act="addi"]')).toBeHidden();
 
@@ -66,7 +66,7 @@ test.describe('Modo compartilhado: gravação, conflitos e link da escala', () =
     await contexto.close();
   });
 
-  // Revisão de 14/11: a entrada do histórico só vai para o servidor depois que a alteração foi gravada
+  // A entrada do histórico só vai para o servidor depois que a alteração foi gravada
   test('a alteração recusada (outra pessoa gravou antes) não entra no histórico: na tela, "não gravada", sem Reverter', async ({ browser }) => {
     const contexto = await novoContexto(browser);
     const servidor = await instalarSupabaseFalso(contexto, comDados());
@@ -117,7 +117,6 @@ test.describe('Modo compartilhado: gravação, conflitos e link da escala', () =
     await contexto.close();
   });
 
-  // Revisão de 14/11: sem conexão, as alterações esperam e são gravadas sozinhas
   test('uma missão extra grava só o dia (o cadastro, de todas as datas, não muda)', async ({ browser }) => {
     const contexto = await novoContexto(browser);
     const estado = estadoSintetico();
@@ -135,7 +134,7 @@ test.describe('Modo compartilhado: gravação, conflitos e link da escala', () =
     await contexto.close();
   });
 
-  // Revisão de 14/11: sem as horas dos instrutores, os limites do mês e do ano não são conferidos; o app avisa
+  // Sem as horas dos instrutores, os limites do mês e do ano não são conferidos; o app avisa
   test('sem as horas dos instrutores ou os resultados: aviso fixo, Aprovar escala desligado e "Tentar de novo"', async ({ browser }) => {
     const contexto = await novoContexto(browser);
     const servidor = await instalarSupabaseFalso(contexto, documentosAtuais(comExemplo(estadoSintetico()), AMANHA));
@@ -157,7 +156,7 @@ test.describe('Modo compartilhado: gravação, conflitos e link da escala', () =
     await contexto.close();
   });
 
-  // Revisão de 14/11: a sessão que expira não perde a alteração nem vira "sem conexão"
+  // A sessão que expira não perde a alteração nem vira "sem conexão"
   test('sessão expirada: o app pede a senha de novo, sem perder a alteração, e grava depois do login', async ({ browser }) => {
     const contexto = await novoContexto(browser);
     const servidor = await instalarSupabaseFalso(contexto, comDados());

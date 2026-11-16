@@ -17,7 +17,7 @@ import { atualizarSelosDaEscala, atualizarSeloDaAgenda, lerPedidosDaData } from 
 // Abre uma data na tela (a data da escala e a data base do BI)
 export function abrirData(data) {
   setData(data);
-  // A data fica no endereço: recarregar a página continua nela (retorno da operação, 14/11)
+  // A data fica no endereço: recarregar a página continua nela
   try {
     const url = new URL(window.location.href);
     if (url.searchParams.get('data') !== data) {
@@ -56,12 +56,12 @@ export function setRole(role, somenteConsulta = false) {
   // Agenda: quem pode registrar pedidos (operadores e secretaria; no modo local, fora do perfil Gestor)
   document.body.dataset.agenda = podeEditarAgenda() ? 'edita' : 'consulta';
   atualizarSeloDaAgenda();
-  // Os campos da tela, desligados ou ligados conforme o perfil (revisão de 14/11)
+  // Os campos da tela, desligados ou ligados conforme o perfil
   aplicarSomenteLeitura();
 }
 
-// As horas dos instrutores ou os resultados dos cursos que não foram lidos (revisão de 14/11): o aviso fica até a leitura
-// dar certo, e o que depende disso fica desligado (Aprovar escala; a próxima missão e o resultado)
+// As horas dos instrutores ou os resultados dos cursos que não foram lidos: o aviso fica até a leitura dar certo, e o
+// que depende disso fica desligado (Aprovar escala; a próxima missão e o resultado)
 const SEM_OS_DADOS = {
   horas: 'Não foi possível ler as horas de voo dos instrutores: os limites do mês e do ano não estão sendo conferidos, e Aprovar escala fica desligado.',
   resultados: 'Não foi possível ler os resultados das missões dos cursos: a próxima missão e o registro de resultados ficam desligados.'
@@ -89,8 +89,8 @@ export async function lerDadosDeNovo() {
   rIns(); rAlu(); rDem(); rOut();
 }
 
-// Uma gravação que não deu certo (revisão de 14/11). Sem conexão, o aviso conta as alterações esperando (as entradas
-// "gravando…" do histórico), que são gravadas sozinhas; uma recusa definitiva do servidor pede para recarregar
+// Uma gravação que não deu certo. Sem conexão, o aviso conta as alterações esperando (as entradas "gravando…" do
+// histórico), que são gravadas sozinhas; uma recusa definitiva do servidor pede para recarregar
 export function avisarFalhaDeGravacao(erro, documento, { definitivo = false } = {}) {
   if (avisoAberto() === 'conflito') return;
   if (definitivo) {
@@ -116,7 +116,7 @@ function avisarAlteracoesEsperando() {
   { recarregar: false });
 }
 
-// Depois de um conflito nada mais é gravado (revisão de 14/11): a tela fica só para consulta até recarregar, com o aviso
+// Depois de um conflito nada mais é gravado: a tela fica só para consulta até recarregar, com o aviso
 export function travarAposConflito({ formato = false } = {}) {
   setRole('gestor', true);
   rRec(); rIns(); rAlu(); rDem();
@@ -158,7 +158,7 @@ export function gravarEscalaCalculada() {
   if (escalaSoCalculada) save();
 }
 
-// A descrição de uma entrada do histórico tem até 500 caracteres, ao gravar e ao abrir (revisão de 14/11)
+// A descrição de uma entrada do histórico tem até 500 caracteres, ao gravar e ao abrir
 const LIMITE_DA_DESCRICAO = 500;
 const textoAte = (texto, limite) => (texto === null || texto === undefined ? texto : String(texto).slice(0, limite));
 
@@ -195,7 +195,7 @@ export function logChange(type, texto, revertAction = null, reverte = null) {
   }));
 }
 
-// Entradas importadas (anteriores à fase 3) mostram também o dia em que foram feitas
+// Entradas importadas mostram também o dia em que foram feitas: ficam todas numa data só, com o horário original
 function horario(iso, importado) {
   const d = new Date(iso);
   const hora = d.toTimeString().slice(0, 8);

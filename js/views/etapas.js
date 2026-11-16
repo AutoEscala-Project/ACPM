@@ -1,6 +1,6 @@
-// A missão do curso no dia (fase 14): a próxima missão de cada aluno (para a Demanda), o progresso (para Alunos) e o
-// resultado de cada voo (para a escala). Os resultados chegam com a data (S.resultados: a situação de cada missão e os
-// registros da data) e não são gravados no dia.
+// A missão do curso no dia: a próxima missão de cada aluno (para a Demanda), o progresso (para Alunos) e o resultado de
+// cada voo (para a escala). Os resultados chegam com a data (S.resultados: a situação de cada missão e os registros da
+// data) e não são gravados no dia.
 import { MIS } from '../config.js';
 import { normalizarCursos } from '../cursos.js';
 import { situacaoPorMissao, proximaMissao, progresso, resultadoDoVoo } from '../resultados.js';

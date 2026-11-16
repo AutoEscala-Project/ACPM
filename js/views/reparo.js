@@ -1,6 +1,6 @@
-// Gaveta das sugestões para um conflito na escala aprovada (fase 12): o voo, o motivo do conflito e o que pode voar no
-// lugar, cada sugestão com "Aplicar"; soltar o voo (o app escala de novo); por último, cancelar o voo (pede o motivo, como no status). Na escala de hoje, só
-// horários que ainda não passaram
+// Gaveta das sugestões para um conflito na escala aprovada: o voo, o motivo do conflito e o que pode voar no lugar,
+// cada sugestão com "Aplicar"; soltar o voo (o app escala de novo); por último, cancelar o voo (pede o motivo, como no
+// status). Na escala de hoje, só horários que ainda não passaram
 import { S, RES, DATA } from '../state.js';
 import { sugerirReparos } from '../reparo.js';
 import { GRUPO_DO_CONFLITO } from '../conflitos.js';

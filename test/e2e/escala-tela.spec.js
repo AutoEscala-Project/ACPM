@@ -45,7 +45,7 @@ test.describe('Tela da Escala', () => {
     await expect(avisos.locator('.al.warn')).toHaveCount(2);
   });
 
-  // Revisão de 14/11: o aviso de peso diz de quem é o peso que falta; o resumo conta alunos e instrutores
+  // O aviso de peso diz de quem é o peso que falta; o resumo conta alunos e instrutores
   test('resumo dos avisos: alunos e instrutores sem peso', async ({ page }) => {
     await abrir(page, { estado: cenario({ ins: [instrutor(1, 1, { kg: 0 })], stu: [aluno(1000, { p1: 390, p2: -1 }), aluno(1001, { p1: 500, p2: -1 }, { kg: 0 })] }) });
     await abrirEscala(page);
@@ -76,7 +76,7 @@ test.describe('Tela da Escala', () => {
     await expect(linha.locator('.c-peso')).toContainText('180 / 170 kg');
     const selo = linha.locator('.c-peso .tag.comb');
     await expect(selo).toHaveText('reduzir 4 gal');
-    // A dica diz o caso deste voo antes da explicação (revisão de 14/11)
+    // A dica diz o caso deste voo antes da explicação
     await selo.click();
     await expect(page.locator('#dica')).toContainText('Reduzir combustível Abastecer até 22 gal (4 a menos que o tanque cheio); o voo, o táxi e a reserva pedem 11 gal; autonomia de 3h23.');
   });
@@ -161,8 +161,8 @@ test.describe('Tela da Escala', () => {
   });
 });
 
-// O popup do mapa fica fora do painel que rola (antes ele era cortado pelo painel e, nas primeiras linhas, sumia sob
-// os filtros e o cabeçalho): abre com um clique (ou Enter) na barra e fecha com Esc ou com um clique fora
+// O popup do mapa fica fora do painel que rola (dentro dele, seria cortado e, nas primeiras linhas, sumiria sob os
+// filtros e o cabeçalho): abre com um clique (ou Enter) na barra e fecha com Esc ou com um clique fora
 test.describe('Mapa: o popup do voo', () => {
   const pop = page => page.locator('#tl-pop');
   const abrirMapa = async page => {

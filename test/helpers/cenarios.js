@@ -1,6 +1,6 @@
 // Gerador determinístico de cenários de demanda para testar o motor de alocação.
-// O mesmo seed sempre produz o mesmo estado, o que permite comparar a saída com os goldens capturados
-// do motor original (index.html no commit 9b5de75) sem versionar os estados de entrada.
+// O mesmo seed sempre produz o mesmo estado, o que permite comparar a saída com os goldens gravados por
+// scripts/capturar-goldens-motor.mjs sem versionar os estados de entrada.
 import { createHash } from 'node:crypto';
 import { FROTA, JANELAS, dois } from './estado.js';
 import { habilitacoesDoNivel } from '../../js/habilitacoes.js';
@@ -39,7 +39,8 @@ export function gerarCenario(seed) {
   const int = (a, b) => a + Math.floor(r() * (b - a + 1));
   const pick = a => a[Math.floor(r() * a.length)];
 
-  // As habilitações saem do nível sorteado (sem sorteio a mais): os cenários são os mesmos de antes das habilitações
+  // As habilitações saem do nível sorteado (sem sorteio a mais): um sorteio a mais mudaria a sequência e, com ela,
+  // os outros campos dos cenários
   const ins = Array.from({ length: int(6, 40) }, (_, i) => ({
     id: i + 1,
     nm: `Instrutor ${dois(i + 1)}`,
@@ -59,8 +60,8 @@ export function gerarCenario(seed) {
     const noturno = mis === 'Noturno';
     const pref = () => (noturno ? NOTURNO : int(-1, ground ? 7 : 8));
     const fly = r() > 0.15, p1 = pref(), p2 = pref();
-    // Uma sessão por pedido (revisão de 14/11); o sorteio das sessões de antes continua, para os outros campos dos
-    // cenários não mudarem
+    // Uma sessão por pedido; o sorteio das sessões fica, sem uso: sem ele, a sequência de sorteios mudaria
+    // e, com ela, os outros campos dos cenários
     if (!ground) int(1, Math.min(3, nb));
     return { fly, mis, eq, p1, p2, nb, ss: 1, pr: int(1, 5) };
   };

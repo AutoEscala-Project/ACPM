@@ -1,6 +1,6 @@
-// Regras de viabilidade da escala (fase 10): o que torna possível pôr um voo num horário, num recurso e com um
-// instrutor. O motor, a divisão das horas e a troca de matrículas usam as mesmas regras (antes repetidas em cada
-// passo); a compactação, os limites legais e as sugestões de reparo também vão usar estas.
+// Regras de viabilidade da escala: o que torna possível pôr um voo num horário, num recurso e com um instrutor.
+// O motor (com a divisão das horas e a troca de matrículas), a compactação e as sugestões de reparo usam as mesmas
+// regras.
 import { T, NI } from './config.js';
 
 // Dois intervalos (em minutos) se sobrepõem quando um começa antes de o outro terminar; encostar não conta

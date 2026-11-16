@@ -1,6 +1,4 @@
-/* ==========================================================================
-   1. DESIGN TOKENS & TEMAS (CLARO / ESCURO)
-   ========================================================================== */
+/* Cores e temas (claro e escuro) */
 :root {
   --bg: #EEF2F5;
   --pn: #FFFFFF;
@@ -49,9 +47,7 @@
   --pop-bg: #223446; --pop-txt: #E6EDF3; --at: #F0954A;
 }
 
-/* ==========================================================================
-   2. LAYOUT BASE E BLOQUEIO ESTRITO DE EDIÇÃO NO PERFIL GESTOR / LINK
-   ========================================================================== */
+/* Base e barra do topo */
 html { scroll-padding-top: env(safe-area-inset-top, 0px); }
 * { box-sizing: border-box; }
 body {
@@ -182,7 +178,7 @@ nav#nav button:focus-visible { outline-offset: -4px; }
 .aba-selo.aviso { background: var(--ye); color: #12263A; }
 .aba-selo.erro { background: #E5484D; color: #fff; }
 
-/* A Secretaria trabalha na agenda: só a Agenda e a Escala (que ela consulta) */
+/* A Secretaria trabalha na agenda: só a Agenda e as abas que ela consulta (Escala, Instrutores e Alunos) */
 body[data-perfil="secretaria"] #nav button:not([data-t="age"]):not([data-t="esc"]):not([data-t="ins"]):not([data-t="alu"]),
 body[data-perfil="secretaria"] .aba-sep,
 body[data-perfil="secretaria"] #btn-open-log,
@@ -232,14 +228,11 @@ section.on { display: block; }
 h2 { font: 600 20px 'Barlow Semi Condensed', sans-serif; margin: 18px 0 10px; }
 h3 { font: 600 15px 'Barlow Semi Condensed', sans-serif; margin: 10px 0 6px; color: var(--ink); }
 
-/* Os controles que aparecem com o mouse também aparecem com o foco em qualquer campo da linha (:focus-within) e em
-   telas de toque (pointer: coarse, como um notebook com tela de toque; revisão de 14/11) */
-/* O perfil Gestor só consulta: os campos ficam apagados (desligados por js/somente-leitura.js) */
+/* Perfil Gestor: só consulta */
 body[data-role="gestor"] .edit-only { display: none !important; }
 /* Dados pessoais: só operadores, administradores e a secretaria (que no resto entra como consulta) */
 body[data-role="gestor"]:not([data-perfil="secretaria"]) .so-dados { display: none !important; }
-/* Os campos do Gestor ficam desligados (js/somente-leitura.js; revisão de 14/11): sem tirar os cliques, as dicas
-   continuam aparecendo */
+/* Os campos do Gestor ficam desligados (js/somente-leitura.js): sem tirar os cliques, as dicas continuam aparecendo */
 body[data-role="gestor"] #s-rec .janela,
 body[data-role="gestor"] #s-ins .cel,
 body[data-role="gestor"] main label.alvo { cursor: default !important; }
@@ -250,9 +243,7 @@ body[data-role="gestor"] main select:not(.flt-ctrl):not(.agenda-campo):not(.cont
   opacity: 0.82;
 }
 
-/* ==========================================================================
-   3. COMPONENTES VISUAIS PADRONIZADOS
-   ========================================================================== */
+/* Componentes */
 .pn {
   background: var(--pn);
   border: 1px solid var(--ln);
@@ -345,6 +336,8 @@ details.caixa.avisos summary { color: var(--wa); }
 .tabela-escala .st-sel.st-Pendente { background: var(--neutro-bg); }
 .tabela-escala .st-sel.st-Atrasado { background: var(--wa-bg); }
 .tabela-escala .st-sel.st-Cancelado { background: var(--er-bg); }
+/* Os controles que aparecem com o mouse também aparecem com o foco em qualquer campo da linha (:focus-within) e em
+   telas de toque (pointer: coarse, como um notebook com tela de toque) */
 /* Tirar da escala: aparece ao passar o mouse ou com o foco (em tela de toque, sempre) */
 .tabela-escala .acao .x { opacity: 0; transition: opacity .1s; }
 .tabela-escala tr:hover .acao .x, .tabela-escala tr:focus-within .acao .x { opacity: 1; }
@@ -353,8 +346,8 @@ details.caixa.avisos summary { color: var(--wa); }
 #out[data-vista="painel"] .mapa, #out[data-vista="painel"] .tabela-escala, #out:not([data-vista="painel"]) .painel-dia { display: none; }
 
 /* Painel no estilo dos aeroportos (como os painéis da INFRAERO): moldura escura, faixa azul com o título, o avião e o
-   relógio; cabeçalho azul; linhas azul-marinho alternadas; horário e missão em amarelo e o resto em branco; a observação
-   na cor do status. Em tela cheia, ocupa a tela toda e as letras crescem com ela */
+   relógio; cabeçalho azul; linhas azul-marinho alternadas; horário e missão em amarelo e o resto em branco; a
+   observação na cor do status. Em tela cheia, ocupa a tela toda e as letras crescem com ela */
 .painel-dia { display: flex; flex-direction: column; gap: 10px; }
 .fids-controles { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 /* Pausar apertado: o fundo do quadro escolhido e uma marca (✓), que vale também sem cor */
@@ -431,9 +424,8 @@ table.fids-tabela { width: 100%; min-width: 860px; border-collapse: collapse; fo
 /* Filtros com rótulo visível (Categoria e Avião / sala começam os dois em "Todos") */
 .flt-rotulo { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--mu); }
 .frota-cab { margin: 16px 0 8px; }
-/* Horários de decolagem por categoria: uma linha por categoria, com os horários em etiquetas */
+/* Horários de decolagem: uma linha de resumo por categoria; o editor abre na própria linha */
 .horarios { display: flex; flex-direction: column; gap: 12px; }
-/* Revisão de 14/11 ("Resumo + Editar"): uma linha de resumo por categoria; o editor abre na própria linha */
 .horarios-cat { display: flex; flex-direction: column; gap: 4px; padding-bottom: 10px; border-bottom: 1px solid var(--ln); }
 .horarios-cat:last-child { border-bottom: 0; padding-bottom: 0; }
 .horarios-cab { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
@@ -581,7 +573,7 @@ dialog.dlg .dlg-acoes, .form-dados .dlg-acoes { display: flex; justify-content: 
 .campo-dado input[aria-invalid="true"] { border-color: var(--er); }
 .campo-dado .erro-campo:empty { display: none; }
 td.c-canac { font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--mu); }
-/* Escala aprovada (fase 12) */
+/* Escala aprovada */
 .aprovacao { display: inline-flex; align-items: center; gap: 8px; }
 .aprovacao:empty { display: none; }
 .selo-aprovada { display: inline-flex; align-items: center; gap: 6px; margin-left: 10px; padding: 2px 10px; border-radius: 14px; background: var(--ok-bg); color: var(--ok); font: 600 13px 'Barlow', sans-serif; vertical-align: middle; }
@@ -591,8 +583,8 @@ details.caixa.conflitos { background: var(--er-bg); border: 1px solid var(--er);
 details.caixa.conflitos summary { color: var(--er); }
 .tabela-escala tr.em-conflito td:first-child { box-shadow: inset 3px 0 0 var(--er); }
 details.caixa.conflitos .btn.quiet { padding: 1px 8px; margin-left: 4px; font-size: 13.5px; }
-/* Compactação (fase 13): os critérios do dia, o tempo parado e a aprovação numa segunda linha da barra da Escala; no
-   celular, cada controle ocupa a linha, com o rótulo em cima */
+/* Compactação: os critérios do dia, o tempo parado e a aprovação numa segunda linha da barra da Escala; no celular,
+   cada controle ocupa a linha, com o rótulo em cima */
 .bar.compactacao { margin-top: -2px; }
 .bar.compactacao[hidden] { display: none; }
 .criterios { display: inline-flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; }
@@ -605,13 +597,13 @@ details.caixa.conflitos .btn.quiet { padding: 1px 8px; margin-left: 4px; font-si
 .bar.compactacao .seg button[aria-disabled="true"] { cursor: default; opacity: .75; }
 .bar.compactacao .seg button.on[aria-disabled="true"] { opacity: 1; }
 .resumo .parado strong { display: block; color: var(--ink); font-variant-numeric: tabular-nums; }
-/* Sugestões para um conflito (fase 12): a gaveta com as opções, a melhor primeiro */
+/* Sugestões para um conflito: a gaveta com as opções, a melhor primeiro */
 .motivo-conflito { margin: 0; padding: 8px 12px; border-radius: 8px; background: var(--er-bg); color: var(--er); }
 .opcoes-reparo { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; overflow-y: auto; }
 .opcoes-reparo li { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px; border: 1px solid var(--ln); border-radius: 8px; background: var(--pn2); }
 .opcoes-reparo li.cancelar { background: transparent; border-style: dashed; }
 .opcoes-reparo .btn { flex: none; }
-/* Limites da lei (fase 11) */
+/* Limites da lei */
 td.mes { white-space: nowrap; font-variant-numeric: tabular-nums; }
 td.mes.perto { color: var(--wa); font-weight: 700; }
 .limites-lei { margin-top: 12px; }
@@ -681,7 +673,7 @@ label.alvo { display: inline-flex; align-items: center; justify-content: center;
 .janela small { color: var(--mu); font-weight: 500; }
 .janela.off { color: var(--mu); }
 .frota-titulo { margin-top: 16px; }
-/* Recursos em duas partes (revisão de 14/11): nesta data e para todas as datas */
+/* Recursos em duas partes: nesta data e para todas as datas */
 .rec-parte { display: flex; flex-direction: column; gap: 12px; margin-bottom: 24px; }
 .rec-parte > .pn { margin: 0; }
 /* Os filhos do flex encolhem (a tabela larga rola dentro da caixa dela, e a página não rola de lado) */
@@ -718,7 +710,7 @@ table.frota tr:hover .rev, table.frota tr:focus-within .rev { opacity: 1; }
 
 /* Instrutores: a disponibilidade do dia numa grade; o cadastro numa tabela, com as habilitações num painel lateral */
 #s-ins[data-vista="dia"] .vista-cadastro, #s-ins[data-vista="cadastro"] .vista-dia { display: none; }
-/* Alunos › Cursos (fase 14): o programa de cada curso */
+/* Alunos › Cursos: o programa de cada curso */
 #s-alu[data-vista="alunos"] .vista-cursos, #s-alu[data-vista="cursos"] .vista-alunos { display: none; }
 .vista-cursos { display: flex; flex-direction: column; gap: 12px; }
 .vista-cursos .curso h3 small { font: 500 14px 'Barlow', sans-serif; color: var(--mu); margin-left: 6px; }
@@ -726,7 +718,7 @@ table.frota tr:hover .rev, table.frota tr:focus-within .rev { opacity: 1; }
 .programa input.codigo { width: 7.5em; font-variant-numeric: tabular-nums; }
 .programa input[data-cf="nome"] { width: 100%; min-width: 12em; }
 .programa td.acoes { white-space: nowrap; }
-/* A missão do curso no dia (fase 14): o código, a próxima missão, o resultado e o progresso */
+/* A missão do curso no dia: o código, a próxima missão, o resultado e o progresso */
 .etapa { display: inline-block; padding: 0 6px; border-radius: 4px; background: var(--info-bg); color: var(--ac); font: 600 12.5px 'Barlow Semi Condensed', sans-serif; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .stu-cell .etapa, .stu-cell .usar-proxima { margin-left: 6px; }
 .usar-proxima { padding: 1px 6px; font-size: 13px; }
@@ -928,9 +920,7 @@ a { color: var(--ac); }
 }
 .tg button { border: 0; background: transparent; color: var(--er); cursor: pointer; }
 
-/* ==========================================================================
-   4. MAPA VISUAL INTERATIVO DE OCUPAÇÃO (SINCRONIZADO COM STATUS)
-   ========================================================================== */
+/* Mapa de ocupação */
 .tl-legend { display: flex; gap: 12px; flex-wrap: wrap; font-size: 12px; color: var(--mu); align-items: center; margin-bottom: 8px; }
 .tl-dot { width: 10px; height: 10px; border-radius: 2px; display: inline-block; margin-right: 4px; vertical-align: middle; }
 .tl-dot-emvoo { border: 2px solid var(--ye); }
@@ -1051,7 +1041,7 @@ a { color: var(--ac); }
   line-height: 1.15;
 }
 
-/* Popup do voo: um só, fixo na tela (fora do painel do mapa, que rola e o cortava); posicionado pelo script */
+/* Popup do voo: um só, fixo na tela (fora do painel do mapa, que rola e o cortaria); posicionado pelo script */
 .tl-pop {
   position: fixed;
   top: 0;
@@ -1102,9 +1092,7 @@ a { color: var(--ac); }
   cursor: pointer;
 }
 
-/* ==========================================================================
-   5. PAINEL DO DIA, BI, MANUAL DO USUÁRIO & TOASTS
-   ========================================================================== */
+/* Histórico, BI, Manual e toasts */
 /* Histórico da data: gaveta lateral sobre a aba aberta */
 .gaveta {
   position: fixed; top: 0; right: 0; bottom: 0; width: min(440px, 100vw); z-index: 200;
@@ -1151,7 +1139,6 @@ a { color: var(--ac); }
 .bi-bar-fill { height: 100%; background: var(--ac); }
 .bi-grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(440px, 100%), 1fr)); gap: 14px; }
 
-/* Manual do Usuário Recolhível (Final da Aba 6) */
 /* Manual (botão no topo): leitura confortável, índice de seções e tabelas geradas das regras */
 .manual-intro { font-size: 15px; margin: 0 0 12px; }
 .manual-indice { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 16px; }
@@ -1202,9 +1189,7 @@ a { color: var(--ac); }
 .sm { font-size: 13px; color: var(--mu); white-space: nowrap; }
 details.pn summary { cursor: pointer; font: 600 16px 'Barlow Semi Condensed', sans-serif; }
 
-/* ==========================================================================
-   LOGIN (MODO COMPARTILHADO, SUPABASE)
-   ========================================================================== */
+/* Login (modo compartilhado, Supabase) */
 #s-login { display: none; max-width: 420px; margin: 32px auto; }
 body[data-login] #s-login { display: block; }
 body[data-login] main > section:not(#s-login),
@@ -1235,9 +1220,7 @@ body[data-backend="supabase"] #btn-bi-clr { display: none !important; }
   body { background: #fff; color: #000; }
 }
 
-/* ==========================================================================
-   ALVOS DE TOQUE NO CELULAR: botões, campos e interruptores com pelo menos 44 px
-   ========================================================================== */
+/* Alvos de toque no celular: botões, campos e interruptores com pelo menos 44 px */
 @media (max-width: 640px) {
   /* Com largura mínima, o item não encolhe mais que o próprio texto (flex-shrink: 0) */
   .topo-ico, .hd-btn, .hd-conta { min-width: 44px; min-height: 44px; justify-content: center; flex-shrink: 0; }
@@ -1260,9 +1243,7 @@ body[data-backend="supabase"] #btn-bi-clr { display: none !important; }
 }
 
 
-/* ==========================================================================
-   TV DA RECEPÇÃO (painel.html): o painel na tela toda; antes do login, um cartão para entrar
-   ========================================================================== */
+/* TV da recepção (painel.html): o painel na tela toda; antes do login, um cartão para entrar */
 body.tela-painel { min-height: 100vh; background: #07122B; overflow: hidden; }
 .login-painel {
   width: min(380px, calc(100vw - 32px)); margin: 12vh auto 0; display: flex; flex-direction: column; gap: 10px;
@@ -1273,7 +1254,7 @@ body.tela-painel { min-height: 100vh; background: #07122B; overflow: hidden; }
 .login-painel label { display: flex; flex-direction: column; gap: 4px; font-weight: 600; }
 .login-logo { height: 44px; width: auto; align-self: flex-start; }
 
-/* As dicas (revisão de 14/11): o balão do glossário e o botão "?" ao lado de um rótulo */
+/* As dicas: o balão do glossário e o botão "?" ao lado de um rótulo */
 .dica {
   position: fixed; top: 0; left: 0; z-index: 60;
   width: max-content; max-width: min(300px, calc(100vw - 16px));

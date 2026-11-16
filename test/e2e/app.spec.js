@@ -99,7 +99,7 @@ test.describe('Aplicação', () => {
     const html = page.locator('html');
     await abrirMenuDaConta(page);
     const tema = page.locator('#btn-theme');
-    // Um interruptor com ícones (sol e lua), sem o texto "Tema claro ou escuro"
+    // Um interruptor com ícones (sol e lua), sem texto
     await expect(tema).toHaveAttribute('role', 'menuitemcheckbox');
     await expect(tema).toHaveAttribute('aria-label', 'Tema escuro');
     await expect(tema).toHaveAttribute('aria-checked', 'false');
@@ -141,10 +141,10 @@ test.describe('Aplicação', () => {
     }
     await expect(manual.locator('h3')).toHaveText(['Primeiros passos: a rotina do operador', 'Perfis de acesso', 'As abas',
       'Como a escala é montada', 'Para o gestor', 'TV da recepção', 'Glossário', 'Perguntas frequentes']);
-    // O Glossário sai do glossário das dicas (revisão de 14/11)
+    // O Glossário sai do glossário das dicas
     await expect(page.locator('#manual-glossario-lista dt')).toHaveCount(Object.keys(GLOSSARIO).length);
     await expect(page.locator('#manual-glossario-lista')).toContainText(GLOSSARIO['horario-livre'].texto);
-    // As abas na ordem do app, sem números, com os nomes novos dos botões e das vistas
+    // As abas na ordem do app, sem números, com os nomes dos botões e das vistas
     await expect(manual.locator('#manual-abas h4')).toHaveText(['Escala', 'Demanda', 'Agenda', 'Recursos', 'Instrutores', 'Alunos', 'Rodízio', 'BI']);
     for (const novo of ['menu da conta', 'Pôr um aluno na demanda', 'Disponibilidade do dia', 'Editar habilitações', 'Não escalar com',
       'Ainda não importado', 'Atualizada às', 'Ver todos', 'Compartilhar', 'Por recurso', 'Novo recurso', 'Retirar', 'Horários de decolagem',

@@ -1,4 +1,4 @@
-// Dados pessoais de alunos e instrutores (fase 9): CPF, CANAC, nascimento, celular e e-mail. Ficam fora do cadastro,
+// Dados pessoais de alunos e instrutores: CPF, CANAC, nascimento, celular e e-mail. Ficam fora do cadastro,
 // numa tabela que só operadores, administradores e a secretaria leem; o servidor valida de novo. O histórico registra
 // só quais campos mudaram, nunca os valores.
 import { describe, it } from 'node:test';
@@ -60,7 +60,7 @@ describe('Dados pessoais: na tela e no histórico', () => {
   });
 });
 
-// Revisão de 14/11: a mesma regra do servidor (salvar_dados_pessoais) para o modo local e o servidor dos testes
+// A mesma regra do servidor (salvar_dados_pessoais) para o modo local e o servidor dos testes
 describe('Dados pessoais: gravar com a versão lida', () => {
   const cadastro = { stu: [{ id: 1000, nm: 'Ana Souza' }, { id: 1001, nm: 'Bia' }], ins: [{ id: 7, nm: 'Instrutor 07' }] };
   const opcoes = (extra = {}) => ({ hoje: '2026-11-14', autor: 'Rayane', agora: '2026-11-14T12:00:00.000Z', cadastro, ...extra });

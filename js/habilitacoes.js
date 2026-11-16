@@ -1,4 +1,4 @@
-// Habilitações individuais dos instrutores (fase 4). No aeroclube as funções não são cumulativas: há instrutor
+// Habilitações individuais dos instrutores. No aeroclube as funções não são cumulativas: há instrutor
 // de C172 que não dá simulador e instrutor de PA-34 que não faz parafuso. Cada instrutor tem a lista do que pode
 // fazer; uma missão exige a habilitação da missão e, no C152, no C172 e no PA-34, também a do avião.
 
@@ -18,7 +18,7 @@ export const HABILITACOES = [
   { id: 'c152', nome: 'C152', curto: 'C152' },
   { id: 'c172', nome: 'C172', curto: 'C172' },
   { id: 'mlte', nome: 'MLTE (PA-34)', curto: 'MLTE (PA-34)' },
-  // O checador é credenciado por partes (retorno da operação, 14/11): o curso, o motor e as regras do voo
+  // O checador é credenciado por partes: o curso, o motor e as regras do voo
   { id: 'checa_pp', nome: 'Checador do curso PP', curto: 'Checador PP' },
   { id: 'checa_pc', nome: 'Checador do curso PC', curto: 'Checador PC' },
   { id: 'checa_inva', nome: 'Checador do curso INVA', curto: 'Checador INVA' },
@@ -69,7 +69,7 @@ const CHECADOR_ANTIGO = {
   checador_mlte: ['checa_pp', 'checa_pc', 'checa_inva', 'checa_mnte', 'checa_mlte', 'checa_vfr', 'checa_ifr']
 };
 export const marcasDoChecadorAntigo = hab => [...new Set(hab.flatMap(h => (Object.hasOwn(CHECADOR_ANTIGO, h) ? CHECADOR_ANTIGO[h] : [h])))];
-// O C152 também (retorno da operação, 14/11): todo instrutor de antes recebeu a habilitação (formato 19)
+// O C152 também exige a habilitação do avião (na migração para o formato 19, todo instrutor do cadastro a recebe)
 const DO_AVIAO = { 'C152': 'c152', 'C172': 'c172', 'PA-34': 'mlte' };
 
 // Só as chaves do próprio mapa (nomes como "constructor" ou "toString" não contam)

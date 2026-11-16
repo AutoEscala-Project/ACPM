@@ -1,4 +1,4 @@
-// Compactação da escala (fase 13): depois de montada a escala e dividida as horas, uma busca local muda voos de horário
+// Compactação da escala: depois de montada a escala e divididas as horas, uma busca local muda voos de horário
 // e de instrutor para fechar os buracos do dia. O operador escolhe o que pesa mais (os buracos dos INVAs, os dos aviões
 // ou o maior buraco, de quem for) e até onde os horários podem mudar (dentro da disponibilidade do aluno, só entre a 1ª
 // e a 2ª preferência, ou não mudam). Os movimentos: mudar o horário (com o mesmo instrutor), passar para outro
@@ -6,8 +6,8 @@
 // duração entre dois instrutores. Cada rodada aplica o movimento que mais diminui o custo, numa ordem fixa (a mesma
 // escala dá sempre o mesmo resultado), até nenhum diminuir ou até os limites da busca. Todas as regras da escala
 // continuam valendo; a soma dos quadrados das horas não cresce (a divisão das horas não piora) e o combustível não
-// piora. Ficam como estão os voos fixos e os que já têm status (Atrasado, Em Voo, Pousou, Cancelado), o instrutor dos voos do
-// rodízio, o Noturno, o Parafuso no C152 e o horário das turmas de Ground.
+// piora. Ficam como estão os voos fixos e os que já têm status (Atrasado, Em Voo, Pousou, Cancelado), o instrutor dos
+// voos do rodízio, o Noturno, o Parafuso no C152 e o horário das turmas de Ground.
 import { AIRCRAFT_EQ_TYPES, GROUND_EQ_TYPE, T, NI, PESOS_DA_COMPACTACAO, LIMITES_DA_COMPACTACAO, MISSOES_LOCAIS, LIMITE_DE_VOOS_LOCAIS } from './config.js';
 import { FROTA_INICIAL, matriculasDoTipo } from './frota.js';
 import { podeFazer } from './habilitacoes.js';
@@ -30,7 +30,7 @@ const STATUS_QUE_MUDAM = ['Confirmado', 'Pendente'];
 const soma = lista => lista.reduce((total, v) => total + v, 0);
 
 // Os voos que ocupam o dia (sem os cancelados; o aluno cancelado de uma turma acompanha a turma), o atrasado no
-// horário novo (revisão de 14/11). Os voos de out ficam os mesmos objetos, menos o atrasado (uma cópia, que nunca muda:
+// horário novo. Os voos de out ficam os mesmos objetos, menos o atrasado (uma cópia, que nunca muda:
 // o voo com status fica onde está)
 function ocupando(out, estado) {
   const statusDe = v => (estado.fStatus && estado.fStatus[v.fKey]) || v.status || 'Confirmado';
@@ -93,7 +93,6 @@ export function custoDaEscala(out, estado) {
 // A busca. Muda os voos de out no lugar (horário, período, instrutor, peso, combustível, avião e a etiqueta da
 // preferência) e devolve quantos movimentos fez
 export function compactar(out, state, { saldo = () => Infinity, posicao = () => 0, limites: limitesDados, historico = () => null, limitesDaBusca = LIMITES_DA_COMPACTACAO } = {}) {
-  // Sem os limites, os do estado (revisão de 14/11)
   const limites = limitesDados || normalizarLimites(state.limites);
   const { buracos, horarios: regra } = normalizarCriterios(state.criterios);
   const pesos = PESOS_DA_COMPACTACAO[buracos], pesosDaPreferencia = PESOS_DA_COMPACTACAO.preferencia;
@@ -106,7 +105,7 @@ export function compactar(out, state, { saldo = () => Infinity, posicao = () => 
   const statusDe = v => (state.fStatus && state.fStatus[v.fKey]) || v.status || 'Confirmado';
 
   // As unidades: um voo, ou uma turma de Ground inteira (1h30 uma vez só). O voo cancelado não ocupa nada e o atrasado
-  // ocupa o horário novo (revisão de 14/11); os dois ficam onde estão
+  // ocupa o horário novo; os dois ficam onde estão
   const unidades = [...agrupar(ocupando(out, state), o => o.classKey || o.fKey).values()].map(voos => {
     const v = voos[0];
     const presa = voos.some(o => o.fixo || !STATUS_QUE_MUDAM.includes(statusDe(o))) || v.mis === 'Noturno' || (v.mis === 'Parafuso' && v.eqType === 'C152');
@@ -131,7 +130,8 @@ export function compactar(out, state, { saldo = () => Infinity, posicao = () => 
     if (!u.inicios.length) u.mudaHorario = false;
   }
 
-  // Quem está onde: os dias dos instrutores, dos recursos (aviões e simuladores) e dos alunos, e as horas de cada instrutor
+  // Quem está onde: os dias dos instrutores, dos recursos (aviões e simuladores) e dos alunos, e as horas de cada
+  // instrutor
   const doInstrutor = new Map(), doRecurso = new Map(), doAluno = new Map(), cargas = new Map(ativos.map(x => [x.id, 0]));
   const por = (mapa, k) => mapa.get(k) || mapa.set(k, new Set()).get(k);
   for (const u of unidades) {
@@ -217,7 +217,7 @@ export function compactar(out, state, { saldo = () => Infinity, posicao = () => 
       }
       if (mudouHorario) {
         for (const s of u.alunos) if (!livre(intervalosDe(doAluno.get(s), movidas), a, b)) return false;
-        // No máximo 6 voos locais saindo no mesmo horário (retorno da operação, 14/11)
+        // No máximo 6 voos locais saindo no mesmo horário
         if (MISSOES_LOCAIS.includes(u.mis)) {
           const ficam = unidades.filter(w => !movidas.includes(w) && w.a === a && MISSOES_LOCAIS.includes(w.mis)).length;
           const chegam = mudancas.filter(n => n.a === a && MISSOES_LOCAIS.includes(n.u.mis)).length;

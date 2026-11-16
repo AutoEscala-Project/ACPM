@@ -2,7 +2,7 @@
 import { estadoSintetico, FROTA_POR_TIPO, JANELAS, dois } from './estado.js';
 import { habilitacoesDoNivel } from '../../js/habilitacoes.js';
 
-// instrutor(id, lv): com as habilitações que o nível A01–A09 permitia; extra.hab define outras
+// instrutor(id, lv): com as habilitações equivalentes ao nível A01–A09; extra.hab define outras
 export const instrutor = (id, lv, extra = {}) => ({
   id, nm: `Instrutor ${dois(id)}`, on: true, hab: habilitacoesDoNivel(lv), kg: 70, aw: Array(JANELAS).fill(true), ...extra
 });

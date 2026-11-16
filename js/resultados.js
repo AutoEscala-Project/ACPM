@@ -1,4 +1,4 @@
-// Resultados das missões dos cursos (fase 14). O operador registra aprovado ou reprovado na linha do voo (pendente
+// Resultados das missões dos cursos. O operador registra aprovado ou reprovado na linha do voo (pendente
 // desfaz um engano); os registros só crescem, e a situação de cada missão é o último registro do aluno, curso e
 // missão. A próxima missão do aluno é a primeira do programa ainda não aprovada (a reprovada volta); o progresso conta
 // as aprovadas do programa. As regras do registro são as do servidor (supabase/migrations/…_resultados_de_missao.sql).

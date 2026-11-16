@@ -1,4 +1,4 @@
-// Os conflitos de um voo fixo (revisão de 14/11). A cada cálculo, o motor confere de novo cada voo da escala aprovada
+// Os conflitos de um voo fixo. A cada cálculo, o motor confere de novo cada voo da escala aprovada
 // com as mesmas regras de quando o escalou; o que não vale mais vira conflito, com um texto e um código. O grupo do
 // código decide as sugestões de reparo: trocar o instrutor, trocar o avião (ou a sala), passar para outro horário, ou
 // soltar o voo para o app escolher de novo (o pedido mudou).
@@ -41,7 +41,7 @@ export function gruposDoConflito(voo) {
   ]);
 }
 
-// Os códigos das rejeições (revisão de 14/11): por que o pedido ficou fora da escala, para dizer onde resolver
+// Os códigos das rejeições: por que o pedido ficou fora da escala, para dizer onde resolver
 export const CODIGOS_DE_REJEICAO = [
   'equipamento-da-missao', 'ground-pendente', 'ground-antes-do-voo-fixo', 'so-parafuso', 'sem-aviao', 'sem-instrutor-habilitado',
   'disponibilidade-do-aluno', 'depois-do-ground', 'sem-horario', 'aluno-ocupado', 'avioes-ocupados', 'sala-ocupada', 'revisao',

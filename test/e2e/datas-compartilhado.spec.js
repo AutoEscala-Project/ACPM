@@ -1,4 +1,4 @@
-// Escala por data no modo compartilhado: migração dos documentos da fase 2 no servidor, gestor navegando
+// Escala por data no modo compartilhado: migração dos documentos antigos no servidor, gestor navegando
 // entre as datas sem gravar e autor das alterações no histórico.
 import { test, expect, prepararContexto, vigiarErros, irPara, AMANHA, entrar, preencherLogin, URL_APP } from './fixtures.js';
 import { instalarSupabaseFalso, documentosAtuais, documentosFase3, CONTAS } from './supabase-falso.js';
@@ -12,7 +12,6 @@ import { separar } from '../../js/dias.js';
 
 const DEPOIS = '2026-11-12';
 
-// O campo de data fica na aba 6 · Escala
 async function mudarData(page, data) {
   await page.locator('#nav button[data-t="esc"]').click();
   await page.locator('#dt').fill(data);
@@ -21,7 +20,7 @@ async function mudarData(page, data) {
 }
 
 test.describe('Escala por data (modo compartilhado)', () => {
-  test('no primeiro acesso de um operador, os documentos da fase 2 viram o formato por data', async ({ page, context }) => {
+  test('no primeiro acesso de um operador, os documentos antigos viram o formato por data', async ({ page, context }) => {
     const estado = ApiClient.normalizeAndMigrateState({ ...estadoSintetico(), stu: [aluno(1000), aluno(1001, { p1: 2 })] });
     const escala = runAllocationEngine(estado);
     const servidor = await instalarSupabaseFalso(context, {
@@ -67,7 +66,6 @@ test.describe('Escala por data (modo compartilhado)', () => {
     await contexto.close();
   });
 
-  // Revisão de 14/11: o servidor fora do ar por um instante não interrompe a conversão (a gravação tenta de novo)
   test('com o servidor fora do ar por um instante, a conversão espera e termina sozinha', async ({ browser }) => {
     const contexto = await browser.newContext({ baseURL: test.info().project.use.baseURL, locale: 'pt-BR', timezoneId: 'America/Sao_Paulo' });
     await prepararContexto(contexto);
@@ -86,7 +84,7 @@ test.describe('Escala por data (modo compartilhado)', () => {
     await contexto.close();
   });
 
-  // Dados no formato da fase 3 (sem versão, simuladores com os nomes antigos): o dia de amanhã com o SIM-MULTI-2 em
+  // Dados no formato anterior (sem versão, simuladores com os nomes antigos): o dia de amanhã com o SIM-MULTI-2 em
   // manutenção e um dia importado do BI com voo no SIM-MONO-1
   function servidorNoFormatoAnterior() {
     const estado = ApiClient.normalizeAndMigrateState({ ...estadoSintetico(), stu: [aluno(1000, { mis: 'Simulador', eq: 'Sim. Mono' })] });

@@ -1,4 +1,4 @@
-// Cursos (fase 14): o programa de cada curso (PP, PC e INVA), mantido no app pelo Administrador, e o curso de cada
+// Cursos: o programa de cada curso (PP, PC e INVA), mantido no app pelo Administrador, e o curso de cada
 // aluno. Cada missão do programa tem um código (PP-07), um nome, o tipo de missão do app, o recurso e as horas; a ordem
 // do programa é a ordem em que o aluno voa.
 import { MIS, GROUND_DURATION_H } from './config.js';
@@ -19,7 +19,7 @@ function normalizarMissao(m) {
   if (!CODIGO.test(id) || !Object.hasOwn(MIS, m.mis)) return null;
   const regra = MIS[m.mis];
   const nome = typeof m.nome === 'string' ? m.nome.trim().replace(/\s+/g, ' ').slice(0, LIMITE_DO_NOME) : '';
-  // As horas fracionadas, até 5 h, como na Demanda (retorno da operação, 14/11)
+  // As horas fracionadas, até 5 h, como na Demanda
   const nb = regra.isGround ? GROUND_DURATION_H : duracaoValida(m.nb);
   return { id, nome: nome || id, mis: m.mis, eq: regra.eq.includes(m.eq) ? m.eq : regra.defEq, nb };
 }

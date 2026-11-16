@@ -1,11 +1,11 @@
-// A frota (aviões e simuladores) fica no cadastro desde a fase 7: cada recurso tem a matrícula, o tipo e, no C152
+// A frota (aviões e simuladores) fica no cadastro: cada recurso tem a matrícula, o tipo e, no C152
 // acrobático, "Só Parafuso". O operador acrescenta e retira recursos na aba Recursos; o limite de peso e o controle
 // das 50 horas vêm do tipo. A sala de Ground não faz parte da frota (é uma só, sempre disponível).
 import { EQ, ACROBAT_REG } from './config.js';
 
 export const TIPOS_DA_FROTA = ['C152', 'C172', 'PA-34', 'Sim. Mono', 'Sim. Multi'];
 
-// A frota que estava no código antes da fase 7: o cadastro começa com ela (passo 11 do formato dos dados)
+// A frota com que o cadastro começa (passo 11 do formato dos dados)
 export const FROTA_INICIAL = Object.entries(EQ).flatMap(([tipo, regs]) =>
   regs.map(reg => ({ reg, tipo, ...(reg === ACROBAT_REG ? { soParafuso: true } : {}) })));
 

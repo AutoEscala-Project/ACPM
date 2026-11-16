@@ -55,7 +55,7 @@ async function oferecerEnvioDosDadosLocais() {
   $('#envio-local').hidden = true;
   if (!enviar) return;
 
-  // Os dados do navegador (formato da fase 2) chegam ao servidor já no formato por data
+  // Os dados do navegador (os documentos antigos, sem data) chegam ao servidor já no formato por data
   await ApiClient.migrarDocumentosAntigos(amanhaISO(), backendLocal);
 }
 
@@ -70,8 +70,8 @@ const AVISOS_DO_LINK = {
   invalido: 'Este link de confirmação expirou ou já foi usado. Se a troca de e-mail não foi concluída, peça de novo em Minha conta.'
 };
 
-// Sessão expirada (revisão de 14/11): um diálogo só, com a conta fixa, enquanto as alterações esperam. Devolve quando a
-// pessoa entrou de novo (as gravações continuam sozinhas)
+// Sessão expirada: um diálogo só, com a conta fixa, enquanto as alterações esperam. Devolve quando a pessoa entrou
+// de novo (as gravações continuam sozinhas)
 let novoLogin = null;
 function pedirNovoLogin(cliente) {
   if (novoLogin) return novoLogin;

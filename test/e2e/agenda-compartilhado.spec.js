@@ -70,7 +70,7 @@ test.describe('Agenda de Solicitações (modo compartilhado)', () => {
     await expect(page.locator('#form-agenda [type="submit"]')).toBeDisabled();
     await expect(page.locator('#ag-excecao')).toBeHidden();
 
-    // Ela vê a Agenda e a Escala (que só consulta) e, pelos dados pessoais, Instrutores e Alunos (fase 9)
+    // Ela vê a Agenda e a Escala (que só consulta) e, pelos dados pessoais, Instrutores e Alunos
     await expect(page.locator('#nav button:visible .aba-rotulo')).toHaveText(['Escala', 'Agenda', 'Instrutores', 'Alunos']);
     await page.locator('#nav button[data-t="esc"]').click();
     await expect(page.locator('body')).toHaveAttribute('data-role', 'gestor');
@@ -100,7 +100,7 @@ test.describe('Agenda de Solicitações (modo compartilhado)', () => {
     await expect(page.locator('#agenda-lista [data-act="cancelar-pedido"]')).toBeHidden();
   });
 
-  // Revisão de 14/11: a importação que termina depois de trocar de data não grava nada na data nova
+  // A importação que termina depois de trocar de data não grava nada na data nova
   test('trocar de data durante a importação da agenda cancela a importação', async ({ page, context }) => {
     const servidor = await instalarSupabaseFalso(context, documentosAtuais({ ...estadoSintetico(), stu: [aluno(1000, { fly: false })] }, AMANHA));
     servidor.solicitacoes.push({

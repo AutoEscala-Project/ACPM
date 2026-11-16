@@ -1,5 +1,5 @@
-// Regras de viabilidade da escala (fase 10): as mesmas para o motor, a divisão das horas e a troca de matrículas (antes
-// repetidas em cada passo). A compactação, os limites legais e as sugestões de reparo vão usar estas.
+// Regras de viabilidade da escala: as mesmas para o motor, a divisão das horas, a troca de matrículas, a compactação
+// e as sugestões de reparo.
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { sobrepoe, livre, cobre, pesoCabe, cabeNoSaldo } from '../../js/viabilidade.js';

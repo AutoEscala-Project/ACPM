@@ -1,6 +1,6 @@
-// Dados pessoais de alunos e instrutores (fase 9): CPF, CANAC (o código da ANAC), nascimento, celular e e-mail. Ficam
-// fora do cadastro, numa tabela que só operadores, administradores e a secretaria leem (o servidor valida tudo de
-// novo), e nunca vão para o CSV, o PDF ou o BI. O histórico registra só quais campos mudaram.
+// Dados pessoais de alunos e instrutores: CPF, CANAC (o código da ANAC), nascimento, celular e e-mail. Ficam fora do
+// cadastro, numa tabela que só operadores, administradores e a secretaria leem (o servidor valida tudo de novo), e
+// nunca vão para o CSV, o PDF ou o BI. O histórico registra só quais campos mudaram.
 export const CAMPOS_PESSOAIS = [
   { id: 'cpf', rotulo: 'CPF' },
   { id: 'canac', rotulo: 'CANAC' },
@@ -43,7 +43,7 @@ export function validarDadosPessoais(entrada, hoje) {
   const dados = {}, erros = {};
   for (const { id } of CAMPOS_PESSOAIS) {
     const bruto = entrada && entrada[id];
-    // Campo vazio (ou só com espaços e pontuação) fica de fora
+    // Campo vazio (ou só com espaços) fica de fora
     if (String(bruto ?? '').trim() === '') continue;
     const regra = REGRAS[id];
     const valor = regra.normalizar(bruto);

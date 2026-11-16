@@ -1,4 +1,4 @@
-// Divisão igual das horas do dia entre os instrutores (fase 7): depois de montada a escala, voos e aulas passam do
+// Divisão igual das horas do dia entre os instrutores: depois de montada a escala, voos e aulas passam do
 // instrutor com mais horas para o com menos sempre que todas as regras continuam valendo. Os voos do rodízio
 // (cheque, MLTE, noturno e C172) ficam com quem a fila escolheu; a turma de Ground se move inteira e conta uma vez.
 import { describe, it } from 'node:test';
@@ -58,7 +58,7 @@ describe('Divisão igual das horas entre os instrutores', () => {
     assert.equal(out.find(o => o.stuId === 1001).insId, 2, 'o voo no C152 passa para quem tinha menos horas');
   });
 
-  it('entre as passagens válidas, a que deixa menos tempo parado (fase 10): o voo vai para quem já voa no horário vizinho', () => {
+  it('entre as passagens válidas, a que deixa menos tempo parado: o voo vai para quem já voa no horário vizinho', () => {
     // O instrutor 1 (menos habilitações) fica com 06:30, 08:20 e 10:10; o 2 voa às 12:40 e o 3, às 16:20 (alunos que
     // não voam com o 1). Para dividir as horas, o voo das 10:10 passa para o 2 (que voa logo depois), e não o das 06:30
     const { out } = escala({

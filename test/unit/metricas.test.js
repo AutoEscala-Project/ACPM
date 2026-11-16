@@ -1,6 +1,6 @@
-// Métricas de uma escala (fase 10): tempo parado dos aviões e dos instrutores, saídas do hangar, aviões usados contra o
-// mínimo possível, equilíbrio das horas, preferências atendidas e trocas de avião. Medem o efeito das regras novas do
-// motor (scripts/medir-escalas.mjs) e, depois, aparecem na Escala.
+// Métricas de uma escala: tempo parado dos aviões e dos instrutores, saídas do hangar, aviões usados contra o
+// mínimo possível, equilíbrio das horas, preferências atendidas e trocas de avião. Medem o efeito das regras do
+// motor (scripts/medir-escalas.mjs); a Escala mostra o tempo parado e as saídas do hangar.
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { metricasDaEscala, INTERVALO_DO_HANGAR } from '../../js/metricas.js';
@@ -58,7 +58,6 @@ describe('Métricas da escala', () => {
   });
 });
 
-// Revisão de 14/11: quanto os voos ficaram longe da 1ª preferência (minutos, em média; sem preferência, não conta)
 describe('Distância até a 1ª preferência', () => {
   it('a média, em minutos, dos voos com a 1ª preferência; 0 sem nenhum', () => {
     const preferencia = { '1_0_1': 390, '2_0_1': 610, '3_0_1': -1 };

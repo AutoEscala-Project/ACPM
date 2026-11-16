@@ -1,5 +1,5 @@
-// Status do voo com detalhes (fase 8): o atraso guarda o novo horário de decolagem e o cancelamento, o motivo (de uma
-// lista; em "Outro", um texto curto). Um atraso que invade o voo seguinte do mesmo recurso, instrutor ou aluno vira aviso.
+// Status do voo com detalhes: o atraso guarda o novo horário de decolagem e o cancelamento, o motivo (de uma lista; em
+// "Outro", um texto curto). Um atraso que invade o voo seguinte do mesmo recurso, instrutor ou aluno vira aviso.
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
@@ -35,7 +35,7 @@ describe('Status do voo: a lista e os detalhes', () => {
   it('atraso: a nova decolagem precisa ser depois da original e no mesmo dia', () => {
     assert.deepEqual(validarDetalhe('Atrasado', { novoInicio: 640 }, 610), { detalhe: { novoInicio: 640 } });
     assert.match(validarDetalhe('Atrasado', { novoInicio: 610 }, 610).erro, /depois das 10:10/);
-    // O voo atrasado pousa até a meia-noite (revisão de 14/11): a duração conta
+    // O voo atrasado pousa até a meia-noite: a duração conta
     assert.deepEqual(validarDetalhe('Atrasado', { novoInicio: 1380 }, 610, 60), { detalhe: { novoInicio: 1380 } });
     assert.equal(validarDetalhe('Atrasado', { novoInicio: 1381 }, 610, 60).erro, 'O voo atrasado precisa pousar até as 24:00 (decolagem até as 23:00).');
     assert.ok(validarDetalhe('Atrasado', { novoInicio: 600 }, 610).erro);
@@ -110,7 +110,7 @@ describe('Status do voo: a lista e os detalhes', () => {
   });
 });
 
-// "Pousou" (revisão de 14/11): o fim do voo. No Ground e no simulador, o mesmo status aparece como "Concluída"
+// "Pousou": o fim do voo. No Ground e no simulador, o mesmo status aparece como "Concluída"
 describe('Pousou e o atraso até o pouso', () => {
   it('"Pousou" aparece como "Concluída" no Ground e no simulador; os outros status, como são', () => {
     const local = voo('1000_0_1', 610, { mis: 'Voo Local', eqType: 'C152' });

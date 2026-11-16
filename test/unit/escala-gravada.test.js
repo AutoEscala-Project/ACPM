@@ -1,6 +1,6 @@
-// A escala gravada ao abrir (revisão de 14/11): cada linha precisa ter os campos que o motor produz, nos formatos
-// dele. Uma linha adulterada invalida a escala gravada (a tela usa a escala calculada de novo); os campos desconhecidos
-// saem. As escalas que o próprio motor produz passam inteiras.
+// A escala gravada ao abrir: cada linha precisa ter os campos que o motor produz, nos formatos dele. Uma linha
+// adulterada invalida a escala gravada (a tela usa a escala calculada de novo); os campos desconhecidos saem. As
+// escalas que o próprio motor produz passam inteiras.
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -50,7 +50,7 @@ describe('Escala gravada', () => {
     const base = saidas[0];
     assert.equal(normalizarEscalaGravada({ ...base, al: [{ t: ATAQUE, s: 'x', m: 'y' }] }), null);
     assert.equal(normalizarEscalaGravada({ ...base, al: [{ t: 'warn', s: 'x', m: 'y', fKey: ATAQUE }] }), null);
-    // O código da rejeição (revisão de 14/11): só os da lista
+    // O código da rejeição: só os da lista
     assert.deepEqual(normalizarEscalaGravada({ ...base, al: [{ t: 'err', s: 'x', m: 'y', codigo: 'bloqueio' }] }).al, [{ t: 'err', s: 'x', m: 'y', codigo: 'bloqueio' }]);
     assert.equal(normalizarEscalaGravada({ ...base, al: [{ t: 'err', s: 'x', m: 'y', codigo: ATAQUE }] }), null);
     assert.equal(normalizarEscalaGravada({ ...base, tot: ATAQUE }), null);

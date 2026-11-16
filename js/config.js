@@ -5,7 +5,7 @@ export const WIN = ['06:30','08:20','10:10','11:30','12:40','13:40','14:30','16:
 export const NI = 8, DAY = [0,1,2,3,4,5,6,7];
 export const T = WIN.map(w => w.split(':')[0] * 60 + +w.split(':')[1]);
 
-// Frotas físicas exibidas na Aba 1 (Recursos)
+// A frota com que o cadastro começa (js/frota.js); a escala usa a do cadastro, que o operador edita na aba Recursos
 export const EQ = {
   'Sim. Mono': ['SIM-MONO-A','SIM-MONO-C'],
   'Sim. Multi': ['SIM-MLTE-E','SIM-MLTE-D'],
@@ -16,7 +16,7 @@ export const EQ = {
 
 export const GROUND_EQ_TYPE = 'Sala Ground';
 export const GROUND_REG = 'SALA-GROUND';
-export const GROUND_DURATION_MIN = 90; // 01h30min
+export const GROUND_DURATION_MIN = 90;
 export const GROUND_DURATION_H = 1.5;
 
 export const SIM_EQ_TYPES = ['Sim. Mono', 'Sim. Multi'];
@@ -63,24 +63,24 @@ export const MIS = {
 // Revisão obrigatória dos aviões a cada 50 horas de voo (o avião para quando não tem saldo para mais 1 h)
 export const REVISAO_H = 50;
 export const MENOR_VOO_H = 1;
-// No máximo 6 voos locais (Voo Local, Voo Solo e TGL) saindo no mesmo horário (retorno da operação, 14/11: determinação
-// da diretoria do aeroclube)
+// No máximo 6 voos locais (Voo Local, Voo Solo e TGL) saindo no mesmo horário: determinação da diretoria do aeroclube
 export const MISSOES_LOCAIS = ['Voo Local', 'Voo Solo', 'TGL (TMA)'];
 export const LIMITE_DE_VOOS_LOCAIS = 6;
-// A duração de um voo da demanda (retorno da operação, 14/11): fracionada, em décimos de hora, até 5 h
+// A duração de um voo da demanda: fracionada, em décimos de hora, até 5 h
 export const DURACAO_MAXIMA_H = 5;
 
-// Limites máximos de peso implícitos ao equipamento (fixos na regra operacional), aluno + instrutor com os tanques cheios
+// Limites máximos de peso implícitos ao equipamento (fixos na regra operacional), aluno + instrutor com os tanques
+// cheios
 export const DEFAULT_LIM = { 'C152': 170, 'C172': 222, 'PA-34': 250 };
 
-// Combustível (fase 10): o tanque (galões americanos) e a autonomia com ele cheio. Acima do limite de peso, o avião
+// Combustível: o tanque (galões americanos) e a autonomia com ele cheio. Acima do limite de peso, o avião
 // pode sair com menos combustível (js/combustivel.js). 1 galão de gasolina de aviação = 6 lb = 2,72 kg
 export const COMBUSTIVEL = { C152: { galoes: 26, autonomiaMin: 240 }, C172: { galoes: 53, autonomiaMin: 360 }, 'PA-34': { galoes: 93, autonomiaMin: 270 } };
 export const KG_POR_GALAO = 6 * 0.45359237;
 // Táxi e espera antes da decolagem (minutos de consumo além do voo)
 export const TAXI_MIN = 10;
 
-// Compactação da escala (fase 13, js/compactar.js): o peso de cada parte no custo do dia, em minutos. INVA: o tempo
+// Compactação da escala (js/compactar.js): o peso de cada parte no custo do dia, em minutos. INVA: o tempo
 // parado dos instrutores vale mais; Avião: o tempo parado dos aviões e as saídas do hangar; Maior buraco: cada buraco
 // (de instrutor ou de avião) vale o quadrado da duração dividido por 60 (1 h vale 60; 2 h, 240; 4 h, 960). A
 // preferência perdida pesa igual nos três: a 2ª vale 30 e outro horário 60, vezes a prioridade do pedido sobre 3
@@ -102,5 +102,5 @@ export const PRE = {
 };
 
 // Status do voo, na ordem do dia; Atrasado leva o novo horário e Cancelado, o motivo (js/status.js)
-// "Pousou" (revisão de 14/11): o fim do voo; no Ground e no simulador aparece como "Concluída" (js/status.js)
+// "Pousou": o fim do voo; no Ground e no simulador aparece como "Concluída" (js/status.js)
 export const FLIGHT_STATUSES = ['Pendente', 'Confirmado', 'Atrasado', 'Em Voo', 'Pousou', 'Cancelado'];

@@ -1,4 +1,4 @@
-// Limites dos instrutores pela Lei do Aeronauta (fase 11): as horas de voo do mês na disponibilidade do dia, as horas
+// Limites dos instrutores pela Lei do Aeronauta: as horas de voo do mês na disponibilidade do dia, as horas
 // de fora do app no painel do instrutor e os limites (só o Administrador muda; neste navegador, o Operador).
 import { test, expect, abrir, irPara, abrirEscala } from './fixtures.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
@@ -50,7 +50,6 @@ test.describe('Limites da lei', () => {
     await expect(limites.getByLabel('Voo no mês (h)')).toHaveValue('100');
   });
 
-  // Revisão de 14/11: o limite é maior que zero (vazio é sem limite)
   test('zero não vale como limite: o valor continua o de antes, com o aviso', async ({ page }) => {
     await abrir(page, { estado: umInstrutorDoisVoos() });
     await irPara(page, 'ins');

@@ -1,6 +1,6 @@
-// O glossário (revisão de 14/11): cada termo da tela numa frase curta, em texto puro. Vai para a dica (o balão que
-// aparece com o mouse, o foco do teclado ou um toque; js/dicas.js) e para a seção Glossário do Manual. Os números das
-// regras vêm da configuração, para o texto nunca contradizer o motor.
+// O glossário: cada termo da tela numa frase curta, em texto puro. Vai para a dica (o balão que aparece com o mouse, o
+// foco do teclado ou um toque; js/dicas.js) e para a seção Glossário do Manual. Os números das regras vêm da
+// configuração, para o texto nunca contradizer o motor.
 import { REVISAO_H, MENOR_VOO_H, GROUND_DURATION_MIN } from './config.js';
 import { LIMITES_DA_LEI } from './limites.js';
 import { INTERVALO_DO_HANGAR } from './metricas.js';

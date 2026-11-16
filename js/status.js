@@ -1,4 +1,4 @@
-// Status do voo com detalhes (fase 8). O atraso guarda o novo horário de decolagem; o cancelamento, o motivo (de uma
+// Status do voo com detalhes. O atraso guarda o novo horário de decolagem; o cancelamento, o motivo (de uma
 // lista; em "Outro", um texto curto). Os detalhes ficam no dia (fObs), ao lado do status (fStatus), e só valem para o
 // status atual do voo. O histórico guarda só a categoria do motivo, nunca o texto livre.
 import { FLIGHT_STATUSES } from './config.js';
@@ -50,8 +50,8 @@ export function validarDetalhe(status, dados, inicio, duracao = 0) {
   return { detalhe: null };
 }
 
-// Os status guardados que valem: os da lista, em chaves de voo (revisão de 14/11: o resto, gravado fora do formato
-// pela API, sai ao abrir)
+// Os status guardados que valem: os da lista, em chaves de voo (o resto, gravado fora do formato pela API, sai
+// ao abrir)
 export function normalizarStatus(fStatus) {
   const dados = fStatus && typeof fStatus === 'object' && !Array.isArray(fStatus) ? fStatus : {};
   return Object.fromEntries(Object.entries(dados).filter(([fKey, st]) => CHAVE_DO_VOO.test(fKey) && FLIGHT_STATUSES.includes(st)));

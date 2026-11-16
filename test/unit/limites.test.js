@@ -1,4 +1,4 @@
-// Limites dos instrutores pela Lei do Aeronauta (fase 11): voo e jornada por dia, voo no mês, no semestre e no ano, e o
+// Limites dos instrutores pela Lei do Aeronauta: voo e jornada por dia, voo no mês, no semestre e no ano, e o
 // repouso entre jornadas. As horas passadas saem das escalas gravadas (só voo em avião, sem os cancelados) e das horas
 // de voo fora do app informadas no cadastro.
 import { describe, it } from 'node:test';
@@ -19,7 +19,7 @@ describe('Limites da lei', () => {
     assert.deepEqual(normalizarLimites(undefined), LIMITES_DA_LEI);
   });
 
-  it('o limite é maior que zero (revisão de 14/11): zero volta ao padrão; a apresentação e o encerramento podem ser 0', () => {
+  it('o limite é maior que zero: zero volta ao padrão; a apresentação e o encerramento podem ser 0', () => {
     const l = normalizarLimites({ vooMesH: 0, jornadaMin: 0, apresentacaoMin: 0, encerramentoMin: 0 });
     assert.deepEqual(l, { ...LIMITES_DA_LEI, apresentacaoMin: 0, encerramentoMin: 0 });
   });
@@ -50,7 +50,7 @@ describe('Horas passadas', () => {
     });
   });
 
-  // Revisão de 14/11: o voo atrasado termina mais tarde; o repouso conta do pouso de verdade (também em voo e pousado)
+  // O voo atrasado termina mais tarde; o repouso conta do pouso de verdade (também em voo e pousado)
   it('o fim do último compromisso da véspera conta o atraso (Atrasado, Em Voo ou Pousou com a nova decolagem)', () => {
     const ontem = (status, fObs) => acumularHoras([dia('2026-11-09', [voo(1, 980)], { '1980_0_1': status }, fObs)], '2026-11-10')[1].fimAnterior;
     assert.equal(ontem('Atrasado', { '1980_0_1': { novoInicio: 1100 } }), 1160);

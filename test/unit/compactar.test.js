@@ -1,4 +1,4 @@
-// Compactação da escala (fase 13): depois de montada a escala e dividida as horas, voos mudam de horário ou de
+// Compactação da escala: depois de montada a escala e divididas as horas, voos mudam de horário ou de
 // instrutor para fechar os buracos do dia, pelo critério que o operador escolhe (os buracos dos INVAs, os dos aviões ou
 // o maior buraco primeiro) e pela regra dos horários (dentro da disponibilidade do aluno, só entre a 1ª e a 2ª
 // preferência, ou sem mudar os horários). Todas as regras da escala continuam valendo, a divisão das horas não piora e
@@ -221,7 +221,6 @@ describe('Compactação: em dias gerados', async () => {
   });
 });
 
-// Revisão de 14/11: chamada sem os limites da lei, a compactação usa os padrões (antes, quebrava)
 describe('Compactação chamada sem os limites', () => {
   it('usa os limites da lei padrão', async () => {
     const { compactar } = await import('../../js/compactar.js');

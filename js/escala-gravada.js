@@ -1,4 +1,4 @@
-// A escala gravada de uma data, ao abrir (revisão de 14/11). Quem tem uma conta de operador consegue gravar qualquer
+// A escala gravada de uma data, ao abrir. Quem tem uma conta de operador consegue gravar qualquer
 // coisa pela API; a tela só usa a escala gravada quando cada linha tem os campos que o motor produz, nos formatos dele.
 // Uma linha adulterada invalida a escala gravada inteira (a tela usa a escala calculada de novo, que é gravada na
 // próxima alteração). Os campos desconhecidos saem.

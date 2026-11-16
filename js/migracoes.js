@@ -2,7 +2,7 @@
 // anterior no seguinte sem perder nada: campos que o passo não conhece são mantidos. As leituras aplicam os passos
 // que faltam, então o app sempre trabalha no formato atual; no primeiro acesso de um operador depois de uma mudança,
 // os dados guardados são regravados no formato atual (ApiClient.atualizarFormatoGravado).
-// Sem o campo "esquema": formato da fase 3 (versão 4).
+// Sem o campo "esquema": versão 4 (o primeiro formato por data).
 import { habilitacoesDoNivel, marcasDoChecadorAntigo } from './habilitacoes.js';
 import { FROTA_INICIAL } from './frota.js';
 import { HORARIOS_INICIAIS, minutoDaPreferencia, ajustarPreferencias } from './horarios.js';
@@ -23,13 +23,13 @@ function pedidoEmMinutos(pedido) {
     if (jan) novo.jan = jan;
     else delete novo.jan;
   }
-  // O PA-34 passa a sair de 30 em 30 minutos: a preferência vai para o horário mais próximo da lista nova
+  // Na versão 12 o PA-34 sai de 30 em 30 minutos: a preferência vai para o horário mais próximo da lista nova
   if (novo.eq === 'PA-34') ajustarPreferencias(novo, HORARIOS_INICIAIS['PA-34']);
   if (Array.isArray(pedido.extra)) novo.extra = pedido.extra.map(pedidoEmMinutos);
   return novo;
 }
 
-// Versão 5 (fase 4): simuladores com os nomes usados no aeroclube
+// Versão 5: simuladores com os nomes usados no aeroclube
 const SIMULADORES_RENOMEADOS = { 'SIM-MONO-1': 'SIM-MONO-A', 'SIM-MONO-2': 'SIM-MONO-C', 'SIM-MULTI-1': 'SIM-MLTE-E', 'SIM-MULTI-2': 'SIM-MLTE-D' };
 export const renomearSimulador = r => (Object.hasOwn(SIMULADORES_RENOMEADOS, r) ? SIMULADORES_RENOMEADOS[r] : r);
 
@@ -47,36 +47,36 @@ const PASSOS = {
       return novo;
     }
   },
-  // Versão 6 (fase 4): habilitações individuais no lugar dos níveis cumulativos A01–A09. Cada instrutor recebe
-  // exatamente o que o seu nível permitia; o nível fica no registro só como cópia (não é mais usado)
+  // Versão 6: habilitações individuais no lugar dos níveis cumulativos A01–A09. Cada instrutor recebe
+  // exatamente o que o seu nível permitia; o nível fica no registro só como cópia (sem uso)
   6: {
     cadastro: cadastro => (Array.isArray(cadastro.ins)
       ? { ...cadastro, ins: cadastro.ins.map(x => (x && !Array.isArray(x.hab) ? { ...x, hab: habilitacoesDoNivel(x.lv) } : x)) }
       : cadastro),
     dia: dia => dia
   },
-  // Versão 7 (fase 4): os dias guardam as horas de cada avião até a revisão de 50 horas (campo "horas"). O passo não
+  // Versão 7: os dias guardam as horas de cada avião até a revisão de 50 horas (campo "horas"). O passo não
   // muda nada; a versão nova impede que uma aba com a versão anterior do app grave os dias sem esse campo
   7: {
     cadastro: cadastro => cadastro,
     dia: dia => dia
   },
-  // Versão 8 (fase 4): os dias guardam as filas do rodízio (campo "filas"), pelo mesmo motivo da versão 7
+  // Versão 8: os dias guardam as filas do rodízio (campo "filas"), pelo mesmo motivo da versão 7
   8: {
     cadastro: cadastro => cadastro,
     dia: dia => dia
   },
-  // Versão 9 (fase 4): os pedidos guardam a disponibilidade do aluno (campo "jan"), pelo mesmo motivo
+  // Versão 9: os pedidos guardam a disponibilidade do aluno (campo "jan"), pelo mesmo motivo
   9: {
     cadastro: cadastro => cadastro,
     dia: dia => dia
   },
-  // Versão 10 (fase 4): os dias guardam as solicitações da agenda já importadas (campo "importadas"), pelo mesmo motivo
+  // Versão 10: os dias guardam as solicitações da agenda já importadas (campo "importadas"), pelo mesmo motivo
   10: {
     cadastro: cadastro => cadastro,
     dia: dia => dia
   },
-  // Versão 11 (fase 7): a frota sai do código e vai para o cadastro (matrícula, tipo e "Só Parafuso"). O cadastro
+  // Versão 11: a frota sai do código e vai para o cadastro (matrícula, tipo e "Só Parafuso"). O cadastro
   // que não tem a frota recebe a que estava no código
   11: {
     cadastro: cadastro => {
@@ -87,8 +87,8 @@ const PASSOS = {
     },
     dia: dia => dia
   },
-  // Versão 12 (fase 7): o cadastro guarda os horários de decolagem de cada categoria (o PA-34 sai de 30 em 30
-  // minutos); os pedidos guardam as preferências em minutos (antes, o número da janela) e "h5" vira "h820"
+  // Versão 12: o cadastro guarda os horários de decolagem de cada categoria (o PA-34 sai de 30 em 30
+  // minutos); os pedidos guardam as preferências em minutos (até a versão 11, o número da janela) e "h5" vira "h820"
   12: {
     cadastro: cadastro => {
       if (cadastro.horarios && typeof cadastro.horarios === 'object') return cadastro;
@@ -99,19 +99,19 @@ const PASSOS = {
       ? { ...dia, pedidos: Object.fromEntries(Object.entries(dia.pedidos).map(([id, pedido]) => [id, pedidoEmMinutos(pedido)])) }
       : dia)
   },
-  // Versão 13 (fase 8): os dias guardam o detalhe do status de cada voo (campo "fObs": o motivo do cancelamento e o
+  // Versão 13: os dias guardam o detalhe do status de cada voo (campo "fObs": o motivo do cancelamento e o
   // novo horário do atraso). O passo não muda nada; a versão nova impede que uma aba com a versão anterior do app
   // grave os dias sem esse campo
   13: {
     cadastro: cadastro => cadastro,
     dia: dia => dia
   },
-  // Versão 14 (fase 10): os dias guardam a ordem dos aviões no hangar (campo "hangar"), pelo mesmo motivo da versão 13
+  // Versão 14: os dias guardam a ordem dos aviões no hangar (campo "hangar"), pelo mesmo motivo da versão 13
   14: {
     cadastro: cadastro => cadastro,
     dia: dia => dia
   },
-  // Versão 15 (fase 11): o cadastro guarda os limites dos instrutores pela Lei do Aeronauta (os padrões da lei) e cada
+  // Versão 15: o cadastro guarda os limites dos instrutores pela Lei do Aeronauta (os padrões da lei) e cada
   // instrutor pode ter as horas de voo fora do app (horasExternas)
   15: {
     cadastro: cadastro => {
@@ -121,17 +121,17 @@ const PASSOS = {
     },
     dia: dia => dia
   },
-  // Versão 16 (fase 12): os dias guardam a escala aprovada (os voos fixos e quem aprovou), pelo mesmo motivo da versão 13
+  // Versão 16: os dias guardam a escala aprovada (os voos fixos e quem aprovou), pelo mesmo motivo da versão 13
   16: {
     cadastro: cadastro => cadastro,
     dia: dia => dia
   },
-  // Versão 17 (fase 13): os dias guardam os critérios da compactação (campo "criterios"), pelo mesmo motivo da versão 13
+  // Versão 17: os dias guardam os critérios da compactação (campo "criterios"), pelo mesmo motivo da versão 13
   17: {
     cadastro: cadastro => cadastro,
     dia: dia => dia
   },
-  // Versão 18 (fase 14): o cadastro guarda o programa dos cursos (PP, PC e INVA; começa vazio) e o curso de cada aluno
+  // Versão 18: o cadastro guarda o programa dos cursos (PP, PC e INVA; começa vazio) e o curso de cada aluno
   18: {
     cadastro: cadastro => {
       if (cadastro.cursos && typeof cadastro.cursos === 'object') return cadastro;
@@ -140,8 +140,8 @@ const PASSOS = {
     },
     dia: dia => dia
   },
-  // Versão 19 (retorno da operação, 14/11): o C152 vira uma habilitação do avião, como o C172 e o PA-34; todo instrutor
-  // do cadastro a recebe (todos voavam o C152)
+  // Versão 19: o C152 vira uma habilitação do avião, como o C172 e o PA-34; todo instrutor do cadastro a recebe
+  // (todos voavam o C152)
   19: {
     cadastro: cadastro => ({
       ...cadastro,
@@ -151,8 +151,8 @@ const PASSOS = {
     }),
     dia: dia => dia
   },
-  // Versão 20 (retorno da operação, 14/11): o checador é credenciado por partes (o curso PP, PC ou INVA; o motor MNTE ou
-  // MLTE; as regras VFR ou IFR), e o cheque exige as três. Cada checador antigo recebe as marcas que davam os mesmos cheques
+  // Versão 20: o checador é credenciado por partes (o curso PP, PC ou INVA; o motor MNTE ou MLTE; as regras VFR ou
+  // IFR), e o cheque exige as três. Cada checador antigo recebe as marcas que davam os mesmos cheques
   20: {
     cadastro: cadastro => ({
       ...cadastro,
@@ -162,7 +162,7 @@ const PASSOS = {
     }),
     dia: dia => dia
   },
-  // Versão 21 (revisão de 14/11): o status "Pousou". Os dados não mudam; o número novo faz a aba da versão anterior (que
+  // Versão 21: o status "Pousou". Os dados não mudam; o número novo faz a aba da versão anterior (que
   // não conhece o Pousou e o tiraria do dia ao abrir) recusar o dia e pedir para recarregar
   21: {
     cadastro: cadastro => cadastro,

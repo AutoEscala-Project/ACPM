@@ -1,4 +1,4 @@
-// Horários de decolagem por categoria (fase 7). Cada categoria (C152, C172, Simulador e PA-34) tem a sua lista, em
+// Horários de decolagem por categoria. Cada categoria (C152, C172, Simulador e PA-34) tem a sua lista, em
 // minutos, editada na aba Recursos; o padrão são as 8 janelas diurnas, e o PA-34 sai de 30 em 30 minutos. O voo
 // noturno sai sempre às 17:30, e o Ground, nas janelas do dia. As 9 janelas viram os períodos do dia: a janela de
 // operação fechada fecha os horários que caem nela, e a disponibilidade dos instrutores e "manhã, tarde e noite"
@@ -31,8 +31,8 @@ export function horariosDoTipo(horarios, tipo) {
   return Array.isArray(lista) && lista.length ? lista : HORARIOS_PADRAO;
 }
 
-// Os horários de uma missão: o Noturno sai às 17:30 e o Voo Solo, sempre às 06:30 (retorno da operação, 14/11: local ou
-// navegação); as demais, na lista do tipo pedido (o Ground, nas janelas do dia)
+// Os horários de uma missão: o Noturno sai às 17:30 e o Voo Solo, sempre às 06:30 (local ou navegação); as demais,
+// na lista do tipo pedido (o Ground, nas janelas do dia)
 export const HORARIO_DO_SOLO = 390;
 export const horariosDaMissao = (horarios, mis, tipo) => (mis === 'Noturno' ? [T[NI]] : mis === 'Voo Solo' ? [HORARIO_DO_SOLO] : horariosDoTipo(horarios, tipo));
 
@@ -78,17 +78,16 @@ export function ajustarPreferencias(pedido, lista) {
 }
 
 
-// A ordem dos horários a tentar (revisão de 14/11, decisão do Pedro): a 1ª e a 2ª preferência, depois os outros pela
-// distância da 1ª (sem ela, da 2ª), o mais cedo no empate; sem preferência, em ordem. Só os horários da lista
+// A ordem dos horários a tentar: a 1ª e a 2ª preferência, depois os outros pela distância da 1ª (sem ela, da 2ª),
+// o mais cedo no empate; sem preferência, em ordem. Só os horários da lista
 export function ordenarPelaPreferencia(lista, p1, p2) {
   const ancora = p1 >= 0 ? p1 : p2 >= 0 ? p2 : null;
   const resto = ancora === null ? [...lista] : [...lista].sort((a, b) => Math.abs(a - ancora) - Math.abs(b - ancora) || a - b);
   return [...new Set([p1, p2, ...resto])].filter(m => lista.includes(m));
 }
 
-// O resumo dos horários e o efeito de uma lista nova (revisão de 14/11, decisão do Pedro: "Resumo + Editar"). No editor,
-// os horários vão das 06:00 às 16:30, o último em que cabe um voo de 1 h antes do noturno (a lista guardada continua
-// aceitando até as 17:00)
+// O resumo dos horários e o efeito de uma lista nova. No editor, os horários vão das 06:00 às 16:30, o último em que
+// cabe um voo de 1 h antes do noturno (a lista guardada continua aceitando até as 17:00)
 export const PRIMEIRO_HORARIO = 6 * 60;
 export const ULTIMO_HORARIO = 16 * 60 + 30;
 

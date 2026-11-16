@@ -67,7 +67,7 @@ test.describe('Demanda', () => {
     await expect(page.locator('#audit-log-list')).toContainText('Missão extra removida de Aluno 09');
   });
 
-  // Retorno da operação (14/11): o aluno que não vai voar não voa nem as missões extras
+  // O aluno que não vai voar não voa nem as missões extras
   test('tirar o "Voa" do aluno tira também as missões extras; reverter volta todas', async ({ page }) => {
     await abrirComExemplo(page);
     await irPara(page, 'dem');
@@ -84,7 +84,6 @@ test.describe('Demanda', () => {
     for (const caixa of await extras.all()) await expect(caixa).toBeChecked();
   });
 
-  // Retorno da operação (14/11): a duração é digitada, fracionada, até 5 h
   test('a duração é um número de horas, fracionado, até 5 h; acima disso, não vale', async ({ page }) => {
     await abrirComExemplo(page);
     await irPara(page, 'dem');

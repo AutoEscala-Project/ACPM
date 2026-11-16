@@ -1,5 +1,6 @@
 // Backend local: os documentos da escala ficam no localStorage deste navegador (modo sem login).
-// cadastro e dia:AAAA-MM-DD são o formato por data (fase 3); estado, escala, historico e bi, o da fase 2.
+// cadastro e dia:AAAA-MM-DD são o formato por data; estado, escala, historico e bi são os documentos antigos, que
+// migrarDocumentosAntigos (storage.js) converte para o formato por data.
 import { prazoDaAgendaPermite } from '../agenda.js';
 import { gravarDadosPessoais, semQuemSaiu } from '../dados-pessoais.js';
 import { acumularHoras } from '../limites.js';
@@ -35,7 +36,7 @@ function datasGuardadas() {
   return datas.sort();
 }
 
-// Ids crescentes para o histórico local (o modo local não tem servidor para numerar as entradas)
+// Ids crescentes para o histórico, a agenda e os resultados (o modo local não tem servidor para numerar as entradas)
 const proximoId = lista => Math.max(Date.now(), ...lista.map(e => e.id + 1));
 
 // Erros da agenda com o mesmo código do servidor (PT403: fora do prazo; 23514: dado inválido; P0002: não achado)
@@ -132,8 +133,7 @@ export const backendLocal = {
       .sort((a, b) => ordem(a.data, b.data) || ordem(a.registrado_em, b.registrado_em));
   },
 
-  // O pedido é num horário específico, com a duração de 0,1 a 5 h (o Ground, 01h30): como no servidor (retorno da
-  // operação, 14/11)
+  // O pedido é num horário específico, com a duração de 0,1 a 5 h (o Ground, 01h30): como no servidor
   async registrarSolicitacao({ data, aluno, aluno_nome, missao, janela, horario = null, horas, observacao = null, registrado_por, excecao = false }, agora = new Date()) {
     if (janela !== 'horario' || !/^[0-2][0-9]:[0-5][0-9]$/.test(horario || '')) throw erroDaAgenda('22023', 'o pedido é num horário específico');
     const h = String(missao).startsWith('Ground') ? 1.5 : Math.round(+horas * 10) / 10;
@@ -144,7 +144,7 @@ export const backendLocal = {
       throw erroDaAgenda('23514', 'pedido incompleto: confira aluno, missão, horário e quem anotou');
     }
     const lista = lerJson(CHAVE_AGENDA) || [];
-    // No máximo 6 voos locais no mesmo horário, como no servidor (retorno da operação, 14/11)
+    // No máximo 6 voos locais no mesmo horário, como no servidor
     const locais = ['Voo Local', 'Voo Solo', 'TGL (TMA)'];
     if (locais.includes(missao) && lista.filter(s => s.data === data && !s.cancelada_em && s.horario === horario && locais.includes(s.missao)).length >= 6) {
       throw erroDaAgenda('PT422', `já há 6 voos locais às ${horario}`);

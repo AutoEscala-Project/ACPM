@@ -1,4 +1,4 @@
-// Combustível e peso (fase 10): o limite de peso de cada avião (aluno + instrutor) vale com os tanques cheios. Acima
+// Combustível e peso: o limite de peso de cada avião (aluno + instrutor) vale com os tanques cheios. Acima
 // dele, o avião sai com menos combustível quando o que fica dá o voo, o táxi e a reserva (30 min de dia; 45 min à
 // noite e em IFR). O motor prefere sempre o tanque cheio e mostra quanto reduzir.
 import { describe, it } from 'node:test';

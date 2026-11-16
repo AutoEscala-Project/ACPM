@@ -21,9 +21,9 @@ export const CONTAS = {
   painel: { email: 'tv@teste.acpm', senha: 'senha-da-tv', id: '00000000-0000-4000-a000-000000000006', perfil: 'painel', nome: 'TV da recepção' }
 };
 
-// Documentos no formato por data da fase 3 (sem a versão do formato) a partir de um estado da aplicação
+// Documentos no formato por data mais antigo (sem a versão do formato) a partir de um estado da aplicação
 export function documentosFase3(estado, data) {
-  // A frota só passou a ficar no cadastro no formato 11
+  // A frota só fica no cadastro do formato 11 em diante
   const { cadastro: { frota, ...cadastro }, dia } = separar(estado);
   return { documentos: { cadastro }, dias: { [data]: { ...dia, resultado: null } } };
 }
@@ -73,7 +73,7 @@ export function criarSupabaseFalso({ documentos = {}, dias = {}, historico: hist
   const solicitacoes = [];
   // Dados pessoais ('aluno:1000' → campos, atualizado_em e atualizado_por): operadores e secretaria leem e gravam
   const dadosPessoais = new Map();
-  // Resultados das missões dos cursos (fase 14): só acréscimo
+  // Resultados das missões dos cursos: só acréscimo
   const resultados = [];
   const sessoes = new Map();
   // Contas criadas pelo administrador, senhas e e-mails trocados e pedidos de troca de e-mail (só neste servidor)
@@ -231,14 +231,14 @@ export function criarSupabaseFalso({ documentos = {}, dias = {}, historico: hist
           Object.assign(s, { cancelada_em: agora.toISOString(), cancelada_por: args.p_cancelada_por.trim() });
           return responder(204);
         }
-        // A função nova (com a duração; retorno da operação, 14/11): só horário específico e duração de 0,1 a 5 h
+        // A função com a duração (p_horas): só horário específico e duração de 0,1 a 5 h
         let horas = null;
         if (Object.hasOwn(args, 'p_horas')) {
           if (args.p_janela !== 'horario' || !args.p_horario) return responder(400, { code: '22023', message: 'o pedido é num horário específico' });
           horas = String(args.p_missao).startsWith('Ground') ? 1.5 : Math.round(+args.p_horas * 10) / 10;
           if (!(horas > 0 && horas <= 5)) return responder(400, { code: '22023', message: 'a duração vai de 0,1 h a 5 h' });
         }
-        // No máximo 6 voos locais no mesmo horário (retorno da operação, 14/11)
+        // No máximo 6 voos locais no mesmo horário
         const locais = ['Voo Local', 'Voo Solo', 'TGL (TMA)'];
         if (Object.hasOwn(args, 'p_horas') && locais.includes(args.p_missao)
             && solicitacoes.filter(s => s.data === args.p_data && !s.cancelada_em && s.horario === args.p_horario && locais.includes(s.missao)).length >= 6) {
@@ -292,7 +292,7 @@ export function criarSupabaseFalso({ documentos = {}, dias = {}, historico: hist
       }
       if (!operador) return responder(403, { code: '42501', message: 'somente operadores podem alterar a escala' });
       if (funcao === 'salvar_documento') {
-        // Depois da conversão (o cadastro existe), os documentos da fase 2 ficam só como cópia
+        // Depois da conversão (o cadastro existe), os documentos da versão anterior do app ficam só como cópia
         if (args.p_chave !== 'cadastro' && banco.has('cadastro')) return responder(409, { code: 'PT409', message: `${args.p_chave} é da versão anterior do app`, hint: 'formato' });
         const resposta = salvar(banco, args.p_chave, args.p_conteudo, args.p_versao_lida);
         // Quem sai do cadastro leva os dados pessoais junto

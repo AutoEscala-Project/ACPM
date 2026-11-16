@@ -1,6 +1,6 @@
-// Painel do dia no estilo dos aeroportos (fase 8): um quadro de Partidas (todas as do dia) e um de Chegadas (as que
+// Painel do dia no estilo dos aeroportos: um quadro de Partidas (todas as do dia) e um de Chegadas (as que
 // ainda não pousaram), que se alternam página a página, como nos painéis da INFRAERO. Servem à visão "Painel" da
-// Escala e, depois, à tela da recepção.
+// Escala e à tela da recepção.
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { linhasDoQuadro, quadroDePartidas, quadroDeChegadas, minutoDoQuadro, paginar, telasDoPainel, EMBARQUE_ANTES_MIN } from '../../js/quadro.js';
@@ -65,7 +65,6 @@ describe('Quadro de partidas', () => {
     ]);
   });
 
-  // Retorno da operação (14/11): 35 minutos antes da decolagem, a TV chama o aluno para a sala de briefing
   it('embarque: dos 35 minutos antes até a decolagem, o voo no avião chama para a sala de briefing', () => {
     const out = [voo('1000_0_1', 760), voo('1001_0_1', 760, { r: 'SIM-MONO-A', eqType: 'Sim. Mono', mis: 'Simulador' }), ...turma([1002], 760)];
     const obs = (agora, fStatus = {}, fObs = {}) => quadroDePartidas(linhasDoQuadro(out, fStatus, fObs), agora)
@@ -121,7 +120,7 @@ describe('Quadro de chegadas', () => {
     assert.equal(chegadas(Infinity).length, 0);
   });
 
-  // Revisão de 14/11: o voo que pousou sai das chegadas na hora (antes, ficava até o horário do pouso passar)
+  // O voo que pousou sai das chegadas na hora, sem esperar o horário do pouso passar
   it('o voo que pousou sai das chegadas; nas partidas, a observação é "Pousou" (no Ground e no simulador, "Concluída")', () => {
     const dia = [voo('1000_0_1', 610), voo('1001_0_1', 610, { eqType: 'Sim. Mono', r: 'SIM-MONO-E', mis: 'Simulador' }), ...turma([1002, 1003], 610)];
     const linhas = linhasDoQuadro(dia, { '1000_0_1': 'Pousou', '1001_0_1': 'Pousou', '1002_0_1': 'Pousou', '1003_0_1': 'Pousou' }, { '1000_0_1': { novoInicio: 620 } });
@@ -174,14 +173,14 @@ describe('O quadro da TV da recepção (o mesmo que o servidor entrega)', async 
     const quadro = quadroDoDia(dia);
     assert.deepEqual(quadro.voos.map(v => [v.fKey, v.a, v.s]), [['1001_0_1', 390, 'João'], ['1000_0_1', 610, 'Maria S.']]);
     assert.deepEqual(Object.keys(quadro.voos[0]).sort(), ['a', 'b', 'classKey', 'eqType', 'etapa', 'fKey', 'ins', 'isGround', 'mis', 'r', 's', 'status']);
-    assert.deepEqual(quadro.voos.map(v => v.etapa), [null, 'PP-07'], 'a missão do curso (fase 14)');
+    assert.deepEqual(quadro.voos.map(v => v.etapa), [null, 'PP-07'], 'a missão do curso');
     assert.deepEqual(quadro.fStatus, dia.fStatus);
     assert.deepEqual(quadro.fObs, { '1000_0_1': { novoInicio: 640 }, '1001_0_1': { motivo: 'Outro' } });
     assert.deepEqual(quadroDoDia({ pedidos: {} }), { voos: null, fStatus: {}, fObs: {} }, 'dia sem escala gravada');
     assert.deepEqual(quadroDoDia(null), { voos: null, fStatus: {}, fObs: {} });
   });
 
-  // Como a função painel_do_dia do servidor (revisão de 14/11): o que foi gravado fora do formato pela API não chega à TV
+  // Como a função painel_do_dia do servidor: o que foi gravado fora do formato pela API não chega à TV
   it('valores fora do formato: só os status e os motivos da lista, as chaves de voo e os horários do dia', () => {
     const X = '"><img src=x>';
     const dia = {

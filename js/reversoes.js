@@ -1,4 +1,4 @@
-// As reversões do histórico (revisão de 14/11). O que "Reverter" desfaz vem gravado no histórico (no servidor, por
+// As reversões do histórico. O que "Reverter" desfaz vem gravado no histórico (no servidor, por
 // quem tem conta de operador), então só vale no formato que o próprio app produz: a reversão fora dele não vira botão
 // nem é aplicada. Um recurso retirado volta pela mesma validação do "+ Novo recurso".
 import { novoRecurso } from './frota.js';
@@ -16,7 +16,7 @@ export function validarReversao(rev, frota) {
   const label = rotulo(rev.label);
   if (rev.kind === 'setFly') {
     const mid = rev.mid === undefined ? 0 : rev.mid;
-    // extras: as missões extras que saíram junto com a principal (revisão de 14/11)
+    // extras: as missões extras que saíram junto com a principal
     const extras = Array.isArray(rev.extras) && rev.extras.length <= 20 && rev.extras.every(m => Number.isInteger(m) && m > 0) ? rev.extras : null;
     if (rev.extras !== undefined && !extras) return null;
     return idValido(rev.stuId) && Number.isInteger(mid) && mid >= 0 && typeof rev.val === 'boolean'
@@ -30,7 +30,7 @@ export function validarReversao(rev, frota) {
     const fixos = rev.fixos && typeof rev.fixos === 'object' ? normalizarFixos(rev.fixos) : {};
     return Object.keys(fixos).length ? { kind: 'restaurarFixos', fixos, label } : null;
   }
-  // Os horários de uma categoria e os pedidos que mudaram com eles (revisão de 14/11)
+  // Os horários de uma categoria e os pedidos que mudaram com eles
   if (rev.kind === 'restaurarHorarios') {
     if (!CATEGORIAS_COM_HORARIOS.includes(rev.cat) || !Array.isArray(rev.lista) || !Array.isArray(rev.pedidos) || rev.pedidos.length > 500) return null;
     const lista = normalizarHorarios({ [rev.cat]: rev.lista })[rev.cat];

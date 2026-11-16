@@ -22,7 +22,7 @@ function emSaoPaulo(instante) {
 export const somarDias = (iso, dias) => new Date(Date.parse(iso + 'T12:00:00Z') + dias * 864e5).toISOString().slice(0, 10);
 export const hojeEmSaoPaulo = (agora = new Date()) => emSaoPaulo(agora).data;
 
-// O aeroclube não opera aos domingos (retorno da operação, 14/11)
+// O aeroclube não opera aos domingos
 export const ehDomingo = iso => new Date(iso + 'T12:00:00Z').getUTCDay() === 0;
 
 // O prazo para os pedidos de uma data: até as 13:00 do dia de operação anterior; a segunda, até sábado às 10:00 (o
@@ -56,7 +56,7 @@ export function disponibilidadeDaSolicitacao({ janela, horario }) {
 // Pedido da demanda: a missão com o equipamento padrão; como preferências, os dois primeiros horários dela que a
 // disponibilidade permite (sem disponibilidade, os primeiros a partir das 08:20 e das 10:10); 1 h (o Ground tem
 // 01h30) e prioridade 3. Os horários são os da categoria do equipamento (o PA-34 tem os seus). eq: outro equipamento
-// da missão (o do programa do curso; revisão de 14/11)
+// da missão (o do programa do curso)
 export function pedidoDaSolicitacao(solicitacao, horarios, { eq } = {}) {
   const jan = disponibilidadeDaSolicitacao(solicitacao);
   const regra = Object.hasOwn(MIS, solicitacao.missao) ? MIS[solicitacao.missao] : MIS['Voo Local'];
@@ -78,15 +78,15 @@ export function pedidoDaSolicitacao(solicitacao, horarios, { eq } = {}) {
 // recebe o pedido como missão principal; a mesma missão copiada da data anterior dá lugar ao pedido; senão, o pedido
 // entra como missão extra (cada pedido é um voo, marcado com o id dele em solicitacao). As solicitações vistas ficam
 // anotadas no dia (estado.importadas) para não repetir.
-// Aluno de um curso (fase 14): quando a próxima missão dele no programa é do tipo pedido, o pedido entra como ela (o
-// código, o recurso e as horas do programa); situacao: o último resultado de cada missão
+// Aluno de um curso: quando a próxima missão dele no programa é do tipo pedido, o pedido entra como ela (o código, o
+// recurso e as horas do programa); situacao: o último resultado de cada missão
 export function importarSolicitacoes(estado, solicitacoes, { situacao = [] } = {}) {
   const programa = normalizarCursos(estado.cursos), mapa = situacaoPorMissao(situacao);
   const resumo = { novos: 0, atualizados: 0, semAluno: 0 };
   if (!Array.isArray(estado.importadas)) estado.importadas = [];
   for (const solicitacao of solicitacoes) {
     if (solicitacao.cancelada_em || estado.importadas.includes(solicitacao.id)) continue;
-    // O pedido de quem não está no cadastro não conta como visto: entra quando o aluno for cadastrado (revisão de 14/11)
+    // O pedido de quem não está no cadastro não conta como visto: entra quando o aluno for cadastrado
     const aluno = estado.stu.find(x => x.id === solicitacao.aluno);
     if (!aluno) { resumo.semAluno++; continue; }
     estado.importadas.push(solicitacao.id);
@@ -96,10 +96,10 @@ export function importarSolicitacoes(estado, solicitacoes, { situacao = [] } = {
     // A missão do curso: o recurso do programa, com os horários e as preferências dele
     const pedido = pedidoDaSolicitacao(solicitacao, estado.horarios, doCurso ? { eq: proxima.eq } : {});
     if (doCurso) Object.assign(pedido, { etapa: proxima.id, nb: proxima.nb });
-    // A duração registrada na agenda vale (retorno da operação, 14/11); o Ground continua com 01h30
+    // A duração registrada na agenda vale; o Ground continua com 01h30
     if (solicitacao.horas !== null && solicitacao.horas !== undefined && !MIS[pedido.mis]?.isGround) pedido.nb = duracaoValida(+solicitacao.horas);
-    // Cada pedido da agenda vira um voo (revisão de 14/11: dois pedidos da mesma missão viravam um só, no horário do
-    // último). Só a missão que veio da data anterior (sem pedido da agenda) dá lugar ao pedido, para não duplicar
+    // Cada pedido da agenda vira um voo (dois pedidos da mesma missão são dois voos). Só a missão que veio da data
+    // anterior (sem pedido da agenda) dá lugar ao pedido, para não duplicar
     pedido.solicitacao = solicitacao.id;
     const copiada = [aluno, ...(aluno.extra || [])].find(m => m.fly && m.mis === pedido.mis && m.solicitacao === undefined);
     if (copiada) {
@@ -118,9 +118,9 @@ export function importarSolicitacoes(estado, solicitacoes, { situacao = [] } = {
   return resumo;
 }
 
-// No máximo 6 voos locais (Voo Local, Voo Solo e TGL) saindo no mesmo horário (retorno da operação, 14/11: determinação
-// da diretoria). Ao agendar mais um local num horário que já tem 6 (pedidos não cancelados da data), não há vaga: o
-// próximo horário possível é o primeiro mais tarde, entre os horários da missão, que ainda tem vaga (null: nenhum)
+// No máximo 6 voos locais (Voo Local, Voo Solo e TGL) saindo no mesmo horário (determinação da diretoria). Ao agendar
+// mais um local num horário que já tem 6 (pedidos não cancelados da data), não há vaga: o próximo horário possível é o
+// primeiro mais tarde, entre os horários da missão, que ainda tem vaga (null: nenhum)
 export function vagaDeVooLocal(pedidos, { data, horario, missao }, horarios) {
   if (!MISSOES_LOCAIS.includes(missao)) return { ok: true };
   const noHorario = h => pedidos.filter(p => p.data === data && !p.cancelada_em && p.janela === 'horario' && p.horario === h && MISSOES_LOCAIS.includes(p.missao)).length;

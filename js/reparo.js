@@ -1,4 +1,4 @@
-// Sugestões para um conflito na escala aprovada (fase 12): sem refazer o dia, o que pode voar no lugar do voo fixo que
+// Sugestões para um conflito na escala aprovada: sem refazer o dia, o que pode voar no lugar do voo fixo que
 // ficou impossível. No mesmo horário: outro avião do mesmo tipo (um que já saiu, com a menor folga, e depois o da
 // frente do hangar), outro instrutor (habilitado, disponível, livre, sem bloqueio do aluno, dentro do peso e da lei; o
 // tanque cheio primeiro, depois quem tem menos horas no dia e menos habilitações) ou os dois. Sem nada no mesmo horário,
@@ -66,7 +66,7 @@ export function sugerirReparos(estado, resultado, fKey, { maximo = 3, depoisDe =
       || (p.hab || []).length - (q.hab || []).length || p.id - q.id);
   const comCombustivel = (texto, x, a, b) => { const gal = reducao(x, a, b); return gal > 0 ? `${texto} · reduzir ${gal} gal` : texto; };
 
-  // O que o conflito pede, pelo código (revisão de 14/11): o pedido mudou (só soltar), o horário não serve (outro
+  // O que o conflito pede, pelo código: o pedido mudou (só soltar), o horário não serve (outro
   // horário), ou o avião e o instrutor
   const grupos = gruposDoConflito(voo);
   const pedidoMudou = grupos.has('pedido');

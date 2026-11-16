@@ -1,6 +1,6 @@
 // Backend Supabase: documentos compartilhados no banco, com controle de concorrência otimista (versão lida).
-// cadastro (e os documentos da fase 2) ficam na tabela documentos e são gravados por salvar_documento;
-// dia:AAAA-MM-DD fica na tabela dias e é gravado por salvar_dia. O histórico é a tabela historico.
+// cadastro (e os documentos antigos: estado, escala, historico e bi) ficam na tabela documentos e são gravados por
+// salvar_documento; dia:AAAA-MM-DD fica na tabela dias e é gravado por salvar_dia. O histórico é a tabela historico.
 // - Gravações do mesmo documento saem em série, sempre com o conteúdo mais recente
 // - Se outra pessoa gravou antes (conflito), o backend para de gravar e avisa por aoConflito (formato: true quando a
 //   recusa é pelo formato dos dados, de uma versão mais nova do app)
@@ -207,7 +207,7 @@ export function criarBackendSupabase(cliente, { aoConflito = () => {}, aoErro = 
       return data;
     },
 
-    // Com a duração (retorno da operação, 14/11): a função nova recusa o pedido por período e a duração fora de 0,1–5 h
+    // O servidor recusa o pedido por período e a duração fora de 0,1–5 h
     async registrarSolicitacao({ data, aluno, aluno_nome, missao, janela, horario = null, horas, observacao = null, registrado_por, excecao = false }) {
       const { data: id, error } = await cliente.rpc('registrar_solicitacao', {
         p_data: data, p_aluno: aluno, p_aluno_nome: aluno_nome, p_missao: missao, p_janela: janela, p_horario: horario, p_horas: horas,

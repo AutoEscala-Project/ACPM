@@ -48,7 +48,7 @@ export function doesGroundGateFlight(gMis, flightReq) {
   return false;
 }
 
-// O número da próxima missão extra de um aluno (revisão de 14/11): depois das missões dele e do que o dia ainda guarda
+// O número da próxima missão extra de um aluno: depois das missões dele e do que o dia ainda guarda
 // para ele (voo fixo, status ou detalhe de uma missão retirada), para não herdar o voo de outra missão. Numerada no
 // aluno, a missão extra não muda o cadastro (o número do cadastro, nid, fica para as pessoas novas)
 export function proximoMid(estado, aluno) {
@@ -75,8 +75,7 @@ export function migrateLegacyMissionName(mis) {
   return Object.hasOwn(map, mis) ? map[mis] : 'Voo Local';
 }
 
-// A duração do voo (retorno da operação, 14/11): em décimos de hora, de 0,1 h a DURACAO_MAXIMA_H (acima, o máximo);
-// fora disso, 1 h
+// A duração do voo: em décimos de hora, de 0,1 h a DURACAO_MAXIMA_H (acima, o máximo); fora disso, 1 h
 export function duracaoValida(valor) {
   const h = Math.round(+valor * 10) / 10;
   if (!Number.isFinite(h) || h <= 0) return 1;
@@ -85,8 +84,8 @@ export function duracaoValida(valor) {
 
 export function normalizeMissionFields(target) {
   target.mis = migrateLegacyMissionName(target.mis);
-  // Uma sessão por missão: a coluna Sessões saiu da Demanda (para dividir o voo no dia, "+ missão"). O campo
-  // continua nos dados, sempre 1, e o motor recebe cada missão como um voo só
+  // Uma sessão por missão (para dividir o voo no dia, "+ missão"): o campo fica nos dados, sempre 1, e o motor
+  // recebe cada missão como um voo só
   target.ss = 1;
   // Preferências e disponibilidade em minutos (formato 12): o número da janela e o "h5" dos dados antigos convertem
   if (Object.hasOwn(target, 'jan')) {
@@ -96,12 +95,12 @@ export function normalizeMissionFields(target) {
   }
   target.p1 = preferenciaValida(target.p1);
   target.p2 = preferenciaValida(target.p2);
-  // Prioridade de 1 a 5 e "voa" sim ou não (revisão de 14/11: valores gravados fora do formato voltam ao padrão)
+  // Prioridade de 1 a 5 e "voa" sim ou não (valores gravados fora do formato voltam ao padrão)
   if (Object.hasOwn(target, 'pr')) target.pr = Number.isInteger(+target.pr) && +target.pr >= 1 && +target.pr <= 5 ? +target.pr : 3;
   if (Object.hasOwn(target, 'fly')) target.fly = Boolean(target.fly);
-  // O código da missão do curso (fase 14), quando o pedido veio do programa
+  // O código da missão do curso, quando o pedido veio do programa
   if (Object.hasOwn(target, 'etapa') && !(typeof target.etapa === 'string' && codigoValido(target.etapa))) delete target.etapa;
-  // O id do pedido da agenda que virou este voo (revisão de 14/11)
+  // O id do pedido da agenda que originou este voo
   if (Object.hasOwn(target, 'solicitacao') && !(Number.isInteger(target.solicitacao) && target.solicitacao > 0)) delete target.solicitacao;
   const mRule = missionRule(target.mis) || MIS['Voo Local'];
   if (!mRule.eq.includes(target.eq)) target.eq = mRule.defEq;
@@ -113,6 +112,6 @@ export function normalizeMissionFields(target) {
   } else {
     target.nb = duracaoValida(target.nb);
   }
-  // Missão de horário fixo (o Noturno às 17:30; o Voo Solo às 06:30, retorno da operação, 14/11): a preferência é ele
+  // Missão de horário fixo (o Noturno às 17:30; o Voo Solo às 06:30): a preferência é ele
   if (target.mis === 'Noturno' || target.mis === 'Voo Solo') { target.p1 = target.mis === 'Noturno' ? T[NI] : HORARIO_DO_SOLO; target.p2 = -1; }
 }

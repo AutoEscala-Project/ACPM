@@ -50,7 +50,6 @@ describe('Regras de missão', () => {
     assert.deepEqual(pedido, { mis: 'Multimotor', eq: 'PA-34', p1: 500, p2: 610, nb: 1.5, ss: 1 });
   });
 
-  // Retorno da operação (14/11): a duração pode ser fracionada (1,2 h; 2,6 h), até 5 h
   it('a duração do voo: de 0,1 h a 5 h, em décimos; acima de 5 h fica 5; fora disso, 1 h', () => {
     const nb = valor => { const p = { mis: 'Voo Local', eq: 'C152', p1: 390, p2: -1, nb: valor }; normalizeMissionFields(p); return p.nb; };
     assert.deepEqual([nb(1.2), nb(2.6), nb(2.64), nb(5), nb(7), nb(0), nb(-1), nb('x'), nb('2.5')], [1.2, 2.6, 2.6, 5, 5, 1, 1, 1, 2.5]);
@@ -95,8 +94,8 @@ describe('Regras de missão', () => {
   });
 });
 
-// Revisão de 14/11: a missão extra é numerada no aluno, e não pelo número do cadastro (que fica no documento de todas
-// as datas: cada missão extra regravava o cadastro, e duas pessoas em datas diferentes recebiam conflito)
+// A missão extra é numerada no aluno, e não pelo número do cadastro (que fica no documento de todas as datas: cada
+// missão extra regravaria o cadastro, e duas pessoas em datas diferentes receberiam conflito)
 describe('Número da missão extra', () => {
   it('o próximo depois das missões do aluno e do que o dia ainda guarda (voo fixo, status ou detalhe de uma missão retirada)', () => {
     const estado = { nid: 5000, stu: [{ id: 1000, extra: [] }, { id: 1001, extra: [{ mid: 1003 }, { mid: 7 }] }], fixos: {}, fStatus: {}, fObs: {} };
@@ -110,7 +109,6 @@ describe('Número da missão extra', () => {
     assert.equal(estado.nid, 5000, 'o número do cadastro não muda');
   });
 
-  // Revisão de 14/11: o pedido que veio da agenda guarda o id da solicitação
   it('o id da solicitação da agenda: inteiro positivo; o resto sai', async () => {
     const { normalizeMissionFields } = await import('../../js/rules.js');
     const ok = { mis: 'Voo Local', eq: 'C152', p1: 390, p2: -1, nb: 1, solicitacao: 12 };
@@ -123,7 +121,7 @@ describe('Número da missão extra', () => {
     }
   });
 
-  // Retorno da operação (14/11): o Voo Solo sai sempre às 06:30 e o Noturno às 17:30; a preferência é esse horário
+  // O Voo Solo sai sempre às 06:30 e o Noturno às 17:30; a preferência é esse horário
   it('missão de horário fixo: a 1ª preferência é o horário dela, sem 2ª', async () => {
     const { normalizeMissionFields } = await import('../../js/rules.js');
     const solo = { mis: 'Voo Solo', eq: 'C152', p1: 760, p2: 870, nb: 2 };

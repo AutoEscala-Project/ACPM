@@ -1,5 +1,5 @@
-// A frota no cadastro (fase 7): matrícula, tipo e, no C152 acrobático, "Só Parafuso". Antes ela ficava no código
-// (EQ em config.js); o formato 11 dos dados a leva para o cadastro, e o motor e as telas passam a lê-la de lá.
+// A frota no cadastro: matrícula, tipo e, no C152 acrobático, "Só Parafuso". A frota inicial vem do código (EQ em
+// config.js); o formato 11 dos dados a leva para o cadastro, e o motor e as telas a leem de lá.
 import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { FROTA_INICIAL, TIPOS_DA_FROTA, normalizarFrota, matriculasDoTipo, novoRecurso } from '../../js/frota.js';
@@ -16,7 +16,7 @@ beforeEach(() => {
 });
 
 describe('Frota: o que ela guarda', () => {
-  it('começa com os 26 recursos que estavam no código; o PR-JPL só voa Parafuso', () => {
+  it('começa com os 26 recursos; o PR-JPL só voa Parafuso', () => {
     assert.equal(FROTA_INICIAL.length, 26);
     assert.deepEqual(FROTA_INICIAL.find(f => f.reg === 'PR-JPL'), { reg: 'PR-JPL', tipo: 'C152', soParafuso: true });
     assert.deepEqual(FROTA_INICIAL.find(f => f.reg === 'PR-VOM'), { reg: 'PR-VOM', tipo: 'PA-34' });

@@ -1,4 +1,4 @@
-// Limites dos instrutores pela Lei do Aeronauta (fase 11). A Lei 13.475/2017 vale para a instrução de voo (art. 5º, III)
+// Limites dos instrutores pela Lei do Aeronauta. A Lei 13.475/2017 vale para a instrução de voo (art. 5º, III)
 // e o RBAC 117 (Apêndice A) a aplica às escolas do RBAC 141. Os números padrão são os da lei; o Administrador pode
 // mudá-los (o acordo coletivo dos instrutores pode ter outros). As horas passadas saem das escalas gravadas (só voo em
 // avião, sem os cancelados) e das horas de voo fora do app informadas no cadastro (horasExternas).
@@ -22,7 +22,7 @@ export function normalizarLimites(limites) {
   return Object.fromEntries(Object.entries(LIMITES_DA_LEI).map(([chave, padrao]) => {
     const v = dados[chave];
     if (v === null && !['apresentacaoMin', 'encerramentoMin'].includes(chave)) return [chave, null];
-    // O limite é maior que zero (revisão de 14/11); a apresentação e o encerramento podem ser 0
+    // O limite é maior que zero; a apresentação e o encerramento podem ser 0
     const minimo = ['apresentacaoMin', 'encerramentoMin'].includes(chave) ? 0 : Number.MIN_VALUE;
     return [chave, typeof v === 'number' && Number.isFinite(v) && v >= minimo ? v : padrao];
   }));
@@ -41,8 +41,8 @@ export function horasDeVooDoDia(dia) {
   return horas;
 }
 
-// O fim do último compromisso (voo, simulador ou Ground) de cada instrutor no dia, sem os cancelados. O atrasado termina
-// na nova decolagem mais a duração, também em voo e depois do pouso (revisão de 14/11)
+// O fim do último compromisso (voo, simulador ou Ground) de cada instrutor no dia, sem os cancelados. O atrasado
+// termina na nova decolagem mais a duração, também em voo e depois do pouso
 const fimDe = (dia, o) => intervaloEfetivo(o, (dia.fStatus || {})[o.fKey] || o.status, (dia.fObs || {})[o.fKey]).b;
 const fimDosCompromissos = dia => voosDoDia(dia).reduce((fins, o) => ({ ...fins, [o.insId]: Math.max(fins[o.insId] ?? 0, fimDe(dia, o)) }), {});
 
@@ -50,8 +50,8 @@ const semestreDe = data => `${data.slice(0, 4)}-${+data.slice(5, 7) <= 6 ? 1 : 2
 const vespera = data => new Date(Date.parse(`${data}T12:00:00Z`) - 864e5).toISOString().slice(0, 10);
 const somar = (registro, campo, horas) => { registro[campo] = Math.round((registro[campo] + horas) * 10) / 10; };
 
-// As horas de voo de cada instrutor antes de uma data, no mês, no semestre e no ano dela (calendário), e o fim do último
-// compromisso na véspera (para o repouso). dias: [{ data, conteudo }]
+// As horas de voo de cada instrutor antes de uma data, no mês, no semestre e no ano dela (calendário), e o fim do
+// último compromisso na véspera (para o repouso). dias: [{ data, conteudo }]
 export function acumularHoras(dias, data) {
   const resultado = {};
   const de = id => (resultado[id] ||= { mes: 0, semestre: 0, ano: 0, fimAnterior: null });

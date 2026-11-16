@@ -1,5 +1,5 @@
-// Verificação do site publicado com login real. Não altera os dados, exceto pela conversão única dos documentos da
-// fase 2 no primeiro acesso de um operador (rode com --workers=1: o operador entra antes do gestor).
+// Verificação do site publicado com login real. Não altera os dados, exceto pela conversão para o formato atual no
+// primeiro acesso de um operador (rode com --workers=1: o operador entra antes do gestor).
 // Roda só quando as senhas das contas estão no ambiente; os demais testes E2E usam o modo local.
 //   BASE_URL=https://thephfernandes.github.io/ACPM/ ACPM_SENHA_OPERADOR=... ACPM_SENHA_GESTOR=... ACPM_SENHA_SECRETARIA=... ACPM_SENHA_ADMIN=... ACPM_SENHA_PAINEL=... \
 //     npx playwright test test/e2e/publicado.spec.js --workers=1
@@ -88,7 +88,7 @@ test.describe('Site publicado (login real)', () => {
     await page.locator('#dt').dispatchEvent('change');
     // A data base do BI só muda quando a nova data termina de carregar
     await expect(page.locator('#bi-dt')).toHaveValue('2099-01-01');
-    // A data nova começa com a demanda vazia (retorno da operação, 14/11): a disponibilidade vem do dia anterior
+    // A data nova começa com a demanda vazia: a disponibilidade vem do dia anterior
     await expect(page.locator('#out')).toContainText(/Nenhum voo nesta data|missões pedidas/);
     await expect(page.locator('#inst .cd')).toHaveCount(instrutores);
     await abrirMenuDaConta(page);

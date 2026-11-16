@@ -1,6 +1,6 @@
-// A TV da recepção (fase 9): painel.html mostra o mesmo painel de partidas e chegadas da Escala, na tela toda e sem
-// botões, com o quadro de hoje e o aluno abreviado. No modo compartilhado, a conta da TV (perfil "painel") só vê o
-// quadro, que ela busca de novo a cada minuto.
+// A TV da recepção: painel.html mostra o mesmo painel de partidas e chegadas da Escala, na tela toda e sem botões,
+// com o quadro de hoje e o aluno abreviado. No modo compartilhado, a conta da TV (perfil "painel") só vê o quadro,
+// que ela busca de novo a cada minuto.
 import { test, expect, prepararContexto, vigiarErros, preencherLogin, URL_APP } from './fixtures.js';
 import { instalarSupabaseFalso, documentosAtuais, CONTAS } from './supabase-falso.js';
 import { runAllocationEngine } from '../../js/engine.js';
@@ -45,7 +45,6 @@ test.describe('TV da recepção', () => {
     expect(caixa.height).toBeGreaterThanOrEqual(tela.height - 1);
   });
 
-  // Retorno da operação (14/11): 35 minutos antes da decolagem, a linha do voo chama o aluno para a sala de briefing
   test('embarque: o voo no avião que sai em até 35 minutos chama para a sala de briefing; o simulador não', async ({ page }) => {
     const e = cenario({
       ins: [instrutor(1, 9), instrutor(2, 9), instrutor(3, 9)],
@@ -107,8 +106,8 @@ test.describe('TV da recepção', () => {
     await context.close();
   });
 
-  // Revisão de 14/11: a TV fica numa tela pública. Ela só aceita a conta da TV e guarda a sessão numa chave só dela: quem
-  // usar a TV não abre o app com a conta de outra pessoa
+  // A TV fica numa tela pública. Ela só aceita a conta da TV e guarda a sessão numa chave só dela: quem usar a TV não
+  // abre o app com a conta de outra pessoa
   test('outra conta não entra na TV: a página pede a conta da TV', async ({ browser }) => {
     const { context, page, erros } = await novaTV(browser);
     await page.goto('./painel.html?supabase=teste');
@@ -139,12 +138,12 @@ test.describe('TV da recepção', () => {
     await context.close();
   });
 
-  test('a TV que entrou antes desta versão (com a sessão na chave do app) continua conectada', async ({ browser }) => {
+  test('a TV com a sessão na chave do app continua conectada', async ({ browser }) => {
     const { context, page, erros } = await novaTV(browser);
     await page.goto('./painel.html?supabase=teste');
     await preencherLogin(page, CONTAS.painel);
     await expect(linhas(page)).toHaveCount(2);
-    // Como a versão anterior guardava: na chave do app
+    // Uma TV conectada por uma versão antiga do app tem a sessão na chave do app
     await page.evaluate(() => {
       localStorage.setItem('acpm-teste', localStorage.getItem('acpm-teste-painel'));
       localStorage.removeItem('acpm-teste-painel');

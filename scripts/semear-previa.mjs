@@ -1,5 +1,5 @@
 // Coloca dados fictícios no projeto de PRÉVIA: 40 instrutores fictícios (A01–A09), sem alunos (documento "cadastro").
-// Só grava se o banco ainda não tiver cadastro nem o "estado" da fase 2 (que o app converte no primeiro acesso
+// Só grava se o banco ainda não tiver cadastro nem o documento antigo "estado" (que o app converte no primeiro acesso
 // de um operador). Recusa rodar contra o projeto de produção.
 //
 // Uso: SUPABASE_DB_PASSWORD=... node scripts/semear-previa.mjs

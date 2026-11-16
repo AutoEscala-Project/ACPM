@@ -1,4 +1,4 @@
-// Cursos (fase 14): o programa de cada curso (PP, PC e INVA) fica em Alunos › Cursos. O Administrador inclui, muda,
+// Cursos: o programa de cada curso (PP, PC e INVA) fica em Alunos › Cursos. O Administrador inclui, muda,
 // reordena e tira missões; os outros perfis só consultam. Cada aluno tem o curso dele.
 import { test, expect, abrir, irPara, confirmar, abrirEscala, prepararContexto, vigiarErros, AMANHA, entrar as entrarNoApp } from './fixtures.js';
 import { criarSupabaseFalso, documentosAtuais, CONTAS } from './supabase-falso.js';
@@ -73,7 +73,7 @@ test.describe('Cursos', () => {
   });
 });
 
-// A missão do curso no dia (fase 14): a Demanda sugere a próxima missão do programa ("Usar" põe a missão, o recurso e
+// A missão do curso no dia: a Demanda sugere a próxima missão do programa ("Usar" põe a missão, o recurso e
 // as horas); na escala, o código fica com o aluno e o operador registra o resultado; aprovada, ela conta no progresso
 // e a próxima passa a ser a seguinte
 test.describe('Cursos no dia', () => {
@@ -162,7 +162,7 @@ test.describe('Cursos no servidor (modo compartilhado)', () => {
     await gestor.contexto.close();
   });
 
-  // Revisão de 14/11: a resposta que chega depois de trocar de data não vai para a data nova
+  // A resposta que chega depois de trocar de data não vai para a data nova
   test('o resultado registrado antes de trocar de data fica no histórico da data do voo', async ({ browser }) => {
     const estado = { ...cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, { p1: 500, p2: -1, etapa: 'PP-01' }, { curso: 'PP' })] }), cursos: PROGRAMA };
     const servidor = criarSupabaseFalso(documentosAtuais(estado, AMANHA));

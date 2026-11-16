@@ -1,4 +1,4 @@
-// Resultados das missões dos cursos (fase 14): o operador registra aprovado ou reprovado (pendente desfaz um engano);
+// Resultados das missões dos cursos: o operador registra aprovado ou reprovado (pendente desfaz um engano);
 // os registros só crescem e a situação de cada missão é o último. A próxima missão do aluno é a primeira do programa
 // ainda não aprovada; o progresso conta as aprovadas do programa.
 import { describe, it } from 'node:test';

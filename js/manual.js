@@ -1,5 +1,5 @@
-// Partes do manual geradas das regras do código (missões, janelas, pesos e rodízio): quando uma regra muda, o
-// manual muda junto. O texto explicativo fica em index.html (seção Manual).
+// Partes do manual geradas das regras do código (missões, janelas, pesos, combustível, rodízio e glossário): quando
+// uma regra muda, o manual muda junto. O texto explicativo fica em index.html (seção Manual).
 import { MIS, WIN, NI, DEFAULT_LIM, GROUND_DURATION_MIN, COMBUSTIVEL } from './config.js';
 import { HABILITACOES, exigencias } from './habilitacoes.js';
 import { CATEGORIAS_DO_RODIZIO } from './rodizio.js';
@@ -10,7 +10,8 @@ const ROTULO = new Map(HABILITACOES.map(h => [h.id, h.curto]));
 const ou = itens => (itens.length > 1 ? `${itens.slice(0, -1).join(', ')} ou ${itens.at(-1)}` : itens[0]);
 const duracao = min => `${Math.floor(min / 60)}h${String(min % 60).padStart(2, '0')}`;
 
-// Habilitações que a missão exige, por equipamento: a da missão e, no C172 e no PA-34, também a do avião
+// Habilitações que a missão exige, por equipamento: a da missão e, no C152, no C172 e no PA-34, também a do avião;
+// nos voos de cheque, só as três marcas do checador
 export function quemPodeDar(mis, equipamentos) {
   const porEquipamento = equipamentos.map(eq => [eq, exigencias(mis, eq).map(grupo => ou(grupo.map(h => ROTULO.get(h))))]);
   if (equipamentos.length === 1) return porEquipamento[0][1].join(' + ');
@@ -46,7 +47,7 @@ export const combustivelDoManual = () => Object.entries(COMBUSTIVEL).map(([tipo,
   `${tipo}: ${galoes} gal, ${Math.floor(autonomiaMin / 60)}h${autonomiaMin % 60 ? String(autonomiaMin % 60).padStart(2, '0') : ''}`);
 export const rodizioDoManual = () => CATEGORIAS_DO_RODIZIO.map(c => c.nome);
 
-// O Glossário (revisão de 14/11): os termos das dicas, aba por aba, na ordem das abas
+// O Glossário: os termos das dicas, aba por aba, na ordem das abas
 export const glossarioDoManual = () => ABAS_DO_GLOSSARIO.map(aba => ({
   aba, termos: Object.values(GLOSSARIO).filter(t => t.aba === aba).map(({ termo, texto }) => ({ termo, texto }))
 }));

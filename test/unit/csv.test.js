@@ -33,7 +33,7 @@ describe('CSV da escala por avião', () => {
     assert.deepEqual(linha.slice(0, 5), ['PR-BTB', '06:30–07:30', 'Ana', 'Navegação (sessão 2/2)', 'Bruno']);
   });
 
-  it('a missão do curso vai na coluna Fase / Missão, antes do tipo de missão (fase 14)', () => {
+  it('a missão do curso vai na coluna Fase / Missão, antes do tipo de missão', () => {
     const [linha] = linhasDoCsv(escala([voo('PR-BTB', 'C152', 390, { mis: 'Navegação', etapa: 'PP-07' })]));
     assert.equal(linha[3], 'PP-07 · Navegação');
   });
@@ -61,7 +61,7 @@ describe('CSV da escala por avião', () => {
     assert.equal(ground, 'Status: Concluída');
   });
 
-  it('observações: acima do limite com os tanques cheios, quanto abastecer e quanto o voo pede (fase 10)', () => {
+  it('observações: acima do limite com os tanques cheios, quanto abastecer e quanto o voo pede', () => {
     const obs = linhasDoCsv(escala([voo('PR-BTB', 'C152', 390, { stuKg: 100, comb: { reduzirGal: 4, abastecerGal: 22, minimoGal: 11, autonomiaMin: 203 } })]))[0][5];
     assert.equal(obs, 'Peso aluno + instrutor: 180 kg (limite do C152 com os tanques cheios: 170 kg) · combustível: abastecer até 22 gal (4 a menos); o voo, o táxi e a reserva pedem 11 gal');
   });
@@ -81,7 +81,7 @@ describe('CSV da escala por avião', () => {
     assert.deepEqual(linhas.slice(2), ['', '"Alertas";"Aluno";"Mensagem"', '"Rejeitado";"Bia";"Rejeitado: sem avião."']);
   });
 
-  // Revisão de 14/11: um nome gravado como "=HYPERLINK(...)" viraria uma fórmula ao abrir o arquivo no Excel
+  // Um nome gravado como "=HYPERLINK(...)" viraria uma fórmula ao abrir o arquivo no Excel
   it('um texto que o Excel leria como fórmula vai com um apóstrofo na frente', () => {
     const csv = montarCsv(escala(
       [voo('PR-BTB', 'C152', 390, { s: '=HYPERLINK("http://x","Clique")', ins: '+Instrutor', mis: '@SOMA(1)' })],

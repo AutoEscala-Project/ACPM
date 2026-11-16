@@ -1,6 +1,5 @@
-// Dia de exemplo para os testes: a mesma demanda que o antigo botão "Preencher exemplo" montava (removido do app
-// na fase 6, porque o sistema já opera com a demanda real). Sequência pseudoaleatória fixa (semente 7): o mesmo
-// estado sempre gera a mesma escala.
+// Dia de exemplo para os testes.
+// Sequência pseudoaleatória fixa (semente 7): o mesmo estado sempre gera a mesma escala.
 import { WIN, NI, GROUND_EQ_TYPE, GROUND_DURATION_H, SIM_EQ_TYPES, MIS } from '../../js/config.js';
 import { pad } from '../../js/format.js';
 import { blank } from '../../js/rules.js';

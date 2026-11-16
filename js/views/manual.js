@@ -15,7 +15,7 @@ export function rManual() {
   $('#manual-missoes tbody').innerHTML = missoesDoManual()
     .map(l => `<tr>${[l.missao, l.equipamentos, l.quem, l.obs].map(celula).join('')}</tr>`)
     .join('');
-  // O Glossário: o mesmo texto das dicas, aba por aba (revisão de 14/11)
+  // O Glossário: o mesmo texto das dicas, aba por aba
   $('#manual-glossario-lista').innerHTML = glossarioDoManual().map(({ aba, termos }) =>
     `<h4>${esc(aba)}</h4><dl class="glossario">${termos.map(t => `<dt>${esc(t.termo)}</dt><dd>${esc(t.texto)}</dd>`).join('')}</dl>`).join('');
 }

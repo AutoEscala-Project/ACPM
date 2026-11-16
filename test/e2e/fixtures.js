@@ -104,7 +104,7 @@ export async function confirmar(page, seletor) {
   await botao.click();
 }
 
-// Cadastro sintético com o dia de exemplo (a demanda do antigo botão "Preencher exemplo")
+// Cadastro sintético com a demanda do dia de exemplo
 export const abrirComExemplo = (page, opts = {}) => abrir(page, { estado: comExemplo(estadoSintetico()), ...opts });
 
 // A escala é refeita a cada alteração: basta abrir a aba

@@ -1,5 +1,5 @@
-// Ordem dos aviões no hangar (fase 10): em Recursos, da frente para o fundo, com subir, descer e pôr na frente. A
-// escala tira primeiro os da frente e junta os voos nos aviões que já saíram; a data seguinte começa com a mesma ordem.
+// Ordem dos aviões no hangar: em Recursos, da frente para o fundo, com subir, descer e pôr na frente. A escala tira
+// primeiro os da frente e junta os voos nos aviões que já saíram; a data seguinte começa com a mesma ordem.
 import { test, expect, abrir, irPara, abrirEscala } from './fixtures.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
 

@@ -1,6 +1,6 @@
-// Cursos (fase 14), em Alunos › Cursos: o programa de cada curso, uma tabela por curso. O Administrador (neste
-// navegador, o Operador) inclui, muda, reordena e tira missões; os outros perfis só consultam. Os campos mudam no
-// lugar, para o foco do teclado continuar onde estava.
+// Cursos, em Alunos › Cursos: o programa de cada curso, uma tabela por curso. O Administrador (neste navegador, o
+// Operador) inclui, muda, reordena e tira missões; os outros perfis só consultam. Os campos mudam no lugar, para o foco
+// do teclado continuar onde estava.
 import { MIS, DURACAO_MAXIMA_H } from '../config.js';
 import { CURSOS, normalizarCursos } from '../cursos.js';
 import { ApiClient } from '../storage.js';

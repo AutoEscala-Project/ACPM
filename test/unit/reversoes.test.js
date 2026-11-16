@@ -1,4 +1,4 @@
-// O que "Reverter" desfaz no histórico (revisão de 14/11): a reversão vem gravada no histórico, então só vale no
+// O que "Reverter" desfaz no histórico: a reversão vem gravada no histórico, então só vale no
 // formato que o próprio app produz; o resto não vira botão nem é aplicado.
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
@@ -11,7 +11,7 @@ describe('Reversões do histórico', () => {
   it('as que o app grava passam, com o rótulo', () => {
     assert.deepEqual(validarReversao({ kind: 'setFly', stuId: 1000, mid: 0, val: false, label: '↶ Reverter' }, FROTA_INICIAL),
       { kind: 'setFly', stuId: 1000, mid: 0, val: false, label: '↶ Reverter' });
-    // As missões extras que saíram com a principal (revisão de 14/11)
+    // As missões extras que saíram com a principal
     assert.deepEqual(validarReversao({ kind: 'setFly', stuId: 1000, mid: 0, val: true, extras: [1001, 1002], label: '↶ Restaurar' }, FROTA_INICIAL),
       { kind: 'setFly', stuId: 1000, mid: 0, val: true, extras: [1001, 1002], label: '↶ Restaurar' });
     assert.deepEqual(validarReversao({ kind: 'setAv', reg: 'PR-VOB', val: true, label: '↶ Reverter' }, FROTA_INICIAL),
@@ -39,7 +39,7 @@ describe('Reversões do histórico', () => {
     assert.equal(validarReversao({ kind: 'setInsOn', insId: 3, val: true }, FROTA_INICIAL).label, '↶ Reverter');
   });
 
-  // Revisão de 14/11: os horários de uma categoria e os pedidos que mudaram com eles
+  // Os horários de uma categoria e os pedidos que mudaram com eles
   it('os horários: a categoria da lista, horários do dia e os pedidos nos formatos do app', () => {
     const rev = { kind: 'restaurarHorarios', cat: 'PA-34', lista: [390, 450], pedidos: [{ stuId: 1000, mid: 0, p1: 450, p2: -1 }, { stuId: 1001, mid: 2, p1: 500, p2: 610, jan: 'h500' }], label: '↶ Reverter' };
     assert.deepEqual(validarReversao(rev, FROTA_INICIAL), rev);

@@ -29,7 +29,7 @@ export const singleDemandRowHTML = (stu, d, mid = 0) => {
   const horarios = horariosDaMissao(S.horarios, d.mis, isGroundMission(d.mis) ? GROUND_EQ_TYPE : d.eq);
   const isGnd = isGroundMission(d.mis);
   const trCls = `${d.fly ? 'on p' + d.pr : 'off'}${isExtra ? ' extra-row' : ''}`;
-  // A missão do curso (fase 14): o código do pedido, ou a próxima do programa para usar
+  // A missão do curso: o código do pedido, ou a próxima do programa para usar
   const etapa = etapaNaDemanda(stu, d, mid);
   const firstCell = isExtra
     ? `<div class="stu-cell"><span class="sm">↳ missão extra</span>${etapa}<button class="x edit-only" data-act="del-mis" data-id="${stu.id}" data-mid="${mid}" aria-label="Tirar a missão extra de ${esc(stu.nm)}" title="Tirar esta missão extra">✕</button></div>`
@@ -40,7 +40,7 @@ export const singleDemandRowHTML = (stu, d, mid = 0) => {
 
   const nbOpts = isGnd
     ? `<select data-f="nb" disabled title="Ground School tem duração fixa de 01h30" aria-label="Duração de ${esc(stu.nm)}"><option value="1.5" selected>1h30</option></select>`
-    // A duração digitada, fracionada, até 5 h (retorno da operação, 14/11)
+    // A duração digitada, fracionada, até 5 h
     : `<input type="number" class="duracao" data-f="nb" min="0.1" max="${DURACAO_MAXIMA_H}" step="0.1" inputmode="decimal" value="${esc(d.nb)}" aria-label="Duração de ${esc(stu.nm)}, em horas">`;
 
   return `<tr data-k="d" data-id="${stu.id}" data-mid="${mid}" data-nm="${esc(stu.nm.toLowerCase())}" data-mis="${esc(d.mis)}" class="${trCls}">
