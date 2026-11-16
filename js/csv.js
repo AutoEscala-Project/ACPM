@@ -4,6 +4,7 @@
 import { GROUND_EQ_TYPE } from './config.js';
 import { hm } from './format.js';
 import { textoDoStatus } from './status.js';
+import { statusDoVoo } from './voo.js';
 
 // Ordem dos grupos: aviões (C152, C172, PA-34), simuladores e a sala de Ground; em cada tipo, pela matrícula
 const ORDEM_DOS_TIPOS = ['C152', 'C172', 'PA-34', 'Sim. Mono', 'Sim. Multi', GROUND_EQ_TYPE];
@@ -41,7 +42,7 @@ export function linhasDoCsv(res, fStatus = {}, fObs = {}) {
   return [...res.out]
     .sort((a, b) => ordemDoTipo(a) - ordemDoTipo(b) || a.r.localeCompare(b.r) || a.a - b.a || a.o - b.o)
     .map(o => {
-      const status = fStatus[o.fKey] || o.status || 'Confirmado';
+      const status = statusDoVoo(o, fStatus);
       // A missão do curso vem antes do tipo de missão: "PP-07 · Navegação"
       const missao = (o.etapa ? `${o.etapa} · ` : '') + (o.ss && o.ss !== '1/1' ? `${o.mis} (sessão ${o.ss})` : o.mis);
       return [o.r, `${hm(o.a)}–${hm(o.b)}`, o.s, missao, o.ins, observacoes(o, status, fObs[o.fKey], res.revisao)];

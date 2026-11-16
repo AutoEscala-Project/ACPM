@@ -13,6 +13,7 @@ import { ApiClient } from '../storage.js';
 import { gerenciaContas } from '../perfis.js';
 import { CURSOS } from '../cursos.js';
 import { progressoDoAluno } from './etapas.js';
+import { unidadeDoVoo, umPorUnidade } from '../voo.js';
 
 const ROTULO = new Map(HABILITACOES.map(h => [h.id, h.curto]));
 // No cadastro, todas na ordem do painel; na grade do dia, só as que mais distinguem o instrutor
@@ -47,7 +48,7 @@ function ocupacaoDosInstrutores() {
   const porInstrutor = new Map();
   voosQueVoam().forEach(o => {
     const atual = porInstrutor.get(o.insId) || { voos: new Set(), janelas: new Set() };
-    atual.voos.add(o.classKey || o.fKey);
+    atual.voos.add(unidadeDoVoo(o));
     WIN.forEach((_, i) => {
       const inicio = T[i], fim = i < WIN.length - 1 ? T[i + 1] : 24 * 60;
       if (o.a < fim && o.b > inicio) atual.janelas.add(i);
@@ -63,7 +64,7 @@ const atributos = x => `data-k="i" data-id="${x.id}" data-hab="${x.hab.join(' ')
 // voo em avião) no mês, no semestre e no ano
 function horasComAEscala(x) {
   const passadas = (S.horasDosInstrutores || {})[x.id] || { mes: 0, semestre: 0, ano: 0, fimAnterior: null };
-  const hoje = [...new Map(voosQueVoam().filter(o => o.insId === x.id && AIRCRAFT_EQ_TYPES.includes(o.eqType)).map(o => [o.classKey || o.fKey, o])).values()]
+  const hoje = umPorUnidade(voosQueVoam().filter(o => o.insId === x.id && AIRCRAFT_EQ_TYPES.includes(o.eqType)))
     .reduce((total, o) => total + o.h, 0);
   const somar = h => Math.round((h + hoje) * 10) / 10;
   return { mes: somar(passadas.mes), semestre: somar(passadas.semestre), ano: somar(passadas.ano), fimAnterior: passadas.fimAnterior };

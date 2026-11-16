@@ -1,8 +1,8 @@
 // Escala aprovada: os voos fixos (horário, avião e instrutor de cada voo, pela chave aluno_missão_sessão) e quem
 // aprovou. Os dados vêm do dia guardado, que pode ter sido gravado fora do app (pela API): só valem nos formatos certos.
 import { rotuloDoStatus } from './status.js';
+import { CHAVE_DO_VOO } from './voo.js';
 
-const CHAVE_DO_VOO = /^\d+_\d+_\d+$/;
 const MATRICULA = /^[A-Z0-9][A-Z0-9-]{1,14}$/;
 const minuto = v => Number.isInteger(v) && v >= 0 && v <= 1440;
 

@@ -4,6 +4,7 @@
 import { FLIGHT_STATUSES } from './config.js';
 import { hm } from './format.js';
 import { nomeDoRecurso } from './categorias.js';
+import { CHAVE_DO_VOO, statusDoVoo, unidadeDoVoo } from './voo.js';
 
 export const MOTIVOS_DE_CANCELAMENTO = ['Meteorologia', 'Manutenção da aeronave', 'Aluno ausente', 'Instrutor indisponível', 'Operacional', 'Outro'];
 export const LIMITE_DO_TEXTO = 140;
@@ -22,7 +23,6 @@ export const detalheAoMudarStatus = (detalhe, status) =>
   (['Em Voo', 'Pousou'].includes(status) && temNovoInicio(detalhe) ? { novoInicio: detalhe.novoInicio } : null);
 
 const FIM_DO_DIA = 24 * 60;
-const CHAVE_DO_VOO = /^\d+_\d+_\d+$/;
 const limparTexto = texto => (typeof texto === 'string' ? texto.trim().replace(/\s+/g, ' ') : '');
 
 // O detalhe que o operador informou, validado: { detalhe } (null para os status sem detalhe) ou { erro }
@@ -113,15 +113,14 @@ export function intervaloEfetivo(o, status, detalhe) {
 // efetivo). Voo cancelado não conta, os alunos de uma mesma turma de Ground não conflitam entre si e a turma
 // atingida conta uma vez (pelo primeiro aluno dela)
 export function conflitosDeAtraso(out, fStatus = {}, fObs = {}) {
-  const statusDe = o => fStatus[o.fKey] || o.status || 'Confirmado';
-  const ativos = out.filter(o => statusDe(o) !== 'Cancelado').map(o => ({ o, ...intervaloEfetivo(o, statusDe(o), fObs[o.fKey]) }));
+  const ativos = out.filter(o => statusDoVoo(o, fStatus) !== 'Cancelado').map(o => ({ o, ...intervaloEfetivo(o, statusDoVoo(o, fStatus), fObs[o.fKey]) }));
   const conflitos = [];
   for (const x of ativos) {
-    if (!STATUS_EM_ANDAMENTO.includes(statusDe(x.o)) || !temNovoInicio(fObs[x.o.fKey])) continue;
+    if (!STATUS_EM_ANDAMENTO.includes(statusDoVoo(x.o, fStatus)) || !temNovoInicio(fObs[x.o.fKey])) continue;
     const atingidos = new Set();
     for (const y of ativos) {
       if (y === x || (x.o.classKey && x.o.classKey === y.o.classKey) || !(x.a < y.b && y.a < x.b)) continue;
-      const grupo = y.o.classKey || y.o.fKey;
+      const grupo = unidadeDoVoo(y.o);
       if (atingidos.has(grupo)) continue;
       const motivos = [];
       if (x.o.r === y.o.r) motivos.push('recurso');

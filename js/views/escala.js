@@ -15,6 +15,7 @@ import { sumUniqueOperationalHours, consolidateTimelineSlots } from '../engine.j
 import { S, RES, AUDIT_LOG, TL_MODE, DATA, isGestor, dadoIndisponivel } from '../state.js';
 import { motivoDoFixo } from '../fixos.js';
 import { $, posicionarJunto } from '../dom.js';
+import { statusDoVoo, unidadeDoVoo } from '../voo.js';
 
 export const HT = o => (o.isGround || isGroundMission(o.mis) ? '01h30 (1,5 h)' : fmtH(o.h) + (o.ss !== '1/1' ? ` (sessão ${o.ss})` : ''));
 
@@ -111,7 +112,7 @@ function buildTimelineGroup(out, groupKey, subLabelFn, barLine1Fn, barLine2Fn, m
 
   const rowsHTML = Object.keys(groups).sort((a, b) => a.localeCompare(b)).map(key => {
     const rawFlights = groups[key];
-    const activeH = sumUniqueOperationalHours(rawFlights, o => (S.fStatus && S.fStatus[o.fKey]) || o.status || 'Confirmado');
+    const activeH = sumUniqueOperationalHours(rawFlights, statusDe);
     const sub = subLabelFn(rawFlights[0], activeH);
     const consolidated = consolidateTimelineSlots(rawFlights);
 
@@ -123,7 +124,7 @@ function buildTimelineGroup(out, groupKey, subLabelFn, barLine1Fn, barLine2Fn, m
       // Turma coletiva: cancelada só quando todos os alunos estão cancelados
       const activeItems = o.items.filter(it => statusDe(it) !== 'Cancelado');
       const stKey = classeDoStatus(activeItems.length ? statusDe(activeItems[0]) : 'Cancelado');
-      const chave = o.classKey || o.fKey || `${groupKey}:${key}:${o.a}`;
+      const chave = unidadeDoVoo(o) || `${groupKey}:${key}:${o.a}`;
       VOOS_DO_MAPA.set(chave, o);
 
       return `<button type="button" class="tl-bar ${cls} tl-st-${stKey}" data-pop="${esc(chave)}" aria-haspopup="dialog" aria-controls="tl-pop" aria-expanded="false" style="left:${left.toFixed(2)}%;width:${width.toFixed(2)}%">
@@ -232,7 +233,7 @@ export function renderAuditPanel() {
 const PERTO_DO_LIMITE_KG = 10;
 const ehGround = o => o.isGround || isGroundMission(o.mis);
 const duracao = o => (ehGround(o) ? '1h30' : fmtH(o.h)) + (o.ss && o.ss !== '1/1' ? ` · sessão ${o.ss}` : '');
-const statusDe = o => (S.fStatus && S.fStatus[o.fKey]) || o.status || 'Confirmado';
+const statusDe = o => statusDoVoo(o, S.fStatus);
 
 // A preferência só aparece quando o voo não ficou na 1ª
 function preferencia(o) {

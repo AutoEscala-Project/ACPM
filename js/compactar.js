@@ -20,6 +20,7 @@ import { disponibilidadeDoAluno, doesGroundGateFlight } from './rules.js';
 import { INTERVALO_DO_HANGAR } from './metricas.js';
 import { normalizarCriterios } from './criterios.js';
 import { intervaloEfetivo } from './status.js';
+import { statusDoVoo, unidadeDoVoo, umPorUnidade, pedidosDosVoos } from './voo.js';
 
 // Um voo que muda de instrutor junto com o horário vai para quem já voa até esta distância (minutos) dele
 const ENCOSTA = 60;
@@ -33,10 +34,9 @@ const soma = lista => lista.reduce((total, v) => total + v, 0);
 // horário novo. Os voos de out ficam os mesmos objetos, menos o atrasado (uma cópia, que nunca muda:
 // o voo com status fica onde está)
 function ocupando(out, estado) {
-  const statusDe = v => (estado.fStatus && estado.fStatus[v.fKey]) || v.status || 'Confirmado';
-  const ativas = new Set(out.filter(o => statusDe(o) !== 'Cancelado').map(o => o.classKey || o.fKey));
-  return out.filter(o => ativas.has(o.classKey || o.fKey)).map(o => {
-    const efetivo = intervaloEfetivo(o, statusDe(o), (estado.fObs || {})[o.fKey]);
+  const ativas = new Set(out.filter(o => statusDoVoo(o, estado.fStatus) !== 'Cancelado').map(unidadeDoVoo));
+  return out.filter(o => ativas.has(unidadeDoVoo(o))).map(o => {
+    const efetivo = intervaloEfetivo(o, statusDoVoo(o, estado.fStatus), (estado.fObs || {})[o.fKey]);
     return efetivo.a === o.a ? o : { ...o, ...efetivo };
   });
 }
@@ -72,18 +72,14 @@ function custoDaPreferencia(a, pedido, pesos) {
   return (a === minutoDaPreferencia(pedido.p2) ? pesos.p2 : pesos.outro) * (+pedido.pr || 3) / 3;
 }
 
-const pedidosDo = estado => {
-  const alunos = new Map((estado.stu || []).map(s => [s.id, s]));
-  return v => { const s = alunos.get(v.stuId); return s && (v.mid ? (s.extra || []).find(ex => ex.mid === v.mid) : s); };
-};
 const agrupar = (lista, chave) => lista.reduce((grupos, o) => grupos.set(chave(o), [...(grupos.get(chave(o)) || []), o]), new Map());
 
 // O custo da escala pelo critério do dia (o mesmo que a busca diminui): os dias dos instrutores, os dos aviões e as
 // preferências perdidas
 export function custoDaEscala(out, estado) {
   const pesos = PESOS_DA_COMPACTACAO[normalizarCriterios(estado.criterios).buracos];
-  const pedidoDe = pedidosDo(estado);
-  const unidades = [...new Map(ocupando(out, estado).map(o => [o.classKey || o.fKey, o])).values()];
+  const pedidoDe = pedidosDosVoos(estado.stu || []);
+  const unidades = umPorUnidade(ocupando(out, estado));
   const intervalos = lista => lista.map(o => [o.a, o.b]);
   return soma([...agrupar(unidades, o => o.insId).values()].map(l => custoDoInstrutor(intervalos(l), pesos)))
     + soma([...agrupar(unidades.filter(o => AIRCRAFT_EQ_TYPES.includes(o.eqType)), o => o.r).values()].map(l => custoDoAviao(intervalos(l), pesos)))
@@ -101,16 +97,15 @@ export function compactar(out, state, { saldo = () => Infinity, posicao = () => 
   const ativos = state.ins.filter(x => x.on).sort((p, q) => p.id - q.id);
   const instrutor = new Map(state.ins.map(x => [x.id, x]));
   const alunos = new Map(state.stu.map(s => [s.id, s]));
-  const pedidoDe = pedidosDo(state);
-  const statusDe = v => (state.fStatus && state.fStatus[v.fKey]) || v.status || 'Confirmado';
+  const pedidoDe = pedidosDosVoos(state.stu || []);
 
   // As unidades: um voo, ou uma turma de Ground inteira (1h30 uma vez só). O voo cancelado não ocupa nada e o atrasado
   // ocupa o horário novo; os dois ficam onde estão
-  const unidades = [...agrupar(ocupando(out, state), o => o.classKey || o.fKey).values()].map(voos => {
+  const unidades = [...agrupar(ocupando(out, state), unidadeDoVoo).values()].map(voos => {
     const v = voos[0];
-    const presa = voos.some(o => o.fixo || !STATUS_QUE_MUDAM.includes(statusDe(o))) || v.mis === 'Noturno' || (v.mis === 'Parafuso' && v.eqType === 'C152');
+    const presa = voos.some(o => o.fixo || !STATUS_QUE_MUDAM.includes(statusDoVoo(o, state.fStatus))) || v.mis === 'Noturno' || (v.mis === 'Parafuso' && v.eqType === 'C152');
     return {
-      chave: v.classKey || v.fKey, voos, a: v.a, b: v.b, dur: v.b - v.a, h: v.h, insId: v.insId, r: v.r, mis: v.mis,
+      chave: unidadeDoVoo(v), voos, a: v.a, b: v.b, dur: v.b - v.a, h: v.h, insId: v.insId, r: v.r, mis: v.mis,
       tipo: v.isGround ? GROUND_EQ_TYPE : v.eqType, isGround: v.isGround, aviao: AIRCRAFT_EQ_TYPES.includes(v.eqType),
       alunos: voos.map(o => o.stuId), original: v.a,
       mudaHorario: !presa && !v.isGround && regra !== 'fixos',

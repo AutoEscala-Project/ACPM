@@ -5,8 +5,8 @@
 import { ALL_EQ_TYPES, MIS, FLIGHT_STATUSES, NI } from './config.js';
 import { codigoValido } from './cursos.js';
 import { CODIGOS_DE_CONFLITO, CODIGOS_DE_REJEICAO } from './conflitos.js';
+import { CHAVE_DO_VOO } from './voo.js';
 
-const CHAVE_DO_VOO = /^\d+_\d+_\d+$/;
 // A chave da turma de Ground: GND_<missão>_<período>_<instrutor> (com um número no fim quando repete)
 const CHAVE_DA_TURMA = /^GND_[A-Za-zÀ-ÿ0-9 .()-]{1,40}_\d+_\d+(_\d+)?$/;
 const MATRICULA = /^[A-Z0-9][A-Z0-9-]{1,14}$/;

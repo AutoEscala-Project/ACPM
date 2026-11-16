@@ -2,6 +2,7 @@
 // contra o mínimo possível, o equilíbrio das horas, as preferências atendidas e as trocas de avião. Medem o efeito das
 // regras do motor (scripts/medir-escalas.mjs); a Escala mostra o tempo parado e as saídas do hangar.
 import { AIRCRAFT_EQ_TYPES } from './config.js';
+import { unidadeDoVoo } from './voo.js';
 
 // Parado por 2 h ou mais entre dois voos, o avião volta para o hangar (uma saída a mais no dia)
 export const INTERVALO_DO_HANGAR = 120;
@@ -45,7 +46,7 @@ export function metricasDaEscala(out, { ativos = [], preferenciaDe = () => -1 } 
   const avioesMinimo = soma([...agrupar(avioes, o => o.eqType).values()].map(pico));
 
   // Cada unidade conta uma vez (a turma de Ground tem um item por aluno)
-  const unidades = [...agrupar(out, o => o.classKey || o.fKey).values()].map(itens => itens[0]);
+  const unidades = [...agrupar(out, unidadeDoVoo).values()].map(itens => itens[0]);
   const porInstrutor = agrupar(unidades, o => o.insId);
   const paradasDosInstrutores = [...porInstrutor.values()].map(itens => soma(paradas(juntar(itens))));
   const horasPorInstrutor = Object.fromEntries([...new Set([...ativos, ...porInstrutor.keys()])]
