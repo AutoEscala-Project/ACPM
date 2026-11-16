@@ -359,6 +359,8 @@ details.caixa.avisos summary { color: var(--wa); }
 }
 .fids {
   --fids-fs: 17px; --fids-linha: 34px; --fids-amarelo: #FFD23F; --fids-branco: #F4F7FF;
+  /* O âmbar dos avisos (atraso, embarque) e o azul-claro dos textos secundários */
+  --fids-ambar: #FFC233; --fids-claro: #DCE7FF;
   overflow-x: auto; background: #07122B; border: 6px solid #0A0F1A; border-radius: 8px; box-shadow: 0 8px 22px rgba(0,0,0,.35);
   font-family: 'Barlow Semi Condensed', sans-serif; color: var(--fids-branco);
 }
@@ -372,11 +374,11 @@ details.caixa.avisos summary { color: var(--wa); }
   margin: 0; color: #fff; font: italic 800 calc(var(--fids-fs) * 2.2) 'Barlow Semi Condensed', sans-serif; letter-spacing: .03em;
   text-shadow: 0 2px 0 #0B2763, 1px 0 0 #0B2763, -1px 0 0 #0B2763;
 }
-.fids-data { font-weight: 600; font-size: calc(var(--fids-fs) * .9); color: #DCE7FF; }
+.fids-data { font-weight: 600; font-size: calc(var(--fids-fs) * .9); color: var(--fids-claro); }
 .fids-aviao { width: calc(var(--fids-fs) * 1.7); height: calc(var(--fids-fs) * 1.7); fill: none; stroke: #fff; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .fids-relogio { display: flex; flex-direction: column; align-items: flex-end; line-height: 1; }
 .fids-relogio b { font-size: calc(var(--fids-fs) * 1.7); font-weight: 700; font-variant-numeric: tabular-nums; }
-.fids-relogio small { margin-top: 3px; font-size: calc(var(--fids-fs) * .65); color: #DCE7FF; }
+.fids-relogio small { margin-top: 3px; font-size: calc(var(--fids-fs) * .65); color: var(--fids-claro); }
 table.fids-tabela { width: 100%; min-width: 860px; border-collapse: collapse; font-size: var(--fids-fs); }
 .fids-tabela th {
   position: static; padding: 4px 10px; border: 0; text-align: left; color: #fff; letter-spacing: .02em;
@@ -394,17 +396,17 @@ table.fids-tabela { width: 100%; min-width: 860px; border-collapse: collapse; fo
 .fids-cia-SimMono, .fids-cia-SimMulti { background: #6B2FA0; }
 .fids-cia-Ground { background: #fff; color: #1A4FA0; }
 .fids-Confirmado .f-obs { color: #8BE59C; }
-.fids-Atrasado .f-obs, .fids-Atrasado .f-prev { color: #FFC233; }
+.fids-Atrasado .f-obs, .fids-Atrasado .f-prev { color: var(--fids-ambar); }
 .fids-Cancelado .f-obs { color: #FF7B7B; }
 .fids-EmVoo .f-obs { color: #74D7FF; }
-.fids-Pousou .f-obs { color: #DCE7FF; }
+.fids-Pousou .f-obs { color: var(--fids-claro); }
 /* Embarque: a chamada para a sala de briefing pisca devagar, como no aeroporto (sem piscar com a animação reduzida) */
-.fids-Embarque .f-obs { color: #FFC233; font-weight: 700; animation: fids-embarque 1.6s ease-in-out infinite; }
+.fids-Embarque .f-obs { color: var(--fids-ambar); font-weight: 700; animation: fids-embarque 1.6s ease-in-out infinite; }
 @keyframes fids-embarque { 50% { opacity: .45; } }
 @media (prefers-reduced-motion: reduce) { .fids-Embarque .f-obs { animation: none; } }
 .fids.pausado .fids-Embarque .f-obs { animation: none; }
-.fids-nada td { color: #DCE7FF; font-weight: 600; }
-.fids-relogio .fids-aviso { color: #FFC233; }
+.fids-nada td { color: var(--fids-claro); font-weight: 600; }
+.fids-relogio .fids-aviso { color: var(--fids-ambar); }
 .fids-relogio .fids-aviso:empty { display: none; }
 /* Na tela toda (tela cheia na Escala ou a TV da recepção, painel.html): letras e linhas crescem com a tela */
 .fids:fullscreen, .fids.inteiro { --fids-fs: 2.6vh; --fids-linha: 5.4vh; overflow: hidden; border: 0; border-radius: 0; }
