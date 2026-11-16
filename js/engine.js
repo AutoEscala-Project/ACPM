@@ -8,11 +8,11 @@ import { HORARIOS_INICIAIS, horariosDaMissao, periodoDoMinuto, minutoDaPreferenc
 import { podeFazer, descreverExigencias } from './habilitacoes.js';
 import { categoriaDoRodizio, ajustarFilas } from './rodizio.js';
 import { avisosDeAtraso, intervaloEfetivo, STATUS_EM_ANDAMENTO } from './status.js';
-import { sobrepoe, livre, cobre, cabeNoSaldo, folgaAte, saldoAteARevisao, problemasDoInstrutor } from './viabilidade.js';
+import { sobrepoe, livre, cabeNoSaldo, folgaAte, saldoAteARevisao, problemasDoInstrutor } from './viabilidade.js';
 import { reducaoNecessaria, combustivelDoVoo } from './combustivel.js';
 import { LIMITE_DO_MOTIVO } from './conflitos.js';
 import { normalizarHangar, posicaoNoHangar } from './hangar.js';
-import { normalizarLimites, dentroDosLimites } from './limites.js';
+import { normalizarLimites } from './limites.js';
 import { compactar, custoDaEscala } from './compactar.js';
 import { chaveDoVoo, statusDoVoo, unidadeDoVoo, umPorUnidade } from './voo.js';
 import { menorPrimeiro, soma, paradasEntre } from './util.js';
@@ -197,21 +197,16 @@ function equalizarHoras(out, state, limites, historico) {
   const instrutorDa = u => u.voos[0].insId;
   const daQuem = id => unidades.filter(u => instrutorDa(u) === id);
 
+  // O receptor serve para a unidade (o combustível não piora e o peso dele precisa estar informado) e nenhum aluno
+  // dela já voa com ele no dia
+  const compromisso = o => ({ a: o.a, b: o.b, voo: AIRCRAFT_EQ_TYPES.includes(o.eqType) });
   const podeReceber = (x, u) => {
-    if (instrutorDa(u) === x.id || !podeFazer(x, u.mis, u.isGround ? GROUND_EQ_TYPE : u.eqType) || !cobre(x.aw, u.a, u.b)) return false;
+    if (instrutorDa(u) === x.id) return false;
     const deles = daQuem(x.id);
-    if (deles.some(o => sobrepoe(o.a, o.b, u.a, u.b))) return false;
-    // Os limites da Lei do Aeronauta do receptor com o voo a mais
-    const compromisso = o => ({ a: o.a, b: o.b, voo: AIRCRAFT_EQ_TYPES.includes(o.eqType) });
-    if (!dentroDosLimites({ compromissos: deles.map(compromisso), novo: compromisso(u), historico: historico(x.id), limites }).ok) return false;
-    return u.voos.every(v => {
-      const aluno = alunos.get(v.stuId);
-      if (aluno && aluno.bl.includes(x.id)) return false;
-      if (deles.some(o => o.voos.some(w => w.stuId === v.stuId))) return false;
-      if (u.isGround || !v.limKg || !v.stuKg) return true;
-      if (!x.kg) return false;
-      return reducaoNecessaria({ stuKg: v.stuKg, insKg: x.kg, tipo: v.eqType, minutos: v.b - v.a, mis: v.mis }) <= (v.comb ? v.comb.reduzirGal : 0);
-    });
+    if (u.voos.some(v => deles.some(o => o.voos.some(w => w.stuId === v.stuId)))) return false;
+    const [v] = u.voos;
+    return !problemasDoInstrutor(x, { mis: u.mis, tipo: u.isGround ? GROUND_EQ_TYPE : u.eqType, a: u.a, b: u.b, alunos: u.voos.map(o => alunos.get(o.stuId)), stuKg: v.stuKg },
+      { compromissos: deles.map(compromisso), historico: historico(x.id), limites, peso: { reducaoMaxima: v.comb ? v.comb.reduzirGal : 0, exigirPesoDoInstrutor: true } }).length;
   };
 
   for (let rodada = 0; rodada < 1000; rodada++) {
