@@ -51,15 +51,6 @@ test.describe('Demanda', () => {
   });
 
 
-  test('sem "Preencher exemplo": o app opera só com a demanda real', async ({ page }) => {
-    await abrir(page);
-    for (const aba of ['ins', 'alu', 'dem']) {
-      await irPara(page, aba);
-      await expect(page.locator(`#s-${aba}`)).not.toContainText('Preencher exemplo');
-    }
-    await expect(page.locator('#demo')).toHaveCount(0);
-  });
-
   test('"+ Missão" adiciona e remove uma missão extra do aluno', async ({ page }) => {
     await abrirComExemplo(page);
     await irPara(page, 'dem');

@@ -15,6 +15,8 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Lint (ESLint e exportações sem uso)
+        run: npm run lint
       # Chromium com as bibliotecas do sistema, que vêm dos espelhos do Ubuntu (uns 20 s). Se o runner não alcança os
       # espelhos (aconteceu em 11/11/2026: a instalação travou até o fim do tempo do job), instala só o navegador; a
       # imagem do GitHub já tem as bibliotecas de que ele precisa

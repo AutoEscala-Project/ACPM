@@ -122,6 +122,8 @@ test.describe('Conteúdo gravado malicioso', () => {
     amanha.horas = { 'PR-VOB': XA };
     amanha.hangar = [XA, 'PR-VOB'];
     amanha.importadas = [XA];
+    // O PR-VOB em manutenção: reverter a entrada do histórico o deixa disponível de novo
+    amanha.av = { ...amanha.av, 'PR-VOB': false };
     const [primeiro, ...resto] = amanha.resultado.out;
     amanha.resultado.out = [{
       ...primeiro, fKey: XA, classKey: XA, w: XA, stuId: XA, mid: XA, eqType: XA, h: XA, ss: XA, r: XA, stuKg: XA, insKg: XA,
@@ -140,18 +142,29 @@ test.describe('Conteúdo gravado malicioso', () => {
       id: 2, data: AMANHA, registrado_em: '2026-11-10T14:10:00.000Z', autor: null, tipo: XA, descricao: 'Recurso retirado',
       reverter: { kind: 'readicionarRecurso', recurso: { reg: XA, tipo: 'C152' }, label: X }, reverte: null, importado: false
     });
+    // Uma reversão no formato certo, com HTML no rótulo do botão (até 40 caracteres, o rótulo vale)
+    docs.acpm4_historico.push({
+      id: 4, data: AMANHA, registrado_em: '2026-11-10T14:20:00.000Z', autor: null, tipo: 'exc', descricao: 'PR-VOB: Manutenção',
+      reverter: { kind: 'setAv', reg: 'PR-VOB', val: true, label: '<img src=x onerror=window.__xss=1>' }, reverte: null, importado: false
+    });
     return docs;
   };
 
   test('valores fora do formato gravados no dia, na escala e no histórico não viram HTML nem quebram a tela', async ({ page }) => {
     await abrirCom(page, documentos(adulterados));
     await percorrer(page);
-    // Reverter a entrada adulterada do histórico também não injeta nada
+    // A reversão adulterada (um recurso com matrícula impossível) não vira botão; a que está no formato certo mostra o
+    // rótulo como texto, e revertê-la não injeta nada
     await page.locator('#btn-open-log').click();
-    const reverter = page.locator('#audit-log-list [data-act="rev-log"]');
-    if (await reverter.count()) await reverter.first().click();
+    const entrada = descricao => page.locator('#audit-log-list .audit-item', { hasText: descricao });
+    await expect(entrada('Recurso retirado').locator('[data-act="rev-log"]')).toHaveCount(0);
+    const reverter = entrada('PR-VOB: Manutenção').locator('[data-act="rev-log"]');
+    await expect(reverter).toHaveText('<img src=x onerror=window.__xss=1>');
+    await reverter.click();
+    await expect(page.locator('#audit-log-list')).toContainText('Revertido: PR-VOB disponível');
     await page.keyboard.press('Escape');
     await irPara(page, 'rec');
+    await expect(page.locator('#eqs input[data-id="PR-VOB"]')).toBeChecked();
     await nada(page);
   });
 

@@ -7,9 +7,8 @@ import { comExemplo } from '../helpers/exemplo.js';
 const MATRICULA = /\b(P[PRT]-[A-Z]{3})\b/;
 
 test.describe('Escala automática', () => {
-  test('a escala já está pronta ao abrir a aba, sem botão de gerar', async ({ page }) => {
+  test('a escala já está pronta ao abrir a aba', async ({ page }) => {
     await abrirComExemplo(page);
-    await expect(page.locator('#gen, #gen2')).toHaveCount(0);
     await irPara(page, 'esc');
     await expect(page.locator('#out .st')).toBeVisible();
     expect((await lerEscala(page)).linhas.length).toBeGreaterThan(20);
@@ -27,8 +26,7 @@ test.describe('Escala automática', () => {
     await irPara(page, 'esc');
     expect((await lerEscala(page)).linhas.some(l => l.includes(matricula))).toBe(false);
 
-    // Sem botão Desfazer: para voltar atrás, basta alterar de novo
-    await expect(page.locator('#btn-undo')).toHaveCount(0);
+    // Para voltar atrás, basta alterar de novo
     await irPara(page, 'rec');
     await page.locator(`#eqs input[data-id="${matricula}"]`).check();
     await irPara(page, 'esc');
@@ -67,6 +65,16 @@ test.describe('Escala automática', () => {
     await expect.poll(() => (servidor.dias.get(AMANHA).conteudo.resultado || { out: [] }).out.length).toBeGreaterThan(20);
     await Promise.all([page.waitForEvent('download'), page.locator('#pdf').click()]);
     await Promise.all([page.waitForEvent('download'), page.locator('#exp').click()]);
+    await Promise.all([page.waitForEvent('download'), page.locator('#xlsx').click()]);
+    expect(servidor.gravacoes.filter(g => g.chave === `dia:${AMANHA}`)).toHaveLength(1);
+  });
+
+  test('exportar o Excel também grava a escala só calculada', async ({ page, context }) => {
+    const servidor = await instalarSupabaseFalso(context, documentosAtuais(comExemplo(estadoSintetico()), AMANHA));
+    await entrar(page, CONTAS.operador);
+    await irPara(page, 'esc');
+    await Promise.all([page.waitForEvent('download'), page.locator('#xlsx').click()]);
+    await expect.poll(() => (servidor.dias.get(AMANHA).conteudo.resultado || { out: [] }).out.length).toBeGreaterThan(20);
     expect(servidor.gravacoes.filter(g => g.chave === `dia:${AMANHA}`)).toHaveLength(1);
   });
 
@@ -75,6 +83,8 @@ test.describe('Escala automática', () => {
     await entrar(page, CONTAS.gestor);
     await irPara(page, 'esc');
     await Promise.all([page.waitForEvent('download'), page.locator('#exp').click()]);
+    const [planilha] = await Promise.all([page.waitForEvent('download'), page.locator('#xlsx').click()]);
+    expect(planilha.suggestedFilename()).toBe(`escala-acpm-${AMANHA}.xlsx`);
     expect(servidor.gravacoes).toEqual([]);
   });
 

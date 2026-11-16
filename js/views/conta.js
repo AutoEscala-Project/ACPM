@@ -28,7 +28,7 @@ export async function carregarContas() {
   let contas;
   try {
     contas = await ApiClient.contas();
-  } catch (e) {
+  } catch {
     $('#lista-contas').innerHTML = '<p class="h">Não foi possível carregar as contas. Verifique a conexão.</p>';
     return;
   }

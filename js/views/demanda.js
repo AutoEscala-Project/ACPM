@@ -11,7 +11,7 @@ import { $ } from '../dom.js';
 import { renderAuditPanel } from './escala.js';
 import { etapaNaDemanda } from './etapas.js';
 
-export function allowedEqOptionsForMission(mis, currentEq) {
+function allowedEqOptionsForMission(mis, currentEq) {
   const m = MIS[mis] || MIS['Voo Local'];
   return opts(m.eq.map(eq => [eq, eq]), currentEq);
 }
@@ -56,7 +56,7 @@ export const singleDemandRowHTML = (stu, d, mid = 0) => {
   </tr>`;
 };
 
-export const studentDemandRowsHTML = stu => {
+const studentDemandRowsHTML = stu => {
   let html = singleDemandRowHTML(stu, stu, 0);
   if (Array.isArray(stu.extra) && stu.extra.length) {
     html += stu.extra.map(ex => singleDemandRowHTML(stu, ex, ex.mid)).join('');

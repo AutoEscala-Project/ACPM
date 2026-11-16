@@ -1,4 +1,4 @@
-import { test, expect, prepararContexto, vigiarErros, irPara, confirmar, AMANHA, abrirMenuDaConta, preencherLogin, URL_APP } from './fixtures.js';
+import { test, expect, prepararContexto, vigiarErros, irPara, AMANHA, abrirMenuDaConta, preencherLogin, URL_APP } from './fixtures.js';
 import { instalarSupabaseFalso, documentosAtuais, CONTAS } from './supabase-falso.js';
 import { estadoSintetico } from '../helpers/estado.js';
 

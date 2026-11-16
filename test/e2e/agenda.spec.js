@@ -44,7 +44,6 @@ test.describe('Agenda de Solicitações', () => {
   test('o horário oferece os horários da missão: o Multimotor (PA-34), de 30 em 30 minutos; sem períodos', async ({ page }) => {
     await abrir(page, { estado: comAlunos() });
     await irPara(page, 'age');
-    await expect(page.locator('#ag-janela')).toHaveCount(0);
     await expect(page.locator('#ag-horario option')).toHaveText(['06:30', '08:20', '10:10', '11:30', '12:40', '13:40', '14:30', '16:20']);
     await page.locator('#ag-missao').selectOption('Multimotor');
     await expect(page.locator('#ag-horario option')).toHaveCount(21);

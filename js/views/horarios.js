@@ -33,7 +33,7 @@ const quantos = n => `${n} ${n === 1 ? 'horário' : 'horários'}`;
 const janelaFechada = m => S.win && S.win[periodoDoMinuto(m)] === false;
 
 // Os pedidos da demanda (os principais e as missões extras), com o nome do aluno
-export const pedidosDaDemanda = () => (S.stu || []).flatMap(s => [{ nome: s.nm, pedido: s }, ...(s.extra || []).map(ex => ({ nome: s.nm, pedido: ex }))]);
+const pedidosDaDemanda = () => (S.stu || []).flatMap(s => [{ nome: s.nm, pedido: s }, ...(s.extra || []).map(ex => ({ nome: s.nm, pedido: ex }))]);
 const efeitoDoRascunho = () => resumoDoImpacto(impactoDosHorarios(pedidosDaDemanda(), S.horarios, rascunho.cat, rascunho.lista));
 
 function horarioNoResumo(m) {

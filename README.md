@@ -51,6 +51,9 @@ npm run test:e2e       # aplicação no navegador (Playwright)
   regra do motor de propósito, regrave com
   `node scripts/capturar-goldens-motor.mjs` e revise a diferença.
 - Os testes usam somente nomes e pesos fictícios.
+- A planilha do Excel (o modelo do aeroclube) é conferida por fora em `test/helpers/xlsx.js`: o ZIP é lido com o zlib
+  do Node, a estrutura é comparada com a do modelo e o lugar de cada voo sai dos rótulos da própria planilha, em dias
+  aleatórios (`test/unit/planilha.test.js`) e contra o CSV da mesma tela (`test/e2e/planilha.spec.js`).
 - O modo compartilhado é testado com um servidor Supabase falso (`test/e2e/supabase-falso.js`) que segue o mesmo
   contrato do banco. `test/e2e/publicado.spec.js` entra no site publicado com login real (só roda com as senhas
   das contas no ambiente: veja o cabeçalho do arquivo).
@@ -89,6 +92,8 @@ mais antigo do que o guardado. Nunca apague campos num passo: mantenha o que o p
 | `js/rodizio.js` | Filas do rodízio (cheque, MLTE, noturno e C172) e a rotação de uma data para a seguinte |
 | `js/agenda.js` | Prazo da agenda de solicitações (13:00 do dia anterior) e a importação para a demanda |
 | `js/csv.js` | CSV da escala agrupado por avião, para o lançamento no portal do aeroclube |
+| `js/planilha.js`, `modelos/escala-cavok.xlsx` | A escala na planilha do modelo do aeroclube (o Excel do lançamento no CAVOK): onde cada voo cai e o arquivo preenchido. O modelo é o arquivo da operação sem os dados do dia; as células que o app preenche estão em `BLOCOS` e `GROUND` (um modelo novo precisa delas nos mesmos lugares, e `test/unit/planilha.test.js` confere) |
+| `js/zip.js` | Leitura e montagem do ZIP do .xlsx, com a compressão do navegador |
 | `js/status.js` | Status do voo com detalhes: o novo horário do atraso, o motivo do cancelamento e o atraso que invade outro voo |
 | `js/quadro.js` | As linhas do painel de partidas e chegadas (Escala e TV da recepção) |
 | `js/dados-pessoais.js` | Dados pessoais de alunos e instrutores: validação (CPF, CANAC, nascimento, celular e e-mail) e formatos |
@@ -102,7 +107,7 @@ mais antigo do que o guardado. Nunca apague campos num passo: mantenha o que o p
 | `js/state.js`, `js/actions.js` | Estado da aplicação e ações (perfil, data, histórico e a escala refeita a cada alteração) |
 | `js/manual.js` | Tabelas do manual geradas das regras (missões, habilitações exigidas, janelas, pesos e rodízio) |
 | `js/views/` | Renderização de cada aba |
-| `js/export.js` | CSV e PDF |
+| `js/export.js` | CSV, PDF e a planilha (Excel) |
 | `js/main.js` | Eventos da interface e inicialização |
 
 ## Fluxo de trabalho

@@ -47,8 +47,6 @@ export const primeiraDataAberta = (agora = new Date()) => {
   return data;
 };
 
-export const horaEmSaoPaulo = (agora = new Date()) => emSaoPaulo(agora).hora;
-
 export function disponibilidadeDaSolicitacao({ janela, horario }) {
   if (janela !== 'horario') return disponibilidadeAtual(janela);
   const minuto = paraMinuto(horario);

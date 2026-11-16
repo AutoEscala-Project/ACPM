@@ -8,7 +8,7 @@ import { S, DATA, insBy, isGestor, voosQueVoam } from '../state.js';
 import { $ } from '../dom.js';
 import { botaoDeDica } from '../dicas.js';
 import { canacDe } from './dados-pessoais.js';
-import { normalizarLimites, LIMITES_DA_LEI, comHorasExternas } from '../limites.js';
+import { normalizarLimites } from '../limites.js';
 import { ApiClient } from '../storage.js';
 import { gerenciaContas } from '../perfis.js';
 import { CURSOS } from '../cursos.js';
@@ -25,7 +25,7 @@ function resumoNaGrade(x) {
   const rotulos = [...checador, ...ORDEM_DA_GRADE.filter(h => x.hab.includes(h)).map(h => ROTULO.get(h))];
   return rotulos.length > 3 ? `${rotulos.slice(0, 3).join(' · ')} · +${rotulos.length - 3}` : rotulos.join(' · ');
 }
-export const GRUPOS_DE_HABILITACAO = [
+const GRUPOS_DE_HABILITACAO = [
   ['Ground e simulador', ['grounds', 'ground_pa34', 'sim_mono', 'sim_multi']],
   ['Voo', ['tgl', 'local', 'navegacao', 'solo', 'parafuso', 'ifr', 'noturno']],
   ['Aviões', ['c152', 'c172', 'mlte']],
@@ -101,7 +101,7 @@ function colunaDoMes(x) {
   return `<td class="mes${atencao ? ' perto' : ''}" title="${esc(titulo)}">${horasTexto(h.mes)} h</td>`;
 }
 
-export function linhaDoCadastro(x) {
+function linhaDoCadastro(x) {
   return `<tr class="cd" ${atributos(x)}>
     <td><input class="nm" data-f="nm" value="${esc(x.nm)}" maxlength="${LIMITE_DO_NOME}" aria-label="Nome do instrutor"></td>
     <td class="c-canac so-dados">${esc(canacDe('instrutor', x.id))}</td>

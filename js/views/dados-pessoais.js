@@ -12,7 +12,7 @@ const DADOS = { aluno: {}, instrutor: {} };
 const pessoa = (tipo, id) => (tipo === 'aluno' ? stuBy(id) : insBy(id));
 
 // No modo compartilhado, pelo perfil; no modo local, fora do perfil Gestor (e do link compartilhado)
-export const podeVerDadosPessoais = () => (ApiClient.perfil ? veDadosPessoais(ApiClient.perfil) : !isGestor());
+const podeVerDadosPessoais = () => (ApiClient.perfil ? veDadosPessoais(ApiClient.perfil) : !isGestor());
 export const canacDe = (tipo, id) => (DADOS[tipo][id] && DADOS[tipo][id].canac) || '';
 
 function atualizarColunas() {
@@ -27,7 +27,7 @@ export async function carregarDadosPessoais() {
     DADOS.aluno = alunos;
     DADOS.instrutor = instrutores;
     atualizarColunas();
-  } catch (e) {
+  } catch {
     // Sem os dados pessoais, as tabelas continuam funcionando (a coluna fica vazia)
   }
 }
@@ -61,7 +61,7 @@ export async function abrirPainelDeDados(tipo, id, botao) {
   let dados;
   try {
     dados = await ApiClient.lerDadosPessoais(tipo, id);
-  } catch (e) {
+  } catch {
     if (pedido !== leitura.pedido) return;
     habilitarPainel(false, 'Não foi possível ler os dados pessoais. Feche e tente de novo.');
     return;

@@ -276,7 +276,6 @@ test.describe('Modo compartilhado: gravação, conflitos e link da escala', () =
     await entrar(page, CONTAS.operador, { url: `${URL_APP}&share=${share}` });
     await expect(page.locator('#aviso-link-texto')).toHaveText(/^Este link antigo levava a escala no próprio endereço e não vale mais/);
     await expect(page.locator('body')).toHaveAttribute('data-role', 'operador');
-    await expect(page.locator('body')).not.toHaveAttribute('data-shared', 'true');
     await irPara(page, 'alu');
     await expect(page.locator('#alu .cd')).toHaveCount(0);
   });

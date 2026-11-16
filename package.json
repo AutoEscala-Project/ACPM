@@ -4,18 +4,23 @@
   "description": "AutoEscala - ACPM (aplicação estática servida pelo GitHub Pages)",
   "type": "module",
   "engines": {
-    "node": ">=22"
+    "node": ">=22.13"
   },
   "scripts": {
     "serve": "node scripts/serve.mjs",
     "test": "npm run test:unit && npm run test:e2e",
     "test:unit": "node --test \"test/unit/**/*.test.js\"",
     "test:e2e": "playwright test",
-    "test:db": "node scripts/testar-banco.mjs"
+    "test:db": "node scripts/testar-banco.mjs",
+    "lint": "eslint . && node scripts/exportacoes-sem-uso.mjs"
   },
   "devDependencies": {
+    "@eslint/js": "10.0.1",
     "@playwright/test": "1.65.0",
     "@supabase/supabase-js": "2.119.0",
+    "eslint": "10.13.0",
+    "espree": "11.2.0",
+    "globals": "17.13.0",
     "jspdf": "4.2.1",
     "jspdf-autotable": "5.0.9"
   }

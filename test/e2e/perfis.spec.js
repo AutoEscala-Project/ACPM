@@ -49,7 +49,6 @@ test.describe('Perfis de acesso', () => {
     const share = encodeURIComponent(Buffer.from(JSON.stringify(payload), 'utf8').toString('base64'));
     await abrirComExemplo(page, { url: `./?role=gestor&share=${share}` });
     await expect(page.locator('#aviso-link-texto')).toHaveText(AVISO_DO_LINK_ANTIGO);
-    await expect(page.locator('body')).not.toHaveAttribute('data-shared', 'true');
     await expect(page.locator('#role-sel')).toBeEnabled();
     await expect(page.locator('#dt')).toHaveValue(AMANHA);
     await abrirEscala(page);

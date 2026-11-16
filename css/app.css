@@ -141,7 +141,9 @@ header.topo {
 }
 .hd-conta:hover { background: rgba(255,255,255,.14); }
 .hd-avatar { width: 26px; height: 26px; border-radius: 50%; background: var(--ye); color: #12263A; display: grid; place-items: center; font: 700 12px 'Barlow', sans-serif; }
-.hd-usuario { display: flex; flex-direction: column; line-height: 1.1; text-align: left; }
+.hd-usuario { display: flex; flex-direction: column; line-height: 1.1; text-align: left; max-width: 140px; }
+/* Um nome longo termina em reticências: sem o limite, as ferramentas cresceriam por cima da data ou da marca */
+.hd-usuario > * { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .hd-usuario small { font: 500 11.5px 'Barlow', sans-serif; opacity: .75; }
 .hd-usuario .hd-sep { display: none; }
 .menu-itens {
@@ -186,14 +188,28 @@ body[data-perfil="secretaria"] .aba-sep,
 body[data-perfil="secretaria"] #btn-open-log,
 body[data-perfil="secretaria"] #btn-share-link { display: none !important; }
 
+/* Com a data no meio, as ferramentas precisam de cerca de 1290 px; sem caber, elas cobririam a data. Abaixo disso, a data
+   vem logo depois da marca; abaixo de 1030 px, a marca e a data ficam na primeira linha e as ferramentas na segunda, na
+   ordem do Tab (marca, data, ferramentas) */
+@media (max-width: 1289px) {
+  header.topo { grid-template-columns: minmax(0, 1fr) auto auto; }
+}
+@media (max-width: 1029px) {
+  header.topo { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "marca data" "ferramentas ferramentas" "abas abas"; }
+}
+/* No celular não cabem a marca e a data na mesma linha: a data ocupa a segunda linha inteira (o tamanho fixo mantém as
+   setas no lugar quando a data muda), e as ferramentas, só com os ícones, ficam ao lado da marca. Aqui o Tab passa pela
+   data antes das ferramentas, que estão acima dela */
 @media (max-width: 640px) {
-  header.topo { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "marca ferramentas" "data data" "abas abas"; padding: 8px 12px 0; }
+  header.topo { grid-template-areas: "marca ferramentas" "data data" "abas abas"; padding: 8px 12px 0; }
   .hd-sel { max-width: 110px; }
   .topo-marca { font-size: 18px; }
   .topo-logo { height: 20px; }
   /* A data ocupa a linha dela: a largura fixa da tela grande faria a página rolar de lado a 320 px */
   .topo-data-campo { width: auto; flex: 1; min-width: 0; }
-  .hd-txt, .hd-usuario, .hd-seta { display: none; }
+  .hd-usuario, .hd-seta { display: none; }
+  /* Só o ícone aparece; a palavra continua no nome do botão, para o leitor de tela */
+  .hd-txt { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   .hd-conta { padding: 3px; }
   .hd-btn { padding: 6px 8px; }
 }
@@ -218,7 +234,7 @@ h3 { font: 600 15px 'Barlow Semi Condensed', sans-serif; margin: 10px 0 6px; col
 
 /* Os controles que aparecem com o mouse também aparecem com o foco em qualquer campo da linha (:focus-within) e em
    telas de toque (pointer: coarse, como um notebook com tela de toque; revisão de 14/11) */
-/* Regras de Somente Visualização Estrita para o Perfil Gestor e Links Compartilhados */
+/* O perfil Gestor só consulta: os campos ficam apagados (desligados por js/somente-leitura.js) */
 body[data-role="gestor"] .edit-only { display: none !important; }
 /* Dados pessoais: só operadores, administradores e a secretaria (que no resto entra como consulta) */
 body[data-role="gestor"]:not([data-perfil="secretaria"]) .so-dados { display: none !important; }
@@ -233,11 +249,6 @@ body[data-role="gestor"] main input:not(.flt-ctrl):not(.agenda-campo):not(.conta
 body[data-role="gestor"] main select:not(.flt-ctrl):not(.agenda-campo):not(.conta-campo) {
   opacity: 0.82;
 }
-body[data-shared="true"] #role-sel {
-  pointer-events: none !important;
-  cursor: default !important;
-  border-color: var(--ye);
-}
 
 /* ==========================================================================
    3. COMPONENTES VISUAIS PADRONIZADOS
@@ -249,7 +260,6 @@ body[data-shared="true"] #role-sel {
   padding: 12px 14px;
   margin-bottom: 12px;
 }
-.chips { display: flex; flex-wrap: wrap; gap: 8px; }
 .chip {
   display: flex;
   align-items: center;
@@ -263,14 +273,6 @@ body[data-shared="true"] #role-sel {
   user-select: none;
 }
 .chip.off { opacity: .55; text-decoration: line-through; }
-.chip-sub {
-  font-size: 11.5px;
-  font-weight: 600;
-  color: var(--wa);
-  background: var(--wa-bg);
-  border-radius: 10px;
-  padding: 0 7px;
-}
 
 select, input:not([type=checkbox]) {
   font: inherit;
@@ -355,6 +357,13 @@ details.caixa.avisos summary { color: var(--wa); }
    na cor do status. Em tela cheia, ocupa a tela toda e as letras crescem com ela */
 .painel-dia { display: flex; flex-direction: column; gap: 10px; }
 .fids-controles { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+/* Pausar apertado: o fundo do quadro escolhido e uma marca (✓), que vale também sem cor */
+.fids-controles .btn[aria-pressed="true"] { background: var(--hd); color: #fff; border-color: var(--hd); }
+.fids-controles .btn[aria-pressed="false"] .ico { display: none; }
+/* Com as cores forçadas do sistema, o fundo some: o botão apertado usa a cor de destaque do sistema */
+@media (forced-colors: active) {
+  .fids-controles .btn[aria-pressed="true"], .seg button.on { forced-color-adjust: none; background: Highlight; color: HighlightText; border-color: Highlight; }
+}
 .fids {
   --fids-fs: 17px; --fids-linha: 34px; --fids-amarelo: #FFD23F; --fids-branco: #F4F7FF;
   overflow-x: auto; background: #07122B; border: 6px solid #0A0F1A; border-radius: 8px; box-shadow: 0 8px 22px rgba(0,0,0,.35);
@@ -452,7 +461,6 @@ table.fids-tabela { width: 100%; min-width: 860px; border-collapse: collapse; fo
 .hr-chip button { display: inline-grid; place-items: center; border: 0; background: transparent; color: var(--mu); border-radius: 50%; padding: 2px; cursor: pointer; }
 .hr-chip button:hover { color: var(--er); }
 .hr-chip .ico { width: 12px; height: 12px; }
-.horarios-acoes { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px; }
 .hr-novo { width: 110px; }
 /* Recurso novo: matrícula, categoria e, no C152, "Só Parafuso" */
 .form-recurso { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px 12px; margin: 0 0 10px; }
@@ -888,14 +896,6 @@ body:not([data-agenda="edita"]) .agenda-acao { display: none !important; }
 .st strong { font-size: 24px; color: var(--ink); display: block; line-height: 1.15; }
 .st small { font-weight: 400; font-size: 12px; color: var(--mu); display: block; margin-top: 2px; }
 
-textarea {
-  width: 100%;
-  height: 140px;
-  font: 13px monospace;
-  background: var(--pn);
-  color: var(--ink);
-  border: 1px solid var(--ln);
-}
 p.h { color: var(--mu); margin: 4px 0 8px; }
 a { color: var(--ac); }
 /* Só para o leitor de tela */
@@ -931,25 +931,6 @@ a { color: var(--ac); }
 /* ==========================================================================
    4. MAPA VISUAL INTERATIVO DE OCUPAÇÃO (SINCRONIZADO COM STATUS)
    ========================================================================== */
-.tl-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-bottom: 10px;
-}
-.tl-switch { display: inline-flex; border: 1px solid var(--ln); border-radius: 5px; overflow: hidden; background: var(--bg); }
-.tl-switch button {
-  border: 0;
-  background: transparent;
-  color: var(--ink);
-  padding: 6px 12px;
-  font: 600 13px 'Barlow Semi Condensed', sans-serif;
-  cursor: pointer;
-}
-.tl-switch button.on { background: var(--ac); color: var(--acT); }
-
 .tl-legend { display: flex; gap: 12px; flex-wrap: wrap; font-size: 12px; color: var(--mu); align-items: center; margin-bottom: 8px; }
 .tl-dot { width: 10px; height: 10px; border-radius: 2px; display: inline-block; margin-right: 4px; vertical-align: middle; }
 .tl-dot-emvoo { border: 2px solid var(--ye); }
@@ -1249,7 +1230,7 @@ body[data-backend="supabase"] #btn-bi-clr { display: none !important; }
 .aviso-link.ok { border-color: var(--ok); }
 
 @media print {
-  header, .bar, nav, section:not(#s-esc), textarea, #audit-panel, #toast-box { display: none !important; }
+  header, .bar, nav, section:not(#s-esc), #toast-box { display: none !important; }
   section#s-esc { display: block; }
   body { background: #fff; color: #000; }
 }

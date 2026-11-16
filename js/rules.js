@@ -35,7 +35,7 @@ export const opcoesDeDisponibilidade = horarios => [['', 'Qualquer horário'], .
   ...horarios.map(m => [`h${m}`, `Só às ${hm(m)}`])];
 
 // Regra da missão pelo nome, somente entre as missões cadastradas (nomes como "constructor" não contam)
-export const missionRule = mis => (Object.hasOwn(MIS, mis) ? MIS[mis] : null);
+const missionRule = mis => (Object.hasOwn(MIS, mis) ? MIS[mis] : null);
 
 export const isGroundMission = mis => Boolean(missionRule(mis) && missionRule(mis).isGround);
 

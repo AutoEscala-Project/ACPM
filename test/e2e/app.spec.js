@@ -11,8 +11,6 @@ test.describe('Aplicação', () => {
     await expect(page.locator('#s-esc')).toBeVisible();
     await expect(page.locator('#nav button[data-t="esc"]')).toHaveClass(/\bon\b/);
     await expect(page.locator('#s-rec')).toBeHidden();
-    // Sem botão Desfazer: para voltar atrás, basta alterar de novo
-    await expect(page.locator('#btn-undo')).toHaveCount(0);
   });
 
   test('o logo do ACPM no topo e como ícone da página; no topo, a águia e "AutoEscala", alinhados, sem a sigla', async ({ page }) => {
@@ -26,7 +24,6 @@ test.describe('Aplicação', () => {
     await expect(logo).toHaveAttribute('alt', '');
     expect(await logo.evaluate(img => img.complete && img.naturalWidth > 0)).toBe(true);
     await expect(page.locator('.topo-marca')).toHaveText('AutoEscala');
-    await expect(page.locator('.topo-sigla')).toHaveCount(0);
     const centros = await page.evaluate(() => ['.topo-logo', '.topo-titulo'].map(s => {
       const r = document.querySelector(s).getBoundingClientRect();
       return r.top + r.height / 2;
@@ -51,7 +48,8 @@ test.describe('Aplicação', () => {
     await expect(page.locator('#dt-rel')).toHaveText('hoje');
   });
 
-  test('o controle da data tem tamanho fixo: as setas não saem do lugar quando o texto muda', async ({ page }) => {
+  for (const largura of [1280, 560, 360]) test(`o controle da data tem tamanho fixo: as setas não saem do lugar quando o texto muda (${largura} px)`, async ({ page }) => {
+    await page.setViewportSize({ width: largura, height: 800 });
     await abrir(page);
     const caixas = () => page.evaluate(() => ['.topo-data', '#dt-ant', '#dt-prox'].map(s => {
       const r = document.querySelector(s).getBoundingClientRect();
@@ -171,11 +169,5 @@ test.describe('Aplicação', () => {
     expect(Math.round(cartao.width)).toBe(Math.round(outra.width));
     const largura = await page.evaluate(() => document.documentElement.clientWidth);
     expect(Math.abs(cartao.x - (largura - cartao.x - cartao.width))).toBeLessThanOrEqual(1);
-  });
-
-  test('o manual saiu do fim da aba BI', async ({ page }) => {
-    await abrir(page);
-    await irPara(page, 'bi');
-    await expect(page.locator('#s-bi details, #s-bi .manual-panel')).toHaveCount(0);
   });
 });

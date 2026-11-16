@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { normalizarHangar, moverNoHangar } from '../../js/hangar.js';
 import { FROTA_INICIAL } from '../../js/frota.js';
 import { runAllocationEngine } from '../../js/engine.js';
-import { aluno, cenario, instrutor, apenas } from '../helpers/montar.js';
+import { aluno, cenario, instrutor } from '../helpers/montar.js';
 
 const C152 = FROTA_INICIAL.filter(f => f.tipo === 'C152').map(f => f.reg);
 

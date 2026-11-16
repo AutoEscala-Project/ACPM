@@ -2,7 +2,7 @@
 // O mesmo seed sempre produz o mesmo estado, o que permite comparar a saída com os goldens capturados
 // do motor original (index.html no commit 9b5de75) sem versionar os estados de entrada.
 import { createHash } from 'node:crypto';
-import { FROTA, JANELAS, LIMITES, dois } from './estado.js';
+import { FROTA, JANELAS, dois } from './estado.js';
 import { habilitacoesDoNivel } from '../../js/habilitacoes.js';
 
 const EQUIP_MISSAO = {
@@ -83,7 +83,6 @@ export function gerarCenario(seed) {
     schemaVer: 4,
     win: Array.from({ length: JANELAS }, () => r() > 0.08),
     av: Object.fromEntries(FROTA.map(reg => [reg, r() > 0.15])),
-    lim: { ...LIMITES },
     nid,
     ins,
     stu,

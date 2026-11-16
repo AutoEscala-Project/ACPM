@@ -48,7 +48,7 @@ function descrever(raiz) {
   }
 }
 
-export function abrirDica(el, { toque = false } = {}) {
+function abrirDica(el, { toque = false } = {}) {
   const termo = GLOSSARIO[el.dataset.dica];
   const dica = balao();
   if (!termo || !dica) return;
@@ -67,7 +67,7 @@ export function abrirDica(el, { toque = false } = {}) {
   if (el.classList.contains('dica-btn')) el.setAttribute('aria-expanded', 'true');
 }
 
-export function fecharDica() {
+function fecharDica() {
   clearTimeout(espera);
   const dica = balao();
   if (dica) dica.hidden = true;
@@ -75,8 +75,6 @@ export function fecharDica() {
   alvo = null;
   porToque = false;
 }
-
-export const dicaAberta = () => Boolean(alvo);
 
 // O botão "?" ao lado de um rótulo (o id é um termo do glossário; o rótulo vai no nome acessível)
 export const botaoDeDica = (id, rotulo) =>

@@ -1,39 +1,39 @@
-// Exportação da escala do dia em CSV e PDF (jsPDF + AutoTable carregados no index.html).
+// Exportação da escala do dia em CSV, PDF (jsPDF + AutoTable carregados no index.html) e na planilha do modelo do
+// aeroclube (Excel, js/planilha.js).
 import { hm, WLB, fmtH } from './format.js';
 import { sumUniqueOperationalHours, consolidateTimelineSlots } from './engine.js';
 import { S, RES, DATA } from './state.js';
-import { $, showToast } from './dom.js';
+import { showToast } from './dom.js';
 import { HT } from './views/escala.js';
 import { montarCsv, nomeDoCsv } from './csv.js';
 import { textoDoStatus } from './status.js';
+import { MODELO, nomeDaPlanilha, montarPlanilha } from './planilha.js';
 
-export async function sv(fn, data) {
-  let dl = null;
-  try { dl = window.claude ? await claude.use('downloads') : null; } catch (e) {}
-  if (dl) {
-    try { await dl.save({ filename: fn, data }); return true; }
-    catch (e) { return !!(e && e.code === 'declined'); }
-  }
-  if (window.claude) return false;
+// Baixa o arquivo pelo navegador; o navegador que não deixar recebe um aviso (o que é: "o CSV", "o PDF", "a planilha")
+function baixar(nome, dados, oQue) {
   try {
-    const blob = data instanceof Blob ? data : new Blob([data], { type: 'text/csv;charset=utf-8' });
-    const u = URL.createObjectURL(blob), l = document.createElement('a');
-    l.href = u; l.download = fn; document.body.appendChild(l); l.click(); l.remove();
-    setTimeout(() => URL.revokeObjectURL(u), 2000);
+    const blob = dados instanceof Blob ? dados : new Blob([dados], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob), link = document.createElement('a');
+    link.href = url;
+    link.download = nome;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
     return true;
-  } catch (e) { return false; }
+  } catch {
+    showToast(`Não foi possível baixar ${oQue} neste navegador.`);
+    return false;
+  }
 }
 
 // CSV para o portal de agendamento: agrupado por avião, em ordem de horário (js/csv.js)
-export async function exp() {
+export function exp() {
   if (!RES) { showToast('Não há escala para exportar nesta data.'); return; }
-  const c = montarCsv(RES, S.fStatus || {}, S.fObs || {});
-  if (await sv(nomeDoCsv(DATA), c)) { showToast('CSV exportado.', 'ok'); return; }
-  $('#csv').value = c;
-  $('#csvbox').hidden = false;
+  if (baixar(nomeDoCsv(DATA), montarCsv(RES, S.fStatus || {}, S.fObs || {}), 'o CSV')) showToast('CSV exportado.', 'ok');
 }
 
-export async function pdf() {
+export function pdf() {
   if (!RES) { showToast('Não há escala para o PDF nesta data.'); return; }
   if (!window.jspdf) { showToast('A biblioteca de PDF não carregou. Verifique a conexão e recarregue a página.'); return; }
 
@@ -96,6 +96,59 @@ export async function pdf() {
     doc.text(`ACPM - Escala de ${dt} - Página ${i} de ${n}`, pw - 14, ph - 6, { align: 'right' });
   }
 
-  if (await sv(`escala-acpm-${dt.split('/').reverse().join('-')}.pdf`, doc.output('blob'))) showToast('PDF emitido.', 'ok');
-  else showToast('O download direto não está disponível neste modo de visualização.');
+  if (baixar(`escala-acpm-${dt.split('/').reverse().join('-')}.pdf`, doc.output('blob'), 'o PDF')) showToast('PDF emitido.', 'ok');
+}
+
+// O .xlsx é montado com a compressão do navegador ("deflate-raw": Safari 16.4, Chrome 103 e Firefox 113 em diante; o
+// resto do app roda em navegadores mais antigos)
+function navegadorMontaPlanilha() {
+  try {
+    new CompressionStream('deflate-raw');
+    new DecompressionStream('deflate-raw');
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// A planilha no modelo do aeroclube, para o lançamento no CAVOK. A escala, os dados e a data são os do clique (copiados
+// na hora): o modelo chega depois (fetch), e a data aberta ou o status de um voo podem ter mudado. Um segundo clique
+// enquanto a planilha é montada não baixa outra
+let montando = false;
+export async function planilha() {
+  if (!RES) { showToast('Não há escala para exportar nesta data.'); return; }
+  if (!navegadorMontaPlanilha()) { showToast('Este navegador não monta a planilha do Excel. Atualize o navegador ou use o CSV.'); return; }
+  if (montando) return;
+  montando = true;
+  try {
+    await baixarPlanilha(RES, DATA, { frota: S.frota ? [...S.frota] : undefined, av: { ...S.av }, fStatus: { ...S.fStatus }, fObs: { ...S.fObs } });
+  } finally {
+    montando = false;
+  }
+}
+
+async function baixarPlanilha(res, data, estado) {
+  let modelo;
+  try {
+    const resposta = await fetch(MODELO, { signal: AbortSignal.timeout(20000) });
+    if (!resposta.ok) throw new Error(`HTTP ${resposta.status}`);
+    modelo = new Uint8Array(await resposta.arrayBuffer());
+  } catch {
+    showToast('O modelo da planilha não carregou. Verifique a conexão e tente de novo.');
+    return;
+  }
+  let pronta;
+  try {
+    pronta = await montarPlanilha(modelo, res, estado, data);
+  } catch (e) {
+    // O modelo que chegou não é o esperado (uma página no lugar dele, um arquivo estragado ou mudado)
+    console.warn(e);
+    showToast('Não foi possível montar a planilha: o modelo que chegou não é o esperado. Recarregue a página e tente de novo, ou use o CSV.');
+    return;
+  }
+  const arquivo = new Blob([pronta.bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  if (!baixar(nomeDaPlanilha(data), arquivo, 'a planilha')) return;
+  const n = pronta.foraDoModelo.length;
+  if (n) showToast(`Planilha exportada. ${n === 1 ? '1 voo não coube' : `${n} voos não couberam`} no modelo: estão na última linha da planilha.`);
+  else showToast('Planilha exportada.', 'ok');
 }

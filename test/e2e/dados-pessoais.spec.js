@@ -1,7 +1,7 @@
 // Dados pessoais de alunos e instrutores (fase 9): CPF, CANAC, nascimento, celular e e-mail, num painel ao lado da
 // tabela. Ficam fora do cadastro; o histórico registra só os campos que mudaram. No modo
 // compartilhado, operadores, administradores e a secretaria veem e editam; o gestor não vê.
-import { test, expect, abrir, irPara, prepararContexto, vigiarErros, abrirMenuDaConta, AMANHA, entrar as entrarNoApp } from './fixtures.js';
+import { test, expect, abrir, irPara, prepararContexto, vigiarErros, AMANHA, entrar as entrarNoApp } from './fixtures.js';
 import { criarSupabaseFalso, instalarSupabaseFalso, documentosAtuais, CONTAS } from './supabase-falso.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
 

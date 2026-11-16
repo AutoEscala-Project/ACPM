@@ -35,7 +35,7 @@ function situacao(r, voadas, revisao) {
 
 // As horas disponíveis até a revisão (retorno da operação, 14/11: a operadora lança as disponíveis; o dia guarda as
 // horas desde a revisão, 50 menos as disponíveis)
-export const horasDisponiveis = horas => Math.round(Math.max(0, REVISAO_H - horas) * 10) / 10;
+const horasDisponiveis = horas => Math.round(Math.max(0, REVISAO_H - horas) * 10) / 10;
 
 // A barra das horas disponíveis: âmbar abaixo de 10 h e vermelha abaixo de 5 h
 function barra(horas) {
@@ -77,7 +77,7 @@ export function rRevisao() {
 
 // A frota (vale para todas as datas; revisão de 14/11): cada recurso uma vez, por categoria, com "Só Parafuso" e o
 // Retirar. A disponibilidade e as horas ficam na tabela desta data
-export function rFrota() {
+function rFrota() {
   const lista = $('#frota');
   if (!lista) return;
   lista.innerHTML = GRUPOS.map(({ rotulo, tipos }) => {

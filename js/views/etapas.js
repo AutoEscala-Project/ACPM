@@ -19,7 +19,7 @@ export function proximaDoPedido(stu, mid) {
   return proximaMissao(programa(), situacao(), stu.id, stu.curso, { exceto });
 }
 
-export const descricaoDaMissao = m => `${m.id}: ${m.nome} · ${m.mis} · ${MIS[m.mis].isGround ? '1h30' : fmtDurLabel(m.nb)}${MIS[m.mis].isGround ? '' : ` · ${m.eq}`}`;
+const descricaoDaMissao = m => `${m.id}: ${m.nome} · ${m.mis} · ${MIS[m.mis].isGround ? '1h30' : fmtDurLabel(m.nb)}${MIS[m.mis].isGround ? '' : ` · ${m.eq}`}`;
 
 // Na Demanda: o código do pedido, ou o botão com a próxima missão do programa
 export function etapaNaDemanda(stu, d, mid) {

@@ -24,7 +24,9 @@ export function abrirData(data) {
       url.searchParams.set('data', data);
       window.history.replaceState(window.history.state, '', url);
     }
-  } catch (e) {}
+  } catch {
+    // O navegador que não deixa mudar o endereço (a página dentro de um iframe, por exemplo): a data só não vai para o link
+  }
   $('#dt').value = data;
   $('#bi-dt').value = data;
   // No topo: "quarta-feira, 11/11" e "amanhã"; na tela estreita, "qua., 11/11" (o CSS mostra um dos dois nomes)
@@ -35,23 +37,15 @@ export function abrirData(data) {
   $('#dt-rel').hidden = !relativo;
 }
 
-export function setRole(role, lockShared = false) {
-  if (lockShared) ApiClient.readOnly = true;
+// somenteConsulta: daqui em diante nada é gravado (o Gestor e a Secretaria no modo compartilhado, ou depois de um conflito)
+export function setRole(role, somenteConsulta = false) {
+  if (somenteConsulta) ApiClient.readOnly = true;
   const validRole = (ApiClient.readOnly || role === 'gestor') ? 'gestor' : 'operador';
   document.body.setAttribute('data-role', validRole);
-  if (ApiClient.readOnly) {
-    document.body.setAttribute('data-shared', 'true');
-  }
   const sel = $('#role-sel');
   if (sel) {
-    if (ApiClient.readOnly) {
-      sel.innerHTML = '<option value="gestor" selected>Gestor (somente leitura)</option>';
-      sel.value = 'gestor';
-      sel.disabled = true;
-      sel.title = 'Link compartilhado: visualização exclusiva no perfil Gestor';
-    } else {
-      sel.value = validRole;
-    }
+    sel.value = validRole;
+    sel.disabled = ApiClient.readOnly;
   }
   // No modo compartilhado o gestor navega entre as datas (somente leitura)
   const dtInput = $('#dt');
@@ -260,7 +254,7 @@ export async function carregarBI() {
   let bi;
   try {
     bi = await ApiClient.biDoPeriodo(inicioSemana < inicioMes ? inicioSemana : inicioMes, fimDoMes(ref));
-  } catch (e) {
+  } catch {
     return;
   }
   if (pedido !== pedidoDeBI) return;
@@ -270,7 +264,7 @@ export async function carregarBI() {
 }
 
 // O BI em memória acompanha a escala da tela (que pode ainda estar sendo gravada)
-export function syncBIHistoryForCurrentDate() {
+function syncBIHistoryForCurrentDate() {
   if (ApiClient.readOnly) return;
   if (!DATA) return;
   if (RES) {
@@ -289,7 +283,7 @@ export function syncBIHistoryForCurrentDate() {
 export const escalaCalculada = () => ({ ...runAllocationEngine(S), data: DATA });
 
 // Refaz a escala e o que depende dela (revisão de 50 horas, painel do dia e BI), sem gravar: quem grava é save
-export function refazerEscala() {
+function refazerEscala() {
   setRES(escalaCalculada());
   syncBIHistoryForCurrentDate();
   rRevisao();

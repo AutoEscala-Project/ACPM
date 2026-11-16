@@ -400,10 +400,26 @@ test.describe('Painel: partidas e chegadas como no aeroporto', () => {
     await expect(titulo(page)).toHaveText('Chegadas');
     await page.clock.runFor(10_000);
     await expect(titulo(page)).toHaveText('Partidas');
-    await page.locator('#out [data-fids="pausar"]').click();
-    await expect(page.locator('#out [data-fids="pausar"]')).toHaveAttribute('aria-pressed', 'true');
+    // Um botão de alternar mantém o nome: o leitor de tela anuncia "Pausar, pressionado" (o nome que muda não é anunciado)
+    const pausar = page.locator('#out [data-fids="pausar"]');
+    await pausar.click();
+    await expect(pausar).toHaveAttribute('aria-pressed', 'true');
+    await expect(pausar).toHaveAccessibleName('Pausar');
+    const fundoSolto = await page.locator('#out [data-fids="tela-cheia"]').evaluate(el => getComputedStyle(el).backgroundColor);
+    expect(await pausar.evaluate(el => getComputedStyle(el).backgroundColor), 'pressionado aparece na tela').not.toBe(fundoSolto);
+    // Além da cor, uma marca (✓) ao lado do nome, escondida do leitor de tela; com as cores forçadas do sistema, o
+    // botão pressionado usa a cor de destaque do sistema
+    await expect(pausar.locator('.ico')).toBeVisible();
+    await page.emulateMedia({ forcedColors: 'active' });
+    expect(await pausar.evaluate(el => getComputedStyle(el).backgroundColor), 'cores forçadas').not.toBe(
+      await page.locator('#out [data-fids="tela-cheia"]').evaluate(el => getComputedStyle(el).backgroundColor));
+    await page.emulateMedia({ forcedColors: 'none' });
     await page.clock.runFor(30_000);
     await expect(titulo(page)).toHaveText('Partidas');
+    await pausar.click();
+    await expect(pausar).toHaveAttribute('aria-pressed', 'false');
+    await expect(pausar).toHaveAccessibleName('Pausar');
+    await expect(pausar.locator('.ico')).toBeHidden();
   });
 
   test('um quadro fixo continua só com ele; a página aparece junto do relógio', async ({ page }) => {

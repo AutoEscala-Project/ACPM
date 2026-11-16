@@ -6,7 +6,7 @@ import { acumularHoras } from '../limites.js';
 import { hojeISO } from '../format.js';
 import { situacaoPorMissao, validarRegistro } from '../resultados.js';
 
-export const CHAVES_LOCAIS = { cadastro: 'acpm4_cadastro', estado: 'acpm3', escala: 'acpm3_res', historico: 'acpm3_audit', bi: 'acpm3_bi' };
+const CHAVES_LOCAIS = { cadastro: 'acpm4_cadastro', estado: 'acpm3', escala: 'acpm3_res', historico: 'acpm3_audit', bi: 'acpm3_bi' };
 export const CHAVE_LEGADA = 'acpm2';
 const PREFIXO_DIA = 'acpm4_dia_';
 const CHAVE_HISTORICO = 'acpm4_historico';
@@ -23,7 +23,7 @@ const chaveLocal = documento => {
 };
 
 const lerJson = chave => {
-  try { return JSON.parse(localStorage.getItem(chave)); } catch (e) { return null; }
+  try { return JSON.parse(localStorage.getItem(chave)); } catch { return null; }
 };
 
 function datasGuardadas() {
@@ -63,7 +63,7 @@ export const backendLocal = {
       const x = JSON.parse(localStorage.getItem(chave));
       if (x || documento !== 'estado') return x;
       return converterAcpm2(JSON.parse(localStorage.getItem(CHAVE_LEGADA)));
-    } catch (e) { return null; }
+    } catch { return null; }
   },
 
   async gravar(documento, conteudo) {
@@ -76,7 +76,7 @@ export const backendLocal = {
         if (dados) localStorage.setItem(CHAVE_DADOS_PESSOAIS, JSON.stringify(semQuemSaiu(dados, conteudo)));
       }
       return true;
-    } catch (e) { return false; }
+    } catch { return false; }
   },
 
   // As datas guardadas num formato anterior (a atualização do formato lê só essas); o dia ilegível também
