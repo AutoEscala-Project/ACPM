@@ -1,4 +1,5 @@
 import { readFile } from 'node:fs/promises';
+import { lerZip } from '../../js/zip.js';
 import { test, expect, abrirComExemplo, irPara, abrirEscala, lerEscala, json, AMANHA } from './fixtures.js';
 
 test.describe('Escala', () => {
@@ -59,6 +60,19 @@ test.describe('Escala', () => {
     expect(conteudo).not.toMatch(/[^\r]\n/);
     expect(conteudo.slice(1).split('\r\n').join('\n') + '\n').toMatchSnapshot('escala-exemplo.csv');
     await expect(page.locator('#toast-box .toast.ok')).toHaveText('CSV exportado.');
+  });
+
+  test('exporta a planilha no modelo do aeroclube (Excel, para o CAVOK)', async ({ page }) => {
+    const [download] = await Promise.all([page.waitForEvent('download'), page.locator('#xlsx').click()]);
+    expect(download.suggestedFilename()).toBe(`escala-acpm-${AMANHA}.xlsx`);
+    const arquivos = await lerZip(new Uint8Array(await readFile(await download.path())));
+    const texto = n => new TextDecoder().decode(arquivos[n]);
+    const [ano, mes, dia] = AMANHA.split('-');
+    expect(texto('xl/workbook.xml')).toContain(`<sheet name="${dia}-${mes}-${ano}"`);
+    const nomes = [...texto('xl/worksheets/sheet1.xml').matchAll(/<t xml:space="preserve">([^<]*)<\/t>/g)].map(m => m[1]);
+    expect(nomes.some(n => n.startsWith('Aluno '))).toBe(true);
+    expect(nomes.some(n => n.startsWith('Instrutor '))).toBe(true);
+    await expect(page.locator('#toast-box .toast.ok')).toHaveText('Planilha exportada.');
   });
 
   test('emite o PDF da escala com título, quadros e mais de uma página', async ({ page }) => {

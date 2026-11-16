@@ -1,4 +1,5 @@
-// Exportação da escala do dia em CSV e PDF (jsPDF + AutoTable carregados no index.html).
+// Exportação da escala do dia em CSV, PDF (jsPDF + AutoTable carregados no index.html) e na planilha do modelo do
+// aeroclube (Excel, js/planilha.js).
 import { hm, WLB, fmtH } from './format.js';
 import { sumUniqueOperationalHours, consolidateTimelineSlots } from './engine.js';
 import { S, RES, DATA } from './state.js';
@@ -6,8 +7,9 @@ import { showToast } from './dom.js';
 import { HT } from './views/escala.js';
 import { montarCsv, nomeDoCsv } from './csv.js';
 import { textoDoStatus } from './status.js';
+import { MODELO, nomeDaPlanilha, montarPlanilha } from './planilha.js';
 
-// Baixa o arquivo pelo navegador; o navegador que não deixar recebe um aviso (o que é: "o CSV", "o PDF")
+// Baixa o arquivo pelo navegador; o navegador que não deixar recebe um aviso (o que é: "o CSV", "o PDF", "a planilha")
 function baixar(nome, dados, oQue) {
   try {
     const blob = dados instanceof Blob ? dados : new Blob([dados], { type: 'text/csv;charset=utf-8' });
@@ -95,4 +97,25 @@ export function pdf() {
   }
 
   if (baixar(`escala-acpm-${dt.split('/').reverse().join('-')}.pdf`, doc.output('blob'), 'o PDF')) showToast('PDF emitido.', 'ok');
+}
+
+// A planilha no modelo do aeroclube, para o lançamento no CAVOK. A escala, os dados e a data são os do clique: o modelo
+// chega depois (fetch), e a data aberta pode ter mudado
+export async function planilha() {
+  if (!RES) { showToast('Não há escala para exportar nesta data.'); return; }
+  const res = RES, estado = S, data = DATA;
+  let pronta;
+  try {
+    const resposta = await fetch(MODELO);
+    if (!resposta.ok) throw new Error(`HTTP ${resposta.status}`);
+    pronta = await montarPlanilha(new Uint8Array(await resposta.arrayBuffer()), res, estado, data);
+  } catch {
+    showToast('Não foi possível montar a planilha: o modelo não carregou. Verifique a conexão e recarregue a página.');
+    return;
+  }
+  const arquivo = new Blob([pronta.bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  if (!baixar(nomeDaPlanilha(data), arquivo, 'a planilha')) return;
+  const n = pronta.foraDoModelo.length;
+  if (n) showToast(`Planilha exportada. ${n === 1 ? '1 voo não coube' : `${n} voos não couberam`} no modelo: estão na última linha da planilha.`);
+  else showToast('Planilha exportada.', 'ok');
 }

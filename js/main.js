@@ -48,7 +48,7 @@ import {
 import { normalizarHangar, moverNoHangar } from './hangar.js';
 import { opcoesDeCategoria, categoriaDoTipo } from './categorias.js';
 import { setRole, save, logChange, escalaCalculada, marcarEscalaSoCalculada, gravarEscalaCalculada, abrirData, historicoParaPainel, carregarData, carregarBI, avisarDadosIndisponiveis, lerDadosDeNovo, mostrarNoHistorico } from './actions.js';
-import { exp, pdf } from './export.js';
+import { exp, pdf, planilha } from './export.js';
 import { projetoSupabase } from './config-supabase.js';
 import { CATEGORIAS_DO_RODIZIO, ajustarFilas } from './rodizio.js';
 import { rRodizio } from './views/rodizio.js';
@@ -193,6 +193,7 @@ const armed = (id, txt, fn) => {
 // Exportar é usar a escala: a escala só calculada fica gravada (quem só consulta não grava)
 $('#exp').onclick = () => { gravarEscalaCalculada(); exp(); };
 $('#pdf').onclick = () => { gravarEscalaCalculada(); pdf(); };
+$('#xlsx').onclick = () => { gravarEscalaCalculada(); planilha(); };
 
 $('#role-sel').onchange = e => {
   setRole(e.target.value);
