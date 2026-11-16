@@ -252,7 +252,7 @@ describe('Voos fixos atrasados e cancelados', () => {
     };
     const { out, al, revisao } = runAllocationEngine(estado);
     assert.deepEqual(revisao['PP-LJV'], { inicio: 49, voadas: 0, fim: 49, paraAs: null });
-    assert.deepEqual(al.filter(a => /Limite da lei/.test(a.m)), []);
+    assert.deepEqual(al.filter(a => a.codigo === 'perto-do-limite'), []);
     assert.deepEqual([doAluno(out, 1002).groupSize, doAluno(out, 1002).tag], [1, 'Pref. 1']);
   });
 

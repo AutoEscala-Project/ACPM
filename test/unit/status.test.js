@@ -186,13 +186,13 @@ describe('Atraso que invade o voo seguinte', () => {
     const [primeiro] = antes.out;
     const depois = runAllocationEngine({ ...base, fStatus: { [primeiro.fKey]: 'Atrasado' }, fObs: { [primeiro.fKey]: { novoInicio: 640 } } });
     assert.deepEqual(depois.out.map(o => [o.fKey, o.a, o.r, o.insId]), antes.out.map(o => [o.fKey, o.a, o.r, o.insId]));
-    const aviso = depois.al.find(a => a.m.startsWith('Atraso:'));
+    const aviso = depois.al.find(a => a.codigo === 'atraso');
     assert.ok(aviso, 'aviso do atraso');
     assert.equal(aviso.t, 'warn');
     assert.equal(aviso.s, 'Aluno 1000');
     assert.match(aviso.m, /nova decolagem às 10:40 \(pouso às 11:40\).*voo das 11:30 de Aluno 1001/);
     assert.match(aviso.m, /mesmo instrutor \(Instrutor 01\)/);
-    assert.equal(antes.al.some(a => a.m.startsWith('Atraso:')), false);
+    assert.equal(antes.al.some(a => a.codigo === 'atraso'), false);
   });
 
   it('turma de Ground atrasada: o aviso aparece uma vez por voo atrasado', () => {
@@ -201,6 +201,6 @@ describe('Atraso que invade o voo seguinte', () => {
     const { out } = runAllocationEngine(base);
     const fStatus = Object.fromEntries(out.map(o => [o.fKey, 'Atrasado']));
     const fObs = Object.fromEntries(out.map(o => [o.fKey, { novoInicio: 420 }]));
-    assert.equal(runAllocationEngine({ ...base, fStatus, fObs }).al.filter(a => a.m.startsWith('Atraso:')).length, 0);
+    assert.equal(runAllocationEngine({ ...base, fStatus, fObs }).al.filter(a => a.codigo === 'atraso').length, 0);
   });
 });

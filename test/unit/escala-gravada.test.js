@@ -53,6 +53,13 @@ describe('Escala gravada', () => {
     // O código da rejeição: só os da lista
     assert.deepEqual(normalizarEscalaGravada({ ...base, al: [{ t: 'err', s: 'x', m: 'y', codigo: 'bloqueio' }] }).al, [{ t: 'err', s: 'x', m: 'y', codigo: 'bloqueio' }]);
     assert.equal(normalizarEscalaGravada({ ...base, al: [{ t: 'err', s: 'x', m: 'y', codigo: ATAQUE }] }), null);
+    // O aviso tem os códigos dele e, no de peso, de quem é o peso que falta
+    const aviso = { t: 'warn', s: 'x', m: 'y', codigo: 'sem-peso', stuId: 1000, insId: 3 };
+    assert.deepEqual(normalizarEscalaGravada({ ...base, al: [aviso] }).al, [aviso]);
+    assert.equal(normalizarEscalaGravada({ ...base, al: [{ ...aviso, codigo: 'bloqueio' }] }), null, 'código de rejeição num aviso');
+    assert.equal(normalizarEscalaGravada({ ...base, al: [{ t: 'err', s: 'x', m: 'y', codigo: 'sem-peso' }] }), null, 'código de aviso numa rejeição');
+    assert.equal(normalizarEscalaGravada({ ...base, al: [{ ...aviso, stuId: ATAQUE }] }), null);
+    assert.equal(normalizarEscalaGravada({ ...base, al: [{ ...aviso, insId: -1 }] }), null);
     assert.equal(normalizarEscalaGravada({ ...base, tot: ATAQUE }), null);
     assert.equal(normalizarEscalaGravada({ ...base, revisao: { [ATAQUE]: { inicio: 1, voadas: 1, fim: 2, paraAs: null } } }), null);
     assert.equal(normalizarEscalaGravada({ ...base, revisao: { 'PR-VOB': { inicio: ATAQUE, voadas: 1, fim: 2, paraAs: null } } }), null);

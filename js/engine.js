@@ -159,7 +159,7 @@ function avisosDeLimite(out, state, limites, historico) {
     for (const [periodo, limite, passadas] of [['mês', limites.vooMesH, h.mes], ['semestre', limites.vooSemestreH, h.semestre], ['ano', limites.vooAnoH, h.ano]]) {
       const total = Math.round((passadas + hoje) * 10) / 10;
       if (limite !== null && total >= 0.9 * limite) {
-        avisos.push({ t: 'warn', s: x ? x.nm : `Instrutor ${id}`, m: `Limite da lei: com esta escala, ${numeroBr(total)} h de voo no ${periodo} (limite de ${limite} h).` });
+        avisos.push({ t: 'warn', s: x ? x.nm : `Instrutor ${id}`, m: `Limite da lei: com esta escala, ${numeroBr(total)} h de voo no ${periodo} (limite de ${limite} h).`, codigo: 'perto-do-limite', insId: +id });
       }
     }
   }
@@ -751,7 +751,7 @@ export function runAllocationEngine(state, opcoes = {}) {
       if (lim && (!stu.kg || !x.kg)) {
         // O aviso diz de quem é o peso que falta
         const quem = !stu.kg && !x.kg ? `Pesos do aluno e de ${x.nm} não informados` : !stu.kg ? 'Peso do aluno não informado' : `Peso de ${x.nm} não informado`;
-        al.push({ t: 'warn', s: labelStu, m: `${quem} (0 kg): verificação de limite (${lim} kg) no ${d.eq} não realizada.` });
+        al.push({ t: 'warn', s: labelStu, m: `${quem} (0 kg): verificação de limite (${lim} kg) no ${d.eq} não realizada.`, codigo: 'sem-peso', ...(stu.kg ? {} : { stuId }), ...(x.kg ? {} : { insId: x.id }) });
       }
     } else {
       // O motivo, com o código que diz onde resolver
@@ -820,7 +820,8 @@ export function runAllocationEngine(state, opcoes = {}) {
         t: 'warn', s: r,
         m: meus.length
           ? `Aeronave parou para revisão de 50 horas às ${hm(paraAs)} (${fmtH(fim)} desde a última revisão).`
-          : `Aeronave parou para revisão de 50 horas: sem saldo para voar hoje (${fmtH(fim)} desde a última revisão).`
+          : `Aeronave parou para revisão de 50 horas: sem saldo para voar hoje (${fmtH(fim)} desde a última revisão).`,
+        codigo: 'revisao'
       });
     }
   }
