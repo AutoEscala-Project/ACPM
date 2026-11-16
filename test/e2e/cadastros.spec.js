@@ -119,7 +119,6 @@ test.describe('Recursos: acrescentar e retirar', () => {
     await expect(page.locator('#frota [data-act="retirar-recurso"]').first()).toBeHidden();
   });
 
-  // Revisão de 14/11: o que vale só nesta data e o que vale para todas as datas ficam separados
   test('Recursos em duas partes: nesta data (janelas, disponibilidade e horas, hangar) e para todas as datas (horários e frota)', async ({ page }) => {
     await abrirSintetico(page);
     await irPara(page, 'rec');
@@ -136,7 +135,7 @@ test.describe('Recursos: acrescentar e retirar', () => {
   });
 });
 
-// Revisão de 14/11 (Pedro: "Resumo + Editar"): cada categoria mostra um resumo; um botão abre o editor da lista
+// Cada categoria mostra um resumo; um botão abre o editor da lista
 test.describe('Recursos: horários de decolagem por categoria', () => {
   const editor = page => page.locator('#horarios .horarios-editor');
 
@@ -151,7 +150,7 @@ test.describe('Recursos: horários de decolagem por categoria', () => {
     const pa34 = page.locator('#horarios [data-cat="PA-34"]');
     await expect(pa34.locator('.horarios-modelo')).toHaveText('De 30 em 30 min, 06:30–16:30');
     await expect(pa34.locator('.horarios-qtd')).toHaveText('21 horários');
-    // No resumo, só um botão por categoria (antes, um ✕ por horário e três botões)
+    // No resumo, só um botão por categoria
     expect(await page.locator('#horarios button').count()).toBeLessThanOrEqual(8);
     await expect(page.locator('#horarios .horarios-editor')).toHaveCount(0);
 
@@ -384,7 +383,6 @@ test.describe('Instrutores', () => {
     await expect(page.locator(`#inst-dia tr[data-id="${id}"] [data-f="aw"][data-w="7"]`)).toBeFocused();
   });
 
-  // Retorno da operação (14/11): o checador é credenciado por partes, e o cheque exige as três
   test('o checador por partes: o curso, o motor e as regras; o cheque vai para quem tem as três', async ({ page }) => {
     const estado = cenario({
       ins: [instrutor(1, 9, { hab: ['local', 'c152', 'checa_pp', 'checa_mnte'] }), instrutor(2, 9, { hab: ['local', 'c152'] })],
@@ -432,7 +430,6 @@ test.describe('Instrutores', () => {
     const painel = page.locator('#painel-instrutor');
     await expect(painel).toBeVisible();
     await expect(painel.locator('h2')).toContainText('Novo instrutor');
-    // Os aviões: C152, C172 e PA-34 (retorno da operação, 14/11)
     await expect(painel.locator('fieldset', { hasText: 'Aviões' }).locator('label')).toHaveText(['C152', 'C172', 'MLTE (PA-34)']);
     await expect(painel.locator('[data-f="hab"][data-h="c152"]')).toBeChecked();
     await painel.locator('[data-f="hab"][data-h="c172"]').check();

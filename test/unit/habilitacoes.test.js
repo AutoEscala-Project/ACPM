@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { HABILITACOES, habilitacoesDoNivel, normalizarHabilitacoes, podeFazer, podeAlgumCheque, descreverExigencias, marcasDoChecadorAntigo } from '../../js/habilitacoes.js';
 import { MIS } from '../../js/config.js';
 
-// Regra dos níveis cumulativos (até a fase 3), congelada aqui: a migração não pode mudar quem pode fazer o quê
+// Regra dos níveis cumulativos, congelada aqui: a migração não pode mudar quem pode fazer o quê
 const NIVEL_DA_MISSAO = { 'Simulador': 2, 'Voo Local': 1, 'Navegação': 4, 'Voo Solo': 5, 'Parafuso': 6, 'IFR': 8, 'Noturno': 7, 'Multimotor': 9 };
 const NIVEL_DO_EQUIPAMENTO = { 'Sala Ground': 1, 'C152': 1, 'Sim. Mono': 2, 'Sim. Multi': 2, 'C172': 7, 'PA-34': 9 };
 const nivelExigido = (mis, eq) => (mis.startsWith('Ground') ? 1 : Math.max(NIVEL_DA_MISSAO[mis], NIVEL_DO_EQUIPAMENTO[eq]));
@@ -53,7 +53,6 @@ describe('Habilitações individuais', () => {
     assert.deepEqual(normalizarHabilitacoes('local'), []);
   });
 
-  // Retorno da operação (14/11): o C152 também é uma habilitação do avião, como o C172 e o PA-34
   it('o C152 exige a habilitação do avião', () => {
     assert.equal(podeFazer(com('local'), 'Voo Local', 'C152'), false);
     assert.equal(podeFazer(com('local', 'c152'), 'Voo Local', 'C152'), true);
@@ -69,7 +68,7 @@ describe('Habilitações individuais', () => {
     assert.equal(podeFazer(com('local'), 'TGL (TMA)', 'C152'), false);
   });
 
-  // Retorno da operação (14/11): o checador é credenciado por partes; o cheque exige as três (o curso, o motor e as regras)
+  // O checador é credenciado por partes; o cheque exige as três (o curso, o motor e as regras)
   it('voos de cheque exigem as três marcas do checador: o curso, o motor e as regras (só as de checador)', () => {
     const exige = {
       'Cheque PP': ['checa_pp', 'checa_mnte', 'checa_vfr'],

@@ -1,5 +1,5 @@
-// Escala por data no modo local: cada data guarda a sua escala, a nova data copia o dia anterior,
-// histórico e BI por data, e os dados da fase 2 deste navegador são convertidos na primeira abertura.
+// Escala por data no modo local: cada data guarda a sua escala, a nova data começa com a demanda vazia,
+// histórico e BI por data, e os dados antigos deste navegador são convertidos na primeira abertura.
 import { test, expect, abrir, abrirSintetico, abrirComExemplo, irPara, abrirEscala, lerEscala, AMANHA } from './fixtures.js';
 import { estadoSintetico } from '../helpers/estado.js';
 import { aluno } from '../helpers/montar.js';
@@ -11,7 +11,6 @@ import { comNomesAntigos } from '../helpers/formato.js';
 
 const DEPOIS = '2026-11-12';
 
-// O campo de data fica na aba 6 · Escala
 async function mudarData(page, data) {
   await page.locator('#nav button[data-t="esc"]').click();
   await page.locator('#dt').fill(data);
@@ -20,7 +19,7 @@ async function mudarData(page, data) {
 }
 
 test.describe('Escala por data', () => {
-  // Retorno da operação (14/11): a demanda é zerada a cada dia; a agenda é o centro dos agendamentos
+  // A demanda é zerada a cada dia; a agenda é o centro dos agendamentos
   test('cada data tem a sua escala; a nova data começa com a demanda vazia', async ({ page }) => {
     await abrirComExemplo(page);
     await abrirEscala(page);
@@ -47,7 +46,7 @@ test.describe('Escala por data', () => {
     expect(await lerEscala(page)).toEqual(escalaDia12);
   });
 
-  test('sem espaço neste navegador: o aviso diz que a alteração não foi salva (revisão de 14/11)', async ({ page }) => {
+  test('sem espaço neste navegador: o aviso diz que a alteração não foi salva', async ({ page }) => {
     await abrirSintetico(page);
     await page.evaluate(() => {
       const gravar = Storage.prototype.setItem;
@@ -118,7 +117,7 @@ test.describe('Escala por data', () => {
     await abrirComExemplo(page);
     await abrirEscala(page);
     await exportar();
-    // A data nova começa com a demanda vazia (retorno da operação, 14/11): um aluno (um voo de 1 h) entra à mão
+    // A data nova começa com a demanda vazia: um aluno (um voo de 1 h) entra à mão
     await mudarData(page, DEPOIS);
     await irPara(page, 'dem');
     await page.locator('#onlyfly').uncheck();
@@ -132,7 +131,7 @@ test.describe('Escala por data', () => {
 
   test('dados no formato anterior neste navegador são regravados no formato atual na abertura', async ({ page }) => {
     const { cadastro, dia } = separar(ApiClient.normalizeAndMigrateState({ ...estadoSintetico(), stu: [aluno(1000)] }));
-    // O cadastro antigo não tinha a frota (formato 11)
+    // O cadastro antigo não tem a frota, que entra no formato 11
     const { frota, ...cadastroAntigo } = cadastro;
     const fase3 = comNomesAntigos({ acpm4_cadastro: cadastroAntigo, [`acpm4_dia_${AMANHA}`]: { ...dia, av: { ...dia.av, 'SIM-MONO-A': false }, resultado: null } });
     await page.addInitScript(json => {
@@ -149,7 +148,7 @@ test.describe('Escala por data', () => {
     expect(gravado.cadastro.ins).toEqual(cadastro.ins);
   });
 
-  test('dados da fase 2 neste navegador são convertidos na primeira abertura', async ({ page }) => {
+  test('dados antigos neste navegador são convertidos na primeira abertura', async ({ page }) => {
     const estado = ApiClient.normalizeAndMigrateState({ ...estadoSintetico(), stu: [aluno(1000), aluno(1001, { p1: 2 })] });
     const escala = runAllocationEngine(estado);
     const fase2 = {

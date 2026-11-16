@@ -1,4 +1,4 @@
-// O dia de operação (fase 12): a escala aprovada fica fixa. O motor põe primeiro os voos fixos (no mesmo horário, avião
+// O dia de operação: a escala aprovada fica fixa. O motor põe primeiro os voos fixos (no mesmo horário, avião
 // e instrutor) e encaixa o resto em volta; um voo fixo que fica impossível continua onde está, marcado em conflito, e o
 // voo fixo cancelado libera o avião e o instrutor.
 import { describe, it } from 'node:test';
@@ -77,7 +77,7 @@ describe('Voos fixos', () => {
   });
 });
 
-// Revisão de 14/11: o voo fixo é conferido de novo a cada cálculo, com as mesmas regras do motor. O que não vale mais
+// O voo fixo é conferido de novo a cada cálculo, com as mesmas regras do motor. O que não vale mais
 // vira conflito, com o texto e o código (o código decide as sugestões de reparo)
 describe('Voos fixos conferidos de novo', () => {
   const VOO = { a: 390, b: 450, r: 'PR-VOB', insId: 1 };
@@ -140,7 +140,7 @@ describe('Voos fixos conferidos de novo', () => {
     assert.deepEqual(conflitoDe(fixado({}, {}, turma)), { conflito: ['o pedido passou de Ground para voo'], codigos: ['ground-ou-voo'] });
   });
 
-  it('os conflitos de antes ganham código', () => {
+  it('os conflitos do instrutor indisponível e da missão ou do avião que mudou também têm código', () => {
     assert.deepEqual(conflitoDe(fixado({}, { ins: [{ ...instrutor(1, 9), on: false }] })),
       { conflito: ['o instrutor não está disponível'], codigos: ['instrutor-indisponivel'] });
     assert.deepEqual(conflitoDe(fixado({ eq: 'C172' })), { conflito: ['a missão ou o avião do pedido mudou'], codigos: ['tipo-de-aviao'] });
@@ -151,7 +151,6 @@ describe('Voos fixos conferidos de novo', () => {
   });
 });
 
-// Revisão de 14/11: a turma de Ground fixa
 describe('Turma de Ground fixa', () => {
   const TURMA = { a: 390, b: 480, r: 'SALA-GROUND', insId: 1, classKey: 'GND_Ground C152_0_1' };
   const ground = (id, pedido = {}, extra = {}) => aluno(id, { ...GROUND_C152, p1: 390, p2: -1, ...pedido }, extra);
@@ -212,7 +211,7 @@ describe('Turma de Ground fixa', () => {
   });
 });
 
-// Revisão de 14/11: o voo atrasado ocupa o horário novo; o cancelado não ocupa nada nem conta nas horas
+// O voo atrasado ocupa o horário novo; o cancelado não ocupa nada nem conta nas horas
 describe('Voos fixos atrasados e cancelados', () => {
   const VOO = { a: 390, b: 450, r: 'PP-LJV', insId: 1 };
 
@@ -258,7 +257,8 @@ describe('Voos fixos atrasados e cancelados', () => {
   });
 
   it('o voo fixo cancelado não conta nas horas da divisão igual', () => {
-    // O instrutor 1 (menos habilitações) tem o voo das 08:20 e um cancelado; com o cancelado contando, o voo iria para o 2
+    // O instrutor 1 (menos habilitações) tem o voo das 08:20 e um cancelado;
+    // com o cancelado contando, o voo iria para o 2
     const estado = {
       ...cenario({ ins: [instrutor(1, 1), instrutor(2, 9)], stu: [aluno(1000, { p1: 390, p2: -1 }), aluno(1001, { p1: 500, p2: -1 })] }),
       fixos: { '1000_0_1': VOO }, fStatus: { '1000_0_1': 'Cancelado' }
@@ -287,7 +287,7 @@ describe('Voos fixos: em 100 dias gerados', async () => {
   });
 });
 
-// Revisão de 14/11: o ciclo do cadeado. Em Voo, Atrasado e Cancelado fixam o voo; Pendente ou Confirmado o soltam fora
+// O ciclo do cadeado. Em Voo, Atrasado, Pousou e Cancelado fixam o voo; Pendente ou Confirmado o soltam fora
 // da escala aprovada; Reabrir mantém os fixados pelo status; o cadeado diz por que o voo está fixo
 describe('O cadeado do voo', () => {
   const VOO = { fKey: '1000_0_1', a: 390, b: 450, r: 'PR-VOB', insId: 1 };

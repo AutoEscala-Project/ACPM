@@ -1,4 +1,4 @@
-// Sugestões para um conflito (fase 12): o botão "Sugestões" da caixa de conflitos abre uma gaveta com o que pode voar
+// Sugestões para um conflito: o botão "Sugestões" da caixa de conflitos abre uma gaveta com o que pode voar
 // no lugar do voo fixo; "Aplicar" muda o voo (que continua fixo) e o histórico desfaz. Cancelar pede o motivo, como no
 // status, já com o motivo do conflito marcado
 import { test, expect, abrir, irPara, abrirEscala, confirmar } from './fixtures.js';
@@ -69,7 +69,7 @@ test.describe('Sugestões para um conflito', () => {
     await expect(botao).toBeFocused();
   });
 
-  // Revisão de 14/11: o pedido mudou depois da aprovação (a duração); a única sugestão é soltar o voo
+  // O pedido mudou depois da aprovação (a duração): a única sugestão é soltar o voo
   test('soltar o voo: o app escala de novo, sem o cadeado; o histórico desfaz', async ({ page }) => {
     const estado = { ...dia(), stu: [aluno(1000, { p1: 390, p2: -1, nb: 2 })], fixos: { '1000_0_1': { a: 390, b: 450, r: 'PP-LJV', insId: 1 } }, aprovacao: { em: '2026-11-10T21:05:00.000Z', por: 'Rayane' } };
     await abrir(page, { estado });

@@ -1,5 +1,5 @@
 // ApiClient com escala por data: carregar e salvar uma data, cópia do dia anterior, BI e migração dos
-// documentos da fase 2 (no próprio backend ou vindos de outro, como no envio dos dados do navegador).
+// documentos antigos (no próprio backend ou vindos de outro, como no envio dos dados do navegador).
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import { FROTA_INICIAL } from '../../js/frota.js';
 import { HORARIOS_INICIAIS } from '../../js/horarios.js';
@@ -100,7 +100,7 @@ describe('Carregar e salvar uma data', () => {
     assert.equal(ehNovo, true);
     assert.equal(escala, null);
     assert.equal(novo.av['PR-BTB'], false);
-    // O cadastro é o mesmo; a demanda começa vazia (retorno da operação, 14/11)
+    // O cadastro é o mesmo; a demanda começa vazia
     assert.deepEqual(novo.stu.map(s => [s.id, s.nm, s.kg, s.fly, s.extra]), estado.stu.map(s => [s.id, s.nm, s.kg, false, []]));
     assert.deepEqual(novo.fStatus, {});
     assert.deepEqual(backend.gravacoes, []);
@@ -114,7 +114,7 @@ describe('Carregar e salvar uma data', () => {
     assert.deepEqual(backend.historico, []);
   });
 });
-describe('Dados lidos à parte (revisão de 14/11)', () => {
+describe('Dados lidos à parte', () => {
   it('sem as horas dos instrutores ou os resultados dos cursos, a data abre e diz o que ficou indisponível', async () => {
     assert.deepEqual((await ApiClient.carregarDia('2026-11-11')).indisponiveis, []);
     backend.horasDosInstrutores = async () => { throw new Error('sem conexão'); };
@@ -127,7 +127,7 @@ describe('Dados lidos à parte (revisão de 14/11)', () => {
   });
 });
 
-describe('Ordem das gravações (revisão de 14/11)', () => {
+describe('Ordem das gravações', () => {
   it('o cadastro é gravado antes do dia; sem o cadastro gravado, o dia não é gravado e a gravação responde false', async () => {
     const estado = ApiClient.normalizeAndMigrateState({ ...ApiClient.createFreshState(), ins: [instrutor(1, 9)], stu: [aluno(1000)] });
     const eventos = [];
@@ -188,7 +188,7 @@ describe('Histórico e BI por data', () => {
   });
 });
 
-describe('Migração dos documentos da fase 2', () => {
+describe('Migração dos documentos antigos', () => {
   async function gravarFase2(destino, { comData = false } = {}) {
     const estado = { ...estadoSintetico(), stu: [aluno(1000)] };
     const escala = { out: [{ fKey: '1000_0_1', h: 1 }], al: [], tot: 1, ...(comData ? { data: '2026-11-20' } : {}) };
@@ -216,7 +216,7 @@ describe('Migração dos documentos da fase 2', () => {
     assert.deepEqual(backend.gravacoes, []);
   });
 
-  it('sem documentos da fase 2 não faz nada', async () => {
+  it('sem documentos antigos não faz nada', async () => {
     assert.equal(await ApiClient.migrarDocumentosAntigos('2026-11-11'), null);
     assert.deepEqual(backend.gravacoes, []);
   });
@@ -251,7 +251,7 @@ describe('Migração dos documentos da fase 2', () => {
 });
 
 describe('Formato dos dados guardados (versões)', () => {
-  // Cadastro e dia no formato da fase 3 (sem versão), com simuladores nos nomes antigos
+  // Cadastro e dia no formato por data mais antigo (sem versão), com simuladores nos nomes antigos
   const cadastroFase3 = () => ({ nid: 1001, ins: [{ id: 1, nm: 'Instrutor 01', lv: 2, kg: 70 }], stu: [{ id: 1000, nm: 'Aluno 1000', kg: 60, bl: [] }] });
   const diaFase3 = (resultado = null) => ({
     win: Array(9).fill(true),
@@ -288,7 +288,7 @@ describe('Formato dos dados guardados (versões)', () => {
     assert.equal(backend.docs.get('dia:2026-11-11').esquema, ESQUEMA);
   });
 
-  it('a conversão dos documentos da fase 2 já grava no formato atual', async () => {
+  it('a conversão dos documentos antigos já grava no formato atual', async () => {
     await backend.gravar('estado', { ...estadoSintetico(), av: { 'SIM-MONO-1': false } });
     await ApiClient.migrarDocumentosAntigos('2026-11-11');
     assert.equal(backend.docs.get('cadastro').esquema, ESQUEMA);

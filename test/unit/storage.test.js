@@ -32,7 +32,7 @@ describe('Migração de estado', () => {
     assert.deepEqual(ApiClient.normalizeAndMigrateState({ stu: 'x', ins: [] }).stu, []);
   });
 
-  it('valores gravados fora do formato: status desconhecidos saem; pessoas e pedidos voltam aos tipos certos (revisão de 14/11)', () => {
+  it('valores gravados fora do formato: status desconhecidos saem; pessoas e pedidos voltam aos tipos certos', () => {
     const ataque = 'x"><img/src/onerror=window.__xss=1>';
     const estado = ApiClient.createFreshState();
     estado.ins = [
@@ -64,7 +64,7 @@ describe('Migração de estado', () => {
     const x = ApiClient.normalizeAndMigrateState(estado);
     assert.equal(x.nid, 1000, 'o número do cadastro vai a 1000 e não muda com a missão extra');
     assert.deepEqual([x.stu[0].mis, x.stu[0].eq], ['Voo Local', 'PA-34']);
-    // A missão extra sem número recebe o próximo do aluno (revisão de 14/11)
+    // A missão extra sem número recebe o próximo do aluno
     assert.deepEqual(
       [x.stu[0].extra[0].mid, x.stu[0].extra[0].mis, x.stu[0].extra[0].eq, x.stu[0].extra[0].p1, x.stu[0].extra[0].nb],
       [1, 'Ground Navegação', 'Sala Ground', 390, 1.5]

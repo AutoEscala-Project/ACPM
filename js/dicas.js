@@ -1,4 +1,4 @@
-// As dicas (revisão de 14/11): um balão só (#dica, role="tooltip") que explica um termo do glossário. Ele aparece:
+// As dicas: um balão só (#dica, role="tooltip") que explica um termo do glossário. Ele aparece:
 // - com o mouse parado sobre o termo por 400 ms;
 // - na hora, quando o foco do teclado chega a um elemento com a dica;
 // - num toque ou clique no botão "?" (a dica de um rótulo) ou numa etiqueta com a dica (que não é um botão).

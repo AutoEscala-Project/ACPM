@@ -1,7 +1,7 @@
 // Compara as escalas de referência gravadas (antes) com o motor atual (depois), nas 41 escalas (o exemplo e as 40
 // geradas), e imprime uma tabela em Markdown para o commit ou o PR. Rode antes de regravar as referências
 // (node scripts/capturar-goldens-motor.mjs): depois disso, antes e depois ficam iguais.
-// Uso: node scripts/medir-escalas.mjs [buracos] [horários]: com os critérios da compactação (fase 13), por exemplo
+// Uso: node scripts/medir-escalas.mjs [buracos] [horários]: com os critérios da compactação, por exemplo
 // "aviao fixos"; sem eles, os do padrão
 import { readFile } from 'node:fs/promises';
 import { performance } from 'node:perf_hooks';
@@ -28,9 +28,9 @@ for (let rodada = 0; rodada < 3; rodada++) {
   });
 }
 
-// Como na tela: o voo cancelado não voa e fica fora das métricas (revisão de 14/11)
+// Como na tela: o voo cancelado não voa e fica fora das métricas
 const voam = out => out.filter(o => o.status !== 'Cancelado');
-// O minuto da 1ª preferência do pedido de cada voo (-1 sem ela), para a distância até ela (revisão de 14/11)
+// O minuto da 1ª preferência do pedido de cada voo (-1 sem ela), para a distância até ela
 const preferenciaNo = estado => o => {
   const aluno = estado.stu.find(x => x.id === o.stuId);
   const pedido = aluno && (o.mid ? (aluno.extra || []).find(ex => ex.mid === o.mid) : aluno);

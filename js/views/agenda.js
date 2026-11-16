@@ -33,7 +33,7 @@ const dataPorExtenso = iso => {
 const quando = instante => new Intl.DateTimeFormat('pt-BR', {
   timeZone: FUSO_DO_AEROCLUBE, day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23'
 }).format(new Date(instante)).replace(',', '');
-// O horário e a duração do pedido (retorno da operação, 14/11); os pedidos de antes por período mostram o período
+// O horário e a duração do pedido; os pedidos feitos por período mostram o período
 const disponibilidade = p => (p.janela === 'horario'
   ? `${p.horario} · ${fmtH(p.horas === null || p.horas === undefined ? 1 : +p.horas)}`
   : JANELAS_DA_AGENDA.find(([j]) => j === p.janela)?.[1] ?? p.janela);
@@ -52,8 +52,8 @@ function gradeDoMes(mes) {
   return [inicio, fim];
 }
 
-// A agenda abre na data aberta no topo (retorno da operação, 14/11); quando ela já fechou para pedidos (amanhã, depois
-// das 13:00), no primeiro dia que ainda aceita pedidos
+// A agenda abre na data aberta no topo; quando ela já fechou para pedidos (amanhã, depois das 13:00), no primeiro dia
+// que ainda aceita pedidos
 const diaPadrao = () => (DATA && DATA >= primeiraDataAberta() ? DATA : primeiraDataAberta());
 export async function abrirAgenda(dia = diaPadrao()) {
   diaEscolhido = dia;
@@ -97,8 +97,8 @@ export function lembrarRegistradoPor(nome) {
   }
 }
 
-// O prazo do dia escolhido (retorno da operação, 14/11): até as 13:00 do dia de operação anterior; a segunda, até sábado
-// às 10:00; o domingo não opera
+// O prazo do dia escolhido: até as 13:00 do dia de operação anterior; a segunda, até sábado às 10:00; o domingo não
+// opera
 const DIAS_DA_SEMANA = ['domingo', 'segunda-feira', 'terça-feira', 'quarta-feira', 'quinta-feira', 'sexta-feira', 'sábado'];
 const diaDaSemana = iso => DIAS_DA_SEMANA[new Date(iso + 'T12:00:00Z').getUTCDay()];
 function prazoDoDia() {

@@ -13,8 +13,8 @@ import { normalizarFixos, normalizarAprovacao } from './fixos.js';
 import { CRITERIOS_PADRAO, normalizarCriterios } from './criterios.js';
 import { normalizarCursos } from './cursos.js';
 
-// jan: disponibilidade do aluno (só quando o pedido tem uma); etapa: o código da missão do curso (fase 14);
-// solicitacao: o id do pedido da agenda que virou este voo (revisão de 14/11)
+// jan: disponibilidade do aluno (só quando o pedido tem uma); etapa: o código da missão do curso;
+// solicitacao: o id do pedido da agenda que virou este voo
 const CAMPOS_DO_PEDIDO = ['fly', 'mis', 'eq', 'p1', 'p2', 'nb', 'ss', 'pr', 'jan', 'etapa', 'solicitacao'];
 const DATA_ISO = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -34,13 +34,12 @@ export function separar(estado) {
   return {
     cadastro: {
       nid: estado.nid,
-      // O nível A01–A09 de antes da fase 4 fica só como cópia, em quem já o tinha
+      // O nível A01–A09 (lv) fica só como cópia, em quem o tem: as habilitações (hab) valem no lugar dele
       ins: estado.ins.map(({ id, nm, lv, kg, hab, horasExternas }) => ({
         id, nm, ...(lv === undefined ? {} : { lv }), kg, hab: [...(hab || [])],
-        // Horas de voo fora do app (fase 11), por mês ('AAAA-MM'; 'AAAA-00': antes deste mês, no ano)
+        // Horas de voo fora do app, por mês ('AAAA-MM'; 'AAAA-00': antes deste mês, no ano)
         ...(horasExternas && Object.keys(horasExternas).length ? { horasExternas: { ...horasExternas } } : {})
       })),
-      // O curso do aluno (fase 14), quando ele tem um
       stu: estado.stu.map(({ id, nm, kg, bl, curso }) => ({ id, nm, kg, bl: [...(bl || [])], ...(curso ? { curso } : {}) })),
       ...(Array.isArray(estado.frota) ? { frota: estado.frota.map(f => ({ ...f })) } : {}),
       ...(estado.horarios ? { horarios: structuredClone(estado.horarios) } : {}),
@@ -106,8 +105,8 @@ export function juntar(cadastro, dia = diaPadrao()) {
 
 // Nova data: começa com a disponibilidade, a ordem do hangar e os critérios da compactação do dia anterior, sem status
 // dos voos (nem os detalhes) nem escala gerada; as horas até a revisão e as filas do rodízio já contam os voos do dia
-// anterior (instrutores: o cadastro, para as filas). A demanda começa vazia (retorno da operação, 14/11): a agenda é o
-// centro dos agendamentos, e a demanda do dia vem de "Importar da agenda"
+// anterior (instrutores: o cadastro, para as filas). A demanda começa vazia: a agenda é o centro dos agendamentos, e a
+// demanda do dia vem de "Importar da agenda"
 export function diaParaCopiar(anterior, instrutores = []) {
   if (!anterior || !anterior.ins || !anterior.pedidos) return diaPadrao();
   const { win, av, ins, pedidos: anteriores, hangar = null, criterios } = structuredClone(anterior);
@@ -129,7 +128,7 @@ export function horasDoDiaSeguinte(dia) {
   return horas;
 }
 
-// A escala da fase 2 não guardava a data: usa a gravada (fase 2), senão o dia do BI com a mesma escala
+// A escala dos documentos antigos nem sempre tem a data: usa a gravada, senão o dia do BI com a mesma escala
 export function inferirDataDaEscala(escala, bi, padrao) {
   if (escala && DATA_ISO.test(escala.data || '')) return escala.data;
   if (escala && Array.isArray(escala.out)) {
@@ -140,10 +139,10 @@ export function inferirDataDaEscala(escala, bi, padrao) {
   return padrao;
 }
 
-// O id das entradas do histórico da fase 2 é o Date.now() de quando foram criadas
+// O id das entradas do histórico dos documentos antigos é o Date.now() de quando foram criadas
 const horarioDoId = id => (Number.isFinite(id) && id > Date.UTC(2020, 0, 1) && id < Date.UTC(2100, 0, 1) ? new Date(id).toISOString() : null);
 
-// Converte os documentos da fase 2 (estado já normalizado, escala, histórico e BI) no formato por data
+// Converte os documentos antigos (estado já normalizado, escala, histórico e BI) no formato por data
 export function converterLegado({ estado, escala, historico, bi }, dataPadrao) {
   const dataAtual = inferirDataDaEscala(escala, bi, dataPadrao);
   const { cadastro, dia } = separar(estado);

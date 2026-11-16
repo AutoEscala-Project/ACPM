@@ -1,6 +1,6 @@
-// Painel no estilo dos aeroportos (fase 8), como os painéis da INFRAERO: o quadro de Partidas (todas as do dia) e o de
-// Chegadas (as que ainda não pousaram) se alternam página a página a cada 10 segundos, com o relógio e a página no
-// canto. O operador pode deixar um quadro só, pausar a troca e abrir em tela cheia (para um monitor ou TV). Só mostra:
+// Painel no estilo dos aeroportos, como os painéis da INFRAERO: o quadro de Partidas (todas as do dia) e o de Chegadas
+// (as que ainda não pousaram) se alternam página a página a cada 10 segundos, com o relógio e a página no canto.
+// O operador pode deixar um quadro só, pausar a troca e abrir em tela cheia (para um monitor ou TV). Só mostra:
 // o status muda na Lista e no mapa. A TV da recepção (painel.html) usa o mesmo painel, na tela toda e sem os botões.
 import { hm, esc, hojeISO, rotuloDaData, minutoDoDia } from '../format.js';
 import { quadroDePartidas, quadroDeChegadas, minutoDoQuadro, telasDoPainel } from '../quadro.js';

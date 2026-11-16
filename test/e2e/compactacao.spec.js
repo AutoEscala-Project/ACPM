@@ -1,7 +1,7 @@
-// Compactação da escala (fase 13): embaixo da barra da Escala, o operador escolhe o que pesa mais nos buracos do dia
+// Compactação da escala: embaixo da barra da Escala, o operador escolhe o que pesa mais nos buracos do dia
 // (INVA, Avião ou Maior buraco) e até onde os horários mudam (na disponibilidade, só 1ª e 2ª preferência, ou não
-// mudam); a escala é refeita na hora e o tempo parado, ao lado do resumo, mostra o efeito. Os critérios ficam com o dia; com a
-// escala aprovada e no Gestor, só aparecem
+// mudam); a escala é refeita na hora e o tempo parado, ao lado do resumo, mostra o efeito. Os critérios ficam com
+// o dia; com a escala aprovada e no Gestor, só aparecem
 import { test, expect, abrir, abrirEscala, confirmar } from './fixtures.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
 

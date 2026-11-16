@@ -101,7 +101,7 @@ function clienteFalso(documentos = {}, { atraso = 0, dias = {} } = {}) {
         return { data: null, error: erro, status };
       }
       if (nome === 'salvar_documento') {
-        // Depois da conversão (o cadastro existe), os documentos da fase 2 ficam só como cópia
+        // Depois da conversão (o cadastro existe), os documentos antigos ficam só como cópia
         if (args.p_chave !== 'cadastro' && banco.has('cadastro')) return { data: null, error: { code: 'PT409', message: 'versão anterior do app' } };
         return salvar(banco, args.p_chave, args.p_conteudo, args.p_versao_lida);
       }
@@ -223,7 +223,7 @@ describe('Backend Supabase', () => {
     assert.deepEqual(conflitos, [['cadastro', { formato: true }]]);
   });
 
-  // Revisão de 14/11: sem conexão, a alteração não se perde; a gravação tenta de novo sozinha
+  // Sem conexão, a alteração não se perde: a gravação tenta de novo sozinha
   it('erro de rede: avisa a cada falha e tenta de novo sozinho, esperando cada vez mais, até gravar', async () => {
     const cliente = clienteFalso();
     const erros = [], gravados = [], esperas = [];

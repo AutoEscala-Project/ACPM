@@ -1,6 +1,6 @@
-// Painel dos dados pessoais (fase 9): CPF, CANAC, nascimento, celular e e-mail de um aluno ou instrutor, ao lado da
-// tabela. Só operadores, administradores e a secretaria veem (no modo local, fora do perfil Gestor). Os dados ficam só
-// aqui, fora do estado: nunca vão para o cadastro, o link compartilhado, o CSV, o PDF ou o BI.
+// Painel dos dados pessoais: CPF, CANAC, nascimento, celular e e-mail de um aluno ou instrutor, ao lado da tabela. Só
+// operadores, administradores e a secretaria veem (no modo local, fora do perfil Gestor). Os dados ficam só aqui, fora
+// do estado: nunca vão para o cadastro, o link compartilhado, o CSV, o PDF ou o BI.
 import { CAMPOS_PESSOAIS, validarDadosPessoais, formatarCpf, formatarCelular } from '../dados-pessoais.js';
 import { ApiClient } from '../storage.js';
 import { veDadosPessoais } from '../perfis.js';
@@ -47,8 +47,8 @@ function campoHtml({ id, rotulo }, dados) {
 
 const quando = iso => new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 
-// A leitura feita ao abrir o painel (revisão de 14/11): a gravação leva de volta a versão lida (atualizado_em). Sem a
-// leitura, o painel não deixa salvar (salvar a partir de dados velhos apagaria o que outra pessoa gravou)
+// A leitura feita ao abrir o painel: a gravação leva de volta a versão lida (atualizado_em). Sem a leitura, o painel
+// não deixa salvar (salvar a partir de dados velhos apagaria o que outra pessoa gravou)
 let leitura = { pedido: 0, atualizadoEm: null, lida: false };
 
 export async function abrirPainelDeDados(tipo, id, botao) {

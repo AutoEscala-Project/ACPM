@@ -1,7 +1,7 @@
-// Aba Recursos, em duas partes (revisão de 14/11). Nesta data: as janelas de operação, a tabela dos aviões e simuladores
-// (disponível ou em manutenção, as horas até a revisão de 50 horas e o que o avião voa na escala do dia; uma categoria ou
-// todas, e cada categoria recolhe e abre) e a ordem no hangar. Para todas as datas: os horários de decolagem
-// (js/views/horarios.js) e a frota, com o Retirar.
+// Aba Recursos, em duas partes. Nesta data: as janelas de operação, a tabela dos aviões e simuladores (disponível ou em
+// manutenção, as horas até a revisão de 50 horas e o que o avião voa na escala do dia; uma categoria ou todas, e cada
+// categoria recolhe e abre) e a ordem no hangar. Para todas as datas: os horários de decolagem (js/views/horarios.js) e
+// a frota, com o Retirar.
 import { WIN, NI, AIRCRAFT_EQ_TYPES, SIM_EQ_TYPES, REVISAO_H } from '../config.js';
 import { normalizarHangar } from '../hangar.js';
 import { FROTA_INICIAL } from '../frota.js';
@@ -33,8 +33,8 @@ function situacao(r, voadas, revisao) {
   return `${fmtH(voadas)} na escala${revisao ? ` · termina com ${fmtH(horasDisponiveis(revisao.fim))} disponíveis` : ''}`;
 }
 
-// As horas disponíveis até a revisão (retorno da operação, 14/11: a operadora lança as disponíveis; o dia guarda as
-// horas desde a revisão, 50 menos as disponíveis)
+// As horas disponíveis até a revisão (a operadora lança as disponíveis; o dia guarda as horas desde a revisão, 50 menos
+// as disponíveis)
 const horasDisponiveis = horas => Math.round(Math.max(0, REVISAO_H - horas) * 10) / 10;
 
 // A barra das horas disponíveis: âmbar abaixo de 10 h e vermelha abaixo de 5 h
@@ -75,8 +75,8 @@ export function rRevisao() {
   }).join('');
 }
 
-// A frota (vale para todas as datas; revisão de 14/11): cada recurso uma vez, por categoria, com "Só Parafuso" e o
-// Retirar. A disponibilidade e as horas ficam na tabela desta data
+// A frota (vale para todas as datas): cada recurso uma vez, por categoria, com "Só Parafuso" e o Retirar. A
+// disponibilidade e as horas ficam na tabela desta data
 function rFrota() {
   const lista = $('#frota');
   if (!lista) return;

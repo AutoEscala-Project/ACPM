@@ -9,7 +9,7 @@ import { EQ } from '../../js/config.js';
 import { habilitacoesDoNivel } from '../../js/habilitacoes.js';
 
 describe('Migrações do formato dos dados', () => {
-  it('dia da fase 3: renomeia os simuladores na disponibilidade e na escala, sem perder nada', () => {
+  it('dia: renomeia os simuladores na disponibilidade e na escala, sem perder nada', () => {
     const antigo = {
       win: [true, false],
       av: { 'SIM-MONO-1': false, 'SIM-MONO-2': true, 'SIM-MULTI-1': true, 'SIM-MULTI-2': false, 'PR-BTB': false },
@@ -47,7 +47,8 @@ describe('Migrações do formato dos dados', () => {
     const cadastro = { nid: 1003, ins: [{ id: 1, nm: 'Instrutor 01', lv: 3, kg: 70 }], stu: [{ id: 1000, nm: 'Aluno 1000', kg: 60, bl: [1] }] };
     const novo = migrarCadastro(structuredClone(cadastro));
     assert.equal(novo.esquema, ESQUEMA);
-    // Desde as versões 11, 12 e 15, o cadastro também guarda a frota, os horários de decolagem e os limites da lei
+    // Desde as versões 11, 12, 15 e 18, o cadastro também guarda a frota, os horários de decolagem,
+    // os limites da lei e o programa dos cursos
     assert.deepEqual({ ...novo, ins: null }, { ...cadastro, ins: null, frota: FROTA_INICIAL, horarios: HORARIOS_INICIAIS, limites: LIMITES_DA_LEI, cursos: { PP: [], PC: [], INVA: [] }, esquema: ESQUEMA });
     assert.equal(migrarCadastro(null), null);
   });
@@ -142,7 +143,7 @@ describe('Migrações do formato dos dados', () => {
     assert.equal(renomearSimulador('PR-BTB'), 'PR-BTB');
   });
 
-  // Versão 19 (retorno da operação, 14/11): o C152 vira uma habilitação; todos os instrutores de antes a recebem
+  // Versão 19: o C152 vira uma habilitação; todos os instrutores de antes a recebem
   it('versão 19: todo instrutor do cadastro recebe a habilitação do C152', () => {
     const cadastro = { esquema: 18, nid: 3, ins: [{ id: 1, nm: 'A', hab: ['local'] }, { id: 2, nm: 'B', hab: ['mlte', 'c152'] }, { id: 3, nm: 'C' }], stu: [] };
     const novo = migrarCadastro(cadastro);
@@ -151,7 +152,7 @@ describe('Migrações do formato dos dados', () => {
     assert.ok(ESQUEMA >= 19);
   });
 
-  // Versão 20 (retorno da operação, 14/11): o checador é credenciado por partes (o curso, o motor e as regras)
+  // Versão 20: o checador é credenciado por partes (o curso, o motor e as regras)
   it('versão 20: cada checador antigo recebe as marcas que davam os mesmos cheques; o resto não muda', () => {
     const cadastro = {
       esquema: 19, nid: 4, stu: [],
@@ -173,7 +174,7 @@ describe('Migrações do formato dos dados', () => {
     assert.ok(ESQUEMA >= 20);
   });
 
-  // Versão 21 (revisão de 14/11): o status "Pousou". Nada muda nos dados; o número novo faz a aba da versão anterior
+  // Versão 21: o status "Pousou". Nada muda nos dados; o número novo faz a aba da versão anterior
   // (que não conhece o Pousou e o apagaria ao abrir o dia) recusar o dia e pedir para recarregar
   it('versão 21: o dia e o cadastro não mudam, só o número do formato', () => {
     const dia = { esquema: 20, fStatus: { '1000_0_1': 'Pousou' }, fObs: { '1000_0_1': { novoInicio: 640 } } };

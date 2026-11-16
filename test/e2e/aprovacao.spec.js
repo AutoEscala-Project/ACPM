@@ -1,6 +1,6 @@
-// O dia de operação (fase 12): "Aprovar escala" fixa os voos. Depois disso, uma alteração não tira ninguém do lugar:
+// O dia de operação: "Aprovar escala" fixa os voos. Depois disso, uma alteração não tira ninguém do lugar:
 // o pedido novo entra em volta, e o voo fixo que ficou impossível aparece em conflito. "Reabrir" volta ao normal.
-// Em Voo e Atrasado também fixam o voo.
+// Em Voo, Atrasado, Pousou e Cancelado também fixam o voo.
 import { test, expect, abrir, irPara, abrirEscala, lerEscala } from './fixtures.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
 
@@ -73,7 +73,6 @@ test.describe('Escala aprovada', () => {
   });
 });
 
-// Revisão de 14/11: o ciclo do cadeado
 test.describe('O cadeado do voo', () => {
   const linha = (page, nome) => page.locator('#out tbody tr:not(.win)', { hasText: nome });
 

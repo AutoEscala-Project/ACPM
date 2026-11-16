@@ -12,7 +12,7 @@ test.describe('Perfis de acesso', () => {
     await expect(page.locator('#out .st-sel').first()).toBeDisabled();
     await irPara(page, 'ins');
     await expect(page.locator('[data-act="addi"]')).toBeHidden();
-    // A grade do dia fica travada (os campos desligados: revisão de 14/11) e as habilitações não abrem (o Gestor vê o resumo)
+    // A grade do dia fica travada (os campos desligados) e as habilitações não abrem (o Gestor vê o resumo)
     await expect(page.locator('#inst-dia .cel input').first()).toBeDisabled();
     await expect(page.locator('#inst-dia [data-f="on"]').first()).toBeDisabled();
     await page.locator('#s-ins [data-vista-ins="cadastro"]').click();
@@ -33,8 +33,8 @@ test.describe('Perfis de acesso', () => {
     await expect(page.locator('#role-sel')).toHaveValue('gestor');
   });
 
-  // Revisão de 14/11: o link que levava a escala inteira no endereço (nomes, pesos e horas) saiu. Sem o servidor, a
-  // escala fica só neste navegador; no app publicado, o link leva só a data (test/e2e/compartilhado.spec.js)
+  // O link não leva a escala no endereço (nomes, pesos e horas). Sem o servidor, a escala fica só neste navegador;
+  // no app publicado, o link leva só a data (test/e2e/compartilhado.spec.js)
   test('neste navegador (sem servidor), Compartilhar explica que o link da escala é do app publicado', async ({ page }) => {
     await abrirComExemplo(page);
     await abrirEscala(page);

@@ -1,5 +1,5 @@
-// Ordem dos aviões no hangar (fase 10): da frente para o fundo, em cada data. O motor tira primeiro os da frente e junta
-// os voos nos aviões que já saíram, para não deixar avião parado no meio do dia nem tirar um do fundo.
+// Ordem dos aviões no hangar: da frente para o fundo, em cada data. O motor tira primeiro os da frente e junta os voos
+// nos aviões que já saíram, para não deixar avião parado no meio do dia nem tirar um do fundo.
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { normalizarHangar, moverNoHangar } from '../../js/hangar.js';
@@ -59,7 +59,7 @@ describe('Hangar: o motor', () => {
     assert.equal(out[0].r, hangar[1]);
   });
 
-  it('o avião que já saiu e está livre preenche o buraco no meio do dia (o exemplo da diretoria: PR-VOB das 06 às 10 e depois às 16)', () => {
+  it('o avião que já saiu e está livre preenche o buraco no meio do dia', () => {
     // O instrutor 1 voa às 06:30, 08:20 e 16:20 no avião da frente; o instrutor 2 voa às 12:40: vai para o mesmo avião
     const { out } = runAllocationEngine({
       ...cenario({ ins: [instrutor(1, 9), instrutor(2, 9)], stu: [

@@ -5,7 +5,7 @@ import { aluno, cenario } from '../helpers/montar.js';
 
 const comAlunos = () => cenario({ stu: [aluno(1000), aluno(1001)] });
 
-// O pedido é sempre num horário específico, com a duração (retorno da operação, 14/11)
+// O pedido é sempre num horário específico, com a duração
 async function registrar(page, { aluno: nome = 'Aluno 1000', missao = 'Voo Local', horario = '06:30', horas = null, por = 'Maria', obs = '' } = {}) {
   await page.locator('#ag-aluno').selectOption({ label: nome });
   await page.locator('#ag-missao').selectOption(missao);
@@ -51,7 +51,7 @@ test.describe('Agenda de Solicitações', () => {
     await expect(page.locator('#agenda-lista tbody tr').first()).toContainText('07:30');
     await page.locator('#ag-missao').selectOption('Noturno');
     await expect(page.locator('#ag-horario option')).toHaveText(['17:30']);
-    // O Voo Solo sai sempre às 06:30 (retorno da operação, 14/11)
+    // O Voo Solo sai sempre às 06:30
     await page.locator('#ag-missao').selectOption('Voo Solo');
     await expect(page.locator('#ag-horario option')).toHaveText(['06:30']);
   });
@@ -68,7 +68,7 @@ test.describe('Agenda de Solicitações', () => {
     await expect(page.locator('#ag-horas')).toHaveValue('1.5');
   });
 
-  // Retorno da operação (14/11): duas operadoras podem marcar o mesmo aluno sem saber uma da outra
+  // Duas operadoras podem marcar o mesmo aluno sem saber uma da outra
   test('o aluno que já tem voo marcado na data: o app avisa e pede para confirmar', async ({ page }) => {
     await abrir(page, { estado: comAlunos() });
     await irPara(page, 'age');
@@ -82,7 +82,7 @@ test.describe('Agenda de Solicitações', () => {
     await expect(page.locator('#form-agenda [type="submit"]')).toHaveText('Registrar pedido');
   });
 
-  // Retorno da operação (14/11): no máximo 6 voos locais (Voo Local, Voo Solo e TGL) no mesmo horário
+  // No máximo 6 voos locais (Voo Local, Voo Solo e TGL) no mesmo horário
   test('o 7º voo local no mesmo horário: horário indisponível, com o motivo e o próximo horário possível', async ({ page }) => {
     const alunos = Array.from({ length: 8 }, (_, i) => aluno(1000 + i));
     await abrir(page, { estado: cenario({ stu: alunos }) });
@@ -149,7 +149,7 @@ test.describe('Agenda de Solicitações', () => {
     await irPara(page, 'dem');
     await expect(page.locator('#dem tr[data-k="d"][data-id="1001"] [data-f="fly"]')).toBeChecked();
 
-    // Outro dia escolhido na agenda vira a data aberta no app (retorno da operação, 14/11): situação e importar dele
+    // Outro dia escolhido na agenda vira a data aberta no app: situação e importar dele
     await irPara(page, 'age');
     await page.locator('#agenda-cal [data-dia="2026-11-12"]').click();
     await expect(page.locator('#dt')).toHaveValue('2026-11-12');
@@ -191,7 +191,7 @@ test.describe('Agenda de Solicitações', () => {
     await expect(page.locator('#agenda-prazo')).toHaveText('Pedidos para quinta-feira (12/11) até amanhã (11/11) às 13:00.');
   });
 
-  // Retorno da operação (14/11): trabalhando numa data à frente, a agenda e as outras abas ficam nela
+  // Trabalhando numa data à frente, a agenda e as outras abas ficam nela
   test('a agenda abre na data aberta no topo; escolher um dia na agenda abre aquela data no app', async ({ page }) => {
     await abrir(page, { estado: comAlunos() });
     await page.locator('#dt-prox').click();
@@ -218,7 +218,7 @@ test.describe('Agenda de Solicitações', () => {
     await expect(page.locator('#dt')).toHaveValue('2026-11-12');
   });
 
-  // Retorno da operação (14/11): o aeroclube não opera aos domingos; os voos de segunda são agendados até sábado às 10:00
+  // O aeroclube não opera aos domingos; os voos de segunda são agendados até sábado às 10:00
   test('sábado: o app abre na segunda; a agenda aceita pedidos para segunda até as 10:00; domingo não existe', async ({ page, context }) => {
     await context.clock.setFixedTime(new Date('2026-11-14T09:00:00-03:00'));
     await abrir(page, { estado: comAlunos() });

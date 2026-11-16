@@ -1,5 +1,5 @@
 // Escala por data: separação entre cadastro (igual em todas as datas) e dia (disponibilidade, demanda e
-// status dos voos), cópia do dia anterior e conversão dos documentos da fase 2.
+// status dos voos), cópia do dia anterior e conversão dos documentos antigos.
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -153,7 +153,7 @@ describe('Nova data', () => {
     assert.deepEqual(novo.hangar, anterior.hangar, 'a ordem do hangar continua a da data anterior');
     assert.deepEqual(novo.criterios, anterior.criterios, 'os critérios da compactação continuam os da data anterior');
     assert.equal(novo.av['PR-BTB'], false);
-    // A demanda começa vazia (retorno da operação, 14/11): a agenda é o centro dos agendamentos; ninguém voa, sem extras
+    // A demanda começa vazia: a agenda é o centro dos agendamentos; ninguém voa, sem extras
     assert.deepEqual(novo.pedidos[1000], { ...blank(), extra: [] });
   });
 
@@ -162,7 +162,7 @@ describe('Nova data', () => {
   });
 });
 
-describe('Conversão dos documentos da fase 2', () => {
+describe('Conversão dos documentos antigos', () => {
   const escala = { out: [{ fKey: '1000_0_1', h: 1, r: 'PP-LJV' }], al: [], tot: 1 };
 
   it('data da escala: a gravada na escala, senão o dia do BI com a mesma escala, senão a data padrão', () => {

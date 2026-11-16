@@ -1,4 +1,4 @@
-// Conteúdo gravado malicioso (revisão de 14/11): quem tem uma conta de operador consegue gravar qualquer coisa no
+// Conteúdo gravado malicioso: quem tem uma conta de operador consegue gravar qualquer coisa no
 // cadastro, no dia, na escala salva e no histórico pela API. Nada disso pode virar HTML ou script em nenhuma tela: o
 // app escapa tudo o que mostra (texto e atributos) e, ao abrir, só aceita os valores que ele mesmo produz.
 import { test, expect, irPara, prepararContexto, vigiarErros, AMANHA, preencherLogin, URL_APP } from './fixtures.js';
@@ -51,7 +51,6 @@ function documentos(mudar) {
   return mudar ? mudar(docs) : docs;
 }
 
-// O que a política de segurança de conteúdo bloquear fica registrado
 const vigiarPolitica = page => page.addInitScript(() => {
   window.__csp = [];
   document.addEventListener('securitypolicyviolation', e => window.__csp.push(`${e.violatedDirective} ${e.blockedURI}`));
@@ -174,7 +173,6 @@ test.describe('Conteúdo gravado malicioso', () => {
     await nada(page);
   });
 
-  // O mesmo conteúdo vindo do servidor (modo compartilhado): no app do operador e na TV, cada um com a sua conta
   test('no modo compartilhado: o conteúdo adulterado vindo do servidor, no app e na TV', async ({ browser }) => {
     const docs = documentos(adulterados);
     const contexto = await browser.newContext({ baseURL: test.info().project.use.baseURL, locale: 'pt-BR', timezoneId: 'America/Sao_Paulo' });
@@ -200,7 +198,7 @@ test.describe('Conteúdo gravado malicioso', () => {
   });
 });
 
-// O link antigo da fase 2 levava a escala inteira no endereço (revisão de 14/11: saiu). Um link desses, mesmo com
+// O link antigo leva a escala inteira no endereço. Um link desses, mesmo com
 // conteúdo malicioso, não é lido: o app avisa que ele não vale mais
 
 // Cada campo do link recebe um HTML que, se fosse interpretado, registraria o nome do campo em window.__xss

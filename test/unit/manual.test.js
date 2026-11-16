@@ -28,7 +28,7 @@ describe('Manual', () => {
     assert.equal(linha('Noturno').obs, 'Só na janela das 17:30');
   });
 
-  it('tanque e autonomia de cada avião (fase 10)', () => {
+  it('tanque e autonomia de cada avião', () => {
     assert.deepEqual(combustivelDoManual(), ['C152: 26 gal, 4h', 'C172: 53 gal, 6h', 'PA-34: 93 gal, 4h30']);
   });
 
@@ -38,7 +38,6 @@ describe('Manual', () => {
     assert.deepEqual(rodizioDoManual(), ['Voos de cheque', 'Voo MLTE (PA-34)', 'Voo noturno', 'Voo C172']);
   });
 
-  // Revisão de 14/11: o Glossário do Manual sai do mesmo glossário das dicas, aba por aba
   it('o glossário, aba por aba, com todos os termos das dicas', () => {
     const grupos = glossarioDoManual();
     assert.deepEqual(grupos.map(g => g.aba), ABAS_DO_GLOSSARIO);

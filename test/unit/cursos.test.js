@@ -1,4 +1,4 @@
-// Cursos (fase 14): o programa de cada curso (PP, PC e INVA), mantido no app pelo Administrador, e o curso de cada
+// Cursos: o programa de cada curso (PP, PC e INVA), mantido no app pelo Administrador, e o curso de cada
 // aluno. Cada missão do programa tem um código (PP-07), um nome, o tipo de missão do app, o recurso e as horas.
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
@@ -24,7 +24,7 @@ describe('Programa dos cursos', () => {
       ['PP-01', 'Missão PP-01', 'Voo Local', 'C152', 1],
       ['PP-02', 'Navegação', 'Navegação', 'C152', 2],
       ['PP-05', 'Missão PP-05', 'Noturno', 'C172', 1],
-      // As horas fracionadas, até 5 h (retorno da operação, 14/11)
+      // As horas fracionadas, até 5 h
       ['PP-06', 'Missão PP-06', 'Voo Local', 'C152', 5],
       ['PP-07', 'Missão PP-07', 'Voo Local', 'C152', 1.2]
     ]);

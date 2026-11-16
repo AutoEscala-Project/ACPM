@@ -1,6 +1,5 @@
-// Diálogo do detalhe do status (fase 8): Cancelado pede o motivo (em "Outro", uma descrição curta) e Atrasado, a nova
-// decolagem. Confirmar devolve o detalhe validado (js/status.js); Voltar, Esc ou fechar desistem, e o status continua
-// o anterior.
+// Diálogo do detalhe do status: Cancelado pede o motivo (em "Outro", uma descrição curta) e Atrasado, a nova decolagem.
+// Confirmar devolve o detalhe validado (js/status.js); Voltar, Esc ou fechar desistem, e o status continua o anterior.
 import { MOTIVOS_DE_CANCELAMENTO, LIMITE_DO_TEXTO, validarDetalhe } from '../status.js';
 import { hm, esc, fmtH } from '../format.js';
 import { paraMinuto } from '../horarios.js';

@@ -1,4 +1,4 @@
-// Horários de decolagem por categoria (fase 7): cada categoria tem a sua lista, em minutos. As 9 janelas viram os
+// Horários de decolagem por categoria: cada categoria tem a sua lista, em minutos. As 9 janelas são os
 // períodos do dia (janelas de operação, disponibilidade dos instrutores e manhã/tarde/noite).
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
@@ -144,8 +144,8 @@ describe('Horários por categoria: trocar a missão ou o avião do pedido', asyn
   });
 });
 
-// Revisão de 14/11 (decisão do Pedro): sem vaga na 1ª nem na 2ª preferência, o horário mais perto da 1ª (sem a 1ª, da
-// 2ª); empatados, o mais cedo. Sem preferência, em ordem
+// Sem vaga na 1ª nem na 2ª preferência, o horário mais perto da 1ª (sem a 1ª, da 2ª); empatados, o mais cedo.
+// Sem preferência, em ordem
 describe('Horários pela distância da preferência', () => {
   it('a 1ª e a 2ª preferência primeiro, depois pela distância da 1ª; o empate vai para o mais cedo', async () => {
     const { ordenarPelaPreferencia } = await import('../../js/horarios.js');
@@ -167,7 +167,7 @@ describe('Horários pela distância da preferência', () => {
   });
 });
 
-// Retorno da operação (14/11): o Voo Solo sai sempre às 06:30 (local ou navegação)
+// O Voo Solo sai sempre às 06:30 (local ou navegação)
 describe('O Voo Solo às 06:30', () => {
   it('a missão Voo Solo só tem o horário das 06:30, em qualquer avião', async () => {
     const { horariosDaMissao, HORARIOS_INICIAIS } = await import('../../js/horarios.js');
@@ -183,7 +183,7 @@ describe('O Voo Solo às 06:30', () => {
   });
 });
 
-// Revisão de 14/11 (Pedro: "Resumo + Editar"): o painel mostra um resumo de cada lista e edita numa caixa só
+// O painel mostra um resumo de cada lista e edita numa caixa só
 describe('O resumo dos horários e o efeito de uma lista nova', () => {
   const h = texto => paraMinuto(texto);
 

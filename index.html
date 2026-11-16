@@ -4,8 +4,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<!-- Política de segurança de conteúdo (revisão de 14/11): só os scripts e estilos abaixo e os servidores do Supabase do
-     app (js/config-supabase.js). Uma biblioteca nova, ou uma versão nova, precisa entrar aqui (test/unit/csp.test.js). -->
+<!-- Política de segurança de conteúdo: só os scripts e estilos abaixo e os servidores do Supabase do app
+     (js/config-supabase.js). Uma biblioteca nova, ou uma versão nova, precisa entrar aqui (test/unit/csp.test.js). -->
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdnjs.cloudflare.com/ajax/libs/jspdf/4.2.1/ https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/5.0.9/ https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/; style-src 'self' https://fonts.googleapis.com 'unsafe-inline'; style-src-elem 'self' https://fonts.googleapis.com; style-src-attr 'unsafe-inline'; font-src https://fonts.gstatic.com; img-src 'self'; connect-src 'self' https://iszaomkinojwxymyglmh.supabase.co https://llylkdgfuagzdaualvqa.supabase.co https://acpm-teste.supabase.invalid; object-src 'none'; base-uri 'self'; form-action 'self'">
 <title>AutoEscala - ACPM</title>
 <meta name="application-name" content="AutoEscala - ACPM">
@@ -141,10 +141,9 @@
     </div>
   </section>
 
-  <!-- RECURSOS DO DIA: janelas de operação e a frota (aviões e simuladores) -->
+  <!-- RECURSOS: o que vale só na data aberta no topo e o que vale para todas as datas -->
   <section id="s-rec">
     <h2>Recursos</h2>
-    <!-- Revisão de 14/11: o que vale só na data aberta no topo e o que vale para todas as datas, separados -->
     <div class="rec-parte" data-parte="data">
       <h3 class="rec-parte-titulo">Nesta data <small>valem para a data aberta no topo; a data seguinte começa com eles</small></h3>
       <div class="pn">
@@ -246,7 +245,7 @@
       <thead><tr><th>Nome</th><th class="so-dados">CANAC</th><th>Curso</th><th>Peso (kg)</th><th>Não escalar com<button type="button" class="dica-btn" data-dica="nao-escalar-com" aria-label="O que é Não escalar com?" aria-expanded="false"></button></th><th></th></tr></thead>
       <tbody id="alu"></tbody>
     </table></div>
-    <!-- O programa de cada curso (fase 14, js/views/cursos.js) -->
+    <!-- O programa de cada curso (js/views/cursos.js) -->
     <div class="vista-cursos" id="cursos"></div>
   </section>
 
@@ -336,8 +335,8 @@
       <button class="btn sec" id="xlsx" title="Baixar a escala no modelo Excel do aeroclube, para o lançamento no CAVOK">Excel</button>
     </div>
 
-    <!-- Como a escala é montada: os critérios da compactação (fase 13: o que pesa mais nos buracos do dia e até onde os
-         horários mudam) e a aprovação (fase 12) -->
+    <!-- Como a escala é montada: os critérios da compactação (o que pesa mais nos buracos do dia e até onde os
+         horários mudam) e a aprovação -->
     <div class="bar compactacao" id="compactacao" hidden>
       <span class="criterios" id="criterios"></span>
       <span class="cresce"></span>

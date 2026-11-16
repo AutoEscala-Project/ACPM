@@ -1,11 +1,11 @@
-// Regras operacionais do motor de alocação, conforme o Manual do Usuário (aba 8 · BI).
+// Regras operacionais do motor de alocação, conforme o Manual (Como a escala é montada).
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { runAllocationEngine, sumUniqueOperationalHours, consolidateTimelineSlots } from '../../js/engine.js';
 import { hm } from '../../js/format.js';
 import { aluno, apenas, cenario, instrutor, missaoExtra, GROUND_C152 } from '../helpers/montar.js';
 
-// As regras da alocação, sem a compactação que vem depois (fase 13; ela tem os testes dela em compactar.test.js)
+// As regras da alocação, sem a compactação que vem depois (ela tem os testes dela em compactar.test.js)
 const alocar = opts => runAllocationEngine(cenario(opts), { compactar: false });
 const resumo = o => ({ s: o.s, w: o.w, tag: o.tag });
 const SO_PP_LJV = apenas('C152', 'PP-LJV');
@@ -49,17 +49,17 @@ describe('Voos: janelas preferidas e encaixe', () => {
 
   it('voo diurno não termina depois das 17:30', () => {
     const { out } = alocar({ ins: [instrutor(1, 1)], stu: [aluno(1000, { nb: 4, p1: 6, p2: 7 })] });
-    // As preferências (14:30 e 16:10) passariam das 17:30; o horário mais perto da 1ª que cabe (revisão de 14/11)
+    // As preferências (14:30 e 16:20) passariam das 17:30; o horário mais perto da 1ª que cabe
     assert.deepEqual(out.map(o => [o.w, o.a, o.b, o.tag]), [[4, 760, 1000, 'Próximo livre']]);
   });
 
-  // Revisão de 14/11: um pedido é um voo só, com as horas pedidas (para dividir no dia, "+ missão"); o número de
-  // sessões dos dados antigos não conta
   it('a duração fracionada: 1,2 h são 72 minutos', () => {
     const { out } = alocar({ ins: [instrutor(1, 9)], stu: [aluno(1000, { nb: 1.2, p1: 390, p2: -1 })] });
     assert.deepEqual([out[0].a, out[0].b, out[0].h], [390, 462, 1.2]);
   });
 
+  // Um pedido é um voo só, com as horas pedidas (para dividir no dia, "+ missão"); o número de sessões dos dados
+  // antigos não conta
   it('um pedido é um voo só, com as horas pedidas', () => {
     const { out } = alocar({ ins: [instrutor(1, 1), instrutor(2, 1)], stu: [aluno(1000, { nb: 3, ss: 2, p1: 0, p2: 2 })] });
     assert.deepEqual(out.map(o => [o.fKey, o.ss, o.a, o.b, o.h, o.tag]), [['1000_0_1', '1/1', 390, 570, 3, 'Pref. 1']]);
@@ -105,13 +105,13 @@ describe('Voos: janelas preferidas e encaixe', () => {
 });
 
 describe('Habilitações exigidas (os instrutores migrados fazem o mesmo que os níveis A01–A09 permitiam)', () => {
-  // [missão, equipamento, nível que bastava antes, habilitações exigidas agora]
+  // [missão, equipamento, nível A01–A09 que basta, habilitações exigidas]
   const casos = [
     ['Simulador', 'Sim. Mono', 2, 'Simulador (Mono)'],
     ['Simulador', 'Sim. Multi', 2, 'Simulador (Multi)'],
     ['Voo Local', 'C172', 7, 'Voo Local + C172'],
     ['Voo Local', 'PA-34', 9, 'Voo Local + MLTE (PA-34)'],
-    // O C152 também é uma habilitação do avião (retorno da operação, 14/11)
+    // O C152 também é uma habilitação do avião
     ['Navegação', 'C152', 4, 'Voo de Navegação + C152'],
     ['Voo Solo', 'C152', 5, 'Voo para liberação de Solo + C152'],
     ['Parafuso', 'C152', 6, 'Voo de Parafuso (SPIN) + C152'],
@@ -193,7 +193,7 @@ describe('Peso da tripulação', () => {
     assert.deepEqual(al, [{ t: 'err', s: 'Aluno 1000', m: 'Rejeitado: peso aluno + instrutor acima do limite de 170 kg do C152, mesmo com o mínimo de combustível.', codigo: 'peso' }]);
   });
 
-  it('um pouco acima do limite: o voo sai com menos combustível (fase 10)', () => {
+  it('um pouco acima do limite: o voo sai com menos combustível', () => {
     const { out, al } = alocar({ ins: [instrutor(1, 1, { kg: 80 })], stu: [aluno(1000, {}, { kg: 100 })] });
     assert.deepEqual(al, []);
     assert.deepEqual([out[0].kg, out[0].limKg, out[0].comb.reduzirGal], [180, 170, 4]);
@@ -211,7 +211,6 @@ describe('Peso da tripulação', () => {
     assert.deepEqual(al, [{ t: 'warn', s: 'Aluno 1000', m: 'Peso do aluno não informado (0 kg): verificação de limite (170 kg) no C152 não realizada.' }]);
   });
 
-  // Revisão de 14/11
   it('quando o peso importa, o instrutor com o peso informado vem antes', () => {
     const { out, al } = alocar({ ins: [instrutor(1, 1, { kg: 0 }), instrutor(2, 9)], stu: [aluno(1000)] });
     assert.deepEqual([out[0].insId, al], [2, []]);
@@ -225,7 +224,7 @@ describe('Peso da tripulação', () => {
   });
 });
 
-// Retorno da operação (14/11): a diretoria permite no máximo 6 voos locais (Voo Local, Voo Solo e TGL) no mesmo horário
+// A diretoria permite no máximo 6 voos locais (Voo Local, Voo Solo e TGL) no mesmo horário
 describe('No máximo 6 voos locais no mesmo horário', () => {
   const instrutores = Array.from({ length: 9 }, (_, i) => instrutor(i + 1, 9));
   it('o 7º voo local das 08:20 vai para outro horário; os de outras missões não contam', () => {
@@ -254,8 +253,8 @@ describe('No máximo 6 voos locais no mesmo horário', () => {
   });
 });
 
-// Retorno da operação (14/11): quem agendou primeiro sai primeiro; a Prioridade continua passando à frente, e o pedido
-// posto à mão (sem a agenda) vem depois dos agendados
+// Quem agendou primeiro sai primeiro; a Prioridade passa à frente, e o pedido posto à mão (sem a agenda) vem depois
+// dos agendados
 describe('A ordem dos agendamentos', () => {
   const umLugar = stu => alocar({ ins: [instrutor(1, 9)], stu, semAeronaves: SO_PP_LJV }).out.find(o => o.a === 390);
   it('com a mesma prioridade, quem agendou primeiro fica com o horário', () => {
@@ -274,7 +273,7 @@ describe('A ordem dos agendamentos', () => {
   });
 });
 
-// Revisão de 14/11 (decisão do Pedro): sem vaga na 1ª nem na 2ª preferência, o horário mais perto da 1ª
+// Sem vaga na 1ª nem na 2ª preferência, o horário mais perto da 1ª
 describe('O horário mais perto da preferência', () => {
   it('voo: o horário livre mais perto da 1ª preferência, não o primeiro do dia', () => {
     // Um avião e um instrutor; o aluno 1000 (prioridade 5) fica com as 12:40; o 1001 queria as 12:40
@@ -289,7 +288,8 @@ describe('O horário mais perto da preferência', () => {
   });
 
   it('Ground: a turma mais perto da 1ª preferência', () => {
-    // A sala está com o Ground PA-34 às 11:30 (prioridade 5); o Ground C152 queria as 11:30: vai para as 13:40 (12:40 e 10:10 cruzam a outra turma), não 06:30
+    // A sala está com o Ground PA-34 às 11:30 (prioridade 5); o Ground C152 queria as 11:30: vai para as 13:40
+    // (12:40 e 10:10 cruzam a outra turma), não 06:30
     const { out } = alocar({
       ins: [instrutor(1, 9), instrutor(2, 9)],
       stu: [aluno(1000, { mis: 'Ground PA-34', eq: 'Sala Ground', nb: 1.5, p1: 3, p2: -1, pr: 5 }), aluno(1001, { ...GROUND_C152, p1: 3, p2: -1 })]
@@ -506,7 +506,6 @@ describe('Ground School', () => {
     ]);
   });
 
-  // Revisão de 14/11
   it('entre duas turmas abertas, a da 1ª preferência vem antes da da 2ª', () => {
     // O 1000 abre a turma das 08:20 (instrutor 1); o 1001, que bloqueou o 1, a das 06:30 (instrutor 2)
     const { out } = alocar({

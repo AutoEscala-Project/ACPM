@@ -16,7 +16,7 @@ export const FROTA = Object.values(FROTA_POR_TIPO).flat();
 
 export const dois = n => String(n).padStart(2, '0');
 
-// 40 instrutores fictícios com a mesma distribuição de níveis do estado inicial da aplicação (A01–A09 em ciclo),
+// 40 instrutores fictícios com os níveis A01–A09 em ciclo,
 // já com as habilitações equivalentes (o nível fica como no cadastro migrado)
 export function rosterSintetico(n = 40) {
   return Array.from({ length: n }, (_, i) => ({

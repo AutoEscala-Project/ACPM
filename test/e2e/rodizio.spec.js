@@ -44,7 +44,7 @@ test.describe('Rodízio', () => {
   });
 });
 
-// Revisão de 14/11: o voo cancelado não voa e não conta nos contadores da data
+// O voo cancelado não voa: não conta nos contadores da data
 test('o voo cancelado não conta no Rodízio, nos Recursos nem nos Instrutores', async ({ page }) => {
   const estado = {
     ...cenario({ ins: [doC172(1), doC172(2)], stu: [aluno(1000, { eq: 'C172', p1: 390, p2: -1 })] }),

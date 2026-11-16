@@ -1,4 +1,4 @@
-// Painel do dia no estilo dos aeroportos (fase 8): um quadro de Partidas (todas as do dia) e um de Chegadas (as que
+// Painel do dia no estilo dos aeroportos: um quadro de Partidas (todas as do dia) e um de Chegadas (as que
 // ainda não pousaram ou terminaram), que se alternam página a página, como nos painéis da INFRAERO. Os dois seguem o
 // horário efetivo (o atrasado no previsto), mostram o horário programado e, no atraso, o previsto. A turma de Ground é
 // uma linha só, sem os nomes dos alunos. Servem à visão "Painel" da Escala e à tela da recepção.
@@ -37,7 +37,7 @@ export function linhasDoQuadro(out, fStatus = {}, fObs = {}) {
       modelo: principal.eqType === GROUND_EQ_TYPE ? '' : principal.eqType || '',
       alunos: itens.map(o => o.s),
       instrutor: principal.ins,
-      // A missão do curso (fase 14) antes do tipo; a turma de Ground fica só com o tipo
+      // A missão do curso antes do tipo; a turma de Ground fica só com o tipo
       missao: principal.etapa && itens.length === 1 && !principal.isGround ? `${principal.etapa} · ${principal.mis}` : principal.mis,
       status,
       motivo: status === 'Cancelado' ? textoDoDetalhe(status, detalhe) : '',
@@ -48,7 +48,7 @@ export function linhasDoQuadro(out, fStatus = {}, fObs = {}) {
 
 const NO_QUADRO = { 'Em Voo': 'Em voo' };
 
-// O embarque (retorno da operação, 14/11): dos 35 minutos antes da decolagem (a nova, no atraso) até ela, o voo no avião
+// O embarque: dos 35 minutos antes da decolagem (a nova, no atraso) até ela, o voo no avião
 // que ainda não decolou chama o aluno para a sala de briefing. O Ground e o simulador não chamam
 export const EMBARQUE_ANTES_MIN = 35;
 const TEXTO_DO_EMBARQUE = 'EMBARQUE IMEDIATO · Sala de briefing';
@@ -120,7 +120,7 @@ export function nomeCurto(nome) {
 // usam esta): só o que o quadro mostra, com o aluno abreviado e, do detalhe do status, o novo horário e a categoria do
 // motivo. Sem escala gravada, voos é null
 export function quadroDoDia(dia) {
-  // Só as linhas no formato do motor e os status da lista (revisão de 14/11): a linha adulterada sai
+  // Só as linhas no formato do motor e os status da lista: a linha adulterada sai
   const out = dia && dia.resultado && Array.isArray(dia.resultado.out) ? dia.resultado.out.map(normalizarLinhaGravada).filter(Boolean) : null;
   if (!out) return { voos: null, fStatus: {}, fObs: {} };
   const voos = out.filter(o => o && Number.isInteger(o.a) && Number.isInteger(o.b))

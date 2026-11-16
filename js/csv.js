@@ -14,8 +14,8 @@ export const CABECALHO = ['Avião / Equipamento', 'Horário', 'Aluno', 'Fase / M
 export const nomeDoCsv = data => `escala-acpm-${data}.csv`;
 
 // Observações pertinentes ao lançamento: status diferente de confirmado (com o novo horário do atraso ou a categoria do
-// motivo do cancelamento; o texto livre não sai do app), turma de Ground, o peso da tripulação (aluno + instrutor) contra
-// o limite do avião e o avião que para para a revisão de 50 horas naquele dia
+// motivo do cancelamento; o texto livre não sai do app), turma de Ground, o peso da tripulação (aluno + instrutor)
+// contra o limite do avião e o avião que para para a revisão de 50 horas naquele dia
 function observacoes(o, status, detalhe, revisao) {
   const notas = [];
   if (status !== 'Confirmado') notas.push(`Status: ${textoDoStatus(status, detalhe, { textoLivre: false, voo: o })}`);
@@ -24,7 +24,7 @@ function observacoes(o, status, detalhe, revisao) {
     if (!o.stuKg) notas.push(`Peso do aluno não informado: limite de ${o.limKg} kg do ${o.eqType} não verificado`);
     else if (!o.insKg) notas.push(`Peso do instrutor não informado: limite de ${o.limKg} kg do ${o.eqType} não verificado`);
     else if (o.comb) {
-      // Acima do limite com os tanques cheios: o voo sai com menos combustível (fase 10)
+      // Acima do limite com os tanques cheios: o voo sai com menos combustível
       const { abastecerGal, reduzirGal, minimoGal } = o.comb;
       notas.push(`Peso aluno + instrutor: ${o.stuKg + o.insKg} kg (limite do ${o.eqType} com os tanques cheios: ${o.limKg} kg) · combustível: abastecer até ${abastecerGal} gal (${reduzirGal} a menos); o voo, o táxi e a reserva pedem ${minimoGal} gal`);
     } else {
@@ -42,14 +42,14 @@ export function linhasDoCsv(res, fStatus = {}, fObs = {}) {
     .sort((a, b) => ordemDoTipo(a) - ordemDoTipo(b) || a.r.localeCompare(b.r) || a.a - b.a || a.o - b.o)
     .map(o => {
       const status = fStatus[o.fKey] || o.status || 'Confirmado';
-      // A missão do curso (fase 14) vem antes do tipo de missão: "PP-07 · Navegação"
+      // A missão do curso vem antes do tipo de missão: "PP-07 · Navegação"
       const missao = (o.etapa ? `${o.etapa} · ` : '') + (o.ss && o.ss !== '1/1' ? `${o.mis} (sessão ${o.ss})` : o.mis);
       return [o.r, `${hm(o.a)}–${hm(o.b)}`, o.s, missao, o.ins, observacoes(o, status, fObs[o.fKey], res.revisao)];
     });
 }
 
 // Um texto que o Excel leria como fórmula (começando com =, +, -, @, tabulação ou retorno) vai com um apóstrofo na
-// frente (revisão de 14/11: um nome gravado como "=HYPERLINK(...)" viraria um link no arquivo)
+// frente: um nome gravado como "=HYPERLINK(...)" viraria um link no arquivo
 const PARECE_FORMULA = /^[=+\-@\t\r]/;
 const celula = v => { const texto = String(v); return '"' + (PARECE_FORMULA.test(texto) ? `'${texto}` : texto).replace(/"/g, '""') + '"'; };
 

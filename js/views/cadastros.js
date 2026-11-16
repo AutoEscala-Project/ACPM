@@ -59,8 +59,8 @@ function ocupacaoDosInstrutores() {
 
 const atributos = x => `data-k="i" data-id="${x.id}" data-hab="${x.hab.join(' ')}" data-nm="${esc(x.nm.toLowerCase())}"`;
 
-// Limites da lei (fase 11): as horas de voo do instrutor com a escala desta data (as de antes, as de fora do app e as de
-// hoje, só voo em avião) no mês, no semestre e no ano
+// Limites da lei: as horas de voo do instrutor com a escala desta data (as de antes, as de fora do app e as de hoje, só
+// voo em avião) no mês, no semestre e no ano
 function horasComAEscala(x) {
   const passadas = (S.horasDosInstrutores || {})[x.id] || { mes: 0, semestre: 0, ano: 0, fimAnterior: null };
   const hoje = [...new Map(voosQueVoam().filter(o => o.insId === x.id && AIRCRAFT_EQ_TYPES.includes(o.eqType)).map(o => [o.classKey || o.fKey, o])).values()]
@@ -113,7 +113,7 @@ function linhaDoCadastro(x) {
 
 // A grade do dia depende da escala: é refeita junto com ela
 export function rInsDia() {
-  // Os termos da grade com o "?" (revisão de 14/11)
+  // Os termos da grade com o "?"
   $('#inst-dia-cab').innerHTML = `<tr><th>Instrutor</th><th>Hoje${botaoDeDica('vem-nesta-data', 'Hoje')}</th>${WIN.map(w => `<th class="jan">${w}</th>`).join('')}<th>Voos${botaoDeDica('voos-do-instrutor', 'Voos')}</th><th>Mês${botaoDeDica('horas-do-mes', 'Mês')}</th><th>Turno${botaoDeDica('turno', 'Turno')}</th><th>Habilitações</th></tr>`;
   if (!S.ins.length) {
     $('#inst-dia').innerHTML = `<tr><td colspan="${WIN.length + 6}" class="h">${SEM_INSTRUTORES}</td></tr>`;

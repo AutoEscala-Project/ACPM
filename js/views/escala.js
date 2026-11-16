@@ -27,8 +27,8 @@ function missionColorClass(mis) {
   return 'm-mu';
 }
 
-// Popup do voo no mapa: um só, fixo na tela e fora do painel que rola (dentro dele o popup era cortado e, nas
-// primeiras linhas, sumia sob os filtros e o cabeçalho). Cada barra guarda a chave do voo; o conteúdo sai do registro
+// Popup do voo no mapa: um só, fixo na tela e fora do painel que rola (dentro dele o popup seria cortado e, nas
+// primeiras linhas, sumiria sob os filtros e o cabeçalho). Cada barra guarda a chave do voo; o conteúdo sai do registro
 // feito no último desenho do mapa, e o popup aberto acompanha a escala refeita (ex.: depois de mudar o status nele)
 const VOOS_DO_MAPA = new Map();
 let popupDe = null;
@@ -210,14 +210,14 @@ export function renderAuditPanel() {
       logListEl.innerHTML = historico.map(item => {
         const tipo = ['inc', 'exc', 'mod'].includes(item.type) ? item.type : 'mod';
         const lbl = tipo === 'inc' ? 'Inclusão' : tipo === 'exc' ? 'Exclusão' : 'Edição';
-        // Só a reversão no formato que o app grava vira botão (revisão de 14/11)
+        // Só a reversão no formato que o app grava vira botão
         const reversao = item.id !== null && item.id !== undefined ? validarReversao(item.revert, S.frota) : null;
         const btnRevert = reversao
           ? `<button class="x edit-only" data-act="rev-log" data-logid="${esc(item.id)}">${esc(reversao.label)}</button>`
           : '';
         const autor = item.autor ? ` <span class="sm audit-autor">${esc(item.autor)}</span>` : '';
         const importado = item.importado ? ' <span class="sm">(importado)</span>' : '';
-        // A alteração ainda sendo gravada, ou recusada pelo servidor (revisão de 14/11)
+        // A alteração ainda sendo gravada, ou recusada pelo servidor
         const estado = item.estado === 'gravando' ? ' <span class="sm audit-estado">gravando…</span>'
           : item.estado === 'nao-gravada' ? ' <span class="sm audit-estado nao-gravada">não gravada</span>' : '';
         return `<div class="audit-item">
@@ -252,7 +252,7 @@ function peso(o) {
 // Acima do limite com os tanques cheios, o voo sai com menos combustível: quanto reduzir (e, na dica, quanto abastecer)
 const horasEMinutos = min => `${Math.floor(min / 60)}h${String(Math.round(min) % 60).padStart(2, '0')}`;
 const textoDoCombustivel = c => `Abastecer até ${c.abastecerGal} gal (${c.reduzirGal} a menos que o tanque cheio); o voo, o táxi e a reserva pedem ${c.minimoGal} gal; autonomia de ${horasEMinutos(c.autonomiaMin)}.`;
-// A dica diz o caso deste voo (quanto abastecer) antes da explicação (revisão de 14/11)
+// A dica diz o caso deste voo (quanto abastecer) antes da explicação
 const seloDoCombustivel = o => (o.comb ? ` <span class="tag comb" data-dica="reduzir-combustivel" data-dica-caso="${textoDoCombustivel(o.comb)}">reduzir ${o.comb.reduzirGal} gal</span>` : '');
 
 function seletorDeStatus(o) {
@@ -276,7 +276,7 @@ const acao = o => (o.stuId
   ? `<button class="x" data-act="rm-fly" data-id="${esc(o.stuId)}" data-mid="${esc(o.mid || 0)}" aria-label="Tirar ${esc(o.s)} da escala" title="Tirar da escala">✕</button>`
   : '');
 
-// Escala aprovada (fase 12): o selo diz quando (e quem) aprovou e o botão reabre; sem aprovação, o botão aprova
+// Escala aprovada: o selo diz quando (e quem) aprovou e o botão reabre; sem aprovação, o botão aprova
 function rAprovacao(temVoos) {
   const lugar = $('#aprovacao'), selo = $('#selo-aprovada');
   if (!lugar || !selo) return;
@@ -288,7 +288,7 @@ function rAprovacao(temVoos) {
     selo.innerHTML = `<svg class="ico" aria-hidden="true"><use href="#i-cadeado"/></svg>Aprovada às ${hora}${S.aprovacao.por ? ` por ${esc(S.aprovacao.por)}` : ''}`;
     lugar.innerHTML = '<button type="button" class="btn sec edit-only" id="btn-reabrir" data-dica="reabrir">Reabrir</button>';
   } else {
-    // Sem as horas dos instrutores, os limites do mês e do ano não foram conferidos: não aprova (revisão de 14/11)
+    // Sem as horas dos instrutores, os limites do mês e do ano não foram conferidos: não aprova
     const semHoras = dadoIndisponivel('horas');
     // Desligado (sem as horas), o title do navegador explica; ligado, a dica do glossário
     const explicacao = semHoras ? ' title="As horas de voo dos instrutores não foram lidas: os limites do mês e do ano não foram conferidos" disabled' : ' data-dica="aprovar-escala"';
@@ -296,15 +296,15 @@ function rAprovacao(temVoos) {
   }
 }
 
-// Compactação (fase 13): os critérios do dia. Com a escala aprovada (os voos fixos não mudam) e no Gestor, só aparecem.
-// A linha some sem voos e sem aprovação
+// Compactação: os critérios do dia. Com a escala aprovada (os voos fixos não mudam) e no Gestor, só aparecem. A linha
+// some sem voos e sem aprovação
 function rCompactacao(out) {
   const lugar = $('#compactacao');
   if (!lugar) return;
   lugar.hidden = !out.length && !S.aprovacao;
   const criterios = normalizarCriterios(S.criterios);
   const travado = isGestor() || Boolean(S.aprovacao);
-  // Cada critério e cada opção com a dica do glossário (revisão de 14/11)
+  // Cada critério e cada opção com a dica do glossário
   // Travados, os botões ficam com aria-disabled (o foco e a dica continuam); na escala aprovada, a dica diz por quê
   const dicaDa = id => (S.aprovacao && !isGestor() ? 'criterios-travados' : `criterio-${id}`);
   const grupo = (campo, rotulo, dica, opcoes) => `<span class="flt-rotulo"><span>${rotulo}</span><button type="button" class="dica-btn" data-dica="${dica}" aria-label="O que é ${rotulo}?" aria-expanded="false"></button> <span class="seg" role="group" aria-label="${rotulo}">${opcoes.map(([id, nome]) =>
@@ -323,7 +323,7 @@ function tempoParado(out) {
 }
 
 // Avisos agrupados por tipo: alunos e instrutores sem peso, aviões que param para a revisão e outros. O aviso de peso
-// diz de quem é o peso que falta (revisão de 14/11): "Peso do aluno", "Peso de Instrutor 01" ou "Pesos do aluno e de…"
+// diz de quem é o peso que falta: "Peso do aluno", "Peso de Instrutor 01" ou "Pesos do aluno e de…"
 const INSTRUTOR_SEM_PESO = /^Pesos? (?:do aluno e )?de (.+?) não informados? \(/;
 function resumoDosAvisos(avisos) {
   const ehPeso = a => /^Pesos? d/.test(a.m);
@@ -412,7 +412,7 @@ function tabela(voos) {
       const classes = [statusDe(voo) === 'Cancelado' ? 'st-Cancelado' : '', voo.conflito ? 'em-conflito' : ''].filter(Boolean);
       return classes.length ? ` class="${classes.join(' ')}"` : '';
     };
-    // O cadeado diz por que o voo está fixo: o status de andamento ou a escala aprovada (revisão de 14/11)
+    // O cadeado diz por que o voo está fixo: o status de andamento ou a escala aprovada
     const motivo = esc(motivoDoFixo(o.fKey, { fStatus: S.fStatus, aprovacao: S.aprovacao, voo: o }));
     const fixo = o.fixo ? ` <svg class="ico fixo" role="img" aria-label="${motivo}" data-dica="voo-fixo" data-dica-termo="${motivo}"><use href="#i-cadeado"/></svg>` : '';
     const doTempo = ` data-w="${o.w}"${recolhido ? ' hidden' : ''}`;

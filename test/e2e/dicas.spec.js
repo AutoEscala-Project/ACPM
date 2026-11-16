@@ -1,4 +1,4 @@
-// As dicas (revisão de 14/11): o balão que explica um termo da tela. Abre com o mouse parado no termo (depois de um
+// As dicas: o balão que explica um termo da tela. Abre com o mouse parado no termo (depois de um
 // instante), na hora com o foco do teclado, e num toque no "?" ou na etiqueta; Esc, um toque fora e sair do termo
 // fecham. O texto vem do glossário.
 import { test, expect, abrir, abrirEscala, irPara } from './fixtures.js';
@@ -80,7 +80,7 @@ test.describe('Dicas com a tela travada', () => {
   });
 });
 
-// Revisão de 14/11: os controles que aparecem com o mouse também aparecem com o foco na linha e no toque
+// Os controles que aparecem com o mouse também aparecem com o foco na linha e no toque
 const opacidade = loc => loc.evaluate(el => getComputedStyle(el).opacity);
 test('o "+ missão" da Demanda aparece com o foco do teclado em qualquer campo da linha', async ({ page }) => {
   await abrir(page, { estado: diaComHorarioLivre() });

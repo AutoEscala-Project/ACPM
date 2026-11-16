@@ -1,6 +1,6 @@
-// Métricas de uma escala (fase 10): o tempo parado dos aviões e dos instrutores, as saídas do hangar, os aviões usados
+// Métricas de uma escala: o tempo parado dos aviões e dos instrutores, as saídas do hangar, os aviões usados
 // contra o mínimo possível, o equilíbrio das horas, as preferências atendidas e as trocas de avião. Medem o efeito das
-// regras do motor (scripts/medir-escalas.mjs) e, depois, aparecem na Escala.
+// regras do motor (scripts/medir-escalas.mjs); a Escala mostra o tempo parado e as saídas do hangar.
 import { AIRCRAFT_EQ_TYPES } from './config.js';
 
 // Parado por 2 h ou mais entre dois voos, o avião volta para o hangar (uma saída a mais no dia)
@@ -37,7 +37,7 @@ function distanciaMedia(out, preferenciaDe) {
 }
 
 // ativos: os ids dos instrutores que vêm no dia (quem não voou conta com 0 h no equilíbrio)
-// preferenciaDe: o minuto da 1ª preferência de um voo (-1 sem ela), para a distância até ela (revisão de 14/11)
+// preferenciaDe: o minuto da 1ª preferência de um voo (-1 sem ela), para a distância até ela
 export function metricasDaEscala(out, { ativos = [], preferenciaDe = () => -1 } = {}) {
   const avioes = out.filter(o => AIRCRAFT_EQ_TYPES.includes(o.eqType));
   const porAviao = agrupar(avioes, o => o.r);

@@ -1,5 +1,5 @@
-// Ordem dos aviões no hangar (fase 10), da frente para o fundo, em cada data: o operador ajusta em Recursos e a data
-// seguinte começa com a mesma ordem. O motor tira primeiro os da frente e junta os voos nos aviões que já saíram, para
+// Ordem dos aviões no hangar, da frente para o fundo, em cada data: o operador ajusta em Recursos e a data seguinte
+// começa com a mesma ordem. O motor tira primeiro os da frente e junta os voos nos aviões que já saíram, para
 // não deixar avião parado no meio do dia nem tirar um do fundo. Simuladores e a sala de Ground não ficam no hangar.
 import { AIRCRAFT_EQ_TYPES } from './config.js';
 

@@ -1,5 +1,5 @@
-// Critérios da compactação da escala (fase 13), escolhidos pelo operador na Escala e guardados com o dia (a data
-// seguinte continua com eles): o que pesa mais nos buracos do dia e até onde os horários dos voos podem mudar
+// Critérios da compactação da escala, escolhidos pelo operador na Escala e guardados com o dia (a data seguinte
+// continua com eles): o que pesa mais nos buracos do dia e até onde os horários dos voos podem mudar
 export const OPCOES_DE_BURACOS = [
   ['inva', 'INVA', 'Menos tempo parado dos instrutores'],
   ['aviao', 'Avião', 'Menos tempo parado dos aviões e menos saídas do hangar'],

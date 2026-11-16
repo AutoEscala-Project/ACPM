@@ -77,7 +77,7 @@ describe('Backend local: escala por data, cadastro e histórico', () => {
 describe('Backend local: agenda de solicitações', () => {
   const antesDas13 = new Date('2026-11-10T12:00:00-03:00');
   const depoisDas13 = new Date('2026-11-10T13:30:00-03:00');
-  // O pedido é num horário específico, com a duração (retorno da operação, 14/11)
+  // O pedido é num horário específico, com a duração
   const pedido = (extra = {}) => ({ data: '2026-11-11', aluno: 1000, aluno_nome: ' Aluno 1000 ', missao: 'Voo Local', janela: 'horario', horario: '06:30', horas: 1, registrado_por: ' Maria ', ...extra });
 
   it('registra no prazo com quem anotou, a hora e a duração; lista por período em ordem', async () => {
@@ -106,7 +106,7 @@ describe('Backend local: agenda de solicitações', () => {
     assert.equal((await backendLocal.listarSolicitacoes('2026-11-11', '2026-11-11'))[0].horas, 1.5);
   });
 
-  // Retorno da operação (14/11): no máximo 6 voos locais no mesmo horário, como no servidor
+  // No máximo 6 voos locais no mesmo horário, como no servidor
   it('o 7º voo local no mesmo horário é recusado (PT422); outra missão passa', async () => {
     for (let i = 0; i < 6; i++) await backendLocal.registrarSolicitacao(pedido({ aluno: 2000 + i, missao: ['Voo Local', 'Voo Solo', 'TGL (TMA)'][i % 3], horario: '08:20' }), antesDas13);
     await assert.rejects(backendLocal.registrarSolicitacao(pedido({ aluno: 2010, horario: '08:20' }), antesDas13), e => e.code === 'PT422');

@@ -1,4 +1,4 @@
-// Sugestões para um conflito na escala aprovada (fase 12): sem refazer o dia, o que pode voar no lugar. Outro avião do
+// Sugestões para um conflito na escala aprovada: sem refazer o dia, o que pode voar no lugar. Outro avião do
 // mesmo tipo, outro instrutor (habilitado, livre, dentro da lei e do peso), os dois, um horário mais tarde no mesmo dia
 // ou cancelar. Cada sugestão é uma mudança no voo fixo; aplicada, o conflito some.
 import { describe, it } from 'node:test';
@@ -106,7 +106,7 @@ describe('Sugestões para um conflito', () => {
     assert.equal(new Set(depois.out.map(o => o.classKey)).size, 1, 'a mesma turma');
   });
 
-  // Revisão de 14/11: as sugestões vêm do código do conflito, não do texto; "Soltar o voo" devolve o pedido ao motor
+  // As sugestões vêm do código do conflito, não do texto; "Soltar o voo" devolve o pedido ao motor
   it('o pedido mudou (a duração): só soltar ou cancelar; solto, o voo volta para a escala sem conflito', () => {
     const base = cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, { p1: 390, p2: -1 })] });
     const { estado, resultado } = aprovadoEMudado(base, e => ({ ...e, stu: [aluno(1000, { p1: 390, p2: -1, nb: 2 })] }));
@@ -139,7 +139,7 @@ describe('Sugestões para um conflito', () => {
     }
   });
 
-  it('a escala gravada antes dos códigos: as sugestões vêm do texto, como antes', () => {
+  it('a escala gravada sem os códigos: as sugestões vêm do texto', () => {
     const base = cenario({ ins: [instrutor(1, 1), instrutor(2, 9)], stu: [aluno(1000, { p1: 390, p2: -1 })] });
     const { estado, resultado } = aprovadoEMudado(base, semInstrutor(1));
     const semCodigos = { ...resultado, out: resultado.out.map(({ conflitoCodigos, ...o }) => o) };

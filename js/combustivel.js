@@ -1,4 +1,4 @@
-// Combustível e peso (fase 10). O limite de peso de cada avião (aluno + instrutor, js/config.js) vale com os tanques
+// Combustível e peso. O limite de peso de cada avião (aluno + instrutor, js/config.js) vale com os tanques
 // cheios. Acima dele, o avião pode sair com menos combustível, desde que o que fica dê o voo, o táxi e a reserva: 30
 // minutos de dia; 45 à noite e em IFR (RBAC 91.151 e 91.167). Tudo arredonda para o lado seguro: a redução e o mínimo
 // para cima, a autonomia para baixo. Sem um dos pesos, ou num tipo sem limite, não há o que conferir.

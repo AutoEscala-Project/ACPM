@@ -1,5 +1,5 @@
-// Revisão de 50 horas na aba Recursos: as horas disponíveis até a revisão (retorno da operação, 14/11: a operadora
-// lança as horas disponíveis, não as horas desde a revisão), o avião que para na escala e a nova data.
+// Revisão de 50 horas na aba Recursos: as horas disponíveis até a revisão (a operadora lança as horas disponíveis,
+// não as horas desde a revisão), o avião que para na escala e a nova data.
 import { test, expect, abrir, irPara, abrirEscala, lerEscala } from './fixtures.js';
 import { aluno, apenas, cenario, instrutor } from '../helpers/montar.js';
 

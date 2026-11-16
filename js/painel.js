@@ -1,8 +1,8 @@
-// TV da recepção (fase 9): o painel de partidas e chegadas de hoje na tela toda (js/views/painel-aeroporto.js). No modo
+// TV da recepção: o painel de partidas e chegadas de hoje na tela toda (js/views/painel-aeroporto.js). No modo
 // compartilhado, a TV entra com a conta dela (perfil "painel", que só vê o quadro, pela função painel_do_dia) e busca o
 // quadro a cada minuto; neste navegador (sem servidor), lê o dia gravado aqui. Recarrega toda madrugada, para pegar as
-// versões novas do app, e mantém a tela acesa. A TV fica numa tela pública (revisão de 14/11): ela só aceita a conta da
-// TV e guarda a sessão numa chave só dela.
+// versões novas do app, e mantém a tela acesa. A TV fica numa tela pública: ela só aceita a conta da TV
+// e guarda a sessão numa chave só dela.
 import { projetoSupabase, chaveDaSessao } from './config-supabase.js';
 import { soPainel } from './perfis.js';
 import { backendLocal } from './backends/local.js';
@@ -73,8 +73,8 @@ function pedirLogin(cliente) {
   });
 }
 
-// A TV que entrou antes da revisão de 14/11 guardou a sessão na chave do app. Se for a conta da TV, a sessão passa para
-// a chave da TV (sem pedir a senha de novo); a sessão de outra conta fica onde está
+// A sessão guardada na chave do app (a TV que entrou pelo app, ou por uma versão sem a chave da TV): se for a conta da
+// TV, a sessão passa para a chave da TV (sem pedir a senha de novo); a sessão de outra conta fica onde está
 async function trazerSessaoDoApp(projeto) {
   const doApp = chaveDaSessao(projeto), daTV = chaveDaSessao(projeto, { painel: true });
   if (localStorage.getItem(daTV) || !localStorage.getItem(doApp)) return;

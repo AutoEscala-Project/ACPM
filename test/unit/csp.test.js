@@ -1,4 +1,4 @@
-// A política de segurança de conteúdo das duas páginas (revisão de 14/11): só os scripts e os estilos que elas usam e só
+// A política de segurança de conteúdo das duas páginas: só os scripts e os estilos que elas usam e só
 // os servidores do Supabase do app. Sem script embutido na página nem atributo de evento (onclick=...), a política não
 // precisa de 'unsafe-inline' nos scripts. Uma biblioteca nova, ou uma versão nova, precisa entrar na política.
 import { describe, it } from 'node:test';

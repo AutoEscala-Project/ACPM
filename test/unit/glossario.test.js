@@ -1,5 +1,5 @@
-// O glossário (revisão de 14/11): os termos da tela, explicados numa frase curta. Os textos vão para a dica (o balão que
-// aparece no mouse, no foco ou no toque) e para a seção Glossário do Manual.
+// O glossário: os termos da tela, explicados numa frase curta. Os textos vão para a dica (o balão que aparece no
+// mouse, no foco ou no toque) e para a seção Glossário do Manual.
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';

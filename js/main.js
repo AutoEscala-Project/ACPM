@@ -212,8 +212,8 @@ function linkDaData(data) {
   return url.toString();
 }
 
-// Sem o servidor, a escala fica só neste navegador (o link que levava a escala inteira no endereço, com nomes, pesos e
-// horas, saiu na revisão de 14/11)
+// Sem o servidor, a escala fica só neste navegador: não há link que leve a escala inteira no endereço (exporia nomes,
+// pesos e horas)
 $('#btn-share-link').onclick = async () => {
   if (!modoCompartilhado()) {
     showToast('Sem o servidor, a escala fica só neste navegador: o link da escala é do app publicado, com login.');
@@ -262,7 +262,7 @@ $('#dt').onchange = e => {
     e.target.value = DATA;
     return;
   }
-  // Domingo não tem escala (retorno da operação, 14/11): abre a segunda
+  // Domingo não tem escala: abre a segunda
   if (ehDomingo(data)) {
     data = somarDias(data, 1);
     e.target.value = data;
@@ -274,7 +274,7 @@ $('#dt').onchange = e => {
   });
 };
 // ‹ e ›: o dia anterior e o seguinte. Um clique no rótulo da data abre o calendário do navegador
-// O domingo fica de fora: o aeroclube não opera (retorno da operação, 14/11)
+// O domingo fica de fora: o aeroclube não opera
 const irParaDia = dias => {
   const dt = $('#dt');
   if (dt.disabled) return;
@@ -439,7 +439,7 @@ armed('#btn-bi-sim', 'Confirmar simulação', async () => {
       const doTipo = isGnd ? [GROUND_REG] : matriculasDoTipo(S.frota, eqType, { parafuso: mis === 'Parafuso' });
       if (!doTipo.length) continue;
       const reg = doTipo.length === 1 ? doTipo[0] : pick(doTipo);
-      // Grounds simulados com os instrutores menos habilitados (como os A01–A02 de antes)
+      // Grounds simulados com os instrutores menos habilitados (até o nível 2)
       const qualIns = isGnd
         ? S.ins.filter(x => podeFazer(x, mis, eqType) && x.hab.length <= habilitacoesDoNivel(2).length)
         : S.ins.filter(x => podeFazer(x, mis, eqType));
@@ -555,8 +555,7 @@ document.addEventListener('click', e => {
   if (!cal) return;
   if (cal.dataset.cal === 'mes') { mudarMes(+cal.dataset.delta); return; }
   escolherDia(cal.dataset.dia);
-  // O dia escolhido na agenda abre no app inteiro (retorno da operação, 14/11: trocar de aba voltava para outra data);
-  // o domingo não tem escala
+  // O dia escolhido na agenda abre no app inteiro (as outras abas ficam nessa data); o domingo não tem escala
   if (cal.dataset.dia !== DATA && dataIsoValida(cal.dataset.dia) && !ehDomingo(cal.dataset.dia)) {
     carregarData(cal.dataset.dia).catch(() => showToast('Não foi possível abrir essa data. Verifique a conexão e tente de novo.'));
   }
@@ -574,7 +573,7 @@ async function importarDaAgenda() {
     showToast('Não foi possível ler a agenda. Verifique a conexão e tente de novo.');
     return;
   }
-  // A resposta chegou depois de trocar de data: os pedidos são de outra data (revisão de 14/11)
+  // A resposta chegou depois de trocar de data: os pedidos são de outra data
   if (DATA !== data) {
     showToast('A data mudou durante a importação da agenda: nada foi importado. Importe de novo na data certa.');
     return;
@@ -605,14 +604,14 @@ async function registrarPedido(excecao) {
     $('#ag-erro').textContent = 'Escolha o aluno e informe quem anotou o pedido (“Registrado por”).';
     return;
   }
-  // A duração: de 0,1 h a 5 h, em décimos (o Ground tem 01h30; retorno da operação, 14/11)
+  // A duração: de 0,1 h a 5 h, em décimos (o Ground tem 01h30)
   const horas = Math.round(parseFloat(String($('#ag-horas').value).replace(',', '.')) * 10) / 10;
   if (!(horas > 0 && horas <= DURACAO_MAXIMA_H)) {
     $('#ag-erro').textContent = `A duração vai de 0,1 h a ${DURACAO_MAXIMA_H} h.`;
     return;
   }
   const dia = diaDaAgenda(), confirmacao = `${aluno.id}|${dia}`;
-  // No máximo 6 voos locais no mesmo horário (retorno da operação, 14/11): o horário está indisponível, com o próximo
+  // No máximo 6 voos locais no mesmo horário: o horário está indisponível, com o próximo
   const pedido = { data: dia, horario: $('#ag-horario').value, missao: $('#ag-missao').value };
   const vaga = vagaDeVooLocal(pedidosCarregados(), pedido, S.horarios);
   if (!vaga.ok) { $('#ag-erro').textContent = semVagaDeVooLocal(pedido, vaga.proximo); return; }
@@ -690,7 +689,7 @@ document.addEventListener('click', e => {
   const a = b.dataset.act, c = b.closest('[data-k]'), id = c ? +c.dataset.id : +b.dataset.id || 0;
   const mid = b.dataset.mid !== undefined ? +b.dataset.mid : (c && c.dataset.mid !== undefined ? +c.dataset.mid : 0);
 
-  // A próxima missão do curso (fase 14): o pedido vira a missão do programa (tipo, recurso e horas) e o aluno voa
+  // A próxima missão do curso: o pedido vira a missão do programa (tipo, recurso e horas) e o aluno voa
   if (a === 'usar-proxima') {
     const s = stuBy(id), target = getMissionTarget(id, mid);
     const m = s && target ? proximaDoPedido(s, mid) : null;
@@ -762,7 +761,7 @@ document.addEventListener('click', e => {
   if (a === 'rev-log') {
     const logId = +b.dataset.logid;
     const entry = AUDIT_LOG.find(x => x.id === logId);
-    // A reversão gravada só vale no formato que o app produz (revisão de 14/11)
+    // A reversão gravada só vale no formato que o app produz
     const rev = entry ? validarReversao(entry.revert, S.frota) : null;
     if (!rev) return;
 
@@ -812,8 +811,8 @@ document.addEventListener('click', e => {
     return;
   }
 
-  // Horários de decolagem (Recursos; revisão de 14/11: "Resumo + Editar"). O editor trabalha num rascunho; só "Salvar"
-  // muda a lista, e os pedidos da categoria acompanham (o horário mais próximo da lista nova). Uma entrada no histórico
+  // Horários de decolagem (Recursos: um resumo e o botão Editar). O editor trabalha num rascunho; só "Salvar" muda a
+  // lista, e os pedidos da categoria acompanham (o horário mais próximo da lista nova). Uma entrada no histórico
   // desfaz a lista e os pedidos que mudaram
   if (a === 'editar-horarios') { abrirEditorDosHorarios(b.dataset.cat); return; }
   if (a === 'rascunho-tirar') { tirarDoRascunho(+b.dataset.min); return; }
@@ -917,7 +916,7 @@ document.addEventListener('click', e => {
   }
 });
 
-// Aprovar a escala (fase 12): todos os voos ficam fixos e o selo diz quando e quem aprovou. Reabrir solta os voos: a
+// Aprovar a escala: todos os voos ficam fixos e o selo diz quando e quem aprovou. Reabrir solta os voos: a
 // escala volta a ser refeita inteira a cada alteração. Os dois pedem confirmação
 document.addEventListener('click', e => {
   const aprovar = e.target.closest('#btn-aprovar'), reabrir = e.target.closest('#btn-reabrir');
@@ -940,7 +939,7 @@ document.addEventListener('click', e => {
   }
 });
 
-// O programa dos cursos (fase 14), em Alunos › Cursos: só o Administrador (neste navegador, o Operador) muda. Incluir,
+// O programa dos cursos, em Alunos › Cursos: só o Administrador (neste navegador, o Operador) muda. Incluir,
 // subir, descer e tirar (com confirmação) refazem a tabela; os campos mudam no lugar. O código vale uma vez por curso
 const ondeNoPrograma = el => { const tr = el.closest('tr[data-curso]'); return { curso: tr.dataset.curso, i: +tr.dataset.i, tr }; };
 const gravarPrograma = (curso, lista) => { S.cursos = normalizarCursos({ ...normalizarCursos(S.cursos), [curso]: lista }); save(); };
@@ -990,7 +989,7 @@ document.addEventListener('change', e => {
     if (erro) { showToast(erro); campo.value = m.id; return; }
     m.id = id;
   } else if (cf === 'nb') {
-    // As horas: de 0,1 h a 5 h, em décimos (retorno da operação, 14/11); fora disso, não vale
+    // As horas: de 0,1 h a 5 h, em décimos; fora disso, não vale
     const h = Math.round(parseFloat(String(campo.value).replace(',', '.')) * 10) / 10;
     if (!(h > 0 && h <= DURACAO_MAXIMA_H)) { showToast(`A duração vai de 0,1 h a ${DURACAO_MAXIMA_H} h.`); campo.value = m.nb; return; }
     m.nb = h;
@@ -1004,7 +1003,7 @@ document.addEventListener('change', e => {
   logChange('mod', `Programa do ${curso}: ${salvo.id} alterada`);
 });
 
-// Critérios da compactação (fase 13): a escala é refeita com o critério novo (com a escala aprovada, não mudam)
+// Critérios da compactação: a escala é refeita com o critério novo (com a escala aprovada, não mudam)
 document.addEventListener('click', e => {
   const b = e.target.closest('[data-criterio]');
   if (!b || b.getAttribute('aria-disabled') === 'true' || isGestor() || S.aprovacao) return;
@@ -1017,7 +1016,7 @@ document.addEventListener('click', e => {
   logChange('mod', `Compactação: ${campo === 'buracos' ? 'buracos' : 'horários'} ${nome(antes[campo])} → ${nome(S.criterios[campo])}`);
 });
 
-// O resultado da missão do curso (fase 14), na linha do voo: vai para o servidor (só acréscimo) e entra na situação do
+// O resultado da missão do curso, na linha do voo: vai para o servidor (só acréscimo) e entra na situação do
 // aluno (o progresso e a próxima missão mudam). Sem conexão, o seletor volta ao que estava
 document.addEventListener('change', async e => {
   const sel = e.target.closest('[data-resultado]');
@@ -1032,7 +1031,7 @@ document.addEventListener('change', async e => {
     const atual = S.resultados || { situacao: [], doDia: [] };
     const mesmaMissao = r => r.aluno === novo.aluno && r.curso === novo.curso && r.missao === novo.missao;
     // A situação de cada missão vale para todas as datas; os registros do dia e o histórico, só para a data do voo (a
-    // resposta pode chegar depois de trocar de data: revisão de 14/11)
+    // resposta pode chegar depois de trocar de data)
     const mesmaData = DATA === registro.data;
     S.resultados = { situacao: [...atual.situacao.filter(r => !mesmaMissao(r)), novo], doDia: mesmaData ? [...atual.doDia, novo] : atual.doDia };
     const descricao = `Resultado de ${o.s} em ${o.etapa}: ${registro.resultado}`;
@@ -1044,7 +1043,7 @@ document.addEventListener('change', async e => {
   rOut(); rAlu(); rDem();
 });
 
-// Sugestões para um conflito (fase 12): a gaveta abre pelo botão do conflito. "Aplicar" muda o voo fixo (na turma de
+// Sugestões para um conflito: a gaveta abre pelo botão do conflito. "Aplicar" muda o voo fixo (na turma de
 // Ground, a turma inteira) e "Soltar" o tira dos fixos; o histórico guarda os fixos de antes, para reverter. Cancelar
 // abre o diálogo do status, já com o motivo do conflito marcado
 document.addEventListener('click', e => {
@@ -1114,14 +1113,13 @@ function aplicarStatus(fKey, status, detalhe) {
   if (!S.fStatus) S.fStatus = {};
   if (!S.fObs) S.fObs = {};
   S.fStatus[fKey] = status;
-  // Sem o diálogo, o novo horário do atraso segue no Em Voo e no Pousou (revisão de 14/11); nos outros, o detalhe sai
+  // Sem o diálogo, o novo horário do atraso segue no Em Voo e no Pousou; nos outros, o detalhe sai
   const novo = detalhe || detalheAoMudarStatus(S.fObs[fKey], status);
   if (novo) S.fObs[fKey] = novo;
   else delete S.fObs[fKey];
   const voo = vooDaChave(fKey);
-  // Em Voo, Atrasado, Pousou e Cancelado fixam o voo (fase 12; o cancelado desde a revisão de 14/11): uma alteração na escala
-  // não o tira do lugar (o cancelado fica onde estava, sem ocupar nada). Fora da escala aprovada, Pendente ou
-  // Confirmado o soltam
+  // Em Voo, Atrasado, Pousou e Cancelado fixam o voo: uma alteração na escala não o tira do lugar (o cancelado fica
+  // onde estava, sem ocupar nada). Fora da escala aprovada, Pendente ou Confirmado o soltam
   if (voo) S.fixos = fixosAoMudarStatus(S.fixos, voo, status, { aprovada: Boolean(S.aprovacao) });
   save();
   const textoDoStatus = status === 'Pousou' ? rotuloDoStatus(status, voo) : textoParaOHistorico(status, detalhe);
@@ -1133,7 +1131,7 @@ function mudarStatus(fKey, status) {
   pedirDetalheDoStatus({ voo, status, aoConfirmar: detalhe => aplicarStatus(fKey, status, detalhe), aoDesistir: () => rOut() });
 }
 
-// Limites da lei (fase 11), no cadastro dos instrutores: só o Administrador muda (neste navegador, o Operador). Vazio é
+// Limites da lei, no cadastro dos instrutores: só o Administrador muda (neste navegador, o Operador). Vazio é
 // sem limite; os campos em horas viram minutos onde o limite é guardado em minutos
 const ROTULOS_DOS_LIMITES = { vooPorJornadaMin: 'voo por jornada', jornadaMin: 'jornada', vooMesH: 'voo no mês', vooSemestreH: 'voo no semestre', vooAnoH: 'voo no ano', repousoMin: 'repouso' };
 const emHoras = (chave, valor) => (valor === null ? 'sem limite' : `${String(chave.endsWith('Min') ? valor / 60 : valor).replace('.', ',')} h`);
@@ -1144,7 +1142,7 @@ document.addEventListener('change', e => {
   const antes = normalizarLimites(S.limites);
   const valor = campo.value.trim() === '' ? null : +campo.value * divisor;
   if (valor !== null && !Number.isFinite(valor)) { rLimites(); return; }
-  // O limite é maior que zero (revisão de 14/11); vazio é sem limite
+  // O limite é maior que zero; vazio é sem limite
   if (valor !== null && valor <= 0) { showToast('O limite precisa ser maior que zero (vazio é sem limite).'); rLimites(); return; }
   S.limites = normalizarLimites({ ...antes, [chave]: valor });
   logChange('mod', `Limites da lei: ${ROTULOS_DOS_LIMITES[chave]} ${emHoras(chave, antes[chave])} → ${emHoras(chave, S.limites[chave])}`);
@@ -1189,8 +1187,8 @@ document.addEventListener('change', e => {
         kind: 'setAv', reg, val: !t.checked, label: '↶ Reverter'
       });
     } else if (a === 'horas') {
-      // As horas disponíveis até a revisão de 50 horas (retorno da operação, 14/11); o dia guarda as horas desde a
-      // revisão (50 menos as disponíveis). Vazio: sem controle para o avião
+      // As horas disponíveis até a revisão de 50 horas; o dia guarda as horas desde a revisão (50 menos as
+      // disponíveis). Vazio: sem controle para o avião
       const reg = t.dataset.horas;
       const disponiveis = t.value === '' ? null : Math.round(parseFloat(String(t.value).replace(',', '.')) * 10) / 10;
       if (disponiveis !== null && !(disponiveis >= 0 && disponiveis <= REVISAO_H)) {
@@ -1267,7 +1265,7 @@ document.addEventListener('change', e => {
         const ins = insBy(+t.value);
         logChange('exc', `${s.nm}: não escalar com ${ins ? ins.nm : ''}`);
       } else if (f === 'curso') {
-        // O curso do aluno (fase 14)
+        // O curso do aluno
         const curso = normalizarCursoDoAluno(t.value);
         if (curso) s.curso = curso;
         else delete s.curso;
@@ -1280,7 +1278,7 @@ document.addEventListener('change', e => {
       if (!target) return;
       if (f === 'fly') {
         target.fly = t.checked;
-        // O aluno que não vai voar não voa as missões extras (retorno da operação, 14/11); reverter volta todas
+        // O aluno que não vai voar não voa as missões extras; reverter volta todas
         const extras = !mid && !target.fly ? (s.extra || []).filter(ex => ex.fly) : [];
         extras.forEach(ex => { ex.fly = false; });
         logChange(
@@ -1295,7 +1293,7 @@ document.addEventListener('change', e => {
         else delete target.jan;
         logChange('mod', `Pedido ${s.nm}: disponibilidade ${rotuloDaDisponibilidade(target.jan)} (${target.mis})`);
       } else {
-        // A duração digitada: de 0,1 h a 5 h, em décimos (retorno da operação, 14/11); fora disso, não vale
+        // A duração digitada: de 0,1 h a 5 h, em décimos; fora disso, não vale
         if (f === 'nb') {
           const h = Math.round(parseFloat(String(t.value).replace(',', '.')) * 10) / 10;
           if (!(h > 0 && h <= DURACAO_MAXIMA_H)) {
@@ -1307,7 +1305,7 @@ document.addEventListener('change', e => {
         }
         const eraGround = isGroundMission(target.mis);
         target[f] = (f === 'mis' || f === 'eq') ? t.value : +t.value;
-        // Missão, recurso ou horas mudados à mão: o pedido deixa de ser a missão do curso (fase 14)
+        // Missão, recurso ou horas mudados à mão: o pedido deixa de ser a missão do curso
         if (['mis', 'eq', 'nb'].includes(f)) delete target.etapa;
         if (f === 'mis') {
           const mRule = MIS[target.mis] || MIS['Voo Local'];
@@ -1355,7 +1353,7 @@ window.addEventListener('beforeunload', e => {
     // Sem o armazenamento do navegador, o tema segue o do sistema
   }
   mostrarTema();
-  // As dicas dos termos e a tela só de consulta do Gestor (revisão de 14/11)
+  // As dicas dos termos e a tela só de consulta do Gestor
   iniciarDicas();
   iniciarSomenteLeitura();
 
@@ -1365,7 +1363,7 @@ window.addEventListener('beforeunload', e => {
   const amanha = ehDomingo(amanhaISO()) ? somarDias(amanhaISO(), 1) : amanhaISO();
   abrirData(amanha);
 
-  // O link antigo da fase 2 levava a escala inteira no endereço (share=): não vale mais, e sai do endereço
+  // Um link com a escala inteira no endereço (share=) não vale: sai do endereço, com o aviso
   if (params.has('share')) {
     const url = new URL(window.location.href);
     url.searchParams.delete('share');
@@ -1374,7 +1372,7 @@ window.addEventListener('beforeunload', e => {
   }
   // A data do link (?data=); uma data que não existe abre amanhã, com o aviso
   const pedida = params.get('data');
-  // O aeroclube não opera aos domingos (retorno da operação, 14/11): um link para um domingo abre a segunda
+  // O aeroclube não opera aos domingos: um link para um domingo abre a segunda
   const domingo = dataIsoValida(pedida) && ehDomingo(pedida);
   const data = dataIsoValida(pedida) ? (domingo ? somarDias(pedida, 1) : pedida) : amanha;
 
@@ -1385,7 +1383,8 @@ window.addEventListener('beforeunload', e => {
     const projeto = projetoSupabase();
     if (projeto && !(await iniciarSessaoSupabase(projeto))) return;
 
-    // Primeira abertura com a escala por data: converte os documentos da fase 2 (do servidor ou deste navegador).
+    // Primeira abertura com a escala por data: converte os documentos sem data (estado, escala, historico e bi), do
+    // servidor ou deste navegador.
     // Depois de uma mudança no formato dos dados, regrava no formato atual o que estiver num formato anterior
     await ApiClient.migrarDocumentosAntigos(amanha);
     await ApiClient.atualizarFormatoGravado();
