@@ -3,7 +3,7 @@
 import { MIS, MISSOES_LOCAIS, LIMITE_DE_VOOS_LOCAIS } from './config.js';
 import { disponibilidadeAtual, disponibilidadeDoAluno, normalizeMissionFields, proximoMid, duracaoValida } from './rules.js';
 import { horariosDaMissao, preferenciasPadrao, paraMinuto } from './horarios.js';
-import { hm } from './format.js';
+import { hm, somarDias } from './format.js';
 import { normalizarCursos } from './cursos.js';
 import { situacaoPorMissao, proximaMissao } from './resultados.js';
 
@@ -19,7 +19,6 @@ function emSaoPaulo(instante) {
   return { data: `${partes.year}-${partes.month}-${partes.day}`, hora: `${partes.hour}:${partes.minute}` };
 }
 
-export const somarDias = (iso, dias) => new Date(Date.parse(iso + 'T12:00:00Z') + dias * 864e5).toISOString().slice(0, 10);
 export const hojeEmSaoPaulo = (agora = new Date()) => emSaoPaulo(agora).data;
 
 // O aeroclube não opera aos domingos

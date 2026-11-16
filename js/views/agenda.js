@@ -6,9 +6,9 @@ import { horariosDaMissao } from '../horarios.js';
 import { S, DATA, isGestor } from '../state.js';
 import { ApiClient } from '../storage.js';
 import { $ } from '../dom.js';
-import { esc, opts, hm, fmtH } from '../format.js';
+import { esc, opts, hm, fmtH, somarDias } from '../format.js';
 import { registraNaAgenda, operaEscala } from '../perfis.js';
-import { JANELAS_DA_AGENDA, FUSO_DO_AEROCLUBE, prazoDaAgendaPermite, prazoDaData, primeiraDataAberta, hojeEmSaoPaulo, somarDias } from '../agenda.js';
+import { JANELAS_DA_AGENDA, FUSO_DO_AEROCLUBE, prazoDaAgendaPermite, prazoDaData, primeiraDataAberta, hojeEmSaoPaulo } from '../agenda.js';
 
 const SEMANA = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
 const CHAVE_REGISTRADO_POR = 'acpm_agenda_registrado_por';

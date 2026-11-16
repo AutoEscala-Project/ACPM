@@ -1,6 +1,6 @@
 import { describe, it, mock } from 'node:test';
 import assert from 'node:assert/strict';
-import { hm, fmtH, fmtDurLabel, WLB, pad, esc, opts, amanhaISO, hojeISO, isoMenosDias, fimDoMes, rotuloDaData, nomeLimpo, LIMITE_DO_NOME, dataIsoValida, minutoDoDia } from '../../js/format.js';
+import { hm, fmtH, fmtDurLabel, WLB, pad, esc, opts, amanhaISO, hojeISO, somarDias, fimDoMes, rotuloDaData, nomeLimpo, LIMITE_DO_NOME, dataIsoValida, minutoDoDia } from '../../js/format.js';
 
 describe('Formatação', () => {
   it('minutos do dia em HH:MM', () => {
@@ -47,12 +47,15 @@ describe('Formatação', () => {
     assert.equal(nomeLimpo('   ', 'Ana'), 'Ana');
   });
 
-  it('datas AAAA-MM-DD: amanhã, dias antes e fim do mês (com virada de mês, ano e bissexto)', () => {
+  it('datas AAAA-MM-DD: amanhã, dias depois e antes, e fim do mês (com virada de mês, ano e bissexto)', () => {
     mock.timers.enable({ apis: ['Date'], now: new Date('2026-12-31T15:00:00Z') });
     try { assert.equal(amanhaISO(), '2027-01-01'); } finally { mock.timers.reset(); }
-    assert.equal(isoMenosDias('2026-11-11', 6), '2026-11-05');
-    assert.equal(isoMenosDias('2026-03-02', 2), '2026-02-28');
-    assert.equal(isoMenosDias('2027-01-01', 1), '2026-12-31');
+    assert.equal(somarDias('2026-11-11', -6), '2026-11-05');
+    assert.equal(somarDias('2026-03-02', -2), '2026-02-28');
+    assert.equal(somarDias('2027-01-01', -1), '2026-12-31');
+    assert.equal(somarDias('2026-12-31', 1), '2027-01-01');
+    assert.equal(somarDias('2028-02-28', 1), '2028-02-29');
+    assert.equal(somarDias('2026-11-11', 0), '2026-11-11');
     assert.deepEqual(['2026-11-11', '2026-12-01', '2026-02-10', '2028-02-10'].map(fimDoMes), ['2026-11-30', '2026-12-31', '2026-02-28', '2028-02-29']);
   });
 

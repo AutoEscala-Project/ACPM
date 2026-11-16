@@ -11,7 +11,7 @@ import { $ } from '../dom.js';
 function getDaysDiff(d1Str, d2Str) {
   const d1 = new Date(d1Str + 'T12:00:00');
   const d2 = new Date(d2Str + 'T12:00:00');
-  return Math.round((d1 - d2) / 86400000);
+  return Math.round((d1 - d2) / 864e5);
 }
 
 // Horas por avião e por instrutor: os 10 maiores, com "Ver todos" para abrir a lista inteira

@@ -17,7 +17,8 @@ export const pad = i => 'Aluno ' + String(i + 1).padStart(2, '0');
 const isoLocal = t => new Date(t - t.getTimezoneOffset() * 6e4).toISOString().slice(0, 10);
 export const hojeISO = () => isoLocal(new Date());
 export const amanhaISO = () => isoLocal(new Date(Date.now() + 864e5));
-export const isoMenosDias = (iso, dias) => new Date(Date.parse(iso + 'T12:00:00Z') - dias * 864e5).toISOString().slice(0, 10);
+// A data AAAA-MM-DD alguns dias depois (ou antes, com dias negativos), pelo calendário
+export const somarDias = (iso, dias) => new Date(Date.parse(iso + 'T12:00:00Z') + dias * 864e5).toISOString().slice(0, 10);
 
 // Rótulo da data em uso no topo: "quarta-feira, 11/11" (com o ano quando não é o de hoje) e "hoje", "amanhã" ou "ontem"
 const DIAS_DA_SEMANA = ['domingo', 'segunda-feira', 'terça-feira', 'quarta-feira', 'quinta-feira', 'sexta-feira', 'sábado'];
@@ -27,7 +28,7 @@ export const minutoDoDia = (data = new Date()) => data.getHours() * 60 + data.ge
 export function rotuloDaData(data, hoje) {
   const [ano, mes, dia] = data.split('-');
   const semana = DIAS_DA_SEMANA[new Date(Date.parse(data + 'T12:00:00Z')).getUTCDay()];
-  const relativo = data === hoje ? 'hoje' : data === isoMenosDias(hoje, -1) ? 'amanhã' : data === isoMenosDias(hoje, 1) ? 'ontem' : '';
+  const relativo = data === hoje ? 'hoje' : data === somarDias(hoje, 1) ? 'amanhã' : data === somarDias(hoje, -1) ? 'ontem' : '';
   const diaMes = `${dia}/${mes}${ano === hoje.slice(0, 4) ? '' : '/' + ano}`;
   // semanaCurta ("qua."): para a tela estreita, onde o nome inteiro não cabe
   return { dia: `${semana}, ${diaMes}`, semana, semanaCurta: `${semana.slice(0, 3)}.`, data: diaMes, relativo };

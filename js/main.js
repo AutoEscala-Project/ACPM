@@ -16,7 +16,7 @@
 import { WIN, T, GROUND_EQ_TYPE, GROUND_REG, GROUND_DURATION_MIN, GROUND_DURATION_H, MIS, PRE, DURACAO_MAXIMA_H, REVISAO_H, LIMITE_DE_VOOS_LOCAIS } from './config.js';
 import { novoRecurso, matriculasDoTipo } from './frota.js';
 import { horariosDaMissao, ajustarPreferencias, descreverHorarios } from './horarios.js';
-import { hm, fmtH, fmtDurLabel, pad, amanhaISO, isoMenosDias, nomeLimpo, dataIsoValida } from './format.js';
+import { hm, fmtH, fmtDurLabel, pad, amanhaISO, somarDias, nomeLimpo, dataIsoValida } from './format.js';
 import { isGroundMission, blank, rotuloDaDisponibilidade, normalizeMissionFields, proximoMid } from './rules.js';
 import { habilitacoesDoNivel, normalizarHabilitacoes, nomeDaHabilitacao, podeFazer } from './habilitacoes.js';
 import { ApiClient } from './storage.js';
@@ -55,7 +55,7 @@ import { rRodizio } from './views/rodizio.js';
 import { abrirConta, carregarContas, gerarSenha, mensagem } from './views/conta.js';
 import { rManual } from './views/manual.js';
 import { atualizarSelosDaEscala, lerPedidosDaData } from './views/selos.js';
-import { importarSolicitacoes, disponibilidadeDaSolicitacao, vagaDeVooLocal, ehDomingo, somarDias } from './agenda.js';
+import { importarSolicitacoes, disponibilidadeDaSolicitacao, vagaDeVooLocal, ehDomingo } from './agenda.js';
 import { abrirAgenda, carregarMes, mudarMes, escolherDia, diaDaAgenda, lembrarRegistradoPor, podeEditarAgenda, rAgenda, preencherHorariosDaAgenda, pedidosDoAluno, descreverPedido, pedidosCarregados } from './views/agenda.js';
 import { ESQUEMA } from './migracoes.js';
 import { iniciarSessaoSupabase } from './sessao.js';
@@ -277,8 +277,8 @@ $('#dt').onchange = e => {
 const irParaDia = dias => {
   const dt = $('#dt');
   if (dt.disabled) return;
-  let destino = isoMenosDias(DATA, -dias);
-  if (ehDomingo(destino)) destino = isoMenosDias(destino, -dias);
+  let destino = somarDias(DATA, dias);
+  if (ehDomingo(destino)) destino = somarDias(destino, dias);
   dt.value = destino;
   dt.dispatchEvent(new Event('change'));
 };
@@ -413,7 +413,7 @@ armed('#clr', 'Confirmar limpeza', () => {
 armed('#btn-bi-sim', 'Confirmar simulação', async () => {
   if (isGestor() || modoCompartilhado()) return;
   const refStr = ($('#bi-dt') && $('#bi-dt').value) || ($('#dt') && $('#dt').value);
-  const existentes = new Set((await ApiClient.backend.listarDias(isoMenosDias(refStr, 30), refStr)).map(d => d.data));
+  const existentes = new Set((await ApiClient.backend.listarDias(somarDias(refStr, -30), refStr)).map(d => d.data));
   const baseDate = new Date(refStr + 'T12:00:00');
   let seed = 42;
   const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
@@ -423,7 +423,7 @@ armed('#btn-bi-sim', 'Confirmar simulação', async () => {
   const stuPool = S.stu.length ? S.stu : Array.from({ length: 15 }, (_, i) => ({ nm: pad(i) }));
 
   for (let dayOffset = 0; dayOffset < 30; dayOffset++) {
-    const d = new Date(baseDate.getTime() - dayOffset * 86400000);
+    const d = new Date(baseDate.getTime() - dayOffset * 864e5);
     const iso = d.toISOString().slice(0, 10);
     if (existentes.has(iso)) continue;
 

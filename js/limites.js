@@ -4,6 +4,7 @@
 // avião, sem os cancelados) e das horas de voo fora do app informadas no cadastro (horasExternas).
 import { AIRCRAFT_EQ_TYPES } from './config.js';
 import { intervaloEfetivo } from './status.js';
+import { somarDias } from './format.js';
 
 export const LIMITES_DA_LEI = {
   vooPorJornadaMin: 570,  // 9h30 de voo numa jornada (tripulação mínima: Lei 13.475, art. 32, I; RBAC 117, A117.13)
@@ -47,7 +48,6 @@ const fimDe = (dia, o) => intervaloEfetivo(o, (dia.fStatus || {})[o.fKey] || o.s
 const fimDosCompromissos = dia => voosDoDia(dia).reduce((fins, o) => ({ ...fins, [o.insId]: Math.max(fins[o.insId] ?? 0, fimDe(dia, o)) }), {});
 
 const semestreDe = data => `${data.slice(0, 4)}-${+data.slice(5, 7) <= 6 ? 1 : 2}`;
-const vespera = data => new Date(Date.parse(`${data}T12:00:00Z`) - 864e5).toISOString().slice(0, 10);
 const somar = (registro, campo, horas) => { registro[campo] = Math.round((registro[campo] + horas) * 10) / 10; };
 
 // As horas de voo de cada instrutor antes de uma data, no mês, no semestre e no ano dela (calendário), e o fim do
@@ -63,7 +63,7 @@ export function acumularHoras(dias, data) {
       if (d.slice(0, 7) === data.slice(0, 7)) somar(de(id), 'mes', horas);
     }
   }
-  const ontem = dias.find(d => d.data === vespera(data));
+  const ontem = dias.find(d => d.data === somarDias(data, -1));
   if (ontem) Object.entries(fimDosCompromissos(ontem.conteudo)).forEach(([id, fim]) => { de(id).fimAnterior = fim; });
   return resultado;
 }

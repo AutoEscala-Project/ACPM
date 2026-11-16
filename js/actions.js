@@ -1,5 +1,5 @@
 // Ações que alteram o estado: perfil de acesso, data da escala, histórico de alterações, geração da escala e BI.
-import { isoMenosDias, fimDoMes, rotuloDaData, hojeISO, LIMITE_DO_NOME } from './format.js';
+import { somarDias, fimDoMes, rotuloDaData, hojeISO, LIMITE_DO_NOME } from './format.js';
 import { aplicarSomenteLeitura } from './somente-leitura.js';
 import { runAllocationEngine } from './engine.js';
 import { ApiClient } from './storage.js';
@@ -249,7 +249,7 @@ let pedidoDeBI = 0;
 export async function carregarBI() {
   const ref = $('#bi-dt').value || DATA;
   const inicioMes = ref.slice(0, 8) + '01';
-  const inicioSemana = isoMenosDias(ref, 6);
+  const inicioSemana = somarDias(ref, -6);
   const pedido = ++pedidoDeBI;
   let bi;
   try {
