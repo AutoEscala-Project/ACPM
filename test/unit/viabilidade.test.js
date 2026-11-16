@@ -2,7 +2,7 @@
 // e as sugestões de reparo.
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { sobrepoe, livre, cobre, pesoCabe, cabeNoSaldo } from '../../js/viabilidade.js';
+import { sobrepoe, livre, cobre, pesoCabe, cabeNoSaldo, folgaAte, saldoAteARevisao } from '../../js/viabilidade.js';
 
 describe('Viabilidade', () => {
   it('dois intervalos se sobrepõem quando um começa antes de o outro terminar (encostar não conta)', () => {
@@ -42,5 +42,20 @@ describe('Viabilidade', () => {
     assert.equal(cabeNoSaldo(48, 1, 49), true);
     assert.equal(cabeNoSaldo(48.5, 1, 49), false);
     assert.equal(cabeNoSaldo(10, 1, Infinity), true);
+  });
+
+  it('o saldo até a revisão: o que falta para as 50 horas; sem as horas informadas, sem limite', () => {
+    assert.equal(saldoAteARevisao({ 'PR-EJA': 47.5 }, 'PR-EJA'), 2.5);
+    assert.equal(saldoAteARevisao({ 'PR-EJA': 47.5 }, 'PR-EJC'), Infinity);
+    assert.equal(saldoAteARevisao({ 'PR-EJA': null }, 'PR-EJA'), Infinity);
+    assert.equal(saldoAteARevisao(undefined, 'PR-EJA'), Infinity);
+  });
+
+  it('a folga entre um voo e o que o avião já voa: 0 se encosta ou sobrepõe; sem voos, Infinity', () => {
+    assert.equal(folgaAte([[390, 450], [600, 660]], 480, 540), 30, 'o mais perto: 30 min depois do das 06:30');
+    assert.equal(folgaAte([[390, 450], [600, 660]], 520, 580), 20, '20 min antes do das 10:00');
+    assert.equal(folgaAte([[390, 450]], 450, 510), 0);
+    assert.equal(folgaAte([[390, 450]], 420, 480), 0);
+    assert.equal(folgaAte([], 390, 450), Infinity);
   });
 });

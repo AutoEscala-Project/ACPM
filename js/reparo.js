@@ -5,10 +5,10 @@
 // o primeiro horário mais tarde no mesmo dia, dentro da disponibilidade do aluno. Depois, soltar o voo (o motor o escala
 // de novo; quando o pedido mudou, é a única sugestão) e, por último, cancelar. Cada sugestão é uma mudança no voo fixo;
 // na turma de Ground, em todos os alunos dela.
-import { AIRCRAFT_EQ_TYPES, GROUND_EQ_TYPE, GROUND_REG, REVISAO_H, T, NI, MINUTOS_DO_DIA } from './config.js';
+import { AIRCRAFT_EQ_TYPES, GROUND_EQ_TYPE, GROUND_REG, T, NI, MINUTOS_DO_DIA } from './config.js';
 import { FROTA_INICIAL, matriculasDoTipo } from './frota.js';
 import { podeFazer } from './habilitacoes.js';
-import { livre, cobre, cabeNoSaldo } from './viabilidade.js';
+import { livre, cobre, cabeNoSaldo, folgaAte, saldoAteARevisao } from './viabilidade.js';
 import { reducaoNecessaria } from './combustivel.js';
 import { normalizarLimites, dentroDosLimites } from './limites.js';
 import { normalizarHangar, posicaoNoHangar } from './hangar.js';
@@ -43,8 +43,8 @@ export function sugerirReparos(estado, resultado, fKey, { maximo = 3, depoisDe =
   const compromissosDo = id => umPorUnidade(outros.filter(o => o.insId === id)).map(o => ({ a: o.a, b: o.b, voo: AIRCRAFT_EQ_TYPES.includes(o.eqType) }));
   const horasNoDia = id => umPorUnidade(outros.filter(o => o.insId === id)).reduce((total, o) => total + o.h, 0);
   const horasDoAviao = r => umPorUnidade(outros.filter(o => o.r === r)).reduce((total, o) => total + o.h, 0);
-  const saldo = r => (typeof (estado.horas || {})[r] === 'number' ? REVISAO_H - estado.horas[r] : Infinity);
-  const folga = (r, a, b) => ocupacaoDo(r).reduce((m, [x, y]) => Math.min(m, y <= a ? a - y : x >= b ? x - b : 0), Infinity);
+  const saldo = r => saldoAteARevisao(estado.horas, r);
+  const folga = (r, a, b) => folgaAte(ocupacaoDo(r), a, b);
   // Combustível a menos com o instrutor (0 com o tanque cheio ou sem um dos pesos; Infinity quando nem o mínimo dá)
   const reducao = (x, a, b) => (voo.isGround ? 0 : reducaoNecessaria({ stuKg: voo.stuKg, insKg: x.kg, tipo, minutos: b - a, mis: voo.mis }));
 

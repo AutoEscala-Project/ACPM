@@ -12,7 +12,7 @@ import { AIRCRAFT_EQ_TYPES, GROUND_EQ_TYPE, T, NI, PESOS_DA_COMPACTACAO, LIMITES
 import { FROTA_INICIAL, matriculasDoTipo } from './frota.js';
 import { podeFazer } from './habilitacoes.js';
 import { categoriaDoRodizio } from './rodizio.js';
-import { livre, cobre, cabeNoSaldo } from './viabilidade.js';
+import { livre, cobre, cabeNoSaldo, folgaAte } from './viabilidade.js';
 import { reducaoNecessaria, combustivelDoVoo } from './combustivel.js';
 import { dentroDosLimites, normalizarLimites } from './limites.js';
 import { HORARIOS_INICIAIS, horariosDaMissao, periodoDoMinuto, minutoDaPreferencia } from './horarios.js';
@@ -136,7 +136,7 @@ export function compactar(out, state, { saldo = () => Infinity, posicao = () => 
   const horasNoRecurso = (r, sem) => { let t = 0; for (const u of doRecurso.get(r) || []) if (!sem.includes(u)) t += u.h; return t; };
   const recursoServe = (u, r, a, b, sem) => Boolean(state.av[r]) && livre(intervalosDe(doRecurso.get(r), sem), a, b)
     && (r === u.r || cabeNoSaldo(horasNoRecurso(r, sem), u.h, saldo(r)));
-  const folga = (r, a, b, sem) => intervalosDe(doRecurso.get(r), sem).reduce((m, [x, y]) => Math.min(m, y <= a ? a - y : x >= b ? x - b : 0), Infinity);
+  const folga = (r, a, b, sem) => folgaAte(intervalosDe(doRecurso.get(r), sem), a, b);
   // Num horário novo, o mesmo avião quando ele está livre; senão, um que já saiu com a menor folga, depois o do hangar
   function recursoPara(u, a, b) {
     if (recursoServe(u, u.r, a, b, [u])) return u.r;

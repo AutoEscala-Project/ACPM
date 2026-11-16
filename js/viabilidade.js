@@ -1,7 +1,7 @@
 // Regras de viabilidade da escala: o que torna possível pôr um voo num horário, num recurso e com um instrutor.
 // O motor (com a divisão das horas e a troca de matrículas), a compactação e as sugestões de reparo usam as mesmas
 // regras.
-import { T, NI, MINUTOS_DO_DIA } from './config.js';
+import { T, NI, MINUTOS_DO_DIA, REVISAO_H } from './config.js';
 
 // Dois intervalos (em minutos) se sobrepõem quando um começa antes de o outro terminar; encostar não conta
 export const sobrepoe = (a1, b1, a2, b2) => a1 < b2 && b1 > a2;
@@ -22,3 +22,9 @@ export function pesoCabe(stuKg, insKg, limKg, { exigirPesoDoInstrutor = false } 
 
 // O voo cabe no saldo de horas do avião até a revisão de 50 horas (sem o saldo informado, Infinity)
 export const cabeNoSaldo = (horasNoDia, h, saldo) => horasNoDia + h <= saldo + 1e-9;
+
+// As horas que o avião ainda pode voar até a revisão de 50 horas (sem as horas informadas, não há limite)
+export const saldoAteARevisao = (horas, r) => (typeof (horas || {})[r] === 'number' ? REVISAO_H - horas[r] : Infinity);
+
+// A folga entre um voo e o que o avião já voa: 0 se encosta ou se sobrepõe; Infinity se o avião ainda está no hangar
+export const folgaAte = (ocupados, a, b) => ocupados.reduce((menor, [x, y]) => Math.min(menor, y <= a ? a - y : x >= b ? x - b : 0), Infinity);

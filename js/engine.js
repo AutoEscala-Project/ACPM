@@ -8,7 +8,7 @@ import { HORARIOS_INICIAIS, horariosDaMissao, periodoDoMinuto, minutoDaPreferenc
 import { podeFazer, descreverExigencias } from './habilitacoes.js';
 import { categoriaDoRodizio, ajustarFilas } from './rodizio.js';
 import { avisosDeAtraso, intervaloEfetivo, STATUS_EM_ANDAMENTO } from './status.js';
-import { sobrepoe, livre, cobre, pesoCabe, cabeNoSaldo } from './viabilidade.js';
+import { sobrepoe, livre, cobre, pesoCabe, cabeNoSaldo, folgaAte, saldoAteARevisao } from './viabilidade.js';
 import { reducaoNecessaria, combustivelDoVoo, pesoECombustivel } from './combustivel.js';
 import { LIMITE_DO_MOTIVO } from './conflitos.js';
 import { normalizarHangar, posicaoNoHangar } from './hangar.js';
@@ -27,9 +27,6 @@ const qtdHabilitacoes = x => (Array.isArray(x.hab) ? x.hab.length : 0);
 // (aluno, instrutor e horário continuam); o PR-JPL continua só para o Parafuso e aviões em manutenção não entram.
 // A redistribuição só vale quando diminui as trocas de avião (senão, ou se algum voo não couber, fica a original).
 // Por último, quem ainda estiver em duas matrículas passa para uma que esteja livre em todos os horários dele.
-
-// A folga entre um voo e o que o avião já voa (0 se encosta; Infinity se o avião ainda está no hangar)
-const folgaAte = (ocupados, a, b) => ocupados.reduce((menor, [x, y]) => Math.min(menor, y <= a ? a - y : x >= b ? x - b : 0), Infinity);
 
 // O tempo parado dos aviões (minutos entre um voo e o seguinte de cada matrícula)
 function paradoDosAvioes(voos, matricula) {
@@ -300,9 +297,9 @@ export function runAllocationEngine(state, opcoes = {}) {
   const filas = ajustarFilas(state.filas, state.ins);
   const voosNaCategoria = {};
 
-  // Revisão de 50 horas: horas que o avião ainda pode voar hoje (sem as horas informadas, não há limite)
+  // Revisão de 50 horas: horas que o avião ainda pode voar hoje
   const horas = state.horas || {};
-  const saldo = r => (typeof horas[r] === 'number' ? REVISAO_H - horas[r] : Infinity);
+  const saldo = r => saldoAteARevisao(horas, r);
 
   // Escala aprovada: os voos fixos entram primeiro, no mesmo horário, avião e instrutor; o resto é encaixado
   // em volta. O fixo que ficou impossível continua onde está, em conflito (com o motivo); o cancelado não ocupa nada
