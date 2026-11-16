@@ -19,7 +19,8 @@ function crc32(bytes) {
 const passarPor = async (bytes, transformacao) =>
   new Uint8Array(await new Response(new Blob([bytes]).stream().pipeThrough(transformacao)).arrayBuffer());
 
-// Os arquivos do ZIP: { caminho: bytes }, na ordem em que estão nele
+// Os arquivos do ZIP: { caminho: bytes }, na ordem em que estão nele. O tamanho e o CRC de cada arquivo são conferidos
+// (um modelo corrompido para aqui, e não numa planilha estragada)
 export async function lerZip(zip) {
   const v = new DataView(zip.buffer, zip.byteOffset, zip.byteLength);
   let fim = zip.length - 22;
@@ -29,17 +30,23 @@ export async function lerZip(zip) {
   const nomes = new TextDecoder();
   const arquivos = {};
   for (let i = 0, p = v.getUint32(fim + 16, true); i < total; i++) {
-    if (v.getUint32(p, true) !== CENTRAL) throw new Error('ZIP corrompido.');
-    const metodo = v.getUint16(p + 10, true), tamanho = v.getUint32(p + 20, true);
+    if (p + 46 > zip.length || v.getUint32(p, true) !== CENTRAL) throw new Error('ZIP corrompido.');
+    const flags = v.getUint16(p + 8, true), metodo = v.getUint16(p + 10, true), crc = v.getUint32(p + 16, true);
+    const comprimido = v.getUint32(p + 20, true), tamanho = v.getUint32(p + 24, true);
     const n = v.getUint16(p + 28, true), extra = v.getUint16(p + 30, true), comentario = v.getUint16(p + 32, true);
     const local = v.getUint32(p + 42, true);
     const nome = nomes.decode(zip.subarray(p + 46, p + 46 + n));
-    if (v.getUint32(local, true) !== LOCAL) throw new Error('ZIP corrompido.');
+    if (flags & 1) throw new Error(`Arquivo criptografado no ZIP (${nome}).`);
+    if (local + 30 > zip.length || v.getUint32(local, true) !== LOCAL) throw new Error('ZIP corrompido.');
     const inicio = local + 30 + v.getUint16(local + 26, true) + v.getUint16(local + 28, true);
-    const dados = zip.subarray(inicio, inicio + tamanho);
-    if (metodo === GUARDADO) arquivos[nome] = dados.slice();
-    else if (metodo === COMPRIMIDO) arquivos[nome] = await passarPor(dados, new DecompressionStream('deflate-raw'));
+    if (inicio + comprimido > zip.length) throw new Error(`ZIP corrompido (${nome}).`);
+    const dados = zip.subarray(inicio, inicio + comprimido);
+    let conteudo;
+    if (metodo === GUARDADO) conteudo = dados.slice();
+    else if (metodo === COMPRIMIDO) conteudo = await passarPor(dados, new DecompressionStream('deflate-raw'));
     else throw new Error(`Compressão ${metodo} não suportada (${nome}).`);
+    if (conteudo.length !== tamanho || crc32(conteudo) !== crc) throw new Error(`ZIP corrompido (${nome}).`);
+    arquivos[nome] = conteudo;
     p += 46 + n + extra + comentario;
   }
   return arquivos;

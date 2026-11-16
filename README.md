@@ -51,6 +51,9 @@ npm run test:e2e       # aplicação no navegador (Playwright)
   regra do motor de propósito, regrave com
   `node scripts/capturar-goldens-motor.mjs` e revise a diferença.
 - Os testes usam somente nomes e pesos fictícios.
+- A planilha do Excel (o modelo do aeroclube) é conferida por fora em `test/helpers/xlsx.js`: o ZIP é lido com o zlib
+  do Node, a estrutura é comparada com a do modelo e o lugar de cada voo sai dos rótulos da própria planilha, em dias
+  aleatórios (`test/unit/planilha.test.js`) e contra o CSV da mesma tela (`test/e2e/planilha.spec.js`).
 - O modo compartilhado é testado com um servidor Supabase falso (`test/e2e/supabase-falso.js`) que segue o mesmo
   contrato do banco. `test/e2e/publicado.spec.js` entra no site publicado com login real (só roda com as senhas
   das contas no ambiente: veja o cabeçalho do arquivo).

@@ -12,14 +12,19 @@
 //   do voo que não está na tabela (a linha mais próxima sem decolagem).
 // - O voo que passa da linha seguinte repete o aluno e o instrutor nas linhas até o pouso (a planilha é a visão
 //   gráfica do dia para a operadora).
-// - O Noturno vai na linha NOTURNO do C172 (a linha "DECOLAR ATÉ 17:00" é só o lembrete do horário e fica vazia). O
-//   cancelado não entra; o atrasado entra no horário novo.
+// - A linha NOTURNO do C172 é a das 17:30: o Noturno vai nela, e o voo do dia que ainda está no ar às 17:30 também
+//   (a linha "DECOLAR ATÉ 17:00" é só o lembrete do horário e fica vazia). O cancelado não entra; o atrasado entra no
+//   horário novo.
 // - O avião indisponível no dia fica com a matrícula em vermelho; o que para para a revisão de 50 horas fica com
 //   "REVISÃO" nas linhas depois da parada.
-// - A frota é a do cadastro: os aviões do modelo ficam nas colunas deles, e um avião novo ocupa a coluna de um que saiu.
-//   O que não couber (mais aviões que colunas, Ground sem coluna) vai na última linha da planilha.
-import { T, NI } from './config.js';
+// - A frota é a do cadastro: os aviões do modelo ficam nas colunas deles, e um avião novo ocupa a coluna de um que saiu
+//   (primeiro os que voam no dia). O bloco do voo é o do tipo do avião no cadastro. O que não couber (mais aviões que
+//   colunas, Ground sem coluna) vai na última linha da planilha.
+// - A linha com mais texto do que as 2 linhas que o modelo comporta fica mais alta (o Excel não aumenta sozinho uma
+//   linha de altura fixa).
+import { T, NI, GROUND_REG } from './config.js';
 import { hm } from './format.js';
+import { FROTA_INICIAL } from './frota.js';
 import { intervaloEfetivo } from './status.js';
 import { lerZip, montarZip } from './zip.js';
 
@@ -39,7 +44,7 @@ export const BLOCOS = [
     modelo: ['PP-LJV', 'PR-BTB', 'PR-IGU', 'PR-VOB', 'PR-VOC', 'PR-VOI', 'PR-VOP', 'PR-VOZ', 'PR-VOW', 'PR-TBT', 'PR-THI', 'PR-MLB', 'PR-JPL']
   },
   {
-    tipos: ['C172'], linhaDaMatricula: 17, linhas: linhas(19), noturno: 26,
+    tipos: ['C172'], linhaDaMatricula: 17, linhas: [...linhas(19), { linha: 26, inicio: T[NI] }],
     colunas: ['B', 'D', 'F', 'H', 'J', 'L'],
     modelo: ['PP-ABP', 'PP-AJS', 'PR-BUL', 'PR-CPL', 'PR-HAR', 'PR-VOY']
   },
@@ -77,12 +82,15 @@ export const rotuloDoRecurso = r => {
   return sim ? `SIM ${sim[2]} - ${sim[1] === 'MONO' ? 'MNTE' : 'MLTE'}` : r;
 };
 
-// A coluna de cada recurso do bloco: a do modelo, se ele está nela; os outros, nas colunas que sobraram, em ordem
-function colunasDoBloco(bloco, recursos) {
+// A coluna de cada recurso do bloco: a do modelo, se ele está nela; os outros, nas colunas que sobraram, primeiro os que
+// voam no dia (o que não voa não tira a coluna de quem voa), cada grupo pela matrícula
+function colunasDoBloco(bloco, recursos, voam) {
   const coluna = new Map();
   bloco.modelo.forEach((r, i) => { if (recursos.includes(r)) coluna.set(r, bloco.colunas[i]); });
   const livres = bloco.colunas.filter((_, i) => !recursos.includes(bloco.modelo[i]));
-  [...recursos].filter(r => !coluna.has(r)).sort().forEach(r => { if (livres.length) coluna.set(r, livres.shift()); });
+  recursos.filter(r => !coluna.has(r))
+    .sort((x, y) => Number(voam.has(y)) - Number(voam.has(x)) || (x < y ? -1 : x > y ? 1 : 0))
+    .forEach(r => { if (livres.length) coluna.set(r, livres.shift()); });
   return coluna;
 }
 
@@ -102,6 +110,26 @@ export function horariosDoDia(inicios, partidas) {
   return lista.sort((a, b) => a - b);
 }
 
+// A altura das linhas de horário: o modelo comporta 2 linhas de texto (30,75 pt; Calibri 10 negrito, uns 13 caracteres
+// por linha na largura das colunas); cada linha a mais soma 12,75 pt. A última linha da planilha (o que não coube no
+// modelo, Calibri 14 em A41:Y41) tem 18,75 pt por linha
+const CARACTERES_POR_LINHA = 13, PONTOS_POR_LINHA = 12.75, MARGEM = 5.25;
+const CARACTERES_NA_A41 = 180, PONTOS_NA_A41 = 18.75;
+
+// Quantas linhas o texto ocupa numa célula com quebra de linha: a palavra vai inteira para a linha seguinte; só a maior
+// que a linha se parte (como no Excel)
+export function linhasDoTexto(texto, largura) {
+  return String(texto).split('\n').reduce((total, paragrafo) => {
+    let linhas = 1, atual = 0;
+    for (const palavra of paragrafo.split(' ')) {
+      const n = [...palavra].length;
+      if (atual > 0 && atual + 1 + n > largura) { linhas++; atual = n; } else atual += (atual > 0 ? 1 : 0) + n;
+      while (atual > largura) { linhas++; atual -= largura; }
+    }
+    return total + linhas;
+  }, 0);
+}
+
 // A linha do voo: a última que começa até a decolagem (antes da primeira, a primeira)
 function linhaDoVoo(linhasDoBloco, a) {
   let i = 0;
@@ -109,10 +137,16 @@ function linhaDoVoo(linhasDoBloco, a) {
   return i;
 }
 
-// As células da escala no modelo: { aba, celulas: { A1: texto }, vermelhas: [células], foraDoModelo: [textos] }.
-// estado: frota, av (disponibilidade), fStatus e fObs do dia; data: AAAA-MM-DD
+// As células da escala no modelo: { aba, celulas: { A1: texto }, vermelhas: [células], quebrar: [células], alturas:
+// { linha: pontos }, foraDoModelo: [textos] }. estado: frota, av (disponibilidade), fStatus e fObs do dia; data: AAAA-MM-DD
 export function planilhaDaEscala(res, estado, data) {
   const fStatus = estado.fStatus || {}, fObs = estado.fObs || {};
+  const frota = Array.isArray(estado.frota) ? estado.frota : FROTA_INICIAL;
+  // O bloco do voo é o do tipo do avião no cadastro (o tipo do pedido pode ter mudado depois que o voo foi fixado); a
+  // sala de Ground é sempre do Ground
+  const tipoNoCadastro = new Map(frota.map(f => [f.reg, f.tipo]));
+  const ehGround = o => Boolean(o.isGround) || o.r === GROUND_REG;
+  const tipoDoVoo = o => tipoNoCadastro.get(o.r) || o.eqType;
   const [ano, mes, dia] = data.split('-');
   const celulas = { [DATA.mes]: MESES[+mes - 1], [DATA.dia]: dia, [DATA.ano]: ano };
   const vermelhas = [];
@@ -125,24 +159,23 @@ export function planilhaDaEscala(res, estado, data) {
     entradas.get(chave).push({ aluno, instrutor });
   };
   // Põe o voo (ou a turma) nas linhas do bloco; nominal: a duração que a linha representa
-  const colocar = (col, linhasDoBloco, { a, b, alunos, instrutor, noturno, nominal }) => {
-    if (noturno !== undefined) { anotar(col, noturno, alunos, instrutor); return; }
+  const colocar = (col, linhasDoBloco, { a, b, alunos, instrutor, nominal }) => {
     const i = linhaDoVoo(linhasDoBloco, a);
     const seguintes = linhasDoBloco.slice(i + 1).filter(l => l.inicio < b);
     const foraDaLinha = a !== linhasDoBloco[i].inicio || b - a !== nominal;
     anotar(col, linhasDoBloco[i].linha, foraDaLinha ? `${alunos} (${hm(a)}–${hm(b)})` : alunos, instrutor);
     seguintes.forEach(l => anotar(col, l.linha, alunos, instrutor));
   };
-  const descricao = (v, alunos) => `${v.r === 'SALA-GROUND' ? v.mis : v.r} ${hm(v.a)}–${hm(v.b)} ${alunos} (${v.instrutor})`;
+  const descricao = (v, alunos) => `${v.r === GROUND_REG ? v.mis : v.r} ${hm(v.a)}–${hm(v.b)} ${alunos} (${v.instrutor})`;
 
   const voos = res.out
     .filter(o => (fStatus[o.fKey] || o.status || 'Confirmado') !== 'Cancelado')
     .map(o => ({ ...o, ...intervaloEfetivo(o, fStatus[o.fKey] || o.status || 'Confirmado', fObs[o.fKey]), instrutor: o.ins }));
 
   for (const bloco of BLOCOS) {
-    const doBloco = voos.filter(o => !o.isGround && bloco.tipos.includes(o.eqType));
-    const recursos = [...new Set([...(estado.frota || []).filter(f => bloco.tipos.includes(f.tipo)).map(f => f.reg), ...doBloco.map(o => o.r)])];
-    const colunas = colunasDoBloco(bloco, recursos);
+    const doBloco = voos.filter(o => !ehGround(o) && bloco.tipos.includes(tipoDoVoo(o)));
+    const recursos = [...new Set([...frota.filter(f => bloco.tipos.includes(f.tipo)).map(f => f.reg), ...doBloco.map(o => o.r)])];
+    const colunas = colunasDoBloco(bloco, recursos, new Set(doBloco.map(o => o.r)));
     // No PA-34, o horário da linha que mudou é reescrito no formato do modelo ("07:00 ás 08:00")
     let linhasDoBloco = bloco.linhas;
     if (bloco.colunaDosHorarios) {
@@ -164,23 +197,23 @@ export function planilhaDaEscala(res, estado, data) {
     for (const o of doBloco) {
       const col = colunas.get(o.r);
       if (!col) { foraDoModelo.push(descricao(o, o.s)); continue; }
-      const noturno = bloco.noturno && (o.mis === 'Noturno' || o.a >= T[NI]) ? bloco.noturno : undefined;
-      colocar(col, linhasDoBloco, { a: o.a, b: o.b, alunos: o.s, instrutor: o.instrutor, noturno, nominal: 60 });
+      colocar(col, linhasDoBloco, { a: o.a, b: o.b, alunos: o.s, instrutor: o.instrutor, nominal: 60 });
     }
     // Revisão de 50 horas: as linhas a partir da parada (as livres)
     for (const [r, col] of colunas) {
       const paraAs = res.revisao && res.revisao[r] ? res.revisao[r].paraAs : null;
       if (paraAs === null || paraAs === undefined) continue;
-      [...linhasDoBloco, ...(bloco.noturno ? [{ linha: bloco.noturno, inicio: T[NI] }] : [])]
+      linhasDoBloco
         .filter(l => l.inicio >= paraAs && !entradas.has(`${col}${l.linha}`))
         .forEach(l => anotar(col, l.linha, 'REVISÃO', 'REVISÃO'));
     }
   }
 
-  // Ground: a turma (os alunos na mesma sala e horário) numa célula só
+  // Ground: a turma (os alunos na mesma sala e horário) numa célula só. O status é de cada aluno: o atrasado sai da
+  // turma e vai no horário novo dele
   const turmas = new Map();
-  voos.filter(o => o.isGround).forEach(o => {
-    const chave = o.classKey || o.fKey;
+  voos.filter(ehGround).forEach(o => {
+    const chave = `${o.classKey || o.fKey}|${o.a}|${o.b}`;
     if (!turmas.has(chave)) turmas.set(chave, { ...o, alunos: [] });
     turmas.get(chave).alunos.push(o.s);
   });
@@ -194,15 +227,37 @@ export function planilhaDaEscala(res, estado, data) {
   for (const [chave, lista] of entradas) {
     const [, col, linha] = /^([A-Z]+)(\d+)$/.exec(chave);
     celulas[chave] = lista.map(e => e.aluno).join(' / ');
-    celulas[`${proximaColuna(col)}${linha}`] = [...new Set(lista.map(e => e.instrutor))].join(' / ');
+    // O instrutor de cada entrada, na ordem dos alunos; o mesmo instrutor em todas aparece uma vez
+    const instrutores = lista.map(e => e.instrutor);
+    celulas[`${proximaColuna(col)}${linha}`] = (new Set(instrutores).size === 1 ? instrutores.slice(0, 1) : instrutores).join(' / ');
   }
-  if (foraDoModelo.length) celulas[FORA_DO_MODELO] = `Fora do modelo (sem coluna na planilha): ${foraDoModelo.join('; ')}`;
-  return { aba: `${dia}-${mes}-${ano}`, celulas, vermelhas, foraDoModelo };
+
+  // A linha de horário com mais texto do que as 2 linhas do modelo fica mais alta
+  const alturas = {};
+  const linhasDeHorario = new Set([...BLOCOS.flatMap(b => b.linhas.map(l => l.linha)), ...GROUND.linhas.map(l => l.linha)]);
+  for (const [ref, texto] of Object.entries(celulas)) {
+    const [, col, linha] = /^([A-Z]+)(\d+)$/.exec(ref);
+    if (col === 'A' || !texto || !linhasDeHorario.has(+linha)) continue;
+    const n = linhasDoTexto(texto, CARACTERES_POR_LINHA);
+    if (n > 2) alturas[linha] = Math.max(alturas[linha] || 0, PONTOS_POR_LINHA * n + MARGEM);
+  }
+  const quebrar = [];
+  if (foraDoModelo.length) {
+    celulas[FORA_DO_MODELO] = `Fora do modelo (sem coluna na planilha): ${foraDoModelo.join('; ')}`;
+    quebrar.push(FORA_DO_MODELO);
+    const n = linhasDoTexto(celulas[FORA_DO_MODELO], CARACTERES_NA_A41);
+    if (n > 1) alturas[/\d+$/.exec(FORA_DO_MODELO)[0]] = PONTOS_NA_A41 * n;
+  }
+  return { aba: `${dia}-${mes}-${ano}`, celulas, vermelhas, quebrar, alturas, foraDoModelo };
 }
 
 // O texto vai como string na própria célula (inlineStr), com o estilo que a célula tem no modelo; o texto vazio limpa a
-// célula. Caracteres que o XML não aceita saem
-const escaparXml = t => String(t).replace(/[^\t\n\r -퟿-�\u{10000}-\u{10FFFF}]/gu, '')
+// célula. Os caracteres que o XML não aceita (de controle, U+FFFE, U+FFFF e a metade de um par substituto) saem. Uma
+// string nunca vira fórmula no Excel: o texto que começa com "=" fica como está. O Excel lê "_x0041_" num texto como o
+// caractere U+0041: todo "_" que abre uma sequência dessas vai escapado ("_x005F_"), mesmo quando ela se sobrepõe a outra
+const FORA_DO_XML = /[^\t\n\r\u0020-\uD7FF\uE000-\uFFFD\u{10000}-\u{10FFFF}]/gu;
+const escaparXml = t => String(t).replace(FORA_DO_XML, '')
+  .replace(/_(?=x[0-9A-Fa-f]{4}_)/g, '_x005F_')
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
 function trocarCelula(xml, ref, troca) {
@@ -213,27 +268,40 @@ function trocarCelula(xml, ref, troca) {
   return xml.slice(0, achada.index) + troca(estilo, achada[0]) + xml.slice(achada.index + achada[0].length);
 }
 
-// Um estilo igual ao da célula, com o fundo vermelho (o avião indisponível): o fundo e os estilos novos vão no fim das
-// listas do styles.xml
-function estiloVermelho(styles, estilo, criados) {
-  if (criados.has(estilo)) return { styles, id: criados.get(estilo) };
-  if (!criados.has('fundo')) {
+// O estilo com quebra de linha (o texto longo da última linha), no lugar certo do <xf>: o <alignment> vem antes do
+// <protection>
+function comQuebra(xf) {
+  const aplica = xf.replace(/<xf (?![^>]*applyAlignment)/, '<xf applyAlignment="1" ');
+  if (/<alignment\b[^>]*\bwrapText=/.test(aplica)) return aplica.replace(/(<alignment\b[^>]*\bwrapText=)"[^"]*"/, '$1"1"');
+  if (/<alignment\b/.test(aplica)) return aplica.replace(/<alignment\b/, '<alignment wrapText="1"');
+  return /\/>$/.test(aplica) ? aplica.replace(/\s*\/>$/, '><alignment wrapText="1"/></xf>') : aplica.replace(/^(<xf [^>]*>)/, '$1<alignment wrapText="1"/>');
+}
+
+// Um estilo derivado do da célula: 'vermelho' (o avião indisponível) ou 'quebra' (com quebra de linha). O fundo
+// vermelho e os estilos novos vão no fim das listas do styles.xml, cada um uma vez só
+function derivarEstilo(styles, estilo, tipo, criados) {
+  const chave = `${tipo}:${estilo}`;
+  if (criados.has(chave)) return { styles, id: criados.get(chave) };
+  // As trocas usam função: no texto de troca de uma string, "$&" e "$1" seriam especiais
+  if (tipo === 'vermelho' && !criados.has('fundo')) {
     const fills = /<fills count="(\d+)">/.exec(styles);
-    styles = styles.replace(/<fills count="\d+">/, `<fills count="${+fills[1] + 1}">`)
-      .replace('</fills>', '<fill><patternFill patternType="solid"><fgColor rgb="FFFF0000"/><bgColor indexed="64"/></patternFill></fill></fills>');
+    styles = styles.replace(/<fills count="\d+">/, () => `<fills count="${+fills[1] + 1}">`)
+      .replace('</fills>', () => '<fill><patternFill patternType="solid"><fgColor rgb="FFFF0000"/><bgColor indexed="64"/></patternFill></fill></fills>');
     criados.set('fundo', +fills[1]);
   }
   const lista = /<cellXfs count="(\d+)">(.*?)<\/cellXfs>/s.exec(styles);
-  const xfs = lista[2].match(/<xf [^>]*?(?:\/>|>.*?<\/xf>)/gs);
-  const novo = xfs[+estilo].replace(/fillId="\d+"/, `fillId="${criados.get('fundo')}"`).replace(/<xf (?![^>]*applyFill)/, '<xf applyFill="1" ');
+  const xf = lista[2].match(/<xf [^>]*?(?:\/>|>.*?<\/xf>)/gs)[+estilo];
+  const novo = tipo === 'vermelho'
+    ? xf.replace(/fillId="\d+"/, `fillId="${criados.get('fundo')}"`).replace(/<xf (?![^>]*applyFill)/, '<xf applyFill="1" ')
+    : comQuebra(xf);
   const id = +lista[1];
-  styles = styles.replace(lista[0], `<cellXfs count="${id + 1}">${lista[2]}${novo}</cellXfs>`);
-  criados.set(estilo, id);
+  styles = styles.replace(lista[0], () => `<cellXfs count="${id + 1}">${lista[2]}${novo}</cellXfs>`);
+  criados.set(chave, id);
   return { styles, id };
 }
 
 // Os arquivos do modelo ({ caminho: texto }) com a planilha do dia
-export function preencherModelo(arquivos, { aba, celulas, vermelhas }) {
+export function preencherModelo(arquivos, { aba, celulas, vermelhas = [], quebrar = [], alturas = {} }) {
   const saida = { ...arquivos };
   let folha = arquivos['xl/worksheets/sheet1.xml'];
   for (const [ref, texto] of Object.entries(celulas)) {
@@ -244,20 +312,40 @@ export function preencherModelo(arquivos, { aba, celulas, vermelhas }) {
   }
   let styles = arquivos['xl/styles.xml'];
   const criados = new Map();
-  for (const ref of vermelhas) {
-    folha = trocarCelula(folha, ref, (estilo, celula) => {
-      const vermelho = estiloVermelho(styles, estilo || '0', criados);
-      styles = vermelho.styles;
-      return estilo === undefined
-        ? celula.replace(`<c r="${ref}"`, `<c r="${ref}" s="${vermelho.id}"`)
-        : celula.replace(` s="${estilo}"`, ` s="${vermelho.id}"`);
+  for (const [tipo, refs] of [['vermelho', vermelhas], ['quebra', quebrar]]) {
+    for (const ref of refs) {
+      folha = trocarCelula(folha, ref, (estilo, celula) => {
+        const derivado = derivarEstilo(styles, estilo || '0', tipo, criados);
+        styles = derivado.styles;
+        return estilo === undefined
+          ? celula.replace(`<c r="${ref}"`, `<c r="${ref}" s="${derivado.id}"`)
+          : celula.replace(` s="${estilo}"`, ` s="${derivado.id}"`);
+      });
+    }
+  }
+  // A linha que precisa de mais altura (nunca menos que a do modelo), com altura fixa
+  for (const [linha, altura] of Object.entries(alturas)) {
+    const padrao = new RegExp(`<row r="${linha}"([^>]*)>`);
+    if (!padrao.test(folha)) throw new Error(`A linha ${linha} não existe no modelo da planilha.`);
+    folha = folha.replace(padrao, (tag, atributos) => {
+      const atual = +((/\sht="([\d.]+)"/.exec(atributos) || [])[1] || 0);
+      if (altura <= atual) return tag;
+      let novos = /\sht="/.test(atributos) ? atributos.replace(/\sht="[\d.]+"/, ` ht="${altura}"`) : `${atributos} ht="${altura}"`;
+      if (!/\scustomHeight="1"/.test(novos)) novos = `${novos.replace(/\scustomHeight="[^"]*"/, '')} customHeight="1"`;
+      return `<row r="${linha}"${novos}>`;
     });
   }
   saida['xl/worksheets/sheet1.xml'] = folha;
   saida['xl/styles.xml'] = styles;
-  saida['xl/workbook.xml'] = arquivos['xl/workbook.xml'].replace(/<sheet name="[^"]*"/, `<sheet name="${escaparXml(aba)}"`);
+  // As células de texto compartilhado que viraram texto na célula saem da contagem de referências do sharedStrings
+  if (arquivos['xl/sharedStrings.xml']) {
+    const referencias = (folha.match(/<c [^>]*?\bt="s"/g) || []).length;
+    saida['xl/sharedStrings.xml'] = arquivos['xl/sharedStrings.xml'].replace(/(<sst\b[^>]*?\bcount=")\d+"/, (_, antes) => `${antes}${referencias}"`);
+  }
+  saida['xl/workbook.xml'] = arquivos['xl/workbook.xml'].replace(/<sheet name="[^"]*"/, () => `<sheet name="${escaparXml(aba)}"`);
   if (arquivos['docProps/app.xml']) {
-    saida['docProps/app.xml'] = arquivos['docProps/app.xml'].replace(/(<TitlesOfParts><vt:vector [^>]*><vt:lpstr>)[^<]*/, `$1${escaparXml(aba)}`);
+    saida['docProps/app.xml'] = arquivos['docProps/app.xml']
+      .replace(/(<TitlesOfParts><vt:vector [^>]*><vt:lpstr>)[^<]*/, (_, antes) => `${antes}${escaparXml(aba)}`);
   }
   return saida;
 }

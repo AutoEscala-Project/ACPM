@@ -99,18 +99,51 @@ export function pdf() {
   if (baixar(`escala-acpm-${dt.split('/').reverse().join('-')}.pdf`, doc.output('blob'), 'o PDF')) showToast('PDF emitido.', 'ok');
 }
 
-// A planilha no modelo do aeroclube, para o lançamento no CAVOK. A escala, os dados e a data são os do clique: o modelo
-// chega depois (fetch), e a data aberta pode ter mudado
+// O .xlsx é montado com a compressão do navegador ("deflate-raw": Safari 16.4, Chrome 103 e Firefox 113 em diante; o
+// resto do app roda em navegadores mais antigos)
+function navegadorMontaPlanilha() {
+  try {
+    new CompressionStream('deflate-raw');
+    new DecompressionStream('deflate-raw');
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// A planilha no modelo do aeroclube, para o lançamento no CAVOK. A escala, os dados e a data são os do clique (copiados
+// na hora): o modelo chega depois (fetch), e a data aberta ou o status de um voo podem ter mudado. Um segundo clique
+// enquanto a planilha é montada não baixa outra
+let montando = false;
 export async function planilha() {
   if (!RES) { showToast('Não há escala para exportar nesta data.'); return; }
-  const res = RES, estado = S, data = DATA;
+  if (!navegadorMontaPlanilha()) { showToast('Este navegador não monta a planilha do Excel. Atualize o navegador ou use o CSV.'); return; }
+  if (montando) return;
+  montando = true;
+  try {
+    await baixarPlanilha(RES, DATA, { frota: S.frota ? [...S.frota] : undefined, av: { ...S.av }, fStatus: { ...S.fStatus }, fObs: { ...S.fObs } });
+  } finally {
+    montando = false;
+  }
+}
+
+async function baixarPlanilha(res, data, estado) {
+  let modelo;
+  try {
+    const resposta = await fetch(MODELO, { signal: AbortSignal.timeout(20000) });
+    if (!resposta.ok) throw new Error(`HTTP ${resposta.status}`);
+    modelo = new Uint8Array(await resposta.arrayBuffer());
+  } catch {
+    showToast('O modelo da planilha não carregou. Verifique a conexão e tente de novo.');
+    return;
+  }
   let pronta;
   try {
-    const resposta = await fetch(MODELO);
-    if (!resposta.ok) throw new Error(`HTTP ${resposta.status}`);
-    pronta = await montarPlanilha(new Uint8Array(await resposta.arrayBuffer()), res, estado, data);
-  } catch {
-    showToast('Não foi possível montar a planilha: o modelo não carregou. Verifique a conexão e recarregue a página.');
+    pronta = await montarPlanilha(modelo, res, estado, data);
+  } catch (e) {
+    // O modelo que chegou não é o esperado (uma página no lugar dele, um arquivo estragado ou mudado)
+    console.warn(e);
+    showToast('Não foi possível montar a planilha: o modelo que chegou não é o esperado. Recarregue a página e tente de novo, ou use o CSV.');
     return;
   }
   const arquivo = new Blob([pronta.bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
