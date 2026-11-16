@@ -2,7 +2,7 @@
 // coisa pela API; a tela só usa a escala gravada quando cada linha tem os campos que o motor produz, nos formatos dele.
 // Uma linha adulterada invalida a escala gravada inteira (a tela usa a escala calculada de novo, que é gravada na
 // próxima alteração). Os campos desconhecidos saem.
-import { ALL_EQ_TYPES, MIS, FLIGHT_STATUSES, NI } from './config.js';
+import { ALL_EQ_TYPES, MIS, FLIGHT_STATUSES, NI, MINUTOS_DO_DIA } from './config.js';
 import { codigoValido } from './cursos.js';
 import { CODIGOS_DE_CONFLITO, CODIGOS_DE_REJEICAO } from './conflitos.js';
 import { CHAVE_DO_VOO } from './voo.js';
@@ -30,8 +30,8 @@ const CAMPOS = {
   classKey: v => typeof v === 'string' && (CHAVE_DO_VOO.test(v) || CHAVE_DA_TURMA.test(v)),
   isGround: v => typeof v === 'boolean',
   w: v => inteiro(v, 0, NI),
-  a: v => inteiro(v, 0, 1440),
-  b: v => inteiro(v, 0, 1440),
+  a: v => inteiro(v, 0, MINUTOS_DO_DIA),
+  b: v => inteiro(v, 0, MINUTOS_DO_DIA),
   o: v => inteiro(v, 0, 100000),
   stuId: v => inteiro(v, 1, 1e9),
   mid: v => inteiro(v, 0, 1e9),
@@ -81,7 +81,7 @@ function alerta(a) {
 
 function revisaoDoAviao(r) {
   if (!objeto(r) || !numero(r.inicio, 0, 100) || !numero(r.voadas, 0, 100) || !numero(r.fim, 0, 200)) return null;
-  if (r.paraAs !== null && !inteiro(r.paraAs, 0, 1440)) return null;
+  if (r.paraAs !== null && !inteiro(r.paraAs, 0, MINUTOS_DO_DIA)) return null;
   return { inicio: r.inicio, voadas: r.voadas, fim: r.fim, paraAs: r.paraAs };
 }
 

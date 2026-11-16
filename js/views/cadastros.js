@@ -1,7 +1,7 @@
 // Abas Instrutores e Alunos. Os instrutores têm duas visões: a disponibilidade do dia (uma grade com as janelas e os
 // voos de cada um na escala) e o cadastro (nome, CANAC, peso e habilitações, editadas num painel lateral). Os dados
 // pessoais (CPF, CANAC, nascimento, celular e e-mail) abrem noutro painel, só para quem pode vê-los (.so-dados).
-import { WIN, PRE, T, AIRCRAFT_EQ_TYPES } from '../config.js';
+import { WIN, PRE, T, AIRCRAFT_EQ_TYPES, MINUTOS_DO_DIA } from '../config.js';
 import { HABILITACOES, nomeDaHabilitacao } from '../habilitacoes.js';
 import { esc, hm, opts, LIMITE_DO_NOME } from '../format.js';
 import { S, DATA, insBy, isGestor, voosQueVoam } from '../state.js';
@@ -50,7 +50,7 @@ function ocupacaoDosInstrutores() {
     const atual = porInstrutor.get(o.insId) || { voos: new Set(), janelas: new Set() };
     atual.voos.add(unidadeDoVoo(o));
     WIN.forEach((_, i) => {
-      const inicio = T[i], fim = i < WIN.length - 1 ? T[i + 1] : 24 * 60;
+      const inicio = T[i], fim = i < WIN.length - 1 ? T[i + 1] : MINUTOS_DO_DIA;
       if (o.a < fim && o.b > inicio) atual.janelas.add(i);
     });
     porInstrutor.set(o.insId, atual);

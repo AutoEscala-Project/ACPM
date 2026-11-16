@@ -2,7 +2,7 @@
 // e o RBAC 117 (Apêndice A) a aplica às escolas do RBAC 141. Os números padrão são os da lei; o Administrador pode
 // mudá-los (o acordo coletivo dos instrutores pode ter outros). As horas passadas saem das escalas gravadas (só voo em
 // avião, sem os cancelados) e das horas de voo fora do app informadas no cadastro (horasExternas).
-import { AIRCRAFT_EQ_TYPES } from './config.js';
+import { AIRCRAFT_EQ_TYPES, MINUTOS_DO_DIA } from './config.js';
 import { intervaloEfetivo } from './status.js';
 import { somarDias } from './format.js';
 
@@ -110,7 +110,7 @@ export function dentroDosLimites({ compromissos, novo, historico, limites }) {
   if (passa(limites.vooSemestreH, h.semestre + vooHojeH)) return { ok: false, motivo: 'semestre' };
   if (passa(limites.vooAnoH, h.ano + vooHojeH)) return { ok: false, motivo: 'ano' };
   if (limites.repousoMin !== null && h.fimAnterior !== null && h.fimAnterior !== undefined) {
-    const repouso = 1440 - (h.fimAnterior + limites.encerramentoMin) + Math.min(...todos.map(c => c.a)) - limites.apresentacaoMin;
+    const repouso = MINUTOS_DO_DIA - (h.fimAnterior + limites.encerramentoMin) + Math.min(...todos.map(c => c.a)) - limites.apresentacaoMin;
     if (repouso < limites.repousoMin) return { ok: false, motivo: 'repouso' };
   }
   return { ok: true };

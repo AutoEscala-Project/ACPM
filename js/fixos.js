@@ -3,8 +3,9 @@
 import { rotuloDoStatus } from './status.js';
 import { CHAVE_DO_VOO } from './voo.js';
 import { MATRICULA } from './frota.js';
+import { MINUTOS_DO_DIA } from './config.js';
 
-const minuto = v => Number.isInteger(v) && v >= 0 && v <= 1440;
+const minuto = v => Number.isInteger(v) && v >= 0 && v <= MINUTOS_DO_DIA;
 
 export function normalizarFixos(fixos) {
   const dados = fixos && typeof fixos === 'object' ? fixos : {};

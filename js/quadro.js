@@ -2,7 +2,7 @@
 // ainda não pousaram ou terminaram), que se alternam página a página, como nos painéis da INFRAERO. Os dois seguem o
 // horário efetivo (o atrasado no previsto), mostram o horário programado e, no atraso, o previsto. A turma de Ground é
 // uma linha só, sem os nomes dos alunos. Servem à visão "Painel" da Escala e à tela da recepção.
-import { GROUND_EQ_TYPE } from './config.js';
+import { GROUND_EQ_TYPE, MINUTOS_DO_DIA } from './config.js';
 import { nomeDoRecurso } from './categorias.js';
 import { isGroundMission } from './rules.js';
 import { intervaloEfetivo, textoDoDetalhe, classeDoStatus, normalizarStatus, rotuloDoStatus, MOTIVOS_DE_CANCELAMENTO } from './status.js';
@@ -136,7 +136,7 @@ function detalhesDoQuadro(fObs) {
     if (!CHAVE_DO_VOO.test(fKey) || !d || typeof d !== 'object') return [];
     const detalhe = {
       ...(MOTIVOS_DE_CANCELAMENTO.includes(d.motivo) ? { motivo: d.motivo } : {}),
-      ...(Number.isInteger(d.novoInicio) && d.novoInicio > 0 && d.novoInicio < 24 * 60 ? { novoInicio: d.novoInicio } : {})
+      ...(Number.isInteger(d.novoInicio) && d.novoInicio > 0 && d.novoInicio < MINUTOS_DO_DIA ? { novoInicio: d.novoInicio } : {})
     };
     return Object.keys(detalhe).length ? [[fKey, detalhe]] : [];
   }));

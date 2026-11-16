@@ -5,7 +5,7 @@
 // o primeiro horário mais tarde no mesmo dia, dentro da disponibilidade do aluno. Depois, soltar o voo (o motor o escala
 // de novo; quando o pedido mudou, é a única sugestão) e, por último, cancelar. Cada sugestão é uma mudança no voo fixo;
 // na turma de Ground, em todos os alunos dela.
-import { AIRCRAFT_EQ_TYPES, GROUND_EQ_TYPE, GROUND_REG, REVISAO_H, T, NI } from './config.js';
+import { AIRCRAFT_EQ_TYPES, GROUND_EQ_TYPE, GROUND_REG, REVISAO_H, T, NI, MINUTOS_DO_DIA } from './config.js';
 import { FROTA_INICIAL, matriculasDoTipo } from './frota.js';
 import { podeFazer } from './habilitacoes.js';
 import { livre, cobre, cabeNoSaldo } from './viabilidade.js';
@@ -93,7 +93,7 @@ export function sugerirReparos(estado, resultado, fKey, { maximo = 3, depoisDe =
   if (!opcoes.length && !pedidoMudou) {
     const duracao = voo.b - voo.a;
     const inicios = voo.isGround ? T.slice(0, NI) : horariosDaMissao(estado.horarios || HORARIOS_INICIAIS, voo.mis, tipo);
-    const fimDoDia = voo.mis === 'Noturno' ? 1440 : T[NI];
+    const fimDoDia = voo.mis === 'Noturno' ? MINUTOS_DO_DIA : T[NI];
     const voosQueDependem = voo.isGround
       ? outros.filter(o => grupo.some(v => v.stuId === o.stuId) && !o.isGround && doesGroundGateFlight(voo.mis, { mis: o.mis, eq: o.eqType }))
       : [];
