@@ -8,8 +8,8 @@ import { HORARIOS_INICIAIS, horariosDaMissao, periodoDoMinuto, minutoDaPreferenc
 import { podeFazer, descreverExigencias } from './habilitacoes.js';
 import { categoriaDoRodizio, ajustarFilas } from './rodizio.js';
 import { avisosDeAtraso, intervaloEfetivo, STATUS_EM_ANDAMENTO } from './status.js';
-import { sobrepoe, livre, cobre, pesoCabe, cabeNoSaldo, folgaAte, saldoAteARevisao } from './viabilidade.js';
-import { reducaoNecessaria, combustivelDoVoo, pesoECombustivel } from './combustivel.js';
+import { sobrepoe, livre, cobre, cabeNoSaldo, folgaAte, saldoAteARevisao, problemasDoInstrutor } from './viabilidade.js';
+import { reducaoNecessaria, combustivelDoVoo } from './combustivel.js';
 import { LIMITE_DO_MOTIVO } from './conflitos.js';
 import { normalizarHangar, posicaoNoHangar } from './hangar.js';
 import { normalizarLimites, dentroDosLimites } from './limites.js';
@@ -19,6 +19,32 @@ import { menorPrimeiro, soma, paradasEntre } from './util.js';
 
 // Entre os instrutores possíveis, primeiro os que têm menos habilitações: os mais versáteis ficam livres
 const qtdHabilitacoes = x => (Array.isArray(x.hab) ? x.hab.length : 0);
+
+// Os instrutores que servem para o horário (as regras em js/viabilidade.js). Sem nenhum, a regra que barrou o que
+// chegou mais longe nelas diz o motivo da rejeição: disponível e habilitado, livre, sem bloqueio, dentro da lei e do peso
+const ETAPAS_DO_INSTRUTOR = ['disp', 'busy', 'bloq', 'limite', 'peso'];
+const ETAPA_DO_PROBLEMA = { 'instrutor-indisponivel': 0, habilitacao: 0, 'instrutor-ocupado': 1, bloqueio: 2, 'limite-da-lei': 3, peso: 4 };
+function instrutoresQueServem(instrutores, problemasDe) {
+  const servem = [];
+  let maisLonge = 0;
+  for (const x of instrutores) {
+    const [problema] = problemasDe(x);
+    if (problema) maisLonge = Math.max(maisLonge, ETAPA_DO_PROBLEMA[problema.codigo]);
+    else servem.push(x);
+  }
+  return { servem, barrou: servem.length ? null : ETAPAS_DO_INSTRUTOR[maisLonge] };
+}
+
+// O texto de cada conflito do instrutor de um voo fixo
+const CONFLITO_DO_INSTRUTOR = {
+  'instrutor-saiu': () => 'o instrutor saiu do cadastro',
+  'instrutor-indisponivel': () => 'o instrutor não está disponível',
+  habilitacao: () => 'o instrutor não tem a habilitação da missão',
+  'instrutor-ocupado': () => 'o instrutor já tem outro compromisso neste horário',
+  bloqueio: () => 'o aluno não voa com este instrutor',
+  'limite-da-lei': p => `o instrutor passaria do limite da lei (${LIMITE_DO_MOTIVO[p.motivo] || p.motivo})`,
+  peso: () => 'o peso do aluno e do instrutor passa do limite do avião, mesmo com o mínimo de combustível'
+};
 
 // Continuidade de avião (eficiência de pátio): a alocação segue a prioridade dos pedidos, não o horário, e às vezes
 // deixa um instrutor em duas matrículas do mesmo tipo. Depois de alocar, as matrículas de cada tipo de avião são
@@ -225,7 +251,7 @@ function equalizarHoras(out, state, limites, historico) {
 // opcoes.trocarMatriculas: false, sem a troca de matrículas para o instrutor ficar no mesmo avião (para comparar, medir
 // e testar)
 export function runAllocationEngine(state, opcoes = {}) {
-  const used = {}, busy = {}, stuBusy = {}, stuLastPick = {}, load = {}, eu = {}, out = [], al = [];
+  const used = {}, stuBusy = {}, stuLastPick = {}, load = {}, eu = {}, out = [], al = [];
   // A frota vem do cadastro; sem ela (estados de teste antigos), a frota inicial
   const frota = Array.isArray(state.frota) ? state.frota : FROTA_INICIAL;
   const soParafuso = matriculasDoTipo(frota, 'C152', { parafuso: true });
@@ -241,8 +267,6 @@ export function runAllocationEngine(state, opcoes = {}) {
   const horasPassadas = state.horasDosInstrutores || {};
   const historico = id => horasPassadas[id] || null;
   const compromissos = {};
-  const cabeNosLimites = (x, a, b, voo, outros = []) =>
-    dentroDosLimites({ compromissos: [...(compromissos[x.id] || []), ...outros], novo: { a, b, voo }, historico: historico(x.id), limites }).ok;
   // Aeronaves/simuladores que cada instrutor já usou no dia, na ordem em que foram escalados
   const insAircraft = {};
   // Armazena turmas abertas de Ground School por missão para permitir múltiplos alunos no mesmo horário/instrutor
@@ -332,20 +356,11 @@ export function runAllocationEngine(state, opcoes = {}) {
       // Pedido que passou de voo para Ground (ou o contrário): o pino é de outro tipo de recurso
       const mudouDeTipo = ground !== (r === GROUND_REG);
       if (status !== 'Cancelado') {
-        if (!x) marcar('instrutor-saiu', 'o instrutor saiu do cadastro');
-        else {
-          if (!x.on || !cobre(x.aw, a, b)) marcar('instrutor-indisponivel', 'o instrutor não está disponível');
-          if (!podeFazer(x, d.mis, tipo)) marcar('habilitacao', 'o instrutor não tem a habilitação da missão');
-          if (!daMesmaTurma && !free(busy, x.id, a, b)) marcar('instrutor-ocupado', 'o instrutor já tem outro compromisso neste horário');
-          if ((stu.bl || []).includes(x.id)) marcar('bloqueio', 'o aluno não voa com este instrutor');
-          if (!daMesmaTurma) {
-            const lei = dentroDosLimites({ compromissos: compromissos[x.id] || [], novo: { ...efetivo, voo: AIRCRAFT_EQ_TYPES.includes(tipo) }, historico: historico(x.id), limites });
-            if (!lei.ok) marcar('limite-da-lei', `o instrutor passaria do limite da lei (${LIMITE_DO_MOTIVO[lei.motivo] || lei.motivo})`);
-          }
-          if (!ground && !mudouDeTipo && !pesoECombustivel({ stuKg: stu.kg, insKg: x.kg, tipo: d.eq, minutos: b - a, mis: d.mis }).cabe) {
-            marcar('peso', 'o peso do aluno e do instrutor passa do limite do avião, mesmo com o mínimo de combustível');
-          }
-        }
+        // O aluno que entra na turma do instrutor não muda a ocupação dele nem a lei
+        problemasDoInstrutor(x, { mis: d.mis, tipo, a, b, efetivo, alunos: [stu], stuKg: stu.kg }, {
+          compromissos: (x && compromissos[x.id]) || [], historico: x ? historico(x.id) : null, limites, jaOcupa: daMesmaTurma,
+          peso: ground || mudouDeTipo ? null : {}, todos: true
+        }).forEach(p => marcar(p.codigo, CONFLITO_DO_INSTRUTOR[p.codigo](p)));
         if (mudouDeTipo) marcar('ground-ou-voo', ground ? 'o pedido passou de voo para Ground' : 'o pedido passou de Ground para voo');
         else if (!ground) {
           const recurso = frota.find(f => f.reg === r);
@@ -370,7 +385,6 @@ export function runAllocationEngine(state, opcoes = {}) {
           if (!daMesmaTurma) {
             (used[ground ? GROUND_REG : r] = used[ground ? GROUND_REG : r] || []).push([ia, ib]);
             if (x) {
-              (busy[x.id] = busy[x.id] || []).push([ia, ib]);
               (compromissos[x.id] ||= []).push({ a: ia, b: ib, voo: AIRCRAFT_EQ_TYPES.includes(tipo) });
             }
           }
@@ -512,17 +526,9 @@ export function runAllocationEngine(state, opcoes = {}) {
           // Há uma única sala de Ground: só abre turma nova com a sala livre durante toda a 01h30
           if (!free(used, GROUND_REG, a, b)) { fcGnd.sala++; continue; }
 
-          const q = state.ins.filter(x => x.on && habilitado(x) && cobre(x.aw, a, b));
-          if (!q.length) { fcGnd.disp++; continue; }
-
-          const f1 = q.filter(x => free(busy, x.id, a, b));
-          if (!f1.length) { fcGnd.busy++; continue; }
-
-          const sobra = f1.filter(x => !stu.bl.includes(x.id));
-          if (!sobra.length) { fcGnd.bloq++; continue; }
-
-          const f2 = sobra.filter(x => cabeNosLimites(x, a, b, false));
-          if (!f2.length) { fcGnd.limite++; continue; }
+          const { servem: f2, barrou } = instrutoresQueServem(state.ins, x => problemasDoInstrutor(x, { mis: d.mis, tipo: GROUND_EQ_TYPE, a, b, alunos: [stu] },
+            { compromissos: compromissos[x.id] || [], historico: historico(x.id), limites }));
+          if (barrou) { fcGnd[barrou]++; continue; }
 
           // Ordena instrutores priorizando: não bloqueado pela turma -> MENOS HABILITAÇÕES -> menor carga no dia
           f2.sort((x1, x2) =>
@@ -541,7 +547,6 @@ export function runAllocationEngine(state, opcoes = {}) {
           (openGroundClasses[d.mis] = openGroundClasses[d.mis] || []).push(chosenClass);
 
           // Marca o instrutor e a sala ocupados neste intervalo (outros alunos do MESMO Ground entram via chosenClass)
-          (busy[pickedIns.id] = busy[pickedIns.id] || []).push([a, b]);
           (compromissos[pickedIns.id] ||= []).push({ a, b, voo: false });
           (used[GROUND_REG] = used[GROUND_REG] || []).push([a, b]);
           load[pickedIns.id] = (load[pickedIns.id] || 0) + GROUND_DURATION_H;
@@ -683,21 +688,10 @@ export function runAllocationEngine(state, opcoes = {}) {
         const eqs = livres.filter(r => cabeNoSaldo(eu[r] || 0, dur / 60, saldo(r)));
         if (!eqs.length) { fc.revisao++; continue; }
 
-        const q = state.ins.filter(x => x.on && podeFazer(x, d.mis, d.eq) && cobre(x.aw, p.a, p.b));
-        if (!q.length) { fc.disp++; continue; }
-
-        const f1 = q.filter(x => free(busy, x.id, p.a, p.b));
-        if (!f1.length) { fc.busy++; continue; }
-
-        const naoBloqueados = f1.filter(x => !stu.bl.includes(x.id));
-        if (!naoBloqueados.length) { fc.bloq++; continue; }
-
-        const ehVoo = AIRCRAFT_EQ_TYPES.includes(d.eq);
-        const f2 = naoBloqueados.filter(x => cabeNosLimites(x, p.a, p.b, ehVoo));
-        if (!f2.length) { fc.limite++; continue; }
-
-        const ins = f2.filter(x => (comMenosCombustivel ? reducao(x) < Infinity : pesoCabe(stu.kg, x.kg, lim)));
-        if (!ins.length) { fc.peso++; continue; }
+        // Na primeira tentativa, só com o tanque cheio
+        const { servem: ins, barrou } = instrutoresQueServem(state.ins, x => problemasDoInstrutor(x, { mis: d.mis, tipo: d.eq, a: p.a, b: p.b, alunos: [stu], stuKg: stu.kg },
+          { compromissos: compromissos[x.id] || [], historico: historico(x.id), limites, peso: { reducaoMaxima: comMenosCombustivel ? Infinity : 0 } }));
+        if (barrou) { fc[barrou]++; continue; }
 
         // Quando o peso importa (o avião tem limite e o aluno, o peso), o instrutor com o peso informado vem antes: sem
         // ele, o limite não é conferido
@@ -723,7 +717,6 @@ export function runAllocationEngine(state, opcoes = {}) {
     if (ch) {
       const { p, r, x } = ch, hh = dur / 60;
       (used[r] = used[r] || []).push([p.a, p.b]);
-      (busy[x.id] = busy[x.id] || []).push([p.a, p.b]);
       (compromissos[x.id] ||= []).push({ a: p.a, b: p.b, voo: AIRCRAFT_EQ_TYPES.includes(d.eq) });
       (stuBusy[stuId] = stuBusy[stuId] || []).push([p.a, p.b]);
       stuLastPick[stuId] = { r, x };
