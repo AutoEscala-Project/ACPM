@@ -93,7 +93,7 @@ The data is small and document-shaped: one roster (about 50 KB), one schedule pe
 2. **One Ground room, no capacity limit.** Different Ground subjects could run at the same time, all in `SALA-GROUND`. *Gabriel: there is only one room.* Fixed in Phase 1.
 3. **Unescaped HTML from the share link.** Fixed in Phase 1. It was broader than the alert messages: ids, level, weight, priority and flight status also reached HTML attributes unvalidated.
 4. **jsPDF 2.5.1 advisories.** Upgraded in Phase 1.
-5. Dead code: `totF_M` in the BI, and the `window.claude` download path left over from a Claude artifact. Still open.
+5. Dead code: `totF_M` in the BI, and the `window.claude` download path left over from a Claude artifact. Removed in the cleanup PR 11 (ESLint found both).
 
 ### Phase 1: Security fixes and Gabriel's operating rules (done on branch `fase-1`, built on `fase-0`)
 Each item was written test-first and has its own commit.
@@ -324,6 +324,17 @@ A full review of the app (engine, data and security, usability and accessibility
    - "Editar" opens the list inline (`js/views/horarios.js`): model, chips with ✕, a time field where Enter adds (06:00–16:30), and the effect before saving (`impactoDosHorarios`: who changes preference, who loses "Só às"). Nothing changes until Salvar; Cancelar and Esc discard; focus returns to Editar. Saving writes one history entry that reverts the list and the adjusted requests (`restaurarHorarios`).
    - Recursos: "Nesta data" (windows, availability and hours, hangar order) and "Vale para todas as datas" (take-off times and the fleet, with + Novo recurso, Retirar and Só Parafuso as compact chips).
    - Left for the next PR: the time vocabulary (the Escala list and PDF grouped by exact departure time, "Aplicar período").
+
+### Cleanup after the audit of 2026-11-15 (branches `limpeza-1` to `limpeza-7`)
+A second audit (accessibility, code quality, tests) found the code drifting toward "AI slop": rules copied across several algorithms, a 1,400-line `main.js`, comments used as a changelog. Pedro's call: clean up before new features, ESLint allowed, history notes out of the code (git keeps the history). Each PR is reviewed by independent agents, every finding checked by three skeptics.
+
+1. [x] **Audit bugs** (branch `limpeza-1`, PR #28): the Secretaria redirect race (and the flaky test it caused; one shared login helper for the E2E tests, `body[data-pronto]`), the take-off times editor by keyboard and screen reader, the header focus ring (white on the dark bar) and 320 px, the board redrawn only when its content changes.
+2. [x] **Lint and dead code** (branch `limpeza-2`): ESLint 10 (`npm run lint`, also in CI) plus `scripts/exportacoes-sem-uso.mjs` (parses with espree: unused exports, test-only exports, module-private ones); 31 exports resolved, dead state (`lim`), the share-link leftovers, unused CSS, tests that could not fail. Also the header between 641 and 1289 px (rows in Tab order, the account name capped) and Pausar as a stable-name toggle with a check mark.
+3. [ ] **History notes out of the code** (branch `limpeza-3`): every comment rewritten file by file (present-tense why, no "revisão de 14/11", "fase N", restating comments out), gated by a token check that the code did not change.
+4. [ ] **Shared primitives**: one module for flight status, flight keys and dates, plus the missing constants.
+5. [ ] **One instructor-eligibility check** for the engine, compaction and repair suggestions; codes on warnings.
+6. [ ] **Tests**: reviewable engine goldens, no duplicated or can't-fail tests.
+7. [ ] **Split `main.js`**: one way to apply a change, one confirmation pattern (absorbs the planned undo/confirmations PR); then the accessibility PR.
 
 ### Phase 16: Later (nice to have)
 - [ ] Track instructor and student currency: last flight, medical/CMA expiry. The engine then checks these too (the course phase is Phase 14).
