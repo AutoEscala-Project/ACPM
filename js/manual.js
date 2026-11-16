@@ -4,11 +4,11 @@ import { MIS, WIN, NI, DEFAULT_LIM, GROUND_DURATION_MIN, COMBUSTIVEL } from './c
 import { HABILITACOES, exigencias } from './habilitacoes.js';
 import { CATEGORIAS_DO_RODIZIO } from './rodizio.js';
 import { GLOSSARIO, ABAS_DO_GLOSSARIO } from './glossario.js';
+import { duracaoHm } from './format.js';
 
 // Os rótulos curtos são os da grade de habilitações da aba Instrutores
 const ROTULO = new Map(HABILITACOES.map(h => [h.id, h.curto]));
 const ou = itens => (itens.length > 1 ? `${itens.slice(0, -1).join(', ')} ou ${itens.at(-1)}` : itens[0]);
-const duracao = min => `${Math.floor(min / 60)}h${String(min % 60).padStart(2, '0')}`;
 
 // Habilitações que a missão exige, por equipamento: a da missão e, no C152, no C172 e no PA-34, também a do avião;
 // nos voos de cheque, só as três marcas do checador
@@ -27,7 +27,7 @@ export function quemPodeDar(mis, equipamentos) {
 }
 
 function observacao(missao, regra) {
-  if (regra.isGround) return `Aula de ${duracao(GROUND_DURATION_MIN)}, em turma; antes do primeiro voo de ${regra.gatesEq || regra.gatesMis} do aluno no dia`;
+  if (regra.isGround) return `Aula de ${duracaoHm(GROUND_DURATION_MIN)}, em turma; antes do primeiro voo de ${regra.gatesEq || regra.gatesMis} do aluno no dia`;
   if (missao === 'Parafuso') return 'No C152, sempre num avião marcado “Só Parafuso” em Recursos (que só voa Parafuso)';
   if (missao === 'Noturno') return `Só na janela das ${WIN[NI]}`;
   return '';
@@ -44,7 +44,7 @@ export const janelasDoManual = () => WIN.map((w, i) => (i === NI ? `${w} (noturn
 export const pesosDoManual = () => Object.entries(DEFAULT_LIM).map(([tipo, kg]) => [tipo, `${kg} kg`]);
 // Tanque e autonomia de cada avião (o limite de peso vale com os tanques cheios)
 export const combustivelDoManual = () => Object.entries(COMBUSTIVEL).map(([tipo, { galoes, autonomiaMin }]) =>
-  `${tipo}: ${galoes} gal, ${Math.floor(autonomiaMin / 60)}h${autonomiaMin % 60 ? String(autonomiaMin % 60).padStart(2, '0') : ''}`);
+  `${tipo}: ${galoes} gal, ${autonomiaMin % 60 ? duracaoHm(autonomiaMin) : `${autonomiaMin / 60}h`}`);
 export const rodizioDoManual = () => CATEGORIAS_DO_RODIZIO.map(c => c.nome);
 
 // O Glossário: os termos das dicas, aba por aba, na ordem das abas

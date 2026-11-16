@@ -1,7 +1,7 @@
 // Agenda de Solicitações: a agenda de papel da secretaria, digitalizada. Calendário do mês com os pedidos de cada dia,
 // a lista do dia escolhido (com a situação de cada pedido na demanda) e o registro de pedidos, com o prazo das 13:00
 // do dia anterior.
-import { MIS } from '../config.js';
+import { MIS, GROUND_DURATION_H } from '../config.js';
 import { horariosDaMissao } from '../horarios.js';
 import { S, DATA, isGestor } from '../state.js';
 import { ApiClient } from '../storage.js';
@@ -170,7 +170,7 @@ export function preencherHorariosDaAgenda() {
   const regra = MIS[missao] || MIS['Voo Local'];
   // O Ground tem sempre 01h30
   const horas = $('#ag-horas');
-  if (regra.isGround) { horas.dataset.antes = horas.dataset.antes || horas.value; horas.value = '1.5'; horas.disabled = true; }
+  if (regra.isGround) { horas.dataset.antes = horas.dataset.antes || horas.value; horas.value = String(GROUND_DURATION_H); horas.disabled = true; }
   else if (horas.disabled) { horas.value = horas.dataset.antes || '1'; delete horas.dataset.antes; horas.disabled = false; }
   const lista = horariosDaMissao(S.horarios, missao, regra.defEq).map(hm);
   const atual = $('#ag-horario').value;

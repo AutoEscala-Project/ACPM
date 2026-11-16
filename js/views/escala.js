@@ -1,6 +1,6 @@
 // Aba Escala: resumo do dia, a lista dos voos (ou o mapa por recurso ou por instrutor) e o histórico da data.
 import { FLIGHT_STATUSES, GROUND_REG } from '../config.js';
-import { hm, WLB, fmtH, esc, rotuloDaData, hojeISO } from '../format.js';
+import { hm, WLB, fmtH, esc, rotuloDaData, hojeISO, duracaoHm, DURACAO_DO_GROUND } from '../format.js';
 import { isGroundMission } from '../rules.js';
 import { categoriaDoTipo, nomeDoRecurso } from '../categorias.js';
 import { textoDoDetalhe, classeDoStatus, rotuloDoStatus, STATUS_COM_DETALHE } from '../status.js';
@@ -17,7 +17,7 @@ import { motivoDoFixo } from '../fixos.js';
 import { $, posicionarJunto } from '../dom.js';
 import { statusDoVoo, unidadeDoVoo } from '../voo.js';
 
-export const HT = o => (o.isGround || isGroundMission(o.mis) ? '01h30 (1,5 h)' : fmtH(o.h) + (o.ss !== '1/1' ? ` (sessão ${o.ss})` : ''));
+export const HT = o => (o.isGround || isGroundMission(o.mis) ? DURACAO_DO_GROUND : fmtH(o.h) + (o.ss !== '1/1' ? ` (sessão ${o.ss})` : ''));
 
 function missionColorClass(mis) {
   if (isGroundMission(mis)) return 'm-gnd';
@@ -251,7 +251,7 @@ function peso(o) {
 }
 
 // Acima do limite com os tanques cheios, o voo sai com menos combustível: quanto reduzir (e, na dica, quanto abastecer)
-const horasEMinutos = min => `${Math.floor(min / 60)}h${String(Math.round(min) % 60).padStart(2, '0')}`;
+const horasEMinutos = min => duracaoHm(Math.round(min));
 const textoDoCombustivel = c => `Abastecer até ${c.abastecerGal} gal (${c.reduzirGal} a menos que o tanque cheio); o voo, o táxi e a reserva pedem ${c.minimoGal} gal; autonomia de ${horasEMinutos(c.autonomiaMin)}.`;
 // A dica diz o caso deste voo (quanto abastecer) antes da explicação
 const seloDoCombustivel = o => (o.comb ? ` <span class="tag comb" data-dica="reduzir-combustivel" data-dica-caso="${textoDoCombustivel(o.comb)}">reduzir ${o.comb.reduzirGal} gal</span>` : '');

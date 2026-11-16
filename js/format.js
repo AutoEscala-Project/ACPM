@@ -1,15 +1,20 @@
 // Formatação de horários, datas, durações e textos exibidos na interface, no CSV e no PDF.
-import { WIN, NI } from './config.js';
+import { WIN, NI, GROUND_DURATION_H } from './config.js';
 
 export const hm = m => String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0');
+// Uma duração em minutos: 570 → "9h30", 600 → "10h00"
+export const duracaoHm = min => `${Math.floor(min / 60)}h${String(min % 60).padStart(2, '0')}`;
 export const WLB = i => `${WIN[i]} · ${i + 1}º tempo` + (i == NI ? ' (noturno)' : '');
 
-// Formatação limpa de horas (suporta 1.5 h = 01h30 do Ground School e horas inteiras de voo)
-export const fmtH = v => {
-  const n = Math.round((+v || 0) * 10) / 10;
-  return Number.isInteger(n) ? `${n} h` : `${String(n).replace('.', ',')} h`;
-};
-export const fmtDurLabel = h => (+h === 1.5 ? '01h30 (1,5 h)' : fmtH(h));
+// Um número com a vírgula decimal (1,5)
+export const numeroBr = n => String(n).replace('.', ',');
+// As horas digitadas, com vírgula ou ponto, em décimos de hora (NaN se não for um número)
+export const lerHoras = texto => Math.round(parseFloat(String(texto).replace(',', '.')) * 10) / 10;
+// Horas arredondadas em décimos, com vírgula: "2 h", "1,5 h"
+export const fmtH = v => `${numeroBr(Math.round((+v || 0) * 10) / 10)} h`;
+// A duração do Ground na tela (1,5 h)
+export const DURACAO_DO_GROUND = '01h30 (1,5 h)';
+export const fmtDurLabel = h => (+h === GROUND_DURATION_H ? DURACAO_DO_GROUND : fmtH(h));
 
 export const pad = i => 'Aluno ' + String(i + 1).padStart(2, '0');
 

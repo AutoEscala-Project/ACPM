@@ -2,7 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   isGroundMission, doesGroundGateFlight, migrateLegacyMissionName, normalizeMissionFields, blank, disponibilidadeDoAluno, disponibilidadeAtual,
-  rotuloDaDisponibilidade, opcoesDeDisponibilidade, proximoMid
+  rotuloDaDisponibilidade, opcoesDeDisponibilidade, proximoMid, duracaoDigitada, ERRO_DA_DURACAO
 } from '../../js/rules.js';
 import { podeFazer, descreverExigencias } from '../../js/habilitacoes.js';
 
@@ -130,5 +130,13 @@ describe('Número da missão extra', () => {
     const noturno = { mis: 'Noturno', eq: 'C172', p1: 500, p2: 610, nb: 1 };
     normalizeMissionFields(noturno);
     assert.deepEqual([noturno.p1, noturno.p2], [1050, -1]);
+  });
+});
+
+describe('A duração digitada', () => {
+  it('de 0,1 h a 5 h, em décimos, com vírgula ou ponto; fora disso, nenhuma', () => {
+    assert.deepEqual(['1,5', '2.6', '0,1', '5', '1,26'].map(duracaoDigitada), [1.5, 2.6, 0.1, 5, 1.3]);
+    for (const fora of ['0', '0,04', '5,1', '6', '', 'abc', '-1']) assert.equal(duracaoDigitada(fora), null, fora);
+    assert.equal(ERRO_DA_DURACAO, 'A duração vai de 0,1 h a 5 h.');
   });
 });

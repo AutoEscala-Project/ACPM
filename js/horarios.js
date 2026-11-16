@@ -5,6 +5,7 @@
 // valem por período.
 import { T, NI, DAY } from './config.js';
 import { categoriaDoTipo } from './categorias.js';
+import { hm } from './format.js';
 
 export const HORARIOS_PADRAO = DAY.map(w => T[w]);
 export const DE_30_EM_30 = Array.from({ length: 21 }, (_, i) => 390 + 30 * i);
@@ -101,8 +102,6 @@ export function modeloDosHorarios(lista) {
   return 'personalizado';
 }
 
-const doisDigitos = n => String(n).padStart(2, '0');
-const hora = m => `${doisDigitos(Math.floor(m / 60))}:${doisDigitos(m % 60)}`;
 const intervalo = passo => (passo % 60 === 0 ? `de ${passo / 60} em ${passo / 60} h` : `de ${passo} em ${passo} min`);
 
 // O nome do modelo, ou a lista resumida: três ou mais horários com o mesmo intervalo viram "07:00–08:30 de 30 em 30 min"
@@ -110,16 +109,16 @@ export function descreverHorarios(lista) {
   const l = emOrdem(lista);
   const modelo = modeloDosHorarios(l);
   if (modelo === 'janelas') return 'Janelas do dia';
-  if (modelo === 'de30') return `De 30 em 30 min, ${hora(l[0])}–${hora(l[l.length - 1])}`;
+  if (modelo === 'de30') return `De 30 em 30 min, ${hm(l[0])}–${hm(l[l.length - 1])}`;
   const partes = [];
   for (let i = 0; i < l.length;) {
     let fim = i;
     if (i + 2 < l.length) {
       const passo = l[i + 1] - l[i];
       while (fim + 1 < l.length && l[fim + 1] - l[fim] === passo) fim++;
-      if (fim - i >= 2) { partes.push(`${hora(l[i])}–${hora(l[fim])} ${intervalo(passo)}`); i = fim + 1; continue; }
+      if (fim - i >= 2) { partes.push(`${hm(l[i])}–${hm(l[fim])} ${intervalo(passo)}`); i = fim + 1; continue; }
     }
-    partes.push(hora(l[i]));
+    partes.push(hm(l[i]));
     i++;
   }
   return partes.join(', ');
@@ -149,7 +148,7 @@ export function impactoDosHorarios(pedidos, horarios, cat, lista) {
 export function resumoDoImpacto({ mudam, perdemSo }) {
   if (!mudam.length) return 'Nenhum pedido muda.';
   const partes = [`${mudam.length} ${mudam.length === 1 ? 'pedido muda' : 'pedidos mudam'} de preferência`];
-  if (perdemSo.length === 1) partes.push(`1 perde “Só às ${hora(perdemSo[0].minuto)}”`);
+  if (perdemSo.length === 1) partes.push(`1 perde “Só às ${hm(perdemSo[0].minuto)}”`);
   else if (perdemSo.length > 1) partes.push(`${perdemSo.length} perdem o “Só às”`);
   return `${partes.join('; ')}.`;
 }

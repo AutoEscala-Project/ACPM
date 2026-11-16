@@ -1,6 +1,6 @@
 import { describe, it, mock } from 'node:test';
 import assert from 'node:assert/strict';
-import { hm, fmtH, fmtDurLabel, WLB, pad, esc, opts, amanhaISO, hojeISO, somarDias, fimDoMes, rotuloDaData, nomeLimpo, LIMITE_DO_NOME, dataIsoValida, minutoDoDia } from '../../js/format.js';
+import { hm, fmtH, fmtDurLabel, WLB, pad, esc, opts, amanhaISO, hojeISO, somarDias, fimDoMes, rotuloDaData, nomeLimpo, LIMITE_DO_NOME, dataIsoValida, minutoDoDia, lerHoras, numeroBr, duracaoHm } from '../../js/format.js';
 
 describe('Formatação', () => {
   it('minutos do dia em HH:MM', () => {
@@ -9,6 +9,11 @@ describe('Formatação', () => {
 
   it('horas com vírgula decimal e arredondamento de uma casa', () => {
     assert.deepEqual([2, 1.5, 1.25, 0, undefined, '3'].map(fmtH), ['2 h', '1,5 h', '1,3 h', '0 h', '0 h', '3 h']);
+    // O número com vírgula, sem arredondar; as horas digitadas, com vírgula ou ponto, em décimos de hora
+    assert.deepEqual([2, 1.5, 0.25, 12.75].map(numeroBr), ['2', '1,5', '0,25', '12,75']);
+    assert.deepEqual(['1,5', '1.5', ' 2,26 ', '3', '0'].map(lerHoras), [1.5, 1.5, 2.3, 3, 0]);
+    for (const invalido of ['', 'abc', ',']) assert.ok(Number.isNaN(lerHoras(invalido)), invalido);
+    assert.deepEqual([570, 600, 90, 5, 0].map(duracaoHm), ['9h30', '10h00', '1h30', '0h05', '0h00']);
   });
 
   it('duração do Ground em 01h30', () => {
