@@ -2,8 +2,8 @@
 // aprovou. Os dados vêm do dia guardado, que pode ter sido gravado fora do app (pela API): só valem nos formatos certos.
 import { rotuloDoStatus } from './status.js';
 import { CHAVE_DO_VOO } from './voo.js';
+import { MATRICULA } from './frota.js';
 
-const MATRICULA = /^[A-Z0-9][A-Z0-9-]{1,14}$/;
 const minuto = v => Number.isInteger(v) && v >= 0 && v <= 1440;
 
 export function normalizarFixos(fixos) {

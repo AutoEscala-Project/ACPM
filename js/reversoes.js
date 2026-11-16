@@ -1,12 +1,11 @@
 // As reversões do histórico. O que "Reverter" desfaz vem gravado no histórico (no servidor, por
 // quem tem conta de operador), então só vale no formato que o próprio app produz: a reversão fora dele não vira botão
 // nem é aplicada. Um recurso retirado volta pela mesma validação do "+ Novo recurso".
-import { novoRecurso } from './frota.js';
+import { novoRecurso, MATRICULA } from './frota.js';
 import { normalizarFixos } from './fixos.js';
 import { CATEGORIAS_COM_HORARIOS, normalizarHorarios } from './horarios.js';
 import { disponibilidadeValida } from './rules.js';
 
-const MATRICULA = /^[A-Z0-9][A-Z0-9-]{1,14}$/;
 const idValido = v => Number.isInteger(v) && v > 0;
 const rotulo = v => (typeof v === 'string' && v.length <= 40 ? v : '↶ Reverter');
 

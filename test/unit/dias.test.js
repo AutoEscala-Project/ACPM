@@ -171,6 +171,7 @@ describe('Conversão dos documentos antigos', () => {
     assert.equal(inferirDataDaEscala(escala, bi, '2026-11-11'), '2026-11-10');
     assert.equal(inferirDataDaEscala(escala, { '2026-11-09': { out: [] } }, '2026-11-11'), '2026-11-11');
     assert.equal(inferirDataDaEscala(null, {}, '2026-11-11'), '2026-11-11');
+    assert.equal(inferirDataDaEscala({ ...escala, data: '2026-02-30' }, {}, '2026-11-11'), '2026-11-11', 'uma data que não existe');
   });
 
   it('gera cadastro, a escala atual, os dias do BI e o histórico para importar', () => {

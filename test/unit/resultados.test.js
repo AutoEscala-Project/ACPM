@@ -49,7 +49,7 @@ describe('Resultados das missões', () => {
     const certo = { aluno: 1000, curso: 'PP', missao: ' pp-07 ', resultado: 'aprovado', data: '2026-11-10', voo: '1000_0_1' };
     assert.deepEqual(validarRegistro(certo), { ...certo, missao: 'PP-07' });
     assert.deepEqual(validarRegistro({ ...certo, voo: null }).voo, null);
-    for (const errado of [{ aluno: 0 }, { curso: 'XX' }, { missao: 'PP 07' }, { resultado: 'talvez' }, { data: '10/11/2026' }, { voo: 'x' }]) {
+    for (const errado of [{ aluno: 0 }, { curso: 'XX' }, { missao: 'PP 07' }, { resultado: 'talvez' }, { data: '10/11/2026' }, { data: '2026-02-30' }, { voo: 'x' }]) {
       assert.throws(() => validarRegistro({ ...certo, ...errado }), e => e.code === '23514', JSON.stringify(errado));
     }
   });

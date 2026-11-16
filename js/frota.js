@@ -9,7 +9,8 @@ export const TIPOS_DA_FROTA = ['C152', 'C172', 'PA-34', 'Sim. Mono', 'Sim. Multi
 export const FROTA_INICIAL = Object.entries(EQ).flatMap(([tipo, regs]) =>
   regs.map(reg => ({ reg, tipo, ...(reg === ACROBAT_REG ? { soParafuso: true } : {}) })));
 
-const MATRICULA = /^[A-Z0-9][A-Z0-9-]{1,14}$/;
+// A matrícula de um avião (PR-ABC) ou o código de um recurso (SALA-GROUND): letras, números e hífen
+export const MATRICULA = /^[A-Z0-9][A-Z0-9-]{1,14}$/;
 const recurso = ({ reg, tipo, soParafuso }) => ({ reg, tipo, ...(soParafuso === true && tipo === 'C152' ? { soParafuso: true } : {}) });
 
 // Só recursos válidos (matrícula em maiúsculas, sem repetir, e um tipo conhecido); sem lista, a frota inicial

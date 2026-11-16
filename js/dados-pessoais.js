@@ -1,6 +1,7 @@
 // Dados pessoais de alunos e instrutores: CPF, CANAC (o código da ANAC), nascimento, celular e e-mail. Ficam fora do
 // cadastro, numa tabela que só operadores, administradores e a secretaria leem (o servidor valida tudo de novo), e
 // nunca vão para o CSV, o PDF ou o BI. O histórico registra só quais campos mudaram.
+import { dataIsoValida } from './format.js';
 export const CAMPOS_PESSOAIS = [
   { id: 'cpf', rotulo: 'CPF' },
   { id: 'canac', rotulo: 'CANAC' },
@@ -23,11 +24,7 @@ export function cpfValido(cpf) {
   return verificador(9) === Number(d[9]) && verificador(10) === Number(d[10]);
 }
 
-const dataValida = (iso, hoje) => {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return false;
-  const data = new Date(`${iso}T12:00:00Z`);
-  return !Number.isNaN(data.getTime()) && data.toISOString().slice(0, 10) === iso && iso >= '1900-01-01' && iso <= hoje;
-};
+const dataValida = (iso, hoje) => dataIsoValida(iso) && iso >= '1900-01-01' && iso <= hoje;
 const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
 const REGRAS = {
