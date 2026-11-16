@@ -7,10 +7,9 @@
 // na turma de Ground, em todos os alunos dela.
 import { AIRCRAFT_EQ_TYPES, GROUND_EQ_TYPE, GROUND_REG, T, NI, MINUTOS_DO_DIA } from './config.js';
 import { FROTA_INICIAL, matriculasDoTipo } from './frota.js';
-import { podeFazer } from './habilitacoes.js';
-import { livre, cobre, cabeNoSaldo, folgaAte, saldoAteARevisao } from './viabilidade.js';
+import { livre, cabeNoSaldo, folgaAte, saldoAteARevisao, problemasDoInstrutor } from './viabilidade.js';
 import { reducaoNecessaria } from './combustivel.js';
-import { normalizarLimites, dentroDosLimites } from './limites.js';
+import { normalizarLimites } from './limites.js';
 import { normalizarHangar, posicaoNoHangar } from './hangar.js';
 import { HORARIOS_INICIAIS, horariosDaMissao, periodoDoMinuto } from './horarios.js';
 import { STATUS_EM_ANDAMENTO } from './status.js';
@@ -37,7 +36,6 @@ export function sugerirReparos(estado, resultado, fKey, { maximo = 3, depoisDe =
   const alunos = new Map(estado.stu.map(s => [s.id, s]));
   const pedidoDo = pedidosDosVoos(estado.stu);
   const tipo = voo.isGround ? GROUND_EQ_TYPE : voo.eqType;
-  const ehVoo = AIRCRAFT_EQ_TYPES.includes(tipo);
 
   const ocupacaoDo = r => umPorUnidade(outros.filter(o => o.r === r)).map(o => [o.a, o.b]);
   const compromissosDo = id => umPorUnidade(outros.filter(o => o.insId === id)).map(o => ({ a: o.a, b: o.b, voo: AIRCRAFT_EQ_TYPES.includes(o.eqType) }));
@@ -49,11 +47,8 @@ export function sugerirReparos(estado, resultado, fKey, { maximo = 3, depoisDe =
   const reducao = (x, a, b) => (voo.isGround ? 0 : reducaoNecessaria({ stuKg: voo.stuKg, insKg: x.kg, tipo, minutos: b - a, mis: voo.mis }));
 
   const aviaoServe = (r, a, b) => (voo.isGround || Boolean(estado.av[r])) && livre(ocupacaoDo(r), a, b) && cabeNoSaldo(horasDoAviao(r), (b - a) / 60, saldo(r));
-  const instrutorServe = (x, a, b) => Boolean(x) && x.on && podeFazer(x, voo.mis, tipo) && cobre(x.aw, a, b)
-    && livre(compromissosDo(x.id).map(c => [c.a, c.b]), a, b)
-    && grupo.every(v => { const s = alunos.get(v.stuId); return !(s && (s.bl || []).includes(x.id)); })
-    && reducao(x, a, b) < Infinity
-    && dentroDosLimites({ compromissos: compromissosDo(x.id), novo: { a, b, voo: ehVoo }, historico: horasPassadas[x.id] || null, limites }).ok;
+  const instrutorServe = (x, a, b) => !problemasDoInstrutor(x, { mis: voo.mis, tipo, a, b, alunos: grupo.map(v => alunos.get(v.stuId)), stuKg: voo.stuKg },
+    { compromissos: x ? compromissosDo(x.id) : [], historico: x ? horasPassadas[x.id] || null : null, limites }).length;
 
   const avioesPara = (a, b) => (voo.isGround
     ? (aviaoServe(GROUND_REG, a, b) ? [GROUND_REG] : [])
