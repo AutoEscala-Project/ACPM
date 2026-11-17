@@ -446,8 +446,9 @@ test.describe('O foco depois de uma ação', () => {
     await abrirEscala(page);
     await page.locator('#btn-open-log').click();
     await expect(page.locator('#historico')).toBeVisible();
+    // O foco vai para a busca sem o clique: dependendo da largura, a gaveta cobre a busca
     const busca = page.locator('#flt-esc-q');
-    await busca.click();
+    await busca.focus();
     await page.keyboard.press('Escape');
     await expect(page.locator('#historico')).toBeHidden();
     await expect(busca).toBeFocused();
