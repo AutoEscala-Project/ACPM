@@ -392,6 +392,51 @@ test.describe('O leitor de tela e o teclado', () => {
     await expect(anuncio).toHaveText(`Confirmar: ${nome}. Para confirmar, acione o botão de novo.`);
   });
 
+  test('o menu da conta: as setas, Home e End andam pelos itens; o Tab que sai do menu o fecha', async ({ page, context }) => {
+    await instalarSupabaseFalso(context, documentosAtuais(comExemplo(estadoSintetico()), '2026-11-11'));
+    await entrar(page, CONTAS.administrador);
+    const botao = page.locator('#btn-menu-conta');
+    await botao.focus();
+    await page.keyboard.press('Enter');
+    const itens = page.locator('#menu-conta [role^="menuitem"]:visible');
+    await expect(itens).toHaveCount(4);
+    expect(await itens.evaluateAll(els => els.map(el => el.getAttribute('aria-label') || el.textContent.trim())))
+      .toEqual(['Minha conta', 'Usuários', 'Tema escuro', 'Sair']);
+    await expect(itens.nth(0)).toBeFocused();
+    for (const [tecla, item] of [['ArrowDown', 1], ['End', 3], ['ArrowDown', 0], ['ArrowUp', 3], ['ArrowUp', 2], ['Home', 0]]) {
+      await page.keyboard.press(tecla);
+      await expect(itens.nth(item), tecla).toBeFocused();
+    }
+    await page.keyboard.press('End');
+    await page.keyboard.press('Tab');
+    await expect(page.locator('#menu-conta')).toBeHidden();
+    await expect(botao).toHaveAttribute('aria-expanded', 'false');
+    // Shift+Tab do botão (com o menu aberto) também sai e fecha
+    await botao.click();
+    await expect(itens.nth(0)).toBeFocused();
+    await page.keyboard.press('Shift+Tab');
+    await expect(botao).toBeFocused();
+    await expect(page.locator('#menu-conta')).toBeVisible();
+    await page.keyboard.press('Shift+Tab');
+    await expect(page.locator('#menu-conta')).toBeHidden();
+  });
+
+  test('o Esc fecha só a camada de cima: com o Histórico aberto, o primeiro fecha o menu da conta, o segundo, a gaveta', async ({ page }) => {
+    await abrirComExemplo(page);
+    await page.locator('#btn-open-log').click();
+    await expect(page.locator('#historico')).toBeVisible();
+    const botao = page.locator('#btn-menu-conta');
+    await botao.focus();
+    await page.keyboard.press('Enter');
+    await expect(page.locator('#menu-conta')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#menu-conta')).toBeHidden();
+    await expect(botao).toBeFocused();
+    await expect(page.locator('#historico')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#historico')).toBeHidden();
+  });
+
   test('as barras do mapa dizem o status do voo (não só a cor)', async ({ page }) => {
     await abrirComExemplo(page);
     await abrirEscala(page);

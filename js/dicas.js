@@ -1,20 +1,38 @@
 // As dicas: um balão só (#dica, role="tooltip") que explica um termo do glossário. Ele aparece:
 // - com o mouse parado sobre o termo por 400 ms;
-// - na hora, quando o foco do teclado chega a um elemento com a dica;
+// - na hora, quando o foco do teclado chega a um elemento com a dica (a etiqueta que não é um botão recebe o foco pelo
+//   Tab, para quem não usa o mouse ler a explicação);
 // - num toque ou clique no botão "?" (a dica de um rótulo) ou numa etiqueta com a dica (que não é um botão).
-// Esc, um toque fora e sair do termo fecham o balão; ele acompanha a rolagem e o tamanho da tela. O texto entra só como
-// texto (nunca como HTML). Para os leitores de tela, cada elemento com a dica aponta (aria-describedby) para o texto do
-// termo, num nó escondido do glossário.
+// Esc, um toque fora e sair do termo fecham o balão; o mouse pode passar do termo para o balão sem que ele feche (para ler
+// ou selecionar o texto). Ele acompanha a rolagem e o tamanho da tela. O texto entra só como texto (nunca como HTML).
+// Para os leitores de tela, cada elemento com a dica aponta (aria-describedby) para o texto do termo, num nó escondido do
+// glossário, e para o caso dele (data-dica-caso), quando tem.
 import { GLOSSARIO } from './glossario.js';
 import { posicionarJunto } from './dom.js';
 
 const ESPERA_DO_MOUSE = 400;
-let alvo = null, porToque = false, espera = null;
+// O mouse que sai do termo ou do balão: o tempo de atravessar o espaço entre os dois
+const ESPERA_PARA_FECHAR = 300;
+let alvo = null, porToque = false, espera = null, saida = null;
 
 const balao = () => document.getElementById('dica');
 const idDoTexto = id => `glossario-${id}`;
 // Elementos que fazem outra coisa no clique (o clique neles não abre a dica; o foco e o mouse, sim)
 const temAcao = el => !el.classList.contains('dica-btn') && el.matches('button, a[href], input, select, textarea, summary, [role="button"]');
+const recebeFoco = el => el.matches('button, a[href], input, select, textarea, summary, [tabindex]');
+
+// O caso de um elemento (data-dica-caso) vira um nó escondido, um por texto, para entrar na descrição dele
+const casos = new Map();
+function idDoCaso(texto) {
+  if (!casos.has(texto)) {
+    const no = document.createElement('span');
+    no.id = `dica-caso-${casos.size + 1}`;
+    no.textContent = texto;
+    document.getElementById('glossario-textos').append(no);
+    casos.set(texto, no.id);
+  }
+  return casos.get(texto);
+}
 
 function criarNos() {
   if (balao()) return;
@@ -36,15 +54,20 @@ function criarNos() {
   document.body.append(textos);
 }
 
-// Cada elemento com uma dica do glossário aponta para o texto dela (sem perder outra descrição que já tenha)
+// Cada elemento com uma dica do glossário aponta para o texto dela (sem perder outra descrição que já tenha) e, se não
+// recebe o foco por si, passa a receber
 function descrever(raiz) {
   const elementos = raiz.matches && raiz.matches('[data-dica]') ? [raiz] : [];
   elementos.push(...(raiz.querySelectorAll ? raiz.querySelectorAll('[data-dica]') : []));
   for (const el of elementos) {
     const id = el.dataset.dica;
     if (!Object.hasOwn(GLOSSARIO, id)) continue;
-    const atuais = (el.getAttribute('aria-describedby') || '').split(/\s+/).filter(Boolean);
-    if (!atuais.includes(idDoTexto(id))) el.setAttribute('aria-describedby', [...atuais, idDoTexto(id)].join(' '));
+    // As descrições de outra origem ficam; as das dicas são refeitas (a dica ou o caso podem ter mudado). Na ordem do
+    // balão: o caso deste elemento, depois a explicação do termo
+    const outras = (el.getAttribute('aria-describedby') || '').split(/\s+/).filter(i => i && !/^(glossario|dica-caso)-/.test(i));
+    const descricao = [...outras, el.dataset.dicaCaso && idDoCaso(el.dataset.dicaCaso), idDoTexto(id)].filter(Boolean).join(' ');
+    if (el.getAttribute('aria-describedby') !== descricao) el.setAttribute('aria-describedby', descricao);
+    if (!recebeFoco(el)) el.tabIndex = 0;
   }
 }
 
@@ -53,6 +76,7 @@ function abrirDica(el, { toque = false } = {}) {
   const dica = balao();
   if (!termo || !dica) return;
   clearTimeout(espera);
+  clearTimeout(saida);
   if (alvo && alvo !== el) fecharDica();
   alvo = el;
   porToque = toque;
@@ -69,6 +93,7 @@ function abrirDica(el, { toque = false } = {}) {
 
 function fecharDica() {
   clearTimeout(espera);
+  clearTimeout(saida);
   const dica = balao();
   if (dica) dica.hidden = true;
   if (alvo && alvo.classList.contains('dica-btn')) alvo.setAttribute('aria-expanded', 'false');
@@ -83,25 +108,35 @@ export const botaoDeDica = (id, rotulo) =>
 export function iniciarDicas() {
   criarNos();
   descrever(document.body);
+  // Os elementos novos e os que ganharam uma dica depois (o selo da escala aprovada)
   new MutationObserver(mudancas => {
-    for (const m of mudancas) for (const no of m.addedNodes) if (no.nodeType === 1) descrever(no);
+    for (const m of mudancas) {
+      if (m.type === 'attributes') descrever(m.target);
+      else for (const no of m.addedNodes) if (no.nodeType === 1) descrever(no);
+    }
     // O termo saiu da tela (a lista foi refeita): o balão fecha
     if (alvo && !alvo.isConnected) fecharDica();
-  }).observe(document.body, { childList: true, subtree: true });
+  }).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['data-dica', 'data-dica-caso'] });
 
   document.addEventListener('pointerover', e => {
     if (e.pointerType !== 'mouse') return;
+    // De volta ao termo aberto ou chegando ao balão: ele fica
+    if (alvo && (alvo.contains(e.target) || e.target.closest('#dica'))) { clearTimeout(saida); return; }
     const el = e.target.closest('[data-dica]');
-    if (!el || el === alvo) return;
+    if (!el) return;
     clearTimeout(espera);
     espera = setTimeout(() => abrirDica(el), ESPERA_DO_MOUSE);
   });
   document.addEventListener('pointerout', e => {
     if (e.pointerType !== 'mouse') return;
-    const el = e.target.closest('[data-dica]');
+    const el = e.target.closest('[data-dica], #dica');
     if (!el || (e.relatedTarget && el.contains(e.relatedTarget))) return;
     clearTimeout(espera);
-    if (el === alvo && !porToque && document.activeElement !== el) fecharDica();
+    const doAberto = el === alvo || el.id === 'dica';
+    if (doAberto && alvo && !porToque && document.activeElement !== alvo) {
+      clearTimeout(saida);
+      saida = setTimeout(fecharDica, ESPERA_PARA_FECHAR);
+    }
   });
   document.addEventListener('focusin', e => {
     const el = e.target.closest && e.target.closest('[data-dica]');

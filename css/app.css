@@ -1267,8 +1267,6 @@ body.tela-painel { min-height: 100vh; background: #07122B; overflow: hidden; }
   padding: 8px 10px; border: 1px solid var(--ln); border-radius: 6px;
   background: var(--pop-bg); color: var(--pop-txt);
   font-size: 12.5px; line-height: 1.45; box-shadow: 0 8px 24px rgba(0,0,0,.35);
-  /* Só texto: o clique passa para o que estiver embaixo */
-  pointer-events: none;
 }
 .dica[hidden] { display: none; }
 .dica strong { font-weight: 700; }
@@ -1290,6 +1288,8 @@ body.tela-painel { min-height: 100vh; background: #07122B; overflow: hidden; }
 .tag[data-dica] { text-decoration: underline dotted; text-underline-offset: 2px; }
 /* No celular e no toque, o "?" tem 44 px para o dedo; o círculo continua pequeno */
 @media (max-width: 640px), (pointer: coarse) {
+/* A etiqueta com a dica recebe o foco pelo Tab (para abrir a dica sem o mouse) */
+[data-dica]:not(button):focus-visible { outline: 2px solid var(--ac); outline-offset: 2px; border-radius: 3px; }
   .dica-btn {
     width: 44px; height: 44px; margin: -13px -11px; border-color: transparent;
     background: radial-gradient(circle, transparent 8px, var(--ln) 8.5px, var(--ln) 9.5px, transparent 10px);

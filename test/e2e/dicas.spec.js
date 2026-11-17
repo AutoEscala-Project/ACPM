@@ -1,7 +1,7 @@
 // As dicas: o balão que explica um termo da tela. Abre com o mouse parado no termo (depois de um
 // instante), na hora com o foco do teclado, e num toque no "?" ou na etiqueta; Esc, um toque fora e sair do termo
 // fecham. O texto vem do glossário.
-import { test, expect, abrir, abrirEscala, irPara } from './fixtures.js';
+import { test, expect, abrir, abrirEscala, irPara, confirmar, AGORA } from './fixtures.js';
 import { aluno, cenario, instrutor, apenas } from '../helpers/montar.js';
 import { GLOSSARIO } from '../../js/glossario.js';
 
@@ -23,6 +23,49 @@ test.describe('Dicas dos termos', () => {
     await expect(dica(page)).toHaveAttribute('role', 'tooltip');
     await page.mouse.move(0, 0);
     await expect(dica(page)).toBeHidden();
+  });
+
+  test('o mouse passa do termo para o balão sem que ele feche (para ler o texto); sair dos dois fecha', async ({ page }) => {
+    await abrir(page, { estado: diaComHorarioLivre() });
+    await abrirEscala(page);
+    await page.clock.install({ time: AGORA });
+    await etiqueta(page).hover();
+    await page.clock.runFor(400);
+    await expect(dica(page)).toBeVisible();
+    // Do termo ao meio do balão, atravessando o espaço entre os dois
+    const caixa = await dica(page).boundingBox();
+    await page.mouse.move(caixa.x + caixa.width / 2, caixa.y + caixa.height / 2, { steps: 10 });
+    await page.clock.runFor(1000);
+    await expect(dica(page)).toBeVisible();
+    await page.mouse.move(0, 0);
+    await page.clock.runFor(1000);
+    await expect(dica(page)).toBeHidden();
+  });
+
+  test('pelo teclado, a etiqueta (que não é um botão) entra no Tab e abre a dica; Esc fecha e o foco fica', async ({ page }) => {
+    await abrir(page, { estado: diaComHorarioLivre() });
+    await abrirEscala(page);
+    const alvo = etiqueta(page);
+    await alvo.focus();
+    await page.keyboard.press('Shift+Tab');
+    await expect(alvo).not.toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(alvo).toBeFocused();
+    await expect(dica(page)).toBeVisible();
+    await expect(dica(page)).toHaveText(`Horário livre ${GLOSSARIO['horario-livre'].texto}`);
+    await page.keyboard.press('Escape');
+    await expect(dica(page)).toBeHidden();
+    await expect(alvo).toBeFocused();
+  });
+
+  test('o selo da escala aprovada, que ganha a dica depois de a tela aberta, também é descrito e entra no Tab', async ({ page }) => {
+    await abrir(page, { estado: diaComHorarioLivre() });
+    await abrirEscala(page);
+    await confirmar(page, '#btn-aprovar');
+    const selo = page.locator('#selo-aprovada');
+    await expect(selo).toBeVisible();
+    await expect(selo).toHaveAccessibleDescription(GLOSSARIO['aprovar-escala'].texto);
+    await expect(selo).toHaveAttribute('tabindex', '0');
   });
 
   test('pelo teclado: o foco no "?" abre na hora, Enter não fecha, Esc fecha e o foco fica', async ({ page }) => {

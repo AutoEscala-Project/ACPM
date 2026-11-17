@@ -82,11 +82,32 @@ export function ligarMenu(botao, menu, { fecharAoEscolher = true } = {}) {
     });
   }
   document.addEventListener('click', e => { if (!menu.hidden && !menu.contains(e.target) && !botao.contains(e.target)) fechar(); });
+  // O Esc fecha só o menu, a camada de cima: ouvido na captura, ele para aqui e não chega aos ouvintes das gavetas e dos
+  // painéis de trás, que continuam abertos
   document.addEventListener('keydown', e => {
     if (e.key !== 'Escape' || menu.hidden) return;
+    e.stopPropagation();
     fechar();
     botao.focus();
+  }, true);
+  // As setas, Home e End andam pelos itens, como num menu do sistema (o Tab também, e sai do menu no fim)
+  menu.addEventListener('keydown', e => {
+    const itens = [...menu.querySelectorAll('[role^="menuitem"]')].filter(el => !el.disabled && el.checkVisibility());
+    if (!itens.length) return;
+    const i = itens.indexOf(document.activeElement);
+    const destino = {
+      ArrowDown: itens[(i + 1) % itens.length], ArrowUp: itens[(i <= 0 ? itens.length : i) - 1],
+      Home: itens[0], End: itens[itens.length - 1]
+    }[e.key];
+    if (!destino) return;
+    e.preventDefault();
+    destino.focus();
   });
+  // O foco que sai para outro lugar da página (Tab no último item, Shift+Tab antes do botão) fecha o menu. Sem destino
+  // (um clique numa área que não recebe o foco, a janela que perdeu o foco), quem fecha é o clique fora, acima
+  const saiu = e => !menu.hidden && e.relatedTarget && !menu.contains(e.relatedTarget) && !botao.contains(e.relatedTarget);
+  menu.addEventListener('focusout', e => { if (saiu(e)) fechar(); });
+  botao.addEventListener('focusout', e => { if (saiu(e)) fechar(); });
   return fechar;
 }
 
