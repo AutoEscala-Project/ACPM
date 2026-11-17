@@ -167,7 +167,8 @@ document.addEventListener('click', e => {
   if ((!aprovar && !reabrir) || isGestor() || !RES) return;
   if (aprovar) {
     if (!confirmado(aprovar, 'Confirmar aprovação')) return;
-    S.fixos = Object.fromEntries(RES.out.map(o => [o.fKey, pinoDoVoo(o)]));
+    // O voo fixo pela escolha do instrutor na Escala continua com a marca: reabrir a escala não o solta
+    S.fixos = Object.fromEntries(RES.out.map(o => [o.fKey, { ...pinoDoVoo(o), ...((S.fixos || {})[o.fKey]?.escolhido ? { escolhido: true } : {}) }]));
     S.aprovacao = { em: new Date().toISOString(), por: ApiClient.autorAtual || '' };
     gravarAlteracao('mod', `Escala aprovada: ${RES.out.length} ${RES.out.length === 1 ? 'voo fixado' : 'voos fixados'}`);
     showToast('Escala aprovada: os voos ficam fixos.', 'ok');

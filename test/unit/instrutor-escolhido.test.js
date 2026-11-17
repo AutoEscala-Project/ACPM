@@ -88,7 +88,7 @@ describe('Instrutor escolhido na Escala: o voo fica onde está', () => {
     assert.deepEqual(antes.out.map(resumo), [['Aluno 1000', 500, 2], ['Aluno 1001', 500, 1]]);
     const voo = antes.out.find(o => o.stuId === 1001);
     const r = escolherInstrutor(estado, antes, { stuId: 1001, mid: 0 }, 2, { noLugar: true });
-    assert.deepEqual(r, { antes: { pedidos: [{ stuId: 1001, mid: 0, insId: 0 }], fixos: {}, soltar: ['1001_0_1'], insAntes: { '1001_0_1': 1 } }, alunos: 1 });
+    assert.deepEqual(r, { antes: { pedidos: [{ stuId: 1001, mid: 0, insId: 0 }], fixos: {}, soltar: ['1001_0_1'] }, alunos: 1 });
     assert.equal(estado.stu[1].insId, 2);
     assert.deepEqual(estado.fixos, { '1001_0_1': { a: 500, b: 560, r: voo.r, insId: 2, escolhido: true } });
 
@@ -206,7 +206,7 @@ describe('Instrutor escolhido na Escala: o ciclo do voo fixo pela escolha', () =
     assert.deepEqual(Object.values(aprovada.fixos).map(p => [p.insId, Boolean(p.escolhido)]), [[2, false]]);
   });
 
-  it('reverter a escolha solta o voo; depois da aprovação ou de um status que fixa, ele fica fixo com o instrutor de antes', () => {
+  it('reverter a escolha solta o voo; depois da aprovação ou de um status que fixa, ele fica fixo onde está, sem a marca', () => {
     const estado = doisVoos();
     const { antes } = escolherNaEscala(estado, 2);
     reverterEscolha(estado, antes);
@@ -217,7 +217,9 @@ describe('Instrutor escolhido na Escala: o ciclo do voo fixo pela escolha', () =
       const r = escolherNaEscala(e, 2);
       depois(e);
       reverterEscolha(e, r.antes);
-      assert.deepEqual([e.fixos['1001_0_1'].insId, Boolean(e.fixos['1001_0_1'].escolhido), e.stu[1].insId], [1, false, undefined]);
+      assert.deepEqual([e.fixos['1001_0_1'].insId, Boolean(e.fixos['1001_0_1'].escolhido), e.stu[1].insId], [2, false, undefined]);
+      // A escala refeita em volta da escolha continua sem conflito (o instrutor de antes já voa com o outro aluno)
+      assert.deepEqual(runAllocationEngine(e).al.filter(a => a.t === 'conf'), []);
     }
 
     // O voo que já era fixo volta ao fixo de antes
@@ -376,14 +378,12 @@ describe('Instrutor escolhido nos dados', () => {
   });
 
   it('a reversão devolve os pedidos e os voos fixos de antes; fora do formato, não vale', () => {
-    const rev = { kind: 'restaurarEscolha', pedidos: [{ stuId: 1000, mid: 0, insId: 0 }, { stuId: 1001, mid: 2, insId: 3 }], fixos: { '1000_0_1': { a: 390, b: 450, r: 'PR-VOB', insId: 1, escolhido: true } }, soltar: ['1001_2_1'], insAntes: { '1001_2_1': 4 }, label: '↶ Reverter' };
+    const rev = { kind: 'restaurarEscolha', pedidos: [{ stuId: 1000, mid: 0, insId: 0 }, { stuId: 1001, mid: 2, insId: 3 }], fixos: { '1000_0_1': { a: 390, b: 450, r: 'PR-VOB', insId: 1, escolhido: true } }, soltar: ['1001_2_1'], label: '↶ Reverter' };
     assert.deepEqual(validarReversao(rev, FROTA_INICIAL), rev);
-    // Sem insAntes (o formato da primeira versão): vazio
-    assert.deepEqual(validarReversao({ ...rev, insAntes: undefined }, FROTA_INICIAL).insAntes, {});
     const reparo = { kind: 'restaurarFixos', fixos: rev.fixos, pedidos: [{ stuId: 1000, mid: 0, insId: 2 }], label: '↶ Reverter' };
     assert.deepEqual(validarReversao(reparo, FROTA_INICIAL), reparo);
     for (const ruim of [{ ...rev, pedidos: [] }, { ...rev, pedidos: [{ stuId: 1000, mid: 0, insId: -1 }] }, { ...rev, soltar: ['x'] }, { ...rev, soltar: undefined },
-      { ...rev, insAntes: { '1000_0_1': 4 } }, { ...rev, insAntes: { '1001_2_1': 'x' } }, { ...reparo, pedidos: [{ stuId: 1000, mid: 0, insId: 0 }] }, { ...reparo, pedidos: 'x' }]) {
+      { ...reparo, pedidos: [{ stuId: 1000, mid: 0, insId: 0 }] }, { ...reparo, pedidos: 'x' }]) {
       assert.equal(validarReversao(ruim, FROTA_INICIAL), null, JSON.stringify(ruim));
     }
   });

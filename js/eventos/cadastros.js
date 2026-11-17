@@ -70,7 +70,7 @@ aoAcionar('addi', () => {
   S.ins.push(newIns);
   mostrarVistaDosInstrutores('cadastro');
   gravarAlteracao('inc', `Instrutor adicionado: ${newIns.nm}`);
-  rIns(); rAlu(); focusLast('#inst .nm');
+  rIns(); rAlu(); rDem(); focusLast('#inst .nm');
 });
 
 aoAcionar('adds', () => {

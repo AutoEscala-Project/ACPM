@@ -1,6 +1,6 @@
 // O instrutor escolhido pelo operador: na Demanda (o app encaixa o voo com ele) e na Escala (o nome do instrutor abre a
 // lista; o voo fica onde está, fixo, com o escolhido, e o resto é refeito em volta). O histórico desfaz
-import { test, expect, abrir, irPara, abrirEscala } from './fixtures.js';
+import { test, expect, abrir, irPara, abrirEscala, confirmar } from './fixtures.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
 
 // Dois voos às 08:20: o app põe o Instrutor 02 (menos habilitações) com o Aluno 1000 e o Instrutor 01 com o 1001
@@ -149,6 +149,19 @@ test.describe('Instrutor escolhido', () => {
     await abrirEscala(page);
     await expect(voo.locator('.fixo')).toHaveCount(0);
     await expect(voo.locator('.ins-btn')).not.toHaveClass(/\bescolhido\b/);
+  });
+
+  test('aprovar e reabrir a escala não soltam o voo fixo pela escolha na Escala', async ({ page }) => {
+    await abrir(page, { estado: dia() });
+    await abrirEscala(page);
+    const voo = linha(page, 'Aluno 1001');
+    await voo.locator('[data-act="trocar-instrutor"]').click();
+    await voo.locator('select[data-a="insVoo"]').selectOption({ label: 'Instrutor 02 (ocupado com Aluno 1000)' });
+    await confirmar(page, '#btn-aprovar');
+    await expect(voo.locator('.fixo')).toHaveAttribute('aria-label', 'Voo fixo: escala aprovada');
+    await confirmar(page, '#btn-reabrir');
+    await expect(voo.locator('.fixo')).toHaveAttribute('aria-label', 'Voo fixo: instrutor escolhido na escala');
+    await expect(linha(page, 'Aluno 1000').locator('.fixo')).toHaveCount(0);
   });
 });
 

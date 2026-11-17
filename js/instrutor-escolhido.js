@@ -89,12 +89,11 @@ export function escolherInstrutor(estado, resultado, { stuId, mid = 0 }, insId, 
   const grupo = mexeNoVoo ? unidadeDe(resultado, voo) : [];
   const alvos = mexeNoVoo ? grupo.map(o => ({ stuId: o.stuId, mid: o.mid || 0 })) : [{ stuId, mid }];
 
-  // Antes: os pedidos, os voos fixos e, dos que não eram fixos, o instrutor (para a reversão saber o que devolver)
+  // Antes: os pedidos, os voos fixos e os que não eram fixos (para a reversão)
   const antes = {
     pedidos: alvos.map(p => ({ ...p, insId: (pedidoDe(estado, p.stuId, p.mid) || {}).insId || 0 })),
     fixos: Object.fromEntries(grupo.filter(o => fixos[o.fKey]).map(o => [o.fKey, fixos[o.fKey]])),
-    soltar: grupo.filter(o => !fixos[o.fKey]).map(o => o.fKey),
-    insAntes: Object.fromEntries(grupo.filter(o => !fixos[o.fKey]).map(o => [o.fKey, o.insId]))
+    soltar: grupo.filter(o => !fixos[o.fKey]).map(o => o.fKey)
   };
 
   for (const p of alvos) {
@@ -121,9 +120,10 @@ export function escolherInstrutor(estado, resultado, { stuId, mid = 0 }, insId, 
 }
 
 // Desfaz uma escolha (a reversão do histórico): os pedidos voltam como estavam e os voos fixos também. O voo que não
-// era fixo deixa de ser; se depois disso a escala foi aprovada ou o voo ganhou um status que fixa, ele continua fixo,
-// com o instrutor de antes
-export function reverterEscolha(estado, { pedidos, fixos, soltar, insAntes = {} }) {
+// era fixo deixa de ser; se depois disso a escala foi aprovada ou o voo ganhou um status que fixa, ele continua fixo
+// onde está, com o instrutor de agora, só sem a marca da escolha (o instrutor de antes pode já ter outro voo no
+// horário: a escala foi refeita em volta da escolha)
+export function reverterEscolha(estado, { pedidos, fixos, soltar }) {
   for (const { stuId, mid, insId } of pedidos) {
     const pedido = pedidoDe(estado, stuId, mid);
     if (!pedido) continue;
@@ -133,8 +133,8 @@ export function reverterEscolha(estado, { pedidos, fixos, soltar, insAntes = {} 
   const novos = { ...(estado.fixos || {}), ...fixos };
   for (const k of soltar) {
     if (!novos[k]) continue;
-    if (soltavel(estado, k) || !Object.hasOwn(insAntes, k)) delete novos[k];
-    else { const { escolhido: _, ...resto } = novos[k]; novos[k] = { ...resto, insId: insAntes[k] }; }
+    if (soltavel(estado, k)) delete novos[k];
+    else { const { escolhido: _, ...resto } = novos[k]; novos[k] = resto; }
   }
   estado.fixos = novos;
 }

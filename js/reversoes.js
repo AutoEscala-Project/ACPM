@@ -42,10 +42,7 @@ export function validarReversao(rev, frota) {
       && (p.insId === 0 || idValido(p.insId)) ? { stuId: p.stuId, mid: p.mid, insId: p.insId } : null));
     const fixos = rev.fixos && typeof rev.fixos === 'object' ? normalizarFixos(rev.fixos) : {};
     if (!pedidos.every(Boolean) || !rev.soltar.every(k => typeof k === 'string' && CHAVE_DO_VOO.test(k))) return null;
-    // O instrutor de antes de cada voo que não era fixo
-    const insAntes = rev.insAntes === undefined ? {} : rev.insAntes;
-    if (!insAntes || typeof insAntes !== 'object' || Array.isArray(insAntes) || !Object.entries(insAntes).every(([k, v]) => rev.soltar.includes(k) && idValido(v))) return null;
-    return { kind: 'restaurarEscolha', pedidos, fixos, soltar: [...rev.soltar], insAntes: { ...insAntes }, label };
+    return { kind: 'restaurarEscolha', pedidos, fixos, soltar: [...rev.soltar], label };
   }
   // Os horários de uma categoria e os pedidos que mudaram com eles
   if (rev.kind === 'restaurarHorarios') {
