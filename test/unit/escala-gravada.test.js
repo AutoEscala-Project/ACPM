@@ -3,12 +3,12 @@
 // escalas que o próprio motor produz passam inteiras.
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import { normalizarEscalaGravada } from '../../js/escala-gravada.js';
 import { runAllocationEngine } from '../../js/engine.js';
 import { aluno, cenario, instrutor, apenas } from '../helpers/montar.js';
+import { lerGoldens } from '../helpers/goldens.js';
 
-const goldens = JSON.parse(readFileSync(new URL('../fixtures/motor-goldens.json', import.meta.url), 'utf8'));
+const goldens = lerGoldens();
 const saidas = [goldens.exemplo.saida, ...goldens.cenarios.map(c => c.saida)];
 const ATAQUE = 'x"><img/src/onerror=window.__xss=1>';
 

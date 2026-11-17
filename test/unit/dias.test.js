@@ -2,15 +2,15 @@
 // status dos voos), cópia do dia anterior e conversão dos documentos antigos.
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import { separar, juntar, diaPadrao, diaParaCopiar, horasDoDiaSeguinte, inferirDataDaEscala, converterLegado, biDosDias } from '../../js/dias.js';
 import { ApiClient } from '../../js/storage.js';
 import { gerarCenario } from '../helpers/cenarios.js';
 import { aluno, instrutor, missaoExtra } from '../helpers/montar.js';
 import { estadoSintetico } from '../helpers/estado.js';
 import { blank } from '../../js/rules.js';
+import { lerGoldens } from '../helpers/goldens.js';
 
-const goldens = JSON.parse(readFileSync(new URL('../fixtures/motor-goldens.json', import.meta.url), 'utf8'));
+const goldens = lerGoldens();
 const normalizado = estado => ApiClient.normalizeAndMigrateState(structuredClone(estado));
 
 describe('Separar e juntar', () => {

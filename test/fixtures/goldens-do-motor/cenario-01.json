@@ -1,0 +1,15 @@
+{
+  "seed": 1,
+  "hash": "75ea19585f376bd0",
+  "out": [
+    {"a":390,"b":570,"r":"PP-AJS","s":"Aluno 01","ins":"Instrutor 13","mis":"Voo Solo","status":"Confirmado","fKey":"1000_1001_1","classKey":"1000_1001_1","isGround":false,"w":0,"o":0,"stuId":1000,"mid":1001,"insId":13,"eqType":"C172","h":3,"ss":"1/1","stuKg":74,"insKg":53,"limKg":222,"kg":127,"baseTag":"Próximo livre","tag":"Próximo livre"},
+    {"a":390,"b":510,"r":"PR-BUL","s":"Aluno 03","ins":"Instrutor 21","mis":"Voo Solo","status":"Pendente","fKey":"1003_0_1","classKey":"1003_0_1","isGround":false,"w":0,"o":2,"stuId":1003,"mid":0,"insId":21,"eqType":"C172","h":2,"ss":"1/1","stuKg":68,"insKg":88,"limKg":222,"kg":156,"baseTag":"Próximo livre","tag":"Próximo livre"},
+    {"a":820,"b":910,"r":"SALA-GROUND","s":"Aluno 02","ins":"Instrutor 16","mis":"Ground Navegação","status":"Confirmado","fKey":"1002_0_1","classKey":"GND_Ground Navegação_5_16","isGround":true,"w":5,"o":1,"stuId":1002,"mid":0,"insId":16,"eqType":"Sala Ground","h":1.5,"ss":"1/1","stuKg":77,"insKg":109,"limKg":0,"kg":0,"baseTag":"Pref. 1","tag":"Pref. 1","groupSize":1},
+    {"a":820,"b":940,"r":"PP-LJV","s":"Aluno 03","ins":"Instrutor 06","mis":"Navegação","status":"Confirmado","fKey":"1003_1004_1","classKey":"1003_1004_1","isGround":false,"w":5,"o":2,"stuId":1003,"mid":1004,"insId":6,"eqType":"C152","h":2,"ss":"1/1","stuKg":68,"insKg":92,"limKg":170,"kg":160,"baseTag":"Pref. 2","tag":"Pref. 2"}
+  ],
+  "al": [
+    {"t":"err","s":"Aluno 01","m":"Rejeitado: o aluno já tem outra missão nos horários possíveis.","codigo":"aluno-ocupado"}
+  ],
+  "tot": 5,
+  "revisao": {}
+}

@@ -46,10 +46,10 @@ npm run test:e2e       # aplicação no navegador (Playwright)
   `BASE_URL=https://gdruumond.github.io/ACPM/ npm run test:e2e` (com a barra final).
 - Os testes E2E comparam a escala gerada com snapshots em `test/e2e/__snapshots__/`. Se uma mudança
   de comportamento for intencional, atualize-os com `npx playwright test --update-snapshots` e revise o diff.
-- `test/fixtures/motor-goldens.json` guarda a escala aprovada do motor para 40 cenários aleatórios e para o
-  dia de exemplo (`test/helpers/exemplo.js`, a demanda do antigo botão "Preencher exemplo"). Depois de mudar uma
-  regra do motor de propósito, regrave com
-  `node scripts/capturar-goldens-motor.mjs` e revise a diferença.
+- `test/fixtures/goldens-do-motor/` guarda a escala aprovada do motor para 40 cenários aleatórios e para o
+  dia de exemplo (a entrada dele, a demanda do antigo botão "Preencher exemplo", fica congelada em
+  `exemplo-estado.json`), um arquivo por cenário e um voo por linha. Depois de mudar uma regra do motor de propósito,
+  regrave com `node scripts/capturar-goldens-motor.mjs` e revise o diff: ele mostra os voos que mudaram.
 - Os testes usam somente nomes e pesos fictícios.
 - A planilha do Excel (o modelo do aeroclube) é conferida por fora em `test/helpers/xlsx.js`: o ZIP é lido com o zlib
   do Node, a estrutura é comparada com a do modelo e o lugar de cada voo sai dos rótulos da própria planilha, em dias
