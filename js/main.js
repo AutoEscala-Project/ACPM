@@ -62,7 +62,6 @@ import { iniciarSessaoSupabase } from './sessao.js';
 import { iniciarDicas } from './dicas.js';
 import { iniciarSomenteLeitura } from './somente-leitura.js';
 
-const activeTimers = new WeakMap();
 // Uma aba escolhida pela pessoa enquanto os dados carregam não é trocada pela aba inicial do perfil
 let abaEscolhida = false;
 
@@ -171,22 +170,40 @@ document.addEventListener('input', e => {
   });
 });
 
-// Botões que pedem confirmação: o primeiro clique troca o texto; o segundo, em até 3,5 s, confirma
+// O único jeito de confirmar uma ação no app: o primeiro clique arma o botão (o texto e o nome lido pelo leitor de
+// tela viram o pedido de confirmação; o ✕ fica vermelho); o segundo, em até 3,5 s, confirma. Sem o segundo, o botão
+// volta a ser o que era
+const CONFIRMACAO_MS = 3500;
+const temporizadores = new WeakMap();
+function desarmar(b) {
+  clearTimeout(temporizadores.get(b));
+  temporizadores.delete(b);
+  b.dataset.arm = '';
+  b.classList.remove('arm');
+  b.textContent = b.dataset.o;
+  if (b.dataset.rotulo !== undefined) b.setAttribute('aria-label', b.dataset.rotulo);
+}
 const confirmado = (b, txt) => {
-  const o = b.dataset.o || (b.dataset.o = b.textContent);
-  if (activeTimers.has(b)) clearTimeout(activeTimers.get(b));
-  if (!b.dataset.arm) {
-    b.dataset.arm = 1; b.textContent = txt;
-    activeTimers.set(b, setTimeout(() => { b.dataset.arm = ''; b.textContent = o; activeTimers.delete(b); }, 3500));
-    return false;
+  if (b.dataset.arm) {
+    desarmar(b);
+    return true;
   }
-  b.dataset.arm = ''; b.textContent = o; activeTimers.delete(b);
-  return true;
+  b.dataset.o = b.textContent;
+  if (b.hasAttribute('aria-label')) {
+    b.dataset.rotulo = b.getAttribute('aria-label');
+    b.setAttribute('aria-label', `${txt}: ${b.dataset.rotulo}`);
+  }
+  b.dataset.arm = '1';
+  b.classList.add('arm');
+  b.textContent = txt;
+  temporizadores.set(b, setTimeout(() => desarmar(b), CONFIRMACAO_MS));
+  return false;
 };
-const armed = (id, txt, fn) => {
-  $(id).onclick = e => {
+// Um botão fixo da tela que pede confirmação (quem só consulta não aciona)
+const comConfirmacao = (seletor, txt, fazer) => {
+  $(seletor).onclick = e => {
     if (isGestor()) return;
-    if (confirmado(e.target, txt)) fn();
+    if (confirmado(e.currentTarget, txt)) fazer();
   };
 };
 
@@ -402,7 +419,7 @@ $('#btn-theme').onclick = () => {
 };
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change', mostrarTema);
 
-armed('#clr', 'Confirmar limpeza', () => {
+comConfirmacao('#clr', 'Confirmar limpeza', () => {
   if (isGestor()) return;
   S.stu.forEach(d => { Object.assign(d, blank()); d.extra = []; });
   save(); rDem();
@@ -411,7 +428,7 @@ armed('#clr', 'Confirmar limpeza', () => {
 });
 
 // Só no modo local: grava 30 dias simulados (marcados como simulados) nas datas que ainda não têm escala
-armed('#btn-bi-sim', 'Confirmar simulação', async () => {
+comConfirmacao('#btn-bi-sim', 'Confirmar simulação', async () => {
   if (isGestor() || modoCompartilhado()) return;
   const refStr = ($('#bi-dt') && $('#bi-dt').value) || ($('#dt') && $('#dt').value);
   const existentes = new Set((await ApiClient.backend.listarDias(somarDias(refStr, -30), refStr)).map(d => d.data));
@@ -463,7 +480,7 @@ armed('#btn-bi-sim', 'Confirmar simulação', async () => {
 });
 
 // Só no modo local: remove os dias simulados (as escalas reais continuam)
-armed('#btn-bi-clr', 'Confirmar limpeza', async () => {
+comConfirmacao('#btn-bi-clr', 'Confirmar limpeza', async () => {
   if (isGestor() || !ApiClient.backend.removerDiasSimulados) return;
   await ApiClient.backend.removerDiasSimulados();
   await carregarBI();
@@ -735,7 +752,7 @@ document.addEventListener('click', e => {
 
   if (a === 'del-mis') {
     const s = stuBy(id);
-    if (!s || !Array.isArray(s.extra)) return;
+    if (!s || !Array.isArray(s.extra) || !confirmado(b, 'Confirmar')) return;
     s.extra = s.extra.filter(ex => ex.mid !== mid);
     save();
     rDem();
@@ -893,14 +910,7 @@ document.addEventListener('click', e => {
     save(); atualizarLinhaDoAluno(s, { naoEscalar: true });
     logChange('mod', `${s.nm}: volta a ser escalado com ${blkIns ? blkIns.nm : ''}`);
   } else if (a === 'deli' || a === 'dels') {
-    if (activeTimers.has(b)) clearTimeout(activeTimers.get(b));
-    if (!b.dataset.arm) {
-      b.dataset.arm = 1; b.textContent = 'Confirmar'; b.classList.add('arm');
-      const tid = setTimeout(() => { b.dataset.arm = ''; b.textContent = '✕'; b.classList.remove('arm'); activeTimers.delete(b); }, 3000);
-      activeTimers.set(b, tid);
-      return;
-    }
-    activeTimers.delete(b);
+    if (!confirmado(b, 'Confirmar')) return;
     if (a === 'deli') {
       const target = insBy(id);
       if (+$('#painel-instrutor').dataset.id === id) fecharPainelDoInstrutor();
@@ -1150,7 +1160,8 @@ document.addEventListener('change', e => {
   rLimites();
 });
 document.addEventListener('click', e => {
-  if (!e.target.closest('[data-limites-padrao]') || !podeEditarLimites()) return;
+  const b = e.target.closest('[data-limites-padrao]');
+  if (!b || !podeEditarLimites() || !confirmado(b, 'Confirmar valores da lei')) return;
   S.limites = { ...LIMITES_DA_LEI };
   logChange('mod', 'Limites da lei: de volta aos valores da lei');
   save();

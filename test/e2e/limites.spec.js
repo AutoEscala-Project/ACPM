@@ -46,7 +46,13 @@ test.describe('Limites da lei', () => {
 
     await irPara(page, 'ins');
     await page.locator('#s-ins [data-vista-ins="cadastro"]').click();
-    await limites.getByRole('button', { name: 'Voltar aos valores da lei' }).click();
+    // Voltar aos valores da lei pede confirmação (os limites mudados se perdem)
+    const padrao = limites.locator('[data-limites-padrao]');
+    await expect(padrao).toHaveText('Voltar aos valores da lei');
+    await padrao.click();
+    await expect(limites.getByLabel('Voo no mês (h)')).toHaveValue('1');
+    await expect(padrao).toHaveText('Confirmar valores da lei');
+    await padrao.click();
     await expect(limites.getByLabel('Voo no mês (h)')).toHaveValue('100');
   });
 
