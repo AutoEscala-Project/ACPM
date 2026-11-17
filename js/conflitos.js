@@ -25,9 +25,21 @@ export const GRUPO_DO_CONFLITO = {
 export const CODIGOS_DE_CONFLITO = Object.keys(GRUPO_DO_CONFLITO);
 
 // O limite da lei que o voo passaria, como aparece no conflito
-export const LIMITE_DO_MOTIVO = {
+const LIMITE_DO_MOTIVO = {
   'voo-dia': 'horas de voo no dia', jornada: 'jornada', mes: 'horas de voo no mês', semestre: 'horas de voo no semestre',
   ano: 'horas de voo no ano', repouso: 'repouso'
+};
+
+// O texto de cada problema do instrutor (os códigos de problemasDoInstrutor, js/viabilidade.js), como aparece no
+// conflito de um voo fixo
+export const TEXTO_DO_PROBLEMA = {
+  'instrutor-saiu': () => 'o instrutor saiu do cadastro',
+  'instrutor-indisponivel': () => 'o instrutor não está disponível',
+  habilitacao: () => 'o instrutor não tem a habilitação da missão',
+  'instrutor-ocupado': () => 'o instrutor já tem outro compromisso neste horário',
+  bloqueio: () => 'o aluno não voa com este instrutor',
+  'limite-da-lei': p => `o instrutor passaria do limite da lei (${LIMITE_DO_MOTIVO[p.motivo] || p.motivo})`,
+  peso: () => 'o peso do aluno e do instrutor passa do limite do avião, mesmo com o mínimo de combustível'
 };
 
 // Os grupos dos conflitos de um voo (sem os códigos, o voo veio de uma escala gravada antes deles: pelo texto)

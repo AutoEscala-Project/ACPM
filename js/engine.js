@@ -10,7 +10,7 @@ import { categoriaDoRodizio, ajustarFilas } from './rodizio.js';
 import { avisosDeAtraso, intervaloEfetivo, STATUS_EM_ANDAMENTO } from './status.js';
 import { sobrepoe, livre, cabeNoSaldo, folgaAte, saldoAteARevisao, problemasDoInstrutor } from './viabilidade.js';
 import { reducaoNecessaria, combustivelDoVoo } from './combustivel.js';
-import { LIMITE_DO_MOTIVO } from './conflitos.js';
+import { TEXTO_DO_PROBLEMA } from './conflitos.js';
 import { normalizarHangar, posicaoNoHangar } from './hangar.js';
 import { normalizarLimites } from './limites.js';
 import { compactar, custoDaEscala } from './compactar.js';
@@ -34,17 +34,6 @@ function instrutoresQueServem(instrutores, problemasDe) {
   }
   return { servem, barrou: servem.length ? null : ETAPAS_DO_INSTRUTOR[maisLonge] };
 }
-
-// O texto de cada conflito do instrutor de um voo fixo
-const CONFLITO_DO_INSTRUTOR = {
-  'instrutor-saiu': () => 'o instrutor saiu do cadastro',
-  'instrutor-indisponivel': () => 'o instrutor não está disponível',
-  habilitacao: () => 'o instrutor não tem a habilitação da missão',
-  'instrutor-ocupado': () => 'o instrutor já tem outro compromisso neste horário',
-  bloqueio: () => 'o aluno não voa com este instrutor',
-  'limite-da-lei': p => `o instrutor passaria do limite da lei (${LIMITE_DO_MOTIVO[p.motivo] || p.motivo})`,
-  peso: () => 'o peso do aluno e do instrutor passa do limite do avião, mesmo com o mínimo de combustível'
-};
 
 // Continuidade de avião (eficiência de pátio): a alocação segue a prioridade dos pedidos, não o horário, e às vezes
 // deixa um instrutor em duas matrículas do mesmo tipo. Depois de alocar, as matrículas de cada tipo de avião são
@@ -359,7 +348,7 @@ export function runAllocationEngine(state, opcoes = {}) {
         problemasDoInstrutor(x, { mis: d.mis, tipo, a, b, efetivo, alunos: [stu], stuKg: stu.kg }, {
           compromissos: (x && compromissos[x.id]) || [], historico: x ? historico(x.id) : null, limites, jaOcupa: daMesmaTurma,
           peso: ground || mudouDeTipo ? null : {}, todos: true
-        }).forEach(p => marcar(p.codigo, CONFLITO_DO_INSTRUTOR[p.codigo](p)));
+        }).forEach(p => marcar(p.codigo, TEXTO_DO_PROBLEMA[p.codigo](p)));
         if (mudouDeTipo) marcar('ground-ou-voo', ground ? 'o pedido passou de voo para Ground' : 'o pedido passou de Ground para voo');
         else if (!ground) {
           const recurso = frota.find(f => f.reg === r);
