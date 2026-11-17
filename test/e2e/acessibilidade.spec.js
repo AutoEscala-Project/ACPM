@@ -1,6 +1,6 @@
 // Acessibilidade: cada botão e cada campo tem um nome para o leitor de tela, e nenhum se chama só "✕" (que o leitor
 // lê como "multiplicação"). Vale para todas as abas, o Histórico e o painel de habilitações.
-import { test, expect, abrir, abrirComExemplo, irPara, entrar, abrirEscala, confirmar } from './fixtures.js';
+import { test, expect, abrir, abrirComExemplo, irPara, entrar, abrirEscala, confirmar, prepararContexto, vigiarErros } from './fixtures.js';
 import { instalarSupabaseFalso, documentosAtuais, CONTAS } from './supabase-falso.js';
 import { comExemplo } from '../helpers/exemplo.js';
 import { estadoSintetico } from '../helpers/estado.js';
@@ -597,6 +597,82 @@ test.describe('O leitor de tela e o teclado', () => {
     await expect(page.locator('#historico')).toBeVisible();
     await page.keyboard.press('Escape');
     await expect(page.locator('#historico')).toBeHidden();
+  });
+
+  test('o Esc fecha só a camada de cima: com o Histórico aberto, o primeiro fecha o diálogo do status, o segundo, a gaveta', async ({ page }) => {
+    await abrirComExemplo(page);
+    await abrirEscala(page);
+    await page.locator('#btn-open-log').click();
+    await expect(page.locator('#historico')).toBeVisible();
+    // O status muda sem o clique (dependendo da largura, a gaveta cobre a lista): o foco fica no ✕ da gaveta. Com o foco
+    // no status, a volta do foco depois do Esc abriria a dica dele, uma camada a mais (o 2º Esc fecharia a dica)
+    const status = page.locator('#out select[data-f="fstatus"]').first();
+    const fkey = await status.getAttribute('data-fkey');
+    const anterior = await status.inputValue();
+    await status.selectOption('Cancelado');
+    const dialogo = page.locator('#dlg-status');
+    await expect(dialogo).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(dialogo).toBeHidden();
+    await expect(page.locator('#historico')).toBeVisible();
+    // Desistir deixa o status anterior, e o foco volta para o ✕ da gaveta
+    await expect(page.locator(`#out select[data-fkey="${fkey}"]`)).toHaveValue(anterior);
+    await expect(page.locator('#btn-fechar-historico')).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#historico')).toBeHidden();
+    await expect(page.locator('#btn-open-log')).toBeFocused();
+  });
+
+  test('o Esc fecha só a camada de cima: as habilitações, abertas em Instrutores, continuam abertas na Escala quando o Esc fecha o diálogo do status', async ({ page }) => {
+    await abrirComExemplo(page);
+    await irPara(page, 'ins');
+    await page.locator('#s-ins [data-vista-ins="cadastro"]').click();
+    await page.locator('#inst [data-act="editar-habs"]').first().click();
+    const painel = page.locator('#painel-instrutor');
+    await expect(painel).toBeVisible();
+    // O painel continua aberto nas outras abas
+    await abrirEscala(page);
+    await expect(painel).toBeVisible();
+    await page.locator('#out select[data-f="fstatus"]').first().selectOption('Cancelado');
+    const dialogo = page.locator('#dlg-status');
+    await expect(dialogo).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(dialogo).toBeHidden();
+    await expect(painel).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(painel).toBeHidden();
+  });
+
+  // Qualquer diálogo é a camada de cima, não só o do status: o da sessão expirada aparece sozinho, na gravação, e o Esc
+  // não o fecha. A gravação com a sessão expirada responde 401 de propósito
+  test('o Esc fecha só a camada de cima: com o diálogo da sessão aberto sobre o popup do mapa, nem o Esc nem um clique no diálogo fecham o popup', async ({ browser }) => {
+    const context = await browser.newContext({ baseURL: test.info().project.use.baseURL, locale: 'pt-BR', timezoneId: 'America/Sao_Paulo' });
+    await prepararContexto(context);
+    const servidor = await instalarSupabaseFalso(context, documentosAtuais(comExemplo(estadoSintetico()), '2026-11-11'));
+    const page = await context.newPage();
+    const erros = vigiarErros(page, { statusEsperados: [401] });
+    await entrar(page, CONTAS.operador);
+    await abrirEscala(page);
+    await page.locator('#s-esc [data-tl="eq"]').click();
+    await page.locator('#out .tl-bar').first().click();
+    const popup = page.locator('#tl-pop');
+    await expect(popup).toBeVisible();
+    servidor.expirarSessoes();
+    await popup.locator('select[data-f="fstatus"]').selectOption('Em Voo');
+    const sessao = page.locator('#dlg-sessao');
+    await expect(sessao).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(sessao).toBeVisible();
+    await expect(popup).toBeVisible();
+    await page.locator('#sessao-senha').click();
+    await expect(popup).toBeVisible();
+    await page.locator('#sessao-senha').fill(CONTAS.operador.senha);
+    await page.locator('#sessao-entrar').click();
+    await expect(sessao).toBeHidden();
+    await expect(popup).toBeVisible();
+    await expect(popup.locator('select[data-f="fstatus"]')).toHaveValue('Em Voo');
+    expect(erros).toEqual([]);
+    await context.close();
   });
 
   for (const [tema, nome] of [['light', 'claro'], ['dark', 'escuro']]) {

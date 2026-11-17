@@ -2,6 +2,10 @@
 
 export const $ = s => document.querySelector(s);
 
+// Um diálogo (<dialog>) aberto é a camada de cima: o Esc é só dele. Quem fecha uma gaveta ou o popup do mapa com o Esc
+// confere isto antes: com um diálogo aberto por cima, o Esc fecha só o diálogo, e a gaveta continua aberta
+export const algumDialogoAberto = () => Boolean(document.querySelector('dialog[open]'));
+
 // Notificação temporária. tipo 'ok': deu certo (verde, com o sinal de certo); sem tipo: aviso (amarelo)
 export function showToast(text, tipo = '') {
   const box = $('#toast-box');

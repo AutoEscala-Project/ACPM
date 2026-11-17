@@ -1,6 +1,6 @@
 // O histórico do dia: a gaveta, limpar (só no modo local) e Reverter
 import { gravarAlteracao } from '../actions.js';
-import { $, showToast } from '../dom.js';
+import { $, showToast, algumDialogoAberto } from '../dom.js';
 import { normalizarFixos } from '../fixos.js';
 import { validarReversao } from '../reversoes.js';
 import { S, AUDIT_LOG, DATA, setAuditLog, isGestor, insBy, stuBy, getMissionTarget } from '../state.js';
@@ -11,7 +11,8 @@ import { rDem } from '../views/demanda.js';
 import { renderAuditPanel } from '../views/escala.js';
 import { rRec } from '../views/recursos.js';
 
-// Histórico: gaveta lateral sobre a aba aberta; o botão abre e fecha, ✕ e Esc fecham
+// Histórico: gaveta lateral sobre a aba aberta; o botão abre e fecha, ✕ e Esc fecham. Com um diálogo aberto por cima (o
+// do status de um voo da Escala), o Esc fecha só o diálogo, e a gaveta continua aberta
 const gavetaDoHistorico = $('#historico');
 function mostrarHistorico(abrir) {
   // Fechar com o foco dentro da gaveta devolve o foco ao botão do Histórico; com o foco fora dela (o Esc dado na busca
@@ -25,7 +26,7 @@ function mostrarHistorico(abrir) {
 $('#btn-open-log').onclick = () => mostrarHistorico(gavetaDoHistorico.hidden);
 $('#btn-fechar-historico').onclick = () => mostrarHistorico(false);
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape' && !gavetaDoHistorico.hidden) mostrarHistorico(false);
+  if (e.key === 'Escape' && !gavetaDoHistorico.hidden && !algumDialogoAberto()) mostrarHistorico(false);
 });
 
 // Só no modo local: no modo compartilhado o histórico é permanente (o botão fica oculto)

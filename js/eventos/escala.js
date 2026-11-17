@@ -3,7 +3,7 @@
 import { gravarAlteracao, logChange, gravarEscalaCalculada } from '../actions.js';
 import { opcoesDeCategoria } from '../categorias.js';
 import { OPCOES_DE_BURACOS, OPCOES_DE_HORARIOS, normalizarCriterios } from '../criterios.js';
-import { $, showToast, anunciar } from '../dom.js';
+import { $, showToast, anunciar, algumDialogoAberto } from '../dom.js';
 import { exp, pdf, planilha } from '../export.js';
 import { pinoDoVoo, fixosAoMudarStatus, fixosAoReabrir } from '../fixos.js';
 import { hm } from '../format.js';
@@ -15,12 +15,13 @@ import { confirmado } from './confirmacao.js';
 import { aoAcionar, aoMudarCampo } from './registro.js';
 import { rAlu } from '../views/cadastros.js';
 import { rDem } from '../views/demanda.js';
-import { pedirDetalheDoStatus, dialogoDeStatusAberto } from '../views/dialogo-status.js';
+import { pedirDetalheDoStatus } from '../views/dialogo-status.js';
 import { rOut, abrirPopupDoMapa, fecharPopupDoMapa, popupDoMapaAberto, reposicionarPopupDoMapa, tabNoPopup } from '../views/escala.js';
 import { abrirPainelDeReparo, fecharPainelDeReparo, opcaoDoPainel, painelDeReparoAberto } from '../views/reparo.js';
 
 // Popup do voo no mapa da escala: a barra abre e fecha; Esc (o foco volta para a barra) e um clique fora fecham, e ele
-// acompanha a barra quando a página ou o mapa rolam
+// acompanha a barra quando a página ou o mapa rolam. Um diálogo aberto por cima (o do status) fica com o Esc e com os
+// cliques dentro dele: o popup continua aberto
 document.addEventListener('click', e => {
   const barra = e.target.closest('#out .tl-bar');
   if (barra) {
@@ -28,10 +29,10 @@ document.addEventListener('click', e => {
     else abrirPopupDoMapa(barra, { focar: true });
     return;
   }
-  if (popupDoMapaAberto() && !e.target.closest('#tl-pop, #dlg-status')) fecharPopupDoMapa();
+  if (popupDoMapaAberto() && !e.target.closest('#tl-pop, dialog')) fecharPopupDoMapa();
 });
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape' && popupDoMapaAberto() && !dialogoDeStatusAberto()) fecharPopupDoMapa({ devolverFoco: true });
+  if (e.key === 'Escape' && popupDoMapaAberto() && !algumDialogoAberto()) fecharPopupDoMapa({ devolverFoco: true });
   if (e.target.closest && e.target.closest('#tl-pop')) tabNoPopup(e);
 });
 document.addEventListener('scroll', reposicionarPopupDoMapa, { capture: true, passive: true });
@@ -208,5 +209,5 @@ document.addEventListener('click', e => {
   showToast(opcao.soltar ? 'Voo solto: o app escalou de novo.' : 'Sugestão aplicada: o voo continua fixo.', 'ok');
 });
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape' && painelDeReparoAberto() && !dialogoDeStatusAberto()) fecharPainelDeReparo(true);
+  if (e.key === 'Escape' && painelDeReparoAberto() && !algumDialogoAberto()) fecharPainelDeReparo(true);
 });

@@ -63,8 +63,6 @@ function ligar() {
   });
 }
 
-export const dialogoDeStatusAberto = () => Boolean($('#dlg-status') && $('#dlg-status').open);
-
 export function pedirDetalheDoStatus({ voo, status, detalhe = null, aoConfirmar, aoDesistir = () => {} }) {
   ligar();
   const dlg = $('#dlg-status');
