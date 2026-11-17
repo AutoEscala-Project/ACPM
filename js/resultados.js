@@ -3,10 +3,10 @@
 // missão. A próxima missão do aluno é a primeira do programa ainda não aprovada (a reprovada volta); o progresso conta
 // as aprovadas do programa. As regras do registro são as do servidor (supabase/migrations/…_resultados_de_missao.sql).
 import { CURSOS, codigoValido } from './cursos.js';
+import { CHAVE_DO_VOO } from './voo.js';
+import { dataIsoValida } from './format.js';
 
 const RESULTADOS = ['aprovado', 'reprovado', 'pendente'];
-const CHAVE_DO_VOO = /^\d+_\d+_\d+$/;
-const DATA = /^\d{4}-\d{2}-\d{2}$/;
 const chave = (aluno, curso, missao) => `${aluno}|${curso}|${missao}`;
 
 // O último registro de cada aluno, curso e missão (a ordem dos registros é a ordem em que foram feitos)
@@ -41,7 +41,7 @@ export function resultadoDoVoo(registrosDoDia, voo) {
 export function validarRegistro({ aluno, curso, missao, resultado, data, voo = null }) {
   const codigo = typeof missao === 'string' ? missao.trim().toUpperCase() : '';
   const certo = Number.isInteger(aluno) && aluno > 0 && CURSOS.some(([c]) => c === curso) && codigoValido(codigo)
-    && RESULTADOS.includes(resultado) && DATA.test(data || '') && (voo === null || CHAVE_DO_VOO.test(voo));
+    && RESULTADOS.includes(resultado) && dataIsoValida(data) && (voo === null || CHAVE_DO_VOO.test(voo));
   if (!certo) throw Object.assign(new Error('resultado fora do formato'), { code: '23514' });
   return { aluno, curso, missao: codigo, resultado, data, voo };
 }

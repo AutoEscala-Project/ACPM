@@ -1,12 +1,12 @@
 // As reversões do histórico. O que "Reverter" desfaz vem gravado no histórico (no servidor, por
 // quem tem conta de operador), então só vale no formato que o próprio app produz: a reversão fora dele não vira botão
 // nem é aplicada. Um recurso retirado volta pela mesma validação do "+ Novo recurso".
-import { novoRecurso } from './frota.js';
+import { novoRecurso, MATRICULA } from './frota.js';
 import { normalizarFixos } from './fixos.js';
 import { CATEGORIAS_COM_HORARIOS, normalizarHorarios } from './horarios.js';
 import { disponibilidadeValida } from './rules.js';
+import { MINUTOS_DO_DIA } from './config.js';
 
-const MATRICULA = /^[A-Z0-9][A-Z0-9-]{1,14}$/;
 const idValido = v => Number.isInteger(v) && v > 0;
 const rotulo = v => (typeof v === 'string' && v.length <= 40 ? v : '↶ Reverter');
 
@@ -35,7 +35,7 @@ export function validarReversao(rev, frota) {
     if (!CATEGORIAS_COM_HORARIOS.includes(rev.cat) || !Array.isArray(rev.lista) || !Array.isArray(rev.pedidos) || rev.pedidos.length > 500) return null;
     const lista = normalizarHorarios({ [rev.cat]: rev.lista })[rev.cat];
     if (lista.length !== rev.lista.length) return null;
-    const preferencia = v => Number.isInteger(v) && v >= -1 && v <= 1440;
+    const preferencia = v => Number.isInteger(v) && v >= -1 && v <= MINUTOS_DO_DIA;
     const pedidos = rev.pedidos.map(p => (p && typeof p === 'object' && idValido(p.stuId) && Number.isInteger(p.mid) && p.mid >= 0
       && preferencia(p.p1) && preferencia(p.p2) && (p.jan === undefined || disponibilidadeValida(p.jan))
       ? { stuId: p.stuId, mid: p.mid, p1: p.p1, p2: p.p2, ...(p.jan === undefined ? {} : { jan: p.jan }) } : null));

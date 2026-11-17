@@ -16,8 +16,8 @@
 import { WIN, T, GROUND_EQ_TYPE, GROUND_REG, GROUND_DURATION_MIN, GROUND_DURATION_H, MIS, PRE, DURACAO_MAXIMA_H, REVISAO_H, LIMITE_DE_VOOS_LOCAIS } from './config.js';
 import { novoRecurso, matriculasDoTipo } from './frota.js';
 import { horariosDaMissao, ajustarPreferencias, descreverHorarios } from './horarios.js';
-import { hm, fmtH, fmtDurLabel, pad, amanhaISO, isoMenosDias, nomeLimpo, dataIsoValida } from './format.js';
-import { isGroundMission, blank, rotuloDaDisponibilidade, normalizeMissionFields, proximoMid } from './rules.js';
+import { hm, fmtH, fmtDurLabel, pad, amanhaISO, somarDias, nomeLimpo, dataIsoValida, lerHoras, numeroBr } from './format.js';
+import { isGroundMission, blank, rotuloDaDisponibilidade, normalizeMissionFields, proximoMid, duracaoDigitada, ERRO_DA_DURACAO } from './rules.js';
 import { habilitacoesDoNivel, normalizarHabilitacoes, nomeDaHabilitacao, podeFazer } from './habilitacoes.js';
 import { ApiClient } from './storage.js';
 import { S, RES, AUDIT_LOG, DATA, setS, setRES, setAuditLog, setTLMode, isGestor, insBy, stuBy, getMissionTarget } from './state.js';
@@ -55,7 +55,7 @@ import { rRodizio } from './views/rodizio.js';
 import { abrirConta, carregarContas, gerarSenha, mensagem } from './views/conta.js';
 import { rManual } from './views/manual.js';
 import { atualizarSelosDaEscala, lerPedidosDaData } from './views/selos.js';
-import { importarSolicitacoes, disponibilidadeDaSolicitacao, vagaDeVooLocal, ehDomingo, somarDias } from './agenda.js';
+import { importarSolicitacoes, disponibilidadeDaSolicitacao, vagaDeVooLocal, ehDomingo } from './agenda.js';
 import { abrirAgenda, carregarMes, mudarMes, escolherDia, diaDaAgenda, lembrarRegistradoPor, podeEditarAgenda, rAgenda, preencherHorariosDaAgenda, pedidosDoAluno, descreverPedido, pedidosCarregados } from './views/agenda.js';
 import { ESQUEMA } from './migracoes.js';
 import { iniciarSessaoSupabase } from './sessao.js';
@@ -278,8 +278,8 @@ $('#dt').onchange = e => {
 const irParaDia = dias => {
   const dt = $('#dt');
   if (dt.disabled) return;
-  let destino = isoMenosDias(DATA, -dias);
-  if (ehDomingo(destino)) destino = isoMenosDias(destino, -dias);
+  let destino = somarDias(DATA, dias);
+  if (ehDomingo(destino)) destino = somarDias(destino, dias);
   dt.value = destino;
   dt.dispatchEvent(new Event('change'));
 };
@@ -414,7 +414,7 @@ armed('#clr', 'Confirmar limpeza', () => {
 armed('#btn-bi-sim', 'Confirmar simulação', async () => {
   if (isGestor() || modoCompartilhado()) return;
   const refStr = ($('#bi-dt') && $('#bi-dt').value) || ($('#dt') && $('#dt').value);
-  const existentes = new Set((await ApiClient.backend.listarDias(isoMenosDias(refStr, 30), refStr)).map(d => d.data));
+  const existentes = new Set((await ApiClient.backend.listarDias(somarDias(refStr, -30), refStr)).map(d => d.data));
   const baseDate = new Date(refStr + 'T12:00:00');
   let seed = 42;
   const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
@@ -424,7 +424,7 @@ armed('#btn-bi-sim', 'Confirmar simulação', async () => {
   const stuPool = S.stu.length ? S.stu : Array.from({ length: 15 }, (_, i) => ({ nm: pad(i) }));
 
   for (let dayOffset = 0; dayOffset < 30; dayOffset++) {
-    const d = new Date(baseDate.getTime() - dayOffset * 86400000);
+    const d = new Date(baseDate.getTime() - dayOffset * 864e5);
     const iso = d.toISOString().slice(0, 10);
     if (existentes.has(iso)) continue;
 
@@ -605,9 +605,9 @@ async function registrarPedido(excecao) {
     return;
   }
   // A duração: de 0,1 h a 5 h, em décimos (o Ground tem 01h30)
-  const horas = Math.round(parseFloat(String($('#ag-horas').value).replace(',', '.')) * 10) / 10;
-  if (!(horas > 0 && horas <= DURACAO_MAXIMA_H)) {
-    $('#ag-erro').textContent = `A duração vai de 0,1 h a ${DURACAO_MAXIMA_H} h.`;
+  const horas = duracaoDigitada($('#ag-horas').value);
+  if (horas === null) {
+    $('#ag-erro').textContent = ERRO_DA_DURACAO;
     return;
   }
   const dia = diaDaAgenda(), confirmacao = `${aluno.id}|${dia}`;
@@ -990,8 +990,8 @@ document.addEventListener('change', e => {
     m.id = id;
   } else if (cf === 'nb') {
     // As horas: de 0,1 h a 5 h, em décimos; fora disso, não vale
-    const h = Math.round(parseFloat(String(campo.value).replace(',', '.')) * 10) / 10;
-    if (!(h > 0 && h <= DURACAO_MAXIMA_H)) { showToast(`A duração vai de 0,1 h a ${DURACAO_MAXIMA_H} h.`); campo.value = m.nb; return; }
+    const h = duracaoDigitada(campo.value);
+    if (h === null) { showToast(ERRO_DA_DURACAO); campo.value = m.nb; return; }
     m.nb = h;
   } else {
     m[cf] = campo.value;
@@ -1134,7 +1134,7 @@ function mudarStatus(fKey, status) {
 // Limites da lei, no cadastro dos instrutores: só o Administrador muda (neste navegador, o Operador). Vazio é
 // sem limite; os campos em horas viram minutos onde o limite é guardado em minutos
 const ROTULOS_DOS_LIMITES = { vooPorJornadaMin: 'voo por jornada', jornadaMin: 'jornada', vooMesH: 'voo no mês', vooSemestreH: 'voo no semestre', vooAnoH: 'voo no ano', repousoMin: 'repouso' };
-const emHoras = (chave, valor) => (valor === null ? 'sem limite' : `${String(chave.endsWith('Min') ? valor / 60 : valor).replace('.', ',')} h`);
+const emHoras = (chave, valor) => (valor === null ? 'sem limite' : `${numeroBr(chave.endsWith('Min') ? valor / 60 : valor)} h`);
 document.addEventListener('change', e => {
   const campo = e.target.closest('[data-limite]');
   if (!campo || !podeEditarLimites()) return;
@@ -1190,7 +1190,7 @@ document.addEventListener('change', e => {
       // As horas disponíveis até a revisão de 50 horas; o dia guarda as horas desde a revisão (50 menos as
       // disponíveis). Vazio: sem controle para o avião
       const reg = t.dataset.horas;
-      const disponiveis = t.value === '' ? null : Math.round(parseFloat(String(t.value).replace(',', '.')) * 10) / 10;
+      const disponiveis = t.value === '' ? null : lerHoras(t.value);
       if (disponiveis !== null && !(disponiveis >= 0 && disponiveis <= REVISAO_H)) {
         showToast(`As horas disponíveis vão de 0 a ${REVISAO_H}.`);
         rRec();
@@ -1236,7 +1236,7 @@ document.addEventListener('change', e => {
       else delete x.horasExternas[chave];
       if (!Object.keys(x.horasExternas).length) delete x.horasExternas;
       S.horasDosInstrutores = comHorasExternas(S.horasBase || {}, S.ins, DATA);
-      logChange('mod', `Horas de voo fora do app de ${x.nm} (${f === 'ext-mes' ? 'neste mês' : 'no ano, antes deste mês'}): ${String(horas).replace('.', ',')} h`);
+      logChange('mod', `Horas de voo fora do app de ${x.nm} (${f === 'ext-mes' ? 'neste mês' : 'no ano, antes deste mês'}): ${numeroBr(horas)} h`);
       save();
       rPainelDoInstrutor();
       return;
@@ -1295,9 +1295,9 @@ document.addEventListener('change', e => {
       } else {
         // A duração digitada: de 0,1 h a 5 h, em décimos; fora disso, não vale
         if (f === 'nb') {
-          const h = Math.round(parseFloat(String(t.value).replace(',', '.')) * 10) / 10;
-          if (!(h > 0 && h <= DURACAO_MAXIMA_H)) {
-            showToast(`A duração vai de 0,1 h a ${DURACAO_MAXIMA_H} h.`);
+          const h = duracaoDigitada(t.value);
+          if (h === null) {
+            showToast(ERRO_DA_DURACAO);
             c.outerHTML = singleDemandRowHTML(s, target, mid);
             return;
           }

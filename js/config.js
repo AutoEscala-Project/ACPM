@@ -2,6 +2,8 @@
 // e turnos.
 
 export const WIN = ['06:30','08:20','10:10','11:30','12:40','13:40','14:30','16:20','17:30'];
+// O fim do dia, em minutos desde a meia-noite (os horários da escala vão de 0 a 1440)
+export const MINUTOS_DO_DIA = 24 * 60;
 export const NI = 8, DAY = [0,1,2,3,4,5,6,7];
 export const T = WIN.map(w => w.split(':')[0] * 60 + +w.split(':')[1]);
 

@@ -5,7 +5,7 @@
 // o primeiro horário mais tarde no mesmo dia, dentro da disponibilidade do aluno. Depois, soltar o voo (o motor o escala
 // de novo; quando o pedido mudou, é a única sugestão) e, por último, cancelar. Cada sugestão é uma mudança no voo fixo;
 // na turma de Ground, em todos os alunos dela.
-import { AIRCRAFT_EQ_TYPES, GROUND_EQ_TYPE, GROUND_REG, REVISAO_H, T, NI } from './config.js';
+import { AIRCRAFT_EQ_TYPES, GROUND_EQ_TYPE, GROUND_REG, REVISAO_H, T, NI, MINUTOS_DO_DIA } from './config.js';
 import { FROTA_INICIAL, matriculasDoTipo } from './frota.js';
 import { podeFazer } from './habilitacoes.js';
 import { livre, cobre, cabeNoSaldo } from './viabilidade.js';
@@ -18,33 +18,31 @@ import { disponibilidadeDoAluno, doesGroundGateFlight } from './rules.js';
 import { nomeDoRecurso } from './categorias.js';
 import { hm } from './format.js';
 import { gruposDoConflito } from './conflitos.js';
+import { statusDoVoo, umPorUnidade, pedidosDosVoos } from './voo.js';
+import { menorPrimeiro } from './util.js';
 
-const menorPrimeiro = (a, b) => (a === b ? 0 : a - b);
-// Os voos uma vez cada (a turma de Ground tem um item por aluno)
-const unicos = lista => [...new Map(lista.map(o => [o.classKey || o.fKey, o])).values()];
 // A turma de Ground muda inteira; o voo, sozinho
 const doGrupo = (resultado, voo) => (voo.isGround ? resultado.out.filter(o => o.classKey === voo.classKey) : [voo]);
 
 export function sugerirReparos(estado, resultado, fKey, { maximo = 3, depoisDe = null } = {}) {
   const voo = resultado.out.find(o => o.fKey === fKey);
   if (!voo || !voo.conflito) return [];
-  const statusDe = o => (estado.fStatus && estado.fStatus[o.fKey]) || o.status || 'Confirmado';
   const grupo = doGrupo(resultado, voo);
   const chavesDoGrupo = new Set(grupo.map(o => o.fKey));
-  const outros = resultado.out.filter(o => !chavesDoGrupo.has(o.fKey) && statusDe(o) !== 'Cancelado');
+  const outros = resultado.out.filter(o => !chavesDoGrupo.has(o.fKey) && statusDoVoo(o, estado.fStatus) !== 'Cancelado');
   const frota = Array.isArray(estado.frota) ? estado.frota : FROTA_INICIAL;
   const hangar = normalizarHangar(estado.hangar, frota);
   const limites = normalizarLimites(estado.limites);
   const horasPassadas = estado.horasDosInstrutores || {};
   const alunos = new Map(estado.stu.map(s => [s.id, s]));
-  const pedidoDo = v => { const s = alunos.get(v.stuId); return s && (v.mid ? (s.extra || []).find(ex => ex.mid === v.mid) : s); };
+  const pedidoDo = pedidosDosVoos(estado.stu);
   const tipo = voo.isGround ? GROUND_EQ_TYPE : voo.eqType;
   const ehVoo = AIRCRAFT_EQ_TYPES.includes(tipo);
 
-  const ocupacaoDo = r => unicos(outros.filter(o => o.r === r)).map(o => [o.a, o.b]);
-  const compromissosDo = id => unicos(outros.filter(o => o.insId === id)).map(o => ({ a: o.a, b: o.b, voo: AIRCRAFT_EQ_TYPES.includes(o.eqType) }));
-  const horasNoDia = id => unicos(outros.filter(o => o.insId === id)).reduce((total, o) => total + o.h, 0);
-  const horasDoAviao = r => unicos(outros.filter(o => o.r === r)).reduce((total, o) => total + o.h, 0);
+  const ocupacaoDo = r => umPorUnidade(outros.filter(o => o.r === r)).map(o => [o.a, o.b]);
+  const compromissosDo = id => umPorUnidade(outros.filter(o => o.insId === id)).map(o => ({ a: o.a, b: o.b, voo: AIRCRAFT_EQ_TYPES.includes(o.eqType) }));
+  const horasNoDia = id => umPorUnidade(outros.filter(o => o.insId === id)).reduce((total, o) => total + o.h, 0);
+  const horasDoAviao = r => umPorUnidade(outros.filter(o => o.r === r)).reduce((total, o) => total + o.h, 0);
   const saldo = r => (typeof (estado.horas || {})[r] === 'number' ? REVISAO_H - estado.horas[r] : Infinity);
   const folga = (r, a, b) => ocupacaoDo(r).reduce((m, [x, y]) => Math.min(m, y <= a ? a - y : x >= b ? x - b : 0), Infinity);
   // Combustível a menos com o instrutor (0 com o tanque cheio ou sem um dos pesos; Infinity quando nem o mínimo dá)
@@ -95,7 +93,7 @@ export function sugerirReparos(estado, resultado, fKey, { maximo = 3, depoisDe =
   if (!opcoes.length && !pedidoMudou) {
     const duracao = voo.b - voo.a;
     const inicios = voo.isGround ? T.slice(0, NI) : horariosDaMissao(estado.horarios || HORARIOS_INICIAIS, voo.mis, tipo);
-    const fimDoDia = voo.mis === 'Noturno' ? 1440 : T[NI];
+    const fimDoDia = voo.mis === 'Noturno' ? MINUTOS_DO_DIA : T[NI];
     const voosQueDependem = voo.isGround
       ? outros.filter(o => grupo.some(v => v.stuId === o.stuId) && !o.isGround && doesGroundGateFlight(voo.mis, { mis: o.mis, eq: o.eqType }))
       : [];
@@ -119,7 +117,7 @@ export function sugerirReparos(estado, resultado, fKey, { maximo = 3, depoisDe =
   }
 
   // Soltar: o voo deixa de ser fixo e o motor o escala de novo, em volta dos outros (não vale para o voo em andamento)
-  const emAndamento = grupo.some(v => STATUS_EM_ANDAMENTO.includes(statusDe(v)));
+  const emAndamento = grupo.some(v => STATUS_EM_ANDAMENTO.includes(statusDoVoo(v, estado.fStatus)));
   const soltar = emAndamento ? [] : [{ tipo: 'soltar', texto: 'Soltar o voo: o app escolhe de novo o horário, o avião e o instrutor', mudancas: null, soltar: true }];
   return [...opcoes.slice(0, maximo), ...soltar, { tipo: 'cancelar', texto: 'Cancelar o voo (pede o motivo)', mudancas: null, motivo: motivoDoConflito(voo.conflito) }];
 }

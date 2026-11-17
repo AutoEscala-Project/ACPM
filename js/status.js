@@ -1,9 +1,10 @@
 // Status do voo com detalhes. O atraso guarda o novo horário de decolagem; o cancelamento, o motivo (de uma
 // lista; em "Outro", um texto curto). Os detalhes ficam no dia (fObs), ao lado do status (fStatus), e só valem para o
 // status atual do voo. O histórico guarda só a categoria do motivo, nunca o texto livre.
-import { FLIGHT_STATUSES } from './config.js';
+import { FLIGHT_STATUSES, MINUTOS_DO_DIA } from './config.js';
 import { hm } from './format.js';
 import { nomeDoRecurso } from './categorias.js';
+import { CHAVE_DO_VOO, statusDoVoo, unidadeDoVoo } from './voo.js';
 
 export const MOTIVOS_DE_CANCELAMENTO = ['Meteorologia', 'Manutenção da aeronave', 'Aluno ausente', 'Instrutor indisponível', 'Operacional', 'Outro'];
 export const LIMITE_DO_TEXTO = 140;
@@ -21,8 +22,6 @@ export const rotuloDoStatus = (status, voo) => (status === 'Pousou' && semVoo(vo
 export const detalheAoMudarStatus = (detalhe, status) =>
   (['Em Voo', 'Pousou'].includes(status) && temNovoInicio(detalhe) ? { novoInicio: detalhe.novoInicio } : null);
 
-const FIM_DO_DIA = 24 * 60;
-const CHAVE_DO_VOO = /^\d+_\d+_\d+$/;
 const limparTexto = texto => (typeof texto === 'string' ? texto.trim().replace(/\s+/g, ' ') : '');
 
 // O detalhe que o operador informou, validado: { detalhe } (null para os status sem detalhe) ou { erro }
@@ -39,11 +38,11 @@ export function validarDetalhe(status, dados, inicio, duracao = 0) {
   }
   if (status === 'Atrasado') {
     const novoInicio = dados && dados.novoInicio;
-    if (!Number.isInteger(novoInicio) || novoInicio <= inicio || novoInicio >= FIM_DO_DIA) {
+    if (!Number.isInteger(novoInicio) || novoInicio <= inicio || novoInicio >= MINUTOS_DO_DIA) {
       return { erro: `A nova decolagem precisa ser depois das ${hm(inicio)}, no mesmo dia.` };
     }
-    if (novoInicio + duracao > FIM_DO_DIA) {
-      return { erro: `O voo atrasado precisa pousar até as 24:00 (decolagem até as ${hm(FIM_DO_DIA - duracao)}).` };
+    if (novoInicio + duracao > MINUTOS_DO_DIA) {
+      return { erro: `O voo atrasado precisa pousar até as 24:00 (decolagem até as ${hm(MINUTOS_DO_DIA - duracao)}).` };
     }
     return { detalhe: { novoInicio } };
   }
@@ -72,7 +71,7 @@ export function normalizarDetalhes(fObs, fStatus) {
       const texto = d.motivo === 'Outro' ? limparTexto(d.texto).slice(0, LIMITE_DO_TEXTO) : '';
       return [[fKey, texto ? { motivo: d.motivo, texto } : { motivo: d.motivo }]];
     }
-    if (STATUS_EM_ANDAMENTO.includes(status[fKey]) && Number.isInteger(d.novoInicio) && d.novoInicio > 0 && d.novoInicio < FIM_DO_DIA) {
+    if (STATUS_EM_ANDAMENTO.includes(status[fKey]) && Number.isInteger(d.novoInicio) && d.novoInicio > 0 && d.novoInicio < MINUTOS_DO_DIA) {
       return [[fKey, { novoInicio: d.novoInicio }]];
     }
     return [];
@@ -113,15 +112,14 @@ export function intervaloEfetivo(o, status, detalhe) {
 // efetivo). Voo cancelado não conta, os alunos de uma mesma turma de Ground não conflitam entre si e a turma
 // atingida conta uma vez (pelo primeiro aluno dela)
 export function conflitosDeAtraso(out, fStatus = {}, fObs = {}) {
-  const statusDe = o => fStatus[o.fKey] || o.status || 'Confirmado';
-  const ativos = out.filter(o => statusDe(o) !== 'Cancelado').map(o => ({ o, ...intervaloEfetivo(o, statusDe(o), fObs[o.fKey]) }));
+  const ativos = out.filter(o => statusDoVoo(o, fStatus) !== 'Cancelado').map(o => ({ o, ...intervaloEfetivo(o, statusDoVoo(o, fStatus), fObs[o.fKey]) }));
   const conflitos = [];
   for (const x of ativos) {
-    if (!STATUS_EM_ANDAMENTO.includes(statusDe(x.o)) || !temNovoInicio(fObs[x.o.fKey])) continue;
+    if (!STATUS_EM_ANDAMENTO.includes(statusDoVoo(x.o, fStatus)) || !temNovoInicio(fObs[x.o.fKey])) continue;
     const atingidos = new Set();
     for (const y of ativos) {
       if (y === x || (x.o.classKey && x.o.classKey === y.o.classKey) || !(x.a < y.b && y.a < x.b)) continue;
-      const grupo = y.o.classKey || y.o.fKey;
+      const grupo = unidadeDoVoo(y.o);
       if (atingidos.has(grupo)) continue;
       const motivos = [];
       if (x.o.r === y.o.r) motivos.push('recurso');

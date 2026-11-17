@@ -2,16 +2,16 @@
 // coisa pela API; a tela só usa a escala gravada quando cada linha tem os campos que o motor produz, nos formatos dele.
 // Uma linha adulterada invalida a escala gravada inteira (a tela usa a escala calculada de novo, que é gravada na
 // próxima alteração). Os campos desconhecidos saem.
-import { ALL_EQ_TYPES, MIS, FLIGHT_STATUSES, NI } from './config.js';
+import { ALL_EQ_TYPES, MIS, FLIGHT_STATUSES, NI, MINUTOS_DO_DIA } from './config.js';
 import { codigoValido } from './cursos.js';
 import { CODIGOS_DE_CONFLITO, CODIGOS_DE_REJEICAO } from './conflitos.js';
+import { CHAVE_DO_VOO } from './voo.js';
+import { dataIsoValida } from './format.js';
+import { MATRICULA } from './frota.js';
 
-const CHAVE_DO_VOO = /^\d+_\d+_\d+$/;
 // A chave da turma de Ground: GND_<missão>_<período>_<instrutor> (com um número no fim quando repete)
 const CHAVE_DA_TURMA = /^GND_[A-Za-zÀ-ÿ0-9 .()-]{1,40}_\d+_\d+(_\d+)?$/;
-const MATRICULA = /^[A-Z0-9][A-Z0-9-]{1,14}$/;
 const SESSAO = /^\d{1,2}\/\d{1,2}$/;
-const DATA = /^\d{4}-\d{2}-\d{2}$/;
 const ETIQUETAS = ['Pref. 1', 'Pref. 2', 'Próximo livre', 'Horário ajustado'];
 const ETIQUETA_DA_TURMA = /^(Pref\. 1|Pref\. 2|Próximo livre|Horário ajustado) · Turma \(\d{1,3}\)$/;
 const TIPOS_DE_ALERTA = ['err', 'warn', 'conf'];
@@ -30,8 +30,8 @@ const CAMPOS = {
   classKey: v => typeof v === 'string' && (CHAVE_DO_VOO.test(v) || CHAVE_DA_TURMA.test(v)),
   isGround: v => typeof v === 'boolean',
   w: v => inteiro(v, 0, NI),
-  a: v => inteiro(v, 0, 1440),
-  b: v => inteiro(v, 0, 1440),
+  a: v => inteiro(v, 0, MINUTOS_DO_DIA),
+  b: v => inteiro(v, 0, MINUTOS_DO_DIA),
   o: v => inteiro(v, 0, 100000),
   stuId: v => inteiro(v, 1, 1e9),
   mid: v => inteiro(v, 0, 1e9),
@@ -81,7 +81,7 @@ function alerta(a) {
 
 function revisaoDoAviao(r) {
   if (!objeto(r) || !numero(r.inicio, 0, 100) || !numero(r.voadas, 0, 100) || !numero(r.fim, 0, 200)) return null;
-  if (r.paraAs !== null && !inteiro(r.paraAs, 0, 1440)) return null;
+  if (r.paraAs !== null && !inteiro(r.paraAs, 0, MINUTOS_DO_DIA)) return null;
   return { inicio: r.inicio, voadas: r.voadas, fim: r.fim, paraAs: r.paraAs };
 }
 
@@ -100,7 +100,7 @@ export function normalizarEscalaGravada(resultado) {
       revisao[r] = limpa;
     }
   }
-  if (resultado.data !== undefined && !(typeof resultado.data === 'string' && DATA.test(resultado.data))) return null;
+  if (resultado.data !== undefined && !dataIsoValida(resultado.data)) return null;
   if (resultado.rej !== undefined && !inteiro(resultado.rej, 0, 100000)) return null;
   return {
     out, al, tot: resultado.tot, ...(resultado.rej !== undefined ? { rej: resultado.rej } : {}),

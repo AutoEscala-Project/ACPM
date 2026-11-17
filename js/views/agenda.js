@@ -1,14 +1,14 @@
 // Agenda de Solicitações: a agenda de papel da secretaria, digitalizada. Calendário do mês com os pedidos de cada dia,
 // a lista do dia escolhido (com a situação de cada pedido na demanda) e o registro de pedidos, com o prazo das 13:00
 // do dia anterior.
-import { MIS } from '../config.js';
+import { MIS, GROUND_DURATION_H } from '../config.js';
 import { horariosDaMissao } from '../horarios.js';
 import { S, DATA, isGestor } from '../state.js';
 import { ApiClient } from '../storage.js';
 import { $ } from '../dom.js';
-import { esc, opts, hm, fmtH } from '../format.js';
+import { esc, opts, hm, fmtH, somarDias } from '../format.js';
 import { registraNaAgenda, operaEscala } from '../perfis.js';
-import { JANELAS_DA_AGENDA, FUSO_DO_AEROCLUBE, prazoDaAgendaPermite, prazoDaData, primeiraDataAberta, hojeEmSaoPaulo, somarDias } from '../agenda.js';
+import { JANELAS_DA_AGENDA, FUSO_DO_AEROCLUBE, prazoDaAgendaPermite, prazoDaData, primeiraDataAberta, hojeEmSaoPaulo } from '../agenda.js';
 
 const SEMANA = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
 const CHAVE_REGISTRADO_POR = 'acpm_agenda_registrado_por';
@@ -170,7 +170,7 @@ export function preencherHorariosDaAgenda() {
   const regra = MIS[missao] || MIS['Voo Local'];
   // O Ground tem sempre 01h30
   const horas = $('#ag-horas');
-  if (regra.isGround) { horas.dataset.antes = horas.dataset.antes || horas.value; horas.value = '1.5'; horas.disabled = true; }
+  if (regra.isGround) { horas.dataset.antes = horas.dataset.antes || horas.value; horas.value = String(GROUND_DURATION_H); horas.disabled = true; }
   else if (horas.disabled) { horas.value = horas.dataset.antes || '1'; delete horas.dataset.antes; horas.disabled = false; }
   const lista = horariosDaMissao(S.horarios, missao, regra.defEq).map(hm);
   const atual = $('#ag-horario').value;

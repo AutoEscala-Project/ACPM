@@ -1,15 +1,20 @@
 // Formatação de horários, datas, durações e textos exibidos na interface, no CSV e no PDF.
-import { WIN, NI } from './config.js';
+import { WIN, NI, GROUND_DURATION_H } from './config.js';
 
 export const hm = m => String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0');
+// Uma duração em minutos: 570 → "9h30", 600 → "10h00"
+export const duracaoHm = min => `${Math.floor(min / 60)}h${String(min % 60).padStart(2, '0')}`;
 export const WLB = i => `${WIN[i]} · ${i + 1}º tempo` + (i == NI ? ' (noturno)' : '');
 
-// Formatação limpa de horas (suporta 1.5 h = 01h30 do Ground School e horas inteiras de voo)
-export const fmtH = v => {
-  const n = Math.round((+v || 0) * 10) / 10;
-  return Number.isInteger(n) ? `${n} h` : `${String(n).replace('.', ',')} h`;
-};
-export const fmtDurLabel = h => (+h === 1.5 ? '01h30 (1,5 h)' : fmtH(h));
+// Um número com a vírgula decimal (1,5)
+export const numeroBr = n => String(n).replace('.', ',');
+// As horas digitadas, com vírgula ou ponto, em décimos de hora (NaN se não for um número)
+export const lerHoras = texto => Math.round(parseFloat(String(texto).replace(',', '.')) * 10) / 10;
+// Horas arredondadas em décimos, com vírgula: "2 h", "1,5 h"
+export const fmtH = v => `${numeroBr(Math.round((+v || 0) * 10) / 10)} h`;
+// A duração do Ground na tela (1,5 h)
+export const DURACAO_DO_GROUND = '01h30 (1,5 h)';
+export const fmtDurLabel = h => (+h === GROUND_DURATION_H ? DURACAO_DO_GROUND : fmtH(h));
 
 export const pad = i => 'Aluno ' + String(i + 1).padStart(2, '0');
 
@@ -17,7 +22,8 @@ export const pad = i => 'Aluno ' + String(i + 1).padStart(2, '0');
 const isoLocal = t => new Date(t - t.getTimezoneOffset() * 6e4).toISOString().slice(0, 10);
 export const hojeISO = () => isoLocal(new Date());
 export const amanhaISO = () => isoLocal(new Date(Date.now() + 864e5));
-export const isoMenosDias = (iso, dias) => new Date(Date.parse(iso + 'T12:00:00Z') - dias * 864e5).toISOString().slice(0, 10);
+// A data AAAA-MM-DD alguns dias depois (ou antes, com dias negativos), pelo calendário
+export const somarDias = (iso, dias) => new Date(Date.parse(iso + 'T12:00:00Z') + dias * 864e5).toISOString().slice(0, 10);
 
 // Rótulo da data em uso no topo: "quarta-feira, 11/11" (com o ano quando não é o de hoje) e "hoje", "amanhã" ou "ontem"
 const DIAS_DA_SEMANA = ['domingo', 'segunda-feira', 'terça-feira', 'quarta-feira', 'quinta-feira', 'sexta-feira', 'sábado'];
@@ -27,7 +33,7 @@ export const minutoDoDia = (data = new Date()) => data.getHours() * 60 + data.ge
 export function rotuloDaData(data, hoje) {
   const [ano, mes, dia] = data.split('-');
   const semana = DIAS_DA_SEMANA[new Date(Date.parse(data + 'T12:00:00Z')).getUTCDay()];
-  const relativo = data === hoje ? 'hoje' : data === isoMenosDias(hoje, -1) ? 'amanhã' : data === isoMenosDias(hoje, 1) ? 'ontem' : '';
+  const relativo = data === hoje ? 'hoje' : data === somarDias(hoje, 1) ? 'amanhã' : data === somarDias(hoje, -1) ? 'ontem' : '';
   const diaMes = `${dia}/${mes}${ano === hoje.slice(0, 4) ? '' : '/' + ano}`;
   // semanaCurta ("qua."): para a tela estreita, onde o nome inteiro não cabe
   return { dia: `${semana}, ${diaMes}`, semana, semanaCurta: `${semana.slice(0, 3)}.`, data: diaMes, relativo };

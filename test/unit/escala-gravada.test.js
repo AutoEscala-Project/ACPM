@@ -57,6 +57,7 @@ describe('Escala gravada', () => {
     assert.equal(normalizarEscalaGravada({ ...base, revisao: { [ATAQUE]: { inicio: 1, voadas: 1, fim: 2, paraAs: null } } }), null);
     assert.equal(normalizarEscalaGravada({ ...base, revisao: { 'PR-VOB': { inicio: ATAQUE, voadas: 1, fim: 2, paraAs: null } } }), null);
     assert.equal(normalizarEscalaGravada({ ...base, data: ATAQUE }), null);
+    assert.equal(normalizarEscalaGravada({ ...base, data: '2026-13-01' }), null, 'uma data que não existe');
     assert.equal(normalizarEscalaGravada({ ...base, rej: ATAQUE }), null);
     assert.deepEqual(normalizarEscalaGravada({ ...base, rej: 2 }), { ...base, rej: 2 }, 'o número de rejeições dos dias importados do BI fica');
     const comExtras = { ...base, extra: ATAQUE, out: [{ ...base.out[0], onclick: ATAQUE }, ...base.out.slice(1)] };

@@ -5,20 +5,24 @@
 // valem por período.
 import { T, NI, DAY } from './config.js';
 import { categoriaDoTipo } from './categorias.js';
+import { hm } from './format.js';
 
 export const HORARIOS_PADRAO = DAY.map(w => T[w]);
-export const DE_30_EM_30 = Array.from({ length: 21 }, (_, i) => 390 + 30 * i);
+export const DE_30_EM_30 = Array.from({ length: 21 }, (_, i) => T[0] + 30 * i);
 
 export const HORARIOS_INICIAIS = { C152: [...HORARIOS_PADRAO], C172: [...HORARIOS_PADRAO], sim: [...HORARIOS_PADRAO], 'PA-34': DE_30_EM_30 };
 export const CATEGORIAS_COM_HORARIOS = Object.keys(HORARIOS_INICIAIS);
 
+// O primeiro horário de decolagem do dia (06:00)
+export const PRIMEIRO_HORARIO = 6 * 60;
+
 // Só horários do dia (06:00 às 17:00), em ordem e sem repetir; a categoria sem lista válida recebe a inicial
-const PRIMEIRO = 6 * 60, ULTIMO = 17 * 60;
+const ULTIMO = 17 * 60;
 export function normalizarHorarios(horarios) {
   const dados = horarios && typeof horarios === 'object' ? horarios : {};
   return Object.fromEntries(CATEGORIAS_COM_HORARIOS.map(cat => {
     const lista = Array.isArray(dados[cat])
-      ? [...new Set(dados[cat].filter(m => Number.isInteger(m) && m >= PRIMEIRO && m <= ULTIMO))].sort((a, b) => a - b)
+      ? [...new Set(dados[cat].filter(m => Number.isInteger(m) && m >= PRIMEIRO_HORARIO && m <= ULTIMO))].sort((a, b) => a - b)
       : [];
     return [cat, lista.length ? lista : [...HORARIOS_INICIAIS[cat]]];
   }));
@@ -33,7 +37,7 @@ export function horariosDoTipo(horarios, tipo) {
 
 // Os horários de uma missão: o Noturno sai às 17:30 e o Voo Solo, sempre às 06:30 (local ou navegação); as demais,
 // na lista do tipo pedido (o Ground, nas janelas do dia)
-export const HORARIO_DO_SOLO = 390;
+export const HORARIO_DO_SOLO = T[0];
 export const horariosDaMissao = (horarios, mis, tipo) => (mis === 'Noturno' ? [T[NI]] : mis === 'Voo Solo' ? [HORARIO_DO_SOLO] : horariosDoTipo(horarios, tipo));
 
 // O período (janela de operação) em que um horário cai: a última janela que começa até ele
@@ -48,7 +52,7 @@ export const minutoDaPreferencia = p => (!Number.isInteger(p) || p < 0 ? -1 : p 
 // Uma preferência válida: um horário entre 06:00 e 17:30 (ou a janela antiga); o resto vira "sem preferência"
 export function preferenciaValida(p) {
   const minuto = minutoDaPreferencia(p);
-  return minuto >= PRIMEIRO && minuto <= T[NI] ? minuto : -1;
+  return minuto >= PRIMEIRO_HORARIO && minuto <= T[NI] ? minuto : -1;
 }
 
 export function paraMinuto(texto) {
@@ -88,7 +92,6 @@ export function ordenarPelaPreferencia(lista, p1, p2) {
 
 // O resumo dos horários e o efeito de uma lista nova. No editor, os horários vão das 06:00 às 16:30, o último em que
 // cabe um voo de 1 h antes do noturno (a lista guardada continua aceitando até as 17:00)
-export const PRIMEIRO_HORARIO = 6 * 60;
 export const ULTIMO_HORARIO = 16 * 60 + 30;
 
 const emOrdem = lista => [...new Set(lista)].sort((a, b) => a - b);
@@ -101,8 +104,6 @@ export function modeloDosHorarios(lista) {
   return 'personalizado';
 }
 
-const doisDigitos = n => String(n).padStart(2, '0');
-const hora = m => `${doisDigitos(Math.floor(m / 60))}:${doisDigitos(m % 60)}`;
 const intervalo = passo => (passo % 60 === 0 ? `de ${passo / 60} em ${passo / 60} h` : `de ${passo} em ${passo} min`);
 
 // O nome do modelo, ou a lista resumida: três ou mais horários com o mesmo intervalo viram "07:00–08:30 de 30 em 30 min"
@@ -110,16 +111,16 @@ export function descreverHorarios(lista) {
   const l = emOrdem(lista);
   const modelo = modeloDosHorarios(l);
   if (modelo === 'janelas') return 'Janelas do dia';
-  if (modelo === 'de30') return `De 30 em 30 min, ${hora(l[0])}–${hora(l[l.length - 1])}`;
+  if (modelo === 'de30') return `De 30 em 30 min, ${hm(l[0])}–${hm(l[l.length - 1])}`;
   const partes = [];
   for (let i = 0; i < l.length;) {
     let fim = i;
     if (i + 2 < l.length) {
       const passo = l[i + 1] - l[i];
       while (fim + 1 < l.length && l[fim + 1] - l[fim] === passo) fim++;
-      if (fim - i >= 2) { partes.push(`${hora(l[i])}–${hora(l[fim])} ${intervalo(passo)}`); i = fim + 1; continue; }
+      if (fim - i >= 2) { partes.push(`${hm(l[i])}–${hm(l[fim])} ${intervalo(passo)}`); i = fim + 1; continue; }
     }
-    partes.push(hora(l[i]));
+    partes.push(hm(l[i]));
     i++;
   }
   return partes.join(', ');
@@ -149,7 +150,7 @@ export function impactoDosHorarios(pedidos, horarios, cat, lista) {
 export function resumoDoImpacto({ mudam, perdemSo }) {
   if (!mudam.length) return 'Nenhum pedido muda.';
   const partes = [`${mudam.length} ${mudam.length === 1 ? 'pedido muda' : 'pedidos mudam'} de preferência`];
-  if (perdemSo.length === 1) partes.push(`1 perde “Só às ${hora(perdemSo[0].minuto)}”`);
+  if (perdemSo.length === 1) partes.push(`1 perde “Só às ${hm(perdemSo[0].minuto)}”`);
   else if (perdemSo.length > 1) partes.push(`${perdemSo.length} perdem o “Só às”`);
   return `${partes.join('; ')}.`;
 }

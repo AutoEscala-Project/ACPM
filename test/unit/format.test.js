@@ -1,6 +1,6 @@
 import { describe, it, mock } from 'node:test';
 import assert from 'node:assert/strict';
-import { hm, fmtH, fmtDurLabel, WLB, pad, esc, opts, amanhaISO, hojeISO, isoMenosDias, fimDoMes, rotuloDaData, nomeLimpo, LIMITE_DO_NOME, dataIsoValida, minutoDoDia } from '../../js/format.js';
+import { hm, fmtH, fmtDurLabel, WLB, pad, esc, opts, amanhaISO, hojeISO, somarDias, fimDoMes, rotuloDaData, nomeLimpo, LIMITE_DO_NOME, dataIsoValida, minutoDoDia, lerHoras, numeroBr, duracaoHm } from '../../js/format.js';
 
 describe('Formatação', () => {
   it('minutos do dia em HH:MM', () => {
@@ -9,6 +9,11 @@ describe('Formatação', () => {
 
   it('horas com vírgula decimal e arredondamento de uma casa', () => {
     assert.deepEqual([2, 1.5, 1.25, 0, undefined, '3'].map(fmtH), ['2 h', '1,5 h', '1,3 h', '0 h', '0 h', '3 h']);
+    // O número com vírgula, sem arredondar; as horas digitadas, com vírgula ou ponto, em décimos de hora
+    assert.deepEqual([2, 1.5, 0.25, 12.75].map(numeroBr), ['2', '1,5', '0,25', '12,75']);
+    assert.deepEqual(['1,5', '1.5', ' 2,26 ', '3', '0'].map(lerHoras), [1.5, 1.5, 2.3, 3, 0]);
+    for (const invalido of ['', 'abc', ',']) assert.ok(Number.isNaN(lerHoras(invalido)), invalido);
+    assert.deepEqual([570, 600, 90, 5, 0].map(duracaoHm), ['9h30', '10h00', '1h30', '0h05', '0h00']);
   });
 
   it('duração do Ground em 01h30', () => {
@@ -47,12 +52,15 @@ describe('Formatação', () => {
     assert.equal(nomeLimpo('   ', 'Ana'), 'Ana');
   });
 
-  it('datas AAAA-MM-DD: amanhã, dias antes e fim do mês (com virada de mês, ano e bissexto)', () => {
+  it('datas AAAA-MM-DD: amanhã, dias depois e antes, e fim do mês (com virada de mês, ano e bissexto)', () => {
     mock.timers.enable({ apis: ['Date'], now: new Date('2026-12-31T15:00:00Z') });
     try { assert.equal(amanhaISO(), '2027-01-01'); } finally { mock.timers.reset(); }
-    assert.equal(isoMenosDias('2026-11-11', 6), '2026-11-05');
-    assert.equal(isoMenosDias('2026-03-02', 2), '2026-02-28');
-    assert.equal(isoMenosDias('2027-01-01', 1), '2026-12-31');
+    assert.equal(somarDias('2026-11-11', -6), '2026-11-05');
+    assert.equal(somarDias('2026-03-02', -2), '2026-02-28');
+    assert.equal(somarDias('2027-01-01', -1), '2026-12-31');
+    assert.equal(somarDias('2026-12-31', 1), '2027-01-01');
+    assert.equal(somarDias('2028-02-28', 1), '2028-02-29');
+    assert.equal(somarDias('2026-11-11', 0), '2026-11-11');
     assert.deepEqual(['2026-11-11', '2026-12-01', '2026-02-10', '2028-02-10'].map(fimDoMes), ['2026-11-30', '2026-12-31', '2026-02-28', '2028-02-29']);
   });
 

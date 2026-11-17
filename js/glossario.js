@@ -5,9 +5,10 @@ import { REVISAO_H, MENOR_VOO_H, GROUND_DURATION_MIN } from './config.js';
 import { LIMITES_DA_LEI } from './limites.js';
 import { INTERVALO_DO_HANGAR } from './metricas.js';
 import { reservaDaMissao } from './combustivel.js';
+import { duracaoHm } from './format.js';
 
 // 570 → "9h30"; 660 → "11 h"
-const duracao = min => (min % 60 ? `${Math.floor(min / 60)}h${String(min % 60).padStart(2, '0')}` : `${min / 60} h`);
+const duracao = min => (min % 60 ? duracaoHm(min) : `${min / 60} h`);
 const lei = LIMITES_DA_LEI;
 
 export const ABAS_DO_GLOSSARIO = ['Escala', 'Critérios', 'Demanda', 'Agenda', 'Recursos', 'Instrutores', 'Alunos', 'Rodízio'];

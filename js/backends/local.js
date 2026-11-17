@@ -6,6 +6,8 @@ import { gravarDadosPessoais, semQuemSaiu } from '../dados-pessoais.js';
 import { acumularHoras } from '../limites.js';
 import { hojeISO } from '../format.js';
 import { situacaoPorMissao, validarRegistro } from '../resultados.js';
+import { GROUND_DURATION_H, DURACAO_MAXIMA_H, MISSOES_LOCAIS, LIMITE_DE_VOOS_LOCAIS } from '../config.js';
+import { duracaoDigitada } from '../rules.js';
 
 const CHAVES_LOCAIS = { cadastro: 'acpm4_cadastro', estado: 'acpm3', escala: 'acpm3_res', historico: 'acpm3_audit', bi: 'acpm3_bi' };
 export const CHAVE_LEGADA = 'acpm2';
@@ -136,18 +138,18 @@ export const backendLocal = {
   // O pedido é num horário específico, com a duração de 0,1 a 5 h (o Ground, 01h30): como no servidor
   async registrarSolicitacao({ data, aluno, aluno_nome, missao, janela, horario = null, horas, observacao = null, registrado_por, excecao = false }, agora = new Date()) {
     if (janela !== 'horario' || !/^[0-2][0-9]:[0-5][0-9]$/.test(horario || '')) throw erroDaAgenda('22023', 'o pedido é num horário específico');
-    const h = String(missao).startsWith('Ground') ? 1.5 : Math.round(+horas * 10) / 10;
-    if (!(h > 0 && h <= 5)) throw erroDaAgenda('22023', 'a duração vai de 0,1 h a 5 h');
+    const h = String(missao).startsWith('Ground') ? GROUND_DURATION_H : duracaoDigitada(horas);
+    if (h === null) throw erroDaAgenda('22023', `a duração vai de 0,1 h a ${DURACAO_MAXIMA_H} h`);
     const noPrazo = prazoDaAgendaPermite(data, agora);
     if (!noPrazo && !excecao) throw erroDaAgenda('PT403', 'prazo encerrado: pedido para o dia seguinte só até as 13:00');
     if (!textoObrigatorio(registrado_por, 80) || !textoObrigatorio(aluno_nome, 80) || !textoObrigatorio(missao, 60)) {
       throw erroDaAgenda('23514', 'pedido incompleto: confira aluno, missão, horário e quem anotou');
     }
     const lista = lerJson(CHAVE_AGENDA) || [];
-    // No máximo 6 voos locais no mesmo horário, como no servidor
-    const locais = ['Voo Local', 'Voo Solo', 'TGL (TMA)'];
-    if (locais.includes(missao) && lista.filter(s => s.data === data && !s.cancelada_em && s.horario === horario && locais.includes(s.missao)).length >= 6) {
-      throw erroDaAgenda('PT422', `já há 6 voos locais às ${horario}`);
+    // No máximo LIMITE_DE_VOOS_LOCAIS voos locais no mesmo horário, como no servidor
+    const local = m => MISSOES_LOCAIS.includes(m);
+    if (local(missao) && lista.filter(s => s.data === data && !s.cancelada_em && s.horario === horario && local(s.missao)).length >= LIMITE_DE_VOOS_LOCAIS) {
+      throw erroDaAgenda('PT422', `já há ${LIMITE_DE_VOOS_LOCAIS} voos locais às ${horario}`);
     }
     const id = proximoId(lista);
     lista.push({

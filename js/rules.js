@@ -1,7 +1,7 @@
 // Regras das missões: Ground School, precedência Ground → voo
 // e normalização de pedidos (inclusive nomes de missão de versões anteriores).
 import { MIS, NI, T, PRE, GROUND_EQ_TYPE, GROUND_DURATION_H, DURACAO_MAXIMA_H } from './config.js';
-import { hm } from './format.js';
+import { hm, lerHoras } from './format.js';
 import { periodoDoMinuto, minutoDaPreferencia, preferenciaValida, HORARIO_DO_SOLO } from './horarios.js';
 import { codigoValido } from './cursos.js';
 
@@ -74,6 +74,13 @@ export function migrateLegacyMissionName(mis) {
   };
   return Object.hasOwn(map, mis) ? map[mis] : 'Voo Local';
 }
+
+// A duração digitada pelo operador: de 0,1 h a DURACAO_MAXIMA_H, em décimos; fora disso, null (e a mensagem)
+export const ERRO_DA_DURACAO = `A duração vai de 0,1 h a ${DURACAO_MAXIMA_H} h.`;
+export const duracaoDigitada = texto => {
+  const h = lerHoras(texto);
+  return h > 0 && h <= DURACAO_MAXIMA_H ? h : null;
+};
 
 // A duração do voo: em décimos de hora, de 0,1 h a DURACAO_MAXIMA_H (acima, o máximo); fora disso, 1 h
 export function duracaoValida(valor) {

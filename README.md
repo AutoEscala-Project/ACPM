@@ -70,6 +70,8 @@ npm run test:e2e       # aplicação no navegador (Playwright)
   `supabase/templates/`): `SUPABASE_AUTH_SMTP_USER=<gmail> SUPABASE_AUTH_SMTP_PASS=<senha de app> supabase config push`
   (prévia) ou com `--remote=<ref de produção>`. Confira antes com `supabase config diff`.
 - Dados fictícios na prévia (só num banco sem dados): `node scripts/semear-previa.mjs`.
+- Escalas fictícias nas próximas datas da prévia (só nas datas sem escala; usa o Supabase CLI autenticado, sem a
+  senha do banco): `node scripts/semear-dias-previa.mjs [dias de operação] [data inicial]` (`SECO=1` só mostra).
 
 ## Formato dos dados
 

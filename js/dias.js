@@ -12,11 +12,11 @@ import { normalizarLimites } from './limites.js';
 import { normalizarFixos, normalizarAprovacao } from './fixos.js';
 import { CRITERIOS_PADRAO, normalizarCriterios } from './criterios.js';
 import { normalizarCursos } from './cursos.js';
+import { dataIsoValida } from './format.js';
 
 // jan: disponibilidade do aluno (só quando o pedido tem uma); etapa: o código da missão do curso;
 // solicitacao: o id do pedido da agenda que virou este voo
 const CAMPOS_DO_PEDIDO = ['fly', 'mis', 'eq', 'p1', 'p2', 'nb', 'ss', 'pr', 'jan', 'etapa', 'solicitacao'];
-const DATA_ISO = /^\d{4}-\d{2}-\d{2}$/;
 
 // Cada recurso da frota começa disponível; o dia guarda só o que muda
 const avDaFrota = frota => Object.fromEntries(frota.map(f => [f.reg, true]));
@@ -130,7 +130,7 @@ export function horasDoDiaSeguinte(dia) {
 
 // A escala dos documentos antigos nem sempre tem a data: usa a gravada, senão o dia do BI com a mesma escala
 export function inferirDataDaEscala(escala, bi, padrao) {
-  if (escala && DATA_ISO.test(escala.data || '')) return escala.data;
+  if (escala && dataIsoValida(escala.data)) return escala.data;
   if (escala && Array.isArray(escala.out)) {
     const alvo = JSON.stringify(escala.out);
     const igual = Object.keys(bi || {}).sort().reverse().find(d => bi[d] && JSON.stringify(bi[d].out) === alvo);
@@ -148,7 +148,7 @@ export function converterLegado({ estado, escala, historico, bi }, dataPadrao) {
   const { cadastro, dia } = separar(estado);
   const dias = { [dataAtual]: { ...dia, resultado: escala && Array.isArray(escala.out) ? escala : null } };
   for (const [data, registro] of Object.entries(bi || {})) {
-    if (data === dataAtual || !DATA_ISO.test(data) || !registro || !Array.isArray(registro.out)) continue;
+    if (data === dataAtual || !dataIsoValida(data) || !registro || !Array.isArray(registro.out)) continue;
     dias[data] = {
       importado: true,
       resultado: { out: registro.out, al: [], tot: registro.tot ?? registro.out.length, rej: registro.rej ?? 0, data }

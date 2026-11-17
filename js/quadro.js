@@ -2,15 +2,15 @@
 // ainda não pousaram ou terminaram), que se alternam página a página, como nos painéis da INFRAERO. Os dois seguem o
 // horário efetivo (o atrasado no previsto), mostram o horário programado e, no atraso, o previsto. A turma de Ground é
 // uma linha só, sem os nomes dos alunos. Servem à visão "Painel" da Escala e à tela da recepção.
-import { GROUND_EQ_TYPE } from './config.js';
+import { GROUND_EQ_TYPE, MINUTOS_DO_DIA } from './config.js';
 import { nomeDoRecurso } from './categorias.js';
 import { isGroundMission } from './rules.js';
 import { intervaloEfetivo, textoDoDetalhe, classeDoStatus, normalizarStatus, rotuloDoStatus, MOTIVOS_DE_CANCELAMENTO } from './status.js';
 import { normalizarLinhaGravada } from './escala-gravada.js';
+import { CHAVE_DO_VOO, statusDoVoo, unidadeDoVoo } from './voo.js';
 
 // Uma linha por voo (a turma de Ground, uma só: cancelada só quando todos os alunos estão), no horário efetivo
 export function linhasDoQuadro(out, fStatus = {}, fObs = {}) {
-  const statusDe = o => fStatus[o.fKey] || o.status || 'Confirmado';
   const grupos = [];
   const turmas = new Map();
   for (const o of out) {
@@ -21,13 +21,13 @@ export function linhasDoQuadro(out, fStatus = {}, fObs = {}) {
     grupos.push(grupo);
   }
   return grupos.map((itens, ordem) => {
-    const ativos = itens.filter(o => statusDe(o) !== 'Cancelado');
+    const ativos = itens.filter(o => statusDoVoo(o, fStatus) !== 'Cancelado');
     const principal = ativos[0] || itens[0];
-    const status = statusDe(principal);
+    const status = statusDoVoo(principal, fStatus);
     const detalhe = fObs[principal.fKey];
     const { a, b } = intervaloEfetivo(principal, status, detalhe);
     return {
-      chave: principal.classKey || principal.fKey,
+      chave: unidadeDoVoo(principal),
       ground: Boolean(principal.isGround || isGroundMission(principal.mis)),
       turma: itens.length > 1,
       inicio: a,
@@ -130,14 +130,13 @@ export function quadroDoDia(dia) {
 }
 
 // Do detalhe do status, só a categoria do motivo (da lista, sem o texto livre) e o novo horário (no dia), nas chaves de voo
-const CHAVE_DO_VOO = /^\d+_\d+_\d+$/;
 function detalhesDoQuadro(fObs) {
   const dados = fObs && typeof fObs === 'object' ? fObs : {};
   return Object.fromEntries(Object.entries(dados).flatMap(([fKey, d]) => {
     if (!CHAVE_DO_VOO.test(fKey) || !d || typeof d !== 'object') return [];
     const detalhe = {
       ...(MOTIVOS_DE_CANCELAMENTO.includes(d.motivo) ? { motivo: d.motivo } : {}),
-      ...(Number.isInteger(d.novoInicio) && d.novoInicio > 0 && d.novoInicio < 24 * 60 ? { novoInicio: d.novoInicio } : {})
+      ...(Number.isInteger(d.novoInicio) && d.novoInicio > 0 && d.novoInicio < MINUTOS_DO_DIA ? { novoInicio: d.novoInicio } : {})
     };
     return Object.keys(detalhe).length ? [[fKey, detalhe]] : [];
   }));

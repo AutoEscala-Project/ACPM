@@ -1,9 +1,9 @@
 // Abas Instrutores e Alunos. Os instrutores têm duas visões: a disponibilidade do dia (uma grade com as janelas e os
 // voos de cada um na escala) e o cadastro (nome, CANAC, peso e habilitações, editadas num painel lateral). Os dados
 // pessoais (CPF, CANAC, nascimento, celular e e-mail) abrem noutro painel, só para quem pode vê-los (.so-dados).
-import { WIN, PRE, T, AIRCRAFT_EQ_TYPES } from '../config.js';
+import { WIN, PRE, T, AIRCRAFT_EQ_TYPES, MINUTOS_DO_DIA } from '../config.js';
 import { HABILITACOES, nomeDaHabilitacao } from '../habilitacoes.js';
-import { esc, hm, opts, LIMITE_DO_NOME } from '../format.js';
+import { esc, hm, opts, LIMITE_DO_NOME, numeroBr } from '../format.js';
 import { S, DATA, insBy, isGestor, voosQueVoam } from '../state.js';
 import { $ } from '../dom.js';
 import { botaoDeDica } from '../dicas.js';
@@ -13,6 +13,7 @@ import { ApiClient } from '../storage.js';
 import { gerenciaContas } from '../perfis.js';
 import { CURSOS } from '../cursos.js';
 import { progressoDoAluno } from './etapas.js';
+import { unidadeDoVoo, umPorUnidade } from '../voo.js';
 
 const ROTULO = new Map(HABILITACOES.map(h => [h.id, h.curto]));
 // No cadastro, todas na ordem do painel; na grade do dia, só as que mais distinguem o instrutor
@@ -47,9 +48,9 @@ function ocupacaoDosInstrutores() {
   const porInstrutor = new Map();
   voosQueVoam().forEach(o => {
     const atual = porInstrutor.get(o.insId) || { voos: new Set(), janelas: new Set() };
-    atual.voos.add(o.classKey || o.fKey);
+    atual.voos.add(unidadeDoVoo(o));
     WIN.forEach((_, i) => {
-      const inicio = T[i], fim = i < WIN.length - 1 ? T[i + 1] : 24 * 60;
+      const inicio = T[i], fim = i < WIN.length - 1 ? T[i + 1] : MINUTOS_DO_DIA;
       if (o.a < fim && o.b > inicio) atual.janelas.add(i);
     });
     porInstrutor.set(o.insId, atual);
@@ -63,12 +64,11 @@ const atributos = x => `data-k="i" data-id="${x.id}" data-hab="${x.hab.join(' ')
 // voo em avião) no mês, no semestre e no ano
 function horasComAEscala(x) {
   const passadas = (S.horasDosInstrutores || {})[x.id] || { mes: 0, semestre: 0, ano: 0, fimAnterior: null };
-  const hoje = [...new Map(voosQueVoam().filter(o => o.insId === x.id && AIRCRAFT_EQ_TYPES.includes(o.eqType)).map(o => [o.classKey || o.fKey, o])).values()]
+  const hoje = umPorUnidade(voosQueVoam().filter(o => o.insId === x.id && AIRCRAFT_EQ_TYPES.includes(o.eqType)))
     .reduce((total, o) => total + o.h, 0);
   const somar = h => Math.round((h + hoje) * 10) / 10;
   return { mes: somar(passadas.mes), semestre: somar(passadas.semestre), ano: somar(passadas.ano), fimAnterior: passadas.fimAnterior };
 }
-const horasTexto = h => String(h).replace('.', ',');
 const perto = (h, limite) => limite !== null && h >= 0.9 * limite;
 // O Administrador muda os limites (neste navegador, o Operador)
 export const podeEditarLimites = () => (ApiClient.perfil ? gerenciaContas(ApiClient.perfil) : !isGestor());
@@ -94,11 +94,11 @@ function linhaDoDia(x, ocupacao) {
 function colunaDoMes(x) {
   const limites = normalizarLimites(S.limites);
   const h = horasComAEscala(x);
-  const titulo = [`${horasTexto(h.mes)} h de voo no mês${limites.vooMesH === null ? '' : ` (limite ${limites.vooMesH} h)`}`,
-    `${horasTexto(h.ano)} h no ano${limites.vooAnoH === null ? '' : ` (limite ${limites.vooAnoH} h)`}`,
+  const titulo = [`${numeroBr(h.mes)} h de voo no mês${limites.vooMesH === null ? '' : ` (limite ${limites.vooMesH} h)`}`,
+    `${numeroBr(h.ano)} h no ano${limites.vooAnoH === null ? '' : ` (limite ${limites.vooAnoH} h)`}`,
     h.fimAnterior === null || h.fimAnterior === undefined ? '' : `ontem até as ${hm(h.fimAnterior)}`].filter(Boolean).join('; ');
   const atencao = perto(h.mes, limites.vooMesH) || perto(h.ano, limites.vooAnoH) || perto(h.semestre, limites.vooSemestreH);
-  return `<td class="mes${atencao ? ' perto' : ''}" title="${esc(titulo)}">${horasTexto(h.mes)} h</td>`;
+  return `<td class="mes${atencao ? ' perto' : ''}" title="${esc(titulo)}">${numeroBr(h.mes)} h</td>`;
 }
 
 function linhaDoCadastro(x) {
@@ -183,7 +183,7 @@ const MESES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julh
 function horasDoInstrutor(x) {
   const limites = normalizarLimites(S.limites);
   const h = horasComAEscala(x);
-  const de = (valor, limite) => `${horasTexto(valor)} h${limite === null ? '' : ` de ${limite} h`}`;
+  const de = (valor, limite) => `${numeroBr(valor)} h${limite === null ? '' : ` de ${limite} h`}`;
   const externas = x.horasExternas || {};
   const mes = MESES[+DATA.slice(5, 7) - 1];
   return `<fieldset class="horas-ins"><legend>Horas de voo (limites da lei)${botaoDeDica('limites-da-lei', 'limites da lei')}</legend>

@@ -1,6 +1,7 @@
 // Estado da aplicação compartilhado entre os módulos. As variáveis são ligações vivas (ES modules):
 // leia-as diretamente e use os setters para substituí-las.
 import { ApiClient } from './storage.js';
+import { pedidoDoAluno } from './voo.js';
 
 export let S = ApiClient.createFreshState();
 export let RES = null;
@@ -31,7 +32,5 @@ export const stuBy = id => S.stu.find(x => x.id === id);
 // Utilitário para acessar missão principal (mid = 0) ou missão extra (mid > 0) de um aluno
 export function getMissionTarget(stuId, mid = 0) {
   const s = stuBy(stuId);
-  if (!s) return null;
-  if (!mid || mid === 0) return s;
-  return (s.extra || []).find(ex => ex.mid === mid) || null;
+  return s ? pedidoDoAluno(s, mid) || null : null;
 }
