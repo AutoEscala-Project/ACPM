@@ -36,6 +36,11 @@ test.describe('Rodízio', () => {
     expect(await opacidade()).toBe('0');
     await segundo.hover();
     await expect.poll(opacidade).toBe('1');
+    // Pelo teclado: com o mouse fora da linha, o foco num botão dela também mostra os botões
+    await page.mouse.move(0, 0);
+    await expect.poll(opacidade).toBe('0');
+    await segundo.locator('[data-act="fila-subir"]').focus();
+    await expect.poll(opacidade).toBe('1');
     await expect(segundo.locator('[data-act="fila-inicio"]')).toHaveAttribute('aria-label', 'Pôr Instrutor 02 no início da fila');
 
     await page.locator('#s-rod [data-manual="manual-aba-rodizio"]').click();

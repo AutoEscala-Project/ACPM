@@ -82,10 +82,16 @@ test.describe('Escala', () => {
     await expect(page.locator('#toast-box .toast')).toHaveCount(0, { timeout: 5000 });
   });
 
+  // O que muda na escala fica gravado: depois de recarregar, ela volta com a alteração (aqui, um voo que decolou).
+  // Sem alteração nenhuma, recarregar só recalcularia a mesma escala a partir dos mesmos dados
   test('mantém a escala após recarregar a página', async ({ page }) => {
-    const antes = await lerEscala(page);
+    const voo = page.locator('#out tbody tr:not(.win)', { hasText: 'Aluno 12' });
+    await voo.locator('.st-sel').selectOption('Em Voo');
+    await expect(voo.locator('.fixo')).toHaveAttribute('aria-label', 'Voo fixo: Em Voo');
+    const alterada = await lerEscala(page);
     await page.reload();
     await irPara(page, 'esc');
-    expect(await lerEscala(page)).toEqual(antes);
+    await expect(voo.locator('.st-sel')).toHaveValue('Em Voo');
+    expect(await lerEscala(page)).toEqual(alterada);
   });
 });

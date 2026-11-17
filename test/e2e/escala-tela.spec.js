@@ -116,7 +116,9 @@ test.describe('Tela da Escala', () => {
 
     // Um avião da categoria; trocar de categoria volta o segundo filtro para "Todos"
     await recurso.selectOption(opcoes[1]);
-    expect((await avioesDasLinhas()).every(a => a.startsWith(opcoes[1] + ' '))).toBe(true);
+    const doAviao = await avioesDasLinhas();
+    expect(doAviao.length).toBeGreaterThan(0);
+    expect(doAviao.every(a => a.startsWith(opcoes[1] + ' ')), doAviao.join(', ')).toBe(true);
     await categoria.selectOption({ label: 'Sala Ground' });
     await expect(recurso).toHaveValue('');
     await expect(recurso.locator('option')).toHaveText(['Todos', 'Sala Ground']);
@@ -376,8 +378,8 @@ test.describe('Painel: partidas e chegadas como no aeroporto', () => {
     await expect(coluna(page, '.f-obs')).toHaveText(['Confirmado', 'Confirmado', 'Atrasado', 'Cancelado · Meteorologia']);
     await expect(coluna(page, '.f-aeronave').first()).toHaveText('Sala Ground');
     await expect(linhas(page).nth(3)).toHaveClass(/\bfids-Cancelado\b/);
-    // O quadro tem sempre a mesma altura: linhas vazias completam a página
-    expect(await page.locator('#out .fids tbody tr').count()).toBeGreaterThan(4);
+    // O quadro tem sempre a mesma altura: linhas vazias completam a página de 12 linhas (aqui, 4 voos e 8 vazias)
+    await expect(page.locator('#out .fids tbody tr')).toHaveCount(12);
   });
 
   test('Chegadas: as pendentes, pelo pouso previsto; num dia que ainda não começou, todas', async ({ page }) => {
