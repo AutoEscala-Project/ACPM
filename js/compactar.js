@@ -19,7 +19,7 @@ import { disponibilidadeDoAluno, doesGroundGateFlight } from './rules.js';
 import { INTERVALO_DO_HANGAR } from './metricas.js';
 import { normalizarCriterios } from './criterios.js';
 import { intervaloEfetivo } from './status.js';
-import { statusDoVoo, unidadeDoVoo, umPorUnidade, pedidosDosVoos } from './voo.js';
+import { statusDoVoo, unidadeDoVoo, umPorUnidade, pedidosDosVoos, ocupacaoDoVoo, compromissoDoVoo } from './voo.js';
 import { soma, agrupar, menorPrimeiro, paradasEntre } from './util.js';
 
 // Um voo que muda de instrutor junto com o horário vai para quem já voa até esta distância (minutos) dele
@@ -89,7 +89,7 @@ export function compactar(out, state, { saldo = () => Infinity, posicao = () => 
     const v = voos[0];
     const presa = voos.some(o => o.fixo || !STATUS_QUE_MUDAM.includes(statusDoVoo(o, state.fStatus))) || v.mis === 'Noturno' || (v.mis === 'Parafuso' && v.eqType === 'C152');
     return {
-      chave: unidadeDoVoo(v), voos, a: v.a, b: v.b, dur: v.b - v.a, h: v.h, insId: v.insId, r: v.r, mis: v.mis,
+      chave: unidadeDoVoo(v), voos, a: v.a, b: v.b, dur: v.b - v.a, h: v.h, insId: v.insId, r: v.r, mis: v.mis, trecho: v.trecho, livreAs: v.livreAs,
       tipo: v.isGround ? GROUND_EQ_TYPE : v.eqType, isGround: v.isGround, aviao: AIRCRAFT_EQ_TYPES.includes(v.eqType),
       alunos: voos.map(o => o.stuId), original: v.a,
       mudaHorario: !presa && !v.isGround && regra !== 'fixos',
@@ -123,7 +123,8 @@ export function compactar(out, state, { saldo = () => Infinity, posicao = () => 
   // Os intervalos de um conjunto, sem as unidades que saem e com os horários que entram
   const intervalosDe = (conjunto, sem, com = []) => {
     const lista = [];
-    if (conjunto) for (const u of conjunto) if (!sem.includes(u)) lista.push([u.a, u.b]);
+    // (o que cada unidade ocupa: a volta do noturno, a manhã até as 10:10; ela é fixa, então nunca se move)
+    if (conjunto) for (const u of conjunto) if (!sem.includes(u)) lista.push(ocupacaoDoVoo(u));
     return lista.concat(com);
   };
   const custosDosInstrutores = new Map(), custosDosAvioes = new Map();
@@ -184,7 +185,7 @@ export function compactar(out, state, { saldo = () => Infinity, posicao = () => 
       const outras = mudancas.filter(n => n !== m && n.insId === m.insId);
       if (mudouHorario || mudouInstrutor) {
         // Com o mesmo instrutor, o bloqueio e o peso não mudam
-        const compromissos = !x ? [] : [...(doInstrutor.get(x.id) || [])].filter(w => !movidas.includes(w)).map(w => ({ a: w.a, b: w.b, voo: w.aviao }))
+        const compromissos = !x ? [] : [...(doInstrutor.get(x.id) || [])].filter(w => !movidas.includes(w)).map(w => ({ ...compromissoDoVoo(w), voo: w.aviao }))
           .concat(outras.map(n => ({ a: n.a, b: n.a + n.u.dur, voo: n.u.aviao })));
         const [v] = u.voos;
         // Com o curso do aluno e o avião do voo: o avião com habilitação própria exige a dele do instrutor (novo ou não)

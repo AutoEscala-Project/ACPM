@@ -3,7 +3,7 @@
 import { MIS, GROUND_EQ_TYPE, T, NI, DURACAO_MAXIMA_H, GROUND_DURATION_H } from '../config.js';
 import { matriculasDoTipo } from '../frota.js';
 import { esc, opts, hm } from '../format.js';
-import { isGroundMission, opcoesDeDisponibilidade } from '../rules.js';
+import { isGroundMission, opcoesDeDisponibilidade, duracaoFixaDaMissao } from '../rules.js';
 import { horariosDaMissao } from '../horarios.js';
 import { descreverExigencias } from '../habilitacoes.js';
 import { S } from '../state.js';
@@ -49,6 +49,9 @@ export const singleDemandRowHTML = (stu, d, mid = 0) => {
 
   const nbOpts = isGnd
     ? `<select data-f="nb" disabled title="Ground School tem duração fixa de 01h30" aria-label="Duração de ${esc(stu.nm)}"><option value="${GROUND_DURATION_H}" selected>1h30</option></select>`
+    // O Noturno: 4 h no dia (o translado e o noturno em BH); a volta é no dia seguinte, às 07:30
+    : d.mis === 'Noturno'
+      ? `<select data-f="nb" disabled title="1 h de translado para BH e 3 h de noturno em BH; a volta, 1 h, no dia seguinte às 07:30" aria-label="Duração de ${esc(stu.nm)}"><option value="${duracaoFixaDaMissao('Noturno')}" selected>4 h + volta</option></select>`
     // A duração digitada, fracionada, até 5 h
     : `<input type="number" class="duracao" data-f="nb" min="0.1" max="${DURACAO_MAXIMA_H}" step="0.1" inputmode="decimal" value="${esc(d.nb)}" aria-label="Duração de ${esc(stu.nm)}, em horas">`;
 

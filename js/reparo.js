@@ -5,7 +5,7 @@
 // o primeiro horário mais tarde no mesmo dia, dentro da disponibilidade do aluno. Depois, soltar o voo (o motor o escala
 // de novo; quando o pedido mudou, é a única sugestão) e, por último, cancelar. Cada sugestão é uma mudança no voo fixo;
 // na turma de Ground, em todos os alunos dela.
-import { AIRCRAFT_EQ_TYPES, GROUND_EQ_TYPE, GROUND_REG, T, NI } from './config.js';
+import { GROUND_EQ_TYPE, GROUND_REG, T, NI } from './config.js';
 import { FROTA_INICIAL, matriculasParaOVoo, recursoDaFrota, instrutorVoaNoAviao } from './frota.js';
 import { livre, cabeNoSaldo, folgaAte, saldoAteARevisao, problemasDoInstrutor } from './viabilidade.js';
 import { reducaoNecessaria } from './combustivel.js';
@@ -17,7 +17,7 @@ import { disponibilidadeDoAluno, doesGroundGateFlight } from './rules.js';
 import { nomeDoRecurso } from './categorias.js';
 import { hm } from './format.js';
 import { gruposDoConflito } from './conflitos.js';
-import { statusDoVoo, umPorUnidade, pedidosDosVoos } from './voo.js';
+import { statusDoVoo, umPorUnidade, pedidosDosVoos, ocupacaoDoVoo, compromissoDoVoo } from './voo.js';
 import { menorPrimeiro } from './util.js';
 
 // A turma de Ground muda inteira; o voo, sozinho
@@ -41,8 +41,9 @@ export function sugerirReparos(estado, resultado, fKey, { maximo = 3, depoisDe =
   const recursoDe = r => (voo.isGround ? null : recursoDaFrota(frota, r));
   const voaNo = (x, r) => voo.isGround || instrutorVoaNoAviao(x, recursoDe(r));
 
-  const ocupacaoDo = r => umPorUnidade(outros.filter(o => o.r === r)).map(o => [o.a, o.b]);
-  const compromissosDo = id => umPorUnidade(outros.filter(o => o.insId === id)).map(o => ({ a: o.a, b: o.b, voo: AIRCRAFT_EQ_TYPES.includes(o.eqType) }));
+  // A volta do noturno ocupa a manhã até as 10:10 (ocupacaoDoVoo); a lei conta só o voo (compromissoDoVoo)
+  const ocupacaoDo = r => umPorUnidade(outros.filter(o => o.r === r)).map(o => ocupacaoDoVoo(o));
+  const compromissosDo = id => umPorUnidade(outros.filter(o => o.insId === id)).map(o => compromissoDoVoo(o));
   const horasNoDia = id => umPorUnidade(outros.filter(o => o.insId === id)).reduce((total, o) => total + o.h, 0);
   const horasDoAviao = r => umPorUnidade(outros.filter(o => o.r === r)).reduce((total, o) => total + o.h, 0);
   const saldo = r => saldoAteARevisao(estado.horas, r);
@@ -103,7 +104,7 @@ export function sugerirReparos(estado, resultado, fKey, { maximo = 3, depoisDe =
     const limite = Math.min(fimDoDia, ...voosQueDependem.map(o => o.a));
     const alunosPodem = (a, b) => grupo.every(v => {
       const permitidas = disponibilidadeDoAluno((pedidoDo(v) || {}).jan);
-      return (!permitidas || permitidas(a)) && livre(outros.filter(o => o.stuId === v.stuId).map(o => [o.a, o.b]), a, b);
+      return (!permitidas || permitidas(a)) && livre(outros.filter(o => o.stuId === v.stuId).map(o => ocupacaoDoVoo(o)), a, b);
     });
     for (const m of inicios) {
       if (m <= Math.max(voo.a, depoisDe ?? -1) || m + duracao > limite || !estado.win[periodoDoMinuto(m)] || !alunosPodem(m, m + duracao)) continue;

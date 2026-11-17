@@ -5,14 +5,14 @@
 //   escala é refeito em volta. O pedido também guarda o instrutor, então ele continua quando o voo é solto.
 // Na turma de Ground, o que muda num voo que já está na escala muda a turma inteira (uma turma tem um instrutor só).
 // "Automático" devolve a escolha ao app.
-import { AIRCRAFT_EQ_TYPES, GROUND_EQ_TYPE } from './config.js';
+import { GROUND_EQ_TYPE } from './config.js';
 import { podeFazer } from './habilitacoes.js';
 import { FROTA_INICIAL, recursoDaFrota } from './frota.js';
 import { normalizarLimites } from './limites.js';
 import { problemasDoInstrutor } from './viabilidade.js';
 import { isGroundMission } from './rules.js';
 import { pinoDoVoo, fixoPeloStatus } from './fixos.js';
-import { chaveDoVoo, pedidoDoAluno, statusDoVoo, umPorUnidade } from './voo.js';
+import { chaveDoVoo, pedidoDoAluno, statusDoVoo, umPorUnidade, compromissoDoVoo } from './voo.js';
 
 const instrutorValido = v => Number.isInteger(v) && v > 0;
 
@@ -59,7 +59,7 @@ export function instrutoresDoVoo(estado, resultado, fKey) {
     // Com o curso do aluno (o noturno do PC é IFR) e o avião do voo (a habilitação própria dele)
     const contexto = { curso: (alunos.get(voo.stuId) || {}).curso, recurso: voo.isGround ? null : recursoDaFrota(Array.isArray(estado.frota) ? estado.frota : FROTA_INICIAL, voo.r) };
     const [problema] = problemasDoInstrutor(x, { mis: voo.mis, tipo: voo.isGround ? GROUND_EQ_TYPE : voo.eqType, a: voo.a, b: voo.b, alunos: grupo.map(o => alunos.get(o.stuId)), stuKg: voo.stuKg, ...contexto }, {
-      compromissos: outros.filter(o => o.insId === x.id).map(o => ({ a: o.a, b: o.b, voo: AIRCRAFT_EQ_TYPES.includes(o.eqType) })),
+      compromissos: outros.filter(o => o.insId === x.id).map(o => compromissoDoVoo(o)),
       historico: horas[x.id] || null, limites, peso: voo.isGround ? null : {}
     });
     if (x.id === voo.insId || !problema) return { id: x.id, nm: x.nm, nota: '' };

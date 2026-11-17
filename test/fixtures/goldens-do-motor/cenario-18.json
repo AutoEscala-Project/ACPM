@@ -20,9 +20,9 @@
   "al": [
     {"t":"err","s":"Aluno 05","m":"Rejeitado: nenhum instrutor dentro dos limites da Lei do Aeronauta (horas de voo, jornada ou repouso) nos horários possíveis.","codigo":"limite-da-lei"},
     {"t":"err","s":"Aluno 16 (Voo Solo)","m":"Rejeitado: o aluno já tem outra missão nos horários possíveis.","codigo":"aluno-ocupado"},
-    {"t":"err","s":"Aluno 02","m":"Rejeitado: nenhum horário aberto comporta 2 h a partir das 17:30.","codigo":"sem-horario"},
-    {"t":"err","s":"Aluno 06","m":"Rejeitado: nenhum horário aberto comporta 1 h a partir das 17:30.","codigo":"sem-horario"},
-    {"t":"err","s":"Aluno 09","m":"Rejeitado: nenhum horário aberto comporta 2 h a partir das 17:30.","codigo":"sem-horario"},
+    {"t":"err","s":"Aluno 02","m":"Rejeitado: nenhum horário aberto comporta 4 h a partir das 17:30.","codigo":"sem-horario"},
+    {"t":"err","s":"Aluno 06","m":"Rejeitado: nenhum horário aberto comporta 4 h a partir das 17:30.","codigo":"sem-horario"},
+    {"t":"err","s":"Aluno 09","m":"Rejeitado: nenhum horário aberto comporta 4 h a partir das 17:30.","codigo":"sem-horario"},
     {"t":"err","s":"Aluno 11","m":"Rejeitado: a missão “Noturno” só voa em C172 (o pedido está no Sim. Multi).","codigo":"equipamento-da-missao"}
   ],
   "tot": 20,

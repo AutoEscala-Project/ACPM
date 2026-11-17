@@ -6,7 +6,7 @@ import { runAllocationEngine } from '../../js/engine.js';
 import { EQ, GROUND_REG, ACROBAT_REG, T, NI, DEFAULT_LIM, AIRCRAFT_EQ_TYPES } from '../../js/config.js';
 import { isGroundMission, doesGroundGateFlight } from '../../js/rules.js';
 import { podeFazer } from '../../js/habilitacoes.js';
-import { gerarCenario, comEscolhas, comAtributos, FORA_DO_CADASTRO } from '../helpers/cenarios.js';
+import { gerarCenario, comEscolhas, comAtributos, comVolta, FORA_DO_CADASTRO } from '../helpers/cenarios.js';
 import { FROTA_INICIAL, recursoDaFrota, aviaoServe, instrutorVoaNoAviao } from '../../js/frota.js';
 import { CODIGOS_DE_REJEICAO } from '../../js/conflitos.js';
 
@@ -18,8 +18,13 @@ const SEEDS = Array.from({ length: 300 }, (_, i) => 1001 + i);
 // “Priorizar com”) e com os atributos dos recursos e os cursos dos alunos (“Só VFR”, habilitação própria, o noturno do
 // PC): as regras da escala valem também com eles
 const execucoes = SEEDS.flatMap(seed => [
-  [seed, gerarCenario(seed)], [`${seed} com escolhas`, comEscolhas(gerarCenario(seed), seed)], [`${seed} com atributos`, comAtributos(gerarCenario(seed), seed)]
-].map(([rotulo, estado]) => ({ seed: rotulo, estado, ...runAllocationEngine(estado) })));
+  [seed, gerarCenario(seed)], [`${seed} com escolhas`, comEscolhas(gerarCenario(seed), seed)], [`${seed} com atributos`, comAtributos(gerarCenario(seed), seed)],
+  [`${seed} com a volta do noturno`, comVolta(gerarCenario(seed), seed)]
+].map(([rotulo, estado]) => {
+  // out: os voos que o motor escala hoje; a volta do noturno de ontem (fixa, de outro dia) fica em voltas, e todos tem os dois
+  const resultado = runAllocationEngine(estado);
+  return { seed: rotulo, estado, ...resultado, out: resultado.out.filter(o => !o.trecho), voltas: resultado.out.filter(o => o.trecho), todos: resultado.out };
+}));
 // A frota do cenário (sem ela, a inicial) e o recurso de um voo
 const frotaDe = estado => (Array.isArray(estado.frota) ? estado.frota : FROTA_INICIAL);
 const recursoDo = (estado, o) => (o.isGround ? null : recursoDaFrota(frotaDe(estado), o.r));
@@ -145,12 +150,24 @@ describe('Invariantes do motor de alocação', () => {
     }
   }));
 
-  it('cada pedido de voo é um voo só, com as horas pedidas', () => emTodos(({ estado, out }) => {
+  // A volta do noturno de ontem: fixa às 07:30–08:30, e o instrutor, o aluno e o avião dela não voam antes das 10:10
+  it('a volta do noturno ocupa o instrutor, o aluno e o avião até as 10:10 (nada deles antes)', () => emTodos(({ estado, out, voltas }) => {
+    assert.equal(voltas.length, (estado.noturnosDaVespera || []).length);
+    for (const v of voltas.filter(o => (estado.fStatus[o.fKey] || o.status) !== 'Cancelado')) {
+      assert.deepEqual([v.a, v.b, v.livreAs, v.h, v.fixo], [450, 510, 610, 1, true]);
+      for (const o of out.filter(w => w !== v && w.a < 610 && (estado.fStatus[w.fKey] || w.status) !== 'Cancelado')) {
+        assert.ok(o.insId !== v.insId && o.stuId !== v.stuId && o.r !== v.r, `${o.fKey} (${o.a}) junto da volta ${v.fKey}`);
+      }
+    }
+  }));
+
+  it('cada pedido de voo é um voo só, com as horas pedidas (o Noturno, as 4 h fixas do dia)', () => emTodos(({ estado, out }) => {
     const grupos = Map.groupBy(out.filter(o => !o.isGround), o => `${o.stuId}_${o.mid}`);
     for (const voos of grupos.values()) {
       const { d } = pedidoDe(estado, voos[0]);
+      const horas = d.mis === 'Noturno' ? 4 : Math.max(1, Math.round(+d.nb || 1));
       assert.equal(voos.length, 1);
-      assert.deepEqual([voos[0].fKey.endsWith('_1'), voos[0].ss, voos[0].h, voos[0].b - voos[0].a], [true, '1/1', Math.max(1, Math.round(+d.nb || 1)), Math.max(1, Math.round(+d.nb || 1)) * 60]);
+      assert.deepEqual([voos[0].fKey.endsWith('_1'), voos[0].ss, voos[0].h, voos[0].b - voos[0].a], [true, '1/1', horas, horas * 60]);
     }
   }));
 

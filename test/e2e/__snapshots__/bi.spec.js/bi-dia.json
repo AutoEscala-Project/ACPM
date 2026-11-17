@@ -1,34 +1,34 @@
 {
   "resumo": [
-    "22 h No dia (11/11/2026) 16 voos/aulas ativas",
-    "22 h Na semana (7 dias) 16 voos/aulas ativas",
-    "22 h No mês (11/2026) 1 dias registrados",
+    "28 h No dia (11/11/2026) 16 voos/aulas ativas",
+    "28 h Na semana (7 dias) 16 voos/aulas ativas",
+    "28 h No mês (11/2026) 1 dias registrados",
     "26/26 Recursos disponíveis 40/40 instrutores"
   ],
   "tabelas": [
     [
+      "PP-ABP C172 5 h 5 h 5 h",
+      "PP-AJS C172 4 h 4 h 4 h",
       "PP-LJV C152 4 h 4 h 4 h",
       "PR-BTB C152 3 h 3 h 3 h",
       "PR-IGU C152 3 h 3 h 3 h",
       "Sala Ground 3 h 3 h 3 h",
-      "PP-ABP C172 2 h 2 h 2 h",
       "PR-TBT C152 2 h 2 h 2 h",
       "PT-JOB PA-34 2 h 2 h 2 h",
-      "PP-AJS C172 1 h 1 h 1 h",
       "PR-JPL Acrobat C152 1 h 1 h 1 h",
       "PR-MLB C152 1 h 1 h 1 h"
     ],
     [
+      "Instrutor 07 4 h 4 h 4 h",
+      "Instrutor 16 4 h 4 h 4 h",
       "Instrutor 05 2 h 2 h 2 h",
-      "Instrutor 08 2 h 2 h 2 h",
       "Instrutor 09 2 h 2 h 2 h",
       "Instrutor 13 2 h 2 h 2 h",
       "Instrutor 19 2 h 2 h 2 h",
       "Instrutor 23 2 h 2 h 2 h",
       "Instrutor 02 1,5 h 1,5 h 1,5 h",
       "Instrutor 11 1,5 h 1,5 h 1,5 h",
-      "Instrutor 01 1 h 1 h 1 h",
-      "Instrutor 04 1 h 1 h 1 h"
+      "Instrutor 01 1 h 1 h 1 h"
     ],
     [
       "Ground C152 Sala Ground 1,5 h 1,5 h 1,5 h",
@@ -42,7 +42,7 @@
       "Voo Solo C152 / C172 / PA-34 4 h 4 h 4 h",
       "Parafuso C152 (PR-JPL) / C172 / PA-34 1 h 1 h 1 h",
       "IFR C172 / PA-34 1 h 1 h 1 h",
-      "Noturno C172 2 h 2 h 2 h",
+      "Noturno C172 8 h 8 h 8 h",
       "Multimotor PA-34 2 h 2 h 2 h",
       "Cheque PP C152 / C172 0 h 0 h 0 h",
       "Cheque PC MNTE VFR C152 / C172 0 h 0 h 0 h",

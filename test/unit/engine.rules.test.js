@@ -70,9 +70,9 @@ describe('Voos: janelas preferidas e encaixe', () => {
     const noturno = missaoExtra(1, { mis: 'Noturno', eq: 'C172', nb: 1 });
     const sim = { mis: 'Simulador', eq: 'Sim. Mono', nb: 1.5, p1: 980, p2: -1, pr: 5 };
     const comSim = alocar({ ins: [instrutor(1, 9), instrutor(2, 9)], stu: [aluno(1000, sim, { extra: [noturno] })] });
-    assert.deepEqual(comSim.out.map(o => [o.mis, hm(o.a), hm(o.b)]), [['Simulador', '14:30', '16:00'], ['Noturno', '17:30', '18:30']]);
+    assert.deepEqual(comSim.out.map(o => [o.mis, hm(o.a), hm(o.b)]), [['Simulador', '14:30', '16:00'], ['Noturno', '17:30', '21:30']]);
     const comAula = alocar({ ins: [instrutor(1, 9), instrutor(2, 9)], stu: [aluno(1000, GROUND_C152, { extra: [noturno] })], janelasOff: [0, 1, 2, 3, 4, 5] });
-    assert.deepEqual(comAula.out.map(o => [o.mis, hm(o.a), hm(o.b)]), [['Ground C152', '14:30', '16:00'], ['Noturno', '17:30', '18:30']]);
+    assert.deepEqual(comAula.out.map(o => [o.mis, hm(o.a), hm(o.b)]), [['Ground C152', '14:30', '16:00'], ['Noturno', '17:30', '21:30']]);
   });
 
   it('com o Noturno no dia, o aluno não entra na turma de Ground das 16:20 (termina depois das 17:30)', () => {
@@ -81,7 +81,7 @@ describe('Voos: janelas preferidas e encaixe', () => {
       ins: [instrutor(1, 9), instrutor(2, 9)],
       stu: [aluno(1000, { ...GROUND_C152, p1: 980, p2: -1, pr: 5 }), aluno(1001, { ...GROUND_C152, p1: 980, p2: -1 }, { extra: [noturno] })]
     });
-    assert.deepEqual(out.filter(o => o.stuId === 1001).map(o => [o.mis, hm(o.a), hm(o.b)]), [['Ground C152', '14:30', '16:00'], ['Noturno', '17:30', '18:30']]);
+    assert.deepEqual(out.filter(o => o.stuId === 1001).map(o => [o.mis, hm(o.a), hm(o.b)]), [['Ground C152', '14:30', '16:00'], ['Noturno', '17:30', '21:30']]);
   });
 
   it('a duração fracionada: 1,2 h são 72 minutos', () => {
@@ -438,16 +438,16 @@ describe('PR-JPL (C152 Acrobat)', () => {
 });
 
 describe('Noturno', () => {
-  it('decola somente na janela das 17:30', () => {
+  it('decola somente na janela das 17:30, com 4 h no dia (o translado e o noturno em BH)', () => {
     const { out } = alocar({ ins: [instrutor(1, 7)], stu: [aluno(1000, { mis: 'Noturno', eq: 'C172', p1: 8, p2: 8 })] });
-    assert.deepEqual(out.map(o => [o.w, o.a, o.b]), [[8, 1050, 1110]]);
+    assert.deepEqual(out.map(o => [o.w, o.a, o.b, o.h]), [[8, 1050, 1290, 4]]);
   });
 
   it('é rejeitado com a janela noturna desativada', () => {
     const { al } = alocar({ ins: [instrutor(1, 7)], stu: [aluno(1000, { mis: 'Noturno', eq: 'C172', p1: 8, p2: 8 })], janelasOff: [8] });
     assert.deepEqual(al, [{
       t: 'err', s: 'Aluno 1000',
-      m: 'Rejeitado: nenhum horário aberto comporta 1 h a partir das 17:30.', codigo: 'sem-horario'
+      m: 'Rejeitado: nenhum horário aberto comporta 4 h a partir das 17:30.', codigo: 'sem-horario'
     }]);
   });
 });

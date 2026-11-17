@@ -31,7 +31,8 @@ export const folgaAte = (ocupados, a, b) => ocupados.reduce((menor, [x, y]) => M
 // O compromisso: a missão, o tipo (a sala de Ground na aula), o horário, o intervalo efetivo (o atrasado ocupa o horário novo:
 // vale para a lei), os alunos (o "Não escalar com" de cada um), o peso do aluno, o curso do aluno (o Noturno do PC exige
 // IFR) e o recurso, quando já se sabe qual (o avião com habilitação própria exige a dele).
-// compromissos: os que o instrutor já tem no dia ({ a, b, voo }). jaOcupa: ele já está neste compromisso (o aluno que
+// compromissos: os que o instrutor já tem no dia ({ a, b, voo }, e ocupaDe/ocupaAte quando ocupa mais que o voo, como a
+// volta do noturno: a lei conta o voo, e o instrutor está ocupado no intervalo maior). jaOcupa: ele já está neste compromisso (o aluno que
 // entra na turma dele), então a ocupação e a lei não mudam. peso: null não confere; reducaoMaxima é o combustível a
 // menos aceito (0: só o tanque cheio) e exigirPesoDoInstrutor recusa o instrutor sem peso quando o peso importa.
 export function problemasDoInstrutor(x, { mis, tipo, a, b, efetivo = { a, b }, alunos = [], stuKg = 0, curso, recurso },
@@ -54,7 +55,7 @@ export function problemasDoInstrutor(x, { mis, tipo, a, b, efetivo = { a, b }, a
     // A habilitação da missão e do tipo; com o contexto, a do curso do aluno e a própria do avião (o motivo diz qual faltou)
     ['habilitacao', () => (!podeFazer(x, mis, tipo) ? false : podeFazer(x, mis, tipo, { curso, recurso }) ||
       { motivo: recurso && !instrutorVoaNoAviao(x, recurso) ? `aviao:${recurso.reg}` : 'curso' })],
-    ['instrutor-ocupado', () => jaOcupa || livre(compromissos.map(c => [c.a, c.b]), a, b)],
+    ['instrutor-ocupado', () => jaOcupa || livre(compromissos.map(c => [c.ocupaDe ?? c.a, c.ocupaAte ?? c.b]), a, b)],
     ['bloqueio', () => !alunos.some(s => s && (s.bl || []).includes(x.id))],
     ['limite-da-lei', dentroDaLei],
     ['peso', pesoServe]

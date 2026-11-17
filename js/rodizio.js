@@ -37,7 +37,8 @@ export function filasDoDiaSeguinte(dia, instrutores) {
   const status = dia.fStatus || {};
   for (const { id } of CATEGORIAS_DO_RODIZIO) {
     const voaram = new Set(out
-      .filter(o => categoriaDoRodizio(o.mis, o.eqType) === id && (status[o.fKey] || o.status) !== 'Cancelado')
+      // A volta do noturno (o trecho do dia seguinte) não conta de novo: o noturno contou no dia dele
+      .filter(o => !o.trecho && categoriaDoRodizio(o.mis, o.eqType) === id && (status[o.fKey] || o.status) !== 'Cancelado')
       .map(o => o.insId));
     filas[id] = [...filas[id].filter(x => !voaram.has(x)), ...filas[id].filter(x => voaram.has(x))];
   }

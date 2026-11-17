@@ -23,9 +23,9 @@
     {"a":930,"b":1050,"r":"PT-KIW","s":"Aluno 07","ins":"Instrutor 04","mis":"Voo Local","status":"Confirmado","fKey":"1011_0_1","classKey":"1011_0_1","isGround":false,"w":6,"o":6,"stuId":1011,"mid":0,"insId":4,"eqType":"PA-34","h":2,"ss":"1/1","stuKg":56,"insKg":59,"limKg":250,"kg":115,"baseTag":"Próximo livre","tag":"Próximo livre"},
     {"a":980,"b":1070,"r":"SALA-GROUND","s":"Aluno 09","ins":"Instrutor 03","mis":"Ground C172","status":"Confirmado","fKey":"1013_1014_1","classKey":"GND_Ground C172_7_3","isGround":true,"w":7,"o":8,"stuId":1013,"mid":1014,"insId":3,"eqType":"Sala Ground","h":1.5,"ss":"1/1","stuKg":99,"insKg":80,"limKg":0,"kg":0,"baseTag":"Pref. 1","tag":"Pref. 1","groupSize":1},
     {"a":980,"b":1040,"r":"PP-ABP","s":"Aluno 01","ins":"Instrutor 02","mis":"Voo Local","status":"Confirmado","fKey":"1000_0_1","classKey":"1000_0_1","isGround":false,"w":7,"o":0,"stuId":1000,"mid":0,"insId":2,"eqType":"C172","h":1,"ss":"1/1","stuKg":58,"insKg":72,"limKg":222,"kg":130,"baseTag":"Próximo livre","tag":"Próximo livre"},
-    {"a":980,"b":1040,"r":"SIM-MLTE-E","s":"Aluno 13","ins":"Instrutor 05","mis":"Simulador","status":"Confirmado","fKey":"1020_1021_1","classKey":"1020_1021_1","isGround":false,"w":7,"o":12,"stuId":1020,"mid":1021,"insId":5,"eqType":"Sim. Multi","h":1,"ss":"1/1","stuKg":74,"insKg":89,"limKg":0,"kg":163,"baseTag":"Pref. 1","tag":"Pref. 1"},
-    {"a":1050,"b":1110,"r":"PP-ABP","s":"Aluno 10","ins":"Instrutor 05","mis":"Noturno","status":"Em Voo","fKey":"1015_0_1","classKey":"1015_0_1","isGround":false,"w":8,"o":9,"stuId":1015,"mid":0,"insId":5,"eqType":"C172","h":1,"ss":"1/1","stuKg":57,"insKg":89,"limKg":222,"kg":146,"baseTag":"Pref. 1","tag":"Pref. 1"},
-    {"a":1050,"b":1170,"r":"PP-AJS","s":"Aluno 15","ins":"Instrutor 06","mis":"Noturno","status":"Confirmado","fKey":"1024_0_1","classKey":"1024_0_1","isGround":false,"w":8,"o":14,"stuId":1024,"mid":0,"insId":6,"eqType":"C172","h":2,"ss":"1/1","stuKg":79,"insKg":98,"limKg":222,"kg":177,"baseTag":"Pref. 1","tag":"Pref. 1"}
+    {"a":980,"b":1040,"r":"SIM-MLTE-E","s":"Aluno 13","ins":"Instrutor 11","mis":"Simulador","status":"Confirmado","fKey":"1020_1021_1","classKey":"1020_1021_1","isGround":false,"w":7,"o":12,"stuId":1020,"mid":1021,"insId":11,"eqType":"Sim. Multi","h":1,"ss":"1/1","stuKg":74,"insKg":100,"limKg":0,"kg":174,"baseTag":"Pref. 1","tag":"Pref. 1"},
+    {"a":1050,"b":1290,"r":"PP-ABP","s":"Aluno 10","ins":"Instrutor 05","mis":"Noturno","status":"Em Voo","fKey":"1015_0_1","classKey":"1015_0_1","isGround":false,"w":8,"o":9,"stuId":1015,"mid":0,"insId":5,"eqType":"C172","h":4,"ss":"1/1","stuKg":57,"insKg":89,"limKg":222,"kg":146,"baseTag":"Pref. 1","tag":"Pref. 1"},
+    {"a":1050,"b":1290,"r":"PP-AJS","s":"Aluno 15","ins":"Instrutor 06","mis":"Noturno","status":"Confirmado","fKey":"1024_0_1","classKey":"1024_0_1","isGround":false,"w":8,"o":14,"stuId":1024,"mid":0,"insId":6,"eqType":"C172","h":4,"ss":"1/1","stuKg":79,"insKg":98,"limKg":222,"kg":177,"baseTag":"Pref. 1","tag":"Pref. 1"}
   ],
   "al": [
     {"t":"err","s":"Aluno 02 (Voo Solo)","m":"Rejeitado: o aluno já tem outra missão nos horários possíveis.","codigo":"aluno-ocupado"},
@@ -33,7 +33,7 @@
     {"t":"err","s":"Aluno 09","m":"Rejeitado: nenhum horário aberto depois do Ground (17:50) comporta 4 h até as 17:30.","codigo":"depois-do-ground"},
     {"t":"err","s":"Aluno 04 (Voo Local)","m":"Rejeitado: o aluno já tem outra missão nos horários possíveis.","codigo":"aluno-ocupado"},
     {"t":"err","s":"Aluno 13 (Multimotor)","m":"Rejeitado: o aluno já tem outra missão nos horários possíveis.","codigo":"aluno-ocupado"},
-    {"t":"err","s":"Aluno 17","m":"Rejeitado: os PA-34 livres exigem a habilitação própria deles, e nenhum instrutor livre a tem (marque em Instrutores › Cadastro).","codigo":"habilitacao-do-aviao"},
+    {"t":"err","s":"Aluno 17","m":"Rejeitado: os instrutores habilitados (MLTE (PA-34)) já têm outro compromisso nos horários possíveis.","codigo":"instrutores-ocupados"},
     {"t":"err","s":"Aluno 18","m":"Rejeitado: os instrutores habilitados (Voo Local + MLTE (PA-34)) já têm outro compromisso nos horários possíveis.","codigo":"instrutores-ocupados"}
   ],
   "tot": 30,

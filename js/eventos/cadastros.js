@@ -7,6 +7,7 @@ import { $, showToast, focusLast } from '../dom.js';
 import { nomeLimpo, numeroBr } from '../format.js';
 import { habilitacoesDoNivel, normalizarHabilitacoes, nomeDaHabilitacao } from '../habilitacoes.js';
 import { LIMITES_DA_LEI, normalizarLimites, comHorasExternas } from '../limites.js';
+import { comRepousoDoNoturno } from '../noturno.js';
 import { blank } from '../rules.js';
 import { fixoPeloStatus } from '../fixos.js';
 import { S, DATA, insBy, stuBy } from '../state.js';
@@ -149,7 +150,7 @@ aoMudarCampo('i', (t, { f, id }) => {
     if (horas > 0) x.horasExternas[chave] = horas;
     else delete x.horasExternas[chave];
     if (!Object.keys(x.horasExternas).length) delete x.horasExternas;
-    S.horasDosInstrutores = comHorasExternas(S.horasBase || {}, S.ins, DATA);
+    S.horasDosInstrutores = comRepousoDoNoturno(comHorasExternas(S.horasBase || {}, S.ins, DATA), S.noturnosDaVespera);
     gravarAlteracao('mod', `Horas de voo fora do app de ${x.nm} (${f === 'ext-mes' ? 'neste mês' : 'no ano, antes deste mês'}): ${numeroBr(horas)} h`);
     rPainelDoInstrutor();
     return;

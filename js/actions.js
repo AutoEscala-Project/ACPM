@@ -6,6 +6,7 @@ import { ApiClient } from './storage.js';
 import { S, RES, AUDIT_LOG, BI_HISTORY, DATA, setS, setRES, setAuditLog, setBIHistory, setData, isGestor, dadoIndisponivel, modoCompartilhado } from './state.js';
 import { $, mostrarAviso, avisoAberto, showToast } from './dom.js';
 import { comHorasExternas } from './limites.js';
+import { comRepousoDoNoturno } from './noturno.js';
 import { rBI } from './views/bi.js';
 import { renderAuditPanel, rOut } from './views/escala.js';
 import { rDem } from './views/demanda.js';
@@ -79,7 +80,7 @@ export async function lerDadosDeNovo() {
   if (DATA !== data) return;
   if (horasBase && dadoIndisponivel('horas')) {
     S.horasBase = horasBase;
-    S.horasDosInstrutores = comHorasExternas(horasBase, S.ins, data);
+    S.horasDosInstrutores = comRepousoDoNoturno(comHorasExternas(horasBase, S.ins, data), S.noturnosDaVespera);
   }
   if (resultados && dadoIndisponivel('resultados')) S.resultados = resultados;
   S.indisponiveis = (S.indisponiveis || []).filter(p => (p === 'horas' ? !horasBase : p === 'resultados' ? !resultados : true));

@@ -9,6 +9,16 @@ export const statusDoVoo = (voo, fStatus) => (fStatus && fStatus[voo.fKey]) || v
 
 export const unidadeDoVoo = voo => voo.classKey || voo.fKey;
 
+// O intervalo que o voo ocupa (o instrutor, o aluno e o avião): o do próprio voo, ou maior na volta do noturno (eles
+// passaram a noite em BH: ocupa desde o início do dia, e eles só ficam livres às 10:10, em livreAs). A lei conta o voo
+export const ocupacaoDoVoo = (voo, a = voo.a, b = voo.b) => (voo.trecho === 'volta' && Number.isInteger(voo.livreAs) ? [0, Math.max(b, voo.livreAs)] : [a, b]);
+// O compromisso do instrutor num voo da escala (js/viabilidade.js): o voo (a e b, para a lei) e o que ele ocupa (ocupaDe
+// e ocupaAte, quando é mais que o voo). a e b: o intervalo efetivo (o atrasado), quando há
+export function compromissoDoVoo(voo, a = voo.a, b = voo.b) {
+  const [de, ate] = ocupacaoDoVoo(voo, a, b);
+  return { a, b, voo: ['C152', 'C172', 'PA-34'].includes(voo.eqType), ...(de !== a || ate !== b ? { ocupaDe: de, ocupaAte: ate } : {}) };
+}
+
 // Uma linha por unidade (a última de cada), na ordem em que a unidade aparece
 export const umPorUnidade = lista => [...new Map(lista.map(voo => [unidadeDoVoo(voo), voo])).values()];
 

@@ -1,9 +1,10 @@
 // Motor de alocação determinístico da escala do dia e utilitários de horas e de ocupação.
 // runAllocationEngine é uma função pura: recebe o estado e devolve { out, al, tot } sem alterá-lo.
-import { T, NI, DAY, MIS, DEFAULT_LIM, GROUND_EQ_TYPE, GROUND_REG, GROUND_DURATION_MIN, GROUND_DURATION_H, REVISAO_H, MENOR_VOO_H, AIRCRAFT_EQ_TYPES, MISSOES_LOCAIS, LIMITE_DE_VOOS_LOCAIS, MINUTOS_DO_DIA } from './config.js';
+import { NOTURNO, T, NI, DAY, MIS, DEFAULT_LIM, GROUND_EQ_TYPE, GROUND_REG, GROUND_DURATION_MIN, GROUND_DURATION_H, REVISAO_H, MENOR_VOO_H, AIRCRAFT_EQ_TYPES, MISSOES_LOCAIS, LIMITE_DE_VOOS_LOCAIS, MINUTOS_DO_DIA } from './config.js';
 import { FROTA_INICIAL, matriculasDoTipo, matriculasParaOVoo, motivoDoAviao, aviaoServe, instrutorVoaNoAviao, recursoDaFrota } from './frota.js';
-import { hm, fmtH, numeroBr } from './format.js';
-import { isGroundMission, doesGroundGateFlight, disponibilidadeDoAluno, rotuloDaDisponibilidade, duracaoValida } from './rules.js';
+import { hm, fmtH, numeroBr, duracaoHm } from './format.js';
+import { repousoAntesDaVolta } from './noturno.js';
+import { isGroundMission, doesGroundGateFlight, disponibilidadeDoAluno, rotuloDaDisponibilidade, duracaoValida, duracaoFixaDaMissao } from './rules.js';
 import { HORARIOS_INICIAIS, horariosDaMissao, periodoDoMinuto, minutoDaPreferencia, ordenarPelaPreferencia, fimDaMissao } from './horarios.js';
 import { podeFazer, descreverExigencias } from './habilitacoes.js';
 import { categoriaDoRodizio, ajustarFilas } from './rodizio.js';
@@ -14,7 +15,7 @@ import { LIMITE_DO_MOTIVO } from './conflitos.js';
 import { normalizarHangar, posicaoNoHangar } from './hangar.js';
 import { normalizarLimites } from './limites.js';
 import { compactar, custoDaEscala } from './compactar.js';
-import { chaveDoVoo, statusDoVoo, unidadeDoVoo, umPorUnidade, pedidosDosVoos } from './voo.js';
+import { chaveDoVoo, statusDoVoo, unidadeDoVoo, umPorUnidade, pedidosDosVoos, ocupacaoDoVoo, compromissoDoVoo } from './voo.js';
 import { menorPrimeiro, soma, paradasEntre } from './util.js';
 
 // Entre os instrutores possíveis, primeiro os que têm menos habilitações: os mais versáteis ficam livres
@@ -109,7 +110,7 @@ function manterInstrutorNoMesmoAviao(out, state, saldo, frota, posicao, serve) {
     // Os voos fixos (escala aprovada) ficam no avião deles e ocupam o horário (o atrasado, o horário novo); o cancelado
     // não ocupa nada
     const fixosDoTipo = out.filter(o => o.eqType === tipo && preso(o) && statusDoVoo(o, state.fStatus) !== 'Cancelado')
-      .map(o => ({ ...o, ...intervaloEfetivo(o, statusDoVoo(o, state.fStatus), (state.fObs || {})[o.fKey]) }));
+      .map(o => { const e = intervaloEfetivo(o, statusDoVoo(o, state.fStatus), (state.fObs || {})[o.fKey]); const [a, b] = ocupacaoDoVoo(o, e.a, e.b); return { ...o, a, b }; });
     const matriculas = matriculasDoTipo(frota, tipo).filter(r => state.av[r]).sort((a, b) => posicao(a) - posicao(b));
     const nova = redistribuirTipo(voos, matriculas, saldo, fixosDoTipo, serve);
     // A distribuição nova vale quando tem menos trocas de avião; com as mesmas trocas, menos aviões fora do hangar e,
@@ -142,7 +143,7 @@ function manterInstrutorNoMesmoAviao(out, state, saldo, frota, posicao, serve) {
 }
 
 // A duração (em minutos) do voo de um pedido: o Ground tem 01h30; o voo, as horas do pedido
-const duracaoDoPedido = (d, ground) => (ground ? GROUND_DURATION_MIN : Math.round(duracaoValida(d.nb) * 60));
+const duracaoDoPedido = (d, ground) => (ground ? GROUND_DURATION_MIN : Math.round((duracaoFixaDaMissao(d.mis) || duracaoValida(d.nb)) * 60));
 
 // Comparação de chaves de ordenação: a primeira posição diferente decide
 const vemAntes = (a, b) => { const i = a.findIndex((v, k) => v !== b[k]); return i >= 0 && a[i] < b[i]; };
@@ -203,7 +204,7 @@ function equalizarHoras(out, state, limites, historico) {
 
   // O receptor serve para a unidade (o combustível não piora e o peso dele precisa estar informado) e nenhum aluno
   // dela já voa com ele no dia
-  const compromisso = o => ({ a: o.a, b: o.b, voo: AIRCRAFT_EQ_TYPES.includes(o.eqType) });
+  const compromisso = u => compromissoDoVoo(u.voos[0], u.a, u.b);
   const podeReceber = (x, u) => {
     if (instrutorDa(u) === x.id) return false;
     const deles = daQuem(x.id);
@@ -375,6 +376,34 @@ export function runAllocationEngine(state, opcoes = {}) {
   const semPar = new Map();
   // Os voos locais (Voo Local, Voo Solo e TGL) que saem em cada horário
   const locaisNoHorario = {};
+
+  // A volta do noturno de ontem (state.noturnosDaVespera, lido da escala gravada da véspera): o translado de BH decola às
+  // 07:30 e pousa às 08:30. O instrutor, o aluno e o avião passaram a noite em BH e só ficam livres às 10:10. Entra como um
+  // voo fixo (o trecho "volta", sessão 2/2 do pedido de ontem) de 07:30–08:30 com livreAs 10:10: ocupa a manhã até as
+  // 10:10 (ocupacaoDoVoo) e conta 1 h de voo para a lei e a revisão. Cancelado (o mau tempo em BH), não ocupa nada
+  for (const [i, n] of (Array.isArray(state.noturnosDaVespera) ? state.noturnosDaVespera : []).entries()) {
+    const fKey = `${n.stuId}_${n.mid}_2`;
+    const status = statusDoVoo({ fKey }, state.fStatus);
+    const x = instrutorPorId.get(n.insId) || null;
+    const stu = state.stu.find(s => s.id === n.stuId) || null;
+    const a = NOTURNO.voltaInicio, b = a + NOTURNO.trechos.volta.minutos, livreAs = NOTURNO.livreAs, h = (b - a) / 60;
+    const linha = { trecho: 'volta', a, b, livreAs, eqType: n.eqType };
+    if (status !== 'Cancelado') {
+      (used[n.r] ||= []).push(ocupacaoDoVoo(linha));
+      (stuBusy[n.stuId] ||= []).push(ocupacaoDoVoo(linha));
+      if (x) (compromissos[x.id] ||= []).push(compromissoDoVoo(linha));
+      eu[n.r] = (eu[n.r] || 0) + h;
+      if (x) load[x.id] = (load[x.id] || 0) + h;
+    }
+    const stuKg = (stu && stu.kg) || n.stuKg || 0, insKg = (x && x.kg) || 0;
+    out.push({
+      fKey, classKey: fKey, isGround: false, w: periodoDoMinuto(a), a, b, o: stu ? state.stu.indexOf(stu) : state.stu.length + i,
+      stuId: n.stuId, mid: n.mid, insId: n.insId, eqType: n.eqType, s: stu ? stu.nm : n.s, mis: 'Noturno', h, ss: '2/2',
+      r: n.r, ins: x ? x.nm : n.ins, stuKg, insKg, limKg: DEFAULT_LIM[n.eqType] || 0, kg: stuKg && insKg ? stuKg + insKg : 0,
+      baseTag: 'Pref. 1', tag: 'Pref. 1', status, fixo: true, trecho: 'volta', livreAs
+    });
+  }
+
   for (const item of act) {
     const fKey = chaveFixa(item);
     if (fKey) {
@@ -696,7 +725,7 @@ export function runAllocationEngine(state, opcoes = {}) {
     // ========================================================================
     const lim = DEFAULT_LIM[d.eq] || 0;
     // Um voo por pedido, com as horas pedidas (para dividir no dia, "+ missão")
-    const H = duracaoValida(d.nb);
+    const H = duracaoFixaDaMissao(d.mis) || duracaoValida(d.nb);
     const night = d.mis === 'Noturno';
     const isParafuso = d.mis === 'Parafuso';
     const local = MISSOES_LOCAIS.includes(d.mis);
@@ -918,6 +947,18 @@ export function runAllocationEngine(state, opcoes = {}) {
     al.push({ t: 'warn', s: o.mid ? `${o.s} (${o.mis})` : o.s, m: `O instrutor escolhido saiu do cadastro: o voo ficou com ${o.ins}. Escolha outro na Demanda ou deixe no Automático.`, codigo: 'escolhido-saiu', stuId: o.stuId, insId: o.insId });
   }
   al.push(...avisosDeLimite(out, state, limites, historico));
+  // O repouso antes da volta do noturno (a lei pede 12 h; o noturno termina às 21:30 e a volta decola às 07:30): um aviso
+  // por instrutor, quando a volta não foi cancelada
+  for (const o of out.filter(v => v.trecho === 'volta' && statusDoVoo(v, state.fStatus) !== 'Cancelado')) {
+    const h = historico(o.insId);
+    if (!h || !Number.isFinite(h.fimDoNoturno) || limites.repousoMin === null || al.some(a => a.codigo === 'repouso-do-noturno' && a.insId === o.insId)) continue;
+    const repouso = repousoAntesDaVolta(h.fimDoNoturno, limites);
+    if (repouso >= limites.repousoMin) continue;
+    al.push({
+      t: 'warn', s: o.ins, codigo: 'repouso-do-noturno', insId: o.insId,
+      m: `Limite da lei: ${duracaoHm(repouso)} de repouso entre o noturno de ontem (até ${hm(h.fimDoNoturno)}) e o translado de volta (${hm(o.a)}), menos que as ${duracaoHm(limites.repousoMin)} da lei.`
+    });
+  }
 
   // Revisão de 50 horas: horas de cada avião controlado e onde ele para (sem saldo para mais uma missão de 1 h)
   const revisao = {};

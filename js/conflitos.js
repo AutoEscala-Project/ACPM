@@ -46,7 +46,7 @@ export function gruposDoConflito(voo) {
 // quem), o instrutor perto do limite da lei (insId), o avião que para para a revisão, o atraso que invade outro voo e
 // o voo que ficou sem o instrutor do “Priorizar com” do aluno e o do pedido cujo instrutor escolhido saiu do cadastro (stuId;
 // insId: quem ficou com o voo)
-export const CODIGOS_DE_AVISO = ['sem-peso', 'perto-do-limite', 'revisao', 'atraso', 'voa-com', 'escolhido-saiu'];
+export const CODIGOS_DE_AVISO = ['sem-peso', 'perto-do-limite', 'revisao', 'atraso', 'voa-com', 'escolhido-saiu', 'repouso-do-noturno'];
 
 // Os códigos das rejeições: por que o pedido ficou fora da escala, para dizer onde resolver
 export const CODIGOS_DE_REJEICAO = [

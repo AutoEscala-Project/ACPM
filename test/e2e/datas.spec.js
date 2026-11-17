@@ -125,7 +125,8 @@ test.describe('Escala por data', () => {
     await abrirEscala(page);
     await exportar();
     await irPara(page, 'bi');
-    await expect(page.locator('#bi-content .st > div').nth(1)).toContainText('23 h');
+    // O exemplo tem dois noturnos (4 h cada no dia) e, na data seguinte, as duas voltas de BH (1 h cada) e o voo de 1 h
+    await expect(page.locator('#bi-content .st > div').nth(1)).toContainText('31 h');
     await expect(page.locator('#bi-content .st > div').nth(2)).toContainText('2 dias registrados');
   });
 

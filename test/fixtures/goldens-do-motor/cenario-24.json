@@ -24,8 +24,7 @@
     {"a":760,"b":820,"r":"PR-BTB","s":"Aluno 19","ins":"Instrutor 16","mis":"Voo Local","status":"Confirmado","fKey":"1027_0_1","classKey":"1027_0_1","isGround":false,"w":4,"o":18,"stuId":1027,"mid":0,"insId":16,"eqType":"C152","h":1,"ss":"1/1","stuKg":75,"insKg":83,"limKg":170,"kg":158,"baseTag":"Horário ajustado","tag":"Horário ajustado"},
     {"a":820,"b":910,"r":"SALA-GROUND","s":"Aluno 04","ins":"Instrutor 04","mis":"Ground C152","status":"Confirmado","fKey":"1004_1006_1","classKey":"GND_Ground C152_5_17","isGround":true,"w":5,"o":3,"stuId":1004,"mid":1006,"insId":4,"eqType":"Sala Ground","h":1.5,"ss":"1/1","stuKg":95,"insKg":96,"limKg":0,"kg":191,"baseTag":"Próximo livre","tag":"Próximo livre","groupSize":1},
     {"a":870,"b":1050,"r":"PR-BTB","s":"Aluno 09","ins":"Instrutor 07","mis":"Navegação","status":"Confirmado","fKey":"1011_0_1","classKey":"1011_0_1","isGround":false,"w":6,"o":8,"stuId":1011,"mid":0,"insId":7,"eqType":"C152","h":3,"ss":"1/1","stuKg":91,"insKg":71,"limKg":170,"kg":162,"baseTag":"Próximo livre","tag":"Próximo livre"},
-    {"a":990,"b":1050,"r":"PT-KIW","s":"Aluno 23","ins":"Instrutor 12","mis":"Voo Local","status":"Confirmado","fKey":"1035_0_1","classKey":"1035_0_1","isGround":false,"w":7,"o":22,"stuId":1035,"mid":0,"insId":12,"eqType":"PA-34","h":1,"ss":"1/1","stuKg":82,"insKg":93,"limKg":250,"kg":175,"baseTag":"Próximo livre","tag":"Próximo livre"},
-    {"a":1050,"b":1230,"r":"PR-HAR","s":"Aluno 09","ins":"Instrutor 12","mis":"Noturno","status":"Confirmado","fKey":"1011_1012_1","classKey":"1011_1012_1","isGround":false,"w":8,"o":8,"stuId":1011,"mid":1012,"insId":12,"eqType":"C172","h":3,"ss":"1/1","stuKg":91,"insKg":93,"limKg":222,"kg":184,"baseTag":"Pref. 1","tag":"Pref. 1"}
+    {"a":990,"b":1050,"r":"PT-KIW","s":"Aluno 23","ins":"Instrutor 12","mis":"Voo Local","status":"Confirmado","fKey":"1035_0_1","classKey":"1035_0_1","isGround":false,"w":7,"o":22,"stuId":1035,"mid":0,"insId":12,"eqType":"PA-34","h":1,"ss":"1/1","stuKg":82,"insKg":93,"limKg":250,"kg":175,"baseTag":"Próximo livre","tag":"Próximo livre"}
   ],
   "al": [
     {"t":"err","s":"Aluno 04 (Voo Solo)","m":"Rejeitado: os instrutores habilitados (Voo para liberação de Solo + MLTE (PA-34)) e livres estão em “Não escalar com” deste aluno.","codigo":"bloqueio"},
@@ -33,6 +32,7 @@
     {"t":"warn","s":"Aluno 11 (Voo Solo)","m":"Peso do aluno não informado (0 kg): verificação de limite (222 kg) no C172 não realizada.","codigo":"sem-peso","stuId":1015},
     {"t":"err","s":"Aluno 12 (IFR)","m":"Rejeitado: o aluno já tem outra missão nos horários possíveis.","codigo":"aluno-ocupado"},
     {"t":"err","s":"Aluno 21 (Noturno)","m":"Rejeitado: nenhum instrutor dentro dos limites da Lei do Aeronauta (horas de voo, jornada ou repouso) nos horários possíveis.","codigo":"limite-da-lei"},
+    {"t":"err","s":"Aluno 09 (Noturno)","m":"Rejeitado: nenhum instrutor dentro dos limites da Lei do Aeronauta (horas de voo, jornada ou repouso) nos horários possíveis.","codigo":"limite-da-lei"},
     {"t":"err","s":"Aluno 12","m":"Rejeitado: o aluno já tem outra missão nos horários possíveis.","codigo":"aluno-ocupado"},
     {"t":"warn","s":"Aluno 22","m":"Peso de Instrutor 05 não informado (0 kg): verificação de limite (222 kg) no C172 não realizada.","codigo":"sem-peso","insId":5},
     {"t":"err","s":"Aluno 21 (Voo Local)","m":"Rejeitado: a missão “Voo Local” só voa em C152 ou C172 ou PA-34 (o pedido está no Sim. Mono).","codigo":"equipamento-da-missao"}

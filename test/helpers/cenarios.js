@@ -135,3 +135,21 @@ export function comAtributos(estado, seed) {
   });
   return { ...estado, frota, ins, stu };
 }
+
+// Os noturnos da véspera sobre um cenário, com outro gerador: ~2 voltas de BH (aluno, instrutor e C172 sorteados), às
+// vezes cancelada no dia (mau tempo em BH); o repouso dos instrutores delas vira aviso (js/noturno.js)
+export function comVolta(estado, seed) {
+  const r = mulberry32(seed * 7907 + 3);
+  const pick = a => a[Math.floor(r() * a.length)];
+  const c172 = FROTA_POR_TIPO.C172;
+  const noturnos = [];
+  for (let i = 0; i < 1 + Math.floor(r() * 3) && estado.stu.length && estado.ins.length; i++) {
+    const s = pick(estado.stu), x = pick(estado.ins), reg = pick(c172);
+    if (noturnos.some(n => n.stuId === s.id || n.insId === x.id || n.r === reg)) continue;
+    noturnos.push({ stuId: s.id, mid: 0, insId: x.id, r: reg, eqType: 'C172', s: s.nm, ins: x.nm, stuKg: s.kg, fim: 1290 });
+  }
+  const fStatus = { ...estado.fStatus };
+  noturnos.forEach(n => { if (r() < 0.15) fStatus[`${n.stuId}_${n.mid}_2`] = 'Cancelado'; });
+  const horasDosInstrutores = Object.fromEntries(noturnos.map(n => [n.insId, { mes: 0, semestre: 0, ano: 0, fimAnterior: null, fimDoNoturno: n.fim }]));
+  return { ...estado, fStatus, noturnosDaVespera: noturnos, horasDosInstrutores };
+}

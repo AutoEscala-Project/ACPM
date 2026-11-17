@@ -14,6 +14,7 @@ import { normalizarDetalhes, normalizarStatus } from './status.js';
 import { normalizarEscalaGravada } from './escala-gravada.js';
 import { normalizarHangar } from './hangar.js';
 import { LIMITES_DA_LEI, normalizarLimites, comHorasExternas } from './limites.js';
+import { noturnosDaVespera, comRepousoDoNoturno } from './noturno.js';
 import { normalizarFixos, normalizarAprovacao } from './fixos.js';
 import { normalizarCriterios } from './criterios.js';
 import { normalizarCursos, normalizarCursoDoAluno } from './cursos.js';
@@ -171,7 +172,9 @@ export const ApiClient = {
     const cadastro = migrarCadastro(guardado);
     const dia = migrarDia(await this.backend.ler(`dia:${data}`));
     const instrutores = (cadastro && cadastro.ins) || [];
-    const base = dia || diaParaCopiar(migrarDia((await this.backend.diaAnterior(data) || {}).conteudo), instrutores);
+    // O dia guardado antes da data: a cópia da data nova e, quando é ontem, os noturnos que voltam de BH hoje
+    const anterior = await this.backend.diaAnterior(data);
+    const base = dia || diaParaCopiar(migrarDia((anterior || {}).conteudo), instrutores);
     const estado = this.normalizeAndMigrateState(juntar(cadastro || { nid: 1000, ins: [], stu: [] }, base || diaPadrao()));
     // As horas de voo de cada instrutor antes da data e o fim de ontem (limites da lei), mais as de fora do app. Não são
     // gravadas (vão à parte, para o estado da tela): saem das escalas guardadas a cada abertura. Sem resposta, o motor
@@ -180,7 +183,10 @@ export const ApiClient = {
     // depende disso (Aprovar escala sem as horas; a próxima missão e o resultado sem os resultados)
     const lidos = await this.lerDadosAParte(data);
     const horasBase = lidos.horasBase || {};
-    const horasDosInstrutores = comHorasExternas(horasBase, estado.ins, data);
+    // Os noturnos de ontem: a volta de BH entra hoje na escala, e o repouso deles é um aviso (js/noturno.js)
+    const noturnos = noturnosDaVespera(anterior, data);
+    if (noturnos.length) estado.noturnosDaVespera = noturnos;
+    const horasDosInstrutores = comRepousoDoNoturno(comHorasExternas(horasBase, estado.ins, data), noturnos);
     // A escala gravada só vale no formato do motor; adulterada, a tela usa a escala calculada
     const escala = dia ? normalizarEscalaGravada(dia.resultado) : null;
     const resultados = lidos.resultados || { situacao: [], doDia: [] };

@@ -61,14 +61,25 @@ export const MIS = {
   'Voo Solo':         { defEq: 'C152',         eq: AIRCRAFT_EQ_TYPES },
   'Parafuso':         { defEq: 'C152',         eq: AIRCRAFT_EQ_TYPES },
   'IFR':              { defEq: 'C172',         eq: ['C172', 'PA-34'], regras: 'IFR' },
-  // O noturno do PP é VFR; o do PC é IFR: o avião homologado IFR e o instrutor com a habilitação IFR
-  'Noturno':          { defEq: 'C172',         eq: ['C172'], porCurso: { PC: { regras: 'IFR', habilitacoes: ['ifr'] } } },
+  // O noturno do PP é VFR; o do PC é IFR: o avião homologado IFR e o instrutor com a habilitação IFR. A missão tem dois
+  // dias (NOTURNO, abaixo): 4 h no dia (o translado e o noturno em BH) e a volta no dia seguinte
+  'Noturno':          { defEq: 'C172',         eq: ['C172'], porCurso: { PC: { regras: 'IFR', habilitacoes: ['ifr'] } }, duracaoFixaH: 4 },
   'Multimotor':       { defEq: 'PA-34',        eq: ['PA-34'] },
   'Cheque PP':          { defEq: 'C152',  eq: ['C152', 'C172'] },
   'Cheque PC MNTE VFR': { defEq: 'C152',  eq: ['C152', 'C172'] },
   'Cheque PC MNTE IFR': { defEq: 'C172',  eq: ['C172'], regras: 'IFR' },
   'Cheque PC MLTE VFR': { defEq: 'PA-34', eq: ['PA-34'] },
   'Cheque PC MLTE IFR': { defEq: 'PA-34', eq: ['PA-34'], regras: 'IFR' }
+};
+
+// A missão noturna tem dois dias. No dia: sai de Pará de Minas às 17:30, 1 h de translado para Belo Horizonte (ida) e 3 h
+// de voo noturno em BH (noite), um bloco só de 4 h. No dia seguinte: o translado de volta (volta), 1 h, decola de BH às
+// 07:30; o instrutor, o aluno e o avião só ficam livres na escala às 10:10. Os ids dos trechos (ida, noite, volta) são os
+// que o programa do curso usa (TSL-01, NOT, TSL-02)
+export const NOTURNO = {
+  trechos: { ida: { minutos: 60, nome: 'Translado Pará de Minas → Belo Horizonte' }, noite: { minutos: 180, nome: 'Noturno em Belo Horizonte' }, volta: { minutos: 60, nome: 'Translado Belo Horizonte → Pará de Minas' } },
+  voltaInicio: 7 * 60 + 30,
+  livreAs: 10 * 60 + 10
 };
 
 // Revisão obrigatória dos aviões a cada 50 horas de voo (o avião para quando não tem saldo para mais 1 h)

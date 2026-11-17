@@ -165,7 +165,7 @@ describe('O motor com os requisitos e os atributos', () => {
 
 describe('Duração padrão, dados e histórico', () => {
   it('o simulador começa com 2 h; o Ground com 01h30; as outras missões com 1 h', () => {
-    assert.deepEqual(['Simulador', 'Ground C152', 'Voo Local', 'Noturno'].map(duracaoPadraoDaMissao), [2, 1.5, 1, 1]);
+    assert.deepEqual(['Simulador', 'Ground C152', 'Voo Local', 'Noturno'].map(duracaoPadraoDaMissao), [2, 1.5, 1, 4]);
     assert.equal(pedidoDaSolicitacao({ missao: 'Simulador', janela: 'horario', horario: '08:20' }, undefined).nb, 2);
   });
 
