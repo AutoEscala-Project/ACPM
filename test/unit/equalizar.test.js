@@ -4,7 +4,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { runAllocationEngine } from '../../js/engine.js';
-import { aluno, cenario, instrutor, GROUND_C152 } from '../helpers/montar.js';
+import { aluno, cenario, instrutor, missaoExtra, GROUND_C152 } from '../helpers/montar.js';
 
 const horasPorInstrutor = out => {
   const horas = {}, vistas = new Set();
@@ -16,7 +16,9 @@ const horasPorInstrutor = out => {
   }
   return horas;
 };
-const escala = opts => runAllocationEngine(cenario(opts));
+// Sem a compactação, que também passa voos de um instrutor para outro quando fecha um buraco (ela tem os testes dela em
+// compactar.test.js): com ela, estes testes passariam mesmo sem a divisão das horas
+const escala = opts => runAllocationEngine(cenario(opts), { compactar: false });
 
 describe('Divisão igual das horas entre os instrutores', () => {
   it('dois voos de 1 h e dois instrutores habilitados e livres: um voo para cada', () => {
@@ -71,10 +73,13 @@ describe('Divisão igual das horas entre os instrutores', () => {
   });
 
   it('o aluno com duas missões no dia não fica com o mesmo instrutor nas duas', () => {
+    // O instrutor 1 fica com 06:30, 08:20 e 10:10 (os dois primeiros alunos não voam com o 2); o 2, com a missão extra das
+    // 12:40 do aluno 1002. O único voo que a divisão poderia passar ao 2 é o das 10:10, do mesmo aluno: ele fica com o 1
     const { out } = escala({
       ins: [instrutor(1, 1), instrutor(2, 9)],
-      stu: [aluno(1000, { p1: 390 }, { extra: [{ mid: 1, fly: true, mis: 'Voo Local', eq: 'C152', p1: 500, p2: 610, nb: 1, ss: 1, pr: 3 }] })]
+      stu: [aluno(1000, { p1: 390, p2: -1 }, { bl: [2] }), aluno(1001, { p1: 500, p2: -1 }, { bl: [2] }),
+        aluno(1002, { p1: 610, p2: -1 }, { extra: [missaoExtra(1003, { p1: 760, p2: -1 })] })]
     });
-    assert.equal(new Set(out.map(o => o.insId)).size, 2);
+    assert.deepEqual(out.filter(o => o.stuId === 1002).map(o => o.insId).sort(), [1, 2]);
   });
 });

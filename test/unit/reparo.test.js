@@ -133,7 +133,7 @@ describe('Sugestões para um conflito', () => {
 
   it('o voo em andamento (Em Voo, Atrasado ou Pousou) não é solto', () => {
     const base = cenario({ ins: [instrutor(1, 9), instrutor(2, 9)], stu: [aluno(1000, { p1: 390, p2: -1 })] });
-    for (const status of ['Em Voo', 'Pousou']) {
+    for (const status of ['Em Voo', 'Atrasado', 'Pousou']) {
       const { estado, resultado } = aprovadoEMudado(base, e => ({ ...semInstrutor(e.fixos['1000_0_1'].insId)(e), fStatus: { '1000_0_1': status } }));
       assert.ok(!sugerirReparos(estado, resultado, '1000_0_1').some(o => o.tipo === 'soltar'), status);
     }

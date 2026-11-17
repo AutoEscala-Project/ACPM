@@ -6,7 +6,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { runAllocationEngine } from '../../js/engine.js';
-import { custoDaEscala } from '../../js/compactar.js';
+import { compactar, custoDaEscala } from '../../js/compactar.js';
 import { CRITERIOS_PADRAO, normalizarCriterios } from '../../js/criterios.js';
 import { AIRCRAFT_EQ_TYPES } from '../../js/config.js';
 import { categoriaDoRodizio } from '../../js/rodizio.js';
@@ -45,9 +45,9 @@ describe('Compactação: os horários', () => {
     assert.deepEqual([voo.baseTag, voo.tag], ['Horário ajustado', 'Horário ajustado']);
   });
 
-  it('a disponibilidade do aluno vale: quem só pode à tarde continua à tarde', () => {
-    const voo = doAluno(runAllocationEngine(buraco({ jan: 'tarde' })).out, 1001);
-    assert.ok(voo.a >= 760, `às ${voo.a}`);
+  it('a disponibilidade de cada aluno vale: quem só pode à tarde vem para as 12:40, e o das 06:30 continua às 06:30', () => {
+    const { out } = runAllocationEngine(buraco({ jan: 'tarde' }));
+    assert.deepEqual(out.map(o => [o.stuId, o.a]), [[1000, 390], [1001, 760]]);
   });
 
   it('só entre a 1ª e a 2ª preferência: vai para a 2ª, mais perto; sem a 2ª, fica', () => {
@@ -109,17 +109,6 @@ describe('Compactação: os instrutores', () => {
     const { out } = runAllocationEngine(base);
     assert.equal(paradoDos(out, 1) + paradoDos(out, 2), 150);
     assert.deepEqual([out.filter(o => o.insId === 1).length, out.filter(o => o.insId === 2).length], [2, 2]);
-  });
-
-  it('o voo do rodízio (C172) fica com o instrutor que a fila escolheu', () => {
-    const c172 = { eq: 'C172', mis: 'Voo Local' };
-    const base = cenario({
-      ins: [instrutor(1, 9), instrutor(2, 9, { aw: TARDE })],
-      stu: [aluno(1000, { ...c172, p1: 390, p2: -1, jan: 'h390' }), aluno(1001, { p1: 820, p2: -1, jan: 'h820' }), aluno(1002, { ...c172, p1: 760, p2: -1, jan: 'h760' })]
-    });
-    const semCompactar = runAllocationEngine(base, { compactar: false }).out;
-    const { out } = runAllocationEngine(base);
-    for (const o of out.filter(v => v.eqType === 'C172')) assert.equal(o.insId, doAluno(semCompactar, o.stuId).insId);
   });
 });
 
@@ -187,14 +176,23 @@ describe('Compactação: em dias gerados', async () => {
     }
   }));
 
-  it('cada instrutor continua dentro dos limites da lei', () => emTodas(({ depois }) => {
-    const porInstrutor = Map.groupBy(unicos(depois.out), o => o.insId);
-    for (const [id, deles] of porInstrutor) {
-      const compromissos = deles.map(o => ({ a: o.a, b: o.b, voo: AIRCRAFT_EQ_TYPES.includes(o.eqType) }));
-      const [novo, ...resto] = compromissos;
-      assert.ok(dentroDosLimites({ compromissos: resto, novo, historico: null, limites: LIMITES_DA_LEI }).ok, `instrutor ${id}`);
-    }
-  }));
+  it('cada instrutor continua dentro dos limites da lei (também num dia em que fechar um buraco passaria da jornada)', () => {
+    const dentroDaLei = out => {
+      for (const [id, deles] of Map.groupBy(unicos(out), o => o.insId)) {
+        const [novo, ...resto] = deles.map(o => ({ a: o.a, b: o.b, voo: AIRCRAFT_EQ_TYPES.includes(o.eqType) }));
+        assert.ok(dentroDosLimites({ compromissos: resto, novo, historico: null, limites: LIMITES_DA_LEI }).ok, `instrutor ${id}`);
+      }
+    };
+    emTodas(({ depois }) => dentroDaLei(depois.out));
+    // Os dias gerados não chegam perto dos limites. Neste, o instrutor 2 voa às 06:30 e às 14:30 (os alunos não voam com
+    // o 1) e o 1, às 08:20, 10:10 e 16:20: passar o das 16:20 para o 2 fecharia o buraco do 1, mas a jornada do 2 iria
+    // das 06:00 às 17:50, mais de 11 h
+    const { out } = runAllocationEngine(cenario({ ins: [instrutor(1, 1), instrutor(2, 9)], stu: [
+      aluno(1000, { p1: 390, p2: -1, jan: 'h390' }, { bl: [1] }), aluno(1001, { p1: 870, p2: -1, jan: 'h870' }, { bl: [1] }),
+      aluno(1002, { p1: 500, p2: -1, jan: 'h500' }), aluno(1003, { p1: 610, p2: -1, jan: 'h610' }), aluno(1004, { p1: 980, p2: -1, jan: 'h980' })
+    ] }));
+    dentroDaLei(out);
+  });
 
   it('os voos fixos não mudam', () => {
     for (const seed of SEEDS) {
@@ -222,13 +220,19 @@ describe('Compactação: em dias gerados', async () => {
 });
 
 describe('Compactação chamada sem os limites', () => {
-  it('usa os limites da lei padrão', async () => {
-    const { compactar } = await import('../../js/compactar.js');
-    const { gerarCenario } = await import('../helpers/cenarios.js');
-    for (const seed of [1001, 1002, 1003]) {
-      const estado = gerarCenario(seed);
-      const out = runAllocationEngine(estado, { compactar: false }).out.map(o => ({ ...o }));
-      assert.doesNotThrow(() => compactar(out, estado), `seed ${seed}`);
-    }
+  it('usa os limites do estado', () => {
+    // O instrutor 1 voa às 06:30 e às 13:40 (não vem às 08:20) e o 2, às 08:20: a compactação passa o das 06:30 para o 2,
+    // a não ser que o estado limite o voo a 1 h por jornada
+    const estado = cenario({
+      ins: [instrutor(1, 1, { aw: Array(9).fill(true).map((v, k) => k !== 1) }), instrutor(2, 9)],
+      stu: [aluno(1000, { p1: 390, p2: -1, jan: 'h390' }), aluno(1001, { p1: 820, p2: -1, jan: 'h820' }), aluno(1002, { p1: 500, p2: -1, jan: 'h500' })]
+    });
+    const base = runAllocationEngine(estado, { compactar: false }).out;
+    const instrutorDas0630 = limites => {
+      const out = base.map(o => ({ ...o }));
+      compactar(out, { ...estado, limites });
+      return doAluno(out, 1000).insId;
+    };
+    assert.deepEqual([instrutorDas0630(undefined), instrutorDas0630({ vooPorJornadaMin: 60 })], [2, 1]);
   });
 });

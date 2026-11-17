@@ -37,13 +37,17 @@ describe('Hangar: o motor', () => {
     assert.equal(out[0].r, hangar[0]);
   });
 
-  it('voos em horários diferentes, com instrutores diferentes, vão para o avião que já saiu (e não para outro do hangar)', () => {
+  // O voo fixo (escala aprovada) do instrutor 1 no 4º avião do hangar: um avião que já saiu e não é o da frente
+  const noQuarto = (a, b) => ({ a, b, r: hangar[3], insId: 1 });
+
+  it('voos em horários diferentes, com instrutores diferentes, vão para o avião que já saiu (e não para o da frente do hangar)', () => {
+    // O voo fixo das 06:30 está no 4º avião; os voos novos das 08:20 e das 12:40, com os instrutores 2 e 3, vão para ele
     const { out } = runAllocationEngine({
-      ...cenario({ ins: [instrutor(1, 9), instrutor(2, 9), instrutor(3, 9)], stu: [aluno(1000, { p1: 390, p2: -1 }), aluno(1001, { p1: 500, p2: -1 }), aluno(1002, { p1: 760, p2: -1 })] }),
-      hangar
+      ...cenario({ ins: [instrutor(1, 9), instrutor(2, 9), instrutor(3, 9)], stu: [aluno(1000, { p1: 390, p2: -1 }),
+        aluno(1001, { p1: 500, p2: -1 }, { bl: [1] }), aluno(1002, { p1: 760, p2: -1 }, { bl: [1] })] }),
+      hangar, fixos: { '1000_0_1': noQuarto(390, 450) }
     });
-    assert.equal(new Set(out.map(o => o.r)).size, 1, `um avião só: ${out.map(o => o.r).join(', ')}`);
-    assert.equal(out[0].r, hangar[0]);
+    assert.deepEqual(out.map(o => [o.insId, o.r]), [[1, hangar[3]], [2, hangar[3]], [3, hangar[3]]]);
   });
 
   it('voos ao mesmo tempo: os da frente do hangar, na ordem', () => {
@@ -60,14 +64,14 @@ describe('Hangar: o motor', () => {
   });
 
   it('o avião que já saiu e está livre preenche o buraco no meio do dia', () => {
-    // O instrutor 1 voa às 06:30, 08:20 e 16:20 no avião da frente; o instrutor 2 voa às 12:40: vai para o mesmo avião
+    // O instrutor 1 voa às 06:30, 08:20 e 14:30 no 4º avião (voos fixos); o voo novo das 12:40, com o instrutor 2, vai
+    // para o buraco desse avião, e não para o da frente do hangar
     const { out } = runAllocationEngine({
       ...cenario({ ins: [instrutor(1, 9), instrutor(2, 9)], stu: [
-        aluno(1000, { p1: 390, p2: -1 }, { bl: [2] }), aluno(1001, { p1: 500, p2: -1 }, { bl: [2] }), aluno(1002, { p1: 980, p2: -1 }, { bl: [2] }),
-        aluno(1003, { p1: 760, p2: -1 }, { bl: [1] })
+        aluno(1000, { p1: 390, p2: -1 }), aluno(1001, { p1: 500, p2: -1 }), aluno(1002, { p1: 870, p2: -1 }), aluno(1003, { p1: 760, p2: -1 }, { bl: [1] })
       ] }),
-      hangar
+      hangar, fixos: { '1000_0_1': noQuarto(390, 450), '1001_0_1': noQuarto(500, 560), '1002_0_1': noQuarto(870, 930) }
     });
-    assert.equal(new Set(out.map(o => o.r)).size, 1, `um avião só: ${out.map(o => `${o.s} ${o.r}`).join(', ')}`);
+    assert.equal(out.find(o => o.stuId === 1003).r, hangar[3], out.map(o => `${o.s} ${o.r}`).join(', '));
   });
 });

@@ -195,12 +195,15 @@ describe('Atraso que invade o voo seguinte', () => {
     assert.equal(antes.al.some(a => a.codigo === 'atraso'), false);
   });
 
-  it('turma de Ground atrasada: o aviso aparece uma vez por voo atrasado', () => {
+  it('turma de Ground atrasada que invade um voo: o aviso aparece uma vez por voo atrasado (um por aluno da turma)', () => {
+    // A turma das 06:30 atrasa para as 07:00 e termina às 08:30, quando o instrutor dela já voa com o aluno 1002; os alunos
+    // da turma não conflitam entre si
     const turma = [1000, 1001].map(id => aluno(id, { ...GROUND_C152, p1: 390, p2: -1 }));
-    const base = cenario({ ins: [instrutor(1, 9)], stu: turma });
-    const { out } = runAllocationEngine(base);
-    const fStatus = Object.fromEntries(out.map(o => [o.fKey, 'Atrasado']));
-    const fObs = Object.fromEntries(out.map(o => [o.fKey, { novoInicio: 420 }]));
-    assert.equal(runAllocationEngine({ ...base, fStatus, fObs }).al.filter(a => a.codigo === 'atraso').length, 0);
+    const base = cenario({ ins: [instrutor(1, 9)], stu: [...turma, aluno(1002, { p1: 500, p2: -1, jan: 'h500' })] });
+    const daTurma = runAllocationEngine(base).out.filter(o => o.isGround);
+    const fStatus = Object.fromEntries(daTurma.map(o => [o.fKey, 'Atrasado']));
+    const fObs = Object.fromEntries(daTurma.map(o => [o.fKey, { novoInicio: 420 }]));
+    const avisos = runAllocationEngine({ ...base, fStatus, fObs }).al.filter(a => a.codigo === 'atraso');
+    assert.deepEqual(avisos.map(a => a.s), ['Aluno 1000', 'Aluno 1001']);
   });
 });

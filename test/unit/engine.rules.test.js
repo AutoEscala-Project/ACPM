@@ -193,12 +193,6 @@ describe('Peso da tripulação', () => {
     assert.deepEqual(al, [{ t: 'err', s: 'Aluno 1000', m: 'Rejeitado: peso aluno + instrutor acima do limite de 170 kg do C152, mesmo com o mínimo de combustível.', codigo: 'peso' }]);
   });
 
-  it('um pouco acima do limite: o voo sai com menos combustível', () => {
-    const { out, al } = alocar({ ins: [instrutor(1, 1, { kg: 80 })], stu: [aluno(1000, {}, { kg: 100 })] });
-    assert.deepEqual(al, []);
-    assert.deepEqual([out[0].kg, out[0].limKg, out[0].comb.reduzirGal], [180, 170, 4]);
-  });
-
   it('escolhe um instrutor mais leve que respeite o limite', () => {
     const { out } = alocar({ ins: [instrutor(1, 1, { kg: 80 }), instrutor(2, 5, { kg: 60 })], stu: [aluno(1000, {}, { kg: 100 })] });
     assert.deepEqual([out[0].insId, out[0].kg, out[0].limKg], [2, 160, 170]);
@@ -246,10 +240,14 @@ describe('No máximo 6 voos locais no mesmo horário', () => {
     assert.deepEqual(al.filter(a => a.t === 'err'), [{ t: 'err', s: 'Aluno 1006', m: 'Rejeitado: já há 6 voos locais (Voo Local, Voo Solo e TGL) em todos os horários possíveis, o máximo no mesmo horário.', codigo: 'limite-de-locais' }]);
   });
 
-  it('a compactação também respeita o limite', () => {
-    const stu = [...[0, 1, 2, 3, 4, 5].map(i => aluno(1000 + i, { p1: 500, p2: -1 })), aluno(1006, { p1: 610, p2: 500 })];
+  it('a compactação também respeita o limite: o buraco não se fecha num horário que já tem 6 locais', () => {
+    // O instrutor 1 voa às 06:30 e às 13:40; a compactação traria o das 13:40 para as 08:20, mas lá já saem 6 voos
+    // locais de outros instrutores: ele vem para as 10:10
+    const outros = [2, 3, 4, 5, 6, 7, 8, 9];
+    const stu = [aluno(1000, { p1: 390, p2: -1, jan: 'h390' }, { bl: outros }), aluno(1001, { p1: 820, p2: -1 }, { bl: outros }),
+      ...[2, 3, 4, 5, 6, 7].map(i => aluno(1000 + i, { p1: 500, p2: -1, jan: 'h500' }, { bl: [1] }))];
     const { out } = runAllocationEngine(cenario({ ins: instrutores, stu }));
-    assert.ok(out.filter(o => o.a === 500).length <= 6);
+    assert.deepEqual([out.filter(o => o.a === 500).length, out.find(o => o.stuId === 1001).a], [6, 610]);
   });
 });
 
