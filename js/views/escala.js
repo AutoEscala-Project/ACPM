@@ -15,6 +15,7 @@ import { metricasDaEscala } from '../metricas.js';
 import { sumUniqueOperationalHours, consolidateTimelineSlots } from '../engine.js';
 import { S, RES, AUDIT_LOG, TL_MODE, DATA, isGestor, dadoIndisponivel } from '../state.js';
 import { motivoDoFixo } from '../fixos.js';
+import { instrutoresDoVoo } from '../instrutor-escolhido.js';
 import { $, posicionarJunto, trocarConteudo, visivel } from '../dom.js';
 import { statusDoVoo, unidadeDoVoo } from '../voo.js';
 
@@ -43,7 +44,7 @@ function conteudoDoPopup(o) {
   return `<div class="tl-pop-hd"><span>${hm(o.a)} – ${hm(o.b)}</span><span>${HT(o)}</span></div>
     <div class="tl-pop-grid">
       <span>${turma ? 'Turma:' : 'Aluno:'}</span><span>${esc(turma ? `${o.students.length} alunos: ${o.students.join(', ')}` : o.s)}</span>
-      <span>Instrutor:</span><span>${esc(o.ins)}</span>
+      <span>Instrutor:</span><span>${botaoDoInstrutor(principal, 'Instrutor do voo')}</span>
       <span>Recurso:</span><span>${esc(nomeDoRecurso(o.r))}</span>
       <span>Missão:</span><span>${esc(o.mis)}</span>
       <span>Peso Trip.:</span><span>${o.kg ? `${o.kg} kg` : '—'}</span>
@@ -280,6 +281,25 @@ function seletorDeStatus(o) {
   </select>${detalheDoStatus(o)}`;
 }
 
+// O instrutor do voo (na turma de Ground, da turma inteira). Para o operador, o nome é um botão que abre a lista no
+// lugar dele (seletorDeInstrutor). Escolher um instrutor fixa o voo onde está, com ele (o resto da escala é refeito em
+// volta); "Automático" devolve a escolha ao app. O instrutor escolhido pelo operador aparece em destaque
+export function botaoDoInstrutor(o, rotulo) {
+  const nome = esc(o.ins);
+  const escolhido = o.insEscolhido ? ' <span class="sm escolhido-marca">escolhido</span>' : '';
+  if (isGestor() || !o.stuId) return nome + escolhido;
+  return `<button type="button" class="ins-btn${o.insEscolhido ? ' escolhido' : ''}" data-act="trocar-instrutor" data-fkey="${esc(o.fKey)}" data-rotulo="${esc(rotulo)}" title="Trocar o instrutor" aria-label="${esc(rotulo)}: ${nome}${o.insEscolhido ? ', escolhido pelo operador' : ''}. Trocar">${nome}</button>`;
+}
+
+// A lista do instrutor do voo: sem escolha, a primeira opção é quem o app pôs; os instrutores que não servem no horário
+// aparecem com o motivo, e o operador pode escolher mesmo assim (o voo fica em conflito, com as sugestões)
+export function seletorDeInstrutor(o, rotulo) {
+  const lista = instrutoresDoVoo(S, RES, o.fKey).filter(x => o.insEscolhido || x.id !== o.insId)
+    .map(x => `<option value="${x.id}"${o.insEscolhido && x.id === o.insId ? ' selected' : ''}>${esc(x.nota ? `${x.nm} (${x.nota})` : x.nm)}</option>`);
+  const automatico = o.insEscolhido ? 'Automático (o app escolhe)' : `${o.ins} (escolhido pelo app)`;
+  return `<select class="ins-sel" data-a="insVoo" data-fkey="${esc(o.fKey)}" data-rotulo="${esc(rotulo)}" aria-label="${esc(rotulo)}"><option value=""${o.insEscolhido ? '' : ' selected'}>${esc(automatico)}</option>${lista.join('')}</select>`;
+}
+
 // O detalhe do status (o motivo do cancelamento ou a nova decolagem do atraso): um clique permite alterá-lo. Em voo e
 // depois do pouso, a decolagem do atraso só aparece
 function detalheDoStatus(o) {
@@ -436,7 +456,7 @@ function tabela(voos) {
       <td class="c-aluno"><b>${esc(o.s)}</b></td>
       <td class="c-missao"${rs}>${esc(o.mis)}${grupo.length > 1 ? ` <small data-dica="turma">Turma de ${grupo.length} alunos</small>` : ''}</td>
       <td class="c-aviao nw"${rs}>${esc(nomeDoRecurso(o.r))}${ehGround(o) ? '' : ` <small>${esc(o.eqType || '')}</small>`}</td>
-      <td class="c-instr nw"${rs}>${esc(o.ins)}</td>
+      <td class="c-instr nw"${rs}>${botaoDoInstrutor(o, `Instrutor de ${grupo.length > 1 ? `${o.mis} (turma)` : o.s}`)}</td>
       <td class="c-peso nw"${rs}>${peso(o)}</td>
       <td class="c-status">${seletorDeStatus(o)}${resultadoNaEscala(o)}</td>
       <td class="c-acao edit-only acao">${acao(o)}</td>

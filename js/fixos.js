@@ -27,6 +27,7 @@ export const pinoDoVoo = o => ({ a: o.a, b: o.b, r: o.r, insId: o.insId, ...(o.i
 // O ciclo do cadeado. Em Voo, Atrasado, Pousou e Cancelado fixam o voo onde ele está (o pino que já havia
 // continua); fora da escala aprovada, Pendente ou Confirmado o soltam. Reabrir a escala mantém os fixados pelo status
 const STATUS_QUE_FIXAM = ['Em Voo', 'Atrasado', 'Pousou', 'Cancelado'];
+export const fixoPeloStatus = (fKey, fStatus) => STATUS_QUE_FIXAM.includes((fStatus || {})[fKey]);
 
 export function fixosAoMudarStatus(fixos, voo, status, { aprovada }) {
   const atuais = fixos || {};
@@ -39,9 +40,11 @@ export function fixosAoMudarStatus(fixos, voo, status, { aprovada }) {
 export const fixosAoReabrir = (fixos, fStatus) =>
   Object.fromEntries(Object.entries(fixos || {}).filter(([fKey]) => STATUS_QUE_FIXAM.includes((fStatus || {})[fKey])));
 
-// Por que o voo está fixo (o texto do cadeado): o status de andamento (com o nome da tela), ou a escala aprovada
+// Por que o voo está fixo (o texto do cadeado): o status de andamento (com o nome da tela), a escala aprovada ou o
+// instrutor escolhido na Escala
 export function motivoDoFixo(fKey, { fStatus, aprovacao, voo }) {
   const status = (fStatus || {})[fKey];
   if (STATUS_QUE_FIXAM.includes(status)) return `Voo fixo: ${rotuloDoStatus(status, voo)}`;
-  return aprovacao ? 'Voo fixo: escala aprovada' : 'Voo fixo';
+  if (aprovacao) return 'Voo fixo: escala aprovada';
+  return voo && voo.insEscolhido ? 'Voo fixo: instrutor escolhido na escala' : 'Voo fixo';
 }

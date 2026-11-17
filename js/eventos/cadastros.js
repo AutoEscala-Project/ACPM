@@ -95,6 +95,8 @@ aoAcionar(['deli', 'dels'], (b, { id }) => {
     if (+$('#painel-instrutor').dataset.id === id) fecharPainelDoInstrutor();
     S.ins = S.ins.filter(x => x.id !== id);
     S.stu.forEach(s => s.bl = s.bl.filter(v => v !== id));
+    // Os pedidos do dia com o instrutor escolhido voltam para a escolha do app
+    S.stu.forEach(s => [s, ...(s.extra || [])].forEach(p => { if (p.insId === id) delete p.insId; }));
     gravarAlteracao('exc', `Instrutor excluído: ${target ? target.nm : id}`);
   } else {
     const target = stuBy(id);

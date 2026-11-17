@@ -6,6 +6,7 @@ import { normalizarFixos } from './fixos.js';
 import { CATEGORIAS_COM_HORARIOS, normalizarHorarios } from './horarios.js';
 import { disponibilidadeValida } from './rules.js';
 import { MINUTOS_DO_DIA } from './config.js';
+import { CHAVE_DO_VOO } from './voo.js';
 
 const idValido = v => Number.isInteger(v) && v > 0;
 const rotulo = v => (typeof v === 'string' && v.length <= 40 ? v : '↶ Reverter');
@@ -29,6 +30,16 @@ export function validarReversao(rev, frota) {
   if (rev.kind === 'restaurarFixos') {
     const fixos = rev.fixos && typeof rev.fixos === 'object' ? normalizarFixos(rev.fixos) : {};
     return Object.keys(fixos).length ? { kind: 'restaurarFixos', fixos, label } : null;
+  }
+  // O instrutor escolhido de antes (insId 0: "Automático") nos pedidos, e os voos fixos como estavam (soltar: os que
+  // não eram fixos)
+  if (rev.kind === 'restaurarEscolha') {
+    if (!Array.isArray(rev.pedidos) || !rev.pedidos.length || rev.pedidos.length > 100 || !Array.isArray(rev.soltar) || rev.soltar.length > 100) return null;
+    const pedidos = rev.pedidos.map(p => (p && typeof p === 'object' && idValido(p.stuId) && Number.isInteger(p.mid) && p.mid >= 0
+      && (p.insId === 0 || idValido(p.insId)) ? { stuId: p.stuId, mid: p.mid, insId: p.insId } : null));
+    const fixos = rev.fixos && typeof rev.fixos === 'object' ? normalizarFixos(rev.fixos) : {};
+    if (!pedidos.every(Boolean) || !rev.soltar.every(k => typeof k === 'string' && CHAVE_DO_VOO.test(k))) return null;
+    return { kind: 'restaurarEscolha', pedidos, fixos, soltar: [...rev.soltar], label };
   }
   // Os horários de uma categoria e os pedidos que mudaram com eles
   if (rev.kind === 'restaurarHorarios') {

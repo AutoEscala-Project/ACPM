@@ -10,7 +10,7 @@ import { disponibilidadeAtual } from './rules.js';
 import { LIMITES_DA_LEI } from './limites.js';
 import { cursosVazios } from './cursos.js';
 
-export const ESQUEMA = 21;
+export const ESQUEMA = 22;
 
 // Um pedido do dia com as preferências em minutos e a disponibilidade no formato atual (formato 12)
 function pedidoEmMinutos(pedido) {
@@ -165,6 +165,12 @@ const PASSOS = {
   // Versão 21: o status "Pousou". Os dados não mudam; o número novo faz a aba da versão anterior (que
   // não conhece o Pousou e o tiraria do dia ao abrir) recusar o dia e pedir para recarregar
   21: {
+    cadastro: cadastro => cadastro,
+    dia: dia => dia
+  },
+  // Versão 22: o pedido do dia pode levar o instrutor escolhido pelo operador (campo "insId"). Os dados não mudam; o
+  // número novo faz a aba da versão anterior (que tiraria o campo ao gravar) recusar o dia e pedir para recarregar
+  22: {
     cadastro: cadastro => cadastro,
     dia: dia => dia
   }

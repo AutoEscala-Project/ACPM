@@ -69,6 +69,19 @@ aoAcionar('rev-log', b => {
     // Um reparo desfeito: os voos voltam a ser fixos como antes dele
     S.fixos = normalizarFixos({ ...(S.fixos || {}), ...rev.fixos });
     gravarAlteracao('mod', `Revertido: ${entry.desc}`, null, entry.id);
+  } else if (rev.kind === 'restaurarEscolha') {
+    // O instrutor escolhido volta como estava, e os voos fixos também (o que a escolha fixou deixa de ser fixo)
+    rev.pedidos.forEach(({ stuId, mid, insId }) => {
+      const alvo = getMissionTarget(stuId, mid);
+      if (!alvo) return;
+      if (insId) alvo.insId = insId;
+      else delete alvo.insId;
+    });
+    const fixos = { ...(S.fixos || {}) };
+    rev.soltar.forEach(k => { delete fixos[k]; });
+    S.fixos = normalizarFixos({ ...fixos, ...rev.fixos });
+    gravarAlteracao('mod', `Revertido: ${entry.desc}`, null, entry.id);
+    rDem();
   } else if (rev.kind === 'restaurarHorarios') {
     // Os horários de uma categoria voltam como estavam, e os pedidos que mudaram com eles também
     S.horarios = { ...S.horarios, [rev.cat]: [...rev.lista] };

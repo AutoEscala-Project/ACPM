@@ -109,6 +109,8 @@ export function normalizeMissionFields(target) {
   if (Object.hasOwn(target, 'etapa') && !(typeof target.etapa === 'string' && codigoValido(target.etapa))) delete target.etapa;
   // O id do pedido da agenda que originou este voo
   if (Object.hasOwn(target, 'solicitacao') && !(Number.isInteger(target.solicitacao) && target.solicitacao > 0)) delete target.solicitacao;
+  // O instrutor escolhido pelo operador para o pedido
+  if (Object.hasOwn(target, 'insId') && !(Number.isInteger(target.insId) && target.insId > 0)) delete target.insId;
   const mRule = missionRule(target.mis) || MIS['Voo Local'];
   if (!mRule.eq.includes(target.eq)) target.eq = mRule.defEq;
   if (mRule.isGround) {
