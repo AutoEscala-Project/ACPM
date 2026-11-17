@@ -60,15 +60,9 @@ describe('Combustível: o motor', () => {
 
   it('sem par que caiba com o tanque cheio, o voo sai com menos combustível e diz quanto', () => {
     const { out, al } = runAllocationEngine(cenario({ ins: [instrutor(1, 9, { kg: 80 })], stu: [pesado(1000)] }));
-    assert.deepEqual(al.filter(a => a.t === 'err'), []);
+    assert.deepEqual(al, []);
     assert.deepEqual(out[0].comb, { reduzirGal: 4, abastecerGal: 22, minimoGal: 11, autonomiaMin: 203 });
     assert.equal(out[0].kg, 180);
-  });
-
-  it('se nem o mínimo de combustível resolve, o voo não entra e a mensagem diz por quê', () => {
-    const { out, al } = runAllocationEngine(cenario({ ins: [instrutor(1, 9, { kg: 100 })], stu: [pesado(1000, { kg: 120 })] }));
-    assert.equal(out.length, 0);
-    assert.match(al[0].m, /peso aluno \+ instrutor acima do limite de 170 kg do C152, mesmo com o mínimo de combustível/);
   });
 
   it('a divisão das horas não passa um voo para quem precisaria de menos combustível', () => {

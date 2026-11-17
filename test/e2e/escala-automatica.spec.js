@@ -7,13 +7,6 @@ import { comExemplo } from '../helpers/exemplo.js';
 const MATRICULA = /\b(P[PRT]-[A-Z]{3})\b/;
 
 test.describe('Escala automática', () => {
-  test('a escala já está pronta ao abrir a aba', async ({ page }) => {
-    await abrirComExemplo(page);
-    await irPara(page, 'esc');
-    await expect(page.locator('#out .st')).toBeVisible();
-    expect((await lerEscala(page)).linhas.length).toBeGreaterThan(20);
-  });
-
   test('cada alteração refaz a escala na hora: o avião em manutenção sai e, religado, volta', async ({ page }) => {
     await abrirComExemplo(page);
     await irPara(page, 'esc');

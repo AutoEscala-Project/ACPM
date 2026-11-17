@@ -65,10 +65,10 @@ test.describe('Escala aprovada', () => {
   });
 
   test('no Gestor, o selo aparece e os botões não', async ({ page }) => {
-    const estado = { ...dia(), fixos: { '1000_0_1': { a: 390, b: 450, r: 'PP-LJV', insId: 1 } }, aprovacao: { em: '2026-11-10T21:05:00.000Z', por: 'Rayane' } };
+    const estado = { ...dia(), fixos: { '1000_0_1': { a: 390, b: 450, r: 'PP-LJV', insId: 1 } }, aprovacao: { em: '2026-11-10T21:05:00.000Z', por: 'Operador 01' } };
     await abrir(page, { estado, url: './?role=gestor' });
     await abrirEscala(page);
-    await expect(page.locator('#selo-aprovada')).toHaveText('Aprovada às 18:05 por Rayane');
+    await expect(page.locator('#selo-aprovada')).toHaveText('Aprovada às 18:05 por Operador 01');
     await expect(page.locator('#btn-reabrir')).toBeHidden();
   });
 });

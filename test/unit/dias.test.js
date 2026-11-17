@@ -2,15 +2,15 @@
 // status dos voos), cópia do dia anterior e conversão dos documentos antigos.
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import { separar, juntar, diaPadrao, diaParaCopiar, horasDoDiaSeguinte, inferirDataDaEscala, converterLegado, biDosDias } from '../../js/dias.js';
 import { ApiClient } from '../../js/storage.js';
 import { gerarCenario } from '../helpers/cenarios.js';
 import { aluno, instrutor, missaoExtra } from '../helpers/montar.js';
 import { estadoSintetico } from '../helpers/estado.js';
 import { blank } from '../../js/rules.js';
+import { lerGoldens } from '../helpers/goldens.js';
 
-const goldens = JSON.parse(readFileSync(new URL('../fixtures/motor-goldens.json', import.meta.url), 'utf8'));
+const goldens = lerGoldens();
 const normalizado = estado => ApiClient.normalizeAndMigrateState(structuredClone(estado));
 
 describe('Separar e juntar', () => {
@@ -61,7 +61,8 @@ describe('Separar e juntar', () => {
     const { cadastro, dia } = separar(estado);
     assert.deepEqual(cadastro.limites.vooMesH, 90);
     assert.deepEqual(cadastro.ins[0].horasExternas, { '2026-11': 12, '2026-00': 300 });
-    assert.equal(JSON.stringify(dia).includes('horasDosInstrutores'), false);
+    // As horas passadas não vão nem para o cadastro nem para o dia: as duas partes são gravadas
+    assert.equal(JSON.stringify({ cadastro, dia }).includes('horasDosInstrutores'), false);
     const junto = juntar(cadastro, dia);
     assert.deepEqual([junto.limites.vooMesH, junto.ins[0].horasExternas], [90, { '2026-11': 12, '2026-00': 300 }]);
   });
@@ -69,7 +70,7 @@ describe('Separar e juntar', () => {
   it('a escala aprovada (os voos fixos e quem aprovou) vai e volta com o dia', () => {
     const estado = normalizado({ ...estadoSintetico(), stu: [aluno(1000)] });
     estado.fixos = { '1000_0_1': { a: 390, b: 450, r: 'PR-VOB', insId: 1 } };
-    estado.aprovacao = { em: '2026-11-10T21:05:00.000Z', por: 'Rayane' };
+    estado.aprovacao = { em: '2026-11-10T21:05:00.000Z', por: 'Operador 01' };
     const { cadastro, dia } = separar(estado);
     assert.deepEqual([dia.fixos, dia.aprovacao], [estado.fixos, estado.aprovacao]);
     assert.deepEqual([juntar(cadastro, dia).fixos, juntar(cadastro, dia).aprovacao], [estado.fixos, estado.aprovacao]);

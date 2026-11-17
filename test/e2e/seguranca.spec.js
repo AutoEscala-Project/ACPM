@@ -40,7 +40,7 @@ function documentos(mudar) {
     [`acpm4_dia_${AMANHA}`]: { ...dias[AMANHA], resultado },
     'acpm4_dia_2026-11-10': { ...dias[AMANHA], resultado: { ...resultado, data: '2026-11-10' } },
     acpm4_historico: [{
-      id: 1, data: AMANHA, registrado_em: '2026-11-10T14:00:00.000Z', autor: `Rayane ${X}`, tipo: 'mod',
+      id: 1, data: AMANHA, registrado_em: '2026-11-10T14:00:00.000Z', autor: `Operador 01 ${X}`, tipo: 'mod',
       descricao: `Alterado ${X}`, reverter: null, reverte: null, importado: false
     }, {
       // Textos enormes gravados pela API: a tela mostra até 500 caracteres da descrição e 80 do autor

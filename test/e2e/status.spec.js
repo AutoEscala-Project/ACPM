@@ -81,7 +81,7 @@ test.describe('Status do voo com detalhes', () => {
 
   test('na escala aprovada, o atraso que invade o voo seguinte vira aviso', async ({ page }) => {
     const estado = {
-      ...doisVoos(), aprovacao: { em: '2026-11-10T21:05:00.000Z', por: 'Rayane' },
+      ...doisVoos(), aprovacao: { em: '2026-11-10T21:05:00.000Z', por: 'Operador 01' },
       fixos: { '1000_0_1': { a: 610, b: 670, r: 'PP-LJV', insId: 1 }, '1001_0_1': { a: 690, b: 750, r: 'PR-BTB', insId: 1 } }
     };
     await abrir(page, { estado });

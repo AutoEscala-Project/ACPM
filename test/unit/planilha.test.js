@@ -255,7 +255,7 @@ describe('Onde cada voo cai na planilha', () => {
   });
 
   it('a linha com mais texto do que as 2 linhas do modelo fica mais alta; as outras ficam como no modelo', async () => {
-    assert.deepEqual(['Ana', 'Maria Fernanda Souza (13:40–14:40)', 'Aluno 02, Aluno 03, Aluno 04', 'Pedro\nHenrique', 'Abcdefghijklmnopqrstuvwxyz0']
+    assert.deepEqual(['Ana', 'Maria Fernanda Souza (13:40–14:40)', 'Aluno 02, Aluno 03, Aluno 04', 'Ana\nBeatriz', 'Abcdefghijklmnopqrstuvwxyz0']
       .map(t => linhasDoTexto(t, 13)), [1, 4, 3, 2, 3]);
     const turma = ['Ana Clara Dias', 'Bruno Henrique Reis', 'Larissa Gomes'].map(n => ground(n, '08:20', '09:50'));
     const out = [voo('PP-LJV', 'C152', '13:40', '14:40', { s: 'Maria Fernanda Souza' }), voo('PR-VOB', 'C152', '06:30', '07:30'), ...turma];

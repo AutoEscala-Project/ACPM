@@ -93,7 +93,11 @@ describe('Migrações do formato dos dados', () => {
   });
 
   it('versão 13: os dias passam a guardar os detalhes do status (motivo do cancelamento e novo horário do atraso)', () => {
-    const dia = { fStatus: { '1000_0_1': 'Cancelado' }, esquema: 12 };
+    const dia = {
+      fStatus: { '1000_0_1': 'Cancelado', '1001_0_1': 'Atrasado' },
+      fObs: { '1000_0_1': { motivo: 'Meteorologia' }, '1001_0_1': { novoInicio: 640 } },
+      esquema: 12
+    };
     assert.deepEqual(migrarDia(dia), { ...dia, esquema: ESQUEMA });
     assert.deepEqual(migrarCadastro({ nid: 1000, ins: [], stu: [], esquema: 12 }).ins, []);
     assert.ok(ESQUEMA >= 13);
@@ -116,7 +120,11 @@ describe('Migrações do formato dos dados', () => {
   });
 
   it('versão 16: os dias guardam a escala aprovada (os voos fixos e quem aprovou)', () => {
-    const dia = { fixos: { '1000_0_1': { a: 390, b: 450, r: 'PR-VOB', insId: 1 } }, aprovacao: null, esquema: 15 };
+    const dia = {
+      fixos: { '1000_0_1': { a: 390, b: 450, r: 'PR-VOB', insId: 1 } },
+      aprovacao: { em: '2026-11-10T21:05:00.000Z', por: 'Operador 01' },
+      esquema: 15
+    };
     assert.deepEqual(migrarDia(dia), { ...dia, esquema: ESQUEMA });
     assert.ok(ESQUEMA >= 16);
   });

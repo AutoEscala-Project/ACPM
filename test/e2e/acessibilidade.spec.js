@@ -113,8 +113,13 @@ test.describe('O foco do teclado na barra do topo', () => {
         const item = itens.nth(i);
         await item.focus();
         await page.keyboard.press('Shift');
-        const { visivel, cor, nome: rotulo } = await item.evaluate(el => ({ visivel: el.matches(':focus-visible'), cor: getComputedStyle(el).outlineColor, nome: el.textContent.trim() }));
+        const { visivel, estilo, cor, nome: rotulo } = await item.evaluate(el => ({
+          visivel: el.matches(':focus-visible'), estilo: getComputedStyle(el).outlineStyle,
+          cor: getComputedStyle(el).outlineColor, nome: el.textContent.trim()
+        }));
         expect(visivel, rotulo).toBe(true);
+        // Primeiro, o anel existe: sem ele (outline none), o navegador continua informando uma cor
+        expect(estilo, rotulo).not.toBe('none');
         expect(razaoDeContraste(cor, fundo), rotulo).toBeGreaterThanOrEqual(3);
       }
     });

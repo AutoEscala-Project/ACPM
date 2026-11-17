@@ -124,9 +124,10 @@ describe('Limites: o motor', async () => {
   });
 
   it('jornada de 11 h: o instrutor do voo das 06:30 não pega o das 16:20', () => {
-    const { out } = runAllocationEngine(cenario({ ins: dois(), stu: [aluno(1000, { p1: 390, p2: -1 }), aluno(1001, { p1: 980, p2: -1 })] }));
-    const instrutorDe = stuId => out.find(o => o.stuId === stuId).insId;
-    assert.notEqual(instrutorDe(1000), instrutorDe(1001));
+    // Sem a divisão das horas e sem a compactação, que separariam os dois voos mesmo sem o limite da jornada
+    const estado = cenario({ ins: dois(), stu: [aluno(1000, { p1: 390, p2: -1 }), aluno(1001, { p1: 980, p2: -1 })] });
+    const { out } = runAllocationEngine(estado, { dividirHoras: false, compactar: false });
+    assert.deepEqual(out.map(o => [o.stuId, o.insId]), [[1000, 1], [1001, 2]]);
   });
 
   it('a divisão das horas não passa um voo para quem passaria do limite do mês', () => {

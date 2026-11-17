@@ -63,11 +63,11 @@ describe('Dados pessoais: na tela e no histórico', () => {
 // A mesma regra do servidor (salvar_dados_pessoais) para o modo local e o servidor dos testes
 describe('Dados pessoais: gravar com a versão lida', () => {
   const cadastro = { stu: [{ id: 1000, nm: 'Ana Souza' }, { id: 1001, nm: 'Bia' }], ins: [{ id: 7, nm: 'Instrutor 07' }] };
-  const opcoes = (extra = {}) => ({ hoje: '2026-11-14', autor: 'Rayane', agora: '2026-11-14T12:00:00.000Z', cadastro, ...extra });
+  const opcoes = (extra = {}) => ({ hoje: '2026-11-14', autor: 'Operador 01', agora: '2026-11-14T12:00:00.000Z', cadastro, ...extra });
 
   it('grava, diz quando e o que mudou (a descrição do histórico, sem os valores)', () => {
     const r = gravarDadosPessoais({}, 'aluno', 1000, { cpf: '529.982.247-25', canac: '123456' }, opcoes({ atualizadoEmLido: null }));
-    assert.deepEqual(r.tabela, { 'aluno:1000': { cpf: '52998224725', canac: '123456', atualizado_em: '2026-11-14T12:00:00.000Z', atualizado_por: 'Rayane' } });
+    assert.deepEqual(r.tabela, { 'aluno:1000': { cpf: '52998224725', canac: '123456', atualizado_em: '2026-11-14T12:00:00.000Z', atualizado_por: 'Operador 01' } });
     assert.equal(r.atualizado_em, '2026-11-14T12:00:00.000Z');
     assert.equal(r.descricao, 'Dados pessoais de Ana Souza atualizados: CPF, CANAC');
     const igual = gravarDadosPessoais(r.tabela, 'aluno', 1000, { cpf: '52998224725', canac: '123456' }, opcoes({ atualizadoEmLido: r.atualizado_em, agora: '2026-11-14T13:00:00.000Z' }));

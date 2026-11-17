@@ -36,6 +36,11 @@ test.describe('Rodízio', () => {
     expect(await opacidade()).toBe('0');
     await segundo.hover();
     await expect.poll(opacidade).toBe('1');
+    // Pelo teclado: com o mouse fora da linha, o foco num botão dela também mostra os botões
+    await page.mouse.move(0, 0);
+    await expect.poll(opacidade).toBe('0');
+    await segundo.locator('[data-act="fila-subir"]').focus();
+    await expect.poll(opacidade).toBe('1');
     await expect(segundo.locator('[data-act="fila-inicio"]')).toHaveAttribute('aria-label', 'Pôr Instrutor 02 no início da fila');
 
     await page.locator('#s-rod [data-manual="manual-aba-rodizio"]').click();
@@ -49,7 +54,7 @@ test('o voo cancelado não conta no Rodízio, nos Recursos nem nos Instrutores',
   const estado = {
     ...cenario({ ins: [doC172(1), doC172(2)], stu: [aluno(1000, { eq: 'C172', p1: 390, p2: -1 })] }),
     fixos: { '1000_0_1': { a: 390, b: 450, r: 'PP-ABP', insId: 1 } }, fStatus: { '1000_0_1': 'Cancelado' },
-    aprovacao: { em: '2026-11-10T21:05:00.000Z', por: 'Rayane' }
+    aprovacao: { em: '2026-11-10T21:05:00.000Z', por: 'Operador 01' }
   };
   await abrir(page, { estado });
   await irPara(page, 'rod');

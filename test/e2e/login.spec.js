@@ -56,7 +56,8 @@ test.describe('Login e perfis (modo compartilhado)', () => {
     await expect(page.locator('body')).toHaveAttribute('data-role', 'gestor');
     await expect(page.locator('#inst .cd')).toHaveCount(40);
     await irPara(page, 'dem');
-    await expect(page.locator('#clr')).toBeHidden();
+    // "Limpar demanda" fica no menu Mais, que o Gestor não tem (o item fica escondido até o menu abrir)
+    await expect(page.locator('#btn-mais-dem')).toBeHidden();
     await irPara(page, 'ins');
     await expect(page.locator('[data-act="addi"]')).toBeHidden();
     expect(servidor.gravacoes).toEqual([]);

@@ -168,7 +168,7 @@ test.describe('Dados pessoais (modo compartilhado)', () => {
   test('o painel lê a pessoa ao abrir; sem resposta, não deixa salvar', async ({ browser }) => {
     const { context, servidor, page, erros } = await entrar(browser, CONTAS.operador);
     // Outra pessoa grava depois do login: o painel mostra o que está no servidor
-    servidor.dadosPessoais.set('aluno:1001', { canac: '777777', atualizado_em: '2026-11-10T13:00:00.000Z', atualizado_por: 'Rayane' });
+    servidor.dadosPessoais.set('aluno:1001', { canac: '777777', atualizado_em: '2026-11-10T13:00:00.000Z', atualizado_por: 'Operador 01' });
     await abrirDadosDoAluno(page, 1001);
     await expect(campo(page, 'CANAC')).toHaveValue('777777');
     await painel(page).getByRole('button', { name: 'Cancelar' }).click();

@@ -3,14 +3,14 @@
 // (node scripts/capturar-goldens-motor.mjs): depois disso, antes e depois ficam iguais.
 // Uso: node scripts/medir-escalas.mjs [buracos] [horários]: com os critérios da compactação, por exemplo
 // "aviao fixos"; sem eles, os do padrão
-import { readFile } from 'node:fs/promises';
 import { performance } from 'node:perf_hooks';
 import { runAllocationEngine } from '../js/engine.js';
 import { metricasDaEscala } from '../js/metricas.js';
 import { minutoDaPreferencia } from '../js/horarios.js';
 import { gerarCenario } from '../test/helpers/cenarios.js';
+import { lerGoldens } from '../test/helpers/goldens.js';
 
-const goldens = JSON.parse(await readFile(new URL('../test/fixtures/motor-goldens.json', import.meta.url), 'utf8'));
+const goldens = lerGoldens();
 const [buracos, horarios] = process.argv.slice(2);
 const criterios = buracos ? { criterios: { buracos, ...(horarios ? { horarios } : {}) } } : {};
 const estados = [goldens.exemplo.estado, ...goldens.cenarios.map(c => gerarCenario(c.seed))].map(e => ({ ...e, ...criterios }));

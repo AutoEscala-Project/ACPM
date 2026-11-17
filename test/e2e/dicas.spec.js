@@ -68,7 +68,7 @@ test.describe('Dicas com a tela travada', () => {
   });
 
   test('na escala aprovada, os critérios ficam travados e a dica diz por quê; o clique não muda nada', async ({ page }) => {
-    await abrir(page, { estado: { ...diaComHorarioLivre(), aprovacao: { em: '2026-11-10T21:05:00.000Z', por: 'Rayane' } } });
+    await abrir(page, { estado: { ...diaComHorarioLivre(), aprovacao: { em: '2026-11-10T21:05:00.000Z', por: 'Operador 01' } } });
     await abrirEscala(page);
     const aviao = page.locator('#criterios [data-valor="aviao"]');
     await expect(aviao).toHaveAttribute('aria-disabled', 'true');
@@ -90,14 +90,6 @@ test('o "+ missão" da Demanda aparece com o foco do teclado em qualquer campo d
   expect(await opacidade(linha.locator('.btn-add-mis'))).toBe('0');
   await linha.locator('[data-f="pr"]').focus();
   await expect.poll(() => opacidade(linha.locator('.btn-add-mis'))).toBe('1');
-});
-
-test('o foco do teclado na data aparece no rótulo dela', async ({ page }) => {
-  await abrir(page, { estado: diaComHorarioLivre() });
-  await page.locator('#dt-ant').focus();
-  await page.keyboard.press('Tab');
-  await expect(page.locator('#dt')).toBeFocused();
-  expect(await page.locator('.topo-data-campo').evaluate(el => getComputedStyle(el).outlineStyle)).toBe('solid');
 });
 
 test.describe('Dicas no celular', () => {

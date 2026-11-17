@@ -1,0 +1,25 @@
+{
+  "seed": 25,
+  "hash": "76791a4dcd8c898b",
+  "out": [
+    {"a":390,"b":480,"r":"SALA-GROUND","s":"Aluno 08","ins":"Instrutor 10","mis":"Ground C152","status":"Confirmado","fKey":"1007_0_1","classKey":"GND_Ground C152_0_10","isGround":true,"w":0,"o":7,"stuId":1007,"mid":0,"insId":10,"eqType":"Sala Ground","h":1.5,"ss":"1/1","stuKg":50,"insKg":69,"limKg":0,"kg":0,"baseTag":"Próximo livre","tag":"Próximo livre","groupSize":1},
+    {"a":390,"b":630,"r":"PP-ABP","s":"Aluno 06","ins":"Instrutor 17","mis":"Voo Solo","status":"Confirmado","fKey":"1005_0_1","classKey":"1005_0_1","isGround":false,"w":0,"o":5,"stuId":1005,"mid":0,"insId":17,"eqType":"C172","h":4,"ss":"1/1","stuKg":59,"insKg":74,"limKg":222,"kg":133,"baseTag":"Próximo livre","tag":"Próximo livre"},
+    {"a":500,"b":590,"r":"SALA-GROUND","s":"Aluno 10","ins":"Instrutor 03","mis":"Ground C172","status":"Confirmado","fKey":"1011_0_1","classKey":"GND_Ground C172_1_8","isGround":true,"w":1,"o":9,"stuId":1011,"mid":0,"insId":3,"eqType":"Sala Ground","h":1.5,"ss":"1/1","stuKg":54,"insKg":90,"limKg":0,"kg":144,"baseTag":"Pref. 1","tag":"Pref. 1","groupSize":1},
+    {"a":610,"b":700,"r":"SALA-GROUND","s":"Aluno 04","ins":"Instrutor 08","mis":"Ground PA-34","status":"Confirmado","fKey":"1003_0_1","classKey":"GND_Ground PA-34_2_8","isGround":true,"w":2,"o":3,"stuId":1003,"mid":0,"insId":8,"eqType":"Sala Ground","h":1.5,"ss":"1/1","stuKg":60,"insKg":86,"limKg":0,"kg":0,"baseTag":"Pref. 1","tag":"Pref. 1","groupSize":1},
+    {"a":690,"b":870,"r":"PP-ABP","s":"Aluno 02","ins":"Instrutor 20","mis":"IFR","status":"Confirmado","fKey":"1001_0_1","classKey":"1001_0_1","isGround":false,"w":3,"o":1,"stuId":1001,"mid":0,"insId":20,"eqType":"C172","h":3,"ss":"1/1","stuKg":73,"insKg":97,"limKg":222,"kg":170,"baseTag":"Pref. 1","tag":"Pref. 1"},
+    {"a":870,"b":960,"r":"SALA-GROUND","s":"Aluno 09","ins":"Instrutor 21","mis":"Ground Navegação","status":"Confirmado","fKey":"1010_0_1","classKey":"GND_Ground Navegação_6_21","isGround":true,"w":6,"o":8,"stuId":1010,"mid":0,"insId":21,"eqType":"Sala Ground","h":1.5,"ss":"1/1","stuKg":79,"insKg":82,"limKg":0,"kg":0,"baseTag":"Pref. 1","tag":"Pref. 1","groupSize":1},
+    {"a":870,"b":990,"r":"PR-VOM","s":"Aluno 05","ins":"Instrutor 20","mis":"Multimotor","status":"Confirmado","fKey":"1004_0_1","classKey":"1004_0_1","isGround":false,"w":6,"o":4,"stuId":1004,"mid":0,"insId":20,"eqType":"PA-34","h":2,"ss":"1/1","stuKg":88,"insKg":97,"limKg":250,"kg":185,"baseTag":"Próximo livre","tag":"Próximo livre"},
+    {"a":980,"b":1040,"r":"PP-ABP","s":"Aluno 03","ins":"Instrutor 15","mis":"Navegação","status":"Confirmado","fKey":"1002_0_1","classKey":"1002_0_1","isGround":false,"w":7,"o":2,"stuId":1002,"mid":0,"insId":15,"eqType":"C172","h":1,"ss":"1/1","stuKg":84,"insKg":50,"limKg":222,"kg":134,"baseTag":"Horário ajustado","tag":"Horário ajustado"},
+    {"a":990,"b":1050,"r":"PR-VOM","s":"Aluno 10","ins":"Instrutor 20","mis":"Multimotor","status":"Confirmado","fKey":"1011_1013_1","classKey":"1011_1013_1","isGround":false,"w":7,"o":9,"stuId":1011,"mid":1013,"insId":20,"eqType":"PA-34","h":1,"ss":"1/1","stuKg":54,"insKg":97,"limKg":250,"kg":151,"baseTag":"Horário ajustado","tag":"Horário ajustado"},
+    {"a":1050,"b":1170,"r":"PP-ABP","s":"Aluno 11","ins":"Instrutor 15","mis":"Noturno","status":"Confirmado","fKey":"1014_0_1","classKey":"1014_0_1","isGround":false,"w":8,"o":10,"stuId":1014,"mid":0,"insId":15,"eqType":"C172","h":2,"ss":"1/1","stuKg":84,"insKg":50,"limKg":222,"kg":134,"baseTag":"Pref. 1","tag":"Pref. 1"}
+  ],
+  "al": [
+    {"t":"err","s":"Aluno 01","m":"Rejeitado: a missão “Multimotor” só voa em PA-34 (o pedido está no Sim. Multi).","codigo":"equipamento-da-missao"},
+    {"t":"err","s":"Aluno 08 (Voo Solo)","m":"Rejeitado: nenhum horário aberto depois do Ground (08:00) comporta 1 h até as 17:30.","codigo":"depois-do-ground"},
+    {"t":"err","s":"Aluno 07","m":"Rejeitado: nenhum instrutor habilitado (MLTE (PA-34)) está disponível durante o voo inteiro nos horários possíveis.","codigo":"instrutores-indisponiveis"},
+    {"t":"err","s":"Aluno 10 (Multimotor)","m":"Rejeitado: o aluno já tem outra missão nos horários possíveis.","codigo":"aluno-ocupado"},
+    {"t":"err","s":"Aluno 08 (Parafuso)","m":"Rejeitado: os instrutores habilitados (Voo de Parafuso (SPIN) + MLTE (PA-34)) já têm outro compromisso nos horários possíveis.","codigo":"instrutores-ocupados"}
+  ],
+  "tot": 15,
+  "revisao": {}
+}

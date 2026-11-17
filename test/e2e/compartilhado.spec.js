@@ -29,9 +29,9 @@ test.describe('Modo compartilhado: gravação, conflitos e link da escala', () =
     await expect(page.locator('#aviso-sync')).toBeVisible();
     await expect(page.locator('#aviso-sync-texto')).toHaveText(
       'Outra pessoa alterou a escala enquanto você editava. A tela ficou só para consulta: recarregue para ver a versão atual e continuar (a sua última alteração não foi salva).');
-    // Só para consulta: sem os controles de edição
+    // Só para consulta: sem os controles de edição (conferidos na aba aberta, a de Recursos)
     await expect(page.locator('body')).toHaveAttribute('data-role', 'gestor');
-    await expect(page.locator('[data-act="addi"]')).toBeHidden();
+    await expect(page.locator('#btn-novo-recurso')).toBeHidden();
 
     await page.waitForTimeout(300);
     const enviadas = servidor.gravacoes.length;

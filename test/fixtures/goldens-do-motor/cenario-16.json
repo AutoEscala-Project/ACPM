@@ -1,0 +1,16 @@
+{
+  "seed": 16,
+  "hash": "e8891998aef349e3",
+  "out": [
+    {"a":390,"b":480,"r":"SALA-GROUND","s":"Aluno 03","ins":"Instrutor 22","mis":"Ground Navegação","status":"Confirmado","fKey":"1002_0_1","classKey":"GND_Ground Navegação_0_22","isGround":true,"w":0,"o":2,"stuId":1002,"mid":0,"insId":22,"eqType":"Sala Ground","h":1.5,"ss":"1/1","stuKg":0,"insKg":68,"limKg":0,"kg":0,"baseTag":"Pref. 1","tag":"Pref. 1","groupSize":1},
+    {"a":390,"b":450,"r":"PP-LJV","s":"Aluno 01","ins":"Instrutor 24","mis":"Voo Local","status":"Confirmado","fKey":"1000_0_1","classKey":"1000_0_1","isGround":false,"w":0,"o":0,"stuId":1000,"mid":0,"insId":24,"eqType":"C152","h":1,"ss":"1/1","stuKg":52,"insKg":83,"limKg":170,"kg":135,"baseTag":"Pref. 1","tag":"Pref. 1"},
+    {"a":390,"b":570,"r":"PP-ABP","s":"Aluno 07","ins":"Instrutor 02","mis":"Parafuso","status":"Confirmado","fKey":"1008_0_1","classKey":"1008_0_1","isGround":false,"w":0,"o":6,"stuId":1008,"mid":0,"insId":2,"eqType":"C172","h":3,"ss":"1/1","stuKg":82,"insKg":75,"limKg":222,"kg":157,"baseTag":"Pref. 1","tag":"Pref. 1"},
+    {"a":610,"b":700,"r":"SALA-GROUND","s":"Aluno 03","ins":"Instrutor 13","mis":"Ground PA-34","status":"Confirmado","fKey":"1002_1003_1","classKey":"GND_Ground PA-34_2_13","isGround":true,"w":2,"o":2,"stuId":1002,"mid":1003,"insId":13,"eqType":"Sala Ground","h":1.5,"ss":"1/1","stuKg":0,"insKg":59,"limKg":0,"kg":0,"baseTag":"Pref. 2","tag":"Pref. 2","groupSize":1},
+    {"a":610,"b":790,"r":"PP-ABP","s":"Aluno 02","ins":"Instrutor 01","mis":"Parafuso","status":"Confirmado","fKey":"1001_0_1","classKey":"1001_0_1","isGround":false,"w":2,"o":1,"stuId":1001,"mid":0,"insId":1,"eqType":"C172","h":3,"ss":"1/1","stuKg":83,"insKg":70,"limKg":222,"kg":153,"baseTag":"Pref. 1","tag":"Pref. 1"},
+    {"a":990,"b":1050,"r":"PR-VOM","s":"Aluno 04","ins":"Instrutor 04","mis":"Multimotor","status":"Confirmado","fKey":"1004_1005_1","classKey":"1004_1005_1","isGround":false,"w":7,"o":3,"stuId":1004,"mid":1005,"insId":4,"eqType":"PA-34","h":1,"ss":"1/1","stuKg":97,"insKg":93,"limKg":250,"kg":190,"baseTag":"Horário ajustado","tag":"Horário ajustado"},
+    {"a":1050,"b":1290,"r":"PP-ABP","s":"Aluno 05","ins":"Instrutor 04","mis":"Noturno","status":"Confirmado","fKey":"1006_0_1","classKey":"1006_0_1","isGround":false,"w":8,"o":4,"stuId":1006,"mid":0,"insId":4,"eqType":"C172","h":4,"ss":"1/1","stuKg":53,"insKg":93,"limKg":222,"kg":146,"baseTag":"Pref. 1","tag":"Pref. 1"}
+  ],
+  "al": [],
+  "tot": 7,
+  "revisao": {}
+}

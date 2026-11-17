@@ -1,0 +1,30 @@
+{
+  "seed": 18,
+  "hash": "85964cd4a3c24193",
+  "out": [
+    {"a":390,"b":570,"r":"PP-LJV","s":"Aluno 04","ins":"Instrutor 10","mis":"Voo Solo","status":"Confirmado","fKey":"1003_0_1","classKey":"1003_0_1","isGround":false,"w":0,"o":3,"stuId":1003,"mid":0,"insId":10,"eqType":"C152","h":3,"ss":"1/1","stuKg":84,"insKg":58,"limKg":170,"kg":142,"baseTag":"Próximo livre","tag":"Próximo livre"},
+    {"a":390,"b":450,"r":"PP-AJS","s":"Aluno 10","ins":"Instrutor 11","mis":"Voo Solo","status":"Confirmado","fKey":"1011_1013_1","classKey":"1011_1013_1","isGround":false,"w":0,"o":9,"stuId":1011,"mid":1013,"insId":11,"eqType":"C172","h":1,"ss":"1/1","stuKg":100,"insKg":73,"limKg":222,"kg":173,"baseTag":"Próximo livre","tag":"Próximo livre"},
+    {"a":390,"b":630,"r":"PP-ABP","s":"Aluno 12","ins":"Instrutor 07","mis":"Voo Local","status":"Confirmado","fKey":"1015_0_1","classKey":"1015_0_1","isGround":false,"w":0,"o":11,"stuId":1015,"mid":0,"insId":7,"eqType":"C172","h":4,"ss":"1/1","stuKg":61,"insKg":66,"limKg":222,"kg":127,"baseTag":"Pref. 1","tag":"Pref. 1"},
+    {"a":450,"b":510,"r":"PR-VOM","s":"Aluno 01","ins":"Instrutor 12","mis":"Navegação","status":"Confirmado","fKey":"1000_0_1","classKey":"1000_0_1","isGround":false,"w":0,"o":0,"stuId":1000,"mid":0,"insId":12,"eqType":"PA-34","h":1,"ss":"1/1","stuKg":73,"insKg":88,"limKg":250,"kg":161,"baseTag":"Horário ajustado","tag":"Horário ajustado"},
+    {"a":500,"b":560,"r":"PR-JPL","s":"Aluno 08","ins":"Instrutor 13","mis":"Parafuso","status":"Confirmado","fKey":"1008_0_1","classKey":"1008_0_1","isGround":false,"w":1,"o":7,"stuId":1008,"mid":0,"insId":13,"eqType":"C152","h":1,"ss":"1/1","stuKg":85,"insKg":83,"limKg":170,"kg":168,"baseTag":"Pref. 1","tag":"Pref. 1"},
+    {"a":500,"b":680,"r":"PR-BTB","s":"Aluno 10","ins":"Instrutor 03","mis":"Voo Local","status":"Confirmado","fKey":"1011_1012_1","classKey":"1011_1012_1","isGround":false,"w":1,"o":9,"stuId":1011,"mid":1012,"insId":3,"eqType":"C152","h":3,"ss":"1/1","stuKg":100,"insKg":68,"limKg":170,"kg":168,"baseTag":"Pref. 2","tag":"Pref. 2"},
+    {"a":510,"b":750,"r":"PR-VOM","s":"Aluno 16","ins":"Instrutor 12","mis":"Parafuso","status":"Confirmado","fKey":"1019_1021_1","classKey":"1019_1021_1","isGround":false,"w":1,"o":15,"stuId":1019,"mid":1021,"insId":12,"eqType":"PA-34","h":4,"ss":"1/1","stuKg":72,"insKg":88,"limKg":250,"kg":160,"baseTag":"Próximo livre","tag":"Próximo livre"},
+    {"a":610,"b":730,"r":"SIM-MLTE-E","s":"Aluno 13","ins":"Instrutor 06","mis":"Simulador","status":"Confirmado","fKey":"1016_0_1","classKey":"1016_0_1","isGround":false,"w":2,"o":12,"stuId":1016,"mid":0,"insId":6,"eqType":"Sim. Multi","h":2,"ss":"1/1","stuKg":57,"insKg":110,"limKg":0,"kg":167,"baseTag":"Pref. 1","tag":"Pref. 1"},
+    {"a":630,"b":690,"r":"PT-KIW","s":"Aluno 15","ins":"Instrutor 15","mis":"Navegação","status":"Confirmado","fKey":"1018_0_1","classKey":"1018_0_1","isGround":false,"w":2,"o":14,"stuId":1018,"mid":0,"insId":15,"eqType":"PA-34","h":1,"ss":"1/1","stuKg":101,"insKg":80,"limKg":250,"kg":181,"baseTag":"Próximo livre","tag":"Próximo livre"},
+    {"a":690,"b":930,"r":"SIM-MONO-A","s":"Aluno 05","ins":"Instrutor 05","mis":"Simulador","status":"Confirmado","fKey":"1004_1005_1","classKey":"1004_1005_1","isGround":false,"w":3,"o":4,"stuId":1004,"mid":1005,"insId":5,"eqType":"Sim. Mono","h":4,"ss":"1/1","stuKg":56,"insKg":92,"limKg":0,"kg":148,"baseTag":"Pref. 1","tag":"Pref. 1"},
+    {"a":760,"b":940,"r":"SIM-MONO-C","s":"Aluno 16","ins":"Instrutor 18","mis":"Simulador","status":"Confirmado","fKey":"1019_0_1","classKey":"1019_0_1","isGround":false,"w":4,"o":15,"stuId":1019,"mid":0,"insId":18,"eqType":"Sim. Mono","h":3,"ss":"1/1","stuKg":72,"insKg":72,"limKg":0,"kg":144,"baseTag":"Próximo livre","tag":"Próximo livre"},
+    {"a":820,"b":910,"r":"SALA-GROUND","s":"Aluno 07","ins":"Instrutor 02","mis":"Ground PA-34","status":"Confirmado","fKey":"1007_0_1","classKey":"GND_Ground PA-34_5_2","isGround":true,"w":5,"o":6,"stuId":1007,"mid":0,"insId":2,"eqType":"Sala Ground","h":1.5,"ss":"1/1","stuKg":83,"insKg":92,"limKg":0,"kg":0,"baseTag":"Pref. 1","tag":"Pref. 1","groupSize":1},
+    {"a":820,"b":940,"r":"PR-BTB","s":"Aluno 10","ins":"Instrutor 17","mis":"Voo Local","status":"Pendente","fKey":"1011_0_1","classKey":"1011_0_1","isGround":false,"w":5,"o":9,"stuId":1011,"mid":0,"insId":17,"eqType":"C152","h":2,"ss":"1/1","stuKg":100,"insKg":55,"limKg":170,"kg":155,"baseTag":"Pref. 1","tag":"Pref. 1"},
+    {"a":980,"b":1070,"r":"SALA-GROUND","s":"Aluno 03","ins":"Instrutor 04","mis":"Ground C152","status":"Confirmado","fKey":"1002_0_1","classKey":"GND_Ground C152_7_4","isGround":true,"w":7,"o":2,"stuId":1002,"mid":0,"insId":4,"eqType":"Sala Ground","h":1.5,"ss":"1/1","stuKg":53,"insKg":95,"limKg":0,"kg":0,"baseTag":"Próximo livre","tag":"Próximo livre","groupSize":1}
+  ],
+  "al": [
+    {"t":"err","s":"Aluno 05","m":"Rejeitado: nenhum instrutor dentro dos limites da Lei do Aeronauta (horas de voo, jornada ou repouso) nos horários possíveis.","codigo":"limite-da-lei"},
+    {"t":"err","s":"Aluno 16 (Voo Solo)","m":"Rejeitado: o aluno já tem outra missão nos horários possíveis.","codigo":"aluno-ocupado"},
+    {"t":"err","s":"Aluno 02","m":"Rejeitado: nenhum horário aberto comporta 2 h a partir das 17:30.","codigo":"sem-horario"},
+    {"t":"err","s":"Aluno 06","m":"Rejeitado: nenhum horário aberto comporta 1 h a partir das 17:30.","codigo":"sem-horario"},
+    {"t":"err","s":"Aluno 09","m":"Rejeitado: nenhum horário aberto comporta 2 h a partir das 17:30.","codigo":"sem-horario"},
+    {"t":"err","s":"Aluno 11","m":"Rejeitado: a missão “Noturno” só voa em C172 (o pedido está no Sim. Multi).","codigo":"equipamento-da-missao"}
+  ],
+  "tot": 20,
+  "revisao": {}
+}

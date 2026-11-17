@@ -150,8 +150,9 @@ test.describe('Recursos: horários de decolagem por categoria', () => {
     const pa34 = page.locator('#horarios [data-cat="PA-34"]');
     await expect(pa34.locator('.horarios-modelo')).toHaveText('De 30 em 30 min, 06:30–16:30');
     await expect(pa34.locator('.horarios-qtd')).toHaveText('21 horários');
-    // No resumo, só um botão por categoria
-    expect(await page.locator('#horarios button').count()).toBeLessThanOrEqual(8);
+    // No resumo, só um botão por categoria (C152, C172, simuladores e PA-34)
+    await expect(page.locator('#horarios .horarios-cat')).toHaveCount(4);
+    await expect(page.locator('#horarios button')).toHaveCount(4);
     await expect(page.locator('#horarios .horarios-editor')).toHaveCount(0);
 
     // A janela das 10:10 fechada nesta data: o horário dela fica apagado, e a dica diz por quê
