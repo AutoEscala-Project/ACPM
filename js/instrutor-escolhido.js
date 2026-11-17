@@ -28,7 +28,7 @@ function impedimentoDoPedido(x, aluno, pedido) {
 export function instrutoresDoPedido(estado, aluno, pedido) {
   const lista = estado.ins.map(x => ({ id: x.id, nm: x.nm, nota: impedimentoDoPedido(x, aluno, pedido) }))
     .filter(o => o.id === pedido.insId || ['', 'fora nesta data'].includes(o.nota));
-  if (instrutorValido(pedido.insId) && !lista.some(o => o.id === pedido.insId)) lista.unshift({ id: pedido.insId, nm: 'Instrutor fora do cadastro', nota: '' });
+  if (instrutorValido(pedido.insId) && !lista.some(o => o.id === pedido.insId)) lista.unshift({ id: pedido.insId, nm: 'Instrutor fora do cadastro', nota: 'o app escolhe' });
   return lista;
 }
 

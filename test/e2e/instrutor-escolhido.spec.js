@@ -167,5 +167,29 @@ test.describe('Instrutor escolhido', () => {
     await expect(voo.locator('.fixo')).toHaveAttribute('aria-label', 'Voo fixo: instrutor escolhido na escala');
     await expect(linha(page, 'Aluno 1000').locator('.fixo')).toHaveCount(0);
   });
+
+  test('o escolhido excluído: na data aberta, o pedido volta ao Automático; em outra data, o app escolhe e avisa', async ({ page }) => {
+    // Outra data: o pedido guardado ainda escolhe o instrutor 9, que saiu do cadastro
+    const estado = dia();
+    estado.stu[0].insId = 9;
+    await abrir(page, { estado });
+    await abrirEscala(page);
+    await expect(linha(page, 'Aluno 1000').locator('.c-instr')).toHaveText('Instrutor 02');
+    await expect(page.locator('#out details.avisos summary')).toContainText('1 voo com o instrutor escolhido fora do cadastro');
+    await expect(page.locator('#out details.avisos')).toContainText('O instrutor escolhido saiu do cadastro: o voo ficou com Instrutor 02.');
+    await irPara(page, 'dem');
+    await expect(pedido(page, 1000).locator('[data-f="insId"] option:checked')).toHaveText('Instrutor fora do cadastro (o app escolhe)');
+
+    // A data aberta: escolher o Instrutor 01 e excluí-lo do cadastro devolve o pedido ao Automático, sem aviso
+    await pedido(page, 1000).locator('[data-f="insId"]').selectOption({ label: 'Instrutor 01' });
+    await irPara(page, 'ins');
+    await page.locator('[data-vista-ins="cadastro"]').click();
+    await confirmar(page, '#inst tr.cd[data-id="1"] [data-act="deli"]');
+    await irPara(page, 'dem');
+    await expect(pedido(page, 1000).locator('[data-f="insId"]')).toHaveValue('');
+    await abrirEscala(page);
+    await expect(page.locator('#out details.avisos')).toHaveCount(0);
+    await expect(linha(page, 'Aluno 1000')).toHaveCount(1);
+  });
 });
 

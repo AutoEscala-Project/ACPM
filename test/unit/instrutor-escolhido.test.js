@@ -62,9 +62,28 @@ describe('Instrutor escolhido na Demanda: o motor encaixa o voo com ele', () => 
     assert.deepEqual(motivo(caso(instrutor(1, 9, { on: false }))), [0, [['instrutor-escolhido', 'Rejeitado: o instrutor escolhido (Instrutor 01) não está disponível nesta data.']]]);
     assert.deepEqual(motivo(caso(instrutor(1, 9, { hab: ['grounds'] }))), [0, [['instrutor-escolhido', 'Rejeitado: o instrutor escolhido (Instrutor 01) não tem a habilitação de Voo Local no C152 (Voo Local + C152).']]]);
     assert.deepEqual(motivo(caso(instrutor(1, 9), {}, { bl: [1] })), [0, [['instrutor-escolhido', 'Rejeitado: o instrutor escolhido (Instrutor 01) está em “Não escalar com” deste aluno.']]]);
-    assert.deepEqual(motivo(caso(instrutor(1, 9), { insId: 99 })), [0, [['instrutor-escolhido', 'Rejeitado: o instrutor escolhido saiu do cadastro.']]]);
     assert.deepEqual(motivo(caso(instrutor(1, 9, { aw: Array(9).fill(false) }))),
       [0, [['instrutores-indisponiveis', 'Rejeitado: o instrutor escolhido (Instrutor 01) não está disponível durante o voo inteiro nos horários possíveis.']]]);
+  });
+
+  it('o escolhido que saiu do cadastro (excluído com outra data aberta): o voo fica com outro instrutor, com aviso', () => {
+    const ins = [instrutor(1, 9), instrutor(2, 1)];
+    const { out, al } = runAllocationEngine(cenario({ ins, stu: [aluno(1000, { insId: 99 })] }));
+    assert.deepEqual(out.map(o => [o.insId, Boolean(o.insEscolhido), o.tag]), [[2, false, 'Pref. 1']]);
+    assert.deepEqual(al.map(a => [a.codigo, a.m, a.stuId, a.insId]), [['escolhido-saiu', 'O instrutor escolhido saiu do cadastro: o voo ficou com Instrutor 02. Escolha outro na Demanda ou deixe no Automático.', 1000, 2]]);
+    // O “Voa com” do aluno volta a valer; o pedido não passa mais na frente dos outros
+    const comPar = runAllocationEngine(cenario({ ins, stu: [aluno(1000, { insId: 99 }, { voaCom: [1] })] }));
+    assert.deepEqual([comPar.out.map(o => [o.insId, o.insPar]), comPar.al.map(a => a.codigo)], [[[1, true]], ['escolhido-saiu']]);
+    const ordem = semCompactar(cenario({ ins, stu: [aluno(1000, { pr: 5 }), aluno(1001, { pr: 1, insId: 99 })], semAeronaves: SO_PP_LJV }));
+    assert.deepEqual(ordem.out.map(o => [o.s, o.tag]), [['Aluno 1000', 'Pref. 1'], ['Aluno 1001', 'Pref. 2']]);
+    // Sem horário possível, a rejeição de sempre (sem o aviso)
+    const semAviao = runAllocationEngine(cenario({ ins, stu: [aluno(1000, { insId: 99 })], semAeronaves: apenas('C152') }));
+    assert.deepEqual(semAviao.al.map(a => a.codigo), ['sem-aviao']);
+    // O voo fixo com o instrutor que saiu continua em conflito, sem o aviso
+    const fixo = cenario({ ins, stu: [aluno(1000, { insId: 99 })] });
+    fixo.fixos = { '1000_0_1': { a: 500, b: 560, r: 'PP-LJV', insId: 99, escolhido: true } };
+    const r = runAllocationEngine(fixo);
+    assert.deepEqual([r.out[0].conflitoCodigos, r.al.map(a => a.t)], [['instrutor-saiu'], ['conf']]);
   });
 
   it('Ground: o aluno com o instrutor escolhido só entra na turma dele; quem não escolheu entra em qualquer uma', () => {
@@ -172,7 +191,7 @@ describe('Instrutor escolhido na Escala: o voo fica onde está', () => {
     assert.deepEqual(instrutoresDoPedido(estado, s, s), [{ id: 1, nm: 'Instrutor 01', nota: '' }, { id: 3, nm: 'Instrutor 03', nota: 'fora nesta data' }]);
     // O escolhido continua na lista mesmo quando não serve mais (com o motivo), ou quando saiu do cadastro
     assert.deepEqual(instrutoresDoPedido(estado, s, { ...s, insId: 4 }).map(o => [o.id, o.nota]), [[1, ''], [3, 'fora nesta data'], [4, 'em Não escalar com']]);
-    assert.deepEqual(instrutoresDoPedido(estado, s, { ...s, insId: 99 })[0], { id: 99, nm: 'Instrutor fora do cadastro', nota: '' });
+    assert.deepEqual(instrutoresDoPedido(estado, s, { ...s, insId: 99 })[0], { id: 99, nm: 'Instrutor fora do cadastro', nota: 'o app escolhe' });
   });
 });
 

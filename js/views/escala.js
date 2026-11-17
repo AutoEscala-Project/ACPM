@@ -371,6 +371,7 @@ function resumoDosAvisos(avisos) {
   const atrasos = doCodigo('atraso').length;
   const limites = quantos(doCodigo('perto-do-limite'), 'insId');
   const semPar = doCodigo('voa-com').length;
+  const saiu = doCodigo('escolhido-saiu').length;
   const outros = avisos.filter(a => !CODIGOS_DE_AVISO.includes(a.codigo)).length;
   const partes = [
     semPeso && `${semPeso} ${semPeso === 1 ? 'aluno sem peso' : 'alunos sem peso'}`,
@@ -379,6 +380,7 @@ function resumoDosAvisos(avisos) {
     atrasos && `${atrasos} ${atrasos === 1 ? 'atraso com conflito' : 'atrasos com conflito'}`,
     limites && `${limites} ${limites === 1 ? 'instrutor perto' : 'instrutores perto'} do limite da lei`,
     semPar && `${semPar} ${semPar === 1 ? 'voo sem' : 'voos sem'} o instrutor de Voa com`,
+    saiu && `${saiu} ${saiu === 1 ? 'voo com o instrutor escolhido' : 'voos com o instrutor escolhido'} fora do cadastro`,
     outros && `${outros} ${outros === 1 ? 'outro' : 'outros'}`
   ].filter(Boolean);
   return `${avisos.length} ${avisos.length === 1 ? 'aviso' : 'avisos'}: ${partes.join(' · ')}`;

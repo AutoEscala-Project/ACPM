@@ -328,23 +328,35 @@ describe('Invariantes das escolhas do operador, em 300 cenários', () => {
       JSON.stringify({ pedidos: pedidos.length, comPar: comPar.length, avisos: avisos.length, recusas: recusas.length, noPar: noPar.length }));
   });
 
+  // O escolhido que está no cadastro (o que saiu não vale mais: o pedido volta para o Automático, com aviso)
+  const escolhidoValido = (estado, d) => Boolean(d.insId) && estado.ins.some(x => x.id === d.insId);
+
   it('o pedido com o instrutor escolhido voa só com ele', () => emTodasAsEscolhas(({ estado, out }) => {
     for (const o of out) {
       const d = pedidoDoVoo(estado, o);
-      if (d.insId) assert.ok(o.insId === d.insId && o.insEscolhido, `${o.fKey}: ${o.insId} em vez de ${d.insId}`);
+      if (escolhidoValido(estado, d)) assert.ok(o.insId === d.insId && o.insEscolhido, `${o.fKey}: ${o.insId} em vez de ${d.insId}`);
       else assert.ok(!o.insEscolhido, `${o.fKey}: marcado sem escolha`);
     }
   }));
 
-  it('o escolhido que não vem, sem a habilitação, bloqueado ou fora do cadastro: o pedido fica fora, com o código', () => emTodasAsEscolhas(({ estado, out, al }) => {
+  it('o escolhido que saiu do cadastro: o voo fica com outro, e o aviso diz com quem', () => emTodasAsEscolhas(({ estado, out, al }) => {
+    const avisos = al.filter(a => a.codigo === 'escolhido-saiu');
+    for (const o of out) {
+      const d = pedidoDoVoo(estado, o);
+      const saiu = d.insId === FORA_DO_CADASTRO;
+      assert.equal(avisos.some(a => a.stuId === o.stuId && a.insId === o.insId && a.m.includes(o.ins)), saiu, `${o.fKey}: aviso ${saiu ? 'faltando' : 'a mais'}`);
+    }
+  }));
+
+  it('o escolhido que não vem, sem a habilitação ou bloqueado: o pedido fica fora, com o código', () => emTodasAsEscolhas(({ estado, out, al }) => {
     for (const s of estado.stu) {
       for (const [mid, d] of [[0, s], ...s.extra.map(ex => [ex.mid, ex])]) {
-        if (!d.fly || !d.insId) continue;
+        if (!d.fly || !escolhidoValido(estado, d)) continue;
         const x = estado.ins.find(i => i.id === d.insId);
         const tipo = isGroundMission(d.mis) ? 'Sala Ground' : d.eq;
         if (x && x.on && podeFazer(x, d.mis, tipo) && !s.bl.includes(x.id)) continue;
         assert.ok(!out.some(o => o.stuId === s.id && o.mid === mid), `${s.id}_${mid} voou com ${d.insId}`);
-        if (d.insId === FORA_DO_CADASTRO || !x.on) assert.ok(al.some(a => a.codigo === 'instrutor-escolhido' || a.codigo === 'equipamento-da-missao'), `${s.id}_${mid} sem o motivo`);
+        if (!x.on) assert.ok(al.some(a => a.codigo === 'instrutor-escolhido' || a.codigo === 'equipamento-da-missao'), `${s.id}_${mid} sem o motivo`);
       }
     }
   }));
@@ -354,7 +366,7 @@ describe('Invariantes das escolhas do operador, em 300 cenários', () => {
     for (const o of out) {
       const s = estado.stu.find(x => x.id === o.stuId), d = pedidoDoVoo(estado, o);
       const pares = (s.voaCom || []).filter(id => estado.ins.some(x => x.id === id));
-      if (d.insId || !pares.length) { assert.ok(!o.insPar, `${o.fKey}: marcado sem Voa com`); continue; }
+      if (escolhidoValido(estado, d) || !pares.length) { assert.ok(!o.insPar, `${o.fKey}: marcado sem Voa com`); continue; }
       if (pares.includes(o.insId)) { assert.ok(o.insPar, `${o.fKey}: com o par sem a marca`); continue; }
       assert.ok(avisos.some(a => a.stuId === o.stuId && a.insId === o.insId && a.m.includes(o.ins)), `${o.fKey}: com ${o.insId}, fora do Voa com ${pares}, sem aviso`);
     }

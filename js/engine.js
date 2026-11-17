@@ -14,7 +14,7 @@ import { LIMITE_DO_MOTIVO } from './conflitos.js';
 import { normalizarHangar, posicaoNoHangar } from './hangar.js';
 import { normalizarLimites } from './limites.js';
 import { compactar, custoDaEscala } from './compactar.js';
-import { chaveDoVoo, statusDoVoo, unidadeDoVoo, umPorUnidade } from './voo.js';
+import { chaveDoVoo, statusDoVoo, unidadeDoVoo, umPorUnidade, pedidosDosVoos } from './voo.js';
 import { menorPrimeiro, soma, paradasEntre } from './util.js';
 
 // Entre os instrutores possíveis, primeiro os que têm menos habilitações: os mais versáteis ficam livres
@@ -323,7 +323,9 @@ export function runAllocationEngine(state, opcoes = {}) {
    * 6º: Ordem de cadastro do aluno e ordem da missão.
    */
   const ordemDoAgendamento = item => (Number.isInteger(item.ref.solicitacao) ? item.ref.solicitacao : Infinity);
-  const semEscolha = item => (item.ref.insId ? 0 : 1);
+  // O instrutor que saiu do cadastro não conta como escolha (o pedido volta para o Automático, com aviso)
+  const noCadastro = new Set(state.ins.map(x => x.id));
+  const semEscolha = item => (item.ref.insId && noCadastro.has(item.ref.insId) ? 0 : 1);
   const semVoaCom = item => ((item.stu.voaCom || []).length ? 0 : 1);
   act.sort((a, b) => {
     const gA = isGroundMission(a.ref.mis) ? 1 : 0;
@@ -473,15 +475,16 @@ export function runAllocationEngine(state, opcoes = {}) {
     const preferidos = [minutoDaPreferencia(d.p1), minutoDaPreferencia(d.p2)];
 
     // O instrutor escolhido pelo operador para o pedido: o motor procura o horário e o avião só com ele. O que impede o
-    // voo em qualquer horário (fora do cadastro, fora do dia, sem a habilitação, em "Não escalar com") recusa logo
+    // voo em qualquer horário (fora do dia, sem a habilitação, em "Não escalar com") recusa logo. O escolhido que saiu
+    // do cadastro (excluído depois de escolhido, numa data que não estava aberta) não vale mais: a exclusão também é do
+    // operador, e o pedido volta para o Automático (com o “Voa com” do aluno), com o aviso no fim
     const escolhido = d.insId ? state.ins.find(x => x.id === d.insId) || null : null;
     const tipoDoPedido = isGnd ? GROUND_EQ_TYPE : d.eq;
     const quem = escolhido ? `o instrutor escolhido (${escolhido.nm})` : '';
-    const impedimento = !d.insId ? null
-      : !escolhido ? 'o instrutor escolhido saiu do cadastro'
-        : !escolhido.on ? `${quem} não está disponível nesta data`
-          : !podeFazer(escolhido, d.mis, tipoDoPedido) ? `${quem} não tem a habilitação de ${d.mis}${isGnd ? '' : ` no ${d.eq}`} (${descreverExigencias(d.mis, tipoDoPedido)})`
-            : (stu.bl || []).includes(escolhido.id) ? `${quem} está em “Não escalar com” deste aluno` : null;
+    const impedimento = !escolhido ? null
+      : !escolhido.on ? `${quem} não está disponível nesta data`
+        : !podeFazer(escolhido, d.mis, tipoDoPedido) ? `${quem} não tem a habilitação de ${d.mis}${isGnd ? '' : ` no ${d.eq}`} (${descreverExigencias(d.mis, tipoDoPedido)})`
+          : (stu.bl || []).includes(escolhido.id) ? `${quem} está em “Não escalar com” deste aluno` : null;
     if (impedimento) {
       al.push({ t: 'err', s: labelStu, m: `Rejeitado: ${impedimento}.`, codigo: 'instrutor-escolhido' });
       continue;
@@ -875,6 +878,14 @@ export function runAllocationEngine(state, opcoes = {}) {
     if (!sem) continue;
     if (sem.pares.includes(o.insId)) { o.insPar = true; continue; }
     al.push({ t: 'warn', s: sem.s, m: `Sem o instrutor de “Voa com” (${sem.nomes}: ${sem.motivo}): o voo ficou com ${o.ins}.`, codigo: 'voa-com', stuId: o.stuId, insId: o.insId });
+  }
+  // O voo do pedido cujo instrutor escolhido saiu do cadastro: o aviso diz quem ficou com ele (o voo fixo fica com o
+  // conflito dele)
+  const pedidoDoVoo = pedidosDosVoos(state.stu);
+  for (const o of out) {
+    const d = o.fixo ? null : pedidoDoVoo(o);
+    if (!d || !d.insId || noCadastro.has(d.insId)) continue;
+    al.push({ t: 'warn', s: o.mid ? `${o.s} (${o.mis})` : o.s, m: `O instrutor escolhido saiu do cadastro: o voo ficou com ${o.ins}. Escolha outro na Demanda ou deixe no Automático.`, codigo: 'escolhido-saiu', stuId: o.stuId, insId: o.insId });
   }
   al.push(...avisosDeLimite(out, state, limites, historico));
 
