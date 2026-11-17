@@ -1,6 +1,7 @@
 -- Os cursos, as fases e as missões em tabelas próprias. Quem lê a escala lê os programas; a TV, a conta sem perfil e o
 -- anônimo, não. Só o Administrador grava, o curso inteiro e a partir da versão lida (cada recusa traz o campo na dica), e
--- ninguém grava direto nas tabelas. A conversão única do programa guardado no cadastro vale só antes do formato 22. As
+-- ninguém grava direto nas tabelas. A conversão única do programa guardado no cadastro vale só antes do formato dos
+-- cursos (public.formato_dos_cursos(), que monta os cadastros de teste: nenhum número de formato fica aqui). As
 -- verificações da gravação são os casos de test/helpers/casos-do-programa.js, com os mesmos dados (o nome do caso é a
 -- descrição; test/unit/espelho-do-banco.test.js confere). Os cursos de teste são o ZZ9 e o ZZ8, o aluno fica acima de
 -- 99000 e o cadastro é trocado: a transação é desfeita no final.
@@ -8,7 +9,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions;
 
-select plan(74);
+select plan(75);
 
 insert into auth.users (id, email, created_at, updated_at) values
   ('00000000-0000-4000-f000-000000000001', 'administrador@cursos.acpm.invalid', now(), now()),
@@ -24,9 +25,11 @@ insert into public.perfis (usuario, perfil, nome) values
   ('00000000-0000-4000-f000-000000000004', 'secretaria', 'Secretaria de teste'),
   ('00000000-0000-4000-f000-000000000005', 'painel', 'TV de teste');
 
--- O cadastro já no formato 22, na versão 7 (o banco de prévia tem o seu), e o curso ZZ8, com uma fase (o id de outro curso)
+-- O cadastro já no formato dos cursos, na versão 7 (o banco de prévia tem o seu), e o curso ZZ8, com uma fase (o id de
+-- outro curso)
 delete from public.documentos where chave = 'cadastro';
-insert into public.documentos (chave, conteudo, versao) values ('cadastro', '{"esquema": 22, "stu": [], "ins": []}', 7);
+insert into public.documentos (chave, conteudo, versao)
+  values ('cadastro', jsonb_build_object('esquema', public.formato_dos_cursos(), 'stu', '[]'::jsonb, 'ins', '[]'::jsonb), 7);
 insert into public.cursos (sigla, nome, ordem) values ('ZZ8', 'Outro curso de teste', 998);
 insert into public.fases_do_curso (id, curso, nome, ordem) values ('00000000-0000-4000-9008-000000000001', 'ZZ8', 'Fase do outro curso', 0);
 
@@ -278,30 +281,35 @@ select throws_ok($$ insert into public.cursos (sigla, nome) values ('ZZ6', 'Dire
 select throws_ok($$ update public.missoes_do_curso set nome = 'Direto na tabela' where curso = 'ZZ9' $$, '42501', null, 'ninguém altera as missões direto');
 select throws_ok($$ delete from public.versoes_dos_cursos where curso = 'ZZ9' $$, '42501', null, 'ninguém apaga as versões');
 
--- A conversão única, com o cadastro ainda no formato 21 (na versão 7)
+-- A conversão única, com o cadastro ainda no formato de antes (um abaixo do formato dos cursos, na versão 7)
 reset role;
-update public.documentos set conteudo = '{"esquema": 21, "stu": [], "ins": []}' where chave = 'cadastro';
+update public.documentos set conteudo = jsonb_build_object('esquema', public.formato_dos_cursos() - 1, 'stu', '[]'::jsonb, 'ins', '[]'::jsonb)
+where chave = 'cadastro';
 set local role authenticated;
 select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-f000-000000000001","role":"authenticated"}', true);
 select is(pg_temp.erro($$ select public.salvar_curso('ZZ9', 5, jsonb_set(pg_temp.trocados(), '{missoes,3,removida}', 'true'), 'ZZ9: alteração de teste') $$),
-  'PT409 formato', 'antes do formato 22, o Administrador espera a conversão (PT409, formato)');
+  'PT409 formato', 'antes do formato dos cursos, o Administrador espera a conversão (PT409, formato)');
 select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-f000-000000000003","role":"authenticated"}', true);
 select throws_ok($$ select public.importar_cursos(pg_temp.legado(), 7) $$, '42501', null, 'o gestor não faz a conversão');
 select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-f000-000000000002","role":"authenticated"}', true);
 select is(pg_temp.importar(pg_temp.legado(), 7), '{"trazidas": 2, "versao": 2, "fases": ["Programa"], "missoes": ["ZZ8-01", "ZZ8-02"],
   "alteracao": [2, "Programa trazido do cadastro (2 missões)", "Operador de teste"]}'::jsonb,
-  'o operador traz o programa do cadastro (formato 21, a versão lida)');
+  'o operador traz o programa do cadastro (antes do formato dos cursos, a versão lida)');
 select is(pg_temp.importar(pg_temp.legado(), 7), '{"trazidas": 0, "versao": 2, "fases": ["Programa"], "missoes": ["ZZ8-01", "ZZ8-02"],
   "alteracao": [2, "Programa trazido do cadastro (2 missões)", "Operador de teste"]}'::jsonb,
   'trazer o mesmo programa de novo não grava nada');
 select is(pg_temp.erro($$ select public.importar_cursos(pg_temp.legado(), 6) $$), 'PT409', 'cadastro alterado depois da leitura é conflito (PT409)');
+-- O cadastro convertido (no formato dos cursos)
 reset role;
-update public.documentos set conteudo = '{"esquema": 22, "stu": [], "ins": []}' where chave = 'cadastro';
+update public.documentos set conteudo = jsonb_build_object('esquema', public.formato_dos_cursos(), 'stu', '[]'::jsonb, 'ins', '[]'::jsonb)
+where chave = 'cadastro';
+select is((select public.esquema_do_conteudo(conteudo) from public.documentos where chave = 'cadastro'), public.formato_dos_cursos(),
+  'o cadastro convertido está no formato dos cursos');
 set local role authenticated;
 select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-f000-000000000002","role":"authenticated"}', true);
 select is(pg_temp.importar(jsonb_build_array(pg_temp.legado() -> 0 #- '{missoes,1}'), 7), '{"trazidas": 0, "versao": 2, "fases": ["Programa"],
   "missoes": ["ZZ8-01", "ZZ8-02"], "alteracao": [2, "Programa trazido do cadastro (2 missões)", "Operador de teste"]}'::jsonb,
-  'depois do formato 22, a conversão não grava mais nada');
+  'no formato dos cursos, a conversão não grava mais nada');
 
 -- O anônimo não lê
 reset role;

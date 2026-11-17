@@ -1,22 +1,28 @@
 // O banco espelha o app. O pgTAP (supabase/tests/database) não roda no CI, então este teste confere o que as duas
 // pontas precisam ter igual: a lista de tipos de missão e recursos da migração dos cursos (missao_e_recurso_validos) é a
-// de js/config.js (MIS), cada caso da gravação dos programas (test/helpers/casos-do-programa.js) é uma verificação de
-// supabase/tests/database/cursos.test.sql, com os mesmos dados, e cada erro que a gravação devolve tem um caso.
+// de js/config.js (MIS), o formato dos cursos (formato_dos_cursos) é o FORMATO_DOS_CURSOS dos casos, cada caso da
+// gravação dos programas (test/helpers/casos-do-programa.js) é uma verificação de supabase/tests/database/cursos.test.sql,
+// com os mesmos dados, e cada erro que a gravação devolve tem um caso.
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { MIS, GROUND_EQ_TYPE, GROUND_DURATION_H, DURACAO_MAXIMA_H } from '../../js/config.js';
-import { CASOS_DO_PROGRAMA, PROGRAMA } from '../helpers/casos-do-programa.js';
+import { CASOS_DO_PROGRAMA, PROGRAMA, FORMATO_DOS_CURSOS } from '../helpers/casos-do-programa.js';
 
 const ler = caminho => readFileSync(new URL(`../../${caminho}`, import.meta.url), 'utf8');
 const MIGRACAO = ler('supabase/migrations/20261117200000_cursos_e_missoes.sql');
 const TESTE_DO_BANCO = ler('supabase/tests/database/cursos.test.sql');
 
+// Uma função da migração, da criação até o fim do corpo (sem o $$; final)
+function funcaoDaMigracao(nome) {
+  const inicio = MIGRACAO.indexOf(`create function public.${nome}(`);
+  assert.ok(inicio >= 0, `a migração cria ${nome}`);
+  return MIGRACAO.slice(inicio, MIGRACAO.indexOf('$$;', inicio));
+}
+
 // A lista da função, linha a linha: o tipo de missão, os recursos e, no Ground, as horas
 function listaDoBanco() {
-  const inicio = MIGRACAO.indexOf('create function public.missao_e_recurso_validos');
-  assert.ok(inicio >= 0, 'a migração cria missao_e_recurso_validos');
-  const corpo = MIGRACAO.slice(inicio, MIGRACAO.indexOf('$$;', inicio));
+  const corpo = funcaoDaMigracao('missao_e_recurso_validos');
   const tipos = [...corpo.matchAll(/^\s*when '([^']+)' then p_eq (?:= '([^']+)'|in \(([^)]*)\))(?: and p_nb = ([\d.]+))?$/gm)]
     .map(([, mis, um, varios, horas]) => ({
       mis,
@@ -52,6 +58,30 @@ describe('O banco espelha o app', () => {
       }
     }
     assert.match(corpo, new RegExp(`else false end and p_nb > 0 and p_nb <= ${DURACAO_MAXIMA_H}\\s*$`));
+  });
+
+  // O formato dos cursos é um número só em cada ponta: a função da migração (imutável e interna: só as funções da
+  // migração a chamam) e a constante dos casos (no passo P12, a de js/migracoes.js). Um aumento é uma linha em cada
+  it('formato_dos_cursos() devolve o FORMATO_DOS_CURSOS dos casos, imutável e fora do alcance da API', () => {
+    const corpo = funcaoDaMigracao('formato_dos_cursos');
+    const r = new RegExp(String.raw`^create function public\.formato_dos_cursos\(\)\s+returns integer\s+language sql\s+immutable\s+`
+      + String.raw`set search_path = ''\s+as \$\$\s+select (\d+)\s*$`).exec(corpo);
+    assert.ok(r, 'uma função sql imutável que devolve um número');
+    assert.equal(Number(r[1]), FORMATO_DOS_CURSOS);
+    assert.match(MIGRACAO, /^revoke execute on function public\.formato_dos_cursos\(\) from public, anon, authenticated;$/m);
+    assert.doesNotMatch(MIGRACAO, /grant execute on function public\.formato_dos_cursos/);
+  });
+
+  // O formato do cadastro (esquema_do_conteudo, direto ou na variável que recebe o valor dele) só é comparado com
+  // formato_dos_cursos(), nunca com um número: o número fica só na função
+  it('a migração compara o formato do cadastro com formato_dos_cursos(), sem nenhum número', () => {
+    const formato = String.raw`(?:public\.)?esquema_do_conteudo\([^()]*\)|\bv_esquema\b`;
+    const operador = '<=|>=|<>|!=|=|<|>';
+    const comparacao = new RegExp(String.raw`(?:${formato})\s*(?:${operador})\s*([\w.]+(?:\(\))?)`, 'g');
+    const comparacoes = [...MIGRACAO.matchAll(comparacao)].map(r => r[1]);
+    assert.ok(comparacoes.length >= 2, 'salvar_curso e importar_cursos comparam o formato do cadastro');
+    assert.deepEqual(comparacoes.filter(outro => outro !== 'public.formato_dos_cursos()'), []);
+    assert.doesNotMatch(MIGRACAO, new RegExp(String.raw`\d\s*(?:${operador})\s*(?:${formato})`), 'nem com o número à esquerda');
   });
 
   it('cada caso da gravação dos programas é uma verificação de cursos.test.sql (o nome é a descrição)', () => {

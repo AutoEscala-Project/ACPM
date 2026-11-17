@@ -19,7 +19,7 @@ insert into public.perfis (usuario, perfil, nome) values
   ('00000000-0000-4000-a000-000000000052', 'gestor', 'Gestor de teste'),
   ('00000000-0000-4000-a000-000000000053', 'painel', 'TV de teste'),
   ('00000000-0000-4000-a000-000000000054', 'administrador', 'Administrador de teste');
--- Sem cadastro, o Administrador cria um curso (com o cadastro antes do formato 22, os cursos esperam a conversão)
+-- Sem cadastro, o Administrador cria um curso (com o cadastro antes do formato dos cursos, os cursos esperam a conversão)
 delete from public.documentos where chave = 'cadastro';
 
 -- A situação só dos alunos de teste, sem a hora do registro

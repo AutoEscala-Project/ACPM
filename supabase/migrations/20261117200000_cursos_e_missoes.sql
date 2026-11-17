@@ -1,7 +1,7 @@
 -- O programa de cada curso em tabelas próprias: cursos, fases e missões, com a regra de cada fase e de cada missão
 -- ("depois das anteriores", "livre" ou "depois de…") e o histórico das versões. Quem lê a escala lê os cursos; só o
 -- Administrador grava, por public.salvar_curso. A conversão única do programa guardado no cadastro (public.importar_cursos)
--- vale só antes de o cadastro chegar ao formato 22.
+-- vale só antes de o cadastro chegar ao formato dos cursos (public.formato_dos_cursos(), logo abaixo).
 -- - A sigla do curso não muda (renomear muda o nome) e o curso nunca é apagado: encerrar desativa. As fases e as
 --   missões têm um id (uuid, criado pelo app) e saem do programa sem ser apagadas (removida): a missão retirada guarda o
 --   código, que não volta para outra missão, e o código de uma missão com resultados não muda.
@@ -9,8 +9,22 @@
 --   versoes_dos_cursos, com a descrição, quem gravou e o curso como ficou.
 -- - O resultado de uma missão vale para qualquer curso cadastrado: a tabela confere só o formato da sigla, e
 --   registrar_resultado recusa o curso desconhecido (23514).
--- - O app anterior (formato 21) não chama nada disto e continua como está: PP, PC e INVA já vêm prontos, e os resultados
---   deles são aceitos como antes.
+-- - O app anterior (de antes do formato dos cursos) não chama nada disto e continua como está: PP, PC e INVA já vêm
+--   prontos, e os resultados deles são aceitos como antes.
+
+-- O formato dos cursos: o formato do cadastro a partir do qual os programas vivem nas tabelas próprias. Antes dele, as
+-- tabelas são só o espelho do programa guardado no cadastro (importar_cursos o traz, e salvar_curso espera); dele em
+-- diante, só salvar_curso grava. É o FORMATO_DOS_CURSOS do app (test/unit/espelho-do-banco.test.js confere). Se outro
+-- formato chegar antes com este número, o aumento é só a linha do número, abaixo, e a da constante
+create function public.formato_dos_cursos()
+  returns integer
+  language sql
+  immutable
+  set search_path = ''
+as $$
+  select 23
+$$;
+revoke execute on function public.formato_dos_cursos() from public, anon, authenticated;
 
 -- O tipo de missão, o recurso e as horas de uma missão do programa, como em js/config.js (MIS): o Ground é na Sala Ground,
 -- com 1,5 h, e as horas vão até 5. test/unit/espelho-do-banco.test.js confere que a lista é a mesma do app
@@ -448,7 +462,8 @@ revoke execute on function public.programa_dos_cursos() from public, anon;
 grant execute on function public.programa_dos_cursos() to authenticated;
 
 -- Grava o curso inteiro (o nome, se está ativo e o programa) a partir da versão lida; p_versao_lida = 0 cria o curso.
--- Só o Administrador, e só depois da conversão do cadastro (formato 22). Devolve a versão nova e a hora da gravação
+-- Só o Administrador, e só com o cadastro já no formato dos cursos (depois da conversão). Devolve a versão nova e a
+-- hora da gravação
 create function public.salvar_curso(p_sigla text, p_versao_lida integer, p_curso jsonb, p_descricao text)
   returns jsonb
   language plpgsql
@@ -463,8 +478,10 @@ begin
   if not public.administrador_atual() then
     raise exception 'somente o Administrador altera os cursos' using errcode = '42501';
   end if;
-  -- Antes do formato 22, as tabelas são só o espelho do programa guardado no cadastro: a conversão pode refazê-las
-  if exists (select 1 from public.documentos where chave = 'cadastro' and public.esquema_do_conteudo(conteudo) < 22) then
+  -- Antes do formato dos cursos, as tabelas são só o espelho do programa guardado no cadastro: a conversão pode
+  -- refazê-las
+  if exists (select 1 from public.documentos
+             where chave = 'cadastro' and public.esquema_do_conteudo(conteudo) < public.formato_dos_cursos()) then
     raise exception 'os programas ainda estão sendo trazidos do cadastro; recarregue a página' using errcode = 'PT409', hint = 'formato';
   end if;
   if coalesce(char_length(p_descricao), 0) not between 1 and 500 then
@@ -517,10 +534,10 @@ $$;
 revoke execute on function public.salvar_curso(text, integer, jsonb, text) from public, anon;
 grant execute on function public.salvar_curso(text, integer, jsonb, text) to authenticated;
 
--- A conversão única: o programa de cada curso guardado no cadastro (formato 21) vai para as tabelas, no lugar do que
--- houver (o mesmo programa não é gravado de novo). O operador (o administrador conta) faz na primeira abertura do app
--- novo; p_versao_do_cadastro é a versão do cadastro que o app leu (0 sem cadastro). Depois do formato 22 não grava nada,
--- nunca mais. Devolve o número de missões trazidas
+-- A conversão única: o programa de cada curso guardado no cadastro (antes do formato dos cursos) vai para as tabelas,
+-- no lugar do que houver (o mesmo programa não é gravado de novo). O operador (o administrador conta) faz na primeira
+-- abertura do app novo; p_versao_do_cadastro é a versão do cadastro que o app leu (0 sem cadastro). Com o cadastro no
+-- formato dos cursos não grava nada, nunca mais. Devolve o número de missões trazidas
 create function public.importar_cursos(p_cursos jsonb, p_versao_do_cadastro integer)
   returns integer
   language plpgsql
@@ -544,7 +561,7 @@ begin
   -- O cadastro travado: a gravação dele (public.salvar_documento) espera a conversão terminar
   select versao, public.esquema_do_conteudo(conteudo) into v_versao_do_cadastro, v_esquema
   from public.documentos where chave = 'cadastro' for update;
-  if v_esquema >= 22 then
+  if v_esquema >= public.formato_dos_cursos() then
     return 0;
   end if;
   if coalesce(v_versao_do_cadastro, 0) is distinct from p_versao_do_cadastro then

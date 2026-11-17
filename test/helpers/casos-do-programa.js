@@ -14,12 +14,12 @@
 // - a ordem é a posição na lista: das fases, no programa; das missões, dentro da fase;
 // - as listas de fases e de missões vêm sempre; o módulo, a regra, os requisitos, "dispensada" e "avaliação" podem
 //   faltar (null, 'ordem', [], false e false);
-// - a primeira recusa decide, nesta ordem: o papel, o formato do cadastro (antes do 22), a descrição, o curso (nome e
-//   ativo), a sigla (criar) ou a versão lida, e o programa: as listas e o limite, os ids (outro curso também), os
-//   campos (das fases: nome, módulo e regra; das missões: fase, código, nome, tipo com recurso e horas, regra,
-//   "dispensada" e "avaliação"), os códigos, os requisitos e o código travado por um resultado;
-// - a conversão troca o programa inteiro (o guardado é apagado), pula o curso igual e o que não existe, e depois do
-//   formato 22 não grava nada.
+// - a primeira recusa decide, nesta ordem: o papel, o formato do cadastro (antes do formato dos cursos), a descrição, o
+//   curso (nome e ativo), a sigla (criar) ou a versão lida, e o programa: as listas e o limite, os ids (outro curso
+//   também), os campos (das fases: nome, módulo e regra; das missões: fase, código, nome, tipo com recurso e horas,
+//   regra, "dispensada" e "avaliação"), os códigos, os requisitos e o código travado por um resultado;
+// - a conversão troca o programa inteiro (o guardado é apagado), pula o curso igual e o que não existe, e com o
+//   cadastro no formato dos cursos não grava nada.
 const id = (grupo, n) => `00000000-0000-4000-${grupo}-${String(n).padStart(12, '0')}`;
 
 export const IDS = Object.freeze({
@@ -103,7 +103,8 @@ const ZZ8_TRAZIDO = {
   ]
 };
 
-// O programa guardado no cadastro (formato 21), como o app manda na conversão: o ZZ8 e um curso que não existe (pulado)
+// O programa guardado no cadastro (antes do formato dos cursos), como o app manda na conversão: o ZZ8 e um curso que
+// não existe (pulado)
 const LEGADO = [
   {
     sigla: 'ZZ8',
@@ -117,10 +118,15 @@ const LEGADO = [
 ];
 const LEGADO_MUDADO = [{ ...LEGADO[0], missoes: LEGADO[0].missoes.slice(0, 1) }];
 
-// Os estados guardados. O cadastro já no formato 22 (versão 7), salvo na conversão
-const CADASTRO_22 = { esquema: 22, versao: 7 };
-const CADASTRO_21 = { esquema: 21, versao: 7 };
-const estado = (zz9, { cadastro = CADASTRO_22, zz8 = ZZ8 } = {}) => ({
+// O formato dos cursos: o formato do cadastro a partir do qual os programas vivem nas tabelas próprias (no banco,
+// public.formato_dos_cursos(); test/unit/espelho-do-banco.test.js confere que é o mesmo). O passo P12 leva esta
+// constante para js/migracoes.js, e este arquivo passa a importá-la de lá
+export const FORMATO_DOS_CURSOS = 23;
+
+// Os estados guardados. O cadastro já convertido, no formato dos cursos (versão 7, salvo na conversão), e o de antes
+const CADASTRO_CONVERTIDO = { esquema: FORMATO_DOS_CURSOS, versao: 7 };
+const CADASTRO_DE_ANTES = { esquema: FORMATO_DOS_CURSOS - 1, versao: 7 };
+const estado = (zz9, { cadastro = CADASTRO_CONVERTIDO, zz8 = ZZ8 } = {}) => ({
   cursos: [...SEMEADOS, zz8, ...(zz9 ? [zz9] : [])],
   resultados: zz9 ? [{ curso: 'ZZ9', missao: 'ZZ9-01' }] : [],
   cadastro
@@ -231,26 +237,26 @@ export const CASOS_DO_PROGRAMA = [
     salvar: salvar(4, M4_MARCADA), retorno: { versao: 5 }, depois: ZZ9_V5, alteracao: versaoGravada('ZZ9', 5, 'ZZ9: alteração de teste')
   },
 
-  // A conversão única do cadastro (o cadastro no formato 21, na versão 7)
+  // A conversão única do cadastro (o cadastro no formato de antes, na versão 7)
   {
-    nome: 'antes do formato 22, o Administrador espera a conversão (PT409, formato)', antes: estado(ZZ9_V5, { cadastro: CADASTRO_21 }),
+    nome: 'antes do formato dos cursos, o Administrador espera a conversão (PT409, formato)', antes: estado(ZZ9_V5, { cadastro: CADASTRO_DE_ANTES }),
     salvar: salvar(5, M4_MARCADA), ...recusa('PT409', 'formato')
   },
   {
-    nome: 'o operador traz o programa do cadastro (formato 21, a versão lida)', antes: estado(ZZ9_V5, { cadastro: CADASTRO_21 }),
+    nome: 'o operador traz o programa do cadastro (antes do formato dos cursos, a versão lida)', antes: estado(ZZ9_V5, { cadastro: CADASTRO_DE_ANTES }),
     importar: { programas: LEGADO, versaoDoCadastro: 7, autor: OPERADOR },
     retorno: 2, depois: ZZ8_TRAZIDO, alteracao: versaoGravada('ZZ8', 2, 'Programa trazido do cadastro (2 missões)', OPERADOR)
   },
   {
-    nome: 'trazer o mesmo programa de novo não grava nada', antes: estado(ZZ9_V5, { cadastro: CADASTRO_21, zz8: ZZ8_TRAZIDO }),
+    nome: 'trazer o mesmo programa de novo não grava nada', antes: estado(ZZ9_V5, { cadastro: CADASTRO_DE_ANTES, zz8: ZZ8_TRAZIDO }),
     importar: { programas: LEGADO, versaoDoCadastro: 7, autor: OPERADOR }, retorno: 0, depois: ZZ8_TRAZIDO, alteracao: null
   },
   {
-    nome: 'cadastro alterado depois da leitura é conflito (PT409)', antes: estado(ZZ9_V5, { cadastro: CADASTRO_21, zz8: ZZ8_TRAZIDO }),
+    nome: 'cadastro alterado depois da leitura é conflito (PT409)', antes: estado(ZZ9_V5, { cadastro: CADASTRO_DE_ANTES, zz8: ZZ8_TRAZIDO }),
     importar: { programas: LEGADO, versaoDoCadastro: 6, autor: OPERADOR }, ...recusa('PT409')
   },
   {
-    nome: 'depois do formato 22, a conversão não grava mais nada', antes: estado(ZZ9_V5, { zz8: ZZ8_TRAZIDO }),
+    nome: 'no formato dos cursos, a conversão não grava mais nada', antes: estado(ZZ9_V5, { zz8: ZZ8_TRAZIDO }),
     importar: { programas: LEGADO_MUDADO, versaoDoCadastro: 7, autor: OPERADOR }, retorno: 0, depois: ZZ8_TRAZIDO, alteracao: null
   }
 ];
