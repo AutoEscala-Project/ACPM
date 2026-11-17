@@ -68,7 +68,7 @@ test.describe('Dicas com a tela travada', () => {
   });
 
   test('na escala aprovada, os critérios ficam travados e a dica diz por quê; o clique não muda nada', async ({ page }) => {
-    await abrir(page, { estado: { ...diaComHorarioLivre(), aprovacao: { em: '2026-11-10T21:05:00.000Z', por: 'Rayane' } } });
+    await abrir(page, { estado: { ...diaComHorarioLivre(), aprovacao: { em: '2026-11-10T21:05:00.000Z', por: 'Operador 01' } } });
     await abrirEscala(page);
     const aviao = page.locator('#criterios [data-valor="aviao"]');
     await expect(aviao).toHaveAttribute('aria-disabled', 'true');

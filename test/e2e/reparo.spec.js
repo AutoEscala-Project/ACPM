@@ -71,7 +71,7 @@ test.describe('Sugestões para um conflito', () => {
 
   // O pedido mudou depois da aprovação (a duração): a única sugestão é soltar o voo
   test('soltar o voo: o app escala de novo, sem o cadeado; o histórico desfaz', async ({ page }) => {
-    const estado = { ...dia(), stu: [aluno(1000, { p1: 390, p2: -1, nb: 2 })], fixos: { '1000_0_1': { a: 390, b: 450, r: 'PP-LJV', insId: 1 } }, aprovacao: { em: '2026-11-10T21:05:00.000Z', por: 'Rayane' } };
+    const estado = { ...dia(), stu: [aluno(1000, { p1: 390, p2: -1, nb: 2 })], fixos: { '1000_0_1': { a: 390, b: 450, r: 'PP-LJV', insId: 1 } }, aprovacao: { em: '2026-11-10T21:05:00.000Z', por: 'Operador 01' } };
     await abrir(page, { estado });
     await abrirEscala(page);
     await expect(page.locator('#out details.conflitos')).toContainText('a duração do pedido mudou');
@@ -93,7 +93,7 @@ test.describe('Sugestões para um conflito', () => {
   });
 
   test('no Gestor, a caixa de conflitos aparece sem o botão Sugestões', async ({ page }) => {
-    const estado = { ...dia(), ins: [instrutor(1, 9, { on: false }), instrutor(2, 9)], fixos: { '1000_0_1': { a: 390, b: 450, r: 'PP-LJV', insId: 1 } }, aprovacao: { em: '2026-11-10T21:05:00.000Z', por: 'Rayane' } };
+    const estado = { ...dia(), ins: [instrutor(1, 9, { on: false }), instrutor(2, 9)], fixos: { '1000_0_1': { a: 390, b: 450, r: 'PP-LJV', insId: 1 } }, aprovacao: { em: '2026-11-10T21:05:00.000Z', por: 'Operador 01' } };
     await abrir(page, { estado, url: './?role=gestor' });
     await abrirEscala(page);
     await expect(page.locator('#out details.conflitos')).toContainText('o instrutor não está disponível');

@@ -69,7 +69,7 @@ describe('Separar e juntar', () => {
   it('a escala aprovada (os voos fixos e quem aprovou) vai e volta com o dia', () => {
     const estado = normalizado({ ...estadoSintetico(), stu: [aluno(1000)] });
     estado.fixos = { '1000_0_1': { a: 390, b: 450, r: 'PR-VOB', insId: 1 } };
-    estado.aprovacao = { em: '2026-11-10T21:05:00.000Z', por: 'Rayane' };
+    estado.aprovacao = { em: '2026-11-10T21:05:00.000Z', por: 'Operador 01' };
     const { cadastro, dia } = separar(estado);
     assert.deepEqual([dia.fixos, dia.aprovacao], [estado.fixos, estado.aprovacao]);
     assert.deepEqual([juntar(cadastro, dia).fixos, juntar(cadastro, dia).aprovacao], [estado.fixos, estado.aprovacao]);

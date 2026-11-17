@@ -49,7 +49,7 @@ test('o voo cancelado não conta no Rodízio, nos Recursos nem nos Instrutores',
   const estado = {
     ...cenario({ ins: [doC172(1), doC172(2)], stu: [aluno(1000, { eq: 'C172', p1: 390, p2: -1 })] }),
     fixos: { '1000_0_1': { a: 390, b: 450, r: 'PP-ABP', insId: 1 } }, fStatus: { '1000_0_1': 'Cancelado' },
-    aprovacao: { em: '2026-11-10T21:05:00.000Z', por: 'Rayane' }
+    aprovacao: { em: '2026-11-10T21:05:00.000Z', por: 'Operador 01' }
   };
   await abrir(page, { estado });
   await irPara(page, 'rod');
