@@ -6,7 +6,7 @@ import { WIN, NI, AIRCRAFT_EQ_TYPES, SIM_EQ_TYPES, REVISAO_H } from '../config.j
 import { normalizarHangar } from '../hangar.js';
 import { FROTA_INICIAL } from '../frota.js';
 import { S, RES, voosQueVoam } from '../state.js';
-import { $ } from '../dom.js';
+import { $, trocarConteudo } from '../dom.js';
 import { hm, fmtH, esc } from '../format.js';
 import { rHorarios } from './horarios.js';
 
@@ -65,14 +65,14 @@ export function rRevisao() {
   const voadas = {};
   voosQueVoam().forEach(o => { voadas[o.r] = (voadas[o.r] || 0) + o.h; });
   const categoria = ($('#flt-rec-cat') && $('#flt-rec-cat').value) || '';
-  $('#revisao').innerHTML = GRUPOS.filter(g => !categoria || g.id === categoria).map(({ id, rotulo, tipos }) => {
+  trocarConteudo($('#revisao'), GRUPOS.filter(g => !categoria || g.id === categoria).map(({ id, rotulo, tipos }) => {
     // A frota do cadastro, na ordem de cada tipo (uma categoria sem recursos não aparece)
     const recursos = tipos.flatMap(tipo => (S.frota || []).filter(f => f.tipo === tipo));
     if (!recursos.length) return '';
     const disponiveis = recursos.filter(f => S.av[f.reg]).length;
     return `<tr class="grupo"><td colspan="5"><button type="button" class="grupo-btn" data-recolher-grupo="${id}" aria-expanded="${!recolhidos.has(id)}"><svg class="ico seta" aria-hidden="true"><use href="#i-baixo"/></svg>${rotulo} <small>${disponiveis} de ${recursos.length} disponíveis</small></button></td></tr>` +
       recursos.map(f => linha(f, id, voadas[f.reg] || 0, resumo[f.reg])).join('');
-  }).join('');
+  }).join(''));
 }
 
 // A frota (vale para todas as datas): cada recurso uma vez, por categoria, com "Só Parafuso" e o Retirar. A
@@ -80,7 +80,7 @@ export function rRevisao() {
 function rFrota() {
   const lista = $('#frota');
   if (!lista) return;
-  lista.innerHTML = GRUPOS.map(({ rotulo, tipos }) => {
+  trocarConteudo(lista, GRUPOS.map(({ rotulo, tipos }) => {
     const recursos = tipos.flatMap(tipo => (S.frota || []).filter(f => f.tipo === tipo));
     if (!recursos.length) return '';
     return `<li class="grupo"><h5>${rotulo} <small>${recursos.length} ${recursos.length === 1 ? 'recurso' : 'recursos'}</small></h5><ul class="frota-itens">` +
@@ -88,11 +88,11 @@ function rFrota() {
         <b>${esc(reg)}</b>${AIRCRAFT_EQ_TYPES.includes(tipo) ? '' : ` <small class="sm">${esc(tipo)}</small>`}${soParafuso ? ' <span class="tag fb" data-dica="so-parafuso">Só Parafuso</span>' : ''}
         <button class="btn quiet rev ret edit-only" data-act="retirar-recurso" data-id="${esc(reg)}" aria-label="Retirar ${esc(reg)} da frota">Retirar</button>
       </li>`).join('') + '</ul></li>';
-  }).join('');
+  }).join(''));
 }
 
 export function rRec() {
-  $('#wins').innerHTML = WIN.map((w, i) => `<label class="janela${S.win[i] ? '' : ' off'}"><input type="checkbox" class="sw" data-a="win" data-i="${i}"${S.win[i] ? ' checked' : ''}><b>${w}</b> <small>${i == NI ? 'noturno' : (i + 1) + 'º'}</small></label>`).join('');
+  trocarConteudo($('#wins'), WIN.map((w, i) => `<label class="janela${S.win[i] ? '' : ' off'}"><input type="checkbox" class="sw" data-a="win" data-i="${i}"${S.win[i] ? ' checked' : ''}><b>${w}</b> <small>${i == NI ? 'noturno' : (i + 1) + 'º'}</small></label>`).join(''));
   rHorarios();
   rRevisao();
   rFrota();
@@ -107,7 +107,7 @@ export function rHangar() {
   const frota = S.frota || FROTA_INICIAL;
   const hangar = normalizarHangar(S.hangar, frota);
   const voos = voosQueVoam();
-  lista.innerHTML = hangar.map((r, i) => {
+  trocarConteudo(lista, hangar.map((r, i) => {
     const tipo = (frota.find(f => f.reg === r) || {}).tipo || '';
     const naEscala = voos.filter(o => o.r === r).length;
     const situacao = S.av[r] === false ? '<span class="tag fb">manutenção</span>'
@@ -122,5 +122,5 @@ export function rHangar() {
           ${botao('subir', 'i-cima', `Subir ${esc(r)}`, i === 0)}${botao('descer', 'i-baixo', `Descer ${esc(r)}`, i === hangar.length - 1)}${botao('frente', 'i-topo', `Pôr ${esc(r)} na frente do hangar`, i === 0)}
         </span>
       </li>`;
-  }).join('');
+  }).join(''));
 }

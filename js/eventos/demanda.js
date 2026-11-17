@@ -2,7 +2,7 @@
 // os campos de cada pedido
 import { gravarAlteracao } from '../actions.js';
 import { T, GROUND_EQ_TYPE, GROUND_DURATION_H, MIS } from '../config.js';
-import { $, showToast, ligarMenu } from '../dom.js';
+import { $, showToast, ligarMenu, trocarElemento } from '../dom.js';
 import { fmtDurLabel } from '../format.js';
 import { horariosDaMissao, ajustarPreferencias } from '../horarios.js';
 import { isGroundMission, blank, rotuloDaDisponibilidade, normalizeMissionFields, proximoMid, duracaoDigitada, ERRO_DA_DURACAO } from '../rules.js';
@@ -138,7 +138,7 @@ aoMudarCampo('d', (t, { f, c, id, mid }) => {
       const h = duracaoDigitada(t.value);
       if (h === null) {
         showToast(ERRO_DA_DURACAO);
-        c.outerHTML = singleDemandRowHTML(s, target, mid);
+        trocarElemento(c, singleDemandRowHTML(s, target, mid));
         return;
       }
       t.value = h;
@@ -164,7 +164,7 @@ aoMudarCampo('d', (t, { f, c, id, mid }) => {
     historico = ['mod', `Pedido ${s.nm}: ${target.mis} · ${target.eq} · ${fmtDurLabel(target.nb)}`];
   }
   gravarAlteracao(...historico);
-  c.outerHTML = singleDemandRowHTML(s, target, mid);
+  trocarElemento(c, singleDemandRowHTML(s, target, mid));
   cnt();
   renderAuditPanel();
 });

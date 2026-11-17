@@ -1,6 +1,7 @@
 // Tela da Escala: Lista, Por recurso ou Por instrutor; resumo com erros e avisos agrupados; uma linha por voo.
 import { test, expect, abrir, abrirComExemplo, abrirEscala, irPara, lerEscala } from './fixtures.js';
 import { aluno, cenario, instrutor, GROUND_C152 } from '../helpers/montar.js';
+import { GLOSSARIO } from '../../js/glossario.js';
 
 test.describe('Tela da Escala', () => {
   test('a barra troca entre Lista, Por recurso, Por instrutor e Painel', async ({ page }) => {
@@ -79,6 +80,8 @@ test.describe('Tela da Escala', () => {
     // A dica diz o caso deste voo antes da explicação
     await selo.click();
     await expect(page.locator('#dica')).toContainText('Reduzir combustível Abastecer até 22 gal (4 a menos que o tanque cheio); o voo, o táxi e a reserva pedem 11 gal; autonomia de 3h23.');
+    // Para o leitor de tela, o mesmo texto: o caso deste voo, depois a explicação do termo
+    await expect(selo).toHaveAccessibleDescription(`Abastecer até 22 gal (4 a menos que o tanque cheio); o voo, o táxi e a reserva pedem 11 gal; autonomia de 3h23. ${GLOSSARIO['reduzir-combustivel'].texto}`);
   });
 
   test('turma de Ground: horário, missão, sala e instrutor uma vez só; cada aluno com o seu status e a sua ação', async ({ page }) => {

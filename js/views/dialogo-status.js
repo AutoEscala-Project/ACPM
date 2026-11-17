@@ -53,6 +53,8 @@ function ligar() {
     if (outro) $('#st-outro').focus();
   });
   $('#st-voltar').addEventListener('click', () => dlg.close());
+  // O foco volta sozinho ao status de onde o diálogo saiu (o <dialog> devolve), e o redesenho da escala o leva ao status
+  // equivalente (trocarConteudo)
   dlg.addEventListener('close', () => {
     if (!pedido) return;
     const { aoDesistir } = pedido;

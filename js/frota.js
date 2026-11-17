@@ -29,12 +29,12 @@ export const matriculasDoTipo = (frota, tipo, { parafuso = false } = {}) => frot
 
 const recursoDaFrota = (frota, r) => frota.find(f => f.reg === r) || null;
 
-// Um recurso novo (aba Recursos): devolve o recurso pronto ou o motivo para não aceitar
+// Um recurso novo (aba Recursos): devolve o recurso pronto, ou o motivo para não aceitar e o campo dele (reg ou tipo)
 export function novoRecurso(frota, { reg, tipo, soParafuso }) {
   const matricula = typeof reg === 'string' ? reg.trim().toUpperCase() : '';
-  if (!matricula) return { erro: 'Informe a matrícula.' };
-  if (!MATRICULA.test(matricula)) return { erro: 'Matrícula inválida: use letras, números e hífen (por exemplo, PR-ABC).' };
-  if (!TIPOS_DA_FROTA.includes(tipo)) return { erro: 'Escolha a categoria.' };
-  if (recursoDaFrota(frota, matricula)) return { erro: `Já existe um recurso com a matrícula ${matricula}.` };
+  if (!matricula) return { erro: 'Informe a matrícula.', campo: 'reg' };
+  if (!MATRICULA.test(matricula)) return { erro: 'Matrícula inválida: use letras, números e hífen (por exemplo, PR-ABC).', campo: 'reg' };
+  if (!TIPOS_DA_FROTA.includes(tipo)) return { erro: 'Escolha a categoria.', campo: 'tipo' };
+  if (recursoDaFrota(frota, matricula)) return { erro: `Já existe um recurso com a matrícula ${matricula}.`, campo: 'reg' };
   return { recurso: recurso({ reg: matricula, tipo, soParafuso }) };
 }

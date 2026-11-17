@@ -56,12 +56,28 @@ test.describe('Agenda de Solicitações', () => {
     await expect(page.locator('#ag-horario option')).toHaveText(['06:30']);
   });
 
+  test('escolher o aluno apaga o erro e a marca de erro dos campos', async ({ page }) => {
+    await abrir(page, { estado: comAlunos() });
+    await irPara(page, 'age');
+    await page.locator('#ag-por').fill('');
+    await page.locator('#form-agenda [type="submit"]').click();
+    await expect(page.locator('#ag-erro')).toContainText('Escolha o aluno');
+    await expect(page.locator('#ag-por')).toHaveAttribute('aria-invalid', 'true');
+    await page.locator('#ag-aluno').selectOption({ label: 'Aluno 1000' });
+    await expect(page.locator('#ag-erro')).toBeEmpty();
+    for (const campo of ['#ag-aluno', '#ag-por']) await expect(page.locator(campo)).toHaveAttribute('aria-invalid', 'false');
+  });
+
   test('a duração: fracionada, até 5 h; o Ground tem 01h30', async ({ page }) => {
     await abrir(page, { estado: comAlunos() });
     await irPara(page, 'age');
     await expect(page.locator('#ag-horas')).toHaveValue('1');
     await registrar(page, { horas: 6 });
     await expect(page.locator('#ag-erro')).toHaveText('A duração vai de 0,1 h a 5 h.');
+    // O campo errado é o marcado, e o motivo é a descrição dele (o que o leitor de tela diz no campo)
+    await expect(page.locator('#ag-horas')).toHaveAttribute('aria-invalid', 'true');
+    await expect(page.locator('#ag-horas')).toHaveAccessibleDescription('A duração vai de 0,1 h a 5 h.');
+    await expect(page.locator('#ag-aluno')).toHaveAttribute('aria-invalid', 'false');
     await expect(page.locator('#agenda-lista tbody tr')).toHaveCount(0);
     await page.locator('#ag-missao').selectOption('Ground C152');
     await expect(page.locator('#ag-horas')).toBeDisabled();

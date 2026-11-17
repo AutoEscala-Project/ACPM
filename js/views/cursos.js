@@ -14,7 +14,10 @@ export const podeEditarCursos = () => !ApiClient.readOnly && (ApiClient.perfil ?
 
 export function mostrarVistaDosAlunos(vista) {
   $('#s-alu').dataset.vista = vista;
-  document.querySelectorAll('#s-alu [data-vista-alu]').forEach(b => b.classList.toggle('on', b.dataset.vistaAlu === vista));
+  document.querySelectorAll('#s-alu [data-vista-alu]').forEach(b => {
+    b.classList.toggle('on', b.dataset.vistaAlu === vista);
+    b.setAttribute('aria-pressed', String(b.dataset.vistaAlu === vista));
+  });
   if (vista === 'cursos') rCursos();
 }
 
@@ -41,7 +44,7 @@ export function rCursos() {
     + CURSOS.map(([id, nome]) => `<div class="pn curso" data-curso="${id}">
     <h3>${id} <small>${nome} · ${cursos[id].length} ${cursos[id].length === 1 ? 'missão' : 'missões'}</small></h3>
     ${cursos[id].length
-    ? `<div class="tw"><table class="cadastro programa"><thead><tr><th>#</th><th>Código</th><th>Nome</th><th>Missão</th><th>Recurso</th><th>Horas</th><th></th></tr></thead>
+    ? `<div class="tw"><table class="cadastro programa"><thead><tr><th>#</th><th>Código</th><th>Nome</th><th>Missão</th><th>Recurso</th><th>Horas</th><th aria-label="Ações"></th></tr></thead>
       <tbody>${cursos[id].map((m, i) => linha(id, m, i, cursos[id].length, edita)).join('')}</tbody></table></div>`
     : `<p class="h">Nenhuma missão no programa.${edita ? ' Use “+ Missão” para incluir a primeira.' : ''}</p>`}
     ${edita ? `<button type="button" class="btn sec" data-act="curso-nova" data-curso="${id}">+ Missão</button>` : ''}
