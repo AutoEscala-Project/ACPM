@@ -92,3 +92,26 @@ export function gerarCenario(seed) {
 }
 
 export const hashEstado = estado => createHash('sha256').update(JSON.stringify(estado)).digest('hex').slice(0, 16);
+
+// As escolhas do operador sobre um cenário, com outro gerador (os cenários de base, e os goldens, não mudam): o “Voa
+// com” em ~30% dos alunos (um ou dois instrutores) e o instrutor escolhido para o dia em ~15% dos pedidos. Às vezes o
+// instrutor está fora do cadastro (999), não vem, não tem a habilitação ou está em “Não escalar com” do aluno
+export const FORA_DO_CADASTRO = 999;
+export function comEscolhas(estado, seed) {
+  const r = mulberry32(seed * 7919 + 13);
+  const pick = a => a[Math.floor(r() * a.length)];
+  const ids = estado.ins.map(x => x.id);
+  const umId = () => (r() < 0.05 ? FORA_DO_CADASTRO : pick(ids));
+  const stu = estado.stu.map(s => {
+    const novo = structuredClone(s);
+    if (r() < 0.3) {
+      const pares = [...new Set([umId(), ...(r() < 0.3 ? [umId()] : [])])].filter(id => !novo.bl.includes(id));
+      if (pares.length) novo.voaCom = pares;
+    }
+    for (const p of [novo, ...novo.extra]) {
+      if (r() < 0.15) p.insId = r() < 0.1 && novo.bl.length ? pick(novo.bl) : umId();
+    }
+    return novo;
+  });
+  return { ...estado, stu };
+}

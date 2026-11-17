@@ -10,6 +10,7 @@ import { S } from '../state.js';
 import { $, trocarConteudo } from '../dom.js';
 import { renderAuditPanel } from './escala.js';
 import { etapaNaDemanda } from './etapas.js';
+import { instrutoresDoPedido } from '../instrutor-escolhido.js';
 
 function allowedEqOptionsForMission(mis, currentEq) {
   const m = MIS[mis] || MIS['Voo Local'];
@@ -22,6 +23,14 @@ function opcoesDeHorario(lista, valor) {
   const itens = [[-1, '—'], ...lista.map(m => [m, hm(m) + (m === T[NI] ? ' (noturno)' : '')])];
   if (Number.isInteger(valor) && valor >= 0 && !lista.includes(valor)) itens.push([valor, `${hm(valor)} (fora da lista)`]);
   return opts(itens, valor);
+}
+
+// O instrutor do pedido: "Automático" (o app escolhe; com o “Voa com” do aluno, um dos instrutores dele) ou um escolhido
+// pelo operador, que vale mais que a escolha do app
+function opcoesDeInstrutor(stu, d) {
+  const lista = instrutoresDoPedido(S, stu, d).map(o => [o.id, o.nota ? `${o.nm} (${o.nota})` : o.nm]);
+  const pares = (stu.voaCom || []).map(id => S.ins.find(x => x.id === id)).filter(Boolean).map(x => x.nm);
+  return opts([['', pares.length ? `Automático (voa com ${pares.join(', ')})` : 'Automático'], ...lista], d.insId || '');
 }
 
 export const singleDemandRowHTML = (stu, d, mid = 0) => {
@@ -48,6 +57,7 @@ export const singleDemandRowHTML = (stu, d, mid = 0) => {
     <td><label class="alvo"><input type="checkbox" class="sw" data-f="fly"${d.fly ? ' checked' : ''} aria-label="${esc(stu.nm)} vai voar"></label></td>
     <td><select data-f="mis" title="${esc(exige)}" aria-label="Missão${de}">${opts(Object.keys(MIS).map(m => [m, m]), d.mis)}</select></td>
     <td><select data-f="eq"${isGnd ? ' disabled' : ''} aria-label="Recurso${de}">${allowedEqOptionsForMission(d.mis, d.eq)}</select></td>
+    <td><select data-f="insId" class="${d.insId ? 'escolhido' : ''}" aria-label="Instrutor${de}">${opcoesDeInstrutor(stu, d)}</select></td>
     <td><select data-f="p1" aria-label="1ª preferência${de}">${opcoesDeHorario(horarios, d.p1)}</select></td>
     <td><select data-f="p2" aria-label="2ª preferência${de}">${opcoesDeHorario(horarios, d.p2)}</select></td>
     <td><select data-f="jan" aria-label="Disponibilidade${de}">${opts(opcoesDeDisponibilidade(horarios), d.jan || '')}</select></td>
@@ -81,7 +91,7 @@ export const cnt = () => {
 
 export const rDem = () => {
   if (!S.stu.length) {
-    trocarConteudo($('#dem'), `<tr class="empty-dem"><td colspan="9" class="h" style="padding:16px">Nenhum aluno cadastrado. Cadastre os alunos na aba Alunos.</td></tr>`);
+    trocarConteudo($('#dem'), `<tr class="empty-dem"><td colspan="10" class="h" style="padding:16px">Nenhum aluno cadastrado. Cadastre os alunos na aba Alunos.</td></tr>`);
     cnt();
     renderAuditPanel();
     return;

@@ -3,6 +3,7 @@ import { gravarAlteracao } from '../actions.js';
 import { $, showToast } from '../dom.js';
 import { normalizarFixos } from '../fixos.js';
 import { validarReversao } from '../reversoes.js';
+import { reverterEscolha, escolherNosPedidos } from '../instrutor-escolhido.js';
 import { S, AUDIT_LOG, DATA, setAuditLog, isGestor, insBy, stuBy, getMissionTarget } from '../state.js';
 import { ApiClient } from '../storage.js';
 import { aoAcionar } from './registro.js';
@@ -66,9 +67,16 @@ aoAcionar('rev-log', b => {
       rIns();
     }
   } else if (rev.kind === 'restaurarFixos') {
-    // Um reparo desfeito: os voos voltam a ser fixos como antes dele
+    // Um reparo desfeito: os voos voltam a ser fixos como antes dele, e o instrutor escolhido dos pedidos também
     S.fixos = normalizarFixos({ ...(S.fixos || {}), ...rev.fixos });
+    if (rev.pedidos) { rev.pedidos.forEach(p => escolherNosPedidos(S, [p], p.insId)); rDem(); }
     gravarAlteracao('mod', `Revertido: ${entry.desc}`, null, entry.id);
+  } else if (rev.kind === 'restaurarEscolha') {
+    // O instrutor escolhido volta como estava, e os voos fixos também (js/instrutor-escolhido.js)
+    reverterEscolha(S, rev);
+    S.fixos = normalizarFixos(S.fixos);
+    gravarAlteracao('mod', `Revertido: ${entry.desc}`, null, entry.id);
+    rDem();
   } else if (rev.kind === 'restaurarHorarios') {
     // Os horários de uma categoria voltam como estavam, e os pedidos que mudaram com eles também
     S.horarios = { ...S.horarios, [rev.cat]: [...rev.lista] };

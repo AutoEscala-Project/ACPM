@@ -102,6 +102,7 @@ mais antigo do que o guardado. Nunca apague campos num passo: mantenha o que o p
 | `js/perfis.js` | Perfis de acesso e o que cada um pode fazer na tela |
 | `js/rules.js` | Regras das missões (Ground School, precedência, disponibilidade do aluno) |
 | `js/engine.js` | Motor de alocação (função pura) |
+| `js/instrutor-escolhido.js` | O instrutor escolhido pelo operador: na Demanda (o motor encaixa o voo com ele) e na Escala (o voo fica fixo onde está, com ele), as opções de cada lista e a reversão |
 | `js/storage.js` | Escala por data, migrações de dados e link compartilhado, sobre um backend (`js/backends/`: local ou Supabase) |
 | `js/dias.js` | Cadastro separado do dia, cópia do dia anterior, conversão dos dados da fase 2 e BI das escalas |
 | `js/migracoes.js` | Versões do formato dos dados guardados e os passos de uma versão para a seguinte |

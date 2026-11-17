@@ -6,17 +6,18 @@ import { runAllocationEngine } from '../../js/engine.js';
 import { EQ, GROUND_REG, ACROBAT_REG, T, NI, DEFAULT_LIM, AIRCRAFT_EQ_TYPES } from '../../js/config.js';
 import { isGroundMission, doesGroundGateFlight } from '../../js/rules.js';
 import { podeFazer } from '../../js/habilitacoes.js';
-import { gerarCenario } from '../helpers/cenarios.js';
+import { gerarCenario, comEscolhas, FORA_DO_CADASTRO } from '../helpers/cenarios.js';
 import { CODIGOS_DE_REJEICAO } from '../../js/conflitos.js';
 
 // Até quando o voo pode ir: o de dia no avião pousa até as 17:30; o Noturno, o simulador e o Ground, até o fim do dia
 const fimDoVoo = o => (o.mis !== 'Noturno' && AIRCRAFT_EQ_TYPES.includes(o.eqType) ? T[NI] : 1440);
 
 const SEEDS = Array.from({ length: 300 }, (_, i) => 1001 + i);
-const execucoes = SEEDS.map(seed => {
-  const estado = gerarCenario(seed);
-  return { seed, estado, ...runAllocationEngine(estado) };
-});
+// Cada seed duas vezes: o cenário como foi gerado e com as escolhas do operador (o instrutor escolhido para o dia e o
+// “Voa com”): as regras da escala valem também com elas
+const execucoes = SEEDS.flatMap(seed => [gerarCenario(seed), comEscolhas(gerarCenario(seed), seed)].map((estado, i) => (
+  { seed: i ? `${seed} com escolhas` : seed, estado, ...runAllocationEngine(estado) })));
+const comAsEscolhas = execucoes.filter(e => String(e.seed).endsWith('com escolhas'));
 
 const sobrepoe = (x, y) => x.a < y.b && y.a < x.b;
 const pedidoDe = (estado, o) => {
@@ -200,9 +201,8 @@ describe('Invariantes do motor de alocação', () => {
     assert.deepEqual(falhas.slice(0, 5), []);
   });
 
-  it('é determinístico e não altera o estado recebido', () => {
-    for (const seed of SEEDS.slice(0, 50)) {
-      const estado = gerarCenario(seed);
+  it('é determinístico e não altera o estado recebido (também com as escolhas do operador)', () => {
+    for (const [seed, estado] of SEEDS.slice(0, 50).flatMap(seed => [[seed, gerarCenario(seed)], [`${seed} com escolhas`, comEscolhas(gerarCenario(seed), seed)]])) {
       const copia = structuredClone(estado);
       const primeira = runAllocationEngine(estado);
       assert.deepEqual(estado, copia, `seed ${seed}: estado alterado`);
@@ -304,4 +304,86 @@ describe('O horário mais perto da preferência, em 300 cenários', async () => 
     }
     assert.deepEqual(falhas.slice(0, 5), [], `${falhas.length} voo(s) longe da preferência sem motivo`);
   });
+});
+
+// O que o operador define vale mais que a escolha do app: o instrutor escolhido para o dia (na Demanda ou na Escala)
+// e o “Voa com” do aluno (o par permanente, com aviso quando nenhum dos instrutores dele pode)
+describe('Invariantes das escolhas do operador, em 300 cenários', () => {
+  const pedidoDoVoo = (estado, o) => pedidoDe(estado, o).d;
+  const emTodasAsEscolhas = verificar => {
+    const falhas = [];
+    for (const exec of comAsEscolhas) {
+      try { verificar(exec); } catch (e) { falhas.push(`seed ${exec.seed}: ${e.message}`); }
+    }
+    assert.deepEqual(falhas.slice(0, 5), [], `${falhas.length} cenário(s) violam a propriedade`);
+  };
+
+  it('os cenários têm escolhas de todo tipo (o teste não passa por falta delas)', () => {
+    const pedidos = comAsEscolhas.flatMap(({ estado }) => estado.stu.flatMap(s => [s, ...s.extra].filter(p => p.fly && p.insId)));
+    const comPar = comAsEscolhas.flatMap(({ estado }) => estado.stu.filter(s => s.voaCom));
+    const avisos = comAsEscolhas.flatMap(({ al }) => al.filter(a => a.codigo === 'voa-com'));
+    const recusas = comAsEscolhas.flatMap(({ al }) => al.filter(a => a.codigo === 'instrutor-escolhido'));
+    const noPar = comAsEscolhas.flatMap(({ out }) => out.filter(o => o.insPar));
+    assert.ok(pedidos.length > 300 && comPar.length > 600 && avisos.length > 50 && recusas.length > 50 && noPar.length > 300,
+      JSON.stringify({ pedidos: pedidos.length, comPar: comPar.length, avisos: avisos.length, recusas: recusas.length, noPar: noPar.length }));
+  });
+
+  // O escolhido que está no cadastro (o que saiu não vale mais: o pedido volta para o Automático, com aviso)
+  const escolhidoValido = (estado, d) => Boolean(d.insId) && estado.ins.some(x => x.id === d.insId);
+
+  it('o pedido com o instrutor escolhido voa só com ele', () => emTodasAsEscolhas(({ estado, out }) => {
+    for (const o of out) {
+      const d = pedidoDoVoo(estado, o);
+      if (escolhidoValido(estado, d)) assert.ok(o.insId === d.insId && o.insEscolhido, `${o.fKey}: ${o.insId} em vez de ${d.insId}`);
+      else assert.ok(!o.insEscolhido, `${o.fKey}: marcado sem escolha`);
+    }
+  }));
+
+  it('o escolhido que saiu do cadastro: o voo fica com outro, e o aviso diz com quem', () => emTodasAsEscolhas(({ estado, out, al }) => {
+    const avisos = al.filter(a => a.codigo === 'escolhido-saiu');
+    for (const o of out) {
+      const d = pedidoDoVoo(estado, o);
+      const saiu = d.insId === FORA_DO_CADASTRO;
+      assert.equal(avisos.some(a => a.stuId === o.stuId && a.insId === o.insId && a.m.includes(o.ins)), saiu, `${o.fKey}: aviso ${saiu ? 'faltando' : 'a mais'}`);
+    }
+  }));
+
+  it('o escolhido que não vem, sem a habilitação ou bloqueado: o pedido fica fora, com o código', () => emTodasAsEscolhas(({ estado, out, al }) => {
+    for (const s of estado.stu) {
+      for (const [mid, d] of [[0, s], ...s.extra.map(ex => [ex.mid, ex])]) {
+        if (!d.fly || !escolhidoValido(estado, d)) continue;
+        const x = estado.ins.find(i => i.id === d.insId);
+        const tipo = isGroundMission(d.mis) ? 'Sala Ground' : d.eq;
+        if (x && x.on && podeFazer(x, d.mis, tipo) && !s.bl.includes(x.id)) continue;
+        assert.ok(!out.some(o => o.stuId === s.id && o.mid === mid), `${s.id}_${mid} voou com ${d.insId}`);
+        if (!x.on) assert.ok(al.some(a => a.codigo === 'instrutor-escolhido' || a.codigo === 'equipamento-da-missao'), `${s.id}_${mid} sem o motivo`);
+      }
+    }
+  }));
+
+  it('com o “Voa com”, o voo fica com um instrutor dele; senão, o aviso diz quem ficou com o voo', () => emTodasAsEscolhas(({ estado, out, al }) => {
+    const avisos = al.filter(a => a.codigo === 'voa-com');
+    for (const o of out) {
+      const s = estado.stu.find(x => x.id === o.stuId), d = pedidoDoVoo(estado, o);
+      const pares = (s.voaCom || []).filter(id => estado.ins.some(x => x.id === id));
+      if (escolhidoValido(estado, d) || !pares.length) { assert.ok(!o.insPar, `${o.fKey}: marcado sem Voa com`); continue; }
+      if (pares.includes(o.insId)) { assert.ok(o.insPar, `${o.fKey}: com o par sem a marca`); continue; }
+      assert.ok(avisos.some(a => a.stuId === o.stuId && a.insId === o.insId && a.m.includes(o.ins)), `${o.fKey}: com ${o.insId}, fora do Voa com ${pares}, sem aviso`);
+    }
+    // Todo aviso é de um voo que está na escala com aquele instrutor, fora do “Voa com”
+    for (const a of avisos) {
+      const s = estado.stu.find(x => x.id === a.stuId);
+      assert.ok(out.some(o => o.stuId === a.stuId && o.insId === a.insId) && !s.voaCom.includes(a.insId), `aviso solto: ${a.m}`);
+    }
+  }));
+
+  it('a divisão das horas e a compactação não trocam o instrutor escolhido nem o do “Voa com”', () => emTodasAsEscolhas(({ estado, out }) => {
+    const antes = new Map(runAllocationEngine(estado, { compactar: false, dividirHoras: false }).out.map(o => [o.fKey, o]));
+    for (const o of antes.values()) {
+      if (!o.insEscolhido && !o.insPar) continue;
+      const depois = out.find(v => v.fKey === o.fKey);
+      assert.ok(depois && depois.insId === o.insId, `${o.fKey}: ${o.insId} → ${depois && depois.insId}`);
+    }
+  }));
+
 });

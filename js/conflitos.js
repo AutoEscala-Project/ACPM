@@ -42,12 +42,14 @@ export function gruposDoConflito(voo) {
 }
 
 // Os códigos dos avisos, para o resumo da Escala agrupar sem ler o texto: o peso que falta (stuId e insId dizem de
-// quem), o instrutor perto do limite da lei (insId), o avião que para para a revisão e o atraso que invade outro voo
-export const CODIGOS_DE_AVISO = ['sem-peso', 'perto-do-limite', 'revisao', 'atraso'];
+// quem), o instrutor perto do limite da lei (insId), o avião que para para a revisão, o atraso que invade outro voo e
+// o voo que ficou sem o instrutor do “Voa com” do aluno e o do pedido cujo instrutor escolhido saiu do cadastro (stuId;
+// insId: quem ficou com o voo)
+export const CODIGOS_DE_AVISO = ['sem-peso', 'perto-do-limite', 'revisao', 'atraso', 'voa-com', 'escolhido-saiu'];
 
 // Os códigos das rejeições: por que o pedido ficou fora da escala, para dizer onde resolver
 export const CODIGOS_DE_REJEICAO = [
   'equipamento-da-missao', 'ground-pendente', 'ground-antes-do-voo-fixo', 'so-parafuso', 'sem-aviao', 'sem-instrutor-habilitado',
   'disponibilidade-do-aluno', 'depois-do-ground', 'sem-horario', 'aluno-ocupado', 'avioes-ocupados', 'sala-ocupada', 'revisao',
-  'instrutores-indisponiveis', 'instrutores-ocupados', 'bloqueio', 'limite-da-lei', 'peso', 'limite-de-locais'
+  'instrutores-indisponiveis', 'instrutores-ocupados', 'bloqueio', 'limite-da-lei', 'peso', 'limite-de-locais', 'instrutor-escolhido'
 ];
