@@ -60,3 +60,23 @@ export function posicionarJunto(balao, alvo) {
   balao.style.setProperty('--seta', `${Math.round(Math.min(Math.max(meio - esquerda, 14), largura - 14))}px`);
   balao.classList.toggle('abaixo', !acima);
 }
+
+// Menus suspensos (conta e "Mais" da Demanda): abrem e fecham no botão; Esc ou um clique fora fecham
+export function ligarMenu(botao, menu, { fecharAoEscolher = true } = {}) {
+  const fechar = () => { menu.hidden = true; botao.setAttribute('aria-expanded', 'false'); };
+  botao.onclick = () => {
+    const abrir = menu.hidden;
+    menu.hidden = !abrir;
+    botao.setAttribute('aria-expanded', String(abrir));
+    const primeiro = abrir && menu.querySelector('[role^="menuitem"]:not([hidden])');
+    if (primeiro) primeiro.focus();
+  };
+  if (fecharAoEscolher) menu.addEventListener('click', e => { if (e.target.closest('[role="menuitem"]')) fechar(); });
+  document.addEventListener('click', e => { if (!menu.hidden && !menu.contains(e.target) && !botao.contains(e.target)) fechar(); });
+  document.addEventListener('keydown', e => {
+    if (e.key !== 'Escape' || menu.hidden) return;
+    fechar();
+    botao.focus();
+  });
+  return fechar;
+}

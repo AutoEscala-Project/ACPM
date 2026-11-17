@@ -1,0 +1,199 @@
+// A Escala: o mapa e o popup do voo, os filtros, exportar e compartilhar, o status do voo, aprovar e reabrir, os
+// critérios da compactação, o resultado da missão do curso e as sugestões para um conflito
+import { gravarAlteracao, logChange, gravarEscalaCalculada } from '../actions.js';
+import { opcoesDeCategoria } from '../categorias.js';
+import { OPCOES_DE_BURACOS, OPCOES_DE_HORARIOS, normalizarCriterios } from '../criterios.js';
+import { $, showToast } from '../dom.js';
+import { exp, pdf, planilha } from '../export.js';
+import { pinoDoVoo, fixosAoMudarStatus, fixosAoReabrir } from '../fixos.js';
+import { hm } from '../format.js';
+import { aplicarReparo } from '../reparo.js';
+import { S, RES, DATA, isGestor, modoCompartilhado, stuBy } from '../state.js';
+import { STATUS_COM_DETALHE, textoParaOHistorico, detalheAoMudarStatus, rotuloDoStatus } from '../status.js';
+import { ApiClient } from '../storage.js';
+import { confirmado } from './confirmacao.js';
+import { aoAcionar, aoMudarCampo } from './registro.js';
+import { rAlu } from '../views/cadastros.js';
+import { rDem } from '../views/demanda.js';
+import { pedirDetalheDoStatus, dialogoDeStatusAberto } from '../views/dialogo-status.js';
+import { rOut, abrirPopupDoMapa, fecharPopupDoMapa, popupDoMapaAberto, reposicionarPopupDoMapa } from '../views/escala.js';
+import { abrirPainelDeReparo, fecharPainelDeReparo, opcaoDoPainel, painelDeReparoAberto } from '../views/reparo.js';
+
+// Popup do voo no mapa da escala: a barra abre e fecha; Esc (o foco volta para a barra) e um clique fora fecham, e ele
+// acompanha a barra quando a página ou o mapa rolam
+document.addEventListener('click', e => {
+  const barra = e.target.closest('#out .tl-bar');
+  if (barra) {
+    if (barra.getAttribute('aria-expanded') === 'true') fecharPopupDoMapa();
+    else abrirPopupDoMapa(barra);
+    return;
+  }
+  if (popupDoMapaAberto() && !e.target.closest('#tl-pop, #dlg-status')) fecharPopupDoMapa();
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && popupDoMapaAberto() && !dialogoDeStatusAberto()) fecharPopupDoMapa({ devolverFoco: true });
+});
+document.addEventListener('scroll', reposicionarPopupDoMapa, { capture: true, passive: true });
+window.addEventListener('resize', reposicionarPopupDoMapa);
+
+document.addEventListener('input', e => {
+  if (e.target.id === 'flt-esc-q') rOut();
+});
+$('#flt-esc-eq').onchange = () => rOut();
+// Categoria; o filtro de recurso mostra só os da categoria escolhida
+$('#flt-esc-cat').innerHTML = opcoesDeCategoria();
+$('#flt-esc-cat').onchange = () => rOut();
+
+// Exportar é usar a escala: a escala só calculada fica gravada (quem só consulta não grava)
+$('#exp').onclick = () => { gravarEscalaCalculada(); exp(); };
+$('#pdf').onclick = () => { gravarEscalaCalculada(); pdf(); };
+$('#xlsx').onclick = () => { gravarEscalaCalculada(); planilha(); };
+
+// No modo compartilhado o link leva só a data: quem abre entra com a própria conta e lê do servidor
+function linkDaData(data) {
+  const url = new URL(window.location.href);
+  const projeto = url.searchParams.get('supabase');
+  url.search = '';
+  if (projeto) url.searchParams.set('supabase', projeto);
+  url.searchParams.set('data', data);
+  return url.toString();
+}
+
+// Sem o servidor, a escala fica só neste navegador: não há link que leve a escala inteira no endereço (exporia nomes,
+// pesos e horas)
+$('#btn-share-link').onclick = async () => {
+  if (!modoCompartilhado()) {
+    showToast('Sem o servidor, a escala fica só neste navegador: o link da escala é do app publicado, com login.');
+    return;
+  }
+  const url = linkDaData(DATA);
+  try {
+    await navigator.clipboard.writeText(url);
+    showToast('Link da escala copiado (quem abrir entra com a própria conta).', 'ok');
+  } catch {
+    prompt('Copie o link da escala:', url);
+  }
+};
+
+// Status do voo: Atrasado e Cancelado pedem o detalhe (a nova decolagem ou o motivo) antes de valer; desistir deixa o
+// status anterior. O histórico registra só a categoria do motivo
+const vooDaChave = fKey => (RES && Array.isArray(RES.out) ? RES.out.find(o => o.fKey === fKey) : null);
+function aplicarStatus(fKey, status, detalhe) {
+  if (!S.fStatus) S.fStatus = {};
+  if (!S.fObs) S.fObs = {};
+  S.fStatus[fKey] = status;
+  // Sem o diálogo, o novo horário do atraso segue no Em Voo e no Pousou; nos outros, o detalhe sai
+  const novo = detalhe || detalheAoMudarStatus(S.fObs[fKey], status);
+  if (novo) S.fObs[fKey] = novo;
+  else delete S.fObs[fKey];
+  const voo = vooDaChave(fKey);
+  // Em Voo, Atrasado, Pousou e Cancelado fixam o voo: uma alteração na escala não o tira do lugar (o cancelado fica
+  // onde estava, sem ocupar nada). Fora da escala aprovada, Pendente ou Confirmado o soltam
+  if (voo) S.fixos = fixosAoMudarStatus(S.fixos, voo, status, { aprovada: Boolean(S.aprovacao) });
+  const textoDoStatus = status === 'Pousou' ? rotuloDoStatus(status, voo) : textoParaOHistorico(status, detalhe);
+  gravarAlteracao('mod', `Status de ${voo ? `${voo.s} (${hm(voo.a)}–${hm(voo.b)})` : fKey}: ${textoDoStatus}`);
+}
+function mudarStatus(fKey, status) {
+  const voo = vooDaChave(fKey);
+  if (!voo || !STATUS_COM_DETALHE.includes(status)) { aplicarStatus(fKey, status, null); return; }
+  pedirDetalheDoStatus({ voo, status, aoConfirmar: detalhe => aplicarStatus(fKey, status, detalhe), aoDesistir: () => rOut() });
+}
+aoMudarCampo('fstatus', t => mudarStatus(t.dataset.fkey, t.value));
+
+// Um clique no detalhe do status (motivo ou nova decolagem) permite alterá-lo; o status continua o mesmo
+aoAcionar('detalhe-status', b => {
+  const fKey = b.dataset.fkey, status = S.fStatus && S.fStatus[fKey], voo = vooDaChave(fKey);
+  if (!voo || !STATUS_COM_DETALHE.includes(status)) return;
+  pedirDetalheDoStatus({ voo, status, detalhe: S.fObs && S.fObs[fKey], aoConfirmar: detalhe => aplicarStatus(fKey, status, detalhe) });
+});
+
+// Aprovar a escala: todos os voos ficam fixos e o selo diz quando e quem aprovou. Reabrir solta os voos: a
+// escala volta a ser refeita inteira a cada alteração. Os dois pedem confirmação
+document.addEventListener('click', e => {
+  const aprovar = e.target.closest('#btn-aprovar'), reabrir = e.target.closest('#btn-reabrir');
+  if ((!aprovar && !reabrir) || isGestor() || !RES) return;
+  if (aprovar) {
+    if (!confirmado(aprovar, 'Confirmar aprovação')) return;
+    S.fixos = Object.fromEntries(RES.out.map(o => [o.fKey, pinoDoVoo(o)]));
+    S.aprovacao = { em: new Date().toISOString(), por: ApiClient.autorAtual || '' };
+    gravarAlteracao('mod', `Escala aprovada: ${RES.out.length} ${RES.out.length === 1 ? 'voo fixado' : 'voos fixados'}`);
+    showToast('Escala aprovada: os voos ficam fixos.', 'ok');
+  } else {
+    if (!confirmado(reabrir, 'Confirmar reabertura')) return;
+    // Os voos em andamento (Em Voo, Atrasado, Pousou, Cancelado) continuam fixos
+    S.fixos = fixosAoReabrir(S.fixos, S.fStatus);
+    S.aprovacao = null;
+    gravarAlteracao('mod', 'Escala reaberta: volta a ser refeita a cada alteração');
+    showToast('Escala reaberta.', 'ok');
+  }
+});
+
+// Critérios da compactação: a escala é refeita com o critério novo (com a escala aprovada, não mudam)
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-criterio]');
+  if (!b || b.getAttribute('aria-disabled') === 'true' || isGestor() || S.aprovacao) return;
+  const campo = b.dataset.criterio, antes = normalizarCriterios(S.criterios);
+  if (antes[campo] === b.dataset.valor) return;
+  S.criterios = normalizarCriterios({ ...antes, [campo]: b.dataset.valor });
+  const opcoes = campo === 'buracos' ? OPCOES_DE_BURACOS : OPCOES_DE_HORARIOS;
+  const nome = id => opcoes.find(([v]) => v === id)[1];
+  gravarAlteracao('mod', `Compactação: ${campo === 'buracos' ? 'buracos' : 'horários'} ${nome(antes[campo])} → ${nome(S.criterios[campo])}`);
+});
+
+// O resultado da missão do curso, na linha do voo: vai para o servidor (só acréscimo) e entra na situação do
+// aluno (o progresso e a próxima missão mudam). Sem conexão, o seletor volta ao que estava
+document.addEventListener('change', async e => {
+  const sel = e.target.closest('[data-resultado]');
+  if (!sel || isGestor()) return;
+  const o = vooDaChave(sel.dataset.resultado), stu = o ? stuBy(o.stuId) : null;
+  if (!o || !o.etapa || !stu || !stu.curso) return;
+  const registro = { aluno: o.stuId, curso: stu.curso, missao: o.etapa, resultado: sel.value, data: DATA, voo: o.fKey };
+  sel.disabled = true;
+  try {
+    const id = await ApiClient.registrarResultado(registro);
+    const novo = { id, ...registro, registrado_em: new Date().toISOString(), registrado_por: ApiClient.autorAtual || null };
+    const atual = S.resultados || { situacao: [], doDia: [] };
+    const mesmaMissao = r => r.aluno === novo.aluno && r.curso === novo.curso && r.missao === novo.missao;
+    // A situação de cada missão vale para todas as datas; os registros do dia e o histórico, só para a data do voo (a
+    // resposta pode chegar depois de trocar de data)
+    const mesmaData = DATA === registro.data;
+    S.resultados = { situacao: [...atual.situacao.filter(r => !mesmaMissao(r)), novo], doDia: mesmaData ? [...atual.doDia, novo] : atual.doDia };
+    const descricao = `Resultado de ${o.s} em ${o.etapa}: ${registro.resultado}`;
+    // O resultado fica no servidor, não nos dados do dia: só a entrada do histórico, sem gravar o dia
+    if (mesmaData) logChange('mod', descricao);
+    else ApiClient.registrarHistorico(registro.data, { tipo: 'mod', descricao });
+  } catch {
+    showToast('Não foi possível registrar o resultado. Verifique a conexão e tente de novo.');
+  }
+  rOut(); rAlu(); rDem();
+});
+
+// Sugestões para um conflito: a gaveta abre pelo botão do conflito. "Aplicar" muda o voo fixo (na turma de
+// Ground, a turma inteira) e "Soltar" o tira dos fixos; o histórico guarda os fixos de antes, para reverter. Cancelar
+// abre o diálogo do status, já com o motivo do conflito marcado
+document.addEventListener('click', e => {
+  const abrirSugestoes = e.target.closest('[data-reparo]');
+  if (abrirSugestoes) { if (!isGestor()) abrirPainelDeReparo(abrirSugestoes.dataset.reparo); return; }
+  if (e.target.closest('#btn-fechar-reparo')) { fecharPainelDeReparo(true); return; }
+  const botao = e.target.closest('[data-reparo-aplicar]');
+  if (!botao || isGestor()) return;
+  const escolha = opcaoDoPainel(+botao.dataset.reparoAplicar);
+  if (!escolha) return;
+  const { fKey, voo, opcao } = escolha;
+  fecharPainelDeReparo();
+  if (!opcao.mudancas && !opcao.soltar) {
+    pedirDetalheDoStatus({ voo, status: 'Cancelado', detalhe: opcao.motivo ? { motivo: opcao.motivo } : null, aoConfirmar: detalhe => aplicarStatus(fKey, 'Cancelado', detalhe) });
+    return;
+  }
+  const antes = S.fixos || {};
+  S.fixos = aplicarReparo(antes, RES, fKey, opcao);
+  // Os voos que mudaram ou saíram dos fixos (soltar): o histórico guarda como estavam
+  const mudados = Object.keys(antes).filter(k => S.fixos[k] !== antes[k]);
+  gravarAlteracao('mod', `Reparo: ${voo.s} (${hm(voo.a)}–${hm(voo.b)}): ${opcao.soltar ? 'Soltar o voo' : opcao.texto}`, {
+    kind: 'restaurarFixos', fixos: Object.fromEntries(mudados.map(k => [k, antes[k]])), label: '↶ Reverter'
+  });
+  showToast(opcao.soltar ? 'Voo solto: o app escalou de novo.' : 'Sugestão aplicada: o voo continua fixo.', 'ok');
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && painelDeReparoAberto() && !dialogoDeStatusAberto()) fecharPainelDeReparo(true);
+});
