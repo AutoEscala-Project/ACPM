@@ -1,10 +1,11 @@
 // Acessibilidade: cada botão e cada campo tem um nome para o leitor de tela, e nenhum se chama só "✕" (que o leitor
 // lê como "multiplicação"). Vale para todas as abas, o Histórico e o painel de habilitações.
-import { test, expect, abrirComExemplo, irPara, entrar, abrirEscala, confirmar } from './fixtures.js';
+import { test, expect, abrir, abrirComExemplo, irPara, entrar, abrirEscala, confirmar } from './fixtures.js';
 import { instalarSupabaseFalso, documentosAtuais, CONTAS } from './supabase-falso.js';
 import { comExemplo } from '../helpers/exemplo.js';
 import { estadoSintetico } from '../helpers/estado.js';
 import { razaoDeContraste } from '../helpers/contraste.js';
+import { aluno, cenario, instrutor } from '../helpers/montar.js';
 
 // Nome acessível, do jeito simples: aria-label, aria-labelledby, o rótulo do campo, o texto do botão ou a dica
 const semNome = (page, raiz) => page.evaluate(seletor => {
@@ -340,6 +341,30 @@ test.describe('O foco depois de uma ação', () => {
   });
 });
 
+// O texto e o fundo que aparece atrás dele: as camadas semitransparentes somadas, de baixo para cima
+const coresDoTexto = locator => locator.evaluate(el => {
+  const canais = cor => /rgba?\(([^)]+)\)/.exec(cor)[1].split(/[\s,/]+/).filter(Boolean).map(Number);
+  const camadas = [];
+  for (let no = el; no; no = no.parentElement) camadas.unshift(getComputedStyle(no).backgroundColor);
+  let fundo = [255, 255, 255];
+  for (const camada of camadas) {
+    const [r, g, b, a = 1] = canais(camada);
+    fundo = [r, g, b].map((v, i) => v * a + fundo[i] * (1 - a));
+  }
+  return { texto: getComputedStyle(el).color, fundo: `rgb(${fundo.map(Math.round).join(', ')})` };
+});
+// Os textos sem o contraste mínimo da WCAG para texto normal (4,5:1), com o rótulo de cada um
+const contrastesFracos = async (itens) => {
+  const fracos = [];
+  for (const [rotulo, locator] of itens) {
+    const { texto, fundo } = await coresDoTexto(locator);
+    const razao = razaoDeContraste(texto, fundo);
+    if (razao < 4.5) fracos.push(`${rotulo}: ${razao.toFixed(2)}:1 (${texto} sobre ${fundo})`);
+  }
+  return fracos;
+};
+
+// O que a tela mostra pela cor ou pela posição também é dito ao leitor de tela; o teclado chega aonde o mouse chega
 test.describe('O leitor de tela e o teclado', () => {
   test('a aba aberta (e o Manual), a vista escolhida e o dia da agenda são ditos, não só coloridos', async ({ page }) => {
     await abrirComExemplo(page);
@@ -436,6 +461,40 @@ test.describe('O leitor de tela e o teclado', () => {
     await page.keyboard.press('Escape');
     await expect(page.locator('#historico')).toBeHidden();
   });
+
+  for (const [tema, nome] of [['light', 'claro'], ['dark', 'escuro']]) {
+    test(`os textos sobre cor (os status, o ✕ armado, o botão do popup, o selo da aprovação) contrastam, no tema ${nome}`, async ({ page }) => {
+      await abrirComExemplo(page);
+      await page.evaluate(t => { document.documentElement.dataset.theme = t; }, tema);
+      await abrirEscala(page);
+      const fracos = [];
+      const conferir = async (rotulo, locator) => fracos.push(...await contrastesFracos([[rotulo, locator]]));
+      const status = page.locator('#out select[data-f="fstatus"]');
+      await status.nth(0).selectOption('Em Voo');
+      await status.nth(1).selectOption('Pousou');
+      await conferir('Em Voo', page.locator('#out .st-sel.st-EmVoo').first());
+      await conferir('Pousou', page.locator('#out .st-sel.st-Pousou').first());
+      await page.locator('#s-esc [data-tl="eq"]').click();
+      await page.locator('#out .tl-bar').first().click();
+      await conferir('botão do popup', page.locator('#tl-pop .tl-pop-btn'));
+      await page.keyboard.press('Escape');
+      await confirmar(page, '#btn-aprovar');
+      await conferir('selo da aprovação', page.locator('#selo-aprovada'));
+      await irPara(page, 'alu');
+      const x = page.locator('#alu [data-act="dels"]').first();
+      await x.click();
+      await expect(x).toHaveClass(/\barm\b/);
+      await conferir('✕ armado', x);
+      expect(fracos).toEqual([]);
+    });
+
+    test(`o selo vermelho da aba (missões que não entraram na escala) contrasta, no tema ${nome}`, async ({ page }) => {
+      await abrir(page, { estado: cenario({ ins: [instrutor(1, 1)], stu: [aluno(1000, { mis: 'Multimotor', eq: 'PA-34' })] }) });
+      await page.evaluate(t => { document.documentElement.dataset.theme = t; }, tema);
+      await expect(page.locator('#selo-esc')).toHaveClass(/\berro\b/);
+      expect(await contrastesFracos([['selo da aba', page.locator('#selo-esc')]])).toEqual([]);
+    });
+  }
 
   test('as barras do mapa dizem o status do voo (não só a cor)', async ({ page }) => {
     await abrirComExemplo(page);

@@ -11,14 +11,15 @@
   --acT: #ffffff;
   --ye: #F2B705;
   --er: #B3261E;
+  --erT: #ffffff;
   --er-bg: #FCEBEA;
   --wa: #8A5A00;
   --wa-bg: #FFF5DB;
-  --ok: #1B7F4B;
+  --ok: #197A47;
   --ok-bg: #E7F4EC;
   --info-bg: #E8F1FB;
   --neutro-bg: #EDF1F4;
-  --fly: #0277BD;
+  --fly: #01639E;
   --hd: #12263A;
   --hdT: #EAF0F5;
   --pop-bg: #12263A;
@@ -32,7 +33,7 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --bg: #0F1822; --pn: #17232F; --pn2: #1C2B39; --ink: #E6EDF3; --mu: #93A3B2;
-    --ln: #2B3B4A; --ln2: #3A4E60; --ac: #6AA8F0; --acT: #0F1822; --er: #FF8A80; --er-bg: rgba(255,138,128,.14);
+    --ln: #2B3B4A; --ln2: #3A4E60; --ac: #6AA8F0; --acT: #0F1822; --er: #FF8A80; --erT: #0F1822; --er-bg: rgba(255,138,128,.14);
     --wa: #F2C94C; --wa-bg: rgba(242,201,76,.14); --ok: #5FD39A; --ok-bg: rgba(95,211,154,.14);
     --info-bg: rgba(106,168,240,.14); --neutro-bg: rgba(147,163,178,.14); --fly: #4FC3F7; --hd: #0A1119; --hdT: #E6EDF3;
     --pop-bg: #223446; --pop-txt: #E6EDF3; --at: #F0954A;
@@ -41,7 +42,7 @@
 
 :root[data-theme="dark"] {
   --bg: #0F1822; --pn: #17232F; --pn2: #1C2B39; --ink: #E6EDF3; --mu: #93A3B2;
-  --ln: #2B3B4A; --ln2: #3A4E60; --ac: #6AA8F0; --acT: #0F1822; --er: #FF8A80; --er-bg: rgba(255,138,128,.14);
+  --ln: #2B3B4A; --ln2: #3A4E60; --ac: #6AA8F0; --acT: #0F1822; --er: #FF8A80; --erT: #0F1822; --er-bg: rgba(255,138,128,.14);
   --wa: #F2C94C; --wa-bg: rgba(242,201,76,.14); --ok: #5FD39A; --ok-bg: rgba(95,211,154,.14);
   --info-bg: rgba(106,168,240,.14); --neutro-bg: rgba(147,163,178,.14); --fly: #4FC3F7; --hd: #0A1119; --hdT: #E6EDF3;
   --pop-bg: #223446; --pop-txt: #E6EDF3; --at: #F0954A;
@@ -176,7 +177,7 @@ nav#nav button:focus-visible { outline-offset: -4px; }
 .aba-sep { width: 1px; height: 18px; background: rgba(255,255,255,.15); margin: 0 6px; flex: none; }
 .aba-selo { min-width: 18px; height: 18px; border-radius: 9px; padding: 0 5px; font: 700 11px/18px 'Barlow', sans-serif; background: rgba(255,255,255,.18); color: #fff; text-align: center; }
 .aba-selo.aviso { background: var(--ye); color: #12263A; }
-.aba-selo.erro { background: #E5484D; color: #fff; }
+.aba-selo.erro { background: #C62828; color: #fff; }
 
 /* A Secretaria trabalha na agenda: só a Agenda e as abas que ela consulta (Escala, Instrutores e Alunos) */
 body[data-perfil="secretaria"] #nav button:not([data-t="age"]):not([data-t="esc"]):not([data-t="ins"]):not([data-t="alu"]),
@@ -894,11 +895,11 @@ p.h { color: var(--mu); margin: 4px 0 8px; }
 a { color: var(--ac); }
 /* Só para o leitor de tela */
 .sr { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
-
 /* O link para pular a barra do topo e as abas: aparece só com o foco do teclado */
 .pular { position: absolute; left: 8px; top: -64px; z-index: 100; padding: 10px 14px; border-radius: 6px; background: var(--ac); color: var(--acT); font-weight: 600; text-decoration: none; }
 .pular:focus { top: 8px; }
 main:focus { outline: none; }
+
 .bl { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 
 .x {
@@ -912,7 +913,8 @@ main:focus { outline: none; }
 }
 .x:hover:not(:disabled) { border-color: var(--er); color: var(--er); }
 .x:disabled { opacity: .4; cursor: not-allowed; }
-.x.arm { background: var(--er); color: #fff; border-color: var(--er); }
+/* Armado, também com o mouse ainda em cima (sem isso, o :hover acima deixava o texto vermelho sobre o vermelho) */
+.x.arm, .x.arm:hover:not(:disabled) { background: var(--er); color: var(--erT); border-color: var(--er); }
 
 .tg {
   display: inline-flex;
@@ -1090,7 +1092,7 @@ main:focus { outline: none; }
 .tl-pop-btn {
   width: 100%;
   background: var(--er);
-  color: #fff;
+  color: var(--erT);
   border: 0;
   border-radius: 4px;
   padding: 4px 8px;
@@ -1286,10 +1288,10 @@ body.tela-painel { min-height: 100vh; background: #07122B; overflow: hidden; }
 .dica-btn:focus-visible { outline: 2px solid var(--ac); outline-offset: 2px; }
 [data-dica]:not(button):not(.dica-btn) { cursor: help; }
 .tag[data-dica] { text-decoration: underline dotted; text-underline-offset: 2px; }
-/* No celular e no toque, o "?" tem 44 px para o dedo; o círculo continua pequeno */
-@media (max-width: 640px), (pointer: coarse) {
 /* A etiqueta com a dica recebe o foco pelo Tab (para abrir a dica sem o mouse) */
 [data-dica]:not(button):focus-visible { outline: 2px solid var(--ac); outline-offset: 2px; border-radius: 3px; }
+/* No celular e no toque, o "?" tem 44 px para o dedo; o círculo continua pequeno */
+@media (max-width: 640px), (pointer: coarse) {
   .dica-btn {
     width: 44px; height: 44px; margin: -13px -11px; border-color: transparent;
     background: radial-gradient(circle, transparent 8px, var(--ln) 8.5px, var(--ln) 9.5px, transparent 10px);
