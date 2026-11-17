@@ -1,5 +1,5 @@
 // Confirmar com dois cliques no mesmo botão
-import { $ } from '../dom.js';
+import { $, anunciar } from '../dom.js';
 import { isGestor } from '../state.js';
 
 // O único jeito de confirmar uma ação no app: o primeiro clique arma o botão (o texto e o nome lido pelo leitor de
@@ -33,6 +33,7 @@ export const confirmado = (b, txt) => {
   b.dataset.arm = '1';
   b.classList.add('arm');
   b.textContent = txt;
+  anunciar(`${b.dataset.armado || txt}. Para confirmar, acione o botão de novo.`);
   temporizadores.set(b, setTimeout(() => desarmar(b), CONFIRMACAO_MS));
   return false;
 };

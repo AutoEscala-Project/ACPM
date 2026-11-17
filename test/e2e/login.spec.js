@@ -27,6 +27,12 @@ test.describe('Login e perfis (modo compartilhado)', () => {
     await expect(page.locator('#login-erro')).toHaveText('E-mail ou senha incorretos.');
     await expect(page.locator('#form-login')).toBeVisible();
     await expect(page.locator('#nav')).toBeHidden();
+    // Para o leitor de tela, os dois campos ficam marcados com o erro, que é a descrição deles; o foco vai para a senha
+    await expect(page.locator('#login-senha')).toBeFocused();
+    for (const campo of ['#login-email', '#login-senha']) {
+      await expect(page.locator(campo)).toHaveAttribute('aria-invalid', 'true');
+      await expect(page.locator(campo)).toHaveAccessibleDescription('E-mail ou senha incorretos.');
+    }
     expect(erros).toEqual([]);
     await contexto.close();
   });

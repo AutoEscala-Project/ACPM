@@ -20,6 +20,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/dist/umd/supabase.js" integrity="sha384-uteMfOloLDGt042uDz+xHGF3ym63/WQ6rFq7murQRG8Ih7QrXGEGNtWd8688sb4O" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 </head>
 <body data-role="operador">
+<a class="pular" href="#conteudo">Pular para o conteúdo</a>
 
 <!-- Ícones de traço (no lugar de emojis): <svg class="ico"><use href="#i-nome"/></svg> -->
 <svg xmlns="http://www.w3.org/2000/svg" hidden>
@@ -54,14 +55,14 @@
   <h1 class="topo-marca"><img class="topo-logo" src="img/acpm-aguia.png" alt="" width="64" height="24"><span class="topo-titulo">AutoEscala</span></h1>
   <!-- A data em uso: o contexto de todas as abas -->
   <div class="topo-data" role="group" aria-label="Data da escala">
-    <button class="topo-ico" type="button" id="dt-ant" aria-label="Dia anterior" title="Dia anterior"><svg class="ico"><use href="#i-esquerda"/></svg></button>
+    <button class="topo-ico" type="button" id="dt-ant" aria-label="Dia anterior" title="Dia anterior"><svg class="ico" aria-hidden="true"><use href="#i-esquerda"/></svg></button>
     <label class="topo-data-campo" title="Escolher a data">
-      <svg class="ico"><use href="#i-calendario"/></svg>
-      <span id="dt-rotulo"></span>
+      <svg class="ico" aria-hidden="true"><use href="#i-calendario"/></svg>
+      <span id="dt-rotulo" aria-live="polite" aria-atomic="true"></span>
       <span class="topo-data-rel" id="dt-rel" hidden></span>
       <input type="date" id="dt" aria-label="Data da escala">
     </label>
-    <button class="topo-ico" type="button" id="dt-prox" aria-label="Próximo dia" title="Próximo dia"><svg class="ico"><use href="#i-direita"/></svg></button>
+    <button class="topo-ico" type="button" id="dt-prox" aria-label="Próximo dia" title="Próximo dia"><svg class="ico" aria-hidden="true"><use href="#i-direita"/></svg></button>
   </div>
   <div class="hd-tools">
     <select class="hd-sel" id="role-sel" aria-label="Perfil de acesso">
@@ -87,7 +88,7 @@
   </div>
   <!-- Abas na ordem de uso: a escala e o que a alimenta no dia; o cadastro; o BI -->
   <nav id="nav" aria-label="Abas">
-    <button data-t="esc" class="on"><span class="aba-rotulo">Escala</span><span class="aba-selo" id="selo-esc" hidden></span></button>
+    <button data-t="esc" class="on" aria-current="page"><span class="aba-rotulo">Escala</span><span class="aba-selo" id="selo-esc" hidden></span></button>
     <button data-t="dem"><span class="aba-rotulo">Demanda</span></button>
     <button data-t="age"><span class="aba-rotulo">Agenda</span><span class="aba-selo" id="selo-age" hidden></span></button>
     <span class="aba-sep" aria-hidden="true"></span>
@@ -100,7 +101,7 @@
   </nav>
 </header>
 
-<main>
+<main id="conteudo" tabindex="-1">
   <!-- AVISO DE SINCRONIZAÇÃO (modo compartilhado): conflito de versão ou falha ao salvar -->
   <div class="aviso-sync" id="aviso-sync" role="alert" hidden>
     <span id="aviso-sync-texto"></span>
@@ -182,8 +183,8 @@
           <button class="btn edit-only" type="button" id="btn-novo-recurso" aria-expanded="false" aria-controls="form-recurso">+ Novo recurso</button>
         </div>
         <form class="form-recurso edit-only" id="form-recurso" autocomplete="off" novalidate hidden>
-          <label>Matrícula <input id="rec-reg" maxlength="15" placeholder="PR-ABC" required></label>
-          <label>Categoria <select id="rec-tipo" required>
+          <label>Matrícula <input id="rec-reg" maxlength="15" placeholder="PR-ABC" required aria-describedby="rec-erro"></label>
+          <label>Categoria <select id="rec-tipo" required aria-describedby="rec-erro">
             <option value="">Escolha…</option><option>C152</option><option>C172</option><option>PA-34</option><option>Sim. Mono</option><option>Sim. Multi</option>
           </select></label>
           <label class="chk" id="rec-parafuso-rotulo" hidden><input type="checkbox" id="rec-parafuso"> Só Parafuso</label>
@@ -201,8 +202,8 @@
     <h2>Instrutores</h2>
     <div class="bar">
       <div class="seg" role="group" aria-label="O que ver">
-        <button type="button" data-vista-ins="dia" class="on"><svg class="ico"><use href="#i-calendario"/></svg>Disponibilidade do dia</button>
-        <button type="button" data-vista-ins="cadastro"><svg class="ico"><use href="#i-instrutor"/></svg>Cadastro</button>
+        <button type="button" aria-pressed="true" data-vista-ins="dia" class="on"><svg class="ico"><use href="#i-calendario"/></svg>Disponibilidade do dia</button>
+        <button type="button" aria-pressed="false" data-vista-ins="cadastro"><svg class="ico"><use href="#i-instrutor"/></svg>Cadastro</button>
       </div>
       <span class="cresce"></span>
       <input type="search" class="flt-ctrl" data-flt="inst" placeholder="Buscar instrutor…" aria-label="Buscar instrutor">
@@ -222,7 +223,7 @@
     </div>
     <div class="vista-cadastro">
       <div class="tw"><table class="cadastro">
-        <thead><tr><th>Nome</th><th class="so-dados">CANAC</th><th>Peso (kg)</th><th>Habilitações</th><th></th></tr></thead>
+        <thead><tr><th>Nome</th><th class="so-dados">CANAC</th><th>Peso (kg)</th><th>Habilitações</th><th aria-label="Ações"></th></tr></thead>
         <tbody id="inst"></tbody>
       </table></div>
       <div class="pn limites-lei" id="limites-lei"></div>
@@ -234,15 +235,15 @@
     <h2>Alunos</h2>
     <div class="bar">
       <div class="seg" role="group" aria-label="O que ver">
-        <button type="button" data-vista-alu="alunos" class="on"><svg class="ico"><use href="#i-instrutor"/></svg>Alunos</button>
-        <button type="button" data-vista-alu="cursos"><svg class="ico"><use href="#i-lista"/></svg>Cursos</button>
+        <button type="button" aria-pressed="true" data-vista-alu="alunos" class="on"><svg class="ico"><use href="#i-instrutor"/></svg>Alunos</button>
+        <button type="button" aria-pressed="false" data-vista-alu="cursos"><svg class="ico"><use href="#i-lista"/></svg>Cursos</button>
       </div>
       <input type="search" class="flt-ctrl vista-alunos" data-flt="alu" placeholder="Buscar aluno…" aria-label="Buscar aluno">
       <span class="cresce"></span>
       <button class="btn edit-only vista-alunos" data-act="adds">+ Novo aluno</button>
     </div>
     <div class="tw vista-alunos"><table class="cadastro alunos">
-      <thead><tr><th>Nome</th><th class="so-dados">CANAC</th><th>Curso</th><th>Peso (kg)</th><th>Não escalar com<button type="button" class="dica-btn" data-dica="nao-escalar-com" aria-label="O que é Não escalar com?" aria-expanded="false"></button></th><th></th></tr></thead>
+      <thead><tr><th>Nome</th><th class="so-dados">CANAC</th><th>Curso</th><th>Peso (kg)</th><th>Não escalar com<button type="button" class="dica-btn" data-dica="nao-escalar-com" aria-label="O que é Não escalar com?" aria-expanded="false"></button></th><th aria-label="Ações"></th></tr></thead>
       <tbody id="alu"></tbody>
     </table></div>
     <!-- O programa de cada curso (js/views/cursos.js) -->
@@ -258,11 +259,11 @@
       <div class="pn">
         <h3 id="agenda-data"></h3>
         <form id="form-agenda" autocomplete="off" novalidate>
-          <label>Aluno<select id="ag-aluno" class="agenda-campo" required></select></label>
+          <label>Aluno<select id="ag-aluno" class="agenda-campo" required aria-describedby="ag-erro"></select></label>
           <label>Fase / missão<select id="ag-missao" class="agenda-campo"></select></label>
-          <label>Horário<select id="ag-horario" class="agenda-campo"></select></label>
-          <label>Duração (h)<input type="number" id="ag-horas" class="agenda-campo" min="0.1" max="5" step="0.1" inputmode="decimal" value="1"></label>
-          <label>Registrado por<input id="ag-por" class="agenda-campo" maxlength="80" required placeholder="Quem anotou o pedido"></label>
+          <label>Horário<select id="ag-horario" class="agenda-campo" aria-describedby="ag-erro"></select></label>
+          <label>Duração (h)<input type="number" id="ag-horas" class="agenda-campo" min="0.1" max="5" step="0.1" inputmode="decimal" value="1" aria-describedby="ag-erro"></label>
+          <label>Registrado por<input id="ag-por" class="agenda-campo" maxlength="80" required placeholder="Quem anotou o pedido" aria-describedby="ag-erro"></label>
           <label>Observação<input id="ag-obs" class="agenda-campo" maxlength="300" placeholder="Opcional"></label>
           <button class="btn" type="submit">Registrar pedido</button>
           <button class="x" type="button" id="ag-excecao" hidden data-dica="excecao">Exceção da Coordenação</button>
@@ -320,10 +321,10 @@
     <h2>Escala do dia <span class="atualizada" id="escala-atualizada" role="status" hidden><svg class="ico" aria-hidden="true"><use href="#i-relogio"/></svg><span id="escala-atualizada-texto"></span></span><span class="selo-aprovada" id="selo-aprovada" hidden></span></h2>
     <div class="bar">
       <div class="seg" role="group" aria-label="Como ver a escala">
-        <button type="button" data-tl="lista" class="on"><svg class="ico"><use href="#i-lista"/></svg>Lista</button>
-        <button type="button" data-tl="eq"><svg class="ico"><use href="#i-aviao"/></svg>Por recurso</button>
-        <button type="button" data-tl="ins"><svg class="ico"><use href="#i-instrutor"/></svg>Por instrutor</button>
-        <button type="button" data-tl="painel"><svg class="ico"><use href="#i-painel"/></svg>Painel</button>
+        <button type="button" aria-pressed="true" data-tl="lista" class="on"><svg class="ico"><use href="#i-lista"/></svg>Lista</button>
+        <button type="button" aria-pressed="false" data-tl="eq"><svg class="ico"><use href="#i-aviao"/></svg>Por recurso</button>
+        <button type="button" aria-pressed="false" data-tl="ins"><svg class="ico"><use href="#i-instrutor"/></svg>Por instrutor</button>
+        <button type="button" aria-pressed="false" data-tl="painel"><svg class="ico"><use href="#i-painel"/></svg>Painel</button>
       </div>
       <span class="cresce"></span>
       <label class="flt-rotulo"><span>Categoria</span> <select id="flt-esc-cat" class="flt-ctrl"></select></label>
@@ -629,7 +630,7 @@
 <!-- Sugestões para um conflito na escala aprovada (js/views/reparo.js) -->
 <aside class="gaveta" id="painel-reparo" aria-labelledby="painel-reparo-titulo" hidden></aside>
 <!-- Detalhe do status do voo: o motivo do cancelamento ou a nova decolagem do atraso (js/views/dialogo-status.js) -->
-<dialog class="dlg" id="dlg-status" aria-labelledby="dlg-status-titulo">
+<dialog class="dlg" id="dlg-status" aria-labelledby="dlg-status-titulo" aria-describedby="dlg-status-voo">
   <form id="form-status" novalidate>
     <h2 id="dlg-status-titulo"></h2>
     <p class="h" id="dlg-status-voo"></p>
@@ -657,6 +658,7 @@
 <div class="tl-pop" id="tl-pop" role="dialog" aria-label="Detalhes do voo" hidden></div>
 
 <div id="toast-box" aria-live="polite"></div>
+<div id="anuncio" class="sr" role="status"></div>
 
 <script type="module" src="js/main.js"></script>
 </body>

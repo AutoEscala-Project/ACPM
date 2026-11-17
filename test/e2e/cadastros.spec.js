@@ -82,10 +82,16 @@ test.describe('Recursos: acrescentar e retirar', () => {
     await page.locator('#rec-tipo').selectOption('C152');
     await page.locator('#form-recurso [type="submit"]').click();
     await expect(page.locator('#rec-erro')).toHaveText('Já existe um recurso com a matrícula PP-LJV.');
+    // O campo do erro fica marcado (e só ele), com o motivo como descrição
+    await expect(page.locator('#rec-reg')).toHaveAttribute('aria-invalid', 'true');
+    await expect(page.locator('#rec-reg')).toHaveAccessibleDescription('Já existe um recurso com a matrícula PP-LJV.');
+    await expect(page.locator('#rec-tipo')).not.toHaveAttribute('aria-invalid');
     await page.locator('#rec-reg').fill('PR-ZZZ');
     await page.locator('#rec-tipo').selectOption('');
     await page.locator('#form-recurso [type="submit"]').click();
     await expect(page.locator('#rec-erro')).toHaveText('Escolha a categoria.');
+    await expect(page.locator('#rec-tipo')).toHaveAttribute('aria-invalid', 'true');
+    await expect(page.locator('#rec-reg')).not.toHaveAttribute('aria-invalid');
     await expect(page.locator('#rec-parafuso')).toBeHidden();
     await page.locator('#rec-tipo').selectOption('C152');
     await expect(page.locator('#rec-parafuso')).toBeVisible();

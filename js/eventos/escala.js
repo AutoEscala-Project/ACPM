@@ -3,7 +3,7 @@
 import { gravarAlteracao, logChange, gravarEscalaCalculada } from '../actions.js';
 import { opcoesDeCategoria } from '../categorias.js';
 import { OPCOES_DE_BURACOS, OPCOES_DE_HORARIOS, normalizarCriterios } from '../criterios.js';
-import { $, showToast } from '../dom.js';
+import { $, showToast, anunciar } from '../dom.js';
 import { exp, pdf, planilha } from '../export.js';
 import { pinoDoVoo, fixosAoMudarStatus, fixosAoReabrir } from '../fixos.js';
 import { hm } from '../format.js';
@@ -37,13 +37,22 @@ document.addEventListener('keydown', e => {
 document.addEventListener('scroll', reposicionarPopupDoMapa, { capture: true, passive: true });
 window.addEventListener('resize', reposicionarPopupDoMapa);
 
+// Depois de um filtro, o leitor de tela ouve quantos voos ficaram (a lista muda sem o foco sair do filtro); na busca,
+// quando a digitação para
+let anuncioDoFiltro = null;
+function filtrar(esperar = 0) {
+  const voos = rOut();
+  clearTimeout(anuncioDoFiltro);
+  const texto = voos ? `${voos === 1 ? '1 voo' : `${voos} voos`} na escala com esses filtros.` : 'Nenhum voo na escala com esses filtros.';
+  anuncioDoFiltro = setTimeout(() => anunciar(texto), esperar);
+}
 document.addEventListener('input', e => {
-  if (e.target.id === 'flt-esc-q') rOut();
+  if (e.target.id === 'flt-esc-q') filtrar(500);
 });
-$('#flt-esc-eq').onchange = () => rOut();
+$('#flt-esc-eq').onchange = () => filtrar();
 // Categoria; o filtro de recurso mostra só os da categoria escolhida
 $('#flt-esc-cat').innerHTML = opcoesDeCategoria();
-$('#flt-esc-cat').onchange = () => rOut();
+$('#flt-esc-cat').onchange = () => filtrar();
 
 // Exportar é usar a escala: a escala só calculada fica gravada (quem só consulta não grava)
 $('#exp').onclick = () => { gravarEscalaCalculada(); exp(); };

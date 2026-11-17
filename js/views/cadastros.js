@@ -40,7 +40,10 @@ let vistaDosInstrutores = 'dia';
 export function mostrarVistaDosInstrutores(vista) {
   vistaDosInstrutores = vista;
   $('#s-ins').dataset.vista = vista;
-  document.querySelectorAll('#s-ins [data-vista-ins]').forEach(b => b.classList.toggle('on', b.dataset.vistaIns === vista));
+  document.querySelectorAll('#s-ins [data-vista-ins]').forEach(b => {
+    b.classList.toggle('on', b.dataset.vistaIns === vista);
+    b.setAttribute('aria-pressed', String(b.dataset.vistaIns === vista));
+  });
 }
 
 // Voos e aulas de cada instrutor na escala da data, sem os cancelados (a turma de Ground conta uma vez) e as janelas em que ele está ocupado

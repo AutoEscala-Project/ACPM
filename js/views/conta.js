@@ -32,7 +32,7 @@ export async function carregarContas() {
     $('#lista-contas').innerHTML = '<p class="h">Não foi possível carregar as contas. Verifique a conexão.</p>';
     return;
   }
-  $('#lista-contas').innerHTML = `<table><thead><tr><th>Nome</th><th>E-mail</th><th>Perfil</th><th>Último acesso</th><th></th></tr></thead>
+  $('#lista-contas').innerHTML = `<table><thead><tr><th>Nome</th><th>E-mail</th><th>Perfil</th><th>Último acesso</th><th aria-label="Ações"></th></tr></thead>
     <tbody>${contas.map(c => {
       const minha = c.email === ApiClient.emailAtual;
       return `<tr>

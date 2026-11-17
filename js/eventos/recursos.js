@@ -15,11 +15,19 @@ import { rDem } from '../views/demanda.js';
 import { NOMES_DAS_CATEGORIAS, abrirEditorDosHorarios, fecharEditorDosHorarios, tirarDoRascunho, porNoRascunho, escolherModelo, rascunhoDosHorarios, editorDosHorariosAberto } from '../views/horarios.js';
 import { rRec, rRevisao, rHangar } from '../views/recursos.js';
 
+// O campo do recurso com erro (aria-invalid); o motivo (#rec-erro) é a descrição dele: o leitor de tela diz os dois
+const CAMPOS_DO_RECURSO = { reg: '#rec-reg', tipo: '#rec-tipo' };
+const marcarCampoDoRecurso = campo => Object.entries(CAMPOS_DO_RECURSO).forEach(([nome, id]) => {
+  if (nome === campo) $(id).setAttribute('aria-invalid', 'true');
+  else $(id).removeAttribute('aria-invalid');
+});
+
 // Recursos: acrescentar um recurso à frota (matrícula, categoria e, no C152, "Só Parafuso")
 function mostrarFormDoRecurso(abrir) {
   $('#form-recurso').hidden = !abrir;
   $('#btn-novo-recurso').setAttribute('aria-expanded', String(abrir));
   $('#rec-erro').textContent = '';
+  marcarCampoDoRecurso(null);
   if (!abrir) return;
   $('#form-recurso').reset();
   $('#rec-parafuso-rotulo').hidden = true;
@@ -34,8 +42,8 @@ $('#rec-tipo').onchange = () => {
 $('#form-recurso').onsubmit = e => {
   e.preventDefault();
   if (isGestor()) return;
-  const { recurso, erro } = novoRecurso(S.frota, { reg: $('#rec-reg').value, tipo: $('#rec-tipo').value, soParafuso: $('#rec-parafuso').checked });
-  if (erro) { $('#rec-erro').textContent = erro; return; }
+  const { recurso, erro, campo } = novoRecurso(S.frota, { reg: $('#rec-reg').value, tipo: $('#rec-tipo').value, soParafuso: $('#rec-parafuso').checked });
+  if (erro) { $('#rec-erro').textContent = erro; marcarCampoDoRecurso(campo); return; }
   S.frota.push(recurso);
   S.av[recurso.reg] = true;
   gravarAlteracao('inc', `Recurso adicionado: ${recurso.reg} (${recurso.tipo}${recurso.soParafuso ? ', só Parafuso' : ''})`);

@@ -152,3 +152,12 @@ export function focarNoTitulo(lugar) {
   if (!titulo.hasAttribute('tabindex')) titulo.setAttribute('tabindex', '-1');
   titulo.focus();
 }
+
+// Um anúncio para o leitor de tela, na região #anuncio (que não aparece na tela). Esvaziar e escrever na volta seguinte
+// do navegador faz o mesmo texto ser lido de novo
+export function anunciar(texto) {
+  const lugar = $('#anuncio');
+  if (!lugar) return;
+  lugar.textContent = '';
+  requestAnimationFrame(() => { lugar.textContent = texto; });
+}

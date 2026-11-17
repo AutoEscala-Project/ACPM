@@ -339,3 +339,105 @@ test.describe('O foco depois de uma ação', () => {
     await expect(page.locator('#btn-aprovar')).toBeFocused();
   });
 });
+
+test.describe('O leitor de tela e o teclado', () => {
+  test('a aba aberta (e o Manual), a vista escolhida e o dia da agenda são ditos, não só coloridos', async ({ page }) => {
+    await abrirComExemplo(page);
+    const atual = page.locator('[aria-current="page"]');
+    await expect(atual).toHaveAttribute('data-t', 'esc');
+    await irPara(page, 'dem');
+    await expect(atual).toHaveCount(1);
+    await expect(atual).toHaveAttribute('data-t', 'dem');
+    await page.locator('#btn-manual').click();
+    await expect(atual).toHaveCount(1);
+    await expect(atual).toHaveId('btn-manual');
+    // A vista escolhida fica "pressionada"; as outras, não
+    await abrirEscala(page);
+    await expect(page.locator('#s-esc [data-tl][aria-pressed="true"]')).toHaveAttribute('data-tl', 'lista');
+    await page.locator('#s-esc [data-tl="eq"]').click();
+    await expect(page.locator('#s-esc [data-tl][aria-pressed="true"]')).toHaveAttribute('data-tl', 'eq');
+    await expect(page.locator('#s-esc [data-tl][aria-pressed="false"]')).toHaveCount(3);
+    await irPara(page, 'ins');
+    await page.locator('[data-vista-ins="cadastro"]').click();
+    await expect(page.locator('[data-vista-ins][aria-pressed="true"]')).toHaveAttribute('data-vista-ins', 'cadastro');
+    await irPara(page, 'alu');
+    await page.locator('[data-vista-alu="cursos"]').click();
+    await expect(page.locator('[data-vista-alu][aria-pressed="true"]')).toHaveAttribute('data-vista-alu', 'cursos');
+    // O dia escolhido no calendário da agenda, e o que passa a ser escolhido
+    await irPara(page, 'age');
+    const escolhido = page.locator('#agenda-cal [aria-current="date"]');
+    await expect(escolhido).toHaveCount(1);
+    await expect(escolhido).toHaveClass(/\bsel\b/);
+    const outro = page.locator('#agenda-cal [data-cal="dia"]:not(.sel):not(.fora)').first();
+    const dia = await outro.getAttribute('data-dia');
+    await outro.click();
+    await expect(escolhido).toHaveAttribute('data-dia', dia);
+  });
+
+  test('o pedido de confirmação é dito na região de status (o nome trocado do botão nem sempre é lido)', async ({ page }) => {
+    await abrirComExemplo(page);
+    await abrirEscala(page);
+    const anuncio = page.locator('#anuncio');
+    await expect(anuncio).toHaveAttribute('role', 'status');
+    await expect(anuncio).toBeEmpty();
+    // Um botão com texto e um ✕ com nome próprio (o do aluno): o anúncio é o nome do botão armado
+    const aprovar = page.locator('#btn-aprovar');
+    await aprovar.click();
+    await expect(anuncio).toHaveText('Confirmar aprovação. Para confirmar, acione o botão de novo.');
+    await irPara(page, 'alu');
+    const x = page.locator('#alu [data-act="dels"]').first();
+    const nome = await x.getAttribute('aria-label');
+    await x.click();
+    await expect(x).toHaveClass(/\barm\b/);
+    await expect(anuncio).toHaveText(`Confirmar: ${nome}. Para confirmar, acione o botão de novo.`);
+  });
+
+  test('as barras do mapa dizem o status do voo (não só a cor)', async ({ page }) => {
+    await abrirComExemplo(page);
+    await abrirEscala(page);
+    await page.locator('#out select[data-f="fstatus"]').first().selectOption('Em Voo');
+    await page.locator('#s-esc [data-tl="eq"]').click();
+    const barras = page.locator('#out .tl-bar');
+    expect(await barras.count()).toBeGreaterThan(1);
+    const ditos = await barras.evaluateAll(bs => bs.map(b => b.querySelector('.sr')?.textContent ?? ''));
+    for (const dito of ditos) expect(dito).toMatch(/^, (Pendente|Confirmado|Atrasado|Em Voo|Pousou|Concluída|Cancelado)$/);
+    expect(ditos).toContain(', Em Voo');
+  });
+
+  test('o primeiro Tab da página é o link para pular ao conteúdo, que leva o foco para depois das abas', async ({ page }) => {
+    await abrirComExemplo(page);
+    const pular = page.locator('a.pular');
+    await expect(pular).not.toBeInViewport();
+    await page.locator('body').focus();
+    await page.keyboard.press('Tab');
+    await expect(pular).toBeFocused();
+    await expect(pular).toBeInViewport();
+    await page.keyboard.press('Enter');
+    await expect(page.locator('main#conteudo')).toBeFocused();
+    // O próximo Tab segue dentro do conteúdo, não volta para a barra do topo
+    await page.keyboard.press('Tab');
+    expect(await page.evaluate(() => document.querySelector('main').contains(document.activeElement))).toBe(true);
+  });
+
+  test('os anúncios: a data do topo ao mudar, quantos voos ficaram com os filtros e o diálogo do status descrito pelo voo', async ({ page }) => {
+    await abrirComExemplo(page);
+    await abrirEscala(page);
+    await expect(page.locator('#dt-rotulo')).toHaveAttribute('aria-live', 'polite');
+    await expect(page.locator('.topo-data-campo svg.ico')).toHaveAttribute('aria-hidden', 'true');
+    // O filtro muda a lista sem tirar o foco dele: o resultado vai para a região de status
+    const busca = page.locator('#flt-esc-q');
+    await busca.fill('zzzz');
+    await expect(page.locator('#out')).toContainText('Nenhum voo na escala com esses filtros.');
+    await expect(page.locator('#anuncio')).toHaveText('Nenhum voo na escala com esses filtros.');
+    await busca.fill('');
+    await expect(page.locator('#anuncio')).toHaveText(/^\d+ voos na escala com esses filtros\.$/);
+    await expect(busca).toBeFocused();
+    // Abrir o diálogo do Atrasado: a descrição dele é o voo
+    const status = page.locator('#out select[data-f="fstatus"]').first();
+    await status.selectOption('Atrasado');
+    await expect(page.locator('#dlg-status')).toBeVisible();
+    await expect(page.locator('#dlg-status')).toHaveAccessibleDescription(await page.locator('#dlg-status-voo').textContent());
+    await expect(page.locator('#dlg-status-voo')).not.toBeEmpty();
+    await page.locator('#dlg-status').getByRole('button', { name: 'Voltar' }).click();
+  });
+});

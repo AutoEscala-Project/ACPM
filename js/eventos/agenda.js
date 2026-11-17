@@ -57,27 +57,33 @@ async function importarDaAgenda() {
 $('#importar-agenda').onclick = importarDaAgenda;
 $('#agenda-importar').onclick = importarDaAgenda;
 
+// Os campos do pedido com erro (aria-invalid): o leitor de tela diz qual campo e lê o motivo (#ag-erro é a descrição deles)
+const marcarInvalidos = (...ids) => ['#ag-aluno', '#ag-horario', '#ag-horas', '#ag-por'].forEach(id => $(id).setAttribute('aria-invalid', String(ids.includes(id))));
+
 // Agenda: registrar um pedido (pela exceção da coordenação, fora do prazo) e cancelar (com confirmação)
 async function registrarPedido(excecao) {
   if (!podeEditarAgenda()) return;
   $('#ag-erro').textContent = '';
+  marcarInvalidos();
   const aluno = S.stu.find(s => s.id === +$('#ag-aluno').value);
   const por = $('#ag-por').value.trim();
   if (!aluno || !por) {
     $('#ag-erro').textContent = 'Escolha o aluno e informe quem anotou o pedido (“Registrado por”).';
+    marcarInvalidos(...[!aluno && '#ag-aluno', !por && '#ag-por'].filter(Boolean));
     return;
   }
   // A duração: de 0,1 h a 5 h, em décimos (o Ground tem 01h30)
   const horas = duracaoDigitada($('#ag-horas').value);
   if (horas === null) {
     $('#ag-erro').textContent = ERRO_DA_DURACAO;
+    marcarInvalidos('#ag-horas');
     return;
   }
   const dia = diaDaAgenda(), confirmacao = `${aluno.id}|${dia}`;
   // No máximo 6 voos locais no mesmo horário: o horário está indisponível, com o próximo
   const pedido = { data: dia, horario: $('#ag-horario').value, missao: $('#ag-missao').value };
   const vaga = vagaDeVooLocal(pedidosCarregados(), pedido, S.horarios);
-  if (!vaga.ok) { $('#ag-erro').textContent = semVagaDeVooLocal(pedido, vaga.proximo); return; }
+  if (!vaga.ok) { $('#ag-erro').textContent = semVagaDeVooLocal(pedido, vaga.proximo); marcarInvalidos('#ag-horario'); return; }
   // O aluno que já tem voo marcado na data: pode ser um reagendamento feito por outra pessoa; o segundo clique confirma
   const marcados = pedidosDoAluno(aluno.id, dia);
   if (marcados.length && $('#form-agenda').dataset.confirmado !== confirmacao) {

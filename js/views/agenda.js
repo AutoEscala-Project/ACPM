@@ -129,7 +129,7 @@ function calendarioHTML() {
     <div class="cal">${SEMANA.map(s => `<span class="sem">${s}</span>`).join('')}${dias.map(d => {
       const qtd = ativos.filter(p => p.data === d).length;
       const classes = ['dia', d.slice(0, 7) !== mesVisivel && 'fora', !prazoDaAgendaPermite(d) && 'fechado', d === diaEscolhido && 'sel'].filter(Boolean).join(' ');
-      return `<button type="button" class="${classes}" data-cal="dia" data-dia="${d}" aria-label="${dataPorExtenso(d)}${qtd ? `: ${qtd} pedido(s)` : ''}">${+d.slice(8)}${qtd ? `<span class="qtd">${qtd}</span>` : ''}</button>`;
+      return `<button type="button" class="${classes}" data-cal="dia" data-dia="${d}"${d === diaEscolhido ? ' aria-current="date"' : ''} aria-label="${dataPorExtenso(d)}${qtd ? `: ${qtd} pedido(s)` : ''}">${+d.slice(8)}${qtd ? `<span class="qtd">${qtd}</span>` : ''}</button>`;
     }).join('')}</div>`;
 }
 
@@ -152,7 +152,7 @@ function listaHTML() {
   if (!doDia.length) return '<p class="h">Nenhum pedido para esta data.</p>';
   // Uma linha por pedido: a observação fica sob o nome do aluno e a conta que registrou, na dica de "Registrado por"
   // (quase sempre é a mesma em todas as linhas)
-  return `<table><thead><tr><th>Registrado em</th><th>Aluno</th><th>Fase / missão</th><th>Horário</th><th>Registrado por</th><th>Situação</th><th></th></tr></thead>
+  return `<table><thead><tr><th>Registrado em</th><th>Aluno</th><th>Fase / missão</th><th>Horário</th><th>Registrado por</th><th>Situação</th><th aria-label="Ações"></th></tr></thead>
     <tbody>${doDia.map(p => `<tr${p.cancelada_em ? ' class="cancel"' : ''}>
       <td>${quando(p.registrado_em)}</td>
       <td><b>${esc(p.aluno_nome)}</b>${p.observacao ? `<small class="obs">${esc(p.observacao)}</small>` : ''}</td>

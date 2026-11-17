@@ -62,6 +62,10 @@ test.describe('Agenda de Solicitações', () => {
     await expect(page.locator('#ag-horas')).toHaveValue('1');
     await registrar(page, { horas: 6 });
     await expect(page.locator('#ag-erro')).toHaveText('A duração vai de 0,1 h a 5 h.');
+    // O campo errado é o marcado, e o motivo é a descrição dele (o que o leitor de tela diz no campo)
+    await expect(page.locator('#ag-horas')).toHaveAttribute('aria-invalid', 'true');
+    await expect(page.locator('#ag-horas')).toHaveAccessibleDescription('A duração vai de 0,1 h a 5 h.');
+    await expect(page.locator('#ag-aluno')).toHaveAttribute('aria-invalid', 'false');
     await expect(page.locator('#agenda-lista tbody tr')).toHaveCount(0);
     await page.locator('#ag-missao').selectOption('Ground C152');
     await expect(page.locator('#ag-horas')).toBeDisabled();

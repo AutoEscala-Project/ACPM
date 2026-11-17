@@ -43,10 +43,10 @@ describe('Frota: o que ela guarda', () => {
     assert.deepEqual(novoRecurso(frota, { reg: ' pr-z ', tipo: 'C172' }), { recurso: { reg: 'PR-Z', tipo: 'C172' } });
     assert.deepEqual(novoRecurso(frota, { reg: 'PR-Q', tipo: 'C152', soParafuso: true }), { recurso: { reg: 'PR-Q', tipo: 'C152', soParafuso: true } });
     assert.deepEqual(novoRecurso(frota, { reg: 'PR-Q', tipo: 'C172', soParafuso: true }), { recurso: { reg: 'PR-Q', tipo: 'C172' } });
-    assert.deepEqual(novoRecurso(frota, { reg: 'pr-a', tipo: 'C152' }), { erro: 'Já existe um recurso com a matrícula PR-A.' });
-    assert.deepEqual(novoRecurso(frota, { reg: '', tipo: 'C152' }), { erro: 'Informe a matrícula.' });
-    assert.deepEqual(novoRecurso(frota, { reg: 'PR ABC!', tipo: 'C152' }), { erro: 'Matrícula inválida: use letras, números e hífen (por exemplo, PR-ABC).' });
-    assert.deepEqual(novoRecurso(frota, { reg: 'PR-Q', tipo: 'Boeing' }), { erro: 'Escolha a categoria.' });
+    assert.deepEqual(novoRecurso(frota, { reg: 'pr-a', tipo: 'C152' }), { erro: 'Já existe um recurso com a matrícula PR-A.', campo: 'reg' });
+    assert.deepEqual(novoRecurso(frota, { reg: '', tipo: 'C152' }), { erro: 'Informe a matrícula.', campo: 'reg' });
+    assert.deepEqual(novoRecurso(frota, { reg: 'PR ABC!', tipo: 'C152' }), { erro: 'Matrícula inválida: use letras, números e hífen (por exemplo, PR-ABC).', campo: 'reg' });
+    assert.deepEqual(novoRecurso(frota, { reg: 'PR-Q', tipo: 'Boeing' }), { erro: 'Escolha a categoria.', campo: 'tipo' });
   });
 });
 

@@ -138,13 +138,15 @@ function buildTimelineGroup(out, groupKey, subLabelFn, barLine1Fn, barLine2Fn, m
 
       // Turma coletiva: cancelada só quando todos os alunos estão cancelados
       const activeItems = o.items.filter(it => statusDe(it) !== 'Cancelado');
-      const stKey = classeDoStatus(activeItems.length ? statusDe(activeItems[0]) : 'Cancelado');
+      const status = activeItems.length ? statusDe(activeItems[0]) : 'Cancelado';
+      const stKey = classeDoStatus(status);
       const chave = unidadeDoVoo(o) || `${groupKey}:${key}:${o.a}`;
       VOOS_DO_MAPA.set(chave, o);
 
       return `<button type="button" class="tl-bar ${cls} tl-st-${stKey}" data-pop="${esc(chave)}" aria-haspopup="dialog" aria-controls="tl-pop" aria-expanded="false" style="left:${left.toFixed(2)}%;width:${width.toFixed(2)}%">
         <span class="tl-bar-t1">${barLine1Fn(o)}</span>
         <span class="tl-bar-t2">${barLine2Fn(o)}</span>
+        <span class="sr">, ${esc(rotuloDoStatus(status, o))}</span>
       </button>`;
     }).join('');
 
@@ -453,16 +455,20 @@ function painelDoDia(voos) {
   return `<div class="painel-dia">${painelDaEscala(() => ({ linhas: linhasDoQuadro(quadro.voos || [], quadro.fStatus, quadro.fObs), data: DATA }))}</div>`;
 }
 
-// A escala é refeita a cada alteração (save em actions.js): aqui ela só é desenhada, na visão escolhida na barra
+// A escala é refeita a cada alteração (save em actions.js): aqui ela só é desenhada, na visão escolhida na barra.
+// Devolve quantos voos ficaram à vista com os filtros
 export function rOut() {
-  document.querySelectorAll('#s-esc [data-tl]').forEach(b => b.classList.toggle('on', b.dataset.tl === TL_MODE));
+  document.querySelectorAll('#s-esc [data-tl]').forEach(b => {
+    b.classList.toggle('on', b.dataset.tl === TL_MODE);
+    b.setAttribute('aria-pressed', String(b.dataset.tl === TL_MODE));
+  });
   $('#out').dataset.vista = TL_MODE === 'lista' || TL_MODE === 'painel' ? TL_MODE : 'mapa';
   if (!RES || (!RES.out.length && !RES.al.length)) {
     trocarConteudo($('#out'), `<p class="h">Nenhum voo nesta data. Marque quem vai voar na aba Demanda: a escala é montada automaticamente.</p>`);
     rCompactacao([]);
     rAprovacao(false);
     atualizarPainelDeReparo();
-    return;
+    return 0;
   }
   const { out, al, tot } = RES;
 
@@ -493,4 +499,5 @@ export function rOut() {
   trocarConteudo($('#out'), h);
   reancorarPopupDoMapa();
   atualizarPainelDeReparo();
+  return voos.length;
 }
