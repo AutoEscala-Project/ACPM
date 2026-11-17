@@ -9,7 +9,8 @@ import { S, isGestor } from '../state.js';
 import { esc, opts } from '../format.js';
 import { $ } from '../dom.js';
 
-export const podeEditarCursos = () => (ApiClient.perfil ? gerenciaContas(ApiClient.perfil) : !isGestor());
+// Depois de um conflito a tela fica só para consulta, também para o Administrador
+export const podeEditarCursos = () => !ApiClient.readOnly && (ApiClient.perfil ? gerenciaContas(ApiClient.perfil) : !isGestor());
 
 export function mostrarVistaDosAlunos(vista) {
   $('#s-alu').dataset.vista = vista;

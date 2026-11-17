@@ -208,6 +208,30 @@ test.describe('Modo compartilhado: gravação, conflitos e link da escala', () =
     await contexto.close();
   });
 
+  test('depois de um conflito, nem o Administrador muda o programa dos cursos ou os limites da lei', async ({ browser }) => {
+    const contexto = await novoContexto(browser);
+    const servidor = await instalarSupabaseFalso(contexto, comDados());
+    const page = await contexto.newPage();
+    const erros = vigiarErros(page, { statusEsperados: [409] });
+    await entrar(page, CONTAS.administrador);
+    const doColega = structuredClone(servidor.dias.get(AMANHA).conteudo);
+    doColega.av['PR-IGU'] = false;
+    servidor.alterarDiaPorOutraPessoa(AMANHA, doColega);
+    await irPara(page, 'rec');
+    await page.locator('#eqs input[data-id="PR-BTB"]').uncheck();
+    await expect(page.locator('#aviso-sync')).toBeVisible();
+    await irPara(page, 'alu');
+    await page.locator('#s-alu [data-vista-alu="cursos"]').click();
+    await expect(page.locator('#cursos')).toContainText('Só o Administrador muda; aqui é consulta.');
+    await expect(page.locator('#cursos [data-act="curso-nova"]')).toHaveCount(0);
+    await irPara(page, 'ins');
+    await page.locator('#s-ins [data-vista-ins="cadastro"]').click();
+    await expect(page.locator('#limites-lei [data-limite="vooMesH"]')).toBeDisabled();
+    await expect(page.locator('#limites-lei [data-limites-padrao]')).toBeDisabled();
+    expect(erros).toEqual([]);
+    await contexto.close();
+  });
+
   test('sem conexão: as alterações esperam (fechar a página pede confirmação) e são gravadas quando a conexão volta', async ({ browser }) => {
     const contexto = await novoContexto(browser);
     const servidor = await instalarSupabaseFalso(contexto, comDados());

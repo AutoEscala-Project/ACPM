@@ -13,7 +13,11 @@ function desarmar(b) {
   b.dataset.arm = '';
   b.classList.remove('arm');
   b.textContent = b.dataset.o;
-  if (b.dataset.rotulo !== undefined) b.setAttribute('aria-label', b.dataset.rotulo);
+  // O nome volta ao de antes, a não ser que a linha tenha sido atualizada enquanto o botão estava armado (o aluno
+  // renomeado, por exemplo): aí fica o nome novo
+  if (b.dataset.rotulo !== undefined && b.getAttribute('aria-label') === b.dataset.armado) b.setAttribute('aria-label', b.dataset.rotulo);
+  delete b.dataset.rotulo;
+  delete b.dataset.armado;
 }
 export const confirmado = (b, txt) => {
   if (b.dataset.arm) {
@@ -23,7 +27,8 @@ export const confirmado = (b, txt) => {
   b.dataset.o = b.textContent;
   if (b.hasAttribute('aria-label')) {
     b.dataset.rotulo = b.getAttribute('aria-label');
-    b.setAttribute('aria-label', `${txt}: ${b.dataset.rotulo}`);
+    b.dataset.armado = `${txt}: ${b.dataset.rotulo}`;
+    b.setAttribute('aria-label', b.dataset.armado);
   }
   b.dataset.arm = '1';
   b.classList.add('arm');
