@@ -450,7 +450,7 @@ function tabela(voos) {
       return classes.length ? ` class="${classes.join(' ')}"` : '';
     };
     // O cadeado diz por que o voo está fixo: o status de andamento ou a escala aprovada
-    const motivo = esc(motivoDoFixo(o.fKey, { fStatus: S.fStatus, aprovacao: S.aprovacao, voo: o }));
+    const motivo = esc(motivoDoFixo(o.fKey, { fStatus: S.fStatus, aprovacao: S.aprovacao, voo: o, fixos: S.fixos }));
     const fixo = o.fixo ? ` <svg class="ico fixo" role="img" aria-label="${motivo}" data-dica="voo-fixo" data-dica-termo="${motivo}"><use href="#i-cadeado"/></svg>` : '';
     const doTempo = ` data-w="${o.w}"${recolhido ? ' hidden' : ''}`;
     h += `<tr${cancelado(o)}${doTempo}>

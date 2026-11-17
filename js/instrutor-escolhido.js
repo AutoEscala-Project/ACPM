@@ -71,11 +71,16 @@ const pedidoDe = (estado, stuId, mid) => {
   return aluno ? pedidoDoAluno(aluno, mid) || null : null;
 };
 
+// O voo fixo pela escolha na Escala, e não pela escala aprovada nem pelo status, pode ser solto
+const soltavel = (estado, fKey) => !estado.aprovacao && !fixoPeloStatus(fKey, estado.fStatus);
+
 // Escolhe o instrutor (insId; null: "Automático") do pedido do aluno (stuId, mid). Muda o estado e devolve o que
 // mudou, como estava antes (a reversão do histórico) e quantos alunos da turma mudaram juntos.
 // - noLugar: false (Demanda) muda o pedido; o voo que já está fixo fica onde está, com o instrutor novo.
-// - noLugar: true (Escala) também fixa o voo onde ele está, com o instrutor novo. "Automático" na Escala solta o voo,
-//   menos o da escala aprovada e o fixado pelo status (esses ficam com o instrutor de agora).
+// - noLugar: true (Escala) também fixa o voo onde ele está, com o instrutor novo; o voo fixo leva a marca escolhido
+//   (a mudança de status e a reabertura da escala não o soltam).
+// - "Automático", na Demanda ou na Escala, devolve a escolha ao app: o voo fixo pela escolha na Escala é solto; o da
+//   escala aprovada e o fixado pelo status continuam fixos, com o instrutor de agora.
 export function escolherInstrutor(estado, resultado, { stuId, mid = 0 }, insId, { noLugar = false } = {}) {
   const fixos = estado.fixos || {};
   const fKey = chaveDoVoo(stuId, mid);
@@ -84,10 +89,12 @@ export function escolherInstrutor(estado, resultado, { stuId, mid = 0 }, insId, 
   const grupo = mexeNoVoo ? unidadeDe(resultado, voo) : [];
   const alvos = mexeNoVoo ? grupo.map(o => ({ stuId: o.stuId, mid: o.mid || 0 })) : [{ stuId, mid }];
 
+  // Antes: os pedidos, os voos fixos e, dos que não eram fixos, o instrutor (para a reversão saber o que devolver)
   const antes = {
     pedidos: alvos.map(p => ({ ...p, insId: (pedidoDe(estado, p.stuId, p.mid) || {}).insId || 0 })),
     fixos: Object.fromEntries(grupo.filter(o => fixos[o.fKey]).map(o => [o.fKey, fixos[o.fKey]])),
-    soltar: grupo.filter(o => !fixos[o.fKey]).map(o => o.fKey)
+    soltar: grupo.filter(o => !fixos[o.fKey]).map(o => o.fKey),
+    insAntes: Object.fromEntries(grupo.filter(o => !fixos[o.fKey]).map(o => [o.fKey, o.insId]))
   };
 
   for (const p of alvos) {
@@ -100,13 +107,53 @@ export function escolherInstrutor(estado, resultado, { stuId, mid = 0 }, insId, 
   if (mexeNoVoo) {
     const novos = { ...fixos };
     for (const o of grupo) {
+      const atual = novos[o.fKey];
       if (instrutorValido(insId)) {
-        if (novos[o.fKey] || noLugar) novos[o.fKey] = { ...(novos[o.fKey] || pinoDoVoo(o)), insId };
-      } else if (noLugar && !estado.aprovacao && !fixoPeloStatus(o.fKey, estado.fStatus)) {
-        delete novos[o.fKey];
+        if (atual || noLugar) novos[o.fKey] = { ...(atual || pinoDoVoo(o)), insId, ...(noLugar ? { escolhido: true } : {}) };
+      } else if (atual && atual.escolhido) {
+        if (soltavel(estado, o.fKey)) delete novos[o.fKey];
+        else { const { escolhido: _, ...resto } = atual; novos[o.fKey] = resto; }
       }
     }
     estado.fixos = novos;
   }
   return { antes, alunos: alvos.length };
+}
+
+// Desfaz uma escolha (a reversão do histórico): os pedidos voltam como estavam e os voos fixos também. O voo que não
+// era fixo deixa de ser; se depois disso a escala foi aprovada ou o voo ganhou um status que fixa, ele continua fixo,
+// com o instrutor de antes
+export function reverterEscolha(estado, { pedidos, fixos, soltar, insAntes = {} }) {
+  for (const { stuId, mid, insId } of pedidos) {
+    const pedido = pedidoDe(estado, stuId, mid);
+    if (!pedido) continue;
+    if (insId) pedido.insId = insId;
+    else delete pedido.insId;
+  }
+  const novos = { ...(estado.fixos || {}), ...fixos };
+  for (const k of soltar) {
+    if (!novos[k]) continue;
+    if (soltavel(estado, k) || !Object.hasOwn(insAntes, k)) delete novos[k];
+    else { const { escolhido: _, ...resto } = novos[k]; novos[k] = { ...resto, insId: insAntes[k] }; }
+  }
+  estado.fixos = novos;
+}
+
+// Os pedidos da unidade do voo (na turma de Ground, todos os alunos dela) que têm o instrutor escolhido, como estão
+export function escolhasDaUnidade(estado, resultado, fKey) {
+  const voo = resultado && resultado.out.find(o => o.fKey === fKey);
+  if (!voo) return [];
+  return unidadeDe(resultado, voo).map(o => ({ stuId: o.stuId, mid: o.mid || 0, insId: (pedidoDe(estado, o.stuId, o.mid || 0) || {}).insId || 0 }))
+    .filter(p => p.insId);
+}
+
+// Muda o instrutor escolhido dos pedidos (insId; null: "Automático"), com o reparo de um conflito: trocar o instrutor
+// é uma escolha do operador, e soltar o voo devolve a escolha ao app
+export function escolherNosPedidos(estado, pedidos, insId) {
+  for (const p of pedidos) {
+    const pedido = pedidoDe(estado, p.stuId, p.mid);
+    if (!pedido) continue;
+    if (instrutorValido(insId)) pedido.insId = insId;
+    else delete pedido.insId;
+  }
 }

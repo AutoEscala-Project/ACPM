@@ -130,5 +130,25 @@ test.describe('Instrutor escolhido', () => {
     await irPara(page, 'alu');
     await expect(page.locator('#alu tr.cd[data-id="1001"] .tg.par')).toHaveText(/Instrutor 02/);
   });
+
+  test('o voo fixo pela escolha na Escala continua fixo ao mudar o status; "Automático" na Demanda o solta', async ({ page }) => {
+    await abrir(page, { estado: dia() });
+    await abrirEscala(page);
+    const voo = linha(page, 'Aluno 1001');
+    await voo.locator('[data-act="trocar-instrutor"]').click();
+    await voo.locator('select[data-a="insVoo"]').selectOption({ label: 'Instrutor 02 (ocupado com Aluno 1000)' });
+    await expect(voo.locator('.fixo')).toHaveCount(1);
+
+    await voo.locator('select[data-f="fstatus"]').selectOption('Pendente');
+    await expect(voo.locator('select[data-f="fstatus"]')).toHaveValue('Pendente');
+    await expect(voo.locator('.fixo')).toHaveAttribute('aria-label', 'Voo fixo: instrutor escolhido na escala');
+    await expect(voo.locator('.c-instr')).toHaveText('Instrutor 02');
+
+    await irPara(page, 'dem');
+    await pedido(page, 1001).locator('[data-f="insId"]').selectOption('');
+    await abrirEscala(page);
+    await expect(voo.locator('.fixo')).toHaveCount(0);
+    await expect(voo.locator('.ins-btn')).not.toHaveClass(/\bescolhido\b/);
+  });
 });
 

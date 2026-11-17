@@ -9,7 +9,7 @@ import { pinoDoVoo, fixosAoMudarStatus, fixosAoReabrir } from '../fixos.js';
 import { hm } from '../format.js';
 import { aplicarReparo } from '../reparo.js';
 import { S, RES, DATA, isGestor, modoCompartilhado, stuBy, insBy } from '../state.js';
-import { escolherInstrutor } from '../instrutor-escolhido.js';
+import { escolherInstrutor, escolhasDaUnidade, escolherNosPedidos } from '../instrutor-escolhido.js';
 import { STATUS_COM_DETALHE, textoParaOHistorico, detalheAoMudarStatus, rotuloDoStatus } from '../status.js';
 import { ApiClient } from '../storage.js';
 import { confirmado } from './confirmacao.js';
@@ -242,12 +242,18 @@ document.addEventListener('click', e => {
     return;
   }
   const antes = S.fixos || {};
+  // O instrutor escolhido dos pedidos acompanha o reparo: trocar o instrutor passa a escolha para o novo; soltar o voo
+  // devolve a escolha ao app
+  const escolhas = escolhasDaUnidade(S, RES, fKey);
+  if (opcao.soltar) escolherNosPedidos(S, escolhas, null);
+  else if (opcao.mudancas.insId) escolherNosPedidos(S, escolhas, opcao.mudancas.insId);
   S.fixos = aplicarReparo(antes, RES, fKey, opcao);
   // Os voos que mudaram ou saíram dos fixos (soltar): o histórico guarda como estavam
   const mudados = Object.keys(antes).filter(k => S.fixos[k] !== antes[k]);
   gravarAlteracao('mod', `Reparo: ${voo.s} (${hm(voo.a)}–${hm(voo.b)}): ${opcao.soltar ? 'Soltar o voo' : opcao.texto}`, {
-    kind: 'restaurarFixos', fixos: Object.fromEntries(mudados.map(k => [k, antes[k]])), label: '↶ Reverter'
+    kind: 'restaurarFixos', fixos: Object.fromEntries(mudados.map(k => [k, antes[k]])), ...(escolhas.length ? { pedidos: escolhas } : {}), label: '↶ Reverter'
   });
+  if (escolhas.length) rDem();
   showToast(opcao.soltar ? 'Voo solto: o app escalou de novo.' : 'Sugestão aplicada: o voo continua fixo.', 'ok');
 });
 document.addEventListener('keydown', e => {

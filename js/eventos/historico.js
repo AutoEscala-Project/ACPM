@@ -3,6 +3,7 @@ import { gravarAlteracao } from '../actions.js';
 import { $, showToast } from '../dom.js';
 import { normalizarFixos } from '../fixos.js';
 import { validarReversao } from '../reversoes.js';
+import { reverterEscolha, escolherNosPedidos } from '../instrutor-escolhido.js';
 import { S, AUDIT_LOG, DATA, setAuditLog, isGestor, insBy, stuBy, getMissionTarget } from '../state.js';
 import { ApiClient } from '../storage.js';
 import { aoAcionar } from './registro.js';
@@ -66,20 +67,14 @@ aoAcionar('rev-log', b => {
       rIns();
     }
   } else if (rev.kind === 'restaurarFixos') {
-    // Um reparo desfeito: os voos voltam a ser fixos como antes dele
+    // Um reparo desfeito: os voos voltam a ser fixos como antes dele, e o instrutor escolhido dos pedidos também
     S.fixos = normalizarFixos({ ...(S.fixos || {}), ...rev.fixos });
+    if (rev.pedidos) { rev.pedidos.forEach(p => escolherNosPedidos(S, [p], p.insId)); rDem(); }
     gravarAlteracao('mod', `Revertido: ${entry.desc}`, null, entry.id);
   } else if (rev.kind === 'restaurarEscolha') {
-    // O instrutor escolhido volta como estava, e os voos fixos também (o que a escolha fixou deixa de ser fixo)
-    rev.pedidos.forEach(({ stuId, mid, insId }) => {
-      const alvo = getMissionTarget(stuId, mid);
-      if (!alvo) return;
-      if (insId) alvo.insId = insId;
-      else delete alvo.insId;
-    });
-    const fixos = { ...(S.fixos || {}) };
-    rev.soltar.forEach(k => { delete fixos[k]; });
-    S.fixos = normalizarFixos({ ...fixos, ...rev.fixos });
+    // O instrutor escolhido volta como estava, e os voos fixos também (js/instrutor-escolhido.js)
+    reverterEscolha(S, rev);
+    S.fixos = normalizarFixos(S.fixos);
     gravarAlteracao('mod', `Revertido: ${entry.desc}`, null, entry.id);
     rDem();
   } else if (rev.kind === 'restaurarHorarios') {

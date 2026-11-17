@@ -8,6 +8,7 @@ import { nomeLimpo, numeroBr } from '../format.js';
 import { habilitacoesDoNivel, normalizarHabilitacoes, nomeDaHabilitacao } from '../habilitacoes.js';
 import { LIMITES_DA_LEI, normalizarLimites, comHorasExternas } from '../limites.js';
 import { blank } from '../rules.js';
+import { fixoPeloStatus } from '../fixos.js';
 import { S, DATA, insBy, stuBy } from '../state.js';
 import { confirmado } from './confirmacao.js';
 import { aoAcionar, aoMudarCampo } from './registro.js';
@@ -85,6 +86,7 @@ aoAcionar('unbl', (b, { id }) => {
   s.bl = s.bl.filter(v => v !== +b.dataset.b);
   gravarAlteracao('mod', `${s.nm}: volta a ser escalado com ${blkIns ? blkIns.nm : ''}`);
   atualizarLinhaDoAluno(s, { naoEscalar: true });
+  rDem();
 });
 
 aoAcionar('unvc', (b, { id }) => {
@@ -94,6 +96,7 @@ aoAcionar('unvc', (b, { id }) => {
   if (!s.voaCom.length) delete s.voaCom;
   gravarAlteracao('mod', `${s.nm}: não voa mais com ${ins ? ins.nm : ''} de preferência`);
   atualizarLinhaDoAluno(s, { voaComMudou: true });
+  rDem();
 });
 
 aoAcionar(['deli', 'dels'], (b, { id }) => {
@@ -105,8 +108,10 @@ aoAcionar(['deli', 'dels'], (b, { id }) => {
     S.ins = S.ins.filter(x => x.id !== id);
     S.stu.forEach(s => s.bl = s.bl.filter(v => v !== id));
     S.stu.forEach(s => { if (s.voaCom) s.voaCom = s.voaCom.filter(v => v !== id); if (s.voaCom && !s.voaCom.length) delete s.voaCom; });
-    // Os pedidos do dia com o instrutor escolhido voltam para a escolha do app
+    // Os pedidos do dia com o instrutor escolhido voltam para a escolha do app, e os voos fixos pela escolha na Escala
+    // são soltos (os da escala aprovada e os fixados pelo status ficam, em conflito, com as sugestões)
     S.stu.forEach(s => [s, ...(s.extra || [])].forEach(p => { if (p.insId === id) delete p.insId; }));
+    S.fixos = Object.fromEntries(Object.entries(S.fixos || {}).filter(([k, p]) => !(p.escolhido && p.insId === id && !S.aprovacao && !fixoPeloStatus(k, S.fStatus))));
     gravarAlteracao('exc', `Instrutor excluído: ${target ? target.nm : id}`);
   } else {
     const target = stuBy(id);
@@ -159,6 +164,8 @@ aoMudarCampo('i', (t, { f, id }) => {
   gravarAlteracao(...historico);
   atualizarLinhaDoCadastro(x);
   if (f === 'nm') rAlu();
+  // A Demanda mostra os instrutores de cada pedido: o nome, quem vem na data e quem tem a habilitação
+  if (['nm', 'on', 'hab'].includes(f)) rDem();
 });
 
 // Os campos de um aluno

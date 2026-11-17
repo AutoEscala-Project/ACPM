@@ -29,7 +29,10 @@ export function validarReversao(rev, frota) {
   if (rev.kind === 'setInsOn') return idValido(rev.insId) && typeof rev.val === 'boolean' ? { kind: 'setInsOn', insId: rev.insId, val: rev.val, label } : null;
   if (rev.kind === 'restaurarFixos') {
     const fixos = rev.fixos && typeof rev.fixos === 'object' ? normalizarFixos(rev.fixos) : {};
-    return Object.keys(fixos).length ? { kind: 'restaurarFixos', fixos, label } : null;
+    // O reparo também muda o instrutor escolhido dos pedidos: como estavam
+    const pedidos = rev.pedidos === undefined ? [] : rev.pedidos;
+    if (!Array.isArray(pedidos) || pedidos.length > 100 || !pedidos.every(p => p && idValido(p.stuId) && Number.isInteger(p.mid) && p.mid >= 0 && idValido(p.insId))) return null;
+    return Object.keys(fixos).length ? { kind: 'restaurarFixos', fixos, ...(pedidos.length ? { pedidos: pedidos.map(p => ({ stuId: p.stuId, mid: p.mid, insId: p.insId })) } : {}), label } : null;
   }
   // O instrutor escolhido de antes (insId 0: "Automático") nos pedidos, e os voos fixos como estavam (soltar: os que
   // não eram fixos)
@@ -39,7 +42,10 @@ export function validarReversao(rev, frota) {
       && (p.insId === 0 || idValido(p.insId)) ? { stuId: p.stuId, mid: p.mid, insId: p.insId } : null));
     const fixos = rev.fixos && typeof rev.fixos === 'object' ? normalizarFixos(rev.fixos) : {};
     if (!pedidos.every(Boolean) || !rev.soltar.every(k => typeof k === 'string' && CHAVE_DO_VOO.test(k))) return null;
-    return { kind: 'restaurarEscolha', pedidos, fixos, soltar: [...rev.soltar], label };
+    // O instrutor de antes de cada voo que não era fixo
+    const insAntes = rev.insAntes === undefined ? {} : rev.insAntes;
+    if (!insAntes || typeof insAntes !== 'object' || Array.isArray(insAntes) || !Object.entries(insAntes).every(([k, v]) => rev.soltar.includes(k) && idValido(v))) return null;
+    return { kind: 'restaurarEscolha', pedidos, fixos, soltar: [...rev.soltar], insAntes: { ...insAntes }, label };
   }
   // Os horários de uma categoria e os pedidos que mudaram com eles
   if (rev.kind === 'restaurarHorarios') {

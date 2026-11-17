@@ -313,21 +313,23 @@ export function runAllocationEngine(state, opcoes = {}) {
    * Ordenação da Fila:
    * 1º: Missões de Ground School SEMPRE antes de missões de Voo/Simulador (garante a criação das turmas
    *     coletivas e define o horário de término do Ground antes de alocar o voo dependente do aluno).
-   * 2º: O pedido com o instrutor escolhido pelo operador para o dia, depois o do aluno com “Voa com” (o par
-   *     permanente do cadastro), depois os outros: o que o operador definiu vale primeiro, e o pedido com menos
-   *     instrutores possíveis é o que tem menos opções (os outros se encaixam em volta dele).
+   * 2º: O pedido com o instrutor escolhido pelo operador para o dia antes dos outros: o que o operador definiu para o
+   *     dia vale primeiro, e o pedido com um instrutor só é o que tem menos opções (os outros se encaixam em volta dele).
    * 3º: Maior prioridade (5 a 1).
-   * 4º: A ordem dos agendamentos: o pedido da agenda que foi registrado antes (o id do
+   * 4º: Com a mesma prioridade, o do aluno com “Voa com” (o par permanente do cadastro) antes: ele tem menos
+   *     instrutores possíveis. O “Voa com” vale todos os dias, então não passa na frente da prioridade.
+   * 5º: A ordem dos agendamentos: o pedido da agenda que foi registrado antes (o id do
    *     pedido cresce com o registro) vem antes; o pedido posto à mão, sem a agenda, vem depois dos agendados.
-   * 5º: Ordem de cadastro do aluno e ordem da missão.
+   * 6º: Ordem de cadastro do aluno e ordem da missão.
    */
   const ordemDoAgendamento = item => (Number.isInteger(item.ref.solicitacao) ? item.ref.solicitacao : Infinity);
-  const semEscolha = item => (item.ref.insId ? 0 : (item.stu.voaCom || []).length ? 1 : 2);
+  const semEscolha = item => (item.ref.insId ? 0 : 1);
+  const semVoaCom = item => ((item.stu.voaCom || []).length ? 0 : 1);
   act.sort((a, b) => {
     const gA = isGroundMission(a.ref.mis) ? 1 : 0;
     const gB = isGroundMission(b.ref.mis) ? 1 : 0;
     if (gA !== gB) return gB - gA;
-    return semEscolha(a) - semEscolha(b) || b.ref.pr - a.ref.pr || menorPrimeiro(ordemDoAgendamento(a), ordemDoAgendamento(b)) || a.stuOrder - b.stuOrder || a.misOrder - b.misOrder;
+    return semEscolha(a) - semEscolha(b) || b.ref.pr - a.ref.pr || semVoaCom(a) - semVoaCom(b) || menorPrimeiro(ordemDoAgendamento(a), ordemDoAgendamento(b)) || a.stuOrder - b.stuOrder || a.misOrder - b.misOrder;
   });
 
   const free = (mp, id, s, e) => livre(mp[id], s, e);

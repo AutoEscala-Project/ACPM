@@ -107,6 +107,8 @@ export function importarSolicitacoes(estado, solicitacoes, { situacao = [] } = {
       Object.assign(copiada, pedido);
       resumo.atualizados++;
     } else if (!aluno.fly) {
+      // O pedido novo não herda o instrutor escolhido de um pedido que tinha saído da escala
+      delete aluno.insId;
       Object.assign(aluno, pedido);
       resumo.novos++;
     } else {

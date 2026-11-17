@@ -4,8 +4,9 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { runAllocationEngine } from '../../js/engine.js';
-import { escolherInstrutor, instrutoresDoPedido, instrutoresDoVoo } from '../../js/instrutor-escolhido.js';
-import { motivoDoFixo } from '../../js/fixos.js';
+import { escolherInstrutor, instrutoresDoPedido, instrutoresDoVoo, reverterEscolha, escolhasDaUnidade, escolherNosPedidos } from '../../js/instrutor-escolhido.js';
+import { motivoDoFixo, fixosAoMudarStatus, fixosAoReabrir, normalizarFixos } from '../../js/fixos.js';
+import { importarSolicitacoes } from '../../js/agenda.js';
 import { validarReversao } from '../../js/reversoes.js';
 import { normalizeMissionFields } from '../../js/rules.js';
 import { separar, juntar } from '../../js/dias.js';
@@ -87,17 +88,18 @@ describe('Instrutor escolhido na Escala: o voo fica onde está', () => {
     assert.deepEqual(antes.out.map(resumo), [['Aluno 1000', 500, 2], ['Aluno 1001', 500, 1]]);
     const voo = antes.out.find(o => o.stuId === 1001);
     const r = escolherInstrutor(estado, antes, { stuId: 1001, mid: 0 }, 2, { noLugar: true });
-    assert.deepEqual(r, { antes: { pedidos: [{ stuId: 1001, mid: 0, insId: 0 }], fixos: {}, soltar: ['1001_0_1'] }, alunos: 1 });
+    assert.deepEqual(r, { antes: { pedidos: [{ stuId: 1001, mid: 0, insId: 0 }], fixos: {}, soltar: ['1001_0_1'], insAntes: { '1001_0_1': 1 } }, alunos: 1 });
     assert.equal(estado.stu[1].insId, 2);
-    assert.deepEqual(estado.fixos, { '1001_0_1': { a: 500, b: 560, r: voo.r, insId: 2 } });
+    assert.deepEqual(estado.fixos, { '1001_0_1': { a: 500, b: 560, r: voo.r, insId: 2, escolhido: true } });
 
     const depois = runAllocationEngine(estado);
     assert.deepEqual(depois.al, []);
     assert.deepEqual(depois.out.map(resumo), [['Aluno 1000', 500, 1], ['Aluno 1001', 500, 2]]);
     const fixo = depois.out.find(o => o.stuId === 1001);
     assert.deepEqual([fixo.fixo, fixo.insEscolhido, fixo.r], [true, true, voo.r]);
-    assert.equal(motivoDoFixo(fixo.fKey, { fStatus: {}, aprovacao: null, voo: fixo }), 'Voo fixo: instrutor escolhido na escala');
-    assert.equal(motivoDoFixo(fixo.fKey, { fStatus: {}, aprovacao: { em: '2026-11-17T10:00:00Z' }, voo: fixo }), 'Voo fixo: escala aprovada');
+    assert.equal(motivoDoFixo(fixo.fKey, { fStatus: {}, aprovacao: null, voo: fixo, fixos: estado.fixos }), 'Voo fixo: instrutor escolhido na escala');
+    assert.equal(motivoDoFixo(fixo.fKey, { fStatus: {}, aprovacao: { em: '2026-11-17T10:00:00Z' }, voo: fixo, fixos: estado.fixos }), 'Voo fixo: escala aprovada');
+    assert.equal(motivoDoFixo(fixo.fKey, { fStatus: {}, aprovacao: null, voo: fixo, fixos: normalizarFixos({ [fixo.fKey]: { a: 500, b: 560, r: voo.r, insId: 2 } }) }), 'Voo fixo');
   });
 
   it('o instrutor que não serve no horário pode ser escolhido: o voo fica fixo, em conflito', () => {
@@ -174,7 +176,88 @@ describe('Instrutor escolhido na Escala: o voo fica onde está', () => {
   });
 });
 
+// O que a revisão independente achou: a escolha na Escala sobrevive ao status e à reabertura; "Automático" na Demanda
+// também solta; a reversão não solta o voo da escala aprovada; o reparo e a agenda não deixam a escolha errada no pedido
+describe('Instrutor escolhido na Escala: o ciclo do voo fixo pela escolha', () => {
+  const doisVoos = () => cenario({ ins: [instrutor(1, 9), instrutor(2, 1)], stu: [aluno(1000), aluno(1001)] });
+  const escolherNaEscala = (estado, insId) => escolherInstrutor(estado, runAllocationEngine(estado), { stuId: 1001, mid: 0 }, insId, { noLugar: true });
+
+  it('mudar o status para Pendente ou Confirmado, ou reabrir a escala, não solta o voo fixo pela escolha', () => {
+    const estado = doisVoos();
+    escolherNaEscala(estado, 2);
+    const voo = runAllocationEngine(estado).out.find(o => o.stuId === 1001);
+    assert.deepEqual(fixosAoMudarStatus(estado.fixos, voo, 'Pendente', { aprovada: false }), estado.fixos);
+    assert.deepEqual(fixosAoReabrir(estado.fixos, {}), estado.fixos);
+    // O fixo só pela aprovação é solto, como antes
+    const aprovado = { '1000_0_1': { a: 500, b: 560, r: 'PP-LJV', insId: 1 } };
+    assert.deepEqual(fixosAoReabrir({ ...estado.fixos, ...aprovado }, {}), estado.fixos);
+  });
+
+  it('"Automático" na Demanda também solta o voo fixo pela escolha na Escala', () => {
+    const estado = doisVoos();
+    escolherNaEscala(estado, 2);
+    escolherInstrutor(estado, runAllocationEngine(estado), { stuId: 1001, mid: 0 }, null);
+    assert.deepEqual([estado.fixos, estado.stu[1].insId], [{}, undefined]);
+    // Com a escala aprovada, o voo fica fixo, com o instrutor de agora, sem a marca da escolha
+    const aprovada = doisVoos();
+    escolherNaEscala(aprovada, 2);
+    aprovada.aprovacao = { em: '2026-11-17T10:00:00Z', por: '' };
+    escolherInstrutor(aprovada, runAllocationEngine(aprovada), { stuId: 1001, mid: 0 }, null);
+    assert.deepEqual(Object.values(aprovada.fixos).map(p => [p.insId, Boolean(p.escolhido)]), [[2, false]]);
+  });
+
+  it('reverter a escolha solta o voo; depois da aprovação ou de um status que fixa, ele fica fixo com o instrutor de antes', () => {
+    const estado = doisVoos();
+    const { antes } = escolherNaEscala(estado, 2);
+    reverterEscolha(estado, antes);
+    assert.deepEqual([estado.fixos, estado.stu[1].insId], [{}, undefined]);
+
+    for (const depois of [e => { e.aprovacao = { em: '2026-11-17T10:00:00Z', por: '' }; }, e => { e.fStatus = { '1001_0_1': 'Em Voo' }; }]) {
+      const e = doisVoos();
+      const r = escolherNaEscala(e, 2);
+      depois(e);
+      reverterEscolha(e, r.antes);
+      assert.deepEqual([e.fixos['1001_0_1'].insId, Boolean(e.fixos['1001_0_1'].escolhido), e.stu[1].insId], [1, false, undefined]);
+    }
+
+    // O voo que já era fixo volta ao fixo de antes
+    const fixo = doisVoos();
+    const pino = { a: 500, b: 560, r: 'PP-LJV', insId: 1 };
+    fixo.fixos = { '1001_0_1': pino };
+    const r = escolherNaEscala(fixo, 2);
+    reverterEscolha(fixo, r.antes);
+    assert.deepEqual(fixo.fixos, { '1001_0_1': pino });
+  });
+
+  it('o reparo leva a escolha junto: trocar o instrutor passa a escolha; soltar devolve ao app', () => {
+    const estado = doisVoos();
+    escolherNaEscala(estado, 2);
+    const res = runAllocationEngine(estado);
+    const escolhas = escolhasDaUnidade(estado, res, '1001_0_1');
+    assert.deepEqual(escolhas, [{ stuId: 1001, mid: 0, insId: 2 }]);
+    assert.deepEqual(escolhasDaUnidade(estado, res, '1000_0_1'), []);
+    escolherNosPedidos(estado, escolhas, 1);
+    assert.equal(estado.stu[1].insId, 1);
+    escolherNosPedidos(estado, escolhas, null);
+    assert.equal(estado.stu[1].insId, undefined);
+  });
+
+  it('o pedido novo da agenda não herda o instrutor escolhido de um pedido que tinha saído da escala', () => {
+    const e = { nid: 2000, importadas: [], stu: [aluno(1000, { fly: false, insId: 1 })] };
+    importarSolicitacoes(e, [{ id: 1, data: '2026-11-11', aluno: 1000, aluno_nome: 'Aluno 1000', missao: 'Simulador', janela: 'tarde', horario: null, cancelada_em: null }]);
+    assert.deepEqual([e.stu[0].fly, e.stu[0].mis, e.stu[0].insId], [true, 'Simulador', undefined]);
+  });
+});
+
 describe('Voa com: os instrutores do aluno (o par permanente do cadastro)', () => {
+  it('o “Voa com” não passa na frente da prioridade; com a mesma prioridade, vai antes', () => {
+    const ins = [instrutor(1, 1), instrutor(2, 1)];
+    const alta = semCompactar(cenario({ ins, stu: [aluno(1000, { pr: 1 }, { voaCom: [1] }), aluno(1001, { pr: 5 })], semAeronaves: SO_PP_LJV }));
+    assert.deepEqual(alta.out.map(o => [o.s, o.tag]), [['Aluno 1001', 'Pref. 1'], ['Aluno 1000', 'Pref. 2']]);
+    const mesma = semCompactar(cenario({ ins, stu: [aluno(1000), aluno(1001, {}, { voaCom: [2] })], semAeronaves: SO_PP_LJV }));
+    assert.deepEqual(mesma.out.map(o => [o.s, o.tag]), [['Aluno 1001', 'Pref. 1'], ['Aluno 1000', 'Pref. 2']]);
+  });
+
   const avisos = al => al.filter(a => a.codigo === 'voa-com').map(a => a.m);
 
   it('o aluno voa com o instrutor dele, não com o que o app escolheria, e sem aviso', () => {
@@ -238,15 +321,17 @@ describe('Voa com: os instrutores do aluno (o par permanente do cadastro)', () =
   // Achado pela busca em cenários aleatórios: o voo que ficou sem o “Voa com” e que a divisão das horas leva para um
   // instrutor do “Voa com” fica marcado e sem aviso (o aviso diria o instrutor errado)
   it('o voo que a divisão das horas leva para o instrutor do “Voa com” não tem aviso', () => {
-    const estado = comEscolhas(gerarCenario(3691), 3691);
-    const antes = runAllocationEngine(estado, { compactar: false, dividirHoras: false });
-    const depois = runAllocationEngine(estado);
-    const paresDe = o => estado.stu.find(s => s.id === o.stuId).voaCom || [];
-    const levados = depois.out.filter(o => { const a = antes.out.find(v => v.fKey === o.fKey); return a && paresDe(o).includes(o.insId) && !paresDe(a).includes(a.insId); });
-    assert.ok(levados.length > 0);
-    for (const o of levados) {
-      assert.equal(o.insPar, true);
-      assert.ok(!depois.al.some(a => a.codigo === 'voa-com' && a.stuId === o.stuId && a.insId === o.insId), o.fKey);
+    for (const seed of [487, 786]) {
+      const estado = comEscolhas(gerarCenario(seed), seed);
+      const antes = runAllocationEngine(estado, { compactar: false, dividirHoras: false });
+      const depois = runAllocationEngine(estado);
+      const paresDe = o => estado.stu.find(s => s.id === o.stuId).voaCom || [];
+      const levados = depois.out.filter(o => { const a = antes.out.find(v => v.fKey === o.fKey); return a && paresDe(o).includes(o.insId) && !paresDe(a).includes(a.insId); });
+      assert.ok(levados.length > 0, `seed ${seed}`);
+      for (const o of levados) {
+        assert.equal(o.insPar, true);
+        assert.ok(!depois.al.some(a => a.codigo === 'voa-com' && a.stuId === o.stuId && a.insId === o.insId), o.fKey);
+      }
     }
   });
 });
@@ -291,9 +376,14 @@ describe('Instrutor escolhido nos dados', () => {
   });
 
   it('a reversão devolve os pedidos e os voos fixos de antes; fora do formato, não vale', () => {
-    const rev = { kind: 'restaurarEscolha', pedidos: [{ stuId: 1000, mid: 0, insId: 0 }, { stuId: 1001, mid: 2, insId: 3 }], fixos: { '1000_0_1': { a: 390, b: 450, r: 'PR-VOB', insId: 1 } }, soltar: ['1001_2_1'], label: '↶ Reverter' };
+    const rev = { kind: 'restaurarEscolha', pedidos: [{ stuId: 1000, mid: 0, insId: 0 }, { stuId: 1001, mid: 2, insId: 3 }], fixos: { '1000_0_1': { a: 390, b: 450, r: 'PR-VOB', insId: 1, escolhido: true } }, soltar: ['1001_2_1'], insAntes: { '1001_2_1': 4 }, label: '↶ Reverter' };
     assert.deepEqual(validarReversao(rev, FROTA_INICIAL), rev);
-    for (const ruim of [{ ...rev, pedidos: [] }, { ...rev, pedidos: [{ stuId: 1000, mid: 0, insId: -1 }] }, { ...rev, soltar: ['x'] }, { ...rev, soltar: undefined }]) {
+    // Sem insAntes (o formato da primeira versão): vazio
+    assert.deepEqual(validarReversao({ ...rev, insAntes: undefined }, FROTA_INICIAL).insAntes, {});
+    const reparo = { kind: 'restaurarFixos', fixos: rev.fixos, pedidos: [{ stuId: 1000, mid: 0, insId: 2 }], label: '↶ Reverter' };
+    assert.deepEqual(validarReversao(reparo, FROTA_INICIAL), reparo);
+    for (const ruim of [{ ...rev, pedidos: [] }, { ...rev, pedidos: [{ stuId: 1000, mid: 0, insId: -1 }] }, { ...rev, soltar: ['x'] }, { ...rev, soltar: undefined },
+      { ...rev, insAntes: { '1000_0_1': 4 } }, { ...rev, insAntes: { '1001_2_1': 'x' } }, { ...reparo, pedidos: [{ stuId: 1000, mid: 0, insId: 0 }] }, { ...reparo, pedidos: 'x' }]) {
       assert.equal(validarReversao(ruim, FROTA_INICIAL), null, JSON.stringify(ruim));
     }
   });
