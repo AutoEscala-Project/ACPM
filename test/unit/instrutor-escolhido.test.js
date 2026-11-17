@@ -12,6 +12,8 @@ import { separar, juntar } from '../../js/dias.js';
 import { normalizarLinhaGravada } from '../../js/escala-gravada.js';
 import { FROTA_INICIAL } from '../../js/frota.js';
 import { aluno, apenas, cenario, instrutor, missaoExtra, GROUND_C152 } from '../helpers/montar.js';
+import { gerarCenario, comEscolhas } from '../helpers/cenarios.js';
+import { ApiClient } from '../../js/storage.js';
 
 const SO_PP_LJV = apenas('C152', 'PP-LJV');
 const semCompactar = estado => runAllocationEngine(estado, { compactar: false });
@@ -172,6 +174,83 @@ describe('Instrutor escolhido na Escala: o voo fica onde está', () => {
   });
 });
 
+describe('Voa com: os instrutores do aluno (o par permanente do cadastro)', () => {
+  const avisos = al => al.filter(a => a.codigo === 'voa-com').map(a => a.m);
+
+  it('o aluno voa com o instrutor dele, não com o que o app escolheria, e sem aviso', () => {
+    const { out, al } = runAllocationEngine(cenario({ ins: [instrutor(1, 9), instrutor(2, 1)], stu: [aluno(1000, {}, { voaCom: [1] })] }));
+    assert.deepEqual([out.map(o => [o.insId, o.insPar, o.tag]), al], [[[1, true, 'Pref. 1']], []]);
+  });
+
+  it('com o instrutor dele ocupado na preferência, o aluno vai para outro horário com ele', () => {
+    // O Aluno 1001 escolheu o Instrutor 01 para o dia: vai antes e fica com as 08:20
+    const { out, al } = semCompactar(cenario({ ins: [instrutor(1, 9), instrutor(2, 1)], stu: [aluno(1000, {}, { voaCom: [1] }), aluno(1001, { insId: 1 })] }));
+    assert.deepEqual(avisos(al), []);
+    assert.deepEqual(out.map(o => [o.s, o.a, o.insId]), [['Aluno 1001', 500, 1], ['Aluno 1000', 610, 1]]);
+  });
+
+  it('com dois instrutores no “Voa com”, qualquer um deles', () => {
+    const { out } = runAllocationEngine(cenario({ ins: [instrutor(1, 9), instrutor(2, 1), instrutor(3, 9)], stu: [aluno(1000, {}, { voaCom: [3, 1] }), aluno(1001, {}, { voaCom: [3, 1] })] }));
+    assert.deepEqual(out.map(o => o.insId).sort(), [1, 3]);
+  });
+
+  it('o instrutor escolhido para o dia vale mais que o “Voa com”', () => {
+    const { out, al } = runAllocationEngine(cenario({ ins: [instrutor(1, 9), instrutor(2, 1)], stu: [aluno(1000, { insId: 2 }, { voaCom: [1] })] }));
+    assert.deepEqual([out.map(o => [o.insId, Boolean(o.insEscolhido), Boolean(o.insPar)]), avisos(al)], [[[2, true, false]], []]);
+  });
+
+  it('quando nenhum instrutor do “Voa com” pode, o voo fica com outro e a escala avisa, com o motivo', () => {
+    const caso = (ins1, extra = {}, pedido = {}) => runAllocationEngine(cenario({ ins: [ins1, instrutor(2, 9)], stu: [aluno(1000, pedido, { voaCom: [1], ...extra })] }));
+    const resumo = r => [r.out.map(o => [o.insId, Boolean(o.insPar)]), avisos(r.al), r.al.filter(a => a.codigo === 'voa-com').map(a => [a.stuId, a.insId])];
+    assert.deepEqual(resumo(caso(instrutor(1, 9, { on: false }))),
+      [[[2, false]], ['Sem o instrutor de “Voa com” (Instrutor 01: fora nesta data): o voo ficou com Instrutor 02.'], [[1000, 2]]]);
+    assert.deepEqual(avisos(caso(instrutor(1, 9, { hab: ['grounds'] })).al), ['Sem o instrutor de “Voa com” (Instrutor 01: sem a habilitação da missão): o voo ficou com Instrutor 02.']);
+    assert.deepEqual(avisos(caso(instrutor(1, 9, { aw: Array(9).fill(false) })).al), ['Sem o instrutor de “Voa com” (Instrutor 01: indisponível nos horários possíveis): o voo ficou com Instrutor 02.']);
+    assert.deepEqual(avisos(caso(instrutor(1, 9, { kg: 150 }), { kg: 100 }).al), ['Sem o instrutor de “Voa com” (Instrutor 01: peso acima do limite do avião): o voo ficou com Instrutor 02.']);
+    // Fora do cadastro, o “Voa com” não conta
+    assert.deepEqual(resumo(caso(instrutor(1, 9), { voaCom: [99] })), [[[1, false]], [], []]);
+  });
+
+  it('o aviso não aparece quando o voo nem entra na escala (a rejeição diz o motivo)', () => {
+    const { out, al } = runAllocationEngine(cenario({ ins: [instrutor(1, 9, { on: false }), instrutor(2, 9)], stu: [aluno(1000, {}, { voaCom: [1] })], semAeronaves: apenas('C152') }));
+    assert.deepEqual([out.length, avisos(al), al.map(a => a.codigo)], [0, [], ['sem-aviao']]);
+  });
+
+  it('Ground: o aluno entra na turma do instrutor dele; sem ela, em outra, com aviso', () => {
+    const { out, al } = runAllocationEngine(cenario({
+      ins: [instrutor(1, 9), instrutor(2, 9)],
+      stu: [aluno(1000, { ...GROUND_C152, insId: 2 }), aluno(1001, GROUND_C152, { voaCom: [1] }), aluno(1002, GROUND_C152, { voaCom: [2] })]
+    }));
+    assert.deepEqual(avisos(al), []);
+    assert.deepEqual(out.map(o => [o.s, o.a, o.insId]), [['Aluno 1000', 500, 2], ['Aluno 1002', 500, 2], ['Aluno 1001', 610, 1]]);
+    const semSala = runAllocationEngine(cenario({ ins: [instrutor(1, 9, { on: false }), instrutor(2, 9)], stu: [aluno(1000, GROUND_C152), aluno(1001, GROUND_C152, { voaCom: [1] })] }));
+    assert.deepEqual(avisos(semSala.al), ['Sem o instrutor de “Voa com” (Instrutor 01: fora nesta data): o voo ficou com Instrutor 02.']);
+    assert.deepEqual(semSala.out.map(o => o.groupSize), [2, 2]);
+  });
+
+  it('a divisão das horas e a compactação não trocam o instrutor do “Voa com”', () => {
+    const ins = [instrutor(1, 1), instrutor(2, 9)];
+    const stu = extra => [aluno(1000, { p1: 390 }, extra), aluno(1001, { p1: 500 }, extra)];
+    assert.deepEqual(runAllocationEngine(cenario({ ins, stu: stu({}) })).out.map(o => o.insId).sort(), [1, 2]);
+    assert.deepEqual(runAllocationEngine(cenario({ ins, stu: stu({ voaCom: [1] }) })).out.map(o => o.insId), [1, 1]);
+  });
+
+  // Achado pela busca em cenários aleatórios: o voo que ficou sem o “Voa com” e que a divisão das horas leva para um
+  // instrutor do “Voa com” fica marcado e sem aviso (o aviso diria o instrutor errado)
+  it('o voo que a divisão das horas leva para o instrutor do “Voa com” não tem aviso', () => {
+    const estado = comEscolhas(gerarCenario(3691), 3691);
+    const antes = runAllocationEngine(estado, { compactar: false, dividirHoras: false });
+    const depois = runAllocationEngine(estado);
+    const paresDe = o => estado.stu.find(s => s.id === o.stuId).voaCom || [];
+    const levados = depois.out.filter(o => { const a = antes.out.find(v => v.fKey === o.fKey); return a && paresDe(o).includes(o.insId) && !paresDe(a).includes(a.insId); });
+    assert.ok(levados.length > 0);
+    for (const o of levados) {
+      assert.equal(o.insPar, true);
+      assert.ok(!depois.al.some(a => a.codigo === 'voa-com' && a.stuId === o.stuId && a.insId === o.insId), o.fKey);
+    }
+  });
+});
+
 describe('Instrutor escolhido nos dados', () => {
   it('o pedido guarda só um id de instrutor válido', () => {
     const pedido = v => { const p = { mis: 'Voo Local', eq: 'C152', p1: 500, p2: 610, nb: 1, insId: v }; normalizeMissionFields(p); return p.insId; };
@@ -186,9 +265,29 @@ describe('Instrutor escolhido nos dados', () => {
     assert.deepEqual([junto.stu[0].insId, junto.stu[0].extra[0].insId], [1, 2]);
   });
 
-  it('a escala gravada guarda a marca do instrutor escolhido', () => {
-    assert.equal(normalizarLinhaGravada({ fKey: '1000_0_1', insEscolhido: true }).insEscolhido, true);
+  it('a escala gravada guarda as marcas do instrutor escolhido e do “Voa com”', () => {
+    assert.deepEqual(normalizarLinhaGravada({ fKey: '1000_0_1', insEscolhido: true, insPar: true }), { fKey: '1000_0_1', insEscolhido: true, insPar: true });
     assert.equal(normalizarLinhaGravada({ fKey: '1000_0_1', insEscolhido: 'sim' }), null);
+    assert.equal(normalizarLinhaGravada({ fKey: '1000_0_1', insPar: 1 }), null);
+  });
+
+  it('ao abrir, o “Voa com” fica só com ids, sem repetir e sem os de “Não escalar com”; o instrutor do pedido, só um id', () => {
+    const estado = ApiClient.createFreshState();
+    const pedido = { fly: true, mis: 'Voo Local', eq: 'C152', p1: 500, p2: -1, nb: 1, ss: 1, pr: 3 };
+    estado.stu = [
+      { id: 1000, nm: 'A', kg: 70, bl: [3], voaCom: [1, 1, 'x', 3, 2.5, -4, 2], ...pedido, insId: 2, extra: [{ mid: 1, ...pedido, insId: 'x' }] },
+      { id: 1001, nm: 'B', kg: 70, bl: [], voaCom: ['x'], ...pedido, insId: 0, extra: [] },
+      { id: 1002, nm: 'C', kg: 70, bl: [], voaCom: 'x', ...pedido, extra: [] }
+    ];
+    const x = ApiClient.normalizeAndMigrateState(estado);
+    assert.deepEqual(x.stu.map(s => [s.voaCom, s.insId, (s.extra[0] || {}).insId]), [[[1, 2], 2, undefined], [undefined, undefined, undefined], [undefined, undefined, undefined]]);
+  });
+
+  it('o “Voa com” vai com o cadastro do aluno (só quando há)', () => {
+    const estado = cenario({ stu: [aluno(1000, {}, { voaCom: [2, 1] }), aluno(1001)] });
+    const { cadastro, dia } = separar(estado);
+    assert.deepEqual(cadastro.stu.map(s => s.voaCom), [[2, 1], undefined]);
+    assert.deepEqual(juntar(cadastro, dia).stu.map(s => s.voaCom), [[2, 1], undefined]);
   });
 
   it('a reversão devolve os pedidos e os voos fixos de antes; fora do formato, não vale', () => {

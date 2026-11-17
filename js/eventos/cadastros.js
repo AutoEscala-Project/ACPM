@@ -87,6 +87,15 @@ aoAcionar('unbl', (b, { id }) => {
   atualizarLinhaDoAluno(s, { naoEscalar: true });
 });
 
+aoAcionar('unvc', (b, { id }) => {
+  const s = stuBy(id);
+  const ins = insBy(+b.dataset.b);
+  s.voaCom = (s.voaCom || []).filter(v => v !== +b.dataset.b);
+  if (!s.voaCom.length) delete s.voaCom;
+  gravarAlteracao('mod', `${s.nm}: não voa mais com ${ins ? ins.nm : ''} de preferência`);
+  atualizarLinhaDoAluno(s, { voaComMudou: true });
+});
+
 aoAcionar(['deli', 'dels'], (b, { id }) => {
   const a = b.dataset.act;
   if (!confirmado(b, 'Confirmar')) return;
@@ -95,6 +104,7 @@ aoAcionar(['deli', 'dels'], (b, { id }) => {
     if (+$('#painel-instrutor').dataset.id === id) fecharPainelDoInstrutor();
     S.ins = S.ins.filter(x => x.id !== id);
     S.stu.forEach(s => s.bl = s.bl.filter(v => v !== id));
+    S.stu.forEach(s => { if (s.voaCom) s.voaCom = s.voaCom.filter(v => v !== id); if (s.voaCom && !s.voaCom.length) delete s.voaCom; });
     // Os pedidos do dia com o instrutor escolhido voltam para a escolha do app
     S.stu.forEach(s => [s, ...(s.extra || [])].forEach(p => { if (p.insId === id) delete p.insId; }));
     gravarAlteracao('exc', `Instrutor excluído: ${target ? target.nm : id}`);
@@ -164,8 +174,15 @@ aoMudarCampo('s', (t, { f, id }) => {
     historico = ['mod', `Peso ${s.nm}: ${s.kg} kg`];
   } else if (f === 'bl' && t.value) {
     s.bl.push(+t.value);
+    // Quem não voa com o aluno sai do “Voa com” dele
+    if (s.voaCom) s.voaCom = s.voaCom.filter(v => v !== +t.value);
+    if (s.voaCom && !s.voaCom.length) delete s.voaCom;
     const ins = insBy(+t.value);
     historico = ['exc', `${s.nm}: não escalar com ${ins ? ins.nm : ''}`];
+  } else if (f === 'voaCom' && t.value) {
+    s.voaCom = [...(s.voaCom || []), +t.value];
+    const ins = insBy(+t.value);
+    historico = ['mod', `${s.nm}: voa com ${ins ? ins.nm : ''} de preferência`];
   } else if (f === 'curso') {
     // O curso do aluno
     const curso = normalizarCursoDoAluno(t.value);
@@ -174,8 +191,9 @@ aoMudarCampo('s', (t, { f, id }) => {
     historico = ['mod', `Curso de ${s.nm}: ${curso || 'nenhum'}`];
   }
   gravarAlteracao(...historico);
-  atualizarLinhaDoAluno(s, { naoEscalar: f === 'bl' });
-  if (f === 'nm') rDem();
+  atualizarLinhaDoAluno(s, { naoEscalar: f === 'bl', voaComMudou: f === 'voaCom' });
+  // A Demanda mostra o nome do aluno e o “Voa com” dele (no Automático do instrutor)
+  if (['nm', 'voaCom', 'bl'].includes(f)) rDem();
 });
 
 // Limites da lei, no cadastro dos instrutores: só o Administrador muda (neste navegador, o Operador). Vazio é

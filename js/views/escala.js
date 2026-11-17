@@ -288,7 +288,7 @@ export function botaoDoInstrutor(o, rotulo) {
   const nome = esc(o.ins);
   const escolhido = o.insEscolhido ? ' <span class="sm escolhido-marca">escolhido</span>' : '';
   if (isGestor() || !o.stuId) return nome + escolhido;
-  return `<button type="button" class="ins-btn${o.insEscolhido ? ' escolhido' : ''}" data-act="trocar-instrutor" data-fkey="${esc(o.fKey)}" data-rotulo="${esc(rotulo)}" title="Trocar o instrutor" aria-label="${esc(rotulo)}: ${nome}${o.insEscolhido ? ', escolhido pelo operador' : ''}. Trocar">${nome}</button>`;
+  return `<button type="button" class="ins-btn${o.insEscolhido ? ' escolhido' : ''}" data-act="trocar-instrutor" data-fkey="${esc(o.fKey)}" data-rotulo="${esc(rotulo)}" title="Trocar o instrutor" aria-label="${esc(rotulo)}: ${nome}${o.insEscolhido ? ', escolhido pelo operador' : o.insPar ? ', do Voa com do aluno' : ''}. Trocar">${nome}</button>`;
 }
 
 // A lista do instrutor do voo: sem escolha, a primeira opção é quem o app pôs; os instrutores que não servem no horário
@@ -296,7 +296,7 @@ export function botaoDoInstrutor(o, rotulo) {
 export function seletorDeInstrutor(o, rotulo) {
   const lista = instrutoresDoVoo(S, RES, o.fKey).filter(x => o.insEscolhido || x.id !== o.insId)
     .map(x => `<option value="${x.id}"${o.insEscolhido && x.id === o.insId ? ' selected' : ''}>${esc(x.nota ? `${x.nm} (${x.nota})` : x.nm)}</option>`);
-  const automatico = o.insEscolhido ? 'Automático (o app escolhe)' : `${o.ins} (escolhido pelo app)`;
+  const automatico = o.insEscolhido ? 'Automático (o app escolhe)' : `${o.ins} (${o.insPar ? 'Voa com do aluno' : 'escolhido pelo app'})`;
   return `<select class="ins-sel" data-a="insVoo" data-fkey="${esc(o.fKey)}" data-rotulo="${esc(rotulo)}" aria-label="${esc(rotulo)}"><option value=""${o.insEscolhido ? '' : ' selected'}>${esc(automatico)}</option>${lista.join('')}</select>`;
 }
 
@@ -370,6 +370,7 @@ function resumoDosAvisos(avisos) {
   const revisao = doCodigo('revisao').length;
   const atrasos = doCodigo('atraso').length;
   const limites = quantos(doCodigo('perto-do-limite'), 'insId');
+  const semPar = doCodigo('voa-com').length;
   const outros = avisos.filter(a => !CODIGOS_DE_AVISO.includes(a.codigo)).length;
   const partes = [
     semPeso && `${semPeso} ${semPeso === 1 ? 'aluno sem peso' : 'alunos sem peso'}`,
@@ -377,6 +378,7 @@ function resumoDosAvisos(avisos) {
     revisao && `${revisao} ${revisao === 1 ? 'avião para' : 'aviões param'} para a revisão de 50 horas`,
     atrasos && `${atrasos} ${atrasos === 1 ? 'atraso com conflito' : 'atrasos com conflito'}`,
     limites && `${limites} ${limites === 1 ? 'instrutor perto' : 'instrutores perto'} do limite da lei`,
+    semPar && `${semPar} ${semPar === 1 ? 'voo sem' : 'voos sem'} o instrutor de Voa com`,
     outros && `${outros} ${outros === 1 ? 'outro' : 'outros'}`
   ].filter(Boolean);
   return `${avisos.length} ${avisos.length === 1 ? 'aviso' : 'avisos'}: ${partes.join(' · ')}`;

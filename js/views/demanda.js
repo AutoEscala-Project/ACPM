@@ -25,10 +25,12 @@ function opcoesDeHorario(lista, valor) {
   return opts(itens, valor);
 }
 
-// O instrutor do pedido: "Automático" (o app escolhe) ou um escolhido pelo operador, que vale mais que a escolha do app
+// O instrutor do pedido: "Automático" (o app escolhe; com o “Voa com” do aluno, um dos instrutores dele) ou um escolhido
+// pelo operador, que vale mais que a escolha do app
 function opcoesDeInstrutor(stu, d) {
   const lista = instrutoresDoPedido(S, stu, d).map(o => [o.id, o.nota ? `${o.nm} (${o.nota})` : o.nm]);
-  return opts([['', 'Automático'], ...lista], d.insId || '');
+  const pares = (stu.voaCom || []).map(id => S.ins.find(x => x.id === id)).filter(Boolean).map(x => x.nm);
+  return opts([['', pares.length ? `Automático (voa com ${pares.join(', ')})` : 'Automático'], ...lista], d.insId || '');
 }
 
 export const singleDemandRowHTML = (stu, d, mid = 0) => {

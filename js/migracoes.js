@@ -168,8 +168,9 @@ const PASSOS = {
     cadastro: cadastro => cadastro,
     dia: dia => dia
   },
-  // Versão 22: o pedido do dia pode levar o instrutor escolhido pelo operador (campo "insId"). Os dados não mudam; o
-  // número novo faz a aba da versão anterior (que tiraria o campo ao gravar) recusar o dia e pedir para recarregar
+  // Versão 22: o pedido do dia pode levar o instrutor escolhido pelo operador (campo "insId") e o aluno do cadastro, os
+  // instrutores dele ("voaCom"). Os dados não mudam; o número novo faz a aba da versão anterior (que tiraria os campos
+  // ao gravar) recusar os dados e pedir para recarregar
   22: {
     cadastro: cadastro => cadastro,
     dia: dia => dia

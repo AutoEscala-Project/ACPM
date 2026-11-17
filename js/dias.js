@@ -40,7 +40,8 @@ export function separar(estado) {
         // Horas de voo fora do app, por mês ('AAAA-MM'; 'AAAA-00': antes deste mês, no ano)
         ...(horasExternas && Object.keys(horasExternas).length ? { horasExternas: { ...horasExternas } } : {})
       })),
-      stu: estado.stu.map(({ id, nm, kg, bl, curso }) => ({ id, nm, kg, bl: [...(bl || [])], ...(curso ? { curso } : {}) })),
+      // voaCom: os instrutores do aluno (o par permanente), só quando há
+      stu: estado.stu.map(({ id, nm, kg, bl, voaCom, curso }) => ({ id, nm, kg, bl: [...(bl || [])], ...(voaCom && voaCom.length ? { voaCom: [...voaCom] } : {}), ...(curso ? { curso } : {}) })),
       ...(Array.isArray(estado.frota) ? { frota: estado.frota.map(f => ({ ...f })) } : {}),
       ...(estado.horarios ? { horarios: structuredClone(estado.horarios) } : {}),
       ...(estado.limites ? { limites: { ...estado.limites } } : {}),
@@ -89,6 +90,7 @@ export function juntar(cadastro, dia = diaPadrao()) {
     stu: cadastro.stu.map(s => ({
       ...s,
       bl: [...(s.bl || [])],
+      ...(s.voaCom ? { voaCom: [...s.voaCom] } : {}),
       ...(pedidos[s.id] ? structuredClone(pedidos[s.id]) : { ...blank(), extra: [] })
     })),
     fStatus: normalizarStatus(dia.fStatus),

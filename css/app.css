@@ -782,8 +782,9 @@ table.cadastro input.nm { width: 100%; min-width: 180px; }
 table.cadastro input[data-f="kg"] { width: 96px; }
 table.cadastro td.acoes { text-align: right; white-space: nowrap; }
 table.cadastro tr[hidden] { display: none; }
-table.alunos select[data-f="bl"] { border-color: transparent; background: transparent; color: var(--mu); }
-table.alunos tr:hover select[data-f="bl"], table.alunos select[data-f="bl"]:focus { border-color: var(--ln2); background: var(--pn); color: var(--ink); }
+table.alunos select[data-f="bl"], table.alunos select[data-f="voaCom"] { border-color: transparent; background: transparent; color: var(--mu); }
+table.alunos tr:hover select[data-f="bl"], table.alunos select[data-f="bl"]:focus,
+table.alunos tr:hover select[data-f="voaCom"], table.alunos select[data-f="voaCom"]:focus { border-color: var(--ln2); background: var(--pn); color: var(--ink); }
 /* Campos discretos, como na Demanda: parecem texto até o mouse passar ou o foco chegar */
 table.cadastro input { border-color: transparent; background: transparent; }
 table.cadastro tr:hover input, table.cadastro input:focus { border-color: var(--ln2); background: var(--pn); }
@@ -807,7 +808,8 @@ input.falta::placeholder { color: var(--wa); }
   table.cadastro td:nth-child(3), table.cadastro td.acoes { grid-column: 1 / -1; padding: 0 8px; }
   table.cadastro td.acoes { display: flex; justify-content: flex-end; align-items: center; gap: 8px; }
   table.cadastro td.acoes [data-act="editar-habs"] { margin-right: auto; }
-  table.alunos select[data-f="bl"] { border-color: var(--ln); }
+  table.alunos select[data-f="bl"], table.alunos select[data-f="voaCom"] { border-color: var(--ln); }
+  table.alunos td.c-voa-com { grid-column: 1 / -1; }
   table.alunos td:nth-child(3) { grid-column: 1; }
   table.alunos td.acoes { grid-column: 2; }
 }
@@ -933,6 +935,8 @@ a { color: var(--ac); }
   font-size: 13px;
 }
 .tg button { border: 0; background: transparent; color: var(--er); cursor: pointer; }
+.tg.par { border-color: var(--ac); }
+.tg.par button { color: var(--ac); }
 
 /* Mapa de ocupação */
 .tl-legend { display: flex; gap: 12px; flex-wrap: wrap; font-size: 12px; color: var(--mu); align-items: center; margin-bottom: 8px; }
