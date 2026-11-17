@@ -331,6 +331,128 @@ test.describe('O foco depois de uma ação', () => {
     await expect(page.locator('#s-manual h2').first()).toBeFocused();
   });
 
+  test('o ✕ que tira o voo da escala, com o Enter dado duas vezes ou segurado, tira um voo só; o foco fica na linha que ficou no lugar', async ({ page }) => {
+    await abrirComExemplo(page);
+    await abrirEscala(page);
+    const xs = page.locator('#out .tabela-escala button[data-act="rm-fly"]');
+    const antes = await xs.count();
+    await xs.nth(2).focus();
+    await page.keyboard.press('Enter');
+    await page.keyboard.press('Enter');
+    await expect(xs).toHaveCount(antes - 1);
+    // O foco fica na linha, que não faz nada com o Enter, e continua nela depois de outro redesenho
+    const naLinha = () => page.evaluate(() => document.activeElement.matches('#out tbody tr[data-foco-neutro]'));
+    expect(await naLinha()).toBe(true);
+    await page.evaluate(() => import('./js/views/escala.js').then(m => m.rOut()));
+    expect(await naLinha()).toBe(true);
+    // Segurado: o primeiro keydown e as repetições da tecla
+    await xs.nth(2).focus();
+    for (let i = 0; i < 5; i++) await page.keyboard.down('Enter');
+    await page.keyboard.up('Enter');
+    await expect(xs).toHaveCount(antes - 2);
+  });
+
+  test('com o Enter dado de novo, o Reverter não reverte outra alteração, e quem subiu ao topo do Rodízio fica lá', async ({ page }) => {
+    await abrirComExemplo(page);
+    await irPara(page, 'rec');
+    // Três alterações que o Histórico desfaz: três recursos postos em manutenção
+    const disponiveis = page.locator('#eqs input[data-a="av"]:checked');
+    for (let i = 0; i < 3; i++) { await disponiveis.first().focus(); await page.keyboard.press('Space'); }
+    await page.locator('#btn-open-log').click();
+    const reverter = page.locator('#audit-log-list button[data-act="rev-log"]');
+    await expect(reverter).toHaveCount(3);
+    await reverter.first().focus();
+    await page.keyboard.press('Enter');
+    await page.keyboard.press('Enter');
+    await expect(reverter).toHaveCount(2);
+    await page.keyboard.press('Escape');
+    // O Rodízio: o 2º da fila sobe para o 1º; o Enter de novo (o Subir dele ficou desligado) não o tira de lá
+    await irPara(page, 'rod');
+    const categoria = await page.locator('#rodizio .pn[data-cat]').evaluateAll(ps => ps.find(p => p.querySelectorAll('li').length >= 3).dataset.cat);
+    const fila = page.locator(`#rodizio .pn[data-cat="${categoria}"] li`);
+    const segundo = await fila.nth(1).getAttribute('data-id');
+    await fila.nth(1).locator('[data-act="fila-subir"]').focus();
+    await page.keyboard.press('Enter');
+    await page.keyboard.press('Enter');
+    await expect(fila.first()).toHaveAttribute('data-id', segundo);
+    // O foco fica com quem subiu (o item dele), e não com quem desceu
+    expect(await page.evaluate(() => document.activeElement.dataset.id)).toBe(segundo);
+  });
+
+  test('num navegador sem checkVisibility (Safari antes do 17.4), mudar um status grava, redesenha e mantém o foco', async ({ page }) => {
+    await page.addInitScript(() => { delete Element.prototype.checkVisibility; });
+    await abrirComExemplo(page);
+    await abrirEscala(page);
+    const status = page.locator('#out select[data-f="fstatus"]').nth(2);
+    const fkey = await status.getAttribute('data-fkey');
+    await status.focus();
+    await status.selectOption('Em Voo');
+    await expect(page.locator(`#out select[data-fkey="${fkey}"]`)).toHaveClass(/\bst-EmVoo\b/);
+    expect(await emFoco(page)).toBe(`select[data-f="fstatus"][data-fkey="${fkey}"]`);
+    await page.reload();
+    await abrirEscala(page);
+    await expect(page.locator(`#out select[data-fkey="${fkey}"]`)).toHaveValue('Em Voo');
+  });
+
+  test('um clique num texto da tabela e Tab: o foco segue dali, e não do topo', async ({ page }) => {
+    await abrirComExemplo(page);
+    await abrirEscala(page);
+    const linha = page.locator('#out .tabela-escala tbody tr:not(.win)').nth(5);
+    await linha.locator('td.c-aluno b').click();
+    await page.keyboard.press('Tab');
+    const fkey = await linha.locator('select[data-f="fstatus"]').getAttribute('data-fkey');
+    expect(await emFoco(page)).toBe(`select[data-f="fstatus"][data-fkey="${fkey}"]`);
+  });
+
+  test('o foco devolvido depois de um redesenho não rola a página até ele', async ({ page }) => {
+    await abrirComExemplo(page);
+    await abrirEscala(page);
+    await page.locator('#out select[data-f="fstatus"]').first().focus();
+    await page.evaluate(() => window.scrollTo({ top: document.body.scrollHeight, behavior: 'instant' }));
+    const antes = await page.evaluate(() => scrollY);
+    expect(antes).toBeGreaterThan(300);
+    // Um redesenho que chega depois (outra alteração, a resposta do servidor)
+    await page.evaluate(() => import('./js/views/escala.js').then(m => m.rOut()));
+    expect(await page.evaluate(() => scrollY)).toBe(antes);
+    await expect(page.locator('#out select[data-f="fstatus"]').first()).toBeFocused();
+  });
+
+  // O Tab que sai de um campo digitado: o change chega com o foco já fora do campo, e a linha é redesenhada
+  const vizinho = page => page.evaluate(() => {
+    const el = document.activeElement;
+    if (el === document.body) return 'body';
+    const tr = el.closest('tr');
+    return `${el.tagName.toLowerCase()}[${el.dataset.f || el.dataset.a || el.dataset.act || ''}] linha=${tr ? `${tr.dataset.id || tr.dataset.r || ''}/${tr.dataset.mid || ''}` : '-'}`;
+  });
+  for (const [nome, aba, seletor, valores] of [['a duração na Demanda', 'dem', '#dem tr[data-k="d"]:not(.off) input[data-f="nb"]', ['1.5', '2']],
+    ['as horas em Recursos', 'rec', '#revisao input[data-a="horas"]', ['20', '21']]]) {
+    test(`digitar ${nome} e sair com Tab ou Shift+Tab leva ao mesmo vizinho que sem digitar, com a linha redesenhada`, async ({ page }) => {
+      await abrirComExemplo(page);
+      await irPara(page, aba);
+      const campo = page.locator(seletor).nth(2);
+      for (const [i, tecla] of ['Tab', 'Shift+Tab'].entries()) {
+        await campo.focus();
+        await page.keyboard.press(tecla);
+        const semDigitar = await vizinho(page);
+        await campo.fill(valores[i]);
+        await page.keyboard.press(tecla);
+        expect(await vizinho(page), tecla).toBe(semDigitar);
+      }
+    });
+  }
+
+  test('com o Histórico aberto, o Esc dado na busca da Escala fecha a gaveta e o foco fica na busca', async ({ page }) => {
+    await abrirComExemplo(page);
+    await abrirEscala(page);
+    await page.locator('#btn-open-log').click();
+    await expect(page.locator('#historico')).toBeVisible();
+    const busca = page.locator('#flt-esc-q');
+    await busca.click();
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#historico')).toBeHidden();
+    await expect(busca).toBeFocused();
+  });
+
   test('aprovar a escala leva o foco ao Reabrir, e reabrir, ao Aprovar', async ({ page }) => {
     await abrirComExemplo(page);
     await abrirEscala(page);
@@ -446,6 +568,20 @@ test.describe('O leitor de tela e o teclado', () => {
     await expect(page.locator('#menu-conta')).toBeHidden();
   });
 
+  test('o Esc fecha só a camada de cima: com o menu da conta aberto, o primeiro fecha a dica aberta pelo mouse', async ({ page }) => {
+    await abrirComExemplo(page);
+    await abrirEscala(page);
+    const botao = page.locator('#btn-menu-conta');
+    await botao.focus();
+    await page.keyboard.press('Enter');
+    await expect(page.locator('#menu-conta')).toBeVisible();
+    await page.locator('#out [data-dica]:not(select):not(button)').first().hover();
+    await expect(page.locator('#dica')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#dica')).toBeHidden();
+    await expect(page.locator('#menu-conta')).toBeVisible();
+  });
+
   test('o Esc fecha só a camada de cima: com o Histórico aberto, o primeiro fecha o menu da conta, o segundo, a gaveta', async ({ page }) => {
     await abrirComExemplo(page);
     await page.locator('#btn-open-log').click();
@@ -508,7 +644,7 @@ test.describe('O leitor de tela e o teclado', () => {
     expect(ditos).toContain(', Em Voo');
   });
 
-  test('o primeiro Tab da página é o link para pular ao conteúdo, que leva o foco para depois das abas', async ({ page }) => {
+  test('o primeiro Tab da página é o link para pular ao conteúdo, e o Tab seguinte já é dentro do conteúdo', async ({ page }) => {
     await abrirComExemplo(page);
     const pular = page.locator('a.pular');
     await expect(pular).not.toBeInViewport();
@@ -517,8 +653,6 @@ test.describe('O leitor de tela e o teclado', () => {
     await expect(pular).toBeFocused();
     await expect(pular).toBeInViewport();
     await page.keyboard.press('Enter');
-    await expect(page.locator('main#conteudo')).toBeFocused();
-    // O próximo Tab segue dentro do conteúdo, não volta para a barra do topo
     await page.keyboard.press('Tab');
     expect(await page.evaluate(() => document.querySelector('main').contains(document.activeElement))).toBe(true);
   });

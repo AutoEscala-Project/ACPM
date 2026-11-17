@@ -129,7 +129,7 @@ function desarmarConfirmacaoDaAgenda() {
 }
 $('#form-agenda').onsubmit = e => { e.preventDefault(); registrarPedido(false); };
 $('#ag-excecao').onclick = () => registrarPedido(true);
-$('#ag-aluno').addEventListener('change', () => { desarmarConfirmacaoDaAgenda(); $('#ag-erro').textContent = ''; });
+$('#ag-aluno').addEventListener('change', () => { desarmarConfirmacaoDaAgenda(); $('#ag-erro').textContent = ''; marcarInvalidos(); });
 $('#ag-missao').onchange = preencherHorariosDaAgenda;
 
 async function cancelarPedido(b) {
@@ -137,6 +137,7 @@ async function cancelarPedido(b) {
   const por = $('#ag-por').value.trim();
   if (!por) {
     $('#ag-erro').textContent = 'Informe seu nome em “Registrado por” para cancelar o pedido.';
+    marcarInvalidos('#ag-por');
     return;
   }
   try {

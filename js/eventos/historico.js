@@ -14,10 +14,12 @@ import { rRec } from '../views/recursos.js';
 // Histórico: gaveta lateral sobre a aba aberta; o botão abre e fecha, ✕ e Esc fecham
 const gavetaDoHistorico = $('#historico');
 function mostrarHistorico(abrir) {
+  // Fechar com o foco dentro da gaveta devolve o foco ao botão do Histórico; com o foco fora dela (o Esc dado na busca
+  // da escala, no popup do mapa), o foco fica onde está
+  const focoDentro = gavetaDoHistorico.contains(document.activeElement);
   gavetaDoHistorico.hidden = !abrir;
   $('#btn-open-log').setAttribute('aria-expanded', String(abrir));
-  // Fechar devolve o foco ao botão do Histórico
-  if (!abrir) { $('#btn-open-log').focus(); return; }
+  if (!abrir) { if (focoDentro) $('#btn-open-log').focus(); return; }
   $('#btn-fechar-historico').focus();
 }
 $('#btn-open-log').onclick = () => mostrarHistorico(gavetaDoHistorico.hidden);

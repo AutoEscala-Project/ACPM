@@ -56,6 +56,18 @@ test.describe('Agenda de Solicitações', () => {
     await expect(page.locator('#ag-horario option')).toHaveText(['06:30']);
   });
 
+  test('escolher o aluno apaga o erro e a marca de erro dos campos', async ({ page }) => {
+    await abrir(page, { estado: comAlunos() });
+    await irPara(page, 'age');
+    await page.locator('#ag-por').fill('');
+    await page.locator('#form-agenda [type="submit"]').click();
+    await expect(page.locator('#ag-erro')).toContainText('Escolha o aluno');
+    await expect(page.locator('#ag-por')).toHaveAttribute('aria-invalid', 'true');
+    await page.locator('#ag-aluno').selectOption({ label: 'Aluno 1000' });
+    await expect(page.locator('#ag-erro')).toBeEmpty();
+    for (const campo of ['#ag-aluno', '#ag-por']) await expect(page.locator(campo)).toHaveAttribute('aria-invalid', 'false');
+  });
+
   test('a duração: fracionada, até 5 h; o Ground tem 01h30', async ({ page }) => {
     await abrir(page, { estado: comAlunos() });
     await irPara(page, 'age');

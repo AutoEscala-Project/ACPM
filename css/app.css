@@ -895,10 +895,10 @@ p.h { color: var(--mu); margin: 4px 0 8px; }
 a { color: var(--ac); }
 /* Só para o leitor de tela */
 .sr { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
-/* O link para pular a barra do topo e as abas: aparece só com o foco do teclado */
+/* O link para pular a barra do topo e as abas: aparece só com o foco do teclado. O <main> não recebe o foco (um
+   tabindex nele faria um clique num texto levar o próximo Tab ao topo): o link leva o próximo Tab para dentro dele */
 .pular { position: absolute; left: 8px; top: -64px; z-index: 100; padding: 10px 14px; border-radius: 6px; background: var(--ac); color: var(--acT); font-weight: 600; text-decoration: none; }
 .pular:focus { top: 8px; }
-main:focus { outline: none; }
 
 .bl { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 
@@ -1269,7 +1269,11 @@ body.tela-painel { min-height: 100vh; background: #07122B; overflow: hidden; }
   padding: 8px 10px; border: 1px solid var(--ln); border-radius: 6px;
   background: var(--pop-bg); color: var(--pop-txt);
   font-size: 12.5px; line-height: 1.45; box-shadow: 0 8px 24px rgba(0,0,0,.35);
+  /* Aberto pelo teclado ou pelo toque, o clique passa para o que estiver embaixo; aberto pelo mouse, o mouse pode ir até
+     ele para ler (js/dicas.js) */
+  pointer-events: none;
 }
+.dica.pelo-mouse { pointer-events: auto; }
 .dica[hidden] { display: none; }
 .dica strong { font-weight: 700; }
 .dica::after {
@@ -1288,6 +1292,9 @@ body.tela-painel { min-height: 100vh; background: #07122B; overflow: hidden; }
 .dica-btn:focus-visible { outline: 2px solid var(--ac); outline-offset: 2px; }
 [data-dica]:not(button):not(.dica-btn) { cursor: help; }
 .tag[data-dica] { text-decoration: underline dotted; text-underline-offset: 2px; }
+/* O item que fica com o foco quando o botão usado some (focarSemAcao, js/dom.js): só marca o lugar */
+[data-foco-neutro]:focus { outline: 2px solid var(--ac); outline-offset: -2px; }
+tr[data-foco-neutro]:focus > td { background: var(--info-bg); }
 /* A etiqueta com a dica recebe o foco pelo Tab (para abrir a dica sem o mouse) */
 [data-dica]:not(button):focus-visible { outline: 2px solid var(--ac); outline-offset: 2px; border-radius: 3px; }
 /* No celular e no toque, o "?" tem 44 px para o dedo; o círculo continua pequeno */

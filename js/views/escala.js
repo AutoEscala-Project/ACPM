@@ -15,7 +15,7 @@ import { metricasDaEscala } from '../metricas.js';
 import { sumUniqueOperationalHours, consolidateTimelineSlots } from '../engine.js';
 import { S, RES, AUDIT_LOG, TL_MODE, DATA, isGestor, dadoIndisponivel } from '../state.js';
 import { motivoDoFixo } from '../fixos.js';
-import { $, posicionarJunto, trocarConteudo } from '../dom.js';
+import { $, posicionarJunto, trocarConteudo, visivel } from '../dom.js';
 import { statusDoVoo, unidadeDoVoo } from '../voo.js';
 
 export const HT = o => (o.isGround || isGroundMission(o.mis) ? DURACAO_DO_GROUND : fmtH(o.h) + (o.ss !== '1/1' ? ` (sessão ${o.ss})` : ''));
@@ -74,7 +74,7 @@ export function abrirPopupDoMapa(barra, { focar = false } = {}) {
   if (focar) controlesDoPopup()[0]?.focus();
 }
 
-const controlesDoPopup = () => [...$('#tl-pop').querySelectorAll('select, button, input, [tabindex="0"]')].filter(c => !c.disabled && c.checkVisibility());
+const controlesDoPopup = () => [...$('#tl-pop').querySelectorAll('select, button, input, [tabindex="0"]')].filter(c => !c.disabled && visivel(c));
 
 // Tab depois do último controle (ou Shift+Tab antes do primeiro) fecha o popup e volta para a barra, de onde o Tab segue
 export function tabNoPopup(e) {
@@ -101,7 +101,7 @@ export const popupDoMapaAberto = () => popupDe !== null;
 export function reposicionarPopupDoMapa() {
   if (popupDe === null) return;
   const barra = barraDoPopup();
-  if (barra && barra.checkVisibility()) posicionarJunto($('#tl-pop'), barra);
+  if (barra && visivel(barra)) posicionarJunto($('#tl-pop'), barra);
   else fecharPopupDoMapa();
 }
 
@@ -109,7 +109,7 @@ export function reposicionarPopupDoMapa() {
 function reancorarPopupDoMapa() {
   if (popupDe === null) return;
   const barra = barraDoPopup();
-  if (!barra || !barra.checkVisibility()) { fecharPopupDoMapa(); return; }
+  if (!barra || !visivel(barra)) { fecharPopupDoMapa(); return; }
   const chave = popupDe;
   popupDe = null;
   const foco = document.activeElement && $('#tl-pop').contains(document.activeElement) ? document.activeElement.dataset.f : null;

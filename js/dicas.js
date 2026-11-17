@@ -1,10 +1,12 @@
 // As dicas: um balão só (#dica, role="tooltip") que explica um termo do glossário. Ele aparece:
 // - com o mouse parado sobre o termo por 400 ms;
 // - na hora, quando o foco do teclado chega a um elemento com a dica (a etiqueta que não é um botão recebe o foco pelo
-//   Tab, para quem não usa o mouse ler a explicação);
+//   Tab, para quem não usa o mouse ler a explicação). O foco que vem de um clique ou toque não abre: o <select> conta
+//   como :focus-visible mesmo assim, e o balão ficaria aberto sobre a linha de cima;
 // - num toque ou clique no botão "?" (a dica de um rótulo) ou numa etiqueta com a dica (que não é um botão).
-// Esc, um toque fora e sair do termo fecham o balão; o mouse pode passar do termo para o balão sem que ele feche (para ler
-// ou selecionar o texto). Ele acompanha a rolagem e o tamanho da tela. O texto entra só como texto (nunca como HTML).
+// Esc, um toque fora e sair do termo fecham o balão; o balão aberto pelo mouse deixa o mouse passar do termo para ele sem
+// fechar (para ler ou selecionar o texto). Aberto pelo teclado ou pelo toque, o clique passa por ele para o que estiver
+// embaixo. Ele acompanha a rolagem e o tamanho da tela. O texto entra só como texto (nunca como HTML).
 // Para os leitores de tela, cada elemento com a dica aponta (aria-describedby) para o texto do termo, num nó escondido do
 // glossário, e para o caso dele (data-dica-caso), quando tem.
 import { GLOSSARIO } from './glossario.js';
@@ -14,6 +16,8 @@ const ESPERA_DO_MOUSE = 400;
 // O mouse que sai do termo ou do balão: o tempo de atravessar o espaço entre os dois
 const ESPERA_PARA_FECHAR = 300;
 let alvo = null, porToque = false, espera = null, saida = null;
+// A última entrada foi o teclado (e não o mouse ou o toque)
+let teclado = false;
 
 const balao = () => document.getElementById('dica');
 const idDoTexto = id => `glossario-${id}`;
@@ -71,10 +75,11 @@ function descrever(raiz) {
   }
 }
 
-function abrirDica(el, { toque = false } = {}) {
+function abrirDica(el, { toque = false, mouse = false } = {}) {
   const termo = GLOSSARIO[el.dataset.dica];
   const dica = balao();
-  if (!termo || !dica) return;
+  // O termo que saiu da tela enquanto o mouse esperava (a lista foi refeita) não abre o balão
+  if (!termo || !dica || !el.isConnected) return;
   clearTimeout(espera);
   clearTimeout(saida);
   if (alvo && alvo !== el) fecharDica();
@@ -86,6 +91,7 @@ function abrirDica(el, { toque = false } = {}) {
   titulo.textContent = el.dataset.dicaTermo || termo.termo;
   // data-dica-caso: o caso deste elemento antes da explicação geral ("Abastecer até 22 gal…"), só texto
   dica.append(titulo, ' ', ...(el.dataset.dicaCaso ? [el.dataset.dicaCaso, ' '] : []), termo.texto);
+  dica.classList.toggle('pelo-mouse', mouse);
   dica.hidden = false;
   posicionarJunto(dica, el);
   if (el.classList.contains('dica-btn')) el.setAttribute('aria-expanded', 'true');
@@ -125,7 +131,7 @@ export function iniciarDicas() {
     const el = e.target.closest('[data-dica]');
     if (!el) return;
     clearTimeout(espera);
-    espera = setTimeout(() => abrirDica(el), ESPERA_DO_MOUSE);
+    espera = setTimeout(() => abrirDica(el, { mouse: true }), ESPERA_DO_MOUSE);
   });
   document.addEventListener('pointerout', e => {
     if (e.pointerType !== 'mouse') return;
@@ -138,9 +144,11 @@ export function iniciarDicas() {
       saida = setTimeout(fecharDica, ESPERA_PARA_FECHAR);
     }
   });
+  addEventListener('keydown', () => { teclado = true; }, true);
+  addEventListener('pointerdown', () => { teclado = false; }, true);
   document.addEventListener('focusin', e => {
     const el = e.target.closest && e.target.closest('[data-dica]');
-    if (el && el.matches(':focus-visible')) abrirDica(el);
+    if (el && teclado && el.matches(':focus-visible')) abrirDica(el);
   });
   document.addEventListener('focusout', e => {
     if (alvo && e.target === alvo && !porToque) fecharDica();
@@ -155,9 +163,9 @@ export function iniciarDicas() {
     }
     if (alvo && !e.target.closest('#dica')) fecharDica();
   });
-  document.addEventListener('keydown', e => {
+  // A dica é a camada de cima: o Esc é ouvido na janela, antes de todos, e não chega ao menu, à gaveta ou ao diálogo de trás
+  addEventListener('keydown', e => {
     if (e.key === 'Escape' && alvo) {
-      // A dica fecha primeiro; o Esc não chega à gaveta ou ao diálogo de trás
       e.stopPropagation();
       fecharDica();
     }
