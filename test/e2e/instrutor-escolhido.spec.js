@@ -81,8 +81,12 @@ test.describe('Instrutor escolhido', () => {
     const voo = linha(page, 'Aluno 1000');
     await voo.locator('[data-act="trocar-instrutor"]').click();
     await expect(voo.locator('select[data-a="insVoo"]')).toBeFocused();
-    await page.keyboard.press('Escape');
-    await expect(voo.locator('select[data-a="insVoo"]')).toHaveCount(0);
+    // O clique abre a lista do navegador quando ele permite (showPicker; no Linux, sim): o primeiro Esc fecha a lista
+    // aberta, o seguinte volta ao nome
+    await expect(async () => {
+      await page.keyboard.press('Escape');
+      await expect(voo.locator('select[data-a="insVoo"]')).toHaveCount(0, { timeout: 300 });
+    }).toPass({ timeout: 3000 });
     await expect(voo.locator('[data-act="trocar-instrutor"]')).toBeFocused();
   });
 
