@@ -18,6 +18,7 @@ import { nomeDoRecurso } from './categorias.js';
 import { hm } from './format.js';
 import { gruposDoConflito } from './conflitos.js';
 import { statusDoVoo, umPorUnidade, pedidosDosVoos, ocupacaoDoVoo, compromissoDoVoo } from './voo.js';
+import { historicoDoDia } from './noturno.js';
 import { menorPrimeiro } from './util.js';
 
 // A turma de Ground muda inteira; o voo, sozinho
@@ -32,7 +33,7 @@ export function sugerirReparos(estado, resultado, fKey, { maximo = 3, depoisDe =
   const frota = Array.isArray(estado.frota) ? estado.frota : FROTA_INICIAL;
   const hangar = normalizarHangar(estado.hangar, frota);
   const limites = normalizarLimites(estado.limites);
-  const horasPassadas = estado.horasDosInstrutores || {};
+  const historicoDe = historicoDoDia(estado);
   const alunos = new Map(estado.stu.map(s => [s.id, s]));
   const pedidoDo = pedidosDosVoos(estado.stu);
   const tipo = voo.isGround ? GROUND_EQ_TYPE : voo.eqType;
@@ -53,7 +54,7 @@ export function sugerirReparos(estado, resultado, fKey, { maximo = 3, depoisDe =
 
   const aviaoServe = (r, a, b) => (voo.isGround || Boolean(estado.av[r])) && livre(ocupacaoDo(r), a, b) && cabeNoSaldo(horasDoAviao(r), (b - a) / 60, saldo(r));
   const instrutorServe = (x, a, b, r = voo.r) => !problemasDoInstrutor(x, { mis: voo.mis, tipo, a, b, alunos: grupo.map(v => alunos.get(v.stuId)), stuKg: voo.stuKg, curso, recurso: recursoDe(r) },
-    { compromissos: x ? compromissosDo(x.id) : [], historico: x ? horasPassadas[x.id] || null : null, limites }).length;
+    { compromissos: x ? compromissosDo(x.id) : [], historico: x ? historicoDe(x.id) : null, limites }).length;
 
   // Os aviões que servem ao voo (o tipo, o "Só Parafuso" e o "Só VFR") e, com o instrutor, os em que ele voa
   const avioesPara = (a, b, x = null) => (voo.isGround
@@ -99,7 +100,7 @@ export function sugerirReparos(estado, resultado, fKey, { maximo = 3, depoisDe =
     const inicios = voo.isGround ? T.slice(0, NI) : horariosDaMissao(estado.horarios || HORARIOS_INICIAIS, voo.mis, tipo);
     const fimDoDia = fimDaMissao(voo.mis, tipo);
     const voosQueDependem = voo.isGround
-      ? outros.filter(o => grupo.some(v => v.stuId === o.stuId) && !o.isGround && doesGroundGateFlight(voo.mis, { mis: o.mis, eq: o.eqType }))
+      ? outros.filter(o => grupo.some(v => v.stuId === o.stuId) && !o.isGround && !o.trecho && doesGroundGateFlight(voo.mis, { mis: o.mis, eq: o.eqType }))
       : [];
     const limite = Math.min(fimDoDia, ...voosQueDependem.map(o => o.a));
     const alunosPodem = (a, b) => grupo.every(v => {

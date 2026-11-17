@@ -14,7 +14,7 @@ import { normalizarDetalhes, normalizarStatus } from './status.js';
 import { normalizarEscalaGravada } from './escala-gravada.js';
 import { normalizarHangar } from './hangar.js';
 import { LIMITES_DA_LEI, normalizarLimites, comHorasExternas } from './limites.js';
-import { noturnosDaVespera, comRepousoDoNoturno } from './noturno.js';
+import { noturnosDaVespera, comRepousoDoNoturno, voltasConferem } from './noturno.js';
 import { normalizarFixos, normalizarAprovacao } from './fixos.js';
 import { normalizarCriterios } from './criterios.js';
 import { normalizarCursos, normalizarCursoDoAluno } from './cursos.js';
@@ -187,8 +187,10 @@ export const ApiClient = {
     const noturnos = noturnosDaVespera(anterior, data);
     if (noturnos.length) estado.noturnosDaVespera = noturnos;
     const horasDosInstrutores = comRepousoDoNoturno(comHorasExternas(horasBase, estado.ins, data), noturnos);
-    // A escala gravada só vale no formato do motor; adulterada, a tela usa a escala calculada
-    const escala = dia ? normalizarEscalaGravada(dia.resultado) : null;
+    // A escala gravada só vale no formato do motor; adulterada, a tela usa a escala calculada. Também quando as voltas do
+    // noturno dela não conferem com os noturnos de ontem (o noturno mudou depois): a calculada é gravada na próxima alteração
+    const gravada = dia ? normalizarEscalaGravada(dia.resultado) : null;
+    const escala = gravada && voltasConferem(gravada, noturnos) ? gravada : null;
     const resultados = lidos.resultados || { situacao: [], doDia: [] };
     const indisponiveis = [...(lidos.horasBase ? [] : ['horas']), ...(lidos.resultados ? [] : ['resultados'])];
     return { estado, escala, novo: !dia, horasBase, horasDosInstrutores, resultados, indisponiveis };

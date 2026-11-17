@@ -15,6 +15,10 @@ test.describe('Noturno de dois dias', () => {
     const duracao = page.locator('#dem tr[data-k="d"][data-id="1000"] [data-f="nb"]');
     await expect(duracao).toBeDisabled();
     await expect(duracao.locator('option:checked')).toHaveText('4 h + volta');
+    // Saindo do Noturno, a missão nova começa com a duração dela (não fica com as 4 h)
+    await page.locator('#dem tr[data-k="d"][data-id="1000"] [data-f="mis"]').selectOption('Voo Local');
+    await expect(page.locator('#dem tr[data-k="d"][data-id="1000"] [data-f="nb"]')).toHaveValue('1');
+    await page.locator('#dem tr[data-k="d"][data-id="1000"] [data-f="mis"]').selectOption('Noturno');
     await irPara(page, 'age');
     await page.locator('#ag-missao').selectOption('Noturno');
     await expect(page.locator('#ag-horas')).toHaveValue('4');

@@ -3,7 +3,7 @@
 import { NOTURNO, T, NI, DAY, MIS, DEFAULT_LIM, GROUND_EQ_TYPE, GROUND_REG, GROUND_DURATION_MIN, GROUND_DURATION_H, REVISAO_H, MENOR_VOO_H, AIRCRAFT_EQ_TYPES, MISSOES_LOCAIS, LIMITE_DE_VOOS_LOCAIS, MINUTOS_DO_DIA } from './config.js';
 import { FROTA_INICIAL, matriculasDoTipo, matriculasParaOVoo, motivoDoAviao, aviaoServe, instrutorVoaNoAviao, recursoDaFrota } from './frota.js';
 import { hm, fmtH, numeroBr, duracaoHm } from './format.js';
-import { repousoAntesDaVolta } from './noturno.js';
+import { repousoAntesDaVolta, historicoDoDia } from './noturno.js';
 import { isGroundMission, doesGroundGateFlight, disponibilidadeDoAluno, rotuloDaDisponibilidade, duracaoValida, duracaoFixaDaMissao } from './rules.js';
 import { HORARIOS_INICIAIS, horariosDaMissao, periodoDoMinuto, minutoDaPreferencia, ordenarPelaPreferencia, fimDaMissao } from './horarios.js';
 import { podeFazer, descreverExigencias } from './habilitacoes.js';
@@ -290,8 +290,8 @@ export function runAllocationEngine(state, opcoes = {}) {
   // Limites da Lei do Aeronauta: as horas de voo de antes de hoje e o fim de ontem de cada instrutor, e os
   // compromissos de hoje (voo em avião conta como voo; simulador e Ground, só na jornada)
   const limites = normalizarLimites(state.limites);
-  const horasPassadas = state.horasDosInstrutores || {};
-  const historico = id => horasPassadas[id] || null;
+  // (quem volta hoje do noturno de ontem fica sem o fimAnterior: o repouso dele é um aviso, js/noturno.js)
+  const historico = historicoDoDia(state);
   const compromissos = {};
   // Aeronaves/simuladores que cada instrutor já usou no dia, na ordem em que foram escalados
   const insAircraft = {};
@@ -389,9 +389,11 @@ export function runAllocationEngine(state, opcoes = {}) {
     const a = NOTURNO.voltaInicio, b = a + NOTURNO.trechos.volta.minutos, livreAs = NOTURNO.livreAs, h = (b - a) / 60;
     const linha = { trecho: 'volta', a, b, livreAs, eqType: n.eqType };
     if (status !== 'Cancelado') {
-      (used[n.r] ||= []).push(ocupacaoDoVoo(linha));
-      (stuBusy[n.stuId] ||= []).push(ocupacaoDoVoo(linha));
-      if (x) (compromissos[x.id] ||= []).push(compromissoDoVoo(linha));
+      // A volta atrasada ocupa até o pouso novo, se for depois das 10:10, e a lei conta o voo no horário novo
+      const efetivo = intervaloEfetivo(linha, status, (state.fObs || {})[fKey]);
+      (used[n.r] ||= []).push(ocupacaoDoVoo(linha, efetivo.a, efetivo.b));
+      (stuBusy[n.stuId] ||= []).push(ocupacaoDoVoo(linha, efetivo.a, efetivo.b));
+      if (x) (compromissos[x.id] ||= []).push(compromissoDoVoo(linha, efetivo.a, efetivo.b));
       eu[n.r] = (eu[n.r] || 0) + h;
       if (x) load[x.id] = (load[x.id] || 0) + h;
     }
@@ -558,7 +560,7 @@ export function runAllocationEngine(state, opcoes = {}) {
       // Se o aluno também tem um voo dependente hoje com horário preferido, prioriza janelas que terminem antes do voo
       const dependentFlights = act.filter(other => other.stuId === stuId && doesGroundGateFlight(d.mis, other.ref));
       // O voo dependente que já está fixo é um prazo: o Ground termina antes dele
-      const prazoFixo = Math.min(Infinity, ...out.filter(o => o.stuId === stuId && o.fixo && !o.isGround && o.status !== 'Cancelado'
+      const prazoFixo = Math.min(Infinity, ...out.filter(o => o.stuId === stuId && o.fixo && !o.isGround && !o.trecho && o.status !== 'Cancelado'
         && doesGroundGateFlight(d.mis, { mis: o.mis, eq: o.eqType })).map(o => o.a));
       const earliestFlightPrefMin = Math.min(prazoFixo, dependentFlights.reduce((minT, flt) => {
         const fp1 = minutoDaPreferencia(flt.ref.p1);

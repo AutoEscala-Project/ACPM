@@ -155,7 +155,8 @@ aoMudarCampo('d', (t, { f, c, id, mid }) => {
       t.value = h;
     }
     const eraGround = isGroundMission(target.mis);
-    const tinhaPadrao = Boolean((MIS[target.mis] || {}).duracaoPadrao);
+    // Saindo de uma missão com duração padrão ou fixa (o simulador, o Noturno), a missão nova começa com a dela
+    const tinhaPadrao = Boolean((MIS[target.mis] || {}).duracaoPadrao || (MIS[target.mis] || {}).duracaoFixaH);
     target[f] = (f === 'mis' || f === 'eq') ? t.value : +t.value;
     // Missão, recurso ou horas mudados à mão: o pedido deixa de ser a missão do curso
     if (['mis', 'eq', 'nb'].includes(f)) delete target.etapa;

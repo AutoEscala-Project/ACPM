@@ -4,7 +4,7 @@
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { runAllocationEngine } from '../../js/engine.js';
-import { noturnosDaVespera, comRepousoDoNoturno, repousoAntesDaVolta } from '../../js/noturno.js';
+import { noturnosDaVespera, comRepousoDoNoturno, repousoAntesDaVolta, historicoDoDia, voltasConferem } from '../../js/noturno.js';
 import { filasDoDiaSeguinte } from '../../js/rodizio.js';
 import { normalizarLimites, LIMITES_DA_LEI } from '../../js/limites.js';
 import { normalizarLinhaGravada } from '../../js/escala-gravada.js';
@@ -17,7 +17,8 @@ const NOTURNO = { mis: 'Noturno', eq: 'C172', p1: 1050, p2: -1 };
 // Um só C172 (o PR-HAR), para ver o avião ocupado até as 10:10
 const SO_PR_HAR = apenas('C172', 'PR-HAR');
 const volta = (extra = {}) => ({ stuId: 1000, mid: 0, insId: 1, r: 'PR-HAR', eqType: 'C172', s: 'Aluno 1000', ins: 'Instrutor 01', stuKg: 70, fim: 1290, ...extra });
-const diaSeguinte = (opts, noturnos = [volta()], horas = comRepousoDoNoturno({}, noturnos)) => {
+// As horas de ontem: o noturno terminou às 21:30 (fimAnterior), como o servidor entrega, com o fim do noturno
+const diaSeguinte = (opts, noturnos = [volta()], horas = comRepousoDoNoturno({ 1: { mes: 0, semestre: 0, ano: 0, fimAnterior: 1290 } }, noturnos)) => {
   const estado = cenario({ semAeronaves: SO_PR_HAR, ...opts });
   estado.noturnosDaVespera = noturnos;
   estado.horasDosInstrutores = horas;
@@ -63,16 +64,35 @@ describe('Noturno: o dia seguinte', () => {
     assert.equal(out.length, 2);
     assert.deepEqual(al.map(a => [a.t, a.codigo, a.insId, a.m]), [['warn', 'repouso-do-noturno', 1,
       'Limite da lei: 9h00 de repouso entre o noturno de ontem (até 21:30) e o translado de volta (07:30), menos que as 12h00 da lei.']]);
-    // Sem o ajuste (fimAnterior de ontem às 21:30), o voo das 10:10 seria recusado pelo repouso
-    const semAjuste = diaSeguinte({ ins: [instrutor(1, 9)], stu: [aluno(1000, { mis: 'Voo Local', eq: 'C172', p1: 610, p2: -1 })] }, [volta()], { 1: { mes: 0, semestre: 0, ano: 0, fimAnterior: 1290 } });
+    // Sem a volta (o servidor não sabe do noturno), o voo das 10:10 seria recusado pelo repouso
+    const semAjuste = diaSeguinte({ ins: [instrutor(1, 9)], stu: [aluno(1000, { mis: 'Voo Local', eq: 'C172', p1: 610, p2: -1, jan: 'h610' })] }, [], { 1: { mes: 0, semestre: 0, ano: 0, fimAnterior: 1290 } });
     assert.deepEqual(runAllocationEngine(semAjuste).al.filter(a => a.t === 'err').map(a => a.codigo), ['limite-da-lei']);
   });
 
-  it('a volta cancelada (mau tempo em BH) não ocupa nada nem avisa', () => {
-    const estado = diaSeguinte({ ins: [instrutor(1, 9)], stu: [aluno(1000, { mis: 'Voo Local', eq: 'C172', p1: 500, p2: -1 })], fStatus: { '1000_0_2': 'Cancelado' } });
+  it('a volta cancelada (mau tempo em BH) não ocupa nada nem avisa, e o repouso volta a valer como sempre', () => {
+    // O aluno voa com outro instrutor às 08:20; o instrutor do noturno não voa de manhã (repouso desde as 21:30)
+    const estado = diaSeguinte({ ins: [instrutor(1, 9), instrutor(2, 9)], stu: [aluno(1000, { mis: 'Voo Local', eq: 'C172', p1: 500, p2: -1 })], fStatus: { '1000_0_2': 'Cancelado' } });
     const { out, al } = runAllocationEngine(estado);
-    assert.deepEqual(resumo(out).map(l => [l[1], l[2], l[6]]), [['Noturno', 450, 'volta'], ['Voo Local', 500, null]]);
+    assert.deepEqual(resumo(out).map(l => [l[1], l[2], l[4], l[6]]), [['Noturno', 450, 1, 'volta'], ['Voo Local', 500, 2, null]]);
     assert.deepEqual(al, []);
+    assert.equal(historicoDoDia(estado)(1).fimAnterior, 1290);
+    // Só o instrutor do noturno: o voo das 08:20 dele é recusado pelo repouso
+    const so = diaSeguinte({ ins: [instrutor(1, 9)], stu: [aluno(1000, { mis: 'Voo Local', eq: 'C172', p1: 500, p2: -1, jan: 'h500' })], fStatus: { '1000_0_2': 'Cancelado' } });
+    assert.deepEqual(runAllocationEngine(so).al.map(a => a.codigo), ['limite-da-lei']);
+  });
+
+  it('a volta atrasada ocupa até o pouso novo, se for depois das 10:10', () => {
+    // Nova decolagem às 09:30: pousa às 10:30, e o voo das 10:10 do mesmo aluno, instrutor e avião vai para depois
+    const estado = diaSeguinte({ ins: [instrutor(1, 9)], stu: [aluno(1000, { mis: 'Voo Local', eq: 'C172', p1: 610, p2: -1 })], fStatus: { '1000_0_2': 'Atrasado' } });
+    estado.fObs = { '1000_0_2': { novoInicio: 570 } };
+    const voo = runAllocationEngine(estado).out.find(o => !o.trecho);
+    assert.ok(voo.a >= 630, `começou às ${voo.a}`);
+  });
+
+  it('o Ground C172 do aluno que volta de BH vai depois das 10:10 (a volta não é o voo que o Ground precede)', () => {
+    const estado = diaSeguinte({ ins: [instrutor(1, 9)], stu: [aluno(1000, { mis: 'Ground C172', eq: 'Sala Ground', nb: 1.5, p1: 500, p2: -1 })] });
+    const { out, al } = runAllocationEngine(estado);
+    assert.deepEqual([al.filter(a => a.t === 'err'), out.find(o => o.isGround).a >= 610], [[], true]);
   });
 
   it('a divisão das horas e a compactação não mexem na volta; ela conta 1 h na revisão', () => {
@@ -113,9 +133,20 @@ describe('Noturno: a véspera (js/noturno.js)', () => {
     assert.equal(repousoAntesDaVolta(n.fim, normalizarLimites()), 1440 - 1350 + 450 - 30);
   });
 
-  it('o instrutor que volta de BH fica sem fimAnterior e com o fim do noturno', () => {
-    assert.deepEqual(comRepousoDoNoturno({ 1: { mes: 10, semestre: 20, ano: 30, fimAnterior: 1290 }, 2: { mes: 1, semestre: 1, ano: 1, fimAnterior: 1000 } }, [volta()]),
-      { 1: { mes: 10, semestre: 20, ano: 30, fimAnterior: null, fimDoNoturno: 1290 }, 2: { mes: 1, semestre: 1, ano: 1, fimAnterior: 1000 } });
+  it('o instrutor que volta de BH guarda o fim do noturno; no dia, sem o fimAnterior, menos com a volta cancelada', () => {
+    const horas = comRepousoDoNoturno({ 1: { mes: 10, semestre: 20, ano: 30, fimAnterior: 1290 }, 2: { mes: 1, semestre: 1, ano: 1, fimAnterior: 1000 } }, [volta()]);
+    assert.deepEqual(horas, { 1: { mes: 10, semestre: 20, ano: 30, fimAnterior: 1290, fimDoNoturno: 1290 }, 2: { mes: 1, semestre: 1, ano: 1, fimAnterior: 1000 } });
+    const estado = { horasDosInstrutores: horas, noturnosDaVespera: [volta()], fStatus: {} };
+    assert.deepEqual([historicoDoDia(estado)(1).fimAnterior, historicoDoDia(estado)(2).fimAnterior, historicoDoDia(estado)(9)], [null, 1000, null]);
+    assert.equal(historicoDoDia({ ...estado, fStatus: { '1000_0_2': 'Cancelado' } })(1).fimAnterior, 1290);
+  });
+
+  it('a escala gravada confere com os noturnos de ontem só com as mesmas voltas', () => {
+    const escala = { out: [{ fKey: '1000_0_2', trecho: 'volta', stuId: 1000, mid: 0, insId: 1, r: 'PR-HAR' }, { fKey: '1001_0_1', stuId: 1001 }] };
+    assert.equal(voltasConferem(escala, [volta()]), true);
+    assert.equal(voltasConferem(escala, []), false, 'o noturno de ontem foi cancelado depois');
+    assert.equal(voltasConferem({ out: [] }, [volta()]), false, 'o noturno de ontem entrou depois');
+    assert.equal(voltasConferem(escala, [volta({ insId: 2 })]), false, 'o instrutor do noturno mudou');
   });
 });
 
@@ -146,12 +177,16 @@ describe('Noturno: abrir o dia seguinte (ApiClient)', () => {
     await ApiClient.salvarDia('2026-11-10', estado, runAllocationEngine(estado));
     const lido = await ApiClient.carregarDia('2026-11-11');
     assert.deepEqual(lido.estado.noturnosDaVespera.map(n => [n.stuId, n.insId, n.fim]), [[1000, 1, 1290]]);
-    assert.deepEqual(lido.horasDosInstrutores[1], { mes: 4, semestre: 4, ano: 4, fimAnterior: null, fimDoNoturno: 1290 });
+    assert.deepEqual(lido.horasDosInstrutores[1], { mes: 4, semestre: 4, ano: 4, fimAnterior: 1290, fimDoNoturno: 1290 });
     const { out, al } = runAllocationEngine({ ...lido.estado, horasDosInstrutores: lido.horasDosInstrutores });
     assert.deepEqual(out.filter(o => o.trecho).map(o => [o.fKey, o.a, o.b, o.livreAs]), [['1000_0_2', 450, 510, 610]]);
     assert.deepEqual(al.map(a => a.codigo), ['repouso-do-noturno']);
-    // Dois dias depois, nada volta (a véspera não teve noturno)
-    await ApiClient.salvarDia('2026-11-11', lido.estado, runAllocationEngine(lido.estado));
-    assert.equal((await ApiClient.carregarDia('2026-11-12')).estado.noturnosDaVespera, undefined);
+    // A escala do dia seguinte gravada fica; se o noturno de ontem é cancelado depois, ela não vale mais (é calculada)
+    await ApiClient.salvarDia('2026-11-11', lido.estado, runAllocationEngine({ ...lido.estado, horasDosInstrutores: lido.horasDosInstrutores }));
+    assert.ok((await ApiClient.carregarDia('2026-11-11')).escala);
+    const ontem = (await ApiClient.backend.ler('dia:2026-11-10'));
+    await ApiClient.backend.gravar('dia:2026-11-10', { ...ontem, fStatus: { '1000_0_1': 'Cancelado' } });
+    const depois = await ApiClient.carregarDia('2026-11-11');
+    assert.deepEqual([depois.escala, depois.estado.noturnosDaVespera], [null, undefined]);
   });
 });

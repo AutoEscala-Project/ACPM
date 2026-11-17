@@ -7,6 +7,7 @@
 // "Automático" devolve a escolha ao app.
 import { GROUND_EQ_TYPE } from './config.js';
 import { podeFazer } from './habilitacoes.js';
+import { historicoDoDia } from './noturno.js';
 import { FROTA_INICIAL, recursoDaFrota } from './frota.js';
 import { normalizarLimites } from './limites.js';
 import { problemasDoInstrutor } from './viabilidade.js';
@@ -54,13 +55,13 @@ export function instrutoresDoVoo(estado, resultado, fKey) {
   const outros = umPorUnidade(resultado.out.filter(o => !chaves.has(o.fKey) && statusDoVoo(o, estado.fStatus) !== 'Cancelado'));
   const alunos = new Map(estado.stu.map(s => [s.id, s]));
   const limites = normalizarLimites(estado.limites);
-  const horas = estado.horasDosInstrutores || {};
+  const historicoDe = historicoDoDia(estado);
   const opcoes = estado.ins.map(x => {
     // Com o curso do aluno (o noturno do PC é IFR) e o avião do voo (a habilitação própria dele)
     const contexto = { curso: (alunos.get(voo.stuId) || {}).curso, recurso: voo.isGround ? null : recursoDaFrota(Array.isArray(estado.frota) ? estado.frota : FROTA_INICIAL, voo.r) };
     const [problema] = problemasDoInstrutor(x, { mis: voo.mis, tipo: voo.isGround ? GROUND_EQ_TYPE : voo.eqType, a: voo.a, b: voo.b, alunos: grupo.map(o => alunos.get(o.stuId)), stuKg: voo.stuKg, ...contexto }, {
       compromissos: outros.filter(o => o.insId === x.id).map(o => compromissoDoVoo(o)),
-      historico: horas[x.id] || null, limites, peso: voo.isGround ? null : {}
+      historico: historicoDe(x.id), limites, peso: voo.isGround ? null : {}
     });
     if (x.id === voo.insId || !problema) return { id: x.id, nm: x.nm, nota: '' };
     const comQuem = problema.codigo === 'instrutor-ocupado' && outros.find(o => o.insId === x.id && o.a < voo.b && o.b > voo.a);
