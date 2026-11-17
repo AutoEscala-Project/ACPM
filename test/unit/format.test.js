@@ -2,6 +2,17 @@ import { describe, it, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { hm, fmtH, fmtDurLabel, WLB, pad, esc, opts, amanhaISO, hojeISO, somarDias, fimDoMes, rotuloDaData, nomeLimpo, LIMITE_DO_NOME, dataIsoValida, minutoDoDia, lerHoras, numeroBr, duracaoHm } from '../../js/format.js';
 
+// O relógio no fuso do aeroclube (São Paulo, UTC−3), qualquer que seja o da máquina (o CI roda em UTC): das 21:00 à
+// meia-noite, a data local já não é a do UTC. O fuso de antes volta no fim
+function emSaoPaulo(fn) {
+  const antes = process.env.TZ;
+  process.env.TZ = 'America/Sao_Paulo';
+  try { return fn(); } finally {
+    if (antes === undefined) delete process.env.TZ;
+    else process.env.TZ = antes;
+  }
+}
+
 describe('Formatação', () => {
   it('minutos do dia em HH:MM', () => {
     assert.deepEqual([0, 390, 1050, 1439].map(hm), ['00:00', '06:30', '17:30', '23:59']);
@@ -53,8 +64,11 @@ describe('Formatação', () => {
   });
 
   it('datas AAAA-MM-DD: amanhã, dias depois e antes, e fim do mês (com virada de mês, ano e bissexto)', () => {
-    mock.timers.enable({ apis: ['Date'], now: new Date('2026-12-31T15:00:00Z') });
-    try { assert.equal(amanhaISO(), '2027-01-01'); } finally { mock.timers.reset(); }
+    // 31/12/2026, 23:00 em São Paulo (no UTC, já 01/01): amanhã é 01/01, pelo relógio local
+    emSaoPaulo(() => {
+      mock.timers.enable({ apis: ['Date'], now: new Date('2027-01-01T02:00:00Z') });
+      try { assert.equal(amanhaISO(), '2027-01-01'); } finally { mock.timers.reset(); }
+    });
     assert.equal(somarDias('2026-11-11', -6), '2026-11-05');
     assert.equal(somarDias('2026-03-02', -2), '2026-02-28');
     assert.equal(somarDias('2027-01-01', -1), '2026-12-31');
@@ -65,8 +79,11 @@ describe('Formatação', () => {
   });
 
   it('hoje no fuso local', () => {
-    mock.timers.enable({ apis: ['Date'], now: new Date('2026-12-31T15:00:00Z') });
-    try { assert.equal(hojeISO(), '2026-12-31'); } finally { mock.timers.reset(); }
+    // 31/12/2026, 23:00 em São Paulo, quando no UTC já é 01/01/2027
+    emSaoPaulo(() => {
+      mock.timers.enable({ apis: ['Date'], now: new Date('2027-01-01T02:00:00Z') });
+      try { assert.equal(hojeISO(), '2026-12-31'); } finally { mock.timers.reset(); }
+    });
   });
 
   it('rótulo da data em uso: dia da semana, dia/mês (com o ano, se for outro) e hoje, amanhã ou ontem', () => {
@@ -80,8 +97,11 @@ describe('Formatação', () => {
   });
 
   it('o minuto do dia no relógio local', () => {
-    assert.equal(minutoDoDia(new Date(2026, 10, 11, 12, 30)), 750);
-    assert.equal(minutoDoDia(new Date(2026, 10, 11, 0, 0)), 0);
-    assert.equal(minutoDoDia(new Date(2026, 10, 11, 23, 59)), 1439);
+    // Em São Paulo, 12:30 no relógio local é 15:30 no UTC
+    emSaoPaulo(() => {
+      assert.equal(minutoDoDia(new Date(2026, 10, 11, 12, 30)), 750);
+      assert.equal(minutoDoDia(new Date(2026, 10, 11, 0, 0)), 0);
+      assert.equal(minutoDoDia(new Date(2026, 10, 11, 23, 59)), 1439);
+    });
   });
 });

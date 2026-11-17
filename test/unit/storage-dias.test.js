@@ -105,14 +105,6 @@ describe('Carregar e salvar uma data', () => {
     assert.deepEqual(novo.fStatus, {});
     assert.deepEqual(backend.gravacoes, []);
   });
-
-  it('somente leitura: nada é gravado', async () => {
-    ApiClient.readOnly = true;
-    assert.equal(await ApiClient.salvarDia('2026-11-11', ApiClient.normalizeAndMigrateState(estadoSintetico()), null), false);
-    assert.equal(await ApiClient.registrarHistorico('2026-11-11', { tipo: 'mod', descricao: 'x' }), null);
-    assert.deepEqual(backend.gravacoes, []);
-    assert.deepEqual(backend.historico, []);
-  });
 });
 describe('Dados lidos à parte', () => {
   it('sem as horas dos instrutores ou os resultados dos cursos, a data abre e diz o que ficou indisponível', async () => {
@@ -165,10 +157,12 @@ describe('Horas até a revisão de 50 horas', () => {
 
 describe('Filas do rodízio', () => {
   it('ficam no dia; a nova data começa com quem voou na categoria no fim da fila', async () => {
-    const estado = ApiClient.normalizeAndMigrateState({ ...estadoSintetico(), ins: [instrutor(1, 9), instrutor(2, 9)], filas: { c172: [1, 2] } });
+    // A fila gravada não é a ordem do cadastro (1, 2, 3), que o estado montaria sozinho se o dia não a guardasse
+    const ins = [instrutor(1, 9), instrutor(2, 9), instrutor(3, 9)];
+    const estado = ApiClient.normalizeAndMigrateState({ ...estadoSintetico(), ins, filas: { c172: [3, 1, 2] } });
     await ApiClient.salvarDia('2026-11-11', estado, { out: [{ fKey: 'a', insId: 1, mis: 'Voo Local', eqType: 'C172', h: 1, r: 'PP-ABP' }], al: [], tot: 1 });
-    assert.deepEqual((await ApiClient.carregarDia('2026-11-11')).estado.filas.c172, [1, 2]);
-    assert.deepEqual((await ApiClient.carregarDia('2026-11-12')).estado.filas.c172, [2, 1]);
+    assert.deepEqual((await ApiClient.carregarDia('2026-11-11')).estado.filas.c172, [3, 1, 2]);
+    assert.deepEqual((await ApiClient.carregarDia('2026-11-12')).estado.filas.c172, [3, 2, 1]);
   });
 });
 

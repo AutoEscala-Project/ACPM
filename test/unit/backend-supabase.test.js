@@ -49,7 +49,7 @@ function clienteFalso(documentos = {}, { atraso = 0, dias = {} } = {}) {
     rpcs,
     chamadas,
     falharProximas(n) { falhasDeRede = n; },
-    // As próximas gravações recebem este erro do servidor (ex.: { code: '42501' } com status 403)
+    // As próximas gravações (e registros no histórico) recebem este erro (ex.: { code: '42501' } com status 403)
     recusarProximas(n, erro, status) { recusas = Array.from({ length: n }, () => ({ erro, status })); },
     contas,
     atualizacoes,
@@ -96,7 +96,7 @@ function clienteFalso(documentos = {}, { atraso = 0, dias = {} } = {}) {
       if (nome === 'salvar_documento' || nome === 'salvar_dia') rpcs.push(structuredClone(args));
       await espera(atraso);
       if (falhasDeRede > 0) { falhasDeRede--; return { data: null, error: { message: 'Failed to fetch', code: '' }, status: 0 }; }
-      if (recusas.length && (nome === 'salvar_documento' || nome === 'salvar_dia')) {
+      if (recusas.length && ['salvar_documento', 'salvar_dia', 'registrar_historico'].includes(nome)) {
         const { erro, status } = recusas.shift();
         return { data: null, error: erro, status };
       }
@@ -193,10 +193,20 @@ describe('Backend Supabase', () => {
   });
 
   it('documentos diferentes são gravados de forma independente', async () => {
-    const cliente = clienteFalso({}, { atraso: 10 });
+    const cliente = clienteFalso();
     const backend = criarBackendSupabase(cliente);
     await Promise.all([backend.ler('estado'), backend.ler('escala')]);
-    await Promise.all([backend.gravar('estado', 1), backend.gravar('escala', 2)]);
+    // A gravação do estado fica presa no servidor; a da escala não espera por ela
+    let soltar;
+    const rpc = cliente.rpc;
+    cliente.rpc = async (nome, args) => {
+      if (args.p_chave === 'estado') await new Promise(r => { soltar = r; });
+      return rpc(nome, args);
+    };
+    const estado = backend.gravar('estado', 1);
+    assert.equal(await Promise.race([backend.gravar('escala', 2), espera(50).then(() => 'esperou o estado')]), true);
+    soltar();
+    assert.equal(await estado, true);
     assert.deepEqual([cliente.banco.get('estado').versao, cliente.banco.get('escala').versao], [1, 1]);
   });
 
@@ -258,22 +268,24 @@ describe('Backend Supabase', () => {
     assert.equal(backend.temGravacoesPendentes(), false);
   });
 
-  it('sessão expirada (401): a alteração espera o novo login (um pedido só) e é gravada depois, com o histórico', async () => {
+  it('sessão expirada (401): a alteração e o histórico esperam o novo login e são gravados depois', async () => {
     const cliente = clienteFalso();
     const pedidos = [];
     let renovar;
     const renovada = new Promise(r => { renovar = r; });
     const backend = criarBackendSupabase(cliente, { aoSessaoExpirada: () => { pedidos.push('login'); return renovada; }, esperar: () => espera(1) });
     await backend.ler('estado');
-    cliente.recusarProximas(2, { code: 'PGRST301', message: 'JWT expired' }, 401);
+    cliente.recusarProximas(3, { code: 'PGRST301', message: 'JWT expired' }, 401);
     const gravacao = backend.gravar('estado', 'A');
     const outra = backend.gravar('dia:2026-11-11', { v: 1 });
+    const registro = backend.registrar({ data: '2026-11-11', tipo: 'exc', descricao: 'PR-BTB: Manutenção' });
     await espera(5);
-    assert.deepEqual(pedidos, ['login', 'login'], 'cada gravação pede (o app mostra um diálogo só)');
+    assert.deepEqual(pedidos, ['login', 'login', 'login'], 'cada gravação pede (o app mostra um diálogo só)');
     assert.equal(backend.temGravacoesPendentes(), true);
     renovar();
-    assert.deepEqual([await gravacao, await outra], [true, true]);
+    assert.deepEqual([await gravacao, await outra, await registro], [true, true, 1]);
     assert.deepEqual(cliente.banco.get('estado'), { conteudo: 'A', versao: 1 });
+    assert.deepEqual(cliente.historico.map(h => h.descricao), ['PR-BTB: Manutenção']);
   });
 
   it('recusa definitiva (sem permissão, dado inválido): avisa e não tenta de novo', async () => {
@@ -392,9 +404,11 @@ describe('Backend Supabase: escala por data e histórico', () => {
     await backend.ler('dia:2026-11-11');
     const gravacoes = [backend.gravar('cadastro', { v: 2 }), backend.gravar('dia:2026-11-11', { v: 2 })];
     assert.deepEqual(await backend.ler('cadastro'), { v: 2 });
-    assert.deepEqual(await backend.diaAnterior('2026-11-12'), { data: '2026-11-11', conteudo: { v: 2 } });
+    // Uma gravação nova antes de cada leitura seguinte: a leitura anterior já esperou as que estavam em andamento
     backend.gravar('dia:2026-11-11', { v: 3 });
-    assert.deepEqual((await backend.listarDias('2026-11-01', '2026-11-30')).map(d => d.conteudo), [{ v: 3 }]);
+    assert.deepEqual(await backend.diaAnterior('2026-11-12'), { data: '2026-11-11', conteudo: { v: 3 } });
+    backend.gravar('dia:2026-11-11', { v: 4 });
+    assert.deepEqual((await backend.listarDias('2026-11-01', '2026-11-30')).map(d => d.conteudo), [{ v: 4 }]);
     assert.deepEqual(await Promise.all(gravacoes), [true, true]);
     assert.equal(await backend.gravar('cadastro', { v: 4 }), true, 'a versão lida continua a mais recente');
   });

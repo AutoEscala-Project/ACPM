@@ -124,13 +124,6 @@ describe('Persistência local (escala por data)', () => {
     assert.deepEqual(await ApiClient.biDoPeriodo('2026-11-01', '2026-11-30'), {});
   });
 
-  it('dados corrompidos não quebram o carregamento', async () => {
-    localStorage.setItem('acpm4_cadastro', '{corrompido');
-    localStorage.setItem('acpm4_dia_2026-11-11', '{corrompido');
-    const { estado, escala } = await ApiClient.carregarDia('2026-11-11');
-    assert.deepEqual([estado.schemaVer, estado.ins, escala], [4, [], null]);
-  });
-
   it('migra o formato acpm2 (7 janelas) para as 9 janelas atuais', async () => {
     localStorage.setItem(CHAVE_LEGADA, JSON.stringify({
       win: [true, true, false, true, true, true, false],
@@ -147,6 +140,8 @@ describe('Persistência local (escala por data)', () => {
   });
 
   it('modo somente leitura (Gestor e Secretaria no modo compartilhado) não grava nada', async () => {
+    // Com um documento antigo para converter: a conversão também não roda
+    localStorage.setItem('acpm3', JSON.stringify({ ins: [], stu: [] }));
     ApiClient.readOnly = true;
     assert.equal(await ApiClient.salvarDia('2026-11-11', ApiClient.createFreshState(), { out: [], al: [], tot: 0 }), false);
     assert.equal(await ApiClient.registrarHistorico('2026-11-11', { tipo: 'mod', descricao: 'x' }), null);

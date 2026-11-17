@@ -61,7 +61,8 @@ describe('Separar e juntar', () => {
     const { cadastro, dia } = separar(estado);
     assert.deepEqual(cadastro.limites.vooMesH, 90);
     assert.deepEqual(cadastro.ins[0].horasExternas, { '2026-11': 12, '2026-00': 300 });
-    assert.equal(JSON.stringify(dia).includes('horasDosInstrutores'), false);
+    // As horas passadas não vão nem para o cadastro nem para o dia: as duas partes são gravadas
+    assert.equal(JSON.stringify({ cadastro, dia }).includes('horasDosInstrutores'), false);
     const junto = juntar(cadastro, dia);
     assert.deepEqual([junto.limites.vooMesH, junto.ins[0].horasExternas], [90, { '2026-11': 12, '2026-00': 300 }]);
   });
