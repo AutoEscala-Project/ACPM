@@ -53,6 +53,37 @@ describe('Voos: janelas preferidas e encaixe', () => {
     assert.deepEqual(out.map(o => [o.w, o.a, o.b, o.tag]), [[4, 760, 1000, 'Próximo livre']]);
   });
 
+  it('o simulador não depende da luz do dia: pode terminar depois das 17:30', () => {
+    const sim = { mis: 'Simulador', eq: 'Sim. Mono', nb: 1.5, p1: 980, p2: -1 };
+    const { out, al } = alocar({ ins: [instrutor(1, 9)], stu: [aluno(1000, sim)] });
+    assert.deepEqual([out.map(o => [o.eqType, hm(o.a), hm(o.b), o.tag]), al], [[['Sim. Mono', '16:20', '17:50', 'Pref. 1']], []]);
+  });
+
+  it('o simulador que passa das 17:30 precisa do instrutor disponível na noite', () => {
+    const sim = { mis: 'Simulador', eq: 'Sim. Mono', nb: 1.5, p1: 980, p2: -1 };
+    const semNoite = Array(9).fill(true).map((v, k) => k !== 8);
+    const { out } = alocar({ ins: [instrutor(1, 9, { aw: semNoite })], stu: [aluno(1000, sim)] });
+    assert.deepEqual(out.map(o => [hm(o.a), hm(o.b), o.tag]), [['14:30', '16:00', 'Próximo livre']]);
+  });
+
+  it('com o Noturno do aluno no dia (só às 17:30), o simulador e a aula dele terminam antes', () => {
+    const noturno = missaoExtra(1, { mis: 'Noturno', eq: 'C172', nb: 1 });
+    const sim = { mis: 'Simulador', eq: 'Sim. Mono', nb: 1.5, p1: 980, p2: -1, pr: 5 };
+    const comSim = alocar({ ins: [instrutor(1, 9), instrutor(2, 9)], stu: [aluno(1000, sim, { extra: [noturno] })] });
+    assert.deepEqual(comSim.out.map(o => [o.mis, hm(o.a), hm(o.b)]), [['Simulador', '14:30', '16:00'], ['Noturno', '17:30', '18:30']]);
+    const comAula = alocar({ ins: [instrutor(1, 9), instrutor(2, 9)], stu: [aluno(1000, GROUND_C152, { extra: [noturno] })], janelasOff: [0, 1, 2, 3, 4, 5] });
+    assert.deepEqual(comAula.out.map(o => [o.mis, hm(o.a), hm(o.b)]), [['Ground C152', '14:30', '16:00'], ['Noturno', '17:30', '18:30']]);
+  });
+
+  it('com o Noturno no dia, o aluno não entra na turma de Ground das 16:20 (termina depois das 17:30)', () => {
+    const noturno = missaoExtra(1, { mis: 'Noturno', eq: 'C172', nb: 1 });
+    const { out } = alocar({
+      ins: [instrutor(1, 9), instrutor(2, 9)],
+      stu: [aluno(1000, { ...GROUND_C152, p1: 980, p2: -1, pr: 5 }), aluno(1001, { ...GROUND_C152, p1: 980, p2: -1 }, { extra: [noturno] })]
+    });
+    assert.deepEqual(out.filter(o => o.stuId === 1001).map(o => [o.mis, hm(o.a), hm(o.b)]), [['Ground C152', '14:30', '16:00'], ['Noturno', '17:30', '18:30']]);
+  });
+
   it('a duração fracionada: 1,2 h são 72 minutos', () => {
     const { out } = alocar({ ins: [instrutor(1, 9)], stu: [aluno(1000, { nb: 1.2, p1: 390, p2: -1 })] });
     assert.deepEqual([out[0].a, out[0].b, out[0].h], [390, 462, 1.2]);
@@ -514,9 +545,14 @@ describe('Ground School', () => {
     assert.deepEqual([out.find(o => o.stuId === 1002).a, out.find(o => o.stuId === 1002).baseTag], [390, 'Pref. 1']);
   });
 
-  it('não termina depois das 17:30', () => {
-    const { al } = alocar({ ins: [instrutor(1, 1)], stu: [aluno(1000, GROUND_C152)], janelasOff: [0, 1, 2, 3, 4, 5, 6] });
-    assert.deepEqual(al, [{ t: 'err', s: 'Aluno 1000', m: 'Rejeitado: nenhum período aberto comporta 01h30 de Ground até as 17:30.', codigo: 'sem-horario' }]);
+  it('a aula não depende da luz do dia: a das 16:20 termina às 17:50', () => {
+    const { out, al } = alocar({ ins: [instrutor(1, 1)], stu: [aluno(1000, GROUND_C152)], janelasOff: [0, 1, 2, 3, 4, 5, 6] });
+    assert.deepEqual([out.map(o => [hm(o.a), hm(o.b)]), al], [[['16:20', '17:50']], []]);
+  });
+
+  it('sem nenhum período do dia aberto, não há horário para a aula', () => {
+    const { al } = alocar({ ins: [instrutor(1, 1)], stu: [aluno(1000, GROUND_C152)], janelasOff: [0, 1, 2, 3, 4, 5, 6, 7] });
+    assert.deepEqual(al, [{ t: 'err', s: 'Aluno 1000', m: 'Rejeitado: nenhum período aberto comporta 01h30 de Ground.', codigo: 'sem-horario' }]);
   });
 });
 
