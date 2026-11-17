@@ -59,6 +59,11 @@ export function proximoMid(estado, aluno) {
   return Math.max(0, ...doAluno, ...doDia.filter(Number.isInteger)) + 1;
 }
 
+// As horas com que um pedido da missão começa: o Ground, 01h30; a missão com duração padrão (o simulador, 2 h), a dela;
+// as outras, 1 h
+export const duracaoPadraoDaMissao = mis => (isGroundMission(mis) ? GROUND_DURATION_H
+  : Object.hasOwn(MIS, mis) && MIS[mis].duracaoPadrao ? MIS[mis].duracaoPadrao : 1);
+
 export const blank = () => ({ fly: false, mis: 'Voo Local', eq: 'C152', p1: T[1], p2: T[2], nb: 1, ss: 1, pr: 3 });
 
 export function migrateLegacyMissionName(mis) {

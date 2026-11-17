@@ -44,7 +44,7 @@ export const singleDemandRowHTML = (stu, d, mid = 0) => {
     ? `<div class="stu-cell"><span class="sm">↳ missão extra</span>${etapa}<button class="x edit-only" data-act="del-mis" data-id="${stu.id}" data-mid="${mid}" aria-label="Tirar a missão extra de ${esc(stu.nm)}" title="Tirar esta missão extra">✕</button></div>`
     : `<div class="stu-cell"><span>${esc(stu.nm)}</span>${etapa}<button class="btn-add-mis edit-only" data-act="add-mis" data-id="${stu.id}" title="Outra missão para este aluno no mesmo dia" aria-label="Mais uma missão para ${esc(stu.nm)}">+ missão</button></div>`;
   const soParafuso = d.mis === 'Parafuso' && d.eq === 'C152' ? matriculasDoTipo(S.frota || [], 'C152', { parafuso: true }) : [];
-  const exige = `Exige ${descreverExigencias(d.mis, isGnd ? GROUND_EQ_TYPE : d.eq)}${soParafuso.length ? ` (no ${soParafuso.join(' ou ')})` : ''}`;
+  const exige = `Exige ${descreverExigencias(d.mis, isGnd ? GROUND_EQ_TYPE : d.eq, { curso: stu.curso })}${soParafuso.length ? ` (no ${soParafuso.join(' ou ')})` : ''}`;
   const de = ` de ${esc(stu.nm)}`;
 
   const nbOpts = isGnd

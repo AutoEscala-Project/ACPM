@@ -25,6 +25,10 @@ export const SIM_EQ_TYPES = ['Sim. Mono', 'Sim. Multi'];
 export const AIRCRAFT_EQ_TYPES = ['C152', 'C172', 'PA-34'];
 export const ALL_EQ_TYPES = [...Object.keys(EQ), GROUND_EQ_TYPE];
 export const ACROBAT_REG = 'PR-JPL'; // Exclusivo para missão de Parafuso
+// Atributos dos aviões da frota inicial (js/frota.js): o PR-CPL não é homologado IFR (só voa VFR) e o PR-VOM exige do
+// instrutor uma habilitação própria (a habilitação de multimotor não basta)
+export const SO_VFR_INICIAL = ['PR-CPL'];
+export const HABILITACAO_PROPRIA_INICIAL = ['PR-VOM'];
 
 /**
  * Fases / Missões do CIAC (incluindo Ground School de 01h30 e Missões de Voo/Simulador). Quem pode ministrar cada
@@ -41,25 +45,30 @@ export const ACROBAT_REG = 'PR-JPL'; // Exclusivo para missão de Parafuso
  * - Voos de cheque: PP e PC MNTE VFR (C152 ou C172), PC MNTE IFR (C172), PC MLTE VFR e IFR (PA-34), com o
  *     checador com as três marcas do cheque (o curso, o motor e as regras)
  */
+// Cada missão: o equipamento padrão (defEq) e os permitidos (eq); regras: 'IFR' quando o voo é IFR (sem o campo, VFR);
+// porCurso: o que muda com o curso do aluno (as regras e as habilitações a mais do instrutor); duracaoPadrao: as horas
+// com que o pedido começa (sem o campo, 1 h). As exigências do voo saem daqui (js/frota.js e js/habilitacoes.js)
 export const MIS = {
   'Ground C152':      { defEq: GROUND_EQ_TYPE, eq: [GROUND_EQ_TYPE], isGround: true, gatesEq: 'C152' },
   'Ground C172':      { defEq: GROUND_EQ_TYPE, eq: [GROUND_EQ_TYPE], isGround: true, gatesEq: 'C172' },
   'Ground PA-34':     { defEq: GROUND_EQ_TYPE, eq: [GROUND_EQ_TYPE], isGround: true, gatesEq: 'PA-34' },
   'Ground Navegação': { defEq: GROUND_EQ_TYPE, eq: [GROUND_EQ_TYPE], isGround: true, gatesMis: 'Navegação' },
-  'Simulador':        { defEq: 'Sim. Mono',    eq: SIM_EQ_TYPES },
+  // A sessão de simulador tem 2 h por padrão (a duração que o pedido e a agenda começam)
+  'Simulador':        { defEq: 'Sim. Mono',    eq: SIM_EQ_TYPES, duracaoPadrao: 2 },
   'Voo Local':        { defEq: 'C152',         eq: AIRCRAFT_EQ_TYPES },
   'TGL (TMA)':        { defEq: 'C152',         eq: AIRCRAFT_EQ_TYPES },
   'Navegação':        { defEq: 'C152',         eq: AIRCRAFT_EQ_TYPES },
   'Voo Solo':         { defEq: 'C152',         eq: AIRCRAFT_EQ_TYPES },
   'Parafuso':         { defEq: 'C152',         eq: AIRCRAFT_EQ_TYPES },
-  'IFR':              { defEq: 'C172',         eq: ['C172', 'PA-34'] },
-  'Noturno':          { defEq: 'C172',         eq: ['C172'] },
+  'IFR':              { defEq: 'C172',         eq: ['C172', 'PA-34'], regras: 'IFR' },
+  // O noturno do PP é VFR; o do PC é IFR: o avião homologado IFR e o instrutor com a habilitação IFR
+  'Noturno':          { defEq: 'C172',         eq: ['C172'], porCurso: { PC: { regras: 'IFR', habilitacoes: ['ifr'] } } },
   'Multimotor':       { defEq: 'PA-34',        eq: ['PA-34'] },
   'Cheque PP':          { defEq: 'C152',  eq: ['C152', 'C172'] },
   'Cheque PC MNTE VFR': { defEq: 'C152',  eq: ['C152', 'C172'] },
-  'Cheque PC MNTE IFR': { defEq: 'C172',  eq: ['C172'] },
+  'Cheque PC MNTE IFR': { defEq: 'C172',  eq: ['C172'], regras: 'IFR' },
   'Cheque PC MLTE VFR': { defEq: 'PA-34', eq: ['PA-34'] },
-  'Cheque PC MLTE IFR': { defEq: 'PA-34', eq: ['PA-34'] }
+  'Cheque PC MLTE IFR': { defEq: 'PA-34', eq: ['PA-34'], regras: 'IFR' }
 };
 
 // Revisão obrigatória dos aviões a cada 50 horas de voo (o avião para quando não tem saldo para mais 1 h)

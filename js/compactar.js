@@ -9,7 +9,7 @@
 // piora. Ficam como estão os voos fixos e os que já têm status (Atrasado, Em Voo, Pousou, Cancelado), o instrutor dos
 // voos do rodízio, o instrutor escolhido pelo operador e o do “Priorizar com”, o Noturno, o Parafuso no C152 e o horário das turmas de Ground.
 import { AIRCRAFT_EQ_TYPES, GROUND_EQ_TYPE, PESOS_DA_COMPACTACAO, LIMITES_DA_COMPACTACAO, MISSOES_LOCAIS, LIMITE_DE_VOOS_LOCAIS } from './config.js';
-import { FROTA_INICIAL, matriculasDoTipo } from './frota.js';
+import { FROTA_INICIAL, matriculasDoTipo, aviaoServe, recursoDaFrota } from './frota.js';
 import { categoriaDoRodizio } from './rodizio.js';
 import { livre, cabeNoSaldo, folgaAte, problemasDoInstrutor } from './viabilidade.js';
 import { combustivelDoVoo } from './combustivel.js';
@@ -132,6 +132,8 @@ export function compactar(out, state, { saldo = () => Infinity, posicao = () => 
   const custoAtualDoAviao = r => (custosDosAvioes.has(r) ? custosDosAvioes.get(r)
     : custosDosAvioes.set(r, custoDoAviao(intervalosDe(doRecurso.get(r), []), pesos)).get(r));
 
+  // Os requisitos do voo da unidade (a missão, o tipo e o curso do aluno: o voo IFR só no avião homologado IFR)
+  const vooDa = u => ({ mis: u.mis, eq: u.tipo, curso: (alunos.get(u.alunos[0]) || {}).curso });
   // O recurso serve: disponível, livre (sem as unidades que saem) e, se for outro, com saldo até a revisão de 50 horas
   const horasNoRecurso = (r, sem) => { let t = 0; for (const u of doRecurso.get(r) || []) if (!sem.includes(u)) t += u.h; return t; };
   const recursoServe = (u, r, a, b, sem) => Boolean(state.av[r]) && livre(intervalosDe(doRecurso.get(r), sem), a, b)
@@ -140,7 +142,7 @@ export function compactar(out, state, { saldo = () => Infinity, posicao = () => 
   // Num horário novo, o mesmo avião quando ele está livre; senão, um que já saiu com a menor folga, depois o do hangar
   function recursoPara(u, a, b) {
     if (recursoServe(u, u.r, a, b, [u])) return u.r;
-    return matriculasDoTipo(frota, u.tipo).filter(r => r !== u.r && recursoServe(u, r, a, b, [u]))
+    return matriculasDoTipo(frota, u.tipo).filter(r => r !== u.r && aviaoServe(recursoDaFrota(frota, r), vooDa(u)) && recursoServe(u, r, a, b, [u]))
       .sort((p, q) => menorPrimeiro(folga(p, a, b, [u]), folga(q, a, b, [u])) || posicao(p) - posicao(q))[0] || null;
   }
 
@@ -182,7 +184,11 @@ export function compactar(out, state, { saldo = () => Infinity, posicao = () => 
         const compromissos = !x ? [] : [...(doInstrutor.get(x.id) || [])].filter(w => !movidas.includes(w)).map(w => ({ a: w.a, b: w.b, voo: w.aviao }))
           .concat(outras.map(n => ({ a: n.a, b: n.a + n.u.dur, voo: n.u.aviao })));
         const [v] = u.voos;
-        const problemas = problemasDoInstrutor(x, { mis: u.mis, tipo: u.tipo, a, b, alunos: mudouInstrutor ? u.voos.map(o => alunos.get(o.stuId)) : [], stuKg: v.stuKg }, {
+        // Com o curso do aluno e o avião do voo: o avião com habilitação própria exige a dele do instrutor (novo ou não)
+        const problemas = problemasDoInstrutor(x, {
+          mis: u.mis, tipo: u.tipo, a, b, alunos: mudouInstrutor ? u.voos.map(o => alunos.get(o.stuId)) : [], stuKg: v.stuKg,
+          curso: vooDa(u).curso, recurso: u.isGround ? null : recursoDaFrota(frota, m.r)
+        }, {
           compromissos, historico: x ? historico(x.id) : null, limites,
           peso: mudouInstrutor ? { reducaoMaxima: v.comb ? v.comb.reduzirGal : 0, exigirPesoDoInstrutor: true } : null
         });

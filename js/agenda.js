@@ -1,7 +1,7 @@
 // Agenda de solicitações da secretaria: a regra do prazo (a mesma do servidor, no horário de São Paulo) e o pedido
 // da demanda que cada solicitação vira ao ser importada.
 import { MIS, MISSOES_LOCAIS, LIMITE_DE_VOOS_LOCAIS } from './config.js';
-import { disponibilidadeAtual, disponibilidadeDoAluno, normalizeMissionFields, proximoMid, duracaoValida } from './rules.js';
+import { disponibilidadeAtual, disponibilidadeDoAluno, normalizeMissionFields, proximoMid, duracaoValida, duracaoPadraoDaMissao } from './rules.js';
 import { horariosDaMissao, preferenciasPadrao, paraMinuto } from './horarios.js';
 import { hm, somarDias } from './format.js';
 import { normalizarCursos } from './cursos.js';
@@ -66,7 +66,7 @@ export function pedidoDaSolicitacao(solicitacao, horarios, { eq } = {}) {
   const [p1, p2] = naDisponibilidade.length ? [naDisponibilidade[0], naDisponibilidade[Math.min(1, naDisponibilidade.length - 1)]] : preferenciasPadrao(lista);
   const pedido = {
     fly: true, mis: solicitacao.missao, eq: equipamento,
-    p1, p2, nb: 1, ss: 1, pr: 3,
+    p1, p2, nb: duracaoPadraoDaMissao(solicitacao.missao), ss: 1, pr: 3,
     ...(jan ? { jan } : {})
   };
   normalizeMissionFields(pedido);

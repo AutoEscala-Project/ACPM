@@ -2,7 +2,7 @@
 // O mesmo seed sempre produz o mesmo estado, o que permite comparar a saída com os goldens gravados por
 // scripts/capturar-goldens-motor.mjs sem versionar os estados de entrada.
 import { createHash } from 'node:crypto';
-import { FROTA, JANELAS, dois } from './estado.js';
+import { FROTA, FROTA_POR_TIPO, JANELAS, dois } from './estado.js';
 import { habilitacoesDoNivel } from '../../js/habilitacoes.js';
 
 const EQUIP_MISSAO = {
@@ -114,4 +114,24 @@ export function comEscolhas(estado, seed) {
     return novo;
   });
   return { ...estado, stu };
+}
+
+// Os atributos dos recursos e os cursos dos alunos sobre um cenário, com outro gerador (os cenários de base não mudam):
+// C172 e PA-34 "Só VFR" (~25%), recursos com habilitação própria (~20%) dada a ~40% dos instrutores, e o curso de cada
+// aluno (PP, PC ou nenhum): o noturno do PC é IFR
+export function comAtributos(estado, seed) {
+  const r = mulberry32(seed * 104729 + 7);
+  const frota = Object.entries(FROTA_POR_TIPO).flatMap(([tipo, regs]) => regs.map(reg => ({
+    reg, tipo,
+    ...(reg === 'PR-JPL' ? { soParafuso: true } : {}),
+    ...(['C172', 'PA-34'].includes(tipo) && r() < 0.25 ? { soVfr: true } : {}),
+    ...(r() < 0.2 ? { habilitacaoPropria: true } : {})
+  })));
+  const proprias = frota.filter(f => f.habilitacaoPropria).map(f => `aviao:${f.reg}`);
+  const ins = estado.ins.map(x => ({ ...x, hab: [...x.hab, ...proprias.filter(() => r() < 0.4)] }));
+  const stu = estado.stu.map(s => {
+    const curso = [undefined, 'PP', 'PC'][Math.floor(r() * 3)];
+    return curso ? { ...structuredClone(s), curso } : structuredClone(s);
+  });
+  return { ...estado, frota, ins, stu };
 }

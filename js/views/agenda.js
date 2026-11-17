@@ -172,6 +172,9 @@ export function preencherHorariosDaAgenda() {
   const horas = $('#ag-horas');
   if (regra.isGround) { horas.dataset.antes = horas.dataset.antes || horas.value; horas.value = String(GROUND_DURATION_H); horas.disabled = true; }
   else if (horas.disabled) { horas.value = horas.dataset.antes || '1'; delete horas.dataset.antes; horas.disabled = false; }
+  // A missão com duração padrão (o simulador, 2 h) começa com ela; saindo dela, volta a 1 h
+  if (!regra.isGround && regra.duracaoPadrao) { horas.value = String(regra.duracaoPadrao); horas.dataset.padrao = '1'; }
+  else if (!regra.isGround && horas.dataset.padrao) { horas.value = '1'; delete horas.dataset.padrao; }
   const lista = horariosDaMissao(S.horarios, missao, regra.defEq).map(hm);
   const atual = $('#ag-horario').value;
   $('#ag-horario').innerHTML = opts(lista.map(h => [h, h]), lista.includes(atual) ? atual : lista[0]);

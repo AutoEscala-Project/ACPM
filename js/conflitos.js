@@ -14,6 +14,7 @@ export const GRUPO_DO_CONFLITO = {
   'aviao-indisponivel': 'aviao',
   'aviao-ocupado': 'aviao',
   'so-parafuso': 'aviao',
+  'so-vfr': 'aviao',
   revisao: 'aviao',
   'sala-ocupada': 'aviao',
   'aluno-ocupado': 'horario',
@@ -51,5 +52,6 @@ export const CODIGOS_DE_AVISO = ['sem-peso', 'perto-do-limite', 'revisao', 'atra
 export const CODIGOS_DE_REJEICAO = [
   'equipamento-da-missao', 'ground-pendente', 'ground-antes-do-voo-fixo', 'so-parafuso', 'sem-aviao', 'sem-instrutor-habilitado',
   'disponibilidade-do-aluno', 'depois-do-ground', 'sem-horario', 'aluno-ocupado', 'avioes-ocupados', 'sala-ocupada', 'revisao',
-  'instrutores-indisponiveis', 'instrutores-ocupados', 'bloqueio', 'limite-da-lei', 'peso', 'limite-de-locais', 'instrutor-escolhido'
+  'instrutores-indisponiveis', 'instrutores-ocupados', 'bloqueio', 'limite-da-lei', 'peso', 'limite-de-locais', 'instrutor-escolhido',
+  'habilitacao-do-aviao'
 ];

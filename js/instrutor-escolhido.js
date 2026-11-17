@@ -7,6 +7,7 @@
 // "Automático" devolve a escolha ao app.
 import { AIRCRAFT_EQ_TYPES, GROUND_EQ_TYPE } from './config.js';
 import { podeFazer } from './habilitacoes.js';
+import { FROTA_INICIAL, recursoDaFrota } from './frota.js';
 import { normalizarLimites } from './limites.js';
 import { problemasDoInstrutor } from './viabilidade.js';
 import { isGroundMission } from './rules.js';
@@ -18,7 +19,7 @@ const instrutorValido = v => Number.isInteger(v) && v > 0;
 // Por que o pedido não pode voar com o instrutor em nenhum horário (o texto curto das opções), ou ''
 function impedimentoDoPedido(x, aluno, pedido) {
   if (!x.on) return 'fora nesta data';
-  if (!podeFazer(x, pedido.mis, isGroundMission(pedido.mis) ? GROUND_EQ_TYPE : pedido.eq)) return 'sem a habilitação';
+  if (!podeFazer(x, pedido.mis, isGroundMission(pedido.mis) ? GROUND_EQ_TYPE : pedido.eq, { curso: aluno.curso })) return 'sem a habilitação';
   if ((aluno.bl || []).includes(x.id)) return 'em Não escalar com';
   return '';
 }
@@ -55,7 +56,9 @@ export function instrutoresDoVoo(estado, resultado, fKey) {
   const limites = normalizarLimites(estado.limites);
   const horas = estado.horasDosInstrutores || {};
   const opcoes = estado.ins.map(x => {
-    const [problema] = problemasDoInstrutor(x, { mis: voo.mis, tipo: voo.isGround ? GROUND_EQ_TYPE : voo.eqType, a: voo.a, b: voo.b, alunos: grupo.map(o => alunos.get(o.stuId)), stuKg: voo.stuKg }, {
+    // Com o curso do aluno (o noturno do PC é IFR) e o avião do voo (a habilitação própria dele)
+    const contexto = { curso: (alunos.get(voo.stuId) || {}).curso, recurso: voo.isGround ? null : recursoDaFrota(Array.isArray(estado.frota) ? estado.frota : FROTA_INICIAL, voo.r) };
+    const [problema] = problemasDoInstrutor(x, { mis: voo.mis, tipo: voo.isGround ? GROUND_EQ_TYPE : voo.eqType, a: voo.a, b: voo.b, alunos: grupo.map(o => alunos.get(o.stuId)), stuKg: voo.stuKg, ...contexto }, {
       compromissos: outros.filter(o => o.insId === x.id).map(o => ({ a: o.a, b: o.b, voo: AIRCRAFT_EQ_TYPES.includes(o.eqType) })),
       historico: horas[x.id] || null, limites, peso: voo.isGround ? null : {}
     });

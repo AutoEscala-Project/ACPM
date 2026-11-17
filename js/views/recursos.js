@@ -4,8 +4,8 @@
 // a frota, com o Retirar.
 import { WIN, NI, AIRCRAFT_EQ_TYPES, SIM_EQ_TYPES, REVISAO_H } from '../config.js';
 import { normalizarHangar } from '../hangar.js';
-import { FROTA_INICIAL } from '../frota.js';
-import { S, RES, voosQueVoam } from '../state.js';
+import { FROTA_INICIAL, ATRIBUTOS_DO_RECURSO, atributoVale } from '../frota.js';
+import { S, RES, voosQueVoam, isGestor } from '../state.js';
 import { $, trocarConteudo } from '../dom.js';
 import { hm, fmtH, esc } from '../format.js';
 import { rHorarios } from './horarios.js';
@@ -45,11 +45,12 @@ function barra(horas) {
   return `<span class="barra ${cor}"><i style="width:${largura}%"></i></span>`;
 }
 
-function linha({ reg: r, tipo, soParafuso }, grupo, voadas, revisao) {
+function linha(recurso, grupo, voadas, revisao) {
+  const { reg: r, tipo } = recurso;
   const aviao = AIRCRAFT_EQ_TYPES.includes(tipo);
   const horas = S.horas[r];
   const temHoras = typeof horas === 'number';
-  const parafuso = soParafuso ? ' <span class="tag fb" data-dica="so-parafuso">Só Parafuso</span>' : '';
+  const parafuso = etiquetasDoRecurso(recurso);
   return `<tr data-r="${esc(r)}" data-grupo="${grupo}"${S.av[r] ? '' : ' class="manutencao"'}${recolhidos.has(grupo) ? ' hidden' : ''}>
     <td><label class="alvo"><input type="checkbox" class="sw" data-a="av" data-id="${esc(r)}"${S.av[r] ? ' checked' : ''} aria-label="${esc(r)} disponível"></label></td>
     <td><b>${esc(r)}</b>${aviao ? '' : ` <small class="sm">${tipo}</small>`}${parafuso}</td>
@@ -75,8 +76,18 @@ export function rRevisao() {
   }).join(''));
 }
 
-// A frota (vale para todas as datas): cada recurso uma vez, por categoria, com "Só Parafuso" e o Retirar. A
-// disponibilidade e as horas ficam na tabela desta data
+// Os atributos marcados de um recurso, como etiquetas (a dica explica cada um)
+const DICA_DO_ATRIBUTO = { soParafuso: 'so-parafuso', soVfr: 'so-vfr', habilitacaoPropria: 'habilitacao-propria' };
+const etiquetasDoRecurso = f => Object.keys(ATRIBUTOS_DO_RECURSO).filter(a => f[a])
+  .map(a => ` <span class="tag fb" data-dica="${DICA_DO_ATRIBUTO[a]}">${ATRIBUTOS_DO_RECURSO[a].nome}</span>`).join('');
+// O recurso com os atributos abertos para editar (um por vez)
+let atributosAbertos = null;
+export function alternarAtributos(reg) { atributosAbertos = atributosAbertos === reg ? null : reg; rFrota(); }
+const editorDeAtributos = f => `<fieldset class="atributos-recurso"><legend class="sr">Atributos de ${esc(f.reg)}</legend>${Object.keys(ATRIBUTOS_DO_RECURSO).filter(a => atributoVale(a, f.tipo))
+  .map(a => `<label class="chk"><input type="checkbox" data-a="atributo" data-r="${esc(f.reg)}" data-atributo="${a}"${f[a] ? ' checked' : ''}> ${ATRIBUTOS_DO_RECURSO[a].nome}</label>`).join('')}</fieldset>`;
+
+// A frota (vale para todas as datas): cada recurso uma vez, por categoria, com os atributos (Só Parafuso, Só VFR e
+// Habilitação própria), Atributos (para marcar) e o Retirar. A disponibilidade e as horas ficam na tabela desta data
 function rFrota() {
   const lista = $('#frota');
   if (!lista) return;
@@ -84,9 +95,10 @@ function rFrota() {
     const recursos = tipos.flatMap(tipo => (S.frota || []).filter(f => f.tipo === tipo));
     if (!recursos.length) return '';
     return `<li class="grupo"><h5>${rotulo} <small>${recursos.length} ${recursos.length === 1 ? 'recurso' : 'recursos'}</small></h5><ul class="frota-itens">` +
-      recursos.map(({ reg, tipo, soParafuso }) => `<li class="frota-item" data-r="${esc(reg)}">
-        <b>${esc(reg)}</b>${AIRCRAFT_EQ_TYPES.includes(tipo) ? '' : ` <small class="sm">${esc(tipo)}</small>`}${soParafuso ? ' <span class="tag fb" data-dica="so-parafuso">Só Parafuso</span>' : ''}
-        <button class="btn quiet rev ret edit-only" data-act="retirar-recurso" data-id="${esc(reg)}" aria-label="Retirar ${esc(reg)} da frota">Retirar</button>
+      recursos.map(f => `<li class="frota-item${atributosAbertos === f.reg ? ' aberto' : ''}" data-r="${esc(f.reg)}">
+        ${isGestor() ? `<b>${esc(f.reg)}</b>` : `<button type="button" class="frota-reg" data-act="atributos-recurso" data-id="${esc(f.reg)}" aria-expanded="${atributosAbertos === f.reg}" aria-label="Atributos de ${esc(f.reg)}" title="Atributos (Só Parafuso, Só VFR, Habilitação própria)">${esc(f.reg)}</button>`}${AIRCRAFT_EQ_TYPES.includes(f.tipo) ? '' : ` <small class="sm">${esc(f.tipo)}</small>`}${etiquetasDoRecurso(f)}
+        <button class="btn quiet rev ret edit-only" data-act="retirar-recurso" data-id="${esc(f.reg)}" aria-label="Retirar ${esc(f.reg)} da frota">Retirar</button>
+        ${atributosAbertos === f.reg ? editorDeAtributos(f) : ''}
       </li>`).join('') + '</ul></li>';
   }).join(''));
 }

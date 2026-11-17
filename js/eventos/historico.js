@@ -3,6 +3,7 @@ import { gravarAlteracao } from '../actions.js';
 import { $, showToast } from '../dom.js';
 import { normalizarFixos } from '../fixos.js';
 import { validarReversao } from '../reversoes.js';
+import { atributoVale } from '../frota.js';
 import { reverterEscolha, escolherNosPedidos } from '../instrutor-escolhido.js';
 import { S, AUDIT_LOG, DATA, setAuditLog, isGestor, insBy, stuBy, getMissionTarget } from '../state.js';
 import { ApiClient } from '../storage.js';
@@ -59,6 +60,14 @@ aoAcionar('rev-log', b => {
     S.av[rev.reg] = rev.val;
     gravarAlteracao(rev.val ? 'inc' : 'exc', `Revertido: ${rev.reg} ${rev.val ? 'disponível' : 'em manutenção'}`, null, entry.id);
     rRec();
+  } else if (rev.kind === 'setAtributo') {
+    const recurso = (S.frota || []).find(f => f.reg === rev.reg);
+    if (recurso && atributoVale(rev.atributo, recurso.tipo)) {
+      if (rev.val) recurso[rev.atributo] = true;
+      else delete recurso[rev.atributo];
+      gravarAlteracao('mod', `Revertido: ${entry.desc}`, null, entry.id);
+      rRec(); rIns(); rDem();
+    }
   } else if (rev.kind === 'setInsOn') {
     const ins = insBy(rev.insId);
     if (ins) {

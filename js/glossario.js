@@ -67,6 +67,8 @@ export const GLOSSARIO = {
     texto: `Quanto o avião ainda pode voar até a revisão de ${REVISAO_H} horas, no início desta data. Sem horas para um voo de ${MENOR_VOO_H} h, ele para e a escala avisa.`
   },
   hangar: { aba: 'Recursos', termo: 'Ordem no hangar', texto: 'Da frente para o fundo: entre aviões livres, o da frente sai primeiro.' },
+  'so-vfr': { aba: 'Recursos', termo: 'Só VFR', texto: 'Avião não homologado IFR: voa as missões VFR, e nenhum voo IFR (IFR, cheques IFR, o noturno do PC) vai para ele.' },
+  'habilitacao-propria': { aba: 'Recursos', termo: 'Habilitação própria', texto: 'O recurso exige do instrutor uma habilitação só dele, além da do tipo (por exemplo, o PR-VOM). Marque-a em Instrutores › Cadastro › Editar habilitações.' },
   'so-parafuso': { aba: 'Recursos', termo: 'Só Parafuso', texto: 'Avião reservado para a missão de Parafuso no C152: as outras missões não usam ele, e o Parafuso só voa nele.' },
 
   // Instrutores
