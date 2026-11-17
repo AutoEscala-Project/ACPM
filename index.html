@@ -123,8 +123,8 @@
   <section id="s-login">
     <h2>Entrar</h2>
     <form class="pn login" id="form-login">
-      <label>E-mail <input type="email" id="login-email" autocomplete="username" required></label>
-      <label>Senha <input type="password" id="login-senha" autocomplete="current-password" required></label>
+      <label>E-mail <input type="email" id="login-email" autocomplete="username" required aria-describedby="login-erro"></label>
+      <label>Senha <input type="password" id="login-senha" autocomplete="current-password" required aria-describedby="login-erro"></label>
       <button class="btn" type="submit" id="btn-entrar">Entrar</button>
       <p id="login-erro" role="alert"></p>
     </form>

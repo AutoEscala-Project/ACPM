@@ -2,7 +2,7 @@
 // conta, Usuários, o tema e o Manual) e o aviso dos dados que não foram lidos
 import { setRole, carregarData, lerDadosDeNovo } from '../actions.js';
 import { ehDomingo } from '../agenda.js';
-import { $, showToast, ligarMenu } from '../dom.js';
+import { $, showToast, ligarMenu, focarNoTitulo } from '../dom.js';
 import { somarDias, dataIsoValida } from '../format.js';
 import { RES, DATA, isGestor, modoCompartilhado } from '../state.js';
 import { ApiClient } from '../storage.js';
@@ -92,15 +92,18 @@ export function iniciarTema() {
 rManual();
 $('#btn-manual').onclick = () => {
   show('manual');
+  focarNoTitulo($('#s-manual'));
   window.scrollTo(0, 0);
 };
 
-$('#btn-conta').onclick = () => { show('conta'); abrirConta(); };
+// O foco vai para o título da página aberta pelo menu
+$('#btn-conta').onclick = () => { show('conta'); abrirConta(); focarNoTitulo($('#s-conta')); };
 // Usuários (administrador): a mesma página, direto na lista de contas
 $('#btn-usuarios').onclick = async () => {
   show('conta');
   await abrirConta();
   $('#usuarios').scrollIntoView({ block: 'start' });
+  focarNoTitulo($('#usuarios'));
 };
 
 // As horas dos instrutores ou os resultados dos cursos que não foram lidos: "Tentar de novo" lê outra vez

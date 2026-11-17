@@ -1,6 +1,6 @@
 // Acessibilidade: cada botão e cada campo tem um nome para o leitor de tela, e nenhum se chama só "✕" (que o leitor
 // lê como "multiplicação"). Vale para todas as abas, o Histórico e o painel de habilitações.
-import { test, expect, abrirComExemplo, irPara, entrar } from './fixtures.js';
+import { test, expect, abrirComExemplo, irPara, entrar, abrirEscala, confirmar } from './fixtures.js';
 import { instalarSupabaseFalso, documentosAtuais, CONTAS } from './supabase-falso.js';
 import { comExemplo } from '../helpers/exemplo.js';
 import { estadoSintetico } from '../helpers/estado.js';
@@ -245,4 +245,97 @@ test.describe('Um nome de conta longo', () => {
       })).toBe(true);
     });
   }
+});
+
+// Quem usa o teclado continua no mesmo lugar depois de uma ação: a tela é redesenhada, mas o foco volta para o campo ou o
+// botão equivalente (antes, ele caía no <body> e o próximo Tab recomeçava do topo)
+test.describe('O foco depois de uma ação', () => {
+  const emFoco = page => page.evaluate(() => {
+    const el = document.activeElement;
+    return el === document.body ? 'body' : `${el.tagName.toLowerCase()}${['data-f', 'data-a', 'data-act', 'data-fkey', 'data-id', 'id'].filter(a => el.hasAttribute(a)).map(a => `[${a}="${el.getAttribute(a)}"]`).join('')}`;
+  });
+
+  test('o status mudado pelo teclado na lista da Escala', async ({ page }) => {
+    await abrirComExemplo(page);
+    await abrirEscala(page);
+    const status = page.locator('#out select[data-f="fstatus"]').first();
+    const fkey = await status.getAttribute('data-fkey');
+    await status.focus();
+    await status.selectOption('Em Voo');
+    await expect(page.locator(`#out select[data-fkey="${fkey}"]`)).toHaveValue('Em Voo');
+    expect(await emFoco(page)).toBe(`select[data-f="fstatus"][data-fkey="${fkey}"]`);
+  });
+
+  test('o Voa da Demanda (a linha que some com "Só quem voa" passa o foco para a seguinte) e a disponibilidade em Recursos', async ({ page }) => {
+    await abrirComExemplo(page);
+    await irPara(page, 'dem');
+    const voando = page.locator('#dem tr[data-k="d"]:not(.off)');
+    // As missões extras do aluno saem junto com a principal: o foco vai para o Voa do próximo aluno
+    const ids = await voando.evaluateAll(linhas => linhas.map(l => l.dataset.id));
+    const [primeira, segunda] = [ids[0], ids.find(id => id !== ids[0])];
+    await voando.nth(0).locator('input[data-f="fly"]').focus();
+    await page.keyboard.press('Space');
+    await expect(page.locator(`#dem tr[data-k="d"][data-id="${primeira}"][data-mid="0"]`)).toBeHidden();
+    await expect(page.locator(`#dem tr[data-k="d"][data-id="${segunda}"] input[data-f="fly"]`).first()).toBeFocused();
+    await irPara(page, 'rec');
+    await page.locator('#eqs input[data-a="av"][data-id="PR-BTB"]').focus();
+    await page.keyboard.press('Space');
+    expect(await emFoco(page)).toBe('input[data-a="av"][data-id="PR-BTB"]');
+  });
+
+  test('o diálogo do Atrasado devolve o foco ao status do voo, desistido ou confirmado (com a lista redesenhada)', async ({ page }) => {
+    await abrirComExemplo(page);
+    await abrirEscala(page);
+    const status = page.locator('#out select[data-f="fstatus"]').first();
+    const fkey = await status.getAttribute('data-fkey');
+    const dialogo = page.locator('#dlg-status');
+    await status.focus();
+    await status.selectOption('Atrasado');
+    await dialogo.getByRole('button', { name: 'Voltar' }).click();
+    await expect(dialogo).toBeHidden();
+    expect(await emFoco(page)).toBe(`select[data-f="fstatus"][data-fkey="${fkey}"]`);
+    // Confirmado: o status muda e a lista é redesenhada; o foco fica no status do mesmo voo
+    await status.selectOption('Atrasado');
+    const [h, m] = (await page.locator('#dlg-status-voo').textContent()).match(/(\d\d):(\d\d)–/).slice(1).map(Number);
+    const novo = h * 60 + m + 30;
+    await page.locator('#st-novo').fill(`${String(Math.floor(novo / 60)).padStart(2, '0')}:${String(novo % 60).padStart(2, '0')}`);
+    await dialogo.getByRole('button', { name: 'Confirmar' }).click();
+    await expect(dialogo).toBeHidden();
+    await expect(page.locator(`#out select[data-fkey="${fkey}"]`)).toHaveValue('Atrasado');
+    expect(await emFoco(page)).toBe(`select[data-f="fstatus"][data-fkey="${fkey}"]`);
+  });
+
+  test('o popup do mapa: Enter na barra leva o foco para ele, e Tab depois do último controle volta para a barra', async ({ page }) => {
+    await abrirComExemplo(page);
+    await abrirEscala(page);
+    await page.locator('[data-tl="eq"]').click();
+    const barra = page.locator('#out .tl-bar').first();
+    await barra.focus();
+    await page.keyboard.press('Enter');
+    await expect(page.locator('#tl-pop')).toBeVisible();
+    await expect(page.locator('#tl-pop select[data-f="fstatus"]')).toBeFocused();
+    const controles = await page.locator('#tl-pop select, #tl-pop button').count();
+    for (let i = 0; i < controles; i++) await page.keyboard.press('Tab');
+    await expect(page.locator('#tl-pop')).toBeHidden();
+    await expect(barra).toBeFocused();
+  });
+
+  test('fechar o Histórico devolve o foco ao botão; o Manual leva o foco ao título dele', async ({ page }) => {
+    await abrirComExemplo(page);
+    await page.locator('#btn-open-log').click();
+    await expect(page.locator('#btn-fechar-historico')).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#btn-open-log')).toBeFocused();
+    await page.locator('#btn-manual').click();
+    await expect(page.locator('#s-manual h2').first()).toBeFocused();
+  });
+
+  test('aprovar a escala leva o foco ao Reabrir, e reabrir, ao Aprovar', async ({ page }) => {
+    await abrirComExemplo(page);
+    await abrirEscala(page);
+    await confirmar(page, '#btn-aprovar');
+    await expect(page.locator('#btn-reabrir')).toBeFocused();
+    await confirmar(page, '#btn-reabrir');
+    await expect(page.locator('#btn-aprovar')).toBeFocused();
+  });
 });

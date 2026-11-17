@@ -1,7 +1,7 @@
 // A navegação: as abas, as vistas de cada aba (lista, por recurso, por instrutor, painel; dia e cadastro), os grupos que
 // recolhem e os links para o Manual
 import { carregarBI } from '../actions.js';
-import { $ } from '../dom.js';
+import { $, focarNoTitulo } from '../dom.js';
 import { setTLMode } from '../state.js';
 import { abrirAgenda } from '../views/agenda.js';
 import { alternarTodosDoBI } from '../views/bi.js';
@@ -56,5 +56,6 @@ document.addEventListener('click', e => {
     e.preventDefault();
     show('manual');
     $('#' + manual.dataset.manual).scrollIntoView({ block: 'start' });
+    focarNoTitulo($('#' + manual.dataset.manual));
   }
 });

@@ -24,10 +24,13 @@ function pedirLogin(cliente) {
         password: $('#login-senha').value
       });
       $('#btn-entrar').disabled = false;
+      for (const campo of [$('#login-email'), $('#login-senha')]) campo.setAttribute('aria-invalid', String(Boolean(error && error.status === 400)));
       if (error) {
         $('#login-erro').textContent = error.status === 400
           ? 'E-mail ou senha incorretos.'
           : 'Não foi possível entrar. Verifique a conexão e tente de novo.';
+        // O botão Entrar ficou desligado durante a tentativa (o foco saiu dele): o foco vai para a senha
+        $('#login-senha').focus();
         return;
       }
       $('#login-senha').value = '';

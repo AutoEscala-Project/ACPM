@@ -2,13 +2,13 @@
 // (aparecem com o mouse ou o foco).
 import { CATEGORIAS_DO_RODIZIO, categoriaDoRodizio, ajustarFilas } from '../rodizio.js';
 import { S, voosQueVoam } from '../state.js';
-import { $ } from '../dom.js';
+import { $, trocarConteudo } from '../dom.js';
 import { esc } from '../format.js';
 
 export function rRodizio() {
   const filas = ajustarFilas(S.filas, S.ins);
   const voos = voosQueVoam();
-  $('#rodizio').innerHTML = CATEGORIAS_DO_RODIZIO.map(({ id, nome }) => {
+  trocarConteudo($('#rodizio'), CATEGORIAS_DO_RODIZIO.map(({ id, nome }) => {
     const fila = filas[id];
     const itens = fila.map((insId, i) => {
       const x = S.ins.find(y => y.id === insId);
@@ -26,5 +26,5 @@ export function rRodizio() {
       </li>`;
     }).join('');
     return `<div class="pn" data-cat="${id}"><h3>${esc(nome)}</h3>${fila.length ? `<ol class="fila">${itens}</ol>` : '<p class="h">Nenhum instrutor habilitado.</p>'}</div>`;
-  }).join('');
+  }).join(''));
 }

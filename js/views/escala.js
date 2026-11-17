@@ -15,7 +15,7 @@ import { metricasDaEscala } from '../metricas.js';
 import { sumUniqueOperationalHours, consolidateTimelineSlots } from '../engine.js';
 import { S, RES, AUDIT_LOG, TL_MODE, DATA, isGestor, dadoIndisponivel } from '../state.js';
 import { motivoDoFixo } from '../fixos.js';
-import { $, posicionarJunto } from '../dom.js';
+import { $, posicionarJunto, trocarConteudo } from '../dom.js';
 import { statusDoVoo, unidadeDoVoo } from '../voo.js';
 
 export const HT = o => (o.isGround || isGroundMission(o.mis) ? DURACAO_DO_GROUND : fmtH(o.h) + (o.ss !== '1/1' ? ` (sessão ${o.ss})` : ''));
@@ -61,7 +61,8 @@ function conteudoDoPopup(o) {
 
 const barraDoPopup = () => (popupDe === null ? null : document.querySelector(`#out .tl-bar[data-pop="${CSS.escape(popupDe)}"]`));
 
-export function abrirPopupDoMapa(barra) {
+// focar: aberto pela pessoa (clique ou Enter na barra), o foco vai para o primeiro controle do popup
+export function abrirPopupDoMapa(barra, { focar = false } = {}) {
   const o = VOOS_DO_MAPA.get(barra.dataset.pop), pop = $('#tl-pop');
   if (!o || !pop) return;
   fecharPopupDoMapa();
@@ -70,6 +71,19 @@ export function abrirPopupDoMapa(barra) {
   barra.setAttribute('aria-expanded', 'true');
   popupDe = barra.dataset.pop;
   posicionarJunto(pop, barra);
+  if (focar) controlesDoPopup()[0]?.focus();
+}
+
+const controlesDoPopup = () => [...$('#tl-pop').querySelectorAll('select, button, input, [tabindex="0"]')].filter(c => !c.disabled && c.checkVisibility());
+
+// Tab depois do último controle (ou Shift+Tab antes do primeiro) fecha o popup e volta para a barra, de onde o Tab segue
+export function tabNoPopup(e) {
+  if (e.key !== 'Tab' || popupDe === null) return;
+  const controles = controlesDoPopup();
+  const saindo = e.shiftKey ? document.activeElement === controles[0] : document.activeElement === controles.at(-1);
+  if (!controles.length || !saindo) return;
+  e.preventDefault();
+  fecharPopupDoMapa({ devolverFoco: true });
 }
 
 export function fecharPopupDoMapa({ devolverFoco = false } = {}) {
@@ -207,9 +221,9 @@ export function renderAuditPanel() {
   const logListEl = $('#audit-log-list');
   if (logListEl) {
     if (!historico.length) {
-      logListEl.innerHTML = `<div class="audit-item"><span class="h">Sem alterações registradas nesta data.</span></div>`;
+      trocarConteudo(logListEl, `<div class="audit-item"><span class="h">Sem alterações registradas nesta data.</span></div>`);
     } else {
-      logListEl.innerHTML = historico.map(item => {
+      trocarConteudo(logListEl, historico.map(item => {
         const tipo = ['inc', 'exc', 'mod'].includes(item.type) ? item.type : 'mod';
         const lbl = tipo === 'inc' ? 'Inclusão' : tipo === 'exc' ? 'Exclusão' : 'Edição';
         // Só a reversão no formato que o app grava vira botão
@@ -226,7 +240,7 @@ export function renderAuditPanel() {
           <div><span class="sm">[${esc(item.ts)}]</span>${autor} <span class="audit-badge ${tipo}">${lbl}</span> <span class="audit-desc">${esc(item.desc)}</span>${importado}${estado}</div>
           ${btnRevert}
         </div>`;
-      }).join('');
+      }).join(''));
     }
   }
 }
@@ -288,13 +302,13 @@ function rAprovacao(temVoos) {
     const hora = `${String(em.getHours()).padStart(2, '0')}:${String(em.getMinutes()).padStart(2, '0')}`;
     selo.dataset.dica = 'aprovar-escala';
     selo.innerHTML = `<svg class="ico" aria-hidden="true"><use href="#i-cadeado"/></svg>Aprovada às ${hora}${S.aprovacao.por ? ` por ${esc(S.aprovacao.por)}` : ''}`;
-    lugar.innerHTML = '<button type="button" class="btn sec edit-only" id="btn-reabrir" data-dica="reabrir">Reabrir</button>';
+    trocarConteudo(lugar, '<button type="button" class="btn sec edit-only" id="btn-reabrir" data-dica="reabrir">Reabrir</button>');
   } else {
     // Sem as horas dos instrutores, os limites do mês e do ano não foram conferidos: não aprova
     const semHoras = dadoIndisponivel('horas');
     // Desligado (sem as horas), o title do navegador explica; ligado, a dica do glossário
     const explicacao = semHoras ? ' title="As horas de voo dos instrutores não foram lidas: os limites do mês e do ano não foram conferidos" disabled' : ' data-dica="aprovar-escala"';
-    lugar.innerHTML = temVoos ? `<button type="button" class="btn edit-only" id="btn-aprovar"${explicacao}>Aprovar escala</button>` : '';
+    trocarConteudo(lugar, temVoos ? `<button type="button" class="btn edit-only" id="btn-aprovar"${explicacao}>Aprovar escala</button>` : '');
   }
 }
 
@@ -311,7 +325,7 @@ function rCompactacao(out) {
   const dicaDa = id => (S.aprovacao && !isGestor() ? 'criterios-travados' : `criterio-${id}`);
   const grupo = (campo, rotulo, dica, opcoes) => `<span class="flt-rotulo"><span>${rotulo}</span><button type="button" class="dica-btn" data-dica="${dica}" aria-label="O que é ${rotulo}?" aria-expanded="false"></button> <span class="seg" role="group" aria-label="${rotulo}">${opcoes.map(([id, nome]) =>
     `<button type="button" data-criterio="${campo}" data-valor="${id}" data-dica="${dicaDa(id)}" aria-pressed="${criterios[campo] === id}"${criterios[campo] === id ? ' class="on"' : ''}${travado ? ' aria-disabled="true"' : ''}>${esc(nome)}</button>`).join('')}</span></span>`;
-  $('#criterios').innerHTML = grupo('buracos', 'Buracos', 'buracos', OPCOES_DE_BURACOS) + grupo('horarios', 'Horários', 'horarios', OPCOES_DE_HORARIOS);
+  trocarConteudo($('#criterios'), grupo('buracos', 'Buracos', 'buracos', OPCOES_DE_BURACOS) + grupo('horarios', 'Horários', 'horarios', OPCOES_DE_HORARIOS));
 }
 
 // O tempo parado que sobra na escala (sem os voos cancelados), ao lado do resumo: o efeito dos critérios da compactação
@@ -444,7 +458,7 @@ export function rOut() {
   document.querySelectorAll('#s-esc [data-tl]').forEach(b => b.classList.toggle('on', b.dataset.tl === TL_MODE));
   $('#out').dataset.vista = TL_MODE === 'lista' || TL_MODE === 'painel' ? TL_MODE : 'mapa';
   if (!RES || (!RES.out.length && !RES.al.length)) {
-    $('#out').innerHTML = `<p class="h">Nenhum voo nesta data. Marque quem vai voar na aba Demanda: a escala é montada automaticamente.</p>`;
+    trocarConteudo($('#out'), `<p class="h">Nenhum voo nesta data. Marque quem vai voar na aba Demanda: a escala é montada automaticamente.</p>`);
     rCompactacao([]);
     rAprovacao(false);
     atualizarPainelDeReparo();
@@ -476,7 +490,7 @@ export function rOut() {
   let h = resumo(out, al, tot);
   if (!voos.length) h += `<p class="h">${tot ? 'Nenhum voo na escala com esses filtros.' : 'Nenhuma missão marcada na Demanda.'}</p>`;
   else h += tabela(voos) + renderVisualTimeline(voos) + (TL_MODE === 'painel' ? painelDoDia(voos) : '');
-  $('#out').innerHTML = h;
+  trocarConteudo($('#out'), h);
   reancorarPopupDoMapa();
   atualizarPainelDeReparo();
 }

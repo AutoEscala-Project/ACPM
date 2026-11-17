@@ -7,7 +7,7 @@ import { isGroundMission, opcoesDeDisponibilidade } from '../rules.js';
 import { horariosDaMissao } from '../horarios.js';
 import { descreverExigencias } from '../habilitacoes.js';
 import { S } from '../state.js';
-import { $ } from '../dom.js';
+import { $, trocarConteudo } from '../dom.js';
 import { renderAuditPanel } from './escala.js';
 import { etapaNaDemanda } from './etapas.js';
 
@@ -81,12 +81,12 @@ export const cnt = () => {
 
 export const rDem = () => {
   if (!S.stu.length) {
-    $('#dem').innerHTML = `<tr class="empty-dem"><td colspan="9" class="h" style="padding:16px">Nenhum aluno cadastrado. Cadastre os alunos na aba Alunos.</td></tr>`;
+    trocarConteudo($('#dem'), `<tr class="empty-dem"><td colspan="9" class="h" style="padding:16px">Nenhum aluno cadastrado. Cadastre os alunos na aba Alunos.</td></tr>`);
     cnt();
     renderAuditPanel();
     return;
   }
-  $('#dem').innerHTML = S.stu.map(studentDemandRowsHTML).join('');
+  trocarConteudo($('#dem'), S.stu.map(studentDemandRowsHTML).join(''));
   cnt();
   applyDemandFilters();
   renderAuditPanel();

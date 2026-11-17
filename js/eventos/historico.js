@@ -16,7 +16,8 @@ const gavetaDoHistorico = $('#historico');
 function mostrarHistorico(abrir) {
   gavetaDoHistorico.hidden = !abrir;
   $('#btn-open-log').setAttribute('aria-expanded', String(abrir));
-  if (!abrir) return;
+  // Fechar devolve o foco ao botão do Histórico
+  if (!abrir) { $('#btn-open-log').focus(); return; }
   $('#btn-fechar-historico').focus();
 }
 $('#btn-open-log').onclick = () => mostrarHistorico(gavetaDoHistorico.hidden);

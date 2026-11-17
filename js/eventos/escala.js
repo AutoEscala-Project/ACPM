@@ -16,7 +16,7 @@ import { aoAcionar, aoMudarCampo } from './registro.js';
 import { rAlu } from '../views/cadastros.js';
 import { rDem } from '../views/demanda.js';
 import { pedirDetalheDoStatus, dialogoDeStatusAberto } from '../views/dialogo-status.js';
-import { rOut, abrirPopupDoMapa, fecharPopupDoMapa, popupDoMapaAberto, reposicionarPopupDoMapa } from '../views/escala.js';
+import { rOut, abrirPopupDoMapa, fecharPopupDoMapa, popupDoMapaAberto, reposicionarPopupDoMapa, tabNoPopup } from '../views/escala.js';
 import { abrirPainelDeReparo, fecharPainelDeReparo, opcaoDoPainel, painelDeReparoAberto } from '../views/reparo.js';
 
 // Popup do voo no mapa da escala: a barra abre e fecha; Esc (o foco volta para a barra) e um clique fora fecham, e ele
@@ -25,13 +25,14 @@ document.addEventListener('click', e => {
   const barra = e.target.closest('#out .tl-bar');
   if (barra) {
     if (barra.getAttribute('aria-expanded') === 'true') fecharPopupDoMapa();
-    else abrirPopupDoMapa(barra);
+    else abrirPopupDoMapa(barra, { focar: true });
     return;
   }
   if (popupDoMapaAberto() && !e.target.closest('#tl-pop, #dlg-status')) fecharPopupDoMapa();
 });
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape' && popupDoMapaAberto() && !dialogoDeStatusAberto()) fecharPopupDoMapa({ devolverFoco: true });
+  if (e.target.closest && e.target.closest('#tl-pop')) tabNoPopup(e);
 });
 document.addEventListener('scroll', reposicionarPopupDoMapa, { capture: true, passive: true });
 window.addEventListener('resize', reposicionarPopupDoMapa);
@@ -118,6 +119,8 @@ document.addEventListener('click', e => {
     S.aprovacao = { em: new Date().toISOString(), por: ApiClient.autorAtual || '' };
     gravarAlteracao('mod', `Escala aprovada: ${RES.out.length} ${RES.out.length === 1 ? 'voo fixado' : 'voos fixados'}`);
     showToast('Escala aprovada: os voos ficam fixos.', 'ok');
+    // O botão virou "Reabrir": o foco vai para ele
+    $('#btn-reabrir')?.focus();
   } else {
     if (!confirmado(reabrir, 'Confirmar reabertura')) return;
     // Os voos em andamento (Em Voo, Atrasado, Pousou, Cancelado) continuam fixos
@@ -125,6 +128,7 @@ document.addEventListener('click', e => {
     S.aprovacao = null;
     gravarAlteracao('mod', 'Escala reaberta: volta a ser refeita a cada alteração');
     showToast('Escala reaberta.', 'ok');
+    $('#btn-aprovar')?.focus();
   }
 });
 
