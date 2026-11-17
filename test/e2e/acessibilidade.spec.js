@@ -627,6 +627,26 @@ test.describe('O leitor de tela e o teclado', () => {
     await expect(page.locator('#btn-open-log')).toBeFocused();
   });
 
+  test('o Esc fecha só a camada de cima: com o Histórico aberto, o primeiro fecha o popup do mapa, o segundo, a gaveta', async ({ page }) => {
+    await abrirComExemplo(page);
+    await abrirEscala(page);
+    await page.locator('#s-esc [data-tl="eq"]').click();
+    await page.locator('#btn-open-log').click();
+    await expect(page.locator('#historico')).toBeVisible();
+    // O popup abre pelo teclado (dependendo da largura, a gaveta cobre a barra), com o foco nele
+    const barra = page.locator('#out .tl-bar').first();
+    await barra.focus();
+    await page.keyboard.press('Enter');
+    const popup = page.locator('#tl-pop');
+    await expect(popup).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(popup).toBeHidden();
+    await expect(barra).toBeFocused();
+    await expect(page.locator('#historico')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#historico')).toBeHidden();
+  });
+
   test('o Esc fecha só a camada de cima: as habilitações, abertas em Instrutores, continuam abertas na Escala quando o Esc fecha o diálogo do status', async ({ page }) => {
     await abrirComExemplo(page);
     await irPara(page, 'ins');

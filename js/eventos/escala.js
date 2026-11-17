@@ -34,8 +34,16 @@ document.addEventListener('click', e => {
   const dentro = e.composedPath().some(el => el instanceof Element && el.matches('#tl-pop, dialog'));
   if (popupDoMapaAberto() && !dentro) fecharPopupDoMapa();
 });
+// O Esc fecha só o popup, a camada de cima: ouvido na captura, ele para aqui e não chega às gavetas e aos painéis
+// de trás (o Histórico, as Sugestões, as habilitações), que continuam abertos. O Esc na lista do instrutor é dela
+// (volta ao nome, abaixo, com o popup aberto)
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape' && popupDoMapaAberto() && !algumDialogoAberto()) fecharPopupDoMapa({ devolverFoco: true });
+  if (e.key !== 'Escape' || !popupDoMapaAberto() || algumDialogoAberto()) return;
+  if (e.target.closest && e.target.closest('select[data-a="insVoo"]')) return;
+  e.stopPropagation();
+  fecharPopupDoMapa({ devolverFoco: true });
+}, true);
+document.addEventListener('keydown', e => {
   if (e.target.closest && e.target.closest('#tl-pop')) tabNoPopup(e);
 });
 document.addEventListener('scroll', reposicionarPopupDoMapa, { capture: true, passive: true });
