@@ -3,11 +3,14 @@ import { horariosDaMissao, periodoDoMinuto } from '../../js/horarios.js';
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { runAllocationEngine } from '../../js/engine.js';
-import { EQ, GROUND_REG, ACROBAT_REG, T, NI, DEFAULT_LIM } from '../../js/config.js';
+import { EQ, GROUND_REG, ACROBAT_REG, T, NI, DEFAULT_LIM, AIRCRAFT_EQ_TYPES } from '../../js/config.js';
 import { isGroundMission, doesGroundGateFlight } from '../../js/rules.js';
 import { podeFazer } from '../../js/habilitacoes.js';
 import { gerarCenario } from '../helpers/cenarios.js';
 import { CODIGOS_DE_REJEICAO } from '../../js/conflitos.js';
+
+// Até quando o voo pode ir: o de dia no avião pousa até as 17:30; o Noturno, o simulador e o Ground, até o fim do dia
+const fimDoVoo = o => (o.mis !== 'Noturno' && AIRCRAFT_EQ_TYPES.includes(o.eqType) ? T[NI] : 1440);
 
 const SEEDS = Array.from({ length: 300 }, (_, i) => 1001 + i);
 const execucoes = SEEDS.map(seed => {
@@ -113,13 +116,13 @@ describe('Invariantes do motor de alocação', () => {
     }
   }));
 
-  it('horários da categoria em períodos habilitados, Noturno às 17:30 e demais missões até 17:30', () => emTodos(({ estado, out }) => {
+  it('horários da categoria em períodos habilitados, Noturno às 17:30, voo de dia no avião até 17:30 (simulador e Ground até o fim do dia)', () => emTodos(({ estado, out }) => {
     for (const o of out) {
       assert.ok(estado.win[o.w], `${o.fKey}: janela ${o.w} desativada`);
       assert.equal(o.w, periodoDoMinuto(o.a), `${o.fKey}: período errado`);
       assert.ok(horariosDaMissao(estado.horarios, o.mis, o.eqType).includes(o.a), `${o.fKey}: ${o.a} fora dos horários do ${o.eqType}`);
       if (o.mis === 'Noturno') assert.equal(o.w, NI, `${o.fKey}: Noturno fora das 17:30`);
-      else assert.ok(o.w < NI && o.b <= T[NI], `${o.fKey}: termina às ${o.b}`);
+      else assert.ok(o.w < NI && o.b <= fimDoVoo(o), `${o.fKey}: termina às ${o.b}`);
       if (o.isGround) assert.equal(o.b - o.a, 90);
     }
   }));
@@ -279,7 +282,7 @@ describe('O horário mais perto da preferência, em 300 cenários', async () => 
         const p1 = minutoDaPreferencia(d.p1), p2 = minutoDaPreferencia(d.p2);
         const ancora = p1 >= 0 ? p1 : p2;
         if (ancora < 0) continue;
-        const dur = o.b - o.a, fim = o.mis === 'Noturno' ? 1440 : T[NI];
+        const dur = o.b - o.a, fim = fimDoVoo(o);
         const x = estado.ins.find(i => i.id === o.insId);
         const permitidas = disponibilidadeDoAluno(d.jan);
         // O voo cancelado sem o cadeado (dados antigos: o app fixa o cancelado) ainda ocupa o horário

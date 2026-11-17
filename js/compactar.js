@@ -8,14 +8,14 @@
 // continuam valendo; a soma dos quadrados das horas não cresce (a divisão das horas não piora) e o combustível não
 // piora. Ficam como estão os voos fixos e os que já têm status (Atrasado, Em Voo, Pousou, Cancelado), o instrutor dos
 // voos do rodízio, o Noturno, o Parafuso no C152 e o horário das turmas de Ground.
-import { AIRCRAFT_EQ_TYPES, GROUND_EQ_TYPE, T, NI, PESOS_DA_COMPACTACAO, LIMITES_DA_COMPACTACAO, MISSOES_LOCAIS, LIMITE_DE_VOOS_LOCAIS } from './config.js';
+import { AIRCRAFT_EQ_TYPES, GROUND_EQ_TYPE, PESOS_DA_COMPACTACAO, LIMITES_DA_COMPACTACAO, MISSOES_LOCAIS, LIMITE_DE_VOOS_LOCAIS } from './config.js';
 import { FROTA_INICIAL, matriculasDoTipo } from './frota.js';
 import { podeFazer } from './habilitacoes.js';
 import { categoriaDoRodizio } from './rodizio.js';
 import { livre, cobre, cabeNoSaldo } from './viabilidade.js';
 import { reducaoNecessaria, combustivelDoVoo } from './combustivel.js';
 import { dentroDosLimites, normalizarLimites } from './limites.js';
-import { HORARIOS_INICIAIS, horariosDaMissao, periodoDoMinuto, minutoDaPreferencia } from './horarios.js';
+import { HORARIOS_INICIAIS, horariosDaMissao, periodoDoMinuto, minutoDaPreferencia, fimDaMissao } from './horarios.js';
 import { disponibilidadeDoAluno, doesGroundGateFlight } from './rules.js';
 import { INTERVALO_DO_HANGAR } from './metricas.js';
 import { normalizarCriterios } from './criterios.js';
@@ -98,14 +98,14 @@ export function compactar(out, state, { saldo = () => Infinity, posicao = () => 
     };
   });
 
-  // Os horários de cada voo: os da categoria, no período aberto, até as 17:30, na disponibilidade do aluno (ou só a 1ª
+  // Os horários de cada voo: os da categoria, no período aberto, até o fim da missão (fimDaMissao), na disponibilidade do aluno (ou só a 1ª
   // e a 2ª preferência) e depois do Ground que libera o voo
   for (const u of unidades.filter(x => x.mudaHorario)) {
     const pedido = pedidoDe(u.voos[0]) || {};
     const permitidas = disponibilidadeDoAluno(pedido.jan);
     const preferidos = [minutoDaPreferencia(pedido.p1), minutoDaPreferencia(pedido.p2)];
     const depoisDoGround = Math.max(0, ...unidades.filter(g => g.isGround && g.alunos.includes(u.alunos[0]) && doesGroundGateFlight(g.mis, { mis: u.mis, eq: u.tipo })).map(g => g.b));
-    u.inicios = horariosDaMissao(horarios, u.mis, u.tipo).filter(m => state.win[periodoDoMinuto(m)] && m + u.dur <= T[NI] && m >= depoisDoGround
+    u.inicios = horariosDaMissao(horarios, u.mis, u.tipo).filter(m => state.win[periodoDoMinuto(m)] && m + u.dur <= fimDaMissao(u.mis, u.tipo) && m >= depoisDoGround
       && (!permitidas || permitidas(m)) && (regra !== 'preferencias' || preferidos.includes(m)));
     if (!u.inicios.length) u.mudaHorario = false;
   }
