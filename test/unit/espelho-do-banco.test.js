@@ -1,12 +1,14 @@
 // O banco espelha o app. O pgTAP (supabase/tests/database) não roda no CI, então este teste confere o que as duas
 // pontas precisam ter igual: a lista de tipos de missão e recursos da migração dos cursos (missao_e_recurso_validos) é a
-// de js/config.js (MIS), o formato dos cursos (formato_dos_cursos) é o FORMATO_DOS_CURSOS dos casos, cada caso da
-// gravação dos programas (test/helpers/casos-do-programa.js) é uma verificação de supabase/tests/database/cursos.test.sql,
-// com os mesmos dados, e cada erro que a gravação devolve tem um caso.
+// de js/config.js (MIS), o formato dos cursos (formato_dos_cursos) é o FORMATO_DOS_CURSOS dos casos, o seguinte ao
+// ESQUEMA do app (js/migracoes.js), cada caso da gravação dos programas (test/helpers/casos-do-programa.js) é uma
+// verificação de supabase/tests/database/cursos.test.sql, com os mesmos dados, e cada erro que a gravação devolve tem
+// um caso.
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { MIS, GROUND_EQ_TYPE, GROUND_DURATION_H, DURACAO_MAXIMA_H } from '../../js/config.js';
+import { ESQUEMA } from '../../js/migracoes.js';
 import { CASOS_DO_PROGRAMA, PROGRAMA, FORMATO_DOS_CURSOS } from '../helpers/casos-do-programa.js';
 
 const ler = caminho => readFileSync(new URL(`../../${caminho}`, import.meta.url), 'utf8');
@@ -72,8 +74,18 @@ describe('O banco espelha o app', () => {
     assert.doesNotMatch(MIGRACAO, /grant execute on function public\.formato_dos_cursos/);
   });
 
+  // O formato dos cursos é o número seguinte ao ESQUEMA do app: o cadastro que o app de hoje grava fica abaixo dele,
+  // e a conversão (importar_cursos) traz os programas. Se outro formato chega antes com o mesmo número (o main, numa
+  // fusão), o formato dos cursos passa ao seguinte: com o cadastro já gravado nele, importar_cursos não traria nada,
+  // nunca. O P12 troca esta verificação, quando o passo do formato dos cursos entra em js/migracoes.js
+  it('o formato dos cursos é o seguinte ao ESQUEMA do app (até o P12)', () => {
+    assert.equal(FORMATO_DOS_CURSOS, ESQUEMA + 1, `o app grava o formato ${ESQUEMA}: o formato dos cursos é o seguinte, ${ESQUEMA + 1}`);
+  });
+
   // O formato do cadastro (esquema_do_conteudo, direto ou na variável que recebe o valor dele) só é comparado com
-  // formato_dos_cursos(), nunca com um número: o número fica só na função
+  // formato_dos_cursos(), nunca com um número: o número fica só na função. A expressão confere as comparações, mesmo
+  // em duas linhas; cada linha que lê o formato confere o resto: uma comparação a mais escrita de outro jeito
+  // (coalesce, entre parênteses, o campo "esquema" direto) ou uma conta com a função (formato_dos_cursos() - 1)
   it('a migração compara o formato do cadastro com formato_dos_cursos(), sem nenhum número', () => {
     const formato = String.raw`(?:public\.)?esquema_do_conteudo\([^()]*\)|\bv_esquema\b`;
     const operador = '<=|>=|<>|!=|=|<|>';
@@ -82,6 +94,8 @@ describe('O banco espelha o app', () => {
     assert.ok(comparacoes.length >= 2, 'salvar_curso e importar_cursos comparam o formato do cadastro');
     assert.deepEqual(comparacoes.filter(outro => outro !== 'public.formato_dos_cursos()'), []);
     assert.doesNotMatch(MIGRACAO, new RegExp(String.raw`\d\s*(?:${operador})\s*(?:${formato})`), 'nem com o número à esquerda');
+    const comNumero = MIGRACAO.split('\n').map(l => l.replace(/--.*$/, '')).filter(l => /esquema/i.test(l) && /(?<![\w.])\d/.test(l));
+    assert.deepEqual(comNumero, [], 'nenhum número na linha que lê o formato do cadastro (fora dos comentários)');
   });
 
   it('cada caso da gravação dos programas é uma verificação de cursos.test.sql (o nome é a descrição)', () => {
