@@ -65,6 +65,16 @@ test.describe('Escala automática', () => {
     await expect.poll(() => (servidor.dias.get(AMANHA).conteudo.resultado || { out: [] }).out.length).toBeGreaterThan(20);
     await Promise.all([page.waitForEvent('download'), page.locator('#pdf').click()]);
     await Promise.all([page.waitForEvent('download'), page.locator('#exp').click()]);
+    await Promise.all([page.waitForEvent('download'), page.locator('#xlsx').click()]);
+    expect(servidor.gravacoes.filter(g => g.chave === `dia:${AMANHA}`)).toHaveLength(1);
+  });
+
+  test('exportar o Excel também grava a escala só calculada', async ({ page, context }) => {
+    const servidor = await instalarSupabaseFalso(context, documentosAtuais(comExemplo(estadoSintetico()), AMANHA));
+    await entrar(page, CONTAS.operador);
+    await irPara(page, 'esc');
+    await Promise.all([page.waitForEvent('download'), page.locator('#xlsx').click()]);
+    await expect.poll(() => (servidor.dias.get(AMANHA).conteudo.resultado || { out: [] }).out.length).toBeGreaterThan(20);
     expect(servidor.gravacoes.filter(g => g.chave === `dia:${AMANHA}`)).toHaveLength(1);
   });
 
@@ -73,6 +83,8 @@ test.describe('Escala automática', () => {
     await entrar(page, CONTAS.gestor);
     await irPara(page, 'esc');
     await Promise.all([page.waitForEvent('download'), page.locator('#exp').click()]);
+    const [planilha] = await Promise.all([page.waitForEvent('download'), page.locator('#xlsx').click()]);
+    expect(planilha.suggestedFilename()).toBe(`escala-acpm-${AMANHA}.xlsx`);
     expect(servidor.gravacoes).toEqual([]);
   });
 

@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import {
   HORARIOS_PADRAO, HORARIOS_INICIAIS, normalizarHorarios, horariosDoTipo, periodoDoMinuto, minutoDaPreferencia, preferenciaValida, paraMinuto,
   preferenciasPadrao, DE_30_EM_30, modeloDosHorarios, descreverHorarios, porPeriodo, impactoDosHorarios, resumoDoImpacto,
-  PRIMEIRO_HORARIO, ULTIMO_HORARIO
+  PRIMEIRO_HORARIO, ULTIMO_HORARIO, fimDaMissao
 } from '../../js/horarios.js';
 import { hm } from '../../js/format.js';
 
@@ -227,5 +227,18 @@ describe('O resumo dos horários e o efeito de uma lista nova', () => {
 
   it('no editor, os horários vão das 06:00 às 16:30 (o último que cabe um voo de 1 h antes do noturno)', () => {
     assert.deepEqual([PRIMEIRO_HORARIO, ULTIMO_HORARIO].map(hm), ['06:00', '16:30']);
+  });
+});
+
+describe('Até quando a missão pode ir', () => {
+  it('o voo de dia no avião pousa até as 17:30, quando começa a noite', () => {
+    for (const tipo of ['C152', 'C172', 'PA-34']) assert.equal(fimDaMissao('Voo Local', tipo), 1050, tipo);
+  });
+
+  it('o Noturno, o simulador e a aula de Ground não dependem da luz do dia: vão até o fim do dia', () => {
+    assert.equal(fimDaMissao('Noturno', 'C172'), 1440);
+    assert.equal(fimDaMissao('Simulador', 'Sim. Mono'), 1440);
+    assert.equal(fimDaMissao('Simulador', 'Sim. Multi'), 1440);
+    assert.equal(fimDaMissao('Ground C152', 'Sala Ground'), 1440);
   });
 });
