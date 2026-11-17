@@ -3,7 +3,7 @@
 // noturno sai sempre às 17:30, e o Ground, nas janelas do dia. As 9 janelas viram os períodos do dia: a janela de
 // operação fechada fecha os horários que caem nela, e a disponibilidade dos instrutores e "manhã, tarde e noite"
 // valem por período.
-import { T, NI, DAY } from './config.js';
+import { T, NI, DAY, AIRCRAFT_EQ_TYPES, MINUTOS_DO_DIA } from './config.js';
 import { categoriaDoTipo } from './categorias.js';
 import { hm } from './format.js';
 
@@ -38,6 +38,10 @@ export function horariosDoTipo(horarios, tipo) {
 // Os horários de uma missão: o Noturno sai às 17:30 e o Voo Solo, sempre às 06:30 (local ou navegação); as demais,
 // na lista do tipo pedido (o Ground, nas janelas do dia)
 export const HORARIO_DO_SOLO = T[0];
+// Até quando a missão pode ir: o voo de dia no avião pousa até as 17:30, quando começa a noite; o Noturno, o simulador
+// e a aula de Ground, que não dependem da luz do dia, vão até o fim do dia
+export const fimDaMissao = (mis, tipo) => (mis !== 'Noturno' && AIRCRAFT_EQ_TYPES.includes(tipo) ? T[NI] : MINUTOS_DO_DIA);
+
 export const horariosDaMissao = (horarios, mis, tipo) => (mis === 'Noturno' ? [T[NI]] : mis === 'Voo Solo' ? [HORARIO_DO_SOLO] : horariosDoTipo(horarios, tipo));
 
 // O período (janela de operação) em que um horário cai: a última janela que começa até ele

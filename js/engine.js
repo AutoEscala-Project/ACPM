@@ -4,7 +4,7 @@ import { T, NI, DAY, MIS, DEFAULT_LIM, GROUND_EQ_TYPE, GROUND_REG, GROUND_DURATI
 import { FROTA_INICIAL, matriculasDoTipo } from './frota.js';
 import { hm, fmtH, numeroBr } from './format.js';
 import { isGroundMission, doesGroundGateFlight, disponibilidadeDoAluno, rotuloDaDisponibilidade, duracaoValida } from './rules.js';
-import { HORARIOS_INICIAIS, horariosDaMissao, periodoDoMinuto, minutoDaPreferencia, ordenarPelaPreferencia } from './horarios.js';
+import { HORARIOS_INICIAIS, horariosDaMissao, periodoDoMinuto, minutoDaPreferencia, ordenarPelaPreferencia, fimDaMissao } from './horarios.js';
 import { podeFazer, descreverExigencias } from './habilitacoes.js';
 import { categoriaDoRodizio, ajustarFilas } from './rodizio.js';
 import { avisosDeAtraso, intervaloEfetivo, STATUS_EM_ANDAMENTO } from './status.js';
@@ -312,6 +312,10 @@ export function runAllocationEngine(state, opcoes = {}) {
   });
 
   const free = (mp, id, s, e) => livre(mp[id], s, e);
+  // Até quando a missão do aluno pode ir. O Noturno só sai às 17:30: o aluno que tem um no dia termina as outras
+  // missões (o simulador e a aula, que podem passar das 17:30) antes dele
+  const comNoturno = new Set(act.filter(item => item.ref.mis === 'Noturno').map(item => item.stuId));
+  const fimDoAluno = (stuId, mis, tipo) => (mis !== 'Noturno' && comNoturno.has(stuId) ? Math.min(T[NI], fimDaMissao(mis, tipo)) : fimDaMissao(mis, tipo));
   // Rodízio: a fila de cada categoria (cheque, MLTE, noturno e C172) e os voos dela que cada instrutor já recebeu hoje
   const filas = ajustarFilas(state.filas, state.ins);
   const voosNaCategoria = {};
@@ -450,7 +454,7 @@ export function runAllocationEngine(state, opcoes = {}) {
     if (isGnd) {
       const habilitado = x => podeFazer(x, d.mis, GROUND_EQ_TYPE);
       const durMin = GROUND_DURATION_MIN; // 90 min (1.5 h)
-      const endMax = T[NI]; // 17:30 (1050 min)
+      const endMax = fimDoAluno(stuId, d.mis, GROUND_EQ_TYPE);
       const starts = DAY.filter(w => state.win[w] && T[w] + durMin <= endMax && naDisponibilidade(T[w]));
       const pf = preferidos.map(m => T.indexOf(m));
 
@@ -480,7 +484,7 @@ export function runAllocationEngine(state, opcoes = {}) {
       // 1ª Tentativa: Unir-se a uma turma já aberta da mesma temática de Ground (mesmo horário e mesmo instrutor)
       // A turma da 1ª preferência, depois a da 2ª, depois as outras
       const ordemDaPreferencia = c => { const i = pf.indexOf(c.w); return i < 0 ? 2 : i; };
-      const orderedExisting = [...existingClasses].filter(c => c.b <= prazoFixo).sort((c1, c2) => {
+      const orderedExisting = [...existingClasses].filter(c => c.b <= prazoFixo && c.b <= endMax).sort((c1, c2) => {
         const inPref1 = ordemDaPreferencia(c1);
         const inPref2 = ordemDaPreferencia(c2);
         if (inPref1 !== inPref2) return inPref1 - inPref2;
@@ -594,7 +598,7 @@ export function runAllocationEngine(state, opcoes = {}) {
         } else if (!starts.length) {
           [codigo, why] = permitidas
             ? ['disponibilidade-do-aluno', `nenhum horário aberto na disponibilidade do aluno (${rotuloDaDisponibilidade(d.jan)}) comporta 01h30 de Ground`]
-            : ['sem-horario', `nenhum período aberto comporta 01h30 de Ground até as ${hm(endMax)}`];
+            : ['sem-horario', `nenhum período aberto comporta 01h30 de Ground${endMax < MINUTOS_DO_DIA ? ` até as ${hm(endMax)}` : ''}`];
         } else {
           const key = Object.keys(fcGnd).sort((a, b) => fcGnd[b] - fcGnd[a])[0];
           [codigo, why] = {
@@ -653,7 +657,7 @@ export function runAllocationEngine(state, opcoes = {}) {
 
     // Os horários de decolagem da categoria (o noturno, às 17:30), com o período aberto e na disponibilidade do aluno
     const starts = horariosDaMissao(horarios, d.mis, d.eq).filter(m => state.win[periodoDoMinuto(m)] && naDisponibilidade(m));
-    const endMax = night ? MINUTOS_DO_DIA : T[NI];
+    const endMax = fimDoAluno(stuId, d.mis, d.eq);
     const dur = Math.round(H * 60);
     // Os horários possíveis: a 1ª e a 2ª preferência, depois os outros pela distância da 1ª; w é o período (a janela de
     // operação em que o voo começa), para agrupar a escala
@@ -769,7 +773,7 @@ export function runAllocationEngine(state, opcoes = {}) {
       } else if (!inicios.length) {
         [codigo, why] = minStartAfterGround > 0
           ? ['depois-do-ground', `nenhum horário aberto depois do Ground (${hm(minStartAfterGround)}) comporta ${fmtH(H)} até as ${hm(endMax)}`]
-          : ['sem-horario', `nenhum horário aberto comporta ${fmtH(H)} ${night ? 'a partir das 17:30' : `até as ${hm(T[NI])}`}`];
+          : ['sem-horario', `nenhum horário aberto comporta ${fmtH(H)}${night ? ' a partir das 17:30' : endMax < MINUTOS_DO_DIA ? ` até as ${hm(endMax)}` : ''}`];
       } else {
         const key = Object.keys(fc).sort((a, b) => fc[b] - fc[a])[0];
         [codigo, why] = {
