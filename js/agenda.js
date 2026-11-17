@@ -4,8 +4,9 @@ import { MIS, MISSOES_LOCAIS, LIMITE_DE_VOOS_LOCAIS } from './config.js';
 import { disponibilidadeAtual, disponibilidadeDoAluno, normalizeMissionFields, proximoMid, duracaoValida } from './rules.js';
 import { horariosDaMissao, preferenciasPadrao, paraMinuto } from './horarios.js';
 import { hm, somarDias } from './format.js';
-import { normalizarCursos } from './cursos.js';
-import { situacaoPorMissao, proximaMissao } from './resultados.js';
+import { indiceDoPrograma } from './programa.js';
+import { proximasMissoes, missoesDoDia } from './progresso.js';
+import { situacaoPorMissao } from './resultados.js';
 
 export const FUSO_DO_AEROCLUBE = 'America/Sao_Paulo';
 
@@ -77,10 +78,12 @@ export function pedidoDaSolicitacao(solicitacao, horarios, { eq } = {}) {
 // recebe o pedido como missão principal; a mesma missão copiada da data anterior dá lugar ao pedido; senão, o pedido
 // entra como missão extra (cada pedido é um voo, marcado com o id dele em solicitacao). As solicitações vistas ficam
 // anotadas no dia (estado.importadas) para não repetir.
-// Aluno de um curso: quando a próxima missão dele no programa é do tipo pedido, o pedido entra como ela (o código, o
-// recurso e as horas do programa); situacao: o último resultado de cada missão
-export function importarSolicitacoes(estado, solicitacoes, { situacao = [] } = {}) {
-  const programa = normalizarCursos(estado.cursos), mapa = situacaoPorMissao(situacao);
+// Aluno de um curso: o pedido entra como a primeira missão liberada do programa que é do tipo pedido (o código, o
+// recurso e as horas do programa); nenhuma, ele entra como veio. As missões que o aluno já tem no dia contam como
+// feitas, como na Demanda. situacao: o último resultado de cada missão; programa: os cursos (vazio quando os resultados
+// ou os programas não foram lidos: nenhum pedido entra como missão do curso)
+export function importarSolicitacoes(estado, solicitacoes, { situacao = [], programa = [] } = {}) {
+  const indice = indiceDoPrograma(programa), mapa = situacaoPorMissao(situacao);
   const resumo = { novos: 0, atualizados: 0, semAluno: 0 };
   if (!Array.isArray(estado.importadas)) estado.importadas = [];
   for (const solicitacao of solicitacoes) {
@@ -89,12 +92,13 @@ export function importarSolicitacoes(estado, solicitacoes, { situacao = [] } = {
     const aluno = estado.stu.find(x => x.id === solicitacao.aluno);
     if (!aluno) { resumo.semAluno++; continue; }
     estado.importadas.push(solicitacao.id);
-    const jaNoDia = [aluno, ...(aluno.extra || [])].filter(m => m.fly && m.etapa).map(m => m.etapa);
-    const proxima = proximaMissao(programa, mapa, aluno.id, aluno.curso, { exceto: jaNoDia });
-    const doCurso = proxima && proxima.mis === solicitacao.missao;
+    const curso = aluno.curso ? indice.curso(aluno.curso) : null;
+    const jaNoDia = curso && missoesDoDia(curso, aluno, { fStatus: estado.fStatus });
+    const missao = curso && proximasMissoes(curso, mapa, aluno.id, { planejadas: jaNoDia, exceto: jaNoDia }).candidatas
+      .find(m => m.mis === solicitacao.missao);
     // A missão do curso: o recurso do programa, com os horários e as preferências dele
-    const pedido = pedidoDaSolicitacao(solicitacao, estado.horarios, doCurso ? { eq: proxima.eq } : {});
-    if (doCurso) Object.assign(pedido, { etapa: proxima.id, nb: proxima.nb });
+    const pedido = pedidoDaSolicitacao(solicitacao, estado.horarios, missao ? { eq: missao.eq } : {});
+    if (missao) Object.assign(pedido, { etapa: missao.codigo, nb: missao.nb });
     // A duração registrada na agenda vale; o Ground continua com 01h30
     if (solicitacao.horas !== null && solicitacao.horas !== undefined && !MIS[pedido.mis]?.isGround) pedido.nb = duracaoValida(+solicitacao.horas);
     // Cada pedido da agenda vira um voo (dois pedidos da mesma missão são dois voos). Só a missão que veio da data

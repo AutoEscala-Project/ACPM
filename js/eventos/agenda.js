@@ -11,6 +11,7 @@ import { confirmado } from './confirmacao.js';
 import { aoAcionar } from './registro.js';
 import { carregarMes, mudarMes, escolherDia, diaDaAgenda, lembrarRegistradoPor, podeEditarAgenda, rAgenda, preencherHorariosDaAgenda, pedidosDoAluno, descreverPedido, pedidosCarregados } from '../views/agenda.js';
 import { rDem } from '../views/demanda.js';
+import { programaParaInferir } from '../views/etapas.js';
 import { lerPedidosDaData } from '../views/selos.js';
 
 // Agenda: o calendário é livre para navegar (inclusive para o Gestor)
@@ -47,7 +48,7 @@ async function importarDaAgenda() {
     showToast(`Nenhum pedido novo na agenda para ${DATA.slice(8, 10)}/${DATA.slice(5, 7)}.`);
     return;
   }
-  const resumo = importarSolicitacoes(S, pendentes, { situacao: (S.resultados && S.resultados.situacao) || [] });
+  const resumo = importarSolicitacoes(S, pendentes, { situacao: (S.resultados && S.resultados.situacao) || [], programa: programaParaInferir() });
   gravarAlteracao('inc', pendentes.filter(s => S.stu.some(x => x.id === s.aluno))
     .map(s => `Agenda: ${s.aluno_nome} incluído (${s.missao} · ${rotuloDaDisponibilidade(disponibilidadeDaSolicitacao(s))}${s.horas ? ` · ${fmtH(+s.horas)}` : ''})`));
   rDem(); rAgenda();

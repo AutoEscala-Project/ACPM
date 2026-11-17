@@ -2,7 +2,10 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { prazoDaAgendaPermite, primeiraDataAberta, disponibilidadeDaSolicitacao, pedidoDaSolicitacao, importarSolicitacoes } from '../../js/agenda.js';
+import { normalizarCursos } from '../../js/cursos.js';
+import { programaDoLegado, percursoDoCurso } from '../../js/programa.js';
 import { aluno } from '../helpers/montar.js';
+import { cursoPP } from '../helpers/programa-pp.js';
 
 const em = iso => new Date(iso);
 
@@ -73,6 +76,8 @@ describe('Agenda de solicitações', () => {
 describe('Importar as solicitações da agenda para a demanda', () => {
   const pedido = (id, alunoId, extra = {}) => ({ id, data: '2026-11-11', aluno: alunoId, aluno_nome: `Aluno ${alunoId}`, missao: 'Voo Local', janela: 'tarde', horario: null, cancelada_em: null, ...extra });
   const estado = () => ({ nid: 2000, importadas: [], stu: [aluno(1000, { fly: false }), aluno(1001, { mis: 'IFR', eq: 'C172' }), aluno(1002)] });
+  // O programa do cadastro (a lista de missões de cada curso) no formato dos cursos, como a tela o passa
+  const doCadastro = cursos => programaDoLegado(normalizarCursos(cursos), (s, c) => `${s}:${c}`);
 
   it('aluno sem voo no dia: o pedido vira a missão principal', () => {
     const e = estado();
@@ -109,9 +114,9 @@ describe('Importar as solicitações da agenda para a demanda', () => {
 
   it('aluno de um curso: quando a próxima missão dele é do tipo pedido, o pedido já entra como ela (código, recurso e horas)', () => {
     const programa = { PP: [{ id: 'PP-01', nome: 'A', mis: 'Voo Local', eq: 'C152', nb: 1 }, { id: 'PP-02', nome: 'B', mis: 'Navegação', eq: 'C172', nb: 2 }], PC: [], INVA: [] };
-    const e = { ...estado(), cursos: programa, stu: [aluno(1000, { fly: false }, { curso: 'PP' }), aluno(1001, { fly: false }, { curso: 'PP' })] };
+    const e = { ...estado(), stu: [aluno(1000, { fly: false }, { curso: 'PP' }), aluno(1001, { fly: false }, { curso: 'PP' })] };
     const situacao = [{ aluno: 1000, curso: 'PP', missao: 'PP-01', resultado: 'aprovado' }];
-    importarSolicitacoes(e, [pedido(7, 1000, { missao: 'Navegação' }), pedido(8, 1001, { missao: 'Navegação' })], { situacao });
+    importarSolicitacoes(e, [pedido(7, 1000, { missao: 'Navegação' }), pedido(8, 1001, { missao: 'Navegação' })], { situacao, programa: doCadastro(programa) });
     assert.deepEqual([e.stu[0].etapa, e.stu[0].eq, e.stu[0].nb], ['PP-02', 'C172', 2]);
     assert.deepEqual([e.stu[1].etapa, e.stu[1].mis], [undefined, 'Navegação'], 'a próxima do 1001 é PP-01 (Voo Local): o pedido entra como veio');
   });
@@ -128,16 +133,47 @@ describe('Importar as solicitações da agenda para a demanda', () => {
   // A agenda guarda a duração; o pedido sem ela fica com 1 h ou as horas do curso
   it('a duração do pedido vai para a demanda (vale mais que as horas do programa do curso)', () => {
     const programa = { PP: [{ id: 'PP-01', nome: 'A', mis: 'Voo Local', eq: 'C152', nb: 2 }], PC: [], INVA: [] };
-    const e = { ...estado(), cursos: programa, stu: [aluno(1000, { fly: false }, { curso: 'PP' }), aluno(1001, { fly: false }, { curso: 'PP' })] };
-    importarSolicitacoes(e, [pedido(20, 1000, { janela: 'horario', horario: '10:10', horas: 2.6 }), pedido(21, 1001, { janela: 'horario', horario: '10:10', horas: null })]);
+    const e = { ...estado(), stu: [aluno(1000, { fly: false }, { curso: 'PP' }), aluno(1001, { fly: false }, { curso: 'PP' })] };
+    importarSolicitacoes(e, [pedido(20, 1000, { janela: 'horario', horario: '10:10', horas: 2.6 }), pedido(21, 1001, { janela: 'horario', horario: '10:10', horas: null })], { programa: doCadastro(programa) });
     assert.deepEqual([e.stu[0].nb, e.stu[0].etapa, e.stu[1].nb, e.stu[1].etapa], [2.6, 'PP-01', 2, 'PP-01']);
   });
 
   it('missão do curso noutro recurso: as preferências são os horários desse recurso, na disponibilidade pedida', () => {
     const programa = { PP: [], PC: [{ id: 'PC-01', nome: 'A', mis: 'IFR', eq: 'PA-34', nb: 1 }], INVA: [] };
-    const e = { ...estado(), cursos: programa, stu: [aluno(1000, { fly: false }, { curso: 'PC' })] };
-    importarSolicitacoes(e, [pedido(9, 1000, { missao: 'IFR', janela: 'manha' })]);
+    const e = { ...estado(), stu: [aluno(1000, { fly: false }, { curso: 'PC' })] };
+    importarSolicitacoes(e, [pedido(9, 1000, { missao: 'IFR', janela: 'manha' })], { programa: doCadastro(programa) });
     assert.deepEqual([e.stu[0].etapa, e.stu[0].eq, e.stu[0].p1, e.stu[0].p2], ['PC-01', 'PA-34', 390, 420]);
+  });
+
+  // No programa em fases, várias missões podem estar liberadas: o pedido entra como a primeira do tipo pedido; nenhuma
+  // liberada do tipo (fora da ordem), ele entra como veio
+  it('aluno de um curso em fases: a primeira missão liberada do tipo pedido; fora da ordem, nenhuma', () => {
+    // As fases 1 a 4 aprovadas (as 13 primeiras missões do curso)
+    const PP = cursoPP();
+    const situacao = percursoDoCurso(PP).missoes.slice(0, 13).map((m, i) => ({ id: i + 1, aluno: 1000, curso: 'PP', missao: m.codigo, resultado: 'aprovado' }));
+    const e = { ...estado(), stu: [aluno(1000, { fly: false }, { curso: 'PP' })] };
+    importarSolicitacoes(e, [pedido(30, 1000, { missao: 'Parafuso' }), pedido(31, 1000, { missao: 'Navegação' }), pedido(32, 1000, { missao: 'Noturno' })],
+      { situacao, programa: [PP] });
+    assert.deepEqual([e.stu[0], ...e.stu[0].extra].map(p => [p.mis, p.etapa, p.eq, p.nb]),
+      [['Parafuso', 'PE-04', 'C152', 1], ['Navegação', 'NAV-01', 'C152', 1.5], ['Noturno', undefined, 'C172', 1]]);
+  });
+
+  it('sem programa (os resultados ou os programas não foram lidos), nenhum pedido entra como missão do curso', () => {
+    const e = { ...estado(), stu: [aluno(1000, { fly: false }, { curso: 'PP' })] };
+    importarSolicitacoes(e, [pedido(40, 1000)], { programa: [] });
+    assert.deepEqual([e.stu[0].fly, e.stu[0].etapa], [true, undefined]);
+  });
+
+  // A missão de um voo cancelado não conta como já marcada no dia
+  it('as missões dos outros voos do dia contam como feitas; a do voo cancelado, não', () => {
+    const programa = { PP: [{ id: 'PP-01', nome: 'A', mis: 'Voo Local', eq: 'C152', nb: 1 }, { id: 'PP-02', nome: 'B', mis: 'Navegação', eq: 'C152', nb: 2 }] };
+    const importar = fStatus => {
+      const e = { ...estado(), fStatus, stu: [aluno(1000, { etapa: 'PP-01' }, { curso: 'PP' })] };
+      importarSolicitacoes(e, [pedido(50, 1000, { missao: 'Navegação' })], { programa: doCadastro(programa) });
+      return e.stu[0].extra.map(x => [x.mis, x.etapa]);
+    };
+    assert.deepEqual(importar({}), [['Navegação', 'PP-02']]);
+    assert.deepEqual(importar({ '1000_0_1': 'Cancelado' }), [['Navegação', undefined]], 'a PP-01 ainda falta');
   });
 });
 

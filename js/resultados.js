@@ -1,7 +1,7 @@
 // Resultados das missões dos cursos. O operador registra aprovado ou reprovado na linha do voo (pendente
 // desfaz um engano); os registros só crescem, e a situação de cada missão é o último registro do aluno, curso e
-// missão. A próxima missão do aluno é a primeira do programa ainda não aprovada (a reprovada volta); o progresso conta
-// as aprovadas do programa. As regras do registro são as do servidor (supabase/migrations/…_resultados_de_missao.sql).
+// missão (a reprovada volta a faltar). A próxima missão e o progresso saem dela (js/progresso.js). As regras do
+// registro são as do servidor (supabase/migrations/…_resultados_de_missao.sql).
 import { CURSOS, codigoValido } from './cursos.js';
 import { CHAVE_DO_VOO } from './voo.js';
 import { dataIsoValida } from './format.js';
@@ -19,17 +19,6 @@ export const situacaoDa = (mapa, aluno, curso, missao) => {
   const r = mapa.get(chave(aluno, curso, missao));
   return r ? r.resultado : 'pendente';
 };
-
-// exceto: as missões que o aluno já tem no dia (a missão extra recebe a seguinte)
-export function proximaMissao(programa, mapa, aluno, curso, { exceto = [] } = {}) {
-  const missoes = (programa && curso && programa[curso]) || [];
-  return missoes.find(m => situacaoDa(mapa, aluno, curso, m.id) !== 'aprovado' && !exceto.includes(m.id)) || null;
-}
-
-export function progresso(programa, mapa, aluno, curso) {
-  const missoes = (programa && curso && programa[curso]) || [];
-  return { aprovadas: missoes.filter(m => situacaoDa(mapa, aluno, curso, m.id) === 'aprovado').length, total: missoes.length };
-}
 
 // O resultado registrado para um voo da escala do dia (o último), ou null
 export function resultadoDoVoo(registrosDoDia, voo) {
