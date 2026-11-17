@@ -20,7 +20,7 @@ import { hm, fmtH, fmtDurLabel, pad, amanhaISO, somarDias, nomeLimpo, dataIsoVal
 import { isGroundMission, blank, rotuloDaDisponibilidade, normalizeMissionFields, proximoMid, duracaoDigitada, ERRO_DA_DURACAO } from './rules.js';
 import { habilitacoesDoNivel, normalizarHabilitacoes, nomeDaHabilitacao, podeFazer } from './habilitacoes.js';
 import { ApiClient } from './storage.js';
-import { S, RES, AUDIT_LOG, DATA, setS, setRES, setAuditLog, setTLMode, isGestor, insBy, stuBy, getMissionTarget } from './state.js';
+import { S, RES, AUDIT_LOG, DATA, setS, setRES, setAuditLog, setTLMode, isGestor, modoCompartilhado, insBy, stuBy, getMissionTarget } from './state.js';
 import { $, showToast, focusLast, mostrarAviso, avisoAberto, avisarDoLink } from './dom.js';
 import { show } from './views/tabs.js';
 import { rBI, alternarTodosDoBI } from './views/bi.js';
@@ -47,7 +47,7 @@ import {
 } from './views/horarios.js';
 import { normalizarHangar, moverNoHangar } from './hangar.js';
 import { opcoesDeCategoria, categoriaDoTipo } from './categorias.js';
-import { setRole, save, logChange, escalaCalculada, marcarEscalaSoCalculada, gravarEscalaCalculada, abrirData, historicoParaPainel, carregarData, carregarBI, avisarDadosIndisponiveis, lerDadosDeNovo, mostrarNoHistorico } from './actions.js';
+import { setRole, gravarAlteracao, logChange, escalaCalculada, marcarEscalaSoCalculada, gravarEscalaCalculada, abrirData, historicoParaPainel, carregarData, carregarBI, avisarDadosIndisponiveis, lerDadosDeNovo, mostrarNoHistorico } from './actions.js';
 import { exp, pdf, planilha } from './export.js';
 import { projetoSupabase } from './config-supabase.js';
 import { CATEGORIAS_DO_RODIZIO, ajustarFilas } from './rodizio.js';
@@ -217,8 +217,6 @@ $('#role-sel').onchange = e => {
   if (RES) rOut();
 };
 
-const modoCompartilhado = () => document.body.dataset.backend === 'supabase';
-
 // No modo compartilhado o link leva só a data: quem abre entra com a própria conta e lê do servidor
 function linkDaData(data) {
   const url = new URL(window.location.href);
@@ -343,8 +341,7 @@ function incluirAluno() {
   campo.value = '';
   if (s.fly) { showToast(`${s.nm} já está na demanda.`); return; }
   s.fly = true;
-  save();
-  logChange('inc', `${s.nm} incluído na demanda`, { kind: 'setFly', stuId: s.id, mid: 0, val: false, label: '↶ Reverter' });
+  gravarAlteracao('inc', `${s.nm} incluído na demanda`, { kind: 'setFly', stuId: s.id, mid: 0, val: false, label: '↶ Reverter' });
   rDem();
   const linha = document.querySelector(`#dem tr[data-k="d"][data-id="${s.id}"][data-mid="0"]`);
   if (linha) linha.scrollIntoView({ block: 'center' });
@@ -388,8 +385,8 @@ $('#form-recurso').onsubmit = e => {
   if (erro) { $('#rec-erro').textContent = erro; return; }
   S.frota.push(recurso);
   S.av[recurso.reg] = true;
-  logChange('inc', `Recurso adicionado: ${recurso.reg} (${recurso.tipo}${recurso.soParafuso ? ', só Parafuso' : ''})`);
-  save(); rRec();
+  gravarAlteracao('inc', `Recurso adicionado: ${recurso.reg} (${recurso.tipo}${recurso.soParafuso ? ', só Parafuso' : ''})`);
+  rRec();
   mostrarFormDoRecurso(false);
   showToast(`${recurso.reg} adicionado à frota.`, 'ok');
 };
@@ -422,8 +419,8 @@ matchMedia('(prefers-color-scheme: dark)').addEventListener('change', mostrarTem
 comConfirmacao('#clr', 'Confirmar limpeza', () => {
   if (isGestor()) return;
   S.stu.forEach(d => { Object.assign(d, blank()); d.extra = []; });
-  save(); rDem();
-  logChange('exc', 'Demanda limpa');
+  gravarAlteracao('exc', 'Demanda limpa');
+  rDem();
   fecharMenuMais();
 });
 
@@ -601,10 +598,9 @@ async function importarDaAgenda() {
     return;
   }
   const resumo = importarSolicitacoes(S, pendentes, { situacao: (S.resultados && S.resultados.situacao) || [] });
-  pendentes.filter(s => S.stu.some(x => x.id === s.aluno)).forEach(s => {
-    logChange('inc', `Agenda: ${s.aluno_nome} incluído (${s.missao} · ${rotuloDaDisponibilidade(disponibilidadeDaSolicitacao(s))}${s.horas ? ` · ${fmtH(+s.horas)}` : ''})`);
-  });
-  save(); rDem(); rAgenda();
+  gravarAlteracao('inc', pendentes.filter(s => S.stu.some(x => x.id === s.aluno))
+    .map(s => `Agenda: ${s.aluno_nome} incluído (${s.missao} · ${rotuloDaDisponibilidade(disponibilidadeDaSolicitacao(s))}${s.horas ? ` · ${fmtH(+s.horas)}` : ''})`));
+  rDem(); rAgenda();
   showToast(`${resumo.novos + resumo.atualizados} pedido(s) da agenda na demanda` +
     (resumo.semAluno ? ` · ${resumo.semAluno} de aluno que não está no cadastro (entra depois de cadastrado)` : '') + '.', 'ok');
 }
@@ -714,8 +710,8 @@ document.addEventListener('click', e => {
     Object.assign(target, { fly: true, mis: m.mis, eq: m.eq, nb: m.nb, etapa: m.id });
     ajustarPreferencias(target, horariosDaMissao(S.horarios, target.mis, target.eq));
     normalizeMissionFields(target);
-    logChange('inc', `${s.nm}: ${m.id} na demanda (${m.mis} · ${m.eq} · ${fmtDurLabel(m.nb)})`);
-    save(); rDem();
+    gravarAlteracao('inc', `${s.nm}: ${m.id} na demanda (${m.mis} · ${m.eq} · ${fmtDurLabel(m.nb)})`);
+    rDem();
     return;
   }
 
@@ -735,9 +731,8 @@ document.addEventListener('click', e => {
       pr: s.pr || 3
     };
     s.extra.push(newEx);
-    save();
+    gravarAlteracao('inc', `Missão extra adicionada para ${s.nm}`);
     rDem();
-    logChange('inc', `Missão extra adicionada para ${s.nm}`);
     showToast(`Nova missão adicionada para ${s.nm}.`, 'ok');
     return;
   }
@@ -754,9 +749,8 @@ document.addEventListener('click', e => {
     const s = stuBy(id);
     if (!s || !Array.isArray(s.extra) || !confirmado(b, 'Confirmar')) return;
     s.extra = s.extra.filter(ex => ex.mid !== mid);
-    save();
+    gravarAlteracao('exc', `Missão extra removida de ${s.nm}`);
     rDem();
-    logChange('exc', `Missão extra removida de ${s.nm}`);
     return;
   }
 
@@ -765,8 +759,7 @@ document.addEventListener('click', e => {
     const target = getMissionTarget(id, mid);
     if (!s || !target || !target.fly) return;
     target.fly = false;
-    save();
-    logChange('exc', `Tirado da escala: ${s.nm} (${target.mis} · ${target.eq})`, {
+    gravarAlteracao('exc', `Tirado da escala: ${s.nm} (${target.mis} · ${target.eq})`, {
       kind: 'setFly', stuId: s.id, mid, val: true, label: '↶ Restaurar'
     });
     rDem();
@@ -788,25 +781,24 @@ document.addEventListener('click', e => {
       if (st && target) {
         target.fly = rev.val;
         (rev.extras || []).forEach(m => { const ex = getMissionTarget(rev.stuId, m); if (ex) ex.fly = rev.val; });
-        logChange(rev.val ? 'inc' : 'exc', `Revertido: ${st.nm} (${target.mis})`, null, entry.id);
-        save(); rDem();
+        gravarAlteracao(rev.val ? 'inc' : 'exc', `Revertido: ${st.nm} (${target.mis})`, null, entry.id);
+        rDem();
       }
     } else if (rev.kind === 'setAv') {
       S.av[rev.reg] = rev.val;
-      logChange(rev.val ? 'inc' : 'exc', `Revertido: ${rev.reg} ${rev.val ? 'disponível' : 'em manutenção'}`, null, entry.id);
-      save(); rRec();
+      gravarAlteracao(rev.val ? 'inc' : 'exc', `Revertido: ${rev.reg} ${rev.val ? 'disponível' : 'em manutenção'}`, null, entry.id);
+      rRec();
     } else if (rev.kind === 'setInsOn') {
       const ins = insBy(rev.insId);
       if (ins) {
         ins.on = rev.val;
-        logChange(rev.val ? 'inc' : 'exc', `Revertido: ${ins.nm} ${rev.val ? 'disponível' : 'indisponível'}`, null, entry.id);
-        save(); rIns();
+        gravarAlteracao(rev.val ? 'inc' : 'exc', `Revertido: ${ins.nm} ${rev.val ? 'disponível' : 'indisponível'}`, null, entry.id);
+        rIns();
       }
     } else if (rev.kind === 'restaurarFixos') {
       // Um reparo desfeito: os voos voltam a ser fixos como antes dele
       S.fixos = normalizarFixos({ ...(S.fixos || {}), ...rev.fixos });
-      logChange('mod', `Revertido: ${entry.desc}`, null, entry.id);
-      save();
+      gravarAlteracao('mod', `Revertido: ${entry.desc}`, null, entry.id);
     } else if (rev.kind === 'restaurarHorarios') {
       // Os horários de uma categoria voltam como estavam, e os pedidos que mudaram com eles também
       S.horarios = { ...S.horarios, [rev.cat]: [...rev.lista] };
@@ -816,14 +808,14 @@ document.addEventListener('click', e => {
         Object.assign(alvo, { p1, p2 });
         if (jan !== undefined) alvo.jan = jan;
       });
-      logChange('mod', `Revertido: ${entry.desc}`, null, entry.id);
-      save(); rRec(); rDem();
+      gravarAlteracao('mod', `Revertido: ${entry.desc}`, null, entry.id);
+      rRec(); rDem();
     } else if (rev.kind === 'readicionarRecurso') {
       // Um recurso retirado volta para a frota, como estava
       S.frota.push({ ...rev.recurso });
       S.av[rev.recurso.reg] = rev.av !== false;
-      logChange('inc', `Revertido: ${rev.recurso.reg} de volta à frota`, null, entry.id);
-      save(); rRec();
+      gravarAlteracao('inc', `Revertido: ${rev.recurso.reg} de volta à frota`, null, entry.id);
+      rRec();
     }
     return;
   }
@@ -843,10 +835,10 @@ document.addEventListener('click', e => {
     const recurso = S.frota.find(f => f.reg === b.dataset.id);
     if (!recurso) return;
     S.frota = S.frota.filter(f => f !== recurso);
-    logChange('exc', `Recurso retirado: ${recurso.reg} (${recurso.tipo})`, {
+    gravarAlteracao('exc', `Recurso retirado: ${recurso.reg} (${recurso.tipo})`, {
       kind: 'readicionarRecurso', recurso: { ...recurso }, av: S.av[recurso.reg] !== false, label: '↶ Reverter'
     });
-    save(); rRec();
+    rRec();
     showToast(`${recurso.reg} retirado da frota.`, 'ok');
     return;
   }
@@ -855,8 +847,7 @@ document.addEventListener('click', e => {
   if (a === 'hangar-subir' || a === 'hangar-descer' || a === 'hangar-frente') {
     const r = b.dataset.id;
     S.hangar = moverNoHangar(normalizarHangar(S.hangar, S.frota), r, a.slice('hangar-'.length));
-    logChange('mod', `Hangar: ${r} passou para ${S.hangar.indexOf(r) + 1}º`);
-    save();
+    gravarAlteracao('mod', `Hangar: ${r} passou para ${S.hangar.indexOf(r) + 1}º`);
     rHangar();
     return;
   }
@@ -871,8 +862,7 @@ document.addEventListener('click', e => {
     fila.splice(depois, 0, insId);
     S.filas[cat] = fila;
     const categoria = CATEGORIAS_DO_RODIZIO.find(c => c.id === cat);
-    logChange('mod', `Rodízio · ${categoria.nome}: ${insBy(insId).nm} passou para ${depois + 1}º`);
-    save();
+    gravarAlteracao('mod', `Rodízio · ${categoria.nome}: ${insBy(insId).nm} passou para ${depois + 1}º`);
     rRodizio();
     return;
   }
@@ -881,8 +871,8 @@ document.addEventListener('click', e => {
   if (a === 'revisao') {
     if (isGestor() || !confirmado(b, 'Confirmar revisão')) return;
     S.horas[b.dataset.id] = 0;
-    logChange('mod', `${b.dataset.id}: revisão de 50 horas feita (${REVISAO_H} h disponíveis)`);
-    save(); rRec();
+    gravarAlteracao('mod', `${b.dataset.id}: revisão de 50 horas feita (${REVISAO_H} h disponíveis)`);
+    rRec();
     return;
   }
 
@@ -896,19 +886,19 @@ document.addEventListener('click', e => {
     const newIns = { id: S.nid++, nm: 'Novo instrutor', on: true, hab: habilitacoesDoNivel(1), kg: 0, aw: WIN.map((_, i) => i < 8) };
     S.ins.push(newIns);
     mostrarVistaDosInstrutores('cadastro');
-    save(); rIns(); rAlu(); focusLast('#inst .nm');
-    logChange('inc', `Instrutor adicionado: ${newIns.nm}`);
+    gravarAlteracao('inc', `Instrutor adicionado: ${newIns.nm}`);
+    rIns(); rAlu(); focusLast('#inst .nm');
   } else if (a === 'adds') {
     const newStu = { id: S.nid++, nm: 'Novo aluno', kg: 0, bl: [], extra: [], ...blank() };
     S.stu.push(newStu);
-    save(); rAlu(); rDem(); focusLast('#alu .nm');
-    logChange('inc', `Aluno cadastrado: ${newStu.nm}`);
+    gravarAlteracao('inc', `Aluno cadastrado: ${newStu.nm}`);
+    rAlu(); rDem(); focusLast('#alu .nm');
   } else if (a === 'unbl') {
     const s = stuBy(id);
     const blkIns = insBy(+b.dataset.b);
     s.bl = s.bl.filter(v => v !== +b.dataset.b);
-    save(); atualizarLinhaDoAluno(s, { naoEscalar: true });
-    logChange('mod', `${s.nm}: volta a ser escalado com ${blkIns ? blkIns.nm : ''}`);
+    gravarAlteracao('mod', `${s.nm}: volta a ser escalado com ${blkIns ? blkIns.nm : ''}`);
+    atualizarLinhaDoAluno(s, { naoEscalar: true });
   } else if (a === 'deli' || a === 'dels') {
     if (!confirmado(b, 'Confirmar')) return;
     if (a === 'deli') {
@@ -916,13 +906,13 @@ document.addEventListener('click', e => {
       if (+$('#painel-instrutor').dataset.id === id) fecharPainelDoInstrutor();
       S.ins = S.ins.filter(x => x.id !== id);
       S.stu.forEach(s => s.bl = s.bl.filter(v => v !== id));
-      logChange('exc', `Instrutor excluído: ${target ? target.nm : id}`);
+      gravarAlteracao('exc', `Instrutor excluído: ${target ? target.nm : id}`);
     } else {
       const target = stuBy(id);
       S.stu = S.stu.filter(x => x.id !== id);
-      logChange('exc', `Aluno excluído: ${target ? target.nm : id}`);
+      gravarAlteracao('exc', `Aluno excluído: ${target ? target.nm : id}`);
     }
-    save(); rIns(); rAlu(); rDem();
+    rIns(); rAlu(); rDem();
   }
 });
 
@@ -935,16 +925,14 @@ document.addEventListener('click', e => {
     if (!confirmado(aprovar, 'Confirmar aprovação')) return;
     S.fixos = Object.fromEntries(RES.out.map(o => [o.fKey, pinoDoVoo(o)]));
     S.aprovacao = { em: new Date().toISOString(), por: ApiClient.autorAtual || '' };
-    save();
-    logChange('mod', `Escala aprovada: ${RES.out.length} ${RES.out.length === 1 ? 'voo fixado' : 'voos fixados'}`);
+    gravarAlteracao('mod', `Escala aprovada: ${RES.out.length} ${RES.out.length === 1 ? 'voo fixado' : 'voos fixados'}`);
     showToast('Escala aprovada: os voos ficam fixos.', 'ok');
   } else {
     if (!confirmado(reabrir, 'Confirmar reabertura')) return;
     // Os voos em andamento (Em Voo, Atrasado, Pousou, Cancelado) continuam fixos
     S.fixos = fixosAoReabrir(S.fixos, S.fStatus);
     S.aprovacao = null;
-    save();
-    logChange('mod', 'Escala reaberta: volta a ser refeita a cada alteração');
+    gravarAlteracao('mod', 'Escala reaberta: volta a ser refeita a cada alteração');
     showToast('Escala reaberta.', 'ok');
   }
 });
@@ -952,7 +940,7 @@ document.addEventListener('click', e => {
 // O programa dos cursos, em Alunos › Cursos: só o Administrador (neste navegador, o Operador) muda. Incluir,
 // subir, descer e tirar (com confirmação) refazem a tabela; os campos mudam no lugar. O código vale uma vez por curso
 const ondeNoPrograma = el => { const tr = el.closest('tr[data-curso]'); return { curso: tr.dataset.curso, i: +tr.dataset.i, tr }; };
-const gravarPrograma = (curso, lista) => { S.cursos = normalizarCursos({ ...normalizarCursos(S.cursos), [curso]: lista }); save(); };
+const mudarPrograma = (curso, lista) => { S.cursos = normalizarCursos({ ...normalizarCursos(S.cursos), [curso]: lista }); };
 document.addEventListener('click', e => {
   const b = e.target.closest('[data-act^="curso-"]');
   if (!b || !podeEditarCursos()) return;
@@ -960,8 +948,8 @@ document.addEventListener('click', e => {
   if (a === 'curso-nova') {
     const curso = b.dataset.curso, lista = normalizarCursos(S.cursos)[curso];
     const nova = novaMissaoDoCurso(curso, lista);
-    gravarPrograma(curso, [...lista, nova]);
-    logChange('inc', `Programa do ${curso}: ${nova.id} incluída`);
+    mudarPrograma(curso, [...lista, nova]);
+    gravarAlteracao('inc', `Programa do ${curso}: ${nova.id} incluída`);
     rCursos();
     $(`#cursos tr[data-curso="${curso}"][data-i="${lista.length}"] [data-cf="nome"]`).focus();
     return;
@@ -971,16 +959,16 @@ document.addEventListener('click', e => {
   if (!m) return;
   if (a === 'curso-remover') {
     if (!confirmado(b, 'Confirmar')) return;
-    gravarPrograma(curso, lista.filter((_, j) => j !== i));
-    logChange('exc', `Programa do ${curso}: ${m.id} removida`);
+    mudarPrograma(curso, lista.filter((_, j) => j !== i));
+    gravarAlteracao('exc', `Programa do ${curso}: ${m.id} removida`);
     rCursos();
     return;
   }
   const j = a === 'curso-subir' ? i - 1 : i + 1;
   if (j < 0 || j >= lista.length) return;
   [lista[i], lista[j]] = [lista[j], lista[i]];
-  gravarPrograma(curso, lista);
-  logChange('mod', `Programa do ${curso}: ${m.id} passou para ${j + 1}ª`);
+  mudarPrograma(curso, lista);
+  gravarAlteracao('mod', `Programa do ${curso}: ${m.id} passou para ${j + 1}ª`);
   rCursos();
   const mesmo = $(`#cursos tr[data-curso="${curso}"][data-i="${j}"] [data-act="${a}"]`);
   (mesmo && !mesmo.disabled ? mesmo : $(`#cursos tr[data-curso="${curso}"][data-i="${j}"] [data-cf="id"]`)).focus();
@@ -1007,10 +995,10 @@ document.addEventListener('change', e => {
     m[cf] = campo.value;
   }
   lista[i] = m;
-  gravarPrograma(curso, lista);
+  mudarPrograma(curso, lista);
   const salvo = normalizarCursos(S.cursos)[curso][i];
+  gravarAlteracao('mod', `Programa do ${curso}: ${salvo.id} alterada`);
   atualizarLinhaDoPrograma(tr, salvo);
-  logChange('mod', `Programa do ${curso}: ${salvo.id} alterada`);
 });
 
 // Critérios da compactação: a escala é refeita com o critério novo (com a escala aprovada, não mudam)
@@ -1022,8 +1010,7 @@ document.addEventListener('click', e => {
   S.criterios = normalizarCriterios({ ...antes, [campo]: b.dataset.valor });
   const opcoes = campo === 'buracos' ? OPCOES_DE_BURACOS : OPCOES_DE_HORARIOS;
   const nome = id => opcoes.find(([v]) => v === id)[1];
-  save();
-  logChange('mod', `Compactação: ${campo === 'buracos' ? 'buracos' : 'horários'} ${nome(antes[campo])} → ${nome(S.criterios[campo])}`);
+  gravarAlteracao('mod', `Compactação: ${campo === 'buracos' ? 'buracos' : 'horários'} ${nome(antes[campo])} → ${nome(S.criterios[campo])}`);
 });
 
 // O resultado da missão do curso, na linha do voo: vai para o servidor (só acréscimo) e entra na situação do
@@ -1045,6 +1032,7 @@ document.addEventListener('change', async e => {
     const mesmaData = DATA === registro.data;
     S.resultados = { situacao: [...atual.situacao.filter(r => !mesmaMissao(r)), novo], doDia: mesmaData ? [...atual.doDia, novo] : atual.doDia };
     const descricao = `Resultado de ${o.s} em ${o.etapa}: ${registro.resultado}`;
+    // O resultado fica no servidor, não nos dados do dia: só a entrada do histórico, sem gravar o dia
     if (mesmaData) logChange('mod', descricao);
     else ApiClient.registrarHistorico(registro.data, { tipo: 'mod', descricao });
   } catch {
@@ -1074,8 +1062,7 @@ document.addEventListener('click', e => {
   S.fixos = aplicarReparo(antes, RES, fKey, opcao);
   // Os voos que mudaram ou saíram dos fixos (soltar): o histórico guarda como estavam
   const mudados = Object.keys(antes).filter(k => S.fixos[k] !== antes[k]);
-  save();
-  logChange('mod', `Reparo: ${voo.s} (${hm(voo.a)}–${hm(voo.b)}): ${opcao.soltar ? 'Soltar o voo' : opcao.texto}`, {
+  gravarAlteracao('mod', `Reparo: ${voo.s} (${hm(voo.a)}–${hm(voo.b)}): ${opcao.soltar ? 'Soltar o voo' : opcao.texto}`, {
     kind: 'restaurarFixos', fixos: Object.fromEntries(mudados.map(k => [k, antes[k]])), label: '↶ Reverter'
   });
   showToast(opcao.soltar ? 'Voo solto: o app escalou de novo.' : 'Sugestão aplicada: o voo continua fixo.', 'ok');
@@ -1101,9 +1088,9 @@ function salvarHorarios() {
     if (p.p1 === antes.p1 && p.p2 === antes.p2 && p.jan === antes.jan) return;
     pedidos.push({ stuId: s.id, mid: p === s ? 0 : p.mid, p1: antes.p1, p2: antes.p2, ...(antes.jan === undefined ? {} : { jan: antes.jan }) });
   }));
-  logChange('mod', `Horários de decolagem do ${NOMES_DAS_CATEGORIAS[cat]}: ${descreverHorarios(lista)}`,
+  gravarAlteracao('mod', `Horários de decolagem do ${NOMES_DAS_CATEGORIAS[cat]}: ${descreverHorarios(lista)}`,
     { kind: 'restaurarHorarios', cat, lista: anterior, pedidos, label: '↶ Reverter' });
-  save(); rRec(); rDem();
+  rRec(); rDem();
   fecharEditorDosHorarios();
 }
 // O modelo escolhido no editor troca a lista do rascunho; Enter no campo põe o horário; Esc descarta o rascunho
@@ -1131,9 +1118,8 @@ function aplicarStatus(fKey, status, detalhe) {
   // Em Voo, Atrasado, Pousou e Cancelado fixam o voo: uma alteração na escala não o tira do lugar (o cancelado fica
   // onde estava, sem ocupar nada). Fora da escala aprovada, Pendente ou Confirmado o soltam
   if (voo) S.fixos = fixosAoMudarStatus(S.fixos, voo, status, { aprovada: Boolean(S.aprovacao) });
-  save();
   const textoDoStatus = status === 'Pousou' ? rotuloDoStatus(status, voo) : textoParaOHistorico(status, detalhe);
-  logChange('mod', `Status de ${voo ? `${voo.s} (${hm(voo.a)}–${hm(voo.b)})` : fKey}: ${textoDoStatus}`);
+  gravarAlteracao('mod', `Status de ${voo ? `${voo.s} (${hm(voo.a)}–${hm(voo.b)})` : fKey}: ${textoDoStatus}`);
 }
 function mudarStatus(fKey, status) {
   const voo = vooDaChave(fKey);
@@ -1155,16 +1141,14 @@ document.addEventListener('change', e => {
   // O limite é maior que zero; vazio é sem limite
   if (valor !== null && valor <= 0) { showToast('O limite precisa ser maior que zero (vazio é sem limite).'); rLimites(); return; }
   S.limites = normalizarLimites({ ...antes, [chave]: valor });
-  logChange('mod', `Limites da lei: ${ROTULOS_DOS_LIMITES[chave]} ${emHoras(chave, antes[chave])} → ${emHoras(chave, S.limites[chave])}`);
-  save();
+  gravarAlteracao('mod', `Limites da lei: ${ROTULOS_DOS_LIMITES[chave]} ${emHoras(chave, antes[chave])} → ${emHoras(chave, S.limites[chave])}`);
   rLimites();
 });
 document.addEventListener('click', e => {
   const b = e.target.closest('[data-limites-padrao]');
   if (!b || !podeEditarLimites() || !confirmado(b, 'Confirmar valores da lei')) return;
   S.limites = { ...LIMITES_DA_LEI };
-  logChange('mod', 'Limites da lei: de volta aos valores da lei');
-  save();
+  gravarAlteracao('mod', 'Limites da lei: de volta aos valores da lei');
   rLimites();
 });
 
@@ -1187,16 +1171,17 @@ document.addEventListener('change', e => {
   }
 
   if (a) {
+    let historico = [];
     if (a === 'win') {
       const idx = +t.dataset.i;
       S.win[idx] = t.checked;
-      logChange(t.checked ? 'inc' : 'exc', `Janela ${WIN[idx]} ${t.checked ? 'ativa' : 'inativa'}`);
+      historico = [t.checked ? 'inc' : 'exc', `Janela ${WIN[idx]} ${t.checked ? 'ativa' : 'inativa'}`];
     } else if (a === 'av') {
       const reg = t.dataset.id;
       S.av[reg] = t.checked;
-      logChange(t.checked ? 'inc' : 'exc', `${reg}: ${t.checked ? 'Disponível' : 'Manutenção'}`, {
+      historico = [t.checked ? 'inc' : 'exc', `${reg}: ${t.checked ? 'Disponível' : 'Manutenção'}`, {
         kind: 'setAv', reg, val: !t.checked, label: '↶ Reverter'
-      });
+      }];
     } else if (a === 'horas') {
       // As horas disponíveis até a revisão de 50 horas; o dia guarda as horas desde a revisão (50 menos as
       // disponíveis). Vazio: sem controle para o avião
@@ -1209,9 +1194,10 @@ document.addEventListener('change', e => {
       }
       if (disponiveis === null) delete S.horas[reg];
       else S.horas[reg] = Math.round((REVISAO_H - disponiveis) * 10) / 10;
-      logChange('mod', `${reg}: ${disponiveis === null ? 'horas disponíveis não informadas' : `${fmtH(disponiveis)} disponíveis até a revisão de 50 horas`}`);
+      historico = ['mod', `${reg}: ${disponiveis === null ? 'horas disponíveis não informadas' : `${fmtH(disponiveis)} disponíveis até a revisão de 50 horas`}`];
     }
-    save(); rRec();
+    gravarAlteracao(...historico);
+    rRec();
     return;
   }
 
@@ -1222,22 +1208,23 @@ document.addEventListener('change', e => {
 
   if (k === 'i') {
     const x = insBy(id);
+    let historico = [];
     if (f === 'on') {
       x.on = t.checked;
-      logChange(t.checked ? 'inc' : 'exc', `${x.nm}: ${t.checked ? 'Disponível' : 'Indisponível'}`, {
+      historico = [t.checked ? 'inc' : 'exc', `${x.nm}: ${t.checked ? 'Disponível' : 'Indisponível'}`, {
         kind: 'setInsOn', insId: x.id, val: !t.checked, label: '↶ Reverter'
-      });
+      }];
     } else if (f === 'nm') {
       const old = x.nm;
       x.nm = nomeLimpo(t.value, x.nm);
-      logChange('mod', `Instrutor: ${old} → ${x.nm}`);
+      historico = ['mod', `Instrutor: ${old} → ${x.nm}`];
     } else if (f === 'kg') {
       x.kg = +t.value || 0;
-      logChange('mod', `Peso ${x.nm}: ${x.kg} kg`);
+      historico = ['mod', `Peso ${x.nm}: ${x.kg} kg`];
     } else if (f === 'hab') {
       const h = t.dataset.h;
       x.hab = normalizarHabilitacoes(t.checked ? [...x.hab, h] : x.hab.filter(k => k !== h));
-      logChange('mod', `Habilitação ${t.checked ? 'incluída' : 'retirada'}: ${x.nm} · ${nomeDaHabilitacao(h)}`);
+      historico = ['mod', `Habilitação ${t.checked ? 'incluída' : 'retirada'}: ${x.nm} · ${nomeDaHabilitacao(h)}`];
     } else if (f === 'ext-mes' || f === 'ext-ano') {
       // Horas de voo fora do app (limites da lei): neste mês ou, no ano, antes deste mês
       const chave = f === 'ext-mes' ? DATA.slice(0, 7) : `${DATA.slice(0, 4)}-00`;
@@ -1247,8 +1234,7 @@ document.addEventListener('change', e => {
       else delete x.horasExternas[chave];
       if (!Object.keys(x.horasExternas).length) delete x.horasExternas;
       S.horasDosInstrutores = comHorasExternas(S.horasBase || {}, S.ins, DATA);
-      logChange('mod', `Horas de voo fora do app de ${x.nm} (${f === 'ext-mes' ? 'neste mês' : 'no ano, antes deste mês'}): ${numeroBr(horas)} h`);
-      save();
+      gravarAlteracao('mod', `Horas de voo fora do app de ${x.nm} (${f === 'ext-mes' ? 'neste mês' : 'no ano, antes deste mês'}): ${numeroBr(horas)} h`);
       rPainelDoInstrutor();
       return;
     } else if (f === 'aw') {
@@ -1257,52 +1243,56 @@ document.addEventListener('change', e => {
       if (!t.value) return;
       x.aw = WIN.map((_, i) => PRE[t.value].includes(i));
     }
-    // A grade do dia é refeita com a escala; a linha do cadastro é atualizada no lugar
-    save();
+    // A grade do dia é refeita com a escala; a linha do cadastro é atualizada no lugar. As janelas e a predefinição do
+    // instrutor gravam sem entrar no histórico
+    gravarAlteracao(...historico);
     atualizarLinhaDoCadastro(x);
     if (f === 'nm') rAlu();
   } else {
     const s = stuBy(id);
     if (k === 's') {
+      let historico = [];
       if (f === 'nm') {
         const old = s.nm;
         s.nm = nomeLimpo(t.value, s.nm);
-        logChange('mod', `Aluno: ${old} → ${s.nm}`);
+        historico = ['mod', `Aluno: ${old} → ${s.nm}`];
       } else if (f === 'kg') {
         s.kg = +t.value || 0;
-        logChange('mod', `Peso ${s.nm}: ${s.kg} kg`);
+        historico = ['mod', `Peso ${s.nm}: ${s.kg} kg`];
       } else if (f === 'bl' && t.value) {
         s.bl.push(+t.value);
         const ins = insBy(+t.value);
-        logChange('exc', `${s.nm}: não escalar com ${ins ? ins.nm : ''}`);
+        historico = ['exc', `${s.nm}: não escalar com ${ins ? ins.nm : ''}`];
       } else if (f === 'curso') {
         // O curso do aluno
         const curso = normalizarCursoDoAluno(t.value);
         if (curso) s.curso = curso;
         else delete s.curso;
-        logChange('mod', `Curso de ${s.nm}: ${curso || 'nenhum'}`);
+        historico = ['mod', `Curso de ${s.nm}: ${curso || 'nenhum'}`];
       }
-      save(); atualizarLinhaDoAluno(s, { naoEscalar: f === 'bl' });
+      gravarAlteracao(...historico);
+      atualizarLinhaDoAluno(s, { naoEscalar: f === 'bl' });
       if (f === 'nm') rDem();
     } else {
       const target = getMissionTarget(id, mid);
       if (!target) return;
+      let historico;
       if (f === 'fly') {
         target.fly = t.checked;
         // O aluno que não vai voar não voa as missões extras; reverter volta todas
         const extras = !mid && !target.fly ? (s.extra || []).filter(ex => ex.fly) : [];
         extras.forEach(ex => { ex.fly = false; });
-        logChange(
+        historico = [
           target.fly ? 'inc' : 'exc',
           `${s.nm} ${target.fly ? 'incluído' : 'retirado'} (${target.mis} · ${target.eq} · ${fmtDurLabel(target.nb)})${extras.length ? `, com ${extras.length === 1 ? 'a missão extra' : `as ${extras.length} missões extras`}` : ''}`,
           { kind: 'setFly', stuId: s.id, mid, val: !target.fly, ...(extras.length ? { extras: extras.map(ex => ex.mid) } : {}), label: target.fly ? '✕ Excluir' : '↶ Restaurar' }
-        );
+        ];
         if (extras.length) rDem();
       } else if (f === 'jan') {
         // Disponibilidade do aluno: o voo só começa nessas janelas (vazio: qualquer horário)
         if (t.value) target.jan = t.value;
         else delete target.jan;
-        logChange('mod', `Pedido ${s.nm}: disponibilidade ${rotuloDaDisponibilidade(target.jan)} (${target.mis})`);
+        historico = ['mod', `Pedido ${s.nm}: disponibilidade ${rotuloDaDisponibilidade(target.jan)} (${target.mis})`];
       } else {
         // A duração digitada: de 0,1 h a 5 h, em décimos; fora disso, não vale
         if (f === 'nb') {
@@ -1332,9 +1322,9 @@ document.addEventListener('change', e => {
         }
         // Os horários da missão e do avião novos (o Noturno sai às 17:30; o PA-34 tem os seus)
         if (f === 'mis' || f === 'eq') ajustarPreferencias(target, horariosDaMissao(S.horarios, target.mis, target.eq));
-        logChange('mod', `Pedido ${s.nm}: ${target.mis} · ${target.eq} · ${fmtDurLabel(target.nb)}`);
+        historico = ['mod', `Pedido ${s.nm}: ${target.mis} · ${target.eq} · ${fmtDurLabel(target.nb)}`];
       }
-      save();
+      gravarAlteracao(...historico);
       c.outerHTML = singleDemandRowHTML(s, target, mid);
       cnt();
       renderAuditPanel();

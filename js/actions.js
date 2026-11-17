@@ -3,7 +3,7 @@ import { somarDias, fimDoMes, rotuloDaData, hojeISO, LIMITE_DO_NOME } from './fo
 import { aplicarSomenteLeitura } from './somente-leitura.js';
 import { runAllocationEngine } from './engine.js';
 import { ApiClient } from './storage.js';
-import { S, RES, AUDIT_LOG, BI_HISTORY, DATA, setS, setRES, setAuditLog, setBIHistory, setData, isGestor, dadoIndisponivel } from './state.js';
+import { S, RES, AUDIT_LOG, BI_HISTORY, DATA, setS, setRES, setAuditLog, setBIHistory, setData, isGestor, dadoIndisponivel, modoCompartilhado } from './state.js';
 import { $, mostrarAviso, avisoAberto, showToast } from './dom.js';
 import { comHorasExternas } from './limites.js';
 import { rBI } from './views/bi.js';
@@ -50,7 +50,7 @@ export function setRole(role, somenteConsulta = false) {
   // No modo compartilhado o gestor navega entre as datas (somente leitura)
   const dtInput = $('#dt');
   if (dtInput) {
-    dtInput.disabled = isGestor() && document.body.dataset.backend !== 'supabase';
+    dtInput.disabled = isGestor() && !modoCompartilhado();
     $('#dt-ant').disabled = $('#dt-prox').disabled = dtInput.disabled;
   }
   // Agenda: quem pode registrar pedidos (operadores e secretaria; no modo local, fora do perfil Gestor)
@@ -131,13 +131,13 @@ export function travarAposConflito({ formato = false } = {}) {
 // A gravação mais recente da escala: as entradas do histórico esperam por ela
 let gravacaoAtual = Promise.resolve(true);
 
-// Refaz e grava a escala; responde se a gravação deu certo
-export function save() {
+// Refaz e grava a escala; responde se a gravação deu certo. Os eventos da tela gravam por gravarAlteracao
+function save() {
   if (isGestor()) return Promise.resolve(false);
   refazerEscala();
   gravacaoAtual = ApiClient.salvarDia(DATA, S, RES);
   // Neste navegador (sem servidor), a gravação só falha quando o armazenamento recusa (o espaço pode ter acabado)
-  if (document.body.dataset.backend !== 'supabase') {
+  if (!modoCompartilhado()) {
     gravacaoAtual.then(gravou => {
       if (!gravou) mostrarAviso('erro', 'Não foi possível salvar neste navegador (o espaço de armazenamento pode ter acabado): a última alteração não foi salva. Exporte o CSV para não perder a escala.', { recarregar: false });
     });
@@ -148,6 +148,17 @@ export function save() {
   $('#escala-atualizada-texto').textContent = `Atualizada às ${String(agora.getHours()).padStart(2, '0')}:${String(agora.getMinutes()).padStart(2, '0')}`;
   $('#escala-atualizada').hidden = false;
   return gravacaoAtual;
+}
+
+// Uma alteração do operador nos dados da data: grava (a escala é refeita) e registra no histórico, nesta ordem e no
+// mesmo evento (a entrada do histórico espera pela gravação que leva a alteração). É o único jeito de os eventos da
+// tela mudarem os dados. Sem descrição, só grava (as janelas de um instrutor, por exemplo, não entram no histórico); com
+// uma lista, registra uma entrada por item (a importação da Agenda, um aluno por entrada). Quem só consulta não grava
+export function gravarAlteracao(tipo, descricao, reverter = null, reverte = null) {
+  save();
+  for (const texto of Array.isArray(descricao) ? descricao : [descricao]) {
+    if (texto) logChange(tipo, texto, reverter, reverte);
+  }
 }
 
 // Escala só calculada (data aberta ainda sem escala gravada): é gravada na primeira alteração ou quando é exportada

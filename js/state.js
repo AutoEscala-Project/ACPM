@@ -22,6 +22,8 @@ export const setData = v => { DATA = v; };
 // O que não foi lido ao abrir a data: 'horas' (dos instrutores) e 'resultados' (dos cursos)
 export const dadoIndisponivel = parte => Boolean(S.indisponiveis && S.indisponiveis.includes(parte));
 export const isGestor = () => ApiClient.readOnly || document.body.getAttribute('data-role') === 'gestor';
+// No site publicado os dados ficam no servidor (Supabase), com login; em localhost, só neste navegador
+export const modoCompartilhado = () => document.body.dataset.backend === 'supabase';
 
 // Os voos da escala desta data que voam: o cancelado não conta nos contadores das abas
 export const voosQueVoam = () => ((RES && RES.out) || []).filter(o => ((S.fStatus || {})[o.fKey] || o.status) !== 'Cancelado');
