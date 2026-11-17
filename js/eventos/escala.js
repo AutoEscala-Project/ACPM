@@ -22,7 +22,8 @@ import { abrirPainelDeReparo, fecharPainelDeReparo, opcaoDoPainel, painelDeRepar
 
 // Popup do voo no mapa da escala: a barra abre e fecha; Esc (o foco volta para a barra) e um clique fora fecham, e ele
 // acompanha a barra quando a página ou o mapa rolam. Um diálogo aberto por cima (o do status) fica com o Esc e com os
-// cliques dentro dele: o popup continua aberto
+// cliques dentro dele: o popup continua aberto. Dentro ou fora é pelo caminho do clique, fixado quando ele começa: o
+// nome do instrutor, já trocado pela lista (js/eventos/registro.js) e fora da página, continua dentro do popup
 document.addEventListener('click', e => {
   const barra = e.target.closest('#out .tl-bar');
   if (barra) {
@@ -30,7 +31,8 @@ document.addEventListener('click', e => {
     else abrirPopupDoMapa(barra, { focar: true });
     return;
   }
-  if (popupDoMapaAberto() && !e.target.closest('#tl-pop, dialog')) fecharPopupDoMapa();
+  const dentro = e.composedPath().some(el => el instanceof Element && el.matches('#tl-pop, dialog'));
+  if (popupDoMapaAberto() && !dentro) fecharPopupDoMapa();
 });
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape' && popupDoMapaAberto() && !algumDialogoAberto()) fecharPopupDoMapa({ devolverFoco: true });
