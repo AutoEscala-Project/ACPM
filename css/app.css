@@ -337,6 +337,12 @@ details.caixa.avisos summary { color: var(--wa); }
 .tabela-escala .st-sel.st-Pendente { background: var(--neutro-bg); }
 .tabela-escala .st-sel.st-Atrasado { background: var(--wa-bg); }
 .tabela-escala .st-sel.st-Cancelado { background: var(--er-bg); }
+/* O instrutor do voo: o nome, como texto, é o botão que troca; o escolhido pelo operador fica em destaque */
+.ins-btn { font: inherit; color: inherit; background: none; border: 1px dashed transparent; border-radius: 4px; padding: 1px 4px; margin: -2px -5px; cursor: pointer; }
+.ins-btn:hover, .ins-btn:focus-visible { border-color: var(--ln2); }
+.ins-btn.escolhido { font-weight: 700; color: var(--ac); }
+.ins-sel { max-width: 16rem; }
+#dem select.escolhido { border-color: var(--ac); color: var(--ac); font-weight: 600; }
 /* Os controles que aparecem com o mouse também aparecem com o foco em qualquer campo da linha (:focus-within) e em
    telas de toque (pointer: coarse, como um notebook com tela de toque) */
 /* Tirar da escala: aparece ao passar o mouse ou com o foco (em tela de toque, sempre) */
@@ -776,8 +782,9 @@ table.cadastro input.nm { width: 100%; min-width: 180px; }
 table.cadastro input[data-f="kg"] { width: 96px; }
 table.cadastro td.acoes { text-align: right; white-space: nowrap; }
 table.cadastro tr[hidden] { display: none; }
-table.alunos select[data-f="bl"] { border-color: transparent; background: transparent; color: var(--mu); }
-table.alunos tr:hover select[data-f="bl"], table.alunos select[data-f="bl"]:focus { border-color: var(--ln2); background: var(--pn); color: var(--ink); }
+table.alunos select[data-f="bl"], table.alunos select[data-f="voaCom"] { border-color: transparent; background: transparent; color: var(--mu); }
+table.alunos tr:hover select[data-f="bl"], table.alunos select[data-f="bl"]:focus,
+table.alunos tr:hover select[data-f="voaCom"], table.alunos select[data-f="voaCom"]:focus { border-color: var(--ln2); background: var(--pn); color: var(--ink); }
 /* Campos discretos, como na Demanda: parecem texto até o mouse passar ou o foco chegar */
 table.cadastro input { border-color: transparent; background: transparent; }
 table.cadastro tr:hover input, table.cadastro input:focus { border-color: var(--ln2); background: var(--pn); }
@@ -801,7 +808,8 @@ input.falta::placeholder { color: var(--wa); }
   table.cadastro td:nth-child(3), table.cadastro td.acoes { grid-column: 1 / -1; padding: 0 8px; }
   table.cadastro td.acoes { display: flex; justify-content: flex-end; align-items: center; gap: 8px; }
   table.cadastro td.acoes [data-act="editar-habs"] { margin-right: auto; }
-  table.alunos select[data-f="bl"] { border-color: var(--ln); }
+  table.alunos select[data-f="bl"], table.alunos select[data-f="voaCom"] { border-color: var(--ln); }
+  table.alunos td.c-voa-com { grid-column: 1 / -1; }
   table.alunos td:nth-child(3) { grid-column: 1; }
   table.alunos td.acoes { grid-column: 2; }
 }
@@ -927,6 +935,8 @@ a { color: var(--ac); }
   font-size: 13px;
 }
 .tg button { border: 0; background: transparent; color: var(--er); cursor: pointer; }
+.tg.par { border-color: var(--ac); }
+.tg.par button { color: var(--ac); }
 
 /* Mapa de ocupação */
 .tl-legend { display: flex; gap: 12px; flex-wrap: wrap; font-size: 12px; color: var(--mu); align-items: center; margin-bottom: 8px; }
@@ -1236,6 +1246,7 @@ body[data-backend="supabase"] #btn-bi-clr { display: none !important; }
   nav#nav button { min-width: 44px; min-height: 44px; justify-content: center; flex: none; }
   .btn, .x, .btn-add-mis, .tg button, .hr-chip button { min-width: 44px; min-height: 44px; flex-shrink: 0; }
   button.st-detalhe { min-height: 44px; }
+  .ins-btn { min-width: 44px; min-height: 44px; margin: 0; }
   select, input:not([type="checkbox"]):not([type="radio"]) { min-height: 44px; }
   details.caixa summary { padding: 12px 0; }
   label.alvo, label.chk, .janela, .habs-painel label.hab { min-width: 44px; min-height: 44px; }

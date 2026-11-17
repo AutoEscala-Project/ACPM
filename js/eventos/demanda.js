@@ -6,7 +6,8 @@ import { $, showToast, ligarMenu, trocarElemento } from '../dom.js';
 import { fmtDurLabel } from '../format.js';
 import { horariosDaMissao, ajustarPreferencias } from '../horarios.js';
 import { isGroundMission, blank, rotuloDaDisponibilidade, normalizeMissionFields, proximoMid, duracaoDigitada, ERRO_DA_DURACAO } from '../rules.js';
-import { S, isGestor, stuBy, getMissionTarget } from '../state.js';
+import { S, RES, isGestor, stuBy, insBy, getMissionTarget } from '../state.js';
+import { escolherInstrutor } from '../instrutor-escolhido.js';
 import { confirmado, comConfirmacao } from './confirmacao.js';
 import { aoAcionar, aoMudarCampo } from './registro.js';
 import { singleDemandRowHTML, cnt, rDem, applyDemandFilters } from '../views/demanda.js';
@@ -51,7 +52,7 @@ document.addEventListener('change', e => {
 
 comConfirmacao('#clr', 'Confirmar limpeza', () => {
   if (isGestor()) return;
-  S.stu.forEach(d => { Object.assign(d, blank()); d.extra = []; });
+  S.stu.forEach(d => { Object.assign(d, blank()); delete d.insId; d.extra = []; });
   gravarAlteracao('exc', 'Demanda limpa');
   rDem();
   fecharMenuMais();
@@ -116,6 +117,16 @@ aoMudarCampo('d', (t, { f, c, id, mid }) => {
   const target = getMissionTarget(id, mid);
   if (!target) return;
   let historico;
+  if (f === 'insId') {
+    // O instrutor escolhido: o app procura o horário e o avião com ele. O voo que já está fixo fica onde está, com o
+    // instrutor novo (na turma de Ground, a turma inteira)
+    const x = t.value ? insBy(+t.value) : null;
+    const { antes, alunos } = escolherInstrutor(S, RES, { stuId: s.id, mid }, x ? x.id : null);
+    gravarAlteracao('mod', `Pedido ${s.nm}: instrutor ${x ? x.nm : 'automático'} (${target.mis})`, { kind: 'restaurarEscolha', ...antes, label: '↶ Reverter' });
+    if (alunos > 1) showToast(`A turma de ${target.mis} passa inteira para ${x ? x.nm : 'a escolha do app'}.`, 'ok');
+    rDem();
+    return;
+  }
   if (f === 'fly') {
     target.fly = t.checked;
     // O aluno que não vai voar não voa as missões extras; reverter volta todas

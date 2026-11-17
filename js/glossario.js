@@ -19,7 +19,7 @@ export const GLOSSARIO = {
   'segunda-preferencia': { aba: 'Escala', termo: '2ª preferência', texto: 'O voo ficou na 2ª preferência do aluno: na 1ª não havia avião, instrutor ou horário livre.' },
   'horario-ajustado': { aba: 'Escala', termo: 'Horário ajustado', texto: 'A compactação mudou o horário para fechar um buraco do dia, dentro da regra de Horários escolhida nos critérios.' },
   conflito: { aba: 'Escala', termo: 'Conflito', texto: 'O voo da escala aprovada não vale mais: o instrutor, o avião, o horário ou o pedido mudou. Ele fica no lugar até ser resolvido em Sugestões.' },
-  'voo-fixo': { aba: 'Escala', termo: 'Voo fixo (cadeado)', texto: 'O voo não muda quando a escala é refeita. Fica fixo pela escala aprovada ou pelo status Atrasado, Em Voo, Pousou ou Cancelado.' },
+  'voo-fixo': { aba: 'Escala', termo: 'Voo fixo (cadeado)', texto: 'O voo não muda quando a escala é refeita. Fica fixo pela escala aprovada, pelo instrutor escolhido na Escala ou pelo status Atrasado, Em Voo, Pousou ou Cancelado.' },
   'reduzir-combustivel': {
     aba: 'Escala', termo: 'Reduzir combustível',
     texto: `Aluno e instrutor passam do limite de peso do avião com o tanque cheio: o avião sai com menos combustível, o bastante para o voo, o táxi e a reserva (${reservaDaMissao('Voo Local')} min; ${reservaDaMissao('Noturno')} à noite e em IFR).`
@@ -50,6 +50,7 @@ export const GLOSSARIO = {
   // Demanda
   voa: { aba: 'Demanda', termo: 'Voa', texto: 'Marcado, o pedido entra na escala desta data. Desmarcado, o aluno continua na lista sem voar.' },
   preferencias: { aba: 'Demanda', termo: 'Preferências', texto: 'Os horários que o aluno prefere, entre os da categoria do avião. Sem vaga neles, a escala usa o horário livre mais perto da 1ª.' },
+  'instrutor-escolhido': { aba: 'Demanda', termo: 'Instrutor', texto: 'Automático: o app escolhe. Um instrutor escolhido pelo operador vale mais: a escala põe o aluno com ele (o horário e o avião em volta dele) e não o troca.' },
   disponibilidade: { aba: 'Demanda', termo: 'Disponibilidade', texto: 'Quando o aluno pode voar: manhã, tarde, noite ou um horário exato. O voo só começa dentro dela.' },
   duracao: { aba: 'Demanda', termo: 'Duração', texto: `As horas do voo, de uma vez. O Ground tem ${duracao(GROUND_DURATION_MIN)}. Para dois voos do aluno no mesmo dia, use “+ missão”.` },
   prioridade: { aba: 'Demanda', termo: 'Prioridade', texto: 'De 1 a 5: o pedido de prioridade maior é escalado antes. Com a mesma prioridade, quem agendou primeiro vai antes; o pedido posto à mão, depois.' },
@@ -81,6 +82,7 @@ export const GLOSSARIO = {
   },
 
   // Alunos
+  'voa-com': { aba: 'Alunos', termo: 'Voa com', texto: 'Os instrutores do aluno: a escala põe o aluno com um deles sempre que algum pode voar. Quando nenhum pode, o voo fica com outro instrutor, com aviso.' },
   'nao-escalar-com': { aba: 'Alunos', termo: 'Não escalar com', texto: 'Instrutores que não voam com este aluno: a escala nunca põe o aluno com eles.' },
   progresso: { aba: 'Alunos', termo: 'Progresso', texto: 'Missões do curso aprovadas sobre o total do programa, e a próxima missão.' },
 

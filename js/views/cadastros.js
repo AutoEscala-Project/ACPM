@@ -237,22 +237,32 @@ function naoEscalarCom(s) {
     `<select data-f="bl" class="edit-only" aria-label="Não escalar com"><option value="">Não escalar com…</option>${S.ins.filter(x => !s.bl.includes(x.id)).map(x => `<option value="${x.id}">${esc(x.nm)}</option>`).join('')}</select>`;
 }
 
+// “Voa com”: os instrutores do aluno (o par permanente). A escala põe o aluno com um deles sempre que algum pode voar o
+// pedido; sem nenhum, com outro instrutor, e avisa. Quem está em “Não escalar com” não entra na lista
+function voaCom(s) {
+  const pares = s.voaCom || [];
+  return pares.map(b => insBy(b) ? `<span class="tg par">${esc(insBy(b).nm)}<button class="edit-only" data-act="unvc" data-b="${b}" aria-label="Tirar ${esc(insBy(b).nm)} de Voa com">✕</button></span>` : '').join('') +
+    `<select data-f="voaCom" class="edit-only" aria-label="Voa com"><option value="">Voa com…</option>${S.ins.filter(x => !pares.includes(x.id) && !s.bl.includes(x.id)).map(x => `<option value="${x.id}">${esc(x.nm)}</option>`).join('')}</select>`;
+}
+
 const linhaDoAluno = s => `<tr class="cd" data-k="s" data-id="${s.id}" data-nm="${esc(s.nm.toLowerCase())}">
   <td><input class="nm" data-f="nm" value="${esc(s.nm)}" maxlength="${LIMITE_DO_NOME}" aria-label="Nome do aluno"></td>
   <td class="c-canac so-dados">${esc(canacDe('aluno', s.id))}</td>
   <td class="c-curso"><select data-f="curso" aria-label="Curso de ${esc(s.nm)}"${isGestor() ? ' disabled' : ''}>${opts([['', '—'], ...CURSOS.map(([id, nome]) => [id, `${id} · ${nome}`])], s.curso || '')}</select>${progressoDoAluno(s)}</td>
   <td><input type="number" min="0" max="200" data-f="kg" value="${s.kg || ''}" placeholder="sem peso" aria-label="Peso de ${esc(s.nm)} em kg"${s.kg ? '' : ' class="falta"'}></td>
-  <td><div class="bl">${naoEscalarCom(s)}</div></td>
+  <td class="c-voa-com"><div class="bl voa-com">${voaCom(s)}</div></td>
+  <td><div class="bl nao-escalar">${naoEscalarCom(s)}</div></td>
   <td class="acoes"><button type="button" class="btn quiet so-dados" data-dados="aluno:${s.id}" aria-label="Dados pessoais de ${esc(s.nm)}">Dados pessoais</button><button class="x edit-only" data-act="dels" aria-label="Excluir ${esc(s.nm)}">✕</button></td>
 </tr>`;
 
 export const rAlu = () => {
   $('#alu').innerHTML = S.stu.length ? S.stu.map(linhaDoAluno).join('')
-    : '<tr><td colspan="6" class="h">Nenhum aluno cadastrado. Clique em “+ Novo aluno” acima para cadastrar.</td></tr>';
+    : '<tr><td colspan="7" class="h">Nenhum aluno cadastrado. Clique em “+ Novo aluno” acima para cadastrar.</td></tr>';
 };
 
-// Atualiza a linha do aluno no lugar. "Não escalar com" é refeito só quando muda, e o foco volta para o seletor
-export function atualizarLinhaDoAluno(s, { naoEscalar = false } = {}) {
+// Atualiza a linha do aluno no lugar. "Voa com" e "Não escalar com" são refeitos só quando mudam (um tira o instrutor
+// da lista do outro), e o foco volta para o seletor que mudou
+export function atualizarLinhaDoAluno(s, { naoEscalar = false, voaComMudou = false } = {}) {
   const linha = document.querySelector(`#alu tr.cd[data-id="${s.id}"]`);
   if (!linha) return;
   linha.dataset.nm = s.nm.toLowerCase();
@@ -269,9 +279,10 @@ export function atualizarLinhaDoAluno(s, { naoEscalar = false } = {}) {
   curso.insertAdjacentHTML('afterend', progressoDoAluno(s));
   linha.querySelector('[data-act="dels"]').setAttribute('aria-label', `Excluir ${s.nm}`);
   linha.querySelector('[data-dados]').setAttribute('aria-label', `Dados pessoais de ${s.nm}`);
-  if (!naoEscalar) return;
-  linha.querySelector('.bl').innerHTML = naoEscalarCom(s);
-  linha.querySelector('[data-f="bl"]').focus();
+  if (!naoEscalar && !voaComMudou) return;
+  linha.querySelector('.bl.nao-escalar').innerHTML = naoEscalarCom(s);
+  linha.querySelector('.bl.voa-com').innerHTML = voaCom(s);
+  linha.querySelector(naoEscalar ? '[data-f="bl"]' : '[data-f="voaCom"]').focus();
 }
 
 // Filtro da aba Instrutores: uma opção por habilitação

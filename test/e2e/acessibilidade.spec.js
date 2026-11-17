@@ -314,7 +314,11 @@ test.describe('O foco depois de uma ação', () => {
     await barra.focus();
     await page.keyboard.press('Enter');
     await expect(page.locator('#tl-pop')).toBeVisible();
+    // O primeiro controle do popup é o instrutor (o nome abre a lista para trocar); depois, o status
+    await expect(page.locator('#tl-pop [data-act="trocar-instrutor"]')).toBeFocused();
+    await page.keyboard.press('Tab');
     await expect(page.locator('#tl-pop select[data-f="fstatus"]')).toBeFocused();
+    await page.keyboard.press('Shift+Tab');
     const controles = await page.locator('#tl-pop select, #tl-pop button').count();
     for (let i = 0; i < controles; i++) await page.keyboard.press('Tab');
     await expect(page.locator('#tl-pop')).toBeHidden();

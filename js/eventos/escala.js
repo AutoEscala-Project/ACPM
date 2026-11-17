@@ -8,7 +8,8 @@ import { exp, pdf, planilha } from '../export.js';
 import { pinoDoVoo, fixosAoMudarStatus, fixosAoReabrir } from '../fixos.js';
 import { hm } from '../format.js';
 import { aplicarReparo } from '../reparo.js';
-import { S, RES, DATA, isGestor, modoCompartilhado, stuBy } from '../state.js';
+import { S, RES, DATA, isGestor, modoCompartilhado, stuBy, insBy } from '../state.js';
+import { escolherInstrutor, escolhasDaUnidade, escolherNosPedidos } from '../instrutor-escolhido.js';
 import { STATUS_COM_DETALHE, textoParaOHistorico, detalheAoMudarStatus, rotuloDoStatus } from '../status.js';
 import { ApiClient } from '../storage.js';
 import { confirmado } from './confirmacao.js';
@@ -16,7 +17,7 @@ import { aoAcionar, aoMudarCampo } from './registro.js';
 import { rAlu } from '../views/cadastros.js';
 import { rDem } from '../views/demanda.js';
 import { pedirDetalheDoStatus } from '../views/dialogo-status.js';
-import { rOut, abrirPopupDoMapa, fecharPopupDoMapa, popupDoMapaAberto, reposicionarPopupDoMapa, tabNoPopup } from '../views/escala.js';
+import { rOut, botaoDoInstrutor, seletorDeInstrutor, abrirPopupDoMapa, fecharPopupDoMapa, popupDoMapaAberto, reposicionarPopupDoMapa, tabNoPopup } from '../views/escala.js';
 import { abrirPainelDeReparo, fecharPainelDeReparo, opcaoDoPainel, painelDeReparoAberto } from '../views/reparo.js';
 
 // Popup do voo no mapa da escala: a barra abre e fecha; Esc (o foco volta para a barra) e um clique fora fecham, e ele
@@ -111,6 +112,48 @@ function mudarStatus(fKey, status) {
 }
 aoMudarCampo('fstatus', t => mudarStatus(t.dataset.fkey, t.value));
 
+// O nome do instrutor abre a lista no lugar dele; sair dela sem mudar (o foco sai, ou Esc) volta ao nome
+const elementoDe = html => { const t = document.createElement('template'); t.innerHTML = html; return t.content.firstElementChild; };
+aoAcionar('trocar-instrutor', b => {
+  const voo = vooDaChave(b.dataset.fkey);
+  if (!voo || !RES) return;
+  const lista = elementoDe(seletorDeInstrutor(voo, b.dataset.rotulo));
+  b.replaceWith(lista);
+  lista.focus();
+  try { lista.showPicker(); } catch { /* sem showPicker (ou sem o gesto do usuário): a lista fica com o foco */ }
+});
+function voltarAoNome(lista, { focar = false } = {}) {
+  const voo = vooDaChave(lista.dataset.fkey);
+  if (!lista.isConnected || !voo) return;
+  const botao = elementoDe(botaoDoInstrutor(voo, lista.dataset.rotulo));
+  lista.replaceWith(botao);
+  if (focar) botao.focus();
+}
+document.addEventListener('focusout', e => {
+  const lista = e.target.closest && e.target.closest('select[data-a="insVoo"]');
+  if (lista) setTimeout(() => voltarAoNome(lista));
+});
+document.addEventListener('keydown', e => {
+  const lista = e.key === 'Escape' && e.target.closest && e.target.closest('select[data-a="insVoo"]');
+  if (!lista) return;
+  e.stopPropagation();
+  voltarAoNome(lista, { focar: true });
+}, true);
+
+// O instrutor escolhido na Escala: o voo (na turma de Ground, a turma inteira) fica onde está, fixo, com ele, e o resto
+// da escala é refeito em volta; o pedido também guarda a escolha. "Automático" devolve a escolha ao app (fora da escala
+// aprovada, o voo deixa de ser fixo). O histórico desfaz
+aoMudarCampo('insVoo', t => {
+  const voo = vooDaChave(t.dataset.fkey);
+  if (!voo) return;
+  const x = t.value ? insBy(+t.value) : null;
+  const { antes, alunos } = escolherInstrutor(S, RES, { stuId: voo.stuId, mid: voo.mid || 0 }, x ? x.id : null, { noLugar: true });
+  const quem = alunos > 1 ? `turma de ${voo.mis}` : voo.s;
+  gravarAlteracao('mod', `Instrutor de ${quem} (${hm(voo.a)}–${hm(voo.b)}): ${x ? x.nm : 'automático'}`, { kind: 'restaurarEscolha', ...antes, label: '↶ Reverter' });
+  rDem();
+  showToast(x ? `${x.nm} fica com o voo; o resto da escala foi refeito em volta.` : 'O app volta a escolher o instrutor deste voo.', 'ok');
+});
+
 // Um clique no detalhe do status (motivo ou nova decolagem) permite alterá-lo; o status continua o mesmo
 aoAcionar('detalhe-status', b => {
   const fKey = b.dataset.fkey, status = S.fStatus && S.fStatus[fKey], voo = vooDaChave(fKey);
@@ -125,7 +168,8 @@ document.addEventListener('click', e => {
   if ((!aprovar && !reabrir) || isGestor() || !RES) return;
   if (aprovar) {
     if (!confirmado(aprovar, 'Confirmar aprovação')) return;
-    S.fixos = Object.fromEntries(RES.out.map(o => [o.fKey, pinoDoVoo(o)]));
+    // O voo fixo pela escolha do instrutor na Escala continua com a marca: reabrir a escala não o solta
+    S.fixos = Object.fromEntries(RES.out.map(o => [o.fKey, { ...pinoDoVoo(o), ...((S.fixos || {})[o.fKey]?.escolhido ? { escolhido: true } : {}) }]));
     S.aprovacao = { em: new Date().toISOString(), por: ApiClient.autorAtual || '' };
     gravarAlteracao('mod', `Escala aprovada: ${RES.out.length} ${RES.out.length === 1 ? 'voo fixado' : 'voos fixados'}`);
     showToast('Escala aprovada: os voos ficam fixos.', 'ok');
@@ -200,12 +244,18 @@ document.addEventListener('click', e => {
     return;
   }
   const antes = S.fixos || {};
+  // O instrutor escolhido dos pedidos acompanha o reparo: trocar o instrutor passa a escolha para o novo; soltar o voo
+  // devolve a escolha ao app
+  const escolhas = escolhasDaUnidade(S, RES, fKey);
+  if (opcao.soltar) escolherNosPedidos(S, escolhas, null);
+  else if (opcao.mudancas.insId) escolherNosPedidos(S, escolhas, opcao.mudancas.insId);
   S.fixos = aplicarReparo(antes, RES, fKey, opcao);
   // Os voos que mudaram ou saíram dos fixos (soltar): o histórico guarda como estavam
   const mudados = Object.keys(antes).filter(k => S.fixos[k] !== antes[k]);
   gravarAlteracao('mod', `Reparo: ${voo.s} (${hm(voo.a)}–${hm(voo.b)}): ${opcao.soltar ? 'Soltar o voo' : opcao.texto}`, {
-    kind: 'restaurarFixos', fixos: Object.fromEntries(mudados.map(k => [k, antes[k]])), label: '↶ Reverter'
+    kind: 'restaurarFixos', fixos: Object.fromEntries(mudados.map(k => [k, antes[k]])), ...(escolhas.length ? { pedidos: escolhas } : {}), label: '↶ Reverter'
   });
+  if (escolhas.length) rDem();
   showToast(opcao.soltar ? 'Voo solto: o app escalou de novo.' : 'Sugestão aplicada: o voo continua fixo.', 'ok');
 });
 document.addEventListener('keydown', e => {
