@@ -239,7 +239,7 @@ describe('Peso da tripulação', () => {
     const { out, al } = alocar({ ins: [instrutor(1, 1)], stu: [aluno(1000, {}, { kg: 0 })] });
     assert.equal(out.length, 1);
     assert.equal(out[0].kg, 0);
-    assert.deepEqual(al, [{ t: 'warn', s: 'Aluno 1000', m: 'Peso do aluno não informado (0 kg): verificação de limite (170 kg) no C152 não realizada.' }]);
+    assert.deepEqual(al, [{ t: 'warn', s: 'Aluno 1000', m: 'Peso do aluno não informado (0 kg): verificação de limite (170 kg) no C152 não realizada.', codigo: 'sem-peso', stuId: 1000 }]);
   });
 
   it('quando o peso importa, o instrutor com o peso informado vem antes', () => {
@@ -247,11 +247,11 @@ describe('Peso da tripulação', () => {
     assert.deepEqual([out[0].insId, al], [2, []]);
   });
 
-  it('o aviso diz de quem é o peso que falta', () => {
+  it('o aviso diz de quem é o peso que falta (no texto e nos ids: o resumo conta os alunos e os instrutores)', () => {
     const soInstrutor = alocar({ ins: [instrutor(1, 1, { kg: 0 })], stu: [aluno(1000)] });
-    assert.deepEqual(soInstrutor.al, [{ t: 'warn', s: 'Aluno 1000', m: 'Peso de Instrutor 01 não informado (0 kg): verificação de limite (170 kg) no C152 não realizada.' }]);
+    assert.deepEqual(soInstrutor.al, [{ t: 'warn', s: 'Aluno 1000', m: 'Peso de Instrutor 01 não informado (0 kg): verificação de limite (170 kg) no C152 não realizada.', codigo: 'sem-peso', insId: 1 }]);
     const osDois = alocar({ ins: [instrutor(1, 1, { kg: 0 })], stu: [aluno(1000, {}, { kg: 0 })] });
-    assert.deepEqual(osDois.al, [{ t: 'warn', s: 'Aluno 1000', m: 'Pesos do aluno e de Instrutor 01 não informados (0 kg): verificação de limite (170 kg) no C152 não realizada.' }]);
+    assert.deepEqual(osDois.al, [{ t: 'warn', s: 'Aluno 1000', m: 'Pesos do aluno e de Instrutor 01 não informados (0 kg): verificação de limite (170 kg) no C152 não realizada.', codigo: 'sem-peso', stuId: 1000, insId: 1 }]);
   });
 });
 
@@ -358,7 +358,7 @@ describe('Revisão de 50 horas', () => {
   it('avião sem saldo para o voo não é escalado: o voo vai para outro avião', () => {
     const { out, al } = alocar({ ins, stu: [aluno(1000)], semAeronaves: apenas('C152', 'PP-LJV', 'PR-BTB'), horas: { 'PP-LJV': 49.5 } });
     assert.equal(out[0].r, 'PR-BTB');
-    assert.deepEqual(al, [{ t: 'warn', s: 'PP-LJV', m: 'Aeronave parou para revisão de 50 horas: sem saldo para voar hoje (49,5 h desde a última revisão).' }]);
+    assert.deepEqual(al, [{ t: 'warn', s: 'PP-LJV', m: 'Aeronave parou para revisão de 50 horas: sem saldo para voar hoje (49,5 h desde a última revisão).', codigo: 'revisao' }]);
   });
 
   it('o avião voa até completar as 50 horas e para no meio do dia; os horários seguintes ficam sem esse avião', () => {
@@ -366,7 +366,7 @@ describe('Revisão de 50 horas', () => {
     assert.deepEqual(out.map(o => [o.s, o.r, hm(o.a)]), [['Aluno 1000', 'PP-LJV', '08:20'], ['Aluno 1001', 'PP-LJV', '10:10']]);
     assert.deepEqual(al, [
       { t: 'err', s: 'Aluno 1002', m: 'Rejeitado: os C152 livres estão sem saldo até a revisão de 50 horas.', codigo: 'revisao' },
-      { t: 'warn', s: 'PP-LJV', m: 'Aeronave parou para revisão de 50 horas às 11:10 (50 h desde a última revisão).' }
+      { t: 'warn', s: 'PP-LJV', m: 'Aeronave parou para revisão de 50 horas às 11:10 (50 h desde a última revisão).', codigo: 'revisao' }
     ]);
     assert.deepEqual(revisao, {
       'PP-LJV': { inicio: 48, voadas: 2, fim: 50, paraAs: 670 },

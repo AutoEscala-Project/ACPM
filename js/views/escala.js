@@ -1,5 +1,6 @@
 // Aba Escala: resumo do dia, a lista dos voos (ou o mapa por recurso ou por instrutor) e o histórico da data.
 import { FLIGHT_STATUSES, GROUND_REG } from '../config.js';
+import { CODIGOS_DE_AVISO } from '../conflitos.js';
 import { hm, WLB, fmtH, esc, rotuloDaData, hojeISO, duracaoHm, DURACAO_DO_GROUND } from '../format.js';
 import { isGroundMission } from '../rules.js';
 import { categoriaDoTipo, nomeDoRecurso } from '../categorias.js';
@@ -323,20 +324,17 @@ function tempoParado(out) {
     </div>`;
 }
 
-// Avisos agrupados por tipo: alunos e instrutores sem peso, aviões que param para a revisão e outros. O aviso de peso
-// diz de quem é o peso que falta: "Peso do aluno", "Peso de Instrutor 01" ou "Pesos do aluno e de…"
-const INSTRUTOR_SEM_PESO = /^Pesos? (?:do aluno e )?de (.+?) não informados? \(/;
+// Avisos agrupados pelo código: alunos e instrutores sem peso, aviões que param para a revisão, atrasos e instrutores
+// perto do limite da lei. Os avisos sem código (de uma escala gravada antes deles) entram em "outros"
 function resumoDosAvisos(avisos) {
-  const ehPeso = a => /^Pesos? d/.test(a.m);
-  const ehRevisao = a => a.m.startsWith('Aeronave parou');
-  const ehAtraso = a => a.m.startsWith('Atraso:');
-  const ehLimite = a => a.m.startsWith('Limite da lei:');
-  const semPeso = new Set(avisos.filter(a => ehPeso(a) && /^Pesos? do aluno/.test(a.m)).map(a => a.s.replace(/ \(.*\)$/, ''))).size;
-  const instrutoresSemPeso = new Set(avisos.filter(ehPeso).map(a => (INSTRUTOR_SEM_PESO.exec(a.m) || [])[1]).filter(Boolean)).size;
-  const revisao = avisos.filter(ehRevisao).length;
-  const atrasos = avisos.filter(ehAtraso).length;
-  const limites = new Set(avisos.filter(ehLimite).map(a => a.s)).size;
-  const outros = avisos.filter(a => !ehPeso(a) && !ehRevisao(a) && !ehAtraso(a) && !ehLimite(a)).length;
+  const doCodigo = codigo => avisos.filter(a => a.codigo === codigo);
+  const quantos = (lista, campo) => new Set(lista.map(a => a[campo]).filter(id => id !== undefined)).size;
+  const semPeso = quantos(doCodigo('sem-peso'), 'stuId');
+  const instrutoresSemPeso = quantos(doCodigo('sem-peso'), 'insId');
+  const revisao = doCodigo('revisao').length;
+  const atrasos = doCodigo('atraso').length;
+  const limites = quantos(doCodigo('perto-do-limite'), 'insId');
+  const outros = avisos.filter(a => !CODIGOS_DE_AVISO.includes(a.codigo)).length;
   const partes = [
     semPeso && `${semPeso} ${semPeso === 1 ? 'aluno sem peso' : 'alunos sem peso'}`,
     instrutoresSemPeso && `${instrutoresSemPeso} ${instrutoresSemPeso === 1 ? 'instrutor sem peso' : 'instrutores sem peso'}`,

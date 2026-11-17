@@ -4,7 +4,7 @@
 // próxima alteração). Os campos desconhecidos saem.
 import { ALL_EQ_TYPES, MIS, FLIGHT_STATUSES, NI, MINUTOS_DO_DIA } from './config.js';
 import { codigoValido } from './cursos.js';
-import { CODIGOS_DE_CONFLITO, CODIGOS_DE_REJEICAO } from './conflitos.js';
+import { CODIGOS_DE_CONFLITO, CODIGOS_DE_REJEICAO, CODIGOS_DE_AVISO } from './conflitos.js';
 import { CHAVE_DO_VOO } from './voo.js';
 import { dataIsoValida } from './format.js';
 import { MATRICULA } from './frota.js';
@@ -72,11 +72,16 @@ export function normalizarLinhaGravada(o) {
   return limpa.a === undefined || limpa.b === undefined || limpa.a < limpa.b ? limpa : null;
 }
 
+// Os códigos de cada tipo de alerta (o conflito tem os códigos na linha do voo)
+const CODIGOS_DO_ALERTA = { err: CODIGOS_DE_REJEICAO, warn: CODIGOS_DE_AVISO, conf: [] };
+
 function alerta(a) {
   if (!objeto(a) || !TIPOS_DE_ALERTA.includes(a.t) || !texto(a.s, 200) || !texto(a.m, 1000)) return null;
   if (a.fKey !== undefined && !CAMPOS.fKey(a.fKey)) return null;
-  if (a.codigo !== undefined && !CODIGOS_DE_REJEICAO.includes(a.codigo)) return null;
-  return { t: a.t, s: a.s, ...(a.fKey !== undefined ? { fKey: a.fKey } : {}), m: a.m, ...(a.codigo !== undefined ? { codigo: a.codigo } : {}) };
+  if (a.codigo !== undefined && !CODIGOS_DO_ALERTA[a.t].includes(a.codigo)) return null;
+  if (['stuId', 'insId'].some(c => a[c] !== undefined && !CAMPOS[c](a[c]))) return null;
+  const opcional = c => (a[c] !== undefined ? { [c]: a[c] } : {});
+  return { t: a.t, s: a.s, ...opcional('fKey'), m: a.m, ...opcional('codigo'), ...opcional('stuId'), ...opcional('insId') };
 }
 
 function revisaoDoAviao(r) {

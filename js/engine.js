@@ -8,17 +8,43 @@ import { HORARIOS_INICIAIS, horariosDaMissao, periodoDoMinuto, minutoDaPreferenc
 import { podeFazer, descreverExigencias } from './habilitacoes.js';
 import { categoriaDoRodizio, ajustarFilas } from './rodizio.js';
 import { avisosDeAtraso, intervaloEfetivo, STATUS_EM_ANDAMENTO } from './status.js';
-import { sobrepoe, livre, cobre, pesoCabe, cabeNoSaldo } from './viabilidade.js';
-import { reducaoNecessaria, combustivelDoVoo, pesoECombustivel } from './combustivel.js';
+import { sobrepoe, livre, cabeNoSaldo, folgaAte, saldoAteARevisao, problemasDoInstrutor } from './viabilidade.js';
+import { reducaoNecessaria, combustivelDoVoo } from './combustivel.js';
 import { LIMITE_DO_MOTIVO } from './conflitos.js';
 import { normalizarHangar, posicaoNoHangar } from './hangar.js';
-import { normalizarLimites, dentroDosLimites } from './limites.js';
+import { normalizarLimites } from './limites.js';
 import { compactar, custoDaEscala } from './compactar.js';
 import { chaveDoVoo, statusDoVoo, unidadeDoVoo, umPorUnidade } from './voo.js';
 import { menorPrimeiro, soma, paradasEntre } from './util.js';
 
 // Entre os instrutores possíveis, primeiro os que têm menos habilitações: os mais versáteis ficam livres
 const qtdHabilitacoes = x => (Array.isArray(x.hab) ? x.hab.length : 0);
+
+// Os instrutores que servem para o horário (as regras em js/viabilidade.js). Sem nenhum, a regra que barrou o que
+// chegou mais longe nelas diz o motivo da rejeição: disponível e habilitado, livre, sem bloqueio, dentro da lei e do peso
+const ETAPAS_DO_INSTRUTOR = ['disp', 'busy', 'bloq', 'limite', 'peso'];
+const ETAPA_DO_PROBLEMA = { 'instrutor-indisponivel': 0, habilitacao: 0, 'instrutor-ocupado': 1, bloqueio: 2, 'limite-da-lei': 3, peso: 4 };
+function instrutoresQueServem(instrutores, problemasDe) {
+  const servem = [];
+  let maisLonge = 0;
+  for (const x of instrutores) {
+    const [problema] = problemasDe(x);
+    if (problema) maisLonge = Math.max(maisLonge, ETAPA_DO_PROBLEMA[problema.codigo]);
+    else servem.push(x);
+  }
+  return { servem, barrou: servem.length ? null : ETAPAS_DO_INSTRUTOR[maisLonge] };
+}
+
+// O texto de cada conflito do instrutor de um voo fixo
+const CONFLITO_DO_INSTRUTOR = {
+  'instrutor-saiu': () => 'o instrutor saiu do cadastro',
+  'instrutor-indisponivel': () => 'o instrutor não está disponível',
+  habilitacao: () => 'o instrutor não tem a habilitação da missão',
+  'instrutor-ocupado': () => 'o instrutor já tem outro compromisso neste horário',
+  bloqueio: () => 'o aluno não voa com este instrutor',
+  'limite-da-lei': p => `o instrutor passaria do limite da lei (${LIMITE_DO_MOTIVO[p.motivo] || p.motivo})`,
+  peso: () => 'o peso do aluno e do instrutor passa do limite do avião, mesmo com o mínimo de combustível'
+};
 
 // Continuidade de avião (eficiência de pátio): a alocação segue a prioridade dos pedidos, não o horário, e às vezes
 // deixa um instrutor em duas matrículas do mesmo tipo. Depois de alocar, as matrículas de cada tipo de avião são
@@ -27,9 +53,6 @@ const qtdHabilitacoes = x => (Array.isArray(x.hab) ? x.hab.length : 0);
 // (aluno, instrutor e horário continuam); o PR-JPL continua só para o Parafuso e aviões em manutenção não entram.
 // A redistribuição só vale quando diminui as trocas de avião (senão, ou se algum voo não couber, fica a original).
 // Por último, quem ainda estiver em duas matrículas passa para uma que esteja livre em todos os horários dele.
-
-// A folga entre um voo e o que o avião já voa (0 se encosta; Infinity se o avião ainda está no hangar)
-const folgaAte = (ocupados, a, b) => ocupados.reduce((menor, [x, y]) => Math.min(menor, y <= a ? a - y : x >= b ? x - b : 0), Infinity);
 
 // O tempo parado dos aviões (minutos entre um voo e o seguinte de cada matrícula)
 function paradoDosAvioes(voos, matricula) {
@@ -136,7 +159,7 @@ function avisosDeLimite(out, state, limites, historico) {
     for (const [periodo, limite, passadas] of [['mês', limites.vooMesH, h.mes], ['semestre', limites.vooSemestreH, h.semestre], ['ano', limites.vooAnoH, h.ano]]) {
       const total = Math.round((passadas + hoje) * 10) / 10;
       if (limite !== null && total >= 0.9 * limite) {
-        avisos.push({ t: 'warn', s: x ? x.nm : `Instrutor ${id}`, m: `Limite da lei: com esta escala, ${numeroBr(total)} h de voo no ${periodo} (limite de ${limite} h).` });
+        avisos.push({ t: 'warn', s: x ? x.nm : `Instrutor ${id}`, m: `Limite da lei: com esta escala, ${numeroBr(total)} h de voo no ${periodo} (limite de ${limite} h).`, codigo: 'perto-do-limite', insId: +id });
       }
     }
   }
@@ -174,21 +197,16 @@ function equalizarHoras(out, state, limites, historico) {
   const instrutorDa = u => u.voos[0].insId;
   const daQuem = id => unidades.filter(u => instrutorDa(u) === id);
 
+  // O receptor serve para a unidade (o combustível não piora e o peso dele precisa estar informado) e nenhum aluno
+  // dela já voa com ele no dia
+  const compromisso = o => ({ a: o.a, b: o.b, voo: AIRCRAFT_EQ_TYPES.includes(o.eqType) });
   const podeReceber = (x, u) => {
-    if (instrutorDa(u) === x.id || !podeFazer(x, u.mis, u.isGround ? GROUND_EQ_TYPE : u.eqType) || !cobre(x.aw, u.a, u.b)) return false;
+    if (instrutorDa(u) === x.id) return false;
     const deles = daQuem(x.id);
-    if (deles.some(o => sobrepoe(o.a, o.b, u.a, u.b))) return false;
-    // Os limites da Lei do Aeronauta do receptor com o voo a mais
-    const compromisso = o => ({ a: o.a, b: o.b, voo: AIRCRAFT_EQ_TYPES.includes(o.eqType) });
-    if (!dentroDosLimites({ compromissos: deles.map(compromisso), novo: compromisso(u), historico: historico(x.id), limites }).ok) return false;
-    return u.voos.every(v => {
-      const aluno = alunos.get(v.stuId);
-      if (aluno && aluno.bl.includes(x.id)) return false;
-      if (deles.some(o => o.voos.some(w => w.stuId === v.stuId))) return false;
-      if (u.isGround || !v.limKg || !v.stuKg) return true;
-      if (!x.kg) return false;
-      return reducaoNecessaria({ stuKg: v.stuKg, insKg: x.kg, tipo: v.eqType, minutos: v.b - v.a, mis: v.mis }) <= (v.comb ? v.comb.reduzirGal : 0);
-    });
+    if (u.voos.some(v => deles.some(o => o.voos.some(w => w.stuId === v.stuId)))) return false;
+    const [v] = u.voos;
+    return !problemasDoInstrutor(x, { mis: u.mis, tipo: u.isGround ? GROUND_EQ_TYPE : u.eqType, a: u.a, b: u.b, alunos: u.voos.map(o => alunos.get(o.stuId)), stuKg: v.stuKg },
+      { compromissos: deles.map(compromisso), historico: historico(x.id), limites, peso: { reducaoMaxima: v.comb ? v.comb.reduzirGal : 0, exigirPesoDoInstrutor: true } }).length;
   };
 
   for (let rodada = 0; rodada < 1000; rodada++) {
@@ -228,7 +246,7 @@ function equalizarHoras(out, state, limites, historico) {
 // opcoes.trocarMatriculas: false, sem a troca de matrículas para o instrutor ficar no mesmo avião (para comparar, medir
 // e testar)
 export function runAllocationEngine(state, opcoes = {}) {
-  const used = {}, busy = {}, stuBusy = {}, stuLastPick = {}, load = {}, eu = {}, out = [], al = [];
+  const used = {}, stuBusy = {}, stuLastPick = {}, load = {}, eu = {}, out = [], al = [];
   // A frota vem do cadastro; sem ela (estados de teste antigos), a frota inicial
   const frota = Array.isArray(state.frota) ? state.frota : FROTA_INICIAL;
   const soParafuso = matriculasDoTipo(frota, 'C152', { parafuso: true });
@@ -244,8 +262,6 @@ export function runAllocationEngine(state, opcoes = {}) {
   const horasPassadas = state.horasDosInstrutores || {};
   const historico = id => horasPassadas[id] || null;
   const compromissos = {};
-  const cabeNosLimites = (x, a, b, voo, outros = []) =>
-    dentroDosLimites({ compromissos: [...(compromissos[x.id] || []), ...outros], novo: { a, b, voo }, historico: historico(x.id), limites }).ok;
   // Aeronaves/simuladores que cada instrutor já usou no dia, na ordem em que foram escalados
   const insAircraft = {};
   // Armazena turmas abertas de Ground School por missão para permitir múltiplos alunos no mesmo horário/instrutor
@@ -304,9 +320,9 @@ export function runAllocationEngine(state, opcoes = {}) {
   const filas = ajustarFilas(state.filas, state.ins);
   const voosNaCategoria = {};
 
-  // Revisão de 50 horas: horas que o avião ainda pode voar hoje (sem as horas informadas, não há limite)
+  // Revisão de 50 horas: horas que o avião ainda pode voar hoje
   const horas = state.horas || {};
-  const saldo = r => (typeof horas[r] === 'number' ? REVISAO_H - horas[r] : Infinity);
+  const saldo = r => saldoAteARevisao(horas, r);
 
   // Escala aprovada: os voos fixos entram primeiro, no mesmo horário, avião e instrutor; o resto é encaixado
   // em volta. O fixo que ficou impossível continua onde está, em conflito (com o motivo); o cancelado não ocupa nada
@@ -339,20 +355,11 @@ export function runAllocationEngine(state, opcoes = {}) {
       // Pedido que passou de voo para Ground (ou o contrário): o pino é de outro tipo de recurso
       const mudouDeTipo = ground !== (r === GROUND_REG);
       if (status !== 'Cancelado') {
-        if (!x) marcar('instrutor-saiu', 'o instrutor saiu do cadastro');
-        else {
-          if (!x.on || !cobre(x.aw, a, b)) marcar('instrutor-indisponivel', 'o instrutor não está disponível');
-          if (!podeFazer(x, d.mis, tipo)) marcar('habilitacao', 'o instrutor não tem a habilitação da missão');
-          if (!daMesmaTurma && !free(busy, x.id, a, b)) marcar('instrutor-ocupado', 'o instrutor já tem outro compromisso neste horário');
-          if ((stu.bl || []).includes(x.id)) marcar('bloqueio', 'o aluno não voa com este instrutor');
-          if (!daMesmaTurma) {
-            const lei = dentroDosLimites({ compromissos: compromissos[x.id] || [], novo: { ...efetivo, voo: AIRCRAFT_EQ_TYPES.includes(tipo) }, historico: historico(x.id), limites });
-            if (!lei.ok) marcar('limite-da-lei', `o instrutor passaria do limite da lei (${LIMITE_DO_MOTIVO[lei.motivo] || lei.motivo})`);
-          }
-          if (!ground && !mudouDeTipo && !pesoECombustivel({ stuKg: stu.kg, insKg: x.kg, tipo: d.eq, minutos: b - a, mis: d.mis }).cabe) {
-            marcar('peso', 'o peso do aluno e do instrutor passa do limite do avião, mesmo com o mínimo de combustível');
-          }
-        }
+        // O aluno que entra na turma do instrutor não muda a ocupação dele nem a lei
+        problemasDoInstrutor(x, { mis: d.mis, tipo, a, b, efetivo, alunos: [stu], stuKg: stu.kg }, {
+          compromissos: (x && compromissos[x.id]) || [], historico: x ? historico(x.id) : null, limites, jaOcupa: daMesmaTurma,
+          peso: ground || mudouDeTipo ? null : {}, todos: true
+        }).forEach(p => marcar(p.codigo, CONFLITO_DO_INSTRUTOR[p.codigo](p)));
         if (mudouDeTipo) marcar('ground-ou-voo', ground ? 'o pedido passou de voo para Ground' : 'o pedido passou de Ground para voo');
         else if (!ground) {
           const recurso = frota.find(f => f.reg === r);
@@ -377,7 +384,6 @@ export function runAllocationEngine(state, opcoes = {}) {
           if (!daMesmaTurma) {
             (used[ground ? GROUND_REG : r] = used[ground ? GROUND_REG : r] || []).push([ia, ib]);
             if (x) {
-              (busy[x.id] = busy[x.id] || []).push([ia, ib]);
               (compromissos[x.id] ||= []).push({ a: ia, b: ib, voo: AIRCRAFT_EQ_TYPES.includes(tipo) });
             }
           }
@@ -519,17 +525,9 @@ export function runAllocationEngine(state, opcoes = {}) {
           // Há uma única sala de Ground: só abre turma nova com a sala livre durante toda a 01h30
           if (!free(used, GROUND_REG, a, b)) { fcGnd.sala++; continue; }
 
-          const q = state.ins.filter(x => x.on && habilitado(x) && cobre(x.aw, a, b));
-          if (!q.length) { fcGnd.disp++; continue; }
-
-          const f1 = q.filter(x => free(busy, x.id, a, b));
-          if (!f1.length) { fcGnd.busy++; continue; }
-
-          const sobra = f1.filter(x => !stu.bl.includes(x.id));
-          if (!sobra.length) { fcGnd.bloq++; continue; }
-
-          const f2 = sobra.filter(x => cabeNosLimites(x, a, b, false));
-          if (!f2.length) { fcGnd.limite++; continue; }
+          const { servem: f2, barrou } = instrutoresQueServem(state.ins, x => problemasDoInstrutor(x, { mis: d.mis, tipo: GROUND_EQ_TYPE, a, b, alunos: [stu] },
+            { compromissos: compromissos[x.id] || [], historico: historico(x.id), limites }));
+          if (barrou) { fcGnd[barrou]++; continue; }
 
           // Ordena instrutores priorizando: não bloqueado pela turma -> MENOS HABILITAÇÕES -> menor carga no dia
           f2.sort((x1, x2) =>
@@ -548,7 +546,6 @@ export function runAllocationEngine(state, opcoes = {}) {
           (openGroundClasses[d.mis] = openGroundClasses[d.mis] || []).push(chosenClass);
 
           // Marca o instrutor e a sala ocupados neste intervalo (outros alunos do MESMO Ground entram via chosenClass)
-          (busy[pickedIns.id] = busy[pickedIns.id] || []).push([a, b]);
           (compromissos[pickedIns.id] ||= []).push({ a, b, voo: false });
           (used[GROUND_REG] = used[GROUND_REG] || []).push([a, b]);
           load[pickedIns.id] = (load[pickedIns.id] || 0) + GROUND_DURATION_H;
@@ -690,21 +687,10 @@ export function runAllocationEngine(state, opcoes = {}) {
         const eqs = livres.filter(r => cabeNoSaldo(eu[r] || 0, dur / 60, saldo(r)));
         if (!eqs.length) { fc.revisao++; continue; }
 
-        const q = state.ins.filter(x => x.on && podeFazer(x, d.mis, d.eq) && cobre(x.aw, p.a, p.b));
-        if (!q.length) { fc.disp++; continue; }
-
-        const f1 = q.filter(x => free(busy, x.id, p.a, p.b));
-        if (!f1.length) { fc.busy++; continue; }
-
-        const naoBloqueados = f1.filter(x => !stu.bl.includes(x.id));
-        if (!naoBloqueados.length) { fc.bloq++; continue; }
-
-        const ehVoo = AIRCRAFT_EQ_TYPES.includes(d.eq);
-        const f2 = naoBloqueados.filter(x => cabeNosLimites(x, p.a, p.b, ehVoo));
-        if (!f2.length) { fc.limite++; continue; }
-
-        const ins = f2.filter(x => (comMenosCombustivel ? reducao(x) < Infinity : pesoCabe(stu.kg, x.kg, lim)));
-        if (!ins.length) { fc.peso++; continue; }
+        // Na primeira tentativa, só com o tanque cheio
+        const { servem: ins, barrou } = instrutoresQueServem(state.ins, x => problemasDoInstrutor(x, { mis: d.mis, tipo: d.eq, a: p.a, b: p.b, alunos: [stu], stuKg: stu.kg },
+          { compromissos: compromissos[x.id] || [], historico: historico(x.id), limites, peso: { reducaoMaxima: comMenosCombustivel ? Infinity : 0 } }));
+        if (barrou) { fc[barrou]++; continue; }
 
         // Quando o peso importa (o avião tem limite e o aluno, o peso), o instrutor com o peso informado vem antes: sem
         // ele, o limite não é conferido
@@ -730,7 +716,6 @@ export function runAllocationEngine(state, opcoes = {}) {
     if (ch) {
       const { p, r, x } = ch, hh = dur / 60;
       (used[r] = used[r] || []).push([p.a, p.b]);
-      (busy[x.id] = busy[x.id] || []).push([p.a, p.b]);
       (compromissos[x.id] ||= []).push({ a: p.a, b: p.b, voo: AIRCRAFT_EQ_TYPES.includes(d.eq) });
       (stuBusy[stuId] = stuBusy[stuId] || []).push([p.a, p.b]);
       stuLastPick[stuId] = { r, x };
@@ -770,7 +755,7 @@ export function runAllocationEngine(state, opcoes = {}) {
       if (lim && (!stu.kg || !x.kg)) {
         // O aviso diz de quem é o peso que falta
         const quem = !stu.kg && !x.kg ? `Pesos do aluno e de ${x.nm} não informados` : !stu.kg ? 'Peso do aluno não informado' : `Peso de ${x.nm} não informado`;
-        al.push({ t: 'warn', s: labelStu, m: `${quem} (0 kg): verificação de limite (${lim} kg) no ${d.eq} não realizada.` });
+        al.push({ t: 'warn', s: labelStu, m: `${quem} (0 kg): verificação de limite (${lim} kg) no ${d.eq} não realizada.`, codigo: 'sem-peso', ...(stu.kg ? {} : { stuId }), ...(x.kg ? {} : { insId: x.id }) });
       }
     } else {
       // O motivo, com o código que diz onde resolver
@@ -839,7 +824,8 @@ export function runAllocationEngine(state, opcoes = {}) {
         t: 'warn', s: r,
         m: meus.length
           ? `Aeronave parou para revisão de 50 horas às ${hm(paraAs)} (${fmtH(fim)} desde a última revisão).`
-          : `Aeronave parou para revisão de 50 horas: sem saldo para voar hoje (${fmtH(fim)} desde a última revisão).`
+          : `Aeronave parou para revisão de 50 horas: sem saldo para voar hoje (${fmtH(fim)} desde a última revisão).`,
+        codigo: 'revisao'
       });
     }
   }

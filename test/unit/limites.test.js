@@ -137,7 +137,7 @@ describe('Limites: o motor', async () => {
 
   it('a partir de 90% do mês, a escala avisa', () => {
     const { al } = runAllocationEngine({ ...cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, { p1: 390, p2: -1 })] }), horasDosInstrutores: { 1: historico(89.5) } });
-    assert.deepEqual(al, [{ t: 'warn', s: 'Instrutor 01', m: 'Limite da lei: com esta escala, 90,5 h de voo no mês (limite de 100 h).' }]);
+    assert.deepEqual(al, [{ t: 'warn', s: 'Instrutor 01', m: 'Limite da lei: com esta escala, 90,5 h de voo no mês (limite de 100 h).', codigo: 'perto-do-limite', insId: 1 }]);
   });
 
   it('limites editados valem; sem limite (vazio), não barra', () => {

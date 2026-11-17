@@ -144,7 +144,8 @@ export function avisosDeAtraso(out, fStatus = {}, fObs = {}) {
     return {
       t: 'warn',
       s: x.s,
-      m: `Atraso: a nova decolagem às ${hm(a)} (pouso às ${hm(b)}) se sobrepõe ao voo das ${hm(outro.a)} de ${y.s}: ${mesmo.join(' e ')}.`
+      m: `Atraso: a nova decolagem às ${hm(a)} (pouso às ${hm(b)}) se sobrepõe ao voo das ${hm(outro.a)} de ${y.s}: ${mesmo.join(' e ')}.`,
+      codigo: 'atraso'
     };
   });
 }

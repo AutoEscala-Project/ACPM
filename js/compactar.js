@@ -10,11 +10,10 @@
 // voos do rodízio, o Noturno, o Parafuso no C152 e o horário das turmas de Ground.
 import { AIRCRAFT_EQ_TYPES, GROUND_EQ_TYPE, PESOS_DA_COMPACTACAO, LIMITES_DA_COMPACTACAO, MISSOES_LOCAIS, LIMITE_DE_VOOS_LOCAIS } from './config.js';
 import { FROTA_INICIAL, matriculasDoTipo } from './frota.js';
-import { podeFazer } from './habilitacoes.js';
 import { categoriaDoRodizio } from './rodizio.js';
-import { livre, cobre, cabeNoSaldo } from './viabilidade.js';
-import { reducaoNecessaria, combustivelDoVoo } from './combustivel.js';
-import { dentroDosLimites, normalizarLimites } from './limites.js';
+import { livre, cabeNoSaldo, folgaAte, problemasDoInstrutor } from './viabilidade.js';
+import { combustivelDoVoo } from './combustivel.js';
+import { normalizarLimites } from './limites.js';
 import { HORARIOS_INICIAIS, horariosDaMissao, periodoDoMinuto, minutoDaPreferencia, fimDaMissao } from './horarios.js';
 import { disponibilidadeDoAluno, doesGroundGateFlight } from './rules.js';
 import { INTERVALO_DO_HANGAR } from './metricas.js';
@@ -136,7 +135,7 @@ export function compactar(out, state, { saldo = () => Infinity, posicao = () => 
   const horasNoRecurso = (r, sem) => { let t = 0; for (const u of doRecurso.get(r) || []) if (!sem.includes(u)) t += u.h; return t; };
   const recursoServe = (u, r, a, b, sem) => Boolean(state.av[r]) && livre(intervalosDe(doRecurso.get(r), sem), a, b)
     && (r === u.r || cabeNoSaldo(horasNoRecurso(r, sem), u.h, saldo(r)));
-  const folga = (r, a, b, sem) => intervalosDe(doRecurso.get(r), sem).reduce((m, [x, y]) => Math.min(m, y <= a ? a - y : x >= b ? x - b : 0), Infinity);
+  const folga = (r, a, b, sem) => folgaAte(intervalosDe(doRecurso.get(r), sem), a, b);
   // Num horário novo, o mesmo avião quando ele está livre; senão, um que já saiu com a menor folga, depois o do hangar
   function recursoPara(u, a, b) {
     if (recursoServe(u, u.r, a, b, [u])) return u.r;
@@ -167,9 +166,8 @@ export function compactar(out, state, { saldo = () => Infinity, posicao = () => 
     return d;
   }
 
-  // As regras da escala com as mudanças: o instrutor (habilitado, disponível, livre, dentro da lei; o novo, sem
-  // bloqueio do aluno, sem já voar com ele no dia, com o peso conferido e sem piorar o combustível), o aluno livre e o
-  // recurso
+  // As regras da escala com as mudanças: o instrutor (js/viabilidade.js; o novo também sem já voar com o aluno no dia
+  // e sem piorar o combustível), o aluno livre e o recurso
   function viavel(mudancas) {
     verificacoes++;
     const movidas = mudancas.map(m => m.u);
@@ -179,21 +177,19 @@ export function compactar(out, state, { saldo = () => Infinity, posicao = () => 
       const x = instrutor.get(m.insId);
       const outras = mudancas.filter(n => n !== m && n.insId === m.insId);
       if (mudouHorario || mudouInstrutor) {
-        if (!x || !x.on || !podeFazer(x, u.mis, u.tipo) || !cobre(x.aw, a, b)) return false;
-        if (!livre(intervalosDe(doInstrutor.get(x.id), movidas, outras.map(n => [n.a, n.a + n.u.dur])), a, b)) return false;
-        const compromissos = [...(doInstrutor.get(x.id) || [])].filter(w => !movidas.includes(w)).map(w => ({ a: w.a, b: w.b, voo: w.aviao }))
+        // Com o mesmo instrutor, o bloqueio e o peso não mudam
+        const compromissos = !x ? [] : [...(doInstrutor.get(x.id) || [])].filter(w => !movidas.includes(w)).map(w => ({ a: w.a, b: w.b, voo: w.aviao }))
           .concat(outras.map(n => ({ a: n.a, b: n.a + n.u.dur, voo: n.u.aviao })));
-        if (!dentroDosLimites({ compromissos, novo: { a, b, voo: u.aviao }, historico: historico(x.id), limites }).ok) return false;
+        const [v] = u.voos;
+        const problemas = problemasDoInstrutor(x, { mis: u.mis, tipo: u.tipo, a, b, alunos: mudouInstrutor ? u.voos.map(o => alunos.get(o.stuId)) : [], stuKg: v.stuKg }, {
+          compromissos, historico: x ? historico(x.id) : null, limites,
+          peso: mudouInstrutor ? { reducaoMaxima: v.comb ? v.comb.reduzirGal : 0, exigirPesoDoInstrutor: true } : null
+        });
+        if (problemas.length) return false;
       }
       if (mudouInstrutor) {
-        for (const v of u.voos) {
-          const aluno = alunos.get(v.stuId);
-          if (aluno && (aluno.bl || []).includes(x.id)) return false;
-          const jaVoa = w => w.insId === x.id && !movidas.includes(w);
-          if ([...(doAluno.get(v.stuId) || [])].some(jaVoa) || outras.some(n => n.u.alunos.includes(v.stuId))) return false;
-          if (u.isGround || !v.limKg || !v.stuKg) continue;
-          if (!x.kg || reducaoNecessaria({ stuKg: v.stuKg, insKg: x.kg, tipo: v.eqType, minutos: u.dur, mis: v.mis }) > (v.comb ? v.comb.reduzirGal : 0)) return false;
-        }
+        const jaVoa = w => w.insId === x.id && !movidas.includes(w);
+        if (u.alunos.some(s => [...(doAluno.get(s) || [])].some(jaVoa) || outras.some(n => n.u.alunos.includes(s)))) return false;
       }
       if (mudouHorario) {
         for (const s of u.alunos) if (!livre(intervalosDe(doAluno.get(s), movidas), a, b)) return false;
