@@ -14,7 +14,7 @@ const fimDoVoo = o => (o.mis !== 'Noturno' && AIRCRAFT_EQ_TYPES.includes(o.eqTyp
 
 const SEEDS = Array.from({ length: 300 }, (_, i) => 1001 + i);
 // Cada seed duas vezes: o cenário como foi gerado e com as escolhas do operador (o instrutor escolhido para o dia e o
-// “Voa com”): as regras da escala valem também com elas
+// “Priorizar com”): as regras da escala valem também com elas
 const execucoes = SEEDS.flatMap(seed => [gerarCenario(seed), comEscolhas(gerarCenario(seed), seed)].map((estado, i) => (
   { seed: i ? `${seed} com escolhas` : seed, estado, ...runAllocationEngine(estado) })));
 const comAsEscolhas = execucoes.filter(e => String(e.seed).endsWith('com escolhas'));
@@ -307,7 +307,7 @@ describe('O horário mais perto da preferência, em 300 cenários', async () => 
 });
 
 // O que o operador define vale mais que a escolha do app: o instrutor escolhido para o dia (na Demanda ou na Escala)
-// e o “Voa com” do aluno (o par permanente, com aviso quando nenhum dos instrutores dele pode)
+// e o “Priorizar com” do aluno (o par permanente, com aviso quando nenhum dos instrutores dele pode)
 describe('Invariantes das escolhas do operador, em 300 cenários', () => {
   const pedidoDoVoo = (estado, o) => pedidoDe(estado, o).d;
   const emTodasAsEscolhas = verificar => {
@@ -361,23 +361,23 @@ describe('Invariantes das escolhas do operador, em 300 cenários', () => {
     }
   }));
 
-  it('com o “Voa com”, o voo fica com um instrutor dele; senão, o aviso diz quem ficou com o voo', () => emTodasAsEscolhas(({ estado, out, al }) => {
+  it('com o “Priorizar com”, o voo fica com um instrutor dele; senão, o aviso diz quem ficou com o voo', () => emTodasAsEscolhas(({ estado, out, al }) => {
     const avisos = al.filter(a => a.codigo === 'voa-com');
     for (const o of out) {
       const s = estado.stu.find(x => x.id === o.stuId), d = pedidoDoVoo(estado, o);
       const pares = (s.voaCom || []).filter(id => estado.ins.some(x => x.id === id));
-      if (escolhidoValido(estado, d) || !pares.length) { assert.ok(!o.insPar, `${o.fKey}: marcado sem Voa com`); continue; }
+      if (escolhidoValido(estado, d) || !pares.length) { assert.ok(!o.insPar, `${o.fKey}: marcado sem Priorizar com`); continue; }
       if (pares.includes(o.insId)) { assert.ok(o.insPar, `${o.fKey}: com o par sem a marca`); continue; }
-      assert.ok(avisos.some(a => a.stuId === o.stuId && a.insId === o.insId && a.m.includes(o.ins)), `${o.fKey}: com ${o.insId}, fora do Voa com ${pares}, sem aviso`);
+      assert.ok(avisos.some(a => a.stuId === o.stuId && a.insId === o.insId && a.m.includes(o.ins)), `${o.fKey}: com ${o.insId}, fora do Priorizar com ${pares}, sem aviso`);
     }
-    // Todo aviso é de um voo que está na escala com aquele instrutor, fora do “Voa com”
+    // Todo aviso é de um voo que está na escala com aquele instrutor, fora do “Priorizar com”
     for (const a of avisos) {
       const s = estado.stu.find(x => x.id === a.stuId);
       assert.ok(out.some(o => o.stuId === a.stuId && o.insId === a.insId) && !s.voaCom.includes(a.insId), `aviso solto: ${a.m}`);
     }
   }));
 
-  it('a divisão das horas e a compactação não trocam o instrutor escolhido nem o do “Voa com”', () => emTodasAsEscolhas(({ estado, out }) => {
+  it('a divisão das horas e a compactação não trocam o instrutor escolhido nem o do “Priorizar com”', () => emTodasAsEscolhas(({ estado, out }) => {
     const antes = new Map(runAllocationEngine(estado, { compactar: false, dividirHoras: false }).out.map(o => [o.fKey, o]));
     for (const o of antes.values()) {
       if (!o.insEscolhido && !o.insPar) continue;

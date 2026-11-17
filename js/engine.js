@@ -175,7 +175,7 @@ function paradoDasUnidades(unidades) {
 // horas para o com menos, enquanto todas as regras continuam valendo: a habilitação, a disponibilidade durante todo o
 // voo, o horário livre, o bloqueio do aluno, o peso e o aluno não repetir o instrutor no dia. Os voos do rodízio
 // (cheque, MLTE, noturno e C172) ficam com quem a fila escolheu, e o voo com o instrutor escolhido pelo operador (ou o
-// do “Voa com” do aluno), com ele; a turma de Ground se move inteira e conta 1h30 uma vez. Cada troca diminui a soma dos quadrados das horas, então a repetição termina. O voo cancelado não conta nem
+// do “Priorizar com” do aluno), com ele; a turma de Ground se move inteira e conta 1h30 uma vez. Cada troca diminui a soma dos quadrados das horas, então a repetição termina. O voo cancelado não conta nem
 // ocupa o instrutor, o atrasado ocupa o horário novo, e o voo com status de andamento não muda de instrutor
 function equalizarHoras(out, state, limites, historico) {
   const ativos = state.ins.filter(x => x.on);
@@ -191,7 +191,7 @@ function equalizarHoras(out, state, limites, historico) {
     const v = voos.find(o => statusDoVoo(o, state.fStatus) !== 'Cancelado');
     return {
       voos, ...intervaloEfetivo(v, statusDoVoo(v, state.fStatus), (state.fObs || {})[v.fKey]), h: v.h, mis: v.mis, eqType: v.eqType, isGround: v.isGround,
-      // O instrutor escolhido pelo operador (na Demanda ou na Escala) e o do “Voa com” do aluno não mudam
+      // O instrutor escolhido pelo operador (na Demanda ou na Escala) e o do “Priorizar com” do aluno não mudam
       presa: voos.some(o => o.fixo || o.insEscolhido || o.insPar || STATUS_EM_ANDAMENTO.includes(statusDoVoo(o, state.fStatus)))
     };
   });
@@ -243,7 +243,7 @@ function equalizarHoras(out, state, limites, historico) {
   }
 }
 
-// Por que os instrutores do “Voa com” do aluno não puderam: o que vale para todos eles (não vêm, sem a habilitação, em
+// Por que os instrutores do “Priorizar com” do aluno não puderam: o que vale para todos eles (não vêm, sem a habilitação, em
 // “Não escalar com”) ou a regra que mais barrou na busca só com eles (fc: as contagens da busca)
 const MOTIVO_SEM_PAR = {
   disp: 'indisponível nos horários possíveis', busy: 'ocupado nos horários possíveis', bloq: 'em “Não escalar com”',
@@ -316,8 +316,8 @@ export function runAllocationEngine(state, opcoes = {}) {
    * 2º: O pedido com o instrutor escolhido pelo operador para o dia antes dos outros: o que o operador definiu para o
    *     dia vale primeiro, e o pedido com um instrutor só é o que tem menos opções (os outros se encaixam em volta dele).
    * 3º: Maior prioridade (5 a 1).
-   * 4º: Com a mesma prioridade, o do aluno com “Voa com” (o par permanente do cadastro) antes: ele tem menos
-   *     instrutores possíveis. O “Voa com” vale todos os dias, então não passa na frente da prioridade.
+   * 4º: Com a mesma prioridade, o do aluno com “Priorizar com” (o par permanente do cadastro) antes: ele tem menos
+   *     instrutores possíveis. O “Priorizar com” vale todos os dias, então não passa na frente da prioridade.
    * 5º: A ordem dos agendamentos: o pedido da agenda que foi registrado antes (o id do
    *     pedido cresce com o registro) vem antes; o pedido posto à mão, sem a agenda, vem depois dos agendados.
    * 6º: Ordem de cadastro do aluno e ordem da missão.
@@ -356,7 +356,7 @@ export function runAllocationEngine(state, opcoes = {}) {
     return Object.hasOwn(fixos, fKey) ? fKey : null;
   };
   const ocupacoesDeAtraso = [];
-  // Os voos que ficaram sem o instrutor do “Voa com” do aluno (fKey → o aviso, que sai no fim)
+  // Os voos que ficaram sem o instrutor do “Priorizar com” do aluno (fKey → o aviso, que sai no fim)
   const semPar = new Map();
   // Os voos locais (Voo Local, Voo Solo e TGL) que saem em cada horário
   const locaisNoHorario = {};
@@ -477,7 +477,7 @@ export function runAllocationEngine(state, opcoes = {}) {
     // O instrutor escolhido pelo operador para o pedido: o motor procura o horário e o avião só com ele. O que impede o
     // voo em qualquer horário (fora do dia, sem a habilitação, em "Não escalar com") recusa logo. O escolhido que saiu
     // do cadastro (excluído depois de escolhido, numa data que não estava aberta) não vale mais: a exclusão também é do
-    // operador, e o pedido volta para o Automático (com o “Voa com” do aluno), com o aviso no fim
+    // operador, e o pedido volta para o Automático (com o “Priorizar com” do aluno), com o aviso no fim
     const escolhido = d.insId ? state.ins.find(x => x.id === d.insId) || null : null;
     const tipoDoPedido = isGnd ? GROUND_EQ_TYPE : d.eq;
     const quem = escolhido ? `o instrutor escolhido (${escolhido.nm})` : '';
@@ -489,13 +489,13 @@ export function runAllocationEngine(state, opcoes = {}) {
       al.push({ t: 'err', s: labelStu, m: `Rejeitado: ${impedimento}.`, codigo: 'instrutor-escolhido' });
       continue;
     }
-    // As passadas da busca do instrutor: só o escolhido; ou primeiro os do “Voa com” do aluno (o par permanente, do
+    // As passadas da busca do instrutor: só o escolhido; ou primeiro os do “Priorizar com” do aluno (o par permanente, do
     // cadastro) em todos os horários e, sem nenhum deles, todos os instrutores, com o aviso; ou todos
     const doPar = escolhido ? [] : (stu.voaCom || []).map(id => state.ins.find(x => x.id === id)).filter(Boolean);
     const passadas = escolhido ? [{ pool: [escolhido], marca: { insEscolhido: true } }]
       : doPar.length ? [{ pool: doPar, marca: { insPar: true } }, { pool: state.ins, marca: {}, semPar: true }]
         : [{ pool: state.ins, marca: {} }];
-    // O voo que ficou sem o instrutor do “Voa com”: o motivo vem da passada só com eles (fc: as contagens dela). O aviso
+    // O voo que ficou sem o instrutor do “Priorizar com”: o motivo vem da passada só com eles (fc: as contagens dela). O aviso
     // sai no fim, com o instrutor que ficou com o voo depois da divisão das horas e da compactação
     const anotarSemPar = fc => semPar.set(chaveDoVoo(stuId, mid), { s: labelStu, nomes: doPar.map(i => i.nm).join(', '), motivo: motivoSemPar(doPar, stu, d, tipoDoPedido, fc), pares: doPar.map(i => i.id) });
 
@@ -871,13 +871,13 @@ export function runAllocationEngine(state, opcoes = {}) {
   } else {
     trocarMatriculas(out);
   }
-  // O voo sem o instrutor do “Voa com”: o aviso diz quem ficou com ele (se a divisão das horas ou a compactação o
-  // passaram para um instrutor do “Voa com”, não há aviso)
+  // O voo sem o instrutor do “Priorizar com”: o aviso diz quem ficou com ele (se a divisão das horas ou a compactação o
+  // passaram para um instrutor do “Priorizar com”, não há aviso)
   for (const o of out) {
     const sem = semPar.get(o.fKey);
     if (!sem) continue;
     if (sem.pares.includes(o.insId)) { o.insPar = true; continue; }
-    al.push({ t: 'warn', s: sem.s, m: `Sem o instrutor de “Voa com” (${sem.nomes}: ${sem.motivo}): o voo ficou com ${o.ins}.`, codigo: 'voa-com', stuId: o.stuId, insId: o.insId });
+    al.push({ t: 'warn', s: sem.s, m: `Sem o instrutor de “Priorizar com” (${sem.nomes}: ${sem.motivo}): o voo ficou com ${o.ins}.`, codigo: 'voa-com', stuId: o.stuId, insId: o.insId });
   }
   // O voo do pedido cujo instrutor escolhido saiu do cadastro: o aviso diz quem ficou com ele (o voo fixo fica com o
   // conflito dele)

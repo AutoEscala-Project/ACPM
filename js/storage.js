@@ -134,7 +134,7 @@ export const ApiClient = {
     x.stu = x.stu.filter(comId);
     x.stu.forEach(s => {
       Object.assign(s, { nm: nome(s.nm, `Aluno ${s.id}`), kg: peso(s.kg), bl: Array.isArray(s.bl) ? s.bl.filter(id => Number.isInteger(id) && id > 0) : [] });
-      // “Voa com”: só ids, sem repetir e sem os de “Não escalar com”; vazio, o campo sai
+      // “Priorizar com”: só ids, sem repetir e sem os de “Não escalar com”; vazio, o campo sai
       const pares = Array.isArray(s.voaCom) ? [...new Set(s.voaCom.filter(id => Number.isInteger(id) && id > 0 && !s.bl.includes(id)))] : [];
       if (pares.length) s.voaCom = pares;
       else delete s.voaCom;

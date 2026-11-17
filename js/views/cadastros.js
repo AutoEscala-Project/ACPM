@@ -237,12 +237,12 @@ function naoEscalarCom(s) {
     `<select data-f="bl" class="edit-only" aria-label="Não escalar com"><option value="">Não escalar com…</option>${S.ins.filter(x => !s.bl.includes(x.id)).map(x => `<option value="${x.id}">${esc(x.nm)}</option>`).join('')}</select>`;
 }
 
-// “Voa com”: os instrutores do aluno (o par permanente). A escala põe o aluno com um deles sempre que algum pode voar o
+// “Priorizar com”: os instrutores do aluno (o par permanente). A escala põe o aluno com um deles sempre que algum pode voar o
 // pedido; sem nenhum, com outro instrutor, e avisa. Quem está em “Não escalar com” não entra na lista
 function voaCom(s) {
   const pares = s.voaCom || [];
-  return pares.map(b => insBy(b) ? `<span class="tg par">${esc(insBy(b).nm)}<button class="edit-only" data-act="unvc" data-b="${b}" aria-label="Tirar ${esc(insBy(b).nm)} de Voa com">✕</button></span>` : '').join('') +
-    `<select data-f="voaCom" class="edit-only" aria-label="Voa com"><option value="">Voa com…</option>${S.ins.filter(x => !pares.includes(x.id) && !s.bl.includes(x.id)).map(x => `<option value="${x.id}">${esc(x.nm)}</option>`).join('')}</select>`;
+  return pares.map(b => insBy(b) ? `<span class="tg par">${esc(insBy(b).nm)}<button class="edit-only" data-act="unvc" data-b="${b}" aria-label="Tirar ${esc(insBy(b).nm)} de Priorizar com">✕</button></span>` : '').join('') +
+    `<select data-f="voaCom" class="edit-only" aria-label="Priorizar com"><option value="">Priorizar com…</option>${S.ins.filter(x => !pares.includes(x.id) && !s.bl.includes(x.id)).map(x => `<option value="${x.id}">${esc(x.nm)}</option>`).join('')}</select>`;
 }
 
 const linhaDoAluno = s => `<tr class="cd" data-k="s" data-id="${s.id}" data-nm="${esc(s.nm.toLowerCase())}">
@@ -260,7 +260,7 @@ export const rAlu = () => {
     : '<tr><td colspan="7" class="h">Nenhum aluno cadastrado. Clique em “+ Novo aluno” acima para cadastrar.</td></tr>';
 };
 
-// Atualiza a linha do aluno no lugar. "Voa com" e "Não escalar com" são refeitos só quando mudam (um tira o instrutor
+// Atualiza a linha do aluno no lugar. "Priorizar com" e "Não escalar com" são refeitos só quando mudam (um tira o instrutor
 // da lista do outro), e o foco volta para o seletor que mudou
 export function atualizarLinhaDoAluno(s, { naoEscalar = false, voaComMudou = false } = {}) {
   const linha = document.querySelector(`#alu tr.cd[data-id="${s.id}"]`);

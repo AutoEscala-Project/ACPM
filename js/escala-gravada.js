@@ -55,7 +55,7 @@ const CAMPOS = {
   fixo: v => v === true,
   // O instrutor foi escolhido pelo operador (na Demanda ou na Escala)
   insEscolhido: v => v === true,
-  // O instrutor é do “Voa com” do aluno
+  // O instrutor é do “Priorizar com” do aluno
   insPar: v => v === true,
   conflito: v => Array.isArray(v) && v.length <= 20 && v.every(m => texto(m, 200)),
   conflitoCodigos: v => Array.isArray(v) && v.length <= 20 && v.every(c => CODIGOS_DE_CONFLITO.includes(c)),
