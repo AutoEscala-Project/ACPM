@@ -1,4 +1,4 @@
-import { test, expect, abrir, abrirSintetico, abrirComExemplo, irPara, abrirEscala, lerEscala } from './fixtures.js';
+import { test, expect, abrir, abrirSintetico, abrirComExemplo, irPara, abrirEscala, lerEscala, AGORA } from './fixtures.js';
 import { aluno, apenas, cenario, instrutor } from '../helpers/montar.js';
 
 test.describe('Recursos', () => {
@@ -541,5 +541,42 @@ test.describe('Alunos', () => {
     await page.locator('#alu .cd').nth(1).locator('.nm').blur();
     await page.locator('[data-flt="alu"]').fill('carla');
     await expect(page.locator('#alu .cd:visible')).toHaveCount(1);
+  });
+});
+
+test.describe('Confirmação', () => {
+  test('um padrão só: o ✕ armado fica vermelho e diz o que confirma; sem o segundo clique, volta ao que era', async ({ page }) => {
+    await abrirComExemplo(page);
+    await irPara(page, 'alu');
+    await page.clock.install({ time: AGORA });
+    const alunos = page.locator('#alu .cd');
+    const total = await alunos.count();
+    const excluir = page.locator('#alu .cd [data-act="dels"]').first();
+    const nome = await excluir.getAttribute('aria-label');
+    expect(nome).toMatch(/^Excluir /);
+    await excluir.click();
+    await expect(excluir).toHaveText('Confirmar');
+    await expect(excluir).toHaveClass(/\barm\b/);
+    await expect(excluir).toHaveAccessibleName(`Confirmar: ${nome}`);
+    await page.clock.runFor(3500);
+    await expect(excluir).toHaveText('✕');
+    await expect(excluir).not.toHaveClass(/\barm\b/);
+    await expect(excluir).toHaveAccessibleName(nome);
+    await expect(alunos).toHaveCount(total);
+  });
+
+  test('o aluno renomeado com o ✕ armado: depois que ele desarma, o nome lido é o novo', async ({ page }) => {
+    await abrirComExemplo(page);
+    await irPara(page, 'alu');
+    await page.clock.install({ time: AGORA });
+    const linha = page.locator('#alu .cd').first();
+    const excluir = linha.locator('[data-act="dels"]');
+    await excluir.click();
+    await linha.locator('.nm').fill('Maria Nova');
+    await linha.locator('.nm').press('Tab');
+    await expect(excluir).toHaveAccessibleName('Excluir Maria Nova');
+    await page.clock.runFor(3500);
+    await expect(excluir).toHaveText('✕');
+    await expect(excluir).toHaveAccessibleName('Excluir Maria Nova');
   });
 });

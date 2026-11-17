@@ -71,7 +71,8 @@ function horasComAEscala(x) {
 }
 const perto = (h, limite) => limite !== null && h >= 0.9 * limite;
 // O Administrador muda os limites (neste navegador, o Operador)
-export const podeEditarLimites = () => (ApiClient.perfil ? gerenciaContas(ApiClient.perfil) : !isGestor());
+// Depois de um conflito a tela fica só para consulta, também para o Administrador
+export const podeEditarLimites = () => !ApiClient.readOnly && (ApiClient.perfil ? gerenciaContas(ApiClient.perfil) : !isGestor());
 const SEM_INSTRUTORES = 'Nenhum instrutor cadastrado. Clique em “+ Novo instrutor” acima para cadastrar.';
 
 function linhaDoDia(x, ocupacao) {

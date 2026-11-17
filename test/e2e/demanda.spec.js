@@ -62,7 +62,12 @@ test.describe('Demanda', () => {
     await expect(extra.locator('td').first()).toContainText('↳ missão extra');
     await expect(extra.locator('[data-f="mis"]')).toHaveValue('Voo Local');
     await expect(extra.locator('[data-f="p1"]')).toHaveValue('760');
-    await extra.locator('[data-act="del-mis"]').click();
+    // Tirar a missão extra pede confirmação, como os outros ✕
+    const tirar = extra.locator('[data-act="del-mis"]');
+    await tirar.click();
+    await expect(tirar).toHaveText('Confirmar');
+    await expect(tirar).toHaveAccessibleName('Confirmar: Tirar a missão extra de Aluno 09');
+    await tirar.click();
     await expect(extra).toHaveCount(0);
     await expect(page.locator('#audit-log-list')).toContainText('Missão extra removida de Aluno 09');
   });
