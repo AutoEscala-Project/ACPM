@@ -120,6 +120,21 @@ describe('O motor com os requisitos e os atributos', () => {
     assert.match(ninguem.al[0].m, /exigem a habilitação própria deles, e nenhum instrutor livre a tem/);
   });
 
+  // Achados da revisão: o aviso do "Priorizar com" e a rejeição do voo IFR dizem o motivo certo
+  it('o "Priorizar com" sem a habilitação própria do avião livre: o aviso diz isso', () => {
+    const ins = [comHab(1, MLTE), comHab(2, [...MLTE, 'aviao:PR-VOM'])];
+    const { out, al } = escala(comFrota({ ins, stu: [aluno(1000, { mis: 'Multimotor', eq: 'PA-34' }, { voaCom: [1] })] }, FROTA, { 'PT-JOB': false }));
+    assert.deepEqual(out.map(o => o.insId), [2]);
+    assert.deepEqual(al.map(a => a.m), ['Sem o instrutor de “Priorizar com” (Instrutor 01: sem a habilitação própria dos aviões livres): o voo ficou com Instrutor 02.']);
+  });
+
+  it('com o avião homologado IFR ocupado e o "Só VFR" livre, a rejeição diz que o voo é IFR', () => {
+    const ifr = { mis: 'IFR', eq: 'C172', jan: 'h500' };
+    const { out, al } = escala(comFrota({ ins: [comHab(1, C172_IFR), comHab(2, C172_IFR)], stu: [aluno(1000, ifr), aluno(1001, ifr)] }));
+    assert.deepEqual(out.map(o => o.r), ['PR-HAR']);
+    assert.deepEqual(al.map(a => [a.codigo, a.m]), [['avioes-ocupados', 'Rejeitado: nenhum C172 homologado IFR livre nos horários possíveis (o voo é IFR; os “Só VFR” não servem a ele).']]);
+  });
+
   it('a divisão das horas, a compactação e a troca de matrículas não levam o voo para quem não voa no avião', () => {
     // Dois voos no PR-VOM com o instrutor 2 (o único habilitado nele); o instrutor 1 está livre e tem menos horas
     const ins = [comHab(1, MLTE), comHab(2, [...MLTE, 'aviao:PR-VOM'])];

@@ -252,7 +252,8 @@ function equalizarHoras(out, state, limites, historico) {
 // “Não escalar com”) ou a regra que mais barrou na busca só com eles (fc: as contagens da busca)
 const MOTIVO_SEM_PAR = {
   disp: 'indisponível nos horários possíveis', busy: 'ocupado nos horários possíveis', bloq: 'em “Não escalar com”',
-  limite: 'no limite da Lei do Aeronauta', peso: 'peso acima do limite do avião'
+  limite: 'no limite da Lei do Aeronauta', peso: 'peso acima do limite do avião',
+  aviaoProprio: 'sem a habilitação própria dos aviões livres'
 };
 function motivoSemPar(doPar, stu, d, tipo, fc) {
   if (doPar.every(x => !x.on)) return 'fora nesta data';
@@ -871,7 +872,9 @@ export function runAllocationEngine(state, opcoes = {}) {
           stu_busy: ['aluno-ocupado', 'o aluno já tem outra missão nos horários possíveis'],
           eq: ['avioes-ocupados', isParafuso && d.eq === 'C152'
             ? `o ${nomesSoParafuso} (só para Parafuso) já está ocupado nos horários possíveis`
-            : `nenhum ${d.eq} livre nos horários possíveis (ocupados por pedidos de prioridade maior)`],
+            : frota.some(f => f.tipo === d.eq && state.av[f.reg] && motivoDoAviao(f, vooDoPedido) === 'so-vfr')
+              ? `nenhum ${d.eq} homologado IFR livre nos horários possíveis (o voo é IFR; os “Só VFR” não servem a ele)`
+              : `nenhum ${d.eq} livre nos horários possíveis (ocupados por pedidos de prioridade maior)`],
           revisao: ['revisao', `os ${d.eq} livres estão sem saldo até a revisão de 50 horas`],
           disp: ['instrutores-indisponiveis', escolhido ? `${quem} não está disponível durante o voo inteiro nos horários possíveis` : `nenhum instrutor habilitado (${exige}) está disponível durante o voo inteiro nos horários possíveis`],
           busy: ['instrutores-ocupados', escolhido ? `${quem} já tem outro compromisso nos horários possíveis` : `os instrutores habilitados (${exige}) já têm outro compromisso nos horários possíveis`],

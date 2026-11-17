@@ -9,7 +9,7 @@
 // piora. Ficam como estão os voos fixos e os que já têm status (Atrasado, Em Voo, Pousou, Cancelado), o instrutor dos
 // voos do rodízio, o instrutor escolhido pelo operador e o do “Priorizar com”, o Noturno, o Parafuso no C152 e o horário das turmas de Ground.
 import { AIRCRAFT_EQ_TYPES, GROUND_EQ_TYPE, PESOS_DA_COMPACTACAO, LIMITES_DA_COMPACTACAO, MISSOES_LOCAIS, LIMITE_DE_VOOS_LOCAIS } from './config.js';
-import { FROTA_INICIAL, matriculasDoTipo, aviaoServe, recursoDaFrota } from './frota.js';
+import { FROTA_INICIAL, matriculasDoTipo, aviaoServe, recursoDaFrota, instrutorVoaNoAviao } from './frota.js';
 import { categoriaDoRodizio } from './rodizio.js';
 import { livre, cabeNoSaldo, folgaAte, problemasDoInstrutor } from './viabilidade.js';
 import { combustivelDoVoo } from './combustivel.js';
@@ -140,9 +140,12 @@ export function compactar(out, state, { saldo = () => Infinity, posicao = () => 
     && (r === u.r || cabeNoSaldo(horasNoRecurso(r, sem), u.h, saldo(r)));
   const folga = (r, a, b, sem) => folgaAte(intervalosDe(doRecurso.get(r), sem), a, b);
   // Num horário novo, o mesmo avião quando ele está livre; senão, um que já saiu com a menor folga, depois o do hangar
-  function recursoPara(u, a, b) {
-    if (recursoServe(u, u.r, a, b, [u])) return u.r;
-    return matriculasDoTipo(frota, u.tipo).filter(r => r !== u.r && aviaoServe(recursoDaFrota(frota, r), vooDa(u)) && recursoServe(u, r, a, b, [u]))
+  // (insId: o instrutor que vai voar, quando muda; o avião com habilitação própria só com quem a tem)
+  function recursoPara(u, a, b, insId = u.insId) {
+    const x = instrutor.get(insId);
+    const voa = r => !x || instrutorVoaNoAviao(x, recursoDaFrota(frota, r));
+    if (voa(u.r) && recursoServe(u, u.r, a, b, [u])) return u.r;
+    return matriculasDoTipo(frota, u.tipo).filter(r => r !== u.r && aviaoServe(recursoDaFrota(frota, r), vooDa(u)) && voa(r) && recursoServe(u, r, a, b, [u]))
       .sort((p, q) => menorPrimeiro(folga(p, a, b, [u]), folga(q, a, b, [u])) || posicao(p) - posicao(q))[0] || null;
   }
 
@@ -268,7 +271,7 @@ export function compactar(out, state, { saldo = () => Infinity, posicao = () => 
         if (!u.mudaHorario) continue;
         for (const a of u.inicios) {
           if (a === u.a || !encosta(x.id, a, a + u.dur, u)) continue;
-          const r = recursoPara(u, a, a + u.dur);
+          const r = recursoPara(u, a, a + u.dur, x.id);
           if (r) considerar([{ u, a, insId: x.id, r }]);
         }
       }
