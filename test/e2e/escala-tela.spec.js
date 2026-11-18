@@ -161,21 +161,21 @@ test.describe('Tela da Escala', () => {
   test('na Lista, cada horário recolhe e abre os voos dele (e continua assim quando a escala é refeita)', async ({ page }) => {
     await abrirComExemplo(page);
     await abrirEscala(page);
-    const botao = page.locator('#out tr.win').first().locator('button');
+    const botao = page.locator('#out tr.win').first().locator('button.win-btn');
     const voos = w => page.locator(`#out tbody tr[data-w="${w}"]:not(.win)`);
     await expect(botao).toHaveAttribute('aria-expanded', 'true');
     expect(await voos(0).count()).toBeGreaterThan(0);
     await botao.click();
-    await expect(page.locator('#out tr.win').first().locator('button')).toHaveAttribute('aria-expanded', 'false');
+    await expect(page.locator('#out tr.win').first().locator('button.win-btn')).toHaveAttribute('aria-expanded', 'false');
     await expect(voos(0).first()).toBeHidden();
     expect(await voos(0).evaluateAll(trs => trs.every(tr => tr.hidden))).toBe(true);
     await expect(voos(1).first()).toBeVisible();
 
     await page.locator('#s-esc [data-tl="eq"]').click();
     await page.locator('#s-esc [data-tl="lista"]').click();
-    await expect(page.locator('#out tr.win').first().locator('button')).toHaveAttribute('aria-expanded', 'false');
+    await expect(page.locator('#out tr.win').first().locator('button.win-btn')).toHaveAttribute('aria-expanded', 'false');
     await expect(voos(0).first()).toBeHidden();
-    await page.locator('#out tr.win').first().locator('button').click();
+    await page.locator('#out tr.win').first().locator('button.win-btn').click();
     await expect(voos(0).first()).toBeVisible();
   });
 
@@ -224,7 +224,7 @@ test.describe('Mapa: o popup do voo', () => {
   test('o voo da primeira linha abre o popup inteiro, por cima dos filtros e do cabeçalho', async ({ page }) => {
     await abrirComExemplo(page);
     await abrirMapa(page);
-    const barra = page.locator('#out .tl-row').first().locator('.tl-bar').first();
+    const barra = page.locator('#out .tl-row:has(.tl-bar)').first().locator('.tl-bar').first();
     await expect(barra).toHaveAttribute('aria-expanded', 'false');
     await barra.click();
     await expect(pop(page)).toBeVisible();

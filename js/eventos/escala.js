@@ -1,5 +1,5 @@
-// A Escala: o mapa e o popup do voo, os filtros, exportar e compartilhar, o status do voo, aprovar e reabrir, os
-// critérios da compactação, o resultado da missão do curso e as sugestões para um conflito
+// A Escala: o mapa e o popup do voo (e o clique no mapa que agenda), os filtros, exportar e compartilhar, o status do voo,
+// aprovar e reabrir, os critérios da compactação, o resultado da missão do curso e as sugestões para um conflito
 import { gravarAlteracao, logChange, gravarEscalaCalculada } from '../actions.js';
 import { opcoesDeCategoria } from '../categorias.js';
 import { OPCOES_DE_BURACOS, OPCOES_DE_HORARIOS, normalizarCriterios } from '../criterios.js';
@@ -12,6 +12,7 @@ import { S, RES, DATA, isGestor, modoCompartilhado, insBy } from '../state.js';
 import { escolherInstrutor, escolhasDaUnidade, escolherNosPedidos } from '../instrutor-escolhido.js';
 import { STATUS_COM_DETALHE, textoParaOHistorico, detalheAoMudarStatus, rotuloDoStatus } from '../status.js';
 import { ApiClient } from '../storage.js';
+import { agendarNoMapa } from './agendamento.js';
 import { confirmado } from './confirmacao.js';
 import { aoAcionar, aoMudarCampo } from './registro.js';
 import { rAlu } from '../views/cadastros.js';
@@ -21,10 +22,21 @@ import { cursoDoResultado } from '../views/etapas.js';
 import { rOut, botaoDoInstrutor, seletorDeInstrutor, abrirPopupDoMapa, fecharPopupDoMapa, popupDoMapaAberto, reposicionarPopupDoMapa, tabNoPopup } from '../views/escala.js';
 import { abrirPainelDeReparo, fecharPainelDeReparo, opcaoDoPainel, painelDeReparoAberto } from '../views/reparo.js';
 
+// O minuto de um clique na faixa de uma linha do mapa: a posição dele dentro da faixa (sem a borda), entre o início e o
+// fim do mapa (data-inicio e data-fim), de 5 em 5 minutos
+function minutoDoClique(faixa, clientX) {
+  const { inicio, fim } = faixa.closest('.tl-wrap').dataset;
+  const fracao = (clientX - faixa.getBoundingClientRect().left - faixa.clientLeft) / faixa.clientWidth;
+  return Math.round((+inicio + Math.min(1, Math.max(0, fracao)) * (fim - inicio)) / 5) * 5;
+}
+
 // Popup do voo no mapa da escala: a barra abre e fecha; Esc (o foco volta para a barra) e um clique fora fecham, e ele
 // acompanha a barra quando a página ou o mapa rolam. Um diálogo aberto por cima (o do status) fica com o Esc e com os
 // cliques dentro dele: o popup continua aberto. Dentro ou fora é pelo caminho do clique, fixado quando ele começa: o
-// nome do instrutor, já trocado pela lista (js/eventos/registro.js) e fora da página, continua dentro do popup
+// nome do instrutor, já trocado pela lista (js/eventos/registro.js) e fora da página, continua dentro do popup.
+// Sem popup aberto, um clique (ou toque) no espaço livre de uma linha do mapa agenda nela: o diálogo abre com o recurso
+// ou o instrutor da linha e o horário da lista mais perto do clique (js/agendamento.js). Com o popup aberto, o clique só
+// fecha o popup
 document.addEventListener('click', e => {
   const barra = e.target.closest('#out .tl-bar');
   if (barra) {
@@ -32,8 +44,15 @@ document.addEventListener('click', e => {
     else abrirPopupDoMapa(barra, { focar: true });
     return;
   }
-  const dentro = e.composedPath().some(el => el instanceof Element && el.matches('#tl-pop, dialog'));
-  if (popupDoMapaAberto() && !dentro) fecharPopupDoMapa();
+  if (popupDoMapaAberto()) {
+    const dentro = e.composedPath().some(el => el instanceof Element && el.matches('#tl-pop, dialog'));
+    if (!dentro) fecharPopupDoMapa();
+    return;
+  }
+  const faixa = e.target.closest('#out .tl-track:not(.inerte)');
+  if (!faixa || isGestor()) return;
+  const { r, ins } = faixa.dataset;
+  agendarNoMapa({ ...(ins ? { insId: +ins } : { r }), minuto: minutoDoClique(faixa, e.clientX) });
 });
 // O Esc fecha só o popup, a camada de cima: ouvido na captura, ele para aqui e não chega às gavetas e aos painéis
 // de trás (o Histórico, as Sugestões, as habilitações), que continuam abertos. O Esc na lista do instrutor é dela

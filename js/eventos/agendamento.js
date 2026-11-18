@@ -37,3 +37,7 @@ function confirmarAgendamento({ proposta, base, avaliacao, contexto }) {
 }
 
 aoAcionar('agendar', b => abrirAgendamento(b.dataset.agendar || 'dia', { aoConfirmar: confirmarAgendamento }));
+
+// O clique no espaço livre de uma linha do mapa (js/eventos/escala.js) abre o mesmo diálogo, com o recurso ou o instrutor
+// da linha e o minuto do clique ({ r ou insId, minuto })
+export const agendarNoMapa = contexto => abrirAgendamento(contexto, { aoConfirmar: confirmarAgendamento });

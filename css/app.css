@@ -1050,15 +1050,18 @@ a { color: var(--ac); }
 .tl-dot-cancelado { background: var(--mu); opacity: .42; }
 
 .tl-wrap { position: relative; padding-top: 4px; }
+/* Cada marca do eixo no minuto dela, centrada nela (o clique na faixa cai no horário da marca); a do fim do mapa, para
+   dentro. O eixo tem a largura de dentro das faixas (sem a borda delas) */
 .tl-axis {
-  display: flex;
-  margin-left: 165px;
+  position: relative;
+  height: 20px;
+  margin: 0 1px 0 166px;
   font-size: 11px;
   font-weight: 600;
   color: var(--mu);
-  justify-content: space-between;
-  padding-bottom: 4px;
 }
+.tl-axis span { position: absolute; top: 0; transform: translateX(-50%); white-space: nowrap; }
+.tl-axis span.fim { transform: translateX(-100%); }
 .tl-row {
   display: flex;
   align-items: center;
@@ -1067,34 +1070,49 @@ a { color: var(--ac); }
   border-top: 1px solid var(--ln);
   font-size: 13px;
 }
+/* O nome e as horas da linha, com o "+" que agenda nela ao lado */
 .tl-lbl {
   width: 155px;
   font-weight: 600;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
   flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 4px;
   line-height: 1.2;
 }
+.tl-lbl > span, .tl-lbl > small { grid-column: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tl-lbl small { font-weight: 400; font-size: 11px; color: var(--mu); }
+.tl-lbl .tl-agendar { grid-column: 2; grid-row: 1 / span 2; }
 
+/* Uma listra por hora (--hora vem do mapa, pelo início e o fim dele), em qualquer largura */
 .tl-track {
   flex: 1;
   position: relative;
   height: 40px;
-  background: repeating-linear-gradient(
-    to right,
-    var(--bg),
-    var(--bg) calc(8.333% - 1px),
-    var(--ln) calc(8.333% - 1px),
-    var(--ln) 8.333%
-  );
+  background-color: var(--bg);
+  background-image: linear-gradient(to right, transparent calc(100% - 1px), var(--ln) calc(100% - 1px));
+  background-size: var(--hora, 8.333%) 100%;
   border-radius: 4px;
   border: 1px solid var(--ln);
   overflow: visible;
 }
+/* O espaço livre da faixa agenda com um clique; quem só consulta e a linha inerte não agendam */
+#out .tl-track:not(.inerte) { cursor: cell; }
+body[data-role="gestor"] #out .tl-track { cursor: default; }
+/* O avião em manutenção: a faixa riscada, sem o "+" e sem agendar com um clique */
+.tl-manutencao .tl-lbl > span { color: var(--mu); }
+.tl-manutencao .tl-track { background-image: repeating-linear-gradient(-45deg, transparent 0 6px, var(--ln) 6px 7px); background-size: auto; }
+
+/* O "+" que agenda: no fim de cada linha do mapa e de cada horário da lista (só o ícone; o nome fica no aria-label) */
+.tl-agendar, .win-agendar {
+  display: inline-grid; place-items: center; padding: 3px; border: 1px solid transparent; border-radius: 6px;
+  background: transparent; color: var(--ac); cursor: pointer;
+}
+.tl-agendar:hover, .win-agendar:hover { background: var(--info-bg); border-color: var(--ln2); }
+.tabela-escala tr.win td { position: relative; }
+.tabela-escala tr.win .win-btn { padding-right: 40px; }
+.win-agendar { position: absolute; top: 50%; right: 8px; transform: translateY(-50%); }
 
 .m-gnd { background: #2E6F40; color: #fff; }
 .m-sim { background: #3A506B; color: #fff; }
@@ -1212,6 +1230,9 @@ a { color: var(--ac); }
   font: 600 12px 'Barlow Semi Condensed', sans-serif;
   cursor: pointer;
 }
+/* "+ Aluno na turma" (a turma de Ground): agenda, não exclui */
+.tl-pop-btn[data-act="agendar"] { background: var(--ac); color: var(--acT); }
+.tl-pop-btn + .tl-pop-btn { margin-top: 6px; }
 
 /* Histórico, BI, Manual e toasts */
 /* Histórico da data: gaveta lateral sobre a aba aberta */
@@ -1339,6 +1360,8 @@ body[data-backend="supabase"] #btn-bi-clr { display: none !important; }
   header, .bar, nav, section:not(#s-esc), #toast-box { display: none !important; }
   section#s-esc { display: block; }
   body { background: #fff; color: #000; }
+  /* Os botões que agendam não vão para o papel */
+  .tl-agendar, .win-agendar, .tl-pop-btn[data-act="agendar"] { display: none !important; }
 }
 
 /* Alvos de toque no celular: botões, campos e interruptores com pelo menos 44 px */
@@ -1357,6 +1380,10 @@ body[data-backend="supabase"] #btn-bi-clr { display: none !important; }
   .cel { height: 44px; min-width: 44px; }
   .fila li { min-height: 48px; }
   .win-btn, .grupo-btn { min-height: 44px; }
+  /* O "+" que agenda: na linha do mapa, no horário da lista e na turma de Ground */
+  .tl-agendar, .win-agendar { min-width: 44px; min-height: 44px; }
+  .tl-pop-btn[data-act="agendar"] { min-height: 44px; }
+  .tabela-escala tr.win .win-btn { padding-right: 52px; }
   .tg { padding-right: 0; }
   .cal { gap: 2px; }
   /* Horários de decolagem: o nome da categoria em cima, as etiquetas na largura toda */

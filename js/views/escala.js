@@ -1,5 +1,5 @@
 // Aba Escala: resumo do dia, a lista dos voos (ou o mapa por recurso ou por instrutor) e o histórico da data.
-import { FLIGHT_STATUSES, GROUND_REG, NOTURNO } from '../config.js';
+import { FLIGHT_STATUSES, GROUND_REG, GROUND_EQ_TYPE, NOTURNO, T } from '../config.js';
 import { CODIGOS_DE_AVISO, CODIGOS_DO_AGENDADO } from '../conflitos.js';
 import { textoDoCombustivel } from '../combustivel.js';
 import { hm, WLB, fmtH, esc, rotuloDaData, hojeISO, duracaoHm, DURACAO_DO_GROUND } from '../format.js';
@@ -59,6 +59,7 @@ function conteudoDoPopup(o) {
         ${detalheDoStatus(principal)}
       </span>
     </div>
+    ${ehGround(o) && ativos.length ? `<button type="button" class="tl-pop-btn edit-only" data-act="agendar" data-agendar="t:${esc(unidadeDoVoo(o))}" aria-haspopup="dialog">+ Aluno na turma</button>` : ''}
     ${!turma && o.stuId && !principal.trecho ? `<button type="button" class="tl-pop-btn edit-only" data-act="rm-fly" data-id="${esc(o.stuId)}" data-mid="${esc(o.mid || 0)}">✕ Excluir da escala</button>` : ''}`;
 }
 
@@ -120,19 +121,60 @@ function reancorarPopupDoMapa() {
   if (popupDe === chave && foco) { const campo = $(`#tl-pop [data-f="${foco}"]`); if (campo) campo.focus(); }
 }
 
-function buildTimelineGroup(out, groupKey, subLabelFn, barLine1Fn, barLine2Fn, minStart, maxEnd) {
+// O mapa é a vista escolhida (Por recurso ou Por instrutor). Na Lista e no Painel, ele fica escondido, só com as linhas
+// dos voos: sem as linhas livres e sem o "+"
+const vistaDoMapa = () => TL_MODE === 'eq' || TL_MODE === 'ins';
+
+// As linhas do mapa, com os voos de cada uma: por recurso, na ordem da matrícula; por instrutor, pelo id (dois
+// instrutores com o mesmo nome ficam em linhas separadas), na ordem do nome e do id. livres: as linhas sem voo que também
+// aparecem ([chave, rótulo]), intercaladas na mesma ordem. A escala gravada só exige a chave do voo
+// (js/escala-gravada.js): o voo gravado sem o id do instrutor fica na linha do nome dele e, sem o nome, leva o do cadastro
+function linhasDoMapa(voos, porInstrutor, livres) {
+  const linhas = new Map();
+  const linha = (chave, rotulo) => linhas.get(chave) || linhas.set(chave, { chave, rotulo: String(rotulo ?? ''), voos: [] }).get(chave);
+  const doInstrutor = o => linha(o.insId ?? o.ins, o.ins ?? (S.ins.find(x => x.id === o.insId) || {}).nm);
+  voos.forEach(o => (porInstrutor ? doInstrutor(o) : linha(o.r, nomeDoRecurso(o.r))).voos.push(o));
+  livres.forEach(([chave, rotulo]) => linha(chave, rotulo));
+  return [...linhas.values()].sort(porInstrutor
+    ? (x, y) => x.rotulo.localeCompare(y.rotulo) || x.chave - y.chave
+    : (x, y) => String(x.chave).localeCompare(String(y.chave)));
+}
+
+// O que a linha diz e faz: as horas do dia (no recurso, com o tipo antes). Nas vistas do mapa, o "+" que agenda nela (no
+// recurso ou com o instrutor) e o clique no espaço livre da faixa; o avião em manutenção fica apagado ("em manutenção"),
+// e ele, o recurso que saiu da frota e o instrutor fora do cadastro não agendam (a faixa fica inerte)
+function detalhesDaLinha(linha, porInstrutor, mapa) {
+  const horas = fmtH(sumUniqueOperationalHours(linha.voos, statusDe));
+  if (porInstrutor) {
+    const agenda = mapa && S.ins.some(x => x.id === linha.chave);
+    return {
+      sub: horas, dados: `data-ins="${esc(linha.chave)}"`, manutencao: false, inerte: mapa && !agenda,
+      agendar: agenda ? { valor: `i:${linha.chave}`, nome: `Agendar com ${linha.rotulo}` } : null
+    };
+  }
+  const r = linha.chave, ground = r === GROUND_REG;
+  const recurso = ground ? null : (S.frota || []).find(f => f.reg === r) || null;
+  const manutencao = mapa && Boolean(recurso) && !S.av[r];
+  const agenda = mapa && (ground || (Boolean(recurso) && !manutencao));
+  const tipo = ground ? '' : (linha.voos.length ? linha.voos[0].eqType : recurso && recurso.tipo) || '';
+  return {
+    sub: [tipo, horas, manutencao ? 'em manutenção' : ''].filter(Boolean).join(' · '), dados: `data-r="${esc(r)}"`, manutencao, inerte: mapa && !agenda,
+    agendar: agenda ? { valor: `r:${r}`, nome: `Agendar ${ground ? 'na Sala Ground' : `no ${r}`}` } : null
+  };
+}
+
+// O mapa: as marcas do eixo ficam no minuto delas e cada listra da faixa é uma hora (--hora), em qualquer largura; o
+// início e o fim do mapa (data-inicio e data-fim, em minutos) dão o horário de um clique na faixa (js/eventos/escala.js)
+function buildTimelineGroup(linhas, porInstrutor, barLine1Fn, barLine2Fn, minStart, maxEnd) {
   const span = maxEnd - minStart;
-  const groups = {};
-  out.forEach(o => (groups[o[groupKey]] = groups[o[groupKey]] || []).push(o));
+  const mapa = vistaDoMapa();
 
   const ticks = [];
-  for (let m = minStart; m <= maxEnd; m += 60) ticks.push(`<span>${hm(m)}</span>`);
+  for (let m = minStart; m <= maxEnd; m += 60) ticks.push(`<span${m === maxEnd ? ' class="fim"' : ''} style="left:${(((m - minStart) / span) * 100).toFixed(2)}%">${hm(m)}</span>`);
 
-  const rowsHTML = Object.keys(groups).sort((a, b) => a.localeCompare(b)).map(key => {
-    const rawFlights = groups[key];
-    const activeH = sumUniqueOperationalHours(rawFlights, statusDe);
-    const sub = subLabelFn(rawFlights[0], activeH);
-    const consolidated = consolidateTimelineSlots(rawFlights);
+  const rowsHTML = linhas.map(linha => {
+    const { sub, dados, manutencao, inerte, agendar } = detalhesDaLinha(linha, porInstrutor, mapa);
+    const consolidated = consolidateTimelineSlots(linha.voos);
 
     const bars = consolidated.map(o => {
       const left = ((o.a - minStart) / span) * 100;
@@ -143,7 +185,7 @@ function buildTimelineGroup(out, groupKey, subLabelFn, barLine1Fn, barLine2Fn, m
       const activeItems = o.items.filter(it => statusDe(it) !== 'Cancelado');
       const status = activeItems.length ? statusDe(activeItems[0]) : 'Cancelado';
       const stKey = classeDoStatus(status);
-      const chave = unidadeDoVoo(o) || `${groupKey}:${key}:${o.a}`;
+      const chave = unidadeDoVoo(o) || `${porInstrutor ? 'ins' : 'r'}:${linha.chave}:${o.a}`;
       VOOS_DO_MAPA.set(chave, o);
 
       return `<button type="button" class="tl-bar ${cls} tl-st-${stKey}" data-pop="${esc(chave)}" aria-haspopup="dialog" aria-controls="tl-pop" aria-expanded="false" style="left:${left.toFixed(2)}%;width:${width.toFixed(2)}%">
@@ -152,27 +194,32 @@ function buildTimelineGroup(out, groupKey, subLabelFn, barLine1Fn, barLine2Fn, m
         <span class="sr">, ${esc(rotuloDoStatus(status, o))}</span>
       </button>`;
     }).join('');
+    // O "+" da linha: só o ícone (o nome fica no aria-label), para o texto da linha continuar o mesmo
+    const mais = agendar ? `<button type="button" class="tl-agendar edit-only" data-act="agendar" data-agendar="${esc(agendar.valor)}" aria-label="${esc(agendar.nome)}" aria-haspopup="dialog"><svg class="ico" aria-hidden="true"><use href="#i-mais"/></svg></button>` : '';
 
-    return `<div class="tl-row">
-      <div class="tl-lbl"><span>${esc(nomeDoRecurso(key))}</span> <small>${sub}</small></div>
-      <div class="tl-track">${bars}</div>
+    return `<div class="tl-row${manutencao ? ' tl-manutencao' : ''}" ${dados}>
+      <div class="tl-lbl"><span>${esc(linha.rotulo)}</span> <small>${esc(sub)}</small>${mais}</div>
+      <div class="tl-track${inerte ? ' inerte' : ''}" ${dados}>${bars}</div>
     </div>`;
   }).join('');
 
-  return `<div class="tl-wrap"><div class="tl-axis">${ticks.join('')}</div>${rowsHTML}</div>`;
+  return `<div class="tl-wrap" data-inicio="${minStart}" data-fim="${maxEnd}" style="--hora:${(6000 / span).toFixed(4)}%"><div class="tl-axis">${ticks.join('')}</div>${rowsHTML}</div>`;
 }
 
-function renderVisualTimeline(out) {
+// O mapa dos voos (com as linhas livres, nas vistas do mapa). Sem voo nenhum à vista, só a grade das linhas livres, sem a
+// legenda
+function renderVisualTimeline(voos, livres = []) {
   VOOS_DO_MAPA.clear();
-  if (!out.length) return '';
+  const porInstrutor = TL_MODE === 'ins';
+  const linhas = linhasDoMapa(voos, porInstrutor, livres);
+  if (!linhas.length) return '';
   const minStart = 360; // 06:00
-  const maxEnd = Math.max(1080, ...out.map(o => o.b));
+  const maxEnd = Math.max(1080, ...voos.map(o => o.b));
 
-  const chartHTML = TL_MODE === 'ins'
+  const chartHTML = porInstrutor
     ? buildTimelineGroup(
-        out,
-        'ins',
-        (first, totalH) => fmtH(totalH),
+        linhas,
+        true,
         o => o.students.length > 1
           ? `${hm(o.a)}–${hm(o.b)} · Turma (${o.students.length} alunos)`
           : `${hm(o.a)}–${hm(o.b)} · ${esc(o.r)}`,
@@ -183,9 +230,8 @@ function renderVisualTimeline(out) {
         maxEnd
       )
     : buildTimelineGroup(
-        out,
-        'r',
-        (first, totalH) => [first.r === GROUND_REG ? '' : first.eqType, fmtH(totalH)].filter(Boolean).join(' · '),
+        linhas,
+        false,
         o => o.students.length > 1
           ? `${hm(o.a)}–${hm(o.b)} · ${esc(o.mis)} (${o.students.length} alunos)`
           : `${hm(o.a)}–${hm(o.b)} · ${esc(o.s)}`,
@@ -196,8 +242,7 @@ function renderVisualTimeline(out) {
         maxEnd
       );
 
-  return `<div class="pn mapa">
-    <div class="tl-legend">
+  const legenda = !voos.length ? '' : `<div class="tl-legend">
       <span><i class="tl-dot m-gnd"></i>Ground School (01h30)</span>
       <span><i class="tl-dot m-sim"></i>Simulador</span>
       <span><i class="tl-dot m-pp"></i>Voo Local / Solo</span>
@@ -208,7 +253,9 @@ function renderVisualTimeline(out) {
       <span><i class="tl-dot tl-dot-emvoo"></i>Em voo</span>
       <span><i class="tl-dot tl-dot-pendente"></i>Pendente</span>
       <span><i class="tl-dot tl-dot-cancelado"></i>Cancelado</span>
-    </div>
+    </div>`;
+  return `<div class="pn mapa">
+    ${legenda}
     ${chartHTML}
   </div>`;
 }
@@ -472,7 +519,8 @@ function tabela(voos, al) {
     if (o.w !== tempo) {
       tempo = o.w;
       const n = porTempo[o.w];
-      h += `<tr class="win" data-w="${o.w}"><td colspan="8"><button type="button" class="win-btn" data-recolher-tempo="${o.w}" aria-expanded="${!recolhido}"><svg class="ico seta" aria-hidden="true"><use href="#i-baixo"/></svg>${WLB(o.w)} <small>${n} ${n === 1 ? 'decolagem ou aula' : 'decolagens e aulas'}</small></button></td></tr>`;
+      // O "+" do horário agenda a partir dele: só o ícone (o nome fica no aria-label), e o texto da linha continua o mesmo
+      h += `<tr class="win" data-w="${o.w}"><td colspan="8"><button type="button" class="win-btn" data-recolher-tempo="${o.w}" aria-expanded="${!recolhido}"><svg class="ico seta" aria-hidden="true"><use href="#i-baixo"/></svg>${WLB(o.w)} <small>${n} ${n === 1 ? 'decolagem ou aula' : 'decolagens e aulas'}</small></button><button type="button" class="win-agendar edit-only" data-act="agendar" data-agendar="w:${o.w}" aria-label="Agendar às ${hm(T[o.w])}" aria-haspopup="dialog"><svg class="ico" aria-hidden="true"><use href="#i-mais"/></svg></button></td></tr>`;
     }
     const rs = grupo.length > 1 ? ` rowspan="${grupo.length}"` : '';
     const cancelado = voo => {
@@ -508,6 +556,29 @@ function painelDoDia(voos) {
   return `<div class="painel-dia">${painelDaEscala(() => ({ linhas: linhasDoQuadro(quadro.voos || [], quadro.fStatus, quadro.fObs), data: DATA }))}</div>`;
 }
 
+// Os filtros da Escala: a categoria (o tipo de cada recurso vem da escala, da frota ou é a sala de Ground), o recurso (só
+// os que estão na escala da data) e a busca
+function filtrosDaEscala(out) {
+  const categoria = ($('#flt-esc-cat') && $('#flt-esc-cat').value) || '';
+  const tipoDoRecurso = new Map([...(S.frota || []).map(f => [f.reg, f.tipo]), [GROUND_REG, GROUND_EQ_TYPE], ...out.map(o => [o.r, o.eqType])]);
+  const daCategoria = r => !categoria || categoriaDoTipo(tipoDoRecurso.get(r)) === categoria;
+  const usados = [...new Set(out.map(o => o.r))].filter(daCategoria).sort();
+  const eqFilterEl = $('#flt-esc-eq');
+  const recurso = eqFilterEl && usados.includes(eqFilterEl.value) ? eqFilterEl.value : '';
+  const texto = ($('#flt-esc-q') && $('#flt-esc-q').value || '').toLowerCase();
+  return { categoria, daCategoria, usados, recurso, texto };
+}
+
+// As linhas sem voo do mapa (só nas vistas do mapa), para agendar nelas: Por recurso, todos os recursos da frota e a sala
+// de Ground, na categoria do filtro; Por instrutor, os instrutores disponíveis no dia. Com um recurso escolhido ou uma
+// busca (Por instrutor, também com uma categoria: o instrutor com voos só de outra categoria pareceria livre), só as linhas
+// com voos
+function linhasLivres({ categoria, daCategoria, recurso, texto }) {
+  if (!vistaDoMapa() || recurso || texto) return [];
+  if (TL_MODE === 'ins') return categoria ? [] : S.ins.filter(x => x.on).map(x => [x.id, x.nm]);
+  return [...(S.frota || []).map(f => f.reg), GROUND_REG].filter(daCategoria).map(r => [r, nomeDoRecurso(r)]);
+}
+
 // A escala é refeita a cada alteração (save em actions.js): aqui ela só é desenhada, na visão escolhida na barra.
 // Devolve quantos voos ficaram à vista com os filtros
 export function rOut() {
@@ -517,7 +588,9 @@ export function rOut() {
   });
   $('#out').dataset.vista = TL_MODE === 'lista' || TL_MODE === 'painel' ? TL_MODE : 'mapa';
   if (!RES || (!RES.out.length && !RES.al.length)) {
-    trocarConteudo($('#out'), `<p class="h">Nenhum voo nesta data. Marque quem vai voar na aba Demanda: a escala é montada automaticamente.</p>`);
+    // Sem voos, nas vistas do mapa, a grade das linhas livres fica embaixo do texto: o "+" e o clique agendam nela
+    const grade = renderVisualTimeline([], linhasLivres(filtrosDaEscala([])));
+    trocarConteudo($('#out'), `<p class="h">Nenhum voo nesta data. Marque quem vai voar na aba Demanda: a escala é montada automaticamente.</p>${grade}`);
     rCompactacao([]);
     rAprovacao(false);
     atualizarPainelDeReparo();
@@ -527,18 +600,13 @@ export function rOut() {
   const { out, al, tot } = RES;
 
   // Filtros: a categoria e, dentro dela, um recurso (só os que estão na escala da data)
-  const categoria = ($('#flt-esc-cat') && $('#flt-esc-cat').value) || '';
-  const tipoDoRecurso = new Map(out.map(o => [o.r, o.eqType]));
-  const daCategoria = r => !categoria || categoriaDoTipo(tipoDoRecurso.get(r)) === categoria;
-  const usados = [...new Set(out.map(o => o.r))].filter(daCategoria).sort();
+  const filtros = filtrosDaEscala(out);
+  const { daCategoria, usados, recurso: curEqFilter, texto: qFilter } = filtros;
   const eqFilterEl = $('#flt-esc-eq');
-  let curEqFilter = eqFilterEl ? eqFilterEl.value : '';
-  if (!usados.includes(curEqFilter)) curEqFilter = '';
   if (eqFilterEl) {
     eqFilterEl.innerHTML = '<option value="">Todos</option>' +
       usados.map(r => `<option value="${esc(r)}"${r === curEqFilter ? ' selected' : ''}>${esc(nomeDoRecurso(r))}</option>`).join('');
   }
-  const qFilter = ($('#flt-esc-q') && $('#flt-esc-q').value || '').toLowerCase();
   const voos = out.filter(o => {
     if (!daCategoria(o.r) || (curEqFilter && o.r !== curEqFilter)) return false;
     if (qFilter && !o.s.toLowerCase().includes(qFilter) && !o.ins.toLowerCase().includes(qFilter) && !o.mis.toLowerCase().includes(qFilter)) return false;
@@ -548,8 +616,9 @@ export function rOut() {
   rAprovacao(out.length > 0);
   rCompactacao(out);
   let h = resumo(out, al, tot);
-  if (!voos.length) h += `<p class="h">${tot ? 'Nenhum voo na escala com esses filtros.' : 'Nenhuma missão marcada na Demanda.'}</p>`;
-  else h += tabela(voos, al) + renderVisualTimeline(voos) + (TL_MODE === 'painel' ? painelDoDia(voos) : '');
+  const livres = linhasLivres(filtros);
+  if (!voos.length) h += `<p class="h">${tot ? 'Nenhum voo na escala com esses filtros.' : 'Nenhuma missão marcada na Demanda.'}</p>${renderVisualTimeline([], livres)}`;
+  else h += tabela(voos, al) + renderVisualTimeline(voos, livres) + (TL_MODE === 'painel' ? painelDoDia(voos) : '');
   trocarConteudo($('#out'), h);
   reancorarPopupDoMapa();
   atualizarPainelDeReparo();

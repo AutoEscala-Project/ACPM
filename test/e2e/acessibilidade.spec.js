@@ -53,6 +53,29 @@ test.describe('Acessibilidade', () => {
     await page.locator('#btn-open-log').click();
     expect(await semNome(page, '#historico'), 'histórico').toEqual([]);
   });
+
+  // O "+" que agenda é só o ícone (escondido do leitor de tela): o nome diz onde o voo vai, o recurso ou o instrutor da
+  // linha no mapa e o horário na lista
+  test('o "+" que agenda tem nome em cada vista: o recurso e o instrutor da linha no mapa, o horário na lista', async ({ page }) => {
+    await abrirComExemplo(page);
+    await abrirEscala(page);
+    const nomes = () => page.locator('#out .win-agendar, #out .tl-agendar').evaluateAll(bs => bs.filter(b => b.checkVisibility()).map(b => b.getAttribute('aria-label')));
+    const lista = await nomes();
+    expect(lista.length).toBeGreaterThan(0);
+    expect(lista.filter(n => !/^Agendar às \d\d:\d\d$/.test(n)), 'lista').toEqual([]);
+    await expect(page.getByRole('button', { name: 'Agendar às 06:30', exact: true })).toBeVisible();
+    await page.locator('#s-esc [data-tl="eq"]').click();
+    const recursos = await nomes();
+    expect(recursos).toContain('Agendar no PR-VOB');
+    expect(recursos).toContain('Agendar na Sala Ground');
+    expect(recursos.filter(n => !/^Agendar (no [A-Z0-9-]+|na Sala Ground)$/.test(n)), 'por recurso').toEqual([]);
+    await expect(page.getByRole('button', { name: 'Agendar no PR-VOB', exact: true })).toBeVisible();
+    await page.locator('#s-esc [data-tl="ins"]').click();
+    const instrutores = await nomes();
+    expect(instrutores).toHaveLength(40);
+    expect(instrutores.filter(n => !/^Agendar com Instrutor \d\d$/.test(n)), 'por instrutor').toEqual([]);
+    await expect(page.getByRole('button', { name: 'Agendar com Instrutor 07', exact: true })).toBeVisible();
+  });
 });
 
 // O anel do foco precisa contrastar com o que está em volta (WCAG 2.4.7 e 1.4.11: pelo menos 3:1). A barra do topo é

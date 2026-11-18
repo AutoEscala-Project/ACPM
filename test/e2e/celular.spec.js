@@ -99,6 +99,21 @@ test.describe('Celular', () => {
     expect(await alvosPequenos(page)).toEqual([]);
   });
 
+  // O "+" que agenda, na lista (um por horário) e em cada linha do mapa, por recurso e por instrutor
+  test('o "+" que agenda tem pelo menos 44 px, na lista e no mapa', async ({ page }) => {
+    await abrirComExemplo(page);
+    await abrirEscala(page);
+    const pequenos = seletor => page.locator(seletor).evaluateAll(bs => bs.filter(b => b.checkVisibility())
+      .map(b => b.getBoundingClientRect()).filter(r => r.width < 44 || r.height < 44).map(r => `${Math.round(r.width)}×${Math.round(r.height)}`));
+    await expect(page.locator('#out .win-agendar').first()).toBeVisible();
+    expect(await pequenos('#out .win-agendar'), 'lista').toEqual([]);
+    for (const vista of ['eq', 'ins']) {
+      await page.locator(`#s-esc [data-tl="${vista}"]`).click();
+      await expect(page.locator('#out .mapa .tl-agendar').first()).toBeVisible();
+      expect(await pequenos('#out .mapa .tl-agendar'), `mapa ${vista}`).toEqual([]);
+    }
+  });
+
   test('a escala vira um cartão por voo, com horário, aluno, missão, avião, instrutor e status à vista', async ({ page }) => {
     await abrirComExemplo(page);
     await abrirEscala(page);
