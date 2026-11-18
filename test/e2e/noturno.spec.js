@@ -96,6 +96,9 @@ test.describe('O Noturno em trechos no programa do curso', () => {
     await page.locator('#onlyfly').uncheck();
     const pedido = page.locator('#dem tr[data-id="1000"][data-mid="0"]');
     await expect(pedido.locator('[data-act="usar-proxima"]')).toHaveText('Próxima: NOT (com TSL-01 e TSL-02) · Usar');
+    // A lista "Outra missão do curso" também oferece o Noturno uma vez, pela noite; nenhum translado vai sozinho
+    await expect(pedido.locator('[data-f="outra-missao"] option'))
+      .toHaveText(['Outra missão…', 'NOT (com TSL-01 e TSL-02) · Noturno · C172 · 3 h', 'TMA-01 · Voo Local · C152 · 1 h (já aprovada)']);
     await pedido.locator('[data-act="usar-proxima"]').click();
     await expect(pedido.locator('[data-f="mis"]')).toHaveValue('Noturno');
     await expect(pedido.locator('.etapa')).toHaveText('NOT');
@@ -106,6 +109,8 @@ test.describe('O Noturno em trechos no programa do curso', () => {
     const extra = page.locator('#dem tr.extra-row[data-id="1000"]');
     await expect(extra).toHaveCount(1);
     await expect(extra.locator('[data-act="usar-proxima"]')).toHaveCount(0);
+    await expect(extra.locator('[data-f="outra-missao"] option'))
+      .toHaveText(['Outra missão…', 'TMA-01 · Voo Local · C152 · 1 h (já aprovada)', 'NOT (com TSL-01 e TSL-02) · Noturno · C172 · 3 h (já em outro voo do dia)']);
     await extra.locator('[data-act="del-mis"]').click();
     await extra.locator('[data-act="del-mis"]').click();
     await expect(extra).toHaveCount(0);

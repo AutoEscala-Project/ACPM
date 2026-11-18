@@ -3,7 +3,7 @@
 // (S.resultados: a situação de cada missão e os registros da data; S.programa: as tabelas dos cursos) e não são gravados
 // no dia. A próxima missão e o progresso seguem as regras do programa (js/progresso.js).
 import { MIS } from '../config.js';
-import { indiceDoPrograma, rotuloDaFase, rotuloDaMissao, percursoDoCurso } from '../programa.js';
+import { indiceDoPrograma, rotuloDaFase, rotuloDaMissao, percursoDoCurso, noturnosDoCurso } from '../programa.js';
 import { estadoDoAluno, proximasMissoes, progressoNoCurso, missoesDoDia, motivoDoBloqueio } from '../progresso.js';
 import { situacaoPorMissao, resultadoDoVoo } from '../resultados.js';
 import { S, isGestor, stuBy, dadoIndisponivel, getMissionTarget } from '../state.js';
@@ -43,8 +43,9 @@ const descricaoDaMissao = m => `${m.id}: ${m.nome} · ${m.mis} · ${MIS[m.mis].i
 // As outras missões do curso do aluno para um pedido ("Outra missão do curso", na Demanda), na ordem do curso: as
 // liberadas, que valem na hora (a que depende do resultado de um voo do dia diz de qual), e as fora da ordem, cada uma
 // com o motivo (motivoDoBloqueio), que pedem confirmação; a que não tem motivo não é escolhida sozinha e fica de fora. As
-// missões dos outros pedidos dele no dia contam como na próxima missão; a do próprio pedido não volta. Sem o programa do
-// curso (ou sem os resultados), nenhuma: null
+// missões dos outros pedidos dele no dia contam como na próxima missão; a do próprio pedido não volta. O Noturno em
+// trechos vai pela noite, como na próxima missão: os translados dele nunca vão sozinhos, nem o dispensado. Sem o
+// programa do curso (ou sem os resultados), nenhuma: null
 function outrasMissoes(stu, d, mid) {
   const curso = cursoDoAluno(stu);
   if (!curso) return null;
@@ -54,8 +55,10 @@ function outrasMissoes(stu, d, mid) {
   const { missoes } = percursoDoCurso(curso);
   const codigo = new Map(missoes.map(m => [m.id, m.codigo]));
   const doPedido = m => m.codigo === d.etapa && (d.cursoDaEtapa || stu.curso) === curso.sigla;
+  const noturnos = noturnosDoCurso(curso);
+  const translado = m => noturnos.has(m.id) && noturnos.get(m.id).noite.id !== m.id;
   const liberadas = [], foraDaOrdem = [];
-  for (const m of missoes.filter(x => !doPedido(x))) {
+  for (const m of missoes.filter(x => !doPedido(x) && !translado(x))) {
     const estado = porMissao.get(m.id);
     if (['liberada', 'condicional'].includes(estado.estado)) {
       liberadas.push({ missao: m, dependeDe: estado.dependeDe.map(id => codigo.get(id)) });
@@ -78,7 +81,9 @@ export function outraMissaoDoPedido(stu, d, mid, codigo) {
   return { missao: (liberada || fora).missao, curso: outras.curso.sigla, liberada: Boolean(liberada), motivo: fora ? fora.motivo : '' };
 }
 
-const resumoDaMissao = m => `${m.codigo} · ${m.mis} · ${MIS[m.mis].isGround ? '1h30' : `${m.eq} · ${fmtDurLabel(m.nb)}`}`;
+// A missão na lista: o código (a noite de um Noturno em trechos com os translados, como na próxima missão), o tipo, o
+// recurso e as horas
+const resumoDaMissao = (curso, m) => `${rotuloDaMissao(curso, m)} · ${m.mis} · ${MIS[m.mis].isGround ? '1h30' : `${m.eq} · ${fmtDurLabel(m.nb)}`}`;
 const emLista = codigos => (codigos.length > 1 ? `${codigos.slice(0, -1).join(', ')} e ${codigos.at(-1)}` : codigos[0]);
 
 // A lista "Outra missão do curso" do pedido: o primeiro item só dá nome à lista (escolher uma missão é que age)
@@ -89,8 +94,8 @@ function outraMissaoNaDemanda(stu, outras) {
   return ` <select class="edit-only outra-missao" data-f="outra-missao" aria-label="Outra missão do curso para ${esc(stu.nm)}">`
     + '<option value="" selected>Outra missão…</option>'
     + grupo(`Liberadas no ${curso.sigla}`, liberadas.map(({ missao: m, dependeDe }) =>
-      [m.codigo, `${resumoDaMissao(m)}${dependeDe.length ? ` — depende do resultado de ${emLista(dependeDe)}` : ''}`]))
-    + grupo('Fora da ordem (pede confirmação)', foraDaOrdem.map(({ missao: m, motivo }) => [m.codigo, `${resumoDaMissao(m)} (${motivo})`]))
+      [m.codigo, `${resumoDaMissao(curso, m)}${dependeDe.length ? ` — depende do resultado de ${emLista(dependeDe)}` : ''}`]))
+    + grupo('Fora da ordem (pede confirmação)', foraDaOrdem.map(({ missao: m, motivo }) => [m.codigo, `${resumoDaMissao(curso, m)} (${motivo})`]))
     + '</select>';
 }
 

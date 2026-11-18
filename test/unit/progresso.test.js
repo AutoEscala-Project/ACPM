@@ -485,15 +485,30 @@ describe('O Noturno em trechos: TSL-01, NOT e TSL-02 num voo só', () => {
 
   it('na Demanda e em Alunos: a próxima é o Noturno, com os translados no nome; o pedido vai como a noite', () => {
     const texto = html => html.replace(/<[^>]+>/g, '').trim();
+    // Na célula da Demanda: o texto do botão Usar e os itens do Noturno na lista "Outra missão do curso"
+    const usar = html => texto((/<button[^>]*data-act="usar-proxima".*?<\/button>/.exec(html) || [''])[0]);
+    const doNoturno = html => [...html.matchAll(/<option value="[^"]+">([^<]*)<\/option>/g)].map(o => o[1]).filter(t => /^(TSL|NOT)\b/.test(t));
     const stu = (extra = {}) => ({ id: ALUNO, nm: 'Aluno 1000', curso: 'PP', fly: true, mis: 'Voo Local', eq: 'C152', nb: 1, p1: 500, p2: -1, pr: 3, ss: 1, extra: [], ...extra });
-    setS({ stu: [], fStatus: {}, resultados: { situacao: ATE_A_8.map(c => reg(c)), doDia: [] }, programa: [curso()] });
-    const botao = etapaNaDemanda(stu(), stu(), 0);
-    assert.equal(texto(botao), 'Próxima: NOT (com TSL-01 e TSL-02) · Usar');
-    assert.match(botao, /title="NOT: NOT · Noturno · 3 h · C172"/);
+    const abrir = programa => setS({ stu: [], fStatus: {}, resultados: { situacao: ATE_A_8.map(c => reg(c)), doDia: [] }, programa: [programa] });
+    abrir(curso());
+    const celula = etapaNaDemanda(stu(), stu(), 0);
+    assert.equal(usar(celula), 'Próxima: NOT (com TSL-01 e TSL-02) · Usar');
+    assert.match(celula, /title="NOT: NOT · Noturno · 3 h · C172"/);
     assert.equal(texto(progressoDoAluno(stu())), '6/10 · Fase 6 · próxima NOT (com TSL-01 e TSL-02)');
-    // Com o Noturno no pedido principal, a missão extra não recebe um translado: a próxima é a da Fase 9 (sob condição)
+    // A lista "Outra missão do curso" também oferece o Noturno uma vez, pela noite e com os translados no nome
+    assert.deepEqual(doNoturno(celula), ['NOT (com TSL-01 e TSL-02) · Noturno · C172 · 3 h']);
+    // Com o Noturno no pedido principal, a missão extra não recebe um translado: a próxima é a da Fase 9 (sob condição), e
+    // a lista tem o Noturno só fora da ordem, pela noite
     const comNoturno = stu({ mis: 'Noturno', eq: 'C172', nb: 4, etapa: 'NOT', extra: [{ mid: 1, fly: true, mis: 'Voo Local', eq: 'C152', nb: 1, p1: 500, p2: -1, pr: 3, ss: 1 }] });
-    assert.equal(texto(etapaNaDemanda(comNoturno, comNoturno.extra[0], 1)), 'Próxima: AVX-CQ · Usar');
+    const extra = etapaNaDemanda(comNoturno, comNoturno.extra[0], 1);
+    assert.equal(usar(extra), 'Próxima: AVX-CQ · Usar');
+    assert.deepEqual(doNoturno(extra), ['NOT (com TSL-01 e TSL-02) · Noturno · C172 · 3 h (já em outro voo do dia)']);
+    // O translado dispensado não voa com a noite, e também não vai sozinho (antes, a lista o oferecia fora da ordem)
+    abrir(curso({ mudar: { 'TSL-02': { dispensada: true } } }));
+    const semVolta = etapaNaDemanda(stu(), stu(), 0);
+    assert.equal(usar(semVolta), 'Próxima: NOT (com TSL-01) · Usar');
+    assert.deepEqual(doNoturno(semVolta), ['NOT (com TSL-01) · Noturno · C172 · 3 h']);
+    assert.equal(outraMissaoDoPedido(stu(), stu(), 0, 'TSL-02'), null);
   });
 
   it('na agenda: o pedido Noturno entra como a noite do programa (a etapa NOT), nunca como um translado', () => {
