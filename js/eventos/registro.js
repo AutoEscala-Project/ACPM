@@ -1,5 +1,6 @@
 // Os cliques nos botões com data-act e as mudanças nos campos das tabelas (data-f, data-a) passam por aqui: cada aba
-// registra o que faz com eles (js/eventos/), e quem só consulta não muda nada
+// registra o que faz com eles (js/eventos/), e quem só consulta não muda nada, nem quem muda antes de a escala abrir
+import { aindaNaoAbriu } from '../actions.js';
 import { RES, isGestor } from '../state.js';
 import { rIns, rAlu } from '../views/cadastros.js';
 import { rDem } from '../views/demanda.js';
@@ -19,7 +20,7 @@ document.addEventListener('click', e => {
   if (!b) return;
   const acao = acoes.get(b.dataset.act);
   if (!acao) return;
-  if (!acao.confereAPermissao && isGestor()) { e.preventDefault(); return; }
+  if (!acao.confereAPermissao && (isGestor() || aindaNaoAbriu())) { e.preventDefault(); return; }
   const c = b.closest('[data-k]'), id = c ? +c.dataset.id : +b.dataset.id || 0;
   const mid = b.dataset.mid !== undefined ? +b.dataset.mid : (c && c.dataset.mid !== undefined ? +c.dataset.mid : 0);
   acao.fazer(b, { id, mid });
@@ -35,8 +36,8 @@ export function aoMudarCampo(tipo, mudar) {
 document.addEventListener('change', e => {
   const t = e.target, f = t.dataset.f, a = t.dataset.a;
   if (!a && !f) return;
-  // Quem só consulta não muda nada: a tela volta a mostrar os dados
-  if (isGestor()) {
+  // Quem só consulta não muda nada, nem antes de a escala abrir: a tela volta a mostrar os dados
+  if (isGestor() || aindaNaoAbriu()) {
     e.preventDefault();
     rRec(); rIns(); rAlu(); rDem();
     if (RES) rOut();

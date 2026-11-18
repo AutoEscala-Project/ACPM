@@ -27,7 +27,7 @@ import './eventos/conta.js';
 import './eventos/agenda.js';
 import './eventos/rodizio.js';
 import './eventos/cursos.js';
-import { setRole, escalaCalculada, marcarEscalaSoCalculada, abrirData, historicoParaPainel, carregarBI, avisarDadosIndisponiveis } from './actions.js';
+import { setRole, abrirData, lerData, dadosPreparados, carregarBI } from './actions.js';
 import { ehDomingo } from './agenda.js';
 import { projetoSupabase } from './config-supabase.js';
 import { iniciarDicas } from './dicas.js';
@@ -35,7 +35,7 @@ import { $, showToast, mostrarAviso, avisoAberto, avisarDoLink } from './dom.js'
 import { amanhaISO, somarDias, dataIsoValida } from './format.js';
 import { iniciarSessaoSupabase } from './sessao.js';
 import { iniciarSomenteLeitura } from './somente-leitura.js';
-import { setS, setRES, setAuditLog, modoCompartilhado } from './state.js';
+import { modoCompartilhado } from './state.js';
 import { ApiClient } from './storage.js';
 import { abaFoiEscolhida } from './eventos/navegacao.js';
 import { avisoDeDomingo, iniciarTema } from './eventos/topo.js';
@@ -93,19 +93,20 @@ window.addEventListener('beforeunload', e => {
     // Depois de uma mudança no formato dos dados, regrava no formato atual o que estiver num formato anterior
     await ApiClient.migrarDocumentosAntigos(amanha);
     await ApiClient.atualizarFormatoGravado();
+    // Daqui em diante as datas podem ser lidas. Uma troca de data feita antes disso esperou (a leitura da abertura, pedida
+    // depois, fica no lugar dela); se algo falhou até aqui, nenhuma data abre (js/actions.js, dadosPreparados)
+    dadosPreparados();
 
+    // Os dados da data. Até eles chegarem, e se a leitura falhar, nada é gravado (js/actions.js, lerData); uma data
+    // escolhida enquanto eles chegavam abre depois, no lugar deles
     abrirData(data);
-    const { estado, escala, horasBase, horasDosInstrutores, resultados, indisponiveis } = await ApiClient.carregarDia(data);
-    setS({ ...estado, horasBase, horasDosInstrutores, resultados, indisponiveis });
-    avisarDadosIndisponiveis();
-    // Data sem escala gravada: a escala calculada aparece na hora (é gravada junto com a primeira alteração)
-    setRES(escala || escalaCalculada());
-    marcarEscalaSoCalculada(!escala);
-    setAuditLog(await historicoParaPainel(data));
-    if (domingo) showToast(avisoDeDomingo(data));
-    else if (pedida && data !== pedida) showToast(`A data do link não existe (${pedida.slice(0, 20)}). A escala aberta é a de amanhã.`);
+    if (await lerData(data)) {
+      if (domingo) showToast(avisoDeDomingo(data));
+      else if (pedida && data !== pedida) showToast(`A data do link não existe (${pedida.slice(0, 20)}). A escala aberta é a de amanhã.`);
+    }
   } catch (e) {
     console.warn(e);
+    dadosPreparados(false);
     if (avisoAberto() !== 'conflito') mostrarAviso('falha', 'Não foi possível preparar os dados da escala. Verifique a conexão e recarregue a página; nada foi perdido.');
     return;
   }

@@ -1,6 +1,6 @@
 // A Escala: o mapa e o popup do voo, os filtros, exportar e compartilhar, o status do voo, aprovar e reabrir, os
 // critérios da compactação, o resultado da missão do curso e as sugestões para um conflito
-import { gravarAlteracao, logChange, gravarEscalaCalculada } from '../actions.js';
+import { gravarAlteracao, logChange, gravarEscalaCalculada, aindaNaoAbriu, dadosLidos } from '../actions.js';
 import { opcoesDeCategoria } from '../categorias.js';
 import { OPCOES_DE_BURACOS, OPCOES_DE_HORARIOS, normalizarCriterios } from '../criterios.js';
 import { $, showToast, anunciar } from '../dom.js';
@@ -164,7 +164,7 @@ aoAcionar('detalhe-status', b => {
 // escala volta a ser refeita inteira a cada alteração. Os dois pedem confirmação
 document.addEventListener('click', e => {
   const aprovar = e.target.closest('#btn-aprovar'), reabrir = e.target.closest('#btn-reabrir');
-  if ((!aprovar && !reabrir) || isGestor() || !RES) return;
+  if ((!aprovar && !reabrir) || isGestor() || !RES || aindaNaoAbriu()) return;
   if (aprovar) {
     if (!confirmado(aprovar, 'Confirmar aprovação')) return;
     // O voo fixo pela escolha do instrutor na Escala continua com a marca: reabrir a escala não o solta
@@ -188,7 +188,7 @@ document.addEventListener('click', e => {
 // Critérios da compactação: a escala é refeita com o critério novo (com a escala aprovada, não mudam)
 document.addEventListener('click', e => {
   const b = e.target.closest('[data-criterio]');
-  if (!b || b.getAttribute('aria-disabled') === 'true' || isGestor() || S.aprovacao) return;
+  if (!b || b.getAttribute('aria-disabled') === 'true' || isGestor() || S.aprovacao || aindaNaoAbriu()) return;
   const campo = b.dataset.criterio, antes = normalizarCriterios(S.criterios);
   if (antes[campo] === b.dataset.valor) return;
   S.criterios = normalizarCriterios({ ...antes, [campo]: b.dataset.valor });
@@ -202,6 +202,7 @@ document.addEventListener('click', e => {
 document.addEventListener('change', async e => {
   const sel = e.target.closest('[data-resultado]');
   if (!sel || isGestor()) return;
+  if (aindaNaoAbriu()) { rOut(); return; }
   const o = vooDaChave(sel.dataset.resultado), stu = o ? stuBy(o.stuId) : null;
   if (!o || !o.etapa || !stu || !stu.curso) return;
   const registro = { aluno: o.stuId, curso: stu.curso, missao: o.etapa, resultado: sel.value, data: DATA, voo: o.fKey };
@@ -212,8 +213,8 @@ document.addEventListener('change', async e => {
     const atual = S.resultados || { situacao: [], doDia: [] };
     const mesmaMissao = r => r.aluno === novo.aluno && r.curso === novo.curso && r.missao === novo.missao;
     // A situação de cada missão vale para todas as datas; os registros do dia e o histórico, só para a data do voo (a
-    // resposta pode chegar depois de trocar de data)
-    const mesmaData = DATA === registro.data;
+    // resposta pode chegar depois de trocar de data, ou com outra data abrindo: a entrada vai direto para a data do voo)
+    const mesmaData = DATA === registro.data && dadosLidos;
     S.resultados = { situacao: [...atual.situacao.filter(r => !mesmaMissao(r)), novo], doDia: mesmaData ? [...atual.doDia, novo] : atual.doDia };
     const descricao = `Resultado de ${o.s} em ${o.etapa}: ${registro.resultado}`;
     // O resultado fica no servidor, não nos dados do dia: só a entrada do histórico, sem gravar o dia
@@ -233,7 +234,7 @@ document.addEventListener('click', e => {
   if (abrirSugestoes) { if (!isGestor()) abrirPainelDeReparo(abrirSugestoes.dataset.reparo); return; }
   if (e.target.closest('#btn-fechar-reparo')) { fecharPainelDeReparo(true); return; }
   const botao = e.target.closest('[data-reparo-aplicar]');
-  if (!botao || isGestor()) return;
+  if (!botao || isGestor() || aindaNaoAbriu()) return;
   const escolha = opcaoDoPainel(+botao.dataset.reparoAplicar);
   if (!escolha) return;
   const { fKey, voo, opcao } = escolha;

@@ -1,5 +1,5 @@
 // O programa dos cursos, em Alunos › Cursos
-import { gravarAlteracao } from '../actions.js';
+import { gravarAlteracao, aindaNaoAbriu } from '../actions.js';
 import { normalizarCursos, novaMissaoDoCurso, codigoValido } from '../cursos.js';
 import { $, showToast } from '../dom.js';
 import { duracaoDigitada, ERRO_DA_DURACAO } from '../rules.js';
@@ -46,6 +46,7 @@ aoAcionar(['curso-nova', 'curso-remover', 'curso-subir', 'curso-descer'], b => {
 document.addEventListener('change', e => {
   const campo = e.target.closest('#cursos [data-cf]');
   if (!campo || !podeEditarCursos()) return;
+  if (aindaNaoAbriu()) { rCursos(); return; }
   const { curso, i, tr } = ondeNoPrograma(campo);
   const lista = normalizarCursos(S.cursos)[curso];
   if (!lista[i]) return;

@@ -179,4 +179,23 @@ test.describe('Cursos no servidor (modo compartilhado)', () => {
     expect(operador.erros).toEqual([]);
     await operador.contexto.close();
   });
+
+  // A resposta que chega com a data seguinte ainda abrindo (nada mais grava até ela abrir) também vai para a data do voo
+  test('o resultado que chega enquanto outra data abre fica no histórico da data do voo', async ({ browser }) => {
+    const estado = { ...cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, { p1: 500, p2: -1, etapa: 'PP-01' }, { curso: 'PP' })] }), cursos: PROGRAMA };
+    const servidor = criarSupabaseFalso(documentosAtuais(estado, AMANHA));
+    const operador = await entrar(browser, servidor, CONTAS.operador);
+    await abrirEscala(operador.page);
+    const liberarResultado = servidor.segurar('/rpc/registrar_resultado');
+    await operador.page.locator('#out tbody tr:not(.win)', { hasText: 'Aluno 1000' }).locator('[data-resultado]').selectOption('aprovado');
+    const liberarDias = servidor.segurarLeiturasDeDias();
+    await operador.page.locator('#dt-prox').click();
+    liberarResultado();
+    await expect.poll(() => servidor.historico.filter(h => h.descricao.startsWith('Resultado de')).map(h => h.data)).toEqual([AMANHA]);
+    liberarDias();
+    await expect(operador.page.locator('#dt-rotulo')).toContainText('12/11');
+    expect(servidor.resultados.map(r => r.data)).toEqual([AMANHA]);
+    expect(operador.erros).toEqual([]);
+    await operador.contexto.close();
+  });
 });
