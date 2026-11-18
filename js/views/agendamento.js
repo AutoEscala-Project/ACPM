@@ -3,13 +3,16 @@
 // A conferência (o motor numa cópia do estado) roda 150 ms depois da última mudança, com "calculando…" na prévia; o envio
 // com a conferência pendente roda ela antes. Enquanto o diálogo está aberto, tudo o que ele diz fica dentro dele (sob um
 // diálogo modal, o aviso e o anúncio da página saem da árvore de acessibilidade). Os bloqueios não deixam agendar (o
-// primeiro vai para o alerta, com o foco no campo dele); os avisos pedem "Agendar mesmo assim" (o peso que falta para
-// antes no campo dele); outro conjunto de avisos pede outra confirmação. Esc e Voltar desistem, e nada muda.
+// primeiro vai para o alerta, com o foco no campo dele), e as alternativas livres deles (outro horário, recurso ou
+// instrutor) são botões que escolhem na hora; os avisos pedem "Agendar mesmo assim" (o peso que falta para antes no
+// campo dele); outro conjunto de avisos pede outra confirmação. Um voo de hoje do aluno muda de lugar ("Mover o voo") ou
+// entra na escala ("Encaixar o voo"); no Ground, o select Instrutor também tem as turmas do dia. Esc e Voltar desistem,
+// e nada muda.
 import { S, DATA, isGestor, dadoIndisponivel } from '../state.js';
 import { ApiClient } from '../storage.js';
 import { runAllocationEngine } from '../engine.js';
 import { situacaoPorMissao } from '../resultados.js';
-import { contextoInicial, formularioDoAgendamento, simularAgendamento, avaliarAgendamento, comPesos, assinaturaDosAvisos } from '../agendamento.js';
+import { contextoInicial, formularioDoAgendamento, simularAgendamento, avaliarAgendamento, comPesos, assinaturaDosAvisos, escolhasDaAlternativa } from '../agendamento.js';
 import { $ } from '../dom.js';
 import { esc, hm, hojeISO, minutoDoDia } from '../format.js';
 
@@ -64,6 +67,11 @@ const definir = (id, valor) => {
   if (el !== document.activeElement && el.value !== valor) el.value = valor;
 };
 
+// O título do diálogo pelo que o agendamento faz (o voo de hoje do aluno: mover ou encaixar)
+const TITULO = { agendar: 'Agendar voo', mover: 'Mover o voo', encaixar: 'Encaixar o voo' };
+// O valor de uma turma de Ground do dia no select Instrutor ("turma:<chave>")
+const turmaDoValor = valor => typeof valor === 'string' && valor.startsWith('turma:');
+
 function desenharFormulario() {
   const f = pedido.formulario;
   const sem = !f.aluno;
@@ -88,14 +96,19 @@ function desenharFormulario() {
     campo('agd-peso-resumo').textContent = f.peso.resumo;
   }
   campo('agd-contexto').textContent = f.contextoTexto || 'O primeiro horário livre.';
+  // O título diz o que acontece: um voo novo, o voo de hoje que muda de lugar ou o que entra na escala
+  campo('agd-titulo').textContent = TITULO[f.acao] || TITULO.agendar;
   // Sem o aluno, os outros campos esperam; a duração fixa (o Ground, o Noturno) fica travada
   for (const id of CAMPOS.slice(1)) campo(id).disabled = sem || pedido.travado;
   campo('agd-aluno').disabled = Boolean(pedido.travado);
   if (f.horas && f.horas.fixa) campo('agd-horas').disabled = true;
 }
 
-// Os itens da conferência: bloqueios, avisos e notas (com os botões do conserto, como "Marcar disponível")
-const item = i => `<li data-codigo="${esc(i.codigo)}">${esc(i.texto)}${(i.opcoes || []).map(o => ` <button type="button" class="btn quiet" data-agd-opcao="${esc(o.opcao)}">${esc(o.texto)}</button>`).join('')}</li>`;
+// Os itens da conferência: bloqueios, avisos e notas (com os botões do conserto, como "Marcar disponível", e as
+// alternativas livres de cada bloqueio, em grupos: "Horários livres: 08:20 10:10")
+const botao = o => `<button type="button" class="btn quiet" data-agd-opcao="${esc(o.opcao)}">${esc(o.texto)}</button>`;
+const alternativas = grupos => (grupos || []).map(g => `<div class="agd-chips"><span>${esc(g.rotulo)}:</span> ${g.opcoes.map(botao).join(' ')}</div>`).join('');
+const item = i => `<li data-codigo="${esc(i.codigo)}">${esc(i.texto)}${(i.opcoes || []).map(o => ` ${botao(o)}`).join('')}${alternativas(i.alternativas)}</li>`;
 function desenharConferencia() {
   const av = pedido.avaliacao;
   const conferencia = $('#agd-conferencia');
@@ -111,21 +124,14 @@ function desenharConferencia() {
   if (form.dataset.confirmado !== undefined && form.dataset.confirmado !== assinaturaDosAvisos(av.avisos)) desarmar();
 }
 
-const quantos = (n, um, varios) => `${n} ${n === 1 ? um : varios}`;
+// A prévia ("O que muda na escala"): o voo agendado e cada voo que muda de lugar, sai ou entra (js/agendamento.js)
 function desenharPrevia() {
   const ul = $('#agd-previa ul');
   const previa = pedido.avaliacao && pedido.avaliacao.previa;
   let linhas;
   if (pedido.pendente) linhas = ['calculando…'];
   else if (!previa || !previa.novo) linhas = ['Complete o voo para ver o que muda na escala.'];
-  else {
-    const o = previa.novo;
-    linhas = [`Entra: ${o.s} · ${o.mis} · ${hm(o.a)}–${hm(o.b)} · ${o.r === 'SALA-GROUND' ? 'Sala Ground' : o.r} · ${o.ins}`];
-    if (previa.movidos.length) linhas.push(`${quantos(previa.movidos.length, 'voo muda', 'voos mudam')} de horário, recurso ou instrutor.`);
-    if (previa.saem.length) linhas.push(`${quantos(previa.saem.length, 'voo sai', 'voos saem')} da escala.`);
-    if (previa.entram.length) linhas.push(`${quantos(previa.entram.length, 'voo entra', 'voos entram')} na escala.`);
-    if (linhas.length === 1) linhas.push('Nenhum outro voo muda.');
-  }
+  else linhas = previa.linhas;
   trocar(ul, linhas.map(l => `<li>${esc(l)}</li>`).join(''));
 }
 
@@ -196,11 +202,18 @@ function aoMudar(e) {
       break;
     case 'agd-tipo': escolhas.tipo = el.value; tocados.delete('horas'); break;
     case 'agd-recurso': escolhas.recurso = el.value; tocados.add('recurso'); break;
-    case 'agd-instrutor': escolhas.instrutor = +el.value; tocados.add('instrutor'); break;
+    case 'agd-instrutor':
+      // Uma turma de Ground do dia: o horário passa a ser o dela
+      escolhas.instrutor = turmaDoValor(el.value) ? el.value : +el.value;
+      tocados.add('instrutor');
+      if (turmaDoValor(el.value)) tocados.delete('horario');
+      break;
     case 'agd-horario':
       escolhas.horario = el.value === 'outro' ? 'outro' : +el.value;
       if (el.value === 'outro' && !escolhas.outroHorario && Number.isInteger(pedido.formulario.horario)) escolhas.outroHorario = hm(pedido.formulario.horario);
       tocados.add('horario');
+      // Outro horário sai da turma de Ground: o aluno abre uma turma nova, com o instrutor que serve nele
+      if (turmaDoValor(escolhas.instrutor)) { tocados.delete('instrutor'); delete escolhas.instrutor; }
       break;
     case 'agd-outro-horario': escolhas.outroHorario = el.value; break;
     case 'agd-horas': escolhas.horas = textoDoCampo(el); tocados.add('horas'); break;
@@ -218,6 +231,25 @@ function aoMudar(e) {
   recalcular();
 }
 
+// Uma opção da conferência (data-agd-opcao): "disponibilizar", ou a alternativa livre "horario:<minuto>",
+// "recurso:<matrícula>" ou "instrutor:<id>", que vale como o campo escolhido pelo operador. A alternativa muda só o campo
+// dela: os outros ficam como estão agora (ela foi calculada com eles; js/agendamento.js). Responde se havia o que escolher
+function escolherOpcao(valor) {
+  const f = pedido.formulario;
+  if (valor === 'disponibilizar') {
+    // O instrutor do voo (na turma de Ground, o da turma)
+    const insId = Number.isInteger(f.instrutor) ? f.instrutor : f.selecao && f.selecao.x ? f.selecao.x.id : null;
+    if (!insId) return false;
+    pedido.escolhas.disponibilizar = insId;
+    return true;
+  }
+  const novas = escolhasDaAlternativa(f, pedido.escolhas, pedido.tocados, valor);
+  if (!novas) return false;
+  pedido.escolhas = novas.escolhas;
+  pedido.tocados = novas.tocados;
+  return true;
+}
+
 function ligar() {
   const dlg = $('#dlg-agendar');
   if (dlg.dataset.ligado) return;
@@ -227,15 +259,17 @@ function ligar() {
   // Os números e o outro horário: a cada tecla (a conferência espera a digitação parar)
   form.addEventListener('input', e => { if (e.target.matches('input')) aoMudar(e); });
   form.addEventListener('submit', e => { e.preventDefault(); enviar(); });
-  // O conserto de um bloqueio: "Marcar disponível" (o instrutor fica disponível nos períodos do voo, com o agendamento)
+  // O conserto de um bloqueio: "Marcar disponível" (o instrutor fica disponível nos períodos do voo, com o agendamento),
+  // ou uma alternativa livre (o horário, o recurso ou o instrutor, como se o operador o escolhesse no campo dele). O foco
+  // vai para "Agendar": o botão clicado sai com a conferência refeita
   form.addEventListener('click', e => {
     const b = e.target.closest('[data-agd-opcao]');
     if (!b || !pedido || pedido.travado) return;
-    if (b.dataset.agdOpcao === 'disponibilizar' && pedido.formulario.instrutor) {
-      pedido.escolhas.disponibilizar = pedido.formulario.instrutor;
-      recalcular({ conferirJa: true });
-      $('#agd-confirmar').focus();
-    }
+    if (!escolherOpcao(b.dataset.agdOpcao)) return;
+    marcarInvalido();
+    $('#agd-erro').textContent = '';
+    recalcular({ conferirJa: true });
+    $('#agd-confirmar').focus();
   });
   $('#agd-voltar').addEventListener('click', () => dlg.close());
   // Esc ou Voltar: desiste (nada muda). Depois de confirmar, o pedido já saiu, e o fechamento não desiste

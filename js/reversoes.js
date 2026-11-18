@@ -3,7 +3,7 @@
 // nem é aplicada. Um recurso retirado volta pela mesma validação do "+ Novo recurso". Desfazer um voo agendado na
 // Escala também fica aqui: quando ele não é desfeito e o que volta como estava.
 import { novoRecurso, MATRICULA, ATRIBUTOS_DO_RECURSO } from './frota.js';
-import { normalizarFixos } from './fixos.js';
+import { normalizarFixos, fixoPeloStatus } from './fixos.js';
 import { CATEGORIAS_COM_HORARIOS, normalizarHorarios } from './horarios.js';
 import { disponibilidadeValida, normalizeMissionFields } from './rules.js';
 import { MINUTOS_DO_DIA, MIS, WIN } from './config.js';
@@ -92,8 +92,9 @@ export function validarReversao(rev, frota) {
   }
   // Um voo agendado na Escala: o pedido como estava (null: o agendamento criou uma missão extra, que sai), o voo fixo de
   // antes (null: não era fixo) e a disponibilidade do instrutor de antes (null: não mudou). criado: o agendamento criou o
-  // voo; criadoComo: o pedido como o agendamento o deixou (desfazer só tira o pedido que ainda é ele). Aqui o rótulo fora
-  // do formato (ou em branco: o botão ficaria sem nome) também invalida a reversão
+  // voo (sem ele, o voo de hoje do aluno mudou de lugar ou entrou na escala); criadoComo: o pedido como o agendamento o
+  // deixou (desfazer só mexe no pedido que ainda é ele). Aqui o rótulo fora do formato (ou em branco: o botão ficaria sem
+  // nome) também invalida a reversão
   if (rev.kind === 'desfazerAgendamento') {
     const { stuId, mid, criado } = rev;
     if (!idValido(stuId) || !Number.isInteger(mid) || mid < 0 || typeof criado !== 'boolean' || !rotuloValido(rev.label) || !rev.label.trim()) return null;
@@ -105,7 +106,7 @@ export function validarReversao(rev, frota) {
     // Sem o pedido de antes, só o voo criado numa missão extra
     const pedidoRuim = ausente(rev.pedido) ? !criado || mid === 0 : !pedido;
     if (pedidoRuim || (!ausente(rev.fixo) && !fixo) || (!ausente(rev.disponibilidade) && !disponibilidade)) return null;
-    if (!ausente(rev.criadoComo) && (!criado || !criadoComo)) return null;
+    if (!ausente(rev.criadoComo) && !criadoComo) return null;
     return { kind: 'desfazerAgendamento', stuId, mid, criado, pedido, fixo, disponibilidade, ...(criadoComo ? { criadoComo } : {}), label: rev.label };
   }
   return null;
@@ -119,12 +120,13 @@ const mesmoPedido = (p, q) => IDENTIDADE_DO_PEDIDO.every(c => p[c] === q[c]);
 // O voo agendado na Escala que já está em andamento (Em Voo, Atrasado ou Pousou) ou que já tem resultado registrado não
 // é desfeito: o texto do aviso, ou ''. Sem os resultados dos cursos (a leitura falhou: estado.indisponiveis), os
 // registros do dia vêm vazios e não dá para conferir; desfazer fica desligado até "Tentar de novo" (o aviso do topo)
-// ler os resultados, como o registro de resultados. O pedido criado pelo agendamento que mudou depois dele (outra
-// missão, recurso, duração ou horário, ou outro pedido no mesmo número de missão extra, que foi tirada e criada de novo)
-// também não: desfazer tiraria ou trocaria um voo que o agendamento não criou
-export function motivoParaNaoDesfazer(estado, { stuId, mid, criado = false, criadoComo = null }) {
+// ler os resultados, como o registro de resultados. O pedido do agendamento (o criado, o que mudou de lugar ou o que
+// entrou na escala) que mudou depois dele (outra missão, recurso, duração ou horário, ou outro pedido no mesmo número de
+// missão extra, que foi tirada e criada de novo) também não: desfazer tiraria ou trocaria um voo que o agendamento não
+// deixou assim
+export function motivoParaNaoDesfazer(estado, { stuId, mid, criadoComo = null }) {
   const fKey = chaveDoVoo(stuId, mid);
-  const aluno = criado && criadoComo ? estado.stu.find(s => s.id === stuId) : null;
+  const aluno = criadoComo ? estado.stu.find(s => s.id === stuId) : null;
   const atual = aluno ? pedidoDoAluno(aluno, mid) : null;
   if (atual && !mesmoPedido(atual, criadoComo)) return 'O pedido mudou depois do agendamento: desfazer agora mexeria em outro voo. Mude o pedido na Demanda.';
   if (STATUS_EM_ANDAMENTO.includes((estado.fStatus || {})[fKey])) return 'O voo já está em andamento: mude o status em vez de desfazer.';
@@ -139,7 +141,10 @@ export function motivoParaNaoDesfazer(estado, { stuId, mid, criado = false, cria
 // - o voo que o agendamento criou sai: a missão extra é retirada, ou o pedido principal volta como estava; a chave do
 //   voo fica limpa (sem voo fixo, status nem detalhe);
 // - o voo movido ou encaixado volta como estava: o pedido (com o instrutor escolhido de antes) e o voo fixo de antes
-//   (sem voo fixo antes, ele deixa de ser fixo); o status e o detalhe dele continuam;
+//   (sem voo fixo antes, ele deixa de ser fixo, e o app o põe de novo na escala; na escala aprovada, em volta dos voos
+//   fixos, como um pedido que chegou depois da aprovação); o status e o detalhe dele continuam. O voo cancelado depois
+//   do agendamento, sem voo fixo antes, fica fixo onde foi cancelado, sem a marca do agendamento (como o voo fixo pelo
+//   status: o cancelado não volta para a escala, nem ocupa outro lugar);
 // - o instrutor marcado disponível no agendamento volta como estava.
 // O peso digitado no agendamento fica no cadastro: é da pessoa. Responde se desfez: sem o aluno, ou sem o pedido do voo
 // movido (já retirado da demanda), não há o que desfazer
@@ -157,7 +162,10 @@ export function desfazerAgendamento(estado, { stuId, mid, criado, pedido, fixo, 
   }
   if (criado) [estado.fixos, estado.fStatus, estado.fObs].forEach(mapa => { if (mapa) delete mapa[fKey]; });
   else if (fixo) estado.fixos = { ...(estado.fixos || {}), [fKey]: { ...fixo } };
-  else if (estado.fixos) delete estado.fixos[fKey];
+  else if (estado.fixos && estado.fixos[fKey] && fixoPeloStatus(fKey, estado.fStatus)) {
+    const { agendado: _, ...peloStatus } = estado.fixos[fKey];
+    estado.fixos[fKey] = peloStatus;
+  } else if (estado.fixos) delete estado.fixos[fKey];
   if (disponibilidade) {
     const x = estado.ins.find(i => i.id === disponibilidade.insId);
     if (x) Object.assign(x, { on: disponibilidade.on, aw: [...disponibilidade.aw] });

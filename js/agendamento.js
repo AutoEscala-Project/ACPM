@@ -8,11 +8,14 @@
 // cada um. A conferência roda o motor numa cópia do estado, com a mesma função que grava (aplicarAgendamento): o que o
 // motor marcaria como conflito, no voo novo ou num voo que não estava em conflito, não deixa agendar; as regras do curso,
 // as que o motor não confere nos voos fixos, o peso que falta e o voo que sai da escala pedem uma confirmação; o resto é
-// informação. Tudo aqui é puro: a tela só desenha o que sai daqui.
+// informação. O bloqueio vem com as alternativas livres (outro horário, outro recurso, outro instrutor). Um voo de hoje
+// do aluno também é agendado: o que está na escala muda de lugar ("Mover"), e o que ficou fora entra ("Encaixar"), com o
+// mesmo pedido. No Ground, o aluno entra numa turma do dia ou abre uma turma nova. Tudo aqui é puro: a tela só desenha o
+// que sai daqui.
 import { MIS, T, NI, DAY, GROUND_EQ_TYPE, GROUND_REG, GROUND_DURATION_MIN, DEFAULT_LIM, MINUTOS_DO_DIA, NOTURNO } from './config.js';
 import {
   alvoDoNovoPedido, normalizeMissionFields, duracaoFixaDaMissao, duracaoPadraoDaMissao, duracaoValida, duracaoDigitada, isGroundMission,
-  disponibilidadeDoAluno, pesoDigitado, ERRO_DA_DURACAO, ERRO_DO_PESO
+  disponibilidadeDoAluno, rotuloDaDisponibilidade, pesoDigitado, ERRO_DA_DURACAO, ERRO_DO_PESO
 } from './rules.js';
 import { horariosDaMissao, periodoDoMinuto, paraMinuto } from './horarios.js';
 import { ocupacaoDaEscala, avioesQueServem, instrutoresQueServem, problemaDoRecurso, problemaDoAluno } from './candidatos.js';
@@ -22,12 +25,14 @@ import { chaveDoVoo, statusDoVoo, pedidoDoAluno, ocupacaoDoVoo } from './voo.js'
 import { CAMPOS_DO_PEDIDO } from './dias.js';
 import { runAllocationEngine } from './engine.js';
 import { CODIGOS_DO_AGENDADO, GRUPO_DO_CONFLITO } from './conflitos.js';
+import { fixoPeloStatus, motivoDoFixo } from './fixos.js';
+import { STATUS_EM_ANDAMENTO, rotuloDoStatus } from './status.js';
 import { pesoECombustivel, textoDoCombustivel } from './combustivel.js';
 import { NOTA_DO_PROBLEMA } from './instrutor-escolhido.js';
 import { sobrepoe } from './viabilidade.js';
 import { hm, fmtH, numeroBr, rotuloDaData } from './format.js';
 import { nomeDoRecurso } from './categorias.js';
-import { categoriaDoRodizio, ajustarFilas } from './rodizio.js';
+import { CATEGORIAS_DO_RODIZIO, categoriaDoRodizio, ajustarFilas } from './rodizio.js';
 import { FROTA_INICIAL, recursoDaFrota, motivoDoAviao } from './frota.js';
 import { podeFazer } from './habilitacoes.js';
 import { ehDomingo } from './agenda.js';
@@ -43,6 +48,10 @@ const juntar = lista => (lista.length < 2 ? lista.join('') : `${lista.slice(0, -
 const ddmm = iso => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`;
 const camposDoPedido = p => Object.fromEntries(CAMPOS_DO_PEDIDO.filter(c => p[c] !== undefined).map(c => [c, p[c]]));
 const rotuloDoVoo = o => (o.mid ? `${o.s} (${o.mis})` : o.s);
+// Onde o voo está: "no PR-VOB", ou "na sala de Ground"; os horários do tipo: "horários do C152", ou "horários das aulas de
+// Ground"
+const noRecurso = r => (r === GROUND_REG ? 'na sala de Ground' : `no ${nomeDoRecurso(r)}`);
+const horariosDoTipo = tipo => (tipo === GROUND_EQ_TYPE ? 'horários das aulas de Ground' : `horários do ${tipo}`);
 
 // ---------------------------------------------------------------------------------------------------------------------
 // O contexto e os horários
@@ -130,16 +139,46 @@ export function naOrdemDoMotor(estado, out) {
   return out.map((o, k) => ({ o, k, c: chave(o) })).sort((p, q) => comparar(p.c, q.c) || p.k - q.k).map(p => p.o);
 }
 
-// Calculada uma vez por escala (a base do diálogo)
+// Calculada uma vez por escala (a base do diálogo) e voo que muda de lugar. exceto: as chaves dos voos que não contam (o
+// voo movido não ocupa o lugar de onde sai)
 const ocupacoesDaBase = new WeakMap();
-function ocupacoes(estado, base) {
-  if (!ocupacoesDaBase.has(base)) {
+function ocupacoes(estado, base, exceto = []) {
+  if (!ocupacoesDaBase.has(base)) ocupacoesDaBase.set(base, new Map());
+  const daBase = ocupacoesDaBase.get(base), chave = exceto.join('|');
+  if (!daBase.has(chave)) {
     const voos = naOrdemDoMotor(estado, base.out);
-    const opcoes = { fStatus: estado.fStatus || {}, fObs: estado.fObs || {}, efetivo: true };
-    ocupacoesDaBase.set(base, { fixos: ocupacaoDaEscala(voos, { ...opcoes, soFixos: true }), todos: ocupacaoDaEscala(voos, opcoes) });
+    const opcoes = { fStatus: estado.fStatus || {}, fObs: estado.fObs || {}, efetivo: true, exceto };
+    daBase.set(chave, { fixos: ocupacaoDaEscala(voos, { ...opcoes, soFixos: true }), todos: ocupacaoDaEscala(voos, opcoes) });
   }
-  return ocupacoesDaBase.get(base);
+  return daBase.get(chave);
 }
+
+// O horário s serve ao voo de minutos no recurso r, com o instrutor x (sem ele, qualquer um) e para o aluno, contra os
+// voos fixos (sem os de exceto): o recurso, o aluno e o instrutor livres (a volta do noturno ocupa até as 10:10)
+function livreNosFixos(estado, base, { stu, r, x, mis, tipo, minutos, ground, stuKg, curso, exceto = [] }) {
+  const { fixos } = ocupacoes(estado, base, exceto);
+  return s => {
+    if (r && problemaDoRecurso(estado, fixos, r, { a: s, b: s + minutos, ground })) return false;
+    if (problemaDoAluno(fixos, stu.id, { a: s, b: s + minutos })) return false;
+    if (!x) return true;
+    const doInstrutor = instrutoresQueServem(estado, fixos, { mis, tipo, a: s, b: s + minutos, alunos: [stu], stuKg, curso, r }).find(c => c.x === x);
+    return Boolean(doInstrutor) && !doInstrutor.problemas.length;
+  };
+}
+
+// As turmas de Ground da missão na escala (sem os voos de exceto): a chave, o horário, o instrutor e quantos alunos, na
+// ordem do horário. A turma cancelada não conta
+function turmasDoDia(estado, base, mis, exceto = []) {
+  const fora = new Set(exceto);
+  const turmas = new Map();
+  for (const o of base.out) {
+    if (!o.isGround || o.mis !== mis || !o.classKey || fora.has(o.fKey) || !ativo(o, estado.fStatus)) continue;
+    if (!turmas.has(o.classKey)) turmas.set(o.classKey, { classKey: o.classKey, mis, a: o.a, b: o.b, insId: o.insId, ins: o.ins, n: 0 });
+    turmas.get(o.classKey).n++;
+  }
+  return [...turmas.values()].sort((p, q) => p.a - q.a || p.insId - q.insId);
+}
+const textoDaTurma = t => `Entrar na turma das ${hm(t.a)} com ${t.ins} (${t.n} ${t.n === 1 ? 'aluno' : 'alunos'})`;
 
 const sobrepoeVoo = (a, b) => o => sobrepoe(a, b, ...ocupacaoDoVoo(o));
 const ocupaDaLista = (mapa, chave, a, b) => (mapa.get(chave) || []).find(sobrepoeVoo(a, b)) || null;
@@ -154,15 +193,73 @@ const cursoDoAluno = (ambiente, stu) => (stu && stu.curso && indiceDoPrograma(am
 
 // As missões do curso que o aluno já tem no dia (os pedidos dele que voam, menos os cancelados: não são sugeridas de
 // novo), as dos voos dele na escala que terminam até o horário a (contam como feitas sob condição: dependem do resultado)
-// e o voo de cada uma (pelo id da missão)
-function missoesNoDia(estado, base, curso, stu, a) {
+// e o voo de cada uma (pelo id da missão). mid: o pedido que muda de lugar (o dele não conta; null: nenhum)
+function missoesNoDia(estado, base, curso, stu, a, mid = null) {
   const idDe = new Map(curso.missoes.map(m => [m.codigo, m.id]));
-  const voos = base.out.filter(o => o.stuId === stu.id && o.etapa && !o.trecho && ativo(o, estado.fStatus) && idDe.has(o.etapa));
+  const voos = base.out.filter(o => o.stuId === stu.id && (mid === null || (o.mid || 0) !== mid) && o.etapa && !o.trecho && ativo(o, estado.fStatus) && idDe.has(o.etapa));
   return {
-    exceto: missoesDoDia(curso, stu, { fStatus: estado.fStatus }),
+    exceto: missoesDoDia(curso, stu, { fStatus: estado.fStatus, mid }),
     planejadas: new Set(voos.filter(o => o.b <= a).map(o => idDe.get(o.etapa))),
     voos: new Map(voos.map(o => [idDe.get(o.etapa), o]))
   };
+}
+
+// O motivo curto de o pedido ter ficado fora da escala, pelo código da rejeição do motor
+const FORA_DA_ESCALA = {
+  'equipamento-da-missao': 'a missão não voa nesse tipo de avião', 'ground-pendente': 'o Ground antes dele ficou fora',
+  'ground-antes-do-voo-fixo': 'sem horário antes do voo fixo', 'so-parafuso': 'sem o avião do Parafuso', 'sem-aviao': 'sem avião disponível',
+  'sem-instrutor-habilitado': 'sem instrutor habilitado', 'disponibilidade-do-aluno': 'fora da disponibilidade do aluno',
+  'depois-do-ground': 'sem horário depois do Ground', 'sem-horario': 'sem horário aberto', 'aluno-ocupado': 'o aluno já voa nos horários',
+  'avioes-ocupados': 'sem avião livre', 'sala-ocupada': 'a sala de Ground ocupada', revisao: 'sem saldo até a revisão de 50 h',
+  'instrutores-indisponiveis': 'sem instrutor disponível', 'instrutores-ocupados': 'sem instrutor livre', bloqueio: 'em Não escalar com',
+  'limite-da-lei': 'o limite da lei', peso: 'o peso acima do limite', 'limite-de-locais': 'o limite de voos locais no horário',
+  'instrutor-escolhido': 'o instrutor escolhido não serve', 'habilitacao-do-aviao': 'sem a habilitação própria do avião'
+};
+// Por que o pedido ficou fora da escala (a rejeição do motor na base, pelo nome do voo)
+function motivoDeFora(base, stu, p) {
+  const err = base.al.find(al => al.t === 'err' && al.s === (p.mid ? `${stu.nm} (${p.mis})` : stu.nm));
+  return (err && FORA_DA_ESCALA[err.codigo]) || 'sem lugar na escala';
+}
+
+// A missão do curso de um pedido do aluno (o código dele, no curso dele), com o estado dela no horário a sem o próprio
+// pedido (o voo que muda de lugar não conta como feito nem como do dia): a ordem do curso é conferida de novo no horário
+// novo. Sem a missão no programa, null; sem os resultados, o estado fica null
+function missaoDoPedido(estado, base, ambiente, stu, p, a) {
+  const sigla = p.cursoDaEtapa || stu.curso;
+  const indice = indiceDoPrograma(ambiente.programa || []);
+  const curso = p.etapa && sigla ? indice.curso(sigla) : null;
+  const m = curso ? indice.missaoPorCodigo(sigla, p.etapa) : null;
+  if (!m || m.removida) return null;
+  const comum = { missao: m, sigla, rotulo: rotuloDaMissao(curso, m) };
+  if (!ambiente.inferir) return { ...comum, estado: null };
+  const mid = p.mid || 0;
+  const { exceto, planejadas, voos } = missoesNoDia(estado, base, curso, stu, a, mid);
+  const info = estadoDoAluno(curso, ambiente.situacao, stu.id, { planejadas, exceto }).porMissao.get(m.id);
+  if (!info || info.estado === 'no-noturno') return { ...comum, estado: null };
+  const motivo = info.estado === 'bloqueada' ? motivoDaMissao(curso, ambiente, stu, m, info, voos) : '';
+  return { ...comum, estado: info.estado, motivo, dependeDe: descreverDependencias(curso, info.dependeDe, voos) };
+}
+
+// Os voos de hoje do aluno (o grupo "Voos de hoje do aluno" do select Missão): cada pedido dele que voa. O que está na
+// escala muda de lugar ("Mover PP-07 · Navegação (hoje 10:10, PR-VOC)"); o que ficou fora entra ("Encaixar PP-07 ·
+// Navegação (ficou fora: sem avião livre)"); o em andamento e o cancelado ficam desligados, com o status. O pedido
+// continua o mesmo: a missão, a missão do curso, o status e o detalhe dele
+function voosDeHoje(estado, base, ambiente, stu, a) {
+  const naEscala = new Map(base.out.filter(o => o.stuId === stu.id && !o.trecho).map(o => [o.fKey, o]));
+  return pedidosQueVoam(stu).map(p => {
+    const mid = p.mid || 0, fKey = chaveDoVoo(stu.id, mid);
+    const voo = naEscala.get(fKey) || null;
+    const status = statusDoVoo(voo || { fKey }, estado.fStatus);
+    const travado = [...STATUS_EM_ANDAMENTO, 'Cancelado'].includes(status) ? status : null;
+    const doCurso = missaoDoPedido(estado, base, ambiente, stu, p, a);
+    const nome = `${doCurso ? doCurso.rotulo : p.etapa || ''}${p.etapa ? ' · ' : ''}${p.mis}`;
+    const texto = `${voo ? `Mover ${nome} (hoje ${hm(voo.a)}, ${nomeDoRecurso(voo.r)})` : `Encaixar ${nome} (ficou fora: ${motivoDeFora(base, stu, p)})`}`
+      + (travado ? ` — ${rotuloDoStatus(travado, voo).toLowerCase()}` : '');
+    return {
+      valor: `pedido:${mid}`, texto, desligada: Boolean(travado),
+      info: { tipo: 'pedido', acao: voo ? 'mover' : 'encaixar', mid, pedido: p, voo, status: travado, mis: p.mis, eq: p.eq, ...doCurso }
+    };
+  });
 }
 
 // A preferência de cada missão pelo contexto (a linha clicada no mapa): no recurso, 2 quando o programa faz a missão no
@@ -266,17 +363,24 @@ function infoDoAluno(estado, base, ambiente, stu) {
   return partes.join(' · ');
 }
 
-// As missões que o aluno pode voar (o select Missão), em grupos: as liberadas do curso (a condicional diz de que resultado
-// depende), as outras missões do curso, fora da ordem (com o motivo: pedem confirmação), e as missões sem o curso (os
-// tipos de missão que o recurso serve, e "Outro tipo de missão…"). Sem os resultados, as missões do curso vêm sem a
-// ordem conferida, e não há missão padrão. O Noturno em trechos vai pela noite, como na próxima missão (com os translados
-// no nome): os translados dele nunca vão sozinhos, nem o dispensado (o pedido leva o código da noite, e o resultado é
-// dela). Devolve os grupos (cada opção: valor, texto e o que a conferência usa), a missão padrão (valor, ou null) e a
-// nota com a próxima e as outras liberadas
-export function opcoesDeMissao(estado, base, ambiente, stu, { a = 0, contexto = {}, recurso = null } = {}) {
+// As missões que o aluno pode voar (o select Missão), em grupos: os voos de hoje do aluno (mover o que está na escala,
+// encaixar o que ficou fora), as liberadas do curso (a condicional diz de que resultado depende), as outras missões do
+// curso, fora da ordem (com o motivo: pedem confirmação), e as missões sem o curso (os tipos de missão que o recurso
+// serve, e "Outro tipo de missão…"). Sem os resultados, as missões do curso vêm sem a ordem conferida, e não há missão
+// padrão. O Noturno em trechos vai pela noite, como na próxima missão (com os translados no nome): os translados dele
+// nunca vão sozinhos, nem o dispensado (o pedido leva o código da noite, e o resultado é dela). A missão padrão, nesta
+// ordem: na turma de Ground do contexto, o Ground dela (o pedido do aluno com ele, a missão do curso ou o tipo); o pedido
+// que ficou fora da escala ("Encaixar"); o pedido que já tem a próxima missão do curso, contada sem os voos de hoje
+// ("Mover": o diálogo nunca sugere a seguinte por cima de um pedido que já existe); a próxima do curso; o tipo de missão.
+// Devolve os grupos (cada opção: valor, texto e o que a conferência usa), a missão padrão (valor, ou null) e a nota com a
+// próxima e as outras liberadas
+export function opcoesDeMissao(estado, base, ambiente, stu, { a = 0, contexto = {}, recurso = null, turma = null } = {}) {
   const curso = cursoDoAluno(ambiente, stu);
   const grupos = [];
   let padrao = null, nota = '';
+  const deHoje = voosDeHoje(estado, base, ambiente, stu, a);
+  if (deHoje.length) grupos.push({ rotulo: 'Voos de hoje do aluno', opcoes: deHoje });
+  let liberadasDoCurso = [];
   if (curso) {
     const percurso = percursoDoCurso(curso);
     const faseDe = new Map(percurso.fases.map(f => [f.id, f]));
@@ -304,6 +408,7 @@ export function opcoesDeMissao(estado, base, ambiente, stu, { a = 0, contexto = 
         const texto = info.estado === 'bloqueada' ? `${descreverMissao(curso, m)} — ${motivo}` : `${descreverMissao(curso, m)} (${motivo})`;
         return { valor: `missao:${m.id}`, texto, info: { ...comum(m), estado: info.estado, motivo } };
       });
+      liberadasDoCurso = liberadas;
       if (liberadas.length) grupos.push({ rotulo: `Liberadas no ${curso.sigla}`, opcoes: liberadas });
       if (foraDaOrdem.length) grupos.push({ rotulo: 'Fora da ordem (pede confirmação)', opcoes: foraDaOrdem });
       if (proxima) {
@@ -340,6 +445,19 @@ export function opcoesDeMissao(estado, base, ambiente, stu, { a = 0, contexto = 
       ...(recurso ? [{ valor: 'tipo:', texto: 'Outro tipo de missão…', info: { tipo: 'outro' } }] : [])]
   });
   if (!padrao && !semPrograma && (!curso || ambiente.inferir)) padrao = `tipo:${tipos.includes('Voo Local') ? 'Voo Local' : tipos[0] || 'Voo Local'}`;
+  // Os voos de hoje do aluno vêm antes da próxima missão: o que ficou fora; o que já tem a próxima do curso (sem os voos
+  // de hoje, ela seria a sugerida). Na turma de Ground, o Ground dela
+  const movivel = o => !o.desligada;
+  const fora = deHoje.find(o => o.info.acao === 'encaixar' && movivel(o));
+  const semOHoje = curso && ambiente.inferir ? proximasMissoes(curso, ambiente.situacao, stu.id, { planejadas: new Set(), exceto: new Set() }).padrao : null;
+  const comAProxima = semOHoje && deHoje.find(o => o.info.acao === 'mover' && movivel(o) && o.info.missao && o.info.missao.id === semOHoje.id && o.info.sigla === curso.sigla);
+  if (turma) {
+    const doAluno = [...deHoje].sort((p, q) => (p.info.acao === 'encaixar' ? 0 : 1) - (q.info.acao === 'encaixar' ? 0 : 1))
+      .find(o => movivel(o) && o.info.mis === turma.mis);
+    const doCurso = liberadasDoCurso.find(o => o.info.mis === turma.mis);
+    padrao = (doAluno || doCurso || { valor: tipos.includes(turma.mis) ? `tipo:${turma.mis}` : padrao }).valor;
+  } else if (fora) padrao = fora.valor;
+  else if (comAProxima) padrao = comAProxima.valor;
   return { grupos, padrao, nota };
 }
 
@@ -363,39 +481,47 @@ function textoDoRecurso(problema, { mis, instrutor }) {
 // o motivo: em manutenção, o voo fixo que ocupa, a revisão de 50 horas, o Só Parafuso e o Só VFR, a habilitação própria
 // que o instrutor não tem. O que só tem voos que não são fixos no horário vem com a nota "ocupado agora (o app
 // reorganiza)". Na ordem: os livres (sem voo nenhum no horário, depois os ocupados só por voos que não são fixos); os do
-// tipo do programa (sem programa, o tipo padrão da missão); os do instrutor no dia; a menor folga; a frente do hangar
-export function opcoesDeRecurso(estado, base, { mis, eq = null, curso, a, b, instrutor = null }) {
-  const { fixos, todos } = ocupacoes(estado, base);
+// tipo do programa (sem programa, o tipo padrão da missão); os do instrutor no dia; a menor folga; a frente do hangar.
+// exceto: o voo que muda de lugar (não ocupa o recurso de onde sai)
+export function opcoesDeRecurso(estado, base, { mis, eq = null, curso, a, b, instrutor = null, exceto = [] }) {
+  const { fixos, todos } = ocupacoes(estado, base, exceto);
   const ground = isGroundMission(mis);
   const tipos = ground ? [GROUND_EQ_TYPE] : MIS[mis].eq;
   const preferido = ground ? GROUND_EQ_TYPE : tipos.includes(eq) ? eq : MIS[mis].defEq;
-  const doInstrutor = new Set(instrutor ? base.out.filter(o => o.insId === instrutor.id && ativo(o, estado.fStatus)).map(o => o.r) : []);
+  const doInstrutor = new Set(instrutor ? base.out.filter(o => o.insId === instrutor.id && !exceto.includes(o.fKey) && ativo(o, estado.fStatus)).map(o => o.r) : []);
   return tipos.flatMap(tipo => avioesQueServem(estado, fixos, { tipo, mis, curso, a, b, ground, instrutor }).map(c => ({ ...c, tipo })))
     .map((c, k) => ({ ...c, k, ocupadoAgora: !c.problema && Boolean(problemaDoRecurso(estado, todos, c.r, { a, b, ground })) }))
     .sort((p, q) => Boolean(p.problema) - Boolean(q.problema) || p.ocupadoAgora - q.ocupadoAgora || (q.tipo === preferido) - (p.tipo === preferido)
       || doInstrutor.has(q.r) - doInstrutor.has(p.r) || (p.folga === q.folga ? 0 : p.folga - q.folga) || p.k - q.k)
     .map(c => ({
-      valor: c.r, tipo: c.tipo, problema: c.problema, desligada: Boolean(c.problema),
+      valor: c.r, tipo: c.tipo, problema: c.problema, desligada: Boolean(c.problema), ocupadoAgora: c.ocupadoAgora,
       texto: `${nomeDoRecurso(c.r)}${ground ? '' : ` · ${c.tipo}`}${c.problema ? ` — ${textoDoRecurso(c.problema, { mis, instrutor })}` : c.ocupadoAgora ? ' — ocupado agora (o app reorganiza)' : ''}`
     }));
+}
+
+// O rodízio da categoria no dia (js/rodizio.js): os voos da categoria de cada instrutor na escala (sem os de exceto e a
+// volta do noturno, que contou ontem) e a posição de cada um na fila. Sem categoria, nenhum voo e a mesma posição
+function rodizioDoDia(estado, base, categoria, exceto = []) {
+  const fila = categoria ? ajustarFilas(estado.filas, estado.ins)[categoria] : [];
+  const naCategoria = new Map();
+  if (categoria) {
+    for (const o of base.out) {
+      if (!o.trecho && !exceto.includes(o.fKey) && ativo(o, estado.fStatus) && categoriaDoRodizio(o.mis, o.eqType) === categoria) naCategoria.set(o.insId, (naCategoria.get(o.insId) || 0) + 1);
+    }
+  }
+  return { naCategoria, posicao: id => (fila.includes(id) ? fila.indexOf(id) : Infinity) };
 }
 
 // Os instrutores para o voo [a, b) (o select Instrutor), em grupos: os que servem neste horário; os com aviso (o
 // indisponível, que o agendamento pode marcar disponível, e o ocupado só com voos que não são fixos: o app reorganiza) e
 // os que não servem (desligados: a habilitação, o "Não escalar com", o voo fixo no horário, o limite da lei, o peso
 // acima do limite mesmo com o mínimo de combustível), com os textos curtos da Escala. Na ordem: o tanque cheio; nas
-// categorias do rodízio, menos voos da categoria no dia e a fila; menos horas no dia, menos habilitações, o id
-export function opcoesDeInstrutor(estado, base, { mis, tipo, a, b, stu, stuKg = 0, curso, r = null }) {
-  const { fixos, todos } = ocupacoes(estado, base);
+// categorias do rodízio, menos voos da categoria no dia e a fila; menos horas no dia, menos habilitações, o id. exceto: o
+// voo que muda de lugar (não ocupa o instrutor no horário de onde sai, nem conta no rodízio)
+export function opcoesDeInstrutor(estado, base, { mis, tipo, a, b, stu, stuKg = 0, curso, r = null, exceto = [] }) {
+  const { fixos, todos } = ocupacoes(estado, base, exceto);
   const categoria = categoriaDoRodizio(mis, tipo);
-  const fila = categoria ? ajustarFilas(estado.filas, estado.ins)[categoria] : [];
-  const naCategoria = new Map();
-  if (categoria) {
-    for (const o of base.out) {
-      if (!o.trecho && ativo(o, estado.fStatus) && categoriaDoRodizio(o.mis, o.eqType) === categoria) naCategoria.set(o.insId, (naCategoria.get(o.insId) || 0) + 1);
-    }
-  }
-  const posicao = id => (fila.includes(id) ? fila.indexOf(id) : Infinity);
+  const { naCategoria, posicao } = rodizioDoDia(estado, base, categoria, exceto);
   const pares = new Set(stu.voaCom || []);
   const lista = instrutoresQueServem(estado, fixos, { mis, tipo, a, b, alunos: [stu], stuKg, curso, r })
     .map((c, k) => ({ ...c, k }))
@@ -433,24 +559,31 @@ const pesoDoCampo = texto => (String(texto ?? '').trim() === '' ? 0 : pesoDigita
 // O formulário do agendamento, montado dos dados (estado; base: a escala calculada agora; ambiente: o programa, a situação
 // das missões, a data, hoje e agora) e do que o operador já escolheu (escolhas: o valor de cada campo; tocados: os campos
 // que ele mudou, que ficam como ele deixou), na ordem: aluno → missão → recurso e instrutor → horário → duração → peso.
-// Os campos que ele não mudou recebem o padrão: a missão do progresso; o recurso e o instrutor que servem no horário de
-// onde o contexto parte; o horário livre do recurso e do instrutor; a duração da missão; o peso do cadastro. Devolve as
-// opções de cada campo, o valor escolhido, os textos de apoio, os bloqueios de formato e a proposta (o que aplicar)
+// Os campos que ele não mudou recebem o padrão: a missão do progresso (ou o voo de hoje do aluno que ficou fora ou que já
+// tem a próxima missão); o recurso e o instrutor que servem no horário de onde o contexto parte; o horário livre do
+// recurso e do instrutor; a duração da missão; o peso do cadastro. O voo de hoje que muda de lugar não ocupa o lugar de
+// onde sai, fica com o instrutor escolhido do pedido e, sem ele, com o do voo de agora quando serve. No Ground, o
+// instrutor pode ser uma turma do dia (entrar nela: o horário e o instrutor são os dela). Devolve as opções de cada campo,
+// o valor escolhido, os textos de apoio, os bloqueios de formato e a proposta (o que aplicar)
 export function formularioDoAgendamento(estado, base, ambiente, contexto, escolhas = {}, tocados = new Set()) {
-  const f = { contexto, formato: [], notas: [], alunos: opcoesDeAluno(estado, base, ambiente, contexto), aluno: null, proposta: null };
+  const f = { contexto, formato: [], notas: [], alunos: opcoesDeAluno(estado, base, ambiente, contexto), aluno: null, acao: null, proposta: null };
   const stu = estado.stu.find(s => s.id === escolhas.aluno) || null;
   if (!stu) { f.formato.push(BLOQUEIO_SEM_ALUNO); return f; }
   f.aluno = stu.id;
   f.alunoInfo = infoDoAluno(estado, base, ambiente, stu);
   const curso = stu.curso || null;
   const frota = frotaDo(estado);
+  // A turma de Ground do contexto ("+ Aluno na turma"): o horário parte dela, na sala
+  const daTurma = contexto.classKey ? base.out.find(o => o.isGround && o.classKey === contexto.classKey && ativo(o, estado.fStatus)) || null : null;
+  const turmaDoContexto = daTurma ? { classKey: daTurma.classKey, mis: daTurma.mis, a: daTurma.a, ins: daTurma.ins } : null;
+  const ctx = turmaDoContexto ? { ...contexto, r: GROUND_REG, minuto: turmaDoContexto.a, perto: true } : contexto;
   const recursoAtual = (escolhas.recurso && escolhas.recurso !== GROUND_REG ? recursoDaFrota(frota, escolhas.recurso) : escolhas.recurso)
-    || (contexto.r && contexto.r !== GROUND_REG ? recursoDaFrota(frota, contexto.r) : contexto.r) || null;
+    || (ctx.r && ctx.r !== GROUND_REG ? recursoDaFrota(frota, ctx.r) : ctx.r) || null;
 
-  // A missão: a escolhida, ou a padrão (a próxima do curso no horário escolhido, ou no de onde o contexto parte; sem curso,
-  // o tipo)
-  const inicio = tocados.has('horario') && Number.isInteger(escolhas.horario) ? escolhas.horario : contexto.minuto;
-  const daMissao = opcoesDeMissao(estado, base, ambiente, stu, { a: inicio, contexto, recurso: recursoAtual });
+  // A missão: a escolhida, ou a padrão (o voo de hoje do aluno, a próxima do curso no horário escolhido, ou no de onde o
+  // contexto parte; sem curso, o tipo)
+  const inicio = tocados.has('horario') && Number.isInteger(escolhas.horario) ? escolhas.horario : ctx.minuto;
+  const daMissao = opcoesDeMissao(estado, base, ambiente, stu, { a: inicio, contexto: ctx, recurso: recursoAtual, turma: turmaDoContexto });
   const valores = new Set(daMissao.grupos.flatMap(g => g.opcoes.map(o => o.valor)));
   const missao = tocados.has('missao') && valores.has(escolhas.missao) ? escolhas.missao : daMissao.padrao;
   const opcaoDe = (grupos, valor) => grupos.flatMap(g => g.opcoes).find(o => o.valor === valor) || null;
@@ -466,87 +599,108 @@ export function formularioDoAgendamento(estado, base, ambiente, contexto, escolh
     f.formato.push({ codigo: 'sem-missao', texto: 'Escolha a missão.', campo: missao ? 'agd-tipo' : 'agd-missao' });
     return f;
   }
+  // O voo de hoje do aluno que muda de lugar (ou entra na escala): ele não ocupa o lugar de onde sai. O em andamento e o
+  // cancelado ficam onde estão
+  const movido = info.tipo === 'pedido' ? info : null;
+  const exceto = movido ? [chaveDoVoo(stu.id, movido.mid)] : [];
+  f.acao = movido ? movido.acao : null;
+  if (movido && movido.status) {
+    const texto = movido.status === 'Cancelado' ? `O voo de ${stu.nm} foi cancelado: ele não muda de lugar.`
+      : `O voo de ${stu.nm} já está em andamento (${rotuloDoStatus(movido.status, movido.voo).toLowerCase()}): mude o status em vez de mover.`;
+    f.formato.push({ codigo: 'voo-em-andamento', texto, campo: 'agd-missao' });
+    return f;
+  }
   const { mis } = info;
   const ground = isGroundMission(mis);
 
-  // A duração (o Ground e o Noturno: fixa)
-  const padraoDaDuracao = duracaoDoAgendamento({ mis, missao: info.missao });
+  // A duração (o Ground e o Noturno: fixa; a do programa; a do pedido que muda de lugar)
+  const padraoDaDuracao = duracaoDoAgendamento({ mis, missao: info.tipo === 'missao' ? info.missao : null, pedido: movido ? movido.pedido : null });
   const horas = padraoDaDuracao.fixa || !tocados.has('horas') ? padraoDaDuracao.horas : duracaoDigitada(escolhas.horas);
   f.horas = { valor: padraoDaDuracao.fixa || !tocados.has('horas') ? String(horas) : String(escolhas.horas ?? ''), fixa: padraoDaDuracao.fixa };
   const minutos = ground ? GROUND_DURATION_MIN : Math.round((horas || padraoDaDuracao.horas) * 60);
+
+  // A turma de Ground em que o aluno entra: a escolhida no select Instrutor, ou a do contexto
+  const turmas = ground ? turmasDoDia(estado, base, mis, exceto) : [];
+  const turmaDe = valor => turmas.find(t => `turma:${t.classKey}` === valor) || null;
+  const turma = !ground ? null : tocados.has('instrutor') ? turmaDe(escolhas.instrutor)
+    : turmaDoContexto && turmaDoContexto.mis === mis ? turmaDe(`turma:${turmaDoContexto.classKey}`) : null;
 
   // O recurso e o instrutor no horário de onde o contexto parte; depois, o horário livre deles, e de novo os padrões nele
   const preferido = ground ? GROUND_EQ_TYPE : MIS[mis].eq.includes(info.eq) ? info.eq : recursoAtual && MIS[mis].eq.includes(recursoAtual.tipo) ? recursoAtual.tipo : MIS[mis].defEq;
   const listaDoTipo = tipo => horariosDoAgendamento(estado, { mis, tipo });
   const outro = escolhas.horario === 'outro' && !ground;
   const tocado = (campo, lista) => tocados.has(campo) && lista.includes(escolhas[campo]);
-  const primeiroNaLista = lista => lista.find(s => s >= (contexto.desde ?? 0) && (contexto.ate === null || s < contexto.ate)) ?? null;
+  const primeiroNaLista = lista => lista.find(s => s >= (ctx.desde ?? 0) && (ctx.ate === null || s < ctx.ate)) ?? null;
   const alunoKg = tocados.has('kgAluno') ? pesoDoCampo(escolhas.kgAluno) : stu.kg || 0;
   const pesoDoInstrutor = x => {
     const digitado = (escolhas.kgInstrutor || {})[x.id];
     return digitado !== undefined ? pesoDoCampo(digitado) : x.kg || 0;
   };
   // Algum instrutor serve no recurso no horário, contra os voos fixos (o avião com habilitação própria pede a dele)
-  const algumInstrutorServe = (a, r) => instrutoresQueServem(estado, ocupacoes(estado, base).fixos, {
+  const algumInstrutorServe = (a, r) => instrutoresQueServem(estado, ocupacoes(estado, base, exceto).fixos, {
     mis, tipo: tipoDe(r), a, b: a + minutos, alunos: [stu], stuKg: alunoKg || 0, curso, r
   }).some(c => !c.problemas.length);
-  // O recurso que o operador escolheu (ou o do contexto) fica enquanto serve à missão. Sem ele, o primeiro que serve; sem
-  // o instrutor escolhido, o primeiro do mesmo tipo em que algum instrutor serve: o avião com habilitação própria que
-  // ninguém do horário tem não vira o padrão (o peso e a habilitação da missão valem para o tipo inteiro: trocar de tipo
-  // fica com o operador)
+  // O recurso que o operador escolheu (ou o do contexto) fica enquanto serve à missão. Sem ele, o do voo que muda de
+  // lugar, quando está livre no horário; senão o primeiro que serve; sem o instrutor escolhido, o primeiro do mesmo tipo
+  // em que algum instrutor serve: o avião com habilitação própria que ninguém do horário tem não vira o padrão (o peso e
+  // a habilitação da missão valem para o tipo inteiro: trocar de tipo fica com o operador)
+  const doVoo = movido && movido.voo ? movido.voo : null;
   const escolherRecurso = (a, x) => {
-    const opcoes = opcoesDeRecurso(estado, base, { mis, eq: preferido, curso, a, b: a + minutos, instrutor: x });
+    const opcoes = opcoesDeRecurso(estado, base, { mis, eq: preferido, curso, a, b: a + minutos, instrutor: x, exceto });
     const valores = opcoes.map(o => o.valor);
     const proprio = tocado('recurso', valores) && serveAMissao(escolhas.recurso) ? escolhas.recurso
-      : contexto.r && valores.includes(contexto.r) && serveAMissao(contexto.r) ? contexto.r : null;
+      : ctx.r && valores.includes(ctx.r) && serveAMissao(ctx.r) ? ctx.r : null;
     const ligadas = opcoes.filter(o => !o.desligada);
     const doTipo = ligadas.filter(o => o.tipo === (ligadas[0] || {}).tipo);
-    const padrao = (x ? ligadas[0] : doTipo.find(o => algumInstrutorServe(a, o.valor)) || ligadas[0]) || opcoes[0] || {};
+    const oDoVoo = doVoo && serveAMissao(doVoo.r) ? ligadas.find(o => o.valor === doVoo.r && !o.ocupadoAgora) : null;
+    const padrao = oDoVoo || (x ? ligadas[0] : doTipo.find(o => algumInstrutorServe(a, o.valor)) || ligadas[0]) || opcoes[0] || {};
     return { opcoes, r: proprio || padrao.valor || null, fixo: Boolean(proprio) };
   };
   const tipoDe = r => (ground ? GROUND_EQ_TYPE : (recursoDaFrota(frota, r) || {}).tipo || preferido);
+  // O instrutor: o que o operador escolheu; o escolhido do pedido que muda de lugar; o da linha clicada; o primeiro do
+  // "Priorizar com" do aluno que serve; o do voo que muda de lugar, quando serve; a ordem da lista
+  const doPedido = movido && movido.pedido.insId ? movido.pedido.insId : null;
   const escolherInstrutor = (a, r) => {
-    const grupos = opcoesDeInstrutor(estado, base, { mis, tipo: tipoDe(r), a, b: a + minutos, stu, stuKg: alunoKg || 0, curso, r });
+    const grupos = opcoesDeInstrutor(estado, base, { mis, tipo: tipoDe(r), a, b: a + minutos, stu, stuKg: alunoKg || 0, curso, r, exceto });
     const todas = grupos.flatMap(g => g.opcoes);
     const habilitadas = todas.filter(o => !o.desligada);
     const servem = (grupos.find(g => g.rotulo === 'Servem neste horário') || { opcoes: [] }).opcoes;
+    const existe = id => Boolean(id) && todas.some(o => o.valor === id);
     const proprio = tocado('instrutor', todas.map(o => o.valor)) ? escolhas.instrutor
-      : contexto.insId && todas.some(o => o.valor === contexto.insId) ? contexto.insId : null;
+      : existe(doPedido) ? doPedido : existe(ctx.insId) ? ctx.insId : null;
     const doPar = (stu.voaCom || []).find(id => servem.some(o => o.valor === id));
-    return { grupos, insId: proprio ?? doPar ?? (habilitadas[0] || todas[0] || {}).valor ?? null, fixo: proprio !== null };
+    const doVooAgora = doVoo && servem.some(o => o.valor === doVoo.insId) ? doVoo.insId : null;
+    return { grupos, insId: proprio ?? doPar ?? doVooAgora ?? (habilitadas[0] || todas[0] || {}).valor ?? null, fixo: proprio !== null };
   };
 
   // O tipo do recurso que o operador escolheu (ou o do contexto), quando ele serve à missão (o tipo e os atributos: o Só
-  // Parafuso, o Só VFR no voo IFR); senão, o preferido. O instrutor que o operador escolheu (ou o do contexto) já conta na
-  // escolha do recurso (a habilitação própria do avião)
+  // Parafuso, o Só VFR no voo IFR); senão, o preferido. O instrutor que o operador escolheu (o do pedido, ou o do contexto)
+  // já conta na escolha do recurso (a habilitação própria do avião)
   const serveAMissao = r => {
     if (!r || ground || r === GROUND_REG) return Boolean(r) && ground && r === GROUND_REG;
     const recurso = recursoDaFrota(frota, r);
     return Boolean(recurso) && MIS[mis].eq.includes(recurso.tipo) && !motivoDoAviao(recurso, { mis, eq: recurso.tipo, curso });
   };
-  const recursoDoOperador = [tocados.has('recurso') ? escolhas.recurso : null, contexto.r].find(serveAMissao) || null;
-  const instrutorDoOperador = estado.ins.find(i => i.id === (tocados.has('instrutor') ? escolhas.instrutor : contexto.insId)) || null;
+  const recursoDoOperador = [tocados.has('recurso') ? escolhas.recurso : null, ctx.r].find(serveAMissao) || null;
+  const idDoOperador = tocados.has('instrutor') ? escolhas.instrutor : doPedido ?? ctx.insId;
+  const instrutorDoOperador = estado.ins.find(i => i.id === (turma ? turma.insId : idDoOperador)) || null;
   let lista = listaDoTipo(recursoDoOperador ? tipoDe(recursoDoOperador) : preferido);
-  let a = outro ? paraMinuto(escolhas.outroHorario) : tocado('horario', lista) ? escolhas.horario : null;
+  let a = turma ? turma.a : outro ? paraMinuto(escolhas.outroHorario) : tocado('horario', lista) ? escolhas.horario : null;
   const horarioDoOperador = a !== null || outro;
-  const ancora = contexto.perto ? contexto.minuto : primeiroNaLista(lista) ?? contexto.minuto;
+  const ancora = ctx.perto ? ctx.minuto : primeiroNaLista(lista) ?? ctx.minuto;
   const inicial = a ?? ancora;
   let rec = escolherRecurso(inicial, instrutorDoOperador);
   let ins = escolherInstrutor(inicial, rec.r);
   if (!horarioDoOperador) {
     // O horário livre do recurso, do instrutor e do aluno (nos voos fixos; a volta do noturno ocupa até as 10:10): o mais
-    // perto do clique, ou o primeiro a partir do início do contexto (na janela do horário da lista)
+    // perto do clique, ou o primeiro a partir do início do contexto (na janela do horário da lista). O voo que muda de
+    // lugar sai do horário em que está, no mesmo recurso
     lista = listaDoTipo(tipoDe(rec.r));
-    const { fixos } = ocupacoes(estado, base);
     const instrutor = estado.ins.find(i => i.id === ins.insId) || null;
-    const livre = s => {
-      if (rec.r && problemaDoRecurso(estado, fixos, rec.r, { a: s, b: s + minutos, ground })) return false;
-      if (problemaDoAluno(fixos, stu.id, { a: s, b: s + minutos })) return false;
-      return !instrutor || !instrutoresQueServem(estado, fixos, { mis, tipo: tipoDe(rec.r), a: s, b: s + minutos, alunos: [stu], stuKg: alunoKg || 0, curso, r: rec.r })
-        .find(c => c.x === instrutor).problemas.length;
-    };
-    const naJanela = lista.filter(s => (contexto.desde === null || s >= contexto.desde) && (contexto.ate === null || s < contexto.ate));
-    a = contexto.perto || !naJanela.length ? encaixarHorario(ancora, lista, livre) : encaixarHorario(naJanela[0], naJanela, livre);
+    const livreAgora = livreNosFixos(estado, base, { stu, r: rec.r, x: instrutor, mis, tipo: tipoDe(rec.r), minutos, ground, stuKg: alunoKg || 0, curso, exceto });
+    const livre = s => !(doVoo && s === doVoo.a && rec.r === doVoo.r) && livreAgora(s);
+    const naJanela = lista.filter(s => (ctx.desde === null || s >= ctx.desde) && (ctx.ate === null || s < ctx.ate));
+    a = ctx.perto || !naJanela.length ? encaixarHorario(ancora, lista, livre) : encaixarHorario(naJanela[0], naJanela, livre);
     // No horário encontrado, os padrões de novo: o recurso do mesmo tipo e o instrutor que melhor servem nele
     if (a !== null) {
       const novo = escolherRecurso(a, instrutorDoOperador);
@@ -554,33 +708,44 @@ export function formularioDoAgendamento(estado, base, ambiente, contexto, escolh
       ins = escolherInstrutor(a, rec.r);
     }
   }
-  const x = estado.ins.find(i => i.id === ins.insId) || null;
+  const x = turma ? instrutorDoOperador : estado.ins.find(i => i.id === ins.insId) || null;
   // Com o instrutor, os recursos de novo: o avião com habilitação própria que ele não tem fica desligado
   if (a !== null && x) {
     const comInstrutor = escolherRecurso(a, x);
     rec = { ...comInstrutor, r: rec.r };
   }
+  // Na turma, a sala é a dela (a turma não ocupa a sala para quem entra nela)
+  if (turma) rec = { opcoes: [{ valor: GROUND_REG, tipo: GROUND_EQ_TYPE, problema: null, desligada: false, texto: `${nomeDoRecurso(GROUND_REG)} · turma das ${hm(turma.a)}` }], r: GROUND_REG, fixo: true };
   const tipo = tipoDe(rec.r);
   lista = listaDoTipo(tipo);
-  const b = a === null ? null : a + minutos;
+  if (turma && !lista.includes(turma.a)) lista = [...lista, turma.a].sort((p, q) => p - q);
+  const b = a === null ? null : turma ? turma.b : a + minutos;
 
   f.recursos = rec.opcoes;
   f.recurso = rec.r;
-  f.instrutores = ins.grupos;
-  f.instrutor = x ? x.id : null;
+  // No Ground, as turmas do dia vêm antes dos instrutores de uma turma nova
+  const opcoesDasTurmas = turmas.map(t => {
+    const bloqueado = (stu.bl || []).includes(t.insId);
+    return { valor: `turma:${t.classKey}`, texto: `${textoDaTurma(t)}${bloqueado ? ` — ${NOTA_DO_PROBLEMA.bloqueio}` : ''}`, desligada: bloqueado, turma: t };
+  });
+  f.instrutores = [...(opcoesDasTurmas.length ? [{ rotulo: 'Turmas de hoje', opcoes: opcoesDasTurmas }] : []), ...ins.grupos];
+  f.instrutor = turma ? `turma:${turma.classKey}` : x ? x.id : null;
   f.horario = outro ? 'outro' : a;
   f.outroHorario = outro ? escolhas.outroHorario || '' : '';
-  // Os horários do recurso, com "(ocupado)" onde o recurso ou o instrutor já tem um voo fixo; outro horário, nos aviões e
-  // simuladores
-  const { fixos } = ocupacoes(estado, base);
+  // Os horários do recurso, com "(ocupado)" onde o recurso ou o instrutor já tem um voo fixo (na turma, o horário dela);
+  // outro horário, nos aviões e simuladores
+  const { fixos } = ocupacoes(estado, base, exceto);
   const ocupado = s => Boolean((rec.r && ocupaDaLista(fixos.recursos, rec.r, s, s + minutos)) || (x && ocupaDaLista(fixos.instrutores, x.id, s, s + minutos)));
-  f.horarios = { opcoes: lista.map(s => ({ valor: s, texto: `${hm(s)}${ocupado(s) ? ' (ocupado)' : ''}` })), outro: !ground };
+  const textoDoHorario = s => `${hm(s)}${turma && s === turma.a ? ' (turma)' : ocupado(s) ? ' (ocupado)' : ''}`;
+  f.horarios = { opcoes: lista.map(s => ({ valor: s, texto: textoDoHorario(s) })), outro: !ground };
 
   // As missões de novo, no horário e no recurso escolhidos: o estado da missão do curso (liberada, condicional, fora da
   // ordem) vale para o horário, e os tipos sem o curso são os que o recurso serve
-  const noHorario = opcoesDeMissao(estado, base, ambiente, stu, { a: a ?? inicio, contexto, recurso: rec.r && rec.r !== GROUND_REG ? recursoDaFrota(frota, rec.r) : rec.r });
+  const noHorario = opcoesDeMissao(estado, base, ambiente, stu, {
+    a: a ?? inicio, contexto: ctx, recurso: rec.r && rec.r !== GROUND_REG ? recursoDaFrota(frota, rec.r) : rec.r, turma: turmaDoContexto
+  });
   f.missoes = { ...noHorario, padrao: daMissao.padrao };
-  const atual = info.tipo === 'missao' ? opcaoDe(noHorario.grupos, missao) : null;
+  const atual = info.tipo === 'missao' || info.tipo === 'pedido' ? opcaoDe(noHorario.grupos, missao) : null;
   if (atual) info = atual.info;
   f.missaoInfo = info;
 
@@ -596,7 +761,8 @@ export function formularioDoAgendamento(estado, base, ambiente, contexto, escolh
   if (lim && a !== null && alunoKg !== null && insKg !== null) f.peso.resumo = resumoDoPeso({ stuKg: alunoKg, insKg, tipo, minutos, mis, lim });
 
   // O contexto, no alto do diálogo
-  f.contextoTexto = textoDoContexto(contexto, ambiente, { r: rec.r, tipo, a, recursoTrocado: contexto.r && rec.r && contexto.r !== rec.r ? contexto.r : null, mis });
+  const recursoTrocado = !turmaDoContexto && ctx.r && rec.r && ctx.r !== rec.r ? ctx.r : null;
+  f.contextoTexto = textoDoContexto(ctx, ambiente, { r: rec.r, tipo, a, recursoTrocado, mis, turma: turmaDoContexto });
   if ((mis === 'Noturno' || mis === 'Voo Solo') && a !== null && inicial !== a && !horarioDoOperador) {
     f.notas.push({ codigo: 'horario-da-missao', texto: `O ${mis} sai às ${hm(a)}.` });
   }
@@ -605,7 +771,7 @@ export function formularioDoAgendamento(estado, base, ambiente, contexto, escolh
   const formato = f.formato;
   if (!rec.r) formato.push({ codigo: 'sem-recurso', texto: `Nenhum recurso para ${mis} na frota.`, campo: 'agd-recurso' });
   else if (ground !== (rec.r === GROUND_REG)) formato.push({ codigo: 'ground-ou-voo', texto: 'O Ground é na sala de Ground; o voo, num avião ou simulador.', campo: 'agd-recurso' });
-  if (!x) formato.push({ codigo: 'sem-instrutor', texto: 'Escolha o instrutor.', campo: 'agd-instrutor' });
+  if (!x) formato.push({ codigo: 'sem-instrutor', texto: turma ? 'O instrutor da turma saiu do cadastro.' : 'Escolha o instrutor.', campo: 'agd-instrutor' });
   if (a === null) formato.push({ codigo: 'horario-invalido', texto: outro ? 'Informe o horário de decolagem (hh:mm).' : 'Nenhum horário de decolagem aberto para esta missão nesta data.', campo: outro ? 'agd-outro-horario' : 'agd-horario' });
   if (horas === null) formato.push({ codigo: 'duracao', texto: ERRO_DA_DURACAO, campo: 'agd-horas' });
   else if (b !== null && b > MINUTOS_DO_DIA) formato.push({ codigo: 'depois-da-meia-noite', texto: 'O voo terminaria depois da meia-noite.', campo: outro ? 'agd-outro-horario' : 'agd-horario' });
@@ -617,9 +783,16 @@ export function formularioDoAgendamento(estado, base, ambiente, contexto, escolh
     stuId: stu.id, mis, eq: ground ? GROUND_EQ_TYPE : tipo, nb: ground ? GROUND_DURATION_MIN / 60 : horas, a, b, r: rec.r, insId: x.id,
     missao: info.tipo === 'missao' ? { sigla: info.sigla, codigo: info.missao.codigo } : null,
     pesos: lim ? { aluno: alunoKg, instrutor: insKg } : null,
-    disponibilizar: escolhas.disponibilizar === x.id ? { insId: x.id } : null
+    disponibilizar: escolhas.disponibilizar === x.id ? { insId: x.id } : null,
+    // O voo de hoje do aluno que muda de lugar (de onde: o horário e o recurso de agora) ou entra na escala
+    ...(movido ? { pedido: { mid: movido.mid, acao: movido.acao, de: doVoo ? { a: doVoo.a, r: doVoo.r } : null } } : {}),
+    // A turma de Ground em que o aluno entra
+    ...(turma ? { turma: { classKey: turma.classKey } } : {})
   };
-  f.selecao = { stu, x, r: rec.r, tipo, a, b, mis, info, ground, horas, fixa: padraoDaDuracao.fixa };
+  f.selecao = {
+    stu, x, r: rec.r, tipo, a, b, mis, info, ground, horas, fixa: padraoDaDuracao.fixa, minutos: b - a, lista, exceto, turma, movido,
+    stuKg: alunoKg || 0, curso
+  };
   return f;
 }
 
@@ -634,13 +807,15 @@ function resumoDoPeso({ stuKg, insKg, tipo, minutos, mis, lim }) {
   return `${kg}: ${minuscula(textoDoCombustivel(r))}`;
 }
 
-function textoDoContexto(contexto, ambiente, { r, tipo, a, recursoTrocado, mis }) {
+function textoDoContexto(contexto, ambiente, { r, tipo, a, recursoTrocado, mis, turma = null }) {
   const onde = r ? `${nomeDoRecurso(r)}${r === GROUND_REG ? '' : ` · ${tipo}`}` : '';
   // Sem horário (nenhum aberto para a missão na data), o contexto diz isso, sem o horário pela metade
   const quando = a === null ? null : hm(a);
   const SEM_HORARIO = 'nenhum horário de decolagem aberto';
   let texto;
-  if (contexto.origem === 'mapa') texto = [onde, quando ? `clique perto de ${hm(contexto.minuto)} → ${quando} (horários do ${tipo})` : SEM_HORARIO].filter(Boolean).join(' · ');
+  // A turma de Ground de onde o diálogo abriu ("+ Aluno na turma"): a missão, o horário e o instrutor dela
+  if (turma) texto = `Turma de ${turma.mis} das ${hm(turma.a)} com ${turma.ins}`;
+  else if (contexto.origem === 'mapa') texto = [onde, quando ? `clique perto de ${hm(contexto.minuto)} → ${quando} (${horariosDoTipo(tipo)})` : SEM_HORARIO].filter(Boolean).join(' · ');
   else if (contexto.origem === 'periodo') texto = [onde, quando ? `o primeiro horário livre a partir de ${hm(contexto.desde)}: ${quando}` : SEM_HORARIO].filter(Boolean).join(' · ');
   else {
     const data = ambiente.data && ambiente.hoje ? rotuloDaData(ambiente.data, ambiente.hoje).dia : '';
@@ -648,34 +823,61 @@ function textoDoContexto(contexto, ambiente, { r, tipo, a, recursoTrocado, mis }
       : contexto.desde !== null && ambiente.data === ambiente.hoje ? `o primeiro horário livre a partir de agora: ${quando}` : `o primeiro horário livre: ${quando}`;
     texto = [maiuscula(data), horario].filter(Boolean).join(' · ');
   }
-  return recursoTrocado ? `${texto}. O ${nomeDoRecurso(recursoTrocado)} não serve ao ${mis}: o voo vai no ${nomeDoRecurso(r)}.` : texto;
+  return recursoTrocado ? `${texto}. O ${nomeDoRecurso(recursoTrocado)} não serve ao ${mis}: o voo vai ${noRecurso(r)}.` : texto;
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
 // Aplicar, simular e conferir
 
+// A chave da turma nova de Ground: nenhuma (o motor usa a chave do voo), menos quando a chave do voo já é a chave da turma
+// de outro voo fixo (o aluno que abriu a turma muda de lugar, e quem entrou nela fica com a chave dela): então uma chave
+// como as do motor ("GND_<missão>_<período>_<instrutor>"), que nenhum outro voo fixo usa. Duas turmas com a mesma chave
+// seriam uma turma só para o motor, e a segunda não ocuparia a sala nem o instrutor no horário dela
+function chaveDaTurmaNova(fixos, fKey, { mis, a, insId }) {
+  const usadas = new Set(Object.entries(fixos).filter(([chave]) => chave !== fKey).map(([, p]) => p.classKey).filter(Boolean));
+  if (!usadas.has(fKey)) return null;
+  const base = `GND_${mis}_${T.includes(a) ? T.indexOf(a) : periodoDoMinuto(a)}_${insId}`;
+  let chave = base;
+  for (let n = 2; usadas.has(chave); n++) chave = `${base}_${n}`;
+  return chave;
+}
+
 // Agenda o voo no estado (o do app, ao confirmar; uma cópia, na simulação): o pedido (o principal, quando ele não voa e a
 // chave está limpa; senão uma missão extra nova), com a missão, o recurso, as horas, a preferência no horário agendado, a
-// missão do curso e o instrutor (o do operador vale mais que a escolha do app); o voo fixo com a marca agendado; os pesos
-// digitados no cadastro de cada um; e, com "Marcar disponível", o instrutor disponível nos períodos do voo. Devolve como
-// estava (a reversão do histórico): o pedido principal de antes (só quando é ele o pedido do voo; a missão extra nova sai
-// inteira), o voo fixo e a disponibilidade de antes, os pesos que mudaram e o pedido como o agendamento o deixou
+// missão do curso e o instrutor (o do operador vale mais que a escolha do app); o voo fixo com a marca agendado (na turma
+// de Ground em que o aluno entra, com a chave dela; a turma nova fica com a chave do voo, ou com outra quando a do voo já
+// é a de outra turma: chaveDaTurmaNova); os pesos digitados no cadastro
+// de cada um; e, com "Marcar disponível", o instrutor disponível nos períodos do voo. O voo de hoje do aluno que muda de
+// lugar (ou entra na escala) é o mesmo pedido: ele fica com a missão e a missão do curso, recebe o recurso, as horas, o
+// horário e o instrutor, e perde a disponibilidade que não inclui o horário novo. Devolve como estava (a reversão do
+// histórico): o pedido de antes (o principal, só quando é ele o pedido do voo; a missão extra nova sai inteira; o pedido
+// movido), o voo fixo e a disponibilidade de antes, os pesos que mudaram e o pedido como o agendamento o deixou
 export function aplicarAgendamento(estado, base, proposta) {
   const aluno = estado.stu.find(s => s.id === proposta.stuId);
-  // O pedido principal como estava, antes de alvoDoNovoPedido o limpar: só vale quando é ele o pedido do voo
-  const principal = camposDoPedido(aluno);
-  const alvo = alvoDoNovoPedido(estado, aluno);
+  const movido = proposta.pedido || null;
+  // O pedido de antes: o que muda de lugar; o principal como estava, antes de alvoDoNovoPedido o limpar (só vale quando é
+  // ele o pedido do voo)
+  const principal = movido ? null : camposDoPedido(aluno);
+  const alvo = movido ? pedidoDoAluno(aluno, movido.mid) : alvoDoNovoPedido(estado, aluno);
+  const doMovido = movido ? camposDoPedido(alvo) : null;
   const mid = alvo === aluno ? 0 : alvo.mid;
   const fKey = chaveDoVoo(aluno.id, mid);
   const fixo = (estado.fixos || {})[fKey] || null;
-  Object.assign(alvo, { fly: true, mis: proposta.mis, eq: proposta.eq, nb: proposta.nb, p1: proposta.a, p2: -1, insId: proposta.insId });
-  if (proposta.missao) Object.assign(alvo, { etapa: proposta.missao.codigo, cursoDaEtapa: proposta.missao.sigla });
-  else { delete alvo.etapa; delete alvo.cursoDaEtapa; }
+  Object.assign(alvo, { fly: true, eq: proposta.eq, nb: proposta.nb, p1: proposta.a, p2: -1, insId: proposta.insId });
+  if (!movido) {
+    alvo.mis = proposta.mis;
+    if (proposta.missao) Object.assign(alvo, { etapa: proposta.missao.codigo, cursoDaEtapa: proposta.missao.sigla });
+    else { delete alvo.etapa; delete alvo.cursoDaEtapa; }
+  }
   const permitidas = disponibilidadeDoAluno(alvo.jan);
   if (permitidas && !permitidas(proposta.a)) delete alvo.jan;
   normalizeMissionFields(alvo);
-  const ground = isGroundMission(proposta.mis);
-  estado.fixos = { ...(estado.fixos || {}), [fKey]: { a: proposta.a, b: proposta.b, r: ground ? GROUND_REG : proposta.r, insId: proposta.insId, agendado: true } };
+  const ground = isGroundMission(alvo.mis);
+  const classKey = !ground ? null : proposta.turma ? proposta.turma.classKey : chaveDaTurmaNova(estado.fixos || {}, fKey, { mis: alvo.mis, a: proposta.a, insId: proposta.insId });
+  estado.fixos = {
+    ...(estado.fixos || {}),
+    [fKey]: { a: proposta.a, b: proposta.b, r: ground ? GROUND_REG : proposta.r, insId: proposta.insId, ...(classKey ? { classKey } : {}), agendado: true }
+  };
   const x = estado.ins.find(i => i.id === proposta.insId) || null;
   const pesos = [];
   if (proposta.pesos) {
@@ -691,7 +893,9 @@ export function aplicarAgendamento(estado, base, proposta) {
     x.on = true;
     x.aw = x.aw.map((v, k) => v || sobrepoe(proposta.a, proposta.b, T[k], k < NI ? T[k + 1] : MINUTOS_DO_DIA));
   }
-  return { stuId: aluno.id, mid, criado: true, pedido: mid === 0 ? principal : null, fixo, disponibilidade, pesos, criadoComo: camposDoPedido(alvo) };
+  return {
+    stuId: aluno.id, mid, criado: !movido, pedido: movido ? doMovido : mid === 0 ? principal : null, fixo, disponibilidade, pesos, criadoComo: camposDoPedido(alvo)
+  };
 }
 
 // O estado com os pesos digitados (só os pesos): a escala dele separa o que os pesos sozinhos mudam do que o agendamento
@@ -726,36 +930,137 @@ const RESUMO_DO_AVISO = {
   'antes-do-ground': 'antes do Ground', 'sem-peso': 'sem peso'
 };
 
+// As alternativas de cada bloqueio (os botões com o que está livre), até ALTERNATIVAS de cada: os horários, os recursos e
+// os instrutores; no peso, os instrutores que cabem nele
+const ALTERNATIVAS = 3;
+const ROTULO_DAS_ALTERNATIVAS = { horarios: 'Horários livres', recursos: 'Recursos livres', instrutores: 'Instrutores livres', maisLeves: 'Instrutores que cabem no peso' };
+const ALTERNATIVAS_DO_GRUPO = { instrutor: ['instrutores', 'horarios'], aviao: ['recursos', 'horarios'], horario: ['horarios'], pedido: [] };
+
+// As alternativas livres para o voo escolhido (selecao, do formulário), contra os voos fixos (o voo que muda de lugar não
+// conta), cada uma calculada só quando um bloqueio pede: os horários da lista em que o recurso, o instrutor e o aluno
+// estão livres (os mais perto do escolhido, na ordem do dia); os recursos do mesmo tipo que servem no horário com o
+// instrutor (os livres antes: trocar de tipo muda os horários, o peso e a habilitação, e fica com o operador); os
+// instrutores que servem no horário (na ordem da lista); no peso, os que servem com peso informado (o peso deles cabe no
+// avião). Na turma de Ground, o horário e o instrutor são os da turma: sem alternativas deles
+function alternativasDoVoo(estado, base, selecao) {
+  const { stu, x, r, tipo, a, b, mis, ground, lista, exceto, turma, stuKg, curso } = selecao;
+  const minutos = b - a;
+  const servem = () => ((opcoesDeInstrutor(estado, base, { mis, tipo, a, b, stu, stuKg, curso, r, exceto })
+    .find(g => g.rotulo === 'Servem neste horário') || { opcoes: [] }).opcoes.filter(o => o.valor !== x.id));
+  return {
+    horarios: () => {
+      if (turma) return [];
+      const livre = livreNosFixos(estado, base, { stu, r, x, mis, tipo, minutos, ground, stuKg, curso, exceto });
+      return lista.filter(s => s !== a && s + minutos <= MINUTOS_DO_DIA && livre(s))
+        .sort((p, q) => Math.abs(p - a) - Math.abs(q - a) || p - q).slice(0, ALTERNATIVAS).sort((p, q) => p - q)
+        .map(s => ({ opcao: `horario:${s}`, texto: hm(s) }));
+    },
+    recursos: () => (ground ? [] : opcoesDeRecurso(estado, base, { mis, eq: tipo, curso, a, b, instrutor: x, exceto })
+      .filter(o => !o.desligada && o.valor !== r && o.tipo === tipo).slice(0, ALTERNATIVAS).map(o => ({ opcao: `recurso:${o.valor}`, texto: nomeDoRecurso(o.valor) }))),
+    instrutores: () => (turma ? [] : servem().slice(0, ALTERNATIVAS).map(o => ({ opcao: `instrutor:${o.valor}`, texto: o.x.nm }))),
+    maisLeves: () => servem().filter(o => o.x.kg > 0).slice(0, ALTERNATIVAS).map(o => ({ opcao: `instrutor:${o.valor}`, texto: `${o.x.nm} (${numeroBr(o.x.kg)} kg)` }))
+  };
+}
+
+// A alternativa escolhida num bloqueio (o botão "horario:<minuto>", "recurso:<matrícula>" ou "instrutor:<id>"): o campo
+// dela recebe o valor, como se o operador o escolhesse, e os outros ficam como o formulário os mostra agora (a missão, o
+// horário, o recurso e o instrutor: a alternativa foi calculada com eles; o valor que o operador escolheu antes e o
+// formulário trocou não volta). Devolve as escolhas e os campos tocados novos, ou null (não é uma alternativa)
+export function escolhasDaAlternativa(formulario, escolhas, tocados, valor) {
+  const [campo, ...resto] = String(valor).split(':');
+  const arg = resto.join(':');
+  if (!['horario', 'recurso', 'instrutor'].includes(campo) || !arg || (campo !== 'recurso' && !/^\d+$/.test(arg))) return null;
+  const novas = { ...escolhas }, novos = new Set(tocados);
+  const agora = {
+    missao: formulario.missao || null, horario: Number.isInteger(formulario.horario) ? formulario.horario : null,
+    recurso: formulario.recurso || null, instrutor: Number.isInteger(formulario.instrutor) ? formulario.instrutor : null
+  };
+  for (const [c, v] of Object.entries(agora)) {
+    if (c !== campo && v !== null) { novas[c] = v; novos.add(c); }
+  }
+  novas[campo] = campo === 'recurso' ? arg : +arg;
+  novos.add(campo);
+  return { escolhas: novas, tocados: novos };
+}
+
+// Por que o voo saiu da escala na simulação (a rejeição do motor, pelo nome do voo): ' (o motivo)', ou ''
+function motivoDaSaida(sim, o) {
+  const err = sim.al.find(al => al.t === 'err' && al.s === rotuloDoVoo(o));
+  return err ? ` (${minuscula(err.m.replace(/^Rejeitado: /, '').replace(/\.$/, ''))})` : '';
+}
+
+// A prévia ("O que muda na escala"): o voo agendado (o que muda de lugar diz de onde sai; o que entra, que estava fora) e,
+// em até LINHAS_DA_PREVIA linhas, cada voo que muda de horário, recurso ou instrutor ("Aluno 1003: 10:10 → 11:30, PR-VOB →
+// PR-VOC"), sai da escala (com o motivo do motor) ou entra nela (estava fora e agora cabe), mais "e mais N"
+const LINHAS_DA_PREVIA = 8;
+function linhasDaPrevia({ novo, movidos, saem, entram }, { antes, sim, movido }) {
+  const recurso = o => nomeDoRecurso(o.r);
+  const de = !movido ? '' : movido.voo ? ` (era ${hm(movido.voo.a)} ${noRecurso(movido.voo.r)})` : ' (estava fora da escala)';
+  const mudancas = o => {
+    const era = antes.get(o.fKey);
+    return [era.a !== o.a ? `${hm(era.a)} → ${hm(o.a)}` : '', era.r !== o.r ? `${recurso(era)} → ${recurso(o)}` : '', era.insId !== o.insId ? `${era.ins} → ${o.ins}` : '']
+      .filter(Boolean).join(', ');
+  };
+  const outras = [
+    ...movidos.map(o => `${rotuloDoVoo(o)}: ${mudancas(o)}`),
+    ...saem.map(o => `Sai: ${rotuloDoVoo(o)}${motivoDaSaida(sim, o)}`),
+    ...entram.map(o => `Entra: ${rotuloDoVoo(o)} · ${hm(o.a)}–${hm(o.b)} · ${recurso(o)}`)
+  ];
+  return [
+    ...(novo ? [`${movido && movido.voo ? 'Muda' : 'Entra'}: ${novo.s} · ${novo.mis} · ${hm(novo.a)}–${hm(novo.b)} · ${recurso(novo)} · ${novo.ins}${de}`] : []),
+    ...outras.slice(0, LINHAS_DA_PREVIA), ...(outras.length > LINHAS_DA_PREVIA ? [`e mais ${outras.length - LINHAS_DA_PREVIA}`] : []),
+    ...(outras.length ? [] : ['Nenhum outro voo muda.'])
+  ];
+}
+
+// A disponibilidade do aluno em palavras: "de manhã", "à tarde", "à noite" ou "às 07:30"
+const QUANDO_DISPONIVEL = { manha: 'de manhã', tarde: 'à tarde', noite: 'à noite' };
+const quandoDisponivel = jan => QUANDO_DISPONIVEL[jan] || rotuloDaDisponibilidade(jan);
+
 // A conferência do agendamento (formulario, a simulação sim e a chave fKey do voo novo; baseComPesos: a escala com os
 // pesos digitados, sem o agendamento):
 // - bloqueios (não deixa agendar): os de formato; cada conflito do voo novo na simulação (o instrutor indisponível, com
-//   "Marcar disponível"); outro voo que fica em conflito por causa do agendamento;
-// - avisos (pedem uma confirmação): as regras do curso, as regras que o motor não confere nos voos agendados (os horários
-//   de decolagem, o pouso até as 17:30, o limite de voos locais, o Ground antes), o peso que falta, os voos que saem da
-//   escala, o conflito que o peso digitado cria em outro voo, o horário que já passou, a data passada, o domingo e os
-//   limites da lei sem as horas;
-// - notas (só informação).
-// Cada item: { codigo, texto, campo?, opcoes?, resumo? (o texto curto do histórico) }. previa: o voo novo e os voos que
-// mudam de lugar, saem ou entram
+//   "Marcar disponível"; os outros, com as alternativas livres); outro voo que fica em conflito por causa do agendamento;
+// - avisos (pedem uma confirmação): as regras do curso (no voo que muda de lugar, a ordem no horário novo e o tipo de
+//   avião que muda), as regras que o motor não confere nos voos agendados (os horários de decolagem, o pouso até as
+//   17:30, o limite de voos locais, o Ground antes), o peso que falta, os voos que saem da escala, o conflito que o peso
+//   digitado cria em outro voo, o horário que já passou, a data passada, o domingo, os limites da lei sem as horas; no
+//   voo que muda de lugar, a disponibilidade do aluno que não inclui o horário novo (ela sai do pedido) e o voo fixo pela
+//   escala aprovada que muda de lugar;
+// - notas (só informação), com a vez na fila do rodízio.
+// Cada item: { codigo, texto, campo?, opcoes?, alternativas?, resumo? (o texto curto do histórico) }. previa: o voo novo,
+// os voos que mudam de lugar, saem ou entram, e as linhas que a tela mostra
 export function avaliarAgendamento({ estado, baseComPesos, base = baseComPesos, sim, fKey, formulario, ambiente = {} }) {
   const bloqueios = [...formulario.formato], avisos = [], notas = [...formulario.notas];
   if (bloqueios.length || !sim || !formulario.selecao) return { bloqueios, avisos, notas, previa: null };
-  const { stu, x, r, tipo, a, b, mis, info, horas, fixa } = formulario.selecao;
+  const { stu, x, r, tipo, a, b, mis, info, horas, fixa, ground, movido, exceto } = formulario.selecao;
   const novo = sim.out.find(o => o.fKey === fKey) || null;
 
-  // Bloqueios: os conflitos do voo novo e os que ele cria nos outros
+  // Bloqueios: os conflitos do voo novo e os que ele cria nos outros, com as alternativas livres (cada tipo de alternativa
+  // vai no primeiro bloqueio que a pede)
+  const alternativas = alternativasDoVoo(estado, base, formulario.selecao);
+  const dadas = new Set();
+  const comAlternativas = (item, tipos) => {
+    const grupos = tipos.filter(t => !dadas.has(t) && dadas.add(t)).map(t => ({ rotulo: ROTULO_DAS_ALTERNATIVAS[t], opcoes: alternativas[t]() }))
+      .filter(g => g.opcoes.length);
+    if (grupos.length) item.alternativas = grupos;
+    return item;
+  };
   if (!novo) bloqueios.push({ codigo: 'sem-voo', texto: 'O voo não entrou na escala.', campo: 'agd-horario' });
   else {
     (novo.conflitoCodigos || []).forEach((codigo, i) => {
-      const item = { codigo, texto: `${maiuscula(novo.conflito[i])}.`, campo: CAMPO_DO_GRUPO[GRUPO_DO_CONFLITO[codigo]] || 'agd-horario' };
+      const grupo = GRUPO_DO_CONFLITO[codigo];
+      const item = { codigo, texto: `${maiuscula(novo.conflito[i])}.`, campo: CAMPO_DO_GRUPO[grupo] || 'agd-horario' };
       if (codigo === 'instrutor-indisponivel') item.opcoes = [{ opcao: 'disponibilizar', texto: `Marcar ${x.nm} disponível às ${hm(a)}` }];
+      else comAlternativas(item, codigo === 'peso' ? ['maisLeves'] : ALTERNATIVAS_DO_GRUPO[grupo] || []);
       bloqueios.push(item);
     });
   }
   const antes = new Map(baseComPesos.out.map(o => [o.fKey, o]));
   for (const o of sim.out) {
     if (o.fKey === fKey || !o.conflito || (antes.get(o.fKey) || {}).conflito) continue;
-    bloqueios.push({ codigo: 'conflito-em-outro-voo', texto: `Agendar aqui deixa o voo de ${rotuloDoVoo(o)} em conflito: ${o.conflito.join('; ')}.`, campo: 'agd-horario' });
+    bloqueios.push(comAlternativas({ codigo: 'conflito-em-outro-voo', texto: `Agendar aqui deixa o voo de ${rotuloDoVoo(o)} em conflito: ${o.conflito.join('; ')}.`, campo: 'agd-horario' },
+      ['horarios', 'recursos', 'instrutores']));
   }
 
   // Avisos: as regras do curso
@@ -772,6 +1077,32 @@ export function avaliarAgendamento({ estado, baseComPesos, base = baseComPesos, 
     if (!isGroundMission(mis) && tipo !== m.eq) {
       avisos.push({ codigo: 'recurso-do-programa', texto: `O programa faz ${m.codigo} no ${m.eq}; o voo vai no ${tipo}, e a missão continua ${m.codigo}.`, resumo: `${m.codigo} no ${tipo}`, campo: 'agd-recurso' });
     }
+  } else if (movido && info.missao) {
+    // O voo de hoje que muda de lugar continua com a missão: a ordem do curso no horário novo (uma missão do dia que voa
+    // depois dela) e o tipo de avião que muda
+    const m = info.missao;
+    if (info.estado === 'bloqueada') avisos.push({ codigo: 'fora-da-ordem', texto: `${m.codigo} fora da ordem: ${info.motivo}.`, resumo: `fora da ordem (${info.motivo})`, campo: 'agd-horario' });
+    if (!ground && tipo !== movido.pedido.eq && tipo !== m.eq) {
+      avisos.push({ codigo: 'recurso-do-programa', texto: `O programa faz ${m.codigo} no ${m.eq}; o voo vai no ${tipo}, e a missão continua ${m.codigo}.`, resumo: `${m.codigo} no ${tipo}`, campo: 'agd-recurso' });
+    }
+  }
+  // O voo de hoje que muda de lugar: a disponibilidade do aluno que não inclui o horário novo sai do pedido; o voo fixo
+  // pela escala aprovada (ou pelo status) deixa o lugar em que estava fixo
+  if (movido) {
+    const { jan } = movido.pedido;
+    const permitidas = disponibilidadeDoAluno(jan);
+    if (permitidas && !permitidas(a)) {
+      avisos.push({ codigo: 'disponibilidade-do-aluno', texto: `${stu.nm} está disponível só ${quandoDisponivel(jan)}: agendado às ${hm(a)}, o pedido fica sem a disponibilidade.`, resumo: 'fora da disponibilidade do aluno', campo: 'agd-horario' });
+    }
+    const pino = (estado.fixos || {})[fKey];
+    const muda = movido.voo && (movido.voo.a !== a || movido.voo.r !== r || movido.voo.insId !== x.id);
+    if (muda && pino && !pino.agendado && (estado.aprovacao || fixoPeloStatus(fKey, estado.fStatus))) {
+      const porque = motivoDoFixo(fKey, { fStatus: estado.fStatus, aprovacao: estado.aprovacao, voo: movido.voo, fixos: estado.fixos }).replace(/^Voo fixo: /, '');
+      avisos.push({
+        codigo: 'fixo-muda', texto: `O voo de ${stu.nm} está fixo (${porque}): ele sai das ${hm(movido.voo.a)} ${noRecurso(movido.voo.r)} e fica fixo no horário novo.`,
+        resumo: 'voo fixo muda de lugar', campo: 'agd-horario'
+      });
+    }
   }
   // As regras que o motor não confere nos voos agendados e o peso que falta (os avisos do motor com a chave do voo novo)
   for (const al of sim.al) {
@@ -784,12 +1115,8 @@ export function avaliarAgendamento({ estado, baseComPesos, base = baseComPesos, 
   const naSim = new Set(sim.out.map(o => o.fKey));
   const saem = baseComPesos.out.filter(o => o.fKey !== fKey && !naSim.has(o.fKey));
   if (saem.length) {
-    const motivo = o => {
-      const err = sim.al.find(al => al.t === 'err' && al.s === rotuloDoVoo(o));
-      return err ? ` (${minuscula(err.m.replace(/^Rejeitado: /, '').replace(/\.$/, ''))})` : '';
-    };
     avisos.push({
-      codigo: 'saem', texto: `Agendar aqui tira da escala: ${saem.slice(0, 8).map(o => `${rotuloDoVoo(o)}${motivo(o)}`).join('; ')}${saem.length > 8 ? ` e mais ${saem.length - 8}` : ''}.`,
+      codigo: 'saem', texto: `Agendar aqui tira da escala: ${saem.slice(0, 8).map(o => `${rotuloDoVoo(o)}${motivoDaSaida(sim, o)}`).join('; ')}${saem.length > 8 ? ` e mais ${saem.length - 8}` : ''}.`,
       resumo: `tira ${saem.length} ${saem.length === 1 ? 'voo' : 'voos'} da escala`
     });
   }
@@ -809,19 +1136,30 @@ export function avaliarAgendamento({ estado, baseComPesos, base = baseComPesos, 
   }
 
   // Notas
-  if (info.tipo === 'missao' && info.estado === 'condicional') notas.push({ codigo: 'condicional', texto: `${info.missao.codigo} depende do resultado de ${info.dependeDe}.` });
+  if ((info.tipo === 'missao' || movido) && info.missao && info.estado === 'condicional') notas.push({ codigo: 'condicional', texto: `${info.missao.codigo} depende do resultado de ${info.dependeDe}.` });
   if (info.tipo === 'missao' && !fixa && horas !== info.missao.nb) {
     notas.push({ codigo: 'duracao-do-programa', texto: `A duração (${fmtH(horas)}) é diferente da do programa para ${info.missao.codigo} (${fmtH(info.missao.nb)}).` });
   }
   if (novo && novo.comb) notas.push({ codigo: 'reduzir-combustivel', texto: `O avião sai com menos combustível: reduzir ${novo.comb.reduzirGal} gal.` });
   if ((stu.voaCom || []).length && !stu.voaCom.includes(x.id)) notas.push({ codigo: 'fora-do-priorizar', texto: `${x.nm} está fora do Priorizar com de ${stu.nm}.` });
   if (formulario.proposta.disponibilizar) notas.push({ codigo: 'disponibilizar', texto: `${x.nm} fica disponível às ${hm(a)} com o agendamento.` });
+  // A vez na fila do rodízio da categoria (o voo da categoria vai para quem tem menos voos dela no dia, depois para o
+  // primeiro da fila), entre os instrutores que servem no horário
+  const categoria = ground ? null : categoriaDoRodizio(mis, tipo);
+  if (categoria) {
+    const { naCategoria, posicao } = rodizioDoDia(estado, base, categoria, exceto);
+    const vez = instrutoresQueServem(estado, ocupacoes(estado, base, exceto).fixos, { mis, tipo, a, b, alunos: [stu], stuKg: formulario.selecao.stuKg, curso: formulario.selecao.curso, r })
+      .filter(c => !c.problemas.length).map(c => c.x)
+      .sort((p, q) => (naCategoria.get(p.id) || 0) - (naCategoria.get(q.id) || 0) || (posicao(p.id) === posicao(q.id) ? 0 : posicao(p.id) - posicao(q.id)) || p.id - q.id)[0];
+    if (vez) notas.push({ codigo: 'rodizio', texto: `Na fila do rodízio (${CATEGORIAS_DO_RODIZIO.find(c => c.id === categoria).nome}), a vez é de ${vez.nm}.` });
+  }
   if (estado.aprovacao) notas.push({ codigo: 'escala-aprovada', texto: 'A escala está aprovada: o voo novo entra fixo e os outros não mudam.' });
   if (mis === 'Noturno') {
     notas.push({ codigo: 'noturno', texto: `O Noturno volta amanhã às ${hm(NOTURNO.voltaInicio)}; o instrutor, o aluno e o avião ficam livres às ${hm(NOTURNO.livreAs)}.` });
   }
+  // Os outros pedidos do aluno que ficaram fora da escala (o que entra agora não)
   const naBase = new Set(baseComPesos.out.map(o => o.fKey));
-  const fora = pedidosQueVoam(stu).filter(p => !naBase.has(chaveDoVoo(stu.id, p.mid || 0)));
+  const fora = pedidosQueVoam(stu).filter(p => chaveDoVoo(stu.id, p.mid || 0) !== fKey && !naBase.has(chaveDoVoo(stu.id, p.mid || 0)));
   if (fora.length) notas.push({ codigo: 'pedido-fora', texto: `${stu.nm} tem ${fora.length === 1 ? 'um pedido' : 'pedidos'} que ficou fora da escala (${fora.map(p => p.mis).join(', ')}): ${fora.length === 1 ? 'ele continua' : 'eles continuam'} fora.` });
 
   // A prévia: o voo novo e o que muda nos outros
@@ -830,19 +1168,26 @@ export function avaliarAgendamento({ estado, baseComPesos, base = baseComPesos, 
     return o.fKey !== fKey && era && (era.a !== o.a || era.r !== o.r || era.insId !== o.insId);
   });
   const entram = sim.out.filter(o => o.fKey !== fKey && !antes.has(o.fKey));
-  return { bloqueios, avisos, notas, previa: { novo, movidos, saem, entram, r, a, b } };
+  const previa = { novo, movidos, saem, entram, r, a, b };
+  return { bloqueios, avisos, notas, previa: { ...previa, linhas: linhasDaPrevia(previa, { antes, sim, movido }) } };
 }
 
 // A assinatura dos avisos: a confirmação vale para estes avisos; outro conjunto pede outra
 export const assinaturaDosAvisos = avisos => avisos.map(a => `${a.codigo}:${a.texto}`).join('|');
 
-// O texto do histórico (até 500 caracteres): o aluno, a missão, o horário, o recurso e o instrutor, os avisos confirmados
-// e o instrutor marcado disponível
+// O texto do histórico (até 500 caracteres): o aluno, a missão, o horário, o recurso e o instrutor (o voo que mudou de
+// lugar diz de onde saiu; o que entrou na escala, que estava fora; o aluno que entrou numa turma de Ground, que entrou
+// nela), os avisos confirmados e o instrutor marcado disponível. estado: como estava antes do agendamento
 export function descricaoDoAgendamento(estado, proposta, { avisos = [] } = {}) {
   const stu = estado.stu.find(s => s.id === proposta.stuId), x = estado.ins.find(i => i.id === proposta.insId);
-  const missao = proposta.missao ? `${proposta.missao.codigo} (${proposta.mis})` : proposta.mis;
+  const movido = proposta.pedido || null;
+  const doPedido = movido && stu ? pedidoDoAluno(stu, movido.mid) : null;
+  const etapa = proposta.missao ? proposta.missao.codigo : doPedido && doPedido.etapa;
+  const missao = etapa ? `${etapa} (${proposta.mis})` : proposta.mis;
   const onde = nomeDoRecurso(isGroundMission(proposta.mis) ? GROUND_REG : proposta.r);
-  const inicio = `${estado.aprovacao ? 'Agendado na escala aprovada' : 'Agendado na escala'}: ${stu ? stu.nm : proposta.stuId} · ${missao} · ${hm(proposta.a)}–${hm(proposta.b)} · ${onde} · ${x ? x.nm : proposta.insId}`;
+  const de = !movido ? '' : movido.de ? ` (era ${hm(movido.de.a)} ${noRecurso(movido.de.r)})` : ' (estava fora da escala)';
+  const naTurma = proposta.turma ? ' · entrou na turma' : '';
+  const inicio = `${estado.aprovacao ? 'Agendado na escala aprovada' : 'Agendado na escala'}: ${stu ? stu.nm : proposta.stuId} · ${missao} · ${hm(proposta.a)}–${hm(proposta.b)} · ${onde} · ${x ? x.nm : proposta.insId}${de}${naTurma}`;
   const disponivel = proposta.disponibilizar ? ` · ${x ? x.nm : proposta.insId} marcado disponível às ${hm(proposta.a)}` : '';
   const resumos = avisos.map(a => a.resumo || a.codigo);
   let confirmado = resumos.length ? ` · confirmado: ${resumos.join('; ')}` : '';

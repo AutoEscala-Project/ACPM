@@ -4,7 +4,7 @@
 // digitado vai para o cadastro e o Histórico desfaz
 import { test, expect, abrir, irPara, abrirEscala, confirmar, entrar, AMANHA } from './fixtures.js';
 import { instalarSupabaseFalso, documentosAtuais, CONTAS } from './supabase-falso.js';
-import { aluno, cenario, instrutor } from '../helpers/montar.js';
+import { aluno, cenario, instrutor, GROUND_C152 } from '../helpers/montar.js';
 import { FROTA_INICIAL } from '../../js/frota.js';
 import { normalizarHorarios } from '../../js/horarios.js';
 import { normalizarLimites } from '../../js/limites.js';
@@ -142,7 +142,9 @@ test.describe('Agendar um voo na Escala', () => {
     await page.locator('#agd-recurso').selectOption('PR-VOB');
     await page.locator('#agd-horario').selectOption('390');
     await expect(page.locator('#agd-recurso')).toHaveValue('PR-VOB');
-    await expect(page.locator('#agd-conferencia .agd-bloqueios li')).toHaveText(['O avião já está ocupado neste horário.']);
+    // O bloqueio, com as alternativas livres
+    await expect(page.locator('#agd-conferencia .agd-bloqueios li')).toHaveCount(1);
+    await expect(page.locator('#agd-conferencia .agd-bloqueios li')).toContainText('O avião já está ocupado neste horário.');
     await page.locator('#agd-confirmar').click();
     await expect(page.locator('#agd-erro')).toHaveText('O avião já está ocupado neste horário.');
     await expect(page.locator('#agd-recurso')).toBeFocused();
@@ -276,6 +278,134 @@ test.describe('Agendar um voo na Escala', () => {
     expect(medidas).toEqual({ cabe: true, pequenos: [] });
     await agendar(page);
     await expect(voo(page, 'Maria Silva')).toHaveCount(1);
+  });
+});
+
+test.describe('Mover e encaixar o voo de hoje do aluno, as turmas de Ground e as alternativas', () => {
+  // O diálogo aberto pela barra, com a aluna escolhida (sem esperar a prévia de um voo novo)
+  async function abrirPara(page, stuId) {
+    await page.locator('#btn-agendar').click();
+    await expect(dialogo(page)).toBeVisible();
+    await page.locator('#agd-aluno').selectOption(String(stuId));
+  }
+
+  test('mover o voo de hoje: fica fixo no horário novo, a Demanda diz "agendado", e desfazer devolve o voo fixo de antes', async ({ page }) => {
+    // A Maria Silva voa a PP-02 às 08:20 no PR-VOB, fixa pelo Instrutor 02 escolhido na Escala
+    const estado = dia({ fixos: { '1001_0_1': { a: 500, b: 560, r: 'PR-VOB', insId: 2, escolhido: true } } });
+    Object.assign(estado.stu[1], { fly: true, p1: 500, p2: -1, etapa: 'PP-02', cursoDaEtapa: 'PP', insId: 2 });
+    await abrirComCurso(page, estado);
+    await expect(voo(page, 'Maria Silva').locator('.fixo')).toHaveAttribute('aria-label', 'Voo fixo: instrutor escolhido na escala');
+    await abrirPara(page, 1001);
+    // O padrão é mover o pedido que já tem a próxima missão (nunca a PP-03 por cima dele), com o instrutor escolhido dele
+    await expect(dialogo(page)).toHaveAccessibleName('Mover o voo');
+    await expect(page.locator('#agd-missao option:checked')).toHaveText('Mover PP-02 · Voo Local (hoje 08:20, PR-VOB)');
+    await expect(page.locator('#agd-instrutor')).toHaveValue('2');
+    await page.locator('#agd-horario').selectOption('610');
+    await expect(page.locator('#agd-recurso')).toHaveValue('PR-VOB');
+    await expect(page.locator('#agd-previa ul li').first()).toHaveText('Muda: Maria Silva · Voo Local · 10:10–11:10 · PR-VOB · Instrutor 02 (era 08:20 no PR-VOB)');
+    await agendar(page);
+    await expect(page.locator('#toast-box')).toContainText('Voo movido: Maria Silva às 10:10 no PR-VOB.');
+    const linha = voo(page, 'Maria Silva');
+    await expect(linha.locator('.c-hr')).toContainText('10:10–11:10');
+    await expect(linha.locator('.fixo')).toHaveAttribute('aria-label', 'Voo fixo: agendado na escala');
+    await expect(linha.locator('select[data-f="fstatus"]')).toBeFocused();
+
+    // Na Demanda: o mesmo pedido (nenhuma missão extra), com a missão do curso e a etiqueta do voo agendado
+    await irPara(page, 'dem');
+    await expect(pedido(page, 1001).locator('.tag[data-dica="voo-agendado"]')).toHaveText('agendado 10:10 · PR-VOB');
+    await expect(pedido(page, 1001).locator('.etapa')).toHaveText('PP-02');
+    await expect(pedido(page, 1001, 1)).toHaveCount(0);
+
+    // O Histórico: uma edição que diz de onde o voo saiu; desfazer devolve o voo fixo pelo instrutor escolhido
+    const lista = await historico(page);
+    const entrada = lista.locator('.audit-item', { hasText: 'Agendado na escala' });
+    await expect(entrada.locator('.audit-desc')).toHaveText('Agendado na escala: Maria Silva · PP-02 (Voo Local) · 10:10–11:10 · PR-VOB · Instrutor 02 (era 08:20 no PR-VOB)');
+    await expect(entrada.locator('.audit-badge')).toHaveText('Edição');
+    await entrada.getByRole('button', { name: '↶ Desfazer' }).click();
+    await expect(lista).toContainText('Revertido: Agendado na escala: Maria Silva');
+    await expect(pedido(page, 1001).locator('.tag[data-dica="voo-agendado"]')).toHaveCount(0);
+    await expect(pedido(page, 1001).locator('[data-f="fly"]')).toBeChecked();
+    await page.locator('#btn-fechar-historico').click();
+    await abrirEscala(page);
+    await expect(voo(page, 'Maria Silva').locator('.c-hr')).toContainText('08:20–09:20');
+    await expect(voo(page, 'Maria Silva').locator('.fixo')).toHaveAttribute('aria-label', 'Voo fixo: instrutor escolhido na escala');
+  });
+
+  test('encaixar o pedido que ficou fora: entra na escala sem outra missão extra, e a prévia diz o voo que muda de lugar', async ({ page }) => {
+    // Um instrutor só: o Aluno 1000 voa às 06:30; a Maria Silva só pode às 06:30 e fica fora da escala
+    const estado = dia({ ins: [instrutor(1, 9)] });
+    Object.assign(estado.stu[1], { fly: true, p1: 390, p2: -1, jan: 'h390' });
+    await abrirComCurso(page, estado);
+    await expect(voo(page, 'Aluno 1000').locator('.c-hr')).toContainText('06:30–07:30');
+    await expect(voo(page, 'Maria Silva')).toHaveCount(0);
+    await abrirPara(page, 1001);
+    await expect(dialogo(page)).toHaveAccessibleName('Encaixar o voo');
+    await expect(page.locator('#agd-missao option:checked')).toHaveText('Encaixar Voo Local (ficou fora: sem instrutor livre)');
+    await expect(page.locator('#agd-horario')).toHaveValue('390');
+    // A prévia (fora da escala aprovada, os outros voos mudam): a Maria entra, e o Aluno 1000 sai das 06:30
+    await page.locator('#agd-previa summary').click();
+    await expect(page.locator('#agd-previa ul li').first()).toContainText('Entra: Maria Silva · Voo Local · 06:30–07:30 · ');
+    await expect(page.locator('#agd-previa ul li').first()).toContainText('(estava fora da escala)');
+    await expect(page.locator('#agd-previa ul')).toContainText('Aluno 1000: 06:30 → ');
+    await agendar(page);
+    await expect(page.locator('#toast-box')).toContainText('Voo encaixado: Maria Silva às 06:30 no ');
+    await expect(voo(page, 'Maria Silva').locator('.c-hr')).toContainText('06:30–07:30');
+    await expect(voo(page, 'Maria Silva').locator('.fixo')).toHaveAttribute('aria-label', 'Voo fixo: agendado na escala');
+    await expect(voo(page, 'Aluno 1000').locator('.c-hr')).not.toContainText('06:30');
+    // O mesmo pedido: nenhuma missão extra
+    await irPara(page, 'dem');
+    await expect(pedido(page, 1001).locator('[data-f="fly"]')).toBeChecked();
+    await expect(pedido(page, 1001, 1)).toHaveCount(0);
+    await expect(pedido(page, 1001).locator('.tag[data-dica="voo-agendado"]')).toContainText('agendado 06:30 · ');
+    await expect((await historico(page)).locator('.audit-desc', { hasText: 'Agendado na escala' })).toContainText('(estava fora da escala)');
+  });
+
+  test('no Ground, a aluna entra na turma do dia: o horário e o instrutor são os da turma', async ({ page }) => {
+    // A turma das 08:20 (Aluno 1000 e Aluno 1002)
+    const estado = dia();
+    estado.stu = [aluno(1000, { ...GROUND_C152, p1: 500, p2: -1 }, { curso: 'PP' }), estado.stu[1], aluno(1002, { ...GROUND_C152, p1: 500, p2: -1 })];
+    await abrirComCurso(page, estado);
+    await expect(page.locator('#out')).toContainText('Turma de 2 alunos');
+    await abrirPara(page, 1001);
+    // Pela barra (o recurso é um avião), o Ground vem por "Outro tipo de missão…"
+    await page.locator('#agd-missao').selectOption({ label: 'Outro tipo de missão…' });
+    await page.locator('#agd-tipo').selectOption('Ground C152');
+    const turma = page.locator('#agd-instrutor optgroup[label="Turmas de hoje"] option');
+    await expect(turma).toHaveText(['Entrar na turma das 08:20 com Instrutor 01 (2 alunos)']);
+    await page.locator('#agd-instrutor').selectOption({ label: 'Entrar na turma das 08:20 com Instrutor 01 (2 alunos)' });
+    await expect(page.locator('#agd-horario')).toHaveValue('500');
+    await expect(page.locator('#agd-horario option:checked')).toHaveText('08:20 (turma)');
+    await expect(page.locator('#agd-recurso option:checked')).toHaveText('Sala Ground · turma das 08:20');
+    await conferido(page);
+    await expect(page.locator('#agd-conferencia .agd-bloqueios li')).toHaveCount(0);
+    await agendar(page);
+    await expect(page.locator('#toast-box')).toContainText('Voo agendado: Maria Silva às 08:20 na sala de Ground.');
+    await expect(page.locator('#out')).toContainText('Turma de 3 alunos');
+    await expect(page.locator('#out tr.membro', { hasText: 'Maria Silva' })).toHaveCount(1);
+    await expect((await historico(page)).locator('.audit-desc', { hasText: 'Agendado na escala' }))
+      .toHaveText('Agendado na escala: Maria Silva · Ground C152 · 08:20–09:50 · Sala Ground · Instrutor 01 · entrou na turma');
+  });
+
+  test('o bloqueio traz as alternativas livres: um clique escolhe outro avião, e o voo é agendado', async ({ page }) => {
+    // O Aluno 1000 está em voo no PR-VOB às 06:30
+    await abrirComCurso(page, dia({ fixos: { '1000_0_1': { a: 390, b: 450, r: 'PR-VOB', insId: 1 } }, fStatus: { '1000_0_1': 'Em Voo' } }));
+    await abrirDialogo(page);
+    await page.locator('#agd-horario').selectOption('500');
+    await page.locator('#agd-recurso').selectOption('PR-VOB');
+    await page.locator('#agd-horario').selectOption('390');
+    const bloqueio = page.locator('#agd-conferencia .agd-bloqueios li');
+    await expect(bloqueio).toContainText('O avião já está ocupado neste horário.');
+    await expect(bloqueio.locator('.agd-chips')).toHaveText([/^Recursos livres: /, 'Horários livres: 08:20 10:10 11:30']);
+    const chip = bloqueio.locator('.agd-chips').first().getByRole('button').first();
+    const reg = (await chip.textContent()).trim();
+    await chip.click();
+    await expect(page.locator('#agd-conferencia .agd-bloqueios li')).toHaveCount(0);
+    await expect(page.locator('#agd-confirmar')).toBeFocused();
+    await expect(page.locator('#agd-recurso')).toHaveValue(reg);
+    await expect(page.locator('#agd-horario')).toHaveValue('390');
+    await agendar(page);
+    await expect(voo(page, 'Maria Silva')).toContainText(reg);
+    await expect(voo(page, 'Maria Silva').locator('.c-hr')).toContainText('06:30–07:30');
   });
 });
 
