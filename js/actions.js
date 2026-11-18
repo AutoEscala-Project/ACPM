@@ -71,7 +71,7 @@ const SEM_OS_DADOS = {
   resultados: 'Não foi possível ler os resultados das missões dos cursos: a próxima missão e o registro de resultados ficam desligados.',
   ...SEM_OS_PROGRAMAS
 };
-export function avisarDadosIndisponiveis() {
+function avisarDadosIndisponiveis() {
   const partes = (S.indisponiveis || []).filter(p => Object.hasOwn(SEM_OS_DADOS, p));
   $('#aviso-dados').hidden = !partes.length;
   $('#aviso-dados-texto').textContent = partes.map(p => SEM_OS_DADOS[p]).join(' ');
@@ -135,6 +135,19 @@ export function travarAposConflito({ formato = false } = {}) {
     : 'Outra pessoa alterou a escala enquanto você editava. A tela ficou só para consulta: recarregue para ver a versão atual e continuar (a sua última alteração não foi salva).');
 }
 
+// Os dados da data aberta foram lidos (setS com os dados dela, em lerData)? Até lá nada é gravado: na abertura do app S
+// ainda é o estado inicial, sem os alunos e os instrutores, e numa troca de data S é o da data anterior, mas o cadastro já
+// foi lido de novo (a gravação levaria a versão nova com o conteúdo velho, por cima do que outra pessoa mudou). Depois de
+// uma leitura que falhou também não: só quando uma data abrir de novo (ou recarregando a página)
+export let dadosLidos = false;
+// Antes de a escala abrir, a mudança é recusada, com o aviso (responde true): quem chama não muda nada, e a tela fica
+// como estava
+export function aindaNaoAbriu() {
+  if (dadosLidos) return false;
+  showToast('A escala ainda não abriu: nada foi mudado. Espere os dados chegarem ou recarregue a página.');
+  return true;
+}
+
 // A escala acompanha os dados: cada alteração do operador refaz a escala da data (o motor leva milissegundos) e
 // grava os dados e a escala juntos. Ao abrir a aba Escala, ela já está pronta
 // A gravação mais recente da escala: as entradas do histórico esperam por ela
@@ -142,7 +155,7 @@ let gravacaoAtual = Promise.resolve(true);
 
 // Refaz e grava a escala; responde se a gravação deu certo. Os eventos da tela gravam por gravarAlteracao
 function save() {
-  if (isGestor()) return Promise.resolve(false);
+  if (isGestor() || !dadosLidos) return Promise.resolve(false);
   refazerEscala();
   gravacaoAtual = ApiClient.salvarDia(DATA, S, RES);
   // Neste navegador (sem servidor), a gravação só falha quando o armazenamento recusa (o espaço pode ter acabado)
@@ -162,8 +175,10 @@ function save() {
 // Uma alteração do operador nos dados da data: grava (a escala é refeita) e registra no histórico, nesta ordem e no
 // mesmo evento (a entrada do histórico espera pela gravação que leva a alteração). É o único jeito de os eventos da
 // tela mudarem os dados. Sem descrição, só grava (as janelas de um instrutor, por exemplo, não entram no histórico); com
-// uma lista, registra uma entrada por item (a importação da Agenda, um aluno por entrada). Quem só consulta não grava
+// uma lista, registra uma entrada por item (a importação da Agenda, um aluno por entrada). Quem só consulta não grava, e
+// nada é gravado antes de a escala abrir
 export function gravarAlteracao(tipo, descricao, reverter = null, reverte = null) {
+  if (isGestor() || aindaNaoAbriu()) return;
   save();
   for (const texto of Array.isArray(descricao) ? descricao : [descricao]) {
     if (texto) logChange(tipo, texto, reverter, reverte);
@@ -173,7 +188,6 @@ export function gravarAlteracao(tipo, descricao, reverter = null, reverte = null
 // Escala só calculada (data aberta ainda sem escala gravada): é gravada na primeira alteração ou quando é exportada
 // (CSV ou PDF), para entrar no BI e nas horas e no rodízio da data seguinte. Abrir uma data não grava nada
 let escalaSoCalculada = false;
-export const marcarEscalaSoCalculada = valor => { escalaSoCalculada = valor; };
 export function gravarEscalaCalculada() {
   if (escalaSoCalculada) save();
 }
@@ -187,7 +201,7 @@ const textoAte = (texto, limite) => (texto === null || texto === undefined ? tex
 // "não gravada". O id (que permite reverter) chega quando o registro é gravado.
 // reverte: id da entrada que esta alteração desfaz (ela deixa de aparecer no painel)
 export function logChange(type, texto, revertAction = null, reverte = null) {
-  if (isGestor()) return;
+  if (isGestor() || !dadosLidos) return;
   const desc = textoAte(texto, LIMITE_DA_DESCRICAO);
   const entry = {
     id: null,
@@ -228,7 +242,7 @@ export function mostrarNoHistorico({ id, descricao }) {
   renderAuditPanel();
 }
 
-export async function historicoParaPainel(data) {
+async function historicoParaPainel(data) {
   return (await ApiClient.historicoDoDia(data)).map(e => ({
     id: e.id,
     ts: horario(e.registrado_em, e.importado),
@@ -241,21 +255,61 @@ export async function historicoParaPainel(data) {
   }));
 }
 
-// Abre a escala de uma data (uma troca rápida de data descarta a resposta da troca anterior)
+// A abertura do app prepara os dados antes de ler a primeira data (main.js: a conversão dos documentos antigos e a
+// atualização do formato). Até lá nenhuma data é lida, e se a preparação falhar nenhuma abre: o cadastro que a
+// conversão ainda não gravou viria vazio, e a primeira alteração gravaria esse cadastro vazio (a conversão ficaria por
+// feita, sem os alunos e os instrutores de antes)
+let liberarLeituras, recusarLeituras;
+const dadosProntos = new Promise((resolve, reject) => { liberarLeituras = resolve; recusarLeituras = reject; });
+dadosProntos.catch(() => {});
+export function dadosPreparados(prontos = true) {
+  if (prontos) liberarLeituras();
+  else recusarLeituras(new Error('A abertura do app não preparou os dados.'));
+}
+
+// Lê os dados de uma data e os põe na tela (o estado, a escala e o histórico): a abertura do app e as trocas de data.
+// Enquanto ela abre nada é gravado. As leituras saem uma de cada vez, na ordem pedida: cada leitura do cadastro e do dia
+// guarda a versão que a gravação seguinte leva (js/backends/supabase.js), e a resposta de uma leitura que ficou para trás
+// chegando depois da mais nova deixaria valendo a versão dela com os dados da mais nova na tela (a gravação passaria por
+// cima, sem conflito, do que outra pessoa mudou entre as duas). A troca que ficou para trás antes de começar a ler nem
+// lê; a que ficou para trás lendo só vai para a tela se for da data aberta (a da abertura do app, quando outra data foi
+// escolhida enquanto ela lia), e aí nada é gravado até a mais nova chegar. Responde se os dados foram para a tela
 let pedidoDeData = 0;
-export async function carregarData(data) {
+let leituraAnterior = Promise.resolve();
+export async function lerData(data) {
   const pedido = ++pedidoDeData;
-  const { estado, escala, horasBase, horasDosInstrutores, resultados, programa, indisponiveis } = await ApiClient.carregarDia(data);
-  const historico = await historicoParaPainel(data);
-  if (pedido !== pedidoDeData) return;
-  abrirData(data);
-  setS({ ...estado, horasBase, horasDosInstrutores, resultados, programa, indisponiveis });
-  avisarDadosIndisponiveis();
-  // Data sem escala gravada (por exemplo, uma data nova, copiada da anterior): a escala calculada aparece na hora
-  // e é gravada junto com a primeira alteração
-  setRES(escala || escalaCalculada());
-  escalaSoCalculada = !escala;
-  setAuditLog(historico);
+  dadosLidos = false;
+  const anterior = leituraAnterior;
+  let terminou;
+  leituraAnterior = new Promise(resolve => { terminou = resolve; });
+  try {
+    await dadosProntos;
+    await anterior;
+    if (pedido !== pedidoDeData) return false;
+    const { estado, escala, horasBase, horasDosInstrutores, resultados, programa, indisponiveis } = await ApiClient.carregarDia(data);
+    const historico = await historicoParaPainel(data);
+    const maisNova = pedido === pedidoDeData;
+    if (!maisNova && data !== DATA) return false;
+    abrirData(data);
+    // O programa dos cursos (as tabelas dos cursos) e o que não foi lido dele ('cursos', ou 'cursos-pendentes' esperando a
+    // conversão) chegam com os dados da data: até eles, nada grava, também o programa
+    setS({ ...estado, horasBase, horasDosInstrutores, resultados, programa, indisponiveis });
+    avisarDadosIndisponiveis();
+    // Data sem escala gravada (por exemplo, uma data nova, copiada da anterior): a escala calculada aparece na hora
+    // e é gravada junto com a primeira alteração
+    setRES(escala || escalaCalculada());
+    escalaSoCalculada = !escala;
+    setAuditLog(historico);
+    dadosLidos = maisNova;
+    return true;
+  } finally {
+    terminou();
+  }
+}
+
+// Abre a escala de outra data
+export async function carregarData(data) {
+  if (!await lerData(data)) return;
   $('#escala-atualizada').hidden = true;
   rRec(); rIns(); rAlu(); rCursos(); rDem(); renderAuditPanel(); rOut(); rAgenda();
   atualizarSelosDaEscala();
@@ -300,7 +354,7 @@ function syncBIHistoryForCurrentDate() {
 
 // Escala da data calculada a partir dos dados da tela. Ela guarda a data para a qual foi feita (no modo
 // compartilhado, todos veem essa data)
-export const escalaCalculada = () => ({ ...runAllocationEngine(S), data: DATA });
+const escalaCalculada = () => ({ ...runAllocationEngine(S), data: DATA });
 
 // Refaz a escala e o que depende dela (revisão de 50 horas, painel do dia e BI), sem gravar: quem grava é save
 function refazerEscala() {

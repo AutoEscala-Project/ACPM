@@ -1,6 +1,6 @@
 // Instrutores e Alunos: incluir, excluir, os campos de cada linha, "Não escalar com", as habilitações, os dados pessoais,
 // os limites da lei e os filtros
-import { gravarAlteracao, mostrarNoHistorico } from '../actions.js';
+import { gravarAlteracao, mostrarNoHistorico, aindaNaoAbriu } from '../actions.js';
 import { WIN, PRE } from '../config.js';
 import { normalizarCursoDoAluno } from '../cursos.js';
 import { $, showToast, focusLast, algumDialogoAberto } from '../dom.js';
@@ -221,6 +221,7 @@ const emHoras = (chave, valor) => (valor === null ? 'sem limite' : `${numeroBr(c
 document.addEventListener('change', e => {
   const campo = e.target.closest('[data-limite]');
   if (!campo || !podeEditarLimites()) return;
+  if (aindaNaoAbriu()) { rLimites(); return; }
   const chave = campo.dataset.limite, divisor = +campo.dataset.divisor;
   const antes = normalizarLimites(S.limites);
   const valor = campo.value.trim() === '' ? null : +campo.value * divisor;
@@ -233,7 +234,7 @@ document.addEventListener('change', e => {
 });
 document.addEventListener('click', e => {
   const b = e.target.closest('[data-limites-padrao]');
-  if (!b || !podeEditarLimites() || !confirmado(b, 'Confirmar valores da lei')) return;
+  if (!b || !podeEditarLimites() || aindaNaoAbriu() || !confirmado(b, 'Confirmar valores da lei')) return;
   S.limites = { ...LIMITES_DA_LEI };
   gravarAlteracao('mod', 'Limites da lei: de volta aos valores da lei');
   rLimites();

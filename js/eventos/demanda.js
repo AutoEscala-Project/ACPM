@@ -1,6 +1,6 @@
 // A Demanda: pôr um aluno, a próxima missão do curso e as outras, as missões extras, tirar da escala, limpar a demanda,
 // os filtros e os campos de cada pedido
-import { gravarAlteracao } from '../actions.js';
+import { gravarAlteracao, aindaNaoAbriu } from '../actions.js';
 import { T, GROUND_EQ_TYPE, GROUND_DURATION_H, MIS } from '../config.js';
 import { $, showToast, ligarMenu, trocarElemento } from '../dom.js';
 import { semAgendados } from '../fixos.js';
@@ -33,7 +33,7 @@ function soltarAgendado(stuId, mid) {
 function incluirAluno() {
   const campo = $('#incluir-aluno');
   const nome = campo.value.trim().toLowerCase();
-  if (!nome || isGestor()) return;
+  if (!nome || isGestor() || aindaNaoAbriu()) return;
   const s = S.stu.find(x => x.nm.toLowerCase() === nome);
   if (!s) { showToast('Aluno não encontrado. Cadastre-o na aba Alunos.'); return; }
   campo.value = '';

@@ -1,5 +1,5 @@
 // A Agenda: o calendário, registrar e cancelar pedidos e importar os pedidos da data para a Demanda
-import { gravarAlteracao, carregarData } from '../actions.js';
+import { gravarAlteracao, carregarData, aindaNaoAbriu } from '../actions.js';
 import { importarSolicitacoes, disponibilidadeDaSolicitacao, vagaDeVooLocal, ehDomingo } from '../agenda.js';
 import { DURACAO_MAXIMA_H, LIMITE_DE_VOOS_LOCAIS } from '../config.js';
 import { $, showToast } from '../dom.js';
@@ -29,7 +29,7 @@ document.addEventListener('click', e => {
 // Demanda e Agenda: traz os pedidos da agenda da secretaria para a data aberta (só acrescenta; não importa o mesmo
 // pedido de novo)
 async function importarDaAgenda() {
-  if (isGestor()) return;
+  if (isGestor() || aindaNaoAbriu()) return;
   const data = DATA;
   let solicitacoes;
   try {
@@ -43,6 +43,8 @@ async function importarDaAgenda() {
     showToast('A data mudou durante a importação da agenda: nada foi importado. Importe de novo na data certa.');
     return;
   }
+  // Outra data começou a abrir enquanto a agenda era lida
+  if (aindaNaoAbriu()) return;
   const pendentes = solicitacoes.filter(s => !s.cancelada_em && !S.importadas.includes(s.id));
   if (!pendentes.length) {
     showToast(`Nenhum pedido novo na agenda para ${DATA.slice(8, 10)}/${DATA.slice(5, 7)}.`);

@@ -1,4 +1,5 @@
 // Confirmar com dois cliques no mesmo botão
+import { aindaNaoAbriu } from '../actions.js';
 import { $, anunciar } from '../dom.js';
 import { isGestor } from '../state.js';
 
@@ -37,10 +38,10 @@ export const confirmado = (b, txt) => {
   temporizadores.set(b, setTimeout(() => desarmar(b), CONFIRMACAO_MS));
   return false;
 };
-// Um botão fixo da tela que pede confirmação (quem só consulta não aciona)
+// Um botão fixo da tela que pede confirmação (quem só consulta não aciona, nem antes de a escala abrir)
 export const comConfirmacao = (seletor, txt, fazer) => {
   $(seletor).onclick = e => {
-    if (isGestor()) return;
+    if (isGestor() || aindaNaoAbriu()) return;
     if (confirmado(e.currentTarget, txt)) fazer();
   };
 };

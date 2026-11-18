@@ -2,8 +2,10 @@
 // Escala) abre o diálogo (js/views/agendamento.js). O voo confirmado é gravado como as outras alterações (a escala é
 // refeita em volta dele), com "↶ Desfazer" no histórico: o voo novo é uma inclusão; o voo de hoje do aluno que mudou de
 // lugar ou entrou na escala, uma edição. O peso digitado vai para o cadastro da pessoa, com uma entrada no histórico
-// cada, na mesma gravação. Depois, o foco vai para o voo na escala
-import { gravarAlteracao, logChange } from '../actions.js';
+// cada, na mesma gravação. Depois, o foco vai para o voo na escala. Antes de a escala abrir (js/actions.js,
+// aindaNaoAbriu), o diálogo não abre (os botões recusam em registro.js; o clique no mapa, aqui) e confirmar não muda
+// nada: nem o voo, nem os pesos, nem o instrutor marcado disponível
+import { gravarAlteracao, logChange, aindaNaoAbriu } from '../actions.js';
 import { aplicarAgendamento, descricaoDoAgendamento, reversaoDoAgendamento, historicoDosPesos } from '../agendamento.js';
 import { isGroundMission } from '../rules.js';
 import { hm } from '../format.js';
@@ -28,7 +30,7 @@ function focarNoVoo(fKey, contexto) {
 const FEITO = { mover: 'Voo movido', encaixar: 'Voo encaixado' };
 
 function confirmarAgendamento({ proposta, base, avaliacao, contexto }) {
-  if (isGestor() || ApiClient.readOnly) return;
+  if (isGestor() || ApiClient.readOnly || aindaNaoAbriu()) return;
   const descricao = descricaoDoAgendamento(S, proposta, avaliacao);
   const antes = aplicarAgendamento(S, base, proposta);
   gravarAlteracao(proposta.pedido ? 'mod' : 'inc', descricao, reversaoDoAgendamento(antes));
@@ -45,4 +47,7 @@ aoAcionar('agendar', b => abrirAgendamento(b.dataset.agendar || 'dia', { aoConfi
 
 // O clique no espaço livre de uma linha do mapa (js/eventos/escala.js) abre o mesmo diálogo, com o recurso ou o instrutor
 // da linha e o minuto do clique ({ r ou insId, minuto })
-export const agendarNoMapa = contexto => abrirAgendamento(contexto, { aoConfirmar: confirmarAgendamento });
+export function agendarNoMapa(contexto) {
+  if (aindaNaoAbriu()) return;
+  abrirAgendamento(contexto, { aoConfirmar: confirmarAgendamento });
+}

@@ -7,7 +7,10 @@
 // parte da versão 0, que o cria). Uma recusa (ou a falta de conexão) descarta o resto da fila do curso, e a tela volta a
 // mostrar o programa gravado, lido de novo, com o aviso do motivo; nada disso trava o resto da tela (outra pessoa que
 // mudou o programa não é um conflito da escala). As alterações do programa não entram no histórico da data: ficam nas
-// versões do curso, que a aba lista. O filtro da aba (o curso mostrado e os encerrados) vale para todos os perfis
+// versões do curso, que a aba lista. O filtro da aba (o curso mostrado e os encerrados) vale para todos os perfis.
+// Antes de a escala abrir (js/actions.js, aindaNaoAbriu), o programa não muda: os botões recusam em registro.js, e os
+// campos e o curso novo, aqui, com o mesmo aviso
+import { aindaNaoAbriu } from '../actions.js';
 import {
   conteudoDoCurso, incluirMissao, mudarMissao, moverMissao, retirarMissao, validarCurso, percursoDoCurso, rotuloDaFase, incluirFase, mudarFase,
   moverFase, retirarFase, restaurarFase, restaurarMissao, definirRegra, marcarMissao, moverMissaoParaFase, ordemRecusada, definirTrecho, mudarCurso,
@@ -202,8 +205,11 @@ async function enviar(sigla, fila) {
 
 // Uma alteração conferida: o curso muda na tela (e com ele a próxima missão e o progresso dos alunos) e entra na fila de
 // gravação. curso: o curso de onde ela partiu (cursoAtual; null: o curso novo, que a gravação cria). A descrição leva a
-// sigla na frente ("PP: CT-03 alterada"), menos a do curso inteiro ('Curso MLTE criado: Multimotor', 'PC encerrado')
+// sigla na frente ("PP: CT-03 alterada"), menos a do curso inteiro ('Curso MLTE criado: Multimotor', 'PC encerrado').
+// Antes de a escala abrir, nada entra na fila (cada entrada já recusou, com o aviso, antes de mexer no curso: aqui é só a
+// garantia, como em gravarAlteracao). A fila que já andava continua: as alterações dela vieram com os dados lidos
 function alterar(curso, novo, descricao, { comSigla = true } = {}) {
+  if (aindaNaoAbriu()) return;
   const sigla = novo.sigla;
   if (!filas.has(sigla)) filas.set(sigla, { versao: curso ? curso.versao : 0, gravado: curso, curso: novo, itens: [], enviando: false });
   const fila = filas.get(sigla);
@@ -461,10 +467,12 @@ function mudarCampoDoCurso(campo) {
 }
 
 // Os campos mudam o curso, e a aba é refeita no lugar (o foco continua no campo, ou vai para o seguinte no Tab; o campo
-// digitado que perdeu o foco para um clique, depois do clique: refazerAba)
+// digitado que perdeu o foco para um clique, depois do clique: refazerAba). Antes de a escala abrir, nenhum campo muda o
+// curso (também o trecho do Noturno): o aviso, e a aba volta a mostrar o programa como está
 document.addEventListener('change', e => {
   const campo = e.target.closest('#cursos [data-cc], #cursos [data-cf], #cursos [data-cfa]');
   if (!campo || !editavel()) return;
+  if (aindaNaoAbriu()) { rCursos(); return; }
   depoisDoClique = apertado && campo.matches(DIGITADO);
   try {
     if (campo.hasAttribute('data-cc')) mudarCampoDoCurso(campo);
@@ -556,11 +564,12 @@ document.addEventListener('click', e => {
 // "Criar o curso": a sigla (em maiúsculas; no formato e uma vez só, também entre os encerrados) e o nome, conferidos no
 // formulário (o erro fica embaixo dos campos, com o campo marcado); o programa vazio ou o modelo escolhido. O curso entra
 // na tela na hora, escolhido no filtro, e vai para a gravação (a versão 0 o cria). O foco vai para "+ Fase" (com o
-// modelo, para o nome do curso, no alto do programa)
+// modelo, para o nome do curso, no alto do programa). Antes de a escala abrir, o curso não é criado: o aviso, e o
+// formulário fica como está
 document.addEventListener('submit', e => {
   if (e.target.id !== 'form-curso') return;
   e.preventDefault();
-  if (!editavel()) return;
+  if (!editavel() || aindaNaoAbriu()) return;
   const comeco = e.target.querySelector('[name="cur-comeco"]:checked');
   const modelo = comeco && Object.hasOwn(MODELOS, comeco.value) ? MODELOS[comeco.value] : null;
   const { curso, erro, campo } = novoCurso(S.programa || [], { sigla: $('#cur-sigla').value, nome: $('#cur-nome').value, modelo });

@@ -1,5 +1,5 @@
 // O histórico do dia: a gaveta, limpar (só no modo local) e Reverter
-import { gravarAlteracao } from '../actions.js';
+import { gravarAlteracao, aindaNaoAbriu } from '../actions.js';
 import { $, showToast, algumDialogoAberto } from '../dom.js';
 import { normalizarFixos } from '../fixos.js';
 import { validarReversao, motivoParaNaoDesfazer, desfazerAgendamento } from '../reversoes.js';
@@ -33,7 +33,7 @@ document.addEventListener('keydown', e => {
 
 // Só no modo local: no modo compartilhado o histórico é permanente (o botão fica oculto)
 $('#btn-clear-log').onclick = async () => {
-  if (isGestor() || !ApiClient.backend.limparHistorico) return;
+  if (isGestor() || !ApiClient.backend.limparHistorico || aindaNaoAbriu()) return;
   await ApiClient.backend.limparHistorico(DATA);
   setAuditLog([]);
   renderAuditPanel();
