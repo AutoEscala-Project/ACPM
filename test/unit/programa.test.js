@@ -11,7 +11,8 @@ import {
 import { normalizarCursos } from '../../js/cursos.js';
 import { FORMATO_DOS_CURSOS } from '../../js/migracoes.js';
 import { cursoPP } from '../helpers/programa-pp.js';
-import { CASOS_DO_PROGRAMA, PROGRAMA, IDS } from '../helpers/casos-do-programa.js';
+import { CASOS_DO_PROGRAMA, PROGRAMA, IDS, NOTURNO_EM_TRECHOS } from '../helpers/casos-do-programa.js';
+import { noturnosDoCurso, rotuloDaMissao } from '../../js/programa.js';
 
 const gerarId = (sigla, codigo) => `${sigla}:${codigo}`;
 const missao = (id, extra = {}) => ({ id, nome: `Missão ${id}`, mis: 'Voo Local', eq: 'C152', nb: 1, ...extra });
@@ -298,6 +299,99 @@ describe('Os programas como o servidor devolve (programaComResultados)', () => {
     assert.deepEqual(curso.alteracoes[0], { versao: 25, descricao: 'ZZ9: versão 25', registrado_em: AGORA, registrado_por: 'Maria' });
     assert.deepEqual([pp.alteracoes.length, pp.missoes], [1, []]);
     assert.deepEqual(normalizarProgramas(lido).at(-1).missoes.map(m => m.comResultados), [true, false, false, false, false]);
+  });
+});
+
+// O Noturno em trechos: a ida, a noite e a volta do Noturno de dois dias, juntas na fase. O que o curso guarda e a tela
+// manda de volta, o que o programa lido mantém, os Noturnos do curso e o nome do Noturno na próxima missão
+describe('O Noturno em trechos (a ida, a noite e a volta)', () => {
+  const { f2, m1, m4, m5, m6, m7 } = IDS;
+  // O ZZ9 com o Noturno em trechos (na Fase 3: ZZ9-06, a ida; ZZ9-05, a noite; ZZ9-07, a volta), gravado e lido de volta
+  // como a tela o tem
+  function lido() {
+    const estado = { cursos: cursosIniciais(), resultados: [], cadastro: { esquema: FORMATO_DOS_CURSOS, versao: 7 } };
+    const { cursos } = gravarCurso(estado, { sigla: 'ZZ9', versaoLida: 0, conteudo: NOTURNO_EM_TRECHOS, descricao: 'Curso ZZ9 criado', agora: AGORA });
+    return normalizarProgramas(programaComResultados({ cursos })).find(c => c.sigla === 'ZZ9');
+  }
+  const trechos = curso => curso.missoes.filter(m => m.trecho).map(m => [m.codigo, m.trecho]);
+  const daMissao = (curso, id) => curso.missoes.find(m => m.id === id);
+  const comMissao = (conteudo, id, campos) => ({ ...conteudo, missoes: conteudo.missoes.map(m => (m.id === id ? { ...m, ...campos } : m)) });
+
+  it('o curso guarda o trecho só na missão que tem um, e a tela manda o mesmo de volta', () => {
+    const zz9 = lido();
+    assert.deepEqual(trechos(zz9), [['ZZ9-06', 'ida'], ['ZZ9-05', 'noite'], ['ZZ9-07', 'volta']]);
+    assert.ok(zz9.missoes.filter(m => !m.trecho).every(m => !Object.hasOwn(m, 'trecho')));
+    assert.deepEqual(conteudoDoCurso(zz9), NOTURNO_EM_TRECHOS);
+    assert.equal(validarCurso(conteudoDoCurso(zz9)), null);
+  });
+
+  it('a missão que deixa de ser Noturno perde o trecho; o Noturno desmanchado é recusado na conferência', () => {
+    const zz9 = lido();
+    const idaNavegacao = mudarMissao(zz9, m6, 'mis', 'Navegação');
+    assert.equal(Object.hasOwn(daMissao(idaNavegacao, m6), 'trecho'), false);
+    assert.deepEqual(trechos(idaNavegacao), [['ZZ9-05', 'noite'], ['ZZ9-07', 'volta']]);
+    assert.equal(validarCurso(conteudoDoCurso(idaNavegacao)), null, 'a noite e a volta continuam um Noturno');
+    const semNoite = mudarMissao(zz9, m5, 'mis', 'Navegação');
+    assert.deepEqual(trechos(semNoite), [['ZZ9-06', 'ida'], ['ZZ9-07', 'volta']]);
+    assert.deepEqual(['code', 'campo'].map(c => validarCurso(conteudoDoCurso(semNoite))[c]), ['22023', 'trecho']);
+    // O nome não mexe no trecho; a volta que sobe para antes da noite desmancha o Noturno
+    assert.deepEqual(trechos(mudarMissao(zz9, m7, 'nome', 'Volta de BH')), trechos(zz9));
+    assert.equal(validarCurso(conteudoDoCurso(moverMissao(zz9, m7, -1))).campo, 'trecho');
+  });
+
+  it('o programa lido: o trecho vale numa missão Noturno, no Noturno inteiro e junto na fase; fora do programa, ele fica', () => {
+    const u = n => `00000000-0000-4000-8100-${String(n).padStart(12, '0')}`;
+    const fase = (n, campos = {}) => ({ id: u(n), nome: `Fase ${n}`, modulo: null, ordem: n - 1, regra: 'ordem', requer: [], removida: false, ...campos });
+    const missao = (n, faseN, trecho, campos = {}) => ({
+      id: u(100 + n), fase: u(faseN), codigo: `PP-${n}`, nome: `Missão ${n}`, mis: 'Noturno', eq: 'C172', nb: 1, ordem: n, regra: 'ordem', requer: [],
+      dispensada: false, avaliacao: false, removida: false, comResultados: false, ...(trecho ? { trecho } : {}), ...campos
+    });
+    const [pp] = normalizarProgramas([{
+      sigla: 'PP', nome: 'Piloto Privado', ordem: 0, ativo: true, versao: 1, alteracoes: [], fases: [fase(1), fase(2), fase(3, { removida: true })],
+      missoes: [
+        // Na Fase 1: um Noturno inteiro; o trecho fora da lista; o trecho num voo local; a ida e a noite com outra missão no meio
+        missao(1, 1, 'ida'), missao(2, 1, 'noite'), missao(3, 1, 'volta'), missao(4, 1, 'translado'), missao(5, 1, 'ida', { mis: 'Voo Local', eq: 'C152' }),
+        missao(6, 1, 'ida'), missao(7, 1), missao(8, 1, 'noite'),
+        // Na Fase 2: duas noites juntas (as três missões perdem o trecho); a ida no fim da fase
+        missao(9, 2, 'ida'), missao(10, 2, 'noite'), missao(11, 2, 'noite'), missao(12, 2), missao(13, 2, 'ida'),
+        // Fora do programa (a missão retirada e a da fase retirada): o trecho fica, para a volta ao programa (no tipo Noturno)
+        missao(14, 2, 'volta', { removida: true }), missao(15, 3, 'ida'), missao(16, 2, 'ida', { removida: true, mis: 'Voo Local', eq: 'C152' })
+      ]
+    }]);
+    assert.deepEqual(trechos(pp), [['PP-1', 'ida'], ['PP-2', 'noite'], ['PP-3', 'volta'], ['PP-8', 'noite'], ['PP-15', 'ida'], ['PP-14', 'volta']]);
+  });
+
+  it('os Noturnos do curso e o nome do Noturno na próxima missão: a noite, com os translados que voam junto', () => {
+    const zz9 = lido();
+    const doNoturno = noturnosDoCurso(zz9);
+    assert.equal(noturnosDoCurso(zz9), doNoturno, 'calculado uma vez por curso');
+    const noturno = doNoturno.get(m5);
+    assert.deepEqual([noturno.ida.codigo, noturno.noite.codigo, noturno.volta.codigo], ['ZZ9-06', 'ZZ9-05', 'ZZ9-07']);
+    assert.deepEqual([doNoturno.get(m6), doNoturno.get(m7), doNoturno.has(m1)], [noturno, noturno, false]);
+    assert.deepEqual([m5, m6, m7, m1].map(id => rotuloDaMissao(zz9, daMissao(zz9, id))), ['ZZ9-05 (com ZZ9-06 e ZZ9-07)', 'ZZ9-06', 'ZZ9-07', 'ZZ9-01']);
+    // Sem a volta; com a ida dispensada (ela não voa); a sequência que não forma um Noturno não conta
+    const semVolta = retirarMissao(zz9, m7);
+    assert.equal(rotuloDaMissao(semVolta, daMissao(semVolta, m5)), 'ZZ9-05 (com ZZ9-06)');
+    const idaDispensada = { ...zz9, missoes: zz9.missoes.map(m => (m.id === m6 ? { ...m, dispensada: true } : m)) };
+    assert.equal(rotuloDaMissao(idaDispensada, daMissao(idaDispensada, m5)), 'ZZ9-05 (com ZZ9-07)');
+    const duasVoltas = { ...zz9, missoes: zz9.missoes.map(m => (m.id === m5 ? { ...m, trecho: 'volta' } : m)) };
+    assert.deepEqual([noturnosDoCurso(duasVoltas).size, rotuloDaMissao(duasVoltas, daMissao(duasVoltas, m5))], [0, 'ZZ9-05']);
+  });
+
+  it('a recusa do trecho vem depois da "avaliação" e antes dos códigos e dos requisitos', () => {
+    const recusa = conteudo => { const { code, campo } = validarCurso(conteudo); return `${code} ${campo}`; };
+    const idaNavegacao = comMissao(NOTURNO_EM_TRECHOS, m6, { mis: 'Navegação' });
+    assert.equal(recusa(comMissao(idaNavegacao, m4, { avaliacao: 1 })), '22023 avaliacao');
+    assert.equal(recusa(comMissao(idaNavegacao, m1, { codigo: 'ZZ9-02' })), '22023 trecho', 'antes do código repetido');
+    const emDuasFases = comMissao(NOTURNO_EM_TRECHOS, m6, { fase: f2 });
+    assert.equal(recusa(comMissao(emDuasFases, m1, { codigo: 'ZZ9-02' })), '22023 trecho', 'a sequência também');
+    assert.equal(recusa(comMissao(emDuasFases, m4, { requer: [m5] })), '22023 trecho', 'antes dos requisitos');
+  });
+
+  it('o programa de antes (o do cadastro) não tem trecho: a conversão não traz nenhum', () => {
+    const legado = normalizarCursos({ PP: [{ id: 'TSL-01', mis: 'Noturno', trecho: 'ida' }, { id: 'NOT', mis: 'Noturno', nb: 3, trecho: 'noite' }] });
+    const [pp] = programaDoLegado(legado, gerarId);
+    assert.deepEqual(pp.missoes.map(m => [m.codigo, Object.hasOwn(m, 'trecho')]), [['TSL-01', false], ['NOT', false]]);
   });
 });
 

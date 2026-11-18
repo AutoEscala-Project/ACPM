@@ -7,7 +7,7 @@
 // erros, na mesma ordem: o modo local grava por elas, e os casos de test/helpers/casos-do-programa.js valem para as duas
 // pontas.
 import { CURSOS, siglaValida, codigoValido, novaMissaoDoCurso } from './cursos.js';
-import { MIS, GROUND_DURATION_H, DURACAO_MAXIMA_H } from './config.js';
+import { MIS, GROUND_DURATION_H, DURACAO_MAXIMA_H, NOTURNO } from './config.js';
 import { duracaoValida } from './rules.js';
 import { FORMATO_DOS_CURSOS } from './migracoes.js';
 
@@ -80,6 +80,84 @@ export function indiceDoPrograma(programa) {
 // travessão longo ou o hífen); sem travessão, o nome inteiro
 export const rotuloDaFase = fase => fase.nome.split(/\s+[–—-]\s+/)[0];
 
+// O Noturno em trechos ------------------------------------------------------------------------------------------------
+// O Noturno de dois dias é um voo só na escala (NOTURNO, em js/config.js), e o programa pode trazê-lo em missões, uma
+// por trecho: a ida (o translado para BH), a noite (o noturno em BH) e a volta (o translado do dia seguinte), todas do
+// tipo Noturno. Na fase, as missões com trecho que vêm uma logo depois da outra são um Noturno só: a ida (se houver), a
+// noite e a volta (se houver), nesta ordem. A próxima missão oferece o Noturno uma vez, pela noite: o pedido leva o
+// código dela, o resultado é dela e vale para os translados
+const TRECHOS = Object.keys(NOTURNO.trechos);
+const FORMAS_DO_NOTURNO = ['noite', 'ida noite', 'noite volta', 'ida noite volta'];
+// O trecho no formato: um dos trechos, numa missão Noturno
+const temTrecho = m => TRECHOS.includes(m.trecho) && m.mis === 'Noturno';
+const semTrecho = ({ trecho, ...m }) => m;
+
+// As missões de cada fase, na ordem em que vêm
+function porFaseNaOrdem(missoes) {
+  const grupos = new Map();
+  for (const m of missoes) {
+    if (!grupos.has(m.fase)) grupos.set(m.fase, []);
+    grupos.get(m.fase).push(m);
+  }
+  return [...grupos.values()];
+}
+
+// As sequências de missões com trecho de uma fase (missoesDaFase: as do programa, na ordem): as que vêm uma logo depois
+// da outra ficam juntas
+function sequenciasComTrecho(missoesDaFase) {
+  const sequencias = [];
+  let atual = null;
+  for (const m of missoesDaFase) {
+    if (!temTrecho(m)) atual = null;
+    else if (atual) atual.push(m);
+    else sequencias.push(atual = [m]);
+  }
+  return sequencias;
+}
+const formaDoNoturno = sequencia => FORMAS_DO_NOTURNO.includes(sequencia.map(m => m.trecho).join(' '));
+
+// Os ids das missões com trecho que não formam um Noturno (missoes: as do programa, na ordem do curso): o trecho delas
+// não vale
+const trechosSoltos = missoes => new Set(porFaseNaOrdem(missoes).flatMap(sequenciasComTrecho).filter(s => !formaDoNoturno(s)).flat().map(m => m.id));
+
+// Os Noturnos do programa do curso: para cada missão de um Noturno, o Noturno dela ({ ida, noite, volta }; sem a ida ou
+// sem a volta, null). A sequência que não forma um Noturno não conta (as missões dela são como as outras). Calculado uma
+// vez por curso
+const noturnos = new WeakMap();
+export function noturnosDoCurso(curso) {
+  if (!noturnos.has(curso)) {
+    const { fases, porFase } = percursoDoCurso(curso);
+    const doNoturno = new Map();
+    for (const sequencia of fases.flatMap(f => sequenciasComTrecho(porFase.get(f.id))).filter(formaDoNoturno)) {
+      const trecho = nome => sequencia.find(m => m.trecho === nome) || null;
+      const noturno = { ida: trecho('ida'), noite: trecho('noite'), volta: trecho('volta') };
+      for (const m of sequencia) doNoturno.set(m.id, noturno);
+    }
+    noturnos.set(curso, doNoturno);
+  }
+  return noturnos.get(curso);
+}
+
+// O nome da missão como a próxima missão: o código; a noite de um Noturno, com os translados dele, que voam junto
+// ("NOT (com TSL-01 e TSL-02)"; o translado dispensado não vai)
+export function rotuloDaMissao(curso, missao) {
+  const noturno = noturnosDoCurso(curso).get(missao.id);
+  const translados = noturno && noturno.noite.id === missao.id ? [noturno.ida, noturno.volta].filter(m => m && !m.dispensada) : [];
+  return translados.length ? `${missao.codigo} (com ${translados.map(m => m.codigo).join(' e ')})` : missao.codigo;
+}
+
+// O trecho do Noturno, como public.gravar_programa: "ida", "noite" ou "volta", só numa missão Noturno; e, em cada fase,
+// cada sequência de missões com trecho é um Noturno (missoes: as do programa, na ordem das listas)
+function conferirTrechos(missoes) {
+  if (!missoes.every(m => m.trecho === undefined || m.trecho === null || temTrecho(m))) {
+    return recusa('22023', 'trecho', 'o trecho do Noturno é "ida", "noite" ou "volta", e só numa missão Noturno');
+  }
+  if (trechosSoltos(missoes).size) {
+    return recusa('22023', 'trecho', 'cada Noturno fica junto na fase: a ida (se houver), uma noite e a volta (se houver), nesta ordem, sem outra missão no meio');
+  }
+  return null;
+}
+
 const ehObjeto = v => v !== null && typeof v === 'object' && !Array.isArray(v);
 const comoLista = v => (Array.isArray(v) ? v : []);
 
@@ -142,12 +220,15 @@ function normalizarCurso(c) {
         id: m.id, fase: m.fase, codigo: m.codigo, nome: nomeCurto(m.nome) || m.codigo, mis: m.mis,
         eq: tipo.eq.includes(m.eq) ? m.eq : tipo.defEq, nb: tipo.isGround ? GROUND_DURATION_H : duracaoValida(m.nb),
         ordem: inteiro(m.ordem), regra: regraConhecida(m.regra), requer: comoLista(m.requer), dispensada: m.dispensada === true,
-        avaliacao: m.avaliacao === true, removida: m.removida === true, comResultados: m.comResultados === true
+        avaliacao: m.avaliacao === true, removida: m.removida === true, comResultados: m.comResultados === true,
+        ...(temTrecho(m) ? { trecho: m.trecho } : {})
       };
     })
     .sort((a, b) => a.removida - b.removida || daFase.get(a.fase).ordem - daFase.get(b.fase).ordem || a.ordem - b.ordem)
     .filter(m => !codigos.has(m.codigo) && codigos.add(m.codigo));
   const missoesDoPrograma = missoes.filter(m => !m.removida).slice(0, LIMITE_DE_MISSOES);
+  // O trecho do Noturno vale só no Noturno inteiro, junto na fase (o da missão fora do programa fica, para a volta dela)
+  const soltos = trechosSoltos(missoesDoPrograma.filter(m => !daFase.get(m.fase).removida));
   const { daFase: posicaoDaFase, daMissao } = posicoes(fasesDoPrograma, missoesDoPrograma.filter(m => !daFase.get(m.fase).removida));
   const soAnteriores = (x, posicao) => {
     const p = posicao.get(x.id);
@@ -158,7 +239,7 @@ function normalizarCurso(c) {
     sigla: c.sigla, nome: nomeCurto(c.nome) || c.sigla, ordem: inteiro(c.ordem), ativo: c.ativo !== false,
     versao: Number.isInteger(c.versao) && c.versao > 0 ? c.versao : 1,
     fases: fasesQueFicam.map(f => soAnteriores(f, posicaoDaFase)),
-    missoes: [...missoesDoPrograma, ...missoes.filter(m => m.removida)].map(m => soAnteriores(m, daMissao)),
+    missoes: [...missoesDoPrograma, ...missoes.filter(m => m.removida)].map(m => soAnteriores(soltos.has(m.id) ? semTrecho(m) : m, daMissao)),
     alteracoes: comoLista(c.alteracoes).filter(a => ehObjeto(a) && Number.isInteger(a.versao) && typeof a.descricao === 'string')
       .slice(0, ALTERACOES_POR_CURSO)
       .map(a => ({ versao: a.versao, descricao: a.descricao, registrado_em: textoOuNulo(a.registrado_em), registrado_por: textoOuNulo(a.registrado_por) }))
@@ -232,7 +313,8 @@ function conferirVersao({ sigla, versaoLida, cursos }) {
 
 // O programa do curso (as fases e as missões), como public.gravar_programa, na mesma ordem: as listas e o limite, os ids
 // (também os de outro curso), os campos (das fases: nome, módulo e regra; das missões: fase, código, nome, tipo com
-// recurso e horas, regra, "dispensada" e "avaliação"), os códigos, os requisitos e o código travado por um resultado.
+// recurso e horas, regra, "dispensada", "avaliação" e o trecho do Noturno, com a sequência dele na fase), os códigos, os
+// requisitos e o código travado por um resultado.
 // contexto: null (só o conteúdo) ou o que está guardado ({ sigla, cursos, resultados, substituir }). Na conversão
 // (substituir), o programa guardado sai inteiro: o código de uma missão retirada e o código com resultados não contam
 function conferirPrograma(conteudo, contexto) {
@@ -275,6 +357,8 @@ function conferirPrograma(conteudo, contexto) {
   if (!missoes.every(regraValida)) return recusa('22023', 'regra', 'a regra da missão é "ordem", "livre" ou "depois"');
   if (!missoes.every(m => simOuNao(m.dispensada))) return recusa('22023', 'dispensada', '"dispensada" é sim ou não');
   if (!missoes.every(m => simOuNao(m.avaliacao))) return recusa('22023', 'avaliacao', '"avaliação" é sim ou não');
+  const erroDoTrecho = conferirTrechos(missoes);
+  if (erroDoTrecho) return erroDoTrecho;
 
   // Os códigos não se repetem no programa nem com os das missões do curso que ficam fora dele (a retirada guarda o código)
   const codigos = missoes.map(m => m.codigo);
@@ -322,7 +406,7 @@ function programaGravado(guardado, conteudo, substituir) {
     missoes: missoes.map(m => ({
       id: m.id, fase: m.fase, codigo: m.codigo, nome: m.nome, mis: m.mis, eq: m.eq, nb: horasDoBanco(m.nb), ordem: ordemNaFase.get(m.id),
       regra: m.regra ?? 'ordem', requer: naOrdemDoCurso(m.requer, daMissao), dispensada: m.dispensada ?? false, avaliacao: m.avaliacao ?? false,
-      removida: false
+      removida: false, ...(m.trecho ? { trecho: m.trecho } : {})
     }))
   };
   if (substituir || !guardado) return novas;
@@ -468,8 +552,8 @@ export function conteudoDoCurso(curso) {
     nome: curso.nome,
     ativo: curso.ativo,
     fases: fases.map(({ id, nome, modulo, regra, requer }) => ({ id, nome, modulo, regra, requer: [...requer] })),
-    missoes: missoes.map(({ id, fase, codigo, nome, mis, eq, nb, regra, requer, dispensada, avaliacao }) => ({
-      id, fase, codigo, nome, mis, eq, nb, regra, requer: [...requer], dispensada, avaliacao
+    missoes: missoes.map(({ id, fase, codigo, nome, mis, eq, nb, regra, requer, dispensada, avaliacao, trecho }) => ({
+      id, fase, codigo, nome, mis, eq, nb, regra, requer: [...requer], dispensada, avaliacao, ...(trecho ? { trecho } : {})
     }))
   };
 }
@@ -523,7 +607,8 @@ export function mudarMissao(curso, id, campo, valor) {
   } else if (campo === 'mis') {
     if (typeof valor !== 'string' || !Object.hasOwn(MIS, valor)) return null;
     const tipo = MIS[valor];
-    novo = { ...m, mis: valor, eq: tipo.eq.includes(m.eq) ? m.eq : tipo.defEq, nb: tipo.isGround ? GROUND_DURATION_H : m.nb };
+    // O trecho do Noturno sai com o tipo Noturno
+    novo = { ...(valor === 'Noturno' ? m : semTrecho(m)), mis: valor, eq: tipo.eq.includes(m.eq) ? m.eq : tipo.defEq, nb: tipo.isGround ? GROUND_DURATION_H : m.nb };
   } else if (campo === 'eq' || campo === 'nb') {
     novo = { ...m, [campo]: valor };
   } else {

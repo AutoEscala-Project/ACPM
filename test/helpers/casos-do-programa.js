@@ -12,12 +12,16 @@
 // - o que vem é o programa: a fase ou a missão que não vem (ou vem com removida: true) sai dele, sem ser apagada, e
 //   guarda o resto (a ordem também) menos os requisitos; a que volta entra de novo, com o que vier;
 // - a ordem é a posição na lista: das fases, no programa; das missões, dentro da fase;
-// - as listas de fases e de missões vêm sempre; o módulo, a regra, os requisitos, "dispensada" e "avaliação" podem
-//   faltar (null, 'ordem', [], false e false);
+// - as listas de fases e de missões vêm sempre; o módulo, a regra, os requisitos, "dispensada", "avaliação" e o trecho
+//   do Noturno podem faltar (null, 'ordem', [], false, false e nenhum);
+// - o trecho do Noturno ("ida", "noite" ou "volta") vai só numa missão Noturno, e na fase as missões com trecho que vêm
+//   uma logo depois da outra são um Noturno só: a ida (se houver), uma noite e a volta (se houver), nesta ordem (a noite
+//   sozinha também vale); o curso guarda o trecho só na missão que tem um;
 // - a primeira recusa decide, nesta ordem: o papel, o formato do cadastro (antes do formato dos cursos), a descrição, o
 //   curso (nome e ativo), a sigla (criar) ou a versão lida, e o programa: as listas e o limite, os ids (outro curso
 //   também), os campos (das fases: nome, módulo e regra; das missões: fase, código, nome, tipo com recurso e horas,
-//   regra, "dispensada" e "avaliação"), os códigos, os requisitos e o código travado por um resultado;
+//   regra, "dispensada", "avaliação" e o trecho do Noturno, com a sequência dele na fase), os códigos, os requisitos e o
+//   código travado por um resultado;
 // - a conversão troca o programa inteiro (o guardado é apagado), pula o curso igual e o que não existe, e com o
 //   cadastro no formato dos cursos não grava nada.
 import { FORMATO_DOS_CURSOS } from '../../js/migracoes.js';
@@ -29,11 +33,12 @@ export const IDS = Object.freeze({
   // Um id que não está no programa, e um id com letras maiúsculas (o banco só aceita o uuid em minúsculas)
   fora: id('9001', 9), maiusculo: '00000000-0000-4000-9002-0000000000AB',
   m1: id('9002', 1), m2: id('9002', 2), m3: id('9002', 3), m4: id('9002', 4), m5: id('9002', 5), m6: id('9002', 6),
+  m7: id('9002', 7), m8: id('9002', 8),
   // O curso ZZ8: a fase guardada e o programa trazido do cadastro (uma fase "Programa" com duas missões)
   faseDoZZ8: id('9008', 1),
   programa: id('9003', 1), legado1: id('9004', 1), legado2: id('9004', 2)
 });
-const { f1, f2, f3, m1, m2, m3, m4, m5, m6 } = IDS;
+const { f1, f2, f3, m1, m2, m3, m4, m5, m6, m7, m8 } = IDS;
 
 // O conteúdo que o app manda para gravar o curso de teste ZZ9 (p_curso): três fases (a terceira "depois de" a
 // primeira, sem módulo) e cinco missões (uma livre, uma dispensada, uma de avaliação "depois de" outra fase e o Ground)
@@ -58,6 +63,15 @@ export const PROGRAMA = {
 const comMissao = (conteudo, qual, campos) => ({ ...conteudo, missoes: conteudo.missoes.map(m => (m.id === qual ? { ...m, ...campos } : m)) });
 const comFase = (conteudo, qual, campos) => ({ ...conteudo, fases: conteudo.fases.map(f => (f.id === qual ? { ...f, ...campos } : f)) });
 const semMissao = (conteudo, qual) => ({ ...conteudo, missoes: conteudo.missoes.filter(m => m.id !== qual) });
+
+// O Noturno em trechos (p_curso): na Fase 3, a ida (ZZ9-06), a noite (a ZZ9-05) e a volta (ZZ9-07), juntas e nesta
+// ordem
+const IDA = { id: m6, fase: f3, codigo: 'ZZ9-06', nome: 'Translado de ida', mis: 'Noturno', eq: 'C172', nb: 1, regra: 'ordem', requer: [], dispensada: false, avaliacao: false, trecho: 'ida' };
+const NOITE = { ...PROGRAMA.missoes[4], trecho: 'noite' };
+const VOLTA = { id: m7, fase: f3, codigo: 'ZZ9-07', nome: 'Translado de volta', mis: 'Noturno', eq: 'C172', nb: 1, regra: 'ordem', requer: [], dispensada: false, avaliacao: false, trecho: 'volta' };
+export const NOTURNO_EM_TRECHOS = { ...PROGRAMA, missoes: [...PROGRAMA.missoes.slice(0, 4), IDA, NOITE, VOLTA] };
+// Uma missão sem trecho no meio do Noturno
+const NO_MEIO = { id: m8, fase: f3, codigo: 'ZZ9-08', nome: 'Voo local em BH', mis: 'Voo Local', eq: 'C172', nb: 1 };
 
 const SEM_M5 = semMissao(PROGRAMA, m5);
 const TROCADOS = comMissao(comMissao(SEM_M5, m2, { codigo: 'ZZ9-03' }), m3, { codigo: 'ZZ9-02' });
@@ -96,6 +110,8 @@ const ZZ9_V2 = versao(ZZ9_V1, 2, { [m5]: { removida: true } });
 const ZZ9_V3 = versao(ZZ9_V2, 3, { [m2]: { codigo: 'ZZ9-03' }, [m3]: { codigo: 'ZZ9-02' } });
 const ZZ9_V4 = versao(ZZ9_V3, 4, { [m5]: { removida: false } });
 const ZZ9_V5 = versao(ZZ9_V4, 5, { [m4]: { removida: true, requer: [] } });
+// O ZZ9 da versão 1 gravado de novo (versão 2) com a Fase 3 nestas missões, nesta ordem
+const comAFase3 = (...missoes) => ({ ...ZZ9_V1, versao: 2, missoes: [...ZZ9_V1.missoes.slice(0, 4), ...missoes.map((m, ordem) => ({ ...m, ordem, removida: false }))] });
 const ZZ8_TRAZIDO = {
   ...ZZ8, versao: 2,
   fases: [{ id: IDS.programa, nome: 'Programa', modulo: null, ordem: 0, regra: 'ordem', requer: [], removida: false }],
@@ -210,6 +226,52 @@ export const CASOS_DO_PROGRAMA = [
   {
     nome: '"avaliação" fora de sim ou não é recusada (22023, avaliacao)', antes: estado(ZZ9_V1),
     salvar: salvar(1, comMissao(PROGRAMA, m4, { avaliacao: 1 })), ...recusa('22023', 'avaliacao')
+  },
+
+  // O Noturno em trechos (o ZZ9 guardado na versão 1)
+  {
+    nome: 'o Noturno com a ida, a noite e a volta, juntas na fase', antes: estado(ZZ9_V1),
+    salvar: salvar(1, NOTURNO_EM_TRECHOS), retorno: { versao: 2 }, depois: comAFase3(IDA, NOITE, VOLTA), alteracao: versaoGravada('ZZ9', 2, 'ZZ9: alteração de teste')
+  },
+  {
+    nome: 'o Noturno só com a noite', antes: estado(ZZ9_V1),
+    salvar: salvar(1, comMissao(PROGRAMA, m5, { trecho: 'noite' })), retorno: { versao: 2 }, depois: comAFase3(NOITE), alteracao: versaoGravada('ZZ9', 2, 'ZZ9: alteração de teste')
+  },
+  {
+    nome: 'o Noturno com a ida e a noite, sem a volta', antes: estado(ZZ9_V1),
+    salvar: salvar(1, semMissao(NOTURNO_EM_TRECHOS, m7)), retorno: { versao: 2 }, depois: comAFase3(IDA, NOITE), alteracao: versaoGravada('ZZ9', 2, 'ZZ9: alteração de teste')
+  },
+  {
+    nome: 'o Noturno com a noite e a volta, sem a ida', antes: estado(ZZ9_V1),
+    salvar: salvar(1, semMissao(NOTURNO_EM_TRECHOS, m6)), retorno: { versao: 2 }, depois: comAFase3(NOITE, VOLTA), alteracao: versaoGravada('ZZ9', 2, 'ZZ9: alteração de teste')
+  },
+  {
+    nome: 'trecho numa missão que não é Noturno é recusado (22023, trecho)', antes: estado(ZZ9_V1),
+    salvar: salvar(1, comMissao(NOTURNO_EM_TRECHOS, m6, { mis: 'Navegação' })), ...recusa('22023', 'trecho')
+  },
+  {
+    nome: 'trecho fora da lista é recusado (22023, trecho)', antes: estado(ZZ9_V1),
+    salvar: salvar(1, comMissao(NOTURNO_EM_TRECHOS, m6, { trecho: 'translado' })), ...recusa('22023', 'trecho')
+  },
+  {
+    nome: 'a ida sem a noite logo depois é recusada (22023, trecho)', antes: estado(ZZ9_V1),
+    salvar: salvar(1, semMissao(comMissao(NOTURNO_EM_TRECHOS, m5, { trecho: null }), m7)), ...recusa('22023', 'trecho')
+  },
+  {
+    nome: 'a volta sem a noite logo antes é recusada (22023, trecho)', antes: estado(ZZ9_V1),
+    salvar: salvar(1, semMissao(comMissao(NOTURNO_EM_TRECHOS, m5, { trecho: null }), m6)), ...recusa('22023', 'trecho')
+  },
+  {
+    nome: 'duas noites no mesmo Noturno são recusadas (22023, trecho)', antes: estado(ZZ9_V1),
+    salvar: salvar(1, comMissao(NOTURNO_EM_TRECHOS, m7, { trecho: 'noite' })), ...recusa('22023', 'trecho')
+  },
+  {
+    nome: 'outra missão no meio do Noturno é recusada (22023, trecho)', antes: estado(ZZ9_V1),
+    salvar: salvar(1, { ...NOTURNO_EM_TRECHOS, missoes: [...NOTURNO_EM_TRECHOS.missoes.slice(0, 6), NO_MEIO, VOLTA] }), ...recusa('22023', 'trecho')
+  },
+  {
+    nome: 'o Noturno em duas fases é recusado (22023, trecho)', antes: estado(ZZ9_V1),
+    salvar: salvar(1, comMissao(NOTURNO_EM_TRECHOS, m6, { fase: f2 })), ...recusa('22023', 'trecho')
   },
 
   // Tirar, trocar e voltar

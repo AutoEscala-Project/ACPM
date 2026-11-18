@@ -1,15 +1,16 @@
 -- Os cursos, as fases e as missões em tabelas próprias. Quem lê a escala lê os programas; a TV, a conta sem perfil e o
 -- anônimo, não. Só o Administrador grava, o curso inteiro e a partir da versão lida (cada recusa traz o campo na dica), e
--- ninguém grava direto nas tabelas. A conversão única do programa guardado no cadastro vale só antes do formato dos
--- cursos (public.formato_dos_cursos(), que monta os cadastros de teste: nenhum número de formato fica aqui). As
--- verificações da gravação são os casos de test/helpers/casos-do-programa.js, com os mesmos dados (o nome do caso é a
--- descrição; test/unit/espelho-do-banco.test.js confere). Os cursos de teste são o ZZ9 e o ZZ8, o aluno fica acima de
--- 99000 e o cadastro é trocado: a transação é desfeita no final.
+-- ninguém grava direto nas tabelas. O Noturno pode vir em trechos (a ida, a noite e a volta, juntas na fase). A conversão
+-- única do programa guardado no cadastro vale só antes do formato dos cursos (public.formato_dos_cursos(), que monta os
+-- cadastros de teste: nenhum número de formato fica aqui). As verificações da gravação são os casos de
+-- test/helpers/casos-do-programa.js, com os mesmos dados (o nome do caso é a descrição;
+-- test/unit/espelho-do-banco.test.js confere). Os cursos de teste são o ZZ9 e o ZZ8, o aluno fica acima de 99000 e o
+-- cadastro é trocado: a transação é desfeita no final.
 begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions;
 
-select plan(75);
+select plan(91);
 
 insert into auth.users (id, email, created_at, updated_at) values
   ('00000000-0000-4000-f000-000000000001', 'administrador@cursos.acpm.invalid', now(), now()),
@@ -68,6 +69,25 @@ create function pg_temp.programa()
     {"id": "00000000-0000-4000-9002-000000000005", "fase": "00000000-0000-4000-9001-000000000003", "codigo": "ZZ9-05", "nome": "Noturno", "mis": "Noturno", "eq": "C172", "nb": 3, "regra": "ordem", "requer": [], "dispensada": false, "avaliacao": false}
   ]}'::jsonb $$;
 
+-- O programa com o Noturno em trechos: na Fase 3, a ida (ZZ9-06), a noite (a ZZ9-05) e a volta (ZZ9-07), juntas e nesta
+-- ordem (NOTURNO_EM_TRECHOS em test/helpers/casos-do-programa.js)
+create function pg_temp.noturno()
+  returns jsonb language sql as $$ select '{"nome": "Curso de teste", "ativo": true,
+  "fases": [
+    {"id": "00000000-0000-4000-9001-000000000001", "nome": "Fase 1 – Duplo comando", "modulo": "Módulo 01 – Treinamento", "regra": "ordem", "requer": []},
+    {"id": "00000000-0000-4000-9001-000000000002", "nome": "Fase 2 – Solo", "modulo": "Módulo 01 – Treinamento", "regra": "ordem", "requer": []},
+    {"id": "00000000-0000-4000-9001-000000000003", "nome": "Fase 3 – Noturno", "modulo": null, "regra": "depois", "requer": ["00000000-0000-4000-9001-000000000001"]}
+  ],
+  "missoes": [
+    {"id": "00000000-0000-4000-9002-000000000001", "fase": "00000000-0000-4000-9001-000000000001", "codigo": "ZZ9-01", "nome": "Primeiro voo", "mis": "Voo Local", "eq": "C152", "nb": 1, "regra": "ordem", "requer": [], "dispensada": false, "avaliacao": false},
+    {"id": "00000000-0000-4000-9002-000000000002", "fase": "00000000-0000-4000-9001-000000000001", "codigo": "ZZ9-02", "nome": "Ground do C152", "mis": "Ground C152", "eq": "Sala Ground", "nb": 1.5, "regra": "livre", "requer": [], "dispensada": false, "avaliacao": false},
+    {"id": "00000000-0000-4000-9002-000000000003", "fase": "00000000-0000-4000-9001-000000000002", "codigo": "ZZ9-03", "nome": "Adaptação", "mis": "Voo Local", "eq": "C152", "nb": 1, "regra": "ordem", "requer": [], "dispensada": true, "avaliacao": false},
+    {"id": "00000000-0000-4000-9002-000000000004", "fase": "00000000-0000-4000-9001-000000000002", "codigo": "ZZ9-04", "nome": "Solo", "mis": "Voo Solo", "eq": "C152", "nb": 1, "regra": "depois", "requer": ["00000000-0000-4000-9002-000000000001"], "dispensada": false, "avaliacao": true},
+    {"id": "00000000-0000-4000-9002-000000000006", "fase": "00000000-0000-4000-9001-000000000003", "codigo": "ZZ9-06", "nome": "Translado de ida", "mis": "Noturno", "eq": "C172", "nb": 1, "regra": "ordem", "requer": [], "dispensada": false, "avaliacao": false, "trecho": "ida"},
+    {"id": "00000000-0000-4000-9002-000000000005", "fase": "00000000-0000-4000-9001-000000000003", "codigo": "ZZ9-05", "nome": "Noturno", "mis": "Noturno", "eq": "C172", "nb": 3, "regra": "ordem", "requer": [], "dispensada": false, "avaliacao": false, "trecho": "noite"},
+    {"id": "00000000-0000-4000-9002-000000000007", "fase": "00000000-0000-4000-9001-000000000003", "codigo": "ZZ9-07", "nome": "Translado de volta", "mis": "Noturno", "eq": "C172", "nb": 1, "regra": "ordem", "requer": [], "dispensada": false, "avaliacao": false, "trecho": "volta"}
+  ]}'::jsonb $$;
+
 -- O programa com os códigos de ZZ9-02 e ZZ9-03 trocados
 create function pg_temp.trocados()
   returns jsonb language sql as $$
@@ -83,6 +103,38 @@ create function pg_temp.legado()
      {"id": "00000000-0000-4000-9004-000000000001", "fase": "00000000-0000-4000-9003-000000000001", "codigo": "ZZ8-01", "nome": "Voo local", "mis": "Voo Local", "eq": "C152", "nb": 1, "regra": "ordem", "requer": [], "dispensada": false, "avaliacao": false},
      {"id": "00000000-0000-4000-9004-000000000002", "fase": "00000000-0000-4000-9003-000000000001", "codigo": "ZZ8-02", "nome": "Navegação", "mis": "Navegação", "eq": "C152", "nb": 2.5, "regra": "ordem", "requer": [], "dispensada": false, "avaliacao": false}]},
   {"sigla": "ZZ7", "fases": [], "missoes": []}]'::jsonb $$;
+
+-- O resultado de uma consulta (um jsonb), com o que ela gravou desfeito: as verificações seguintes partem do mesmo estado
+create function pg_temp.desfeito(p_sql text)
+  returns jsonb language plpgsql as $$
+declare
+  v_resultado jsonb;
+begin
+  begin
+    execute p_sql into v_resultado;
+    raise exception 'pg_temp.desfeito';
+  exception when others then
+    if sqlerrm <> 'pg_temp.desfeito' then
+      raise;
+    end if;
+  end;
+  return v_resultado;
+end;
+$$;
+
+-- Grava o ZZ9 (a partir da versão 1) e devolve a versão que a gravação deu e o trecho de cada missão que tem um, na
+-- ordem do programa, como quem lê a escala recebe (programa_dos_cursos)
+create function pg_temp.com_trechos(p_curso jsonb)
+  returns jsonb language plpgsql as $$
+declare
+  v_retorno jsonb := public.salvar_curso('ZZ9', 1, p_curso, 'ZZ9: alteração de teste') -> 'versao';
+begin
+  return jsonb_build_object('retorno', v_retorno, 'trechos', (
+    select coalesce(jsonb_agg(jsonb_build_array(m.e ->> 'codigo', m.e -> 'trecho') order by m.i), '[]'::jsonb)
+    from jsonb_array_elements(public.programa_dos_cursos()) c, jsonb_array_elements(c -> 'missoes') with ordinality m(e, i)
+    where c ->> 'sigla' = 'ZZ9' and m.e ? 'trecho'));
+end;
+$$;
 
 -- O ZZ9 como ficou: a versão, o código de cada missão (por id) e se saiu do programa, e a última versão registrada
 create function pg_temp.zz9()
@@ -141,6 +193,11 @@ select has_function('public', 'programa_dos_cursos', array[]::name[], 'função 
 select has_function('public', 'salvar_curso', array['text', 'integer', 'jsonb', 'text'], 'função salvar_curso existe');
 select has_function('public', 'importar_cursos', array['jsonb', 'integer'], 'função importar_cursos existe');
 select has_function('public', 'missao_e_recurso_validos', array['text', 'text', 'numeric'], 'função missao_e_recurso_validos existe');
+select has_column('public', 'missoes_do_curso', 'trecho', 'coluna trecho (o trecho do Noturno) existe em missoes_do_curso');
+-- A conversão compara o programa sem o trecho do Noturno
+select is(public.assinatura_do_programa(pg_temp.noturno()),
+  public.assinatura_do_programa(pg_temp.noturno() #- '{missoes,4,trecho}' #- '{missoes,5,trecho}' #- '{missoes,6,trecho}'),
+  'a assinatura do programa não conta o trecho do Noturno');
 -- Cada gravação de um curso (a conversão do cadastro também) soma uma versão e registra uma linha em versoes_dos_cursos
 select results_eq($$ select c.sigla, c.ordem, c.versao - (select count(*)::integer from public.versoes_dos_cursos v where v.curso = c.sigla)
                      from public.cursos c where c.sigla in ('PP', 'PC', 'INVA') order by c.ordem $$,
@@ -246,6 +303,33 @@ select is(pg_temp.erro($$ select public.salvar_curso('ZZ9', 1, jsonb_set(pg_temp
   '22023 dispensada', '"dispensada" fora de sim ou não é recusada (22023, dispensada)');
 select is(pg_temp.erro($$ select public.salvar_curso('ZZ9', 1, jsonb_set(pg_temp.programa(), '{missoes,3,avaliacao}', '1'), 'ZZ9: alteração de teste') $$),
   '22023 avaliacao', '"avaliação" fora de sim ou não é recusada (22023, avaliacao)');
+-- O Noturno em trechos: o que vale volta com o trecho de cada missão (e nada fica gravado); o resto é recusado
+select is(pg_temp.desfeito($$ select pg_temp.com_trechos(pg_temp.noturno()) $$),
+  '{"retorno": 2, "trechos": [["ZZ9-06", "ida"], ["ZZ9-05", "noite"], ["ZZ9-07", "volta"]]}'::jsonb,
+  'o Noturno com a ida, a noite e a volta, juntas na fase');
+select is(pg_temp.desfeito($$ select pg_temp.com_trechos(jsonb_set(pg_temp.programa(), '{missoes,4,trecho}', '"noite"')) $$),
+  '{"retorno": 2, "trechos": [["ZZ9-05", "noite"]]}'::jsonb, 'o Noturno só com a noite');
+select is(pg_temp.desfeito($$ select pg_temp.com_trechos(pg_temp.noturno() #- '{missoes,6}') $$),
+  '{"retorno": 2, "trechos": [["ZZ9-06", "ida"], ["ZZ9-05", "noite"]]}'::jsonb, 'o Noturno com a ida e a noite, sem a volta');
+select is(pg_temp.desfeito($$ select pg_temp.com_trechos(pg_temp.noturno() #- '{missoes,4}') $$),
+  '{"retorno": 2, "trechos": [["ZZ9-05", "noite"], ["ZZ9-07", "volta"]]}'::jsonb, 'o Noturno com a noite e a volta, sem a ida');
+select is((select versao from public.cursos where sigla = 'ZZ9'), 1, 'e o ZZ9 continua na versão 1');
+select is(pg_temp.erro($$ select public.salvar_curso('ZZ9', 1, jsonb_set(pg_temp.noturno(), '{missoes,4,mis}', '"Navegação"'), 'ZZ9: alteração de teste') $$),
+  '22023 trecho', 'trecho numa missão que não é Noturno é recusado (22023, trecho)');
+select is(pg_temp.erro($$ select public.salvar_curso('ZZ9', 1, jsonb_set(pg_temp.noturno(), '{missoes,4,trecho}', '"translado"'), 'ZZ9: alteração de teste') $$),
+  '22023 trecho', 'trecho fora da lista é recusado (22023, trecho)');
+select is(pg_temp.erro($$ select public.salvar_curso('ZZ9', 1, jsonb_set(pg_temp.noturno() #- '{missoes,6}', '{missoes,5,trecho}', 'null'), 'ZZ9: alteração de teste') $$),
+  '22023 trecho', 'a ida sem a noite logo depois é recusada (22023, trecho)');
+select is(pg_temp.erro($$ select public.salvar_curso('ZZ9', 1, jsonb_set(pg_temp.noturno() #- '{missoes,4}', '{missoes,4,trecho}', 'null'), 'ZZ9: alteração de teste') $$),
+  '22023 trecho', 'a volta sem a noite logo antes é recusada (22023, trecho)');
+select is(pg_temp.erro($$ select public.salvar_curso('ZZ9', 1, jsonb_set(pg_temp.noturno(), '{missoes,6,trecho}', '"noite"'), 'ZZ9: alteração de teste') $$),
+  '22023 trecho', 'duas noites no mesmo Noturno são recusadas (22023, trecho)');
+select is(pg_temp.erro($$ select public.salvar_curso('ZZ9', 1, jsonb_insert(pg_temp.noturno(), '{missoes,6}',
+    '{"id": "00000000-0000-4000-9002-000000000008", "fase": "00000000-0000-4000-9001-000000000003", "codigo": "ZZ9-08", "nome": "Voo local em BH", "mis": "Voo Local", "eq": "C172", "nb": 1}'),
+    'ZZ9: alteração de teste') $$),
+  '22023 trecho', 'outra missão no meio do Noturno é recusada (22023, trecho)');
+select is(pg_temp.erro($$ select public.salvar_curso('ZZ9', 1, jsonb_set(pg_temp.noturno(), '{missoes,4,fase}', '"00000000-0000-4000-9001-000000000002"'), 'ZZ9: alteração de teste') $$),
+  '22023 trecho', 'o Noturno em duas fases é recusado (22023, trecho)');
 
 -- Tirar, trocar e voltar: o que não vem sai do programa e fica guardado (com o código)
 select is(pg_temp.gravar(1, pg_temp.programa() #- '{missoes,4}'), '{"retorno": 2, "versao": 2,
@@ -281,8 +365,12 @@ select throws_ok($$ insert into public.cursos (sigla, nome) values ('ZZ6', 'Dire
 select throws_ok($$ update public.missoes_do_curso set nome = 'Direto na tabela' where curso = 'ZZ9' $$, '42501', null, 'ninguém altera as missões direto');
 select throws_ok($$ delete from public.versoes_dos_cursos where curso = 'ZZ9' $$, '42501', null, 'ninguém apaga as versões');
 
--- A conversão única, com o cadastro ainda no formato de antes (um abaixo do formato dos cursos, na versão 7)
+-- A tabela também guarda o trecho só numa missão Noturno
 reset role;
+select throws_ok($$ update public.missoes_do_curso set trecho = 'ida' where curso = 'ZZ9' and codigo = 'ZZ9-01' $$, '23514', null,
+  'o trecho só fica numa missão Noturno, também direto na tabela');
+
+-- A conversão única, com o cadastro ainda no formato de antes (um abaixo do formato dos cursos, na versão 7)
 update public.documentos set conteudo = jsonb_build_object('esquema', public.formato_dos_cursos() - 1, 'stu', '[]'::jsonb, 'ins', '[]'::jsonb)
 where chave = 'cadastro';
 set local role authenticated;
@@ -292,6 +380,9 @@ select is(pg_temp.erro($$ select public.salvar_curso('ZZ9', 5, jsonb_set(pg_temp
 select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-f000-000000000003","role":"authenticated"}', true);
 select throws_ok($$ select public.importar_cursos(pg_temp.legado(), 7) $$, '42501', null, 'o gestor não faz a conversão');
 select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-f000-000000000002","role":"authenticated"}', true);
+select is(pg_temp.desfeito($$ select pg_temp.importar(jsonb_build_array(pg_temp.legado() -> 0 #- '{missoes,1}', pg_temp.legado() -> 0), 7) $$),
+  '{"trazidas": 3, "versao": 3, "fases": ["Programa"], "missoes": ["ZZ8-01", "ZZ8-02"], "alteracao": [3, "Programa trazido do cadastro (2 missões)", "Operador de teste"]}'::jsonb,
+  'o mesmo curso duas vezes na conversão: vale a ordem da lista');
 select is(pg_temp.importar(pg_temp.legado(), 7), '{"trazidas": 2, "versao": 2, "fases": ["Programa"], "missoes": ["ZZ8-01", "ZZ8-02"],
   "alteracao": [2, "Programa trazido do cadastro (2 missões)", "Operador de teste"]}'::jsonb,
   'o operador traz o programa do cadastro (antes do formato dos cursos, a versão lida)');

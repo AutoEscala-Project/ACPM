@@ -13,6 +13,8 @@ import { setS } from '../../js/state.js';
 import { etapaNaDemanda, progressoDoAluno, outraMissaoDoPedido, cursoDoResultado } from '../../js/views/etapas.js';
 import { cursoPP } from '../helpers/programa-pp.js';
 import { mulberry32 } from '../helpers/cenarios.js';
+import { importarSolicitacoes } from '../../js/agenda.js';
+import { aluno as alunoDoCenario } from '../helpers/montar.js';
 
 const ALUNO = 1000;
 const PP = cursoPP();
@@ -376,6 +378,135 @@ describe('Na Demanda e em Alunos', () => {
     assert.equal(cursoDoResultado(voo), null);
     abrir({ stu: [] });
     assert.equal(cursoDoResultado(voo), null, 'o aluno saiu do cadastro');
+  });
+});
+
+// O Noturno em trechos (js/programa.js): a ida (TSL-01), a noite (NOT) e a volta (TSL-02) são um voo só. Num pedaço do
+// PP com a Fase 6 (o noturno) impressa depois da Fase 8 e aberta depois da Fase 4, a próxima missão oferece o Noturno uma
+// vez, pela noite (com os translados no nome); os translados nunca vão sozinhos e estão feitos quando a noite está
+describe('O Noturno em trechos: TSL-01, NOT e TSL-02 num voo só', () => {
+  const fase = (numero, ordem, campos = {}) => ({ id: `NT:F${numero}`, nome: `Fase ${numero}`, modulo: null, ordem, regra: 'ordem', requer: [], removida: false, ...campos });
+  const missao = (numero, codigo, ordem, campos = {}) => ({
+    id: `NT:${codigo}`, fase: `NT:F${numero}`, codigo, nome: codigo, mis: 'Voo Local', eq: 'C152', nb: 1, ordem, regra: 'ordem', requer: [], dispensada: false,
+    avaliacao: false, removida: false, ...campos
+  });
+  const noturno = (codigo, ordem, trecho, nb = 1) => missao(6, codigo, ordem, { mis: 'Noturno', eq: 'C172', nb, trecho });
+  // As Fases 4, 5 (a SPIN livre), 7, 8, 6 (o Noturno, depois da Fase 4) e 9; com trechos, ou com os translados como
+  // navegações do C172 e a noite sem trecho (como o cronograma de antes)
+  const curso = ({ trechos = true, mudar = {} } = {}) => ({
+    sigla: 'PP', nome: 'Piloto Privado', ordem: 0, ativo: true,
+    fases: [fase(4, 0), fase(5, 1), fase(7, 2), fase(8, 3), fase(6, 4, { regra: 'depois', requer: ['NT:F4'] }), fase(9, 5)],
+    missoes: [
+      missao(4, 'TMA-01', 0), missao(4, 'TMA-02', 1), missao(5, 'NAV-01', 0, { mis: 'Navegação', nb: 1.5 }), missao(5, 'PE-04', 1, { mis: 'Parafuso', regra: 'livre' }),
+      missao(7, 'END-SOLO', 0), missao(8, 'END-SOLO-NAV', 0, { mis: 'Navegação' }),
+      ...(trechos ? [noturno('TSL-01', 0, 'ida'), noturno('NOT', 1, 'noite', 3), noturno('TSL-02', 2, 'volta')]
+        : [missao(6, 'TSL-01', 0, { mis: 'Navegação', eq: 'C172' }), noturno('NOT', 1, undefined, 3), missao(6, 'TSL-02', 2, { mis: 'Navegação', eq: 'C172' })]),
+      missao(9, 'AVX-CQ', 0, { mis: 'Navegação', nb: 2 })
+    ].map(m => ({ ...m, ...mudar[m.codigo] }))
+  });
+  const NT = curso();
+  const nid = codigo => `NT:${codigo}`;
+  const mapaDe = registros => situacaoPorMissao(registros.map(([codigo, resultado = 'aprovado']) => reg(codigo, resultado)));
+  const feitas = (...codigos) => mapaDe(codigos.map(c => [c]));
+  const ATE_A_8 = ['TMA-01', 'TMA-02', 'NAV-01', 'PE-04', 'END-SOLO', 'END-SOLO-NAV'];
+  const codigosDe = lista => lista.map(m => m.codigo);
+  const noNoturno = { estado: 'no-noturno', noturno: nid('NOT'), faltam: [], fasesFechadas: [], dependeDe: [] };
+
+  it('o Noturno é oferecido uma vez, pela noite: depois da Fase 4, embora impresso depois da Fase 8; os translados, nunca sozinhos', () => {
+    const nada = estadoDoAluno(NT, feitas(), ALUNO);
+    assert.deepEqual(codigosDe(nada.candidatas), ['TMA-01']);
+    assert.deepEqual(nada.porMissao.get(nid('NOT')), { estado: 'bloqueada', faltam: [nid('TMA-01'), nid('TMA-02')], fasesFechadas: ['NT:F4'], dependeDe: [] });
+    assert.deepEqual([nada.porMissao.get(nid('TSL-01')), nada.porMissao.get(nid('TSL-02'))], [noNoturno, noNoturno]);
+    // A Fase 4 aprovada: a NAV-01, a SPIN e o Noturno (a noite espera o que a ida espera, não a ida)
+    const ate4 = estadoDoAluno(NT, feitas('TMA-01', 'TMA-02'), ALUNO);
+    assert.deepEqual(codigosDe(ate4.candidatas), ['NAV-01', 'PE-04', 'NOT']);
+    assert.deepEqual(ate4.porMissao.get(nid('NOT')), { estado: 'liberada', faltam: [], fasesFechadas: [], dependeDe: [] });
+    assert.equal(proximasMissoes(NT, feitas('TMA-01', 'TMA-02'), ALUNO, { preferencia: m => (m.eq === 'C172' ? 2 : 1) }).padrao.codigo, 'NOT', 'no C172');
+    // Até a Fase 8: só o Noturno; a Fase 9 espera por ele (a noite, não os translados)
+    const ate8 = estadoDoAluno(NT, feitas(...ATE_A_8), ALUNO);
+    assert.deepEqual(codigosDe(ate8.candidatas), ['NOT']);
+    assert.deepEqual(ate8.porMissao.get(nid('AVX-CQ')), { estado: 'bloqueada', faltam: [nid('NOT')], fasesFechadas: ['NT:F6'], dependeDe: [] });
+  });
+
+  it('a noite aprovada (ou dispensada) faz o Noturno: os translados contam feitos no Noturno, sem resultado deles', () => {
+    const comNoturno = feitas(...ATE_A_8, 'NOT');
+    const { porMissao, candidatas: lista } = estadoDoAluno(NT, comNoturno, ALUNO);
+    assert.deepEqual(codigosDe(lista), ['AVX-CQ']);
+    assert.deepEqual([porMissao.get(nid('NOT')).estado, porMissao.get(nid('TSL-01')), porMissao.get(nid('TSL-02'))], ['aprovada', noNoturno, noNoturno]);
+    const fase9 = NT.fases.find(f => f.id === 'NT:F9');
+    assert.deepEqual(progressoNoCurso(NT, comNoturno, ALUNO), { aprovadas: 9, total: 10, faseAtual: fase9, proxima: NT.missoes.at(-1), concluido: false });
+    assert.equal(progressoNoCurso(NT, feitas(...ATE_A_8, 'NOT', 'AVX-CQ'), ALUNO).concluido, true);
+    // A noite reprovada: o Noturno volta; o resultado de um translado (de antes) não faz o Noturno nem conta sozinho
+    assert.deepEqual(codigosDe(estadoDoAluno(NT, mapaDe([...ATE_A_8.map(c => [c]), ['NOT'], ['NOT', 'reprovado']]), ALUNO).candidatas), ['NOT']);
+    const soATsl = feitas(...ATE_A_8, 'TSL-01', 'TSL-02');
+    assert.deepEqual(codigosDe(estadoDoAluno(NT, soATsl, ALUNO).candidatas), ['NOT']);
+    assert.equal(progressoNoCurso(NT, soATsl, ALUNO).aprovadas, 6);
+    // A noite dispensada: o Noturno está feito, e os translados contam
+    const dispensado = curso({ mudar: { NOT: { dispensada: true } } });
+    assert.deepEqual(codigosDe(estadoDoAluno(dispensado, feitas(...ATE_A_8), ALUNO).candidatas), ['AVX-CQ']);
+    assert.equal(progressoNoCurso(dispensado, feitas(...ATE_A_8), ALUNO).aprovadas, 8);
+  });
+
+  it('no mesmo dia: o Noturno marcado não volta, e a missão seguinte depende do resultado da noite', () => {
+    const { porMissao, candidatas: lista } = estadoDoAluno(NT, feitas(...ATE_A_8), ALUNO, { planejadas: new Set([nid('NOT')]), exceto: new Set([nid('NOT')]) });
+    assert.deepEqual(codigosDe(lista), ['AVX-CQ']);
+    assert.deepEqual([porMissao.get(nid('NOT')).estado, porMissao.get(nid('TSL-01')).estado], ['no-dia', 'no-noturno']);
+    assert.deepEqual(porMissao.get(nid('AVX-CQ')), { estado: 'condicional', faltam: [], fasesFechadas: [], dependeDe: [nid('NOT')] });
+    // O pedido com o código de um translado (de antes) é o do Noturno: ele também não volta
+    const comTranslado = estadoDoAluno(NT, feitas(...ATE_A_8), ALUNO, { planejadas: new Set([nid('TSL-01')]), exceto: new Set([nid('TSL-01')]) });
+    assert.deepEqual([comTranslado.porMissao.get(nid('NOT')).estado, codigosDe(comTranslado.candidatas)], ['no-dia', ['AVX-CQ']]);
+  });
+
+  it('a ida dispensada: o Noturno espera o que a noite espera; sem translados, a noite é uma missão como as outras', () => {
+    // A ida dispensada esperaria o ENDOSSO SOLO: o Noturno não espera
+    const idaDispensada = curso({ mudar: { 'TSL-01': { dispensada: true, regra: 'depois', requer: [nid('END-SOLO')] } } });
+    const { porMissao, candidatas: lista } = estadoDoAluno(idaDispensada, feitas('TMA-01', 'TMA-02'), ALUNO);
+    assert.deepEqual(codigosDe(lista), ['NAV-01', 'PE-04', 'NOT']);
+    assert.deepEqual([porMissao.get(nid('TSL-01')).estado, porMissao.get(nid('TSL-02')).estado], ['dispensada', 'no-noturno']);
+    const soANoite = curso({ mudar: { 'TSL-01': { trecho: undefined, mis: 'Navegação' }, 'TSL-02': { trecho: undefined, mis: 'Navegação' } } });
+    assert.deepEqual(codigosDe(estadoDoAluno(soANoite, feitas('TMA-01', 'TMA-02'), ALUNO).candidatas), ['NAV-01', 'PE-04', 'TSL-01']);
+  });
+
+  it('as fases sem trecho ficam como antes: 300 históricos sorteados dão o mesmo estado e as mesmas candidatas', () => {
+    const SEM = curso({ trechos: false });
+    // A Fase 6 (a do Noturno) e a 9 (que espera por ela) mudam de propósito
+    const foraDa6e9 = m => !['NT:F6', 'NT:F9'].includes(m.fase);
+    const codigos = NT.missoes.map(m => m.codigo);
+    for (let semente = 1; semente <= 300; semente++) {
+      const r = mulberry32(semente);
+      const mapa = mapaDe(codigos.filter(() => r() < 0.5).map(c => [c, r() < 0.8 ? 'aprovado' : 'reprovado']));
+      const doDia = new Set(codigos.filter(() => r() < 0.15).map(nid));
+      const opcoes = { planejadas: doDia, exceto: doDia };
+      const com = estadoDoAluno(NT, mapa, ALUNO, opcoes), sem = estadoDoAluno(SEM, mapa, ALUNO, opcoes);
+      for (const m of NT.missoes.filter(foraDa6e9)) assert.deepEqual(com.porMissao.get(m.id), sem.porMissao.get(m.id), `semente ${semente}: ${m.codigo}`);
+      assert.deepEqual(com.candidatas.filter(foraDa6e9).map(m => m.id), sem.candidatas.filter(foraDa6e9).map(m => m.id), `semente ${semente}`);
+    }
+  });
+
+  it('na Demanda e em Alunos: a próxima é o Noturno, com os translados no nome; o pedido vai como a noite', () => {
+    const texto = html => html.replace(/<[^>]+>/g, '').trim();
+    const stu = (extra = {}) => ({ id: ALUNO, nm: 'Aluno 1000', curso: 'PP', fly: true, mis: 'Voo Local', eq: 'C152', nb: 1, p1: 500, p2: -1, pr: 3, ss: 1, extra: [], ...extra });
+    setS({ stu: [], fStatus: {}, resultados: { situacao: ATE_A_8.map(c => reg(c)), doDia: [] }, programa: [curso()] });
+    const botao = etapaNaDemanda(stu(), stu(), 0);
+    assert.equal(texto(botao), 'Próxima: NOT (com TSL-01 e TSL-02) · Usar');
+    assert.match(botao, /title="NOT: NOT · Noturno · 3 h · C172"/);
+    assert.equal(texto(progressoDoAluno(stu())), '6/10 · Fase 6 · próxima NOT (com TSL-01 e TSL-02)');
+    // Com o Noturno no pedido principal, a missão extra não recebe um translado: a próxima é a da Fase 9 (sob condição)
+    const comNoturno = stu({ mis: 'Noturno', eq: 'C172', nb: 4, etapa: 'NOT', extra: [{ mid: 1, fly: true, mis: 'Voo Local', eq: 'C152', nb: 1, p1: 500, p2: -1, pr: 3, ss: 1 }] });
+    assert.equal(texto(etapaNaDemanda(comNoturno, comNoturno.extra[0], 1)), 'Próxima: AVX-CQ · Usar');
+  });
+
+  it('na agenda: o pedido Noturno entra como a noite do programa (a etapa NOT), nunca como um translado', () => {
+    const solicitacao = (id, missao) => ({ id, data: '2026-11-11', aluno: ALUNO, aluno_nome: 'Aluno 1000', missao, janela: 'noite', horario: null, cancelada_em: null });
+    const importar = (situacao, missoes) => {
+      const estado = { nid: 2000, importadas: [], stu: [alunoDoCenario(ALUNO, { fly: false }, { curso: 'PP' })] };
+      importarSolicitacoes(estado, missoes.map((m, i) => solicitacao(70 + i, m)), { situacao, programa: [curso()] });
+      return [estado.stu[0], ...estado.stu[0].extra].map(p => [p.mis, p.etapa, p.eq, p.nb, p.p1]);
+    };
+    const ate4 = ['TMA-01', 'TMA-02'].map(c => reg(c));
+    assert.deepEqual(importar(ate4, ['Noturno', 'Navegação']), [['Noturno', 'NOT', 'C172', 4, 1050], ['Navegação', 'NAV-01', 'C152', 1.5, 500]]);
+    // Antes da Fase 4, o Noturno é fora da ordem: o pedido entra sem a missão do curso
+    assert.deepEqual(importar([], ['Noturno']).map(p => p.slice(0, 2)), [['Noturno', undefined]]);
   });
 });
 

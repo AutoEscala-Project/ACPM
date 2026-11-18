@@ -3,7 +3,7 @@
 // (S.resultados: a situação de cada missão e os registros da data; S.programa: as tabelas dos cursos) e não são gravados
 // no dia. A próxima missão e o progresso seguem as regras do programa (js/progresso.js).
 import { MIS } from '../config.js';
-import { indiceDoPrograma, rotuloDaFase, percursoDoCurso } from '../programa.js';
+import { indiceDoPrograma, rotuloDaFase, rotuloDaMissao, percursoDoCurso } from '../programa.js';
 import { estadoDoAluno, proximasMissoes, progressoNoCurso, missoesDoDia, motivoDoBloqueio } from '../progresso.js';
 import { situacaoPorMissao, resultadoDoVoo } from '../resultados.js';
 import { S, isGestor, stuBy, dadoIndisponivel, getMissionTarget } from '../state.js';
@@ -29,13 +29,13 @@ const cursoDoAluno = stu => (stu.curso && indiceDoPrograma(programaParaInferir()
 
 // A próxima missão para um pedido do aluno: a primeira liberada do programa. As missões dos outros pedidos dele no dia
 // (que voam e não foram cancelados) contam como feitas e não voltam. O código vai como id: é a etapa do pedido; o curso
-// (a sigla) vai com ela
+// (a sigla) vai com ela (o Noturno em trechos vai pela noite, com os translados no rótulo)
 export function proximaDoPedido(stu, mid) {
   const curso = cursoDoAluno(stu);
   if (!curso) return null;
   const doDia = missoesDoDia(curso, stu, { fStatus: S.fStatus, mid: mid || 0 });
   const { padrao } = proximasMissoes(curso, situacao(), stu.id, { planejadas: doDia, exceto: doDia });
-  return padrao && { id: padrao.codigo, nome: padrao.nome, mis: padrao.mis, eq: padrao.eq, nb: padrao.nb, curso: curso.sigla };
+  return padrao && { id: padrao.codigo, nome: padrao.nome, mis: padrao.mis, eq: padrao.eq, nb: padrao.nb, curso: curso.sigla, rotulo: rotuloDaMissao(curso, padrao) };
 }
 
 const descricaoDaMissao = m => `${m.id}: ${m.nome} · ${m.mis} · ${MIS[m.mis].isGround ? '1h30' : fmtDurLabel(m.nb)}${MIS[m.mis].isGround ? '' : ` · ${m.eq}`}`;
@@ -108,7 +108,7 @@ export function etapaNaDemanda(stu, d, mid) {
   if (d.etapa) return ` <span class="etapa" title="Missão do curso ${esc(d.cursoDaEtapa || stu.curso || '')}">${esc(d.etapa)}</span>${lista}`;
   const proxima = proximaDoPedido(stu, mid);
   return (proxima
-    ? ` <button type="button" class="btn quiet edit-only usar-proxima" data-act="usar-proxima" data-id="${esc(stu.id)}" data-mid="${esc(mid)}" title="${esc(descricaoDaMissao(proxima))}">Próxima: ${esc(proxima.id)} · Usar</button>`
+    ? ` <button type="button" class="btn quiet edit-only usar-proxima" data-act="usar-proxima" data-id="${esc(stu.id)}" data-mid="${esc(mid)}" title="${esc(descricaoDaMissao(proxima))}">Próxima: ${esc(proxima.rotulo)} · Usar</button>`
     : '') + lista;
 }
 
@@ -120,7 +120,7 @@ export function progressoDoAluno(stu) {
   const { aprovadas, total, faseAtual, proxima } = progressoNoCurso(curso, situacao(), stu.id);
   if (!total) return '';
   const fase = faseAtual && indiceDoPrograma(programaParaInferir()).percurso(curso.sigla).fases.length > 1 ? ` · ${esc(rotuloDaFase(faseAtual))}` : '';
-  return `<small class="progresso" data-dica="progresso">${aprovadas}/${total}${fase}${proxima ? ` · próxima ${esc(proxima.codigo)}` : ' · concluído'}</small>`;
+  return `<small class="progresso" data-dica="progresso">${aprovadas}/${total}${fase}${proxima ? ` · próxima ${esc(rotuloDaMissao(curso, proxima))}` : ' · concluído'}</small>`;
 }
 
 // O curso do resultado de um voo da escala (a sigla): o da missão do pedido (o aluno pode ter trocado de curso depois que

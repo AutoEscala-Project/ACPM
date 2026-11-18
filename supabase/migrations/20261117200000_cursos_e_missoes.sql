@@ -9,6 +9,9 @@
 --   versoes_dos_cursos, com a descrição, quem gravou e o curso como ficou.
 -- - O resultado de uma missão vale para qualquer curso cadastrado: a tabela confere só o formato da sigla, e
 --   registrar_resultado recusa o curso desconhecido (23514).
+-- - O Noturno de dois dias é um voo só, e o programa pode trazê-lo numa missão por trecho (o trecho: a ida, a noite ou a
+--   volta, como em js/config.js, NOTURNO): na fase, as missões com trecho que vêm uma logo depois da outra são um Noturno
+--   só, com a ida (se houver), a noite e a volta (se houver), nesta ordem. O app oferece o Noturno pela noite.
 -- - O app anterior (de antes do formato dos cursos) não chama nada disto e continua como está: PP, PC e INVA já vêm
 --   prontos, e os resultados deles são aceitos como antes.
 
@@ -95,8 +98,11 @@ create table public.missoes_do_curso (
   regra text not null default 'ordem' check (regra in ('ordem', 'livre', 'depois')),
   dispensada boolean not null default false,
   avaliacao boolean not null default false,
+  -- O trecho do Noturno de dois dias (a ida, a noite ou a volta), só numa missão Noturno; nas outras, nenhum
+  trecho text,
   removida boolean not null default false,
   unique (id, curso),
+  constraint missoes_do_curso_trecho check (trecho is null or (trecho in ('ida', 'noite', 'volta') and tipo_de_missao = 'Noturno')),
   -- Adiada até o fim da transação: dois códigos trocam de missão numa gravação só
   constraint missoes_do_curso_codigo_unico unique (curso, codigo) deferrable initially deferred,
   foreign key (fase, curso) references public.fases_do_curso (id, curso),
@@ -194,7 +200,8 @@ insert into public.cursos (sigla, nome, ordem) values ('PP', 'Piloto Privado', 0
 -- Funções internas (só as funções abaixo chamam) -------------------------------------------------------------------
 
 -- Um curso no formato do app: as fases e as missões em ordem (as retiradas no fim, com removida), os requisitos de cada
--- uma, se a missão já tem resultados (comResultados) e as últimas 20 alterações do programa
+-- uma, se a missão já tem resultados (comResultados), o trecho do Noturno (só na missão que tem um) e as últimas 20
+-- alterações do programa
 create function public.programa_do_curso(p_sigla text)
   returns jsonb
   language sql
@@ -221,6 +228,7 @@ as $$
         'dispensada', m.dispensada, 'avaliacao', m.avaliacao, 'removida', m.removida,
         -- Os códigos com resultados, numa consulta só (pelo índice de curso e missão)
         'comResultados', m.codigo in (select x.missao from public.resultados_de_missao x where x.curso = p_sigla))
+        || case when m.trecho is null then '{}'::jsonb else jsonb_build_object('trecho', m.trecho) end
         order by m.removida, f.ordem, m.ordem, m.id)
       from public.missoes_do_curso m join public.fases_do_curso f on f.id = m.fase where m.curso = c.sigla), '[]'::jsonb),
     'alteracoes', coalesce((
@@ -231,8 +239,8 @@ as $$
 $$;
 revoke execute on function public.programa_do_curso(text) from public, anon, authenticated;
 
--- As missões do programa (código, nome, tipo, recurso e horas), na ordem do curso, sem as retiradas: compara o programa
--- trazido do cadastro com o guardado (o mesmo programa não é gravado de novo)
+-- As missões do programa (código, nome, tipo, recurso e horas; o trecho do Noturno não conta), na ordem do curso, sem as
+-- retiradas: compara o programa trazido do cadastro com o guardado (o mesmo programa não é gravado de novo)
 create function public.assinatura_do_programa(p_curso jsonb)
   returns jsonb
   language sql
@@ -344,6 +352,26 @@ begin
   if exists (select 1 from jsonb_array_elements(v_missoes) e where coalesce(jsonb_typeof(e -> 'avaliacao'), 'null') not in ('null', 'boolean')) then
     raise exception '"avaliação" é sim ou não' using errcode = '22023', hint = 'avaliacao';
   end if;
+  -- O trecho do Noturno (pode faltar): a ida, a noite ou a volta, só numa missão Noturno. Na fase, as missões com trecho
+  -- que vêm uma logo depois da outra são um Noturno só: a ida (se houver; nada com trecho antes dela, a noite logo
+  -- depois), uma noite (antes dela, nada com trecho ou a ida; depois, nada com trecho ou a volta) e a volta (se houver; a
+  -- noite logo antes, nada com trecho depois)
+  if exists (select 1 from jsonb_array_elements(v_missoes) e
+             where coalesce(jsonb_typeof(e -> 'trecho'), 'null') <> 'null'
+               and (jsonb_typeof(e -> 'trecho') <> 'string' or e ->> 'trecho' not in ('ida', 'noite', 'volta') or e ->> 'mis' <> 'Noturno')) then
+    raise exception 'o trecho do Noturno é "ida", "noite" ou "volta", e só numa missão Noturno' using errcode = '22023', hint = 'trecho';
+  end if;
+  if exists (
+    select 1 from (
+      select t.trecho, lag(t.trecho) over w as antes, lead(t.trecho) over w as depois
+      from (select m.e ->> 'trecho' as trecho, m.e -> 'fase' as fase, m.i from jsonb_array_elements(v_missoes) with ordinality m(e, i)) t
+      window w as (partition by t.fase order by t.i)) s
+    where (s.trecho = 'ida' and (s.antes is not null or s.depois is distinct from 'noite'))
+       or (s.trecho = 'noite' and (coalesce(s.antes, 'ida') <> 'ida' or coalesce(s.depois, 'volta') <> 'volta'))
+       or (s.trecho = 'volta' and (s.antes is distinct from 'noite' or s.depois is not null))) then
+    raise exception 'cada Noturno fica junto na fase: a ida (se houver), uma noite e a volta (se houver), nesta ordem, sem outra missão no meio'
+      using errcode = '22023', hint = 'trecho';
+  end if;
 
   -- 4. Os códigos não se repetem no programa nem com os das missões do curso que ficam fora dele (a retirada guarda o
   -- código); a restrição adiada da tabela é a rede de segurança
@@ -417,14 +445,15 @@ begin
     removida = false
   where f.curso = p_sigla;
   insert into public.missoes_do_curso as m (id, curso, fase, codigo, nome, tipo_de_missao, recurso, horas, ordem, regra, dispensada,
-    avaliacao, removida)
+    avaliacao, trecho, removida)
   select (e ->> 'id')::uuid, p_sigla, (e ->> 'fase')::uuid, e ->> 'codigo', e ->> 'nome', e ->> 'mis', e ->> 'eq',
     round((e ->> 'nb')::numeric, 1), (row_number() over (partition by e ->> 'fase' order by i) - 1)::integer,
-    coalesce(e ->> 'regra', 'ordem'), coalesce((e ->> 'dispensada')::boolean, false), coalesce((e ->> 'avaliacao')::boolean, false), false
+    coalesce(e ->> 'regra', 'ordem'), coalesce((e ->> 'dispensada')::boolean, false), coalesce((e ->> 'avaliacao')::boolean, false),
+    e ->> 'trecho', false
   from jsonb_array_elements(v_missoes) with ordinality t(e, i)
   on conflict (id) do update set fase = excluded.fase, codigo = excluded.codigo, nome = excluded.nome,
     tipo_de_missao = excluded.tipo_de_missao, recurso = excluded.recurso, horas = excluded.horas, ordem = excluded.ordem,
-    regra = excluded.regra, dispensada = excluded.dispensada, avaliacao = excluded.avaliacao, removida = false
+    regra = excluded.regra, dispensada = excluded.dispensada, avaliacao = excluded.avaliacao, trecho = excluded.trecho, removida = false
   where m.curso = p_sigla;
   -- O que não veio sai do programa, sem ser apagado
   update public.fases_do_curso f set removida = true
@@ -572,9 +601,11 @@ begin
     raise exception 'os programas vão numa lista' using errcode = '22023', hint = 'limite';
   end if;
 
+  -- Na ordem da lista: o mesmo curso duas vezes, a segunda vê a primeira
   for v_curso in
-    select e from jsonb_array_elements(p_cursos) e
-    where jsonb_typeof(e) = 'object' and exists (select 1 from public.cursos c where c.sigla = e ->> 'sigla')
+    select t.e from jsonb_array_elements(p_cursos) with ordinality t(e, i)
+    where jsonb_typeof(t.e) = 'object' and exists (select 1 from public.cursos c where c.sigla = t.e ->> 'sigla')
+    order by t.i
   loop
     continue when public.assinatura_do_programa(v_curso) = public.assinatura_do_programa(public.programa_do_curso(v_curso ->> 'sigla'));
     v_missoes := public.gravar_programa(v_curso ->> 'sigla', v_curso, true);

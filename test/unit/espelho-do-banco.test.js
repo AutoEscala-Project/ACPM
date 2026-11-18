@@ -1,15 +1,15 @@
 // O banco espelha o app. O pgTAP (supabase/tests/database) não roda no CI, então este teste confere o que as duas
 // pontas precisam ter igual: a lista de tipos de missão e recursos da migração dos cursos (missao_e_recurso_validos) é a
 // de js/config.js (MIS), o formato dos cursos (formato_dos_cursos) é o FORMATO_DOS_CURSOS do app, um passo do formato
-// que o app grava (os dois em js/migracoes.js), cada caso da gravação dos programas (test/helpers/casos-do-programa.js)
-// é uma verificação de supabase/tests/database/cursos.test.sql, com os mesmos dados, e cada erro que a gravação devolve
-// tem um caso.
+// que o app grava (os dois em js/migracoes.js), os trechos do Noturno são os de js/config.js (NOTURNO), cada caso da
+// gravação dos programas (test/helpers/casos-do-programa.js) é uma verificação de supabase/tests/database/cursos.test.sql,
+// com os mesmos dados, e cada erro que a gravação devolve tem um caso.
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { MIS, GROUND_EQ_TYPE, GROUND_DURATION_H, DURACAO_MAXIMA_H } from '../../js/config.js';
+import { MIS, GROUND_EQ_TYPE, GROUND_DURATION_H, DURACAO_MAXIMA_H, NOTURNO } from '../../js/config.js';
 import { ESQUEMA, FORMATO_DOS_CURSOS, migrarCadastro, antesDosCursosProprios } from '../../js/migracoes.js';
-import { CASOS_DO_PROGRAMA, PROGRAMA } from '../helpers/casos-do-programa.js';
+import { CASOS_DO_PROGRAMA, PROGRAMA, NOTURNO_EM_TRECHOS } from '../helpers/casos-do-programa.js';
 
 const ler = caminho => readFileSync(new URL(`../../${caminho}`, import.meta.url), 'utf8');
 const MIGRACAO = ler('supabase/migrations/20261117200000_cursos_e_missoes.sql');
@@ -62,6 +62,16 @@ describe('O banco espelha o app', () => {
     assert.match(corpo, new RegExp(`else false end and p_nb > 0 and p_nb <= ${DURACAO_MAXIMA_H}\\s*$`));
   });
 
+  // A coluna (a regra da tabela) e a gravação (public.gravar_programa) aceitam os trechos do Noturno do app, e só no tipo
+  // Noturno
+  it('os trechos do Noturno da migração são os de NOTURNO, só no tipo Noturno', () => {
+    const listas = [...MIGRACAO.matchAll(/trecho'?\s+(?:not\s+)?in\s+\(([^)]*)\)/g)].map(r => [...r[1].matchAll(/'([^']+)'/g)].map(x => x[1]));
+    assert.equal(listas.length, 2, 'a regra da tabela e a gravação');
+    for (const lista of listas) assert.deepEqual(lista, Object.keys(NOTURNO.trechos));
+    assert.match(MIGRACAO, /check \(trecho is null or \(trecho in \([^)]*\) and tipo_de_missao = 'Noturno'\)\)/);
+    assert.match(funcaoDaMigracao('gravar_programa'), /e ->> 'mis' <> 'Noturno'/);
+  });
+
   // O formato dos cursos é um número só em cada ponta: a função da migração (imutável e interna: só as funções da
   // migração a chamam) e a constante de js/migracoes.js (que os casos também usam). Um aumento é uma linha em cada
   it('formato_dos_cursos() devolve o FORMATO_DOS_CURSOS do app, imutável e fora do alcance da API', () => {
@@ -112,6 +122,7 @@ describe('O banco espelha o app', () => {
 
   it('cursos.test.sql grava os mesmos programas dos casos', () => {
     assert.deepEqual(literalDoTeste('programa'), PROGRAMA);
+    assert.deepEqual(literalDoTeste('noturno'), NOTURNO_EM_TRECHOS);
     assert.deepEqual(literalDoTeste('legado'), CASOS_DO_PROGRAMA.find(c => c.importar).importar.programas);
   });
 
