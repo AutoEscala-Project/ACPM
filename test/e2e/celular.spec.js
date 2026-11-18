@@ -1,5 +1,6 @@
 // No celular (390 px): a escala em cartões, um por voo, e nenhuma aba rola para o lado.
-import { test, expect, abrirComExemplo, abrirEscala, irPara } from './fixtures.js';
+import { test, expect, abrir, abrirComExemplo, abrirEscala, irPara } from './fixtures.js';
+import { aluno, cenario, instrutor } from '../helpers/montar.js';
 
 test.use({ viewport: { width: 390, height: 844 } });
 
@@ -26,7 +27,7 @@ const alvosPequenos = page => page.evaluate(() => {
 test.describe('Celular', () => {
   test('nenhuma aba rola para o lado; o mapa rola dentro do próprio painel', async ({ page }) => {
     await abrirComExemplo(page);
-    for (const aba of ['esc', 'dem', 'age', 'rec', 'ins', 'alu', 'rod', 'bi']) {
+    for (const aba of ['esc', 'dem', 'age', 'rec', 'ins', 'alu', 'cur', 'rod', 'bi']) {
       await irPara(page, aba);
       expect(await larguraDaPagina(page), `aba ${aba}`).toBeLessThanOrEqual(390);
     }
@@ -43,10 +44,21 @@ test.describe('Celular', () => {
 
   test('botões e campos com pelo menos 44 px para o dedo, em todas as abas', async ({ page }) => {
     await abrirComExemplo(page);
-    for (const aba of ['esc', 'dem', 'age', 'rec', 'ins', 'alu', 'rod', 'bi']) {
+    for (const aba of ['esc', 'dem', 'age', 'rec', 'ins', 'alu', 'cur', 'rod', 'bi']) {
       await irPara(page, aba);
       expect(await alvosPequenos(page), `aba ${aba}`).toEqual([]);
     }
+  });
+
+  // O exemplo não tem programa: aqui, a aba Cursos com missões, um cartão por missão (o Ground, com o recurso e as horas
+  // desligados)
+  test('a aba Cursos com o programa cabe na tela, com alvos de 44 px', async ({ page }) => {
+    const cursos = { PP: [{ id: 'PP-01', nome: 'Familiarização', mis: 'Voo Local', eq: 'C152', nb: 1 }, { id: 'PP-02', nome: 'Ground', mis: 'Ground C152', eq: 'Sala Ground', nb: 1.5 }], PC: [], INVA: [] };
+    await abrir(page, { estado: { ...cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, {}, { curso: 'PP' })] }), cursos } });
+    await irPara(page, 'cur');
+    await expect(page.locator('#cursos tr[data-i]')).toHaveCount(2);
+    expect(await larguraDaPagina(page)).toBeLessThanOrEqual(390);
+    expect(await alvosPequenos(page)).toEqual([]);
   });
 
   test('a escala vira um cartão por voo, com horário, aluno, missão, avião, instrutor e status à vista', async ({ page }) => {

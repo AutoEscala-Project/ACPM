@@ -68,7 +68,7 @@ async function abrirCom(page, docs, url = './') {
 // Todas as abas e visões, as gavetas e o popup do mapa
 async function percorrer(page) {
   await expect(page.locator('#wins input[data-a="win"]').first()).toBeAttached();
-  for (const aba of ['esc', 'dem', 'age', 'rec', 'ins', 'alu', 'rod', 'bi']) {
+  for (const aba of ['esc', 'dem', 'age', 'rec', 'ins', 'alu', 'cur', 'rod', 'bi']) {
     await irPara(page, aba);
     await nada(page);
   }
@@ -89,8 +89,7 @@ async function percorrer(page) {
   await irPara(page, 'ins');
   await page.locator('#s-ins [data-vista-ins="cadastro"]').click();
   await nada(page);
-  await irPara(page, 'alu');
-  await page.locator('#s-alu [data-vista-alu="cursos"]').click();
+  await irPara(page, 'cur');
   await nada(page);
   await page.locator('#btn-manual').click();
   await nada(page);
@@ -102,6 +101,9 @@ test.describe('Conteúdo gravado malicioso', () => {
     await percorrer(page);
     await irPara(page, 'alu');
     await expect(page.locator('#alu tr[data-id="1000"] [data-f="nm"]')).toHaveValue(`Aluno ${X}`);
+    // O nome malicioso do programa chega à aba Cursos (a conferência dela não passa por estar vazia)
+    await irPara(page, 'cur');
+    await expect(page.locator('#cursos .curso[data-curso="PP"] [data-cf="nome"]')).toHaveValue(`Familiarização ${X}`);
     await irPara(page, 'esc');
     await expect(page.locator('#out tbody')).toContainText(`Aluno ${X}`);
     await expect(page.locator('#selo-aprovada')).toContainText(`Operador ${X}`);

@@ -1,23 +1,18 @@
-// Cursos: o programa de cada curso (PP, PC e INVA) fica em Alunos › Cursos. O Administrador inclui, muda,
-// reordena e tira missões; os outros perfis só consultam. Cada aluno tem o curso dele.
-import { test, expect, abrir, irPara, confirmar, abrirEscala, prepararContexto, vigiarErros, AMANHA, entrar as entrarNoApp } from './fixtures.js';
+// Cursos: o programa de cada curso (PP, PC e INVA) fica na aba Cursos. O Administrador inclui, muda, reordena e tira
+// missões; os outros perfis só consultam. Cada aluno tem o curso dele, em Alunos.
+import { test, expect, abrir, irPara, confirmar, abrirEscala, prepararContexto, vigiarErros, preencherLogin, AMANHA, URL_APP, entrar as entrarNoApp } from './fixtures.js';
 import { criarSupabaseFalso, documentosAtuais, CONTAS } from './supabase-falso.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
 
 const dia = (extra = {}) => ({ ...cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, {}, { curso: 'PP' }), aluno(1001)] }), ...extra });
 const PROGRAMA = { PP: [{ id: 'PP-01', nome: 'Familiarização', mis: 'Voo Local', eq: 'C152', nb: 1 }, { id: 'PP-02', nome: 'Navegação', mis: 'Navegação', eq: 'C152', nb: 2 }], PC: [], INVA: [] };
-const verCursos = async page => {
-  await irPara(page, 'alu');
-  await page.locator('#s-alu [data-vista-alu="cursos"]').click();
-  await expect(page.locator('#cursos')).toBeVisible();
-};
 const curso = (page, id) => page.locator(`#cursos .curso[data-curso="${id}"]`);
 const linhas = (page, id) => curso(page, id).locator('tbody tr[data-i]');
 
 test.describe('Cursos', () => {
   test('o Administrador monta o programa: inclui, muda, reordena e tira missões; tudo fica gravado', async ({ page }) => {
     await abrir(page, { estado: dia() });
-    await verCursos(page);
+    await irPara(page, 'cur');
     await expect(curso(page, 'PP')).toContainText('Nenhuma missão no programa');
     await curso(page, 'PP').getByRole('button', { name: '+ Missão' }).click();
     await curso(page, 'PP').getByRole('button', { name: '+ Missão' }).click();
@@ -46,7 +41,7 @@ test.describe('Cursos', () => {
     await page.keyboard.press('Escape');
 
     await page.reload();
-    await verCursos(page);
+    await irPara(page, 'cur');
     await expect(linhas(page, 'PP')).toHaveCount(1);
     await expect(linhas(page, 'PP').nth(0).locator('[data-cf="mis"]')).toHaveValue('Navegação');
     await expect(linhas(page, 'PP').nth(0).locator('[data-cf="nb"]')).toHaveValue('2');
@@ -64,12 +59,28 @@ test.describe('Cursos', () => {
 
   test('no Gestor, o programa e o curso dos alunos só aparecem', async ({ page }) => {
     await abrir(page, { estado: dia({ cursos: PROGRAMA }), url: './?role=gestor' });
-    await verCursos(page);
+    await irPara(page, 'cur');
     await expect(linhas(page, 'PP')).toHaveCount(2);
     await expect(linhas(page, 'PP').nth(0).locator('[data-cf="nome"]')).toBeDisabled();
     await expect(curso(page, 'PP').getByRole('button', { name: '+ Missão' })).toBeHidden();
-    await page.locator('#s-alu [data-vista-alu="alunos"]').click();
+    await expect(page.locator('#cursos')).toContainText('Só o Administrador muda; aqui é consulta.');
+    await irPara(page, 'alu');
     await expect(page.locator('#alu tr[data-id="1000"] [data-f="curso"]')).toBeDisabled();
+  });
+
+  // Neste navegador, o perfil muda pelo topo: a aba Cursos aberta mostra ou tira na hora os controles de quem muda
+  test('trocar o perfil com a aba Cursos aberta troca os controles do programa', async ({ page }) => {
+    await abrir(page, { estado: dia({ cursos: PROGRAMA }) });
+    await irPara(page, 'cur');
+    await expect(curso(page, 'PP').getByRole('button', { name: '+ Missão' })).toBeVisible();
+    await page.locator('#role-sel').selectOption('gestor');
+    await expect(curso(page, 'PP').getByRole('button', { name: '+ Missão' })).toHaveCount(0);
+    await expect(linhas(page, 'PP').nth(0).locator('[data-act="curso-remover"]')).toHaveCount(0);
+    await expect(page.locator('#cursos')).toContainText('Só o Administrador muda; aqui é consulta.');
+    await page.locator('#role-sel').selectOption('operador');
+    await expect(curso(page, 'PP').getByRole('button', { name: '+ Missão' })).toBeVisible();
+    await expect(linhas(page, 'PP').nth(0).locator('[data-cf="nome"]')).toBeEnabled();
+    await expect(page.locator('#cursos')).not.toContainText('aqui é consulta');
   });
 });
 
@@ -178,5 +189,51 @@ test.describe('Cursos no servidor (modo compartilhado)', () => {
     expect(servidor.resultados.map(r => r.data)).toEqual([AMANHA]);
     expect(operador.erros).toEqual([]);
     await operador.contexto.close();
+  });
+
+  // Trocar de data lê o cadastro de novo: a aba Cursos aberta mostra o programa que outra pessoa mudou nesse meio-tempo
+  test('com a aba Cursos aberta, a data nova mostra o programa lido de novo', async ({ browser }) => {
+    const estado = { ...cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, {}, { curso: 'PP' })] }), cursos: PROGRAMA };
+    const servidor = criarSupabaseFalso(documentosAtuais(estado, AMANHA));
+    const gestor = await entrar(browser, servidor, CONTAS.gestor);
+    await irPara(gestor.page, 'cur');
+    await expect(linhas(gestor.page, 'PP')).toHaveCount(2);
+    const cadastro = structuredClone(servidor.banco.get('cadastro').conteudo);
+    servidor.alterarPorOutraPessoa('cadastro', { ...cadastro, cursos: { ...cadastro.cursos, PP: cadastro.cursos.PP.slice(1) } });
+    await gestor.page.locator('#dt-prox').click();
+    await expect(gestor.page.locator('#dt-rotulo')).toContainText('12/11');
+    await expect(gestor.page.locator('#s-cur')).toBeVisible();
+    await expect(linhas(gestor.page, 'PP')).toHaveCount(1);
+    await expect(linhas(gestor.page, 'PP').nth(0).locator('[data-cf="id"]')).toHaveValue('PP-02');
+    expect(gestor.erros).toEqual([]);
+    await gestor.contexto.close();
+  });
+
+  // A aba aberta enquanto os dados carregam é refeita quando eles chegam: a Secretaria, que consulta os cursos, fica na
+  // aba e vê o programa, não a aba vazia de antes da leitura
+  test('a aba Cursos aberta enquanto os dados carregavam mostra o programa quando eles chegam', async ({ browser }) => {
+    const estado = { ...cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, {}, { curso: 'PP' })] }), cursos: PROGRAMA };
+    const servidor = criarSupabaseFalso(documentosAtuais(estado, AMANHA));
+    const contexto = await browser.newContext({ baseURL: test.info().project.use.baseURL, locale: 'pt-BR', timezoneId: 'America/Sao_Paulo' });
+    await prepararContexto(contexto);
+    await servidor.instalar(contexto);
+    const page = await contexto.newPage();
+    const erros = vigiarErros(page);
+    const liberar = servidor.segurarLeiturasDeDias();
+    await page.goto(URL_APP);
+    await preencherLogin(page, CONTAS.secretaria);
+    await expect(page.locator('#usuario')).toBeVisible();
+    await irPara(page, 'cur');
+    await expect(curso(page, 'PP')).toContainText('Nenhuma missão no programa');
+    liberar();
+    await expect(page.locator('body[data-pronto]')).toBeAttached();
+    await expect(page.locator('#s-cur')).toBeVisible();
+    await expect(linhas(page, 'PP')).toHaveCount(2);
+    await expect(linhas(page, 'PP').nth(0).locator('[data-cf="nome"]')).toHaveValue('Familiarização');
+    await expect(linhas(page, 'PP').nth(0).locator('[data-cf="nome"]')).toBeDisabled();
+    await expect(page.locator('#cursos')).toContainText('Só o Administrador muda; aqui é consulta.');
+    expect(servidor.gravacoes).toEqual([]);
+    expect(erros).toEqual([]);
+    await contexto.close();
   });
 });

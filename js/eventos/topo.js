@@ -7,12 +7,16 @@ import { somarDias, dataIsoValida } from '../format.js';
 import { RES, DATA, isGestor, modoCompartilhado } from '../state.js';
 import { ApiClient } from '../storage.js';
 import { abrirConta } from '../views/conta.js';
+import { rCursos } from '../views/cursos.js';
 import { rOut } from '../views/escala.js';
 import { rManual } from '../views/manual.js';
 import { show } from '../views/tabs.js';
 
+// O perfil (neste navegador). A aba Cursos é refeita: aberta, ela mostra ou tira na hora os controles de quem muda o
+// programa
 $('#role-sel').onchange = e => {
   setRole(e.target.value);
+  rCursos();
   if (RES) rOut();
 };
 

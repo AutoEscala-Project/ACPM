@@ -41,6 +41,7 @@ import { abaFoiEscolhida } from './eventos/navegacao.js';
 import { avisoDeDomingo, iniciarTema } from './eventos/topo.js';
 import { abrirAgenda, diaDaAgenda, podeEditarAgenda } from './views/agenda.js';
 import { rIns, rAlu } from './views/cadastros.js';
+import { rCursos } from './views/cursos.js';
 import { carregarDadosPessoais } from './views/dados-pessoais.js';
 import { rDem } from './views/demanda.js';
 import { renderAuditPanel, rOut } from './views/escala.js';
@@ -113,7 +114,8 @@ window.addEventListener('beforeunload', e => {
   // No modo compartilhado o perfil vem da conta: role= da URL não vale
   if (!modoCompartilhado() && params.get('role')) setRole(params.get('role'), false);
 
-  rRec(); rIns(); rAlu(); rDem(); renderAuditPanel();
+  // As abas com os dados lidos, também a que a pessoa abriu enquanto eles carregavam (Cursos, por exemplo)
+  rRec(); rIns(); rAlu(); rCursos(); rDem(); renderAuditPanel();
   document.body.dataset.agenda = podeEditarAgenda() ? 'edita' : 'consulta';
   // Dados pessoais (para a coluna CANAC das tabelas), para quem pode vê-los
   carregarDadosPessoais();

@@ -1,4 +1,4 @@
-// O programa dos cursos, em Alunos › Cursos
+// O programa dos cursos, na aba Cursos
 import { gravarAlteracao } from '../actions.js';
 import { normalizarCursos, novaMissaoDoCurso, codigoValido } from '../cursos.js';
 import { $, showToast } from '../dom.js';
@@ -8,8 +8,8 @@ import { confirmado } from './confirmacao.js';
 import { aoAcionar } from './registro.js';
 import { rCursos, podeEditarCursos, atualizarLinhaDoPrograma } from '../views/cursos.js';
 
-// O programa dos cursos, em Alunos › Cursos: só o Administrador (neste navegador, o Operador) muda. Incluir,
-// subir, descer e tirar (com confirmação) refazem a tabela; os campos mudam no lugar. O código vale uma vez por curso
+// O programa dos cursos, na aba Cursos: só o Administrador (neste navegador, o Operador) muda. Incluir, subir,
+// descer e tirar (com confirmação) refazem a tabela; os campos mudam no lugar. O código vale uma vez por curso
 const ondeNoPrograma = el => { const tr = el.closest('tr[data-curso]'); return { curso: tr.dataset.curso, i: +tr.dataset.i, tr }; };
 const mudarPrograma = (curso, lista) => { S.cursos = normalizarCursos({ ...normalizarCursos(S.cursos), [curso]: lista }); };
 aoAcionar(['curso-nova', 'curso-remover', 'curso-subir', 'curso-descer'], b => {

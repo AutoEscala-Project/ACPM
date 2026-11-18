@@ -113,7 +113,7 @@ test.describe('Dados pessoais (modo compartilhado)', () => {
 
   test('a Secretaria vê Alunos e Instrutores e edita só os dados pessoais', async ({ browser }) => {
     const { context, servidor, page, erros } = await entrar(browser, CONTAS.secretaria);
-    await expect(page.locator('#nav button[data-t]:visible')).toHaveText(['Escala', 'Agenda', 'Instrutores', 'Alunos']);
+    await expect(page.locator('#nav button[data-t]:visible')).toHaveText(['Escala', 'Agenda', 'Instrutores', 'Alunos', 'Cursos']);
     await irPara(page, 'alu');
     await expect(page.locator('#alu tr[data-id="1000"] [data-f="kg"]')).toBeDisabled();
     await page.locator('#alu tr[data-id="1000"] [data-dados]').click();

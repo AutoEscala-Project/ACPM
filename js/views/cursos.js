@@ -1,6 +1,7 @@
-// Cursos, em Alunos › Cursos: o programa de cada curso, uma tabela por curso. O Administrador (neste navegador, o
-// Operador) inclui, muda, reordena e tira missões; os outros perfis só consultam. Os campos mudam no lugar, para o foco
-// do teclado continuar onde estava.
+// A aba Cursos: o programa de cada curso, uma tabela por curso. O Administrador (neste navegador, o Operador) inclui,
+// muda, reordena e tira missões; os outros perfis só consultam. Os campos mudam no lugar, para o foco do teclado
+// continuar onde estava. Ela é refeita ao abrir e junto com as outras abas (a data carregada, os dados lidos de novo, o
+// conflito, a troca de perfil): aberta, nunca fica com os controles de antes.
 import { MIS, DURACAO_MAXIMA_H } from '../config.js';
 import { CURSOS, normalizarCursos } from '../cursos.js';
 import { ApiClient } from '../storage.js';
@@ -11,15 +12,6 @@ import { $ } from '../dom.js';
 
 // Depois de um conflito a tela fica só para consulta, também para o Administrador
 export const podeEditarCursos = () => !ApiClient.readOnly && (ApiClient.perfil ? gerenciaContas(ApiClient.perfil) : !isGestor());
-
-export function mostrarVistaDosAlunos(vista) {
-  $('#s-alu').dataset.vista = vista;
-  document.querySelectorAll('#s-alu [data-vista-alu]').forEach(b => {
-    b.classList.toggle('on', b.dataset.vistaAlu === vista);
-    b.setAttribute('aria-pressed', String(b.dataset.vistaAlu === vista));
-  });
-  if (vista === 'cursos') rCursos();
-}
 
 const opcoesDoRecurso = m => opts(MIS[m.mis].eq.map(e => [e, e]), m.eq);
 

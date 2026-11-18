@@ -179,8 +179,8 @@ nav#nav button:focus-visible { outline-offset: -4px; }
 .aba-selo.aviso { background: var(--ye); color: #12263A; }
 .aba-selo.erro { background: #C62828; color: #fff; }
 
-/* A Secretaria trabalha na agenda: só a Agenda e as abas que ela consulta (Escala, Instrutores e Alunos) */
-body[data-perfil="secretaria"] #nav button:not([data-t="age"]):not([data-t="esc"]):not([data-t="ins"]):not([data-t="alu"]),
+/* A Secretaria trabalha na agenda: só a Agenda e as abas que ela consulta (Escala, Instrutores, Alunos e Cursos) */
+body[data-perfil="secretaria"] #nav button:not([data-t="age"]):not([data-t="esc"]):not([data-t="ins"]):not([data-t="alu"]):not([data-t="cur"]),
 body[data-perfil="secretaria"] .aba-sep,
 body[data-perfil="secretaria"] #btn-open-log,
 body[data-perfil="secretaria"] #btn-share-link { display: none !important; }
@@ -726,10 +726,9 @@ table.frota tr:hover .rev, table.frota tr:focus-within .rev { opacity: 1; }
 
 /* Instrutores: a disponibilidade do dia numa grade; o cadastro numa tabela, com as habilitações num painel lateral */
 #s-ins[data-vista="dia"] .vista-cadastro, #s-ins[data-vista="cadastro"] .vista-dia { display: none; }
-/* Alunos › Cursos: o programa de cada curso */
-#s-alu[data-vista="alunos"] .vista-cursos, #s-alu[data-vista="cursos"] .vista-alunos { display: none; }
-.vista-cursos { display: flex; flex-direction: column; gap: 12px; }
-.vista-cursos .curso h3 small { font: 500 14px 'Barlow', sans-serif; color: var(--mu); margin-left: 6px; }
+/* Cursos: o programa de cada curso */
+#cursos { display: flex; flex-direction: column; gap: 12px; }
+#cursos .curso h3 small { font: 500 14px 'Barlow', sans-serif; color: var(--mu); margin-left: 6px; }
 .programa td.n { color: var(--mu); font-variant-numeric: tabular-nums; width: 2.5em; }
 .programa input.codigo { width: 7.5em; font-variant-numeric: tabular-nums; }
 .programa input[data-cf="nome"] { width: 100%; min-width: 12em; }

@@ -95,6 +95,7 @@
     <button data-t="rec"><span class="aba-rotulo">Recursos</span><span class="aba-selo" id="selo-rec" hidden></span></button>
     <button data-t="ins"><span class="aba-rotulo">Instrutores</span></button>
     <button data-t="alu"><span class="aba-rotulo">Alunos</span></button>
+    <button data-t="cur"><span class="aba-rotulo">Cursos</span></button>
     <button data-t="rod"><span class="aba-rotulo">Rodízio</span></button>
     <span class="aba-sep" aria-hidden="true"></span>
     <button data-t="bi"><span class="aba-rotulo">BI</span></button>
@@ -231,23 +232,23 @@
   </section>
 
   <!-- ALUNOS -->
-  <section id="s-alu" data-vista="alunos">
+  <section id="s-alu">
     <h2>Alunos</h2>
     <div class="bar">
-      <div class="seg" role="group" aria-label="O que ver">
-        <button type="button" aria-pressed="true" data-vista-alu="alunos" class="on"><svg class="ico"><use href="#i-instrutor"/></svg>Alunos</button>
-        <button type="button" aria-pressed="false" data-vista-alu="cursos"><svg class="ico"><use href="#i-lista"/></svg>Cursos</button>
-      </div>
-      <input type="search" class="flt-ctrl vista-alunos" data-flt="alu" placeholder="Buscar aluno…" aria-label="Buscar aluno">
+      <input type="search" class="flt-ctrl" data-flt="alu" placeholder="Buscar aluno…" aria-label="Buscar aluno">
       <span class="cresce"></span>
-      <button class="btn edit-only vista-alunos" data-act="adds">+ Novo aluno</button>
+      <button class="btn edit-only" data-act="adds">+ Novo aluno</button>
     </div>
-    <div class="tw vista-alunos"><table class="cadastro alunos">
+    <div class="tw"><table class="cadastro alunos">
       <thead><tr><th>Nome</th><th class="so-dados">CANAC</th><th>Curso</th><th>Peso (kg)</th><th>Priorizar com<button type="button" class="dica-btn" data-dica="voa-com" aria-label="O que é Priorizar com?" aria-expanded="false"></button></th><th>Não escalar com<button type="button" class="dica-btn" data-dica="nao-escalar-com" aria-label="O que é Não escalar com?" aria-expanded="false"></button></th><th aria-label="Ações"></th></tr></thead>
       <tbody id="alu"></tbody>
     </table></div>
-    <!-- O programa de cada curso (js/views/cursos.js) -->
-    <div class="vista-cursos" id="cursos"></div>
+  </section>
+
+  <!-- CURSOS: o programa de cada curso (js/views/cursos.js); o curso de cada aluno fica em Alunos -->
+  <section id="s-cur">
+    <h2>Cursos</h2>
+    <div id="cursos"></div>
   </section>
 
   <!-- AGENDA DE SOLICITAÇÕES (secretaria) -->
@@ -438,7 +439,7 @@
         <li><b>Operador:</b> altera tudo e opera a escala.</li>
         <li><b>Administrador:</b> faz tudo o que o Operador faz e também cria e exclui contas (em <i>Usuários</i>, no menu da conta).</li>
         <li><b>Gestor:</b> consulta tudo (escala, BI, histórico, PDF, CSV e Excel), sem alterar nada.</li>
-        <li><b>Secretaria:</b> registra os pedidos de voo na Agenda (o app abre para ela nessa aba), consulta a Escala e, em Instrutores e Alunos, edita os dados pessoais (o resto ela só consulta); as outras abas ela não vê.</li>
+        <li><b>Secretaria:</b> registra os pedidos de voo na Agenda (o app abre para ela nessa aba), consulta a Escala e os Cursos e, em Instrutores e Alunos, edita os dados pessoais (o resto ela só consulta); as outras abas ela não vê.</li>
         <li><b>Painel (TV da recepção):</b> só vê o painel de partidas e chegadas de hoje (veja <a href="#manual-tv">TV da recepção</a>).</li>
       </ul>
       <p>Cada pessoa entra com a própria conta. No menu da conta (o seu nome, no canto direito do topo) ficam <i>Minha conta</i>, <i>Usuários</i> (só para o Administrador), o interruptor do tema claro ou escuro e <i>Sair</i>. Em <i>Minha conta</i> dá para trocar a senha (com pelo menos 12 caracteres) e o e-mail: o sistema manda um link para o e-mail atual e outro para o novo, e a troca vale depois que os dois forem abertos.</p>
@@ -447,7 +448,7 @@
 
     <div class="pn" id="manual-abas">
       <h3>As abas</h3>
-      <p>As abas seguem a ordem de uso: Escala, Demanda e Agenda; Recursos, Instrutores, Alunos e Rodízio; e o BI.</p>
+      <p>As abas seguem a ordem de uso: Escala, Demanda e Agenda; Recursos, Instrutores, Alunos, Cursos e Rodízio; e o BI.</p>
       <h4>Escala</h4>
       <p>No alto, o resumo do dia (missões pedidas, escaladas e as horas de voo e aula), as missões que não entraram, cada uma com o motivo (caixa vermelha), e os avisos agrupados (caixa amarela). Depois, a escala em três vistas:</p>
       <ul>
@@ -468,7 +469,7 @@
         <li><b>Prioridade:</b> de 1 a 5; quem tem 5 é atendido primeiro.</li>
       </ul>
       <p><i>Só quem voa</i> (ligado) esconde quem não voa na data. <i>+ missão</i> (aparece com o mouse ou o foco do teclado na linha; no celular, fica à vista) acrescenta outra missão ao mesmo aluno no dia, por exemplo Ground de manhã e voo à tarde. <i>Importar pedidos da agenda</i> traz os pedidos da data: só acrescenta, nunca apaga nem repete. <i>Pôr um aluno na demanda</i> inclui um aluno que ainda não voa na data. <i>Limpar demanda</i> fica no menu <i>Mais</i> e pede confirmação.</p>
-      <p><b>Alunos de um curso</b> (o curso fica em Alunos): ao lado do nome aparece a próxima missão do programa, por exemplo <i>Próxima: PP-07 · Usar</i> (deixe o mouse em cima para ver a missão, as horas e o recurso). <i>Usar</i> põe essa missão no pedido (o tipo de missão, o recurso e as horas do programa), liga <i>Voa</i>, e o código aparece no lugar do botão. Na <i>+ missão</i> do mesmo aluno, a sugestão é a missão seguinte. Mudar à mão a missão, o recurso ou a duração tira o código. Na importação da agenda, quando a próxima missão do aluno é do tipo pedido, o pedido já entra como ela.</p>
+      <p><b>Alunos de um curso</b> (o curso de cada aluno fica em Alunos, e o programa do curso, na aba Cursos): ao lado do nome aparece a próxima missão do programa, por exemplo <i>Próxima: PP-07 · Usar</i> (deixe o mouse em cima para ver a missão, as horas e o recurso). <i>Usar</i> põe essa missão no pedido (o tipo de missão, o recurso e as horas do programa), liga <i>Voa</i>, e o código aparece no lugar do botão. Na <i>+ missão</i> do mesmo aluno, a sugestão é a missão seguinte. Mudar à mão a missão, o recurso ou a duração tira o código. Na importação da agenda, quando a próxima missão do aluno é do tipo pedido, o pedido já entra como ela.</p>
 
       <h4>Agenda</h4>
       <p>A agenda de pedidos da secretaria, com um calendário. Cada pedido tem o aluno, a missão, o horário (os horários da missão: o Multimotor, por exemplo, tem os do PA-34), a duração (fracionada, até 5 h; o Ground tem 01h30) e quem anotou. No máximo 6 voos locais (Voo Local, Voo Solo e TGL) saem no mesmo horário (determinação da diretoria): ao agendar o 7º, o horário fica indisponível, e o app diz o próximo horário possível. O Voo Solo sai sempre às 06:30. Se o aluno já tem voo marcado na data, o app avisa (pode ser um reagendamento feito por outra pessoa) e só registra mais um com “Registrar mesmo assim”. Cada pedido vira um voo na demanda, com o horário e a duração dele. O pedido para o dia seguinte só pode ser registrado até as 13:00 (horário de Brasília); depois disso, só para os próximos dias. O aeroclube não opera aos domingos: domingo não tem escala nem pedidos (o app pula o domingo), e os voos de segunda são agendados até sábado às 10:00. Operadores e Administradores podem registrar fora do prazo com a <i>Exceção da Coordenação</i>, que fica marcada no pedido.</p>
@@ -493,8 +494,10 @@
 
       <h4>Alunos</h4>
       <p>Nome, CANAC, curso e peso de cada aluno; embaixo do curso, as missões aprovadas do programa e a próxima (por exemplo, <i>12/40 · próxima PP-13</i>). O peso entra no limite de peso de cada avião (sem o peso, a escala avisa que não conferiu). Em <i>Priorizar com</i>, escolha os instrutores do aluno (o par de sempre): a escala põe o aluno com um deles sempre que algum pode voar o pedido, mesmo fora das preferências de horário, e a divisão das horas e a compactação não o trocam. Quando nenhum deles pode (não vem na data, está ocupado, sem a habilitação…), o voo fica com outro instrutor e a escala avisa, com o motivo. Em <i>Não escalar com</i>, escolha os instrutores que não devem voar com o aluno (quem está nesta lista sai do <i>Priorizar com</i>). O instrutor escolhido na Demanda para o dia vale mais que o <i>Priorizar com</i>.</p>
-      <p><b>Cursos</b> (o botão ao lado de <i>Alunos</i>): o programa do PP, do PC e do INVA, na ordem em que o aluno voa. Cada missão tem um código (por exemplo, PP-07, até 15 letras, números, pontos e hífens, sem repetir no curso), um nome, o tipo de missão da escala, o recurso e as horas (o Ground é sempre na sala, com 1h30). <i>+ Missão</i> inclui com o próximo número livre; as setas mudam a ordem e o ✕ tira (pede confirmação). Só o Administrador muda o programa; os outros perfis consultam.</p>
       <p><b>Dados pessoais</b> (o botão na linha do aluno ou do instrutor): CPF, CANAC (o código da ANAC, 6 dígitos), nascimento, celular (com DDD) e e-mail. O app confere o CPF pelos dígitos verificadores e não aceita o mesmo CPF ou CANAC em dois alunos; deixar tudo vazio apaga os dados da pessoa. Só operadores, administradores e a secretaria veem esses dados: eles ficam fora da escala e não vão para o CSV, o PDF nem o Excel, e o Histórico registra só quais campos mudaram, nunca os valores (também as alterações da secretaria). Excluir um aluno ou instrutor apaga os dados pessoais dele. Se outra pessoa alterou os dados enquanto o painel estava aberto, o app avisa em vez de gravar por cima: feche e abra de novo.</p>
+
+      <h4>Cursos</h4>
+      <p>O programa do PP, do PC e do INVA, na ordem em que o aluno voa (o curso de cada aluno fica em Alunos). Cada missão tem um código (por exemplo, PP-07, até 15 letras, números, pontos e hífens, sem repetir no curso), um nome, o tipo de missão da escala, o recurso e as horas (o Ground é sempre na sala, com 1h30). <i>+ Missão</i> inclui com o próximo número livre; as setas mudam a ordem e o ✕ tira (pede confirmação). Só o Administrador muda o programa; os outros perfis consultam.</p>
 
       <h4 id="manual-aba-rodizio">Rodízio</h4>
       <p>Filas para dividir com justiça, entre os instrutores habilitados, os voos que remuneram melhor:</p>

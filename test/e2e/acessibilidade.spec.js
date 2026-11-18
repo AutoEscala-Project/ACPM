@@ -35,7 +35,7 @@ const semNome = (page, raiz) => page.evaluate(seletor => {
 test.describe('Acessibilidade', () => {
   test('todo botão e todo campo tem nome para o leitor de tela, em todas as abas', async ({ page }) => {
     await abrirComExemplo(page);
-    for (const aba of ['esc', 'dem', 'age', 'rec', 'ins', 'alu', 'rod', 'bi']) {
+    for (const aba of ['esc', 'dem', 'age', 'rec', 'ins', 'alu', 'cur', 'rod', 'bi']) {
       await irPara(page, aba);
       expect(await semNome(page, '.topo, #nav, main section.on'), `aba ${aba}`).toEqual([]);
     }
@@ -512,9 +512,10 @@ test.describe('O leitor de tela e o teclado', () => {
     await irPara(page, 'ins');
     await page.locator('[data-vista-ins="cadastro"]').click();
     await expect(page.locator('[data-vista-ins][aria-pressed="true"]')).toHaveAttribute('data-vista-ins', 'cadastro');
-    await irPara(page, 'alu');
-    await page.locator('[data-vista-alu="cursos"]').click();
-    await expect(page.locator('[data-vista-alu][aria-pressed="true"]')).toHaveAttribute('data-vista-alu', 'cursos');
+    // Cursos é uma aba, não uma vista de Alunos: a aba aberta é a atual
+    await irPara(page, 'cur');
+    await expect(atual).toHaveCount(1);
+    await expect(atual).toHaveAttribute('data-t', 'cur');
     // O dia escolhido no calendário da agenda, e o que passa a ser escolhido
     await irPara(page, 'age');
     const escolhido = page.locator('#agenda-cal [aria-current="date"]');

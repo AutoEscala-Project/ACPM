@@ -1,5 +1,6 @@
 // Navegação entre as abas.
 import { rBI } from './bi.js';
+import { rCursos } from './cursos.js';
 import { rRodizio } from './rodizio.js';
 
 export function show(t) {
@@ -11,5 +12,6 @@ export function show(t) {
     else b.removeAttribute('aria-current');
   });
   if (t === 'bi') rBI();
+  if (t === 'cur') rCursos();
   if (t === 'rod') rRodizio();
 }

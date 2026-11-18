@@ -2,6 +2,7 @@
 // registra o que faz com eles (js/eventos/), e quem só consulta não muda nada
 import { RES, isGestor } from '../state.js';
 import { rIns, rAlu } from '../views/cadastros.js';
+import { rCursos } from '../views/cursos.js';
 import { rDem } from '../views/demanda.js';
 import { rOut } from '../views/escala.js';
 import { rRec } from '../views/recursos.js';
@@ -38,7 +39,7 @@ document.addEventListener('change', e => {
   // Quem só consulta não muda nada: a tela volta a mostrar os dados
   if (isGestor()) {
     e.preventDefault();
-    rRec(); rIns(); rAlu(); rDem();
+    rRec(); rIns(); rAlu(); rCursos(); rDem();
     if (RES) rOut();
     return;
   }

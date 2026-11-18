@@ -11,6 +11,7 @@ import { rBI } from './views/bi.js';
 import { renderAuditPanel, rOut } from './views/escala.js';
 import { rDem } from './views/demanda.js';
 import { rIns, rInsDia, rAlu } from './views/cadastros.js';
+import { rCursos } from './views/cursos.js';
 import { rRec, rRevisao, rHangar } from './views/recursos.js';
 import { podeEditarAgenda, rAgenda } from './views/agenda.js';
 import { atualizarSelosDaEscala, atualizarSeloDaAgenda, lerPedidosDaData } from './views/selos.js';
@@ -87,7 +88,7 @@ export async function lerDadosDeNovo() {
   avisarDadosIndisponiveis();
   if (!S.indisponiveis.length) showToast('Dados lidos.', 'ok');
   if (horasBase && !isGestor()) save();
-  rIns(); rAlu(); rDem(); rOut();
+  rIns(); rAlu(); rCursos(); rDem(); rOut();
 }
 
 // Uma gravação que não deu certo. Sem conexão, o aviso conta as alterações esperando (as entradas "gravando…" do
@@ -120,7 +121,7 @@ function avisarAlteracoesEsperando() {
 // Depois de um conflito nada mais é gravado: a tela fica só para consulta até recarregar, com o aviso
 export function travarAposConflito({ formato = false } = {}) {
   setRole('gestor', true);
-  rRec(); rIns(); rAlu(); rDem();
+  rRec(); rIns(); rAlu(); rCursos(); rDem();
   if (RES) rOut();
   mostrarAviso('conflito', formato
     ? 'O app foi atualizado. Recarregue a página para continuar (a sua última alteração não foi salva).'
@@ -249,7 +250,7 @@ export async function carregarData(data) {
   escalaSoCalculada = !escala;
   setAuditLog(historico);
   $('#escala-atualizada').hidden = true;
-  rRec(); rIns(); rAlu(); rDem(); renderAuditPanel(); rOut(); rAgenda();
+  rRec(); rIns(); rAlu(); rCursos(); rDem(); renderAuditPanel(); rOut(); rAgenda();
   atualizarSelosDaEscala();
   lerPedidosDaData();
   await carregarBI();
