@@ -1,15 +1,41 @@
 // As reversões do histórico. O que "Reverter" desfaz vem gravado no histórico (no servidor, por
 // quem tem conta de operador), então só vale no formato que o próprio app produz: a reversão fora dele não vira botão
-// nem é aplicada. Um recurso retirado volta pela mesma validação do "+ Novo recurso".
+// nem é aplicada. Um recurso retirado volta pela mesma validação do "+ Novo recurso". Desfazer um voo agendado na
+// Escala também fica aqui: quando ele não é desfeito e o que volta como estava.
 import { novoRecurso, MATRICULA, ATRIBUTOS_DO_RECURSO } from './frota.js';
 import { normalizarFixos } from './fixos.js';
 import { CATEGORIAS_COM_HORARIOS, normalizarHorarios } from './horarios.js';
-import { disponibilidadeValida } from './rules.js';
-import { MINUTOS_DO_DIA } from './config.js';
-import { CHAVE_DO_VOO } from './voo.js';
+import { disponibilidadeValida, normalizeMissionFields } from './rules.js';
+import { MINUTOS_DO_DIA, MIS, WIN } from './config.js';
+import { CHAVE_DO_VOO, chaveDoVoo, pedidoDoAluno } from './voo.js';
+import { CAMPOS_DO_PEDIDO } from './dias.js';
+import { STATUS_EM_ANDAMENTO } from './status.js';
 
 const idValido = v => Number.isInteger(v) && v > 0;
-const rotulo = v => (typeof v === 'string' && v.length <= 40 ? v : '↶ Reverter');
+const rotuloValido = v => typeof v === 'string' && v.length <= 40;
+const rotulo = v => (rotuloValido(v) ? v : '↶ Reverter');
+const objeto = v => Boolean(v) && typeof v === 'object' && !Array.isArray(v);
+const ausente = v => v === null || v === undefined;
+// Um campo do pedido é um valor simples: texto, número, sim ou não (null fica de fora na normalização). Uma lista ou um
+// objeto gravado no histórico não é campo de pedido: a normalização o converteria em texto (['Noturno'] passaria por
+// 'Noturno', sem o horário do Noturno) ou lançaria uma exceção (um objeto com "toString": null, que o JSON permite), e aí
+// nem o histórico nem a escala da data seriam desenhados
+const valorSimples = v => v === null || ['string', 'number', 'boolean'].includes(typeof v);
+
+// O pedido de antes de um agendamento: só os campos do pedido (CAMPOS_DO_PEDIDO), com valores simples, uma missão do
+// app (o nome, em texto) e o "voa" sim ou não; o resto vai para os formatos do app (normalizeMissionFields). Fora disso,
+// null
+function pedidoDeAntes(p) {
+  if (!objeto(p) || !Object.entries(p).every(([c, v]) => CAMPOS_DO_PEDIDO.includes(c) && valorSimples(v))) return null;
+  if (typeof p.mis !== 'string' || !Object.hasOwn(MIS, p.mis) || typeof p.fly !== 'boolean') return null;
+  const pedido = { ...p };
+  normalizeMissionFields(pedido);
+  return pedido;
+}
+
+// A disponibilidade de antes de um instrutor no dia: se ele vem (on) e cada horário do dia (aw); fora disso, null
+const disponibilidadeDeAntes = d => (objeto(d) && idValido(d.insId) && typeof d.on === 'boolean' && Array.isArray(d.aw)
+  && d.aw.length === WIN.length && d.aw.every(v => typeof v === 'boolean') ? { insId: d.insId, on: d.on, aw: [...d.aw] } : null);
 
 // A reversão limpa (só os campos dela), ou null
 export function validarReversao(rev, frota) {
@@ -64,5 +90,64 @@ export function validarReversao(rev, frota) {
     const { recurso } = novoRecurso(frota, rev.recurso && typeof rev.recurso === 'object' ? rev.recurso : {});
     return recurso ? { kind: 'readicionarRecurso', recurso, av: rev.av !== false, label } : null;
   }
+  // Um voo agendado na Escala: o pedido como estava (null: o agendamento criou uma missão extra, que sai), o voo fixo de
+  // antes (null: não era fixo) e a disponibilidade do instrutor de antes (null: não mudou). criado: o agendamento criou o
+  // voo. Aqui o rótulo fora do formato (ou em branco: o botão ficaria sem nome) também invalida a reversão
+  if (rev.kind === 'desfazerAgendamento') {
+    const { stuId, mid, criado } = rev;
+    if (!idValido(stuId) || !Number.isInteger(mid) || mid < 0 || typeof criado !== 'boolean' || !rotuloValido(rev.label) || !rev.label.trim()) return null;
+    const fKey = chaveDoVoo(stuId, mid);
+    const pedido = ausente(rev.pedido) ? null : pedidoDeAntes(rev.pedido);
+    const fixo = ausente(rev.fixo) ? null : normalizarFixos({ [fKey]: rev.fixo })[fKey] || null;
+    const disponibilidade = ausente(rev.disponibilidade) ? null : disponibilidadeDeAntes(rev.disponibilidade);
+    // Sem o pedido de antes, só o voo criado numa missão extra
+    const pedidoRuim = ausente(rev.pedido) ? !criado || mid === 0 : !pedido;
+    if (pedidoRuim || (!ausente(rev.fixo) && !fixo) || (!ausente(rev.disponibilidade) && !disponibilidade)) return null;
+    return { kind: 'desfazerAgendamento', stuId, mid, criado, pedido, fixo, disponibilidade, label: rev.label };
+  }
   return null;
+}
+
+// O voo agendado na Escala que já está em andamento (Em Voo, Atrasado ou Pousou) ou que já tem resultado registrado não
+// é desfeito: o texto do aviso, ou ''. Sem os resultados dos cursos (a leitura falhou: estado.indisponiveis), os
+// registros do dia vêm vazios e não dá para conferir; desfazer fica desligado até "Tentar de novo" (o aviso do topo)
+// ler os resultados, como o registro de resultados
+export function motivoParaNaoDesfazer(estado, { stuId, mid }) {
+  const fKey = chaveDoVoo(stuId, mid);
+  if (STATUS_EM_ANDAMENTO.includes((estado.fStatus || {})[fKey])) return 'O voo já está em andamento: mude o status em vez de desfazer.';
+  if ((estado.indisponiveis || []).includes('resultados')) {
+    return 'Sem os resultados dos cursos, o app não confere se o voo já tem resultado: clique em "Tentar de novo" no aviso e desfaça depois.';
+  }
+  if (((estado.resultados || {}).doDia || []).some(r => r && r.voo === fKey)) return 'O voo já tem resultado registrado.';
+  return '';
+}
+
+// Desfaz um voo agendado na Escala (a reversão validada acima):
+// - o voo que o agendamento criou sai: a missão extra é retirada, ou o pedido principal volta como estava; a chave do
+//   voo fica limpa (sem voo fixo, status nem detalhe);
+// - o voo movido ou encaixado volta como estava: o pedido (com o instrutor escolhido de antes) e o voo fixo de antes
+//   (sem voo fixo antes, ele deixa de ser fixo); o status e o detalhe dele continuam;
+// - o instrutor marcado disponível no agendamento volta como estava.
+// O peso digitado no agendamento fica no cadastro: é da pessoa. Responde se desfez: sem o aluno, ou sem o pedido do voo
+// movido (já retirado da demanda), não há o que desfazer
+export function desfazerAgendamento(estado, { stuId, mid, criado, pedido, fixo, disponibilidade }) {
+  const aluno = estado.stu.find(s => s.id === stuId);
+  const alvo = aluno ? pedidoDoAluno(aluno, mid) : null;
+  if (!aluno || (!criado && !alvo)) return false;
+  const fKey = chaveDoVoo(stuId, mid);
+  if (!pedido) aluno.extra = (aluno.extra || []).filter(ex => ex.mid !== mid);
+  else if (alvo) {
+    // Os campos do pedido de agora saem e os de antes voltam; o resto do aluno (o cadastro) e as missões extras ficam
+    CAMPOS_DO_PEDIDO.forEach(c => { delete alvo[c]; });
+    Object.assign(alvo, pedido);
+    normalizeMissionFields(alvo);
+  }
+  if (criado) [estado.fixos, estado.fStatus, estado.fObs].forEach(mapa => { if (mapa) delete mapa[fKey]; });
+  else if (fixo) estado.fixos = { ...(estado.fixos || {}), [fKey]: { ...fixo } };
+  else if (estado.fixos) delete estado.fixos[fKey];
+  if (disponibilidade) {
+    const x = estado.ins.find(i => i.id === disponibilidade.insId);
+    if (x) Object.assign(x, { on: disponibilidade.on, aw: [...disponibilidade.aw] });
+  }
+  return true;
 }

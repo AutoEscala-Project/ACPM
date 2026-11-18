@@ -2,7 +2,7 @@
 import { gravarAlteracao } from '../actions.js';
 import { $, showToast, algumDialogoAberto } from '../dom.js';
 import { normalizarFixos } from '../fixos.js';
-import { validarReversao } from '../reversoes.js';
+import { validarReversao, motivoParaNaoDesfazer, desfazerAgendamento } from '../reversoes.js';
 import { atributoVale } from '../frota.js';
 import { reverterEscolha, escolherNosPedidos } from '../instrutor-escolhido.js';
 import { S, AUDIT_LOG, DATA, setAuditLog, isGestor, insBy, stuBy, getMissionTarget } from '../state.js';
@@ -104,5 +104,14 @@ aoAcionar('rev-log', b => {
     S.av[rev.recurso.reg] = rev.av !== false;
     gravarAlteracao('inc', `Revertido: ${rev.recurso.reg} de volta à frota`, null, entry.id);
     rRec();
+  } else if (rev.kind === 'desfazerAgendamento') {
+    // Um voo agendado na Escala: o criado sai, o movido volta para onde estava, e o instrutor marcado disponível volta
+    // como estava (js/reversoes.js). O voo já em andamento ou com resultado registrado fica, com o aviso
+    const motivo = motivoParaNaoDesfazer(S, rev);
+    if (motivo) { showToast(motivo); return; }
+    if (desfazerAgendamento(S, rev)) {
+      gravarAlteracao(rev.criado ? 'exc' : 'mod', `Revertido: ${entry.desc}`, null, entry.id);
+      rDem(); rIns();
+    }
   }
 });
