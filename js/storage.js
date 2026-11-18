@@ -18,6 +18,11 @@ import { noturnosDaVespera, comRepousoDoNoturno, voltasConferem } from './noturn
 import { normalizarFixos, normalizarAprovacao } from './fixos.js';
 import { normalizarCriterios } from './criterios.js';
 import { normalizarCursos, normalizarCursoDoAluno } from './cursos.js';
+import { normalizarProgramas } from './programa.js';
+
+// A recusa de quem só consulta (o Gestor e a Secretaria no modo compartilhado, ou a tela travada depois de um
+// conflito), com o código do servidor
+const somenteLeitura = () => Promise.reject(Object.assign(new Error('somente leitura'), { code: '42501' }));
 
 export const ApiClient = {
   KEY_THEME: 'acpm3_theme',
@@ -289,8 +294,22 @@ export const ApiClient = {
   // Resultados das missões dos cursos: fora do estado; o servidor decide quem lê (os perfis da escala) e quem
   // registra (operadores e administradores)
   registrarResultado(registro) {
-    if (this.readOnly) return Promise.reject(Object.assign(new Error('somente leitura'), { code: '42501' }));
+    if (this.readOnly) return somenteLeitura();
     return this.backend.registrarResultado(registro, { autor: this.autorAtual || null });
+  },
+
+  // O programa dos cursos (as tabelas dos cursos; no modo local, este navegador), nos formatos certos: lido de novo
+  // depois de uma gravação recusada. Sem resposta, o erro vai para quem chamou
+  async lerProgramas() {
+    return normalizarProgramas(await this.backend.programaDosCursos());
+  },
+
+  // Grava o curso inteiro (o nome, se está ativo, as fases e as missões) a partir da versão lida (0 cria), com a
+  // descrição da alteração. No modo compartilhado, só o Administrador (o servidor confere); a recusa vem com o código e
+  // o campo (e.campo)
+  salvarCurso(sigla, versaoLida, conteudo, descricao) {
+    if (this.readOnly) return somenteLeitura();
+    return this.backend.salvarCurso(sigla, versaoLida, conteudo, { descricao, autor: this.autorAtual || null });
   },
 
   async biDoPeriodo(de, ate) {

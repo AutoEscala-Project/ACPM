@@ -1,15 +1,15 @@
 // O banco espelha o app. O pgTAP (supabase/tests/database) não roda no CI, então este teste confere o que as duas
 // pontas precisam ter igual: a lista de tipos de missão e recursos da migração dos cursos (missao_e_recurso_validos) é a
-// de js/config.js (MIS), o formato dos cursos (formato_dos_cursos) é o FORMATO_DOS_CURSOS dos casos, o seguinte ao
-// ESQUEMA do app (js/migracoes.js), cada caso da gravação dos programas (test/helpers/casos-do-programa.js) é uma
+// de js/config.js (MIS), o formato dos cursos (formato_dos_cursos) é o FORMATO_DOS_CURSOS do app, o seguinte ao
+// ESQUEMA (os dois em js/migracoes.js), cada caso da gravação dos programas (test/helpers/casos-do-programa.js) é uma
 // verificação de supabase/tests/database/cursos.test.sql, com os mesmos dados, e cada erro que a gravação devolve tem
 // um caso.
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { MIS, GROUND_EQ_TYPE, GROUND_DURATION_H, DURACAO_MAXIMA_H } from '../../js/config.js';
-import { ESQUEMA } from '../../js/migracoes.js';
-import { CASOS_DO_PROGRAMA, PROGRAMA, FORMATO_DOS_CURSOS } from '../helpers/casos-do-programa.js';
+import { ESQUEMA, FORMATO_DOS_CURSOS } from '../../js/migracoes.js';
+import { CASOS_DO_PROGRAMA, PROGRAMA } from '../helpers/casos-do-programa.js';
 
 const ler = caminho => readFileSync(new URL(`../../${caminho}`, import.meta.url), 'utf8');
 const MIGRACAO = ler('supabase/migrations/20261117200000_cursos_e_missoes.sql');
@@ -63,8 +63,8 @@ describe('O banco espelha o app', () => {
   });
 
   // O formato dos cursos é um número só em cada ponta: a função da migração (imutável e interna: só as funções da
-  // migração a chamam) e a constante dos casos (no passo P12, a de js/migracoes.js). Um aumento é uma linha em cada
-  it('formato_dos_cursos() devolve o FORMATO_DOS_CURSOS dos casos, imutável e fora do alcance da API', () => {
+  // migração a chamam) e a constante de js/migracoes.js (que os casos também usam). Um aumento é uma linha em cada
+  it('formato_dos_cursos() devolve o FORMATO_DOS_CURSOS do app, imutável e fora do alcance da API', () => {
     const corpo = funcaoDaMigracao('formato_dos_cursos');
     const r = new RegExp(String.raw`^create function public\.formato_dos_cursos\(\)\s+returns integer\s+language sql\s+immutable\s+`
       + String.raw`set search_path = ''\s+as \$\$\s+select (\d+)\s*$`).exec(corpo);

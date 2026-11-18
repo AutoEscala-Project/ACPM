@@ -29,8 +29,21 @@ describe('Resultados das missões', () => {
     const certo = { aluno: 1000, curso: 'PP', missao: ' pp-07 ', resultado: 'aprovado', data: '2026-11-10', voo: '1000_0_1' };
     assert.deepEqual(validarRegistro(certo), { ...certo, missao: 'PP-07' });
     assert.deepEqual(validarRegistro({ ...certo, voo: null }).voo, null);
-    for (const errado of [{ aluno: 0 }, { curso: 'XX' }, { missao: 'PP 07' }, { resultado: 'talvez' }, { data: '10/11/2026' }, { data: '2026-02-30' }, { voo: 'x' }]) {
-      assert.throws(() => validarRegistro({ ...certo, ...errado }), e => e.code === '23514', JSON.stringify(errado));
+    // Sem a lista dos cursos, só o formato da sigla: o curso que o Administrador criou também vale
+    assert.equal(validarRegistro({ ...certo, curso: 'PC-IFR' }).curso, 'PC-IFR');
+    for (const errado of [{ aluno: 0 }, { curso: 'pp' }, { curso: 'X' }, { curso: 'PP-' }, { curso: null }, { missao: 'PP 07' }, { resultado: 'talvez' },
+      { data: '10/11/2026' }, { data: '2026-02-30' }, { voo: 'x' }]) {
+      assert.throws(() => validarRegistro({ ...certo, ...errado }), { code: '23514', message: 'resultado fora do formato' }, JSON.stringify(errado));
     }
+  });
+
+  it('com a lista dos cursos, o curso desconhecido é recusado antes do resto, como no servidor (23514)', () => {
+    const certo = { aluno: 1000, curso: 'ZZ9', missao: 'ZZ9-01', resultado: 'aprovado', data: '2026-11-10', voo: null };
+    const cursos = ['PP', 'PC', 'INVA', 'ZZ9'];
+    assert.equal(validarRegistro(certo, { cursos }).curso, 'ZZ9');
+    for (const curso of ['XX', 'pp']) {
+      assert.throws(() => validarRegistro({ ...certo, curso, resultado: 'talvez' }, { cursos }), { code: '23514', message: 'curso desconhecido' }, curso);
+    }
+    assert.throws(() => validarRegistro({ ...certo, resultado: 'talvez' }, { cursos }), { code: '23514', message: 'resultado fora do formato' });
   });
 });

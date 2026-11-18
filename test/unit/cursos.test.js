@@ -2,7 +2,7 @@
 // aluno. Cada missão do programa tem um código (PP-07), um nome, o tipo de missão do app, o recurso e as horas.
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { CURSOS, cursosVazios, normalizarCursos, normalizarCursoDoAluno, novaMissaoDoCurso } from '../../js/cursos.js';
+import { CURSOS, cursosVazios, normalizarCursos, normalizarCursoDoAluno, novaMissaoDoCurso, siglaValida } from '../../js/cursos.js';
 
 const missao = (id, extra = {}) => ({ id, nome: `Missão ${id}`, mis: 'Voo Local', eq: 'C152', nb: 1, ...extra });
 
@@ -13,7 +13,7 @@ describe('Programa dos cursos', () => {
     assert.deepEqual(normalizarCursos(undefined), cursosVazios());
   });
 
-  it('só missões válidas: código curto e único no curso, missão do app, recurso da missão e horas inteiras de 1 a 11', () => {
+  it('só missões válidas: código curto e único no curso, missão do app, recurso da missão e horas de 0,1 a 5 (em décimos)', () => {
     const cursos = normalizarCursos({
       PP: [missao('PP-01'), missao('pp-02 ', { nome: '  Navegação  ', mis: 'Navegação', nb: 2 }), missao('PP-01'), missao('', {}), missao('PP 03'),
         missao('PP-04', { mis: 'Inexistente' }), missao('PP-05', { eq: 'PA-34', mis: 'Noturno' }), missao('PP-06', { nb: 40 }), missao('PP-07', { nb: 1.2 })],
@@ -41,10 +41,16 @@ describe('Programa dos cursos', () => {
     assert.equal(novaMissaoDoCurso('INVA', [missao('INVA-01'), missao('INVA-07'), missao('INVA-X')]).id, 'INVA-08');
   });
 
-  it('o curso do aluno: só um dos três', () => {
-    assert.equal(normalizarCursoDoAluno('PC'), 'PC');
-    assert.equal(normalizarCursoDoAluno('pc'), undefined);
-    assert.equal(normalizarCursoDoAluno(undefined), undefined);
+  it('a sigla do curso, como no servidor: de 2 a 10 letras maiúsculas, números e hífen, começando por letra e sem hífen no fim', () => {
+    for (const certa of ['PP', 'PC', 'INVA', 'IFR', 'PC-IFR', 'MLTE2', 'ABCDEFGHIJ']) assert.equal(siglaValida(certa), true, certa);
+    for (const errada of ['P', 'pp', 'Pp', '2PP', 'PP-', '-PP', 'PP 2', 'ABCDEFGHIJK', '<b>PP</b>', '', null, undefined, 12, ['PP']]) {
+      assert.equal(siglaValida(errada), false, String(errada));
+    }
+  });
+
+  it('o curso do aluno: a sigla conferida só no formato (um curso fora de PP, PC e INVA também fica)', () => {
+    assert.deepEqual(['PC', 'IFR', 'PC-IFR'].map(normalizarCursoDoAluno), ['PC', 'IFR', 'PC-IFR']);
+    for (const errado of ['pc', 'pp', '<b>PP</b>', 'PP ', '', undefined, null, 7]) assert.equal(normalizarCursoDoAluno(errado), undefined, String(errado));
   });
 });
 

@@ -4,16 +4,23 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { criarBackendSupabase } from '../../js/backends/supabase.js';
 import { situacaoPorMissao, validarRegistro } from '../../js/resultados.js';
+import { cursosIniciais, gravarCurso, importarProgramas, programaComResultados, programaDoLegado } from '../../js/programa.js';
+import { normalizarCursos } from '../../js/cursos.js';
+import { FORMATO_DOS_CURSOS } from '../../js/migracoes.js';
+import { PROGRAMA } from '../helpers/casos-do-programa.js';
 
 const espera = ms => new Promise(r => setTimeout(r, ms));
 
-// Tabelas em memória (documentos, dias e historico) com o mesmo contrato das funções do banco testadas em pgTAP
+// Tabelas em memória (documentos, dias e historico) com o mesmo contrato das funções do banco testadas em pgTAP. Os
+// cursos (programa_dos_cursos, salvar_curso e importar_cursos) seguem as regras do servidor (js/programa.js) e começam
+// como o banco: PP, PC e INVA vazios
 function clienteFalso(documentos = {}, { atraso = 0, dias = {} } = {}) {
   const banco = new Map(Object.entries(documentos));
   const tabelaDias = new Map(Object.entries(dias));
   const historico = [];
   const solicitacoes = [];
   const resultados = [];
+  const cursos = { lista: cursosIniciais(), alteracoes: [] };
   // Contas do servidor falso: a do usuário logado e as que o administrador gerencia
   const contas = [{ usuario: 'u-eu', email: 'eu@teste.acpm', senha: 'senha atual bem longa', nome: 'Eu', perfil: 'administrador' }];
   const atualizacoes = [];
@@ -41,11 +48,18 @@ function clienteFalso(documentos = {}, { atraso = 0, dias = {} } = {}) {
     mapa.set(chave, { conteudo, versao: versaoAtual + 1 });
     return { data: versaoAtual + 1, error: null };
   };
+  // O que a gravação dos cursos confere: os cursos, os resultados e o cadastro (o formato e a versão)
+  const estadoDosCursos = () => ({
+    cursos: cursos.lista, resultados, cadastro: banco.has('cadastro') ? { esquema: esquema(banco.get('cadastro').conteudo), versao: banco.get('cadastro').versao } : null
+  });
+  // A recusa como o PostgREST manda: o código, a mensagem e a dica (o campo)
+  const recusaDoBanco = e => ({ data: null, error: { code: e.code, message: e.message, hint: e.campo || null } });
 
   return {
     banco,
     dias: tabelaDias,
     historico,
+    cursos,
     rpcs,
     chamadas,
     falharProximas(n) { falhasDeRede = n; },
@@ -96,7 +110,7 @@ function clienteFalso(documentos = {}, { atraso = 0, dias = {} } = {}) {
       if (nome === 'salvar_documento' || nome === 'salvar_dia') rpcs.push(structuredClone(args));
       await espera(atraso);
       if (falhasDeRede > 0) { falhasDeRede--; return { data: null, error: { message: 'Failed to fetch', code: '' }, status: 0 }; }
-      if (recusas.length && ['salvar_documento', 'salvar_dia', 'registrar_historico'].includes(nome)) {
+      if (recusas.length && ['salvar_documento', 'salvar_dia', 'registrar_historico', 'programa_dos_cursos', 'salvar_curso', 'importar_cursos'].includes(nome)) {
         const { erro, status } = recusas.shift();
         return { data: null, error: erro, status };
       }
@@ -119,9 +133,30 @@ function clienteFalso(documentos = {}, { atraso = 0, dias = {} } = {}) {
         }
         return { data: args.p_entradas.length, error: null };
       }
+      if (nome === 'programa_dos_cursos') return { data: programaComResultados({ cursos: cursos.lista, resultados, alteracoes: cursos.alteracoes }), error: null };
+      if (nome === 'salvar_curso') {
+        try {
+          const r = gravarCurso(estadoDosCursos(), { sigla: args.p_sigla, versaoLida: args.p_versao_lida, conteudo: args.p_curso, descricao: args.p_descricao, autor: contas[0].nome });
+          Object.assign(cursos, { lista: r.cursos, alteracoes: [...cursos.alteracoes, r.alteracao] });
+          return { data: r.retorno, error: null };
+        } catch (e) {
+          return recusaDoBanco(e);
+        }
+      }
+      if (nome === 'importar_cursos') {
+        try {
+          const r = importarProgramas(estadoDosCursos(), { programas: args.p_cursos, versaoDoCadastro: args.p_versao_do_cadastro, autor: contas[0].nome });
+          Object.assign(cursos, { lista: r.cursos, alteracoes: [...cursos.alteracoes, ...r.alteracoes] });
+          return { data: r.retorno, error: null };
+        } catch (e) {
+          return recusaDoBanco(e);
+        }
+      }
       if (nome === 'registrar_resultado') {
         try {
-          const r = validarRegistro({ aluno: args.p_aluno, curso: args.p_curso, missao: args.p_missao, resultado: args.p_resultado, data: args.p_data, voo: args.p_voo });
+          // O curso tem de existir (os cursos do servidor)
+          const r = validarRegistro({ aluno: args.p_aluno, curso: args.p_curso, missao: args.p_missao, resultado: args.p_resultado, data: args.p_data, voo: args.p_voo },
+            { cursos: cursos.lista.map(c => c.sigla) });
           resultados.push({ id: resultados.length + 1, ...r, registrado_em: new Date(Date.UTC(2026, 10, 10, 12, 0, resultados.length)).toISOString(), registrado_por: 'Operador' });
           return { data: resultados.length, error: null };
         } catch (e) {
@@ -439,7 +474,8 @@ describe('Backend Supabase: escala por data e histórico', () => {
     assert.deepEqual((await backend.situacaoDasMissoes()).map(r => [r.aluno, r.curso, r.missao, r.resultado]), [[1000, 'PP', 'PP-07', 'aprovado']]);
     assert.deepEqual((await backend.resultadosDoDia('2026-11-11')).map(r => [r.id, r.voo, r.resultado]), [[1, '1000_0_1', 'aprovado']]);
     assert.deepEqual(await backend.resultadosDoDia('2026-11-12'), []);
-    await assert.rejects(backend.registrarResultado({ ...registro, curso: 'XX' }), e => e.code === '23514');
+    // O curso que não existe no servidor ('XX'): 23514, como antes da lista de cursos
+    await assert.rejects(backend.registrarResultado({ ...registro, curso: 'XX' }), { code: '23514', message: 'curso desconhecido' });
   });
 
   it('depois de um conflito, nada mais é gravado: nem outras datas nem o histórico', async () => {
@@ -453,5 +489,62 @@ describe('Backend Supabase: escala por data e histórico', () => {
     assert.equal(await backend.gravar('dia:2026-11-12', {}), false);
     assert.equal(await backend.registrar({ data: '2026-11-11', tipo: 'mod', descricao: 'x' }), null);
     assert.deepEqual(cliente.chamadas.map(c => c[0]), ['salvar_dia']);
+  });
+});
+
+describe('Backend Supabase: o programa dos cursos', () => {
+  const NO_FORMATO = { cadastro: { conteudo: { esquema: FORMATO_DOS_CURSOS }, versao: 7 } };
+  const ANTES_DO_FORMATO = { cadastro: { conteudo: { esquema: FORMATO_DOS_CURSOS - 1 }, versao: 7 } };
+
+  it('lê os programas e grava um curso por chamadas únicas às funções do banco, com os argumentos delas', async () => {
+    const cliente = clienteFalso(NO_FORMATO);
+    const backend = criarBackendSupabase(cliente);
+    assert.deepEqual((await backend.programaDosCursos()).map(c => [c.sigla, c.versao, c.missoes]), [['PP', 1, []], ['PC', 1, []], ['INVA', 1, []]]);
+    assert.deepEqual(cliente.chamadas.at(-1), ['programa_dos_cursos', undefined]);
+    const resposta = await backend.salvarCurso('ZZ9', 0, PROGRAMA, { descricao: 'Curso ZZ9 criado: Curso de teste', autor: 'ignorado: o servidor sabe quem é' });
+    assert.deepEqual(cliente.chamadas.at(-1), ['salvar_curso', { p_sigla: 'ZZ9', p_versao_lida: 0, p_curso: PROGRAMA, p_descricao: 'Curso ZZ9 criado: Curso de teste' }]);
+    assert.deepEqual([resposta.versao, typeof resposta.atualizado_em], [1, 'string']);
+    const zz9 = (await backend.programaDosCursos()).at(-1);
+    assert.deepEqual([zz9.sigla, zz9.versao, zz9.missoes.length, zz9.alteracoes.map(a => [a.versao, a.registrado_por])], ['ZZ9', 1, 5, [[1, 'Eu']]]);
+    assert.deepEqual(cliente.rpcs, [], 'nada passa pela fila das gravações (salvar_documento e salvar_dia)');
+  });
+
+  it('a conversão leva a versão do cadastro lida por último (0 antes de ler); cadastro alterado depois: PT409', async () => {
+    const cliente = clienteFalso(ANTES_DO_FORMATO);
+    const backend = criarBackendSupabase(cliente);
+    const programas = programaDoLegado(normalizarCursos({ PP: [{ id: 'PP-01', nome: 'Familiarização', mis: 'Voo Local' }] }));
+    await assert.rejects(backend.importarCursos(programas), { code: 'PT409', campo: null });
+    assert.deepEqual(cliente.chamadas.at(-1), ['importar_cursos', { p_cursos: programas, p_versao_do_cadastro: 0 }]);
+    await backend.ler('cadastro');
+    assert.equal(await backend.importarCursos(programas), 1);
+    assert.deepEqual(cliente.chamadas.at(-1), ['importar_cursos', { p_cursos: programas, p_versao_do_cadastro: 7 }]);
+    // Depois de gravar o cadastro, a versão gravada (a conversão já feita: nada mais)
+    assert.equal(await backend.gravar('cadastro', { esquema: FORMATO_DOS_CURSOS }), true);
+    assert.equal(await backend.importarCursos(programas), 0);
+    assert.equal(cliente.chamadas.at(-1)[1].p_versao_do_cadastro, 8);
+  });
+
+  it('a recusa traz o código e o campo (a dica do servidor) e fica com quem chamou: não trava as gravações', async () => {
+    const cliente = clienteFalso(ANTES_DO_FORMATO, { dias: { '2026-11-11': { conteudo: {}, versao: 1 } } });
+    const conflitos = [], erros = [];
+    const backend = criarBackendSupabase(cliente, { aoConflito: d => conflitos.push(d), aoErro: (e, d) => erros.push(d) });
+    await assert.rejects(backend.salvarCurso('ZZ9', 0, PROGRAMA, { descricao: 'Curso ZZ9 criado' }), { code: 'PT409', campo: 'formato' });
+    cliente.banco.set('cadastro', NO_FORMATO.cadastro);
+    const comCodigo = codigo => ({ ...PROGRAMA, missoes: PROGRAMA.missoes.map((m, i) => (i ? m : { ...m, codigo })) });
+    await assert.rejects(backend.salvarCurso('ZZ9', 0, comCodigo('zz9 01'), { descricao: 'Curso ZZ9 criado' }), { code: '22023', campo: 'codigo' });
+    await assert.rejects(backend.salvarCurso('ZZ9', 0, PROGRAMA, { descricao: '' }), { code: '22023', campo: 'descricao' });
+    await assert.rejects(backend.salvarCurso('ZZ7', 1, PROGRAMA, { descricao: 'ZZ7: alteração' }), { code: 'P0002', campo: null });
+    await backend.salvarCurso('ZZ9', 0, PROGRAMA, { descricao: 'Curso ZZ9 criado' });
+    await assert.rejects(backend.salvarCurso('ZZ9', 0, PROGRAMA, { descricao: 'Curso ZZ9 criado' }), { code: 'PT409', campo: 'sigla' });
+    await assert.rejects(backend.salvarCurso('ZZ9', 3, PROGRAMA, { descricao: 'ZZ9: alteração' }), { code: 'PT409', campo: null });
+    cliente.recusarProximas(1, { code: '42501', message: 'somente o Administrador altera os cursos' }, 403);
+    await assert.rejects(backend.salvarCurso('ZZ9', 1, PROGRAMA, { descricao: 'ZZ9: alteração' }), { code: '42501', campo: null, message: 'somente o Administrador altera os cursos' });
+    cliente.recusarProximas(1, { code: '42501', message: 'permission denied for function programa_dos_cursos' }, 401);
+    await assert.rejects(backend.programaDosCursos(), { code: '42501' });
+    cliente.falharProximas(1);
+    await assert.rejects(backend.importarCursos([]), { message: 'Failed to fetch' });
+    assert.deepEqual([conflitos, erros], [[], []], 'nenhum aviso de conflito nem de erro das gravações');
+    await backend.ler('dia:2026-11-11');
+    assert.equal(await backend.gravar('dia:2026-11-11', { v: 2 }), true, 'as gravações continuam');
   });
 });

@@ -10,16 +10,33 @@ import { backendLocal } from '../../js/backends/local.js';
 import { simularNavegador } from '../helpers/navegador.js';
 import { estadoSintetico } from '../helpers/estado.js';
 import { aluno, instrutor, missaoExtra } from '../helpers/montar.js';
-import { ESQUEMA } from '../../js/migracoes.js';
+import { ESQUEMA, FORMATO_DOS_CURSOS } from '../../js/migracoes.js';
 import { habilitacoesDoNivel } from '../../js/habilitacoes.js';
+import { cursosIniciais, gravarCurso, importarProgramas, programaComResultados } from '../../js/programa.js';
+import { PROGRAMA } from '../helpers/casos-do-programa.js';
 
-// Backend em memória com a mesma interface, contando as gravações
+// Backend em memória com a mesma interface, contando as gravações. O programa dos cursos segue as regras do servidor
+// (js/programa.js), começando como o banco (PP, PC e INVA vazios); a conversão do cadastro entra em gravacoes
 function backendEmMemoria() {
   const docs = new Map();
   const historico = [];
   const gravacoes = [];
+  const cursos = { lista: cursosIniciais(), alteracoes: [] };
+  const estadoDosCursos = () => ({ cursos: cursos.lista, resultados: [], cadastro: docs.has('cadastro') ? { esquema: docs.get('cadastro').esquema, versao: 0 } : null });
   return {
-    docs, historico, gravacoes,
+    docs, historico, gravacoes, cursos,
+    async programaDosCursos() { return programaComResultados({ cursos: cursos.lista, alteracoes: cursos.alteracoes }); },
+    async salvarCurso(sigla, versaoLida, conteudo, { descricao, autor = null } = {}) {
+      const r = gravarCurso(estadoDosCursos(), { sigla, versaoLida, conteudo, descricao, autor });
+      Object.assign(cursos, { lista: r.cursos, alteracoes: [...cursos.alteracoes, r.alteracao] });
+      return r.retorno;
+    },
+    async importarCursos(programas, { autor = null } = {}) {
+      gravacoes.push('importarCursos');
+      const r = importarProgramas(estadoDosCursos(), { programas, versaoDoCadastro: 0, autor });
+      Object.assign(cursos, { lista: r.cursos, alteracoes: [...cursos.alteracoes, ...r.alteracoes] });
+      return r.retorno;
+    },
     async ler(doc) { return docs.has(doc) ? structuredClone(docs.get(doc)) : null; },
     async gravar(doc, conteudo) { gravacoes.push(doc); docs.set(doc, structuredClone(conteudo)); return true; },
     async listarDias(de, ate) {
@@ -56,7 +73,7 @@ beforeEach(() => {
   ApiClient.readOnly = false;
   ApiClient.cadastroGravado = undefined;
 });
-afterEach(() => { ApiClient.backend = original; ApiClient.readOnly = false; });
+afterEach(() => { ApiClient.backend = original; ApiClient.readOnly = false; ApiClient.autorAtual = null; });
 
 const escalaDe = data => ({ out: [{ fKey: '1000_0_1', h: 1 }], al: [], tot: 1, data });
 
@@ -116,6 +133,54 @@ describe('Dados lidos à parte', () => {
     const semNada = await ApiClient.carregarDia('2026-11-11');
     assert.deepEqual([semNada.indisponiveis, semNada.resultados], [['horas', 'resultados'], { situacao: [], doDia: [] }]);
     assert.deepEqual(await ApiClient.lerDadosAParte('2026-11-11'), { horasBase: null, resultados: null });
+  });
+});
+
+describe('O programa dos cursos (ApiClient)', () => {
+  // O cadastro já no formato dos cursos (a conversão feita): o Administrador grava os cursos
+  const convertido = () => backend.docs.set('cadastro', { nid: 1000, ins: [], stu: [], esquema: FORMATO_DOS_CURSOS });
+
+  it('lê os programas nos formatos certos', async () => {
+    assert.deepEqual((await ApiClient.lerProgramas()).map(c => [c.sigla, c.versao, c.fases, c.missoes, c.alteracoes]),
+      [['PP', 1, [], [], []], ['PC', 1, [], [], []], ['INVA', 1, [], [], []]]);
+    backend.programaDosCursos = async () => [{ sigla: 'pp' }, { sigla: 'PC', nome: 'Piloto Comercial', fases: [{ id: 'F1', nome: 'Fase 1' }], missoes: 'x' }];
+    assert.deepEqual((await ApiClient.lerProgramas()).map(c => [c.sigla, c.versao, c.fases, c.missoes]), [['PC', 1, [], []]]);
+  });
+
+  it('sem resposta, ou num backend sem os cursos, a leitura recusa: quem chamou decide o que mostrar', async () => {
+    backend.programaDosCursos = async () => { throw new Error('sem conexão'); };
+    await assert.rejects(ApiClient.lerProgramas(), /sem conexão/);
+    delete backend.programaDosCursos;
+    await assert.rejects(ApiClient.lerProgramas(), TypeError);
+  });
+
+  it('grava o curso com a descrição e quem gravou; a recusa vem com o código e o campo, e a leitura de novo mostra o programa gravado', async () => {
+    convertido();
+    ApiClient.autorAtual = 'Admin de Teste';
+    assert.equal((await ApiClient.salvarCurso('ZZ9', 0, PROGRAMA, 'Curso ZZ9 criado: Curso de teste')).versao, 1);
+    assert.deepEqual(backend.cursos.alteracoes.map(a => [a.curso, a.versao, a.descricao, a.registrado_por]), [['ZZ9', 1, 'Curso ZZ9 criado: Curso de teste', 'Admin de Teste']]);
+    await assert.rejects(ApiClient.salvarCurso('ZZ9', 0, PROGRAMA, 'Curso ZZ9 criado de novo'), { code: 'PT409', campo: 'sigla' });
+    const zz9 = (await ApiClient.lerProgramas()).find(c => c.sigla === 'ZZ9');
+    assert.deepEqual([zz9.versao, zz9.missoes.length, zz9.alteracoes.map(a => a.versao)], [1, 5, [1]]);
+    assert.deepEqual(backend.gravacoes, [], 'nada vai para o cadastro nem para os dias');
+  });
+
+  it('só consulta (o Gestor e a Secretaria, ou a tela travada depois de um conflito): a gravação é recusada (42501) sem chamar o backend', async () => {
+    convertido();
+    ApiClient.readOnly = true;
+    let chamadas = 0;
+    backend.salvarCurso = async () => { chamadas++; };
+    await assert.rejects(ApiClient.salvarCurso('ZZ9', 0, PROGRAMA, 'Curso ZZ9 criado: Curso de teste'), { code: '42501' });
+    assert.equal(chamadas, 0);
+    assert.equal((await ApiClient.lerProgramas()).length, 3, 'a leitura continua');
+  });
+
+  it('o backend de teste converte o cadastro como o servidor e põe a conversão na lista das gravações, junto dos dias e do cadastro', async () => {
+    backend.docs.set('cadastro', { nid: 1000, ins: [], stu: [], esquema: FORMATO_DOS_CURSOS - 1 });
+    const fase = '00000000-0000-4000-8000-000000000001';
+    const pp = { sigla: 'PP', fases: [{ id: fase, nome: 'Programa' }], missoes: [{ id: '00000000-0000-4000-8000-000000000002', fase, codigo: 'PP-01', nome: 'PP-01', mis: 'Voo Local', eq: 'C152', nb: 1 }] };
+    assert.equal(await backend.importarCursos([pp, { sigla: 'ZZ7', fases: [], missoes: [] }]), 1);
+    assert.deepEqual([backend.gravacoes, backend.cursos.alteracoes.map(a => a.descricao)], [['importarCursos'], ['Programa trazido do cadastro (1 missão)']]);
   });
 });
 

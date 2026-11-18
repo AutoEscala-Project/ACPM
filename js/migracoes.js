@@ -11,6 +11,10 @@ import { LIMITES_DA_LEI } from './limites.js';
 import { cursosVazios } from './cursos.js';
 
 export const ESQUEMA = 23;
+// O formato dos cursos: o formato do cadastro a partir do qual os programas vivem nas tabelas próprias (antes dele, vale
+// o programa guardado no cadastro, que a conversão única traz para as tabelas). O 22 é o do instrutor escolhido e o 23,
+// o dos atributos da frota; um aumento é esta linha mais public.formato_dos_cursos() (a migração dos cursos)
+export const FORMATO_DOS_CURSOS = 24;
 
 // Um pedido do dia com as preferências em minutos e a disponibilidade no formato atual (formato 12)
 function pedidoEmMinutos(pedido) {

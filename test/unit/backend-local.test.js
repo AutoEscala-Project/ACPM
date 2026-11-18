@@ -3,7 +3,11 @@ import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { backendLocal } from '../../js/backends/local.js';
 import { ApiClient } from '../../js/storage.js';
+import { FORMATO_DOS_CURSOS } from '../../js/migracoes.js';
+import { programaDoLegado } from '../../js/programa.js';
+import { normalizarCursos } from '../../js/cursos.js';
 import { simularNavegador } from '../helpers/navegador.js';
+import { PROGRAMA, IDS } from '../helpers/casos-do-programa.js';
 
 beforeEach(() => simularNavegador());
 
@@ -138,6 +142,106 @@ describe('Backend local: resultados das missões', () => {
     await backendLocal.registrarResultado(registro);
     await backendLocal.registrarResultado({ ...registro, resultado: 'pendente' });
     assert.deepEqual((await backendLocal.resultadosDoDia('2026-11-10')).map(r => r.resultado), ['reprovado', 'pendente']);
+  });
+
+  it('o curso tem de existir (23514): os três de hoje, sem programa gravado; depois, os cursos gravados', async () => {
+    await assert.rejects(backendLocal.registrarResultado({ ...registro, curso: 'ZZ9', missao: 'ZZ9-01' }), { code: '23514', message: 'curso desconhecido' });
+    await backendLocal.registrarResultado({ ...registro, curso: 'INVA' });
+    localStorage.setItem('acpm4_cadastro', JSON.stringify({ esquema: FORMATO_DOS_CURSOS }));
+    await backendLocal.salvarCurso('ZZ9', 0, PROGRAMA, { descricao: 'Curso ZZ9 criado: Curso de teste' });
+    await backendLocal.registrarResultado({ ...registro, curso: 'ZZ9', missao: 'ZZ9-01' });
+    await assert.rejects(backendLocal.registrarResultado({ ...registro, curso: 'XX' }), { code: '23514' });
+    assert.deepEqual((await backendLocal.resultadosDoDia('2026-11-10')).map(r => r.curso), ['INVA', 'ZZ9']);
+  });
+});
+
+describe('Backend local: o programa dos cursos (as regras do servidor, js/programa.js)', () => {
+  const agora = new Date('2026-11-18T13:00:00.000Z');
+  const comCadastro = esquema => localStorage.setItem('acpm4_cadastro', JSON.stringify({ nid: 1000, ins: [], stu: [], esquema }));
+  const guardado = () => localStorage.getItem('acpm4_cursos');
+  const criarZZ9 = () => backendLocal.salvarCurso('ZZ9', 0, PROGRAMA, { descricao: 'Curso ZZ9 criado: Curso de teste', autor: 'Maria', agora });
+
+  it('sem programa gravado: PP, PC e INVA vazios, na versão 1, como o servidor começa; a leitura não grava a chave', async () => {
+    const programa = await backendLocal.programaDosCursos();
+    assert.deepEqual(programa.map(c => [c.sigla, c.nome, c.ordem, c.ativo, c.versao, c.fases, c.missoes, c.alteracoes]), [
+      ['PP', 'Piloto Privado', 0, true, 1, [], [], []], ['PC', 'Piloto Comercial', 1, true, 1, [], [], []], ['INVA', 'Instrutor de Voo', 2, true, 1, [], [], []]
+    ]);
+    assert.equal(guardado(), null);
+    assert.equal(localStorage.length, 0);
+  });
+
+  it('grava o curso como o servidor: a versão, a ordem, as alterações com quem gravou e as missões que já têm resultados', async () => {
+    comCadastro(FORMATO_DOS_CURSOS);
+    assert.deepEqual(await criarZZ9(), { versao: 1, atualizado_em: agora.toISOString() });
+    await backendLocal.registrarResultado({ aluno: 1000, curso: 'ZZ9', missao: 'ZZ9-01', resultado: 'reprovado', data: '2026-11-18', voo: null });
+    const semM5 = { ...PROGRAMA, nome: 'Curso de teste (novo nome)', missoes: PROGRAMA.missoes.filter(m => m.id !== IDS.m5) };
+    assert.equal((await backendLocal.salvarCurso('ZZ9', 1, semM5, { descricao: 'ZZ9: ZZ9-05 tirada do programa', agora })).versao, 2);
+    const zz9 = (await backendLocal.programaDosCursos()).find(c => c.sigla === 'ZZ9');
+    assert.deepEqual([zz9.nome, zz9.ordem, zz9.versao], ['Curso de teste (novo nome)', 3, 2]);
+    assert.deepEqual(zz9.missoes.map(m => [m.codigo, m.removida, m.comResultados]),
+      [['ZZ9-01', false, true], ['ZZ9-02', false, false], ['ZZ9-03', false, false], ['ZZ9-04', false, false], ['ZZ9-05', true, false]]);
+    assert.deepEqual(zz9.alteracoes, [
+      { versao: 2, descricao: 'ZZ9: ZZ9-05 tirada do programa', registrado_em: agora.toISOString(), registrado_por: null },
+      { versao: 1, descricao: 'Curso ZZ9 criado: Curso de teste', registrado_em: agora.toISOString(), registrado_por: 'Maria' }
+    ]);
+    // Na chave, os cursos no formato do servidor (sem o que a leitura acrescenta) e as alterações com o curso
+    const { cursos, alteracoes } = JSON.parse(guardado());
+    assert.deepEqual([cursos.map(c => c.sigla), Object.hasOwn(cursos[3].missoes[0], 'comResultados'), alteracoes.map(a => [a.curso, a.versao])],
+      [['PP', 'PC', 'INVA', 'ZZ9'], false, [['ZZ9', 1], ['ZZ9', 2]]]);
+  });
+
+  it('recusa como o servidor (PT409, 23505, 23514, 22023, P0002), com o código e o campo, sem gravar nada', async () => {
+    comCadastro(FORMATO_DOS_CURSOS);
+    await criarZZ9();
+    await backendLocal.registrarResultado({ aluno: 1000, curso: 'ZZ9', missao: 'ZZ9-01', resultado: 'aprovado', data: '2026-11-18', voo: null });
+    const antes = guardado();
+    const comMissao = (i, campos) => ({ ...PROGRAMA, missoes: PROGRAMA.missoes.map((m, j) => (j === i ? { ...m, ...campos } : m)) });
+    const recusas = [
+      [() => criarZZ9(), { code: 'PT409', campo: 'sigla' }],
+      [() => backendLocal.salvarCurso('ZZ9', 7, PROGRAMA, { descricao: 'ZZ9: alteração' }), { code: 'PT409', campo: null }],
+      [() => backendLocal.salvarCurso('ZZ9', 1, comMissao(1, { codigo: 'ZZ9-01' }), { descricao: 'ZZ9: alteração' }), { code: '23505', campo: 'codigo' }],
+      [() => backendLocal.salvarCurso('ZZ9', 1, comMissao(0, { codigo: 'ZZ9-10' }), { descricao: 'ZZ9: alteração' }), { code: '23514', campo: 'codigo' }],
+      [() => backendLocal.salvarCurso('ZZ9', 1, comMissao(4, { eq: 'C152' }), { descricao: 'ZZ9: alteração' }), { code: '22023', campo: 'mis' }],
+      [() => backendLocal.salvarCurso('ZZ7', 1, PROGRAMA, { descricao: 'ZZ7: alteração' }), { code: 'P0002', campo: null }]
+    ];
+    for (const [gravar, erro] of recusas) {
+      // A recusa vem na promessa (nada é lançado na chamada)
+      let gravacao;
+      assert.doesNotThrow(() => { gravacao = gravar(); });
+      await assert.rejects(gravacao, erro);
+    }
+    assert.equal(guardado(), antes, 'nada gravado');
+  });
+
+  it('antes do formato dos cursos, o programa espera a conversão (PT409 formato); sem cadastro, grava', async () => {
+    comCadastro(FORMATO_DOS_CURSOS - 1);
+    await assert.rejects(criarZZ9(), { code: 'PT409', campo: 'formato' });
+    assert.equal(guardado(), null);
+    localStorage.removeItem('acpm4_cadastro');
+    assert.equal((await criarZZ9()).versao, 1);
+  });
+
+  it('a conversão do cadastro: só antes do formato dos cursos; o curso igual é pulado e a chave só é gravada quando algum curso muda', async () => {
+    const legado = () => programaDoLegado(normalizarCursos({ PP: [{ id: 'PP-01', nome: 'Familiarização', mis: 'Voo Local', eq: 'C152', nb: 1 }] }));
+    comCadastro(FORMATO_DOS_CURSOS);
+    assert.equal(await backendLocal.importarCursos(legado()), 0);
+    assert.equal(guardado(), null, 'no formato dos cursos, nada');
+    comCadastro(FORMATO_DOS_CURSOS - 1);
+    assert.equal(await backendLocal.importarCursos(legado(), { autor: 'Maria', agora }), 1);
+    const depois = guardado();
+    const [pp] = await backendLocal.programaDosCursos();
+    assert.deepEqual([pp.versao, pp.fases.map(f => f.nome), pp.missoes.map(m => m.codigo)], [2, ['Programa'], ['PP-01']]);
+    assert.deepEqual(pp.alteracoes, [{ versao: 2, descricao: 'Programa trazido do cadastro (1 missão)', registrado_em: agora.toISOString(), registrado_por: 'Maria' }]);
+    // O mesmo programa com outros ids (cada abertura gera ids novos) é o mesmo: nada é gravado
+    const gravadas = [], setItem = localStorage.setItem.bind(localStorage);
+    localStorage.setItem = (chave, valor) => { gravadas.push(chave); setItem(chave, valor); };
+    assert.equal(await backendLocal.importarCursos(legado()), 0);
+    assert.deepEqual([gravadas, guardado()], [[], depois]);
+    // Sem cadastro (o primeiro uso deste navegador), a conversão grava
+    localStorage.removeItem('acpm4_cadastro');
+    localStorage.removeItem('acpm4_cursos');
+    assert.equal(await backendLocal.importarCursos(legado()), 1);
+    assert.deepEqual(gravadas, ['acpm4_cursos']);
   });
 });
 

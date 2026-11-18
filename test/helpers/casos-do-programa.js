@@ -20,6 +20,8 @@
 //   regra, "dispensada" e "avaliação"), os códigos, os requisitos e o código travado por um resultado;
 // - a conversão troca o programa inteiro (o guardado é apagado), pula o curso igual e o que não existe, e com o
 //   cadastro no formato dos cursos não grava nada.
+import { FORMATO_DOS_CURSOS } from '../../js/migracoes.js';
+
 const id = (grupo, n) => `00000000-0000-4000-${grupo}-${String(n).padStart(12, '0')}`;
 
 export const IDS = Object.freeze({
@@ -118,13 +120,9 @@ const LEGADO = [
 ];
 const LEGADO_MUDADO = [{ ...LEGADO[0], missoes: LEGADO[0].missoes.slice(0, 1) }];
 
-// O formato dos cursos: o formato do cadastro a partir do qual os programas vivem nas tabelas próprias (no banco,
-// public.formato_dos_cursos(); test/unit/espelho-do-banco.test.js confere que é o mesmo). É o seguinte ao ESQUEMA do
-// app: o 22 é o do instrutor escolhido e o 23, o dos atributos da frota (Só VFR, habilitação própria). O passo P12 leva
-// esta constante para js/migracoes.js, e este arquivo passa a importá-la de lá
-export const FORMATO_DOS_CURSOS = 24;
-
-// Os estados guardados. O cadastro já convertido, no formato dos cursos (versão 7, salvo na conversão), e o de antes
+// Os estados guardados. O formato dos cursos é o do app (FORMATO_DOS_CURSOS, em js/migracoes.js; no banco,
+// public.formato_dos_cursos(): test/unit/espelho-do-banco.test.js confere que é o mesmo). O cadastro já convertido, no
+// formato dos cursos (versão 7, salvo na conversão), e o de antes
 const CADASTRO_CONVERTIDO = { esquema: FORMATO_DOS_CURSOS, versao: 7 };
 const CADASTRO_DE_ANTES = { esquema: FORMATO_DOS_CURSOS - 1, versao: 7 };
 const estado = (zz9, { cadastro = CADASTRO_CONVERTIDO, zz8 = ZZ8 } = {}) => ({

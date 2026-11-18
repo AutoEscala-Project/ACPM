@@ -6,11 +6,15 @@ import { duracaoValida } from './rules.js';
 
 export const CURSOS = [['PP', 'Piloto Privado'], ['PC', 'Piloto Comercial'], ['INVA', 'Instrutor de Voo']];
 const CODIGO = /^[A-Z0-9][A-Z0-9.-]{0,14}$/;
+const SIGLA = /^[A-Z][A-Z0-9-]{0,8}[A-Z0-9]$/;
 const LIMITE_DE_MISSOES = 200, LIMITE_DO_NOME = 80;
 
 export const cursosVazios = () => Object.fromEntries(CURSOS.map(([id]) => [id, []]));
 // O código de uma missão: letras maiúsculas, números, ponto e hífen, até 15
 export const codigoValido = id => CODIGO.test(id);
+// A sigla de um curso (PP, PC-IFR), como no servidor: de 2 a 10 letras maiúsculas, números e hífen, começando por letra
+// e sem hífen no fim. Vale para os cursos que o Administrador cria também
+export const siglaValida = sigla => typeof sigla === 'string' && SIGLA.test(sigla);
 
 // Uma missão do programa, nos formatos certos; null quando não serve (sem código ou missão desconhecida)
 function normalizarMissao(m) {
@@ -35,7 +39,9 @@ export function normalizarCursos(cursos) {
   }));
 }
 
-export const normalizarCursoDoAluno = c => (CURSOS.some(([id]) => id === c) ? c : undefined);
+// O curso do aluno: a sigla, conferida só no formato. Um curso que não está em CURSOS (criado pelo Administrador nas
+// tabelas dos cursos) continua valendo: a matrícula não se perde na próxima gravação
+export const normalizarCursoDoAluno = c => (siglaValida(c) ? c : undefined);
 
 // A missão nova do programa: o próximo número livre do curso (PP-01, PP-02…), um voo local de 1 h no C152
 export function novaMissaoDoCurso(curso, missoes) {

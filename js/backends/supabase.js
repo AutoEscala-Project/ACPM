@@ -25,6 +25,8 @@ const esperaPadrao = tentativa => new Promise(resolve => {
 });
 
 const erroComCodigo = error => Object.assign(new Error(error.message), { code: error.code || String(error.status || '') });
+// Com o campo recusado, que o servidor manda na dica (hint)
+const erroComCampo = error => Object.assign(erroComCodigo(error), { campo: error.hint || null });
 
 export function criarBackendSupabase(cliente, { aoConflito = () => {}, aoErro = () => {}, aoGravar = () => {}, aoSessaoExpirada = null, esperar = esperaPadrao } = {}) {
   // A sessão expirou (401): espera o novo login, quando o app sabe pedir; senão, conta como recusa definitiva
@@ -251,7 +253,7 @@ export function criarBackendSupabase(cliente, { aoConflito = () => {}, aoErro = 
       const { data: resposta, error } = await cliente.rpc('salvar_dados_pessoais', {
         p_tipo: tipo, p_id: id, p_dados: dados, p_atualizado_em: atualizadoEm, p_data: data
       });
-      if (error) throw Object.assign(erroComCodigo(error), { campo: error.hint || null });
+      if (error) throw erroComCampo(error);
       return resposta;
     },
 
@@ -274,6 +276,31 @@ export function criarBackendSupabase(cliente, { aoConflito = () => {}, aoErro = 
         .select('id, aluno, curso, missao, resultado, data, voo, registrado_em, registrado_por').eq('data', data).order('id');
       if (error) throw erroComCodigo(error);
       return linhas;
+    },
+
+    // O programa dos cursos (as tabelas dos cursos): o servidor decide quem lê (os perfis da escala; os outros recebem a
+    // lista vazia) e manda tudo num documento só. Os cursos são chamadas únicas, fora da fila das gravações: uma recusa
+    // (um PT409 também) fica com quem chamou e não trava a tela
+    async programaDosCursos() {
+      const { data, error } = await cliente.rpc('programa_dos_cursos');
+      if (error) throw erroComCampo(error);
+      return data || [];
+    },
+
+    // Grava o curso inteiro a partir da versão lida (0 cria): só o Administrador; o servidor confere tudo e diz o campo
+    // recusado na dica. Devolve a versão nova e a hora
+    async salvarCurso(sigla, versaoLida, conteudo, { descricao } = {}) {
+      const { data, error } = await cliente.rpc('salvar_curso', { p_sigla: sigla, p_versao_lida: versaoLida, p_curso: conteudo, p_descricao: descricao });
+      if (error) throw erroComCampo(error);
+      return data;
+    },
+
+    // A conversão única do programa guardado no cadastro, com a versão do cadastro lida por último (0 sem cadastro): o
+    // servidor recusa (PT409) se o cadastro mudou depois. Devolve quantas missões vieram
+    async importarCursos(programas) {
+      const { data, error } = await cliente.rpc('importar_cursos', { p_cursos: programas, p_versao_do_cadastro: versoes.cadastro ?? 0 });
+      if (error) throw erroComCampo(error);
+      return data;
     },
 
     async importarHistorico(data, entradas) {
