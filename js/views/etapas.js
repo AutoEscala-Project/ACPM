@@ -1,9 +1,9 @@
 // A missão do curso no dia: a próxima missão de cada aluno (para a Demanda), o progresso (para Alunos) e o resultado de
-// cada voo (para a escala). Os resultados chegam com a data (S.resultados: a situação de cada missão e os registros da
-// data) e não são gravados no dia. A próxima missão e o progresso seguem as regras do programa (js/progresso.js).
+// cada voo (para a escala). Os resultados e o programa dos cursos chegam com a data (S.resultados: a situação de cada
+// missão e os registros da data; S.programa: as tabelas dos cursos) e não são gravados no dia. A próxima missão e o
+// progresso seguem as regras do programa (js/progresso.js).
 import { MIS } from '../config.js';
-import { normalizarCursos } from '../cursos.js';
-import { programaDoLegado, indiceDoPrograma, rotuloDaFase } from '../programa.js';
+import { indiceDoPrograma, rotuloDaFase } from '../programa.js';
 import { proximasMissoes, progressoNoCurso, missoesDoDia } from '../progresso.js';
 import { situacaoPorMissao, resultadoDoVoo } from '../resultados.js';
 import { S, isGestor, stuBy, dadoIndisponivel } from '../state.js';
@@ -18,21 +18,12 @@ function situacao() {
   return situacoes.get(registros);
 }
 
-// O programa do cadastro (cada curso numa fase só, com as missões na ordem do voo), refeito só quando ele muda (a
-// edição troca S.cursos)
-let doCadastro = null;
-function programaDoCadastro() {
-  if (!doCadastro || doCadastro.cursos !== S.cursos) {
-    doCadastro = { cursos: S.cursos, programa: programaDoLegado(normalizarCursos(S.cursos), (s, c) => s + ':' + c) };
-  }
-  return doCadastro.programa;
-}
-
-// O programa de onde saem a próxima missão, o progresso e a missão dos pedidos da agenda: nenhum quando faltam os
-// resultados ou os programas (nada é inferido de uma situação vazia); até os cursos virem das tabelas, o do cadastro
+// O programa de onde saem a próxima missão, o progresso e a missão dos pedidos da agenda: o das tabelas dos cursos, lido
+// com a data; nenhum quando faltam os resultados ou os programas, ou quando eles ainda esperam a conversão do cadastro
+// (nada é inferido de uma situação ou de um programa vazios), e nenhum antes de a data abrir
 export function programaParaInferir() {
   if (['resultados', 'cursos', 'cursos-pendentes'].some(parte => dadoIndisponivel(parte))) return [];
-  return S.programa ?? programaDoCadastro();
+  return S.programa || [];
 }
 const cursoDoAluno = stu => (stu.curso && indiceDoPrograma(programaParaInferir()).curso(stu.curso)) || null;
 

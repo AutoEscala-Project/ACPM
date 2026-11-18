@@ -19,8 +19,19 @@ const nada = async page => {
   expect(await page.evaluate(() => window.__csp || []), 'nada bloqueado pela política de segurança').toEqual([]);
 };
 
-// O cadastro, os dias (hoje, para a TV, e amanhã, a data que abre) e o histórico, no formato atual, com o dia de amanhã
-// já com a escala gravada
+// O programa dos cursos como este navegador o guarda (acpm4_cursos: os cursos e, à parte, as alterações de todos, na
+// ordem em que foram registradas) e como o servidor falso o recebe (o formato de programa_dos_cursos: as alterações de
+// cada curso, a mais recente primeiro)
+const noNavegador = cursos => ({
+  cursos: cursos.map(({ alteracoes, ...c }) => c),
+  alteracoes: cursos.flatMap(c => [...(c.alteracoes || [])].reverse().map(a => ({ curso: c.sigla, ...a })))
+});
+const noServidor = ({ cursos, alteracoes }) => cursos.map(c => ({
+  ...c, alteracoes: alteracoes.filter(a => a.curso === c.sigla).reverse().map(({ curso, ...a }) => a)
+}));
+
+// O cadastro, os dias (hoje, para a TV, e amanhã, a data que abre), o histórico e o programa dos cursos (nas tabelas dos
+// cursos: o do cadastro, como a conversão deixa), no formato atual, com o dia de amanhã já com a escala gravada
 function documentos(mudar) {
   const estado = {
     ...cenario({
@@ -34,9 +45,22 @@ function documentos(mudar) {
     aprovacao: { em: '2026-11-10T21:05:00.000Z', por: `Operador ${X}` }
   };
   const resultado = { ...runAllocationEngine(estado), data: AMANHA };
-  const { documentos: { cadastro }, dias } = documentosAtuais(estado, AMANHA);
+  const { documentos: { cadastro }, dias, cursos } = documentosAtuais(estado, AMANHA);
+  // O programa com textos maliciosos também no nome do curso, no nome e no módulo da fase e nas alterações registradas,
+  // e uma segunda fase (com mais de uma, o nome curto da fase vai para o "+ Missão" dela e para os nomes dos campos)
+  const fase2 = { id: '00000000-0000-4000-8000-0000000000f2', nome: `Fase 2 ${XA}`, modulo: null, ordem: 1, regra: 'ordem', requer: [], removida: false };
+  const programa = cursos.map(c => (c.sigla !== 'PP' ? c : {
+    ...c, nome: `Piloto Privado ${X}`,
+    fases: [...c.fases.map(f => ({ ...f, nome: `Programa ${XA}`, modulo: `Módulo ${XS}` })), fase2],
+    missoes: [...c.missoes, {
+      id: '00000000-0000-4000-8000-0000000000b2', fase: fase2.id, codigo: 'PP-02', nome: `Navegação ${XS}`, mis: 'Navegação', eq: 'C152', nb: 2,
+      ordem: 0, regra: 'ordem', requer: [], dispensada: false, avaliacao: false, removida: false
+    }],
+    alteracoes: c.alteracoes.map(a => ({ ...a, descricao: `PP: alterado ${X}`, registrado_por: `Admin ${X}` }))
+  }));
   const docs = {
     acpm4_cadastro: cadastro,
+    acpm4_cursos: noNavegador(programa),
     [`acpm4_dia_${AMANHA}`]: { ...dias[AMANHA], resultado },
     'acpm4_dia_2026-11-10': { ...dias[AMANHA], resultado: { ...resultado, data: '2026-11-10' } },
     acpm4_historico: [{
@@ -101,9 +125,16 @@ test.describe('Conteúdo gravado malicioso', () => {
     await percorrer(page);
     await irPara(page, 'alu');
     await expect(page.locator('#alu tr[data-id="1000"] [data-f="nm"]')).toHaveValue(`Aluno ${X}`);
-    // O nome malicioso do programa chega à aba Cursos (a conferência dela não passa por estar vazia)
+    // Os nomes maliciosos do programa (das tabelas dos cursos) chegam à aba Cursos (a conferência dela não passa por estar
+    // vazia): os das missões, o do curso e os das fases, também no "+ Missão" da fase e no nome do campo
     await irPara(page, 'cur');
-    await expect(page.locator('#cursos .curso[data-curso="PP"] [data-cf="nome"]')).toHaveValue(`Familiarização ${X}`);
+    const pp = page.locator('#cursos .curso[data-curso="PP"]');
+    await expect(pp.locator('tr:has([value="PP-01"]) [data-cf="nome"]')).toHaveValue(`Familiarização ${X}`);
+    await expect(pp.locator('tr:has([value="PP-02"]) [data-cf="nome"]')).toHaveValue(`Navegação ${XS}`);
+    await expect(pp.locator('h3 small')).toContainText(`Piloto Privado ${X}`);
+    await expect(pp.locator('.fase h4')).toHaveText([`Programa ${XA}`, `Fase 2 ${XA}`]);
+    await expect(pp.locator('[data-act="missao-nova"]').nth(1)).toHaveText(`+ Missão na Fase 2 ${XA}`);
+    await expect(pp.locator('tr:has([value="PP-02"]) [data-cf="codigo"]')).toHaveAttribute('aria-label', `Código da 1ª missão da Fase 2 ${XA}`);
     await irPara(page, 'esc');
     await expect(page.locator('#out tbody')).toContainText(`Aluno ${X}`);
     await expect(page.locator('#selo-aprovada')).toContainText(`Operador ${X}`);
@@ -139,6 +170,17 @@ test.describe('Conteúdo gravado malicioso', () => {
     docs['acpm4_dia_2026-11-10'] = structuredClone(amanha);
     docs.acpm4_cadastro.ins[1] = { ...docs.acpm4_cadastro.ins[1], kg: XA, hab: ['local', XA] };
     docs.acpm4_cadastro.stu[1] = { ...docs.acpm4_cadastro.stu[1], kg: XA, bl: [XA], curso: XA };
+    // O programa adulterado: o que está fora do formato sai (o curso sem sigla, a fase e a missão sem id, a missão sem
+    // código ou tipo) ou é corrigido (o recurso, as horas, a regra, os requisitos, a versão, as alterações)
+    const [pp] = docs.acpm4_cursos.cursos;
+    const [primeira] = pp.missoes;
+    const id = n => `00000000-0000-4000-8000-0000000000${n}`;
+    pp.versao = XA;
+    pp.fases.push({ ...pp.fases[0], id: XA, nome: X });
+    pp.missoes.push({ ...primeira, id: XA, codigo: 'PP-90' }, { ...primeira, id: id('a1'), codigo: XA }, { ...primeira, id: id('a2'), codigo: 'PP-91', mis: XA },
+      { ...primeira, id: id('a3'), codigo: 'PP-92', nome: `Corrigida ${X}`, eq: XA, nb: XA, regra: XA, requer: [XA], ordem: 1 });
+    docs.acpm4_cursos.cursos.push({ ...structuredClone(pp), sigla: XA });
+    docs.acpm4_cursos.alteracoes.push({ curso: 'PP', versao: XA, descricao: X, registrado_em: XA, registrado_por: X });
     docs.acpm4_historico.push({
       id: 2, data: AMANHA, registrado_em: '2026-11-10T14:10:00.000Z', autor: null, tipo: XA, descricao: 'Recurso retirado',
       reverter: { kind: 'readicionarRecurso', recurso: { reg: XA, tipo: 'C152' }, label: X }, reverte: null, importado: false
@@ -151,9 +193,19 @@ test.describe('Conteúdo gravado malicioso', () => {
     return docs;
   };
 
-  test('valores fora do formato gravados no dia, na escala e no histórico não viram HTML nem quebram a tela', async ({ page }) => {
+  test('valores fora do formato gravados no dia, na escala, no histórico e no programa não viram HTML nem quebram a tela', async ({ page }) => {
     await abrirCom(page, documentos(adulterados));
     await percorrer(page);
+    // Do programa adulterado, a aba Cursos mostra o que está no formato: o curso de sigla certa, com as fases e as missões
+    // de id, código e tipo certos (a corrigida com o recurso e as horas padrão)
+    await expect(page.locator('#cursos .curso')).toHaveCount(3);
+    const pp = page.locator('#cursos .curso[data-curso="PP"]');
+    await expect(pp.locator('.fase')).toHaveCount(2);
+    await expect(pp.locator('[data-cf="codigo"]')).toHaveCount(3);
+    const corrigida = pp.locator('tr:has([data-cf="codigo"][value="PP-92"])');
+    await expect(corrigida.locator('[data-cf="nome"]')).toHaveValue(`Corrigida ${X}`);
+    await expect(corrigida.locator('[data-cf="eq"]')).toHaveValue('C152');
+    await expect(corrigida.locator('[data-cf="nb"]')).toHaveValue('1');
     // A reversão adulterada (um recurso com matrícula impossível) não vira botão; a que está no formato certo mostra o
     // rótulo como texto, e revertê-la não injeta nada
     await page.locator('#btn-open-log').click();
@@ -182,7 +234,8 @@ test.describe('Conteúdo gravado malicioso', () => {
     await instalarSupabaseFalso(contexto, {
       documentos: { cadastro: docs.acpm4_cadastro },
       dias: { [AMANHA]: docs[`acpm4_dia_${AMANHA}`], '2026-11-10': docs['acpm4_dia_2026-11-10'] },
-      historico: docs.acpm4_historico
+      historico: docs.acpm4_historico,
+      cursos: noServidor(docs.acpm4_cursos)
     });
     for (const [url, conta] of [[URL_APP, CONTAS.operador], ['./painel.html?supabase=teste', CONTAS.painel]]) {
       const page = await contexto.newPage();
@@ -190,8 +243,13 @@ test.describe('Conteúdo gravado malicioso', () => {
       await vigiarPolitica(page);
       await page.goto(url);
       await preencherLogin(page, conta);
-      if (conta === CONTAS.operador) await percorrer(page);
-      else await expect(page.locator('.fids tbody tr:not(.fids-vazia):not(.fids-nada)').first()).toBeVisible();
+      if (conta === CONTAS.operador) {
+        await percorrer(page);
+        // O programa malicioso vem das tabelas dos cursos (programa_dos_cursos) e chega à aba Cursos, só para consulta
+        await irPara(page, 'cur');
+        await expect(page.locator('#cursos .curso[data-curso="PP"] tr:has([value="PP-01"]) [data-cf="nome"]')).toHaveValue(`Familiarização ${X}`);
+        await expect(page.locator('#cursos .curso[data-curso="PP"] tr:has([value="PP-92"]) [data-cf="nome"]')).toHaveValue(`Corrigida ${X}`);
+      } else await expect(page.locator('.fids tbody tr:not(.fids-vazia):not(.fids-nada)').first()).toBeVisible();
       await nada(page);
       expect(erros).toEqual([]);
       await page.close();

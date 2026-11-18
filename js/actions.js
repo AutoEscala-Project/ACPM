@@ -11,7 +11,7 @@ import { rBI } from './views/bi.js';
 import { renderAuditPanel, rOut } from './views/escala.js';
 import { rDem } from './views/demanda.js';
 import { rIns, rInsDia, rAlu } from './views/cadastros.js';
-import { rCursos } from './views/cursos.js';
+import { rCursos, SEM_OS_PROGRAMAS } from './views/cursos.js';
 import { rRec, rRevisao, rHangar } from './views/recursos.js';
 import { podeEditarAgenda, rAgenda } from './views/agenda.js';
 import { atualizarSelosDaEscala, atualizarSeloDaAgenda, lerPedidosDaData } from './views/selos.js';
@@ -62,11 +62,14 @@ export function setRole(role, somenteConsulta = false) {
   aplicarSomenteLeitura();
 }
 
-// As horas dos instrutores ou os resultados dos cursos que não foram lidos: o aviso fica até a leitura dar certo, e o
-// que depende disso fica desligado (Aprovar escala; a próxima missão e o resultado)
+// As horas dos instrutores, os resultados ou os programas dos cursos que não foram lidos (ou os programas que ainda estão
+// no cadastro, esperando a conversão): o aviso fica até a leitura dar certo, e o que depende disso fica desligado
+// (Aprovar escala; a próxima missão, o progresso e o resultado). Os textos dos programas são os que a aba Cursos mostra
+// no lugar deles
 const SEM_OS_DADOS = {
   horas: 'Não foi possível ler as horas de voo dos instrutores: os limites do mês e do ano não estão sendo conferidos, e Aprovar escala fica desligado.',
-  resultados: 'Não foi possível ler os resultados das missões dos cursos: a próxima missão e o registro de resultados ficam desligados.'
+  resultados: 'Não foi possível ler os resultados das missões dos cursos: a próxima missão e o registro de resultados ficam desligados.',
+  ...SEM_OS_PROGRAMAS
 };
 export function avisarDadosIndisponiveis() {
   const partes = (S.indisponiveis || []).filter(p => Object.hasOwn(SEM_OS_DADOS, p));
@@ -74,17 +77,21 @@ export function avisarDadosIndisponiveis() {
   $('#aviso-dados-texto').textContent = partes.map(p => SEM_OS_DADOS[p]).join(' ');
 }
 
-// "Tentar de novo": lê de novo o que faltou; a escala é refeita com as horas (o voo além do limite do mês aparece)
+// "Tentar de novo": lê de novo o que faltou; a escala é refeita com as horas (o voo além do limite do mês aparece). Os
+// programas que ainda esperam a conversão do cadastro continuam no aviso (ela é feita na abertura de um Operador)
 export async function lerDadosDeNovo() {
   const data = DATA;
-  const { horasBase, resultados } = await ApiClient.lerDadosAParte(data);
+  const { horasBase, resultados, programa } = await ApiClient.lerDadosAParte(data);
   if (DATA !== data) return;
   if (horasBase && dadoIndisponivel('horas')) {
     S.horasBase = horasBase;
     S.horasDosInstrutores = comRepousoDoNoturno(comHorasExternas(horasBase, S.ins, data), S.noturnosDaVespera);
   }
   if (resultados && dadoIndisponivel('resultados')) S.resultados = resultados;
-  S.indisponiveis = (S.indisponiveis || []).filter(p => (p === 'horas' ? !horasBase : p === 'resultados' ? !resultados : true));
+  if (programa && dadoIndisponivel('cursos')) S.programa = programa;
+  // O que foi lido sai do aviso
+  const lidos = new Map([['horas', horasBase], ['resultados', resultados], ['cursos', programa]]);
+  S.indisponiveis = (S.indisponiveis || []).filter(p => !lidos.get(p));
   avisarDadosIndisponiveis();
   if (!S.indisponiveis.length) showToast('Dados lidos.', 'ok');
   if (horasBase && !isGestor()) save();
@@ -238,11 +245,11 @@ export async function historicoParaPainel(data) {
 let pedidoDeData = 0;
 export async function carregarData(data) {
   const pedido = ++pedidoDeData;
-  const { estado, escala, horasBase, horasDosInstrutores, resultados, indisponiveis } = await ApiClient.carregarDia(data);
+  const { estado, escala, horasBase, horasDosInstrutores, resultados, programa, indisponiveis } = await ApiClient.carregarDia(data);
   const historico = await historicoParaPainel(data);
   if (pedido !== pedidoDeData) return;
   abrirData(data);
-  setS({ ...estado, horasBase, horasDosInstrutores, resultados, indisponiveis });
+  setS({ ...estado, horasBase, horasDosInstrutores, resultados, programa, indisponiveis });
   avisarDadosIndisponiveis();
   // Data sem escala gravada (por exemplo, uma data nova, copiada da anterior): a escala calculada aparece na hora
   // e é gravada junto com a primeira alteração

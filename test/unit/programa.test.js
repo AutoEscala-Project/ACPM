@@ -6,7 +6,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   programaDoLegado, percursoDoCurso, indiceDoPrograma, rotuloDaFase, normalizarProgramas, gravarCurso, importarProgramas,
-  programaComResultados, cursosIniciais, novoId
+  programaComResultados, cursosIniciais, novoId, conteudoDoCurso, incluirMissao, mudarMissao, moverMissao, retirarMissao, validarCurso
 } from '../../js/programa.js';
 import { normalizarCursos } from '../../js/cursos.js';
 import { FORMATO_DOS_CURSOS } from '../../js/migracoes.js';
@@ -387,5 +387,151 @@ describe('O programa lido, nos formatos certos (normalizarProgramas)', () => {
       ...Array.from({ length: 22 }, (_, i) => ({ versao: 30 - i, descricao: `versão ${30 - i}`, registrado_em: AGORA, registrado_por: i ? 'Maria' : 7 }))];
     const [{ alteracoes: lidas }] = normalizarProgramas([curso({ alteracoes })]);
     assert.deepEqual([lidas.length, lidas[0], lidas.at(-1).versao], [20, { versao: 30, descricao: 'versão 30', registrado_em: AGORA, registrado_por: null }, 11]);
+  });
+});
+
+// A aba Cursos muda o curso na tela na hora e grava o curso inteiro: cada operação devolve o curso como fica, e ele tem
+// de ser o que o servidor grava e devolve depois (a tela não mostra uma coisa e grava outra)
+describe('A edição do programa na aba Cursos', () => {
+  const { f1, f2, f3, m1, m2, m3, m4, m5 } = IDS;
+  const NO_FORMATO = { esquema: FORMATO_DOS_CURSOS, versao: 7 };
+  // O ZZ9 dos casos como a tela o tem: gravado e lido de volta, como o servidor devolve (programa_dos_cursos)
+  const lido = (estado, sigla = 'ZZ9') => normalizarProgramas(programaComResultados(estado)).find(c => c.sigla === sigla);
+  function guardado() {
+    const estado = { cursos: cursosIniciais(), resultados: [], cadastro: NO_FORMATO };
+    const { cursos } = gravarCurso(estado, { sigla: 'ZZ9', versaoLida: 0, conteudo: PROGRAMA, descricao: 'Curso ZZ9 criado', agora: AGORA });
+    return { ...estado, cursos };
+  }
+  // O curso como a tela o mandaria (conteudoDoCurso), gravado a partir da versão dele e lido de volta
+  function regravado(estado, curso) {
+    const { cursos } = gravarCurso(estado, { sigla: curso.sigla, versaoLida: curso.versao, conteudo: conteudoDoCurso(curso), descricao: `${curso.sigla}: alteração`, agora: AGORA });
+    return { estado: { ...estado, cursos }, curso: lido({ ...estado, cursos }, curso.sigla) };
+  }
+  const semVersao = ({ versao, alteracoes, ...curso }) => pelosIds(curso);
+  const codigos = (curso, fase) => percursoDoCurso(curso).porFase.get(fase).map(m => m.codigo);
+  let n = 0;
+  const gerarId = () => `00000000-0000-4000-8abc-${String(++n).padStart(12, '0')}`;
+
+  it('o conteúdo da gravação: as fases e as missões do programa, na ordem, sem as tiradas nem os campos da tela', () => {
+    const zz9 = lido(guardado());
+    assert.deepEqual(conteudoDoCurso(zz9), PROGRAMA);
+    assert.equal(validarCurso(conteudoDoCurso(zz9)), null);
+    const semM5 = retirarMissao(zz9, m5);
+    assert.deepEqual(conteudoDoCurso(semM5).missoes.map(m => m.id), [m1, m2, m3, m4]);
+    assert.deepEqual(Object.keys(conteudoDoCurso(semM5).missoes[0]), Object.keys(PROGRAMA.missoes[0]));
+  });
+
+  it('cada operação dá o curso que o servidor grava e devolve (só a versão e as alterações mudam)', () => {
+    let { estado, curso } = { estado: guardado(), curso: lido(guardado()) };
+    const passos = [
+      c => incluirMissao(c, f1, gerarId).curso,
+      c => mudarMissao(c, m1, 'nome', '  Primeiro   voo local  '),
+      c => mudarMissao(c, m2, 'mis', 'Voo Local'),
+      c => moverMissao(c, m2, -1),
+      c => mudarMissao(c, m3, 'codigo', 'zz9-30'),
+      c => mudarMissao(c, m5, 'nb', 2.5),
+      c => retirarMissao(c, m1),
+      c => incluirMissao(c, null, gerarId).curso,
+      c => moverMissao(c, m4, -1)
+    ];
+    for (const [i, passo] of passos.entries()) {
+      const novo = passo(curso);
+      assert.ok(novo, `passo ${i}`);
+      assert.equal(validarCurso(conteudoDoCurso(novo)), null, `passo ${i}`);
+      ({ estado, curso } = regravado(estado, novo));
+      assert.deepEqual(semVersao(curso), semVersao(novo), `passo ${i}`);
+      assert.equal(curso.versao, novo.versao + 1);
+    }
+    assert.deepEqual([codigos(curso, f1), codigos(curso, f2), codigos(curso, f3)], [['ZZ9-02', 'ZZ9-06'], ['ZZ9-04', 'ZZ9-30'], ['ZZ9-05', 'ZZ9-31']], 'a seguinte à ZZ9-05 já era a da Fase 1: o próximo número livre');
+  });
+
+  it('"+ Missão": no fim da fase, com o tipo, o recurso e as horas da anterior e o código seguinte ao dela (ou o próximo livre do curso)', () => {
+    const zz9 = lido(guardado());
+    const noFim = (faseId, curso = zz9) => incluirMissao(curso, faseId, gerarId);
+    // Na Fase 3, a seguinte à ZZ9-05 está livre; na Fase 1, a ZZ9-03 é de outra missão: o próximo número livre do curso
+    const naF3 = noFim(f3);
+    assert.deepEqual([naF3.missao.codigo, naF3.missao.nome, naF3.missao.mis, naF3.missao.eq, naF3.missao.nb, naF3.missao.ordem, naF3.missao.fase], ['ZZ9-06', 'ZZ9-06', 'Noturno', 'C172', 3, 1, f3]);
+    assert.deepEqual([naF3.missao.regra, naF3.missao.requer, naF3.missao.dispensada, naF3.missao.avaliacao, naF3.missao.comResultados], ['ordem', [], false, false, false]);
+    const naF1 = noFim(f1);
+    assert.deepEqual([naF1.missao.codigo, naF1.missao.mis, naF1.missao.eq, naF1.missao.nb], ['ZZ9-06', 'Ground C152', 'Sala Ground', 1.5]);
+    assert.deepEqual(codigos(naF1.curso, f1), ['ZZ9-01', 'ZZ9-02', 'ZZ9-06']);
+    // A missão tirada do programa guarda o código: ele não volta
+    assert.equal(noFim(f3, retirarMissao(zz9, m5)).missao.codigo, 'ZZ9-06');
+    const comAntiga = noFim(f1, incluirMissao(zz9, f3, gerarId).curso);
+    assert.equal(noFim(f1, retirarMissao(comAntiga.curso, comAntiga.missao.id)).missao.codigo, 'ZZ9-08', 'a ZZ9-07 saiu do programa e guarda o código');
+    // Sem fase dita, a última; uma fase que não está no programa, nada
+    assert.equal(incluirMissao(zz9, null, gerarId).missao.fase, f3);
+    assert.equal(incluirMissao(zz9, IDS.fora, gerarId), null);
+    assert.deepEqual(zz9, lido(guardado()), 'o curso recebido não muda');
+  });
+
+  it('o código da missão nova segue o formato da anterior (TMA-05 → TMA-06, AVP-SOLO-05 → AVP-SOLO-06, PP-099 → PP-100)', () => {
+    const fase = { id: gerarId(), nome: 'Fase 4', modulo: null, ordem: 0, regra: 'ordem', requer: [], removida: false };
+    const comUltima = codigo => ({
+      sigla: 'PP', nome: 'Piloto Privado', ordem: 0, ativo: true, versao: 1, fases: [fase], alteracoes: [],
+      missoes: [{ id: gerarId(), fase: fase.id, codigo, nome: codigo, mis: 'Voo Local', eq: 'C152', nb: 1, ordem: 0, regra: 'ordem', requer: [], dispensada: false, avaliacao: false, removida: false, comResultados: false }]
+    });
+    const seguinte = codigo => incluirMissao(comUltima(codigo), fase.id, gerarId).missao.codigo;
+    assert.deepEqual(['TMA-05', 'AVP-SOLO-05', 'PP-099', 'CT-9', 'NAV-150NM', 'NOT', 'ABCDEFGHIJKLM-9'].map(seguinte),
+      ['TMA-06', 'AVP-SOLO-06', 'PP-100', 'CT-10', 'PP-01', 'PP-01', 'PP-01']);
+  });
+
+  it('"+ Missão" no curso sem fases: a Fase 1 entra com a missão (um voo local de 1 h no C152, com o primeiro número do curso)', () => {
+    const [pp] = normalizarProgramas(cursosIniciais());
+    const { curso, missao } = incluirMissao(pp, null, gerarId);
+    assert.deepEqual(curso.fases.map(({ nome, modulo, ordem, regra, requer, removida }) => ({ nome, modulo, ordem, regra, requer, removida })),
+      [{ nome: 'Fase 1', modulo: null, ordem: 0, regra: 'ordem', requer: [], removida: false }]);
+    assert.deepEqual([missao.fase, missao.codigo, missao.nome, missao.mis, missao.eq, missao.nb, missao.ordem], [curso.fases[0].id, 'PP-01', 'PP-01', 'Voo Local', 'C152', 1, 0]);
+    const estado = { cursos: cursosIniciais(), resultados: [], cadastro: NO_FORMATO };
+    assert.deepEqual(semVersao(regravado(estado, curso).curso), semVersao(curso));
+  });
+
+  it('um campo da missão: o código em maiúsculas (o nome igual ao código acompanha), o nome sem espaços a mais (vazio: o código), o tipo com o recurso e as horas', () => {
+    const zz9 = lido(guardado());
+    const missaoDe = (curso, id) => curso.missoes.find(m => m.id === id);
+    const comNomeDeCodigo = mudarMissao(zz9, m5, 'nome', '');
+    assert.equal(missaoDe(comNomeDeCodigo, m5).nome, 'ZZ9-05');
+    assert.deepEqual(['codigo', 'nome'].map(c => missaoDe(mudarMissao(comNomeDeCodigo, m5, 'codigo', ' zz9-50 '), m5)[c]), ['ZZ9-50', 'ZZ9-50']);
+    assert.deepEqual(['codigo', 'nome'].map(c => missaoDe(mudarMissao(zz9, m5, 'codigo', 'ZZ9-50'), m5)[c]), ['ZZ9-50', 'Noturno'], 'o nome próprio fica');
+    assert.equal(missaoDe(mudarMissao(zz9, m1, 'nome', ` ${'x'.repeat(90)} `), m1).nome, 'x'.repeat(80));
+    const tipo = (curso, id) => ['mis', 'eq', 'nb'].map(c => missaoDe(curso, id)[c]);
+    assert.deepEqual(tipo(mudarMissao(zz9, m1, 'mis', 'Ground Navegação'), m1), ['Ground Navegação', 'Sala Ground', 1.5]);
+    assert.deepEqual(tipo(mudarMissao(zz9, m2, 'mis', 'Voo Local'), m2), ['Voo Local', 'C152', 1.5], 'do Ground, as horas ficam');
+    assert.deepEqual(tipo(mudarMissao(zz9, m1, 'mis', 'IFR'), m1), ['IFR', 'C172', 1], 'o C152 não serve: o recurso padrão do tipo');
+    assert.deepEqual(tipo(mudarMissao(mudarMissao(zz9, m1, 'eq', 'C172'), m1, 'mis', 'IFR'), m1), ['IFR', 'C172', 1]);
+    assert.deepEqual(tipo(mudarMissao(zz9, m1, 'nb', 2.5), m1), ['Voo Local', 'C152', 2.5]);
+    // Nada muda: null (o código igual em minúsculas, o nome igual com espaços, o tipo desconhecido, a missão tirada)
+    for (const [id, campo, valor] of [[m1, 'codigo', 'zz9-01'], [m1, 'nome', ' Primeiro  voo '], [m1, 'mis', 'Voo Local'], [m1, 'mis', 'Balão'], [m1, 'ordem', 3], [IDS.fora, 'nome', 'x']]) {
+      assert.equal(mudarMissao(zz9, id, campo, valor), null, `${campo} ${valor}`);
+    }
+    assert.equal(mudarMissao(retirarMissao(zz9, m1), m1, 'nome', 'Outro'), null);
+    assert.deepEqual(zz9, lido(guardado()), 'o curso recebido não muda');
+  });
+
+  it('↑ e ↓ trocam a missão com a vizinha da mesma fase; na ponta da fase, nada; a que esperaria por uma posterior é recusada pela conferência', () => {
+    const zz9 = lido(guardado());
+    assert.deepEqual(codigos(moverMissao(zz9, m2, -1), f1), ['ZZ9-02', 'ZZ9-01']);
+    assert.deepEqual(codigos(moverMissao(zz9, m1, 1), f1), ['ZZ9-02', 'ZZ9-01']);
+    assert.deepEqual(moverMissao(zz9, m1, 1).missoes.filter(m => m.fase === f1).map(m => [m.codigo, m.ordem]), [['ZZ9-02', 0], ['ZZ9-01', 1]]);
+    for (const [id, passo] of [[m1, -1], [m2, 1], [m3, -1], [m5, 1], [m5, -1], [IDS.fora, 1]]) assert.equal(moverMissao(zz9, id, passo), null, `${id} ${passo}`);
+    // A ZZ9-02 "depois de" a ZZ9-01: subir a ZZ9-02 a poria antes do que ela espera
+    const depois = { ...zz9, missoes: zz9.missoes.map(m => (m.id === m2 ? { ...m, regra: 'depois', requer: [m1] } : m)) };
+    const { code, campo } = validarCurso(conteudoDoCurso(moverMissao(depois, m2, -1)));
+    assert.deepEqual([code, campo], ['22023', 'requer']);
+  });
+
+  it('tirar do programa: a missão fica no curso, fora do programa e sem requisitos; quem esperava por ela deixa de esperar', () => {
+    const zz9 = lido(guardado());
+    const semM1 = retirarMissao(zz9, m1);
+    const tirada = semM1.missoes.find(m => m.id === m1);
+    assert.deepEqual([tirada.removida, tirada.requer, tirada.codigo, tirada.ordem], [true, [], 'ZZ9-01', 0]);
+    assert.deepEqual(semM1.missoes.filter(m => m.fase === f1 && !m.removida).map(m => [m.codigo, m.ordem]), [['ZZ9-02', 0]]);
+    // A ZZ9-04 esperava só pela ZZ9-01: volta a "depois das anteriores"
+    assert.deepEqual(['regra', 'requer'].map(c => semM1.missoes.find(m => m.id === m4)[c]), ['ordem', []]);
+    const comDuas = { ...zz9, missoes: zz9.missoes.map(m => (m.id === m4 ? { ...m, requer: [m1, m2] } : m)) };
+    assert.deepEqual(['regra', 'requer'].map(c => retirarMissao(comDuas, m1).missoes.find(m => m.id === m4)[c]), ['depois', [m2]]);
+    assert.equal(retirarMissao(semM1, m1), null, 'já fora do programa');
+    assert.deepEqual(indiceDoPrograma([semM1]).missaoPorCodigo('ZZ9', 'ZZ9-01').id, m1, 'o código continua com nome');
+    assert.equal(retirarMissao(zz9, m3).missoes.filter(m => m.removida).length, 1);
   });
 });

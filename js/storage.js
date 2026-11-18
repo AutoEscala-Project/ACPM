@@ -7,7 +7,7 @@ import { normalizeMissionFields, proximoMid, pesoValido } from './rules.js';
 import { HORARIOS_INICIAIS, normalizarHorarios } from './horarios.js';
 import { backendLocal } from './backends/local.js';
 import { separar, juntar, diaPadrao, diaParaCopiar, converterLegado, biDosDias } from './dias.js';
-import { ESQUEMA, migrarCadastro, migrarDia, precisaMigrar, renomearSimulador } from './migracoes.js';
+import { ESQUEMA, migrarCadastro, migrarDia, precisaMigrar, antesDosCursosProprios, renomearSimulador } from './migracoes.js';
 import { habilitacoesDoNivel, normalizarHabilitacoes } from './habilitacoes.js';
 import { ajustarFilas } from './rodizio.js';
 import { normalizarDetalhes, normalizarStatus } from './status.js';
@@ -18,7 +18,7 @@ import { noturnosDaVespera, comRepousoDoNoturno, voltasConferem } from './noturn
 import { normalizarFixos, normalizarAprovacao } from './fixos.js';
 import { normalizarCriterios } from './criterios.js';
 import { normalizarCursos, normalizarCursoDoAluno } from './cursos.js';
-import { normalizarProgramas } from './programa.js';
+import { normalizarProgramas, programaDoLegado } from './programa.js';
 
 // A recusa de quem só consulta (o Gestor e a Secretaria no modo compartilhado, ou a tela travada depois de um
 // conflito), com o código do servidor
@@ -196,20 +196,27 @@ export const ApiClient = {
     const gravada = dia ? normalizarEscalaGravada(dia.resultado) : null;
     const escala = gravada && voltasConferem(gravada, noturnos) ? gravada : null;
     const resultados = lidos.resultados || { situacao: [], doDia: [] };
-    const indisponiveis = [...(lidos.horasBase ? [] : ['horas']), ...(lidos.resultados ? [] : ['resultados'])];
-    return { estado, escala, novo: !dia, horasBase, horasDosInstrutores, resultados, indisponiveis };
+    // O programa dos cursos ainda no cadastro: antes do formato dos cursos, com missões no programa de algum curso, as
+    // tabelas ainda não o têm (a conversão única é feita na primeira abertura de um Operador ou Administrador; quem só
+    // consulta pode chegar antes). A tela diz por que a próxima missão e o progresso ficam desligados
+    const programaPendente = antesDosCursosProprios(guardado) && Object.values(normalizarCursos(guardado.cursos)).some(missoes => missoes.length > 0);
+    const indisponiveis = [...(lidos.horasBase ? [] : ['horas']), ...(lidos.resultados ? [] : ['resultados']),
+      ...(lidos.programa ? [] : ['cursos']), ...(programaPendente ? ['cursos-pendentes'] : [])];
+    return { estado, escala, novo: !dia, horasBase, horasDosInstrutores, resultados, programa: lidos.programa || [], indisponiveis };
   },
 
-  // O que vai à parte do dia (não é gravado nele): as horas de voo de cada instrutor antes da data (limites da lei) e os
-  // resultados das missões dos cursos (a situação de cada missão e os registros da data). Sem resposta, null
+  // O que vai à parte do dia (não é gravado nele): as horas de voo de cada instrutor antes da data (limites da lei), os
+  // resultados das missões dos cursos (a situação de cada missão e os registros da data) e o programa dos cursos (as
+  // tabelas dos cursos; neste navegador, acpm4_cursos). Sem resposta, null
   async lerDadosAParte(data) {
     const ler = async fn => fn();
-    const [horasBase, resultados] = await Promise.all([
+    const [horasBase, resultados, programa] = await Promise.all([
       ler(() => this.backend.horasDosInstrutores(data)).then(h => h || {}, () => null),
       ler(() => Promise.all([this.backend.situacaoDasMissoes(), this.backend.resultadosDoDia(data)]))
-        .then(([situacao, doDia]) => ({ situacao: situacao || [], doDia: doDia || [] }), () => null)
+        .then(([situacao, doDia]) => ({ situacao: situacao || [], doDia: doDia || [] }), () => null),
+      ler(() => this.lerProgramas()).catch(() => null)
     ]);
-    return { horasBase, resultados };
+    return { horasBase, resultados, programa };
   },
 
   async salvarDia(data, estado, escala) {
@@ -311,14 +318,24 @@ export const ApiClient = {
     return this.backend.salvarCurso(sigla, versaoLida, conteudo, { descricao, autor: this.autorAtual || null });
   },
 
+  // A conversão única do programa guardado no cadastro (cadastro.cursos, que fica como cópia) para as tabelas dos cursos:
+  // cada curso numa fase só, com as missões na mesma ordem (programaDoLegado, com ids novos). Os três cursos vão, também
+  // os vazios: o servidor pula o que já é igual e, com o cadastro já no formato dos cursos, não grava nada. Uma recusa ou
+  // a falta de conexão vai para quem chamou (a conversão é retomada na próxima abertura)
+  importarProgramaDoCadastro(cadastro) {
+    return this.backend.importarCursos(programaDoLegado(normalizarCursos(cadastro && cadastro.cursos)), { autor: this.autorAtual || null });
+  },
+
   async biDoPeriodo(de, ate) {
     return biDosDias((await this.backend.listarDias(de, ate)).map(d => ({ ...d, conteudo: migrarDia(d.conteudo) })));
   },
 
   // Converte os documentos antigos (estado, escala, histórico e BI) para o formato por data, uma vez só.
   // A origem pode ser outro backend (envio dos dados do navegador). Os documentos antigos ficam como cópia;
-  // dias que já existem não são sobrescritos e o cadastro é gravado por último (marca a migração como concluída).
-  // Se uma gravação falhar, para com erro antes do cadastro: a conversão é retomada na próxima abertura.
+  // dias que já existem não são sobrescritos e o cadastro é gravado por último (marca a migração como concluída). Antes
+  // dele, o programa dos cursos vai para as tabelas dos cursos (o cadastro já sai no formato dos cursos, que encerra a
+  // conversão do programa). Se uma gravação falhar, para com erro antes do cadastro: a conversão é retomada na próxima
+  // abertura.
   async migrarDocumentosAntigos(dataPadrao, origem = this.backend) {
     if (this.readOnly || await this.backend.ler('cadastro')) return null;
     const estado = await origem.ler('estado');
@@ -334,6 +351,7 @@ export const ApiClient = {
       if (!await this.backend.gravar(`dia:${data}`, migrarDia(conteudo))) throw new Error(`A conversão dos dados não terminou (dia ${data}).`);
     }
     if (plano.historico.length) await this.backend.importarHistorico(plano.dataAtual, plano.historico);
+    await this.importarProgramaDoCadastro(plano.cadastro);
     const cadastro = migrarCadastro(plano.cadastro);
     if (!await this.backend.gravar('cadastro', cadastro)) throw new Error('A conversão dos dados não terminou (cadastro).');
     this.cadastroGravado = JSON.stringify(cadastro);
@@ -341,7 +359,9 @@ export const ApiClient = {
   },
 
   // Regrava no formato atual tudo o que está num formato anterior: todos os dias e, por último, o cadastro (que
-  // marca a atualização como concluída). Se uma gravação falhar, para com erro: é retomada na próxima abertura.
+  // marca a atualização como concluída). Antes do formato dos cursos, o programa guardado no cadastro vai para as tabelas
+  // dos cursos depois dos dias e antes do cadastro: gravado no formato dos cursos, o cadastro encerra essa conversão, que
+  // não volta a ser feita. Se uma gravação (ou a conversão) falhar, para com erro: é retomada na próxima abertura.
   async atualizarFormatoGravado() {
     if (this.readOnly) return false;
     const cadastro = await this.backend.ler('cadastro');
@@ -351,6 +371,7 @@ export const ApiClient = {
       if (!precisaMigrar(dia)) continue;
       if (!await this.backend.gravar(`dia:${data}`, migrarDia(dia))) throw new Error(`A atualização dos dados não terminou (dia ${data}).`);
     }
+    if (antesDosCursosProprios(cadastro)) await this.importarProgramaDoCadastro(cadastro);
     const novo = migrarCadastro(cadastro);
     if (!await this.backend.gravar('cadastro', novo)) throw new Error('A atualização dos dados não terminou (cadastro).');
     this.cadastroGravado = JSON.stringify(novo);

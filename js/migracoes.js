@@ -10,10 +10,11 @@ import { disponibilidadeAtual } from './rules.js';
 import { LIMITES_DA_LEI } from './limites.js';
 import { cursosVazios } from './cursos.js';
 
-export const ESQUEMA = 23;
+export const ESQUEMA = 24;
 // O formato dos cursos: o formato do cadastro a partir do qual os programas vivem nas tabelas próprias (antes dele, vale
 // o programa guardado no cadastro, que a conversão única traz para as tabelas). O 22 é o do instrutor escolhido e o 23,
-// o dos atributos da frota; um aumento é esta linha mais public.formato_dos_cursos() (a migração dos cursos)
+// o dos atributos da frota; um aumento é esta linha mais public.formato_dos_cursos() (a migração dos cursos), com o
+// passo dele renumerado aqui embaixo
 export const FORMATO_DOS_CURSOS = 24;
 
 // Um pedido do dia com as preferências em minutos e a disponibilidade no formato atual (formato 12)
@@ -193,12 +194,25 @@ const PASSOS = {
       })
     } : cadastro),
     dia: dia => dia
+  },
+  // Versão 24 (o formato dos cursos, FORMATO_DOS_CURSOS): o programa dos cursos vai para tabelas próprias. O cadastro
+  // guarda a cópia de antes ("cursos"), que ninguém mais grava; os voos fixos podem levar "agendado" (o voo agendado na
+  // Escala) e os pedidos, "cursoDaEtapa" (o curso da missão do pedido). Os dados não mudam; o número novo faz a aba da
+  // versão anterior recusar a gravação e pedir para recarregar (sem tirar esses campos do dia), e o cadastro gravado nele
+  // marca a conversão única do programa como feita (ApiClient.atualizarFormatoGravado)
+  24: {
+    cadastro: cadastro => cadastro,
+    dia: dia => dia
   }
 };
 
 const versaoDe = doc => (typeof doc.esquema === 'number' ? doc.esquema : 4);
 
 export const precisaMigrar = doc => Boolean(doc) && typeof doc === 'object' && versaoDe(doc) < ESQUEMA;
+
+// O cadastro guardado antes do formato dos cursos: o programa de cada curso ainda é o do cadastro ("cursos"), que a
+// conversão única leva para as tabelas dos cursos antes de o cadastro ser regravado no formato atual
+export const antesDosCursosProprios = doc => Boolean(doc) && typeof doc === 'object' && versaoDe(doc) < FORMATO_DOS_CURSOS;
 
 function migrar(doc, parte) {
   if (!doc || typeof doc !== 'object') return doc;

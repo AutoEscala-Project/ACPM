@@ -76,6 +76,8 @@ beforeEach(() => {
 afterEach(() => { ApiClient.backend = original; ApiClient.readOnly = false; ApiClient.autorAtual = null; });
 
 const escalaDe = data => ({ out: [{ fKey: '1000_0_1', h: 1 }], al: [], tot: 1, data });
+// O cadastro já no formato dos cursos (a conversão feita): o Administrador grava os cursos
+const convertido = () => backend.docs.set('cadastro', { nid: 1000, ins: [], stu: [], esquema: FORMATO_DOS_CURSOS });
 
 describe('Carregar e salvar uma data', () => {
   it('sem cadastro nem dias: estado vazio para a data, sem escala', async () => {
@@ -124,22 +126,56 @@ describe('Carregar e salvar uma data', () => {
   });
 });
 describe('Dados lidos à parte', () => {
-  it('sem as horas dos instrutores ou os resultados dos cursos, a data abre e diz o que ficou indisponível', async () => {
-    assert.deepEqual((await ApiClient.carregarDia('2026-11-11')).indisponiveis, []);
+  it('sem as horas dos instrutores, os resultados ou os programas dos cursos, a data abre e diz o que ficou indisponível', async () => {
+    const aberta = await ApiClient.carregarDia('2026-11-11');
+    assert.deepEqual(aberta.indisponiveis, []);
+    assert.deepEqual(aberta.programa.map(c => [c.sigla, c.versao, c.fases, c.missoes]), [['PP', 1, [], []], ['PC', 1, [], []], ['INVA', 1, [], []]]);
     backend.horasDosInstrutores = async () => { throw new Error('sem conexão'); };
     const semHoras = await ApiClient.carregarDia('2026-11-11');
     assert.deepEqual([semHoras.indisponiveis, semHoras.horasBase], [['horas'], {}]);
     backend.situacaoDasMissoes = async () => { throw new Error('sem conexão'); };
+    const semResultados = await ApiClient.carregarDia('2026-11-11');
+    assert.deepEqual([semResultados.indisponiveis, semResultados.resultados], [['horas', 'resultados'], { situacao: [], doDia: [] }]);
+    backend.programaDosCursos = async () => { throw new Error('sem conexão'); };
     const semNada = await ApiClient.carregarDia('2026-11-11');
-    assert.deepEqual([semNada.indisponiveis, semNada.resultados], [['horas', 'resultados'], { situacao: [], doDia: [] }]);
-    assert.deepEqual(await ApiClient.lerDadosAParte('2026-11-11'), { horasBase: null, resultados: null });
+    assert.deepEqual([semNada.indisponiveis, semNada.programa], [['horas', 'resultados', 'cursos'], []]);
+    assert.deepEqual(await ApiClient.lerDadosAParte('2026-11-11'), { horasBase: null, resultados: null, programa: null });
+  });
+
+  it('o programa lido vem nos formatos certos; num backend sem os cursos, a data abre sem ele e diz por quê', async () => {
+    convertido();
+    await ApiClient.salvarCurso('ZZ9', 0, PROGRAMA, 'Curso ZZ9 criado: Curso de teste');
+    const { programa: lido, indisponiveis } = await ApiClient.carregarDia('2026-11-11');
+    assert.deepEqual(lido, await ApiClient.lerProgramas());
+    assert.deepEqual([lido.map(c => c.sigla), lido.at(-1).missoes.length, indisponiveis], [['PP', 'PC', 'INVA', 'ZZ9'], 5, []]);
+    backend.programaDosCursos = async () => [{ sigla: 'pp' }, { sigla: 'PC', nome: 'Piloto Comercial', fases: 'x' }];
+    assert.deepEqual((await ApiClient.lerDadosAParte('2026-11-11')).programa.map(c => [c.sigla, c.fases, c.missoes]), [['PC', [], []]]);
+    delete backend.programaDosCursos;
+    const semOsCursos = await ApiClient.carregarDia('2026-11-11');
+    assert.deepEqual([semOsCursos.programa, semOsCursos.indisponiveis], [[], ['cursos']]);
+  });
+
+  // Quem só consulta (a Gestor e a Secretaria no modo compartilhado) pode abrir antes da primeira abertura de um Operador,
+  // que faz a conversão: com o programa ainda no cadastro, a próxima missão e o progresso ficam desligados, e a tela diz
+  // por quê (as tabelas ainda não têm o programa)
+  it('o programa ainda no cadastro (antes do formato dos cursos, com missões): "cursos-pendentes"', async () => {
+    const comPrograma = esquema => backend.docs.set('cadastro', {
+      nid: 1000, ins: [], stu: [], esquema, cursos: { PP: [{ id: 'PP-01', nome: 'Familiarização', mis: 'Voo Local', eq: 'C152', nb: 1 }], PC: [], INVA: [] }
+    });
+    comPrograma(FORMATO_DOS_CURSOS - 1);
+    assert.deepEqual((await ApiClient.carregarDia('2026-11-11')).indisponiveis, ['cursos-pendentes']);
+    backend.docs.set('cadastro', { nid: 1000, ins: [], stu: [] });
+    assert.deepEqual((await ApiClient.carregarDia('2026-11-11')).indisponiveis, [], 'sem programa no cadastro, nada espera a conversão');
+    comPrograma(FORMATO_DOS_CURSOS);
+    assert.deepEqual((await ApiClient.carregarDia('2026-11-11')).indisponiveis, [], 'no formato dos cursos, o programa é o das tabelas');
+    comPrograma(FORMATO_DOS_CURSOS - 1);
+    backend.programaDosCursos = async () => { throw new Error('sem conexão'); };
+    assert.deepEqual((await ApiClient.carregarDia('2026-11-11')).indisponiveis, ['cursos', 'cursos-pendentes']);
+    assert.deepEqual(backend.gravacoes, [], 'a abertura não grava nada');
   });
 });
 
 describe('O programa dos cursos (ApiClient)', () => {
-  // O cadastro já no formato dos cursos (a conversão feita): o Administrador grava os cursos
-  const convertido = () => backend.docs.set('cadastro', { nid: 1000, ins: [], stu: [], esquema: FORMATO_DOS_CURSOS });
-
   it('lê os programas nos formatos certos', async () => {
     assert.deepEqual((await ApiClient.lerProgramas()).map(c => [c.sigla, c.versao, c.fases, c.missoes, c.alteracoes]),
       [['PP', 1, [], [], []], ['PC', 1, [], [], []], ['INVA', 1, [], [], []]]);
@@ -364,7 +400,7 @@ describe('Formato dos dados guardados (versões)', () => {
     // Só as datas num formato anterior (o servidor devolve no máximo 1000 linhas por consulta: nada de baixar todos os dias)
     backend.listarDias = async () => { throw new Error('não deve baixar todos os dias'); };
     assert.equal(await ApiClient.atualizarFormatoGravado(), true);
-    assert.deepEqual(backend.gravacoes, ['dia:2026-10-16', 'dia:2026-11-11', 'cadastro'], 'o dia que já estava no formato atual não é regravado');
+    assert.deepEqual(backend.gravacoes, ['dia:2026-10-16', 'dia:2026-11-11', 'importarCursos', 'cadastro'], 'o dia que já estava no formato atual não é regravado');
     assert.equal(backend.docs.get('dia:2026-10-16').resultado.out[0].r, 'SIM-MONO-A');
     assert.equal(backend.docs.get('dia:2026-11-11').av['SIM-MLTE-D'], false);
     const fase3 = cadastroFase3();
@@ -393,5 +429,72 @@ describe('Formato dos dados guardados (versões)', () => {
     ApiClient.readOnly = true;
     assert.equal(await ApiClient.atualizarFormatoGravado(), false);
     assert.deepEqual(backend.gravacoes, []);
+  });
+});
+
+describe('A conversão única do programa dos cursos (do cadastro para as tabelas)', () => {
+  const PP = [{ id: 'PP-01', nome: 'Familiarização', mis: 'Voo Local', eq: 'C152', nb: 1 }, { id: 'PP-02', nome: 'Navegação', mis: 'Navegação', eq: 'C152', nb: 2 }];
+  const cadastroDeAntes = () => ({ nid: 1001, ins: [], stu: [{ id: 1000, nm: 'Aluno 1000', kg: 60, bl: [], curso: 'PP' }], cursos: { PP, PC: [], INVA: [] }, esquema: FORMATO_DOS_CURSOS - 1 });
+  const missoesDe = sigla => backend.cursos.lista.find(c => c.sigla === sigla).missoes.map(m => [m.codigo, m.nome, m.mis, m.eq, m.nb, m.removida]);
+
+  it('na atualização do formato: os dias, depois a conversão, depois o cadastro (que a encerra); uma vez só', async () => {
+    await backend.gravar('cadastro', cadastroDeAntes());
+    await backend.gravar('dia:2026-11-11', { esquema: FORMATO_DOS_CURSOS - 1, pedidos: {} });
+    backend.gravacoes.length = 0;
+    ApiClient.autorAtual = 'Operador 01';
+    assert.equal(await ApiClient.atualizarFormatoGravado(), true);
+    assert.deepEqual(backend.gravacoes, ['dia:2026-11-11', 'importarCursos', 'cadastro']);
+    assert.deepEqual(missoesDe('PP'), [['PP-01', 'Familiarização', 'Voo Local', 'C152', 1, false], ['PP-02', 'Navegação', 'Navegação', 'C152', 2, false]]);
+    assert.deepEqual(backend.cursos.alteracoes.map(a => [a.curso, a.versao, a.descricao, a.registrado_por]), [['PP', 2, 'Programa trazido do cadastro (2 missões)', 'Operador 01']]);
+    assert.deepEqual(backend.cursos.lista.filter(c => c.sigla !== 'PP').map(c => [c.sigla, c.versao, c.fases]), [['PC', 1, []], ['INVA', 1, []]], 'o curso vazio fica como estava');
+    // A cópia do programa fica no cadastro, que agora está no formato dos cursos
+    assert.deepEqual(backend.docs.get('cadastro'), { ...cadastroDeAntes(), esquema: ESQUEMA });
+
+    backend.gravacoes.length = 0;
+    assert.equal(await ApiClient.atualizarFormatoGravado(), false);
+    assert.deepEqual(backend.gravacoes, [], 'a conversão não volta a ser feita');
+    const { programa, indisponiveis } = await ApiClient.carregarDia('2026-11-11');
+    assert.deepEqual([programa.find(c => c.sigla === 'PP').missoes.map(m => m.codigo), indisponiveis], [['PP-01', 'PP-02'], []]);
+  });
+
+  it('a conversão que falha (sem conexão, ou o cadastro mudou depois da leitura) não grava o cadastro: a próxima abertura termina', async () => {
+    await backend.gravar('cadastro', cadastroDeAntes());
+    const importar = backend.importarCursos;
+    backend.importarCursos = async () => { throw Object.assign(new Error('o cadastro foi alterado depois da leitura; recarregue a página'), { code: 'PT409' }); };
+    await assert.rejects(ApiClient.atualizarFormatoGravado(), { code: 'PT409' });
+    assert.equal(backend.docs.get('cadastro').esquema, FORMATO_DOS_CURSOS - 1, 'o cadastro continua antes do formato dos cursos');
+    assert.deepEqual(missoesDe('PP'), []);
+    backend.importarCursos = importar;
+    assert.equal(await ApiClient.atualizarFormatoGravado(), true);
+    assert.deepEqual(missoesDe('PP').map(([codigo]) => codigo), ['PP-01', 'PP-02']);
+    assert.equal(backend.docs.get('cadastro').esquema, ESQUEMA);
+  });
+
+  it('o cadastro já no formato dos cursos (ou depois dele) não converte nada; o de antes, sem programa, converte sem mudar as tabelas', async () => {
+    await backend.gravar('cadastro', { ...cadastroDeAntes(), esquema: ESQUEMA });
+    backend.gravacoes.length = 0;
+    assert.equal(await ApiClient.atualizarFormatoGravado(), false);
+    assert.deepEqual(backend.gravacoes, []);
+    await backend.gravar('cadastro', { nid: 1000, ins: [], stu: [], cursos: { PP: [], PC: [], INVA: [] }, esquema: FORMATO_DOS_CURSOS - 1 });
+    backend.gravacoes.length = 0;
+    assert.equal(await ApiClient.atualizarFormatoGravado(), true);
+    assert.deepEqual([backend.gravacoes, backend.cursos.alteracoes], [['importarCursos', 'cadastro'], []], 'o igual é pulado');
+  });
+
+  it('na conversão dos documentos antigos: o programa do estado vai para as tabelas antes do cadastro', async () => {
+    await backend.gravar('estado', { ...estadoSintetico(), stu: [aluno(1000, {}, { curso: 'PP' })], cursos: { PP, PC: [], INVA: [] } });
+    backend.gravacoes.length = 0;
+    assert.equal(await ApiClient.migrarDocumentosAntigos('2026-11-11'), '2026-11-11');
+    assert.deepEqual(backend.gravacoes, ['dia:2026-11-11', 'importarCursos', 'cadastro']);
+    assert.deepEqual(missoesDe('PP').map(([codigo]) => codigo), ['PP-01', 'PP-02']);
+    assert.equal(backend.docs.get('cadastro').esquema, ESQUEMA);
+    assert.deepEqual(backend.docs.get('cadastro').cursos.PP.map(m => m.id), ['PP-01', 'PP-02'], 'a cópia fica no cadastro');
+  });
+
+  it('a conversão dos documentos antigos que falha não grava o cadastro', async () => {
+    await backend.gravar('estado', { ...estadoSintetico(), cursos: { PP, PC: [], INVA: [] } });
+    backend.importarCursos = async () => { throw new Error('sem conexão'); };
+    await assert.rejects(ApiClient.migrarDocumentosAntigos('2026-11-11'), /sem conexão/);
+    assert.equal(backend.docs.has('cadastro'), false);
   });
 });

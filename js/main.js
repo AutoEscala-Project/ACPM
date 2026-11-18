@@ -39,6 +39,7 @@ import { setS, setRES, setAuditLog, modoCompartilhado } from './state.js';
 import { ApiClient } from './storage.js';
 import { abaFoiEscolhida } from './eventos/navegacao.js';
 import { avisoDeDomingo, iniciarTema } from './eventos/topo.js';
+import { programaSendoGravado } from './eventos/cursos.js';
 import { abrirAgenda, diaDaAgenda, podeEditarAgenda } from './views/agenda.js';
 import { rIns, rAlu } from './views/cadastros.js';
 import { rCursos } from './views/cursos.js';
@@ -49,9 +50,10 @@ import { rRec } from './views/recursos.js';
 import { atualizarSelosDaEscala, lerPedidosDaData } from './views/selos.js';
 import { show } from './views/tabs.js';
 
-// Fechar ou recarregar a página com alterações esperando a conexão pede confirmação (elas se perderiam)
+// Fechar ou recarregar a página com alterações esperando a conexão, ou com o programa de um curso ainda sendo gravado, pede
+// confirmação (elas se perderiam)
 window.addEventListener('beforeunload', e => {
-  if (!ApiClient.temGravacoesPendentes()) return;
+  if (!ApiClient.temGravacoesPendentes() && !programaSendoGravado()) return;
   e.preventDefault();
   e.returnValue = '';
 });
@@ -96,8 +98,8 @@ window.addEventListener('beforeunload', e => {
     await ApiClient.atualizarFormatoGravado();
 
     abrirData(data);
-    const { estado, escala, horasBase, horasDosInstrutores, resultados, indisponiveis } = await ApiClient.carregarDia(data);
-    setS({ ...estado, horasBase, horasDosInstrutores, resultados, indisponiveis });
+    const { estado, escala, horasBase, horasDosInstrutores, resultados, programa, indisponiveis } = await ApiClient.carregarDia(data);
+    setS({ ...estado, horasBase, horasDosInstrutores, resultados, programa, indisponiveis });
     avisarDadosIndisponiveis();
     // Data sem escala gravada: a escala calculada aparece na hora (é gravada junto com a primeira alteração)
     setRES(escala || escalaCalculada());

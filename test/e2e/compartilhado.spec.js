@@ -222,7 +222,7 @@ test.describe('Modo compartilhado: gravação, conflitos e link da escala', () =
     await expect(page.locator('#aviso-sync')).toBeVisible();
     await irPara(page, 'cur');
     await expect(page.locator('#cursos')).toContainText('Só o Administrador muda; aqui é consulta.');
-    await expect(page.locator('#cursos [data-act="curso-nova"]')).toHaveCount(0);
+    await expect(page.locator('#cursos [data-act="missao-nova"]')).toHaveCount(0);
     await irPara(page, 'ins');
     await page.locator('#s-ins [data-vista-ins="cadastro"]').click();
     await expect(page.locator('#limites-lei [data-limite="vooMesH"]')).toBeDisabled();
@@ -247,12 +247,12 @@ test.describe('Modo compartilhado: gravação, conflitos e link da escala', () =
     await page.locator('#eqs input[data-id="PR-BTB"]').uncheck();
     await irPara(page, 'cur');
     await expect(page.locator('#cursos')).toContainText('Só o Administrador muda.');
-    await expect(page.locator('#cursos [data-act="curso-nova"]')).toHaveCount(3);
+    await expect(page.locator('#cursos [data-act="missao-nova"]')).toHaveCount(3);
     liberar();
     await expect(page.locator('#aviso-sync')).toBeVisible();
     await expect(page.locator('#s-cur')).toBeVisible();
     await expect(page.locator('#cursos')).toContainText('Só o Administrador muda; aqui é consulta.');
-    await expect(page.locator('#cursos [data-act="curso-nova"]')).toHaveCount(0);
+    await expect(page.locator('#cursos [data-act="missao-nova"]')).toHaveCount(0);
     expect(erros).toEqual([]);
     await contexto.close();
   });

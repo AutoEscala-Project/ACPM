@@ -6,7 +6,7 @@
 // do servidor (public.salvar_curso e public.importar_cursos, na migração 20261117200000_cursos_e_missoes), com os mesmos
 // erros, na mesma ordem: o modo local grava por elas, e os casos de test/helpers/casos-do-programa.js valem para as duas
 // pontas.
-import { CURSOS, siglaValida, codigoValido } from './cursos.js';
+import { CURSOS, siglaValida, codigoValido, novaMissaoDoCurso } from './cursos.js';
 import { MIS, GROUND_DURATION_H, DURACAO_MAXIMA_H } from './config.js';
 import { duracaoValida } from './rules.js';
 import { FORMATO_DOS_CURSOS } from './migracoes.js';
@@ -208,8 +208,9 @@ function requerConfere(item, anterior) {
 // Confere o curso (o nome, se está ativo, as fases e as missões) como o servidor, na ordem dele: devolve o erro que o
 // servidor daria primeiro (com code, campo e a mensagem), ou null. Com o contexto (a sigla, a versão lida e o que está
 // guardado: os cursos e os resultados), confere também o que depende dele: a sigla nova ou a versão lida, os ids de
-// outro curso, o código de uma missão retirada e o código que já tem resultados
-function validarCurso(conteudo, contexto = null) {
+// outro curso, o código de uma missão retirada e o código que já tem resultados. A aba Cursos confere cada alteração
+// antes de gravar (sem contexto: o conteúdo)
+export function validarCurso(conteudo, contexto = null) {
   if (!ehObjeto(conteudo)) return recusa('22023', 'limite', 'o curso vai num objeto');
   if (!nomeValido(conteudo.nome)) return recusa('22023', 'nome', 'o nome do curso vai de 1 a 80 caracteres');
   if (typeof conteudo.ativo !== 'boolean') return recusa('22023', 'ativo', 'o curso está ativo ou encerrado (sim ou não)');
@@ -434,4 +435,128 @@ export function programaComResultados({ cursos, resultados = [], alteracoes = []
         .map(a => ({ versao: a.versao, descricao: a.descricao, registrado_em: a.registrado_em, registrado_por: a.registrado_por }))
     };
   });
+}
+
+// A edição do programa na aba Cursos ----------------------------------------------------------------------------------
+// Cada operação recebe o curso como a tela o tem (o de S.programa: as fases e as missões, também as tiradas do programa)
+// e devolve o curso como fica, num objeto novo (o recebido não muda), ou null quando não há o que mudar. As ordens vêm
+// renumeradas como o servidor grava (a da fase no programa; a da missão na fase), e conteudoDoCurso dá o que vai para a
+// gravação do curso inteiro (salvar_curso)
+
+// As fases e as missões do programa (sem as tiradas), na ordem do curso
+function programaDoCurso(curso) {
+  const { fases, porFase } = percursoDoCurso(curso);
+  return { fases: [...fases], missoes: fases.flatMap(f => porFase.get(f.id)) };
+}
+
+// O curso com estas fases e estas missões no programa, nesta ordem; as tiradas do programa (as de antes e as que saem
+// agora) ficam fora dele, como estavam
+function comPrograma(curso, fases, missoes, saem = []) {
+  const { ordemNaFase } = posicoes(fases, missoes);
+  return {
+    ...curso,
+    fases: [...fases.map((f, i) => ({ ...f, ordem: i })), ...curso.fases.filter(f => f.removida)],
+    missoes: [...missoes.map(m => ({ ...m, ordem: ordemNaFase.get(m.id) })), ...saem, ...curso.missoes.filter(m => m.removida)]
+  };
+}
+
+// O que vai para a gravação do curso inteiro (salvar_curso): o nome, se está ativo, as fases e as missões do programa, na
+// ordem (a posição na lista é a ordem); as tiradas do programa não vão (o servidor as mantém fora dele)
+export function conteudoDoCurso(curso) {
+  const { fases, missoes } = programaDoCurso(curso);
+  return {
+    nome: curso.nome,
+    ativo: curso.ativo,
+    fases: fases.map(({ id, nome, modulo, regra, requer }) => ({ id, nome, modulo, regra, requer: [...requer] })),
+    missoes: missoes.map(({ id, fase, codigo, nome, mis, eq, nb, regra, requer, dispensada, avaliacao }) => ({
+      id, fase, codigo, nome, mis, eq, nb, regra, requer: [...requer], dispensada, avaliacao
+    }))
+  };
+}
+
+// O código da missão nova: o seguinte ao da missão anterior da fase, no mesmo formato (TMA-05 → TMA-06, AVP-SOLO-05 →
+// AVP-SOLO-06), quando ele está livre no curso; senão, o próximo número livre do curso (PP-01, PP-02…). As missões
+// tiradas do programa contam: o código delas continua reservado
+function codigoNovo(curso, anterior) {
+  const r = anterior && /^(.*?)(\d+)$/.exec(anterior.codigo);
+  const seguinte = r && `${r[1]}${String(Number(r[2]) + 1).padStart(r[2].length, '0')}`;
+  if (seguinte && codigoValido(seguinte) && !curso.missoes.some(m => m.codigo === seguinte)) return seguinte;
+  return novaMissaoDoCurso(curso.sigla, curso.missoes.map(m => ({ id: m.codigo }))).id;
+}
+
+// "+ Missão": a missão nova entra no fim da fase (sem fase, na última; o curso sem nenhuma ganha a "Fase 1"), depois das
+// anteriores, com o tipo de missão, o recurso e as horas da missão anterior da fase (senão, um voo local de 1 h no C152)
+// e, como nome, o código. Devolve o curso e a missão nova; null quando a fase não está no programa
+export function incluirMissao(curso, faseId = null, gerarId = novoId) {
+  const programa = programaDoCurso(curso);
+  let fase = faseId ? programa.fases.find(f => f.id === faseId) : programa.fases.at(-1);
+  if (faseId && !fase) return null;
+  const fases = [...programa.fases];
+  if (!fase) {
+    fase = { id: gerarId(), nome: `Fase ${fases.length + 1}`, modulo: null, ordem: fases.length, regra: 'ordem', requer: [], removida: false };
+    fases.push(fase);
+  }
+  const daFase = f => programa.missoes.filter(m => m.fase === f.id);
+  const anterior = daFase(fase).at(-1) || null;
+  const codigo = codigoNovo(curso, anterior);
+  const { mis, eq, nb } = anterior || novaMissaoDoCurso(curso.sigla, []);
+  const missao = {
+    id: gerarId(), fase: fase.id, codigo, nome: codigo, mis, eq, nb, ordem: 0, regra: 'ordem', requer: [], dispensada: false,
+    avaliacao: false, removida: false, comResultados: false
+  };
+  const novo = comPrograma(curso, fases, fases.flatMap(f => (f.id === fase.id ? [...daFase(f), missao] : daFase(f))));
+  return { curso: novo, missao: novo.missoes.find(m => m.id === missao.id) };
+}
+
+// Um campo de uma missão do programa: o código (em maiúsculas; o nome que era o código acompanha), o nome (sem os
+// espaços a mais, até 80 caracteres; vazio, vale o código), o tipo de missão (o recurso fica, se o tipo o aceita, senão
+// vai para o padrão dele; o Ground fica com 1,5 h), o recurso ou as horas. null quando nada muda
+export function mudarMissao(curso, id, campo, valor) {
+  const m = curso.missoes.find(x => x.id === id && !x.removida);
+  if (!m) return null;
+  let novo;
+  if (campo === 'codigo') {
+    const codigo = String(valor).trim().toUpperCase();
+    novo = { ...m, codigo, nome: m.nome === m.codigo ? codigo : m.nome };
+  } else if (campo === 'nome') {
+    novo = { ...m, nome: nomeCurto(valor) || m.codigo };
+  } else if (campo === 'mis') {
+    if (typeof valor !== 'string' || !Object.hasOwn(MIS, valor)) return null;
+    const tipo = MIS[valor];
+    novo = { ...m, mis: valor, eq: tipo.eq.includes(m.eq) ? m.eq : tipo.defEq, nb: tipo.isGround ? GROUND_DURATION_H : m.nb };
+  } else if (campo === 'eq' || campo === 'nb') {
+    novo = { ...m, [campo]: valor };
+  } else {
+    return null;
+  }
+  if (['codigo', 'nome', 'mis', 'eq', 'nb'].every(c => novo[c] === m[c])) return null;
+  return { ...curso, missoes: curso.missoes.map(x => (x === m ? novo : x)) };
+}
+
+// ↑ e ↓: a missão troca de lugar com a vizinha da mesma fase (passo -1 sobe, 1 desce); null na ponta da fase
+export function moverMissao(curso, id, passo) {
+  const { fases, missoes } = programaDoCurso(curso);
+  const m = missoes.find(x => x.id === id);
+  if (!m) return null;
+  const daFase = missoes.filter(x => x.fase === m.fase);
+  const i = daFase.indexOf(m), j = i + passo;
+  if (j < 0 || j >= daFase.length) return null;
+  [daFase[i], daFase[j]] = [daFase[j], daFase[i]];
+  return comPrograma(curso, fases, fases.flatMap(f => (f.id === m.fase ? daFase : missoes.filter(x => x.fase === f.id))));
+}
+
+// "Tirar do programa": a missão sai do programa e da próxima missão, mas fica no curso (os resultados continuam com o
+// código dela, que segue reservado), sem requisitos, como o servidor a guarda. Quem esperava por ela ("depois de…")
+// deixa de esperar; sem mais nenhuma, volta a "depois das anteriores"
+export function retirarMissao(curso, id) {
+  const { fases, missoes } = programaDoCurso(curso);
+  const m = missoes.find(x => x.id === id);
+  if (!m) return null;
+  const semEla = x => {
+    if (!x.requer.includes(id)) return x;
+    const requer = x.requer.filter(r => r !== id);
+    return { ...x, requer, regra: x.regra === 'depois' && !requer.length ? 'ordem' : x.regra };
+  };
+  return comPrograma(curso, fases, missoes.filter(x => x !== m).map(semEla),
+    [{ ...m, regra: m.regra === 'depois' ? 'ordem' : m.regra, requer: [], removida: true }]);
 }

@@ -1,14 +1,14 @@
 // O banco espelha o app. O pgTAP (supabase/tests/database) não roda no CI, então este teste confere o que as duas
 // pontas precisam ter igual: a lista de tipos de missão e recursos da migração dos cursos (missao_e_recurso_validos) é a
-// de js/config.js (MIS), o formato dos cursos (formato_dos_cursos) é o FORMATO_DOS_CURSOS do app, o seguinte ao
-// ESQUEMA (os dois em js/migracoes.js), cada caso da gravação dos programas (test/helpers/casos-do-programa.js) é uma
-// verificação de supabase/tests/database/cursos.test.sql, com os mesmos dados, e cada erro que a gravação devolve tem
-// um caso.
+// de js/config.js (MIS), o formato dos cursos (formato_dos_cursos) é o FORMATO_DOS_CURSOS do app, um passo do formato
+// que o app grava (os dois em js/migracoes.js), cada caso da gravação dos programas (test/helpers/casos-do-programa.js)
+// é uma verificação de supabase/tests/database/cursos.test.sql, com os mesmos dados, e cada erro que a gravação devolve
+// tem um caso.
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { MIS, GROUND_EQ_TYPE, GROUND_DURATION_H, DURACAO_MAXIMA_H } from '../../js/config.js';
-import { ESQUEMA, FORMATO_DOS_CURSOS } from '../../js/migracoes.js';
+import { ESQUEMA, FORMATO_DOS_CURSOS, migrarCadastro, antesDosCursosProprios } from '../../js/migracoes.js';
 import { CASOS_DO_PROGRAMA, PROGRAMA } from '../helpers/casos-do-programa.js';
 
 const ler = caminho => readFileSync(new URL(`../../${caminho}`, import.meta.url), 'utf8');
@@ -74,12 +74,17 @@ describe('O banco espelha o app', () => {
     assert.doesNotMatch(MIGRACAO, /grant execute on function public\.formato_dos_cursos/);
   });
 
-  // O formato dos cursos é o número seguinte ao ESQUEMA do app: o cadastro que o app de hoje grava fica abaixo dele,
-  // e a conversão (importar_cursos) traz os programas. Se outro formato chega antes com o mesmo número (o main, numa
-  // fusão), o formato dos cursos passa ao seguinte: com o cadastro já gravado nele, importar_cursos não traria nada,
-  // nunca. O P12 troca esta verificação, quando o passo do formato dos cursos entra em js/migracoes.js
-  it('o formato dos cursos é o seguinte ao ESQUEMA do app (até o P12)', () => {
-    assert.equal(FORMATO_DOS_CURSOS, ESQUEMA + 1, `o app grava o formato ${ESQUEMA}: o formato dos cursos é o seguinte, ${ESQUEMA + 1}`);
+  // O formato dos cursos é um passo de js/migracoes.js, e o app grava nele ou num formato depois dele: o cadastro de
+  // antes passa pelo passo (sem ele, migrarCadastro quebra), e o regravado já não espera a conversão. Se outro formato
+  // chega antes com o mesmo número (o main, numa fusão), o passo dos cursos é renumerado, junto com esta constante e a
+  // função do banco: com o cadastro já gravado no número do outro, importar_cursos não traria nada, nunca
+  it('o formato dos cursos é um passo do formato que o app grava, e o cadastro de antes passa por ele', () => {
+    assert.ok(ESQUEMA >= FORMATO_DOS_CURSOS, `o app grava o formato ${ESQUEMA}: o formato dos cursos (${FORMATO_DOS_CURSOS}) não pode vir depois dele`);
+    const antes = { nid: 1000, ins: [], stu: [], esquema: FORMATO_DOS_CURSOS - 1 };
+    assert.equal(antesDosCursosProprios(antes), true);
+    const regravado = migrarCadastro(antes);
+    assert.equal(regravado.esquema, ESQUEMA);
+    assert.equal(antesDosCursosProprios(regravado), false);
   });
 
   // O formato do cadastro (esquema_do_conteudo, direto ou na variável que recebe o valor dele) só é comparado com
