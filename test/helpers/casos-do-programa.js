@@ -119,9 +119,10 @@ const LEGADO = [
 const LEGADO_MUDADO = [{ ...LEGADO[0], missoes: LEGADO[0].missoes.slice(0, 1) }];
 
 // O formato dos cursos: o formato do cadastro a partir do qual os programas vivem nas tabelas próprias (no banco,
-// public.formato_dos_cursos(); test/unit/espelho-do-banco.test.js confere que é o mesmo). O passo P12 leva esta
-// constante para js/migracoes.js, e este arquivo passa a importá-la de lá
-export const FORMATO_DOS_CURSOS = 23;
+// public.formato_dos_cursos(); test/unit/espelho-do-banco.test.js confere que é o mesmo). É o seguinte ao ESQUEMA do
+// app: o 22 é o do instrutor escolhido e o 23, o dos atributos da frota (Só VFR, habilitação própria). O passo P12 leva
+// esta constante para js/migracoes.js, e este arquivo passa a importá-la de lá
+export const FORMATO_DOS_CURSOS = 24;
 
 // Os estados guardados. O cadastro já convertido, no formato dos cursos (versão 7, salvo na conversão), e o de antes
 const CADASTRO_CONVERTIDO = { esquema: FORMATO_DOS_CURSOS, versao: 7 };

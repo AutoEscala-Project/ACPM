@@ -59,6 +59,14 @@ export function proximoMid(estado, aluno) {
   return Math.max(0, ...doAluno, ...doDia.filter(Number.isInteger)) + 1;
 }
 
+// As horas com que um pedido da missão começa: o Ground, 01h30; a missão com duração padrão (o simulador, 2 h), a dela;
+// as outras, 1 h
+export const duracaoPadraoDaMissao = mis => (isGroundMission(mis) ? GROUND_DURATION_H
+  : duracaoFixaDaMissao(mis) || (Object.hasOwn(MIS, mis) && MIS[mis].duracaoPadrao ? MIS[mis].duracaoPadrao : 1));
+// A duração que não muda (o Ground, 01h30; o Noturno, 4 h no dia: o translado e o noturno em BH), ou null
+export const duracaoFixaDaMissao = mis => (isGroundMission(mis) ? GROUND_DURATION_H
+  : Object.hasOwn(MIS, mis) && MIS[mis].duracaoFixaH ? MIS[mis].duracaoFixaH : null);
+
 export const blank = () => ({ fly: false, mis: 'Voo Local', eq: 'C152', p1: T[1], p2: T[2], nb: 1, ss: 1, pr: 3 });
 
 export function migrateLegacyMissionName(mis) {
@@ -119,7 +127,7 @@ export function normalizeMissionFields(target) {
     if (target.p1 === T[NI]) target.p1 = T[0];
     if (target.p2 === T[NI]) target.p2 = T[1];
   } else {
-    target.nb = duracaoValida(target.nb);
+    target.nb = duracaoFixaDaMissao(target.mis) || duracaoValida(target.nb);
   }
   // Missão de horário fixo (o Noturno às 17:30; o Voo Solo às 06:30): a preferência é ele
   if (target.mis === 'Noturno' || target.mis === 'Voo Solo') { target.p1 = target.mis === 'Noturno' ? T[NI] : HORARIO_DO_SOLO; target.p2 = -1; }

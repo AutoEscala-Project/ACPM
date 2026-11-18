@@ -15,14 +15,15 @@
 -- O formato dos cursos: o formato do cadastro a partir do qual os programas vivem nas tabelas próprias. Antes dele, as
 -- tabelas são só o espelho do programa guardado no cadastro (importar_cursos o traz, e salvar_curso espera); dele em
 -- diante, só salvar_curso grava. É o FORMATO_DOS_CURSOS do app (test/unit/espelho-do-banco.test.js confere). Se outro
--- formato chegar antes com este número, o aumento é só a linha do número, abaixo, e a da constante
+-- formato chegar antes com este número, o aumento é só a linha do número, abaixo, e a da constante. É o seguinte ao
+-- último formato do app: o 22 é o do instrutor escolhido e o 23, o dos atributos da frota (Só VFR, habilitação própria)
 create function public.formato_dos_cursos()
   returns integer
   language sql
   immutable
   set search_path = ''
 as $$
-  select 23
+  select 24
 $$;
 revoke execute on function public.formato_dos_cursos() from public, anon, authenticated;
 

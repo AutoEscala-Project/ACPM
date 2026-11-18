@@ -3,7 +3,7 @@
 import { MIS, GROUND_EQ_TYPE, T, NI, DURACAO_MAXIMA_H, GROUND_DURATION_H } from '../config.js';
 import { matriculasDoTipo } from '../frota.js';
 import { esc, opts, hm } from '../format.js';
-import { isGroundMission, opcoesDeDisponibilidade } from '../rules.js';
+import { isGroundMission, opcoesDeDisponibilidade, duracaoFixaDaMissao } from '../rules.js';
 import { horariosDaMissao } from '../horarios.js';
 import { descreverExigencias } from '../habilitacoes.js';
 import { S } from '../state.js';
@@ -25,12 +25,12 @@ function opcoesDeHorario(lista, valor) {
   return opts(itens, valor);
 }
 
-// O instrutor do pedido: "Automático" (o app escolhe; com o “Voa com” do aluno, um dos instrutores dele) ou um escolhido
+// O instrutor do pedido: "Automático" (o app escolhe; com o “Priorizar com” do aluno, um dos instrutores dele) ou um escolhido
 // pelo operador, que vale mais que a escolha do app
 function opcoesDeInstrutor(stu, d) {
   const lista = instrutoresDoPedido(S, stu, d).map(o => [o.id, o.nota ? `${o.nm} (${o.nota})` : o.nm]);
   const pares = (stu.voaCom || []).map(id => S.ins.find(x => x.id === id)).filter(Boolean).map(x => x.nm);
-  return opts([['', pares.length ? `Automático (voa com ${pares.join(', ')})` : 'Automático'], ...lista], d.insId || '');
+  return opts([['', pares.length ? `Automático (prioriza ${pares.join(', ')})` : 'Automático'], ...lista], d.insId || '');
 }
 
 export const singleDemandRowHTML = (stu, d, mid = 0) => {
@@ -44,11 +44,14 @@ export const singleDemandRowHTML = (stu, d, mid = 0) => {
     ? `<div class="stu-cell"><span class="sm">↳ missão extra</span>${etapa}<button class="x edit-only" data-act="del-mis" data-id="${stu.id}" data-mid="${mid}" aria-label="Tirar a missão extra de ${esc(stu.nm)}" title="Tirar esta missão extra">✕</button></div>`
     : `<div class="stu-cell"><span>${esc(stu.nm)}</span>${etapa}<button class="btn-add-mis edit-only" data-act="add-mis" data-id="${stu.id}" title="Outra missão para este aluno no mesmo dia" aria-label="Mais uma missão para ${esc(stu.nm)}">+ missão</button></div>`;
   const soParafuso = d.mis === 'Parafuso' && d.eq === 'C152' ? matriculasDoTipo(S.frota || [], 'C152', { parafuso: true }) : [];
-  const exige = `Exige ${descreverExigencias(d.mis, isGnd ? GROUND_EQ_TYPE : d.eq)}${soParafuso.length ? ` (no ${soParafuso.join(' ou ')})` : ''}`;
+  const exige = `Exige ${descreverExigencias(d.mis, isGnd ? GROUND_EQ_TYPE : d.eq, { curso: stu.curso })}${soParafuso.length ? ` (no ${soParafuso.join(' ou ')})` : ''}`;
   const de = ` de ${esc(stu.nm)}`;
 
   const nbOpts = isGnd
     ? `<select data-f="nb" disabled title="Ground School tem duração fixa de 01h30" aria-label="Duração de ${esc(stu.nm)}"><option value="${GROUND_DURATION_H}" selected>1h30</option></select>`
+    // O Noturno: 4 h no dia (o translado e o noturno em BH); a volta é no dia seguinte, às 07:30
+    : d.mis === 'Noturno'
+      ? `<select data-f="nb" disabled title="1 h de translado para BH e 3 h de noturno em BH; a volta, 1 h, no dia seguinte às 07:30" aria-label="Duração de ${esc(stu.nm)}"><option value="${duracaoFixaDaMissao('Noturno')}" selected>4 h</option></select>`
     // A duração digitada, fracionada, até 5 h
     : `<input type="number" class="duracao" data-f="nb" min="0.1" max="${DURACAO_MAXIMA_H}" step="0.1" inputmode="decimal" value="${esc(d.nb)}" aria-label="Duração de ${esc(stu.nm)}, em horas">`;
 

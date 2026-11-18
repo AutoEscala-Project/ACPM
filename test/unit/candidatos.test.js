@@ -2,7 +2,7 @@
 // um com o motivo de não servir, na ordem das Sugestões para um conflito (js/reparo.js)
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { ocupacaoDaEscala, problemaDoRecurso, avioesQueServem, instrutoresQueServem } from '../../js/candidatos.js';
+import { ocupacaoDaEscala, problemaDoRecurso, problemaDoAluno, avioesQueServem, instrutoresQueServem } from '../../js/candidatos.js';
 import { TEXTO_DO_PROBLEMA } from '../../js/conflitos.js';
 import { runAllocationEngine } from '../../js/engine.js';
 import { aluno, cenario, instrutor, GROUND_C152 } from '../helpers/montar.js';
@@ -147,5 +147,98 @@ describe('Candidatos: os instrutores', () => {
     const lista = instrutoresQueServem(estado, ocupacaoDaEscala([]), { mis: 'Ground C152', tipo: 'Sala Ground', a: 610, b: 700, alunos: [estudante, outro], stuKg: 110 });
     assert.deepEqual(lista.filter(c => c.problemas.some(p => p.codigo === 'bloqueio')).map(c => c.x.id), [2, 8]);
     assert.ok(lista.every(c => c.reducao === 0 && !c.problemas.some(p => p.codigo === 'peso')));
+  });
+});
+
+// Dois C172 (o PR-CPL "Só VFR") e dois PA-34 (o PR-VOM com habilitação própria), todos disponíveis
+const FROTA = [
+  { reg: 'PR-CPL', tipo: 'C172', soVfr: true }, { reg: 'PR-HAR', tipo: 'C172' },
+  { reg: 'PR-VOM', tipo: 'PA-34', habilitacaoPropria: true }, { reg: 'PT-JOB', tipo: 'PA-34' }
+];
+const comFrota = estado => ({ ...estado, frota: FROTA, av: Object.fromEntries(FROTA.map(f => [f.reg, true])) });
+const codigos = lista => Object.fromEntries(lista.map(c => [c.r, c.problema && c.problema.codigo]));
+const textos = lista => lista.map(c => [c.x.id, c.problemas.map(p => TEXTO_DO_PROBLEMA[p.codigo](p))]);
+
+describe('Candidatos: os requisitos do voo e os atributos dos recursos (js/frota.js)', () => {
+  const vazia = ocupacaoDaEscala([]);
+
+  it('Só VFR: o voo IFR, e o noturno do PC, não vão para o avião não homologado IFR; o VFR e o noturno do PP, sim', () => {
+    const estado = comFrota(cenario());
+    const voo = (mis, curso) => ({ tipo: 'C172', mis, curso, a: 610, b: 670 });
+    const ifr = avioesQueServem(estado, vazia, voo('IFR'));
+    assert.deepEqual(ifr.map(c => [c.r, c.problema && c.problema.codigo]), [['PR-HAR', null], ['PR-CPL', 'so-vfr']], 'o que serve primeiro');
+    assert.deepEqual(codigos(avioesQueServem(estado, vazia, voo('Voo Local'))), { 'PR-CPL': null, 'PR-HAR': null });
+    assert.deepEqual(codigos(avioesQueServem(estado, vazia, voo('Noturno', 'PC'))), { 'PR-CPL': 'so-vfr', 'PR-HAR': null });
+    assert.deepEqual(codigos(avioesQueServem(estado, vazia, voo('Noturno', 'PP'))), { 'PR-CPL': null, 'PR-HAR': null });
+  });
+
+  it('o noturno do PC também exige do instrutor a habilitação IFR (o motivo diz que é a do curso do aluno)', () => {
+    const estado = comFrota(cenario({ ins: [instrutor(1, 1, { hab: ['noturno', 'c172', 'local'] }), instrutor(2, 1, { hab: ['noturno', 'c172', 'local', 'ifr'] })] }));
+    const noturno = curso => instrutoresQueServem(estado, vazia, { mis: 'Noturno', tipo: 'C172', a: 1050, b: 1290, curso, r: 'PR-HAR' });
+    assert.deepEqual(textos(noturno('PP')), [[1, []], [2, []]]);
+    assert.deepEqual(textos(noturno('PC')), [[2, []], [1, ['o instrutor não tem a habilitação que o curso do aluno exige nesta missão (o noturno do PC é IFR)']]]);
+  });
+
+  it('habilitação própria: o avião que a exige só serve com o instrutor que a tem (o problema diz qual avião)', () => {
+    const ins = [instrutor(1, 1, { hab: ['mlte', 'local'] }), instrutor(2, 1, { hab: ['mlte', 'local', 'aviao:PR-VOM'] })];
+    const estado = comFrota(cenario({ ins }));
+    const voo = { mis: 'Multimotor', tipo: 'PA-34', a: 610, b: 670 };
+    // Os instrutores no avião: no PR-VOM, só quem tem a habilitação dele; noutro avião, ou sem saber o avião, todos
+    const no = r => textos(instrutoresQueServem(estado, vazia, { ...voo, r }));
+    assert.deepEqual(no('PR-VOM'), [[2, []], [1, ['o instrutor não tem a habilitação própria do PR-VOM']]]);
+    assert.deepEqual(no('PT-JOB'), [[1, []], [2, []]]);
+    assert.deepEqual(no(null), [[1, []], [2, []]]);
+    // Os aviões com o instrutor: o PR-VOM não serve com quem não tem a habilitação dele (o problema do conflito do voo fixo)
+    assert.deepEqual(avioesQueServem(estado, vazia, { ...voo, instrutor: ins[0] }).map(c => [c.r, c.problema]),
+      [['PT-JOB', null], ['PR-VOM', { codigo: 'habilitacao', motivo: 'aviao:PR-VOM' }]]);
+    assert.deepEqual(codigos(avioesQueServem(estado, vazia, { ...voo, instrutor: ins[1] })), { 'PR-VOM': null, 'PT-JOB': null });
+    assert.deepEqual(codigos(avioesQueServem(estado, vazia, voo)), { 'PR-VOM': null, 'PT-JOB': null }, 'sem o instrutor, só o avião');
+  });
+});
+
+describe('Candidatos: a volta do noturno de ontem (js/voo.js e js/noturno.js)', () => {
+  // A volta de BH no PR-HAR, com o instrutor 1 e o aluno 1000: decola às 07:30 e pousa às 08:30; eles e o avião ficam
+  // livres às 10:10
+  const volta = linha('1000_0_2', { r: 'PR-HAR', eqType: 'C172', mis: 'Noturno', a: 450, b: 510, trecho: 'volta', livreAs: 610, fixo: true });
+  const estado = comFrota(cenario({ ins: [instrutor(1, 9), instrutor(2, 9)], stu: [aluno(1000), aluno(1001)] }));
+  const as9 = { a: 540, b: 600 }, as1010 = { a: 610, b: 670 };
+  const do1 = (e, ocupacao, horario) => instrutoresQueServem(e, ocupacao, { mis: 'Voo Local', tipo: 'C172', ...horario }).find(c => c.x.id === 1).problemas
+    .map(p => TEXTO_DO_PROBLEMA[p.codigo](p));
+
+  it('ocupa o avião, o aluno e o instrutor desde o início do dia até as 10:10 (encostar às 10:10 não conta)', () => {
+    const ocupacao = ocupacaoDaEscala([volta]);
+    const doAviao = problemaDoRecurso(estado, ocupacao, 'PR-HAR', as9);
+    assert.deepEqual([doAviao.codigo, doAviao.voo.fKey], ['aviao-ocupado', '1000_0_2']);
+    assert.equal(problemaDoRecurso(estado, ocupacao, 'PR-HAR', as1010), null);
+    const doAluno = problemaDoAluno(ocupacao, 1000, as9);
+    assert.deepEqual([doAluno.codigo, doAluno.voo.fKey], ['aluno-ocupado', '1000_0_2']);
+    assert.equal(problemaDoAluno(ocupacao, 1000, as1010), null);
+    assert.equal(problemaDoAluno(ocupacao, 1001, as9), null, 'só o aluno da volta');
+    assert.deepEqual(do1(estado, ocupacao, as9), ['o instrutor já tem outro compromisso neste horário']);
+    // A folga do avião conta até as 10:10: o voo das 10:10 encosta nela
+    const har = avioesQueServem(estado, ocupacao, { tipo: 'C172', mis: 'Voo Local', ...as1010 }).find(c => c.r === 'PR-HAR');
+    assert.deepEqual([har.problema, har.folga], [null, 0]);
+  });
+
+  it('a lei conta só o voo: às 10:10, a jornada do instrutor começa às 07:00, não à meia-noite', () => {
+    assert.deepEqual(do1(estado, ocupacaoDaEscala([volta]), as1010), []);
+  });
+
+  it('atrasada, a volta ocupa até o pouso novo, quando ele passa das 10:10 (efetivo)', () => {
+    const ocupacao = ocupacaoDaEscala([volta], { fStatus: { '1000_0_2': 'Atrasado' }, fObs: { '1000_0_2': { novoInicio: 600 } }, efetivo: true });
+    assert.equal(problemaDoRecurso(estado, ocupacao, 'PR-HAR', as1010).codigo, 'aviao-ocupado');
+    assert.equal(problemaDoRecurso(estado, ocupacao, 'PR-HAR', { a: 660, b: 720 }), null);
+  });
+
+  it('o repouso de quem volta hoje é um aviso, não barra os voos novos; com a volta cancelada, barra', () => {
+    // O fim de ontem às 23:00: às 10:10, o repouso seria de 10h10, menos que as 12 h da lei
+    const comVolta = fStatus => ({
+      ...estado, fStatus, horasDosInstrutores: { 1: { mes: 0, semestre: 0, ano: 0, fimAnterior: 1380 } },
+      noturnosDaVespera: [{ stuId: 1000, mid: 0, insId: 1, r: 'PR-HAR', eqType: 'C172', s: 'Aluno 1000', ins: 'Instrutor 01', stuKg: 70, fim: 1290 }]
+    });
+    const no1010 = e => do1(e, ocupacaoDaEscala([volta], { fStatus: e.fStatus }), as1010);
+    assert.deepEqual(no1010(comVolta({})), []);
+    assert.deepEqual(no1010(comVolta({ '1000_0_2': 'Cancelado' })), ['o instrutor passaria do limite da lei (repouso)']);
+    assert.deepEqual(no1010({ ...comVolta({}), noturnosDaVespera: [] }), ['o instrutor passaria do limite da lei (repouso)'], 'sem a volta, o repouso vale');
   });
 });

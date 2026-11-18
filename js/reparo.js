@@ -7,7 +7,6 @@
 // na turma de Ground, em todos os alunos dela. Os aviões e os instrutores que servem vêm de js/candidatos.js, com os
 // outros voos do dia no horário marcado de cada um.
 import { GROUND_EQ_TYPE, T, NI } from './config.js';
-import { livre } from './viabilidade.js';
 import { HORARIOS_INICIAIS, horariosDaMissao, periodoDoMinuto, fimDaMissao } from './horarios.js';
 import { STATUS_EM_ANDAMENTO } from './status.js';
 import { disponibilidadeDoAluno, doesGroundGateFlight } from './rules.js';
@@ -15,7 +14,7 @@ import { nomeDoRecurso } from './categorias.js';
 import { hm } from './format.js';
 import { gruposDoConflito } from './conflitos.js';
 import { statusDoVoo, pedidosDosVoos } from './voo.js';
-import { ocupacaoDaEscala, problemaDoRecurso, avioesQueServem, instrutoresQueServem } from './candidatos.js';
+import { ocupacaoDaEscala, problemaDoAluno, avioesQueServem, instrutoresQueServem } from './candidatos.js';
 
 // A turma de Ground muda inteira; o voo, sozinho
 const doGrupo = (resultado, voo) => (voo.isGround ? resultado.out.filter(o => o.classKey === voo.classKey) : [voo]);
@@ -29,12 +28,16 @@ export function sugerirReparos(estado, resultado, fKey, { maximo = 3, depoisDe =
   const alunos = new Map(estado.stu.map(s => [s.id, s]));
   const pedidoDo = pedidosDosVoos(estado.stu);
   const tipo = voo.isGround ? GROUND_EQ_TYPE : voo.eqType;
+  // Os requisitos do voo: a missão, o tipo e o curso do aluno (o noturno do PC é IFR; js/frota.js)
+  const curso = (alunos.get(voo.stuId) || {}).curso;
 
-  const avioesPara = (a, b) => avioesQueServem(estado, ocupacao, { tipo, mis: voo.mis, a, b, ground: voo.isGround })
+  // Os aviões que servem ao voo (o tipo, o "Só Parafuso" e o "Só VFR") e, com o instrutor, os em que ele voa
+  const avioesPara = (a, b, instrutor = null) => avioesQueServem(estado, ocupacao, { tipo, mis: voo.mis, curso, a, b, ground: voo.isGround, instrutor })
     .filter(c => !c.problema).map(c => c.r);
-  // Os instrutores que servem, cada um com o combustível a menos com ele ({ x, problemas, reducao })
-  const instrutoresPara = (a, b) => instrutoresQueServem(estado, ocupacao,
-    { mis: voo.mis, tipo, a, b, alunos: grupo.map(v => alunos.get(v.stuId)), stuKg: voo.stuKg }).filter(c => !c.problemas.length);
+  // Os instrutores que servem no avião r (o avião com habilitação própria exige a dele), cada um com o combustível a
+  // menos com ele ({ x, problemas, reducao })
+  const instrutoresPara = (a, b, r = voo.r) => instrutoresQueServem(estado, ocupacao,
+    { mis: voo.mis, tipo, a, b, alunos: grupo.map(v => alunos.get(v.stuId)), stuKg: voo.stuKg, curso, r }).filter(c => !c.problemas.length);
   const comCombustivel = (texto, { reducao }) => (reducao > 0 ? `${texto} · reduzir ${reducao} gal` : texto);
 
   // O que o conflito pede, pelo código: o pedido mudou (só soltar), o horário não serve (outro
@@ -51,12 +54,15 @@ export function sugerirReparos(estado, resultado, fKey, { maximo = 3, depoisDe =
   if (!problemaNoAluno && !pedidoMudou) {
     const { a, b } = voo;
     const avioes = avioesPara(a, b), instrutores = instrutoresPara(a, b);
-    if (problemaNoAviao && !problemaNoInstrutor) avioes.forEach(r => opcoes.push({ tipo: 'aviao', texto: `Trocar o avião: ${nomeDoRecurso(r)}`, mudancas: { r } }));
+    // Outro avião com o mesmo instrutor: um em que ele voa
+    if (problemaNoAviao && !problemaNoInstrutor) avioesPara(a, b, atual).forEach(r => opcoes.push({ tipo: 'aviao', texto: `Trocar o avião: ${nomeDoRecurso(r)}`, mudancas: { r } }));
     if (problemaNoInstrutor && !problemaNoAviao) {
       instrutores.forEach(c => opcoes.push({ tipo: 'instrutor', texto: comCombustivel(`Trocar o instrutor: ${c.x.nm}`, c), mudancas: { insId: c.x.id } }));
     }
-    if (problemaNoAviao && problemaNoInstrutor && avioes.length && instrutores.length) {
-      const [r] = avioes, [c] = instrutores;
+    // Os dois: o primeiro avião que tem um instrutor que serve (com a habilitação própria dele, quando o avião exige)
+    const par = problemaNoAviao && problemaNoInstrutor ? avioes.map(r => [r, instrutoresPara(a, b, r)[0]]).find(([, c]) => c) : null;
+    if (par) {
+      const [r, c] = par;
       opcoes.push({ tipo: 'ambos', texto: comCombustivel(`Trocar o avião e o instrutor: ${nomeDoRecurso(r)}, com ${c.x.nm}`, c), mudancas: { r, insId: c.x.id } });
     }
   }
@@ -68,18 +74,20 @@ export function sugerirReparos(estado, resultado, fKey, { maximo = 3, depoisDe =
     const inicios = voo.isGround ? T.slice(0, NI) : horariosDaMissao(estado.horarios || HORARIOS_INICIAIS, voo.mis, tipo);
     const fimDoDia = fimDaMissao(voo.mis, tipo);
     const voosDoAluno = v => ocupacao.alunos.get(v.stuId) || [];
+    // (a volta do noturno de ontem não depende do Ground de hoje)
     const voosQueDependem = voo.isGround
-      ? grupo.flatMap(voosDoAluno).filter(o => !o.isGround && doesGroundGateFlight(voo.mis, { mis: o.mis, eq: o.eqType }))
+      ? grupo.flatMap(voosDoAluno).filter(o => !o.isGround && !o.trecho && doesGroundGateFlight(voo.mis, { mis: o.mis, eq: o.eqType }))
       : [];
     const limite = Math.min(fimDoDia, ...voosQueDependem.map(o => o.a));
     const alunosPodem = (a, b) => grupo.every(v => {
       const permitidas = disponibilidadeDoAluno((pedidoDo(v) || {}).jan);
-      return (!permitidas || permitidas(a)) && livre(voosDoAluno(v).map(o => [o.a, o.b]), a, b);
+      return (!permitidas || permitidas(a)) && !problemaDoAluno(ocupacao, v.stuId, { a, b });
     });
     for (const m of inicios) {
       if (m <= Math.max(voo.a, depoisDe ?? -1) || m + duracao > limite || !estado.win[periodoDoMinuto(m)] || !alunosPodem(m, m + duracao)) continue;
-      const r = !voo.isGround && !problemaDoRecurso(estado, ocupacao, voo.r, { a: m, b: m + duracao }) ? voo.r : avioesPara(m, m + duracao)[0];
-      const instrutores = instrutoresPara(m, m + duracao);
+      // O avião de antes, quando ele ainda serve ao voo e está livre; senão, um em que o instrutor de antes voa, ou outro
+      const r = !voo.isGround && avioesPara(m, m + duracao).includes(voo.r) ? voo.r : avioesPara(m, m + duracao, atual)[0] || avioesPara(m, m + duracao)[0];
+      const instrutores = r ? instrutoresPara(m, m + duracao, r) : [];
       const c = instrutores.find(i => i.x === atual) || instrutores[0];
       if (!r || !c) continue;
       opcoes.push({

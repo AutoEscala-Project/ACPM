@@ -7,6 +7,7 @@ import { $, showToast, focusLast, algumDialogoAberto } from '../dom.js';
 import { nomeLimpo, numeroBr } from '../format.js';
 import { habilitacoesDoNivel, normalizarHabilitacoes, nomeDaHabilitacao } from '../habilitacoes.js';
 import { LIMITES_DA_LEI, normalizarLimites, comHorasExternas } from '../limites.js';
+import { comRepousoDoNoturno } from '../noturno.js';
 import { blank } from '../rules.js';
 import { fixoPeloStatus } from '../fixos.js';
 import { S, DATA, insBy, stuBy } from '../state.js';
@@ -94,7 +95,7 @@ aoAcionar('unvc', (b, { id }) => {
   const ins = insBy(+b.dataset.b);
   s.voaCom = (s.voaCom || []).filter(v => v !== +b.dataset.b);
   if (!s.voaCom.length) delete s.voaCom;
-  gravarAlteracao('mod', `${s.nm}: não voa mais com ${ins ? ins.nm : ''} de preferência`);
+  gravarAlteracao('mod', `${s.nm}: deixa de priorizar ${ins ? ins.nm : ''}`);
   atualizarLinhaDoAluno(s, { voaComMudou: true });
   rDem();
 });
@@ -149,7 +150,7 @@ aoMudarCampo('i', (t, { f, id }) => {
     if (horas > 0) x.horasExternas[chave] = horas;
     else delete x.horasExternas[chave];
     if (!Object.keys(x.horasExternas).length) delete x.horasExternas;
-    S.horasDosInstrutores = comHorasExternas(S.horasBase || {}, S.ins, DATA);
+    S.horasDosInstrutores = comRepousoDoNoturno(comHorasExternas(S.horasBase || {}, S.ins, DATA), S.noturnosDaVespera);
     gravarAlteracao('mod', `Horas de voo fora do app de ${x.nm} (${f === 'ext-mes' ? 'neste mês' : 'no ano, antes deste mês'}): ${numeroBr(horas)} h`);
     rPainelDoInstrutor();
     return;
@@ -181,7 +182,7 @@ aoMudarCampo('s', (t, { f, id }) => {
     historico = ['mod', `Peso ${s.nm}: ${s.kg} kg`];
   } else if (f === 'bl' && t.value) {
     s.bl.push(+t.value);
-    // Quem não voa com o aluno sai do “Voa com” dele
+    // Quem não voa com o aluno sai do “Priorizar com” dele
     if (s.voaCom) s.voaCom = s.voaCom.filter(v => v !== +t.value);
     if (s.voaCom && !s.voaCom.length) delete s.voaCom;
     const ins = insBy(+t.value);
@@ -189,7 +190,7 @@ aoMudarCampo('s', (t, { f, id }) => {
   } else if (f === 'voaCom' && t.value) {
     s.voaCom = [...(s.voaCom || []), +t.value];
     const ins = insBy(+t.value);
-    historico = ['mod', `${s.nm}: voa com ${ins ? ins.nm : ''} de preferência`];
+    historico = ['mod', `${s.nm}: priorizar com ${ins ? ins.nm : ''}`];
   } else if (f === 'curso') {
     // O curso do aluno
     const curso = normalizarCursoDoAluno(t.value);
@@ -199,7 +200,7 @@ aoMudarCampo('s', (t, { f, id }) => {
   }
   gravarAlteracao(...historico);
   atualizarLinhaDoAluno(s, { naoEscalar: f === 'bl', voaComMudou: f === 'voaCom' });
-  // A Demanda mostra o nome do aluno e o “Voa com” dele (no Automático do instrutor)
+  // A Demanda mostra o nome do aluno e o “Priorizar com” dele (no Automático do instrutor)
   if (['nm', 'voaCom', 'bl'].includes(f)) rDem();
 });
 

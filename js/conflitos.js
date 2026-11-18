@@ -14,6 +14,7 @@ export const GRUPO_DO_CONFLITO = {
   'aviao-indisponivel': 'aviao',
   'aviao-ocupado': 'aviao',
   'so-parafuso': 'aviao',
+  'so-vfr': 'aviao',
   revisao: 'aviao',
   'sala-ocupada': 'aviao',
   'aluno-ocupado': 'horario',
@@ -31,11 +32,13 @@ const LIMITE_DO_MOTIVO = {
 };
 
 // O texto de cada problema do instrutor (os códigos de problemasDoInstrutor, js/viabilidade.js), como aparece no
-// conflito de um voo fixo
+// conflito de um voo fixo. Na habilitação, o motivo diz qual faltou: a do curso do aluno ou a própria do avião
 export const TEXTO_DO_PROBLEMA = {
   'instrutor-saiu': () => 'o instrutor saiu do cadastro',
   'instrutor-indisponivel': () => 'o instrutor não está disponível',
-  habilitacao: () => 'o instrutor não tem a habilitação da missão',
+  habilitacao: p => (!p.motivo ? 'o instrutor não tem a habilitação da missão'
+    : p.motivo === 'curso' ? 'o instrutor não tem a habilitação que o curso do aluno exige nesta missão (o noturno do PC é IFR)'
+      : `o instrutor não tem a habilitação própria do ${p.motivo.slice('aviao:'.length)}`),
   'instrutor-ocupado': () => 'o instrutor já tem outro compromisso neste horário',
   bloqueio: () => 'o aluno não voa com este instrutor',
   'limite-da-lei': p => `o instrutor passaria do limite da lei (${LIMITE_DO_MOTIVO[p.motivo] || p.motivo})`,
@@ -55,13 +58,14 @@ export function gruposDoConflito(voo) {
 
 // Os códigos dos avisos, para o resumo da Escala agrupar sem ler o texto: o peso que falta (stuId e insId dizem de
 // quem), o instrutor perto do limite da lei (insId), o avião que para para a revisão, o atraso que invade outro voo e
-// o voo que ficou sem o instrutor do “Voa com” do aluno e o do pedido cujo instrutor escolhido saiu do cadastro (stuId;
+// o voo que ficou sem o instrutor do “Priorizar com” do aluno e o do pedido cujo instrutor escolhido saiu do cadastro (stuId;
 // insId: quem ficou com o voo)
-export const CODIGOS_DE_AVISO = ['sem-peso', 'perto-do-limite', 'revisao', 'atraso', 'voa-com', 'escolhido-saiu'];
+export const CODIGOS_DE_AVISO = ['sem-peso', 'perto-do-limite', 'revisao', 'atraso', 'voa-com', 'escolhido-saiu', 'repouso-do-noturno'];
 
 // Os códigos das rejeições: por que o pedido ficou fora da escala, para dizer onde resolver
 export const CODIGOS_DE_REJEICAO = [
   'equipamento-da-missao', 'ground-pendente', 'ground-antes-do-voo-fixo', 'so-parafuso', 'sem-aviao', 'sem-instrutor-habilitado',
   'disponibilidade-do-aluno', 'depois-do-ground', 'sem-horario', 'aluno-ocupado', 'avioes-ocupados', 'sala-ocupada', 'revisao',
-  'instrutores-indisponiveis', 'instrutores-ocupados', 'bloqueio', 'limite-da-lei', 'peso', 'limite-de-locais', 'instrutor-escolhido'
+  'instrutores-indisponiveis', 'instrutores-ocupados', 'bloqueio', 'limite-da-lei', 'peso', 'limite-de-locais', 'instrutor-escolhido',
+  'habilitacao-do-aviao'
 ];

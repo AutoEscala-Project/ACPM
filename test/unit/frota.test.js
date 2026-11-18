@@ -16,10 +16,12 @@ beforeEach(() => {
 });
 
 describe('Frota: o que ela guarda', () => {
-  it('começa com os 26 recursos; o PR-JPL só voa Parafuso', () => {
+  it('começa com os 26 recursos; o PR-JPL só voa Parafuso, o PR-CPL só VFR e o PR-VOM exige a habilitação própria', () => {
     assert.equal(FROTA_INICIAL.length, 26);
     assert.deepEqual(FROTA_INICIAL.find(f => f.reg === 'PR-JPL'), { reg: 'PR-JPL', tipo: 'C152', soParafuso: true });
-    assert.deepEqual(FROTA_INICIAL.find(f => f.reg === 'PR-VOM'), { reg: 'PR-VOM', tipo: 'PA-34' });
+    assert.deepEqual(FROTA_INICIAL.find(f => f.reg === 'PR-CPL'), { reg: 'PR-CPL', tipo: 'C172', soVfr: true });
+    assert.deepEqual(FROTA_INICIAL.find(f => f.reg === 'PR-VOM'), { reg: 'PR-VOM', tipo: 'PA-34', habilitacaoPropria: true });
+    assert.deepEqual(FROTA_INICIAL.find(f => f.reg === 'PT-JOB'), { reg: 'PT-JOB', tipo: 'PA-34' });
     assert.deepEqual(TIPOS_DA_FROTA, ['C152', 'C172', 'PA-34', 'Sim. Mono', 'Sim. Multi']);
   });
 

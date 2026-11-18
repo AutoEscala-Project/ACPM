@@ -90,20 +90,20 @@ test.describe('Instrutor escolhido', () => {
     await expect(voo.locator('[data-act="trocar-instrutor"]')).toBeFocused();
   });
 
-  test('Voa com (Alunos): o aluno voa com o instrutor dele; quando ele não vem, com outro, e a escala avisa', async ({ page }) => {
+  test('Priorizar com (Alunos): o aluno voa com o instrutor dele; quando ele não vem, com outro, e a escala avisa', async ({ page }) => {
     await abrir(page, { estado: dia() });
     await irPara(page, 'alu');
     const aluno = page.locator('#alu tr.cd[data-id="1000"]');
     await aluno.locator('[data-f="voaCom"]').selectOption({ label: 'Instrutor 01' });
     await expect(aluno.locator('.tg.par')).toHaveText(/Instrutor 01/);
     await expect(page.locator('#alu tr.cd[data-id="1000"] [data-f="voaCom"]')).toBeFocused();
-    // Quem está no “Voa com” não aparece em “Não escalar com”, e o contrário
+    // Quem está no “Priorizar com” não aparece em “Não escalar com”, e o contrário
     await expect(aluno.locator('[data-f="bl"] option', { hasText: 'Instrutor 01' })).toHaveCount(1);
     await aluno.locator('[data-f="bl"]').selectOption({ label: 'Instrutor 03' });
     await expect(aluno.locator('[data-f="voaCom"] option', { hasText: 'Instrutor 03' })).toHaveCount(0);
 
     await irPara(page, 'dem');
-    await expect(pedido(page, 1000).locator('[data-f="insId"] option').first()).toHaveText('Automático (voa com Instrutor 01)');
+    await expect(pedido(page, 1000).locator('[data-f="insId"] option').first()).toHaveText('Automático (prioriza Instrutor 01)');
 
     await abrirEscala(page);
     await expect(linha(page, 'Aluno 1000').locator('.c-instr')).toHaveText('Instrutor 01');
@@ -115,10 +115,10 @@ test.describe('Instrutor escolhido', () => {
     await abrirEscala(page);
     await expect(linha(page, 'Aluno 1000')).toHaveCount(1);
     await expect(linha(page, 'Aluno 1000').locator('.c-instr')).toHaveText('Instrutor 02');
-    await expect(page.locator('#out details.avisos summary')).toContainText('1 voo sem o instrutor de Voa com');
-    await expect(page.locator('#out details.avisos')).toContainText('Sem o instrutor de “Voa com” (Instrutor 01: fora nesta data)');
+    await expect(page.locator('#out details.avisos summary')).toContainText('1 voo sem o instrutor de Priorizar com');
+    await expect(page.locator('#out details.avisos')).toContainText('Sem o instrutor de “Priorizar com” (Instrutor 01: fora nesta data)');
 
-    // Tirar do “Voa com”: o aviso some
+    // Tirar do “Priorizar com”: o aviso some
     await irPara(page, 'alu');
     await page.locator('#alu tr.cd[data-id="1000"] [data-act="unvc"]').click();
     await expect(page.locator('#alu tr.cd[data-id="1000"] .tg.par')).toHaveCount(0);
@@ -126,7 +126,7 @@ test.describe('Instrutor escolhido', () => {
     await expect(page.locator('#out details.avisos')).toHaveCount(0);
   });
 
-  test('o “Voa com” fica no cadastro: vale também na data seguinte', async ({ page }) => {
+  test('o “Priorizar com” fica no cadastro: vale também na data seguinte', async ({ page }) => {
     await abrir(page, { estado: dia() });
     await irPara(page, 'alu');
     await page.locator('#alu tr.cd[data-id="1001"] [data-f="voaCom"]').selectOption({ label: 'Instrutor 02' });

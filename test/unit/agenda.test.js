@@ -62,7 +62,7 @@ describe('Agenda de solicitações', () => {
     assert.deepEqual(pedidoDaSolicitacao({ missao: 'IFR', janela: 'horario', horario: '14:30' }),
       { fly: true, mis: 'IFR', eq: 'C172', p1: 870, p2: 870, nb: 1, ss: 1, pr: 3, jan: 'h870' });
     assert.deepEqual(pedidoDaSolicitacao({ missao: 'Noturno', janela: 'noite' }),
-      { fly: true, mis: 'Noturno', eq: 'C172', p1: 1050, p2: -1, nb: 1, ss: 1, pr: 3, jan: 'noite' });
+      { fly: true, mis: 'Noturno', eq: 'C172', p1: 1050, p2: -1, nb: 4, ss: 1, pr: 3, jan: 'noite' });
     const ground = pedidoDaSolicitacao({ missao: 'Ground C152', janela: 'manha' });
     assert.deepEqual([ground.eq, ground.nb, ground.p1, ground.p2, ground.jan], ['Sala Ground', 1.5, 390, 500, 'manha']);
     // O PA-34 tem horários de 30 em 30 minutos
@@ -146,16 +146,19 @@ describe('Importar as solicitações da agenda para a demanda', () => {
   });
 
   // No programa em fases, várias missões podem estar liberadas: o pedido entra como a primeira do tipo pedido; nenhuma
-  // liberada do tipo (fora da ordem), ele entra como veio
+  // liberada do tipo (fora da ordem, ou fora do programa), ele entra como veio, com a duração da missão: o Noturno, o
+  // bloco de 4 h às 17:30 (o translado e o noturno em BH); o simulador, as 2 h de padrão
   it('aluno de um curso em fases: a primeira missão liberada do tipo pedido; fora da ordem, nenhuma', () => {
     // As fases 1 a 4 aprovadas (as 13 primeiras missões do curso)
     const PP = cursoPP();
     const situacao = percursoDoCurso(PP).missoes.slice(0, 13).map((m, i) => ({ id: i + 1, aluno: 1000, curso: 'PP', missao: m.codigo, resultado: 'aprovado' }));
     const e = { ...estado(), stu: [aluno(1000, { fly: false }, { curso: 'PP' })] };
-    importarSolicitacoes(e, [pedido(30, 1000, { missao: 'Parafuso' }), pedido(31, 1000, { missao: 'Navegação' }), pedido(32, 1000, { missao: 'Noturno' })],
-      { situacao, programa: [PP] });
+    importarSolicitacoes(e, [pedido(30, 1000, { missao: 'Parafuso' }), pedido(31, 1000, { missao: 'Navegação' }), pedido(32, 1000, { missao: 'Noturno' }),
+      pedido(33, 1000, { missao: 'Simulador' })], { situacao, programa: [PP] });
     assert.deepEqual([e.stu[0], ...e.stu[0].extra].map(p => [p.mis, p.etapa, p.eq, p.nb]),
-      [['Parafuso', 'PE-04', 'C152', 1], ['Navegação', 'NAV-01', 'C152', 1.5], ['Noturno', undefined, 'C172', 1]]);
+      [['Parafuso', 'PE-04', 'C152', 1], ['Navegação', 'NAV-01', 'C152', 1.5], ['Noturno', undefined, 'C172', 4], ['Simulador', undefined, 'Sim. Mono', 2]]);
+    const noturno = e.stu[0].extra.find(p => p.mis === 'Noturno');
+    assert.deepEqual([noturno.p1, noturno.p2], [1050, -1], 'o Noturno sai às 17:30');
   });
 
   it('sem programa (os resultados ou os programas não foram lidos), nenhum pedido entra como missão do curso', () => {

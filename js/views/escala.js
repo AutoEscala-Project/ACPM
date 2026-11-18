@@ -1,5 +1,5 @@
 // Aba Escala: resumo do dia, a lista dos voos (ou o mapa por recurso ou por instrutor) e o histórico da data.
-import { FLIGHT_STATUSES, GROUND_REG } from '../config.js';
+import { FLIGHT_STATUSES, GROUND_REG, NOTURNO } from '../config.js';
 import { CODIGOS_DE_AVISO } from '../conflitos.js';
 import { textoDoCombustivel } from '../combustivel.js';
 import { hm, WLB, fmtH, esc, rotuloDaData, hojeISO, duracaoHm, DURACAO_DO_GROUND } from '../format.js';
@@ -58,7 +58,7 @@ function conteudoDoPopup(o) {
         ${detalheDoStatus(principal)}
       </span>
     </div>
-    ${!turma && o.stuId ? `<button type="button" class="tl-pop-btn edit-only" data-act="rm-fly" data-id="${esc(o.stuId)}" data-mid="${esc(o.mid || 0)}">✕ Excluir da escala</button>` : ''}`;
+    ${!turma && o.stuId && !principal.trecho ? `<button type="button" class="tl-pop-btn edit-only" data-act="rm-fly" data-id="${esc(o.stuId)}" data-mid="${esc(o.mid || 0)}">✕ Excluir da escala</button>` : ''}`;
 }
 
 const barraDoPopup = () => (popupDe === null ? null : document.querySelector(`#out .tl-bar[data-pop="${CSS.escape(popupDe)}"]`));
@@ -254,6 +254,12 @@ const ehGround = o => o.isGround || isGroundMission(o.mis);
 const duracao = o => (ehGround(o) ? '1h30' : fmtH(o.h)) + (o.ss && o.ss !== '1/1' ? ` · sessão ${o.ss}` : '');
 const statusDe = o => statusDoVoo(o, S.fStatus);
 
+// O noturno de dois dias: no dia, o translado e o noturno em BH, com a volta amanhã; no dia seguinte, a volta de BH, com
+// a hora em que o instrutor, o aluno e o avião ficam livres
+const trechoDoNoturno = o => (o.mis !== 'Noturno' ? ''
+  : o.trecho === 'volta' ? ` <small data-dica="noturno">volta de BH · livres às ${hm(o.livreAs)}</small>`
+    : ` <small data-dica="noturno">translado + 3 h em BH · volta amanhã às ${hm(NOTURNO.voltaInicio)}</small>`);
+
 // A preferência só aparece quando o voo não ficou na 1ª
 function preferencia(o) {
   if (o.baseTag === 'Pref. 2') return ' <span class="tag" data-dica="segunda-preferencia">2ª preferência</span>';
@@ -286,8 +292,9 @@ function seletorDeStatus(o) {
 export function botaoDoInstrutor(o, rotulo) {
   const nome = esc(o.ins);
   const escolhido = o.insEscolhido ? ' <span class="sm escolhido-marca">escolhido</span>' : '';
-  if (isGestor() || !o.stuId) return nome + escolhido;
-  return `<button type="button" class="ins-btn${o.insEscolhido ? ' escolhido' : ''}" data-act="trocar-instrutor" data-fkey="${esc(o.fKey)}" data-rotulo="${esc(rotulo)}" title="Trocar o instrutor" aria-label="${esc(rotulo)}: ${nome}${o.insEscolhido ? ', escolhido pelo operador' : o.insPar ? ', do Voa com do aluno' : ''}. Trocar">${nome}</button>`;
+  // A volta do noturno é a continuação do voo de ontem: o instrutor não muda nela
+  if (isGestor() || !o.stuId || o.trecho) return nome + escolhido;
+  return `<button type="button" class="ins-btn${o.insEscolhido ? ' escolhido' : ''}" data-act="trocar-instrutor" data-fkey="${esc(o.fKey)}" data-rotulo="${esc(rotulo)}" title="Trocar o instrutor" aria-label="${esc(rotulo)}: ${nome}${o.insEscolhido ? ', escolhido pelo operador' : o.insPar ? ', do Priorizar com do aluno' : ''}. Trocar">${nome}</button>`;
 }
 
 // A lista do instrutor do voo: sem escolha, a primeira opção é quem o app pôs; os instrutores que não servem no horário
@@ -295,7 +302,7 @@ export function botaoDoInstrutor(o, rotulo) {
 export function seletorDeInstrutor(o, rotulo) {
   const lista = instrutoresDoVoo(S, RES, o.fKey).filter(x => o.insEscolhido || x.id !== o.insId)
     .map(x => `<option value="${x.id}"${o.insEscolhido && x.id === o.insId ? ' selected' : ''}>${esc(x.nota ? `${x.nm} (${x.nota})` : x.nm)}</option>`);
-  const automatico = o.insEscolhido ? 'Automático (o app escolhe)' : `${o.ins} (${o.insPar ? 'Voa com do aluno' : 'escolhido pelo app'})`;
+  const automatico = o.insEscolhido ? 'Automático (o app escolhe)' : `${o.ins} (${o.insPar ? 'Priorizar com do aluno' : 'escolhido pelo app'})`;
   return `<select class="ins-sel" data-a="insVoo" data-fkey="${esc(o.fKey)}" data-rotulo="${esc(rotulo)}" aria-label="${esc(rotulo)}"><option value=""${o.insEscolhido ? '' : ' selected'}>${esc(automatico)}</option>${lista.join('')}</select>`;
 }
 
@@ -309,7 +316,7 @@ function detalheDoStatus(o) {
     : `<button type="button" class="st-detalhe" data-act="detalhe-status" data-fkey="${esc(o.fKey)}" title="Alterar o detalhe do status">${esc(texto)}</button>`;
 }
 
-const acao = o => (o.stuId
+const acao = o => (o.stuId && !o.trecho
   ? `<button class="x" data-act="rm-fly" data-id="${esc(o.stuId)}" data-mid="${esc(o.mid || 0)}" aria-label="Tirar ${esc(o.s)} da escala" title="Tirar da escala">✕</button>`
   : '');
 
@@ -373,6 +380,7 @@ function resumoDosAvisos(avisos) {
   const limites = quantos(doCodigo('perto-do-limite'), 'insId');
   const semPar = doCodigo('voa-com').length;
   const saiu = doCodigo('escolhido-saiu').length;
+  const repouso = quantos(doCodigo('repouso-do-noturno'), 'insId');
   const outros = avisos.filter(a => !CODIGOS_DE_AVISO.includes(a.codigo)).length;
   const partes = [
     semPeso && `${semPeso} ${semPeso === 1 ? 'aluno sem peso' : 'alunos sem peso'}`,
@@ -380,8 +388,9 @@ function resumoDosAvisos(avisos) {
     revisao && `${revisao} ${revisao === 1 ? 'avião para' : 'aviões param'} para a revisão de 50 horas`,
     atrasos && `${atrasos} ${atrasos === 1 ? 'atraso com conflito' : 'atrasos com conflito'}`,
     limites && `${limites} ${limites === 1 ? 'instrutor perto' : 'instrutores perto'} do limite da lei`,
-    semPar && `${semPar} ${semPar === 1 ? 'voo sem' : 'voos sem'} o instrutor de Voa com`,
+    semPar && `${semPar} ${semPar === 1 ? 'voo sem' : 'voos sem'} o instrutor de Priorizar com`,
     saiu && `${saiu} ${saiu === 1 ? 'voo com o instrutor escolhido' : 'voos com o instrutor escolhido'} fora do cadastro`,
+    repouso && `${repouso} ${repouso === 1 ? 'instrutor' : 'instrutores'} sem o repouso da lei antes da volta do noturno`,
     outros && `${outros} ${outros === 1 ? 'outro' : 'outros'}`
   ].filter(Boolean);
   return `${avisos.length} ${avisos.length === 1 ? 'aviso' : 'avisos'}: ${partes.join(' · ')}`;
@@ -459,7 +468,7 @@ function tabela(voos) {
     h += `<tr${cancelado(o)}${doTempo}>
       <td class="c-hr hr"${rs}>${hm(o.a)}–${hm(o.b)} <small>${duracao(o)}</small>${fixo}${preferencia(o)}${o.conflito ? ' <span class="tag er" data-dica="conflito">conflito</span>' : ''}</td>
       <td class="c-aluno"><b>${esc(o.s)}</b></td>
-      <td class="c-missao"${rs}>${esc(o.mis)}${grupo.length > 1 ? ` <small data-dica="turma">Turma de ${grupo.length} alunos</small>` : ''}</td>
+      <td class="c-missao"${rs}>${esc(o.mis)}${grupo.length > 1 ? ` <small data-dica="turma">Turma de ${grupo.length} alunos</small>` : ''}${trechoDoNoturno(o)}</td>
       <td class="c-aviao nw"${rs}>${esc(nomeDoRecurso(o.r))}${ehGround(o) ? '' : ` <small>${esc(o.eqType || '')}</small>`}</td>
       <td class="c-instr nw"${rs}>${botaoDoInstrutor(o, `Instrutor de ${grupo.length > 1 ? `${o.mis} (turma)` : o.s}`)}</td>
       <td class="c-peso nw"${rs}>${peso(o)}</td>

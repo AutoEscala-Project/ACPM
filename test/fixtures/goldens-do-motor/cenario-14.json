@@ -11,7 +11,7 @@
   ],
   "al": [
     {"t":"err","s":"Aluno 05 (Voo Local)","m":"Rejeitado: nenhum horário aberto depois do Ground (16:00) comporta 4 h até as 17:30.","codigo":"depois-do-ground"},
-    {"t":"err","s":"Aluno 04","m":"Rejeitado: nenhum horário aberto comporta 3 h a partir das 17:30.","codigo":"sem-horario"}
+    {"t":"err","s":"Aluno 04","m":"Rejeitado: nenhum horário aberto comporta 4 h a partir das 17:30.","codigo":"sem-horario"}
   ],
   "tot": 8,
   "revisao": {}

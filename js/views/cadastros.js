@@ -3,6 +3,7 @@
 // pessoais (CPF, CANAC, nascimento, celular e e-mail) abrem noutro painel, só para quem pode vê-los (.so-dados).
 import { WIN, PRE, T, AIRCRAFT_EQ_TYPES, MINUTOS_DO_DIA } from '../config.js';
 import { HABILITACOES, nomeDaHabilitacao } from '../habilitacoes.js';
+import { FROTA_INICIAL, habilitacaoDoAviao } from '../frota.js';
 import { esc, hm, opts, LIMITE_DO_NOME, numeroBr } from '../format.js';
 import { S, DATA, insBy, isGestor, voosQueVoam } from '../state.js';
 import { $ } from '../dom.js';
@@ -19,7 +20,8 @@ const ROTULO = new Map(HABILITACOES.map(h => [h.id, h.curto]));
 // No cadastro, todas na ordem do painel; na grade do dia, só as que mais distinguem o instrutor
 const ORDEM_DA_GRADE = ['mlte', 'c172', 'ifr', 'noturno', 'parafuso', 'solo', 'navegacao', 'local', 'tgl', 'sim_multi', 'sim_mono',
   'ground_pa34', 'grounds'];
-const resumoDasHabilitacoes = x => x.hab.map(h => ROTULO.get(h)).join(' · ');
+const rotuloDa = h => ROTULO.get(h) || nomeDaHabilitacao(h);
+const resumoDasHabilitacoes = x => x.hab.map(rotuloDa).join(' · ');
 // Na grade do dia, as marcas de checador (o curso, o motor e as regras) contam como uma, na frente
 function resumoNaGrade(x) {
   const checador = x.hab.some(h => h.startsWith('checa_')) ? ['Checador'] : [];
@@ -164,6 +166,12 @@ export function rIns() {
   rPainelDoInstrutor();
 }
 
+// Os recursos com habilitação própria (Recursos › Frota › Atributos): uma habilitação para cada, como o PR-VOM
+function gruposDosRecursos() {
+  const ids = (Array.isArray(S.frota) ? S.frota : FROTA_INICIAL).filter(f => f.habilitacaoPropria).map(f => habilitacaoDoAviao(f.reg));
+  return ids.length ? [['Habilitação própria do recurso', ids, 'habilitacao-propria']] : [];
+}
+
 // Painel lateral com as habilitações de um instrutor, em grupos
 export function rPainelDoInstrutor() {
   const painel = $('#painel-instrutor');
@@ -176,7 +184,7 @@ export function rPainelDoInstrutor() {
     </div>
     <p class="h">Marque o que o instrutor pode fazer. Nos aviões (C152, C172 e PA-34), a missão exige também a habilitação do avião; o voo de cheque exige uma marca de cada grupo do checador.</p>
     <div class="habs-painel" data-k="i" data-id="${x.id}">
-      ${GRUPOS_DE_HABILITACAO.map(([titulo, ids, dica]) => `<fieldset><legend>${titulo}${dica ? botaoDeDica(dica, 'checador') : ''}</legend>${ids.map(h =>
+      ${[...GRUPOS_DE_HABILITACAO, ...gruposDosRecursos()].map(([titulo, ids, dica]) => `<fieldset><legend>${titulo}${dica ? botaoDeDica(dica, dica === 'checador' ? 'checador' : 'habilitação própria') : ''}</legend>${ids.map(h =>
         `<label class="hab"><input type="checkbox" class="sw" data-f="hab" data-h="${h}"${x.hab.includes(h) ? ' checked' : ''}>${esc(nomeDaHabilitacao(h))}</label>`).join('')}</fieldset>`).join('')}
       ${horasDoInstrutor(x)}
     </div>`;
@@ -237,12 +245,12 @@ function naoEscalarCom(s) {
     `<select data-f="bl" class="edit-only" aria-label="Não escalar com"><option value="">Não escalar com…</option>${S.ins.filter(x => !s.bl.includes(x.id)).map(x => `<option value="${x.id}">${esc(x.nm)}</option>`).join('')}</select>`;
 }
 
-// “Voa com”: os instrutores do aluno (o par permanente). A escala põe o aluno com um deles sempre que algum pode voar o
+// “Priorizar com”: os instrutores do aluno (o par permanente). A escala põe o aluno com um deles sempre que algum pode voar o
 // pedido; sem nenhum, com outro instrutor, e avisa. Quem está em “Não escalar com” não entra na lista
 function voaCom(s) {
   const pares = s.voaCom || [];
-  return pares.map(b => insBy(b) ? `<span class="tg par">${esc(insBy(b).nm)}<button class="edit-only" data-act="unvc" data-b="${b}" aria-label="Tirar ${esc(insBy(b).nm)} de Voa com">✕</button></span>` : '').join('') +
-    `<select data-f="voaCom" class="edit-only" aria-label="Voa com"><option value="">Voa com…</option>${S.ins.filter(x => !pares.includes(x.id) && !s.bl.includes(x.id)).map(x => `<option value="${x.id}">${esc(x.nm)}</option>`).join('')}</select>`;
+  return pares.map(b => insBy(b) ? `<span class="tg par">${esc(insBy(b).nm)}<button class="edit-only" data-act="unvc" data-b="${b}" aria-label="Tirar ${esc(insBy(b).nm)} de Priorizar com">✕</button></span>` : '').join('') +
+    `<select data-f="voaCom" class="edit-only" aria-label="Priorizar com"><option value="">Priorizar com…</option>${S.ins.filter(x => !pares.includes(x.id) && !s.bl.includes(x.id)).map(x => `<option value="${x.id}">${esc(x.nm)}</option>`).join('')}</select>`;
 }
 
 const linhaDoAluno = s => `<tr class="cd" data-k="s" data-id="${s.id}" data-nm="${esc(s.nm.toLowerCase())}">
@@ -260,7 +268,7 @@ export const rAlu = () => {
     : '<tr><td colspan="7" class="h">Nenhum aluno cadastrado. Clique em “+ Novo aluno” acima para cadastrar.</td></tr>';
 };
 
-// Atualiza a linha do aluno no lugar. "Voa com" e "Não escalar com" são refeitos só quando mudam (um tira o instrutor
+// Atualiza a linha do aluno no lugar. "Priorizar com" e "Não escalar com" são refeitos só quando mudam (um tira o instrutor
 // da lista do outro), e o foco volta para o seletor que mudou
 export function atualizarLinhaDoAluno(s, { naoEscalar = false, voaComMudou = false } = {}) {
   const linha = document.querySelector(`#alu tr.cd[data-id="${s.id}"]`);
