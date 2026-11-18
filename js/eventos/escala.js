@@ -29,7 +29,9 @@ document.addEventListener('click', e => {
     else abrirPopupDoMapa(barra, { focar: true });
     return;
   }
-  if (popupDoMapaAberto() && !e.target.closest('#tl-pop, #dlg-status')) fecharPopupDoMapa();
+  // O caminho do evento é o do começo do clique: o nome do instrutor, trocado pela lista no mesmo clique (fora do documento
+  // depois disso), ainda conta como dentro do popup
+  if (popupDoMapaAberto() && !e.composedPath().some(n => n instanceof Element && n.matches('#tl-pop, #dlg-status'))) fecharPopupDoMapa();
 });
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape' && popupDoMapaAberto() && !dialogoDeStatusAberto()) fecharPopupDoMapa({ devolverFoco: true });
@@ -150,6 +152,9 @@ aoMudarCampo('insVoo', t => {
   const quem = alunos > 1 ? `turma de ${voo.mis}` : voo.s;
   gravarAlteracao('mod', `Instrutor de ${quem} (${hm(voo.a)}–${hm(voo.b)}): ${x ? x.nm : 'automático'}`, { kind: 'restaurarEscolha', ...antes, label: '↶ Reverter' });
   rDem();
+  // A escala foi redesenhada: o foco volta para o nome do instrutor do voo (no popup do mapa, quando ele está aberto)
+  const nome = `[data-act="trocar-instrutor"][data-fkey="${CSS.escape(voo.fKey)}"]`;
+  ((popupDoMapaAberto() && document.querySelector(`#tl-pop ${nome}`)) || document.querySelector(`#out ${nome}`))?.focus();
   showToast(x ? `${x.nm} fica com o voo; o resto da escala foi refeito em volta.` : 'O app volta a escolher o instrutor deste voo.', 'ok');
 });
 

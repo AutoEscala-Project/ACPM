@@ -191,5 +191,32 @@ test.describe('Instrutor escolhido', () => {
     await expect(page.locator('#out details.avisos')).toHaveCount(0);
     await expect(linha(page, 'Aluno 1000')).toHaveCount(1);
   });
+
+  // O nome do instrutor no popup do mapa abre a lista sem fechar o popup; escolher deixa o foco no nome (no popup e na lista)
+  test('no mapa, o nome do instrutor no popup abre a lista, e a escolha deixa o foco no nome', async ({ page }) => {
+    await abrir(page, { estado: dia() });
+    await abrirEscala(page);
+    await page.locator('[data-tl="ins"]').click();
+    const barra = page.locator('#out .tl-bar', { hasText: 'Aluno 1001' });
+    await barra.click();
+    const popup = page.locator('#tl-pop');
+    await expect(popup).toBeVisible();
+    await popup.locator('[data-act="trocar-instrutor"]').click();
+    await expect(popup).toBeVisible();
+    const lista = popup.locator('select[data-a="insVoo"]');
+    await expect(lista).toBeFocused();
+    await lista.selectOption({ label: 'Instrutor 02 (ocupado com Aluno 1000)' });
+    await expect(popup).toBeVisible();
+    await expect(popup.locator('[data-act="trocar-instrutor"]')).toHaveText('Instrutor 02');
+    await expect(popup.locator('[data-act="trocar-instrutor"]')).toBeFocused();
+
+    // Na lista também: depois da escolha, o foco fica no nome do instrutor do voo
+    await page.keyboard.press('Escape');
+    await page.locator('[data-tl="lista"]').click();
+    const voo = linha(page, 'Aluno 1001');
+    await voo.locator('[data-act="trocar-instrutor"]').click();
+    await voo.locator('select[data-a="insVoo"]').selectOption({ label: 'Automático (o app escolhe)' });
+    await expect(linha(page, 'Aluno 1001').locator('[data-act="trocar-instrutor"]')).toBeFocused();
+  });
 });
 
