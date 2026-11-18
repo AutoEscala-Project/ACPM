@@ -5,7 +5,7 @@ import { opcoesDeCategoria } from '../categorias.js';
 import { OPCOES_DE_BURACOS, OPCOES_DE_HORARIOS, normalizarCriterios } from '../criterios.js';
 import { $, showToast, anunciar, algumDialogoAberto } from '../dom.js';
 import { exp, pdf, planilha } from '../export.js';
-import { pinoDoVoo, fixosAoMudarStatus, fixosAoReabrir } from '../fixos.js';
+import { fixosAoMudarStatus, fixosAoReabrir, fixosAoAprovar } from '../fixos.js';
 import { hm } from '../format.js';
 import { aplicarReparo } from '../reparo.js';
 import { S, RES, DATA, isGestor, modoCompartilhado, stuBy, insBy } from '../state.js';
@@ -110,7 +110,8 @@ function aplicarStatus(fKey, status, detalhe) {
   else delete S.fObs[fKey];
   const voo = vooDaChave(fKey);
   // Em Voo, Atrasado, Pousou e Cancelado fixam o voo: uma alteração na escala não o tira do lugar (o cancelado fica
-  // onde estava, sem ocupar nada). Fora da escala aprovada, Pendente ou Confirmado o soltam
+  // onde estava, sem ocupar nada). Fora da escala aprovada, Pendente ou Confirmado o soltam, menos o fixo pelo operador
+  // na Escala (o instrutor escolhido e o voo agendado)
   if (voo) S.fixos = fixosAoMudarStatus(S.fixos, voo, status, { aprovada: Boolean(S.aprovacao) });
   const textoDoStatus = status === 'Pousou' ? rotuloDoStatus(status, voo) : textoParaOHistorico(status, detalhe);
   gravarAlteracao('mod', `Status de ${voo ? `${voo.s} (${hm(voo.a)}–${hm(voo.b)})` : fKey}: ${textoDoStatus}`);
@@ -178,8 +179,9 @@ document.addEventListener('click', e => {
   if ((!aprovar && !reabrir) || isGestor() || !RES) return;
   if (aprovar) {
     if (!confirmado(aprovar, 'Confirmar aprovação')) return;
-    // O voo fixo pela escolha do instrutor na Escala continua com a marca: reabrir a escala não o solta
-    S.fixos = Object.fromEntries(RES.out.map(o => [o.fKey, { ...pinoDoVoo(o), ...((S.fixos || {})[o.fKey]?.escolhido ? { escolhido: true } : {}) }]));
+    // O voo fixo pelo operador na Escala (o instrutor escolhido e o voo agendado) continua com a marca: reabrir a escala
+    // não o solta. O agendado fora da escala (o pedido foi tirado dela) continua fixo, para o voo voltar ao lugar dele
+    S.fixos = fixosAoAprovar(S.fixos, RES.out);
     S.aprovacao = { em: new Date().toISOString(), por: ApiClient.autorAtual || '' };
     gravarAlteracao('mod', `Escala aprovada: ${RES.out.length} ${RES.out.length === 1 ? 'voo fixado' : 'voos fixados'}`);
     showToast('Escala aprovada: os voos ficam fixos.', 'ok');
@@ -187,7 +189,7 @@ document.addEventListener('click', e => {
     $('#btn-reabrir')?.focus();
   } else {
     if (!confirmado(reabrir, 'Confirmar reabertura')) return;
-    // Os voos em andamento (Em Voo, Atrasado, Pousou, Cancelado) continuam fixos
+    // Os voos em andamento (Em Voo, Atrasado, Pousou, Cancelado) e os fixados pelo operador na Escala continuam fixos
     S.fixos = fixosAoReabrir(S.fixos, S.fStatus);
     S.aprovacao = null;
     gravarAlteracao('mod', 'Escala reaberta: volta a ser refeita a cada alteração');

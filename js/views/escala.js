@@ -461,7 +461,8 @@ function tabela(voos) {
       const classes = [statusDe(voo) === 'Cancelado' ? 'st-Cancelado' : '', voo.conflito ? 'em-conflito' : ''].filter(Boolean);
       return classes.length ? ` class="${classes.join(' ')}"` : '';
     };
-    // O cadeado diz por que o voo está fixo: o status de andamento ou a escala aprovada
+    // O cadeado diz por que o voo está fixo: o status de andamento, o agendamento na Escala, a escala aprovada ou o
+    // instrutor escolhido na Escala (as marcas estão nos voos fixos do dia)
     const motivo = esc(motivoDoFixo(o.fKey, { fStatus: S.fStatus, aprovacao: S.aprovacao, voo: o, fixos: S.fixos }));
     const fixo = o.fixo ? ` <svg class="ico fixo" role="img" aria-label="${motivo}" data-dica="voo-fixo" data-dica-termo="${motivo}"><use href="#i-cadeado"/></svg>` : '';
     const doTempo = ` data-w="${o.w}"${recolhido ? ' hidden' : ''}`;

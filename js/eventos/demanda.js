@@ -3,10 +3,12 @@
 import { gravarAlteracao } from '../actions.js';
 import { T, GROUND_EQ_TYPE, GROUND_DURATION_H, MIS } from '../config.js';
 import { $, showToast, ligarMenu, trocarElemento } from '../dom.js';
+import { semAgendados } from '../fixos.js';
 import { fmtDurLabel } from '../format.js';
 import { horariosDaMissao, ajustarPreferencias } from '../horarios.js';
 import { isGroundMission, blank, rotuloDaDisponibilidade, normalizeMissionFields, proximoMid, duracaoDigitada, ERRO_DA_DURACAO, duracaoPadraoDaMissao } from '../rules.js';
 import { S, RES, isGestor, stuBy, insBy, getMissionTarget } from '../state.js';
+import { chaveDoVoo } from '../voo.js';
 import { escolherInstrutor } from '../instrutor-escolhido.js';
 import { confirmado, comConfirmacao } from './confirmacao.js';
 import { aoAcionar, aoMudarCampo } from './registro.js';
@@ -16,6 +18,16 @@ import { proximaDoPedido } from '../views/etapas.js';
 
 // "Limpar demanda" pede confirmação no próprio menu (dois cliques): o menu só fecha depois
 const fecharMenuMais = ligarMenu($('#btn-mais-dem'), $('#menu-mais-dem'), { fecharAoEscolher: false });
+
+// O voo agendado na Escala é do pedido como ele estava: com outra missão, outro recurso ou outras horas (à mão ou pela
+// próxima missão do curso), ele deixa de ser fixo, e a escala encaixa o pedido de novo. O que está em andamento, pousou
+// ou foi cancelado continua fixo pelo status, só sem a marca do agendamento. Devolve o que o histórico diz
+function soltarAgendado(stuId, mid) {
+  const fKey = chaveDoVoo(stuId, mid);
+  if (!(S.fixos && S.fixos[fKey] && S.fixos[fKey].agendado)) return '';
+  S.fixos = semAgendados(S.fixos, [fKey], S.fStatus);
+  return S.fixos[fKey] ? '' : ' (deixa de ser fixo)';
+}
 
 // "Pôr um aluno na demanda": quem ainda não voa passa a voar na data, com o pedido que já tinha
 function incluirAluno() {
@@ -53,6 +65,9 @@ document.addEventListener('change', e => {
 comConfirmacao('#clr', 'Confirmar limpeza', () => {
   if (isGestor()) return;
   S.stu.forEach(d => { Object.assign(d, blank()); delete d.insId; d.extra = []; });
+  // Os voos agendados na Escala saem com os pedidos (um agendamento não passa para o pedido que vier depois); o que tem um
+  // status que fixa continua fixo pelo status, como os outros
+  S.fixos = semAgendados(S.fixos, null, S.fStatus);
   gravarAlteracao('exc', 'Demanda limpa');
   rDem();
   fecharMenuMais();
@@ -66,7 +81,8 @@ aoAcionar('usar-proxima', (b, { id, mid }) => {
   Object.assign(target, { fly: true, mis: m.mis, eq: m.eq, nb: m.nb, etapa: m.id });
   ajustarPreferencias(target, horariosDaMissao(S.horarios, target.mis, target.eq));
   normalizeMissionFields(target);
-  gravarAlteracao('inc', `${s.nm}: ${m.id} na demanda (${m.mis} · ${m.eq} · ${fmtDurLabel(m.nb)})`);
+  const solto = soltarAgendado(s.id, mid);
+  gravarAlteracao('inc', `${s.nm}: ${m.id} na demanda (${m.mis} · ${m.eq} · ${fmtDurLabel(m.nb)})${solto}`);
   rDem();
 });
 
@@ -95,6 +111,8 @@ aoAcionar('del-mis', (b, { id, mid }) => {
   const s = stuBy(id);
   if (!s || !Array.isArray(s.extra) || !confirmado(b, 'Confirmar')) return;
   s.extra = s.extra.filter(ex => ex.mid !== mid);
+  // O voo agendado da missão sai com ela (com um status que fixa, fica fixo pelo status, como os outros)
+  S.fixos = semAgendados(S.fixos, [chaveDoVoo(s.id, mid)], S.fStatus);
   gravarAlteracao('exc', `Missão extra removida de ${s.nm}`);
   rDem();
 });
@@ -157,9 +175,13 @@ aoMudarCampo('d', (t, { f, c, id, mid }) => {
     const eraGround = isGroundMission(target.mis);
     // Saindo de uma missão com duração padrão ou fixa (o simulador, o Noturno), a missão nova começa com a dela
     const tinhaPadrao = Boolean((MIS[target.mis] || {}).duracaoPadrao || (MIS[target.mis] || {}).duracaoFixaH);
+    const anterior = target[f];
     target[f] = (f === 'mis' || f === 'eq') ? t.value : +t.value;
-    // Missão, recurso ou horas mudados à mão: o pedido deixa de ser a missão do curso
-    if (['mis', 'eq', 'nb'].includes(f)) delete target.etapa;
+    // Missão, recurso ou horas mudados à mão: o pedido deixa de ser a missão do curso, e o voo agendado dele na Escala
+    // deixa de ser fixo. A mesma duração digitada de outro jeito (1.0 no lugar de 1) não muda o voo
+    const mudouOVoo = ['mis', 'eq', 'nb'].includes(f) && target[f] !== anterior;
+    if (mudouOVoo) delete target.etapa;
+    const solto = mudouOVoo ? soltarAgendado(s.id, mid) : '';
     if (f === 'mis') {
       const mRule = MIS[target.mis] || MIS['Voo Local'];
       if (!mRule.eq.includes(target.eq)) {
@@ -175,7 +197,7 @@ aoMudarCampo('d', (t, { f, c, id, mid }) => {
     }
     // Os horários da missão e do avião novos (o Noturno sai às 17:30; o PA-34 tem os seus)
     if (f === 'mis' || f === 'eq') ajustarPreferencias(target, horariosDaMissao(S.horarios, target.mis, target.eq));
-    historico = ['mod', `Pedido ${s.nm}: ${target.mis} · ${target.eq} · ${fmtDurLabel(target.nb)}`];
+    historico = ['mod', `Pedido ${s.nm}: ${target.mis} · ${target.eq} · ${fmtDurLabel(target.nb)}${solto}`];
   }
   gravarAlteracao(...historico);
   trocarElemento(c, singleDemandRowHTML(s, target, mid));

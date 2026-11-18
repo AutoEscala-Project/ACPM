@@ -192,6 +192,32 @@ test.describe('Instrutor escolhido', () => {
     await expect(linha(page, 'Aluno 1000')).toHaveCount(1);
   });
 
+  test('o escolhido excluído de um voo agendado na Escala: o voo fica no lugar, em conflito, com as sugestões', async ({ page }) => {
+    // O Aluno 1001 agendado às 10:10 e, depois, com o Instrutor 01 escolhido na Escala; um voo fixo só pela escolha (o
+    // Aluno 1000) é solto, como antes
+    const estado = dia();
+    estado.stu[0].insId = 1;
+    estado.stu[1].insId = 1;
+    estado.fixos = {
+      '1000_0_1': { a: 500, b: 560, r: 'PR-VOC', insId: 1, escolhido: true },
+      '1001_0_1': { a: 610, b: 670, r: 'PR-VOB', insId: 1, escolhido: true, agendado: true }
+    };
+    await abrir(page, { estado });
+    await abrirEscala(page);
+    await expect(linha(page, 'Aluno 1001').locator('.fixo')).toHaveAttribute('aria-label', 'Voo fixo: agendado na escala');
+    await irPara(page, 'ins');
+    await page.locator('[data-vista-ins="cadastro"]').click();
+    await confirmar(page, '#inst tr.cd[data-id="1"] [data-act="deli"]');
+    await abrirEscala(page);
+    const voo = linha(page, 'Aluno 1001');
+    await expect(voo.locator('.c-hr')).toContainText('10:10–11:10');
+    await expect(voo.locator('.fixo')).toHaveAttribute('aria-label', 'Voo fixo: agendado na escala');
+    await expect(voo).toHaveClass(/\bem-conflito\b/);
+    await expect(page.locator('#out details.conflitos')).toContainText('o instrutor saiu do cadastro');
+    await expect(page.locator('#out details.conflitos [data-reparo="1001_0_1"]')).toHaveCount(1);
+    await expect(linha(page, 'Aluno 1000').locator('.fixo')).toHaveCount(0);
+  });
+
   // No mapa, o nome do instrutor fica no popup do voo: a lista abre no lugar dele, e o popup continua aberto
   test('no mapa: o nome do instrutor no popup abre a lista; o Esc volta ao nome, e o escolhido fica com o voo, fixo', async ({ page }) => {
     await abrir(page, { estado: dia() });

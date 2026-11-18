@@ -75,8 +75,9 @@ const pedidoDe = (estado, stuId, mid) => {
   return aluno ? pedidoDoAluno(aluno, mid) || null : null;
 };
 
-// O voo fixo pela escolha na Escala, e não pela escala aprovada nem pelo status, pode ser solto
-const soltavel = (estado, fKey) => !estado.aprovacao && !fixoPeloStatus(fKey, estado.fStatus);
+// O voo fixo pela escolha na Escala, e não pela escala aprovada, pelo status nem pelo agendamento na Escala (o pino
+// agendado), pode ser solto
+const soltavel = (estado, fKey, pino) => !estado.aprovacao && !fixoPeloStatus(fKey, estado.fStatus) && !pino.agendado;
 
 // Escolhe o instrutor (insId; null: "Automático") do pedido do aluno (stuId, mid). Muda o estado e devolve o que
 // mudou, como estava antes (a reversão do histórico) e quantos alunos da turma mudaram juntos.
@@ -84,7 +85,7 @@ const soltavel = (estado, fKey) => !estado.aprovacao && !fixoPeloStatus(fKey, es
 // - noLugar: true (Escala) também fixa o voo onde ele está, com o instrutor novo; o voo fixo leva a marca escolhido
 //   (a mudança de status e a reabertura da escala não o soltam).
 // - "Automático", na Demanda ou na Escala, devolve a escolha ao app: o voo fixo pela escolha na Escala é solto; o da
-//   escala aprovada e o fixado pelo status continuam fixos, com o instrutor de agora.
+//   escala aprovada, o fixado pelo status e o agendado na Escala continuam fixos, com o instrutor de agora.
 export function escolherInstrutor(estado, resultado, { stuId, mid = 0 }, insId, { noLugar = false } = {}) {
   const fixos = estado.fixos || {};
   const fKey = chaveDoVoo(stuId, mid);
@@ -114,7 +115,7 @@ export function escolherInstrutor(estado, resultado, { stuId, mid = 0 }, insId, 
       if (instrutorValido(insId)) {
         if (atual || noLugar) novos[o.fKey] = { ...(atual || pinoDoVoo(o)), insId, ...(noLugar ? { escolhido: true } : {}) };
       } else if (atual && atual.escolhido) {
-        if (soltavel(estado, o.fKey)) delete novos[o.fKey];
+        if (soltavel(estado, o.fKey, atual)) delete novos[o.fKey];
         else { const { escolhido: _, ...resto } = atual; novos[o.fKey] = resto; }
       }
     }
@@ -124,9 +125,9 @@ export function escolherInstrutor(estado, resultado, { stuId, mid = 0 }, insId, 
 }
 
 // Desfaz uma escolha (a reversão do histórico): os pedidos voltam como estavam e os voos fixos também. O voo que não
-// era fixo deixa de ser; se depois disso a escala foi aprovada ou o voo ganhou um status que fixa, ele continua fixo
-// onde está, com o instrutor de agora, só sem a marca da escolha (o instrutor de antes pode já ter outro voo no
-// horário: a escala foi refeita em volta da escolha)
+// era fixo deixa de ser; se depois disso a escala foi aprovada, o voo ganhou um status que fixa ou foi agendado na
+// Escala, ele continua fixo onde está, com o instrutor de agora, só sem a marca da escolha (o instrutor de antes pode
+// já ter outro voo no horário: a escala foi refeita em volta da escolha)
 export function reverterEscolha(estado, { pedidos, fixos, soltar }) {
   for (const { stuId, mid, insId } of pedidos) {
     const pedido = pedidoDe(estado, stuId, mid);
@@ -137,7 +138,7 @@ export function reverterEscolha(estado, { pedidos, fixos, soltar }) {
   const novos = { ...(estado.fixos || {}), ...fixos };
   for (const k of soltar) {
     if (!novos[k]) continue;
-    if (soltavel(estado, k)) delete novos[k];
+    if (soltavel(estado, k, novos[k])) delete novos[k];
     else { const { escolhido: _, ...resto } = novos[k]; novos[k] = resto; }
   }
   estado.fixos = novos;

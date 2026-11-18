@@ -4,6 +4,10 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { runAllocationEngine } from '../../js/engine.js';
+import { normalizarFixos, pinoDoVoo, fixosAoMudarStatus, fixosAoReabrir, fixosAoAprovar, semAgendados, motivoDoFixo } from '../../js/fixos.js';
+import { escolherInstrutor, reverterEscolha } from '../../js/instrutor-escolhido.js';
+import { comRepousoDoNoturno } from '../../js/noturno.js';
+import { gerarCenario } from '../helpers/cenarios.js';
 import { aluno, cenario, instrutor, apenas, missaoExtra, GROUND_C152 } from '../helpers/montar.js';
 
 const pino = o => ({ a: o.a, b: o.b, r: o.r, insId: o.insId, ...(o.isGround ? { classKey: o.classKey } : {}) });
@@ -324,5 +328,265 @@ describe('O cadeado do voo', () => {
     assert.equal(motivoDoFixo('1000_0_1', { fStatus: { '1000_0_1': 'Pousou' }, aprovacao: null }), 'Voo fixo: Pousou');
     // No Ground e no simulador, o Pousou aparece como "Concluída"
     assert.equal(motivoDoFixo('1000_0_1', { fStatus: { '1000_0_1': 'Pousou' }, aprovacao: null, voo: { mis: 'Ground C152', isGround: true } }), 'Voo fixo: Concluída');
+  });
+});
+
+// O voo agendado na Escala: o pino com a marca agendado. Ele fica fixo no ciclo inteiro do cadeado (o status, a
+// reabertura e a aprovação, que guarda até o agendado que está fora da escala) e sai quando a Demanda solta o pedido
+// dele (semAgendados: a demanda limpa, a missão extra tirada, outra missão no pedido)
+describe('O voo agendado na Escala', () => {
+  const VOO = { fKey: '1000_0_1', a: 390, b: 450, r: 'PR-VOB', insId: 1 };
+  const PINO = { a: 390, b: 450, r: 'PR-VOB', insId: 1 };
+  const AGENDADO = { ...PINO, agendado: true };
+  const APROVACAO = { em: '2026-11-10T21:05:00.000Z', por: 'Operador 01' };
+
+  it('os dados guardam a marca só quando ela é true: adulterada, sai (o voo fixo continua)', () => {
+    const lidos = normalizarFixos({
+      '1000_0_1': AGENDADO,
+      '1001_0_1': { ...PINO, agendado: 'sim' },
+      '1002_0_1': { ...PINO, agendado: 1 },
+      '1003_0_1': { ...PINO, agendado: false },
+      '1004_0_1': { ...PINO, agendado: true, escolhido: true, onclick: 'x' },
+      '1005_0_1': { ...PINO, escolhido: 'true', agendado: true },
+      '1006_0_1': { ...PINO, a: '390', agendado: true }
+    });
+    assert.deepEqual(lidos, {
+      '1000_0_1': AGENDADO, '1001_0_1': PINO, '1002_0_1': PINO, '1003_0_1': PINO,
+      '1004_0_1': { ...PINO, escolhido: true, agendado: true }, '1005_0_1': AGENDADO
+    });
+  });
+
+  it('o pino do voo leva a marca da linha da escala (também na turma de Ground)', () => {
+    assert.deepEqual(pinoDoVoo({ ...VOO, agendado: true }), AGENDADO);
+    assert.deepEqual(pinoDoVoo(VOO), PINO);
+    const turma = { fKey: '1000_0_1', a: 390, b: 480, r: 'SALA-GROUND', insId: 1, isGround: true, classKey: 'GND_Ground C152_0_1', agendado: true };
+    assert.deepEqual(pinoDoVoo(turma), { a: 390, b: 480, r: 'SALA-GROUND', insId: 1, classKey: 'GND_Ground C152_0_1', agendado: true });
+  });
+
+  it('Pendente e Confirmado não soltam o agendado; o status de andamento mantém o pino dele, com a marca', () => {
+    const fixos = { '1000_0_1': AGENDADO, '1001_0_1': { ...PINO, a: 500, b: 560 } };
+    for (const status of ['Pendente', 'Confirmado']) assert.deepEqual(fixosAoMudarStatus(fixos, VOO, status, { aprovada: false }), fixos);
+    for (const status of ['Em Voo', 'Atrasado', 'Pousou', 'Cancelado']) assert.deepEqual(fixosAoMudarStatus(fixos, VOO, status, { aprovada: false }), fixos);
+    // O voo fixo sem marca continua sendo solto, como antes
+    assert.deepEqual(fixosAoMudarStatus(fixos, { ...VOO, fKey: '1001_0_1' }, 'Confirmado', { aprovada: false }), { '1000_0_1': AGENDADO });
+  });
+
+  it('Reabrir mantém o agendado, com os fixados pelo status e pela escolha do instrutor; o fixo só pela aprovação sai', () => {
+    const fixos = { '1000_0_1': AGENDADO, '1001_0_1': PINO, '1002_0_1': { ...PINO, escolhido: true }, '1003_0_1': PINO, '1004_0_1': { ...AGENDADO, escolhido: true } };
+    const reaberta = fixosAoReabrir(fixos, { '1003_0_1': 'Em Voo', '1000_0_1': 'Confirmado' });
+    assert.deepEqual(reaberta, { '1000_0_1': AGENDADO, '1002_0_1': fixos['1002_0_1'], '1003_0_1': PINO, '1004_0_1': fixos['1004_0_1'] });
+  });
+
+  it('Aprovar fixa cada voo da escala com as marcas: o agendado (do pino ou da linha) e o escolhido (do pino)', () => {
+    const linha = (fKey, extra = {}) => ({ fKey, classKey: fKey, isGround: false, a: 390, b: 450, r: 'PR-VOB', insId: 1, ...extra });
+    const turma = 'GND_Ground C152_0_1';
+    const out = [
+      linha('1000_0_1'), linha('1001_0_1', { agendado: true }), linha('1002_0_1'), linha('1003_0_1'),
+      linha('1004_0_1', { isGround: true, classKey: turma, r: 'SALA-GROUND', b: 480, agendado: true })
+    ];
+    // A escala da tela pode ser a gravada antes da marca (o 1000 não a tem na linha): a marca vem do pino
+    const fixos = { '1000_0_1': AGENDADO, '1002_0_1': { ...PINO, escolhido: true }, '1003_0_1': { ...PINO, a: 500, b: 560 } };
+    assert.deepEqual(fixosAoAprovar(fixos, out), {
+      '1000_0_1': AGENDADO, '1001_0_1': AGENDADO, '1002_0_1': { ...PINO, escolhido: true }, '1003_0_1': PINO,
+      '1004_0_1': { a: 390, b: 480, r: 'SALA-GROUND', insId: 1, classKey: turma, agendado: true }
+    });
+  });
+
+  it('Aprovar mantém o agendado que está fora da escala (o pedido tirado dela); os outros fixos fora dela saem, como antes', () => {
+    const fixos = { '1000_0_1': AGENDADO, '1001_0_1': { ...AGENDADO, escolhido: true }, '1002_0_1': { ...PINO, escolhido: true }, '1003_0_1': PINO };
+    const out = [{ fKey: '1004_0_1', classKey: '1004_0_1', isGround: false, a: 500, b: 560, r: 'PR-VOC', insId: 2 }];
+    const PINO_DA_ESCALA = { a: 500, b: 560, r: 'PR-VOC', insId: 2 };
+    assert.deepEqual(fixosAoAprovar(fixos, out), { '1000_0_1': AGENDADO, '1001_0_1': fixos['1001_0_1'], '1004_0_1': PINO_DA_ESCALA });
+    assert.deepEqual(fixosAoAprovar(undefined, out), { '1004_0_1': PINO_DA_ESCALA });
+    assert.deepEqual(fixosAoAprovar(fixos, []), { '1000_0_1': AGENDADO, '1001_0_1': fixos['1001_0_1'] });
+  });
+
+  it('sem agendados, Aprovar fixa o mesmo que antes: cada voo da escala, com a escolha do instrutor que o pino tinha', () => {
+    // O código de antes, como estava em js/eventos/escala.js
+    const comoAntes = (fixos, out) => Object.fromEntries(out.map(o => [o.fKey, { ...pino(o), ...((fixos || {})[o.fKey]?.escolhido ? { escolhido: true } : {}) }]));
+    for (let seed = 2001; seed <= 2030; seed++) {
+      const { out } = runAllocationEngine(gerarCenario(seed));
+      const fixos = { ...Object.fromEntries(out.filter((o, i) => i % 3 === 0).map(o => [o.fKey, { ...pino(o), escolhido: true }])), '9999_0_1': { ...PINO, escolhido: true } };
+      assert.deepEqual(fixosAoAprovar(fixos, out), comoAntes(fixos, out), `seed ${seed}`);
+    }
+  });
+
+  it('com o motor: o agendado tirado da escala volta ao lugar dele depois da aprovação, e a reabertura não o solta', () => {
+    // O agendamento: o Aluno 1000 às 10:10 no PR-VOB com o Instrutor 02 (o pedido dele prefere as 06:30)
+    const estado = cenario({ ins: [instrutor(1, 9), instrutor(2, 9)], stu: [aluno(1000, { p1: 390, p2: -1 }), aluno(1001, { p1: 500, p2: -1 })] });
+    const agendado = { a: 610, b: 670, r: 'PR-VOB', insId: 2, agendado: true };
+    estado.fixos = { '1000_0_1': agendado };
+    const doAluno1000 = r => doAluno(r.out, 1000);
+    const antes = runAllocationEngine(estado);
+    assert.deepEqual([doAluno1000(antes).a, doAluno1000(antes).agendado, antes.al], [610, true, []]);
+
+    // Tirado da escala (Voa desligado) e a escala aprovada: o agendado continua nos voos fixos
+    estado.stu[0].fly = false;
+    const semEle = runAllocationEngine(estado);
+    assert.equal(doAluno1000(semEle), undefined);
+    estado.fixos = fixosAoAprovar(estado.fixos, semEle.out);
+    estado.aprovacao = APROVACAO;
+    assert.deepEqual(Object.keys(estado.fixos).sort(), ['1000_0_1', '1001_0_1']);
+
+    // De volta à escala: no lugar do agendamento, com a marca, e o cadeado diz por quê
+    estado.stu[0].fly = true;
+    const voo = doAluno1000(runAllocationEngine(estado));
+    assert.deepEqual([voo.a, voo.r, voo.insId, voo.fixo, voo.agendado, voo.conflito], [610, 'PR-VOB', 2, true, true, undefined]);
+    assert.equal(motivoDoFixo(voo.fKey, { fStatus: {}, aprovacao: estado.aprovacao, voo, fixos: estado.fixos }), 'Voo fixo: agendado na escala');
+    assert.equal(motivoDoFixo('1001_0_1', { fStatus: {}, aprovacao: estado.aprovacao, fixos: estado.fixos }), 'Voo fixo: escala aprovada');
+    // Reabrir: o agendado continua fixo; o fixo só pela aprovação sai
+    assert.deepEqual(fixosAoReabrir(estado.fixos, {}), { '1000_0_1': agendado });
+  });
+
+  it('o cadeado: o status primeiro, depois o agendamento, a escala aprovada e o instrutor escolhido', () => {
+    const motivo = (pinoDoDia, { fStatus = {}, aprovacao = null } = {}) => motivoDoFixo('1000_0_1', { fStatus, aprovacao, voo: VOO, fixos: { '1000_0_1': pinoDoDia } });
+    const AMBOS = { ...AGENDADO, escolhido: true };
+    assert.equal(motivo(AMBOS, { fStatus: { '1000_0_1': 'Em Voo' }, aprovacao: APROVACAO }), 'Voo fixo: Em Voo');
+    assert.equal(motivo(AMBOS, { aprovacao: APROVACAO }), 'Voo fixo: agendado na escala');
+    assert.equal(motivo(AGENDADO), 'Voo fixo: agendado na escala');
+    assert.equal(motivo({ ...PINO, escolhido: true }, { aprovacao: APROVACAO }), 'Voo fixo: escala aprovada');
+    assert.equal(motivo({ ...PINO, escolhido: true }), 'Voo fixo: instrutor escolhido na escala');
+    assert.equal(motivo(PINO), 'Voo fixo');
+    assert.equal(motivoDoFixo('1000_0_1', { fStatus: {}, aprovacao: null }), 'Voo fixo');
+  });
+
+  it('semAgendados: sem chaves, tira todos os agendados; com chaves, só os delas; os outros voos fixos ficam', () => {
+    const fixos = {
+      '1000_0_1': AGENDADO, '1001_0_1': PINO, '1002_0_1': { ...PINO, escolhido: true }, '1003_0_1': { ...AGENDADO, escolhido: true }, '1004_1_1': AGENDADO
+    };
+    const copia = structuredClone(fixos);
+    assert.deepEqual(semAgendados(fixos), { '1001_0_1': PINO, '1002_0_1': fixos['1002_0_1'] });
+    assert.deepEqual(semAgendados(fixos, ['1004_1_1']), { '1000_0_1': AGENDADO, '1001_0_1': PINO, '1002_0_1': fixos['1002_0_1'], '1003_0_1': fixos['1003_0_1'] });
+    // O agendado que também tinha o instrutor escolhido sai inteiro
+    assert.equal(semAgendados(fixos, ['1003_0_1'])['1003_0_1'], undefined);
+    // As chaves de voos fixos sem a marca: nada muda
+    assert.deepEqual(semAgendados(fixos, ['1001_0_1', '1002_0_1', '1009_0_1']), fixos);
+    assert.deepEqual(semAgendados(fixos, []), fixos);
+    assert.deepEqual(semAgendados(undefined), {});
+    assert.deepEqual(fixos, copia, 'os voos fixos de antes não mudam');
+  });
+
+  it('semAgendados com o status: o agendado em andamento, pousado ou cancelado continua fixo pelo status, só sem a marca', () => {
+    const fixos = {
+      '1000_0_1': AGENDADO, '1001_0_1': { ...AGENDADO, escolhido: true }, '1002_0_1': AGENDADO, '1003_0_1': AGENDADO, '1004_0_1': PINO
+    };
+    const fStatus = { '1000_0_1': 'Em Voo', '1001_0_1': 'Cancelado', '1002_0_1': 'Confirmado', '1004_0_1': 'Pousou' };
+    const copia = structuredClone(fixos);
+    // A demanda limpa: o agendado com um status que fixa fica como o fixo pelo status (com a escolha do instrutor, se tinha)
+    assert.deepEqual(semAgendados(fixos, null, fStatus), { '1000_0_1': PINO, '1001_0_1': { ...PINO, escolhido: true }, '1004_0_1': PINO });
+    assert.deepEqual(semAgendados(fixos, ['1000_0_1', '1002_0_1'], fStatus), { '1000_0_1': PINO, '1001_0_1': fixos['1001_0_1'], '1003_0_1': AGENDADO, '1004_0_1': PINO });
+    for (const status of ['Em Voo', 'Atrasado', 'Pousou', 'Cancelado']) {
+      assert.deepEqual(semAgendados({ '1000_0_1': AGENDADO }, ['1000_0_1'], { '1000_0_1': status }), { '1000_0_1': PINO }, status);
+    }
+    for (const status of ['Pendente', 'Confirmado']) assert.deepEqual(semAgendados({ '1000_0_1': AGENDADO }, ['1000_0_1'], { '1000_0_1': status }), {}, status);
+    assert.deepEqual(fixos, copia, 'os voos fixos de antes não mudam');
+  });
+
+  it('com o motor: o agendado com um status que fixa não sai do lugar quando a Demanda muda a missão, como o fixo pelo status', () => {
+    for (const status of ['Em Voo', 'Atrasado', 'Pousou', 'Cancelado']) {
+      for (const agendado of [true, false]) {
+        const estado = cenario({ ins: [instrutor(1, 9), instrutor(2, 9)], stu: [aluno(1000, { p1: 390, p2: -1 }), aluno(1001, { p1: 500, p2: -1 })] });
+        estado.fixos = { '1000_0_1': { a: 610, b: 670, r: 'PR-VOB', insId: 2, ...(agendado ? { agendado: true } : {}) } };
+        // O status na Escala mantém o pino (com a marca); depois, outra missão no pedido (eventos/demanda.js)
+        estado.fixos = fixosAoMudarStatus(estado.fixos, doAluno(runAllocationEngine(estado).out, 1000), status, { aprovada: false });
+        estado.fStatus = { '1000_0_1': status };
+        estado.stu[0].mis = 'Navegação';
+        estado.fixos = semAgendados(estado.fixos, ['1000_0_1'], estado.fStatus);
+        const voo = doAluno(runAllocationEngine(estado).out, 1000);
+        assert.deepEqual([voo.a, voo.r, voo.insId, voo.fixo, voo.agendado, voo.status], [610, 'PR-VOB', 2, true, undefined, status], `${status}, agendado: ${agendado}`);
+      }
+    }
+  });
+
+  it('o agendado com o instrutor escolhido que a Demanda solta: o pedido continua com o instrutor, e o motor também', () => {
+    // O Aluno 1001 agendado às 10:10 e depois com o Instrutor 02 escolhido na Escala (o pedido guarda a escolha)
+    const estado = cenario({ ins: [instrutor(1, 9), instrutor(2, 1)], stu: [aluno(1000), aluno(1001, { insId: 2 })] });
+    estado.fixos = { '1001_0_1': { a: 610, b: 670, r: 'PR-VOC', insId: 2, agendado: true, escolhido: true } };
+    estado.fixos = semAgendados(estado.fixos, ['1001_0_1']);
+    assert.deepEqual(estado.fixos, {});
+    const voo = doAluno(runAllocationEngine(estado).out, 1001);
+    assert.deepEqual([voo.insId, voo.insEscolhido, voo.fixo], [2, true, undefined]);
+  });
+
+  it('"Automático" no agendado com o instrutor escolhido: ele continua agendado, com o instrutor de agora, sem a marca da escolha', () => {
+    // O app põe o Instrutor 02 (menos habilitações) no Aluno 1000 e o 01 no 1001, os dois às 08:20
+    const estado = cenario({ ins: [instrutor(1, 9), instrutor(2, 1)], stu: [aluno(1000), aluno(1001)] });
+    const agendado = { ...pino(doAluno(runAllocationEngine(estado).out, 1001)), agendado: true };
+    estado.fixos = { '1001_0_1': agendado };
+    // O instrutor escolhido na Escala: o agendado leva também a marca da escolha
+    escolherInstrutor(estado, runAllocationEngine(estado), { stuId: 1001, mid: 0 }, 2, { noLugar: true });
+    assert.deepEqual(estado.fixos, { '1001_0_1': { ...agendado, insId: 2, escolhido: true } });
+    const { antes } = escolherInstrutor(estado, runAllocationEngine(estado), { stuId: 1001, mid: 0 }, null, { noLugar: true });
+    assert.deepEqual([estado.fixos, estado.stu[1].insId], [{ '1001_0_1': { ...agendado, insId: 2 } }, undefined]);
+    // Pela Demanda, também
+    escolherInstrutor(estado, runAllocationEngine(estado), { stuId: 1001, mid: 0 }, 2, { noLugar: true });
+    escolherInstrutor(estado, runAllocationEngine(estado), { stuId: 1001, mid: 0 }, null);
+    assert.deepEqual(estado.fixos, { '1001_0_1': { ...agendado, insId: 2 } });
+    // A reversão do "Automático" volta a escolha
+    reverterEscolha(estado, antes);
+    assert.deepEqual([estado.fixos, estado.stu[1].insId], [{ '1001_0_1': { ...agendado, insId: 2, escolhido: true } }, 2]);
+  });
+
+  it('reverter uma escolha não solta o voo agendado depois dela no mesmo lugar', () => {
+    const estado = cenario({ ins: [instrutor(1, 9), instrutor(2, 1)], stu: [aluno(1000), aluno(1001)] });
+    const { antes } = escolherInstrutor(estado, runAllocationEngine(estado), { stuId: 1001, mid: 0 }, 2, { noLugar: true });
+    assert.deepEqual(antes.soltar, ['1001_0_1']);
+    const agendado = { ...estado.fixos['1001_0_1'], agendado: true };
+    delete agendado.escolhido;
+    estado.fixos = { '1001_0_1': agendado };
+    reverterEscolha(estado, antes);
+    assert.deepEqual([estado.fixos, estado.stu[1].insId], [{ '1001_0_1': agendado }, undefined]);
+  });
+});
+
+// A volta do noturno de ontem é uma linha fixa da escala (lida da véspera), não um voo fixo do dia: o agendamento não
+// mexe nela. A aprovação, o status, a reabertura e a Demanda a tratam como antes (o pino da volta tem a chave da sessão
+// 2, que o motor não lê)
+describe('O voo agendado e a volta do noturno de ontem', () => {
+  const volta = { stuId: 1000, mid: 0, insId: 1, r: 'PR-HAR', eqType: 'C172', s: 'Aluno 1000', ins: 'Instrutor 01', stuKg: 70, fim: 1290 };
+  const PINO_DA_VOLTA = { a: 450, b: 510, r: 'PR-HAR', insId: 1 };
+  const diaSeguinte = () => {
+    const estado = cenario({
+      ins: [instrutor(1, 9), instrutor(2, 9)], stu: [aluno(1000, { mis: 'Voo Local', eq: 'C172', p1: 610, p2: -1 }), aluno(1001, { p1: 500, p2: -1 })],
+      semAeronaves: apenas('C172', 'PR-HAR')
+    });
+    estado.noturnosDaVespera = [volta];
+    estado.horasDosInstrutores = comRepousoDoNoturno({ 1: { mes: 0, semestre: 0, ano: 0, fimAnterior: 1290 } }, [volta]);
+    return estado;
+  };
+  const daVolta = out => out.find(o => o.trecho === 'volta');
+
+  it('Aprovar fixa a volta como antes, sem marca, ao lado do voo agendado; o motor não lê o pino dela', () => {
+    const estado = diaSeguinte();
+    estado.fixos = { '1001_0_1': { a: 610, b: 670, r: 'PR-VOB', insId: 2, agendado: true } };
+    const res = runAllocationEngine(estado);
+    const linha = daVolta(res.out);
+    assert.deepEqual([linha.fKey, linha.fixo, Object.hasOwn(linha, 'agendado')], ['1000_0_2', true, false]);
+    const aprovados = fixosAoAprovar(estado.fixos, res.out);
+    assert.deepEqual(Object.keys(aprovados).sort(), res.out.map(o => o.fKey).sort());
+    assert.deepEqual([aprovados['1000_0_2'], aprovados['1001_0_1']], [PINO_DA_VOLTA, estado.fixos['1001_0_1']]);
+    const aprovada = runAllocationEngine({ ...estado, fixos: aprovados });
+    assert.deepEqual(daVolta(aprovada.out), linha);
+    assert.deepEqual(aprovada.al.filter(a => a.t === 'conf'), []);
+    // Só o pino da volta não muda a escala
+    assert.deepEqual(runAllocationEngine({ ...estado, fixos: { ...estado.fixos, '1000_0_2': PINO_DA_VOLTA } }), res);
+  });
+
+  it('o status, a reabertura e a Demanda (semAgendados) tratam a volta como antes', () => {
+    const estado = diaSeguinte();
+    const res = runAllocationEngine(estado);
+    const linha = daVolta(res.out);
+    // O status de andamento fixa a volta; Confirmado a solta fora da escala aprovada
+    const emVoo = fixosAoMudarStatus({}, linha, 'Em Voo', { aprovada: false });
+    assert.deepEqual(emVoo, { '1000_0_2': PINO_DA_VOLTA });
+    assert.deepEqual(fixosAoMudarStatus(emVoo, linha, 'Confirmado', { aprovada: false }), {});
+    // A demanda limpa e o pedido do aluno mudado não tiram o pino da volta
+    const aprovados = fixosAoAprovar({}, res.out);
+    assert.deepEqual(semAgendados(aprovados), aprovados);
+    assert.deepEqual(semAgendados(aprovados, ['1000_0_1', '1000_0_2']), aprovados);
+    // Reabrir: a volta sai com os outros fixos pela aprovação, menos com um status que fixa
+    assert.equal(Object.hasOwn(fixosAoReabrir(aprovados, {}), '1000_0_2'), false);
+    assert.deepEqual(fixosAoReabrir(aprovados, { '1000_0_2': 'Pousou' }), { '1000_0_2': PINO_DA_VOLTA });
+    assert.equal(motivoDoFixo('1000_0_2', { fStatus: {}, aprovacao: null, voo: linha, fixos: aprovados }), 'Voo fixo');
   });
 });

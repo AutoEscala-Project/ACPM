@@ -488,6 +488,8 @@ export function runAllocationEngine(state, opcoes = {}) {
         ...(ground || !x ? {} : combustivelDoVoo(stu.kg, x.kg, d.eq, b - a, d.mis)),
         baseTag, tag: baseTag, status, fixo: true,
         ...(x && d.insId === x.id ? { insEscolhido: true } : {}),
+        // O voo agendado na Escala: a linha leva a marca do pino (a aprovação e a escala gravada a guardam)
+        ...(pino.agendado ? { agendado: true } : {}),
         ...(conflito.length ? { conflito, conflitoCodigos } : {})
       });
       if (conflito.length) al.push({ t: 'conf', s: mid ? `${stu.nm} (${d.mis})` : stu.nm, fKey, m: `Conflito na escala aprovada: ${conflito.join('; ')}.` });

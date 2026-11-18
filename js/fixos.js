@@ -1,5 +1,7 @@
 // Escala aprovada: os voos fixos (horário, avião e instrutor de cada voo, pela chave aluno_missão_sessão) e quem
 // aprovou. Os dados vêm do dia guardado, que pode ter sido gravado fora do app (pela API): só valem nos formatos certos.
+// O operador também fixa um voo na Escala: pelo instrutor escolhido (a marca escolhido) e pelo agendamento (a marca
+// agendado). As marcas acompanham o voo fixo na aprovação, no status e na reabertura
 import { rotuloDoStatus } from './status.js';
 import { CHAVE_DO_VOO } from './voo.js';
 import { MATRICULA } from './frota.js';
@@ -15,7 +17,9 @@ export function normalizarFixos(fixos) {
     return [[fKey, {
       a: p.a, b: p.b, r: p.r, insId: p.insId, ...(typeof p.classKey === 'string' && p.classKey.length <= 80 ? { classKey: p.classKey } : {}),
       // Fixo pelo instrutor escolhido na Escala
-      ...(p.escolhido === true ? { escolhido: true } : {})
+      ...(p.escolhido === true ? { escolhido: true } : {}),
+      // Agendado na Escala: o operador marcou o voo no horário, no recurso e com o instrutor
+      ...(p.agendado === true ? { agendado: true } : {})
     }]];
   }));
 }
@@ -25,31 +29,67 @@ export function normalizarAprovacao(aprovacao) {
   return { em: aprovacao.em, por: typeof aprovacao.por === 'string' ? aprovacao.por.slice(0, 80) : '' };
 }
 
-// O voo fixo como o motor o recebe: o horário, o avião e o instrutor (e a turma, no Ground)
-export const pinoDoVoo = o => ({ a: o.a, b: o.b, r: o.r, insId: o.insId, ...(o.isGround ? { classKey: o.classKey } : {}) });
+// O voo fixo como o motor o recebe: o horário, o avião e o instrutor (e a turma, no Ground); o voo agendado leva a marca
+export const pinoDoVoo = o => ({ a: o.a, b: o.b, r: o.r, insId: o.insId, ...(o.isGround ? { classKey: o.classKey } : {}), ...(o.agendado ? { agendado: true } : {}) });
 
 // O ciclo do cadeado. Em Voo, Atrasado, Pousou e Cancelado fixam o voo onde ele está (o pino que já havia
-// continua); fora da escala aprovada, Pendente ou Confirmado o soltam, menos o fixo pelo instrutor escolhido na Escala.
-// Reabrir a escala mantém os fixados pelo status e pela escolha do instrutor
+// continua); fora da escala aprovada, Pendente ou Confirmado o soltam, menos o fixo pelo operador na Escala (pelo
+// instrutor escolhido ou pelo agendamento). Reabrir a escala mantém os fixados pelo status e pelo operador na Escala
 const STATUS_QUE_FIXAM = ['Em Voo', 'Atrasado', 'Pousou', 'Cancelado'];
 export const fixoPeloStatus = (fKey, fStatus) => STATUS_QUE_FIXAM.includes((fStatus || {})[fKey]);
+const fixoPeloOperador = p => Boolean(p && (p.escolhido || p.agendado));
 
 export function fixosAoMudarStatus(fixos, voo, status, { aprovada }) {
   const atuais = fixos || {};
   if (STATUS_QUE_FIXAM.includes(status)) return { ...atuais, [voo.fKey]: atuais[voo.fKey] || pinoDoVoo(voo) };
-  if (aprovada || !atuais[voo.fKey] || atuais[voo.fKey].escolhido) return atuais;
+  if (aprovada || !atuais[voo.fKey] || fixoPeloOperador(atuais[voo.fKey])) return atuais;
   const { [voo.fKey]: _, ...resto } = atuais;
   return resto;
 }
 
 export const fixosAoReabrir = (fixos, fStatus) =>
-  Object.fromEntries(Object.entries(fixos || {}).filter(([fKey, p]) => p.escolhido || STATUS_QUE_FIXAM.includes((fStatus || {})[fKey])));
+  Object.fromEntries(Object.entries(fixos || {}).filter(([fKey, p]) => fixoPeloOperador(p) || fixoPeloStatus(fKey, fStatus)));
 
-// Por que o voo está fixo (o texto do cadeado): o status de andamento (com o nome da tela), a escala aprovada ou o
-// instrutor escolhido na Escala
+// Aprovar a escala: cada voo dela fica fixo onde está (out: a escala da tela, calculada ou gravada). O fixo pelo
+// operador na Escala continua com a marca (o instrutor escolhido, do pino; o agendado, do pino ou da linha da escala), e
+// o agendado que não está na escala (o pedido tirado da escala) continua fixo: o voo volta para o lugar dele quando o
+// pedido voltar
+export function fixosAoAprovar(fixos, out) {
+  const atuais = fixos || {};
+  const daEscala = Object.fromEntries(out.map(o => {
+    const atual = atuais[o.fKey];
+    return [o.fKey, {
+      ...pinoDoVoo(o), ...(atual && atual.escolhido ? { escolhido: true } : {}), ...(o.agendado || (atual && atual.agendado) ? { agendado: true } : {})
+    }];
+  }));
+  const foraDaEscala = Object.entries(atuais).filter(([fKey, p]) => p.agendado && !Object.hasOwn(daEscala, fKey));
+  return { ...Object.fromEntries(foraDaEscala), ...daEscala };
+}
+
+// Os voos fixos sem os agendados das chaves (sem chaves: sem nenhum agendado). Na Demanda, o voo agendado sai com o
+// pedido que ele fixava: com a demanda limpa, com a missão extra tirada, ou com outra missão, outro recurso ou outras
+// horas no pedido (o agendamento era do pedido de antes). O agendado que também tinha o instrutor escolhido sai inteiro
+// (o pedido continua com o instrutor). O agendado com um status que fixa (fStatus: Em Voo, Atrasado, Pousou, Cancelado)
+// continua fixo onde está, só sem a marca do agendamento, como os outros voos fixos pelo status (o voo em andamento, o
+// que pousou e o cancelado não mudam de lugar). Os outros voos fixos (pela escala aprovada, pelo status ou só pelo
+// instrutor escolhido) ficam
+export function semAgendados(fixos, chaves = null, fStatus = null) {
+  const daChave = fKey => !chaves || chaves.includes(fKey);
+  return Object.fromEntries(Object.entries(fixos || {}).flatMap(([fKey, p]) => {
+    if (!p.agendado || !daChave(fKey)) return [[fKey, p]];
+    if (!fixoPeloStatus(fKey, fStatus)) return [];
+    const { agendado: _, ...doStatus } = p;
+    return [[fKey, doStatus]];
+  }));
+}
+
+// Por que o voo está fixo (o texto do cadeado): o status de andamento (com o nome da tela), o agendamento na Escala, a
+// escala aprovada ou o instrutor escolhido na Escala, nesta ordem
 export function motivoDoFixo(fKey, { fStatus, aprovacao, voo, fixos }) {
   const status = (fStatus || {})[fKey];
   if (STATUS_QUE_FIXAM.includes(status)) return `Voo fixo: ${rotuloDoStatus(status, voo)}`;
+  const pino = (fixos || {})[fKey];
+  if (pino && pino.agendado) return 'Voo fixo: agendado na escala';
   if (aprovacao) return 'Voo fixo: escala aprovada';
-  return (fixos || {})[fKey] && fixos[fKey].escolhido ? 'Voo fixo: instrutor escolhido na escala' : 'Voo fixo';
+  return pino && pino.escolhido ? 'Voo fixo: instrutor escolhido na escala' : 'Voo fixo';
 }

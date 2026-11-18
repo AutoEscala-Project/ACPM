@@ -1,5 +1,5 @@
-import { test, expect, abrir, abrirSintetico, abrirComExemplo, irPara, abrirEscala, lerEscala } from './fixtures.js';
-import { aluno, cenario, instrutor } from '../helpers/montar.js';
+import { test, expect, abrir, abrirSintetico, abrirComExemplo, irPara, abrirEscala, lerEscala, confirmar, AMANHA } from './fixtures.js';
+import { aluno, cenario, instrutor, missaoExtra } from '../helpers/montar.js';
 
 const linhaDoAluno = (page, nome) => page.locator(`#dem tr[data-k="d"][data-mid="0"][data-nm="${nome.toLowerCase()}"]`);
 
@@ -184,4 +184,158 @@ test.describe('Demanda', () => {
     await expect(visiveis).toHaveCount(6);
   });
 
+});
+
+// O voo agendado na Escala (o voo fixo com a marca agendado) é do pedido como ele estava. Tirar da escala e pôr de volta
+// o mantém no lugar; outra missão no pedido (à mão ou pela próxima missão do curso) o solta, e o histórico diz; a missão
+// extra tirada e a demanda limpa levam os agendados delas. O status, Aprovar e Reabrir não o soltam, e o voo em
+// andamento, pousado ou cancelado continua fixo pelo status
+test.describe('Voo agendado na Escala', () => {
+  // O Aluno 1000 está agendado às 10:10 no PR-VOB com o Instrutor 02 (o pedido dele prefere as 06:30)
+  const AGENDADO = { a: 610, b: 670, r: 'PR-VOB', insId: 2, agendado: true };
+  const dia = ({ pedido1000 = {}, aluno1000 = {}, ...extra } = {}) => ({
+    ...cenario({ ins: [instrutor(1, 9), instrutor(2, 9)], stu: [aluno(1000, { p1: 390, p2: -1, ...pedido1000 }, aluno1000), aluno(1001, { p1: 500, p2: -1 })] }),
+    fixos: { '1000_0_1': AGENDADO }, ...extra
+  });
+  const voo = (page, nome) => page.locator('#out tbody tr:not(.win)', { hasText: nome });
+  const pedido = (page, id, mid = 0) => page.locator(`#dem tr[data-k="d"][data-id="${id}"][data-mid="${mid}"]`);
+  // Os voos fixos da data gravados neste navegador (a gravação sai logo depois da alteração)
+  const fixosGravados = page => page.evaluate(d => {
+    const dia = JSON.parse(localStorage.getItem(`acpm4_dia_${d}`) || 'null');
+    return dia ? Object.keys(dia.fixos || {}).sort() : null;
+  }, AMANHA);
+  const pinosGravados = page => page.evaluate(d => {
+    const dia = JSON.parse(localStorage.getItem(`acpm4_dia_${d}`) || 'null');
+    return dia ? dia.fixos || {} : null;
+  }, AMANHA);
+  const naDemanda = async page => {
+    await irPara(page, 'dem');
+    if (await page.locator('#onlyfly').isChecked()) await page.locator('#onlyfly').uncheck();
+  };
+
+  test('tirar da escala e pôr de volta mantém o voo no lugar; outra missão no pedido o solta, e o histórico diz', async ({ page }) => {
+    await abrir(page, { estado: dia() });
+    await abrirEscala(page);
+    await expect(voo(page, 'Aluno 1000').locator('.c-hr')).toContainText('10:10–11:10');
+    await expect(voo(page, 'Aluno 1000').locator('.fixo')).toHaveAttribute('aria-label', 'Voo fixo: agendado na escala');
+
+    await naDemanda(page);
+    await pedido(page, 1000).locator('[data-f="fly"]').uncheck();
+    await abrirEscala(page);
+    await expect(voo(page, 'Aluno 1000')).toHaveCount(0);
+    await naDemanda(page);
+    await pedido(page, 1000).locator('[data-f="fly"]').check();
+    await abrirEscala(page);
+    await expect(voo(page, 'Aluno 1000').locator('.c-hr')).toContainText('10:10–11:10');
+    await expect(voo(page, 'Aluno 1000').locator('.fixo')).toHaveAttribute('aria-label', 'Voo fixo: agendado na escala');
+
+    await naDemanda(page);
+    await pedido(page, 1000).locator('[data-f="mis"]').selectOption('Navegação');
+    await expect(page.locator('#audit-log-list')).toContainText('Pedido Aluno 1000: Navegação · C152 · 1 h (deixa de ser fixo)');
+    await abrirEscala(page);
+    await expect(voo(page, 'Aluno 1000').locator('.fixo')).toHaveCount(0);
+    await expect(voo(page, 'Aluno 1000').locator('.c-hr')).toContainText('06:30–07:30');
+    await expect.poll(() => fixosGravados(page)).toEqual([]);
+  });
+
+  test('a próxima missão do curso (Usar) também solta o voo agendado do pedido', async ({ page }) => {
+    const cursos = { PP: [{ id: 'PP-01', nome: 'Familiarização', mis: 'Voo Local', eq: 'C152', nb: 1 }], PC: [], INVA: [] };
+    await abrir(page, { estado: dia({ pedido1000: { mis: 'Navegação' }, aluno1000: { curso: 'PP' }, cursos }) });
+    await abrirEscala(page);
+    await expect(voo(page, 'Aluno 1000').locator('.fixo')).toHaveAttribute('aria-label', 'Voo fixo: agendado na escala');
+    await naDemanda(page);
+    await pedido(page, 1000).locator('[data-act="usar-proxima"]').click();
+    await expect(pedido(page, 1000).locator('.etapa')).toHaveText('PP-01');
+    await expect(page.locator('#audit-log-list')).toContainText('Aluno 1000: PP-01 na demanda (Voo Local · C152 · 1 h) (deixa de ser fixo)');
+    await abrirEscala(page);
+    await expect(voo(page, 'Aluno 1000').locator('.fixo')).toHaveCount(0);
+  });
+
+  test('a mesma duração digitada de outro jeito (1.0 no lugar de 1) não muda o pedido: o voo continua agendado', async ({ page }) => {
+    await abrir(page, { estado: dia() });
+    await naDemanda(page);
+    const duracao = pedido(page, 1000).locator('[data-f="nb"]');
+    await expect(duracao).toHaveValue('1');
+    await duracao.fill('1.0');
+    await duracao.press('Tab');
+    await expect(page.locator('#audit-log-list')).toContainText('Pedido Aluno 1000: Voo Local · C152 · 1 h');
+    await expect(page.locator('#audit-log-list')).not.toContainText('deixa de ser fixo');
+    await abrirEscala(page);
+    await expect(voo(page, 'Aluno 1000').locator('.c-hr')).toContainText('10:10–11:10');
+    await expect(voo(page, 'Aluno 1000').locator('.fixo')).toHaveAttribute('aria-label', 'Voo fixo: agendado na escala');
+    await expect.poll(() => pinosGravados(page)).toEqual({ '1000_0_1': AGENDADO });
+  });
+
+  test('o voo agendado em andamento ou pousado continua fixo pelo status: outra missão e a demanda limpa só tiram a marca', async ({ page }) => {
+    // O Aluno 1000 (agendado às 10:10) está em voo; o Aluno 1001, agendado às 08:20, já pousou
+    const { agendado: _, ...EM_VOO } = AGENDADO;
+    const POUSOU = { a: 500, b: 560, r: 'PR-VOC', insId: 1 };
+    const estado = dia({ fStatus: { '1000_0_1': 'Em Voo', '1001_0_1': 'Pousou' } });
+    estado.fixos = { ...estado.fixos, '1001_0_1': { ...POUSOU, agendado: true } };
+    await abrir(page, { estado });
+    await abrirEscala(page);
+    await expect(voo(page, 'Aluno 1000').locator('.fixo')).toHaveAttribute('aria-label', 'Voo fixo: Em Voo');
+
+    await naDemanda(page);
+    await pedido(page, 1000).locator('[data-f="mis"]').selectOption('Navegação');
+    await expect(page.locator('#audit-log-list')).toContainText('Pedido Aluno 1000: Navegação · C152 · 1 h');
+    await expect(page.locator('#audit-log-list')).not.toContainText('deixa de ser fixo');
+    await expect.poll(() => pinosGravados(page)).toEqual({ '1000_0_1': EM_VOO, '1001_0_1': { ...POUSOU, agendado: true } });
+    await abrirEscala(page);
+    await expect(voo(page, 'Aluno 1000').locator('.c-hr')).toContainText('10:10–11:10');
+    await expect(voo(page, 'Aluno 1000').locator('.fixo')).toHaveAttribute('aria-label', 'Voo fixo: Em Voo');
+
+    await naDemanda(page);
+    await page.locator('#btn-mais-dem').click();
+    await confirmar(page, '#clr');
+    await expect.poll(() => pinosGravados(page)).toEqual({ '1000_0_1': EM_VOO, '1001_0_1': POUSOU });
+  });
+
+  test('a missão extra tirada e a demanda limpa levam os voos agendados delas; os outros voos fixos ficam', async ({ page }) => {
+    const estado = dia({ fStatus: { '1001_0_1': 'Em Voo' } });
+    estado.stu[1].extra = [missaoExtra(1, { p1: 760, p2: -1 })];
+    estado.fixos = { ...estado.fixos, '1001_0_1': { a: 500, b: 560, r: 'PR-VOC', insId: 1 }, '1001_1_1': { a: 760, b: 820, r: 'PR-VOC', insId: 1, agendado: true } };
+    await abrir(page, { estado });
+    await abrirEscala(page);
+    await expect(voo(page, 'Aluno 1001').filter({ hasText: '12:40' }).locator('.fixo')).toHaveAttribute('aria-label', 'Voo fixo: agendado na escala');
+
+    await naDemanda(page);
+    await confirmar(page, '#dem tr[data-k="d"][data-id="1001"][data-mid="1"] [data-act="del-mis"]');
+    await expect(page.locator('#audit-log-list')).toContainText('Missão extra removida de Aluno 1001');
+    await expect.poll(() => fixosGravados(page)).toEqual(['1000_0_1', '1001_0_1']);
+
+    await page.locator('#btn-mais-dem').click();
+    await confirmar(page, '#clr');
+    await expect(page.locator('#dem tr[data-k="d"].on')).toHaveCount(0);
+    await expect.poll(() => fixosGravados(page)).toEqual(['1001_0_1']);
+  });
+
+  test('Pendente, Confirmado, Aprovar e Reabrir mantêm o voo agendado; tirado da escala antes de aprovar, ele volta ao lugar dele', async ({ page }) => {
+    await abrir(page, { estado: dia() });
+    await abrirEscala(page);
+    const cadeado = voo(page, 'Aluno 1000').locator('.fixo');
+    for (const status of ['Pendente', 'Confirmado']) {
+      await voo(page, 'Aluno 1000').locator('.st-sel').selectOption(status);
+      await expect(voo(page, 'Aluno 1000').locator('.st-sel')).toHaveValue(status);
+      await expect(cadeado).toHaveAttribute('aria-label', 'Voo fixo: agendado na escala');
+    }
+
+    // Fora da escala quando ela é aprovada: de volta, ele fica no lugar do agendamento
+    await naDemanda(page);
+    await pedido(page, 1000).locator('[data-f="fly"]').uncheck();
+    await abrirEscala(page);
+    await confirmar(page, '#btn-aprovar');
+    await expect(page.locator('#selo-aprovada')).toBeVisible();
+    await naDemanda(page);
+    await pedido(page, 1000).locator('[data-f="fly"]').check();
+    await abrirEscala(page);
+    await expect(voo(page, 'Aluno 1000').locator('.c-hr')).toContainText('10:10–11:10');
+    await expect(cadeado).toHaveAttribute('aria-label', 'Voo fixo: agendado na escala');
+    await expect(voo(page, 'Aluno 1001').locator('.fixo')).toHaveAttribute('aria-label', 'Voo fixo: escala aprovada');
+
+    await confirmar(page, '#btn-reabrir');
+    await expect(page.locator('#selo-aprovada')).toBeHidden();
+    await expect(cadeado).toHaveAttribute('aria-label', 'Voo fixo: agendado na escala');
+    await expect(voo(page, 'Aluno 1001').locator('.fixo')).toHaveCount(0);
+  });
 });

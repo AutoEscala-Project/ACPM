@@ -572,3 +572,20 @@ describe('Horas operacionais e mapa de ocupação', () => {
     assert.equal(barras[0].items.length, 2);
   });
 });
+
+// O voo agendado na Escala é um voo fixo com a marca agendado: a linha dele na escala leva a marca (a aprovação e a escala
+// gravada a guardam). A marca não muda a escala: o mesmo voo fixo sem ela dá a mesma escala
+describe('Voo agendado na Escala', () => {
+  it('a linha do voo fixo leva a marca do pino agendado; os outros voos, não; sem a marca, a mesma escala', () => {
+    const estado = cenario({ ins: [instrutor(1, 9), instrutor(2, 9)], stu: [aluno(1000, { p1: 390, p2: -1 }), aluno(1001, { p1: 500, p2: -1 }), aluno(1002, { p1: 610, p2: -1 })] });
+    const agendado = { a: 610, b: 670, r: 'PR-VOB', insId: 2, agendado: true };
+    const fixos = { '1000_0_1': agendado, '1001_0_1': { a: 500, b: 560, r: 'PR-VOC', insId: 1 } };
+    const resultado = runAllocationEngine({ ...estado, fixos });
+    const marcas = id => { const o = resultado.out.find(v => v.stuId === id); return [o.fixo, o.agendado]; };
+    assert.deepEqual([marcas(1000), marcas(1001), marcas(1002)], [[true, true], [true, undefined], [undefined, undefined]]);
+    assert.deepEqual(resultado.al, []);
+    const { agendado: _, ...semAMarca } = agendado;
+    const semMarca = runAllocationEngine({ ...estado, fixos: { ...fixos, '1000_0_1': semAMarca } });
+    assert.deepEqual(semMarca, { ...resultado, out: resultado.out.map(({ agendado: _, ...o }) => o) });
+  });
+});
