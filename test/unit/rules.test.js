@@ -120,6 +120,21 @@ describe('Número da missão extra', () => {
     assert.equal(proximoMid({ ...estado, resultados: null }, { id: 1000, extra: [{ mid: 1 }] }), 2, 'sem os resultados lidos');
   });
 
+  // O curso da missão do curso (a sigla) só vale com a missão: sem o código (ou com o código fora do formato, que sai), ou
+  // fora do formato das siglas, ele sai
+  it('o curso da missão do curso: uma sigla, só com o código da missão', () => {
+    const pedido = extra => { const p = { mis: 'Voo Local', eq: 'C152', p1: 390, p2: -1, nb: 1, ...extra }; normalizeMissionFields(p); return p; };
+    assert.deepEqual([pedido({ etapa: 'PE-04', cursoDaEtapa: 'PP' }), pedido({ etapa: 'IFR-01', cursoDaEtapa: 'PC-IFR' })].map(p => [p.etapa, p.cursoDaEtapa]),
+      [['PE-04', 'PP'], ['IFR-01', 'PC-IFR']]);
+    for (const ruim of ['pp', 'P', 'PP-', 'PPPPPPPPPPP', '<b>', 7, null, ['PP'], { toString: () => 'PP' }]) {
+      const p = pedido({ etapa: 'PE-04', cursoDaEtapa: ruim });
+      assert.deepEqual([p.etapa, Object.hasOwn(p, 'cursoDaEtapa')], ['PE-04', false], String(ruim));
+    }
+    for (const semCodigo of [{}, { etapa: 'pe 04' }, { etapa: null }]) {
+      assert.equal(Object.hasOwn(pedido({ ...semCodigo, cursoDaEtapa: 'PP' }), 'cursoDaEtapa'), false, JSON.stringify(semCodigo));
+    }
+  });
+
   it('o id da solicitação da agenda: inteiro positivo; o resto sai', async () => {
     const { normalizeMissionFields } = await import('../../js/rules.js');
     const ok = { mis: 'Voo Local', eq: 'C152', p1: 390, p2: -1, nb: 1, solicitacao: 12 };

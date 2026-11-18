@@ -1,5 +1,5 @@
-// A Demanda: pôr um aluno, a próxima missão do curso, as missões extras, tirar da escala, limpar a demanda, os filtros e
-// os campos de cada pedido
+// A Demanda: pôr um aluno, a próxima missão do curso e as outras, as missões extras, tirar da escala, limpar a demanda,
+// os filtros e os campos de cada pedido
 import { gravarAlteracao } from '../actions.js';
 import { T, GROUND_EQ_TYPE, GROUND_DURATION_H, MIS } from '../config.js';
 import { $, showToast, ligarMenu, trocarElemento } from '../dom.js';
@@ -14,7 +14,7 @@ import { confirmado, comConfirmacao } from './confirmacao.js';
 import { aoAcionar, aoMudarCampo } from './registro.js';
 import { singleDemandRowHTML, cnt, rDem, applyDemandFilters } from '../views/demanda.js';
 import { renderAuditPanel } from '../views/escala.js';
-import { proximaDoPedido } from '../views/etapas.js';
+import { proximaDoPedido, outraMissaoDoPedido, botaoForaDaOrdem } from '../views/etapas.js';
 
 // "Limpar demanda" pede confirmação no próprio menu (dois cliques): o menu só fecha depois
 const fecharMenuMais = ligarMenu($('#btn-mais-dem'), $('#menu-mais-dem'), { fecharAoEscolher: false });
@@ -64,7 +64,7 @@ document.addEventListener('change', e => {
 
 comConfirmacao('#clr', 'Confirmar limpeza', () => {
   if (isGestor()) return;
-  S.stu.forEach(d => { Object.assign(d, blank()); delete d.insId; d.extra = []; });
+  S.stu.forEach(d => { Object.assign(d, blank()); for (const campo of ['insId', 'etapa', 'cursoDaEtapa']) delete d[campo]; d.extra = []; });
   // Os voos agendados na Escala saem com os pedidos (um agendamento não passa para o pedido que vier depois); o que tem um
   // status que fixa continua fixo pelo status, como os outros
   S.fixos = semAgendados(S.fixos, null, S.fStatus);
@@ -73,16 +73,57 @@ comConfirmacao('#clr', 'Confirmar limpeza', () => {
   fecharMenuMais();
 });
 
+// A missão do curso no pedido: ele vira a missão do programa (tipo, recurso e horas; a duração fixa da missão vale mais),
+// com o código e o curso dela, e o aluno voa; o instrutor escolhido continua. Devolve o que o histórico diz do voo
+// agendado do pedido (que deixa de ser fixo)
+function usarMissaoDoCurso(s, target, mid, { codigo, curso, mis, eq, nb }) {
+  Object.assign(target, { fly: true, mis, eq, nb, etapa: codigo, cursoDaEtapa: curso });
+  ajustarPreferencias(target, horariosDaMissao(S.horarios, target.mis, target.eq));
+  normalizeMissionFields(target);
+  return soltarAgendado(s.id, mid);
+}
+// O pedido como ficou, para o histórico
+const missaoDoPedido = d => `${d.mis} · ${d.eq} · ${fmtDurLabel(d.nb)}`;
+
 // A próxima missão do curso: o pedido vira a missão do programa (tipo, recurso e horas) e o aluno voa
 aoAcionar('usar-proxima', (b, { id, mid }) => {
   const s = stuBy(id), target = getMissionTarget(id, mid);
   const m = s && target ? proximaDoPedido(s, mid) : null;
   if (!m) return;
-  Object.assign(target, { fly: true, mis: m.mis, eq: m.eq, nb: m.nb, etapa: m.id });
-  ajustarPreferencias(target, horariosDaMissao(S.horarios, target.mis, target.eq));
-  normalizeMissionFields(target);
-  const solto = soltarAgendado(s.id, mid);
-  gravarAlteracao('inc', `${s.nm}: ${m.id} na demanda (${m.mis} · ${m.eq} · ${fmtDurLabel(m.nb)})${solto}`);
+  const solto = usarMissaoDoCurso(s, target, mid, { ...m, codigo: m.id });
+  gravarAlteracao('inc', `${s.nm}: ${m.id} na demanda (${missaoDoPedido(target)})${solto}`);
+  rDem();
+});
+
+// "Outra missão do curso": a liberada vale na hora, como o Usar. A fora da ordem (a missão bloqueada pelo programa, a já
+// aprovada, a dispensada ou a que o aluno já tem em outro voo do dia) pede confirmação: o botão dela aparece armado, e
+// o segundo acionamento põe a missão no pedido; o histórico diz por que ela estava fora da ordem
+function escolherOutraMissao(t, c, s, target, mid) {
+  const escolha = t.value ? outraMissaoDoPedido(s, target, mid, t.value) : null;
+  if (!escolha) { trocarElemento(c, singleDemandRowHTML(s, target, mid)); return; }
+  const { missao: m } = escolha;
+  if (escolha.liberada) {
+    const solto = usarMissaoDoCurso(s, target, mid, { ...m, curso: escolha.curso });
+    gravarAlteracao('inc', `${s.nm}: ${m.codigo} na demanda (${missaoDoPedido(target)})${solto}`);
+    rDem();
+    return;
+  }
+  c.querySelector('[data-act="usar-fora-da-ordem"]')?.remove();
+  t.insertAdjacentHTML('afterend', botaoForaDaOrdem(s, escolha));
+  const botao = t.nextElementSibling;
+  confirmado(botao, `Confirmar: ${m.codigo} fora da ordem`);
+  botao.focus();
+}
+
+aoAcionar('usar-fora-da-ordem', (b, { id, mid }) => {
+  const s = stuBy(id), target = getMissionTarget(id, mid);
+  const escolha = s && target ? outraMissaoDoPedido(s, target, mid, b.dataset.codigo) : null;
+  // A missão já não é uma das outras do pedido (o programa ou os resultados mudaram): a linha volta a mostrar as de agora
+  if (!escolha) { rDem(); return; }
+  const { missao: m } = escolha;
+  if (!escolha.liberada && !confirmado(b, `Confirmar: ${m.codigo} fora da ordem`)) return;
+  const solto = usarMissaoDoCurso(s, target, mid, { ...m, curso: escolha.curso });
+  gravarAlteracao('inc', `${s.nm}: ${m.codigo} na demanda${escolha.liberada ? ` (${missaoDoPedido(target)})` : `, fora da ordem (${escolha.motivo})`}${solto}`);
   rDem();
 });
 
@@ -134,6 +175,7 @@ aoMudarCampo('d', (t, { f, c, id, mid }) => {
   const s = stuBy(id);
   const target = getMissionTarget(id, mid);
   if (!target) return;
+  if (f === 'outra-missao') { escolherOutraMissao(t, c, s, target, mid); return; }
   let historico;
   if (f === 'insId') {
     // O instrutor escolhido: o app procura o horário e o avião com ele. O voo que já está fixo fica onde está, com o
@@ -177,10 +219,10 @@ aoMudarCampo('d', (t, { f, c, id, mid }) => {
     const tinhaPadrao = Boolean((MIS[target.mis] || {}).duracaoPadrao || (MIS[target.mis] || {}).duracaoFixaH);
     const anterior = target[f];
     target[f] = (f === 'mis' || f === 'eq') ? t.value : +t.value;
-    // Missão, recurso ou horas mudados à mão: o pedido deixa de ser a missão do curso, e o voo agendado dele na Escala
-    // deixa de ser fixo. A mesma duração digitada de outro jeito (1.0 no lugar de 1) não muda o voo
+    // Missão, recurso ou horas mudados à mão: o pedido deixa de ser a missão do curso (o código e o curso dela), e o voo
+    // agendado dele na Escala deixa de ser fixo. A mesma duração digitada de outro jeito (1.0 no lugar de 1) não muda o voo
     const mudouOVoo = ['mis', 'eq', 'nb'].includes(f) && target[f] !== anterior;
-    if (mudouOVoo) delete target.etapa;
+    if (mudouOVoo) for (const campo of ['etapa', 'cursoDaEtapa']) delete target[campo];
     const solto = mudouOVoo ? soltarAgendado(s.id, mid) : '';
     if (f === 'mis') {
       const mRule = MIS[target.mis] || MIS['Voo Local'];

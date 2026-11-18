@@ -97,11 +97,13 @@ function vooQueDaLugar(estado, aluno, mis) {
 // na demanda sem pedido da agenda dá lugar ao pedido (vooQueDaLugar); senão, o pedido vai para o pedido principal do
 // aluno, quando ele não voa e o dia não guarda nada dele, ou para uma missão extra nova (alvoDoNovoPedido). As
 // solicitações vistas ficam anotadas no dia (estado.importadas) para não repetir.
-// Aluno de um curso: o pedido entra como a primeira missão liberada do programa que é do tipo pedido (o código, o
-// recurso e as horas do programa); nenhuma, ele entra como veio. As missões dos outros voos do aluno no dia contam como
-// feitas, como na Demanda; a do voo que dá lugar ao pedido, não (ela continua no dia, agora com o pedido). situacao: o
-// último resultado de cada missão; programa: os cursos (vazio quando os resultados ou os programas não foram lidos:
-// nenhum pedido entra como missão do curso)
+// Aluno de um curso: o pedido entra como a primeira missão liberada do programa que é do tipo pedido (o código e o curso
+// dela, o recurso e as horas do programa); nenhuma, ele entra como veio. As missões dos outros voos do aluno no dia
+// contam como feitas, como na Demanda; a do voo que dá lugar ao pedido, não (ela continua no dia, agora com o pedido). A
+// missão do curso que o operador pôs nesse voo (Usar, "Outra missão do curso") continua a dele, com o recurso e as horas
+// que ele tem (as registradas na agenda valem mais, como na missão do programa): a escolha do operador vale mais que a
+// próxima missão do programa. situacao: o último resultado de cada missão; programa: os cursos (vazio quando os
+// resultados ou os programas não foram lidos: nenhum pedido entra como missão do curso)
 export function importarSolicitacoes(estado, solicitacoes, { situacao = [], programa = [] } = {}) {
   const indice = indiceDoPrograma(programa), mapa = situacaoPorMissao(situacao);
   const resumo = { novos: 0, atualizados: 0, semAluno: 0 };
@@ -113,13 +115,16 @@ export function importarSolicitacoes(estado, solicitacoes, { situacao = [], prog
     if (!aluno) { resumo.semAluno++; continue; }
     estado.importadas.push(solicitacao.id);
     const copiada = vooQueDaLugar(estado, aluno, migrateLegacyMissionName(solicitacao.missao));
-    const curso = aluno.curso ? indice.curso(aluno.curso) : null;
+    const escolhida = copiada && copiada.etapa ? copiada : null;
+    const curso = !escolhida && aluno.curso ? indice.curso(aluno.curso) : null;
     const jaNoDia = curso && missoesDoDia(curso, aluno, { fStatus: estado.fStatus, mid: copiada ? copiada.mid || 0 : null });
     const missao = curso && proximasMissoes(curso, mapa, aluno.id, { planejadas: jaNoDia, exceto: jaNoDia }).candidatas
       .find(m => m.mis === solicitacao.missao);
     // A missão do curso: o recurso do programa, com os horários e as preferências dele, e as horas dele
-    const pedido = pedidoDaSolicitacao(solicitacao, estado.horarios, missao ? { eq: missao.eq, nb: missao.nb } : {});
-    if (missao) pedido.etapa = missao.codigo;
+    const doCurso = escolhida || missao;
+    const pedido = pedidoDaSolicitacao(solicitacao, estado.horarios, doCurso ? { eq: doCurso.eq, nb: doCurso.nb } : {});
+    if (escolhida) Object.assign(pedido, { etapa: escolhida.etapa }, escolhida.cursoDaEtapa ? { cursoDaEtapa: escolhida.cursoDaEtapa } : {});
+    else if (missao) Object.assign(pedido, { etapa: missao.codigo, cursoDaEtapa: curso.sigla });
     pedido.solicitacao = solicitacao.id;
     if (copiada) {
       // O voo continua com o instrutor escolhido; a disponibilidade e a missão do curso passam a ser as do pedido

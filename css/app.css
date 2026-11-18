@@ -737,6 +737,13 @@ table.frota tr:hover .rev, table.frota tr:focus-within .rev { opacity: 1; }
 .etapa { display: inline-block; padding: 0 6px; border-radius: 4px; background: var(--info-bg); color: var(--ac); font: 600 12.5px 'Barlow Semi Condensed', sans-serif; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .stu-cell .etapa, .stu-cell .usar-proxima { margin-left: 6px; }
 .usar-proxima { padding: 1px 6px; font-size: 13px; }
+/* "Outra missão do curso" (Demanda): estreita como o botão da próxima missão (sem a largura da missão mais longa, a
+   coluna do aluno não caberia na tela); as missões aparecem ao abrir a lista */
+#dem select.outra-missao { width: 7.5em; flex-shrink: 0; padding: 1px 6px; font-size: 13px; color: var(--ac); }
+#dem select.outra-missao optgroup, #dem select.outra-missao option { color: var(--ink); font-weight: 400; }
+/* Com o nome comprido, o código (ou a próxima missão) e a lista descem para a linha de baixo do nome, em vez de alargar
+   a coluna do aluno até a tabela passar da tela */
+#s-dem .stu-cell:has(.outra-missao) { flex-wrap: wrap; }
 .resultado { display: flex; align-items: center; gap: 6px; margin-top: 4px; flex-wrap: wrap; }
 .res-sel { font-size: 13px; padding: 2px 4px; }
 .res-sel.res-aprovado, .res.res-aprovado { color: var(--ok); font-weight: 600; }

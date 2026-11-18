@@ -15,6 +15,8 @@ export function situacaoPorMissao(registros) {
   [...(registros || [])].sort((p, q) => (p.id || 0) - (q.id || 0)).forEach(r => mapa.set(chave(r.aluno, r.curso, r.missao), r));
   return mapa;
 }
+// O último registro do aluno, curso e missão (o resultado e a data do voo), ou null
+export const registroDa = (mapa, aluno, curso, missao) => mapa.get(chave(aluno, curso, missao)) || null;
 export const situacaoDa = (mapa, aluno, curso, missao) => {
   const r = mapa.get(chave(aluno, curso, missao));
   return r ? r.resultado : 'pendente';

@@ -89,8 +89,9 @@ describe('Desfazer um voo agendado na Escala', () => {
     const principal = { ...NOVO, mid: 0, pedido: { fly: false, mis: 'Voo Local', eq: 'C152', p1: 500, p2: 610, nb: 1, ss: 1, pr: 3 } };
     assert.deepEqual(validarReversao(principal, FROTA_INICIAL), principal);
     assert.deepEqual(validarReversao(MOVIDO, FROTA_INICIAL), MOVIDO);
-    // Todos os campos do pedido: a disponibilidade do aluno, a missão do curso, o pedido da agenda e o instrutor escolhido
-    const completo = { ...MOVIDO, pedido: { ...ANTES, jan: 'h500', solicitacao: 12 } };
+    // Todos os campos do pedido: a disponibilidade do aluno, a missão do curso (e o curso dela), o pedido da agenda e o
+    // instrutor escolhido
+    const completo = { ...MOVIDO, pedido: { ...ANTES, jan: 'h500', solicitacao: 12, cursoDaEtapa: 'PP' } };
     assert.deepEqual(Object.keys(completo.pedido).sort(), [...CAMPOS_DO_PEDIDO].sort());
     assert.deepEqual(validarReversao(completo, FROTA_INICIAL), completo);
     assert.equal(validarReversao({ ...NOVO, label: 'x'.repeat(40) }, FROTA_INICIAL).label, 'x'.repeat(40));

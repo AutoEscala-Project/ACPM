@@ -3,7 +3,7 @@
 import { MIS, NI, T, PRE, GROUND_EQ_TYPE, GROUND_DURATION_H, DURACAO_MAXIMA_H } from './config.js';
 import { hm, lerHoras } from './format.js';
 import { periodoDoMinuto, minutoDaPreferencia, preferenciaValida, HORARIO_DO_SOLO } from './horarios.js';
-import { codigoValido } from './cursos.js';
+import { codigoValido, siglaValida } from './cursos.js';
 import { chaveDoVoo } from './voo.js';
 
 // Disponibilidade do aluno para o pedido (da agenda da secretaria ou escolhida na demanda): o voo só começa nesses
@@ -154,6 +154,9 @@ export function normalizeMissionFields(target) {
   if (Object.hasOwn(target, 'fly')) target.fly = Boolean(target.fly);
   // O código da missão do curso, quando o pedido veio do programa
   if (Object.hasOwn(target, 'etapa') && !(typeof target.etapa === 'string' && codigoValido(target.etapa))) delete target.etapa;
+  // O curso dessa missão (a sigla; o resultado vai para ele, mesmo que o aluno troque de curso no mesmo dia): só com a
+  // missão do curso. Não se chama "curso": o pedido principal é o próprio aluno, e o curso do aluno é outro campo
+  if (Object.hasOwn(target, 'cursoDaEtapa') && !(siglaValida(target.cursoDaEtapa) && Object.hasOwn(target, 'etapa'))) delete target.cursoDaEtapa;
   // O id do pedido da agenda que originou este voo
   if (Object.hasOwn(target, 'solicitacao') && !(Number.isInteger(target.solicitacao) && target.solicitacao > 0)) delete target.solicitacao;
   // O instrutor escolhido pelo operador para o pedido

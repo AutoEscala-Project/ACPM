@@ -3,7 +3,7 @@
 // situação, estão em progresso.test.js.
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { situacaoPorMissao, situacaoDa, resultadoDoVoo, validarRegistro } from '../../js/resultados.js';
+import { situacaoPorMissao, situacaoDa, registroDa, resultadoDoVoo, validarRegistro } from '../../js/resultados.js';
 
 const reg = (id, aluno, curso, missao, resultado, extra = {}) => ({ id, aluno, curso, missao, resultado, data: '2026-11-10', voo: null, ...extra });
 
@@ -16,6 +16,8 @@ describe('Resultados das missões', () => {
     assert.deepEqual(['PP-01', 'PP-02', 'PP-03'].map(m => situacaoDa(mapa, 1000, 'PP', m)), ['aprovado', 'pendente', 'pendente']);
     assert.equal(situacaoDa(mapa, 1001, 'PP', 'PP-01'), 'reprovado');
     assert.equal(situacaoDa(mapa, 1000, 'PC', 'PP-01'), 'pendente', 'cada curso tem a sua situação');
+    // O último registro inteiro (o motivo da missão fora da ordem diz a data da reprovada)
+    assert.deepEqual([registroDa(mapa, 1001, 'PP', 'PP-01').id, registroDa(mapa, 1000, 'PP', 'PP-02').id, registroDa(mapa, 1000, 'PP', 'PP-03')], [5, 4, null]);
   });
 
   it('o resultado de um voo na escala do dia: o último registro dele', () => {

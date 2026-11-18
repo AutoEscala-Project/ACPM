@@ -8,7 +8,7 @@ import { exp, pdf, planilha } from '../export.js';
 import { fixosAoMudarStatus, fixosAoReabrir, fixosAoAprovar } from '../fixos.js';
 import { hm } from '../format.js';
 import { aplicarReparo } from '../reparo.js';
-import { S, RES, DATA, isGestor, modoCompartilhado, stuBy, insBy } from '../state.js';
+import { S, RES, DATA, isGestor, modoCompartilhado, insBy } from '../state.js';
 import { escolherInstrutor, escolhasDaUnidade, escolherNosPedidos } from '../instrutor-escolhido.js';
 import { STATUS_COM_DETALHE, textoParaOHistorico, detalheAoMudarStatus, rotuloDoStatus } from '../status.js';
 import { ApiClient } from '../storage.js';
@@ -17,6 +17,7 @@ import { aoAcionar, aoMudarCampo } from './registro.js';
 import { rAlu } from '../views/cadastros.js';
 import { rDem } from '../views/demanda.js';
 import { pedirDetalheDoStatus } from '../views/dialogo-status.js';
+import { cursoDoResultado } from '../views/etapas.js';
 import { rOut, botaoDoInstrutor, seletorDeInstrutor, abrirPopupDoMapa, fecharPopupDoMapa, popupDoMapaAberto, reposicionarPopupDoMapa, tabNoPopup } from '../views/escala.js';
 import { abrirPainelDeReparo, fecharPainelDeReparo, opcaoDoPainel, painelDeReparoAberto } from '../views/reparo.js';
 
@@ -210,14 +211,15 @@ document.addEventListener('click', e => {
   gravarAlteracao('mod', `Compactação: ${campo === 'buracos' ? 'buracos' : 'horários'} ${nome(antes[campo])} → ${nome(S.criterios[campo])}`);
 });
 
-// O resultado da missão do curso, na linha do voo: vai para o servidor (só acréscimo) e entra na situação do
-// aluno (o progresso e a próxima missão mudam). Sem conexão, o seletor volta ao que estava
+// O resultado da missão do curso, na linha do voo: vai para o servidor (só acréscimo), no curso da missão do pedido (o
+// aluno pode ter trocado de curso no mesmo dia), e entra na situação do aluno (o progresso e a próxima missão mudam).
+// Sem conexão, o seletor volta ao que estava
 document.addEventListener('change', async e => {
   const sel = e.target.closest('[data-resultado]');
   if (!sel || isGestor()) return;
-  const o = vooDaChave(sel.dataset.resultado), stu = o ? stuBy(o.stuId) : null;
-  if (!o || !o.etapa || !stu || !stu.curso) return;
-  const registro = { aluno: o.stuId, curso: stu.curso, missao: o.etapa, resultado: sel.value, data: DATA, voo: o.fKey };
+  const o = vooDaChave(sel.dataset.resultado), curso = o ? cursoDoResultado(o) : null;
+  if (!o || !o.etapa || !curso) return;
+  const registro = { aluno: o.stuId, curso, missao: o.etapa, resultado: sel.value, data: DATA, voo: o.fKey };
   sel.disabled = true;
   try {
     const id = await ApiClient.registrarResultado(registro);

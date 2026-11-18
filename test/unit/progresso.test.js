@@ -1,16 +1,16 @@
 // A próxima missão pelas regras do programa (js/progresso.js): os exemplos do cronograma do PP (o desenho dos cursos,
-// §4.8 e apêndice A), as regras de cada fase e missão, o progresso, as missões do dia, o que a Demanda e Alunos mostram
-// (js/views/etapas.js) e a paridade com a próxima missão de antes (o programa do cadastro numa fase só, todas as missões
-// depois das anteriores).
+// §4.8 e apêndice A), as regras de cada fase e missão, o progresso, o motivo de uma missão estar fora da ordem, as
+// missões do dia, o que a Demanda, Alunos e a escala mostram (js/views/etapas.js) e a paridade com a próxima missão de
+// antes (o programa do cadastro numa fase só, todas as missões depois das anteriores).
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { estadoDoAluno, proximasMissoes, progressoNoCurso, missoesDoDia } from '../../js/progresso.js';
+import { estadoDoAluno, proximasMissoes, progressoNoCurso, missoesDoDia, motivoDoBloqueio } from '../../js/progresso.js';
 import { programaDoLegado, percursoDoCurso, indiceDoPrograma } from '../../js/programa.js';
 import { situacaoPorMissao, situacaoDa } from '../../js/resultados.js';
 import { normalizarCursos, codigoValido } from '../../js/cursos.js';
 import { MIS } from '../../js/config.js';
 import { setS } from '../../js/state.js';
-import { etapaNaDemanda, progressoDoAluno } from '../../js/views/etapas.js';
+import { etapaNaDemanda, progressoDoAluno, outraMissaoDoPedido, cursoDoResultado } from '../../js/views/etapas.js';
 import { cursoPP } from '../helpers/programa-pp.js';
 import { mulberry32 } from '../helpers/cenarios.js';
 
@@ -203,6 +203,63 @@ describe('O progresso no curso', () => {
   });
 });
 
+// O motivo de uma missão estar fora da ordem (a escolha dela pede confirmação; o histórico registra): a Demanda o mostra
+// em "Outra missão do curso"
+describe('Por que a missão está fora da ordem', () => {
+  const motivo = (mapa, codigo, opcoes, curso = PP) => {
+    const m = curso.missoes.find(x => x.codigo === codigo);
+    return motivoDoBloqueio(curso, m, estadoDoAluno(curso, mapa, ALUNO, opcoes).porMissao.get(m.id), { mapa, aluno: ALUNO });
+  };
+
+  it('a bloqueada: as missões que faltam, até três; mais que isso, as duas primeiras e quantas mais', () => {
+    const nada = aprovadas([]);
+    assert.deepEqual(['IN-02', 'CT-01', 'IN-01'].map(c => motivo(nada, c)), ['falta IN-01', 'faltam IN-01 e IN-02', '']);
+    // A Fase 5 (depois das anteriores) espera a Fase 4: a SPIN, livre na fase, só espera a TMA-05
+    const semTMA05 = aprovadas(ate('TMA-04'));
+    assert.deepEqual(['PE-04', 'NAV-02', 'CAP-01'].map(c => motivo(semTMA05, c)), ['falta TMA-05', 'faltam TMA-05 e NAV-01', 'já aprovada']);
+    assert.equal(motivo(aprovadas(ate('CAP-01')), 'CAP-04'), 'faltam CAP-02 e CAP-03');
+    assert.equal(motivo(aprovadas(ate('IN-02')), 'CAP-04'), 'faltam CT-01, CT-02 e mais 3');
+    // A Fase 9 espera a Fase 8 e a Fase 6, na ordem do curso: 11 e 3 missões
+    assert.equal(motivo(aprovadas(dasFases(1, 2, 3, 4, 5, 7)), 'AVX-CQ'), 'faltam END-SOLO-NAV, AVP-NSOLO-01 e mais 12');
+  });
+
+  it('na fase que abre depois de outras escolhidas ("depois de…"), a fase fechada e o que falta nela', () => {
+    assert.equal(motivo(aprovadas([]), 'TSL-01'), 'a Fase 6 abre depois da Fase 4: faltam TMA-01, TMA-02 e mais 3');
+    assert.equal(motivo(aprovadas(ate('TMA-03')), 'TSL-01'), 'a Fase 6 abre depois da Fase 4: faltam TMA-04 e TMA-05');
+    // O NOT também espera o TSL-01, mas o motivo é a fase fechada
+    assert.equal(motivo(aprovadas(ate('TMA-04')), 'NOT'), 'a Fase 6 abre depois da Fase 4: falta TMA-05');
+    // Com a Fase 4 completa, a fase abriu: só o que falta na fase
+    assert.equal(motivo(aprovadas(dasFases(1, 2, 3, 4)), 'NOT'), 'falta TSL-01');
+    // Duas fases fechadas na lista: as duas, na ordem do curso
+    const fase = (id, ordem, nome, regra = 'ordem', requer = []) => ({ id, nome, modulo: null, ordem, regra, requer, removida: false });
+    const missao = (fase, codigo, ordem) => ({ id: `YY:${codigo}`, fase, codigo, nome: codigo, mis: 'Voo Local', eq: 'C152', nb: 1, ordem, regra: 'ordem', requer: [], dispensada: false, avaliacao: false, removida: false });
+    const YY = { sigla: 'YY', nome: 'Teste', ordem: 3, ativo: true, fases: [fase('F1', 0, 'Fase 1 – A'), fase('F2', 1, 'Fase 2 – B', 'livre'), fase('F3', 2, 'Fase 3 – C', 'depois', ['F1', 'F2'])],
+      missoes: [missao('F1', 'A1', 0), missao('F2', 'B1', 0), missao('F3', 'C1', 0)] };
+    assert.equal(motivo(situacaoPorMissao([]), 'C1', {}, YY), 'a Fase 3 abre depois da Fase 1 e da Fase 2: faltam A1 e B1');
+  });
+
+  it('a reprovada, com a data do último resultado; a já aprovada, a dispensada, a do outro voo do dia; a condicional, nenhum', () => {
+    const reprovada = situacaoPorMissao([...ate('TMA-02').map(c => reg(c)), reg('TMA-03', 'reprovado')]);
+    assert.equal(motivo(reprovada, 'TMA-04'), 'falta TMA-03 (reprovada em 14/11)');
+    assert.equal(motivo(reprovada, 'TMA-05'), 'faltam TMA-03 (reprovada em 14/11) e TMA-04');
+    const mapa = aprovadas(ate('TMA-03'));
+    assert.deepEqual(['TMA-01', 'ADAPT-C152'].map(c => motivo(mapa, c)), ['já aprovada', 'dispensada']);
+    const noDia = { planejadas: ids(['TMA-04']), exceto: ids(['TMA-04']) };
+    assert.deepEqual(['TMA-04', 'TMA-05'].map(c => motivo(mapa, c, noDia)), ['já em outro voo do dia', ''], 'a TMA-05 depende do resultado da TMA-04');
+  });
+
+  // Os resultados de todos os alunos só crescem: a data da reprovada vem do registro do aluno, achado pela chave. Antes, a
+  // lista da Demanda percorria os resultados de todos a cada missão de cada aluno (o tempo crescia com o quadrado deles)
+  it('a data da reprovada é a do registro do aluno no curso, achado sem percorrer os resultados dos outros', () => {
+    const percorrer = () => { throw new Error('percorreu os resultados de todos os alunos'); };
+    class SoPelaChave extends Map {}
+    for (const metodo of ['values', 'entries', 'keys', 'forEach', Symbol.iterator]) SoPelaChave.prototype[metodo] = percorrer;
+    const mapa = new SoPelaChave(situacaoPorMissao([...ate('TMA-02').map(c => reg(c)), { ...reg('TMA-03', 'reprovado', 1001), data: '2026-11-12' },
+      { ...reg('TMA-03', 'reprovado', ALUNO, 'PC'), data: '2026-11-13' }, { ...reg('TMA-03', 'reprovado'), data: '2026-11-16' }]));
+    assert.equal(motivo(mapa, 'TMA-04'), 'falta TMA-03 (reprovada em 16/11)');
+  });
+});
+
 describe('As missões do dia (Demanda e agenda)', () => {
   it('as etapas dos pedidos do aluno que voam; o cancelado, o que não voa e o pedido que recebe a missão não contam', () => {
     const aluno = {
@@ -217,14 +274,24 @@ describe('As missões do dia (Demanda e agenda)', () => {
   });
 });
 
-// Na tela (js/views/etapas.js), com o programa em S.programa: o botão da próxima missão na Demanda e o progresso em
-// Alunos. Sem os resultados ou os programas, nada é inferido: nem Usar, nem progresso (antes, 0/N)
+// Na tela (js/views/etapas.js), com o programa em S.programa: o botão da próxima missão e a lista das outras missões do
+// curso na Demanda, o progresso em Alunos e o curso do resultado na escala. Sem os resultados ou os programas, nada é
+// inferido: nem Usar, nem outra missão, nem progresso (antes, 0/N)
 describe('Na Demanda e em Alunos', () => {
   const texto = html => html.replace(/<[^>]+>/g, '').trim();
   const pedido = (extra = {}) => ({ fly: true, mis: 'Voo Local', eq: 'C152', nb: 1, p1: 500, p2: -1, pr: 3, ss: 1, ...extra });
   const aluno = (extra = {}) => ({ id: ALUNO, nm: 'Aluno 1000', curso: 'PP', ...pedido(), extra: [], ...extra });
   const abrir = (estado = {}) => setS({ stu: [], fStatus: {}, resultados: { situacao: [], doDia: [] }, programa: [cursoPP()], ...estado });
-  const usar = (stu, mid = 0) => texto(etapaNaDemanda(stu, mid ? stu.extra.find(x => x.mid === mid) : stu, mid));
+  const naDemanda = (stu, mid) => etapaNaDemanda(stu, mid ? stu.extra.find(x => x.mid === mid) : stu, mid);
+  // O texto do botão Usar do pedido ('' sem ele)
+  const usar = (stu, mid = 0) => texto((/<button[^>]*data-act="usar-proxima".*?<\/button>/.exec(naDemanda(stu, mid)) || [''])[0]);
+  // A lista "Outra missão do curso" do pedido: cada grupo com o texto dos itens (sem a lista, null)
+  const outras = (stu, mid = 0) => {
+    const lista = /<select[^>]*data-f="outra-missao"[^>]*>(.*?)<\/select>/.exec(naDemanda(stu, mid));
+    return lista && Object.fromEntries([...lista[1].matchAll(/<optgroup label="([^"]*)">(.*?)<\/optgroup>/g)]
+      .map(([, rotulo, itens]) => [rotulo, [...itens.matchAll(/<option value="[^"]*">([^<]*)<\/option>/g)].map(o => o[1])]));
+  };
+  const FORA = 'Fora da ordem (pede confirmação)';
 
   it('o progresso: as aprovadas sobre as que contam, a fase (quando o curso tem mais de uma) e a próxima', () => {
     abrir({ resultados: { situacao: dasFases(1, 2, 3, 4).map(c => reg(c)), doDia: [] } });
@@ -236,10 +303,11 @@ describe('Na Demanda e em Alunos', () => {
     assert.equal(progressoDoAluno(aluno({ curso: 'INVA' })), '', 'o curso sem missões');
   });
 
-  it('sem os resultados ou os programas, nem Usar nem progresso', () => {
+  it('sem os resultados ou os programas, nem Usar, nem outra missão, nem progresso', () => {
     for (const parte of ['resultados', 'cursos', 'cursos-pendentes']) {
       abrir({ indisponiveis: [parte] });
-      assert.deepEqual([progressoDoAluno(aluno()), usar(aluno())], ['', ''], parte);
+      assert.deepEqual([progressoDoAluno(aluno()), naDemanda(aluno())], ['', ''], parte);
+      assert.equal(outraMissaoDoPedido(aluno(), aluno(), 0, 'IN-01'), null, parte);
     }
     abrir({ indisponiveis: ['horas'] });
     assert.deepEqual([texto(progressoDoAluno(aluno())), usar(aluno())], ['0/46 · Fase 1 · próxima IN-01', 'Próxima: IN-01 · Usar']);
@@ -251,6 +319,63 @@ describe('Na Demanda e em Alunos', () => {
     assert.equal(usar(comExtra, 1), 'Próxima: IN-02 · Usar');
     abrir({ fStatus: { '1000_0_1': 'Cancelado' } });
     assert.equal(usar(comExtra, 1), 'Próxima: IN-01 · Usar');
+  });
+
+  it('outra missão do curso: as liberadas, que valem na hora, e as fora da ordem, com o motivo; a do próprio pedido não volta', () => {
+    abrir({ resultados: { situacao: ate('TMA-04').map(c => reg(c)), doDia: [] } });
+    const lista = outras(aluno());
+    assert.deepEqual(Object.keys(lista), ['Liberadas no PP', FORA]);
+    assert.deepEqual(lista['Liberadas no PP'], ['TMA-05 · Voo Local · C152 · 1 h']);
+    assert.equal(lista[FORA].length, 46);
+    const item = codigo => lista[FORA].find(t => t.startsWith(`${codigo} `));
+    assert.deepEqual(['IN-01', 'PE-04', 'NAV-01', 'ADAPT-C152', 'NOT'].map(item), [
+      'IN-01 · Voo Local · C152 · 1 h (já aprovada)',
+      'PE-04 · Parafuso · C152 · 1 h (falta TMA-05)',
+      'NAV-01 · Navegação · C152 · 01h30 (1,5 h) (falta TMA-05)',
+      'ADAPT-C152 · Voo Local · C152 · 1 h (dispensada)',
+      'NOT · Noturno · C172 · 3 h (a Fase 6 abre depois da Fase 4: falta TMA-05)'
+    ]);
+    // Com a TMA-05 no pedido principal: ela sai da lista dele, e as que esperam por ela continuam fora da ordem
+    const comTMA05 = aluno({ etapa: 'TMA-05', cursoDaEtapa: 'PP', extra: [pedido({ mid: 1 })] });
+    assert.deepEqual(outras(comTMA05)['Liberadas no PP'], undefined);
+    assert.equal(outras(comTMA05)[FORA].some(t => t.startsWith('TMA-05 ')), false);
+    // Na missão extra, a TMA-05 está no outro voo do dia: as que esperam por ela dependem do resultado
+    assert.deepEqual(outras(comTMA05, 1)['Liberadas no PP'], [
+      'NAV-01 · Navegação · C152 · 01h30 (1,5 h) — depende do resultado de TMA-05',
+      'PE-04 · Parafuso · C152 · 1 h — depende do resultado de TMA-05',
+      'TSL-01 · Navegação · C172 · 1 h — depende do resultado de TMA-05'
+    ]);
+    assert.equal(outras(comTMA05, 1)[FORA].find(t => t.startsWith('TMA-05 ')), 'TMA-05 · Voo Local · C152 · 1 h (já em outro voo do dia)');
+    // O aluno sem curso, o curso sem programa: nenhuma lista
+    assert.deepEqual([outras(aluno({ curso: undefined })), outras(aluno({ curso: 'INVA' }))], [null, null]);
+  });
+
+  it('a missão escolhida na lista: liberada ou fora da ordem, com o motivo; a que não está na lista, nenhuma', () => {
+    abrir({ resultados: { situacao: ate('TMA-04').map(c => reg(c)), doDia: [] } });
+    const missao = codigo => PP.missoes.find(m => m.codigo === codigo).id;
+    const escolha = (stu, codigo) => {
+      const r = outraMissaoDoPedido(stu, stu, 0, codigo);
+      return r && { ...r, missao: r.missao.id };
+    };
+    assert.deepEqual(escolha(aluno(), 'TMA-05'), { missao: missao('TMA-05'), curso: 'PP', liberada: true, motivo: '' });
+    assert.deepEqual(escolha(aluno(), 'PE-04'), { missao: missao('PE-04'), curso: 'PP', liberada: false, motivo: 'falta TMA-05' });
+    assert.deepEqual([escolha(aluno(), 'XX-99'), escolha(aluno({ etapa: 'PE-04', cursoDaEtapa: 'PP' }), 'PE-04')], [null, null]);
+    // A missão do pedido é de outro curso (o aluno trocou de curso): a do mesmo código no curso dele continua na lista
+    assert.equal(escolha(aluno({ etapa: 'PE-04', cursoDaEtapa: 'PC' }), 'PE-04').liberada, false);
+  });
+
+  it('o resultado vai para o curso da missão do pedido (o aluno trocou de curso), enquanto o pedido é essa missão', () => {
+    const voo = { fKey: '1000_0_1', stuId: ALUNO, mid: 0, etapa: 'NAV-01', s: 'Aluno 1000' };
+    abrir({ stu: [aluno({ curso: 'PC', etapa: 'NAV-01', cursoDaEtapa: 'PP' })] });
+    assert.equal(cursoDoResultado(voo), 'PP');
+    // A escala gravada é de antes de o pedido mudar de missão; o pedido de antes do curso da missão: o curso do aluno
+    assert.equal(cursoDoResultado({ ...voo, etapa: 'NAV-02' }), 'PC');
+    abrir({ stu: [aluno({ curso: 'PC', etapa: 'NAV-01' })] });
+    assert.equal(cursoDoResultado(voo), 'PC');
+    abrir({ stu: [aluno({ curso: undefined, etapa: 'NAV-01' })] });
+    assert.equal(cursoDoResultado(voo), null);
+    abrir({ stu: [] });
+    assert.equal(cursoDoResultado(voo), null, 'o aluno saiu do cadastro');
   });
 });
 

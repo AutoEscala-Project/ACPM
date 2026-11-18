@@ -84,6 +84,18 @@ describe('Separar e juntar', () => {
     assert.deepEqual([junto.stu[0].etapa, junto.stu[0].extra[0].etapa], ['PP-07', 'PP-08']);
   });
 
+  // O curso da missão vai com o pedido, não com o aluno: o aluno que troca de curso no dia continua com o curso dele no
+  // cadastro, e o resultado da missão vai para o curso dela
+  it('o curso da missão do curso vai e volta com o pedido do dia, fora do cadastro', () => {
+    const estado = normalizado({ ...estadoSintetico(), stu: [aluno(1000, { etapa: 'PE-04', cursoDaEtapa: 'PP' }, { curso: 'PC', extra: [missaoExtra(1001, { etapa: 'NAV-01', cursoDaEtapa: 'PP' })] })] });
+    const { cadastro, dia } = separar(estado);
+    assert.deepEqual([dia.pedidos[1000].cursoDaEtapa, dia.pedidos[1000].extra[0].cursoDaEtapa], ['PP', 'PP']);
+    assert.deepEqual(cadastro.stu[0], { id: 1000, nm: 'Aluno 1000', kg: 70, bl: [], curso: 'PC' });
+    const junto = juntar(cadastro, dia);
+    assert.deepEqual([junto.stu[0].curso, junto.stu[0].etapa, junto.stu[0].cursoDaEtapa, junto.stu[0].extra[0].cursoDaEtapa], ['PC', 'PE-04', 'PP', 'PP']);
+    assert.deepEqual(junto, estado);
+  });
+
   it('o programa dos cursos e o curso de cada aluno ficam no cadastro', () => {
     const estado = normalizado({ ...estadoSintetico(), stu: [aluno(1000, {}, { curso: 'PP' }), aluno(1001)] });
     estado.cursos = { PP: [{ id: 'PP-01', nome: 'Familiarização', mis: 'Voo Local', eq: 'C152', nb: 1 }], PC: [], INVA: [] };

@@ -210,8 +210,8 @@ aoMudarCampo('s', (t, { f, id }) => {
   }
   gravarAlteracao(...historico);
   atualizarLinhaDoAluno(s, { naoEscalar: f === 'bl', voaComMudou: f === 'voaCom' });
-  // A Demanda mostra o nome do aluno e o “Priorizar com” dele (no Automático do instrutor)
-  if (['nm', 'voaCom', 'bl'].includes(f)) rDem();
+  // A Demanda mostra o nome do aluno, o “Priorizar com” dele (no Automático do instrutor) e as missões do curso dele
+  if (['nm', 'voaCom', 'bl', 'curso'].includes(f)) rDem();
 });
 
 // Limites da lei, no cadastro dos instrutores: só o Administrador muda (neste navegador, o Operador). Vazio é

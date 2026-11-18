@@ -172,6 +172,35 @@ describe('Importar as solicitações da agenda para a demanda', () => {
     assert.deepEqual([noturno.p1, noturno.p2], [1050, -1], 'o Noturno sai às 17:30');
   });
 
+  // O curso da missão vai com o código: o resultado vai para ele, mesmo que o aluno troque de curso no mesmo dia
+  it('o pedido que entra como missão do curso leva o curso dela; o que entra como veio, nenhum', () => {
+    const PP = cursoPP();
+    const situacao = percursoDoCurso(PP).missoes.slice(0, 13).map((m, i) => ({ id: i + 1, aluno: 1000, curso: 'PP', missao: m.codigo, resultado: 'aprovado' }));
+    const e = { ...estado(), stu: [aluno(1000, { fly: false }, { curso: 'PP' }), aluno(1001, { fly: false })] };
+    importarSolicitacoes(e, [pedido(34, 1000, { missao: 'Parafuso' }), pedido(35, 1000, { missao: 'Simulador' }), pedido(36, 1001)], { situacao, programa: [PP] });
+    assert.deepEqual([e.stu[0], ...e.stu[0].extra, e.stu[1]].map(p => [p.mis, p.etapa, p.cursoDaEtapa]),
+      [['Parafuso', 'PE-04', 'PP'], ['Simulador', undefined, undefined], ['Voo Local', undefined, undefined]]);
+    assert.equal(Object.hasOwn(e.stu[0].extra[0], 'cursoDaEtapa'), false);
+  });
+
+  // A escolha do operador vale mais que a do app: a missão do curso que o operador pôs no voo ("Outra missão do curso",
+  // Usar), sem voo fixo, continua quando o pedido da agenda da mesma missão toma o lugar dele. Antes, o pedido entrava
+  // como a primeira liberada do tipo (a NAV-01 no lugar da NAV-02 escolhida), e a escolha se perdia
+  it('a missão do curso escolhida no voo que dá lugar ao pedido da agenda continua a dele, com o curso, o recurso e as horas', () => {
+    const PP = cursoPP();
+    const situacao = percursoDoCurso(PP).missoes.slice(0, 13).map((m, i) => ({ id: i + 1, aluno: 1000, curso: 'PP', missao: m.codigo, resultado: 'aprovado' }));
+    const e = { ...estado(), stu: [aluno(1000, { mis: 'Navegação', eq: 'C152', nb: 1.5, etapa: 'NAV-02', cursoDaEtapa: 'PP', insId: 2 }, { curso: 'PC' })] };
+    const resumo = importarSolicitacoes(e, [pedido(37, 1000, { missao: 'Navegação', janela: 'manha' })], { situacao, programa: [PP] });
+    assert.deepEqual(resumo, { novos: 0, atualizados: 1, semAluno: 0 });
+    const p = e.stu[0];
+    assert.deepEqual([p.etapa, p.cursoDaEtapa, p.eq, p.nb, p.solicitacao, p.jan, p.insId, p.extra], ['NAV-02', 'PP', 'C152', 1.5, 37, 'manha', 2, []]);
+    // Sem os programas lidos, a escolha também continua (ela não é inferida); a duração registrada na agenda vale mais
+    const semPrograma = { ...estado(), stu: [aluno(1000, { mis: 'Navegação', eq: 'C172', nb: 2, etapa: 'TSL-01' }, { curso: 'PP' })] };
+    importarSolicitacoes(semPrograma, [pedido(38, 1000, { missao: 'Navegação', horas: 1.2 })], { programa: [] });
+    const q = semPrograma.stu[0];
+    assert.deepEqual([q.etapa, Object.hasOwn(q, 'cursoDaEtapa'), q.eq, q.nb, q.solicitacao], ['TSL-01', false, 'C172', 1.2, 38]);
+  });
+
   it('sem programa (os resultados ou os programas não foram lidos), nenhum pedido entra como missão do curso', () => {
     const e = { ...estado(), stu: [aluno(1000, { fly: false }, { curso: 'PP' })] };
     importarSolicitacoes(e, [pedido(40, 1000)], { programa: [] });

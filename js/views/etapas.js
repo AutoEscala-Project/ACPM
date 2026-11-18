@@ -1,12 +1,12 @@
-// A missão do curso no dia: a próxima missão de cada aluno (para a Demanda), o progresso (para Alunos) e o resultado de
-// cada voo (para a escala). Os resultados e o programa dos cursos chegam com a data (S.resultados: a situação de cada
-// missão e os registros da data; S.programa: as tabelas dos cursos) e não são gravados no dia. A próxima missão e o
-// progresso seguem as regras do programa (js/progresso.js).
+// A missão do curso no dia: a próxima missão de cada aluno e as outras do curso (para a Demanda), o progresso (para
+// Alunos) e o resultado de cada voo (para a escala). Os resultados e o programa dos cursos chegam com a data
+// (S.resultados: a situação de cada missão e os registros da data; S.programa: as tabelas dos cursos) e não são gravados
+// no dia. A próxima missão e o progresso seguem as regras do programa (js/progresso.js).
 import { MIS } from '../config.js';
-import { indiceDoPrograma, rotuloDaFase } from '../programa.js';
-import { proximasMissoes, progressoNoCurso, missoesDoDia } from '../progresso.js';
+import { indiceDoPrograma, rotuloDaFase, percursoDoCurso } from '../programa.js';
+import { estadoDoAluno, proximasMissoes, progressoNoCurso, missoesDoDia, motivoDoBloqueio } from '../progresso.js';
 import { situacaoPorMissao, resultadoDoVoo } from '../resultados.js';
-import { S, isGestor, stuBy, dadoIndisponivel } from '../state.js';
+import { S, isGestor, stuBy, dadoIndisponivel, getMissionTarget } from '../state.js';
 import { esc, opts, fmtDurLabel } from '../format.js';
 
 const resultados = () => S.resultados || { situacao: [], doDia: [] };
@@ -28,24 +28,88 @@ export function programaParaInferir() {
 const cursoDoAluno = stu => (stu.curso && indiceDoPrograma(programaParaInferir()).curso(stu.curso)) || null;
 
 // A próxima missão para um pedido do aluno: a primeira liberada do programa. As missões dos outros pedidos dele no dia
-// (que voam e não foram cancelados) contam como feitas e não voltam. O código vai como id: é a etapa do pedido
+// (que voam e não foram cancelados) contam como feitas e não voltam. O código vai como id: é a etapa do pedido; o curso
+// (a sigla) vai com ela
 export function proximaDoPedido(stu, mid) {
   const curso = cursoDoAluno(stu);
   if (!curso) return null;
   const doDia = missoesDoDia(curso, stu, { fStatus: S.fStatus, mid: mid || 0 });
   const { padrao } = proximasMissoes(curso, situacao(), stu.id, { planejadas: doDia, exceto: doDia });
-  return padrao && { id: padrao.codigo, nome: padrao.nome, mis: padrao.mis, eq: padrao.eq, nb: padrao.nb };
+  return padrao && { id: padrao.codigo, nome: padrao.nome, mis: padrao.mis, eq: padrao.eq, nb: padrao.nb, curso: curso.sigla };
 }
 
 const descricaoDaMissao = m => `${m.id}: ${m.nome} · ${m.mis} · ${MIS[m.mis].isGround ? '1h30' : fmtDurLabel(m.nb)}${MIS[m.mis].isGround ? '' : ` · ${m.eq}`}`;
 
-// Na Demanda: o código do pedido, ou o botão com a próxima missão do programa
+// As outras missões do curso do aluno para um pedido ("Outra missão do curso", na Demanda), na ordem do curso: as
+// liberadas, que valem na hora (a que depende do resultado de um voo do dia diz de qual), e as fora da ordem, cada uma
+// com o motivo (motivoDoBloqueio), que pedem confirmação; a que não tem motivo não é escolhida sozinha e fica de fora. As
+// missões dos outros pedidos dele no dia contam como na próxima missão; a do próprio pedido não volta. Sem o programa do
+// curso (ou sem os resultados), nenhuma: null
+function outrasMissoes(stu, d, mid) {
+  const curso = cursoDoAluno(stu);
+  if (!curso) return null;
+  const mapa = situacao();
+  const doDia = missoesDoDia(curso, stu, { fStatus: S.fStatus, mid: mid || 0 });
+  const { porMissao } = estadoDoAluno(curso, mapa, stu.id, { planejadas: doDia, exceto: doDia });
+  const { missoes } = percursoDoCurso(curso);
+  const codigo = new Map(missoes.map(m => [m.id, m.codigo]));
+  const doPedido = m => m.codigo === d.etapa && (d.cursoDaEtapa || stu.curso) === curso.sigla;
+  const liberadas = [], foraDaOrdem = [];
+  for (const m of missoes.filter(x => !doPedido(x))) {
+    const estado = porMissao.get(m.id);
+    if (['liberada', 'condicional'].includes(estado.estado)) {
+      liberadas.push({ missao: m, dependeDe: estado.dependeDe.map(id => codigo.get(id)) });
+      continue;
+    }
+    const motivo = motivoDoBloqueio(curso, m, estado, { mapa, aluno: stu.id });
+    if (motivo) foraDaOrdem.push({ missao: m, motivo });
+  }
+  return { curso, liberadas, foraDaOrdem };
+}
+
+// A missão do curso escolhida em "Outra missão do curso" para o pedido: { missao, curso (a sigla), liberada, motivo }. A
+// liberada vale na hora; a fora da ordem pede confirmação. null: ela não é uma das outras missões do pedido (o programa
+// ou os resultados mudaram)
+export function outraMissaoDoPedido(stu, d, mid, codigo) {
+  const outras = outrasMissoes(stu, d, mid);
+  const liberada = outras && outras.liberadas.find(x => x.missao.codigo === codigo);
+  const fora = outras && !liberada && outras.foraDaOrdem.find(x => x.missao.codigo === codigo);
+  if (!liberada && !fora) return null;
+  return { missao: (liberada || fora).missao, curso: outras.curso.sigla, liberada: Boolean(liberada), motivo: fora ? fora.motivo : '' };
+}
+
+const resumoDaMissao = m => `${m.codigo} · ${m.mis} · ${MIS[m.mis].isGround ? '1h30' : `${m.eq} · ${fmtDurLabel(m.nb)}`}`;
+const emLista = codigos => (codigos.length > 1 ? `${codigos.slice(0, -1).join(', ')} e ${codigos.at(-1)}` : codigos[0]);
+
+// A lista "Outra missão do curso" do pedido: o primeiro item só dá nome à lista (escolher uma missão é que age)
+function outraMissaoNaDemanda(stu, outras) {
+  const { curso, liberadas, foraDaOrdem } = outras;
+  if (!liberadas.length && !foraDaOrdem.length) return '';
+  const grupo = (rotulo, itens) => (itens.length ? `<optgroup label="${esc(rotulo)}">${opts(itens)}</optgroup>` : '');
+  return ` <select class="edit-only outra-missao" data-f="outra-missao" aria-label="Outra missão do curso para ${esc(stu.nm)}">`
+    + '<option value="" selected>Outra missão…</option>'
+    + grupo(`Liberadas no ${curso.sigla}`, liberadas.map(({ missao: m, dependeDe }) =>
+      [m.codigo, `${resumoDaMissao(m)}${dependeDe.length ? ` — depende do resultado de ${emLista(dependeDe)}` : ''}`]))
+    + grupo('Fora da ordem (pede confirmação)', foraDaOrdem.map(({ missao: m, motivo }) => [m.codigo, `${resumoDaMissao(m)} (${motivo})`]))
+    + '</select>';
+}
+
+// A missão fora da ordem escolhida para o pedido espera a confirmação neste botão, que aparece armado (js/eventos/demanda.js)
+export const botaoForaDaOrdem = (stu, escolha) => {
+  const { missao: { codigo }, motivo } = escolha;
+  return ` <button type="button" class="btn quiet edit-only usar-proxima" data-act="usar-fora-da-ordem" data-codigo="${esc(codigo)}" data-dica="fora-da-ordem" data-dica-caso="${esc(`${codigo}: ${motivo}`)}" aria-label="Usar ${esc(codigo)} fora da ordem para ${esc(stu.nm)} (${esc(motivo)})">Usar ${esc(codigo)} fora da ordem</button>`;
+};
+
+// Na Demanda: o código do pedido (com o curso dele), ou o botão com a próxima missão do programa, e a lista das outras
+// missões do curso
 export function etapaNaDemanda(stu, d, mid) {
-  if (d.etapa) return ` <span class="etapa" title="Missão do curso ${esc(stu.curso || '')}">${esc(d.etapa)}</span>`;
+  const outras = outrasMissoes(stu, d, mid);
+  const lista = outras ? outraMissaoNaDemanda(stu, outras) : '';
+  if (d.etapa) return ` <span class="etapa" title="Missão do curso ${esc(d.cursoDaEtapa || stu.curso || '')}">${esc(d.etapa)}</span>${lista}`;
   const proxima = proximaDoPedido(stu, mid);
-  return proxima
+  return (proxima
     ? ` <button type="button" class="btn quiet edit-only usar-proxima" data-act="usar-proxima" data-id="${esc(stu.id)}" data-mid="${esc(mid)}" title="${esc(descricaoDaMissao(proxima))}">Próxima: ${esc(proxima.id)} · Usar</button>`
-    : '';
+    : '') + lista;
 }
 
 // Em Alunos: as aprovadas sobre as missões que contam (a dispensada não conta), a fase em que o aluno está (quando o
@@ -59,14 +123,21 @@ export function progressoDoAluno(stu) {
   return `<small class="progresso" data-dica="progresso">${aprovadas}/${total}${fase}${proxima ? ` · próxima ${esc(proxima.codigo)}` : ' · concluído'}</small>`;
 }
 
+// O curso do resultado de um voo da escala (a sigla): o da missão do pedido (o aluno pode ter trocado de curso depois que
+// ela foi para o pedido), quando o pedido ainda é essa missão; senão (o pedido de antes do curso da missão), o do aluno.
+// Sem nenhum, null
+export function cursoDoResultado(o) {
+  const stu = stuBy(o.stuId), pedido = getMissionTarget(o.stuId, o.mid || 0);
+  return (pedido && pedido.etapa === o.etapa && pedido.cursoDaEtapa) || (stu && stu.curso) || null;
+}
+
 // Na escala, com o status do aluno: o código da missão do curso e o resultado (o operador registra; os outros veem)
 export function resultadoNaEscala(o) {
   if (!o.etapa) return '';
   const registrado = resultadoDoVoo(resultados().doDia, o.fKey);
   const atual = ['aprovado', 'reprovado'].includes(registrado) ? registrado : 'pendente';
-  const stu = stuBy(o.stuId);
   const codigo = `<span class="etapa" data-dica="missao-do-curso">${esc(o.etapa)}</span>`;
-  if (isGestor() || !stu || !stu.curso) {
+  if (isGestor() || !cursoDoResultado(o)) {
     return `<span class="resultado">${codigo}${atual !== 'pendente' ? ` <span class="res res-${atual}">${atual === 'aprovado' ? 'Aprovado' : 'Reprovado'}</span>` : ''}</span>`;
   }
   return `<span class="resultado">${codigo} <select class="res-sel res-${atual}" data-resultado="${esc(o.fKey)}" aria-label="Resultado de ${esc(o.s)} em ${esc(o.etapa)}" data-dica="resultado"${dadoIndisponivel('resultados') ? ' disabled' : ''}>${opts([['pendente', 'Resultado'], ['aprovado', 'Aprovado'], ['reprovado', 'Reprovado']], atual)}</select></span>`;
