@@ -17,7 +17,7 @@ import {
 import { horariosDaMissao, periodoDoMinuto, paraMinuto } from './horarios.js';
 import { ocupacaoDaEscala, avioesQueServem, instrutoresQueServem, problemaDoRecurso, problemaDoAluno } from './candidatos.js';
 import { estadoDoAluno, proximasMissoes, progressoNoCurso, missoesDoDia } from './progresso.js';
-import { indiceDoPrograma, percursoDoCurso, rotuloDaFase } from './programa.js';
+import { indiceDoPrograma, percursoDoCurso, rotuloDaFase, rotuloDaMissao, noturnosDoCurso } from './programa.js';
 import { chaveDoVoo, statusDoVoo, pedidoDoAluno, ocupacaoDoVoo } from './voo.js';
 import { CAMPOS_DO_PEDIDO } from './dias.js';
 import { runAllocationEngine } from './engine.js';
@@ -211,7 +211,9 @@ function motivoDaMissao(curso, ambiente, stu, m, info, voosDoDia) {
   return `${falta(info.faltam)}${registro && registro.resultado === 'reprovado' && registro.data ? ` (reprovada em ${ddmm(registro.data)})` : ''}`;
 }
 
-const descreverMissao = m => `${m.codigo} · ${m.mis}${isGroundMission(m.mis) ? ' · 1h30' : ` · ${m.eq} · ${fmtH(m.nb)}`}`;
+// A missão na lista: o código (a noite de um Noturno em trechos com os translados, como na próxima missão), o tipo, o
+// recurso e as horas
+const descreverMissao = (curso, m) => `${rotuloDaMissao(curso, m)} · ${m.mis}${isGroundMission(m.mis) ? ' · 1h30' : ` · ${m.eq} · ${fmtH(m.nb)}`}`;
 const descreverDependencias = (curso, ids, voosDoDia) => juntar(ids.map(id => {
   const voo = voosDoDia.get(id);
   const m = curso.missoes.find(x => x.id === id);
@@ -234,7 +236,7 @@ export function opcoesDeAluno(estado, base, ambiente, contexto = {}) {
     }
     const voos = base.out.filter(o => o.stuId === stu.id && ativo(o, estado.fStatus));
     const texto = [
-      stu.nm, stu.curso ? ` — ${stu.curso}${proxima ? ` · próxima ${proxima.codigo}` : ''}` : '',
+      stu.nm, stu.curso ? ` — ${stu.curso}${proxima ? ` · próxima ${rotuloDaMissao(curso, proxima)}` : ''}` : '',
       voos.length ? ` · voa hoje às ${voos.map(o => hm(o.a)).join(', ')}` : '',
       instrutor && (stu.bl || []).includes(instrutor.id) ? ` · não voa com ${instrutor.nm}` : ''
     ].join('');
@@ -254,7 +256,7 @@ function infoDoAluno(estado, base, ambiente, stu) {
     const { aprovadas, total, faseAtual, proxima } = progressoNoCurso(curso, ambiente.situacao, stu.id);
     if (faseAtual && percursoDoCurso(curso).fases.length > 1) partes.push(rotuloDaFase(faseAtual));
     if (total) partes.push(`${aprovadas}/${total}`);
-    if (proxima) partes.push(`próxima ${proxima.codigo}`);
+    if (proxima) partes.push(`próxima ${rotuloDaMissao(curso, proxima)}`);
   }
   const voos = base.out.filter(o => o.stuId === stu.id && ativo(o, estado.fStatus));
   if (voos.length) partes.push(`já voa hoje ${voos.map(o => `${hm(o.a)} (${[o.etapa || o.mis, nomeDoRecurso(o.r)].join(', ')})`).join('; ')}`);
@@ -267,8 +269,10 @@ function infoDoAluno(estado, base, ambiente, stu) {
 // As missões que o aluno pode voar (o select Missão), em grupos: as liberadas do curso (a condicional diz de que resultado
 // depende), as outras missões do curso, fora da ordem (com o motivo: pedem confirmação), e as missões sem o curso (os
 // tipos de missão que o recurso serve, e "Outro tipo de missão…"). Sem os resultados, as missões do curso vêm sem a
-// ordem conferida, e não há missão padrão. Devolve os grupos (cada opção: valor, texto e o que a conferência usa), a
-// missão padrão (valor, ou null) e a nota com a próxima e as outras liberadas
+// ordem conferida, e não há missão padrão. O Noturno em trechos vai pela noite, como na próxima missão (com os translados
+// no nome): os translados dele nunca vão sozinhos, nem o dispensado (o pedido leva o código da noite, e o resultado é
+// dela). Devolve os grupos (cada opção: valor, texto e o que a conferência usa), a missão padrão (valor, ou null) e a
+// nota com a próxima e as outras liberadas
 export function opcoesDeMissao(estado, base, ambiente, stu, { a = 0, contexto = {}, recurso = null } = {}) {
   const curso = cursoDoAluno(ambiente, stu);
   const grupos = [];
@@ -278,6 +282,8 @@ export function opcoesDeMissao(estado, base, ambiente, stu, { a = 0, contexto = 
     const faseDe = new Map(percurso.fases.map(f => [f.id, f]));
     const variasFases = percurso.fases.length > 1;
     const comum = m => ({ tipo: 'missao', missao: m, mis: m.mis, eq: m.eq, sigla: curso.sigla });
+    const noturnos = noturnosDoCurso(curso);
+    const missoes = percurso.missoes.filter(m => !noturnos.has(m.id) || noturnos.get(m.id).noite.id === m.id);
     if (ambiente.inferir) {
       const { exceto, planejadas, voos } = missoesNoDia(estado, base, curso, stu, a);
       const { porMissao } = estadoDoAluno(curso, ambiente.situacao, stu.id, { planejadas, exceto });
@@ -287,15 +293,15 @@ export function opcoesDeMissao(estado, base, ambiente, stu, { a = 0, contexto = 
       const liberadas = candidatas.map(m => {
         const info = porMissao.get(m.id);
         const depende = info.estado === 'condicional' ? ` — depende do resultado de ${descreverDependencias(curso, info.dependeDe, voos)}` : '';
-        return { valor: `missao:${m.id}`, texto: `${descreverMissao(m)}${depende}`, info: { ...comum(m), estado: info.estado, dependeDe: descreverDependencias(curso, info.dependeDe, voos) } };
+        return { valor: `missao:${m.id}`, texto: `${descreverMissao(curso, m)}${depende}`, info: { ...comum(m), estado: info.estado, dependeDe: descreverDependencias(curso, info.dependeDe, voos) } };
       });
-      const foraDaOrdem = percurso.missoes.filter(m => !candidatas.includes(m)).map(m => {
+      const foraDaOrdem = missoes.filter(m => !candidatas.includes(m)).map(m => {
         const info = porMissao.get(m.id) || { estado: 'bloqueada', faltam: [], fasesFechadas: [], dependeDe: [] };
         const voo = info.estado === 'no-dia' ? [...(voos.values())].find(o => o.etapa === m.codigo) : null;
         const motivo = info.estado === 'aprovada' ? 'já aprovada' : info.estado === 'dispensada' ? 'dispensada'
           : info.estado === 'no-dia' ? (voo ? `já no voo de hoje às ${hm(voo.a)}` : 'já em outro pedido de hoje')
             : motivoDaMissao(curso, ambiente, stu, m, info, voos);
-        const texto = info.estado === 'bloqueada' ? `${descreverMissao(m)} — ${motivo}` : `${descreverMissao(m)} (${motivo})`;
+        const texto = info.estado === 'bloqueada' ? `${descreverMissao(curso, m)} — ${motivo}` : `${descreverMissao(curso, m)} (${motivo})`;
         return { valor: `missao:${m.id}`, texto, info: { ...comum(m), estado: info.estado, motivo } };
       });
       if (liberadas.length) grupos.push({ rotulo: `Liberadas no ${curso.sigla}`, opcoes: liberadas });
@@ -306,14 +312,14 @@ export function opcoesDeMissao(estado, base, ambiente, stu, { a = 0, contexto = 
           const fase = faseDe.get(m.fase);
           return m.regra === 'livre' ? `livre na ${rotuloDaFase(fase)}` : variasFases ? rotuloDaFase(fase) : '';
         };
-        const comOnde = m => (onde(m) ? `${m.codigo} (${onde(m)})` : m.codigo);
+        const comOnde = m => (onde(m) ? `${rotuloDaMissao(curso, m)} (${onde(m)})` : rotuloDaMissao(curso, m));
         const outras = candidatas.filter(m => m !== proxima);
         nota = `Próxima do ${curso.sigla}: ${comOnde(proxima)}.${outras.length ? ` Também ${outras.length === 1 ? 'liberada' : 'liberadas'}: ${outras.map(comOnde).join(', ')}.` : ''}`;
       } else nota = percurso.missoes.length ? `Nenhuma missão do ${curso.sigla} liberada agora.` : `O programa do ${curso.sigla} não tem missões.`;
     } else {
       grupos.push({
         rotulo: `Missões do ${curso.sigla} (a ordem não foi conferida)`,
-        opcoes: percurso.missoes.map(m => ({ valor: `missao:${m.id}`, texto: descreverMissao(m), info: { ...comum(m), estado: null } }))
+        opcoes: missoes.map(m => ({ valor: `missao:${m.id}`, texto: descreverMissao(curso, m), info: { ...comum(m), estado: null } }))
       });
       nota = 'Sem os resultados dos cursos, a ordem do programa não é conferida: escolha a missão.';
     }

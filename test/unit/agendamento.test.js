@@ -292,6 +292,46 @@ describe('Agendamento: os padrões do formulário', () => {
     assert.equal(semHorario.contextoTexto, 'Quarta-feira, 11/11 · nenhum horário de decolagem aberto');
   });
 
+  it('o Noturno em trechos vai pela noite, com os translados no nome: nenhum translado sozinho, e o voo leva a etapa da noite', () => {
+    // O PP com o Noturno em trechos: o TSL-01 (a ida), a NOT (a noite) e o TSL-02 (a volta) num voo só
+    const comTrechos = (mudar = {}) => {
+      const curso = cursoPP(), trechos = { 'TSL-01': 'ida', NOT: 'noite', 'TSL-02': 'volta' };
+      curso.missoes = curso.missoes.map(m => (trechos[m.codigo] ? { ...m, mis: 'Noturno', trecho: trechos[m.codigo], ...mudar[m.codigo] } : m));
+      return curso;
+    };
+    const NT = comTrechos();
+    const ate = fases => aprovadas(1001, NT.missoes.filter(m => fases.includes(m.fase)).map(m => m.codigo));
+    const ATE_A_4 = ['PP:F1', 'PP:F2', 'PP:F3', 'PP:F4'], ATE_A_8 = [...ATE_A_4, 'PP:F5', 'PP:F7', 'PP:F8'];
+    const estado = doDia();
+    const base = runAllocationEngine(estado);
+    const daFase6 = (amb, stu = estado.stu[1]) => {
+      const { grupos, nota } = opcoesDeMissao(estado, base, amb, stu, { a: 390, contexto: contextoInicial('dia', amb) });
+      return { textos: opcoes(grupos).filter(o => o.info.tipo === 'missao' && o.info.missao.fase === 'PP:F6').map(o => o.texto), nota };
+    };
+    // Depois da Fase 4: a noite, liberada, com os translados no nome (também na nota); sem os resultados, também só ela
+    const f1a4 = ambiente({ programa: [NT], registros: ate(ATE_A_4) });
+    assert.deepEqual(daFase6(f1a4), {
+      textos: ['NOT (com TSL-01 e TSL-02) · Noturno · C172 · 3 h'],
+      nota: 'Próxima do PP: NAV-01 (Fase 5). Também liberadas: PE-04 (livre na Fase 5), NOT (com TSL-01 e TSL-02) (Fase 6).'
+    });
+    assert.deepEqual(daFase6({ ...f1a4, inferir: false }).textos, ['NOT (com TSL-01 e TSL-02) · Noturno · C172 · 3 h']);
+    // A noite aprovada: só ela, fora da ordem; o translado dispensado não vai, nem no nome
+    assert.deepEqual(daFase6(ambiente({ programa: [NT], registros: [...ate(ATE_A_4), ...aprovadas(1001, ['NOT'])] })).textos,
+      ['NOT (com TSL-01 e TSL-02) · Noturno · C172 · 3 h (já aprovada)']);
+    assert.deepEqual(daFase6(ambiente({ programa: [comTrechos({ 'TSL-02': { dispensada: true } })], registros: ate(ATE_A_4) })).textos,
+      ['NOT (com TSL-01) · Noturno · C172 · 3 h']);
+    // Até a Fase 8: a próxima é o Noturno, no aluno e no formulário, e o pedido do voo leva a etapa da noite
+    const f1a8 = ambiente({ programa: [NT], registros: ate(ATE_A_8) });
+    const doAluno = opcoesDeAluno(estado, base, f1a8, contextoInicial('dia', f1a8)).flatMap(g => g.opcoes).find(o => o.valor === 1001);
+    assert.equal(doAluno.texto, 'Aluno 1001 — PP · próxima NOT (com TSL-01 e TSL-02)');
+    const { formulario } = agendar(estado, { amb: f1a8, escolhas: { aluno: 1001 } });
+    assert.deepEqual([formulario.missao, formulario.alunoInfo], ['missao:PP:NOT', 'PP · Fase 6 · 42/46 · próxima NOT (com TSL-01 e TSL-02)']);
+    assert.deepEqual([formulario.proposta.mis, formulario.proposta.missao], ['Noturno', { sigla: 'PP', codigo: 'NOT' }]);
+    const depois = structuredClone(estado);
+    const { criadoComo } = aplicarAgendamento(depois, base, formulario.proposta);
+    assert.deepEqual([criadoComo.mis, criadoComo.etapa, criadoComo.cursoDaEtapa], ['Noturno', 'NOT', 'PP']);
+  });
+
   it('a turma de Ground com atrasos diferentes ocupa a sala pelo primeiro aluno que o motor confere (a prioridade antes do cadastro)', () => {
     // Escala aprovada: a turma das 08:20 (Aluno 1000, prioridade 3, atrasado para as 10:10; Aluno 1001, prioridade 5)
     const estado = cenario({ ins: [instrutor(1, 9), instrutor(2, 9)], stu: [
