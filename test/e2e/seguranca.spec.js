@@ -138,6 +138,18 @@ test.describe('Conteúdo gravado malicioso', () => {
     await irPara(page, 'esc');
     await expect(page.locator('#out tbody')).toContainText(`Aluno ${X}`);
     await expect(page.locator('#selo-aprovada')).toContainText(`Operador ${X}`);
+    // O diálogo do agendamento: os nomes nas opções (os alunos e os instrutores) e nos textos dele aparecem como texto
+    await page.locator('#btn-agendar').click();
+    await expect(page.locator('#dlg-agendar')).toBeVisible();
+    await expect(page.locator('#agd-aluno option[value="1000"]')).toContainText(`Aluno ${X}`);
+    await expect(page.locator('#agd-aluno option[value="1002"]')).toContainText(`Aluna ${XS}`);
+    await page.locator('#agd-aluno').selectOption('1002');
+    await expect(page.locator('#agd-instrutor option[value="1"]')).toContainText(`Instrutor ${X}`);
+    await page.locator('#agd-aluno').selectOption('1000');
+    await expect(page.locator('#agd-aluno-info')).toContainText('já voa hoje');
+    await nada(page);
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#dlg-agendar')).toBeHidden();
     await page.locator('#btn-open-log').click();
     const longa = page.locator('#audit-log-list .audit-item').filter({ hasText: 'Longo Longo' });
     await expect(longa.locator('.audit-desc')).toHaveText('Longo '.repeat(400).slice(0, 500).trim());

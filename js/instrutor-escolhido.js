@@ -35,7 +35,7 @@ export function instrutoresDoPedido(estado, aluno, pedido) {
 }
 
 // O que pesa contra o instrutor no voo (o texto curto das opções da Escala), pelo código da regra
-const NOTA_DO_PROBLEMA = {
+export const NOTA_DO_PROBLEMA = {
   'instrutor-indisponivel': 'indisponível', habilitacao: 'sem a habilitação', 'instrutor-ocupado': 'ocupado',
   bloqueio: 'em Não escalar com', 'limite-da-lei': 'limite da lei', peso: 'peso acima do limite'
 };

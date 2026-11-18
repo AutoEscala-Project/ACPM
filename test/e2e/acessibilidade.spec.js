@@ -648,6 +648,40 @@ test.describe('O leitor de tela e o teclado', () => {
     await expect(page.locator('#historico')).toBeHidden();
   });
 
+  // O diálogo do agendamento: o nome, a descrição (o contexto), o foco no aluno, os nomes dos campos e o alerta vazio, que
+  // fica na árvore de acessibilidade (escondido sem display: none) para ser anunciado. Ele é a camada de cima: com as
+  // habilitações abertas embaixo, o Esc fecha só ele, e o seguinte, as habilitações
+  test('o diálogo do agendamento: nome, descrição, foco e campos com nome; o Esc fecha só ele, com as habilitações abertas embaixo', async ({ page }) => {
+    await abrirComExemplo(page);
+    await irPara(page, 'ins');
+    await page.locator('#s-ins [data-vista-ins="cadastro"]').click();
+    await page.locator('#inst [data-act="editar-habs"]').first().click();
+    const painel = page.locator('#painel-instrutor');
+    await expect(painel).toBeVisible();
+    await abrirEscala(page);
+    await page.locator('#btn-agendar').focus();
+    await page.keyboard.press('Enter');
+    const dialogo = page.locator('#dlg-agendar');
+    await expect(dialogo).toBeVisible();
+    await expect(dialogo).toHaveAccessibleName('Agendar voo');
+    await expect(page.locator('#agd-contexto')).not.toBeEmpty();
+    await expect(dialogo).toHaveAccessibleDescription(await page.locator('#agd-contexto').textContent());
+    await expect(page.locator('#agd-aluno')).toBeFocused();
+    await expect(page.locator('#agd-aluno')).toHaveAccessibleName('Aluno');
+    await expect(page.locator('#agd-erro')).toHaveAttribute('role', 'alert');
+    expect(await page.locator('#agd-erro').evaluate(el => getComputedStyle(el).display)).not.toBe('none');
+    await page.locator('#agd-aluno').selectOption({ index: 1 });
+    await expect(page.locator('#agd-previa ul')).toContainText('Entra:');
+    expect(await semNome(page, '#dlg-agendar')).toEqual([]);
+    await page.keyboard.press('Escape');
+    await expect(dialogo).toBeHidden();
+    await expect(painel).toBeVisible();
+    await expect(page.locator('#btn-agendar')).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(painel).toBeHidden();
+    await expect(page.locator('#log-cnt')).toHaveText('0');
+  });
+
   test('o Esc fecha só a camada de cima: as habilitações, abertas em Instrutores, continuam abertas na Escala quando o Esc fecha o diálogo do status', async ({ page }) => {
     await abrirComExemplo(page);
     await irPara(page, 'ins');

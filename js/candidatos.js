@@ -11,7 +11,7 @@ import { normalizarLimites } from './limites.js';
 import { normalizarHangar, posicaoNoHangar } from './hangar.js';
 import { historicoDoDia } from './noturno.js';
 import { intervaloEfetivo } from './status.js';
-import { statusDoVoo, umPorUnidade, ocupacaoDoVoo, compromissoDoVoo } from './voo.js';
+import { statusDoVoo, unidadeDoVoo, ocupacaoDoVoo, compromissoDoVoo } from './voo.js';
 import { agrupar, menorPrimeiro, soma } from './util.js';
 
 const frotaDo = estado => (Array.isArray(estado.frota) ? estado.frota : FROTA_INICIAL);
@@ -22,10 +22,19 @@ const intervalos = voos => voos.map(o => ocupacaoDoVoo(o));
 const oQueOcupa = (voos, a, b) => voos.find(o => sobrepoe(a, b, ...ocupacaoDoVoo(o)));
 const horas = voos => soma(voos.map(o => o.h));
 
+// Uma linha por unidade, a primeira de cada na ordem da lista, com as unidades na ordem em que aparecem
+const primeiraDaUnidade = lista => {
+  const vistas = new Set();
+  return lista.filter(o => !vistas.has(unidadeDoVoo(o)) && vistas.add(unidadeDoVoo(o)));
+};
+
 // A ocupação do dia pelos voos da escala: por recurso e por instrutor, uma vez por unidade (a turma de Ground ocupa a
 // sala e o instrutor uma vez só), e por aluno, cada um com os voos dele (Maps). O voo cancelado não ocupa nada.
 // exceto: as chaves dos voos que não contam (o voo que vai mudar, ou a turma dele); efetivo: o voo atrasado ocupa o
-// horário novo (sem ele, o marcado); soFixos: só os voos fixos (os outros, o motor encaixa de novo em volta)
+// horário novo (sem ele, o marcado); soFixos: só os voos fixos (os outros, o motor encaixa de novo em volta). A turma
+// ocupa a sala e o instrutor pelo primeiro aluno dela na lista que não foi cancelado, como no motor (o primeiro que ele
+// confere): com atrasos diferentes na turma, quem precisa do intervalo do motor passa os voos na ordem dele
+// (js/agendamento.js, naOrdemDoMotor)
 export function ocupacaoDaEscala(out, { fStatus = {}, fObs = {}, efetivo = false, exceto = [], soFixos = false } = {}) {
   const fora = new Set(exceto);
   const voos = out.filter(o => !fora.has(o.fKey) && (!soFixos || o.fixo) && statusDoVoo(o, fStatus) !== 'Cancelado')
@@ -34,7 +43,7 @@ export function ocupacaoDaEscala(out, { fStatus = {}, fObs = {}, efetivo = false
       const { a, b } = intervaloEfetivo(o, statusDoVoo(o, fStatus), (fObs || {})[o.fKey]);
       return a === o.a ? o : { ...o, a, b };
     });
-  const porUnidade = grupos => new Map([...grupos].map(([chave, lista]) => [chave, umPorUnidade(lista)]));
+  const porUnidade = grupos => new Map([...grupos].map(([chave, lista]) => [chave, primeiraDaUnidade(lista)]));
   return {
     recursos: porUnidade(agrupar(voos, o => o.r)),
     instrutores: porUnidade(agrupar(voos, o => o.insId)),

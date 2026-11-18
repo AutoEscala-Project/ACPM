@@ -124,7 +124,7 @@ export function ligarMenu(botao, menu, { fecharAoEscolher = true } = {}) {
 //   o que ficou no lugar, que não faz nada com o Enter. Assim o Enter repetido ou segurado não age nos itens seguintes.
 const QUEM_E = ['id', 'data-f', 'data-a', 'data-act', 'data-w', 'data-i', 'data-h', 'data-b', 'data-cat', 'data-min', 'data-cal',
   'data-dia', 'data-delta', 'data-criterio', 'data-valor', 'data-logid', 'data-horas', 'data-fkey', 'data-resultado',
-  'data-reparo', 'data-dados', 'data-id', 'data-mid', 'data-recolher-tempo', 'data-recolher-grupo'];
+  'data-reparo', 'data-dados', 'data-id', 'data-mid', 'data-recolher-tempo', 'data-recolher-grupo', 'data-agendar'];
 const DA_LINHA = ['data-k', 'data-id', 'data-mid', 'data-fkey', 'data-cat'];
 // O tipo do campo: os atributos que dizem o que ele é, sem os que dizem de quem (o voo, o aluno, o recurso)
 const DO_TIPO = ['data-f', 'data-a', 'data-act', 'data-criterio', 'data-cal'];

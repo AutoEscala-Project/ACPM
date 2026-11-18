@@ -20,6 +20,7 @@ export const GLOSSARIO = {
   'horario-ajustado': { aba: 'Escala', termo: 'Horário ajustado', texto: 'A compactação mudou o horário para fechar um buraco do dia, dentro da regra de Horários escolhida nos critérios.' },
   conflito: { aba: 'Escala', termo: 'Conflito', texto: 'O voo fixo não vale mais: o instrutor, o avião, o horário ou o pedido mudou, ou outro voo fixo já ocupa o lugar (o agendado na Escala cede o lugar aos outros fixos). Ele fica onde está até ser resolvido em Sugestões.' },
   'voo-fixo': { aba: 'Escala', termo: 'Voo fixo (cadeado)', texto: 'O voo não muda quando a escala é refeita. Fica fixo pelo agendamento na Escala, pela escala aprovada, pelo instrutor escolhido na Escala ou pelo status Atrasado, Em Voo, Pousou ou Cancelado.' },
+  'voo-agendado': { aba: 'Escala', termo: 'Voo agendado', texto: 'Marcado pelo operador em “+ Agendar voo”: fica fixo no horário, no recurso e com o instrutor confirmados, e a escala é refeita em volta dele. O Histórico desfaz o agendamento.' },
   'fora-da-regra': {
     aba: 'Escala', termo: 'Fora da regra',
     texto: `O voo agendado na Escala está fora de uma regra que a escala segue sozinha: os horários de decolagem, o pouso do voo de dia até as ${hm(T[NI])}, no máximo ${LIMITE_DE_VOOS_LOCAIS} voos locais por horário ou o Ground antes do voo. Ele fica onde foi agendado.`

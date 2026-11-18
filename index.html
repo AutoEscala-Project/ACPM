@@ -49,6 +49,7 @@
   <symbol id="i-sol" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
   <symbol id="i-lua" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></symbol>
   <symbol id="i-aviso" viewBox="0 0 24 24"><path d="M12 3l10 18H2z"/><path d="M12 10v5M12 18h.01"/></symbol>
+  <symbol id="i-mais" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
 </svg>
 
 <header class="topo">
@@ -328,6 +329,7 @@
         <button type="button" aria-pressed="false" data-tl="ins"><svg class="ico"><use href="#i-instrutor"/></svg>Por instrutor</button>
         <button type="button" aria-pressed="false" data-tl="painel"><svg class="ico"><use href="#i-painel"/></svg>Painel</button>
       </div>
+      <button type="button" class="btn edit-only" id="btn-agendar" data-act="agendar" data-agendar="dia" aria-haspopup="dialog">+ Agendar voo</button>
       <span class="cresce"></span>
       <label class="flt-rotulo"><span>Categoria</span> <select id="flt-esc-cat" class="flt-ctrl"></select></label>
       <label class="flt-rotulo"><span>Recurso</span> <select id="flt-esc-eq" class="flt-ctrl"><option value="">Todos</option></select></label>
@@ -457,6 +459,7 @@
         <li><b>Painel:</b> partidas e chegadas como nos painéis dos aeroportos. <i>Partidas</i> mostra todas as decolagens (e o início das aulas) do dia e <i>Chegadas</i>, o que ainda não pousou ou terminou, cada um pelo horário previsto: o horário programado, a missão, o modelo, a aeronave, o aluno (no Ground, só quantos alunos), o instrutor, o previsto (no atraso, o novo horário) e a observação na cor do status (no cancelamento, com o motivo). Dos 35 minutos antes da decolagem até ela, o voo no avião que ainda não decolou chama o aluno: <i>EMBARQUE IMEDIATO · Sala de briefing</i> (o Ground e o simulador não chamam; no atraso, conta a nova decolagem). Os quadros se alternam página a página a cada 10 segundos; escolha <i>Partidas</i> ou <i>Chegadas</i> para ver um só, <i>Pausar</i> para parar a troca e <i>Tela cheia</i> para um monitor ou TV. O painel só mostra: o status muda na Lista e no mapa.</li>
       </ul>
       <p>Filtre por categoria (C152, C172, Simulador, PA-34 ou Sala Ground) e, dentro dela, por recurso, ou busque um aluno ou instrutor. Na lista, um clique no horário recolhe ou abre os voos dele. Na lista e no mapa, o nome do instrutor abre a lista para trocar: o voo fica onde está (horário e avião), fixo, com esse instrutor (mudar o status ou reabrir a escala não o solta), e o resto da escala é refeito em volta (na turma de Ground, a turma inteira muda). Os instrutores que não servem no horário aparecem com o motivo (ocupado, indisponível, sem a habilitação…); escolher um deles deixa o voo em conflito, com as <i>Sugestões</i>. A escolha fica também no pedido, na Demanda; <i>Automático</i> devolve a escolha ao app, e o Histórico desfaz. Na lista, mude o status do voo ou use o ✕ do fim da linha (<i>Tirar da escala</i>, aparece com o mouse ou o foco do teclado na linha; no celular, fica à vista) para tirar um voo; o Histórico permite restaurar. O histórico registra o motivo do cancelamento só pela categoria: a descrição de “Outro” fica no voo, não no histórico. <i>CSV</i> gera o arquivo do lançamento no portal, agrupado por avião e com o peso e o status (com o motivo ou a nova decolagem); <i>PDF</i> gera a escala para impressão, com o status de cada voo; <i>Excel</i> preenche a planilha da escala no modelo do aeroclube (a do lançamento no CAVOK): cada voo na linha do horário dele, com o aluno e o instrutor na coluna do avião. O voo das 11:30 vai na linha do almoço; o que está fora dos horários da planilha (13:40) vai na linha anterior com o horário real ao lado do nome. No PA-34, que sai de 30 em 30 minutos, o horário da linha vira o do voo, como na planilha feita à mão. O voo que passa da linha seguinte repete o aluno e o instrutor nas linhas até o pouso, e o Noturno vai na linha NOTURNO do C172; o cancelado não entra, o avião indisponível fica com a matrícula em vermelho e o que para para a revisão de 50 horas, com “REVISÃO” depois da parada. No celular, a lista mostra um cartão por voo.</p>
+      <p><i>+ Agendar voo</i> (na barra da Escala) marca um voo direto na escala. Escolha o aluno: a missão (a próxima do curso, pelas regras do programa; as outras do curso aparecem com o motivo de estarem fora da ordem), o recurso e o instrutor livres, o primeiro horário livre (o Ground, só nas janelas do dia; o Noturno, às 17:30), a duração e o peso de cada um vêm sugeridos, e dá para mudar qualquer um. Antes de agendar, o app confere o voo na escala inteira: o que deixaria um voo em conflito (o avião, a sala ou o instrutor ocupado por um voo fixo, o instrutor indisponível, o peso acima do limite mesmo com o mínimo de combustível) não deixa agendar, e o instrutor indisponível pode ser marcado disponível ali mesmo; o que foge de uma regra (a missão fora da ordem do curso, um horário fora da lista, o pouso depois das 17:30, o 7º voo local do horário, o peso que falta, um voo que sai da escala) pede uma confirmação em <i>Agendar mesmo assim</i>. O voo agendado fica fixo no horário, no recurso e com o instrutor (o cadeado diz “agendado na escala”; o instrutor fica escolhido no pedido), a escala é refeita em volta dele, e o pedido aparece na Demanda com a missão do curso; o peso digitado vai para o cadastro da pessoa. O Histórico desfaz o agendamento.</p>
 
       <h4>Demanda</h4>
       <p>Uma linha por aluno. Ligue <i>Voa</i> para quem voa na data e preencha:</p>
@@ -657,6 +660,44 @@
     <p class="erro-campo" id="sessao-erro" role="alert"></p>
     <div class="dlg-acoes">
       <button type="submit" class="btn" id="sessao-entrar">Entrar</button>
+    </div>
+  </form>
+</dialog>
+<!-- Agendar um voo na Escala (js/views/agendamento.js): o aluno, a missão, o recurso, o instrutor, o horário, a duração e o
+     peso; a conferência roda o motor numa cópia da escala. Os ids são agd-* (a Agenda usa ag-*). Nada aqui usa os
+     atributos dos ouvintes globais (data-f, data-a, data-act, data-t, data-tl, data-dica): o diálogo cuida dos seus -->
+<dialog class="dlg dlg-agendar" id="dlg-agendar" aria-labelledby="agd-titulo" aria-describedby="agd-contexto">
+  <form id="form-agendar" novalidate>
+    <h2 id="agd-titulo">Agendar voo</h2>
+    <p class="h" id="agd-contexto"></p>
+    <div class="campos-agendar">
+      <label class="campo">Aluno <select id="agd-aluno" aria-describedby="agd-aluno-info"></select></label>
+      <small class="h" id="agd-aluno-info"></small>
+      <label class="campo">Missão <select id="agd-missao" aria-describedby="agd-missao-nota"></select></label>
+      <small class="h" id="agd-missao-nota"></small>
+      <label class="campo" id="agd-tipo-rotulo" hidden>Tipo de missão <select id="agd-tipo"></select></label>
+      <label class="campo">Recurso <select id="agd-recurso"></select></label>
+      <label class="campo">Instrutor <select id="agd-instrutor"></select></label>
+      <div class="campo-duplo">
+        <label class="campo">Decolagem <select id="agd-horario"></select></label>
+        <label class="campo" id="agd-outro-rotulo" hidden>Outro horário <input type="time" id="agd-outro-horario" step="300"></label>
+        <label class="campo">Duração (h) <input type="number" id="agd-horas" min="0.1" max="5" step="0.1" inputmode="decimal"></label>
+      </div>
+      <fieldset id="agd-peso"><legend>Peso da tripulação</legend>
+        <label class="campo">Aluno (kg) <input type="number" id="agd-kg-aluno" min="1" max="300" step="0.1" inputmode="decimal" placeholder="sem peso"></label>
+        <label class="campo">Instrutor (kg) <input type="number" id="agd-kg-instrutor" min="1" max="300" step="0.1" inputmode="decimal" placeholder="sem peso"></label>
+        <p class="h" id="agd-peso-resumo"></p>
+        <small class="h">O peso digitado fica no cadastro da pessoa.</small>
+      </fieldset>
+    </div>
+    <div id="agd-conferencia" aria-live="polite">
+      <ul class="agd-bloqueios"></ul><ul class="agd-avisos"></ul><ul class="agd-notas"></ul>
+      <details id="agd-previa"><summary>O que muda na escala</summary><ul></ul></details>
+    </div>
+    <p class="erro-campo" id="agd-erro" role="alert"></p>
+    <div class="dlg-acoes">
+      <button type="button" class="btn sec" id="agd-voltar">Voltar</button>
+      <button type="submit" class="btn" id="agd-confirmar">Agendar</button>
     </div>
   </form>
 </dialog>

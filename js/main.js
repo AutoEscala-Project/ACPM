@@ -27,6 +27,7 @@ import './eventos/conta.js';
 import './eventos/agenda.js';
 import './eventos/rodizio.js';
 import './eventos/cursos.js';
+import './eventos/agendamento.js';
 import { setRole, escalaCalculada, marcarEscalaSoCalculada, abrirData, historicoParaPainel, carregarBI, avisarDadosIndisponiveis } from './actions.js';
 import { ehDomingo } from './agenda.js';
 import { projetoSupabase } from './config-supabase.js';

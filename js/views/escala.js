@@ -10,6 +10,7 @@ import { validarReversao } from '../reversoes.js';
 import { linhasDoQuadro, quadroDoDia } from '../quadro.js';
 import { painelDaEscala } from './painel-aeroporto.js';
 import { atualizarPainelDeReparo } from './reparo.js';
+import { atualizarAgendamento } from './agendamento.js';
 import { resultadoNaEscala } from './etapas.js';
 import { OPCOES_DE_BURACOS, OPCOES_DE_HORARIOS, normalizarCriterios } from '../criterios.js';
 import { metricasDaEscala } from '../metricas.js';
@@ -520,6 +521,7 @@ export function rOut() {
     rCompactacao([]);
     rAprovacao(false);
     atualizarPainelDeReparo();
+    atualizarAgendamento();
     return 0;
   }
   const { out, al, tot } = RES;
@@ -551,5 +553,7 @@ export function rOut() {
   trocarConteudo($('#out'), h);
   reancorarPopupDoMapa();
   atualizarPainelDeReparo();
+  // O diálogo do agendamento aberto confere de novo com a escala nova
+  atualizarAgendamento();
   return voos.length;
 }

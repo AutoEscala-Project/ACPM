@@ -92,7 +92,8 @@ export function validarReversao(rev, frota) {
   }
   // Um voo agendado na Escala: o pedido como estava (null: o agendamento criou uma missão extra, que sai), o voo fixo de
   // antes (null: não era fixo) e a disponibilidade do instrutor de antes (null: não mudou). criado: o agendamento criou o
-  // voo. Aqui o rótulo fora do formato (ou em branco: o botão ficaria sem nome) também invalida a reversão
+  // voo; criadoComo: o pedido como o agendamento o deixou (desfazer só tira o pedido que ainda é ele). Aqui o rótulo fora
+  // do formato (ou em branco: o botão ficaria sem nome) também invalida a reversão
   if (rev.kind === 'desfazerAgendamento') {
     const { stuId, mid, criado } = rev;
     if (!idValido(stuId) || !Number.isInteger(mid) || mid < 0 || typeof criado !== 'boolean' || !rotuloValido(rev.label) || !rev.label.trim()) return null;
@@ -100,20 +101,32 @@ export function validarReversao(rev, frota) {
     const pedido = ausente(rev.pedido) ? null : pedidoDeAntes(rev.pedido);
     const fixo = ausente(rev.fixo) ? null : normalizarFixos({ [fKey]: rev.fixo })[fKey] || null;
     const disponibilidade = ausente(rev.disponibilidade) ? null : disponibilidadeDeAntes(rev.disponibilidade);
+    const criadoComo = ausente(rev.criadoComo) ? null : pedidoDeAntes(rev.criadoComo);
     // Sem o pedido de antes, só o voo criado numa missão extra
     const pedidoRuim = ausente(rev.pedido) ? !criado || mid === 0 : !pedido;
     if (pedidoRuim || (!ausente(rev.fixo) && !fixo) || (!ausente(rev.disponibilidade) && !disponibilidade)) return null;
-    return { kind: 'desfazerAgendamento', stuId, mid, criado, pedido, fixo, disponibilidade, label: rev.label };
+    if (!ausente(rev.criadoComo) && (!criado || !criadoComo)) return null;
+    return { kind: 'desfazerAgendamento', stuId, mid, criado, pedido, fixo, disponibilidade, ...(criadoComo ? { criadoComo } : {}), label: rev.label };
   }
   return null;
 }
 
+// O que identifica o pedido criado pelo agendamento: a missão, o recurso, as horas, a preferência (o horário agendado) e
+// a missão do curso. Voar ou não, a prioridade, o instrutor e a disponibilidade mudam sem ele deixar de ser o mesmo
+const IDENTIDADE_DO_PEDIDO = ['mis', 'eq', 'nb', 'p1', 'p2', 'etapa'];
+const mesmoPedido = (p, q) => IDENTIDADE_DO_PEDIDO.every(c => p[c] === q[c]);
+
 // O voo agendado na Escala que já está em andamento (Em Voo, Atrasado ou Pousou) ou que já tem resultado registrado não
 // é desfeito: o texto do aviso, ou ''. Sem os resultados dos cursos (a leitura falhou: estado.indisponiveis), os
 // registros do dia vêm vazios e não dá para conferir; desfazer fica desligado até "Tentar de novo" (o aviso do topo)
-// ler os resultados, como o registro de resultados
-export function motivoParaNaoDesfazer(estado, { stuId, mid }) {
+// ler os resultados, como o registro de resultados. O pedido criado pelo agendamento que mudou depois dele (outra
+// missão, recurso, duração ou horário, ou outro pedido no mesmo número de missão extra, que foi tirada e criada de novo)
+// também não: desfazer tiraria ou trocaria um voo que o agendamento não criou
+export function motivoParaNaoDesfazer(estado, { stuId, mid, criado = false, criadoComo = null }) {
   const fKey = chaveDoVoo(stuId, mid);
+  const aluno = criado && criadoComo ? estado.stu.find(s => s.id === stuId) : null;
+  const atual = aluno ? pedidoDoAluno(aluno, mid) : null;
+  if (atual && !mesmoPedido(atual, criadoComo)) return 'O pedido mudou depois do agendamento: desfazer agora mexeria em outro voo. Mude o pedido na Demanda.';
   if (STATUS_EM_ANDAMENTO.includes((estado.fStatus || {})[fKey])) return 'O voo já está em andamento: mude o status em vez de desfazer.';
   if ((estado.indisponiveis || []).includes('resultados')) {
     return 'Sem os resultados dos cursos, o app não confere se o voo já tem resultado: clique em "Tentar de novo" no aviso e desfaça depois.';

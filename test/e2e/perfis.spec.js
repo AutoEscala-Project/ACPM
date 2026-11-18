@@ -8,6 +8,8 @@ test.describe('Perfis de acesso', () => {
     await page.locator('#role-sel').selectOption('gestor');
     await expect(page.locator('body')).toHaveAttribute('data-role', 'gestor');
     await expect(page.locator('#out [data-act="rm-fly"]').first()).toBeHidden();
+    // O Gestor não agenda voos na Escala
+    await expect(page.locator('#btn-agendar')).toBeHidden();
     await expect(page.locator('#dt')).toBeDisabled();
     await expect(page.locator('#out .st-sel').first()).toBeDisabled();
     await irPara(page, 'ins');
@@ -21,6 +23,9 @@ test.describe('Perfis de acesso', () => {
 
     await page.locator('#role-sel').selectOption('operador');
     await expect(page.locator('[data-act="addi"]')).toBeVisible();
+    await irPara(page, 'esc');
+    await expect(page.locator('#btn-agendar')).toBeVisible();
+    await irPara(page, 'ins');
     await page.locator('#s-ins [data-vista-ins="dia"]').click();
     await expect(page.locator('#inst-dia .cel input').first()).toBeEnabled();
     await expect(page.locator('#dt')).toBeEnabled();
@@ -29,6 +34,7 @@ test.describe('Perfis de acesso', () => {
   test('?role=gestor abre no Gestor sem travar o seletor', async ({ page }) => {
     await abrirSintetico(page, { url: './?role=gestor' });
     await expect(page.locator('body')).toHaveAttribute('data-role', 'gestor');
+    await expect(page.locator('#btn-agendar')).toBeHidden();
     await expect(page.locator('#role-sel')).toBeEnabled();
     await expect(page.locator('#role-sel')).toHaveValue('gestor');
   });
