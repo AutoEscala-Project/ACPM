@@ -1,6 +1,6 @@
 // Aba Escala: resumo do dia, a lista dos voos (ou o mapa por recurso ou por instrutor) e o histórico da data.
 import { FLIGHT_STATUSES, GROUND_REG, NOTURNO } from '../config.js';
-import { CODIGOS_DE_AVISO } from '../conflitos.js';
+import { CODIGOS_DE_AVISO, CODIGOS_DO_AGENDADO } from '../conflitos.js';
 import { textoDoCombustivel } from '../combustivel.js';
 import { hm, WLB, fmtH, esc, rotuloDaData, hojeISO, duracaoHm, DURACAO_DO_GROUND } from '../format.js';
 import { isGroundMission } from '../rules.js';
@@ -368,8 +368,9 @@ function tempoParado(out) {
     </div>`;
 }
 
-// Avisos agrupados pelo código: alunos e instrutores sem peso, aviões que param para a revisão, atrasos e instrutores
-// perto do limite da lei. Os avisos sem código (de uma escala gravada antes deles) entram em "outros"
+// Avisos agrupados pelo código: alunos e instrutores sem peso, aviões que param para a revisão, atrasos, instrutores
+// perto do limite da lei e os voos agendados fora das regras (um por voo). Os avisos sem código (de uma escala gravada
+// antes deles) entram em "outros"
 function resumoDosAvisos(avisos) {
   const doCodigo = codigo => avisos.filter(a => a.codigo === codigo);
   const quantos = (lista, campo) => new Set(lista.map(a => a[campo]).filter(id => id !== undefined)).size;
@@ -381,6 +382,7 @@ function resumoDosAvisos(avisos) {
   const semPar = doCodigo('voa-com').length;
   const saiu = doCodigo('escolhido-saiu').length;
   const repouso = quantos(doCodigo('repouso-do-noturno'), 'insId');
+  const foraDaRegra = quantos(avisos.filter(a => CODIGOS_DO_AGENDADO.includes(a.codigo)), 'fKey');
   const outros = avisos.filter(a => !CODIGOS_DE_AVISO.includes(a.codigo)).length;
   const partes = [
     semPeso && `${semPeso} ${semPeso === 1 ? 'aluno sem peso' : 'alunos sem peso'}`,
@@ -391,6 +393,7 @@ function resumoDosAvisos(avisos) {
     semPar && `${semPar} ${semPar === 1 ? 'voo sem' : 'voos sem'} o instrutor de Priorizar com`,
     saiu && `${saiu} ${saiu === 1 ? 'voo com o instrutor escolhido' : 'voos com o instrutor escolhido'} fora do cadastro`,
     repouso && `${repouso} ${repouso === 1 ? 'instrutor' : 'instrutores'} sem o repouso da lei antes da volta do noturno`,
+    foraDaRegra && `${foraDaRegra} ${foraDaRegra === 1 ? 'agendamento' : 'agendamentos'} fora da regra`,
     outros && `${outros} ${outros === 1 ? 'outro' : 'outros'}`
   ].filter(Boolean);
   return `${avisos.length} ${avisos.length === 1 ? 'aviso' : 'avisos'}: ${partes.join(' · ')}`;
@@ -413,9 +416,12 @@ function resumo(out, al, tot) {
     h += `<details class="caixa erros" open><summary>${erros.length === 1 ? '1 missão não entrou' : `${erros.length} missões não entraram`} na escala: ${esc(nomes)}</summary>
       <ul>${erros.map(item).join('')}</ul></details>`;
   }
-  // Voos fixos que ficaram impossíveis (escala aprovada): continuam no lugar até o operador resolver
+  // Voos fixos que ficaram impossíveis (da escala aprovada, agendados ou com o instrutor escolhido na Escala): continuam no
+  // lugar até o operador resolver
   const conflito = a => `<li class="al ${a.t}"><b>${esc(a.s)}</b> ${esc(a.m)}${a.fKey ? ` <button type="button" class="btn quiet edit-only" data-reparo="${esc(a.fKey)}" title="O que pode voar no lugar deste voo">Sugestões</button>` : ''}</li>`;
-  if (conflitos.length) h += `<details class="caixa conflitos" open><summary>${conflitos.length} ${conflitos.length === 1 ? 'voo em conflito' : 'voos em conflito'} na escala aprovada</summary><ul>${conflitos.map(conflito).join('')}</ul></details>`;
+  const n = conflitos.length;
+  const emConflito = S.aprovacao ? `${n} ${n === 1 ? 'voo em conflito' : 'voos em conflito'} na escala aprovada` : `${n} ${n === 1 ? 'voo fixo' : 'voos fixos'} em conflito`;
+  if (n) h += `<details class="caixa conflitos" open><summary>${emConflito}</summary><ul>${conflitos.map(conflito).join('')}</ul></details>`;
   if (avisos.length) h += `<details class="caixa avisos"><summary>${resumoDosAvisos(avisos)}</summary><ul>${avisos.map(item).join('')}</ul></details>`;
   return h + '</div>';
 }
@@ -431,9 +437,20 @@ export function alternarTempo(w) {
   if (botao) botao.setAttribute('aria-expanded', String(!recolher));
 }
 
+// O voo agendado fora das regras (os avisos dele, um texto por regra), ao lado do horário: na dica, o caso dele
+function seloForaDaRegra(grupo, foraDaRegra) {
+  const casos = [...new Set(grupo.flatMap(o => foraDaRegra.get(o.fKey) || []))];
+  return casos.length ? ` <span class="tag fb" data-dica="fora-da-regra" data-dica-caso="${esc(casos.join(' '))}">fora da regra</span>` : '';
+}
+
 // Uma linha por voo. Na turma de Ground, horário, missão, sala e instrutor aparecem uma vez; cada aluno tem a
 // sua linha, com o seu status e a sua ação. Um clique no horário recolhe ou abre os voos dele
-function tabela(voos) {
+function tabela(voos, al) {
+  // Os avisos das regras que cada voo agendado pulou, pela chave do voo
+  const foraDaRegra = new Map();
+  for (const a of al) {
+    if (a.t === 'warn' && a.fKey && CODIGOS_DO_AGENDADO.includes(a.codigo)) foraDaRegra.set(a.fKey, [...(foraDaRegra.get(a.fKey) || []), a.m]);
+  }
   const grupos = [];
   const turmas = new Map();
   for (const o of voos) {
@@ -467,7 +484,7 @@ function tabela(voos) {
     const fixo = o.fixo ? ` <svg class="ico fixo" role="img" aria-label="${motivo}" data-dica="voo-fixo" data-dica-termo="${motivo}"><use href="#i-cadeado"/></svg>` : '';
     const doTempo = ` data-w="${o.w}"${recolhido ? ' hidden' : ''}`;
     h += `<tr${cancelado(o)}${doTempo}>
-      <td class="c-hr hr"${rs}>${hm(o.a)}–${hm(o.b)} <small>${duracao(o)}</small>${fixo}${preferencia(o)}${o.conflito ? ' <span class="tag er" data-dica="conflito">conflito</span>' : ''}</td>
+      <td class="c-hr hr"${rs}>${hm(o.a)}–${hm(o.b)} <small>${duracao(o)}</small>${fixo}${preferencia(o)}${seloForaDaRegra(grupo, foraDaRegra)}${o.conflito ? ' <span class="tag er" data-dica="conflito">conflito</span>' : ''}</td>
       <td class="c-aluno"><b>${esc(o.s)}</b></td>
       <td class="c-missao"${rs}>${esc(o.mis)}${grupo.length > 1 ? ` <small data-dica="turma">Turma de ${grupo.length} alunos</small>` : ''}${trechoDoNoturno(o)}</td>
       <td class="c-aviao nw"${rs}>${esc(nomeDoRecurso(o.r))}${ehGround(o) ? '' : ` <small>${esc(o.eqType || '')}</small>`}</td>
@@ -530,7 +547,7 @@ export function rOut() {
   rCompactacao(out);
   let h = resumo(out, al, tot);
   if (!voos.length) h += `<p class="h">${tot ? 'Nenhum voo na escala com esses filtros.' : 'Nenhuma missão marcada na Demanda.'}</p>`;
-  else h += tabela(voos) + renderVisualTimeline(voos) + (TL_MODE === 'painel' ? painelDoDia(voos) : '');
+  else h += tabela(voos, al) + renderVisualTimeline(voos) + (TL_MODE === 'painel' ? painelDoDia(voos) : '');
   trocarConteudo($('#out'), h);
   reancorarPopupDoMapa();
   atualizarPainelDeReparo();

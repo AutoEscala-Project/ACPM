@@ -7,6 +7,8 @@ import { runAllocationEngine } from '../../js/engine.js';
 import { normalizarFixos, pinoDoVoo, fixosAoMudarStatus, fixosAoReabrir, fixosAoAprovar, semAgendados, motivoDoFixo } from '../../js/fixos.js';
 import { escolherInstrutor, reverterEscolha } from '../../js/instrutor-escolhido.js';
 import { comRepousoDoNoturno } from '../../js/noturno.js';
+import { normalizarEscalaGravada } from '../../js/escala-gravada.js';
+import { CODIGOS_DO_AGENDADO } from '../../js/conflitos.js';
 import { gerarCenario } from '../helpers/cenarios.js';
 import { aluno, cenario, instrutor, apenas, missaoExtra, GROUND_C152 } from '../helpers/montar.js';
 
@@ -588,5 +590,263 @@ describe('O voo agendado e a volta do noturno de ontem', () => {
     assert.equal(Object.hasOwn(fixosAoReabrir(aprovados, {}), '1000_0_2'), false);
     assert.deepEqual(fixosAoReabrir(aprovados, { '1000_0_2': 'Pousou' }), { '1000_0_2': PINO_DA_VOLTA });
     assert.equal(motivoDoFixo('1000_0_2', { fStatus: {}, aprovacao: null, voo: linha, fixos: aprovados }), 'Voo fixo');
+  });
+});
+
+// O voo agendado na Escala no motor. Ele entra depois dos outros voos fixos (pelo status, pela escala aprovada e pelo
+// instrutor escolhido): o que ele gasta é conferido contra eles, e o conflito fica nele, nunca no voo que já estava fixo.
+// As regras que o motor segue sozinho e não confere nos fixos (os horários de decolagem, o pouso até as 17:30, o máximo
+// de voos locais no horário, o Ground antes do voo) e o peso que falta viram avisos dele, com a chave do voo. A turma
+// fixa fora das janelas não invalida a escala gravada
+describe('Voos agendados no motor', () => {
+  const agendado = (a, b, r, insId, extra = {}) => ({ a, b, r, insId, agendado: true, ...extra });
+  const instrutores = n => Array.from({ length: n }, (_, i) => instrutor(i + 1, 9));
+  const daChave = (out, fKey) => out.find(o => o.fKey === fKey);
+  const semMarca = ({ agendado: _, ...p }) => p;
+  const avisosDe = (al, ...codigos) => al.filter(a => a.t === 'warn' && codigos.includes(a.codigo));
+
+  it('no avião e no horário de um voo aprovado: o conflito fica no agendado (Conflito no voo agendado), e o aprovado não muda', () => {
+    // O Aluno 1001, de prioridade maior, agendado no avião e no horário do voo aprovado do Aluno 1000, com o outro instrutor
+    const base = cenario({ ins: instrutores(2), stu: [aluno(1000, { p1: 390, p2: -1, pr: 3 }), aluno(1001, { p1: 500, p2: -1, pr: 5 })] });
+    const antes = runAllocationEngine(base);
+    const aprovado = doAluno(antes.out, 1000);
+    const fixos = { ...fixarTudo(antes.out), '1001_0_1': agendado(aprovado.a, aprovado.b, aprovado.r, aprovado.insId === 1 ? 2 : 1) };
+    const { out, al } = runAllocationEngine({ ...base, fixos });
+    assert.deepEqual(pino(doAluno(out, 1000)), pino(aprovado));
+    assert.deepEqual([doAluno(out, 1000).conflito, doAluno(out, 1001).conflitoCodigos, doAluno(out, 1001).agendado], [undefined, ['aviao-ocupado'], true]);
+    assert.deepEqual(al, [{ t: 'conf', s: 'Aluno 1001', fKey: '1001_0_1', m: 'Conflito no voo agendado: o avião já está ocupado neste horário.' }]);
+    // O mesmo voo fixo sem a marca entra pela prioridade, antes do aprovado: o conflito ia para o voo aprovado
+    const comoFixo = runAllocationEngine({ ...base, fixos: { ...fixos, '1001_0_1': semMarca(fixos['1001_0_1']) } });
+    assert.deepEqual([doAluno(comoFixo.out, 1000).conflitoCodigos, doAluno(comoFixo.out, 1001).conflito], [['aviao-ocupado'], undefined]);
+    assert.deepEqual(comoFixo.al, [{ t: 'conf', s: 'Aluno 1000', fKey: '1000_0_1', m: 'Conflito na escala aprovada: o avião já está ocupado neste horário.' }]);
+  });
+
+  it('o saldo até a revisão de 50 horas fica com o voo aprovado: o agendado que passaria dela leva o conflito', () => {
+    // O PR-VOB tem 1h30 até a revisão: o voo aprovado das 06:30 usa 1 h, e o agendado das 10:10 (prioridade maior) não cabe
+    const base = cenario({ ins: instrutores(2), stu: [aluno(1000, { p1: 390, p2: -1, pr: 3 }), aluno(1001, { p1: 610, p2: -1, pr: 5 })], horas: { 'PR-VOB': 48.5 } });
+    const fixos = { '1000_0_1': { a: 390, b: 450, r: 'PR-VOB', insId: 1 }, '1001_0_1': agendado(610, 670, 'PR-VOB', 2) };
+    const { out, al } = runAllocationEngine({ ...base, fixos });
+    assert.deepEqual([doAluno(out, 1000).conflito, doAluno(out, 1001).conflitoCodigos], [undefined, ['revisao']]);
+    assert.deepEqual(al.filter(a => a.t === 'conf'), [{ t: 'conf', s: 'Aluno 1001', fKey: '1001_0_1', m: 'Conflito no voo agendado: o avião passaria da revisão de 50 horas.' }]);
+    const comoFixo = runAllocationEngine({ ...base, fixos: { ...fixos, '1001_0_1': semMarca(fixos['1001_0_1']) } });
+    assert.deepEqual([doAluno(comoFixo.out, 1000).conflitoCodigos, doAluno(comoFixo.out, 1001).conflito], [['revisao'], undefined]);
+  });
+
+  it('o instrutor, o aluno, a sala de Ground e a lei: o que o voo aprovado já usa fica com ele', () => {
+    const casos = [
+      ['o instrutor', [aluno(1000, { p1: 390, p2: -1, pr: 1 }), aluno(1001, { p1: 390, p2: -1, pr: 5 })],
+        { '1000_0_1': { a: 390, b: 450, r: 'PR-VOB', insId: 1 } }, ['1001_0_1', agendado(390, 450, 'PR-VOC', 1)], {}, ['instrutor-ocupado']],
+      ['o aluno (outra missão dele)', [aluno(1000, { p1: 390, p2: -1, pr: 1 }, { extra: [missaoExtra(1, { p1: 390, p2: -1, pr: 5 })] })],
+        { '1000_0_1': { a: 390, b: 450, r: 'PR-VOB', insId: 1 } }, ['1000_1_1', agendado(390, 450, 'PR-VOC', 2)], {}, ['aluno-ocupado']],
+      ['a sala de Ground', [aluno(1000, { ...GROUND_C152, p1: 390, p2: -1, pr: 1 }), aluno(1001, { mis: 'Ground C172', eq: 'Sala Ground', nb: 1.5, p1: 390, p2: -1, pr: 5 })],
+        { '1000_0_1': { a: 390, b: 480, r: 'SALA-GROUND', insId: 1, classKey: 'GND_Ground C152_0_1' } }, ['1001_0_1', agendado(390, 480, 'SALA-GROUND', 2)], {}, ['sala-ocupada']],
+      // O Instrutor 01 tem 98h30 no mês: o voo aprovado chega a 99h30, e o agendado passaria das 100 h
+      ['a lei (as horas do mês)', [aluno(1000, { p1: 390, p2: -1, pr: 1 }), aluno(1001, { p1: 610, p2: -1, pr: 5 })],
+        { '1000_0_1': { a: 390, b: 450, r: 'PR-VOB', insId: 1 } }, ['1001_0_1', agendado(610, 670, 'PR-VOC', 1)],
+        { horasDosInstrutores: { 1: { mes: 98.5, semestre: 0, ano: 0, fimAnterior: null } } }, ['limite-da-lei']]
+    ];
+    for (const [rotulo, stu, aprovados, [chave, pinoAgendado], extra, codigos] of casos) {
+      const estado = { ...cenario({ ins: instrutores(2), stu }), ...extra, fixos: { ...aprovados, [chave]: pinoAgendado } };
+      const { out, al } = runAllocationEngine(estado);
+      const [aprovado] = Object.keys(aprovados);
+      assert.deepEqual([daChave(out, aprovado).conflito, daChave(out, chave).conflitoCodigos], [undefined, codigos], rotulo);
+      assert.match(al.find(a => a.t === 'conf').m, /^Conflito no voo agendado: /, rotulo);
+      // Sem a marca, o pedido de prioridade maior entrava antes e tirava o lugar do voo aprovado
+      const comoFixo = runAllocationEngine({ ...estado, fixos: { ...aprovados, [chave]: semMarca(pinoAgendado) } });
+      assert.deepEqual([daChave(comoFixo.out, aprovado).conflitoCodigos, daChave(comoFixo.out, chave).conflito], [codigos, undefined], `${rotulo}, sem a marca`);
+    }
+  });
+
+  it('o fixo pelo instrutor escolhido na Escala (#38) e o fixo pelo status também ficam com o lugar; o agendado com o instrutor escolhido entra com os agendados', () => {
+    // O Aluno 1001, de prioridade maior e com o instrutor escolhido no pedido (o agendamento escolhe o instrutor), agendado
+    // no avião e no horário do voo do Aluno 1000, fixo pela escolha do instrutor na Escala ou pelo status
+    const base = cenario({ ins: instrutores(2), stu: [aluno(1000, { p1: 390, p2: -1, pr: 1, insId: 1 }), aluno(1001, { p1: 390, p2: -1, pr: 5, insId: 2 })] });
+    const doAgendado = agendado(390, 450, 'PR-VOB', 2);
+    const casos = [
+      ['o escolhido', { '1000_0_1': { a: 390, b: 450, r: 'PR-VOB', insId: 1, escolhido: true }, '1001_0_1': doAgendado }, {}],
+      ['o Em Voo', { '1000_0_1': { a: 390, b: 450, r: 'PR-VOB', insId: 1 }, '1001_0_1': doAgendado }, { '1000_0_1': 'Em Voo' }],
+      ['o agendado também escolhido', { '1000_0_1': { a: 390, b: 450, r: 'PR-VOB', insId: 1, escolhido: true }, '1001_0_1': { ...doAgendado, escolhido: true } }, {}]
+    ];
+    for (const [rotulo, fixos, fStatus] of casos) {
+      const { out, al } = runAllocationEngine({ ...base, fixos, fStatus });
+      assert.deepEqual([doAluno(out, 1000).conflito, doAluno(out, 1000).insEscolhido, doAluno(out, 1001).conflitoCodigos, doAluno(out, 1001).insEscolhido],
+        [undefined, true, ['aviao-ocupado'], true], rotulo);
+      assert.deepEqual(al, [{ t: 'conf', s: 'Aluno 1001', fKey: '1001_0_1', m: 'Conflito no voo agendado: o avião já está ocupado neste horário.' }], rotulo);
+    }
+  });
+
+  it('fora dos horários de decolagem: o do avião, o Noturno às 17:30, o Voo Solo às 06:30 e o Ground nas janelas do dia', () => {
+    const casos = [
+      [{}, agendado(420, 480, 'PR-VOB', 1), 'Agendado às 07:00, fora dos horários de decolagem do C152.'],
+      [{ mis: 'Noturno', eq: 'C172', nb: 4, p1: 1050 }, agendado(1020, 1260, 'PR-HAR', 1), 'Agendado às 17:00: o Noturno sai às 17:30.'],
+      [{ mis: 'Voo Solo' }, agendado(500, 560, 'PR-VOB', 1), 'Agendado às 08:20: o Voo Solo sai às 06:30.'],
+      [GROUND_C152, agendado(420, 510, 'SALA-GROUND', 1), 'Agendado às 07:00, fora dos horários das aulas de Ground.'],
+      [{ mis: 'Simulador', eq: 'Sim. Mono' }, agendado(420, 480, 'SIM-MONO-A', 1), 'Agendado às 07:00, fora dos horários de decolagem do Sim. Mono.']
+    ];
+    for (const [pedido, pinoAgendado, m] of casos) {
+      const estado = { ...cenario({ ins: instrutores(1), stu: [aluno(1000, { p1: 390, p2: -1, ...pedido })] }), fixos: { '1000_0_1': pinoAgendado } };
+      const resultado = runAllocationEngine(estado);
+      assert.deepEqual(resultado.al, [{ t: 'warn', s: 'Aluno 1000', fKey: '1000_0_1', m, codigo: 'fora-dos-horarios', stuId: 1000 }], m);
+      assert.deepEqual([resultado.out[0].conflito, resultado.out[0].agendado], [undefined, true], m);
+      assert.deepEqual(normalizarEscalaGravada(resultado), resultado, `${m}: a escala gravada`);
+      // O mesmo voo fixo sem a marca (pela aprovação): nenhum aviso, como antes
+      assert.deepEqual(runAllocationEngine({ ...estado, fixos: { '1000_0_1': semMarca(pinoAgendado) } }).al, [], `${m}, sem a marca`);
+    }
+    // Nos horários da missão, nenhum aviso
+    const nasJanelas = { ...cenario({ ins: instrutores(1), stu: [aluno(1000, { ...GROUND_C152, p1: 390, p2: -1 })] }), fixos: { '1000_0_1': agendado(500, 590, 'SALA-GROUND', 1) } };
+    assert.deepEqual(runAllocationEngine(nasJanelas).al, []);
+  });
+
+  it('depois das 17:30: o voo de dia no avião, e as outras missões do aluno que tem o Noturno no dia', () => {
+    const doDia = { ...cenario({ ins: instrutores(1), stu: [aluno(1000, { p1: 390, p2: -1, nb: 2 })] }), fixos: { '1000_0_1': agendado(980, 1100, 'PR-VOB', 1) } };
+    assert.deepEqual(runAllocationEngine(doDia).al, [{ t: 'warn', s: 'Aluno 1000', fKey: '1000_0_1', m: 'Agendado até as 18:20: o voo de dia pousa até as 17:30.', codigo: 'depois-das-17h30', stuId: 1000 }]);
+    // O Ground das 16:20 vai até as 17:50: sem o Noturno, a aula pode passar das 17:30; com ele, não
+    const ground = (extra = []) => ({ ...cenario({ ins: instrutores(2), stu: [aluno(1000, { ...GROUND_C152, p1: 980, p2: -1 }, { extra })] }), fixos: { '1000_0_1': agendado(980, 1070, 'SALA-GROUND', 1) } });
+    assert.deepEqual(runAllocationEngine(ground()).al, []);
+    assert.deepEqual(avisosDe(runAllocationEngine(ground([missaoExtra(1, { mis: 'Noturno', eq: 'C172', nb: 4, p1: 1050, p2: -1 })])).al, ...CODIGOS_DO_AGENDADO), [
+      { t: 'warn', s: 'Aluno 1000', fKey: '1000_0_1', m: 'Agendado até as 17:50: com o Noturno no dia, o aluno termina as outras missões até as 17:30.', codigo: 'depois-das-17h30', stuId: 1000 }
+    ]);
+    // O Noturno agendado às 17:30 vai até as 21:30, como sempre: nenhum aviso
+    const noturno = { ...cenario({ ins: instrutores(1), stu: [aluno(1000, { mis: 'Noturno', eq: 'C172', nb: 4, p1: 1050, p2: -1 })] }), fixos: { '1000_0_1': agendado(1050, 1290, 'PR-HAR', 1) } };
+    assert.deepEqual(runAllocationEngine(noturno).al, []);
+  });
+
+  it('o 7º voo local no mesmo horário: o agendado avisa (os seis aprovados ficam como estão); outro horário e o voo não local, não', () => {
+    const regs = ['PP-LJV', 'PR-BTB', 'PR-IGU', 'PR-MLB', 'PR-TBT', 'PR-THI', 'PR-VOB'];
+    const dia = (pedido7 = {}, pino7 = {}) => {
+      const stu = regs.map((r, i) => aluno(1000 + i, { p1: 500, p2: -1, ...(i === 6 ? pedido7 : {}) }));
+      const fixos = Object.fromEntries(stu.map((s, i) => [`${s.id}_0_1`, { a: 500, b: 560, r: regs[i], insId: i + 1, ...(i === 6 ? { agendado: true, ...pino7 } : {}) }]));
+      return { ...cenario({ ins: instrutores(7), stu }), fixos };
+    };
+    const { out, al } = runAllocationEngine(dia());
+    assert.deepEqual(al, [{ t: 'warn', s: 'Aluno 1006', fKey: '1006_0_1', m: 'Agendado às 08:20 como o 7º voo local do horário: no máximo 6 voos locais saem no mesmo horário.', codigo: 'limite-de-locais', stuId: 1006 }]);
+    assert.ok(out.every(o => !o.conflito));
+    assert.deepEqual(runAllocationEngine(dia({ mis: 'Navegação' })).al, [], 'a navegação não é um voo local');
+    assert.deepEqual(runAllocationEngine(dia({ p1: 610 }, { a: 610, b: 670 })).al, [], 'às 10:10, o 1º local do horário');
+    // O voo do 7º local fixo pela aprovação (sem a marca) fica como antes, sem aviso
+    assert.deepEqual(runAllocationEngine({ ...dia(), fixos: { ...dia().fixos, '1006_0_1': semMarca(dia().fixos['1006_0_1']) } }).al, []);
+  });
+
+  it('o Ground antes do voo: o voo agendado antes do fim do Ground fixo do aluno, e o Ground agendado depois do início do voo fixo', () => {
+    // O Ground C152 aprovado às 08:20 e o voo de C152 agendado às 06:30
+    const vooAntes = { ...cenario({ ins: instrutores(2), stu: [aluno(1000, { ...GROUND_C152, p1: 500, p2: -1 }, { extra: [missaoExtra(1, { p1: 390, p2: -1 })] })] }),
+      fixos: { '1000_0_1': { a: 500, b: 590, r: 'SALA-GROUND', insId: 1 }, '1000_1_1': agendado(390, 450, 'PR-VOB', 2) } };
+    assert.deepEqual(runAllocationEngine(vooAntes).al, [{ t: 'warn', s: 'Aluno 1000 (Voo Local)', fKey: '1000_1_1', m: 'Agendado às 06:30, antes do fim do Ground C152 do aluno (09:50): o Ground vem antes do voo.', codigo: 'antes-do-ground', stuId: 1000 }]);
+    // O voo de C152 aprovado às 06:30 e o Ground C152 agendado às 08:20
+    const groundDepois = { ...cenario({ ins: instrutores(2), stu: [aluno(1000, { p1: 390, p2: -1 }, { extra: [missaoExtra(1, { ...GROUND_C152, p1: 500, p2: -1 })] })] }),
+      fixos: { '1000_0_1': { a: 390, b: 450, r: 'PR-VOB', insId: 1 }, '1000_1_1': agendado(500, 590, 'SALA-GROUND', 2) } };
+    assert.deepEqual(runAllocationEngine(groundDepois).al, [{ t: 'warn', s: 'Aluno 1000 (Ground C152)', fKey: '1000_1_1', m: 'Agendado até as 09:50, depois do início do Voo Local do aluno (06:30): o Ground vem antes do voo.', codigo: 'antes-do-ground', stuId: 1000 }]);
+    // Na ordem certa, ou com um Ground que não vem antes deste voo (o Ground C172 e o voo de C152), nenhum aviso; os dois
+    // fixos só pela aprovação, também nenhum
+    assert.deepEqual(runAllocationEngine({ ...vooAntes, fixos: { ...vooAntes.fixos, '1000_1_1': agendado(610, 670, 'PR-VOB', 2) } }).al, []);
+    const outroGround = structuredClone(vooAntes);
+    outroGround.stu[0].mis = 'Ground C172';
+    assert.deepEqual(runAllocationEngine(outroGround).al, []);
+    assert.deepEqual(runAllocationEngine({ ...vooAntes, fixos: { ...vooAntes.fixos, '1000_1_1': semMarca(vooAntes.fixos['1000_1_1']) } }).al, []);
+    // A fronteira: o PA-34 sai de 30 em 30 min, e o voo das 08:00 começa quando o Ground PA-34 das 06:30 termina (sem
+    // aviso; o das 07:30, antes dele, avisa). Do outro lado, o Ground agendado que termina quando o voo fixo começa
+    const GROUND_PA34 = { mis: 'Ground PA-34', eq: 'Sala Ground', nb: 1.5 }, MLTE = { mis: 'Multimotor', eq: 'PA-34' };
+    const fronteira = inicio => ({ ...cenario({ ins: instrutores(2), stu: [aluno(1000, { ...GROUND_PA34, p1: 390, p2: -1 }, { extra: [missaoExtra(1, { ...MLTE, p1: inicio, p2: -1 })] })] }),
+      fixos: { '1000_0_1': { a: 390, b: 480, r: 'SALA-GROUND', insId: 1 }, '1000_1_1': agendado(inicio, inicio + 60, 'PT-JOB', 2) } });
+    assert.deepEqual(runAllocationEngine(fronteira(480)).al, []);
+    assert.deepEqual(avisosDe(runAllocationEngine(fronteira(450)).al, 'antes-do-ground').map(a => a.m), ['Agendado às 07:30, antes do fim do Ground PA-34 do aluno (08:00): o Ground vem antes do voo.']);
+    const groundNaFronteira = { ...cenario({ ins: instrutores(2), stu: [aluno(1000, { ...MLTE, p1: 480, p2: -1 }, { extra: [missaoExtra(1, { ...GROUND_PA34, p1: 390, p2: -1 })] })] }),
+      fixos: { '1000_0_1': { a: 480, b: 540, r: 'PT-JOB', insId: 1 }, '1000_1_1': agendado(390, 480, 'SALA-GROUND', 2) } };
+    assert.deepEqual(runAllocationEngine(groundNaFronteira).al, []);
+    // O Ground cancelado não conta
+    assert.deepEqual(runAllocationEngine({ ...vooAntes, fStatus: { '1000_0_1': 'Cancelado' } }).al, []);
+    // Por cima um do outro (o aluno em dois lugares é o conflito; a ordem, o aviso): o voo agendado no começo do Ground,
+    // e o Ground agendado no começo do voo de 2 h, que termina depois dele
+    const juntos = runAllocationEngine({ ...vooAntes, fixos: { ...vooAntes.fixos, '1000_1_1': agendado(500, 560, 'PR-VOB', 2) } });
+    assert.deepEqual([daChave(juntos.out, '1000_1_1').conflitoCodigos, avisosDe(juntos.al, 'antes-do-ground').map(a => a.m)],
+      [['aluno-ocupado'], ['Agendado às 08:20, antes do fim do Ground C152 do aluno (09:50): o Ground vem antes do voo.']]);
+    const vooLongo = structuredClone(groundDepois);
+    vooLongo.stu[0].nb = 2;
+    vooLongo.fixos = { '1000_0_1': { a: 390, b: 510, r: 'PR-VOB', insId: 1 }, '1000_1_1': agendado(390, 480, 'SALA-GROUND', 2) };
+    const grounds = runAllocationEngine(vooLongo);
+    assert.deepEqual([daChave(grounds.out, '1000_1_1').conflitoCodigos, avisosDe(grounds.al, 'antes-do-ground').map(a => a.m)],
+      [['aluno-ocupado'], ['Agendado até as 08:00, depois do início do Voo Local do aluno (06:30): o Ground vem antes do voo.']]);
+  });
+
+  it('a volta do noturno de ontem não depende do Ground de hoje: o Ground agendado depois dela não avisa, e a volta fica como era', () => {
+    const volta = { stuId: 1000, mid: 0, insId: 1, r: 'PR-HAR', eqType: 'C172', s: 'Aluno 1000', ins: 'Instrutor 01', stuKg: 70, fim: 1290 };
+    const estado = cenario({ ins: instrutores(2), stu: [aluno(1000, { mis: 'Ground C172', eq: 'Sala Ground', nb: 1.5, p1: 610, p2: -1 })] });
+    estado.noturnosDaVespera = [volta];
+    estado.horasDosInstrutores = comRepousoDoNoturno({ 1: { mes: 0, semestre: 0, ano: 0, fimAnterior: 1290 } }, [volta]);
+    const semAgendado = runAllocationEngine(estado);
+    const comAgendado = runAllocationEngine({ ...estado, fixos: { '1000_0_1': agendado(610, 700, 'SALA-GROUND', 2) } });
+    assert.deepEqual(comAgendado.al.map(a => a.codigo), ['repouso-do-noturno']);
+    assert.deepEqual(comAgendado.out.find(o => o.trecho), semAgendado.out.find(o => o.trecho));
+    assert.deepEqual(daChave(comAgendado.out, '1000_0_1').conflito, undefined);
+  });
+
+  it('o peso que falta: só no voo agendado em avião (com a chave do voo); o fixo pela aprovação, o Ground e o simulador não avisam', () => {
+    const estado = cenario({
+      ins: [instrutor(1, 9, { kg: 0 }), instrutor(2, 9)],
+      stu: [aluno(1000, { p1: 390, p2: -1 }, { kg: 0 }), aluno(1001, { p1: 500, p2: -1 }, { kg: 0 }), aluno(1002, { p1: 610, p2: -1 })]
+    });
+    const fixos = { '1000_0_1': agendado(390, 450, 'PR-VOB', 2), '1001_0_1': agendado(500, 560, 'PR-VOB', 1), '1002_0_1': agendado(610, 670, 'PR-VOB', 1) };
+    const resultado = runAllocationEngine({ ...estado, fixos });
+    const texto = quem => `${quem} (0 kg): verificação de limite (170 kg) no C152 não realizada.`;
+    assert.deepEqual(resultado.al, [
+      { t: 'warn', s: 'Aluno 1000', fKey: '1000_0_1', m: texto('Peso do aluno não informado'), codigo: 'sem-peso', stuId: 1000 },
+      { t: 'warn', s: 'Aluno 1001', fKey: '1001_0_1', m: texto('Pesos do aluno e de Instrutor 01 não informados'), codigo: 'sem-peso', stuId: 1001, insId: 1 },
+      { t: 'warn', s: 'Aluno 1002', fKey: '1002_0_1', m: texto('Peso de Instrutor 01 não informado'), codigo: 'sem-peso', insId: 1 }
+    ]);
+    assert.deepEqual(normalizarEscalaGravada(resultado), resultado);
+    // Os mesmos voos fixos pela aprovação: nenhum aviso, como antes
+    assert.deepEqual(runAllocationEngine({ ...estado, fixos: Object.fromEntries(Object.entries(fixos).map(([k, p]) => [k, semMarca(p)])) }).al, []);
+    // O Ground e o simulador agendados não têm limite de peso
+    const semLimite = cenario({ ins: [instrutor(1, 9, { kg: 0 })], stu: [aluno(1000, { ...GROUND_C152, p1: 390, p2: -1 }, { kg: 0 }), aluno(1001, { mis: 'Simulador', eq: 'Sim. Mono', p1: 610, p2: -1 }, { kg: 0 })] });
+    assert.deepEqual(runAllocationEngine({ ...semLimite, fixos: { '1000_0_1': agendado(390, 480, 'SALA-GROUND', 1), '1001_0_1': agendado(610, 670, 'SIM-MONO-A', 1) } }).al, []);
+  });
+
+  it('o agendado cancelado, em andamento ou que mudou de tipo não avisa; Pendente e Confirmado avisam', () => {
+    // Às 07:00 (fora dos horários do C152), até as 18:20 (depois das 17:30) e sem o peso do aluno
+    const estado = (pedido = {}, fStatus = {}, fObs = {}) => ({
+      ...cenario({ ins: instrutores(2), stu: [aluno(1000, { p1: 390, p2: -1, nb: 2, ...pedido }, { kg: 0 }), aluno(1001, { p1: 980, p2: -1, nb: 2 }, { kg: 0 })] }),
+      fixos: { '1000_0_1': agendado(420, 540, 'PR-VOB', 1), '1001_0_1': agendado(980, 1100, 'PR-VOC', 2) }, fStatus, fObs
+    });
+    const codigos = r => r.al.filter(a => a.t === 'warn').map(a => `${a.fKey}:${a.codigo}`);
+    const todos = ['1000_0_1:fora-dos-horarios', '1000_0_1:sem-peso', '1001_0_1:depois-das-17h30', '1001_0_1:sem-peso'];
+    assert.deepEqual(codigos(runAllocationEngine(estado())), todos);
+    for (const status of ['Pendente', 'Confirmado']) {
+      assert.deepEqual(codigos(runAllocationEngine(estado({}, { '1000_0_1': status, '1001_0_1': status }))), todos, status);
+    }
+    for (const status of ['Em Voo', 'Pousou', 'Cancelado']) {
+      assert.deepEqual(codigos(runAllocationEngine(estado({}, { '1000_0_1': status, '1001_0_1': status }))), [], status);
+    }
+    // O atrasado também já saiu (o atraso dele é outro aviso)
+    const atrasado = runAllocationEngine(estado({}, { '1000_0_1': 'Atrasado' }, { '1000_0_1': { novoInicio: 450 } }));
+    assert.deepEqual(codigos(atrasado), ['1001_0_1:depois-das-17h30', '1001_0_1:sem-peso']);
+    // O pedido que passou para Ground com o voo fixo num avião: só o conflito
+    const mudou = runAllocationEngine(estado(GROUND_C152));
+    assert.deepEqual(daChave(mudou.out, '1000_0_1').conflitoCodigos, ['ground-ou-voo']);
+    assert.deepEqual(codigos(mudou), ['1001_0_1:depois-das-17h30', '1001_0_1:sem-peso']);
+  });
+
+  it('a turma de Ground fixa fora das janelas: o colega que entra nela fica no período dela, e a escala gravada vale', () => {
+    // A turma fixa às 07:00 (aprovada ou agendada) e um colega do mesmo Ground, escalado pelo motor
+    for (const marca of [{}, { agendado: true }]) {
+      const estado = {
+        ...cenario({ ins: instrutores(1), stu: [aluno(1000, { ...GROUND_C152, p1: 390, p2: -1 }), aluno(1001, { ...GROUND_C152, p1: 390, p2: -1 })] }),
+        fixos: { '1000_0_1': { a: 420, b: 510, r: 'SALA-GROUND', insId: 1, ...marca } }
+      };
+      const resultado = runAllocationEngine(estado);
+      const [fixo, colega] = [doAluno(resultado.out, 1000), doAluno(resultado.out, 1001)];
+      assert.deepEqual([colega.classKey, colega.a, colega.b, colega.w, colega.fixo], [fixo.classKey, 420, 510, 0, undefined], JSON.stringify(marca));
+      assert.equal(fixo.w, 0);
+      // As 07:00 não são preferência do colega (ele não tem a 2ª): horário livre, não a 2ª preferência
+      assert.deepEqual([colega.baseTag, colega.tag], ['Próximo livre', 'Próximo livre · Turma (2)'], JSON.stringify(marca));
+      assert.deepEqual(normalizarEscalaGravada(resultado), resultado, JSON.stringify(marca));
+    }
+    // Entre as turmas abertas, a das 07:00 não passa na frente como se fosse a 2ª preferência do colega (sem a 2ª): ele
+    // fica na turma das 10:10, que abriu antes (o aluno dela vem antes na demanda), e no horário livre
+    const duasTurmas = {
+      ...cenario({ ins: instrutores(2), stu: [aluno(1002, { ...GROUND_C152, p1: 610, p2: -1 }), aluno(1000, { ...GROUND_C152, p1: 610, p2: -1 }), aluno(1001, { ...GROUND_C152, p1: 870, p2: -1 })] }),
+      fixos: { '1002_0_1': { a: 610, b: 700, r: 'SALA-GROUND', insId: 2, classKey: 'GND_Ground C152_2_2' }, '1000_0_1': { a: 420, b: 510, r: 'SALA-GROUND', insId: 1 } }
+    };
+    const colega = doAluno(runAllocationEngine(duasTurmas).out, 1001);
+    assert.deepEqual([colega.classKey, colega.a, colega.baseTag], ['GND_Ground C152_2_2', 610, 'Próximo livre']);
   });
 });

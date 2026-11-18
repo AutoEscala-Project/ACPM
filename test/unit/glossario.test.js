@@ -4,7 +4,8 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { GLOSSARIO, ABAS_DO_GLOSSARIO } from '../../js/glossario.js';
-import { REVISAO_H, MENOR_VOO_H } from '../../js/config.js';
+import { REVISAO_H, MENOR_VOO_H, LIMITE_DE_VOOS_LOCAIS, T, NI } from '../../js/config.js';
+import { hm } from '../../js/format.js';
 import { LIMITES_DA_LEI } from '../../js/limites.js';
 import { INTERVALO_DO_HANGAR } from '../../js/metricas.js';
 
@@ -40,5 +41,6 @@ describe('Glossário', () => {
     assert.match(GLOSSARIO['tempo-parado'].texto, new RegExp(`${INTERVALO_DO_HANGAR / 60} h ou mais`));
     assert.match(GLOSSARIO['limites-da-lei'].texto, new RegExp(`${LIMITES_DA_LEI.vooMesH} h no mês`));
     assert.match(GLOSSARIO['limites-da-lei'].texto, new RegExp(`${LIMITES_DA_LEI.vooAnoH} h no ano`));
+    assert.match(GLOSSARIO['fora-da-regra'].texto, new RegExp(`até as ${hm(T[NI])}, no máximo ${LIMITE_DE_VOOS_LOCAIS} voos locais`));
   });
 });

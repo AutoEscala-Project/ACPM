@@ -6,9 +6,12 @@ import { runAllocationEngine } from '../../js/engine.js';
 import { EQ, GROUND_REG, ACROBAT_REG, T, NI, DEFAULT_LIM, AIRCRAFT_EQ_TYPES } from '../../js/config.js';
 import { isGroundMission, doesGroundGateFlight } from '../../js/rules.js';
 import { podeFazer } from '../../js/habilitacoes.js';
-import { gerarCenario, comEscolhas, comAtributos, comVolta, FORA_DO_CADASTRO } from '../helpers/cenarios.js';
+import { gerarCenario, comEscolhas, comAtributos, comVolta, FORA_DO_CADASTRO, mulberry32 } from '../helpers/cenarios.js';
+import { FROTA_POR_TIPO } from '../helpers/estado.js';
 import { FROTA_INICIAL, recursoDaFrota, aviaoServe, instrutorVoaNoAviao } from '../../js/frota.js';
-import { CODIGOS_DE_REJEICAO } from '../../js/conflitos.js';
+import { CODIGOS_DE_REJEICAO, CODIGOS_DO_AGENDADO } from '../../js/conflitos.js';
+import { fixosAoAprovar } from '../../js/fixos.js';
+import { normalizarEscalaGravada } from '../../js/escala-gravada.js';
 
 // Até quando o voo pode ir: o de dia no avião pousa até as 17:30; o Noturno, o simulador e o Ground, até o fim do dia
 const fimDoVoo = o => (o.mis !== 'Noturno' && AIRCRAFT_EQ_TYPES.includes(o.eqType) ? T[NI] : 1440);
@@ -413,4 +416,105 @@ describe('Invariantes das escolhas do operador, em 300 cenários', () => {
     }
   }));
 
+});
+
+// O dia aprovado com voos agendados na Escala em qualquer recurso, instrutor e horário (também fora das regras e em
+// conflito): os agendados entram depois dos voos aprovados, que ficam onde estavam e sem conflito. Os conflitos e os
+// avisos das regras puladas ficam nos agendados, a escala é determinística e a escala gravada a aceita inteira
+describe('Voos agendados num dia aprovado, em 150 cenários', () => {
+  const pino = o => ({ a: o.a, b: o.b, r: o.r, insId: o.insId, ...(o.isGround ? { classKey: o.classKey } : {}) });
+  const MISSOES = [['Voo Local', 'C152'], ['Voo Local', 'C172'], ['Navegação', 'C152'], ['Voo Solo', 'C152'], ['Noturno', 'C172'], ['Simulador', 'Sim. Mono'], ['Ground C152', 'Sala Ground'], ['Multimotor', 'PA-34']];
+  const HORARIOS = [390, 420, 500, 610, 690, 760, 820, 870, 980, 1000, 1050];
+  // Os agendamentos, com outro gerador (o cenário não muda): quatro voos de aluno novo ou missões extras de quem já voa,
+  // às vezes na turma de Ground aprovada; num quarto dos dias, mais sete voos locais no mesmo horário
+  function comAgendados(base, antes, seed) {
+    const r = mulberry32(seed * 6151 + 11);
+    const pick = a => a[Math.floor(r() * a.length)];
+    const stu = structuredClone(base.stu);
+    const fixos = fixosAoAprovar({}, antes.out);
+    const turmas = antes.out.filter(o => o.isGround && o.status !== 'Cancelado');
+    const horarioDosLocais = pick(HORARIOS.slice(0, -1));
+    const pedidos = [
+      ...Array.from({ length: 4 }, () => pick(MISSOES)),
+      ...(seed % 4 ? [] : Array.from({ length: 7 }, () => ['Voo Local', 'C152', horarioDosLocais]))
+    ];
+    pedidos.forEach(([mis, eq, horario], i) => {
+      const ground = eq === 'Sala Ground';
+      const turma = ground && turmas.length && r() < 0.5 ? pick(turmas) : null;
+      const nb = ground ? 1.5 : mis === 'Noturno' ? 4 : 1 + Math.floor(r() * 2);
+      const pedido = { fly: true, mis: turma ? turma.mis : mis, eq, p1: 390, p2: -1, nb, ss: 1, pr: 1 + Math.floor(r() * 5) };
+      const a = turma ? turma.a : horario || pick(HORARIOS);
+      const agendado = {
+        a, b: Math.min(a + Math.round(nb * 60), 1440), r: ground ? 'SALA-GROUND' : pick(FROTA_POR_TIPO[eq]),
+        insId: turma ? turma.insId : pick(base.ins).id, agendado: true, ...(turma ? { classKey: turma.classKey } : {})
+      };
+      if (r() < 0.5) {
+        stu.push({ id: 9000 + i, nm: `Agendado ${i}`, kg: r() < 0.2 ? 0 : 70, bl: [], extra: [], ...pedido });
+        fixos[`${9000 + i}_0_1`] = agendado;
+      } else {
+        const s = pick(stu);
+        s.extra.push({ mid: 900 + i, ...pedido });
+        fixos[`${s.id}_${900 + i}_1`] = agendado;
+      }
+    });
+    return { ...base, stu, fixos };
+  }
+  const dias = SEEDS.slice(0, 150).map(seed => {
+    // Metade dos dias com a volta do noturno de ontem (não é um voo fixo do dia: fica como era)
+    const base = seed % 2 ? gerarCenario(seed) : comVolta(gerarCenario(seed), seed);
+    const antes = runAllocationEngine(base);
+    const estado = comAgendados(base, antes, seed);
+    const copia = structuredClone(estado);
+    return { seed, antes, estado, copia, depois: runAllocationEngine(estado) };
+  });
+  const emTodosOsDias = verificar => {
+    const falhas = [];
+    for (const dia of dias) {
+      try { verificar(dia); } catch (e) { falhas.push(`seed ${dia.seed}: ${e.message}`); }
+    }
+    assert.deepEqual(falhas.slice(0, 5), [], `${falhas.length} dia(s) violam a propriedade`);
+  };
+
+  it('os dias têm agendamentos de todo tipo (o teste não passa por falta deles)', () => {
+    const agendados = dias.flatMap(({ depois }) => depois.out.filter(o => o.agendado));
+    const avisos = dias.flatMap(({ depois }) => depois.al.filter(a => a.t === 'warn' && a.fKey));
+    const quantos = codigo => avisos.filter(a => a.codigo === codigo).length;
+    const naTurma = dias.flatMap(({ depois }) => depois.out.filter(o => o.agendado && o.isGround && depois.out.some(v => !v.agendado && v.classKey === o.classKey)));
+    const contagens = { agendados: agendados.length, emConflito: agendados.filter(o => o.conflito).length, semConflito: agendados.filter(o => !o.conflito).length, naTurma: naTurma.length, semPeso: quantos('sem-peso'), ...Object.fromEntries(CODIGOS_DO_AGENDADO.map(c => [c, quantos(c)])) };
+    assert.ok(contagens.agendados > 700 && contagens.emConflito > 300 && contagens.semConflito > 50 && contagens.naTurma > 10 && contagens.semPeso > 30 &&
+      CODIGOS_DO_AGENDADO.every(c => contagens[c] > 10), JSON.stringify(contagens));
+  });
+
+  it('os voos aprovados ficam onde estavam, sem conflito (e a volta do noturno, como era)', () => emTodosOsDias(({ antes, depois }) => {
+    for (const o of antes.out) {
+      const igual = depois.out.find(v => v.fKey === o.fKey);
+      assert.ok(igual, `${o.fKey} sumiu`);
+      assert.deepEqual(pino(igual), pino(o), `${o.fKey} mudou`);
+      assert.equal(igual.conflito, undefined, `${o.fKey} em conflito`);
+      assert.equal(igual.agendado, undefined, `${o.fKey} com a marca`);
+    }
+    assert.deepEqual(depois.out.filter(o => o.trecho), antes.out.filter(o => o.trecho));
+  }));
+
+  it('cada agendado fica no lugar dele, com a marca; os conflitos e os avisos das regras puladas são só dos agendados', () => emTodosOsDias(({ estado, depois }) => {
+    const agendados = new Map(depois.out.filter(o => o.agendado).map(o => [o.fKey, o]));
+    for (const [fKey, p] of Object.entries(estado.fixos).filter(([, p]) => p.agendado)) {
+      const o = agendados.get(fKey);
+      assert.ok(o, `${fKey} fora da escala`);
+      assert.deepEqual([o.a, o.b, o.r, o.insId, o.fixo], [p.a, p.b, p.r, p.insId, true], fKey);
+    }
+    for (const a of depois.al.filter(x => x.t === 'conf')) {
+      assert.ok(agendados.has(a.fKey) && a.m.startsWith('Conflito no voo agendado: '), `${a.fKey}: ${a.m}`);
+    }
+    for (const a of depois.al.filter(x => x.t === 'warn' && (CODIGOS_DO_AGENDADO.includes(x.codigo) || x.fKey))) {
+      assert.ok(agendados.has(a.fKey) && !agendados.get(a.fKey).conflitoCodigos?.includes('ground-ou-voo'), `${a.fKey}: ${a.m}`);
+      assert.ok(!['Atrasado', 'Em Voo', 'Pousou', 'Cancelado'].includes(agendados.get(a.fKey).status), `${a.fKey}: ${a.m}`);
+    }
+  }));
+
+  it('é determinístico, não altera o estado recebido, e a escala gravada aceita a escala inteira', () => emTodosOsDias(({ estado, copia, depois }) => {
+    assert.deepEqual(estado, copia, 'estado alterado');
+    assert.deepEqual(runAllocationEngine(estado), depois, 'saída diferente');
+    assert.deepEqual(normalizarEscalaGravada(depois), depois, 'a escala gravada não aceita');
+  }));
 });

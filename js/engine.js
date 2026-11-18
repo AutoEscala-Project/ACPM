@@ -393,110 +393,166 @@ export function runAllocationEngine(state, opcoes = {}) {
     });
   }
 
-  for (const item of act) {
+  // Os voos agendados na Escala entram depois dos outros fixos (pelo status, pela escala aprovada e pelo instrutor
+  // escolhido na Escala), cada grupo na ordem dos pedidos: o que o agendado gasta (o avião ou a sala, o instrutor, o
+  // aluno, o saldo até a revisão, a lei, os voos locais do horário e o rodízio) é conferido contra os outros fixos, e o
+  // conflito fica nele, nunca no voo que já estava fixo
+  const agendado = item => Boolean(fixos[chaveFixa(item)].agendado);
+  const comPino = act.filter(chaveFixa);
+  // O agendado pode estar fora de regras que o motor segue sozinho e não confere nos fixos (o operador confirmou ao
+  // agendar): cada uma vira um aviso, com a chave do voo, depois dos fixos. Não avisam o voo cancelado, o em andamento
+  // (ele já saiu) e o que mudou de tipo (o conflito dele já diz)
+  const avisosDosAgendados = [];
+  const agendadosComAviso = new Set();
+  for (const item of [...comPino.filter(i => !agendado(i)), ...comPino.filter(agendado)]) {
     const fKey = chaveFixa(item);
-    if (fKey) {
-      const pino = fixos[fKey];
-      const { stu, stuId, mid, ref: d, stuOrder } = item;
-      const ground = isGroundMission(d.mis);
-      const { a, b, r, insId } = pino;
-      const classKey = ground ? pino.classKey || fKey : fKey;
-      const x = state.ins.find(i => i.id === insId);
-      const status = statusDoVoo({ fKey }, state.fStatus);
-      const efetivo = intervaloEfetivo({ a, b }, status, (state.fObs || {})[fKey]);
-      const tipo = ground ? GROUND_EQ_TYPE : d.eq;
-      // A turma ocupa a sala e o instrutor pelo primeiro aluno dela que não foi cancelado
-      const daMesmaTurma = ground && out.some(o => o.classKey === classKey && o.stuId !== stuId && o.status !== 'Cancelado');
-      // Conferido de novo com as regras do motor: cada conflito com o texto e o código
-      const conflito = [], conflitoCodigos = [];
-      const marcar = (codigo, texto) => { conflito.push(texto); conflitoCodigos.push(codigo); };
-      // Pedido que passou de voo para Ground (ou o contrário): o pino é de outro tipo de recurso
-      const mudouDeTipo = ground !== (r === GROUND_REG);
-      if (status !== 'Cancelado') {
-        // O aluno que entra na turma do instrutor não muda a ocupação dele nem a lei
-        const recursoDoPino = ground || mudouDeTipo ? null : recursoDaFrota(frota, r);
-        problemasDoInstrutor(x, { mis: d.mis, tipo, a, b, efetivo, alunos: [stu], stuKg: stu.kg, curso: stu.curso, recurso: recursoDoPino }, {
-          compromissos: (x && compromissos[x.id]) || [], historico: x ? historico(x.id) : null, limites, jaOcupa: daMesmaTurma,
-          peso: ground || mudouDeTipo ? null : {}, todos: true
-        }).forEach(p => marcar(p.codigo, TEXTO_DO_PROBLEMA[p.codigo](p)));
-        if (mudouDeTipo) marcar('ground-ou-voo', ground ? 'o pedido passou de voo para Ground' : 'o pedido passou de Ground para voo');
-        else if (!ground) {
-          const recurso = frota.find(f => f.reg === r);
-          if (!recurso || recurso.tipo !== d.eq) marcar('tipo-de-aviao', 'a missão ou o avião do pedido mudou');
-          else if (!state.av[r]) marcar('aviao-indisponivel', 'o avião está indisponível');
-          if (!free(used, r, a, b)) marcar('aviao-ocupado', 'o avião já está ocupado neste horário');
-          // Os atributos do avião: o "Só Parafuso" e o "Só VFR" (o voo IFR só no avião homologado IFR)
-          const motivo = recurso && recurso.tipo === d.eq ? motivoDoAviao(recurso, { mis: d.mis, eq: d.eq, curso: stu.curso }) : null;
-          if (motivo === 'so-parafuso') marcar('so-parafuso', d.mis === 'Parafuso' ? `o Parafuso só voa no ${nomesSoParafuso}` : `o ${r} é só para o Parafuso`);
-          if (motivo === 'so-vfr') marcar('so-vfr', `o ${r} não é homologado IFR, e o voo é IFR`);
-          if (!cabeNoSaldo(eu[r] || 0, (b - a) / 60, saldo(r))) marcar('revisao', 'o avião passaria da revisão de 50 horas');
-        } else if (!daMesmaTurma && !free(used, GROUND_REG, a, b)) marcar('sala-ocupada', 'a sala de Ground já está ocupada neste horário');
-        if (!free(stuBusy, stuId, a, b)) marcar('aluno-ocupado', 'o aluno já tem outro voo neste horário');
-        if (!state.win[periodoDoMinuto(a)]) marcar('horario-fechado', 'o horário está fechado nesta data');
-        const permitidas = disponibilidadeDoAluno(d.jan);
-        if (permitidas && !permitidas(a)) marcar('disponibilidade', 'o horário está fora da disponibilidade do aluno');
-        if (!mudouDeTipo && b - a !== duracaoDoPedido(d, ground)) marcar('duracao', 'a duração do pedido mudou');
-        // Ocupa o avião (ou a sala), o instrutor e o aluno; a turma ocupa a sala e o instrutor uma vez só. O voo atrasado
-        // ocupa o horário novo, depois de conferidos os outros fixos: o atraso que invade outro voo
-        // fixo é um aviso de atraso, não um conflito dele
-        const h = ground ? GROUND_DURATION_H : (b - a) / 60;
-        const ocupar = ({ a: ia, b: ib }) => {
-          if (!daMesmaTurma) {
-            (used[ground ? GROUND_REG : r] = used[ground ? GROUND_REG : r] || []).push([ia, ib]);
-            if (x) {
-              (compromissos[x.id] ||= []).push({ a: ia, b: ib, voo: AIRCRAFT_EQ_TYPES.includes(tipo) });
-            }
-          }
-          (stuBusy[stuId] = stuBusy[stuId] || []).push([ia, ib]);
-        };
-        if (efetivo.a === a) ocupar(efetivo);
-        else ocupacoesDeAtraso.push(() => ocupar(efetivo));
-        if (!ground && MISSOES_LOCAIS.includes(d.mis)) locaisNoHorario[efetivo.a] = (locaisNoHorario[efetivo.a] || 0) + 1;
-        if (!daMesmaTurma) {
-          if (x) load[x.id] = (load[x.id] || 0) + h;
-          eu[ground ? GROUND_REG : r] = (eu[ground ? GROUND_REG : r] || 0) + h;
+    const pino = fixos[fKey];
+    const { stu, stuId, mid, ref: d, stuOrder } = item;
+    const rotulo = mid ? `${stu.nm} (${d.mis})` : stu.nm;
+    const ground = isGroundMission(d.mis);
+    const { a, b, r, insId } = pino;
+    const classKey = ground ? pino.classKey || fKey : fKey;
+    const x = state.ins.find(i => i.id === insId);
+    const status = statusDoVoo({ fKey }, state.fStatus);
+    const efetivo = intervaloEfetivo({ a, b }, status, (state.fObs || {})[fKey]);
+    const tipo = ground ? GROUND_EQ_TYPE : d.eq;
+    const lim = ground ? 0 : DEFAULT_LIM[d.eq] || 0;
+    // A turma ocupa a sala e o instrutor pelo primeiro aluno dela que não foi cancelado
+    const daMesmaTurma = ground && out.some(o => o.classKey === classKey && o.stuId !== stuId && o.status !== 'Cancelado');
+    // Conferido de novo com as regras do motor: cada conflito com o texto e o código
+    const conflito = [], conflitoCodigos = [];
+    const marcar = (codigo, texto) => { conflito.push(texto); conflitoCodigos.push(codigo); };
+    // Pedido que passou de voo para Ground (ou o contrário): o pino é de outro tipo de recurso
+    const mudouDeTipo = ground !== (r === GROUND_REG);
+    if (status !== 'Cancelado') {
+      // O aluno que entra na turma do instrutor não muda a ocupação dele nem a lei
+      const recursoDoPino = ground || mudouDeTipo ? null : recursoDaFrota(frota, r);
+      problemasDoInstrutor(x, { mis: d.mis, tipo, a, b, efetivo, alunos: [stu], stuKg: stu.kg, curso: stu.curso, recurso: recursoDoPino }, {
+        compromissos: (x && compromissos[x.id]) || [], historico: x ? historico(x.id) : null, limites, jaOcupa: daMesmaTurma,
+        peso: ground || mudouDeTipo ? null : {}, todos: true
+      }).forEach(p => marcar(p.codigo, TEXTO_DO_PROBLEMA[p.codigo](p)));
+      if (mudouDeTipo) marcar('ground-ou-voo', ground ? 'o pedido passou de voo para Ground' : 'o pedido passou de Ground para voo');
+      else if (!ground) {
+        const recurso = frota.find(f => f.reg === r);
+        if (!recurso || recurso.tipo !== d.eq) marcar('tipo-de-aviao', 'a missão ou o avião do pedido mudou');
+        else if (!state.av[r]) marcar('aviao-indisponivel', 'o avião está indisponível');
+        if (!free(used, r, a, b)) marcar('aviao-ocupado', 'o avião já está ocupado neste horário');
+        // Os atributos do avião: o "Só Parafuso" e o "Só VFR" (o voo IFR só no avião homologado IFR)
+        const motivo = recurso && recurso.tipo === d.eq ? motivoDoAviao(recurso, { mis: d.mis, eq: d.eq, curso: stu.curso }) : null;
+        if (motivo === 'so-parafuso') marcar('so-parafuso', d.mis === 'Parafuso' ? `o Parafuso só voa no ${nomesSoParafuso}` : `o ${r} é só para o Parafuso`);
+        if (motivo === 'so-vfr') marcar('so-vfr', `o ${r} não é homologado IFR, e o voo é IFR`);
+        if (!cabeNoSaldo(eu[r] || 0, (b - a) / 60, saldo(r))) marcar('revisao', 'o avião passaria da revisão de 50 horas');
+      } else if (!daMesmaTurma && !free(used, GROUND_REG, a, b)) marcar('sala-ocupada', 'a sala de Ground já está ocupada neste horário');
+      if (!free(stuBusy, stuId, a, b)) marcar('aluno-ocupado', 'o aluno já tem outro voo neste horário');
+      if (!state.win[periodoDoMinuto(a)]) marcar('horario-fechado', 'o horário está fechado nesta data');
+      const permitidas = disponibilidadeDoAluno(d.jan);
+      if (permitidas && !permitidas(a)) marcar('disponibilidade', 'o horário está fora da disponibilidade do aluno');
+      if (!mudouDeTipo && b - a !== duracaoDoPedido(d, ground)) marcar('duracao', 'a duração do pedido mudou');
+      if (pino.agendado && !STATUS_EM_ANDAMENTO.includes(status) && !mudouDeTipo) {
+        agendadosComAviso.add(fKey);
+        const avisar = (codigo, m) => avisosDosAgendados.push({ t: 'warn', s: rotulo, fKey, m, codigo, stuId });
+        // Os horários de decolagem da missão (o Ground, nas janelas do dia; o Noturno, às 17:30; o Voo Solo, às 06:30)
+        const lista = ground ? DAY.map(w => T[w]) : horariosDaMissao(horarios, d.mis, d.eq);
+        if (!lista.includes(a)) {
+          avisar('fora-dos-horarios', ground ? `Agendado às ${hm(a)}, fora dos horários das aulas de Ground.`
+            : d.mis === 'Noturno' || d.mis === 'Voo Solo' ? `Agendado às ${hm(a)}: o ${d.mis} sai às ${hm(lista[0])}.`
+              : `Agendado às ${hm(a)}, fora dos horários de decolagem do ${d.eq}.`);
         }
-        if (x && !ground) {
-          const avioes = (insAircraft[x.id] = insAircraft[x.id] || []);
-          if (!avioes.includes(r)) avioes.push(r);
-          stuLastPick[stuId] = { r, x };
-          const categoria = categoriaDoRodizio(d.mis, d.eq);
-          if (categoria) voosNaCategoria[`${categoria}:${x.id}`] = (voosNaCategoria[`${categoria}:${x.id}`] || 0) + 1;
+        // Até quando a missão pode ir: o voo de dia no avião pousa até as 17:30; com o Noturno no dia, o aluno termina as
+        // outras missões antes dele
+        const fim = fimDoAluno(stuId, d.mis, tipo);
+        if (b > fim) {
+          avisar('depois-das-17h30', AIRCRAFT_EQ_TYPES.includes(tipo) ? `Agendado até as ${hm(b)}: o voo de dia pousa até as ${hm(fim)}.`
+            : `Agendado até as ${hm(b)}: com o Noturno no dia, o aluno termina as outras missões até as ${hm(fim)}.`);
         }
-        if (ground) {
-          // A turma fixa fica aberta: um aluno novo do mesmo Ground pode entrar nela, se ela não está em conflito (sem o
-          // instrutor, por exemplo)
-          const turmas = (openGroundClasses[d.mis] = openGroundClasses[d.mis] || []);
-          if (x && !daMesmaTurma && !conflito.length && !turmas.some(c => c.classKey === classKey)) turmas.push({ classKey, mis: d.mis, w: T.indexOf(a), a, b, x, count: 0 });
-          const turma = turmas.find(c => c.classKey === classKey);
-          if (turma) turma.count++;
-          const gRec = (stuGroundStatus[stuId] || []).find(g => g.mis === d.mis && g.allocatedEnd === null);
-          if (gRec) gRec.allocatedEnd = b;
+        // No máximo 6 voos locais saindo no mesmo horário: conferido antes de contar este
+        const locais = locaisNoHorario[efetivo.a] || 0;
+        if (!ground && MISSOES_LOCAIS.includes(d.mis) && locais >= LIMITE_DE_VOOS_LOCAIS) {
+          avisar('limite-de-locais', `Agendado às ${hm(a)} como o ${locais + 1}º voo local do horário: no máximo ${LIMITE_DE_VOOS_LOCAIS} voos locais saem no mesmo horário.`);
+        }
+        // O peso que falta, como no voo escalado pelo motor (os outros voos fixos não avisam)
+        if (lim && x && (!stu.kg || !x.kg)) {
+          const quem = !stu.kg && !x.kg ? `Pesos do aluno e de ${x.nm} não informados` : !stu.kg ? 'Peso do aluno não informado' : `Peso de ${x.nm} não informado`;
+          avisosDosAgendados.push({ t: 'warn', s: rotulo, fKey, m: `${quem} (0 kg): verificação de limite (${lim} kg) no ${d.eq} não realizada.`, codigo: 'sem-peso', ...(stu.kg ? {} : { stuId }), ...(x.kg ? {} : { insId: x.id }) });
         }
       }
-      const pf = [minutoDaPreferencia(d.p1), minutoDaPreferencia(d.p2)];
-      const baseTag = a === pf[0] ? 'Pref. 1' : a === pf[1] ? 'Pref. 2' : 'Próximo livre';
-      const lim = ground ? 0 : DEFAULT_LIM[d.eq] || 0;
-      out.push({
-        fKey, classKey, isGround: ground,
-        w: ground && T.indexOf(a) >= 0 ? T.indexOf(a) : periodoDoMinuto(a), a, b,
-        o: stuOrder, stuId, mid, insId, eqType: tipo,
-        s: stu.nm, mis: d.mis, h: ground ? GROUND_DURATION_H : (b - a) / 60, ss: '1/1',
-        ...(d.etapa ? { etapa: d.etapa } : {}),
-        r: ground ? GROUND_REG : r, ins: x ? x.nm : 'Instrutor fora do cadastro',
-        stuKg: stu.kg || 0, insKg: (x && x.kg) || 0, limKg: lim, kg: stu.kg && x && x.kg ? stu.kg + x.kg : 0,
-        ...(ground || !x ? {} : combustivelDoVoo(stu.kg, x.kg, d.eq, b - a, d.mis)),
-        baseTag, tag: baseTag, status, fixo: true,
-        ...(x && d.insId === x.id ? { insEscolhido: true } : {}),
-        // O voo agendado na Escala: a linha leva a marca do pino (a aprovação e a escala gravada a guardam)
-        ...(pino.agendado ? { agendado: true } : {}),
-        ...(conflito.length ? { conflito, conflitoCodigos } : {})
-      });
-      if (conflito.length) al.push({ t: 'conf', s: mid ? `${stu.nm} (${d.mis})` : stu.nm, fKey, m: `Conflito na escala aprovada: ${conflito.join('; ')}.` });
+      // Ocupa o avião (ou a sala), o instrutor e o aluno; a turma ocupa a sala e o instrutor uma vez só. O voo atrasado
+      // ocupa o horário novo, depois de conferidos os outros fixos: o atraso que invade outro voo
+      // fixo é um aviso de atraso, não um conflito dele
+      const h = ground ? GROUND_DURATION_H : (b - a) / 60;
+      const ocupar = ({ a: ia, b: ib }) => {
+        if (!daMesmaTurma) {
+          (used[ground ? GROUND_REG : r] = used[ground ? GROUND_REG : r] || []).push([ia, ib]);
+          if (x) {
+            (compromissos[x.id] ||= []).push({ a: ia, b: ib, voo: AIRCRAFT_EQ_TYPES.includes(tipo) });
+          }
+        }
+        (stuBusy[stuId] = stuBusy[stuId] || []).push([ia, ib]);
+      };
+      if (efetivo.a === a) ocupar(efetivo);
+      else ocupacoesDeAtraso.push(() => ocupar(efetivo));
+      if (!ground && MISSOES_LOCAIS.includes(d.mis)) locaisNoHorario[efetivo.a] = (locaisNoHorario[efetivo.a] || 0) + 1;
+      if (!daMesmaTurma) {
+        if (x) load[x.id] = (load[x.id] || 0) + h;
+        eu[ground ? GROUND_REG : r] = (eu[ground ? GROUND_REG : r] || 0) + h;
+      }
+      if (x && !ground) {
+        const avioes = (insAircraft[x.id] = insAircraft[x.id] || []);
+        if (!avioes.includes(r)) avioes.push(r);
+        stuLastPick[stuId] = { r, x };
+        const categoria = categoriaDoRodizio(d.mis, d.eq);
+        if (categoria) voosNaCategoria[`${categoria}:${x.id}`] = (voosNaCategoria[`${categoria}:${x.id}`] || 0) + 1;
+      }
+      if (ground) {
+        // A turma fixa fica aberta: um aluno novo do mesmo Ground pode entrar nela, se ela não está em conflito (sem o
+        // instrutor, por exemplo)
+        const turmas = (openGroundClasses[d.mis] = openGroundClasses[d.mis] || []);
+        if (x && !daMesmaTurma && !conflito.length && !turmas.some(c => c.classKey === classKey)) turmas.push({ classKey, mis: d.mis, w: T.indexOf(a), a, b, x, count: 0 });
+        const turma = turmas.find(c => c.classKey === classKey);
+        if (turma) turma.count++;
+        const gRec = (stuGroundStatus[stuId] || []).find(g => g.mis === d.mis && g.allocatedEnd === null);
+        if (gRec) gRec.allocatedEnd = b;
+      }
     }
+    const pf = [minutoDaPreferencia(d.p1), minutoDaPreferencia(d.p2)];
+    const baseTag = a === pf[0] ? 'Pref. 1' : a === pf[1] ? 'Pref. 2' : 'Próximo livre';
+    out.push({
+      fKey, classKey, isGround: ground,
+      w: ground && T.indexOf(a) >= 0 ? T.indexOf(a) : periodoDoMinuto(a), a, b,
+      o: stuOrder, stuId, mid, insId, eqType: tipo,
+      s: stu.nm, mis: d.mis, h: ground ? GROUND_DURATION_H : (b - a) / 60, ss: '1/1',
+      ...(d.etapa ? { etapa: d.etapa } : {}),
+      r: ground ? GROUND_REG : r, ins: x ? x.nm : 'Instrutor fora do cadastro',
+      stuKg: stu.kg || 0, insKg: (x && x.kg) || 0, limKg: lim, kg: stu.kg && x && x.kg ? stu.kg + x.kg : 0,
+      ...(ground || !x ? {} : combustivelDoVoo(stu.kg, x.kg, d.eq, b - a, d.mis)),
+      baseTag, tag: baseTag, status, fixo: true,
+      ...(x && d.insId === x.id ? { insEscolhido: true } : {}),
+      // O voo agendado na Escala: a linha leva a marca do pino (a aprovação e a escala gravada a guardam)
+      ...(pino.agendado ? { agendado: true } : {}),
+      ...(conflito.length ? { conflito, conflitoCodigos } : {})
+    });
+    if (conflito.length) al.push({ t: 'conf', s: rotulo, fKey, m: `${pino.agendado ? 'Conflito no voo agendado' : 'Conflito na escala aprovada'}: ${conflito.join('; ')}.` });
   }
 
   ocupacoesDeAtraso.forEach(ocupar => ocupar());
+  // O Ground antes do voo, entre os fixos (o motor só confere a ordem quando escala um dos dois): o agendado que começa
+  // antes do fim do Ground fixo de que depende, ou o Ground agendado que termina depois do início de um voo fixo que
+  // depende dele. A volta do noturno de ontem não depende do Ground de hoje
+  const fixoAtivo = o => o.fixo && !o.trecho && o.status !== 'Cancelado';
+  for (const o of out.filter(v => agendadosComAviso.has(v.fKey))) {
+    const doAluno = out.filter(v => v !== o && v.stuId === o.stuId && fixoAtivo(v));
+    const avisar = m => avisosDosAgendados.push({ t: 'warn', s: o.mid ? `${o.s} (${o.mis})` : o.s, fKey: o.fKey, m, codigo: 'antes-do-ground', stuId: o.stuId });
+    if (o.isGround) {
+      const voos = doAluno.filter(v => !v.isGround && doesGroundGateFlight(o.mis, { mis: v.mis, eq: v.eqType }) && v.a < o.b);
+      const voo = voos.reduce((p, v) => (!p || v.a < p.a ? v : p), null);
+      if (voo) avisar(`Agendado até as ${hm(o.b)}, depois do início do ${voo.mis} do aluno (${hm(voo.a)}): o Ground vem antes do voo.`);
+    } else {
+      const grounds = doAluno.filter(v => v.isGround && doesGroundGateFlight(v.mis, { mis: o.mis, eq: o.eqType }) && v.b > o.a);
+      const aula = grounds.reduce((p, v) => (!p || v.b > p.b ? v : p), null);
+      if (aula) avisar(`Agendado às ${hm(o.a)}, antes do fim do ${aula.mis} do aluno (${hm(aula.b)}): o Ground vem antes do voo.`);
+    }
+  }
+  al.push(...avisosDosAgendados);
 
   for (const item of act) {
     if (chaveFixa(item)) continue;
@@ -544,7 +600,6 @@ export function runAllocationEngine(state, opcoes = {}) {
       const durMin = GROUND_DURATION_MIN; // 90 min (1.5 h)
       const endMax = fimDoAluno(stuId, d.mis, GROUND_EQ_TYPE);
       const starts = DAY.filter(w => state.win[w] && T[w] + durMin <= endMax && naDisponibilidade(T[w]));
-      const pf = preferidos.map(m => T.indexOf(m));
 
       // Se o aluno também tem um voo dependente hoje com horário preferido, prioriza janelas que terminem antes do voo
       const dependentFlights = act.filter(other => other.stuId === stuId && doesGroundGateFlight(d.mis, other.ref));
@@ -572,8 +627,9 @@ export function runAllocationEngine(state, opcoes = {}) {
         const naPassada = x => passada.pool.includes(x);
 
         // 1ª Tentativa: Unir-se a uma turma já aberta da mesma temática de Ground (mesmo horário e mesmo instrutor)
-        // A turma da 1ª preferência, depois a da 2ª, depois as outras
-        const ordemDaPreferencia = c => { const i = pf.indexOf(c.w); return i < 0 ? 2 : i; };
+        // A turma da 1ª preferência, depois a da 2ª, depois as outras (pelo horário: a turma fixa fora das janelas do dia
+        // não tem janela, e não vale como a preferência que o aluno não tem)
+        const ordemDaPreferencia = c => { const i = preferidos.indexOf(c.a); return i < 0 ? 2 : i; };
         const orderedExisting = [...existingClasses].filter(c => c.b <= prazoFixo && c.b <= endMax).sort((c1, c2) => {
           const inPref1 = ordemDaPreferencia(c1);
           const inPref2 = ordemDaPreferencia(c2);
@@ -658,13 +714,14 @@ export function runAllocationEngine(state, opcoes = {}) {
         if (gRec) gRec.allocatedEnd = chosenClass.b;
 
         const fKey = chaveDoVoo(stuId, mid);
-        const baseTag = chosenClass.w === pf[0] ? 'Pref. 1' : chosenClass.w === pf[1] ? 'Pref. 2' : 'Próximo livre';
+        const baseTag = chosenClass.a === preferidos[0] ? 'Pref. 1' : chosenClass.a === preferidos[1] ? 'Pref. 2' : 'Próximo livre';
 
         out.push({
           fKey,
           classKey: chosenClass.classKey,
           isGround: true,
-          w: chosenClass.w, a: chosenClass.a, b: chosenClass.b,
+          // A turma fixa fora das janelas do dia (T.indexOf do horário dela é -1) fica no período em que começa
+          w: chosenClass.w >= 0 ? chosenClass.w : periodoDoMinuto(chosenClass.a), a: chosenClass.a, b: chosenClass.b,
           o: stuOrder,
           stuId,
           mid,

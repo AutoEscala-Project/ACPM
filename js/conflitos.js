@@ -56,11 +56,17 @@ export function gruposDoConflito(voo) {
   ]);
 }
 
+// As regras que o motor segue sozinho e não confere nos voos fixos, quando o voo agendado na Escala está fora delas (o
+// operador confirmou ao agendar): os horários de decolagem da missão, o pouso do voo de dia até as 17:30, o máximo de
+// voos locais saindo no mesmo horário e o Ground antes do voo. Cada aviso tem a chave do voo (fKey) e o aluno (stuId).
+// O limite de locais também é um código de rejeição: a escala gravada confere cada código na lista do tipo do alerta
+export const CODIGOS_DO_AGENDADO = ['fora-dos-horarios', 'depois-das-17h30', 'limite-de-locais', 'antes-do-ground'];
+
 // Os códigos dos avisos, para o resumo da Escala agrupar sem ler o texto: o peso que falta (stuId e insId dizem de
-// quem), o instrutor perto do limite da lei (insId), o avião que para para a revisão, o atraso que invade outro voo e
-// o voo que ficou sem o instrutor do “Priorizar com” do aluno e o do pedido cujo instrutor escolhido saiu do cadastro (stuId;
-// insId: quem ficou com o voo)
-export const CODIGOS_DE_AVISO = ['sem-peso', 'perto-do-limite', 'revisao', 'atraso', 'voa-com', 'escolhido-saiu', 'repouso-do-noturno'];
+// quem), o instrutor perto do limite da lei (insId), o avião que para para a revisão, o atraso que invade outro voo, o
+// voo que ficou sem o instrutor do “Priorizar com” do aluno e o do pedido cujo instrutor escolhido saiu do cadastro (stuId;
+// insId: quem ficou com o voo), o repouso antes da volta do noturno (insId) e as regras que o voo agendado pulou
+export const CODIGOS_DE_AVISO = ['sem-peso', 'perto-do-limite', 'revisao', 'atraso', 'voa-com', 'escolhido-saiu', 'repouso-do-noturno', ...CODIGOS_DO_AGENDADO];
 
 // Os códigos das rejeições: por que o pedido ficou fora da escala, para dizer onde resolver
 export const CODIGOS_DE_REJEICAO = [
