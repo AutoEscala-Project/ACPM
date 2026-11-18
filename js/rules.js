@@ -4,6 +4,7 @@ import { MIS, NI, T, PRE, GROUND_EQ_TYPE, GROUND_DURATION_H, DURACAO_MAXIMA_H } 
 import { hm, lerHoras } from './format.js';
 import { periodoDoMinuto, minutoDaPreferencia, preferenciaValida, HORARIO_DO_SOLO } from './horarios.js';
 import { codigoValido } from './cursos.js';
+import { chaveDoVoo } from './voo.js';
 
 // Disponibilidade do aluno para o pedido (da agenda da secretaria ou escolhida na demanda): o voo só começa nesses
 // horários. "manha", "tarde" e "noite" valem por período (as janelas de operação de cada um); "h450" é um horário
@@ -48,13 +49,24 @@ export function doesGroundGateFlight(gMis, flightReq) {
   return false;
 }
 
-// O número da próxima missão extra de um aluno: depois das missões dele e do que o dia ainda guarda
-// para ele (voo fixo, status ou detalhe de uma missão retirada), para não herdar o voo de outra missão. Numerada no
-// aluno, a missão extra não muda o cadastro (o número do cadastro, nid, fica para as pessoas novas)
+// As chaves dos voos que o dia ainda guarda, também das missões que saíram da demanda: o voo fixo, o status, o detalhe
+// do status e os resultados registrados na data
+function chavesGuardadas(estado) {
+  const resultados = estado.resultados && Array.isArray(estado.resultados.doDia) ? estado.resultados.doDia : [];
+  return [...[estado.fixos, estado.fStatus, estado.fObs].flatMap(m => Object.keys(m && typeof m === 'object' ? m : {})),
+    ...resultados.map(r => r && r.voo).filter(voo => typeof voo === 'string')];
+}
+
+// O dia ainda guarda alguma coisa do voo da chave (o voo fixo, o status, o detalhe ou um resultado): um pedido novo nela
+// herdaria o cadeado, o status ou o resultado de outro voo
+export const chaveTemSobras = (estado, chave) => chavesGuardadas(estado).includes(chave);
+
+// O número da próxima missão extra de um aluno: depois das missões dele e do que o dia ainda guarda para ele (voo fixo,
+// status, detalhe ou resultado de uma missão retirada), para não herdar o voo de outra missão. Numerada no aluno, a
+// missão extra não muda o cadastro (o número do cadastro, nid, fica para as pessoas novas)
 export function proximoMid(estado, aluno) {
   const prefixo = `${aluno.id}_`;
-  const doDia = [estado.fixos, estado.fStatus, estado.fObs].flatMap(m => Object.keys(m && typeof m === 'object' ? m : {}))
-    .filter(fKey => fKey.startsWith(prefixo)).map(fKey => Number(fKey.split('_')[1]));
+  const doDia = chavesGuardadas(estado).filter(fKey => fKey.startsWith(prefixo)).map(fKey => Number(fKey.split('_')[1]));
   const doAluno = (aluno.extra || []).map(ex => ex.mid).filter(Number.isInteger);
   return Math.max(0, ...doAluno, ...doDia.filter(Number.isInteger)) + 1;
 }
@@ -68,6 +80,21 @@ export const duracaoFixaDaMissao = mis => (isGroundMission(mis) ? GROUND_DURATIO
   : Object.hasOwn(MIS, mis) && MIS[mis].duracaoFixaH ? MIS[mis].duracaoFixaH : null);
 
 export const blank = () => ({ fly: false, mis: 'Voo Local', eq: 'C152', p1: T[1], p2: T[2], nb: 1, ss: 1, pr: 3 });
+
+// O pedido que recebe um voo novo do aluno (o pedido da agenda; o voo agendado na escala): o principal, quando ele não
+// voa e o dia não guarda nada da chave dele, em branco (sem a disponibilidade, a missão do curso, o pedido da agenda e o
+// instrutor escolhido do voo de antes); senão, uma missão extra nova, com a prioridade do aluno. O pedido que não voa e
+// tem sobras fica como está: voltando a voar, volta para o mesmo lugar
+export function alvoDoNovoPedido(estado, aluno) {
+  if (!aluno.fly && !chaveTemSobras(estado, chaveDoVoo(aluno.id, 0))) {
+    Object.assign(aluno, blank());
+    for (const campo of ['jan', 'etapa', 'cursoDaEtapa', 'solicitacao', 'insId']) delete aluno[campo];
+    return aluno;
+  }
+  const extra = { mid: proximoMid(estado, aluno), ...blank(), pr: aluno.pr || 3 };
+  aluno.extra = [...(aluno.extra || []), extra];
+  return extra;
+}
 
 export function migrateLegacyMissionName(mis) {
   if (missionRule(mis)) return mis;

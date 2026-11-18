@@ -1,12 +1,14 @@
 // Agenda de solicitações da secretaria: a regra do prazo (a mesma do servidor, no horário de São Paulo) e o pedido
 // da demanda que cada solicitação vira ao ser importada.
 import { MIS, MISSOES_LOCAIS, LIMITE_DE_VOOS_LOCAIS } from './config.js';
-import { disponibilidadeAtual, disponibilidadeDoAluno, normalizeMissionFields, proximoMid, duracaoValida, duracaoPadraoDaMissao } from './rules.js';
+import { disponibilidadeAtual, disponibilidadeDoAluno, normalizeMissionFields, migrateLegacyMissionName, duracaoPadraoDaMissao, alvoDoNovoPedido } from './rules.js';
 import { horariosDaMissao, preferenciasPadrao, paraMinuto } from './horarios.js';
 import { hm, somarDias } from './format.js';
 import { indiceDoPrograma } from './programa.js';
 import { proximasMissoes, missoesDoDia } from './progresso.js';
-import { situacaoPorMissao } from './resultados.js';
+import { situacaoPorMissao, resultadoDoVoo } from './resultados.js';
+import { chaveDoVoo } from './voo.js';
+import { fixoPeloStatus } from './fixos.js';
 
 export const FUSO_DO_AEROCLUBE = 'America/Sao_Paulo';
 
@@ -54,10 +56,11 @@ export function disponibilidadeDaSolicitacao({ janela, horario }) {
 }
 
 // Pedido da demanda: a missão com o equipamento padrão; como preferências, os dois primeiros horários dela que a
-// disponibilidade permite (sem disponibilidade, os primeiros a partir das 08:20 e das 10:10); 1 h (o Ground tem
-// 01h30) e prioridade 3. Os horários são os da categoria do equipamento (o PA-34 tem os seus). eq: outro equipamento
-// da missão (o do programa do curso)
-export function pedidoDaSolicitacao(solicitacao, horarios, { eq } = {}) {
+// disponibilidade permite (sem disponibilidade, os primeiros a partir das 08:20 e das 10:10); prioridade 3. Os horários
+// são os da categoria do equipamento (o PA-34 tem os seus). As horas: as fixas da missão (o Ground, 01h30; o Noturno,
+// 4 h); senão, as registradas na agenda; senão, as do programa do curso; senão, as padrão da missão (1 h; o simulador,
+// 2 h). eq e nb: o recurso e as horas da missão do programa do curso
+export function pedidoDaSolicitacao(solicitacao, horarios, { eq, nb } = {}) {
   const jan = disponibilidadeDaSolicitacao(solicitacao);
   const regra = Object.hasOwn(MIS, solicitacao.missao) ? MIS[solicitacao.missao] : MIS['Voo Local'];
   const equipamento = eq && regra.eq.includes(eq) ? eq : regra.defEq;
@@ -65,23 +68,40 @@ export function pedidoDaSolicitacao(solicitacao, horarios, { eq } = {}) {
   const permitida = disponibilidadeDoAluno(jan);
   const naDisponibilidade = permitida ? lista.filter(permitida) : [];
   const [p1, p2] = naDisponibilidade.length ? [naDisponibilidade[0], naDisponibilidade[Math.min(1, naDisponibilidade.length - 1)]] : preferenciasPadrao(lista);
+  const registradas = solicitacao.horas === null || solicitacao.horas === undefined ? null : +solicitacao.horas;
   const pedido = {
     fly: true, mis: solicitacao.missao, eq: equipamento,
-    p1, p2, nb: duracaoPadraoDaMissao(solicitacao.missao), ss: 1, pr: 3,
+    p1, p2, nb: registradas ?? nb ?? duracaoPadraoDaMissao(solicitacao.missao), ss: 1, pr: 3,
     ...(jan ? { jan } : {})
   };
+  // A duração fixa da missão vale mais que as outras (normalizeMissionFields a impõe)
   normalizeMissionFields(pedido);
   return pedido;
 }
 
-// Importa para a demanda da data as solicitações ativas ainda não importadas. Só acrescenta: o aluno sem voo no dia
-// recebe o pedido como missão principal; a mesma missão copiada da data anterior dá lugar ao pedido; senão, o pedido
-// entra como missão extra (cada pedido é um voo, marcado com o id dele em solicitacao). As solicitações vistas ficam
-// anotadas no dia (estado.importadas) para não repetir.
+// O voo da mesma missão (mis) que está na demanda do aluno sem pedido da agenda (posto à mão: a demanda começa vazia a
+// cada data): ele dá lugar ao pedido, para não duplicar. O voo fixo (agendado, aprovado ou com o instrutor escolhido na
+// escala), o fixado pelo status (em andamento ou cancelado; também quando o cadeado saiu, como na aprovação com o Voa
+// desligado) e o que já tem resultado na data ficam como estão. Nenhum: null
+function vooQueDaLugar(estado, aluno, mis) {
+  const doDia = estado.resultados ? estado.resultados.doDia : [];
+  return [aluno, ...(aluno.extra || [])].find(p => {
+    const chave = chaveDoVoo(aluno.id, p.mid || 0);
+    return p.fly && p.mis === mis && p.solicitacao === undefined && !Object.hasOwn(estado.fixos || {}, chave)
+      && !fixoPeloStatus(chave, estado.fStatus) && resultadoDoVoo(doDia, chave) === null;
+  }) || null;
+}
+
+// Importa para a demanda da data as solicitações ativas ainda não importadas. Só acrescenta: cada pedido da agenda vira
+// um voo, marcado com o id dele em solicitacao (dois pedidos da mesma missão são dois voos). O voo da mesma missão posto
+// na demanda sem pedido da agenda dá lugar ao pedido (vooQueDaLugar); senão, o pedido vai para o pedido principal do
+// aluno, quando ele não voa e o dia não guarda nada dele, ou para uma missão extra nova (alvoDoNovoPedido). As
+// solicitações vistas ficam anotadas no dia (estado.importadas) para não repetir.
 // Aluno de um curso: o pedido entra como a primeira missão liberada do programa que é do tipo pedido (o código, o
-// recurso e as horas do programa); nenhuma, ele entra como veio. As missões que o aluno já tem no dia contam como
-// feitas, como na Demanda. situacao: o último resultado de cada missão; programa: os cursos (vazio quando os resultados
-// ou os programas não foram lidos: nenhum pedido entra como missão do curso)
+// recurso e as horas do programa); nenhuma, ele entra como veio. As missões dos outros voos do aluno no dia contam como
+// feitas, como na Demanda; a do voo que dá lugar ao pedido, não (ela continua no dia, agora com o pedido). situacao: o
+// último resultado de cada missão; programa: os cursos (vazio quando os resultados ou os programas não foram lidos:
+// nenhum pedido entra como missão do curso)
 export function importarSolicitacoes(estado, solicitacoes, { situacao = [], programa = [] } = {}) {
   const indice = indiceDoPrograma(programa), mapa = situacaoPorMissao(situacao);
   const resumo = { novos: 0, atualizados: 0, semAluno: 0 };
@@ -92,31 +112,22 @@ export function importarSolicitacoes(estado, solicitacoes, { situacao = [], prog
     const aluno = estado.stu.find(x => x.id === solicitacao.aluno);
     if (!aluno) { resumo.semAluno++; continue; }
     estado.importadas.push(solicitacao.id);
+    const copiada = vooQueDaLugar(estado, aluno, migrateLegacyMissionName(solicitacao.missao));
     const curso = aluno.curso ? indice.curso(aluno.curso) : null;
-    const jaNoDia = curso && missoesDoDia(curso, aluno, { fStatus: estado.fStatus });
+    const jaNoDia = curso && missoesDoDia(curso, aluno, { fStatus: estado.fStatus, mid: copiada ? copiada.mid || 0 : null });
     const missao = curso && proximasMissoes(curso, mapa, aluno.id, { planejadas: jaNoDia, exceto: jaNoDia }).candidatas
       .find(m => m.mis === solicitacao.missao);
-    // A missão do curso: o recurso do programa, com os horários e as preferências dele
-    const pedido = pedidoDaSolicitacao(solicitacao, estado.horarios, missao ? { eq: missao.eq } : {});
-    if (missao) Object.assign(pedido, { etapa: missao.codigo, nb: missao.nb });
-    // A duração registrada na agenda vale; o Ground continua com 01h30
-    if (solicitacao.horas !== null && solicitacao.horas !== undefined && !MIS[pedido.mis]?.isGround) pedido.nb = duracaoValida(+solicitacao.horas);
-    // Cada pedido da agenda vira um voo (dois pedidos da mesma missão são dois voos). Só a missão que veio da data
-    // anterior (sem pedido da agenda) dá lugar ao pedido, para não duplicar
+    // A missão do curso: o recurso do programa, com os horários e as preferências dele, e as horas dele
+    const pedido = pedidoDaSolicitacao(solicitacao, estado.horarios, missao ? { eq: missao.eq, nb: missao.nb } : {});
+    if (missao) pedido.etapa = missao.codigo;
     pedido.solicitacao = solicitacao.id;
-    const copiada = [aluno, ...(aluno.extra || [])].find(m => m.fly && m.mis === pedido.mis && m.solicitacao === undefined);
     if (copiada) {
-      delete copiada.jan;
-      delete copiada.etapa;
+      // O voo continua com o instrutor escolhido; a disponibilidade e a missão do curso passam a ser as do pedido
+      for (const campo of ['jan', 'etapa', 'cursoDaEtapa']) delete copiada[campo];
       Object.assign(copiada, pedido);
       resumo.atualizados++;
-    } else if (!aluno.fly) {
-      // O pedido novo não herda o instrutor escolhido de um pedido que tinha saído da escala
-      delete aluno.insId;
-      Object.assign(aluno, pedido);
-      resumo.novos++;
     } else {
-      aluno.extra = [...(aluno.extra || []), { mid: proximoMid(estado, aluno), ...pedido }];
+      Object.assign(alvoDoNovoPedido(estado, aluno), pedido);
       resumo.novos++;
     }
   }
