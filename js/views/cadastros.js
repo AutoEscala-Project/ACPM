@@ -5,14 +5,13 @@ import { WIN, PRE, T, AIRCRAFT_EQ_TYPES, MINUTOS_DO_DIA } from '../config.js';
 import { HABILITACOES, nomeDaHabilitacao } from '../habilitacoes.js';
 import { FROTA_INICIAL, habilitacaoDoAviao } from '../frota.js';
 import { esc, hm, opts, LIMITE_DO_NOME, numeroBr } from '../format.js';
-import { S, DATA, insBy, isGestor, voosQueVoam } from '../state.js';
+import { S, DATA, insBy, isGestor, voosQueVoam, dadoIndisponivel } from '../state.js';
 import { $ } from '../dom.js';
 import { botaoDeDica } from '../dicas.js';
 import { canacDe } from './dados-pessoais.js';
 import { normalizarLimites } from '../limites.js';
 import { ApiClient } from '../storage.js';
 import { gerenciaContas } from '../perfis.js';
-import { CURSOS } from '../cursos.js';
 import { progressoDoAluno } from './etapas.js';
 import { unidadeDoVoo, umPorUnidade } from '../voo.js';
 
@@ -253,10 +252,19 @@ function voaCom(s) {
     `<select data-f="voaCom" class="edit-only" aria-label="Priorizar com"><option value="">Priorizar com…</option>${S.ins.filter(x => !pares.includes(x.id) && !s.bl.includes(x.id)).map(x => `<option value="${x.id}">${esc(x.nm)}</option>`).join('')}</select>`;
 }
 
+// O curso do aluno: os cursos ativos (a aba Cursos), e o curso dele quando está encerrado ("(encerrado)") ou não existe
+// ("(curso desconhecido)"). Sem os programas lidos, o curso dele só pela sigla (nada é dito sobre ele)
+function opcoesDoCurso(s) {
+  const programa = S.programa || [], atual = s.curso ? programa.find(c => c.sigla === s.curso) : null;
+  const doAluno = !s.curso || (atual && atual.ativo) ? []
+    : [[s.curso, atual ? `${s.curso} · ${atual.nome} (encerrado)` : dadoIndisponivel('cursos') ? s.curso : `${s.curso} (curso desconhecido)`]];
+  return opts([['', '—'], ...programa.filter(c => c.ativo).map(c => [c.sigla, `${c.sigla} · ${c.nome}`]), ...doAluno], s.curso || '');
+}
+
 const linhaDoAluno = s => `<tr class="cd" data-k="s" data-id="${s.id}" data-nm="${esc(s.nm.toLowerCase())}">
   <td><input class="nm" data-f="nm" value="${esc(s.nm)}" maxlength="${LIMITE_DO_NOME}" aria-label="Nome do aluno"></td>
   <td class="c-canac so-dados">${esc(canacDe('aluno', s.id))}</td>
-  <td class="c-curso"><select data-f="curso" aria-label="Curso de ${esc(s.nm)}"${isGestor() ? ' disabled' : ''}>${opts([['', '—'], ...CURSOS.map(([id, nome]) => [id, `${id} · ${nome}`])], s.curso || '')}</select>${progressoDoAluno(s)}</td>
+  <td class="c-curso"><select data-f="curso" aria-label="Curso de ${esc(s.nm)}"${isGestor() ? ' disabled' : ''}>${opcoesDoCurso(s)}</select>${progressoDoAluno(s)}</td>
   <td><input type="number" min="1" max="300" data-f="kg" value="${s.kg || ''}" placeholder="sem peso" aria-label="Peso de ${esc(s.nm)} em kg"${s.kg ? '' : ' class="falta"'}></td>
   <td class="c-voa-com"><div class="bl voa-com">${voaCom(s)}</div></td>
   <td><div class="bl nao-escalar">${naoEscalarCom(s)}</div></td>
@@ -279,7 +287,9 @@ export function atualizarLinhaDoAluno(s, { naoEscalar = false, voaComMudou = fal
   kg.value = s.kg || '';
   kg.classList.toggle('falta', !s.kg);
   kg.setAttribute('aria-label', `Peso de ${s.nm} em kg`);
+  // As opções acompanham o curso do aluno (o encerrado de que ele saiu não fica na lista)
   const curso = linha.querySelector('[data-f="curso"]');
+  curso.innerHTML = opcoesDoCurso(s);
   curso.value = s.curso || '';
   curso.setAttribute('aria-label', `Curso de ${s.nm}`);
   const progresso = linha.querySelector('.progresso');

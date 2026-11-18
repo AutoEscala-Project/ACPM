@@ -3,15 +3,17 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { prazoDaAgendaPermite, primeiraDataAberta, disponibilidadeDaSolicitacao, pedidoDaSolicitacao, importarSolicitacoes } from '../../js/agenda.js';
 import { normalizarCursos } from '../../js/cursos.js';
-import { programaDoLegado, percursoDoCurso } from '../../js/programa.js';
+import { programaDoLegado, percursoDoCurso, novoCurso } from '../../js/programa.js';
+import { MODELOS } from '../../js/modelos-de-curso.js';
 import { runAllocationEngine } from '../../js/engine.js';
 import { blank } from '../../js/rules.js';
 import { setS } from '../../js/state.js';
 import { programaParaInferir } from '../../js/views/etapas.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
-import { cursoPP } from '../helpers/programa-pp.js';
 
 const em = iso => new Date(iso);
+// O cronograma do PP (o modelo do app, com o Noturno em trechos) como o curso PP, com os ids tirados da sigla e da chave
+const cursoPP = () => novoCurso([], { sigla: 'PP', nome: 'Piloto Privado', modelo: MODELOS['pp-acpm'] }, (s, c) => `${s}:${c}`).curso;
 
 describe('Agenda de solicitações', () => {
   it('pedido para o dia seguinte só até as 13:00 de São Paulo; depois, a partir de dois dias', () => {
@@ -156,18 +158,20 @@ describe('Importar as solicitações da agenda para a demanda', () => {
     assert.deepEqual([e.stu[0].etapa, e.stu[0].eq, e.stu[0].p1, e.stu[0].p2], ['PC-01', 'PA-34', 390, 420]);
   });
 
-  // No programa em fases, várias missões podem estar liberadas: o pedido entra como a primeira do tipo pedido; nenhuma
-  // liberada do tipo (fora da ordem, ou fora do programa), ele entra como veio, com a duração da missão: o Noturno, o
-  // bloco de 4 h às 17:30 (o translado e o noturno em BH); o simulador, as 2 h de padrão
+  // No programa em fases, várias missões podem estar liberadas: o pedido entra como a primeira do tipo pedido (o Noturno
+  // em trechos, pela noite: o bloco de 4 h às 17:30, o translado e o noturno em BH); nenhuma liberada do tipo (fora da
+  // ordem, ou fora do programa), ele entra como veio, com a duração da missão: o simulador, as 2 h de padrão
   it('aluno de um curso em fases: a primeira missão liberada do tipo pedido; fora da ordem, nenhuma', () => {
-    // As fases 1 a 4 aprovadas (as 13 primeiras missões do curso)
+    // As fases 1 a 4 aprovadas (as 13 primeiras missões do curso): o Voo Solo (na Fase 7) ainda está fora da ordem
     const PP = cursoPP();
     const situacao = percursoDoCurso(PP).missoes.slice(0, 13).map((m, i) => ({ id: i + 1, aluno: 1000, curso: 'PP', missao: m.codigo, resultado: 'aprovado' }));
     const e = { ...estado(), stu: [aluno(1000, { fly: false }, { curso: 'PP' })] };
     importarSolicitacoes(e, [pedido(30, 1000, { missao: 'Parafuso' }), pedido(31, 1000, { missao: 'Navegação' }), pedido(32, 1000, { missao: 'Noturno' }),
-      pedido(33, 1000, { missao: 'Simulador' })], { situacao, programa: [PP] });
-    assert.deepEqual([e.stu[0], ...e.stu[0].extra].map(p => [p.mis, p.etapa, p.eq, p.nb]),
-      [['Parafuso', 'PE-04', 'C152', 1], ['Navegação', 'NAV-01', 'C152', 1.5], ['Noturno', undefined, 'C172', 4], ['Simulador', undefined, 'Sim. Mono', 2]]);
+      pedido(33, 1000, { missao: 'Simulador' }), pedido(39, 1000, { missao: 'Voo Solo' })], { situacao, programa: [PP] });
+    assert.deepEqual([e.stu[0], ...e.stu[0].extra].map(p => [p.mis, p.etapa, p.eq, p.nb]), [
+      ['Parafuso', 'PE-04', 'C152', 1], ['Navegação', 'NAV-01', 'C152', 1.5], ['Noturno', 'NOT', 'C172', 4], ['Simulador', undefined, 'Sim. Mono', 2],
+      ['Voo Solo', undefined, 'C152', 1]
+    ]);
     const noturno = e.stu[0].extra.find(p => p.mis === 'Noturno');
     assert.deepEqual([noturno.p1, noturno.p2], [1050, -1], 'o Noturno sai às 17:30');
   });

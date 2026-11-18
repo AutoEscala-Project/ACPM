@@ -1,22 +1,26 @@
-// A próxima missão pelas regras do programa (js/progresso.js): os exemplos do cronograma do PP (o desenho dos cursos,
-// §4.8 e apêndice A), as regras de cada fase e missão, o progresso, o motivo de uma missão estar fora da ordem, as
-// missões do dia, o que a Demanda, Alunos e a escala mostram (js/views/etapas.js) e a paridade com a próxima missão de
-// antes (o programa do cadastro numa fase só, todas as missões depois das anteriores).
+// A próxima missão pelas regras do programa (js/progresso.js): os exemplos do cronograma do PP (o modelo do app, em
+// js/modelos-de-curso.js: o desenho dos cursos, §4.8 e apêndice A, com o Noturno em trechos), as regras de cada fase e
+// missão, o progresso, o motivo de uma missão estar fora da ordem, as missões do dia, o que a Demanda, Alunos e a escala
+// mostram (js/views/etapas.js) e a paridade com a próxima missão de antes (o programa do cadastro numa fase só, todas as
+// missões depois das anteriores).
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { estadoDoAluno, proximasMissoes, progressoNoCurso, missoesDoDia, motivoDoBloqueio } from '../../js/progresso.js';
-import { programaDoLegado, percursoDoCurso, indiceDoPrograma } from '../../js/programa.js';
+import { programaDoLegado, percursoDoCurso, indiceDoPrograma, novoCurso } from '../../js/programa.js';
+import { MODELOS } from '../../js/modelos-de-curso.js';
 import { situacaoPorMissao, situacaoDa } from '../../js/resultados.js';
 import { normalizarCursos, codigoValido } from '../../js/cursos.js';
 import { MIS } from '../../js/config.js';
 import { setS } from '../../js/state.js';
 import { etapaNaDemanda, progressoDoAluno, outraMissaoDoPedido, cursoDoResultado } from '../../js/views/etapas.js';
-import { cursoPP } from '../helpers/programa-pp.js';
 import { mulberry32 } from '../helpers/cenarios.js';
 import { importarSolicitacoes } from '../../js/agenda.js';
 import { aluno as alunoDoCenario } from '../helpers/montar.js';
 
 const ALUNO = 1000;
+// O cronograma do PP como o curso PP, com os ids tirados da sigla e da chave (PP:F4, PP:TSL-01), novo a cada chamada (os
+// testes podem mudá-lo)
+const cursoPP = () => novoCurso([], { sigla: 'PP', nome: 'Piloto Privado', modelo: MODELOS['pp-acpm'] }, (s, c) => `${s}:${c}`).curso;
 const PP = cursoPP();
 const ORDEM = percursoDoCurso(PP).missoes.map(m => m.codigo);
 const id = codigo => PP.missoes.find(m => m.codigo === codigo).id;
@@ -39,32 +43,29 @@ const naLinha = tipo => m => (m.eq === tipo ? 2 : MIS[m.mis].eq.includes(tipo) ?
 const noPrJpl = m => (m.mis === 'Parafuso' ? 2 : 0);
 
 describe('A próxima missão no cronograma do PP', () => {
-  it('o cronograma (apêndice A): 9 fases na ordem impressa, 47 missões (46 contam), 45 h, códigos e missões válidos', () => {
+  it('o cronograma (o modelo do app, conferido em modelos-de-curso.test.js): o AV PROF. antes de cada SOLO; o Noturno em trechos', () => {
     assert.deepEqual(PP.fases.map(f => f.nome.slice(0, 6)), ['Fase 1', 'Fase 2', 'Fase 3', 'Fase 4', 'Fase 5', 'Fase 7', 'Fase 8', 'Fase 6', 'Fase 9']);
-    assert.deepEqual(PP.fases.filter(f => f.regra !== 'ordem').map(f => [f.regra, f.requer]), [['depois', [faseId(4)]]]);
-    const contam = PP.missoes.filter(m => !m.dispensada);
-    assert.deepEqual([PP.missoes.length, contam.length, Math.round(contam.reduce((h, m) => h + m.nb, 0) * 10) / 10], [47, 46, 45]);
-    assert.deepEqual(PP.missoes.filter(m => m.regra !== 'ordem' || m.dispensada || m.avaliacao).map(m => [m.codigo, m.regra, m.dispensada, m.avaliacao]),
-      [['CAP-04', 'ordem', false, true], ['TMA-05', 'ordem', false, true], ['PE-03', 'ordem', false, true], ['PE-04', 'livre', false, false], ['ADAPT-C152', 'ordem', true, false]]);
     assert.ok(PP.missoes.every(m => codigoValido(m.codigo) && MIS[m.mis].eq.includes(m.eq)));
     assert.deepEqual(ORDEM.slice(ORDEM.indexOf('END-SOLO'), ORDEM.indexOf('END-SOLO') + 5), ['END-SOLO', 'AVP-SOLO-01', 'SOLO-01', 'AVP-SOLO-02', 'SOLO-02'], 'o AV PROF. antes de cada SOLO');
+    assert.deepEqual(dasFases(6).map(c => [c, PP.missoes.find(m => m.codigo === c).trecho]), [['TSL-01', 'ida'], ['NOT', 'noite'], ['TSL-02', 'volta']]);
   });
 
-  it('nada aprovado: só a IN-01; o voo noturno espera a Fase 4', () => {
+  it('nada aprovado: só a IN-01; o voo noturno espera a Fase 4 (pela noite; os translados vão com ela)', () => {
     const mapa = aprovadas([]);
     assert.deepEqual(candidatas(mapa), ['IN-01']);
     assert.equal(padrao(mapa), 'IN-01');
     assert.equal(padrao(mapa, { preferencia: naLinha('C172') }), 'IN-01', 'no C172: a IN-01, que também serve nele');
     assert.equal(padrao(mapa, { preferencia: noPrJpl }), 'IN-01', 'no PR-JPL nenhuma serve: a primeira');
-    assert.deepEqual(estado(mapa, 'TSL-01'), { estado: 'bloqueada', faltam: dasFases(4).map(id), fasesFechadas: [faseId(4)], dependeDe: [] });
+    assert.deepEqual(estado(mapa, 'NOT'), { estado: 'bloqueada', faltam: dasFases(4).map(id), fasesFechadas: [faseId(4)], dependeDe: [] });
+    assert.deepEqual(estado(mapa, 'TSL-01'), { estado: 'no-noturno', noturno: id('NOT'), faltam: [], fasesFechadas: [], dependeDe: [] });
     assert.deepEqual(estado(mapa, 'IN-02'), { estado: 'bloqueada', faltam: [id('IN-01')], fasesFechadas: [], dependeDe: [] });
   });
 
   it('Fases 1 a 4 aprovadas: a NAV-01, a SPIN (livre na Fase 5) e o noturno (depois da Fase 4, impresso depois da 8)', () => {
     const mapa = aprovadas(dasFases(1, 2, 3, 4));
-    assert.deepEqual(candidatas(mapa), ['NAV-01', 'PE-04', 'TSL-01']);
+    assert.deepEqual(candidatas(mapa), ['NAV-01', 'PE-04', 'NOT']);
     assert.equal(padrao(mapa), 'NAV-01');
-    assert.equal(padrao(mapa, { preferencia: naLinha('C172') }), 'TSL-01', 'no C172: o noturno, que o programa faz nele');
+    assert.equal(padrao(mapa, { preferencia: naLinha('C172') }), 'NOT', 'no C172: o noturno, que o programa faz nele');
     assert.equal(padrao(mapa, { preferencia: naLinha('C152') }), 'NAV-01', 'num C152 comum: a primeira');
     assert.equal(padrao(mapa, { preferencia: noPrJpl }), 'PE-04', 'no PR-JPL: a SPIN');
     // A Fase 7 espera a Fase 5 inteira
@@ -74,30 +75,30 @@ describe('A próxima missão no cronograma do PP', () => {
 
   it('a Fase 5 sem a SPIN: a SPIN e o noturno; a Fase 7 espera a Fase 5 completa, com a SPIN', () => {
     const mapa = aprovadas(ate('PE-03'));
-    assert.deepEqual(candidatas(mapa), ['PE-04', 'TSL-01']);
+    assert.deepEqual(candidatas(mapa), ['PE-04', 'NOT']);
     assert.equal(padrao(mapa), 'PE-04');
-    assert.equal(padrao(mapa, { preferencia: naLinha('C172') }), 'TSL-01');
+    assert.equal(padrao(mapa, { preferencia: naLinha('C172') }), 'NOT');
     assert.equal(padrao(mapa, { preferencia: noPrJpl }), 'PE-04');
     assert.deepEqual(estado(mapa, 'END-SOLO'), { estado: 'bloqueada', faltam: [id('PE-04')], fasesFechadas: [faseId(5)], dependeDe: [] });
   });
 
   it('a ADAPTAÇÃO (dispensada) conta como feita e nunca é sugerida: a Fase 7 começa pelo ENDOSSO SOLO', () => {
     const mapa = aprovadas(dasFases(1, 2, 3, 4, 5));
-    assert.deepEqual(candidatas(mapa), ['END-SOLO', 'TSL-01']);
+    assert.deepEqual(candidatas(mapa), ['END-SOLO', 'NOT']);
     assert.equal(estado(mapa, 'ADAPT-C152').estado, 'dispensada');
     // Com a Fase 7 aprovada (sem a ADAPTAÇÃO), a Fase 8 abre
     const comA7 = aprovadas(dasFases(1, 2, 3, 4, 5, 7).filter(c => c !== 'ADAPT-C152'));
-    assert.deepEqual(candidatas(comA7), ['END-SOLO-NAV', 'TSL-01']);
+    assert.deepEqual(candidatas(comA7), ['END-SOLO-NAV', 'NOT']);
     assert.equal(padrao(comA7), 'END-SOLO-NAV');
-    assert.equal(padrao(comA7, { preferencia: naLinha('C172') }), 'TSL-01');
+    assert.equal(padrao(comA7, { preferencia: naLinha('C172') }), 'NOT');
     assert.equal(padrao(comA7, { preferencia: noPrJpl }), 'END-SOLO-NAV', 'no PR-JPL nenhuma serve: a primeira');
   });
 
-  it('a Fase 9 espera a Fase 6 (o noturno) e a Fase 8', () => {
+  it('a Fase 9 espera a Fase 6 (o noturno: a noite, com os translados) e a Fase 8', () => {
     const semNoturno = aprovadas(dasFases(1, 2, 3, 4, 5, 7, 8));
-    assert.deepEqual(candidatas(semNoturno), ['TSL-01']);
-    assert.equal(padrao(semNoturno, { preferencia: naLinha('C172') }), 'TSL-01');
-    assert.deepEqual(estado(semNoturno, 'AVX-CQ'), { estado: 'bloqueada', faltam: dasFases(6).map(id), fasesFechadas: [faseId(6)], dependeDe: [] });
+    assert.deepEqual(candidatas(semNoturno), ['NOT']);
+    assert.equal(padrao(semNoturno, { preferencia: naLinha('C172') }), 'NOT');
+    assert.deepEqual(estado(semNoturno, 'AVX-CQ'), { estado: 'bloqueada', faltam: [id('NOT')], fasesFechadas: [faseId(6)], dependeDe: [] });
     const semANav = aprovadas(dasFases(1, 2, 3, 4, 5, 7, 6));
     assert.deepEqual(candidatas(semANav), ['END-SOLO-NAV']);
     assert.deepEqual(estado(semANav, 'AVX-CQ').fasesFechadas, [faseId(8)]);
@@ -137,8 +138,8 @@ describe('Encadear missões no mesmo dia', () => {
   it('a fase completa sob condição abre as que esperam por ela, também sob condição', () => {
     const mapa = aprovadas(ate('TMA-04'));
     const { porMissao, candidatas: lista } = estadoDoAluno(PP, mapa, ALUNO, { planejadas: ids(['TMA-05']), exceto: ids(['TMA-05']) });
-    assert.deepEqual(lista.map(m => m.codigo), ['NAV-01', 'PE-04', 'TSL-01']);
-    assert.deepEqual(porMissao.get(id('TSL-01')), { estado: 'condicional', faltam: [], fasesFechadas: [], dependeDe: [id('TMA-05')] });
+    assert.deepEqual(lista.map(m => m.codigo), ['NAV-01', 'PE-04', 'NOT']);
+    assert.deepEqual(porMissao.get(id('NOT')), { estado: 'condicional', faltam: [], fasesFechadas: [], dependeDe: [id('TMA-05')] });
     assert.equal(porMissao.get(id('NAV-01')).estado, 'condicional');
   });
 });
@@ -175,7 +176,7 @@ describe('As regras de cada fase e missão', () => {
     curso.missoes.find(m => m.codigo === 'NAV-01').removida = true;
     curso.fases.find(f => f.nome.startsWith('Fase 9 ')).removida = true;
     curso.missoes.find(m => m.codigo === 'AVX-CQ').removida = true;
-    assert.deepEqual(candidatas(aprovadas(dasFases(1, 2, 3, 4)), {}, curso), ['NAV-02', 'PE-04', 'TSL-01']);
+    assert.deepEqual(candidatas(aprovadas(dasFases(1, 2, 3, 4)), {}, curso), ['NAV-02', 'PE-04', 'NOT']);
     const tudo = aprovadas(ORDEM.filter(c => !['NAV-01', 'AVX-CQ'].includes(c)));
     assert.deepEqual(candidatas(tudo, {}, curso), []);
     assert.deepEqual(progressoNoCurso(curso, tudo, ALUNO), { aprovadas: 44, total: 44, faseAtual: null, proxima: null, concluido: true });
@@ -186,7 +187,7 @@ describe('As regras de cada fase e missão', () => {
     const semF4 = cursoPP();
     semF4.fases.find(f => f.id === faseId(4)).removida = true;
     semF4.missoes.filter(m => m.fase === faseId(4)).forEach(m => { m.removida = true; });
-    assert.deepEqual(candidatas(aprovadas([]), {}, semF4), ['IN-01', 'TSL-01']);
+    assert.deepEqual(candidatas(aprovadas([]), {}, semF4), ['IN-01', 'NOT']);
   });
 });
 
@@ -221,17 +222,17 @@ describe('Por que a missão está fora da ordem', () => {
     assert.deepEqual(['PE-04', 'NAV-02', 'CAP-01'].map(c => motivo(semTMA05, c)), ['falta TMA-05', 'faltam TMA-05 e NAV-01', 'já aprovada']);
     assert.equal(motivo(aprovadas(ate('CAP-01')), 'CAP-04'), 'faltam CAP-02 e CAP-03');
     assert.equal(motivo(aprovadas(ate('IN-02')), 'CAP-04'), 'faltam CT-01, CT-02 e mais 3');
-    // A Fase 9 espera a Fase 8 e a Fase 6, na ordem do curso: 11 e 3 missões
-    assert.equal(motivo(aprovadas(dasFases(1, 2, 3, 4, 5, 7)), 'AVX-CQ'), 'faltam END-SOLO-NAV, AVP-NSOLO-01 e mais 12');
+    // A Fase 9 espera a Fase 8 e a Fase 6, na ordem do curso: as 11 missões da 8 e o Noturno (pela noite)
+    assert.equal(motivo(aprovadas(dasFases(1, 2, 3, 4, 5, 7)), 'AVX-CQ'), 'faltam END-SOLO-NAV, AVP-NSOLO-01 e mais 10');
   });
 
   it('na fase que abre depois de outras escolhidas ("depois de…"), a fase fechada e o que falta nela', () => {
-    assert.equal(motivo(aprovadas([]), 'TSL-01'), 'a Fase 6 abre depois da Fase 4: faltam TMA-01, TMA-02 e mais 3');
-    assert.equal(motivo(aprovadas(ate('TMA-03')), 'TSL-01'), 'a Fase 6 abre depois da Fase 4: faltam TMA-04 e TMA-05');
-    // O NOT também espera o TSL-01, mas o motivo é a fase fechada
+    assert.equal(motivo(aprovadas([]), 'NOT'), 'a Fase 6 abre depois da Fase 4: faltam TMA-01, TMA-02 e mais 3');
+    assert.equal(motivo(aprovadas(ate('TMA-03')), 'NOT'), 'a Fase 6 abre depois da Fase 4: faltam TMA-04 e TMA-05');
     assert.equal(motivo(aprovadas(ate('TMA-04')), 'NOT'), 'a Fase 6 abre depois da Fase 4: falta TMA-05');
-    // Com a Fase 4 completa, a fase abriu: só o que falta na fase
-    assert.equal(motivo(aprovadas(dasFases(1, 2, 3, 4)), 'NOT'), 'falta TSL-01');
+    // Com a Fase 4 completa, a fase abriu e o Noturno está liberado (a noite espera o que a ida espera); os translados
+    // nunca vão sozinhos: nenhum motivo para eles
+    assert.deepEqual(['NOT', 'TSL-01', 'TSL-02'].map(c => motivo(aprovadas(dasFases(1, 2, 3, 4)), c)), ['', '', '']);
     // Duas fases fechadas na lista: as duas, na ordem do curso
     const fase = (id, ordem, nome, regra = 'ordem', requer = []) => ({ id, nome, modulo: null, ordem, regra, requer, removida: false });
     const missao = (fase, codigo, ordem) => ({ id: `YY:${codigo}`, fase, codigo, nome: codigo, mis: 'Voo Local', eq: 'C152', nb: 1, ordem, regra: 'ordem', requer: [], dispensada: false, avaliacao: false, removida: false });
@@ -328,14 +329,15 @@ describe('Na Demanda e em Alunos', () => {
     const lista = outras(aluno());
     assert.deepEqual(Object.keys(lista), ['Liberadas no PP', FORA]);
     assert.deepEqual(lista['Liberadas no PP'], ['TMA-05 · Voo Local · C152 · 1 h']);
-    assert.equal(lista[FORA].length, 46);
+    // As 47 do programa, menos a TMA-05 (liberada) e os translados do Noturno (nunca vão sozinhos)
+    assert.equal(lista[FORA].length, 44);
     const item = codigo => lista[FORA].find(t => t.startsWith(`${codigo} `));
     assert.deepEqual(['IN-01', 'PE-04', 'NAV-01', 'ADAPT-C152', 'NOT'].map(item), [
       'IN-01 · Voo Local · C152 · 1 h (já aprovada)',
       'PE-04 · Parafuso · C152 · 1 h (falta TMA-05)',
       'NAV-01 · Navegação · C152 · 01h30 (1,5 h) (falta TMA-05)',
       'ADAPT-C152 · Voo Local · C152 · 1 h (dispensada)',
-      'NOT · Noturno · C172 · 3 h (a Fase 6 abre depois da Fase 4: falta TMA-05)'
+      'NOT (com TSL-01 e TSL-02) · Noturno · C172 · 3 h (a Fase 6 abre depois da Fase 4: falta TMA-05)'
     ]);
     // Com a TMA-05 no pedido principal: ela sai da lista dele, e as que esperam por ela continuam fora da ordem
     const comTMA05 = aluno({ etapa: 'TMA-05', cursoDaEtapa: 'PP', extra: [pedido({ mid: 1 })] });
@@ -345,7 +347,7 @@ describe('Na Demanda e em Alunos', () => {
     assert.deepEqual(outras(comTMA05, 1)['Liberadas no PP'], [
       'NAV-01 · Navegação · C152 · 01h30 (1,5 h) — depende do resultado de TMA-05',
       'PE-04 · Parafuso · C152 · 1 h — depende do resultado de TMA-05',
-      'TSL-01 · Navegação · C172 · 1 h — depende do resultado de TMA-05'
+      'NOT (com TSL-01 e TSL-02) · Noturno · C172 · 3 h — depende do resultado de TMA-05'
     ]);
     assert.equal(outras(comTMA05, 1)[FORA].find(t => t.startsWith('TMA-05 ')), 'TMA-05 · Voo Local · C152 · 1 h (já em outro voo do dia)');
     // O aluno sem curso, o curso sem programa: nenhuma lista

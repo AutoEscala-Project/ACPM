@@ -1,7 +1,8 @@
 // O programa dos cursos em fases: o programa de antes (o do cadastro) no formato novo, uma fase por curso com as missões
 // na mesma ordem, e o índice do programa (o curso, o caminho dele, a missão pelo id e pelo código); o programa lido do
-// servidor nos formatos certos; e a gravação de um curso e a conversão do cadastro como no servidor, com os casos que o
-// banco também confere (test/helpers/casos-do-programa.js) e o que eles não mostram.
+// servidor nos formatos certos; a gravação de um curso e a conversão do cadastro como no servidor, com os casos que o
+// banco também confere (test/helpers/casos-do-programa.js) e o que eles não mostram; a edição na aba Cursos; e os cursos
+// novos, o nome, encerrar e o modelo de programa (o cronograma do PP, de js/modelos-de-curso.js).
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
@@ -14,11 +15,13 @@ import {
 } from '../../js/programa.js';
 import { normalizarCursos } from '../../js/cursos.js';
 import { FORMATO_DOS_CURSOS } from '../../js/migracoes.js';
-import { cursoPP } from '../helpers/programa-pp.js';
 import { CASOS_DO_PROGRAMA, PROGRAMA, IDS, NOTURNO_EM_TRECHOS } from '../helpers/casos-do-programa.js';
-import { noturnosDoCurso, rotuloDaMissao } from '../../js/programa.js';
+import { noturnosDoCurso, rotuloDaMissao, definirTrecho, mudarCurso, aplicarModelo, novoCurso } from '../../js/programa.js';
+import { MODELOS } from '../../js/modelos-de-curso.js';
 
 const gerarId = (sigla, codigo) => `${sigla}:${codigo}`;
+// O cronograma do PP (o modelo do app) como o curso PP, com os ids tirados da sigla e da chave (PP:F4, PP:TSL-01)
+const cursoPP = () => novoCurso([], { sigla: 'PP', nome: 'Piloto Privado', modelo: MODELOS['pp-acpm'] }, gerarId).curso;
 const missao = (id, extra = {}) => ({ id, nome: `Missão ${id}`, mis: 'Voo Local', eq: 'C152', nb: 1, ...extra });
 
 describe('O programa de antes no formato novo', () => {
@@ -853,5 +856,126 @@ describe('A edição das fases e das regras na aba Cursos', () => {
     assert.deepEqual([regra(curso, f2), regra(curso, f4), regra(curso, m5), regra(curso, m4)], [['livre', []], ['ordem', []], ['depois', [m1, m2]], ['ordem', []]],
       'a ZZ9-04 e a Fase 4 voltaram do servidor sem a lista');
     assert.deepEqual([codigos(curso, f1), codigos(curso, f2), codigos(curso, f4)], [['ZZ9-01', 'ZZ9-02', 'ZZ9-03'], ['ZZ9-04'], []]);
+  });
+});
+
+describe('Os cursos novos, o nome, encerrar e o cronograma do PP', () => {
+  const MODELO = MODELOS['pp-acpm'];
+  const NO_FORMATO = { esquema: FORMATO_DOS_CURSOS, versao: 7 };
+  const contas = ({ mantidas, novas, retiradas }) => [mantidas, novas, retiradas];
+  const daMissao = (curso, codigo) => curso.missoes.find(m => m.codigo === codigo);
+  const codigosDoPrograma = curso => percursoDoCurso(curso).missoes.map(m => m.codigo);
+
+  it('"+ Novo curso": a sigla em maiúsculas, no formato e uma vez só (também entre os encerrados), o nome; no fim da lista', () => {
+    const programa = normalizarProgramas(cursosIniciais()).map(c => (c.sigla === 'PC' ? { ...c, ativo: false } : c));
+    const { curso } = novoCurso(programa, { sigla: ' mlte ', nome: '  Multimotor   IFR ' });
+    assert.deepEqual(curso, { sigla: 'MLTE', nome: 'Multimotor IFR', ordem: 3, ativo: true, versao: 0, fases: [], missoes: [], alteracoes: [] });
+    const erro = dados => { const r = novoCurso(programa, dados); return [r.campo, r.erro, r.curso]; };
+    assert.deepEqual(erro({ sigla: ' ', nome: 'X' }), ['sigla', 'Escreva a sigla do curso (por exemplo, PC-IFR).', undefined]);
+    for (const sigla of ['P', 'PC-', '1PC', 'PILOTO-COMERCIAL', 'PÇ', 'P C']) {
+      assert.deepEqual(erro({ sigla, nome: 'X' }).slice(0, 2), ['sigla', 'A sigla tem de 2 a 10 caracteres: letras sem acento, números e hífen, começando por letra e sem hífen no fim (por exemplo, PC-IFR).'], sigla);
+    }
+    assert.deepEqual(erro({ sigla: 'pp', nome: 'X' }).slice(0, 2), ['sigla', 'Já existe o curso PP (Piloto Privado).']);
+    assert.deepEqual(erro({ sigla: 'PC', nome: 'X' }).slice(0, 2), ['sigla', 'Já existe o curso PC (Piloto Comercial), encerrado: para usá-lo de novo, reative-o.']);
+    assert.deepEqual(erro({ sigla: 'MLTE', nome: '  ' }).slice(0, 2), ['nome', 'Escreva o nome do curso (até 80 caracteres).']);
+    assert.equal(novoCurso(programa, { sigla: 'MLTE', nome: 'x'.repeat(90) }).curso.nome, 'x'.repeat(80));
+    // A gravação cria o curso (versão 0) no mesmo lugar da lista: o fim (no servidor também)
+    const estado = { cursos: cursosIniciais(), resultados: [], cadastro: NO_FORMATO };
+    const gravado = gravarCurso(estado, { sigla: 'MLTE', versaoLida: 0, conteudo: conteudoDoCurso(curso), descricao: 'Curso MLTE criado: Multimotor IFR', agora: AGORA });
+    assert.deepEqual(gravado.cursos.map(c => [c.sigla, c.ordem]).at(-1), ['MLTE', curso.ordem]);
+    assert.deepEqual(gravado.retorno, { versao: 1, atualizado_em: AGORA });
+    assert.equal(novoCurso([], { sigla: 'PP', nome: 'Piloto Privado' }).curso.ordem, 0);
+  });
+
+  it('"+ Novo curso" com o cronograma do PP: as 9 fases e as 47 missões, com ids novos', () => {
+    const { curso } = novoCurso(normalizarProgramas(cursosIniciais()), { sigla: 'PP-B', nome: 'Piloto Privado B', modelo: MODELO });
+    assert.deepEqual(codigosDoPrograma(curso), codigosDoPrograma(cursoPP()));
+    assert.ok([...curso.fases, ...curso.missoes].every(x => UUID_V4.test(x.id)));
+    assert.equal(validarCurso(conteudoDoCurso(curso)), null);
+  });
+
+  it('o nome do curso (sem os espaços a mais, até 80 caracteres) e encerrar ou reativar', () => {
+    const [pp] = normalizarProgramas(cursosIniciais());
+    assert.equal(mudarCurso(pp, 'nome', '  Piloto   Privado ACPM ').nome, 'Piloto Privado ACPM');
+    assert.equal(mudarCurso(pp, 'nome', 'x'.repeat(90)).nome, 'x'.repeat(80));
+    assert.deepEqual([mudarCurso(pp, 'ativo', false).ativo, mudarCurso({ ...pp, ativo: false }, 'ativo', true).ativo], [false, true]);
+    for (const [campo, valor] of [['nome', '  '], ['nome', 'Piloto Privado'], ['ativo', true], ['ativo', 'não'], ['sigla', 'PX']]) {
+      assert.equal(mudarCurso(pp, campo, valor), null, `${campo} ${valor}`);
+    }
+    // O servidor guarda o curso encerrado (e o reativado)
+    const estado = { cursos: cursosIniciais(), resultados: [], cadastro: NO_FORMATO };
+    const encerrado = gravarCurso(estado, { sigla: 'PP', versaoLida: 1, conteudo: conteudoDoCurso(mudarCurso(pp, 'ativo', false)), descricao: 'PP encerrado' });
+    assert.deepEqual(encerrado.cursos.map(c => [c.sigla, c.ativo, c.versao]), [['PP', false, 2], ['PC', true, 1], ['INVA', true, 1]]);
+  });
+
+  it('o cronograma do PP no PP vazio: as 9 fases e as 47 missões entram', () => {
+    const [pp] = normalizarProgramas(cursosIniciais());
+    const r = aplicarModelo(pp, MODELO, gerarId);
+    assert.deepEqual(contas(r), [0, 47, 0]);
+    assert.deepEqual(r.curso, { ...cursoPP(), versao: 1 });
+    assert.deepEqual(pp, normalizarProgramas(cursosIniciais())[0], 'o curso recebido não muda');
+  });
+
+  // O PP trazido do cadastro (uma fase só, "Programa"), gravado e lido como o servidor faz: a TMA-05 (com resultados) e a
+  // CT-01 ficam, com o mesmo id; o NOT, tirado do programa antes, volta (o código é dele); a PP-01 (com resultados) e a
+  // PP-02 saem, e a fase "Programa" também; as outras 44 do cronograma entram
+  it('o cronograma do PP no PP trazido do cadastro: os códigos que já existem ficam (o mesmo id), os outros saem, os do cronograma entram', () => {
+    const legado = normalizarCursos({ PP: [
+      { id: 'PP-01', nome: 'Familiarização', mis: 'Voo Local' }, { id: 'TMA-05', nome: 'Tráfego', mis: 'Navegação', nb: 2 }, { id: 'CT-01', mis: 'Voo Local' },
+      { id: 'NOT', nome: 'Noturno', mis: 'Noturno', nb: 3 }, { id: 'PP-02', mis: 'Voo Local' }
+    ] });
+    let estado = { cursos: cursosIniciais(), resultados: [], cadastro: null };
+    estado = { ...estado, cursos: importarProgramas(estado, { programas: programaDoLegado(legado), versaoDoCadastro: 0, agora: AGORA }).cursos };
+    const lerPP = () => normalizarProgramas(programaComResultados(estado)).find(c => c.sigla === 'PP');
+    const semNot = { ...lerPP(), missoes: lerPP().missoes.filter(m => m.codigo !== 'NOT') };
+    estado = { ...estado, cursos: gravarCurso(estado, { sigla: 'PP', versaoLida: 2, conteudo: conteudoDoCurso(semNot), descricao: 'PP: NOT tirada do programa', agora: AGORA }).cursos };
+    estado = { ...estado, resultados: [{ curso: 'PP', missao: 'TMA-05' }, { curso: 'PP', missao: 'PP-01' }], cadastro: NO_FORMATO };
+    const pp = lerPP();
+    assert.deepEqual([codigosDoPrograma(pp), daMissao(pp, 'NOT').removida, percursoDoCurso(pp).fases.map(f => f.nome)], [['PP-01', 'TMA-05', 'CT-01', 'PP-02'], true, ['Programa']]);
+
+    const r = aplicarModelo(pp, MODELO);
+    assert.deepEqual(contas(r), [3, 44, 2]);
+    assert.deepEqual(codigosDoPrograma(r.curso), codigosDoPrograma(cursoPP()));
+    const tma05 = daMissao(r.curso, 'TMA-05'), not = daMissao(r.curso, 'NOT');
+    assert.deepEqual([tma05.id, tma05.nome, tma05.mis, tma05.nb, tma05.avaliacao, tma05.comResultados, tma05.removida], [daMissao(pp, 'TMA-05').id, 'TMA-05', 'Voo Local', 1, true, true, false]);
+    assert.equal(tma05.fase, percursoDoCurso(r.curso).fases[3].id, 'na Fase 4');
+    assert.deepEqual([not.id, not.trecho, not.removida, not.nome], [daMissao(pp, 'NOT').id, 'noite', false, 'NOT']);
+    assert.deepEqual([daMissao(r.curso, 'PP-01').removida, daMissao(r.curso, 'PP-01').nome, daMissao(r.curso, 'PP-02').removida], [true, 'Familiarização', true]);
+    assert.deepEqual(r.curso.fases.filter(f => f.removida).map(f => f.nome), ['Programa']);
+    assert.equal(validarCurso(conteudoDoCurso(r.curso)), null);
+
+    // O servidor aceita (o código da missão tirada do programa é dela; o código com resultados não muda) e devolve o mesmo
+    const gravado = gravarCurso(estado, { sigla: 'PP', versaoLida: pp.versao, conteudo: conteudoDoCurso(r.curso), descricao: 'PP: cronograma P.I PPA 001A aplicado', agora: AGORA });
+    estado = { ...estado, cursos: gravado.cursos };
+    const lido = lerPP();
+    assert.deepEqual(conteudoDoCurso(lido), conteudoDoCurso(r.curso));
+    assert.deepEqual(lido.missoes.filter(m => m.removida).map(m => m.codigo), ['PP-01', 'PP-02']);
+    assert.deepEqual([daMissao(lido, 'TMA-05').comResultados, daMissao(lido, 'PP-01').comResultados], [true, true]);
+  });
+
+  it('o trecho do Noturno: ida, noite ou volta numa missão Noturno; vazio tira; o Noturno desmanchado, a conferência recusa', () => {
+    const { curso } = novoCurso([], { sigla: 'PP', nome: 'Piloto Privado', modelo: MODELO });
+    const id = codigo => daMissao(curso, codigo).id;
+    const trechos = c => percursoDoCurso(c).missoes.filter(m => m.trecho).map(m => [m.codigo, m.trecho]);
+    const recusa = c => { const e = validarCurso(conteudoDoCurso(c)); return e && [e.code, e.campo]; };
+    let c = ['TSL-01', 'NOT', 'TSL-02'].reduce((x, codigo) => definirTrecho(x, id(codigo), ''), curso);
+    assert.deepEqual([trechos(c), recusa(c)], [[], null]);
+    assert.equal(Object.hasOwn(daMissao(c, 'NOT'), 'trecho'), false, 'sem trecho, a missão fica sem o campo');
+    // A ida sem a noite logo depois não forma um Noturno: a conferência recusa; com a noite primeiro, vale
+    assert.deepEqual(recusa(definirTrecho(c, id('TSL-01'), 'ida')), ['22023', 'trecho']);
+    c = definirTrecho(c, id('NOT'), 'noite');
+    assert.equal(recusa(c), null, 'a noite sozinha é um Noturno');
+    c = definirTrecho(definirTrecho(c, id('TSL-01'), 'ida'), id('TSL-02'), 'volta');
+    assert.deepEqual([trechos(c), recusa(c)], [[['TSL-01', 'ida'], ['NOT', 'noite'], ['TSL-02', 'volta']], null]);
+    assert.deepEqual(conteudoDoCurso(c), conteudoDoCurso(curso));
+    // Duas noites, a volta antes da noite: a conferência recusa
+    assert.deepEqual(recusa(definirTrecho(c, id('TSL-02'), 'noite')), ['22023', 'trecho']);
+    assert.deepEqual(recusa(definirTrecho(c, id('TSL-01'), 'volta')), ['22023', 'trecho']);
+    // Nada muda: o mesmo trecho, uma missão que não é Noturno, um trecho que não existe, a missão fora do programa
+    const semVolta = retirarMissao(c, id('TSL-02'));
+    for (const [x, codigo, trecho] of [[c, 'NOT', 'noite'], [c, 'IN-01', 'ida'], [c, 'NOT', 'translado'], [semVolta, 'TSL-02', '']]) {
+      assert.equal(definirTrecho(x, id(codigo), trecho), null, `${codigo} ${trecho}`);
+    }
+    assert.deepEqual(recusa(semVolta), null, 'a ida e a noite continuam um Noturno');
   });
 });

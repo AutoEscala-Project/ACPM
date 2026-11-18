@@ -1,20 +1,25 @@
-// A aba Cursos: o programa de cada curso (as tabelas dos cursos, em S.programa), fase a fase, com as missões na ordem em
-// que o aluno voa. As fases seguidas com o mesmo módulo ficam sob um título só; cada fase diz quando abre, e cada missão,
-// quando voar ("Depois das anteriores", "Livre na fase" ou "Depois de…" missões anteriores) e as marcas (dispensada,
-// avaliação). O Administrador (neste navegador, o Operador) inclui, muda, reordena e tira fases e missões e volta com as
-// retiradas; os outros perfis leem o programa em texto. A cada alteração a aba é refeita no lugar: o foco continua onde
-// estava, e as caixas abertas ("Depois de…", as retiradas, as alterações) continuam abertas. Ela é refeita também ao
-// abrir e junto com as outras abas (a data carregada, os dados lidos de novo, o conflito, a troca de perfil): aberta,
-// nunca fica com os controles de antes. Sem os programas (a leitura falhou, ou eles ainda esperam a conversão do
-// cadastro), ela diz por quê.
+// A aba Cursos: os cursos (as tabelas dos cursos, em S.programa) e o programa de cada um, fase a fase, com as missões na
+// ordem em que o aluno voa. As fases seguidas com o mesmo módulo ficam sob um título só; cada fase diz quando abre, e cada
+// missão, quando voar ("Depois das anteriores", "Livre na fase" ou "Depois de…" missões anteriores), as marcas
+// (dispensada, avaliação) e, no Noturno em trechos, o trecho. No alto, o filtro (um curso ou todos; os encerrados só com
+// "Mostrar encerrados"). O Administrador (neste navegador, o Operador) cria cursos ("+ Novo curso", com o programa vazio
+// ou um modelo), muda o nome, encerra e reativa, põe o cronograma do PP no PP ainda vazio ou numa fase só, e inclui, muda,
+// reordena e tira fases e missões e volta com as retiradas; os outros perfis leem o programa em texto. Cada curso lista
+// os alunos dele, com o progresso. A cada alteração a aba é refeita no lugar: o foco continua onde estava, e as caixas
+// abertas ("Depois de…", as retiradas, os alunos, as alterações) e o formulário do curso novo continuam como estavam. Ela
+// é refeita também ao abrir e junto com as outras abas (a data carregada, os dados lidos de novo, o conflito, a troca de
+// perfil): aberta, nunca fica com os controles de antes. Sem os programas (a leitura falhou, ou eles ainda esperam a
+// conversão do cadastro), ela diz por quê.
 import { MIS, DURACAO_MAXIMA_H } from '../config.js';
 import { percursoDoCurso, rotuloDaFase, requisitosPossiveis } from '../programa.js';
+import { MODELOS } from '../modelos-de-curso.js';
 import { FUSO_DO_AEROCLUBE } from '../agenda.js';
 import { ApiClient } from '../storage.js';
 import { gerenciaContas } from '../perfis.js';
 import { S, isGestor, dadoIndisponivel } from '../state.js';
 import { esc, opts, fmtH } from '../format.js';
 import { $, trocarConteudo, trocarElemento } from '../dom.js';
+import { progressoDoAluno } from './etapas.js';
 
 // Os programas que não foram lidos, ou que ainda estão no cadastro: o que a aba mostra no lugar deles (o mesmo texto do
 // aviso do topo, em js/actions.js). A próxima missão e o progresso ficam desligados
@@ -61,6 +66,17 @@ const quandoVoar = (curso, m) => (m.regra === 'livre' ? 'Livre na fase'
 
 const opcoesDoRecurso = m => opts(MIS[m.mis].eq.map(e => [e, e]), m.eq);
 const quantas = (n, uma, varias) => `${n} ${n === 1 ? uma : varias}`;
+
+// O trecho do Noturno de dois dias (os de NOTURNO.trechos, em js/config.js) numa missão Noturno: a ida para BH, a noite em
+// BH ou a volta do dia seguinte. Para quem muda, a lista embaixo do tipo de missão; para quem só consulta, o texto
+const TRECHOS_DO_NOTURNO = [['', 'Nenhum'], ['ida', 'Ida'], ['noite', 'Noite'], ['volta', 'Volta']];
+const trechoQueEdita = (m, codigo) => (m.mis === 'Noturno'
+  ? `<label class="trecho-do-noturno"><span>Trecho</span> <select data-cf="trecho" data-dica="trecho-do-noturno" aria-label="Trecho do Noturno de ${codigo}">${opts(TRECHOS_DO_NOTURNO, m.trecho || '')}</select></label>`
+  : '');
+const trechoDeConsulta = m => {
+  const trecho = m.mis === 'Noturno' && TRECHOS_DO_NOTURNO.find(([valor]) => valor && valor === m.trecho);
+  return trecho ? ` · <span class="trecho-do-noturno" data-dica="trecho-do-noturno">${trecho[1].toLowerCase()}</span>` : '';
+};
 // Os nomes dos botões de uma missão: o ✕ de uma missão com resultados diz que eles ficam
 const ROTULOS = { 'missao-subir': 'Subir', 'missao-descer': 'Descer' };
 const rotuloDoBotao = (act, sigla, m) => (act === 'missao-retirar'
@@ -97,7 +113,7 @@ function linhaQueEdita(curso, fase, m, i, total, fases, onde, abertas) {
     <td class="n">${i + 1}</td>
     <td class="c-codigo"><input data-cf="codigo" class="codigo" value="${codigo}" maxlength="15" autocomplete="off" aria-label="Código da ${i + 1}ª missão ${esc(onde)}"${travado ? ` readonly title="${TRAVADO}"` : ''}>${travado ? `<svg class="ico" role="img" aria-label="${TRAVADO}"><use href="#i-cadeado"/></svg>` : ''}</td>
     <td class="c-nome"><input data-cf="nome" value="${esc(m.nome)}" maxlength="80" autocomplete="off" aria-label="Nome de ${codigo}"></td>
-    <td class="c-mis"><select data-cf="mis" aria-label="Missão de ${codigo}">${opts(Object.keys(MIS).map(k => [k, k]), m.mis)}</select></td>
+    <td class="c-mis"><select data-cf="mis" aria-label="Missão de ${codigo}">${opts(Object.keys(MIS).map(k => [k, k]), m.mis)}</select>${trechoQueEdita(m, codigo)}</td>
     <td class="c-eq"><select data-cf="eq" aria-label="Recurso de ${codigo}"${ground ? ' disabled' : ''}>${opcoesDoRecurso(m)}</select></td>
     <td class="c-nb"><input type="number" class="duracao" data-cf="nb" min="0.1" max="${DURACAO_MAXIMA_H}" step="0.1" inputmode="decimal" value="${esc(m.nb)}" aria-label="Horas de ${codigo}"${ground ? ' disabled' : ''}></td>
     <td class="c-quando"><select data-cf="regra" aria-label="Quando voar ${codigo}">${opcoesDaRegra(QUANDO_VOAR, m.regra, semAnteriores)}</select>${m.regra === 'depois' ? requisitosDaMissao(curso, m, abertas) : ''}</td>
@@ -113,7 +129,7 @@ function linhaDeConsulta(curso, fase, m, i) {
     <td class="n">${i + 1}</td>
     <td class="c-codigo codigo">${esc(m.codigo)}</td>
     <td class="c-nome">${esc(m.nome)}</td>
-    <td class="c-mis">${esc(m.mis)}</td>
+    <td class="c-mis">${esc(m.mis)}${trechoDeConsulta(m)}</td>
     <td class="c-eq">${esc(m.eq)}</td>
     <td class="c-nb">${esc(fmtH(m.nb))}</td>
     <td class="c-quando">${esc(quandoVoar(curso, m))}</td>
@@ -191,13 +207,43 @@ function alteracoesDoCurso(curso, aberta) {
   return `<details class="alteracoes"${aberta ? ' open' : ''}><summary id="alteracoes-${esc(curso.sigla)}">Alterações do programa</summary><ol>${lista.map(item).join('')}</ol></details>`;
 }
 
-// Um curso: a sigla, o nome, quantas fases (quando são mais de uma), quantas missões contam e quantas são dispensadas;
-// as fases, sob o título do módulo delas; "+ Fase", as retiradas e as alterações. O curso sem nenhuma fase tem o
-// "+ Missão" que começa a Fase 1
-function cartaoDoCurso(curso, edita, abertas) {
-  const { fases, porFase, missoes } = percursoDoCurso(curso);
+// Os alunos do curso (os de Alunos com este curso), pelo nome, cada um com o progresso no programa (como em Alunos)
+function alunosDoCurso(curso, abertas) {
+  const alunos = (S.stu || []).filter(s => s.curso === curso.sigla).sort((a, b) => a.nm.localeCompare(b.nm, 'pt-BR'));
+  if (!alunos.length) return '';
+  const id = `alunos-${curso.sigla}`;
+  const aluno = s => {
+    const progresso = progressoDoAluno(s);
+    return `<li>${esc(s.nm)}${progresso ? ` · ${progresso}` : ''}</li>`;
+  };
+  return `<details class="alunos-do-curso"${abertas.has(id) ? ' open' : ''}><summary id="${esc(id)}">${quantas(alunos.length, 'aluno', 'alunos')} no ${esc(curso.sigla)}</summary><ul>${alunos.map(aluno).join('')}</ul></details>`;
+}
+
+// Os modelos de programa feitos para o curso (o cronograma do PP, no PP), oferecidos enquanto o programa está vazio ou numa
+// fase só (o programa trazido do cadastro): as chaves deles em MODELOS
+const modelosDoCurso = (curso, fases, missoes) => (!missoes.length || fases.length === 1
+  ? Object.keys(MODELOS).filter(chave => MODELOS[chave].curso === curso.sigla) : []);
+// O botão de um modelo: "Usar o cronograma do PP (P.I PPA 001A)"
+const textoDoModelo = chave => `Usar o cronograma do ${MODELOS[chave].curso} (${MODELOS[chave].documento})`;
+
+// O cabeçalho do curso: a sigla, o nome, quantas fases (quando são mais de uma), quantas missões contam e quantas são
+// dispensadas, e a etiqueta do encerrado. Para quem muda: o nome do curso, encerrar ou reativar e o modelo do programa
+function cabecalhoDoCurso(curso, edita, { fases, missoes }) {
   const sigla = esc(curso.sigla), dispensadas = missoes.filter(m => m.dispensada).length;
   const resumo = `${esc(curso.nome)}${fases.length > 1 ? ` · <span data-dica="fase-do-curso">${fases.length} fases</span>` : ''} · ${quantas(missoes.length - dispensadas, 'missão', 'missões')}${dispensadas ? ` (<span data-dica="dispensada">${quantas(dispensadas, 'dispensada', 'dispensadas')}</span>)` : ''}`;
+  const titulo = `<h3 id="curso-${sigla}">${sigla} <small>${resumo}</small>${curso.ativo ? '' : ' <span class="tag encerrado">encerrado</span>'}</h3>`;
+  if (!edita) return `<div class="curso-cab">${titulo}</div>`;
+  const [act, acao] = curso.ativo ? ['curso-encerrar', 'Encerrar'] : ['curso-reativar', 'Reativar'];
+  return `<div class="curso-cab">${titulo}
+    <label class="campo-do-curso"><span>Nome</span> <input data-cc="nome" value="${esc(curso.nome)}" maxlength="80" autocomplete="off" aria-label="Nome do curso ${sigla}"></label>
+    <span class="acoes-do-curso"><button type="button" class="btn sec" data-act="${act}" aria-label="${acao} o curso ${sigla}">${acao} o curso</button>${modelosDoCurso(curso, fases, missoes).map(chave => `<button type="button" class="btn sec" data-act="curso-modelo" data-modelo="${esc(chave)}">${esc(textoDoModelo(chave))}</button>`).join('')}</span>
+  </div>`;
+}
+
+// Um curso: o cabeçalho; as fases, sob o título do módulo delas; "+ Fase", as retiradas, os alunos e as alterações. O curso
+// sem nenhuma fase tem o "+ Missão" que começa a Fase 1
+function cartaoDoCurso(curso, edita, abertas) {
+  const percurso = percursoDoCurso(curso), { fases, porFase } = percurso;
   let modulo = null;
   const corpo = fases.length
     ? fases.map((f, i) => {
@@ -206,13 +252,58 @@ function cartaoDoCurso(curso, edita, abertas) {
       return titulo + blocoDaFase(curso, f, i, fases, porFase.get(f.id), edita, f.modulo ? 'h5' : 'h4', abertas);
     }).join('')
     : `<p class="h">Nenhuma missão no programa.${edita ? ' Use “+ Missão” para incluir a primeira (ela começa a Fase 1), ou “+ Fase” para começar pelas fases.' : ''}</p>${edita ? '<button type="button" class="btn sec" data-act="missao-nova">+ Missão</button>' : ''}`;
-  return `<div class="pn curso" data-curso="${sigla}">
-    <div class="curso-cab"><h3 id="curso-${sigla}">${sigla} <small>${resumo}</small></h3></div>
+  return `<div class="pn curso${curso.ativo ? '' : ' encerrado'}" data-curso="${esc(curso.sigla)}">
+    ${cabecalhoDoCurso(curso, edita, percurso)}
     ${corpo}
     ${edita ? '<button type="button" class="btn sec" data-act="fase-nova">+ Fase</button>' : ''}
     ${retiradasDoCurso(curso, edita, abertas)}
+    ${alunosDoCurso(curso, abertas)}
     ${alteracoesDoCurso(curso, abertas.has(`alteracoes-${curso.sigla}`))}
   </div>`;
+}
+
+// O filtro da aba (para todos os perfis): o curso mostrado ('': todos) e se os encerrados aparecem. O curso escolhido
+// aparece também encerrado
+const filtro = { curso: '', encerrados: false };
+// Muda o filtro ({ curso, encerrados }, os dois ou um só); quem muda refaz a aba
+export function filtrarCursos(mudanca) {
+  Object.assign(filtro, mudanca);
+}
+const aparece = curso => curso.ativo || filtro.encerrados || curso.sigla === filtro.curso;
+
+// A barra da aba: o curso (todos, ou um), "Mostrar encerrados" e, para quem muda, "+ Novo curso"
+function barraDosCursos(programa, edita, formularioAberto) {
+  const opcoes = [['', 'Todos os cursos'], ...programa.filter(aparece).map(c => [c.sigla, `${c.sigla} · ${c.nome}${c.ativo ? '' : ' (encerrado)'}`])];
+  return `<div class="bar barra-dos-cursos">
+    <label class="flt-rotulo"><span>Curso</span> <select id="cur-sel" class="flt-ctrl">${opts(opcoes, filtro.curso)}</select></label>
+    <label class="chk"><input type="checkbox" id="cur-encerrados" class="flt-ctrl"${filtro.encerrados ? ' checked' : ''}> Mostrar encerrados</label>
+    <span class="cresce"></span>
+    ${edita ? `<button type="button" class="btn" id="cur-novo" data-act="curso-novo" aria-expanded="${formularioAberto}" aria-controls="form-curso">+ Novo curso</button>` : ''}
+  </div>`;
+}
+
+// O formulário "+ Novo curso" (para quem muda): a sigla, o nome e com que programa começar (vazio, ou um modelo). Aberto,
+// ele continua como estava quando a aba é refeita: o que foi digitado, a escolha, o erro e os campos marcados com ele
+const FORMULARIO_FECHADO = { aberto: false, sigla: '', nome: '', comeco: 'vazio', erro: '', invalidos: [] };
+function formularioComoEsta(lugar) {
+  const form = lugar.querySelector('#form-curso');
+  if (!form || form.hidden) return FORMULARIO_FECHADO;
+  const marcado = form.querySelector('[name="cur-comeco"]:checked');
+  return {
+    aberto: true, sigla: form.querySelector('#cur-sigla').value, nome: form.querySelector('#cur-nome').value, comeco: marcado ? marcado.value : 'vazio',
+    erro: form.querySelector('#cur-erro').textContent, invalidos: [...form.querySelectorAll('[aria-invalid="true"]')].map(x => x.id)
+  };
+}
+function formularioDoCurso(f) {
+  const campo = (id, rotulo, valor, maximo) => `<label class="campo">${rotulo} <input id="${id}" maxlength="${maximo}" autocomplete="off" aria-describedby="cur-erro" value="${esc(valor)}"${f.invalidos.includes(id) ? ' aria-invalid="true"' : ''}></label>`;
+  const comeco = (valor, rotulo) => `<label class="chk"><input type="radio" name="cur-comeco" value="${esc(valor)}"${f.comeco === valor ? ' checked' : ''}> ${esc(rotulo)}</label>`;
+  return `<form id="form-curso" class="pn" novalidate${f.aberto ? '' : ' hidden'}>
+    ${campo('cur-sigla', 'Sigla', f.sigla, 10)}
+    ${campo('cur-nome', 'Nome', f.nome, 80)}
+    <fieldset><legend>Começar com</legend>${comeco('vazio', 'Programa vazio')}${Object.entries(MODELOS).map(([chave, m]) => comeco(chave, `${m.nome} (${m.documento})`)).join('')}</fieldset>
+    <p class="erro-campo" id="cur-erro" role="alert">${esc(f.erro)}</p>
+    <div class="dlg-acoes"><button type="button" class="btn sec" id="cur-cancelar">Cancelar</button><button class="btn">Criar o curso</button></div>
+  </form>`;
 }
 
 // Na tela estreita, a tabela de cada fase rola para o lado: refeita a aba, ela fica onde estava (e não volta ao começo a
@@ -238,11 +329,23 @@ export function rCursos() {
   const edita = podeEditarCursos(), programa = S.programa || [];
   const abertas = new Set([...lugar.querySelectorAll('details[open] > summary[id]')].map(s => s.id));
   const rolagens = new Map([...lugar.querySelectorAll(TABELA_DA_FASE)].map(tw => [tw.parentElement.dataset.fase, tw.scrollLeft]));
+  const formulario = edita ? formularioComoEsta(lugar) : FORMULARIO_FECHADO;
+  // O cursor de quem digita no formulário continua onde estava
+  const ativo = document.activeElement;
+  const cursor = formulario.aberto && ativo && ativo.matches('#form-curso input:not([type="radio"])') ? [ativo.id, ativo.selectionStart, ativo.selectionEnd] : null;
+  // O curso escolhido que não existe mais (o curso novo que o servidor recusou) volta a todos
+  if (filtro.curso && !programa.some(c => c.sigla === filtro.curso)) filtro.curso = '';
+  const mostrados = programa.filter(c => (filtro.curso ? c.sigla === filtro.curso : aparece(c)));
   const modulos = [...new Set(programa.flatMap(c => percursoDoCurso(c).fases.map(f => f.modulo).filter(Boolean)))];
+  const encerrados = programa.filter(c => !c.ativo).length;
   // Antes de a data abrir, sem programa: a aba é refeita quando ele chega
-  trocarConteudo(lugar, `<p class="h">O programa de cada curso, em fases (as fases de um módulo juntas), na ordem em que o aluno voa: quando cada fase abre e, em cada missão, o código (PP-07), o nome, o tipo de missão da escala, o recurso, as horas e quando voar. ${edita ? 'Só o Administrador muda.' : 'Só o Administrador muda; aqui é consulta.'}</p>`
-    + programa.map(curso => cartaoDoCurso(curso, edita, abertas)).join('')
+  trocarConteudo(lugar, barraDosCursos(programa, edita, formulario.aberto)
+    + (edita ? formularioDoCurso(formulario) : '')
+    + `<p class="h">O programa de cada curso, em fases (as fases de um módulo juntas), na ordem em que o aluno voa: quando cada fase abre e, em cada missão, o código (PP-07), o nome, o tipo de missão da escala, o recurso, as horas e quando voar. ${edita ? 'Só o Administrador muda.' : 'Só o Administrador muda; aqui é consulta.'}</p>`
+    + (programa.length && !mostrados.length ? `<p class="h">Nenhum curso ativo.${encerrados ? ' Marque “Mostrar encerrados” para ver os encerrados.' : ''}</p>` : '')
+    + mostrados.map(curso => cartaoDoCurso(curso, edita, abertas)).join('')
     + (edita ? `<datalist id="cur-modulos">${modulos.map(m => `<option value="${esc(m)}"></option>`).join('')}</datalist>` : ''));
+  if (cursor && document.activeElement && document.activeElement.id === cursor[0]) document.activeElement.setSelectionRange(cursor[1], cursor[2]);
   manterRolagens(lugar, rolagens);
 }
 

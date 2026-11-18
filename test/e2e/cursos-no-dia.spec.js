@@ -1,4 +1,5 @@
-// A missão do curso no dia, com o programa em fases (o cronograma do PP): na Demanda, além da próxima missão (Usar), a
+// A missão do curso no dia, com o programa em fases (o cronograma do PP, o modelo do app, com o Noturno em trechos): na
+// Demanda, além da próxima missão (Usar), a
 // lista "Outra missão do curso" põe outra missão do programa no pedido. A liberada vale na hora; a fora da ordem (a que o
 // programa ainda não libera, a já aprovada, a dispensada) pede confirmação num botão que aparece armado, e o histórico
 // diz por quê. O pedido guarda o curso da missão (cursoDaEtapa): o resultado vai para ele, mesmo que o aluno troque de
@@ -6,26 +7,19 @@
 import { test, expect, irPara, abrirEscala, confirmar, AMANHA } from './fixtures.js';
 import { documentosAtuais } from './supabase-falso.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
-import { cursoPP } from '../helpers/programa-pp.js';
-import { cursosIniciais, percursoDoCurso } from '../../js/programa.js';
+import { cursosIniciais, percursoDoCurso, novoCurso } from '../../js/programa.js';
+import { MODELOS } from '../../js/modelos-de-curso.js';
 
-// O cronograma do PP como as tabelas dos cursos o guardam (neste navegador, acpm4_cursos): os ids das fases e das
-// missões viram uuids, os únicos que o programa lido aceita
+// O cronograma do PP (o modelo do app) como as tabelas dos cursos o guardam (neste navegador, acpm4_cursos), na versão 1:
+// os ids das fases e das missões são uuids, os únicos que o programa lido aceita
 function programaPP() {
-  const pp = cursoPP(), ids = new Map();
-  const uuid = id => {
-    if (!ids.has(id)) ids.set(id, `00000000-0000-4000-8000-${String(ids.size + 1).padStart(12, '0')}`);
-    return ids.get(id);
-  };
-  return {
-    ...pp, versao: 1,
-    fases: pp.fases.map(f => ({ ...f, id: uuid(f.id), requer: f.requer.map(uuid) })),
-    missoes: pp.missoes.map(m => ({ ...m, id: uuid(m.id), fase: uuid(m.fase), requer: m.requer.map(uuid) }))
-  };
+  let n = 0;
+  const uuid = () => `00000000-0000-4000-8000-${String(++n).padStart(12, '0')}`;
+  return { ...novoCurso([], { sigla: 'PP', nome: 'Piloto Privado', modelo: MODELOS['pp-acpm'] }, uuid).curso, versao: 1 };
 }
 
 // As missões do PP na ordem do curso, até esta (inclusive), aprovadas para a Maria
-const ORDEM = percursoDoCurso(cursoPP()).missoes.map(m => m.codigo);
+const ORDEM = percursoDoCurso(programaPP()).missoes.map(m => m.codigo);
 const aprovadasAte = codigo => ORDEM.slice(0, ORDEM.indexOf(codigo) + 1).map((missao, i) => ({
   id: i + 1, aluno: 1000, curso: 'PP', missao, resultado: 'aprovado', data: '2026-11-09', voo: null,
   registrado_em: '2026-11-09T12:00:00.000Z', registrado_por: 'Operador 01'
@@ -74,26 +68,27 @@ test.describe('Cursos no dia: outra missão do curso', () => {
     const lista = linha.locator('[data-f="outra-missao"]');
     await expect(lista).toHaveAccessibleName('Outra missão do curso para Maria');
     await expect(lista.locator('optgroup[label="Liberadas no PP"] option')).toHaveText([
-      'NAV-01 · Navegação · C152 · 01h30 (1,5 h)', 'PE-04 · Parafuso · C152 · 1 h', 'TSL-01 · Navegação · C172 · 1 h'
+      'NAV-01 · Navegação · C152 · 01h30 (1,5 h)', 'PE-04 · Parafuso · C152 · 1 h', 'NOT (com TSL-01 e TSL-02) · Noturno · C172 · 3 h'
     ]);
     await expect(lista.locator(`optgroup[label="${FORA}"] option[value="NAV-02"]`)).toHaveText('NAV-02 · Navegação · C152 · 01h30 (1,5 h) (falta NAV-01)');
     await expect(lista.locator(`optgroup[label="${FORA}"] option[value="IN-01"]`)).toHaveText('IN-01 · Voo Local · C152 · 1 h (já aprovada)');
     // O aluno sem curso não tem a lista
     await expect(page.locator('#dem tr[data-id="1001"] [data-f="outra-missao"]')).toHaveCount(0);
 
-    await lista.selectOption('TSL-01');
-    await expect(linha.locator('.etapa')).toHaveText('TSL-01');
+    // O Noturno vai pela noite (o NOT), com os translados: o pedido Noturno, com as 4 h do dia
+    await lista.selectOption('NOT');
+    await expect(linha.locator('.etapa')).toHaveText('NOT');
     await expect(linha.locator('.etapa')).toHaveAttribute('title', 'Missão do curso PP');
     await expect(linha.locator('[data-f="fly"]')).toBeChecked();
-    await expect(linha.locator('[data-f="mis"]')).toHaveValue('Navegação');
+    await expect(linha.locator('[data-f="mis"]')).toHaveValue('Noturno');
     await expect(linha.locator('[data-f="eq"]')).toHaveValue('C172');
     await expect(linha.locator('[data-act="usar-fora-da-ordem"]')).toHaveCount(0);
     // A missão do pedido sai da lista dele; as outras liberadas continuam
     await expect(linha.locator('[data-f="outra-missao"] optgroup[label="Liberadas no PP"] option')).toHaveText([
       'NAV-01 · Navegação · C152 · 01h30 (1,5 h)', 'PE-04 · Parafuso · C152 · 1 h'
     ]);
-    await expect(page.locator('#audit-log-list')).toContainText('Maria: TSL-01 na demanda (Navegação · C172 · 1 h)');
-    await expect.poll(() => pedidoGravado(page)).toEqual({ fly: true, mis: 'Navegação', eq: 'C172', etapa: 'TSL-01', cursoDaEtapa: 'PP' });
+    await expect(page.locator('#audit-log-list')).toContainText('Maria: NOT na demanda (Noturno · C172 · 4 h)');
+    await expect.poll(() => pedidoGravado(page)).toEqual({ fly: true, mis: 'Noturno', eq: 'C172', etapa: 'NOT', cursoDaEtapa: 'PP' });
   });
 
   test('a fora da ordem pede confirmação: o botão aparece armado, o segundo acionamento põe a missão e o histórico diz por quê', async ({ page }) => {
@@ -162,8 +157,8 @@ test.describe('Cursos no dia: outra missão do curso', () => {
     await expect(linha.locator('[data-f="outra-missao"]')).toBeVisible();
     const cabe = () => page.evaluate(() => document.querySelector('#s-dem .tw').scrollWidth <= document.querySelector('#s-dem .tw').clientWidth);
     expect(await cabe()).toBe(true);
-    await linha.locator('[data-f="outra-missao"]').selectOption('TSL-01');
-    await expect(linha.locator('.etapa')).toHaveText('TSL-01');
+    await linha.locator('[data-f="outra-missao"]').selectOption('NOT');
+    await expect(linha.locator('.etapa')).toHaveText('NOT');
     expect(await cabe()).toBe(true);
   });
 
@@ -214,8 +209,8 @@ test.describe('Cursos no dia: o curso da missão no pedido', () => {
     await expect(linha.locator('.etapa')).toHaveCount(0);
     await expect.poll(() => pedidoGravado(page)).toEqual({ fly: true, mis: 'Navegação', eq: 'C172' });
 
-    await linha.locator('[data-f="outra-missao"]').selectOption('TSL-01');
-    await expect.poll(() => pedidoGravado(page)).toEqual({ fly: true, mis: 'Navegação', eq: 'C172', etapa: 'TSL-01', cursoDaEtapa: 'PP' });
+    await linha.locator('[data-f="outra-missao"]').selectOption('NOT');
+    await expect.poll(() => pedidoGravado(page)).toEqual({ fly: true, mis: 'Noturno', eq: 'C172', etapa: 'NOT', cursoDaEtapa: 'PP' });
     await page.locator('#btn-mais-dem').click();
     await confirmar(page, '#clr');
     await expect(linha.locator('.etapa')).toHaveCount(0);

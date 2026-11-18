@@ -1,16 +1,19 @@
-// O programa dos cursos, na aba Cursos: só o Administrador (neste navegador, o Operador) muda, com o programa lido das
-// tabelas dos cursos. Cada alteração é uma operação de js/programa.js sobre o curso da tela, conferida antes como o
+// Os cursos e o programa deles, na aba Cursos: só o Administrador (neste navegador, o Operador) muda, com o programa lido
+// das tabelas dos cursos. Cada alteração é uma operação de js/programa.js sobre o curso da tela, conferida antes como o
 // servidor confere (com um problema, a aba volta a mostrar o curso como estava e o aviso diz qual); a ordem nova que poria
 // uma fase ou uma missão antes do que ela espera ("depois de…") é recusada com o motivo. O curso muda na tela na hora e
 // vai para a gravação do curso inteiro (ApiClient.salvarCurso), em fila: uma gravação de cada vez, na ordem das
-// alterações, cada uma com o curso como ficou naquela alteração e a versão confirmada pela gravação anterior. Uma recusa
-// (ou a falta de conexão) descarta o resto da fila do curso, e a tela volta a mostrar o programa gravado, lido de novo,
-// com o aviso do motivo; nada disso trava o resto da tela (outra pessoa que mudou o programa não é um conflito da
-// escala). As alterações do programa não entram no histórico da data: ficam nas versões do curso, que a aba lista
+// alterações, cada uma com o curso como ficou naquela alteração e a versão confirmada pela gravação anterior (o curso novo
+// parte da versão 0, que o cria). Uma recusa (ou a falta de conexão) descarta o resto da fila do curso, e a tela volta a
+// mostrar o programa gravado, lido de novo, com o aviso do motivo; nada disso trava o resto da tela (outra pessoa que
+// mudou o programa não é um conflito da escala). As alterações do programa não entram no histórico da data: ficam nas
+// versões do curso, que a aba lista. O filtro da aba (o curso mostrado e os encerrados) vale para todos os perfis
 import {
   conteudoDoCurso, incluirMissao, mudarMissao, moverMissao, retirarMissao, validarCurso, percursoDoCurso, rotuloDaFase, incluirFase, mudarFase,
-  moverFase, retirarFase, restaurarFase, restaurarMissao, definirRegra, marcarMissao, moverMissaoParaFase, ordemRecusada
+  moverFase, retirarFase, restaurarFase, restaurarMissao, definirRegra, marcarMissao, moverMissaoParaFase, ordemRecusada, definirTrecho, mudarCurso,
+  aplicarModelo, novoCurso
 } from '../programa.js';
+import { MODELOS } from '../modelos-de-curso.js';
 import { codigoValido } from '../cursos.js';
 import { ApiClient } from '../storage.js';
 import { $, showToast } from '../dom.js';
@@ -18,7 +21,7 @@ import { duracaoDigitada, ERRO_DA_DURACAO } from '../rules.js';
 import { S } from '../state.js';
 import { confirmado } from './confirmacao.js';
 import { aoAcionar } from './registro.js';
-import { rCursos, podeEditarCursos, programasIndisponiveis, codigoTravado, mostrarAlteracoes, nomesDosRequisitos, listaComE } from '../views/cursos.js';
+import { rCursos, podeEditarCursos, programasIndisponiveis, codigoTravado, mostrarAlteracoes, nomesDosRequisitos, listaComE, filtrarCursos } from '../views/cursos.js';
 import { rAlu } from '../views/cadastros.js';
 import { rDem } from '../views/demanda.js';
 
@@ -37,7 +40,11 @@ const confirmados = new Map();
 export const programaSendoGravado = () => filas.size > 0;
 
 const naTela = sigla => (S.programa || []).find(c => c.sigla === sigla) || null;
-const porNaTela = curso => { S.programa = (S.programa || []).map(c => (c.sigla === curso.sigla ? curso : c)); };
+// O curso na tela: no lugar do de mesma sigla; o curso novo, no fim da lista
+const porNaTela = curso => {
+  const programa = S.programa || [];
+  S.programa = programa.some(c => c.sigla === curso.sigla) ? programa.map(c => (c.sigla === curso.sigla ? curso : c)) : [...programa, curso];
+};
 
 // O curso de onde a alteração parte: com gravações esperando, o da fila (com todas elas); senão, o da tela, a não ser
 // que ele seja mais antigo que o confirmado aqui
@@ -119,9 +126,10 @@ const recusar = texto => {
 function avisoDaRecusa(erro, sigla) {
   const { code, campo, message } = erro || {};
   if (code === 'PT409') {
-    return campo === 'formato'
-      ? 'Os programas ainda estão sendo trazidos do cadastro. Recarregue a página.'
-      : `Outra pessoa mudou o programa do ${sigla}: a tela mostra a versão atual. Refaça a alteração.`;
+    if (campo === 'formato') return 'Os programas ainda estão sendo trazidos do cadastro. Recarregue a página.';
+    // O curso novo com a sigla de um curso que outra pessoa criou antes
+    if (campo === 'sigla') return `Outra pessoa já criou o curso ${sigla}: a tela mostra os cursos como estão.`;
+    return `Outra pessoa mudou o programa do ${sigla}: a tela mostra a versão atual. Refaça a alteração.`;
   }
   // Depois de um conflito, a tela fica só para consulta: nada mais é gravado, nem o programa
   if (code === '42501') return ApiClient.readOnly ? 'A tela está só para consulta: a alteração do programa não foi gravada.' : 'Só o Administrador muda os cursos.';
@@ -134,8 +142,9 @@ function avisoDaRecusa(erro, sigla) {
 }
 
 // Uma gravação que não deu certo: o resto da fila do curso já saiu, e a tela volta a mostrar o programa gravado, lido de
-// novo (o curso com gravações esperando continua como a tela o mostra); sem conexão, o último curso confirmado. O aviso
-// diz o motivo
+// novo (o curso com gravações esperando continua como a tela o mostra, também o curso novo que ainda não foi criado); sem
+// conexão, o último curso confirmado (o curso novo que não foi criado sai da tela). O aviso diz o motivo. O foco que
+// estava no curso novo que saiu da tela vai para "+ Novo curso" (não fica perdido no alto da página)
 async function mostrarOGravado(sigla, gravado, erro) {
   let programa = null;
   try {
@@ -143,9 +152,18 @@ async function mostrarOGravado(sigla, gravado, erro) {
   } catch {
     // Sem conexão: fica o último curso confirmado
   }
-  if (programa) S.programa = programa.map(c => (filas.has(c.sigla) ? filas.get(c.sigla).curso : c));
-  else porNaTela(gravado);
+  if (programa) {
+    const esperando = [...filas.values()].map(f => f.curso).filter(c => !programa.some(p => p.sigla === c.sigla));
+    S.programa = [...programa.map(c => (filas.has(c.sigla) ? filas.get(c.sigla).curso : c)), ...esperando];
+  } else if (gravado) {
+    porNaTela(gravado);
+  } else {
+    S.programa = (S.programa || []).filter(c => c.sigla !== sigla);
+  }
+  const ativo = document.activeElement;
+  const focoNoCurso = Boolean(ativo && ativo.closest(`#cursos .curso[data-curso="${sigla}"]`));
   rCursos(); rAlu(); rDem();
+  if (focoNoCurso && !naTela(sigla)) focar(['#cur-novo']);
   showToast(avisoDaRecusa(erro, sigla));
 }
 
@@ -167,7 +185,7 @@ async function enviar(sigla, fila) {
     fila.itens.shift();
     fila.versao = resposta.versao;
     const alteracao = { versao: resposta.versao, descricao: item.descricao, registrado_em: resposta.atualizado_em ?? null, registrado_por: ApiClient.autorAtual || null };
-    fila.gravado = { ...item.curso, versao: resposta.versao, alteracoes: [alteracao, ...(fila.gravado.alteracoes || [])].slice(0, ALTERACOES_NA_TELA) };
+    fila.gravado = { ...item.curso, versao: resposta.versao, alteracoes: [alteracao, ...((fila.gravado && fila.gravado.alteracoes) || [])].slice(0, ALTERACOES_NA_TELA) };
   }
   filas.delete(sigla);
   confirmados.set(sigla, fila.gravado);
@@ -183,13 +201,14 @@ async function enviar(sigla, fila) {
 }
 
 // Uma alteração conferida: o curso muda na tela (e com ele a próxima missão e o progresso dos alunos) e entra na fila de
-// gravação. curso: o curso de onde ela partiu (cursoAtual)
-function alterar(curso, novo, descricao) {
-  const sigla = curso.sigla;
-  if (!filas.has(sigla)) filas.set(sigla, { versao: curso.versao, gravado: curso, curso, itens: [], enviando: false });
+// gravação. curso: o curso de onde ela partiu (cursoAtual; null: o curso novo, que a gravação cria). A descrição leva a
+// sigla na frente ("PP: CT-03 alterada"), menos a do curso inteiro ('Curso MLTE criado: Multimotor', 'PC encerrado')
+function alterar(curso, novo, descricao, { comSigla = true } = {}) {
+  const sigla = novo.sigla;
+  if (!filas.has(sigla)) filas.set(sigla, { versao: curso ? curso.versao : 0, gravado: curso, curso: novo, itens: [], enviando: false });
   const fila = filas.get(sigla);
   fila.curso = novo;
-  fila.itens.push({ curso: novo, conteudo: conteudoDoCurso(novo), descricao: `${sigla}: ${descricao}` });
+  fila.itens.push({ curso: novo, conteudo: conteudoDoCurso(novo), descricao: comSigla ? `${sigla}: ${descricao}` : descricao });
   porNaTela(novo);
   rAlu(); rDem();
   if (!fila.enviando) enviar(sigla, fila);
@@ -347,9 +366,12 @@ aoAcionar(['fase-restaurar', 'missao-restaurar'], b => {
   if (r.regraPerdida) showToast(`A missão ${avisoDaRegraPerdida(m.codigo, r.regraPerdida, false)}`);
 });
 
+// O trecho do Noturno na descrição da alteração: "TSL-01 é a ida do Noturno"
+const TRECHOS = { ida: 'a ida', noite: 'a noite', volta: 'a volta' };
+
 // Os campos de uma missão: o código (uma vez por curso, também entre as tiradas do programa, que guardam o seu; travado
-// quando já há resultados), o nome, o tipo de missão, o recurso, as horas, quando voar e a lista "Depois de…", as marcas
-// e a fase
+// quando já há resultados), o nome, o tipo de missão, o trecho do Noturno, o recurso, as horas, quando voar e a lista
+// "Depois de…", as marcas e a fase
 function mudarCampoDaMissao(campo) {
   const { curso, missao: m, tr } = ondeNoPrograma(campo);
   if (!m) return;
@@ -363,6 +385,9 @@ function mudarCampoDaMissao(campo) {
     novo = definirRegra(curso, m.id, 'depois', lista);
   } else if (cf === 'dispensada' || cf === 'avaliacao') {
     novo = marcarMissao(curso, m.id, cf, campo.checked);
+  } else if (cf === 'trecho') {
+    // O Noturno desmanchado (a ida sem a noite logo depois, por exemplo) é recusado na conferência, com o motivo
+    novo = definirTrecho(curso, m.id, campo.value);
   } else if (cf === 'fase') {
     novo = moverMissaoParaFase(curso, m.id, campo.value);
     if (novo && !ordemValida(novo, m.id)) return refazerAba();
@@ -391,8 +416,9 @@ function mudarCampoDaMissao(campo) {
   const descricao = cf === 'regra' || cf === 'requer' ? regraNaDescricao(novo, salva, salva.codigo, false)
     : cf === 'dispensada' ? `${salva.codigo} ${salva.dispensada ? 'dispensada' : 'deixa de ser dispensada'}`
       : cf === 'avaliacao' ? `${salva.codigo} ${salva.avaliacao ? 'é avaliação' : 'deixa de ser avaliação'}`
-        : cf === 'fase' ? `${salva.codigo} passou para a ${rotuloDaFase(novo.fases.find(f => f.id === salva.fase))}`
-          : `${salva.codigo} alterada`;
+        : cf === 'trecho' ? `${salva.codigo} ${salva.trecho ? `é ${TRECHOS[salva.trecho]} do Noturno` : 'deixa de ser trecho do Noturno'}`
+          : cf === 'fase' ? `${salva.codigo} passou para a ${rotuloDaFase(novo.fases.find(f => f.id === salva.fase))}`
+            : `${salva.codigo} alterada`;
   alterar(curso, novo, descricao);
   refazerAba();
   if (cf === 'regra' && salva.regra === 'depois') abrirRequisitos(m.id);
@@ -423,16 +449,131 @@ function mudarCampoDaFase(campo) {
   if (cfa === 'regra' && salva.regra === 'depois') abrirRequisitos(f.id);
 }
 
+// O nome do curso (vazio não vale)
+function mudarCampoDoCurso(campo) {
+  const { curso } = ondeNoPrograma(campo);
+  if (!curso) return;
+  if (!campo.value.trim()) return recusar('O nome do curso vai de 1 a 80 caracteres.');
+  const novo = mudarCurso(curso, 'nome', campo.value);
+  if (!novo || !conferido(novo)) return refazerAba();
+  alterar(curso, novo, `Curso ${curso.sigla} renomeado: ${novo.nome}`, { comSigla: false });
+  refazerAba();
+}
+
 // Os campos mudam o curso, e a aba é refeita no lugar (o foco continua no campo, ou vai para o seguinte no Tab; o campo
 // digitado que perdeu o foco para um clique, depois do clique: refazerAba)
 document.addEventListener('change', e => {
-  const campo = e.target.closest('#cursos [data-cf], #cursos [data-cfa]');
+  const campo = e.target.closest('#cursos [data-cc], #cursos [data-cf], #cursos [data-cfa]');
   if (!campo || !editavel()) return;
   depoisDoClique = apertado && campo.matches(DIGITADO);
   try {
-    if (campo.hasAttribute('data-cfa')) mudarCampoDaFase(campo);
+    if (campo.hasAttribute('data-cc')) mudarCampoDoCurso(campo);
+    else if (campo.hasAttribute('data-cfa')) mudarCampoDaFase(campo);
     else mudarCampoDaMissao(campo);
   } finally {
     depoisDoClique = false;
   }
+});
+
+// O filtro da aba, para todos os perfis (também quem só consulta): o curso mostrado (ou todos) e "Mostrar encerrados"
+document.addEventListener('change', e => {
+  if (e.target.id === 'cur-sel') filtrarCursos({ curso: e.target.value });
+  else if (e.target.id === 'cur-encerrados') filtrarCursos({ encerrados: e.target.checked });
+  else return;
+  rCursos();
+});
+
+// Os cursos ------------------------------------------------------------------------------------------------------------
+
+const quantas = (n, uma, varias) => `${n} ${n === 1 ? uma : varias}`;
+
+// Encerrar (com confirmação) e reativar um curso. O encerrado sai das matrículas novas (Alunos); os alunos que já estão
+// nele continuam, com a próxima missão e o progresso. Ele continua à vista na aba ("Mostrar encerrados" fica marcado),
+// com o foco em "Reativar o curso"
+aoAcionar(['curso-encerrar', 'curso-reativar'], b => {
+  if (!editavel()) return;
+  const { curso } = ondeNoPrograma(b);
+  if (!curso) return;
+  const encerrar = b.dataset.act === 'curso-encerrar';
+  if (encerrar && !confirmado(b, 'Confirmar encerramento')) return;
+  const novo = mudarCurso(curso, 'ativo', !encerrar);
+  if (!novo || !conferido(novo)) return;
+  alterar(curso, novo, `${curso.sigla} ${encerrar ? 'encerrado' : 'reativado'}`, { comSigla: false });
+  if (encerrar) filtrarCursos({ encerrados: true });
+  rCursos();
+  focar([`#cursos .curso[data-curso="${curso.sigla}"] [data-act="${encerrar ? 'curso-reativar' : 'curso-encerrar'}"]`]);
+  showToast(encerrar ? `${curso.sigla} encerrado: ele sai da lista dos cursos em Alunos; quem já está nele continua.` : `${curso.sigla} reativado.`, 'ok');
+});
+
+// O que o modelo faz no programa, no botão armado: "12 missões ficam, 35 entram, 28 saem" (sem as partes vazias)
+function resumoDoModelo({ mantidas, novas, retiradas }) {
+  const partes = [[mantidas, 'fica', 'ficam'], [novas, 'entra', 'entram'], [retiradas, 'sai', 'saem']].filter(([n]) => n > 0);
+  return partes.map(([n, uma, varias], i) => `${n}${i ? '' : ` ${n === 1 ? 'missão' : 'missões'}`} ${n === 1 ? uma : varias}`).join(', ');
+}
+
+// "Usar o cronograma do PP" (no PP vazio ou numa fase só): o programa passa a ser o do modelo (aplicarModelo). O primeiro
+// clique arma o botão com o que acontece (as missões que ficam, entram e saem); o segundo aplica. Nada é gravado sem ele
+aoAcionar('curso-modelo', b => {
+  if (!editavel()) return;
+  const { curso } = ondeNoPrograma(b);
+  const modelo = Object.hasOwn(MODELOS, b.dataset.modelo) ? MODELOS[b.dataset.modelo] : null;
+  if (!curso || !modelo) return;
+  const r = aplicarModelo(curso, modelo);
+  if (!confirmado(b, `Confirmar: ${resumoDoModelo(r)}`) || !conferido(r.curso)) return;
+  alterar(curso, r.curso, `cronograma ${modelo.documento} aplicado (${quantas(r.mantidas, 'mantida', 'mantidas')}, ${quantas(r.novas, 'nova', 'novas')}, ${quantas(r.retiradas, 'retirada', 'retiradas')})`);
+  rCursos();
+  focar([`#cursos .curso[data-curso="${curso.sigla}"] [data-cc="nome"]`]);
+});
+
+// "+ Novo curso": o formulário abre (e fecha) embaixo da barra, vazio e com o foco na sigla; fechado, o foco volta ao botão
+function mostrarFormularioDoCurso(abrir) {
+  const form = $('#form-curso'), botao = $('#cur-novo');
+  if (!form || !botao) return;
+  form.hidden = !abrir;
+  botao.setAttribute('aria-expanded', String(abrir));
+  $('#cur-sigla').value = '';
+  $('#cur-nome').value = '';
+  form.querySelector('[name="cur-comeco"][value="vazio"]').checked = true;
+  marcarCampoDoCurso(null, '');
+  (abrir ? $('#cur-sigla') : botao).focus();
+}
+// O erro do curso novo: o motivo em #cur-erro (a descrição dos dois campos: o leitor de tela diz os dois) e o campo com
+// o problema marcado (aria-invalid)
+function marcarCampoDoCurso(campo, erro) {
+  $('#cur-erro').textContent = erro;
+  for (const nome of ['sigla', 'nome']) {
+    if (nome === campo) $(`#cur-${nome}`).setAttribute('aria-invalid', 'true');
+    else $(`#cur-${nome}`).removeAttribute('aria-invalid');
+  }
+}
+aoAcionar('curso-novo', () => {
+  if (editavel()) mostrarFormularioDoCurso($('#form-curso').hidden);
+});
+document.addEventListener('click', e => {
+  if (e.target.closest('#cur-cancelar')) mostrarFormularioDoCurso(false);
+});
+
+// "Criar o curso": a sigla (em maiúsculas; no formato e uma vez só, também entre os encerrados) e o nome, conferidos no
+// formulário (o erro fica embaixo dos campos, com o campo marcado); o programa vazio ou o modelo escolhido. O curso entra
+// na tela na hora, escolhido no filtro, e vai para a gravação (a versão 0 o cria). O foco vai para "+ Fase" (com o
+// modelo, para o nome do curso, no alto do programa)
+document.addEventListener('submit', e => {
+  if (e.target.id !== 'form-curso') return;
+  e.preventDefault();
+  if (!editavel()) return;
+  const comeco = e.target.querySelector('[name="cur-comeco"]:checked');
+  const modelo = comeco && Object.hasOwn(MODELOS, comeco.value) ? MODELOS[comeco.value] : null;
+  const { curso, erro, campo } = novoCurso(S.programa || [], { sigla: $('#cur-sigla').value, nome: $('#cur-nome').value, modelo });
+  if (erro) {
+    marcarCampoDoCurso(campo, erro);
+    $(`#cur-${campo}`).focus();
+    return;
+  }
+  if (!conferido(curso)) return;
+  alterar(null, curso, `Curso ${curso.sigla} criado: ${curso.nome}${modelo ? ` (com o cronograma ${modelo.documento})` : ''}`, { comSigla: false });
+  mostrarFormularioDoCurso(false);
+  filtrarCursos({ curso: curso.sigla });
+  rCursos();
+  const noCartao = seletor => `#cursos .curso[data-curso="${curso.sigla}"] ${seletor}`;
+  focar(modelo ? [noCartao('[data-cc="nome"]')] : [noCartao('[data-act="fase-nova"]')]);
 });

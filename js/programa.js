@@ -818,3 +818,87 @@ export function ordemRecusada(curso, movido) {
   if (m.fase !== r.fase && movido === r.fase) return `${motivo}: a ${nomeDaFase(r.fase)} não pode passar para depois da ${nomeDaFase(m.fase)}.`;
   return `${motivo}: ela não pode passar para antes dela.`;
 }
+
+// O trecho do Noturno de uma missão Noturno do programa: "ida", "noite" ou "volta" (vazio ou null tira). Se as missões
+// com trecho da fase formam um Noturno (a ida, se houver, a noite e a volta, se houver, juntas e nesta ordem), quem confere
+// é validarCurso. null quando nada muda, ou quando a missão não é Noturno
+export function definirTrecho(curso, id, trecho) {
+  const m = programaDoCurso(curso).missoes.find(x => x.id === id);
+  const novo = trecho || null;
+  if (!m || m.mis !== 'Noturno' || (novo !== null && !TRECHOS.includes(novo)) || (m.trecho || null) === novo) return null;
+  const mudada = novo ? { ...m, trecho: novo } : semTrecho(m);
+  return { ...curso, missoes: curso.missoes.map(x => (x === m ? mudada : x)) };
+}
+
+// Os cursos novos, os encerrados e os modelos de programa ------------------------------------------------------------
+
+// O nome do curso (sem os espaços a mais, até 80 caracteres; vazio não vale) ou se ele está ativo ("Encerrar o curso":
+// ele sai das matrículas novas; os alunos que já estão nele continuam). null quando nada muda
+export function mudarCurso(curso, campo, valor) {
+  if (campo === 'nome') {
+    const nome = nomeCurto(valor);
+    return nome && nome !== curso.nome ? { ...curso, nome } : null;
+  }
+  if (campo === 'ativo') return typeof valor === 'boolean' && valor !== curso.ativo ? { ...curso, ativo: valor } : null;
+  return null;
+}
+
+// Um modelo de programa (js/modelos-de-curso.js) no curso: o programa passa a ser o do modelo, nas fases dele. A missão do
+// curso com o código de uma do modelo fica (o mesmo id: os resultados continuam contando), com os campos do modelo; a
+// tirada do programa com um desses códigos volta a ele (o código é dela). As outras missões do programa saem dele (os
+// resultados ficam), e as do modelo que faltam entram. As fases de antes saem do programa (as missões que ficam vão para
+// as do modelo). gerarId(sigla, chave) dá os ids, novos, das fases (a chave da fase no modelo) e das missões que entram (o
+// código). Devolve o curso (um objeto novo; o recebido não muda) e quantas missões ficaram, entraram e saíram
+export function aplicarModelo(curso, modelo, gerarId = novoId) {
+  const doCurso = new Map(curso.missoes.map(m => [m.codigo, m]));
+  const doModelo = modelo.fases.flatMap(f => f.missoes.map(m => ({ ...m, chaveDaFase: f.chave })));
+  const codigos = new Set(doModelo.map(m => m.codigo));
+  const idDaFase = new Map(modelo.fases.map(f => [f.chave, gerarId(curso.sigla, f.chave)]));
+  const idDaMissao = new Map(doModelo.map(m => [m.codigo, doCurso.has(m.codigo) ? doCurso.get(m.codigo).id : gerarId(curso.sigla, m.codigo)]));
+  const fases = modelo.fases.map((f, ordem) => ({
+    id: idDaFase.get(f.chave), nome: f.nome, modulo: f.modulo ?? null, ordem, regra: f.regra ?? 'ordem', requer: (f.requer || []).map(k => idDaFase.get(k)),
+    removida: false
+  }));
+  const ordemNaFase = new Map();
+  const missoes = doModelo.map(m => {
+    const ordem = ordemNaFase.get(m.chaveDaFase) || 0;
+    ordemNaFase.set(m.chaveDaFase, ordem + 1);
+    const antiga = doCurso.get(m.codigo);
+    return {
+      id: idDaMissao.get(m.codigo), fase: idDaFase.get(m.chaveDaFase), codigo: m.codigo, nome: m.nome, mis: m.mis, eq: m.eq, nb: m.nb, ordem,
+      regra: m.regra ?? 'ordem', requer: (m.requer || []).map(c => idDaMissao.get(c)), dispensada: m.dispensada === true, avaliacao: m.avaliacao === true,
+      removida: false, comResultados: Boolean(antiga && antiga.comResultados), ...(m.trecho ? { trecho: m.trecho } : {})
+    };
+  });
+  const saem = curso.missoes.filter(m => !m.removida && !codigos.has(m.codigo));
+  return {
+    curso: {
+      ...curso,
+      fases: [...fases, ...curso.fases.filter(f => !f.removida).map(f => ({ ...f, removida: true })), ...curso.fases.filter(f => f.removida)],
+      missoes: [...missoes, ...saem.map(m => ({ ...m, removida: true })), ...curso.missoes.filter(m => m.removida && !codigos.has(m.codigo))]
+    },
+    mantidas: doModelo.filter(m => doCurso.has(m.codigo)).length,
+    novas: doModelo.filter(m => !doCurso.has(m.codigo)).length,
+    retiradas: saem.length
+  };
+}
+
+// "+ Novo curso": a sigla (em maiúsculas; no formato e uma vez só, também entre os encerrados), o nome (sem os espaços a
+// mais, até 80 caracteres) e, se vier, o modelo do programa (aplicarModelo, com ids novos). programa: os cursos que
+// existem. O curso novo vai para o fim da lista, ativo, na versão 0 (a gravação o cria). Devolve { curso } ou, com um
+// problema, { erro, campo } (o campo: 'sigla' ou 'nome')
+export function novoCurso(programa, { sigla, nome, modelo = null }, gerarId = novoId) {
+  const s = String(sigla ?? '').trim().toUpperCase(), n = nomeCurto(nome);
+  if (!s) return { erro: 'Escreva a sigla do curso (por exemplo, PC-IFR).', campo: 'sigla' };
+  if (!siglaValida(s)) {
+    return { erro: 'A sigla tem de 2 a 10 caracteres: letras sem acento, números e hífen, começando por letra e sem hífen no fim (por exemplo, PC-IFR).', campo: 'sigla' };
+  }
+  const existente = programa.find(c => c.sigla === s);
+  if (existente) {
+    return { erro: `Já existe o curso ${s} (${existente.nome})${existente.ativo ? '' : ', encerrado: para usá-lo de novo, reative-o'}.`, campo: 'sigla' };
+  }
+  if (!n) return { erro: 'Escreva o nome do curso (até 80 caracteres).', campo: 'nome' };
+  const ordem = Math.min(Math.max(-1, ...programa.map(c => c.ordem)) + 1, 999);
+  const curso = { sigla: s, nome: n, ordem, ativo: true, versao: 0, fases: [], missoes: [], alteracoes: [] };
+  return { curso: modelo ? aplicarModelo(curso, modelo, gerarId).curso : curso };
+}

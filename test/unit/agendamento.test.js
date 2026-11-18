@@ -16,9 +16,13 @@ import { situacaoPorMissao } from '../../js/resultados.js';
 import { T } from '../../js/config.js';
 import { HORARIOS_PADRAO, DE_30_EM_30 } from '../../js/horarios.js';
 import { aluno, cenario, instrutor, missaoExtra, GROUND_C152 } from '../helpers/montar.js';
-import { cursoPP } from '../helpers/programa-pp.js';
+import { novoCurso } from '../../js/programa.js';
+import { MODELOS } from '../../js/modelos-de-curso.js';
 
 const DATA = '2026-11-11', HOJE = '2026-11-10';
+// O cronograma do PP (o modelo do app, com o Noturno em trechos) como o curso PP, com os ids tirados da sigla e da chave
+// (PP:F4, PP:TSL-01)
+const cursoPP = () => novoCurso([], { sigla: 'PP', nome: 'Piloto Privado', modelo: MODELOS['pp-acpm'] }, (s, c) => `${s}:${c}`).curso;
 const PP = cursoPP();
 const aprovadas = (stuId, codigos) => codigos.map((missao, i) => ({ id: i + 1, aluno: stuId, curso: 'PP', missao, resultado: 'aprovado', data: '2026-11-01' }));
 const ambiente = ({ registros = [], ...resto } = {}) => ({
@@ -164,8 +168,8 @@ describe('Agendamento: os padrões do formulário', () => {
     const missoes = contexto => opcoesDeMissao(estado, base, f1a4, stu, { a: 390, contexto: contextoInicial(contexto, f1a4) });
     assert.equal(missoes('dia').padrao, 'missao:PP:NAV-01');
     assert.equal(missoes('r:PR-JPL').padrao, 'missao:PP:PE-04');
-    assert.deepEqual(opcoes(missoes('dia').grupos).filter(o => o.info.estado === 'liberada').map(o => o.info.missao.codigo), ['NAV-01', 'PE-04', 'TSL-01']);
-    assert.equal(missoes('dia').nota, 'Próxima do PP: NAV-01 (Fase 5). Também liberadas: PE-04 (livre na Fase 5), TSL-01 (Fase 6).');
+    assert.deepEqual(opcoes(missoes('dia').grupos).filter(o => o.info.estado === 'liberada').map(o => o.info.missao.codigo), ['NAV-01', 'PE-04', 'NOT']);
+    assert.equal(missoes('dia').nota, 'Próxima do PP: NAV-01 (Fase 5). Também liberadas: PE-04 (livre na Fase 5), NOT (com TSL-01 e TSL-02) (Fase 6).');
     // Nada aprovado, no C172: a IN-01 (do C152) no avião clicado, com o aviso do recurso do programa
     const { formulario, avaliacao } = agendar(doDia(), { amb: ambiente(), contexto: 'r:PR-VOY', escolhas: { aluno: 1001 } });
     assert.deepEqual([formulario.missao, formulario.recurso], ['missao:PP:IN-01', 'PR-VOY']);
@@ -293,10 +297,10 @@ describe('Agendamento: os padrões do formulário', () => {
   });
 
   it('o Noturno em trechos vai pela noite, com os translados no nome: nenhum translado sozinho, e o voo leva a etapa da noite', () => {
-    // O PP com o Noturno em trechos: o TSL-01 (a ida), a NOT (a noite) e o TSL-02 (a volta) num voo só
+    // O PP com o Noturno em trechos (o do cronograma): o TSL-01 (a ida), a NOT (a noite) e o TSL-02 (a volta) num voo só
     const comTrechos = (mudar = {}) => {
-      const curso = cursoPP(), trechos = { 'TSL-01': 'ida', NOT: 'noite', 'TSL-02': 'volta' };
-      curso.missoes = curso.missoes.map(m => (trechos[m.codigo] ? { ...m, mis: 'Noturno', trecho: trechos[m.codigo], ...mudar[m.codigo] } : m));
+      const curso = cursoPP();
+      curso.missoes = curso.missoes.map(m => ({ ...m, ...mudar[m.codigo] }));
       return curso;
     };
     const NT = comTrechos();

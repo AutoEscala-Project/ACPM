@@ -202,7 +202,7 @@ aoMudarCampo('s', (t, { f, id }) => {
     const ins = insBy(+t.value);
     historico = ['mod', `${s.nm}: priorizar com ${ins ? ins.nm : ''}`];
   } else if (f === 'curso') {
-    // O curso do aluno
+    // O curso do aluno: qualquer sigla no formato (também a de um curso que o Administrador criou na aba Cursos)
     const curso = normalizarCursoDoAluno(t.value);
     if (curso) s.curso = curso;
     else delete s.curso;

@@ -64,8 +64,8 @@ test.describe('Celular', () => {
   });
 
   // O programa em fases (gravado neste navegador, como as tabelas dos cursos o guardam): os cabeçalhos das fases, a
-  // missão "Depois de…" com a escolha aberta, a fase de cada missão, as retiradas e as alterações também cabem na tela,
-  // com alvos de 44 px
+  // missão "Depois de…" com a escolha aberta, a fase de cada missão, as retiradas, os alunos do curso e as alterações
+  // também cabem na tela, com alvos de 44 px
   test('a aba Cursos em fases cabe na tela, com as caixas abertas e alvos de 44 px', async ({ page }) => {
     const u = n => `00000000-0000-4000-8013-${String(n).padStart(12, '0')}`;
     const modulo = 'Módulo 01 – Treinamento Duplo Comando';
@@ -94,7 +94,7 @@ test.describe('Celular', () => {
     await irPara(page, 'cur');
     await expect(page.locator('#cursos .curso[data-curso="PP"] tr[data-i]')).toHaveCount(3);
     for (const resumo of await page.locator('#cursos .curso[data-curso="PP"] summary').all()) await resumo.click();
-    await expect(page.locator('#cursos .curso[data-curso="PP"] details[open]')).toHaveCount(4);
+    await expect(page.locator('#cursos .curso[data-curso="PP"] details[open]')).toHaveCount(5);
     expect(await larguraDaPagina(page)).toBeLessThanOrEqual(390);
     expect(await alvosPequenos(page)).toEqual([]);
   });

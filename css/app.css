@@ -797,8 +797,34 @@ table.frota tr:hover .rev, table.frota tr:focus-within .rev { opacity: 1; }
 #cursos details.retiradas li { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; padding: 2px 0; border-bottom: 1px solid var(--ln); }
 #cursos details.alteracoes ol { margin: 6px 0 0; padding-left: 20px; font-size: 13.5px; }
 #cursos details.alteracoes li { margin: 2px 0; }
-/* A tabela das missões: as marcas uma embaixo da outra e, nos botões, a fase da missão embaixo de subir, descer e tirar */
+/* Os cursos: o filtro e "+ Novo curso" na barra; o formulário do curso novo (a sigla, o nome e com que programa começar);
+   no cabeçalho do curso, o nome, encerrar ou reativar e o modelo do programa; o encerrado, esmaecido; os alunos do curso */
+#cursos .barra-dos-cursos { margin: 0; }
+#form-curso { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px 16px; margin: 0; }
+#form-curso[hidden] { display: none; }
+#form-curso .campo { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--mu); }
+#form-curso .campo input { color: var(--ink); }
+#form-curso #cur-sigla { width: 9em; text-transform: uppercase; }
+#form-curso #cur-nome { width: 22em; max-width: 100%; }
+#form-curso [aria-invalid="true"] { border-color: var(--er); }
+#form-curso fieldset { display: flex; flex-wrap: wrap; gap: 2px 16px; margin: 0; padding: 0; border: 0; }
+#form-curso legend { padding: 0; margin-bottom: 4px; font-size: 13px; color: var(--mu); }
+#form-curso .dlg-acoes { display: flex; gap: 8px; margin-left: auto; }
+#cursos .campo-do-curso { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--mu); }
+#cursos .campo-do-curso input { width: 18em; max-width: 100%; color: var(--ink); }
+#cursos .acoes-do-curso { margin-left: auto; display: inline-flex; flex-wrap: wrap; gap: 6px; }
+#cursos .curso.encerrado > .curso-cab h3 { color: var(--mu); }
+#cursos .curso-cab .tag { margin-left: 6px; vertical-align: 1px; }
+#cursos details.alunos-do-curso { margin-top: 12px; }
+#cursos details.alunos-do-curso summary { font-weight: 600; }
+#cursos details.alunos-do-curso ul { margin: 6px 0 0; padding-left: 20px; font-size: 13.5px; }
+#cursos details.alunos-do-curso li { margin: 2px 0; }
+#cursos details.alunos-do-curso .progresso { color: var(--mu); font-variant-numeric: tabular-nums; }
+/* A tabela das missões: as marcas uma embaixo da outra e, nos botões, a fase da missão embaixo de subir, descer e tirar;
+   numa missão Noturno, o trecho embaixo do tipo de missão */
 table.cadastro.programa td { padding: 4px 6px; }
+.programa label.trecho-do-noturno { display: flex; align-items: center; gap: 6px; margin-top: 4px; font-size: 13px; color: var(--mu); }
+.programa label.trecho-do-noturno select { color: var(--ink); }
 .programa td.n { color: var(--mu); font-variant-numeric: tabular-nums; width: 2.5em; }
 .programa input.codigo { width: 7.5em; font-variant-numeric: tabular-nums; }
 .programa input[data-cf="nome"] { width: 100%; min-width: 10em; }
@@ -851,6 +877,12 @@ td.c-curso .progresso { display: block; margin-top: 2px; color: var(--mu); font-
   #cursos .campo-da-fase, #cursos details.requisitos { flex: 1 1 100%; }
   #cursos .campo-da-fase :is(input, select), #cursos .campo-da-fase input[data-cfa] { flex: 1; min-width: 0; }
   #cursos summary { min-height: 44px; padding: 12px 0; box-sizing: border-box; }
+  #cursos .campo-do-curso, #cursos .acoes-do-curso, #form-curso .campo, #form-curso .dlg-acoes { flex: 1 1 100%; }
+  #cursos .campo-do-curso input, #form-curso .campo input { flex: 1; width: auto; min-width: 0; }
+  #cursos .acoes-do-curso { margin-left: 0; }
+  /* O botão do cronograma ("Usar o cronograma do PP (P.I PPA 001A)") quebra a linha em vez de passar da tela */
+  #cursos .acoes-do-curso .btn, #form-curso .chk { flex-shrink: 1; max-width: 100%; text-align: left; }
+  table.cadastro.programa label.trecho-do-noturno select { flex: 1; }
 }
 .legenda-disp { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; margin: 0 0 8px; font-size: 13.5px; color: var(--mu); }
 .legenda-disp span { display: inline-flex; align-items: center; gap: 6px; }
