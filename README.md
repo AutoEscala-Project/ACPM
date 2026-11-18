@@ -12,9 +12,10 @@ a escala juntos. O manual de uso está no botão "Manual", no topo do app.
   (uma por data).
   O perfil da conta define o acesso: **Operador** edita, **Gestor** só consulta, **Secretaria** registra pedidos na
   agenda de solicitações (a escala ela só consulta) e **Administrador** faz tudo o que o Operador faz e, além disso,
-  cria e exclui contas (em "Minha conta" › Usuários). O cadastro aberto é desligado. Em "Minha conta", cada pessoa
-  troca a própria senha e o e-mail (o e-mail novo vale depois dos links de confirmação, que dependem do SMTP do
-  Supabase). A primeira conta de administrador sai de `scripts/criar-conta.mjs`.
+  cria e exclui contas (em "Minha conta" › Usuários) e muda os cursos e o programa de cada um (aba Cursos). O cadastro
+  aberto é desligado. Em "Minha conta", cada pessoa troca a própria senha e o e-mail (o e-mail novo vale depois dos
+  links de confirmação, que dependem do SMTP do Supabase). A primeira conta de administrador sai de
+  `scripts/criar-conta.mjs`.
 - **Local (`localhost`):** sem login, dados só no `localStorage` do navegador. Em localhost, `?supabase=previa` usa o
   projeto de prévia (com login).
 
@@ -80,11 +81,34 @@ O cadastro e cada dia guardam a versão do formato (campo `esquema`). Para mudar
 no formato novo tudo o que estiver gravado (os dias e, por último, o cadastro) e o banco recusa conteúdo num formato
 mais antigo do que o guardado. Nunca apague campos num passo: mantenha o que o passo não conhece.
 
+Do formato 24 em diante, o formato dos cursos, o programa de cada curso vive em tabelas próprias. O número fica num
+lugar só em cada ponta, `FORMATO_DOS_CURSOS` (`js/migracoes.js`) e `public.formato_dos_cursos()` (migração
+`20261117200000_cursos_e_missoes.sql`), e `test/unit/espelho-do-banco.test.js` confere que é o mesmo. Se outro formato
+chegar antes com o mesmo número, o aumento é essa linha em cada ponta, com o passo dos cursos (e o `ESQUEMA`)
+renumerado em `js/migracoes.js`. O app lê os programas das tabelas e só o Administrador grava, por `salvar_curso` (no
+modo local, os programas ficam em `acpm4_cursos`, e o Operador grava); o cadastro guarda a cópia de antes (`cursos`),
+que ninguém mais grava. A conversão é única: no primeiro acesso de um Operador ou Administrador ao app no formato 24,
+o programa do cadastro vai para as tabelas (`importar_cursos`, cada curso numa fase só, "Programa", com as missões na
+ordem) depois dos dias e antes do cadastro, que, gravado no formato 24, a encerra. Até lá, quem só consulta vê o aviso
+de que os programas ainda não foram trazidos do cadastro, com a próxima missão e o progresso desligados.
+
+Para pôr o formato 24 no ar, nesta ordem:
+
+1. a migração na prévia (`supabase db push --remote`) e `npm run test:db` na prévia;
+2. a mesma migração na produção (`--remote=<ref de produção>`), **antes do merge**: ela acrescenta as tabelas e as
+   funções e só alarga a regra dos resultados (PP, PC e INVA já vêm na tabela dos cursos, ainda sem programa), então o
+   app no ar, no formato 23, continua como está;
+3. o merge, e o GitHub Pages publica o app no formato 24;
+4. **uma abertura do app como Operador ou Administrador**, que faz a conversão única.
+
+Depois, num PR à parte, com a conversão feita e nenhuma aba de antes do formato 24 aberta: tirar `importar_cursos` do
+banco (e a chamada dela no app). A cópia `cadastro.cursos` fica.
+
 ## Estrutura
 
 | Caminho | Conteúdo |
 |---|---|
-| `index.html` | Marcação das oito abas |
+| `index.html` | Marcação das nove abas |
 | `painel.html`, `js/painel.js` | TV da recepção: o painel de partidas e chegadas de hoje na tela toda |
 | `css/app.css` | Estilos e temas claro/escuro |
 | `js/config.js` | Janelas, missões, limites de peso e a frota inicial |
@@ -92,6 +116,11 @@ mais antigo do que o guardado. Nunca apague campos num passo: mantenha o que o p
 | `js/categorias.js` | Categorias de recurso dos filtros (C152, C172, Simulador, PA-34 e Sala Ground) |
 | `js/habilitacoes.js` | Habilitações individuais dos instrutores e o que cada missão exige |
 | `js/rodizio.js` | Filas do rodízio (cheque, MLTE, noturno e C172) e a rotação de uma data para a seguinte |
+| `js/cursos.js` | Os cursos iniciais (PP, PC e INVA), o formato da sigla e do código da missão, o curso de cada aluno e o programa guardado no cadastro (`cursos`, a cópia de antes do formato 24, que ninguém mais grava) |
+| `js/programa.js` | O programa dos cursos em fases (as tabelas dos cursos; no modo local, `acpm4_cursos`): a regra de quando voar cada fase e cada missão, o Noturno em trechos, as operações do editor da aba Cursos e a gravação e a conversão única do cadastro, com as regras e os erros do servidor |
+| `js/modelos-de-curso.js` | Os programas prontos que o Administrador põe num curso: o cronograma do Piloto Privado (P.I PPA 001A), com 9 fases e 47 missões |
+| `js/progresso.js` | A próxima missão de cada aluno pelas regras do programa (a liberada; as fora da ordem, com o motivo) e o progresso no curso |
+| `js/resultados.js` | Os resultados das missões (aprovado ou reprovado; pendente desfaz um engano): a situação de cada missão do aluno e as regras do registro, as do servidor |
 | `js/agenda.js` | Prazo da agenda de solicitações (13:00 do dia anterior) e a importação para a demanda |
 | `js/csv.js` | CSV da escala agrupado por avião, para o lançamento no portal do aeroclube |
 | `js/planilha.js`, `modelos/escala-cavok.xlsx` | A escala na planilha do modelo do aeroclube (o Excel do lançamento no CAVOK): onde cada voo cai e o arquivo preenchido. O modelo é o arquivo da operação sem os dados do dia; as células que o app preenche estão em `BLOCOS` e `GROUND` (um modelo novo precisa delas nos mesmos lugares, e `test/unit/planilha.test.js` confere) |
@@ -102,8 +131,14 @@ mais antigo do que o guardado. Nunca apague campos num passo: mantenha o que o p
 | `js/perfis.js` | Perfis de acesso e o que cada um pode fazer na tela |
 | `js/rules.js` | Regras das missões (Ground School, precedência, disponibilidade do aluno) |
 | `js/engine.js` | Motor de alocação (função pura) |
+| `js/viabilidade.js` | O que torna possível um voo num horário, num recurso e com um instrutor (disponível, habilitado, livre, fora do "Não escalar com", dentro da lei e do peso; o saldo até a revisão): as mesmas regras no motor, na compactação, nas Sugestões e no agendamento |
+| `js/fixos.js` | Os voos fixos (pela escala aprovada, pelo status, pelo instrutor escolhido e pelo agendamento na Escala): o que acontece com eles ao mudar o status, aprovar, reabrir e mudar a demanda, e o motivo do cadeado |
+| `js/candidatos.js` | Os recursos e os instrutores que servem a um voo num horário, contra os outros voos do dia, cada um com o que o impede (as Sugestões e o agendamento) |
+| `js/reparo.js` | As Sugestões para um conflito na escala aprovada: outro avião, outro instrutor, outro horário, soltar o voo ou cancelar |
 | `js/instrutor-escolhido.js` | O instrutor escolhido pelo operador: na Demanda (o motor encaixa o voo com ele) e na Escala (o voo fica fixo onde está, com ele), as opções de cada lista e a reversão |
-| `js/storage.js` | Escala por data, migrações de dados e link compartilhado, sobre um backend (`js/backends/`: local ou Supabase) |
+| `js/agendamento.js` | O voo agendado na Escala, em funções puras: o formulário do diálogo (a missão pelo progresso, o recurso e o instrutor que servem, o horário pelo clique, a duração e o peso; o voo de hoje do aluno que muda de lugar ou entra na escala; a turma de Ground), a conferência pelo motor numa cópia do estado (os bloqueios, com as alternativas, e os avisos que pedem confirmação), o pedido com o voo fixo (a marca `agendado`) e a reversão |
+| `js/views/agendamento.js`, `js/eventos/agendamento.js` | O diálogo "Agendar voo" (`#dlg-agendar`), aberto pelo "+ Agendar voo" da barra da Escala, pelo "+" de cada linha do mapa e de cada horário da lista, pelo clique numa linha livre do mapa e pelo "+ Aluno na turma" da turma de Ground; a gravação, com "↶ Desfazer" no Histórico |
+| `js/storage.js` | Escala por data, migrações de dados e os programas dos cursos (a leitura, a gravação e a conversão única do cadastro), sobre um backend (`js/backends/`: local ou Supabase) |
 | `js/dias.js` | Cadastro separado do dia, cópia do dia anterior, conversão dos dados da fase 2 e BI das escalas |
 | `js/migracoes.js` | Versões do formato dos dados guardados e os passos de uma versão para a seguinte |
 | `js/sessao.js`, `js/config-supabase.js` | Login, perfil de acesso e projeto Supabase de cada endereço |
