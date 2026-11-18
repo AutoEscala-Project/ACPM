@@ -8,6 +8,10 @@ import {
   programaDoLegado, percursoDoCurso, indiceDoPrograma, rotuloDaFase, normalizarProgramas, gravarCurso, importarProgramas,
   programaComResultados, cursosIniciais, novoId, conteudoDoCurso, incluirMissao, mudarMissao, moverMissao, retirarMissao, validarCurso
 } from '../../js/programa.js';
+import {
+  requisitosPossiveis, definirRegra, marcarMissao, mudarFase, incluirFase, moverFase, moverMissaoParaFase, retirarFase, restaurarFase,
+  restaurarMissao, ordemRecusada
+} from '../../js/programa.js';
 import { normalizarCursos } from '../../js/cursos.js';
 import { FORMATO_DOS_CURSOS } from '../../js/migracoes.js';
 import { cursoPP } from '../helpers/programa-pp.js';
@@ -456,16 +460,17 @@ describe('O programa lido, nos formatos certos (normalizarProgramas)', () => {
     assert.deepEqual(lido.missoes.map(m => m.id), [u(102)]);
   });
 
-  it('os requisitos só apontam para trás; "depois de…" sem nenhum vira "depois das anteriores"; a retirada fica sem nenhum', () => {
+  it('os requisitos só apontam para trás; "depois de…" sem nenhum vira "depois das anteriores"; a retirada fica sem nenhum, com a regra', () => {
     const [lido] = normalizarProgramas([curso({
       fases: [fase(1), fase(2, { regra: 'depois', requer: [u(3), u(2), u(9), u(1), u(1), 5] }), fase(3, { regra: 'depois', requer: [u(3)] }),
         fase(4, { regra: 'depois', requer: [u(1)], removida: true })],
       missoes: [missaoDe(1, 1), missaoDe(2, 1, { regra: 'depois', requer: [u(103), u(101)] }), missaoDe(3, 2, { ordem: 0, requer: [u(101)] }),
         missaoDe(4, 2, { ordem: 1, regra: 'depois', requer: [u(102)] }), missaoDe(5, 1, { removida: true, regra: 'depois', requer: [u(101)] })]
     })]);
-    assert.deepEqual(lido.fases.map(f => [f.regra, f.requer]), [['ordem', []], ['depois', [u(1)]], ['ordem', []], ['ordem', []]]);
+    // A retirada fica "depois de…" sem a lista, como o servidor a guarda: "Voltar ao programa" sabe que ela esperava
+    assert.deepEqual(lido.fases.map(f => [f.regra, f.requer]), [['ordem', []], ['depois', [u(1)]], ['ordem', []], ['depois', []]]);
     assert.deepEqual(lido.missoes.map(m => [m.codigo, m.regra, m.requer]),
-      [['PP-01', 'ordem', []], ['PP-02', 'depois', [u(101)]], ['PP-03', 'ordem', []], ['PP-04', 'depois', [u(102)]], ['PP-05', 'ordem', []]]);
+      [['PP-01', 'ordem', []], ['PP-02', 'depois', [u(101)]], ['PP-03', 'ordem', []], ['PP-04', 'depois', [u(102)]], ['PP-05', 'depois', []]]);
   });
 
   it('em ordem, as retiradas no fim; no programa, até 50 fases e 200 missões (as retiradas ficam todas)', () => {
@@ -627,5 +632,226 @@ describe('A edição do programa na aba Cursos', () => {
     assert.equal(retirarMissao(semM1, m1), null, 'já fora do programa');
     assert.deepEqual(indiceDoPrograma([semM1]).missaoPorCodigo('ZZ9', 'ZZ9-01').id, m1, 'o código continua com nome');
     assert.equal(retirarMissao(zz9, m3).missoes.filter(m => m.removida).length, 1);
+  });
+});
+
+// As fases, as regras de quando abrir e de quando voar, as marcas e a volta ao programa: cada operação dá o curso que o
+// servidor grava e devolve (a lista "depois de…" de quem sai do programa fica só na tela, para "Voltar ao programa"); a
+// ordem que poria um item antes do que ele espera é recusada com o motivo
+describe('A edição das fases e das regras na aba Cursos', () => {
+  const { f1, f2, f3, m1, m2, m3, m4, m5 } = IDS;
+  const NO_FORMATO = { esquema: FORMATO_DOS_CURSOS, versao: 7 };
+  const lido = estado => normalizarProgramas(programaComResultados(estado)).find(c => c.sigla === 'ZZ9');
+  function guardado() {
+    const estado = { cursos: cursosIniciais(), resultados: [], cadastro: NO_FORMATO };
+    const { cursos } = gravarCurso(estado, { sigla: 'ZZ9', versaoLida: 0, conteudo: PROGRAMA, descricao: 'Curso ZZ9 criado', agora: AGORA });
+    return { ...estado, cursos };
+  }
+  // O ZZ9 dos casos (F1: ZZ9-01, ZZ9-02 livre; F2: ZZ9-03 dispensada, ZZ9-04 depois da ZZ9-01; F3 depois da F1: ZZ9-05)
+  // como a tela o tem
+  const zz9 = () => lido(guardado());
+  function regravado(estado, curso) {
+    const { cursos } = gravarCurso(estado, { sigla: 'ZZ9', versaoLida: curso.versao, conteudo: conteudoDoCurso(curso), descricao: 'ZZ9: alteração', agora: AGORA });
+    return { estado: { ...estado, cursos }, curso: lido({ ...estado, cursos }) };
+  }
+  // O curso como o servidor o devolve: quem está fora do programa vem sem a lista "depois de…"
+  const comoNoServidor = ({ versao, alteracoes, ...curso }) => pelosIds({
+    ...curso, fases: curso.fases.map(f => (f.removida ? { ...f, requer: [] } : f)), missoes: curso.missoes.map(m => (m.removida ? { ...m, requer: [] } : m))
+  });
+  const fasesDe = curso => percursoDoCurso(curso).fases.map(f => f.id);
+  const codigos = (curso, fase) => percursoDoCurso(curso).porFase.get(fase).map(m => m.codigo);
+  const doCurso = (curso, id) => [...curso.fases, ...curso.missoes].find(x => x.id === id);
+  const regra = (curso, id) => [doCurso(curso, id).regra, doCurso(curso, id).requer];
+  let n = 0;
+  const gerarId = () => `00000000-0000-4000-8def-${String(++n).padStart(12, '0')}`;
+
+  it('o que cada fase e cada missão pode esperar: as do mesmo tipo antes dela, na ordem do curso (as missões, de qualquer fase anterior)', () => {
+    const curso = zz9();
+    const ids = id => requisitosPossiveis(curso, id).map(x => x.id);
+    assert.deepEqual([ids(f1), ids(f2), ids(f3)], [[], [f1], [f1, f2]]);
+    assert.deepEqual([ids(m1), ids(m2), ids(m4), ids(m5)], [[], [m1], [m1, m2, m3], [m1, m2, m3, m4]]);
+    assert.deepEqual(ids(IDS.fora), []);
+    assert.deepEqual(requisitosPossiveis(retirarMissao(curso, m3), m3), [], 'fora do programa, nenhuma');
+  });
+
+  it('a regra: "depois de…" sem lista fica com a de antes ou com o item logo antes; a lista vale só com anteriores, na ordem do curso', () => {
+    const curso = zz9();
+    assert.deepEqual(regra(definirRegra(curso, f2, 'depois'), f2), ['depois', [f1]]);
+    assert.deepEqual(regra(definirRegra(curso, f3, 'depois', [f2, f1]), f3), ['depois', [f1, f2]]);
+    assert.deepEqual(regra(definirRegra(curso, f3, 'livre'), f3), ['livre', []]);
+    // A missão espera a logo antes dela no curso, também a de outra fase; a lista perde o que não vem antes
+    assert.deepEqual(regra(definirRegra(curso, m5, 'depois'), m5), ['depois', [m4]]);
+    assert.deepEqual(regra(definirRegra(curso, m4, 'depois', [m3, m5, IDS.fora, m1]), m4), ['depois', [m1, m3]]);
+    assert.deepEqual(regra(definirRegra(curso, m4, 'ordem'), m4), ['ordem', []]);
+    assert.deepEqual(regra(definirRegra(curso, m2, 'ordem'), m2), ['ordem', []]);
+    // Nada muda, nada antes para esperar, a lista vazia, a regra desconhecida, a retirada: null
+    for (const [id, r, lista] of [[m4, 'depois', [m1]], [m4, 'depois', null], [m2, 'livre', null], [m1, 'depois', null], [f1, 'depois', null],
+      [m4, 'depois', []], [m4, 'depois', [m5]], [m4, 'sempre', null], [IDS.fora, 'livre', null]]) {
+      assert.equal(definirRegra(curso, id, r, lista), null, `${id} ${r} ${lista}`);
+    }
+    assert.equal(definirRegra(retirarMissao(curso, m2), m2, 'ordem'), null);
+    assert.deepEqual(curso, zz9(), 'o curso recebido não muda');
+  });
+
+  it('as marcas da missão: dispensada e avaliação, sim ou não', () => {
+    const curso = zz9();
+    const marcas = (c, id) => ['dispensada', 'avaliacao'].map(campo => doCurso(c, id)[campo]);
+    assert.deepEqual(marcas(marcarMissao(curso, m1, 'dispensada', true), m1), [true, false]);
+    assert.deepEqual(marcas(marcarMissao(curso, m3, 'dispensada', false), m3), [false, false]);
+    assert.deepEqual(marcas(marcarMissao(curso, m4, 'avaliacao', false), m4), [false, false]);
+    for (const [id, campo, valor] of [[m1, 'dispensada', false], [m1, 'dispensada', 'sim'], [m1, 'removida', true], [IDS.fora, 'avaliacao', true]]) {
+      assert.equal(marcarMissao(curso, id, campo, valor), null, `${campo} ${valor}`);
+    }
+    assert.equal(marcarMissao(retirarMissao(curso, m1), m1, 'dispensada', true), null);
+  });
+
+  it('o nome e o módulo da fase: sem os espaços a mais; sem nome fica o de antes, sem módulo fica sem', () => {
+    const curso = zz9();
+    const fase = (c, id) => [doCurso(c, id).nome, doCurso(c, id).modulo];
+    assert.deepEqual(fase(mudarFase(curso, f2, 'nome', '  Fase 2 –  Solo   local '), f2), ['Fase 2 – Solo local', 'Módulo 01 – Treinamento']);
+    assert.deepEqual(fase(mudarFase(curso, f3, 'modulo', ' Módulo 02 – Noturno '), f3), ['Fase 3 – Noturno', 'Módulo 02 – Noturno']);
+    assert.deepEqual(fase(mudarFase(curso, f1, 'modulo', '  '), f1), ['Fase 1 – Duplo comando', null]);
+    for (const [id, campo, valor] of [[f2, 'nome', '   '], [f2, 'nome', 'Fase 2 – Solo'], [f3, 'modulo', ''], [f1, 'regra', 'livre'], [IDS.fora, 'nome', 'x']]) {
+      assert.equal(mudarFase(curso, id, campo, valor), null, `${campo} ${valor}`);
+    }
+  });
+
+  it('"+ Fase": no fim do programa, "Fase N", depois das anteriores, com o módulo da última', () => {
+    const { curso, fase } = incluirFase(zz9(), gerarId);
+    assert.deepEqual([fase.nome, fase.modulo, fase.ordem, fase.regra, fase.requer, fase.removida], ['Fase 4', null, 3, 'ordem', [], false]);
+    assert.deepEqual(fasesDe(curso), [f1, f2, f3, fase.id]);
+    const comModulo = incluirFase(mudarFase(zz9(), f3, 'modulo', 'Módulo 02'), gerarId).fase;
+    assert.equal(comModulo.modulo, 'Módulo 02');
+    // O PP impresso: a fase nova é a "Fase 10", no Módulo 03
+    assert.deepEqual(['nome', 'modulo'].map(c => incluirFase(cursoPP(), gerarId).fase[c]), ['Fase 10', 'Módulo 03 – Avaliação']);
+  });
+
+  it('↑ e ↓ da fase levam as missões dela; na ponta, nada; a ordem que poria uma fase ou missão antes do que ela espera é recusada', () => {
+    const curso = zz9();
+    const desceF2 = moverFase(curso, f2, 1);
+    assert.deepEqual(fasesDe(desceF2), [f1, f3, f2]);
+    assert.deepEqual([codigos(desceF2, f2), codigos(desceF2, f3)], [['ZZ9-03', 'ZZ9-04'], ['ZZ9-05']]);
+    assert.equal(ordemRecusada(desceF2, f2), null);
+    assert.equal(validarCurso(conteudoDoCurso(desceF2)), null);
+    for (const [id, passo] of [[f1, -1], [f3, 1], [IDS.fora, 1]]) assert.equal(moverFase(curso, id, passo), null);
+    // A Fase 3 abre depois da Fase 1; a ZZ9-04 (Fase 2) voa depois da ZZ9-01 (Fase 1)
+    assert.equal(ordemRecusada(moverFase(curso, f2, -1), f2), 'A missão ZZ9-04 voa depois da ZZ9-01: a Fase 2 não pode passar para antes da Fase 1.');
+    assert.equal(ordemRecusada(moverFase(curso, f1, 1), f1), 'A missão ZZ9-04 voa depois da ZZ9-01: a Fase 1 não pode passar para depois da Fase 2.');
+    const semM4 = definirRegra(curso, m4, 'ordem');
+    assert.equal(ordemRecusada(moverFase(moverFase(semM4, f1, 1), f1, 1), f1), 'A Fase 3 abre depois da Fase 1: a Fase 1 não pode passar para depois dela.');
+    assert.equal(ordemRecusada(moverFase(moverFase(semM4, f3, -1), f3, -1), f3), 'A Fase 3 abre depois da Fase 1: ela não pode passar para antes dela.');
+    // O exemplo do desenho, no PP impresso: a Fase 6 sobe até a Fase 5, e não passa da Fase 4
+    let pp = cursoPP();
+    for (let i = 0; i < 3; i++) {
+      pp = moverFase(pp, 'PP:F6', -1);
+      assert.equal(ordemRecusada(pp, 'PP:F6'), null);
+    }
+    assert.equal(ordemRecusada(moverFase(pp, 'PP:F6', -1), 'PP:F6'), 'A Fase 6 abre depois da Fase 4: ela não pode passar para antes dela.');
+  });
+
+  it('↑ e ↓ da missão e a missão em outra fase (no fim dela): a que ficaria antes do que espera é recusada', () => {
+    const curso = definirRegra(zz9(), m2, 'depois', [m1]);
+    assert.equal(ordemRecusada(moverMissao(curso, m2, -1), m2), 'A missão ZZ9-02 voa depois da ZZ9-01: ela não pode passar para antes dela.');
+    assert.equal(ordemRecusada(moverMissao(curso, m1, 1), m1), 'A missão ZZ9-02 voa depois da ZZ9-01: a ZZ9-01 não pode passar para depois dela.');
+    assert.equal(ordemRecusada(moverMissao(zz9(), m1, 1), m1), null, 'a ZZ9-02 livre não espera');
+    const m3NaF1 = moverMissaoParaFase(curso, m3, f1);
+    assert.deepEqual([codigos(m3NaF1, f1), codigos(m3NaF1, f2)], [['ZZ9-01', 'ZZ9-02', 'ZZ9-03'], ['ZZ9-04']]);
+    assert.equal(doCurso(m3NaF1, m3).ordem, 2);
+    assert.equal(ordemRecusada(m3NaF1, m3), null);
+    assert.equal(ordemRecusada(moverMissaoParaFase(curso, m1, f2), m1), 'A missão ZZ9-02 voa depois da ZZ9-01: a ZZ9-01 não pode passar para depois dela.');
+    assert.equal(ordemRecusada(moverMissaoParaFase(zz9(), m4, f3), m4), null);
+    for (const [id, fase] of [[m3, f2], [m3, IDS.fora], [IDS.fora, f1]]) assert.equal(moverMissaoParaFase(curso, id, fase), null);
+    assert.equal(moverMissaoParaFase(retirarMissao(curso, m3), m3, f1), null);
+  });
+
+  it('tirar uma fase: só sem missões; ela fica no curso com a regra e a lista (só na tela); quem esperava por ela deixa de esperar', () => {
+    const curso = zz9();
+    assert.equal(retirarFase(curso, f3), null, 'a Fase 3 tem a ZZ9-05');
+    const semF3 = retirarFase(retirarMissao(curso, m5), f3);
+    assert.deepEqual(fasesDe(semF3), [f1, f2]);
+    const tirada = doCurso(semF3, f3);
+    assert.deepEqual([tirada.removida, tirada.regra, tirada.requer, tirada.ordem], [true, 'depois', [f1], 2]);
+    assert.equal(validarCurso(conteudoDoCurso(semF3)), null);
+    // A Fase 3 esperava a Fase 1 e a Fase 2: tirada a 2 (vazia), espera só a 1; esperando só a 2, volta a "depois das anteriores"
+    const vazia = retirarMissao(retirarMissao(definirRegra(curso, f3, 'depois', [f1, f2]), m3), m4);
+    assert.deepEqual(regra(retirarFase(vazia, f2), f3), ['depois', [f1]]);
+    assert.deepEqual(regra(retirarFase(definirRegra(vazia, f3, 'depois', [f2]), f2), f3), ['ordem', []]);
+    assert.equal(retirarFase(semF3, f3), null, 'já fora do programa');
+  });
+
+  it('voltar ao programa: a fase e a missão voltam ao lugar de antes, com a regra; "depois de…" volta com a lista que ainda está antes', () => {
+    const curso = zz9();
+    // A ZZ9-04 (depois da ZZ9-01) tirada nesta tela: volta ao 2º lugar da Fase 2, ainda depois da ZZ9-01
+    const volta = restaurarMissao(retirarMissao(curso, m4), m4);
+    assert.equal(volta.regraPerdida, null);
+    assert.deepEqual([codigos(volta.curso, f2), regra(volta.curso, m4), doCurso(volta.curso, m4).removida], [['ZZ9-03', 'ZZ9-04'], ['depois', [m1]], false]);
+    assert.deepEqual(comoNoServidor(volta.curso), comoNoServidor(curso));
+    // A Fase 3 (depois da Fase 1) tirada e de volta, no 3º lugar, sem missões; a ZZ9-05 volta depois, uma a uma
+    const semF3 = retirarFase(retirarMissao(curso, m5), f3);
+    const f3DeVolta = restaurarFase(semF3, f3);
+    assert.deepEqual([f3DeVolta.regraPerdida, fasesDe(f3DeVolta.curso), regra(f3DeVolta.curso, f3), codigos(f3DeVolta.curso, f3)], [null, [f1, f2, f3], ['depois', [f1]], []]);
+    assert.equal(restaurarMissao(semF3, m5), null, 'a missão de uma fase fora do programa espera a fase');
+    assert.deepEqual(codigos(restaurarMissao(f3DeVolta.curso, m5).curso, f3), ['ZZ9-05']);
+    // O lugar de antes, ou o fim quando a fase ficou menor
+    const semM3M4 = retirarMissao(retirarMissao(curso, m3), m4);
+    assert.deepEqual(codigos(restaurarMissao(semM3M4, m4).curso, f2), ['ZZ9-04']);
+    // Os que ela esperava saíram do programa: volta "depois das anteriores", e diz por quê
+    const semM1 = retirarMissao(retirarMissao(curso, m4), m1);
+    assert.deepEqual([restaurarMissao(semM1, m4).regraPerdida, regra(restaurarMissao(semM1, m4).curso, m4)], ['requisitos-fora', ['ordem', []]]);
+    const semF2 = retirarFase(retirarMissao(retirarMissao(retirarFase(retirarMissao(definirRegra(curso, f3, 'depois', [f2]), m5), f3), m3), m4), f2);
+    assert.deepEqual([restaurarFase(semF2, f3).regraPerdida, regra(restaurarFase(semF2, f3).curso, f3)], ['requisitos-fora', ['ordem', []]]);
+    for (const [fazer, id] of [[restaurarMissao, m1], [restaurarFase, f1], [restaurarMissao, IDS.fora], [restaurarFase, IDS.fora]]) assert.equal(fazer(curso, id), null);
+    assert.deepEqual(curso, zz9(), 'o curso recebido não muda');
+  });
+
+  // Desenho, adendo §6: o servidor guarda a missão (ou a fase) retirada com a regra "depois" e sem a lista; lida de novo,
+  // ela continua "depois de…" (normalizarProgramas não a troca por "depois das anteriores"), e a volta avisa que a lista
+  // não ficou, em vez de perder a regra calada
+  it('lida de novo do servidor, a retirada "depois de…" vem sem a lista: volta "depois das anteriores", com o aviso', () => {
+    let { estado, curso } = { estado: guardado(), curso: zz9() };
+    ({ estado, curso } = regravado(estado, retirarMissao(curso, m4)));
+    assert.deepEqual([doCurso(curso, m4).removida, ...regra(curso, m4)], [true, 'depois', []]);
+    const volta = restaurarMissao(curso, m4);
+    assert.deepEqual([volta.regraPerdida, regra(volta.curso, m4)], ['sem-requisitos', ['ordem', []]]);
+    ({ curso } = regravado(estado, retirarFase(retirarMissao(curso, m5), f3)));
+    assert.deepEqual([doCurso(curso, f3).removida, ...regra(curso, f3)], [true, 'depois', []]);
+    const faseDeVolta = restaurarFase(curso, f3);
+    assert.deepEqual([faseDeVolta.regraPerdida, regra(faseDeVolta.curso, f3)], ['sem-requisitos', ['ordem', []]]);
+  });
+
+  it('cada operação dá o curso que o servidor grava e devolve (fora a lista de quem está fora do programa)', () => {
+    let { estado, curso } = { estado: guardado(), curso: zz9() };
+    let f4;
+    const passos = [
+      c => { const r = incluirFase(c, gerarId); f4 = r.fase.id; return r.curso; },
+      c => mudarFase(c, f2, 'nome', 'Fase 2 – Solo local'),
+      c => mudarFase(c, f3, 'modulo', 'Módulo 02 – Noturno'),
+      c => definirRegra(c, m2, 'ordem'),
+      c => moverFase(c, f3, -1),
+      c => definirRegra(c, m5, 'depois', [m2, m1]),
+      c => definirRegra(c, f2, 'livre'),
+      c => definirRegra(c, f4, 'depois', [f3, f1]),
+      c => marcarMissao(c, m3, 'dispensada', false),
+      c => marcarMissao(c, m1, 'avaliacao', true),
+      c => moverMissaoParaFase(c, m3, f1),
+      c => retirarMissao(c, m4),
+      c => restaurarMissao(c, m4).curso,
+      c => incluirMissao(c, f4, gerarId).curso,
+      c => retirarMissao(c, percursoDoCurso(c).porFase.get(f4)[0].id),
+      c => retirarFase(c, f4),
+      c => restaurarFase(c, f4).curso
+    ];
+    for (const [i, passo] of passos.entries()) {
+      const novo = passo(curso);
+      assert.ok(novo, `passo ${i}`);
+      assert.equal(validarCurso(conteudoDoCurso(novo)), null, `passo ${i}`);
+      assert.equal(ordemRecusada(novo, null), null, `passo ${i}`);
+      ({ estado, curso } = regravado(estado, novo));
+      assert.deepEqual(comoNoServidor(curso), comoNoServidor(novo), `passo ${i}`);
+    }
+    assert.deepEqual(fasesDe(curso), [f1, f3, f2, f4]);
+    assert.deepEqual([regra(curso, f2), regra(curso, f4), regra(curso, m5), regra(curso, m4)], [['livre', []], ['ordem', []], ['depois', [m1, m2]], ['ordem', []]],
+      'a ZZ9-04 e a Fase 4 voltaram do servidor sem a lista');
+    assert.deepEqual([codigos(curso, f1), codigos(curso, f2), codigos(curso, f4)], [['ZZ9-01', 'ZZ9-02', 'ZZ9-03'], ['ZZ9-04'], []]);
   });
 });

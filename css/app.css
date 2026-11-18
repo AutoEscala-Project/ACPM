@@ -766,13 +766,48 @@ table.frota tr:hover .rev, table.frota tr:focus-within .rev { opacity: 1; }
 
 /* Instrutores: a disponibilidade do dia numa grade; o cadastro numa tabela, com as habilitações num painel lateral */
 #s-ins[data-vista="dia"] .vista-cadastro, #s-ins[data-vista="cadastro"] .vista-dia { display: none; }
-/* Cursos: o programa de cada curso */
+/* Cursos: o programa de cada curso, em fases (sob o título do módulo), cada fase com o cabeçalho (nome, módulo, quando
+   abre, "Depois de…" e os botões) e a tabela das missões; no fim, "+ Fase", as retiradas e as alterações */
 #cursos { display: flex; flex-direction: column; gap: 12px; }
 #cursos .curso h3 small { font: 500 14px 'Barlow', sans-serif; color: var(--mu); margin-left: 6px; }
+#cursos .curso-cab { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px; }
+#cursos h4.modulo { margin: 18px 0 2px; padding-bottom: 4px; border-bottom: 1px solid var(--ln); font: 600 13.5px 'Barlow Semi Condensed', sans-serif; color: var(--mu); letter-spacing: .02em; text-transform: uppercase; }
+#cursos .fase { margin: 12px 0 16px; }
+#cursos .fase-cab { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; margin: 0 0 8px; }
+#cursos .fase-cab :is(h4, h5) { margin: 0; font: 600 15px 'Barlow Semi Condensed', sans-serif; color: var(--ink); }
+#cursos .fase-cab p.regra { margin: 0; color: var(--mu); font-size: 13.5px; }
+#cursos .campo-da-fase { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--mu); }
+#cursos .campo-da-fase :is(input, select) { color: var(--ink); }
+#cursos .nome-da-fase { flex: 1 1 24em; }
+#cursos .nome-da-fase input { flex: 1; min-width: 12em; font: 600 15px 'Barlow Semi Condensed', sans-serif; }
+#cursos .modulo-da-fase { flex: 0 1 22em; }
+#cursos .modulo-da-fase input { flex: 1; min-width: 10em; }
+#cursos .fase-cab .acoes { margin-left: auto; display: inline-flex; gap: 4px; }
+#cursos .fase > .btn, #cursos .curso > .btn { margin-top: 6px; }
+#cursos summary { cursor: pointer; }
+#cursos summary:focus-visible { outline: 2px solid var(--ac); outline-offset: 2px; border-radius: 3px; }
+/* "Depois de…": o resumo do que o item espera e, aberta, uma marca para cada fase ou missão anterior (as missões, por fase) */
+#cursos details.requisitos summary { color: var(--ac); font-size: 13.5px; }
+#cursos details.requisitos fieldset { display: flex; flex-wrap: wrap; gap: 0 14px; margin: 6px 0 0; padding: 2px 10px 6px; border: 1px solid var(--ln); border-radius: 6px; }
+#cursos details.requisitos legend { padding: 0 4px; font-size: 12.5px; color: var(--mu); }
+#cursos details.requisitos .chk { font-size: 13.5px; white-space: nowrap; }
+#cursos details.retiradas, #cursos details.alteracoes { margin-top: 12px; }
+#cursos details.retiradas summary, #cursos details.alteracoes summary { font-weight: 600; }
+#cursos details.retiradas ul { list-style: none; margin: 6px 0 0; padding: 0; }
+#cursos details.retiradas li { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; padding: 2px 0; border-bottom: 1px solid var(--ln); }
+#cursos details.alteracoes ol { margin: 6px 0 0; padding-left: 20px; font-size: 13.5px; }
+#cursos details.alteracoes li { margin: 2px 0; }
+/* A tabela das missões: as marcas uma embaixo da outra e, nos botões, a fase da missão embaixo de subir, descer e tirar */
+table.cadastro.programa td { padding: 4px 6px; }
 .programa td.n { color: var(--mu); font-variant-numeric: tabular-nums; width: 2.5em; }
 .programa input.codigo { width: 7.5em; font-variant-numeric: tabular-nums; }
-.programa input[data-cf="nome"] { width: 100%; min-width: 12em; }
-.programa td.acoes { white-space: nowrap; }
+.programa input[data-cf="nome"] { width: 100%; min-width: 10em; }
+.programa input.duracao { width: 5em; }
+.programa td.c-quando { min-width: 11em; }
+.programa td.c-marcas .chk { display: flex; font-size: 13.5px; white-space: nowrap; }
+.programa .acoes-da-missao { display: grid; grid-template-columns: repeat(3, max-content); justify-content: end; gap: 4px; }
+.programa .acoes-da-missao select[data-cf="fase"] { grid-column: 1 / -1; max-width: 9em; }
+.programa.consulta td.codigo { font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
 /* A missão do curso no dia: o código, a próxima missão, o resultado e o progresso */
 .etapa { display: inline-block; padding: 0 6px; border-radius: 4px; background: var(--info-bg); color: var(--ac); font: 600 12.5px 'Barlow Semi Condensed', sans-serif; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .stu-cell .etapa, .stu-cell .usar-proxima { margin-left: 6px; }
@@ -790,17 +825,32 @@ table.frota tr:hover .rev, table.frota tr:focus-within .rev { opacity: 1; }
 .res-sel.res-reprovado, .res.res-reprovado { color: var(--er); font-weight: 600; }
 td.c-curso .progresso { display: block; margin-top: 2px; color: var(--mu); font-variant-numeric: tabular-nums; }
 @media (max-width: 640px) {
-  /* Um cartão por missão: o número, o código e o nome; a missão; o recurso, as horas e os botões */
-  table.cadastro.programa tr[data-i] { display: grid; grid-template-columns: 2em 1fr 1fr auto; grid-template-areas: "n id nome nome" "mis mis mis mis" "eq eq nb acoes"; gap: 6px 8px; align-items: center; padding: 10px 8px; border-top: 1px solid var(--ln); }
+  /* Um cartão por missão: o número, o código e o nome; a missão; o recurso e as horas; quando voar; as marcas; a fase da
+     missão e os botões. Para quem só consulta, o mesmo cartão, em texto */
+  table.cadastro.programa tr[data-i] {
+    display: grid; grid-template-columns: 2em 1fr 1fr 1fr; gap: 6px 8px; align-items: center; padding: 10px 8px; border-top: 1px solid var(--ln);
+    grid-template-areas: "n codigo nome nome" "mis mis mis mis" "eq eq nb nb" "quando quando quando quando" "marcas marcas marcas marcas" "acoes acoes acoes acoes";
+  }
+  table.cadastro.programa.consulta tr[data-i] { grid-template-areas: "n codigo nome nome" "mis mis eq nb" "quando quando quando quando" "marcas marcas marcas marcas"; }
   table.cadastro.programa tr[data-i]:first-child { border-top: 0; }
-  table.cadastro.programa td:nth-child(1) { grid-area: n; }
-  table.cadastro.programa td:nth-child(2) { grid-area: id; }
-  table.cadastro.programa td:nth-child(3) { grid-area: nome; }
-  table.cadastro.programa td:nth-child(4) { grid-area: mis; }
-  table.cadastro.programa td:nth-child(5) { grid-area: eq; }
-  table.cadastro.programa td:nth-child(6) { grid-area: nb; }
-  table.cadastro.programa td:nth-child(7) { grid-area: acoes; padding: 0; }
+  table.cadastro.programa td { padding: 0; }
+  table.cadastro.programa td.n { grid-area: n; }
+  table.cadastro.programa td.c-codigo { grid-area: codigo; }
+  table.cadastro.programa td.c-nome { grid-area: nome; }
+  table.cadastro.programa td.c-mis { grid-area: mis; }
+  table.cadastro.programa td.c-eq { grid-area: eq; }
+  table.cadastro.programa td.c-nb { grid-area: nb; }
+  table.cadastro.programa td.c-quando { grid-area: quando; min-width: 0; }
+  table.cadastro.programa td.c-marcas { grid-area: marcas; white-space: normal; }
+  table.cadastro.programa td.c-marcas:empty { display: none; }
+  table.cadastro.programa td.acoes { grid-area: acoes; padding: 0; display: block; }
+  table.cadastro.programa .acoes-da-missao { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 8px; }
   table.cadastro.programa input, table.cadastro.programa select { width: 100%; min-width: 0; }
+  table.cadastro.programa .acoes-da-missao select[data-cf="fase"] { order: -1; flex: 1 1 4em; width: auto; max-width: none; }
+  table.cadastro.programa td.c-marcas .chk { display: inline-flex; margin-right: 12px; }
+  #cursos .campo-da-fase, #cursos details.requisitos { flex: 1 1 100%; }
+  #cursos .campo-da-fase :is(input, select), #cursos .campo-da-fase input[data-cfa] { flex: 1; min-width: 0; }
+  #cursos summary { min-height: 44px; padding: 12px 0; box-sizing: border-box; }
 }
 .legenda-disp { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; margin: 0 0 8px; font-size: 13.5px; color: var(--mu); }
 .legenda-disp span { display: inline-flex; align-items: center; gap: 6px; }

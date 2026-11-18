@@ -104,11 +104,12 @@ test.describe('Cursos', () => {
     await expect(page.locator('#alu tr[data-id="1001"] [data-f="curso"]')).toHaveValue('INVA');
   });
 
-  test('no Gestor, o programa e o curso dos alunos só aparecem', async ({ page }) => {
+  test('no Gestor, o programa (em texto) e o curso dos alunos só aparecem', async ({ page }) => {
     await abrir(page, { estado: dia({ cursos: PROGRAMA }), url: './?role=gestor' });
     await irPara(page, 'cur');
     await expect(linhas(page, 'PP')).toHaveCount(2);
-    await expect(linhas(page, 'PP').nth(0).locator('[data-cf="nome"]')).toBeDisabled();
+    await expect(linhas(page, 'PP').nth(1).locator('td')).toHaveText(['2', 'PP-02', 'Navegação', 'Navegação', 'C152', '2 h', 'Depois das anteriores', '']);
+    await expect(curso(page, 'PP').locator('input, select')).toHaveCount(0);
     await expect(curso(page, 'PP').getByRole('button', { name: '+ Missão' })).toBeHidden();
     await expect(page.locator('#cursos')).toContainText('Só o Administrador muda; aqui é consulta.');
     await irPara(page, 'alu');
@@ -271,7 +272,7 @@ test.describe('Cursos no servidor (modo compartilhado)', () => {
     await expect(gestor.page.locator('#dt-rotulo')).toContainText('12/11');
     await expect(gestor.page.locator('#s-cur')).toBeVisible();
     await expect(linhas(gestor.page, 'PP')).toHaveCount(1);
-    await expect(linhas(gestor.page, 'PP').nth(0).locator('[data-cf="codigo"]')).toHaveValue('PP-02');
+    await expect(linhas(gestor.page, 'PP').nth(0).locator('td.c-codigo')).toHaveText('PP-02');
     expect(gestor.erros).toEqual([]);
     await gestor.contexto.close();
   });
@@ -305,9 +306,16 @@ test.describe('Cursos no servidor (modo compartilhado)', () => {
 
     const gestor = await entrar(browser, servidor, CONTAS.gestor);
     await irPara(gestor.page, 'cur');
-    await expect(linhas(gestor.page, 'PP').nth(0).locator('[data-cf="codigo"]')).toHaveValue('PP-02');
-    await expect(linhas(gestor.page, 'PP').nth(1).locator('[data-cf="codigo"]')).toHaveValue('PP-01');
-    await expect(linhas(gestor.page, 'PP').nth(1).locator('[data-cf="nome"]')).toHaveValue('Familiarização no C152');
+    await expect(linhas(gestor.page, 'PP').nth(0).locator('td.c-codigo')).toHaveText('PP-02');
+    await expect(linhas(gestor.page, 'PP').nth(1).locator('td.c-codigo')).toHaveText('PP-01');
+    await expect(linhas(gestor.page, 'PP').nth(1).locator('td.c-nome')).toHaveText('Familiarização no C152');
+    // As alterações do programa, a mais recente primeiro: quando, quem e o que mudou (também para quem só consulta)
+    const alteracoes = curso(gestor.page, 'PP').locator('details.alteracoes');
+    await alteracoes.locator('summary').click();
+    await expect(alteracoes.locator('li')).toHaveText([
+      '[10/11 12:00] Admin de Teste · PP: PP-02 passou para 1ª', '[10/11 12:00] Admin de Teste · PP: PP-01 alterada',
+      '[10/11 12:00] Operador de Teste · Programa trazido do cadastro (2 missões)'
+    ]);
     await irPara(gestor.page, 'alu');
     await expect(gestor.page.locator('#alu tr[data-id="1000"] .progresso')).toHaveText('0/2 · próxima PP-02');
     expect(gestor.erros).toEqual([]);
@@ -470,7 +478,8 @@ test.describe('Cursos no servidor (modo compartilhado)', () => {
     await expect(linhas(operador.page, 'PP')).toHaveCount(2);
     await expect(operador.page.locator('#cursos')).toContainText('Só o Administrador muda; aqui é consulta.');
     await expect(operador.page.locator('#cursos [data-act="missao-nova"]')).toHaveCount(0);
-    await expect(linhas(operador.page, 'PP').nth(0).locator('[data-cf="nome"]')).toBeDisabled();
+    await expect(linhas(operador.page, 'PP').nth(0).locator('td.c-nome')).toHaveText('Familiarização');
+    await expect(operador.page.locator('#cursos input, #cursos select')).toHaveCount(0);
     const recusa = await operador.page.evaluate(async () => {
       const { ApiClient } = await import('./js/storage.js');
       const pp = (await ApiClient.lerProgramas()).find(c => c.sigla === 'PP');
@@ -504,11 +513,332 @@ test.describe('Cursos no servidor (modo compartilhado)', () => {
     await expect(page.locator('body[data-pronto]')).toBeAttached();
     await expect(page.locator('#s-cur')).toBeVisible();
     await expect(linhas(page, 'PP')).toHaveCount(2);
-    await expect(linhas(page, 'PP').nth(0).locator('[data-cf="nome"]')).toHaveValue('Familiarização');
-    await expect(linhas(page, 'PP').nth(0).locator('[data-cf="nome"]')).toBeDisabled();
+    // A Secretaria lê o programa em texto, sem campos
+    await expect(linhas(page, 'PP').nth(0).locator('td')).toHaveText(['1', 'PP-01', 'Familiarização', 'Voo Local', 'C152', '1 h', 'Depois das anteriores', '']);
+    await expect(page.locator('#cursos input, #cursos select')).toHaveCount(0);
     await expect(page.locator('#cursos')).toContainText('Só o Administrador muda; aqui é consulta.');
     expect(servidor.gravacoes).toEqual([]);
     expect(erros).toEqual([]);
     await contexto.close();
+  });
+});
+
+// As fases, os módulos e quando voar: o programa em fases (como as tabelas dos cursos o guardam) gravado neste navegador,
+// com o cadastro e o dia no formato atual (sem a conversão do cadastro)
+test.describe('Cursos: fases, módulos e quando voar', () => {
+  const u = n => `00000000-0000-4000-8013-${String(n).padStart(12, '0')}`;
+  const [F4, F5, F7, F8, F6, F9] = [4, 5, 7, 8, 6, 9].map(u);
+  const M = { tma05: u(101), pe03: u(102), pe04: u(103), adapt: u(104), endSolo: u(105), navSolo: u(106), not: u(107), avx: u(108) };
+  const M01 = 'Módulo 01 – Duplo Comando', M02 = 'Módulo 02 – Voo Solo', M03 = 'Módulo 03 – Avaliação';
+  const missao = (id, fase, codigo, nome, mis = 'Voo Local', eq = 'C152', nb = 1, extra = {}) => ({ id, fase, codigo, nome, mis, eq, nb, ...extra });
+  // O cronograma do PP, resumido (uma ou duas missões de cada fase), com as fases na ordem impressa (a 6, do noturno,
+  // depois da 8) e sem as exceções, que o Administrador monta
+  const CRONOGRAMA = {
+    nome: 'Piloto Privado', ativo: true,
+    fases: [
+      { id: F4, nome: 'Fase 4 – Manobras e Aproximações', modulo: M01 }, { id: F5, nome: 'Fase 5 – Procedimentos de Emergência', modulo: M01 },
+      { id: F7, nome: 'Fase 7 – Voo Solo', modulo: M02 }, { id: F8, nome: 'Fase 8 – Navegação Solo', modulo: M02 },
+      { id: F6, nome: 'Fase 6 – Voo Noturno', modulo: M02 }, { id: F9, nome: 'Fase 9 – Voo de Cheque', modulo: M03 }
+    ],
+    missoes: [
+      missao(M.tma05, F4, 'TMA-05', 'TMA-05', 'Voo Local', 'C152', 1, { avaliacao: true }),
+      missao(M.pe03, F5, 'PE-03', 'PE-03'), missao(M.pe04, F5, 'PE-04', 'PE-04 – SPIN', 'Parafuso'),
+      missao(M.adapt, F7, 'ADAPT-C152', 'ADAPTAÇÃO AO CESSNA 152'), missao(M.endSolo, F7, 'END-SOLO', 'ENDOSSO SOLO LOCAL'),
+      missao(M.navSolo, F8, 'NAV-SOLO-01', 'NAV SOLO 01', 'Voo Solo'),
+      missao(M.not, F6, 'NOT', 'NOT', 'Noturno', 'C172', 3),
+      missao(M.avx, F9, 'AVX-CQ', 'AVX ENDOSSO CQ', 'Navegação', 'C152', 2)
+    ]
+  };
+  const comMudancas = (conteudo, fases = {}, missoes = {}) => ({
+    ...conteudo, fases: conteudo.fases.map(f => ({ ...f, ...fases[f.id] })), missoes: conteudo.missoes.map(m => ({ ...m, ...missoes[m.id] }))
+  });
+  // O PP como as tabelas dos cursos o guardam (versão 2)
+  const ppGuardado = conteudo => gravarCurso({ cursos: cursosIniciais() }, { sigla: 'PP', versaoLida: 1, conteudo, descricao: 'PP: cronograma' }).cursos;
+  const aprovadas = (aluno, codigos, primeiro) => codigos.map((missao, i) => ({
+    id: primeiro + i, aluno, curso: 'PP', missao, resultado: 'aprovado', data: '2026-11-05', voo: null, registrado_em: '2026-11-05T12:00:00.000Z', registrado_por: 'Operador'
+  }));
+  const alunos = () => cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, { fly: false }, { curso: 'PP' }), aluno(1001, { fly: false }, { curso: 'PP' })] });
+
+  async function abrirComPrograma(page, { conteudo, resultados = [], url = './' }) {
+    const { documentos: { cadastro }, dias } = documentosAtuais(alunos(), AMANHA);
+    const docs = { acpm4_cadastro: cadastro, [`acpm4_dia_${AMANHA}`]: dias[AMANHA], acpm4_cursos: { cursos: ppGuardado(conteudo), alteracoes: [] }, acpm4_resultados: resultados };
+    await page.addInitScript(json => {
+      if (localStorage.getItem('acpm4_cadastro')) return;
+      for (const [chave, valor] of Object.entries(JSON.parse(json))) localStorage.setItem(chave, JSON.stringify(valor));
+    }, JSON.stringify(docs));
+    await page.goto(url);
+    await expect(page.locator('#wins input[data-a="win"]').first()).toBeAttached();
+  }
+  const descricoesGuardadas = async page => (await programaGuardado(page)).alteracoes.map(a => a.descricao);
+  const proxima = (page, id) => page.locator(`#dem tr[data-id="${id}"][data-mid="0"] [data-act="usar-proxima"]`);
+  async function naDemanda(page) {
+    await irPara(page, 'dem');
+    await page.locator('#onlyfly').uncheck();
+  }
+
+  // As exceções do PP são dados do programa: o SPIN livre na Fase 5, a Fase 6 (impressa depois da 8) depois da Fase 4 e
+  // a ADAPTAÇÃO dispensada. A próxima missão da Demanda (a primeira liberada, na ordem do programa) as segue
+  test('o Administrador monta as exceções do PP, e a próxima missão da Demanda as segue', async ({ page }) => {
+    const resultados = [...aprovadas(1000, ['TMA-05', 'PE-03', 'PE-04'], 1), ...aprovadas(1001, ['TMA-05', 'PE-03', 'PE-04', 'END-SOLO', 'NAV-SOLO-01'], 10)];
+    await abrirComPrograma(page, { conteudo: CRONOGRAMA, resultados });
+    await naDemanda(page);
+    await expect(proxima(page, 1000)).toHaveText('Próxima: ADAPT-C152 · Usar');
+    await expect(proxima(page, 1001)).toHaveText('Próxima: ADAPT-C152 · Usar');
+
+    await irPara(page, 'cur');
+    const pp = curso(page, 'PP');
+    await expect(pp.locator('h3 small')).toHaveText('Piloto Privado · 6 fases · 8 missões');
+    // As fases seguidas do mesmo módulo, sob um título só
+    await expect(pp.locator('h4.modulo')).toHaveText([M01, M02, M03]);
+    await expect(pp.locator('.fase-cab h5')).toHaveText(CRONOGRAMA.fases.map(f => f.nome));
+
+    await pp.locator(`tr[data-missao="${M.pe04}"] [data-cf="regra"]`).selectOption('livre');
+    // "Depois de…" começa com a fase logo antes (a 8) e abre a escolha, só das fases anteriores
+    const f6 = pp.locator(`.fase[data-fase="${F6}"]`);
+    await f6.locator('[data-cfa="regra"]').selectOption('depois');
+    const requisitos = f6.locator('details.requisitos');
+    await expect(requisitos.locator('summary')).toHaveText('Depois de: Fase 8');
+    await expect(requisitos).toHaveAttribute('open', '');
+    await expect(requisitos.locator('label')).toHaveText(['Fase 4', 'Fase 5', 'Fase 7', 'Fase 8']);
+    await requisitos.locator(`[data-cfa="requer"][value="${F4}"]`).click();
+    await expect(requisitos.locator('summary')).toHaveText('Depois de: Fase 4 e Fase 8');
+    await expect(requisitos.locator(`[data-cfa="requer"][value="${F4}"]`)).toBeFocused();
+    await requisitos.locator(`[data-cfa="requer"][value="${F8}"]`).click();
+    await expect(requisitos.locator('summary')).toHaveText('Depois de: Fase 4');
+    // A última da lista não sai: sem nenhuma, a regra seria outra
+    await requisitos.locator(`[data-cfa="requer"][value="${F4}"]`).click();
+    await expect(page.locator('#toast-box')).toContainText('A Fase 6 espera pelo menos uma fase: para não esperar nenhuma, escolha “Desde o início do curso”.');
+    await expect(requisitos.locator(`[data-cfa="requer"][value="${F4}"]`)).toBeChecked();
+    await pp.locator(`tr[data-missao="${M.adapt}"] [data-cf="dispensada"]`).click();
+    await expect(pp.locator(`tr[data-missao="${M.adapt}"] [data-cf="dispensada"]`)).toBeChecked();
+    await expect(pp.locator('h3 small')).toHaveText('Piloto Privado · 6 fases · 7 missões (1 dispensada)');
+
+    // Cada alteração grava o curso, com a descrição; a lista das alterações, a mais recente primeiro
+    const descricoes = ['PP: PE-04 livre na fase', 'PP: Fase 6 depois de Fase 8', 'PP: Fase 6 depois de Fase 4 e Fase 8', 'PP: Fase 6 depois de Fase 4', 'PP: ADAPT-C152 dispensada'];
+    await expect.poll(() => descricoesGuardadas(page)).toEqual(descricoes);
+    const guardado = (await programaGuardado(page)).cursos.find(c => c.sigla === 'PP');
+    const doGuardado = id => [...guardado.fases, ...guardado.missoes].find(x => x.id === id);
+    expect([doGuardado(M.pe04).regra, doGuardado(F6).regra, doGuardado(F6).requer, doGuardado(M.adapt).dispensada]).toEqual(['livre', 'depois', [F4], true]);
+    const alteracoes = pp.locator('details.alteracoes');
+    await alteracoes.locator('summary').click();
+    await expect(alteracoes.locator('li')).toHaveText(descricoes.map(d => `[10/11 12:00] ${d}`).reverse());
+
+    // A ADAPTAÇÃO dispensada não é mais a próxima; quem fez as Fases 7 e 8 vai para o noturno
+    await naDemanda(page);
+    await expect(proxima(page, 1000)).toHaveText('Próxima: END-SOLO · Usar');
+    await expect(proxima(page, 1001)).toHaveText('Próxima: NOT · Usar');
+
+    await page.reload();
+    await irPara(page, 'cur');
+    await expect(pp.locator(`tr[data-missao="${M.pe04}"] [data-cf="regra"]`)).toHaveValue('livre');
+    await expect(f6.locator('[data-cfa="regra"]')).toHaveValue('depois');
+    await expect(f6.locator('details.requisitos summary')).toHaveText('Depois de: Fase 4');
+    await expect(pp.locator(`tr[data-missao="${M.adapt}"] [data-cf="dispensada"]`)).toBeChecked();
+  });
+
+  // Para o Gestor (e a Secretaria, abaixo, no modo compartilhado), o programa é texto, sem paredes de campos desligados
+  test('para quem só consulta, o programa é texto: quando a fase abre, quando voar e as marcas', async ({ page }) => {
+    const conteudo = comMudancas(CRONOGRAMA, { [F6]: { regra: 'depois', requer: [F4] } },
+      { [M.pe04]: { regra: 'livre' }, [M.adapt]: { dispensada: true }, [M.not]: { regra: 'depois', requer: [M.tma05] } });
+    await abrirComPrograma(page, { conteudo, url: './?role=gestor' });
+    await irPara(page, 'cur');
+    const pp = curso(page, 'PP');
+    await expect(page.locator('#cursos')).toContainText('Só o Administrador muda; aqui é consulta.');
+    await expect(pp.locator('input, select')).toHaveCount(0);
+    await expect(pp.locator('[data-act]')).toHaveCount(0);
+    await expect(pp.locator('h4.modulo')).toHaveText([M01, M02, M03]);
+    await expect(pp.locator(`.fase[data-fase="${F6}"] h5`)).toHaveText('Fase 6 – Voo Noturno');
+    await expect(pp.locator('p.regra')).toHaveText(['Abre depois da Fase 4']);
+    const quando = id => pp.locator(`tr[data-missao="${id}"] td.c-quando`);
+    await expect(quando(M.pe03)).toHaveText('Depois das anteriores');
+    await expect(quando(M.pe04)).toHaveText('Livre na fase');
+    await expect(quando(M.not)).toHaveText('Depois de TMA-05');
+    await expect(pp.locator(`tr[data-missao="${M.adapt}"] td.c-marcas`)).toHaveText('dispensada');
+    await expect(pp.locator(`tr[data-missao="${M.tma05}"] td.c-marcas`)).toHaveText('AVAL');
+    await expect(pp.locator(`tr[data-missao="${M.not}"] td`)).toHaveText(['1', 'NOT', 'NOT', 'Noturno', 'C172', '3 h', 'Depois de TMA-05', '']);
+  });
+
+  // "Voltar ao programa" devolve a missão ao lugar dela, com a regra. O servidor guarda a missão retirada sem a lista
+  // "depois de…" (o adendo do desenho, §6): lido de novo o programa, ela volta "depois das anteriores", com o aviso
+  test('tirar e voltar ao programa: no mesmo lugar e com a regra; lido de novo, o "depois de…" volta com o aviso', async ({ page }) => {
+    const [F1, F2, IN01, IN02, CT01, CT02] = [1, 2, 201, 202, 203, 204].map(u);
+    const conteudo = {
+      nome: 'Piloto Privado', ativo: true,
+      fases: [{ id: F1, nome: 'Fase 1 – Introdução ao Voo' }, { id: F2, nome: 'Fase 2 – O Controle da Aeronave' }],
+      missoes: [missao(IN01, F1, 'IN-01', 'IN-01'), missao(IN02, F1, 'IN-02', 'IN-02'), missao(CT01, F2, 'CT-01', 'CT-01', 'Voo Local', 'C152', 1, { regra: 'depois', requer: [IN01] }),
+        missao(CT02, F2, 'CT-02', 'CT-02')]
+    };
+    await abrirComPrograma(page, { conteudo });
+    await irPara(page, 'cur');
+    const pp = curso(page, 'PP'), ct01 = pp.locator(`tr[data-missao="${CT01}"]`);
+    const retirar = () => confirmar(page, `#cursos tr[data-missao="${CT01}"] [data-act="missao-retirar"]`);
+    await expect(ct01.locator('details.requisitos summary')).toHaveText('Depois de: IN-01');
+    await retirar();
+    await expect(ct01).toHaveCount(0);
+    const retiradas = pp.locator('details.retiradas');
+    await retiradas.locator('summary').click();
+    await expect(retiradas.locator('summary')).toHaveText('Retiradas (1)');
+    await expect(retiradas.locator('li')).toHaveText(['CT-01 · Fase 2 Voltar ao programa']);
+    // De volta: o 1º lugar da Fase 2, ainda depois da IN-01, com o foco no código
+    await retiradas.getByRole('button', { name: 'Voltar ao programa: CT-01' }).click();
+    await expect(pp.locator('details.retiradas')).toHaveCount(0);
+    await expect(pp.locator(`.fase[data-fase="${F2}"] tbody tr`).first()).toHaveAttribute('data-missao', CT01);
+    await expect(ct01.locator('[data-cf="codigo"]')).toBeFocused();
+    await expect(ct01.locator('[data-cf="regra"]')).toHaveValue('depois');
+    await expect(ct01.locator('details.requisitos summary')).toHaveText('Depois de: IN-01');
+
+    // Tirada de novo e lida de novo (recarregada): a lista não ficou guardada
+    await retirar();
+    await expect.poll(() => descricoesGuardadas(page)).toEqual(['PP: CT-01 tirada do programa', 'PP: CT-01 de volta ao programa', 'PP: CT-01 tirada do programa']);
+    await page.reload();
+    await irPara(page, 'cur');
+    await pp.locator('details.retiradas summary').click();
+    await pp.getByRole('button', { name: 'Voltar ao programa: CT-01' }).click();
+    await expect(page.locator('#toast-box')).toContainText('A missão CT-01 voltou “depois das anteriores”: a lista “Depois de…” não fica guardada fora do programa. Escolha de novo em “Quando voar”.');
+    await expect(ct01.locator('[data-cf="regra"]')).toHaveValue('ordem');
+    await expect(ct01.locator('details.requisitos')).toHaveCount(0);
+
+    // A fase só sai sem missões. "+ Fase" entra no fim, com o nome em foco; tirada e de volta, ela fica no lugar
+    await expect(pp.locator(`.fase[data-fase="${F2}"] [data-act="fase-retirar"]`)).toBeDisabled();
+    await pp.getByRole('button', { name: '+ Fase' }).click();
+    const nova = pp.locator('.fase').nth(2);
+    await expect(nova.locator('[data-cfa="nome"]')).toBeFocused();
+    await expect(nova.locator('[data-cfa="nome"]')).toHaveValue('Fase 3');
+    await page.keyboard.type('Fase 3 – Revisão');
+    await page.keyboard.press('Tab');
+    await expect(nova.locator('[data-cfa="nome"]')).toHaveValue('Fase 3 – Revisão');
+    await expect(nova.locator('[data-cfa="modulo"]')).toBeFocused();
+    await nova.locator('[data-cfa="modulo"]').fill('Módulo 02 – Revisão');
+    await nova.locator('[data-cfa="modulo"]').press('Enter');
+    await expect(pp.locator('h4.modulo')).toHaveText(['Módulo 02 – Revisão']);
+    await expect(pp.locator('.fase-cab h5')).toHaveText(['Fase 3 – Revisão']);
+    await confirmar(page, `#cursos .fase[data-fase="${await nova.getAttribute('data-fase')}"] [data-act="fase-retirar"]`);
+    await expect(pp.locator('.fase')).toHaveCount(2);
+    await pp.locator('details.retiradas summary').click();
+    await expect(pp.locator('details.retiradas li')).toHaveText(['Fase 3 – Revisão Voltar ao programa']);
+    await pp.getByRole('button', { name: 'Voltar ao programa: Fase 3' }).click();
+    await expect(pp.locator('.fase')).toHaveCount(3);
+    await expect(pp.locator('.fase').nth(2).locator('[data-cfa="nome"]')).toBeFocused();
+    await expect.poll(() => descricoesGuardadas(page)).toEqual([
+      'PP: CT-01 tirada do programa', 'PP: CT-01 de volta ao programa', 'PP: CT-01 tirada do programa', 'PP: CT-01 de volta ao programa',
+      'PP: Fase 3 incluída', 'PP: Fase 3 alterada', 'PP: Fase 3 alterada', 'PP: Fase 3 tirada do programa', 'PP: Fase 3 de volta ao programa'
+    ]);
+  });
+
+  // A ordem que poria uma fase ou uma missão antes do que ela espera não muda nada e diz por quê; a missão vai para o fim
+  // de outra fase pela lista ao lado do ✕
+  test('subir ou mudar de fase o que ficaria antes do que espera é recusado, com o motivo', async ({ page }) => {
+    const [TSL01] = [301].map(u);
+    const conteudo = {
+      nome: 'Piloto Privado', ativo: true,
+      fases: [{ id: F4, nome: 'Fase 4 – Manobras e Aproximações' }, { id: F6, nome: 'Fase 6 – Voo Noturno', regra: 'depois', requer: [F4] }],
+      missoes: [missao(M.tma05, F4, 'TMA-05', 'TMA-05'), missao(TSL01, F6, 'TSL-01', 'TSL-01', 'Navegação', 'C172', 1),
+        missao(M.not, F6, 'NOT', 'NOT', 'Noturno', 'C172', 3, { regra: 'depois', requer: [TSL01] })]
+    };
+    await abrirComPrograma(page, { conteudo });
+    await irPara(page, 'cur');
+    const pp = curso(page, 'PP'), toast = page.locator('#toast-box');
+    await pp.getByRole('button', { name: 'Subir a Fase 6' }).click();
+    await expect(toast).toContainText('A Fase 6 abre depois da Fase 4: ela não pode passar para antes dela.');
+    await pp.getByRole('button', { name: 'Descer a Fase 4' }).click();
+    await expect(toast).toContainText('A Fase 6 abre depois da Fase 4: a Fase 4 não pode passar para depois dela.');
+    await pp.getByRole('button', { name: 'Subir NOT' }).click();
+    await expect(toast).toContainText('A missão NOT voa depois da TSL-01: ela não pode passar para antes dela.');
+    // O mesmo motivo pela lista da fase: sem o aviso de antes na tela, o aviso é desta recusa
+    await page.evaluate(() => document.querySelector('#toast-box').replaceChildren());
+    await pp.locator(`tr[data-missao="${M.not}"] [data-cf="fase"]`).selectOption(F4);
+    await expect(toast).toContainText('A missão NOT voa depois da TSL-01: ela não pode passar para antes dela.');
+    await expect(pp.locator(`tr[data-missao="${M.not}"] [data-cf="fase"]`)).toHaveValue(F6);
+    await expect(pp.locator('.fase').first()).toHaveAttribute('data-fase', F4);
+    expect(await descricoesGuardadas(page)).toEqual([]);
+    // A TSL-01 pode ir para a Fase 4 (fica antes da NOT): vai para o fim dela, e o foco a acompanha
+    await pp.locator(`tr[data-missao="${TSL01}"] [data-cf="fase"]`).selectOption(F4);
+    await expect(pp.locator(`.fase[data-fase="${F4}"] tbody tr`)).toHaveCount(2);
+    await expect(pp.locator(`.fase[data-fase="${F4}"] tbody tr`).nth(1)).toHaveAttribute('data-missao', TSL01);
+    await expect(pp.locator(`tr[data-missao="${TSL01}"] [data-cf="fase"]`)).toBeFocused();
+    await expect.poll(() => descricoesGuardadas(page)).toEqual(['PP: TSL-01 passou para a Fase 4']);
+  });
+
+  // O campo digitado que perde o foco para um clique avisa a mudança no mousedown, antes do click: a aba é refeita depois
+  // do clique (também o demorado), e o clique vale. Sem clicar num controle, ela é refeita do mesmo jeito
+  test('digitar num campo e clicar direto em outro botão, marca ou campo: valem as duas alterações', async ({ page }) => {
+    const [F1, F2, IN01, IN02, CT01] = [1, 2, 401, 402, 403].map(u);
+    const conteudo = {
+      nome: 'Piloto Privado', ativo: true,
+      fases: [{ id: F1, nome: 'Fase 1 – Introdução ao Voo' }, { id: F2, nome: 'Fase 2 – O Controle da Aeronave' }],
+      missoes: [missao(IN01, F1, 'IN-01', 'IN-01'), missao(IN02, F1, 'IN-02', 'IN-02'), missao(CT01, F2, 'CT-01', 'CT-01')]
+    };
+    await abrirComPrograma(page, { conteudo });
+    await irPara(page, 'cur');
+    const pp = curso(page, 'PP'), daFase1 = pp.locator(`.fase[data-fase="${F1}"] tbody tr`);
+    // O nome de uma missão, e o ↓ de outra, com o botão do mouse apertado por um tempo
+    await pp.locator(`tr[data-missao="${CT01}"] [data-cf="nome"]`).fill('Controle da aeronave');
+    await pp.getByRole('button', { name: 'Descer IN-01' }).click({ delay: 300 });
+    await expect(daFase1.first()).toHaveAttribute('data-missao', IN02);
+    await expect(pp.getByRole('button', { name: 'Descer IN-01' })).toBeDisabled();
+    // O nome de uma fase, e a marca de uma missão
+    await pp.locator(`.fase[data-fase="${F2}"] [data-cfa="nome"]`).fill('Fase 2 – Controle');
+    await pp.locator(`tr[data-missao="${IN01}"] [data-cf="dispensada"]`).click();
+    await expect(pp.locator(`tr[data-missao="${IN01}"] [data-cf="dispensada"]`)).toBeChecked();
+    await expect(pp.locator(`tr[data-missao="${IN01}"] [data-cf="dispensada"]`)).toBeFocused();
+    // O código de uma missão, e o "+ Fase": o nome da fase nova fica em foco e selecionado
+    await pp.locator(`tr[data-missao="${IN02}"] [data-cf="codigo"]`).fill('IN-05');
+    await pp.getByRole('button', { name: '+ Fase' }).click();
+    const nova = pp.locator('.fase').nth(2).locator('[data-cfa="nome"]');
+    await expect(nova).toBeFocused();
+    await page.keyboard.type('Fase 3 – Revisão');
+    await page.keyboard.press('Enter');
+    await expect(nova).toHaveValue('Fase 3 – Revisão');
+    // O código de outra missão, e um clique fora dos controles: a aba é refeita, com o código novo nos nomes dos botões
+    await pp.locator(`tr[data-missao="${CT01}"] [data-cf="codigo"]`).fill('CT-09');
+    await pp.locator('h3').click();
+    await expect(pp.locator(`tr[data-missao="${CT01}"] [data-act="missao-retirar"]`)).toHaveAttribute('aria-label', 'Tirar CT-09 do programa');
+    await expect(pp.locator(`tr[data-missao="${IN02}"] [data-act="missao-retirar"]`)).toHaveAttribute('aria-label', 'Tirar IN-05 do programa');
+    await expect(pp.locator(`tr[data-missao="${CT01}"] [data-cf="nome"]`)).toHaveValue('Controle da aeronave');
+    // O nome de uma missão, e um clique no fim do nome de outra: o foco e o cursor ficam onde o clique os pôs
+    await pp.locator(`tr[data-missao="${CT01}"] [data-cf="nome"]`).fill('Controle');
+    const nomeDaIN01 = pp.locator(`tr[data-missao="${IN01}"] [data-cf="nome"]`);
+    const caixa = await nomeDaIN01.boundingBox();
+    await page.mouse.click(caixa.x + caixa.width - 4, caixa.y + caixa.height / 2);
+    await expect(nomeDaIN01).toBeFocused();
+    await page.keyboard.type(' (revisão)');
+    await page.keyboard.press('Enter');
+    await expect(nomeDaIN01).toHaveValue('IN-01 (revisão)');
+    // O nome de uma missão, e os dois cliques do ✕ de outra: o primeiro arma o ✕, e ele continua armado para o segundo
+    await nomeDaIN01.fill('Introdução');
+    const tirar = `#cursos tr[data-missao="${IN02}"] [data-act="missao-retirar"]`;
+    await page.locator(tirar).click();
+    await expect(page.locator(tirar)).toHaveText('Confirmar');
+    await page.waitForTimeout(700);
+    await expect(page.locator(tirar)).toHaveText('Confirmar');
+    await page.locator(tirar).click();
+    await expect(pp.locator(`tr[data-missao="${IN02}"]`)).toHaveCount(0);
+    await expect.poll(() => descricoesGuardadas(page)).toEqual([
+      'PP: CT-01 alterada', 'PP: IN-01 passou para 2ª', 'PP: Fase 2 alterada', 'PP: IN-01 dispensada', 'PP: IN-05 alterada', 'PP: Fase 3 incluída',
+      'PP: Fase 3 alterada', 'PP: CT-09 alterada', 'PP: CT-09 alterada', 'PP: IN-01 alterada', 'PP: IN-01 alterada', 'PP: IN-05 tirada do programa'
+    ]);
+  });
+
+  // Na tela estreita, a tabela de cada fase rola para o lado: refeita a aba, ela fica onde estava, com a marca à vista
+  test('na tela estreita, a tabela da fase não volta ao começo a cada alteração', async ({ page }) => {
+    await page.setViewportSize({ width: 900, height: 800 });
+    await abrirComPrograma(page, { conteudo: CRONOGRAMA });
+    await irPara(page, 'cur');
+    const tabela = curso(page, 'PP').locator(`.fase[data-fase="${F7}"] > .tw`);
+    const rolagem = () => tabela.evaluate(tw => tw.scrollLeft);
+    await tabela.evaluate(tw => { tw.scrollLeft = tw.scrollWidth; });
+    const noFim = await rolagem();
+    expect(noFim).toBeGreaterThan(0);
+    const marca = curso(page, 'PP').locator(`tr[data-missao="${M.adapt}"] [data-cf="dispensada"]`);
+    await marca.click();
+    await expect(marca).toBeChecked();
+    await expect(marca).toBeFocused();
+    expect(await rolagem()).toBe(noFim);
+    // A marca em foco continua à vista dentro da tabela
+    expect(await marca.evaluate(el => {
+      const r = el.getBoundingClientRect(), caixa = el.closest('.tw').getBoundingClientRect();
+      return r.left >= caixa.left && r.right <= caixa.right;
+    })).toBe(true);
+    await expect.poll(() => descricoesGuardadas(page)).toEqual(['PP: ADAPT-C152 dispensada']);
   });
 });

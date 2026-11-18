@@ -96,6 +96,17 @@ export const GLOSSARIO = {
   'nao-escalar-com': { aba: 'Alunos', termo: 'Não escalar com', texto: 'Instrutores que não voam com este aluno: a escala nunca põe o aluno com eles.' },
   progresso: { aba: 'Alunos', termo: 'Progresso', texto: 'Missões do curso aprovadas sobre o total do programa, e a próxima missão.' },
 
+  // Cursos
+  'fase-do-curso': {
+    aba: 'Cursos', termo: 'Fase do curso',
+    texto: 'Um grupo de missões do programa. A fase abre depois das fases anteriores, desde o início do curso ou depois das fases escolhidas, e fica completa com todas as missões dela feitas.'
+  },
+  'quando-voar': {
+    aba: 'Cursos', termo: 'Quando voar',
+    texto: 'Depois das anteriores: espera as anteriores da fase. Livre na fase: voa com a fase aberta; as seguintes não esperam por ela, mas a fase só fica completa com ela. Depois de: espera só as missões escolhidas, anteriores a ela.'
+  },
+  dispensada: { aba: 'Cursos', termo: 'Dispensada', texto: 'A missão vale como feita para todos os alunos do curso: não é sugerida e não entra no total do progresso.' },
+
   // Rodízio
   rodizio: { aba: 'Rodízio', termo: 'Rodízio', texto: 'Os voos de cheque, MLTE, noturno e C172 seguem uma fila por categoria: vai o primeiro livre; quem voou vai para o fim na data seguinte.' }
 };

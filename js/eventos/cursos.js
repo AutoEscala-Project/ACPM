@@ -1,12 +1,16 @@
 // O programa dos cursos, na aba Cursos: só o Administrador (neste navegador, o Operador) muda, com o programa lido das
 // tabelas dos cursos. Cada alteração é uma operação de js/programa.js sobre o curso da tela, conferida antes como o
-// servidor confere (com um problema, o campo volta e o aviso diz qual). O curso muda na tela na hora e vai para a
-// gravação do curso inteiro (ApiClient.salvarCurso), em fila: uma gravação de cada vez, na ordem das alterações, cada uma
-// com o curso como ficou naquela alteração e a versão confirmada pela gravação anterior. Uma recusa (ou a falta de
-// conexão) descarta o resto da fila do curso, e a tela volta a mostrar o programa gravado, lido de novo, com o aviso do
-// motivo; nada disso trava o resto da tela (outra pessoa que mudou o programa não é um conflito da escala). As alterações
-// do programa não entram no histórico da data: ficam nas versões do curso
-import { conteudoDoCurso, incluirMissao, mudarMissao, moverMissao, retirarMissao, validarCurso, percursoDoCurso, rotuloDaFase } from '../programa.js';
+// servidor confere (com um problema, a aba volta a mostrar o curso como estava e o aviso diz qual); a ordem nova que poria
+// uma fase ou uma missão antes do que ela espera ("depois de…") é recusada com o motivo. O curso muda na tela na hora e
+// vai para a gravação do curso inteiro (ApiClient.salvarCurso), em fila: uma gravação de cada vez, na ordem das
+// alterações, cada uma com o curso como ficou naquela alteração e a versão confirmada pela gravação anterior. Uma recusa
+// (ou a falta de conexão) descarta o resto da fila do curso, e a tela volta a mostrar o programa gravado, lido de novo,
+// com o aviso do motivo; nada disso trava o resto da tela (outra pessoa que mudou o programa não é um conflito da
+// escala). As alterações do programa não entram no histórico da data: ficam nas versões do curso, que a aba lista
+import {
+  conteudoDoCurso, incluirMissao, mudarMissao, moverMissao, retirarMissao, validarCurso, percursoDoCurso, rotuloDaFase, incluirFase, mudarFase,
+  moverFase, retirarFase, restaurarFase, restaurarMissao, definirRegra, marcarMissao, moverMissaoParaFase, ordemRecusada
+} from '../programa.js';
 import { codigoValido } from '../cursos.js';
 import { ApiClient } from '../storage.js';
 import { $, showToast } from '../dom.js';
@@ -14,12 +18,12 @@ import { duracaoDigitada, ERRO_DA_DURACAO } from '../rules.js';
 import { S } from '../state.js';
 import { confirmado } from './confirmacao.js';
 import { aoAcionar } from './registro.js';
-import { rCursos, podeEditarCursos, programasIndisponiveis, atualizarLinhaDoPrograma, codigoTravado } from '../views/cursos.js';
+import { rCursos, podeEditarCursos, programasIndisponiveis, codigoTravado, mostrarAlteracoes, nomesDosRequisitos, listaComE } from '../views/cursos.js';
 import { rAlu } from '../views/cadastros.js';
 import { rDem } from '../views/demanda.js';
 
-// As últimas alterações de cada curso, como o servidor as devolve
-const ALTERACOES_NA_TELA = 20;
+// As últimas alterações de cada curso, como o servidor as devolve; o tamanho da descrição de uma alteração
+const ALTERACOES_NA_TELA = 20, LIMITE_DA_DESCRICAO = 500;
 
 // As gravações esperando, por curso (a sigla): a versão confirmada pela última gravação, o curso que ela gravou, o curso
 // como a tela o mostra (com todas as alterações da fila) e a fila. O curso sai daqui quando a fila esvazia
@@ -55,6 +59,61 @@ function conferido(novo) {
   if (erro) showToast(frase(erro.message));
   return !erro;
 }
+
+// A ordem nova que poria uma fase ou uma missão antes do que ela espera é recusada, com o motivo
+function ordemValida(novo, movido) {
+  const recusa = ordemRecusada(novo, movido);
+  if (recusa) showToast(recusa);
+  return !recusa;
+}
+
+// A aba refeita depois de um campo mudar. O campo digitado que perde o foco para um clique avisa a mudança no mousedown
+// desse clique, antes do mouseup e do click: refeita nessa hora, a aba tiraria da tela o botão ou a marca apertada, e o
+// clique se perderia (seria preciso clicar de novo). O curso já mudou; a aba é refeita logo depois do clique (que age
+// sobre o curso como ficou) ou na próxima tecla, se o próprio clique não a refez. As marcas e as listas avisam a mudança
+// no click: a aba é refeita na hora
+const DIGITADO = 'input:not([type="checkbox"])';
+let apertado = false, depoisDoClique = false;
+document.addEventListener('mousedown', () => { apertado = true; }, true);
+document.addEventListener('mouseup', () => { apertado = false; }, true);
+document.addEventListener('keydown', () => { apertado = false; }, true);
+function refazerAba() {
+  const lugar = $('#cursos');
+  if (!depoisDoClique || !lugar) {
+    rCursos();
+    return;
+  }
+  const comoEstava = lugar.firstElementChild;
+  function refazer() {
+    removeEventListener('mouseup', soltou, true);
+    removeEventListener('keydown', refazer, true);
+    if (lugar.firstElementChild !== comoEstava) return;
+    // O clique armou um ✕ (o primeiro dos dois cliques de "Tirar"): a aba espera o segundo, ou o ✕ voltar a ser o que era
+    if (lugar.querySelector('[data-arm="1"]')) {
+      setTimeout(refazer, 500);
+      return;
+    }
+    // O clique pode ter posto o cursor num campo de texto: ele continua onde o clique o pôs
+    const ativo = document.activeElement;
+    const cursor = ativo && lugar.contains(ativo) && ativo.matches(DIGITADO) && ativo.selectionStart !== null
+      ? [ativo.value, ativo.selectionStart, ativo.selectionEnd, ativo.selectionDirection] : null;
+    rCursos();
+    const novo = document.activeElement;
+    if (cursor && novo !== ativo && novo.matches(DIGITADO) && novo.value === cursor[0]) novo.setSelectionRange(cursor[1], cursor[2], cursor[3]);
+  }
+  // O click vem logo depois do mouseup, na mesma tarefa
+  function soltou() {
+    setTimeout(refazer);
+  }
+  addEventListener('mouseup', soltou, true);
+  addEventListener('keydown', refazer, true);
+}
+
+// Uma alteração que não vale: o aviso, e a aba volta a mostrar o curso como está (o campo mexido também)
+const recusar = texto => {
+  showToast(texto);
+  refazerAba();
+};
 
 // O aviso de uma gravação do programa que não deu certo, pelo código da recusa (e pelo campo dela)
 function avisoDaRecusa(erro, sigla) {
@@ -112,12 +171,14 @@ async function enviar(sigla, fila) {
   }
   filas.delete(sigla);
   confirmados.set(sigla, fila.gravado);
-  // A tela fica com a versão gravada (o conteúdo é o que ela já mostra). Se o programa foi lido de novo enquanto a fila
-  // andava (a data trocada), ela volta a mostrar o que ficou gravado
+  // A tela fica com a versão gravada (o conteúdo é o que ela já mostra; muda só a lista das alterações). Se o programa
+  // foi lido de novo enquanto a fila andava (a data trocada), ela volta a mostrar o que ficou gravado
   const mostrado = naTela(sigla);
   porNaTela(fila.gravado);
   if (mostrado !== fila.curso) {
     rCursos(); rAlu(); rDem();
+  } else {
+    mostrarAlteracoes(fila.gravado);
   }
 }
 
@@ -137,12 +198,26 @@ function alterar(curso, novo, descricao) {
 // Quem muda o programa, com ele na tela (lido das tabelas dos cursos)
 const editavel = () => podeEditarCursos() && !programasIndisponiveis().length;
 
-// O curso de um botão ou de um campo (o do cartão, como está agora) e a missão da linha
+// O curso de um botão ou de um campo (o do cartão, como está agora), a fase do bloco e a missão da linha
 function ondeNoPrograma(el) {
-  const cartao = el.closest('.curso[data-curso]'), tr = el.closest('tr[data-missao]');
+  const cartao = el.closest('.curso[data-curso]'), bloco = el.closest('.fase[data-fase]'), tr = el.closest('tr[data-missao]');
   const curso = cartao ? cursoAtual(cartao.dataset.curso) : null;
+  const fase = curso && bloco ? curso.fases.find(f => f.id === bloco.dataset.fase && !f.removida) || null : null;
   const missao = curso && tr ? curso.missoes.find(m => m.id === tr.dataset.missao && !m.removida) || null : null;
-  return { curso, missao, tr };
+  return { curso, fase, missao, tr };
+}
+
+// O foco depois de refazer a aba: o primeiro dos elementos que existe e está ligado (selecionar: o texto do campo)
+function focar(seletores, { selecionar = false } = {}) {
+  const el = seletores.map(s => s && $(s)).find(x => x && !x.disabled);
+  if (!el) return;
+  el.focus();
+  if (selecionar) el.select();
+}
+// A caixa "Depois de…" de uma fase ou de uma missão, aberta (quem acabou de escolher "Depois de…" escolhe a lista)
+function abrirRequisitos(id) {
+  const resumo = document.getElementById(`requisitos-${id}`);
+  if (resumo) resumo.parentElement.open = true;
 }
 
 // A fase nos textos, só no curso com mais de uma ("na Fase 2"); no curso com uma fase só, ela não é dita
@@ -152,7 +227,24 @@ function naFase(curso, faseId) {
   return fases.length > 1 && fase ? ` na ${rotuloDaFase(fase)}` : '';
 }
 
-// Incluir, subir, descer e tirar (com confirmação) refazem a aba, com o foco no que foi mexido
+// A regra na descrição da alteração: "PE-04 livre na fase", "NOT depois de TSL-01", "Fase 6 depois de Fase 4". Uma lista
+// longa demais para a descrição vira quantas são
+function regraNaDescricao(curso, item, nome, ehFase) {
+  if (item.regra === 'livre') return `${nome} ${ehFase ? 'desde o início do curso' : 'livre na fase'}`;
+  if (item.regra === 'ordem') return `${nome} ${ehFase ? 'depois das fases anteriores' : 'depois das anteriores'}`;
+  const nomes = nomesDosRequisitos(curso, item), texto = `${nome} depois de ${listaComE(nomes)}`;
+  return [...`${curso.sigla}: ${texto}`].length <= LIMITE_DA_DESCRICAO ? texto : `${nome} depois de ${nomes.length} ${ehFase ? 'fases' : 'missões'}`;
+}
+
+// A regra perdida ao voltar ao programa (js/programa.js, regraDeVolta): o aviso
+function avisoDaRegraPerdida(nome, regraPerdida, ehFase) {
+  const voltou = `${nome} voltou “${ehFase ? 'depois das fases anteriores' : 'depois das anteriores'}”`;
+  return regraPerdida === 'requisitos-fora'
+    ? `${voltou}: ${ehFase ? 'as fases' : 'as missões'} que ela esperava não estão mais antes dela.`
+    : `${voltou}: a lista “Depois de…” não fica guardada fora do programa. Escolha de novo em “${ehFase ? 'Abre' : 'Quando voar'}”.`;
+}
+
+// Incluir, subir, descer e tirar (com confirmação) uma missão refazem a aba, com o foco no que foi mexido
 aoAcionar(['missao-nova', 'missao-subir', 'missao-descer', 'missao-retirar'], b => {
   if (!editavel()) return;
   const { curso, missao: m } = ondeNoPrograma(b);
@@ -164,11 +256,7 @@ aoAcionar(['missao-nova', 'missao-subir', 'missao-descer', 'missao-retirar'], b 
     alterar(curso, r.curso, `${r.missao.codigo} incluída${naFase(r.curso, r.missao.fase)}`);
     rCursos();
     // O nome da missão nova em foco, selecionado: o que for digitado fica no lugar do código
-    const nome = $(`#cursos tr[data-missao="${r.missao.id}"] [data-cf="nome"]`);
-    if (nome) {
-      nome.focus();
-      nome.select();
-    }
+    focar([`#cursos tr[data-missao="${r.missao.id}"] [data-cf="nome"]`], { selecionar: true });
     return;
   }
   if (!m) return;
@@ -181,58 +269,170 @@ aoAcionar(['missao-nova', 'missao-subir', 'missao-descer', 'missao-retirar'], b 
     // O foco vai para a missão que ficou no lugar (ou para a anterior; na fase vazia, para o "+ Missão" dela)
     const antes = percursoDoCurso(curso).porFase.get(m.fase) || [], depois = percursoDoCurso(novo).porFase.get(m.fase) || [];
     const vizinha = depois[Math.min(antes.indexOf(m), depois.length - 1)];
-    const alvo = vizinha ? $(`#cursos tr[data-missao="${vizinha.id}"] [data-cf="codigo"]`) : $(`#cursos [data-act="missao-nova"][data-fase="${m.fase}"]`);
-    if (alvo) alvo.focus();
+    focar([vizinha && `#cursos tr[data-missao="${vizinha.id}"] [data-cf="codigo"]`, `#cursos [data-act="missao-nova"][data-fase="${m.fase}"]`]);
     return;
   }
   const novo = moverMissao(curso, m.id, a === 'missao-subir' ? -1 : 1);
-  if (!novo || !conferido(novo)) return;
+  if (!novo || !ordemValida(novo, m.id) || !conferido(novo)) return;
   const posicao = (percursoDoCurso(novo).porFase.get(m.fase) || []).findIndex(x => x.id === m.id);
   alterar(curso, novo, `${m.codigo} passou para ${posicao + 1}ª`);
   rCursos();
-  const mesmo = $(`#cursos tr[data-missao="${m.id}"] [data-act="${a}"]`);
-  (mesmo && !mesmo.disabled ? mesmo : $(`#cursos tr[data-missao="${m.id}"] [data-cf="codigo"]`)).focus();
+  focar([`#cursos tr[data-missao="${m.id}"] [data-act="${a}"]`, `#cursos tr[data-missao="${m.id}"] [data-cf="codigo"]`]);
 });
 
-// Os campos de uma missão mudam no lugar: o código (uma vez por curso, também entre as tiradas do programa, que guardam o
-// seu; travado quando já há resultados), o nome, o tipo de missão, o recurso e as horas
-document.addEventListener('change', e => {
-  const campo = e.target.closest('#cursos [data-cf]');
-  if (!campo || !editavel()) return;
+// "+ Fase", subir, descer e tirar uma fase (com confirmação; só a fase sem missões sai), com o foco no que foi mexido
+aoAcionar(['fase-nova', 'fase-subir', 'fase-descer', 'fase-retirar'], b => {
+  if (!editavel()) return;
+  const { curso, fase: f } = ondeNoPrograma(b);
+  if (!curso) return;
+  const a = b.dataset.act;
+  if (a === 'fase-nova') {
+    const r = incluirFase(curso);
+    if (!conferido(r.curso)) return;
+    alterar(curso, r.curso, `${rotuloDaFase(r.fase)} incluída`);
+    rCursos();
+    focar([`#cursos .fase[data-fase="${r.fase.id}"] [data-cfa="nome"]`], { selecionar: true });
+    return;
+  }
+  if (!f) return;
+  if (a === 'fase-retirar') {
+    if (!confirmado(b, 'Confirmar')) return;
+    const novo = retirarFase(curso, f.id);
+    if (!novo || !conferido(novo)) return;
+    alterar(curso, novo, `${rotuloDaFase(f)} tirada do programa`);
+    rCursos();
+    // O foco vai para a fase que ficou no lugar (ou para a anterior; sem nenhuma, para o "+ Fase" do curso)
+    const antes = percursoDoCurso(curso).fases, depois = percursoDoCurso(novo).fases;
+    const vizinha = depois[Math.min(antes.indexOf(f), depois.length - 1)];
+    focar([vizinha && `#cursos .fase[data-fase="${vizinha.id}"] [data-cfa="nome"]`, `#cursos .curso[data-curso="${curso.sigla}"] [data-act="fase-nova"]`]);
+    return;
+  }
+  const novo = moverFase(curso, f.id, a === 'fase-subir' ? -1 : 1);
+  if (!novo || !ordemValida(novo, f.id) || !conferido(novo)) return;
+  const posicao = percursoDoCurso(novo).fases.findIndex(x => x.id === f.id);
+  alterar(curso, novo, `${rotuloDaFase(f)} passou para ${posicao + 1}ª`);
+  rCursos();
+  focar([`#cursos .fase[data-fase="${f.id}"] [data-act="${a}"]`, `#cursos .fase[data-fase="${f.id}"] [data-cfa="nome"]`]);
+});
+
+// "Voltar ao programa": a fase ou a missão volta ao lugar de antes, com a regra; a regra "depois de…" que não pôde
+// voltar (a lista não está mais antes dela, ou não ficou guardada) vira "depois das anteriores", com o aviso. A missão
+// de uma fase fora do programa espera a fase voltar
+aoAcionar(['fase-restaurar', 'missao-restaurar'], b => {
+  if (!editavel()) return;
+  const { curso } = ondeNoPrograma(b);
+  if (!curso) return;
+  if (b.dataset.act === 'fase-restaurar') {
+    const f = curso.fases.find(x => x.id === b.dataset.fase && x.removida);
+    const r = f && restaurarFase(curso, f.id);
+    if (!r || !conferido(r.curso)) return;
+    alterar(curso, r.curso, `${rotuloDaFase(f)} de volta ao programa`);
+    rCursos();
+    focar([`#cursos .fase[data-fase="${f.id}"] [data-cfa="nome"]`]);
+    if (r.regraPerdida) showToast(`A ${avisoDaRegraPerdida(rotuloDaFase(f), r.regraPerdida, true)}`);
+    return;
+  }
+  const m = curso.missoes.find(x => x.id === b.dataset.missao && x.removida);
+  if (!m) return;
+  const fase = curso.fases.find(x => x.id === m.fase);
+  if (!fase || fase.removida) {
+    showToast(`A missão ${m.codigo} é ${fase ? `da ${rotuloDaFase(fase)}, que está` : 'de uma fase'} fora do programa: volte com a fase antes.`);
+    return;
+  }
+  const r = restaurarMissao(curso, m.id);
+  if (!r || !conferido(r.curso)) return;
+  alterar(curso, r.curso, `${m.codigo} de volta ao programa`);
+  rCursos();
+  focar([`#cursos tr[data-missao="${m.id}"] [data-cf="codigo"]`]);
+  if (r.regraPerdida) showToast(`A missão ${avisoDaRegraPerdida(m.codigo, r.regraPerdida, false)}`);
+});
+
+// Os campos de uma missão: o código (uma vez por curso, também entre as tiradas do programa, que guardam o seu; travado
+// quando já há resultados), o nome, o tipo de missão, o recurso, as horas, quando voar e a lista "Depois de…", as marcas
+// e a fase
+function mudarCampoDaMissao(campo) {
   const { curso, missao: m, tr } = ondeNoPrograma(campo);
   if (!m) return;
   const cf = campo.dataset.cf;
-  let valor = campo.value;
-  if (cf === 'codigo') {
-    valor = campo.value.trim().toUpperCase();
-    const outra = curso.missoes.find(o => o.id !== m.id && o.codigo === valor);
-    const erro = valor === m.codigo ? ''
-      : codigoTravado(curso.sigla, m) ? `Já há resultados com o código ${m.codigo}: ele não muda (o nome muda).`
-        : !codigoValido(valor) ? 'O código da missão usa letras, números, ponto e hífen (até 15).'
-          : outra && outra.removida ? `O código ${valor} é de uma missão tirada do programa do ${curso.sigla} (ela guarda o código).`
-            : outra ? `O código ${valor} já existe no ${curso.sigla}.` : '';
-    if (erro) {
-      showToast(erro);
-      campo.value = m.codigo;
-      return;
+  let novo;
+  if (cf === 'regra') {
+    novo = definirRegra(curso, m.id, campo.value);
+  } else if (cf === 'requer') {
+    const lista = [...tr.querySelectorAll('[data-cf="requer"]:checked')].map(x => x.value);
+    if (!lista.length) return recusar(`A missão ${m.codigo} espera pelo menos uma missão: para não esperar nenhuma, escolha “Livre na fase”.`);
+    novo = definirRegra(curso, m.id, 'depois', lista);
+  } else if (cf === 'dispensada' || cf === 'avaliacao') {
+    novo = marcarMissao(curso, m.id, cf, campo.checked);
+  } else if (cf === 'fase') {
+    novo = moverMissaoParaFase(curso, m.id, campo.value);
+    if (novo && !ordemValida(novo, m.id)) return refazerAba();
+  } else {
+    let valor = campo.value;
+    if (cf === 'codigo') {
+      valor = campo.value.trim().toUpperCase();
+      const outra = curso.missoes.find(o => o.id !== m.id && o.codigo === valor);
+      const erro = valor === m.codigo ? ''
+        : codigoTravado(curso.sigla, m) ? `Já há resultados com o código ${m.codigo}: ele não muda (o nome muda).`
+          : !codigoValido(valor) ? 'O código da missão usa letras, números, ponto e hífen (até 15).'
+            : outra && outra.removida ? `O código ${valor} é de uma missão tirada do programa do ${curso.sigla} (ela guarda o código).`
+              : outra ? `O código ${valor} já existe no ${curso.sigla}.` : '';
+      if (erro) return recusar(erro);
+    } else if (cf === 'nb') {
+      // As horas: de 0,1 h a 5 h, em décimos; fora disso, não vale
+      valor = duracaoDigitada(campo.value);
+      if (valor === null) return recusar(ERRO_DA_DURACAO);
     }
-  } else if (cf === 'nb') {
-    // As horas: de 0,1 h a 5 h, em décimos; fora disso, não vale
-    valor = duracaoDigitada(campo.value);
-    if (valor === null) {
-      showToast(ERRO_DA_DURACAO);
-      campo.value = m.nb;
-      return;
-    }
+    novo = mudarMissao(curso, m.id, cf, valor);
   }
-  const novo = mudarMissao(curso, m.id, cf, valor);
-  // Nada mudou (o código em minúsculas, o nome com espaços a mais) ou a alteração não vale: a linha volta a mostrar a
+  // Nada mudou (o código em minúsculas, o nome com espaços a mais) ou a alteração não vale: a aba volta a mostrar a
   // missão como está
-  if (!novo || !conferido(novo)) {
-    atualizarLinhaDoPrograma(tr, curso.sigla, m);
-    return;
-  }
+  if (!novo || !conferido(novo)) return refazerAba();
   const salva = novo.missoes.find(x => x.id === m.id);
-  alterar(curso, novo, `${salva.codigo} alterada`);
-  atualizarLinhaDoPrograma(tr, curso.sigla, salva);
+  const descricao = cf === 'regra' || cf === 'requer' ? regraNaDescricao(novo, salva, salva.codigo, false)
+    : cf === 'dispensada' ? `${salva.codigo} ${salva.dispensada ? 'dispensada' : 'deixa de ser dispensada'}`
+      : cf === 'avaliacao' ? `${salva.codigo} ${salva.avaliacao ? 'é avaliação' : 'deixa de ser avaliação'}`
+        : cf === 'fase' ? `${salva.codigo} passou para a ${rotuloDaFase(novo.fases.find(f => f.id === salva.fase))}`
+          : `${salva.codigo} alterada`;
+  alterar(curso, novo, descricao);
+  refazerAba();
+  if (cf === 'regra' && salva.regra === 'depois') abrirRequisitos(m.id);
+  // A missão foi para outra fase: o foco a acompanha
+  if (cf === 'fase') focar([`#cursos tr[data-missao="${m.id}"] [data-cf="fase"]`]);
+}
+
+// Os campos de uma fase: o nome (vazio não vale), o módulo, quando ela abre e a lista "Depois de…"
+function mudarCampoDaFase(campo) {
+  const { curso, fase: f } = ondeNoPrograma(campo);
+  if (!f) return;
+  const cfa = campo.dataset.cfa, rotulo = rotuloDaFase(f);
+  let novo = null;
+  if (cfa === 'nome' && !campo.value.trim()) return recusar('O nome da fase vai de 1 a 80 caracteres.');
+  if (cfa === 'nome' || cfa === 'modulo') {
+    novo = mudarFase(curso, f.id, cfa, campo.value);
+  } else if (cfa === 'regra') {
+    novo = definirRegra(curso, f.id, campo.value);
+  } else if (cfa === 'requer') {
+    const lista = [...campo.closest('.fase-cab').querySelectorAll('[data-cfa="requer"]:checked')].map(x => x.value);
+    if (!lista.length) return recusar(`A ${rotulo} espera pelo menos uma fase: para não esperar nenhuma, escolha “Desde o início do curso”.`);
+    novo = definirRegra(curso, f.id, 'depois', lista);
+  }
+  if (!novo || !conferido(novo)) return refazerAba();
+  const salva = novo.fases.find(x => x.id === f.id);
+  alterar(curso, novo, cfa === 'regra' || cfa === 'requer' ? regraNaDescricao(novo, salva, rotuloDaFase(salva), true) : `${rotuloDaFase(salva)} alterada`);
+  refazerAba();
+  if (cfa === 'regra' && salva.regra === 'depois') abrirRequisitos(f.id);
+}
+
+// Os campos mudam o curso, e a aba é refeita no lugar (o foco continua no campo, ou vai para o seguinte no Tab; o campo
+// digitado que perdeu o foco para um clique, depois do clique: refazerAba)
+document.addEventListener('change', e => {
+  const campo = e.target.closest('#cursos [data-cf], #cursos [data-cfa]');
+  if (!campo || !editavel()) return;
+  depoisDoClique = apertado && campo.matches(DIGITADO);
+  try {
+    if (campo.hasAttribute('data-cfa')) mudarCampoDaFase(campo);
+    else mudarCampoDaMissao(campo);
+  } finally {
+    depoisDoClique = false;
+  }
 });

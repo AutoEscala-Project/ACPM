@@ -132,7 +132,12 @@ test.describe('Conteúdo gravado malicioso', () => {
     await expect(pp.locator('tr:has([value="PP-01"]) [data-cf="nome"]')).toHaveValue(`Familiarização ${X}`);
     await expect(pp.locator('tr:has([value="PP-02"]) [data-cf="nome"]')).toHaveValue(`Navegação ${XS}`);
     await expect(pp.locator('h3 small')).toContainText(`Piloto Privado ${X}`);
-    await expect(pp.locator('.fase h4')).toHaveText([`Programa ${XA}`, `Fase 2 ${XA}`]);
+    // A primeira fase tem módulo: o título dela fica sob o do módulo (h5); a segunda, sem módulo, é h4
+    await expect(pp.locator('.fase-cab :is(h4, h5)')).toHaveText([`Programa ${XA}`, `Fase 2 ${XA}`]);
+    await expect(pp.locator('h4.modulo')).toHaveText([`Módulo ${XS}`]);
+    await expect(pp.locator('[data-cfa="nome"]').first()).toHaveValue(`Programa ${XA}`);
+    await expect(pp.locator('[data-cfa="modulo"]').first()).toHaveValue(`Módulo ${XS}`);
+    await expect(pp.locator('details.alteracoes li').first()).toContainText(`Admin ${X} · PP: alterado ${X}`);
     await expect(pp.locator('[data-act="missao-nova"]').nth(1)).toHaveText(`+ Missão na Fase 2 ${XA}`);
     await expect(pp.locator('tr:has([value="PP-02"]) [data-cf="codigo"]')).toHaveAttribute('aria-label', `Código da 1ª missão da Fase 2 ${XA}`);
     await irPara(page, 'esc');
@@ -257,10 +262,12 @@ test.describe('Conteúdo gravado malicioso', () => {
       await preencherLogin(page, conta);
       if (conta === CONTAS.operador) {
         await percorrer(page);
-        // O programa malicioso vem das tabelas dos cursos (programa_dos_cursos) e chega à aba Cursos, só para consulta
+        // O programa malicioso vem das tabelas dos cursos (programa_dos_cursos) e chega à aba Cursos, só para consulta (em
+        // texto)
         await irPara(page, 'cur');
-        await expect(page.locator('#cursos .curso[data-curso="PP"] tr:has([value="PP-01"]) [data-cf="nome"]')).toHaveValue(`Familiarização ${X}`);
-        await expect(page.locator('#cursos .curso[data-curso="PP"] tr:has([value="PP-92"]) [data-cf="nome"]')).toHaveValue(`Corrigida ${X}`);
+        const daMissao = codigo => page.locator('#cursos .curso[data-curso="PP"] tbody tr', { has: page.locator('td.c-codigo', { hasText: codigo }) });
+        await expect(daMissao('PP-01').locator('td.c-nome')).toHaveText(`Familiarização ${X}`);
+        await expect(daMissao('PP-92').locator('td.c-nome')).toHaveText(`Corrigida ${X}`);
       } else await expect(page.locator('.fids tbody tr:not(.fids-vazia):not(.fids-nada)').first()).toBeVisible();
       await nada(page);
       expect(erros).toEqual([]);

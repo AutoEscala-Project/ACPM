@@ -192,7 +192,8 @@ const retiradasNoFim = (a, b) => a.removida - b.removida || a.ordem - b.ordem;
 // recurso entre os do tipo, senão o padrão; o Ground com 1,5 h), sem código repetido (vale a primeira) e, sem nome, com
 // o código. No programa, no máximo 50 fases e 200 missões (as retiradas ficam todas: o código delas continua valendo).
 // Os requisitos só apontam para itens anteriores do programa: "depois de…" sem nenhum vira "depois das anteriores", e a
-// fase ou a missão retirada fica sem nenhum
+// fase ou a missão retirada fica sem nenhum, mas com a regra (o servidor a guarda assim: "Voltar ao programa" sabe que
+// ela era "depois de…" e avisa que a lista não ficou)
 export function normalizarProgramas(programa) {
   const siglas = new Set();
   return comoLista(programa).filter(c => ehObjeto(c) && siglaValida(c.sigla) && !siglas.has(c.sigla) && siglas.add(c.sigla))
@@ -233,7 +234,7 @@ function normalizarCurso(c) {
   const soAnteriores = (x, posicao) => {
     const p = posicao.get(x.id);
     const requer = x.regra === 'depois' && p !== undefined ? [...new Set(x.requer)].filter(id => posicao.get(id) < p) : [];
-    return { ...x, regra: x.regra === 'depois' && !requer.length ? 'ordem' : x.regra, requer };
+    return { ...x, regra: x.regra === 'depois' && !requer.length && !x.removida ? 'ordem' : x.regra, requer };
   };
   return {
     sigla: c.sigla, nome: nomeCurto(c.nome) || c.sigla, ordem: inteiro(c.ordem), ativo: c.ativo !== false,
@@ -630,18 +631,190 @@ export function moverMissao(curso, id, passo) {
   return comPrograma(curso, fases, fases.flatMap(f => (f.id === m.fase ? daFase : missoes.filter(x => x.fase === f.id))));
 }
 
+// Quem esperava pelo item que sai do programa ("depois de…") deixa de esperar; sem mais nenhum, volta a "depois das
+// anteriores"
+const semORequisito = id => x => {
+  if (!x.requer.includes(id)) return x;
+  const requer = x.requer.filter(r => r !== id);
+  return { ...x, requer, regra: x.regra === 'depois' && !requer.length ? 'ordem' : x.regra };
+};
+
 // "Tirar do programa": a missão sai do programa e da próxima missão, mas fica no curso (os resultados continuam com o
-// código dela, que segue reservado), sem requisitos, como o servidor a guarda. Quem esperava por ela ("depois de…")
-// deixa de esperar; sem mais nenhuma, volta a "depois das anteriores"
+// código dela, que segue reservado), com a regra. A lista "depois de…" dela fica só na tela, para "Voltar ao programa":
+// o servidor guarda a missão retirada sem requisitos (lido de novo, o programa a traz sem a lista). Quem esperava por
+// ela deixa de esperar
 export function retirarMissao(curso, id) {
   const { fases, missoes } = programaDoCurso(curso);
   const m = missoes.find(x => x.id === id);
   if (!m) return null;
-  const semEla = x => {
-    if (!x.requer.includes(id)) return x;
-    const requer = x.requer.filter(r => r !== id);
-    return { ...x, requer, regra: x.regra === 'depois' && !requer.length ? 'ordem' : x.regra };
+  return comPrograma(curso, fases, missoes.filter(x => x !== m).map(semORequisito(id)), [{ ...m, removida: true }]);
+}
+
+// As fases do programa, as regras de quando abrir e de quando voar, as marcas e o que volta ao programa ---------------
+// As mesmas regras das operações de cima: o curso recebido não muda, e null quando não há o que mudar
+
+// O que uma fase ou uma missão do programa pode esperar ("depois de…"): as do mesmo tipo que vêm antes dela, na ordem do
+// curso (as fases do programa antes dela; as missões do programa antes dela, também as das fases anteriores). Fora do
+// programa, nenhuma
+export function requisitosPossiveis(curso, id) {
+  const { fases, missoes, posicao } = percursoDoCurso(curso);
+  const i = fases.findIndex(f => f.id === id);
+  if (i >= 0) return fases.slice(0, i);
+  return posicao.has(id) ? missoes.slice(0, posicao.get(id)) : [];
+}
+
+// A regra de uma fase (quando ela abre: "ordem", depois das fases anteriores; "livre", desde o início do curso;
+// "depois", depois das fases da lista) ou de uma missão (quando voar: "ordem", depois das anteriores da fase; "livre",
+// livre na fase; "depois", depois das missões da lista, que podem ser de fases anteriores). Na regra "depois", requer
+// é a lista: valem os itens anteriores, na ordem do curso; sem ela, fica a lista de antes ou, sem nenhuma, o item logo
+// antes. null quando nada muda, ou quando a lista fica vazia (nada antes para esperar)
+export function definirRegra(curso, id, regra, requer = null) {
+  if (!REGRAS.includes(regra)) return null;
+  const { fases, missoes } = programaDoCurso(curso);
+  const ehFase = fases.some(f => f.id === id);
+  const item = (ehFase ? fases : missoes).find(x => x.id === id);
+  if (!item) return null;
+  let lista = [];
+  if (regra === 'depois') {
+    const possiveis = requisitosPossiveis(curso, id).map(x => x.id);
+    const pedidos = requer || (item.regra === 'depois' && item.requer.length ? item.requer : possiveis.slice(-1));
+    lista = possiveis.filter(p => pedidos.includes(p));
+    if (!lista.length) return null;
+  }
+  if (item.regra === regra && item.requer.length === lista.length && lista.every(r => item.requer.includes(r))) return null;
+  const novo = { ...item, regra, requer: lista };
+  return ehFase ? { ...curso, fases: curso.fases.map(f => (f === item ? novo : f)) } : { ...curso, missoes: curso.missoes.map(m => (m === item ? novo : m)) };
+}
+
+// As marcas de uma missão do programa: "dispensada" (vale como feita para todos os alunos do curso e sai do total do
+// progresso) e "avaliação". null quando nada muda
+export function marcarMissao(curso, id, campo, valor) {
+  if (!['dispensada', 'avaliacao'].includes(campo) || typeof valor !== 'boolean') return null;
+  const m = programaDoCurso(curso).missoes.find(x => x.id === id);
+  if (!m || m[campo] === valor) return null;
+  return { ...curso, missoes: curso.missoes.map(x => (x === m ? { ...m, [campo]: valor } : x)) };
+}
+
+// O nome ou o módulo de uma fase do programa, sem os espaços a mais, até 80 caracteres. Sem nome, a fase fica com o de
+// antes; sem módulo, fica sem. null quando nada muda
+export function mudarFase(curso, id, campo, valor) {
+  const f = programaDoCurso(curso).fases.find(x => x.id === id);
+  if (!f || !['nome', 'modulo'].includes(campo)) return null;
+  const texto = nomeCurto(valor);
+  const novo = campo === 'nome' ? { ...f, nome: texto || f.nome } : { ...f, modulo: texto || null };
+  if (novo.nome === f.nome && novo.modulo === f.modulo) return null;
+  return { ...curso, fases: curso.fases.map(x => (x === f ? novo : x)) };
+}
+
+// "+ Fase": a fase nova entra no fim do programa, depois das fases anteriores, com o nome "Fase N" (N: as fases do
+// programa, com ela) e o módulo da última fase. Devolve o curso e a fase nova
+export function incluirFase(curso, gerarId = novoId) {
+  const { fases, missoes } = programaDoCurso(curso);
+  const fase = {
+    id: gerarId(), nome: `Fase ${fases.length + 1}`, modulo: fases.length ? fases.at(-1).modulo : null, ordem: fases.length, regra: 'ordem',
+    requer: [], removida: false
   };
-  return comPrograma(curso, fases, missoes.filter(x => x !== m).map(semEla),
-    [{ ...m, regra: m.regra === 'depois' ? 'ordem' : m.regra, requer: [], removida: true }]);
+  const novo = comPrograma(curso, [...fases, fase], missoes);
+  return { curso: novo, fase: novo.fases.find(f => f.id === fase.id) };
+}
+
+// ↑ e ↓ de uma fase: ela troca de lugar com a vizinha, com as missões dela (passo -1 sobe, 1 desce); null na ponta do
+// programa. A ordem que poria um item antes do que ele espera é recusada (ordemRecusada)
+export function moverFase(curso, id, passo) {
+  const { fases, missoes } = programaDoCurso(curso);
+  const i = fases.findIndex(f => f.id === id), j = i + passo;
+  if (i < 0 || j < 0 || j >= fases.length) return null;
+  const novas = [...fases];
+  [novas[i], novas[j]] = [novas[j], novas[i]];
+  return comPrograma(curso, novas, novas.flatMap(f => missoes.filter(m => m.fase === f.id)));
+}
+
+// A missão vai para outra fase do programa, no fim dela; null quando ela já está nessa fase
+export function moverMissaoParaFase(curso, id, faseId) {
+  const { fases, missoes } = programaDoCurso(curso);
+  const m = missoes.find(x => x.id === id);
+  if (!m || m.fase === faseId || !fases.some(f => f.id === faseId)) return null;
+  const outras = missoes.filter(x => x !== m);
+  return comPrograma(curso, fases, fases.flatMap(f => [...outras.filter(x => x.fase === f.id), ...(f.id === faseId ? [{ ...m, fase: faseId }] : [])]));
+}
+
+// "Tirar do programa" de uma fase: só a fase sem missões no programa (as dela saem antes, ou vão para outra fase). Ela
+// fica no curso, fora do programa, com a regra (a lista "depois de…" fica só na tela, como a da missão retirada); quem
+// esperava por ela deixa de esperar
+export function retirarFase(curso, id) {
+  const { fases, missoes } = programaDoCurso(curso);
+  const f = fases.find(x => x.id === id);
+  if (!f || missoes.some(m => m.fase === id)) return null;
+  const novo = comPrograma(curso, fases.filter(x => x !== f).map(semORequisito(id)), missoes);
+  return { ...novo, fases: [...novo.fases.filter(x => !x.removida), { ...f, removida: true }, ...novo.fases.filter(x => x.removida)] };
+}
+
+// A regra de quem volta ao programa: na regra "depois", valem os itens da lista que estão antes dele (antes: os itens do
+// programa antes do lugar dele, na ordem do curso). Sem nenhum, ele volta "depois das anteriores", e regraPerdida diz
+// por quê: 'requisitos-fora' (os que ele esperava saíram do programa ou ficaram depois dele) ou 'sem-requisitos' (a
+// lista não veio: o servidor não guarda a lista de quem está fora do programa)
+function regraDeVolta(item, antes) {
+  if (item.regra !== 'depois') return { regra: item.regra, requer: [], regraPerdida: null };
+  const requer = antes.filter(x => item.requer.includes(x.id)).map(x => x.id);
+  if (requer.length) return { regra: 'depois', requer, regraPerdida: null };
+  return { regra: 'ordem', requer: [], regraPerdida: item.requer.length ? 'requisitos-fora' : 'sem-requisitos' };
+}
+// O lugar de quem volta: o mesmo número na ordem de antes (na fase, para a missão), ou o fim, se a lista ficou menor
+const lugarDeVolta = (item, n) => (Number.isInteger(item.ordem) ? Math.min(Math.max(item.ordem, 0), n) : n);
+
+// "Voltar ao programa" de uma fase retirada: ela volta ao lugar de antes, com a regra (regraDeVolta) e sem missões (as
+// dela que foram retiradas voltam uma a uma). Devolve o curso e regraPerdida (null: a regra ficou)
+export function restaurarFase(curso, id) {
+  const f = curso.fases.find(x => x.id === id && x.removida);
+  if (!f) return null;
+  const { fases, missoes } = programaDoCurso(curso);
+  const i = lugarDeVolta(f, fases.length);
+  const { regraPerdida, ...regra } = regraDeVolta(f, fases.slice(0, i));
+  const novas = [...fases.slice(0, i), { ...f, ...regra, removida: false }, ...fases.slice(i)];
+  return { curso: comPrograma({ ...curso, fases: curso.fases.filter(x => x !== f) }, novas, missoes), regraPerdida };
+}
+
+// "Voltar ao programa" de uma missão retirada: ela volta ao lugar de antes na fase dela, com o código, os campos e a
+// regra (regraDeVolta). Só para uma fase do programa: com a fase fora dele, null (volte com a fase antes). Devolve o curso
+// e regraPerdida (null: a regra ficou)
+export function restaurarMissao(curso, id) {
+  const m = curso.missoes.find(x => x.id === id && x.removida);
+  const { fases, missoes } = programaDoCurso(curso);
+  if (!m || !fases.some(f => f.id === m.fase)) return null;
+  const daFase = missoes.filter(x => x.fase === m.fase), i = lugarDeVolta(m, daFase.length);
+  const volta = { ...m, removida: false };
+  const lista = fases.flatMap(f => (f.id === m.fase ? [...daFase.slice(0, i), volta, ...daFase.slice(i)] : missoes.filter(x => x.fase === f.id)));
+  const { regraPerdida, ...regra } = regraDeVolta(m, lista.slice(0, lista.indexOf(volta)));
+  const novas = lista.map(x => (x === volta ? { ...volta, ...regra } : x));
+  return { curso: comPrograma({ ...curso, missoes: curso.missoes.filter(x => x !== m) }, fases, novas), regraPerdida };
+}
+
+// A ordem nova (↑ e ↓ de uma fase ou de uma missão, a missão em outra fase) que poria uma fase ou uma missão antes do
+// que ela espera ("depois de…"): o motivo da recusa, dito a partir do que foi movido (movido: o id da fase ou da missão);
+// null quando a ordem vale. curso: o curso como ficaria
+export function ordemRecusada(curso, movido) {
+  const { fases, missoes } = programaDoCurso(curso);
+  const { daFase, daMissao } = posicoes(fases, missoes);
+  const primeiraQuebrada = (lista, posicao) => {
+    for (const x of lista) {
+      const r = x.regra === 'depois' ? x.requer.find(id => posicao.has(id) && posicao.get(id) >= posicao.get(x.id)) : undefined;
+      if (r !== undefined) return [x, lista.find(y => y.id === r)];
+    }
+    return null;
+  };
+  const daFaseQuebrada = primeiraQuebrada(fases, daFase);
+  if (daFaseQuebrada) {
+    const [f, r] = daFaseQuebrada;
+    const quem = movido === r.id ? `a ${rotuloDaFase(r)} não pode passar para depois dela` : 'ela não pode passar para antes dela';
+    return `A ${rotuloDaFase(f)} abre depois da ${rotuloDaFase(r)}: ${quem}.`;
+  }
+  const daMissaoQuebrada = primeiraQuebrada(missoes, daMissao);
+  if (!daMissaoQuebrada) return null;
+  const [m, r] = daMissaoQuebrada;
+  const nomeDaFase = id => rotuloDaFase(fases.find(f => f.id === id));
+  const motivo = `A missão ${m.codigo} voa depois da ${r.codigo}`;
+  if (movido === r.id) return `${motivo}: a ${r.codigo} não pode passar para depois dela.`;
+  if (m.fase !== r.fase && movido === m.fase) return `${motivo}: a ${nomeDaFase(m.fase)} não pode passar para antes da ${nomeDaFase(r.fase)}.`;
+  if (m.fase !== r.fase && movido === r.fase) return `${motivo}: a ${nomeDaFase(r.fase)} não pode passar para depois da ${nomeDaFase(m.fase)}.`;
+  return `${motivo}: ela não pode passar para antes dela.`;
 }

@@ -1,6 +1,8 @@
 // No celular (390 px): a escala em cartões, um por voo, e nenhuma aba rola para o lado.
-import { test, expect, abrir, abrirComExemplo, abrirEscala, irPara } from './fixtures.js';
+import { test, expect, abrir, abrirComExemplo, abrirEscala, irPara, AMANHA } from './fixtures.js';
+import { documentosAtuais } from './supabase-falso.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
+import { cursosIniciais, gravarCurso } from '../../js/programa.js';
 
 test.use({ viewport: { width: 390, height: 844 } });
 
@@ -57,6 +59,42 @@ test.describe('Celular', () => {
     await abrir(page, { estado: { ...cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, {}, { curso: 'PP' })] }), cursos } });
     await irPara(page, 'cur');
     await expect(page.locator('#cursos tr[data-i]')).toHaveCount(2);
+    expect(await larguraDaPagina(page)).toBeLessThanOrEqual(390);
+    expect(await alvosPequenos(page)).toEqual([]);
+  });
+
+  // O programa em fases (gravado neste navegador, como as tabelas dos cursos o guardam): os cabeçalhos das fases, a
+  // missão "Depois de…" com a escolha aberta, a fase de cada missão, as retiradas e as alterações também cabem na tela,
+  // com alvos de 44 px
+  test('a aba Cursos em fases cabe na tela, com as caixas abertas e alvos de 44 px', async ({ page }) => {
+    const u = n => `00000000-0000-4000-8013-${String(n).padStart(12, '0')}`;
+    const modulo = 'Módulo 01 – Treinamento Duplo Comando';
+    const conteudo = {
+      nome: 'Piloto Privado', ativo: true,
+      fases: [{ id: u(1), nome: 'Fase 1 – Introdução ao Voo', modulo }, { id: u(2), nome: 'Fase 2 – O Controle da Aeronave', modulo, regra: 'depois', requer: [u(1)] }],
+      missoes: [
+        { id: u(11), fase: u(1), codigo: 'IN-01', nome: 'IN-01', mis: 'Voo Local', eq: 'C152', nb: 1 },
+        { id: u(12), fase: u(1), codigo: 'IN-02', nome: 'IN-02', mis: 'Ground C152', eq: 'Sala Ground', nb: 1.5, dispensada: true },
+        { id: u(13), fase: u(2), codigo: 'AVP-SOLO-05', nome: 'AV PROF. SOLO 05', mis: 'Voo Local', eq: 'C152', nb: 0.3, regra: 'depois', requer: [u(11), u(12)], avaliacao: true },
+        { id: u(14), fase: u(2), codigo: 'CT-09', nome: 'CT-09', mis: 'Voo Local', eq: 'C152', nb: 1 }
+      ]
+    };
+    // A CT-09 tirada do programa: fica nas retiradas
+    const comCt09 = gravarCurso({ cursos: cursosIniciais() }, { sigla: 'PP', versaoLida: 1, conteudo, descricao: 'PP: cronograma' });
+    const semCt09 = gravarCurso({ cursos: comCt09.cursos }, { sigla: 'PP', versaoLida: 2, conteudo: { ...conteudo, missoes: conteudo.missoes.slice(0, 3) }, descricao: 'PP: CT-09 tirada do programa' });
+    const { documentos: { cadastro }, dias } = documentosAtuais(cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, {}, { curso: 'PP' })] }), AMANHA);
+    const docs = {
+      acpm4_cadastro: cadastro, [`acpm4_dia_${AMANHA}`]: dias[AMANHA], acpm4_cursos: { cursos: semCt09.cursos, alteracoes: [comCt09.alteracao, semCt09.alteracao] }
+    };
+    await page.addInitScript(json => {
+      if (localStorage.getItem('acpm4_cadastro')) return;
+      for (const [chave, valor] of Object.entries(JSON.parse(json))) localStorage.setItem(chave, JSON.stringify(valor));
+    }, JSON.stringify(docs));
+    await page.goto('./');
+    await irPara(page, 'cur');
+    await expect(page.locator('#cursos .curso[data-curso="PP"] tr[data-i]')).toHaveCount(3);
+    for (const resumo of await page.locator('#cursos .curso[data-curso="PP"] summary').all()) await resumo.click();
+    await expect(page.locator('#cursos .curso[data-curso="PP"] details[open]')).toHaveCount(4);
     expect(await larguraDaPagina(page)).toBeLessThanOrEqual(390);
     expect(await alvosPequenos(page)).toEqual([]);
   });
