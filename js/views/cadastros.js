@@ -111,7 +111,7 @@ function linhaDoCadastro(x) {
   return `<tr class="cd" ${atributos(x)}>
     <td><input class="nm" data-f="nm" value="${esc(x.nm)}" maxlength="${LIMITE_DO_NOME}" aria-label="Nome do instrutor"></td>
     <td class="c-canac so-dados">${esc(canacDe('instrutor', x.id))}</td>
-    <td><input type="number" min="0" max="200" data-f="kg" value="${x.kg || ''}" placeholder="sem peso" aria-label="Peso de ${esc(x.nm)} em kg"${x.kg ? '' : ' class="falta"'}></td>
+    <td><input type="number" min="1" max="300" data-f="kg" value="${x.kg || ''}" placeholder="sem peso" aria-label="Peso de ${esc(x.nm)} em kg"${x.kg ? '' : ' class="falta"'}></td>
     <td><span class="habs-resumo">${esc(resumoDasHabilitacoes(x)) || 'Nenhuma'}</span></td>
     <td class="acoes"><button type="button" class="btn quiet so-dados" data-dados="instrutor:${x.id}" aria-label="Dados pessoais de ${esc(x.nm)}">Dados pessoais</button><button class="btn quiet edit-only" data-act="editar-habs" data-id="${x.id}">Editar habilitações</button><button class="x edit-only" data-act="deli" aria-label="Excluir ${esc(x.nm)}">✕</button></td>
   </tr>`;
@@ -257,7 +257,7 @@ const linhaDoAluno = s => `<tr class="cd" data-k="s" data-id="${s.id}" data-nm="
   <td><input class="nm" data-f="nm" value="${esc(s.nm)}" maxlength="${LIMITE_DO_NOME}" aria-label="Nome do aluno"></td>
   <td class="c-canac so-dados">${esc(canacDe('aluno', s.id))}</td>
   <td class="c-curso"><select data-f="curso" aria-label="Curso de ${esc(s.nm)}"${isGestor() ? ' disabled' : ''}>${opts([['', '—'], ...CURSOS.map(([id, nome]) => [id, `${id} · ${nome}`])], s.curso || '')}</select>${progressoDoAluno(s)}</td>
-  <td><input type="number" min="0" max="200" data-f="kg" value="${s.kg || ''}" placeholder="sem peso" aria-label="Peso de ${esc(s.nm)} em kg"${s.kg ? '' : ' class="falta"'}></td>
+  <td><input type="number" min="1" max="300" data-f="kg" value="${s.kg || ''}" placeholder="sem peso" aria-label="Peso de ${esc(s.nm)} em kg"${s.kg ? '' : ' class="falta"'}></td>
   <td class="c-voa-com"><div class="bl voa-com">${voaCom(s)}</div></td>
   <td><div class="bl nao-escalar">${naoEscalarCom(s)}</div></td>
   <td class="acoes"><button type="button" class="btn quiet so-dados" data-dados="aluno:${s.id}" aria-label="Dados pessoais de ${esc(s.nm)}">Dados pessoais</button><button class="x edit-only" data-act="dels" aria-label="Excluir ${esc(s.nm)}">✕</button></td>

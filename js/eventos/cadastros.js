@@ -8,7 +8,7 @@ import { nomeLimpo, numeroBr } from '../format.js';
 import { habilitacoesDoNivel, normalizarHabilitacoes, nomeDaHabilitacao } from '../habilitacoes.js';
 import { LIMITES_DA_LEI, normalizarLimites, comHorasExternas } from '../limites.js';
 import { comRepousoDoNoturno } from '../noturno.js';
-import { blank } from '../rules.js';
+import { blank, pesoDigitado, ERRO_DO_PESO } from '../rules.js';
 import { fixoPeloStatus } from '../fixos.js';
 import { S, DATA, insBy, stuBy } from '../state.js';
 import { confirmado } from './confirmacao.js';
@@ -123,6 +123,11 @@ aoAcionar(['deli', 'dels'], (b, { id }) => {
   rIns(); rAlu(); rDem();
 });
 
+// O peso digitado no cadastro (aluno ou instrutor): vazio é sem peso (0); zero, negativo, acima de 300 kg ou um texto
+// que não é número não vale (null): o aviso aparece e o campo volta ao peso de antes. O texto que não é número chega
+// vazio (o campo é type=number), mas com validity.badInput: ele não apaga o peso
+const pesoDoCampo = campo => (campo.value.trim() === '' && !campo.validity.badInput ? 0 : pesoDigitado(campo.value));
+
 // Os campos de um instrutor
 aoMudarCampo('i', (t, { f, id }) => {
   const x = insBy(id);
@@ -137,8 +142,10 @@ aoMudarCampo('i', (t, { f, id }) => {
     x.nm = nomeLimpo(t.value, x.nm);
     historico = ['mod', `Instrutor: ${old} → ${x.nm}`];
   } else if (f === 'kg') {
-    x.kg = +t.value || 0;
-    historico = ['mod', `Peso ${x.nm}: ${x.kg} kg`];
+    const kg = pesoDoCampo(t);
+    if (kg === null) { showToast(ERRO_DO_PESO); t.value = x.kg || ''; return; }
+    x.kg = kg;
+    historico = ['mod', `Peso ${x.nm}: ${numeroBr(x.kg)} kg`];
   } else if (f === 'hab') {
     const h = t.dataset.h;
     x.hab = normalizarHabilitacoes(t.checked ? [...x.hab, h] : x.hab.filter(k => k !== h));
@@ -179,8 +186,10 @@ aoMudarCampo('s', (t, { f, id }) => {
     s.nm = nomeLimpo(t.value, s.nm);
     historico = ['mod', `Aluno: ${old} → ${s.nm}`];
   } else if (f === 'kg') {
-    s.kg = +t.value || 0;
-    historico = ['mod', `Peso ${s.nm}: ${s.kg} kg`];
+    const kg = pesoDoCampo(t);
+    if (kg === null) { showToast(ERRO_DO_PESO); t.value = s.kg || ''; return; }
+    s.kg = kg;
+    historico = ['mod', `Peso ${s.nm}: ${numeroBr(s.kg)} kg`];
   } else if (f === 'bl' && t.value) {
     s.bl.push(+t.value);
     // Quem não voa com o aluno sai do “Priorizar com” dele

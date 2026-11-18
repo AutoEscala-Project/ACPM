@@ -2,7 +2,8 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   isGroundMission, doesGroundGateFlight, migrateLegacyMissionName, normalizeMissionFields, blank, disponibilidadeDoAluno, disponibilidadeAtual,
-  rotuloDaDisponibilidade, opcoesDeDisponibilidade, proximoMid, duracaoDigitada, ERRO_DA_DURACAO, chaveTemSobras, alvoDoNovoPedido
+  rotuloDaDisponibilidade, opcoesDeDisponibilidade, proximoMid, duracaoDigitada, ERRO_DA_DURACAO, chaveTemSobras, alvoDoNovoPedido,
+  pesoValido, pesoDigitado, ERRO_DO_PESO
 } from '../../js/rules.js';
 import { podeFazer, descreverExigencias } from '../../js/habilitacoes.js';
 
@@ -199,5 +200,19 @@ describe('A duração digitada', () => {
     assert.deepEqual(['1,5', '2.6', '0,1', '5', '1,26'].map(duracaoDigitada), [1.5, 2.6, 0.1, 5, 1.3]);
     for (const fora of ['0', '0,04', '5,1', '6', '', 'abc', '-1']) assert.equal(duracaoDigitada(fora), null, fora);
     assert.equal(ERRO_DA_DURACAO, 'A duração vai de 0,1 h a 5 h.');
+  });
+});
+
+describe('O peso', () => {
+  it('o gravado: mais que 0 e até 300 kg; fora disso, ou sem ser um número, sem peso (0)', () => {
+    assert.deepEqual([72, 72.5, 0.1, 250, 300].map(pesoValido), [72, 72.5, 0.1, 250, 300]);
+    for (const fora of [0, -70, 300.1, 400, NaN, Infinity, '70', null, undefined, {}]) assert.equal(pesoValido(fora), 0, String(fora));
+  });
+
+  it('o digitado: em décimos, com vírgula ou ponto, mais que 0 e até 300 kg; fora disso, nenhum', () => {
+    assert.deepEqual(['72', '72,5', '80.3', '68,25', '0,1', '250', '300', '300,04', ' 75 ', 90].map(pesoDigitado),
+      [72, 72.5, 80.3, 68.3, 0.1, 250, 300, 300, 75, 90]);
+    for (const fora of ['0', '0,04', '-1', '300,1', '350', '', 'abc', 'Infinity']) assert.equal(pesoDigitado(fora), null, fora);
+    assert.equal(ERRO_DO_PESO, 'O peso vai de 1 a 300 kg.');
   });
 });

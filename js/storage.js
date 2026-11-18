@@ -3,7 +3,7 @@
 import { WIN } from './config.js';
 import { FROTA_INICIAL, normalizarFrota } from './frota.js';
 import { pad, LIMITE_DO_NOME } from './format.js';
-import { normalizeMissionFields, proximoMid } from './rules.js';
+import { normalizeMissionFields, proximoMid, pesoValido } from './rules.js';
 import { HORARIOS_INICIAIS, normalizarHorarios } from './horarios.js';
 import { backendLocal } from './backends/local.js';
 import { separar, juntar, diaPadrao, diaParaCopiar, converterLegado, biDosDias } from './dias.js';
@@ -130,16 +130,15 @@ export const ApiClient = {
     // Pessoas nos tipos certos: sem id inteiro, a pessoa sai; nome de até 80 caracteres; peso de 0 a 300 kg;
     // disponibilidade com uma janela por período; bloqueios só com ids
     const nome = (v, padrao) => (typeof v === 'string' && v.trim() ? v.slice(0, LIMITE_DO_NOME) : padrao);
-    const peso = v => (typeof v === 'number' && Number.isFinite(v) && v > 0 && v <= 300 ? v : 0);
     const comId = p => Boolean(p) && typeof p === 'object' && Number.isInteger(p.id) && p.id > 0;
     x.ins = x.ins.filter(comId);
     x.ins.forEach(i => {
-      Object.assign(i, { nm: nome(i.nm, `Instrutor ${i.id}`), on: i.on !== false, kg: peso(i.kg) });
+      Object.assign(i, { nm: nome(i.nm, `Instrutor ${i.id}`), on: i.on !== false, kg: pesoValido(i.kg) });
       i.aw = Array.isArray(i.aw) && i.aw.length === WIN.length ? i.aw.map(v => v === true) : WIN.map(() => true);
     });
     x.stu = x.stu.filter(comId);
     x.stu.forEach(s => {
-      Object.assign(s, { nm: nome(s.nm, `Aluno ${s.id}`), kg: peso(s.kg), bl: Array.isArray(s.bl) ? s.bl.filter(id => Number.isInteger(id) && id > 0) : [] });
+      Object.assign(s, { nm: nome(s.nm, `Aluno ${s.id}`), kg: pesoValido(s.kg), bl: Array.isArray(s.bl) ? s.bl.filter(id => Number.isInteger(id) && id > 0) : [] });
       // “Priorizar com”: só ids, sem repetir e sem os de “Não escalar com”; vazio, o campo sai
       const pares = Array.isArray(s.voaCom) ? [...new Set(s.voaCom.filter(id => Number.isInteger(id) && id > 0 && !s.bl.includes(id)))] : [];
       if (pares.length) s.voaCom = pares;

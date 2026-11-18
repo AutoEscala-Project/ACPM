@@ -108,6 +108,16 @@ describe('Migração de estado', () => {
     assert.deepEqual(x.stu.map(s => s.curso), ['IFR', 'PC', 'PC-IFR', undefined, undefined, undefined, undefined]);
     assert.ok(x.stu.slice(3).every(s => !Object.hasOwn(s, 'curso')), 'o campo sai');
   });
+
+  // O cadastro aceita até 300 kg: o que vem gravado fica no mesmo limite
+  it('o peso continua de 0 a 300 kg: acima, zero, negativo ou sem ser um número, a pessoa fica sem peso', () => {
+    const pesos = [300, 250.5, 0.1, 300.1, 0, -70, '70', null];
+    const x = ApiClient.normalizeAndMigrateState({ ...ApiClient.createFreshState(),
+      ins: pesos.map((kg, i) => instrutor(i + 1, 1, { kg })), stu: pesos.map((kg, i) => aluno(1000 + i, {}, { kg })) });
+    const esperados = [300, 250.5, 0.1, 0, 0, 0, 0, 0];
+    assert.deepEqual(x.ins.map(i => i.kg), esperados);
+    assert.deepEqual(x.stu.map(s => s.kg), esperados);
+  });
 });
 
 describe('Persistência local (escala por data)', () => {

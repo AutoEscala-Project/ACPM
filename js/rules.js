@@ -124,6 +124,18 @@ export function duracaoValida(valor) {
   return Math.min(h, DURACAO_MAXIMA_H);
 }
 
+// O peso de um aluno ou instrutor, em kg: mais que 0 e até PESO_MAXIMO; 0 é sem peso. O gravado fora disso (ou que não é
+// um número) fica sem peso
+const PESO_MAXIMO = 300;
+export const pesoValido = v => (typeof v === 'number' && Number.isFinite(v) && v > 0 && v <= PESO_MAXIMO ? v : 0);
+// O peso digitado pelo operador: em décimos de kg, com vírgula ou ponto, mais que 0 e até PESO_MAXIMO; fora disso, null
+// (e a mensagem). O campo vazio é sem peso: quem lê o campo decide
+export const ERRO_DO_PESO = `O peso vai de 1 a ${PESO_MAXIMO} kg.`;
+export const pesoDigitado = texto => {
+  const kg = Math.round(parseFloat(String(texto).replace(',', '.')) * 10) / 10;
+  return kg > 0 && kg <= PESO_MAXIMO ? kg : null;
+};
+
 export function normalizeMissionFields(target) {
   target.mis = migrateLegacyMissionName(target.mis);
   // Uma sessão por missão (para dividir o voo no dia, "+ missão"): o campo fica nos dados, sempre 1, e o motor
