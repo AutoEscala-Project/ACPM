@@ -6,17 +6,28 @@ import { runAllocationEngine } from '../../js/engine.js';
 import { EQ, GROUND_REG, ACROBAT_REG, T, NI, DEFAULT_LIM, AIRCRAFT_EQ_TYPES } from '../../js/config.js';
 import { isGroundMission, doesGroundGateFlight } from '../../js/rules.js';
 import { podeFazer } from '../../js/habilitacoes.js';
-import { gerarCenario, comEscolhas, FORA_DO_CADASTRO } from '../helpers/cenarios.js';
+import { gerarCenario, comEscolhas, comAtributos, comVolta, FORA_DO_CADASTRO } from '../helpers/cenarios.js';
+import { FROTA_INICIAL, recursoDaFrota, aviaoServe, instrutorVoaNoAviao } from '../../js/frota.js';
 import { CODIGOS_DE_REJEICAO } from '../../js/conflitos.js';
 
 // Até quando o voo pode ir: o de dia no avião pousa até as 17:30; o Noturno, o simulador e o Ground, até o fim do dia
 const fimDoVoo = o => (o.mis !== 'Noturno' && AIRCRAFT_EQ_TYPES.includes(o.eqType) ? T[NI] : 1440);
 
 const SEEDS = Array.from({ length: 300 }, (_, i) => 1001 + i);
-// Cada seed duas vezes: o cenário como foi gerado e com as escolhas do operador (o instrutor escolhido para o dia e o
-// “Voa com”): as regras da escala valem também com elas
-const execucoes = SEEDS.flatMap(seed => [gerarCenario(seed), comEscolhas(gerarCenario(seed), seed)].map((estado, i) => (
-  { seed: i ? `${seed} com escolhas` : seed, estado, ...runAllocationEngine(estado) })));
+// Cada seed três vezes: o cenário como foi gerado, com as escolhas do operador (o instrutor escolhido para o dia e o
+// “Priorizar com”) e com os atributos dos recursos e os cursos dos alunos (“Só VFR”, habilitação própria, o noturno do
+// PC): as regras da escala valem também com eles
+const execucoes = SEEDS.flatMap(seed => [
+  [seed, gerarCenario(seed)], [`${seed} com escolhas`, comEscolhas(gerarCenario(seed), seed)], [`${seed} com atributos`, comAtributos(gerarCenario(seed), seed)],
+  [`${seed} com a volta do noturno`, comVolta(gerarCenario(seed), seed)]
+].map(([rotulo, estado]) => {
+  // out: os voos que o motor escala hoje; a volta do noturno de ontem (fixa, de outro dia) fica em voltas, e todos tem os dois
+  const resultado = runAllocationEngine(estado);
+  return { seed: rotulo, estado, ...resultado, out: resultado.out.filter(o => !o.trecho), voltas: resultado.out.filter(o => o.trecho), todos: resultado.out };
+}));
+// A frota do cenário (sem ela, a inicial) e o recurso de um voo
+const frotaDe = estado => (Array.isArray(estado.frota) ? estado.frota : FROTA_INICIAL);
+const recursoDo = (estado, o) => (o.isGround ? null : recursoDaFrota(frotaDe(estado), o.r));
 const comAsEscolhas = execucoes.filter(e => String(e.seed).endsWith('com escolhas'));
 
 const sobrepoe = (x, y) => x.a < y.b && y.a < x.b;
@@ -81,12 +92,12 @@ describe('Invariantes do motor de alocação', () => {
     }
   }));
 
-  it('instrutor ativo, habilitado para a missão no equipamento, disponível em todo o período e não bloqueado', () => emTodos(({ estado, out }) => {
+  it('instrutor ativo, habilitado para a missão no equipamento (com o curso do aluno e a habilitação própria do avião), disponível em todo o período e não bloqueado', () => emTodos(({ estado, out }) => {
     for (const o of out) {
       const x = estado.ins.find(i => i.id === o.insId);
       const { stu } = pedidoDe(estado, o);
       assert.ok(x.on, `${o.fKey}: instrutor inativo`);
-      assert.ok(podeFazer(x, o.mis, o.eqType), `${o.fKey}: ${o.mis}/${o.eqType} sem habilitação (${x.hab})`);
+      assert.ok(podeFazer(x, o.mis, o.eqType, { curso: stu.curso, recurso: recursoDo(estado, o) }), `${o.fKey}: ${o.mis}/${o.eqType} no ${o.r} (${stu.curso}) sem habilitação (${x.hab})`);
       assert.ok(!stu.bl.includes(x.id), `${o.fKey}: instrutor bloqueado`);
       T.forEach((ini, k) => {
         const fim = k < NI ? T[k + 1] : 1440;
@@ -95,7 +106,7 @@ describe('Invariantes do motor de alocação', () => {
     }
   }));
 
-  it('equipamento compatível, disponível e PR-JPL somente para Parafuso', () => emTodos(({ estado, out }) => {
+  it('equipamento compatível, disponível, PR-JPL somente para Parafuso e o voo IFR só no avião homologado IFR', () => emTodos(({ estado, out }) => {
     for (const o of out) {
       if (o.isGround) {
         assert.equal(o.r, GROUND_REG);
@@ -104,6 +115,7 @@ describe('Invariantes do motor de alocação', () => {
       assert.ok(EQ[o.eqType].includes(o.r), `${o.fKey}: ${o.r} não pertence a ${o.eqType}`);
       assert.ok(estado.av[o.r], `${o.fKey}: ${o.r} em manutenção`);
       assert.equal(o.r === ACROBAT_REG, o.mis === 'Parafuso' && o.eqType === 'C152', `${o.fKey}: uso indevido do ${ACROBAT_REG}`);
+      assert.ok(aviaoServe(recursoDo(estado, o), { mis: o.mis, eq: o.eqType, curso: pedidoDe(estado, o).stu.curso }), `${o.fKey}: ${o.r} não serve a ${o.mis}`);
     }
   }));
 
@@ -138,12 +150,24 @@ describe('Invariantes do motor de alocação', () => {
     }
   }));
 
-  it('cada pedido de voo é um voo só, com as horas pedidas', () => emTodos(({ estado, out }) => {
+  // A volta do noturno de ontem: fixa às 07:30–08:30, e o instrutor, o aluno e o avião dela não voam antes das 10:10
+  it('a volta do noturno ocupa o instrutor, o aluno e o avião até as 10:10 (nada deles antes)', () => emTodos(({ estado, out, voltas }) => {
+    assert.equal(voltas.length, (estado.noturnosDaVespera || []).length);
+    for (const v of voltas.filter(o => (estado.fStatus[o.fKey] || o.status) !== 'Cancelado')) {
+      assert.deepEqual([v.a, v.b, v.livreAs, v.h, v.fixo], [450, 510, 610, 1, true]);
+      for (const o of out.filter(w => w !== v && w.a < 610 && (estado.fStatus[w.fKey] || w.status) !== 'Cancelado')) {
+        assert.ok(o.insId !== v.insId && o.stuId !== v.stuId && o.r !== v.r, `${o.fKey} (${o.a}) junto da volta ${v.fKey}`);
+      }
+    }
+  }));
+
+  it('cada pedido de voo é um voo só, com as horas pedidas (o Noturno, as 4 h fixas do dia)', () => emTodos(({ estado, out }) => {
     const grupos = Map.groupBy(out.filter(o => !o.isGround), o => `${o.stuId}_${o.mid}`);
     for (const voos of grupos.values()) {
       const { d } = pedidoDe(estado, voos[0]);
+      const horas = d.mis === 'Noturno' ? 4 : Math.max(1, Math.round(+d.nb || 1));
       assert.equal(voos.length, 1);
-      assert.deepEqual([voos[0].fKey.endsWith('_1'), voos[0].ss, voos[0].h, voos[0].b - voos[0].a], [true, '1/1', Math.max(1, Math.round(+d.nb || 1)), Math.max(1, Math.round(+d.nb || 1)) * 60]);
+      assert.deepEqual([voos[0].fKey.endsWith('_1'), voos[0].ss, voos[0].h, voos[0].b - voos[0].a], [true, '1/1', horas, horas * 60]);
     }
   }));
 
@@ -179,8 +203,11 @@ describe('Invariantes do motor de alocação', () => {
       for (const insId of new Set(mudam.map(o => o.insId))) {
         const meus = mudam.filter(o => o.insId === insId);
         if (new Set(meus.map(o => o.r)).size < 2) continue;
-        const livre = EQ[tipo].find(r => r !== ACROBAT_REG && estado.av[r] &&
-          meus.every(f => !voos.some(o => o.insId !== insId && o.r === r && sobrepoe(o, f))));
+        // Livre, servindo a todos os voos dele (os requisitos do voo) e com a habilitação própria, quando o avião exige
+        const x = estado.ins.find(i => i.id === insId);
+        const livre = EQ[tipo].find(r => r !== ACROBAT_REG && estado.av[r] && instrutorVoaNoAviao(x, recursoDaFrota(frotaDe(estado), r)) &&
+          meus.every(f => aviaoServe(recursoDaFrota(frotaDe(estado), r), { mis: f.mis, eq: f.eqType, curso: pedidoDe(estado, f).stu.curso }) &&
+            !voos.some(o => o.insId !== insId && o.r === r && sobrepoe(o, f))));
         assert.equal(livre, undefined, `instrutor ${insId} usou ${[...new Set(meus.map(o => o.r))]} com ${livre} livre o dia todo`);
       }
     }
@@ -307,7 +334,7 @@ describe('O horário mais perto da preferência, em 300 cenários', async () => 
 });
 
 // O que o operador define vale mais que a escolha do app: o instrutor escolhido para o dia (na Demanda ou na Escala)
-// e o “Voa com” do aluno (o par permanente, com aviso quando nenhum dos instrutores dele pode)
+// e o “Priorizar com” do aluno (o par permanente, com aviso quando nenhum dos instrutores dele pode)
 describe('Invariantes das escolhas do operador, em 300 cenários', () => {
   const pedidoDoVoo = (estado, o) => pedidoDe(estado, o).d;
   const emTodasAsEscolhas = verificar => {
@@ -361,23 +388,23 @@ describe('Invariantes das escolhas do operador, em 300 cenários', () => {
     }
   }));
 
-  it('com o “Voa com”, o voo fica com um instrutor dele; senão, o aviso diz quem ficou com o voo', () => emTodasAsEscolhas(({ estado, out, al }) => {
+  it('com o “Priorizar com”, o voo fica com um instrutor dele; senão, o aviso diz quem ficou com o voo', () => emTodasAsEscolhas(({ estado, out, al }) => {
     const avisos = al.filter(a => a.codigo === 'voa-com');
     for (const o of out) {
       const s = estado.stu.find(x => x.id === o.stuId), d = pedidoDoVoo(estado, o);
       const pares = (s.voaCom || []).filter(id => estado.ins.some(x => x.id === id));
-      if (escolhidoValido(estado, d) || !pares.length) { assert.ok(!o.insPar, `${o.fKey}: marcado sem Voa com`); continue; }
+      if (escolhidoValido(estado, d) || !pares.length) { assert.ok(!o.insPar, `${o.fKey}: marcado sem Priorizar com`); continue; }
       if (pares.includes(o.insId)) { assert.ok(o.insPar, `${o.fKey}: com o par sem a marca`); continue; }
-      assert.ok(avisos.some(a => a.stuId === o.stuId && a.insId === o.insId && a.m.includes(o.ins)), `${o.fKey}: com ${o.insId}, fora do Voa com ${pares}, sem aviso`);
+      assert.ok(avisos.some(a => a.stuId === o.stuId && a.insId === o.insId && a.m.includes(o.ins)), `${o.fKey}: com ${o.insId}, fora do Priorizar com ${pares}, sem aviso`);
     }
-    // Todo aviso é de um voo que está na escala com aquele instrutor, fora do “Voa com”
+    // Todo aviso é de um voo que está na escala com aquele instrutor, fora do “Priorizar com”
     for (const a of avisos) {
       const s = estado.stu.find(x => x.id === a.stuId);
       assert.ok(out.some(o => o.stuId === a.stuId && o.insId === a.insId) && !s.voaCom.includes(a.insId), `aviso solto: ${a.m}`);
     }
   }));
 
-  it('a divisão das horas e a compactação não trocam o instrutor escolhido nem o do “Voa com”', () => emTodasAsEscolhas(({ estado, out }) => {
+  it('a divisão das horas e a compactação não trocam o instrutor escolhido nem o do “Priorizar com”', () => emTodasAsEscolhas(({ estado, out }) => {
     const antes = new Map(runAllocationEngine(estado, { compactar: false, dividirHoras: false }).out.map(o => [o.fKey, o]));
     for (const o of antes.values()) {
       if (!o.insEscolhido && !o.insPar) continue;

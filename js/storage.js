@@ -14,6 +14,7 @@ import { normalizarDetalhes, normalizarStatus } from './status.js';
 import { normalizarEscalaGravada } from './escala-gravada.js';
 import { normalizarHangar } from './hangar.js';
 import { LIMITES_DA_LEI, normalizarLimites, comHorasExternas } from './limites.js';
+import { noturnosDaVespera, comRepousoDoNoturno, voltasConferem } from './noturno.js';
 import { normalizarFixos, normalizarAprovacao } from './fixos.js';
 import { normalizarCriterios } from './criterios.js';
 import { normalizarCursos, normalizarCursoDoAluno } from './cursos.js';
@@ -134,7 +135,7 @@ export const ApiClient = {
     x.stu = x.stu.filter(comId);
     x.stu.forEach(s => {
       Object.assign(s, { nm: nome(s.nm, `Aluno ${s.id}`), kg: peso(s.kg), bl: Array.isArray(s.bl) ? s.bl.filter(id => Number.isInteger(id) && id > 0) : [] });
-      // “Voa com”: só ids, sem repetir e sem os de “Não escalar com”; vazio, o campo sai
+      // “Priorizar com”: só ids, sem repetir e sem os de “Não escalar com”; vazio, o campo sai
       const pares = Array.isArray(s.voaCom) ? [...new Set(s.voaCom.filter(id => Number.isInteger(id) && id > 0 && !s.bl.includes(id)))] : [];
       if (pares.length) s.voaCom = pares;
       else delete s.voaCom;
@@ -171,7 +172,9 @@ export const ApiClient = {
     const cadastro = migrarCadastro(guardado);
     const dia = migrarDia(await this.backend.ler(`dia:${data}`));
     const instrutores = (cadastro && cadastro.ins) || [];
-    const base = dia || diaParaCopiar(migrarDia((await this.backend.diaAnterior(data) || {}).conteudo), instrutores);
+    // O dia guardado antes da data: a cópia da data nova e, quando é ontem, os noturnos que voltam de BH hoje
+    const anterior = await this.backend.diaAnterior(data);
+    const base = dia || diaParaCopiar(migrarDia((anterior || {}).conteudo), instrutores);
     const estado = this.normalizeAndMigrateState(juntar(cadastro || { nid: 1000, ins: [], stu: [] }, base || diaPadrao()));
     // As horas de voo de cada instrutor antes da data e o fim de ontem (limites da lei), mais as de fora do app. Não são
     // gravadas (vão à parte, para o estado da tela): saem das escalas guardadas a cada abertura. Sem resposta, o motor
@@ -180,9 +183,14 @@ export const ApiClient = {
     // depende disso (Aprovar escala sem as horas; a próxima missão e o resultado sem os resultados)
     const lidos = await this.lerDadosAParte(data);
     const horasBase = lidos.horasBase || {};
-    const horasDosInstrutores = comHorasExternas(horasBase, estado.ins, data);
-    // A escala gravada só vale no formato do motor; adulterada, a tela usa a escala calculada
-    const escala = dia ? normalizarEscalaGravada(dia.resultado) : null;
+    // Os noturnos de ontem: a volta de BH entra hoje na escala, e o repouso deles é um aviso (js/noturno.js)
+    const noturnos = noturnosDaVespera(anterior, data);
+    if (noturnos.length) estado.noturnosDaVespera = noturnos;
+    const horasDosInstrutores = comRepousoDoNoturno(comHorasExternas(horasBase, estado.ins, data), noturnos);
+    // A escala gravada só vale no formato do motor; adulterada, a tela usa a escala calculada. Também quando as voltas do
+    // noturno dela não conferem com os noturnos de ontem (o noturno mudou depois): a calculada é gravada na próxima alteração
+    const gravada = dia ? normalizarEscalaGravada(dia.resultado) : null;
+    const escala = gravada && voltasConferem(gravada, noturnos) ? gravada : null;
     const resultados = lidos.resultados || { situacao: [], doDia: [] };
     const indisponiveis = [...(lidos.horasBase ? [] : ['horas']), ...(lidos.resultados ? [] : ['resultados'])];
     return { estado, escala, novo: !dia, horasBase, horasDosInstrutores, resultados, indisponiveis };

@@ -1,6 +1,10 @@
 // Habilitações individuais dos instrutores. No aeroclube as funções não são cumulativas: há instrutor
 // de C172 que não dá simulador e instrutor de PA-34 que não faz parafuso. Cada instrutor tem a lista do que pode
-// fazer; uma missão exige a habilitação da missão e, no C152, no C172 e no PA-34, também a do avião.
+// fazer; uma missão exige a habilitação da missão e, no C152, no C172 e no PA-34, também a do avião. O voo pode exigir
+// mais: pelo curso do aluno (o Noturno do PC exige IFR) e pelo próprio recurso (o avião com habilitação própria, como o
+// PR-VOM, exige a habilitação "aviao:<matrícula>", que aparece na grade quando o recurso é marcado em Recursos).
+import { MIS } from './config.js';
+import { exigenciasDoAviao, PREFIXO_DA_HABILITACAO_DO_AVIAO, MATRICULA } from './frota.js';
 
 // Ordem da grade na aba Instrutores (curto: rótulo da grade; nome: o nome completo, na dica e nas mensagens)
 export const HABILITACOES = [
@@ -29,11 +33,16 @@ export const HABILITACOES = [
 ];
 const ORDEM = new Map(HABILITACOES.map((h, i) => [h.id, i]));
 const NOME = new Map(HABILITACOES.map(h => [h.id, h.nome]));
-export const nomeDaHabilitacao = id => NOME.get(id) || id;
+// A habilitação própria de um recurso: "aviao:PR-VOM"
+const ehDoAviao = id => typeof id === 'string' && id.startsWith(PREFIXO_DA_HABILITACAO_DO_AVIAO) && MATRICULA.test(id.slice(PREFIXO_DA_HABILITACAO_DO_AVIAO.length));
+export const nomeDaHabilitacao = id => NOME.get(id) || (ehDoAviao(id) ? `Avião ${id.slice(PREFIXO_DA_HABILITACAO_DO_AVIAO.length)}` : id);
 
 // Lista válida: só habilitações conhecidas, sem repetição, na ordem da grade
+// (as habilitações próprias dos recursos vêm depois, na ordem das matrículas)
+const posicao = h => (ORDEM.has(h) ? ORDEM.get(h) : HABILITACOES.length);
 export const normalizarHabilitacoes = lista =>
-  (Array.isArray(lista) ? [...new Set(lista.filter(h => ORDEM.has(h)))] : []).sort((a, b) => ORDEM.get(a) - ORDEM.get(b));
+  (Array.isArray(lista) ? [...new Set(lista.filter(h => ORDEM.has(h) || ehDoAviao(h)))] : [])
+    .sort((a, b) => posicao(a) - posicao(b) || (a < b ? -1 : a > b ? 1 : 0));
 
 // Habilitação de cada missão (o simulador depende do equipamento) e a exigida pelo avião
 const DA_MISSAO = {
@@ -75,23 +84,28 @@ const DO_AVIAO = { 'C152': 'c152', 'C172': 'c172', 'PA-34': 'mlte' };
 // Só as chaves do próprio mapa (nomes como "constructor" ou "toString" não contam)
 const doMapa = (mapa, chave, padrao) => (Object.hasOwn(mapa, chave) ? mapa[chave] : padrao);
 
-// Exigências da missão no equipamento: todos os grupos, e em cada grupo basta uma das habilitações
-export function exigencias(mis, eq) {
-  if (ehCheque(mis)) return CHEQUES[mis].map(h => [h]);
-  const grupos = [[mis === 'Simulador' ? doMapa(DO_SIMULADOR, eq, 'sim_mono') : doMapa(DA_MISSAO, mis, 'local')]];
-  if (Object.hasOwn(DO_AVIAO, eq) && !grupos.some(g => g.includes(DO_AVIAO[eq]))) grupos.push([DO_AVIAO[eq]]);
+// Exigências da missão no equipamento: todos os grupos, e em cada grupo basta uma das habilitações. Com o contexto do
+// voo, também as do curso do aluno (MIS[mis].porCurso: o Noturno do PC exige IFR) e as do recurso (habilitação própria)
+export function exigencias(mis, eq, { curso, recurso } = {}) {
+  const grupos = ehCheque(mis) ? CHEQUES[mis].map(h => [h])
+    : [[mis === 'Simulador' ? doMapa(DO_SIMULADOR, eq, 'sim_mono') : doMapa(DA_MISSAO, mis, 'local')]];
+  if (!ehCheque(mis) && Object.hasOwn(DO_AVIAO, eq) && !grupos.some(g => g.includes(DO_AVIAO[eq]))) grupos.push([DO_AVIAO[eq]]);
+  const regra = Object.hasOwn(MIS, mis) ? MIS[mis] : null;
+  const doCurso = regra && regra.porCurso && typeof curso === 'string' && Object.hasOwn(regra.porCurso, curso) ? regra.porCurso[curso].habilitacoes || [] : [];
+  for (const h of [...doCurso, ...exigenciasDoAviao(recurso)]) if (!grupos.some(g => g.length === 1 && g[0] === h)) grupos.push([h]);
   return grupos;
 }
 
-export const podeFazer = (instrutor, mis, eq) => {
+// contexto: { curso, recurso } do voo (sem ele, só a missão e o tipo)
+export const podeFazer = (instrutor, mis, eq, contexto) => {
   const hab = Array.isArray(instrutor.hab) ? instrutor.hab : [];
-  return exigencias(mis, eq).every(grupo => grupo.some(h => hab.includes(h)));
+  return exigencias(mis, eq, contexto).every(grupo => grupo.some(h => hab.includes(h)));
 };
 
 // Quem pode dar ao menos um dos voos de cheque (a fila do rodízio dos cheques)
 export const podeAlgumCheque = instrutor => Object.keys(CHEQUES).some(mis => podeFazer(instrutor, mis));
 
-export const descreverExigencias = (mis, eq) => exigencias(mis, eq).map(g => g.map(h => NOME.get(h)).join(' ou ')).join(' + ');
+export const descreverExigencias = (mis, eq, contexto) => exigencias(mis, eq, contexto).map(g => g.map(nomeDaHabilitacao).join(' ou ')).join(' + ');
 
 // Migração dos níveis cumulativos A01–A09: o instrutor recebe exatamente o que o nível permitia
 // (checadores não existiam: começam desmarcados)

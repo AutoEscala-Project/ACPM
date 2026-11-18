@@ -121,8 +121,8 @@ test.describe('Demanda', () => {
     ));
 
     await linha.locator('[data-f="mis"]').selectOption('Noturno');
-    // Horários em minutos: o Noturno sai às 17:30 (1050)
-    expect(await valores()).toEqual({ eq: 'C172', p1: '1050', p2: '1050', nb: '1' });
+    // Horários em minutos: o Noturno sai às 17:30 (1050), com 4 h no dia (o translado e o noturno em BH)
+    expect(await valores()).toEqual({ eq: 'C172', p1: '1050', p2: '1050', nb: '4' });
 
     await linha.locator('[data-f="mis"]').selectOption('Ground C152');
     expect(await valores()).toEqual({ eq: 'Sala Ground', p1: '500', p2: '610', nb: '1.5' });

@@ -31,8 +31,7 @@
     {"a":870,"b":1050,"r":"SIM-MLTE-D","s":"Aluno 10","ins":"Instrutor 07","mis":"Simulador","status":"Confirmado","fKey":"1015_0_1","classKey":"1015_0_1","isGround":false,"w":6,"o":9,"stuId":1015,"mid":0,"insId":7,"eqType":"Sim. Multi","h":3,"ss":"1/1","stuKg":78,"insKg":55,"limKg":0,"kg":133,"baseTag":"Pref. 1","tag":"Pref. 1"},
     {"a":870,"b":1050,"r":"PR-IGU","s":"Aluno 20","ins":"Instrutor 12","mis":"Navegação","status":"Confirmado","fKey":"1028_0_1","classKey":"1028_0_1","isGround":false,"w":6,"o":19,"stuId":1028,"mid":0,"insId":12,"eqType":"C152","h":3,"ss":"1/1","stuKg":59,"insKg":84,"limKg":170,"kg":143,"baseTag":"Pref. 1","tag":"Pref. 1"},
     {"a":980,"b":1070,"r":"SALA-GROUND","s":"Aluno 03","ins":"Instrutor 10","mis":"Ground C152","status":"Confirmado","fKey":"1003_0_1","classKey":"GND_Ground C152_7_10","isGround":true,"w":7,"o":2,"stuId":1003,"mid":0,"insId":10,"eqType":"Sala Ground","h":1.5,"ss":"1/1","stuKg":82,"insKg":67,"limKg":0,"kg":0,"baseTag":"Próximo livre","tag":"Próximo livre","groupSize":1},
-    {"a":980,"b":1160,"r":"SIM-MONO-A","s":"Aluno 18","ins":"Instrutor 05","mis":"Simulador","status":"Confirmado","fKey":"1024_1025_1","classKey":"1024_1025_1","isGround":false,"w":7,"o":17,"stuId":1024,"mid":1025,"insId":5,"eqType":"Sim. Mono","h":3,"ss":"1/1","stuKg":0,"insKg":94,"limKg":0,"kg":0,"baseTag":"Pref. 2","tag":"Pref. 2"},
-    {"a":1050,"b":1110,"r":"PP-ABP","s":"Aluno 25","ins":"Instrutor 06","mis":"Noturno","status":"Confirmado","fKey":"1037_0_1","classKey":"1037_0_1","isGround":false,"w":8,"o":24,"stuId":1037,"mid":0,"insId":6,"eqType":"C172","h":1,"ss":"1/1","stuKg":62,"insKg":73,"limKg":222,"kg":135,"baseTag":"Pref. 1","tag":"Pref. 1"}
+    {"a":980,"b":1160,"r":"SIM-MONO-A","s":"Aluno 18","ins":"Instrutor 05","mis":"Simulador","status":"Confirmado","fKey":"1024_1025_1","classKey":"1024_1025_1","isGround":false,"w":7,"o":17,"stuId":1024,"mid":1025,"insId":5,"eqType":"Sim. Mono","h":3,"ss":"1/1","stuKg":0,"insKg":94,"limKg":0,"kg":0,"baseTag":"Pref. 2","tag":"Pref. 2"}
   ],
   "al": [
     {"t":"err","s":"Aluno 08","m":"Rejeitado: nenhum instrutor ativo tem a habilitação de IFR no PA-34 (Voo IFR + MLTE (PA-34)).","codigo":"sem-instrutor-habilitado"},
@@ -48,7 +47,8 @@
     {"t":"err","s":"Aluno 23","m":"Rejeitado: nenhum instrutor ativo tem a habilitação de Parafuso no PA-34 (Voo de Parafuso (SPIN) + MLTE (PA-34)).","codigo":"sem-instrutor-habilitado"},
     {"t":"err","s":"Aluno 27 (IFR)","m":"Rejeitado: os instrutores habilitados (Voo IFR + C172) já têm outro compromisso nos horários possíveis.","codigo":"instrutores-ocupados"},
     {"t":"err","s":"Aluno 16 (Voo Local)","m":"Rejeitado: nenhum instrutor ativo tem a habilitação de Voo Local no PA-34 (Voo Local + MLTE (PA-34)).","codigo":"sem-instrutor-habilitado"},
-    {"t":"err","s":"Aluno 09","m":"Rejeitado: os instrutores habilitados (Voo Noturno + C172) já têm outro compromisso nos horários possíveis.","codigo":"instrutores-ocupados"},
+    {"t":"err","s":"Aluno 25","m":"Rejeitado: nenhum instrutor dentro dos limites da Lei do Aeronauta (horas de voo, jornada ou repouso) nos horários possíveis.","codigo":"limite-da-lei"},
+    {"t":"err","s":"Aluno 09","m":"Rejeitado: nenhum instrutor dentro dos limites da Lei do Aeronauta (horas de voo, jornada ou repouso) nos horários possíveis.","codigo":"limite-da-lei"},
     {"t":"err","s":"Aluno 21","m":"Rejeitado: nenhum instrutor dentro dos limites da Lei do Aeronauta (horas de voo, jornada ou repouso) nos horários possíveis.","codigo":"limite-da-lei"},
     {"t":"err","s":"Aluno 27","m":"Rejeitado: os instrutores habilitados (Voo Local + C172) já têm outro compromisso nos horários possíveis.","codigo":"instrutores-ocupados"}
   ],

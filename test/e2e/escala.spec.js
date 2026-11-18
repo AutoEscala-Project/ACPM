@@ -19,7 +19,7 @@ test.describe('Escala', () => {
   });
 
   test('filtra por equipamento e por texto', async ({ page }) => {
-    await page.locator('#flt-esc-eq').selectOption('PR-VOM');
+    await page.locator('#flt-esc-eq').selectOption('PT-JOB');
     const porEquipamento = await lerEscala(page);
     await page.locator('#flt-esc-eq').selectOption('');
     await page.locator('#flt-esc-q').fill('ground');

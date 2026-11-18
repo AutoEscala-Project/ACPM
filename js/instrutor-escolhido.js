@@ -5,20 +5,22 @@
 //   escala é refeito em volta. O pedido também guarda o instrutor, então ele continua quando o voo é solto.
 // Na turma de Ground, o que muda num voo que já está na escala muda a turma inteira (uma turma tem um instrutor só).
 // "Automático" devolve a escolha ao app.
-import { AIRCRAFT_EQ_TYPES, GROUND_EQ_TYPE } from './config.js';
+import { GROUND_EQ_TYPE } from './config.js';
 import { podeFazer } from './habilitacoes.js';
+import { historicoDoDia } from './noturno.js';
+import { FROTA_INICIAL, recursoDaFrota } from './frota.js';
 import { normalizarLimites } from './limites.js';
 import { problemasDoInstrutor } from './viabilidade.js';
 import { isGroundMission } from './rules.js';
 import { pinoDoVoo, fixoPeloStatus } from './fixos.js';
-import { chaveDoVoo, pedidoDoAluno, statusDoVoo, umPorUnidade } from './voo.js';
+import { chaveDoVoo, pedidoDoAluno, statusDoVoo, umPorUnidade, compromissoDoVoo } from './voo.js';
 
 const instrutorValido = v => Number.isInteger(v) && v > 0;
 
 // Por que o pedido não pode voar com o instrutor em nenhum horário (o texto curto das opções), ou ''
 function impedimentoDoPedido(x, aluno, pedido) {
   if (!x.on) return 'fora nesta data';
-  if (!podeFazer(x, pedido.mis, isGroundMission(pedido.mis) ? GROUND_EQ_TYPE : pedido.eq)) return 'sem a habilitação';
+  if (!podeFazer(x, pedido.mis, isGroundMission(pedido.mis) ? GROUND_EQ_TYPE : pedido.eq, { curso: aluno.curso })) return 'sem a habilitação';
   if ((aluno.bl || []).includes(x.id)) return 'em Não escalar com';
   return '';
 }
@@ -53,11 +55,13 @@ export function instrutoresDoVoo(estado, resultado, fKey) {
   const outros = umPorUnidade(resultado.out.filter(o => !chaves.has(o.fKey) && statusDoVoo(o, estado.fStatus) !== 'Cancelado'));
   const alunos = new Map(estado.stu.map(s => [s.id, s]));
   const limites = normalizarLimites(estado.limites);
-  const horas = estado.horasDosInstrutores || {};
+  const historicoDe = historicoDoDia(estado);
   const opcoes = estado.ins.map(x => {
-    const [problema] = problemasDoInstrutor(x, { mis: voo.mis, tipo: voo.isGround ? GROUND_EQ_TYPE : voo.eqType, a: voo.a, b: voo.b, alunos: grupo.map(o => alunos.get(o.stuId)), stuKg: voo.stuKg }, {
-      compromissos: outros.filter(o => o.insId === x.id).map(o => ({ a: o.a, b: o.b, voo: AIRCRAFT_EQ_TYPES.includes(o.eqType) })),
-      historico: horas[x.id] || null, limites, peso: voo.isGround ? null : {}
+    // Com o curso do aluno (o noturno do PC é IFR) e o avião do voo (a habilitação própria dele)
+    const contexto = { curso: (alunos.get(voo.stuId) || {}).curso, recurso: voo.isGround ? null : recursoDaFrota(Array.isArray(estado.frota) ? estado.frota : FROTA_INICIAL, voo.r) };
+    const [problema] = problemasDoInstrutor(x, { mis: voo.mis, tipo: voo.isGround ? GROUND_EQ_TYPE : voo.eqType, a: voo.a, b: voo.b, alunos: grupo.map(o => alunos.get(o.stuId)), stuKg: voo.stuKg, ...contexto }, {
+      compromissos: outros.filter(o => o.insId === x.id).map(o => compromissoDoVoo(o)),
+      historico: historicoDe(x.id), limites, peso: voo.isGround ? null : {}
     });
     if (x.id === voo.insId || !problema) return { id: x.id, nm: x.nm, nota: '' };
     const comQuem = problema.codigo === 'instrutor-ocupado' && outros.find(o => o.insId === x.id && o.a < voo.b && o.b > voo.a);

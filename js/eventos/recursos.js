@@ -5,7 +5,7 @@ import { opcoesDeCategoria, categoriaDoTipo } from '../categorias.js';
 import { WIN, REVISAO_H } from '../config.js';
 import { $, showToast } from '../dom.js';
 import { fmtH, lerHoras } from '../format.js';
-import { novoRecurso } from '../frota.js';
+import { novoRecurso, ATRIBUTOS_DO_RECURSO, atributoVale } from '../frota.js';
 import { normalizarHangar, moverNoHangar } from '../hangar.js';
 import { horariosDaMissao, ajustarPreferencias, descreverHorarios } from '../horarios.js';
 import { S, isGestor } from '../state.js';
@@ -13,7 +13,8 @@ import { confirmado } from './confirmacao.js';
 import { aoAcionar, aoMudarCampo } from './registro.js';
 import { rDem } from '../views/demanda.js';
 import { NOMES_DAS_CATEGORIAS, abrirEditorDosHorarios, fecharEditorDosHorarios, tirarDoRascunho, porNoRascunho, escolherModelo, rascunhoDosHorarios, editorDosHorariosAberto } from '../views/horarios.js';
-import { rRec, rRevisao, rHangar } from '../views/recursos.js';
+import { rRec, rRevisao, rHangar, alternarAtributos } from '../views/recursos.js';
+import { rIns, rPainelDoInstrutor } from '../views/cadastros.js';
 
 // O campo do recurso com erro (aria-invalid); o motivo (#rec-erro) é a descrição dele: o leitor de tela diz os dois
 const CAMPOS_DO_RECURSO = { reg: '#rec-reg', tipo: '#rec-tipo' };
@@ -51,6 +52,26 @@ $('#form-recurso').onsubmit = e => {
   mostrarFormDoRecurso(false);
   showToast(`${recurso.reg} adicionado à frota.`, 'ok');
 };
+
+// Os atributos de um recurso (Só Parafuso, Só VFR e Habilitação própria): o botão abre as caixas no próprio recurso, e
+// cada mudança vale para todas as datas (a escala é refeita) e entra no histórico, que desfaz
+aoAcionar('atributos-recurso', b => alternarAtributos(b.dataset.id));
+function marcarAtributo(reg, atributo, val) {
+  const recurso = (S.frota || []).find(f => f.reg === reg);
+  if (!recurso || !atributoVale(atributo, recurso.tipo)) return false;
+  if (val) recurso[atributo] = true;
+  else delete recurso[atributo];
+  return true;
+}
+aoMudarCampo('atributo', t => {
+  const { r: reg, atributo } = t.dataset;
+  if (!marcarAtributo(reg, atributo, t.checked)) return;
+  gravarAlteracao('mod', `${reg}: ${ATRIBUTOS_DO_RECURSO[atributo].nome} ${t.checked ? 'marcado' : 'desmarcado'}`, {
+    kind: 'setAtributo', reg, atributo, val: !t.checked, label: '↶ Reverter'
+  });
+  rRec(); rIns(); rPainelDoInstrutor(); rDem();
+  document.querySelector(`[data-a="atributo"][data-r="${CSS.escape(reg)}"][data-atributo="${atributo}"]`)?.focus();
+});
 
 // Categoria (sem a sala de Ground)
 $('#flt-rec-cat').innerHTML = opcoesDeCategoria({ comGround: false });

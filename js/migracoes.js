@@ -10,7 +10,7 @@ import { disponibilidadeAtual } from './rules.js';
 import { LIMITES_DA_LEI } from './limites.js';
 import { cursosVazios } from './cursos.js';
 
-export const ESQUEMA = 22;
+export const ESQUEMA = 23;
 
 // Um pedido do dia com as preferências em minutos e a disponibilidade no formato atual (formato 12)
 function pedidoEmMinutos(pedido) {
@@ -173,6 +173,21 @@ const PASSOS = {
   // ao gravar) recusar os dados e pedir para recarregar
   22: {
     cadastro: cadastro => cadastro,
+    dia: dia => dia
+  },
+  // Versão 23: os atributos dos recursos da frota (js/frota.js). O PR-CPL não é homologado IFR ("Só VFR") e o PR-VOM
+  // exige do instrutor a habilitação própria dele (ninguém a tem até ser marcada em Instrutores); o que já estiver
+  // marcado fica. As habilitações dos instrutores passam a aceitar a do avião ("aviao:PR-VOM")
+  23: {
+    cadastro: cadastro => (Array.isArray(cadastro.frota) ? {
+      ...cadastro,
+      frota: cadastro.frota.map(f => {
+        if (!f || typeof f !== 'object') return f;
+        if (f.reg === 'PR-CPL' && f.tipo === 'C172' && f.soVfr === undefined) return { ...f, soVfr: true };
+        if (f.reg === 'PR-VOM' && f.tipo === 'PA-34' && f.habilitacaoPropria === undefined) return { ...f, habilitacaoPropria: true };
+        return f;
+      })
+    } : cadastro),
     dia: dia => dia
   }
 };

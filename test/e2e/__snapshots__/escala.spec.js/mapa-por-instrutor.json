@@ -24,22 +24,21 @@
     ]
   },
   {
-    "rotulo": "Instrutor 07 1 h",
+    "rotulo": "Instrutor 07 4 h",
     "barras": [
-      "17:30–18:30 · PP-AJS / Aluno 01 · Noturno"
+      "17:30–21:30 · PP-ABP / Aluno 01 · Noturno"
     ]
   },
   {
-    "rotulo": "Instrutor 08 2 h",
+    "rotulo": "Instrutor 08 1 h",
     "barras": [
-      "16:20–17:20 · PP-ABP / Aluno 14 · IFR",
-      "17:30–18:30 · PP-ABP / Aluno 15 · Noturno"
+      "11:30–12:30 · PP-ABP / Aluno 14 · IFR"
     ]
   },
   {
     "rotulo": "Instrutor 09 2 h",
     "barras": [
-      "08:30–10:30 · PR-VOM / Aluno 01 · Multimotor"
+      "08:30–10:30 · PT-JOB / Aluno 01 · Multimotor"
     ]
   },
   {
@@ -64,6 +63,12 @@
     "rotulo": "Instrutor 15 1 h",
     "barras": [
       "10:10–11:10 · PR-JPL / Aluno 08 · Parafuso"
+    ]
+  },
+  {
+    "rotulo": "Instrutor 16 4 h",
+    "barras": [
+      "17:30–21:30 · PP-AJS / Aluno 15 · Noturno"
     ]
   },
   {

@@ -5,7 +5,7 @@ import { T, GROUND_EQ_TYPE, GROUND_DURATION_H, MIS } from '../config.js';
 import { $, showToast, ligarMenu, trocarElemento } from '../dom.js';
 import { fmtDurLabel } from '../format.js';
 import { horariosDaMissao, ajustarPreferencias } from '../horarios.js';
-import { isGroundMission, blank, rotuloDaDisponibilidade, normalizeMissionFields, proximoMid, duracaoDigitada, ERRO_DA_DURACAO } from '../rules.js';
+import { isGroundMission, blank, rotuloDaDisponibilidade, normalizeMissionFields, proximoMid, duracaoDigitada, ERRO_DA_DURACAO, duracaoPadraoDaMissao } from '../rules.js';
 import { S, RES, isGestor, stuBy, insBy, getMissionTarget } from '../state.js';
 import { escolherInstrutor } from '../instrutor-escolhido.js';
 import { confirmado, comConfirmacao } from './confirmacao.js';
@@ -155,6 +155,8 @@ aoMudarCampo('d', (t, { f, c, id, mid }) => {
       t.value = h;
     }
     const eraGround = isGroundMission(target.mis);
+    // Saindo de uma missão com duração padrão ou fixa (o simulador, o Noturno), a missão nova começa com a dela
+    const tinhaPadrao = Boolean((MIS[target.mis] || {}).duracaoPadrao || (MIS[target.mis] || {}).duracaoFixaH);
     target[f] = (f === 'mis' || f === 'eq') ? t.value : +t.value;
     // Missão, recurso ou horas mudados à mão: o pedido deixa de ser a missão do curso
     if (['mis', 'eq', 'nb'].includes(f)) delete target.etapa;
@@ -166,8 +168,9 @@ aoMudarCampo('d', (t, { f, c, id, mid }) => {
       if (mRule.isGround) {
         target.eq = GROUND_EQ_TYPE;
         target.nb = GROUND_DURATION_H;
-      } else if (eraGround) {
-        target.nb = 1;
+      } else if (eraGround || tinhaPadrao || mRule.duracaoPadrao) {
+        // A missão nova começa com a duração padrão dela (o simulador, 2 h); vindo do Ground ou do simulador, também
+        target.nb = duracaoPadraoDaMissao(target.mis);
       }
     }
     // Os horários da missão e do avião novos (o Noturno sai às 17:30; o PA-34 tem os seus)
