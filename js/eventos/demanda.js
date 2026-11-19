@@ -50,9 +50,12 @@ document.addEventListener('change', e => {
   if (e.target.id === 'onlyfly') $('#dem').classList.toggle('only', e.target.checked);
 });
 
+// "Limpar demanda": cada pedido fica em branco, sem nada do voo de antes (como o pedido que a agenda reaproveita): saem
+// a disponibilidade, a missão do curso, o pedido da agenda e o instrutor escolhido, e as missões extras. Assim o Voa
+// religado à mão não traz a disponibilidade de antes, e o pedido da agenda da mesma missão toma este voo
 comConfirmacao('#clr', 'Confirmar limpeza', () => {
   if (isGestor()) return;
-  S.stu.forEach(d => { Object.assign(d, blank()); delete d.insId; d.extra = []; });
+  S.stu.forEach(d => { Object.assign(d, blank()); for (const campo of ['jan', 'etapa', 'solicitacao', 'insId']) delete d[campo]; d.extra = []; });
   gravarAlteracao('exc', 'Demanda limpa');
   rDem();
   fecharMenuMais();

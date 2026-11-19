@@ -1,4 +1,4 @@
-import { test, expect, abrir, abrirSintetico, abrirComExemplo, irPara, abrirEscala, lerEscala } from './fixtures.js';
+import { test, expect, abrir, abrirSintetico, abrirComExemplo, irPara, abrirEscala, lerEscala, AMANHA } from './fixtures.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
 
 const linhaDoAluno = (page, nome) => page.locator(`#dem tr[data-k="d"][data-mid="0"][data-nm="${nome.toLowerCase()}"]`);
@@ -48,6 +48,40 @@ test.describe('Demanda', () => {
     await expect(page.locator('#clr')).toHaveText('Confirmar limpeza');
     await page.locator('#clr').click();
     await expect(page.locator('#dem tr[data-k="d"].on')).toHaveCount(0);
+  });
+
+  // O pedido limpo fica em branco, sem nada do voo de antes (como o pedido que a agenda reaproveita): a disponibilidade, a
+  // missão do curso, o pedido da agenda e o instrutor escolhido
+  test('"Limpar demanda" deixa o pedido sem nada do voo de antes: o Voa religado e o pedido da agenda da mesma missão não trazem o antigo', async ({ page }) => {
+    const antes = { p1: 390, p2: -1, jan: 'manha', solicitacao: 7, etapa: 'PP-01', insId: 1 };
+    await abrir(page, { estado: cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, antes, { curso: 'PP' })] }) });
+    await irPara(page, 'dem');
+    await page.locator('#btn-mais-dem').click();
+    await page.locator('#clr').click();
+    await page.locator('#clr').click();
+    await expect(page.locator('#dem tr[data-k="d"].on')).toHaveCount(0);
+    const guardado = () => page.evaluate(data => JSON.parse(localStorage.getItem(`acpm4_dia_${data}`)).pedidos[1000], AMANHA);
+    await expect.poll(async () => Object.keys(await guardado()).filter(c => ['jan', 'etapa', 'solicitacao', 'insId'].includes(c))).toEqual([]);
+
+    // O Voa religado à mão: qualquer horário, no automático
+    await page.locator('#onlyfly').uncheck();
+    const linha = page.locator('#dem tr[data-k="d"][data-id="1000"][data-mid="0"]');
+    await linha.locator('[data-f="fly"]').check();
+    await expect(linha.locator('[data-f="jan"]')).toHaveValue('');
+    await expect(linha.locator('[data-f="insId"]')).toHaveValue('');
+
+    // O pedido da agenda para a mesma missão (Voo Local) toma este voo, em vez de virar um segundo
+    await irPara(page, 'age');
+    await page.locator('#ag-aluno').selectOption({ label: 'Aluno 1000' });
+    await page.locator('#ag-missao').selectOption('Voo Local');
+    await page.locator('#ag-horario').selectOption('10:10');
+    await page.locator('#ag-por').fill('Maria');
+    await page.locator('#form-agenda [type="submit"]').click();
+    await expect(page.locator('#agenda-lista tbody tr')).toHaveCount(1);
+    await irPara(page, 'dem');
+    await page.locator('#importar-agenda').click();
+    await expect(page.locator('#dem tr[data-k="d"][data-id="1000"]')).toHaveCount(1);
+    await expect(linha.locator('[data-f="jan"]')).toHaveValue('h610');
   });
 
 
