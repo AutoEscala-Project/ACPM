@@ -15,7 +15,11 @@ import { aluno, cenario, instrutor } from '../helpers/montar.js';
 
 const ATAQUE = 'x"><img/src/onerror=window.__xss=1>';
 
-// Uma reversão válida de cada tipo, com todos os campos que o app grava
+// O pedido de antes de um agendamento, com todos os campos do pedido (CAMPOS_DO_PEDIDO)
+const PEDIDO_DE_ANTES = { fly: true, mis: 'Navegação', eq: 'C172', p1: 500, p2: -1, nb: 2, ss: 1, pr: 3, jan: 'manha', etapa: 'PP-07', solicitacao: 7, insId: 2, cursoDaEtapa: 'PP' };
+// Uma reversão válida de cada tipo, com todos os campos que o app grava. Do voo agendado na Escala, duas: o criado numa
+// missão extra (sem o pedido de antes) e o que mudou de lugar (o pedido, o voo fixo e a disponibilidade do instrutor de
+// antes, e o pedido como o agendamento o deixou)
 const VALIDAS = [
   { kind: 'setFly', stuId: 1000, mid: 0, val: true, extras: [1001, 1002], label: '↶ Restaurar' },
   { kind: 'setAv', reg: 'PR-VOB', val: true, label: '↶ Reverter' },
@@ -24,7 +28,14 @@ const VALIDAS = [
   { kind: 'restaurarFixos', fixos: { '1000_0_1': { a: 390, b: 450, r: 'PR-VOB', insId: 1, classKey: 'g', escolhido: true } }, pedidos: [{ stuId: 1000, mid: 0, insId: 2 }], label: '↶ Reverter' },
   { kind: 'restaurarEscolha', pedidos: [{ stuId: 1000, mid: 0, insId: 0 }], fixos: { '1000_0_1': { a: 390, b: 450, r: 'PR-VOB', insId: 1 } }, soltar: ['1001_2_1'], label: '↶ Reverter' },
   { kind: 'restaurarHorarios', cat: 'PA-34', lista: [390, 450], pedidos: [{ stuId: 1000, mid: 2, p1: 450, p2: -1, jan: 'h450' }], label: '↶ Reverter' },
-  { kind: 'readicionarRecurso', recurso: { reg: 'PR-NEW', tipo: 'C172', soVfr: true }, av: false, label: '↶ Reverter' }
+  { kind: 'readicionarRecurso', recurso: { reg: 'PR-NEW', tipo: 'C172', soVfr: true }, av: false, label: '↶ Reverter' },
+  { kind: 'desfazerAgendamento', stuId: 1000, mid: 2, criado: true, pedido: null, fixo: null, disponibilidade: null, label: '↶ Desfazer' },
+  {
+    kind: 'desfazerAgendamento', stuId: 1000, mid: 0, criado: false, pedido: PEDIDO_DE_ANTES,
+    fixo: { a: 500, b: 620, r: 'PR-HAR', insId: 2, classKey: 'g', escolhido: true, agendado: true },
+    disponibilidade: { insId: 5, on: true, aw: [true, true, true, true, false, false, false, false, false] },
+    criadoComo: { ...PEDIDO_DE_ANTES, p1: 610, jan: 'h610' }, label: '↶ Desfazer'
+  }
 ];
 // O que o histórico adulterado pode trazer em qualquer campo (é JSON): objetos que não viram texto (sem um toString ou
 // um valueOf que sirva), listas deles, os nomes do protótipo e os tipos trocados
@@ -69,6 +80,7 @@ describe('Reversões do histórico', () => {
   // A entrada adulterada só perde o botão: a validação nunca lança (o painel do Histórico, que a chama para cada entrada,
   // não seria desenhado), e o que ela devolve tem só os valores do formato do app
   it('qualquer campo adulterado, de qualquer tipo de reversão, não lança: a reversão vale limpa ou não vale', () => {
+    assert.deepEqual(Object.keys(PEDIDO_DE_ANTES).sort(), [...CAMPOS_DO_PEDIDO].sort(), 'o pedido de antes da amostra tem todos os campos do pedido');
     for (const rev of VALIDAS) {
       assert.deepEqual(validarReversao(rev, FROTA_INICIAL), rev);
       for (const caminho of caminhos(rev)) {
