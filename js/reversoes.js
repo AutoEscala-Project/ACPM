@@ -1,6 +1,7 @@
 // As reversões do histórico. O que "Reverter" desfaz vem gravado no histórico (no servidor, por
 // quem tem conta de operador), então só vale no formato que o próprio app produz: a reversão fora dele não vira botão
-// nem é aplicada. Um recurso retirado volta pela mesma validação do "+ Novo recurso".
+// nem é aplicada. Um recurso retirado volta pela mesma validação do "+ Novo recurso". Cada campo tem o tipo conferido
+// antes de ser usado: a validação nunca lança, e a entrada adulterada só fica sem o botão (o painel continua desenhado).
 import { novoRecurso, MATRICULA, ATRIBUTOS_DO_RECURSO } from './frota.js';
 import { normalizarFixos } from './fixos.js';
 import { CATEGORIAS_COM_HORARIOS, normalizarHorarios } from './horarios.js';
@@ -26,9 +27,11 @@ export function validarReversao(rev, frota) {
   if (rev.kind === 'setAv') {
     return typeof rev.reg === 'string' && MATRICULA.test(rev.reg) && typeof rev.val === 'boolean' ? { kind: 'setAv', reg: rev.reg, val: rev.val, label } : null;
   }
-  // Um atributo de um recurso (Só Parafuso, Só VFR ou Habilitação própria)
+  // Um atributo de um recurso (Só Parafuso, Só VFR ou Habilitação própria). Os tipos antes de tudo: o Object.hasOwn
+  // converte o nome em texto, e um objeto que não vira texto (sem toString) lançaria
   if (rev.kind === 'setAtributo') {
-    return typeof rev.reg === 'string' && MATRICULA.test(rev.reg) && Object.hasOwn(ATRIBUTOS_DO_RECURSO, rev.atributo) && typeof rev.val === 'boolean'
+    return typeof rev.reg === 'string' && typeof rev.atributo === 'string' && typeof rev.val === 'boolean'
+      && MATRICULA.test(rev.reg) && Object.hasOwn(ATRIBUTOS_DO_RECURSO, rev.atributo)
       ? { kind: 'setAtributo', reg: rev.reg, atributo: rev.atributo, val: rev.val, label } : null;
   }
   if (rev.kind === 'setInsOn') return idValido(rev.insId) && typeof rev.val === 'boolean' ? { kind: 'setInsOn', insId: rev.insId, val: rev.val, label } : null;
