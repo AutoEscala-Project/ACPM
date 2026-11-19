@@ -242,6 +242,10 @@ test.describe('Agendar um voo na Escala', () => {
   test('o peso digitado vai para o cadastro (Alunos e Instrutores), com uma entrada no histórico cada; sem peso, o envio para no campo', async ({ page }) => {
     await abrirComCurso(page);
     await abrirDialogo(page);
+    // Os campos dizem ao leitor de tela que o peso digitado fica no cadastro, e o peso no avião
+    for (const id of ['#agd-kg-aluno', '#agd-kg-instrutor']) {
+      await expect(page.locator(id)).toHaveAccessibleDescription('O peso digitado fica no cadastro da pessoa. 140 kg de 170 kg no C152: tanque cheio.');
+    }
     await page.locator('#agd-kg-aluno').fill('');
     await expect(page.locator('#agd-conferencia .agd-avisos li')).toContainText('Peso do aluno não informado');
     await expect(page.locator('#agd-peso-resumo')).toHaveText('Sem um dos pesos, o limite de 170 kg do C152 não é conferido.');
