@@ -94,6 +94,40 @@ test.describe('Cursos', () => {
     expect((await programaGuardado(page)).alteracoes).toHaveLength(1);
   });
 
+  // O programa trazido do cadastro fica numa fase só, "Programa": quando ela ganha companhia, os textos dizem "a fase
+  // Programa" (como dizem "a Fase 2"), e não "a Programa"
+  test('com a fase "Programa" e outra, os nomes e as alterações dizem "a fase Programa"', async ({ page }) => {
+    await abrir(page, { estado: dia({ cursos: PROGRAMA }) });
+    await irPara(page, 'cur');
+    const pp = curso(page, 'PP');
+    await pp.getByRole('button', { name: '+ Fase' }).click();
+    await expect(pp.locator('.fase')).toHaveCount(2);
+    const programa = pp.locator('.fase').first();
+    await expect(programa.locator('[data-cfa="nome"]')).toHaveAccessibleName('Nome da fase Programa');
+    await expect(programa.locator('[data-cfa="modulo"]')).toHaveAccessibleName('Módulo da fase Programa');
+    await expect(programa.locator('[data-cfa="regra"]')).toHaveAccessibleName('Quando a fase Programa abre');
+    await expect(programa.locator('[data-act="fase-descer"]')).toHaveAccessibleName('Descer a fase Programa');
+    await expect(programa.locator('[data-act="fase-retirar"]')).toHaveAccessibleName('Tirar a fase Programa do programa');
+    await expect(programa.locator('tbody tr').first().locator('[data-cf="codigo"]')).toHaveAccessibleName('Código da 1ª missão da fase Programa');
+    const textos = await pp.evaluate(c => [...c.querySelectorAll('[aria-label], button, legend, summary, p')].map(e => e.getAttribute('aria-label') || e.textContent).join(' | '));
+    expect(textos).not.toMatch(/\b(na|da|a) Programa\b/);
+    // "+ Missão" na fase Programa, a missão para a Fase 2 e de volta, e a Fase 2 depois da fase Programa
+    await programa.getByRole('button', { name: '+ Missão na fase Programa' }).click();
+    const pp03 = pp.locator('tr', { has: page.locator('[data-cf="codigo"][value="PP-03"]') });
+    await pp03.locator('[data-cf="fase"]').selectOption({ label: 'Fase 2' });
+    await pp.locator('tr', { has: page.locator('[data-cf="codigo"][value="PP-03"]') }).locator('[data-cf="fase"]').selectOption({ label: 'Programa' });
+    const fase2 = pp.locator('.fase').nth(1);
+    await fase2.locator('[data-cfa="regra"]').selectOption('depois');
+    await expect(fase2.locator('details.requisitos legend')).toHaveText('A Fase 2 abre depois de');
+    await expect.poll(async () => (await programaGuardado(page)).alteracoes.map(a => a.descricao)).toEqual([
+      'Programa trazido do cadastro (2 missões)', 'PP: Fase 2 incluída', 'PP: PP-03 incluída na fase Programa', 'PP: PP-03 passou para a Fase 2',
+      'PP: PP-03 passou para a fase Programa', 'PP: Fase 2 depois de Programa'
+    ]);
+    // Para quem só consulta: "Abre depois da fase Programa"
+    await page.locator('#role-sel').selectOption('gestor');
+    await expect(pp.locator('p.regra')).toHaveText(['Abre depois da fase Programa']);
+  });
+
   test('cada aluno tem o curso dele, na lista de alunos', async ({ page }) => {
     await abrir(page, { estado: dia() });
     await irPara(page, 'alu');

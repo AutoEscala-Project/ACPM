@@ -11,7 +11,7 @@
 // perfil): aberta, nunca fica com os controles de antes. Sem os programas (a leitura falhou, ou eles ainda esperam a
 // conversão do cadastro), ela diz por quê.
 import { MIS, DURACAO_MAXIMA_H } from '../config.js';
-import { percursoDoCurso, rotuloDaFase, requisitosPossiveis } from '../programa.js';
+import { percursoDoCurso, rotuloDaFase, nomeDaFase, requisitosPossiveis } from '../programa.js';
 import { MODELOS } from '../modelos-de-curso.js';
 import { FUSO_DO_AEROCLUBE } from '../agenda.js';
 import { ApiClient } from '../storage.js';
@@ -46,11 +46,11 @@ const TRAVADO = 'Já há resultados com este código: o código não muda (o nom
 
 // "A, B e C"
 export const listaComE = nomes => (nomes.length > 1 ? `${nomes.slice(0, -1).join(', ')} e ${nomes.at(-1)}` : nomes[0] || '');
-// O que uma fase ou uma missão espera ("depois de…"): os nomes curtos das fases ou os códigos das missões, na ordem do
-// curso
-export function nomesDosRequisitos(curso, item) {
+// O que uma fase ou uma missão espera ("depois de…"): os nomes curtos das fases (ou, com nomear, o nome que ela dá a cada
+// fase: nomeDaFase, depois de "da") ou os códigos das missões, na ordem do curso
+export function nomesDosRequisitos(curso, item, nomear = rotuloDaFase) {
   const fases = new Map(curso.fases.map(f => [f.id, f])), missoes = new Map(curso.missoes.map(m => [m.id, m]));
-  return item.requer.map(id => (fases.has(id) ? rotuloDaFase(fases.get(id)) : missoes.has(id) ? missoes.get(id).codigo : null)).filter(Boolean);
+  return item.requer.map(id => (fases.has(id) ? nomear(fases.get(id)) : missoes.has(id) ? missoes.get(id).codigo : null)).filter(Boolean);
 }
 // A lista no resumo da caixa "Depois de…": até três nomes, e quantos mais
 const resumoDaLista = nomes => (nomes.length > 3 ? `${nomes.slice(0, 3).join(', ')} e mais ${nomes.length - 3}` : listaComE(nomes));
@@ -88,7 +88,7 @@ function requisitosDaFase(curso, f, abertas) {
   const marcadas = new Set(f.requer), id = `requisitos-${f.id}`;
   const fases = requisitosPossiveis(curso, f.id).map(g => `<label class="chk"><input type="checkbox" data-cfa="requer" data-fase="${esc(g.id)}" value="${esc(g.id)}"${marcadas.has(g.id) ? ' checked' : ''}> ${esc(rotuloDaFase(g))}</label>`);
   return `<details class="requisitos"${abertas.has(id) ? ' open' : ''}><summary id="${esc(id)}">Depois de: ${esc(resumoDaLista(nomesDosRequisitos(curso, f)))}</summary>
-    <fieldset><legend>A ${esc(rotuloDaFase(f))} abre depois de</legend>${fases.join('')}</fieldset></details>`;
+    <fieldset><legend>A ${esc(nomeDaFase(f))} abre depois de</legend>${fases.join('')}</fieldset></details>`;
 }
 
 // A caixa "Depois de…" de uma missão: o resumo e as missões anteriores, por fase (as de fases anteriores também valem)
@@ -138,9 +138,10 @@ function linhaDeConsulta(curso, fase, m, i) {
 }
 
 // O cabeçalho da fase, para quem muda: o título (para o leitor de tela e o nome da tabela), o nome, o módulo (com os
-// módulos em uso), quando ela abre (com a caixa "Depois de…") e os botões: subir, descer e tirar (só a fase sem missões)
+// módulos em uso), quando ela abre (com a caixa "Depois de…") e os botões: subir, descer e tirar (só a fase sem missões).
+// Os nomes dos campos e dos botões dizem a fase ("Nome da Fase 2", "Subir a fase Programa": nomeDaFase)
 function cabecalhoQueEdita(curso, f, i, total, comMissoes, nivel, abertas) {
-  const rotulo = esc(rotuloDaFase(f));
+  const rotulo = esc(nomeDaFase(f));
   const botao = (act, texto, nome, desligado, dica = '') => `<button type="button" class="x" data-act="${act}" aria-label="${nome}"${dica ? ` title="${dica}"` : ''}${desligado ? ' disabled' : ''}>${texto}</button>`;
   return `<div class="fase-cab">
     <${nivel} class="sr" id="fase-${esc(f.id)}">${esc(f.nome)}</${nivel}>
@@ -155,14 +156,15 @@ function cabecalhoQueEdita(curso, f, i, total, comMissoes, nivel, abertas) {
 // O cabeçalho da fase, para quem só consulta: o nome e, quando ela não espera só as fases anteriores, quando abre
 function cabecalhoDeConsulta(curso, f, nivel) {
   const abre = f.regra === 'livre' ? 'Abre desde o início do curso'
-    : f.regra === 'depois' ? `Abre depois ${listaComE(nomesDosRequisitos(curso, f).map(nome => `da ${nome}`))}` : '';
+    : f.regra === 'depois' ? `Abre depois ${listaComE(nomesDosRequisitos(curso, f, nomeDaFase).map(nome => `da ${nome}`))}` : '';
   return `<div class="fase-cab"><${nivel} id="fase-${esc(f.id)}">${esc(f.nome)}</${nivel}>${abre ? `<p class="regra">${esc(abre)}</p>` : ''}</div>`;
 }
 
 // Uma fase do programa: o cabeçalho, a tabela das missões e, para quem muda, o "+ Missão" dela. nivel: o título da fase
-// (h5 sob o título de um módulo; h4 sem módulo). No curso com mais de uma fase, os nomes dizem a fase
+// (h5 sob o título de um módulo; h4 sem módulo). No curso com mais de uma fase, os nomes dizem a fase ("da Fase 2", "na
+// fase Programa": nomeDaFase)
 function blocoDaFase(curso, fase, i, fases, missoes, edita, nivel, abertas) {
-  const rotulo = rotuloDaFase(fase), variasFases = fases.length > 1, onde = variasFases ? `da ${rotulo}` : `do ${curso.sigla}`;
+  const rotulo = nomeDaFase(fase), variasFases = fases.length > 1, onde = variasFases ? `da ${rotulo}` : `do ${curso.sigla}`;
   const cabecalho = edita ? cabecalhoQueEdita(curso, fase, i, fases.length, missoes.length > 0, nivel, abertas) : cabecalhoDeConsulta(curso, fase, nivel);
   const linhas = missoes.map((m, j) => (edita ? linhaQueEdita(curso, fase, m, j, missoes.length, fases, onde, abertas) : linhaDeConsulta(curso, fase, m, j)));
   const colunas = `<th>#</th><th>Código</th><th>Nome</th><th>Missão</th><th>Recurso</th><th>Horas</th><th>Quando voar<button type="button" class="dica-btn" data-dica="quando-voar" aria-label="O que é Quando voar?" aria-expanded="false"></button></th><th>Marcas</th>${edita ? '<th aria-label="Ações"></th>' : ''}`;
@@ -188,7 +190,7 @@ function retiradasDoCurso(curso, edita, abertas) {
     return `<li><span><b>${esc(m.codigo)}</b>${m.nome !== m.codigo ? ` ${esc(m.nome)}` : ''}${fase ? ` · ${esc(rotuloDaFase(fase))}` : ''}</span>${voltar('missao-restaurar', 'data-missao', m.id, m.codigo)}</li>`;
   };
   return `<details class="retiradas"${abertas.has(id) ? ' open' : ''}><summary id="${esc(id)}">Retiradas (${fasesFora.length + missoesFora.length})</summary><ul>
-    ${fasesFora.map(f => `<li><span>${esc(f.nome)}</span>${voltar('fase-restaurar', 'data-fase', f.id, rotuloDaFase(f))}</li>`).join('')}${missoesFora.map(missao).join('')}
+    ${fasesFora.map(f => `<li><span>${esc(f.nome)}</span>${voltar('fase-restaurar', 'data-fase', f.id, nomeDaFase(f))}</li>`).join('')}${missoesFora.map(missao).join('')}
   </ul></details>`;
 }
 

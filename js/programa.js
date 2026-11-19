@@ -79,6 +79,12 @@ export function indiceDoPrograma(programa) {
 // O nome curto da fase: o que vem antes do travessão ("Fase 6 – Treinamento de Voo Noturno" é a "Fase 6"; também com o
 // travessão longo ou o hífen); sem travessão, o nome inteiro
 export const rotuloDaFase = fase => fase.nome.split(/\s+[–—-]\s+/)[0];
+// A fase num texto, depois de "a", "da" ou "na": o nome curto, quando ele já diz que é uma fase ("a Fase 6"); senão, com
+// "fase" na frente ("na fase Programa", a fase única do programa trazido do cadastro; "a fase Revisão")
+export const nomeDaFase = fase => {
+  const rotulo = rotuloDaFase(fase);
+  return /^fase(?!\p{L})/iu.test(rotulo) ? rotulo : `fase ${rotulo}`;
+};
 
 // O Noturno em trechos ------------------------------------------------------------------------------------------------
 // O Noturno de dois dias é um voo só na escala (NOTURNO, em js/config.js), e o programa pode trazê-lo em missões, uma
@@ -805,17 +811,17 @@ export function ordemRecusada(curso, movido) {
   const daFaseQuebrada = primeiraQuebrada(fases, daFase);
   if (daFaseQuebrada) {
     const [f, r] = daFaseQuebrada;
-    const quem = movido === r.id ? `a ${rotuloDaFase(r)} não pode passar para depois dela` : 'ela não pode passar para antes dela';
-    return `A ${rotuloDaFase(f)} abre depois da ${rotuloDaFase(r)}: ${quem}.`;
+    const quem = movido === r.id ? `a ${nomeDaFase(r)} não pode passar para depois dela` : 'ela não pode passar para antes dela';
+    return `A ${nomeDaFase(f)} abre depois da ${nomeDaFase(r)}: ${quem}.`;
   }
   const daMissaoQuebrada = primeiraQuebrada(missoes, daMissao);
   if (!daMissaoQuebrada) return null;
   const [m, r] = daMissaoQuebrada;
-  const nomeDaFase = id => rotuloDaFase(fases.find(f => f.id === id));
+  const faseDe = id => nomeDaFase(fases.find(f => f.id === id));
   const motivo = `A missão ${m.codigo} voa depois da ${r.codigo}`;
   if (movido === r.id) return `${motivo}: a ${r.codigo} não pode passar para depois dela.`;
-  if (m.fase !== r.fase && movido === m.fase) return `${motivo}: a ${nomeDaFase(m.fase)} não pode passar para antes da ${nomeDaFase(r.fase)}.`;
-  if (m.fase !== r.fase && movido === r.fase) return `${motivo}: a ${nomeDaFase(r.fase)} não pode passar para depois da ${nomeDaFase(m.fase)}.`;
+  if (m.fase !== r.fase && movido === m.fase) return `${motivo}: a ${faseDe(m.fase)} não pode passar para antes da ${faseDe(r.fase)}.`;
+  if (m.fase !== r.fase && movido === r.fase) return `${motivo}: a ${faseDe(r.fase)} não pode passar para depois da ${faseDe(m.fase)}.`;
   return `${motivo}: ela não pode passar para antes dela.`;
 }
 

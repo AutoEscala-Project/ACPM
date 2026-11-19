@@ -12,7 +12,7 @@
 // campos e o curso novo, aqui, com o mesmo aviso
 import { aindaNaoAbriu } from '../actions.js';
 import {
-  conteudoDoCurso, incluirMissao, mudarMissao, moverMissao, retirarMissao, validarCurso, percursoDoCurso, rotuloDaFase, incluirFase, mudarFase,
+  conteudoDoCurso, incluirMissao, mudarMissao, moverMissao, retirarMissao, validarCurso, percursoDoCurso, nomeDaFase, incluirFase, mudarFase,
   moverFase, retirarFase, restaurarFase, restaurarMissao, definirRegra, marcarMissao, moverMissaoParaFase, ordemRecusada, definirTrecho, mudarCurso,
   aplicarModelo, novoCurso
 } from '../programa.js';
@@ -245,11 +245,12 @@ function abrirRequisitos(id) {
   if (resumo) resumo.parentElement.open = true;
 }
 
-// A fase nos textos, só no curso com mais de uma ("na Fase 2"); no curso com uma fase só, ela não é dita
+// A fase nos textos, só no curso com mais de uma ("na Fase 2", "na fase Programa": nomeDaFase); no curso com uma fase
+// só, ela não é dita
 function naFase(curso, faseId) {
   const { fases } = percursoDoCurso(curso);
   const fase = fases.find(f => f.id === faseId);
-  return fases.length > 1 && fase ? ` na ${rotuloDaFase(fase)}` : '';
+  return fases.length > 1 && fase ? ` na ${nomeDaFase(fase)}` : '';
 }
 
 // A regra na descrição da alteração: "PE-04 livre na fase", "NOT depois de TSL-01", "Fase 6 depois de Fase 4". Uma lista
@@ -314,7 +315,7 @@ aoAcionar(['fase-nova', 'fase-subir', 'fase-descer', 'fase-retirar'], b => {
   if (a === 'fase-nova') {
     const r = incluirFase(curso);
     if (!conferido(r.curso)) return;
-    alterar(curso, r.curso, `${rotuloDaFase(r.fase)} incluída`);
+    alterar(curso, r.curso, `${nomeDaFase(r.fase)} incluída`);
     rCursos();
     focar([`#cursos .fase[data-fase="${r.fase.id}"] [data-cfa="nome"]`], { selecionar: true });
     return;
@@ -324,7 +325,7 @@ aoAcionar(['fase-nova', 'fase-subir', 'fase-descer', 'fase-retirar'], b => {
     if (!confirmado(b, 'Confirmar')) return;
     const novo = retirarFase(curso, f.id);
     if (!novo || !conferido(novo)) return;
-    alterar(curso, novo, `${rotuloDaFase(f)} tirada do programa`);
+    alterar(curso, novo, `${nomeDaFase(f)} tirada do programa`);
     rCursos();
     // O foco vai para a fase que ficou no lugar (ou para a anterior; sem nenhuma, para o "+ Fase" do curso)
     const antes = percursoDoCurso(curso).fases, depois = percursoDoCurso(novo).fases;
@@ -335,7 +336,7 @@ aoAcionar(['fase-nova', 'fase-subir', 'fase-descer', 'fase-retirar'], b => {
   const novo = moverFase(curso, f.id, a === 'fase-subir' ? -1 : 1);
   if (!novo || !ordemValida(novo, f.id) || !conferido(novo)) return;
   const posicao = percursoDoCurso(novo).fases.findIndex(x => x.id === f.id);
-  alterar(curso, novo, `${rotuloDaFase(f)} passou para ${posicao + 1}ª`);
+  alterar(curso, novo, `${nomeDaFase(f)} passou para ${posicao + 1}ª`);
   rCursos();
   focar([`#cursos .fase[data-fase="${f.id}"] [data-act="${a}"]`, `#cursos .fase[data-fase="${f.id}"] [data-cfa="nome"]`]);
 });
@@ -351,17 +352,17 @@ aoAcionar(['fase-restaurar', 'missao-restaurar'], b => {
     const f = curso.fases.find(x => x.id === b.dataset.fase && x.removida);
     const r = f && restaurarFase(curso, f.id);
     if (!r || !conferido(r.curso)) return;
-    alterar(curso, r.curso, `${rotuloDaFase(f)} de volta ao programa`);
+    alterar(curso, r.curso, `${nomeDaFase(f)} de volta ao programa`);
     rCursos();
     focar([`#cursos .fase[data-fase="${f.id}"] [data-cfa="nome"]`]);
-    if (r.regraPerdida) showToast(`A ${avisoDaRegraPerdida(rotuloDaFase(f), r.regraPerdida, true)}`);
+    if (r.regraPerdida) showToast(`A ${avisoDaRegraPerdida(nomeDaFase(f), r.regraPerdida, true)}`);
     return;
   }
   const m = curso.missoes.find(x => x.id === b.dataset.missao && x.removida);
   if (!m) return;
   const fase = curso.fases.find(x => x.id === m.fase);
   if (!fase || fase.removida) {
-    showToast(`A missão ${m.codigo} é ${fase ? `da ${rotuloDaFase(fase)}, que está` : 'de uma fase'} fora do programa: volte com a fase antes.`);
+    showToast(`A missão ${m.codigo} é ${fase ? `da ${nomeDaFase(fase)}, que está` : 'de uma fase'} fora do programa: volte com a fase antes.`);
     return;
   }
   const r = restaurarMissao(curso, m.id);
@@ -423,7 +424,7 @@ function mudarCampoDaMissao(campo) {
     : cf === 'dispensada' ? `${salva.codigo} ${salva.dispensada ? 'dispensada' : 'deixa de ser dispensada'}`
       : cf === 'avaliacao' ? `${salva.codigo} ${salva.avaliacao ? 'é avaliação' : 'deixa de ser avaliação'}`
         : cf === 'trecho' ? `${salva.codigo} ${salva.trecho ? `é ${TRECHOS[salva.trecho]} do Noturno` : 'deixa de ser trecho do Noturno'}`
-          : cf === 'fase' ? `${salva.codigo} passou para a ${rotuloDaFase(novo.fases.find(f => f.id === salva.fase))}`
+          : cf === 'fase' ? `${salva.codigo} passou para a ${nomeDaFase(novo.fases.find(f => f.id === salva.fase))}`
             : `${salva.codigo} alterada`;
   alterar(curso, novo, descricao);
   refazerAba();
@@ -436,7 +437,7 @@ function mudarCampoDaMissao(campo) {
 function mudarCampoDaFase(campo) {
   const { curso, fase: f } = ondeNoPrograma(campo);
   if (!f) return;
-  const cfa = campo.dataset.cfa, rotulo = rotuloDaFase(f);
+  const cfa = campo.dataset.cfa, rotulo = nomeDaFase(f);
   let novo = null;
   if (cfa === 'nome' && !campo.value.trim()) return recusar('O nome da fase vai de 1 a 80 caracteres.');
   if (cfa === 'nome' || cfa === 'modulo') {
@@ -450,7 +451,7 @@ function mudarCampoDaFase(campo) {
   }
   if (!novo || !conferido(novo)) return refazerAba();
   const salva = novo.fases.find(x => x.id === f.id);
-  alterar(curso, novo, cfa === 'regra' || cfa === 'requer' ? regraNaDescricao(novo, salva, rotuloDaFase(salva), true) : `${rotuloDaFase(salva)} alterada`);
+  alterar(curso, novo, cfa === 'regra' || cfa === 'requer' ? regraNaDescricao(novo, salva, nomeDaFase(salva), true) : `${nomeDaFase(salva)} alterada`);
   refazerAba();
   if (cfa === 'regra' && salva.regra === 'depois') abrirRequisitos(f.id);
 }

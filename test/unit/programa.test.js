@@ -6,7 +6,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  programaDoLegado, percursoDoCurso, indiceDoPrograma, rotuloDaFase, normalizarProgramas, gravarCurso, importarProgramas,
+  programaDoLegado, percursoDoCurso, indiceDoPrograma, rotuloDaFase, nomeDaFase, normalizarProgramas, gravarCurso, importarProgramas,
   programaComResultados, cursosIniciais, novoId, conteudoDoCurso, incluirMissao, mudarMissao, moverMissao, retirarMissao, validarCurso
 } from '../../js/programa.js';
 import {
@@ -98,6 +98,12 @@ describe('O índice do programa', () => {
   it('o nome curto da fase: o que vem antes do travessão', () => {
     assert.deepEqual(['Fase 6 – Treinamento de Voo Noturno', 'Fase 3 — Coordenação', 'Fase 2 - Navegação', 'Pré-solo', 'Programa', 'Fase 10'].map(nome => rotuloDaFase({ nome })),
       ['Fase 6', 'Fase 3', 'Fase 2', 'Pré-solo', 'Programa', 'Fase 10']);
+  });
+
+  // "na Fase 6", mas "na fase Programa" (a fase do programa trazido do cadastro), e não "na Programa"
+  it('a fase num texto: o nome curto que já diz "Fase"; senão, com "fase" na frente', () => {
+    assert.deepEqual(['Fase 6 – Treinamento de Voo Noturno', 'FASE 2', 'Fase', 'Programa', 'Pré-solo – Revisão', 'Fases finais', 'Faseamento'].map(nome => nomeDaFase({ nome })),
+      ['Fase 6', 'FASE 2', 'Fase', 'fase Programa', 'fase Pré-solo', 'fase Fases finais', 'fase Faseamento']);
   });
 });
 
@@ -750,6 +756,11 @@ describe('A edição das fases e das regras na aba Cursos', () => {
       assert.equal(ordemRecusada(pp, 'PP:F6'), null);
     }
     assert.equal(ordemRecusada(moverFase(pp, 'PP:F6', -1), 'PP:F6'), 'A Fase 6 abre depois da Fase 4: ela não pode passar para antes dela.');
+    // A fase que não se chama "Fase N" (a do programa trazido do cadastro) é dita "a fase Programa"
+    const comPrograma = mudarFase(curso, f1, 'nome', 'Programa');
+    assert.equal(ordemRecusada(moverFase(comPrograma, f2, -1), f2), 'A missão ZZ9-04 voa depois da ZZ9-01: a Fase 2 não pode passar para antes da fase Programa.');
+    assert.equal(ordemRecusada(moverFase(moverFase(definirRegra(comPrograma, m4, 'ordem'), f1, 1), f1, 1), f1),
+      'A Fase 3 abre depois da fase Programa: a fase Programa não pode passar para depois dela.');
   });
 
   it('↑ e ↓ da missão e a missão em outra fase (no fim dela): a que ficaria antes do que espera é recusada', () => {
