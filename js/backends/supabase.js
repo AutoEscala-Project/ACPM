@@ -90,7 +90,9 @@ export function criarBackendSupabase(cliente, { aoConflito = () => {}, aoErro = 
   }
 
   return {
-    async ler(documento) {
+    // A leitura guarda a versão lida, que a gravação seguinte do documento leva. guardarVersao: false só consulta (o
+    // formato do cadastro, por exemplo): a gravação seguinte continua com a versão da leitura de antes, a dos dados da tela
+    async ler(documento, { guardarVersao = true } = {}) {
       await gravacoesConcluidas();
       const dia = DOCUMENTO_DIA.exec(documento);
       const consulta = dia
@@ -98,7 +100,7 @@ export function criarBackendSupabase(cliente, { aoConflito = () => {}, aoErro = 
         : cliente.from('documentos').select('conteudo, versao').eq('chave', documento);
       const { data, error } = await consulta.maybeSingle();
       if (error) throw new Error(error.message);
-      versoes[documento] = data ? data.versao : 0;
+      if (guardarVersao) versoes[documento] = data ? data.versao : 0;
       return data ? data.conteudo : null;
     },
 

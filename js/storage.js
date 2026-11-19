@@ -24,6 +24,11 @@ import { normalizarProgramas, programaDoLegado } from './programa.js';
 // conflito), com o código do servidor
 const somenteLeitura = () => Promise.reject(Object.assign(new Error('somente leitura'), { code: '42501' }));
 
+// O programa dos cursos ainda no cadastro (guardado: o cadastro como está gravado): antes do formato dos cursos, com
+// missões no programa de algum curso, as tabelas ainda não o têm (a conversão única é feita na primeira abertura de um
+// Operador ou Administrador; quem só consulta pode chegar antes)
+const programaNoCadastro = guardado => antesDosCursosProprios(guardado) && Object.values(normalizarCursos(guardado.cursos)).some(missoes => missoes.length > 0);
+
 export const ApiClient = {
   KEY_THEME: 'acpm3_theme',
   // Onde os documentos ficam: backend local (localStorage) ou Supabase (login)
@@ -196,12 +201,10 @@ export const ApiClient = {
     const gravada = dia ? normalizarEscalaGravada(dia.resultado) : null;
     const escala = gravada && voltasConferem(gravada, noturnos) ? gravada : null;
     const resultados = lidos.resultados || { situacao: [], doDia: [] };
-    // O programa dos cursos ainda no cadastro: antes do formato dos cursos, com missões no programa de algum curso, as
-    // tabelas ainda não o têm (a conversão única é feita na primeira abertura de um Operador ou Administrador; quem só
-    // consulta pode chegar antes). A tela diz por que a próxima missão e o progresso ficam desligados
-    const programaPendente = antesDosCursosProprios(guardado) && Object.values(normalizarCursos(guardado.cursos)).some(missoes => missoes.length > 0);
+    // O programa dos cursos ainda no cadastro (programaNoCadastro): a tela diz por que a próxima missão e o progresso
+    // ficam desligados
     const indisponiveis = [...(lidos.horasBase ? [] : ['horas']), ...(lidos.resultados ? [] : ['resultados']),
-      ...(lidos.programa ? [] : ['cursos']), ...(programaPendente ? ['cursos-pendentes'] : [])];
+      ...(lidos.programa ? [] : ['cursos']), ...(programaNoCadastro(guardado) ? ['cursos-pendentes'] : [])];
     return { estado, escala, novo: !dia, horasBase, horasDosInstrutores, resultados, programa: lidos.programa || [], indisponiveis };
   },
 
@@ -308,6 +311,13 @@ export const ApiClient = {
   // depois de uma gravação recusada. Sem resposta, o erro vai para quem chamou
   async lerProgramas() {
     return normalizarProgramas(await this.backend.programaDosCursos());
+  },
+
+  // O programa dos cursos ainda espera a conversão do cadastro (programaNoCadastro)? "Tentar de novo", na tela aberta
+  // antes dela, pergunta: o cadastro é lido de novo só para isso, sem mudar a versão que a gravação seguinte dele leva (os
+  // dados da tela continuam os lidos com a data). Sem resposta, o erro vai para quem chamou
+  async programaAindaNoCadastro() {
+    return programaNoCadastro(await this.backend.ler('cadastro', { guardarVersao: false }));
   },
 
   // Grava o curso inteiro (o nome, se está ativo, as fases e as missões) a partir da versão lida (0 cria), com a

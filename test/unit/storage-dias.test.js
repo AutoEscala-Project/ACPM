@@ -173,6 +173,27 @@ describe('Dados lidos à parte', () => {
     assert.deepEqual((await ApiClient.carregarDia('2026-11-11')).indisponiveis, ['cursos', 'cursos-pendentes']);
     assert.deepEqual(backend.gravacoes, [], 'a abertura não grava nada');
   });
+
+  // "Tentar de novo", na tela aberta antes da conversão, pergunta se ela já foi feita: o cadastro é lido de novo só para
+  // consultar o formato (a versão que a gravação seguinte leva não muda: js/backends/supabase.js)
+  it('o programa ainda no cadastro, perguntado de novo: só consulta o cadastro, sem gravar', async () => {
+    const opcoes = [];
+    const ler = backend.ler;
+    backend.ler = async (doc, opcao) => { opcoes.push([doc, opcao]); return ler(doc); };
+    const comPrograma = esquema => backend.docs.set('cadastro', {
+      nid: 1000, ins: [], stu: [], esquema, cursos: { PP: [{ id: 'PP-01', nome: 'Familiarização', mis: 'Voo Local', eq: 'C152', nb: 1 }], PC: [], INVA: [] }
+    });
+    comPrograma(FORMATO_DOS_CURSOS - 1);
+    assert.equal(await ApiClient.programaAindaNoCadastro(), true);
+    comPrograma(FORMATO_DOS_CURSOS);
+    assert.equal(await ApiClient.programaAindaNoCadastro(), false, 'a conversão foi feita');
+    backend.docs.set('cadastro', { nid: 1000, ins: [], stu: [] });
+    assert.equal(await ApiClient.programaAindaNoCadastro(), false, 'sem programa no cadastro, nada espera a conversão');
+    assert.deepEqual(opcoes, Array(3).fill(['cadastro', { guardarVersao: false }]));
+    backend.ler = async () => { throw new Error('sem conexão'); };
+    await assert.rejects(ApiClient.programaAindaNoCadastro(), /sem conexão/);
+    assert.deepEqual(backend.gravacoes, []);
+  });
 });
 
 describe('O programa dos cursos (ApiClient)', () => {

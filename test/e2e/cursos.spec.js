@@ -3,10 +3,11 @@
 // grava o curso inteiro (não o cadastro nem o dia) e não entra no histórico da data. Cada aluno tem o curso dele, em
 // Alunos.
 import { test, expect, abrir, irPara, confirmar, abrirEscala, prepararContexto, vigiarErros, preencherLogin, AMANHA, URL_APP, entrar as entrarNoApp } from './fixtures.js';
-import { criarSupabaseFalso, documentosAtuais, CONTAS } from './supabase-falso.js';
+import { criarSupabaseFalso, documentosAtuais, documentosFase3, CONTAS } from './supabase-falso.js';
 import { aluno, cenario, instrutor, missaoExtra } from '../helpers/montar.js';
 import { IDS } from '../helpers/casos-do-programa.js';
 import { cursosIniciais, gravarCurso } from '../../js/programa.js';
+import { ApiClient } from '../../js/storage.js';
 
 const dia = (extra = {}) => ({ ...cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, {}, { curso: 'PP' }), aluno(1001)] }), ...extra });
 const PROGRAMA = { PP: [{ id: 'PP-01', nome: 'Familiarização', mis: 'Voo Local', eq: 'C152', nb: 1 }, { id: 'PP-02', nome: 'Navegação', mis: 'Navegação', eq: 'C152', nb: 2 }], PC: [], INVA: [] };
@@ -521,6 +522,40 @@ test.describe('Cursos no servidor (modo compartilhado)', () => {
     await expect(admin.page.locator('#cursos [data-act="missao-nova"]')).toHaveCount(3);
     expect(admin.erros).toEqual([]);
     await admin.contexto.close();
+  });
+
+  // A Gestora (ou a Secretaria) que abriu antes da primeira abertura de um Operador vê o aviso dos programas que ainda
+  // estão no cadastro. Depois que o Operador abre (e faz a conversão), "Tentar de novo" lê de novo o formato do cadastro
+  // e os programas: o aviso sai, e a próxima missão, o progresso e a aba Cursos voltam, sem recarregar e sem gravar nada
+  test('depois da conversão por um Operador, "Tentar de novo" tira o aviso dos programas que esperavam por ela', async ({ browser }) => {
+    const estado = ApiClient.normalizeAndMigrateState({ ...cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, {}, { curso: 'PP' })] }), cursos: PROGRAMA });
+    const servidor = criarSupabaseFalso(documentosFase3(estado, AMANHA));
+    const gestor = await entrar(browser, servidor, CONTAS.gestor);
+    const pendentes = 'Os programas dos cursos ainda não foram trazidos do cadastro (isso acontece na primeira abertura de um Operador ou Administrador depois da atualização): a próxima missão e o progresso ficam desligados.';
+    const tentar = gestor.page.locator('#btn-tentar-dados');
+    await expect(gestor.page.locator('#aviso-dados-texto')).toHaveText(pendentes);
+    // Antes da conversão, o aviso fica
+    await tentar.click();
+    await expect(tentar).toBeEnabled();
+    await expect(gestor.page.locator('#aviso-dados-texto')).toHaveText(pendentes);
+
+    // O Operador abre: a conversão leva o programa para as tabelas, e o cadastro vai para o formato dos cursos
+    const operador = await entrar(browser, servidor, CONTAS.operador);
+    await expect.poll(() => doServidor(servidor).missoes.length).toBe(2);
+    await expect(operador.page.locator('#aviso-dados')).toBeHidden();
+    expect(operador.erros).toEqual([]);
+    await operador.contexto.close();
+    const gravacoes = servidor.gravacoes.length;
+
+    await tentar.click();
+    await expect(gestor.page.locator('#aviso-dados')).toBeHidden();
+    await irPara(gestor.page, 'alu');
+    await expect(gestor.page.locator('#alu tr[data-id="1000"] .progresso')).toHaveText('0/2 · próxima PP-01');
+    await irPara(gestor.page, 'cur');
+    await expect(linhas(gestor.page, 'PP')).toHaveCount(2);
+    expect(servidor.gravacoes).toHaveLength(gravacoes);
+    expect(gestor.erros).toEqual([]);
+    await gestor.contexto.close();
   });
 
   // Sem os programas, a lista do curso em Alunos traz os três cursos com que o app começa (o servidor sempre os tem), e o

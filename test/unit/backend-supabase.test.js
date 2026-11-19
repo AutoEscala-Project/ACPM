@@ -268,6 +268,26 @@ describe('Backend Supabase', () => {
     assert.deepEqual(conflitos, [['cadastro', { formato: true }]]);
   });
 
+  // A leitura só para consultar (o formato do cadastro, em "Tentar de novo") não troca a versão que a gravação seguinte
+  // leva: a gravação dos dados da tela, lidos antes, não passa por cima do que outra pessoa gravou depois
+  it('a leitura só para consultar não muda a versão lida: a gravação seguinte continua com a de antes', async () => {
+    const cliente = clienteFalso({ cadastro: { conteudo: { v: 1 }, versao: 1 } });
+    const conflitos = [];
+    const backend = criarBackendSupabase(cliente, { aoConflito: doc => conflitos.push(doc) });
+    await backend.ler('cadastro');
+    cliente.banco.set('cadastro', { conteudo: { v: 2 }, versao: 2 });
+    assert.deepEqual(await backend.ler('cadastro', { guardarVersao: false }), { v: 2 });
+    assert.equal(await backend.gravar('cadastro', { v: 3 }), false);
+    assert.deepEqual(conflitos, ['cadastro']);
+    assert.deepEqual(cliente.banco.get('cadastro'), { conteudo: { v: 2 }, versao: 2 });
+    // Uma leitura comum guarda a versão nova
+    const outro = criarBackendSupabase(cliente);
+    await outro.ler('cadastro', { guardarVersao: false });
+    await outro.ler('cadastro');
+    assert.equal(await outro.gravar('cadastro', { v: 3 }), true);
+    assert.deepEqual(cliente.banco.get('cadastro'), { conteudo: { v: 3 }, versao: 3 });
+  });
+
   // Sem conexão, a alteração não se perde: a gravação tenta de novo sozinha
   it('erro de rede: avisa a cada falha e tenta de novo sozinho, esperando cada vez mais, até gravar', async () => {
     const cliente = clienteFalso();

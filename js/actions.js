@@ -79,20 +79,28 @@ function avisarDadosIndisponiveis() {
 }
 
 // "Tentar de novo": lê de novo o que faltou; a escala é refeita com as horas (o voo além do limite do mês aparece). Os
-// programas que ainda esperam a conversão do cadastro continuam no aviso (ela é feita na abertura de um Operador)
+// programas que esperavam a conversão do cadastro (ela é feita na abertura de um Operador ou Administrador; quem só
+// consulta pode ter aberto antes): o formato do cadastro é lido de novo e, com a conversão feita, valem os programas
+// lidos agora (sem eles, o aviso passa a ser o dos programas que não foram lidos)
 export async function lerDadosDeNovo() {
   const data = DATA;
-  const { horasBase, resultados, programa } = await ApiClient.lerDadosAParte(data);
+  const pendentes = dadoIndisponivel('cursos-pendentes');
+  const [{ horasBase, resultados, programa }, aindaNoCadastro] = await Promise.all([
+    ApiClient.lerDadosAParte(data),
+    pendentes ? ApiClient.programaAindaNoCadastro().catch(() => true) : true
+  ]);
   if (DATA !== data) return;
+  const convertidos = pendentes && !aindaNoCadastro;
   if (horasBase && dadoIndisponivel('horas')) {
     S.horasBase = horasBase;
     S.horasDosInstrutores = comRepousoDoNoturno(comHorasExternas(horasBase, S.ins, data), S.noturnosDaVespera);
   }
   if (resultados && dadoIndisponivel('resultados')) S.resultados = resultados;
-  if (programa && dadoIndisponivel('cursos')) S.programa = programa;
+  if (programa && (dadoIndisponivel('cursos') || convertidos)) S.programa = programa;
   // O que foi lido sai do aviso
-  const lidos = new Map([['horas', horasBase], ['resultados', resultados], ['cursos', programa]]);
+  const lidos = new Map([['horas', horasBase], ['resultados', resultados], ['cursos', programa], ['cursos-pendentes', convertidos]]);
   S.indisponiveis = (S.indisponiveis || []).filter(p => !lidos.get(p));
+  if (convertidos && !programa && !S.indisponiveis.includes('cursos')) S.indisponiveis = [...S.indisponiveis, 'cursos'];
   avisarDadosIndisponiveis();
   if (!S.indisponiveis.length) showToast('Dados lidos.', 'ok');
   if (horasBase && !isGestor()) save();
