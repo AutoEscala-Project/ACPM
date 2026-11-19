@@ -480,9 +480,10 @@ function textoDoRecurso(problema, { mis, instrutor }) {
 // Os recursos para a missão no horário [a, b) (o select Recurso), contra os voos fixos. O que não serve vem desligado, com
 // o motivo: em manutenção, o voo fixo que ocupa, a revisão de 50 horas, o Só Parafuso e o Só VFR, a habilitação própria
 // que o instrutor não tem. O que só tem voos que não são fixos no horário vem com a nota "ocupado agora (o app
-// reorganiza)". Na ordem: os livres (sem voo nenhum no horário, depois os ocupados só por voos que não são fixos); os do
-// tipo do programa (sem programa, o tipo padrão da missão); os do instrutor no dia; a menor folga; a frente do hangar.
-// exceto: o voo que muda de lugar (não ocupa o recurso de onde sai)
+// reorganiza)". Na ordem: os que servem; os do tipo do programa (sem programa, o tipo padrão da missão): o do tipo que o
+// app libera, tirando de lá um voo que não é fixo, vem antes do livre de outro tipo, que pediria a confirmação do recurso
+// do programa; os livres (sem voo nenhum no horário, depois os ocupados só por voos que não são fixos); os do instrutor no
+// dia; a menor folga; a frente do hangar. exceto: o voo que muda de lugar (não ocupa o recurso de onde sai)
 export function opcoesDeRecurso(estado, base, { mis, eq = null, curso, a, b, instrutor = null, exceto = [] }) {
   const { fixos, todos } = ocupacoes(estado, base, exceto);
   const ground = isGroundMission(mis);
@@ -491,7 +492,7 @@ export function opcoesDeRecurso(estado, base, { mis, eq = null, curso, a, b, ins
   const doInstrutor = new Set(instrutor ? base.out.filter(o => o.insId === instrutor.id && !exceto.includes(o.fKey) && ativo(o, estado.fStatus)).map(o => o.r) : []);
   return tipos.flatMap(tipo => avioesQueServem(estado, fixos, { tipo, mis, curso, a, b, ground, instrutor }).map(c => ({ ...c, tipo })))
     .map((c, k) => ({ ...c, k, ocupadoAgora: !c.problema && Boolean(problemaDoRecurso(estado, todos, c.r, { a, b, ground })) }))
-    .sort((p, q) => Boolean(p.problema) - Boolean(q.problema) || p.ocupadoAgora - q.ocupadoAgora || (q.tipo === preferido) - (p.tipo === preferido)
+    .sort((p, q) => Boolean(p.problema) - Boolean(q.problema) || (q.tipo === preferido) - (p.tipo === preferido) || p.ocupadoAgora - q.ocupadoAgora
       || doInstrutor.has(q.r) - doInstrutor.has(p.r) || (p.folga === q.folga ? 0 : p.folga - q.folga) || p.k - q.k)
     .map(c => ({
       valor: c.r, tipo: c.tipo, problema: c.problema, desligada: Boolean(c.problema), ocupadoAgora: c.ocupadoAgora,

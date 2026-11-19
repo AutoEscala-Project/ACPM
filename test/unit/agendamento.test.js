@@ -211,6 +211,22 @@ describe('Agendamento: os padrões do formulário', () => {
     assert.deepEqual([habilitado.formulario.recurso, habilitado.formulario.instrutor, codigos(habilitado.avaliacao.bloqueios)], ['PR-VOM', 2, []]);
   });
 
+  it('o recurso padrão é do tipo do programa, mesmo ocupado agora por um voo que o app reorganiza: o livre de outro tipo pediria confirmação', () => {
+    // Só o PR-VOB entre os C152, com o Aluno 1000 às 06:30 (o app escolheu: ele muda de horário)
+    const estado = doDia();
+    for (const r of apenas('C152', 'PR-VOB')) estado.av[r] = false;
+    const { formulario, avaliacao, sim } = agendar(estado, { amb, escolhas: { aluno: 1001 } });
+    assert.deepEqual([formulario.missao, formulario.recurso, formulario.horario], ['missao:PP:IN-02', 'PR-VOB', 390]);
+    assert.equal(formulario.recursos[0].texto, 'PR-VOB · C152 — ocupado agora (o app reorganiza)');
+    assert.deepEqual([codigos(avaliacao.bloqueios), codigos(avaliacao.avisos)], [[], []]);
+    assert.deepEqual(sim.out.filter(o => o.stuId === 1000).map(o => [o.r, o.a]), [['PR-VOB', 500]]);
+    // Com o C152 ocupado por um voo fixo, o padrão é o livre de outro tipo, com o aviso do recurso do programa
+    estado.fixos = { '1000_0_1': { a: 390, b: 450, r: 'PR-VOB', insId: 1 } };
+    estado.fStatus = { '1000_0_1': 'Em Voo' };
+    const outroTipo = agendar(estado, { amb, escolhas: { aluno: 1001, horario: 390 }, tocados: ['horario'] });
+    assert.deepEqual([outroTipo.formulario.recursos.find(o => o.valor === outroTipo.formulario.recurso).tipo, codigos(outroTipo.avaliacao.avisos)], ['C172', ['recurso-do-programa']]);
+  });
+
   it('o recurso clicado que não serve à missão pelos atributos (o Só Parafuso no voo local) dá lugar a um que serve, e o contexto diz', () => {
     const { formulario, avaliacao } = agendar(doDia(), { amb, contexto: 'r:PR-JPL', escolhas: { aluno: 1001 } });
     assert.equal(formulario.missao, 'missao:PP:IN-02');
