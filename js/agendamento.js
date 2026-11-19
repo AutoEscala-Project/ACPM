@@ -309,8 +309,12 @@ function motivoDaMissao(curso, ambiente, stu, m, info, voosDoDia) {
 }
 
 // A missão na lista: o código (a noite de um Noturno em trechos com os translados, como na próxima missão), o tipo, o
-// recurso e as horas
-const descreverMissao = (curso, m) => `${rotuloDaMissao(curso, m)} · ${m.mis}${isGroundMission(m.mis) ? ' · 1h30' : ` · ${m.eq} · ${fmtH(m.nb)}`}`;
+// recurso e as horas do voo (a duração fixa da missão vale mais que a do programa: o Noturno voa as 4 h do dia, a ida e
+// a noite, mesmo com a noite de 3 h no programa)
+const descreverMissao = (curso, m) => `${rotuloDaMissao(curso, m)} · ${m.mis}${isGroundMission(m.mis) ? ' · 1h30' : ` · ${m.eq} · ${fmtH(duracaoFixaDaMissao(m.mis) || m.nb)}`}`;
+// O rótulo da missão seguido de um parêntese (na nota, a fase dela): o Noturno em trechos fica "NOT, com TSL-01 e
+// TSL-02 (Fase 6)", sem dois parênteses seguidos
+const rotuloAntesDoParentese = (curso, m) => rotuloDaMissao(curso, m).replace(/ \((com [^)]+)\)$/, ', $1');
 const descreverDependencias = (curso, ids, voosDoDia) => juntar(ids.map(id => {
   const voo = voosDoDia.get(id);
   const m = curso.missoes.find(x => x.id === id);
@@ -417,7 +421,7 @@ export function opcoesDeMissao(estado, base, ambiente, stu, { a = 0, contexto = 
           const fase = faseDe.get(m.fase);
           return m.regra === 'livre' ? `livre na ${rotuloDaFase(fase)}` : variasFases ? rotuloDaFase(fase) : '';
         };
-        const comOnde = m => (onde(m) ? `${rotuloDaMissao(curso, m)} (${onde(m)})` : rotuloDaMissao(curso, m));
+        const comOnde = m => (onde(m) ? `${rotuloAntesDoParentese(curso, m)} (${onde(m)})` : rotuloDaMissao(curso, m));
         const outras = candidatas.filter(m => m !== proxima);
         nota = `Próxima do ${curso.sigla}: ${comOnde(proxima)}.${outras.length ? ` Também ${outras.length === 1 ? 'liberada' : 'liberadas'}: ${outras.map(comOnde).join(', ')}.` : ''}`;
       } else nota = percurso.missoes.length ? `Nenhuma missão do ${curso.sigla} liberada agora.` : `O programa do ${curso.sigla} não tem missões.`;

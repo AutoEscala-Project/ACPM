@@ -337,7 +337,7 @@ describe('Na Demanda e em Alunos', () => {
       'PE-04 · Parafuso · C152 · 1 h (falta TMA-05)',
       'NAV-01 · Navegação · C152 · 01h30 (1,5 h) (falta TMA-05)',
       'ADAPT-C152 · Voo Local · C152 · 1 h (dispensada)',
-      'NOT (com TSL-01 e TSL-02) · Noturno · C172 · 3 h (a Fase 6 abre depois da Fase 4: falta TMA-05)'
+      'NOT (com TSL-01 e TSL-02) · Noturno · C172 · 4 h (a Fase 6 abre depois da Fase 4: falta TMA-05)'
     ]);
     // Com a TMA-05 no pedido principal: ela sai da lista dele, e as que esperam por ela continuam fora da ordem
     const comTMA05 = aluno({ etapa: 'TMA-05', cursoDaEtapa: 'PP', extra: [pedido({ mid: 1 })] });
@@ -347,7 +347,7 @@ describe('Na Demanda e em Alunos', () => {
     assert.deepEqual(outras(comTMA05, 1)['Liberadas no PP'], [
       'NAV-01 · Navegação · C152 · 01h30 (1,5 h) — depende do resultado de TMA-05',
       'PE-04 · Parafuso · C152 · 1 h — depende do resultado de TMA-05',
-      'NOT (com TSL-01 e TSL-02) · Noturno · C172 · 3 h — depende do resultado de TMA-05'
+      'NOT (com TSL-01 e TSL-02) · Noturno · C172 · 4 h — depende do resultado de TMA-05'
     ]);
     assert.equal(outras(comTMA05, 1)[FORA].find(t => t.startsWith('TMA-05 ')), 'TMA-05 · Voo Local · C152 · 1 h (já em outro voo do dia)');
     // O aluno sem curso, o curso sem programa: nenhuma lista
@@ -495,21 +495,21 @@ describe('O Noturno em trechos: TSL-01, NOT e TSL-02 num voo só', () => {
     abrir(curso());
     const celula = etapaNaDemanda(stu(), stu(), 0);
     assert.equal(usar(celula), 'Próxima: NOT (com TSL-01 e TSL-02) · Usar');
-    assert.match(celula, /title="NOT: NOT · Noturno · 3 h · C172"/);
+    assert.match(celula, /title="NOT: NOT · Noturno · 4 h · C172"/);
     assert.equal(texto(progressoDoAluno(stu())), '6/10 · Fase 6 · próxima NOT (com TSL-01 e TSL-02)');
     // A lista "Outra missão do curso" também oferece o Noturno uma vez, pela noite e com os translados no nome
-    assert.deepEqual(doNoturno(celula), ['NOT (com TSL-01 e TSL-02) · Noturno · C172 · 3 h']);
+    assert.deepEqual(doNoturno(celula), ['NOT (com TSL-01 e TSL-02) · Noturno · C172 · 4 h']);
     // Com o Noturno no pedido principal, a missão extra não recebe um translado: a próxima é a da Fase 9 (sob condição), e
     // a lista tem o Noturno só fora da ordem, pela noite
     const comNoturno = stu({ mis: 'Noturno', eq: 'C172', nb: 4, etapa: 'NOT', extra: [{ mid: 1, fly: true, mis: 'Voo Local', eq: 'C152', nb: 1, p1: 500, p2: -1, pr: 3, ss: 1 }] });
     const extra = etapaNaDemanda(comNoturno, comNoturno.extra[0], 1);
     assert.equal(usar(extra), 'Próxima: AVX-CQ · Usar');
-    assert.deepEqual(doNoturno(extra), ['NOT (com TSL-01 e TSL-02) · Noturno · C172 · 3 h (já em outro voo do dia)']);
+    assert.deepEqual(doNoturno(extra), ['NOT (com TSL-01 e TSL-02) · Noturno · C172 · 4 h (já em outro voo do dia)']);
     // O translado dispensado não voa com a noite, e também não vai sozinho (antes, a lista o oferecia fora da ordem)
     abrir(curso({ mudar: { 'TSL-02': { dispensada: true } } }));
     const semVolta = etapaNaDemanda(stu(), stu(), 0);
     assert.equal(usar(semVolta), 'Próxima: NOT (com TSL-01) · Usar');
-    assert.deepEqual(doNoturno(semVolta), ['NOT (com TSL-01) · Noturno · C172 · 3 h']);
+    assert.deepEqual(doNoturno(semVolta), ['NOT (com TSL-01) · Noturno · C172 · 4 h']);
     assert.equal(outraMissaoDoPedido(stu(), stu(), 0, 'TSL-02'), null);
   });
 

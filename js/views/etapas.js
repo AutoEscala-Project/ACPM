@@ -8,6 +8,7 @@ import { estadoDoAluno, proximasMissoes, progressoNoCurso, missoesDoDia, motivoD
 import { situacaoPorMissao, resultadoDoVoo } from '../resultados.js';
 import { S, isGestor, stuBy, dadoIndisponivel, getMissionTarget } from '../state.js';
 import { esc, opts, fmtDurLabel } from '../format.js';
+import { duracaoFixaDaMissao } from '../rules.js';
 
 const resultados = () => S.resultados || { situacao: [], doDia: [] };
 // A situação de cada missão, calculada uma vez por leitura dos resultados (registrar um resultado troca a lista)
@@ -38,7 +39,10 @@ export function proximaDoPedido(stu, mid) {
   return padrao && { id: padrao.codigo, nome: padrao.nome, mis: padrao.mis, eq: padrao.eq, nb: padrao.nb, curso: curso.sigla, rotulo: rotuloDaMissao(curso, padrao) };
 }
 
-const descricaoDaMissao = m => `${m.id}: ${m.nome} · ${m.mis} · ${MIS[m.mis].isGround ? '1h30' : fmtDurLabel(m.nb)}${MIS[m.mis].isGround ? '' : ` · ${m.eq}`}`;
+// As horas do voo da missão: a duração fixa dela vale mais que a do programa (o Noturno voa as 4 h do dia, a ida e a
+// noite, mesmo com a noite de 3 h no programa), como no pedido que Usar monta (normalizeMissionFields)
+const horasDoVoo = m => fmtDurLabel(duracaoFixaDaMissao(m.mis) || m.nb);
+const descricaoDaMissao = m => `${m.id}: ${m.nome} · ${m.mis} · ${MIS[m.mis].isGround ? '1h30' : horasDoVoo(m)}${MIS[m.mis].isGround ? '' : ` · ${m.eq}`}`;
 
 // As outras missões do curso do aluno para um pedido ("Outra missão do curso", na Demanda), na ordem do curso: as
 // liberadas, que valem na hora (a que depende do resultado de um voo do dia diz de qual), e as fora da ordem, cada uma
@@ -83,7 +87,7 @@ export function outraMissaoDoPedido(stu, d, mid, codigo) {
 
 // A missão na lista: o código (a noite de um Noturno em trechos com os translados, como na próxima missão), o tipo, o
 // recurso e as horas
-const resumoDaMissao = (curso, m) => `${rotuloDaMissao(curso, m)} · ${m.mis} · ${MIS[m.mis].isGround ? '1h30' : `${m.eq} · ${fmtDurLabel(m.nb)}`}`;
+const resumoDaMissao = (curso, m) => `${rotuloDaMissao(curso, m)} · ${m.mis} · ${MIS[m.mis].isGround ? '1h30' : `${m.eq} · ${horasDoVoo(m)}`}`;
 const emLista = codigos => (codigos.length > 1 ? `${codigos.slice(0, -1).join(', ')} e ${codigos.at(-1)}` : codigos[0]);
 
 // A lista "Outra missão do curso" do pedido: o primeiro item só dá nome à lista (escolher uma missão é que age)

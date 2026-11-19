@@ -68,7 +68,7 @@ test.describe('Cursos no dia: outra missão do curso', () => {
     const lista = linha.locator('[data-f="outra-missao"]');
     await expect(lista).toHaveAccessibleName('Outra missão do curso para Maria');
     await expect(lista.locator('optgroup[label="Liberadas no PP"] option')).toHaveText([
-      'NAV-01 · Navegação · C152 · 01h30 (1,5 h)', 'PE-04 · Parafuso · C152 · 1 h', 'NOT (com TSL-01 e TSL-02) · Noturno · C172 · 3 h'
+      'NAV-01 · Navegação · C152 · 01h30 (1,5 h)', 'PE-04 · Parafuso · C152 · 1 h', 'NOT (com TSL-01 e TSL-02) · Noturno · C172 · 4 h'
     ]);
     await expect(lista.locator(`optgroup[label="${FORA}"] option[value="NAV-02"]`)).toHaveText('NAV-02 · Navegação · C152 · 01h30 (1,5 h) (falta NAV-01)');
     await expect(lista.locator(`optgroup[label="${FORA}"] option[value="IN-01"]`)).toHaveText('IN-01 · Voo Local · C152 · 1 h (já aprovada)');

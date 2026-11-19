@@ -174,7 +174,7 @@ describe('Agendamento: os padrões do formulário', () => {
     assert.equal(missoes('dia').padrao, 'missao:PP:NAV-01');
     assert.equal(missoes('r:PR-JPL').padrao, 'missao:PP:PE-04');
     assert.deepEqual(opcoes(missoes('dia').grupos).filter(o => o.info.estado === 'liberada').map(o => o.info.missao.codigo), ['NAV-01', 'PE-04', 'NOT']);
-    assert.equal(missoes('dia').nota, 'Próxima do PP: NAV-01 (Fase 5). Também liberadas: PE-04 (livre na Fase 5), NOT (com TSL-01 e TSL-02) (Fase 6).');
+    assert.equal(missoes('dia').nota, 'Próxima do PP: NAV-01 (Fase 5). Também liberadas: PE-04 (livre na Fase 5), NOT, com TSL-01 e TSL-02 (Fase 6).');
     // Nada aprovado, no C172: a IN-01 (do C152) no avião clicado, com o aviso do recurso do programa
     const { formulario, avaliacao } = agendar(doDia(), { amb: ambiente(), contexto: 'r:PR-VOY', escolhas: { aluno: 1001 } });
     assert.deepEqual([formulario.missao, formulario.recurso], ['missao:PP:IN-01', 'PR-VOY']);
@@ -339,15 +339,15 @@ describe('Agendamento: os padrões do formulário', () => {
     // Depois da Fase 4: a noite, liberada, com os translados no nome (também na nota); sem os resultados, também só ela
     const f1a4 = ambiente({ programa: [NT], registros: ate(ATE_A_4) });
     assert.deepEqual(daFase6(f1a4), {
-      textos: ['NOT (com TSL-01 e TSL-02) · Noturno · C172 · 3 h'],
-      nota: 'Próxima do PP: NAV-01 (Fase 5). Também liberadas: PE-04 (livre na Fase 5), NOT (com TSL-01 e TSL-02) (Fase 6).'
+      textos: ['NOT (com TSL-01 e TSL-02) · Noturno · C172 · 4 h'],
+      nota: 'Próxima do PP: NAV-01 (Fase 5). Também liberadas: PE-04 (livre na Fase 5), NOT, com TSL-01 e TSL-02 (Fase 6).'
     });
-    assert.deepEqual(daFase6({ ...f1a4, inferir: false }).textos, ['NOT (com TSL-01 e TSL-02) · Noturno · C172 · 3 h']);
+    assert.deepEqual(daFase6({ ...f1a4, inferir: false }).textos, ['NOT (com TSL-01 e TSL-02) · Noturno · C172 · 4 h']);
     // A noite aprovada: só ela, fora da ordem; o translado dispensado não vai, nem no nome
     assert.deepEqual(daFase6(ambiente({ programa: [NT], registros: [...ate(ATE_A_4), ...aprovadas(1001, ['NOT'])] })).textos,
-      ['NOT (com TSL-01 e TSL-02) · Noturno · C172 · 3 h (já aprovada)']);
+      ['NOT (com TSL-01 e TSL-02) · Noturno · C172 · 4 h (já aprovada)']);
     assert.deepEqual(daFase6(ambiente({ programa: [comTrechos({ 'TSL-02': { dispensada: true } })], registros: ate(ATE_A_4) })).textos,
-      ['NOT (com TSL-01) · Noturno · C172 · 3 h']);
+      ['NOT (com TSL-01) · Noturno · C172 · 4 h']);
     // Até a Fase 8: a próxima é o Noturno, no aluno e no formulário, e o pedido do voo leva a etapa da noite
     const f1a8 = ambiente({ programa: [NT], registros: ate(ATE_A_8) });
     const doAluno = opcoesDeAluno(estado, base, f1a8, contextoInicial('dia', f1a8)).flatMap(g => g.opcoes).find(o => o.valor === 1001);
