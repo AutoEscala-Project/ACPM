@@ -136,7 +136,9 @@ test.describe('Aplicação', () => {
     const texto = await manual.innerText();
     for (const antigo of ['A01', 'A09', 'Gerar escala', 'Preencher exemplo', 'Link Blindado', 'Importar Solicitações da Agenda',
       'Vai voar?', 'Início pref', 'Exportar CSV', 'Emitir PDF', 'Turno rápido', 'Cada cartão', 'campo Data', 'Equipamento', 'Bloquear',
-      'Sessões', 'sessão', 'Desfazer', 'Escala de Voo', 'Por avião e sala', 'Avião / sala', 'Aviões e salas', 'o botão ao lado de Alunos']) {
+      'Sessões', 'sessão', 'Desfazer', 'Escala de Voo', 'Por avião e sala', 'Avião / sala', 'Aviões e salas', 'o botão ao lado de Alunos',
+      // O "+" do mapa fica ao lado do nome da linha; o Operador não muda os Cursos nem os limites da lei
+      'no fim de cada linha', 'altera tudo e opera a escala']) {
       expect(texto, antigo).not.toContain(antigo);
     }
     await expect(manual.locator('h3')).toHaveText(['Primeiros passos: a rotina do operador', 'Perfis de acesso', 'As abas',
@@ -148,7 +150,11 @@ test.describe('Aplicação', () => {
     await expect(manual.locator('#manual-abas h4')).toHaveText(['Escala', 'Demanda', 'Agenda', 'Recursos', 'Instrutores', 'Alunos', 'Cursos', 'Rodízio', 'BI']);
     for (const novo of ['menu da conta', 'Pôr um aluno na demanda', 'Disponibilidade do dia', 'Editar habilitações', 'Não escalar com',
       'Ainda não importado', 'Atualizada às', 'Ver todos', 'Compartilhar', 'Por recurso', 'Novo recurso', 'Retirar', 'Horários de decolagem',
-      'de 30 em 30 minutos', 'divide as horas do dia']) {
+      'de 30 em 30 minutos', 'divide as horas do dia',
+      // O agendamento na Escala (mover e encaixar, as turmas, as alternativas, a prévia, os avisos), o voo agendado na
+      // Demanda, as alterações dos cursos fora do Histórico e o peso aceito
+      'Encaixar o voo', 'Mover o voo', 'Entrar na turma das', 'Horários livres', 'O que muda na escala', 'Agendar mesmo assim',
+      'agendado 10:10 · PR-VOB', 'fora da regra', 'ao lado do nome de cada linha', 'não entram no Histórico da data', 'de 1 a 300 kg']) {
       expect(texto, novo).toContain(novo);
     }
 
