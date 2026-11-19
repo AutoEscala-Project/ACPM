@@ -584,6 +584,24 @@ describe('A edição do programa na aba Cursos', () => {
       ['TMA-06', 'AVP-SOLO-06', 'PP-100', 'CT-10', 'PP-01', 'PP-01', 'PP-01']);
   });
 
+  // Os reservados: os códigos que os resultados do curso ou a Demanda da data aberta levam, também sem missão (o código
+  // que saiu de uma missão com um pedido ainda nele, por exemplo). A missão nova não fica com nenhum: os resultados e o
+  // voo do pedido passariam a ser dela
+  it('o código da missão nova pula os reservados: o seguinte ao da anterior e o próximo número livre do curso', () => {
+    const fase = { id: gerarId(), nome: 'Fase 2', modulo: null, ordem: 0, regra: 'ordem', requer: [], removida: false };
+    const missao = (codigo, ordem) => ({
+      id: gerarId(), fase: fase.id, codigo, nome: codigo, mis: 'Voo Local', eq: 'C152', nb: 1, ordem, regra: 'ordem', requer: [], dispensada: false, avaliacao: false,
+      removida: false, comResultados: false
+    });
+    const pp = { sigla: 'PP', nome: 'Piloto Privado', ordem: 0, ativo: true, versao: 1, fases: [fase], alteracoes: [], missoes: [missao('CT-01', 0), missao('CT-02', 1)] };
+    const nova = reservados => incluirMissao(pp, fase.id, gerarId, reservados).missao.codigo;
+    assert.equal(nova(), 'CT-03');
+    assert.equal(nova(['CT-03']), 'PP-01', 'a CT-03, sem missão, leva resultados ou está num pedido: o próximo número livre do curso');
+    assert.equal(nova(['CT-03', 'PP-01', 'PP-02']), 'PP-03');
+    assert.equal(nova(['CT-03', 'PP-07']), 'PP-08');
+    assert.equal(nova(['CT-01', 'PP-07']), 'CT-03', 'os reservados que não são a seguinte não mudam nada');
+  });
+
   it('"+ Missão" no curso sem fases: a Fase 1 entra com a missão (um voo local de 1 h no C152, com o primeiro número do curso)', () => {
     const [pp] = normalizarProgramas(cursosIniciais());
     const { curso, missao } = incluirMissao(pp, null, gerarId);

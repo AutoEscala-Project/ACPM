@@ -24,7 +24,10 @@ import { duracaoDigitada, ERRO_DA_DURACAO } from '../rules.js';
 import { S } from '../state.js';
 import { confirmado } from './confirmacao.js';
 import { aoAcionar } from './registro.js';
-import { rCursos, podeEditarCursos, programasIndisponiveis, codigoTravado, mostrarAlteracoes, nomesDosRequisitos, listaComE, filtrarCursos } from '../views/cursos.js';
+import {
+  rCursos, podeEditarCursos, programasIndisponiveis, codigoTravado, codigoComResultados, codigoNaDemanda, codigosReservados, mostrarAlteracoes,
+  nomesDosRequisitos, listaComE, filtrarCursos
+} from '../views/cursos.js';
 import { rAlu } from '../views/cadastros.js';
 import { rDem } from '../views/demanda.js';
 
@@ -277,7 +280,8 @@ aoAcionar(['missao-nova', 'missao-subir', 'missao-descer', 'missao-retirar'], b 
   if (!curso) return;
   const a = b.dataset.act;
   if (a === 'missao-nova') {
-    const r = incluirMissao(curso, b.dataset.fase || null);
+    // O código novo pula os que os resultados ou a Demanda da data aberta levam, também sem missão
+    const r = incluirMissao(curso, b.dataset.fase || null, undefined, codigosReservados(curso.sigla));
     if (!r || !conferido(r.curso)) return;
     alterar(curso, r.curso, `${r.missao.codigo} incluída${naFase(r.curso, r.missao.fase)}`);
     rCursos();
@@ -376,9 +380,26 @@ aoAcionar(['fase-restaurar', 'missao-restaurar'], b => {
 // O trecho do Noturno na descrição da alteração: "TSL-01 é a ida do Noturno"
 const TRECHOS = { ida: 'a ida', noite: 'a noite', volta: 'a volta' };
 
-// Os campos de uma missão: o código (uma vez por curso, também entre as tiradas do programa, que guardam o seu; travado
-// quando já há resultados), o nome, o tipo de missão, o trecho do Noturno, o recurso, as horas, quando voar e a lista
-// "Depois de…", as marcas e a fase
+// O código digitado para uma missão, conferido: o motivo da recusa, ou ''. O código é o que os resultados e os pedidos
+// guardam (o resultado do voo vai para o código do pedido). Ele não muda quando já há resultados com ele, nem quando a
+// Demanda da data aberta o leva (o nome muda); e não vale o código de outra missão do curso (também a tirada do
+// programa, que guarda o seu), nem o que, sem missão, os resultados ou a Demanda ainda levam: os resultados e o voo
+// passariam para a missão que o recebesse
+function recusaDoCodigo(curso, m, valor) {
+  if (valor === m.codigo) return '';
+  if (codigoTravado(curso.sigla, m)) return `Já há resultados com o código ${m.codigo}: ele não muda (o nome muda).`;
+  const naDemanda = codigoNaDemanda(curso.sigla, m.codigo);
+  if (naDemanda) return `O código ${m.codigo} está ${naDemanda}: ele não muda enquanto um pedido o leva (o nome muda).`;
+  if (!codigoValido(valor)) return 'O código da missão usa letras, números, ponto e hífen (até 15).';
+  const outra = curso.missoes.find(o => o.id !== m.id && o.codigo === valor);
+  if (outra) return outra.removida ? `O código ${valor} é de uma missão tirada do programa do ${curso.sigla} (ela guarda o código).` : `O código ${valor} já existe no ${curso.sigla}.`;
+  if (codigoComResultados(curso.sigla, valor)) return `Já há resultados com o código ${valor} no ${curso.sigla}: ele não vai para outra missão (os resultados passariam para ela).`;
+  const doPedido = codigoNaDemanda(curso.sigla, valor);
+  return doPedido ? `O código ${valor} está ${doPedido}: ele não vai para outra missão (o resultado do voo passaria para ela).` : '';
+}
+
+// Os campos de uma missão: o código (recusaDoCodigo), o nome, o tipo de missão, o trecho do Noturno, o recurso, as
+// horas, quando voar e a lista "Depois de…", as marcas e a fase
 function mudarCampoDaMissao(campo) {
   const { curso, missao: m, tr } = ondeNoPrograma(campo);
   if (!m) return;
@@ -402,12 +423,7 @@ function mudarCampoDaMissao(campo) {
     let valor = campo.value;
     if (cf === 'codigo') {
       valor = campo.value.trim().toUpperCase();
-      const outra = curso.missoes.find(o => o.id !== m.id && o.codigo === valor);
-      const erro = valor === m.codigo ? ''
-        : codigoTravado(curso.sigla, m) ? `Já há resultados com o código ${m.codigo}: ele não muda (o nome muda).`
-          : !codigoValido(valor) ? 'O código da missão usa letras, números, ponto e hífen (até 15).'
-            : outra && outra.removida ? `O código ${valor} é de uma missão tirada do programa do ${curso.sigla} (ela guarda o código).`
-              : outra ? `O código ${valor} já existe no ${curso.sigla}.` : '';
+      const erro = recusaDoCodigo(curso, m, valor);
       if (erro) return recusar(erro);
     } else if (cf === 'nb') {
       // As horas: de 0,1 h a 5 h, em décimos; fora disso, não vale
@@ -420,12 +436,14 @@ function mudarCampoDaMissao(campo) {
   // missão como está
   if (!novo || !conferido(novo)) return refazerAba();
   const salva = novo.missoes.find(x => x.id === m.id);
-  const descricao = cf === 'regra' || cf === 'requer' ? regraNaDescricao(novo, salva, salva.codigo, false)
-    : cf === 'dispensada' ? `${salva.codigo} ${salva.dispensada ? 'dispensada' : 'deixa de ser dispensada'}`
-      : cf === 'avaliacao' ? `${salva.codigo} ${salva.avaliacao ? 'é avaliação' : 'deixa de ser avaliação'}`
-        : cf === 'trecho' ? `${salva.codigo} ${salva.trecho ? `é ${TRECHOS[salva.trecho]} do Noturno` : 'deixa de ser trecho do Noturno'}`
-          : cf === 'fase' ? `${salva.codigo} passou para a ${nomeDaFase(novo.fases.find(f => f.id === salva.fase))}`
-            : `${salva.codigo} alterada`;
+  // O código novo diz o de antes ("PP: CT-03 → CT-3A"): as alterações do programa mostram de onde ele veio
+  const descricao = cf === 'codigo' ? `${m.codigo} → ${salva.codigo}`
+    : cf === 'regra' || cf === 'requer' ? regraNaDescricao(novo, salva, salva.codigo, false)
+      : cf === 'dispensada' ? `${salva.codigo} ${salva.dispensada ? 'dispensada' : 'deixa de ser dispensada'}`
+        : cf === 'avaliacao' ? `${salva.codigo} ${salva.avaliacao ? 'é avaliação' : 'deixa de ser avaliação'}`
+          : cf === 'trecho' ? `${salva.codigo} ${salva.trecho ? `é ${TRECHOS[salva.trecho]} do Noturno` : 'deixa de ser trecho do Noturno'}`
+            : cf === 'fase' ? `${salva.codigo} passou para a ${nomeDaFase(novo.fases.find(f => f.id === salva.fase))}`
+              : `${salva.codigo} alterada`;
   alterar(curso, novo, descricao);
   refazerAba();
   if (cf === 'regra' && salva.regra === 'depois') abrirRequisitos(m.id);

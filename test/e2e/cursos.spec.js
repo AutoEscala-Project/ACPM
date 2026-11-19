@@ -4,7 +4,7 @@
 // Alunos.
 import { test, expect, abrir, irPara, confirmar, abrirEscala, prepararContexto, vigiarErros, preencherLogin, AMANHA, URL_APP, entrar as entrarNoApp } from './fixtures.js';
 import { criarSupabaseFalso, documentosAtuais, CONTAS } from './supabase-falso.js';
-import { aluno, cenario, instrutor } from '../helpers/montar.js';
+import { aluno, cenario, instrutor, missaoExtra } from '../helpers/montar.js';
 import { IDS } from '../helpers/casos-do-programa.js';
 import { cursosIniciais, gravarCurso } from '../../js/programa.js';
 
@@ -723,8 +723,8 @@ test.describe('Cursos: fases, módulos e quando voar', () => {
   }));
   const alunos = () => cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, { fly: false }, { curso: 'PP' }), aluno(1001, { fly: false }, { curso: 'PP' })] });
 
-  async function abrirComPrograma(page, { conteudo, resultados = [], url = './' }) {
-    const { documentos: { cadastro }, dias } = documentosAtuais(alunos(), AMANHA);
+  async function abrirComPrograma(page, { conteudo, resultados = [], url = './', estado = alunos() }) {
+    const { documentos: { cadastro }, dias } = documentosAtuais(estado, AMANHA);
     const docs = { acpm4_cadastro: cadastro, [`acpm4_dia_${AMANHA}`]: dias[AMANHA], acpm4_cursos: { cursos: ppGuardado(conteudo), alteracoes: [] }, acpm4_resultados: resultados };
     await page.addInitScript(json => {
       if (localStorage.getItem('acpm4_cadastro')) return;
@@ -923,6 +923,72 @@ test.describe('Cursos: fases, módulos e quando voar', () => {
     await expect.poll(() => descricoesGuardadas(page)).toEqual(['PP: TSL-01 passou para a Fase 4']);
   });
 
+  // O código é o que os resultados e os pedidos guardam: o resultado do voo vai para o código do pedido. Com a Demanda da
+  // data aberta levando o código (o pedido principal ou um extra, no curso da missão do pedido, senão no do aluno), ele
+  // não muda (o nome muda), como com resultados. O código sem missão que os resultados ou a Demanda ainda levam (o que
+  // saiu de uma missão com o pedido de outra data nele, por exemplo) não vai para outra missão: digitado, é recusado, e o
+  // "+ Missão" o pula. A troca que vale diz o código de antes nas alterações do programa
+  test('o código que a Demanda leva não muda; o que, sem missão, os resultados ou a Demanda levam não vai para outra missão', async ({ page }) => {
+    const estado = cenario({
+      ins: [instrutor(1, 9)],
+      stu: [
+        aluno(1000, { etapa: 'PE-03' }, { nm: 'Maria', curso: 'PP' }),
+        aluno(1001, { fly: false, etapa: 'TMA-06', cursoDaEtapa: 'PP', extra: [missaoExtra(1, { fly: false, etapa: 'END-SOLO', cursoDaEtapa: 'PP' })] }, { nm: 'João', curso: 'PP' }),
+        // A PE-04 do PC não é a do PP
+        aluno(1002, { fly: false, etapa: 'PE-04', cursoDaEtapa: 'PC' }, { nm: 'Ana', curso: 'PC' })
+      ]
+    });
+    // Um resultado na PE-05, que nenhuma missão do PP tem
+    await abrirComPrograma(page, { conteudo: CRONOGRAMA, resultados: aprovadas(1000, ['PE-05'], 1), estado });
+    await irPara(page, 'cur');
+    const pp = curso(page, 'PP'), toast = page.locator('#toast-box');
+    const codigo = id => pp.locator(`tr[data-missao="${id}"] [data-cf="codigo"]`);
+    const naDemanda = nomes => `Este código está na Demanda de amanhã (${nomes}): ele não muda enquanto um pedido o leva (o nome muda)`;
+    // Travados, com o cadeado e o motivo: a PE-03 (o pedido da Maria, que está na escala) e a END-SOLO (o extra do João)
+    for (const [id, nomes] of [[M.pe03, 'Maria'], [M.endSolo, 'João']]) {
+      await expect(codigo(id)).toHaveAttribute('readonly', '');
+      await expect(codigo(id)).toHaveAttribute('title', naDemanda(nomes));
+      await expect(pp.locator(`tr[data-missao="${id}"] td.c-codigo svg`)).toHaveAttribute('aria-label', naDemanda(nomes));
+    }
+    for (const id of [M.pe04, M.tma05]) await expect(codigo(id)).not.toHaveAttribute('readonly');
+    // O nome muda
+    await pp.locator(`tr[data-missao="${M.pe03}"] [data-cf="nome"]`).fill('PE-03 – Emergências');
+    await pp.locator(`tr[data-missao="${M.pe03}"] [data-cf="nome"]`).press('Tab');
+    await expect.poll(() => descricoesGuardadas(page)).toEqual(['PP: PE-03 alterada']);
+    // A tela que ainda mostrava o campo livre (antes de o pedido chegar): a troca é recusada do mesmo jeito
+    await codigo(M.pe03).evaluate(el => el.removeAttribute('readonly'));
+    await codigo(M.pe03).fill('PE-3A');
+    await codigo(M.pe03).press('Tab');
+    await expect(toast).toContainText('O código PE-03 está na Demanda de amanhã (Maria): ele não muda enquanto um pedido o leva (o nome muda).');
+    await expect(codigo(M.pe03)).toHaveValue('PE-03');
+    await expect(codigo(M.pe03)).toHaveAttribute('readonly', '');
+
+    // O "+ Missão" pula a PE-05 (com o resultado) e a TMA-06 (no pedido do João): o próximo número livre do curso
+    await pp.getByRole('button', { name: '+ Missão na Fase 5' }).click();
+    await expect(pp.locator(`.fase[data-fase="${F5}"] tbody tr`).nth(2).locator('[data-cf="codigo"]')).toHaveValue('PP-01');
+    await pp.getByRole('button', { name: '+ Missão na Fase 4' }).click();
+    const nova = pp.locator(`.fase[data-fase="${F4}"] tbody tr`).nth(1).locator('[data-cf="codigo"]');
+    await expect(nova).toHaveValue('PP-02');
+    // Digitados, eles são recusados, com o motivo
+    await page.evaluate(() => document.querySelector('#toast-box').replaceChildren());
+    await nova.fill('pe-05');
+    await nova.press('Tab');
+    await expect(toast).toContainText('Já há resultados com o código PE-05 no PP: ele não vai para outra missão (os resultados passariam para ela).');
+    await expect(nova).toHaveValue('PP-02');
+    await nova.fill('TMA-06');
+    await nova.press('Tab');
+    await expect(toast).toContainText('O código TMA-06 está na Demanda de amanhã (João): ele não vai para outra missão (o resultado do voo passaria para ela).');
+    await expect(nova).toHaveValue('PP-02');
+
+    // O código livre muda; a alteração diz o de antes
+    await codigo(M.pe04).fill('PE-4A');
+    await codigo(M.pe04).press('Tab');
+    await expect(codigo(M.pe04)).toHaveValue('PE-4A');
+    await expect.poll(() => descricoesGuardadas(page)).toEqual(['PP: PE-03 alterada', 'PP: PP-01 incluída na Fase 5', 'PP: PP-02 incluída na Fase 4', 'PP: PE-04 → PE-4A']);
+    await pp.locator('details.alteracoes summary').click();
+    await expect(pp.locator('details.alteracoes li').first()).toContainText('PP: PE-04 → PE-4A');
+  });
+
   // O campo digitado que perde o foco para um clique avisa a mudança no mousedown, antes do click: a aba é refeita depois
   // do clique (também o demorado), e o clique vale. Sem clicar num controle, ela é refeita do mesmo jeito
   test('digitar num campo e clicar direto em outro botão, marca ou campo: valem as duas alterações', async ({ page }) => {
@@ -977,9 +1043,10 @@ test.describe('Cursos: fases, módulos e quando voar', () => {
     await expect(page.locator(tirar)).toHaveText('Confirmar');
     await page.locator(tirar).click();
     await expect(pp.locator(`tr[data-missao="${IN02}"]`)).toHaveCount(0);
+    // A troca de código diz o código de antes
     await expect.poll(() => descricoesGuardadas(page)).toEqual([
-      'PP: CT-01 alterada', 'PP: IN-01 passou para 2ª', 'PP: Fase 2 alterada', 'PP: IN-01 dispensada', 'PP: IN-05 alterada', 'PP: Fase 3 incluída',
-      'PP: Fase 3 alterada', 'PP: CT-09 alterada', 'PP: CT-09 alterada', 'PP: IN-01 alterada', 'PP: IN-01 alterada', 'PP: IN-05 tirada do programa'
+      'PP: CT-01 alterada', 'PP: IN-01 passou para 2ª', 'PP: Fase 2 alterada', 'PP: IN-01 dispensada', 'PP: IN-02 → IN-05', 'PP: Fase 3 incluída',
+      'PP: Fase 3 alterada', 'PP: CT-01 → CT-09', 'PP: CT-09 alterada', 'PP: IN-01 alterada', 'PP: IN-01 alterada', 'PP: IN-05 tirada do programa'
     ]);
   });
 

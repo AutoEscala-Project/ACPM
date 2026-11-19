@@ -567,18 +567,21 @@ export function conteudoDoCurso(curso) {
 
 // O código da missão nova: o seguinte ao da missão anterior da fase, no mesmo formato (TMA-05 → TMA-06, AVP-SOLO-05 →
 // AVP-SOLO-06), quando ele está livre no curso; senão, o próximo número livre do curso (PP-01, PP-02…). As missões
-// tiradas do programa contam: o código delas continua reservado
-function codigoNovo(curso, anterior) {
+// tiradas do programa contam: o código delas continua reservado. Os reservados (os códigos que os resultados do curso
+// ou a Demanda da data aberta levam, mesmo sem missão: js/views/cursos.js, codigosReservados) contam do mesmo jeito
+function codigoNovo(curso, anterior, reservados) {
+  const usados = new Set([...curso.missoes.map(m => m.codigo), ...reservados]);
   const r = anterior && /^(.*?)(\d+)$/.exec(anterior.codigo);
   const seguinte = r && `${r[1]}${String(Number(r[2]) + 1).padStart(r[2].length, '0')}`;
-  if (seguinte && codigoValido(seguinte) && !curso.missoes.some(m => m.codigo === seguinte)) return seguinte;
-  return novaMissaoDoCurso(curso.sigla, curso.missoes.map(m => ({ id: m.codigo }))).id;
+  if (seguinte && codigoValido(seguinte) && !usados.has(seguinte)) return seguinte;
+  return novaMissaoDoCurso(curso.sigla, [...usados].map(id => ({ id }))).id;
 }
 
 // "+ Missão": a missão nova entra no fim da fase (sem fase, na última; o curso sem nenhuma ganha a "Fase 1"), depois das
 // anteriores, com o tipo de missão, o recurso e as horas da missão anterior da fase (senão, um voo local de 1 h no C152)
-// e, como nome, o código. Devolve o curso e a missão nova; null quando a fase não está no programa
-export function incluirMissao(curso, faseId = null, gerarId = novoId) {
+// e, como nome, o código (codigoNovo, fora dos reservados). Devolve o curso e a missão nova; null quando a fase não está
+// no programa
+export function incluirMissao(curso, faseId = null, gerarId = novoId, reservados = []) {
   const programa = programaDoCurso(curso);
   let fase = faseId ? programa.fases.find(f => f.id === faseId) : programa.fases.at(-1);
   if (faseId && !fase) return null;
@@ -589,7 +592,7 @@ export function incluirMissao(curso, faseId = null, gerarId = novoId) {
   }
   const daFase = f => programa.missoes.filter(m => m.fase === f.id);
   const anterior = daFase(fase).at(-1) || null;
-  const codigo = codigoNovo(curso, anterior);
+  const codigo = codigoNovo(curso, anterior, reservados);
   const { mis, eq, nb } = anterior || novaMissaoDoCurso(curso.sigla, []);
   const missao = {
     id: gerarId(), fase: fase.id, codigo, nome: codigo, mis, eq, nb, ordem: 0, regra: 'ordem', requer: [], dispensada: false,

@@ -14,12 +14,13 @@ import { MIS, DURACAO_MAXIMA_H } from '../config.js';
 import { percursoDoCurso, rotuloDaFase, nomeDaFase, requisitosPossiveis } from '../programa.js';
 import { MODELOS } from '../modelos-de-curso.js';
 import { FUSO_DO_AEROCLUBE } from '../agenda.js';
+import { nomeDaData } from '../agendamento.js';
 import { ApiClient } from '../storage.js';
 import { gerenciaContas } from '../perfis.js';
-import { S, isGestor, dadoIndisponivel } from '../state.js';
-import { esc, opts, fmtH } from '../format.js';
+import { S, RES, DATA, isGestor, dadoIndisponivel } from '../state.js';
+import { esc, opts, fmtH, hojeISO } from '../format.js';
 import { $, trocarConteudo, trocarElemento } from '../dom.js';
-import { progressoDoAluno } from './etapas.js';
+import { progressoDoAluno, cursoDoResultado } from './etapas.js';
 
 // Os programas que não foram lidos, ou que ainda estão no cadastro: o que a aba mostra no lugar deles (o mesmo texto do
 // aviso do topo, em js/actions.js). A próxima missão e o progresso ficam desligados
@@ -43,6 +44,44 @@ function codigosComResultado() {
 }
 export const codigoTravado = (sigla, m) => m.comResultados || codigosComResultado().has(`${sigla}|${m.codigo}`);
 const TRAVADO = 'Já há resultados com este código: o código não muda (o nome muda)';
+// Algum resultado do curso (lido com a data, ou registrado depois) leva o código, com ou sem missão
+export const codigoComResultados = (sigla, codigo) => codigosComResultado().has(`${sigla}|${codigo}`);
+
+// Os códigos do curso que a Demanda da data aberta leva: os pedidos dela (o principal e os extras de cada aluno, no
+// curso da missão do pedido, senão no do aluno) e os voos da escala dela (no curso do resultado). O resultado do voo vai
+// para o código do pedido: enquanto um pedido o leva, ele não muda (o nome muda) nem vai para outra missão. Por código,
+// os alunos, pelo nome, sem repetir, na ordem do cadastro
+function codigosDaDemanda(sigla) {
+  const porCodigo = new Map();
+  const anotar = (curso, codigo, nome) => {
+    if (curso !== sigla || !codigo) return;
+    const nomes = porCodigo.get(codigo) || [];
+    if (!nomes.includes(nome)) porCodigo.set(codigo, [...nomes, nome]);
+  };
+  for (const s of S.stu || []) {
+    for (const p of [s, ...(s.extra || [])]) anotar(p.cursoDaEtapa || s.curso, p.etapa, s.nm);
+  }
+  for (const o of (RES && RES.out) || []) if (o.etapa) anotar(cursoDoResultado(o), o.etapa, o.s);
+  return porCodigo;
+}
+// Onde a Demanda leva o código, para os avisos: "na Demanda de amanhã (Maria e João)"; '' quando ela não o leva
+export function codigoNaDemanda(sigla, codigo) {
+  const nomes = codigosDaDemanda(sigla).get(codigo);
+  return nomes ? `na Demanda ${nomeDaData({ data: DATA, hoje: hojeISO() }).de} (${resumoDaLista(nomes)})` : '';
+}
+// Os códigos que os resultados do curso ou a Demanda da data aberta levam (com missão ou sem). O que não tem missão fica
+// reservado: na missão que o recebesse, os resultados (e o resultado do voo do pedido) passariam a ser dela, de quem
+// não a voou. O "+ Missão" pula todos (js/programa.js, incluirMissao)
+export function codigosReservados(sigla) {
+  const comResultados = [...codigosComResultado()].filter(chave => chave.startsWith(`${sigla}|`)).map(chave => chave.slice(sigla.length + 1));
+  return [...new Set([...comResultados, ...codigosDaDemanda(sigla).keys()])];
+}
+// A trava do código de uma missão, para o título e o cadeado: os resultados ou a Demanda da data aberta; '' sem trava
+function travaDoCodigo(sigla, m) {
+  if (codigoTravado(sigla, m)) return TRAVADO;
+  const naDemanda = codigoNaDemanda(sigla, m.codigo);
+  return naDemanda ? `Este código está ${naDemanda}: ele não muda enquanto um pedido o leva (o nome muda)` : '';
+}
 
 // "A, B e C"
 export const listaComE = nomes => (nomes.length > 1 ? `${nomes.slice(0, -1).join(', ')} e ${nomes.at(-1)}` : nomes[0] || '');
@@ -100,18 +139,19 @@ function requisitosDaMissao(curso, m, abertas) {
     ${grupos.map(([f, lista]) => `<fieldset><legend>${esc(rotuloDaFase(f))}</legend>${lista.map(marca).join('')}</fieldset>`).join('')}</details>`;
 }
 
-// Uma missão da fase, para quem muda: o número na fase, o código (travado com resultados), o nome, o tipo de missão, o
-// recurso, as horas, quando voar (com a caixa "Depois de…"), as marcas e os botões (subir, descer, tirar) com a fase
-// dela. onde: "do PP" (o curso com uma fase só) ou "da Fase 6"
+// Uma missão da fase, para quem muda: o número na fase, o código (travado com resultados ou com a Demanda da data aberta
+// levando o código, com o cadeado e o motivo), o nome, o tipo de missão, o recurso, as horas, quando voar (com a caixa
+// "Depois de…"), as marcas e os botões (subir, descer, tirar) com a fase dela. onde: "do PP" (o curso com uma fase só)
+// ou "da Fase 6"
 function linhaQueEdita(curso, fase, m, i, total, fases, onde, abertas) {
-  const ground = Boolean(MIS[m.mis].isGround), travado = codigoTravado(curso.sigla, m), codigo = esc(m.codigo);
+  const ground = Boolean(MIS[m.mis].isGround), trava = travaDoCodigo(curso.sigla, m), codigo = esc(m.codigo);
   const botao = (act, texto, desligado) => `<button type="button" class="x" data-act="${act}" aria-label="${esc(rotuloDoBotao(act, curso.sigla, m))}"${desligado ? ' disabled' : ''}>${texto}</button>`;
   const outraFase = fases.length > 1 ? `<select data-cf="fase" aria-label="Fase de ${codigo}">${opts(fases.map(f => [f.id, rotuloDaFase(f)]), m.fase)}</select>` : '';
   // A primeira missão do curso não tem nada antes para esperar
   const semAnteriores = percursoDoCurso(curso).posicao.get(m.id) === 0;
   return `<tr data-missao="${esc(m.id)}" data-fase="${esc(fase.id)}" data-i="${i}">
     <td class="n">${i + 1}</td>
-    <td class="c-codigo"><input data-cf="codigo" class="codigo" value="${codigo}" maxlength="15" autocomplete="off" aria-label="Código da ${i + 1}ª missão ${esc(onde)}"${travado ? ` readonly title="${TRAVADO}"` : ''}>${travado ? `<svg class="ico" role="img" aria-label="${TRAVADO}"><use href="#i-cadeado"/></svg>` : ''}</td>
+    <td class="c-codigo"><input data-cf="codigo" class="codigo" value="${codigo}" maxlength="15" autocomplete="off" aria-label="Código da ${i + 1}ª missão ${esc(onde)}"${trava ? ` readonly title="${esc(trava)}"` : ''}>${trava ? `<svg class="ico" role="img" aria-label="${esc(trava)}"><use href="#i-cadeado"/></svg>` : ''}</td>
     <td class="c-nome"><input data-cf="nome" value="${esc(m.nome)}" maxlength="80" autocomplete="off" aria-label="Nome de ${codigo}"></td>
     <td class="c-mis"><select data-cf="mis" aria-label="Missão de ${codigo}">${opts(Object.keys(MIS).map(k => [k, k]), m.mis)}</select>${trechoQueEdita(m, codigo)}</td>
     <td class="c-eq"><select data-cf="eq" aria-label="Recurso de ${codigo}"${ground ? ' disabled' : ''}>${opcoesDoRecurso(m)}</select></td>
