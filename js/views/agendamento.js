@@ -108,17 +108,20 @@ function desenharFormulario() {
 // Os itens da conferência: bloqueios, avisos e notas (com os botões do conserto, como "Marcar disponível", e as
 // alternativas livres de cada bloqueio, em grupos: "Horários livres: 08:20 10:10")
 const botao = o => `<button type="button" class="btn quiet" data-agd-opcao="${esc(o.opcao)}">${esc(o.texto)}</button>`;
-const alternativas = grupos => (grupos || []).map(g => `<div class="agd-chips"><span>${esc(g.rotulo)}:</span> ${g.opcoes.map(botao).join(' ')}</div>`).join('');
-const item = i => `<li data-codigo="${esc(i.codigo)}">${esc(i.texto)}${(i.opcoes || []).map(o => ` ${botao(o)}`).join('')}${alternativas(i.alternativas)}</li>`;
+// Cada grupo de alternativas tem o nome dele, o rótulo que aparece ("Horários livres"): o leitor de tela diz o grupo
+// antes dos botões ("08:20" sozinho não diz o que é). id: o do item, o mesmo enquanto a conferência não muda (o
+// conteúdo só é trocado quando muda)
+const alternativas = (grupos, id) => (grupos || []).map((g, k) => `<div class="agd-chips" role="group" aria-labelledby="${id}-${k}"><span><span id="${id}-${k}">${esc(g.rotulo)}</span>:</span> ${g.opcoes.map(botao).join(' ')}</div>`).join('');
+const item = (i, id) => `<li data-codigo="${esc(i.codigo)}">${esc(i.texto)}${(i.opcoes || []).map(o => ` ${botao(o)}`).join('')}${alternativas(i.alternativas, id)}</li>`;
 function desenharConferencia() {
   const av = pedido.avaliacao;
   const conferencia = $('#agd-conferencia');
   // Antes de escolher o aluno, o "Escolha o aluno" é uma orientação, não um erro
   const soOrientacao = av.bloqueios.length === 1 && av.bloqueios[0].codigo === 'sem-aluno';
-  const html = (seletor, lista) => trocar(conferencia.querySelector(seletor), lista.map(item).join(''));
-  html('.agd-bloqueios', soOrientacao ? [] : av.bloqueios);
-  html('.agd-avisos', av.avisos);
-  html('.agd-notas', soOrientacao ? [...av.bloqueios, ...av.notas] : av.notas);
+  const html = (nome, lista) => trocar(conferencia.querySelector(`.agd-${nome}`), lista.map((i, n) => item(i, `agd-alt-${nome}-${n}`)).join(''));
+  html('bloqueios', soOrientacao ? [] : av.bloqueios);
+  html('avisos', av.avisos);
+  html('notas', soOrientacao ? [...av.bloqueios, ...av.notas] : av.notas);
   desenharPrevia();
   // Outro conjunto de avisos desarma a confirmação
   const form = $('#form-agendar');

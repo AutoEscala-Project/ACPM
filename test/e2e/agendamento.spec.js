@@ -450,7 +450,10 @@ test.describe('Mover e encaixar o voo de hoje do aluno, as turmas de Ground e as
     const bloqueio = page.locator('#agd-conferencia .agd-bloqueios li');
     await expect(bloqueio).toContainText('O avião já está ocupado neste horário.');
     await expect(bloqueio.locator('.agd-chips')).toHaveText([/^Recursos livres: /, 'Horários livres: 08:20 10:10 11:30']);
-    const chip = bloqueio.locator('.agd-chips').first().getByRole('button').first();
+    // Cada grupo de alternativas tem o nome dele: o leitor de tela diz "Horários livres" antes de "08:20"
+    await expect(bloqueio.getByRole('group', { name: 'Horários livres', exact: true }).getByRole('button')).toHaveText(['08:20', '10:10', '11:30']);
+    await expect(bloqueio.getByRole('group', { name: 'Recursos livres', exact: true }).getByRole('button')).not.toHaveCount(0);
+    const chip = bloqueio.getByRole('group', { name: 'Recursos livres', exact: true }).getByRole('button').first();
     const reg = (await chip.textContent()).trim();
     await chip.click();
     await expect(page.locator('#agd-conferencia .agd-bloqueios li')).toHaveCount(0);
