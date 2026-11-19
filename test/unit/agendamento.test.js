@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import {
   contextoInicial, horariosDoAgendamento, encaixarHorario, duracaoDoAgendamento, naOrdemDoMotor, opcoesDeAluno, opcoesDeMissao,
   opcoesDeRecurso, opcoesDeInstrutor, formularioDoAgendamento, aplicarAgendamento, simularAgendamento, avaliarAgendamento, comPesos,
-  assinaturaDosAvisos, descricaoDoAgendamento, reversaoDoAgendamento, historicoDosPesos, escolhasDaAlternativa
+  assinaturaDosAvisos, descricaoDoAgendamento, reversaoDoAgendamento, historicoDosPesos, escolhasDaAlternativa, nomeDaData
 } from '../../js/agendamento.js';
 import { ocupacaoDaEscala } from '../../js/candidatos.js';
 import { runAllocationEngine } from '../../js/engine.js';
@@ -117,9 +117,48 @@ describe('Agendamento: os padrões do formulário', () => {
     const grupos = opcoesDeAluno(estado, base, amb, contextoInicial('i:1', amb));
     assert.deepEqual(grupos.map(g => [g.rotulo, g.opcoes.map(o => o.texto)]), [
       ['Ficaram fora da escala', ['Aluno 1002 · não voa com Instrutor 01']],
-      ['Na demanda de hoje', ['Aluno 1000 — PP · próxima IN-01 · voa hoje às 06:30']],
+      ['Na demanda de amanhã', ['Aluno 1000 — PP · próxima IN-01 · voa amanhã às 06:30']],
       ['Outros alunos', ['Aluno 1001 — PP · próxima IN-02']]
     ]);
+  });
+
+  // O operador costuma montar a escala de amanhã: os textos que falam dos voos da data aberta dizem hoje, amanhã ou a
+  // data, nunca "hoje" para outra data
+  it('a data aberta pelo nome certo nos textos do diálogo: hoje, amanhã ou a data', () => {
+    assert.deepEqual(nomeDaData({ data: DATA, hoje: DATA }), { de: 'de hoje', quando: 'hoje', curto: 'hoje' });
+    assert.deepEqual(nomeDaData({ data: DATA, hoje: HOJE }), { de: 'de amanhã', quando: 'amanhã', curto: 'amanhã' });
+    // Depois de amanhã, ontem e em outro ano: a data
+    assert.deepEqual(nomeDaData({ data: DATA, hoje: '2026-11-09' }), { de: 'de 11/11', quando: 'em 11/11', curto: '11/11' });
+    assert.equal(nomeDaData({ data: DATA, hoje: '2026-11-12' }).quando, 'em 11/11');
+    assert.equal(nomeDaData({ data: '2027-01-02', hoje: '2026-12-31' }).de, 'de 02/01/2027');
+    assert.deepEqual(nomeDaData({}), { de: 'do dia', quando: '', curto: '' });
+    // O Aluno 1000 voa a IN-01 às 06:30 na data
+    const estado = doDia({ s1000: { etapa: 'IN-01', cursoDaEtapa: 'PP' } });
+    const textos = hoje => {
+      const amb = ambiente({ hoje, agora: 0 });
+      const { base, formulario: f } = agendar(estado, { amb, escolhas: { aluno: 1000 } });
+      const r = base.out.find(o => o.stuId === 1000).r;
+      const noturno = agendar(estado, { amb, contexto: { r: 'PR-VOY', minuto: 600 }, escolhas: { aluno: 1001, missao: 'tipo:Noturno' }, tocados: ['missao'] }).avaliacao;
+      return [
+        f.alunos[0].rotulo, f.alunos[0].opcoes[0].texto.replace(/^.* · voa/, 'voa'), f.alunoInfo.replace(/^.* · já/, 'já').replace(r, 'R'),
+        f.missoes.grupos[0].rotulo, f.missoes.grupos[0].opcoes[0].texto.replace(r, 'R'), opcoes(f.missoes.grupos).find(o => o.valor === 'missao:PP:IN-01').texto,
+        noturno.notas.find(n => n.codigo === 'noturno').texto.replace(/;.*/, '')
+      ];
+    };
+    assert.deepEqual(textos(HOJE), [
+      'Na demanda de amanhã', 'voa amanhã às 06:30', 'já voa amanhã às 06:30 (IN-01, R)', 'Voos de amanhã do aluno', 'Mover IN-01 · Voo Local (amanhã 06:30, R)',
+      'IN-01 · Voo Local · C152 · 1 h (já no voo de amanhã às 06:30)', 'O Noturno volta em 12/11 às 07:30'
+    ]);
+    assert.deepEqual(textos(DATA), [
+      'Na demanda de hoje', 'voa hoje às 06:30', 'já voa hoje às 06:30 (IN-01, R)', 'Voos de hoje do aluno', 'Mover IN-01 · Voo Local (hoje 06:30, R)',
+      'IN-01 · Voo Local · C152 · 1 h (já no voo de hoje às 06:30)', 'O Noturno volta amanhã às 07:30'
+    ]);
+    assert.deepEqual(textos('2026-11-09'), [
+      'Na demanda de 11/11', 'voa em 11/11 às 06:30', 'já voa em 11/11 às 06:30 (IN-01, R)', 'Voos de 11/11 do aluno', 'Mover IN-01 · Voo Local (11/11 06:30, R)',
+      'IN-01 · Voo Local · C152 · 1 h (já no voo de 11/11 às 06:30)', 'O Noturno volta em 12/11 às 07:30'
+    ]);
+    // A data de ontem: o Noturno dela volta hoje
+    assert.equal(textos('2026-11-12').at(-1), 'O Noturno volta hoje às 07:30');
   });
 
   it('a próxima missão do curso, o recurso livre, o instrutor que serve, o primeiro horário livre, a duração e o peso do cadastro', () => {
@@ -162,7 +201,7 @@ describe('Agendamento: os padrões do formulário', () => {
     estado.noturnosDaVespera = [{ stuId: 1001, mid: 0, insId: 1, r: 'PR-VOY', eqType: 'C172', s: 'Aluno 1001', ins: 'Instrutor 01', stuKg: 70, fim: 1290 }];
     const { formulario } = agendar(estado, { amb, escolhas: { aluno: 1001 } });
     assert.equal(formulario.horario, 610);
-    assert.match(formulario.alunoInfo, /já voa hoje 07:30 \(Noturno, PR-VOY\)$/);
+    assert.match(formulario.alunoInfo, /já voa amanhã às 07:30 \(Noturno, PR-VOY\)$/);
   });
 
   it('a preferência do contexto: no avião Só Parafuso, o PE-04; sem contexto, a primeira liberada; no C172, a missão do C152 com aviso', () => {
@@ -265,9 +304,9 @@ describe('Agendamento: os padrões do formulário', () => {
     const stu = estado.stu[0];
     const textos = a => Object.fromEntries(opcoes(opcoesDeMissao(estado, base, ambiente(), stu, { a }).grupos).map(o => [o.valor, o.texto]));
     // O IN-01 voa às 06:30: às 06:30 o IN-02 espera por ele; às 08:20, depende do resultado
-    assert.equal(textos(390)['missao:PP:IN-01'], 'IN-01 · Voo Local · C152 · 1 h (já no voo de hoje às 06:30)');
+    assert.equal(textos(390)['missao:PP:IN-01'], 'IN-01 · Voo Local · C152 · 1 h (já no voo de amanhã às 06:30)');
     assert.equal(textos(390)['missao:PP:IN-02'], 'IN-02 · Voo Local · C152 · 1 h — IN-01 voa depois, às 06:30');
-    assert.equal(textos(500)['missao:PP:IN-02'], 'IN-02 · Voo Local · C152 · 1 h — depende do resultado de IN-01 (hoje 06:30)');
+    assert.equal(textos(500)['missao:PP:IN-02'], 'IN-02 · Voo Local · C152 · 1 h — depende do resultado de IN-01 (amanhã 06:30)');
     assert.equal(textos(500)['missao:PP:CT-01'], 'CT-01 · Voo Local · C152 · 1 h — a Fase 2 abre depois da Fase 1: falta IN-02');
     assert.equal(textos(500)['missao:PP:ADAPT-C152'], 'ADAPT-C152 · Voo Local · C152 · 1 h (dispensada)');
     const reprovada = ambiente({ registros: [...aprovadas(1001, ['IN-01']), { id: 9, aluno: 1001, curso: 'PP', missao: 'IN-02', resultado: 'reprovado', data: '2026-11-04' }] });
@@ -297,7 +336,7 @@ describe('Agendamento: os padrões do formulário', () => {
     assert.deepEqual([outro.tipos.length > 10, outro.tipo, outro.recurso.startsWith('SIM-'), outro.horas.valor], [true, 'Simulador', true, '2']);
   });
 
-  it('o Ground: a sala, a duração fixa e os horários das janelas; o Noturno, às 17:30, com a volta amanhã', () => {
+  it('o Ground: a sala, a duração fixa e os horários das janelas; o Noturno, às 17:30, com a volta no dia seguinte', () => {
     const estado = doDia();
     delete estado.stu[1].curso;
     const ground = agendar(estado, { amb, escolhas: { aluno: 1001, missao: 'tipo:Ground C152' }, tocados: ['missao'] });
@@ -311,7 +350,7 @@ describe('Agendamento: os padrões do formulário', () => {
     assert.deepEqual(codigos(noturno.avaliacao.notas), ['horario-da-missao', 'rodizio', 'noturno']);
     assert.deepEqual(noturno.avaliacao.notas.map(n => n.texto), [
       'O Noturno sai às 17:30.', 'Na fila do rodízio (Voo noturno), a vez é de Instrutor 01.',
-      'O Noturno volta amanhã às 07:30; o instrutor, o aluno e o avião ficam livres às 10:10.'
+      'O Noturno volta em 12/11 às 07:30; o instrutor, o aluno e o avião ficam livres às 10:10.'
     ]);
     // Com a janela das 17:30 fechada, o Noturno fica sem horário: o bloqueio diz por quê, e o contexto não fica pela metade
     const fechada = { ...estado, win: estado.win.map((v, w) => w !== 8) };
@@ -535,7 +574,7 @@ describe('Agendamento: a conferência', () => {
     assert.deepEqual(aviso(1001, 'missao:PP:CT-01'), [{ codigo: 'fora-da-ordem', texto: 'CT-01 fora da ordem: a Fase 2 abre depois da Fase 1: falta IN-02.', resumo: 'fora da ordem (a Fase 2 abre depois da Fase 1: falta IN-02)', campo: 'agd-missao' }]);
     assert.deepEqual(codigos(aviso(1001, 'missao:PP:IN-01')), ['ja-aprovada']);
     assert.deepEqual(codigos(aviso(1001, 'missao:PP:ADAPT-C152')), ['dispensada']);
-    assert.deepEqual(aviso(1000, 'missao:PP:IN-01').map(a => [a.codigo, a.texto]), [['repetida-no-dia', 'IN-01 já está no voo de hoje às 06:30: o aluno voa a missão duas vezes no dia.']]);
+    assert.deepEqual(aviso(1000, 'missao:PP:IN-01').map(a => [a.codigo, a.texto]), [['repetida-no-dia', 'IN-01 já está no voo de amanhã às 06:30: o aluno voa a missão duas vezes no dia.']]);
     const encerrado = aviso(1001, 'missao:PP:IN-02', { programa: [{ ...PP, ativo: false }] });
     assert.deepEqual(codigos(encerrado), ['curso-encerrado']);
     // A missão de outro curso (o aluno trocou de curso)
@@ -624,7 +663,7 @@ describe('Agendamento: a conferência', () => {
       escolhas: { aluno: 1001, missao: 'missao:PP:CT-01', horario: 500, horas: '1,5', instrutor: 2 }, tocados: ['missao', 'horario', 'horas', 'instrutor']
     }).notas;
     assert.deepEqual(notas.map(n => [n.codigo, n.texto]), [
-      ['condicional', 'CT-01 depende do resultado de IN-02 (hoje 06:30).'],
+      ['condicional', 'CT-01 depende do resultado de IN-02 (amanhã 06:30).'],
       ['duracao-do-programa', 'A duração (1,5 h) é diferente da do programa para CT-01 (1 h).'],
       ['fora-do-priorizar', 'Instrutor 02 está fora do Priorizar com de Aluno 1001.']
     ]);
@@ -672,7 +711,7 @@ describe('Agendamento: os voos de hoje do aluno (mover e encaixar)', () => {
   const amb = ambiente({ registros: aprovadas(1001, ['IN-01']) });
   // Um instrutor só: o Aluno 1001 (prioridade 5) voa às 06:30; o Aluno 1000 só pode às 06:30 e fica fora da escala
   const comFora = () => doDia({ ins: [instrutor(1, 9)], s1000: { jan: 'h390', etapa: 'IN-01', cursoDaEtapa: 'PP' }, s1001: { fly: true, p1: 390, p2: -1, pr: 5 } });
-  const deHoje = f => f.missoes.grupos.find(g => g.rotulo === 'Voos de hoje do aluno');
+  const deHoje = f => f.missoes.grupos.find(g => g.rotulo === 'Voos de amanhã do aluno');
 
   it('o padrão nunca é a missão seguinte por cima de um pedido que já existe: o que ficou fora entra; o que tem a próxima muda de lugar', () => {
     // O IN-01 do Aluno 1000 voa às 06:30 (o app escolheu): mover; o IN-02 continua escolhível, dependendo do resultado
@@ -680,8 +719,8 @@ describe('Agendamento: os voos de hoje do aluno (mover e encaixar)', () => {
     const voo = runAllocationEngine(estado).out.find(o => o.stuId === 1000);
     const { formulario: f } = agendar(estado, { escolhas: { aluno: 1000 } });
     assert.deepEqual([f.missao, f.acao], ['pedido:0', 'mover']);
-    assert.deepEqual(deHoje(f).opcoes.map(o => [o.valor, o.texto, Boolean(o.desligada)]), [['pedido:0', `Mover IN-01 · Voo Local (hoje 06:30, ${voo.r})`, false]]);
-    assert.equal(opcoes(f.missoes.grupos).find(o => o.valor === 'missao:PP:IN-02').texto, 'IN-02 · Voo Local · C152 · 1 h — depende do resultado de IN-01 (hoje 06:30)');
+    assert.deepEqual(deHoje(f).opcoes.map(o => [o.valor, o.texto, Boolean(o.desligada)]), [['pedido:0', `Mover IN-01 · Voo Local (amanhã 06:30, ${voo.r})`, false]]);
+    assert.equal(opcoes(f.missoes.grupos).find(o => o.valor === 'missao:PP:IN-02').texto, 'IN-02 · Voo Local · C152 · 1 h — depende do resultado de IN-01 (amanhã 06:30)');
     // O voo sai do horário em que está: o primeiro horário livre depois dele, no mesmo avião e com o mesmo instrutor
     assert.deepEqual([f.horario, f.recurso, f.instrutor], [500, voo.r, voo.insId]);
     assert.deepEqual(f.proposta.pedido, { mid: 0, acao: 'mover', de: { a: 390, r: voo.r } });
@@ -693,7 +732,7 @@ describe('Agendamento: os voos de hoje do aluno (mover e encaixar)', () => {
     // Sem a próxima num pedido do dia (o pedido sem a missão do curso), a próxima do curso, num voo novo
     const semEtapa = agendar(doDia(), { escolhas: { aluno: 1000 } }).formulario;
     assert.deepEqual([semEtapa.missao, semEtapa.acao], ['missao:PP:IN-01', null]);
-    assert.deepEqual(deHoje(semEtapa).opcoes.map(o => o.texto), [`Mover Voo Local (hoje 06:30, ${voo.r})`]);
+    assert.deepEqual(deHoje(semEtapa).opcoes.map(o => o.texto), [`Mover Voo Local (amanhã 06:30, ${voo.r})`]);
   });
 
   it('o voo em andamento e o cancelado ficam desligados, com o status; o cancelado não segura a próxima missão', () => {
@@ -702,7 +741,7 @@ describe('Agendamento: os voos de hoje do aluno (mover e encaixar)', () => {
     for (const [status, rotulo] of [['Em Voo', 'em voo'], ['Atrasado', 'atrasado'], ['Pousou', 'pousou'], ['Cancelado', 'cancelado']]) {
       const comStatus = { ...estado, fixos: { '1000_0_1': { a: voo.a, b: voo.b, r: voo.r, insId: voo.insId } }, fStatus: { '1000_0_1': status } };
       const { formulario: f } = agendar(comStatus, { escolhas: { aluno: 1000 } });
-      assert.deepEqual(deHoje(f).opcoes.map(o => [o.texto, o.desligada]), [[`Mover IN-01 · Voo Local (hoje 06:30, ${voo.r}) — ${rotulo}`, true]], status);
+      assert.deepEqual(deHoje(f).opcoes.map(o => [o.texto, o.desligada]), [[`Mover IN-01 · Voo Local (amanhã 06:30, ${voo.r}) — ${rotulo}`, true]], status);
       assert.notEqual(f.missao, 'pedido:0', status);
       // Escolhido mesmo assim (o select não deixa), não muda de lugar
       const escolhido = agendar(comStatus, { escolhas: { aluno: 1000, missao: 'pedido:0' }, tocados: ['missao'] }).formulario;
@@ -816,7 +855,7 @@ describe('Agendamento: os voos de hoje do aluno (mover e encaixar)', () => {
     assert.deepEqual(cedo.avisos.map(a => [a.codigo, a.texto]), [['fora-da-ordem', 'IN-02 fora da ordem: IN-01 voa depois, às 08:20.']]);
     // Mais tarde, depois do IN-01: só a nota de que depende do resultado
     const tardeOk = agendar(ordem, { escolhas: { aluno: 1000, missao: 'pedido:1', horario: 760 }, tocados: ['missao', 'horario'] }).avaliacao;
-    assert.deepEqual([codigos(tardeOk.avisos), tardeOk.notas.find(n => n.codigo === 'condicional').texto], [[], 'IN-02 depende do resultado de IN-01 (hoje 08:20).']);
+    assert.deepEqual([codigos(tardeOk.avisos), tardeOk.notas.find(n => n.codigo === 'condicional').texto], [[], 'IN-02 depende do resultado de IN-01 (amanhã 08:20).']);
   });
 
   it('mover o Noturno: as 4 h fixas às 17:30, com a volta amanhã; o Ground, 1h30 nas janelas do dia', () => {
@@ -876,7 +915,7 @@ describe('Agendamento: as turmas de Ground', () => {
     const turma = runAllocationEngine(estado).out[0];
     const { formulario: f, sim, avaliacao } = agendar(estado, { escolhas: { aluno: 1001, missao: 'tipo:Ground C152', instrutor: `turma:${turma.classKey}` }, tocados: ['missao', 'instrutor'] });
     assert.deepEqual(f.instrutores[0], {
-      rotulo: 'Turmas de hoje',
+      rotulo: 'Turmas de amanhã',
       opcoes: [{ valor: `turma:${turma.classKey}`, texto: 'Entrar na turma das 08:20 com Instrutor 01 (2 alunos)', desligada: false, turma: { classKey: turma.classKey, mis: 'Ground C152', a: 500, b: 590, insId: 1, ins: 'Instrutor 01', n: 2 } }]
     });
     assert.deepEqual([f.instrutor, f.horario, f.recurso, f.recursos.map(o => o.texto)], [`turma:${turma.classKey}`, 500, 'SALA-GROUND', ['Sala Ground · turma das 08:20']]);

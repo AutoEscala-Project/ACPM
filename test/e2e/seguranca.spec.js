@@ -151,7 +151,7 @@ test.describe('Conteúdo gravado malicioso', () => {
     await page.locator('#agd-aluno').selectOption('1002');
     await expect(page.locator('#agd-instrutor option[value="1"]')).toContainText(`Instrutor ${X}`);
     await page.locator('#agd-aluno').selectOption('1000');
-    await expect(page.locator('#agd-aluno-info')).toContainText('já voa hoje');
+    await expect(page.locator('#agd-aluno-info')).toContainText('já voa amanhã');
     await nada(page);
     await page.keyboard.press('Escape');
     await expect(page.locator('#dlg-agendar')).toBeHidden();

@@ -300,6 +300,24 @@ test.describe('Agendar um voo na Escala', () => {
     await agendar(page);
     await expect(voo(page, 'Maria Silva')).toHaveCount(1);
   });
+
+  // O operador costuma montar a escala de amanhã (a data que abre): o diálogo chama os voos dela de amanhã, nunca de hoje
+  test('na data de amanhã, o diálogo não chama de "hoje" os voos da data: diz amanhã', async ({ page }) => {
+    const estado = dia();
+    Object.assign(estado.stu[0], { etapa: 'PP-01', cursoDaEtapa: 'PP' });
+    await abrirComCurso(page, estado);
+    await expect(page.locator('#dt-rel')).toHaveText('amanhã');
+    await page.locator('#btn-agendar').click();
+    const grupos = id => page.locator(id).evaluate(s => [...s.querySelectorAll('optgroup')].map(g => `${g.label}: ${[...g.children].map(o => o.textContent).join(' | ')}`).join(' / '));
+    expect(await grupos('#agd-aluno')).toMatch(/^Na demanda de amanhã: Aluno 1000 — PP · próxima PP-02 · voa amanhã às 06:30 \/ /);
+    await page.locator('#agd-aluno').selectOption('1000');
+    await expect(page.locator('#agd-aluno-info')).toHaveText(/ · já voa amanhã às 06:30 \(PP-01, [A-Z0-9-]+\)$/);
+    await expect(page.locator('#agd-missao optgroup').first()).toHaveAttribute('label', 'Voos de amanhã do aluno');
+    await expect(page.locator('#agd-missao option:checked')).toHaveText(/^Mover PP-01 · Voo Local \(amanhã 06:30, /);
+    expect(await grupos('#agd-missao')).not.toMatch(/hoje/);
+    expect(await grupos('#agd-aluno')).not.toMatch(/hoje/);
+    await expect(page.locator('#agd-aluno-info')).not.toContainText('hoje');
+  });
 });
 
 test.describe('Mover e encaixar o voo de hoje do aluno, as turmas de Ground e as alternativas', () => {
@@ -319,7 +337,7 @@ test.describe('Mover e encaixar o voo de hoje do aluno, as turmas de Ground e as
     await abrirPara(page, 1001);
     // O padrão é mover o pedido que já tem a próxima missão (nunca a PP-03 por cima dele), com o instrutor escolhido dele
     await expect(dialogo(page)).toHaveAccessibleName('Mover o voo');
-    await expect(page.locator('#agd-missao option:checked')).toHaveText('Mover PP-02 · Voo Local (hoje 08:20, PR-VOB)');
+    await expect(page.locator('#agd-missao option:checked')).toHaveText('Mover PP-02 · Voo Local (amanhã 08:20, PR-VOB)');
     await expect(page.locator('#agd-instrutor')).toHaveValue('2');
     await page.locator('#agd-horario').selectOption('610');
     await expect(page.locator('#agd-recurso')).toHaveValue('PR-VOB');
@@ -391,7 +409,7 @@ test.describe('Mover e encaixar o voo de hoje do aluno, as turmas de Ground e as
     // Pela barra (o recurso é um avião), o Ground vem por "Outro tipo de missão…"
     await page.locator('#agd-missao').selectOption({ label: 'Outro tipo de missão…' });
     await page.locator('#agd-tipo').selectOption('Ground C152');
-    const turma = page.locator('#agd-instrutor optgroup[label="Turmas de hoje"] option');
+    const turma = page.locator('#agd-instrutor optgroup[label="Turmas de amanhã"] option');
     await expect(turma).toHaveText(['Entrar na turma das 08:20 com Instrutor 01 (2 alunos)']);
     await page.locator('#agd-instrutor').selectOption({ label: 'Entrar na turma das 08:20 com Instrutor 01 (2 alunos)' });
     await expect(page.locator('#agd-horario')).toHaveValue('500');

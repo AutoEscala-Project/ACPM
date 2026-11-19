@@ -30,7 +30,7 @@ import { STATUS_EM_ANDAMENTO, rotuloDoStatus, intervaloEfetivo } from './status.
 import { pesoECombustivel, textoDoCombustivel } from './combustivel.js';
 import { NOTA_DO_PROBLEMA } from './instrutor-escolhido.js';
 import { sobrepoe } from './viabilidade.js';
-import { hm, fmtH, numeroBr, rotuloDaData } from './format.js';
+import { hm, fmtH, numeroBr, rotuloDaData, somarDias } from './format.js';
 import { nomeDoRecurso } from './categorias.js';
 import { CATEGORIAS_DO_RODIZIO, categoriaDoRodizio, ajustarFilas } from './rodizio.js';
 import { FROTA_INICIAL, recursoDaFrota, motivoDoAviao } from './frota.js';
@@ -52,6 +52,19 @@ const rotuloDoVoo = o => (o.mid ? `${o.s} (${o.mis})` : o.s);
 // Ground"
 const noRecurso = r => (r === GROUND_REG ? 'na sala de Ground' : `no ${nomeDoRecurso(r)}`);
 const horariosDoTipo = tipo => (tipo === GROUND_EQ_TYPE ? 'horários das aulas de Ground' : `horários do ${tipo}`);
+
+// A data aberta nos textos do diálogo, pelo nome certo: hoje, amanhã (a data que o operador costuma montar) ou a data
+// ("12/11"; em outro ano, com o ano). Três formas: depois de "de" ("Na demanda de amanhã"), depois de um verbo ("voa
+// amanhã às 08:20"; a data, "em 12/11") e antes de um horário ("amanhã 08:20"). Sem a data, "do dia" e nada
+export function nomeDaData({ data, hoje } = {}) {
+  const { relativo = '', data: diaMes = '' } = data && hoje ? rotuloDaData(data, hoje) : {};
+  const nome = ['hoje', 'amanhã'].includes(relativo) ? relativo : diaMes;
+  return { de: nome ? `de ${nome}` : 'do dia', quando: nome && nome === diaMes ? `em ${nome}` : nome, curto: nome };
+}
+// O horário de um voo na data: "amanhã 08:20" (sem a data, só o horário)
+const naData = (dia, minuto) => [dia.curto, hm(minuto)].filter(Boolean).join(' ');
+// O verbo com a data e os horários: "voa amanhã às 06:30, 10:10"
+const naDataAs = (dia, verbo, horarios) => [verbo, dia.quando, `às ${horarios}`].filter(Boolean).join(' ');
 
 // ---------------------------------------------------------------------------------------------------------------------
 // O contexto e os horários
@@ -237,15 +250,16 @@ function missaoDoPedido(estado, base, ambiente, stu, p, a) {
   const info = estadoDoAluno(curso, ambiente.situacao, stu.id, { planejadas, exceto }).porMissao.get(m.id);
   if (!info || info.estado === 'no-noturno') return { ...comum, estado: null };
   const motivo = info.estado === 'bloqueada' ? motivoDaMissao(curso, ambiente, stu, m, info, voos) : '';
-  return { ...comum, estado: info.estado, motivo, dependeDe: descreverDependencias(curso, info.dependeDe, voos) };
+  return { ...comum, estado: info.estado, motivo, dependeDe: descreverDependencias(curso, info.dependeDe, voos, nomeDaData(ambiente)) };
 }
 
-// Os voos de hoje do aluno (o grupo "Voos de hoje do aluno" do select Missão): cada pedido dele que voa. O que está na
-// escala muda de lugar ("Mover PP-07 · Navegação (hoje 10:10, PR-VOC)"); o que ficou fora entra ("Encaixar PP-07 ·
+// Os voos do aluno na data (o grupo "Voos de amanhã do aluno" do select Missão): cada pedido dele que voa. O que está
+// na escala muda de lugar ("Mover PP-07 · Navegação (amanhã 10:10, PR-VOC)"); o que ficou fora entra ("Encaixar PP-07 ·
 // Navegação (ficou fora: sem avião livre)"); o em andamento e o cancelado ficam desligados, com o status. O pedido
 // continua o mesmo: a missão, a missão do curso, o status e o detalhe dele
 function voosDeHoje(estado, base, ambiente, stu, a) {
   const naEscala = new Map(base.out.filter(o => o.stuId === stu.id && !o.trecho).map(o => [o.fKey, o]));
+  const dia = nomeDaData(ambiente);
   return pedidosQueVoam(stu).map(p => {
     const mid = p.mid || 0, fKey = chaveDoVoo(stu.id, mid);
     const voo = naEscala.get(fKey) || null;
@@ -253,7 +267,7 @@ function voosDeHoje(estado, base, ambiente, stu, a) {
     const travado = [...STATUS_EM_ANDAMENTO, 'Cancelado'].includes(status) ? status : null;
     const doCurso = missaoDoPedido(estado, base, ambiente, stu, p, a);
     const nome = `${doCurso ? doCurso.rotulo : p.etapa || ''}${p.etapa ? ' · ' : ''}${p.mis}`;
-    const texto = `${voo ? `Mover ${nome} (hoje ${hm(voo.a)}, ${nomeDoRecurso(voo.r)})` : `Encaixar ${nome} (ficou fora: ${motivoDeFora(base, stu, p)})`}`
+    const texto = `${voo ? `Mover ${nome} (${naData(dia, voo.a)}, ${nomeDoRecurso(voo.r)})` : `Encaixar ${nome} (ficou fora: ${motivoDeFora(base, stu, p)})`}`
       + (travado ? ` — ${rotuloDoStatus(travado, voo).toLowerCase()}` : '');
     return {
       valor: `pedido:${mid}`, texto, desligada: Boolean(travado),
@@ -315,10 +329,11 @@ const descreverMissao = (curso, m) => `${rotuloDaMissao(curso, m)} · ${m.mis}${
 // O rótulo da missão seguido de um parêntese (na nota, a fase dela): o Noturno em trechos fica "NOT, com TSL-01 e
 // TSL-02 (Fase 6)", sem dois parênteses seguidos
 const rotuloAntesDoParentese = (curso, m) => rotuloDaMissao(curso, m).replace(/ \((com [^)]+)\)$/, ', $1');
-const descreverDependencias = (curso, ids, voosDoDia) => juntar(ids.map(id => {
+// As missões de que uma depende, com o voo de cada uma na data ("IN-01 (amanhã 06:30)"); dia: nomeDaData
+const descreverDependencias = (curso, ids, voosDoDia, dia) => juntar(ids.map(id => {
   const voo = voosDoDia.get(id);
   const m = curso.missoes.find(x => x.id === id);
-  return voo ? `${m.codigo} (hoje ${hm(voo.a)})` : m.codigo;
+  return voo ? `${m.codigo} (${naData(dia, voo.a)})` : m.codigo;
 }));
 
 // Os alunos (o select Aluno), em grupos: os que têm um pedido que ficou fora da escala, os que voam na data e os outros.
@@ -326,7 +341,8 @@ const descreverDependencias = (curso, ids, voosDoDia) => juntar(ids.map(id => {
 export function opcoesDeAluno(estado, base, ambiente, contexto = {}) {
   const naEscala = new Set(base.out.map(o => o.fKey));
   const instrutor = contexto.insId ? estado.ins.find(x => x.id === contexto.insId) : null;
-  const grupos = [['Ficaram fora da escala', []], ['Na demanda de hoje', []], ['Outros alunos', []]];
+  const dia = nomeDaData(ambiente);
+  const grupos = [['Ficaram fora da escala', []], [`Na demanda ${dia.de}`, []], ['Outros alunos', []]];
   for (const stu of [...estado.stu].sort(porNome)) {
     const pedidos = pedidosQueVoam(stu);
     const curso = ambiente.inferir ? cursoDoAluno(ambiente, stu) : null;
@@ -338,7 +354,7 @@ export function opcoesDeAluno(estado, base, ambiente, contexto = {}) {
     const voos = base.out.filter(o => o.stuId === stu.id && ativo(o, estado.fStatus));
     const texto = [
       stu.nm, stu.curso ? ` — ${stu.curso}${proxima ? ` · próxima ${rotuloDaMissao(curso, proxima)}` : ''}` : '',
-      voos.length ? ` · voa hoje às ${voos.map(o => hm(o.a)).join(', ')}` : '',
+      voos.length ? ` · ${naDataAs(dia, 'voa', voos.map(o => hm(o.a)).join(', '))}` : '',
       instrutor && (stu.bl || []).includes(instrutor.id) ? ` · não voa com ${instrutor.nm}` : ''
     ].join('');
     const fora = pedidos.some(p => !naEscala.has(chaveDoVoo(stu.id, p.mid || 0)));
@@ -348,7 +364,7 @@ export function opcoesDeAluno(estado, base, ambiente, contexto = {}) {
 }
 
 // O aluno no diálogo: o curso, a fase, as aprovadas, a próxima missão, os voos dele na data e o pedido que ficou fora da
-// escala ("PP · Fase 4 · 12/46 · próxima TMA-03 · já voa hoje 08:20 (TMA-02, PR-VOC)")
+// escala ("PP · Fase 4 · 12/46 · próxima TMA-03 · já voa amanhã às 08:20 (TMA-02, PR-VOC)")
 function infoDoAluno(estado, base, ambiente, stu) {
   const partes = [];
   const curso = cursoDoAluno(ambiente, stu);
@@ -360,14 +376,14 @@ function infoDoAluno(estado, base, ambiente, stu) {
     if (proxima) partes.push(`próxima ${rotuloDaMissao(curso, proxima)}`);
   }
   const voos = base.out.filter(o => o.stuId === stu.id && ativo(o, estado.fStatus));
-  if (voos.length) partes.push(`já voa hoje ${voos.map(o => `${hm(o.a)} (${[o.etapa || o.mis, nomeDoRecurso(o.r)].join(', ')})`).join('; ')}`);
+  if (voos.length) partes.push(naDataAs(nomeDaData(ambiente), 'já voa', voos.map(o => `${hm(o.a)} (${[o.etapa || o.mis, nomeDoRecurso(o.r)].join(', ')})`).join('; ')));
   const naEscala = new Set(base.out.map(o => o.fKey));
   const fora = pedidosQueVoam(stu).filter(p => !naEscala.has(chaveDoVoo(stu.id, p.mid || 0)));
   if (fora.length) partes.push(`ficou fora da escala: ${fora.map(p => p.mis).join(', ')}`);
   return partes.join(' · ');
 }
 
-// As missões que o aluno pode voar (o select Missão), em grupos: os voos de hoje do aluno (mover o que está na escala,
+// As missões que o aluno pode voar (o select Missão), em grupos: os voos do aluno na data (mover o que está na escala,
 // encaixar o que ficou fora), as liberadas do curso (a condicional diz de que resultado depende), as outras missões do
 // curso, fora da ordem (com o motivo: pedem confirmação), e as missões sem o curso (os tipos de missão que o recurso
 // serve, e "Outro tipo de missão…"). Sem os resultados, as missões do curso vêm sem a ordem conferida, e não há missão
@@ -382,8 +398,9 @@ export function opcoesDeMissao(estado, base, ambiente, stu, { a = 0, contexto = 
   const curso = cursoDoAluno(ambiente, stu);
   const grupos = [];
   let padrao = null, nota = '';
+  const dia = nomeDaData(ambiente);
   const deHoje = voosDeHoje(estado, base, ambiente, stu, a);
-  if (deHoje.length) grupos.push({ rotulo: 'Voos de hoje do aluno', opcoes: deHoje });
+  if (deHoje.length) grupos.push({ rotulo: `Voos ${dia.de} do aluno`, opcoes: deHoje });
   let liberadasDoCurso = [];
   if (curso) {
     const percurso = percursoDoCurso(curso);
@@ -400,14 +417,15 @@ export function opcoesDeMissao(estado, base, ambiente, stu, { a = 0, contexto = 
       });
       const liberadas = candidatas.map(m => {
         const info = porMissao.get(m.id);
-        const depende = info.estado === 'condicional' ? ` — depende do resultado de ${descreverDependencias(curso, info.dependeDe, voos)}` : '';
-        return { valor: `missao:${m.id}`, texto: `${descreverMissao(curso, m)}${depende}`, info: { ...comum(m), estado: info.estado, dependeDe: descreverDependencias(curso, info.dependeDe, voos) } };
+        const dependeDe = descreverDependencias(curso, info.dependeDe, voos, dia);
+        const depende = info.estado === 'condicional' ? ` — depende do resultado de ${dependeDe}` : '';
+        return { valor: `missao:${m.id}`, texto: `${descreverMissao(curso, m)}${depende}`, info: { ...comum(m), estado: info.estado, dependeDe } };
       });
       const foraDaOrdem = missoes.filter(m => !candidatas.includes(m)).map(m => {
         const info = porMissao.get(m.id) || { estado: 'bloqueada', faltam: [], fasesFechadas: [], dependeDe: [] };
         const voo = info.estado === 'no-dia' ? [...(voos.values())].find(o => o.etapa === m.codigo) : null;
         const motivo = info.estado === 'aprovada' ? 'já aprovada' : info.estado === 'dispensada' ? 'dispensada'
-          : info.estado === 'no-dia' ? (voo ? `já no voo de hoje às ${hm(voo.a)}` : 'já em outro pedido de hoje')
+          : info.estado === 'no-dia' ? (voo ? `já no voo ${dia.de} às ${hm(voo.a)}` : `já em outro pedido ${dia.de}`)
             : motivoDaMissao(curso, ambiente, stu, m, info, voos);
         const texto = info.estado === 'bloqueada' ? `${descreverMissao(curso, m)} — ${motivo}` : `${descreverMissao(curso, m)} (${motivo})`;
         return { valor: `missao:${m.id}`, texto, info: { ...comum(m), estado: info.estado, motivo } };
@@ -449,8 +467,8 @@ export function opcoesDeMissao(estado, base, ambiente, stu, { a = 0, contexto = 
       ...(recurso ? [{ valor: 'tipo:', texto: 'Outro tipo de missão…', info: { tipo: 'outro' } }] : [])]
   });
   if (!padrao && !semPrograma && (!curso || ambiente.inferir)) padrao = `tipo:${tipos.includes('Voo Local') ? 'Voo Local' : tipos[0] || 'Voo Local'}`;
-  // Os voos de hoje do aluno vêm antes da próxima missão: o que ficou fora; o que já tem a próxima do curso (sem os voos
-  // de hoje, ela seria a sugerida). Na turma de Ground, o Ground dela
+  // Os voos do aluno na data vêm antes da próxima missão: o que ficou fora; o que já tem a próxima do curso (sem os voos
+  // da data, ela seria a sugerida). Na turma de Ground, o Ground dela
   const movivel = o => !o.desligada;
   const fora = deHoje.find(o => o.info.acao === 'encaixar' && movivel(o));
   const semOHoje = curso && ambiente.inferir ? proximasMissoes(curso, ambiente.situacao, stu.id, { planejadas: new Set(), exceto: new Set() }).padrao : null;
@@ -733,7 +751,7 @@ export function formularioDoAgendamento(estado, base, ambiente, contexto, escolh
     const bloqueado = (stu.bl || []).includes(t.insId);
     return { valor: `turma:${t.classKey}`, texto: `${textoDaTurma(t)}${bloqueado ? ` — ${NOTA_DO_PROBLEMA.bloqueio}` : ''}`, desligada: bloqueado, turma: t };
   });
-  f.instrutores = [...(opcoesDasTurmas.length ? [{ rotulo: 'Turmas de hoje', opcoes: opcoesDasTurmas }] : []), ...ins.grupos];
+  f.instrutores = [...(opcoesDasTurmas.length ? [{ rotulo: `Turmas ${nomeDaData(ambiente).de}`, opcoes: opcoesDasTurmas }] : []), ...ins.grupos];
   f.instrutor = turma ? `turma:${turma.classKey}` : x ? x.id : null;
   f.horario = outro ? 'outro' : a;
   f.outroHorario = outro ? escolhas.outroHorario || '' : '';
@@ -1174,7 +1192,9 @@ export function avaliarAgendamento({ estado, baseComPesos, base = baseComPesos, 
   }
   if (estado.aprovacao) notas.push({ codigo: 'escala-aprovada', texto: 'A escala está aprovada: o voo novo entra fixo e os outros não mudam.' });
   if (mis === 'Noturno') {
-    notas.push({ codigo: 'noturno', texto: `O Noturno volta amanhã às ${hm(NOTURNO.voltaInicio)}; o instrutor, o aluno e o avião ficam livres às ${hm(NOTURNO.livreAs)}.` });
+    // A volta é no dia seguinte ao da data aberta: amanhã só quando a data é hoje
+    const volta = nomeDaData({ data: ambiente.data && somarDias(ambiente.data, 1), hoje: ambiente.hoje }).quando || 'no dia seguinte';
+    notas.push({ codigo: 'noturno', texto: `O Noturno volta ${volta} às ${hm(NOTURNO.voltaInicio)}; o instrutor, o aluno e o avião ficam livres às ${hm(NOTURNO.livreAs)}.` });
   }
   // Os outros pedidos do aluno que ficaram fora da escala (o que entra agora não)
   const naBase = new Set(baseComPesos.out.map(o => o.fKey));
