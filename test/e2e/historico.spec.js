@@ -226,6 +226,35 @@ test.describe('Histórico', () => {
     await expect(page.locator('#out tbody tr:not(.win)', { hasText: 'Aluno 1000' }).locator('.c-hr')).toContainText('06:30–07:30');
   });
 
+  // O voo movido já voava antes do agendamento: o "Voa" desligado depois dele é do operador, e desfazer não põe o aluno
+  // de volta na escala
+  test('desfazer um voo movido depois de desligar "Voa": o aluno continua fora da escala', async ({ page }) => {
+    // O agendamento moveu o Aluno 1000 das 08:20 para as 10:10 (fixo no PR-VOB); depois, "Voa" foi desligado
+    const estado = cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, { fly: false, p1: 610, p2: -1, insId: 1 }), aluno(1001, { p1: 390, p2: -1 })] });
+    estado.fixos = { '1000_0_1': { a: 610, b: 670, r: 'PR-VOB', insId: 1, agendado: true } };
+    await abrirComHistorico(page, estado, [agendamento(1, 'Agendado na escala: Aluno 1000 · Voo Local · 10:10–11:10 · PR-VOB · Instrutor 01 (era 08:20 no PR-VOC)', {
+      stuId: 1000, mid: 0, criado: false, pedido: { fly: true, mis: 'Voo Local', eq: 'C152', p1: 500, p2: -1, nb: 1, ss: 1, pr: 3 }
+    })]);
+    await abrirEscala(page);
+    const voo = page.locator('#out tbody tr:not(.win)', { hasText: 'Aluno 1000' });
+    await expect(voo).toHaveCount(0);
+    await page.locator('#btn-open-log').click();
+    await page.locator('#audit-log-list [data-act="rev-log"]').click();
+    await expect(page.locator('#audit-log-list .audit-item', { hasText: 'Revertido: Agendado na escala: Aluno 1000' })).toHaveCount(1);
+    await page.keyboard.press('Escape');
+    // Continua fora da escala, e a Demanda continua com "Voa" desligado
+    await expect(voo).toHaveCount(0);
+    await irPara(page, 'dem');
+    const voa = page.locator('#dem tr[data-k="d"][data-id="1000"][data-mid="0"] [data-f="fly"]');
+    await expect(voa).not.toBeChecked();
+    // Voando de novo, o voo vai para o horário de antes do agendamento (08:20), sem o cadeado
+    await page.locator('#onlyfly').uncheck();
+    await voa.check();
+    await abrirEscala(page);
+    await expect(voo.locator('.c-hr')).toContainText('08:20–09:20');
+    await expect(voo.locator('.fixo')).toHaveCount(0);
+  });
+
   // Desfazer um agendamento e depois reverter a troca de instrutor feita depois dele: o voo agendado desfeito não volta.
   // De volta, ele prenderia o voo seguinte da aluna no horário, no avião e com o instrutor do agendamento desfeito
   test('desfazer o agendamento e depois reverter a troca de instrutor não traz o voo agendado de volta', async ({ page }) => {

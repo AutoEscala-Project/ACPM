@@ -213,6 +213,23 @@ describe('Desfazer um voo agendado na Escala', () => {
     assert.equal(semEscolha.fStatus['1000_0_1'], 'Confirmado');
   });
 
+  // O voo movido já voava antes do agendamento (só o pedido que voa muda de lugar): o "Voa" desligado depois dele é do
+  // operador, e desfazer o agendamento não põe o aluno de volta na escala
+  it('o voo movido depois de desligar "Voa": o pedido e o voo fixo voltam como estavam, e o aluno continua sem voar', () => {
+    const estado = dia();
+    estado.stu[0].fly = false;
+    assert.equal(motivoParaNaoDesfazer(estado, MOVIDO), '');
+    assert.equal(desfazerAgendamento(estado, validarReversao(MOVIDO, FROTA_INICIAL)), true);
+    assert.deepEqual(campos(estado.stu[0]), { ...ANTES, fly: false });
+    assert.deepEqual(estado.fixos['1000_0_1'], MOVIDO.fixo);
+    // O pedido principal criado pelo agendamento volta como estava, sem voar, do mesmo jeito
+    const criado = dia();
+    criado.stu[0].fly = false;
+    const antes = { fly: false, mis: 'Voo Local', eq: 'C152', p1: 500, p2: 610, nb: 1, ss: 1, pr: 2 };
+    assert.equal(desfazerAgendamento(criado, validarReversao({ ...NOVO, mid: 0, pedido: antes }, FROTA_INICIAL)), true);
+    assert.deepEqual(campos(criado.stu[0]), antes);
+  });
+
   it('o voo em andamento ou com resultado registrado não é desfeito, com o motivo', () => {
     const estado = dia();
     for (const status of ['Em Voo', 'Atrasado', 'Pousou']) {

@@ -150,10 +150,12 @@ export function motivoParaNaoDesfazer(estado, { stuId, mid, criado, criadoComo =
 //   voo fica limpa (sem voo fixo, status nem detalhe);
 // - o voo movido ou encaixado volta como estava: o pedido (com o instrutor escolhido de antes) e o voo fixo de antes
 //   (sem voo fixo antes, ele deixa de ser fixo, e o app o põe de novo na escala; na escala aprovada, em volta dos voos
-//   fixos, como um pedido que chegou depois da aprovação); o status e o detalhe dele continuam. Na turma de Ground, o voo
-//   fixo de antes volta para a turma só enquanto ela está como ele a deixou (js/fixos.js, pinoDeVoltaNaTurma). O voo
-//   cancelado depois do agendamento, sem voo fixo antes, fica fixo onde foi cancelado, sem a marca do agendamento (como
-//   o voo fixo pelo status: o cancelado não volta para a escala, nem ocupa outro lugar);
+//   fixos, como um pedido que chegou depois da aprovação); o status e o detalhe dele continuam. Ele já voava antes do
+//   agendamento (só o pedido que voa muda de lugar): o "Voa" desligado depois dele continua desligado, e o aluno que o
+//   operador tirou da escala não volta para ela (volta para o lugar de antes quando voar de novo). Na turma de Ground,
+//   o voo fixo de antes volta para a turma só enquanto ela está como ele a deixou (js/fixos.js, pinoDeVoltaNaTurma). O
+//   voo cancelado depois do agendamento, sem voo fixo antes, fica fixo onde foi cancelado, sem a marca do agendamento
+//   (como o voo fixo pelo status: o cancelado não volta para a escala, nem ocupa outro lugar);
 // - o instrutor marcado disponível no agendamento volta como estava.
 // O peso digitado no agendamento fica no cadastro: é da pessoa. Responde se desfez: sem o aluno, ou sem o pedido do voo
 // movido (já retirado da demanda), não há o que desfazer (motivoParaNaoDesfazer diz por quê)
@@ -164,9 +166,12 @@ export function desfazerAgendamento(estado, { stuId, mid, criado, pedido, fixo, 
   const fKey = chaveDoVoo(stuId, mid);
   if (!pedido) aluno.extra = (aluno.extra || []).filter(ex => ex.mid !== mid);
   else if (alvo) {
-    // Os campos do pedido de agora saem e os de antes voltam; o resto do aluno (o cadastro) e as missões extras ficam
+    // Os campos do pedido de agora saem e os de antes voltam; o resto do aluno (o cadastro) e as missões extras ficam. O
+    // voo movido ou encaixado que não voa mais continua sem voar
+    const voa = alvo.fly;
     CAMPOS_DO_PEDIDO.forEach(c => { delete alvo[c]; });
     Object.assign(alvo, pedido);
+    if (!criado && !voa) alvo.fly = false;
     normalizeMissionFields(alvo);
   }
   if (criado) [estado.fixos, estado.fStatus, estado.fObs].forEach(mapa => { if (mapa) delete mapa[fKey]; });
