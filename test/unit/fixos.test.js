@@ -4,7 +4,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { runAllocationEngine } from '../../js/engine.js';
-import { normalizarFixos, pinoDoVoo, fixosAoMudarStatus, fixosAoReabrir, fixosAoAprovar, semAgendados, motivoDoFixo } from '../../js/fixos.js';
+import { normalizarFixos, pinoDoVoo, fixosAoMudarStatus, fixosAoReabrir, fixosAoAprovar, semAgendados, motivoDoFixo, pinoDeVoltaNaTurma } from '../../js/fixos.js';
 import { escolherInstrutor, reverterEscolha } from '../../js/instrutor-escolhido.js';
 import { comRepousoDoNoturno } from '../../js/noturno.js';
 import { normalizarEscalaGravada } from '../../js/escala-gravada.js';
@@ -214,6 +214,29 @@ describe('Turma de Ground fixa', () => {
     };
     const { al } = runAllocationEngine(estado);
     assert.deepEqual(al, [{ t: 'err', s: 'Aluno 1000', m: 'Rejeitado: o Ground precisa terminar antes do voo fixo das 06:30, e não há horário para ele antes disso.', codigo: 'ground-antes-do-voo-fixo' }]);
+  });
+
+  // Desfazer o agendamento que tirou um aluno da turma (js/reversoes.js): o voo fixo de antes volta com a chave da turma só
+  // enquanto ela está como ele a deixou; senão, numa turma só dele. Com a mesma chave, as duas turmas seriam uma só para o
+  // motor, e o segundo horário não ocuparia a sala nem o instrutor
+  it('o voo fixo de antes volta para a turma só enquanto ela está no mesmo horário e com o mesmo instrutor', () => {
+    const { classKey: _, ...semChave } = TURMA;
+    // A turma como estava, ou sem outro voo fixo nela: a chave volta
+    assert.deepEqual(pinoDeVoltaNaTurma({ '1001_0_1': TURMA }, '1000_0_1', TURMA, 'Ground C152'), TURMA);
+    assert.deepEqual(pinoDeVoltaNaTurma({ '1000_0_1': { ...TURMA, a: 610, b: 700 } }, '1000_0_1', TURMA, 'Ground C152'), TURMA);
+    // A turma passou para as 12:40 ou para outro instrutor: o voo volta sem a chave (a turma dele fica com a chave do voo)
+    for (const mudou of [{ a: 760, b: 850 }, { insId: 2 }]) {
+      assert.deepEqual(pinoDeVoltaNaTurma({ '1001_0_1': { ...TURMA, ...mudou } }, '1000_0_1', TURMA, 'Ground C152'), semChave, JSON.stringify(mudou));
+    }
+    // A turma que tem a chave do voo dele (ele a abriu, e outro aluno entrou nela) também é a turma dele
+    const aberta = { '1001_0_1': { ...semChave, a: 760, b: 850, classKey: '1000_0_1' } };
+    assert.deepEqual(pinoDeVoltaNaTurma(aberta, '1000_0_1', semChave, 'Ground C152'), { ...semChave, classKey: 'GND_Ground C152_0_1' });
+    // A chave do voo já é a de outra turma: uma chave nova, que nenhum voo fixo usa
+    const outra = { '1001_0_1': { ...TURMA, a: 760, b: 850 }, '1002_0_1': { ...TURMA, a: 610, b: 700, classKey: '1000_0_1' } };
+    assert.deepEqual(pinoDeVoltaNaTurma(outra, '1000_0_1', TURMA, 'Ground C152'), { ...semChave, classKey: 'GND_Ground C152_0_1_2' });
+    // O voo de avião não tem turma
+    const voo = { a: 390, b: 450, r: 'PR-VOB', insId: 1 };
+    assert.deepEqual(pinoDeVoltaNaTurma({ '1001_0_1': { ...voo, a: 500, b: 560 } }, '1000_0_1', voo, 'Voo Local'), voo);
   });
 });
 

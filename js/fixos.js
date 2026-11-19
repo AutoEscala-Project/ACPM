@@ -5,7 +5,8 @@
 import { rotuloDoStatus } from './status.js';
 import { CHAVE_DO_VOO, pedidoDoAluno } from './voo.js';
 import { MATRICULA } from './frota.js';
-import { MINUTOS_DO_DIA } from './config.js';
+import { MINUTOS_DO_DIA, GROUND_REG, T } from './config.js';
+import { periodoDoMinuto } from './horarios.js';
 
 const minuto = v => Number.isInteger(v) && v >= 0 && v <= MINUTOS_DO_DIA;
 
@@ -116,6 +117,29 @@ export function fixosQueVoltam(estado, fixos, { mudados = new Set(), soltos = ne
     else if (!p.agendado || !(soltos.has(fKey) || (atual ? !atual.agendado : !soltaAgendado))) voltam[fKey] = p;
   }
   return { fixos: voltam, semInstrutor };
+}
+
+// O voo fixo de antes que volta para a turma de Ground dele (desfazer o agendamento que o mudou de lugar:
+// js/reversoes.js). A chave da turma volta só enquanto a turma continua como ele a deixou: os outros voos fixos dela no
+// mesmo horário e com o mesmo instrutor. A turma que mudou de horário ou de instrutor depois do agendamento (pelas
+// Sugestões) já não é a dele: ele volta numa turma só dele, sem chave (a turma fica com a chave do voo) ou, quando a chave
+// do voo já é a de outra turma, com uma chave nova, como as do motor ("GND_<missão>_<período>_<instrutor>", com um número
+// no fim quando repete). Duas turmas com a mesma chave seriam uma turma só para o motor: só o primeiro aluno que ele
+// confere ocupa a sala e o instrutor, e a outra turma não ocuparia nada no horário dela
+export function pinoDeVoltaNaTurma(fixos, fKey, pino, mis) {
+  if (pino.r !== GROUND_REG) return pino;
+  const chaveDe = (k, p) => p.classKey || k;
+  const outros = Object.entries(fixos || {}).filter(([k, p]) => k !== fKey && p.r === GROUND_REG);
+  const chave = chaveDe(fKey, pino);
+  const comoEle = p => p.a === pino.a && p.b === pino.b && p.insId === pino.insId;
+  if (outros.every(([k, p]) => chaveDe(k, p) !== chave || comoEle(p))) return pino;
+  const { classKey: _, ...semChave } = pino;
+  const usadas = new Set(outros.map(([k, p]) => chaveDe(k, p)));
+  if (!usadas.has(fKey)) return semChave;
+  const base = `GND_${mis}_${T.includes(pino.a) ? T.indexOf(pino.a) : periodoDoMinuto(pino.a)}_${pino.insId}`;
+  let nova = base;
+  for (let n = 2; usadas.has(nova); n++) nova = `${base}_${n}`;
+  return { ...semChave, classKey: nova };
 }
 
 // Por que o voo está fixo (o texto do cadeado): o status de andamento (com o nome da tela), o agendamento na Escala, a

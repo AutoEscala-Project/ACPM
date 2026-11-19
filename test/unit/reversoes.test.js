@@ -255,6 +255,43 @@ describe('Desfazer um voo agendado na Escala', () => {
     assert.equal(Object.hasOwn(estado.fixos, '1000_2_1'), false);
     assert.equal(Object.hasOwn(estado.fStatus, '1000_2_1'), false);
   });
+
+  // A turma de Ground aprovada (os Alunos 1000 e 1001 às 08:20): o agendamento tira o Aluno 1000 dela, e a turma (só o
+  // Aluno 1001) passa para as 12:40 pelas Sugestões. Desfazer devolvia o voo fixo de antes com a chave da turma: a turma
+  // ficava às 08:20 e às 12:40, e o motor ocupava a sala e o instrutor só num dos horários (outra turma entrava no outro,
+  // sem conflito)
+  it('o aluno movido de uma turma de Ground volta para ela só enquanto a turma está no horário e com o instrutor de antes', () => {
+    const GROUND = { mis: 'Ground C152', eq: 'Sala Ground', nb: 1.5, p1: 500, p2: -1 };
+    const turmaMovida = (mudarATurma) => {
+      const estado = cenario({ ins: [instrutor(1, 9), instrutor(2, 9)], stu: [aluno(1000, GROUND), aluno(1001, GROUND)] });
+      const res = runAllocationEngine(estado);
+      estado.fixos = fixosAoAprovar({}, res.out);
+      estado.aprovacao = { em: '2026-11-10T10:00:00Z', por: '' };
+      const turma = estado.fixos['1000_0_1'];
+      assert.equal(estado.fixos['1001_0_1'].classKey, turma.classKey);
+      const proposta = { stuId: 1000, mis: 'Ground C152', eq: 'Sala Ground', nb: 1.5, a: 610, b: 700, r: 'SALA-GROUND', insId: turma.insId, pedido: { mid: 0, acao: 'mover' } };
+      const rev = validarReversao(JSON.parse(JSON.stringify(reversaoDoAgendamento(aplicarAgendamento(estado, res, proposta)))), FROTA_INICIAL);
+      if (mudarATurma) estado.fixos = aplicarReparo(estado.fixos, runAllocationEngine(estado), '1001_0_1', { mudancas: { a: 760, b: 850, insId: turma.insId } });
+      assert.equal(motivoParaNaoDesfazer(estado, rev), '');
+      assert.equal(desfazerAgendamento(estado, rev), true);
+      return { estado, turma };
+    };
+    // A turma passou para as 12:40: o Aluno 1000 volta às 08:20, numa turma só dele (sem a chave)
+    const { estado, turma } = turmaMovida(true);
+    const { classKey: _, ...semChave } = turma;
+    assert.deepEqual(estado.fixos['1000_0_1'], semChave);
+    // As duas turmas ocupam a sala: outro Ground pedido às 12:40 não entra no horário da turma do Aluno 1001
+    estado.stu.push(aluno(1002, { ...GROUND, mis: 'Ground Navegação', p1: 760 }));
+    const { out } = runAllocationEngine(estado);
+    const daSala = out.filter(o => o.isGround);
+    const juntas = daSala.filter((o, i) => daSala.some((p, j) => j < i && p.classKey !== o.classKey && p.a < o.b && o.a < p.b));
+    assert.deepEqual(juntas, []);
+    assert.deepEqual(out.filter(o => o.conflito), []);
+    assert.notEqual(out.find(o => o.stuId === 1002).a, 760);
+    // A turma como estava: o Aluno 1000 volta para ela, com a chave
+    const comoEstava = turmaMovida(false);
+    assert.deepEqual(comoEstava.estado.fixos['1000_0_1'], comoEstava.turma);
+  });
 });
 
 // Reverter uma troca de instrutor ou um reparo das Sugestões depois de um agendamento na Escala: o histórico da data (a

@@ -4,7 +4,7 @@
 // Escala também fica aqui: quando ele não é desfeito e o que volta como estava; e o que a reversão de uma mudança nos
 // voos fixos não devolve depois de um agendamento.
 import { novoRecurso, MATRICULA, ATRIBUTOS_DO_RECURSO } from './frota.js';
-import { normalizarFixos, fixoPeloStatus } from './fixos.js';
+import { normalizarFixos, fixoPeloStatus, pinoDeVoltaNaTurma } from './fixos.js';
 import { CATEGORIAS_COM_HORARIOS, normalizarHorarios } from './horarios.js';
 import { disponibilidadeValida, normalizeMissionFields } from './rules.js';
 import { MINUTOS_DO_DIA, MIS, WIN } from './config.js';
@@ -146,9 +146,10 @@ export function motivoParaNaoDesfazer(estado, { stuId, mid, criadoComo = null })
 //   voo fica limpa (sem voo fixo, status nem detalhe);
 // - o voo movido ou encaixado volta como estava: o pedido (com o instrutor escolhido de antes) e o voo fixo de antes
 //   (sem voo fixo antes, ele deixa de ser fixo, e o app o põe de novo na escala; na escala aprovada, em volta dos voos
-//   fixos, como um pedido que chegou depois da aprovação); o status e o detalhe dele continuam. O voo cancelado depois
-//   do agendamento, sem voo fixo antes, fica fixo onde foi cancelado, sem a marca do agendamento (como o voo fixo pelo
-//   status: o cancelado não volta para a escala, nem ocupa outro lugar);
+//   fixos, como um pedido que chegou depois da aprovação); o status e o detalhe dele continuam. Na turma de Ground, o voo
+//   fixo de antes volta para a turma só enquanto ela está como ele a deixou (js/fixos.js, pinoDeVoltaNaTurma). O voo
+//   cancelado depois do agendamento, sem voo fixo antes, fica fixo onde foi cancelado, sem a marca do agendamento (como
+//   o voo fixo pelo status: o cancelado não volta para a escala, nem ocupa outro lugar);
 // - o instrutor marcado disponível no agendamento volta como estava.
 // O peso digitado no agendamento fica no cadastro: é da pessoa. Responde se desfez: sem o aluno, ou sem o pedido do voo
 // movido (já retirado da demanda), não há o que desfazer
@@ -165,7 +166,7 @@ export function desfazerAgendamento(estado, { stuId, mid, criado, pedido, fixo, 
     normalizeMissionFields(alvo);
   }
   if (criado) [estado.fixos, estado.fStatus, estado.fObs].forEach(mapa => { if (mapa) delete mapa[fKey]; });
-  else if (fixo) estado.fixos = { ...(estado.fixos || {}), [fKey]: { ...fixo } };
+  else if (fixo) estado.fixos = { ...(estado.fixos || {}), [fKey]: { ...pinoDeVoltaNaTurma(estado.fixos, fKey, fixo, alvo.mis) } };
   else if (estado.fixos && estado.fixos[fKey] && fixoPeloStatus(fKey, estado.fStatus)) {
     const { agendado: _, ...peloStatus } = estado.fixos[fKey];
     estado.fixos[fKey] = peloStatus;
