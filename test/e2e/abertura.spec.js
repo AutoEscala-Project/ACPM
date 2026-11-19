@@ -4,7 +4,8 @@
 // cadastro já lido de novo. Toda mudança é recusada, com o aviso, e a tela fica como estava: também o programa dos cursos
 // (a aba Cursos grava nas tabelas dos cursos, à parte do dia) e o agendamento na Escala (o diálogo nem abre). As datas são
 // lidas uma de cada vez (a versão que a gravação leva é a da leitura dos dados da tela), e nenhuma data é lida antes de a
-// abertura preparar os dados, nem depois de a preparação falhar
+// abertura preparar os dados, nem depois de a preparação falhar. O que fica aberto na tela quando a data abre passa a
+// mostrar os dados dela
 import { test, expect, prepararContexto, vigiarErros, preencherLogin, entrar, irPara, abrirEscala, AMANHA, URL_APP } from './fixtures.js';
 import { criarSupabaseFalso, documentosAtuais, CONTAS } from './supabase-falso.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
@@ -602,6 +603,62 @@ test.describe('Os cursos, o agendamento e a missão do curso: nada muda antes de
     servidor.falhar('/rest/v1/dias', 0);
     await page.locator('#dt-prox').click();
     await valemNaDataNova(page, servidor);
+    expect(erros).toEqual([]);
+    await contexto.close();
+  });
+});
+
+// O que fica aberto na tela quando os dados de uma data chegam (a abertura ou uma troca de data) passa a mostrar os dados
+// dela: a pessoa decide sobre o que está vendo, e o que grava parte do que foi lido
+test.describe('O que fica aberto quando a data abre passa a mostrar os dados dela', () => {
+  const DEPOIS = '2026-11-12';
+  const doC172 = id => instrutor(id, 1, { hab: ['local', 'noturno', 'c172'] });
+  // Três instrutores do C172: a fila do C172 é 01, 02, 03 amanhã e 03, 01, 02 no dia 12
+  function servidorComFilas() {
+    const documentos = documentosAtuais({ ...cenario({ ins: [doC172(1), doC172(2), doC172(3)], stu: [aluno(1000, { p1: 500, p2: -1 })] }), cursos: PROGRAMA, nid: 1001 }, AMANHA);
+    const amanha = documentos.dias[AMANHA];
+    amanha.filas = { ...(amanha.filas || {}), c172: [1, 2, 3] };
+    const depois = structuredClone(amanha);
+    depois.filas.c172 = [3, 1, 2];
+    return criarSupabaseFalso({ ...documentos, dias: { [AMANHA]: amanha, [DEPOIS]: depois } });
+  }
+  const filaDoC172 = page => page.locator('#rodizio [data-cat="c172"] li b');
+
+  test('a aba Rodízio aberta numa troca de data mostra as filas da data nova, e o botão age sobre a fila que ela mostra', async ({ browser }) => {
+    const servidor = servidorComFilas();
+    const contexto = await novoContexto(browser, servidor);
+    const page = await contexto.newPage();
+    const erros = vigiarErros(page);
+    await entrar(page, CONTAS.operador);
+    await irPara(page, 'rod');
+    await expect(filaDoC172(page)).toHaveText(['Instrutor 01', 'Instrutor 02', 'Instrutor 03']);
+    await page.locator('#dt-prox').click();
+    await expect(page.locator('#dt-rotulo')).toContainText('12/11');
+    await expect(filaDoC172(page)).toHaveText(['Instrutor 03', 'Instrutor 01', 'Instrutor 02']);
+    // "Subir" o Instrutor 01, o 2º da fila do dia 12: ele passa para 1º
+    await page.locator('#rodizio [data-cat="c172"] li[data-id="1"] [data-act="fila-subir"]').click();
+    await expect(filaDoC172(page)).toHaveText(['Instrutor 01', 'Instrutor 03', 'Instrutor 02']);
+    await expect.poll(() => servidor.dias.get(DEPOIS).conteudo.filas.c172).toEqual([1, 3, 2]);
+    await expect.poll(() => servidor.historico.map(h => [h.data, h.descricao])).toEqual([[DEPOIS, 'Rodízio · Voo C172: Instrutor 01 passou para 1º']]);
+    expect(servidor.dias.get(AMANHA).conteudo.filas.c172).toEqual([1, 2, 3]);
+    expect(erros).toEqual([]);
+    await contexto.close();
+  });
+
+  test('a aba Rodízio aberta enquanto a escala abre mostra as filas quando os dados chegam', async ({ browser }) => {
+    const servidor = servidorComFilas();
+    const contexto = await novoContexto(browser, servidor);
+    const page = await contexto.newPage();
+    const erros = vigiarErros(page);
+    const liberar = servidor.segurarLeiturasDeDias();
+    await page.goto(URL_APP);
+    await preencherLogin(page, CONTAS.operador);
+    await expect(page.locator('#usuario')).toBeVisible();
+    await irPara(page, 'rod');
+    await expect(page.locator('#rodizio [data-cat="c172"]')).toContainText('Nenhum instrutor habilitado.');
+    liberar();
+    await expect(page.locator('body[data-pronto]')).toBeAttached();
+    await expect(filaDoC172(page)).toHaveText(['Instrutor 01', 'Instrutor 02', 'Instrutor 03']);
     expect(erros).toEqual([]);
     await contexto.close();
   });

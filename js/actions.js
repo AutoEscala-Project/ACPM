@@ -13,6 +13,7 @@ import { rDem } from './views/demanda.js';
 import { rIns, rInsDia, rAlu } from './views/cadastros.js';
 import { rCursos, SEM_OS_PROGRAMAS } from './views/cursos.js';
 import { rRec, rRevisao, rHangar } from './views/recursos.js';
+import { rRodizio } from './views/rodizio.js';
 import { podeEditarAgenda, rAgenda } from './views/agenda.js';
 import { atualizarSelosDaEscala, atualizarSeloDaAgenda, lerPedidosDaData } from './views/selos.js';
 
@@ -307,11 +308,12 @@ export async function lerData(data) {
   }
 }
 
-// Abre a escala de outra data
+// Abre a escala de outra data. As abas são refeitas com os dados dela, também a do Rodízio: aberta, ela mostraria as
+// filas da data anterior, e o clique agiria sobre uma fila que a pessoa não está vendo
 export async function carregarData(data) {
   if (!await lerData(data)) return;
   $('#escala-atualizada').hidden = true;
-  rRec(); rIns(); rAlu(); rCursos(); rDem(); renderAuditPanel(); rOut(); rAgenda();
+  rRec(); rIns(); rAlu(); rCursos(); rRodizio(); rDem(); renderAuditPanel(); rOut(); rAgenda();
   atualizarSelosDaEscala();
   lerPedidosDaData();
   await carregarBI();

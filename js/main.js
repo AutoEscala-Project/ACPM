@@ -48,6 +48,7 @@ import { carregarDadosPessoais } from './views/dados-pessoais.js';
 import { rDem } from './views/demanda.js';
 import { renderAuditPanel, rOut } from './views/escala.js';
 import { rRec } from './views/recursos.js';
+import { rRodizio } from './views/rodizio.js';
 import { atualizarSelosDaEscala, lerPedidosDaData } from './views/selos.js';
 import { show } from './views/tabs.js';
 
@@ -118,8 +119,8 @@ window.addEventListener('beforeunload', e => {
   // No modo compartilhado o perfil vem da conta: role= da URL não vale
   if (!modoCompartilhado() && params.get('role')) setRole(params.get('role'), false);
 
-  // As abas com os dados lidos, também a que a pessoa abriu enquanto eles carregavam (Cursos, por exemplo)
-  rRec(); rIns(); rAlu(); rCursos(); rDem(); renderAuditPanel();
+  // As abas com os dados lidos, também a que a pessoa abriu enquanto eles carregavam (Cursos ou Rodízio, por exemplo)
+  rRec(); rIns(); rAlu(); rCursos(); rRodizio(); rDem(); renderAuditPanel();
   document.body.dataset.agenda = podeEditarAgenda() ? 'edita' : 'consulta';
   // Dados pessoais (para a coluna CANAC das tabelas), para quem pode vê-los
   carregarDadosPessoais();
