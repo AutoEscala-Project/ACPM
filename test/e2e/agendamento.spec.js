@@ -294,11 +294,26 @@ test.describe('Agendar um voo na Escala', () => {
     await abrirDialogo(page);
     const medidas = await dialogo(page).evaluate(dlg => ({
       cabe: dlg.getBoundingClientRect().right <= innerWidth && dlg.getBoundingClientRect().left >= 0 && dlg.scrollWidth <= dlg.clientWidth,
-      pequenos: [...dlg.querySelectorAll('select, input, button')].filter(el => el.checkVisibility() && el.getBoundingClientRect().height < 44).map(el => el.id || el.textContent)
+      pequenos: [...dlg.querySelectorAll('select, input, button, summary')].filter(el => el.checkVisibility() && el.getBoundingClientRect().height < 44).map(el => el.id || el.textContent)
     }));
     expect(medidas).toEqual({ cabe: true, pequenos: [] });
     await agendar(page);
     await expect(voo(page, 'Maria Silva')).toHaveCount(1);
+  });
+
+  test('no celular (390 px), "O que muda na escala" e as alternativas de um bloqueio também têm 44 px', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    // O Aluno 1000 está em voo no PR-VOB às 06:30: escolhido às 06:30, o PR-VOB é um bloqueio com as alternativas
+    await abrirComCurso(page, dia({ fixos: { '1000_0_1': { a: 390, b: 450, r: 'PR-VOB', insId: 1 } }, fStatus: { '1000_0_1': 'Em Voo' } }));
+    await abrirDialogo(page);
+    await page.locator('#agd-horario').selectOption('500');
+    await page.locator('#agd-recurso').selectOption('PR-VOB');
+    await page.locator('#agd-horario').selectOption('390');
+    await expect(page.locator('#agd-conferencia .agd-chips')).toHaveCount(2);
+    const pequenos = await dialogo(page).evaluate(dlg => [...dlg.querySelectorAll('select, input, button, summary')]
+      .filter(el => el.checkVisibility() && el.getBoundingClientRect().height < 44).map(el => `${el.id || el.textContent.trim()} ${Math.round(el.getBoundingClientRect().height)} px`));
+    expect(pequenos).toEqual([]);
+    expect((await page.locator('#agd-previa summary').boundingBox()).height).toBeGreaterThanOrEqual(44);
   });
 
   // O operador costuma montar a escala de amanhã (a data que abre): o diálogo chama os voos dela de amanhã, nunca de hoje

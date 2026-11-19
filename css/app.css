@@ -604,6 +604,7 @@ dialog.dlg-agendar select { max-width: 100%; }
 .agd-chips .btn { padding: 2px 10px; border: 1px solid var(--ln2); border-radius: 14px; font-size: 13.5px; }
 #agd-previa { margin: 6px 0 0; padding: 6px 10px; border: 1px solid var(--ln); border-radius: 6px; }
 #agd-previa summary { cursor: pointer; font-weight: 600; }
+#agd-previa summary:focus-visible { outline: 2px solid var(--ac); outline-offset: 2px; border-radius: 3px; }
 #agd-conferencia #agd-previa ul { margin: 6px 0 2px; padding: 0 0 0 18px; background: none; }
 /* O alerta vazio continua na árvore de acessibilidade (escondido com display: none, ele não seria anunciado quando o
    erro aparecer), sem ocupar espaço */
@@ -614,6 +615,8 @@ dialog.dlg-agendar [aria-invalid="true"] { border-color: var(--er); outline: 1px
   dialog.dlg-agendar { padding: 14px; }
   .campo-duplo { grid-template-columns: 1fr; }
   #agd-peso .campo { display: flex; width: auto; margin-right: 0; }
+  /* "O que muda na escala" com 44 px para o dedo, como os campos e os botões do diálogo */
+  #agd-previa summary { min-height: 44px; padding: 12px 0; box-sizing: border-box; }
 }
 /* Painel dos dados pessoais */
 .form-dados { display: flex; flex-direction: column; gap: 10px; overflow-y: auto; }
