@@ -11,7 +11,7 @@ import { livre, cabeNoSaldo, folgaAte, saldoAteARevisao, problemasDoInstrutor } 
 import { reducaoNecessaria } from './combustivel.js';
 import { normalizarLimites } from './limites.js';
 import { normalizarHangar, posicaoNoHangar } from './hangar.js';
-import { HORARIOS_INICIAIS, horariosDaMissao, periodoDoMinuto, fimDaMissao } from './horarios.js';
+import { HORARIOS_INICIAIS, horariosDaMissao, periodoDoMinuto, fimDasMissoesDoDia } from './horarios.js';
 import { STATUS_EM_ANDAMENTO } from './status.js';
 import { disponibilidadeDoAluno, doesGroundGateFlight } from './rules.js';
 import { nomeDoRecurso } from './categorias.js';
@@ -94,11 +94,13 @@ export function sugerirReparos(estado, resultado, fKey, { maximo = 3, depoisDe =
   }
 
   // Sem nada no mesmo horário: o primeiro horário mais tarde, no mesmo dia, com o avião e o instrutor de antes quando
-  // eles servem. Vale a disponibilidade de cada aluno, e o Ground termina antes dos voos que dependem dele
+  // eles servem. Vale a disponibilidade de cada aluno, e o Ground termina antes dos voos que dependem dele. O fim é o
+  // do motor para cada aluno (fimDasMissoesDoDia): com um Noturno na demanda do dia, as outras missões até as 17:30
   if (!opcoes.length && !pedidoMudou) {
     const duracao = voo.b - voo.a;
     const inicios = voo.isGround ? T.slice(0, NI) : horariosDaMissao(estado.horarios || HORARIOS_INICIAIS, voo.mis, tipo);
-    const fimDoDia = fimDaMissao(voo.mis, tipo);
+    const fimDoAluno = fimDasMissoesDoDia(estado.stu);
+    const fimDoDia = Math.min(...grupo.map(v => fimDoAluno(v.stuId, voo.mis, tipo)));
     const voosQueDependem = voo.isGround
       ? outros.filter(o => grupo.some(v => v.stuId === o.stuId) && !o.isGround && !o.trecho && doesGroundGateFlight(voo.mis, { mis: o.mis, eq: o.eqType }))
       : [];

@@ -352,7 +352,7 @@ export function runAllocationEngine(state, opcoes = {}) {
 
   const free = (mp, id, s, e) => livre(mp[id], s, e);
   // Até quando a missão do aluno pode ir. O Noturno só sai às 17:30: o aluno que tem um no dia termina as outras
-  // missões (o simulador e a aula, que podem passar das 17:30) antes dele. A compactação usa a mesma regra
+  // missões (o simulador e a aula, que podem passar das 17:30) antes dele. A compactação e as Sugestões usam a mesma regra
   const fimDoAluno = fimDasMissoesDoDia(state.stu);
   // Rodízio: a fila de cada categoria (cheque, MLTE, noturno e C172) e os voos dela que cada instrutor já recebeu hoje
   const filas = ajustarFilas(state.filas, state.ins);
