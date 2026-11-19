@@ -8,13 +8,15 @@ import assert from 'node:assert/strict';
 import { runAllocationEngine } from '../../js/engine.js';
 import { compactar, custoDaEscala } from '../../js/compactar.js';
 import { CRITERIOS_PADRAO, normalizarCriterios } from '../../js/criterios.js';
-import { AIRCRAFT_EQ_TYPES } from '../../js/config.js';
+import { AIRCRAFT_EQ_TYPES, T, NI } from '../../js/config.js';
 import { categoriaDoRodizio } from '../../js/rodizio.js';
 import { LIMITES_DA_LEI, dentroDosLimites } from '../../js/limites.js';
 import { disponibilidadeDoAluno } from '../../js/rules.js';
 import { minutoDaPreferencia } from '../../js/horarios.js';
 import { metricasDaEscala } from '../../js/metricas.js';
-import { aluno, cenario, instrutor } from '../helpers/montar.js';
+import { hm } from '../../js/format.js';
+import { aluno, cenario, instrutor, missaoExtra, apenas } from '../helpers/montar.js';
+import { gerarCenario, comEscolhas, comAtributos, comVolta } from '../helpers/cenarios.js';
 
 const doAluno = (out, id) => out.find(o => o.stuId === id);
 const com = (estado, criterios) => ({ ...estado, criterios: { ...CRITERIOS_PADRAO, ...criterios } });
@@ -63,6 +65,30 @@ describe('Compactação: os horários', () => {
   it('o voo fixo (escala aprovada) não muda; o resto da escala continua igual em volta dele', () => {
     const { out } = runAllocationEngine({ ...buraco(), fixos: { '1001_0_1': { a: 820, b: 880, r: 'PP-LJV', insId: 1 } } });
     assert.equal(doAluno(out, 1001).a, 820);
+  });
+
+  // A regra do motor: o Noturno só sai às 17:30, e o aluno que tem um na demanda do dia termina as outras missões antes
+  // dele, também quando o Noturno não entrou na escala ou foi cancelado. O simulador (2 h, 1ª preferência às 16:20)
+  // fica às 14:30; levado para a 1ª preferência, iria até as 18:20
+  it('o aluno com o Noturno no dia (rejeitado ou cancelado) não tem o simulador levado para depois das 17:30', () => {
+    const sim = missaoExtra(1, { mis: 'Simulador', eq: 'Sim. Mono', nb: 2, p1: 980, p2: -1 });
+    const comNoturno = (pedido, opcoes = {}) => cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, { mis: 'Noturno', eq: 'C172', nb: 1, p1: 8, p2: 8, ...pedido }, { extra: [sim] })], ...opcoes });
+    const simulador = estado => runAllocationEngine(estado).out.filter(o => o.mis === 'Simulador').map(o => [hm(o.a), hm(o.b)]);
+    assert.deepEqual(simulador(comNoturno({}, { semAeronaves: apenas('C172') })), [['14:30', '16:30']], 'o Noturno rejeitado (nenhum C172)');
+    assert.deepEqual(simulador(comNoturno({}, { fStatus: { '1000_0_1': 'Cancelado' } })), [['14:30', '16:30']], 'o Noturno cancelado');
+    // Sem o Noturno na demanda, o simulador pode ir até depois das 17:30: fica na 1ª preferência
+    assert.deepEqual(simulador(comNoturno({ fly: false })), [['16:20', '18:20']]);
+  });
+
+  // Os dias gerados em que a compactação levava o simulador de quem tem o Noturno no dia para depois das 17:30
+  it('nos dias gerados, quem tem o Noturno no dia termina as outras missões até as 17:30', () => {
+    const dias = [['129', gerarCenario(129)], ['129 com a volta do noturno', comVolta(gerarCenario(129), 129)],
+      ['241 com escolhas', comEscolhas(gerarCenario(241), 241)], ['277', gerarCenario(277)], ['277 com atributos', comAtributos(gerarCenario(277), 277)]];
+    for (const [seed, estado] of dias) {
+      const comNoturno = new Set(estado.stu.filter(s => [s, ...s.extra].some(p => p.fly && p.mis === 'Noturno')).map(s => s.id));
+      const depois = runAllocationEngine(estado).out.filter(o => comNoturno.has(o.stuId) && o.mis !== 'Noturno' && o.b > T[NI]);
+      assert.deepEqual(depois.map(o => `${o.fKey} ${o.mis} ${hm(o.a)}–${hm(o.b)}`), [], `seed ${seed}`);
+    }
   });
 });
 

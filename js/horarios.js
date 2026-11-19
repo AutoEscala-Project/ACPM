@@ -41,6 +41,13 @@ export const HORARIO_DO_SOLO = T[0];
 // Até quando a missão pode ir: o voo de dia no avião pousa até as 17:30, quando começa a noite; o Noturno, o simulador
 // e a aula de Ground, que não dependem da luz do dia, vão até o fim do dia
 export const fimDaMissao = (mis, tipo) => (mis !== 'Noturno' && AIRCRAFT_EQ_TYPES.includes(tipo) ? T[NI] : MINUTOS_DO_DIA);
+// Até quando a missão de cada aluno pode ir no dia (o motor e a compactação usam esta): o Noturno só sai às 17:30, então
+// o aluno que tem um na demanda do dia (o pedido ou uma missão extra marcados para voar, entre ou não o Noturno na
+// escala) termina as outras missões (o simulador e a aula, que podem passar das 17:30) antes dele
+export function fimDasMissoesDoDia(alunos) {
+  const comNoturno = new Set(alunos.filter(s => [s, ...(Array.isArray(s.extra) ? s.extra : [])].some(p => p.fly && p.mis === 'Noturno')).map(s => s.id));
+  return (stuId, mis, tipo) => (mis !== 'Noturno' && comNoturno.has(stuId) ? Math.min(T[NI], fimDaMissao(mis, tipo)) : fimDaMissao(mis, tipo));
+}
 
 export const horariosDaMissao = (horarios, mis, tipo) => (mis === 'Noturno' ? [T[NI]] : mis === 'Voo Solo' ? [HORARIO_DO_SOLO] : horariosDoTipo(horarios, tipo));
 
