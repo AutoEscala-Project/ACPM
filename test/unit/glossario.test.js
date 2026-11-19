@@ -43,4 +43,11 @@ describe('Glossário', () => {
     assert.match(GLOSSARIO['limites-da-lei'].texto, new RegExp(`${LIMITES_DA_LEI.vooAnoH} h no ano`));
     assert.match(GLOSSARIO['fora-da-regra'].texto, new RegExp(`até as ${hm(T[NI])}, no máximo ${LIMITE_DE_VOOS_LOCAIS} voos locais`));
   });
+
+  // A seção Glossário do Manual lista os termos de cada aba na ordem do glossário: os da aba Cursos ficam no bloco dela,
+  // e o grupo começa pela fase do curso (não pelo trecho do Noturno, que fica no fim)
+  it('os termos da aba Cursos, na ordem do bloco dela', () => {
+    const daAba = Object.entries(GLOSSARIO).filter(([, t]) => t.aba === 'Cursos').map(([id]) => id);
+    assert.deepEqual(daAba, ['fase-do-curso', 'quando-voar', 'dispensada', 'trecho-do-noturno']);
+  });
 });

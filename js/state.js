@@ -19,7 +19,8 @@ export const setBIHistory = v => { BI_HISTORY = v; };
 export const setTLMode = v => { TL_MODE = v; };
 export const setData = v => { DATA = v; };
 
-// O que não foi lido ao abrir a data: 'horas' (dos instrutores) e 'resultados' (dos cursos)
+// O que não foi lido ao abrir a data: 'horas' (dos instrutores), 'resultados' (dos cursos), 'cursos' (os programas, das
+// tabelas dos cursos) e 'cursos-pendentes' (os programas que ainda estão no cadastro, esperando a conversão)
 export const dadoIndisponivel = parte => Boolean(S.indisponiveis && S.indisponiveis.includes(parte));
 export const isGestor = () => ApiClient.readOnly || document.body.getAttribute('data-role') === 'gestor';
 // No site publicado os dados ficam no servidor (Supabase), com login; em localhost, só neste navegador

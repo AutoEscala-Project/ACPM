@@ -1,6 +1,7 @@
-// Cursos: o programa de cada curso (PP, PC e INVA), mantido no app pelo Administrador, e o curso de cada
-// aluno. Cada missão do programa tem um código (PP-07), um nome, o tipo de missão do app, o recurso e as horas; a ordem
-// do programa é a ordem em que o aluno voa.
+// Cursos: os três cursos com que o app começa (PP, PC e INVA), os formatos da sigla do curso e do código da missão, o
+// curso de cada aluno e a cópia de antes do programa, a que o cadastro guarda (uma lista de missões por curso, na ordem
+// em que o aluno voa: o código, o nome, o tipo de missão do app, o recurso e as horas), lida só para a conversão. O
+// programa em vigor fica nas tabelas dos cursos, e o Administrador o muda na aba Cursos (js/programa.js).
 import { MIS, GROUND_DURATION_H } from './config.js';
 import { duracaoValida } from './rules.js';
 

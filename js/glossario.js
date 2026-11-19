@@ -74,7 +74,6 @@ export const GLOSSARIO = {
   },
   hangar: { aba: 'Recursos', termo: 'Ordem no hangar', texto: 'Da frente para o fundo: entre aviões livres, o da frente sai primeiro.' },
   noturno: { aba: 'Escala', termo: 'Noturno', texto: 'Missão de dois dias: sai às 17:30 para BH (1 h de translado) e voa 3 h de noturno em BH; no dia seguinte, a volta decola de BH às 07:30, e o instrutor, o aluno e o avião ficam livres às 10:10.' },
-  'trecho-do-noturno': { aba: 'Cursos', termo: 'Trecho do Noturno', texto: 'O Noturno é um voo só em três trechos: a ida para BH, a noite em BH e a volta no dia seguinte. No programa, as missões dos trechos vêm juntas na fase; a próxima missão oferece a noite, e o resultado dela vale para os três.' },
   'so-vfr': { aba: 'Recursos', termo: 'Só VFR', texto: 'Avião não homologado IFR: voa as missões VFR, e nenhum voo IFR (IFR, cheques IFR, o noturno do PC) vai para ele.' },
   'habilitacao-propria': { aba: 'Recursos', termo: 'Habilitação própria', texto: 'O recurso exige do instrutor uma habilitação só dele, além da do tipo (por exemplo, o PR-VOM). Marque-a em Instrutores › Cadastro › Editar habilitações.' },
   'so-parafuso': { aba: 'Recursos', termo: 'Só Parafuso', texto: 'Avião reservado para a missão de Parafuso no C152: as outras missões não usam ele, e o Parafuso só voa nele.' },
@@ -106,6 +105,7 @@ export const GLOSSARIO = {
     texto: 'Depois das anteriores: espera as anteriores da fase. Livre na fase: voa com a fase aberta; as seguintes não esperam por ela, mas a fase só fica completa com ela. Depois de: espera só as missões escolhidas, anteriores a ela.'
   },
   dispensada: { aba: 'Cursos', termo: 'Dispensada', texto: 'A missão vale como feita para todos os alunos do curso: não é sugerida e não entra no total do progresso.' },
+  'trecho-do-noturno': { aba: 'Cursos', termo: 'Trecho do Noturno', texto: 'O Noturno é um voo só em três trechos: a ida para BH, a noite em BH e a volta no dia seguinte. No programa, as missões dos trechos vêm juntas na fase; a próxima missão oferece a noite, e o resultado dela vale para os três.' },
 
   // Rodízio
   rodizio: { aba: 'Rodízio', termo: 'Rodízio', texto: 'Os voos de cheque, MLTE, noturno e C172 seguem uma fila por categoria: vai o primeiro livre; quem voou vai para o fim na data seguinte.' }
