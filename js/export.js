@@ -1,6 +1,6 @@
 // Exportação da escala do dia em CSV, PDF (jsPDF + AutoTable carregados no index.html) e na planilha do modelo do
 // aeroclube (Excel, js/planilha.js).
-import { hm, WLB, fmtH } from './format.js';
+import { hm, WLB, fmtH, pesoBr } from './format.js';
 import { sumUniqueOperationalHours, consolidateTimelineSlots } from './engine.js';
 import { S, RES, DATA } from './state.js';
 import { showToast } from './dom.js';
@@ -63,7 +63,7 @@ export function pdf() {
     // Status com o detalhe (o novo horário do atraso ou o motivo do cancelamento)
     // Só a categoria do motivo: o PDF sai do app (o texto livre pode ter dados pessoais)
     const status = textoDoStatus(statusDoVoo(o, S.fStatus), S.fObs && S.fObs[o.fKey], { textoLivre: false, voo: o });
-    const pesoComCombustivel = o.kg ? `${o.kg} kg${o.comb ? ` · abastecer ${o.comb.abastecerGal} gal` : ''}` : '-';
+    const pesoComCombustivel = o.kg ? `${pesoBr(o.kg)} kg${o.comb ? ` · abastecer ${o.comb.abastecerGal} gal` : ''}` : '-';
     body.push([`${hm(o.a)}-${hm(o.b)}`, o.s, o.mis, o.r, o.ins, HT(o), pesoComCombustivel, o.tag, status]);
   });
 

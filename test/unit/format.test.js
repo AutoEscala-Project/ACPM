@@ -1,6 +1,6 @@
 import { describe, it, mock } from 'node:test';
 import assert from 'node:assert/strict';
-import { hm, fmtH, fmtDurLabel, WLB, pad, esc, opts, amanhaISO, hojeISO, somarDias, fimDoMes, rotuloDaData, nomeLimpo, LIMITE_DO_NOME, dataIsoValida, minutoDoDia, lerHoras, numeroBr, duracaoHm } from '../../js/format.js';
+import { hm, fmtH, fmtDurLabel, WLB, pad, esc, opts, amanhaISO, hojeISO, somarDias, fimDoMes, rotuloDaData, nomeLimpo, LIMITE_DO_NOME, dataIsoValida, minutoDoDia, lerHoras, numeroBr, duracaoHm, pesoBr } from '../../js/format.js';
 
 // O relógio no fuso do aeroclube (São Paulo, UTC−3), qualquer que seja o da máquina (o CI roda em UTC): das 21:00 à
 // meia-noite, a data local já não é a do UTC. O fuso de antes volta no fim
@@ -25,6 +25,14 @@ describe('Formatação', () => {
     assert.deepEqual(['1,5', '1.5', ' 2,26 ', '3', '0'].map(lerHoras), [1.5, 1.5, 2.3, 3, 0]);
     for (const invalido of ['', 'abc', ',']) assert.ok(Number.isNaN(lerHoras(invalido)), invalido);
     assert.deepEqual([570, 600, 90, 5, 0].map(duracaoHm), ['9h30', '10h00', '1h30', '0h05', '0h00']);
+  });
+
+  // O peso da tripulação é a soma dos pesos do aluno e do instrutor, que podem ter décimos: a soma traz o resto do ponto
+  // flutuante, que a tela, o PDF e o CSV não mostram
+  it('peso em décimos de kg, com a vírgula e sem o resto do ponto flutuante da soma', () => {
+    assert.equal(40.1 + 40.7, 80.80000000000001);
+    assert.equal(85.3 + 88.6, 173.89999999999998);
+    assert.deepEqual([40.1 + 40.7, 85.3 + 88.6, 150, 72.5, 70.25, 0, undefined].map(pesoBr), ['80,8', '173,9', '150', '72,5', '70,3', '0', '0']);
   });
 
   it('duração do Ground em 01h30', () => {

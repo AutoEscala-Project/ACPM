@@ -2,7 +2,7 @@
 // as linhas vêm agrupadas por avião/equipamento e em ordem de horário dentro de cada um. Abre direto no Excel:
 // separador ";", UTF-8 com BOM e quebras de linha do Windows.
 import { GROUND_EQ_TYPE } from './config.js';
-import { hm } from './format.js';
+import { hm, pesoBr } from './format.js';
 import { textoDoStatus } from './status.js';
 import { statusDoVoo } from './voo.js';
 
@@ -15,8 +15,8 @@ export const CABECALHO = ['Avião / Equipamento', 'Horário', 'Aluno', 'Fase / M
 export const nomeDoCsv = data => `escala-acpm-${data}.csv`;
 
 // Observações pertinentes ao lançamento: status diferente de confirmado (com o novo horário do atraso ou a categoria do
-// motivo do cancelamento; o texto livre não sai do app), turma de Ground, o peso da tripulação (aluno + instrutor)
-// contra o limite do avião e o avião que para para a revisão de 50 horas naquele dia
+// motivo do cancelamento; o texto livre não sai do app), turma de Ground, o peso da tripulação (aluno + instrutor, em
+// décimos) contra o limite do avião e o avião que para para a revisão de 50 horas naquele dia
 function observacoes(o, status, detalhe, revisao) {
   const notas = [];
   if (status !== 'Confirmado') notas.push(`Status: ${textoDoStatus(status, detalhe, { textoLivre: false, voo: o })}`);
@@ -27,10 +27,10 @@ function observacoes(o, status, detalhe, revisao) {
     else if (o.comb) {
       // Acima do limite com os tanques cheios: o voo sai com menos combustível
       const { abastecerGal, reduzirGal, minimoGal } = o.comb;
-      notas.push(`Peso aluno + instrutor: ${o.stuKg + o.insKg} kg (limite do ${o.eqType} com os tanques cheios: ${o.limKg} kg) · combustível: abastecer até ${abastecerGal} gal (${reduzirGal} a menos); o voo, o táxi e a reserva pedem ${minimoGal} gal`);
+      notas.push(`Peso aluno + instrutor: ${pesoBr(o.stuKg + o.insKg)} kg (limite do ${o.eqType} com os tanques cheios: ${o.limKg} kg) · combustível: abastecer até ${abastecerGal} gal (${reduzirGal} a menos); o voo, o táxi e a reserva pedem ${minimoGal} gal`);
     } else {
       const total = o.stuKg + o.insKg;
-      notas.push(`Peso aluno + instrutor: ${total} kg (limite do ${o.eqType}: ${o.limKg} kg) · ${total <= o.limKg ? 'dentro do envelope' : 'ACIMA DO LIMITE'}`);
+      notas.push(`Peso aluno + instrutor: ${pesoBr(total)} kg (limite do ${o.eqType}: ${o.limKg} kg) · ${total <= o.limKg ? 'dentro do envelope' : 'ACIMA DO LIMITE'}`);
     }
   }
   const parada = revisao && Object.hasOwn(revisao, o.r) ? revisao[o.r].paraAs : null;

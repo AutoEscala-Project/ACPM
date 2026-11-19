@@ -112,6 +112,27 @@ test.describe('Tela da Escala', () => {
     await expect(selo).toHaveAccessibleDescription(`Abastecer até 22 gal (4 a menos que o tanque cheio); o voo, o táxi e a reserva pedem 11 gal; autonomia de 3h23. ${GLOSSARIO['reduzir-combustivel'].texto}`);
   });
 
+  // O agendamento grava no cadastro os pesos digitados, com décimos: a soma (40,1 + 40,7 dá 80.80000000000001 no ponto
+  // flutuante) aparece em décimos e com a vírgula, como no resumo do diálogo, na lista e no popup do mapa
+  test('os pesos com décimos digitados no agendamento: a lista e o popup mostram a soma em décimos, com a vírgula', async ({ page }) => {
+    await abrir(page, { estado: cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, { fly: false }), aluno(1001, { p1: 390, p2: -1 })] }) });
+    await abrirEscala(page);
+    await page.locator('#btn-agendar').click();
+    await page.locator('#agd-aluno').selectOption('1000');
+    await expect(page.locator('#agd-previa ul')).toContainText('Entra:');
+    await page.locator('#agd-kg-aluno').fill('40.1');
+    await page.locator('#agd-kg-instrutor').fill('40.7');
+    await expect(page.locator('#agd-peso-resumo')).toContainText('80,8 kg de 170 kg');
+    await page.locator('#agd-confirmar').click();
+    await expect(page.locator('#dlg-agendar')).toBeHidden();
+    const linha = page.locator('#out tbody tr:not(.win)', { hasText: 'Aluno 1000' });
+    await expect(linha.locator('.c-peso')).toHaveText('80,8 / 170 kg');
+    await page.locator('#s-esc [data-tl="eq"]').click();
+    await page.locator('#out .tl-bar', { hasText: 'Aluno 1000' }).click();
+    const pesoNoPopup = page.locator('#tl-pop .tl-pop-grid > span', { hasText: 'Peso Trip.:' }).locator('xpath=following-sibling::span[1]');
+    await expect(pesoNoPopup).toHaveText('80,8 kg');
+  });
+
   test('turma de Ground: horário, missão, sala e instrutor uma vez só; cada aluno com o seu status e a sua ação', async ({ page }) => {
     await abrir(page, { estado: cenario({ ins: [instrutor(1, 9)], stu: [1000, 1001, 1002].map(id => aluno(id, { ...GROUND_C152, p1: 0, p2: 1 })) }) });
     await abrirEscala(page);

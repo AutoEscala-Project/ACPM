@@ -2,7 +2,7 @@
 import { FLIGHT_STATUSES, GROUND_REG, GROUND_EQ_TYPE, NOTURNO, T } from '../config.js';
 import { CODIGOS_DE_AVISO, CODIGOS_DO_AGENDADO } from '../conflitos.js';
 import { textoDoCombustivel } from '../combustivel.js';
-import { hm, WLB, fmtH, esc, rotuloDaData, hojeISO, duracaoHm, DURACAO_DO_GROUND } from '../format.js';
+import { hm, WLB, fmtH, esc, rotuloDaData, hojeISO, duracaoHm, DURACAO_DO_GROUND, pesoBr } from '../format.js';
 import { isGroundMission } from '../rules.js';
 import { categoriaDoTipo, nomeDoRecurso } from '../categorias.js';
 import { textoDoDetalhe, classeDoStatus, rotuloDoStatus, STATUS_COM_DETALHE } from '../status.js';
@@ -49,7 +49,7 @@ function conteudoDoPopup(o) {
       <span>Instrutor:</span><span>${botaoDoInstrutor(principal, 'Instrutor do voo')}</span>
       <span>Recurso:</span><span>${esc(nomeDoRecurso(o.r))}</span>
       <span>Missão:</span><span>${esc(o.mis)}</span>
-      <span>Peso Trip.:</span><span>${o.kg ? `${o.kg} kg` : '—'}</span>
+      <span>Peso Trip.:</span><span>${o.kg ? `${pesoBr(o.kg)} kg` : '—'}</span>
       ${o.comb ? `<span>Combustível:</span><span>${textoDoCombustivel(o.comb)}</span>` : ''}
       <span>Status:</span>
       <span>
@@ -316,11 +316,11 @@ function preferencia(o) {
   return '';
 }
 
-// Peso da tripulação só nos aviões, contra o limite (em destaque a menos de 10 kg dele)
+// Peso da tripulação só nos aviões, em décimos, contra o limite (em destaque a menos de 10 kg dele)
 function peso(o) {
   if (!o.limKg) return '';
   if (!o.kg) return '<span class="tag fb" data-dica="sem-peso">sem peso</span>';
-  return `<span class="${o.kg > o.limKg - PERTO_DO_LIMITE_KG ? 'perto' : ''}">${o.kg}</span> <span class="sm">/ ${o.limKg} kg</span>${seloDoCombustivel(o)}`;
+  return `<span class="${o.kg > o.limKg - PERTO_DO_LIMITE_KG ? 'perto' : ''}">${pesoBr(o.kg)}</span> <span class="sm">/ ${o.limKg} kg</span>${seloDoCombustivel(o)}`;
 }
 
 // Acima do limite com os tanques cheios, o voo sai com menos combustível: quanto reduzir (e, na dica, quanto abastecer).
