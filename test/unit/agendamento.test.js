@@ -137,6 +137,12 @@ describe('Agendamento: os padrões do formulário', () => {
     // A linha do recurso continua como o recurso do voo (o padrão); o recurso que o operador troca não é "o que não serve"
     const trocado = agendar(estado, { amb, contexto: 'r:PR-VOB', escolhas: { aluno: 1001, recurso: 'PR-VOC' }, tocados: ['recurso'] }).formulario;
     assert.deepEqual([trocado.recurso, trocado.contextoTexto], ['PR-VOC', 'PR-VOC · C152 · o primeiro horário livre: 06:30']);
+    // A linha do PR-JPL (Só Parafuso) não serve ao voo local: a explicação fica também depois de o operador escolher outro
+    // recurso, ou outro horário pelas alternativas (que marcam todos os campos como escolhidos)
+    for (const tocados of [[], ['recurso', 'horario']]) {
+      const f = agendar(estado, { amb, contexto: 'r:PR-JPL', escolhas: { aluno: 1001, recurso: 'PR-VOC', horario: 500 }, tocados }).formulario;
+      assert.ok(f.contextoTexto.endsWith(`. O PR-JPL não serve ao Voo Local: o voo vai no ${f.recurso}.`), f.contextoTexto);
+    }
     // Hoje, a barra parte de agora
     assert.deepEqual(agendar(estado, { amb: { ...amb, hoje: DATA, agora: 600 } }).formulario.contextoTexto, 'Quarta-feira, 11/11 · o primeiro horário livre a partir de agora');
   });

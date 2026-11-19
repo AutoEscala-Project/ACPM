@@ -792,8 +792,8 @@ export function formularioDoAgendamento(estado, base, ambiente, contexto, escolh
   if (lim && a !== null && alunoKg !== null && insKg !== null) f.peso.resumo = resumoDoPeso({ stuKg: alunoKg, insKg, tipo, minutos, mis, lim });
 
   // O contexto, no alto do diálogo, com o horário escolhido. O recurso do contexto que não serve à missão dá lugar a
-  // outro, e o contexto diz por quê (o que o operador trocou, ele mesmo escolheu)
-  const recursoTrocado = !turmaDoContexto && !tocados.has('recurso') && ctx.r && rec.r && ctx.r !== rec.r ? ctx.r : null;
+  // outro, e o contexto diz por quê; o que serve e o operador trocou, ele mesmo escolheu (nada a explicar)
+  const recursoTrocado = !turmaDoContexto && ctx.r && rec.r && ctx.r !== rec.r && !serveAMissao(ctx.r) ? ctx.r : null;
   f.contextoTexto = textoDoContexto(ctx, ambiente, { r: rec.r, tipo, a, recursoTrocado, mis, turma: turmaDoContexto, instrutor: x });
   if ((mis === 'Noturno' || mis === 'Voo Solo') && a !== null && inicial !== a && !horarioDoOperador) {
     f.notas.push({ codigo: 'horario-da-missao', texto: `O ${mis} sai às ${hm(a)}.` });
