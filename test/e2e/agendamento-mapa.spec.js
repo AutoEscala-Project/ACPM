@@ -78,6 +78,11 @@ test.describe('Agendar pelo mapa', () => {
     await expect(page.locator('#agd-horario')).toHaveValue('1050');
     await expect(page.locator('#agd-contexto')).toHaveText('PP-ABP · C172 · clique perto de 14:00 → 17:30 (horários do C172)');
     await expect(page.locator('#agd-conferencia .agd-notas')).toContainText('O Noturno sai às 17:30.');
+    // A volta no dia seguinte (a data aberta é amanhã) e o repouso do instrutor até ela, abaixo das 12 h da lei
+    await expect(page.locator('#agd-conferencia .agd-notas li[data-codigo="noturno"]')).toHaveText('O Noturno volta em 12/11 às 07:30; o instrutor, o aluno e o avião ficam livres às 10:10.');
+    await expect(page.locator('#agd-conferencia .agd-notas li[data-codigo="repouso-do-noturno"]'))
+      .toHaveText(/^Limite da lei: Instrutor \d\d fica com 9h00 de repouso entre o noturno \(até 21:30\) e o translado de volta \(07:30\), menos que as 12h00 da lei; a escala de 12\/11 avisa\.$/);
+    await expect(page.locator('#agd-conferencia .agd-avisos li')).toHaveCount(0);
     await page.locator('#agd-voltar').click();
     await expect(dialogo(page)).toBeHidden();
 

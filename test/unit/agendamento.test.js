@@ -12,6 +12,7 @@ import { ocupacaoDaEscala } from '../../js/candidatos.js';
 import { runAllocationEngine } from '../../js/engine.js';
 import { validarReversao, desfazerAgendamento, motivoParaNaoDesfazer } from '../../js/reversoes.js';
 import { normalizarLinhaGravada } from '../../js/escala-gravada.js';
+import { noturnosDaVespera, comRepousoDoNoturno } from '../../js/noturno.js';
 import { fixosAoAprovar, fixosAoMudarStatus } from '../../js/fixos.js';
 import { normalizeMissionFields } from '../../js/rules.js';
 import { gerarCenario } from '../helpers/cenarios.js';
@@ -347,16 +348,44 @@ describe('Agendamento: os padrões do formulário', () => {
     assert.ok(normalizarLinhaGravada(linha), 'a turma nova é aceita pela escala gravada');
     const noturno = agendar(estado, { amb, contexto: { r: 'PR-VOY', minuto: 600 }, escolhas: { aluno: 1001, missao: 'tipo:Noturno' }, tocados: ['missao'] });
     assert.deepEqual([noturno.formulario.horario, noturno.formulario.horas], [1050, { valor: '4', fixa: true }]);
-    assert.deepEqual(codigos(noturno.avaliacao.notas), ['horario-da-missao', 'rodizio', 'noturno']);
+    assert.deepEqual(codigos(noturno.avaliacao.notas), ['horario-da-missao', 'rodizio', 'noturno', 'repouso-do-noturno']);
     assert.deepEqual(noturno.avaliacao.notas.map(n => n.texto), [
       'O Noturno sai às 17:30.', 'Na fila do rodízio (Voo noturno), a vez é de Instrutor 01.',
-      'O Noturno volta em 12/11 às 07:30; o instrutor, o aluno e o avião ficam livres às 10:10.'
+      'O Noturno volta em 12/11 às 07:30; o instrutor, o aluno e o avião ficam livres às 10:10.',
+      `Limite da lei: ${noturno.formulario.selecao.x.nm} fica com 9h00 de repouso entre o noturno (até 21:30) e o translado de volta (07:30), menos que as 12h00 da lei; a escala de 12/11 avisa.`
     ]);
     // Com a janela das 17:30 fechada, o Noturno fica sem horário: o bloqueio diz por quê, e o contexto não fica pela metade
     const fechada = { ...estado, win: estado.win.map((v, w) => w !== 8) };
     const semHorario = agendar(fechada, { amb, escolhas: { aluno: 1001, missao: 'tipo:Noturno' }, tocados: ['missao'] }).formulario;
     assert.deepEqual(codigos(semHorario.formato), ['horario-invalido']);
     assert.equal(semHorario.contextoTexto, 'Quarta-feira, 11/11 · nenhum horário de decolagem aberto');
+  });
+
+  // A lei pede 12 h de repouso, e a volta do Noturno decola de BH às 07:30: a escala do dia da volta avisa
+  // (repouso-do-noturno), e o agendamento do Noturno já diz o repouso que fica, numa nota (sem confirmação)
+  it('o Noturno: a nota diz o repouso do instrutor até a volta, o mesmo que a escala do dia da volta avisa', () => {
+    const estado = doDia();
+    delete estado.stu[1].curso;
+    const noturno = (mudar = {}, escolhas = {}) => agendar({ ...estado, ...mudar }, {
+      amb, contexto: { r: 'PR-VOY', minuto: 600 }, escolhas: { aluno: 1001, missao: 'tipo:Noturno', ...escolhas }, tocados: ['missao', ...Object.keys(escolhas)]
+    });
+    const repouso = r => (r.avaliacao.notas.find(n => n.codigo === 'repouso-do-noturno') || {}).texto || null;
+    const { formulario, avaliacao, sim } = noturno();
+    const x = formulario.selecao.x;
+    assert.deepEqual(codigos(avaliacao.avisos), []);
+    assert.equal(repouso({ avaliacao }), `Limite da lei: ${x.nm} fica com 9h00 de repouso entre o noturno (até 21:30) e o translado de volta (07:30), menos que as 12h00 da lei; a escala de 12/11 avisa.`);
+    // A escala do dia seguinte, com a escala do agendamento gravada como a véspera, avisa o mesmo repouso
+    const noturnos = noturnosDaVespera({ data: DATA, conteudo: { ...estado, resultado: sim } }, '2026-11-12');
+    const seguinte = { ...cenario({ ins: estado.ins, stu: [aluno(1002, { fly: false })] }), noturnosDaVespera: noturnos, horasDosInstrutores: comRepousoDoNoturno({}, noturnos) };
+    const aviso = runAllocationEngine(seguinte).al.find(a => a.codigo === 'repouso-do-noturno');
+    assert.deepEqual([aviso.insId, aviso.m], [x.id, 'Limite da lei: 9h00 de repouso entre o noturno de ontem (até 21:30) e o translado de volta (07:30), menos que as 12h00 da lei.']);
+    // Na data de hoje, a escala de amanhã avisa; o noturno que sai mais tarde (outro horário) deixa menos repouso
+    assert.match(repouso(agendar(estado, { amb: { ...amb, hoje: DATA, agora: 0 }, contexto: { r: 'PR-VOY', minuto: 600 }, escolhas: { aluno: 1001, missao: 'tipo:Noturno' }, tocados: ['missao'] })), /; a escala de amanhã avisa\.$/);
+    assert.match(repouso(noturno({}, { horario: 'outro', outroHorario: '18:00' })), /fica com 8h30 de repouso entre o noturno \(até 22:00\)/);
+    // Com o repouso mínimo menor que o que fica, ou sem ele (o Administrador muda os limites), nada
+    assert.equal(repouso(noturno({ limites: { repousoMin: 480 } })), null);
+    assert.equal(repouso(noturno({ limites: { repousoMin: null } })), null);
+    assert.match(repouso(noturno({ limites: { repousoMin: 600 } })), /fica com 9h00 de repouso .*, menos que as 10h00 da lei;/);
   });
 
   it('o Noturno em trechos vai pela noite, com os translados no nome: nenhum translado sozinho, e o voo leva a etapa da noite', () => {

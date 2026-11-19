@@ -30,7 +30,9 @@ import { STATUS_EM_ANDAMENTO, rotuloDoStatus, intervaloEfetivo } from './status.
 import { pesoECombustivel, textoDoCombustivel } from './combustivel.js';
 import { NOTA_DO_PROBLEMA } from './instrutor-escolhido.js';
 import { sobrepoe } from './viabilidade.js';
-import { hm, fmtH, numeroBr, rotuloDaData, somarDias } from './format.js';
+import { hm, fmtH, numeroBr, rotuloDaData, somarDias, duracaoHm } from './format.js';
+import { normalizarLimites } from './limites.js';
+import { repousoAntesDaVolta } from './noturno.js';
 import { nomeDoRecurso } from './categorias.js';
 import { CATEGORIAS_DO_RODIZIO, categoriaDoRodizio, ajustarFilas } from './rodizio.js';
 import { FROTA_INICIAL, recursoDaFrota, motivoDoAviao } from './frota.js';
@@ -1050,7 +1052,7 @@ const quandoDisponivel = jan => QUANDO_DISPONIVEL[jan] || rotuloDaDisponibilidad
 //   digitado cria em outro voo, o horário que já passou, a data passada, o domingo, os limites da lei sem as horas; no
 //   voo que muda de lugar, a disponibilidade do aluno que não inclui o horário novo (ela sai do pedido) e o voo fixo pela
 //   escala aprovada que muda de lugar;
-// - notas (só informação), com a vez na fila do rodízio.
+// - notas (só informação), com a vez na fila do rodízio e, no Noturno, a volta e o repouso do instrutor até ela.
 // Cada item: { codigo, texto, campo?, opcoes?, alternativas?, resumo? (o texto curto do histórico) }. previa: o voo novo,
 // os voos que mudam de lugar, saem ou entram, e as linhas que a tela mostra
 export function avaliarAgendamento({ estado, baseComPesos, base = baseComPesos, sim, fKey, formulario, ambiente = {} }) {
@@ -1193,8 +1195,19 @@ export function avaliarAgendamento({ estado, baseComPesos, base = baseComPesos, 
   if (estado.aprovacao) notas.push({ codigo: 'escala-aprovada', texto: 'A escala está aprovada: o voo novo entra fixo e os outros não mudam.' });
   if (mis === 'Noturno') {
     // A volta é no dia seguinte ao da data aberta: amanhã só quando a data é hoje
-    const volta = nomeDaData({ data: ambiente.data && somarDias(ambiente.data, 1), hoje: ambiente.hoje }).quando || 'no dia seguinte';
-    notas.push({ codigo: 'noturno', texto: `O Noturno volta ${volta} às ${hm(NOTURNO.voltaInicio)}; o instrutor, o aluno e o avião ficam livres às ${hm(NOTURNO.livreAs)}.` });
+    const volta = nomeDaData({ data: ambiente.data && somarDias(ambiente.data, 1), hoje: ambiente.hoje });
+    notas.push({ codigo: 'noturno', texto: `O Noturno volta ${volta.quando || 'no dia seguinte'} às ${hm(NOTURNO.voltaInicio)}; o instrutor, o aluno e o avião ficam livres às ${hm(NOTURNO.livreAs)}.` });
+    // O repouso da lei antes da volta (do fim do noturno, em BH, à volta das 07:30): abaixo do mínimo, a escala do dia da
+    // volta avisa (repouso-do-noturno, js/engine.js), e o agendamento já diz quanto fica. A decisão do aeroclube é avisar
+    // a lei, não isentar: é uma nota, sem confirmação
+    const limites = normalizarLimites(estado.limites);
+    const repouso = limites.repousoMin === null ? null : repousoAntesDaVolta(b, limites);
+    if (repouso !== null && repouso < limites.repousoMin) {
+      notas.push({
+        codigo: 'repouso-do-noturno',
+        texto: `Limite da lei: ${x.nm} fica com ${duracaoHm(repouso)} de repouso entre o noturno (até ${hm(b)}) e o translado de volta (${hm(NOTURNO.voltaInicio)}), menos que as ${duracaoHm(limites.repousoMin)} da lei; a escala ${volta.curto ? volta.de : 'do dia seguinte'} avisa.`
+      });
+    }
   }
   // Os outros pedidos do aluno que ficaram fora da escala (o que entra agora não)
   const naBase = new Set(baseComPesos.out.map(o => o.fKey));
