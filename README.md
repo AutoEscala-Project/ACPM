@@ -142,11 +142,11 @@ banco (e a chamada dela no app). A cópia `cadastro.cursos` fica.
 | `js/dias.js` | Cadastro separado do dia, cópia do dia anterior, conversão dos dados da fase 2 e BI das escalas |
 | `js/migracoes.js` | Versões do formato dos dados guardados e os passos de uma versão para a seguinte |
 | `js/sessao.js`, `js/config-supabase.js` | Login, perfil de acesso e projeto Supabase de cada endereço |
-| `js/state.js`, `js/actions.js` | Estado da aplicação e ações (perfil, data, histórico e a escala refeita a cada alteração); `gravarAlteracao` é o único jeito de os eventos mudarem os dados |
+| `js/state.js`, `js/actions.js` | Estado da aplicação e ações (perfil, data, histórico e a escala refeita a cada alteração); `gravarAlteracao` é o único jeito de os eventos mudarem os dados, e nada grava antes de os dados da data aberta serem lidos (`lerData` lê uma data de cada vez; `aindaNaoAbriu` recusa a mudança com o aviso) |
 | `js/manual.js` | Tabelas do manual geradas das regras (missões, habilitações exigidas, janelas, pesos e rodízio) |
 | `js/views/` | Renderização de cada aba |
 | `js/export.js` | CSV, PDF e a planilha (Excel) |
-| `js/eventos/` | Os eventos de cada aba (um módulo por aba); `registro.js` recebe os botões com `data-act` e os campos das tabelas, com a trava de quem só consulta, e `confirmacao.js` é o único jeito de confirmar (dois cliques) |
+| `js/eventos/` | Os eventos de cada aba (um módulo por aba); `registro.js` recebe os botões com `data-act` e os campos das tabelas, com a trava de quem só consulta e a de antes de a data abrir, e `confirmacao.js` é o único jeito de confirmar (dois cliques) |
 | `js/main.js` | A abertura do app (liga os eventos, lê a sessão e os dados e abre a data) |
 
 ## Fluxo de trabalho
