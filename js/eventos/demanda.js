@@ -5,9 +5,10 @@ import { T, GROUND_EQ_TYPE, GROUND_DURATION_H, MIS } from '../config.js';
 import { $, showToast, ligarMenu, trocarElemento } from '../dom.js';
 import { fmtDurLabel } from '../format.js';
 import { horariosDaMissao, ajustarPreferencias } from '../horarios.js';
-import { isGroundMission, blank, rotuloDaDisponibilidade, normalizeMissionFields, proximoMid, duracaoDigitada, ERRO_DA_DURACAO, duracaoPadraoDaMissao } from '../rules.js';
+import { isGroundMission, rotuloDaDisponibilidade, normalizeMissionFields, proximoMid, duracaoDigitada, ERRO_DA_DURACAO, duracaoPadraoDaMissao } from '../rules.js';
 import { S, RES, isGestor, stuBy, insBy, getMissionTarget } from '../state.js';
 import { escolherInstrutor } from '../instrutor-escolhido.js';
+import { limparDemanda } from '../fixos.js';
 import { confirmado, comConfirmacao } from './confirmacao.js';
 import { aoAcionar, aoMudarCampo } from './registro.js';
 import { singleDemandRowHTML, cnt, rDem, applyDemandFilters } from '../views/demanda.js';
@@ -50,15 +51,18 @@ document.addEventListener('change', e => {
   if (e.target.id === 'onlyfly') $('#dem').classList.toggle('only', e.target.checked);
 });
 
-// "Limpar demanda": cada pedido fica em branco, sem nada do voo de antes (como o pedido que a agenda reaproveita): saem
-// a disponibilidade, a missão do curso, o pedido da agenda e o instrutor escolhido, e as missões extras. Assim o Voa
-// religado à mão não traz a disponibilidade de antes, e o pedido da agenda da mesma missão toma este voo
+// "Limpar demanda": cada pedido fica em branco, sem nada do voo de antes, e o voo dele fica solto, sem o voo fixo e sem
+// o status (js/fixos.js). Assim o Voa religado à mão não traz a disponibilidade, o cadeado nem o status de antes, e o
+// pedido da agenda da mesma missão toma este voo. O voo em andamento ou que já pousou fica como está, e a escala
+// aprovada é reaberta; o histórico e o aviso dizem quantos voos ficaram
 comConfirmacao('#clr', 'Confirmar limpeza', () => {
   if (isGestor()) return;
-  S.stu.forEach(d => { Object.assign(d, blank()); for (const campo of ['jan', 'etapa', 'solicitacao', 'insId']) delete d[campo]; d.extra = []; });
-  gravarAlteracao('exc', 'Demanda limpa');
+  const { ficam, reaberta } = limparDemanda(S);
+  const texto = `Demanda limpa${reaberta ? ' e escala reaberta' : ''}${ficam ? ` (${ficam === 1 ? '1 voo em andamento fica' : `${ficam} voos em andamento ficam`})` : ''}`;
+  gravarAlteracao('exc', texto);
   rDem();
   fecharMenuMais();
+  showToast(`${texto}.`, 'ok');
 });
 
 // A próxima missão do curso: o pedido vira a missão do programa (tipo, recurso e horas) e o aluno voa

@@ -4,6 +4,8 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { runAllocationEngine } from '../../js/engine.js';
+import { limparDemanda } from '../../js/fixos.js';
+import { blank } from '../../js/rules.js';
 import { aluno, cenario, instrutor, apenas, missaoExtra, GROUND_C152 } from '../helpers/montar.js';
 
 const pino = o => ({ a: o.a, b: o.b, r: o.r, insId: o.insId, ...(o.isGround ? { classKey: o.classKey } : {}) });
@@ -324,5 +326,94 @@ describe('O cadeado do voo', () => {
     assert.equal(motivoDoFixo('1000_0_1', { fStatus: { '1000_0_1': 'Pousou' }, aprovacao: null }), 'Voo fixo: Pousou');
     // No Ground e no simulador, o Pousou aparece como "Concluída"
     assert.equal(motivoDoFixo('1000_0_1', { fStatus: { '1000_0_1': 'Pousou' }, aprovacao: null, voo: { mis: 'Ground C152', isGround: true } }), 'Voo fixo: Concluída');
+  });
+});
+
+// "Limpar demanda": cada pedido fica em branco e o voo dele fica solto (sem o voo fixo, o status e o detalhe), seja qual
+// for o motivo do cadeado; o voo em andamento ou que já pousou fica como está; a escala aprovada é reaberta
+describe('Limpar demanda', () => {
+  const PINO = { a: 390, b: 450, r: 'PR-VOB', insId: 1 };
+  const APROVACAO = { em: '2026-11-10T21:05:00.000Z', por: 'Operador 01' };
+  // O aluno com o pedido em branco (e sem as missões extras)
+  const emBranco = s => ({ id: s.id, nm: s.nm, kg: s.kg, bl: s.bl, extra: [], ...blank() });
+
+  it('o pedido fica em branco e o voo solto: saem o voo fixo (da aprovação, do instrutor escolhido ou do status), o status e o detalhe', () => {
+    const estado = {
+      ...cenario({
+        stu: [
+          aluno(1000, { p1: 390, p2: -1, jan: 'manha', etapa: 'PP-01', solicitacao: 7, insId: 1 }, { extra: [missaoExtra(1, { p1: 610, p2: -1 })] }),
+          aluno(1001, { p1: 500, p2: -1 }),
+          aluno(1002, { fly: false, p1: 610, p2: -1 })
+        ]
+      }),
+      fixos: { '1000_0_1': { ...PINO, escolhido: true }, '1000_1_1': { ...PINO, a: 610, b: 670 }, '1001_0_1': { ...PINO, a: 500, b: 560 }, '1002_0_1': { ...PINO, a: 610, b: 670, insId: 2 } },
+      fStatus: { '1000_0_1': 'Confirmado', '1000_1_1': 'Pendente', '1001_0_1': 'Cancelado', '1002_0_1': 'Cancelado' },
+      fObs: { '1001_0_1': { motivo: 'Meteorologia' }, '1002_0_1': { motivo: 'Outro', texto: 'Pista interditada' } }
+    };
+    const alunos = estado.stu.map(s => ({ ...s }));
+    assert.deepEqual(limparDemanda(estado), { ficam: 0, reaberta: false });
+    assert.deepEqual(estado.stu, alunos.map(emBranco));
+    assert.deepEqual([estado.fixos, estado.fStatus, estado.fObs, estado.aprovacao], [{}, {}, {}, null]);
+  });
+
+  it('o voo em andamento ou que já pousou (Atrasado, Em Voo, Pousou) fica como está: o pedido, a missão extra, o voo fixo, o status e o detalhe', () => {
+    const estado = {
+      ...cenario({
+        stu: [
+          aluno(1000, { p1: 390, p2: -1, jan: 'manha', insId: 1 }, { extra: [missaoExtra(1, { p1: 610, p2: -1 }), missaoExtra(2, { p1: 760, p2: -1, etapa: 'PP-02' })] }),
+          aluno(1001, { p1: 500, p2: -1, solicitacao: 9 }),
+          aluno(1002, { p1: 610, p2: -1 })
+        ]
+      }),
+      fixos: { '1000_0_1': { ...PINO, escolhido: true }, '1000_1_1': { ...PINO, a: 610, b: 670 }, '1000_2_1': { ...PINO, a: 760, b: 820 }, '1001_0_1': { ...PINO, a: 500, b: 560 }, '1002_0_1': { ...PINO, a: 610, b: 670, insId: 2 } },
+      fStatus: { '1000_0_1': 'Em Voo', '1000_1_1': 'Cancelado', '1000_2_1': 'Pousou', '1001_0_1': 'Atrasado', '1002_0_1': 'Confirmado' },
+      fObs: { '1000_1_1': { motivo: 'Meteorologia' }, '1001_0_1': { novoInicio: 530 } }
+    };
+    const antes = structuredClone(estado);
+    assert.deepEqual(limparDemanda(estado), { ficam: 3, reaberta: false });
+    // O Aluno 1000 fica com o pedido e a missão extra que pousou; a missão extra cancelada sai. O 1001 fica inteiro
+    assert.deepEqual(estado.stu, [{ ...antes.stu[0], extra: [antes.stu[0].extra[1]] }, antes.stu[1], emBranco(antes.stu[2])]);
+    const sem = (dados, ...chaves) => Object.fromEntries(Object.entries(dados).filter(([fKey]) => !chaves.includes(fKey)));
+    assert.deepEqual(estado.fixos, sem(antes.fixos, '1000_1_1', '1002_0_1'));
+    assert.deepEqual(estado.fStatus, sem(antes.fStatus, '1000_1_1', '1002_0_1'));
+    assert.deepEqual(estado.fObs, { '1001_0_1': { novoInicio: 530 } });
+  });
+
+  it('a escala aprovada é reaberta, como em Reabrir: só o voo em andamento continua fixo', () => {
+    // O voo fixo que o dia ainda guarda de uma missão extra tirada antes (1000_4_1) não é um pedido: sai como em Reabrir
+    const estado = {
+      ...cenario({ stu: [aluno(1000, { p1: 390, p2: -1 }), aluno(1001, { p1: 500, p2: -1 })] }),
+      fixos: { '1000_0_1': PINO, '1001_0_1': { ...PINO, a: 500, b: 560 }, '1000_4_1': { ...PINO, a: 760, b: 820 } },
+      fStatus: { '1000_0_1': 'Pousou' },
+      aprovacao: APROVACAO
+    };
+    assert.deepEqual(limparDemanda(estado), { ficam: 1, reaberta: true });
+    assert.deepEqual([estado.fixos, estado.fStatus, estado.aprovacao], [{ '1000_0_1': PINO }, { '1000_0_1': 'Pousou' }, null]);
+  });
+
+  it('a volta do noturno de ontem não é um pedido do dia: o status e o detalhe dela ficam', () => {
+    const estado = { ...cenario({ stu: [aluno(1000)] }), fStatus: { '1000_0_2': 'Atrasado', '1000_0_1': 'Confirmado' }, fObs: { '1000_0_2': { novoInicio: 480 } } };
+    assert.deepEqual(limparDemanda(estado), { ficam: 0, reaberta: false });
+    assert.deepEqual([estado.fStatus, estado.fObs], [{ '1000_0_2': 'Atrasado' }, { '1000_0_2': { novoInicio: 480 } }]);
+  });
+
+  it('o Voa religado depois da limpeza: o pedido é escalado de novo, solto, sem o status de antes; o voo que pousou continua onde estava', () => {
+    const base = cenario({ ins: [instrutor(1, 9), instrutor(2, 9)], stu: [aluno(1000, { p1: 390, p2: -1, insId: 2 }), aluno(1001, { p1: 390, p2: -1 }), aluno(1002, { p1: 610, p2: -1 })] });
+    const antes = runAllocationEngine(base);
+    const estado = {
+      ...structuredClone(base),
+      fixos: { ...fixarTudo(antes.out), '1000_0_1': { ...pino(doAluno(antes.out, 1000)), escolhido: true } },
+      fStatus: { '1001_0_1': 'Cancelado', '1002_0_1': 'Pousou' }, fObs: { '1001_0_1': { motivo: 'Meteorologia' } }, aprovacao: APROVACAO
+    };
+    limparDemanda(estado);
+    estado.stu.forEach(s => { s.fly = true; });
+    const { out } = runAllocationEngine(estado);
+    // O pedido em branco sai na 1ª preferência dele (08:20), sem o cadeado, sem o instrutor escolhido e Confirmado
+    for (const id of [1000, 1001]) {
+      const o = doAluno(out, id);
+      assert.deepEqual([o.a, o.fixo, o.insEscolhido, o.status], [500, undefined, undefined, 'Confirmado'], `Aluno ${id}`);
+    }
+    const pousou = doAluno(out, 1002);
+    assert.deepEqual([pino(pousou), pousou.fixo, pousou.status], [pino(doAluno(antes.out, 1002)), true, 'Pousou']);
   });
 });

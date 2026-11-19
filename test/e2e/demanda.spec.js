@@ -1,4 +1,4 @@
-import { test, expect, abrir, abrirSintetico, abrirComExemplo, irPara, abrirEscala, lerEscala, AMANHA } from './fixtures.js';
+import { test, expect, abrir, abrirSintetico, abrirComExemplo, irPara, abrirEscala, lerEscala, confirmar, AMANHA } from './fixtures.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
 
 const linhaDoAluno = (page, nome) => page.locator(`#dem tr[data-k="d"][data-mid="0"][data-nm="${nome.toLowerCase()}"]`);
@@ -84,6 +84,58 @@ test.describe('Demanda', () => {
     await expect(linha.locator('[data-f="jan"]')).toHaveValue('h610');
   });
 
+  // A limpeza também solta os voos que limpa, seja qual for o motivo do cadeado (a escala aprovada, o instrutor escolhido
+  // na Escala, o status), e reabre a escala aprovada. O voo que já pousou fica como está: o pedido, o cadeado e o status
+  test('"Limpar demanda" solta os voos que limpa (o cadeado e o status de antes) e reabre a escala; o voo que pousou fica', async ({ page }) => {
+    const estado = cenario({
+      ins: [instrutor(1, 9), instrutor(2, 9)],
+      stu: [aluno(1000, { p1: 390, p2: -1 }), aluno(1001, { p1: 500, p2: -1 }), aluno(1002, { p1: 610, p2: -1 })],
+      fStatus: { '1001_0_1': 'Confirmado' }
+    });
+    await abrir(page, { estado });
+    await abrirEscala(page);
+    const voo = nome => page.locator('#out tbody tr:not(.win)', { hasText: nome });
+    await confirmar(page, '#btn-aprovar');
+    // O Aluno 1000 com o outro instrutor, escolhido na Escala; o Aluno 1002 já pousou
+    const doApp = (await voo('Aluno 1000').locator('.c-instr').innerText()).trim();
+    await voo('Aluno 1000').locator('[data-act="trocar-instrutor"]').click();
+    await voo('Aluno 1000').locator('select[data-a="insVoo"]').selectOption(doApp === 'Instrutor 01' ? '2' : '1');
+    await expect(voo('Aluno 1000').locator('.ins-btn')).toHaveClass(/\bescolhido\b/);
+    await voo('Aluno 1002').locator('.st-sel').selectOption('Pousou');
+    await expect(voo('Aluno 1002').locator('.fixo')).toHaveAttribute('aria-label', 'Voo fixo: Pousou');
+    await expect(page.locator('#out tbody tr:not(.win) .fixo')).toHaveCount(3);
+    const pousou = (await lerEscala(page)).linhas.find(l => l.includes('Aluno 1002'));
+
+    await irPara(page, 'dem');
+    await page.locator('#btn-mais-dem').click();
+    await confirmar(page, '#clr');
+    await expect(page.locator('#toast-box .toast').last()).toHaveText('Demanda limpa e escala reaberta (1 voo em andamento fica).');
+    await expect(page.locator('#audit-log-list')).toContainText('Demanda limpa e escala reaberta (1 voo em andamento fica)');
+    // Só o pedido do voo que pousou continua; o dia guardado não tem mais o cadeado, o status nem a aprovação dos outros
+    await expect(page.locator('#dem tr[data-k="d"].on')).toHaveAttribute('data-id', '1002');
+    const guardado = () => page.evaluate(data => {
+      const { fixos, fStatus, aprovacao } = JSON.parse(localStorage.getItem(`acpm4_dia_${data}`));
+      return { fixos: Object.keys(fixos), fStatus, aprovacao };
+    }, AMANHA);
+    await expect.poll(guardado).toEqual({ fixos: ['1002_0_1'], fStatus: { '1002_0_1': 'Pousou' }, aprovacao: null });
+
+    // O Voa religado: o app escala o pedido em branco de novo (na 1ª preferência dele, 08:20), solto e Confirmado
+    await page.locator('#onlyfly').uncheck();
+    for (const id of [1000, 1001]) await page.locator(`#dem tr[data-k="d"][data-id="${id}"][data-mid="0"] [data-f="fly"]`).check();
+    await abrirEscala(page);
+    await expect(page.locator('#selo-aprovada')).toBeHidden();
+    await expect(page.locator('#btn-aprovar')).toBeVisible();
+    for (const nome of ['Aluno 1000', 'Aluno 1001']) {
+      await expect(voo(nome).locator('.c-hr')).toContainText('08:20–09:20');
+      await expect(voo(nome).locator('.fixo')).toHaveCount(0);
+      await expect(voo(nome).locator('.ins-btn')).not.toHaveClass(/\bescolhido\b/);
+      await expect(voo(nome).locator('.st-sel')).toHaveValue('Confirmado');
+    }
+    await expect.poll(async () => (await guardado()).fStatus).toEqual({ '1002_0_1': 'Pousou' });
+    // O voo que pousou não mudou: o mesmo horário, avião e instrutor, com o status e o cadeado
+    expect((await lerEscala(page)).linhas.find(l => l.includes('Aluno 1002'))).toBe(pousou);
+    await expect(voo('Aluno 1002').locator('.fixo')).toHaveAttribute('aria-label', 'Voo fixo: Pousou');
+  });
 
   test('"+ Missão" adiciona e remove uma missão extra do aluno', async ({ page }) => {
     await abrirComExemplo(page);
