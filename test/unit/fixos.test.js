@@ -348,10 +348,11 @@ describe('Limpar demanda', () => {
       }),
       fixos: { '1000_0_1': { ...PINO, escolhido: true }, '1000_1_1': { ...PINO, a: 610, b: 670 }, '1001_0_1': { ...PINO, a: 500, b: 560 }, '1002_0_1': { ...PINO, a: 610, b: 670, insId: 2 } },
       fStatus: { '1000_0_1': 'Confirmado', '1000_1_1': 'Pendente', '1001_0_1': 'Cancelado', '1002_0_1': 'Cancelado' },
-      fObs: { '1001_0_1': { motivo: 'Meteorologia' }, '1002_0_1': { motivo: 'Outro', texto: 'Pista interditada' } }
+      fObs: { '1001_0_1': { motivo: 'Meteorologia' }, '1002_0_1': { motivo: 'Outro', texto: 'Pista interditada' } },
+      aprovacao: APROVACAO
     };
     const alunos = estado.stu.map(s => ({ ...s }));
-    assert.deepEqual(limparDemanda(estado), { ficam: 0, reaberta: false });
+    assert.deepEqual(limparDemanda(estado), { ficam: 0, reaberta: true });
     assert.deepEqual(estado.stu, alunos.map(emBranco));
     assert.deepEqual([estado.fixos, estado.fStatus, estado.fObs, estado.aprovacao], [{}, {}, {}, null]);
   });

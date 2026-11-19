@@ -105,6 +105,12 @@ test.describe('Demanda', () => {
     await expect(voo('Aluno 1002').locator('.fixo')).toHaveAttribute('aria-label', 'Voo fixo: Pousou');
     await expect(page.locator('#out tbody tr:not(.win) .fixo')).toHaveCount(3);
     const pousou = (await lerEscala(page)).linhas.find(l => l.includes('Aluno 1002'));
+    // O dia guardado: os três voos fixos, o Confirmado do Aluno 1001, o Pousou do 1002 e a aprovação
+    const guardado = () => page.evaluate(data => {
+      const { fixos, fStatus, aprovacao } = JSON.parse(localStorage.getItem(`acpm4_dia_${data}`));
+      return { fixos: Object.keys(fixos).sort(), fStatus, aprovada: Boolean(aprovacao) };
+    }, AMANHA);
+    await expect.poll(guardado).toEqual({ fixos: ['1000_0_1', '1001_0_1', '1002_0_1'], fStatus: { '1001_0_1': 'Confirmado', '1002_0_1': 'Pousou' }, aprovada: true });
 
     await irPara(page, 'dem');
     await page.locator('#btn-mais-dem').click();
@@ -113,11 +119,7 @@ test.describe('Demanda', () => {
     await expect(page.locator('#audit-log-list')).toContainText('Demanda limpa e escala reaberta (1 voo em andamento fica)');
     // Só o pedido do voo que pousou continua; o dia guardado não tem mais o cadeado, o status nem a aprovação dos outros
     await expect(page.locator('#dem tr[data-k="d"].on')).toHaveAttribute('data-id', '1002');
-    const guardado = () => page.evaluate(data => {
-      const { fixos, fStatus, aprovacao } = JSON.parse(localStorage.getItem(`acpm4_dia_${data}`));
-      return { fixos: Object.keys(fixos), fStatus, aprovacao };
-    }, AMANHA);
-    await expect.poll(guardado).toEqual({ fixos: ['1002_0_1'], fStatus: { '1002_0_1': 'Pousou' }, aprovacao: null });
+    await expect.poll(guardado).toEqual({ fixos: ['1002_0_1'], fStatus: { '1002_0_1': 'Pousou' }, aprovada: false });
 
     // O Voa religado: o app escala o pedido em branco de novo (na 1ª preferência dele, 08:20), solto e Confirmado
     await page.locator('#onlyfly').uncheck();
