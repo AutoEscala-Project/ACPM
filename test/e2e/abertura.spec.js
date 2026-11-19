@@ -540,6 +540,20 @@ test.describe('Os cursos, o agendamento e a missão do curso: nada muda antes de
     await expect(cursoPP(page).locator('[data-act="curso-encerrar"]')).not.toHaveText(/^Confirmar/);
     await expect(page.locator('#cursos .curso[data-curso="MLTE"]')).toHaveCount(0);
     await expect(page.locator('#cur-sigla')).toHaveValue('MLTE');
+    // O que só muda o que se vê não é uma ação e vale também agora: o curso na tela (o formulário aberto continua) e a fase
+    // que recolhe e abre
+    await page.locator('#cur-ver-PC').click();
+    await expect(page.locator('#cursos .curso[data-curso="PC"]')).toBeVisible();
+    await expect(cursoPP(page)).toHaveCount(0);
+    await page.locator('#cur-ver-PP').click();
+    await expect(page.locator('#cur-sigla')).toHaveValue('MLTE');
+    const fase = cursoPP(page).locator('[data-recolher-fase]');
+    await fase.click();
+    await expect(fase).toHaveAttribute('aria-expanded', 'false');
+    await expect(cursoPP(page).locator('tbody tr[data-missao]').first()).toBeHidden();
+    await fase.click();
+    await expect(cursoPP(page).locator('tbody tr[data-missao]')).toHaveCount(3);
+    await expect(cursoPP(page).locator('tbody tr[data-missao]').first()).toBeVisible();
     await irPara(page, 'dem');
     await expect(pedidoDoAluno(page).locator('[data-act="usar-proxima"]')).toHaveText('Próxima: PP-01 · Usar');
     await expect(pedidoDoAluno(page).locator('[data-f="outra-missao"]')).toHaveValue('');

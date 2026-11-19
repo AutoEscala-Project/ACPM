@@ -96,7 +96,7 @@ export const GLOSSARIO = {
   // Alunos
   'voa-com': { aba: 'Alunos', termo: 'Priorizar com', texto: 'Os instrutores do aluno: a escala põe o aluno com um deles sempre que algum pode voar. Quando nenhum pode, o voo fica com outro instrutor, com aviso.' },
   'nao-escalar-com': { aba: 'Alunos', termo: 'Não escalar com', texto: 'Instrutores que não voam com este aluno: a escala nunca põe o aluno com eles.' },
-  progresso: { aba: 'Alunos', termo: 'Progresso', texto: 'Missões do curso aprovadas sobre o total do programa, e a próxima missão.' },
+  progresso: { aba: 'Alunos', termo: 'Progresso', texto: 'Missões do curso aprovadas sobre o total do programa, a fase em que o aluno está (no curso com mais de uma) e a próxima missão.' },
   'filtro-dos-cursos': { aba: 'Alunos', termo: 'Filtro dos cursos', texto: 'Mostra só os alunos de algum dos cursos marcados, em Alunos e na Demanda (as marcas valem nas duas): PP e PC mostram os alunos dos dois. “Sem curso” mostra quem não tem curso; sem nenhum marcado, mostra todos.' },
 
   // Cursos
@@ -104,6 +104,7 @@ export const GLOSSARIO = {
     aba: 'Cursos', termo: 'Fase do curso',
     texto: 'Um grupo de missões do programa. A fase abre depois das fases anteriores, desde o início do curso ou depois das fases escolhidas, e fica completa com todas as missões dela feitas.'
   },
+  'alunos-na-fase': { aba: 'Cursos', termo: 'Alunos na fase', texto: 'Os alunos do curso que estão nesta fase: a primeira fase aberta em que ainda falta missão para eles (a do progresso, em Alunos). Quem concluiu o curso não conta.' },
   'quando-voar': {
     aba: 'Cursos', termo: 'Quando voar',
     texto: 'Depois das anteriores: espera as anteriores da fase. Livre na fase: voa com a fase aberta; as seguintes não esperam por ela, mas a fase só fica completa com ela. Depois de: espera só as missões escolhidas, anteriores a ela.'

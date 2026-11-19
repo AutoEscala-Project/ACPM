@@ -142,8 +142,9 @@ test.describe('Aplicação', () => {
       'Sessões', 'sessão', 'Desfazer', 'Escala de Voo', 'Por avião e sala', 'Avião / sala', 'Aviões e salas', 'o botão ao lado de Alunos',
       // O "+" do mapa fica ao lado do nome da linha; o Operador não muda os Cursos nem os limites da lei; a coluna de quem
       // vem é "Vem" (a data aberta não é sempre hoje); o filtro das habilitações tem várias marcas; o peso vem antes do
-      // curso em Alunos
+      // curso em Alunos; Cursos mostra um curso de cada vez (sem "todos")
       'no fim de cada linha', 'altera tudo e opera a escala', 'o interruptor de quem vem', 'filtro por habilitação', 'Nome, CANAC, curso e peso',
+      'mostra um curso só ou todos',
       // Recursos em duas vistas (não mais em duas partes), com as categorias marcadas na barra
       'A aba tem duas partes', 'Escolha uma categoria para ver só a frota dela', 'na Frota, em “Vale para todas as datas”',
       'Veja na aba Recursos se ele está ligado']) {
@@ -177,7 +178,9 @@ test.describe('Aplicação', () => {
       // sem filtros
       'em Disponibilidade do dia, desligue', 'abre o Cadastro com o formulário', 'Buscar matrícula', '3 de 26 recursos',
       'os recursos de alguma das marcadas', 'Categoria: C152 ou PA-34', 'Filtro das categorias',
-      'nunca para a ordem no hangar', 'cujo botão mostra o mesmo número', 'Veja em Recursos, na Disponibilidade do dia, se ele está ligado']) {
+      'nunca para a ordem no hangar', 'cujo botão mostra o mesmo número', 'Veja em Recursos, na Disponibilidade do dia, se ele está ligado',
+      // Cursos: um de cada vez, o índice das fases, as fases recolhidas e os alunos por fase
+      'um curso de cada vez', 'índice das fases', 'Recolher todas', 'Abrir todas', 'agrupados pela fase em que estão']) {
       expect(texto, novo).toContain(novo);
     }
 

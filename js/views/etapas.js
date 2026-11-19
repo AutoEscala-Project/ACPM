@@ -1,5 +1,6 @@
 // A missão do curso no dia: a próxima missão de cada aluno e as outras do curso (para a Demanda), o progresso (para
-// Alunos) e o resultado de cada voo (para a escala). Os resultados e o programa dos cursos chegam com a data
+// Alunos), a fase de cada aluno (para a aba Cursos) e o resultado de cada voo (para a escala). Os resultados e o
+// programa dos cursos chegam com a data
 // (S.resultados: a situação de cada missão e os registros da data; S.programa: as tabelas dos cursos) e não são gravados
 // no dia. A próxima missão e o progresso seguem as regras do programa (js/progresso.js).
 import { MIS } from '../config.js';
@@ -151,6 +152,16 @@ export function progressoDoAluno(stu) {
   if (!total) return '';
   const fase = faseAtual && indiceDoPrograma(programaParaInferir()).percurso(curso.sigla).fases.length > 1 ? ` · ${esc(rotuloDaFase(faseAtual))}` : '';
   return `<small class="progresso" data-dica="progresso">${aprovadas}/${total}${fase}${proxima ? ` · próxima ${esc(rotuloDaMissao(curso, proxima))}` : ' · concluído'}</small>`;
+}
+
+// Na aba Cursos (os alunos por fase): a fase em que o aluno está no curso dele (a do progresso: a primeira fase aberta em
+// que falta missão) e se ele concluiu. null quando o progresso não se conhece: sem os programas ou os resultados, ou no
+// curso sem missões que contam
+export function faseDoAluno(stu) {
+  const curso = cursoDoAluno(stu);
+  if (!curso) return null;
+  const { total, faseAtual, concluido } = progressoNoCurso(curso, situacao(), stu.id);
+  return total ? { fase: faseAtual, concluido } : null;
 }
 
 // O curso do resultado de um voo da escala (a sigla): o da missão do pedido (o aluno pode ter trocado de curso depois que

@@ -135,6 +135,10 @@ test.describe('Conteúdo gravado malicioso', () => {
     // A primeira fase tem módulo: o título dela fica sob o do módulo (h5); a segunda, sem módulo, é h4
     await expect(pp.locator('.fase-cab :is(h4, h5)')).toHaveText([`Programa ${XA}`, `Fase 2 ${XA}`]);
     await expect(pp.locator('h4.modulo')).toHaveText([`Módulo ${XS}`]);
+    // E também no botão do curso, no alto, e no índice das fases (o módulo e as fases)
+    await expect(page.locator('#cur-ver-PP')).toHaveText(`PP · Piloto Privado ${X}`);
+    await expect(pp.locator('.indice-das-fases .indice-modulo-nome')).toHaveText([`Módulo ${XS}`]);
+    await expect(pp.locator('.indice-das-fases a')).toHaveText([`Programa ${XA}`, `Fase 2 ${XA}`]);
     await expect(pp.locator('[data-cfa="nome"]').first()).toHaveValue(`Programa ${XA}`);
     await expect(pp.locator('[data-cfa="modulo"]').first()).toHaveValue(`Módulo ${XS}`);
     await expect(pp.locator('details.alteracoes li').first()).toContainText(`Admin ${X} · PP: alterado ${X}`);
@@ -219,9 +223,11 @@ test.describe('Conteúdo gravado malicioso', () => {
   test('valores fora do formato gravados no dia, na escala, no histórico e no programa não viram HTML nem quebram a tela', async ({ page }) => {
     await abrirCom(page, documentos(adulterados));
     await percorrer(page);
-    // Do programa adulterado, a aba Cursos mostra o que está no formato: o curso de sigla certa, com as fases e as missões
-    // de id, código e tipo certos (a corrigida com o recurso e as horas padrão)
-    await expect(page.locator('#cursos .curso')).toHaveCount(3);
+    // Do programa adulterado, a aba Cursos mostra o que está no formato: os cursos de sigla certa (um botão para cada, no
+    // alto, e um curso de cada vez na tela), com as fases e as missões de id, código e tipo certos (a corrigida com o
+    // recurso e as horas padrão)
+    await expect(page.locator('#cursos .seg-dos-cursos button')).toHaveText([`PP · Piloto Privado ${X}`, 'PC · Piloto Comercial', 'INVA · Instrutor de Voo']);
+    await expect(page.locator('#cursos .curso')).toHaveCount(1);
     const pp = page.locator('#cursos .curso[data-curso="PP"]');
     await expect(pp.locator('.fase')).toHaveCount(2);
     await expect(pp.locator('[data-cf="codigo"]')).toHaveCount(3);
