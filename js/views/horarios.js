@@ -1,7 +1,7 @@
 // Horários de decolagem na aba Recursos. Cada categoria mostra um resumo (o modelo, quantos horários e os horários da
 // manhã e da tarde, com o da janela fechada nesta data riscado) e um botão "Editar". O editor abre na própria linha,
 // com uma cópia da lista (o rascunho): o modelo, os horários com ✕, um campo em que Enter põe o horário e o efeito nos
-// pedidos antes de salvar. Nada muda até "Salvar" (js/main.js); "Cancelar" e Esc descartam.
+// pedidos antes de salvar. Nada muda até "Salvar" (js/eventos/recursos.js); "Cancelar" e Esc descartam.
 //
 // O editor é desenhado ao abrir. Cada mudança no rascunho atualiza só os horários, o modelo marcado, o efeito e o erro:
 // o foco fica onde está, e o efeito (aria-live) e o erro (role="alert") continuam os mesmos elementos, para o leitor de
@@ -20,13 +20,14 @@ const MODELOS = [['janelas', 'Janelas do dia'], ['de30', 'De 30 em 30 min'], ['p
 const PERIODOS = [['manha', 'Manhã'], ['tarde', 'Tarde']];
 const ID_DO_ERRO = 'hr-erro', ID_DA_DICA = 'hr-dica';
 
-// O rascunho do editor aberto: { cat, lista, erro, erroDoCampo }, ou null. erroDoCampo: o erro é do horário digitado
-// (o campo fica marcado como inválido); o de tirar o último horário não é
+// O rascunho do editor aberto: { cat, lista, base, erro, erroDoCampo }, ou null. base: a lista da categoria quando o
+// editor abriu (Salvar só grava enquanto ela é a da categoria: js/eventos/recursos.js). erroDoCampo: o erro é do horário
+// digitado (o campo fica marcado como inválido); o de tirar o último horário não é
 let rascunho = null;
 // A última escrita pedida no alerta: uma escrita adiada que ficou para trás não é feita
 let escritasNoAlerta = 0;
 export const editorDosHorariosAberto = () => Boolean(rascunho);
-export const rascunhoDosHorarios = () => (rascunho ? { cat: rascunho.cat, lista: [...rascunho.lista] } : null);
+export const rascunhoDosHorarios = () => (rascunho ? { cat: rascunho.cat, lista: [...rascunho.lista], base: [...rascunho.base] } : null);
 
 const listaDe = cat => (S.horarios && S.horarios[cat]) || [];
 const quantos = n => `${n} ${n === 1 ? 'horário' : 'horários'}`;
@@ -150,7 +151,7 @@ function atualizarEditor() {
 
 export function abrirEditorDosHorarios(cat) {
   if (!CATEGORIAS_COM_HORARIOS.includes(cat)) return;
-  rascunho = { cat, lista: [...listaDe(cat)], erro: '', erroDoCampo: false };
+  rascunho = { cat, lista: [...listaDe(cat)], base: [...listaDe(cat)], erro: '', erroDoCampo: false };
   rHorarios();
   $('#horarios .hr-novo').focus();
 }

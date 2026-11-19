@@ -239,6 +239,34 @@ test.describe('Recursos: horários de decolagem por categoria', () => {
     await page.locator('#role-sel').selectOption('gestor');
     await expect(page.locator('#horarios [data-act="editar-horarios"]').first()).toBeHidden();
   });
+
+  test('a lista mudou depois que o editor abriu (o histórico a reverteu): Salvar não grava o rascunho por cima, com o aviso', async ({ page }) => {
+    await abrirSintetico(page);
+    await irPara(page, 'rec');
+    const c152 = page.locator('#horarios [data-cat="C152"]');
+    async function por(hora) {
+      await editor(page).locator('.hr-novo').fill(hora);
+      await editor(page).locator('.hr-novo').press('Enter');
+      await expect(editor(page).locator('.hr-chip', { hasText: hora })).toHaveCount(1);
+    }
+    await c152.locator('[data-act="editar-horarios"]').click();
+    await por('07:45');
+    await editor(page).locator('[data-act="salvar-horarios"]').click();
+    await expect(c152.locator('.horarios-qtd')).toHaveText('9 horários');
+    // O editor aberto de novo (o rascunho parte da lista com o 07:45); com ele aberto, o histórico reverte o 07:45
+    await c152.locator('[data-act="editar-horarios"]').click();
+    await por('08:45');
+    await page.locator('#btn-open-log').click();
+    await page.locator('#audit-log-list .audit-item', { hasText: 'Horários de decolagem do C152' }).locator('[data-act="rev-log"]').click();
+    await page.keyboard.press('Escape');
+    await expect(editor(page)).toBeVisible();
+    await editor(page).locator('[data-act="salvar-horarios"]').click();
+    await expect(page.locator('#toast-box')).toContainText('Os horários do C152 mudaram depois que o editor abriu: nada foi salvo. Confira a lista e edite de novo.');
+    await expect(editor(page)).toHaveCount(0);
+    // Fica a lista revertida: sem o 07:45 e sem o 08:45 do rascunho
+    await expect(c152.locator('.horarios-modelo')).toHaveText('Janelas do dia');
+    await expect(c152.locator('.horarios-qtd')).toHaveText('8 horários');
+  });
 });
 
 test.describe('Recursos: o editor dos horários pelo teclado e no leitor de tela', () => {

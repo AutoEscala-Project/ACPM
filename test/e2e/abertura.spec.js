@@ -662,4 +662,54 @@ test.describe('O que fica aberto quando a data abre passa a mostrar os dados del
     expect(erros).toEqual([]);
     await contexto.close();
   });
+
+  // Os horários são do cadastro, e a data que abre traz o cadastro lido de novo, com a versão dele. O rascunho do editor
+  // parte da lista de quando ele abriu: com a lista igual, ele vale na data nova; mudada por outra pessoa, gravá-lo apagaria
+  // o horário dela sem conflito (a versão é a nova). Nada é salvo, e o editor fecha com o aviso
+  test('o editor dos horários aberto numa troca de data: com a lista igual, Salvar grava; mudada por outra pessoa, nada é salvo', async ({ browser }) => {
+    const servidor = servidorComFilas();
+    const contexto = await novoContexto(browser, servidor);
+    const page = await contexto.newPage();
+    const erros = vigiarErros(page);
+    await entrar(page, CONTAS.operador);
+    await irPara(page, 'rec');
+    const c152 = page.locator('#horarios [data-cat="C152"]');
+    const editor = page.locator('#horarios .horarios-editor');
+    const doC152 = () => servidor.banco.get('cadastro').conteudo.horarios.C152;
+    async function por(hora) {
+      await editor.locator('.hr-novo').fill(hora);
+      await editor.locator('.hr-novo').press('Enter');
+      await expect(editor.locator('.hr-chip', { hasText: hora })).toHaveCount(1);
+    }
+    // Ninguém mais muda os horários: o rascunho atravessa a troca de data e grava na data nova
+    await c152.locator('[data-act="editar-horarios"]').click();
+    await por('07:45');
+    await page.locator('#dt-prox').click();
+    await expect(page.locator('#dt-rotulo')).toContainText('12/11');
+    await editor.locator('[data-act="salvar-horarios"]').click();
+    await expect(editor).toHaveCount(0);
+    await expect.poll(doC152).toContain(465);
+    await expect.poll(() => servidor.historico.map(h => [h.data, h.descricao.split(':')[0]])).toEqual([[DEPOIS, 'Horários de decolagem do C152']]);
+
+    // Outra pessoa põe 09:15 nos horários do C152. O editor, aberto antes, atravessa a volta para amanhã, cuja leitura traz
+    // o cadastro com o 09:15
+    await c152.locator('[data-act="editar-horarios"]').click();
+    await por('08:45');
+    const { conteudo } = servidor.banco.get('cadastro');
+    servidor.alterarPorOutraPessoa('cadastro', { ...conteudo, horarios: { ...conteudo.horarios, C152: [...conteudo.horarios.C152, 555].sort((a, b) => a - b) } });
+    await page.locator('#dt-ant').click();
+    await expect(page.locator('#dt-rotulo')).toContainText('11/11');
+    await page.locator('#toast-box').evaluate(caixa => caixa.replaceChildren());
+    await editor.locator('[data-act="salvar-horarios"]').click();
+    await expect(page.locator('#toast-box')).toContainText('Os horários do C152 mudaram depois que o editor abriu: nada foi salvo. Confira a lista e edite de novo.');
+    await expect(editor).toHaveCount(0);
+    await expect(c152.locator('[data-act="editar-horarios"]')).toBeFocused();
+    // A lista, na tela e no servidor, é a de agora: com o 09:15 da outra pessoa, sem o 08:45 do rascunho
+    await expect(c152.locator('.hr', { hasText: '09:15' })).toHaveCount(1);
+    await expect(c152.locator('.hr', { hasText: '08:45' })).toHaveCount(0);
+    expect([doC152().includes(555), doC152().includes(525)]).toEqual([true, false]);
+    expect(servidor.historico).toHaveLength(1);
+    expect(erros).toEqual([]);
+    await contexto.close();
+  });
 });
