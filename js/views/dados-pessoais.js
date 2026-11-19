@@ -6,7 +6,7 @@ import { ApiClient } from '../storage.js';
 import { veDadosPessoais } from '../perfis.js';
 import { isGestor, insBy, stuBy, DATA } from '../state.js';
 import { esc, hojeISO } from '../format.js';
-import { $ } from '../dom.js';
+import { $, abrirGaveta } from '../dom.js';
 
 const DADOS = { aluno: {}, instrutor: {} };
 const pessoa = (tipo, id) => (tipo === 'aluno' ? stuBy(id) : insBy(id));
@@ -57,6 +57,8 @@ export async function abrirPainelDeDados(tipo, id, botao) {
   const pedido = ++leitura.pedido;
   leitura = { pedido, atualizadoEm: null, lida: false };
   desenharPainel(tipo, id, botao, p, DADOS[tipo][id] || {});
+  // Por cima das outras gavetas abertas; redesenhado com os dados lidos, fica onde está
+  abrirGaveta($('#painel-dados'));
   habilitarPainel(false, 'Lendo os dados…');
   let dados;
   try {
@@ -100,7 +102,6 @@ function desenharPainel(tipo, id, botao, p, dados) {
       </div>
       ${dados.atualizado_em ? `<p class="h">Atualizado em ${quando(dados.atualizado_em)}${dados.atualizado_por ? ` por ${esc(dados.atualizado_por)}` : ''}.</p>` : ''}
     </form>`;
-  painel.hidden = false;
 }
 
 export function fecharPainelDeDados(devolverFoco = false) {

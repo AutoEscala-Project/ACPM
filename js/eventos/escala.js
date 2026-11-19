@@ -3,7 +3,7 @@
 import { gravarAlteracao, logChange, gravarEscalaCalculada, aindaNaoAbriu, dadosLidos } from '../actions.js';
 import { opcoesDeCategoria } from '../categorias.js';
 import { OPCOES_DE_BURACOS, OPCOES_DE_HORARIOS, normalizarCriterios } from '../criterios.js';
-import { $, showToast, anunciar } from '../dom.js';
+import { $, showToast, anunciar, gavetaDoEsc } from '../dom.js';
 import { exp, pdf, planilha } from '../export.js';
 import { pinoDoVoo, fixosAoMudarStatus, fixosAoReabrir } from '../fixos.js';
 import { hm } from '../format.js';
@@ -18,7 +18,7 @@ import { rAlu } from '../views/cadastros.js';
 import { rDem } from '../views/demanda.js';
 import { pedirDetalheDoStatus, dialogoDeStatusAberto } from '../views/dialogo-status.js';
 import { rOut, botaoDoInstrutor, seletorDeInstrutor, abrirPopupDoMapa, fecharPopupDoMapa, popupDoMapaAberto, reposicionarPopupDoMapa, tabNoPopup } from '../views/escala.js';
-import { abrirPainelDeReparo, fecharPainelDeReparo, opcaoDoPainel, painelDeReparoAberto } from '../views/reparo.js';
+import { abrirPainelDeReparo, fecharPainelDeReparo, opcaoDoPainel } from '../views/reparo.js';
 
 // Popup do voo no mapa da escala: a barra abre e fecha; Esc (o foco volta para a barra) e um clique fora fecham, e ele
 // acompanha a barra quando a página ou o mapa rolam
@@ -258,6 +258,7 @@ document.addEventListener('click', e => {
   if (escolhas.length) rDem();
   showToast(opcao.soltar ? 'Voo solto: o app escalou de novo.' : 'Sugestão aplicada: o voo continua fixo.', 'ok');
 });
+// O Esc fecha a gaveta quando ela é a de cima ou tem o foco (js/dom.js)
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape' && painelDeReparoAberto() && !dialogoDeStatusAberto()) fecharPainelDeReparo(true);
+  if (e.key === 'Escape' && gavetaDoEsc(e) === $('#painel-reparo') && !dialogoDeStatusAberto()) fecharPainelDeReparo(true);
 });

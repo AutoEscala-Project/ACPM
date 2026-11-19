@@ -6,7 +6,7 @@ import { HABILITACOES, nomeDaHabilitacao } from '../habilitacoes.js';
 import { FROTA_INICIAL, habilitacaoDoAviao } from '../frota.js';
 import { esc, hm, opts, LIMITE_DO_NOME, numeroBr } from '../format.js';
 import { S, DATA, insBy, isGestor, voosQueVoam } from '../state.js';
-import { $ } from '../dom.js';
+import { $, abrirGaveta } from '../dom.js';
 import { botaoDeDica } from '../dicas.js';
 import { canacDe } from './dados-pessoais.js';
 import { normalizarLimites } from '../limites.js';
@@ -224,10 +224,11 @@ export function rLimites() {
     <button type="button" class="btn quiet" data-limites-padrao${desligado}>Voltar aos valores da lei</button>`;
 }
 
+// O painel abre por cima das outras gavetas abertas (também quando já estava aberto, com outro instrutor)
 export function abrirPainelDoInstrutor(id) {
   const painel = $('#painel-instrutor');
   painel.dataset.id = id;
-  painel.hidden = false;
+  abrirGaveta(painel);
   rPainelDoInstrutor();
   $('#btn-fechar-painel-instrutor').focus();
 }
