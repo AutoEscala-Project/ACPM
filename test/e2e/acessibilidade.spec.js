@@ -896,6 +896,48 @@ test.describe('O leitor de tela e o teclado', () => {
     await expect(page.locator('#historico')).toBeHidden();
   });
 
+  // As duas regras juntas: o diálogo do agendamento é a camada de cima (o Esc é só dele), e as gavetas embaixo dele
+  // fecham uma de cada vez, a que abriu por último primeiro. Nada é gravado
+  for (const [nome, gaveta, focoNaGaveta, abrirGaveta] of GAVETAS) {
+    test(`o Esc fecha só a camada de cima: com ${nome} e o Histórico abertos, o primeiro fecha o diálogo do agendamento, o segundo, o Histórico, o terceiro, ${nome}`, async ({ page }) => {
+      await abrirComDuasGavetas(page, { abrirGaveta, focoNaGaveta });
+      await abrirEscala(page);
+      // As gavetas podem cobrir o botão: pelo teclado
+      await page.locator('#btn-agendar').focus();
+      await page.keyboard.press('Enter');
+      const dialogo = page.locator('#dlg-agendar');
+      await expect(dialogo).toBeVisible();
+      await page.keyboard.press('Escape');
+      await expect(dialogo).toBeHidden();
+      await expect(page.locator('#historico')).toBeVisible();
+      await expect(page.locator(gaveta)).toBeVisible();
+      await expect(page.locator('#btn-agendar')).toBeFocused();
+      await page.keyboard.press('Escape');
+      await expect(page.locator('#historico')).toBeHidden();
+      await expect(page.locator(gaveta)).toBeVisible();
+      await page.keyboard.press('Escape');
+      await expect(page.locator(gaveta)).toBeHidden();
+      await expect(page.locator('#log-cnt')).toHaveText('0');
+    });
+  }
+
+  // Na aba Cursos, com o foco num campo do programa (fora das gavetas), vale a mesma regra: o Esc fecha a gaveta que abriu
+  // por último, e o foco fica no campo
+  test('o Esc fecha só a gaveta de cima também na aba Cursos: com o foco no nome do curso, o primeiro fecha o Histórico, o segundo, os Dados pessoais', async ({ page }) => {
+    const [, gaveta, focoNaGaveta, abrirGaveta] = GAVETAS[0];
+    await abrirComDuasGavetas(page, { abrirGaveta, focoNaGaveta });
+    await irPara(page, 'cur');
+    const nome = page.locator('#cursos .curso[data-curso="PP"] [data-cc="nome"]');
+    await nome.focus();
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#historico')).toBeHidden();
+    await expect(page.locator(gaveta)).toBeVisible();
+    await expect(nome).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(page.locator(gaveta)).toBeHidden();
+    await expect(page.locator('#log-cnt')).toHaveText('0');
+  });
+
   for (const [tema, nome] of [['light', 'claro'], ['dark', 'escuro']]) {
     test(`os textos sobre cor (os status, o ✕ armado, o botão do popup, o selo da aprovação) contrastam, no tema ${nome}`, async ({ page }) => {
       await abrirComExemplo(page);
