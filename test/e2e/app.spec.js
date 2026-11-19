@@ -154,7 +154,9 @@ test.describe('Aplicação', () => {
       // O agendamento na Escala (mover e encaixar, as turmas, as alternativas, a prévia, os avisos), o voo agendado na
       // Demanda, as alterações dos cursos fora do Histórico e o peso aceito
       'Encaixar o voo', 'Mover o voo', 'Entrar na turma das', 'Horários livres', 'O que muda na escala', 'Agendar mesmo assim',
-      'agendado 10:10 · PR-VOB', 'fora da regra', 'ao lado do nome de cada linha', 'não entram no Histórico da data', 'de 1 a 300 kg']) {
+      'agendado 10:10 · PR-VOB', 'fora da regra', 'ao lado do nome de cada linha', 'não entram no Histórico da data', 'de 1 a 300 kg',
+      // Acima do limite de voos locais do horário, todo voo local agendado pede a confirmação (não só o 7º)
+      'mais de 6 voos locais no mesmo horário']) {
       expect(texto, novo).toContain(novo);
     }
 
