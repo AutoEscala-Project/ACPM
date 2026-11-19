@@ -1,7 +1,9 @@
-// Aba Recursos, em duas partes. Nesta data: as janelas de operação, a tabela dos aviões e simuladores (disponível ou em
-// manutenção, as horas até a revisão de 50 horas e o que o avião voa na escala do dia; uma categoria ou todas, e cada
-// categoria recolhe e abre) e a ordem no hangar. Para todas as datas: os horários de decolagem (js/views/horarios.js) e
-// a frota, com o Retirar.
+// Aba Recursos, em duas vistas (js/views/vistas.js). A Disponibilidade do dia vale para a data aberta no topo: as janelas
+// de operação, a tabela dos aviões e simuladores (disponível ou em manutenção, as horas até a revisão de 50 horas e o que
+// o avião voa na escala do dia; cada categoria recolhe e abre) e, ao lado dela, a ordem no hangar. O Cadastro vale para
+// todas as datas: a frota, com os atributos e o Retirar, e os horários de decolagem (js/views/horarios.js). A busca pela
+// matrícula e as categorias (js/views/filtros-dos-recursos.js) valem para a tabela, a frota e os horários, nunca para o
+// hangar; a barra diz quantos recursos aparecem.
 import { WIN, NI, AIRCRAFT_EQ_TYPES, SIM_EQ_TYPES, REVISAO_H } from '../config.js';
 import { normalizarHangar } from '../hangar.js';
 import { FROTA_INICIAL, ATRIBUTOS_DO_RECURSO, atributoVale } from '../frota.js';
@@ -9,9 +11,17 @@ import { S, RES, voosQueVoam, isGestor } from '../state.js';
 import { $, trocarConteudo } from '../dom.js';
 import { hm, fmtH, esc } from '../format.js';
 import { rHorarios } from './horarios.js';
+import { recursoAVista, filtrandoRecursos } from './filtros-dos-recursos.js';
+import { mostrarVista } from './vistas.js';
 
 // Os grupos usam os ids das categorias do filtro (js/categorias.js)
 const GRUPOS = [...AIRCRAFT_EQ_TYPES.map(tipo => ({ id: tipo, rotulo: tipo, tipos: [tipo] })), { id: 'sim', rotulo: 'Simuladores', tipos: SIM_EQ_TYPES }];
+// Os recursos de cada grupo, na ordem da frota do cadastro: todos e os que os filtros deixam à vista (o grupo sem nenhum à
+// vista não aparece)
+const gruposDaFrota = () => GRUPOS.map(grupo => {
+  const recursos = grupo.tipos.flatMap(tipo => (S.frota || []).filter(f => f.tipo === tipo));
+  return { ...grupo, recursos, aVista: recursos.filter(recursoAVista) };
+}).filter(g => g.aVista.length);
 
 // Categorias recolhidas (continuam assim quando a escala é refeita, até recarregar a página)
 const recolhidos = new Set();
@@ -60,20 +70,25 @@ function linha(recurso, grupo, voadas, revisao) {
   </tr>`;
 }
 
-// A frota, por tipo: refeita junto com a escala (as horas voadas no dia e onde cada avião para)
+// Quando os filtros não deixam nenhum recurso: o motivo e "Limpar filtros" (sem data-act: vale também para o Gestor). O
+// id do botão faz o foco de quem usa o teclado continuar nele quando a tabela ou a frota são refeitas
+const NENHUM = 'Nenhum recurso com esses filtros.';
+const botaoDeLimpar = lugar => `<button type="button" class="btn quiet" id="limpar-filtros-${lugar}" data-limpar-recursos>Limpar filtros</button>`;
+const semResultado = () => filtrandoRecursos() && (S.frota || []).length > 0;
+
+// A frota, por tipo: refeita junto com a escala (as horas voadas no dia e onde cada avião para). O cabeçalho do grupo
+// conta todos os recursos da categoria, também os que os filtros escondem
 export function rRevisao() {
   const resumo = (RES && RES.revisao) || {};
   const voadas = {};
   voosQueVoam().forEach(o => { voadas[o.r] = (voadas[o.r] || 0) + o.h; });
-  const categoria = ($('#flt-rec-cat') && $('#flt-rec-cat').value) || '';
-  trocarConteudo($('#revisao'), GRUPOS.filter(g => !categoria || g.id === categoria).map(({ id, rotulo, tipos }) => {
-    // A frota do cadastro, na ordem de cada tipo (uma categoria sem recursos não aparece)
-    const recursos = tipos.flatMap(tipo => (S.frota || []).filter(f => f.tipo === tipo));
-    if (!recursos.length) return '';
+  const grupos = gruposDaFrota().map(({ id, rotulo, recursos, aVista }) => {
     const disponiveis = recursos.filter(f => S.av[f.reg]).length;
     return `<tr class="grupo"><td colspan="5"><button type="button" class="grupo-btn" data-recolher-grupo="${id}" aria-expanded="${!recolhidos.has(id)}"><svg class="ico seta" aria-hidden="true"><use href="#i-baixo"/></svg>${rotulo} <small>${disponiveis} de ${recursos.length} disponíveis</small></button></td></tr>` +
-      recursos.map(f => linha(f, id, voadas[f.reg] || 0, resumo[f.reg])).join('');
-  }).join(''));
+      aVista.map(f => linha(f, id, voadas[f.reg] || 0, resumo[f.reg])).join('');
+  });
+  trocarConteudo($('#revisao'), grupos.length || !semResultado() ? grupos.join('')
+    : `<tr class="sem-resultado"><td colspan="5" class="h"><div class="sem-resultado-texto">${NENHUM} ${botaoDeLimpar('revisao')}</div></td></tr>`);
 }
 
 // Os atributos marcados de um recurso, como etiquetas (a dica explica cada um)
@@ -91,28 +106,51 @@ const editorDeAtributos = f => `<fieldset class="atributos-recurso"><legend clas
 function rFrota() {
   const lista = $('#frota');
   if (!lista) return;
-  trocarConteudo(lista, GRUPOS.map(({ rotulo, tipos }) => {
-    const recursos = tipos.flatMap(tipo => (S.frota || []).filter(f => f.tipo === tipo));
-    if (!recursos.length) return '';
-    return `<li class="grupo"><h5>${rotulo} <small>${recursos.length} ${recursos.length === 1 ? 'recurso' : 'recursos'}</small></h5><ul class="frota-itens">` +
-      recursos.map(f => `<li class="frota-item${atributosAbertos === f.reg ? ' aberto' : ''}" data-r="${esc(f.reg)}">
+  const grupos = gruposDaFrota().map(({ rotulo, recursos, aVista }) =>
+    `<li class="grupo"><h5>${rotulo} <small>${recursos.length} ${recursos.length === 1 ? 'recurso' : 'recursos'}</small></h5><ul class="frota-itens">` +
+      aVista.map(f => `<li class="frota-item${atributosAbertos === f.reg ? ' aberto' : ''}" data-r="${esc(f.reg)}">
         ${isGestor() ? `<b>${esc(f.reg)}</b>` : `<button type="button" class="frota-reg" data-act="atributos-recurso" data-id="${esc(f.reg)}" aria-expanded="${atributosAbertos === f.reg}" aria-label="Atributos de ${esc(f.reg)}" title="Atributos (Só Parafuso, Só VFR, Habilitação própria)">${esc(f.reg)}</button>`}${AIRCRAFT_EQ_TYPES.includes(f.tipo) ? '' : ` <small class="sm">${esc(f.tipo)}</small>`}${etiquetasDoRecurso(f)}
         <button class="btn quiet rev ret edit-only" data-act="retirar-recurso" data-id="${esc(f.reg)}" aria-label="Retirar ${esc(f.reg)} da frota">Retirar</button>
         ${atributosAbertos === f.reg ? editorDeAtributos(f) : ''}
-      </li>`).join('') + '</ul></li>';
-  }).join(''));
+      </li>`).join('') + '</ul></li>');
+  trocarConteudo(lista, grupos.length || !semResultado() ? grupos.join('')
+    : `<li class="sem-resultado h">${NENHUM} ${botaoDeLimpar('frota')}</li>`);
+}
+
+// Quantos recursos aparecem: "3 de 26 recursos" com algum filtro, "26 recursos" sem nenhum. A região é de status (o leitor
+// de tela dita quando o texto muda); na digitação da busca, ela espera a pessoa parar
+let esperaDaContagem = null;
+function contarRecursos(esperar) {
+  const frota = S.frota || [];
+  const nome = frota.length === 1 ? 'recurso' : 'recursos';
+  const texto = !frota.length ? '' : filtrandoRecursos() ? `${frota.filter(recursoAVista).length} de ${frota.length} ${nome}` : `${frota.length} ${nome}`;
+  clearTimeout(esperaDaContagem);
+  const escrever = () => {
+    const lugar = $('#rec-contagem');
+    if (lugar && lugar.textContent !== texto) lugar.textContent = texto;
+  };
+  if (esperar) esperaDaContagem = setTimeout(escrever, esperar);
+  else escrever();
+}
+
+// Os filtros mudaram: a tabela, a frota, os horários e a contagem (o hangar e as janelas não mudam)
+export function aplicarFiltrosDosRecursos({ esperar = 0 } = {}) {
+  rRevisao();
+  rFrota();
+  rHorarios();
+  contarRecursos(esperar);
 }
 
 export function rRec() {
+  mostrarVista('rec');
   trocarConteudo($('#wins'), WIN.map((w, i) => `<label class="janela${S.win[i] ? '' : ' off'}"><input type="checkbox" class="sw" data-a="win" data-i="${i}"${S.win[i] ? ' checked' : ''}><b>${w}</b> <small>${i == NI ? 'noturno' : (i + 1) + 'º'}</small></label>`).join(''));
-  rHorarios();
-  rRevisao();
-  rFrota();
   rHangar();
+  aplicarFiltrosDosRecursos();
 }
 
 // A ordem dos aviões no hangar, da frente para o fundo, com o que cada um voa na escala da data; os botões aparecem com
-// o mouse ou o foco (como no Rodízio)
+// o mouse ou o foco (como no Rodízio). Sempre com todos os aviões: os filtros não valem aqui (Subir e Descer andam na
+// lista inteira)
 export function rHangar() {
   const lista = $('#hangar');
   if (!lista) return;

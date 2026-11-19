@@ -1,6 +1,6 @@
 // Selos de atenção nas abas: avisos da escala, aviões parados ou perto da revisão de 50 horas e pedidos da agenda
 // que ainda não estão na demanda.
-import { test, expect, abrir, irPara, AMANHA, entrar } from './fixtures.js';
+import { test, expect, abrir, irPara, irParaVista, AMANHA, entrar } from './fixtures.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
 import { instalarSupabaseFalso, documentosAtuais, CONTAS } from './supabase-falso.js';
 import { estadoSintetico } from '../helpers/estado.js';
@@ -27,10 +27,25 @@ test.describe('Selos nas abas', () => {
     await expect(page.locator('#selo-esc')).toBeHidden();
   });
 
-  test('Recursos: aviões parados ou com menos de 5 h até a revisão de 50 horas', async ({ page }) => {
+  // A tabela dos aviões fica na Disponibilidade do dia: o selo diz onde e aparece também no botão dela (quem está no
+  // Cadastro vê onde olhar)
+  test('Recursos: aviões parados ou com menos de 5 h até a revisão de 50 horas, também no botão da Disponibilidade do dia', async ({ page }) => {
     await abrir(page, { estado: cenario({ horas: { 'PR-BTB': 47, 'PR-IGU': 10 } }) });
     await expect(page.locator('#selo-rec')).toHaveText('1');
+    await expect(page.locator('#selo-rec')).toHaveAttribute('title', '1 avião parado ou perto da revisão de 50 horas (Recursos › Disponibilidade do dia)');
     await expect(page.locator('#selo-esc')).toBeHidden();
+    await irParaVista(page, 'rec', 'cadastro');
+    const doDia = page.locator('#s-rec [data-vista-rec="dia"] #selo-rec-dia');
+    await expect(doDia).toBeVisible();
+    await expect(doDia).toHaveText('1');
+    await expect(doDia).toHaveClass(/\baviso\b/);
+    await expect(doDia).toHaveAttribute('title', '1 avião parado ou perto da revisão de 50 horas');
+    // A revisão feita: os dois somem
+    await irParaVista(page, 'rec', 'dia');
+    await page.locator('#eqs tr[data-r="PR-BTB"] [data-act="revisao"]').click();
+    await page.locator('#eqs tr[data-r="PR-BTB"] [data-act="revisao"]').click();
+    await expect(page.locator('#selo-rec')).toBeHidden();
+    await expect(doDia).toBeHidden();
   });
 
   test('Agenda: pedidos da data que ainda não estão na demanda; somem depois de importar', async ({ page, context }) => {

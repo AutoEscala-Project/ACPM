@@ -143,7 +143,10 @@ test.describe('Aplicação', () => {
       // O "+" do mapa fica ao lado do nome da linha; o Operador não muda os Cursos nem os limites da lei; a coluna de quem
       // vem é "Vem" (a data aberta não é sempre hoje); o filtro das habilitações tem várias marcas; o peso vem antes do
       // curso em Alunos
-      'no fim de cada linha', 'altera tudo e opera a escala', 'o interruptor de quem vem', 'filtro por habilitação', 'Nome, CANAC, curso e peso']) {
+      'no fim de cada linha', 'altera tudo e opera a escala', 'o interruptor de quem vem', 'filtro por habilitação', 'Nome, CANAC, curso e peso',
+      // Recursos em duas vistas (não mais em duas partes), com as categorias marcadas na barra
+      'A aba tem duas partes', 'Escolha uma categoria para ver só a frota dela', 'na Frota, em “Vale para todas as datas”',
+      'Veja na aba Recursos se ele está ligado']) {
       expect(texto, antigo).not.toContain(antigo);
     }
     await expect(manual.locator('h3')).toHaveText(['Primeiros passos: a rotina do operador', 'Perfis de acesso', 'As abas',
@@ -169,7 +172,10 @@ test.describe('Aplicação', () => {
       // Alunos com a barra de Instrutores: as colunas na mesma ordem, o filtro dos cursos (a regra "algum dos marcados"),
       // o link para a Demanda (o filtro dos cursos é um só nas duas abas) e o cartão do celular
       'Nome, CANAC, peso e curso', 'Filtro dos cursos', 'aparecem os alunos de algum dos marcados', 'Curso: PP ou PC', 'Abrir a Demanda',
-      'aparecem os pedidos dos alunos de algum dos cursos marcados', 'O filtro dos cursos é um só nas duas abas', 'um cartão por pessoa']) {
+      'aparecem os pedidos dos alunos de algum dos cursos marcados', 'O filtro dos cursos é um só nas duas abas', 'um cartão por pessoa',
+      // Recursos: as duas vistas, a busca pela matrícula, as categorias e o hangar sem filtros
+      'em Disponibilidade do dia, desligue', 'abre o Cadastro com o formulário', 'Buscar matrícula', '3 de 26 recursos',
+      'nunca para a ordem no hangar', 'cujo botão mostra o mesmo número', 'Veja em Recursos, na Disponibilidade do dia, se ele está ligado']) {
       expect(texto, novo).toContain(novo);
     }
 
@@ -183,7 +189,8 @@ test.describe('Aplicação', () => {
   test('o manual tem a largura das outras páginas e fica centralizado', async ({ page }) => {
     await abrir(page);
     await irPara(page, 'rec');
-    const outra = await page.locator('#s-rec .pn').first().boundingBox();
+    // O quadro das janelas de operação (Recursos › Disponibilidade do dia), da largura da página
+    const outra = await page.locator('#s-rec .vista-dia > .pn').first().boundingBox();
     await page.locator('#btn-manual').click();
     const cartao = await page.locator('#s-manual .pn').first().boundingBox();
     expect(Math.round(cartao.x)).toBe(Math.round(outra.x));

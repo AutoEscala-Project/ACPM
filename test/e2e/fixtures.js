@@ -90,8 +90,8 @@ export async function irPara(page, aba) {
   await expect(page.locator(`#s-${aba}`)).toBeVisible();
 }
 
-// Abre uma vista de uma aba (Instrutores: 'dia' ou 'cadastro'): a aba e o botão da vista no controle segmentado do alto
-// dela. O Playwright só age no que está à vista: o que fica na outra vista pede a troca antes
+// Abre uma vista de uma aba (Instrutores e Recursos: 'dia' ou 'cadastro'): a aba e o botão da vista no controle
+// segmentado do alto dela. O Playwright só age no que está à vista: o que fica na outra vista pede a troca antes
 export async function irParaVista(page, aba, vista) {
   await irPara(page, aba);
   await page.locator(`#s-${aba} [data-vista-${aba}="${vista}"]`).click();
@@ -118,11 +118,12 @@ export const filtrarHabilitacoes = (page, valores, opcoes) => marcarNoFiltro(pag
 // O filtro dos cursos de Alunos ('alu') ou da Demanda ('dem'): os valores são as siglas ('PP', 'PC'…) e 'sem-curso'
 export const filtrarCursos = (page, aba, valores, opcoes) => marcarNoFiltro(page, `flt-${aba}-cur`, valores, opcoes);
 
-// As telas que não são a de abertura de uma aba: as outras vistas (Instrutores › Cadastro), os painéis abertos dos filtros
-// de vários valores (o das habilitações, em Instrutores, e o dos cursos, em Alunos e na Demanda, com duas marcas: o botão
-// diz as duas) e as tabelas que os filtros deixam sem nenhuma linha (com "Limpar filtros"). Os testes do celular e da
-// acessibilidade, que conferem cada aba como ela abre, conferem também estas: conferir(nome) roda em cada uma. No fim, a
-// busca e as marcas voltam a vazias
+// As telas que não são a de abertura de uma aba: as outras vistas (Instrutores › Cadastro, Recursos › Cadastro), os
+// painéis abertos dos filtros de vários valores (o das habilitações, em Instrutores, e o dos cursos, em Alunos e na
+// Demanda, com duas marcas: o botão diz as duas), as tabelas (e a frota) que os filtros deixam sem nenhuma linha (com
+// "Limpar filtros") e Recursos com uma categoria marcada. Os testes do celular e da acessibilidade, que conferem cada aba
+// como ela abre, conferem também estas: conferir(nome) roda em cada uma. No fim, a busca e as marcas voltam a vazias, e
+// Recursos, à Disponibilidade do dia
 export async function percorrerVistasEFiltros(page, conferir) {
   await irParaVista(page, 'ins', 'cadastro');
   await conferir('instrutores: cadastro');
@@ -149,6 +150,21 @@ export async function percorrerVistasEFiltros(page, conferir) {
     await conferir(`${nome}: o filtro dos cursos aberto, com duas marcas`);
     await filtrarCursos(page, aba, []);
   }
+  await irParaVista(page, 'rec', 'cadastro');
+  await conferir('recursos: cadastro');
+  await page.locator('#flt-rec-cat input[value="PA-34"]').check();
+  await expect(page.locator('#rec-contagem')).toHaveText(/^\d+ de \d+ recursos$/);
+  await conferir('recursos: cadastro, uma categoria');
+  await page.locator('#flt-rec-mat').fill('nenhum assim');
+  await expect(page.locator('#frota li.sem-resultado')).toBeVisible();
+  await expect(page.locator('#rec-contagem')).toHaveText(/^0 de \d+ /);
+  await conferir('recursos: cadastro, nenhum com os filtros');
+  await irParaVista(page, 'rec', 'dia');
+  await nenhumComOsFiltros(page, 'revisao', 'rec');
+  await conferir('recursos: disponibilidade do dia, nenhum com os filtros');
+  await page.locator('#limpar-filtros-revisao').click();
+  await expect(page.locator('#flt-rec-cat input:checked')).toHaveCount(0);
+  await expect(page.locator('#flt-rec-mat')).toHaveValue('');
 }
 
 // A tabela que os filtros deixam sem nenhuma linha: a linha que diz por quê; a contagem já escrita (ela espera a

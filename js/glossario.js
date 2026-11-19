@@ -67,17 +67,17 @@ export const GLOSSARIO = {
 
   // Recursos
   'horario-em-janela-fechada': { aba: 'Recursos', termo: 'Horário apagado', texto: 'O horário cai numa janela de operação fechada nesta data: nesta data, nenhum voo sai nele. Ele continua na lista para as outras datas.' },
-  janelas: { aba: 'Recursos', termo: 'Janelas de operação', texto: 'Os períodos do dia em que a escola opera nesta data. Período fechado não recebe voo nem Ground.' },
-  'horarios-de-decolagem': { aba: 'Recursos', termo: 'Horários de decolagem', texto: 'Os horários em que cada categoria pode decolar (o PA-34 tem os seus). Valem para todas as datas.' },
+  janelas: { aba: 'Recursos', termo: 'Janelas de operação', texto: 'Os períodos do dia em que a escola opera nesta data (Recursos › Disponibilidade do dia). Período fechado não recebe voo nem Ground.' },
+  'horarios-de-decolagem': { aba: 'Recursos', termo: 'Horários de decolagem', texto: 'Os horários em que cada categoria pode decolar (o PA-34 tem os seus). Valem para todas as datas e ficam em Recursos › Cadastro.' },
   'horas-disponiveis': {
     aba: 'Recursos', termo: 'Horas disponíveis',
     texto: `Quanto o avião ainda pode voar até a revisão de ${REVISAO_H} horas, no início desta data. Sem horas para um voo de ${MENOR_VOO_H} h, ele para e a escala avisa.`
   },
-  hangar: { aba: 'Recursos', termo: 'Ordem no hangar', texto: 'Da frente para o fundo: entre aviões livres, o da frente sai primeiro.' },
+  hangar: { aba: 'Recursos', termo: 'Ordem no hangar', texto: 'Da frente para o fundo, sempre com todos os aviões (Recursos › Disponibilidade do dia): entre aviões livres, o da frente sai primeiro.' },
   noturno: { aba: 'Escala', termo: 'Noturno', texto: 'Missão de dois dias: sai às 17:30 para BH (1 h de translado) e voa 3 h de noturno em BH; no dia seguinte, a volta decola de BH às 07:30, e o instrutor, o aluno e o avião ficam livres às 10:10.' },
-  'so-vfr': { aba: 'Recursos', termo: 'Só VFR', texto: 'Avião não homologado IFR: voa as missões VFR, e nenhum voo IFR (IFR, cheques IFR, o noturno do PC) vai para ele.' },
-  'habilitacao-propria': { aba: 'Recursos', termo: 'Habilitação própria', texto: 'O recurso exige do instrutor uma habilitação só dele, além da do tipo (por exemplo, o PR-VOM). Marque-a em Instrutores › Cadastro › Editar habilitações.' },
-  'so-parafuso': { aba: 'Recursos', termo: 'Só Parafuso', texto: 'Avião reservado para a missão de Parafuso no C152: as outras missões não usam ele, e o Parafuso só voa nele.' },
+  'so-vfr': { aba: 'Recursos', termo: 'Só VFR', texto: 'Avião não homologado IFR: voa as missões VFR, e nenhum voo IFR (IFR, cheques IFR, o noturno do PC) vai para ele. Marque na frota, em Recursos › Cadastro.' },
+  'habilitacao-propria': { aba: 'Recursos', termo: 'Habilitação própria', texto: 'O recurso (marcado na frota, em Recursos › Cadastro) exige do instrutor uma habilitação só dele, além da do tipo (por exemplo, o PR-VOM). Marque-a em Instrutores › Cadastro › Editar habilitações.' },
+  'so-parafuso': { aba: 'Recursos', termo: 'Só Parafuso', texto: 'Avião reservado para a missão de Parafuso no C152: as outras missões não usam ele, e o Parafuso só voa nele. Marque na frota, em Recursos › Cadastro.' },
 
   // Instrutores
   'vem-nesta-data': { aba: 'Instrutores', termo: 'Vem', texto: 'Marcado, o instrutor vem nesta data (a aberta no topo, que nem sempre é hoje) e pode ser escalado nos períodos marcados ao lado.' },

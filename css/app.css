@@ -434,7 +434,9 @@ table.fids-tabela { width: 100%; min-width: 860px; border-collapse: collapse; fo
 .tabela-escala tbody tr[hidden], table.frota tr[hidden] { display: none !important; }
 /* Filtros com rótulo visível (Categoria e Avião / sala começam os dois em "Todos") */
 .flt-rotulo { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--mu); }
-.frota-cab { margin: 16px 0 8px; }
+/* Recursos: as categorias são caixas de marcar na barra (uma ou outra; nenhuma marcada, todas) */
+.flt-categorias { flex-wrap: wrap; gap: 0 12px; }
+.flt-categorias .chk { color: var(--ink); font-size: 14px; }
 /* Horários de decolagem: uma linha de resumo por categoria; o editor abre na própria linha */
 .horarios { display: flex; flex-direction: column; gap: 12px; }
 .horarios-cat { display: flex; flex-direction: column; gap: 4px; padding-bottom: 10px; border-bottom: 1px solid var(--ln); }
@@ -472,7 +474,6 @@ table.fids-tabela { width: 100%; min-width: 860px; border-collapse: collapse; fo
 .erro-campo { flex-basis: 100%; margin: 0; color: var(--er); }
 .erro-campo:empty { display: none; }
 table.frota .acoes-frota { white-space: nowrap; text-align: right; }
-.frota-cab .frota-titulo { margin: 0; }
 /* O mapa rola dentro do próprio painel quando não cabe na tela */
 .mapa { overflow-x: auto; }
 .mapa .tl-wrap { min-width: 720px; }
@@ -485,6 +486,10 @@ table.frota .acoes-frota { white-space: nowrap; text-align: right; }
   #s-esc .flt-rotulo, #flt-esc-q { flex: 1 1 140px; min-width: 0; }
   .flt-rotulo select { flex: 1; min-width: 0; }
   .bar .cresce { display: none; }
+  /* Recursos: a busca ocupa a linha dela; as categorias, a seguinte (e quebram em duas, se não couberem); a contagem e
+     "+ Novo recurso" vêm depois */
+  #flt-rec-mat { flex: 1 1 140px; min-width: 0; }
+  .flt-categorias { flex: 1 1 100%; }
   .resumo .st, .resumo .parado { width: 100%; justify-content: space-between; gap: 8px; }
   details.caixa { min-width: 0; flex-basis: 100%; }
   .tabela-escala { overflow: visible; border: 0; background: transparent; }
@@ -728,8 +733,7 @@ label.alvo { display: inline-flex; align-items: center; justify-content: center;
 }
 .janela small { color: var(--mu); font-weight: 500; }
 .janela.off { color: var(--mu); }
-.frota-titulo { margin-top: 16px; }
-/* Recursos em duas partes: nesta data e para todas as datas */
+/* Recursos em duas vistas: a disponibilidade do dia (nesta data) e o cadastro (para todas as datas) */
 .rec-parte { display: flex; flex-direction: column; gap: 12px; margin-bottom: 24px; }
 .rec-parte > .pn { margin: 0; }
 /* Os filhos do flex encolhem (a tabela larga rola dentro da caixa dela, e a página não rola de lado) */
@@ -737,7 +741,18 @@ label.alvo { display: inline-flex; align-items: center; justify-content: center;
 .rec-parte-titulo { margin: 4px 0 0; padding-bottom: 4px; border-bottom: 2px solid var(--ln2); font-size: 18px; }
 .rec-parte-titulo small { font: 400 13px 'Barlow', sans-serif; color: var(--mu); margin-left: 6px; }
 .rec-parte h4 { margin: 0 0 8px; font: 600 15px 'Barlow Semi Condensed', sans-serif; }
-.rec-parte .frota-cab h4 { margin: 0; }
+/* Na disponibilidade do dia, a ordem no hangar fica ao lado da tabela dos aviões a partir de 1.100 px (embaixo, nas telas
+   menores). A coluna da tabela encolhe, e a tabela larga rola dentro da caixa dela */
+.rec-dia { display: grid; gap: 12px; }
+.rec-dia > * { min-width: 0; }
+.rec-dia > .pn { margin: 0; }
+.rec-aeronaves > p.h { margin-bottom: 0; }
+@media (min-width: 1100px) {
+  .rec-dia { grid-template-columns: minmax(0, 1fr) minmax(260px, 300px); align-items: start; }
+}
+/* Quando os filtros não deixam nenhum recurso na frota ou nenhuma categoria nos horários de decolagem */
+.frota-cadastro > li.sem-resultado { padding: 2px 0; }
+.horarios > .sem-resultado { margin: 0; }
 .frota-cadastro { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
 .frota-cadastro h5 { margin: 0 0 4px; font: 600 14px 'Barlow Semi Condensed', sans-serif; }
 .frota-cadastro h5 small { color: var(--mu); font-weight: 500; margin-left: 6px; }

@@ -29,4 +29,25 @@ test.describe('Ordem no hangar', () => {
     await irPara(page, 'rec');
     expect((await posicoes(page))[0]).toBe('PR-VOB');
   });
+
+  // A busca e as categorias de Recursos não valem no hangar: ele mostra sempre todos os aviões (fica ao lado da tabela
+  // filtrada), e Subir troca o avião com o vizinho da lista inteira, também com o que os filtros escondem na tabela
+  test('os filtros de Recursos não valem no hangar: todos os aviões continuam, e Subir troca com o vizinho da lista inteira', async ({ page }) => {
+    await abrir(page, { estado: cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000)] }) });
+    await irPara(page, 'rec');
+    const antes = await posicoes(page);
+    await page.locator('#flt-rec-cat input[value="PA-34"]').check();
+    await page.locator('#flt-rec-mat').fill('vom');
+    await expect(page.locator('#revisao tr[data-r]')).toHaveCount(1);
+    await expect(page.locator('#rec-contagem')).toHaveText('1 de 26 recursos');
+    expect(await posicoes(page)).toEqual(antes);
+    // O PR-VOM (PA-34) sobe um lugar: troca com o PR-VOY, um C172 que a tabela filtrada não mostra
+    const i = antes.indexOf('PR-VOM');
+    expect(antes[i - 1]).toBe('PR-VOY');
+    await page.locator('#hangar li[data-id="PR-VOM"] [data-act="hangar-subir"]').click();
+    const depois = [...antes];
+    [depois[i - 1], depois[i]] = ['PR-VOM', 'PR-VOY'];
+    await expect.poll(() => posicoes(page)).toEqual(depois);
+    await expect(page.locator('#hangar li[data-id="PR-VOM"] .pos')).toHaveText(`${i}º`);
+  });
 });

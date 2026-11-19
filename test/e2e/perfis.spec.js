@@ -111,6 +111,34 @@ test.describe('Perfis de acesso', () => {
     await expect(page.locator('#dem tr[data-k="d"]:visible')).toHaveAttribute('data-id', '1001');
   });
 
+  // Em Recursos também: a busca pela matrícula e as caixas das categorias (.flt-ctrl, sem data-f nem data-a), as duas
+  // vistas e o "Limpar filtros"; "+ Novo recurso" não aparece
+  test('o Gestor busca a matrícula, marca as categorias e troca de vista em Recursos; "Limpar filtros" mostra todos de novo', async ({ page }) => {
+    await abrir(page, { estado: cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000)] }), url: './?role=gestor' });
+    await expect(page.locator('body')).toHaveAttribute('data-role', 'gestor');
+    await irPara(page, 'rec');
+    await expect(page.locator('#s-rec')).toHaveAttribute('data-vista', 'dia');
+    await expect(page.locator('#btn-novo-recurso')).toBeHidden();
+    const busca = page.locator('#flt-rec-mat'), pa34 = page.locator('#flt-rec-cat input[value="PA-34"]');
+    await expect(busca).toBeEnabled();
+    await expect(page.locator('#flt-rec-cat input')).toHaveCount(4);
+    for (const caixa of await page.locator('#flt-rec-cat input').all()) await expect(caixa).toBeEnabled();
+    await busca.fill('vob');
+    await expect(page.locator('#revisao tr[data-r]')).toHaveCount(1);
+    await expect(page.locator('#rec-contagem')).toHaveText('1 de 26 recursos');
+    await busca.fill('');
+    await pa34.check();
+    await expect(page.locator('#revisao tr[data-r]')).toHaveCount(3);
+    await irParaVista(page, 'rec', 'cadastro');
+    await expect(page.locator('#frota li.frota-item')).toHaveCount(3);
+    await busca.fill('nenhum assim');
+    await page.locator('#limpar-filtros-frota').click();
+    await expect(busca).toBeFocused();
+    await expect(pa34).not.toBeChecked();
+    await expect(page.locator('#frota li.frota-item')).toHaveCount(26);
+    await expect(page.locator('#rec-contagem')).toHaveText('26 recursos');
+  });
+
   // O link não leva a escala no endereço (nomes, pesos e horas). Sem o servidor, a escala fica só neste navegador;
   // no app publicado, o link leva só a data (test/e2e/compartilhado.spec.js)
   test('neste navegador (sem servidor), Compartilhar explica que o link da escala é do app publicado', async ({ page }) => {
