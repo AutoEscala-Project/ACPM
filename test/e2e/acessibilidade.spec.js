@@ -725,6 +725,74 @@ test.describe('O leitor de tela e o teclado', () => {
     await expect(painel).toBeHidden();
   });
 
+  // As Sugestões de um conflito (como em reparo.spec.js): a escala aprovada e o instrutor do voo do Aluno 1000 desligado
+  // na data. Devolve o botão "Sugestões", com a gaveta aberta
+  async function abrirSugestoes(page) {
+    await abrir(page, { estado: cenario({ ins: [instrutor(1, 9), instrutor(2, 9)], stu: [aluno(1000, { p1: 390, p2: -1 }), aluno(1001, { p1: 500, p2: -1 })] }) });
+    await abrirEscala(page);
+    await confirmar(page, '#btn-aprovar');
+    const doVoo = (await page.locator('#out tbody tr:not(.win)', { hasText: 'Aluno 1000' }).locator('.c-instr').innerText()).trim();
+    await irPara(page, 'ins');
+    await page.locator(`#inst-dia tr[data-id="${doVoo.endsWith('01') ? 1 : 2}"] [data-f="on"]`).uncheck();
+    await abrirEscala(page);
+    const botao = page.locator('#out details.conflitos [data-reparo]');
+    await botao.click();
+    await expect(page.locator('#painel-reparo')).toBeVisible();
+    return botao;
+  }
+
+  test('o Esc fecha só a camada de cima: com as Sugestões abertas, o primeiro fecha o diálogo do agendamento, o segundo, a gaveta', async ({ page }) => {
+    const botao = await abrirSugestoes(page);
+    await page.locator('#btn-agendar').focus();
+    await page.keyboard.press('Enter');
+    const dialogo = page.locator('#dlg-agendar');
+    await expect(dialogo).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(dialogo).toBeHidden();
+    await expect(page.locator('#painel-reparo')).toBeVisible();
+    await expect(page.locator('#btn-agendar')).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#painel-reparo')).toBeHidden();
+    await expect(botao).toBeFocused();
+  });
+
+  test('o Esc fecha só a camada de cima: com as Sugestões abertas, o primeiro fecha o diálogo do status (o status fica), o segundo, a gaveta', async ({ page }) => {
+    await abrirSugestoes(page);
+    const status = page.locator('#out tbody tr:not(.win)', { hasText: 'Aluno 1001' }).locator('select[data-f="fstatus"]');
+    const anterior = await status.inputValue();
+    await status.selectOption('Cancelado');
+    const dialogo = page.locator('#dlg-status');
+    await expect(dialogo).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(dialogo).toBeHidden();
+    await expect(page.locator('#painel-reparo')).toBeVisible();
+    await expect(status).toHaveValue(anterior);
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#painel-reparo')).toBeHidden();
+  });
+
+  // Os Dados pessoais continuam abertos nas outras abas, como as habilitações: o diálogo do agendamento é a camada de cima
+  test('o Esc fecha só a camada de cima: com os Dados pessoais abertos, o primeiro fecha o diálogo do agendamento, o segundo, o painel (nada é gravado)', async ({ page }) => {
+    await abrir(page, { estado: cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000)] }) });
+    await irPara(page, 'alu');
+    await page.locator('#alu tr[data-id="1000"] [data-dados]').click();
+    const painel = page.locator('#painel-dados');
+    await expect(painel).toBeVisible();
+    await abrirEscala(page);
+    await expect(painel).toBeVisible();
+    await page.locator('#btn-agendar').focus();
+    await page.keyboard.press('Enter');
+    const dialogo = page.locator('#dlg-agendar');
+    await expect(dialogo).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(dialogo).toBeHidden();
+    await expect(painel).toBeVisible();
+    await expect(page.locator('#btn-agendar')).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(painel).toBeHidden();
+    await expect(page.locator('#log-cnt')).toHaveText('0');
+  });
+
   // Qualquer diálogo é a camada de cima, não só o do status: o da sessão expirada aparece sozinho, na gravação, e o Esc
   // não o fecha. A gravação com a sessão expirada responde 401 de propósito
   test('o Esc fecha só a camada de cima: com o diálogo da sessão aberto sobre o popup do mapa, nem o Esc nem um clique no diálogo fecham o popup', async ({ browser }) => {
