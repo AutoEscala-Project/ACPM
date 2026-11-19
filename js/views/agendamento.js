@@ -95,7 +95,8 @@ function desenharFormulario() {
     definir('agd-kg-instrutor', f.peso.instrutor);
     campo('agd-peso-resumo').textContent = f.peso.resumo;
   }
-  campo('agd-contexto').textContent = f.contextoTexto || 'O primeiro horário livre.';
+  // A descrição do diálogo (aria-describedby): de onde ele abriu, desde antes do aluno, e depois o horário escolhido
+  campo('agd-contexto').textContent = f.contextoTexto || '';
   // O título diz o que acontece: um voo novo, o voo de hoje que muda de lugar ou o que entra na escala
   campo('agd-titulo').textContent = TITULO[f.acao] || TITULO.agendar;
   // Sem o aluno, os outros campos esperam; a duração fixa (o Ground, o Noturno) fica travada

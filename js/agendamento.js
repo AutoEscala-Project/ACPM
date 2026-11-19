@@ -592,15 +592,21 @@ const pesoDoCampo = texto => (String(texto ?? '').trim() === '' ? 0 : pesoDigita
 // o valor escolhido, os textos de apoio, os bloqueios de formato e a proposta (o que aplicar)
 export function formularioDoAgendamento(estado, base, ambiente, contexto, escolhas = {}, tocados = new Set()) {
   const f = { contexto, formato: [], notas: [], alunos: opcoesDeAluno(estado, base, ambiente, contexto), aluno: null, acao: null, proposta: null };
+  const frota = frotaDo(estado);
+  // A turma de Ground do contexto ("+ Aluno na turma"): o horário parte dela, na sala
+  const daTurma = contexto.classKey ? base.out.find(o => o.isGround && o.classKey === contexto.classKey && ativo(o, estado.fStatus)) || null : null;
+  const turmaDoContexto = daTurma ? { classKey: daTurma.classKey, mis: daTurma.mis, a: daTurma.a, ins: daTurma.ins } : null;
+  // A descrição do diálogo diz de onde ele abriu desde antes do aluno (sem o horário, que vem dele): a linha do recurso
+  // ou do instrutor, o horário da lista, o clique no mapa, a turma ou a data
+  f.contextoTexto = textoDoContexto(contexto, ambiente, {
+    r: contexto.r, tipo: contexto.r && contexto.r !== GROUND_REG ? (recursoDaFrota(frota, contexto.r) || {}).tipo || null : null,
+    turma: turmaDoContexto, instrutor: contexto.insId ? estado.ins.find(i => i.id === contexto.insId) || null : null
+  });
   const stu = estado.stu.find(s => s.id === escolhas.aluno) || null;
   if (!stu) { f.formato.push(BLOQUEIO_SEM_ALUNO); return f; }
   f.aluno = stu.id;
   f.alunoInfo = infoDoAluno(estado, base, ambiente, stu);
   const curso = stu.curso || null;
-  const frota = frotaDo(estado);
-  // A turma de Ground do contexto ("+ Aluno na turma"): o horário parte dela, na sala
-  const daTurma = contexto.classKey ? base.out.find(o => o.isGround && o.classKey === contexto.classKey && ativo(o, estado.fStatus)) || null : null;
-  const turmaDoContexto = daTurma ? { classKey: daTurma.classKey, mis: daTurma.mis, a: daTurma.a, ins: daTurma.ins } : null;
   const ctx = turmaDoContexto ? { ...contexto, r: GROUND_REG, minuto: turmaDoContexto.a, perto: true } : contexto;
   const recursoAtual = (escolhas.recurso && escolhas.recurso !== GROUND_REG ? recursoDaFrota(frota, escolhas.recurso) : escolhas.recurso)
     || (ctx.r && ctx.r !== GROUND_REG ? recursoDaFrota(frota, ctx.r) : ctx.r) || null;
@@ -785,9 +791,10 @@ export function formularioDoAgendamento(estado, base, ambiente, contexto, escolh
   };
   if (lim && a !== null && alunoKg !== null && insKg !== null) f.peso.resumo = resumoDoPeso({ stuKg: alunoKg, insKg, tipo, minutos, mis, lim });
 
-  // O contexto, no alto do diálogo
-  const recursoTrocado = !turmaDoContexto && ctx.r && rec.r && ctx.r !== rec.r ? ctx.r : null;
-  f.contextoTexto = textoDoContexto(ctx, ambiente, { r: rec.r, tipo, a, recursoTrocado, mis, turma: turmaDoContexto });
+  // O contexto, no alto do diálogo, com o horário escolhido. O recurso do contexto que não serve à missão dá lugar a
+  // outro, e o contexto diz por quê (o que o operador trocou, ele mesmo escolheu)
+  const recursoTrocado = !turmaDoContexto && !tocados.has('recurso') && ctx.r && rec.r && ctx.r !== rec.r ? ctx.r : null;
+  f.contextoTexto = textoDoContexto(ctx, ambiente, { r: rec.r, tipo, a, recursoTrocado, mis, turma: turmaDoContexto, instrutor: x });
   if ((mis === 'Noturno' || mis === 'Voo Solo') && a !== null && inicial !== a && !horarioDoOperador) {
     f.notas.push({ codigo: 'horario-da-missao', texto: `O ${mis} sai às ${hm(a)}.` });
   }
@@ -832,23 +839,35 @@ function resumoDoPeso({ stuKg, insKg, tipo, minutos, mis, lim }) {
   return `${kg}: ${minuscula(textoDoCombustivel(r))}`;
 }
 
-function textoDoContexto(contexto, ambiente, { r, tipo, a, recursoTrocado, mis, turma = null }) {
-  const onde = r ? `${nomeDoRecurso(r)}${r === GROUND_REG ? '' : ` · ${tipo}`}` : '';
+// A descrição do diálogo: de onde ele abriu e o horário que o formulário escolheu (a: o horário; null: nenhum aberto
+// para a missão; sem ele, o aluno ainda não foi escolhido). A linha de um recurso ("PR-VOB · C152 · o primeiro horário
+// livre: 06:30") ou de um instrutor ("Com Instrutor 07 · …"), o horário da lista ("… a partir das 10:10: 10:10"), o
+// clique no mapa ("… clique perto das 10:25 → 10:10 (horários do C152)"), a turma de Ground ou a barra da Escala (a data)
+function textoDoContexto(contexto, ambiente, { r = null, tipo = null, a, recursoTrocado = null, mis = null, turma = null, instrutor = null }) {
+  const onde = r ? `${nomeDoRecurso(r)}${r === GROUND_REG || !tipo ? '' : ` · ${tipo}`}` : '';
+  // O instrutor da linha (o "+" ou o clique na linha dele no mapa)
+  const com = instrutor && (contexto.origem === 'instrutor' || (contexto.origem === 'mapa' && contexto.insId)) ? `Com ${instrutor.nm}` : '';
   // Sem horário (nenhum aberto para a missão na data), o contexto diz isso, sem o horário pela metade
-  const quando = a === null ? null : hm(a);
-  const SEM_HORARIO = 'nenhum horário de decolagem aberto';
-  let texto;
+  const comAluno = a !== undefined;
+  const quando = comAluno && a !== null ? hm(a) : null;
+  const horario = texto => (!comAluno ? texto : quando ? `${texto}: ${quando}` : 'nenhum horário de decolagem aberto');
+  let partes;
   // A turma de Ground de onde o diálogo abriu ("+ Aluno na turma"): a missão, o horário e o instrutor dela
-  if (turma) texto = `Turma de ${turma.mis} das ${hm(turma.a)} com ${turma.ins}`;
-  else if (contexto.origem === 'mapa') texto = [onde, quando ? `clique perto de ${hm(contexto.minuto)} → ${quando} (${horariosDoTipo(tipo)})` : SEM_HORARIO].filter(Boolean).join(' · ');
-  else if (contexto.origem === 'periodo') texto = [onde, quando ? `o primeiro horário livre a partir de ${hm(contexto.desde)}: ${quando}` : SEM_HORARIO].filter(Boolean).join(' · ');
+  if (turma) partes = [`Turma de ${turma.mis} das ${hm(turma.a)} com ${turma.ins}`];
+  else if (contexto.origem === 'mapa') {
+    const clique = `clique perto das ${hm(contexto.minuto)}`;
+    partes = [com, onde, !comAluno ? clique : quando ? `${clique} → ${quando} (${horariosDoTipo(tipo)})` : horario(clique)];
+  } else if (contexto.origem === 'periodo') partes = [onde, horario(`o primeiro horário livre a partir das ${hm(contexto.desde)}`)];
+  else if (contexto.origem === 'recurso') partes = [onde, horario('o primeiro horário livre')];
+  else if (contexto.origem === 'instrutor') partes = [com, horario('o primeiro horário livre')];
   else {
     const data = ambiente.data && ambiente.hoje ? rotuloDaData(ambiente.data, ambiente.hoje).dia : '';
-    const horario = !quando ? SEM_HORARIO
-      : contexto.desde !== null && ambiente.data === ambiente.hoje ? `o primeiro horário livre a partir de agora: ${quando}` : `o primeiro horário livre: ${quando}`;
-    texto = [maiuscula(data), horario].filter(Boolean).join(' · ');
+    partes = [data, horario(contexto.desde !== null && ambiente.data === ambiente.hoje ? 'o primeiro horário livre a partir de agora' : 'o primeiro horário livre')];
   }
-  return recursoTrocado ? `${texto}. O ${nomeDoRecurso(recursoTrocado)} não serve ao ${mis}: o voo vai ${noRecurso(r)}.` : texto;
+  const texto = maiuscula(partes.filter(Boolean).join(' · '));
+  if (!recursoTrocado) return texto;
+  const doContexto = recursoTrocado === GROUND_REG ? 'A sala de Ground' : `O ${nomeDoRecurso(recursoTrocado)}`;
+  return `${texto}. ${doContexto} não serve ao ${mis}: o voo vai ${noRecurso(r)}.`;
 }
 
 // ---------------------------------------------------------------------------------------------------------------------

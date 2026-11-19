@@ -111,6 +111,36 @@ describe('Agendamento: os padrões do formulário', () => {
     assert.equal(formulario.formato[0].texto, 'Escolha o aluno: a missão, o horário e o peso vêm dele.');
   });
 
+  // O contexto é a descrição do diálogo (aria-describedby): ele diz de onde o diálogo abriu desde antes do aluno, e
+  // depois, com o horário que o formulário escolheu
+  it('a descrição do diálogo diz de onde ele abriu, antes e depois do aluno: a barra, a linha, o horário da lista, o clique e a turma', () => {
+    const estado = cenario({ ins: [instrutor(1, 9), instrutor(2, 9), instrutor(7, 9)], stu: [
+      aluno(1000, { p1: 390, p2: -1 }, { curso: 'PP' }), aluno(1001, { fly: false }, { curso: 'PP' }), ...[1002, 1003].map(id => aluno(id, { ...GROUND_C152, p1: 500, p2: -1 }))
+    ] });
+    const turma = runAllocationEngine(estado).out.find(o => o.isGround);
+    const descricoes = contexto => [{}, { aluno: 1001 }].map(escolhas => {
+      const { formulario: f } = agendar(estado, { amb, contexto, escolhas });
+      return f.recurso ? f.contextoTexto.replaceAll(f.recurso, 'R') : f.contextoTexto;
+    });
+    assert.deepEqual(descricoes('dia'), ['Quarta-feira, 11/11 · o primeiro horário livre', 'Quarta-feira, 11/11 · o primeiro horário livre: 06:30']);
+    assert.deepEqual(descricoes('r:PR-VOB'), ['PR-VOB · C152 · o primeiro horário livre', 'R · C152 · o primeiro horário livre: 06:30']);
+    // A linha da sala de Ground, com um aluno cuja missão é um voo: o voo vai para um avião, e a descrição diz por quê
+    assert.deepEqual(descricoes('r:SALA-GROUND'), ['Sala Ground · o primeiro horário livre', 'R · C152 · o primeiro horário livre: 06:30. A sala de Ground não serve ao Voo Local: o voo vai no R.']);
+    assert.deepEqual(descricoes('i:7'), ['Com Instrutor 07 · o primeiro horário livre', 'Com Instrutor 07 · o primeiro horário livre: 06:30']);
+    assert.deepEqual(descricoes('w:2'), ['O primeiro horário livre a partir das 10:10', 'R · C152 · o primeiro horário livre a partir das 10:10: 10:10']);
+    assert.deepEqual(descricoes({ r: 'PR-VOB', minuto: 865 }), ['PR-VOB · C152 · clique perto das 14:25', 'R · C152 · clique perto das 14:25 → 14:30 (horários do C152)']);
+    assert.deepEqual(descricoes({ insId: 7, minuto: 500 }), ['Com Instrutor 07 · clique perto das 08:20', 'Com Instrutor 07 · R · C152 · clique perto das 08:20 → 08:20 (horários do C152)']);
+    assert.deepEqual(descricoes(`t:${turma.classKey}`), Array(2).fill(`Turma de Ground C152 das 08:20 com ${turma.ins}`));
+    // A linha do PR-VOB: o voo fica nele, e a descrição o diz
+    assert.equal(agendar(estado, { amb, contexto: 'r:PR-VOB', escolhas: { aluno: 1001 } }).formulario.contextoTexto, 'PR-VOB · C152 · o primeiro horário livre: 06:30');
+    assert.equal(agendar(estado, { amb, contexto: { r: 'PR-VOB', minuto: 865 }, escolhas: { aluno: 1001 } }).formulario.contextoTexto, 'PR-VOB · C152 · clique perto das 14:25 → 14:30 (horários do C152)');
+    // A linha do recurso continua como o recurso do voo (o padrão); o recurso que o operador troca não é "o que não serve"
+    const trocado = agendar(estado, { amb, contexto: 'r:PR-VOB', escolhas: { aluno: 1001, recurso: 'PR-VOC' }, tocados: ['recurso'] }).formulario;
+    assert.deepEqual([trocado.recurso, trocado.contextoTexto], ['PR-VOC', 'PR-VOC · C152 · o primeiro horário livre: 06:30']);
+    // Hoje, a barra parte de agora
+    assert.deepEqual(agendar(estado, { amb: { ...amb, hoje: DATA, agora: 600 } }).formulario.contextoTexto, 'Quarta-feira, 11/11 · o primeiro horário livre a partir de agora');
+  });
+
   it('os alunos em grupos: fora da escala, na demanda e os outros, com o curso, a próxima missão e os horários do dia', () => {
     const estado = doDia({ ins: [instrutor(1, 9)], s1000: { jan: 'h390' }, extra: {} });
     estado.stu.push(aluno(1002, { p1: 390, p2: -1, jan: 'h390' }, { bl: [1] }));
@@ -929,7 +959,7 @@ describe('Agendamento: os voos de hoje do aluno (mover e encaixar)', () => {
     const fora = cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, { ...GROUND_C152, p1: 390, p2: -1, jan: 'h390' })], janelasOff: [0] });
     const g = agendar(fora, { contexto: { r: 'PR-VOB', minuto: 600 }, escolhas: { aluno: 1000 } }).formulario;
     assert.deepEqual([g.missao, g.acao, g.recurso, g.horario], ['pedido:0', 'encaixar', 'SALA-GROUND', 610]);
-    assert.equal(g.contextoTexto, 'Sala Ground · clique perto de 10:00 → 10:10 (horários das aulas de Ground). O PR-VOB não serve ao Ground C152: o voo vai na sala de Ground.');
+    assert.equal(g.contextoTexto, 'Sala Ground · clique perto das 10:00 → 10:10 (horários das aulas de Ground). O PR-VOB não serve ao Ground C152: o voo vai na sala de Ground.');
   });
 });
 

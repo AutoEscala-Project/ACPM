@@ -51,10 +51,13 @@ test.describe('Agendar pelo mapa', () => {
     await expect(linha(page, 'PR-VOB').locator('.tl-bar')).toHaveCount(0);
     await expect(linha(page, 'PR-VOB').locator('.tl-lbl')).toHaveText('PR-VOB C152 · 0 h');
     await clicarNoMinuto(faixa(page, 'PR-VOB'), 625);
+    // A descrição do diálogo diz o clique desde antes do aluno; depois, o horário escolhido
+    await expect(dialogo(page)).toHaveAccessibleDescription('PR-VOB · C152 · clique perto das 10:25');
     await escolherAluno(page);
     await expect(page.locator('#agd-recurso')).toHaveValue('PR-VOB');
     await expect(page.locator('#agd-horario')).toHaveValue('610');
-    await expect(page.locator('#agd-contexto')).toHaveText('PR-VOB · C152 · clique perto de 10:25 → 10:10 (horários do C152)');
+    await expect(page.locator('#agd-contexto')).toHaveText('PR-VOB · C152 · clique perto das 10:25 → 10:10 (horários do C152)');
+    await expect(dialogo(page)).toHaveAccessibleDescription('PR-VOB · C152 · clique perto das 10:25 → 10:10 (horários do C152)');
     await expect(page.locator('#agd-conferencia .agd-bloqueios li')).toHaveCount(0);
     await expect(page.locator('#agd-conferencia .agd-avisos li')).toHaveCount(0);
     await agendar(page);
@@ -76,7 +79,7 @@ test.describe('Agendar pelo mapa', () => {
     await page.locator('#agd-missao').selectOption('tipo:Noturno');
     await expect(page.locator('#agd-recurso')).toHaveValue('PP-ABP');
     await expect(page.locator('#agd-horario')).toHaveValue('1050');
-    await expect(page.locator('#agd-contexto')).toHaveText('PP-ABP · C172 · clique perto de 14:00 → 17:30 (horários do C172)');
+    await expect(page.locator('#agd-contexto')).toHaveText('PP-ABP · C172 · clique perto das 14:00 → 17:30 (horários do C172)');
     await expect(page.locator('#agd-conferencia .agd-notas')).toContainText('O Noturno sai às 17:30.');
     // A volta no dia seguinte (a data aberta é amanhã) e o repouso do instrutor até ela, abaixo das 12 h da lei
     await expect(page.locator('#agd-conferencia .agd-notas li[data-codigo="noturno"]')).toHaveText('O Noturno volta em 12/11 às 07:30; o instrutor, o aluno e o avião ficam livres às 10:10.');
@@ -90,7 +93,7 @@ test.describe('Agendar pelo mapa', () => {
     await escolherAluno(page);
     await expect(page.locator('#agd-recurso')).toHaveValue('PT-JOB');
     await expect(page.locator('#agd-horario')).toHaveValue('540');
-    await expect(page.locator('#agd-contexto')).toHaveText('PT-JOB · PA-34 · clique perto de 09:10 → 09:00 (horários do PA-34)');
+    await expect(page.locator('#agd-contexto')).toHaveText('PT-JOB · PA-34 · clique perto das 09:10 → 09:00 (horários do PA-34)');
     await page.keyboard.press('Escape');
     await expect(dialogo(page)).toBeHidden();
     await expect(page.locator('#log-cnt')).toHaveText('0');
@@ -107,6 +110,8 @@ test.describe('Agendar pelo mapa', () => {
     await page.keyboard.press('Enter');
     await expect(dialogo(page)).toBeVisible();
     await expect(page.locator('#agd-aluno')).toBeFocused();
+    // A descrição do diálogo diz a linha de onde ele abriu, antes do aluno
+    await expect(dialogo(page)).toHaveAccessibleDescription('PR-VOB · C152 · o primeiro horário livre');
     await page.keyboard.press('Escape');
     await expect(dialogo(page)).toBeHidden();
     await expect(mais).toBeFocused();
@@ -118,7 +123,8 @@ test.describe('Agendar pelo mapa', () => {
     await expect(page.locator('#agd-aluno')).toHaveValue('1001');
     await expect(page.locator('#agd-recurso')).toHaveValue('PR-VOB');
     await expect(page.locator('#agd-horario')).toHaveValue('390');
-    await expect(page.locator('#agd-contexto')).toHaveText('Quarta-feira, 11/11 · o primeiro horário livre: 06:30');
+    await expect(page.locator('#agd-contexto')).toHaveText('PR-VOB · C152 · o primeiro horário livre: 06:30');
+    await expect(dialogo(page)).toHaveAccessibleDescription('PR-VOB · C152 · o primeiro horário livre: 06:30');
     await page.locator('#agd-recurso').selectOption('PP-AJS');
     await expect(page.locator('#agd-previa ul')).toContainText('Entra: Maria Silva · Voo Local · 06:30–07:30 · PP-AJS');
     await page.locator('#agd-confirmar').focus();
@@ -140,11 +146,20 @@ test.describe('Agendar pelo mapa', () => {
     await expect(linhaDoInstrutor(page, 9)).toHaveCount(0);
     // As linhas na ordem do nome
     await expect(page.locator('#out .tl-row .tl-lbl > span')).toHaveText(['Instrutor 01', 'Instrutor 02', 'Instrutor 07']);
+    // O "+" da linha: a descrição do diálogo diz o instrutor dela, antes e depois do aluno
+    await livre.locator('.tl-agendar').click();
+    await expect(dialogo(page)).toHaveAccessibleDescription('Com Instrutor 07 · o primeiro horário livre');
+    await escolherAluno(page);
+    await expect(page.locator('#agd-instrutor')).toHaveValue('7');
+    await expect(dialogo(page)).toHaveAccessibleDescription(/^Com Instrutor 07 · o primeiro horário livre: \d\d:\d\d$/);
+    await page.keyboard.press('Escape');
+    await expect(dialogo(page)).toBeHidden();
     await clicarNoMinuto(livre.locator('.tl-track'), 500);
+    await expect(dialogo(page)).toHaveAccessibleDescription('Com Instrutor 07 · clique perto das 08:20');
     await escolherAluno(page);
     await expect(page.locator('#agd-instrutor')).toHaveValue('7');
     await expect(page.locator('#agd-horario')).toHaveValue('500');
-    await expect(page.locator('#agd-contexto')).toContainText('clique perto de 08:20 → 08:20 (horários do C152)');
+    await expect(page.locator('#agd-contexto')).toHaveText(/^Com Instrutor 07 · [A-Z0-9-]+ · C152 · clique perto das 08:20 → 08:20 \(horários do C152\)$/);
     await agendar(page);
     await expect(linhaDoInstrutor(page, 7).locator('.tl-bar .tl-bar-t2')).toHaveText('Maria Silva · Voo Local');
     await expect(linhaDoInstrutor(page, 7).locator('.tl-lbl')).toHaveText('Instrutor 07 1 h');
@@ -258,7 +273,7 @@ test.describe('Agendar pelo mapa', () => {
     await expect(page.locator('#agd-recurso')).toHaveValue(r);
     await expect(page.locator('#agd-instrutor')).toHaveValue('1');
     await expect(page.locator('#agd-horario')).toHaveValue('610');
-    await expect(page.locator('#agd-contexto')).toHaveText(`${r} · C172 · clique perto de 09:00 → 10:10 (horários do C172)`);
+    await expect(page.locator('#agd-contexto')).toHaveText(`${r} · C172 · clique perto das 09:00 → 10:10 (horários do C172)`);
     await expect(page.locator('#agd-conferencia .agd-bloqueios li')).toHaveCount(0);
   });
 
@@ -300,9 +315,10 @@ test.describe('Agendar pela lista e pela turma de Ground', () => {
     const mais = periodo.locator('.win-agendar');
     await expect(mais).toHaveAccessibleName('Agendar às 10:10');
     await mais.click();
+    await expect(dialogo(page)).toHaveAccessibleDescription('O primeiro horário livre a partir das 10:10');
     await escolherAluno(page);
     await expect(page.locator('#agd-horario')).toHaveValue('610');
-    await expect(page.locator('#agd-contexto')).toContainText('o primeiro horário livre a partir de 10:10: 10:10');
+    await expect(page.locator('#agd-contexto')).toHaveText(/^[A-Z0-9-]+ · C152 · o primeiro horário livre a partir das 10:10: 10:10$/);
     await agendar(page);
     const voo = page.locator('#out tbody tr:not(.win)', { hasText: 'Maria Silva' });
     await expect(voo.locator('.c-hr')).toContainText('10:10–11:10');
@@ -321,6 +337,8 @@ test.describe('Agendar pela lista e pela turma de Ground', () => {
     await naTurma.click();
     await expect(dialogo(page)).toBeVisible();
     await expect(page.locator('#agd-aluno')).toBeFocused();
+    // A descrição do diálogo diz a turma desde antes do aluno
+    await expect(dialogo(page)).toHaveAccessibleDescription(/^Turma de Ground C152 das 08:20 com Instrutor \d\d$/);
     await page.keyboard.press('Escape');
     await expect(dialogo(page)).toBeHidden();
     await expect(popup(page)).toBeVisible();
