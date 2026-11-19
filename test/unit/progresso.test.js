@@ -12,7 +12,7 @@ import { situacaoPorMissao, situacaoDa } from '../../js/resultados.js';
 import { normalizarCursos, codigoValido } from '../../js/cursos.js';
 import { MIS } from '../../js/config.js';
 import { setS } from '../../js/state.js';
-import { etapaNaDemanda, progressoDoAluno, outraMissaoDoPedido, cursoDoResultado } from '../../js/views/etapas.js';
+import { etapaNaDemanda, progressoDoAluno, outraMissaoDoPedido, cursoDoResultado, confirmacaoDaMissao, botaoForaDaOrdem } from '../../js/views/etapas.js';
 import { mulberry32 } from '../helpers/cenarios.js';
 import { importarSolicitacoes } from '../../js/agenda.js';
 import { aluno as alunoDoCenario } from '../helpers/montar.js';
@@ -361,11 +361,35 @@ describe('Na Demanda e em Alunos', () => {
       const r = outraMissaoDoPedido(stu, stu, 0, codigo);
       return r && { ...r, missao: r.missao.id };
     };
-    assert.deepEqual(escolha(aluno(), 'TMA-05'), { missao: missao('TMA-05'), curso: 'PP', liberada: true, motivo: '' });
-    assert.deepEqual(escolha(aluno(), 'PE-04'), { missao: missao('PE-04'), curso: 'PP', liberada: false, motivo: 'falta TMA-05' });
+    assert.deepEqual(escolha(aluno(), 'TMA-05'), { missao: missao('TMA-05'), curso: 'PP', liberada: true, motivo: '', encerrado: false });
+    assert.deepEqual(escolha(aluno(), 'PE-04'), { missao: missao('PE-04'), curso: 'PP', liberada: false, motivo: 'falta TMA-05', encerrado: false });
     assert.deepEqual([escolha(aluno(), 'XX-99'), escolha(aluno({ etapa: 'PE-04', cursoDaEtapa: 'PP' }), 'PE-04')], [null, null]);
     // A missão do pedido é de outro curso (o aluno trocou de curso): a do mesmo código no curso dele continua na lista
     assert.equal(escolha(aluno({ etapa: 'PE-04', cursoDaEtapa: 'PC' }), 'PE-04').liberada, false);
+    // A confirmação: o botão, o botão armado e os motivos
+    assert.deepEqual(confirmacaoDaMissao(outraMissaoDoPedido(aluno(), aluno(), 0, 'PE-04')), { botao: 'Usar PE-04 fora da ordem', armado: 'Confirmar: PE-04 fora da ordem', motivos: 'falta TMA-05' });
+  });
+
+  // O curso encerrado é uma das regras do curso que pedem confirmação (desenho §4.9), na Demanda como no agendamento: a
+  // próxima missão (Usar) e as liberadas também pedem
+  it('no curso encerrado, a próxima missão e as liberadas pedem confirmação, com o curso nos motivos', () => {
+    abrir({ resultados: { situacao: ate('TMA-04').map(c => reg(c)), doDia: [] }, programa: [{ ...cursoPP(), ativo: false }] });
+    const stu = aluno({ fly: false });
+    const usarHtml = naDemanda(stu, 0);
+    assert.equal(usar(stu), 'Próxima: TMA-05 · Usar');
+    assert.match(usarHtml, /title="TMA-05: [^"]* \(curso PP encerrado: pede confirmação\)"/);
+    assert.deepEqual(Object.keys(outras(stu)), ['Liberadas no PP (curso encerrado: pede confirmação)', FORA]);
+    const liberada = outraMissaoDoPedido(stu, stu, 0, 'TMA-05');
+    assert.deepEqual([liberada.liberada, liberada.encerrado], [true, true]);
+    assert.deepEqual(confirmacaoDaMissao(liberada), { botao: 'Usar TMA-05 do curso encerrado', armado: 'Confirmar: TMA-05 do curso encerrado', motivos: 'curso PP encerrado' });
+    assert.deepEqual(confirmacaoDaMissao(outraMissaoDoPedido(stu, stu, 0, 'PE-04')).motivos, 'falta TMA-05; curso PP encerrado');
+    // O botão que espera a confirmação: o nome diz o aluno e os motivos; a dica é a do curso encerrado
+    const botao = botaoForaDaOrdem(stu, liberada);
+    assert.match(botao, /data-dica="curso-encerrado" data-dica-caso="TMA-05: curso PP encerrado" aria-label="Usar TMA-05 do curso encerrado para Aluno 1000 \(curso PP encerrado\)">Usar TMA-05 do curso encerrado<\/button>$/);
+    // Com o curso ativo, nada disso
+    abrir({ resultados: { situacao: ate('TMA-04').map(c => reg(c)), doDia: [] } });
+    assert.doesNotMatch(naDemanda(stu, 0), /encerrado/);
+    assert.equal(outraMissaoDoPedido(stu, stu, 0, 'TMA-05').encerrado, false);
   });
 
   it('o resultado vai para o curso da missão do pedido (o aluno trocou de curso), enquanto o pedido é essa missão', () => {

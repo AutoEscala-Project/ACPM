@@ -14,7 +14,7 @@ import { confirmado, comConfirmacao } from './confirmacao.js';
 import { aoAcionar, aoMudarCampo } from './registro.js';
 import { singleDemandRowHTML, cnt, rDem, applyDemandFilters } from '../views/demanda.js';
 import { renderAuditPanel } from '../views/escala.js';
-import { proximaDoPedido, outraMissaoDoPedido, botaoForaDaOrdem } from '../views/etapas.js';
+import { proximaDoPedido, outraMissaoDoPedido, botaoForaDaOrdem, confirmacaoDaMissao } from '../views/etapas.js';
 
 // "Limpar demanda" pede confirmação no próprio menu (dois cliques): o menu só fecha depois
 const fecharMenuMais = ligarMenu($('#btn-mais-dem'), $('#menu-mais-dem'), { fecharAoEscolher: false });
@@ -85,24 +85,31 @@ function usarMissaoDoCurso(s, target, mid, { codigo, curso, mis, eq, nb }) {
 // O pedido como ficou, para o histórico
 const missaoDoPedido = d => `${d.mis} · ${d.eq} · ${fmtDurLabel(d.nb)}`;
 
-// A próxima missão do curso: o pedido vira a missão do programa (tipo, recurso e horas) e o aluno voa
+// O curso encerrado no histórico (a missão foi confirmada assim)
+const comOCursoEncerrado = (encerrado, sigla) => (encerrado ? `, com o curso ${sigla} encerrado` : '');
+
+// A próxima missão do curso: o pedido vira a missão do programa (tipo, recurso e horas) e o aluno voa. No curso
+// encerrado, o primeiro acionamento arma o botão e o segundo confirma (como no agendamento, desenho §4.9), e o histórico
+// diz que o curso estava encerrado
 aoAcionar('usar-proxima', (b, { id, mid }) => {
   const s = stuBy(id), target = getMissionTarget(id, mid);
   const m = s && target ? proximaDoPedido(s, mid) : null;
   if (!m) return;
+  if (m.encerrado && !confirmado(b, `Confirmar: ${m.id} do curso encerrado`)) return;
   const solto = usarMissaoDoCurso(s, target, mid, { ...m, codigo: m.id });
-  gravarAlteracao('inc', `${s.nm}: ${m.id} na demanda (${missaoDoPedido(target)})${solto}`);
+  gravarAlteracao('inc', `${s.nm}: ${m.id} na demanda (${missaoDoPedido(target)})${comOCursoEncerrado(m.encerrado, m.curso)}${solto}`);
   rDem();
 });
 
 // "Outra missão do curso": a liberada vale na hora, como o Usar. A fora da ordem (a missão bloqueada pelo programa, a já
 // aprovada, a dispensada ou a que o aluno já tem em outro voo do dia) pede confirmação: o botão dela aparece armado, e
-// o segundo acionamento põe a missão no pedido; o histórico diz por que ela estava fora da ordem
+// o segundo acionamento põe a missão no pedido; o histórico diz por que ela estava fora da ordem. No curso encerrado,
+// também a liberada pede confirmação, e o histórico diz que o curso estava encerrado
 function escolherOutraMissao(t, c, s, target, mid) {
   const escolha = t.value ? outraMissaoDoPedido(s, target, mid, t.value) : null;
   if (!escolha) { trocarElemento(c, singleDemandRowHTML(s, target, mid)); return; }
   const { missao: m } = escolha;
-  if (escolha.liberada) {
+  if (escolha.liberada && !escolha.encerrado) {
     const solto = usarMissaoDoCurso(s, target, mid, { ...m, curso: escolha.curso });
     gravarAlteracao('inc', `${s.nm}: ${m.codigo} na demanda (${missaoDoPedido(target)})${solto}`);
     rDem();
@@ -111,7 +118,7 @@ function escolherOutraMissao(t, c, s, target, mid) {
   c.querySelector('[data-act="usar-fora-da-ordem"]')?.remove();
   t.insertAdjacentHTML('afterend', botaoForaDaOrdem(s, escolha));
   const botao = t.nextElementSibling;
-  confirmado(botao, `Confirmar: ${m.codigo} fora da ordem`);
+  confirmado(botao, confirmacaoDaMissao(escolha).armado);
   botao.focus();
 }
 
@@ -121,9 +128,10 @@ aoAcionar('usar-fora-da-ordem', (b, { id, mid }) => {
   // A missão já não é uma das outras do pedido (o programa ou os resultados mudaram): a linha volta a mostrar as de agora
   if (!escolha) { rDem(); return; }
   const { missao: m } = escolha;
-  if (!escolha.liberada && !confirmado(b, `Confirmar: ${m.codigo} fora da ordem`)) return;
+  if ((!escolha.liberada || escolha.encerrado) && !confirmado(b, confirmacaoDaMissao(escolha).armado)) return;
   const solto = usarMissaoDoCurso(s, target, mid, { ...m, curso: escolha.curso });
-  gravarAlteracao('inc', `${s.nm}: ${m.codigo} na demanda${escolha.liberada ? ` (${missaoDoPedido(target)})` : `, fora da ordem (${escolha.motivo})`}${solto}`);
+  const como = escolha.liberada ? ` (${missaoDoPedido(target)})` : `, fora da ordem (${escolha.motivo})`;
+  gravarAlteracao('inc', `${s.nm}: ${m.codigo} na demanda${como}${comOCursoEncerrado(escolha.encerrado, escolha.curso)}${solto}`);
   rDem();
 });
 

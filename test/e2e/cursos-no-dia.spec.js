@@ -26,15 +26,15 @@ const aprovadasAte = codigo => ORDEM.slice(0, ORDEM.indexOf(codigo) + 1).map((mi
 }));
 
 // A Maria (PP; nm: outro nome para ela) não voa ainda; o Aluno 1001 não tem curso. O cadastro e o dia já no formato
-// atual, os cursos com o PP e os resultados da Maria, neste navegador
-async function abrirComOPP(page, { resultados, pedido = {}, fixos = {}, url = './', nm = 'Maria' }) {
+// atual, os cursos com o PP (encerrado: o PP encerrado na aba Cursos) e os resultados da Maria, neste navegador
+async function abrirComOPP(page, { resultados, pedido = {}, fixos = {}, url = './', nm = 'Maria', encerrado = false }) {
   const estado = cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, { fly: false, p1: 500, p2: -1, ...pedido }, { nm, curso: 'PP' }), aluno(1001, { fly: false })] });
   estado.fixos = fixos;
   const { documentos: { cadastro }, dias } = documentosAtuais(estado, AMANHA);
   const docs = {
     acpm4_cadastro: cadastro,
     [`acpm4_dia_${AMANHA}`]: dias[AMANHA],
-    acpm4_cursos: { cursos: cursosIniciais().map(c => (c.sigla === 'PP' ? programaPP() : c)), alteracoes: [] },
+    acpm4_cursos: { cursos: cursosIniciais().map(c => (c.sigla === 'PP' ? { ...programaPP(), ...(encerrado ? { ativo: false } : {}) } : c)), alteracoes: [] },
     acpm4_resultados: resultados
   };
   await page.addInitScript(json => {
@@ -167,6 +167,47 @@ test.describe('Cursos no dia: outra missão do curso', () => {
     const linha = await naDemanda(page);
     await expect(linha.locator('[data-f="outra-missao"]')).toBeHidden();
     await expect(linha.locator('[data-act="usar-proxima"]')).toBeHidden();
+  });
+
+  // O curso encerrado é uma das regras do curso que pedem confirmação (desenho §4.9), na Demanda como no agendamento:
+  // Usar e as liberadas também pedem, e o histórico diz que o curso estava encerrado
+  test('no curso encerrado, Usar e as liberadas pedem confirmação, e o histórico diz que o curso estava encerrado', async ({ page }) => {
+    await abrirComOPP(page, { resultados: aprovadasAte('TMA-05'), encerrado: true });
+    const linha = await naDemanda(page);
+    const usar = linha.locator('[data-act="usar-proxima"]');
+    await expect(usar).toHaveText('Próxima: NAV-01 · Usar');
+    await expect(usar).toHaveAttribute('title', /\(curso PP encerrado: pede confirmação\)$/);
+    // O primeiro clique arma o botão; nada muda ainda
+    await usar.click();
+    await expect(usar).toHaveText('Confirmar: NAV-01 do curso encerrado');
+    await expect(linha.locator('.etapa')).toHaveCount(0);
+    await expect(linha.locator('[data-f="fly"]')).not.toBeChecked();
+    await expect(page.locator('#audit-log-list')).not.toContainText('NAV-01');
+    await usar.click();
+    await expect(linha.locator('.etapa')).toHaveText('NAV-01');
+    await expect(page.locator('#audit-log-list')).toContainText('Maria: NAV-01 na demanda (Navegação · C152 · 01h30 (1,5 h)), com o curso PP encerrado');
+    await expect.poll(() => pedidoGravado(page)).toEqual({ fly: true, mis: 'Navegação', eq: 'C152', etapa: 'NAV-01', cursoDaEtapa: 'PP' });
+
+    // "Outra missão…": a liberada também pede confirmação, num botão que aparece armado
+    const lista = linha.locator('[data-f="outra-missao"]');
+    await expect(lista.locator('optgroup').first()).toHaveAttribute('label', 'Liberadas no PP (curso encerrado: pede confirmação)');
+    await lista.selectOption('PE-04');
+    const botao = linha.locator('[data-act="usar-fora-da-ordem"]');
+    await expect(botao).toHaveText('Confirmar: PE-04 do curso encerrado');
+    await expect(botao).toBeFocused();
+    await expect(botao).toHaveAccessibleName('Confirmar: PE-04 do curso encerrado: Usar PE-04 do curso encerrado para Maria (curso PP encerrado)');
+    await expect(linha.locator('.etapa')).toHaveText('NAV-01');
+    await page.keyboard.press('Enter');
+    await expect(linha.locator('.etapa')).toHaveText('PE-04');
+    await expect(page.locator('#audit-log-list')).toContainText('Maria: PE-04 na demanda (Parafuso · C152 · 1 h), com o curso PP encerrado');
+
+    // A fora da ordem diz os dois motivos
+    await lista.selectOption('IN-01');
+    await expect(botao).toHaveText('Confirmar: IN-01 fora da ordem');
+    await expect(botao).toHaveAccessibleName('Confirmar: IN-01 fora da ordem: Usar IN-01 fora da ordem para Maria (já aprovada; curso PP encerrado)');
+    await page.keyboard.press('Enter');
+    await expect(linha.locator('.etapa')).toHaveText('IN-01');
+    await expect(page.locator('#audit-log-list')).toContainText('Maria: IN-01 na demanda, fora da ordem (já aprovada), com o curso PP encerrado');
   });
 });
 

@@ -30,13 +30,17 @@ const cursoDoAluno = stu => (stu.curso && indiceDoPrograma(programaParaInferir()
 
 // A próxima missão para um pedido do aluno: a primeira liberada do programa. As missões dos outros pedidos dele no dia
 // (que voam e não foram cancelados) contam como feitas e não voltam. O código vai como id: é a etapa do pedido; o curso
-// (a sigla) vai com ela (o Noturno em trechos vai pela noite, com os translados no rótulo)
+// (a sigla) vai com ela (o Noturno em trechos vai pela noite, com os translados no rótulo). encerrado: o curso foi
+// encerrado (Usar pede confirmação, como no agendamento)
 export function proximaDoPedido(stu, mid) {
   const curso = cursoDoAluno(stu);
   if (!curso) return null;
   const doDia = missoesDoDia(curso, stu, { fStatus: S.fStatus, mid: mid || 0 });
   const { padrao } = proximasMissoes(curso, situacao(), stu.id, { planejadas: doDia, exceto: doDia });
-  return padrao && { id: padrao.codigo, nome: padrao.nome, mis: padrao.mis, eq: padrao.eq, nb: padrao.nb, curso: curso.sigla, rotulo: rotuloDaMissao(curso, padrao) };
+  return padrao && {
+    id: padrao.codigo, nome: padrao.nome, mis: padrao.mis, eq: padrao.eq, nb: padrao.nb, curso: curso.sigla, rotulo: rotuloDaMissao(curso, padrao),
+    encerrado: curso.ativo === false
+  };
 }
 
 // As horas do voo da missão: a duração fixa dela vale mais que a do programa (o Noturno voa as 4 h do dia, a ida e a
@@ -74,15 +78,26 @@ function outrasMissoes(stu, d, mid) {
   return { curso, liberadas, foraDaOrdem };
 }
 
-// A missão do curso escolhida em "Outra missão do curso" para o pedido: { missao, curso (a sigla), liberada, motivo }. A
-// liberada vale na hora; a fora da ordem pede confirmação. null: ela não é uma das outras missões do pedido (o programa
-// ou os resultados mudaram)
+// A missão do curso escolhida em "Outra missão do curso" para o pedido: { missao, curso (a sigla), liberada, motivo,
+// encerrado }. A liberada vale na hora; a fora da ordem pede confirmação, e no curso encerrado, todas pedem (desenho
+// §4.9, como no agendamento). null: ela não é uma das outras missões do pedido (o programa ou os resultados mudaram)
 export function outraMissaoDoPedido(stu, d, mid, codigo) {
   const outras = outrasMissoes(stu, d, mid);
   const liberada = outras && outras.liberadas.find(x => x.missao.codigo === codigo);
   const fora = outras && !liberada && outras.foraDaOrdem.find(x => x.missao.codigo === codigo);
   if (!liberada && !fora) return null;
-  return { missao: (liberada || fora).missao, curso: outras.curso.sigla, liberada: Boolean(liberada), motivo: fora ? fora.motivo : '' };
+  return {
+    missao: (liberada || fora).missao, curso: outras.curso.sigla, liberada: Boolean(liberada), motivo: fora ? fora.motivo : '',
+    encerrado: outras.curso.ativo === false
+  };
+}
+
+// O que pede a confirmação da missão escolhida para o pedido (a fora da ordem; a do curso encerrado): o texto do botão,
+// o do botão armado e os motivos (o nome do botão, a dica e o histórico)
+export function confirmacaoDaMissao({ missao: { codigo }, curso, liberada, motivo, encerrado }) {
+  const como = liberada ? 'do curso encerrado' : 'fora da ordem';
+  const motivos = [liberada ? '' : motivo, encerrado ? `curso ${curso} encerrado` : ''].filter(Boolean).join('; ');
+  return { botao: `Usar ${codigo} ${como}`, armado: `Confirmar: ${codigo} ${como}`, motivos };
 }
 
 // A missão na lista: o código (a noite de um Noturno em trechos com os translados, como na próxima missão), o tipo, o
@@ -95,29 +110,35 @@ function outraMissaoNaDemanda(stu, outras) {
   const { curso, liberadas, foraDaOrdem } = outras;
   if (!liberadas.length && !foraDaOrdem.length) return '';
   const grupo = (rotulo, itens) => (itens.length ? `<optgroup label="${esc(rotulo)}">${opts(itens)}</optgroup>` : '');
+  // No curso encerrado, as liberadas também pedem confirmação
+  const encerrado = curso.ativo === false ? ' (curso encerrado: pede confirmação)' : '';
   return ` <select class="edit-only outra-missao" data-f="outra-missao" aria-label="Outra missão do curso para ${esc(stu.nm)}">`
     + '<option value="" selected>Outra missão…</option>'
-    + grupo(`Liberadas no ${curso.sigla}`, liberadas.map(({ missao: m, dependeDe }) =>
+    + grupo(`Liberadas no ${curso.sigla}${encerrado}`, liberadas.map(({ missao: m, dependeDe }) =>
       [m.codigo, `${resumoDaMissao(curso, m)}${dependeDe.length ? ` — depende do resultado de ${emLista(dependeDe)}` : ''}`]))
     + grupo('Fora da ordem (pede confirmação)', foraDaOrdem.map(({ missao: m, motivo }) => [m.codigo, `${resumoDaMissao(curso, m)} (${motivo})`]))
     + '</select>';
 }
 
-// A missão fora da ordem escolhida para o pedido espera a confirmação neste botão, que aparece armado (js/eventos/demanda.js)
+// A missão escolhida para o pedido que pede confirmação (a fora da ordem; no curso encerrado, também a liberada) espera
+// neste botão, que aparece armado (js/eventos/demanda.js)
 export const botaoForaDaOrdem = (stu, escolha) => {
-  const { missao: { codigo }, motivo } = escolha;
-  return ` <button type="button" class="btn quiet edit-only usar-proxima" data-act="usar-fora-da-ordem" data-codigo="${esc(codigo)}" data-dica="fora-da-ordem" data-dica-caso="${esc(`${codigo}: ${motivo}`)}" aria-label="Usar ${esc(codigo)} fora da ordem para ${esc(stu.nm)} (${esc(motivo)})">Usar ${esc(codigo)} fora da ordem</button>`;
+  const { codigo } = escolha.missao;
+  const { botao, motivos } = confirmacaoDaMissao(escolha);
+  const dica = escolha.liberada ? 'data-dica="curso-encerrado"' : 'data-dica="fora-da-ordem"';
+  return ` <button type="button" class="btn quiet edit-only usar-proxima" data-act="usar-fora-da-ordem" data-codigo="${esc(codigo)}" ${dica} data-dica-caso="${esc(`${codigo}: ${motivos}`)}" aria-label="${esc(`${botao} para ${stu.nm} (${motivos})`)}">${esc(botao)}</button>`;
 };
 
-// Na Demanda: o código do pedido (com o curso dele), ou o botão com a próxima missão do programa, e a lista das outras
-// missões do curso
+// Na Demanda: o código do pedido (com o curso dele), ou o botão com a próxima missão do programa (no curso encerrado, ele
+// pede confirmação), e a lista das outras missões do curso
 export function etapaNaDemanda(stu, d, mid) {
   const outras = outrasMissoes(stu, d, mid);
   const lista = outras ? outraMissaoNaDemanda(stu, outras) : '';
   if (d.etapa) return ` <span class="etapa" title="Missão do curso ${esc(d.cursoDaEtapa || stu.curso || '')}">${esc(d.etapa)}</span>${lista}`;
   const proxima = proximaDoPedido(stu, mid);
+  const titulo = proxima && `${descricaoDaMissao(proxima)}${proxima.encerrado ? ` (curso ${proxima.curso} encerrado: pede confirmação)` : ''}`;
   return (proxima
-    ? ` <button type="button" class="btn quiet edit-only usar-proxima" data-act="usar-proxima" data-id="${esc(stu.id)}" data-mid="${esc(mid)}" title="${esc(descricaoDaMissao(proxima))}">Próxima: ${esc(proxima.rotulo)} · Usar</button>`
+    ? ` <button type="button" class="btn quiet edit-only usar-proxima" data-act="usar-proxima" data-id="${esc(stu.id)}" data-mid="${esc(mid)}" title="${esc(titulo)}">Próxima: ${esc(proxima.rotulo)} · Usar</button>`
     : '') + lista;
 }
 
