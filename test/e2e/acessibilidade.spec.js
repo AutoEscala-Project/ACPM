@@ -1,6 +1,6 @@
 // Acessibilidade: cada botão e cada campo tem um nome para o leitor de tela, e nenhum se chama só "✕" (que o leitor
 // lê como "multiplicação"). Vale para todas as abas, o Histórico e o painel de habilitações.
-import { test, expect, abrir, abrirComExemplo, irPara, entrar, abrirEscala, confirmar, prepararContexto, vigiarErros } from './fixtures.js';
+import { test, expect, abrir, abrirComExemplo, irPara, entrar, abrirEscala, confirmar, prepararContexto, vigiarErros, percorrerVistasEFiltros } from './fixtures.js';
 import { instalarSupabaseFalso, documentosAtuais, CONTAS } from './supabase-falso.js';
 import { comExemplo } from '../helpers/exemplo.js';
 import { estadoSintetico } from '../helpers/estado.js';
@@ -44,6 +44,7 @@ test.describe('Acessibilidade', () => {
       await page.locator(`#s-esc [data-tl="${vista}"]`).click();
       expect(await semNome(page, 'main section.on'), `mapa ${vista}`).toEqual([]);
     }
+    await percorrerVistasEFiltros(page, async tela => expect(await semNome(page, 'main section.on'), tela).toEqual([]));
     await irPara(page, 'ins');
     await page.locator('#s-ins [data-vista-ins="cadastro"]').click();
     expect(await semNome(page, 'main section.on'), 'cadastro de instrutores').toEqual([]);
@@ -171,11 +172,16 @@ test.describe('Telas de 320 px', () => {
     const abas = await page.locator('#nav button[data-t]:visible').evaluateAll(bs => bs.map(b => b.dataset.t));
     expect(abas.length).toBeGreaterThan(5);
     const largas = [];
+    const conferir = async tela => {
+      const largura = await page.evaluate(() => document.documentElement.scrollWidth);
+      if (largura > 320) largas.push(`${tela}: ${largura}px`);
+    };
     for (const aba of abas) {
       await irPara(page, aba);
-      const largura = await page.evaluate(() => document.documentElement.scrollWidth);
-      if (largura > 320) largas.push(`${aba}: ${largura}px`);
+      await conferir(aba);
     }
+    // As outras vistas e as tabelas sem nenhum com os filtros
+    await percorrerVistasEFiltros(page, conferir);
     expect(largas).toEqual([]);
   });
 

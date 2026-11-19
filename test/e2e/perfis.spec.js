@@ -1,4 +1,5 @@
-import { test, expect, abrirSintetico, abrirComExemplo, irPara, abrirEscala, AMANHA } from './fixtures.js';
+import { test, expect, abrir, abrirSintetico, abrirComExemplo, irPara, irParaVista, abrirEscala, AMANHA } from './fixtures.js';
+import { aluno, cenario, instrutor } from '../helpers/montar.js';
 
 test.describe('Perfis de acesso', () => {
   test('perfil Gestor oculta a edição e o Operador a restaura', async ({ page }) => {
@@ -37,6 +38,41 @@ test.describe('Perfis de acesso', () => {
     await expect(page.locator('#btn-agendar')).toBeHidden();
     await expect(page.locator('#role-sel')).toBeEnabled();
     await expect(page.locator('#role-sel')).toHaveValue('gestor');
+  });
+
+  // Quem só consulta usa os filtros como o Operador: a busca e a habilitação (.flt-ctrl, que js/somente-leitura.js não
+  // desliga), as vistas e o "Limpar filtros" (sem data-act, que js/eventos/registro.js não deixa passar para ele)
+  test('o Gestor busca, filtra e troca de vista em Instrutores e Alunos; "Limpar filtros" mostra todos de novo', async ({ page }) => {
+    const estado = cenario({ ins: [instrutor(1, 9, { nm: 'Ângelo Brandão' }), instrutor(2, 9), instrutor(3, 1)], stu: [aluno(1000, {}, { nm: 'João Silva' }), aluno(1001)] });
+    await abrir(page, { estado, url: './?role=gestor' });
+    await expect(page.locator('body')).toHaveAttribute('data-role', 'gestor');
+    await irPara(page, 'ins');
+    const busca = page.locator('[data-flt="inst"]'), hab = page.locator('#flt-ins-hab');
+    const dia = page.locator('#inst-dia tr[data-k="i"]:visible');
+    await busca.fill('angelo');
+    await expect(dia).toHaveCount(1);
+    await expect(page.locator('#ins-contagem')).toHaveText('1 de 3 instrutores');
+    await busca.fill('');
+    await hab.selectOption('mlte');
+    await expect(dia).toHaveCount(2);
+    await irParaVista(page, 'ins', 'cadastro');
+    await expect(page.locator('#inst .cd:visible')).toHaveCount(2);
+    await busca.fill('nenhum assim');
+    await page.locator('#limpar-filtros-inst').click();
+    await expect(busca).toBeFocused();
+    await expect(hab).toHaveValue('');
+    await expect(page.locator('#inst .cd:visible')).toHaveCount(3);
+    await expect(page.locator('#ins-contagem')).toHaveText('3 instrutores');
+
+    await irPara(page, 'alu');
+    const buscaAlu = page.locator('[data-flt="alu"]');
+    await buscaAlu.fill('joao');
+    await expect(page.locator('#alu tr.cd:visible')).toHaveCount(1);
+    await buscaAlu.fill('nenhum assim');
+    await page.locator('#limpar-filtros-alu').click();
+    await expect(buscaAlu).toHaveValue('');
+    await expect(page.locator('#alu tr.cd:visible')).toHaveCount(2);
+    await expect(page.locator('#alu-contagem')).toHaveText('2 alunos');
   });
 
   // O link não leva a escala no endereço (nomes, pesos e horas). Sem o servidor, a escala fica só neste navegador;

@@ -1,7 +1,7 @@
 // Dados pessoais de alunos e instrutores: CPF, CANAC, nascimento, celular e e-mail, num painel ao lado da tabela.
 // Ficam fora do cadastro; o histórico registra só os campos que mudaram. No modo compartilhado, operadores,
 // administradores e a secretaria veem e editam; o gestor não vê.
-import { test, expect, abrir, irPara, prepararContexto, vigiarErros, AMANHA, entrar as entrarNoApp } from './fixtures.js';
+import { test, expect, abrir, irPara, irParaVista, prepararContexto, vigiarErros, AMANHA, entrar as entrarNoApp } from './fixtures.js';
 import { criarSupabaseFalso, instalarSupabaseFalso, documentosAtuais, CONTAS } from './supabase-falso.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
 
@@ -124,6 +124,47 @@ test.describe('Dados pessoais (modo compartilhado)', () => {
     expect(servidor.dadosPessoais.get('aluno:1000')).toMatchObject({ canac: '123456', atualizado_por: 'Secretaria de Teste' });
     expect(erros).toEqual([]);
     await context.close();
+  });
+
+  // A vista de cada aba fica na memória até a página recarregar; antes de a pessoa escolher, vale a do perfil: a Secretaria
+  // abre Instrutores no Cadastro (o trabalho dela ali são os dados pessoais), o Operador na Disponibilidade do dia
+  test('Instrutores abre no Cadastro para a Secretaria e na Disponibilidade do dia para o Operador; a vista escolhida fica até recarregar', async ({ browser }) => {
+    const secretaria = await entrar(browser, CONTAS.secretaria);
+    const page = secretaria.page;
+    await irPara(page, 'ins');
+    await expect(page.locator('#s-ins')).toHaveAttribute('data-vista', 'cadastro');
+    await expect(page.locator('#s-ins [data-vista-ins="cadastro"]')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('#s-ins [data-vista-ins="dia"]')).toHaveAttribute('aria-pressed', 'false');
+    await expect(page.locator('#inst tr[data-id="1"] [data-dados]')).toBeVisible();
+    await expect(page.locator('#inst-dia')).toBeHidden();
+    // Ela busca e usa o "Limpar filtros" (sem data-act: vale também para quem só consulta)
+    const busca = page.locator('[data-flt="inst"]');
+    await busca.fill('instrutor 02');
+    await expect(page.locator('#inst .cd:visible')).toHaveCount(1);
+    await busca.fill('nenhum assim');
+    await page.locator('#limpar-filtros-inst').click();
+    await expect(busca).toHaveValue('');
+    await expect(page.locator('#inst .cd:visible')).toHaveCount(2);
+    // A vista escolhida fica ao voltar à aba
+    await irParaVista(page, 'ins', 'dia');
+    await irPara(page, 'alu');
+    await irPara(page, 'ins');
+    await expect(page.locator('#s-ins')).toHaveAttribute('data-vista', 'dia');
+    await expect(page.locator('#inst-dia tr[data-id="1"]')).toBeVisible();
+    // Recarregada a página, vale de novo a do perfil
+    await page.reload();
+    await expect(page.locator('body[data-pronto]')).toBeAttached();
+    await irPara(page, 'ins');
+    await expect(page.locator('#s-ins')).toHaveAttribute('data-vista', 'cadastro');
+    expect(secretaria.erros).toEqual([]);
+    await secretaria.context.close();
+
+    const operador = await entrar(browser, CONTAS.operador);
+    await irPara(operador.page, 'ins');
+    await expect(operador.page.locator('#s-ins')).toHaveAttribute('data-vista', 'dia');
+    await expect(operador.page.locator('#s-ins [data-vista-ins="dia"]')).toHaveAttribute('aria-pressed', 'true');
+    expect(operador.erros).toEqual([]);
+    await operador.context.close();
   });
 
   test('o operador grava pelo servidor; o gestor não vê os dados pessoais', async ({ browser }) => {

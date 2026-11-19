@@ -13,9 +13,10 @@ import { fixoPeloStatus } from '../fixos.js';
 import { S, DATA, insBy, stuBy } from '../state.js';
 import { confirmado } from './confirmacao.js';
 import { aoAcionar, aoMudarCampo } from './registro.js';
-import { rIns, rAlu, applyInstructorFilters, preencherFiltroDeHabilitacoes, mostrarVistaDosInstrutores, abrirPainelDoInstrutor, fecharPainelDoInstrutor, atualizarLinhaDoCadastro, atualizarLinhaDoAluno, rPainelDoInstrutor, rLimites, podeEditarLimites } from '../views/cadastros.js';
+import { rIns, rAlu, prepararFiltros, filtrar, limparFiltros, manterAVista, abrirPainelDoInstrutor, fecharPainelDoInstrutor, atualizarLinhaDoCadastro, atualizarLinhaDoAluno, rPainelDoInstrutor, rLimites, podeEditarLimites } from '../views/cadastros.js';
 import { abrirPainelDeDados, fecharPainelDeDados, salvarPainelDeDados } from '../views/dados-pessoais.js';
 import { rDem } from '../views/demanda.js';
+import { mostrarVista } from '../views/vistas.js';
 
 // Dados pessoais de um aluno ou instrutor: o botão da linha abre o painel; Cancelar, ✕ e Esc fecham (o foco volta para
 // o botão; o Esc, quando o painel é a gaveta de cima ou tem o foco: js/dom.js). Salvar valida e grava; o histórico
@@ -52,33 +53,38 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Escape' && gavetaDoEsc(e) === $('#painel-instrutor') && !algumDialogoAberto()) fecharPainelDoInstrutor(true);
 });
 
-// Filtros: os instrutores (nome, habilitação) e os alunos (nome)
+// Filtros: os instrutores (o nome e a habilitação) e os alunos (o nome). "Limpar filtros" aparece na linha que diz que
+// nenhum passa; sem data-act, ele vale também para quem só consulta
+const ABA_DA_BUSCA = { inst: 'ins', alu: 'alu' };
 document.addEventListener('input', e => {
-  if (e.target.dataset.flt === 'inst') { applyInstructorFilters(); return; }
-  const f = e.target.dataset.flt;
-  if (!f) return;
-  const q = e.target.value.toLowerCase();
-  document.querySelectorAll('#' + f + ' .cd').forEach(c => {
-    c.hidden = !c.querySelector('.nm').value.toLowerCase().includes(q);
-  });
+  const aba = ABA_DA_BUSCA[e.target.dataset && e.target.dataset.flt];
+  if (aba) filtrar(aba, { nome: e.target.value });
 });
-preencherFiltroDeHabilitacoes();
-$('#flt-ins-hab').onchange = applyInstructorFilters;
+prepararFiltros();
+$('#flt-ins-hab').onchange = e => filtrar('ins', { hab: e.target.value });
+document.addEventListener('click', e => {
+  const botao = e.target.closest('[data-limpar-filtros]');
+  if (botao) limparFiltros(botao.dataset.limparFiltros);
+});
 
 aoAcionar('editar-habs', b => abrirPainelDoInstrutor(+b.dataset.id));
 
-// O instrutor novo aparece no cadastro, com o nome selecionado para digitar
+// O instrutor novo aparece no cadastro, com o nome selecionado para digitar: os filtros continuam, e ele fica à vista
+// mesmo fora deles (até eles mudarem)
 aoAcionar('addi', () => {
   const newIns = { id: S.nid++, nm: 'Novo instrutor', on: true, hab: habilitacoesDoNivel(1), kg: 0, aw: WIN.map((_, i) => i < 8) };
   S.ins.push(newIns);
-  mostrarVistaDosInstrutores('cadastro');
+  mostrarVista('ins', 'cadastro');
+  manterAVista('ins', newIns.id);
   gravarAlteracao('inc', `Instrutor adicionado: ${newIns.nm}`);
   rIns(); rAlu(); rDem(); focusLast('#inst .nm');
 });
 
+// O aluno novo, também: com o nome selecionado, à vista mesmo fora da busca (até ela mudar)
 aoAcionar('adds', () => {
   const newStu = { id: S.nid++, nm: 'Novo aluno', kg: 0, bl: [], extra: [], ...blank() };
   S.stu.push(newStu);
+  manterAVista('alu', newStu.id);
   gravarAlteracao('inc', `Aluno cadastrado: ${newStu.nm}`);
   rAlu(); rDem(); focusLast('#alu .nm');
 });

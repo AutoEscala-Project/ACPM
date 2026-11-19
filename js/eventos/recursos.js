@@ -3,7 +3,7 @@
 import { gravarAlteracao, aindaNaoAbriu } from '../actions.js';
 import { opcoesDeCategoria, categoriaDoTipo } from '../categorias.js';
 import { WIN, REVISAO_H } from '../config.js';
-import { $, showToast } from '../dom.js';
+import { $, showToast, fecharNoEsc } from '../dom.js';
 import { fmtH, lerHoras } from '../format.js';
 import { novoRecurso, ATRIBUTOS_DO_RECURSO, atributoVale } from '../frota.js';
 import { normalizarHangar, moverNoHangar } from '../hangar.js';
@@ -178,12 +178,13 @@ function salvarHorarios() {
   rRec(); rDem();
   fecharEditorDosHorarios();
 }
-// O modelo escolhido no editor troca a lista do rascunho; Enter no campo põe o horário; Esc descarta o rascunho
+// O modelo escolhido no editor troca a lista do rascunho; Enter no campo põe o horário; Esc, com o foco nos horários,
+// descarta o rascunho e fecha só o editor (o Histórico aberto continua aberto)
 document.addEventListener('change', e => {
   if (e.target.name === 'hr-modelo' && e.target.closest('#horarios')) escolherModelo(e.target.value);
 });
 document.addEventListener('keydown', e => {
   if (!editorDosHorariosAberto() || !e.target.closest || !e.target.closest('#horarios')) return;
   if (e.key === 'Enter' && e.target.classList.contains('hr-novo')) { e.preventDefault(); porNoRascunho(); }
-  else if (e.key === 'Escape') fecharEditorDosHorarios();
 });
+fecharNoEsc(() => (editorDosHorariosAberto() ? $('#horarios') : null), fecharEditorDosHorarios);

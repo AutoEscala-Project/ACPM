@@ -1,6 +1,6 @@
 import { describe, it, mock } from 'node:test';
 import assert from 'node:assert/strict';
-import { hm, fmtH, fmtDurLabel, WLB, pad, esc, opts, amanhaISO, hojeISO, somarDias, fimDoMes, rotuloDaData, nomeLimpo, LIMITE_DO_NOME, dataIsoValida, minutoDoDia, lerHoras, numeroBr, duracaoHm, pesoBr } from '../../js/format.js';
+import { hm, fmtH, fmtDurLabel, WLB, pad, esc, opts, amanhaISO, hojeISO, somarDias, fimDoMes, rotuloDaData, nomeLimpo, LIMITE_DO_NOME, dataIsoValida, minutoDoDia, lerHoras, numeroBr, duracaoHm, pesoBr, chaveDeBusca } from '../../js/format.js';
 
 // O relógio no fuso do aeroclube (São Paulo, UTC−3), qualquer que seja o da máquina (o CI roda em UTC): das 21:00 à
 // meia-noite, a data local já não é a do UTC. O fuso de antes volta no fim
@@ -69,6 +69,24 @@ describe('Formatação', () => {
     assert.equal(nomeLimpo('  Ana   Paula  ', 'Ana'), 'Ana Paula');
     assert.equal(nomeLimpo('A'.repeat(100), 'Ana'), 'A'.repeat(80));
     assert.equal(nomeLimpo('   ', 'Ana'), 'Ana');
+  });
+
+  // As buscas (Instrutores, Alunos, Demanda, Escala e BI) comparam as chaves: o nome digitado sem acento, em minúsculas ou
+  // com espaços a mais acha o cadastrado
+  it('a chave da busca: sem acentos, em minúsculas e com um espaço só entre as palavras', () => {
+    assert.equal(chaveDeBusca('João'), 'joao');
+    assert.equal(chaveDeBusca('  Maria   da CONCEIÇÃO '), 'maria da conceicao');
+    assert.equal(chaveDeBusca('Ângela Müller Brandão'), 'angela muller brandao');
+    // O mesmo nome escrito com a letra acentuada inteira (NFC) ou com o sinal separado (NFD) dá a mesma chave
+    assert.equal(chaveDeBusca('Jos\u00e9'), chaveDeBusca('Jose\u0301'));
+    assert.equal(chaveDeBusca('Jos\u00e9'), 'jose');
+    // O que não é letra fica: o código da missão, o número e o hífen
+    assert.equal(chaveDeBusca('PP-07 · Navegação C152'), 'pp-07 · navegacao c152');
+    assert.equal(chaveDeBusca('Instrutor 01'), 'instrutor 01');
+    assert.deepEqual([undefined, null, '', '   '].map(chaveDeBusca), ['', '', '', '']);
+    // Quem digita com acento acha quem foi cadastrado sem ele, e o contrário
+    assert.ok(chaveDeBusca('Joao Silva').includes(chaveDeBusca('joão')));
+    assert.ok(chaveDeBusca('João Silva').includes(chaveDeBusca('JOAO  s')));
   });
 
   it('datas AAAA-MM-DD: amanhã, dias depois e antes, e fim do mês (com virada de mês, ano e bissexto)', () => {

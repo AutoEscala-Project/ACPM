@@ -1,7 +1,7 @@
 // Aba BI: horas por recurso, instrutor e missão (dia, semana e mês). Os filtros seguem a Escala: a categoria e,
 // dentro dela, um recurso.
 import { GROUND_EQ_TYPE, GROUND_REG, MIS } from '../config.js';
-import { fmtH, esc } from '../format.js';
+import { fmtH, esc, chaveDeBusca } from '../format.js';
 import { isGroundMission, migrateLegacyMissionName } from '../rules.js';
 import { S, BI_HISTORY } from '../state.js';
 import { categoriaDoTipo, nomeDoRecurso } from '../categorias.js';
@@ -33,7 +33,7 @@ export function rBI() {
   const refDate = ($('#bi-dt') && $('#bi-dt').value) || ($('#dt') && $('#dt').value) || new Date().toISOString().slice(0, 10);
   const refMonth = refDate.slice(0, 7);
   const categoria = ($('#bi-flt-cat') && $('#bi-flt-cat').value) || '';
-  const fltInsQ = ($('#bi-flt-ins') && $('#bi-flt-ins').value || '').toLowerCase();
+  const fltInsQ = chaveDeBusca($('#bi-flt-ins') && $('#bi-flt-ins').value);
 
   const eqStats = {};
   const frota = S.frota || [];
@@ -111,7 +111,7 @@ export function rBI() {
     .sort((a, b) => b.m - a.m || b.w - a.w || b.d - a.d || a.reg.localeCompare(b.reg));
 
   const insList = Object.values(insStats)
-    .filter(x => !fltInsQ || x.nm.toLowerCase().includes(fltInsQ))
+    .filter(x => !fltInsQ || chaveDeBusca(x.nm).includes(fltInsQ))
     .sort((a, b) => b.m - a.m || b.w - a.w || b.d - a.d || a.nm.localeCompare(b.nm));
 
   const maxEqM = Math.max(1, ...eqList.map(e => e.m));

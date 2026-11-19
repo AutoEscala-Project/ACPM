@@ -1,5 +1,5 @@
 // No celular (390 px): a escala em cartões, um por voo, e nenhuma aba rola para o lado.
-import { test, expect, abrir, abrirComExemplo, abrirEscala, irPara, AMANHA } from './fixtures.js';
+import { test, expect, abrir, abrirComExemplo, abrirEscala, irPara, percorrerVistasEFiltros, AMANHA } from './fixtures.js';
 import { documentosAtuais } from './supabase-falso.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
 import { cursosIniciais, gravarCurso } from '../../js/programa.js';
@@ -42,6 +42,8 @@ test.describe('Celular', () => {
     await page.locator('#s-esc [data-tl="painel"]').click();
     await expect(page.locator('#out .painel-dia')).toBeVisible();
     expect(await larguraDaPagina(page), 'painel').toBeLessThanOrEqual(390);
+    // As outras vistas e as tabelas sem nenhum com os filtros
+    await percorrerVistasEFiltros(page, async tela => expect(await larguraDaPagina(page), tela).toBeLessThanOrEqual(390));
   });
 
   test('botões e campos com pelo menos 44 px para o dedo, em todas as abas', async ({ page }) => {
@@ -50,6 +52,7 @@ test.describe('Celular', () => {
       await irPara(page, aba);
       expect(await alvosPequenos(page), `aba ${aba}`).toEqual([]);
     }
+    await percorrerVistasEFiltros(page, async tela => expect(await alvosPequenos(page), tela).toEqual([]));
   });
 
   // O exemplo não tem programa: aqui, a aba Cursos com missões, um cartão por missão (o Ground, com o recurso e as horas

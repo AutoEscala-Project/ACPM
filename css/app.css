@@ -769,8 +769,16 @@ table.frota .rev { opacity: 0; transition: opacity .1s; }
 table.frota tr:hover .rev, table.frota tr:focus-within .rev { opacity: 1; }
 @media (hover: none), (pointer: coarse) { table.frota .rev { opacity: 1; } }
 
-/* Instrutores: a disponibilidade do dia numa grade; o cadastro numa tabela, com as habilitações num painel lateral */
-#s-ins[data-vista="dia"] .vista-cadastro, #s-ins[data-vista="cadastro"] .vista-dia { display: none; }
+/* As vistas de uma aba (js/views/vistas.js): a seção diz a vista escolhida (data-vista), e só a parte dela aparece. Em
+   Instrutores, a disponibilidade do dia numa grade; o cadastro numa tabela, com as habilitações num painel lateral */
+section[data-vista="dia"] .vista-cadastro, section[data-vista="cadastro"] .vista-dia { display: none; }
+/* Instrutores e Alunos: quantos os filtros mostram ("12 de 40 instrutores"), e a linha de quando eles não deixam nenhum */
+.contagem { color: var(--mu); font-size: 13.5px; white-space: nowrap; }
+.contagem:empty { display: none; }
+tbody tr.sem-resultado td { padding: 10px 8px; color: var(--mu); }
+/* Na tabela mais larga que a tela (a grade do dia, no celular, rola para o lado), o texto e o "Limpar filtros" ficam na
+   parte à vista: presos à esquerda e da largura da tela, com o botão embaixo do texto quando não cabe ao lado */
+tbody tr.sem-resultado .sem-resultado-texto { position: sticky; left: 8px; max-width: calc(100vw - 50px); }
 /* Cursos: o programa de cada curso, em fases (sob o título do módulo), cada fase com o cabeçalho (nome, módulo, quando
    abre, "Depois de…" e os botões) e a tabela das missões; no fim, "+ Fase", as retiradas e as alterações */
 #cursos { display: flex; flex-direction: column; gap: 12px; }
@@ -938,7 +946,7 @@ input.falta::placeholder { color: var(--wa); }
 .habs-painel legend { padding: 0 4px; font: 600 14px 'Barlow Semi Condensed', sans-serif; }
 .habs-painel label.hab { display: flex; align-items: center; gap: 10px; padding: 6px 0; cursor: pointer; }
 @media (max-width: 640px) {
-  [data-flt="inst"], #flt-ins-hab { flex: 1 1 140px; min-width: 0; }
+  [data-flt="inst"], #flt-ins-hab, [data-flt="alu"] { flex: 1 1 140px; min-width: 0; }
   /* Cadastro no celular: um cartão por instrutor (nome e peso; habilitações; ações) */
   table.cadastro { min-width: 0; }
   table.cadastro thead { display: none; }
