@@ -262,3 +262,19 @@ describe('Compactação chamada sem os limites', () => {
     assert.deepEqual([instrutorDas0630(undefined), instrutorDas0630({ vooPorJornadaMin: 60 })], [2, 1]);
   });
 });
+
+describe('O custo da escala', () => {
+  // A volta do noturno de ontem leva o número do pedido de ontem (a missão 0); o pedido de hoje do aluno é outro, e a
+  // preferência dele não vale para a volta (que é fixa, às 07:30)
+  it('não cobra da volta do noturno de ontem a preferência do pedido de hoje do aluno', () => {
+    const volta = { stuId: 1000, mid: 0, insId: 1, r: 'PR-HAR', eqType: 'C172', s: 'Aluno 1000', ins: 'Instrutor 01', stuKg: 70, fim: 1290 };
+    const custo = pedidoDeHoje => {
+      const estado = { ...cenario({ stu: [aluno(1000, { fly: false, ...pedidoDeHoje })] }), noturnosDaVespera: [volta] };
+      const { out } = runAllocationEngine(estado);
+      assert.deepEqual(out.map(o => [o.fKey, o.trecho, hm(o.a)]), [['1000_0_2', 'volta', '07:30']]);
+      return custoDaEscala(out, estado);
+    };
+    // O pedido de hoje (que não voa) às 07:30 ou às 13:40, com prioridade 1 ou 5: o custo da escala é o mesmo
+    assert.equal(custo({ p1: 820, p2: -1, pr: 5 }), custo({ p1: 450, p2: -1, pr: 1 }));
+  });
+});

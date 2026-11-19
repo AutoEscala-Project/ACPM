@@ -24,9 +24,12 @@ export const umPorUnidade = lista => [...new Map(lista.map(voo => [unidadeDoVoo(
 
 // O pedido de um voo: o do próprio aluno (missão 0) ou uma das missões extras dele
 export const pedidoDoAluno = (aluno, mid) => (mid ? (aluno.extra || []).find(ex => ex.mid === mid) : aluno);
+// O pedido de cada voo da escala, pelos alunos do dia. A volta do noturno de ontem (o trecho "volta") não tem pedido no
+// dia: ela leva o número do pedido de ontem, e o pedido de hoje com esse número é outro
 export const pedidosDosVoos = alunos => {
   const porId = new Map(alunos.map(s => [s.id, s]));
   return voo => {
+    if (voo.trecho === 'volta') return undefined;
     const aluno = porId.get(voo.stuId);
     return aluno && pedidoDoAluno(aluno, voo.mid);
   };
