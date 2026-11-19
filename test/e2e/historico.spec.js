@@ -300,6 +300,46 @@ test.describe('Histórico', () => {
     await expect(voo.locator('.fixo')).toHaveCount(0);
   });
 
+  // O mesmo com o "Soltar o voo" das Sugestões: o reparo revertido depois de desfeito o agendamento não traz o voo
+  // agendado de volta, nem o instrutor escolhido dele
+  test('desfazer o agendamento e depois reverter o "Soltar o voo" das Sugestões não traz o voo agendado de volta', async ({ page }) => {
+    const estado = cenario({
+      ins: [instrutor(1, 9), instrutor(2, 9)],
+      stu: [aluno(1000, { p1: 390, p2: -1 }), aluno(1001, { fly: false, p1: 870, p2: -1 }, { nm: 'Maria Silva' })]
+    });
+    await abrir(page, { estado });
+    await abrirEscala(page);
+    await page.locator('#btn-agendar').click();
+    await page.locator('#agd-aluno').selectOption('1001');
+    await page.locator('#agd-horario').selectOption('610');
+    await expect(page.locator('#agd-previa ul')).toContainText('Entra:');
+    const ins = await page.locator('#agd-instrutor').inputValue();
+    await page.locator('#agd-confirmar').click();
+    await expect(page.locator('#dlg-agendar')).toBeHidden();
+
+    // O instrutor do agendamento não vem mais: o voo agendado fica em conflito, e as Sugestões o soltam
+    await irPara(page, 'ins');
+    await page.locator(`#inst-dia tr[data-id="${ins}"] [data-f="on"]`).uncheck();
+    await abrirEscala(page);
+    await page.locator('#out details.conflitos [data-reparo]').click();
+    const soltar = page.locator('#painel-reparo .opcoes-reparo li', { hasText: 'Soltar o voo' });
+    await soltar.getByRole('button', { name: 'Soltar' }).click();
+    await expect(page.locator('#painel-reparo')).toBeHidden();
+
+    await page.locator('#btn-open-log').click();
+    const lista = page.locator('#audit-log-list');
+    await lista.locator('.audit-item', { hasText: 'Agendado na escala' }).getByRole('button', { name: '↶ Desfazer' }).click();
+    await expect(lista).toContainText('Revertido: Agendado na escala: Maria Silva');
+    await lista.locator('.audit-item', { hasText: 'Reparo: Maria Silva' }).getByRole('button', { name: '↶ Reverter' }).click();
+    await expect(lista).toContainText('Revertido: Reparo: Maria Silva');
+    await page.locator('#btn-fechar-historico').click();
+    expect(await page.evaluate(data => JSON.parse(localStorage.getItem(`acpm4_dia_${data}`)).fixos, AMANHA)).toEqual({});
+    await irPara(page, 'dem');
+    const pedido = page.locator('#dem tr[data-k="d"][data-id="1001"][data-mid="0"]');
+    await expect(pedido.locator('[data-f="fly"]')).not.toBeChecked();
+    await expect(pedido.locator('[data-f="insId"]')).toHaveValue('');
+  });
+
   // O voo movido pelo agendamento continua na Demanda depois de desfeito (com o pedido de antes): é o histórico que diz
   // que o agendamento foi desfeito depois da troca de instrutor
   test('desfazer um voo movido e depois reverter a troca de instrutor: o voo volta para onde estava, sem o cadeado', async ({ page }) => {
