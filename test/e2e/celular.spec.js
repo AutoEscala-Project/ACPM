@@ -114,6 +114,26 @@ test.describe('Celular', () => {
     }
   });
 
+  // Com o "+" de 44 px, sobram uns 107 px para o nome da linha do mapa: o nome longo quebra em linhas e fica inteiro à
+  // vista (no toque, não há o title para ler o resto)
+  test('no mapa, o nome longo da linha quebra em linhas, inteiro, sem reticências', async ({ page }) => {
+    const longo = 'Maria Fernanda dos Santos Oliveira';
+    await abrir(page, { estado: cenario({ ins: [instrutor(1, 9, { nm: longo }), instrutor(2, 9)], stu: [aluno(1000, { p1: 390, p2: -1 })] }) });
+    await abrirEscala(page);
+    await page.locator('#s-esc [data-tl="ins"]').click();
+    const linha = page.locator('#out .mapa .tl-row', { has: page.locator('.tl-lbl > span', { hasText: longo }) });
+    await expect(linha.locator('.tl-agendar')).toBeVisible();
+    const nome = await linha.locator('.tl-lbl > span').evaluate(span => ({
+      cortado: span.scrollWidth > span.clientWidth || span.scrollHeight > span.clientHeight,
+      linhas: Math.round(span.getBoundingClientRect().height / parseFloat(getComputedStyle(span).lineHeight))
+    }));
+    expect(nome.cortado).toBe(false);
+    expect(nome.linhas).toBeGreaterThan(1);
+    // Com o mouse (na tela larga, o nome continua numa linha só), o title mostra o nome inteiro
+    await expect(linha.locator('.tl-lbl > span')).toHaveAttribute('title', longo);
+    expect(await larguraDaPagina(page)).toBeLessThanOrEqual(390);
+  });
+
   test('a escala vira um cartão por voo, com horário, aluno, missão, avião, instrutor e status à vista', async ({ page }) => {
     await abrirComExemplo(page);
     await abrirEscala(page);

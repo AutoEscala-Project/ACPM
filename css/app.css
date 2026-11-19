@@ -1414,6 +1414,10 @@ body[data-backend="supabase"] #btn-bi-clr { display: none !important; }
   .win-btn, .grupo-btn { min-height: 44px; }
   /* O "+" que agenda: na linha do mapa, no horário da lista e na turma de Ground */
   .tl-agendar, .win-agendar { min-width: 44px; min-height: 44px; }
+  /* Com o "+" de 44 px, sobram uns 107 px para o nome da linha do mapa: o nome (e as horas) quebram em quantas linhas
+     precisarem, em vez de terminar em reticências (no toque, não há o title para ler o resto). Até duas linhas, a linha
+     do mapa fica da altura do "+" */
+  .tl-lbl > span, .tl-lbl > small { white-space: normal; overflow-wrap: anywhere; }
   .tl-pop-btn[data-act="agendar"] { min-height: 44px; }
   .tabela-escala tr.win .win-btn { padding-right: 52px; }
   .tg { padding-right: 0; }
