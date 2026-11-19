@@ -1,11 +1,11 @@
 // Motor de alocação determinístico da escala do dia e utilitários de horas e de ocupação.
 // runAllocationEngine é uma função pura: recebe o estado e devolve { out, al, tot } sem alterá-lo.
-import { NOTURNO, T, NI, DAY, MIS, DEFAULT_LIM, GROUND_EQ_TYPE, GROUND_REG, GROUND_DURATION_MIN, GROUND_DURATION_H, REVISAO_H, MENOR_VOO_H, AIRCRAFT_EQ_TYPES, MISSOES_LOCAIS, LIMITE_DE_VOOS_LOCAIS, MINUTOS_DO_DIA } from './config.js';
+import { NOTURNO, T, DAY, MIS, DEFAULT_LIM, GROUND_EQ_TYPE, GROUND_REG, GROUND_DURATION_MIN, GROUND_DURATION_H, REVISAO_H, MENOR_VOO_H, AIRCRAFT_EQ_TYPES, MISSOES_LOCAIS, LIMITE_DE_VOOS_LOCAIS, MINUTOS_DO_DIA } from './config.js';
 import { FROTA_INICIAL, matriculasDoTipo, matriculasParaOVoo, motivoDoAviao, aviaoServe, instrutorVoaNoAviao, recursoDaFrota } from './frota.js';
 import { hm, fmtH, numeroBr, duracaoHm } from './format.js';
 import { repousoAntesDaVolta, historicoDoDia } from './noturno.js';
 import { isGroundMission, doesGroundGateFlight, disponibilidadeDoAluno, rotuloDaDisponibilidade, duracaoValida, duracaoFixaDaMissao } from './rules.js';
-import { HORARIOS_INICIAIS, horariosDaMissao, periodoDoMinuto, minutoDaPreferencia, ordenarPelaPreferencia, fimDaMissao } from './horarios.js';
+import { HORARIOS_INICIAIS, horariosDaMissao, periodoDoMinuto, minutoDaPreferencia, ordenarPelaPreferencia, fimDasMissoesDoDia } from './horarios.js';
 import { podeFazer, descreverExigencias } from './habilitacoes.js';
 import { categoriaDoRodizio, ajustarFilas } from './rodizio.js';
 import { avisosDeAtraso, intervaloEfetivo, STATUS_EM_ANDAMENTO } from './status.js';
@@ -339,9 +339,8 @@ export function runAllocationEngine(state, opcoes = {}) {
 
   const free = (mp, id, s, e) => livre(mp[id], s, e);
   // Até quando a missão do aluno pode ir. O Noturno só sai às 17:30: o aluno que tem um no dia termina as outras
-  // missões (o simulador e a aula, que podem passar das 17:30) antes dele
-  const comNoturno = new Set(act.filter(item => item.ref.mis === 'Noturno').map(item => item.stuId));
-  const fimDoAluno = (stuId, mis, tipo) => (mis !== 'Noturno' && comNoturno.has(stuId) ? Math.min(T[NI], fimDaMissao(mis, tipo)) : fimDaMissao(mis, tipo));
+  // missões (o simulador e a aula, que podem passar das 17:30) antes dele. A compactação e as Sugestões usam a mesma regra
+  const fimDoAluno = fimDasMissoesDoDia(state.stu);
   // Rodízio: a fila de cada categoria (cheque, MLTE, noturno e C172) e os voos dela que cada instrutor já recebeu hoje
   const filas = ajustarFilas(state.filas, state.ins);
   const voosNaCategoria = {};

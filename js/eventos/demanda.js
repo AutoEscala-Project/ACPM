@@ -62,9 +62,12 @@ document.addEventListener('change', e => {
   if (e.target.id === 'onlyfly') $('#dem').classList.toggle('only', e.target.checked);
 });
 
+// "Limpar demanda": cada pedido fica em branco, sem nada do voo de antes (como o pedido que a agenda reaproveita): saem
+// a disponibilidade, a missão do curso, o pedido da agenda e o instrutor escolhido, e as missões extras. Assim o Voa
+// religado à mão não traz a disponibilidade de antes, e o pedido da agenda da mesma missão toma este voo
 comConfirmacao('#clr', 'Confirmar limpeza', () => {
   if (isGestor()) return;
-  S.stu.forEach(d => { Object.assign(d, blank()); for (const campo of ['insId', 'etapa', 'cursoDaEtapa']) delete d[campo]; d.extra = []; });
+  S.stu.forEach(d => { Object.assign(d, blank()); for (const campo of ['jan', 'etapa', 'cursoDaEtapa', 'solicitacao', 'insId']) delete d[campo]; d.extra = []; });
   // Os voos agendados na Escala saem com os pedidos (um agendamento não passa para o pedido que vier depois); o que tem um
   // status que fixa continua fixo pelo status, como os outros
   S.fixos = semAgendados(S.fixos, null, S.fStatus);

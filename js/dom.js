@@ -36,6 +36,28 @@ export function fecharAviso(tipo) {
   $('#aviso-sync').hidden = true;
 }
 
+// As gavetas (o Histórico, as habilitações, os dados pessoais e as sugestões) abrem no mesmo lugar, à direita, umas
+// sobre as outras. A de cima é a que abriu por último: ela fica por cima na tela (a camada, no z-index da .gaveta), e o
+// Esc fecha só ela, ou a gaveta em que está o foco; o próximo Esc fecha a de baixo
+let gavetasJaAbertas = 0;
+const gavetasAbertas = () => [...document.querySelectorAll('.gaveta:not([hidden])')]
+  .sort((p, q) => (+p.dataset.ordem || 0) - (+q.dataset.ordem || 0));
+export function abrirGaveta(gaveta) {
+  gaveta.hidden = false;
+  gaveta.dataset.ordem = String(++gavetasJaAbertas);
+  gavetasAbertas().forEach((g, camada) => g.style.setProperty('--camada', String(camada)));
+}
+// A gaveta que o Esc fecha. Cada gaveta tem o seu ouvinte do Esc, e a escolha vale para a tecla inteira: a primeira que
+// fecha não passa a vez para a de baixo no mesmo Esc
+const gavetaDoEscEscolhida = new WeakMap();
+export function gavetaDoEsc(evento) {
+  if (!gavetaDoEscEscolhida.has(evento)) {
+    const abertas = gavetasAbertas();
+    gavetaDoEscEscolhida.set(evento, abertas.find(g => g.contains(document.activeElement)) || abertas.at(-1) || null);
+  }
+  return gavetaDoEscEscolhida.get(evento);
+}
+
 // Aviso sobre o link que abriu o app (a volta da confirmação da troca de e-mail, um link antigo), com o botão "OK"
 export function avisarDoLink(texto, tipo) {
   $('#aviso-link-texto').textContent = texto;

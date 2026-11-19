@@ -825,6 +825,77 @@ test.describe('O leitor de tela e o teclado', () => {
     await context.close();
   });
 
+  // As gavetas abrem no mesmo lugar, à direita, umas sobre as outras. A de cima é a que abriu por último (ela fica por
+  // cima na tela) ou a que tem o foco: o Esc fecha só ela, e o próximo, a de baixo. O Histórico abre pelo teclado, porque
+  // a outra gaveta cobre o botão dele para o mouse
+  const GAVETAS = [
+    ['os Dados pessoais', '#painel-dados', '#dado-cpf', async page => {
+      await irPara(page, 'alu');
+      await page.locator('#alu tr[data-id="1000"] [data-dados]').click();
+    }],
+    ['as Habilitações', '#painel-instrutor', '#btn-fechar-painel-instrutor', async page => {
+      await irPara(page, 'ins');
+      await page.locator('#s-ins [data-vista-ins="cadastro"]').click();
+      await page.locator('#inst tr.cd[data-id="1"] [data-act="editar-habs"]').click();
+    }]
+  ];
+  const abrirComDuasGavetas = async (page, { abrirGaveta, focoNaGaveta }) => {
+    await abrir(page, { estado: cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000)] }) });
+    await abrirGaveta(page);
+    await expect(page.locator(focoNaGaveta)).toBeFocused();
+    await page.locator('#btn-open-log').focus();
+    await page.keyboard.press('Enter');
+    await expect(page.locator('#historico')).toBeVisible();
+    await expect(page.locator('#btn-fechar-historico')).toBeFocused();
+  };
+  // A gaveta que aparece no meio da área das gavetas (a de cima na tela)
+  const gavetaNaTela = page => page.evaluate(() => {
+    const { left, top, width, height } = document.querySelector('#historico').getBoundingClientRect();
+    return document.elementFromPoint(left + width / 2, top + height / 2).closest('.gaveta').id;
+  });
+
+  for (const [nome, gaveta, focoNaGaveta, abrirGaveta] of GAVETAS) {
+    test(`o Esc fecha só a gaveta de cima: com ${nome} e o Histórico abertos (o Histórico por último), o primeiro fecha o Histórico, o segundo, ${nome}`, async ({ page }) => {
+      await abrirComDuasGavetas(page, { abrirGaveta, focoNaGaveta });
+      expect(await gavetaNaTela(page), 'o Histórico, que abriu por último, fica por cima').toBe('historico');
+      await page.keyboard.press('Escape');
+      await expect(page.locator('#historico')).toBeHidden();
+      await expect(page.locator(gaveta)).toBeVisible();
+      await expect(page.locator('#btn-open-log')).toBeFocused();
+      await page.keyboard.press('Escape');
+      await expect(page.locator(gaveta)).toBeHidden();
+    });
+  }
+
+  test('o Esc fecha só a gaveta de cima: com o Histórico aberto, os Dados pessoais abertos depois fecham primeiro', async ({ page }) => {
+    await abrir(page, { estado: cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000)] }) });
+    await irPara(page, 'alu');
+    await page.locator('#btn-open-log').click();
+    await expect(page.locator('#historico')).toBeVisible();
+    // A gaveta do Histórico pode cobrir o botão da linha: pelo teclado
+    await page.locator('#alu tr[data-id="1000"] [data-dados]').focus();
+    await page.keyboard.press('Enter');
+    await expect(page.locator('#dado-cpf')).toBeFocused();
+    expect(await gavetaNaTela(page)).toBe('painel-dados');
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#painel-dados')).toBeHidden();
+    await expect(page.locator('#historico')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#historico')).toBeHidden();
+  });
+
+  test('o Esc fecha a gaveta em que está o foco, mesmo a de baixo; o próximo, a outra', async ({ page }) => {
+    const [, , focoNaGaveta, abrirGaveta] = GAVETAS[0];
+    await abrirComDuasGavetas(page, { abrirGaveta, focoNaGaveta });
+    // O foco volta para o CPF, nos Dados pessoais (embaixo do Histórico)
+    await page.locator('#dado-cpf').focus();
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#painel-dados')).toBeHidden();
+    await expect(page.locator('#historico')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#historico')).toBeHidden();
+  });
+
   for (const [tema, nome] of [['light', 'claro'], ['dark', 'escuro']]) {
     test(`os textos sobre cor (os status, o ✕ armado, o botão do popup, o selo da aprovação) contrastam, no tema ${nome}`, async ({ page }) => {
       await abrirComExemplo(page);

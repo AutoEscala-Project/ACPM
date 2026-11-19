@@ -1275,9 +1275,10 @@ body[data-role="gestor"] #out .tl-track { cursor: default; }
 .tl-pop-btn + .tl-pop-btn { margin-top: 6px; }
 
 /* Histórico, BI, Manual e toasts */
-/* Histórico da data: gaveta lateral sobre a aba aberta */
+/* Histórico da data: gaveta lateral sobre a aba aberta. As gavetas abertas ficam umas sobre as outras, a que abriu por
+   último em cima (--camada, posta por abrirGaveta em js/dom.js) */
 .gaveta {
-  position: fixed; top: 0; right: 0; bottom: 0; width: min(440px, 100vw); z-index: 200;
+  position: fixed; top: 0; right: 0; bottom: 0; width: min(440px, 100vw); z-index: calc(200 + var(--camada, 0));
   display: flex; flex-direction: column; gap: 8px; padding: 14px 16px; overflow: hidden;
   background: var(--pn); color: var(--ink); border-left: 1px solid var(--ln); box-shadow: -8px 0 24px rgba(0,0,0,.18);
 }

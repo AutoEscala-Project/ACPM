@@ -69,6 +69,22 @@ test.describe('Sugestões para um conflito', () => {
     await expect(botao).toBeFocused();
   });
 
+  // As gavetas ficam umas sobre as outras: o Esc fecha só a de cima (a que abriu por último), e o próximo, a de baixo
+  test('com o Histórico aberto, o Esc fecha primeiro as Sugestões, abertas depois; o segundo, o Histórico', async ({ page }) => {
+    await aprovarETirarOInstrutor(page);
+    await page.locator('#btn-open-log').click();
+    await expect(page.locator('#historico')).toBeVisible();
+    // A gaveta do Histórico pode cobrir o botão: pelo teclado
+    await page.locator('#out details.conflitos [data-reparo]').focus();
+    await page.keyboard.press('Enter');
+    await expect(gaveta(page)).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(gaveta(page)).toBeHidden();
+    await expect(page.locator('#historico')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#historico')).toBeHidden();
+  });
+
   // O pedido mudou depois da aprovação (a duração): a única sugestão é soltar o voo
   test('soltar o voo: o app escala de novo, sem o cadeado; o histórico desfaz', async ({ page }) => {
     const estado = { ...dia(), stu: [aluno(1000, { p1: 390, p2: -1, nb: 2 })], fixos: { '1000_0_1': { a: 390, b: 450, r: 'PP-LJV', insId: 1 } }, aprovacao: { em: '2026-11-10T21:05:00.000Z', por: 'Operador 01' } };

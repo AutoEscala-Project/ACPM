@@ -3,7 +3,7 @@
 import { gravarAlteracao, mostrarNoHistorico, aindaNaoAbriu } from '../actions.js';
 import { WIN, PRE } from '../config.js';
 import { normalizarCursoDoAluno } from '../cursos.js';
-import { $, showToast, focusLast, algumDialogoAberto } from '../dom.js';
+import { $, showToast, focusLast, algumDialogoAberto, gavetaDoEsc } from '../dom.js';
 import { nomeLimpo, numeroBr } from '../format.js';
 import { habilitacoesDoNivel, normalizarHabilitacoes, nomeDaHabilitacao } from '../habilitacoes.js';
 import { LIMITES_DA_LEI, normalizarLimites, comHorasExternas } from '../limites.js';
@@ -18,7 +18,8 @@ import { abrirPainelDeDados, fecharPainelDeDados, salvarPainelDeDados } from '..
 import { rDem } from '../views/demanda.js';
 
 // Dados pessoais de um aluno ou instrutor: o botão da linha abre o painel; Cancelar, ✕ e Esc fecham (o foco volta para
-// o botão). Salvar valida e grava; o histórico registra só os nomes dos campos que mudaram
+// o botão; o Esc, quando o painel é a gaveta de cima ou tem o foco: js/dom.js). Salvar valida e grava; o histórico
+// registra só os nomes dos campos que mudaram
 document.addEventListener('click', e => {
   const botao = e.target.closest('[data-dados]');
   if (botao) {
@@ -29,7 +30,7 @@ document.addEventListener('click', e => {
   if (e.target.closest('#btn-fechar-dados, #btn-cancelar-dados')) fecharPainelDeDados(true);
 });
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape' && !$('#painel-dados').hidden && !algumDialogoAberto()) fecharPainelDeDados(true);
+  if (e.key === 'Escape' && gavetaDoEsc(e) === $('#painel-dados') && !algumDialogoAberto()) fecharPainelDeDados(true);
 });
 document.addEventListener('submit', async e => {
   if (e.target.id !== 'form-dados') return;
@@ -41,13 +42,14 @@ document.addEventListener('submit', async e => {
   if (salvo.historico && salvo.data === DATA) mostrarNoHistorico(salvo.historico);
 });
 
-// Painel das habilitações de um instrutor: ✕ e Esc fecham (o foco volta para o botão que abriu). Ele continua aberto nas
-// outras abas: com um diálogo aberto por cima (o do status, na Escala), o Esc fecha só o diálogo
+// Painel das habilitações de um instrutor: ✕ e Esc fecham (o foco volta para o botão que abriu; o Esc, quando o painel
+// é a gaveta de cima ou tem o foco). Ele continua aberto nas outras abas: com um diálogo aberto por cima (o do status,
+// na Escala), o Esc fecha só o diálogo
 document.addEventListener('click', e => {
   if (e.target.closest('#btn-fechar-painel-instrutor')) fecharPainelDoInstrutor(true);
 });
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape' && !$('#painel-instrutor').hidden && !algumDialogoAberto()) fecharPainelDoInstrutor(true);
+  if (e.key === 'Escape' && gavetaDoEsc(e) === $('#painel-instrutor') && !algumDialogoAberto()) fecharPainelDoInstrutor(true);
 });
 
 // Filtros: os instrutores (nome, habilitação) e os alunos (nome)

@@ -202,6 +202,12 @@ test.describe('Conteúdo gravado malicioso', () => {
       id: 2, data: AMANHA, registrado_em: '2026-11-10T14:10:00.000Z', autor: null, tipo: XA, descricao: 'Recurso retirado',
       reverter: { kind: 'readicionarRecurso', recurso: { reg: XA, tipo: 'C152' }, label: X }, reverte: null, importado: false
     });
+    // O nome do atributo é um objeto que não vira texto (sem toString): a validação da reversão não pode lançar, ou o
+    // painel do Histórico não seria desenhado
+    docs.acpm4_historico.push({
+      id: 5, data: AMANHA, registrado_em: '2026-11-10T14:15:00.000Z', autor: null, tipo: 'mod', descricao: 'PR-CPL: Só VFR',
+      reverter: { kind: 'setAtributo', reg: 'PR-CPL', atributo: { toString: null }, val: true, label: '↶ Reverter' }, reverte: null, importado: false
+    });
     // Uma reversão no formato certo, com HTML no rótulo do botão (até 40 caracteres, o rótulo vale)
     docs.acpm4_historico.push({
       id: 4, data: AMANHA, registrado_em: '2026-11-10T14:20:00.000Z', autor: null, tipo: 'exc', descricao: 'PR-VOB: Manutenção',
@@ -223,11 +229,13 @@ test.describe('Conteúdo gravado malicioso', () => {
     await expect(corrigida.locator('[data-cf="nome"]')).toHaveValue(`Corrigida ${X}`);
     await expect(corrigida.locator('[data-cf="eq"]')).toHaveValue('C152');
     await expect(corrigida.locator('[data-cf="nb"]')).toHaveValue('1');
-    // A reversão adulterada (um recurso com matrícula impossível) não vira botão; a que está no formato certo mostra o
-    // rótulo como texto, e revertê-la não injeta nada
+    // A reversão adulterada (um recurso com matrícula impossível, um atributo que não é texto) não vira botão; a que está
+    // no formato certo mostra o rótulo como texto, e revertê-la não injeta nada
     await page.locator('#btn-open-log').click();
     const entrada = descricao => page.locator('#audit-log-list .audit-item', { hasText: descricao });
     await expect(entrada('Recurso retirado').locator('[data-act="rev-log"]')).toHaveCount(0);
+    await expect(entrada('PR-CPL: Só VFR')).toBeVisible();
+    await expect(entrada('PR-CPL: Só VFR').locator('[data-act="rev-log"]')).toHaveCount(0);
     const reverter = entrada('PR-VOB: Manutenção').locator('[data-act="rev-log"]');
     await expect(reverter).toHaveText('<img src=x onerror=window.__xss=1>');
     await reverter.click();

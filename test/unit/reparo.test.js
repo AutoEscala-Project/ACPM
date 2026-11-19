@@ -7,7 +7,8 @@ import { runAllocationEngine } from '../../js/engine.js';
 import { sugerirReparos, aplicarReparo } from '../../js/reparo.js';
 import { LIMITES_DA_LEI, dentroDosLimites } from '../../js/limites.js';
 import { AIRCRAFT_EQ_TYPES } from '../../js/config.js';
-import { aluno, cenario, instrutor, apenas, GROUND_C152 } from '../helpers/montar.js';
+import { hm } from '../../js/format.js';
+import { aluno, cenario, instrutor, apenas, missaoExtra, GROUND_C152 } from '../helpers/montar.js';
 
 const pino = o => ({ a: o.a, b: o.b, r: o.r, insId: o.insId, ...(o.isGround ? { classKey: o.classKey } : {}) });
 const fixarTudo = out => Object.fromEntries(out.map(o => [o.fKey, pino(o)]));
@@ -129,6 +130,30 @@ describe('Sugestões para um conflito', () => {
     const [voo] = runAllocationEngine(aplicar(estado, resultado, '1000_0_1', opcoes[0])).out;
     assert.equal(voo.conflito, undefined);
     assert.ok(voo.a >= 450);
+  });
+
+  // A regra do motor (fimDasMissoesDoDia, js/horarios.js): o Noturno só sai às 17:30, e o aluno que tem um na demanda do
+  // dia termina as outras missões antes dele, também com o Noturno fora da escala (aqui, nenhum C172). O voo fixo das
+  // 14:30, sem o instrutor nesse período, só vai para as 16:20 quando termina até as 17:30; na turma de Ground, vale o
+  // aluno da turma que tem o Noturno
+  it('o horário mais tarde segue a regra do Noturno: quem tem um no dia termina as outras missões até as 17:30', () => {
+    const aw = Array(9).fill(true); aw[6] = false;
+    const noturno = fly => ({ mis: 'Noturno', eq: 'C172', nb: 1, p1: 8, p2: 8, fly });
+    const sugestoes = (stu, mis) => {
+      const base = cenario({ ins: [instrutor(1, 9)], stu, semAeronaves: apenas('C172') });
+      const { estado, resultado } = aprovadoEMudado(base, e => ({ ...e, ins: [instrutor(1, 9, { aw })] }));
+      const voo = resultado.out.find(o => o.mis === mis);
+      assert.deepEqual([hm(voo.a), voo.conflitoCodigos], ['14:30', ['instrutor-indisponivel']]);
+      return sugerirReparos(estado, resultado, voo.fKey).map(o => (o.mudancas ? `${hm(o.mudancas.a)}–${hm(o.mudancas.b)}` : o.tipo));
+    };
+    const simulador = (fly, nb) => sugestoes([aluno(1000, noturno(fly), { extra: [missaoExtra(1, { mis: 'Simulador', eq: 'Sim. Mono', nb, p1: 870, p2: -1 })] })], 'Simulador');
+    const turma = fly => sugestoes([aluno(1000, noturno(fly), { extra: [missaoExtra(1, { ...GROUND_C152, p1: 870, p2: -1 })] }), aluno(1001, { ...GROUND_C152, p1: 870, p2: -1 })], 'Ground C152');
+    assert.deepEqual(simulador(true, 2), ['soltar', 'cancelar'], 'o simulador de 2 h às 16:20 iria até as 18:20');
+    assert.deepEqual(simulador(true, 1), ['16:20–17:20', 'soltar', 'cancelar'], 'o de 1 h termina às 17:20');
+    assert.deepEqual(turma(true), ['soltar', 'cancelar'], 'a turma às 16:20 iria até as 17:50');
+    // Sem o Noturno na demanda, o simulador e a aula podem passar das 17:30
+    assert.deepEqual(simulador(false, 2), ['16:20–18:20', 'soltar', 'cancelar']);
+    assert.deepEqual(turma(false), ['16:20–17:50', 'soltar', 'cancelar']);
   });
 
   it('o voo em andamento (Em Voo, Atrasado ou Pousou) não é solto', () => {

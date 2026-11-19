@@ -3,7 +3,7 @@
 import { gravarAlteracao, logChange, gravarEscalaCalculada, aindaNaoAbriu, dadosLidos } from '../actions.js';
 import { opcoesDeCategoria } from '../categorias.js';
 import { OPCOES_DE_BURACOS, OPCOES_DE_HORARIOS, normalizarCriterios } from '../criterios.js';
-import { $, showToast, anunciar, algumDialogoAberto } from '../dom.js';
+import { $, showToast, anunciar, algumDialogoAberto, gavetaDoEsc } from '../dom.js';
 import { exp, pdf, planilha } from '../export.js';
 import { fixosAoMudarStatus, fixosAoReabrir, fixosAoAprovar } from '../fixos.js';
 import { hm } from '../format.js';
@@ -20,7 +20,7 @@ import { rDem } from '../views/demanda.js';
 import { pedirDetalheDoStatus } from '../views/dialogo-status.js';
 import { cursoDoResultado } from '../views/etapas.js';
 import { rOut, botaoDoInstrutor, seletorDeInstrutor, abrirPopupDoMapa, fecharPopupDoMapa, popupDoMapaAberto, reposicionarPopupDoMapa, tabNoPopup } from '../views/escala.js';
-import { abrirPainelDeReparo, fecharPainelDeReparo, opcaoDoPainel, painelDeReparoAberto } from '../views/reparo.js';
+import { abrirPainelDeReparo, fecharPainelDeReparo, opcaoDoPainel } from '../views/reparo.js';
 
 // O minuto de um clique na faixa de uma linha do mapa: a posição dele dentro da faixa (sem a borda), entre o início e o
 // fim do mapa (data-inicio e data-fim), de 5 em 5 minutos
@@ -292,6 +292,8 @@ document.addEventListener('click', e => {
   if (escolhas.length) rDem();
   showToast(opcao.soltar ? 'Voo solto: o app escalou de novo.' : 'Sugestão aplicada: o voo continua fixo.', 'ok');
 });
+// O Esc fecha a gaveta quando ela é a de cima ou tem o foco (js/dom.js); com um diálogo aberto por cima (o do status, o
+// do agendamento), o Esc fecha só o diálogo
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape' && painelDeReparoAberto() && !algumDialogoAberto()) fecharPainelDeReparo(true);
+  if (e.key === 'Escape' && gavetaDoEsc(e) === $('#painel-reparo') && !algumDialogoAberto()) fecharPainelDeReparo(true);
 });

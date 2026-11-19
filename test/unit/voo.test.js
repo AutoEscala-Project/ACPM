@@ -60,4 +60,13 @@ describe('O pedido de um voo', () => {
     assert.equal(pedidoDe({ stuId: 1000, mid: 2 }), extra);
     assert.equal(pedidoDe({ stuId: 9999, mid: 0 }), undefined);
   });
+
+  // A volta do noturno de ontem (o trecho "volta", sessão 2) leva o número do pedido de ontem: o pedido de hoje com esse
+  // número é outro, e a volta não tem pedido no dia
+  it('pedidosDosVoos não dá pedido à volta do noturno de ontem', () => {
+    const pedidoDe = pedidosDosVoos([aluno]);
+    assert.equal(pedidoDe({ fKey: '1000_0_2', stuId: 1000, mid: 0, trecho: 'volta' }), undefined);
+    assert.equal(pedidoDe({ fKey: '1000_2_2', stuId: 1000, mid: 2, trecho: 'volta' }), undefined);
+    assert.equal(pedidoDe({ fKey: '1000_0_1', stuId: 1000, mid: 0 }), aluno);
+  });
 });

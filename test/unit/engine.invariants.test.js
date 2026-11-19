@@ -143,6 +143,13 @@ describe('Invariantes do motor de alocação', () => {
     }
   }));
 
+  // O Noturno só sai às 17:30: com ele na demanda do dia (entre ou não na escala), o simulador e a aula do aluno, que
+  // podem passar das 17:30, terminam antes, também depois da compactação
+  it('o aluno com o Noturno na demanda do dia termina as outras missões até as 17:30', () => emTodos(({ estado, out }) => {
+    const comNoturno = new Set(estado.stu.filter(s => [s, ...s.extra].some(p => p.fly && p.mis === 'Noturno')).map(s => s.id));
+    for (const o of out.filter(v => comNoturno.has(v.stuId) && v.mis !== 'Noturno')) assert.ok(o.b <= T[NI], `${o.fKey} (${o.mis}): termina às ${o.b}`);
+  }));
+
   it('o voo começa depois do término do Ground da mesma temática', () => emTodos(({ out }) => {
     for (const voo of out.filter(o => !o.isGround)) {
       for (const g of out.filter(o => o.isGround && o.stuId === voo.stuId)) {
