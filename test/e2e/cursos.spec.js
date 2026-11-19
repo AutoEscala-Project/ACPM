@@ -489,6 +489,34 @@ test.describe('Cursos no servidor (modo compartilhado)', () => {
     await admin.contexto.close();
   });
 
+  // Sem os programas, a lista do curso em Alunos traz os três cursos com que o app começa (o servidor sempre os tem), e o
+  // curso do aluno que não é um deles fica, pela sigla: nenhum aluno perde o curso, e a matrícula continua possível
+  test('sem os programas dos cursos, o curso em Alunos oferece PP, PC e INVA, e o curso de cada aluno continua', async ({ browser }) => {
+    const estado = { ...cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, {}, { curso: 'PP' }), aluno(1001), aluno(1002, {}, { curso: 'MLTE' })] }), cursos: PROGRAMA };
+    const servidor = criarSupabaseFalso(documentosAtuais(estado, AMANHA));
+    servidor.falhar('/rpc/programa_dos_cursos');
+    const operador = await entrar(browser, servidor, CONTAS.operador, { statusEsperados: [503] });
+    await expect(operador.page.locator('#aviso-dados')).toBeVisible();
+    await irPara(operador.page, 'alu');
+    const opcoes = id => operador.page.locator(`#alu tr[data-id="${id}"] [data-f="curso"] option`);
+    const tres = ['PP · Piloto Privado', 'PC · Piloto Comercial', 'INVA · Instrutor de Voo'];
+    await expect(opcoes(1000)).toHaveText(['—', ...tres]);
+    await expect(operador.page.locator('#alu tr[data-id="1000"] [data-f="curso"]')).toHaveValue('PP');
+    await expect(opcoes(1001)).toHaveText(['—', ...tres]);
+    await expect(opcoes(1002)).toHaveText(['—', ...tres, 'MLTE']);
+    await expect(operador.page.locator('#alu tr[data-id="1002"] [data-f="curso"]')).toHaveValue('MLTE');
+    // A matrícula feita sem os programas vale
+    await operador.page.locator('#alu tr[data-id="1001"] [data-f="curso"]').selectOption('INVA');
+    await expect(operador.page.locator('#audit-log-list')).toContainText('Curso de Aluno 1001: INVA');
+    // Lidos os programas, a lista é a das tabelas dos cursos: o curso que não existe nelas é dito como tal
+    await operador.page.locator('#btn-tentar-dados').click();
+    await expect(operador.page.locator('#aviso-dados')).toBeHidden();
+    await expect(opcoes(1002)).toHaveText(['—', ...tres, 'MLTE (curso desconhecido)']);
+    await expect(operador.page.locator('#alu tr[data-id="1001"] [data-f="curso"]')).toHaveValue('INVA');
+    expect(operador.erros).toEqual([]);
+    await operador.contexto.close();
+  });
+
   // O Operador consulta os cursos; quem grava é o Administrador, e o servidor confere (salvar_curso recusa com 42501)
   test('o Operador só consulta o programa: a gravação de um curso pela API é recusada pelo servidor (42501)', async ({ browser }) => {
     const servidor = servidorComPrograma();

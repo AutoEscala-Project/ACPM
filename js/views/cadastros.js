@@ -14,6 +14,7 @@ import { ApiClient } from '../storage.js';
 import { gerenciaContas } from '../perfis.js';
 import { progressoDoAluno } from './etapas.js';
 import { unidadeDoVoo, umPorUnidade } from '../voo.js';
+import { CURSOS } from '../cursos.js';
 
 const ROTULO = new Map(HABILITACOES.map(h => [h.id, h.curto]));
 // No cadastro, todas na ordem do painel; na grade do dia, só as que mais distinguem o instrutor
@@ -253,11 +254,14 @@ function voaCom(s) {
 }
 
 // O curso do aluno: os cursos ativos (a aba Cursos), e o curso dele quando está encerrado ("(encerrado)") ou não existe
-// ("(curso desconhecido)"). Sem os programas lidos, o curso dele só pela sigla (nada é dito sobre ele)
+// ("(curso desconhecido)"). Sem os programas lidos, os três cursos com que o app começa (o servidor sempre os tem:
+// nenhum curso é apagado) e o curso dele que não é um deles, só pela sigla (nada é dito sobre ele)
 function opcoesDoCurso(s) {
-  const programa = S.programa || [], atual = s.curso ? programa.find(c => c.sigla === s.curso) : null;
+  const semProgramas = dadoIndisponivel('cursos') || !(S.programa || []).length;
+  const programa = semProgramas ? CURSOS.map(([sigla, nome]) => ({ sigla, nome, ativo: true })) : S.programa;
+  const atual = s.curso ? programa.find(c => c.sigla === s.curso) : null;
   const doAluno = !s.curso || (atual && atual.ativo) ? []
-    : [[s.curso, atual ? `${s.curso} · ${atual.nome} (encerrado)` : dadoIndisponivel('cursos') ? s.curso : `${s.curso} (curso desconhecido)`]];
+    : [[s.curso, atual ? `${s.curso} · ${atual.nome} (encerrado)` : semProgramas ? s.curso : `${s.curso} (curso desconhecido)`]];
   return opts([['', '—'], ...programa.filter(c => c.ativo).map(c => [c.sigla, `${c.sigla} · ${c.nome}`]), ...doAluno], s.curso || '');
 }
 
