@@ -800,6 +800,24 @@ describe('Agendamento: os voos de hoje do aluno (mover e encaixar)', () => {
     assert.deepEqual(deHoje(semEtapa).opcoes.map(o => o.texto), [`Mover Voo Local (amanhã 06:30, ${voo.r})`]);
   });
 
+  // A volta do noturno de ontem leva o número do pedido de ontem (0, na sessão 2), o mesmo do pedido de hoje do aluno, e
+  // não é o voo dele (pedidosDosVoos, js/voo.js): "Mover" é só do voo de hoje, e a volta continua onde está, ocupando o
+  // aluno até as 10:10 (js/candidatos.js)
+  it('a volta do noturno de ontem não é o voo do pedido de hoje: mover leva só o voo de hoje, e a volta fica', () => {
+    const estado = doDia({ s1000: { p1: 820, p2: -1, pr: 5 } });
+    estado.noturnosDaVespera = [{ stuId: 1000, mid: 0, insId: 1, r: 'PR-VOY', eqType: 'C172', s: 'Aluno 1000', ins: 'Instrutor 01', stuKg: 70, fim: 1290 }];
+    const doAluno = out => out.filter(o => o.stuId === 1000).map(o => [o.fKey, o.trecho || null, hm(o.a)]);
+    const { base, formulario: f } = agendar(estado, { amb, escolhas: { aluno: 1000 } });
+    assert.deepEqual(doAluno(base.out), [['1000_0_2', 'volta', '07:30'], ['1000_0_1', null, '13:40']]);
+    const voo = base.out.find(o => o.fKey === '1000_0_1');
+    assert.deepEqual(deHoje(f).opcoes.map(o => [o.valor, o.texto]), [['pedido:0', `Mover Voo Local (amanhã 13:40, ${voo.r})`]]);
+    // O voo novo do aluno: o primeiro horário depois da volta
+    assert.equal(f.horario, 610);
+    // O voo de hoje movido para as 10:10: a volta continua às 07:30, sem pedido
+    const { sim } = agendar(estado, { amb, escolhas: { aluno: 1000, missao: 'pedido:0', horario: 610 }, tocados: ['missao', 'horario'] });
+    assert.deepEqual(doAluno(sim.out), [['1000_0_2', 'volta', '07:30'], ['1000_0_1', null, '10:10']]);
+  });
+
   it('o voo em andamento e o cancelado ficam desligados, com o status; o cancelado não segura a próxima missão', () => {
     const estado = doDia({ s1000: { etapa: 'IN-01', cursoDaEtapa: 'PP' } });
     const voo = runAllocationEngine(estado).out.find(o => o.stuId === 1000);
