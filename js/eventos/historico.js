@@ -110,7 +110,8 @@ aoAcionar('rev-log', b => {
     rRec();
   } else if (rev.kind === 'desfazerAgendamento') {
     // Um voo agendado na Escala: o criado sai, o movido volta para onde estava, e o instrutor marcado disponível volta
-    // como estava (js/reversoes.js). O voo já em andamento ou com resultado registrado fica, com o aviso
+    // como estava (js/reversoes.js). O voo já em andamento ou com resultado registrado fica, com o aviso; o movido cujo
+    // pedido saiu da Demanda também (não há o que desfazer)
     const motivo = motivoParaNaoDesfazer(S, rev);
     if (motivo) { showToast(motivo); return; }
     if (desfazerAgendamento(S, rev)) {

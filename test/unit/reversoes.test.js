@@ -228,7 +228,7 @@ describe('Desfazer um voo agendado na Escala', () => {
     assert.equal(motivoParaNaoDesfazer(estado, MOVIDO), '');
     estado.resultados.doDia.push({ id: 2, aluno: 1000, curso: 'PP', missao: 'PP-07', resultado: 'pendente', data: '2026-11-11', voo: '1000_0_1' });
     assert.equal(motivoParaNaoDesfazer(estado, MOVIDO), 'O voo já tem resultado registrado.');
-    assert.equal(motivoParaNaoDesfazer({ stu: [], fStatus: {} }, MOVIDO), '');
+    assert.equal(motivoParaNaoDesfazer({ stu: dia().stu, fStatus: {} }, MOVIDO), '');
   });
 
   // A leitura dos resultados falhou (js/storage.js: os registros do dia vêm vazios e 'resultados' fica indisponível): o
@@ -244,13 +244,19 @@ describe('Desfazer um voo agendado na Escala', () => {
     assert.equal(motivoParaNaoDesfazer({ ...dia(), indisponiveis: ['horas'] }, MOVIDO), '');
   });
 
-  it('sem o aluno, ou sem o pedido do voo movido, não há o que desfazer', () => {
+  // O "↶ Desfazer" do Histórico não fazia nada e não dizia nada: agora o aviso diz por quê, e o botão continua
+  it('sem o aluno, ou sem o pedido do voo movido, não há o que desfazer, e o aviso diz por quê', () => {
     const estado = dia();
-    assert.equal(desfazerAgendamento(estado, { ...validarReversao(MOVIDO, FROTA_INICIAL), stuId: 1001 }), false);
-    assert.equal(desfazerAgendamento(estado, validarReversao({ ...MOVIDO, mid: 7 }, FROTA_INICIAL)), false);
+    const semAluno = { ...validarReversao(MOVIDO, FROTA_INICIAL), stuId: 1001 }, semPedido = validarReversao({ ...MOVIDO, mid: 7 }, FROTA_INICIAL);
+    assert.equal(motivoParaNaoDesfazer(estado, semAluno), 'O aluno deste voo saiu do cadastro: não há o que desfazer.');
+    assert.equal(motivoParaNaoDesfazer(estado, semPedido), 'O pedido deste voo saiu da Demanda: não há o que desfazer.');
+    assert.equal(motivoParaNaoDesfazer(estado, { ...validarReversao(NOVO, FROTA_INICIAL), stuId: 1001 }), 'O aluno deste voo saiu do cadastro: não há o que desfazer.');
+    assert.equal(desfazerAgendamento(estado, semAluno), false);
+    assert.equal(desfazerAgendamento(estado, semPedido), false);
     assert.deepEqual(estado, dia());
-    // A missão extra criada que já saiu da demanda: a chave do voo fica limpa do mesmo jeito
+    // A missão extra criada que já saiu da demanda: desfaz, e a chave do voo fica limpa do mesmo jeito
     estado.stu[0].extra = estado.stu[0].extra.filter(ex => ex.mid !== 2);
+    assert.equal(motivoParaNaoDesfazer(estado, validarReversao(NOVO, FROTA_INICIAL)), '');
     assert.equal(desfazerAgendamento(estado, validarReversao(NOVO, FROTA_INICIAL)), true);
     assert.equal(Object.hasOwn(estado.fixos, '1000_2_1'), false);
     assert.equal(Object.hasOwn(estado.fStatus, '1000_2_1'), false);

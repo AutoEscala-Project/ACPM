@@ -127,12 +127,16 @@ const mesmoPedido = (p, q) => IDENTIDADE_DO_PEDIDO.every(c => p[c] === q[c]);
 // ler os resultados, como o registro de resultados. O pedido do agendamento (o criado, o que mudou de lugar ou o que
 // entrou na escala) que mudou depois dele (outra missão, recurso, duração ou horário, ou outro pedido no mesmo número de
 // missão extra, que foi tirada e criada de novo) também não: desfazer tiraria ou trocaria um voo que o agendamento não
-// deixou assim
-export function motivoParaNaoDesfazer(estado, { stuId, mid, criadoComo = null }) {
+// deixou assim. Sem o aluno no cadastro, ou sem o pedido do voo que mudou de lugar ou entrou na escala (tirado da
+// Demanda depois), não há o que desfazer; o voo criado numa missão extra que saiu da Demanda é desfeito (a chave dele
+// fica limpa)
+export function motivoParaNaoDesfazer(estado, { stuId, mid, criado, criadoComo = null }) {
   const fKey = chaveDoVoo(stuId, mid);
-  const aluno = criadoComo ? estado.stu.find(s => s.id === stuId) : null;
+  const aluno = estado.stu.find(s => s.id === stuId);
   const atual = aluno ? pedidoDoAluno(aluno, mid) : null;
-  if (atual && !mesmoPedido(atual, criadoComo)) return 'O pedido mudou depois do agendamento: desfazer agora mexeria em outro voo. Mude o pedido na Demanda.';
+  if (!aluno) return 'O aluno deste voo saiu do cadastro: não há o que desfazer.';
+  if (!criado && !atual) return 'O pedido deste voo saiu da Demanda: não há o que desfazer.';
+  if (atual && criadoComo && !mesmoPedido(atual, criadoComo)) return 'O pedido mudou depois do agendamento: desfazer agora mexeria em outro voo. Mude o pedido na Demanda.';
   if (STATUS_EM_ANDAMENTO.includes((estado.fStatus || {})[fKey])) return 'O voo já está em andamento: mude o status em vez de desfazer.';
   if ((estado.indisponiveis || []).includes('resultados')) {
     return 'Sem os resultados dos cursos, o app não confere se o voo já tem resultado: clique em "Tentar de novo" no aviso e desfaça depois.';
@@ -152,7 +156,7 @@ export function motivoParaNaoDesfazer(estado, { stuId, mid, criadoComo = null })
 //   o voo fixo pelo status: o cancelado não volta para a escala, nem ocupa outro lugar);
 // - o instrutor marcado disponível no agendamento volta como estava.
 // O peso digitado no agendamento fica no cadastro: é da pessoa. Responde se desfez: sem o aluno, ou sem o pedido do voo
-// movido (já retirado da demanda), não há o que desfazer
+// movido (já retirado da demanda), não há o que desfazer (motivoParaNaoDesfazer diz por quê)
 export function desfazerAgendamento(estado, { stuId, mid, criado, pedido, fixo, disponibilidade }) {
   const aluno = estado.stu.find(s => s.id === stuId);
   const alvo = aluno ? pedidoDoAluno(aluno, mid) : null;

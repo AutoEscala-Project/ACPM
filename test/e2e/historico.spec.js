@@ -207,6 +207,25 @@ test.describe('Histórico', () => {
     await expect(page.locator('#dem tr[data-k="d"][data-id="1000"][data-mid="0"] [data-f="insId"]')).toHaveValue('2');
   });
 
+  // O voo movido cujo pedido saiu da Demanda (a missão extra tirada depois): não há o que desfazer. O clique não fazia
+  // nada e não dizia nada; agora o aviso diz por quê, e a entrada continua com o botão
+  test('desfazer um voo movido cujo pedido saiu da Demanda: o aviso diz por quê, e nada muda', async ({ page }) => {
+    // A missão extra 1 do Aluno 1000 mudou das 10:10 para as 12:40 e depois saiu da Demanda
+    const estado = cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, { p1: 390, p2: -1 })] });
+    const pedido = { fly: true, mis: 'Voo Local', eq: 'C152', p1: 610, p2: -1, nb: 1, ss: 1, pr: 3 };
+    const descricao = 'Agendado na escala: Aluno 1000 (Voo Local) · Voo Local · 12:40–13:40 · PR-VOB · Instrutor 01 (era 10:10 no PR-VOB)';
+    await abrirComHistorico(page, estado, [agendamento(1, descricao, { stuId: 1000, mid: 1, criado: false, pedido })]);
+    await abrirEscala(page);
+    await page.locator('#btn-open-log').click();
+    const desfazer = page.locator('#audit-log-list [data-act="rev-log"]');
+    await desfazer.click();
+    await expect(page.locator('#toast-box')).toContainText('O pedido deste voo saiu da Demanda: não há o que desfazer.');
+    await expect(desfazer).toHaveText('↶ Desfazer');
+    await expect(page.locator('#audit-log-list .audit-item')).toHaveCount(1);
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#out tbody tr:not(.win)', { hasText: 'Aluno 1000' }).locator('.c-hr')).toContainText('06:30–07:30');
+  });
+
   // Desfazer um agendamento e depois reverter a troca de instrutor feita depois dele: o voo agendado desfeito não volta.
   // De volta, ele prenderia o voo seguinte da aluna no horário, no avião e com o instrutor do agendamento desfeito
   test('desfazer o agendamento e depois reverter a troca de instrutor não traz o voo agendado de volta', async ({ page }) => {
