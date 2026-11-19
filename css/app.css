@@ -872,6 +872,9 @@ td.c-curso .progresso { display: block; margin-top: 2px; color: var(--mu); font-
   table.cadastro.programa td.acoes { grid-area: acoes; padding: 0; display: block; }
   table.cadastro.programa .acoes-da-missao { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 8px; }
   table.cadastro.programa input, table.cadastro.programa select { width: 100%; min-width: 0; }
+  /* O cadeado do código travado (a missão com resultados) fica ao lado do campo, não embaixo dele */
+  table.cadastro.programa td.c-codigo { display: flex; align-items: center; gap: 4px; }
+  table.cadastro.programa td.c-codigo input { flex: 1; }
   table.cadastro.programa .acoes-da-missao select[data-cf="fase"] { order: -1; flex: 1 1 4em; width: auto; max-width: none; }
   table.cadastro.programa td.c-marcas .chk { display: inline-flex; margin-right: 12px; }
   #cursos .campo-da-fase, #cursos details.requisitos { flex: 1 1 100%; }

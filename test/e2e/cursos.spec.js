@@ -943,6 +943,26 @@ test.describe('Cursos: fases, módulos e quando voar', () => {
     })).toBe(true);
     await expect.poll(() => descricoesGuardadas(page)).toEqual(['PP: ADAPT-C152 dispensada']);
   });
+
+  // No celular, cada missão é um cartão: o cadeado do código travado (a missão com resultados) fica ao lado do campo,
+  // na mesma linha, e o cartão cabe na tela
+  test('no celular, o cadeado do código travado fica ao lado do campo', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 812 });
+    await abrirComPrograma(page, { conteudo: CRONOGRAMA, resultados: aprovadas(1000, ['TMA-05'], 1) });
+    await irPara(page, 'cur');
+    const linha = curso(page, 'PP').locator(`tr[data-missao="${M.tma05}"]`);
+    await expect(linha.locator('[data-cf="codigo"]')).toHaveAttribute('readonly', '');
+    const campo = await linha.locator('[data-cf="codigo"]').boundingBox(), cadeado = await linha.locator('td.c-codigo svg').boundingBox();
+    // O cadeado começa depois do fim do campo, com o meio dele na altura do campo
+    expect(cadeado.x).toBeGreaterThanOrEqual(campo.x + campo.width);
+    expect(cadeado.y + cadeado.height / 2).toBeGreaterThan(campo.y);
+    expect(cadeado.y + cadeado.height / 2).toBeLessThan(campo.y + campo.height);
+    // O campo e o nome ao lado continuam inteiros, e a página não rola para o lado
+    const nome = await linha.locator('[data-cf="nome"]').boundingBox();
+    expect(cadeado.x + cadeado.width).toBeLessThanOrEqual(nome.x);
+    expect(campo.width).toBeGreaterThan(40);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375);
+  });
 });
 
 // Os cursos: "+ Novo curso" (a sigla e o nome conferidos no formulário, o programa vazio ou o cronograma do PP), o nome,
