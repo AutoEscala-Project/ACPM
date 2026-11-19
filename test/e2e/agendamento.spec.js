@@ -332,6 +332,28 @@ test.describe('Agendar um voo na Escala', () => {
     await expect(page.locator('#log-cnt')).toHaveText('0');
   });
 
+  // Um conflito de gravação (outra pessoa gravou antes) deixa a tela só para consulta com o diálogo aberto: os campos e
+  // "Agendar" ficam desligados, e o foco, que cairia na página, vai para "Voltar"
+  for (const [onde, alvo] of [['num campo', '#agd-horario'], ['em "Agendar"', '#agd-confirmar']]) {
+    test(`com o foco ${onde}, a tela que fica só para consulta leva o foco do diálogo a "Voltar", e nada é agendado`, async ({ page }) => {
+      await abrirComCurso(page);
+      await abrirDialogo(page);
+      await page.locator(alvo).focus();
+      await page.evaluate(() => import('./js/actions.js').then(m => m.travarAposConflito()));
+      await expect(page.locator('#agd-erro')).toHaveText('A tela ficou só para consulta: o voo não foi agendado.');
+      await expect(page.locator(alvo)).toBeDisabled();
+      await expect(page.locator('#agd-voltar')).toBeFocused();
+      // O Shift+Tab continua dentro do diálogo; "Voltar" fecha, e nada mudou
+      await page.keyboard.press('Shift+Tab');
+      expect(await dialogo(page).evaluate(d => d.contains(document.activeElement))).toBe(true);
+      await page.locator('#agd-voltar').focus();
+      await page.keyboard.press('Enter');
+      await expect(dialogo(page)).toBeHidden();
+      await expect(voo(page, 'Maria Silva')).toHaveCount(0);
+      await expect(page.locator('#log-cnt')).toHaveText('0');
+    });
+  }
+
   test('no celular (390 px), o diálogo cabe na tela e os campos e botões têm 44 px', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await abrirComCurso(page);

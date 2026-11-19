@@ -315,13 +315,17 @@ function enviar() {
   aoConfirmar({ proposta: formulario.proposta, base, avaliacao, contexto });
 }
 
-// A tela ficou só para consulta (o Gestor, ou o conflito de gravação com o diálogo aberto): nada é agendado
+// A tela ficou só para consulta (o Gestor, ou o conflito de gravação com o diálogo aberto): nada é agendado. O campo
+// ou o botão com o foco fica desligado, e o foco cairia na página (o Tab seguinte sairia dela): ele vai para "Voltar",
+// o que sobra para fazer
 function travar() {
   pedido.travado = true;
   clearTimeout(pedido.temporizador);
   desenharFormulario();
   $('#agd-confirmar').disabled = true;
   $('#agd-erro').textContent = 'A tela ficou só para consulta: o voo não foi agendado.';
+  const dlg = $('#dlg-agendar'), foco = document.activeElement;
+  if (dlg.open && (!foco || !dlg.contains(foco) || foco.disabled)) $('#agd-voltar').focus();
 }
 
 // Abre o diálogo pelo contexto (o data-agendar do botão). aoConfirmar recebe a proposta, a escala de agora (base), a
