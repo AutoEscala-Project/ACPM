@@ -380,6 +380,24 @@ describe('Limpar demanda', () => {
     assert.deepEqual(estado.fObs, { '1001_0_1': { novoInicio: 530 } });
   });
 
+  it('na turma de Ground, o aluno em aula fica na turma, com a sala e o instrutor; os colegas ainda Confirmado são limpos', () => {
+    // A turma de três alunos, na escala aprovada: só o 1001 está em aula (cada aluno da turma tem o seu status)
+    const base = cenario({ ins: [instrutor(1, 9), instrutor(2, 9)], stu: [1000, 1001, 1002].map(id => aluno(id, { ...GROUND_C152, p1: 390, p2: -1 })) });
+    const antes = runAllocationEngine(base);
+    assert.equal(new Set(antes.out.map(o => o.classKey)).size, 1, 'uma turma só');
+    const estado = { ...structuredClone(base), fixos: fixarTudo(antes.out), fStatus: { '1000_0_1': 'Confirmado', '1001_0_1': 'Em Voo' }, aprovacao: APROVACAO };
+    assert.deepEqual(limparDemanda(estado), { ficam: 1, reaberta: true });
+    assert.deepEqual([estado.fixos, estado.fStatus], [{ '1001_0_1': pino(doAluno(antes.out, 1001)) }, { '1001_0_1': 'Em Voo' }]);
+    assert.deepEqual(estado.stu.map(s => [s.id, s.fly, s.mis]), [[1000, false, 'Voo Local'], [1001, true, 'Ground C152'], [1002, false, 'Voo Local']]);
+    // O aluno em aula continua no mesmo lugar, e o colega que volta a pedir o mesmo Ground entra na turma dele
+    Object.assign(estado.stu[0], GROUND_C152, { fly: true, p1: 390, p2: -1 });
+    const { out } = runAllocationEngine(estado);
+    assert.deepEqual(out.map(o => [o.stuId, pino(o), o.fixo, o.status]).sort(), [
+      [1000, pino(doAluno(antes.out, 1000)), undefined, 'Confirmado'],
+      [1001, pino(doAluno(antes.out, 1001)), true, 'Em Voo']
+    ]);
+  });
+
   it('a escala aprovada é reaberta, como em Reabrir: só o voo em andamento continua fixo', () => {
     // O voo fixo que o dia ainda guarda de uma missão extra tirada antes (1000_4_1) não é um pedido: sai como em Reabrir
     const estado = {
