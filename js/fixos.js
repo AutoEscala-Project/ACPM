@@ -3,7 +3,7 @@
 // O operador também fixa um voo na Escala: pelo instrutor escolhido (a marca escolhido) e pelo agendamento (a marca
 // agendado). As marcas acompanham o voo fixo na aprovação, no status e na reabertura
 import { rotuloDoStatus } from './status.js';
-import { CHAVE_DO_VOO } from './voo.js';
+import { CHAVE_DO_VOO, pedidoDoAluno } from './voo.js';
 import { MATRICULA } from './frota.js';
 import { MINUTOS_DO_DIA } from './config.js';
 
@@ -81,6 +81,41 @@ export function semAgendados(fixos, chaves = null, fStatus = null) {
     const { agendado: _, ...doStatus } = p;
     return [[fKey, doStatus]];
   }));
+}
+
+// O pedido do voo da chave voa: o aluno e o pedido estão na Demanda, com "Voa" ligado
+function voaNaChave(estado, fKey) {
+  const [stuId, mid] = fKey.split('_').map(Number);
+  const aluno = (estado.stu || []).find(s => s.id === stuId);
+  const pedido = aluno ? pedidoDoAluno(aluno, mid) : null;
+  return Boolean(pedido && pedido.fly);
+}
+
+// Os voos fixos que a reversão de uma mudança nos voos fixos (a troca do instrutor, o reparo das Sugestões) devolve: os de
+// antes dela, menos os das chaves que mudaram de agendamento depois dela (mudados, pelo histórico: js/reversoes.js; o
+// voo fixo e o instrutor escolhido do pedido ficam como estão) e menos o voo agendado cujo agendamento não continua. De
+// volta, ele prenderia o voo do aluno no horário, no recurso e com o instrutor de um agendamento que já não existe. O voo
+// agendado de antes não volta:
+// - com o pedido dele fora da Demanda ou com outra missão (soltos, pelo histórico: a Demanda soltou o voo agendado);
+// - com o voo fixo de agora sem a marca do agendamento (o desfazer devolveu o voo fixo de antes do agendamento; a Demanda
+//   tirou a marca do voo em andamento): o de agora fica;
+// - com a chave sem voo fixo e o pedido fora da Demanda ou sem voar (a missão extra tirada, a demanda limpa, o
+//   agendamento desfeito): nem o instrutor escolhido do pedido;
+// - com a chave sem voo fixo, depois de uma mudança que não solta o voo agendado (soltaAgendado: false, a troca do
+//   instrutor): o que o soltou depois dela continua valendo.
+// O voo agendado que o próprio reparo soltou ("Soltar o voo"), com o pedido voando, volta. Devolve os voos fixos que
+// voltam e as chaves dos pedidos que ficam com o instrutor escolhido de agora
+export function fixosQueVoltam(estado, fixos, { mudados = new Set(), soltos = new Set(), soltaAgendado = true } = {}) {
+  const atuais = estado.fixos || {};
+  const semInstrutor = new Set(mudados);
+  const voltam = {};
+  for (const [fKey, p] of Object.entries(fixos || {})) {
+    if (mudados.has(fKey)) continue;
+    const atual = atuais[fKey];
+    if (p.agendado && !atual && !voaNaChave(estado, fKey)) semInstrutor.add(fKey);
+    else if (!p.agendado || !(soltos.has(fKey) || (atual ? !atual.agendado : !soltaAgendado))) voltam[fKey] = p;
+  }
+  return { fixos: voltam, semInstrutor };
 }
 
 // Por que o voo está fixo (o texto do cadeado): o status de andamento (com o nome da tela), o agendamento na Escala, a

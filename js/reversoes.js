@@ -1,7 +1,8 @@
 // As reversões do histórico. O que "Reverter" desfaz vem gravado no histórico (no servidor, por
 // quem tem conta de operador), então só vale no formato que o próprio app produz: a reversão fora dele não vira botão
 // nem é aplicada. Um recurso retirado volta pela mesma validação do "+ Novo recurso". Desfazer um voo agendado na
-// Escala também fica aqui: quando ele não é desfeito e o que volta como estava.
+// Escala também fica aqui: quando ele não é desfeito e o que volta como estava; e o que a reversão de uma mudança nos
+// voos fixos não devolve depois de um agendamento.
 import { novoRecurso, MATRICULA, ATRIBUTOS_DO_RECURSO } from './frota.js';
 import { normalizarFixos, fixoPeloStatus } from './fixos.js';
 import { CATEGORIAS_COM_HORARIOS, normalizarHorarios } from './horarios.js';
@@ -112,9 +113,12 @@ export function validarReversao(rev, frota) {
   return null;
 }
 
-// O que identifica o pedido criado pelo agendamento: a missão, o recurso, as horas, a preferência (o horário agendado) e
-// a missão do curso. Voar ou não, a prioridade, o instrutor e a disponibilidade mudam sem ele deixar de ser o mesmo
-const IDENTIDADE_DO_PEDIDO = ['mis', 'eq', 'nb', 'p1', 'p2', 'etapa'];
+// A missão do pedido: o tipo de missão, o recurso, as horas e a missão do curso. O pedido que muda de missão na Demanda
+// solta o voo agendado nele (js/eventos/demanda.js)
+const MISSAO_DO_PEDIDO = ['mis', 'eq', 'nb', 'etapa'];
+// O que identifica o pedido criado pelo agendamento: a missão e a preferência (o horário agendado). Voar ou não, a
+// prioridade, o instrutor e a disponibilidade mudam sem ele deixar de ser o mesmo
+const IDENTIDADE_DO_PEDIDO = [...MISSAO_DO_PEDIDO, 'p1', 'p2'];
 const mesmoPedido = (p, q) => IDENTIDADE_DO_PEDIDO.every(c => p[c] === q[c]);
 
 // O voo agendado na Escala que já está em andamento (Em Voo, Atrasado ou Pousou) ou que já tem resultado registrado não
@@ -171,4 +175,42 @@ export function desfazerAgendamento(estado, { stuId, mid, criado, pedido, fixo, 
     if (x) Object.assign(x, { on: disponibilidade.on, aw: [...disponibilidade.aw] });
   }
   return true;
+}
+
+// Reverter uma mudança nos voos fixos (a troca do instrutor ou um reparo das Sugestões: a entrada do histórico) depois de
+// um agendamento na Escala. O histórico da data (as entradas, a mais nova primeiro) diz, por chave de voo, o que a
+// reversão não devolve (js/fixos.js, fixosQueVoltam):
+// - mudados: a chave de um agendamento feito depois da mudança, que não foi desfeito (o voo fixo e o instrutor escolhido
+//   do pedido são os dele), e a de um agendamento de antes dela que foi desfeito depois ("↶ Desfazer" devolveu a chave e o
+//   pedido como eram antes do agendamento): nem o voo fixo nem o instrutor escolhido de antes da mudança voltam;
+// - soltos: a do agendamento de antes da mudança cujo pedido saiu da Demanda ou mudou de missão (a Demanda soltou o voo
+//   agendado): o voo agendado de antes dela não volta.
+// O agendamento de antes da mudança, em cada chave, é o último dela que não foi desfeito antes da mudança
+export function agendamentosEmVolta(estado, historico, entrada, frota) {
+  const mudados = new Set(), soltos = new Set();
+  const i = historico.indexOf(entrada);
+  if (i < 0) return { mudados, soltos };
+  const depois = historico.slice(0, i), antes = historico.slice(i + 1);
+  const desfeitas = entradas => new Set(entradas.map(e => e.reverte).filter(id => !ausente(id)));
+  const desfeitasDepois = desfeitas(depois), desfeitasAntes = desfeitas(antes);
+  const agendamento = e => {
+    const rev = validarReversao(e.revert, frota);
+    return rev && rev.kind === 'desfazerAgendamento' ? rev : null;
+  };
+  for (const e of depois) {
+    const rev = agendamento(e);
+    if (rev && !desfeitasDepois.has(e.id)) mudados.add(chaveDoVoo(rev.stuId, rev.mid));
+  }
+  const vistas = new Set();
+  for (const e of antes) {
+    const rev = agendamento(e);
+    const fKey = rev ? chaveDoVoo(rev.stuId, rev.mid) : null;
+    if (!rev || desfeitasAntes.has(e.id) || vistas.has(fKey)) continue;
+    vistas.add(fKey);
+    if (desfeitasDepois.has(e.id)) { mudados.add(fKey); continue; }
+    const aluno = estado.stu.find(s => s.id === rev.stuId);
+    const pedido = aluno ? pedidoDoAluno(aluno, rev.mid) : null;
+    if (!pedido || (rev.criadoComo && MISSAO_DO_PEDIDO.some(c => pedido[c] !== rev.criadoComo[c]))) soltos.add(fKey);
+  }
+  return { mudados, soltos };
 }

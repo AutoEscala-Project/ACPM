@@ -12,7 +12,7 @@ import { FROTA_INICIAL, recursoDaFrota } from './frota.js';
 import { normalizarLimites } from './limites.js';
 import { problemasDoInstrutor } from './viabilidade.js';
 import { isGroundMission } from './rules.js';
-import { pinoDoVoo, fixoPeloStatus } from './fixos.js';
+import { pinoDoVoo, fixoPeloStatus, fixosQueVoltam } from './fixos.js';
 import { chaveDoVoo, pedidoDoAluno, statusDoVoo, umPorUnidade, compromissoDoVoo } from './voo.js';
 
 const instrutorValido = v => Number.isInteger(v) && v > 0;
@@ -124,20 +124,28 @@ export function escolherInstrutor(estado, resultado, { stuId, mid = 0 }, insId, 
   return { antes, alunos: alvos.length };
 }
 
+// O que o histórico diz dos agendamentos em volta da mudança revertida (js/reversoes.js, agendamentosEmVolta): sem ele,
+// nenhum agendamento mudou depois dela
+const SEM_AGENDAMENTOS = { mudados: new Set(), soltos: new Set() };
+
 // Desfaz uma escolha (a reversão do histórico): os pedidos voltam como estavam e os voos fixos também. O voo que não
 // era fixo deixa de ser; se depois disso a escala foi aprovada, o voo ganhou um status que fixa ou foi agendado na
 // Escala, ele continua fixo onde está, com o instrutor de agora, só sem a marca da escolha (o instrutor de antes pode
-// já ter outro voo no horário: a escala foi refeita em volta da escolha)
-export function reverterEscolha(estado, { pedidos, fixos, soltar }) {
+// já ter outro voo no horário: a escala foi refeita em volta da escolha). O voo agendado volta só enquanto o
+// agendamento continua (js/fixos.js, fixosQueVoltam; emVolta: o que o histórico diz): a chave de um agendamento
+// desfeito depois da escolha, ou feito depois dela, fica como está, com o instrutor escolhido de agora; e, como a troca
+// do instrutor não solta o voo agendado, o que o soltou depois dela continua valendo
+export function reverterEscolha(estado, { pedidos, fixos, soltar }, emVolta = SEM_AGENDAMENTOS) {
+  const { fixos: voltam, semInstrutor } = fixosQueVoltam(estado, fixos, { ...emVolta, soltaAgendado: false });
   for (const { stuId, mid, insId } of pedidos) {
     const pedido = pedidoDe(estado, stuId, mid);
-    if (!pedido) continue;
+    if (!pedido || semInstrutor.has(chaveDoVoo(stuId, mid))) continue;
     if (insId) pedido.insId = insId;
     else delete pedido.insId;
   }
-  const novos = { ...(estado.fixos || {}), ...fixos };
+  const novos = { ...(estado.fixos || {}), ...voltam };
   for (const k of soltar) {
-    if (!novos[k]) continue;
+    if (!novos[k] || emVolta.mudados.has(k)) continue;
     if (soltavel(estado, k, novos[k])) delete novos[k];
     else { const { escolhido: _, ...resto } = novos[k]; novos[k] = resto; }
   }
@@ -160,5 +168,16 @@ export function escolherNosPedidos(estado, pedidos, insId) {
     if (!pedido) continue;
     if (instrutorValido(insId)) pedido.insId = insId;
     else delete pedido.insId;
+  }
+}
+
+// Desfaz um reparo das Sugestões (a reversão do histórico): os voos voltam a ser fixos como antes dele, e o instrutor
+// escolhido dos pedidos também. O voo agendado volta só enquanto o agendamento continua (js/fixos.js, fixosQueVoltam;
+// emVolta: o que o histórico diz): o que o próprio reparo soltou ("Soltar o voo"), com o pedido voando, volta
+export function reverterReparo(estado, { fixos, pedidos = [] }, emVolta = SEM_AGENDAMENTOS) {
+  const { fixos: voltam, semInstrutor } = fixosQueVoltam(estado, fixos, { ...emVolta, soltaAgendado: true });
+  estado.fixos = { ...(estado.fixos || {}), ...voltam };
+  for (const p of pedidos) {
+    if (!semInstrutor.has(chaveDoVoo(p.stuId, p.mid))) escolherNosPedidos(estado, [p], p.insId);
   }
 }

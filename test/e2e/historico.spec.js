@@ -1,5 +1,5 @@
 // Histórico da data numa gaveta lateral, que abre sobre a aba aberta (sem trocar de aba).
-import { test, expect, abrirSintetico, irPara, abrirEscala, AMANHA, prepararContexto, vigiarErros, entrar } from './fixtures.js';
+import { test, expect, abrir, abrirSintetico, irPara, abrirEscala, AMANHA, prepararContexto, vigiarErros, entrar } from './fixtures.js';
 import { documentosAtuais, instalarSupabaseFalso, CONTAS } from './supabase-falso.js';
 import { aluno, cenario, instrutor, missaoExtra } from '../helpers/montar.js';
 
@@ -205,5 +205,86 @@ test.describe('Histórico', () => {
     await expect(voo.locator('.fixo')).toHaveAttribute('aria-label', 'Voo fixo: instrutor escolhido na escala');
     await irPara(page, 'dem');
     await expect(page.locator('#dem tr[data-k="d"][data-id="1000"][data-mid="0"] [data-f="insId"]')).toHaveValue('2');
+  });
+
+  // Desfazer um agendamento e depois reverter a troca de instrutor feita depois dele: o voo agendado desfeito não volta.
+  // De volta, ele prenderia o voo seguinte da aluna no horário, no avião e com o instrutor do agendamento desfeito
+  test('desfazer o agendamento e depois reverter a troca de instrutor não traz o voo agendado de volta', async ({ page }) => {
+    const estado = cenario({
+      ins: [instrutor(1, 9), instrutor(2, 9)],
+      stu: [aluno(1000, { p1: 390, p2: -1 }), aluno(1001, { fly: false, p1: 870, p2: -1 }, { nm: 'Maria Silva' })]
+    });
+    await abrir(page, { estado });
+    await abrirEscala(page);
+    // A Maria agendada às 10:10, com o recurso e o instrutor que o diálogo sugere
+    await page.locator('#btn-agendar').click();
+    await page.locator('#agd-aluno').selectOption('1001');
+    await page.locator('#agd-horario').selectOption('610');
+    await expect(page.locator('#agd-previa ul')).toContainText('Entra:');
+    const ins = await page.locator('#agd-instrutor').inputValue();
+    await page.locator('#agd-confirmar').click();
+    await expect(page.locator('#dlg-agendar')).toBeHidden();
+    const voo = page.locator('#out tbody tr:not(.win)', { hasText: 'Maria Silva' });
+    await expect(voo.locator('.c-hr')).toContainText('10:10–11:10');
+
+    // Na Demanda, o instrutor da Maria muda para o outro; no Histórico, o agendamento é desfeito e a troca, revertida
+    await irPara(page, 'dem');
+    const pedido = page.locator('#dem tr[data-k="d"][data-id="1001"][data-mid="0"]');
+    await pedido.locator('[data-f="insId"]').selectOption(ins === '1' ? '2' : '1');
+    await page.locator('#btn-open-log').click();
+    const lista = page.locator('#audit-log-list');
+    await lista.locator('.audit-item', { hasText: 'Agendado na escala' }).getByRole('button', { name: '↶ Desfazer' }).click();
+    await expect(lista).toContainText('Revertido: Agendado na escala: Maria Silva');
+    await lista.locator('.audit-item', { hasText: 'Pedido Maria Silva: instrutor' }).getByRole('button', { name: '↶ Reverter' }).click();
+    await expect(lista).toContainText('Revertido: Pedido Maria Silva: instrutor');
+    await page.locator('#btn-fechar-historico').click();
+    // O pedido é o de antes do agendamento: sem voar e sem o instrutor escolhido; o dia não guarda o voo fixo
+    await expect(pedido.locator('[data-f="fly"]')).not.toBeChecked();
+    await expect(pedido.locator('[data-f="insId"]')).toHaveValue('');
+    expect(await page.evaluate(data => JSON.parse(localStorage.getItem(`acpm4_dia_${data}`)).fixos, AMANHA)).toEqual({});
+
+    // A Maria volta a voar: o voo vai para a preferência dela (14:30), sem o cadeado
+    await page.locator('#incluir-aluno').fill('Maria Silva');
+    await page.locator('#incluir-aluno').press('Enter');
+    await expect(pedido.locator('[data-f="fly"]')).toBeChecked();
+    await abrirEscala(page);
+    await expect(voo.locator('.c-hr')).toContainText('14:30–15:30');
+    await expect(voo.locator('.fixo')).toHaveCount(0);
+  });
+
+  // O voo movido pelo agendamento continua na Demanda depois de desfeito (com o pedido de antes): é o histórico que diz
+  // que o agendamento foi desfeito depois da troca de instrutor
+  test('desfazer um voo movido e depois reverter a troca de instrutor: o voo volta para onde estava, sem o cadeado', async ({ page }) => {
+    const estado = cenario({ ins: [instrutor(1, 9), instrutor(2, 9)], stu: [aluno(1000, { p1: 390, p2: -1 }, { nm: 'Maria Silva' })] });
+    await abrir(page, { estado });
+    await abrirEscala(page);
+    const voo = page.locator('#out tbody tr:not(.win)', { hasText: 'Maria Silva' });
+    await expect(voo.locator('.c-hr')).toContainText('06:30–07:30');
+    // O voo de hoje da Maria muda para as 12:40
+    await page.locator('#btn-agendar').click();
+    await page.locator('#agd-aluno').selectOption('1000');
+    await page.locator('#agd-missao').selectOption('pedido:0');
+    await page.locator('#agd-horario').selectOption('760');
+    await expect(page.locator('#agd-previa ul')).toContainText('Muda:');
+    const ins = await page.locator('#agd-instrutor').inputValue();
+    await page.locator('#agd-confirmar').click();
+    await expect(page.locator('#dlg-agendar')).toBeHidden();
+    await expect(voo.locator('.c-hr')).toContainText('12:40–13:40');
+
+    await irPara(page, 'dem');
+    const pedido = page.locator('#dem tr[data-k="d"][data-id="1000"][data-mid="0"]');
+    await pedido.locator('[data-f="insId"]').selectOption(ins === '1' ? '2' : '1');
+    await page.locator('#btn-open-log').click();
+    const lista = page.locator('#audit-log-list');
+    await lista.locator('.audit-item', { hasText: 'Agendado na escala' }).getByRole('button', { name: '↶ Desfazer' }).click();
+    await expect(lista).toContainText('Revertido: Agendado na escala: Maria Silva');
+    await lista.locator('.audit-item', { hasText: 'Pedido Maria Silva: instrutor' }).getByRole('button', { name: '↶ Reverter' }).click();
+    await expect(lista).toContainText('Revertido: Pedido Maria Silva: instrutor');
+    await page.locator('#btn-fechar-historico').click();
+    // O pedido de antes do agendamento, sem o instrutor escolhido; o voo de volta às 06:30, solto
+    await expect(pedido.locator('[data-f="insId"]')).toHaveValue('');
+    await abrirEscala(page);
+    await expect(voo.locator('.c-hr')).toContainText('06:30–07:30');
+    await expect(voo.locator('.fixo')).toHaveCount(0);
   });
 });

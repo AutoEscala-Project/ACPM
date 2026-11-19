@@ -2,9 +2,16 @@
 // formato que o próprio app produz; o resto não vira botão nem é aplicado.
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { validarReversao, motivoParaNaoDesfazer, desfazerAgendamento } from '../../js/reversoes.js';
+import { validarReversao, motivoParaNaoDesfazer, desfazerAgendamento, agendamentosEmVolta } from '../../js/reversoes.js';
 import { FROTA_INICIAL } from '../../js/frota.js';
 import { CAMPOS_DO_PEDIDO } from '../../js/dias.js';
+import { aplicarAgendamento, reversaoDoAgendamento } from '../../js/agendamento.js';
+import { escolherInstrutor, escolhasDaUnidade, escolherNosPedidos, reverterEscolha, reverterReparo } from '../../js/instrutor-escolhido.js';
+import { aplicarReparo } from '../../js/reparo.js';
+import { normalizarFixos, semAgendados, fixosAoAprovar } from '../../js/fixos.js';
+import { runAllocationEngine } from '../../js/engine.js';
+import { blank } from '../../js/rules.js';
+import { aluno, cenario, instrutor } from '../helpers/montar.js';
 
 const ATAQUE = 'x"><img/src/onerror=window.__xss=1>';
 
@@ -247,5 +254,172 @@ describe('Desfazer um voo agendado na Escala', () => {
     assert.equal(desfazerAgendamento(estado, validarReversao(NOVO, FROTA_INICIAL)), true);
     assert.equal(Object.hasOwn(estado.fixos, '1000_2_1'), false);
     assert.equal(Object.hasOwn(estado.fStatus, '1000_2_1'), false);
+  });
+});
+
+// Reverter uma troca de instrutor ou um reparo das Sugestões depois de um agendamento na Escala: o histórico da data (a
+// entrada mais nova primeiro) diz o que a reversão não devolve. O voo agendado volta só enquanto o agendamento continua:
+// de volta depois de desfeito (ou de solto pela Demanda), ele prenderia o voo seguinte do aluno no horário, no avião e com
+// o instrutor de um agendamento que não existe mais
+describe('Reverter depois de um agendamento na Escala', () => {
+  const K = '1001_0_1';
+  // O Aluno 1000 voa às 06:30; o Aluno 1001 não voa (o pedido dele prefere as 14:30)
+  const dia = () => cenario({ ins: [instrutor(1, 9), instrutor(2, 9)], stu: [aluno(1000, { p1: 390, p2: -1 }), aluno(1001, { fly: false, p1: 870, p2: -1 })] });
+  // O Aluno 1001 voa às 06:30, sem voo fixo
+  const voando = () => cenario({ ins: [instrutor(1, 9), instrutor(2, 9)], stu: [aluno(1001, { p1: 390, p2: -1 })] });
+  // O agendamento: um voo novo do Aluno 1001 às 10:10 no PP-LJV com o Instrutor 01, ou o voo de hoje dele, que muda para
+  // as 12:40
+  const NOVO = { stuId: 1001, mis: 'Voo Local', eq: 'C152', nb: 1, a: 610, b: 670, r: 'PP-LJV', insId: 1 };
+  const MOVIDO = { ...NOVO, a: 760, b: 820, pedido: { mid: 0, acao: 'mover' } };
+  const AGENDADO = { a: 610, b: 670, r: 'PP-LJV', insId: 1, agendado: true };
+  const vooDe = (estado, fKey = K) => runAllocationEngine(estado).out.find(o => o.fKey === fKey);
+
+  // O histórico como o painel o guarda, e o que js/eventos/historico.js faz no clique de "↶ Desfazer" ou "↶ Reverter";
+  // o agendamento (js/eventos/agendamento.js), a troca do instrutor na Demanda (js/eventos/demanda.js) e o reparo das
+  // Sugestões (js/eventos/escala.js), com a reversão de cada um
+  function historico() {
+    const lista = [];
+    const registrar = revert => {
+      const e = { id: lista.length + 1, revert: JSON.parse(JSON.stringify(revert)), reverte: null };
+      lista.unshift(e);
+      return e;
+    };
+    const reverter = (estado, e) => {
+      const rev = validarReversao(e.revert, FROTA_INICIAL);
+      if (rev.kind === 'desfazerAgendamento') {
+        assert.equal(motivoParaNaoDesfazer(estado, rev), '');
+        assert.equal(desfazerAgendamento(estado, rev), true);
+      } else {
+        const emVolta = agendamentosEmVolta(estado, lista, e, FROTA_INICIAL);
+        (rev.kind === 'restaurarEscolha' ? reverterEscolha : reverterReparo)(estado, rev, emVolta);
+        estado.fixos = normalizarFixos(estado.fixos);
+      }
+      lista.unshift({ id: lista.length + 1, revert: null, reverte: e.id });
+    };
+    const agendar = (estado, proposta) => registrar(reversaoDoAgendamento(aplicarAgendamento(estado, runAllocationEngine(estado), proposta)));
+    const trocar = (estado, stuId, mid, insId) =>
+      registrar({ kind: 'restaurarEscolha', ...escolherInstrutor(estado, runAllocationEngine(estado), { stuId, mid }, insId).antes, label: '↶ Reverter' });
+    const reparar = (estado, fKey, opcao) => {
+      const res = runAllocationEngine(estado), antes = estado.fixos;
+      const escolhas = escolhasDaUnidade(estado, res, fKey);
+      if (opcao.soltar) escolherNosPedidos(estado, escolhas, null);
+      else if (opcao.mudancas.insId) escolherNosPedidos(estado, escolhas, opcao.mudancas.insId);
+      estado.fixos = aplicarReparo(antes, res, fKey, opcao);
+      const mudados = Object.keys(antes).filter(k => estado.fixos[k] !== antes[k]);
+      return registrar({ kind: 'restaurarFixos', fixos: Object.fromEntries(mudados.map(k => [k, antes[k]])), ...(escolhas.length ? { pedidos: escolhas } : {}), label: '↶ Reverter' });
+    };
+    return { lista, agendar, trocar, reparar, reverter };
+  }
+
+  it('desfazer o agendamento e depois reverter a troca de instrutor não traz o voo agendado de volta', () => {
+    const estado = dia(), h = historico();
+    const agendamento = h.agendar(estado, NOVO);
+    const troca = h.trocar(estado, 1001, 0, 2);
+    assert.deepEqual(estado.fixos[K], { ...AGENDADO, insId: 2 });
+    h.reverter(estado, agendamento);
+    h.reverter(estado, troca);
+    // Nem o voo fixo nem o instrutor escolhido do agendamento desfeito voltam: o pedido é o de antes dele
+    assert.equal(estado.fixos[K], undefined);
+    assert.deepEqual([estado.stu[1].fly, estado.stu[1].insId], [false, undefined]);
+    // O aluno volta a voar, com outra missão: o voo vai para a preferência dele (14:30), sem a marca do agendamento
+    Object.assign(estado.stu[1], { fly: true, mis: 'Navegação', nb: 1.5 });
+    const voo = vooDe(estado);
+    assert.deepEqual([voo.a, Boolean(voo.agendado), Boolean(voo.fixo)], [870, false, false]);
+  });
+
+  it('nem o "Soltar o voo" das Sugestões revertido, nem o voo criado numa missão extra ou movido', () => {
+    const casos = [
+      ['soltar o voo criado', dia, NOVO, (e, h) => h.reparar(e, K, { soltar: true }), K],
+      ['trocar o instrutor da missão extra criada', voando, NOVO, (e, h) => h.trocar(e, 1001, 1, 2), '1001_1_1'],
+      ['trocar o instrutor do voo movido', voando, MOVIDO, (e, h) => h.trocar(e, 1001, 0, 2), K],
+      ['soltar o voo movido', voando, MOVIDO, (e, h) => h.reparar(e, K, { soltar: true }), K],
+      ['passar o voo movido para outro instrutor', voando, MOVIDO, (e, h) => h.reparar(e, K, { mudancas: { insId: 2 } }), K]
+    ];
+    for (const [nome, inicio, proposta, mudar, fKey] of casos) {
+      const estado = inicio(), h = historico();
+      const agendamento = h.agendar(estado, proposta);
+      const mudanca = mudar(estado, h);
+      h.reverter(estado, agendamento);
+      h.reverter(estado, mudanca);
+      assert.equal(estado.fixos[fKey], undefined, nome);
+      const pedido = fKey === K ? estado.stu.find(s => s.id === 1001) : estado.stu.find(s => s.id === 1001).extra.find(ex => ex.mid === 1);
+      if (pedido) assert.equal(pedido.insId, undefined, nome);
+      // O voo movido volta para a preferência dele (06:30), sem a marca do agendamento
+      if (proposta === MOVIDO) assert.deepEqual([vooDe(estado).a, Boolean(vooDe(estado).agendado)], [390, false], nome);
+    }
+  });
+
+  it('o voo agendado que continua volta com a reversão: da troca de instrutor, do "Soltar o voo" e com "Voa" desligado', () => {
+    const casos = [
+      ['trocar o instrutor', (e, h) => h.trocar(e, 1001, 0, 2)],
+      ['soltar o voo', (e, h) => h.reparar(e, K, { soltar: true })],
+      ['trocar o instrutor e desligar "Voa"', (e, h) => { const troca = h.trocar(e, 1001, 0, 2); e.stu[1].fly = false; return troca; }]
+    ];
+    for (const [nome, mudar] of casos) {
+      const estado = dia(), h = historico();
+      h.agendar(estado, NOVO);
+      h.reverter(estado, mudar(estado, h));
+      assert.deepEqual(estado.fixos[K], AGENDADO, nome);
+      assert.equal(estado.stu[1].insId, 1, nome);
+    }
+  });
+
+  it('o agendamento feito depois da mudança fica como está, com o instrutor escolhido dele', () => {
+    // Desfeito e agendado de novo (o pedido principal, às 12:40, com o Instrutor 02)
+    const estado = dia(), h = historico();
+    const primeiro = h.agendar(estado, NOVO);
+    const troca = h.trocar(estado, 1001, 0, 2);
+    h.reverter(estado, primeiro);
+    h.agendar(estado, { ...NOVO, a: 760, b: 820, insId: 2 });
+    h.reverter(estado, troca);
+    assert.deepEqual([estado.fixos[K], estado.stu[1].insId], [{ ...AGENDADO, a: 760, b: 820, insId: 2 }, 2]);
+    // Movido depois da troca (às 14:30, com o Instrutor 02)
+    const movido = dia(), m = historico();
+    m.agendar(movido, NOVO);
+    const outra = m.trocar(movido, 1001, 0, 2);
+    m.agendar(movido, { ...MOVIDO, a: 870, b: 930, insId: 2 });
+    m.reverter(movido, outra);
+    assert.deepEqual([movido.fixos[K], movido.stu[1].insId], [{ ...AGENDADO, a: 870, b: 930, insId: 2 }, 2]);
+  });
+
+  it('o voo agendado que a Demanda soltou não volta: a demanda limpa, outra missão no pedido', () => {
+    const limpa = dia(), h = historico();
+    h.agendar(limpa, NOVO);
+    const troca = h.trocar(limpa, 1001, 0, 2);
+    limpa.stu.forEach(s => { Object.assign(s, blank()); for (const c of ['insId', 'etapa', 'cursoDaEtapa']) delete s[c]; s.extra = []; });
+    limpa.fixos = semAgendados(limpa.fixos, null, limpa.fStatus);
+    h.reverter(limpa, troca);
+    assert.deepEqual([limpa.fixos[K], limpa.stu[1].insId], [undefined, undefined]);
+    // Outra missão no pedido depois do reparo: o voo agendado não volta; o instrutor escolhido de antes do reparo, sim
+    const outra = dia(), r = historico();
+    r.agendar(outra, NOVO);
+    const reparo = r.reparar(outra, K, { mudancas: { insId: 2 } });
+    Object.assign(outra.stu[1], { mis: 'Navegação', nb: 1.5 });
+    outra.fixos = semAgendados(outra.fixos, [K], outra.fStatus);
+    r.reverter(outra, reparo);
+    assert.deepEqual([outra.fixos[K], outra.stu[1].insId], [undefined, 1]);
+  });
+
+  it('o voo fixo que o desfazer devolveu fica: o da escala aprovada, sem a marca do agendamento', () => {
+    const estado = voando(), h = historico();
+    estado.fixos = fixosAoAprovar({}, runAllocationEngine(estado).out);
+    estado.aprovacao = { em: '2026-11-10T10:00:00Z', por: '' };
+    const aprovado = estado.fixos[K];
+    const agendamento = h.agendar(estado, MOVIDO);
+    const troca = h.trocar(estado, 1001, 0, 2);
+    h.reverter(estado, agendamento);
+    h.reverter(estado, troca);
+    assert.deepEqual(estado.fixos[K], aprovado);
+    assert.equal(estado.stu[0].insId, undefined);
+  });
+
+  it('sem a entrada no histórico, o estado decide: o voo agendado sem pedido que voe não volta, nem o instrutor dele', () => {
+    const estado = dia(), h = historico();
+    const agendamento = h.agendar(estado, NOVO);
+    const troca = h.trocar(estado, 1001, 0, 2);
+    assert.deepEqual(agendamentosEmVolta(estado, h.lista, { ...troca }, FROTA_INICIAL), { mudados: new Set(), soltos: new Set() });
+    desfazerAgendamento(estado, validarReversao(agendamento.revert, FROTA_INICIAL));
+    reverterEscolha(estado, validarReversao(troca.revert, FROTA_INICIAL));
+    assert.deepEqual([estado.fixos[K], estado.stu[1].insId], [undefined, undefined]);
   });
 });

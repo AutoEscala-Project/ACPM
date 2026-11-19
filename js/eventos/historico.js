@@ -2,9 +2,9 @@
 import { gravarAlteracao, aindaNaoAbriu } from '../actions.js';
 import { $, showToast, algumDialogoAberto } from '../dom.js';
 import { normalizarFixos } from '../fixos.js';
-import { validarReversao, motivoParaNaoDesfazer, desfazerAgendamento } from '../reversoes.js';
+import { validarReversao, motivoParaNaoDesfazer, desfazerAgendamento, agendamentosEmVolta } from '../reversoes.js';
 import { atributoVale } from '../frota.js';
-import { reverterEscolha, escolherNosPedidos } from '../instrutor-escolhido.js';
+import { reverterEscolha, reverterReparo } from '../instrutor-escolhido.js';
 import { S, AUDIT_LOG, DATA, setAuditLog, isGestor, insBy, stuBy, getMissionTarget } from '../state.js';
 import { ApiClient } from '../storage.js';
 import { aoAcionar } from './registro.js';
@@ -77,13 +77,17 @@ aoAcionar('rev-log', b => {
       rIns();
     }
   } else if (rev.kind === 'restaurarFixos') {
-    // Um reparo desfeito: os voos voltam a ser fixos como antes dele, e o instrutor escolhido dos pedidos também
-    S.fixos = normalizarFixos({ ...(S.fixos || {}), ...rev.fixos });
-    if (rev.pedidos) { rev.pedidos.forEach(p => escolherNosPedidos(S, [p], p.insId)); rDem(); }
+    // Um reparo desfeito: os voos voltam a ser fixos como antes dele, e o instrutor escolhido dos pedidos também. O voo
+    // agendado volta só enquanto o agendamento continua: o histórico diz qual foi desfeito ou feito depois do reparo
+    // (js/reversoes.js e js/instrutor-escolhido.js)
+    reverterReparo(S, rev, agendamentosEmVolta(S, AUDIT_LOG, entry, S.frota));
+    S.fixos = normalizarFixos(S.fixos);
+    if (rev.pedidos) rDem();
     gravarAlteracao('mod', `Revertido: ${entry.desc}`, null, entry.id);
   } else if (rev.kind === 'restaurarEscolha') {
-    // O instrutor escolhido volta como estava, e os voos fixos também (js/instrutor-escolhido.js)
-    reverterEscolha(S, rev);
+    // O instrutor escolhido volta como estava, e os voos fixos também; o voo agendado, só enquanto o agendamento
+    // continua (js/reversoes.js e js/instrutor-escolhido.js)
+    reverterEscolha(S, rev, agendamentosEmVolta(S, AUDIT_LOG, entry, S.frota));
     S.fixos = normalizarFixos(S.fixos);
     gravarAlteracao('mod', `Revertido: ${entry.desc}`, null, entry.id);
     rDem();
