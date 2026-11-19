@@ -259,9 +259,9 @@ describe('Importar as solicitações da agenda para a demanda', () => {
     for (const status of ['Pendente', 'Confirmado']) assert.deepEqual(importar(status), [12, []], status);
   });
 
-  // A sonda do juiz (sonda-limpar.mjs): "Limpar demanda" volta os pedidos ao branco, e o voo fixo (o agendado) fica preso
-  // à chave do pedido principal. O pedido da agenda que entrasse nele herdaria o voo fixo de outra missão; o mesmo com o
-  // status, o detalhe ou o resultado de um voo que saiu da escala
+  // A sonda do juiz (sonda-limpar.mjs), de antes de "Limpar demanda" soltar os voos que limpa: os pedidos voltavam ao
+  // branco, e o voo fixo (o agendado) ficava preso à chave do pedido principal. O pedido da agenda que entrasse nele
+  // herdaria o voo fixo de outra missão; o mesmo com o status, o detalhe ou o resultado de um voo que saiu da escala
   it('o pedido principal que não voa mas tem sobras no dia não recebe o pedido da agenda: ele vira uma missão extra', () => {
     const e = cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, { p1: 610, p2: -1 })] });
     e.fixos = { '1000_0_1': { a: 610, b: 670, r: 'PP-LJV', insId: 1, agendado: true } };

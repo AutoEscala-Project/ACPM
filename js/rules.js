@@ -80,17 +80,20 @@ export const duracaoFixaDaMissao = mis => (isGroundMission(mis) ? GROUND_DURATIO
   : Object.hasOwn(MIS, mis) && MIS[mis].duracaoFixaH ? MIS[mis].duracaoFixaH : null);
 
 export const blank = () => ({ fly: false, mis: 'Voo Local', eq: 'C152', p1: T[1], p2: T[2], nb: 1, ss: 1, pr: 3 });
+// O pedido em branco, sem nada do voo de antes: saem a disponibilidade, a missão do curso (o código e o curso), o pedido
+// da agenda e o instrutor escolhido. Assim ficam o pedido que a agenda reaproveita (alvoDoNovoPedido) e o pedido limpo
+// por "Limpar demanda" (js/fixos.js). Muda o pedido e o devolve
+export function deixarEmBranco(pedido) {
+  Object.assign(pedido, blank());
+  for (const campo of ['jan', 'etapa', 'cursoDaEtapa', 'solicitacao', 'insId']) delete pedido[campo];
+  return pedido;
+}
 
 // O pedido que recebe um voo novo do aluno (o pedido da agenda; o voo agendado na escala): o principal, quando ele não
-// voa e o dia não guarda nada da chave dele, em branco (sem a disponibilidade, a missão do curso, o pedido da agenda e o
-// instrutor escolhido do voo de antes); senão, uma missão extra nova, com a prioridade do aluno. O pedido que não voa e
-// tem sobras fica como está: voltando a voar, volta para o mesmo lugar
+// voa e o dia não guarda nada da chave dele, em branco (deixarEmBranco); senão, uma missão extra nova, com a prioridade
+// do aluno. O pedido que não voa e tem sobras fica como está: voltando a voar, volta para o mesmo lugar
 export function alvoDoNovoPedido(estado, aluno) {
-  if (!aluno.fly && !chaveTemSobras(estado, chaveDoVoo(aluno.id, 0))) {
-    Object.assign(aluno, blank());
-    for (const campo of ['jan', 'etapa', 'cursoDaEtapa', 'solicitacao', 'insId']) delete aluno[campo];
-    return aluno;
-  }
+  if (!aluno.fly && !chaveTemSobras(estado, chaveDoVoo(aluno.id, 0))) return deixarEmBranco(aluno);
   const extra = { mid: proximoMid(estado, aluno), ...blank(), pr: aluno.pr || 3 };
   aluno.extra = [...(aluno.extra || []), extra];
   return extra;

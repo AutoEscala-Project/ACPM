@@ -3,10 +3,10 @@
 import { gravarAlteracao, aindaNaoAbriu } from '../actions.js';
 import { T, GROUND_EQ_TYPE, GROUND_DURATION_H, MIS } from '../config.js';
 import { $, showToast, ligarMenu, trocarElemento } from '../dom.js';
-import { semAgendados } from '../fixos.js';
+import { semAgendados, limparDemanda } from '../fixos.js';
 import { fmtDurLabel } from '../format.js';
 import { horariosDaMissao, ajustarPreferencias } from '../horarios.js';
-import { isGroundMission, blank, rotuloDaDisponibilidade, normalizeMissionFields, proximoMid, duracaoDigitada, ERRO_DA_DURACAO, duracaoPadraoDaMissao } from '../rules.js';
+import { isGroundMission, rotuloDaDisponibilidade, normalizeMissionFields, proximoMid, duracaoDigitada, ERRO_DA_DURACAO, duracaoPadraoDaMissao } from '../rules.js';
 import { S, RES, isGestor, stuBy, insBy, getMissionTarget } from '../state.js';
 import { chaveDoVoo } from '../voo.js';
 import { escolherInstrutor } from '../instrutor-escolhido.js';
@@ -62,18 +62,19 @@ document.addEventListener('change', e => {
   if (e.target.id === 'onlyfly') $('#dem').classList.toggle('only', e.target.checked);
 });
 
-// "Limpar demanda": cada pedido fica em branco, sem nada do voo de antes (como o pedido que a agenda reaproveita): saem
-// a disponibilidade, a missão do curso, o pedido da agenda e o instrutor escolhido, e as missões extras. Assim o Voa
-// religado à mão não traz a disponibilidade de antes, e o pedido da agenda da mesma missão toma este voo
+// "Limpar demanda": cada pedido fica em branco, sem nada do voo de antes, e o voo dele fica solto, sem o voo fixo (também
+// o agendado na Escala) e sem o status (js/fixos.js). Assim o Voa religado à mão não traz a disponibilidade, o cadeado
+// nem o status de antes, e o pedido da agenda da mesma missão toma este voo. O voo em andamento ou que já pousou fica
+// como está (o agendado continua agendado), e a escala aprovada é reaberta; o histórico e o aviso dizem quantos voos
+// ficaram
 comConfirmacao('#clr', 'Confirmar limpeza', () => {
   if (isGestor()) return;
-  S.stu.forEach(d => { Object.assign(d, blank()); for (const campo of ['jan', 'etapa', 'cursoDaEtapa', 'solicitacao', 'insId']) delete d[campo]; d.extra = []; });
-  // Os voos agendados na Escala saem com os pedidos (um agendamento não passa para o pedido que vier depois); o que tem um
-  // status que fixa continua fixo pelo status, como os outros
-  S.fixos = semAgendados(S.fixos, null, S.fStatus);
-  gravarAlteracao('exc', 'Demanda limpa');
+  const { ficam, reaberta } = limparDemanda(S);
+  const texto = `Demanda limpa${reaberta ? ' e escala reaberta' : ''}${ficam ? ` (${ficam === 1 ? '1 voo em andamento fica' : `${ficam} voos em andamento ficam`})` : ''}`;
+  gravarAlteracao('exc', texto);
   rDem();
   fecharMenuMais();
+  showToast(`${texto}.`, 'ok');
 });
 
 // A missão do curso no pedido: ele vira a missão do programa (tipo, recurso e horas; a duração fixa da missão vale mais),

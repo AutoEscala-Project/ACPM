@@ -8,9 +8,8 @@ import { CAMPOS_DO_PEDIDO } from '../../js/dias.js';
 import { aplicarAgendamento, reversaoDoAgendamento } from '../../js/agendamento.js';
 import { escolherInstrutor, escolhasDaUnidade, escolherNosPedidos, reverterEscolha, reverterReparo } from '../../js/instrutor-escolhido.js';
 import { aplicarReparo } from '../../js/reparo.js';
-import { normalizarFixos, semAgendados, fixosAoAprovar } from '../../js/fixos.js';
+import { normalizarFixos, semAgendados, fixosAoAprovar, limparDemanda } from '../../js/fixos.js';
 import { runAllocationEngine } from '../../js/engine.js';
-import { blank } from '../../js/rules.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
 
 const ATAQUE = 'x"><img/src/onerror=window.__xss=1>';
@@ -506,8 +505,7 @@ describe('Reverter depois de um agendamento na Escala', () => {
     const limpa = dia(), h = historico();
     h.agendar(limpa, NOVO);
     const troca = h.trocar(limpa, 1001, 0, 2);
-    limpa.stu.forEach(s => { Object.assign(s, blank()); for (const c of ['insId', 'etapa', 'cursoDaEtapa']) delete s[c]; s.extra = []; });
-    limpa.fixos = semAgendados(limpa.fixos, null, limpa.fStatus);
+    limparDemanda(limpa);
     h.reverter(limpa, troca);
     assert.deepEqual([limpa.fixos[K], limpa.stu[1].insId], [undefined, undefined]);
     // Outra missão no pedido depois do reparo: o voo agendado não volta; o instrutor escolhido de antes do reparo, sim
