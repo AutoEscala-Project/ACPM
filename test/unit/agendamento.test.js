@@ -552,6 +552,27 @@ describe('Agendamento: a conferência', () => {
     assert.deepEqual(semPeso.map(a => [a.codigo, a.campo, a.resumo]), [['sem-peso', 'agd-kg-aluno', 'sem peso']]);
   });
 
+  it('o 7º voo local do horário pede confirmação também quando o aluno novo vem antes no cadastro (o motor avisa outro agendado)', () => {
+    // Seis voos locais agendados às 08:20; o Aluno 1001 é o primeiro do cadastro: o motor confere o agendado dele antes dos
+    // outros, e o aviso do motor fica no último deles
+    const outros = [1000, 1002, 1003, 1004, 1005, 1006];
+    const regs = ['PP-LJV', 'PR-BTB', 'PR-IGU', 'PR-MLB', 'PR-TBT', 'PR-THI'];
+    const estado = cenario({ ins: [1, 2, 3, 4, 5, 6, 7].map(id => instrutor(id, 9)), stu: [aluno(1001, { fly: false }, { curso: 'PP' }), ...outros.map(id => aluno(id, { p1: 500, p2: -1 }))] });
+    estado.fixos = Object.fromEntries(outros.map((id, i) => [`${id}_0_1`, { a: 500, b: 560, r: regs[i], insId: i + 1, agendado: true }]));
+    const { formulario, sim, fKey, avaliacao } = agendar(estado, { amb, escolhas: { aluno: 1001, horario: 500 }, tocados: ['horario'] });
+    assert.deepEqual([formulario.proposta.mis, formulario.proposta.a], ['Voo Local', 500]);
+    assert.deepEqual(sim.al.filter(al => al.codigo === 'limite-de-locais').map(al => al.fKey), ['1006_0_1']);
+    assert.ok(!sim.al.some(al => al.fKey === fKey && al.codigo === 'limite-de-locais'));
+    assert.deepEqual(avaliacao.avisos.map(a => [a.codigo, a.texto, a.campo, a.resumo]), [[
+      'limite-de-locais', 'Agendado às 08:20 como o 7º voo local do horário: no máximo 6 voos locais saem no mesmo horário.', 'agd-horario',
+      'acima do limite de voos locais no horário'
+    ]]);
+    // Às 10:10, com os seis às 08:20, nenhum aviso; o Ground às 08:20 não é voo local
+    assert.deepEqual(codigos(agendar(estado, { amb, escolhas: { aluno: 1001, horario: 610 }, tocados: ['horario'] }).avaliacao.avisos), []);
+    const ground = agendar(estado, { amb, escolhas: { aluno: 1001, missao: 'tipo:Ground C152', horario: 500 }, tocados: ['missao', 'horario'] });
+    assert.ok(!codigos(ground.avaliacao.avisos).includes('limite-de-locais'));
+  });
+
   it('o voo que sai da escala e o conflito que só o peso digitado cria pedem confirmação', () => {
     // Um instrutor só: o Aluno 1000 só pode às 06:30 e sai da escala quando o 1001 fica com o instrutor às 06:30
     const estado = doDia({ ins: [instrutor(1, 9)], s1000: { jan: 'h390' } });

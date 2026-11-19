@@ -129,6 +129,27 @@ test.describe('Agendar um voo na Escala', () => {
     await expect((await historico(page)).locator('.audit-desc', { hasText: 'Agendado na escala' })).toContainText('· confirmado: fora da ordem (falta PP-02)');
   });
 
+  test('o 7º voo local do horário pede "Agendar mesmo assim", também quando a aluna vem antes no cadastro', async ({ page }) => {
+    // Seis voos locais agendados às 08:20; a Maria é a primeira do cadastro: o motor confere o agendado dela antes dos
+    // outros, e o aviso dele fica no último dos seis
+    const outros = [1002, 1003, 1004, 1005, 1006, 1007];
+    const regs = ['PP-LJV', 'PR-BTB', 'PR-IGU', 'PR-MLB', 'PR-TBT', 'PR-THI'];
+    const estado = {
+      ...cenario({ ins: [1, 2, 3, 4, 5, 6, 7].map(id => instrutor(id, 9)), stu: [aluno(1001, { fly: false }, { curso: 'PP', nm: 'Maria Silva' }), ...outros.map(id => aluno(id, { p1: 500, p2: -1 }))] }),
+      cursos: PROGRAMA, fixos: Object.fromEntries(outros.map((id, i) => [`${id}_0_1`, { a: 500, b: 560, r: regs[i], insId: i + 1, agendado: true }]))
+    };
+    await abrirComCurso(page, estado);
+    await abrirDialogo(page);
+    await page.locator('#agd-horario').selectOption('500');
+    await expect(page.locator('#agd-conferencia .agd-avisos li')).toHaveText(['Agendado às 08:20 como o 7º voo local do horário: no máximo 6 voos locais saem no mesmo horário.']);
+    await page.locator('#agd-confirmar').click();
+    await expect(page.locator('#agd-confirmar')).toHaveText('Agendar mesmo assim');
+    await expect(dialogo(page)).toBeVisible();
+    await agendar(page);
+    await expect(voo(page, 'Maria Silva').locator('.c-hr')).toContainText('08:20–09:20');
+    await expect((await historico(page)).locator('.audit-desc', { hasText: 'Agendado na escala' })).toContainText('· confirmado: acima do limite de voos locais no horário');
+  });
+
   test('o avião com um voo fixo no horário não serve: a opção diz por quê, e escolhido mesmo assim, não deixa agendar', async ({ page }) => {
     // O Aluno 1000 está em voo no PR-VOB às 06:30
     await abrirComCurso(page, dia({ fixos: { '1000_0_1': { a: 390, b: 450, r: 'PR-VOB', insId: 1 } }, fStatus: { '1000_0_1': 'Em Voo' } }));

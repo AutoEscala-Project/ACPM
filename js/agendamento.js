@@ -12,7 +12,7 @@
 // do aluno também é agendado: o que está na escala muda de lugar ("Mover"), e o que ficou fora entra ("Encaixar"), com o
 // mesmo pedido. No Ground, o aluno entra numa turma do dia ou abre uma turma nova. Tudo aqui é puro: a tela só desenha o
 // que sai daqui.
-import { MIS, T, NI, DAY, GROUND_EQ_TYPE, GROUND_REG, GROUND_DURATION_MIN, DEFAULT_LIM, MINUTOS_DO_DIA, NOTURNO } from './config.js';
+import { MIS, T, NI, DAY, GROUND_EQ_TYPE, GROUND_REG, GROUND_DURATION_MIN, DEFAULT_LIM, MINUTOS_DO_DIA, NOTURNO, MISSOES_LOCAIS, LIMITE_DE_VOOS_LOCAIS } from './config.js';
 import {
   alvoDoNovoPedido, normalizeMissionFields, duracaoFixaDaMissao, duracaoPadraoDaMissao, duracaoValida, duracaoDigitada, isGroundMission,
   disponibilidadeDoAluno, rotuloDaDisponibilidade, pesoDigitado, ERRO_DA_DURACAO, ERRO_DO_PESO
@@ -26,7 +26,7 @@ import { CAMPOS_DO_PEDIDO } from './dias.js';
 import { runAllocationEngine } from './engine.js';
 import { CODIGOS_DO_AGENDADO, GRUPO_DO_CONFLITO } from './conflitos.js';
 import { fixoPeloStatus, motivoDoFixo } from './fixos.js';
-import { STATUS_EM_ANDAMENTO, rotuloDoStatus } from './status.js';
+import { STATUS_EM_ANDAMENTO, rotuloDoStatus, intervaloEfetivo } from './status.js';
 import { pesoECombustivel, textoDoCombustivel } from './combustivel.js';
 import { NOTA_DO_PROBLEMA } from './instrutor-escolhido.js';
 import { sobrepoe } from './viabilidade.js';
@@ -1110,6 +1110,20 @@ export function avaliarAgendamento({ estado, baseComPesos, base = baseComPesos, 
     const campo = al.codigo === 'sem-peso' ? (!(formulario.proposta.pesos || {}).aluno ? 'agd-kg-aluno' : 'agd-kg-instrutor')
       : al.codigo === 'antes-do-ground' ? 'agd-horario' : al.codigo === 'depois-das-17h30' ? 'agd-horas' : 'agd-horario';
     avisos.push({ codigo: al.codigo, texto: al.m, resumo: RESUMO_DO_AVISO[al.codigo], campo });
+  }
+  // O limite de voos locais no horário: o motor avisa o agendado que ele confere depois do 6º, e ele confere os agendados
+  // na ordem dos pedidos (o aluno que vem antes no cadastro, ou com mais prioridade, é conferido antes dos agendados de
+  // antes): o aviso dele pode ficar num voo agendado antes. O voo novo que deixa mais de 6 voos locais saindo no horário
+  // dele pede a confirmação do mesmo jeito
+  if (novo && !ground && MISSOES_LOCAIS.includes(mis) && !avisos.some(av => av.codigo === 'limite-de-locais')) {
+    const saida = o => intervaloEfetivo(o, statusDoVoo(o, estado.fStatus), (estado.fObs || {})[o.fKey]).a;
+    const locais = sim.out.filter(o => !o.isGround && MISSOES_LOCAIS.includes(o.mis) && ativo(o, estado.fStatus) && saida(o) === saida(novo)).length;
+    if (locais > LIMITE_DE_VOOS_LOCAIS) {
+      avisos.push({
+        codigo: 'limite-de-locais', texto: `Agendado às ${hm(a)} como o ${locais}º voo local do horário: no máximo ${LIMITE_DE_VOOS_LOCAIS} voos locais saem no mesmo horário.`,
+        resumo: RESUMO_DO_AVISO['limite-de-locais'], campo: 'agd-horario'
+      });
+    }
   }
   // Os voos que saem da escala (com o motivo do motor) e o conflito que o peso digitado sozinho cria em outro voo
   const naSim = new Set(sim.out.map(o => o.fKey));
