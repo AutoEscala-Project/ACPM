@@ -1,5 +1,5 @@
 // No celular (390 px): a escala em cartões, um por voo, e nenhuma aba rola para o lado.
-import { test, expect, abrir, abrirComExemplo, abrirEscala, irPara, percorrerVistasEFiltros, AMANHA } from './fixtures.js';
+import { test, expect, abrir, abrirComExemplo, abrirEscala, irPara, percorrerVistasEFiltros, filtrarHabilitacoes, AMANHA } from './fixtures.js';
 import { documentosAtuais } from './supabase-falso.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
 import { cursosIniciais, gravarCurso } from '../../js/programa.js';
@@ -53,6 +53,29 @@ test.describe('Celular', () => {
       expect(await alvosPequenos(page), `aba ${aba}`).toEqual([]);
     }
     await percorrerVistasEFiltros(page, async tela => expect(await alvosPequenos(page), tela).toEqual([]));
+  });
+
+  // O filtro das habilitações no celular (390 e 320 px): o botão divide a linha com a busca; o painel abre no fluxo da
+  // página, inteiro na largura da tela (a grade desce para baixo dele: nada fica coberto), e as caixas, o "Limpar" e o
+  // "?" têm 44 px para o dedo
+  test('o filtro das habilitações cabe no celular (390 e 320 px): o painel empurra a grade, com alvos de 44 px', async ({ page }) => {
+    await abrirComExemplo(page);
+    for (const largura of [390, 320]) {
+      await page.setViewportSize({ width: largura, height: 800 });
+      await irPara(page, 'ins');
+      await filtrarHabilitacoes(page, ['noturno', 'c172'], { fechar: false });
+      const caixas = await Promise.all(['[data-flt="inst"]', '#flt-ins-hab', '#flt-ins-hab-painel', '#s-ins .vista-dia .tw']
+        .map(seletor => page.locator(seletor).boundingBox()));
+      const [busca, botao, painel, grade] = caixas;
+      expect(Math.abs(botao.y + botao.height / 2 - (busca.y + busca.height / 2)), `${largura}: o botão na linha da busca`).toBeLessThan(4);
+      expect(botao.x + botao.width, `${largura}: o botão na tela`).toBeLessThanOrEqual(largura);
+      expect(painel.x, `${largura}: o painel na tela`).toBeGreaterThanOrEqual(0);
+      expect(painel.x + painel.width, `${largura}: o painel na tela`).toBeLessThanOrEqual(largura);
+      expect(grade.y, `${largura}: a grade embaixo do painel`).toBeGreaterThanOrEqual(painel.y + painel.height);
+      expect(await larguraDaPagina(page), `${largura}: a página não rola para o lado`).toBeLessThanOrEqual(largura);
+      expect(await alvosPequenos(page), `${largura}: alvos de 44 px`).toEqual([]);
+      await filtrarHabilitacoes(page, []);
+    }
   });
 
   // O exemplo não tem programa: aqui, a aba Cursos com missões, um cartão por missão (o Ground, com o recurso e as horas

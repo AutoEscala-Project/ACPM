@@ -1,7 +1,7 @@
 // Dados pessoais de alunos e instrutores: CPF, CANAC, nascimento, celular e e-mail, num painel ao lado da tabela.
 // Ficam fora do cadastro; o histórico registra só os campos que mudaram. No modo compartilhado, operadores,
 // administradores e a secretaria veem e editam; o gestor não vê.
-import { test, expect, abrir, irPara, irParaVista, prepararContexto, vigiarErros, AMANHA, entrar as entrarNoApp } from './fixtures.js';
+import { test, expect, abrir, irPara, irParaVista, prepararContexto, vigiarErros, filtrarHabilitacoes, AMANHA, entrar as entrarNoApp } from './fixtures.js';
 import { criarSupabaseFalso, instalarSupabaseFalso, documentosAtuais, CONTAS } from './supabase-falso.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
 
@@ -137,13 +137,22 @@ test.describe('Dados pessoais (modo compartilhado)', () => {
     await expect(page.locator('#s-ins [data-vista-ins="dia"]')).toHaveAttribute('aria-pressed', 'false');
     await expect(page.locator('#inst tr[data-id="1"] [data-dados]')).toBeVisible();
     await expect(page.locator('#inst-dia')).toBeHidden();
-    // Ela busca e usa o "Limpar filtros" (sem data-act: vale também para quem só consulta)
+    // Ela busca, filtra pelas habilitações (as caixas não ficam desligadas para quem só consulta) e usa o "Limpar
+    // filtros" (sem data-act: vale também para quem só consulta)
     const busca = page.locator('[data-flt="inst"]');
     await busca.fill('instrutor 02');
     await expect(page.locator('#inst .cd:visible')).toHaveCount(1);
-    await busca.fill('nenhum assim');
+    await busca.fill('');
+    await page.locator('#flt-ins-hab').click();
+    await expect(page.locator('#flt-ins-hab-painel input[data-filtro]:disabled')).toHaveCount(0);
+    await filtrarHabilitacoes(page, ['noturno', 'c172']);
+    await expect(page.locator('#inst .cd:visible')).toHaveCount(2);
+    await expect(page.locator('#ins-contagem')).toHaveText('2 de 2 instrutores');
+    await filtrarHabilitacoes(page, ['noturno', 'checa_pp']);
+    await expect(page.locator('#inst tr.sem-resultado')).toBeVisible();
     await page.locator('#limpar-filtros-inst').click();
     await expect(busca).toHaveValue('');
+    await expect(page.locator('#flt-ins-hab')).toHaveText('Todas as habilitações');
     await expect(page.locator('#inst .cd:visible')).toHaveCount(2);
     // A vista escolhida fica ao voltar à aba
     await irParaVista(page, 'ins', 'dia');

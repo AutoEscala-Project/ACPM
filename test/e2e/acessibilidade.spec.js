@@ -944,6 +944,63 @@ test.describe('O leitor de tela e o teclado', () => {
     await expect(page.locator('#log-cnt')).toHaveText('0');
   });
 
+  // O filtro das habilitações (Instrutores) é um painel da própria página: o Esc com o foco nele fecha só ele (ouvido na
+  // captura, ele para ali), e as gavetas continuam abertas; os próximos fecham as gavetas, a de cima primeiro. As marcas
+  // ficam
+  test('o Esc fecha só a camada de cima: com as Habilitações e o Histórico abertos, o primeiro fecha o filtro das habilitações, o segundo, o Histórico, o terceiro, as Habilitações', async ({ page }) => {
+    const [, gaveta, focoNaGaveta, abrirGaveta] = GAVETAS[1];
+    await abrirComDuasGavetas(page, { abrirGaveta, focoNaGaveta });
+    // As gavetas podem cobrir o botão do filtro: pelo teclado
+    const botao = page.locator('#flt-ins-hab'), painel = page.locator('#flt-ins-hab-painel');
+    await botao.focus();
+    await page.keyboard.press('Enter');
+    await expect(painel).toBeVisible();
+    await expect(botao).toHaveAttribute('aria-expanded', 'true');
+    // A caixa marcada pelo teclado (o espaço na caixa é um clique dentro do painel: ele continua aberto)
+    const noturno = painel.locator('input[data-valor="noturno"]');
+    await noturno.focus();
+    await page.keyboard.press('Space');
+    await expect(noturno).toBeChecked();
+    await expect(painel).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(painel).toBeHidden();
+    await expect(botao).toHaveAttribute('aria-expanded', 'false');
+    await expect(botao).toBeFocused();
+    await expect(page.locator('#historico')).toBeVisible();
+    await expect(page.locator(gaveta)).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#historico')).toBeHidden();
+    await expect(page.locator(gaveta)).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.locator(gaveta)).toBeHidden();
+    await expect(page.locator('#inst tr.cd[data-id="1"] [data-act="editar-habs"]')).toBeFocused();
+    await expect(botao).toHaveText('Habilitações: Noturno');
+  });
+
+  // Com o foco em lugar nenhum (o clique no texto do painel; no Safari, o botão clicado não recebe o foco): sem gaveta
+  // aberta, o Esc fecha o filtro e leva o foco ao botão; com uma gaveta aberta, o Esc é dela, e o filtro continua aberto
+  test('o Esc com o foco em lugar nenhum: com o Histórico aberto, fecha o Histórico; sem gaveta, fecha o filtro das habilitações', async ({ page }) => {
+    await abrir(page, { estado: cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000)] }) });
+    await irPara(page, 'ins');
+    await page.locator('#btn-open-log').click();
+    await expect(page.locator('#historico')).toBeVisible();
+    // O Histórico pode cobrir o botão do filtro: pelo teclado
+    const botao = page.locator('#flt-ins-hab'), painel = page.locator('#flt-ins-hab-painel');
+    await botao.focus();
+    await page.keyboard.press('Enter');
+    await expect(painel).toBeVisible();
+    // O clique no começo da frase da regra (um texto, que não recebe o foco): o foco sai do botão para lugar nenhum
+    await painel.locator('.filtro-regra').click({ position: { x: 4, y: 6 } });
+    expect(await page.evaluate(() => document.activeElement === document.body)).toBe(true);
+    await expect(painel).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#historico')).toBeHidden();
+    await expect(painel).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(painel).toBeHidden();
+    await expect(botao).toBeFocused();
+  });
+
   for (const [tema, nome] of [['light', 'claro'], ['dark', 'escuro']]) {
     test(`os textos sobre cor (os status, o ✕ armado, o botão do popup, o selo da aprovação) contrastam, no tema ${nome}`, async ({ page }) => {
       await abrirComExemplo(page);

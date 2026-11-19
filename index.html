@@ -209,9 +209,9 @@
       </div>
       <span class="cresce"></span>
       <input type="search" class="flt-ctrl" data-flt="inst" placeholder="Buscar instrutor…" aria-label="Buscar instrutor">
-      <select id="flt-ins-hab" class="flt-ctrl" aria-label="Filtrar por habilitação">
-        <option value="">Todas as habilitações</option>
-      </select>
+      <!-- O filtro das habilitações (várias marcas; js/views/filtro-multiplo.js): o painel abre na linha de baixo da barra -->
+      <button type="button" class="btn sec filtro-botao flt-ctrl" id="flt-ins-hab" aria-expanded="false" aria-controls="flt-ins-hab-painel"><span class="filtro-resumo">Todas as habilitações</span><svg class="ico seta" aria-hidden="true"><use href="#i-baixo"/></svg></button>
+      <div class="filtro-painel" id="flt-ins-hab-painel" role="group" aria-label="Filtrar por habilitação" hidden></div>
       <span class="contagem" id="ins-contagem" role="status"></span>
       <button class="btn edit-only" data-act="addi">+ Novo instrutor</button>
     </div>
@@ -495,12 +495,13 @@
       <p><b>Revisão de 50 horas:</b> informe as horas disponíveis de cada avião (quanto ele ainda pode voar até a revisão); a barra ao lado fica âmbar abaixo de 10 h e vermelha abaixo de 5 h. A escala não passa disso: o avião para quando não tem horas para mais um voo, e o aviso aparece na escala. Depois da revisão, clique em <i>Revisão feita</i> (aparece com o mouse ou o foco do teclado na linha; no celular, fica à vista): o avião volta a ter 50 h disponíveis. A data seguinte começa com as horas disponíveis desta data menos os voos dela que não foram cancelados. Avião sem as horas informadas fica sem esse controle.</p>
 
       <h4>Instrutores</h4>
-      <p>Duas vistas, com a busca e o filtro por habilitação valendo nas duas. Instrutores abre na <i>Disponibilidade do dia</i> (para a Secretaria, no <i>Cadastro</i>), e a vista escolhida fica até a página ser recarregada:</p>
+      <p>Duas vistas, com a busca e o filtro das habilitações valendo nas duas. Instrutores abre na <i>Disponibilidade do dia</i> (para a Secretaria, no <i>Cadastro</i>), e a vista escolhida fica até a página ser recarregada:</p>
       <ul>
         <li><b>Disponibilidade do dia:</b> uma linha por instrutor, com o interruptor <i>Vem</i> (quem vem na data aberta no topo, que nem sempre é hoje) e as janelas do dia: azul-claro quando o instrutor está disponível, azul quando ele já tem voo ou aula na escala e listrado quando não vem. Clique numa janela para mudar; <i>Aplicar turno</i> marca várias de uma vez. A coluna <i>Mês</i> mostra as horas de voo do instrutor no mês com a escala desta data (em destaque a partir de 90% do limite).</li>
         <li><b>Cadastro:</b> nome, CANAC, peso (em destaque quando falta) e as habilitações. <i>Editar habilitações</i> abre um painel ao lado com as 21 habilitações em grupos: Ground e simulador, Voo, Aviões e os três do checador (o curso PP, PC ou INVA; o motor MNTE ou MLTE; as regras VFR ou IFR: o voo de cheque exige uma marca de cada), e as horas de voo do instrutor no mês, no semestre e no ano; ali também se informam as horas de voo feitas fora do app (neste mês e, no ano, antes deste mês). <i>Dados pessoais</i> abre os dados do instrutor (veja Alunos). Embaixo ficam os <b>limites da Lei do Aeronauta</b> (veja <a href="#manual-regras">Como a escala é montada</a>), que só o Administrador muda.</li>
       </ul>
       <p>A busca acha o nome sem os acentos (“joao” acha “João”; também na Demanda, na Escala e no BI) e continua valendo depois de cada alteração. Ao lado, o número diz quantos aparecem (por exemplo, <i>12 de 40 instrutores</i>); quando os filtros não deixam nenhum, <i>Limpar filtros</i> mostra todos de novo. O instrutor cadastrado ou alterado agora (<i>+ Novo instrutor</i>, o nome, uma habilitação) continua à vista mesmo fora dos filtros, até eles mudarem.</p>
+      <p><b>Filtro das habilitações:</b> o botão ao lado da busca (<i>Todas as habilitações</i>) abre as habilitações nos grupos de <i>Editar habilitações</i>, com a habilitação própria de cada recurso (por exemplo, <i>Avião PR-VOM</i>). Marque uma ou mais: aparecem só os instrutores que têm todas as marcadas. Para o Noturno no C172, por exemplo, marque Noturno e C172: aparece quem tem as duas. O botão diz o que está marcado (<i>Habilitações: Noturno + C172</i>), e <i>Limpar</i> desmarca todas. O Esc ou um clique fora fecha o filtro, que continua valendo; a habilitação própria que sai da frota, em Recursos, sai também do filtro. O Gestor e a Secretaria também filtram.</p>
       <p>O instrutor só recebe uma missão se tiver as habilitações que ela exige (veja a tabela em <a href="#manual-regras">Como a escala é montada</a>) e se estiver disponível durante o voo inteiro. O voo pode exigir mais: o noturno do aluno do PC é IFR (o instrutor precisa da habilitação IFR), e o recurso com <i>Habilitação própria</i> (Recursos) exige a dele, que aparece num grupo próprio em <i>Editar habilitações</i>.</p>
 
       <h4>Alunos</h4>
