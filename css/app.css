@@ -610,7 +610,9 @@ dialog.dlg-agendar select { max-width: 100%; }
    erro aparecer), sem ocupar espaço */
 #agd-erro { margin-top: 8px; font-weight: 600; }
 #agd-erro:empty { display: block; position: absolute; width: 1px; height: 1px; margin: 0; overflow: hidden; clip: rect(0 0 0 0); }
-dialog.dlg-agendar [aria-invalid="true"] { border-color: var(--er); outline: 1px solid var(--er); }
+/* O campo com erro: a borda e a sombra vermelhas, sem mexer no contorno, que é o anel do foco: o campo que recebe o foco
+   no envio mostra o anel de 2 px como os outros (um contorno aqui, mais específico, tomaria o lugar dele) */
+dialog.dlg-agendar [aria-invalid="true"] { border-color: var(--er); box-shadow: 0 0 0 1px var(--er); }
 @media (max-width: 640px) {
   dialog.dlg-agendar { padding: 14px; }
   .campo-duplo { grid-template-columns: 1fr; }

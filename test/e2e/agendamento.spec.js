@@ -177,6 +177,48 @@ test.describe('Agendar um voo na Escala', () => {
     await expect(page.locator('#log-cnt')).toHaveText('0');
   });
 
+  // O envio leva o foco ao campo do bloqueio: ele mostra o anel de 2 px do foco, como qualquer campo, e o erro fica na
+  // borda e na sombra vermelhas, nos dois temas
+  test('o campo com erro, com o foco pelo teclado, mostra o anel do foco de 2 px; sem o foco, a borda vermelha', async ({ page }) => {
+    await abrirComCurso(page, dia({ fixos: { '1000_0_1': { a: 390, b: 450, r: 'PR-VOB', insId: 1 } }, fStatus: { '1000_0_1': 'Em Voo' } }));
+    await abrirDialogo(page);
+    await page.locator('#agd-horario').selectOption('500');
+    await page.locator('#agd-recurso').selectOption('PR-VOB');
+    await page.locator('#agd-horario').selectOption('390');
+    await expect(page.locator('#agd-conferencia .agd-bloqueios li')).toHaveCount(1);
+    await page.locator('#agd-confirmar').focus();
+    await page.keyboard.press('Enter');
+    const recurso = page.locator('#agd-recurso');
+    await expect(recurso).toBeFocused();
+    await expect(recurso).toHaveAttribute('aria-invalid', 'true');
+    // As cores do tema: a do foco (a de destaque) e a do erro
+    const cores = () => page.evaluate(() => Object.fromEntries(['ac', 'er'].map(cor => {
+      const amostra = document.createElement('i');
+      amostra.style.color = `var(--${cor})`;
+      document.body.append(amostra);
+      const valor = getComputedStyle(amostra).color;
+      amostra.remove();
+      return [cor, valor];
+    })));
+    const estilo = () => recurso.evaluate(el => {
+      const s = getComputedStyle(el);
+      return { anel: `${s.outlineStyle} ${s.outlineWidth} ${s.outlineColor}`, borda: s.borderTopColor, sombra: s.boxShadow };
+    });
+    for (const tema of ['light', 'dark']) {
+      await page.emulateMedia({ colorScheme: tema });
+      const { ac, er } = await cores();
+      const focado = await estilo();
+      expect(focado.anel, tema).toBe(`solid 2px ${ac}`);
+      expect([focado.borda, focado.sombra.includes(er)], tema).toEqual([er, true]);
+    }
+    // Sem o foco, o erro continua na borda e na sombra, sem o anel
+    await page.keyboard.press('Tab');
+    await expect(recurso).not.toBeFocused();
+    const { er } = await cores();
+    const semFoco = await estilo();
+    expect([semFoco.anel.startsWith('none'), semFoco.borda, semFoco.sombra.includes(er)]).toEqual([true, er, true]);
+  });
+
   test('o instrutor indisponível: "Marcar disponível" deixa agendar, e desfazer devolve a disponibilidade', async ({ page }) => {
     await abrirComCurso(page, dia({ ins: [instrutor(1, 9), instrutor(2, 9, { on: false })] }));
     await abrirDialogo(page);
