@@ -137,20 +137,28 @@ test.describe('Escala por data (modo compartilhado)', () => {
     expect(servidor.historico).toEqual([]);
   });
 
-  test('alteração feita enquanto outra data carrega fica na data que estava aberta', async ({ page, context }) => {
-    const servidor = await instalarSupabaseFalso(context, documentosAtuais(estadoSintetico(), AMANHA));
+  // Enquanto outra data abre, a tela ainda é a da data anterior, mas o cadastro já foi lido de novo, com a versão atual:
+  // gravar nessa hora levaria o cadastro velho por cima do que outra pessoa mudou (o aluno que ela incluiu sumiria). A
+  // alteração é recusada, em nenhuma das datas; com a data nova aberta, vale de novo
+  test('alteração feita enquanto outra data carrega é recusada: nada é gravado, e o aluno que outra pessoa incluiu fica', async ({ page, context }) => {
+    const servidor = await instalarSupabaseFalso(context, documentosAtuais({ ...estadoSintetico(), stu: [aluno(1000)], nid: 1001 }, AMANHA));
     await entrar(page, CONTAS.operador);
+    const { conteudo } = servidor.banco.get('cadastro');
+    servidor.alterarPorOutraPessoa('cadastro', { ...conteudo, nid: 1002, stu: [...conteudo.stu, { ...conteudo.stu[0], id: 1001, nm: 'Aluno da colega' }] });
     const liberar = servidor.segurarLeiturasDeDias();
     await mudarData(page, DEPOIS);
     await irPara(page, 'rec');
-    await page.locator('#eqs input[data-id="PR-BTB"]').uncheck();
-    await expect.poll(() => servidor.gravacoes.length).toBe(1);
-    expect(servidor.gravacoes.map(g => g.chave)).toEqual([`dia:${AMANHA}`]);
+    await page.locator('#eqs input[data-id="PR-BTB"]').click();
+    await expect(page.locator('#toast-box')).toContainText('A escala ainda não abriu: nada foi mudado.');
+    await expect(page.locator('#eqs input[data-id="PR-BTB"]')).toBeChecked();
     liberar();
-    await expect(page.locator('#log-cnt')).toHaveText('0');
-    expect(servidor.dias.get(AMANHA).conteudo.av['PR-BTB']).toBe(false);
-    expect(servidor.dias.has(DEPOIS)).toBe(false);
-    expect(servidor.historico.map(h => [h.data, h.descricao])).toEqual([[AMANHA, 'PR-BTB: Manutenção']]);
+    await expect(page.locator('#dt-rotulo')).toContainText('12/11');
+    await page.locator('#eqs input[data-id="PR-BTB"]').uncheck();
+    await expect.poll(() => servidor.dias.get(DEPOIS)?.conteudo.av['PR-BTB']).toBe(false);
+    expect(servidor.gravacoes.map(g => g.chave)).not.toContain(`dia:${AMANHA}`);
+    expect(servidor.dias.get(AMANHA).conteudo.av['PR-BTB']).toBe(true);
+    expect(servidor.banco.get('cadastro').conteudo.stu.map(s => s.nm)).toEqual(['Aluno 1000', 'Aluno da colega']);
+    await expect.poll(() => servidor.historico.map(h => [h.data, h.descricao])).toEqual([[DEPOIS, 'PR-BTB: Manutenção']]);
   });
 
   test('o histórico mostra quem fez cada alteração', async ({ page, context }) => {

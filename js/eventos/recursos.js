@@ -1,6 +1,6 @@
 // Recursos: a frota (acrescentar e retirar), a disponibilidade e as horas até a revisão de 50 horas, as janelas de
 // operação, o hangar e os horários de decolagem
-import { gravarAlteracao } from '../actions.js';
+import { gravarAlteracao, aindaNaoAbriu } from '../actions.js';
 import { opcoesDeCategoria, categoriaDoTipo } from '../categorias.js';
 import { WIN, REVISAO_H } from '../config.js';
 import { $, showToast } from '../dom.js';
@@ -42,7 +42,7 @@ $('#rec-tipo').onchange = () => {
 };
 $('#form-recurso').onsubmit = e => {
   e.preventDefault();
-  if (isGestor()) return;
+  if (isGestor() || aindaNaoAbriu()) return;
   const { recurso, erro, campo } = novoRecurso(S.frota, { reg: $('#rec-reg').value, tipo: $('#rec-tipo').value, soParafuso: $('#rec-parafuso').checked });
   if (erro) { $('#rec-erro').textContent = erro; marcarCampoDoRecurso(campo); return; }
   S.frota.push(recurso);
