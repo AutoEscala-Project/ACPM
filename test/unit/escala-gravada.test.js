@@ -3,10 +3,11 @@
 // escalas que o próprio motor produz passam inteiras.
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { normalizarEscalaGravada } from '../../js/escala-gravada.js';
+import { normalizarEscalaGravada, normalizarLinhaGravada } from '../../js/escala-gravada.js';
 import { runAllocationEngine } from '../../js/engine.js';
 import { aluno, cenario, instrutor, apenas } from '../helpers/montar.js';
 import { lerGoldens } from '../helpers/goldens.js';
+import { CODIGOS_DO_AGENDADO, CODIGOS_DE_AVISO, CODIGOS_DE_REJEICAO } from '../../js/conflitos.js';
 
 const goldens = lerGoldens();
 const saidas = [goldens.exemplo.saida, ...goldens.cenarios.map(c => c.saida)];
@@ -32,6 +33,42 @@ describe('Escala gravada', () => {
     assert.deepEqual(normalizarEscalaGravada(escala), escala);
   });
 
+  it('o voo agendado na Escala: a marca fica na escala gravada; adulterada, invalida a escala', () => {
+    const estado = cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, { p1: 390, p2: -1 }), aluno(1001, { p1: 500, p2: -1 })] });
+    const escala = runAllocationEngine({ ...estado, fixos: { '1000_0_1': { a: 610, b: 670, r: 'PR-VOB', insId: 1, agendado: true } } });
+    const agendado = escala.out.find(o => o.stuId === 1000);
+    assert.deepEqual([agendado.fixo, agendado.agendado], [true, true]);
+    assert.deepEqual(normalizarEscalaGravada(escala), escala);
+    assert.deepEqual(normalizarLinhaGravada({ fKey: '1000_0_1', fixo: true, agendado: true }), { fKey: '1000_0_1', fixo: true, agendado: true });
+    for (const valor of ['sim', 1, false, null, {}]) assert.equal(normalizarLinhaGravada({ fKey: '1000_0_1', agendado: valor }), null, JSON.stringify(valor));
+  });
+
+  it('os avisos do voo agendado fora das regras: os códigos valem no aviso; só o limite de locais vale também na rejeição', () => {
+    const base = saidas[0];
+    const comAlerta = a => normalizarEscalaGravada({ ...base, al: [a] });
+    for (const codigo of CODIGOS_DO_AGENDADO) {
+      const aviso = { t: 'warn', s: 'Aluno 1000', fKey: '1000_0_1', m: 'Agendado às 07:00.', codigo, stuId: 1000 };
+      assert.deepEqual(comAlerta(aviso).al, [aviso], codigo);
+      assert.equal(comAlerta({ ...aviso, fKey: ATAQUE }), null, `${codigo}: a chave do voo adulterada`);
+      assert.equal(comAlerta({ t: 'conf', s: 'x', m: 'y', codigo }), null, `${codigo}: o conflito não tem código`);
+    }
+    // O limite de locais é os dois: o aviso do agendado e a rejeição do pedido; cada tipo confere a lista dele
+    assert.deepEqual(CODIGOS_DO_AGENDADO.filter(c => CODIGOS_DE_REJEICAO.includes(c)), ['limite-de-locais']);
+    assert.deepEqual(comAlerta({ t: 'err', s: 'x', m: 'y', codigo: 'limite-de-locais' }).al, [{ t: 'err', s: 'x', m: 'y', codigo: 'limite-de-locais' }]);
+    for (const codigo of ['fora-dos-horarios', 'depois-das-17h30', 'antes-do-ground']) {
+      assert.equal(comAlerta({ t: 'err', s: 'x', m: 'y', codigo }), null, `${codigo} numa rejeição`);
+    }
+    assert.ok(CODIGOS_DO_AGENDADO.every(c => CODIGOS_DE_AVISO.includes(c)));
+    // A escala do motor com os avisos do agendado passa inteira: às 07:00 (fora dos horários do C152) e o 7º voo local
+    const estado = cenario({ ins: Array.from({ length: 8 }, (_, i) => instrutor(i + 1, 9)), stu: Array.from({ length: 8 }, (_, i) => aluno(1000 + i, { p1: 500, p2: -1 })) });
+    const regs = ['PP-LJV', 'PR-BTB', 'PR-IGU', 'PR-MLB', 'PR-TBT', 'PR-THI', 'PR-VOB'];
+    const fixos = Object.fromEntries(regs.map((r, i) => [`${1000 + i}_0_1`, { a: 500, b: 560, r, insId: i + 1, ...(i === 6 ? { agendado: true } : {}) }]));
+    fixos['1007_0_1'] = { a: 420, b: 480, r: 'PR-VOC', insId: 8, agendado: true };
+    const escala = runAllocationEngine({ ...estado, fixos });
+    assert.deepEqual(escala.al.map(a => a.codigo), ['limite-de-locais', 'fora-dos-horarios']);
+    assert.deepEqual(normalizarEscalaGravada(escala), escala);
+  });
+
   it('um campo adulterado em qualquer linha invalida a escala gravada', () => {
     const base = saidas[0];
     const adulterar = (campo, valor) => ({ ...base, out: [{ ...base.out[0], [campo]: valor }, ...base.out.slice(1)] });
@@ -40,7 +77,7 @@ describe('Escala gravada', () => {
       ['stuId', ATAQUE], ['mid', 1.5], ['insId', '1'], ['eqType', ATAQUE], ['s', 7], ['ins', { nm: 1 }], ['mis', ATAQUE],
       ['h', ATAQUE], ['ss', ATAQUE], ['r', ATAQUE], ['stuKg', ATAQUE], ['insKg', -5], ['limKg', ATAQUE], ['kg', ATAQUE],
       ['comb', { reduzirGal: ATAQUE, abastecerGal: 7, minimoGal: 11, autonomiaMin: 60 }], ['baseTag', ATAQUE], ['tag', ATAQUE],
-      ['status', ATAQUE], ['groupSize', ATAQUE], ['fixo', 'sim'], ['conflito', ATAQUE], ['conflito', [ATAQUE, 3]], ['conflitoCodigos', [ATAQUE]], ['conflitoCodigos', 'peso'], ['etapa', ATAQUE]
+      ['status', ATAQUE], ['groupSize', ATAQUE], ['fixo', 'sim'], ['agendado', 'sim'], ['conflito', ATAQUE], ['conflito', [ATAQUE, 3]], ['conflitoCodigos', [ATAQUE]], ['conflitoCodigos', 'peso'], ['etapa', ATAQUE]
     ];
     for (const [campo, valor] of ruins) assert.equal(normalizarEscalaGravada(adulterar(campo, valor)), null, `${campo} = ${JSON.stringify(valor)}`);
     assert.equal(normalizarEscalaGravada({ ...base, out: [{ ...base.out[0], a: 450, b: 390 }] }), null, 'termina antes de começar');

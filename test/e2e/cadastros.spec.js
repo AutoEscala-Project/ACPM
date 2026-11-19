@@ -239,6 +239,34 @@ test.describe('Recursos: horários de decolagem por categoria', () => {
     await page.locator('#role-sel').selectOption('gestor');
     await expect(page.locator('#horarios [data-act="editar-horarios"]').first()).toBeHidden();
   });
+
+  test('a lista mudou depois que o editor abriu (o histórico a reverteu): Salvar não grava o rascunho por cima, com o aviso', async ({ page }) => {
+    await abrirSintetico(page);
+    await irPara(page, 'rec');
+    const c152 = page.locator('#horarios [data-cat="C152"]');
+    async function por(hora) {
+      await editor(page).locator('.hr-novo').fill(hora);
+      await editor(page).locator('.hr-novo').press('Enter');
+      await expect(editor(page).locator('.hr-chip', { hasText: hora })).toHaveCount(1);
+    }
+    await c152.locator('[data-act="editar-horarios"]').click();
+    await por('07:45');
+    await editor(page).locator('[data-act="salvar-horarios"]').click();
+    await expect(c152.locator('.horarios-qtd')).toHaveText('9 horários');
+    // O editor aberto de novo (o rascunho parte da lista com o 07:45); com ele aberto, o histórico reverte o 07:45
+    await c152.locator('[data-act="editar-horarios"]').click();
+    await por('08:45');
+    await page.locator('#btn-open-log').click();
+    await page.locator('#audit-log-list .audit-item', { hasText: 'Horários de decolagem do C152' }).locator('[data-act="rev-log"]').click();
+    await page.keyboard.press('Escape');
+    await expect(editor(page)).toBeVisible();
+    await editor(page).locator('[data-act="salvar-horarios"]').click();
+    await expect(page.locator('#toast-box')).toContainText('Os horários do C152 mudaram depois que o editor abriu: nada foi salvo. Confira a lista e edite de novo.');
+    await expect(editor(page)).toHaveCount(0);
+    // Fica a lista revertida: sem o 07:45 e sem o 08:45 do rascunho
+    await expect(c152.locator('.horarios-modelo')).toHaveText('Janelas do dia');
+    await expect(c152.locator('.horarios-qtd')).toHaveText('8 horários');
+  });
 });
 
 test.describe('Recursos: o editor dos horários pelo teclado e no leitor de tela', () => {
@@ -537,6 +565,58 @@ test.describe('Alunos', () => {
       await nome.blur();
       await expect(page.locator(`${lista} .cd`).last().locator('.nm')).toHaveValue(longo.slice(0, 80).trim());
     }
+  });
+
+  test('o peso vai até 300 kg, nos alunos e nos instrutores: acima disso, não vale', async ({ page }) => {
+    await abrirSintetico(page);
+    const historico = page.locator('#audit-log-list');
+    const aviso = page.locator('.toast');
+    for (const [aba, botao, lista, nome] of [['alu', 'adds', '#alu', 'Novo aluno'], ['ins', 'addi', '#inst', 'Novo instrutor']]) {
+      await irPara(page, aba);
+      await page.locator(`[data-act="${botao}"]`).click();
+      const peso = page.locator(`${lista} .cd`).last().locator('[data-f="kg"]');
+      // O campo vai de 1 a 300 kg, como o aviso: as setas não chegam a 0, que não vale
+      await expect(peso).toHaveAttribute('min', '1');
+      await expect(peso).toHaveAttribute('max', '300');
+      // Acima do limite de antes (200 kg), vale
+      await peso.fill('250');
+      await peso.blur();
+      await expect(historico).toContainText(`Peso ${nome}: 250 kg`);
+      await expect(peso).not.toHaveClass(/\bfalta\b/);
+      // Acima de 300 kg, não: o aviso aparece e o campo volta ao peso de antes. Cada recusa espera o aviso da anterior
+      // sair, para conferir o dela
+      await expect(aviso).toHaveCount(0);
+      await peso.fill('350');
+      await peso.blur();
+      await expect(aviso).toHaveText('O peso vai de 1 a 300 kg.');
+      await expect(peso).toHaveValue('250');
+      // Um texto que não é número também não vale: o campo (type=number) chega vazio, mas o peso não some
+      await expect(aviso).toHaveCount(0);
+      await peso.fill('');
+      await peso.pressSequentially('1-2');
+      await peso.blur();
+      await expect(aviso).toHaveText('O peso vai de 1 a 300 kg.');
+      await expect(peso).toHaveValue('250');
+      await expect(peso).not.toHaveClass(/\bfalta\b/);
+      // Em décimos: o histórico mostra a vírgula. As recusas não entraram nele
+      await peso.fill('72.5');
+      await peso.blur();
+      await expect(historico).toContainText(`Peso ${nome}: 72,5 kg`);
+      await expect(historico).not.toContainText(`Peso ${nome}: 350`);
+      await expect(historico).not.toContainText(`Peso ${nome}: 0 kg`);
+    }
+    // O peso digitado fica gravado; vazio, a pessoa fica sem peso
+    await page.reload();
+    await irPara(page, 'ins');
+    await page.locator('#s-ins [data-vista-ins="cadastro"]').click();
+    await expect(page.locator('#inst .cd').last().locator('[data-f="kg"]')).toHaveValue('72.5');
+    await irPara(page, 'alu');
+    const peso = page.locator('#alu .cd').last().locator('[data-f="kg"]');
+    await expect(peso).toHaveValue('72.5');
+    await peso.fill('');
+    await peso.blur();
+    await expect(peso).toHaveClass(/\bfalta\b/);
+    await expect(peso).toHaveValue('');
   });
 
   test('busca alunos pelo nome', async ({ page }) => {

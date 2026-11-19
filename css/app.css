@@ -179,8 +179,8 @@ nav#nav button:focus-visible { outline-offset: -4px; }
 .aba-selo.aviso { background: var(--ye); color: #12263A; }
 .aba-selo.erro { background: #C62828; color: #fff; }
 
-/* A Secretaria trabalha na agenda: só a Agenda e as abas que ela consulta (Escala, Instrutores e Alunos) */
-body[data-perfil="secretaria"] #nav button:not([data-t="age"]):not([data-t="esc"]):not([data-t="ins"]):not([data-t="alu"]),
+/* A Secretaria trabalha na agenda: só a Agenda e as abas que ela consulta (Escala, Instrutores, Alunos e Cursos) */
+body[data-perfil="secretaria"] #nav button:not([data-t="age"]):not([data-t="esc"]):not([data-t="ins"]):not([data-t="alu"]):not([data-t="cur"]),
 body[data-perfil="secretaria"] .aba-sep,
 body[data-perfil="secretaria"] #btn-open-log,
 body[data-perfil="secretaria"] #btn-share-link { display: none !important; }
@@ -575,6 +575,51 @@ dialog.dlg .campo { display: flex; flex-direction: column; gap: 4px; margin: 10p
 dialog.dlg .campo[hidden] { display: none; }
 dialog.dlg .campo small { font-weight: 400; }
 dialog.dlg .dlg-acoes, .form-dados .dlg-acoes { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+/* Agendar um voo na Escala (js/views/agendamento.js): mais largo, rola por dentro quando não cabe na altura */
+dialog.dlg-agendar { width: min(560px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); overflow-y: auto; }
+dialog.dlg-agendar .campos-agendar { display: flex; flex-direction: column; }
+dialog.dlg-agendar .campo { margin: 8px 0 2px; }
+dialog.dlg-agendar .campos-agendar > small.h { margin: 0 0 4px; overflow-wrap: anywhere; }
+dialog.dlg-agendar .campos-agendar > small.h:empty { display: none; }
+dialog.dlg-agendar select { max-width: 100%; }
+.campo-duplo { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
+#agd-peso { margin: 10px 0 4px; padding: 4px 12px 8px; border: 1px solid var(--ln); border-radius: 8px; }
+#agd-peso[hidden] { display: none; }
+#agd-peso legend { padding: 0 4px; font-weight: 600; }
+#agd-peso .campo { display: inline-flex; width: calc(50% - 8px); margin-right: 8px; vertical-align: top; }
+#agd-peso-resumo { margin: 6px 0 2px; }
+#agd-peso-resumo:empty { display: none; }
+/* A conferência: os bloqueios em vermelho, os avisos em amarelo, as notas em cinza; vazias, as listas somem */
+#agd-conferencia { margin-top: 10px; font-size: 14px; }
+#agd-conferencia ul { margin: 6px 0; padding: 6px 10px 6px 26px; border-radius: 6px; }
+#agd-conferencia ul:empty { display: none; }
+#agd-conferencia ul li + li { margin-top: 3px; }
+.agd-bloqueios { background: var(--er-bg); color: var(--er); }
+.agd-avisos { background: var(--wa-bg); color: var(--ink); }
+.agd-avisos li::marker { color: var(--wa); }
+.agd-notas { background: var(--pn2); color: var(--mu); }
+#agd-conferencia [data-agd-opcao] { padding: 1px 8px; margin-left: 4px; font-size: 13.5px; }
+/* As alternativas (os chips) e a prévia do que muda na escala */
+.agd-chips { display: flex; flex-wrap: wrap; gap: 4px 6px; margin-top: 4px; }
+.agd-chips .btn { padding: 2px 10px; border: 1px solid var(--ln2); border-radius: 14px; font-size: 13.5px; }
+#agd-previa { margin: 6px 0 0; padding: 6px 10px; border: 1px solid var(--ln); border-radius: 6px; }
+#agd-previa summary { cursor: pointer; font-weight: 600; }
+#agd-previa summary:focus-visible { outline: 2px solid var(--ac); outline-offset: 2px; border-radius: 3px; }
+#agd-conferencia #agd-previa ul { margin: 6px 0 2px; padding: 0 0 0 18px; background: none; }
+/* O alerta vazio continua na árvore de acessibilidade (escondido com display: none, ele não seria anunciado quando o
+   erro aparecer), sem ocupar espaço */
+#agd-erro { margin-top: 8px; font-weight: 600; }
+#agd-erro:empty { display: block; position: absolute; width: 1px; height: 1px; margin: 0; overflow: hidden; clip: rect(0 0 0 0); }
+/* O campo com erro: a borda e a sombra vermelhas, sem mexer no contorno, que é o anel do foco: o campo que recebe o foco
+   no envio mostra o anel de 2 px como os outros (um contorno aqui, mais específico, tomaria o lugar dele) */
+dialog.dlg-agendar [aria-invalid="true"] { border-color: var(--er); box-shadow: 0 0 0 1px var(--er); }
+@media (max-width: 640px) {
+  dialog.dlg-agendar { padding: 14px; }
+  .campo-duplo { grid-template-columns: 1fr; }
+  #agd-peso .campo { display: flex; width: auto; margin-right: 0; }
+  /* "O que muda na escala" com 44 px para o dedo, como os campos e os botões do diálogo */
+  #agd-previa summary { min-height: 44px; padding: 12px 0; box-sizing: border-box; }
+}
 /* Painel dos dados pessoais */
 .form-dados { display: flex; flex-direction: column; gap: 10px; overflow-y: auto; }
 .campo-dado { display: flex; flex-direction: column; gap: 4px; }
@@ -726,35 +771,126 @@ table.frota tr:hover .rev, table.frota tr:focus-within .rev { opacity: 1; }
 
 /* Instrutores: a disponibilidade do dia numa grade; o cadastro numa tabela, com as habilitações num painel lateral */
 #s-ins[data-vista="dia"] .vista-cadastro, #s-ins[data-vista="cadastro"] .vista-dia { display: none; }
-/* Alunos › Cursos: o programa de cada curso */
-#s-alu[data-vista="alunos"] .vista-cursos, #s-alu[data-vista="cursos"] .vista-alunos { display: none; }
-.vista-cursos { display: flex; flex-direction: column; gap: 12px; }
-.vista-cursos .curso h3 small { font: 500 14px 'Barlow', sans-serif; color: var(--mu); margin-left: 6px; }
+/* Cursos: o programa de cada curso, em fases (sob o título do módulo), cada fase com o cabeçalho (nome, módulo, quando
+   abre, "Depois de…" e os botões) e a tabela das missões; no fim, "+ Fase", as retiradas e as alterações */
+#cursos { display: flex; flex-direction: column; gap: 12px; }
+#cursos .curso h3 small { font: 500 14px 'Barlow', sans-serif; color: var(--mu); margin-left: 6px; }
+#cursos .curso-cab { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px; }
+#cursos h4.modulo { margin: 18px 0 2px; padding-bottom: 4px; border-bottom: 1px solid var(--ln); font: 600 13.5px 'Barlow Semi Condensed', sans-serif; color: var(--mu); letter-spacing: .02em; text-transform: uppercase; }
+#cursos .fase { margin: 12px 0 16px; }
+#cursos .fase-cab { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; margin: 0 0 8px; }
+#cursos .fase-cab :is(h4, h5) { margin: 0; font: 600 15px 'Barlow Semi Condensed', sans-serif; color: var(--ink); }
+#cursos .fase-cab p.regra { margin: 0; color: var(--mu); font-size: 13.5px; }
+#cursos .campo-da-fase { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--mu); }
+#cursos .campo-da-fase :is(input, select) { color: var(--ink); }
+#cursos .nome-da-fase { flex: 1 1 24em; }
+#cursos .nome-da-fase input { flex: 1; min-width: 12em; font: 600 15px 'Barlow Semi Condensed', sans-serif; }
+#cursos .modulo-da-fase { flex: 0 1 22em; }
+#cursos .modulo-da-fase input { flex: 1; min-width: 10em; }
+#cursos .fase-cab .acoes { margin-left: auto; display: inline-flex; gap: 4px; }
+#cursos .fase > .btn, #cursos .curso > .btn { margin-top: 6px; }
+#cursos summary { cursor: pointer; }
+#cursos summary:focus-visible { outline: 2px solid var(--ac); outline-offset: 2px; border-radius: 3px; }
+/* "Depois de…": o resumo do que o item espera e, aberta, uma marca para cada fase ou missão anterior (as missões, por fase) */
+#cursos details.requisitos summary { color: var(--ac); font-size: 13.5px; }
+#cursos details.requisitos fieldset { display: flex; flex-wrap: wrap; gap: 0 14px; margin: 6px 0 0; padding: 2px 10px 6px; border: 1px solid var(--ln); border-radius: 6px; }
+#cursos details.requisitos legend { padding: 0 4px; font-size: 12.5px; color: var(--mu); }
+#cursos details.requisitos .chk { font-size: 13.5px; white-space: nowrap; }
+#cursos details.retiradas, #cursos details.alteracoes { margin-top: 12px; }
+#cursos details.retiradas summary, #cursos details.alteracoes summary { font-weight: 600; }
+#cursos details.retiradas ul { list-style: none; margin: 6px 0 0; padding: 0; }
+#cursos details.retiradas li { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; padding: 2px 0; border-bottom: 1px solid var(--ln); }
+#cursos details.alteracoes ol { margin: 6px 0 0; padding-left: 20px; font-size: 13.5px; }
+#cursos details.alteracoes li { margin: 2px 0; }
+/* Os cursos: o filtro e "+ Novo curso" na barra; o formulário do curso novo (a sigla, o nome e com que programa começar);
+   no cabeçalho do curso, o nome, encerrar ou reativar e o modelo do programa; o encerrado, esmaecido; os alunos do curso */
+#cursos .barra-dos-cursos { margin: 0; }
+#form-curso { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px 16px; margin: 0; }
+#form-curso[hidden] { display: none; }
+#form-curso .campo { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--mu); }
+#form-curso .campo input { color: var(--ink); }
+#form-curso #cur-sigla { width: 9em; text-transform: uppercase; }
+#form-curso #cur-nome { width: 22em; max-width: 100%; }
+#form-curso [aria-invalid="true"] { border-color: var(--er); }
+#form-curso fieldset { display: flex; flex-wrap: wrap; gap: 2px 16px; margin: 0; padding: 0; border: 0; }
+#form-curso legend { padding: 0; margin-bottom: 4px; font-size: 13px; color: var(--mu); }
+#form-curso .dlg-acoes { display: flex; gap: 8px; margin-left: auto; }
+#cursos .campo-do-curso { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--mu); }
+#cursos .campo-do-curso input { width: 18em; max-width: 100%; color: var(--ink); }
+#cursos .acoes-do-curso { margin-left: auto; display: inline-flex; flex-wrap: wrap; gap: 6px; }
+#cursos .curso.encerrado > .curso-cab h3 { color: var(--mu); }
+#cursos .curso-cab .tag { margin-left: 6px; vertical-align: 1px; }
+#cursos details.alunos-do-curso { margin-top: 12px; }
+#cursos details.alunos-do-curso summary { font-weight: 600; }
+#cursos details.alunos-do-curso ul { margin: 6px 0 0; padding-left: 20px; font-size: 13.5px; }
+#cursos details.alunos-do-curso li { margin: 2px 0; }
+#cursos details.alunos-do-curso .progresso { color: var(--mu); font-variant-numeric: tabular-nums; }
+/* A tabela das missões: as marcas uma embaixo da outra e, nos botões, a fase da missão embaixo de subir, descer e tirar;
+   numa missão Noturno, o trecho embaixo do tipo de missão */
+table.cadastro.programa td { padding: 4px 6px; }
+.programa label.trecho-do-noturno { display: flex; align-items: center; gap: 6px; margin-top: 4px; font-size: 13px; color: var(--mu); }
+.programa label.trecho-do-noturno select { color: var(--ink); }
 .programa td.n { color: var(--mu); font-variant-numeric: tabular-nums; width: 2.5em; }
 .programa input.codigo { width: 7.5em; font-variant-numeric: tabular-nums; }
-.programa input[data-cf="nome"] { width: 100%; min-width: 12em; }
-.programa td.acoes { white-space: nowrap; }
+.programa input[data-cf="nome"] { width: 100%; min-width: 10em; }
+.programa input.duracao { width: 5em; }
+.programa td.c-quando { min-width: 11em; }
+.programa td.c-marcas .chk { display: flex; font-size: 13.5px; white-space: nowrap; }
+.programa .acoes-da-missao { display: grid; grid-template-columns: repeat(3, max-content); justify-content: end; gap: 4px; }
+.programa .acoes-da-missao select[data-cf="fase"] { grid-column: 1 / -1; max-width: 9em; }
+.programa.consulta td.codigo { font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
 /* A missão do curso no dia: o código, a próxima missão, o resultado e o progresso */
 .etapa { display: inline-block; padding: 0 6px; border-radius: 4px; background: var(--info-bg); color: var(--ac); font: 600 12.5px 'Barlow Semi Condensed', sans-serif; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .stu-cell .etapa, .stu-cell .usar-proxima { margin-left: 6px; }
 .usar-proxima { padding: 1px 6px; font-size: 13px; }
+/* "Outra missão do curso" (Demanda): estreita como o botão da próxima missão (sem a largura da missão mais longa, a
+   coluna do aluno não caberia na tela); as missões aparecem ao abrir a lista */
+#dem select.outra-missao { width: 7.5em; flex-shrink: 0; padding: 1px 6px; font-size: 13px; color: var(--ac); }
+#dem select.outra-missao optgroup, #dem select.outra-missao option { color: var(--ink); font-weight: 400; }
+/* Com o nome comprido, o código (ou a próxima missão) e a lista descem para a linha de baixo do nome, em vez de alargar
+   a coluna do aluno até a tabela passar da tela */
+#s-dem .stu-cell:has(.outra-missao) { flex-wrap: wrap; }
 .resultado { display: flex; align-items: center; gap: 6px; margin-top: 4px; flex-wrap: wrap; }
 .res-sel { font-size: 13px; padding: 2px 4px; }
 .res-sel.res-aprovado, .res.res-aprovado { color: var(--ok); font-weight: 600; }
 .res-sel.res-reprovado, .res.res-reprovado { color: var(--er); font-weight: 600; }
 td.c-curso .progresso { display: block; margin-top: 2px; color: var(--mu); font-variant-numeric: tabular-nums; }
 @media (max-width: 640px) {
-  /* Um cartão por missão: o número, o código e o nome; a missão; o recurso, as horas e os botões */
-  table.cadastro.programa tr[data-i] { display: grid; grid-template-columns: 2em 1fr 1fr auto; grid-template-areas: "n id nome nome" "mis mis mis mis" "eq eq nb acoes"; gap: 6px 8px; align-items: center; padding: 10px 8px; border-top: 1px solid var(--ln); }
+  /* Um cartão por missão: o número, o código e o nome; a missão; o recurso e as horas; quando voar; as marcas; a fase da
+     missão e os botões. Para quem só consulta, o mesmo cartão, em texto */
+  table.cadastro.programa tr[data-i] {
+    display: grid; grid-template-columns: 2em 1fr 1fr 1fr; gap: 6px 8px; align-items: center; padding: 10px 8px; border-top: 1px solid var(--ln);
+    grid-template-areas: "n codigo nome nome" "mis mis mis mis" "eq eq nb nb" "quando quando quando quando" "marcas marcas marcas marcas" "acoes acoes acoes acoes";
+  }
+  table.cadastro.programa.consulta tr[data-i] { grid-template-areas: "n codigo nome nome" "mis mis eq nb" "quando quando quando quando" "marcas marcas marcas marcas"; }
   table.cadastro.programa tr[data-i]:first-child { border-top: 0; }
-  table.cadastro.programa td:nth-child(1) { grid-area: n; }
-  table.cadastro.programa td:nth-child(2) { grid-area: id; }
-  table.cadastro.programa td:nth-child(3) { grid-area: nome; }
-  table.cadastro.programa td:nth-child(4) { grid-area: mis; }
-  table.cadastro.programa td:nth-child(5) { grid-area: eq; }
-  table.cadastro.programa td:nth-child(6) { grid-area: nb; }
-  table.cadastro.programa td:nth-child(7) { grid-area: acoes; padding: 0; }
+  table.cadastro.programa td { padding: 0; }
+  table.cadastro.programa td.n { grid-area: n; }
+  table.cadastro.programa td.c-codigo { grid-area: codigo; }
+  table.cadastro.programa td.c-nome { grid-area: nome; }
+  table.cadastro.programa td.c-mis { grid-area: mis; }
+  table.cadastro.programa td.c-eq { grid-area: eq; }
+  table.cadastro.programa td.c-nb { grid-area: nb; }
+  table.cadastro.programa td.c-quando { grid-area: quando; min-width: 0; }
+  table.cadastro.programa td.c-marcas { grid-area: marcas; white-space: normal; }
+  table.cadastro.programa td.c-marcas:empty { display: none; }
+  table.cadastro.programa td.acoes { grid-area: acoes; padding: 0; display: block; }
+  table.cadastro.programa .acoes-da-missao { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 8px; }
   table.cadastro.programa input, table.cadastro.programa select { width: 100%; min-width: 0; }
+  /* O cadeado do código travado (a missão com resultados) fica ao lado do campo, não embaixo dele */
+  table.cadastro.programa td.c-codigo { display: flex; align-items: center; gap: 4px; }
+  table.cadastro.programa td.c-codigo input { flex: 1; }
+  table.cadastro.programa .acoes-da-missao select[data-cf="fase"] { order: -1; flex: 1 1 4em; width: auto; max-width: none; }
+  table.cadastro.programa td.c-marcas .chk { display: inline-flex; margin-right: 12px; }
+  #cursos .campo-da-fase, #cursos details.requisitos { flex: 1 1 100%; }
+  #cursos .campo-da-fase :is(input, select), #cursos .campo-da-fase input[data-cfa] { flex: 1; min-width: 0; }
+  #cursos summary { min-height: 44px; padding: 12px 0; box-sizing: border-box; }
+  #cursos .campo-do-curso, #cursos .acoes-do-curso, #form-curso .campo, #form-curso .dlg-acoes { flex: 1 1 100%; }
+  #cursos .campo-do-curso input, #form-curso .campo input { flex: 1; width: auto; min-width: 0; }
+  #cursos .acoes-do-curso { margin-left: 0; }
+  /* O botão do cronograma ("Usar o cronograma do PP (P.I PPA 001A)") quebra a linha em vez de passar da tela */
+  #cursos .acoes-do-curso .btn, #form-curso .chk { flex-shrink: 1; max-width: 100%; text-align: left; }
+  table.cadastro.programa label.trecho-do-noturno select { flex: 1; }
 }
 .legenda-disp { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; margin: 0 0 8px; font-size: 13.5px; color: var(--mu); }
 .legenda-disp span { display: inline-flex; align-items: center; gap: 6px; }
@@ -954,15 +1090,18 @@ a { color: var(--ac); }
 .tl-dot-cancelado { background: var(--mu); opacity: .42; }
 
 .tl-wrap { position: relative; padding-top: 4px; }
+/* Cada marca do eixo no minuto dela, centrada nela (o clique na faixa cai no horário da marca); a do fim do mapa, para
+   dentro. O eixo tem a largura de dentro das faixas (sem a borda delas) */
 .tl-axis {
-  display: flex;
-  margin-left: 165px;
+  position: relative;
+  height: 20px;
+  margin: 0 1px 0 166px;
   font-size: 11px;
   font-weight: 600;
   color: var(--mu);
-  justify-content: space-between;
-  padding-bottom: 4px;
 }
+.tl-axis span { position: absolute; top: 0; transform: translateX(-50%); white-space: nowrap; }
+.tl-axis span.fim { transform: translateX(-100%); }
 .tl-row {
   display: flex;
   align-items: center;
@@ -971,34 +1110,49 @@ a { color: var(--ac); }
   border-top: 1px solid var(--ln);
   font-size: 13px;
 }
+/* O nome e as horas da linha, com o "+" que agenda nela ao lado */
 .tl-lbl {
   width: 155px;
   font-weight: 600;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
   flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 4px;
   line-height: 1.2;
 }
+.tl-lbl > span, .tl-lbl > small { grid-column: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tl-lbl small { font-weight: 400; font-size: 11px; color: var(--mu); }
+.tl-lbl .tl-agendar { grid-column: 2; grid-row: 1 / span 2; }
 
+/* Uma listra por hora (--hora vem do mapa, pelo início e o fim dele), em qualquer largura */
 .tl-track {
   flex: 1;
   position: relative;
   height: 40px;
-  background: repeating-linear-gradient(
-    to right,
-    var(--bg),
-    var(--bg) calc(8.333% - 1px),
-    var(--ln) calc(8.333% - 1px),
-    var(--ln) 8.333%
-  );
+  background-color: var(--bg);
+  background-image: linear-gradient(to right, transparent calc(100% - 1px), var(--ln) calc(100% - 1px));
+  background-size: var(--hora, 8.333%) 100%;
   border-radius: 4px;
   border: 1px solid var(--ln);
   overflow: visible;
 }
+/* O espaço livre da faixa agenda com um clique; quem só consulta e a linha inerte não agendam */
+#out .tl-track:not(.inerte) { cursor: cell; }
+body[data-role="gestor"] #out .tl-track { cursor: default; }
+/* O avião em manutenção: a faixa riscada, sem o "+" e sem agendar com um clique */
+.tl-manutencao .tl-lbl > span { color: var(--mu); }
+.tl-manutencao .tl-track { background-image: repeating-linear-gradient(-45deg, transparent 0 6px, var(--ln) 6px 7px); background-size: auto; }
+
+/* O "+" que agenda: no fim de cada linha do mapa e de cada horário da lista (só o ícone; o nome fica no aria-label) */
+.tl-agendar, .win-agendar {
+  display: inline-grid; place-items: center; padding: 3px; border: 1px solid transparent; border-radius: 6px;
+  background: transparent; color: var(--ac); cursor: pointer;
+}
+.tl-agendar:hover, .win-agendar:hover { background: var(--info-bg); border-color: var(--ln2); }
+.tabela-escala tr.win td { position: relative; }
+.tabela-escala tr.win .win-btn { padding-right: 40px; }
+.win-agendar { position: absolute; top: 50%; right: 8px; transform: translateY(-50%); }
 
 .m-gnd { background: #2E6F40; color: #fff; }
 .m-sim { background: #3A506B; color: #fff; }
@@ -1116,11 +1270,15 @@ a { color: var(--ac); }
   font: 600 12px 'Barlow Semi Condensed', sans-serif;
   cursor: pointer;
 }
+/* "+ Aluno na turma" (a turma de Ground): agenda, não exclui */
+.tl-pop-btn[data-act="agendar"] { background: var(--ac); color: var(--acT); }
+.tl-pop-btn + .tl-pop-btn { margin-top: 6px; }
 
 /* Histórico, BI, Manual e toasts */
-/* Histórico da data: gaveta lateral sobre a aba aberta */
+/* Histórico da data: gaveta lateral sobre a aba aberta. As gavetas abertas ficam umas sobre as outras, a que abriu por
+   último em cima (--camada, posta por abrirGaveta em js/dom.js) */
 .gaveta {
-  position: fixed; top: 0; right: 0; bottom: 0; width: min(440px, 100vw); z-index: 200;
+  position: fixed; top: 0; right: 0; bottom: 0; width: min(440px, 100vw); z-index: calc(200 + var(--camada, 0));
   display: flex; flex-direction: column; gap: 8px; padding: 14px 16px; overflow: hidden;
   background: var(--pn); color: var(--ink); border-left: 1px solid var(--ln); box-shadow: -8px 0 24px rgba(0,0,0,.18);
 }
@@ -1243,6 +1401,8 @@ body[data-backend="supabase"] #btn-bi-clr { display: none !important; }
   header, .bar, nav, section:not(#s-esc), #toast-box { display: none !important; }
   section#s-esc { display: block; }
   body { background: #fff; color: #000; }
+  /* Os botões que agendam não vão para o papel */
+  .tl-agendar, .win-agendar, .tl-pop-btn[data-act="agendar"] { display: none !important; }
 }
 
 /* Alvos de toque no celular: botões, campos e interruptores com pelo menos 44 px */
@@ -1261,6 +1421,14 @@ body[data-backend="supabase"] #btn-bi-clr { display: none !important; }
   .cel { height: 44px; min-width: 44px; }
   .fila li { min-height: 48px; }
   .win-btn, .grupo-btn { min-height: 44px; }
+  /* O "+" que agenda: na linha do mapa, no horário da lista e na turma de Ground */
+  .tl-agendar, .win-agendar { min-width: 44px; min-height: 44px; }
+  /* Com o "+" de 44 px, sobram uns 107 px para o nome da linha do mapa: o nome (e as horas) quebram em quantas linhas
+     precisarem, em vez de terminar em reticências (no toque, não há o title para ler o resto). Até duas linhas, a linha
+     do mapa fica da altura do "+" */
+  .tl-lbl > span, .tl-lbl > small { white-space: normal; overflow-wrap: anywhere; }
+  .tl-pop-btn[data-act="agendar"] { min-height: 44px; }
+  .tabela-escala tr.win .win-btn { padding-right: 52px; }
   .tg { padding-right: 0; }
   .cal { gap: 2px; }
   /* Horários de decolagem: o nome da categoria em cima, as etiquetas na largura toda */

@@ -4,7 +4,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { COMBUSTIVEL, KG_POR_GALAO, TAXI_MIN } from '../../js/config.js';
-import { pesoECombustivel, reservaDaMissao } from '../../js/combustivel.js';
+import { pesoECombustivel, reservaDaMissao, combustivelDoVoo, textoDoCombustivel } from '../../js/combustivel.js';
 import { runAllocationEngine } from '../../js/engine.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
 
@@ -29,6 +29,11 @@ describe('Combustível: peso acima do limite com o tanque cheio', () => {
     // 10 kg = 3,67 galões (para cima: 4). Consumo 6,5 gal/h; 1 h + 10 min + 30 min = 100 min = 10,8 galões (para cima: 11)
     assert.deepEqual(pesoECombustivel({ stuKg: 100, insKg: 80, tipo: 'C152', minutos: 60, mis: 'Voo Local' }),
       { cabe: true, kg: 180, limKg: 170, reduzirGal: 4, abastecerGal: 22, minimoGal: 11, autonomiaMin: 203 });
+  });
+
+  it('em texto (a dica do "reduzir 4 gal" e o popup do mapa): quanto abastecer, o mínimo e a autonomia', () => {
+    const { comb } = combustivelDoVoo(100, 80, 'C152', 60, 'Voo Local');
+    assert.equal(textoDoCombustivel(comb), 'Abastecer até 22 gal (4 a menos que o tanque cheio); o voo, o táxi e a reserva pedem 11 gal; autonomia de 3h23.');
   });
 
   it('50 kg acima no C152: o combustível que sobraria não dá o voo e a reserva', () => {

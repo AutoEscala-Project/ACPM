@@ -7,7 +7,7 @@ test.describe('Aplicação', () => {
     await expect(page).toHaveTitle('AutoEscala - ACPM');
     await expect(page.locator('meta[name="application-name"]')).toHaveAttribute('content', 'AutoEscala - ACPM');
     await expect(page.locator('meta[name="apple-mobile-web-app-title"]')).toHaveAttribute('content', 'AutoEscala');
-    await expect(page.locator('#nav button .aba-rotulo')).toHaveText(['Escala', 'Demanda', 'Agenda', 'Recursos', 'Instrutores', 'Alunos', 'Rodízio', 'BI']);
+    await expect(page.locator('#nav button .aba-rotulo')).toHaveText(['Escala', 'Demanda', 'Agenda', 'Recursos', 'Instrutores', 'Alunos', 'Cursos', 'Rodízio', 'BI']);
     await expect(page.locator('#s-esc')).toBeVisible();
     await expect(page.locator('#nav button[data-t="esc"]')).toHaveClass(/\bon\b/);
     await expect(page.locator('#s-rec')).toBeHidden();
@@ -65,7 +65,7 @@ test.describe('Aplicação', () => {
 
   test('navega pelas abas; sem os botões "Próximo" de um passo a passo', async ({ page }) => {
     await abrir(page);
-    for (const aba of ['ins', 'alu', 'dem', 'esc', 'bi', 'rec']) {
+    for (const aba of ['ins', 'alu', 'cur', 'dem', 'esc', 'bi', 'rec']) {
       await irPara(page, aba);
       await expect(page.locator(`#nav button[data-t="${aba}"]`)).toHaveClass(/\bon\b/);
       await expect(page.locator('section.on')).toHaveCount(1);
@@ -136,7 +136,9 @@ test.describe('Aplicação', () => {
     const texto = await manual.innerText();
     for (const antigo of ['A01', 'A09', 'Gerar escala', 'Preencher exemplo', 'Link Blindado', 'Importar Solicitações da Agenda',
       'Vai voar?', 'Início pref', 'Exportar CSV', 'Emitir PDF', 'Turno rápido', 'Cada cartão', 'campo Data', 'Equipamento', 'Bloquear',
-      'Sessões', 'sessão', 'Desfazer', 'Escala de Voo', 'Por avião e sala', 'Avião / sala', 'Aviões e salas']) {
+      'Sessões', 'sessão', 'Desfazer', 'Escala de Voo', 'Por avião e sala', 'Avião / sala', 'Aviões e salas', 'o botão ao lado de Alunos',
+      // O "+" do mapa fica ao lado do nome da linha; o Operador não muda os Cursos nem os limites da lei
+      'no fim de cada linha', 'altera tudo e opera a escala']) {
       expect(texto, antigo).not.toContain(antigo);
     }
     await expect(manual.locator('h3')).toHaveText(['Primeiros passos: a rotina do operador', 'Perfis de acesso', 'As abas',
@@ -145,10 +147,16 @@ test.describe('Aplicação', () => {
     await expect(page.locator('#manual-glossario-lista dt')).toHaveCount(Object.keys(GLOSSARIO).length);
     await expect(page.locator('#manual-glossario-lista')).toContainText(GLOSSARIO['horario-livre'].texto);
     // As abas na ordem do app, sem números, com os nomes dos botões e das vistas
-    await expect(manual.locator('#manual-abas h4')).toHaveText(['Escala', 'Demanda', 'Agenda', 'Recursos', 'Instrutores', 'Alunos', 'Rodízio', 'BI']);
+    await expect(manual.locator('#manual-abas h4')).toHaveText(['Escala', 'Demanda', 'Agenda', 'Recursos', 'Instrutores', 'Alunos', 'Cursos', 'Rodízio', 'BI']);
     for (const novo of ['menu da conta', 'Pôr um aluno na demanda', 'Disponibilidade do dia', 'Editar habilitações', 'Não escalar com',
       'Ainda não importado', 'Atualizada às', 'Ver todos', 'Compartilhar', 'Por recurso', 'Novo recurso', 'Retirar', 'Horários de decolagem',
-      'de 30 em 30 minutos', 'divide as horas do dia']) {
+      'de 30 em 30 minutos', 'divide as horas do dia',
+      // O agendamento na Escala (mover e encaixar, as turmas, as alternativas, a prévia, os avisos), o voo agendado na
+      // Demanda, as alterações dos cursos fora do Histórico e o peso aceito
+      'Encaixar o voo', 'Mover o voo', 'Entrar na turma das', 'Horários livres', 'O que muda na escala', 'Agendar mesmo assim',
+      'agendado 10:10 · PR-VOB', 'fora da regra', 'ao lado do nome de cada linha', 'não entram no Histórico da data', 'de 1 a 300 kg',
+      // Acima do limite de voos locais do horário, todo voo local agendado pede a confirmação (não só o 7º)
+      'mais de 6 voos locais no mesmo horário']) {
       expect(texto, novo).toContain(novo);
     }
 

@@ -3,6 +3,7 @@
 // minutos de dia; 45 à noite e em IFR (RBAC 91.151 e 91.167). Tudo arredonda para o lado seguro: a redução e o mínimo
 // para cima, a autonomia para baixo. Sem um dos pesos, ou num tipo sem limite, não há o que conferir.
 import { DEFAULT_LIM, COMBUSTIVEL, KG_POR_GALAO, TAXI_MIN } from './config.js';
+import { duracaoHm } from './format.js';
 
 export const reservaDaMissao = mis => (mis === 'Noturno' || /IFR/.test(mis || '') ? 45 : 30);
 
@@ -29,3 +30,6 @@ export function combustivelDoVoo(stuKg, insKg, tipo, minutos, mis) {
   const { reduzirGal, abastecerGal, minimoGal, autonomiaMin } = pesoECombustivel({ stuKg, insKg, tipo, minutos, mis });
   return reduzirGal ? { comb: { reduzirGal, abastecerGal, minimoGal, autonomiaMin } } : {};
 }
+
+// O combustível do voo que sai com menos (o comb do voo), em texto: quanto abastecer, o mínimo e a autonomia
+export const textoDoCombustivel = c => `Abastecer até ${c.abastecerGal} gal (${c.reduzirGal} a menos que o tanque cheio); o voo, o táxi e a reserva pedem ${c.minimoGal} gal; autonomia de ${duracaoHm(Math.round(c.autonomiaMin))}.`;

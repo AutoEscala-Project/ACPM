@@ -3,7 +3,8 @@
 import { MIS, NI, T, PRE, GROUND_EQ_TYPE, GROUND_DURATION_H, DURACAO_MAXIMA_H } from './config.js';
 import { hm, lerHoras } from './format.js';
 import { periodoDoMinuto, minutoDaPreferencia, preferenciaValida, HORARIO_DO_SOLO } from './horarios.js';
-import { codigoValido } from './cursos.js';
+import { codigoValido, siglaValida } from './cursos.js';
+import { chaveDoVoo } from './voo.js';
 
 // Disponibilidade do aluno para o pedido (da agenda da secretaria ou escolhida na demanda): o voo só começa nesses
 // horários. "manha", "tarde" e "noite" valem por período (as janelas de operação de cada um); "h450" é um horário
@@ -48,13 +49,24 @@ export function doesGroundGateFlight(gMis, flightReq) {
   return false;
 }
 
-// O número da próxima missão extra de um aluno: depois das missões dele e do que o dia ainda guarda
-// para ele (voo fixo, status ou detalhe de uma missão retirada), para não herdar o voo de outra missão. Numerada no
-// aluno, a missão extra não muda o cadastro (o número do cadastro, nid, fica para as pessoas novas)
+// As chaves dos voos que o dia ainda guarda, também das missões que saíram da demanda: o voo fixo, o status, o detalhe
+// do status e os resultados registrados na data
+function chavesGuardadas(estado) {
+  const resultados = estado.resultados && Array.isArray(estado.resultados.doDia) ? estado.resultados.doDia : [];
+  return [...[estado.fixos, estado.fStatus, estado.fObs].flatMap(m => Object.keys(m && typeof m === 'object' ? m : {})),
+    ...resultados.map(r => r && r.voo).filter(voo => typeof voo === 'string')];
+}
+
+// O dia ainda guarda alguma coisa do voo da chave (o voo fixo, o status, o detalhe ou um resultado): um pedido novo nela
+// herdaria o cadeado, o status ou o resultado de outro voo
+export const chaveTemSobras = (estado, chave) => chavesGuardadas(estado).includes(chave);
+
+// O número da próxima missão extra de um aluno: depois das missões dele e do que o dia ainda guarda para ele (voo fixo,
+// status, detalhe ou resultado de uma missão retirada), para não herdar o voo de outra missão. Numerada no aluno, a
+// missão extra não muda o cadastro (o número do cadastro, nid, fica para as pessoas novas)
 export function proximoMid(estado, aluno) {
   const prefixo = `${aluno.id}_`;
-  const doDia = [estado.fixos, estado.fStatus, estado.fObs].flatMap(m => Object.keys(m && typeof m === 'object' ? m : {}))
-    .filter(fKey => fKey.startsWith(prefixo)).map(fKey => Number(fKey.split('_')[1]));
+  const doDia = chavesGuardadas(estado).filter(fKey => fKey.startsWith(prefixo)).map(fKey => Number(fKey.split('_')[1]));
   const doAluno = (aluno.extra || []).map(ex => ex.mid).filter(Number.isInteger);
   return Math.max(0, ...doAluno, ...doDia.filter(Number.isInteger)) + 1;
 }
@@ -68,6 +80,24 @@ export const duracaoFixaDaMissao = mis => (isGroundMission(mis) ? GROUND_DURATIO
   : Object.hasOwn(MIS, mis) && MIS[mis].duracaoFixaH ? MIS[mis].duracaoFixaH : null);
 
 export const blank = () => ({ fly: false, mis: 'Voo Local', eq: 'C152', p1: T[1], p2: T[2], nb: 1, ss: 1, pr: 3 });
+// O pedido em branco, sem nada do voo de antes: saem a disponibilidade, a missão do curso (o código e o curso), o pedido
+// da agenda e o instrutor escolhido. Assim ficam o pedido que a agenda reaproveita (alvoDoNovoPedido) e o pedido limpo
+// por "Limpar demanda" (js/fixos.js). Muda o pedido e o devolve
+export function deixarEmBranco(pedido) {
+  Object.assign(pedido, blank());
+  for (const campo of ['jan', 'etapa', 'cursoDaEtapa', 'solicitacao', 'insId']) delete pedido[campo];
+  return pedido;
+}
+
+// O pedido que recebe um voo novo do aluno (o pedido da agenda; o voo agendado na escala): o principal, quando ele não
+// voa e o dia não guarda nada da chave dele, em branco (deixarEmBranco); senão, uma missão extra nova, com a prioridade
+// do aluno. O pedido que não voa e tem sobras fica como está: voltando a voar, volta para o mesmo lugar
+export function alvoDoNovoPedido(estado, aluno) {
+  if (!aluno.fly && !chaveTemSobras(estado, chaveDoVoo(aluno.id, 0))) return deixarEmBranco(aluno);
+  const extra = { mid: proximoMid(estado, aluno), ...blank(), pr: aluno.pr || 3 };
+  aluno.extra = [...(aluno.extra || []), extra];
+  return extra;
+}
 
 export function migrateLegacyMissionName(mis) {
   if (missionRule(mis)) return mis;
@@ -97,6 +127,18 @@ export function duracaoValida(valor) {
   return Math.min(h, DURACAO_MAXIMA_H);
 }
 
+// O peso de um aluno ou instrutor, em kg: mais que 0 e até PESO_MAXIMO; 0 é sem peso. O gravado fora disso (ou que não é
+// um número) fica sem peso
+const PESO_MAXIMO = 300;
+export const pesoValido = v => (typeof v === 'number' && Number.isFinite(v) && v > 0 && v <= PESO_MAXIMO ? v : 0);
+// O peso digitado pelo operador: em décimos de kg, com vírgula ou ponto, mais que 0 e até PESO_MAXIMO; fora disso, null
+// (e a mensagem). O campo vazio é sem peso: quem lê o campo decide
+export const ERRO_DO_PESO = `O peso vai de 1 a ${PESO_MAXIMO} kg.`;
+export const pesoDigitado = texto => {
+  const kg = Math.round(parseFloat(String(texto).replace(',', '.')) * 10) / 10;
+  return kg > 0 && kg <= PESO_MAXIMO ? kg : null;
+};
+
 export function normalizeMissionFields(target) {
   target.mis = migrateLegacyMissionName(target.mis);
   // Uma sessão por missão (para dividir o voo no dia, "+ missão"): o campo fica nos dados, sempre 1, e o motor
@@ -115,6 +157,9 @@ export function normalizeMissionFields(target) {
   if (Object.hasOwn(target, 'fly')) target.fly = Boolean(target.fly);
   // O código da missão do curso, quando o pedido veio do programa
   if (Object.hasOwn(target, 'etapa') && !(typeof target.etapa === 'string' && codigoValido(target.etapa))) delete target.etapa;
+  // O curso dessa missão (a sigla; o resultado vai para ele, mesmo que o aluno troque de curso no mesmo dia): só com a
+  // missão do curso. Não se chama "curso": o pedido principal é o próprio aluno, e o curso do aluno é outro campo
+  if (Object.hasOwn(target, 'cursoDaEtapa') && !(siglaValida(target.cursoDaEtapa) && Object.hasOwn(target, 'etapa'))) delete target.cursoDaEtapa;
   // O id do pedido da agenda que originou este voo
   if (Object.hasOwn(target, 'solicitacao') && !(Number.isInteger(target.solicitacao) && target.solicitacao > 0)) delete target.solicitacao;
   // O instrutor escolhido pelo operador para o pedido

@@ -1,6 +1,6 @@
 // Acessibilidade: cada botão e cada campo tem um nome para o leitor de tela, e nenhum se chama só "✕" (que o leitor
 // lê como "multiplicação"). Vale para todas as abas, o Histórico e o painel de habilitações.
-import { test, expect, abrir, abrirComExemplo, irPara, entrar, abrirEscala, confirmar } from './fixtures.js';
+import { test, expect, abrir, abrirComExemplo, irPara, entrar, abrirEscala, confirmar, prepararContexto, vigiarErros } from './fixtures.js';
 import { instalarSupabaseFalso, documentosAtuais, CONTAS } from './supabase-falso.js';
 import { comExemplo } from '../helpers/exemplo.js';
 import { estadoSintetico } from '../helpers/estado.js';
@@ -35,7 +35,7 @@ const semNome = (page, raiz) => page.evaluate(seletor => {
 test.describe('Acessibilidade', () => {
   test('todo botão e todo campo tem nome para o leitor de tela, em todas as abas', async ({ page }) => {
     await abrirComExemplo(page);
-    for (const aba of ['esc', 'dem', 'age', 'rec', 'ins', 'alu', 'rod', 'bi']) {
+    for (const aba of ['esc', 'dem', 'age', 'rec', 'ins', 'alu', 'cur', 'rod', 'bi']) {
       await irPara(page, aba);
       expect(await semNome(page, '.topo, #nav, main section.on'), `aba ${aba}`).toEqual([]);
     }
@@ -52,6 +52,29 @@ test.describe('Acessibilidade', () => {
     await page.keyboard.press('Escape');
     await page.locator('#btn-open-log').click();
     expect(await semNome(page, '#historico'), 'histórico').toEqual([]);
+  });
+
+  // O "+" que agenda é só o ícone (escondido do leitor de tela): o nome diz onde o voo vai, o recurso ou o instrutor da
+  // linha no mapa e o horário na lista
+  test('o "+" que agenda tem nome em cada vista: o recurso e o instrutor da linha no mapa, o horário na lista', async ({ page }) => {
+    await abrirComExemplo(page);
+    await abrirEscala(page);
+    const nomes = () => page.locator('#out .win-agendar, #out .tl-agendar').evaluateAll(bs => bs.filter(b => b.checkVisibility()).map(b => b.getAttribute('aria-label')));
+    const lista = await nomes();
+    expect(lista.length).toBeGreaterThan(0);
+    expect(lista.filter(n => !/^Agendar às \d\d:\d\d$/.test(n)), 'lista').toEqual([]);
+    await expect(page.getByRole('button', { name: 'Agendar às 06:30', exact: true })).toBeVisible();
+    await page.locator('#s-esc [data-tl="eq"]').click();
+    const recursos = await nomes();
+    expect(recursos).toContain('Agendar no PR-VOB');
+    expect(recursos).toContain('Agendar na Sala Ground');
+    expect(recursos.filter(n => !/^Agendar (no [A-Z0-9-]+|na Sala Ground)$/.test(n)), 'por recurso').toEqual([]);
+    await expect(page.getByRole('button', { name: 'Agendar no PR-VOB', exact: true })).toBeVisible();
+    await page.locator('#s-esc [data-tl="ins"]').click();
+    const instrutores = await nomes();
+    expect(instrutores).toHaveLength(40);
+    expect(instrutores.filter(n => !/^Agendar com Instrutor \d\d$/.test(n)), 'por instrutor').toEqual([]);
+    await expect(page.getByRole('button', { name: 'Agendar com Instrutor 07', exact: true })).toBeVisible();
   });
 });
 
@@ -512,9 +535,10 @@ test.describe('O leitor de tela e o teclado', () => {
     await irPara(page, 'ins');
     await page.locator('[data-vista-ins="cadastro"]').click();
     await expect(page.locator('[data-vista-ins][aria-pressed="true"]')).toHaveAttribute('data-vista-ins', 'cadastro');
-    await irPara(page, 'alu');
-    await page.locator('[data-vista-alu="cursos"]').click();
-    await expect(page.locator('[data-vista-alu][aria-pressed="true"]')).toHaveAttribute('data-vista-alu', 'cursos');
+    // Cursos é uma aba, não uma vista de Alunos: a aba aberta é a atual
+    await irPara(page, 'cur');
+    await expect(atual).toHaveCount(1);
+    await expect(atual).toHaveAttribute('data-t', 'cur');
     // O dia escolhido no calendário da agenda, e o que passa a ser escolhido
     await irPara(page, 'age');
     const escolhido = page.locator('#agenda-cal [aria-current="date"]');
@@ -601,6 +625,317 @@ test.describe('O leitor de tela e o teclado', () => {
     await expect(page.locator('#historico')).toBeVisible();
     await page.keyboard.press('Escape');
     await expect(page.locator('#historico')).toBeHidden();
+  });
+
+  test('o Esc fecha só a camada de cima: com o Histórico aberto, o primeiro fecha o diálogo do status, o segundo, a gaveta', async ({ page }) => {
+    await abrirComExemplo(page);
+    await abrirEscala(page);
+    await page.locator('#btn-open-log').click();
+    await expect(page.locator('#historico')).toBeVisible();
+    // O status muda sem o clique (dependendo da largura, a gaveta cobre a lista): o foco fica no ✕ da gaveta. Com o foco
+    // no status, a volta do foco depois do Esc abriria a dica dele, uma camada a mais (o 2º Esc fecharia a dica)
+    const status = page.locator('#out select[data-f="fstatus"]').first();
+    const fkey = await status.getAttribute('data-fkey');
+    const anterior = await status.inputValue();
+    await status.selectOption('Cancelado');
+    const dialogo = page.locator('#dlg-status');
+    await expect(dialogo).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(dialogo).toBeHidden();
+    await expect(page.locator('#historico')).toBeVisible();
+    // Desistir deixa o status anterior, e o foco volta para o ✕ da gaveta
+    await expect(page.locator(`#out select[data-fkey="${fkey}"]`)).toHaveValue(anterior);
+    await expect(page.locator('#btn-fechar-historico')).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#historico')).toBeHidden();
+    await expect(page.locator('#btn-open-log')).toBeFocused();
+  });
+
+  test('o Esc fecha só a camada de cima: com o Histórico aberto, o primeiro fecha o popup do mapa, o segundo, a gaveta', async ({ page }) => {
+    await abrirComExemplo(page);
+    await abrirEscala(page);
+    await page.locator('#s-esc [data-tl="eq"]').click();
+    await page.locator('#btn-open-log').click();
+    await expect(page.locator('#historico')).toBeVisible();
+    // O popup abre pelo teclado (dependendo da largura, a gaveta cobre a barra), com o foco nele
+    const barra = page.locator('#out .tl-bar').first();
+    await barra.focus();
+    await page.keyboard.press('Enter');
+    const popup = page.locator('#tl-pop');
+    await expect(popup).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(popup).toBeHidden();
+    await expect(barra).toBeFocused();
+    await expect(page.locator('#historico')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#historico')).toBeHidden();
+  });
+
+  // O diálogo do agendamento: o nome, a descrição (o contexto), o foco no aluno, os nomes dos campos e o alerta vazio, que
+  // fica na árvore de acessibilidade (escondido sem display: none) para ser anunciado. Ele é a camada de cima: com as
+  // habilitações abertas embaixo, o Esc fecha só ele, e o seguinte, as habilitações
+  test('o diálogo do agendamento: nome, descrição, foco e campos com nome; o Esc fecha só ele, com as habilitações abertas embaixo', async ({ page }) => {
+    await abrirComExemplo(page);
+    await irPara(page, 'ins');
+    await page.locator('#s-ins [data-vista-ins="cadastro"]').click();
+    await page.locator('#inst [data-act="editar-habs"]').first().click();
+    const painel = page.locator('#painel-instrutor');
+    await expect(painel).toBeVisible();
+    await abrirEscala(page);
+    await page.locator('#btn-agendar').focus();
+    await page.keyboard.press('Enter');
+    const dialogo = page.locator('#dlg-agendar');
+    await expect(dialogo).toBeVisible();
+    await expect(dialogo).toHaveAccessibleName('Agendar voo');
+    await expect(page.locator('#agd-contexto')).not.toBeEmpty();
+    await expect(dialogo).toHaveAccessibleDescription(await page.locator('#agd-contexto').textContent());
+    await expect(page.locator('#agd-aluno')).toBeFocused();
+    await expect(page.locator('#agd-aluno')).toHaveAccessibleName('Aluno');
+    await expect(page.locator('#agd-erro')).toHaveAttribute('role', 'alert');
+    expect(await page.locator('#agd-erro').evaluate(el => getComputedStyle(el).display)).not.toBe('none');
+    await page.locator('#agd-aluno').selectOption({ index: 1 });
+    await expect(page.locator('#agd-previa ul')).toContainText('Entra:');
+    expect(await semNome(page, '#dlg-agendar')).toEqual([]);
+    await page.keyboard.press('Escape');
+    await expect(dialogo).toBeHidden();
+    await expect(painel).toBeVisible();
+    await expect(page.locator('#btn-agendar')).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(painel).toBeHidden();
+    await expect(page.locator('#log-cnt')).toHaveText('0');
+  });
+
+  test('o Esc fecha só a camada de cima: as habilitações, abertas em Instrutores, continuam abertas na Escala quando o Esc fecha o diálogo do status', async ({ page }) => {
+    await abrirComExemplo(page);
+    await irPara(page, 'ins');
+    await page.locator('#s-ins [data-vista-ins="cadastro"]').click();
+    await page.locator('#inst [data-act="editar-habs"]').first().click();
+    const painel = page.locator('#painel-instrutor');
+    await expect(painel).toBeVisible();
+    // O painel continua aberto nas outras abas
+    await abrirEscala(page);
+    await expect(painel).toBeVisible();
+    await page.locator('#out select[data-f="fstatus"]').first().selectOption('Cancelado');
+    const dialogo = page.locator('#dlg-status');
+    await expect(dialogo).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(dialogo).toBeHidden();
+    await expect(painel).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(painel).toBeHidden();
+  });
+
+  // As Sugestões de um conflito (como em reparo.spec.js): a escala aprovada e o instrutor do voo do Aluno 1000 desligado
+  // na data. Devolve o botão "Sugestões", com a gaveta aberta
+  async function abrirSugestoes(page) {
+    await abrir(page, { estado: cenario({ ins: [instrutor(1, 9), instrutor(2, 9)], stu: [aluno(1000, { p1: 390, p2: -1 }), aluno(1001, { p1: 500, p2: -1 })] }) });
+    await abrirEscala(page);
+    await confirmar(page, '#btn-aprovar');
+    const doVoo = (await page.locator('#out tbody tr:not(.win)', { hasText: 'Aluno 1000' }).locator('.c-instr').innerText()).trim();
+    await irPara(page, 'ins');
+    await page.locator(`#inst-dia tr[data-id="${doVoo.endsWith('01') ? 1 : 2}"] [data-f="on"]`).uncheck();
+    await abrirEscala(page);
+    const botao = page.locator('#out details.conflitos [data-reparo]');
+    await botao.click();
+    await expect(page.locator('#painel-reparo')).toBeVisible();
+    return botao;
+  }
+
+  test('o Esc fecha só a camada de cima: com as Sugestões abertas, o primeiro fecha o diálogo do agendamento, o segundo, a gaveta', async ({ page }) => {
+    const botao = await abrirSugestoes(page);
+    await page.locator('#btn-agendar').focus();
+    await page.keyboard.press('Enter');
+    const dialogo = page.locator('#dlg-agendar');
+    await expect(dialogo).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(dialogo).toBeHidden();
+    await expect(page.locator('#painel-reparo')).toBeVisible();
+    await expect(page.locator('#btn-agendar')).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#painel-reparo')).toBeHidden();
+    await expect(botao).toBeFocused();
+  });
+
+  test('o Esc fecha só a camada de cima: com as Sugestões abertas, o primeiro fecha o diálogo do status (o status fica), o segundo, a gaveta', async ({ page }) => {
+    await abrirSugestoes(page);
+    const status = page.locator('#out tbody tr:not(.win)', { hasText: 'Aluno 1001' }).locator('select[data-f="fstatus"]');
+    const anterior = await status.inputValue();
+    await status.selectOption('Cancelado');
+    const dialogo = page.locator('#dlg-status');
+    await expect(dialogo).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(dialogo).toBeHidden();
+    await expect(page.locator('#painel-reparo')).toBeVisible();
+    await expect(status).toHaveValue(anterior);
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#painel-reparo')).toBeHidden();
+  });
+
+  // Os Dados pessoais continuam abertos nas outras abas, como as habilitações: o diálogo do agendamento é a camada de cima
+  test('o Esc fecha só a camada de cima: com os Dados pessoais abertos, o primeiro fecha o diálogo do agendamento, o segundo, o painel (nada é gravado)', async ({ page }) => {
+    await abrir(page, { estado: cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000)] }) });
+    await irPara(page, 'alu');
+    await page.locator('#alu tr[data-id="1000"] [data-dados]').click();
+    const painel = page.locator('#painel-dados');
+    await expect(painel).toBeVisible();
+    await abrirEscala(page);
+    await expect(painel).toBeVisible();
+    await page.locator('#btn-agendar').focus();
+    await page.keyboard.press('Enter');
+    const dialogo = page.locator('#dlg-agendar');
+    await expect(dialogo).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(dialogo).toBeHidden();
+    await expect(painel).toBeVisible();
+    await expect(page.locator('#btn-agendar')).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(painel).toBeHidden();
+    await expect(page.locator('#log-cnt')).toHaveText('0');
+  });
+
+  // Qualquer diálogo é a camada de cima, não só o do status: o da sessão expirada aparece sozinho, na gravação, e o Esc
+  // não o fecha. A gravação com a sessão expirada responde 401 de propósito
+  test('o Esc fecha só a camada de cima: com o diálogo da sessão aberto sobre o popup do mapa, nem o Esc nem um clique no diálogo fecham o popup', async ({ browser }) => {
+    const context = await browser.newContext({ baseURL: test.info().project.use.baseURL, locale: 'pt-BR', timezoneId: 'America/Sao_Paulo' });
+    await prepararContexto(context);
+    const servidor = await instalarSupabaseFalso(context, documentosAtuais(comExemplo(estadoSintetico()), '2026-11-11'));
+    const page = await context.newPage();
+    const erros = vigiarErros(page, { statusEsperados: [401] });
+    await entrar(page, CONTAS.operador);
+    await abrirEscala(page);
+    await page.locator('#s-esc [data-tl="eq"]').click();
+    await page.locator('#out .tl-bar').first().click();
+    const popup = page.locator('#tl-pop');
+    await expect(popup).toBeVisible();
+    servidor.expirarSessoes();
+    await popup.locator('select[data-f="fstatus"]').selectOption('Em Voo');
+    const sessao = page.locator('#dlg-sessao');
+    await expect(sessao).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(sessao).toBeVisible();
+    await expect(popup).toBeVisible();
+    await page.locator('#sessao-senha').click();
+    await expect(popup).toBeVisible();
+    await page.locator('#sessao-senha').fill(CONTAS.operador.senha);
+    await page.locator('#sessao-entrar').click();
+    await expect(sessao).toBeHidden();
+    await expect(popup).toBeVisible();
+    await expect(popup.locator('select[data-f="fstatus"]')).toHaveValue('Em Voo');
+    expect(erros).toEqual([]);
+    await context.close();
+  });
+
+  // As gavetas abrem no mesmo lugar, à direita, umas sobre as outras. A de cima é a que abriu por último (ela fica por
+  // cima na tela) ou a que tem o foco: o Esc fecha só ela, e o próximo, a de baixo. O Histórico abre pelo teclado, porque
+  // a outra gaveta cobre o botão dele para o mouse
+  const GAVETAS = [
+    ['os Dados pessoais', '#painel-dados', '#dado-cpf', async page => {
+      await irPara(page, 'alu');
+      await page.locator('#alu tr[data-id="1000"] [data-dados]').click();
+    }],
+    ['as Habilitações', '#painel-instrutor', '#btn-fechar-painel-instrutor', async page => {
+      await irPara(page, 'ins');
+      await page.locator('#s-ins [data-vista-ins="cadastro"]').click();
+      await page.locator('#inst tr.cd[data-id="1"] [data-act="editar-habs"]').click();
+    }]
+  ];
+  const abrirComDuasGavetas = async (page, { abrirGaveta, focoNaGaveta }) => {
+    await abrir(page, { estado: cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000)] }) });
+    await abrirGaveta(page);
+    await expect(page.locator(focoNaGaveta)).toBeFocused();
+    await page.locator('#btn-open-log').focus();
+    await page.keyboard.press('Enter');
+    await expect(page.locator('#historico')).toBeVisible();
+    await expect(page.locator('#btn-fechar-historico')).toBeFocused();
+  };
+  // A gaveta que aparece no meio da área das gavetas (a de cima na tela)
+  const gavetaNaTela = page => page.evaluate(() => {
+    const { left, top, width, height } = document.querySelector('#historico').getBoundingClientRect();
+    return document.elementFromPoint(left + width / 2, top + height / 2).closest('.gaveta').id;
+  });
+
+  for (const [nome, gaveta, focoNaGaveta, abrirGaveta] of GAVETAS) {
+    test(`o Esc fecha só a gaveta de cima: com ${nome} e o Histórico abertos (o Histórico por último), o primeiro fecha o Histórico, o segundo, ${nome}`, async ({ page }) => {
+      await abrirComDuasGavetas(page, { abrirGaveta, focoNaGaveta });
+      expect(await gavetaNaTela(page), 'o Histórico, que abriu por último, fica por cima').toBe('historico');
+      await page.keyboard.press('Escape');
+      await expect(page.locator('#historico')).toBeHidden();
+      await expect(page.locator(gaveta)).toBeVisible();
+      await expect(page.locator('#btn-open-log')).toBeFocused();
+      await page.keyboard.press('Escape');
+      await expect(page.locator(gaveta)).toBeHidden();
+    });
+  }
+
+  test('o Esc fecha só a gaveta de cima: com o Histórico aberto, os Dados pessoais abertos depois fecham primeiro', async ({ page }) => {
+    await abrir(page, { estado: cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000)] }) });
+    await irPara(page, 'alu');
+    await page.locator('#btn-open-log').click();
+    await expect(page.locator('#historico')).toBeVisible();
+    // A gaveta do Histórico pode cobrir o botão da linha: pelo teclado
+    await page.locator('#alu tr[data-id="1000"] [data-dados]').focus();
+    await page.keyboard.press('Enter');
+    await expect(page.locator('#dado-cpf')).toBeFocused();
+    expect(await gavetaNaTela(page)).toBe('painel-dados');
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#painel-dados')).toBeHidden();
+    await expect(page.locator('#historico')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#historico')).toBeHidden();
+  });
+
+  test('o Esc fecha a gaveta em que está o foco, mesmo a de baixo; o próximo, a outra', async ({ page }) => {
+    const [, , focoNaGaveta, abrirGaveta] = GAVETAS[0];
+    await abrirComDuasGavetas(page, { abrirGaveta, focoNaGaveta });
+    // O foco volta para o CPF, nos Dados pessoais (embaixo do Histórico)
+    await page.locator('#dado-cpf').focus();
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#painel-dados')).toBeHidden();
+    await expect(page.locator('#historico')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#historico')).toBeHidden();
+  });
+
+  // As duas regras juntas: o diálogo do agendamento é a camada de cima (o Esc é só dele), e as gavetas embaixo dele
+  // fecham uma de cada vez, a que abriu por último primeiro. Nada é gravado
+  for (const [nome, gaveta, focoNaGaveta, abrirGaveta] of GAVETAS) {
+    test(`o Esc fecha só a camada de cima: com ${nome} e o Histórico abertos, o primeiro fecha o diálogo do agendamento, o segundo, o Histórico, o terceiro, ${nome}`, async ({ page }) => {
+      await abrirComDuasGavetas(page, { abrirGaveta, focoNaGaveta });
+      await abrirEscala(page);
+      // As gavetas podem cobrir o botão: pelo teclado
+      await page.locator('#btn-agendar').focus();
+      await page.keyboard.press('Enter');
+      const dialogo = page.locator('#dlg-agendar');
+      await expect(dialogo).toBeVisible();
+      await page.keyboard.press('Escape');
+      await expect(dialogo).toBeHidden();
+      await expect(page.locator('#historico')).toBeVisible();
+      await expect(page.locator(gaveta)).toBeVisible();
+      await expect(page.locator('#btn-agendar')).toBeFocused();
+      await page.keyboard.press('Escape');
+      await expect(page.locator('#historico')).toBeHidden();
+      await expect(page.locator(gaveta)).toBeVisible();
+      await page.keyboard.press('Escape');
+      await expect(page.locator(gaveta)).toBeHidden();
+      await expect(page.locator('#log-cnt')).toHaveText('0');
+    });
+  }
+
+  // Na aba Cursos, com o foco num campo do programa (fora das gavetas), vale a mesma regra: o Esc fecha a gaveta que abriu
+  // por último, e o foco fica no campo
+  test('o Esc fecha só a gaveta de cima também na aba Cursos: com o foco no nome do curso, o primeiro fecha o Histórico, o segundo, os Dados pessoais', async ({ page }) => {
+    const [, gaveta, focoNaGaveta, abrirGaveta] = GAVETAS[0];
+    await abrirComDuasGavetas(page, { abrirGaveta, focoNaGaveta });
+    await irPara(page, 'cur');
+    const nome = page.locator('#cursos .curso[data-curso="PP"] [data-cc="nome"]');
+    await nome.focus();
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#historico')).toBeHidden();
+    await expect(page.locator(gaveta)).toBeVisible();
+    await expect(nome).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(page.locator(gaveta)).toBeHidden();
+    await expect(page.locator('#log-cnt')).toHaveText('0');
   });
 
   for (const [tema, nome] of [['light', 'claro'], ['dark', 'escuro']]) {

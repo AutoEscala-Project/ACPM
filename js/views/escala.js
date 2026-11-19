@@ -1,7 +1,8 @@
 // Aba Escala: resumo do dia, a lista dos voos (ou o mapa por recurso ou por instrutor) e o histórico da data.
-import { FLIGHT_STATUSES, GROUND_REG, NOTURNO } from '../config.js';
-import { CODIGOS_DE_AVISO } from '../conflitos.js';
-import { hm, WLB, fmtH, esc, rotuloDaData, hojeISO, duracaoHm, DURACAO_DO_GROUND } from '../format.js';
+import { FLIGHT_STATUSES, GROUND_REG, GROUND_EQ_TYPE, NOTURNO, T } from '../config.js';
+import { CODIGOS_DE_AVISO, CODIGOS_DO_AGENDADO } from '../conflitos.js';
+import { textoDoCombustivel } from '../combustivel.js';
+import { hm, WLB, fmtH, esc, rotuloDaData, hojeISO, duracaoHm, DURACAO_DO_GROUND, pesoBr } from '../format.js';
 import { isGroundMission } from '../rules.js';
 import { categoriaDoTipo, nomeDoRecurso } from '../categorias.js';
 import { textoDoDetalhe, classeDoStatus, rotuloDoStatus, STATUS_COM_DETALHE } from '../status.js';
@@ -9,6 +10,7 @@ import { validarReversao } from '../reversoes.js';
 import { linhasDoQuadro, quadroDoDia } from '../quadro.js';
 import { painelDaEscala } from './painel-aeroporto.js';
 import { atualizarPainelDeReparo } from './reparo.js';
+import { atualizarAgendamento } from './agendamento.js';
 import { resultadoNaEscala } from './etapas.js';
 import { OPCOES_DE_BURACOS, OPCOES_DE_HORARIOS, normalizarCriterios } from '../criterios.js';
 import { metricasDaEscala } from '../metricas.js';
@@ -47,7 +49,7 @@ function conteudoDoPopup(o) {
       <span>Instrutor:</span><span>${botaoDoInstrutor(principal, 'Instrutor do voo')}</span>
       <span>Recurso:</span><span>${esc(nomeDoRecurso(o.r))}</span>
       <span>Missão:</span><span>${esc(o.mis)}</span>
-      <span>Peso Trip.:</span><span>${o.kg ? `${o.kg} kg` : '—'}</span>
+      <span>Peso Trip.:</span><span>${o.kg ? `${pesoBr(o.kg)} kg` : '—'}</span>
       ${o.comb ? `<span>Combustível:</span><span>${textoDoCombustivel(o.comb)}</span>` : ''}
       <span>Status:</span>
       <span>
@@ -57,6 +59,7 @@ function conteudoDoPopup(o) {
         ${detalheDoStatus(principal)}
       </span>
     </div>
+    ${ehGround(o) && ativos.length ? `<button type="button" class="tl-pop-btn edit-only" data-act="agendar" data-agendar="t:${esc(unidadeDoVoo(o))}" aria-haspopup="dialog">+ Aluno na turma</button>` : ''}
     ${!turma && o.stuId && !principal.trecho ? `<button type="button" class="tl-pop-btn edit-only" data-act="rm-fly" data-id="${esc(o.stuId)}" data-mid="${esc(o.mid || 0)}">✕ Excluir da escala</button>` : ''}`;
 }
 
@@ -118,19 +121,60 @@ function reancorarPopupDoMapa() {
   if (popupDe === chave && foco) { const campo = $(`#tl-pop [data-f="${foco}"]`); if (campo) campo.focus(); }
 }
 
-function buildTimelineGroup(out, groupKey, subLabelFn, barLine1Fn, barLine2Fn, minStart, maxEnd) {
+// O mapa é a vista escolhida (Por recurso ou Por instrutor). Na Lista e no Painel, ele fica escondido, só com as linhas
+// dos voos: sem as linhas livres e sem o "+"
+const vistaDoMapa = () => TL_MODE === 'eq' || TL_MODE === 'ins';
+
+// As linhas do mapa, com os voos de cada uma: por recurso, na ordem da matrícula; por instrutor, pelo id (dois
+// instrutores com o mesmo nome ficam em linhas separadas), na ordem do nome e do id. livres: as linhas sem voo que também
+// aparecem ([chave, rótulo]), intercaladas na mesma ordem. A escala gravada só exige a chave do voo
+// (js/escala-gravada.js): o voo gravado sem o id do instrutor fica na linha do nome dele e, sem o nome, leva o do cadastro
+function linhasDoMapa(voos, porInstrutor, livres) {
+  const linhas = new Map();
+  const linha = (chave, rotulo) => linhas.get(chave) || linhas.set(chave, { chave, rotulo: String(rotulo ?? ''), voos: [] }).get(chave);
+  const doInstrutor = o => linha(o.insId ?? o.ins, o.ins ?? (S.ins.find(x => x.id === o.insId) || {}).nm);
+  voos.forEach(o => (porInstrutor ? doInstrutor(o) : linha(o.r, nomeDoRecurso(o.r))).voos.push(o));
+  livres.forEach(([chave, rotulo]) => linha(chave, rotulo));
+  return [...linhas.values()].sort(porInstrutor
+    ? (x, y) => x.rotulo.localeCompare(y.rotulo) || x.chave - y.chave
+    : (x, y) => String(x.chave).localeCompare(String(y.chave)));
+}
+
+// O que a linha diz e faz: as horas do dia (no recurso, com o tipo antes). Nas vistas do mapa, o "+" que agenda nela (no
+// recurso ou com o instrutor) e o clique no espaço livre da faixa; o avião em manutenção fica apagado ("em manutenção"),
+// e ele, o recurso que saiu da frota e o instrutor fora do cadastro não agendam (a faixa fica inerte)
+function detalhesDaLinha(linha, porInstrutor, mapa) {
+  const horas = fmtH(sumUniqueOperationalHours(linha.voos, statusDe));
+  if (porInstrutor) {
+    const agenda = mapa && S.ins.some(x => x.id === linha.chave);
+    return {
+      sub: horas, dados: `data-ins="${esc(linha.chave)}"`, manutencao: false, inerte: mapa && !agenda,
+      agendar: agenda ? { valor: `i:${linha.chave}`, nome: `Agendar com ${linha.rotulo}` } : null
+    };
+  }
+  const r = linha.chave, ground = r === GROUND_REG;
+  const recurso = ground ? null : (S.frota || []).find(f => f.reg === r) || null;
+  const manutencao = mapa && Boolean(recurso) && !S.av[r];
+  const agenda = mapa && (ground || (Boolean(recurso) && !manutencao));
+  const tipo = ground ? '' : (linha.voos.length ? linha.voos[0].eqType : recurso && recurso.tipo) || '';
+  return {
+    sub: [tipo, horas, manutencao ? 'em manutenção' : ''].filter(Boolean).join(' · '), dados: `data-r="${esc(r)}"`, manutencao, inerte: mapa && !agenda,
+    agendar: agenda ? { valor: `r:${r}`, nome: `Agendar ${ground ? 'na Sala Ground' : `no ${r}`}` } : null
+  };
+}
+
+// O mapa: as marcas do eixo ficam no minuto delas e cada listra da faixa é uma hora (--hora), em qualquer largura; o
+// início e o fim do mapa (data-inicio e data-fim, em minutos) dão o horário de um clique na faixa (js/eventos/escala.js)
+function buildTimelineGroup(linhas, porInstrutor, barLine1Fn, barLine2Fn, minStart, maxEnd) {
   const span = maxEnd - minStart;
-  const groups = {};
-  out.forEach(o => (groups[o[groupKey]] = groups[o[groupKey]] || []).push(o));
+  const mapa = vistaDoMapa();
 
   const ticks = [];
-  for (let m = minStart; m <= maxEnd; m += 60) ticks.push(`<span>${hm(m)}</span>`);
+  for (let m = minStart; m <= maxEnd; m += 60) ticks.push(`<span${m === maxEnd ? ' class="fim"' : ''} style="left:${(((m - minStart) / span) * 100).toFixed(2)}%">${hm(m)}</span>`);
 
-  const rowsHTML = Object.keys(groups).sort((a, b) => a.localeCompare(b)).map(key => {
-    const rawFlights = groups[key];
-    const activeH = sumUniqueOperationalHours(rawFlights, statusDe);
-    const sub = subLabelFn(rawFlights[0], activeH);
-    const consolidated = consolidateTimelineSlots(rawFlights);
+  const rowsHTML = linhas.map(linha => {
+    const { sub, dados, manutencao, inerte, agendar } = detalhesDaLinha(linha, porInstrutor, mapa);
+    const consolidated = consolidateTimelineSlots(linha.voos);
 
     const bars = consolidated.map(o => {
       const left = ((o.a - minStart) / span) * 100;
@@ -141,7 +185,7 @@ function buildTimelineGroup(out, groupKey, subLabelFn, barLine1Fn, barLine2Fn, m
       const activeItems = o.items.filter(it => statusDe(it) !== 'Cancelado');
       const status = activeItems.length ? statusDe(activeItems[0]) : 'Cancelado';
       const stKey = classeDoStatus(status);
-      const chave = unidadeDoVoo(o) || `${groupKey}:${key}:${o.a}`;
+      const chave = unidadeDoVoo(o) || `${porInstrutor ? 'ins' : 'r'}:${linha.chave}:${o.a}`;
       VOOS_DO_MAPA.set(chave, o);
 
       return `<button type="button" class="tl-bar ${cls} tl-st-${stKey}" data-pop="${esc(chave)}" aria-haspopup="dialog" aria-controls="tl-pop" aria-expanded="false" style="left:${left.toFixed(2)}%;width:${width.toFixed(2)}%">
@@ -150,27 +194,34 @@ function buildTimelineGroup(out, groupKey, subLabelFn, barLine1Fn, barLine2Fn, m
         <span class="sr">, ${esc(rotuloDoStatus(status, o))}</span>
       </button>`;
     }).join('');
+    // O "+" da linha: só o ícone (o nome fica no aria-label), para o texto da linha continuar o mesmo
+    const mais = agendar ? `<button type="button" class="tl-agendar edit-only" data-act="agendar" data-agendar="${esc(agendar.valor)}" aria-label="${esc(agendar.nome)}" aria-haspopup="dialog"><svg class="ico" aria-hidden="true"><use href="#i-mais"/></svg></button>` : '';
 
-    return `<div class="tl-row">
-      <div class="tl-lbl"><span>${esc(nomeDoRecurso(key))}</span> <small>${sub}</small></div>
-      <div class="tl-track">${bars}</div>
+    // O nome que não cabe na coluna termina em reticências: o title mostra o nome inteiro (no celular, ele quebra em
+    // linhas, css/app.css)
+    return `<div class="tl-row${manutencao ? ' tl-manutencao' : ''}" ${dados}>
+      <div class="tl-lbl"><span title="${esc(linha.rotulo)}">${esc(linha.rotulo)}</span> <small>${esc(sub)}</small>${mais}</div>
+      <div class="tl-track${inerte ? ' inerte' : ''}" ${dados}>${bars}</div>
     </div>`;
   }).join('');
 
-  return `<div class="tl-wrap"><div class="tl-axis">${ticks.join('')}</div>${rowsHTML}</div>`;
+  return `<div class="tl-wrap" data-inicio="${minStart}" data-fim="${maxEnd}" style="--hora:${(6000 / span).toFixed(4)}%"><div class="tl-axis">${ticks.join('')}</div>${rowsHTML}</div>`;
 }
 
-function renderVisualTimeline(out) {
+// O mapa dos voos (com as linhas livres, nas vistas do mapa). Sem voo nenhum à vista, só a grade das linhas livres, sem a
+// legenda
+function renderVisualTimeline(voos, livres = []) {
   VOOS_DO_MAPA.clear();
-  if (!out.length) return '';
+  const porInstrutor = TL_MODE === 'ins';
+  const linhas = linhasDoMapa(voos, porInstrutor, livres);
+  if (!linhas.length) return '';
   const minStart = 360; // 06:00
-  const maxEnd = Math.max(1080, ...out.map(o => o.b));
+  const maxEnd = Math.max(1080, ...voos.map(o => o.b));
 
-  const chartHTML = TL_MODE === 'ins'
+  const chartHTML = porInstrutor
     ? buildTimelineGroup(
-        out,
-        'ins',
-        (first, totalH) => fmtH(totalH),
+        linhas,
+        true,
         o => o.students.length > 1
           ? `${hm(o.a)}–${hm(o.b)} · Turma (${o.students.length} alunos)`
           : `${hm(o.a)}–${hm(o.b)} · ${esc(o.r)}`,
@@ -181,9 +232,8 @@ function renderVisualTimeline(out) {
         maxEnd
       )
     : buildTimelineGroup(
-        out,
-        'r',
-        (first, totalH) => [first.r === GROUND_REG ? '' : first.eqType, fmtH(totalH)].filter(Boolean).join(' · '),
+        linhas,
+        false,
         o => o.students.length > 1
           ? `${hm(o.a)}–${hm(o.b)} · ${esc(o.mis)} (${o.students.length} alunos)`
           : `${hm(o.a)}–${hm(o.b)} · ${esc(o.s)}`,
@@ -194,8 +244,7 @@ function renderVisualTimeline(out) {
         maxEnd
       );
 
-  return `<div class="pn mapa">
-    <div class="tl-legend">
+  const legenda = !voos.length ? '' : `<div class="tl-legend">
       <span><i class="tl-dot m-gnd"></i>Ground School (01h30)</span>
       <span><i class="tl-dot m-sim"></i>Simulador</span>
       <span><i class="tl-dot m-pp"></i>Voo Local / Solo</span>
@@ -206,7 +255,9 @@ function renderVisualTimeline(out) {
       <span><i class="tl-dot tl-dot-emvoo"></i>Em voo</span>
       <span><i class="tl-dot tl-dot-pendente"></i>Pendente</span>
       <span><i class="tl-dot tl-dot-cancelado"></i>Cancelado</span>
-    </div>
+    </div>`;
+  return `<div class="pn mapa">
+    ${legenda}
     ${chartHTML}
   </div>`;
 }
@@ -267,16 +318,14 @@ function preferencia(o) {
   return '';
 }
 
-// Peso da tripulação só nos aviões, contra o limite (em destaque a menos de 10 kg dele)
+// Peso da tripulação só nos aviões, em décimos, contra o limite (em destaque a menos de 10 kg dele)
 function peso(o) {
   if (!o.limKg) return '';
   if (!o.kg) return '<span class="tag fb" data-dica="sem-peso">sem peso</span>';
-  return `<span class="${o.kg > o.limKg - PERTO_DO_LIMITE_KG ? 'perto' : ''}">${o.kg}</span> <span class="sm">/ ${o.limKg} kg</span>${seloDoCombustivel(o)}`;
+  return `<span class="${o.kg > o.limKg - PERTO_DO_LIMITE_KG ? 'perto' : ''}">${pesoBr(o.kg)}</span> <span class="sm">/ ${o.limKg} kg</span>${seloDoCombustivel(o)}`;
 }
 
-// Acima do limite com os tanques cheios, o voo sai com menos combustível: quanto reduzir (e, na dica, quanto abastecer)
-const horasEMinutos = min => duracaoHm(Math.round(min));
-const textoDoCombustivel = c => `Abastecer até ${c.abastecerGal} gal (${c.reduzirGal} a menos que o tanque cheio); o voo, o táxi e a reserva pedem ${c.minimoGal} gal; autonomia de ${horasEMinutos(c.autonomiaMin)}.`;
+// Acima do limite com os tanques cheios, o voo sai com menos combustível: quanto reduzir (e, na dica, quanto abastecer).
 // A dica diz o caso deste voo (quanto abastecer) antes da explicação
 const seloDoCombustivel = o => (o.comb ? ` <span class="tag comb" data-dica="reduzir-combustivel" data-dica-caso="${textoDoCombustivel(o.comb)}">reduzir ${o.comb.reduzirGal} gal</span>` : '');
 
@@ -357,6 +406,8 @@ function rCompactacao(out) {
   trocarConteudo($('#criterios'), grupo('buracos', 'Buracos', 'buracos', OPCOES_DE_BURACOS) + grupo('horarios', 'Horários', 'horarios', OPCOES_DE_HORARIOS));
 }
 
+const horasEMinutos = min => duracaoHm(Math.round(min));
+
 // O tempo parado que sobra na escala (sem os voos cancelados), ao lado do resumo: o efeito dos critérios da compactação
 function tempoParado(out) {
   const m = metricasDaEscala(out.filter(o => statusDe(o) !== 'Cancelado'));
@@ -367,8 +418,9 @@ function tempoParado(out) {
     </div>`;
 }
 
-// Avisos agrupados pelo código: alunos e instrutores sem peso, aviões que param para a revisão, atrasos e instrutores
-// perto do limite da lei. Os avisos sem código (de uma escala gravada antes deles) entram em "outros"
+// Avisos agrupados pelo código: alunos e instrutores sem peso, aviões que param para a revisão, atrasos, instrutores
+// perto do limite da lei e os voos agendados fora das regras (um por voo). Os avisos sem código (de uma escala gravada
+// antes deles) entram em "outros"
 function resumoDosAvisos(avisos) {
   const doCodigo = codigo => avisos.filter(a => a.codigo === codigo);
   const quantos = (lista, campo) => new Set(lista.map(a => a[campo]).filter(id => id !== undefined)).size;
@@ -380,6 +432,7 @@ function resumoDosAvisos(avisos) {
   const semPar = doCodigo('voa-com').length;
   const saiu = doCodigo('escolhido-saiu').length;
   const repouso = quantos(doCodigo('repouso-do-noturno'), 'insId');
+  const foraDaRegra = quantos(avisos.filter(a => CODIGOS_DO_AGENDADO.includes(a.codigo)), 'fKey');
   const outros = avisos.filter(a => !CODIGOS_DE_AVISO.includes(a.codigo)).length;
   const partes = [
     semPeso && `${semPeso} ${semPeso === 1 ? 'aluno sem peso' : 'alunos sem peso'}`,
@@ -390,6 +443,7 @@ function resumoDosAvisos(avisos) {
     semPar && `${semPar} ${semPar === 1 ? 'voo sem' : 'voos sem'} o instrutor de Priorizar com`,
     saiu && `${saiu} ${saiu === 1 ? 'voo com o instrutor escolhido' : 'voos com o instrutor escolhido'} fora do cadastro`,
     repouso && `${repouso} ${repouso === 1 ? 'instrutor' : 'instrutores'} sem o repouso da lei antes da volta do noturno`,
+    foraDaRegra && `${foraDaRegra} ${foraDaRegra === 1 ? 'agendamento' : 'agendamentos'} fora da regra`,
     outros && `${outros} ${outros === 1 ? 'outro' : 'outros'}`
   ].filter(Boolean);
   return `${avisos.length} ${avisos.length === 1 ? 'aviso' : 'avisos'}: ${partes.join(' · ')}`;
@@ -412,9 +466,12 @@ function resumo(out, al, tot) {
     h += `<details class="caixa erros" open><summary>${erros.length === 1 ? '1 missão não entrou' : `${erros.length} missões não entraram`} na escala: ${esc(nomes)}</summary>
       <ul>${erros.map(item).join('')}</ul></details>`;
   }
-  // Voos fixos que ficaram impossíveis (escala aprovada): continuam no lugar até o operador resolver
+  // Voos fixos que ficaram impossíveis (da escala aprovada, agendados ou com o instrutor escolhido na Escala): continuam no
+  // lugar até o operador resolver
   const conflito = a => `<li class="al ${a.t}"><b>${esc(a.s)}</b> ${esc(a.m)}${a.fKey ? ` <button type="button" class="btn quiet edit-only" data-reparo="${esc(a.fKey)}" title="O que pode voar no lugar deste voo">Sugestões</button>` : ''}</li>`;
-  if (conflitos.length) h += `<details class="caixa conflitos" open><summary>${conflitos.length} ${conflitos.length === 1 ? 'voo em conflito' : 'voos em conflito'} na escala aprovada</summary><ul>${conflitos.map(conflito).join('')}</ul></details>`;
+  const n = conflitos.length;
+  const emConflito = S.aprovacao ? `${n} ${n === 1 ? 'voo em conflito' : 'voos em conflito'} na escala aprovada` : `${n} ${n === 1 ? 'voo fixo' : 'voos fixos'} em conflito`;
+  if (n) h += `<details class="caixa conflitos" open><summary>${emConflito}</summary><ul>${conflitos.map(conflito).join('')}</ul></details>`;
   if (avisos.length) h += `<details class="caixa avisos"><summary>${resumoDosAvisos(avisos)}</summary><ul>${avisos.map(item).join('')}</ul></details>`;
   return h + '</div>';
 }
@@ -430,9 +487,20 @@ export function alternarTempo(w) {
   if (botao) botao.setAttribute('aria-expanded', String(!recolher));
 }
 
+// O voo agendado fora das regras (os avisos dele, um texto por regra), ao lado do horário: na dica, o caso dele
+function seloForaDaRegra(grupo, foraDaRegra) {
+  const casos = [...new Set(grupo.flatMap(o => foraDaRegra.get(o.fKey) || []))];
+  return casos.length ? ` <span class="tag fb" data-dica="fora-da-regra" data-dica-caso="${esc(casos.join(' '))}">fora da regra</span>` : '';
+}
+
 // Uma linha por voo. Na turma de Ground, horário, missão, sala e instrutor aparecem uma vez; cada aluno tem a
 // sua linha, com o seu status e a sua ação. Um clique no horário recolhe ou abre os voos dele
-function tabela(voos) {
+function tabela(voos, al) {
+  // Os avisos das regras que cada voo agendado pulou, pela chave do voo
+  const foraDaRegra = new Map();
+  for (const a of al) {
+    if (a.t === 'warn' && a.fKey && CODIGOS_DO_AGENDADO.includes(a.codigo)) foraDaRegra.set(a.fKey, [...(foraDaRegra.get(a.fKey) || []), a.m]);
+  }
   const grupos = [];
   const turmas = new Map();
   for (const o of voos) {
@@ -453,19 +521,21 @@ function tabela(voos) {
     if (o.w !== tempo) {
       tempo = o.w;
       const n = porTempo[o.w];
-      h += `<tr class="win" data-w="${o.w}"><td colspan="8"><button type="button" class="win-btn" data-recolher-tempo="${o.w}" aria-expanded="${!recolhido}"><svg class="ico seta" aria-hidden="true"><use href="#i-baixo"/></svg>${WLB(o.w)} <small>${n} ${n === 1 ? 'decolagem ou aula' : 'decolagens e aulas'}</small></button></td></tr>`;
+      // O "+" do horário agenda a partir dele: só o ícone (o nome fica no aria-label), e o texto da linha continua o mesmo
+      h += `<tr class="win" data-w="${o.w}"><td colspan="8"><button type="button" class="win-btn" data-recolher-tempo="${o.w}" aria-expanded="${!recolhido}"><svg class="ico seta" aria-hidden="true"><use href="#i-baixo"/></svg>${WLB(o.w)} <small>${n} ${n === 1 ? 'decolagem ou aula' : 'decolagens e aulas'}</small></button><button type="button" class="win-agendar edit-only" data-act="agendar" data-agendar="w:${o.w}" aria-label="Agendar às ${hm(T[o.w])}" aria-haspopup="dialog"><svg class="ico" aria-hidden="true"><use href="#i-mais"/></svg></button></td></tr>`;
     }
     const rs = grupo.length > 1 ? ` rowspan="${grupo.length}"` : '';
     const cancelado = voo => {
       const classes = [statusDe(voo) === 'Cancelado' ? 'st-Cancelado' : '', voo.conflito ? 'em-conflito' : ''].filter(Boolean);
       return classes.length ? ` class="${classes.join(' ')}"` : '';
     };
-    // O cadeado diz por que o voo está fixo: o status de andamento ou a escala aprovada
+    // O cadeado diz por que o voo está fixo: o status de andamento, o agendamento na Escala, a escala aprovada ou o
+    // instrutor escolhido na Escala (as marcas estão nos voos fixos do dia)
     const motivo = esc(motivoDoFixo(o.fKey, { fStatus: S.fStatus, aprovacao: S.aprovacao, voo: o, fixos: S.fixos }));
     const fixo = o.fixo ? ` <svg class="ico fixo" role="img" aria-label="${motivo}" data-dica="voo-fixo" data-dica-termo="${motivo}"><use href="#i-cadeado"/></svg>` : '';
     const doTempo = ` data-w="${o.w}"${recolhido ? ' hidden' : ''}`;
     h += `<tr${cancelado(o)}${doTempo}>
-      <td class="c-hr hr"${rs}>${hm(o.a)}–${hm(o.b)} <small>${duracao(o)}</small>${fixo}${preferencia(o)}${o.conflito ? ' <span class="tag er" data-dica="conflito">conflito</span>' : ''}</td>
+      <td class="c-hr hr"${rs}>${hm(o.a)}–${hm(o.b)} <small>${duracao(o)}</small>${fixo}${preferencia(o)}${seloForaDaRegra(grupo, foraDaRegra)}${o.conflito ? ' <span class="tag er" data-dica="conflito">conflito</span>' : ''}</td>
       <td class="c-aluno"><b>${esc(o.s)}</b></td>
       <td class="c-missao"${rs}>${esc(o.mis)}${grupo.length > 1 ? ` <small data-dica="turma">Turma de ${grupo.length} alunos</small>` : ''}${trechoDoNoturno(o)}</td>
       <td class="c-aviao nw"${rs}>${esc(nomeDoRecurso(o.r))}${ehGround(o) ? '' : ` <small>${esc(o.eqType || '')}</small>`}</td>
@@ -488,6 +558,29 @@ function painelDoDia(voos) {
   return `<div class="painel-dia">${painelDaEscala(() => ({ linhas: linhasDoQuadro(quadro.voos || [], quadro.fStatus, quadro.fObs), data: DATA }))}</div>`;
 }
 
+// Os filtros da Escala: a categoria (o tipo de cada recurso vem da escala, da frota ou é a sala de Ground), o recurso (só
+// os que estão na escala da data) e a busca
+function filtrosDaEscala(out) {
+  const categoria = ($('#flt-esc-cat') && $('#flt-esc-cat').value) || '';
+  const tipoDoRecurso = new Map([...(S.frota || []).map(f => [f.reg, f.tipo]), [GROUND_REG, GROUND_EQ_TYPE], ...out.map(o => [o.r, o.eqType])]);
+  const daCategoria = r => !categoria || categoriaDoTipo(tipoDoRecurso.get(r)) === categoria;
+  const usados = [...new Set(out.map(o => o.r))].filter(daCategoria).sort();
+  const eqFilterEl = $('#flt-esc-eq');
+  const recurso = eqFilterEl && usados.includes(eqFilterEl.value) ? eqFilterEl.value : '';
+  const texto = ($('#flt-esc-q') && $('#flt-esc-q').value || '').toLowerCase();
+  return { categoria, daCategoria, usados, recurso, texto };
+}
+
+// As linhas sem voo do mapa (só nas vistas do mapa), para agendar nelas: Por recurso, todos os recursos da frota e a sala
+// de Ground, na categoria do filtro; Por instrutor, os instrutores disponíveis no dia. Com um recurso escolhido ou uma
+// busca (Por instrutor, também com uma categoria: o instrutor com voos só de outra categoria pareceria livre), só as linhas
+// com voos
+function linhasLivres({ categoria, daCategoria, recurso, texto }) {
+  if (!vistaDoMapa() || recurso || texto) return [];
+  if (TL_MODE === 'ins') return categoria ? [] : S.ins.filter(x => x.on).map(x => [x.id, x.nm]);
+  return [...(S.frota || []).map(f => f.reg), GROUND_REG].filter(daCategoria).map(r => [r, nomeDoRecurso(r)]);
+}
+
 // A escala é refeita a cada alteração (save em actions.js): aqui ela só é desenhada, na visão escolhida na barra.
 // Devolve quantos voos ficaram à vista com os filtros
 export function rOut() {
@@ -497,27 +590,25 @@ export function rOut() {
   });
   $('#out').dataset.vista = TL_MODE === 'lista' || TL_MODE === 'painel' ? TL_MODE : 'mapa';
   if (!RES || (!RES.out.length && !RES.al.length)) {
-    trocarConteudo($('#out'), `<p class="h">Nenhum voo nesta data. Marque quem vai voar na aba Demanda: a escala é montada automaticamente.</p>`);
+    // Sem voos, nas vistas do mapa, a grade das linhas livres fica embaixo do texto: o "+" e o clique agendam nela
+    const grade = renderVisualTimeline([], linhasLivres(filtrosDaEscala([])));
+    trocarConteudo($('#out'), `<p class="h">Nenhum voo nesta data. Marque quem vai voar na aba Demanda: a escala é montada automaticamente.</p>${grade}`);
     rCompactacao([]);
     rAprovacao(false);
     atualizarPainelDeReparo();
+    atualizarAgendamento();
     return 0;
   }
   const { out, al, tot } = RES;
 
   // Filtros: a categoria e, dentro dela, um recurso (só os que estão na escala da data)
-  const categoria = ($('#flt-esc-cat') && $('#flt-esc-cat').value) || '';
-  const tipoDoRecurso = new Map(out.map(o => [o.r, o.eqType]));
-  const daCategoria = r => !categoria || categoriaDoTipo(tipoDoRecurso.get(r)) === categoria;
-  const usados = [...new Set(out.map(o => o.r))].filter(daCategoria).sort();
+  const filtros = filtrosDaEscala(out);
+  const { daCategoria, usados, recurso: curEqFilter, texto: qFilter } = filtros;
   const eqFilterEl = $('#flt-esc-eq');
-  let curEqFilter = eqFilterEl ? eqFilterEl.value : '';
-  if (!usados.includes(curEqFilter)) curEqFilter = '';
   if (eqFilterEl) {
     eqFilterEl.innerHTML = '<option value="">Todos</option>' +
       usados.map(r => `<option value="${esc(r)}"${r === curEqFilter ? ' selected' : ''}>${esc(nomeDoRecurso(r))}</option>`).join('');
   }
-  const qFilter = ($('#flt-esc-q') && $('#flt-esc-q').value || '').toLowerCase();
   const voos = out.filter(o => {
     if (!daCategoria(o.r) || (curEqFilter && o.r !== curEqFilter)) return false;
     if (qFilter && !o.s.toLowerCase().includes(qFilter) && !o.ins.toLowerCase().includes(qFilter) && !o.mis.toLowerCase().includes(qFilter)) return false;
@@ -527,10 +618,13 @@ export function rOut() {
   rAprovacao(out.length > 0);
   rCompactacao(out);
   let h = resumo(out, al, tot);
-  if (!voos.length) h += `<p class="h">${tot ? 'Nenhum voo na escala com esses filtros.' : 'Nenhuma missão marcada na Demanda.'}</p>`;
-  else h += tabela(voos) + renderVisualTimeline(voos) + (TL_MODE === 'painel' ? painelDoDia(voos) : '');
+  const livres = linhasLivres(filtros);
+  if (!voos.length) h += `<p class="h">${tot ? 'Nenhum voo na escala com esses filtros.' : 'Nenhuma missão marcada na Demanda.'}</p>${renderVisualTimeline([], livres)}`;
+  else h += tabela(voos, al) + renderVisualTimeline(voos, livres) + (TL_MODE === 'painel' ? painelDoDia(voos) : '');
   trocarConteudo($('#out'), h);
   reancorarPopupDoMapa();
   atualizarPainelDeReparo();
+  // O diálogo do agendamento aberto confere de novo com a escala nova
+  atualizarAgendamento();
   return voos.length;
 }

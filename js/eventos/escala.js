@@ -1,27 +1,42 @@
-// A Escala: o mapa e o popup do voo, os filtros, exportar e compartilhar, o status do voo, aprovar e reabrir, os
-// critérios da compactação, o resultado da missão do curso e as sugestões para um conflito
+// A Escala: o mapa e o popup do voo (e o clique no mapa que agenda), os filtros, exportar e compartilhar, o status do voo,
+// aprovar e reabrir, os critérios da compactação, o resultado da missão do curso e as sugestões para um conflito
 import { gravarAlteracao, logChange, gravarEscalaCalculada, aindaNaoAbriu, dadosLidos } from '../actions.js';
 import { opcoesDeCategoria } from '../categorias.js';
 import { OPCOES_DE_BURACOS, OPCOES_DE_HORARIOS, normalizarCriterios } from '../criterios.js';
-import { $, showToast, anunciar } from '../dom.js';
+import { $, showToast, anunciar, algumDialogoAberto, gavetaDoEsc } from '../dom.js';
 import { exp, pdf, planilha } from '../export.js';
-import { pinoDoVoo, fixosAoMudarStatus, fixosAoReabrir } from '../fixos.js';
+import { fixosAoMudarStatus, fixosAoReabrir, fixosAoAprovar } from '../fixos.js';
 import { hm } from '../format.js';
 import { aplicarReparo } from '../reparo.js';
-import { S, RES, DATA, isGestor, modoCompartilhado, stuBy, insBy } from '../state.js';
+import { S, RES, DATA, isGestor, modoCompartilhado, insBy } from '../state.js';
 import { escolherInstrutor, escolhasDaUnidade, escolherNosPedidos } from '../instrutor-escolhido.js';
 import { STATUS_COM_DETALHE, textoParaOHistorico, detalheAoMudarStatus, rotuloDoStatus } from '../status.js';
 import { ApiClient } from '../storage.js';
+import { agendarNoMapa } from './agendamento.js';
 import { confirmado } from './confirmacao.js';
 import { aoAcionar, aoMudarCampo } from './registro.js';
 import { rAlu } from '../views/cadastros.js';
 import { rDem } from '../views/demanda.js';
-import { pedirDetalheDoStatus, dialogoDeStatusAberto } from '../views/dialogo-status.js';
+import { pedirDetalheDoStatus } from '../views/dialogo-status.js';
+import { cursoDoResultado } from '../views/etapas.js';
 import { rOut, botaoDoInstrutor, seletorDeInstrutor, abrirPopupDoMapa, fecharPopupDoMapa, popupDoMapaAberto, reposicionarPopupDoMapa, tabNoPopup } from '../views/escala.js';
-import { abrirPainelDeReparo, fecharPainelDeReparo, opcaoDoPainel, painelDeReparoAberto } from '../views/reparo.js';
+import { abrirPainelDeReparo, fecharPainelDeReparo, opcaoDoPainel } from '../views/reparo.js';
+
+// O minuto de um clique na faixa de uma linha do mapa: a posição dele dentro da faixa (sem a borda), entre o início e o
+// fim do mapa (data-inicio e data-fim), de 5 em 5 minutos
+function minutoDoClique(faixa, clientX) {
+  const { inicio, fim } = faixa.closest('.tl-wrap').dataset;
+  const fracao = (clientX - faixa.getBoundingClientRect().left - faixa.clientLeft) / faixa.clientWidth;
+  return Math.round((+inicio + Math.min(1, Math.max(0, fracao)) * (fim - inicio)) / 5) * 5;
+}
 
 // Popup do voo no mapa da escala: a barra abre e fecha; Esc (o foco volta para a barra) e um clique fora fecham, e ele
-// acompanha a barra quando a página ou o mapa rolam
+// acompanha a barra quando a página ou o mapa rolam. Um diálogo aberto por cima (o do status) fica com o Esc e com os
+// cliques dentro dele: o popup continua aberto. Dentro ou fora é pelo caminho do clique, fixado quando ele começa: o
+// nome do instrutor, já trocado pela lista (js/eventos/registro.js) e fora da página, continua dentro do popup.
+// Sem popup aberto, um clique (ou toque) no espaço livre de uma linha do mapa agenda nela: o diálogo abre com o recurso
+// ou o instrutor da linha e o horário da lista mais perto do clique (js/agendamento.js). Com o popup aberto, o clique só
+// fecha o popup
 document.addEventListener('click', e => {
   const barra = e.target.closest('#out .tl-bar');
   if (barra) {
@@ -29,10 +44,26 @@ document.addEventListener('click', e => {
     else abrirPopupDoMapa(barra, { focar: true });
     return;
   }
-  if (popupDoMapaAberto() && !e.target.closest('#tl-pop, #dlg-status')) fecharPopupDoMapa();
+  if (popupDoMapaAberto()) {
+    const dentro = e.composedPath().some(el => el instanceof Element && el.matches('#tl-pop, dialog'));
+    if (!dentro) fecharPopupDoMapa();
+    return;
+  }
+  const faixa = e.target.closest('#out .tl-track:not(.inerte)');
+  if (!faixa || isGestor()) return;
+  const { r, ins } = faixa.dataset;
+  agendarNoMapa({ ...(ins ? { insId: +ins } : { r }), minuto: minutoDoClique(faixa, e.clientX) });
 });
+// O Esc fecha só o popup, a camada de cima: ouvido na captura, ele para aqui e não chega às gavetas e aos painéis
+// de trás (o Histórico, as Sugestões, as habilitações), que continuam abertos. O Esc na lista do instrutor é dela
+// (volta ao nome, abaixo, com o popup aberto)
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape' && popupDoMapaAberto() && !dialogoDeStatusAberto()) fecharPopupDoMapa({ devolverFoco: true });
+  if (e.key !== 'Escape' || !popupDoMapaAberto() || algumDialogoAberto()) return;
+  if (e.target.closest && e.target.closest('select[data-a="insVoo"]')) return;
+  e.stopPropagation();
+  fecharPopupDoMapa({ devolverFoco: true });
+}, true);
+document.addEventListener('keydown', e => {
   if (e.target.closest && e.target.closest('#tl-pop')) tabNoPopup(e);
 });
 document.addEventListener('scroll', reposicionarPopupDoMapa, { capture: true, passive: true });
@@ -99,7 +130,8 @@ function aplicarStatus(fKey, status, detalhe) {
   else delete S.fObs[fKey];
   const voo = vooDaChave(fKey);
   // Em Voo, Atrasado, Pousou e Cancelado fixam o voo: uma alteração na escala não o tira do lugar (o cancelado fica
-  // onde estava, sem ocupar nada). Fora da escala aprovada, Pendente ou Confirmado o soltam
+  // onde estava, sem ocupar nada). Fora da escala aprovada, Pendente ou Confirmado o soltam, menos o fixo pelo operador
+  // na Escala (o instrutor escolhido e o voo agendado)
   if (voo) S.fixos = fixosAoMudarStatus(S.fixos, voo, status, { aprovada: Boolean(S.aprovacao) });
   const textoDoStatus = status === 'Pousou' ? rotuloDoStatus(status, voo) : textoParaOHistorico(status, detalhe);
   gravarAlteracao('mod', `Status de ${voo ? `${voo.s} (${hm(voo.a)}–${hm(voo.b)})` : fKey}: ${textoDoStatus}`);
@@ -167,8 +199,9 @@ document.addEventListener('click', e => {
   if ((!aprovar && !reabrir) || isGestor() || !RES || aindaNaoAbriu()) return;
   if (aprovar) {
     if (!confirmado(aprovar, 'Confirmar aprovação')) return;
-    // O voo fixo pela escolha do instrutor na Escala continua com a marca: reabrir a escala não o solta
-    S.fixos = Object.fromEntries(RES.out.map(o => [o.fKey, { ...pinoDoVoo(o), ...((S.fixos || {})[o.fKey]?.escolhido ? { escolhido: true } : {}) }]));
+    // O voo fixo pelo operador na Escala (o instrutor escolhido e o voo agendado) continua com a marca: reabrir a escala
+    // não o solta. O agendado fora da escala (o pedido foi tirado dela) continua fixo, para o voo voltar ao lugar dele
+    S.fixos = fixosAoAprovar(S.fixos, RES.out);
     S.aprovacao = { em: new Date().toISOString(), por: ApiClient.autorAtual || '' };
     gravarAlteracao('mod', `Escala aprovada: ${RES.out.length} ${RES.out.length === 1 ? 'voo fixado' : 'voos fixados'}`);
     showToast('Escala aprovada: os voos ficam fixos.', 'ok');
@@ -176,7 +209,7 @@ document.addEventListener('click', e => {
     $('#btn-reabrir')?.focus();
   } else {
     if (!confirmado(reabrir, 'Confirmar reabertura')) return;
-    // Os voos em andamento (Em Voo, Atrasado, Pousou, Cancelado) continuam fixos
+    // Os voos em andamento (Em Voo, Atrasado, Pousou, Cancelado) e os fixados pelo operador na Escala continuam fixos
     S.fixos = fixosAoReabrir(S.fixos, S.fStatus);
     S.aprovacao = null;
     gravarAlteracao('mod', 'Escala reaberta: volta a ser refeita a cada alteração');
@@ -197,15 +230,16 @@ document.addEventListener('click', e => {
   gravarAlteracao('mod', `Compactação: ${campo === 'buracos' ? 'buracos' : 'horários'} ${nome(antes[campo])} → ${nome(S.criterios[campo])}`);
 });
 
-// O resultado da missão do curso, na linha do voo: vai para o servidor (só acréscimo) e entra na situação do
-// aluno (o progresso e a próxima missão mudam). Sem conexão, o seletor volta ao que estava
+// O resultado da missão do curso, na linha do voo: vai para o servidor (só acréscimo), no curso da missão do pedido (o
+// aluno pode ter trocado de curso no mesmo dia), e entra na situação do aluno (o progresso e a próxima missão mudam).
+// Sem conexão, o seletor volta ao que estava
 document.addEventListener('change', async e => {
   const sel = e.target.closest('[data-resultado]');
   if (!sel || isGestor()) return;
   if (aindaNaoAbriu()) { rOut(); return; }
-  const o = vooDaChave(sel.dataset.resultado), stu = o ? stuBy(o.stuId) : null;
-  if (!o || !o.etapa || !stu || !stu.curso) return;
-  const registro = { aluno: o.stuId, curso: stu.curso, missao: o.etapa, resultado: sel.value, data: DATA, voo: o.fKey };
+  const o = vooDaChave(sel.dataset.resultado), curso = o ? cursoDoResultado(o) : null;
+  if (!o || !o.etapa || !curso) return;
+  const registro = { aluno: o.stuId, curso, missao: o.etapa, resultado: sel.value, data: DATA, voo: o.fKey };
   sel.disabled = true;
   try {
     const id = await ApiClient.registrarResultado(registro);
@@ -258,6 +292,8 @@ document.addEventListener('click', e => {
   if (escolhas.length) rDem();
   showToast(opcao.soltar ? 'Voo solto: o app escalou de novo.' : 'Sugestão aplicada: o voo continua fixo.', 'ok');
 });
+// O Esc fecha a gaveta quando ela é a de cima ou tem o foco (js/dom.js); com um diálogo aberto por cima (o do status, o
+// do agendamento), o Esc fecha só o diálogo
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape' && painelDeReparoAberto() && !dialogoDeStatusAberto()) fecharPainelDeReparo(true);
+  if (e.key === 'Escape' && gavetaDoEsc(e) === $('#painel-reparo') && !algumDialogoAberto()) fecharPainelDeReparo(true);
 });

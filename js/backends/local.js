@@ -6,6 +6,7 @@ import { gravarDadosPessoais, semQuemSaiu } from '../dados-pessoais.js';
 import { acumularHoras } from '../limites.js';
 import { hojeISO } from '../format.js';
 import { situacaoPorMissao, validarRegistro } from '../resultados.js';
+import { cursosIniciais, gravarCurso, importarProgramas, programaComResultados } from '../programa.js';
 import { GROUND_DURATION_H, DURACAO_MAXIMA_H, MISSOES_LOCAIS, LIMITE_DE_VOOS_LOCAIS } from '../config.js';
 import { duracaoDigitada } from '../rules.js';
 
@@ -16,6 +17,9 @@ const CHAVE_HISTORICO = 'acpm4_historico';
 const CHAVE_AGENDA = 'acpm4_agenda';
 const CHAVE_DADOS_PESSOAIS = 'acpm4_dados_pessoais';
 const CHAVE_RESULTADOS = 'acpm4_resultados';
+// O programa dos cursos (as tabelas dos cursos do servidor): { cursos, alteracoes }, com as últimas 200 alterações
+const CHAVE_CURSOS = 'acpm4_cursos';
+const ALTERACOES_GUARDADAS = 200;
 const DOCUMENTO_DIA = /^dia:(\d{4}-\d{2}-\d{2})$/;
 
 const chaveLocal = documento => {
@@ -40,6 +44,25 @@ function datasGuardadas() {
 
 // Ids crescentes para o histórico, a agenda e os resultados (o modo local não tem servidor para numerar as entradas)
 const proximoId = lista => Math.max(Date.now(), ...lista.map(e => e.id + 1));
+
+// O formato de um documento guardado, como no servidor (public.esquema_do_conteudo): o número inteiro do campo
+// "esquema"; sem ele, 0
+const formatoDe = conteudo => (conteudo && typeof conteudo.esquema === 'number' ? Math.floor(conteudo.esquema) : 0);
+
+// Os cursos guardados neste navegador, no formato do servidor, e as alterações do programa. Sem nada gravado, os
+// cursos com que o servidor começa (PP, PC e INVA, vazios): a leitura não grava a chave
+function cursosGuardados() {
+  const guardados = lerJson(CHAVE_CURSOS);
+  if (!guardados || !Array.isArray(guardados.cursos)) return { cursos: cursosIniciais(), alteracoes: [] };
+  return { cursos: guardados.cursos, alteracoes: Array.isArray(guardados.alteracoes) ? guardados.alteracoes : [] };
+}
+const gravarCursos = (cursos, alteracoes) => localStorage.setItem(CHAVE_CURSOS, JSON.stringify({ cursos, alteracoes: alteracoes.slice(-ALTERACOES_GUARDADAS) }));
+// O que a gravação dos cursos confere, como no servidor: os cursos, os resultados (o código com resultados não muda) e
+// o cadastro (o formato dele; o modo local não tem a versão do servidor: 0)
+const estadoDosCursos = cursos => {
+  const cadastro = lerJson(CHAVES_LOCAIS.cadastro);
+  return { cursos, resultados: lerJson(CHAVE_RESULTADOS) || [], cadastro: cadastro === null ? null : { esquema: formatoDe(cadastro), versao: 0 } };
+};
 
 // Erros da agenda com o mesmo código do servidor (PT403: fora do prazo; 23514: dado inválido; P0002: não achado)
 const erroDaAgenda = (code, message) => Object.assign(new Error(message), { code });
@@ -84,8 +107,7 @@ export const backendLocal = {
 
   // As datas guardadas num formato anterior (a atualização do formato lê só essas); o dia ilegível também
   async diasEmFormatoAntigo(esquema) {
-    const versao = c => (c && typeof c.esquema === 'number' ? Math.floor(c.esquema) : 0);
-    return datasGuardadas().filter(d => versao(lerJson(PREFIXO_DIA + d)) < esquema);
+    return datasGuardadas().filter(d => formatoDe(lerJson(PREFIXO_DIA + d)) < esquema);
   },
 
   async listarDias(de, ate) {
@@ -198,11 +220,13 @@ export const backendLocal = {
     return { atualizado_em: r.atualizado_em, atualizado_por: autor, historico };
   },
 
-  // Resultados das missões dos cursos neste navegador, com as regras do servidor: só acréscimo; vale o último registro
+  // Resultados das missões dos cursos neste navegador, com as regras do servidor: só acréscimo; vale o último registro;
+  // o curso tem de existir (um dos cursos guardados)
   async registrarResultado(registro, { autor = null, agora = new Date() } = {}) {
     const lista = lerJson(CHAVE_RESULTADOS) || [];
     const id = proximoId(lista);
-    lista.push({ id, ...validarRegistro(registro), registrado_em: agora.toISOString(), registrado_por: autor });
+    const cursos = cursosGuardados().cursos.map(c => c.sigla);
+    lista.push({ id, ...validarRegistro(registro, { cursos }), registrado_em: agora.toISOString(), registrado_por: autor });
     localStorage.setItem(CHAVE_RESULTADOS, JSON.stringify(lista));
     return id;
   },
@@ -213,6 +237,33 @@ export const backendLocal = {
 
   async resultadosDoDia(data) {
     return (lerJson(CHAVE_RESULTADOS) || []).filter(r => r.data === data);
+  },
+
+  // O programa dos cursos neste navegador, como o servidor devolve (programa_dos_cursos): se cada missão já tem
+  // resultados e as últimas 20 alterações de cada curso
+  async programaDosCursos() {
+    const { cursos, alteracoes } = cursosGuardados();
+    return programaComResultados({ cursos, resultados: lerJson(CHAVE_RESULTADOS) || [], alteracoes });
+  },
+
+  // Grava o curso inteiro a partir da versão lida (0 cria) com as regras do servidor (gravarCurso, em js/programa.js):
+  // a recusa vem com o código e o campo, como a do servidor, e nada é gravado. Antes do formato dos cursos (o cadastro
+  // deste navegador num formato anterior), o programa espera a conversão
+  async salvarCurso(sigla, versaoLida, conteudo, { descricao, autor = null, agora = new Date() } = {}) {
+    const guardados = cursosGuardados();
+    const r = gravarCurso(estadoDosCursos(guardados.cursos), { sigla, versaoLida, conteudo, descricao, autor, agora: agora.toISOString() });
+    gravarCursos(r.cursos, [...guardados.alteracoes, r.alteracao]);
+    return r.retorno;
+  },
+
+  // A conversão única do programa guardado no cadastro (importarProgramas, em js/programa.js): com o cadastro deste
+  // navegador no formato dos cursos, nada (0); o curso igual ao guardado é pulado, e a chave só é gravada quando algum
+  // curso muda
+  async importarCursos(programas, { autor = null, agora = new Date() } = {}) {
+    const guardados = cursosGuardados();
+    const r = importarProgramas(estadoDosCursos(guardados.cursos), { programas, versaoDoCadastro: 0, autor, agora: agora.toISOString() });
+    if (r.alteracoes.length) gravarCursos(r.cursos, [...guardados.alteracoes, ...r.alteracoes]);
+    return r.retorno;
   },
 
   async importarHistorico(data, entradas) {

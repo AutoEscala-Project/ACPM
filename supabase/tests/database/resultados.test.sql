@@ -1,21 +1,26 @@
 -- Fase 14: os resultados das missões dos cursos. A tabela só cresce: o operador registra pela função (aprovado,
 -- reprovado ou pendente, que desfaz um engano), e ninguém grava direto, altera nem apaga. Quem lê a escala lê; a TV e o
--- anônimo, não. A situação de cada missão é o último registro. Os alunos de teste ficam acima de 99000 (a transação é
--- desfeita no final).
+-- anônimo, não. A situação de cada missão é o último registro. Revisão de 17/11 (cursos_e_missoes): vale qualquer curso
+-- cadastrado (a função confere que ele existe; a tabela, o formato da sigla). Os alunos de teste ficam acima de 99000 e
+-- o cadastro sai do caminho (a transação é desfeita no final).
 begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions;
 
-select plan(25);
+select plan(27);
 
 insert into auth.users (id, email, created_at, updated_at) values
   ('00000000-0000-4000-a000-000000000051', 'operador@resultados.acpm.invalid', now(), now()),
   ('00000000-0000-4000-a000-000000000052', 'gestor@resultados.acpm.invalid', now(), now()),
-  ('00000000-0000-4000-a000-000000000053', 'painel@resultados.acpm.invalid', now(), now());
+  ('00000000-0000-4000-a000-000000000053', 'painel@resultados.acpm.invalid', now(), now()),
+  ('00000000-0000-4000-a000-000000000054', 'administrador@resultados.acpm.invalid', now(), now());
 insert into public.perfis (usuario, perfil, nome) values
   ('00000000-0000-4000-a000-000000000051', 'operador', 'Operador de teste'),
   ('00000000-0000-4000-a000-000000000052', 'gestor', 'Gestor de teste'),
-  ('00000000-0000-4000-a000-000000000053', 'painel', 'TV de teste');
+  ('00000000-0000-4000-a000-000000000053', 'painel', 'TV de teste'),
+  ('00000000-0000-4000-a000-000000000054', 'administrador', 'Administrador de teste');
+-- Sem cadastro, o Administrador cria um curso (com o cadastro antes do formato dos cursos, os cursos esperam a conversão)
+delete from public.documentos where chave = 'cadastro';
 
 -- A situação só dos alunos de teste, sem a hora do registro
 create function pg_temp.situacao()
@@ -43,7 +48,7 @@ select is(pg_temp.situacao(), '[
 ]'::jsonb, 'a situação de cada missão é o último registro, com quem registrou');
 select is((select count(*)::integer from public.resultados_de_missao where aluno > 99000), 5, 'os registros anteriores continuam (só acréscimo)');
 
--- Valores fora do formato
+-- Valores fora do formato (e o curso que não existe)
 select throws_ok($$ select public.registrar_resultado(99001, 'XX', 'PP-07', 'aprovado', '2099-11-10', null) $$, '23514', null, 'curso inválido');
 select throws_ok($$ select public.registrar_resultado(99001, 'PP', 'PP 07', 'aprovado', '2099-11-10', null) $$, '23514', null, 'código inválido');
 select throws_ok($$ select public.registrar_resultado(99001, 'PP', 'PP-07', 'talvez', '2099-11-10', null) $$, '23514', null, 'resultado inválido');
@@ -67,6 +72,16 @@ select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-a000-0000000
 select is(pg_temp.situacao(), '[]'::jsonb, 'a TV não lê a situação');
 select is((select count(*)::integer from public.resultados_de_missao where aluno > 99000), 0, 'nem os registros');
 select throws_ok($$ select public.registrar_resultado(99001, 'PP', 'PP-09', 'aprovado', '2099-11-12', null) $$, '42501', null, 'nem registra');
+
+-- Um curso novo: o Administrador cria o ZZ9, e o operador registra nele
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-a000-000000000054","role":"authenticated"}', true);
+select public.salvar_curso('ZZ9', 0, '{"nome": "Curso de teste", "ativo": true, "fases": [], "missoes": []}', 'Curso ZZ9 criado: Curso de teste') ->> 'versao' as criado;
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-a000-000000000051","role":"authenticated"}', true);
+select ok(public.registrar_resultado(99004, 'ZZ9', 'ZZ9-01', 'aprovado', '2099-11-12', null) > 0, 'um curso criado pelo Administrador recebe resultados');
+-- A tabela recusa a sigla fora do formato, mesmo gravando direto (como o dono do banco)
+reset role;
+select throws_ok($$ insert into public.resultados_de_missao (aluno, curso, missao, resultado, data) values (99004, 'pp', 'PP-01', 'aprovado', '2099-11-12') $$,
+  '23514', null, 'a tabela recusa a sigla fora do formato');
 
 -- O anônimo não chega na tabela
 reset role;

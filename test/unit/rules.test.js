@@ -2,7 +2,8 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   isGroundMission, doesGroundGateFlight, migrateLegacyMissionName, normalizeMissionFields, blank, disponibilidadeDoAluno, disponibilidadeAtual,
-  rotuloDaDisponibilidade, opcoesDeDisponibilidade, proximoMid, duracaoDigitada, ERRO_DA_DURACAO
+  rotuloDaDisponibilidade, opcoesDeDisponibilidade, proximoMid, duracaoDigitada, ERRO_DA_DURACAO, chaveTemSobras, alvoDoNovoPedido,
+  pesoValido, pesoDigitado, ERRO_DO_PESO
 } from '../../js/rules.js';
 import { podeFazer, descreverExigencias } from '../../js/habilitacoes.js';
 
@@ -109,6 +110,31 @@ describe('Número da missão extra', () => {
     assert.equal(estado.nid, 5000, 'o número do cadastro não muda');
   });
 
+  // O resultado fica no servidor, preso à chave do voo: a missão nova com o número de uma retirada mostraria o resultado
+  // dela
+  it('nem o número de uma missão retirada que tem resultado registrado na data', () => {
+    const doDia = [{ id: 1, aluno: 1000, curso: 'PP', missao: 'PP-03', resultado: 'reprovado', data: '2026-11-11', voo: '1000_3_1' }, { voo: '1001_9_1' }, { voo: null }, null];
+    const estado = { stu: [], fixos: {}, fStatus: {}, fObs: {}, resultados: { situacao: [], doDia } };
+    assert.equal(proximoMid(estado, { id: 1000, extra: [{ mid: 1 }] }), 4);
+    assert.equal(proximoMid(estado, { id: 1001, extra: [{ mid: 2 }] }), 10);
+    assert.equal(proximoMid({ ...estado, resultados: null }, { id: 1000, extra: [{ mid: 1 }] }), 2, 'sem os resultados lidos');
+  });
+
+  // O curso da missão do curso (a sigla) só vale com a missão: sem o código (ou com o código fora do formato, que sai), ou
+  // fora do formato das siglas, ele sai
+  it('o curso da missão do curso: uma sigla, só com o código da missão', () => {
+    const pedido = extra => { const p = { mis: 'Voo Local', eq: 'C152', p1: 390, p2: -1, nb: 1, ...extra }; normalizeMissionFields(p); return p; };
+    assert.deepEqual([pedido({ etapa: 'PE-04', cursoDaEtapa: 'PP' }), pedido({ etapa: 'IFR-01', cursoDaEtapa: 'PC-IFR' })].map(p => [p.etapa, p.cursoDaEtapa]),
+      [['PE-04', 'PP'], ['IFR-01', 'PC-IFR']]);
+    for (const ruim of ['pp', 'P', 'PP-', 'PPPPPPPPPPP', '<b>', 7, null, ['PP'], { toString: () => 'PP' }]) {
+      const p = pedido({ etapa: 'PE-04', cursoDaEtapa: ruim });
+      assert.deepEqual([p.etapa, Object.hasOwn(p, 'cursoDaEtapa')], ['PE-04', false], String(ruim));
+    }
+    for (const semCodigo of [{}, { etapa: 'pe 04' }, { etapa: null }]) {
+      assert.equal(Object.hasOwn(pedido({ ...semCodigo, cursoDaEtapa: 'PP' }), 'cursoDaEtapa'), false, JSON.stringify(semCodigo));
+    }
+  });
+
   it('o id da solicitação da agenda: inteiro positivo; o resto sai', async () => {
     const { normalizeMissionFields } = await import('../../js/rules.js');
     const ok = { mis: 'Voo Local', eq: 'C152', p1: 390, p2: -1, nb: 1, solicitacao: 12 };
@@ -133,10 +159,75 @@ describe('Número da missão extra', () => {
   });
 });
 
+// O voo novo de um aluno (o pedido da agenda; o voo agendado na escala) não herda o que o dia ainda guarda de outro voo:
+// o cadeado, o status, o detalhe ou o resultado ficam presos à chave (aluno_missão_1)
+describe('O pedido que recebe um voo novo', () => {
+  const CHAVE = '1000_0_1';
+  const resultado = voo => ({ id: 1, aluno: 1000, curso: 'PP', missao: 'PP-01', resultado: 'aprovado', data: '2026-11-11', voo });
+  const SOBRAS = {
+    'voo fixo': { fixos: { [CHAVE]: { a: 610, b: 670, r: 'PP-LJV', insId: 1 } } },
+    status: { fStatus: { [CHAVE]: 'Cancelado' } },
+    detalhe: { fObs: { [CHAVE]: { motivo: 'Meteorologia' } } },
+    resultado: { resultados: { situacao: [], doDia: [resultado(CHAVE)] } }
+  };
+  const dia = (sobras = {}) => ({ stu: [], fixos: {}, fStatus: {}, fObs: {}, resultados: { situacao: [], doDia: [] }, ...sobras });
+  // O aluno que saiu da escala: o pedido principal não voa e ainda tem o que era do voo de antes
+  const quemSaiu = (extra = {}) => ({
+    id: 1000, nm: 'Aluno 1000', kg: 70, bl: [], curso: 'PP', fly: false, mis: 'Navegação', eq: 'C172', p1: 760, p2: 870, nb: 2, ss: 1, pr: 1,
+    jan: 'tarde', etapa: 'PP-03', cursoDaEtapa: 'PP', solicitacao: 7, insId: 3, extra: [{ mid: 2, ...blank(), fly: true }], ...extra
+  });
+
+  it('a chave tem sobras: o voo fixo, o status, o detalhe ou um resultado registrado na data', () => {
+    assert.equal(chaveTemSobras(dia(), CHAVE), false);
+    assert.equal(chaveTemSobras({}, CHAVE), false, 'o dia sem nada (e sem os resultados lidos)');
+    for (const [sobra, sobras] of Object.entries(SOBRAS)) assert.equal(chaveTemSobras(dia(sobras), CHAVE), true, sobra);
+    // As de outro voo não contam: outra missão do aluno, outro aluno, a volta de BH do noturno de ontem (a sessão 2)
+    const deOutros = dia({ fixos: { '1000_1_1': SOBRAS['voo fixo'].fixos[CHAVE] }, fStatus: { '1001_0_1': 'Cancelado', '1000_0_2': 'Atrasado' },
+      resultados: { situacao: [], doDia: [resultado('1000_2_1'), { voo: null }, null] } });
+    assert.equal(chaveTemSobras(deOutros, CHAVE), false);
+  });
+
+  it('o pedido principal, quando o aluno não voa e o dia não guarda nada dele: em branco, sem o que era do voo de antes', () => {
+    const aluno = quemSaiu();
+    const alvo = alvoDoNovoPedido(dia(), aluno);
+    assert.equal(alvo, aluno, 'o pedido principal é o próprio aluno');
+    assert.deepEqual(aluno, { id: 1000, nm: 'Aluno 1000', kg: 70, bl: [], curso: 'PP', ...blank(), extra: [{ mid: 2, ...blank(), fly: true }] });
+  });
+
+  it('com sobras na chave do pedido principal, ou com ele voando, uma missão extra nova: o pedido principal fica como estava', () => {
+    for (const [sobra, sobras] of Object.entries(SOBRAS)) {
+      const aluno = quemSaiu(), antes = structuredClone(aluno);
+      const alvo = alvoDoNovoPedido(dia(sobras), aluno);
+      // O número seguinte, a prioridade do aluno e nada do voo de antes (nem o instrutor escolhido)
+      assert.deepEqual(alvo, { mid: 3, ...blank(), pr: 1 }, sobra);
+      assert.equal(aluno.extra.at(-1), alvo, sobra);
+      // Voltando a voar, o pedido principal volta para o mesmo lugar, com o voo fixo dele
+      assert.deepEqual({ ...aluno, extra: aluno.extra.slice(0, -1) }, antes, sobra);
+    }
+    const voando = quemSaiu({ fly: true, pr: undefined, extra: [] });
+    assert.deepEqual(alvoDoNovoPedido(dia(), voando), { mid: 1, ...blank() }, 'sem a prioridade do aluno, 3');
+    assert.deepEqual([voando.fly, voando.etapa, voando.insId, voando.extra.length], [true, 'PP-03', 3, 1]);
+  });
+});
+
 describe('A duração digitada', () => {
   it('de 0,1 h a 5 h, em décimos, com vírgula ou ponto; fora disso, nenhuma', () => {
     assert.deepEqual(['1,5', '2.6', '0,1', '5', '1,26'].map(duracaoDigitada), [1.5, 2.6, 0.1, 5, 1.3]);
     for (const fora of ['0', '0,04', '5,1', '6', '', 'abc', '-1']) assert.equal(duracaoDigitada(fora), null, fora);
     assert.equal(ERRO_DA_DURACAO, 'A duração vai de 0,1 h a 5 h.');
+  });
+});
+
+describe('O peso', () => {
+  it('o gravado: mais que 0 e até 300 kg; fora disso, ou sem ser um número, sem peso (0)', () => {
+    assert.deepEqual([72, 72.5, 0.1, 250, 300].map(pesoValido), [72, 72.5, 0.1, 250, 300]);
+    for (const fora of [0, -70, 300.1, 400, NaN, Infinity, '70', null, undefined, {}]) assert.equal(pesoValido(fora), 0, String(fora));
+  });
+
+  it('o digitado: em décimos, com vírgula ou ponto, mais que 0 e até 300 kg; fora disso, nenhum', () => {
+    assert.deepEqual(['72', '72,5', '80.3', '68,25', '0,1', '250', '300', '300,04', ' 75 ', 90].map(pesoDigitado),
+      [72, 72.5, 80.3, 68.3, 0.1, 250, 300, 300, 75, 90]);
+    for (const fora of ['0', '0,04', '-1', '300,1', '350', '', 'abc', 'Infinity']) assert.equal(pesoDigitado(fora), null, fora);
+    assert.equal(ERRO_DO_PESO, 'O peso vai de 1 a 300 kg.');
   });
 });

@@ -11,6 +11,18 @@ import { ApiClient } from '../../js/storage.js';
 import { separar } from '../../js/dias.js';
 
 const DEPOIS = '2026-11-12';
+// O programa do PP guardado no cadastro (o de antes do formato dos cursos), que a conversão única leva para as tabelas
+const PROGRAMA = { PP: [{ id: 'PP-01', nome: 'Familiarização', mis: 'Voo Local', eq: 'C152', nb: 1 }, { id: 'PP-02', nome: 'Navegação', mis: 'Navegação', eq: 'C152', nb: 2 }], PC: [], INVA: [] };
+const doPP = servidor => servidor.cursos.find(c => c.sigla === 'PP');
+// As funções do servidor chamadas pela página, na ordem
+function funcoesChamadas(page) {
+  const chamadas = [];
+  page.on('request', r => {
+    const { pathname } = new URL(r.url());
+    if (pathname.startsWith('/rest/v1/rpc/')) chamadas.push(pathname.slice('/rest/v1/rpc/'.length));
+  });
+  return chamadas;
+}
 
 async function mudarData(page, data) {
   await page.locator('#nav button[data-t="esc"]').click();
@@ -21,7 +33,7 @@ async function mudarData(page, data) {
 
 test.describe('Escala por data (modo compartilhado)', () => {
   test('no primeiro acesso de um operador, os documentos antigos viram o formato por data', async ({ page, context }) => {
-    const estado = ApiClient.normalizeAndMigrateState({ ...estadoSintetico(), stu: [aluno(1000), aluno(1001, { p1: 2 })] });
+    const estado = ApiClient.normalizeAndMigrateState({ ...estadoSintetico(), stu: [aluno(1000), aluno(1001, { p1: 2 })], cursos: PROGRAMA });
     const escala = runAllocationEngine(estado);
     const servidor = await instalarSupabaseFalso(context, {
       documentos: {
@@ -42,6 +54,8 @@ test.describe('Escala por data (modo compartilhado)', () => {
     expect([...servidor.dias.keys()].sort()).toEqual(['2026-11-03', AMANHA]);
     expect(servidor.historico.map(h => [h.descricao, h.importado])).toEqual([['Alteração antiga', true]]);
     expect(servidor.banco.has('estado'), 'os documentos da fase 2 ficam como cópia').toBe(true);
+    // O programa do estado vai para as tabelas dos cursos antes do cadastro (que já sai no formato dos cursos)
+    expect([doPP(servidor).versao, doPP(servidor).missoes.map(m => m.codigo)]).toEqual([2, ['PP-01', 'PP-02']]);
   });
 
   test('se o servidor recusar uma gravação da conversão, o app pede para recarregar em vez de abrir o cadastro vazio', async ({ browser }) => {
@@ -87,7 +101,7 @@ test.describe('Escala por data (modo compartilhado)', () => {
   // Dados no formato anterior (sem versão, simuladores com os nomes antigos): o dia de amanhã com o SIM-MULTI-2 em
   // manutenção e um dia importado do BI com voo no SIM-MONO-1
   function servidorNoFormatoAnterior() {
-    const estado = ApiClient.normalizeAndMigrateState({ ...estadoSintetico(), stu: [aluno(1000, { mis: 'Simulador', eq: 'Sim. Mono' })] });
+    const estado = ApiClient.normalizeAndMigrateState({ ...estadoSintetico(), stu: [aluno(1000, { mis: 'Simulador', eq: 'Sim. Mono' }, { curso: 'PP' })], cursos: PROGRAMA });
     const { documentos, dias } = documentosFase3(estado, AMANHA);
     const escala = runAllocationEngine(estado);
     return comNomesAntigos({
@@ -102,10 +116,19 @@ test.describe('Escala por data (modo compartilhado)', () => {
   test('no primeiro acesso de um operador, os dados no formato anterior são regravados no formato atual', async ({ page, context }) => {
     const servidor = await instalarSupabaseFalso(context, servidorNoFormatoAnterior());
     expect(servidor.dias.get('2026-11-03').conteudo.resultado.out[0].r).toBe('SIM-MONO-1');
+    const chamadas = funcoesChamadas(page);
     await entrar(page, CONTAS.operador);
     await expect(page.locator('#eqs input[data-id="SIM-MLTE-D"]')).not.toBeChecked();
     await expect(page.locator('#eqs input[data-id="SIM-MULTI-2"]')).toHaveCount(0);
+    // A conversão do programa (importar_cursos) vem depois dos dias e antes do cadastro; ela não é a gravação de um
+    // documento, e as gravações continuam as mesmas
+    expect(chamadas.filter(f => ['salvar_dia', 'importar_cursos', 'salvar_documento'].includes(f))).toEqual(['salvar_dia', 'salvar_dia', 'importar_cursos', 'salvar_documento']);
     expect(servidor.gravacoes.map(g => g.chave)).toEqual(['dia:2026-11-03', `dia:${AMANHA}`, 'cadastro']);
+    expect([doPP(servidor).versao, doPP(servidor).missoes.map(m => [m.codigo, m.nome])]).toEqual([2, [['PP-01', 'Familiarização'], ['PP-02', 'Navegação']]]);
+    expect(servidor.banco.get('cadastro').conteudo.cursos, 'o cadastro guarda a cópia do programa').toEqual(PROGRAMA);
+    await irPara(page, 'alu');
+    await expect(page.locator('#alu tr[data-id="1000"] .progresso')).toHaveText('0/2 · próxima PP-01');
+    await expect(page.locator('#aviso-dados')).toBeHidden();
     const amanha = servidor.dias.get(AMANHA).conteudo;
     expect([amanha.esquema, amanha.av['SIM-MLTE-D'], amanha.av['SIM-MONO-A']]).toEqual([ESQUEMA, false, true]);
     expect(Object.keys(amanha.av).filter(r => /^SIM-(MONO|MULTI)-\d$/.test(r))).toEqual([]);
@@ -113,11 +136,21 @@ test.describe('Escala por data (modo compartilhado)', () => {
     expect(servidor.banco.get('cadastro').conteudo.esquema).toBe(ESQUEMA);
   });
 
+  // Antes da primeira abertura de um Operador, o programa ainda está só no cadastro: a próxima missão e o progresso
+  // ficam desligados, e a Gestora vê por quê (na aba Cursos também)
   test('gestor vê os dados no formato atual antes da atualização, sem gravar nada', async ({ page, context }) => {
     const servidor = await instalarSupabaseFalso(context, servidorNoFormatoAnterior());
+    const chamadas = funcoesChamadas(page);
     await entrar(page, CONTAS.gestor);
     await expect(page.locator('#eqs input[data-id="SIM-MLTE-D"]')).not.toBeChecked();
+    const pendentes = 'Os programas dos cursos ainda não foram trazidos do cadastro (isso acontece na primeira abertura de um Operador ou Administrador depois da atualização): a próxima missão e o progresso ficam desligados.';
+    await expect(page.locator('#aviso-dados-texto')).toHaveText(pendentes);
+    await irPara(page, 'alu');
+    await expect(page.locator('#alu tr[data-id="1000"] .progresso')).toHaveCount(0);
+    await irPara(page, 'cur');
+    await expect(page.locator('#cursos')).toHaveText(pendentes);
     expect(servidor.gravacoes).toEqual([]);
+    expect(chamadas).not.toContain('importar_cursos');
     expect(servidor.dias.get(AMANHA).conteudo.esquema).toBeUndefined();
   });
 

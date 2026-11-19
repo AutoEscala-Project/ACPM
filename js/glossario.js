@@ -1,25 +1,30 @@
 // O glossário: cada termo da tela numa frase curta, em texto puro. Vai para a dica (o balão que aparece com o mouse, o
 // foco do teclado ou um toque; js/dicas.js) e para a seção Glossário do Manual. Os números das regras vêm da
 // configuração, para o texto nunca contradizer o motor.
-import { REVISAO_H, MENOR_VOO_H, GROUND_DURATION_MIN } from './config.js';
+import { REVISAO_H, MENOR_VOO_H, GROUND_DURATION_MIN, LIMITE_DE_VOOS_LOCAIS, T, NI } from './config.js';
 import { LIMITES_DA_LEI } from './limites.js';
 import { INTERVALO_DO_HANGAR } from './metricas.js';
 import { reservaDaMissao } from './combustivel.js';
-import { duracaoHm } from './format.js';
+import { duracaoHm, hm } from './format.js';
 
 // 570 → "9h30"; 660 → "11 h"
 const duracao = min => (min % 60 ? duracaoHm(min) : `${min / 60} h`);
 const lei = LIMITES_DA_LEI;
 
-export const ABAS_DO_GLOSSARIO = ['Escala', 'Critérios', 'Demanda', 'Agenda', 'Recursos', 'Instrutores', 'Alunos', 'Rodízio'];
+export const ABAS_DO_GLOSSARIO = ['Escala', 'Critérios', 'Demanda', 'Agenda', 'Recursos', 'Instrutores', 'Alunos', 'Cursos', 'Rodízio'];
 
 export const GLOSSARIO = {
   // Escala
   'horario-livre': { aba: 'Escala', termo: 'Horário livre', texto: 'Sem vaga na 1ª nem na 2ª preferência, o voo foi para o horário livre mais perto da 1ª preferência (empatados, o mais cedo).' },
   'segunda-preferencia': { aba: 'Escala', termo: '2ª preferência', texto: 'O voo ficou na 2ª preferência do aluno: na 1ª não havia avião, instrutor ou horário livre.' },
   'horario-ajustado': { aba: 'Escala', termo: 'Horário ajustado', texto: 'A compactação mudou o horário para fechar um buraco do dia, dentro da regra de Horários escolhida nos critérios.' },
-  conflito: { aba: 'Escala', termo: 'Conflito', texto: 'O voo da escala aprovada não vale mais: o instrutor, o avião, o horário ou o pedido mudou. Ele fica no lugar até ser resolvido em Sugestões.' },
-  'voo-fixo': { aba: 'Escala', termo: 'Voo fixo (cadeado)', texto: 'O voo não muda quando a escala é refeita. Fica fixo pela escala aprovada, pelo instrutor escolhido na Escala ou pelo status Atrasado, Em Voo, Pousou ou Cancelado.' },
+  conflito: { aba: 'Escala', termo: 'Conflito', texto: 'O voo fixo não vale mais: o instrutor, o avião, o horário ou o pedido mudou, ou outro voo fixo já ocupa o lugar (o agendado na Escala cede o lugar aos outros fixos). Ele fica onde está até ser resolvido em Sugestões.' },
+  'voo-fixo': { aba: 'Escala', termo: 'Voo fixo (cadeado)', texto: 'O voo não muda quando a escala é refeita. Fica fixo pelo agendamento na Escala, pela escala aprovada, pelo instrutor escolhido na Escala ou pelo status Atrasado, Em Voo, Pousou ou Cancelado.' },
+  'voo-agendado': { aba: 'Escala', termo: 'Voo agendado', texto: 'Marcado pelo operador em “+ Agendar voo”: fica fixo no horário, no recurso e com o instrutor confirmados, e a escala é refeita em volta dele. O Histórico desfaz o agendamento.' },
+  'fora-da-regra': {
+    aba: 'Escala', termo: 'Fora da regra',
+    texto: `O voo agendado na Escala está fora de uma regra que a escala segue sozinha: os horários de decolagem, o pouso do voo de dia até as ${hm(T[NI])}, no máximo ${LIMITE_DE_VOOS_LOCAIS} voos locais por horário ou o Ground antes do voo. Ele fica onde foi agendado.`
+  },
   'reduzir-combustivel': {
     aba: 'Escala', termo: 'Reduzir combustível',
     texto: `Aluno e instrutor passam do limite de peso do avião com o tanque cheio: o avião sai com menos combustível, o bastante para o voo, o táxi e a reserva (${reservaDaMissao('Voo Local')} min; ${reservaDaMissao('Noturno')} à noite e em IFR).`
@@ -54,6 +59,8 @@ export const GLOSSARIO = {
   disponibilidade: { aba: 'Demanda', termo: 'Disponibilidade', texto: 'Quando o aluno pode voar: manhã, tarde, noite ou um horário exato. O voo só começa dentro dela.' },
   duracao: { aba: 'Demanda', termo: 'Duração', texto: `As horas do voo, de uma vez. O Ground tem ${duracao(GROUND_DURATION_MIN)}. Para dois voos do aluno no mesmo dia, use “+ missão”.` },
   prioridade: { aba: 'Demanda', termo: 'Prioridade', texto: 'De 1 a 5: o pedido de prioridade maior é escalado antes. Com a mesma prioridade, quem agendou primeiro vai antes; o pedido posto à mão, depois.' },
+  'fora-da-ordem': { aba: 'Demanda', termo: 'Fora da ordem', texto: 'A missão do curso que o programa ainda não libera (falta uma anterior ou a fase não abriu), a já aprovada, a dispensada ou a que o aluno já tem em outro voo do dia. Escolhê-la pede confirmação, e o histórico diz por quê.' },
+  'curso-encerrado': { aba: 'Demanda', termo: 'Curso encerrado', texto: 'O curso do aluno foi encerrado na aba Cursos. A próxima missão e as outras do curso continuam, mas cada uma pede confirmação, aqui e no agendamento, e o histórico diz que o curso estava encerrado.' },
 
   // Agenda
   excecao: { aba: 'Agenda', termo: 'Exceção da Coordenação', texto: 'Registra o pedido depois do prazo (13:00 da véspera; a segunda, sábado às 10:00). O pedido fica marcado como exceção, para auditoria.' },
@@ -88,6 +95,18 @@ export const GLOSSARIO = {
   'voa-com': { aba: 'Alunos', termo: 'Priorizar com', texto: 'Os instrutores do aluno: a escala põe o aluno com um deles sempre que algum pode voar. Quando nenhum pode, o voo fica com outro instrutor, com aviso.' },
   'nao-escalar-com': { aba: 'Alunos', termo: 'Não escalar com', texto: 'Instrutores que não voam com este aluno: a escala nunca põe o aluno com eles.' },
   progresso: { aba: 'Alunos', termo: 'Progresso', texto: 'Missões do curso aprovadas sobre o total do programa, e a próxima missão.' },
+
+  // Cursos
+  'fase-do-curso': {
+    aba: 'Cursos', termo: 'Fase do curso',
+    texto: 'Um grupo de missões do programa. A fase abre depois das fases anteriores, desde o início do curso ou depois das fases escolhidas, e fica completa com todas as missões dela feitas.'
+  },
+  'quando-voar': {
+    aba: 'Cursos', termo: 'Quando voar',
+    texto: 'Depois das anteriores: espera as anteriores da fase. Livre na fase: voa com a fase aberta; as seguintes não esperam por ela, mas a fase só fica completa com ela. Depois de: espera só as missões escolhidas, anteriores a ela.'
+  },
+  dispensada: { aba: 'Cursos', termo: 'Dispensada', texto: 'A missão vale como feita para todos os alunos do curso: não é sugerida e não entra no total do progresso.' },
+  'trecho-do-noturno': { aba: 'Cursos', termo: 'Trecho do Noturno', texto: 'O Noturno é um voo só em três trechos: a ida para BH, a noite em BH e a volta no dia seguinte. No programa, as missões dos trechos vêm juntas na fase; a próxima missão oferece a noite, e o resultado dela vale para os três.' },
 
   // Rodízio
   rodizio: { aba: 'Rodízio', termo: 'Rodízio', texto: 'Os voos de cheque, MLTE, noturno e C172 seguem uma fila por categoria: vai o primeiro livre; quem voou vai para o fim na data seguinte.' }

@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises';
-import { test, expect, abrirComExemplo, irPara, abrirEscala, lerEscala, json, AMANHA } from './fixtures.js';
+import { test, expect, abrir, abrirComExemplo, irPara, abrirEscala, lerEscala, json, AMANHA } from './fixtures.js';
+import { aluno, cenario, instrutor } from '../helpers/montar.js';
 
 test.describe('Escala', () => {
   test.beforeEach(async ({ page }) => {
@@ -94,4 +95,20 @@ test.describe('Escala', () => {
     await expect(voo.locator('.st-sel')).toHaveValue('Em Voo');
     expect(await lerEscala(page)).toEqual(alterada);
   });
+});
+
+// Os pesos com décimos (o agendamento grava no cadastro o que o operador digita): o PDF e o CSV levam a soma em décimos,
+// com a vírgula, como a tela, e não o resto do ponto flutuante (40,1 + 40,7 dá 80.80000000000001)
+test('o PDF e o CSV levam o peso da tripulação com décimos em décimos, com a vírgula', async ({ page }) => {
+  await abrir(page, { estado: cenario({ ins: [instrutor(1, 9, { kg: 40.7 })], stu: [aluno(1000, { p1: 390, p2: -1 }, { kg: 40.1 })] }) });
+  await abrirEscala(page);
+  await expect(page.locator('#out tbody tr:not(.win) .c-peso')).toHaveText('80,8 / 170 kg');
+  const [pdf] = await Promise.all([page.waitForEvent('download'), page.locator('#pdf').click()]);
+  const conteudoDoPdf = (await readFile(await pdf.path())).toString('latin1');
+  expect(conteudoDoPdf).toContain('(80,8 kg)');
+  expect(conteudoDoPdf).not.toContain('80.80000000000001');
+  const [csv] = await Promise.all([page.waitForEvent('download'), page.locator('#exp').click()]);
+  const conteudoDoCsv = await readFile(await csv.path(), 'utf8');
+  expect(conteudoDoCsv).toContain('"Peso aluno + instrutor: 80,8 kg (limite do C152: 170 kg) · dentro do envelope"');
+  expect(conteudoDoCsv).not.toContain('80.80000000000001');
 });

@@ -1,10 +1,10 @@
 // O histórico do dia: a gaveta, limpar (só no modo local) e Reverter
 import { gravarAlteracao, aindaNaoAbriu } from '../actions.js';
-import { $, showToast } from '../dom.js';
+import { $, showToast, algumDialogoAberto, abrirGaveta, gavetaDoEsc } from '../dom.js';
 import { normalizarFixos } from '../fixos.js';
-import { validarReversao } from '../reversoes.js';
+import { validarReversao, motivoParaNaoDesfazer, desfazerAgendamento, agendamentosEmVolta } from '../reversoes.js';
 import { atributoVale } from '../frota.js';
-import { reverterEscolha, escolherNosPedidos } from '../instrutor-escolhido.js';
+import { reverterEscolha, reverterReparo } from '../instrutor-escolhido.js';
 import { S, AUDIT_LOG, DATA, setAuditLog, isGestor, insBy, stuBy, getMissionTarget } from '../state.js';
 import { ApiClient } from '../storage.js';
 import { aoAcionar } from './registro.js';
@@ -13,13 +13,16 @@ import { rDem } from '../views/demanda.js';
 import { renderAuditPanel } from '../views/escala.js';
 import { rRec } from '../views/recursos.js';
 
-// Histórico: gaveta lateral sobre a aba aberta; o botão abre e fecha, ✕ e Esc fecham
+// Histórico: gaveta lateral sobre a aba aberta (por cima das outras gavetas abertas); o botão abre e fecha, ✕ e Esc
+// fecham (o Esc, quando ela é a gaveta de cima ou tem o foco: js/dom.js). Com um diálogo aberto por cima (o do status de
+// um voo da Escala), o Esc fecha só o diálogo, e a gaveta continua aberta
 const gavetaDoHistorico = $('#historico');
 function mostrarHistorico(abrir) {
   // Fechar com o foco dentro da gaveta devolve o foco ao botão do Histórico; com o foco fora dela (o Esc dado na busca
   // da escala, no popup do mapa), o foco fica onde está
   const focoDentro = gavetaDoHistorico.contains(document.activeElement);
-  gavetaDoHistorico.hidden = !abrir;
+  if (abrir) abrirGaveta(gavetaDoHistorico);
+  else gavetaDoHistorico.hidden = true;
   $('#btn-open-log').setAttribute('aria-expanded', String(abrir));
   if (!abrir) { if (focoDentro) $('#btn-open-log').focus(); return; }
   $('#btn-fechar-historico').focus();
@@ -27,7 +30,7 @@ function mostrarHistorico(abrir) {
 $('#btn-open-log').onclick = () => mostrarHistorico(gavetaDoHistorico.hidden);
 $('#btn-fechar-historico').onclick = () => mostrarHistorico(false);
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape' && !gavetaDoHistorico.hidden) mostrarHistorico(false);
+  if (e.key === 'Escape' && gavetaDoEsc(e) === gavetaDoHistorico && !algumDialogoAberto()) mostrarHistorico(false);
 });
 
 // Só no modo local: no modo compartilhado o histórico é permanente (o botão fica oculto)
@@ -76,13 +79,17 @@ aoAcionar('rev-log', b => {
       rIns();
     }
   } else if (rev.kind === 'restaurarFixos') {
-    // Um reparo desfeito: os voos voltam a ser fixos como antes dele, e o instrutor escolhido dos pedidos também
-    S.fixos = normalizarFixos({ ...(S.fixos || {}), ...rev.fixos });
-    if (rev.pedidos) { rev.pedidos.forEach(p => escolherNosPedidos(S, [p], p.insId)); rDem(); }
+    // Um reparo desfeito: os voos voltam a ser fixos como antes dele, e o instrutor escolhido dos pedidos também. O voo
+    // agendado volta só enquanto o agendamento continua: o histórico diz qual foi desfeito ou feito depois do reparo
+    // (js/reversoes.js e js/instrutor-escolhido.js)
+    reverterReparo(S, rev, agendamentosEmVolta(S, AUDIT_LOG, entry, S.frota));
+    S.fixos = normalizarFixos(S.fixos);
+    if (rev.pedidos) rDem();
     gravarAlteracao('mod', `Revertido: ${entry.desc}`, null, entry.id);
   } else if (rev.kind === 'restaurarEscolha') {
-    // O instrutor escolhido volta como estava, e os voos fixos também (js/instrutor-escolhido.js)
-    reverterEscolha(S, rev);
+    // O instrutor escolhido volta como estava, e os voos fixos também; o voo agendado, só enquanto o agendamento
+    // continua (js/reversoes.js e js/instrutor-escolhido.js)
+    reverterEscolha(S, rev, agendamentosEmVolta(S, AUDIT_LOG, entry, S.frota));
     S.fixos = normalizarFixos(S.fixos);
     gravarAlteracao('mod', `Revertido: ${entry.desc}`, null, entry.id);
     rDem();
@@ -103,5 +110,15 @@ aoAcionar('rev-log', b => {
     S.av[rev.recurso.reg] = rev.av !== false;
     gravarAlteracao('inc', `Revertido: ${rev.recurso.reg} de volta à frota`, null, entry.id);
     rRec();
+  } else if (rev.kind === 'desfazerAgendamento') {
+    // Um voo agendado na Escala: o criado sai, o movido volta para onde estava, e o instrutor marcado disponível volta
+    // como estava (js/reversoes.js). O voo já em andamento ou com resultado registrado fica, com o aviso; o movido cujo
+    // pedido saiu da Demanda também (não há o que desfazer)
+    const motivo = motivoParaNaoDesfazer(S, rev);
+    if (motivo) { showToast(motivo); return; }
+    if (desfazerAgendamento(S, rev)) {
+      gravarAlteracao(rev.criado ? 'exc' : 'mod', `Revertido: ${entry.desc}`, null, entry.id);
+      rDem(); rIns();
+    }
   }
 });

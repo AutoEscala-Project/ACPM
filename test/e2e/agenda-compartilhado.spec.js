@@ -70,8 +70,8 @@ test.describe('Agenda de Solicitações (modo compartilhado)', () => {
     await expect(page.locator('#form-agenda [type="submit"]')).toBeDisabled();
     await expect(page.locator('#ag-excecao')).toBeHidden();
 
-    // Ela vê a Agenda e a Escala (que só consulta) e, pelos dados pessoais, Instrutores e Alunos
-    await expect(page.locator('#nav button:visible .aba-rotulo')).toHaveText(['Escala', 'Agenda', 'Instrutores', 'Alunos']);
+    // Ela vê a Agenda, a Escala e os Cursos (que só consulta) e, pelos dados pessoais, Instrutores e Alunos
+    await expect(page.locator('#nav button:visible .aba-rotulo')).toHaveText(['Escala', 'Agenda', 'Instrutores', 'Alunos', 'Cursos']);
     await page.locator('#nav button[data-t="esc"]').click();
     await expect(page.locator('body')).toHaveAttribute('data-role', 'gestor');
     expect(servidor.gravacoes).toEqual([]);

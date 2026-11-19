@@ -4,22 +4,17 @@
 // tanque cheio primeiro, depois quem tem menos horas no dia e menos habilitações) ou os dois. Sem nada no mesmo horário,
 // o primeiro horário mais tarde no mesmo dia, dentro da disponibilidade do aluno. Depois, soltar o voo (o motor o escala
 // de novo; quando o pedido mudou, é a única sugestão) e, por último, cancelar. Cada sugestão é uma mudança no voo fixo;
-// na turma de Ground, em todos os alunos dela.
-import { GROUND_EQ_TYPE, GROUND_REG, T, NI } from './config.js';
-import { FROTA_INICIAL, matriculasParaOVoo, recursoDaFrota, instrutorVoaNoAviao } from './frota.js';
-import { livre, cabeNoSaldo, folgaAte, saldoAteARevisao, problemasDoInstrutor } from './viabilidade.js';
-import { reducaoNecessaria } from './combustivel.js';
-import { normalizarLimites } from './limites.js';
-import { normalizarHangar, posicaoNoHangar } from './hangar.js';
-import { HORARIOS_INICIAIS, horariosDaMissao, periodoDoMinuto, fimDaMissao } from './horarios.js';
+// na turma de Ground, em todos os alunos dela. Os aviões e os instrutores que servem vêm de js/candidatos.js, com os
+// outros voos do dia no horário marcado de cada um.
+import { GROUND_EQ_TYPE, T, NI } from './config.js';
+import { HORARIOS_INICIAIS, horariosDaMissao, periodoDoMinuto, fimDasMissoesDoDia } from './horarios.js';
 import { STATUS_EM_ANDAMENTO } from './status.js';
 import { disponibilidadeDoAluno, doesGroundGateFlight } from './rules.js';
 import { nomeDoRecurso } from './categorias.js';
 import { hm } from './format.js';
 import { gruposDoConflito } from './conflitos.js';
-import { statusDoVoo, umPorUnidade, pedidosDosVoos, ocupacaoDoVoo, compromissoDoVoo } from './voo.js';
-import { historicoDoDia } from './noturno.js';
-import { menorPrimeiro } from './util.js';
+import { statusDoVoo, pedidosDosVoos } from './voo.js';
+import { ocupacaoDaEscala, problemaDoAluno, avioesQueServem, instrutoresQueServem } from './candidatos.js';
 
 // A turma de Ground muda inteira; o voo, sozinho
 const doGrupo = (resultado, voo) => (voo.isGround ? resultado.out.filter(o => o.classKey === voo.classKey) : [voo]);
@@ -28,43 +23,22 @@ export function sugerirReparos(estado, resultado, fKey, { maximo = 3, depoisDe =
   const voo = resultado.out.find(o => o.fKey === fKey);
   if (!voo || !voo.conflito) return [];
   const grupo = doGrupo(resultado, voo);
-  const chavesDoGrupo = new Set(grupo.map(o => o.fKey));
-  const outros = resultado.out.filter(o => !chavesDoGrupo.has(o.fKey) && statusDoVoo(o, estado.fStatus) !== 'Cancelado');
-  const frota = Array.isArray(estado.frota) ? estado.frota : FROTA_INICIAL;
-  const hangar = normalizarHangar(estado.hangar, frota);
-  const limites = normalizarLimites(estado.limites);
-  const historicoDe = historicoDoDia(estado);
+  // Os outros voos do dia (sem o voo, ou a turma, e sem os cancelados), no horário marcado
+  const ocupacao = ocupacaoDaEscala(resultado.out, { fStatus: estado.fStatus, exceto: grupo.map(o => o.fKey) });
   const alunos = new Map(estado.stu.map(s => [s.id, s]));
   const pedidoDo = pedidosDosVoos(estado.stu);
   const tipo = voo.isGround ? GROUND_EQ_TYPE : voo.eqType;
-  // Os requisitos do voo (o curso do aluno: o noturno do PC é IFR) e o avião de cada sugestão (js/frota.js)
+  // Os requisitos do voo: a missão, o tipo e o curso do aluno (o noturno do PC é IFR; js/frota.js)
   const curso = (alunos.get(voo.stuId) || {}).curso;
-  const recursoDe = r => (voo.isGround ? null : recursoDaFrota(frota, r));
-  const voaNo = (x, r) => voo.isGround || instrutorVoaNoAviao(x, recursoDe(r));
-
-  // A volta do noturno ocupa a manhã até as 10:10 (ocupacaoDoVoo); a lei conta só o voo (compromissoDoVoo)
-  const ocupacaoDo = r => umPorUnidade(outros.filter(o => o.r === r)).map(o => ocupacaoDoVoo(o));
-  const compromissosDo = id => umPorUnidade(outros.filter(o => o.insId === id)).map(o => compromissoDoVoo(o));
-  const horasNoDia = id => umPorUnidade(outros.filter(o => o.insId === id)).reduce((total, o) => total + o.h, 0);
-  const horasDoAviao = r => umPorUnidade(outros.filter(o => o.r === r)).reduce((total, o) => total + o.h, 0);
-  const saldo = r => saldoAteARevisao(estado.horas, r);
-  const folga = (r, a, b) => folgaAte(ocupacaoDo(r), a, b);
-  // Combustível a menos com o instrutor (0 com o tanque cheio ou sem um dos pesos; Infinity quando nem o mínimo dá)
-  const reducao = (x, a, b) => (voo.isGround ? 0 : reducaoNecessaria({ stuKg: voo.stuKg, insKg: x.kg, tipo, minutos: b - a, mis: voo.mis }));
-
-  const aviaoServe = (r, a, b) => (voo.isGround || Boolean(estado.av[r])) && livre(ocupacaoDo(r), a, b) && cabeNoSaldo(horasDoAviao(r), (b - a) / 60, saldo(r));
-  const instrutorServe = (x, a, b, r = voo.r) => !problemasDoInstrutor(x, { mis: voo.mis, tipo, a, b, alunos: grupo.map(v => alunos.get(v.stuId)), stuKg: voo.stuKg, curso, recurso: recursoDe(r) },
-    { compromissos: x ? compromissosDo(x.id) : [], historico: x ? historicoDe(x.id) : null, limites }).length;
 
   // Os aviões que servem ao voo (o tipo, o "Só Parafuso" e o "Só VFR") e, com o instrutor, os em que ele voa
-  const avioesPara = (a, b, x = null) => (voo.isGround
-    ? (aviaoServe(GROUND_REG, a, b) ? [GROUND_REG] : [])
-    : matriculasParaOVoo(frota, { mis: voo.mis, eq: tipo, curso }).filter(r => aviaoServe(r, a, b) && (!x || voaNo(x, r)))
-      .sort((p, q) => menorPrimeiro(folga(p, a, b), folga(q, a, b)) || posicaoNoHangar(hangar, p) - posicaoNoHangar(hangar, q)));
-  const instrutoresPara = (a, b, r = voo.r) => estado.ins.filter(x => instrutorServe(x, a, b, r))
-    .sort((p, q) => (reducao(p, a, b) > 0) - (reducao(q, a, b) > 0) || horasNoDia(p.id) - horasNoDia(q.id)
-      || (p.hab || []).length - (q.hab || []).length || p.id - q.id);
-  const comCombustivel = (texto, x, a, b) => { const gal = reducao(x, a, b); return gal > 0 ? `${texto} · reduzir ${gal} gal` : texto; };
+  const avioesPara = (a, b, instrutor = null) => avioesQueServem(estado, ocupacao, { tipo, mis: voo.mis, curso, a, b, ground: voo.isGround, instrutor })
+    .filter(c => !c.problema).map(c => c.r);
+  // Os instrutores que servem no avião r (o avião com habilitação própria exige a dele), cada um com o combustível a
+  // menos com ele ({ x, problemas, reducao })
+  const instrutoresPara = (a, b, r = voo.r) => instrutoresQueServem(estado, ocupacao,
+    { mis: voo.mis, tipo, a, b, alunos: grupo.map(v => alunos.get(v.stuId)), stuKg: voo.stuKg, curso, r }).filter(c => !c.problemas.length);
+  const comCombustivel = (texto, { reducao }) => (reducao > 0 ? `${texto} · reduzir ${reducao} gal` : texto);
 
   // O que o conflito pede, pelo código: o pedido mudou (só soltar), o horário não serve (outro
   // horário), ou o avião e o instrutor
@@ -81,41 +55,47 @@ export function sugerirReparos(estado, resultado, fKey, { maximo = 3, depoisDe =
     const { a, b } = voo;
     const avioes = avioesPara(a, b), instrutores = instrutoresPara(a, b);
     // Outro avião com o mesmo instrutor: um em que ele voa
-    if (problemaNoAviao && !problemaNoInstrutor) avioes.filter(r => !atual || voaNo(atual, r)).forEach(r => opcoes.push({ tipo: 'aviao', texto: `Trocar o avião: ${nomeDoRecurso(r)}`, mudancas: { r } }));
+    if (problemaNoAviao && !problemaNoInstrutor) avioesPara(a, b, atual).forEach(r => opcoes.push({ tipo: 'aviao', texto: `Trocar o avião: ${nomeDoRecurso(r)}`, mudancas: { r } }));
     if (problemaNoInstrutor && !problemaNoAviao) {
-      instrutores.forEach(x => opcoes.push({ tipo: 'instrutor', texto: comCombustivel(`Trocar o instrutor: ${x.nm}`, x, a, b), mudancas: { insId: x.id } }));
+      instrutores.forEach(c => opcoes.push({ tipo: 'instrutor', texto: comCombustivel(`Trocar o instrutor: ${c.x.nm}`, c), mudancas: { insId: c.x.id } }));
     }
     // Os dois: o primeiro avião que tem um instrutor que serve (com a habilitação própria dele, quando o avião exige)
-    const par = problemaNoAviao && problemaNoInstrutor ? avioes.map(r => [r, instrutoresPara(a, b, r)[0]]).find(([, x]) => x) : null;
+    const par = problemaNoAviao && problemaNoInstrutor ? avioes.map(r => [r, instrutoresPara(a, b, r)[0]]).find(([, c]) => c) : null;
     if (par) {
-      const [r, x] = par;
-      opcoes.push({ tipo: 'ambos', texto: comCombustivel(`Trocar o avião e o instrutor: ${nomeDoRecurso(r)}, com ${x.nm}`, x, a, b), mudancas: { r, insId: x.id } });
+      const [r, c] = par;
+      opcoes.push({ tipo: 'ambos', texto: comCombustivel(`Trocar o avião e o instrutor: ${nomeDoRecurso(r)}, com ${c.x.nm}`, c), mudancas: { r, insId: c.x.id } });
     }
   }
 
   // Sem nada no mesmo horário: o primeiro horário mais tarde, no mesmo dia, com o avião e o instrutor de antes quando
-  // eles servem. Vale a disponibilidade de cada aluno, e o Ground termina antes dos voos que dependem dele
+  // eles servem. Vale a disponibilidade de cada aluno, e o Ground termina antes dos voos que dependem dele. O fim é o
+  // do motor para cada aluno (fimDasMissoesDoDia): com um Noturno na demanda do dia, as outras missões até as 17:30
   if (!opcoes.length && !pedidoMudou) {
     const duracao = voo.b - voo.a;
     const inicios = voo.isGround ? T.slice(0, NI) : horariosDaMissao(estado.horarios || HORARIOS_INICIAIS, voo.mis, tipo);
-    const fimDoDia = fimDaMissao(voo.mis, tipo);
+    const fimDoAluno = fimDasMissoesDoDia(estado.stu);
+    const fimDoDia = Math.min(...grupo.map(v => fimDoAluno(v.stuId, voo.mis, tipo)));
+    const voosDoAluno = v => ocupacao.alunos.get(v.stuId) || [];
+    // (a volta do noturno de ontem não depende do Ground de hoje)
     const voosQueDependem = voo.isGround
-      ? outros.filter(o => grupo.some(v => v.stuId === o.stuId) && !o.isGround && !o.trecho && doesGroundGateFlight(voo.mis, { mis: o.mis, eq: o.eqType }))
+      ? grupo.flatMap(voosDoAluno).filter(o => !o.isGround && !o.trecho && doesGroundGateFlight(voo.mis, { mis: o.mis, eq: o.eqType }))
       : [];
     const limite = Math.min(fimDoDia, ...voosQueDependem.map(o => o.a));
     const alunosPodem = (a, b) => grupo.every(v => {
       const permitidas = disponibilidadeDoAluno((pedidoDo(v) || {}).jan);
-      return (!permitidas || permitidas(a)) && livre(outros.filter(o => o.stuId === v.stuId).map(o => ocupacaoDoVoo(o)), a, b);
+      return (!permitidas || permitidas(a)) && !problemaDoAluno(ocupacao, v.stuId, { a, b });
     });
     for (const m of inicios) {
       if (m <= Math.max(voo.a, depoisDe ?? -1) || m + duracao > limite || !estado.win[periodoDoMinuto(m)] || !alunosPodem(m, m + duracao)) continue;
-      const r = !voo.isGround && aviaoServe(voo.r, m, m + duracao) && avioesPara(m, m + duracao).includes(voo.r) ? voo.r : avioesPara(m, m + duracao, atual)[0] || avioesPara(m, m + duracao)[0];
-      const x = r && instrutorServe(atual, m, m + duracao, r) ? atual : r ? instrutoresPara(m, m + duracao, r)[0] : null;
-      if (!r || !x) continue;
+      // O avião de antes, quando ele ainda serve ao voo e está livre; senão, um em que o instrutor de antes voa, ou outro
+      const r = !voo.isGround && avioesPara(m, m + duracao).includes(voo.r) ? voo.r : avioesPara(m, m + duracao, atual)[0] || avioesPara(m, m + duracao)[0];
+      const instrutores = r ? instrutoresPara(m, m + duracao, r) : [];
+      const c = instrutores.find(i => i.x === atual) || instrutores[0];
+      if (!r || !c) continue;
       opcoes.push({
         tipo: 'horario',
-        texto: comCombustivel(`Passar para as ${hm(m)}, ${voo.isGround ? 'na' : 'no'} ${nomeDoRecurso(r)}, com ${x.nm}`, x, m, m + duracao),
-        mudancas: { a: m, b: m + duracao, ...(voo.isGround ? {} : { r }), insId: x.id }
+        texto: comCombustivel(`Passar para as ${hm(m)}, ${voo.isGround ? 'na' : 'no'} ${nomeDoRecurso(r)}, com ${c.x.nm}`, c),
+        mudancas: { a: m, b: m + duracao, ...(voo.isGround ? {} : { r }), insId: c.x.id }
       });
       break;
     }

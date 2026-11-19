@@ -11,7 +11,9 @@ import { rBI } from './views/bi.js';
 import { renderAuditPanel, rOut } from './views/escala.js';
 import { rDem } from './views/demanda.js';
 import { rIns, rInsDia, rAlu } from './views/cadastros.js';
+import { rCursos, SEM_OS_PROGRAMAS } from './views/cursos.js';
 import { rRec, rRevisao, rHangar } from './views/recursos.js';
+import { rRodizio } from './views/rodizio.js';
 import { podeEditarAgenda, rAgenda } from './views/agenda.js';
 import { atualizarSelosDaEscala, atualizarSeloDaAgenda, lerPedidosDaData } from './views/selos.js';
 
@@ -61,11 +63,14 @@ export function setRole(role, somenteConsulta = false) {
   aplicarSomenteLeitura();
 }
 
-// As horas dos instrutores ou os resultados dos cursos que não foram lidos: o aviso fica até a leitura dar certo, e o
-// que depende disso fica desligado (Aprovar escala; a próxima missão e o resultado)
+// As horas dos instrutores, os resultados ou os programas dos cursos que não foram lidos (ou os programas que ainda estão
+// no cadastro, esperando a conversão): o aviso fica até a leitura dar certo, e o que depende disso fica desligado
+// (Aprovar escala; a próxima missão, o progresso e o resultado). Os textos dos programas são os que a aba Cursos mostra
+// no lugar deles
 const SEM_OS_DADOS = {
   horas: 'Não foi possível ler as horas de voo dos instrutores: os limites do mês e do ano não estão sendo conferidos, e Aprovar escala fica desligado.',
-  resultados: 'Não foi possível ler os resultados das missões dos cursos: a próxima missão e o registro de resultados ficam desligados.'
+  resultados: 'Não foi possível ler os resultados das missões dos cursos: a próxima missão e o registro de resultados ficam desligados.',
+  ...SEM_OS_PROGRAMAS
 };
 function avisarDadosIndisponiveis() {
   const partes = (S.indisponiveis || []).filter(p => Object.hasOwn(SEM_OS_DADOS, p));
@@ -73,21 +78,33 @@ function avisarDadosIndisponiveis() {
   $('#aviso-dados-texto').textContent = partes.map(p => SEM_OS_DADOS[p]).join(' ');
 }
 
-// "Tentar de novo": lê de novo o que faltou; a escala é refeita com as horas (o voo além do limite do mês aparece)
+// "Tentar de novo": lê de novo o que faltou; a escala é refeita com as horas (o voo além do limite do mês aparece). Os
+// programas que esperavam a conversão do cadastro (ela é feita na abertura de um Operador ou Administrador; quem só
+// consulta pode ter aberto antes): o formato do cadastro é lido de novo e, com a conversão feita, valem os programas
+// lidos agora (sem eles, o aviso passa a ser o dos programas que não foram lidos)
 export async function lerDadosDeNovo() {
   const data = DATA;
-  const { horasBase, resultados } = await ApiClient.lerDadosAParte(data);
+  const pendentes = dadoIndisponivel('cursos-pendentes');
+  const [{ horasBase, resultados, programa }, aindaNoCadastro] = await Promise.all([
+    ApiClient.lerDadosAParte(data),
+    pendentes ? ApiClient.programaAindaNoCadastro().catch(() => true) : true
+  ]);
   if (DATA !== data) return;
+  const convertidos = pendentes && !aindaNoCadastro;
   if (horasBase && dadoIndisponivel('horas')) {
     S.horasBase = horasBase;
     S.horasDosInstrutores = comRepousoDoNoturno(comHorasExternas(horasBase, S.ins, data), S.noturnosDaVespera);
   }
   if (resultados && dadoIndisponivel('resultados')) S.resultados = resultados;
-  S.indisponiveis = (S.indisponiveis || []).filter(p => (p === 'horas' ? !horasBase : p === 'resultados' ? !resultados : true));
+  if (programa && (dadoIndisponivel('cursos') || convertidos)) S.programa = programa;
+  // O que foi lido sai do aviso
+  const lidos = new Map([['horas', horasBase], ['resultados', resultados], ['cursos', programa], ['cursos-pendentes', convertidos]]);
+  S.indisponiveis = (S.indisponiveis || []).filter(p => !lidos.get(p));
+  if (convertidos && !programa && !S.indisponiveis.includes('cursos')) S.indisponiveis = [...S.indisponiveis, 'cursos'];
   avisarDadosIndisponiveis();
   if (!S.indisponiveis.length) showToast('Dados lidos.', 'ok');
   if (horasBase && !isGestor()) save();
-  rIns(); rAlu(); rDem(); rOut();
+  rIns(); rAlu(); rCursos(); rDem(); rOut();
 }
 
 // Uma gravação que não deu certo. Sem conexão, o aviso conta as alterações esperando (as entradas "gravando…" do
@@ -120,7 +137,7 @@ function avisarAlteracoesEsperando() {
 // Depois de um conflito nada mais é gravado: a tela fica só para consulta até recarregar, com o aviso
 export function travarAposConflito({ formato = false } = {}) {
   setRole('gestor', true);
-  rRec(); rIns(); rAlu(); rDem();
+  rRec(); rIns(); rAlu(); rCursos(); rDem();
   if (RES) rOut();
   mostrarAviso('conflito', formato
     ? 'O app foi atualizado. Recarregue a página para continuar (a sua última alteração não foi salva).'
@@ -278,12 +295,14 @@ export async function lerData(data) {
     await dadosProntos;
     await anterior;
     if (pedido !== pedidoDeData) return false;
-    const { estado, escala, horasBase, horasDosInstrutores, resultados, indisponiveis } = await ApiClient.carregarDia(data);
+    const { estado, escala, horasBase, horasDosInstrutores, resultados, programa, indisponiveis } = await ApiClient.carregarDia(data);
     const historico = await historicoParaPainel(data);
     const maisNova = pedido === pedidoDeData;
     if (!maisNova && data !== DATA) return false;
     abrirData(data);
-    setS({ ...estado, horasBase, horasDosInstrutores, resultados, indisponiveis });
+    // O programa dos cursos (as tabelas dos cursos) e o que não foi lido dele ('cursos', ou 'cursos-pendentes' esperando a
+    // conversão) chegam com os dados da data: até eles, nada grava, também o programa
+    setS({ ...estado, horasBase, horasDosInstrutores, resultados, programa, indisponiveis });
     avisarDadosIndisponiveis();
     // Data sem escala gravada (por exemplo, uma data nova, copiada da anterior): a escala calculada aparece na hora
     // e é gravada junto com a primeira alteração
@@ -297,11 +316,12 @@ export async function lerData(data) {
   }
 }
 
-// Abre a escala de outra data
+// Abre a escala de outra data. As abas são refeitas com os dados dela, também a do Rodízio: aberta, ela mostraria as
+// filas da data anterior, e o clique agiria sobre uma fila que a pessoa não está vendo
 export async function carregarData(data) {
   if (!await lerData(data)) return;
   $('#escala-atualizada').hidden = true;
-  rRec(); rIns(); rAlu(); rDem(); renderAuditPanel(); rOut(); rAgenda();
+  rRec(); rIns(); rAlu(); rCursos(); rRodizio(); rDem(); renderAuditPanel(); rOut(); rAgenda();
   atualizarSelosDaEscala();
   lerPedidosDaData();
   await carregarBI();

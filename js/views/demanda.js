@@ -11,6 +11,8 @@ import { $, trocarConteudo } from '../dom.js';
 import { renderAuditPanel } from './escala.js';
 import { etapaNaDemanda } from './etapas.js';
 import { instrutoresDoPedido } from '../instrutor-escolhido.js';
+import { chaveDoVoo } from '../voo.js';
+import { nomeDoRecurso } from '../categorias.js';
 
 function allowedEqOptionsForMission(mis, currentEq) {
   const m = MIS[mis] || MIS['Voo Local'];
@@ -33,13 +35,21 @@ function opcoesDeInstrutor(stu, d) {
   return opts([['', pares.length ? `Automático (prioriza ${pares.join(', ')})` : 'Automático'], ...lista], d.insId || '');
 }
 
+// O voo agendado na Escala (o voo fixo com a marca agendado): o horário e o recurso dele. Ele explica por que mudar a
+// preferência do pedido não muda o voo
+function tagDoAgendado(stu, mid) {
+  const pino = (S.fixos || {})[chaveDoVoo(stu.id, mid)];
+  if (!pino || !pino.agendado) return '';
+  return ` <span class="tag" data-dica="voo-agendado"><svg class="ico" aria-hidden="true"><use href="#i-cadeado"/></svg>agendado ${hm(pino.a)} · ${esc(nomeDoRecurso(pino.r))}</span>`;
+}
+
 export const singleDemandRowHTML = (stu, d, mid = 0) => {
   const isExtra = mid !== 0;
   const horarios = horariosDaMissao(S.horarios, d.mis, isGroundMission(d.mis) ? GROUND_EQ_TYPE : d.eq);
   const isGnd = isGroundMission(d.mis);
   const trCls = `${d.fly ? 'on p' + d.pr : 'off'}${isExtra ? ' extra-row' : ''}`;
-  // A missão do curso: o código do pedido, ou a próxima do programa para usar
-  const etapa = etapaNaDemanda(stu, d, mid);
+  // A missão do curso: o código do pedido, ou a próxima do programa para usar; o voo agendado na Escala
+  const etapa = etapaNaDemanda(stu, d, mid) + tagDoAgendado(stu, mid);
   const firstCell = isExtra
     ? `<div class="stu-cell"><span class="sm">↳ missão extra</span>${etapa}<button class="x edit-only" data-act="del-mis" data-id="${stu.id}" data-mid="${mid}" aria-label="Tirar a missão extra de ${esc(stu.nm)}" title="Tirar esta missão extra">✕</button></div>`
     : `<div class="stu-cell"><span>${esc(stu.nm)}</span>${etapa}<button class="btn-add-mis edit-only" data-act="add-mis" data-id="${stu.id}" title="Outra missão para este aluno no mesmo dia" aria-label="Mais uma missão para ${esc(stu.nm)}">+ missão</button></div>`;

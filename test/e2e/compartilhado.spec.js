@@ -220,14 +220,39 @@ test.describe('Modo compartilhado: gravação, conflitos e link da escala', () =
     await irPara(page, 'rec');
     await page.locator('#eqs input[data-id="PR-BTB"]').uncheck();
     await expect(page.locator('#aviso-sync')).toBeVisible();
-    await irPara(page, 'alu');
-    await page.locator('#s-alu [data-vista-alu="cursos"]').click();
+    await irPara(page, 'cur');
     await expect(page.locator('#cursos')).toContainText('Só o Administrador muda; aqui é consulta.');
-    await expect(page.locator('#cursos [data-act="curso-nova"]')).toHaveCount(0);
+    await expect(page.locator('#cursos [data-act="missao-nova"]')).toHaveCount(0);
     await irPara(page, 'ins');
     await page.locator('#s-ins [data-vista-ins="cadastro"]').click();
     await expect(page.locator('#limites-lei [data-limite="vooMesH"]')).toBeDisabled();
     await expect(page.locator('#limites-lei [data-limites-padrao]')).toBeDisabled();
+    expect(erros).toEqual([]);
+    await contexto.close();
+  });
+
+  // A recusa do servidor pode chegar com outra aba aberta (a gravação demorou): a aba Cursos aberta é refeita na hora e
+  // fica só para consulta, sem precisar trocar de aba
+  test('o conflito que chega com a aba Cursos aberta tira dela os controles de quem muda', async ({ browser }) => {
+    const contexto = await novoContexto(browser);
+    const servidor = await instalarSupabaseFalso(contexto, comDados());
+    const page = await contexto.newPage();
+    const erros = vigiarErros(page, { statusEsperados: [409] });
+    await entrar(page, CONTAS.administrador);
+    const doColega = structuredClone(servidor.dias.get(AMANHA).conteudo);
+    doColega.av['PR-IGU'] = false;
+    servidor.alterarDiaPorOutraPessoa(AMANHA, doColega);
+    const liberar = servidor.segurarGravacoes();
+    await irPara(page, 'rec');
+    await page.locator('#eqs input[data-id="PR-BTB"]').uncheck();
+    await irPara(page, 'cur');
+    await expect(page.locator('#cursos')).toContainText('Só o Administrador muda.');
+    await expect(page.locator('#cursos [data-act="missao-nova"]')).toHaveCount(3);
+    liberar();
+    await expect(page.locator('#aviso-sync')).toBeVisible();
+    await expect(page.locator('#s-cur')).toBeVisible();
+    await expect(page.locator('#cursos')).toContainText('Só o Administrador muda; aqui é consulta.');
+    await expect(page.locator('#cursos [data-act="missao-nova"]')).toHaveCount(0);
     expect(erros).toEqual([]);
     await contexto.close();
   });

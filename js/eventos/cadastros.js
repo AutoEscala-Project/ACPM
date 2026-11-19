@@ -3,12 +3,12 @@
 import { gravarAlteracao, mostrarNoHistorico, aindaNaoAbriu } from '../actions.js';
 import { WIN, PRE } from '../config.js';
 import { normalizarCursoDoAluno } from '../cursos.js';
-import { $, showToast, focusLast } from '../dom.js';
+import { $, showToast, focusLast, algumDialogoAberto, gavetaDoEsc } from '../dom.js';
 import { nomeLimpo, numeroBr } from '../format.js';
 import { habilitacoesDoNivel, normalizarHabilitacoes, nomeDaHabilitacao } from '../habilitacoes.js';
 import { LIMITES_DA_LEI, normalizarLimites, comHorasExternas } from '../limites.js';
 import { comRepousoDoNoturno } from '../noturno.js';
-import { blank } from '../rules.js';
+import { blank, pesoDigitado, ERRO_DO_PESO } from '../rules.js';
 import { fixoPeloStatus } from '../fixos.js';
 import { S, DATA, insBy, stuBy } from '../state.js';
 import { confirmado } from './confirmacao.js';
@@ -16,10 +16,10 @@ import { aoAcionar, aoMudarCampo } from './registro.js';
 import { rIns, rAlu, applyInstructorFilters, preencherFiltroDeHabilitacoes, mostrarVistaDosInstrutores, abrirPainelDoInstrutor, fecharPainelDoInstrutor, atualizarLinhaDoCadastro, atualizarLinhaDoAluno, rPainelDoInstrutor, rLimites, podeEditarLimites } from '../views/cadastros.js';
 import { abrirPainelDeDados, fecharPainelDeDados, salvarPainelDeDados } from '../views/dados-pessoais.js';
 import { rDem } from '../views/demanda.js';
-import { dialogoDeStatusAberto } from '../views/dialogo-status.js';
 
 // Dados pessoais de um aluno ou instrutor: o botão da linha abre o painel; Cancelar, ✕ e Esc fecham (o foco volta para
-// o botão). Salvar valida e grava; o histórico registra só os nomes dos campos que mudaram
+// o botão; o Esc, quando o painel é a gaveta de cima ou tem o foco: js/dom.js). Salvar valida e grava; o histórico
+// registra só os nomes dos campos que mudaram
 document.addEventListener('click', e => {
   const botao = e.target.closest('[data-dados]');
   if (botao) {
@@ -30,7 +30,7 @@ document.addEventListener('click', e => {
   if (e.target.closest('#btn-fechar-dados, #btn-cancelar-dados')) fecharPainelDeDados(true);
 });
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape' && !$('#painel-dados').hidden && !dialogoDeStatusAberto()) fecharPainelDeDados(true);
+  if (e.key === 'Escape' && gavetaDoEsc(e) === $('#painel-dados') && !algumDialogoAberto()) fecharPainelDeDados(true);
 });
 document.addEventListener('submit', async e => {
   if (e.target.id !== 'form-dados') return;
@@ -42,12 +42,14 @@ document.addEventListener('submit', async e => {
   if (salvo.historico && salvo.data === DATA) mostrarNoHistorico(salvo.historico);
 });
 
-// Painel das habilitações de um instrutor: ✕ e Esc fecham (o foco volta para o botão que abriu)
+// Painel das habilitações de um instrutor: ✕ e Esc fecham (o foco volta para o botão que abriu; o Esc, quando o painel
+// é a gaveta de cima ou tem o foco). Ele continua aberto nas outras abas: com um diálogo aberto por cima (o do status,
+// na Escala), o Esc fecha só o diálogo
 document.addEventListener('click', e => {
   if (e.target.closest('#btn-fechar-painel-instrutor')) fecharPainelDoInstrutor(true);
 });
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape' && !$('#painel-instrutor').hidden) fecharPainelDoInstrutor(true);
+  if (e.key === 'Escape' && gavetaDoEsc(e) === $('#painel-instrutor') && !algumDialogoAberto()) fecharPainelDoInstrutor(true);
 });
 
 // Filtros: os instrutores (nome, habilitação) e os alunos (nome)
@@ -110,9 +112,10 @@ aoAcionar(['deli', 'dels'], (b, { id }) => {
     S.stu.forEach(s => s.bl = s.bl.filter(v => v !== id));
     S.stu.forEach(s => { if (s.voaCom) s.voaCom = s.voaCom.filter(v => v !== id); if (s.voaCom && !s.voaCom.length) delete s.voaCom; });
     // Os pedidos do dia com o instrutor escolhido voltam para a escolha do app, e os voos fixos pela escolha na Escala
-    // são soltos (os da escala aprovada e os fixados pelo status ficam, em conflito, com as sugestões)
+    // são soltos (os da escala aprovada, os fixados pelo status e os agendados na Escala ficam, em conflito, com as
+    // sugestões)
     S.stu.forEach(s => [s, ...(s.extra || [])].forEach(p => { if (p.insId === id) delete p.insId; }));
-    S.fixos = Object.fromEntries(Object.entries(S.fixos || {}).filter(([k, p]) => !(p.escolhido && p.insId === id && !S.aprovacao && !fixoPeloStatus(k, S.fStatus))));
+    S.fixos = Object.fromEntries(Object.entries(S.fixos || {}).filter(([k, p]) => !(p.escolhido && !p.agendado && p.insId === id && !S.aprovacao && !fixoPeloStatus(k, S.fStatus))));
     gravarAlteracao('exc', `Instrutor excluído: ${target ? target.nm : id}`);
   } else {
     const target = stuBy(id);
@@ -121,6 +124,11 @@ aoAcionar(['deli', 'dels'], (b, { id }) => {
   }
   rIns(); rAlu(); rDem();
 });
+
+// O peso digitado no cadastro (aluno ou instrutor): vazio é sem peso (0); zero, negativo, acima de 300 kg ou um texto
+// que não é número não vale (null): o aviso aparece e o campo volta ao peso de antes. O texto que não é número chega
+// vazio (o campo é type=number), mas com validity.badInput: ele não apaga o peso
+const pesoDoCampo = campo => (campo.value.trim() === '' && !campo.validity.badInput ? 0 : pesoDigitado(campo.value));
 
 // Os campos de um instrutor
 aoMudarCampo('i', (t, { f, id }) => {
@@ -136,8 +144,10 @@ aoMudarCampo('i', (t, { f, id }) => {
     x.nm = nomeLimpo(t.value, x.nm);
     historico = ['mod', `Instrutor: ${old} → ${x.nm}`];
   } else if (f === 'kg') {
-    x.kg = +t.value || 0;
-    historico = ['mod', `Peso ${x.nm}: ${x.kg} kg`];
+    const kg = pesoDoCampo(t);
+    if (kg === null) { showToast(ERRO_DO_PESO); t.value = x.kg || ''; return; }
+    x.kg = kg;
+    historico = ['mod', `Peso ${x.nm}: ${numeroBr(x.kg)} kg`];
   } else if (f === 'hab') {
     const h = t.dataset.h;
     x.hab = normalizarHabilitacoes(t.checked ? [...x.hab, h] : x.hab.filter(k => k !== h));
@@ -178,8 +188,10 @@ aoMudarCampo('s', (t, { f, id }) => {
     s.nm = nomeLimpo(t.value, s.nm);
     historico = ['mod', `Aluno: ${old} → ${s.nm}`];
   } else if (f === 'kg') {
-    s.kg = +t.value || 0;
-    historico = ['mod', `Peso ${s.nm}: ${s.kg} kg`];
+    const kg = pesoDoCampo(t);
+    if (kg === null) { showToast(ERRO_DO_PESO); t.value = s.kg || ''; return; }
+    s.kg = kg;
+    historico = ['mod', `Peso ${s.nm}: ${numeroBr(s.kg)} kg`];
   } else if (f === 'bl' && t.value) {
     s.bl.push(+t.value);
     // Quem não voa com o aluno sai do “Priorizar com” dele
@@ -192,7 +204,7 @@ aoMudarCampo('s', (t, { f, id }) => {
     const ins = insBy(+t.value);
     historico = ['mod', `${s.nm}: priorizar com ${ins ? ins.nm : ''}`];
   } else if (f === 'curso') {
-    // O curso do aluno
+    // O curso do aluno: qualquer sigla no formato (também a de um curso que o Administrador criou na aba Cursos)
     const curso = normalizarCursoDoAluno(t.value);
     if (curso) s.curso = curso;
     else delete s.curso;
@@ -200,8 +212,8 @@ aoMudarCampo('s', (t, { f, id }) => {
   }
   gravarAlteracao(...historico);
   atualizarLinhaDoAluno(s, { naoEscalar: f === 'bl', voaComMudou: f === 'voaCom' });
-  // A Demanda mostra o nome do aluno e o “Priorizar com” dele (no Automático do instrutor)
-  if (['nm', 'voaCom', 'bl'].includes(f)) rDem();
+  // A Demanda mostra o nome do aluno, o “Priorizar com” dele (no Automático do instrutor) e as missões do curso dele
+  if (['nm', 'voaCom', 'bl', 'curso'].includes(f)) rDem();
 });
 
 // Limites da lei, no cadastro dos instrutores: só o Administrador muda (neste navegador, o Operador). Vazio é

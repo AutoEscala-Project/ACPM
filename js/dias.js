@@ -14,9 +14,11 @@ import { CRITERIOS_PADRAO, normalizarCriterios } from './criterios.js';
 import { normalizarCursos } from './cursos.js';
 import { dataIsoValida } from './format.js';
 
-// jan: disponibilidade do aluno (só quando o pedido tem uma); etapa: o código da missão do curso;
-// solicitacao: o id do pedido da agenda que virou este voo; insId: o instrutor escolhido pelo operador (só quando há um)
-const CAMPOS_DO_PEDIDO = ['fly', 'mis', 'eq', 'p1', 'p2', 'nb', 'ss', 'pr', 'jan', 'etapa', 'solicitacao', 'insId'];
+// Os campos do pedido do dia (o pedido principal é o próprio aluno: o resto dele é do cadastro). jan: disponibilidade do
+// aluno (só quando o pedido tem uma); etapa: o código da missão do curso; solicitacao: o id do pedido da agenda que virou
+// este voo; insId: o instrutor escolhido pelo operador (só quando há um). Desfazer um voo agendado na Escala devolve
+// estes campos do pedido como estavam (js/reversoes.js)
+export const CAMPOS_DO_PEDIDO = ['fly', 'mis', 'eq', 'p1', 'p2', 'nb', 'ss', 'pr', 'jan', 'etapa', 'solicitacao', 'insId', 'cursoDaEtapa'];
 
 // Cada recurso da frota começa disponível; o dia guarda só o que muda
 const avDaFrota = frota => Object.fromEntries(frota.map(f => [f.reg, true]));

@@ -149,13 +149,21 @@ aoAcionar('cancelar-horarios', () => fecharEditorDosHorarios());
 aoAcionar('salvar-horarios', () => salvarHorarios());
 
 // Salvar os horários do editor: a lista nova da categoria, os pedidos dela ajustados e uma entrada no histórico que desfaz
-// os dois. Sem mudança, só fecha
+// os dois. Sem mudança, só fecha. O rascunho parte da lista de quando o editor abriu: se a lista da categoria mudou
+// depois (a data aberta foi lida de novo, com o cadastro que outra pessoa mudou, ou o histórico reverteu os horários),
+// salvar apagaria essa mudança sem conflito. Nada é salvo, e o editor fecha com o aviso
+const mesmaLista = (a, b) => a.length === b.length && a.every((m, i) => m === b[i]);
 function salvarHorarios() {
   const rascunho = rascunhoDosHorarios();
   if (!rascunho) return;
-  const { cat, lista } = rascunho;
+  const { cat, lista, base } = rascunho;
   const anterior = [...((S.horarios && S.horarios[cat]) || [])];
-  if (anterior.length === lista.length && anterior.every((m, i) => m === lista[i])) { fecharEditorDosHorarios(); return; }
+  if (mesmaLista(anterior, lista)) { fecharEditorDosHorarios(); return; }
+  if (!mesmaLista(anterior, base)) {
+    fecharEditorDosHorarios();
+    showToast(`Os horários do ${NOMES_DAS_CATEGORIAS[cat]} mudaram depois que o editor abriu: nada foi salvo. Confira a lista e edite de novo.`);
+    return;
+  }
   S.horarios = { ...S.horarios, [cat]: lista };
   const pedidos = [];
   S.stu.forEach(s => [s, ...(s.extra || [])].forEach(p => {

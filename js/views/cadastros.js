@@ -5,16 +5,16 @@ import { WIN, PRE, T, AIRCRAFT_EQ_TYPES, MINUTOS_DO_DIA } from '../config.js';
 import { HABILITACOES, nomeDaHabilitacao } from '../habilitacoes.js';
 import { FROTA_INICIAL, habilitacaoDoAviao } from '../frota.js';
 import { esc, hm, opts, LIMITE_DO_NOME, numeroBr } from '../format.js';
-import { S, DATA, insBy, isGestor, voosQueVoam } from '../state.js';
-import { $ } from '../dom.js';
+import { S, DATA, insBy, isGestor, voosQueVoam, dadoIndisponivel } from '../state.js';
+import { $, abrirGaveta } from '../dom.js';
 import { botaoDeDica } from '../dicas.js';
 import { canacDe } from './dados-pessoais.js';
 import { normalizarLimites } from '../limites.js';
 import { ApiClient } from '../storage.js';
 import { gerenciaContas } from '../perfis.js';
-import { CURSOS } from '../cursos.js';
 import { progressoDoAluno } from './etapas.js';
 import { unidadeDoVoo, umPorUnidade } from '../voo.js';
+import { CURSOS } from '../cursos.js';
 
 const ROTULO = new Map(HABILITACOES.map(h => [h.id, h.curto]));
 // No cadastro, todas na ordem do painel; na grade do dia, só as que mais distinguem o instrutor
@@ -111,7 +111,7 @@ function linhaDoCadastro(x) {
   return `<tr class="cd" ${atributos(x)}>
     <td><input class="nm" data-f="nm" value="${esc(x.nm)}" maxlength="${LIMITE_DO_NOME}" aria-label="Nome do instrutor"></td>
     <td class="c-canac so-dados">${esc(canacDe('instrutor', x.id))}</td>
-    <td><input type="number" min="0" max="200" data-f="kg" value="${x.kg || ''}" placeholder="sem peso" aria-label="Peso de ${esc(x.nm)} em kg"${x.kg ? '' : ' class="falta"'}></td>
+    <td><input type="number" min="1" max="300" data-f="kg" value="${x.kg || ''}" placeholder="sem peso" aria-label="Peso de ${esc(x.nm)} em kg"${x.kg ? '' : ' class="falta"'}></td>
     <td><span class="habs-resumo">${esc(resumoDasHabilitacoes(x)) || 'Nenhuma'}</span></td>
     <td class="acoes"><button type="button" class="btn quiet so-dados" data-dados="instrutor:${x.id}" aria-label="Dados pessoais de ${esc(x.nm)}">Dados pessoais</button><button class="btn quiet edit-only" data-act="editar-habs" data-id="${x.id}">Editar habilitações</button><button class="x edit-only" data-act="deli" aria-label="Excluir ${esc(x.nm)}">✕</button></td>
   </tr>`;
@@ -224,10 +224,11 @@ export function rLimites() {
     <button type="button" class="btn quiet" data-limites-padrao${desligado}>Voltar aos valores da lei</button>`;
 }
 
+// O painel abre por cima das outras gavetas abertas (também quando já estava aberto, com outro instrutor)
 export function abrirPainelDoInstrutor(id) {
   const painel = $('#painel-instrutor');
   painel.dataset.id = id;
-  painel.hidden = false;
+  abrirGaveta(painel);
   rPainelDoInstrutor();
   $('#btn-fechar-painel-instrutor').focus();
 }
@@ -253,11 +254,23 @@ function voaCom(s) {
     `<select data-f="voaCom" class="edit-only" aria-label="Priorizar com"><option value="">Priorizar com…</option>${S.ins.filter(x => !pares.includes(x.id) && !s.bl.includes(x.id)).map(x => `<option value="${x.id}">${esc(x.nm)}</option>`).join('')}</select>`;
 }
 
+// O curso do aluno: os cursos ativos (a aba Cursos), e o curso dele quando está encerrado ("(encerrado)") ou não existe
+// ("(curso desconhecido)"). Sem os programas lidos, os três cursos com que o app começa (o servidor sempre os tem:
+// nenhum curso é apagado) e o curso dele que não é um deles, só pela sigla (nada é dito sobre ele)
+function opcoesDoCurso(s) {
+  const semProgramas = dadoIndisponivel('cursos') || !(S.programa || []).length;
+  const programa = semProgramas ? CURSOS.map(([sigla, nome]) => ({ sigla, nome, ativo: true })) : S.programa;
+  const atual = s.curso ? programa.find(c => c.sigla === s.curso) : null;
+  const doAluno = !s.curso || (atual && atual.ativo) ? []
+    : [[s.curso, atual ? `${s.curso} · ${atual.nome} (encerrado)` : semProgramas ? s.curso : `${s.curso} (curso desconhecido)`]];
+  return opts([['', '—'], ...programa.filter(c => c.ativo).map(c => [c.sigla, `${c.sigla} · ${c.nome}`]), ...doAluno], s.curso || '');
+}
+
 const linhaDoAluno = s => `<tr class="cd" data-k="s" data-id="${s.id}" data-nm="${esc(s.nm.toLowerCase())}">
   <td><input class="nm" data-f="nm" value="${esc(s.nm)}" maxlength="${LIMITE_DO_NOME}" aria-label="Nome do aluno"></td>
   <td class="c-canac so-dados">${esc(canacDe('aluno', s.id))}</td>
-  <td class="c-curso"><select data-f="curso" aria-label="Curso de ${esc(s.nm)}"${isGestor() ? ' disabled' : ''}>${opts([['', '—'], ...CURSOS.map(([id, nome]) => [id, `${id} · ${nome}`])], s.curso || '')}</select>${progressoDoAluno(s)}</td>
-  <td><input type="number" min="0" max="200" data-f="kg" value="${s.kg || ''}" placeholder="sem peso" aria-label="Peso de ${esc(s.nm)} em kg"${s.kg ? '' : ' class="falta"'}></td>
+  <td class="c-curso"><select data-f="curso" aria-label="Curso de ${esc(s.nm)}"${isGestor() ? ' disabled' : ''}>${opcoesDoCurso(s)}</select>${progressoDoAluno(s)}</td>
+  <td><input type="number" min="1" max="300" data-f="kg" value="${s.kg || ''}" placeholder="sem peso" aria-label="Peso de ${esc(s.nm)} em kg"${s.kg ? '' : ' class="falta"'}></td>
   <td class="c-voa-com"><div class="bl voa-com">${voaCom(s)}</div></td>
   <td><div class="bl nao-escalar">${naoEscalarCom(s)}</div></td>
   <td class="acoes"><button type="button" class="btn quiet so-dados" data-dados="aluno:${s.id}" aria-label="Dados pessoais de ${esc(s.nm)}">Dados pessoais</button><button class="x edit-only" data-act="dels" aria-label="Excluir ${esc(s.nm)}">✕</button></td>
@@ -279,7 +292,9 @@ export function atualizarLinhaDoAluno(s, { naoEscalar = false, voaComMudou = fal
   kg.value = s.kg || '';
   kg.classList.toggle('falta', !s.kg);
   kg.setAttribute('aria-label', `Peso de ${s.nm} em kg`);
+  // As opções acompanham o curso do aluno (o encerrado de que ele saiu não fica na lista)
   const curso = linha.querySelector('[data-f="curso"]');
+  curso.innerHTML = opcoesDoCurso(s);
   curso.value = s.curso || '';
   curso.setAttribute('aria-label', `Curso de ${s.nm}`);
   const progresso = linha.querySelector('.progresso');

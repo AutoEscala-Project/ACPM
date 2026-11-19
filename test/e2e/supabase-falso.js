@@ -1,7 +1,10 @@
 // Servidor Supabase falso para os testes E2E, atendido por rotas do Playwright (sem rede).
 // Segue o contrato do banco real (supabase/tests/database): login por e-mail e senha, perfil por conta,
 // documentos e escalas por data com versão (salvar_documento e salvar_dia respondem 409 / PT409 em conflito e
-// 403 sem perfil de operador) e histórico que só cresce (registrar_historico e importar_historico).
+// 403 sem perfil de operador), histórico que só cresce (registrar_historico e importar_historico) e o programa dos
+// cursos nas tabelas (programa_dos_cursos, salvar_curso e importar_cursos, com as regras da gravação de js/programa.js,
+// as mesmas do modo local).
+import { createHash } from 'node:crypto';
 import { separar } from '../../js/dias.js';
 import { migrarCadastro, migrarDia } from '../../js/migracoes.js';
 import { prazoDaAgendaPermite } from '../../js/agenda.js';
@@ -9,6 +12,8 @@ import { gravarDadosPessoais, semQuemSaiu } from '../../js/dados-pessoais.js';
 import { quadroDoDia } from '../../js/quadro.js';
 import { acumularHoras } from '../../js/limites.js';
 import { situacaoPorMissao, validarRegistro } from '../../js/resultados.js';
+import { normalizarCursos } from '../../js/cursos.js';
+import { cursosIniciais, gravarCurso, importarProgramas, programaComResultados, programaDoLegado } from '../../js/programa.js';
 
 export const URL_TESTE = 'https://acpm-teste.supabase.invalid';
 
@@ -28,10 +33,40 @@ export function documentosFase3(estado, data) {
   return { documentos: { cadastro }, dias: { [data]: { ...dia, resultado: null } } };
 }
 
-// Os mesmos documentos no formato atual (o que o app grava hoje), com a frota do estado (ou a inicial)
+// O relógio do servidor, o mesmo instante do relógio fixo das páginas (AGORA, em test/e2e/fixtures.js)
+const RELOGIO_DAS_PAGINAS = '2026-11-10T12:00:00-03:00';
+
+// O id (uuid) de uma fase ou de uma missão do programa trazido do cadastro, tirado da sigla e do código (a fase única
+// do curso usa o nome dela, "Programa"): o mesmo estado dá sempre os mesmos ids
+const idDoLegado = (sigla, codigo) => {
+  const h = createHash('sha1').update(`${sigla}:${codigo}`).digest('hex');
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20, 32)}`;
+};
+
+// O programa guardado no cadastro (os cursos do estado) como o banco fica depois da conversão única (importar_cursos,
+// pela mesma regra: importarProgramas), feita pelo operador de teste no relógio das páginas: o programa de cada curso
+// (programaDoLegado de normalizarCursos, com os ids tirados da sigla e do código) entra no lugar do dos cursos com que o
+// banco começa. O curso com missões fica numa fase só, "Programa", na versão 2, com a versão registrada da conversão; o
+// curso sem missões é igual ao do começo e fica como estava (sem fases, na versão 1). No formato de programa_dos_cursos:
+// as alterações de cada curso, a mais recente primeiro
+function programaConvertido(cursosDoCadastro) {
+  const { cursos, alteracoes } = importarProgramas({ cursos: cursosIniciais(), cadastro: null }, {
+    programas: programaDoLegado(normalizarCursos(cursosDoCadastro), idDoLegado), versaoDoCadastro: 0, autor: CONTAS.operador.nome,
+    agora: new Date(RELOGIO_DAS_PAGINAS).toISOString()
+  });
+  return cursos.map(c => ({ ...c, alteracoes: alteracoes.filter(a => a.curso === c.sigla).reverse().map(({ curso, ...a }) => a) }));
+}
+
+// Os mesmos documentos no formato atual (o que o app grava hoje), com a frota do estado (ou a inicial), e o programa do
+// cadastro já nas tabelas dos cursos, como a conversão única deixa (cursos). Com o cadastro no formato atual, o app não
+// faz a conversão: sem o programa nas tabelas, ficaria sem programa nenhum
 export function documentosAtuais(estado, data) {
   const { cadastro, dia } = separar(estado);
-  return { documentos: { cadastro: migrarCadastro(cadastro) }, dias: { [data]: migrarDia({ ...dia, resultado: null }) } };
+  return {
+    documentos: { cadastro: migrarCadastro(cadastro) },
+    dias: { [data]: migrarDia({ ...dia, resultado: null }) },
+    cursos: programaConvertido(estado.cursos)
+  };
 }
 
 const base64url = obj => Buffer.from(JSON.stringify(obj)).toString('base64url');
@@ -65,7 +100,10 @@ const LINHAS_POR_CONSULTA = 1000;
 
 // Um servidor pode atender vários contextos do navegador (ex.: operador e gestor vendo os mesmos dados)
 // agora: o relógio do servidor para o prazo da agenda (o mesmo instante do relógio fixo das páginas)
-export function criarSupabaseFalso({ documentos = {}, dias = {}, historico: historicoInicial = [], agora = new Date('2026-11-10T12:00:00-03:00'), nomes = {} } = {}) {
+// cursos: o programa dos cursos nas tabelas, no formato de programa_dos_cursos (sem comResultados, que vem dos
+// resultados; as alteracoes de cada curso, a mais recente primeiro, são as versões registradas dele, e podem faltar);
+// sem ele, os cursos com que o banco começa (PP, PC e INVA, vazios)
+export function criarSupabaseFalso({ documentos = {}, dias = {}, historico: historicoInicial = [], cursos: cursosGuardados = cursosIniciais(), agora = new Date(RELOGIO_DAS_PAGINAS), nomes = {} } = {}) {
   const banco = new Map(Object.entries(documentos).map(([chave, conteudo]) => [chave, { conteudo, versao: 1 }]));
   const tabelaDias = new Map(Object.entries(dias).map(([data, conteudo]) => [data, { conteudo, versao: 1 }]));
   // As entradas do histórico já gravadas (no formato da tabela historico)
@@ -75,6 +113,13 @@ export function criarSupabaseFalso({ documentos = {}, dias = {}, historico: hist
   const dadosPessoais = new Map();
   // Resultados das missões dos cursos: só acréscimo
   const resultados = [];
+  // O programa dos cursos (cursos, fases e missões), com o padrão das colunas no que faltar (ordem 0, ativo, versão 1;
+  // sem fases nem missões), e as versões registradas de cada curso ({ curso, versao, descricao, registrado_em,
+  // registrado_por }), na ordem. As regras da gravação devolvem a lista nova: cada gravação troca a lista inteira
+  const iniciais = structuredClone(cursosGuardados);
+  let cursos = iniciais.map(({ alteracoes, ...c }) => ({ ordem: 0, ativo: true, versao: 1, fases: [], missoes: [], ...c }));
+  const alteracoesDosCursos = iniciais.flatMap(c => (Array.isArray(c.alteracoes) ? [...c.alteracoes].reverse() : []).map(a => ({ curso: c.sigla, ...a })));
+  let gravacoesDosCursos = 0;
   const sessoes = new Map();
   // Contas criadas pelo administrador, senhas e e-mails trocados e pedidos de troca de e-mail (só neste servidor)
   const contasCriadas = [];
@@ -117,6 +162,18 @@ export function criarSupabaseFalso({ documentos = {}, dias = {}, historico: hist
     mapa.set(chave, { conteudo, versao: versaoAtual + 1 });
     return [200, versaoAtual + 1];
   };
+  // O que as regras da gravação dos cursos conferem (gravarCurso e importarProgramas, de js/programa.js), como no banco:
+  // os cursos guardados, os resultados (o código com resultados não muda) e o cadastro (o formato e a versão dele, ou
+  // null sem cadastro). Com o cadastro antes do formato dos cursos (FORMATO_DOS_CURSOS, de js/migracoes.js), salvar_curso
+  // espera a conversão; dele em diante, importar_cursos não grava mais nada
+  const estadoDosCursos = () => {
+    const cadastro = banco.get('cadastro');
+    return { cursos, resultados, cadastro: cadastro ? { esquema: esquema(cadastro.conteudo), versao: cadastro.versao } : null };
+  };
+  // Quem grava nos cursos, como o banco registra (o nome do perfil, senão o e-mail), e quando: no relógio das páginas,
+  // um instante depois a cada gravação
+  const autorNosCursos = c => nomes[c.id] || c.nome || emailDe(c);
+  const agoraNosCursos = () => new Date(agora.getTime() + gravacoesDosCursos++).toISOString();
 
   const atender = async route => {
     const req = route.request();
@@ -124,6 +181,9 @@ export function criarSupabaseFalso({ documentos = {}, dias = {}, historico: hist
     const responder = (status, corpo) => route.fulfill({
       status, headers: { ...cors, 'Content-Type': 'application/json' }, body: corpo === undefined ? '' : JSON.stringify(corpo)
     });
+    // A recusa das regras dos cursos como o PostgREST manda: o status pelo código (PT409 e 23505: 409; P0002: 404;
+    // 22023 e 23514: 400), a mensagem e a dica (o campo; null quando não há)
+    const recusaDosCursos = e => responder({ PT409: 409, 23505: 409, P0002: 404 }[e.code] || 400, { code: e.code, message: e.message, hint: e.campo ?? null });
     if (desconectado) return route.abort('internetdisconnected');
     if (req.method() === 'OPTIONS') return route.fulfill({ status: 204, headers: cors });
     for (const [caminho, espera] of seguradas) if (url.pathname.endsWith(caminho)) await espera;
@@ -290,6 +350,26 @@ export function criarSupabaseFalso({ documentos = {}, dias = {}, historico: hist
           return responder({ 23505: 409, PT409: 409, P0002: 404 }[e.code] || 400, { code: e.code, message: e.message.replace(/\.$/, ''), hint: e.campo });
         }
       }
+      // O programa dos cursos: quem lê a escala lê todos os cursos num documento só (os outros perfis recebem a lista
+      // vazia), com os códigos que já têm resultados e as últimas alterações de cada curso
+      if (funcao === 'programa_dos_cursos') {
+        return responder(200, leEscala ? programaComResultados({ cursos, resultados, alteracoes: alteracoesDosCursos }) : []);
+      }
+      // Só o Administrador grava o curso inteiro, a partir da versão lida (0 cria), com as regras do banco; antes do
+      // formato dos cursos, espera a conversão (PT409, formato)
+      if (funcao === 'salvar_curso') {
+        if (!conta || conta.perfil !== 'administrador') return responder(403, { code: '42501', message: 'somente o Administrador altera os cursos' });
+        try {
+          const r = gravarCurso(estadoDosCursos(), {
+            sigla: args.p_sigla, versaoLida: args.p_versao_lida, conteudo: args.p_curso, descricao: args.p_descricao, autor: autorNosCursos(conta), agora: agoraNosCursos()
+          });
+          cursos = r.cursos;
+          alteracoesDosCursos.push(r.alteracao);
+          return responder(200, r.retorno);
+        } catch (e) {
+          return recusaDosCursos(e);
+        }
+      }
       if (!operador) return responder(403, { code: '42501', message: 'somente operadores podem alterar a escala' });
       if (funcao === 'salvar_documento') {
         // Depois da conversão (o cadastro existe), os documentos da versão anterior do app ficam só como cópia
@@ -314,11 +394,28 @@ export function criarSupabaseFalso({ documentos = {}, dias = {}, historico: hist
       }
       if (funcao === 'registrar_resultado') {
         try {
-          const r = validarRegistro({ aluno: args.p_aluno, curso: args.p_curso, missao: args.p_missao, resultado: args.p_resultado, data: args.p_data, voo: args.p_voo });
+          // O curso tem de existir: um dos cursos das tabelas (o encerrado também)
+          const r = validarRegistro({ aluno: args.p_aluno, curso: args.p_curso, missao: args.p_missao, resultado: args.p_resultado, data: args.p_data, voo: args.p_voo },
+            { cursos: cursos.map(c => c.sigla) });
           resultados.push({ id: resultados.length + 1, ...r, registrado_em: new Date(Date.now() + resultados.length).toISOString(), registrado_por: conta.nome });
           return responder(200, resultados.length);
         } catch (e) {
           return responder(400, { code: e.code, message: e.message });
+        }
+      }
+      // A conversão única do programa guardado no cadastro (importarProgramas): com o cadastro já no formato dos cursos,
+      // nada (0, nunca mais); com o cadastro alterado depois da leitura, PT409. Não é uma gravação de documento: não entra
+      // em gravacoes
+      if (funcao === 'importar_cursos') {
+        try {
+          const r = importarProgramas(estadoDosCursos(), {
+            programas: args.p_cursos, versaoDoCadastro: args.p_versao_do_cadastro, autor: autorNosCursos(conta), agora: agoraNosCursos()
+          });
+          cursos = r.cursos;
+          alteracoesDosCursos.push(...r.alteracoes);
+          return responder(200, r.retorno);
+        } catch (e) {
+          return recusaDosCursos(e);
         }
       }
       if (funcao === 'registrar_historico') {
@@ -346,6 +443,8 @@ export function criarSupabaseFalso({ documentos = {}, dias = {}, historico: hist
     solicitacoes,
     dadosPessoais,
     resultados,
+    // O programa dos cursos como está agora nas tabelas (cada gravação troca a lista)
+    get cursos() { return cursos; },
     contasCriadas,
     trocasDeEmail,
     senhaDe,

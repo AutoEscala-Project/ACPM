@@ -6,14 +6,16 @@ import { sugerirReparos } from '../reparo.js';
 import { GRUPO_DO_CONFLITO } from '../conflitos.js';
 import { nomeDoRecurso } from '../categorias.js';
 import { esc, hm, hojeISO, minutoDoDia } from '../format.js';
-import { $ } from '../dom.js';
+import { $, abrirGaveta } from '../dom.js';
 
 let opcoesAbertas = [];
 
 const vooDaChave = fKey => (RES && Array.isArray(RES.out) ? RES.out.find(o => o.fKey === fKey) : null);
 
-export const painelDeReparoAberto = () => Boolean($('#painel-reparo') && !$('#painel-reparo').hidden);
+const painelDeReparoAberto = () => Boolean($('#painel-reparo') && !$('#painel-reparo').hidden);
 
+// focar: aberta pelo botão "Sugestões" (o foco vai para a primeira sugestão, e a gaveta, por cima das outras abertas);
+// sem focar, a gaveta aberta é redesenhada no lugar em que está
 export function abrirPainelDeReparo(fKey, { focar = true } = {}) {
   const voo = vooDaChave(fKey);
   if (!voo || !voo.conflito) return;
@@ -37,7 +39,7 @@ export function abrirPainelDeReparo(fKey, { focar = true } = {}) {
       <span>${esc(o.mudancas || o.soltar ? o.texto : o.motivo ? `Motivo: ${o.motivo}` : 'Pede o motivo')}</span>
       <button type="button" class="btn${o.mudancas ? '' : ' sec'}" data-reparo-aplicar="${i}">${o.mudancas ? 'Aplicar' : o.soltar ? 'Soltar' : 'Cancelar o voo'}</button>
     </li>`).join('')}</ol>`;
-  painel.hidden = false;
+  if (focar || painel.hidden) abrirGaveta(painel);
   const primeiro = painel.querySelector('[data-reparo-aplicar]');
   if (focar && primeiro) primeiro.focus();
 }

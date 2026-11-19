@@ -6,7 +6,6 @@ import { setTLMode } from '../state.js';
 import { abrirAgenda } from '../views/agenda.js';
 import { alternarTodosDoBI } from '../views/bi.js';
 import { mostrarVistaDosInstrutores } from '../views/cadastros.js';
-import { mostrarVistaDosAlunos } from '../views/cursos.js';
 import { rOut, alternarTempo } from '../views/escala.js';
 import { acaoDoPainel } from '../views/painel-aeroporto.js';
 import { alternarGrupoDaFrota } from '../views/recursos.js';
@@ -46,8 +45,6 @@ document.addEventListener('click', e => {
   if (grupo) { alternarGrupoDaFrota(grupo.dataset.recolherGrupo); return; }
   const vistaIns = e.target.closest('[data-vista-ins]');
   if (vistaIns) { mostrarVistaDosInstrutores(vistaIns.dataset.vistaIns); return; }
-  const vistaAlu = e.target.closest('[data-vista-alu]');
-  if (vistaAlu) { mostrarVistaDosAlunos(vistaAlu.dataset.vistaAlu); return; }
   const todosDoBI = e.target.closest('[data-bi-todos]');
   if (todosDoBI) { alternarTodosDoBI(todosDoBI.dataset.biTodos); return; }
   // Links para uma parte do Manual

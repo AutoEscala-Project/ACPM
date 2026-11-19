@@ -53,6 +53,34 @@ test.describe('Tela da Escala', () => {
     await expect(page.locator('#out details.caixa.avisos summary')).toHaveText('2 avisos: 1 aluno sem peso · 1 instrutor sem peso');
   });
 
+  // O voo agendado na Escala fora das regras que a escala segue sozinha (o operador confirmou ao agendar): a etiqueta
+  // ao lado do horário, com o caso na dica, e o resumo conta os agendamentos (um por voo)
+  test('o voo agendado fora das regras: a etiqueta "fora da regra" com o caso na dica, e o resumo conta os agendamentos', async ({ page }) => {
+    const estado = cenario({ ins: [instrutor(1, 9), instrutor(2, 9)], stu: [aluno(1000, { p1: 390, p2: -1 }), aluno(1001, { p1: 980, p2: -1, nb: 2 }), aluno(1002, { p1: 500, p2: -1 })] });
+    // Às 07:00 (fora dos horários do C152) e das 16:20 às 18:20 (o voo de dia pousa até as 17:30)
+    estado.fixos = { '1000_0_1': { a: 420, b: 480, r: 'PR-VOB', insId: 1, agendado: true }, '1001_0_1': { a: 980, b: 1100, r: 'PR-VOC', insId: 2, agendado: true } };
+    await abrir(page, { estado });
+    await abrirEscala(page);
+    await expect(page.locator('#out details.caixa.avisos summary')).toHaveText('2 avisos: 2 agendamentos fora da regra');
+    const etiqueta = nome => page.locator('#out tbody tr:not(.win)', { hasText: nome }).locator('.c-hr .tag[data-dica="fora-da-regra"]');
+    await expect(etiqueta('Aluno 1000')).toHaveText('fora da regra');
+    await expect(etiqueta('Aluno 1002')).toHaveCount(0);
+    await etiqueta('Aluno 1000').click();
+    await expect(page.locator('#dica')).toHaveText(`Fora da regra Agendado às 07:00, fora dos horários de decolagem do C152. ${GLOSSARIO['fora-da-regra'].texto}`);
+    await expect(etiqueta('Aluno 1001')).toHaveAccessibleDescription(`Agendado até as 18:20: o voo de dia pousa até as 17:30. ${GLOSSARIO['fora-da-regra'].texto}`);
+  });
+
+  // Fora da escala aprovada, o voo fixo em conflito é de um agendamento, do instrutor escolhido na Escala ou de um status
+  test('o voo fixo em conflito sem a escala aprovada: "voo fixo em conflito", com o conflito do agendado', async ({ page }) => {
+    const estado = cenario({ ins: [instrutor(1, 9, { on: false }), instrutor(2, 9)], stu: [aluno(1000, { p1: 390, p2: -1 }), aluno(1001, { p1: 500, p2: -1 })] });
+    estado.fixos = { '1000_0_1': { a: 610, b: 670, r: 'PR-VOB', insId: 1, agendado: true } };
+    await abrir(page, { estado });
+    await abrirEscala(page);
+    const conflitos = page.locator('#out details.caixa.conflitos');
+    await expect(conflitos.locator('summary')).toHaveText('1 voo fixo em conflito');
+    await expect(conflitos.locator('.al.conf')).toHaveText('Aluno 1000 Conflito no voo agendado: o instrutor não está disponível. Sugestões');
+  });
+
   test('uma linha por voo: duração junto do horário, preferência só quando não é a 1ª, peso com o limite e status discreto', async ({ page }) => {
     await abrir(page, { estado: cenario({ ins: [instrutor(1, 9)], stu: [
       aluno(1000, { mis: 'Voo Local', eq: 'C152', p1: 0, p2: 1 }),
@@ -82,6 +110,27 @@ test.describe('Tela da Escala', () => {
     await expect(page.locator('#dica')).toContainText('Reduzir combustível Abastecer até 22 gal (4 a menos que o tanque cheio); o voo, o táxi e a reserva pedem 11 gal; autonomia de 3h23.');
     // Para o leitor de tela, o mesmo texto: o caso deste voo, depois a explicação do termo
     await expect(selo).toHaveAccessibleDescription(`Abastecer até 22 gal (4 a menos que o tanque cheio); o voo, o táxi e a reserva pedem 11 gal; autonomia de 3h23. ${GLOSSARIO['reduzir-combustivel'].texto}`);
+  });
+
+  // O agendamento grava no cadastro os pesos digitados, com décimos: a soma (40,1 + 40,7 dá 80.80000000000001 no ponto
+  // flutuante) aparece em décimos e com a vírgula, como no resumo do diálogo, na lista e no popup do mapa
+  test('os pesos com décimos digitados no agendamento: a lista e o popup mostram a soma em décimos, com a vírgula', async ({ page }) => {
+    await abrir(page, { estado: cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, { fly: false }), aluno(1001, { p1: 390, p2: -1 })] }) });
+    await abrirEscala(page);
+    await page.locator('#btn-agendar').click();
+    await page.locator('#agd-aluno').selectOption('1000');
+    await expect(page.locator('#agd-previa ul')).toContainText('Entra:');
+    await page.locator('#agd-kg-aluno').fill('40.1');
+    await page.locator('#agd-kg-instrutor').fill('40.7');
+    await expect(page.locator('#agd-peso-resumo')).toContainText('80,8 kg de 170 kg');
+    await page.locator('#agd-confirmar').click();
+    await expect(page.locator('#dlg-agendar')).toBeHidden();
+    const linha = page.locator('#out tbody tr:not(.win)', { hasText: 'Aluno 1000' });
+    await expect(linha.locator('.c-peso')).toHaveText('80,8 / 170 kg');
+    await page.locator('#s-esc [data-tl="eq"]').click();
+    await page.locator('#out .tl-bar', { hasText: 'Aluno 1000' }).click();
+    const pesoNoPopup = page.locator('#tl-pop .tl-pop-grid > span', { hasText: 'Peso Trip.:' }).locator('xpath=following-sibling::span[1]');
+    await expect(pesoNoPopup).toHaveText('80,8 kg');
   });
 
   test('turma de Ground: horário, missão, sala e instrutor uma vez só; cada aluno com o seu status e a sua ação', async ({ page }) => {
@@ -133,21 +182,21 @@ test.describe('Tela da Escala', () => {
   test('na Lista, cada horário recolhe e abre os voos dele (e continua assim quando a escala é refeita)', async ({ page }) => {
     await abrirComExemplo(page);
     await abrirEscala(page);
-    const botao = page.locator('#out tr.win').first().locator('button');
+    const botao = page.locator('#out tr.win').first().locator('button.win-btn');
     const voos = w => page.locator(`#out tbody tr[data-w="${w}"]:not(.win)`);
     await expect(botao).toHaveAttribute('aria-expanded', 'true');
     expect(await voos(0).count()).toBeGreaterThan(0);
     await botao.click();
-    await expect(page.locator('#out tr.win').first().locator('button')).toHaveAttribute('aria-expanded', 'false');
+    await expect(page.locator('#out tr.win').first().locator('button.win-btn')).toHaveAttribute('aria-expanded', 'false');
     await expect(voos(0).first()).toBeHidden();
     expect(await voos(0).evaluateAll(trs => trs.every(tr => tr.hidden))).toBe(true);
     await expect(voos(1).first()).toBeVisible();
 
     await page.locator('#s-esc [data-tl="eq"]').click();
     await page.locator('#s-esc [data-tl="lista"]').click();
-    await expect(page.locator('#out tr.win').first().locator('button')).toHaveAttribute('aria-expanded', 'false');
+    await expect(page.locator('#out tr.win').first().locator('button.win-btn')).toHaveAttribute('aria-expanded', 'false');
     await expect(voos(0).first()).toBeHidden();
-    await page.locator('#out tr.win').first().locator('button').click();
+    await page.locator('#out tr.win').first().locator('button.win-btn').click();
     await expect(voos(0).first()).toBeVisible();
   });
 
@@ -196,7 +245,7 @@ test.describe('Mapa: o popup do voo', () => {
   test('o voo da primeira linha abre o popup inteiro, por cima dos filtros e do cabeçalho', async ({ page }) => {
     await abrirComExemplo(page);
     await abrirMapa(page);
-    const barra = page.locator('#out .tl-row').first().locator('.tl-bar').first();
+    const barra = page.locator('#out .tl-row:has(.tl-bar)').first().locator('.tl-bar').first();
     await expect(barra).toHaveAttribute('aria-expanded', 'false');
     await barra.click();
     await expect(pop(page)).toBeVisible();

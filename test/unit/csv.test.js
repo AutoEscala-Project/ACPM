@@ -66,6 +66,15 @@ describe('CSV da escala por avião', () => {
     assert.equal(obs, 'Peso aluno + instrutor: 180 kg (limite do C152 com os tanques cheios: 170 kg) · combustível: abastecer até 22 gal (4 a menos); o voo, o táxi e a reserva pedem 11 gal');
   });
 
+  // Os pesos com décimos (o diálogo de agendamento grava o que o operador digita): a soma vai em décimos, com a vírgula,
+  // sem o resto do ponto flutuante (40,1 + 40,7 dá 80.80000000000001)
+  it('observações: o peso com décimos em décimos, com a vírgula, dentro e acima do limite', () => {
+    const obs = extra => linhasDoCsv(escala([voo('PR-BTB', 'C152', 390, extra)]))[0][5];
+    assert.equal(obs({ stuKg: 40.1, insKg: 40.7 }), 'Peso aluno + instrutor: 80,8 kg (limite do C152: 170 kg) · dentro do envelope');
+    assert.equal(obs({ stuKg: 85.3, insKg: 88.6, comb: { reduzirGal: 2, abastecerGal: 24, minimoGal: 11, autonomiaMin: 221 } }),
+      'Peso aluno + instrutor: 173,9 kg (limite do C152 com os tanques cheios: 170 kg) · combustível: abastecer até 24 gal (2 a menos); o voo, o táxi e a reserva pedem 11 gal');
+  });
+
   it('observações: avião que para para a revisão de 50 horas naquele dia', () => {
     const res = { ...escala([voo('PR-BTB', 'C152', 390), voo('PR-VOB', 'C152', 390)]), revisao: { 'PR-BTB': { inicio: 49, voadas: 1, fim: 50, paraAs: 450 }, 'PR-VOB': { inicio: 10, voadas: 1, fim: 11, paraAs: null } } };
     const [btb, vob] = linhasDoCsv(res);

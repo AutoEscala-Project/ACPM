@@ -1,9 +1,11 @@
 // A escala abrindo: até os dados da data chegarem, e depois de uma leitura que falhou, nada é gravado. Antes deles, o
 // estado da tela é o inicial (sem os alunos e os instrutores), mas o cadastro já foi lido, com a versão atual: gravar
 // nessa hora levaria o cadastro vazio por cima do de todos. Numa troca de data, a tela ainda é a da data anterior, com o
-// cadastro já lido de novo. Toda mudança é recusada, com o aviso, e a tela fica como estava. As datas são lidas uma de
-// cada vez (a versão que a gravação leva é a da leitura dos dados da tela), e nenhuma data é lida antes de a abertura
-// preparar os dados, nem depois de a preparação falhar
+// cadastro já lido de novo. Toda mudança é recusada, com o aviso, e a tela fica como estava: também o programa dos cursos
+// (a aba Cursos grava nas tabelas dos cursos, à parte do dia) e o agendamento na Escala (o diálogo nem abre). As datas são
+// lidas uma de cada vez (a versão que a gravação leva é a da leitura dos dados da tela), e nenhuma data é lida antes de a
+// abertura preparar os dados, nem depois de a preparação falhar. O que fica aberto na tela quando a data abre passa a
+// mostrar os dados dela
 import { test, expect, prepararContexto, vigiarErros, preencherLogin, entrar, irPara, abrirEscala, AMANHA, URL_APP } from './fixtures.js';
 import { criarSupabaseFalso, documentosAtuais, CONTAS } from './supabase-falso.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
@@ -37,10 +39,15 @@ async function novoContexto(browser, servidor) {
   return contexto;
 }
 
-// O cadastro do servidor: os alunos, os instrutores e o programa do PP
+// O cadastro do servidor: os alunos e os instrutores e, nas tabelas dos cursos, cada curso com a versão dele e o programa
+// do PP (os códigos, na ordem)
 const cadastroDe = servidor => {
   const { conteudo } = servidor.banco.get('cadastro');
-  return { alunos: conteudo.stu.map(s => s.nm), instrutores: conteudo.ins.map(i => i.nm), pp: conteudo.cursos.PP.map(m => m.id) };
+  const pp = servidor.cursos.find(c => c.sigla === 'PP');
+  return {
+    alunos: conteudo.stu.map(s => s.nm), instrutores: conteudo.ins.map(i => i.nm), cursos: servidor.cursos.map(c => `${c.sigla} v${c.versao}`),
+    pp: pp.missoes.filter(m => !m.removida).sort((a, b) => a.ordem - b.ordem).map(m => m.codigo)
+  };
 };
 
 // A mudança recusada mostra o aviso, uma vez (os avisos anteriores saem antes)
@@ -50,16 +57,12 @@ async function recusada(page, nome, mudar) {
   await expect(page.locator('#toast-box .toast'), nome).toHaveText([AVISO]);
 }
 
-// Os botões que já estão na tela antes de os dados chegarem, e o "+ Missão" de Alunos › Cursos (desenhado com o programa
-// vazio do estado inicial)
+// Os botões que já estão na tela antes de os dados chegarem: também "+ Novo curso" (a aba Cursos, ainda sem os cursos) e
+// "+ Agendar voo", na barra da Escala
 const BOTOES_DA_ABERTURA = [
   ['+ Novo aluno', async page => { await irPara(page, 'alu'); await page.locator('#s-alu [data-act="adds"]').click(); }],
   ['+ Novo instrutor', async page => { await irPara(page, 'ins'); await page.locator('#s-ins [data-act="addi"]').click(); }],
-  ['Alunos › Cursos › + Missão', async page => {
-    await irPara(page, 'alu');
-    await page.locator('#s-alu [data-vista-alu="cursos"]').click();
-    await page.locator('#cursos .curso[data-curso="PP"] [data-act="curso-nova"]').click();
-  }],
+  ['Cursos › + Novo curso', async page => { await irPara(page, 'cur'); await page.locator('#cur-novo').click(); }],
   ['+ Novo recurso', async page => {
     await irPara(page, 'rec');
     await page.locator('#btn-novo-recurso').click();
@@ -72,7 +75,8 @@ const BOTOES_DA_ABERTURA = [
     await page.locator('#btn-mais-dem').click();
     await page.locator('#clr').click();
   }],
-  ['Importar da agenda', async page => { await irPara(page, 'dem'); await page.locator('#importar-agenda').click(); }]
+  ['Importar da agenda', async page => { await irPara(page, 'dem'); await page.locator('#importar-agenda').click(); }],
+  ['+ Agendar voo', async page => { await irPara(page, 'esc'); await page.locator('#btn-agendar').click(); }]
 ];
 
 test.describe('A escala abrindo: nada é gravado antes de os dados da data chegarem', () => {
@@ -88,27 +92,35 @@ test.describe('A escala abrindo: nada é gravado antes de os dados da data chega
     await expect(page.locator('#usuario')).toBeVisible();
 
     for (const [nome, usar] of BOTOES_DA_ABERTURA) await recusada(page, nome, () => usar(page));
-    // A tela também ficou como estava: sem o aluno novo, a missão nova ou "Limpar demanda" armado
+    // A tela também ficou como estava: sem o aluno novo, o formulário do curso novo, o diálogo de agendar ou "Limpar
+    // demanda" armado
     await expect(page.locator('#alu tr.cd')).toHaveCount(0);
-    await expect(page.locator('#cursos tr[data-curso]')).toHaveCount(0);
+    await expect(page.locator('#cursos .curso')).toHaveCount(0);
+    await expect(page.locator('#form-curso')).toBeHidden();
+    await expect(page.locator('#dlg-agendar')).toBeHidden();
     await expect(page.locator('#clr')).toHaveText('Limpar demanda');
     expect(servidor.gravacoes).toEqual([]);
     expect(servidor.historico).toEqual([]);
     expect(cadastroDe(servidor)).toEqual(antes);
 
-    // Com os dados, os mesmos botões gravam, junto com o que já estava no cadastro
+    // Com os dados, os mesmos botões gravam, junto com o que já estava no cadastro. O programa do curso fica só nas tabelas
+    // dos cursos (fora do histórico da data), e "+ Agendar voo" abre o diálogo
     liberar();
     await expect(page.locator('body[data-pronto]')).toBeAttached();
     await irPara(page, 'alu');
-    await page.locator('#s-alu [data-vista-alu="alunos"]').click();
     await expect(page.locator('#alu tr.cd')).toHaveCount(2);
     await page.locator('#s-alu [data-act="adds"]').click();
     await expect.poll(() => cadastroDe(servidor).alunos).toEqual(['Aluno 1000', 'Aluno 1001', 'Novo aluno']);
-    await page.locator('#s-alu [data-vista-alu="cursos"]').click();
-    await page.locator('#cursos .curso[data-curso="PP"] [data-act="curso-nova"]').click();
+    await irPara(page, 'cur');
+    await page.locator('#cursos .curso[data-curso="PP"] [data-act="missao-nova"]').click();
     await expect.poll(() => cadastroDe(servidor).pp).toEqual(['PP-01', 'PP-02']);
     expect(cadastroDe(servidor).instrutores).toEqual(antes.instrutores);
-    await expect.poll(() => servidor.historico.map(h => h.descricao)).toEqual(['Aluno cadastrado: Novo aluno', 'Programa do PP: PP-02 incluída']);
+    await expect.poll(() => servidor.historico.map(h => h.descricao)).toEqual(['Aluno cadastrado: Novo aluno']);
+    await irPara(page, 'esc');
+    await page.locator('#btn-agendar').click();
+    await expect(page.locator('#dlg-agendar')).toBeVisible();
+    await page.locator('#agd-voltar').click();
+    await expect(page.locator('#dlg-agendar')).toBeHidden();
     expect(erros).toEqual([]);
     await contexto.close();
   });
@@ -150,6 +162,7 @@ test.describe('A escala abrindo: nada é gravado antes de os dados da data chega
     const contexto = await novoContexto(browser, servidor);
     const page = await contexto.newPage();
     const erros = vigiarErros(page);
+    const antes = cadastroDe(servidor);
     await entrar(page, CONTAS.administrador);
     await abrirEscala(page);
     const liberar = servidor.segurarLeiturasDeDias();
@@ -179,20 +192,20 @@ test.describe('A escala abrindo: nada é gravado antes de os dados da data chega
     await recusada(page, 'os limites da lei', async () => { await limite.fill('90'); await limite.press('Tab'); });
     await expect(limite).toHaveValue('100');
 
-    await irPara(page, 'alu');
-    await page.locator('#s-alu [data-vista-alu="cursos"]').click();
-    const nome = page.locator('#cursos tr[data-curso="PP"][data-i="0"] [data-cf="nome"]');
+    await irPara(page, 'cur');
+    const nome = page.locator('#cursos .curso[data-curso="PP"] tbody tr[data-i="0"] [data-cf="nome"]');
     await recusada(page, 'o programa do curso', async () => { await nome.fill('Primeiro voo'); await nome.press('Tab'); });
     await expect(nome).toHaveValue('Familiarização');
     expect(servidor.gravacoes).toEqual([]);
     expect(servidor.historico).toEqual([]);
     expect(servidor.resultados).toEqual([]);
+    expect(cadastroDe(servidor)).toEqual(antes);
 
     liberar();
     await expect(page.locator('#dt-rotulo')).toContainText('12/11');
     await nome.fill('Primeiro voo');
     await nome.press('Tab');
-    await expect.poll(() => servidor.banco.get('cadastro').conteudo.cursos.PP[0].nome).toBe('Primeiro voo');
+    await expect.poll(() => servidor.cursos.find(c => c.sigla === 'PP').missoes.find(m => m.codigo === 'PP-01').nome).toBe('Primeiro voo');
     expect(cadastroDe(servidor).alunos).toEqual(['Aluno 1000', 'Aluno 1001']);
     expect(erros).toEqual([]);
     await contexto.close();
@@ -427,5 +440,276 @@ test.describe('A escala abrindo: nada é gravado antes de os dados da data chega
     await page.reload();
     await expect(page.locator('#alu tr.cd')).toHaveCount(2);
     await expect(page.locator('#aviso-sync')).toBeHidden();
+  });
+});
+
+// O programa dos cursos (a aba Cursos grava nas tabelas dos cursos), o agendamento na Escala (pela barra, pelo "+" de um
+// horário da lista ou de uma linha do mapa, e pelo clique no mapa) e a missão do curso na Demanda também não mudam nada
+// com a tela da data anterior: enquanto outra data abre e depois de ela falhar, cada um recusa com o aviso, e a tela fica
+// como estava. Com a data aberta, valem de novo
+test.describe('Os cursos, o agendamento e a missão do curso: nada muda antes de a data abrir', () => {
+  // O PP com duas missões e um Noturno (a lista do trecho). O Aluno 1000, do PP, voa às 06:30 sem a missão do curso (a
+  // próxima é a PP-01, e as outras ficam em "Outra missão…"); a Maria Silva, sem curso, não voa
+  const PROGRAMA_DO_DIA = {
+    PP: [
+      { id: 'PP-01', nome: 'Familiarização', mis: 'Voo Local', eq: 'C152', nb: 1 },
+      { id: 'PP-02', nome: 'Manobras', mis: 'Voo Local', eq: 'C152', nb: 1 },
+      { id: 'NOT', nome: 'Noturno', mis: 'Noturno', eq: 'C172', nb: 1 }
+    ],
+    PC: [],
+    INVA: []
+  };
+  const estadoDoDia = () => ({
+    ...cenario({ ins: [instrutor(1, 9), instrutor(2, 9)], stu: [aluno(1000, { p1: 390, p2: -1 }, { curso: 'PP' }), aluno(1001, { fly: false }, { nm: 'Maria Silva' })] }),
+    cursos: PROGRAMA_DO_DIA, nid: 1002
+  });
+  // Amanhã e o dia 12 com a mesma demanda (o dia 12 já gravado, sem o voo que a Maria Silva agenda amanhã)
+  const DEPOIS = '2026-11-12';
+  function servidorDoDia() {
+    const documentos = documentosAtuais(estadoDoDia(), AMANHA);
+    return criarSupabaseFalso({ ...documentos, dias: { ...documentos.dias, [DEPOIS]: structuredClone(documentos.dias[AMANHA]) } });
+  }
+
+  const cursoPP = page => page.locator('#cursos .curso[data-curso="PP"]');
+  const trechoDoNoturno = page => cursoPP(page).locator('[data-cf="trecho"]');
+  const pedidoDoAluno = page => page.locator('#dem tr[data-k="d"][data-id="1000"][data-mid="0"]');
+  const dialogo = page => page.locator('#dlg-agendar');
+  // Uma linha do mapa sem voo nenhum (o clique nela agenda)
+  const faixaLivre = page => page.locator('#out .tl-row[data-r]:not(:has(.tl-bar)) .tl-track:not(.inerte)').first();
+  async function vistaDaEscala(page, vista) {
+    await irPara(page, 'esc');
+    await page.locator(`#s-esc [data-tl="${vista}"]`).click();
+    await expect(page.locator(vista === 'lista' ? '#out tr.win' : '#out .tl-row').first()).toBeVisible();
+  }
+  async function agendarAMaria(page) {
+    await expect(dialogo(page)).toBeVisible();
+    await page.locator('#agd-aluno').selectOption('1001');
+    await expect(page.locator('#agd-previa ul')).toContainText('Entra:');
+    await page.locator('#agd-confirmar').click();
+    await expect(dialogo(page)).toBeHidden();
+  }
+
+  async function abrirODia(browser, servidor, opcoes) {
+    const contexto = await novoContexto(browser, servidor);
+    const page = await contexto.newPage();
+    const erros = vigiarErros(page, opcoes);
+    await entrar(page, CONTAS.administrador);
+    // Na data aberta: a Maria Silva agendada pela barra da Escala (o Histórico desfaz) e o formulário do curso novo aberto,
+    // já preenchido
+    await irPara(page, 'esc');
+    await page.locator('#btn-agendar').click();
+    await agendarAMaria(page);
+    await expect.poll(() => servidor.historico.map(h => [h.data, h.descricao])).toEqual([[AMANHA, expect.stringMatching(/^Agendado na escala: Maria Silva/)]]);
+    await irPara(page, 'cur');
+    await page.locator('#cur-novo').click();
+    await page.locator('#cur-sigla').fill('MLTE');
+    await page.locator('#cur-nome').fill('Multimotor');
+    return { contexto, page, erros };
+  }
+
+  // Cada entrada com a tela da data anterior
+  const ENTRADAS = [
+    ['Cursos › + Missão', async page => { await irPara(page, 'cur'); await cursoPP(page).locator('[data-act="missao-nova"]').click(); }],
+    ['Cursos › o trecho do Noturno', async page => { await irPara(page, 'cur'); await trechoDoNoturno(page).selectOption('noite'); }],
+    ['Cursos › Usar o cronograma do PP', async page => { await irPara(page, 'cur'); await cursoPP(page).locator('[data-act="curso-modelo"]').click(); }],
+    ['Cursos › Encerrar o curso', async page => { await irPara(page, 'cur'); await cursoPP(page).locator('[data-act="curso-encerrar"]').click(); }],
+    ['Cursos › Criar o curso', async page => { await irPara(page, 'cur'); await page.getByRole('button', { name: 'Criar o curso' }).click(); }],
+    ['+ Agendar voo', async page => { await irPara(page, 'esc'); await page.locator('#btn-agendar').click(); }],
+    ['o + de um horário da lista', async page => { await vistaDaEscala(page, 'lista'); await page.locator('#out .win-agendar').first().click(); }],
+    ['o + de uma linha do mapa', async page => { await vistaDaEscala(page, 'eq'); await page.locator('#out .tl-agendar').first().click(); }],
+    ['um clique no mapa', async page => { await vistaDaEscala(page, 'eq'); await faixaLivre(page).click(); }],
+    ['Demanda › Usar', async page => { await irPara(page, 'dem'); await pedidoDoAluno(page).locator('[data-act="usar-proxima"]').click(); }],
+    ['Demanda › Outra missão do curso', async page => { await irPara(page, 'dem'); await pedidoDoAluno(page).locator('[data-f="outra-missao"]').selectOption('PP-02'); }],
+    ['Histórico › Desfazer o agendamento', async page => {
+      await page.locator('#btn-open-log').click();
+      await page.locator('#audit-log-list [data-act="rev-log"]').click();
+    }]
+  ];
+
+  // Todas recusam com o aviso; nada é gravado, e a tela fica como estava
+  async function nadaMuda(page, servidor) {
+    const antes = { cadastro: cadastroDe(servidor), gravacoes: servidor.gravacoes.length, historico: servidor.historico.length };
+    for (const [nome, usar] of ENTRADAS) await recusada(page, nome, () => usar(page));
+    await page.locator('#btn-fechar-historico').click();
+    await expect(dialogo(page)).toBeHidden();
+    await irPara(page, 'cur');
+    await expect(cursoPP(page).locator('tbody tr[data-missao]')).toHaveCount(3);
+    await expect(trechoDoNoturno(page)).toHaveValue('');
+    // Os dois botões que pedem confirmação nem armaram
+    await expect(cursoPP(page).locator('[data-act="curso-modelo"]')).not.toHaveText(/^Confirmar/);
+    await expect(cursoPP(page).locator('[data-act="curso-encerrar"]')).not.toHaveText(/^Confirmar/);
+    await expect(page.locator('#cursos .curso[data-curso="MLTE"]')).toHaveCount(0);
+    await expect(page.locator('#cur-sigla')).toHaveValue('MLTE');
+    await irPara(page, 'dem');
+    await expect(pedidoDoAluno(page).locator('[data-act="usar-proxima"]')).toHaveText('Próxima: PP-01 · Usar');
+    await expect(pedidoDoAluno(page).locator('[data-f="outra-missao"]')).toHaveValue('');
+    await expect(page.locator('#dem [data-act="usar-fora-da-ordem"]')).toHaveCount(0);
+    await vistaDaEscala(page, 'lista');
+    await expect(page.locator('#out tbody tr:not(.win)', { hasText: 'Maria Silva' })).toHaveCount(1);
+    expect(cadastroDe(servidor)).toEqual(antes.cadastro);
+    expect(servidor.gravacoes.length).toBe(antes.gravacoes);
+    expect(servidor.historico.length).toBe(antes.historico);
+  }
+
+  // Na data nova, as mesmas entradas valem: a missão do curso na Demanda, o programa e o curso novo (nas tabelas dos
+  // cursos) e o agendamento, pela barra e pelo clique no mapa
+  async function valemNaDataNova(page, servidor) {
+    await expect(page.locator('#dt-rotulo')).toContainText('12/11');
+    const daDataNova = () => servidor.historico.filter(h => h.data === DEPOIS).map(h => h.descricao);
+    await irPara(page, 'dem');
+    await pedidoDoAluno(page).locator('[data-act="usar-proxima"]').click();
+    await expect.poll(daDataNova).toEqual([expect.stringMatching(/^Aluno 1000: PP-01 na demanda/)]);
+    await irPara(page, 'cur');
+    await trechoDoNoturno(page).selectOption('noite');
+    await expect.poll(() => servidor.cursos.find(c => c.sigla === 'PP').missoes.find(m => m.codigo === 'NOT').trecho).toBe('noite');
+    await cursoPP(page).locator('[data-act="missao-nova"]').click();
+    await expect.poll(() => cadastroDe(servidor).pp).toHaveLength(4);
+    await page.getByRole('button', { name: 'Criar o curso' }).click();
+    await expect.poll(() => cadastroDe(servidor).cursos).toContain('MLTE v1');
+    await irPara(page, 'esc');
+    await page.locator('#btn-agendar').click();
+    await expect(dialogo(page)).toBeVisible();
+    await page.locator('#agd-voltar').click();
+    await vistaDaEscala(page, 'eq');
+    await faixaLivre(page).click();
+    await agendarAMaria(page);
+    await expect.poll(daDataNova).toEqual([expect.stringMatching(/^Aluno 1000: PP-01 na demanda/), expect.stringMatching(/Maria Silva/)]);
+    expect(servidor.gravacoes.map(g => g.chave)).toContain(`dia:${DEPOIS}`);
+  }
+
+  test('enquanto outra data abre, nenhuma entrada dos cursos, do agendamento ou da missão do curso muda nada; na data nova, valem', async ({ browser }) => {
+    const servidor = servidorDoDia();
+    const { contexto, page, erros } = await abrirODia(browser, servidor);
+    const liberar = servidor.segurarLeiturasDeDias();
+    await page.locator('#dt-prox').click();
+    await nadaMuda(page, servidor);
+    liberar();
+    await valemNaDataNova(page, servidor);
+    expect(erros).toEqual([]);
+    await contexto.close();
+  });
+
+  test('depois de a troca de data falhar, nenhuma entrada dos cursos, do agendamento ou da missão do curso muda nada; abrindo a data, valem', async ({ browser }) => {
+    test.slow();
+    const servidor = servidorDoDia();
+    const { contexto, page, erros } = await abrirODia(browser, servidor, { statusEsperados: [503] });
+    // A leitura da data falha, também nas tentativas de novo do supabase-js: a tela continua a da data anterior
+    servidor.falhar('/rest/v1/dias', 1000);
+    await page.locator('#dt-prox').click();
+    await expect(page.locator('#toast-box')).toContainText('Não foi possível abrir essa data.', { timeout: 15000 });
+    await expect(page.locator('#dt')).toHaveValue(AMANHA);
+    await nadaMuda(page, servidor);
+    // O servidor volta: a data abre
+    servidor.falhar('/rest/v1/dias', 0);
+    await page.locator('#dt-prox').click();
+    await valemNaDataNova(page, servidor);
+    expect(erros).toEqual([]);
+    await contexto.close();
+  });
+});
+
+// O que fica aberto na tela quando os dados de uma data chegam (a abertura ou uma troca de data) passa a mostrar os dados
+// dela: a pessoa decide sobre o que está vendo, e o que grava parte do que foi lido
+test.describe('O que fica aberto quando a data abre passa a mostrar os dados dela', () => {
+  const DEPOIS = '2026-11-12';
+  const doC172 = id => instrutor(id, 1, { hab: ['local', 'noturno', 'c172'] });
+  // Três instrutores do C172: a fila do C172 é 01, 02, 03 amanhã e 03, 01, 02 no dia 12
+  function servidorComFilas() {
+    const documentos = documentosAtuais({ ...cenario({ ins: [doC172(1), doC172(2), doC172(3)], stu: [aluno(1000, { p1: 500, p2: -1 })] }), cursos: PROGRAMA, nid: 1001 }, AMANHA);
+    const amanha = documentos.dias[AMANHA];
+    amanha.filas = { ...(amanha.filas || {}), c172: [1, 2, 3] };
+    const depois = structuredClone(amanha);
+    depois.filas.c172 = [3, 1, 2];
+    return criarSupabaseFalso({ ...documentos, dias: { [AMANHA]: amanha, [DEPOIS]: depois } });
+  }
+  const filaDoC172 = page => page.locator('#rodizio [data-cat="c172"] li b');
+
+  test('a aba Rodízio aberta numa troca de data mostra as filas da data nova, e o botão age sobre a fila que ela mostra', async ({ browser }) => {
+    const servidor = servidorComFilas();
+    const contexto = await novoContexto(browser, servidor);
+    const page = await contexto.newPage();
+    const erros = vigiarErros(page);
+    await entrar(page, CONTAS.operador);
+    await irPara(page, 'rod');
+    await expect(filaDoC172(page)).toHaveText(['Instrutor 01', 'Instrutor 02', 'Instrutor 03']);
+    await page.locator('#dt-prox').click();
+    await expect(page.locator('#dt-rotulo')).toContainText('12/11');
+    await expect(filaDoC172(page)).toHaveText(['Instrutor 03', 'Instrutor 01', 'Instrutor 02']);
+    // "Subir" o Instrutor 01, o 2º da fila do dia 12: ele passa para 1º
+    await page.locator('#rodizio [data-cat="c172"] li[data-id="1"] [data-act="fila-subir"]').click();
+    await expect(filaDoC172(page)).toHaveText(['Instrutor 01', 'Instrutor 03', 'Instrutor 02']);
+    await expect.poll(() => servidor.dias.get(DEPOIS).conteudo.filas.c172).toEqual([1, 3, 2]);
+    await expect.poll(() => servidor.historico.map(h => [h.data, h.descricao])).toEqual([[DEPOIS, 'Rodízio · Voo C172: Instrutor 01 passou para 1º']]);
+    expect(servidor.dias.get(AMANHA).conteudo.filas.c172).toEqual([1, 2, 3]);
+    expect(erros).toEqual([]);
+    await contexto.close();
+  });
+
+  test('a aba Rodízio aberta enquanto a escala abre mostra as filas quando os dados chegam', async ({ browser }) => {
+    const servidor = servidorComFilas();
+    const contexto = await novoContexto(browser, servidor);
+    const page = await contexto.newPage();
+    const erros = vigiarErros(page);
+    const liberar = servidor.segurarLeiturasDeDias();
+    await page.goto(URL_APP);
+    await preencherLogin(page, CONTAS.operador);
+    await expect(page.locator('#usuario')).toBeVisible();
+    await irPara(page, 'rod');
+    await expect(page.locator('#rodizio [data-cat="c172"]')).toContainText('Nenhum instrutor habilitado.');
+    liberar();
+    await expect(page.locator('body[data-pronto]')).toBeAttached();
+    await expect(filaDoC172(page)).toHaveText(['Instrutor 01', 'Instrutor 02', 'Instrutor 03']);
+    expect(erros).toEqual([]);
+    await contexto.close();
+  });
+
+  // Os horários são do cadastro, e a data que abre traz o cadastro lido de novo, com a versão dele. O rascunho do editor
+  // parte da lista de quando ele abriu: com a lista igual, ele vale na data nova; mudada por outra pessoa, gravá-lo apagaria
+  // o horário dela sem conflito (a versão é a nova). Nada é salvo, e o editor fecha com o aviso
+  test('o editor dos horários aberto numa troca de data: com a lista igual, Salvar grava; mudada por outra pessoa, nada é salvo', async ({ browser }) => {
+    const servidor = servidorComFilas();
+    const contexto = await novoContexto(browser, servidor);
+    const page = await contexto.newPage();
+    const erros = vigiarErros(page);
+    await entrar(page, CONTAS.operador);
+    await irPara(page, 'rec');
+    const c152 = page.locator('#horarios [data-cat="C152"]');
+    const editor = page.locator('#horarios .horarios-editor');
+    const doC152 = () => servidor.banco.get('cadastro').conteudo.horarios.C152;
+    async function por(hora) {
+      await editor.locator('.hr-novo').fill(hora);
+      await editor.locator('.hr-novo').press('Enter');
+      await expect(editor.locator('.hr-chip', { hasText: hora })).toHaveCount(1);
+    }
+    // Ninguém mais muda os horários: o rascunho atravessa a troca de data e grava na data nova
+    await c152.locator('[data-act="editar-horarios"]').click();
+    await por('07:45');
+    await page.locator('#dt-prox').click();
+    await expect(page.locator('#dt-rotulo')).toContainText('12/11');
+    await editor.locator('[data-act="salvar-horarios"]').click();
+    await expect(editor).toHaveCount(0);
+    await expect.poll(doC152).toContain(465);
+    await expect.poll(() => servidor.historico.map(h => [h.data, h.descricao.split(':')[0]])).toEqual([[DEPOIS, 'Horários de decolagem do C152']]);
+
+    // Outra pessoa põe 09:15 nos horários do C152. O editor, aberto antes, atravessa a volta para amanhã, cuja leitura traz
+    // o cadastro com o 09:15
+    await c152.locator('[data-act="editar-horarios"]').click();
+    await por('08:45');
+    const { conteudo } = servidor.banco.get('cadastro');
+    servidor.alterarPorOutraPessoa('cadastro', { ...conteudo, horarios: { ...conteudo.horarios, C152: [...conteudo.horarios.C152, 555].sort((a, b) => a - b) } });
+    await page.locator('#dt-ant').click();
+    await expect(page.locator('#dt-rotulo')).toContainText('11/11');
+    await page.locator('#toast-box').evaluate(caixa => caixa.replaceChildren());
+    await editor.locator('[data-act="salvar-horarios"]').click();
+    await expect(page.locator('#toast-box')).toContainText('Os horários do C152 mudaram depois que o editor abriu: nada foi salvo. Confira a lista e edite de novo.');
+    await expect(editor).toHaveCount(0);
+    await expect(c152.locator('[data-act="editar-horarios"]')).toBeFocused();
+    // A lista, na tela e no servidor, é a de agora: com o 09:15 da outra pessoa, sem o 08:45 do rascunho
+    await expect(c152.locator('.hr', { hasText: '09:15' })).toHaveCount(1);
+    await expect(c152.locator('.hr', { hasText: '08:45' })).toHaveCount(0);
+    expect([doC152().includes(555), doC152().includes(525)]).toEqual([true, false]);
+    expect(servidor.historico).toHaveLength(1);
+    expect(erros).toEqual([]);
+    await contexto.close();
   });
 });

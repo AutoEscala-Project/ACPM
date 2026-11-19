@@ -99,6 +99,25 @@ describe('Migração de estado', () => {
     const x = ApiClient.normalizeAndMigrateState({ schemaVer: 4, ins: [instrutor(1, 1, { hab: ['c172', 'xyz', 'local'] }), { id: 2, nm: 'B', on: true, lv: 7, kg: 0, aw: [] }], stu: [] });
     assert.deepEqual(x.ins.map(i => i.hab), [['local', 'c172'], habilitacoesDoNivel(7)]);
   });
+
+  // Os cursos que o Administrador cria ficam nas tabelas dos cursos: a matrícula num curso fora de PP, PC e INVA (a sigla
+  // no formato) não se perde na próxima gravação
+  it('o curso do aluno: a sigla no formato fica, também a de um curso desconhecido; fora do formato, sai', () => {
+    const cursos = ['IFR', 'PC', 'PC-IFR', 'pp', '<b>PP</b>', 'P', 7];
+    const x = ApiClient.normalizeAndMigrateState({ ...ApiClient.createFreshState(), stu: cursos.map((curso, i) => aluno(1000 + i, {}, { curso })) });
+    assert.deepEqual(x.stu.map(s => s.curso), ['IFR', 'PC', 'PC-IFR', undefined, undefined, undefined, undefined]);
+    assert.ok(x.stu.slice(3).every(s => !Object.hasOwn(s, 'curso')), 'o campo sai');
+  });
+
+  // O cadastro aceita até 300 kg: o que vem gravado fica no mesmo limite
+  it('o peso continua de 0 a 300 kg: acima, zero, negativo ou sem ser um número, a pessoa fica sem peso', () => {
+    const pesos = [300, 250.5, 0.1, 300.1, 0, -70, '70', null];
+    const x = ApiClient.normalizeAndMigrateState({ ...ApiClient.createFreshState(),
+      ins: pesos.map((kg, i) => instrutor(i + 1, 1, { kg })), stu: pesos.map((kg, i) => aluno(1000 + i, {}, { kg })) });
+    const esperados = [300, 250.5, 0.1, 0, 0, 0, 0, 0];
+    assert.deepEqual(x.ins.map(i => i.kg), esperados);
+    assert.deepEqual(x.stu.map(s => s.kg), esperados);
+  });
 });
 
 describe('Persistência local (escala por data)', () => {

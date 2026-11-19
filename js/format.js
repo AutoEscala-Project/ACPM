@@ -8,6 +8,9 @@ export const WLB = i => `${WIN[i]} · ${i + 1}º tempo` + (i == NI ? ' (noturno)
 
 // Um número com a vírgula decimal (1,5)
 export const numeroBr = n => String(n).replace('.', ',');
+// Um peso em kg, em décimos e com a vírgula, sem a unidade: "80,8", "150". A soma de dois pesos com décimos traz o resto
+// do ponto flutuante (40,1 + 40,7 dá 80.80000000000001), que não aparece na Escala, no PDF nem no CSV
+export const pesoBr = kg => numeroBr(Math.round((+kg || 0) * 10) / 10);
 // As horas digitadas, com vírgula ou ponto, em décimos de hora (NaN se não for um número)
 export const lerHoras = texto => Math.round(parseFloat(String(texto).replace(',', '.')) * 10) / 10;
 // Horas arredondadas em décimos, com vírgula: "2 h", "1,5 h"

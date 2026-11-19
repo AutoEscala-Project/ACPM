@@ -57,6 +57,8 @@ const CAMPOS = {
   insEscolhido: v => v === true,
   // O instrutor é do “Priorizar com” do aluno
   insPar: v => v === true,
+  // O voo foi agendado na Escala pelo operador (o voo fixo dele tem a marca)
+  agendado: v => v === true,
   // O trecho do noturno no dia seguinte (a volta de BH) e até quando ele ocupa o instrutor, o aluno e o avião
   trecho: v => v === 'volta',
   livreAs: v => inteiro(v, 0, MINUTOS_DO_DIA),

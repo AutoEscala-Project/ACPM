@@ -2,7 +2,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { LIMITES_DA_LEI } from '../../js/limites.js';
-import { ESQUEMA, migrarCadastro, migrarDia, precisaMigrar, renomearSimulador } from '../../js/migracoes.js';
+import { ESQUEMA, FORMATO_DOS_CURSOS, migrarCadastro, migrarDia, precisaMigrar, antesDosCursosProprios, renomearSimulador } from '../../js/migracoes.js';
 import { FROTA_INICIAL } from '../../js/frota.js';
 import { HORARIOS_INICIAIS } from '../../js/horarios.js';
 import { EQ } from '../../js/config.js';
@@ -188,5 +188,37 @@ describe('Migrações do formato dos dados', () => {
     const dia = { esquema: 20, fStatus: { '1000_0_1': 'Pousou' }, fObs: { '1000_0_1': { novoInicio: 640 } } };
     assert.deepEqual(migrarDia(dia), { ...dia, esquema: ESQUEMA });
     assert.ok(ESQUEMA >= 21);
+  });
+
+  // Versão 24 (o formato dos cursos): o programa vai para as tabelas dos cursos. O cadastro guarda a cópia de antes
+  // ("cursos", que ninguém mais grava); o voo agendado na Escala e o curso da missão do pedido passam pelo dia. Nada
+  // muda: o número novo faz a aba da versão anterior recusar a gravação (e tirar esses campos) e pedir para recarregar
+  it('versão 24: o cadastro (com a cópia do programa) e o dia não mudam, só o número do formato', () => {
+    assert.equal(FORMATO_DOS_CURSOS, 24);
+    const cadastro = {
+      esquema: 23, nid: 1001, ins: [], stu: [{ id: 1000, nm: 'Aluno 1000', kg: 60, bl: [], curso: 'PP' }], frota: [], horarios: {}, limites: {},
+      cursos: { PP: [{ id: 'PP-01', nome: 'Familiarização', mis: 'Voo Local', eq: 'C152', nb: 1 }], PC: [], INVA: [] }
+    };
+    const novo = migrarCadastro(structuredClone(cadastro));
+    assert.deepEqual(novo, { ...cadastro, esquema: ESQUEMA });
+    assert.deepEqual(Object.keys(novo), Object.keys(cadastro), 'nenhum campo sai do cadastro (nem a cópia do programa)');
+    const dia = {
+      esquema: 23,
+      pedidos: { 1000: { fly: true, mis: 'Voo Local', etapa: 'PP-01', cursoDaEtapa: 'PP', insId: 1, extra: [] } },
+      fixos: { '1000_0_1': { a: 390, b: 450, r: 'PR-VOB', insId: 1, agendado: true } }
+    };
+    assert.deepEqual(migrarDia(structuredClone(dia)), { ...dia, esquema: ESQUEMA });
+    assert.ok(ESQUEMA >= FORMATO_DOS_CURSOS);
+  });
+
+  // Antes do formato dos cursos, o programa de cada curso ainda é o do cadastro: a conversão única o leva para as
+  // tabelas dos cursos antes de o cadastro ser regravado
+  it('antesDosCursosProprios: o cadastro guardado num formato anterior ao dos cursos (sem "esquema", o mais antigo)', () => {
+    for (const esquema of [undefined, 4, 18, 22, 23, '24']) {
+      assert.equal(antesDosCursosProprios({ nid: 1000, ins: [], stu: [], ...(esquema === undefined ? {} : { esquema }) }), true, String(esquema));
+    }
+    for (const esquema of [24, 25]) assert.equal(antesDosCursosProprios({ esquema }), false, String(esquema));
+    for (const doc of [null, undefined, 'cadastro', 24]) assert.equal(antesDosCursosProprios(doc), false, String(doc));
+    assert.equal(antesDosCursosProprios(migrarCadastro({ nid: 1000, ins: [], stu: [], esquema: 23 })), false, 'regravado, já no formato atual');
   });
 });

@@ -1,12 +1,13 @@
--- Fase 9: a TV da recepção. O perfil "painel" não lê nenhuma tabela (nem os documentos, os dias, o histórico, a agenda
--- ou os dados pessoais) e não grava nada: ele vê só o quadro de hoje (horário de São Paulo) pela função painel_do_dia,
--- com o aluno abreviado ("Maria S.") e, do detalhe do status, só a categoria do motivo e o novo horário.
+-- Fase 9: a TV da recepção. O perfil "painel" não lê nenhuma tabela (nem os documentos, os dias, o histórico, a agenda,
+-- os dados pessoais ou, desde a revisão de 17/11, as tabelas dos cursos) e não grava nada: ele vê só o quadro de hoje
+-- (horário de São Paulo) pela função painel_do_dia, com o aluno abreviado ("Maria S.") e, do detalhe do status, só a
+-- categoria do motivo e o novo horário.
 -- Roda dentro de uma transação desfeita no final: não deixa dados no banco.
 begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions;
 
-select plan(31);
+select plan(32);
 
 insert into auth.users (id, email, created_at, updated_at) values
   ('00000000-0000-4000-a000-000000000031', 'painel@painel.acpm.invalid', now(), now()),
@@ -34,6 +35,34 @@ insert into public.dias (data, conteudo) values ((now() at time zone 'America/Sa
   ))
 ));
 
+-- O curso de teste ZZ9 nas tabelas dos cursos: duas fases (a segunda depois da primeira), duas missões (a segunda depois
+-- da primeira) e uma versão
+insert into public.cursos (sigla, nome, ordem) values ('ZZ9', 'Curso de teste', 999);
+insert into public.fases_do_curso (id, curso, nome, ordem, regra) values
+  ('00000000-0000-4000-9001-000000000001', 'ZZ9', 'Fase 1', 0, 'ordem'),
+  ('00000000-0000-4000-9001-000000000002', 'ZZ9', 'Fase 2', 1, 'depois');
+insert into public.requisitos_das_fases (curso, fase, requer)
+  values ('ZZ9', '00000000-0000-4000-9001-000000000002', '00000000-0000-4000-9001-000000000001');
+insert into public.missoes_do_curso (id, curso, fase, codigo, nome, tipo_de_missao, recurso, horas, ordem, regra) values
+  ('00000000-0000-4000-9002-000000000001', 'ZZ9', '00000000-0000-4000-9001-000000000001', 'ZZ9-01', 'Primeiro voo', 'Voo Local', 'C152', 1, 0, 'ordem'),
+  ('00000000-0000-4000-9002-000000000002', 'ZZ9', '00000000-0000-4000-9001-000000000002', 'ZZ9-02', 'Solo', 'Voo Solo', 'C152', 1, 0, 'depois');
+insert into public.requisitos_das_missoes (curso, missao, requer)
+  values ('ZZ9', '00000000-0000-4000-9002-000000000002', '00000000-0000-4000-9002-000000000001');
+insert into public.versoes_dos_cursos (curso, versao, descricao, conteudo) values ('ZZ9', 1, 'Curso ZZ9 criado: Curso de teste', '{}');
+
+-- As linhas do ZZ9 que quem chama vê em cada tabela dos cursos: o curso, as fases, as missões, os requisitos das fases e
+-- das missões e as versões
+create function pg_temp.linhas_do_zz9()
+  returns integer[] language sql as $$
+  select array[
+    (select count(*)::integer from public.cursos where sigla = 'ZZ9'),
+    (select count(*)::integer from public.fases_do_curso where curso = 'ZZ9'),
+    (select count(*)::integer from public.missoes_do_curso where curso = 'ZZ9'),
+    (select count(*)::integer from public.requisitos_das_fases where curso = 'ZZ9'),
+    (select count(*)::integer from public.requisitos_das_missoes where curso = 'ZZ9'),
+    (select count(*)::integer from public.versoes_dos_cursos where curso = 'ZZ9')]
+$$;
+
 -- Estrutura
 select ok('painel' = any(enum_range(null::public.perfil_acesso)::text[]), 'perfil painel existe');
 select has_function('public', 'painel_do_dia', 'função painel_do_dia existe');
@@ -51,6 +80,7 @@ select ok(not exists (select 1 from public.dias), 'painel não lê os dias');
 select ok(not exists (select 1 from public.historico), 'painel não lê o histórico');
 select ok(not exists (select 1 from public.solicitacoes), 'painel não lê a agenda');
 select ok(not exists (select 1 from public.dados_pessoais), 'painel não lê os dados pessoais');
+select is(pg_temp.linhas_do_zz9(), array[0, 0, 0, 0, 0, 0], 'painel não lê os cursos (nem as fases, as missões, os requisitos e as versões)');
 select throws_ok($$ select public.salvar_dia(current_date, '{}', 0) $$, '42501', null, 'painel não grava a escala');
 select throws_ok($$ select public.salvar_dados_pessoais('aluno', 1000, '{"canac":"123456"}', null, null) $$, '42501', null, 'painel não grava dados pessoais');
 

@@ -2,6 +2,10 @@
 
 export const $ = s => document.querySelector(s);
 
+// Um diálogo (<dialog>) aberto é a camada de cima: o Esc é só dele. Quem fecha uma gaveta ou o popup do mapa com o Esc
+// confere isto antes: com um diálogo aberto por cima, o Esc fecha só o diálogo, e a gaveta continua aberta
+export const algumDialogoAberto = () => Boolean(document.querySelector('dialog[open]'));
+
 // Notificação temporária. tipo 'ok': deu certo (verde, com o sinal de certo); sem tipo: aviso (amarelo)
 export function showToast(text, tipo = '') {
   const box = $('#toast-box');
@@ -30,6 +34,28 @@ export function fecharAviso(tipo) {
   if (avisoAtual !== tipo) return;
   avisoAtual = null;
   $('#aviso-sync').hidden = true;
+}
+
+// As gavetas (o Histórico, as habilitações, os dados pessoais e as sugestões) abrem no mesmo lugar, à direita, umas
+// sobre as outras. A de cima é a que abriu por último: ela fica por cima na tela (a camada, no z-index da .gaveta), e o
+// Esc fecha só ela, ou a gaveta em que está o foco; o próximo Esc fecha a de baixo
+let gavetasJaAbertas = 0;
+const gavetasAbertas = () => [...document.querySelectorAll('.gaveta:not([hidden])')]
+  .sort((p, q) => (+p.dataset.ordem || 0) - (+q.dataset.ordem || 0));
+export function abrirGaveta(gaveta) {
+  gaveta.hidden = false;
+  gaveta.dataset.ordem = String(++gavetasJaAbertas);
+  gavetasAbertas().forEach((g, camada) => g.style.setProperty('--camada', String(camada)));
+}
+// A gaveta que o Esc fecha. Cada gaveta tem o seu ouvinte do Esc, e a escolha vale para a tecla inteira: a primeira que
+// fecha não passa a vez para a de baixo no mesmo Esc
+const gavetaDoEscEscolhida = new WeakMap();
+export function gavetaDoEsc(evento) {
+  if (!gavetaDoEscEscolhida.has(evento)) {
+    const abertas = gavetasAbertas();
+    gavetaDoEscEscolhida.set(evento, abertas.find(g => g.contains(document.activeElement)) || abertas.at(-1) || null);
+  }
+  return gavetaDoEscEscolhida.get(evento);
 }
 
 // Aviso sobre o link que abriu o app (a volta da confirmação da troca de e-mail, um link antigo), com o botão "OK"
@@ -118,13 +144,17 @@ export function ligarMenu(botao, menu, { fecharAoEscolher = true } = {}) {
 //   seguinte;
 // - um botão (o ✕ do voo tirado da escala, o Reverter já usado, o Subir de quem chegou ao topo da fila): o item dele, ou
 //   o que ficou no lugar, que não faz nada com o Enter. Assim o Enter repetido ou segurado não age nos itens seguintes.
+// Na aba Cursos: os campos do curso (data-cc), da fase (data-cfa) e da missão (data-cf), e a fase ou a missão de que um
+// botão ou uma caixa de "depois de…" fala (data-fase, data-missao); as linhas são a missão (tr[data-missao]), a fase
+// (.fase[data-fase]) e o curso (.curso[data-curso])
 const QUEM_E = ['id', 'data-f', 'data-a', 'data-act', 'data-w', 'data-i', 'data-h', 'data-b', 'data-cat', 'data-min', 'data-cal',
   'data-dia', 'data-delta', 'data-criterio', 'data-valor', 'data-logid', 'data-horas', 'data-fkey', 'data-resultado',
-  'data-reparo', 'data-dados', 'data-id', 'data-mid', 'data-recolher-tempo', 'data-recolher-grupo'];
-const DA_LINHA = ['data-k', 'data-id', 'data-mid', 'data-fkey', 'data-cat'];
+  'data-reparo', 'data-dados', 'data-id', 'data-mid', 'data-recolher-tempo', 'data-recolher-grupo', 'data-agendar', 'data-cc',
+  'data-cfa', 'data-cf', 'data-fase', 'data-missao'];
+const DA_LINHA = ['data-k', 'data-id', 'data-mid', 'data-fkey', 'data-cat', 'data-missao', 'data-fase', 'data-curso'];
 // O tipo do campo: os atributos que dizem o que ele é, sem os que dizem de quem (o voo, o aluno, o recurso)
 const DO_TIPO = ['data-f', 'data-a', 'data-act', 'data-criterio', 'data-cal'];
-const LINHA = '[data-k], [data-fkey], tr[data-id], li[data-id]';
+const LINHA = '[data-k], [data-fkey], tr[data-id], li[data-id], tr[data-missao], .fase[data-fase], .curso[data-curso]';
 // Os itens de uma lista, com ou sem identidade: as linhas das tabelas, os itens das listas e os do Histórico
 const ITEM = 'tbody tr, li, .audit-item';
 const comAtributos = (el, lista) => el.tagName.toLowerCase() +
