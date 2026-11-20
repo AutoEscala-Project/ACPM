@@ -8,7 +8,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions;
 
-select plan(49);
+select plan(50);
 
 insert into auth.users (id, email, created_at, updated_at) values
   ('00000000-0000-4000-a000-000000000031', 'painel@painel.acpm.invalid', now(), now()),
@@ -185,6 +185,11 @@ select lives_ok($$ select pg_temp.painel_como('00000000-0000-4000-a000-000000000
 select is(pg_temp.painel_como('00000000-0000-4000-a000-000000000031'), '{"colunas": [{"id": "aluno", "on": false},
   {"id": "horario", "on": true}, {"id": "missao", "on": false}]}'::jsonb,
   'adulterada: sem o quadro de fora, só as colunas conhecidas, uma vez, com on booleano e nada a mais');
+reset role;
+select pg_temp.gravar_painel('{"quadro": "partidas", "colunas": [{"id": "aluno"}, {"id": "horario", "on": null}, {"id": "missao", "on": true}]}');
+set local role authenticated;
+select is(pg_temp.painel_como('00000000-0000-4000-a000-000000000031')->'colunas', '[{"id": "aluno", "on": false},
+  {"id": "horario", "on": false}, {"id": "missao", "on": true}]'::jsonb, 'a coluna sem o "on" (ou com null) vem com on false, não sem ele');
 reset role;
 select pg_temp.gravar_painel('{"quadro": "chegadas", "colunas": "horario,aluno"}');
 set local role authenticated;

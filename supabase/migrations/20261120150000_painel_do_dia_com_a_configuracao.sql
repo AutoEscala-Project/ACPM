@@ -29,7 +29,8 @@ begin
   end if;
   -- A configuração do painel (o campo "painel" do cadastro; sem ela, null, e a TV mostra o padrão), só no formato do app:
   -- o quadro da lista (fora dela, sai) e as colunas conhecidas, cada uma uma vez (a primeira), na ordem gravada, com
-  -- "on" verdadeiro ou falso (o que não é true é false); a TV completa o resto como o app (normalizarPainel)
+  -- "on" verdadeiro ou falso (o que não é true é false, também sem o "on": o null sumiria no jsonb_strip_nulls); a TV
+  -- completa o resto como o app (normalizarPainel)
   select conteudo->'painel' into guardado from public.documentos where chave = 'cadastro';
   if jsonb_typeof(guardado) = 'object' then
     painel := jsonb_strip_nulls(jsonb_build_object(
@@ -37,7 +38,7 @@ begin
       'colunas', coalesce((
         select jsonb_agg(jsonb_build_object('id', c.id, 'on', c.ligada) order by c.posicao)
         from (
-          select distinct on (e.valor->>'id') e.valor->>'id' as id, e.valor->'on' = 'true'::jsonb as ligada, e.posicao
+          select distinct on (e.valor->>'id') e.valor->>'id' as id, coalesce(e.valor->'on' = 'true'::jsonb, false) as ligada, e.posicao
           from jsonb_array_elements(case when jsonb_typeof(guardado->'colunas') = 'array' then guardado->'colunas' else '[]'::jsonb end)
             with ordinality as e(valor, posicao)
           where jsonb_typeof(e.valor) = 'object' and e.valor->>'id' = any (colunas)
