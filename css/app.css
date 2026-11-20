@@ -434,9 +434,6 @@ table.fids-tabela { width: 100%; min-width: 860px; border-collapse: collapse; fo
 .tabela-escala tbody tr[hidden], table.frota tr[hidden] { display: none !important; }
 /* Filtros com rótulo visível (Categoria e Avião / sala começam os dois em "Todos") */
 .flt-rotulo { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--mu); }
-/* Recursos: as categorias são caixas de marcar na barra (uma ou outra; nenhuma marcada, todas) */
-.flt-categorias { flex-wrap: wrap; gap: 0 12px; }
-.flt-categorias .chk { color: var(--ink); font-size: 14px; }
 /* Horários de decolagem: uma linha de resumo por categoria; o editor abre na própria linha */
 .horarios { display: flex; flex-direction: column; gap: 12px; }
 .horarios-cat { display: flex; flex-direction: column; gap: 4px; padding-bottom: 10px; border-bottom: 1px solid var(--ln); }
@@ -486,10 +483,6 @@ table.frota .acoes-frota { white-space: nowrap; text-align: right; }
   #s-esc .flt-rotulo, #flt-esc-q { flex: 1 1 140px; min-width: 0; }
   .flt-rotulo select { flex: 1; min-width: 0; }
   .bar .cresce { display: none; }
-  /* Recursos: a busca ocupa a linha dela; as categorias, a seguinte (e quebram em duas, se não couberem); a contagem e
-     "+ Novo recurso" vêm depois */
-  #flt-rec-mat { flex: 1 1 140px; min-width: 0; }
-  .flt-categorias { flex: 1 1 100%; }
   .resumo .st, .resumo .parado { width: 100%; justify-content: space-between; gap: 8px; }
   details.caixa { min-width: 0; flex-basis: 100%; }
   .tabela-escala { overflow: visible; border: 0; background: transparent; }
@@ -984,7 +977,7 @@ input.falta::placeholder { color: var(--wa); }
 .habs-painel legend { padding: 0 4px; font: 600 14px 'Barlow Semi Condensed', sans-serif; }
 .habs-painel label.hab { display: flex; align-items: center; gap: 10px; padding: 6px 0; cursor: pointer; }
 @media (max-width: 640px) {
-  [data-flt="inst"], #flt-ins-hab, [data-flt="alu"], #flt-alu-cur { flex: 1 1 140px; min-width: 0; }
+  [data-flt="inst"], #flt-ins-hab, [data-flt="alu"], #flt-alu-cur, #flt-rec-mat, #flt-rec-cat { flex: 1 1 140px; min-width: 0; }
   /* O botão do filtro divide a linha com a busca: o que está marcado ("Habilitações: Noturno + C172") ocupa até duas
      linhas, em vez de virar "Habilitaçõ…" */
   .filtro-botao { padding: 4px 8px 4px 10px; }

@@ -173,8 +173,10 @@ test.describe('Aplicação', () => {
       // o link para a Demanda (o filtro dos cursos é um só nas duas abas) e o cartão do celular
       'Nome, CANAC, peso e curso', 'Filtro dos cursos', 'aparecem os alunos de algum dos marcados', 'Curso: PP ou PC', 'Abrir a Demanda',
       'aparecem os pedidos dos alunos de algum dos cursos marcados', 'O filtro dos cursos é um só nas duas abas', 'um cartão por pessoa',
-      // Recursos: as duas vistas, a busca pela matrícula, as categorias e o hangar sem filtros
+      // Recursos: as duas vistas, a busca pela matrícula, o filtro das categorias (a regra "alguma das marcadas") e o hangar
+      // sem filtros
       'em Disponibilidade do dia, desligue', 'abre o Cadastro com o formulário', 'Buscar matrícula', '3 de 26 recursos',
+      'os recursos de alguma das marcadas', 'Categoria: C152 ou PA-34', 'Filtro das categorias',
       'nunca para a ordem no hangar', 'cujo botão mostra o mesmo número', 'Veja em Recursos, na Disponibilidade do dia, se ele está ligado']) {
       expect(texto, novo).toContain(novo);
     }

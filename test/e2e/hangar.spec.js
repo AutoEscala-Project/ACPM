@@ -1,6 +1,6 @@
 // Ordem dos aviões no hangar: em Recursos, da frente para o fundo, com subir, descer e pôr na frente. A escala tira
 // primeiro os da frente e junta os voos nos aviões que já saíram; a data seguinte começa com a mesma ordem.
-import { test, expect, abrir, irPara, abrirEscala } from './fixtures.js';
+import { test, expect, abrir, irPara, abrirEscala, filtrarCategorias } from './fixtures.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
 
 const posicoes = page => page.locator('#hangar li').evaluateAll(lis => lis.map(li => li.dataset.id));
@@ -36,7 +36,7 @@ test.describe('Ordem no hangar', () => {
     await abrir(page, { estado: cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000)] }) });
     await irPara(page, 'rec');
     const antes = await posicoes(page);
-    await page.locator('#flt-rec-cat input[value="PA-34"]').check();
+    await filtrarCategorias(page, ['PA-34']);
     await page.locator('#flt-rec-mat').fill('vom');
     await expect(page.locator('#revisao tr[data-r]')).toHaveCount(1);
     await expect(page.locator('#rec-contagem')).toHaveText('1 de 26 recursos');

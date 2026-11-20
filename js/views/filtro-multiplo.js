@@ -2,7 +2,8 @@
 // (em grupos, cada um com a sua legenda), a frase da regra ("Mostra quem tem todas as marcadas") e "Limpar". O botão
 // diz o que está marcado ("Habilitações: Noturno + C172"; sem nenhuma, "Todas as habilitações"). A regra é de cada uso
 // (js/filtro-multiplo.js): "todas" nas habilitações de Instrutores (js/views/cadastros.js), "alguma" num valor só por
-// linha (o curso do aluno, em Alunos e na Demanda: js/views/filtro-dos-cursos.js; a categoria).
+// linha (o curso do aluno, em Alunos e na Demanda: js/views/filtro-dos-cursos.js; a categoria do recurso, em Recursos:
+// js/views/filtros-dos-recursos.js).
 // - O painel fica no fluxo da página, na linha de baixo da barra: ele empurra a tabela em vez de cobri-la, e no celular
 //   não sai da tela. No HTML, ele vem logo depois do botão (o Tab e o leitor de tela passam do botão para as caixas).
 // - Quem só consulta (o Gestor, a Secretaria) usa o filtro como o Operador: as caixas têm a classe flt-ctrl (js/somente-

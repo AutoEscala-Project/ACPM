@@ -12,7 +12,7 @@ import { S, isGestor } from '../state.js';
 import { confirmado } from './confirmacao.js';
 import { aoAcionar, aoMudarCampo } from './registro.js';
 import { rDem } from '../views/demanda.js';
-import { filtrarRecursos, limparFiltrosDosRecursos, manterRecursoAVista, filtroDasCategorias } from '../views/filtros-dos-recursos.js';
+import { filtrarRecursos, limparFiltrosDosRecursos, manterRecursoAVista, criarFiltroDasCategorias } from '../views/filtros-dos-recursos.js';
 import { NOMES_DAS_CATEGORIAS, abrirEditorDosHorarios, fecharEditorDosHorarios, tirarDoRascunho, porNoRascunho, escolherModelo, rascunhoDosHorarios, editorDosHorariosAberto } from '../views/horarios.js';
 import { rRec, rHangar, alternarAtributos, aplicarFiltrosDosRecursos } from '../views/recursos.js';
 import { rIns, rPainelDoInstrutor } from '../views/cadastros.js';
@@ -99,7 +99,7 @@ $('#flt-rec-mat').addEventListener('input', e => {
   filtrarRecursos({ matricula: e.target.value });
   aplicarFiltrosDosRecursos({ esperar: ESPERA_DA_DIGITACAO });
 });
-const categorias = filtroDasCategorias($('#flt-rec-cat'), marcadas => {
+const categorias = criarFiltroDasCategorias(marcadas => {
   filtrarRecursos({ categorias: marcadas });
   aplicarFiltrosDosRecursos();
 });

@@ -117,11 +117,13 @@ async function marcarNoFiltro(page, id, valores, { fechar = true } = {}) {
 export const filtrarHabilitacoes = (page, valores, opcoes) => marcarNoFiltro(page, 'flt-ins-hab', valores, opcoes);
 // O filtro dos cursos de Alunos ('alu') ou da Demanda ('dem'): os valores são as siglas ('PP', 'PC'…) e 'sem-curso'
 export const filtrarCursos = (page, aba, valores, opcoes) => marcarNoFiltro(page, `flt-${aba}-cur`, valores, opcoes);
+// O filtro das categorias de Recursos: os valores são os ids das categorias ('C152', 'C172', 'sim', 'PA-34')
+export const filtrarCategorias = (page, valores, opcoes) => marcarNoFiltro(page, 'flt-rec-cat', valores, opcoes);
 
 // As telas que não são a de abertura de uma aba: as outras vistas (Instrutores › Cadastro, Recursos › Cadastro), os
 // painéis abertos dos filtros de vários valores (o das habilitações, em Instrutores, e o dos cursos, em Alunos e na
 // Demanda, com duas marcas: o botão diz as duas), as tabelas (e a frota) que os filtros deixam sem nenhuma linha (com
-// "Limpar filtros") e Recursos com uma categoria marcada. Os testes do celular e da acessibilidade, que conferem cada aba
+// "Limpar filtros") e Recursos com o painel das categorias aberto, com duas marcas. Os testes do celular e da acessibilidade, que conferem cada aba
 // como ela abre, conferem também estas: conferir(nome) roda em cada uma. No fim, a busca e as marcas voltam a vazias, e
 // Recursos, à Disponibilidade do dia
 export async function percorrerVistasEFiltros(page, conferir) {
@@ -152,9 +154,11 @@ export async function percorrerVistasEFiltros(page, conferir) {
   }
   await irParaVista(page, 'rec', 'cadastro');
   await conferir('recursos: cadastro');
-  await page.locator('#flt-rec-cat input[value="PA-34"]').check();
+  await filtrarCategorias(page, ['sim', 'PA-34'], { fechar: false });
+  await expect(page.locator('#flt-rec-cat')).toHaveText('Categoria: Simulador ou PA-34');
   await expect(page.locator('#rec-contagem')).toHaveText(/^\d+ de \d+ recursos$/);
-  await conferir('recursos: cadastro, uma categoria');
+  await conferir('recursos: cadastro, o filtro das categorias aberto, com duas marcas');
+  await page.locator('#flt-rec-cat').click();
   await page.locator('#flt-rec-mat').fill('nenhum assim');
   await expect(page.locator('#frota li.sem-resultado')).toBeVisible();
   await expect(page.locator('#rec-contagem')).toHaveText(/^0 de \d+ /);
@@ -163,7 +167,8 @@ export async function percorrerVistasEFiltros(page, conferir) {
   await nenhumComOsFiltros(page, 'revisao', 'rec');
   await conferir('recursos: disponibilidade do dia, nenhum com os filtros');
   await page.locator('#limpar-filtros-revisao').click();
-  await expect(page.locator('#flt-rec-cat input:checked')).toHaveCount(0);
+  await expect(page.locator('#flt-rec-cat-painel input:checked')).toHaveCount(0);
+  await expect(page.locator('#flt-rec-cat')).toHaveText('Todas as categorias');
   await expect(page.locator('#flt-rec-mat')).toHaveValue('');
 }
 

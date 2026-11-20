@@ -6,8 +6,9 @@
 // (js/views/recursos.js, js/views/horarios.js). O recurso acrescentado agora e a categoria dos horários editados agora
 // continuam à vista mesmo fora dos filtros, até eles mudarem: é ali que está quem acabou de mexer (e o foco do teclado)
 import { CATEGORIAS, categoriaDoTipo } from '../categorias.js';
-import { chaveDeBusca, esc } from '../format.js';
+import { chaveDeBusca } from '../format.js';
 import { S } from '../state.js';
+import { criarFiltroMultiplo } from './filtro-multiplo.js';
 
 const filtros = { matricula: '', categorias: [] };
 const mantidos = { recursos: new Set(), horarios: new Set() };
@@ -42,16 +43,17 @@ export const limparFiltrosDosRecursos = () => filtrarRecursos({ matricula: '', c
 export const manterRecursoAVista = reg => { mantidos.recursos.add(reg); };
 export const manterHorariosAVista = cat => { mantidos.horarios.add(cat); };
 
-// TODO(abas-2): trocar estas caixas por "Categoria ▾", o filtro de vários valores do passo 2 (criarFiltroMultiplo, em
-// js/views/filtro-multiplo.js no ramo abas-2-habilitacoes, com a regra 'alguma'), quando as pilhas se juntarem. Até lá,
-// as categorias (sem a Sala Ground, que não está em Recursos) são caixas de marcar na barra, e só esta função as desenha
-// e as lê: lugar é o grupo (#flt-rec-cat, com o rótulo), aoMudar recebe as categorias marcadas, e limpar() desmarca as
-// caixas sem avisar ("Limpar filtros", como o limpar() do componente). As caixas têm flt-ctrl (js/somente-leitura.js não
-// as desliga para o Gestor) e nenhum data-f ou data-a (não são alterações dos dados)
-export function filtroDasCategorias(lugar, aoMudar) {
-  lugar.innerHTML = `<span id="${lugar.id}-rotulo">Categoria</span>` + CATEGORIAS.filter(c => c.id !== 'ground')
-    .map(c => `<label class="chk"><input type="checkbox" class="flt-ctrl" value="${esc(c.id)}">${esc(c.nome)}</label>`).join('');
-  const caixas = [...lugar.querySelectorAll('input')];
-  lugar.addEventListener('change', () => aoMudar(caixas.filter(c => c.checked).map(c => c.value)));
-  return { limpar: () => caixas.forEach(c => { c.checked = false; }) };
+// "Categoria ▾", o filtro de vários valores (js/views/filtro-multiplo.js) com a regra "alguma": um recurso é de uma
+// categoria só, e aparece o de alguma das marcadas. As opções são as categorias sem a Sala Ground, que não está em
+// Recursos. O componente desenha as caixas (com flt-ctrl, sem data-act, data-f ou data-a: o Gestor também filtra, e
+// marcar não é uma alteração dos dados) e guarda as marcas; aoMudar recebe as categorias marcadas, e limpar() as desmarca
+// sem avisar ("Limpar filtros")
+export function criarFiltroDasCategorias(aoMudar) {
+  const filtro = criarFiltroMultiplo({
+    id: 'flt-rec-cat', nome: 'Categoria', todas: 'Todas as categorias', regra: 'alguma',
+    frase: 'Mostra os recursos de alguma das categorias marcadas.', dica: ['filtro-das-categorias', 'Filtro das categorias'],
+    grupos: () => [{ titulo: 'Categorias', opcoes: CATEGORIAS.filter(c => c.id !== 'ground').map(c => [c.id, c.nome]) }],
+    aoMudar: () => aoMudar(filtro.valores())
+  });
+  return filtro;
 }

@@ -73,6 +73,7 @@ export const GLOSSARIO = {
     aba: 'Recursos', termo: 'Horas disponíveis',
     texto: `Quanto o avião ainda pode voar até a revisão de ${REVISAO_H} horas, no início desta data. Sem horas para um voo de ${MENOR_VOO_H} h, ele para e a escala avisa.`
   },
+  'filtro-das-categorias': { aba: 'Recursos', termo: 'Filtro das categorias', texto: 'Mostra só os recursos de alguma das categorias marcadas, nas duas vistas: C152 e PA-34 mostram os dois. Nunca vale para a ordem no hangar. Sem nenhuma marcada, mostra todos.' },
   hangar: { aba: 'Recursos', termo: 'Ordem no hangar', texto: 'Da frente para o fundo, sempre com todos os aviões (Recursos › Disponibilidade do dia): entre aviões livres, o da frente sai primeiro.' },
   noturno: { aba: 'Escala', termo: 'Noturno', texto: 'Missão de dois dias: sai às 17:30 para BH (1 h de translado) e voa 3 h de noturno em BH; no dia seguinte, a volta decola de BH às 07:30, e o instrutor, o aluno e o avião ficam livres às 10:10.' },
   'so-vfr': { aba: 'Recursos', termo: 'Só VFR', texto: 'Avião não homologado IFR: voa as missões VFR, e nenhum voo IFR (IFR, cheques IFR, o noturno do PC) vai para ele. Marque na frota, em Recursos › Cadastro.' },
