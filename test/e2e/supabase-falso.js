@@ -115,9 +115,11 @@ export const METEOROLOGIA_DE_TESTE = {
 
 // A configuração do painel que painel_do_dia entrega (migração 20261120150000_painel_do_dia_com_a_configuracao.sql): o
 // campo "painel" do cadastro, só no formato do app (o quadro da lista; as colunas conhecidas, uma vez, com "on"
-// booleano); sem ela, null
+// booleano; as listas 'auto', 'uma' ou 'duas'); sem ela, null. O quadro e as listas fora da lista saem (o null que o
+// jsonb_strip_nulls tira)
 const QUADROS_DO_PAINEL = ['missoes', 'alternar', 'partidas', 'chegadas'];
 const COLUNAS_DO_PAINEL = ['horario', 'aeronave', 'modelo', 'aluno', 'instrutor', 'missao', 'previsto', 'observacao'];
+const LISTAS_DO_PAINEL = ['auto', 'uma', 'duas'];
 function painelDoCadastro(cadastro) {
   const guardado = cadastro && cadastro.painel;
   if (!guardado || typeof guardado !== 'object' || Array.isArray(guardado)) return null;
@@ -125,7 +127,11 @@ function painelDoCadastro(cadastro) {
   const colunas = (Array.isArray(guardado.colunas) ? guardado.colunas : [])
     .filter(c => c && typeof c === 'object' && !Array.isArray(c) && COLUNAS_DO_PAINEL.includes(c.id) && !vistas.has(c.id) && vistas.add(c.id))
     .map(c => ({ id: c.id, on: c.on === true }));
-  return { ...(QUADROS_DO_PAINEL.includes(guardado.quadro) ? { quadro: guardado.quadro } : {}), colunas };
+  return {
+    ...(QUADROS_DO_PAINEL.includes(guardado.quadro) ? { quadro: guardado.quadro } : {}),
+    ...(LISTAS_DO_PAINEL.includes(guardado.listas) ? { listas: guardado.listas } : {}),
+    colunas
+  };
 }
 
 // Um servidor pode atender vários contextos do navegador (ex.: operador e gestor vendo os mesmos dados)

@@ -1,7 +1,8 @@
 -- O painel_do_dia passa a entregar também a configuração do painel ("Configurar painel", no cadastro, campo "painel",
 -- do formato 25 em diante): o perfil da TV não lê o cadastro, e a TV mostrava sempre o padrão (Missões, com as colunas
--- do padrão). Agora ela segue o quadro e as colunas que o operador escolheu, como a Escala. Só o formato do app sai do
--- cadastro: o quadro da lista e as colunas conhecidas, com "on" booleano; sem a configuração, 'painel' é null.
+-- do padrão). Agora ela segue o quadro, as colunas e as listas (uma, ou duas lado a lado) que o operador escolheu, como a
+-- Escala. Só o formato do app sai do cadastro: o quadro da lista, as colunas conhecidas, com "on" booleano, e as listas
+-- 'auto', 'uma' ou 'duas'; sem a configuração, 'painel' é null.
 -- O resto da função fica como em 20261114140751_painel_status_validos.sql: os mesmos campos, security definer, o
 -- search_path vazio e a execução só para authenticated (a TV que ainda não tem esta migração lê o mesmo de antes, sem o
 -- campo novo, e mostra o padrão).
@@ -20,6 +21,7 @@ declare
   -- Os quadros e as colunas do painel (js/config-do-painel.js)
   quadros constant text[] := array['missoes', 'alternar', 'partidas', 'chegadas'];
   colunas constant text[] := array['horario', 'aeronave', 'modelo', 'aluno', 'instrutor', 'missao', 'previsto', 'observacao'];
+  listas constant text[] := array['auto', 'uma', 'duas'];
   dia jsonb;
   guardado jsonb;
   painel jsonb;
@@ -28,13 +30,15 @@ begin
     raise exception 'sem acesso ao painel' using errcode = '42501';
   end if;
   -- A configuração do painel (o campo "painel" do cadastro; sem ela, null, e a TV mostra o padrão), só no formato do app:
-  -- o quadro da lista (fora dela, sai) e as colunas conhecidas, cada uma uma vez (a primeira), na ordem gravada, com
-  -- "on" verdadeiro ou falso (o que não é true é false, também sem o "on": o null sumiria no jsonb_strip_nulls); a TV
-  -- completa o resto como o app (normalizarPainel)
+  -- o quadro da lista (fora dela, null: sai), as colunas conhecidas, cada uma uma vez (a primeira), na ordem gravada,
+  -- com "on" verdadeiro ou falso (o que não é true é false, também sem o "on": o null sumiria no jsonb_strip_nulls), e
+  -- as listas, só 'auto', 'uma' ou 'duas' (fora delas, null: sai, e a TV fica no Automático); a TV completa o resto como
+  -- o app (normalizarPainel)
   select conteudo->'painel' into guardado from public.documentos where chave = 'cadastro';
   if jsonb_typeof(guardado) = 'object' then
     painel := jsonb_strip_nulls(jsonb_build_object(
       'quadro', case when guardado->>'quadro' = any (quadros) then guardado->>'quadro' end,
+      'listas', case when jsonb_typeof(guardado->'listas') = 'string' and guardado->>'listas' = any (listas) then guardado->>'listas' end,
       'colunas', coalesce((
         select jsonb_agg(jsonb_build_object('id', c.id, 'on', c.ligada) order by c.posicao)
         from (

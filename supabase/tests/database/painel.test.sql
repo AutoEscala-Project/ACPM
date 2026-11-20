@@ -1,14 +1,14 @@
 -- Fase 9: a TV da recepção. O perfil "painel" não lê nenhuma tabela (nem os documentos, os dias, o histórico, a agenda,
 -- os dados pessoais ou, desde a revisão de 17/11, as tabelas dos cursos) e não grava nada: ele vê só o quadro de hoje
 -- (horário de São Paulo) pela função painel_do_dia, com o aluno abreviado ("Maria S.") e, do detalhe do status, só a
--- categoria do motivo e o novo horário. Desde 20/11, com a configuração do painel do cadastro (o quadro e as colunas), só
--- no formato do app.
+-- categoria do motivo e o novo horário. Desde 20/11, com a configuração do painel do cadastro (o quadro, as colunas e as
+-- listas), só no formato do app.
 -- Roda dentro de uma transação desfeita no final: não deixa dados no banco.
 begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions;
 
-select plan(50);
+select plan(58);
 
 insert into auth.users (id, email, created_at, updated_at) values
   ('00000000-0000-4000-a000-000000000031', 'painel@painel.acpm.invalid', now(), now()),
@@ -199,6 +199,42 @@ reset role;
 select pg_temp.gravar_painel('"missoes"');
 set local role authenticated;
 select is(pg_temp.painel_como('00000000-0000-4000-a000-000000000031'), 'null'::jsonb, 'a configuração que não é um objeto: null');
+-- As listas (uma, ou duas lado a lado na tela grande): só 'auto', 'uma' ou 'duas'; fora disso, null (o campo sai, e a TV
+-- fica no Automático), com o resto da configuração como era
+reset role;
+select pg_temp.gravar_painel('{"quadro": "partidas", "listas": "duas", "colunas": [{"id": "horario", "on": true}]}');
+set local role authenticated;
+select is(pg_temp.painel_como('00000000-0000-4000-a000-000000000031'), '{"quadro": "partidas", "listas": "duas", "colunas": [{"id": "horario", "on": true}]}'::jsonb,
+  'a TV recebe as listas gravadas: duas lado a lado');
+reset role;
+select pg_temp.gravar_painel('{"quadro": "missoes", "listas": "uma", "colunas": []}');
+set local role authenticated;
+select is(pg_temp.painel_como('00000000-0000-4000-a000-000000000031')->>'listas', 'uma', 'sempre uma lista');
+reset role;
+select pg_temp.gravar_painel('{"quadro": "missoes", "listas": "auto", "colunas": []}');
+set local role authenticated;
+select is(pg_temp.painel_como('00000000-0000-4000-a000-000000000031')->>'listas', 'auto', 'o Automático');
+reset role;
+select pg_temp.gravar_painel('{"quadro": "chegadas", "listas": "tres", "colunas": [{"id": "aluno", "on": true}]}');
+set local role authenticated;
+select is(pg_temp.painel_como('00000000-0000-4000-a000-000000000031'), '{"quadro": "chegadas", "colunas": [{"id": "aluno", "on": true}]}'::jsonb,
+  'as listas fora da lista: null (sai), e o resto da configuração fica');
+reset role;
+select pg_temp.gravar_painel('{"quadro": "missoes", "listas": "DUAS", "colunas": []}');
+set local role authenticated;
+select is(pg_temp.painel_como('00000000-0000-4000-a000-000000000031')->'listas', null, 'as listas em maiúsculas: null');
+reset role;
+select pg_temp.gravar_painel('{"quadro": "missoes", "listas": ["duas"], "colunas": []}');
+set local role authenticated;
+select is(pg_temp.painel_como('00000000-0000-4000-a000-000000000031')->'listas', null, 'as listas numa lista: null');
+reset role;
+select pg_temp.gravar_painel('{"quadro": "missoes", "listas": {"duas": true}, "colunas": []}');
+set local role authenticated;
+select is(pg_temp.painel_como('00000000-0000-4000-a000-000000000031')->'listas', null, 'as listas num objeto: null');
+reset role;
+select pg_temp.gravar_painel('{"quadro": "missoes", "listas": 2, "colunas": []}');
+set local role authenticated;
+select is(pg_temp.painel_como('00000000-0000-4000-a000-000000000031')->'listas', null, 'as listas num número: null');
 -- O dia sem escala gravada também traz a configuração
 reset role;
 select pg_temp.gravar_painel('{"quadro": "alternar", "colunas": [{"id": "horario", "on": true}]}');
