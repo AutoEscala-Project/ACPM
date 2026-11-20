@@ -142,7 +142,11 @@ A TV fica ligada dias seguidos, sem ninguém por perto, e nunca mostra um quadro
   conta da TV, que vê só o quadro do dia.
 - **Sem uma busca boa há mais de 3 minutos**, o quadro sai da tela e fica o aviso "Painel sem atualização desde HH:MM:
   tentando de novo…"; quando renovar e entrar de novo não dão certo, o login aparece com "Sessão expirada: entre de novo
-  nesta TV". O quadro volta sozinho na busca boa seguinte.
+  nesta TV". O quadro volta sozinho na busca boa seguinte. Sem conexão não é sessão expirada: a TV ligada antes da
+  internet, com a sessão guardada já vencida, mostra o aviso (não o login) e renova quando a conexão volta.
+- **A recarga das 03:00** (as versões novas do app) só acontece com o endereço do app respondendo; sem conexão, a TV
+  continua na página e tenta de novo a cada 5 minutos (recarregar sem conexão a deixaria na página de erro do navegador).
+- No login da TV, a senha recusada, ou a de uma conta que não é a da TV, sai do campo (a tela é pública).
 - Cada busca traz a configuração do painel (`painel_do_dia`, com a migração `20261120150000`): a mudança do
   "Configurar painel" chega a todas as TVs em até um minuto. Nada disso depende da migração nem da função: sem elas, a
   TV mostra o padrão e "Meteorologia indisponível", como antes.
