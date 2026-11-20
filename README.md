@@ -74,6 +74,33 @@ npm run test:e2e       # aplicação no navegador (Playwright)
 - Escalas fictícias nas próximas datas da prévia (só nas datas sem escala; usa o Supabase CLI autenticado, sem a
   senha do banco): `node scripts/semear-dias-previa.mjs [dias de operação] [data inicial]` (`SECO=1` só mostra).
 
+## Meteorologia no painel (função `meteorologia`)
+
+O pé do painel (a vista Painel da Escala e a TV da recepção) mostra o METAR e o TAF oficiais de Pampulha (SBBH) e de
+Confins (SBCF), lado a lado. As mensagens vêm do aviationweather.gov, que traz as do DECEA e não pede chave; o navegador
+não pode chamá-lo direto (ele não manda os cabeçalhos CORS), então quem busca é a Edge Function
+`supabase/functions/meteorologia` (Deno): ela exige a sessão de uma conta do app (o JWT, conferido pelo gateway e pelo
+Auth do projeto), guarda as mensagens 5 minutos na memória, desiste do aviationweather.gov em 12 segundos e responde
+`{ gerado, estacoes: [{ icao, nome, metar, taf, observado }] }` só às origens do app. A leitura das mensagens
+(`mensagens.js`) e o atendimento (`atendimento.js`) são JavaScript puro, testados também no Node
+(`test/unit/meteorologia-funcao.test.js`, com respostas de verdade em `test/fixtures/meteorologia/`).
+
+### Publicar
+
+```sh
+supabase functions deploy meteorologia --project-ref <ref da prévia>     # acpm-escala-preview
+supabase functions deploy meteorologia --project-ref <ref de produção>   # acpm-escala
+```
+
+O `verify_jwt = true` de `supabase/config.toml` vale no deploy (é o padrão; não use `--no-verify-jwt`). A função não usa
+segredos: o Supabase já dá a ela `SUPABASE_URL` e `SUPABASE_ANON_KEY`.
+
+**A ordem:** a função na prévia, conferida na prévia (https://thephfernandes.github.io/ACPM/, o painel com as duas
+caixas), depois na produção, e só então o merge. O app foi feito para não depender dela: sem a função publicada (404),
+com o aviationweather.gov fora do ar ou sem conexão, o painel e a TV abrem e funcionam como antes, e o pé do painel diz
+**"Meteorologia indisponível"** (com mensagens já recebidas, elas ficam, com "Sem atualização desde…"). No modo local
+(sem servidor) o pé diz sempre "Meteorologia indisponível", sem nenhuma busca.
+
 ## Formato dos dados
 
 O cadastro e cada dia guardam a versão do formato (campo `esquema`). Para mudar o formato, acrescente um passo em
@@ -128,6 +155,8 @@ banco (e a chamada dela no app). A cópia `cadastro.cursos` fica.
 | `js/status.js` | Status do voo com detalhes: o novo horário do atraso, o motivo do cancelamento e o atraso que invade outro voo |
 | `js/quadro.js` | As linhas do painel: os quadros Missões, Partidas e Chegadas (Escala e TV da recepção) |
 | `js/config-do-painel.js` | A configuração do painel no cadastro (`painel`, do formato 25 em diante): o quadro com que ele abre e as colunas, ligadas ou não e na ordem |
+| `js/meteorologia.js`, `js/views/meteorologia.js` | A meteorologia do pé do painel (Escala e TV): a busca na função `meteorologia` a cada 10 minutos, que guarda as últimas mensagens boas quando falha, o METAR antigo (mais de 90 minutos) e a faixa com as duas caixas, SBBH e SBCF |
+| `supabase/functions/meteorologia/` | A Edge Function que busca o METAR e o TAF de SBBH e SBCF no aviationweather.gov (`index.ts`; o atendimento e a leitura das mensagens em JavaScript puro, testados no Node) |
 | `js/dados-pessoais.js` | Dados pessoais de alunos e instrutores: validação (CPF, CANAC, nascimento, celular e e-mail) e formatos |
 | `js/perfis.js` | Perfis de acesso e o que cada um pode fazer na tela |
 | `js/rules.js` | Regras das missões (Ground School, precedência, disponibilidade do aluno) |

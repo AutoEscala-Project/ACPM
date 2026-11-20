@@ -98,12 +98,28 @@ function consultar(linhas, url) {
 }
 const LINHAS_POR_CONSULTA = 1000;
 
+// O METAR e o TAF que a função meteorologia entrega (supabase/functions/meteorologia), no relógio das páginas (10/11/2026
+// 12:00 em São Paulo, 15:00Z): Pampulha observado às 14:00Z, sem TAF (como costuma ser), e Confins às 15:00Z, com o TAF
+// em grupos (as mensagens de 20/11/2026, com a data trocada)
+export const METEOROLOGIA_DE_TESTE = {
+  gerado: '2026-11-10T15:00:00.000Z',
+  estacoes: [
+    { icao: 'SBBH', nome: 'Pampulha', metar: 'METAR SBBH 101400Z 30005KT 9999 BKN025 FEW035TCU SCT090 26/16 Q1017', taf: null, observado: '2026-11-10T14:00:00.000Z' },
+    {
+      icao: 'SBCF', nome: 'Confins', metar: 'METAR SBCF 101500Z 36007KT 9999 BKN023 SCT100 27/22 Q1016',
+      taf: 'TAF SBCF 100800Z 1012/1112 34005KT 7000 SCT016 TX28/1018Z TN19/1109Z BECMG 1015/1017 9999 SCT035 TEMPO 1018/1021 TS SCT035 FEW040CB PROB30 1107/1111 2000 BR SCT002 RMK PGM',
+      observado: '2026-11-10T15:00:00.000Z'
+    }
+  ]
+};
+
 // Um servidor pode atender vários contextos do navegador (ex.: operador e gestor vendo os mesmos dados)
 // agora: o relógio do servidor para o prazo da agenda (o mesmo instante do relógio fixo das páginas)
 // cursos: o programa dos cursos nas tabelas, no formato de programa_dos_cursos (sem comResultados, que vem dos
 // resultados; as alteracoes de cada curso, a mais recente primeiro, são as versões registradas dele, e podem faltar);
 // sem ele, os cursos com que o banco começa (PP, PC e INVA, vazios)
-export function criarSupabaseFalso({ documentos = {}, dias = {}, historico: historicoInicial = [], cursos: cursosGuardados = cursosIniciais(), agora = new Date(RELOGIO_DAS_PAGINAS), nomes = {} } = {}) {
+// meteorologia: o que a função meteorologia entrega; null: a função não foi publicada (404 do Supabase)
+export function criarSupabaseFalso({ documentos = {}, dias = {}, historico: historicoInicial = [], cursos: cursosGuardados = cursosIniciais(), agora = new Date(RELOGIO_DAS_PAGINAS), nomes = {}, meteorologia: meteorologiaInicial = METEOROLOGIA_DE_TESTE } = {}) {
   const banco = new Map(Object.entries(documentos).map(([chave, conteudo]) => [chave, { conteudo, versao: 1 }]));
   const tabelaDias = new Map(Object.entries(dias).map(([data, conteudo]) => [data, { conteudo, versao: 1 }]));
   // As entradas do histórico já gravadas (no formato da tabela historico)
@@ -146,6 +162,8 @@ export function criarSupabaseFalso({ documentos = {}, dias = {}, historico: hist
   let desconectado = false;
   const seguradas = new Map();
   const falhas = new Map();
+  let meteorologia = meteorologiaInicial;
+  const chamadasDaMeteorologia = [];
 
   // Versão do formato do conteúdo (campo esquema); o servidor não aceita voltar a um formato mais antigo
   const esquema = conteudo => (conteudo && typeof conteudo.esquema === 'number' ? Math.floor(conteudo.esquema) : 0);
@@ -222,6 +240,14 @@ export function criarSupabaseFalso({ documentos = {}, dias = {}, historico: hist
       }
       if (email !== undefined) trocasDeEmail.push({ de: emailDe(conta), para: email, redirecionar: url.searchParams.get('redirect_to') });
       return responder(200, { ...usuario(conta, emailDe(conta)), ...(email !== undefined ? { new_email: email } : {}) });
+    }
+    // A função meteorologia (Edge Function): só com a sessão de uma conta (o gateway confere o JWT); sem a função
+    // publicada, o 404 do Supabase
+    if (url.pathname === '/functions/v1/meteorologia') {
+      chamadasDaMeteorologia.push({ metodo: req.method(), conta: conta ? conta.perfil : null });
+      if (meteorologia === null) return responder(404, { code: 'NOT_FOUND', message: 'Requested function was not found' });
+      if (!conta) return responder(401, { code: 401, message: 'Invalid JWT' });
+      return responder(200, meteorologia);
     }
     if (url.pathname === '/auth/v1/logout') {
       saidas.push(url.searchParams.get('scope'));
@@ -471,6 +497,10 @@ export function criarSupabaseFalso({ documentos = {}, dias = {}, historico: hist
       seguradas.set(caminho, new Promise(resolve => { liberar = resolve; }));
       return () => { seguradas.delete(caminho); liberar(); };
     },
+    // A função meteorologia: as chamadas (o método e o perfil de quem chamou) e o que ela passa a entregar (null: sem a
+    // função publicada)
+    chamadasDaMeteorologia,
+    trocarMeteorologia(dados) { meteorologia = dados; },
     // As sessões abertas expiram (quem estava conectado precisa entrar de novo)
     expirarSessoes() { sessoes.clear(); },
     // Sem conexão: nenhuma requisição chega ao servidor até reconectar

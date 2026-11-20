@@ -1,0 +1,68 @@
+[
+ {
+  "icaoId": "SBBH",
+  "receiptTime": "2026-11-20T13:10:42.026Z",
+  "obsTime": 1795179600,
+  "reportTime": "2026-11-20T13:00:00.000Z",
+  "temp": 26,
+  "dewp": 1,
+  "wdir": 300,
+  "wspd": 5,
+  "visib": "6+",
+  "altim": 1017,
+  "qcField": 0,
+  "metarType": "METAR",
+  "rawOb": "METAR SBBH 201300Z 30005KT 9999 BKN025 FEW035TCU SCT090 26/01 Q1017",
+  "lat": -19.851,
+  "lon": -43.951,
+  "elev": 799,
+  "name": "Belo Horizonte/Astra, MG, BR",
+  "cover": "SCT",
+  "clouds": [
+   {
+    "cover": "BKN",
+    "base": 2500
+   },
+   {
+    "cover": "FEW",
+    "base": 3500
+   },
+   {
+    "cover": "SCT",
+    "base": 9000
+   }
+  ],
+  "fltCat": "MVFR"
+ },
+ {
+  "icaoId": "SBCF",
+  "receiptTime": "2026-11-20T13:59:23.950Z",
+  "obsTime": 1795183200,
+  "reportTime": "2026-11-20T14:00:00.000Z",
+  "temp": 27,
+  "dewp": 22,
+  "wdir": 360,
+  "wspd": 7,
+  "visib": "6+",
+  "altim": 1016,
+  "qcField": 0,
+  "metarType": "METAR",
+  "rawOb": "METAR SBCF 201400Z 36007KT 9999 BKN023 SCT100 27/22 Q1016",
+  "lat": -19.635,
+  "lon": -43.966,
+  "elev": 825,
+  "name": "Belo Horizonte/Neves Intl, MG, BR",
+  "cover": "SCT",
+  "clouds": [
+   {
+    "cover": "BKN",
+    "base": 2300
+   },
+   {
+    "cover": "SCT",
+    "base": 10000
+   }
+  ],
+  "fltCat": "MVFR"
+ }
+]

@@ -41,6 +41,9 @@ export const GLOSSARIO = {
   'aprovar-escala': { aba: 'Escala', termo: 'Aprovar escala', texto: 'Fixa todos os voos: depois disso, uma alteração não tira ninguém do lugar. O pedido novo entra em volta, e o voo impossível vira conflito.' },
   reabrir: { aba: 'Escala', termo: 'Reabrir', texto: 'Solta os voos (menos os em andamento) e a escala volta a ser refeita inteira a cada alteração.' },
   'painel-missoes': { aba: 'Escala', termo: 'Missões (painel)', texto: 'O quadro do painel com todos os voos e aulas do dia, na ordem do horário, sem separar partidas e chegadas. É o padrão do painel e da TV; Configurar painel escolhe o quadro e as colunas.' },
+  metar: { aba: 'Escala', termo: 'METAR', texto: 'A observação meteorológica oficial do aeródromo, de hora em hora (o SPECI, quando o tempo muda). O pé do painel mostra a de Pampulha (SBBH) e a de Confins (SBCF), com a hora local e a Z.' },
+  taf: { aba: 'Escala', termo: 'TAF', texto: 'A previsão oficial do aeródromo para as próximas horas. No painel, cada mudança (BECMG, TEMPO, PROB, FM) começa uma linha; sem TAF em vigor, a caixa avisa.' },
+  'metar-antigo': { aba: 'Escala', termo: 'METAR antigo', texto: 'O METAR com mais de 90 minutos: a estação parou de mandar, ou a busca não chegou. O painel marca a caixa e diz a idade.' },
 
   // Critérios da compactação
   buracos: { aba: 'Critérios', termo: 'Buracos', texto: 'O que a compactação diminui primeiro: o tempo parado dos instrutores (INVA), o dos aviões (Avião) ou os maiores buracos, de qualquer um.' },

@@ -3,10 +3,14 @@
 // página a página a cada 10 segundos, com o relógio e a página no canto. O quadro com que o painel abre e as colunas
 // (quais e em que ordem) vêm da configuração do painel (js/config-do-painel.js); o operador pode ver outro quadro na
 // hora, pausar a troca e abrir em tela cheia (para um monitor ou TV). Só mostra: o status muda na Lista e no mapa. A TV
-// da recepção (painel.html) usa o mesmo painel, na tela toda e sem os botões.
+// da recepção (painel.html) usa o mesmo painel, na tela toda e sem os botões. Embaixo do quadro, a faixa da meteorologia
+// (js/views/meteorologia.js): o METAR e o TAF de Pampulha e de Confins, as duas caixas sempre à vista; o quadro fica em
+// .fids-quadro, e a faixa, em .fids-meteo, ao lado dele (trocar o quadro não refaz a faixa, nem o contrário).
 import { hm, esc, hojeISO, rotuloDaData, minutoDoDia } from '../format.js';
 import { quadroDeMissoes, quadroDePartidas, quadroDeChegadas, minutoDoQuadro, telasDosQuadros } from '../quadro.js';
 import { QUADROS_DO_PAINEL, normalizarPainel, colunasVisiveis, rotuloDaColuna, quadroValido } from '../config-do-painel.js';
+import { estadoDaMeteorologia, pedirMeteorologia, aoMudarMeteorologia } from '../meteorologia.js';
+import { faixaDaMeteorologia, secaoDaMeteorologia } from './meteorologia.js';
 
 const TROCA_MS = 10000;
 const POR_PAGINA = 12;
@@ -46,13 +50,19 @@ const modoAtual = () => (estado.modo && quadroValido(estado.modo) ? estado.modo 
 // a página teria dez vezes as linhas que cabem: as de baixo ficariam fora da tela, sem nunca aparecer)
 const emPixels = valor => parseFloat(valor) * (/vh\s*$/.test(valor) ? innerHeight / 100 : 1);
 
-// Quantas linhas cabem: na página, 12; em tela cheia, as que couberem na altura da tela
+// Quantas linhas cabem: na página, 12; em tela cheia, as que couberem na altura da tela, tirados o topo, o cabeçalho da
+// tabela e a faixa da meteorologia (as linhas que não cabem vão para a página seguinte). Antes do primeiro desenho (sem
+// o topo e o cabeçalho para medir), as linhas de 80% da tela
+const FOLGA = 4;
 function porPagina() {
   const cheia = document.fullscreenElement && document.fullscreenElement.classList.contains('fids') ? document.fullscreenElement : null;
   const quadro = cheia || (estado.inteiro && document.querySelector(estado.seletor));
   if (!quadro) return POR_PAGINA;
   const linha = emPixels(getComputedStyle(quadro).getPropertyValue('--fids-linha')) || 48;
-  return Math.max(8, Math.floor((innerHeight * 0.8) / linha));
+  const altura = seletor => { const el = quadro.querySelector(seletor); return el ? el.offsetHeight : 0; };
+  const topo = altura('.fids-topo') + altura('.fids-tabela thead');
+  const livre = topo ? innerHeight - topo - FOLGA : innerHeight * 0.8;
+  return Math.max(4, Math.floor((livre - altura('.fids-meteo')) / linha));
 }
 
 function telasAgora() {
@@ -112,6 +122,7 @@ export function painelDaEscala(fonte, dica = '') {
   estado.seletor = '#out .fids';
   estado.inteiro = false;
   ligarRelogio();
+  pedirMeteorologia();
   const atual = modoAtual();
   return `<div class="fids-controles">
       <div class="seg" role="group" aria-label="Quadros do painel">
@@ -121,7 +132,7 @@ export function painelDaEscala(fonte, dica = '') {
       <button type="button" class="btn sec" data-fids="tela-cheia">Tela cheia</button>
       <button type="button" class="btn sec" data-fids="configurar" aria-haspopup="dialog">Configurar painel</button>
     </div>
-    <div class="fids${estado.pausado ? ' pausado' : ''}" role="region" aria-label="Painel do dia">${quadroNovo()}</div>`;
+    <div class="fids${estado.pausado ? ' pausado' : ''}" role="region" aria-label="Painel do dia"><div class="fids-quadro">${quadroNovo()}</div>${secaoDaMeteorologia(estadoDaMeteorologia())}</div>`;
 }
 
 // A configuração mudou o quadro com que o painel abre: o painel passa a mostrar esse quadro (o escolhido nos botões
@@ -133,7 +144,7 @@ export function seguirConfiguracaoDoPainel() {
 }
 
 function redesenhar() {
-  const quadro = document.querySelector(estado.seletor);
+  const quadro = document.querySelector(`${estado.seletor} > .fids-quadro`);
   if (!quadro || !estado.fonte) return;
   const html = quadroHtml();
   if (semHora(html) === estado.chave) {
@@ -171,11 +182,32 @@ export function painelNaTela(elemento, fonte) {
   elemento.classList.add('fids', 'inteiro');
   elemento.setAttribute('role', 'region');
   elemento.setAttribute('aria-label', 'Painel do dia');
-  elemento.innerHTML = quadroNovo();
+  // A faixa entra antes do quadro: as linhas da página contam com a altura dela
+  pedirMeteorologia();
+  elemento.innerHTML = `<div class="fids-quadro"></div>${secaoDaMeteorologia(estadoDaMeteorologia())}`;
+  const quadro = elemento.querySelector('.fids-quadro');
+  quadro.innerHTML = quadroNovo();
   caberNaLargura();
+  // Com o topo e o cabeçalho na tela, as linhas da página saem da altura medida
+  redesenhar();
   ligarRelogio();
 }
 export const atualizarPainel = redesenhar;
+
+// A faixa da meteorologia com o que há agora (mensagens novas, uma busca que falhou, a idade): só é trocada quando muda.
+// Quando a altura dela muda, na tela toda, a página passa a ter outras tantas linhas
+const faixasEscritas = new WeakMap();
+function atualizarFaixa() {
+  const faixa = document.querySelector(`${estado.seletor} > .fids-meteo`);
+  if (!faixa) return;
+  const html = faixaDaMeteorologia(estadoDaMeteorologia());
+  if (faixasEscritas.get(faixa) === html) return;
+  const altura = faixa.offsetHeight;
+  faixa.innerHTML = html;
+  faixasEscritas.set(faixa, html);
+  if (faixa.offsetHeight !== altura) redesenhar();
+}
+aoMudarMeteorologia(atualizarFaixa);
 
 function atualizarRelogio() {
   const relogio = document.querySelector(`${estado.seletor} .fids-hora`);
@@ -202,6 +234,11 @@ function ligarRelogio() {
     if (trocar || estado.telas <= 1) estado.ultimaTroca = Date.now();
     if (trocar) estado.tela += 1;
     const minuto = minutoDoDia();
+    // A cada minuto, a idade da meteorologia; a cada 10, as mensagens novas (pedirMeteorologia conta o tempo)
+    if (minuto !== estado.minuto) {
+      pedirMeteorologia();
+      atualizarFaixa();
+    }
     if (trocar || minuto !== estado.minuto) {
       estado.minuto = minuto;
       redesenhar();

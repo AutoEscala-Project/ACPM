@@ -83,7 +83,7 @@ test.describe('Painel: o quadro Missões', () => {
       const dados = [...quadro.querySelectorAll('tbody tr:not(.fids-vazia):not(.fids-nada)')];
       return {
         cabe: quadro.querySelector('.fids-tabela').scrollWidth <= quadro.clientWidth,
-        fundo: quadro.querySelector('.fids-tabela').getBoundingClientRect().bottom <= innerHeight,
+        fundo: quadro.querySelector('.fids-tabela').getBoundingClientRect().bottom <= quadro.querySelector('.fids-meteo').getBoundingClientRect().top + 0.5,
         foraDaTela: dados.filter(tr => tr.getBoundingClientRect().bottom > innerHeight).length,
         colunas: quadro.querySelectorAll('thead th').length,
         pagina: quadro.querySelector('.fids-relogio small').textContent

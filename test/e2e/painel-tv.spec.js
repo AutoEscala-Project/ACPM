@@ -109,8 +109,8 @@ test.describe('TV da recepção', () => {
   });
 
   // Um dia cheio na tela toda: o quadro cabe na largura (com todas as colunas, em qualquer ordem, e os textos longos: o
-  // embarque, a turma de Ground, os nomes compridos) e na altura (as linhas que não cabem vão para a página seguinte), na
-  // TV de 1080p e de 720p e no monitor 16:10 ou 4:3 em tela cheia
+  // embarque, a turma de Ground, os nomes compridos) e na altura, acima da faixa da meteorologia (as linhas que não cabem
+  // vão para a página seguinte), na TV de 1080p e de 720p e no monitor 16:10 ou 4:3 em tela cheia
   const CASOS_DA_TELA = [
     [1920, 1080, { quadro: 'partidas', colunas: [...TODAS_AS_COLUNAS].reverse() }],
     [1280, 720, null],
@@ -135,6 +135,7 @@ test.describe('TV da recepção', () => {
           quadro: quadro.clientWidth,
           pagina: document.documentElement.scrollWidth,
           fundo: quadro.querySelector('.fids-tabela').getBoundingClientRect().bottom,
+          faixa: quadro.querySelector('.fids-meteo').getBoundingClientRect().toJSON(),
           foraDaTela: dados.filter(tr => tr.getBoundingClientRect().bottom > innerHeight).length,
           linhas: dados.length,
           paginas: Number(/\/(\d+)/.exec(quadro.querySelector('.fids-relogio small').textContent)[1])
@@ -144,6 +145,9 @@ test.describe('TV da recepção', () => {
       expect(medidas.topo, 'a faixa do topo na largura').toBeLessThanOrEqual(medidas.quadro);
       expect(medidas.pagina).toBeLessThanOrEqual(largura);
       expect(medidas.fundo, 'o quadro (com as linhas vazias) na altura').toBeLessThanOrEqual(altura);
+      // Neste navegador, a faixa diz "Meteorologia indisponível", no pé da tela, embaixo do quadro
+      expect(medidas.fundo, 'o quadro acima da faixa da meteorologia').toBeLessThanOrEqual(medidas.faixa.top + 0.5);
+      expect(medidas.faixa.bottom, 'a faixa no pé da tela').toBeCloseTo(altura, 0);
       expect(medidas.foraDaTela, 'nenhuma linha fora da tela').toBe(0);
       expect(medidas.paginas, 'o que não cabe vai para outra página').toBeGreaterThan(1);
       expect(medidas.linhas).toBeGreaterThanOrEqual(8);
