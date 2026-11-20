@@ -132,7 +132,8 @@ A TV fica ligada dias seguidos, sem ninguém por perto, e nunca mostra um quadro
 
 - **A sessão se renova sozinha** antes de expirar: faltando menos de 10 minutos, a cada busca do quadro e a cada 30
   segundos, e na hora quando a TV acorda, quando a página volta à vista e quando a conexão volta. Um 401 (o JWT recusado)
-  em `painel_do_dia` ou na função `meteorologia` renova e tenta mais uma vez.
+  em `painel_do_dia` ou na função `meteorologia` renova e tenta mais uma vez. A renovação sem resposta em 20 segundos
+  (a conexão que caiu no meio) não segura as buscas: elas seguem com a sessão que ainda vale.
 - **"Manter esta TV conectada"**, no login da TV (marcado por quem entra; só para a conta com o perfil Painel): **a senha
   da conta da TV fica guardada no navegador daquela TV** (`localStorage`, chave `acpm-<projeto>-painel-entrada`, em
   texto, ao lado da sessão). Quando a renovação é recusada (a sessão revogada ou perdida), a TV entra de novo sozinha

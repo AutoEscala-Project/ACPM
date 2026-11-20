@@ -314,4 +314,46 @@ test.describe('A sessão da TV da recepção', () => {
     await a.context.close();
     await b.context.close();
   });
+
+  // A conexão que cai no meio de uma renovação: o pedido fica sem resposta e sem erro (até o navegador desistir, muitos
+  // minutos depois). As buscas não esperam por ela: seguem com a sessão que ainda vale. Quando o navegador desiste, a
+  // renovação seguinte dá certo, e a TV passa da validade da primeira sessão sem o aviso
+  test('uma renovação sem resposta não prende as buscas, e a seguinte dá certo', async ({ browser }) => {
+    const { servidor, context, page, erros } = await novaTV(browser, { validadeDaSessao: 15 * 60 });
+    // O primeiro pedido de renovação fica sem resposta (até desistir); os outros chegam ao servidor
+    let presa = null;
+    await context.route(/\/auth\/v1\/token\?grant_type=refresh_token/, route => {
+      if (presa) return route.fallback();
+      presa = route;
+    });
+    await page.goto('./painel.html?supabase=teste');
+    await entrarNaTV(page, CONTAS.painel);
+    await expect(linhas(page)).toHaveCount(2);
+    // 08:06: a renovação começou e ficou sem resposta
+    await page.clock.runFor(6 * MINUTO);
+    await expect.poll(() => presa).not.toBeNull();
+    // As buscas seguintes não esperam por ela: o quadro segue atualizado com a sessão que ainda vale (até 08:15)
+    cancelarJoao(servidor);
+    await page.clock.runFor(MINUTO);
+    await expect(linhas(page).nth(1)).toHaveClass(/\bfids-Cancelado\b/);
+    const dia = structuredClone(servidor.dias.get(HOJE).conteudo);
+    dia.fStatus = { ...dia.fStatus, '1001_0_1': 'Confirmado' };
+    servidor.alterarDiaPorOutraPessoa(HOJE, dia);
+    await page.clock.runFor(2 * MINUTO);
+    await expect(linhas(page).nth(1)).toHaveClass(/\bfids-Confirmado\b/);
+    await quadroNaTela(page);
+    // O navegador desiste do pedido: a renovação seguinte (passado o minuto em que o supabase-js não repete a que falhou)
+    // dá certo, e a TV passa das 08:15 com o quadro
+    await presa.abort('timedout');
+    await page.clock.runFor(2 * MINUTO);
+    await expect.poll(() => servidor.renovacoes.filter(r => r.aceita).length).toBeGreaterThan(0);
+    servidor.expirarTokensAnteriores();
+    cancelarJoao(servidor);
+    await page.clock.runFor(10 * MINUTO);
+    await quadroNaTela(page);
+    await expect(linhas(page).nth(1)).toHaveClass(/\bfids-Cancelado\b/);
+    // O pedido de que o navegador desistiu
+    expect(erros.filter(e => !/ERR_TIMED_OUT/.test(e))).toEqual([]);
+    await context.close();
+  });
 });

@@ -4,7 +4,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  RENOVAR_ANTES_MS, SEM_ATUALIZACAO_MS, TIQUE_MS, acordou, criarSessaoDaTV, erroDeSessao, falhaPassageira, guardaDaEntrada,
+  PRAZO_DA_RENOVACAO_MS, RENOVAR_ANTES_MS, SEM_ATUALIZACAO_MS, TIQUE_MS, acordou, criarSessaoDaTV, erroDeSessao, falhaPassageira, guardaDaEntrada,
   precisaRenovar, telaDaTV
 } from '../../js/sessao-da-tv.js';
 
@@ -154,11 +154,17 @@ function authFalso({ sessao = { expires_at: (AGORA + 60 * MINUTO) / 1000 }, reno
   return { auth, chamadas };
 }
 const TV = { email: 'tv@teste.acpm', senha: 'senha-da-tv' };
-function montar({ guardada = null, perfil = 'painel', ...opcoes } = {}) {
+// O prazo de cada renovação, falso: só passa quando o teste manda (passar), e anota os milissegundos pedidos
+function prazoFalso() {
+  const esperas = [];
+  const prazo = ms => new Promise(resolve => { esperas.push({ ms, resolve }); });
+  return { prazo, esperas, passar: () => esperas.splice(0).forEach(e => e.resolve()) };
+}
+function montar({ guardada = null, perfil = 'painel', prazo = prazoFalso().prazo, ...opcoes } = {}) {
   const { auth, chamadas } = authFalso(opcoes);
   const a = armazenamento(), entrada = guardaDaEntrada('k', a);
   if (guardada) entrada.guardar(guardada.email, guardada.senha);
-  const sessao = criarSessaoDaTV({ auth, entrada, perfil: async () => perfil, agora: () => AGORA });
+  const sessao = criarSessaoDaTV({ auth, entrada, perfil: async () => perfil, agora: () => AGORA, prazo });
   return { sessao, auth, chamadas, entrada };
 }
 const nomes = chamadas => chamadas.map(c => (Array.isArray(c) ? c[0] : c));
@@ -232,6 +238,25 @@ describe('A renovação da sessão da TV', () => {
     const { sessao, chamadas } = montar({ sessao: { expires_at: (AGORA + 5 * MINUTO) / 1000 } });
     assert.deepEqual(await Promise.all([sessao.renovar(), sessao.renovar()]), ['ok', 'ok']);
     assert.deepEqual(nomes(chamadas), ['getSession', 'refreshSession', 'getSession']);
+  });
+
+  it('a renovação sem resposta (a conexão caiu no meio): passados 20 segundos, vale como rede, e a seguinte não espera por ela', async () => {
+    assert.equal(PRAZO_DA_RENOVACAO_MS, 20000);
+    const relogio = prazoFalso();
+    const { sessao, auth, chamadas } = montar({ sessao: { expires_at: (AGORA + 5 * MINUTO) / 1000 }, prazo: relogio.prazo });
+    let responder;
+    auth.refreshSession = () => { chamadas.push('refreshSession'); return new Promise(resolve => { responder = resolve; }); };
+    const primeira = sessao.renovar();
+    const segunda = sessao.renovar();
+    await new Promise(resolve => setImmediate(resolve));
+    assert.deepEqual(relogio.esperas.map(e => e.ms), [20000]);
+    relogio.passar();
+    assert.equal(await primeira, 'rede');
+    // A segunda já corre (sem esperar a primeira terminar), e ela também fica no prazo
+    await new Promise(resolve => setImmediate(resolve));
+    assert.deepEqual(nomes(chamadas), ['getSession', 'refreshSession', 'getSession', 'refreshSession']);
+    responder({ data: { session: null }, error: null });
+    assert.equal(await segunda, 'ok');
   });
 });
 

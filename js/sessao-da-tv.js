@@ -14,6 +14,9 @@ import { soPainel } from './perfis.js';
 export const RENOVAR_ANTES_MS = 10 * 60000;
 export const SEM_ATUALIZACAO_MS = 3 * 60000;
 export const TIQUE_MS = 30000;
+// A renovação que não termina em 20 segundos (a conexão caiu no meio, e o pedido fica sem resposta e sem erro até o
+// navegador desistir, muitos minutos depois) não segura mais as buscas: elas seguem com a sessão que ainda vale
+export const PRAZO_DA_RENOVACAO_MS = 20000;
 
 // A sessão que expira (expires_at, em segundos) em menos de 10 minutos é renovada; sem a data, não
 export const precisaRenovar = (expiraEm, agora) => typeof expiraEm === 'number' && expiraEm * 1000 - agora < RENOVAR_ANTES_MS;
@@ -60,9 +63,11 @@ export function guardaDaEntrada(chave, armazenamento = globalThis.localStorage) 
 }
 
 // A sessão da TV sobre o auth do supabase-js. perfil(): o perfil da conta conectada (null sem perfil; undefined quando
-// não deu para saber). renovar devolve 'ok' (a sessão vale), 'rede' (não deu para falar com o servidor: a sessão fica e a
-// TV tenta de novo) ou 'expirada' (renovar e entrar de novo não deram certo: falta o login)
-export function criarSessaoDaTV({ auth, entrada, perfil, agora = () => Date.now() }) {
+// não deu para saber). renovar devolve 'ok' (a sessão vale), 'rede' (não deu para falar com o servidor, ou ele não
+// respondeu no prazo: a sessão fica e a TV tenta de novo) ou 'expirada' (renovar e entrar de novo não deram certo: falta
+// o login). prazo(ms): a promessa que se cumpre passados ms (o relógio, nos testes)
+const prazoPadrao = ms => new Promise(resolve => { setTimeout(resolve, ms); });
+export function criarSessaoDaTV({ auth, entrada, perfil, agora = () => Date.now(), prazo = prazoPadrao }) {
   // Entra de novo com o e-mail e a senha guardados. Sem eles, ou com eles recusados (a senha mudou, a conta deixou de
   // ser a da TV), eles saem, e a sessão que sobrou (sobrou: a renovação recusada deixou a sessão morta guardada; a conta
   // que entrou e não é a da TV) sai deste navegador. Sem sessão nenhuma, nada a tirar: um login feito na tela enquanto
@@ -94,10 +99,12 @@ export function criarSessaoDaTV({ auth, entrada, perfil, agora = () => Date.now(
     return falhaPassageira(recusa) ? 'rede' : entrarDeNovo({ sobrou: true });
   }
 
-  // Uma renovação por vez (a busca do quadro, a da meteorologia e o tique podem pedir juntas)
+  // Uma renovação por vez (a busca do quadro, a da meteorologia e o tique podem pedir juntas), cada uma com o prazo: a que
+  // passa dele vale como 'rede' e libera a seguinte (o supabase-js junta a renovação nova com a que ainda corre, e o
+  // refresh token não é usado duas vezes)
   let fila = Promise.resolve();
   const renovar = ({ forcar = false } = {}) => {
-    const vez = fila.then(() => passo(forcar));
+    const vez = fila.then(() => Promise.race([passo(forcar), prazo(PRAZO_DA_RENOVACAO_MS).then(() => 'rede')]));
     fila = vez.catch(() => {});
     return vez;
   };
