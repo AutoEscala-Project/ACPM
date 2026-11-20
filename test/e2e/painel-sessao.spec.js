@@ -263,6 +263,36 @@ test.describe('A sessão da TV da recepção', () => {
     await context.close();
   });
 
+  // A TV ligada de manhã antes da internet: a sessão guardada já passou da validade e não dá para renovar ainda. Ela não é
+  // sessão expirada (o refresh token ainda vale): a TV mostra o aviso, sem o login, e o quadro volta com a conexão
+  test('a TV que liga sem conexão, com a sessão guardada vencida: o aviso, não o login; com a conexão, ela renova e o quadro volta', async ({ browser }) => {
+    const { servidor, context, page, erros } = await novaTV(browser, { validadeDaSessao: 15 * 60 });
+    await page.goto('./painel.html?supabase=teste');
+    await entrarNaTV(page, CONTAS.painel);
+    await expect(linhas(page)).toHaveCount(2);
+    // A TV fica desligada (sem conexão) por meia hora e é religada: a sessão de 15 minutos venceu. O supabase-js tenta
+    // renovar por uns 30 segundos antes de desistir, e o relógio da página anda aos poucos
+    servidor.desconectar();
+    await page.clock.fastForward(30 * MINUTO);
+    await page.reload();
+    const aviso = page.locator('#aviso-da-tv');
+    await expect.poll(async () => {
+      await page.clock.runFor(1000);
+      return aviso.isVisible();
+    }, { timeout: 20_000 }).toBe(true);
+    await expect(page.locator('#form-login')).toBeHidden();
+    await expect(page.locator('#aviso-da-tv-texto')).toHaveText(/^Painel sem atualização desde 08:3\d: tentando de novo…$/);
+    // A conexão volta: a TV renova a sessão guardada, sem o login, e o quadro aparece
+    servidor.reconectar();
+    cancelarJoao(servidor);
+    await page.clock.runFor(MINUTO);
+    await quadroNaTela(page);
+    await expect(linhas(page).nth(1)).toHaveClass(/\bfids-Cancelado\b/);
+    expect(servidor.renovacoes.some(r => r.aceita)).toBe(true);
+    expect(erros).toEqual([]);
+    await context.close();
+  });
+
   test('a TV que volta à vista (ou acorda) busca na hora, com a sessão renovada', async ({ browser }) => {
     const { servidor, context, page, erros } = await novaTV(browser, { validadeDaSessao: 15 * 60 });
     await page.goto('./painel.html?supabase=teste');

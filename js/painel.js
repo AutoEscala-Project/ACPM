@@ -18,7 +18,7 @@ import { configurarMeteorologia } from './meteorologia.js';
 import { linhasDoQuadro, quadroDoDia } from './quadro.js';
 import { painelNaTela, atualizarPainel } from './views/painel-aeroporto.js';
 import { hm, hojeISO, minutoDoDia } from './format.js';
-import { TIQUE_MS, acordou, criarSessaoDaTV, guardaDaEntrada, telaDaTV } from './sessao-da-tv.js';
+import { TIQUE_MS, acordou, criarSessaoDaTV, falhaPassageira, guardaDaEntrada, telaDaTV } from './sessao-da-tv.js';
 
 const BUSCA_MS = 60000;
 // Uma busca sem resposta em 30 segundos (a conexão que caiu no meio) não segura as seguintes
@@ -224,13 +224,15 @@ async function conectar(projeto) {
   entrada = guardaDaEntrada(chaveDaEntradaDaTV(projeto));
   sessao = criarSessaoDaTV({ auth: cliente.auth, entrada, perfil: () => perfilDaConta(cliente) });
   cliente.auth.onAuthStateChange((_evento, atual) => { if (atual && atual.user && atual.user.email) emailDaTV = atual.user.email; });
-  const { data } = await cliente.auth.getSession();
+  const { data, error } = await cliente.auth.getSession();
   const perfil = data.session ? await perfilDaConta(cliente) : null;
   if (data.session && perfil !== undefined && !soPainel(perfil)) {
     await cliente.auth.signOut({ scope: 'local' }).catch(() => {});
     entrada.limpar();
     await pedirLogin();
-  } else if (!data.session) {
+  } else if (!data.session && !falhaPassageira(error)) {
+    // Sem sessão. (A sessão guardada vencida que não deu para renovar, sem conexão, continua guardada: a TV segue com
+    // ela, mostra o aviso e renova quando a conexão voltar, sem pedir o login)
     const guardada = entrada.ler();
     if (await sessao.entrarDeNovo() === 'expirada') await pedirLogin({ expirada: Boolean(guardada), email: guardada ? guardada.email : '' });
   }
