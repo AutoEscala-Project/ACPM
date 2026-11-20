@@ -138,8 +138,8 @@ test.describe('Aplicação', () => {
       'Vai voar?', 'Início pref', 'Exportar CSV', 'Emitir PDF', 'Turno rápido', 'Cada cartão', 'campo Data', 'Equipamento', 'Bloquear',
       'Sessões', 'sessão', 'Desfazer', 'Escala de Voo', 'Por avião e sala', 'Avião / sala', 'Aviões e salas', 'o botão ao lado de Alunos',
       // O "+" do mapa fica ao lado do nome da linha; o Operador não muda os Cursos nem os limites da lei; a coluna de quem
-      // vem é "Vem" (a data aberta não é sempre hoje)
-      'no fim de cada linha', 'altera tudo e opera a escala', 'o interruptor de quem vem']) {
+      // vem é "Vem" (a data aberta não é sempre hoje); o filtro das habilitações tem várias marcas
+      'no fim de cada linha', 'altera tudo e opera a escala', 'o interruptor de quem vem', 'filtro por habilitação']) {
       expect(texto, antigo).not.toContain(antigo);
     }
     await expect(manual.locator('h3')).toHaveText(['Primeiros passos: a rotina do operador', 'Perfis de acesso', 'As abas',
@@ -158,8 +158,10 @@ test.describe('Aplicação', () => {
       'agendado 10:10 · PR-VOB', 'fora da regra', 'ao lado do nome de cada linha', 'não entram no Histórico da data', 'de 1 a 300 kg',
       // Acima do limite de voos locais do horário, todo voo local agendado pede a confirmação (não só o 7º)
       'mais de 6 voos locais no mesmo horário',
-      // A busca sem acentos, quantos aparecem e o "Limpar filtros"; a coluna Vem (a data aberta não é sempre hoje)
-      'sem os acentos', '12 de 40 instrutores', 'Limpar filtros', 'o interruptor Vem']) {
+      // A busca sem acentos, quantos aparecem e o "Limpar filtros"; a coluna Vem (a data aberta não é sempre hoje); o filtro
+      // das habilitações, com várias marcas e a regra ("todas as marcadas")
+      'sem os acentos', '12 de 40 instrutores', 'Limpar filtros', 'o interruptor Vem', 'Filtro das habilitações',
+      'que têm todas as marcadas', 'Habilitações: Noturno + C172']) {
       expect(texto, novo).toContain(novo);
     }
 

@@ -779,6 +779,25 @@ tbody tr.sem-resultado td { padding: 10px 8px; color: var(--mu); }
 /* Na tabela mais larga que a tela (a grade do dia, no celular, rola para o lado), o texto e o "Limpar filtros" ficam na
    parte à vista: presos à esquerda e da largura da tela, com o botão embaixo do texto quando não cabe ao lado */
 tbody tr.sem-resultado .sem-resultado-texto { position: sticky; left: 8px; max-width: calc(100vw - 50px); }
+/* O filtro de vários valores (js/views/filtro-multiplo.js): o botão diz o que está marcado, e a seta vira com o painel
+   aberto. O painel vem logo depois do botão no HTML (o Tab passa do botão para as caixas), mas na tela fica na linha de
+   baixo da barra, no fluxo da página: ele empurra a tabela em vez de cobri-la. Os grupos ficam lado a lado, cada um com as
+   caixas em coluna */
+.filtro-botao { max-width: min(100%, 24em); justify-content: space-between; }
+.filtro-botao .filtro-resumo { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.filtro-botao .seta { flex: none; transition: transform .15s; }
+.filtro-botao[aria-expanded="true"] .seta { transform: rotate(180deg); }
+.filtro-botao.com-marcas { border-color: var(--ac); }
+.filtro-painel { order: 1; flex: 1 1 100%; min-width: 0; padding: 6px 12px 12px; background: var(--pn); border: 1px solid var(--ln2); border-radius: 8px; }
+.filtro-painel[hidden] { display: none; }
+/* A regra e "Limpar" na mesma linha: na tela estreita, a frase quebra e "Limpar" fica à direita */
+.filtro-cab { display: flex; align-items: center; gap: 2px 12px; }
+.filtro-regra { flex: 1 1 auto; min-width: 0; margin: 0; font-size: 13.5px; color: var(--mu); }
+.filtro-regra .filtro-fim { white-space: nowrap; }
+.filtro-grupos { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 4px; }
+.filtro-grupos fieldset { margin: 0; padding: 2px 12px 6px; border: 1px solid var(--ln); border-radius: 8px; }
+.filtro-grupos legend { padding: 0 4px; font: 600 14px 'Barlow Semi Condensed', sans-serif; }
+.filtro-opcao { display: flex; align-items: center; gap: 8px; padding: 3px 0; cursor: pointer; white-space: nowrap; }
 /* Cursos: o programa de cada curso, em fases (sob o título do módulo), cada fase com o cabeçalho (nome, módulo, quando
    abre, "Depois de…" e os botões) e a tabela das missões; no fim, "+ Fase", as retiradas e as alterações */
 #cursos { display: flex; flex-direction: column; gap: 12px; }
@@ -947,6 +966,14 @@ input.falta::placeholder { color: var(--wa); }
 .habs-painel label.hab { display: flex; align-items: center; gap: 10px; padding: 6px 0; cursor: pointer; }
 @media (max-width: 640px) {
   [data-flt="inst"], #flt-ins-hab, [data-flt="alu"] { flex: 1 1 140px; min-width: 0; }
+  /* O botão do filtro divide a linha com a busca: o que está marcado ("Habilitações: Noturno + C172") ocupa até duas
+     linhas, em vez de virar "Habilitaçõ…" */
+  .filtro-botao { padding: 4px 8px 4px 10px; }
+  .filtro-botao .filtro-resumo { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; white-space: normal; line-height: 1.2; text-align: left; }
+  /* O painel do filtro: os grupos um embaixo do outro, cada um com as caixas em duas colunas quando cabem, e cada caixa
+     com o rótulo inteiro (o texto quebra) e 44 px para o dedo */
+  .filtro-grupos fieldset { flex: 1 1 100%; min-width: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(128px, 1fr)); column-gap: 12px; }
+  .filtro-opcao { min-height: 44px; white-space: normal; }
   /* Cadastro no celular: um cartão por instrutor (nome e peso; habilitações; ações) */
   table.cadastro { min-width: 0; }
   table.cadastro thead { display: none; }

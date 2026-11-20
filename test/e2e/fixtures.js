@@ -98,9 +98,26 @@ export async function irParaVista(page, aba, vista) {
   await expect(page.locator(`#s-${aba}`)).toHaveAttribute('data-vista', vista);
 }
 
-// As telas que não são a de abertura de uma aba: as outras vistas (Instrutores › Cadastro) e as tabelas que os filtros
-// deixam sem nenhuma linha (com "Limpar filtros"). Os testes do celular e da acessibilidade, que conferem cada aba como
-// ela abre, conferem também estas: conferir(nome) roda em cada uma. No fim, a busca volta a vazia
+// O filtro das habilitações de Instrutores (js/views/filtro-multiplo.js): abre o painel, deixa marcadas só as
+// habilitações dadas (os valores: 'mlte', 'aviao:PR-VOM'…) e fecha o painel pelo botão (com fechar: false, ele fica
+// aberto). Sem nenhuma, todas desmarcadas
+export async function filtrarHabilitacoes(page, valores, { fechar = true } = {}) {
+  const botao = page.locator('#flt-ins-hab'), painel = page.locator('#flt-ins-hab-painel');
+  if (await botao.getAttribute('aria-expanded') !== 'true') await botao.click();
+  await expect(painel).toBeVisible();
+  const mudar = await painel.locator('input[data-filtro]').evaluateAll((caixas, marcar) =>
+    caixas.filter(c => c.checked !== marcar.includes(c.dataset.valor)).map(c => c.dataset.valor), valores);
+  for (const valor of mudar) await painel.locator(`input[data-valor="${valor}"]`).click();
+  await expect(painel.locator('input[data-filtro]:checked')).toHaveCount(valores.length);
+  if (!fechar) return;
+  await botao.click();
+  await expect(painel).toBeHidden();
+}
+
+// As telas que não são a de abertura de uma aba: as outras vistas (Instrutores › Cadastro), o painel aberto do filtro
+// das habilitações (com duas marcas: o botão diz as duas) e as tabelas que os filtros deixam sem nenhuma linha (com
+// "Limpar filtros"). Os testes do celular e da acessibilidade, que conferem cada aba como ela abre, conferem também
+// estas: conferir(nome) roda em cada uma. No fim, a busca e as marcas voltam a vazias
 export async function percorrerVistasEFiltros(page, conferir) {
   await irParaVista(page, 'ins', 'cadastro');
   await conferir('instrutores: cadastro');
@@ -111,6 +128,10 @@ export async function percorrerVistasEFiltros(page, conferir) {
   await nenhumComOsFiltros(page, 'inst-dia', 'ins');
   await conferir('instrutores: disponibilidade do dia, nenhum com os filtros');
   await page.locator('[data-flt="inst"]').fill('');
+  await filtrarHabilitacoes(page, ['noturno', 'c172'], { fechar: false });
+  await expect(page.locator('#flt-ins-hab')).toHaveText('Habilitações: Noturno + C172');
+  await conferir('instrutores: o filtro das habilitações aberto, com duas marcas');
+  await filtrarHabilitacoes(page, []);
   await irPara(page, 'alu');
   await page.locator('[data-flt="alu"]').fill('nenhum assim');
   await nenhumComOsFiltros(page, 'alu', 'alu');

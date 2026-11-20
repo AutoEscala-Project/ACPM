@@ -16,6 +16,7 @@ import { progressoDoAluno } from './etapas.js';
 import { unidadeDoVoo, umPorUnidade } from '../voo.js';
 import { CURSOS } from '../cursos.js';
 import { mostrarVista } from './vistas.js';
+import { criarFiltroMultiplo } from './filtro-multiplo.js';
 
 const ROTULO = new Map(HABILITACOES.map(h => [h.id, h.curto]));
 // No cadastro, todas na ordem do painel; na grade do dia, só as que mais distinguem o instrutor
@@ -157,6 +158,8 @@ export function atualizarLinhaDoCadastro(x) {
 
 export function rIns() {
   mostrarVista('ins');
+  // As opções do filtro das habilitações acompanham a frota (a habilitação própria de cada recurso)
+  if (filtroDasHabilitacoes) filtroDasHabilitacoes.desenhar();
   rLimites();
   $('#inst').innerHTML = S.ins.length ? S.ins.map(linhaDoCadastro).join('') : `<tr><td colspan="5" class="h">${SEM_INSTRUTORES}</td></tr>`;
   rInsDia();
@@ -310,31 +313,42 @@ export function atualizarLinhaDoAluno(s, { naoEscalar = false, voaComMudou = fal
   aplicarFiltrosDosAlunos();
 }
 
-// Os filtros de Instrutores (o nome e a habilitação, nas duas vistas) e de Alunos (o nome). Eles ficam aqui, e não só
-// nos campos, e valem de novo a cada redesenho das linhas: o cadastro novo, outra data, um nome mudado, um resultado
-// registrado. O nome é comparado pela chave da busca (sem acentos). Quem acabou de ser cadastrado (+ Novo) ou alterado
-// na linha dele (o nome, a habilitação tirada no painel) continua à vista mesmo fora dos filtros, até eles mudarem: é na
-// linha do novo que se digita o nome, e a linha alterada não some com o foco de quem usa o teclado (o Tab depois do nome,
-// o botão a que o painel devolve o foco)
-const SEM_FILTROS = { ins: { nome: '', hab: '' }, alu: { nome: '' } };
-const filtros = { ins: { ...SEM_FILTROS.ins }, alu: { ...SEM_FILTROS.alu } };
+// Os filtros de Instrutores (o nome e as habilitações, nas duas vistas) e de Alunos (o nome). Eles ficam aqui (a busca)
+// e no filtro de vários valores (as marcas), e não só nos campos, e valem de novo a cada redesenho das linhas: o cadastro
+// novo, outra data, um nome mudado, um resultado registrado. O nome é comparado pela chave da busca (sem acentos). Quem
+// acabou de ser cadastrado (+ Novo) ou alterado na linha dele (o nome, a habilitação tirada no painel) continua à vista
+// mesmo fora dos filtros, até eles mudarem: é na linha do novo que se digita o nome, e a linha alterada não some com o
+// foco de quem usa o teclado (o Tab depois do nome, o botão a que o painel devolve o foco)
+const filtros = { ins: { nome: '' }, alu: { nome: '' } };
 const mantidos = { ins: new Set(), alu: new Set() };
-const CAMPOS_DOS_FILTROS = { ins: { nome: '[data-flt="inst"]', hab: '#flt-ins-hab' }, alu: { nome: '[data-flt="alu"]' } };
+const BUSCA_DA_ABA = { ins: '[data-flt="inst"]', alu: '[data-flt="alu"]' };
+// Os filtros de vários valores de cada aba (js/views/filtro-multiplo.js): em Instrutores, o das habilitações
+let filtroDasHabilitacoes = null;
+const multiplos = { ins: [], alu: [] };
 const NOMES_DA_ABA = { ins: ['instrutor', 'instrutores'], alu: ['aluno', 'alunos'] };
 // Na digitação, a contagem espera a pessoa parar (o leitor de tela não a dita a cada letra)
 const ESPERA_DA_DIGITACAO = 500;
 
-// Ao abrir: as opções do filtro de habilitação (uma por habilitação), e os campos como os filtros, vazios (o navegador
-// que devolve o texto de antes de recarregar a página não deixa o campo diferente do filtro)
+// As opções do filtro das habilitações: os grupos do painel "Editar habilitações", com a habilitação própria de cada
+// recurso da frota, e os rótulos da coluna Habilitações
+const opcoesDasHabilitacoes = () => [...GRUPOS_DE_HABILITACAO, ...gruposDosRecursos()]
+  .map(([titulo, ids]) => ({ titulo, opcoes: ids.map(h => [h, rotuloDa(h)]) }));
+
+// Ao abrir: o filtro das habilitações, e a busca como o filtro, vazia (o navegador que devolve o texto de antes de
+// recarregar a página não deixa o campo diferente do filtro). Nas habilitações, o instrutor aparece se tem todas as
+// marcadas: uma missão pede várias juntas (o Noturno no C172, Noturno e C172)
 export function prepararFiltros() {
-  $('#flt-ins-hab').insertAdjacentHTML('beforeend', HABILITACOES.map(h => `<option value="${h.id}">${esc(h.nome)}</option>`).join(''));
-  for (const aba of Object.keys(CAMPOS_DOS_FILTROS)) {
-    for (const [chave, seletor] of Object.entries(CAMPOS_DOS_FILTROS[aba])) $(seletor).value = filtros[aba][chave];
-  }
+  filtroDasHabilitacoes = criarFiltroMultiplo({
+    id: 'flt-ins-hab', nome: 'Habilitações', todas: 'Todas as habilitações', regra: 'todas',
+    dica: ['filtro-das-habilitacoes', 'Filtro das habilitações'], grupos: opcoesDasHabilitacoes, aoMudar: () => filtrar('ins')
+  });
+  multiplos.ins = [filtroDasHabilitacoes];
+  for (const [aba, seletor] of Object.entries(BUSCA_DA_ABA)) $(seletor).value = filtros[aba].nome;
 }
 
-// Um filtro da aba mudou ({ nome } ou { hab }): vale para todas as linhas, também as do cadastrado e do alterado agora
-export function filtrar(aba, mudanca) {
+// Um filtro da aba mudou (a busca, { nome }, ou as marcas de um filtro de vários valores): vale para todas as linhas,
+// também as do cadastrado e do alterado agora
+export function filtrar(aba, mudanca = {}) {
   Object.assign(filtros[aba], mudanca);
   mantidos[aba].clear();
   APLICAR[aba]({ esperar: 'nome' in mudanca ? ESPERA_DA_DIGITACAO : 0 });
@@ -345,23 +359,25 @@ export function manterAVista(aba, id) {
   mantidos[aba].add(id);
 }
 
-// "Limpar filtros": os filtros e os campos voltam a vazio, todas as linhas aparecem, e o foco vai para a busca
+// "Limpar filtros": a busca e as marcas voltam a vazio, todas as linhas aparecem, e o foco vai para a busca
 export function limparFiltros(aba) {
-  Object.assign(filtros[aba], SEM_FILTROS[aba]);
+  filtros[aba].nome = '';
+  multiplos[aba].forEach(filtro => filtro.limpar());
   mantidos[aba].clear();
-  for (const [chave, seletor] of Object.entries(CAMPOS_DOS_FILTROS[aba])) $(seletor).value = filtros[aba][chave];
+  $(BUSCA_DA_ABA[aba]).value = '';
   APLICAR[aba]();
-  $(CAMPOS_DOS_FILTROS[aba].nome).focus();
+  $(BUSCA_DA_ABA[aba]).focus();
 }
 
-const filtrando = aba => Object.keys(SEM_FILTROS[aba]).some(chave => filtros[aba][chave]);
+const filtrando = aba => Boolean(filtros[aba].nome) || multiplos[aba].some(filtro => filtro.valores().length > 0);
 
-// Os filtros dos instrutores valem para as duas vistas: a habilitação é uma das do instrutor
+// Os filtros dos instrutores valem para as duas vistas: o instrutor tem todas as habilitações marcadas (data-hab, com a
+// habilitação própria do recurso: aviao:PR-VOM)
 function applyInstructorFilters({ esperar = 0 } = {}) {
-  const { nome, hab } = filtros.ins;
-  const q = chaveDeBusca(nome);
+  const q = chaveDeBusca(filtros.ins.nome);
+  const temAsMarcadas = filtroDasHabilitacoes ? filtroDasHabilitacoes.quemPassa() : () => true;
   filtrarLinhas('ins', ['#inst-dia', '#inst'], esperar,
-    l => mantidos.ins.has(+l.dataset.id) || ((!q || l.dataset.nm.includes(q)) && (!hab || l.dataset.hab.split(' ').includes(hab))));
+    l => mantidos.ins.has(+l.dataset.id) || ((!q || l.dataset.nm.includes(q)) && temAsMarcadas(l.dataset.hab.split(' '))));
 }
 
 function aplicarFiltrosDosAlunos({ esperar = 0 } = {}) {

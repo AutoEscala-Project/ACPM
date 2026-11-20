@@ -53,15 +53,15 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Escape' && gavetaDoEsc(e) === $('#painel-instrutor') && !algumDialogoAberto()) fecharPainelDoInstrutor(true);
 });
 
-// Filtros: os instrutores (o nome e a habilitação) e os alunos (o nome). "Limpar filtros" aparece na linha que diz que
-// nenhum passa; sem data-act, ele vale também para quem só consulta
+// Filtros: os instrutores (o nome e as habilitações, no filtro de vários valores, que ouve as próprias caixas:
+// js/views/filtro-multiplo.js) e os alunos (o nome). "Limpar filtros" aparece na linha que diz que nenhum passa; sem
+// data-act, ele vale também para quem só consulta
 const ABA_DA_BUSCA = { inst: 'ins', alu: 'alu' };
 document.addEventListener('input', e => {
   const aba = ABA_DA_BUSCA[e.target.dataset && e.target.dataset.flt];
   if (aba) filtrar(aba, { nome: e.target.value });
 });
 prepararFiltros();
-$('#flt-ins-hab').onchange = e => filtrar('ins', { hab: e.target.value });
 document.addEventListener('click', e => {
   const botao = e.target.closest('[data-limpar-filtros]');
   if (botao) limparFiltros(botao.dataset.limparFiltros);

@@ -58,15 +58,20 @@ export function gavetaDoEsc(evento) {
   return gavetaDoEscEscolhida.get(evento);
 }
 
-// O Esc num painel da própria página (o editor dos horários de decolagem, o formulário do curso novo) fecha só ele, quando
-// o foco está dentro dele. Ouvido na captura, ele para aqui e não chega aos ouvintes das gavetas (o Histórico aberto
-// continua aberto); a dica e o menu abertos por cima são ouvidos antes e ficam com o Esc, e com um diálogo aberto o Esc
-// é do diálogo. aberto() devolve o painel aberto (ou null)
-export function fecharNoEsc(aberto, fechar) {
+// O Esc num painel da própria página (o editor dos horários de decolagem, o formulário do curso novo, o filtro de vários
+// valores) fecha só ele, quando o foco está dentro dele. Ouvido na captura, ele para aqui e não chega aos ouvintes das
+// gavetas (o Histórico aberto continua aberto); a dica e o menu abertos por cima são ouvidos antes e ficam com o Esc, e
+// com um diálogo aberto o Esc é do diálogo. aberto() devolve o painel aberto (ou null), ou as partes dele (o botão do
+// filtro e o painel que ele abre). semFoco: o Esc fecha também com o foco em lugar nenhum (o clique no texto do painel; o
+// Safari, que não leva o foco ao botão clicado), quando não há gaveta aberta (com uma, o Esc é dela)
+export function fecharNoEsc(aberto, fechar, { semFoco = false } = {}) {
   document.addEventListener('keydown', e => {
     if (e.key !== 'Escape' || algumDialogoAberto()) return;
     const painel = aberto();
-    if (!painel || !(e.target instanceof Node) || !painel.contains(e.target)) return;
+    if (!painel || !(e.target instanceof Node)) return;
+    const dentro = [].concat(painel).some(parte => parte.contains(e.target));
+    const emLugarNenhum = semFoco && e.target === document.body && !gavetasAbertas().length;
+    if (!dentro && !emLugarNenhum) return;
     e.stopPropagation();
     fechar();
   }, true);
@@ -160,14 +165,16 @@ export function ligarMenu(botao, menu, { fecharAoEscolher = true } = {}) {
 //   o que ficou no lugar, que não faz nada com o Enter. Assim o Enter repetido ou segurado não age nos itens seguintes.
 // Na aba Cursos: os campos do curso (data-cc), da fase (data-cfa) e da missão (data-cf), e a fase ou a missão de que um
 // botão ou uma caixa de "depois de…" fala (data-fase, data-missao); as linhas são a missão (tr[data-missao]), a fase
-// (.fase[data-fase]) e o curso (.curso[data-curso])
+// (.fase[data-fase]) e o curso (.curso[data-curso]). No filtro de vários valores (js/views/filtro-multiplo.js), a caixa
+// de cada opção: o filtro (data-filtro) e o valor (data-valor)
 const QUEM_E = ['id', 'data-f', 'data-a', 'data-act', 'data-w', 'data-i', 'data-h', 'data-b', 'data-cat', 'data-min', 'data-cal',
   'data-dia', 'data-delta', 'data-criterio', 'data-valor', 'data-logid', 'data-horas', 'data-fkey', 'data-resultado',
   'data-reparo', 'data-dados', 'data-id', 'data-mid', 'data-recolher-tempo', 'data-recolher-grupo', 'data-agendar', 'data-cc',
-  'data-cfa', 'data-cf', 'data-fase', 'data-missao'];
+  'data-cfa', 'data-cf', 'data-fase', 'data-missao', 'data-filtro'];
 const DA_LINHA = ['data-k', 'data-id', 'data-mid', 'data-fkey', 'data-cat', 'data-missao', 'data-fase', 'data-curso'];
-// O tipo do campo: os atributos que dizem o que ele é, sem os que dizem de quem (o voo, o aluno, o recurso)
-const DO_TIPO = ['data-f', 'data-a', 'data-act', 'data-criterio', 'data-cal'];
+// O tipo do campo: os atributos que dizem o que ele é, sem os que dizem de quem (o voo, o aluno, o recurso) ou qual
+// (o valor da caixa do filtro)
+const DO_TIPO = ['data-f', 'data-a', 'data-act', 'data-criterio', 'data-cal', 'data-filtro'];
 const LINHA = '[data-k], [data-fkey], tr[data-id], li[data-id], tr[data-missao], .fase[data-fase], .curso[data-curso]';
 // Os itens de uma lista, com ou sem identidade: as linhas das tabelas, os itens das listas e os do Histórico
 const ITEM = 'tbody tr, li, .audit-item';

@@ -105,11 +105,11 @@ aoAcionar('rev-log', b => {
     gravarAlteracao('mod', `Revertido: ${entry.desc}`, null, entry.id);
     rRec(); rDem();
   } else if (rev.kind === 'readicionarRecurso') {
-    // Um recurso retirado volta para a frota, como estava
+    // Um recurso retirado volta para a frota, como estava (com a habilitação própria, em Instrutores)
     S.frota.push({ ...rev.recurso });
     S.av[rev.recurso.reg] = rev.av !== false;
     gravarAlteracao('inc', `Revertido: ${rev.recurso.reg} de volta à frota`, null, entry.id);
-    rRec();
+    rRec(); rIns();
   } else if (rev.kind === 'desfazerAgendamento') {
     // Um voo agendado na Escala: o criado sai, o movido volta para onde estava, e o instrutor marcado disponível volta
     // como estava (js/reversoes.js). O voo já em andamento ou com resultado registrado fica, com o aviso; o movido cujo

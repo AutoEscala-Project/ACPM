@@ -109,7 +109,8 @@ aoMudarCampo('horas', t => {
   rRec();
 });
 
-// Retirar um recurso da frota (pede confirmação; o histórico desfaz)
+// Retirar um recurso da frota (pede confirmação; o histórico desfaz). Instrutores é refeito: a habilitação própria do
+// recurso sai do painel "Editar habilitações" e do filtro das habilitações
 aoAcionar('retirar-recurso', b => {
   if (!confirmado(b, 'Confirmar retirada')) return;
   const recurso = S.frota.find(f => f.reg === b.dataset.id);
@@ -118,7 +119,7 @@ aoAcionar('retirar-recurso', b => {
   gravarAlteracao('exc', `Recurso retirado: ${recurso.reg} (${recurso.tipo})`, {
     kind: 'readicionarRecurso', recurso: { ...recurso }, av: S.av[recurso.reg] !== false, label: '↶ Reverter'
   });
-  rRec();
+  rRec(); rIns();
   showToast(`${recurso.reg} retirado da frota.`, 'ok');
 });
 
