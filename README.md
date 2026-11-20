@@ -125,6 +125,27 @@ novo). E o app novo não depende delas:
 - **Sem a migração**, `painel_do_dia()` responde como antes, sem o campo `painel`, e a TV mostra o padrão (Missões, com
   as colunas do padrão e as listas no Automático: duas lado a lado na TV Full HD), como hoje; a Escala segue a configuração de qualquer jeito (ela lê o cadastro).
 
+## A sessão da TV da recepção
+
+A TV fica ligada dias seguidos, sem ninguém por perto, e nunca mostra um quadro velho como se fosse o de agora
+(`js/sessao-da-tv.js`, usado por `js/painel.js`):
+
+- **A sessão se renova sozinha** antes de expirar: faltando menos de 10 minutos, a cada busca do quadro e a cada 30
+  segundos, e na hora quando a TV acorda, quando a página volta à vista e quando a conexão volta. Um 401 (o JWT recusado)
+  em `painel_do_dia` ou na função `meteorologia` renova e tenta mais uma vez.
+- **"Manter esta TV conectada"**, no login da TV (marcado por quem entra; só para a conta com o perfil Painel): **a senha
+  da conta da TV fica guardada no navegador daquela TV** (`localStorage`, chave `acpm-<projeto>-painel-entrada`, em
+  texto, ao lado da sessão). Quando a renovação é recusada (a sessão revogada ou perdida), a TV entra de novo sozinha
+  com ela. A senha recusada (trocada) sai, e a TV pede o login. Outra conta nunca fica guardada (e o que estava guardado
+  sai). *Sair desta TV* (o botão aparece com o mouse) apaga a sessão e a senha guardada. Use só na TV da recepção, com a
+  conta da TV, que vê só o quadro do dia.
+- **Sem uma busca boa há mais de 3 minutos**, o quadro sai da tela e fica o aviso "Painel sem atualização desde HH:MM:
+  tentando de novo…"; quando renovar e entrar de novo não dão certo, o login aparece com "Sessão expirada: entre de novo
+  nesta TV". O quadro volta sozinho na busca boa seguinte.
+- Cada busca traz a configuração do painel (`painel_do_dia`, com a migração `20261120150000`): a mudança do
+  "Configurar painel" chega a todas as TVs em até um minuto. Nada disso depende da migração nem da função: sem elas, a
+  TV mostra o padrão e "Meteorologia indisponível", como antes.
+
 ## Formato dos dados
 
 O cadastro e cada dia guardam a versão do formato (campo `esquema`). Para mudar o formato, acrescente um passo em
@@ -177,6 +198,7 @@ banco (e a chamada dela no app). A cópia `cadastro.cursos` fica.
 | `js/planilha.js`, `modelos/escala-cavok.xlsx` | A escala na planilha do modelo do aeroclube (o Excel do lançamento no CAVOK): onde cada voo cai e o arquivo preenchido. O modelo é o arquivo da operação sem os dados do dia; as células que o app preenche estão em `BLOCOS` e `GROUND` (um modelo novo precisa delas nos mesmos lugares, e `test/unit/planilha.test.js` confere) |
 | `js/zip.js` | Leitura e montagem do ZIP do .xlsx, com a compressão do navegador |
 | `js/status.js` | Status do voo com detalhes: o novo horário do atraso, o motivo do cancelamento e o atraso que invade outro voo |
+| `js/sessao-da-tv.js` | A sessão da TV da recepção: a renovação antes de expirar, "Manter esta TV conectada" (o e-mail e a senha guardados neste navegador) e o que a TV mostra (o quadro, o aviso sem atualização ou o login) |
 | `js/quadro.js` | As linhas do painel: os quadros Missões, Partidas e Chegadas (Escala e TV da recepção) e as páginas, com uma lista ou duas lado a lado |
 | `js/config-do-painel.js` | A configuração do painel no cadastro (`painel`, do formato 25 em diante): o quadro com que ele abre, as colunas (ligadas ou não e na ordem) e as listas (`auto`, `uma` ou `duas` lado a lado) |
 | `js/meteorologia.js`, `js/views/meteorologia.js` | A meteorologia do pé do painel (Escala e TV): a busca na função `meteorologia` a cada 10 minutos, que guarda as últimas mensagens boas quando falha, o METAR antigo (mais de 90 minutos) e a faixa com as duas caixas, SBBH e SBCF |

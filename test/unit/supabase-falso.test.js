@@ -35,6 +35,7 @@ async function conectar(servidor) {
     return resposta;
   };
   return {
+    pedir,
     entrar: async conta => (await pedir('/auth/v1/token?grant_type=password', { email: conta.email, password: conta.senha })).corpo.access_token,
     rpc: (token, funcao, args = {}) => pedir(`/rest/v1/rpc/${funcao}`, args, token)
   };
@@ -145,5 +146,58 @@ describe('Servidor falso dos testes E2E: os cursos', () => {
     assert.deepEqual([desconhecido.status, desconhecido.corpo.code, desconhecido.corpo.message], [400, '23514', 'curso desconhecido']);
     assert.deepEqual(await resultado('ZZ9'), { status: 200, corpo: 1 });
     assert.deepEqual((await rpc(tokens.gestor, 'programa_dos_cursos')).corpo.find(c => c.sigla === 'ZZ9').missoes.filter(m => m.comResultados).map(m => m.codigo), ['ZZ9-01']);
+  });
+});
+
+// A sessão no Auth falso (a TV da recepção, js/sessao-da-tv.js): a renovação troca os dois tokens e o refresh token vale
+// uma vez; revogadas as sessões, nem o token nem o refresh token valem; a validade da sessão vem só como expires_in
+describe('Servidor falso dos testes E2E: a sessão', () => {
+  const login = (pedir, conta, senha = conta.senha) => pedir('/auth/v1/token?grant_type=password', { email: conta.email, password: senha });
+  const renovar = (pedir, refresh) => pedir('/auth/v1/token?grant_type=refresh_token', { refresh_token: refresh });
+
+  it('a renovação troca os dois tokens; o refresh token já usado é recusado', async () => {
+    const servidor = criarSupabaseFalso();
+    const { pedir, rpc } = await conectar(servidor);
+    const sessao = (await login(pedir, CONTAS.painel)).corpo;
+    assert.equal(typeof sessao.expires_at, 'number');
+    const nova = await renovar(pedir, sessao.refresh_token);
+    assert.equal(nova.status, 200);
+    assert.notEqual(nova.corpo.access_token, sessao.access_token);
+    assert.notEqual(nova.corpo.refresh_token, sessao.refresh_token);
+    assert.equal((await rpc(nova.corpo.access_token, 'painel_do_dia')).status, 200);
+    const usada = await renovar(pedir, sessao.refresh_token);
+    assert.deepEqual([usada.status, usada.corpo.error_code], [400, 'refresh_token_not_found']);
+    assert.deepEqual(servidor.renovacoes, [{ perfil: 'painel', aceita: true }, { perfil: null, aceita: false }]);
+  });
+
+  it('com a validade da sessão, só o expires_in (o supabase-js conta do relógio da página)', async () => {
+    const { pedir } = await conectar(criarSupabaseFalso({ validadeDaSessao: 900 }));
+    const sessao = (await login(pedir, CONTAS.painel)).corpo;
+    assert.equal(sessao.expires_in, 900);
+    assert.equal('expires_at' in sessao, false);
+    assert.equal('expires_at' in (await renovar(pedir, sessao.refresh_token)).corpo, false);
+  });
+
+  it('revogadas as sessões, o token dá 401 e a renovação é recusada; a senha trocada recusa o login', async () => {
+    const servidor = criarSupabaseFalso();
+    const { pedir, rpc } = await conectar(servidor);
+    const sessao = (await login(pedir, CONTAS.painel)).corpo;
+    servidor.revogarSessoes();
+    assert.equal((await rpc(sessao.access_token, 'painel_do_dia')).status, 401);
+    assert.equal((await renovar(pedir, sessao.refresh_token)).status, 400);
+    servidor.trocarSenha(CONTAS.painel, 'senha-nova-da-tv');
+    assert.deepEqual([(await login(pedir, CONTAS.painel)).status, (await login(pedir, CONTAS.painel, 'senha-nova-da-tv')).status], [400, 200]);
+  });
+
+  it('expirados os tokens anteriores, só o último de cada conta vale', async () => {
+    const servidor = criarSupabaseFalso();
+    const { pedir, rpc } = await conectar(servidor);
+    const primeira = (await login(pedir, CONTAS.painel)).corpo;
+    const segunda = (await renovar(pedir, primeira.refresh_token)).corpo;
+    const operador = (await login(pedir, CONTAS.operador)).corpo;
+    servidor.expirarTokensAnteriores();
+    assert.equal((await rpc(primeira.access_token, 'painel_do_dia')).status, 401);
+    assert.equal((await rpc(segunda.access_token, 'painel_do_dia')).status, 200);
+    assert.equal((await rpc(operador.access_token, 'painel_do_dia')).status, 200);
   });
 });
