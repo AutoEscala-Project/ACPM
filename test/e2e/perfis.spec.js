@@ -109,6 +109,14 @@ test.describe('Perfis de acesso', () => {
     await filtrarCursos(page, 'dem', ['sem-curso']);
     await expect(page.locator('#dem tr[data-k="d"]:visible')).toHaveCount(1);
     await expect(page.locator('#dem tr[data-k="d"]:visible')).toHaveAttribute('data-id', '1001');
+    // O "Limpar filtros" da Demanda: a busca e as marcas
+    await page.locator('#flt-dem').fill('nenhum assim');
+    await page.locator('#limpar-filtros-dem').click();
+    await expect(page.locator('#flt-dem')).toBeFocused();
+    await expect(page.locator('#flt-dem')).toHaveValue('');
+    await expect(page.locator('#flt-dem-cur')).toHaveText('Todos os cursos');
+    await expect(page.locator('#dem tr[data-k="d"]:visible')).toHaveCount(2);
+    await expect(page.locator('#dem tr.sem-resultado')).toHaveCount(0);
   });
 
   // Em Recursos também: a busca pela matrícula e o filtro das categorias (o botão e as caixas com .flt-ctrl, sem data-f
