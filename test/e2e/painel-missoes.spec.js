@@ -125,6 +125,27 @@ test.describe('Painel: o quadro Missões', () => {
     await expect.poll(medidas).toEqual({ cabem: true, linhas: [12], cabecalhos: [padrao], fundo: true });
   });
 
+  // "Sempre duas listas" na tela estreita (o celular, o tablet em pé): o painel rola de lado inteiro, como com uma lista.
+  // Antes, as listas ficavam na largura da tela e a faixa do topo ia até 860 px: rolando o painel para ver a hora, o
+  // quadro ficava vazio embaixo dela
+  for (const [largura, altura] of [[390, 844], [768, 1024]]) {
+    test(`sempre duas listas na tela de ${largura} px: as listas vão até o fim do topo, sem um quadro vazio ao rolar`, async ({ page }) => {
+      await page.setViewportSize({ width: largura, height: altura });
+      await abrir(page, { estado: { ...comExemplo(estadoSintetico()), painel: { quadro: 'missoes', colunas: [], listas: 'duas' } } });
+      await abrirPainel(page);
+      await expect(page.locator('#out .fids .fids-lista')).toHaveCount(2);
+      const medidas = await page.locator('#out .fids').evaluate(quadro => ({
+        topo: quadro.querySelector('.fids-topo').getBoundingClientRect().width,
+        listas: quadro.querySelector('.fids-listas').getBoundingClientRect().width,
+        rola: quadro.scrollWidth,
+        pagina: document.documentElement.scrollWidth
+      }));
+      expect(medidas.listas, 'as listas na largura do topo').toBeGreaterThanOrEqual(medidas.topo);
+      expect(medidas.rola, 'nada além das listas').toBeLessThanOrEqual(Math.ceil(medidas.listas) + 12);
+      expect(medidas.pagina, 'a página não rola de lado').toBeLessThanOrEqual(largura);
+    });
+  }
+
   test('Missões é um quadro só: não alterna com outro', async ({ page }) => {
     await page.clock.install({ time: new Date('2026-11-10T12:00:00-03:00') });
     await abrir(page, { estado: dia() });

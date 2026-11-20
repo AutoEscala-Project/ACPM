@@ -393,7 +393,12 @@ table.fids-tabela { width: 100%; min-width: 860px; border-collapse: collapse; fo
    Cada lista ocupa a metade: se nem com as letras no mínimo ela couber ("Sempre duas listas"), rola na página e é
    cortada na tela toda, sem invadir a outra */
 .fids-listas { display: grid; grid-template-columns: minmax(0, 1fr); }
-.fids-listas.duas { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: var(--fids-vao); }
+/* A legenda da tabela (só para o leitor de tela, .sr) fica dentro da lista: sem isso, ela sairia do painel que rola e a
+   página rolaria de lado no celular */
+.fids-lista { position: relative; }
+/* Na página, as duas listas têm a largura mínima do topo (860 px): na tela estreita o painel rola de lado inteiro, como com
+   uma lista, sem um quadro vazio embaixo do topo */
+.fids-listas.duas { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: var(--fids-vao); min-width: 860px; }
 .fids-listas.duas table.fids-tabela { min-width: 0; }
 .fids-listas.duas .fids-lista { overflow-x: auto; }
 /* A medida das duas listas (js/views/painel-aeroporto.js): a tabela com todas as linhas, fora da vista, na largura dela */
@@ -431,7 +436,8 @@ table.fids-tabela { width: 100%; min-width: 860px; border-collapse: collapse; fo
    js/views/painel-aeroporto.js) */
 .fids:fullscreen, .fids.inteiro { --fids-fs: calc(2.6vh * var(--fids-ajuste, 1)); --fids-linha: 5.4vh; --fids-vao: 1.2vw; overflow: hidden; border: 0; border-radius: 0; }
 .fids:fullscreen .fids-listas.duas .fids-lista, .fids.inteiro .fids-listas.duas .fids-lista { overflow: hidden; }
-.fids:fullscreen .fids-topo, .fids:fullscreen table.fids-tabela, .fids.inteiro .fids-topo, .fids.inteiro table.fids-tabela { min-width: 0; }
+.fids:fullscreen .fids-topo, .fids:fullscreen table.fids-tabela, .fids:fullscreen .fids-listas,
+.fids.inteiro .fids-topo, .fids.inteiro table.fids-tabela, .fids.inteiro .fids-listas { min-width: 0; }
 .fids.inteiro { position: fixed; inset: 0; box-shadow: none; }
 /* A medida das duas listas fica fora da vista também na tela toda (depois da regra da TV, que ela desfaz) */
 .fids.fids-medida { position: absolute; inset: 0 auto auto 0; width: max-content; visibility: hidden; pointer-events: none; border: 0; box-shadow: none; overflow: visible; }
