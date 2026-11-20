@@ -359,6 +359,94 @@ test.describe('Demanda', () => {
     await expect.poll(aVista).toEqual(['1000', '1001', '1002']);
   });
 
+  // Como em Instrutores e Alunos: quando a busca, a missão e as marcas dos cursos escondem todos os pedidos que "Só quem
+  // voa" deixa, a tabela diz por quê, e "Limpar filtros" (sem data-act) desfaz os três, com o foco na busca. "Só quem
+  // voa" fica como está; sem ninguém voando, nenhum filtro da barra esconde nada, e a linha não aparece
+  test('sem nenhum pedido com os filtros, "Nenhum aluno com esses filtros" e "Limpar filtros"; "Só quem voa" fica, e sem ninguém voando a linha não aparece', async ({ page }) => {
+    await abrir(page, { estado: cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, {}, { nm: 'Ana', curso: 'PP' }), aluno(1001, {}, { nm: 'Bruno', curso: 'PC' }), aluno(1002, { fly: false }, { nm: 'Carla' })] }) });
+    await irPara(page, 'dem');
+    const aVista = () => page.locator('#dem tr[data-k="d"]:visible').evaluateAll(linhas => linhas.map(l => l.dataset.id));
+    const nenhum = page.locator('#dem tr.sem-resultado'), limpar = page.locator('#limpar-filtros-dem'), busca = page.locator('#flt-dem');
+    await expect.poll(aVista).toEqual(['1000', '1001']);
+    await expect(nenhum).toHaveCount(0);
+    // A busca, a missão e os cursos, cada um sozinho
+    await busca.fill('nenhum assim');
+    await expect(nenhum).toHaveText('Nenhum aluno com esses filtros. Limpar filtros');
+    await expect(nenhum.locator('td')).toHaveAttribute('colspan', '10');
+    await expect(limpar).not.toHaveAttribute('data-act');
+    await busca.fill('');
+    await expect(nenhum).toHaveCount(0);
+    await page.locator('#flt-dem-mis').selectOption('Navegação');
+    await expect(nenhum).toBeVisible();
+    await page.locator('#flt-dem-mis').selectOption('');
+    await expect(nenhum).toHaveCount(0);
+    await filtrarCursos(page, 'dem', ['sem-curso']);
+    await expect(nenhum).toBeVisible();
+    // "Só quem voa" desligado: a Carla (sem curso, não voa) passa nos filtros, e a linha sai; ligado de novo, ela volta
+    await page.locator('#onlyfly').uncheck();
+    await expect.poll(aVista).toEqual(['1002']);
+    await expect(nenhum).toHaveCount(0);
+    await page.locator('#onlyfly').check();
+    await expect(nenhum).toBeVisible();
+    // Os três juntos: "Limpar filtros" desfaz todos, com o foco na busca; "Só quem voa" continua ligado
+    await page.locator('#flt-dem-mis').selectOption('Navegação');
+    await busca.fill('carla');
+    await expect(nenhum).toBeVisible();
+    await limpar.click();
+    await expect(busca).toBeFocused();
+    await expect(busca).toHaveValue('');
+    await expect(page.locator('#flt-dem-mis')).toHaveValue('');
+    await expect(page.locator('#flt-dem-cur')).toHaveText('Todos os cursos');
+    await expect(page.locator('#flt-dem-cur-painel input[data-filtro]:checked')).toHaveCount(0);
+    await expect(page.locator('#onlyfly')).toBeChecked();
+    await expect.poll(aVista).toEqual(['1000', '1001']);
+    await expect(nenhum).toHaveCount(0);
+    // Pelo teclado
+    await busca.fill('nenhum assim');
+    await limpar.focus();
+    await page.keyboard.press('Enter');
+    await expect(busca).toBeFocused();
+    await expect.poll(aVista).toEqual(['1000', '1001']);
+    // O Voa desligado no último pedido à vista: os outros que voam ficam escondidos pela busca, e a linha aparece
+    await busca.fill('ana');
+    await expect.poll(aVista).toEqual(['1000']);
+    await linhaDoAluno(page, 'Ana').locator('[data-f="fly"]').uncheck();
+    await expect.poll(aVista).toEqual([]);
+    await expect(nenhum).toBeVisible();
+    // Sem ninguém voando, a linha não aparece (a contagem de cima já diz), nem com a busca; sem "Só quem voa", ela volta
+    await busca.fill('');
+    await linhaDoAluno(page, 'Bruno').locator('[data-f="fly"]').uncheck();
+    await expect(page.locator('#cnt')).toHaveText('0 / 3 aluno(s) · 0 missão(ões) marcada(s)');
+    await expect(nenhum).toHaveCount(0);
+    await busca.fill('nenhum assim');
+    await expect(nenhum).toHaveCount(0);
+    await page.locator('#onlyfly').uncheck();
+    await expect(nenhum).toBeVisible();
+  });
+
+  // As marcas dos cursos são as mesmas de Alunos: marcadas lá, a Demanda pode abrir sem nenhum pedido à vista. "Limpar
+  // filtros" da Demanda as tira nas duas abas (em Alunos, as caixas, o botão, as linhas e a contagem)
+  test('"Limpar filtros" da Demanda tira as marcas dos cursos que vieram de Alunos, nas duas abas', async ({ page }) => {
+    await abrir(page, { estado: cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, {}, { nm: 'Ana', curso: 'PP' }), aluno(1001, { fly: false }, { nm: 'Bruno', curso: 'PC' })] }) });
+    await irPara(page, 'alu');
+    await filtrarCursos(page, 'alu', ['PC']);
+    await expect(page.locator('#alu-contagem')).toHaveText('1 de 2 alunos');
+    await page.getByRole('button', { name: 'Abrir a Demanda' }).click();
+    await expect(page.locator('#flt-dem-cur')).toHaveText('Curso: PC');
+    await expect(page.locator('#dem tr[data-k="d"]:visible')).toHaveCount(0);
+    await expect(page.locator('#dem tr.sem-resultado')).toHaveText('Nenhum aluno com esses filtros. Limpar filtros');
+    await page.locator('#dem tr.sem-resultado').getByRole('button', { name: 'Limpar filtros' }).click();
+    await expect(page.locator('#flt-dem')).toBeFocused();
+    await expect(page.locator('#flt-dem-cur')).toHaveText('Todos os cursos');
+    await expect(page.locator('#dem tr[data-k="d"]:visible')).toHaveCount(1);
+    await expect(page.locator('#dem tr.sem-resultado')).toHaveCount(0);
+    await irPara(page, 'alu');
+    await expect(page.locator('#flt-alu-cur')).toHaveText('Todos os cursos');
+    await expect(page.locator('#flt-alu-cur-painel input[data-filtro]:checked')).toHaveCount(0);
+    await expect(page.locator('#alu tr.cd:visible')).toHaveCount(2);
+    await expect(page.locator('#alu-contagem')).toHaveText('2 alunos');
+  });
+
   // As buscas da Demanda, da Escala (o aluno, o instrutor ou a missão) e do BI acham o nome sem os acentos e sem diferença
   // de maiúsculas, como as de Instrutores e Alunos
   test('as buscas da Demanda, da Escala e do BI acham o nome sem acentos', async ({ page }) => {

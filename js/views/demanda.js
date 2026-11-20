@@ -15,6 +15,7 @@ import { instrutoresDoPedido } from '../instrutor-escolhido.js';
 import { chaveDoVoo } from '../voo.js';
 import { nomeDoRecurso } from '../categorias.js';
 import { criarFiltroDosCursos, cursoDaLinha } from './filtro-dos-cursos.js';
+import { nenhumComOsFiltros } from './cadastros.js';
 
 function allowedEqOptionsForMission(mis, currentEq) {
   const m = MIS[mis] || MIS['Voo Local'];
@@ -147,4 +148,27 @@ function applyDemandFilters() {
     const matchMis = !mis || tr.dataset.mis === mis;
     tr.hidden = !(mantidosNaDemanda.has(+tr.dataset.id) || (matchName && matchMis && noCurso(cursoDaLinha(tr))));
   });
+  conferirNenhumNaDemanda();
+}
+
+// Com os filtros da barra escondendo todos os pedidos, a linha "Nenhum aluno com esses filtros", com "Limpar filtros"
+// (como em Instrutores e Alunos). Ela conta só os pedidos que "Só quem voa" deixa: sem ninguém voando, nenhum filtro da
+// barra esconde nada, e a contagem de cima já diz "0 missão(ões) marcada(s)". Vale de novo quando "Só quem voa" muda e
+// quando o Voa de um pedido muda (a linha dele é refeita)
+export function conferirNenhumNaDemanda() {
+  const corpo = $('#dem');
+  if (!corpo) return;
+  const soQuemVoa = corpo.classList.contains('only');
+  const restam = [...corpo.querySelectorAll(':scope > tr[data-k="d"]')].filter(tr => !(soQuemVoa && tr.classList.contains('off')));
+  nenhumComOsFiltros(corpo, restam.length > 0 && restam.every(tr => tr.hidden), { nome: 'aluno' });
+}
+
+// "Limpar filtros" da Demanda: a busca, a missão e as marcas dos cursos (também as de Alunos, que são as mesmas) voltam a
+// vazio, e o foco vai para a busca. "Só quem voa" fica como está
+export function limparFiltrosDaDemanda() {
+  $('#flt-dem').value = '';
+  $('#flt-dem-mis').value = '';
+  if (filtroDosCursos) filtroDosCursos.limpar();
+  filtrarDemanda();
+  $('#flt-dem').focus();
 }
