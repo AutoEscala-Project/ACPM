@@ -1,5 +1,5 @@
-// A configuração do painel (a visão "Painel" da Escala e a TV da recepção): o quadro com que ele abre e as colunas, na
-// ordem e ligadas ou não. Fica no cadastro (campo "painel", igual em todas as datas): o Operador e o Administrador mudam,
+// A configuração do painel (a visão "Painel" da Escala e a TV da recepção): o quadro com que ele abre, as colunas, na
+// ordem e ligadas ou não, e as listas (uma ou duas lado a lado). Fica no cadastro (campo "painel", igual em todas as datas): o Operador e o Administrador mudam,
 // em "Configurar painel"; sem ela, vale o padrão. O que vem gravado pode ter sido escrito fora do app (ou por uma
 // versão anterior): normalizarPainel aceita só os quadros e as colunas conhecidos, e pelo menos uma coluna fica ligada.
 
@@ -12,6 +12,16 @@ export const QUADROS_DO_PAINEL = [
   { id: 'chegadas', rotulo: 'Chegadas' }
 ];
 const QUADRO_PADRAO = 'missoes';
+
+// As listas: duas lado a lado (a página continua da lista da esquerda na da direita) põem o dobro de voos na tela grande.
+// Automático (o padrão): duas quando o painel tem pelo menos 1.600 px de largura (CSS) e elas cabem
+export const LISTAS_DO_PAINEL = [
+  { id: 'auto', rotulo: 'Automático' },
+  { id: 'uma', rotulo: 'Sempre uma lista' },
+  { id: 'duas', rotulo: 'Sempre duas listas lado a lado' }
+];
+const LISTAS_PADRAO = 'auto';
+export const LARGURA_DAS_DUAS_LISTAS = 1600;
 
 // As colunas, na ordem padrão. Previsto e Observação dependem do status ao vivo: começam desligadas
 export const COLUNAS_DO_PAINEL = [
@@ -27,14 +37,17 @@ export const COLUNAS_DO_PAINEL = [
 
 const COLUNA = new Map(COLUNAS_DO_PAINEL.map(c => [c.id, c]));
 const QUADRO = new Map(QUADROS_DO_PAINEL.map(q => [q.id, q]));
+const LISTAS = new Map(LISTAS_DO_PAINEL.map(l => [l.id, l]));
 export const rotuloDaColuna = id => COLUNA.get(id).rotulo;
 export const rotuloDoQuadro = id => QUADRO.get(id).rotulo;
+export const rotuloDasListas = id => LISTAS.get(id).rotulo;
 export const quadroValido = id => QUADRO.has(id);
 
-export const painelPadrao = () => ({ quadro: QUADRO_PADRAO, colunas: COLUNAS_DO_PAINEL.map(c => ({ id: c.id, on: c.ligada })) });
+export const painelPadrao = () => ({ quadro: QUADRO_PADRAO, colunas: COLUNAS_DO_PAINEL.map(c => ({ id: c.id, on: c.ligada })), listas: LISTAS_PADRAO });
 
-// Só os quadros e as colunas conhecidos, cada coluna uma vez; a coluna que falta (uma coluna nova, numa configuração
-// gravada antes dela) entra no fim, como no padrão. Nenhuma ligada: ligam as do padrão
+// Só os quadros, as colunas e as listas conhecidos, cada coluna uma vez; a coluna que falta (uma coluna nova, numa
+// configuração gravada antes dela) entra no fim, como no padrão. Nenhuma ligada: ligam as do padrão. Sem as listas (a
+// configuração gravada antes delas), Automático
 export function normalizarPainel(painel) {
   const dado = painel && typeof painel === 'object' && !Array.isArray(painel) ? painel : {};
   const quadro = QUADRO.has(dado.quadro) ? dado.quadro : QUADRO_PADRAO;
@@ -47,7 +60,16 @@ export function normalizarPainel(painel) {
   }
   for (const c of COLUNAS_DO_PAINEL) if (!vistas.has(c.id)) colunas.push({ id: c.id, on: c.ligada });
   if (!colunas.some(c => c.on)) for (const c of colunas) c.on = COLUNA.get(c.id).ligada;
-  return { quadro, colunas };
+  const listas = LISTAS.has(dado.listas) ? dado.listas : LISTAS_PADRAO;
+  return { quadro, colunas, listas };
+}
+
+// Quantas listas o painel mostra nesta largura (em px CSS). No Automático, duas a partir de 1.600 px; o painel ainda
+// confere se elas cabem (js/views/painel-aeroporto.js)
+export function listasNaLargura(painel, largura) {
+  const { listas } = normalizarPainel(painel);
+  if (listas === 'auto') return largura >= LARGURA_DAS_DUAS_LISTAS ? 2 : 1;
+  return listas === 'duas' ? 2 : 1;
 }
 
 // As colunas que o painel mostra, na ordem
@@ -74,3 +96,5 @@ export function moverColuna(painel, id, passo) {
 }
 
 export const escolherQuadro = (painel, quadro) => (QUADRO.has(quadro) ? { ...normalizarPainel(painel), quadro } : null);
+
+export const escolherListas = (painel, listas) => (LISTAS.has(listas) ? { ...normalizarPainel(painel), listas } : null);

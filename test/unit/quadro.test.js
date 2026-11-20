@@ -202,6 +202,25 @@ describe('Páginas e alternância', () => {
     assert.deepEqual(telasDosQuadros([['partidas', []], ['chegadas', []]], 16).map(t => [t.quadro, t.linhas]), [['partidas', []], ['chegadas', []]]);
   });
 
+  // Pedro, 2026-11-20: na tela grande, duas listas lado a lado (umas 28 linhas de uma vez), em todos os quadros
+  it('duas listas lado a lado: a página tem o dobro das linhas, a da esquerda primeiro e o resto na da direita', () => {
+    const voos = Array.from({ length: 33 }, (_, i) => i + 1);
+    const telas = telasDosQuadros([['missoes', voos]], 14, 2);
+    assert.deepEqual(telas.map(t => [t.pagina, t.paginas, t.linhas.length, t.listas.map(l => l.length)]), [[1, 2, 28, [14, 14]], [2, 2, 5, [5, 0]]]);
+    assert.deepEqual(telas[0].listas[0], voos.slice(0, 14));
+    assert.deepEqual(telas[0].listas[1], voos.slice(14, 28));
+    assert.deepEqual(telas[1].listas, [[29, 30, 31, 32, 33], []]);
+    // Os quadros do aeroporto também: as páginas de partidas e depois as de chegadas
+    const alternar = telasDosQuadros([['partidas', [1, 2, 3, 4, 5]], ['chegadas', [6]]], 2, 2);
+    assert.deepEqual(alternar.map(t => [t.quadro, t.pagina, t.paginas, t.listas]), [
+      ['partidas', 1, 2, [[1, 2], [3, 4]]], ['partidas', 2, 2, [[5], []]], ['chegadas', 1, 1, [[6], []]]
+    ]);
+    // Nada no quadro: uma página, com as duas listas vazias
+    assert.deepEqual(telasDosQuadros([['missoes', []]], 14, 2).map(t => t.listas), [[[], []]]);
+    // Uma lista (o padrão): a página inteira nela
+    assert.deepEqual(telasDosQuadros([['missoes', [1, 2, 3]]], 2).map(t => t.listas), [[[1, 2]], [[3]]]);
+  });
+
   it('Missões é um quadro só, paginado como os outros', () => {
     assert.deepEqual(telasDosQuadros([['missoes', [1, 2, 3]]], 2).map(t => [t.quadro, t.pagina, t.paginas, t.linhas]), [
       ['missoes', 1, 2, [1, 2]], ['missoes', 2, 2, [3]]

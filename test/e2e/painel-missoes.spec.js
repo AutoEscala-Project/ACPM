@@ -30,7 +30,8 @@ const abrirPainel = async page => {
   await expect(page.locator('#out .fids')).toBeVisible();
 };
 const titulo = page => page.locator('#out .fids .fids-titulo');
-const cabecalho = page => page.locator('#out .fids thead th');
+// As colunas da primeira lista (com duas listas lado a lado, a segunda tem as mesmas)
+const cabecalho = page => page.locator('#out .fids .fids-lista').first().locator('thead th');
 const linhas = page => page.locator('#out .fids tbody tr:not(.fids-vazia):not(.fids-nada)');
 const dialogo = page => page.locator('#dlg-painel');
 const coluna = (page, rotulo) => dialogo(page).locator('.pn-coluna', { hasText: rotulo });
@@ -97,6 +98,33 @@ test.describe('Painel: o quadro Missões', () => {
     expect(await page.locator('#out .fids').evaluate(el => el.style.getPropertyValue('--fids-ajuste'))).toBe('');
   });
 
+  // Pedro, 2026-11-20: na tela grande, duas listas lado a lado também na tela cheia da Escala (as linhas que cabem na
+  // altura, em cada uma). Na página, o painel não passa de 1.280 px de largura: no Automático, uma lista
+  test('na tela grande, a tela cheia da Escala tem duas listas lado a lado; na página, uma', async ({ page }) => {
+    await page.setViewportSize({ width: 1920, height: 1080 });
+    await page.clock.install({ time: new Date('2026-11-10T06:00:00-03:00') });
+    await abrir(page, { estado: comExemplo(estadoSintetico()) });
+    await abrirPainel(page);
+    const medidas = () => page.evaluate(() => {
+      const quadro = document.querySelector('#out .fids');
+      const tabelas = [...quadro.querySelectorAll('.fids-tabela')];
+      return {
+        cabem: tabelas.every(t => t.scrollWidth <= t.parentElement.clientWidth),
+        linhas: tabelas.map(t => t.tBodies[0].rows.length),
+        cabecalhos: tabelas.map(t => [...t.tHead.rows[0].cells].map(th => th.textContent).join(', ')),
+        fundo: Math.max(...tabelas.map(t => t.getBoundingClientRect().bottom)) <= innerHeight
+      };
+    });
+    const padrao = PADRAO.join(', ');
+    expect(await medidas()).toEqual({ cabem: true, linhas: [12], cabecalhos: [padrao], fundo: true });
+    await page.locator('#out [data-fids="tela-cheia"]').click();
+    await expect.poll(() => page.evaluate(() => Boolean(document.fullscreenElement))).toBe(true);
+    await expect.poll(medidas).toEqual({ cabem: true, linhas: [14, 14], cabecalhos: [padrao, padrao], fundo: true });
+    await expect(page.locator('#out .fids .fids-relogio small')).toHaveText(/^página 1\/\d+$/);
+    await page.evaluate(() => document.exitFullscreen());
+    await expect.poll(medidas).toEqual({ cabem: true, linhas: [12], cabecalhos: [padrao], fundo: true });
+  });
+
   test('Missões é um quadro só: não alterna com outro', async ({ page }) => {
     await page.clock.install({ time: new Date('2026-11-10T12:00:00-03:00') });
     await abrir(page, { estado: dia() });
@@ -154,6 +182,7 @@ test.describe('Configurar painel', () => {
     // Fica gravado no cadastro (vale em todas as datas) e no Histórico, uma entrada por mudança
     expect(await painelGravado(page)).toEqual({
       quadro: 'partidas',
+      listas: 'auto',
       colunas: [{ id: 'horario', on: true }, { id: 'aeronave', on: true }, { id: 'modelo', on: true }, { id: 'missao', on: true },
         { id: 'aluno', on: true }, { id: 'instrutor', on: true }, { id: 'previsto', on: false }, { id: 'observacao', on: true }]
     });
@@ -180,12 +209,62 @@ test.describe('Configurar painel', () => {
     await expect(dialogo(page).getByRole('radio', { name: 'Missões' })).toBeChecked();
     await expect(dialogo(page).locator('#pn-padrao')).toBeDisabled();
     await expect(dialogo(page).locator('#pn-fechar')).toBeFocused();
-    await expect(historico(page)).toContainText('Painel: de volta ao padrão (Missões; Horário, Aeronave, Modelo, Aluno, Instrutor, Missão)');
+    await expect(historico(page)).toContainText('Painel: de volta ao padrão (Missões; Horário, Aeronave, Modelo, Aluno, Instrutor, Missão; listas: Automático)');
     // O padrão não fica gravado: sem a configuração, vale o padrão
     expect(await painelGravado(page)).toBeUndefined();
     await dialogo(page).locator('#pn-fechar').click();
     await expect(dialogo(page)).toBeHidden();
     await expect(configurar(page)).toBeFocused();
+  });
+
+  // Pedro, 2026-11-20: "Listas": Automático (o padrão: duas listas lado a lado quando o painel tem pelo menos 1.600 px de
+  // largura), "Sempre uma lista" e "Sempre duas listas lado a lado", nos botões de escolha como o quadro
+  test('Listas: Automático, uma ou duas lado a lado, pelo teclado; vale na hora e fica no Histórico', async ({ page }) => {
+    await abrir(page, { estado: dia() });
+    await abrirPainel(page);
+    const listas = page.locator('#out .fids .fids-lista');
+    // A página de 1280 px: no Automático, uma lista
+    await expect(listas).toHaveCount(1);
+    await configurar(page).click();
+    await expect(dialogo(page).getByRole('group', { name: 'Listas' }).getByRole('radio')).toHaveCount(3);
+    const auto = dialogo(page).getByRole('radio', { name: 'Automático' });
+    await expect(auto).toBeChecked();
+    await expect(auto).toHaveAccessibleDescription(/pelo menos 1\.600 px de largura/);
+
+    // Pelo teclado: as setas trocam a escolha, e o foco continua nela
+    await auto.focus();
+    await page.keyboard.press('ArrowDown');
+    const uma = dialogo(page).getByRole('radio', { name: 'Sempre uma lista' });
+    await expect(uma).toBeChecked();
+    await expect(uma).toBeFocused();
+    await expect(listas).toHaveCount(1);
+    await page.keyboard.press('ArrowDown');
+    const duas = dialogo(page).getByRole('radio', { name: 'Sempre duas listas lado a lado' });
+    await expect(duas).toBeChecked();
+    await expect(duas).toBeFocused();
+    // O painel atrás muda na hora: duas listas de 12 linhas, com as mesmas colunas; os 4 voos na da esquerda
+    await expect(listas).toHaveCount(2);
+    for (const lista of await listas.all()) {
+      await expect(lista.locator('thead th')).toHaveText(PADRAO);
+      await expect(lista.locator('tbody tr')).toHaveCount(12);
+    }
+    await expect(listas.first().locator('tbody tr:not(.fids-vazia) .f-hora')).toHaveText(['06:30', '08:20', '10:10', '11:30']);
+    await expect(listas.nth(1).locator('tbody tr:not(.fids-vazia)')).toHaveCount(0);
+    await expect(listas.first().locator('caption')).toHaveText('Missões, lista 1 de 2');
+    const caixas = await listas.evaluateAll(ls => ls.map(l => l.getBoundingClientRect()).map(c => [c.left, c.right, c.top]));
+    expect(caixas[1][0], 'lado a lado').toBeGreaterThanOrEqual(caixas[0][1]);
+    expect(caixas[1][2]).toBeCloseTo(caixas[0][2], 0);
+
+    expect((await painelGravado(page)).listas).toBe('duas');
+    await expect(historico(page)).toContainText('Painel: listas: Sempre uma lista (antes: Automático)');
+    await expect(historico(page)).toContainText('Painel: listas: Sempre duas listas lado a lado (antes: Sempre uma lista)');
+    await expect(dialogo(page).locator('#pn-padrao')).toBeEnabled();
+
+    // Voltar ao padrão volta ao Automático
+    await dialogo(page).locator('#pn-padrao').click();
+    await expect(auto).toBeChecked();
+    await expect(listas).toHaveCount(1);
+    expect(await painelGravado(page)).toBeUndefined();
   });
 
   test('pelo menos uma coluna fica no painel', async ({ page }) => {
@@ -208,10 +287,11 @@ test.describe('Configurar painel', () => {
   });
 
   test('o Gestor vê a configuração sem mudar nada; os quadros continuam à mão', async ({ page }) => {
-    const painel = { quadro: 'chegadas', colunas: [{ id: 'aluno', on: true }, { id: 'horario', on: true }] };
+    const painel = { quadro: 'chegadas', colunas: [{ id: 'aluno', on: true }, { id: 'horario', on: true }], listas: 'duas' };
     await abrir(page, { estado: dia({ painel }), url: './?role=gestor' });
     await abrirPainel(page);
     await expect(titulo(page)).toHaveText('Chegadas');
+    await expect(page.locator('#out .fids .fids-lista')).toHaveCount(2);
     await expect(cabecalho(page)).toHaveText(['Aluno', 'Horário', 'Aeronave', 'Modelo', 'Instrutor', 'Missão']);
     await page.locator('#out [data-fids="missoes"]').click();
     await expect(titulo(page)).toHaveText('Missões');
@@ -220,6 +300,9 @@ test.describe('Configurar painel', () => {
     await expect(dialogo(page)).toBeVisible();
     await expect(dialogo(page).locator('#dlg-painel-nota')).toHaveText('Só o Operador e o Administrador mudam o painel.');
     await expect(dialogo(page).getByRole('radio', { name: 'Chegadas', exact: true })).toBeChecked();
+    await expect(dialogo(page).getByRole('radio', { name: 'Sempre duas listas lado a lado' })).toBeChecked();
+    await expect(dialogo(page).getByRole('radio', { name: 'Sempre duas listas lado a lado' })).toBeDisabled();
+    await expect(dialogo(page).getByRole('radio', { name: 'Automático' })).toBeDisabled();
     for (const campo of await dialogo(page).locator('#dlg-painel-campos input, #dlg-painel-campos button, #pn-padrao').all()) await expect(campo).toBeDisabled();
     await expect(dialogo(page).locator('#pn-fechar')).toBeFocused();
     await page.keyboard.press('Escape');
@@ -253,6 +336,7 @@ test.describe('Configurar painel', () => {
     await expect(cabecalho(page)).toHaveText([...PADRAO, 'Previsto']);
     await expect.poll(() => servidor.banco.get('cadastro').conteudo.painel).toEqual({
       quadro: 'missoes',
+      listas: 'auto',
       colunas: [...['horario', 'aeronave', 'modelo', 'aluno', 'instrutor', 'missao', 'previsto'].map(id => ({ id, on: true })), { id: 'observacao', on: false }]
     });
     await expect.poll(() => servidor.historico.map(h => h.descricao)).toContain('Painel: coluna Previsto ligada');

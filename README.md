@@ -126,8 +126,8 @@ banco (e a chamada dela no app). A cópia `cadastro.cursos` fica.
 | `js/planilha.js`, `modelos/escala-cavok.xlsx` | A escala na planilha do modelo do aeroclube (o Excel do lançamento no CAVOK): onde cada voo cai e o arquivo preenchido. O modelo é o arquivo da operação sem os dados do dia; as células que o app preenche estão em `BLOCOS` e `GROUND` (um modelo novo precisa delas nos mesmos lugares, e `test/unit/planilha.test.js` confere) |
 | `js/zip.js` | Leitura e montagem do ZIP do .xlsx, com a compressão do navegador |
 | `js/status.js` | Status do voo com detalhes: o novo horário do atraso, o motivo do cancelamento e o atraso que invade outro voo |
-| `js/quadro.js` | As linhas do painel: os quadros Missões, Partidas e Chegadas (Escala e TV da recepção) |
-| `js/config-do-painel.js` | A configuração do painel no cadastro (`painel`, do formato 25 em diante): o quadro com que ele abre e as colunas, ligadas ou não e na ordem |
+| `js/quadro.js` | As linhas do painel: os quadros Missões, Partidas e Chegadas (Escala e TV da recepção) e as páginas, com uma lista ou duas lado a lado |
+| `js/config-do-painel.js` | A configuração do painel no cadastro (`painel`, do formato 25 em diante): o quadro com que ele abre, as colunas (ligadas ou não e na ordem) e as listas (`auto`, `uma` ou `duas` lado a lado) |
 | `js/dados-pessoais.js` | Dados pessoais de alunos e instrutores: validação (CPF, CANAC, nascimento, celular e e-mail) e formatos |
 | `js/perfis.js` | Perfis de acesso e o que cada um pode fazer na tela |
 | `js/rules.js` | Regras das missões (Ground School, precedência, disponibilidade do aluno) |

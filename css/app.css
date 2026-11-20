@@ -367,7 +367,7 @@ details.caixa.avisos summary { color: var(--wa); }
   .fids-controles .btn[aria-pressed="true"], .seg button.on { forced-color-adjust: none; background: Highlight; color: HighlightText; border-color: Highlight; }
 }
 .fids {
-  --fids-fs: 17px; --fids-linha: 34px; --fids-amarelo: #FFD23F; --fids-branco: #F4F7FF;
+  --fids-fs: 17px; --fids-linha: 34px; --fids-vao: 12px; --fids-amarelo: #FFD23F; --fids-branco: #F4F7FF;
   /* O âmbar dos avisos (atraso, embarque) e o azul-claro dos textos secundários */
   --fids-ambar: #FFC233; --fids-claro: #DCE7FF;
   overflow-x: auto; background: #07122B; border: 6px solid #0A0F1A; border-radius: 8px; box-shadow: 0 8px 22px rgba(0,0,0,.35);
@@ -389,6 +389,15 @@ details.caixa.avisos summary { color: var(--wa); }
 .fids-relogio b { font-size: calc(var(--fids-fs) * 1.7); font-weight: 700; font-variant-numeric: tabular-nums; }
 .fids-relogio small { margin-top: 3px; font-size: calc(var(--fids-fs) * .65); color: var(--fids-claro); }
 table.fids-tabela { width: 100%; min-width: 860px; border-collapse: collapse; font-size: var(--fids-fs); }
+/* Uma lista, ou duas lado a lado na tela grande (a página continua da esquerda na da direita), com as mesmas colunas.
+   Cada lista ocupa a metade: se nem com as letras no mínimo ela couber ("Sempre duas listas"), rola na página e é
+   cortada na tela toda, sem invadir a outra */
+.fids-listas { display: grid; grid-template-columns: minmax(0, 1fr); }
+.fids-listas.duas { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: var(--fids-vao); }
+.fids-listas.duas table.fids-tabela { min-width: 0; }
+.fids-listas.duas .fids-lista { overflow-x: auto; }
+/* A medida das duas listas (js/views/painel-aeroporto.js): a tabela com todas as linhas, fora da vista, na largura dela */
+.fids-medida table.fids-tabela { width: auto; min-width: 0; }
 .fids-tabela th {
   position: static; padding: 4px 10px; border: 0; text-align: left; color: #fff; letter-spacing: .02em;
   font: 700 calc(var(--fids-fs) * .78) 'Barlow Semi Condensed', sans-serif; background: linear-gradient(#3463C2, #23499B);
@@ -420,9 +429,12 @@ table.fids-tabela { width: 100%; min-width: 860px; border-collapse: collapse; fo
 /* Na tela toda (tela cheia na Escala ou a TV da recepção, painel.html): letras e linhas crescem com a tela. Quando a
    tabela não cabe na largura (muitas colunas, nomes longos, a tela 4:3), o painel diminui as letras (--fids-ajuste,
    js/views/painel-aeroporto.js) */
-.fids:fullscreen, .fids.inteiro { --fids-fs: calc(2.6vh * var(--fids-ajuste, 1)); --fids-linha: 5.4vh; overflow: hidden; border: 0; border-radius: 0; }
+.fids:fullscreen, .fids.inteiro { --fids-fs: calc(2.6vh * var(--fids-ajuste, 1)); --fids-linha: 5.4vh; --fids-vao: 1.2vw; overflow: hidden; border: 0; border-radius: 0; }
+.fids:fullscreen .fids-listas.duas .fids-lista, .fids.inteiro .fids-listas.duas .fids-lista { overflow: hidden; }
 .fids:fullscreen .fids-topo, .fids:fullscreen table.fids-tabela, .fids.inteiro .fids-topo, .fids.inteiro table.fids-tabela { min-width: 0; }
 .fids.inteiro { position: fixed; inset: 0; box-shadow: none; }
+/* A medida das duas listas fica fora da vista também na tela toda (depois da regra da TV, que ela desfaz) */
+.fids.fids-medida { position: absolute; inset: 0 auto auto 0; width: max-content; visibility: hidden; pointer-events: none; border: 0; box-shadow: none; overflow: visible; }
 /* A hora da última atualização da escala: discreta, com um relógio, ao lado do título */
 .atualizada { display: inline-flex; align-items: center; gap: 4px; margin-left: 10px; vertical-align: middle; font: 400 13px 'Barlow', sans-serif; color: var(--mu); }
 .atualizada .ico { width: 14px; height: 14px; vertical-align: 0; }
@@ -585,6 +597,7 @@ dialog.dlg-painel { width: min(460px, calc(100vw - 32px)); max-height: calc(100d
 dialog.dlg-painel .pn-grupo { margin: 10px 0; padding: 6px 12px 8px; border: 1px solid var(--ln); border-radius: 8px; min-width: 0; }
 dialog.dlg-painel .pn-grupo legend { padding: 0 4px; font-weight: 600; }
 dialog.dlg-painel .pn-grupo > .chk { display: flex; padding: 3px 0; }
+dialog.dlg-painel .pn-grupo > small.h { display: block; margin: 4px 0 0; }
 .pn-colunas { margin: 0; padding: 0; list-style: none; counter-reset: pn-coluna; }
 .pn-coluna { display: flex; align-items: center; gap: 6px; padding: 3px 0; border-bottom: 1px solid var(--ln); counter-increment: pn-coluna; }
 .pn-coluna:last-child { border-bottom: 0; }

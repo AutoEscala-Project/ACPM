@@ -129,21 +129,9 @@ test.describe('TV da recepção', () => {
       await gravarNesteNavegador(page, diaCheio(painel));
       await page.goto('./painel.html');
       await expect(linhas(page).first()).toBeVisible();
-      const medidas = await page.evaluate(() => {
-        const quadro = document.querySelector('.fids');
-        const dados = [...quadro.querySelectorAll('tbody tr:not(.fids-vazia):not(.fids-nada)')];
-        return {
-          tabela: quadro.querySelector('.fids-tabela').scrollWidth,
-          topo: quadro.querySelector('.fids-topo').scrollWidth,
-          quadro: quadro.clientWidth,
-          pagina: document.documentElement.scrollWidth,
-          fundo: quadro.querySelector('.fids-tabela').getBoundingClientRect().bottom,
-          foraDaTela: dados.filter(tr => tr.getBoundingClientRect().bottom > innerHeight).length,
-          linhas: dados.length,
-          paginas: Number(/\/(\d+)/.exec(quadro.querySelector('.fids-relogio small').textContent)[1])
-        };
-      });
-      expect(medidas.tabela, 'a tabela na largura').toBeLessThanOrEqual(medidas.quadro);
+      const medidas = await medirOQuadro(page);
+      expect(medidas.sobra, 'cada lista na largura dela').toBeGreaterThanOrEqual(0);
+      expect(medidas.tabelas, 'as listas na largura do quadro').toBeLessThanOrEqual(medidas.quadro);
       expect(medidas.topo, 'a faixa do topo na largura').toBeLessThanOrEqual(medidas.quadro);
       expect(medidas.pagina).toBeLessThanOrEqual(largura);
       expect(medidas.fundo, 'o quadro (com as linhas vazias) na altura').toBeLessThanOrEqual(altura);
@@ -152,6 +140,81 @@ test.describe('TV da recepção', () => {
       expect(medidas.linhas).toBeGreaterThanOrEqual(8);
     });
   }
+
+  // Pedro, 2026-11-20: na tela grande, duas listas lado a lado, umas 28 linhas de uma vez, em todos os quadros: a página
+  // começa na lista da esquerda e continua na da direita, com as mesmas colunas; as letras podem diminuir, até o mínimo
+  // da lista única na tela toda (60% de 2,6% da altura). Automático: duas a partir de 1.600 px de largura
+  // No Automático, as duas listas só valem quando cabem com as letras no mínimo: com todas as colunas e os nomes
+  // compridos do dia cheio, a TV de 1080p fica com uma lista
+  const CASOS_DAS_LISTAS = [
+    [1920, 1080, null, 2],
+    [2560, 1440, null, 2],
+    [1280, 720, null, 1],
+    [1920, 1080, { quadro: 'alternar', colunas: TODAS_AS_COLUNAS }, 1],
+    [1920, 1080, { quadro: 'missoes', colunas: [], listas: 'uma' }, 1],
+    [1280, 720, { quadro: 'missoes', colunas: [], listas: 'duas' }, 2]
+  ];
+  for (const [largura, altura, painel, listas] of CASOS_DAS_LISTAS) {
+    const nome = painel ? `${painel.quadro}, ${painel.colunas.length || 6} colunas, ${painel.listas || 'auto'}` : 'padrão';
+    test(`na tela de ${largura}×${altura} (${nome}), ${listas === 2 ? 'duas listas lado a lado' : 'uma lista'}, sem nada fora da tela`, async ({ page }) => {
+      await page.setViewportSize({ width: largura, height: altura });
+      await page.clock.setFixedTime(new Date('2026-11-10T06:00:00-03:00'));
+      await gravarNesteNavegador(page, diaCheio(painel));
+      await page.goto('./painel.html');
+      await expect(linhas(page).first()).toBeVisible();
+      await expect(page.locator('.fids .fids-lista')).toHaveCount(listas);
+      const medidas = await medirOQuadro(page);
+      expect(medidas.sobra, 'cada lista na largura dela').toBeGreaterThanOrEqual(0);
+      expect(medidas.pagina).toBeLessThanOrEqual(largura);
+      expect(medidas.fundo, 'as listas (com as linhas vazias) na altura').toBeLessThanOrEqual(altura);
+      expect(medidas.foraDaTela, 'nenhuma linha fora da tela').toBe(0);
+      expect(medidas.letras, 'as letras no mínimo da tela toda ou maiores').toBeGreaterThanOrEqual(Math.floor(0.6 * 0.026 * altura * 100) / 100);
+      // As linhas de cada lista: as mesmas da lista única na tela toda (a linha tem 5,4% da altura: 14 em qualquer tela)
+      const porLista = Math.floor((altura * 0.8) / (altura * 0.054));
+      expect(medidas.porLista).toEqual(Array(listas).fill(porLista));
+      expect(medidas.linhas, 'a primeira página cheia').toBe(porLista * listas);
+      if (listas === 2) {
+        expect(medidas.linhas, 'umas 28 linhas de uma vez').toBeGreaterThanOrEqual(26);
+        // As duas lado a lado, com as mesmas colunas; a da esquerda primeiro (os horários seguem da esquerda para a direita)
+        expect(medidas.cabecalhos[1]).toEqual(medidas.cabecalhos[0]);
+        expect(medidas.lado).toBe(true);
+        expect(medidas.emOrdem, 'a página continua da esquerda na direita').toBe(true);
+      }
+    });
+  }
+
+  // A TV que muda de tamanho (outra resolução, a janela do navegador) refaz as listas e as linhas de cada uma
+  test('a tela que muda de tamanho passa de uma lista para duas e de volta', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await page.clock.setFixedTime(new Date('2026-11-10T06:00:00-03:00'));
+    await gravarNesteNavegador(page, diaCheio());
+    await page.goto('./painel.html');
+    const listas = page.locator('.fids .fids-lista');
+    await expect(listas).toHaveCount(1);
+    await expect(listas.first().locator('tbody tr')).toHaveCount(14);
+    await page.setViewportSize({ width: 1920, height: 1080 });
+    await expect(listas).toHaveCount(2);
+    await expect(listas.nth(1).locator('tbody tr')).toHaveCount(14);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await expect(listas).toHaveCount(1);
+  });
+
+  // "Sempre duas listas" com o que não cabe nem com as letras no mínimo: cada lista é cortada na metade dela, sem invadir a
+  // outra e sem a página rolar (no Automático, ficaria uma lista)
+  test('sempre duas listas, mesmo quando não cabem: as letras no mínimo e cada lista cortada na metade dela', async ({ page }) => {
+    await page.setViewportSize({ width: 1920, height: 1080 });
+    await page.clock.setFixedTime(new Date('2026-11-10T06:00:00-03:00'));
+    await gravarNesteNavegador(page, diaCheio({ quadro: 'partidas', colunas: TODAS_AS_COLUNAS, listas: 'duas' }));
+    await page.goto('./painel.html');
+    await expect(linhas(page).first()).toBeVisible();
+    await expect(page.locator('.fids .fids-lista')).toHaveCount(2);
+    const medidas = await medirOQuadro(page);
+    expect(medidas.sobra, 'não cabe').toBeLessThan(0);
+    expect(medidas.letras).toBeCloseTo(0.6 * 0.026 * 1080, 0);
+    expect(medidas.lado, 'uma não invade a outra').toBe(true);
+    expect(medidas.cortadas, 'cada lista cortada na largura dela').toBe(true);
+    expect(medidas.pagina).toBeLessThanOrEqual(1920);
+  });
 
   test('embarque: o voo no avião que sai em até 35 minutos chama para a sala de briefing; o simulador não', async ({ page }) => {
     const e = cenario({
@@ -303,6 +366,36 @@ test.describe('TV da recepção', () => {
     await context.close();
   });
 });
+
+// As medidas do quadro na tela: as listas na largura (sobra: o menor espaço livre de uma lista; negativo, ela não cabe),
+// a faixa do topo, a página, o fundo, as linhas fora da tela, as linhas e as páginas, o tamanho das letras e as listas
+async function medirOQuadro(page) {
+  return page.evaluate(() => {
+    const quadro = document.querySelector('.fids');
+    const dados = [...quadro.querySelectorAll('tbody tr:not(.fids-vazia):not(.fids-nada)')];
+    const listas = [...quadro.querySelectorAll('.fids-lista')];
+    const tabelas = listas.map(l => l.querySelector('.fids-tabela'));
+    const caixas = listas.map(l => l.getBoundingClientRect());
+    const horarios = tabelas.flatMap(t => [...t.querySelectorAll('tbody tr:not(.fids-vazia):not(.fids-nada)')].map(tr => tr.querySelector('.f-hora')?.textContent ?? ''));
+    return {
+      sobra: Math.min(...tabelas.map(t => t.parentElement.clientWidth - t.scrollWidth)),
+      tabelas: Math.round(Math.max(...caixas.map(c => c.right)) - Math.min(...caixas.map(c => c.left))),
+      topo: quadro.querySelector('.fids-topo').scrollWidth,
+      quadro: quadro.clientWidth,
+      pagina: document.documentElement.scrollWidth,
+      fundo: Math.max(...tabelas.map(t => t.getBoundingClientRect().bottom)),
+      foraDaTela: dados.filter(tr => tr.getBoundingClientRect().bottom > innerHeight || tr.getBoundingClientRect().right > innerWidth + 1).length,
+      linhas: dados.length,
+      porLista: tabelas.map(t => t.tBodies[0].rows.length),
+      paginas: Number(/\/(\d+)/.exec(quadro.querySelector('.fids-relogio small').textContent)[1]),
+      letras: parseFloat(getComputedStyle(quadro.querySelector('tbody td')).fontSize),
+      cabecalhos: tabelas.map(t => [...t.querySelectorAll('thead th')].map(th => th.textContent)),
+      lado: caixas.length === 2 && caixas[1].left >= caixas[0].right && Math.abs(caixas[1].top - caixas[0].top) < 1,
+      cortadas: listas.every(l => getComputedStyle(l).overflowX === 'hidden'),
+      emOrdem: horarios.every((h, i) => i === 0 || !h || !horarios[i - 1] || horarios[i - 1] <= h)
+    };
+  });
+}
 
 async function novaTV(browser) {
   const context = await browser.newContext({ baseURL: test.info().project.use.baseURL, locale: 'pt-BR', timezoneId: 'America/Sao_Paulo' });

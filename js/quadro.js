@@ -119,11 +119,15 @@ export function paginar(lista, porPagina) {
 }
 
 // As telas na ordem em que se alternam: as páginas de cada quadro ([nome, linhas]), um quadro depois do outro (como no
-// aeroporto, as páginas de partidas e depois as de chegadas)
-export function telasDosQuadros(quadros, porPagina) {
+// aeroporto, as páginas de partidas e depois as de chegadas). Cada página tem uma lista ou duas lado a lado (porLista
+// linhas em cada uma): a página começa na lista da esquerda e continua na da direita
+export function telasDosQuadros(quadros, porLista, listas = 1) {
   return quadros.flatMap(([quadro, lista]) => {
-    const paginas = paginar(lista, porPagina);
-    return paginas.map((linhas, i) => ({ quadro, pagina: i + 1, paginas: paginas.length, linhas }));
+    const paginas = paginar(lista, porLista * listas);
+    return paginas.map((linhas, i) => ({
+      quadro, pagina: i + 1, paginas: paginas.length, linhas,
+      listas: Array.from({ length: listas }, (_, n) => linhas.slice(n * porLista, (n + 1) * porLista))
+    }));
   });
 }
 
