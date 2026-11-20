@@ -16,21 +16,23 @@ const caixa = (page, icao) => faixa(page).locator(`.meteo-estacao[data-icao="${i
 const linhas = page => page.locator('.fids tbody tr:not(.fids-vazia):not(.fids-nada)');
 
 // O dia de exemplo (com os voos duas vezes, em outra chave: o quadro tem mais de uma página na tela toda), gravado como
-// o operador deixa, e o mesmo cadastro
-function diaCheio() {
+// o operador deixa, e o mesmo cadastro (com a configuração do painel, quando há); mudar: mexe nos voos antes de gravar
+function diaCheio({ painel = null, mudar = null } = {}) {
   const e = comExemplo(estadoSintetico());
+  if (painel) e.painel = painel;
   const escala = runAllocationEngine(e);
   escala.out = [...escala.out, ...escala.out.map(o => ({ ...o, fKey: o.fKey.replace(/^\d+/, n => String(Number(n) + 5000)) }))];
+  if (mudar) mudar(escala.out);
   const docs = documentosAtuais(e, HOJE);
   docs.dias[HOJE] = { ...docs.dias[HOJE], resultado: escala };
   return docs;
 }
 
 // Uma TV (ou um navegador) com o servidor falso; statusEsperados: as respostas de erro que o teste provoca
-async function novoContexto(browser, opcoes = {}, { statusEsperados = [], viewport } = {}) {
+async function novoContexto(browser, opcoes = {}, { statusEsperados = [], viewport, dia = diaCheio() } = {}) {
   const context = await browser.newContext({ baseURL: test.info().project.use.baseURL, locale: 'pt-BR', timezoneId: 'America/Sao_Paulo', ...(viewport ? { viewport } : {}) });
   await prepararContexto(context);
-  const servidor = await instalarSupabaseFalso(context, { ...diaCheio(), ...opcoes });
+  const servidor = await instalarSupabaseFalso(context, { ...dia, ...opcoes });
   const page = await context.newPage();
   return { context, servidor, page, erros: vigiarErros(page, { statusEsperados }) };
 }
@@ -360,6 +362,50 @@ test.describe('Meteorologia no painel', () => {
     await expect.poll(async () => (await medir()).atras).toBe(0);
     await ladoALado(page);
     expect((await medir()).dados[0]).toBeGreaterThan(0);
+    expect(erros).toEqual([]);
+    await context.close();
+  });
+
+  // As letras diminuem só na página que precisa (um nome comprido); na seguinte, elas voltam a crescer, e o topo e o
+  // cabeçalho também: as linhas de cada lista são contadas com as letras inteiras, e nenhuma fica atrás da faixa em
+  // nenhuma página (contadas com as letras menores da página anterior, a última de cada lista ficava atrás dela)
+  test('na TV, a página com as letras menores e a seguinte com as inteiras: nenhuma linha atrás da faixa, as mesmas linhas por lista', async ({ browser }) => {
+    const nomeComprido = 'Instrutor Wenceslau Wanderley Washington Wolfgang Wellington Wagner Westphalen';
+    const dia = diaCheio({
+      painel: { quadro: 'missoes', colunas: [], listas: 'duas' },
+      // Os três primeiros voos do dia (na primeira página) com o instrutor de nome comprido
+      mudar: out => { for (const o of [...out].sort((x, y) => x.a - y.a).slice(0, 3)) o.ins = nomeComprido; }
+    });
+    const { context, page, erros } = await novoContexto(browser, { meteorologia: LONGAS }, { viewport: { width: 1920, height: 1080 }, dia });
+    await page.clock.install({ time: new Date('2026-11-10T06:00:00-03:00') });
+    await page.goto('./painel.html?supabase=teste');
+    await preencherLogin(page, CONTAS.painel);
+    await expect(caixa(page, 'SBCF').locator('.meteo-taf')).toBeVisible();
+    await expect(page.locator('.fids .fids-lista')).toHaveCount(2);
+    const medir = () => page.evaluate(() => {
+      const quadro = document.querySelector('.fids');
+      const faixa = quadro.querySelector('.fids-meteo').getBoundingClientRect();
+      return {
+        pagina: quadro.querySelector('.fids-relogio small').textContent,
+        ajuste: quadro.style.getPropertyValue('--fids-ajuste'),
+        porLista: [...quadro.querySelectorAll('.fids-tabela')].map(t => t.tBodies[0].rows.length),
+        atras: [...quadro.querySelectorAll('tbody tr')].filter(tr => tr.getBoundingClientRect().bottom > faixa.top + 0.5).length
+      };
+    });
+    await expect(page.locator('.fids-relogio small').first()).toHaveText(/^página 1\/2$/);
+    const primeira = await medir();
+    // A primeira página, com o nome comprido, nas letras menores
+    expect(primeira.ajuste).not.toBe('');
+    expect(primeira.atras).toBe(0);
+    for (const pagina of [2, 1, 2]) {
+      await page.clock.runFor(10_000);
+      await expect(page.locator('.fids-relogio small').first()).toHaveText(new RegExp(`^página ${pagina}/2$`));
+      const m = await medir();
+      // A segunda página, sem o nome comprido, nas letras inteiras
+      if (pagina === 2) expect(m.ajuste).toBe('');
+      expect(m.atras, `página ${pagina}: nenhuma linha atrás da faixa`).toBe(0);
+      expect(m.porLista, `página ${pagina}: as mesmas linhas por lista`).toEqual(primeira.porLista);
+    }
     expect(erros).toEqual([]);
     await context.close();
   });

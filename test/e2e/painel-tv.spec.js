@@ -174,14 +174,14 @@ test.describe('TV da recepção', () => {
       expect(medidas.foraDaTela, 'nenhuma linha fora da tela').toBe(0);
       expect(medidas.letras, 'as letras no mínimo da tela toda ou maiores').toBeGreaterThanOrEqual(Math.floor(0.6 * 0.026 * altura * 100) / 100);
       // As linhas de cada lista: as que cabem acima da faixa da meteorologia, que fica embaixo das duas listas, no pé da
-      // tela (mais uma linha não caberia); as duas listas com as mesmas
+      // tela, com as letras inteiras (mais uma linha não caberia nelas); as duas listas com as mesmas
       const porLista = medidas.porLista[0];
       expect(medidas.porLista).toEqual(Array(listas).fill(porLista));
+      expect(porLista, 'mais uma linha não caberia').toBe(await linhasQueCabem(page));
       // A primeira página cheia (o dia que cabe numa página só, com as linhas que ele tem)
       if (medidas.paginas > 1) expect(medidas.linhas, 'a primeira página cheia').toBe(porLista * listas);
       else expect(medidas.linhas).toBeLessThanOrEqual(porLista * listas);
       expect(medidas.fundo, 'as listas acima da faixa').toBeLessThanOrEqual(medidas.faixa.top + 0.5);
-      expect(medidas.faixa.top - medidas.fundo, 'mais uma linha não caberia').toBeLessThan(medidas.linha + 5);
       expect(medidas.faixa.bottom, 'a faixa no pé da tela').toBeCloseTo(altura, 0);
       expect(medidas.faixa.left, 'a faixa embaixo das duas listas, da largura do quadro').toBeCloseTo(0, 0);
       expect(medidas.faixa.width).toBeCloseTo(largura, 0);
@@ -494,10 +494,15 @@ test.describe('TV da recepção', () => {
 // a faixa do topo, a página, o fundo, as linhas fora da tela, as linhas e as páginas, o tamanho das letras e as listas
 // As linhas que cabem numa lista na tela toda: da altura entre o cabeçalho da tabela e a faixa da meteorologia, com a
 // folga de 4 px do painel (js/views/painel-aeroporto.js)
+// As linhas que cabem em cada lista entre o cabeçalho e a faixa da meteorologia, com as letras inteiras (sem o ajuste da
+// largura, que é só da página na tela: a página seguinte pode ter as letras inteiras, e as linhas são as mesmas em todas)
 async function linhasQueCabem(page) {
   return page.evaluate(() => {
     const quadro = document.querySelector('.fids');
+    const ajuste = quadro.style.getPropertyValue('--fids-ajuste');
+    quadro.style.removeProperty('--fids-ajuste');
     const cabecalho = quadro.querySelector('.fids-tabela thead').getBoundingClientRect().bottom;
+    if (ajuste) quadro.style.setProperty('--fids-ajuste', ajuste);
     const linha = quadro.querySelector('tbody tr').getBoundingClientRect().height;
     return Math.floor((quadro.querySelector('.fids-meteo').getBoundingClientRect().top - cabecalho - 4) / linha);
   });

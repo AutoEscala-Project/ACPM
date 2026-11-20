@@ -58,14 +58,20 @@ const naTelaToda = () => telaCheia() || (estado.inteiro && document.querySelecto
 
 // Quantas linhas cabem em cada lista: na página, 12; em tela cheia, as que couberem na altura da tela, tirados o topo, o
 // cabeçalho da tabela e a faixa da meteorologia, que fica embaixo das duas listas (as linhas que não cabem vão para a
-// página seguinte). Antes do primeiro desenho (sem o topo e o cabeçalho para medir), as linhas de 80% da tela
+// página seguinte). Antes do primeiro desenho (sem o topo e o cabeçalho para medir), as linhas de 80% da tela.
+// O topo e o cabeçalho são medidos com as letras inteiras, sem o ajuste da largura: o ajuste é o da página que está na
+// tela, e a página seguinte pode não precisar dele (as letras voltam a crescer, o topo e o cabeçalho também, e a última
+// linha de cada lista ficaria atrás da faixa). Assim cada lista tem as mesmas linhas em todas as páginas
 const FOLGA = 4;
 function porLista() {
   const quadro = naTelaToda();
   if (!quadro) return POR_PAGINA;
   const linha = emPixels(getComputedStyle(quadro).getPropertyValue('--fids-linha')) || 48;
   const altura = seletor => { const el = quadro.querySelector(seletor); return el ? el.offsetHeight : 0; };
+  const ajuste = quadro.style.getPropertyValue('--fids-ajuste');
+  if (ajuste) quadro.style.removeProperty('--fids-ajuste');
   const topo = altura('.fids-topo') + altura('.fids-tabela thead');
+  if (ajuste) quadro.style.setProperty('--fids-ajuste', ajuste);
   const livre = topo ? innerHeight - topo - FOLGA : innerHeight * 0.8;
   return Math.max(4, Math.floor((livre - altura('.fids-meteo')) / linha));
 }
@@ -329,12 +335,11 @@ export function acaoDoPainel(acao) {
 }
 
 // Ao entrar e sair da tela cheia e quando a janela muda de tamanho, o número de linhas por página, as listas (uma ou duas)
-// e o tamanho das letras mudam. As letras novas mudam a altura do cabeçalho da tabela, e com ela as linhas que cabem acima
-// da faixa da meteorologia: o quadro é medido de novo depois delas
+// e o tamanho das letras mudam (as linhas que cabem acima da faixa da meteorologia não dependem do ajuste das letras:
+// porLista mede o topo e o cabeçalho sem ele)
 const refazerNoTamanhoNovo = () => {
   redesenhar();
   caberNaLargura();
-  redesenhar();
 };
 document.addEventListener('fullscreenchange', refazerNoTamanhoNovo);
 let esperaDoTamanho = null;
