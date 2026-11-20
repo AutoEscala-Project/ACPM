@@ -141,7 +141,9 @@ function painelDoCadastro(cadastro) {
 // sem ele, os cursos com que o banco começa (PP, PC e INVA, vazios)
 // meteorologia: o que a função meteorologia entrega; null: a função não foi publicada (404 do Supabase)
 // painelDoDiaAntigo: o painel_do_dia de antes da migração 20261120150000 (sem a configuração do painel)
-export function criarSupabaseFalso({ documentos = {}, dias = {}, historico: historicoInicial = [], cursos: cursosGuardados = cursosIniciais(), agora = new Date(RELOGIO_DAS_PAGINAS), nomes = {}, meteorologia: meteorologiaInicial = METEOROLOGIA_DE_TESTE, painelDoDiaAntigo = false } = {}) {
+// validadeDaSessao: quantos segundos a sessão vale, no relógio da página (o Auth manda só o expires_in, e o supabase-js
+// conta do relógio dele); sem ela, a sessão vale até bem depois do relógio fixo das páginas
+export function criarSupabaseFalso({ documentos = {}, dias = {}, historico: historicoInicial = [], cursos: cursosGuardados = cursosIniciais(), agora = new Date(RELOGIO_DAS_PAGINAS), nomes = {}, meteorologia: meteorologiaInicial = METEOROLOGIA_DE_TESTE, painelDoDiaAntigo = false, validadeDaSessao = null } = {}) {
   const banco = new Map(Object.entries(documentos).map(([chave, conteudo]) => [chave, { conteudo, versao: 1 }]));
   const tabelaDias = new Map(Object.entries(dias).map(([data, conteudo]) => [data, { conteudo, versao: 1 }]));
   // As entradas do histórico já gravadas (no formato da tabela historico)
@@ -168,10 +170,33 @@ export function criarSupabaseFalso({ documentos = {}, dias = {}, historico: hist
   const senhaDe = c => (senhas.has(c.id) ? senhas.get(c.id) : c.senha);
   const emailDe = c => (emails.has(c.id) ? emails.get(c.id) : c.email);
   const exp = () => Math.floor(Date.now() / 1000) + 10 * 365 * 24 * 3600;  // longe no futuro: o relógio da página é fixo
+  // Cada token de sessão (JWT) é único (o número no fim), e o último de cada conta fica anotado
+  let tokensEmitidos = 0;
+  const ultimoToken = new Map();
   const emitirToken = conta => {
-    const token = `${base64url({ alg: 'HS256', typ: 'JWT' })}.${base64url({ sub: conta.id, email: emailDe(conta), role: 'authenticated', aud: 'authenticated', exp: exp() })}.assinatura`;
+    const token = `${base64url({ alg: 'HS256', typ: 'JWT' })}.${base64url({ sub: conta.id, email: emailDe(conta), role: 'authenticated', aud: 'authenticated', exp: exp(), n: ++tokensEmitidos })}.assinatura`;
     sessoes.set(token, conta);
+    ultimoToken.set(conta.id, token);
     return token;
+  };
+  // Os refresh tokens: cada um vale uma vez (a renovação troca os dois tokens) e sai com o logout da sessão dele ou com
+  // a revogação. renovacoes: os pedidos de renovação (o perfil e se foi aceito)
+  const renovaveis = new Map();
+  const renovacaoDoToken = new Map();
+  const renovacoes = [];
+  const emitirRenovacao = (conta, token) => {
+    const renovacao = `renovar-${conta.id}-${tokensEmitidos}`;
+    renovaveis.set(renovacao, conta);
+    renovacaoDoToken.set(token, renovacao);
+    return renovacao;
+  };
+  // A sessão que o Auth devolve no login e na renovação
+  const novaSessao = conta => {
+    const token = emitirToken(conta);
+    return {
+      access_token: token, token_type: 'bearer', expires_in: validadeDaSessao || 3600, ...(validadeDaSessao ? {} : { expires_at: exp() }),
+      refresh_token: emitirRenovacao(conta, token), user: usuario(conta, emailDe(conta))
+    };
   };
   const gravacoes = [];
   const saidas = [];
@@ -248,8 +273,16 @@ export function criarSupabaseFalso({ documentos = {}, dias = {}, historico: hist
       const { email, password } = req.postDataJSON();
       const alvo = todasAsContas().find(c => emailDe(c) === email && senhaDe(c) === password);
       if (!alvo) return responder(400, { code: 400, error_code: 'invalid_credentials', msg: 'Invalid login credentials' });
-      const token = emitirToken(alvo);
-      return responder(200, { access_token: token, token_type: 'bearer', expires_in: 3600, expires_at: exp(), refresh_token: `renovar-${alvo.id}`, user: usuario(alvo, emailDe(alvo)) });
+      return responder(200, novaSessao(alvo));
+    }
+    // A renovação da sessão: o refresh token vale uma vez; revogado ou já usado, a recusa do Auth
+    if (url.pathname === '/auth/v1/token' && url.searchParams.get('grant_type') === 'refresh_token') {
+      const { refresh_token: renovacao } = req.postDataJSON();
+      const alvo = renovaveis.get(renovacao);
+      renovacoes.push({ perfil: alvo ? alvo.perfil : null, aceita: Boolean(alvo) });
+      if (!alvo) return responder(400, { code: 400, error_code: 'refresh_token_not_found', msg: 'Invalid Refresh Token: Refresh Token Not Found' });
+      renovaveis.delete(renovacao);
+      return responder(200, novaSessao(alvo));
     }
     if (url.pathname === '/auth/v1/user') {
       if (!conta) return responder(401, { code: 401, msg: 'invalid JWT' });
@@ -273,7 +306,9 @@ export function criarSupabaseFalso({ documentos = {}, dias = {}, historico: hist
     }
     if (url.pathname === '/auth/v1/logout') {
       saidas.push(url.searchParams.get('scope'));
-      sessoes.delete((req.headers().authorization || '').replace(/^Bearer /, ''));
+      const saiu = (req.headers().authorization || '').replace(/^Bearer /, '');
+      sessoes.delete(saiu);
+      renovaveis.delete(renovacaoDoToken.get(saiu));
       return route.fulfill({ status: 204, headers: cors });
     }
 
@@ -508,7 +543,8 @@ export function criarSupabaseFalso({ documentos = {}, dias = {}, historico: hist
       const conta = todasAsContas().find(c => emailDe(c) === de);
       emails.set(conta.id, para);
       const expira = Math.floor(agora.getTime() / 1000) + 3600;
-      return `#access_token=${emitirToken(conta)}&expires_at=${expira}&expires_in=3600&refresh_token=renovar-${conta.id}&token_type=bearer&type=email_change`;
+      const token = emitirToken(conta);
+      return `#access_token=${token}&expires_at=${expira}&expires_in=3600&refresh_token=${emitirRenovacao(conta, token)}&token_type=bearer&type=email_change`;
     },
     // Simula indisponibilidade do servidor nas próximas gravações
     // (503: fora do ar, o app tenta de novo; 400: recusa definitiva)
@@ -525,8 +561,19 @@ export function criarSupabaseFalso({ documentos = {}, dias = {}, historico: hist
     // função publicada)
     chamadasDaMeteorologia,
     trocarMeteorologia(dados) { meteorologia = dados; },
-    // As sessões abertas expiram (quem estava conectado precisa entrar de novo)
+    // As sessões abertas expiram (quem estava conectado precisa entrar de novo, ou renovar a sessão)
     expirarSessoes() { sessoes.clear(); },
+    // Só o último token de sessão de cada conta continua valendo (os anteriores expiraram)
+    expirarTokensAnteriores() {
+      const ultimos = new Set(ultimoToken.values());
+      for (const token of [...sessoes.keys()]) if (!ultimos.has(token)) sessoes.delete(token);
+    },
+    // As sessões abertas são revogadas: os tokens e os refresh tokens deixam de valer (só o login volta)
+    revogarSessoes() { sessoes.clear(); renovaveis.clear(); },
+    // Os pedidos de renovação da sessão ({ perfil, aceita })
+    renovacoes,
+    // A senha da conta muda (fora deste navegador: o administrador, ou a pessoa em outro aparelho)
+    trocarSenha(conta, senha) { senhas.set(conta.id, senha); },
     // Sem conexão: nenhuma requisição chega ao servidor até reconectar
     desconectar() { desconectado = true; },
     reconectar() { desconectado = false; },
