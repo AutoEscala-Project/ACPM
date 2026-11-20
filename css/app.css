@@ -447,14 +447,11 @@ table.fids-tabela { width: 100%; min-width: 860px; border-collapse: collapse; fo
 }
 .meteo-topo { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 2px 12px; margin-bottom: 6px; font-size: .92em; }
 .meteo-titulo { font-weight: 700; color: #fff; letter-spacing: .04em; }
-.meteo-falha { color: var(--fids-ambar); font-weight: 600; }
 .meteo-estacoes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .meteo-estacao { min-width: 0; padding: 6px 10px 8px; border: 1px solid #23499B; border-radius: 6px; background: #0B1A3D; }
-.meteo-estacao.meteo-desatualizada { border-color: var(--fids-ambar); }
 .meteo-cab { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; margin-bottom: 4px; }
 .fids .meteo-nome { margin: 0; font: 700 1.15em 'Barlow Semi Condensed', sans-serif; color: var(--fids-amarelo); letter-spacing: .02em; }
 .meteo-hora { font-variant-numeric: tabular-nums; }
-.meteo-antigo { padding: 0 6px; border-radius: 3px; background: var(--fids-ambar); color: #07122B; font-weight: 700; }
 .meteo-msg {
   margin: 0; color: var(--fids-branco); font: 500 1em/1.35 ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
   white-space: normal; overflow-wrap: anywhere;

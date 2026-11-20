@@ -252,7 +252,7 @@ export function painelNaTela(elemento, fonte) {
 }
 export const atualizarPainel = redesenhar;
 
-// A faixa da meteorologia com o que há agora (mensagens novas, uma busca que falhou, a idade): só é trocada quando muda.
+// A faixa da meteorologia com o que há agora (mensagens novas, a busca a caminho): só é trocada quando muda.
 // Quando a altura dela muda, na tela toda, a página passa a ter outras tantas linhas
 const faixasEscritas = new WeakMap();
 function atualizarFaixa() {
@@ -292,11 +292,9 @@ function ligarRelogio() {
     if (trocar || estado.telas <= 1) estado.ultimaTroca = Date.now();
     if (trocar) estado.tela += 1;
     const minuto = minutoDoDia();
-    // A cada minuto, a idade da meteorologia; a cada 10, as mensagens novas (pedirMeteorologia conta o tempo)
-    if (minuto !== estado.minuto) {
-      pedirMeteorologia();
-      atualizarFaixa();
-    }
+    // A cada 10 minutos, as mensagens novas (pedirMeteorologia, conferida a cada minuto, conta o tempo; a faixa muda
+    // quando a busca termina)
+    if (minuto !== estado.minuto) pedirMeteorologia();
     if (trocar || minuto !== estado.minuto) {
       estado.minuto = minuto;
       redesenhar();

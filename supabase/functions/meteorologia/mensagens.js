@@ -1,6 +1,6 @@
-// O METAR e o TAF de Pampulha (SBBH) e de Confins (SBCF), das respostas da API do aviationweather.gov (o centro de dados
-// da NOAA, que traz as mensagens oficiais do DECEA). JavaScript puro, sem nada do Deno nem do Node: a função
-// meteorologia (index.ts) e os testes de unidade (test/unit/meteorologia-funcao.test.js) usam o mesmo módulo.
+// O METAR e o TAF de Pampulha (SBBH) e de Confins (SBCF), das respostas da API da REDEMET (a rede de meteorologia do
+// DECEA, a fonte oficial). JavaScript puro, sem nada do Deno nem do Node: a função meteorologia (index.ts) e os testes
+// de unidade (test/unit/meteorologia-funcao.test.js) usam o mesmo módulo.
 // O que chega da rede não é confiável: só os textos das estações conhecidas, sem caracteres de controle e com tamanho
 // limitado; o que não vem no formato fica de fora (a estação aparece sem a mensagem).
 
@@ -9,34 +9,47 @@ export const ESTACOES = [
   { icao: 'SBCF', nome: 'Confins' }
 ];
 
-const BASE = 'https://aviationweather.gov/api/data';
+const BASE = 'https://api-redemet.decea.mil.br/mensagens';
 const IDS = ESTACOES.map(e => e.icao).join(',');
-// A última mensagem de cada estação, em JSON (o texto oficial vem em rawOb e rawTAF)
-export const ENDERECOS = {
-  metar: `${BASE}/metar?ids=${IDS}&format=json`,
-  taf: `${BASE}/taf?ids=${IDS}&format=json`
-};
+// A janela do METAR: sem data_ini e data_fim, a REDEMET devolve só a hora UTC de agora, e a estação cujo METAR da hora
+// ainda não chegou fica de fora. Com as 3 horas antes (a hora UTC, AAAAMMDDHH), vêm os METAR e SPECI delas, de cada
+// estação, e fica o mais recente
+const JANELA_DO_METAR_H = 3;
+const horaUtc = data => data.toISOString().slice(0, 13).replace(/\D/g, '');
+
+// Os endereços das consultas, com a janela do METAR contada de agora. O TAF vai sem janela: assim a REDEMET devolve os
+// TAF em vigor (com data_ini e data_fim, ela devolveu só os que começam a valer dentro da janela: o TAF em vigor, que
+// começou antes, ficou de fora). A chave vai no cabeçalho x-api-key, nunca no endereço
+export function enderecos(agora = new Date()) {
+  const inicio = new Date(agora.getTime() - JANELA_DO_METAR_H * 3600000);
+  return {
+    metar: `${BASE}/metar/${IDS}?data_ini=${horaUtc(inicio)}&data_fim=${horaUtc(agora)}`,
+    taf: `${BASE}/taf/${IDS}`
+  };
+}
 
 const TAMANHO_MAXIMO = 1500;
 
-// O texto oficial numa linha: sem caracteres de controle, os espaços (e as quebras de linha do formato "raw") juntados
-// num só. Vazio ou fora do formato: null
+// O texto oficial numa linha: sem caracteres de controle, os espaços (e as quebras de linha) juntados num só, sem o "="
+// que fecha a mensagem. Vazio ou fora do formato: null
 export function limparMensagem(texto) {
   if (typeof texto !== 'string') return null;
   const semControle = Array.from(texto, c => {
     const codigo = c.charCodeAt(0);
     return codigo < 32 || (codigo >= 127 && codigo < 160) ? ' ' : c;
   }).join('');
-  const limpo = semControle.replace(/\s+/g, ' ').trim();
+  const limpo = semControle.replace(/\s+/g, ' ').replace(/[\s=]+$/, '').trim();
   return limpo ? limpo.slice(0, TAMANHO_MAXIMO) : null;
 }
 
-// A resposta da API: um JSON com a lista das mensagens. 204 (nenhuma mensagem) chega como texto vazio
-export function lerLista(texto) {
-  if (typeof texto !== 'string' || !texto.trim()) return [];
-  const dados = JSON.parse(texto);
-  if (!Array.isArray(dados)) throw new Error('a resposta do aviationweather.gov não é uma lista');
-  return dados;
+// A resposta da REDEMET: { status, message, data: { data: [mensagens], ... } }. Outra coisa (o status false, um erro):
+// erro
+export function lerMensagens(texto) {
+  const dados = JSON.parse(typeof texto === 'string' ? texto : '');
+  const pagina = dados && typeof dados === 'object' && dados.status !== false ? dados.data : null;
+  const lista = pagina && typeof pagina === 'object' ? pagina.data : null;
+  if (!Array.isArray(lista)) throw new Error('a resposta da REDEMET veio fora do formato');
+  return lista;
 }
 
 // O dia e a hora do grupo DDHHMMZ logo depois do indicativo ("METAR SBBH 201300Z ..."), no mês da referência (ou no
@@ -58,50 +71,58 @@ export function horaDaMensagem(texto, referencia = new Date()) {
   return data.getUTCDate() === dia ? data : null;
 }
 
-// Um instante da API: segundos desde 1970 (obsTime, validTimeTo) ou texto ISO (reportTime, issueTime)
-function instante(valor) {
-  if (typeof valor === 'number' && Number.isFinite(valor)) return new Date(valor * 1000);
-  if (typeof valor === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(valor)) {
-    const data = new Date(valor);
-    return Number.isNaN(data.getTime()) ? null : data;
-  }
-  return null;
+// Um instante da REDEMET ("2026-11-20 16:00:00", em UTC). Fora do formato: null
+export function instante(valor) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?$/.exec(typeof valor === 'string' ? valor.trim() : '');
+  if (!m) return null;
+  const [ano, mes, dia, hora, minuto, segundo] = m.slice(1).map(v => Number(v || 0));
+  if (hora > 23 || minuto > 59 || segundo > 59) return null;
+  const data = new Date(Date.UTC(ano, mes - 1, dia, hora, minuto, segundo));
+  return data.getUTCMonth() === mes - 1 && data.getUTCDate() === dia ? data : null;
 }
 
-const daEstacao = (lista, icao) => lista.filter(m => m && typeof m === 'object' && m.icaoId === icao);
+const daEstacao = (lista, icao) => lista.filter(m => m && typeof m === 'object' && m.id_localidade === icao);
+const ms = data => (data ? data.getTime() : -Infinity);
+// a vem depois de b: pela primeira chave que difere
+const depois = (a, b) => {
+  const i = a.findIndex((v, j) => v !== b[j]);
+  return i >= 0 && a[i] > b[i];
+};
 
-// O METAR (ou SPECI) mais recente da estação e a hora da observação
+// O METAR (ou SPECI) mais recente da estação: o da validade_inicial mais nova (no empate, o da observação mais nova, e
+// então o recebido por último), com a hora da observação (a do grupo DDHHMMZ; sem ele, a validade_inicial)
 function ultimoMetar(lista, icao, agora) {
   let melhor = null;
   for (const m of daEstacao(lista, icao)) {
-    const texto = limparMensagem(m.rawOb);
+    const texto = limparMensagem(m.mens);
     if (!texto) continue;
-    const observado = instante(m.obsTime) || instante(m.reportTime) || horaDaMensagem(texto, agora);
+    const inicio = instante(m.validade_inicial);
+    const observado = horaDaMensagem(texto, agora) || inicio;
     if (!observado) continue;
-    if (!melhor || observado > melhor.observado) melhor = { texto, observado };
+    const ordem = [ms(inicio), ms(observado), ms(instante(m.recebimento))];
+    if (!melhor || depois(ordem, melhor.ordem)) melhor = { texto, observado, ordem };
   }
   return melhor;
 }
 
-// O TAF em vigor da estação: o mais recente (mostRecent, senão a emissão mais nova), se a validade não acabou
+// O TAF em vigor da estação: um cuja validade (da validade_inicial à validade_final) cobre agora; entre dois, o emitido
+// por último (o grupo DDHHMMZ; sem ele, o recebimento). Sem a validade, não dá para saber se está em vigor: fica de fora
 function ultimoTaf(lista, icao, agora) {
   let melhor = null;
   for (const t of daEstacao(lista, icao)) {
-    const texto = limparMensagem(t.rawTAF);
+    const texto = limparMensagem(t.mens);
     if (!texto) continue;
-    const fim = instante(t.validTimeTo);
-    if (fim && fim < agora) continue;
-    const emitido = instante(t.issueTime) || horaDaMensagem(texto, agora) || new Date(0);
-    const candidato = { texto, emitido, maisRecente: t.mostRecent === 1 };
-    if (!melhor || (candidato.maisRecente && !melhor.maisRecente) || (candidato.maisRecente === melhor.maisRecente && emitido > melhor.emitido)) {
-      melhor = candidato;
-    }
+    const inicio = instante(t.validade_inicial), fim = instante(t.validade_final);
+    if (!inicio || !fim || inicio > agora || fim <= agora) continue;
+    const recebido = instante(t.recebimento);
+    const ordem = [ms(horaDaMensagem(texto, agora) || recebido), ms(recebido), ms(inicio)];
+    if (!melhor || depois(ordem, melhor.ordem)) melhor = { texto, ordem };
   }
   return melhor;
 }
 
-// A resposta da função: as duas estações, sempre nesta ordem, cada uma com o METAR, o TAF (null quando não há) e a hora
-// da observação do METAR (ISO)
+// A resposta da função: as duas estações, sempre nesta ordem, cada uma com o METAR, o TAF (null quando nenhum está em
+// vigor) e a hora da observação do METAR (ISO)
 export function montarResposta(metars, tafs, agora = new Date()) {
   const listaM = Array.isArray(metars) ? metars : [], listaT = Array.isArray(tafs) ? tafs : [];
   return {

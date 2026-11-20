@@ -1,8 +1,8 @@
 // A meteorologia no pé do painel (a vista Painel da Escala, em tela cheia também, e a TV da recepção): o METAR e o TAF
 // oficiais de Pampulha (SBBH) e de Confins (SBCF), pela função meteorologia do servidor (no servidor falso dos testes, a
-// rota /functions/v1/meteorologia), em duas caixas lado a lado, sempre as duas, sem alternar. A cada 10 minutos, as
-// mensagens novas; a busca que falha guarda as últimas, com a idade. Sem a função publicada e neste navegador (sem
-// servidor): "Meteorologia indisponível", e o resto do painel igual.
+// rota /functions/v1/meteorologia), em duas caixas lado a lado, sempre as duas, sem alternar, cada uma com "Atualizado
+// às" a hora da observação do METAR dela. A cada 10 minutos, as mensagens novas; a busca que falha guarda as últimas.
+// Sem a função publicada e neste navegador (sem servidor): "Meteorologia indisponível", e o resto do painel igual.
 import { test, expect, abrir, abrirEscala, entrar, prepararContexto, vigiarErros, preencherLogin, URL_APP } from './fixtures.js';
 import { instalarSupabaseFalso, documentosAtuais, CONTAS, METEOROLOGIA_DE_TESTE } from './supabase-falso.js';
 import { runAllocationEngine } from '../../js/engine.js';
@@ -52,16 +52,16 @@ async function ladoALado(page) {
 }
 
 test.describe('Meteorologia no painel', () => {
-  test('na Escala: as duas estações lado a lado, com o METAR, o TAF em linhas e a hora da observação (local e Z)', async ({ browser }) => {
+  test('na Escala: as duas estações lado a lado, com o METAR, o TAF em linhas e a hora da atualização (local e Z)', async ({ browser }) => {
     const { context, servidor, page, erros } = await novoContexto(browser);
     await entrar(page, CONTAS.operador);
     await abrirPainelDaEscala(page);
     await expect(faixa(page)).toBeVisible();
-    await expect(faixa(page).locator('.meteo-atualizada')).toHaveText('Atualizado às 12:00');
+    await expect(faixa(page).locator('.meteo-topo')).toHaveText('METAR e TAF');
     await expect(caixa(page, 'SBBH').locator('.meteo-nome')).toHaveText('SBBH · Pampulha');
     await expect(caixa(page, 'SBCF').locator('.meteo-nome')).toHaveText('SBCF · Confins');
-    await expect(caixa(page, 'SBBH').locator('.meteo-hora')).toHaveText('Observado às 11:00 (14:00Z)');
-    await expect(caixa(page, 'SBCF').locator('.meteo-hora')).toHaveText('Observado às 12:00 (15:00Z)');
+    await expect(caixa(page, 'SBBH').locator('.meteo-hora')).toHaveText('Atualizado às 11:00 (14:00Z)');
+    await expect(caixa(page, 'SBCF').locator('.meteo-hora')).toHaveText('Atualizado às 12:00 (15:00Z)');
     await expect(caixa(page, 'SBBH').locator('.meteo-metar')).toHaveText(METEOROLOGIA_DE_TESTE.estacoes[0].metar);
     await expect(caixa(page, 'SBBH').locator('.meteo-sem')).toHaveText('Sem TAF em vigor');
     await expect(caixa(page, 'SBCF').locator('.meteo-metar')).toHaveText(METEOROLOGIA_DE_TESTE.estacoes[1].metar);
@@ -69,7 +69,7 @@ test.describe('Meteorologia no painel', () => {
       'TAF SBCF 100800Z 1012/1112 34005KT 7000 SCT016 TX28/1018Z TN19/1109Z',
       'BECMG 1015/1017 9999 SCT035', 'TEMPO 1018/1021 TS SCT035 FEW040CB', 'PROB30 1107/1111 2000 BR SCT002 RMK PGM'
     ].join('\n'));
-    await expect(faixa(page).locator('.meteo-antigo')).toHaveCount(0);
+    await expect(faixa(page).getByText(/antigo|Sem atualização/)).toHaveCount(0);
     // Letra de máquina de escrever
     expect(await caixa(page, 'SBCF').locator('.meteo-taf').evaluate(el => getComputedStyle(el).fontFamily)).toMatch(/monospace/);
     await ladoALado(page);
@@ -106,40 +106,43 @@ test.describe('Meteorologia no painel', () => {
     await context.close();
   });
 
-  test('a cada 10 minutos, as mensagens novas; a busca que falha guarda as últimas, com desde quando', async ({ browser }) => {
+  test('a cada 10 minutos, as mensagens novas; a busca que falha guarda as últimas, cada caixa com a hora dela', async ({ browser }) => {
     const { context, servidor, page, erros } = await novoContexto(browser, {}, { statusEsperados: [503] });
     await page.clock.install({ time: new Date('2026-11-10T12:00:00-03:00') });
     await page.goto('./painel.html?supabase=teste');
     await preencherLogin(page, CONTAS.painel);
-    await expect(faixa(page).locator('.meteo-atualizada')).toHaveText('Atualizado às 12:00');
+    await expect(caixa(page, 'SBCF').locator('.meteo-hora')).toHaveText('Atualizado às 12:00 (15:00Z)');
     expect(servidor.chamadasDaMeteorologia).toHaveLength(1);
     // Antes dos 10 minutos, nenhuma busca nova
     await page.clock.runFor(9 * 60_000);
     expect(servidor.chamadasDaMeteorologia).toHaveLength(1);
-    // Aos 10 minutos, a função fora do ar: as mensagens continuam, com a idade
+    // Aos 10 minutos, a função fora do ar (a chave da REDEMET que falta dá 503): as mensagens continuam, com a hora
+    // delas, sem marca nem idade
+    const recusadas = [];
+    page.on('response', r => { if (r.url().includes('/functions/v1/meteorologia') && r.status() === 503) recusadas.push(r.url()); });
     servidor.falhar('/functions/v1/meteorologia', 1);
     await page.clock.runFor(60_000);
-    await expect(faixa(page).locator('.meteo-falha')).toHaveText('Sem atualização desde 12:00 (há 10 min)');
-    await expect(caixa(page, 'SBCF').locator('.meteo-metar')).toHaveText(METEOROLOGIA_DE_TESTE.estacoes[1].metar);
-    // A idade continua contando, minuto a minuto
+    await expect.poll(() => recusadas.length).toBe(1);
     await page.clock.runFor(5 * 60_000);
-    await expect(faixa(page).locator('.meteo-falha')).toHaveText('Sem atualização desde 12:00 (há 15 min)');
-    // Aos 20 minutos, as mensagens novas (o METAR das 12:20 de Confins); a falha some
+    await expect(caixa(page, 'SBCF').locator('.meteo-metar')).toHaveText(METEOROLOGIA_DE_TESTE.estacoes[1].metar);
+    await expect(caixa(page, 'SBBH').locator('.meteo-hora')).toHaveText('Atualizado às 11:00 (14:00Z)');
+    await expect(caixa(page, 'SBCF').locator('.meteo-hora')).toHaveText('Atualizado às 12:00 (15:00Z)');
+    await expect(faixa(page).getByText(/antigo|Sem atualização|há \d/)).toHaveCount(0);
+    // Aos 20 minutos, as mensagens novas (o SPECI das 12:20 de Confins): a hora dela muda, a de Pampulha fica
     const novas = structuredClone(METEOROLOGIA_DE_TESTE);
     novas.gerado = '2026-11-10T15:20:00.000Z';
     novas.estacoes[1] = { ...novas.estacoes[1], metar: 'SPECI SBCF 101520Z 34012KT 4000 TSRA BKN015 FEW030CB 22/20 Q1017', observado: '2026-11-10T15:20:00.000Z' };
     servidor.trocarMeteorologia(novas);
     await page.clock.runFor(5 * 60_000);
-    await expect(faixa(page).locator('.meteo-atualizada')).toHaveText('Atualizado às 12:20');
-    await expect(faixa(page).locator('.meteo-falha')).toHaveCount(0);
     await expect(caixa(page, 'SBCF').locator('.meteo-metar')).toHaveText(novas.estacoes[1].metar);
-    await expect(caixa(page, 'SBCF').locator('.meteo-hora')).toHaveText('Observado às 12:20 (15:20Z)');
+    await expect(caixa(page, 'SBCF').locator('.meteo-hora')).toHaveText('Atualizado às 12:20 (15:20Z)');
+    await expect(caixa(page, 'SBBH').locator('.meteo-hora')).toHaveText('Atualizado às 11:00 (14:00Z)');
     // As que chegaram à função: a das 12:00 e a das 12:20 (a das 12:10 parou no servidor fora do ar)
     expect(servidor.chamadasDaMeteorologia).toHaveLength(2);
-    // O METAR de Pampulha (14:00Z) passa dos 90 minutos às 15:30Z: a marca, só nele
+    // Muito depois, o METAR de Pampulha (14:00Z) continua só com a hora dele: nenhuma marca de antigo
     await page.clock.runFor(11 * 60_000);
-    await expect(caixa(page, 'SBBH').locator('.meteo-antigo')).toHaveText('METAR antigo · há 1 h 31 min');
-    await expect(caixa(page, 'SBCF').locator('.meteo-antigo')).toHaveCount(0);
+    await expect(caixa(page, 'SBBH').locator('.meteo-hora')).toHaveText('Atualizado às 11:00 (14:00Z)');
+    await expect(faixa(page).getByText(/antigo/)).toHaveCount(0);
     expect(erros).toEqual([]);
     await context.close();
   });
@@ -192,15 +195,16 @@ test.describe('Meteorologia no painel', () => {
     expect(pedidos.filter(u => !u.startsWith('https://cdn') && !/fonts\.(googleapis|gstatic)\.com/.test(u))).toEqual([]);
   });
 
-  test('o METAR de mais de 90 minutos: a marca "METAR antigo", com a idade; sem METAR, o aviso', async ({ browser }) => {
+  test('o METAR de 2 horas atrás: só "Atualizado às", sem marca; sem METAR, o aviso e nenhuma hora', async ({ browser }) => {
     const velhas = structuredClone(METEOROLOGIA_DE_TESTE);
     velhas.estacoes[0] = { ...velhas.estacoes[0], metar: 'METAR SBBH 101300Z 00000KT 9999 FEW030 24/18 Q1018', observado: '2026-11-10T13:00:00.000Z' };
     velhas.estacoes[1] = { ...velhas.estacoes[1], metar: null, observado: null };
     const { context, page, erros } = await novoContexto(browser, { meteorologia: velhas });
     await page.goto('./painel.html?supabase=teste');
     await preencherLogin(page, CONTAS.painel);
-    await expect(caixa(page, 'SBBH').locator('.meteo-antigo')).toHaveText('METAR antigo · há 2 h 00 min');
-    await expect(caixa(page, 'SBBH')).toHaveClass(/meteo-desatualizada/);
+    await expect(caixa(page, 'SBBH').locator('.meteo-hora')).toHaveText('Atualizado às 10:00 (13:00Z)');
+    await expect(caixa(page, 'SBBH')).toHaveAttribute('class', 'meteo-estacao');
+    await expect(faixa(page).getByText(/antigo|há \d/)).toHaveCount(0);
     await expect(caixa(page, 'SBCF').locator('.meteo-sem').first()).toHaveText('Sem METAR');
     await expect(caixa(page, 'SBCF').locator('.meteo-hora')).toHaveCount(0);
     await expect(caixa(page, 'SBCF').locator('.meteo-taf')).toBeVisible();
@@ -263,7 +267,7 @@ test.describe('Meteorologia no painel', () => {
     expect(m.linhas, `${rotulo}: as linhas da página`).toBeGreaterThanOrEqual(5);
     expect(m.largura, `${rotulo}: sem rolar para o lado`).toBe(true);
   };
-  // A função que demora (o aviationweather.gov lento): o painel e a TV abrem na hora, sem esperar por ela; quando as
+  // A função que demora (a REDEMET lenta): o painel e a TV abrem na hora, sem esperar por ela; quando as
   // mensagens chegam, a faixa cresce e a página da TV passa a ter as linhas que cabem acima dela
   test('a função lenta não segura nada: o painel e a TV abrem, e a faixa espera as mensagens', async ({ browser }) => {
     const { context, servidor, page, erros } = await novoContexto(browser, { meteorologia: LONGAS }, { viewport: { width: 1280, height: 720 } });
