@@ -24,7 +24,7 @@ const esperaPadrao = tentativa => new Promise(resolve => {
   if (typeof addEventListener === 'function') addEventListener('online', fim);
 });
 
-// A função meteorologia espera o aviationweather.gov até 12 s: a chamada desiste depois de 25 s
+// A função meteorologia espera a REDEMET até 12 s: a chamada desiste depois de 25 s
 const TEMPO_DA_METEOROLOGIA = 25000;
 
 const erroComCodigo = error => Object.assign(new Error(error.message), { code: error.code || String(error.status || '') });
@@ -308,9 +308,9 @@ export function criarBackendSupabase(cliente, { aoConflito = () => {}, aoErro = 
       return data;
     },
 
-    // O METAR e o TAF de Pampulha e de Confins (a função meteorologia, com a sessão de quem chama; o servidor os busca no
-    // aviationweather.gov). Sem a função publicada (404), sem conexão ou com o aviationweather.gov fora do ar: o erro,
-    // com o status
+    // O METAR e o TAF de Pampulha e de Confins (a função meteorologia, com a sessão de quem chama; o servidor os busca na
+    // REDEMET). Sem a função publicada (404), sem a chave da REDEMET no servidor (503), sem conexão ou com a REDEMET fora
+    // do ar: o erro, com o status
     async meteorologia() {
       const { data, error } = await cliente.functions.invoke('meteorologia', { method: 'GET', timeout: TEMPO_DA_METEOROLOGIA });
       if (error) {

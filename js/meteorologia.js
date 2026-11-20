@@ -1,15 +1,13 @@
 // A meteorologia do painel (a vista Painel da Escala e a TV da recepção): o METAR e o TAF oficiais de Pampulha (SBBH) e
-// de Confins (SBCF), da função meteorologia do servidor (supabase/functions/meteorologia, que os busca no
-// aviationweather.gov). O painel pede as mensagens quando aparece e, enquanto está na tela, a cada 10 minutos; uma busca
-// que falha não apaga as últimas mensagens boas (o painel diz desde quando estão sem atualização). Sem servidor (este
+// de Confins (SBCF), da função meteorologia do servidor (supabase/functions/meteorologia, que os busca na REDEMET, a
+// API do DECEA). O painel pede as mensagens quando aparece e, enquanto está na tela, a cada 10 minutos; uma busca que
+// falha não apaga as últimas mensagens boas (cada caixa diz a hora da observação do METAR dela). Sem servidor (este
 // navegador) ou sem a função publicada, o painel diz "Meteorologia indisponível", e nada mais muda.
 
 export const ATUALIZAR_MS = 10 * 60000;
 // O painel pede a cada virada do minuto: a tentativa de 10 minutos atrás, por alguns segundos, já vale (senão a busca
 // ficaria para o minuto seguinte, a cada 11 minutos)
 const FOLGA_MS = 30000;
-// O METAR sai de hora em hora: com mais de 90 minutos, a estação parou de mandar (ou a busca, de chegar)
-const METAR_ANTIGO_MS = 90 * 60000;
 const TAMANHO_MAXIMO = 1500;
 
 const ESTACOES = [
@@ -35,9 +33,6 @@ export function normalizarMeteorologia(dados) {
     })
   };
 }
-
-// O METAR com mais de 90 minutos (sem a hora da observação, não dá para saber: não é antigo)
-export const metarAntigo = (observado, agora) => observado !== null && agora - observado > METAR_ANTIGO_MS;
 
 // O TAF em linhas, como se lê: cada mudança (BECMG, TEMPO, FM…, PROB30, PROB40 e PROB30 TEMPO) começa uma linha
 const MUDANCA = /^(BECMG|TEMPO|PROB\d{2}|FM\d{6})$/;

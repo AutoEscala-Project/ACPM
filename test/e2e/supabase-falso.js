@@ -99,8 +99,8 @@ function consultar(linhas, url) {
 const LINHAS_POR_CONSULTA = 1000;
 
 // O METAR e o TAF que a função meteorologia entrega (supabase/functions/meteorologia), no relógio das páginas (10/11/2026
-// 12:00 em São Paulo, 15:00Z): Pampulha observado às 14:00Z, sem TAF (como costuma ser), e Confins às 15:00Z, com o TAF
-// em grupos (as mensagens de 20/11/2026, com a data trocada)
+// 12:00 em São Paulo, 15:00Z): Pampulha observado às 14:00Z, sem TAF em vigor (o caso do aviso), e Confins às 15:00Z,
+// com o TAF em grupos (as mensagens de 20/11/2026, com a data trocada)
 export const METEOROLOGIA_DE_TESTE = {
   gerado: '2026-11-10T15:00:00.000Z',
   estacoes: [

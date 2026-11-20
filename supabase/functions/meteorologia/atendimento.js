@@ -4,18 +4,18 @@
 //   OPTIONS da verificação prévia do navegador
 // - Só uma sessão válida do app: o gateway do Supabase confere o JWT (verify_jwt, o padrão; supabase/config.toml) e,
 //   aqui, o Auth do projeto confere que a sessão é de uma conta (a chave publicável sozinha não serve)
-// - As mensagens ficam 5 minutos na memória: as TVs e os navegadores juntos fazem no máximo duas consultas ao
-//   aviationweather.gov a cada 5 minutos (o METAR sai de hora em hora; o SPECI, quando o tempo muda)
-// - O aviationweather.gov que não responde em 12 segundos conta como fora do ar; fora do ar, a função devolve as últimas
-//   mensagens que tem (até 3 horas: quem lê vê a hora da observação) ou o erro 502, com a mensagem em português
-import { ENDERECOS, lerLista, montarResposta } from './mensagens.js';
+// - A REDEMET (a API do DECEA) pede a chave, o segredo REDEMET_API_KEY do projeto, que vai só no cabeçalho x-api-key
+//   (nunca no endereço, nos logs nem nas respostas). Sem a chave, a função responde 503, com a mensagem em português
+// - As mensagens ficam 5 minutos na memória: as TVs e os navegadores juntos fazem no máximo duas consultas à REDEMET a
+//   cada 5 minutos (o METAR sai de hora em hora; o SPECI, quando o tempo muda)
+// - A REDEMET que não responde em 12 segundos conta como fora do ar; fora do ar, a função devolve as últimas mensagens
+//   que tem (até 3 horas: quem lê vê a hora da observação) ou o erro 502, com a mensagem em português
+import { enderecos, lerMensagens, montarResposta } from './mensagens.js';
 
 const CACHE_MS = 5 * 60000;
 const VELHO_DEMAIS_MS = 3 * 3600000;
 const TEMPO_MAXIMO_MS = 12000;
 const SESSAO_MS = 5 * 60000;
-// Sem dados pessoais: só o nome do app (o aviationweather.gov pede que os clientes automáticos se identifiquem)
-const AGENTE = 'ACPM-AutoEscala/1.0';
 
 const ORIGENS = ['https://gdruumond.github.io', 'https://thephfernandes.github.io'];
 const LOCAL = /^http:\/\/(localhost|127\.0\.0\.1)(:\d{1,5})?$/;
@@ -59,21 +59,24 @@ export function conferirNoAuth(urlDoProjeto, chavePadrao, buscar = fetch, agora 
   };
 }
 
-// Uma consulta ao aviationweather.gov, com o tempo máximo
-async function consultar(buscar, endereco, tempoMaximo) {
-  const resposta = await buscar(endereco, { headers: { 'User-Agent': AGENTE, Accept: 'application/json' }, signal: AbortSignal.timeout(tempoMaximo) });
-  if (resposta.status === 204) return [];
-  if (!resposta.ok) throw new Error(`o aviationweather.gov respondeu ${resposta.status}`);
-  return lerLista(await resposta.text());
+// Uma consulta à REDEMET, com a chave no cabeçalho e o tempo máximo. O erro diz só o status (nunca a chave)
+async function consultar(buscar, endereco, chave, tempoMaximo) {
+  const resposta = await buscar(endereco, { headers: { 'x-api-key': chave, Accept: 'application/json' }, signal: AbortSignal.timeout(tempoMaximo) });
+  if (!resposta.ok) {
+    if (resposta.body) await resposta.body.cancel().catch(() => {});
+    throw new Error(`a REDEMET respondeu ${resposta.status}`);
+  }
+  return lerMensagens(await resposta.text());
 }
 
-// conferirSessao(req): true para uma sessão válida do app (sem ela, ninguém entra); buscar: o fetch; agora: o relógio
-// (ms); tempoMaximo: a espera pelo aviationweather.gov (ms). O tipo em JSDoc é o que o Deno lê ao conferir o index.ts
-// (deno check): sem ele, o Deno deduz os tipos dos valores padrão, e conferirSessao, sem padrão, ficaria de fora
+// conferirSessao(req): true para uma sessão válida do app (sem ela, ninguém entra); chave: a chave da REDEMET (o segredo
+// REDEMET_API_KEY; vazia, a função responde 503); buscar: o fetch; agora: o relógio (ms); tempoMaximo: a espera pela
+// REDEMET (ms). O tipo em JSDoc é o que o Deno lê ao conferir o index.ts (deno check): sem ele, o Deno deduz os tipos dos
+// valores padrão, e conferirSessao, sem padrão, ficaria de fora
 /**
- * @param {{ conferirSessao: (req: Request) => Promise<boolean>, buscar?: typeof fetch, agora?: () => number, tempoMaximo?: number }} opcoes
+ * @param {{ conferirSessao: (req: Request) => Promise<boolean>, chave?: string, buscar?: typeof fetch, agora?: () => number, tempoMaximo?: number }} opcoes
  */
-export function criarAtendimento({ conferirSessao, buscar = fetch, agora = Date.now, tempoMaximo = TEMPO_MAXIMO_MS }) {
+export function criarAtendimento({ conferirSessao, chave = '', buscar = fetch, agora = Date.now, tempoMaximo = TEMPO_MAXIMO_MS }) {
   let guardado = null;   // { em, dados }
   let emAndamento = null;
 
@@ -81,7 +84,8 @@ export function criarAtendimento({ conferirSessao, buscar = fetch, agora = Date.
     if (guardado && agora() - guardado.em < CACHE_MS) return guardado.dados;
     // Duas chamadas juntas fazem uma consulta só
     if (!emAndamento) {
-      emAndamento = Promise.all([consultar(buscar, ENDERECOS.metar, tempoMaximo), consultar(buscar, ENDERECOS.taf, tempoMaximo)])
+      const endereco = enderecos(new Date(agora()));
+      emAndamento = Promise.all([consultar(buscar, endereco.metar, chave, tempoMaximo), consultar(buscar, endereco.taf, chave, tempoMaximo)])
         .then(([metars, tafs]) => {
           guardado = { em: agora(), dados: montarResposta(metars, tafs, new Date(agora())) };
           return guardado.dados;
@@ -106,12 +110,13 @@ export function criarAtendimento({ conferirSessao, buscar = fetch, agora = Date.
       return responder(req, 503, { erro: 'Não foi possível conferir a sessão. Tente de novo em instantes.' });
     }
     if (!valida) return responder(req, 401, { erro: 'Entre no app para ver a meteorologia.' });
+    if (!chave) return responder(req, 503, { erro: 'A meteorologia não está configurada no servidor: falta a chave da REDEMET (o segredo REDEMET_API_KEY).' });
     try {
       return responder(req, 200, await mensagens());
     } catch (e) {
       const tempo = e && (e.name === 'TimeoutError' || e.name === 'AbortError');
       return responder(req, 502, {
-        erro: tempo ? 'O aviationweather.gov não respondeu a tempo.' : 'Não foi possível buscar o METAR e o TAF no aviationweather.gov.',
+        erro: tempo ? 'A REDEMET não respondeu a tempo.' : 'Não foi possível buscar o METAR e o TAF na REDEMET.',
         detalhe: String((e && e.message) || e).slice(0, 200)
       });
     }

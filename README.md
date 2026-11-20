@@ -77,13 +77,17 @@ npm run test:e2e       # aplicação no navegador (Playwright)
 ## Meteorologia no painel (função `meteorologia`)
 
 O pé do painel (a vista Painel da Escala e a TV da recepção) mostra o METAR e o TAF oficiais de Pampulha (SBBH) e de
-Confins (SBCF), lado a lado. As mensagens vêm do aviationweather.gov, que traz as do DECEA e não pede chave; o navegador
-não pode chamá-lo direto (ele não manda os cabeçalhos CORS), então quem busca é a Edge Function
-`supabase/functions/meteorologia` (Deno): ela exige a sessão de uma conta do app (o JWT, conferido pelo gateway e pelo
-Auth do projeto), guarda as mensagens 5 minutos na memória, desiste do aviationweather.gov em 12 segundos e responde
-`{ gerado, estacoes: [{ icao, nome, metar, taf, observado }] }` só às origens do app. A leitura das mensagens
-(`mensagens.js`) e o atendimento (`atendimento.js`) são JavaScript puro, testados também no Node
-(`test/unit/meteorologia-funcao.test.js`, com respostas de verdade em `test/fixtures/meteorologia/`).
+Confins (SBCF), lado a lado, cada caixa com "Atualizado às" a hora da observação do METAR (a local e a Z). As mensagens
+vêm da REDEMET (https://api-redemet.decea.mil.br, a API do DECEA), a única fonte. A REDEMET pede uma chave, que não pode
+ir para o navegador, então quem busca é a Edge Function `supabase/functions/meteorologia` (Deno): ela exige a sessão de
+uma conta do app (o JWT, conferido pelo gateway e pelo Auth do projeto), manda a chave só no cabeçalho `x-api-key`
+(nunca no endereço), pede o METAR das últimas 3 horas (`data_ini` e `data_fim`, em UTC: sem eles, a REDEMET manda só a
+hora de agora, e a estação cujo METAR da hora ainda não chegou ficaria sem) e fica com o mais recente de cada estação,
+pede o TAF sem janela (os em vigor) e fica com o que cobre agora, o emitido por último, guarda as mensagens 5 minutos na
+memória, desiste da REDEMET em 12 segundos e responde `{ gerado, estacoes: [{ icao, nome, metar, taf, observado }] }`
+só às origens do app. A leitura das mensagens (`mensagens.js`) e o atendimento (`atendimento.js`) são JavaScript puro,
+testados também no Node (`test/unit/meteorologia-funcao.test.js`, com respostas de verdade da REDEMET em
+`test/fixtures/meteorologia/`).
 
 A TV da recepção também passa a seguir o "Configurar painel" com o servidor: a migração
 `20261120150000_painel_do_dia_com_a_configuracao.sql` faz `painel_do_dia()` entregar, além do quadro do dia, o campo
@@ -94,18 +98,22 @@ cadastro.
 ### Publicar (a função e a migração)
 
 ```sh
-# 1. Prévia (acpm-escala-preview): a função, a migração e os testes do banco
+# 1. Prévia (acpm-escala-preview): a chave da REDEMET, a função, a migração e os testes do banco
+supabase secrets set REDEMET_API_KEY=<a chave da REDEMET> --project-ref <ref da prévia>
 supabase functions deploy meteorologia --project-ref <ref da prévia>
 supabase db push --remote                       # a migração painel_do_dia_com_a_configuracao
 SUPABASE_DB_PASSWORD=... npm run test:db
 
 # 2. Produção (acpm-escala), depois de conferir a prévia
+supabase secrets set REDEMET_API_KEY=<a chave da REDEMET> --project-ref <ref de produção>
 supabase functions deploy meteorologia --project-ref <ref de produção>
 supabase db push --remote=<ref de produção>
 ```
 
-O `verify_jwt = true` de `supabase/config.toml` vale no deploy (é o padrão; não use `--no-verify-jwt`). A função não usa
-segredos: o Supabase já dá a ela `SUPABASE_URL` e `SUPABASE_ANON_KEY`. No Supabase CLI 3, o projeto vai em
+O `verify_jwt = true` de `supabase/config.toml` vale no deploy (é o padrão; não use `--no-verify-jwt`). O único segredo
+da função é `REDEMET_API_KEY` (a chave da REDEMET, que ela lê com `Deno.env.get`); nunca a escreva no repositório, nos
+testes nem em mensagens de commit. Sem ela, a função responde 503 ("A meteorologia não está configurada no servidor…") e
+o pé do painel diz "Meteorologia indisponível". `SUPABASE_URL` e `SUPABASE_ANON_KEY` o Supabase já dá. No Supabase CLI 3, o projeto vai em
 `--remote=<ref>` (o `--project-ref <ref>` das versões anteriores). Antes do deploy, `npx deno check
 supabase/functions/meteorologia/index.ts` confere os tipos.
 
@@ -119,9 +127,9 @@ painel com as duas caixas, e a TV com o quadro, as colunas e as listas do "Confi
 então o merge. As duas só acrescentam: o app no ar continua igual com elas (ele não chama a função e ignora o campo
 novo). E o app novo não depende delas:
 
-- **Sem a função publicada** (404), com o aviationweather.gov fora do ar ou sem conexão, o painel e a TV abrem e
-  funcionam como antes, e o pé do painel diz **"Meteorologia indisponível"** (com mensagens já recebidas, elas ficam,
-  com "Sem atualização desde…"). No modo local (sem servidor), o pé diz sempre "Meteorologia indisponível", sem busca.
+- **Sem a função publicada** (404), sem a chave da REDEMET (503), com a REDEMET fora do ar ou sem conexão, o painel e
+  a TV abrem e funcionam como antes, e o pé do painel diz **"Meteorologia indisponível"** (com mensagens já recebidas,
+  elas ficam, cada caixa com a hora da observação do METAR dela). No modo local (sem servidor), o pé diz sempre "Meteorologia indisponível", sem busca.
 - **Sem a migração**, `painel_do_dia()` responde como antes, sem o campo `painel`, e a TV mostra o padrão (Missões, com
   as colunas do padrão e as listas no Automático: duas lado a lado na TV Full HD), como hoje; a Escala segue a configuração de qualquer jeito (ela lê o cadastro).
 
@@ -179,8 +187,8 @@ banco (e a chamada dela no app). A cópia `cadastro.cursos` fica.
 | `js/status.js` | Status do voo com detalhes: o novo horário do atraso, o motivo do cancelamento e o atraso que invade outro voo |
 | `js/quadro.js` | As linhas do painel: os quadros Missões, Partidas e Chegadas (Escala e TV da recepção) e as páginas, com uma lista ou duas lado a lado |
 | `js/config-do-painel.js` | A configuração do painel no cadastro (`painel`, do formato 25 em diante): o quadro com que ele abre, as colunas (ligadas ou não e na ordem) e as listas (`auto`, `uma` ou `duas` lado a lado) |
-| `js/meteorologia.js`, `js/views/meteorologia.js` | A meteorologia do pé do painel (Escala e TV): a busca na função `meteorologia` a cada 10 minutos, que guarda as últimas mensagens boas quando falha, o METAR antigo (mais de 90 minutos) e a faixa com as duas caixas, SBBH e SBCF |
-| `supabase/functions/meteorologia/` | A Edge Function que busca o METAR e o TAF de SBBH e SBCF no aviationweather.gov (`index.ts`; o atendimento e a leitura das mensagens em JavaScript puro, testados no Node) |
+| `js/meteorologia.js`, `js/views/meteorologia.js` | A meteorologia do pé do painel (Escala e TV): a busca na função `meteorologia` a cada 10 minutos, que guarda as últimas mensagens boas quando falha, e a faixa com as duas caixas, SBBH e SBCF, cada uma com a hora da atualização |
+| `supabase/functions/meteorologia/` | A Edge Function que busca o METAR e o TAF de SBBH e SBCF na REDEMET, com a chave do segredo `REDEMET_API_KEY` (`index.ts`; o atendimento e a leitura das mensagens em JavaScript puro, testados no Node) |
 | `js/dados-pessoais.js` | Dados pessoais de alunos e instrutores: validação (CPF, CANAC, nascimento, celular e e-mail) e formatos |
 | `js/perfis.js` | Perfis de acesso e o que cada um pode fazer na tela |
 | `js/rules.js` | Regras das missões (Ground School, precedência, disponibilidade do aluno) |
