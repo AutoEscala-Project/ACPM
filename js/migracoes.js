@@ -10,7 +10,7 @@ import { disponibilidadeAtual } from './rules.js';
 import { LIMITES_DA_LEI } from './limites.js';
 import { cursosVazios } from './cursos.js';
 
-export const ESQUEMA = 24;
+export const ESQUEMA = 25;
 // O formato dos cursos: o formato do cadastro a partir do qual os programas vivem nas tabelas próprias (antes dele, vale
 // o programa guardado no cadastro, que a conversão única traz para as tabelas). O 22 é o do instrutor escolhido e o 23,
 // o dos atributos da frota; um aumento é esta linha mais public.formato_dos_cursos() (a migração dos cursos), com o
@@ -201,6 +201,13 @@ const PASSOS = {
   // versão anterior recusar a gravação e pedir para recarregar (sem tirar esses campos do dia), e o cadastro gravado nele
   // marca a conversão única do programa como feita (ApiClient.atualizarFormatoGravado)
   24: {
+    cadastro: cadastro => cadastro,
+    dia: dia => dia
+  },
+  // Versão 25: o cadastro pode levar a configuração do painel (campo "painel": o quadro com que ele abre e as colunas;
+  // js/config-do-painel.js). Os dados não mudam; o número novo faz a aba da versão anterior (que tiraria o campo ao
+  // gravar o cadastro, e o painel e a TV voltariam ao padrão) recusar a gravação e pedir para recarregar
+  25: {
     cadastro: cadastro => cadastro,
     dia: dia => dia
   }

@@ -17,6 +17,7 @@ import { LIMITES_DA_LEI, normalizarLimites, comHorasExternas } from './limites.j
 import { noturnosDaVespera, comRepousoDoNoturno, voltasConferem } from './noturno.js';
 import { normalizarFixos, normalizarAprovacao } from './fixos.js';
 import { normalizarCriterios } from './criterios.js';
+import { normalizarPainel } from './config-do-painel.js';
 import { normalizarCursos, normalizarCursoDoAluno } from './cursos.js';
 import { normalizarProgramas, programaDoLegado } from './programa.js';
 
@@ -94,6 +95,9 @@ export const ApiClient = {
     x.limites = normalizarLimites(x.limites);
     // O programa dos cursos e o curso de cada aluno
     x.cursos = normalizarCursos(x.cursos);
+    // A configuração do painel: só quando foi mudada (sem ela, o padrão)
+    if (x.painel) x.painel = normalizarPainel(x.painel);
+    else delete x.painel;
     x.stu.forEach(s => {
       const curso = normalizarCursoDoAluno(s.curso);
       if (curso) s.curso = curso;

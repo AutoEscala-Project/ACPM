@@ -5,6 +5,7 @@ import { $, focarNoTitulo } from '../dom.js';
 import { setTLMode } from '../state.js';
 import { abrirAgenda } from '../views/agenda.js';
 import { alternarTodosDoBI } from '../views/bi.js';
+import { abrirConfigDoPainel } from '../views/config-do-painel.js';
 import { rOut, alternarTempo } from '../views/escala.js';
 import { acaoDoPainel } from '../views/painel-aeroporto.js';
 import { alternarGrupoDaFrota } from '../views/recursos.js';
@@ -35,10 +36,11 @@ document.addEventListener('click', e => {
     rOut();
     return;
   }
-  // Painel: os dois quadros ou um só, pausar a troca e tela cheia
+  // Painel: o quadro (Missões, os dois do aeroporto ou um só), pausar a troca, tela cheia e a configuração do painel
   const fidsBtn = e.target.closest('[data-fids]');
   if (fidsBtn) {
-    acaoDoPainel(fidsBtn.dataset.fids);
+    if (fidsBtn.dataset.fids === 'configurar') abrirConfigDoPainel();
+    else acaoDoPainel(fidsBtn.dataset.fids);
     return;
   }
   // Recolher e abrir: os horários da Lista (Escala) e as categorias da frota (Recursos)
