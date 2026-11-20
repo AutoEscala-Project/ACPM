@@ -311,6 +311,42 @@ test.describe('A sessão da TV da recepção', () => {
     await context.close();
   });
 
+  // Às 03:00 a página recarrega (as versões novas do app). Sem conexão, o recarregamento levaria à página de erro do
+  // navegador, e a TV ficaria nela (nada do app roda ali para voltar): a TV espera a conexão e recarrega depois
+  test('a recarga da madrugada sem conexão espera a conexão voltar (a TV não fica na página de erro do navegador)', async ({ browser }) => {
+    const servidor = criarSupabaseFalso(documentosDeHoje());
+    const context = await browser.newContext({ baseURL: test.info().project.use.baseURL, locale: 'pt-BR', timezoneId: 'America/Sao_Paulo' });
+    await prepararContexto(context);
+    await servidor.instalar(context);
+    const page = await context.newPage();
+    const erros = vigiarErros(page, { ignorar: [/ERR_INTERNET_DISCONNECTED/] });
+    await page.clock.install({ time: new Date('2026-11-10T02:55:00-03:00') });
+    await page.goto('./painel.html?supabase=teste');
+    await entrarNaTV(page, CONTAS.painel, { manter: true });
+    await expect(linhas(page)).toHaveCount(2);
+    await page.evaluate(() => { window.antesDaRecarga = true; });
+    // 02:59: a internet cai (o servidor e o próprio endereço do app)
+    const semInternet = route => route.abort('internetdisconnected');
+    await page.clock.runFor(4 * MINUTO);
+    servidor.desconectar();
+    await context.route(/\/painel\.html/, semInternet);
+    // 03:00 passa: a página não recarregou, e o app continua na tela (com o aviso, quando passar dos 3 minutos)
+    await page.clock.runFor(5 * MINUTO);
+    expect(await page.evaluate(() => window.antesDaRecarga)).toBe(true);
+    await expect(page.locator('#aviso-da-tv-texto')).toHaveText('Painel sem atualização desde 02:59: tentando de novo…');
+    // A conexão volta: a TV recarrega (o app novo), e o quadro volta, sem o login
+    await context.unroute(/\/painel\.html/, semInternet);
+    servidor.reconectar();
+    await expect.poll(async () => {
+      await page.clock.runFor(MINUTO).catch(() => {});
+      return page.evaluate(() => window.antesDaRecarga ?? null).catch(() => 'recarregando');
+    }, { timeout: 20_000 }).toBeNull();
+    await expect(linhas(page)).toHaveCount(2);
+    await quadroNaTela(page);
+    expect(erros).toEqual([]);
+    await context.close();
+  });
+
   // Todas as contas de TV seguem o "Configurar painel": a configuração vem a cada busca de painel_do_dia, e a mudança
   // chega a cada TV em até um minuto, também na TV que acabou de entrar de novo sozinha
   test('duas TVs, com contas diferentes, seguem a mudança do "Configurar painel" em até um minuto', async ({ browser }) => {

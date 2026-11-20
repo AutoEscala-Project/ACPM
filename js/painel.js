@@ -207,12 +207,27 @@ function manterTelaAcesa() {
   pedir();
 }
 
-// Às 03:00 a página recarrega: pega as versões novas do app e começa o dia limpa
+// Às 03:00 a página recarrega: pega as versões novas do app e começa o dia limpa. Só com o app ao alcance: sem conexão,
+// o recarregamento levaria à página de erro do navegador, e a TV ficaria nela (ali nada do app roda para voltar); a TV
+// segue com a página aberta (o aviso, se for o caso) e tenta de novo a cada 5 minutos
+const RECARREGAR_DE_NOVO_MS = 5 * 60000;
+async function recarregarQuandoDer() {
+  try {
+    const resposta = await fetch(window.location.href, { method: 'HEAD', cache: 'no-store' });
+    if (resposta.ok) {
+      window.location.reload();
+      return;
+    }
+  } catch {
+    // sem conexão
+  }
+  setTimeout(recarregarQuandoDer, RECARREGAR_DE_NOVO_MS);
+}
 function recarregarDeMadrugada() {
   const agora = new Date(), proxima = new Date(agora);
   proxima.setHours(3, 0, 0, 0);
   if (proxima <= agora) proxima.setDate(proxima.getDate() + 1);
-  setTimeout(() => window.location.reload(), proxima - agora);
+  setTimeout(recarregarQuandoDer, proxima - agora);
 }
 
 // A conta da TV conectada: a sessão guardada (se for a conta da TV; sem conexão, a TV segue com ela) ou, sem ela, o
