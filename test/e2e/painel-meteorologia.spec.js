@@ -265,6 +265,8 @@ test.describe('Meteorologia no painel', () => {
   // mensagens chegam, a faixa cresce e a página da TV passa a ter as linhas que cabem acima dela
   test('a função lenta não segura nada: o painel e a TV abrem, e a faixa espera as mensagens', async ({ browser }) => {
     const { context, servidor, page, erros } = await novoContexto(browser, { meteorologia: LONGAS }, { viewport: { width: 1280, height: 720 } });
+    // 06:00: o dia inteiro ainda está no quadro Missões (ao meio-dia, os voos da manhã já teriam saído dele)
+    await context.clock.setFixedTime(new Date('2026-11-10T06:00:00-03:00'));
     const soltar = servidor.segurar('/functions/v1/meteorologia');
     await entrar(page, CONTAS.operador);
     await abrirPainelDaEscala(page);
@@ -308,6 +310,7 @@ test.describe('Meteorologia no painel', () => {
 
   test('em tela cheia na Escala: o quadro pagina acima da faixa; fora dela, volta às 12 linhas', async ({ browser }) => {
     const { context, page, erros } = await novoContexto(browser, { meteorologia: LONGAS }, { viewport: { width: 1280, height: 720 } });
+    await context.clock.setFixedTime(new Date('2026-11-10T06:00:00-03:00'));
     await entrar(page, CONTAS.operador, { url: `${URL_APP}&data=${HOJE}` });
     await abrirPainelDaEscala(page);
     await expect(caixa(page, 'SBCF').locator('.meteo-taf')).toBeVisible();

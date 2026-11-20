@@ -177,7 +177,9 @@ test.describe('TV da recepção', () => {
       // tela (mais uma linha não caberia); as duas listas com as mesmas
       const porLista = medidas.porLista[0];
       expect(medidas.porLista).toEqual(Array(listas).fill(porLista));
-      expect(medidas.linhas, 'a primeira página cheia').toBe(porLista * listas);
+      // A primeira página cheia (o dia que cabe numa página só, com as linhas que ele tem)
+      if (medidas.paginas > 1) expect(medidas.linhas, 'a primeira página cheia').toBe(porLista * listas);
+      else expect(medidas.linhas).toBeLessThanOrEqual(porLista * listas);
       expect(medidas.fundo, 'as listas acima da faixa').toBeLessThanOrEqual(medidas.faixa.top + 0.5);
       expect(medidas.faixa.top - medidas.fundo, 'mais uma linha não caberia').toBeLessThan(medidas.linha + 5);
       expect(medidas.faixa.bottom, 'a faixa no pé da tela').toBeCloseTo(altura, 0);
@@ -345,6 +347,8 @@ test.describe('TV da recepção', () => {
   test('com o servidor ainda sem a migração, a TV mostra o padrão (Missões, com as colunas do padrão)', async ({ browser }) => {
     const context = await browser.newContext({ baseURL: test.info().project.use.baseURL, locale: 'pt-BR', timezoneId: 'America/Sao_Paulo' });
     await prepararContexto(context);
+    // 08:00: os voos de hoje ainda estão no quadro Missões (o cancelado também)
+    await context.clock.setFixedTime(MANHA);
     await instalarSupabaseFalso(context, { ...documentosDeHoje({ quadro: 'chegadas', colunas: TODAS_AS_COLUNAS }), painelDoDiaAntigo: true });
     const page = await context.newPage();
     const erros = vigiarErros(page);
@@ -352,7 +356,7 @@ test.describe('TV da recepção', () => {
     await preencherLogin(page, CONTAS.painel);
     await expect(page.locator('.fids .fids-titulo')).toHaveText('Missões');
     await expect(page.locator('.fids thead th')).toHaveText(PADRAO);
-    await expect(linhas(page).locator('.f-aluno')).toHaveText(['Maria S.']);
+    await expect(linhas(page).locator('.f-aluno')).toHaveText(['Maria S.', 'João']);
     expect(erros).toEqual([]);
     await context.close();
   });
