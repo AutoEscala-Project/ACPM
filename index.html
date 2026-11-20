@@ -144,46 +144,52 @@
     </div>
   </section>
 
-  <!-- RECURSOS: o que vale só na data aberta no topo e o que vale para todas as datas -->
-  <section id="s-rec">
+  <!-- RECURSOS: duas vistas (js/views/vistas.js). A disponibilidade do dia vale só para a data aberta no topo; o cadastro
+       (a frota e os horários de decolagem), para todas as datas. A busca e as categorias valem nas duas, nunca no hangar -->
+  <section id="s-rec" data-vista="dia">
     <h2>Recursos</h2>
-    <div class="rec-parte" data-parte="data">
+    <div class="bar">
+      <div class="seg" role="group" aria-label="O que ver">
+        <button type="button" aria-pressed="true" data-vista-rec="dia" class="on"><svg class="ico"><use href="#i-calendario"/></svg>Disponibilidade do dia<span class="aba-selo" id="selo-rec-dia" hidden></span></button>
+        <button type="button" aria-pressed="false" data-vista-rec="cadastro"><svg class="ico"><use href="#i-aviao"/></svg>Cadastro</button>
+      </div>
+      <span class="cresce"></span>
+      <input type="search" class="flt-ctrl" id="flt-rec-mat" placeholder="Buscar matrícula…" aria-label="Buscar matrícula">
+      <!-- O filtro das categorias (várias marcas; js/views/filtros-dos-recursos.js): o painel abre na linha de baixo da barra -->
+      <button type="button" class="btn sec filtro-botao flt-ctrl" id="flt-rec-cat" aria-expanded="false" aria-controls="flt-rec-cat-painel"><span class="filtro-resumo">Todas as categorias</span><svg class="ico seta" aria-hidden="true"><use href="#i-baixo"/></svg></button>
+      <div class="filtro-painel" id="flt-rec-cat-painel" role="group" aria-label="Filtrar por categoria" hidden></div>
+      <span class="contagem" id="rec-contagem" role="status"></span>
+      <button class="btn edit-only" type="button" id="btn-novo-recurso" aria-expanded="false" aria-controls="form-recurso">+ Novo recurso</button>
+    </div>
+    <div class="rec-parte vista-dia" data-parte="data">
       <h3 class="rec-parte-titulo">Nesta data <small>valem para a data aberta no topo; a data seguinte começa com eles</small></h3>
       <div class="pn">
         <h4>Janelas de operação</h4>
         <div class="janelas" id="wins"></div>
       </div>
-      <div class="bar frota-cab">
-        <h4 class="frota-titulo">Aviões e simuladores <small>disponíveis nesta data e as horas até a revisão de 50 horas; a escala não passa das 50 horas</small></h4>
-        <span class="cresce"></span>
-        <label class="flt-rotulo"><span>Categoria</span> <select id="flt-rec-cat" class="flt-ctrl"></select></label>
-      </div>
-      <div class="tw" id="eqs">
-        <table class="frota">
-          <thead><tr><th>Disponível</th><th>Recurso</th><th>Horas disponíveis<button type="button" class="dica-btn" data-dica="horas-disponiveis" aria-label="O que é Horas disponíveis?" aria-expanded="false"></button></th><th>Na escala do dia</th><th class="edit-only" aria-label="Revisão"></th></tr></thead>
-          <tbody id="revisao"></tbody>
-        </table>
-      </div>
-      <p class="h">As horas que o avião ainda pode voar até a revisão de 50 horas. A data seguinte começa com estas horas menos os voos do dia que não foram cancelados. Avião sem as horas informadas fica sem o controle da revisão.</p>
-      <div class="pn">
-        <h4>Ordem no hangar</h4>
-        <p class="h">Da frente para o fundo. A escala tira primeiro os aviões da frente e junta os voos nos que já saíram, para não deixar avião parado no meio do dia; a data seguinte começa com esta ordem.</p>
-        <ol class="fila hangar" id="hangar"></ol>
+      <!-- A tabela e, ao lado dela a partir de 1.100 px (embaixo, nas telas menores), a ordem no hangar -->
+      <div class="rec-dia">
+        <div class="rec-aeronaves">
+          <h4 class="frota-titulo">Aviões e simuladores <small>disponíveis nesta data e as horas até a revisão de 50 horas; a escala não passa das 50 horas</small></h4>
+          <div class="tw" id="eqs">
+            <table class="frota">
+              <thead><tr><th>Disponível</th><th>Recurso</th><th>Horas disponíveis<button type="button" class="dica-btn" data-dica="horas-disponiveis" aria-label="O que é Horas disponíveis?" aria-expanded="false"></button></th><th>Na escala do dia</th><th class="edit-only" aria-label="Revisão"></th></tr></thead>
+              <tbody id="revisao"></tbody>
+            </table>
+          </div>
+          <p class="h">As horas que o avião ainda pode voar até a revisão de 50 horas. A data seguinte começa com estas horas menos os voos do dia que não foram cancelados. Avião sem as horas informadas fica sem o controle da revisão.</p>
+        </div>
+        <div class="pn rec-hangar">
+          <h4>Ordem no hangar</h4>
+          <p class="h">Da frente para o fundo, sempre com todos os aviões (os filtros não valem aqui). A escala tira primeiro os aviões da frente e junta os voos nos que já saíram, para não deixar avião parado no meio do dia; a data seguinte começa com esta ordem.</p>
+          <ol class="fila hangar" id="hangar"></ol>
+        </div>
       </div>
     </div>
-    <div class="rec-parte" data-parte="todas">
+    <div class="rec-parte vista-cadastro" data-parte="todas">
       <h3 class="rec-parte-titulo">Vale para todas as datas <small>muda também as datas já abertas</small></h3>
       <div class="pn">
-        <h4>Horários de decolagem</h4>
-        <p class="h">Os horários em que um voo pode sair, por categoria, dentro das janelas de operação abertas. O voo noturno sai às 17:30.</p>
-        <div class="horarios" id="horarios"></div>
-      </div>
-      <div class="pn">
-        <div class="bar frota-cab">
-          <h4>Frota</h4>
-          <span class="cresce"></span>
-          <button class="btn edit-only" type="button" id="btn-novo-recurso" aria-expanded="false" aria-controls="form-recurso">+ Novo recurso</button>
-        </div>
+        <h4>Frota</h4>
         <form class="form-recurso edit-only" id="form-recurso" autocomplete="off" novalidate hidden>
           <label>Matrícula <input id="rec-reg" maxlength="15" placeholder="PR-ABC" required aria-describedby="rec-erro"></label>
           <label>Categoria <select id="rec-tipo" required aria-describedby="rec-erro">
@@ -195,6 +201,11 @@
           <p class="erro-campo" id="rec-erro" role="alert"></p>
         </form>
         <ul class="frota-cadastro" id="frota" aria-label="Frota"></ul>
+      </div>
+      <div class="pn">
+        <h4>Horários de decolagem</h4>
+        <p class="h">Os horários em que um voo pode sair, por categoria, dentro das janelas de operação abertas. O voo noturno sai às 17:30.</p>
+        <div class="horarios" id="horarios"></div>
       </div>
     </div>
   </section>
@@ -432,7 +443,7 @@
       <h3>Primeiros passos: a rotina do operador</h3>
       <ol>
         <li><b>Confira a data no topo.</b> O sistema abre na aba Escala, na data de amanhã. Use as setas ‹ › ao lado da data, ou clique nela para escolher no calendário. Tudo o que você vê e altera, em qualquer aba, vale para essa data. Uma data nova começa com os aviões, as janelas e os horários dos instrutores da anterior, e com a demanda vazia: a agenda é o centro dos agendamentos, e <i>Importar da agenda</i> monta a demanda do dia. As horas dos aviões e as filas do rodízio já chegam atualizadas com os voos da data anterior.</li>
-        <li><b>Recursos:</b> desligue os aviões e simuladores indisponíveis (em manutenção) e as janelas de horário que não vão operar. Confira as horas de cada avião desde a última revisão de 50 horas.</li>
+        <li><b>Recursos:</b> em <i>Disponibilidade do dia</i>, desligue os aviões e simuladores indisponíveis (em manutenção) e as janelas de horário que não vão operar. Confira as horas de cada avião desde a última revisão de 50 horas.</li>
         <li><b>Instrutores:</b> em <i>Disponibilidade do dia</i>, desligue em <i>Vem</i> quem não vem na data e confira as janelas de cada um.</li>
         <li><b>Demanda:</b> clique em <i>Importar pedidos da agenda</i> (o botão diz quantos pedidos da secretaria ainda não estão na demanda) e ajuste o que precisar: missão, recurso, horários preferidos, disponibilidade, duração e prioridade. Para um aluno que não está na lista, use <i>Pôr um aluno na demanda</i>.</li>
         <li><b>Escala:</b> ela já está pronta. Confira as missões que não entraram (caixa vermelha, com o motivo) e os avisos (caixa amarela), ajuste o que for preciso e baixe o <i>CSV</i> (para o lançamento no portal), o <i>PDF</i> e o <i>Excel</i> (a planilha do aeroclube, para o lançamento no CAVOK).</li>
@@ -442,7 +453,7 @@
       </ol>
       <p class="manual-destaque"><b>Não existe botão de gerar nem de salvar.</b> Toda alteração, em qualquer aba, refaz a escala na hora e fica gravada. Ao lado do título da Escala aparece a hora da última atualização (por exemplo, “Atualizada às 10:42”).</p>
       <p class="manual-destaque">Uma data que você só abriu para consultar não é gravada. Ela passa a contar (no BI, nas horas dos aviões e no rodízio da data seguinte) quando você altera alguma coisa nela ou baixa o CSV, o PDF ou o Excel.</p>
-      <p>Os números ao lado do nome das abas avisam o que pede atenção: na Escala, as missões que não entraram (em vermelho) ou os avisos (em amarelo); na Agenda, os pedidos que ainda não estão na demanda; em Recursos, os aviões parados ou perto da revisão de 50 horas.</p>
+      <p>Os números ao lado do nome das abas avisam o que pede atenção: na Escala, as missões que não entraram (em vermelho) ou os avisos (em amarelo); na Agenda, os pedidos que ainda não estão na demanda; em Recursos, os aviões parados ou perto da revisão de 50 horas (na <i>Disponibilidade do dia</i>, cujo botão mostra o mesmo número).</p>
     </div>
 
     <div class="pn" id="manual-perfis">
@@ -494,12 +505,17 @@
       <p>Na data aberta no topo, a coluna <i>Situação</i> diz se o pedido já está na demanda (“Na demanda”) ou não (“Ainda não importado”), e o operador pode importar por ali mesmo. O pedido cancelado continua na lista, esmaecido; deixe o mouse sobre “Cancelado” para ver quem cancelou e quando.</p>
 
       <h4>Recursos</h4>
-      <p>A aba tem duas partes. <b>Nesta data</b>: as janelas de operação, a disponibilidade e as horas dos aviões e a ordem no hangar valem para a data aberta no topo (a data seguinte começa com eles). <b>Vale para todas as datas</b>: os horários de decolagem e a frota; mudar ali muda também as datas já abertas.</p>
+      <p>Duas vistas, com a busca e as categorias valendo nas duas. Recursos abre na <i>Disponibilidade do dia</i>, e a vista escolhida fica até a página ser recarregada:</p>
+      <ul>
+        <li><b>Disponibilidade do dia</b> (nesta data: vale para a data aberta no topo, e a data seguinte começa com ela): as janelas de operação, a tabela dos aviões e simuladores (disponível ou em manutenção, as horas até a revisão de 50 horas e quanto cada um voa na escala do dia) e, ao lado dela (embaixo, nas telas menores), a ordem no hangar.</li>
+        <li><b>Cadastro</b> (vale para todas as datas: mudar ali muda também as datas já abertas): a frota, com os atributos e o <i>Retirar</i>, e os horários de decolagem. <i>+ Novo recurso</i>, na barra da aba, abre o Cadastro com o formulário.</li>
+      </ul>
+      <p><i>Buscar matrícula</i> acha o recurso sem o hífen e sem diferença de maiúsculas (“vob” acha o PR-VOB), e <i>Categoria</i> abre as caixas das categorias (C152, C172, Simulador e PA-34) e mostra os recursos de alguma das marcadas (nenhuma marcada, todas); o botão diz quais estão marcadas, por exemplo <i>Categoria: C152 ou PA-34</i>. Os dois valem para a tabela, a frota e os horários de decolagem (os das categorias marcadas e, com a busca, os das categorias dos recursos achados), nunca para a ordem no hangar, que mostra sempre todos os aviões. Ao lado, o número diz quantos recursos aparecem (por exemplo, <i>3 de 26 recursos</i>); quando os filtros não deixam nenhum, <i>Limpar filtros</i> mostra todos de novo. O recurso acrescentado agora e os horários editados agora continuam à vista mesmo fora dos filtros, até eles mudarem.</p>
       <p><b>Janelas de operação:</b> os períodos do dia em que a escala opera. Desligar uma janela tira da escala do dia os horários de decolagem que caem nela. A disponibilidade dos instrutores e “manhã, tarde e noite” do aluno também valem por janela.</p>
       <ul class="manual-lista-curta" id="manual-janelas"></ul>
-      <p><b>Horários de decolagem:</b> cada categoria (C152, C172, Simulador e PA-34) tem os seus horários de saída. O padrão são as janelas do dia, e o PA-34 sai de 30 em 30 minutos. Cada categoria mostra um resumo: o modelo (<i>Janelas do dia</i>, <i>De 30 em 30 min</i> ou a lista resumida), quantos horários e os horários da manhã e da tarde; o horário que cai numa janela fechada nesta data aparece riscado. <i>Editar</i> abre a lista na própria linha: escolha um modelo, tire um horário pelo ✕ ou digite outro (das 06:00 às 16:30) e tecle Enter. Antes de salvar, o editor diz quantos pedidos mudam de preferência e quem perde o “Só às”. <i>Salvar</i> muda a lista, e os pedidos da categoria vão para o horário mais próximo da lista nova; <i>Cancelar</i> ou Esc descartam. O histórico desfaz a lista e os pedidos juntos. O voo noturno sai sempre às 17:30, e o Ground, nas janelas do dia.</p>
-      <p><b>Aviões e simuladores:</b> desligado quer dizer indisponível (em manutenção). Cada recurso tem atributos: na <b>Frota</b>, um clique na matrícula abre as caixas dele, e eles valem para todas as datas: <i>Só Parafuso</i> (C152: só voa Parafuso, e o Parafuso no C152 só nele), <i>Só VFR</i> (C172 e PA-34 não homologados IFR, como o PR-CPL: nenhum voo IFR vai para ele, nem o noturno do PC) e <i>Habilitação própria</i> (o recurso exige do instrutor uma habilitação só dele, como o PR-VOM: marque-a nas habilitações de quem voa nele). O histórico desfaz. Para acrescentar um recurso à frota, use <i>+ Novo recurso</i>: a matrícula e a categoria (no C152, também “Só Parafuso”); o limite de peso e o controle das 50 horas vêm da categoria. <i>+ Novo recurso</i> e <i>Retirar</i> ficam na <b>Frota</b>, em “Vale para todas as datas”. <i>Retirar</i> (aparece com o mouse ou o foco do teclado na linha; no celular, fica à vista) tira um recurso da frota, com confirmação; o Histórico desfaz. A tabela mostra quanto cada avião voa na escala do dia e o saldo até a revisão de 50 horas. Escolha uma categoria para ver só a frota dela; um clique no nome da categoria recolhe ou abre as linhas.</p>
-      <p><b>Ordem no hangar:</b> os aviões da frente para o fundo, como estão guardados. A escala tira primeiro os da frente e junta os voos nos que já saíram; os do fundo só saem quando os da frente não dão conta. Use os botões de cada avião (aparecem com o mouse ou o foco do teclado; no celular, ficam à vista) para subir, descer ou pôr um avião na frente. A data seguinte começa com a mesma ordem; ajuste quando o hangar for arrumado de outro jeito.</p>
+      <p><b>Horários de decolagem</b> (no Cadastro): cada categoria (C152, C172, Simulador e PA-34) tem os seus horários de saída. O padrão são as janelas do dia, e o PA-34 sai de 30 em 30 minutos. Cada categoria mostra um resumo: o modelo (<i>Janelas do dia</i>, <i>De 30 em 30 min</i> ou a lista resumida), quantos horários e os horários da manhã e da tarde; o horário que cai numa janela fechada nesta data aparece riscado. <i>Editar</i> abre a lista na própria linha: escolha um modelo, tire um horário pelo ✕ ou digite outro (das 06:00 às 16:30) e tecle Enter. Antes de salvar, o editor diz quantos pedidos mudam de preferência e quem perde o “Só às”. <i>Salvar</i> muda a lista, e os pedidos da categoria vão para o horário mais próximo da lista nova; <i>Cancelar</i> ou Esc descartam. O histórico desfaz a lista e os pedidos juntos. O voo noturno sai sempre às 17:30, e o Ground, nas janelas do dia.</p>
+      <p><b>Aviões e simuladores:</b> desligado quer dizer indisponível (em manutenção). Cada recurso tem atributos: na <b>Frota</b> (no Cadastro), um clique na matrícula abre as caixas dele, e eles valem para todas as datas: <i>Só Parafuso</i> (C152: só voa Parafuso, e o Parafuso no C152 só nele), <i>Só VFR</i> (C172 e PA-34 não homologados IFR, como o PR-CPL: nenhum voo IFR vai para ele, nem o noturno do PC) e <i>Habilitação própria</i> (o recurso exige do instrutor uma habilitação só dele, como o PR-VOM: marque-a nas habilitações de quem voa nele). O histórico desfaz. Para acrescentar um recurso à frota, use <i>+ Novo recurso</i> (na barra da aba, ele abre o Cadastro): a matrícula e a categoria (no C152, também “Só Parafuso”); o limite de peso e o controle das 50 horas vêm da categoria. <i>Retirar</i>, na <b>Frota</b> (aparece com o mouse ou o foco do teclado no recurso; no celular, fica à vista), tira um recurso da frota, com confirmação; o Histórico desfaz. A tabela da Disponibilidade do dia mostra quanto cada avião voa na escala do dia e o saldo até a revisão de 50 horas; um clique no nome da categoria recolhe ou abre as linhas dela.</p>
+      <p><b>Ordem no hangar:</b> os aviões da frente para o fundo, como estão guardados, sempre todos (a busca e as categorias não valem aqui). A escala tira primeiro os da frente e junta os voos nos que já saíram; os do fundo só saem quando os da frente não dão conta. Use os botões de cada avião (aparecem com o mouse ou o foco do teclado; no celular, ficam à vista) para subir, descer ou pôr um avião na frente. A data seguinte começa com a mesma ordem; ajuste quando o hangar for arrumado de outro jeito.</p>
       <p><b>Revisão de 50 horas:</b> informe as horas disponíveis de cada avião (quanto ele ainda pode voar até a revisão); a barra ao lado fica âmbar abaixo de 10 h e vermelha abaixo de 5 h. A escala não passa disso: o avião para quando não tem horas para mais um voo, e o aviso aparece na escala. Depois da revisão, clique em <i>Revisão feita</i> (aparece com o mouse ou o foco do teclado na linha; no celular, fica à vista): o avião volta a ter 50 h disponíveis. A data seguinte começa com as horas disponíveis desta data menos os voos dela que não foram cancelados. Avião sem as horas informadas fica sem esse controle.</p>
 
       <h4>Instrutores</h4>
@@ -620,7 +636,7 @@
         <dt>As horas de um Ground em turma contam por aluno?</dt>
         <dd>Não: o instrutor recebe 1h30, mesmo com vários alunos na turma.</dd>
         <dt>Um avião parou de aparecer na escala.</dt>
-        <dd>Veja na aba Recursos se ele está ligado (disponível) e se ainda tem saldo até a revisão de 50 horas. Depois da revisão, clique em <i>Revisão feita</i>.</dd>
+        <dd>Veja em Recursos, na <i>Disponibilidade do dia</i>, se ele está ligado (disponível) e se ainda tem saldo até a revisão de 50 horas. Depois da revisão, clique em <i>Revisão feita</i>.</dd>
         <dt>Onde ficam Minha conta e Sair?</dt>
         <dd>No menu da conta: clique no seu nome (no celular, nas suas iniciais), no canto direito do topo.</dd>
         <dt>Esqueci a senha.</dt>

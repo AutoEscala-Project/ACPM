@@ -1,7 +1,7 @@
 // Recursos: a frota (acrescentar e retirar), a disponibilidade e as horas até a revisão de 50 horas, as janelas de
-// operação, o hangar e os horários de decolagem
+// operação, o hangar, os horários de decolagem e os filtros (a busca pela matrícula e as categorias)
 import { gravarAlteracao, aindaNaoAbriu } from '../actions.js';
-import { opcoesDeCategoria, categoriaDoTipo } from '../categorias.js';
+import { categoriaDoTipo } from '../categorias.js';
 import { WIN, REVISAO_H } from '../config.js';
 import { $, showToast, fecharNoEsc } from '../dom.js';
 import { fmtH, lerHoras } from '../format.js';
@@ -12,9 +12,11 @@ import { S, isGestor } from '../state.js';
 import { confirmado } from './confirmacao.js';
 import { aoAcionar, aoMudarCampo } from './registro.js';
 import { rDem } from '../views/demanda.js';
+import { filtrarRecursos, limparFiltrosDosRecursos, manterRecursoAVista, criarFiltroDasCategorias } from '../views/filtros-dos-recursos.js';
 import { NOMES_DAS_CATEGORIAS, abrirEditorDosHorarios, fecharEditorDosHorarios, tirarDoRascunho, porNoRascunho, escolherModelo, rascunhoDosHorarios, editorDosHorariosAberto } from '../views/horarios.js';
-import { rRec, rRevisao, rHangar, alternarAtributos } from '../views/recursos.js';
+import { rRec, rHangar, alternarAtributos, aplicarFiltrosDosRecursos } from '../views/recursos.js';
 import { rIns, rPainelDoInstrutor } from '../views/cadastros.js';
+import { mostrarVista, vistaDa } from '../views/vistas.js';
 
 // O campo do recurso com erro (aria-invalid); o motivo (#rec-erro) é a descrição dele: o leitor de tela diz os dois
 const CAMPOS_DO_RECURSO = { reg: '#rec-reg', tipo: '#rec-tipo' };
@@ -23,7 +25,10 @@ const marcarCampoDoRecurso = campo => Object.entries(CAMPOS_DO_RECURSO).forEach(
   else $(id).removeAttribute('aria-invalid');
 });
 
-// Recursos: acrescentar um recurso à frota (matrícula, categoria e, no C152, "Só Parafuso")
+// Recursos: acrescentar um recurso à frota (matrícula, categoria e, no C152, "Só Parafuso"). "+ Novo recurso", na barra
+// da aba, abre o Cadastro com o formulário em cima da frota (como "+ Novo instrutor"; o formulário que ficou aberto lá
+// continua com o que foi digitado); no Cadastro, ele abre e fecha o formulário. Fechado por Cancelar ou depois de
+// acrescentar, o foco volta ao botão
 function mostrarFormDoRecurso(abrir) {
   $('#form-recurso').hidden = !abrir;
   $('#btn-novo-recurso').setAttribute('aria-expanded', String(abrir));
@@ -34,8 +39,16 @@ function mostrarFormDoRecurso(abrir) {
   $('#rec-parafuso-rotulo').hidden = true;
   $('#rec-reg').focus();
 }
-$('#btn-novo-recurso').onclick = () => mostrarFormDoRecurso($('#form-recurso').hidden);
-$('#rec-cancelar').onclick = () => mostrarFormDoRecurso(false);
+$('#btn-novo-recurso').onclick = () => {
+  const deOutraVista = vistaDa('rec') !== 'cadastro';
+  mostrarVista('rec', 'cadastro');
+  if (deOutraVista && !$('#form-recurso').hidden) $('#rec-reg').focus();
+  else mostrarFormDoRecurso($('#form-recurso').hidden);
+};
+$('#rec-cancelar').onclick = () => {
+  mostrarFormDoRecurso(false);
+  $('#btn-novo-recurso').focus();
+};
 $('#rec-tipo').onchange = () => {
   $('#rec-parafuso-rotulo').hidden = $('#rec-tipo').value !== 'C152';
   if ($('#rec-tipo').value !== 'C152') $('#rec-parafuso').checked = false;
@@ -47,9 +60,12 @@ $('#form-recurso').onsubmit = e => {
   if (erro) { $('#rec-erro').textContent = erro; marcarCampoDoRecurso(campo); return; }
   S.frota.push(recurso);
   S.av[recurso.reg] = true;
+  // O recurso novo aparece mesmo fora dos filtros (até eles mudarem)
+  manterRecursoAVista(recurso.reg);
   gravarAlteracao('inc', `Recurso adicionado: ${recurso.reg} (${recurso.tipo}${recurso.soParafuso ? ', só Parafuso' : ''})`);
   rRec();
   mostrarFormDoRecurso(false);
+  $('#btn-novo-recurso').focus();
   showToast(`${recurso.reg} adicionado à frota.`, 'ok');
 };
 
@@ -73,9 +89,28 @@ aoMudarCampo('atributo', t => {
   document.querySelector(`[data-a="atributo"][data-r="${CSS.escape(reg)}"][data-atributo="${atributo}"]`)?.focus();
 });
 
-// Categoria (sem a sala de Ground)
-$('#flt-rec-cat').innerHTML = opcoesDeCategoria({ comGround: false });
-$('#flt-rec-cat').onchange = () => rRevisao();
+// Os filtros: a busca pela matrícula e as categorias, nas duas vistas. Na digitação, a contagem espera a pessoa parar.
+// "Limpar filtros" aparece na tabela e na frota quando eles não deixam nenhum recurso; sem data-act, ele vale também para
+// quem só consulta. O campo começa como o filtro, vazio (o navegador que devolve o texto de antes de recarregar a página
+// não deixa o campo diferente do filtro)
+const ESPERA_DA_DIGITACAO = 500;
+$('#flt-rec-mat').value = '';
+$('#flt-rec-mat').addEventListener('input', e => {
+  filtrarRecursos({ matricula: e.target.value });
+  aplicarFiltrosDosRecursos({ esperar: ESPERA_DA_DIGITACAO });
+});
+const categorias = criarFiltroDasCategorias(marcadas => {
+  filtrarRecursos({ categorias: marcadas });
+  aplicarFiltrosDosRecursos();
+});
+document.addEventListener('click', e => {
+  if (!e.target.closest('[data-limpar-recursos]')) return;
+  limparFiltrosDosRecursos();
+  $('#flt-rec-mat').value = '';
+  categorias.limpar();
+  aplicarFiltrosDosRecursos();
+  $('#flt-rec-mat').focus();
+});
 
 aoMudarCampo('win', t => {
   const idx = +t.dataset.i;

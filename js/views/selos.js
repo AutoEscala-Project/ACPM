@@ -1,5 +1,6 @@
 // Selos de atenção nas abas: avisos da escala (vermelho quando alguma missão não entrou), aviões parados ou com menos
-// de 5 h até a revisão de 50 horas e pedidos da agenda para a data que ainda não estão na demanda.
+// de 5 h até a revisão de 50 horas e pedidos da agenda para a data que ainda não estão na demanda. O selo de Recursos
+// aparece também no botão da Disponibilidade do dia, a vista da tabela dos aviões (quem está no Cadastro vê onde olhar).
 import { $ } from '../dom.js';
 import { RES, S, DATA, isGestor } from '../state.js';
 import { REVISAO_H } from '../config.js';
@@ -25,7 +26,9 @@ export function atualizarSelosDaEscala() {
   const revisao = (RES && RES.revisao) || {};
   const atencao = Object.entries(revisao)
     .filter(([r, v]) => S.av[r] !== false && (v.paraAs !== null || REVISAO_H - v.fim < PERTO_DA_REVISAO_H)).length;
-  selo('rec', atencao, 'aviso', `${atencao} ${atencao === 1 ? 'avião parado ou perto' : 'aviões parados ou perto'} da revisão de 50 horas`);
+  const avioes = `${atencao} ${atencao === 1 ? 'avião parado ou perto' : 'aviões parados ou perto'} da revisão de 50 horas`;
+  selo('rec', atencao, 'aviso', `${avioes} (Recursos › Disponibilidade do dia)`);
+  selo('rec-dia', atencao, 'aviso', avioes);
   atualizarSeloDaAgenda();
 }
 

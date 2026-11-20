@@ -6,6 +6,10 @@
 // O editor é desenhado ao abrir. Cada mudança no rascunho atualiza só os horários, o modelo marcado, o efeito e o erro:
 // o foco fica onde está, e o efeito (aria-live) e o erro (role="alert") continuam os mesmos elementos, para o leitor de
 // tela anunciar o texto novo. Quando a aba é redesenhada por outra alteração, o foco volta ao elemento equivalente.
+//
+// Os filtros de Recursos valem aqui por categoria (js/views/filtros-dos-recursos.js): aparecem as categorias marcadas e,
+// com a busca, as dos recursos achados. A categoria do editor aberto, ou fechado agora (o foco volta ao "Editar" dela),
+// continua à vista até os filtros mudarem.
 import { WIN } from '../config.js';
 import { S } from '../state.js';
 import { $ } from '../dom.js';
@@ -14,6 +18,7 @@ import {
   CATEGORIAS_COM_HORARIOS, HORARIOS_PADRAO, DE_30_EM_30, PRIMEIRO_HORARIO, ULTIMO_HORARIO, periodoDoMinuto, paraMinuto,
   modeloDosHorarios, descreverHorarios, porPeriodo, impactoDosHorarios, resumoDoImpacto
 } from '../horarios.js';
+import { horariosAVista, manterHorariosAVista } from './filtros-dos-recursos.js';
 
 export const NOMES_DAS_CATEGORIAS = { C152: 'C152', C172: 'C172', sim: 'Simulador', 'PA-34': 'PA-34' };
 const MODELOS = [['janelas', 'Janelas do dia'], ['de30', 'De 30 em 30 min'], ['personalizado', 'Personalizado']];
@@ -111,10 +116,11 @@ export function rHorarios() {
   // O horário digitado (e ainda não posto) continua no campo, se o editor redesenhado é o da mesma categoria
   const aberto = caixa.querySelector('.horarios-cat.editando');
   const digitado = aberto && rascunho && aberto.dataset.cat === rascunho.cat ? aberto.querySelector('.hr-novo').value : '';
-  caixa.innerHTML = CATEGORIAS_COM_HORARIOS.map(cat => {
+  const aVista = CATEGORIAS_COM_HORARIOS.filter(cat => (rascunho && rascunho.cat === cat) || horariosAVista(cat));
+  caixa.innerHTML = aVista.map(cat => {
     const editando = Boolean(rascunho) && rascunho.cat === cat;
     return `<div class="horarios-cat${editando ? ' editando' : ''}" data-cat="${cat}">${editando ? editor(cat) : resumo(cat)}</div>`;
-  }).join('');
+  }).join('') || '<p class="h sem-resultado">Nenhuma categoria com esses filtros.</p>';
   const campo = caixa.querySelector('.hr-novo');
   if (campo) campo.value = digitado;
   const alvo = foco && caixa.querySelector(foco);
@@ -156,11 +162,13 @@ export function abrirEditorDosHorarios(cat) {
   $('#horarios .hr-novo').focus();
 }
 
-// Fecha o editor (salvo ou descartado) e devolve o foco ao "Editar" da categoria
+// Fecha o editor (salvo ou descartado) e devolve o foco ao "Editar" da categoria, que continua à vista mesmo fora dos
+// filtros (até eles mudarem)
 export function fecharEditorDosHorarios() {
   if (!rascunho) return;
   const { cat } = rascunho;
   rascunho = null;
+  manterHorariosAVista(cat);
   rHorarios();
   const botao = document.querySelector(`#horarios [data-act="editar-horarios"][data-cat="${cat}"]`);
   if (botao) botao.focus();

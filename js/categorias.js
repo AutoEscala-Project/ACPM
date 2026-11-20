@@ -17,6 +17,7 @@ export const nomeDoRecurso = r => (r === GROUND_REG ? 'Sala Ground' : r);
 // A categoria de um tipo (C152, Sim. Mono, Sala Ground…): vale também para um recurso que já saiu da frota
 export const categoriaDoTipo = tipo => (CATEGORIAS.find(c => c.tipos.includes(tipo)) || { id: null }).id;
 
-// Opções do seletor: "Todos" e as categorias (em Recursos, sem a Sala Ground)
-export const opcoesDeCategoria = ({ comGround = true } = {}) => '<option value="">Todos</option>' +
-  CATEGORIAS.filter(c => comGround || c.id !== 'ground').map(c => `<option value="${c.id}">${esc(c.nome)}</option>`).join('');
+// Opções do seletor da Escala e do BI: "Todos" e as categorias (Recursos marca as categorias em caixas, sem a Sala
+// Ground: js/views/filtros-dos-recursos.js)
+export const opcoesDeCategoria = () => '<option value="">Todos</option>' +
+  CATEGORIAS.map(c => `<option value="${c.id}">${esc(c.nome)}</option>`).join('');

@@ -6,7 +6,7 @@
 // lidas uma de cada vez (a versão que a gravação leva é a da leitura dos dados da tela), e nenhuma data é lida antes de a
 // abertura preparar os dados, nem depois de a preparação falhar. O que fica aberto na tela quando a data abre passa a
 // mostrar os dados dela
-import { test, expect, prepararContexto, vigiarErros, preencherLogin, entrar, irPara, abrirEscala, AMANHA, URL_APP } from './fixtures.js';
+import { test, expect, prepararContexto, vigiarErros, preencherLogin, entrar, irPara, irParaVista, abrirEscala, AMANHA, URL_APP } from './fixtures.js';
 import { criarSupabaseFalso, documentosAtuais, CONTAS } from './supabase-falso.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
 import { runAllocationEngine } from '../../js/engine.js';
@@ -672,7 +672,7 @@ test.describe('O que fica aberto quando a data abre passa a mostrar os dados del
     const page = await contexto.newPage();
     const erros = vigiarErros(page);
     await entrar(page, CONTAS.operador);
-    await irPara(page, 'rec');
+    await irParaVista(page, 'rec', 'cadastro');
     const c152 = page.locator('#horarios [data-cat="C152"]');
     const editor = page.locator('#horarios .horarios-editor');
     const doC152 = () => servidor.banco.get('cadastro').conteudo.horarios.C152;
