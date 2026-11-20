@@ -9,7 +9,8 @@
 // - As mensagens ficam 5 minutos na memória: as TVs e os navegadores juntos fazem no máximo duas consultas à REDEMET a
 //   cada 5 minutos (o METAR sai de hora em hora; o SPECI, quando o tempo muda)
 // - A REDEMET que não responde em 12 segundos conta como fora do ar; fora do ar, a função devolve as últimas mensagens
-//   que tem (até 3 horas: quem lê vê a hora da observação) ou o erro 502, com a mensagem em português
+//   que tem (até 3 horas: quem lê vê a hora da observação; o TAF, só o que ainda cobre agora) ou o erro 502, com a
+//   mensagem em português (e o detalhe com o texto nosso: nunca a chave nem o que a REDEMET mandou)
 import { enderecos, lerMensagens, montarResposta } from './mensagens.js';
 
 const CACHE_MS = 5 * 60000;
@@ -59,14 +60,36 @@ export function conferirNoAuth(urlDoProjeto, chavePadrao, buscar = fetch, agora 
   };
 }
 
-// Uma consulta à REDEMET, com a chave no cabeçalho e o tempo máximo. O erro diz só o status (nunca a chave)
+// O erro de uma consulta, com o texto nosso: o do fetch pode trazer o valor do cabeçalho (o Deno, com um cabeçalho
+// inválido: 'Invalid header value: "<a chave>"'), e o do JSON.parse, o começo da resposta (que pode repetir a chave)
+const erroSeguro = (e, texto) => {
+  const tempo = Boolean(e) && (e.name === 'TimeoutError' || e.name === 'AbortError');
+  return Object.assign(new Error(tempo ? 'a REDEMET não respondeu a tempo' : texto), { name: tempo ? 'TimeoutError' : 'Error' });
+};
+
+// Uma consulta à REDEMET, com a chave no cabeçalho e o tempo máximo. O erro diz só o status ou o que falhou, com o
+// texto nosso (nunca a chave nem o que a REDEMET mandou)
 async function consultar(buscar, endereco, chave, tempoMaximo) {
-  const resposta = await buscar(endereco, { headers: { 'x-api-key': chave, Accept: 'application/json' }, signal: AbortSignal.timeout(tempoMaximo) });
+  let resposta, texto;
+  try {
+    resposta = await buscar(endereco, { headers: { 'x-api-key': chave, Accept: 'application/json' }, signal: AbortSignal.timeout(tempoMaximo) });
+  } catch (e) {
+    throw erroSeguro(e, 'a conexão com a REDEMET falhou');
+  }
   if (!resposta.ok) {
     if (resposta.body) await resposta.body.cancel().catch(() => {});
     throw new Error(`a REDEMET respondeu ${resposta.status}`);
   }
-  return lerMensagens(await resposta.text());
+  try {
+    texto = await resposta.text();
+  } catch (e) {
+    throw erroSeguro(e, 'a resposta da REDEMET não chegou inteira');
+  }
+  try {
+    return lerMensagens(texto);
+  } catch {
+    throw new Error('a resposta da REDEMET veio fora do formato');
+  }
 }
 
 // conferirSessao(req): true para uma sessão válida do app (sem ela, ninguém entra); chave: a chave da REDEMET (o segredo
@@ -77,27 +100,30 @@ async function consultar(buscar, endereco, chave, tempoMaximo) {
  * @param {{ conferirSessao: (req: Request) => Promise<boolean>, chave?: string, buscar?: typeof fetch, agora?: () => number, tempoMaximo?: number }} opcoes
  */
 export function criarAtendimento({ conferirSessao, chave = '', buscar = fetch, agora = Date.now, tempoMaximo = TEMPO_MAXIMO_MS }) {
-  let guardado = null;   // { em, dados }
+  let guardado = null;   // { em, metars, tafs }: as listas da REDEMET, como vieram
   let emAndamento = null;
 
+  // As mensagens guardadas, escolhidas agora: o TAF em vigor é o que cobre agora (o que venceu desde a consulta sai);
+  // gerado é a hora da consulta
+  const responderCom = g => ({ ...montarResposta(g.metars, g.tafs, new Date(agora())), gerado: new Date(g.em).toISOString() });
+
   async function mensagens() {
-    if (guardado && agora() - guardado.em < CACHE_MS) return guardado.dados;
+    if (guardado && agora() - guardado.em < CACHE_MS) return responderCom(guardado);
     // Duas chamadas juntas fazem uma consulta só
     if (!emAndamento) {
       const endereco = enderecos(new Date(agora()));
       emAndamento = Promise.all([consultar(buscar, endereco.metar, chave, tempoMaximo), consultar(buscar, endereco.taf, chave, tempoMaximo)])
         .then(([metars, tafs]) => {
-          guardado = { em: agora(), dados: montarResposta(metars, tafs, new Date(agora())) };
-          return guardado.dados;
+          guardado = { em: agora(), metars, tafs };
         })
         .finally(() => { emAndamento = null; });
     }
     try {
-      return await emAndamento;
+      await emAndamento;
     } catch (e) {
-      if (guardado && agora() - guardado.em < VELHO_DEMAIS_MS) return guardado.dados;
-      throw e;
+      if (!(guardado && agora() - guardado.em < VELHO_DEMAIS_MS)) throw e;
     }
+    return responderCom(guardado);
   }
 
   return async req => {

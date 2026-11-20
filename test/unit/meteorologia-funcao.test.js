@@ -273,6 +273,36 @@ describe('meteorologia: o atendimento da função', () => {
     }
   });
 
+  it('o erro nunca traz a chave: nem o do fetch (o Deno põe o valor do cabeçalho inválido na mensagem), nem a resposta que a repete', async () => {
+    // O fetch do Deno, com a chave fora do formato de um cabeçalho: "Invalid header value: "<a chave>""
+    const invalida = async () => { throw new TypeError(`Invalid header value: "${CHAVE}"`); };
+    const r = await comChave({ buscar: invalida })(pedido());
+    assert.equal(r.status, 502);
+    const corpo = await r.text();
+    assert.ok(!corpo.includes(CHAVE), corpo);
+    assert.equal(JSON.parse(corpo).erro, 'Não foi possível buscar o METAR e o TAF na REDEMET.');
+    // A REDEMET que devolve a chave num texto fora do JSON
+    const eco = await comChave({ buscar: redemetFalsa({ metar: `Invalid API key ${CHAVE}` }).buscar })(pedido());
+    assert.equal(eco.status, 502);
+    const texto = await eco.text();
+    assert.ok(!texto.includes(CHAVE), texto);
+  });
+
+  it('as últimas mensagens guardadas: o TAF que venceu enquanto a REDEMET estava fora do ar sai (o em vigor é o de agora)', async () => {
+    const boa = redemetFalsa(), fora = redemetFalsa({ status: 503 });
+    let buscar = boa.buscar, agora = new Date('2026-11-20T23:30:00Z').getTime();
+    const atender = comChave({ buscar: (...a) => buscar(...a), agora: () => agora });
+    const antes = await (await atender(pedido())).json();
+    assert.deepEqual(antes.estacoes.map(e => e.taf), [TAF_SBBH, TAF_SBCF]);
+    buscar = fora.buscar;
+    // 00:30Z: o TAF de Pampulha (2012/2024) venceu; o de Confins (2012/2112) continua; as mensagens são as das 23:30Z
+    agora += 60 * 60000;
+    const depois = await (await atender(pedido())).json();
+    assert.deepEqual(depois.estacoes.map(e => e.taf), [null, TAF_SBCF]);
+    assert.equal(depois.gerado, '2026-11-20T23:30:00.000Z');
+    assert.deepEqual(depois.estacoes.map(e => e.metar), antes.estacoes.map(e => e.metar));
+  });
+
   it('a REDEMET que não responde a tempo (12 segundos; aqui, 200 ms): 502', async () => {
     const lenta = redemetFalsa({ demora: 60000 });
     const atender = comChave({ buscar: lenta.buscar, tempoMaximo: 200 });
