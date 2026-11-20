@@ -123,9 +123,9 @@ export const filtrarCategorias = (page, valores, opcoes) => marcarNoFiltro(page,
 // As telas que não são a de abertura de uma aba: as outras vistas (Instrutores › Cadastro, Recursos › Cadastro, outro
 // curso em Cursos), os painéis abertos dos filtros de vários valores (o das habilitações, em Instrutores, o dos cursos, em
 // Alunos e na Demanda, e o das categorias, em Recursos, com duas marcas: o botão diz as duas) e as tabelas (e a frota)
-// que os filtros deixam sem nenhuma linha (com "Limpar filtros"). Os testes do celular e da acessibilidade, que conferem
-// cada aba como ela abre, conferem também estas: conferir(nome) roda em cada uma. No fim, a busca e as marcas voltam a
-// vazias, Recursos, à Disponibilidade do dia, e Cursos, ao primeiro curso
+// que os filtros deixam sem nenhuma linha (com "Limpar filtros"; também a da Demanda). Os testes do celular e da
+// acessibilidade, que conferem cada aba como ela abre, conferem também estas: conferir(nome) roda em cada uma. No fim, a
+// busca e as marcas voltam a vazias, Recursos, à Disponibilidade do dia, e Cursos, ao primeiro curso
 export async function percorrerVistasEFiltros(page, conferir) {
   await irParaVista(page, 'ins', 'cadastro');
   await conferir('instrutores: cadastro');
@@ -152,6 +152,10 @@ export async function percorrerVistasEFiltros(page, conferir) {
     await conferir(`${nome}: o filtro dos cursos aberto, com duas marcas`);
     await filtrarCursos(page, aba, []);
   }
+  await page.locator('#flt-dem').fill('nenhum assim');
+  await nenhumComOsFiltros(page, 'dem');
+  await conferir('demanda: nenhum com os filtros');
+  await page.locator('#flt-dem').fill('');
   await irParaVista(page, 'rec', 'cadastro');
   await conferir('recursos: cadastro');
   await filtrarCategorias(page, ['sim', 'PA-34'], { fechar: false });
@@ -179,11 +183,12 @@ export async function percorrerVistasEFiltros(page, conferir) {
 }
 
 // A tabela que os filtros deixam sem nenhuma linha: a linha que diz por quê; a contagem já escrita (ela espera a
-// digitação parar: a tela é conferida com o texto mais longo, "0 de 40 instrutores"); e o "Limpar filtros" inteiro na
-// parte à vista da tabela e da tela (a grade do dia, mais larga que o celular, rola para o lado)
+// digitação parar: a tela é conferida com o texto mais longo, "0 de 40 instrutores"; a Demanda, sem aba, não tem); e o
+// "Limpar filtros" inteiro na parte à vista da tabela e da tela (a grade do dia e a Demanda, mais largas que o celular,
+// rolam para o lado)
 async function nenhumComOsFiltros(page, corpo, aba) {
   await expect(page.locator(`#${corpo} tr.sem-resultado`)).toBeVisible();
-  await expect(page.locator(`#${aba}-contagem`)).toHaveText(/^0 de \d+ /);
+  if (aba) await expect(page.locator(`#${aba}-contagem`)).toHaveText(/^0 de \d+ /);
   const fora = await page.locator(`#limpar-filtros-${corpo}`).evaluate(botao => {
     const caixa = botao.getBoundingClientRect(), tabela = botao.closest('.tw');
     const esquerda = tabela.getBoundingClientRect().left + tabela.clientLeft, direita = esquerda + tabela.clientWidth;
