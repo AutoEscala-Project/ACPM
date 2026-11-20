@@ -406,6 +406,10 @@ deno_version = 2
 # [edge_runtime.secrets]
 # secret_key = "env(SECRET_VALUE)"
 
+# O METAR e o TAF de SBBH e SBCF para o painel (supabase/functions/meteorologia): só com a sessão de uma conta do app
+[functions.meteorologia]
+verify_jwt = true
+
 [analytics]
 enabled = true
 port = 54327

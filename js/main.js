@@ -32,6 +32,7 @@ import { setRole, abrirData, lerData, dadosPreparados, carregarBI } from './acti
 import { ehDomingo } from './agenda.js';
 import { projetoSupabase } from './config-supabase.js';
 import { iniciarDicas } from './dicas.js';
+import { configurarMeteorologia } from './meteorologia.js';
 import { $, showToast, mostrarAviso, avisoAberto, avisarDoLink } from './dom.js';
 import { amanhaISO, somarDias, dataIsoValida } from './format.js';
 import { iniciarSessaoSupabase } from './sessao.js';
@@ -66,6 +67,8 @@ window.addEventListener('beforeunload', e => {
   // As dicas dos termos e a tela só de consulta do Gestor
   iniciarDicas();
   iniciarSomenteLeitura();
+  // A meteorologia do painel vem do servidor (a função meteorologia); neste navegador, não há
+  configurarMeteorologia(() => ApiClient.meteorologia());
 
   // O endereço é lido antes: abrir uma data põe a data nele
   const params = new URLSearchParams(window.location.search);

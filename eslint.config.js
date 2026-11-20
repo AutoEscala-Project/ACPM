@@ -10,6 +10,9 @@ export default [
   { files: ['js/**/*.js'], languageOptions: { globals: globals.browser } },
   { files: ['scripts/**/*.mjs', '*.js', 'test/unit/**/*.js', 'test/helpers/**/*.js'], languageOptions: { globals: globals.node } },
   { files: ['test/e2e/**/*.js'], languageOptions: { globals: { ...globals.node, ...globals.browser } } },
+  // A função meteorologia do Supabase (Deno): os módulos em JavaScript usam só o que o Deno e o Node têm em comum (fetch,
+  // Request, Response, AbortSignal)
+  { files: ['supabase/functions/**/*.js'], languageOptions: { globals: globals.node } },
   // { chave: _, ...resto } tira uma chave de uma cópia: a chave que sai não conta como variável sem uso
   { rules: { 'no-unused-vars': ['error', { ignoreRestSiblings: true }] } }
 ];

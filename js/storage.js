@@ -340,6 +340,12 @@ export const ApiClient = {
     return this.backend.importarCursos(programaDoLegado(normalizarCursos(cadastro && cadastro.cursos)), { autor: this.autorAtual || null });
   },
 
+  // O METAR e o TAF do painel (js/meteorologia.js), pela função do servidor. Sem servidor (este navegador): null, sem
+  // busca (o painel diz "Meteorologia indisponível")
+  meteorologia() {
+    return typeof this.backend.meteorologia === 'function' ? this.backend.meteorologia() : null;
+  },
+
   async biDoPeriodo(de, ate) {
     return biDosDias((await this.backend.listarDias(de, ate)).map(d => ({ ...d, conteudo: migrarDia(d.conteudo) })));
   },

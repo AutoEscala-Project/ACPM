@@ -85,7 +85,7 @@ test.describe('Painel: o quadro Missões', () => {
       const dados = [...quadro.querySelectorAll('tbody tr:not(.fids-vazia):not(.fids-nada)')];
       return {
         cabe: quadro.querySelector('.fids-tabela').scrollWidth <= quadro.clientWidth,
-        fundo: quadro.querySelector('.fids-tabela').getBoundingClientRect().bottom <= innerHeight,
+        fundo: quadro.querySelector('.fids-tabela').getBoundingClientRect().bottom <= quadro.querySelector('.fids-meteo').getBoundingClientRect().top + 0.5,
         foraDaTela: dados.filter(tr => tr.getBoundingClientRect().bottom > innerHeight).length,
         colunas: quadro.querySelectorAll('thead th').length,
         pagina: quadro.querySelector('.fids-relogio small').textContent
@@ -119,7 +119,16 @@ test.describe('Painel: o quadro Missões', () => {
     expect(await medidas()).toEqual({ cabem: true, linhas: [12], cabecalhos: [padrao], fundo: true });
     await page.locator('#out [data-fids="tela-cheia"]').click();
     await expect.poll(() => page.evaluate(() => Boolean(document.fullscreenElement))).toBe(true);
-    await expect.poll(medidas).toEqual({ cabem: true, linhas: [14, 14], cabecalhos: [padrao, padrao], fundo: true });
+    // Em cada lista, as linhas que cabem entre o cabeçalho e a faixa da meteorologia, embaixo das duas (a folga de 4 px)
+    await expect.poll(async () => (await medidas()).linhas.length).toBe(2);
+    const cabem = await page.evaluate(() => {
+      const quadro = document.querySelector('#out .fids');
+      const cabecalho = quadro.querySelector('.fids-tabela thead').getBoundingClientRect().bottom;
+      const linha = quadro.querySelector('tbody tr').getBoundingClientRect().height;
+      return Math.floor((quadro.querySelector('.fids-meteo').getBoundingClientRect().top - cabecalho - 4) / linha);
+    });
+    expect(cabem).toBeGreaterThanOrEqual(12);
+    await expect.poll(medidas).toEqual({ cabem: true, linhas: [cabem, cabem], cabecalhos: [padrao, padrao], fundo: true });
     await expect(page.locator('#out .fids .fids-relogio small')).toHaveText(/^página 1\/\d+$/);
     await page.evaluate(() => document.exitFullscreen());
     await expect.poll(medidas).toEqual({ cabem: true, linhas: [12], cabecalhos: [padrao], fundo: true });

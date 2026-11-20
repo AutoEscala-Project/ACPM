@@ -439,6 +439,32 @@ table.fids-tabela { width: 100%; min-width: 860px; border-collapse: collapse; fo
 .fids:fullscreen .fids-topo, .fids:fullscreen table.fids-tabela, .fids:fullscreen .fids-listas,
 .fids.inteiro .fids-topo, .fids.inteiro table.fids-tabela, .fids.inteiro .fids-listas { min-width: 0; }
 .fids.inteiro { position: fixed; inset: 0; box-shadow: none; }
+/* A meteorologia embaixo do quadro (js/views/meteorologia.js): o METAR e o TAF de Pampulha e de Confins em duas caixas
+   lado a lado, sempre as duas (no celular, uma embaixo da outra), em letra de máquina de escrever, quebrando a linha.
+   No painel que rola para o lado (a página estreita), a faixa fica parada, à vista. Na tela toda, ela fica no pé da tela,
+   com as letras crescendo com a tela; as linhas da página do quadro contam com a altura dela */
+.fids-meteo {
+  --meteo-fs: 13px; position: sticky; left: 0; padding: 8px 12px 10px; background: #0A1733; border-top: 2px solid #23499B;
+  font: 500 var(--meteo-fs)/1.35 'Barlow Semi Condensed', sans-serif; color: var(--fids-claro);
+}
+.meteo-topo { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 2px 12px; margin-bottom: 6px; font-size: .92em; }
+.meteo-titulo { font-weight: 700; color: #fff; letter-spacing: .04em; }
+.meteo-estacoes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.meteo-estacao { min-width: 0; padding: 6px 10px 8px; border: 1px solid #23499B; border-radius: 6px; background: #0B1A3D; }
+.meteo-cab { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; margin-bottom: 4px; }
+.fids .meteo-nome { margin: 0; font: 700 1.15em 'Barlow Semi Condensed', sans-serif; color: var(--fids-amarelo); letter-spacing: .02em; }
+.meteo-hora { font-variant-numeric: tabular-nums; }
+.meteo-msg {
+  margin: 0; color: var(--fids-branco); font: 500 1em/1.35 ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
+  white-space: normal; overflow-wrap: anywhere;
+}
+.meteo-msg + .meteo-msg { margin-top: 4px; }
+.meteo-msg.meteo-sem { color: var(--fids-claro); font-family: 'Barlow Semi Condensed', sans-serif; font-style: italic; }
+.meteo-aviso { margin: 0; color: var(--fids-claro); font-weight: 600; }
+.fids:fullscreen, .fids.inteiro { display: flex; flex-direction: column; }
+.fids:fullscreen .fids-quadro, .fids.inteiro .fids-quadro { flex: 1 1 auto; min-height: 0; }
+.fids:fullscreen .fids-meteo, .fids.inteiro .fids-meteo { flex: none; --meteo-fs: 1.9vh; }
+@media (max-width: 640px) { .meteo-estacoes { grid-template-columns: minmax(0, 1fr); } }
 /* A medida das duas listas fica fora da vista também na tela toda (depois da regra da TV, que ela desfaz) */
 .fids.fids-medida { position: absolute; inset: 0 auto auto 0; width: max-content; visibility: hidden; pointer-events: none; border: 0; box-shadow: none; overflow: visible; }
 /* A hora da última atualização da escala: discreta, com um relógio, ao lado do título */

@@ -1,7 +1,8 @@
 // A TV da recepção: painel.html mostra o mesmo painel da Escala, na tela toda e sem botões, com o quadro de hoje e o
 // aluno abreviado, no quadro e com as colunas da configuração do painel (sem ela, Missões com as colunas do padrão). No
-// modo compartilhado, a conta da TV (perfil "painel") só vê o quadro, que ela busca de novo a cada minuto; a função do
-// servidor ainda não entrega a configuração, e a TV mostra o padrão. Missões mostra também o voo cancelado.
+// modo compartilhado, a conta da TV (perfil "painel") só vê o quadro, que ela busca de novo a cada minuto, com a
+// configuração do painel que a função painel_do_dia entrega (sem ela, o banco ainda sem a migração, o padrão). Missões
+// mostra também o voo cancelado.
 import { test, expect, prepararContexto, vigiarErros, preencherLogin, URL_APP } from './fixtures.js';
 import { instalarSupabaseFalso, documentosAtuais, CONTAS } from './supabase-falso.js';
 import { runAllocationEngine } from '../../js/engine.js';
@@ -112,8 +113,8 @@ test.describe('TV da recepção', () => {
   });
 
   // Um dia cheio na tela toda: o quadro cabe na largura (com todas as colunas, em qualquer ordem, e os textos longos: o
-  // embarque, a turma de Ground, os nomes compridos) e na altura (as linhas que não cabem vão para a página seguinte), na
-  // TV de 1080p e de 720p e no monitor 16:10 ou 4:3 em tela cheia
+  // embarque, a turma de Ground, os nomes compridos) e na altura, acima da faixa da meteorologia (as linhas que não cabem
+  // vão para a página seguinte), na TV de 1080p e de 720p e no monitor 16:10 ou 4:3 em tela cheia
   const CASOS_DA_TELA = [
     [1920, 1080, { quadro: 'partidas', colunas: [...TODAS_AS_COLUNAS].reverse() }],
     [1280, 720, null],
@@ -135,6 +136,9 @@ test.describe('TV da recepção', () => {
       expect(medidas.topo, 'a faixa do topo na largura').toBeLessThanOrEqual(medidas.quadro);
       expect(medidas.pagina).toBeLessThanOrEqual(largura);
       expect(medidas.fundo, 'o quadro (com as linhas vazias) na altura').toBeLessThanOrEqual(altura);
+      // Neste navegador, a faixa diz "Meteorologia indisponível", no pé da tela, embaixo do quadro
+      expect(medidas.fundo, 'o quadro acima da faixa da meteorologia').toBeLessThanOrEqual(medidas.faixa.top + 0.5);
+      expect(medidas.faixa.bottom, 'a faixa no pé da tela').toBeCloseTo(altura, 0);
       expect(medidas.foraDaTela, 'nenhuma linha fora da tela').toBe(0);
       expect(medidas.paginas, 'o que não cabe vai para outra página').toBeGreaterThan(1);
       expect(medidas.linhas).toBeGreaterThanOrEqual(8);
@@ -169,12 +173,20 @@ test.describe('TV da recepção', () => {
       expect(medidas.fundo, 'as listas (com as linhas vazias) na altura').toBeLessThanOrEqual(altura);
       expect(medidas.foraDaTela, 'nenhuma linha fora da tela').toBe(0);
       expect(medidas.letras, 'as letras no mínimo da tela toda ou maiores').toBeGreaterThanOrEqual(Math.floor(0.6 * 0.026 * altura * 100) / 100);
-      // As linhas de cada lista: as mesmas da lista única na tela toda (a linha tem 5,4% da altura: 14 em qualquer tela)
-      const porLista = Math.floor((altura * 0.8) / (altura * 0.054));
+      // As linhas de cada lista: as que cabem acima da faixa da meteorologia, que fica embaixo das duas listas, no pé da
+      // tela, com as letras inteiras (mais uma linha não caberia nelas); as duas listas com as mesmas
+      const porLista = medidas.porLista[0];
       expect(medidas.porLista).toEqual(Array(listas).fill(porLista));
-      expect(medidas.linhas, 'a primeira página cheia').toBe(porLista * listas);
+      expect(porLista, 'mais uma linha não caberia').toBe(await linhasQueCabem(page));
+      // A primeira página cheia (o dia que cabe numa página só, com as linhas que ele tem)
+      if (medidas.paginas > 1) expect(medidas.linhas, 'a primeira página cheia').toBe(porLista * listas);
+      else expect(medidas.linhas).toBeLessThanOrEqual(porLista * listas);
+      expect(medidas.fundo, 'as listas acima da faixa').toBeLessThanOrEqual(medidas.faixa.top + 0.5);
+      expect(medidas.faixa.bottom, 'a faixa no pé da tela').toBeCloseTo(altura, 0);
+      expect(medidas.faixa.left, 'a faixa embaixo das duas listas, da largura do quadro').toBeCloseTo(0, 0);
+      expect(medidas.faixa.width).toBeCloseTo(largura, 0);
       if (listas === 2) {
-        expect(medidas.linhas, 'umas 28 linhas de uma vez').toBeGreaterThanOrEqual(26);
+        expect(medidas.linhas, 'umas 26 linhas de uma vez, com a faixa no pé').toBeGreaterThanOrEqual(24);
         // As duas lado a lado, com as mesmas colunas; a da esquerda primeiro (os horários seguem da esquerda para a direita)
         expect(medidas.cabecalhos[1]).toEqual(medidas.cabecalhos[0]);
         expect(medidas.lado).toBe(true);
@@ -191,10 +203,10 @@ test.describe('TV da recepção', () => {
     await page.goto('./painel.html');
     const listas = page.locator('.fids .fids-lista');
     await expect(listas).toHaveCount(1);
-    await expect(listas.first().locator('tbody tr')).toHaveCount(14);
+    await expect(listas.first().locator('tbody tr')).toHaveCount(await linhasQueCabem(page));
     await page.setViewportSize({ width: 1920, height: 1080 });
     await expect(listas).toHaveCount(2);
-    await expect(listas.nth(1).locator('tbody tr')).toHaveCount(14);
+    await expect(listas.nth(1).locator('tbody tr')).toHaveCount(await linhasQueCabem(page));
     await page.setViewportSize({ width: 1440, height: 900 });
     await expect(listas).toHaveCount(1);
   });
@@ -288,18 +300,129 @@ test.describe('TV da recepção', () => {
     await context.close();
   });
 
-  // O perfil da TV não lê o cadastro, e a função painel_do_dia ainda não entrega a configuração do painel: com o
-  // servidor, a TV mostra o padrão, mesmo com o painel configurado
-  test('com o servidor, a TV mostra o padrão (Missões, com as colunas do padrão)', async ({ browser }) => {
+  // O perfil da TV não lê o cadastro: a configuração do painel vem no campo "painel" de painel_do_dia (migração
+  // 20261120150000), e a TV a segue, como a Escala; a mudança do operador chega na busca seguinte
+  test('com o servidor, a TV segue a configuração do painel que painel_do_dia entrega, e a mudança dela', async ({ browser }) => {
     const context = await browser.newContext({ baseURL: test.info().project.use.baseURL, locale: 'pt-BR', timezoneId: 'America/Sao_Paulo' });
     await prepararContexto(context);
-    await instalarSupabaseFalso(context, documentosDeHoje({ quadro: 'chegadas', colunas: TODAS_AS_COLUNAS }));
+    const servidor = await instalarSupabaseFalso(context, documentosDeHoje({ quadro: 'partidas', colunas: TODAS_AS_COLUNAS }));
+    const page = await context.newPage();
+    const erros = vigiarErros(page);
+    await page.clock.install({ time: new Date('2026-11-10T07:00:00-03:00') });
+    await page.goto('./painel.html?supabase=teste');
+    await preencherLogin(page, CONTAS.painel);
+    await expect(page.locator('.fids .fids-titulo')).toHaveText('Partidas');
+    await expect(page.locator('.fids thead th')).toHaveText([...PADRAO, 'Previsto', 'Observação']);
+    await expect(linhas(page).locator('.f-obs')).toHaveText(['Atrasado', 'Cancelado · Outro']);
+    // O operador muda a configuração: a TV segue na busca seguinte
+    const cadastro = structuredClone(servidor.banco.get('cadastro').conteudo);
+    cadastro.painel = { quadro: 'missoes', colunas: [{ id: 'aluno', on: true }, { id: 'horario', on: true }] };
+    servidor.alterarPorOutraPessoa('cadastro', cadastro);
+    await page.clock.runFor(60_000);
+    await expect(page.locator('.fids .fids-titulo')).toHaveText('Missões');
+    await expect(page.locator('.fids thead th')).toHaveText(['Aluno', 'Horário', 'Aeronave', 'Modelo', 'Instrutor', 'Missão']);
+    expect(erros).toEqual([]);
+    await context.close();
+  });
+
+  // A configuração gravada fora do formato pela API: o servidor manda só o que vale dela, e a TV não quebra
+  test('com o servidor e a configuração adulterada, a TV mostra o que vale dela, sem erro', async ({ browser }) => {
+    const context = await browser.newContext({ baseURL: test.info().project.use.baseURL, locale: 'pt-BR', timezoneId: 'America/Sao_Paulo' });
+    await prepararContexto(context);
+    await instalarSupabaseFalso(context, documentosDeHoje({ quadro: '__proto__', colunas: [{ id: 'aluno', on: 'sim' }, { id: '<img src=x>', on: true }, 'horario', { id: 'missao', on: true }] }));
+    const page = await context.newPage();
+    const erros = vigiarErros(page);
+    await page.goto('./painel.html?supabase=teste');
+    await preencherLogin(page, CONTAS.painel);
+    await expect(page.locator('.fids .fids-titulo')).toHaveText('Missões');
+    // Missão (ligada) primeiro; Aluno, desligado; as que faltam entram no fim, como no padrão
+    await expect(page.locator('.fids thead th')).toHaveText(['Missão', 'Horário', 'Aeronave', 'Modelo', 'Instrutor']);
+    await expect(page.locator('.fids img[src="x"]')).toHaveCount(0);
+    expect(erros).toEqual([]);
+    await context.close();
+  });
+
+  // As listas também vêm de painel_do_dia: "Sempre duas listas" vale na TV de 720p (no Automático, uma), e a mudança do
+  // operador para "Sempre uma lista" chega na busca seguinte
+  test('com o servidor, a TV segue as listas que painel_do_dia entrega, e a mudança delas', async ({ browser }) => {
+    const context = await browser.newContext({ baseURL: test.info().project.use.baseURL, locale: 'pt-BR', timezoneId: 'America/Sao_Paulo', viewport: { width: 1280, height: 720 } });
+    await prepararContexto(context);
+    const servidor = await instalarSupabaseFalso(context, documentosDeHoje({ quadro: 'missoes', colunas: [], listas: 'duas' }));
+    const page = await context.newPage();
+    const erros = vigiarErros(page);
+    await page.clock.install({ time: MANHA });
+    await page.goto('./painel.html?supabase=teste');
+    await preencherLogin(page, CONTAS.painel);
+    const listas = page.locator('.fids .fids-lista');
+    await expect(listas).toHaveCount(2);
+    await expect(page.locator('.fids .fids-listas')).toHaveClass(/\bduas\b/);
+    await expect(linhas(page).locator('.f-aluno')).toHaveText(['Maria S.', 'João']);
+    // A faixa da meteorologia, embaixo das duas
+    const [esquerda, direita, faixa] = await Promise.all([listas.nth(0).boundingBox(), listas.nth(1).boundingBox(), page.locator('.fids .fids-meteo').boundingBox()]);
+    expect(faixa.y).toBeGreaterThanOrEqual(Math.max(esquerda.y + esquerda.height, direita.y + direita.height) - 0.5);
+    expect(faixa.x).toBeLessThanOrEqual(esquerda.x);
+    expect(faixa.x + faixa.width).toBeGreaterThanOrEqual(direita.x + direita.width);
+    // O operador escolhe "Sempre uma lista": a TV segue na busca seguinte
+    const cadastro = structuredClone(servidor.banco.get('cadastro').conteudo);
+    cadastro.painel = { ...cadastro.painel, listas: 'uma' };
+    servidor.alterarPorOutraPessoa('cadastro', cadastro);
+    await page.clock.runFor(60_000);
+    await expect(listas).toHaveCount(1);
+    await expect(linhas(page).locator('.f-aluno')).toHaveText(['Maria S.', 'João']);
+    expect(erros).toEqual([]);
+    await context.close();
+  });
+
+  // Sem as listas no que painel_do_dia entrega (o banco ainda sem a migração, a configuração gravada antes das listas ou
+  // as listas fora do formato, que o servidor tira): o Automático, duas listas na TV Full HD
+  const SEM_AS_LISTAS = [
+    ['o banco ainda sem a migração', { painel: { quadro: 'missoes', colunas: [], listas: 'uma' }, antigo: true }],
+    ['a configuração gravada antes das listas', { painel: { quadro: 'missoes', colunas: [] } }],
+    ['as listas fora do formato', { painel: { quadro: 'missoes', colunas: [], listas: 'tres' } }]
+  ];
+  for (const [caso, { painel, antigo = false }] of SEM_AS_LISTAS) {
+    test(`com o servidor e ${caso}, a TV fica no Automático: duas listas na TV Full HD`, async ({ browser }) => {
+      const context = await browser.newContext({ baseURL: test.info().project.use.baseURL, locale: 'pt-BR', timezoneId: 'America/Sao_Paulo', viewport: { width: 1920, height: 1080 } });
+      await prepararContexto(context);
+      await context.clock.setFixedTime(MANHA);
+      // A configuração gravada como está (documentosAtuais a normalizaria, com as listas)
+      const docs = documentosDeHoje();
+      docs.documentos.cadastro = { ...docs.documentos.cadastro, painel };
+      const servidor = await instalarSupabaseFalso(context, { ...docs, painelDoDiaAntigo: antigo });
+      const page = await context.newPage();
+      const erros = vigiarErros(page);
+      const respostas = [];
+      page.on('response', r => { if (r.url().includes('/rpc/painel_do_dia')) respostas.push(r.json()); });
+      await page.goto('./painel.html?supabase=teste');
+      await preencherLogin(page, CONTAS.painel);
+      await expect(page.locator('.fids .fids-titulo')).toHaveText('Missões');
+      await expect(page.locator('.fids .fids-lista')).toHaveCount(2);
+      await expect(linhas(page).locator('.f-aluno')).toHaveText(['Maria S.', 'João']);
+      // O que chegou do servidor não tem as listas
+      const resposta = await respostas[0];
+      if (antigo) expect(resposta).not.toHaveProperty('painel');
+      else expect(resposta.painel).not.toHaveProperty('listas');
+      expect(servidor.banco.get('cadastro').conteudo.painel).toEqual(painel);
+      expect(erros).toEqual([]);
+      await context.close();
+    });
+  }
+
+  // O banco ainda sem a migração (painel_do_dia sem o campo "painel"): a TV mostra o padrão, como antes, mesmo com o
+  // painel configurado
+  test('com o servidor ainda sem a migração, a TV mostra o padrão (Missões, com as colunas do padrão)', async ({ browser }) => {
+    const context = await browser.newContext({ baseURL: test.info().project.use.baseURL, locale: 'pt-BR', timezoneId: 'America/Sao_Paulo' });
+    await prepararContexto(context);
+    // 08:00: os voos de hoje ainda estão no quadro Missões (o cancelado também)
+    await context.clock.setFixedTime(MANHA);
+    await instalarSupabaseFalso(context, { ...documentosDeHoje({ quadro: 'chegadas', colunas: TODAS_AS_COLUNAS }), painelDoDiaAntigo: true });
     const page = await context.newPage();
     const erros = vigiarErros(page);
     await page.goto('./painel.html?supabase=teste');
     await preencherLogin(page, CONTAS.painel);
     await expect(page.locator('.fids .fids-titulo')).toHaveText('Missões');
     await expect(page.locator('.fids thead th')).toHaveText(PADRAO);
+    await expect(linhas(page).locator('.f-aluno')).toHaveText(['Maria S.', 'João']);
     expect(erros).toEqual([]);
     await context.close();
   });
@@ -367,6 +490,21 @@ test.describe('TV da recepção', () => {
   });
 });
 
+// As linhas que cabem numa lista na tela toda: da altura entre o cabeçalho da tabela e a faixa da meteorologia, com a
+// folga de 4 px do painel (js/views/painel-aeroporto.js), e com as letras inteiras (sem o ajuste da largura, que é só da
+// página na tela: a página seguinte pode ter as letras inteiras, e as linhas são as mesmas em todas)
+async function linhasQueCabem(page) {
+  return page.evaluate(() => {
+    const quadro = document.querySelector('.fids');
+    const ajuste = quadro.style.getPropertyValue('--fids-ajuste');
+    quadro.style.removeProperty('--fids-ajuste');
+    const cabecalho = quadro.querySelector('.fids-tabela thead').getBoundingClientRect().bottom;
+    if (ajuste) quadro.style.setProperty('--fids-ajuste', ajuste);
+    const linha = quadro.querySelector('tbody tr').getBoundingClientRect().height;
+    return Math.floor((quadro.querySelector('.fids-meteo').getBoundingClientRect().top - cabecalho - 4) / linha);
+  });
+}
+
 // As medidas do quadro na tela: as listas na largura (sobra: o menor espaço livre de uma lista; negativo, ela não cabe),
 // a faixa do topo, a página, o fundo, as linhas fora da tela, as linhas e as páginas, o tamanho das letras e as listas
 async function medirOQuadro(page) {
@@ -384,6 +522,8 @@ async function medirOQuadro(page) {
       quadro: quadro.clientWidth,
       pagina: document.documentElement.scrollWidth,
       fundo: Math.max(...tabelas.map(t => t.getBoundingClientRect().bottom)),
+      faixa: quadro.querySelector('.fids-meteo').getBoundingClientRect().toJSON(),
+      linha: quadro.querySelector('tbody tr').getBoundingClientRect().height,
       foraDaTela: dados.filter(tr => tr.getBoundingClientRect().bottom > innerHeight || tr.getBoundingClientRect().right > innerWidth + 1).length,
       linhas: dados.length,
       porLista: tabelas.map(t => t.tBodies[0].rows.length),
