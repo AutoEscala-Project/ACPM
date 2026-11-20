@@ -1,9 +1,9 @@
-// Painel do dia no estilo dos aeroportos: um quadro de Partidas (todas as do dia) e um de Chegadas (as que
-// ainda não pousaram), que se alternam página a página, como nos painéis da INFRAERO. Servem à visão "Painel" da
-// Escala e à tela da recepção.
+// Painel do dia: o quadro de Missões (todos os voos do dia, na ordem do horário) e, no estilo dos aeroportos, um quadro
+// de Partidas (todas as do dia) e um de Chegadas (as que ainda não pousaram), que se alternam página a página, como nos
+// painéis da INFRAERO. Servem à visão "Painel" da Escala e à tela da recepção.
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { linhasDoQuadro, quadroDePartidas, quadroDeChegadas, minutoDoQuadro, paginar, telasDoPainel, EMBARQUE_ANTES_MIN } from '../../js/quadro.js';
+import { linhasDoQuadro, quadroDeMissoes, quadroDePartidas, quadroDeChegadas, minutoDoQuadro, paginar, telasDosQuadros, EMBARQUE_ANTES_MIN } from '../../js/quadro.js';
 
 const voo = (fKey, a, extra = {}) => ({
   fKey, classKey: fKey, isGround: false, a, b: a + 60, o: 0, r: 'PR-VOB', eqType: 'C152', s: `Aluno ${fKey.split('_')[0]}`,
@@ -98,6 +98,31 @@ describe('Quadro de partidas', () => {
   });
 });
 
+describe('Quadro de missões', () => {
+  it('todos os voos do dia (a turma de Ground numa linha), pelo horário programado; o atrasado com o previsto', () => {
+    const out = [voo('1000_0_1', 390), ...turma([1001, 1002], 500), voo('1003_0_1', 610, { r: 'PT-KIW', eqType: 'PA-34', mis: 'Multimotor', ins: 'Instrutor 02' })];
+    const missoes = quadroDeMissoes(linhasDoQuadro(out, { '1000_0_1': 'Atrasado' }, { '1000_0_1': { novoInicio: 640 } }));
+    assert.deepEqual(missoes.map(colunas), [
+      [390, 640, 'Voo Local', 'C152', 'PR-VOB', 'Aluno 1000', 'Instrutor 01', 'Atrasado'],
+      [500, null, 'Ground C152', 'Ground', 'Sala Ground', '2 alunos', 'Instrutor 01', 'Confirmado'],
+      [610, null, 'Multimotor', 'PA-34', 'PT-KIW', 'Aluno 1003', 'Instrutor 02', 'Confirmado']
+    ]);
+  });
+
+  it('sem partidas e chegadas: o voo que já pousou continua; o cancelado não entra; ninguém é chamado para o embarque', () => {
+    const out = [voo('1000_0_1', 390), voo('1001_0_1', 760), voo('1002_0_1', 820), voo('1003_0_1', 900)];
+    const fStatus = { '1000_0_1': 'Pousou', '1002_0_1': 'Cancelado' };
+    const missoes = quadroDeMissoes(linhasDoQuadro(out, fStatus, { '1002_0_1': { motivo: 'Meteorologia' } }));
+    assert.deepEqual(missoes.map(l => [l.aluno, l.observacao, l.classe]), [
+      ['Aluno 1000', 'Pousou', 'Pousou'], ['Aluno 1001', 'Confirmado', 'Confirmado'], ['Aluno 1003', 'Confirmado', 'Confirmado']
+    ]);
+    // A turma de Ground só sai quando todos os alunos estão cancelados
+    const turmaMeioCancelada = linhasDoQuadro(turma([1004, 1005]), { '1004_0_1': 'Cancelado' });
+    assert.deepEqual(quadroDeMissoes(turmaMeioCancelada).map(l => l.aluno), ['2 alunos']);
+    assert.deepEqual(quadroDeMissoes(linhasDoQuadro(turma([1004, 1005]), { '1004_0_1': 'Cancelado', '1005_0_1': 'Cancelado' })), []);
+  });
+});
+
 describe('Quadro de chegadas', () => {
   const out = [voo('1000_0_1', 390), voo('1001_0_1', 610), voo('1002_0_1', 690), voo('1003_0_1', 760), voo('1004_0_1', 820)];
   const fStatus = { '1001_0_1': 'Em Voo', '1003_0_1': 'Cancelado', '1004_0_1': 'Atrasado' };
@@ -146,11 +171,18 @@ describe('Páginas e alternância', () => {
   });
 
   it('as telas se alternam como no aeroporto: as páginas de partidas e depois as de chegadas', () => {
-    const telas = telasDoPainel([1, 2, 3], [4], 2);
+    const telas = telasDosQuadros([['partidas', [1, 2, 3]], ['chegadas', [4]]], 2);
     assert.deepEqual(telas.map(t => [t.quadro, t.pagina, t.paginas, t.linhas]), [
       ['partidas', 1, 2, [1, 2]], ['partidas', 2, 2, [3]], ['chegadas', 1, 1, [4]]
     ]);
-    assert.deepEqual(telasDoPainel([], [], 16).map(t => [t.quadro, t.linhas]), [['partidas', []], ['chegadas', []]]);
+    assert.deepEqual(telasDosQuadros([['partidas', []], ['chegadas', []]], 16).map(t => [t.quadro, t.linhas]), [['partidas', []], ['chegadas', []]]);
+  });
+
+  it('Missões é um quadro só, paginado como os outros', () => {
+    assert.deepEqual(telasDosQuadros([['missoes', [1, 2, 3]]], 2).map(t => [t.quadro, t.pagina, t.paginas, t.linhas]), [
+      ['missoes', 1, 2, [1, 2]], ['missoes', 2, 2, [3]]
+    ]);
+    assert.deepEqual(telasDosQuadros([['missoes', []]], 12).map(t => [t.quadro, t.linhas]), [['missoes', []]]);
   });
 });
 

@@ -2,6 +2,11 @@
 import { test, expect, abrir, abrirComExemplo, abrirEscala, irPara, lerEscala } from './fixtures.js';
 import { aluno, cenario, instrutor, GROUND_C152 } from '../helpers/montar.js';
 import { GLOSSARIO } from '../../js/glossario.js';
+import { COLUNAS_DO_PAINEL } from '../../js/config-do-painel.js';
+
+// O painel como era antes do quadro Missões: Partidas e Chegadas alternando, com todas as colunas (Previsto e Observação
+// também), na ordem do padrão
+const PAINEL_DO_AEROPORTO = { quadro: 'alternar', colunas: COLUNAS_DO_PAINEL.map(c => ({ id: c.id, on: true })) };
 
 test.describe('Tela da Escala', () => {
   test('a barra troca entre Lista, Por recurso, Por instrutor e Painel', async ({ page }) => {
@@ -302,7 +307,8 @@ test.describe('Mapa: o popup do voo', () => {
 });
 
 // O Painel no estilo dos aeroportos (os painéis da INFRAERO): Partidas (todas as do dia) e Chegadas (as que ainda não
-// pousaram) se alternam página a página, com o relógio no canto. Ground aparece sem os nomes dos alunos
+// pousaram) se alternam página a página, com o relógio no canto. Ground aparece sem os nomes dos alunos. Aqui, o painel
+// configurado para abrir em "Partidas e chegadas", com todas as colunas
 test.describe('Painel: partidas e chegadas como no aeroporto', () => {
   // 06:30 atrasado para 11:00; 10:10 confirmado; 11:30 cancelado; turma de Ground às 08:20
   const dia = () => ({
@@ -314,7 +320,8 @@ test.describe('Painel: partidas e chegadas como no aeroporto', () => {
     }),
     fObs: { '1000_0_1': { novoInicio: 660 }, '1002_0_1': { motivo: 'Meteorologia' } },
     // O teste é do quadro: os horários ficam onde a escala pôs (sem a compactação mudar)
-    criterios: { buracos: 'inva', horarios: 'fixos' }
+    criterios: { buracos: 'inva', horarios: 'fixos' },
+    painel: PAINEL_DO_AEROPORTO
   });
   const abrirPainel = async page => {
     await abrirEscala(page);
@@ -327,7 +334,7 @@ test.describe('Painel: partidas e chegadas como no aeroporto', () => {
   // O quadro só é refeito quando muda: na troca de página, na virada do minuto e com dados novos. Refazê-lo a cada
   // segundo reinicia a animação do embarque e tira o leitor de tela do lugar
   test('o quadro muda só com a página ou o minuto; Pausar para a troca e o pisca, e o quadro continua seguindo a hora', async ({ page }) => {
-    await abrir(page, { estado: cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, { mis: 'Multimotor', eq: 'PA-34', p1: 750, p2: -1 })] }) });
+    await abrir(page, { estado: { ...cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, { mis: 'Multimotor', eq: 'PA-34', p1: 750, p2: -1 })] }), painel: PAINEL_DO_AEROPORTO } });
     // A data aberta (amanhã, 11/11) vira hoje, ao meio-dia: o PA-34 das 12:30 está em embarque
     await page.clock.install({ time: new Date('2026-11-11T12:00:00-03:00') });
     await abrirPainel(page);
@@ -421,7 +428,7 @@ test.describe('Painel: partidas e chegadas como no aeroporto', () => {
     await page.locator('#out [data-fids="partidas"]').click();
     await expect(titulo(page)).toHaveText('Partidas');
     await expect(page.locator('#out .fids .fids-relogio b')).toHaveText('12:00');
-    await expect(page.locator('#out .fids thead th')).toHaveText(['Horário', 'Missão', 'Modelo', 'Aeronave', 'Aluno', 'Instrutor', 'Previsto', 'Observação']);
+    await expect(page.locator('#out .fids thead th')).toHaveText(['Horário', 'Aeronave', 'Modelo', 'Aluno', 'Instrutor', 'Missão', 'Previsto', 'Observação']);
     await expect(coluna(page, '.f-hora')).toHaveText(['08:20', '10:10', '06:30', '11:30']);
     await expect(coluna(page, '.f-prev')).toHaveText(['', '', '11:00', '']);
     await expect(coluna(page, '.f-missao')).toHaveText(['Ground C152', 'Voo Local', 'Voo Local', 'Voo Local']);

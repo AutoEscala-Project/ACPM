@@ -12,6 +12,7 @@ import { normalizarLimites } from './limites.js';
 import { normalizarFixos, normalizarAprovacao } from './fixos.js';
 import { CRITERIOS_PADRAO, normalizarCriterios } from './criterios.js';
 import { normalizarCursos } from './cursos.js';
+import { normalizarPainel } from './config-do-painel.js';
 import { dataIsoValida } from './format.js';
 
 // Os campos do pedido do dia (o pedido principal é o próprio aluno: o resto dele é do cadastro). jan: disponibilidade do
@@ -47,7 +48,9 @@ export function separar(estado) {
       ...(Array.isArray(estado.frota) ? { frota: estado.frota.map(f => ({ ...f })) } : {}),
       ...(estado.horarios ? { horarios: structuredClone(estado.horarios) } : {}),
       ...(estado.limites ? { limites: { ...estado.limites } } : {}),
-      ...(estado.cursos ? { cursos: structuredClone(estado.cursos) } : {})
+      ...(estado.cursos ? { cursos: structuredClone(estado.cursos) } : {}),
+      // A configuração do painel (o quadro e as colunas), só depois de mudada: sem ela, vale o padrão
+      ...(estado.painel ? { painel: normalizarPainel(estado.painel) } : {})
     },
     dia: {
       win: [...estado.win],
@@ -82,6 +85,7 @@ export function juntar(cadastro, dia = diaPadrao()) {
     ...(cadastro.horarios ? { horarios: normalizarHorarios(cadastro.horarios) } : {}),
     ...(cadastro.limites ? { limites: normalizarLimites(cadastro.limites) } : {}),
     ...(cadastro.cursos ? { cursos: normalizarCursos(cadastro.cursos) } : {}),
+    ...(cadastro.painel ? { painel: normalizarPainel(cadastro.painel) } : {}),
     win: Array.isArray(dia.win) ? [...dia.win] : WIN.map(() => true),
     av: { ...avDaFrota(frota), ...(dia.av || {}) },
     nid: cadastro.nid,

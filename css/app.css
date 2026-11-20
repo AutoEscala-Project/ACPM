@@ -417,8 +417,10 @@ table.fids-tabela { width: 100%; min-width: 860px; border-collapse: collapse; fo
 .fids-nada td { color: var(--fids-claro); font-weight: 600; }
 .fids-relogio .fids-aviso { color: var(--fids-ambar); }
 .fids-relogio .fids-aviso:empty { display: none; }
-/* Na tela toda (tela cheia na Escala ou a TV da recepção, painel.html): letras e linhas crescem com a tela */
-.fids:fullscreen, .fids.inteiro { --fids-fs: 2.6vh; --fids-linha: 5.4vh; overflow: hidden; border: 0; border-radius: 0; }
+/* Na tela toda (tela cheia na Escala ou a TV da recepção, painel.html): letras e linhas crescem com a tela. Quando a
+   tabela não cabe na largura (muitas colunas, nomes longos, a tela 4:3), o painel diminui as letras (--fids-ajuste,
+   js/views/painel-aeroporto.js) */
+.fids:fullscreen, .fids.inteiro { --fids-fs: calc(2.6vh * var(--fids-ajuste, 1)); --fids-linha: 5.4vh; overflow: hidden; border: 0; border-radius: 0; }
 .fids:fullscreen .fids-topo, .fids:fullscreen table.fids-tabela, .fids.inteiro .fids-topo, .fids.inteiro table.fids-tabela { min-width: 0; }
 .fids.inteiro { position: fixed; inset: 0; box-shadow: none; }
 /* A hora da última atualização da escala: discreta, com um relógio, ao lado do título */
@@ -479,6 +481,8 @@ table.frota .acoes-frota { white-space: nowrap; text-align: right; }
 @media (max-width: 640px) {
   .seg { width: 100%; }
   .seg button { flex: 1; justify-content: center; padding: 6px 4px; font-size: 13.5px; }
+  /* Os quadros do painel: dois por linha */
+  .fids-controles .seg { display: grid; grid-template-columns: 1fr 1fr; }
   .seg .ico { display: none; }
   #s-esc .flt-rotulo, #flt-esc-q { flex: 1 1 140px; min-width: 0; }
   .flt-rotulo select { flex: 1; min-width: 0; }
@@ -575,6 +579,22 @@ dialog.dlg .campo { display: flex; flex-direction: column; gap: 4px; margin: 10p
 dialog.dlg .campo[hidden] { display: none; }
 dialog.dlg .campo small { font-weight: 400; }
 dialog.dlg .dlg-acoes, .form-dados .dlg-acoes { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+/* Configurar painel (js/views/config-do-painel.js): o quadro com que o painel abre e as colunas, numeradas na ordem do
+   painel, cada uma com ↑ e ↓; rola por dentro quando não cabe na altura */
+dialog.dlg-painel { width: min(460px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); overflow-y: auto; }
+dialog.dlg-painel .pn-grupo { margin: 10px 0; padding: 6px 12px 8px; border: 1px solid var(--ln); border-radius: 8px; min-width: 0; }
+dialog.dlg-painel .pn-grupo legend { padding: 0 4px; font-weight: 600; }
+dialog.dlg-painel .pn-grupo > .chk { display: flex; padding: 3px 0; }
+.pn-colunas { margin: 0; padding: 0; list-style: none; counter-reset: pn-coluna; }
+.pn-coluna { display: flex; align-items: center; gap: 6px; padding: 3px 0; border-bottom: 1px solid var(--ln); counter-increment: pn-coluna; }
+.pn-coluna:last-child { border-bottom: 0; }
+.pn-coluna::before { content: counter(pn-coluna) "."; min-width: 1.6em; color: var(--mu); font-variant-numeric: tabular-nums; }
+.pn-coluna .chk { flex: 1; min-width: 0; }
+dialog.dlg-painel .chk input { flex: none; }
+.pn-coluna.desligada .chk { color: var(--mu); }
+.pn-mover { padding: 4px 8px; }
+.pn-mover:disabled { opacity: .45; cursor: default; }
+dialog.dlg-painel .btn.quiet:disabled { color: var(--mu); cursor: default; }
 /* Agendar um voo na Escala (js/views/agendamento.js): mais largo, rola por dentro quando não cabe na altura */
 dialog.dlg-agendar { width: min(560px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); overflow-y: auto; }
 dialog.dlg-agendar .campos-agendar { display: flex; flex-direction: column; }

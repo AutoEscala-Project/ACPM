@@ -1,8 +1,10 @@
-// TV da recepção: o painel de partidas e chegadas de hoje na tela toda (js/views/painel-aeroporto.js). No modo
-// compartilhado, a TV entra com a conta dela (perfil "painel", que só vê o quadro, pela função painel_do_dia) e busca o
-// quadro a cada minuto; neste navegador (sem servidor), lê o dia gravado aqui. Recarrega toda madrugada, para pegar as
-// versões novas do app, e mantém a tela acesa. A TV fica numa tela pública: ela só aceita a conta da TV
-// e guarda a sessão numa chave só dela.
+// TV da recepção: o painel de hoje na tela toda (js/views/painel-aeroporto.js), no quadro e com as colunas da
+// configuração do painel. No modo compartilhado, a TV entra com a conta dela (perfil "painel", que só vê o quadro, pela
+// função painel_do_dia) e busca o quadro a cada minuto; neste navegador (sem servidor), lê o dia e a configuração
+// gravados aqui. A função painel_do_dia ainda não entrega a configuração (o perfil da TV não lê o cadastro): sem ela, a
+// TV mostra o padrão (Missões, com as colunas do padrão); quando a função passar a entregar o campo "painel", a TV o
+// segue sem mudar aqui. Recarrega toda madrugada, para pegar as versões novas do app, e mantém a tela acesa. A TV fica
+// numa tela pública: ela só aceita a conta da TV e guarda a sessão numa chave só dela.
 import { projetoSupabase, chaveDaSessao } from './config-supabase.js';
 import { soPainel } from './perfis.js';
 import { backendLocal } from './backends/local.js';
@@ -12,7 +14,7 @@ import { hm, hojeISO, minutoDoDia } from './format.js';
 
 const BUSCA_MS = 60000;
 const SEM_CONEXAO_MS = 3 * 60000;
-let quadro = { data: hojeISO(), voos: null, fStatus: {}, fObs: {} };
+let quadro = { data: hojeISO(), voos: null, fStatus: {}, fObs: {}, painel: null };
 let ultimaBusca = null;
 
 const horaDe = instante => hm(minutoDoDia(new Date(instante)));
@@ -20,6 +22,7 @@ const fonte = () => ({
   linhas: quadro.voos ? linhasDoQuadro(quadro.voos, quadro.fStatus, quadro.fObs) : [],
   data: quadro.data,
   semEscala: !quadro.voos,
+  painel: quadro.painel,
   aviso: ultimaBusca !== null && Date.now() - ultimaBusca > SEM_CONEXAO_MS ? `Sem conexão desde ${horaDe(ultimaBusca)}` : ''
 });
 
@@ -27,7 +30,7 @@ const fonte = () => ({
 async function atualizar(buscar) {
   try {
     const novo = await buscar();
-    quadro = { data: novo.data || hojeISO(), voos: novo.voos, fStatus: novo.fStatus || {}, fObs: novo.fObs || {} };
+    quadro = { data: novo.data || hojeISO(), voos: novo.voos, fStatus: novo.fStatus || {}, fObs: novo.fObs || {}, painel: novo.painel || null };
     ultimaBusca = Date.now();
   } catch {
     // o aviso aparece depois de 3 minutos sem resposta
@@ -35,8 +38,12 @@ async function atualizar(buscar) {
   atualizarPainel();
 }
 
-// O dia gravado neste navegador (modo sem servidor), como o servidor entregaria
-const buscarNesteNavegador = async () => ({ data: hojeISO(), ...quadroDoDia(await backendLocal.ler(`dia:${hojeISO()}`)) });
+// O dia gravado neste navegador (modo sem servidor), como o servidor entregaria, e a configuração do painel do cadastro
+// (o painel a normaliza)
+const buscarNesteNavegador = async () => {
+  const cadastro = await backendLocal.ler('cadastro');
+  return { data: hojeISO(), ...quadroDoDia(await backendLocal.ler(`dia:${hojeISO()}`)), painel: (cadastro && cadastro.painel) || null };
+};
 
 // O perfil da conta conectada: null sem perfil, undefined quando não deu para saber (sem conexão)
 async function perfilDaConta(cliente) {

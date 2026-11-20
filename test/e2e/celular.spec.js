@@ -401,4 +401,38 @@ test.describe('Celular', () => {
     }
     await expect(cartao.locator('.c-instr')).toContainText('Instrutor 13');
   });
+  // O painel no celular (390 e 320 px): os quatro quadros dois por linha, o quadro rola dentro da moldura, e o diálogo
+  // "Configurar painel" cabe na tela, com alvos de 44 px
+  test('o painel e "Configurar painel" cabem no celular (390 e 320 px), com alvos de 44 px', async ({ page }) => {
+    await abrirComExemplo(page);
+    await abrirEscala(page);
+    await page.locator('#s-esc [data-tl="painel"]').click();
+    for (const largura of [390, 320]) {
+      await page.setViewportSize({ width: largura, height: 700 });
+      await expect(page.locator('#out .fids')).toBeVisible();
+      expect(await larguraDaPagina(page), `${largura}: painel`).toBeLessThanOrEqual(largura);
+      expect(await alvosPequenos(page), `${largura}: painel`).toEqual([]);
+      const quadros = await page.locator('#out .seg [data-fids]').evaluateAll(bs => bs.map(b => b.getBoundingClientRect()).map(r => [r.x, r.right]));
+      for (const [x, direita] of quadros) {
+        expect(x, `${largura}: quadro na tela`).toBeGreaterThanOrEqual(0);
+        expect(direita, `${largura}: quadro na tela`).toBeLessThanOrEqual(largura);
+      }
+      await page.locator('#out [data-fids="configurar"]').click();
+      const dialogo = page.locator('#dlg-painel');
+      await expect(dialogo).toBeVisible();
+      const caixa = await dialogo.boundingBox();
+      expect(caixa.x, `${largura}: diálogo`).toBeGreaterThanOrEqual(0);
+      expect(caixa.x + caixa.width, `${largura}: diálogo`).toBeLessThanOrEqual(largura);
+      expect(await dialogo.evaluate(d => d.scrollWidth <= d.clientWidth), `${largura}: o diálogo não rola para o lado`).toBe(true);
+      expect(await larguraDaPagina(page), `${largura}: com o diálogo`).toBeLessThanOrEqual(largura);
+      const pequenos = await dialogo.evaluate(d => [...d.querySelectorAll('button, input')].map(el => {
+        const alvo = el.matches('input') ? el.closest('label') : el;
+        const { width, height } = alvo.getBoundingClientRect();
+        return width < 44 || height < 44 ? `${el.getAttribute('aria-label') || alvo.textContent.trim()} ${Math.round(width)}×${Math.round(height)}` : null;
+      }).filter(Boolean));
+      expect(pequenos, `${largura}: alvos do diálogo`).toEqual([]);
+      await page.keyboard.press('Escape');
+      await expect(dialogo).toBeHidden();
+    }
+  });
 });

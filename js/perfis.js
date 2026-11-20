@@ -6,7 +6,7 @@ export const PERFIS = Object.keys(ROTULOS);
 export const operaEscala = perfil => perfil === 'operador' || perfil === 'administrador';
 export const registraNaAgenda = perfil => operaEscala(perfil) || perfil === 'secretaria';
 export const gerenciaContas = perfil => perfil === 'administrador';
-// A TV da recepção só vê o painel de partidas e chegadas (painel.html)
+// A TV da recepção só vê o painel do dia (painel.html)
 export const soPainel = perfil => perfil === 'painel';
 // Dados pessoais de alunos e instrutores (CPF, CANAC, nascimento, celular e e-mail): operadores, administradores e a secretaria
 export const veDadosPessoais = perfil => operaEscala(perfil) || perfil === 'secretaria';

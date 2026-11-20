@@ -1,7 +1,9 @@
-// Painel do dia no estilo dos aeroportos: um quadro de Partidas (todas as do dia) e um de Chegadas (as que
-// ainda não pousaram ou terminaram), que se alternam página a página, como nos painéis da INFRAERO. Os dois seguem o
-// horário efetivo (o atrasado no previsto), mostram o horário programado e, no atraso, o previsto. A turma de Ground é
-// uma linha só, sem os nomes dos alunos. Servem à visão "Painel" da Escala e à tela da recepção.
+// Painel do dia: o quadro de Missões (todos os voos do dia, na ordem do horário, sem partidas e chegadas: sem o status
+// ao vivo, separar os dois não ajuda) e, no estilo dos aeroportos, um quadro de Partidas (todas as do dia) e um de
+// Chegadas (as que ainda não pousaram ou terminaram), que se alternam página a página, como nos painéis da INFRAERO.
+// Partidas e Chegadas seguem o horário efetivo (o atrasado no previsto); os três mostram o horário programado e, no
+// atraso, o previsto. A turma de Ground é uma linha só, sem os nomes dos alunos. Servem à visão "Painel" da Escala e à
+// tela da recepção.
 import { GROUND_EQ_TYPE, MINUTOS_DO_DIA } from './config.js';
 import { nomeDoRecurso } from './categorias.js';
 import { isGroundMission } from './rules.js';
@@ -56,11 +58,11 @@ const AINDA_NO_CHAO = ['Pendente', 'Confirmado', 'Atrasado'];
 const emEmbarque = (l, agora) => !l.ground && !/^Sim\./.test(l.modelo) && AINDA_NO_CHAO.includes(l.status)
   && Number.isFinite(agora) && agora >= l.inicio - EMBARQUE_ANTES_MIN && agora < l.inicio;
 
-// A linha como aparece no quadro: o horário programado (da decolagem nas partidas, do pouso nas chegadas), o previsto
-// quando atrasado e a observação (o status; o cancelado com o motivo; nas partidas, o embarque)
+// A linha como aparece no quadro: o horário programado (da decolagem nas partidas e nas missões, do pouso nas chegadas),
+// o previsto quando atrasado e a observação (o status; o cancelado com o motivo; nas partidas, o embarque)
 function linhaDoAeroporto(l, momento, agora) {
-  const efetivo = momento === 'partida' ? l.inicio : l.fim;
-  const programado = l.original ? (momento === 'partida' ? l.original.inicio : l.original.fim) : efetivo;
+  const efetivo = momento === 'chegada' ? l.fim : l.inicio;
+  const programado = l.original ? (momento === 'chegada' ? l.original.fim : l.original.inicio) : efetivo;
   const n = l.alunos.length;
   return {
     chave: l.chave,
@@ -79,6 +81,12 @@ function linhaDoAeroporto(l, momento, agora) {
 }
 
 const peloEfetivo = (x, y) => x.efetivo - y.efetivo;
+
+// Missões: todos os voos do dia, na ordem do horário programado (o que o quadro mostra), sem a chamada do embarque. O
+// cancelado não entra: sem a coluna Observação (desligada no padrão), ele pareceria um voo de pé
+export const quadroDeMissoes = linhas => linhas.filter(l => l.status !== 'Cancelado')
+  .map(l => linhaDoAeroporto(l, 'missao'))
+  .sort((x, y) => x.horario - y.horario || peloEfetivo(x, y));
 
 // Partidas: todas as do dia (agora: o minuto do quadro, para o embarque)
 export const quadroDePartidas = (linhas, agora) => linhas.map(l => linhaDoAeroporto(l, 'partida', agora)).sort(peloEfetivo);
@@ -99,9 +107,10 @@ export function paginar(lista, porPagina) {
   return paginas.length ? paginas : [[]];
 }
 
-// As telas na ordem em que se alternam, como no aeroporto: as páginas de partidas e depois as de chegadas
-export function telasDoPainel(partidas, chegadas, porPagina) {
-  return [['partidas', partidas], ['chegadas', chegadas]].flatMap(([quadro, lista]) => {
+// As telas na ordem em que se alternam: as páginas de cada quadro ([nome, linhas]), um quadro depois do outro (como no
+// aeroporto, as páginas de partidas e depois as de chegadas)
+export function telasDosQuadros(quadros, porPagina) {
+  return quadros.flatMap(([quadro, lista]) => {
     const paginas = paginar(lista, porPagina);
     return paginas.map((linhas, i) => ({ quadro, pagina: i + 1, paginas: paginas.length, linhas }));
   });

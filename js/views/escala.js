@@ -9,6 +9,7 @@ import { textoDoDetalhe, classeDoStatus, rotuloDoStatus, STATUS_COM_DETALHE } fr
 import { validarReversao } from '../reversoes.js';
 import { linhasDoQuadro, quadroDoDia } from '../quadro.js';
 import { painelDaEscala } from './painel-aeroporto.js';
+import { botaoDeDica } from '../dicas.js';
 import { atualizarPainelDeReparo } from './reparo.js';
 import { atualizarAgendamento } from './agendamento.js';
 import { resultadoNaEscala } from './etapas.js';
@@ -551,11 +552,12 @@ function tabela(voos, al) {
   return h + '</tbody></table></div>';
 }
 
-// Painel: partidas e chegadas no estilo dos aeroportos, com os voos dos filtros (js/views/painel-aeroporto.js). Feito para
-// um monitor ou uma TV: as mesmas reduções da TV da recepção (o aluno abreviado e só a categoria do motivo)
+// Painel: as missões do dia ou, no estilo dos aeroportos, partidas e chegadas, com os voos dos filtros e a configuração
+// do painel (js/views/painel-aeroporto.js). Feito para um monitor ou uma TV: as mesmas reduções da TV da recepção (o
+// aluno abreviado e só a categoria do motivo)
 function painelDoDia(voos) {
   const quadro = quadroDoDia({ resultado: { out: voos }, fStatus: S.fStatus, fObs: S.fObs });
-  return `<div class="painel-dia">${painelDaEscala(() => ({ linhas: linhasDoQuadro(quadro.voos || [], quadro.fStatus, quadro.fObs), data: DATA }))}</div>`;
+  return `<div class="painel-dia">${painelDaEscala(() => ({ linhas: linhasDoQuadro(quadro.voos || [], quadro.fStatus, quadro.fObs), data: DATA, painel: S.painel }), botaoDeDica('painel-missoes', 'o quadro Missões'))}</div>`;
 }
 
 // Os filtros da Escala: a categoria (o tipo de cada recurso vem da escala, da frota ou é a sala de Ground), o recurso (só
