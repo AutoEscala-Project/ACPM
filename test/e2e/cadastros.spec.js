@@ -1,5 +1,8 @@
-import { test, expect, abrir, abrirSintetico, abrirComExemplo, irPara, irParaVista, abrirEscala, lerEscala, filtrarHabilitacoes, confirmar, AGORA } from './fixtures.js';
+import { test, expect, abrir, abrirSintetico, abrirComExemplo, irPara, irParaVista, abrirEscala, lerEscala, filtrarHabilitacoes, filtrarCursos, confirmar, AGORA, AMANHA } from './fixtures.js';
+import { documentosAtuais } from './supabase-falso.js';
 import { aluno, apenas, cenario, instrutor } from '../helpers/montar.js';
+import { cursosIniciais } from '../../js/programa.js';
+import { GLOSSARIO } from '../../js/glossario.js';
 
 test.describe('Recursos', () => {
   test('estado inicial: 9 janelas, 26 recursos, nenhum instrutor e nenhum aluno', async ({ page }) => {
@@ -857,7 +860,7 @@ test.describe('Alunos', () => {
   test('cadastra, bloqueia instrutor e exclui aluno com confirmação', async ({ page }) => {
     await abrirSintetico(page);
     await irPara(page, 'alu');
-    await expect(page.locator('#s-alu thead th')).toHaveText(['Nome', 'CANAC', 'Curso', 'Peso (kg)', 'Priorizar com', 'Não escalar com', '']);
+    await expect(page.locator('#s-alu thead th')).toHaveText(['Nome', 'CANAC', 'Peso (kg)', 'Curso', 'Priorizar com', 'Não escalar com', '']);
     await page.locator('[data-act="adds"]').click();
     const linha = page.locator('#alu .cd');
     await expect(linha).toHaveCount(1);
@@ -997,13 +1000,13 @@ test.describe('Alunos', () => {
     await expect.poll(nomesAVista).toEqual(['João Silva']);
 
     // O aluno renomeado na tabela, pelo teclado: a linha continua à vista, mesmo fora da busca, e o Tab leva ao campo
-    // seguinte dela (o foco não some com a linha). Mudada a busca, ela vale para o nome novo (fora dela, a linha sai, e a
-    // tabela diz por quê)
+    // seguinte dela, o peso (o foco não some com a linha). Mudada a busca, ela vale para o nome novo (fora dela, a linha
+    // sai, e a tabela diz por quê)
     const joao = page.locator('#alu tr.cd[data-id="1000"] .nm');
     await joao.fill('Joaquim Silva');
     await page.keyboard.press('Tab');
     await expect(page.locator('#audit-log-list')).toContainText('Aluno: João Silva → Joaquim Silva');
-    await expect(page.locator('#alu tr.cd[data-id="1000"] [data-f="curso"]')).toBeFocused();
+    await expect(page.locator('#alu tr.cd[data-id="1000"] [data-f="kg"]')).toBeFocused();
     await expect.poll(nomesAVista).toEqual(['Joaquim Silva']);
     await expect(contagem).toHaveText('1 de 3 alunos');
     await busca.fill('joao');
@@ -1038,6 +1041,230 @@ test.describe('Alunos', () => {
     await expect(page.locator('#alu tr.cd:visible')).toHaveCount(4);
     await expect(page.locator('#alu tr.sem-resultado')).toHaveCount(0);
     await expect(contagem).toHaveText('4 alunos');
+  });
+});
+
+// O filtro dos cursos de Alunos (o filtro de vários valores, como o das habilitações em Instrutores, com a regra "alguma":
+// um curso só por aluno), a barra no lugar da de Instrutores e o link para a Demanda
+test.describe('Alunos: o filtro dos cursos e a barra dos Instrutores', () => {
+  // O cadastro e o dia, com os cursos como as tabelas dos cursos os guardam, neste navegador
+  async function abrirComCursos(page, { estado, cursos = cursosIniciais() }) {
+    const { documentos: { cadastro }, dias } = documentosAtuais(estado, AMANHA);
+    const docs = { acpm4_cadastro: cadastro, [`acpm4_dia_${AMANHA}`]: dias[AMANHA], acpm4_cursos: { cursos, alteracoes: [] } };
+    await page.addInitScript(json => {
+      if (localStorage.getItem('acpm4_cadastro')) return;
+      for (const [chave, valor] of Object.entries(JSON.parse(json))) localStorage.setItem(chave, JSON.stringify(valor));
+    }, JSON.stringify(docs));
+    await page.goto('./');
+    await expect(page.locator('#wins input[data-a="win"]').first()).toBeAttached();
+  }
+  const nomesAVista = page => page.locator('#alu tr.cd:visible .nm').evaluateAll(campos => campos.map(c => c.value));
+
+  // Na mesma ordem e no mesmo lugar: a busca, o filtro, quantos aparecem e "+ Novo", juntos e alinhados à direita como em
+  // Instrutores (lá, as vistas ficam à esquerda), numa linha só; a busca da mesma largura
+  test('a barra de Alunos é a de Instrutores: a busca, o filtro, quantos aparecem e "+ Novo", no mesmo lugar', async ({ page }) => {
+    await abrir(page, { estado: cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000)] }) });
+    const barra = (aba, novo) => page.locator(`#s-${aba} .bar`).evaluate((bar, novo) => {
+      const caixas = [':scope > input[type="search"]', ':scope > .filtro-botao', ':scope > .contagem', `:scope > [data-act="${novo}"]`]
+        .map(seletor => bar.querySelector(seletor).getBoundingClientRect());
+      return {
+        // O espaço entre cada um e o seguinte, e o meio de cada um na altura
+        espacos: caixas.slice(1).map((c, i) => Math.round(c.left - caixas[i].right)),
+        numaLinha: caixas.every(c => Math.abs((c.top + c.bottom) / 2 - (caixas[0].top + caixas[0].bottom) / 2) <= 2),
+        direita: Math.round(caixas[3].right), busca: Math.round(caixas[0].width)
+      };
+    }, novo);
+    await irPara(page, 'ins');
+    const ins = await barra('ins', 'addi');
+    await irPara(page, 'alu');
+    const alu = await barra('alu', 'adds');
+    expect(alu.espacos).toEqual([8, 8, 8]);
+    expect(alu.numaLinha).toBe(true);
+    expect(alu).toEqual(ins);
+  });
+
+  test('o filtro dos cursos: os ativos, o encerrado e o desconhecido marcados e "Sem curso"; aparece quem está em algum dos marcados', async ({ page }) => {
+    const estado = cenario({
+      ins: [instrutor(1, 9)],
+      stu: [aluno(1000, {}, { nm: 'Ana', curso: 'PP' }), aluno(1001, {}, { nm: 'Bruno', curso: 'PC' }), aluno(1002, {}, { nm: 'Carla', curso: 'ZZ9' }),
+        aluno(1003, {}, { nm: 'Davi' }), aluno(1004, {}, { nm: 'Elisa', curso: 'INVA' })]
+    });
+    // O PC encerrado na aba Cursos
+    await abrirComCursos(page, { estado, cursos: cursosIniciais().map(c => (c.sigla === 'PC' ? { ...c, ativo: false } : c)) });
+    await irPara(page, 'alu');
+    const botao = page.locator('#flt-alu-cur'), painel = page.locator('#flt-alu-cur-painel'), contagem = page.locator('#alu-contagem');
+    const caixa = valor => painel.locator(`input[data-valor="${valor}"]`);
+    await expect(botao).toHaveText('Todos os cursos');
+    await expect(botao).toHaveAttribute('aria-expanded', 'false');
+    await expect(botao).toHaveAttribute('aria-controls', 'flt-alu-cur-painel');
+    await botao.click();
+    await expect(painel).toBeVisible();
+    await expect(painel).toHaveAccessibleName('Filtrar por curso');
+    // A regra dita no painel, com o "?" do glossário
+    await expect(painel.locator('.filtro-regra')).toHaveText('Mostra os alunos de algum dos cursos marcados.');
+    await expect(painel.locator('.filtro-regra [data-dica="filtro-dos-cursos"]')).toHaveAccessibleName('O que é Filtro dos cursos?');
+    await expect(painel.locator('.filtro-regra [data-dica="filtro-dos-cursos"]')).toHaveAccessibleDescription(GLOSSARIO['filtro-dos-cursos'].texto);
+    // Os ativos na ordem da aba Cursos, o encerrado e o desconhecido marcados, e "Sem curso"
+    await expect(painel.locator('legend')).toHaveText(['Cursos']);
+    await expect(painel.locator('label')).toHaveText(['PP · Piloto Privado', 'INVA · Instrutor de Voo', 'PC · Piloto Comercial (encerrado)', 'ZZ9 (curso desconhecido)', 'Sem curso']);
+    // Cada linha diz o curso do aluno
+    await expect(page.locator('#alu tr.cd[data-id="1000"]')).toHaveAttribute('data-curso', 'PP');
+    await expect(page.locator('#alu tr.cd[data-id="1003"]')).toHaveAttribute('data-curso', '');
+
+    // Um curso: os alunos dele
+    await caixa('PP').check();
+    await expect.poll(() => nomesAVista(page)).toEqual(['Ana']);
+    await expect(botao).toHaveText('Curso: PP');
+    await expect(botao).toHaveClass(/\bcom-marcas\b/);
+    await expect(contagem).toHaveText('1 de 5 alunos');
+    // Mais um, o encerrado: os de um ou do outro
+    await caixa('PC').check();
+    await expect.poll(() => nomesAVista(page)).toEqual(['Ana', 'Bruno']);
+    await expect(botao).toHaveText('Curso: PP ou PC');
+    await expect(contagem).toHaveText('2 de 5 alunos');
+    // "Sem curso": quem não tem
+    await caixa('sem-curso').check();
+    await expect.poll(() => nomesAVista(page)).toEqual(['Ana', 'Bruno', 'Davi']);
+    await expect(botao).toHaveText('Curso: PP ou PC ou sem curso');
+    // Com a busca, os dois valem juntos
+    await page.locator('[data-flt="alu"]').fill('bru');
+    await expect.poll(() => nomesAVista(page)).toEqual(['Bruno']);
+    await expect(contagem).toHaveText('1 de 5 alunos');
+    await page.locator('[data-flt="alu"]').fill('');
+    // "Limpar" desmarca todos
+    await painel.getByRole('button', { name: 'Limpar' }).click();
+    await expect.poll(() => nomesAVista(page)).toEqual(['Ana', 'Bruno', 'Carla', 'Davi', 'Elisa']);
+    await expect(botao).toHaveText('Todos os cursos');
+    await expect(contagem).toHaveText('5 alunos');
+    // O curso desconhecido também filtra. O Esc fecha o painel (o foco volta ao botão), e o filtro continua
+    await caixa('ZZ9').check();
+    await expect.poll(() => nomesAVista(page)).toEqual(['Carla']);
+    await page.keyboard.press('Escape');
+    await expect(painel).toBeHidden();
+    await expect(botao).toBeFocused();
+    await expect(botao).toHaveText('Curso: ZZ9');
+    // Nenhum com a busca e o curso: "Limpar filtros" limpa também as marcas
+    await page.locator('[data-flt="alu"]').fill('ana');
+    await expect(page.locator('#alu tr.sem-resultado')).toBeVisible();
+    await expect(contagem).toHaveText('0 de 5 alunos');
+    await page.locator('#limpar-filtros-alu').click();
+    await expect(page.locator('[data-flt="alu"]')).toHaveValue('');
+    await expect(botao).toHaveText('Todos os cursos');
+    await expect(painel.locator('input[data-filtro]:checked')).toHaveCount(0);
+    await expect(page.locator('#alu tr.cd:visible')).toHaveCount(5);
+    await expect(contagem).toHaveText('5 alunos');
+  });
+
+  // As marcas duram aos redesenhos (outra data, + Novo aluno); o aluno com o curso mudado na linha continua à vista (é a
+  // linha alterada agora), até os filtros mudarem. As opções acompanham os programas (o curso criado e o encerrado na aba
+  // Cursos) e os cursos dos alunos: o desconhecido de que o último aluno saiu some, e a marca dele sai do filtro
+  test('o filtro dos cursos dura aos redesenhos e acompanha os programas e o curso de cada aluno', async ({ page }) => {
+    const estado = { ...cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, {}, { nm: 'Ana', curso: 'PP' }), aluno(1001, {}, { nm: 'Bruno' }), aluno(1002, {}, { nm: 'Carla', curso: 'ZZ9' })] }), nid: 1003 };
+    await abrirComCursos(page, { estado });
+    await irPara(page, 'alu');
+    const botao = page.locator('#flt-alu-cur'), painel = page.locator('#flt-alu-cur-painel'), contagem = page.locator('#alu-contagem');
+    await filtrarCursos(page, 'alu', ['PP']);
+    await expect.poll(() => nomesAVista(page)).toEqual(['Ana']);
+    // Outra data: as linhas são refeitas (as de antes ficam marcadas), e o filtro continua
+    await page.locator('#alu tr').evaluateAll(linhas => linhas.forEach(l => { l.dataset.antes = ''; }));
+    await page.locator('#dt-prox').click();
+    await expect(page.locator('#dt')).toHaveValue('2026-11-12');
+    await expect(page.locator('#alu tr[data-antes]')).toHaveCount(0);
+    await expect.poll(() => nomesAVista(page)).toEqual(['Ana']);
+    await expect(botao).toHaveText('Curso: PP');
+    await expect(contagem).toHaveText('1 de 3 alunos');
+    // O aluno novo aparece (é na linha dele que se digita o nome); os outros continuam filtrados
+    await page.locator('[data-act="adds"]').click();
+    await expect.poll(() => nomesAVista(page)).toEqual(['Ana', 'Novo aluno']);
+    await expect(contagem).toHaveText('2 de 4 alunos');
+    // O curso mudado na linha: a Ana passa para o INVA e continua à vista; a linha diz o curso novo
+    await page.locator('#alu tr.cd[data-id="1000"] [data-f="curso"]').selectOption('INVA');
+    await expect(page.locator('#audit-log-list')).toContainText('Curso de Ana: INVA');
+    await expect(page.locator('#alu tr.cd[data-id="1000"]')).toHaveAttribute('data-curso', 'INVA');
+    await expect.poll(() => nomesAVista(page)).toEqual(['Ana', 'Novo aluno']);
+    // Mudados os filtros, eles valem para todos: o curso novo da Ana, e o aluno novo, sem curso, sai
+    await filtrarCursos(page, 'alu', ['PP', 'INVA']);
+    await expect.poll(() => nomesAVista(page)).toEqual(['Ana']);
+    await expect(botao).toHaveText('Curso: PP ou INVA');
+
+    // O curso criado na aba Cursos aparece no filtro, e as marcas continuam; encerrado, ele fica, marcado
+    const rotulos = () => painel.locator('label').allTextContents();
+    await irPara(page, 'cur');
+    await page.locator('#cur-novo').click();
+    await page.locator('#cur-sigla').fill('MLTE');
+    await page.locator('#cur-nome').fill('Multimotor');
+    await page.locator('#cur-nome').press('Enter');
+    await expect(page.locator('#cursos .curso[data-curso="MLTE"]')).toBeVisible();
+    await irPara(page, 'alu');
+    await botao.click();
+    await expect.poll(rotulos).toEqual(['PP · Piloto Privado', 'PC · Piloto Comercial', 'INVA · Instrutor de Voo', 'MLTE · Multimotor', 'ZZ9 (curso desconhecido)', 'Sem curso']);
+    await expect(painel.locator('input[data-filtro]:checked')).toHaveCount(2);
+    await irPara(page, 'cur');
+    await confirmar(page, '#cursos .curso[data-curso="MLTE"] [data-act="curso-encerrar"]');
+    await expect(page.locator('#toast-box')).toContainText('MLTE encerrado');
+    await irPara(page, 'alu');
+    await botao.click();
+    await expect.poll(rotulos).toEqual(['PP · Piloto Privado', 'PC · Piloto Comercial', 'INVA · Instrutor de Voo', 'MLTE · Multimotor (encerrado)', 'ZZ9 (curso desconhecido)', 'Sem curso']);
+    await expect(botao).toHaveText('Curso: PP ou INVA');
+
+    // O curso desconhecido marcado: o último aluno dele sai dele, e a opção some, com a marca (o filtro fica sem marcas)
+    await filtrarCursos(page, 'alu', ['ZZ9'], { fechar: false });
+    await expect.poll(() => nomesAVista(page)).toEqual(['Carla']);
+    await page.locator('#alu tr.cd[data-id="1002"] [data-f="curso"]').selectOption('PP');
+    await expect(painel.locator('input[data-valor="ZZ9"]')).toHaveCount(0);
+    await expect(botao).toHaveText('Todos os cursos');
+    await expect.poll(() => nomesAVista(page)).toEqual(['Ana', 'Bruno', 'Carla', 'Novo aluno']);
+    await expect(contagem).toHaveText('4 alunos');
+  });
+
+  // Os pedidos de cada data ficam na Demanda: o link embaixo da barra leva a ela, com o foco no título (o botão some com a
+  // aba de Alunos). Sem data-act, ele vale também para quem só consulta (o Gestor), pelo mouse e pelo teclado
+  test('"Abrir a Demanda", embaixo da barra, leva à Demanda com o foco no título; também para o Gestor', async ({ page }) => {
+    await abrir(page, { estado: cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000)] }) });
+    await irPara(page, 'alu');
+    await expect(page.locator('#s-alu .ir-para-demanda')).toHaveText('Os pedidos de cada data ficam na Demanda. Abrir a Demanda');
+    const abrirDemanda = page.getByRole('button', { name: 'Abrir a Demanda' });
+    await abrirDemanda.click();
+    await expect(page.locator('#s-dem')).toBeVisible();
+    await expect(page.locator('#s-alu')).toBeHidden();
+    await expect(page.locator('#nav button[data-t="dem"]')).toHaveAttribute('aria-current', 'page');
+    await expect(page.locator('#s-dem h2')).toBeFocused();
+    await page.locator('#role-sel').selectOption('gestor');
+    await irPara(page, 'alu');
+    await abrirDemanda.focus();
+    await page.keyboard.press('Enter');
+    await expect(page.locator('#s-dem')).toBeVisible();
+    await expect(page.locator('#s-dem h2')).toBeFocused();
+  });
+
+  // O filtro dos cursos é um só, em Alunos e na Demanda (o plano: Alunos leva à Demanda e divide com ela o filtro dos
+  // cursos): os alunos marcados em Alunos são os da Demanda aberta pelo link, as marcas feitas na Demanda valem em Alunos,
+  // e "Limpar filtros" de Alunos as tira nas duas abas
+  test('o filtro dos cursos é o mesmo em Alunos e na Demanda: "Abrir a Demanda" mostra os pedidos dos alunos marcados', async ({ page }) => {
+    await abrir(page, { estado: cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, {}, { nm: 'Ana', curso: 'PP' }), aluno(1001, {}, { nm: 'Bruno', curso: 'PC' }), aluno(1002, {}, { nm: 'Carla' })] }) });
+    const pedidos = () => page.locator('#dem tr[data-k="d"]:visible').evaluateAll(linhas => linhas.map(l => l.dataset.id));
+    await irPara(page, 'alu');
+    await filtrarCursos(page, 'alu', ['PP']);
+    await expect.poll(() => nomesAVista(page)).toEqual(['Ana']);
+    await page.getByRole('button', { name: 'Abrir a Demanda' }).click();
+    await expect(page.locator('#flt-dem-cur')).toHaveText('Curso: PP');
+    await expect.poll(pedidos).toEqual(['1000']);
+    // Marcado na Demanda, vale em Alunos (as caixas e o botão de lá também)
+    await filtrarCursos(page, 'dem', ['PP', 'sem-curso']);
+    await expect.poll(pedidos).toEqual(['1000', '1002']);
+    await irPara(page, 'alu');
+    await expect(page.locator('#flt-alu-cur')).toHaveText('Curso: PP ou sem curso');
+    await expect(page.locator('#flt-alu-cur-painel input[data-filtro]:checked')).toHaveCount(2);
+    await expect.poll(() => nomesAVista(page)).toEqual(['Ana', 'Carla']);
+    await expect(page.locator('#alu-contagem')).toHaveText('2 de 3 alunos');
+    // "Limpar filtros" de Alunos tira as marcas nas duas abas
+    await page.locator('[data-flt="alu"]').fill('bruno');
+    await page.locator('#limpar-filtros-alu').click();
+    await expect(page.locator('#flt-alu-cur')).toHaveText('Todos os cursos');
+    await irPara(page, 'dem');
+    await expect(page.locator('#flt-dem-cur')).toHaveText('Todos os cursos');
+    await expect(page.locator('#flt-dem-cur-painel input[data-filtro]:checked')).toHaveCount(0);
+    await expect.poll(pedidos).toEqual(['1000', '1001', '1002']);
   });
 });
 

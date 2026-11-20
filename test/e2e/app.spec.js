@@ -63,6 +63,7 @@ test.describe('Aplicação', () => {
     }
   });
 
+  // O único botão que leva a outra aba (data-go) é o "Abrir a Demanda", em Alunos: os pedidos de cada data ficam lá
   test('navega pelas abas; sem os botões "Próximo" de um passo a passo', async ({ page }) => {
     await abrir(page);
     for (const aba of ['ins', 'alu', 'cur', 'dem', 'esc', 'bi', 'rec']) {
@@ -70,7 +71,9 @@ test.describe('Aplicação', () => {
       await expect(page.locator(`#nav button[data-t="${aba}"]`)).toHaveClass(/\bon\b/);
       await expect(page.locator('section.on')).toHaveCount(1);
     }
-    await expect(page.locator('[data-go]')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /^Próximo:/ })).toHaveCount(0);
+    await expect(page.locator('[data-go]')).toHaveCount(1);
+    await expect(page.locator('#s-alu [data-go="dem"]')).toHaveText('Abrir a Demanda');
   });
 
   test('aplica a folha de estilos (tokens de cor, layout e fontes)', async ({ page }) => {
@@ -138,8 +141,9 @@ test.describe('Aplicação', () => {
       'Vai voar?', 'Início pref', 'Exportar CSV', 'Emitir PDF', 'Turno rápido', 'Cada cartão', 'campo Data', 'Equipamento', 'Bloquear',
       'Sessões', 'sessão', 'Desfazer', 'Escala de Voo', 'Por avião e sala', 'Avião / sala', 'Aviões e salas', 'o botão ao lado de Alunos',
       // O "+" do mapa fica ao lado do nome da linha; o Operador não muda os Cursos nem os limites da lei; a coluna de quem
-      // vem é "Vem" (a data aberta não é sempre hoje); o filtro das habilitações tem várias marcas
-      'no fim de cada linha', 'altera tudo e opera a escala', 'o interruptor de quem vem', 'filtro por habilitação']) {
+      // vem é "Vem" (a data aberta não é sempre hoje); o filtro das habilitações tem várias marcas; o peso vem antes do
+      // curso em Alunos
+      'no fim de cada linha', 'altera tudo e opera a escala', 'o interruptor de quem vem', 'filtro por habilitação', 'Nome, CANAC, curso e peso']) {
       expect(texto, antigo).not.toContain(antigo);
     }
     await expect(manual.locator('h3')).toHaveText(['Primeiros passos: a rotina do operador', 'Perfis de acesso', 'As abas',
@@ -161,7 +165,11 @@ test.describe('Aplicação', () => {
       // A busca sem acentos, quantos aparecem e o "Limpar filtros"; a coluna Vem (a data aberta não é sempre hoje); o filtro
       // das habilitações, com várias marcas e a regra ("todas as marcadas")
       'sem os acentos', '12 de 40 instrutores', 'Limpar filtros', 'o interruptor Vem', 'Filtro das habilitações',
-      'que têm todas as marcadas', 'Habilitações: Noturno + C172']) {
+      'que têm todas as marcadas', 'Habilitações: Noturno + C172',
+      // Alunos com a barra de Instrutores: as colunas na mesma ordem, o filtro dos cursos (a regra "algum dos marcados"),
+      // o link para a Demanda (o filtro dos cursos é um só nas duas abas) e o cartão do celular
+      'Nome, CANAC, peso e curso', 'Filtro dos cursos', 'aparecem os alunos de algum dos marcados', 'Curso: PP ou PC', 'Abrir a Demanda',
+      'aparecem os pedidos dos alunos de algum dos cursos marcados', 'O filtro dos cursos é um só nas duas abas', 'um cartão por pessoa']) {
       expect(texto, novo).toContain(novo);
     }
 

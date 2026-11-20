@@ -1,4 +1,4 @@
-import { test, expect, abrir, abrirSintetico, abrirComExemplo, irPara, irParaVista, abrirEscala, filtrarHabilitacoes, AMANHA } from './fixtures.js';
+import { test, expect, abrir, abrirSintetico, abrirComExemplo, irPara, irParaVista, abrirEscala, filtrarHabilitacoes, filtrarCursos, AMANHA } from './fixtures.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
 
 test.describe('Perfis de acesso', () => {
@@ -40,13 +40,13 @@ test.describe('Perfis de acesso', () => {
     await expect(page.locator('#role-sel')).toHaveValue('gestor');
   });
 
-  // Quem só consulta usa os filtros como o Operador: a busca e as caixas das habilitações (.flt-ctrl, que
-  // js/somente-leitura.js não desliga), as vistas, o botão e o "Limpar" do filtro e o "Limpar filtros" (sem data-act, que
-  // js/eventos/registro.js não deixa passar para ele)
-  test('o Gestor busca, filtra pelas habilitações e troca de vista em Instrutores e Alunos; "Limpar filtros" mostra todos de novo', async ({ page }) => {
+  // Quem só consulta usa os filtros como o Operador: a busca e as caixas das habilitações e dos cursos (.flt-ctrl, que
+  // js/somente-leitura.js não desliga), as vistas, o botão e o "Limpar" do filtro, o "Limpar filtros" e o "Abrir a Demanda"
+  // (sem data-act, que js/eventos/registro.js não deixa passar para ele)
+  test('o Gestor busca, filtra pelas habilitações e pelos cursos e troca de vista em Instrutores, Alunos e na Demanda; "Limpar filtros" mostra todos de novo', async ({ page }) => {
     const estado = cenario({
       ins: [instrutor(1, 9, { nm: 'Ângelo Brandão' }), instrutor(2, 9), instrutor(3, 1), instrutor(4, 1, { hab: ['local', 'c172'] })],
-      stu: [aluno(1000, {}, { nm: 'João Silva' }), aluno(1001)]
+      stu: [aluno(1000, {}, { nm: 'João Silva', curso: 'PP' }), aluno(1001)]
     });
     await abrir(page, { estado, url: './?role=gestor' });
     await expect(page.locator('body')).toHaveAttribute('data-role', 'gestor');
@@ -93,6 +93,30 @@ test.describe('Perfis de acesso', () => {
     await expect(buscaAlu).toHaveValue('');
     await expect(page.locator('#alu tr.cd:visible')).toHaveCount(2);
     await expect(page.locator('#alu-contagem')).toHaveText('2 alunos');
+    // O filtro dos cursos, em Alunos e na Demanda (pelo "Abrir a Demanda", com as mesmas marcas)
+    await page.locator('#flt-alu-cur').click();
+    await expect(page.locator('#flt-alu-cur-painel input[data-filtro]:disabled')).toHaveCount(0);
+    await filtrarCursos(page, 'alu', ['PP']);
+    await expect(page.locator('#alu tr.cd:visible')).toHaveCount(1);
+    await expect(page.locator('#alu-contagem')).toHaveText('1 de 2 alunos');
+    await page.getByRole('button', { name: 'Abrir a Demanda' }).click();
+    await expect(page.locator('#s-dem')).toBeVisible();
+    await expect(page.locator('#flt-dem-cur')).toHaveText('Curso: PP');
+    await expect(page.locator('#dem tr[data-k="d"]:visible')).toHaveCount(1);
+    await expect(page.locator('#dem tr[data-k="d"]:visible')).toHaveAttribute('data-id', '1000');
+    await page.locator('#flt-dem-cur').click();
+    await expect(page.locator('#flt-dem-cur-painel input[data-filtro]:disabled')).toHaveCount(0);
+    await filtrarCursos(page, 'dem', ['sem-curso']);
+    await expect(page.locator('#dem tr[data-k="d"]:visible')).toHaveCount(1);
+    await expect(page.locator('#dem tr[data-k="d"]:visible')).toHaveAttribute('data-id', '1001');
+    // O "Limpar filtros" da Demanda: a busca e as marcas
+    await page.locator('#flt-dem').fill('nenhum assim');
+    await page.locator('#limpar-filtros-dem').click();
+    await expect(page.locator('#flt-dem')).toBeFocused();
+    await expect(page.locator('#flt-dem')).toHaveValue('');
+    await expect(page.locator('#flt-dem-cur')).toHaveText('Todos os cursos');
+    await expect(page.locator('#dem tr[data-k="d"]:visible')).toHaveCount(2);
+    await expect(page.locator('#dem tr.sem-resultado')).toHaveCount(0);
   });
 
   // O link não leva a escala no endereço (nomes, pesos e horas). Sem o servidor, a escala fica só neste navegador;

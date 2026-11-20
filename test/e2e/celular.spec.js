@@ -1,5 +1,5 @@
 // No celular (390 px): a escala em cartões, um por voo, e nenhuma aba rola para o lado.
-import { test, expect, abrir, abrirComExemplo, abrirEscala, irPara, percorrerVistasEFiltros, filtrarHabilitacoes, AMANHA } from './fixtures.js';
+import { test, expect, abrir, abrirComExemplo, abrirEscala, irPara, irParaVista, percorrerVistasEFiltros, filtrarHabilitacoes, filtrarCursos, AMANHA } from './fixtures.js';
 import { documentosAtuais } from './supabase-falso.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
 import { cursosIniciais, gravarCurso } from '../../js/programa.js';
@@ -53,6 +53,162 @@ test.describe('Celular', () => {
       expect(await alvosPequenos(page), `aba ${aba}`).toEqual([]);
     }
     await percorrerVistasEFiltros(page, async tela => expect(await alvosPequenos(page), tela).toEqual([]));
+  });
+
+  // O cadastro no celular (390 e 320 px), em Instrutores e em Alunos: um cartão por pessoa, o mesmo nas duas abas. Cada
+  // parte vai para o lugar dela pela classe da célula, e não pela posição (desde a coluna do CANAC, o peso ficava no lugar
+  // das habilitações em Instrutores), com o nome da coluna em cima, o mesmo do título dela na tela grande; nada sai do
+  // cartão (o "Dados pessoais" e o ✕ saíam dele, em Alunos e, nos 320 px, em Instrutores), e a tabela não rola para o
+  // lado. Na tela grande, os nomes não aparecem (a linha dos títulos está lá). Para quem só consulta, "Priorizar com" e
+  // "Não escalar com" sem ninguém não aparecem (o nome sozinho, sem nada embaixo)
+  test('o cadastro no celular: um cartão por pessoa, as partes no lugar pela classe, com o nome em cima e tudo dentro dele (390 e 320 px)', async ({ page }) => {
+    const estado = cenario({
+      ins: [instrutor(1, 9, { nm: 'Maria Fernanda dos Santos Oliveira' }), instrutor(2, 1)],
+      stu: [aluno(1000, {}, { nm: 'João Pedro de Alcântara Albuquerque', curso: 'PP', voaCom: [1], bl: [2] }), aluno(1001)]
+    });
+    await page.addInitScript(dados => {
+      if (!localStorage.getItem('acpm4_dados_pessoais')) localStorage.setItem('acpm4_dados_pessoais', dados);
+    }, JSON.stringify({ 'aluno:1000': { canac: '123456' }, 'instrutor:1': { canac: '654321' } }));
+    await abrir(page, { estado });
+    // Cada cartão: a área de cada célula à vista (pela classe), o nome em cima dela (::before) e o título da coluna, e
+    // o que sai do cartão
+    const cartoes = corpo => page.locator(`${corpo} tr.cd`).evaluateAll(linhas => linhas.map(linha => {
+      const titulos = [...linha.closest('table').tHead.rows[0].cells].map(th => th.textContent.trim());
+      const caixa = linha.getBoundingClientRect();
+      const celulas = [...linha.cells].filter(td => td.checkVisibility()).map(td => {
+        const r = td.getBoundingClientRect();
+        return {
+          classe: td.classList[0], area: getComputedStyle(td).gridRowStart, base: Math.round(r.bottom), caixa: [r.left, r.top, r.right, r.bottom],
+          nome: getComputedStyle(td, '::before').content, titulo: td.dataset.rotulo ? titulos[td.cellIndex] : null, rotulo: td.dataset.rotulo || null
+        };
+      });
+      const fora = [...linha.querySelectorAll('button, input, select, .tg, .habs-resumo, .progresso')].filter(el => el.checkVisibility())
+        .filter(el => { const r = el.getBoundingClientRect(); return r.left < caixa.left - 0.5 || r.right > caixa.right + 0.5; })
+        .map(el => el.dataset.f || el.dataset.act || el.dataset.dados || el.className);
+      // Os controles na ordem do Tab (a do HTML), com o lugar de cada um na tela
+      const controles = [...linha.querySelectorAll('button, input, select')].filter(el => el.checkVisibility()).map(el => {
+        const r = el.getBoundingClientRect();
+        return { nome: el.dataset.f || el.dataset.act || (el.dataset.dados ? 'dados' : el.className), caixa: [r.left, r.top, r.right, r.bottom] };
+      });
+      return { id: linha.dataset.id, grade: getComputedStyle(linha).display, celulas, fora, controles };
+    }));
+    const AREAS = {
+      inst: { 'c-nome': 'nome', 'c-canac': 'canac', 'c-peso': 'peso', 'c-habs': 'habs', acoes: 'acoes' },
+      alu: { 'c-nome': 'nome', 'c-canac': 'canac', 'c-peso': 'peso', 'c-curso': 'curso', 'c-voa-com': 'voa-com', 'c-nao-escalar': 'nao-escalar', acoes: 'acoes' }
+    };
+    const ORDEM = { inst: [['c-nome'], ['c-peso', 'c-canac'], ['c-habs'], ['acoes']], alu: [['c-nome'], ['c-peso', 'c-canac'], ['c-curso'], ['c-voa-com'], ['c-nao-escalar'], ['acoes']] };
+    const conferir = async (corpo, largura) => {
+      const lista = await cartoes(`#${corpo}`);
+      expect(lista.length, `${largura}: #${corpo}`).toBe(2);
+      for (const { id, grade, celulas, fora, controles } of lista) {
+        const onde = `${largura}: #${corpo} ${id}`;
+        expect(grade, onde).toBe('grid');
+        expect(fora, `${onde}: fora do cartão`).toEqual([]);
+        // O Tab segue a ordem da tela: cada controle vem depois do anterior, na mesma linha (à direita dele) ou embaixo
+        // (o foco não sobe e desce dentro do cartão)
+        const foraDaOrdem = controles.slice(1).flatMap((b, i) => {
+          const a = controles[i];
+          const mesmaLinha = Math.min(a.caixa[3], b.caixa[3]) - Math.max(a.caixa[1], b.caixa[1]) > 1;
+          return (mesmaLinha ? b.caixa[0] < a.caixa[2] - 1 : b.caixa[1] < a.caixa[3] - 1) ? [`${a.nome} → ${b.nome}`] : [];
+        });
+        expect(foraDaOrdem, `${onde}: a ordem do Tab ${JSON.stringify(controles.map(c => c.nome))}`).toEqual([]);
+        for (const c of celulas) {
+          expect(c.area, `${onde}: ${c.classe}`).toBe(AREAS[corpo][c.classe]);
+          // O nome em cima é o do título da coluna
+          if (c.rotulo) expect([c.nome, c.rotulo], `${onde}: ${c.classe}`).toEqual([`"${c.titulo}"`, c.titulo]);
+        }
+        // As linhas do cartão, de cima para baixo (as partes de uma linha ficam alinhadas embaixo): o nome; o peso e o CANAC
+        // lado a lado; …; os botões
+        const base = classe => (celulas.find(c => c.classe === classe) || {}).base;
+        const linhas = ORDEM[corpo].map(grupo => grupo.map(base).filter(t => t !== undefined)).filter(g => g.length);
+        expect(linhas.every(g => g.every(t => Math.abs(t - g[0]) <= 1)), `${onde}: ${JSON.stringify(linhas)}`).toBe(true);
+        expect(linhas.slice(1).every((g, i) => g[0] > linhas[i][0]), `${onde}: a ordem das linhas ${JSON.stringify(linhas)}`).toBe(true);
+        // Nenhuma parte por cima de outra
+        const sobrepostas = celulas.flatMap((a, i) => celulas.slice(i + 1).filter(b => Math.min(a.caixa[2], b.caixa[2]) - Math.max(a.caixa[0], b.caixa[0]) > 1
+          && Math.min(a.caixa[3], b.caixa[3]) - Math.max(a.caixa[1], b.caixa[1]) > 1).map(b => `${a.classe}/${b.classe}`));
+        expect(sobrepostas, `${onde}: partes sobrepostas`).toEqual([]);
+      }
+      // Em Instrutores, "Editar habilitações" fica numa linha só dele, embaixo das habilitações, em cima dos outros botões
+      if (corpo === 'inst') {
+        const [editar, dados] = await Promise.all(['[data-act="editar-habs"]', '[data-dados]'].map(b => page.locator(`#inst tr.cd[data-id="1"] ${b}`).boundingBox()));
+        expect(editar.y + editar.height, `${largura}: "Editar habilitações" em cima`).toBeLessThanOrEqual(dados.y);
+      }
+      expect(await page.locator(`#${corpo}`).evaluate(corpo => corpo.closest('.tw').scrollWidth <= corpo.closest('.tw').clientWidth), `${largura}: #${corpo} sem rolar para o lado`).toBe(true);
+      expect(await larguraDaPagina(page), `${largura}: a página`).toBeLessThanOrEqual(largura);
+      expect(await alvosPequenos(page), `${largura}: #${corpo}`).toEqual([]);
+    };
+    for (const largura of [390, 320]) {
+      await page.setViewportSize({ width: largura, height: 800 });
+      await irParaVista(page, 'ins', 'cadastro');
+      await expect(page.locator('#inst tr.cd[data-id="1"] .c-canac')).toHaveText('654321');
+      await conferir('inst', largura);
+      await irPara(page, 'alu');
+      await expect(page.locator('#alu tr.cd[data-id="1000"] .c-canac')).toHaveText('123456');
+      await conferir('alu', largura);
+      // Sem o CANAC, o peso fica sozinho na linha dele (a célula vazia não aparece)
+      await expect(page.locator('#alu tr.cd[data-id="1001"] .c-canac')).toBeHidden();
+    }
+    // Na tela grande, a tabela, com a linha dos títulos: os nomes em cima das partes não aparecem
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await expect(page.locator('#s-alu thead')).toBeVisible();
+    expect(await page.locator('#alu tr.cd[data-id="1000"] td.c-peso').evaluate(td => getComputedStyle(td, '::before').content)).toBe('none');
+
+    // Quem só consulta: sem a lista para escolher, "Priorizar com" e "Não escalar com" sem ninguém não aparecem; com alguém,
+    // aparecem, com o nome em cima
+    await page.setViewportSize({ width: 390, height: 800 });
+    await page.locator('#role-sel').selectOption('gestor');
+    await irPara(page, 'alu');
+    const celula = (id, classe) => page.locator(`#alu tr.cd[data-id="${id}"] td.${classe}`);
+    await expect(celula(1001, 'c-voa-com')).toBeHidden();
+    await expect(celula(1001, 'c-nao-escalar')).toBeHidden();
+    await expect(celula(1000, 'c-voa-com')).toBeVisible();
+    await expect(celula(1000, 'c-voa-com').locator('.tg')).toHaveText('Maria Fernanda dos Santos Oliveira', { useInnerText: true });
+    await expect(celula(1000, 'c-nao-escalar').locator('.tg')).toHaveText('Instrutor 02', { useInnerText: true });
+    // O Gestor não tem nenhum botão no cartão: a parte deles não aparece
+    await expect(celula(1000, 'acoes')).toBeHidden();
+    expect(await larguraDaPagina(page)).toBeLessThanOrEqual(390);
+  });
+
+  // O filtro dos cursos no celular (390 e 320 px), em Alunos e na Demanda: o botão fica na linha da busca (em Alunos, como
+  // o das habilitações em Instrutores); o painel abre inteiro na tela, com a tabela embaixo dele, e alvos de 44 px
+  test('o filtro dos cursos cabe no celular (390 e 320 px), em Alunos e na Demanda: o painel empurra a tabela, com alvos de 44 px', async ({ page }) => {
+    await abrirComExemplo(page);
+    for (const largura of [390, 320]) {
+      await page.setViewportSize({ width: largura, height: 800 });
+      for (const [aba, busca, tabela] of [['alu', '[data-flt="alu"]', '#s-alu .tw'], ['dem', '#flt-dem', '#s-dem .tw']]) {
+        await irPara(page, aba);
+        await filtrarCursos(page, aba, ['PP', 'sem-curso'], { fechar: false });
+        const [campo, botao, painel, abaixo] = await Promise.all([busca, `#flt-${aba}-cur`, `#flt-${aba}-cur-painel`, tabela].map(seletor => page.locator(seletor).boundingBox()));
+        if (aba === 'alu') expect(Math.abs(botao.y + botao.height / 2 - (campo.y + campo.height / 2)), `${largura}: o botão na linha da busca`).toBeLessThan(4);
+        expect(botao.x + botao.width, `${largura} ${aba}: o botão na tela`).toBeLessThanOrEqual(largura);
+        expect(painel.x, `${largura} ${aba}: o painel na tela`).toBeGreaterThanOrEqual(0);
+        expect(painel.x + painel.width, `${largura} ${aba}: o painel na tela`).toBeLessThanOrEqual(largura);
+        expect(abaixo.y, `${largura} ${aba}: a tabela embaixo do painel`).toBeGreaterThanOrEqual(painel.y + painel.height);
+        expect(await larguraDaPagina(page), `${largura} ${aba}: a página não rola para o lado`).toBeLessThanOrEqual(largura);
+        expect(await alvosPequenos(page), `${largura} ${aba}: alvos de 44 px`).toEqual([]);
+        await filtrarCursos(page, aba, []);
+      }
+    }
+  });
+
+  // A faixa das abas rola para o lado no celular: a aba aberta pelo "Abrir a Demanda" (Alunos) aparece nela, com a marca
+  // da aba aberta à vista (sem isso, a faixa continuava em Alunos, e nenhuma aba à vista parecia aberta)
+  test('"Abrir a Demanda" traz a aba Demanda para a parte à vista da faixa das abas', async ({ page }) => {
+    await abrirComExemplo(page);
+    await irPara(page, 'alu');
+    const naFaixa = aba => page.locator(`#nav button[data-t="${aba}"]`).evaluate(b => {
+      const r = b.getBoundingClientRect(), faixa = b.closest('#nav').getBoundingClientRect();
+      return r.left >= faixa.left - 0.5 && r.right <= faixa.right + 0.5;
+    });
+    // A faixa rolada até o fim, como depois de tocar numa das últimas abas: a Demanda fica fora, à esquerda
+    await page.locator('#nav').evaluate(faixa => { faixa.scrollLeft = faixa.scrollWidth; });
+    expect(await naFaixa('alu')).toBe(true);
+    expect(await naFaixa('dem')).toBe(false);
+    await page.getByRole('button', { name: 'Abrir a Demanda' }).click();
+    await expect(page.locator('#s-dem h2')).toBeFocused();
+    await expect(page.locator('#nav button[data-t="dem"]')).toHaveClass(/\bon\b/);
+    await expect.poll(() => naFaixa('dem')).toBe(true);
+    expect(await larguraDaPagina(page)).toBeLessThanOrEqual(390);
   });
 
   // O filtro das habilitações no celular (390 e 320 px): o botão divide a linha com a busca; o painel abre no fluxo da

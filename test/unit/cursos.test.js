@@ -2,7 +2,8 @@
 // aluno. Cada missão do programa tem um código (PP-07), um nome, o tipo de missão do app, o recurso e as horas.
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { CURSOS, cursosVazios, normalizarCursos, normalizarCursoDoAluno, novaMissaoDoCurso, siglaValida } from '../../js/cursos.js';
+import { CURSOS, cursosVazios, normalizarCursos, normalizarCursoDoAluno, novaMissaoDoCurso, siglaValida, SEM_CURSO, opcoesDoFiltroDosCursos } from '../../js/cursos.js';
+import { passaNoFiltro, resumoDoFiltro } from '../../js/filtro-multiplo.js';
 
 const missao = (id, extra = {}) => ({ id, nome: `Missão ${id}`, mis: 'Voo Local', eq: 'C152', nb: 1, ...extra });
 
@@ -51,6 +52,46 @@ describe('Programa dos cursos', () => {
   it('o curso do aluno: a sigla conferida só no formato (um curso fora de PP, PC e INVA também fica)', () => {
     assert.deepEqual(['PC', 'IFR', 'PC-IFR'].map(normalizarCursoDoAluno), ['PC', 'IFR', 'PC-IFR']);
     for (const errado of ['pc', 'pp', '<b>PP</b>', 'PP ', '', undefined, null, 7]) assert.equal(normalizarCursoDoAluno(errado), undefined, String(errado));
+  });
+});
+
+// O filtro dos cursos, em Alunos e na Demanda: as opções ([valor, rótulo no botão, texto da caixa]) e a regra "alguma"
+// (um curso só por aluno), com "Sem curso" para quem não tem
+describe('O filtro dos cursos', () => {
+  const programa = [
+    { sigla: 'PP', nome: 'Piloto Privado', ativo: true }, { sigla: 'MLTE', nome: 'Multimotor', ativo: false },
+    { sigla: 'PC', nome: 'Piloto Comercial', ativo: true }, { sigla: 'INVA', nome: 'Instrutor de Voo', ativo: true }
+  ];
+
+  it('os ativos na ordem do programa, os encerrados marcados, o curso desconhecido de um aluno e "Sem curso" no fim', () => {
+    const opcoes = opcoesDoFiltroDosCursos(programa, ['PP', 'ZZ9', undefined, 'PP', 'AB1', 'ZZ9', ''], { semProgramas: false });
+    assert.deepEqual(opcoes, [
+      ['PP', 'PP', 'PP · Piloto Privado'], ['PC', 'PC', 'PC · Piloto Comercial'], ['INVA', 'INVA', 'INVA · Instrutor de Voo'],
+      ['MLTE', 'MLTE', 'MLTE · Multimotor (encerrado)'],
+      // Uma vez cada, em ordem
+      ['AB1', 'AB1', 'AB1 (curso desconhecido)'], ['ZZ9', 'ZZ9', 'ZZ9 (curso desconhecido)'],
+      [SEM_CURSO, 'sem curso', 'Sem curso']
+    ]);
+    // "Sem curso" não é uma sigla: nenhum curso tem esse valor
+    assert.equal(siglaValida(SEM_CURSO), false);
+  });
+
+  it('sem os programas lidos, o curso de fora fica só pela sigla (nada é dito sobre ele); sem aluno de fora, só os do programa', () => {
+    const tres = CURSOS.map(([sigla, nome]) => ({ sigla, nome, ativo: true }));
+    assert.deepEqual(opcoesDoFiltroDosCursos(tres, ['MLTE'], { semProgramas: true }).map(o => o[2]),
+      ['PP · Piloto Privado', 'PC · Piloto Comercial', 'INVA · Instrutor de Voo', 'MLTE', 'Sem curso']);
+    assert.deepEqual(opcoesDoFiltroDosCursos(tres, ['PP', undefined]).map(o => o[0]), ['PP', 'PC', 'INVA', SEM_CURSO]);
+  });
+
+  it('o aluno aparece se está em algum dos marcados ("alguma"); "Sem curso" acha quem não tem; o botão junta com "ou"', () => {
+    assert.equal(passaNoFiltro(['PP'], ['PP', 'PC'], 'alguma'), true);
+    assert.equal(passaNoFiltro(['INVA'], ['PP', 'PC'], 'alguma'), false);
+    assert.equal(passaNoFiltro([SEM_CURSO], ['PP', SEM_CURSO], 'alguma'), true);
+    assert.equal(passaNoFiltro([SEM_CURSO], ['PP'], 'alguma'), false);
+    assert.equal(passaNoFiltro(['PP'], [], 'alguma'), true);
+    const rotulos = new Map(opcoesDoFiltroDosCursos(programa, []).map(([valor, rotulo]) => [valor, rotulo]));
+    assert.equal(resumoDoFiltro(['PP', SEM_CURSO].map(v => rotulos.get(v)), { nome: 'Curso', todas: 'Todos os cursos', regra: 'alguma' }), 'Curso: PP ou sem curso');
+    assert.equal(resumoDoFiltro([], { nome: 'Curso', todas: 'Todos os cursos', regra: 'alguma' }), 'Todos os cursos');
   });
 });
 
