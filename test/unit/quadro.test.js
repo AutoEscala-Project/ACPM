@@ -3,7 +3,7 @@
 // painéis da INFRAERO. Servem à visão "Painel" da Escala e à tela da recepção.
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { linhasDoQuadro, quadroDeMissoes, quadroDePartidas, quadroDeChegadas, minutoDoQuadro, paginar, telasDosQuadros, EMBARQUE_ANTES_MIN } from '../../js/quadro.js';
+import { linhasDoQuadro, quadroDeMissoes, quadroDePartidas, quadroDeChegadas, minutoDoQuadro, paginar, telasDosQuadros, EMBARQUE_ANTES_MIN, MISSAO_FICA_MIN } from '../../js/quadro.js';
 
 const voo = (fKey, a, extra = {}) => ({
   fKey, classKey: fKey, isGround: false, a, b: a + 60, o: 0, r: 'PR-VOB', eqType: 'C152', s: `Aluno ${fKey.split('_')[0]}`,
@@ -122,6 +122,28 @@ describe('Quadro de missões', () => {
     assert.deepEqual(quadroDeMissoes(turmaMeioCancelada).map(l => [l.aluno, l.observacao]), [['2 alunos', 'Confirmado']]);
     const turmaCancelada = linhasDoQuadro(turma([1004, 1005]), { '1004_0_1': 'Cancelado', '1005_0_1': 'Cancelado' });
     assert.deepEqual(quadroDeMissoes(turmaCancelada).map(l => [l.aluno, l.observacao, l.classe]), [['2 alunos', 'Cancelado', 'Cancelado']]);
+  });
+  // Pedro, 2026-11-20: a primeira página é sempre o que acontece agora e o que vem depois
+  it('o voo sai 30 minutos depois do fim efetivo (o novo, no atraso; o programado, no cancelado); a turma de Ground, no fim', () => {
+    assert.equal(MISSAO_FICA_MIN, 30);
+    // 06:30–07:30; 08:00–09:00 atrasado para 09:00–10:00; 09:00–10:00 cancelado; Ground 08:00–09:30; 10:00–11:00 em voo
+    const out = [voo('1000_0_1', 390), voo('1001_0_1', 480), voo('1002_0_1', 540), ...turma([1003, 1004], 480), voo('1005_0_1', 600)];
+    const fStatus = { '1001_0_1': 'Atrasado', '1002_0_1': 'Cancelado', '1005_0_1': 'Em Voo' };
+    const linhas = linhasDoQuadro(out, fStatus, { '1001_0_1': { novoInicio: 540 }, '1002_0_1': { motivo: 'Meteorologia' } });
+    const alunos = agora => quadroDeMissoes(linhas, agora).map(l => l.aluno);
+    assert.deepEqual(alunos(479), ['Aluno 1000', '2 alunos', 'Aluno 1001', 'Aluno 1002', 'Aluno 1005'], '07:59: o das 06:30 terminou há 29 minutos');
+    assert.deepEqual(alunos(480), ['Aluno 1000', '2 alunos', 'Aluno 1001', 'Aluno 1002', 'Aluno 1005'], 'há 30 minutos, ainda fica');
+    assert.deepEqual(alunos(481), ['2 alunos', 'Aluno 1001', 'Aluno 1002', 'Aluno 1005'], 'há 31 minutos, sai');
+    // A turma de Ground (até 09:30) sai quando o fim passa, sem os 30 minutos
+    assert.deepEqual(alunos(569), ['2 alunos', 'Aluno 1001', 'Aluno 1002', 'Aluno 1005']);
+    assert.deepEqual(alunos(570), ['Aluno 1001', 'Aluno 1002', 'Aluno 1005']);
+    // O atrasado conta do fim novo (10:00) e o cancelado do programado (10:00), não do original (09:00)
+    assert.deepEqual(alunos(630), ['Aluno 1001', 'Aluno 1002', 'Aluno 1005']);
+    assert.deepEqual(alunos(631), ['Aluno 1005'], 'o atrasado e o cancelado saem às 10:31');
+    // O que está em voo fica até mudar de status, mesmo depois do fim
+    assert.deepEqual(alunos(800), ['Aluno 1005']);
+    // Num dia futuro (-Infinity), num dia passado (Infinity) e sem a hora, o dia todo
+    for (const agora of [-Infinity, Infinity, undefined]) assert.equal(alunos(agora).length, 5, String(agora));
   });
 });
 

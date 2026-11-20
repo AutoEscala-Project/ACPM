@@ -60,7 +60,7 @@ function telasAgora() {
   const agora = new Date();
   const minuto = minutoDoQuadro(data, hojeISO(), minutoDoDia(agora));
   const modo = modoAtual();
-  const quadros = modo === 'missoes' ? [['missoes', quadroDeMissoes(linhas)]]
+  const quadros = modo === 'missoes' ? [['missoes', quadroDeMissoes(linhas, minuto)]]
     : [['partidas', quadroDePartidas], ['chegadas', quadroDeChegadas]].filter(([quadro]) => modo === 'alternar' || modo === quadro)
       .map(([quadro, montar]) => [quadro, montar(linhas, minuto)]);
   return telasDosQuadros(quadros, porPagina());

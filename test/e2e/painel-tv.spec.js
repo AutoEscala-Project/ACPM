@@ -14,6 +14,7 @@ const TODAS_AS_COLUNAS = COLUNAS_DO_PAINEL.map(c => ({ id: c.id, on: true }));
 const PADRAO = ['Horário', 'Aeronave', 'Modelo', 'Aluno', 'Instrutor', 'Missão'];
 
 const HOJE = '2026-11-10';
+const MANHA = new Date('2026-11-10T08:00:00-03:00');
 // Hoje: Maria às 08:20 (atrasada para 08:50) e João às 10:10 (cancelado por "Outro", com um texto que a TV não mostra)
 function estado() {
   const e = cenario({
@@ -72,12 +73,12 @@ test.describe('TV da recepção', () => {
 
   test('sem configuração, a TV mostra Missões com as colunas do padrão: todos os voos do dia, com o cancelado', async ({ page }) => {
     await gravarNesteNavegador(page, documentosDeHoje());
-    await page.clock.setFixedTime(new Date('2026-11-10T12:00:00-03:00'));
+    await page.clock.setFixedTime(new Date('2026-11-10T09:00:00-03:00'));
     await page.goto('./painel.html');
     await expect(page.locator('.fids .fids-titulo')).toHaveText('Missões');
     await expect(page.locator('.fids thead th')).toHaveText(PADRAO);
-    // O voo das 08:20, atrasado para 08:50, já passou: no quadro de Missões, ele continua (sem partidas e chegadas); o
-    // cancelado das 10:10 também aparece
+    // O voo das 08:20, atrasado para 08:50, já decolou: no quadro de Missões, ele continua (sem partidas e chegadas), no
+    // horário programado; o cancelado das 10:10 também aparece
     await expect(linhas(page).locator('.f-aluno')).toHaveText(['Maria S.', 'João']);
     await expect(linhas(page).locator('.f-hora')).toHaveText(['08:20', '10:10']);
     await expect(linhas(page).nth(1)).toHaveClass(/\bfids-Cancelado\b/);
@@ -169,6 +170,29 @@ test.describe('TV da recepção', () => {
     await expect(linhaDe('Carla D.').locator('.f-obs')).toHaveText('Confirmado');
   });
 
+  // Pedro, 2026-11-20: o quadro Missões deixa de fora o que terminou há mais de 30 minutos (o fim efetivo: o novo, no
+  // atraso; o programado, no cancelado), para a primeira página ser sempre o que acontece agora e o que vem depois
+  test('Missões: o voo que terminou há 29 minutos fica; o que terminou há 31 minutos sai', async ({ page }) => {
+    await gravarNesteNavegador(page, documentosDeHoje());
+    // Maria: 08:20 atrasada para 08:50, termina às 09:50; João: 10:10 cancelado, terminaria às 11:10
+    await page.clock.install({ time: new Date('2026-11-10T10:19:00-03:00') });
+    await page.goto('./painel.html');
+    await expect(page.locator('.fids .fids-titulo')).toHaveText('Missões');
+    await expect(linhas(page).locator('.f-aluno')).toHaveText(['Maria S.', 'João']);
+    // 10:21: Maria terminou há 31 minutos e sai (o painel confere a cada virada do minuto)
+    await page.clock.runFor(2 * 60_000);
+    await expect(page.locator('.fids .fids-hora')).toHaveText('10:21');
+    await expect(linhas(page).locator('.f-aluno')).toHaveText(['João']);
+    // O cancelado conta do fim programado: às 11:39 (29 minutos depois) fica; às 11:41, sai
+    await page.clock.runFor(78 * 60_000);
+    await expect(page.locator('.fids .fids-hora')).toHaveText('11:39');
+    await expect(linhas(page).locator('.f-aluno')).toHaveText(['João']);
+    await page.clock.runFor(2 * 60_000);
+    await expect(page.locator('.fids .fids-hora')).toHaveText('11:41');
+    await expect(linhas(page)).toHaveCount(0);
+    await expect(page.locator('.fids .fids-nada')).toHaveText('Nenhuma missão');
+  });
+
   test('sem a escala de hoje gravada, o painel avisa', async ({ page }) => {
     await page.goto('./painel.html');
     await expect(page.locator('.fids .fids-nada')).toHaveText('A escala de hoje ainda não foi publicada.');
@@ -180,7 +204,7 @@ test.describe('TV da recepção', () => {
     const servidor = await instalarSupabaseFalso(context, documentosDeHoje());
     const page = await context.newPage();
     const erros = vigiarErros(page);
-    await page.clock.install({ time: new Date('2026-11-10T12:00:00-03:00') });
+    await page.clock.install({ time: new Date('2026-11-10T08:00:00-03:00') });
     await page.goto('./painel.html?supabase=teste');
     await preencherLogin(page, CONTAS.painel);
     // O quadro de Missões, com o voo cancelado
@@ -283,6 +307,8 @@ test.describe('TV da recepção', () => {
 async function novaTV(browser) {
   const context = await browser.newContext({ baseURL: test.info().project.use.baseURL, locale: 'pt-BR', timezoneId: 'America/Sao_Paulo' });
   await prepararContexto(context);
+  // 08:00: os voos de hoje ainda estão no quadro Missões (ao meio-dia, eles já teriam terminado há mais de 30 minutos)
+  await context.clock.setFixedTime(MANHA);
   await instalarSupabaseFalso(context, documentosDeHoje());
   const page = await context.newPage();
   return { context, page, erros: vigiarErros(page) };
