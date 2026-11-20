@@ -222,19 +222,19 @@ select is(pg_temp.painel_como('00000000-0000-4000-a000-000000000031'), '{"quadro
 reset role;
 select pg_temp.gravar_painel('{"quadro": "missoes", "listas": "DUAS", "colunas": []}');
 set local role authenticated;
-select is(pg_temp.painel_como('00000000-0000-4000-a000-000000000031')->'listas', null, 'as listas em maiúsculas: null');
+select is(pg_temp.painel_como('00000000-0000-4000-a000-000000000031'), '{"quadro": "missoes", "colunas": []}'::jsonb, 'as listas em maiúsculas: null (sai), e o resto fica');
 reset role;
 select pg_temp.gravar_painel('{"quadro": "missoes", "listas": ["duas"], "colunas": []}');
 set local role authenticated;
-select is(pg_temp.painel_como('00000000-0000-4000-a000-000000000031')->'listas', null, 'as listas numa lista: null');
+select is(pg_temp.painel_como('00000000-0000-4000-a000-000000000031'), '{"quadro": "missoes", "colunas": []}'::jsonb, 'as listas numa lista: null (sai), e o resto fica');
 reset role;
 select pg_temp.gravar_painel('{"quadro": "missoes", "listas": {"duas": true}, "colunas": []}');
 set local role authenticated;
-select is(pg_temp.painel_como('00000000-0000-4000-a000-000000000031')->'listas', null, 'as listas num objeto: null');
+select is(pg_temp.painel_como('00000000-0000-4000-a000-000000000031'), '{"quadro": "missoes", "colunas": []}'::jsonb, 'as listas num objeto: null (sai), e o resto fica');
 reset role;
 select pg_temp.gravar_painel('{"quadro": "missoes", "listas": 2, "colunas": []}');
 set local role authenticated;
-select is(pg_temp.painel_como('00000000-0000-4000-a000-000000000031')->'listas', null, 'as listas num número: null');
+select is(pg_temp.painel_como('00000000-0000-4000-a000-000000000031'), '{"quadro": "missoes", "colunas": []}'::jsonb, 'as listas num número: null (sai), e o resto fica');
 -- O dia sem escala gravada também traz a configuração
 reset role;
 select pg_temp.gravar_painel('{"quadro": "alternar", "colunas": [{"id": "horario", "on": true}]}');
