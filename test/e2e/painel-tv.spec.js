@@ -1,7 +1,7 @@
 // A TV da recepção: painel.html mostra o mesmo painel da Escala, na tela toda e sem botões, com o quadro de hoje e o
 // aluno abreviado, no quadro e com as colunas da configuração do painel (sem ela, Missões com as colunas do padrão). No
-// modo compartilhado, a conta da TV (perfil "painel") só vê o quadro, que ela busca de novo a cada minuto; a função do
-// servidor ainda não entrega a configuração, e a TV mostra o padrão.
+// modo compartilhado, a conta da TV (perfil "painel") só vê o quadro, que ela busca de novo a cada minuto, com a
+// configuração do painel que a função painel_do_dia entrega (sem ela, o banco ainda sem a migração, o padrão).
 import { test, expect, prepararContexto, vigiarErros, preencherLogin, URL_APP } from './fixtures.js';
 import { instalarSupabaseFalso, documentosAtuais, CONTAS } from './supabase-falso.js';
 import { runAllocationEngine } from '../../js/engine.js';
@@ -201,18 +201,61 @@ test.describe('TV da recepção', () => {
     await context.close();
   });
 
-  // O perfil da TV não lê o cadastro, e a função painel_do_dia ainda não entrega a configuração do painel: com o
-  // servidor, a TV mostra o padrão, mesmo com o painel configurado
-  test('com o servidor, a TV mostra o padrão (Missões, com as colunas do padrão)', async ({ browser }) => {
+  // O perfil da TV não lê o cadastro: a configuração do painel vem no campo "painel" de painel_do_dia (migração
+  // 20261120150000), e a TV a segue, como a Escala; a mudança do operador chega na busca seguinte
+  test('com o servidor, a TV segue a configuração do painel que painel_do_dia entrega, e a mudança dela', async ({ browser }) => {
     const context = await browser.newContext({ baseURL: test.info().project.use.baseURL, locale: 'pt-BR', timezoneId: 'America/Sao_Paulo' });
     await prepararContexto(context);
-    await instalarSupabaseFalso(context, documentosDeHoje({ quadro: 'chegadas', colunas: TODAS_AS_COLUNAS }));
+    const servidor = await instalarSupabaseFalso(context, documentosDeHoje({ quadro: 'partidas', colunas: TODAS_AS_COLUNAS }));
+    const page = await context.newPage();
+    const erros = vigiarErros(page);
+    await page.clock.install({ time: new Date('2026-11-10T07:00:00-03:00') });
+    await page.goto('./painel.html?supabase=teste');
+    await preencherLogin(page, CONTAS.painel);
+    await expect(page.locator('.fids .fids-titulo')).toHaveText('Partidas');
+    await expect(page.locator('.fids thead th')).toHaveText([...PADRAO, 'Previsto', 'Observação']);
+    await expect(linhas(page).locator('.f-obs')).toHaveText(['Atrasado', 'Cancelado · Outro']);
+    // O operador muda a configuração: a TV segue na busca seguinte
+    const cadastro = structuredClone(servidor.banco.get('cadastro').conteudo);
+    cadastro.painel = { quadro: 'missoes', colunas: [{ id: 'aluno', on: true }, { id: 'horario', on: true }] };
+    servidor.alterarPorOutraPessoa('cadastro', cadastro);
+    await page.clock.runFor(60_000);
+    await expect(page.locator('.fids .fids-titulo')).toHaveText('Missões');
+    await expect(page.locator('.fids thead th')).toHaveText(['Aluno', 'Horário', 'Aeronave', 'Modelo', 'Instrutor', 'Missão']);
+    expect(erros).toEqual([]);
+    await context.close();
+  });
+
+  // A configuração gravada fora do formato pela API: o servidor manda só o que vale dela, e a TV não quebra
+  test('com o servidor e a configuração adulterada, a TV mostra o que vale dela, sem erro', async ({ browser }) => {
+    const context = await browser.newContext({ baseURL: test.info().project.use.baseURL, locale: 'pt-BR', timezoneId: 'America/Sao_Paulo' });
+    await prepararContexto(context);
+    await instalarSupabaseFalso(context, documentosDeHoje({ quadro: '__proto__', colunas: [{ id: 'aluno', on: 'sim' }, { id: '<img src=x>', on: true }, 'horario', { id: 'missao', on: true }] }));
+    const page = await context.newPage();
+    const erros = vigiarErros(page);
+    await page.goto('./painel.html?supabase=teste');
+    await preencherLogin(page, CONTAS.painel);
+    await expect(page.locator('.fids .fids-titulo')).toHaveText('Missões');
+    // Missão (ligada) primeiro; Aluno, desligado; as que faltam entram no fim, como no padrão
+    await expect(page.locator('.fids thead th')).toHaveText(['Missão', 'Horário', 'Aeronave', 'Modelo', 'Instrutor']);
+    await expect(page.locator('.fids img[src="x"]')).toHaveCount(0);
+    expect(erros).toEqual([]);
+    await context.close();
+  });
+
+  // O banco ainda sem a migração (painel_do_dia sem o campo "painel"): a TV mostra o padrão, como antes, mesmo com o
+  // painel configurado
+  test('com o servidor ainda sem a migração, a TV mostra o padrão (Missões, com as colunas do padrão)', async ({ browser }) => {
+    const context = await browser.newContext({ baseURL: test.info().project.use.baseURL, locale: 'pt-BR', timezoneId: 'America/Sao_Paulo' });
+    await prepararContexto(context);
+    await instalarSupabaseFalso(context, { ...documentosDeHoje({ quadro: 'chegadas', colunas: TODAS_AS_COLUNAS }), painelDoDiaAntigo: true });
     const page = await context.newPage();
     const erros = vigiarErros(page);
     await page.goto('./painel.html?supabase=teste');
     await preencherLogin(page, CONTAS.painel);
     await expect(page.locator('.fids .fids-titulo')).toHaveText('Missões');
     await expect(page.locator('.fids thead th')).toHaveText(PADRAO);
+    await expect(linhas(page).locator('.f-aluno')).toHaveText(['Maria S.']);
     expect(erros).toEqual([]);
     await context.close();
   });

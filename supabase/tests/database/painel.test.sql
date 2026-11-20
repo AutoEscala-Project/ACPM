@@ -1,13 +1,14 @@
 -- Fase 9: a TV da recepção. O perfil "painel" não lê nenhuma tabela (nem os documentos, os dias, o histórico, a agenda,
 -- os dados pessoais ou, desde a revisão de 17/11, as tabelas dos cursos) e não grava nada: ele vê só o quadro de hoje
 -- (horário de São Paulo) pela função painel_do_dia, com o aluno abreviado ("Maria S.") e, do detalhe do status, só a
--- categoria do motivo e o novo horário.
+-- categoria do motivo e o novo horário. Desde 20/11, com a configuração do painel do cadastro (o quadro e as colunas), só
+-- no formato do app.
 -- Roda dentro de uma transação desfeita no final: não deixa dados no banco.
 begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions;
 
-select plan(32);
+select plan(49);
 
 insert into auth.users (id, email, created_at, updated_at) values
   ('00000000-0000-4000-a000-000000000031', 'painel@painel.acpm.invalid', now(), now()),
@@ -135,6 +136,79 @@ select is((select array_agg(v->>'fKey') from jsonb_array_elements(public.painel_
 select is(public.painel_do_dia()->'voos'->0->>'status', 'Confirmado', 'o status desconhecido da linha vira Confirmado');
 select is(public.painel_do_dia()->'voos'->0->>'etapa', null, 'a missão do curso fora do formato sai');
 select is((select max(length(v.value)) from jsonb_each_text(public.painel_do_dia()->'voos'->0) v), 80, 'os textos longos são cortados');
+
+-- A configuração do painel ("Configurar painel", o campo "painel" do cadastro): a TV, que não lê o cadastro, a recebe
+-- no quadro, só no formato do app (20/11)
+create function pg_temp.painel_como(p_conta text)
+  returns jsonb language sql as $$
+  select set_config('request.jwt.claims', jsonb_build_object('sub', p_conta, 'role', 'authenticated')::text, true);
+  select public.painel_do_dia()->'painel'
+$$;
+create function pg_temp.gravar_painel(p_painel jsonb)
+  returns void language sql as $$
+  update public.documentos set conteudo = jsonb_set(conteudo, '{painel}', p_painel) where chave = 'cadastro'
+$$;
+reset role;
+delete from public.documentos where chave = 'cadastro';
+set local role authenticated;
+select is(pg_temp.painel_como('00000000-0000-4000-a000-000000000031'), 'null'::jsonb, 'sem cadastro, a configuração vem null (a TV mostra o padrão)');
+select is((select array_agg(k order by k) from jsonb_object_keys(public.painel_do_dia()) k), array['data', 'fObs', 'fStatus', 'painel', 'voos'],
+  'os campos de antes e o painel');
+reset role;
+insert into public.documentos (chave, conteudo) values ('cadastro', '{"esquema": 25, "stu": [], "ins": []}');
+set local role authenticated;
+select is(pg_temp.painel_como('00000000-0000-4000-a000-000000000031'), 'null'::jsonb, 'o cadastro sem a configuração: null');
+reset role;
+select pg_temp.gravar_painel('{"quadro": "partidas", "colunas": [{"id": "aluno", "on": true}, {"id": "horario", "on": true},
+  {"id": "observacao", "on": true}, {"id": "missao", "on": false}]}');
+set local role authenticated;
+select is(pg_temp.painel_como('00000000-0000-4000-a000-000000000031'), '{"quadro": "partidas", "colunas": [{"id": "aluno", "on": true},
+  {"id": "horario", "on": true}, {"id": "observacao", "on": true}, {"id": "missao", "on": false}]}'::jsonb,
+  'a TV recebe a configuração gravada: o quadro e as colunas, na ordem');
+select ok(not exists (select 1 from public.documentos), 'a TV continua sem ler o cadastro');
+select is(pg_temp.painel_como('00000000-0000-4000-a000-000000000032')->>'quadro', 'partidas', 'o operador também recebe a configuração');
+reset role;
+select pg_temp.gravar_painel('{"quadro": "missoes", "colunas": [{"id": "horario", "on": true}, {"id": "aeronave", "on": true},
+  {"id": "modelo", "on": true}, {"id": "aluno", "on": true}, {"id": "instrutor", "on": true}, {"id": "missao", "on": true},
+  {"id": "previsto", "on": false}, {"id": "observacao", "on": false}]}');
+set local role authenticated;
+select is(jsonb_array_length(pg_temp.painel_como('00000000-0000-4000-a000-000000000031')->'colunas'), 8, 'as oito colunas do app');
+select is(pg_temp.painel_como('00000000-0000-4000-a000-000000000031')->>'quadro', 'missoes', 'o quadro Missões');
+-- Adulterada pela API: o quadro fora da lista sai; das colunas, só as conhecidas, uma vez (a primeira), com "on"
+-- booleano (o que não é true é false) e sem os campos a mais
+reset role;
+select pg_temp.gravar_painel('{"quadro": "__proto__", "extra": {"a": 1}, "colunas": [{"id": "aluno", "on": "sim"},
+  {"id": "aluno", "on": true}, {"id": "<img src=x>", "on": true}, "horario", null, [1], {"on": true},
+  {"id": "horario", "on": true, "extra": "<b>"}, {"id": "missao", "on": 1}]}');
+set local role authenticated;
+select lives_ok($$ select pg_temp.painel_como('00000000-0000-4000-a000-000000000031') $$, 'o quadro abre com a configuração adulterada');
+select is(pg_temp.painel_como('00000000-0000-4000-a000-000000000031'), '{"colunas": [{"id": "aluno", "on": false},
+  {"id": "horario", "on": true}, {"id": "missao", "on": false}]}'::jsonb,
+  'adulterada: sem o quadro de fora, só as colunas conhecidas, uma vez, com on booleano e nada a mais');
+reset role;
+select pg_temp.gravar_painel('{"quadro": "chegadas", "colunas": "horario,aluno"}');
+set local role authenticated;
+select is(pg_temp.painel_como('00000000-0000-4000-a000-000000000031'), '{"quadro": "chegadas", "colunas": []}'::jsonb,
+  'as colunas que não são uma lista: nenhuma (a TV usa as do padrão)');
+reset role;
+select pg_temp.gravar_painel('"missoes"');
+set local role authenticated;
+select is(pg_temp.painel_como('00000000-0000-4000-a000-000000000031'), 'null'::jsonb, 'a configuração que não é um objeto: null');
+-- O dia sem escala gravada também traz a configuração
+reset role;
+select pg_temp.gravar_painel('{"quadro": "alternar", "colunas": [{"id": "horario", "on": true}]}');
+delete from public.dias where data = (now() at time zone 'America/Sao_Paulo')::date;
+set local role authenticated;
+select is(pg_temp.painel_como('00000000-0000-4000-a000-000000000031'), '{"quadro": "alternar", "colunas": [{"id": "horario", "on": true}]}'::jsonb,
+  'o dia sem escala também traz a configuração');
+select is(public.painel_do_dia()->'voos', 'null'::jsonb, 'e continua sem os voos');
+-- A função fica como era: security definer, o search_path vazio e a execução só para quem entrou
+reset role;
+select ok((select prosecdef from pg_proc where oid = 'public.painel_do_dia()'::regprocedure), 'painel_do_dia continua security definer');
+select is((select proconfig from pg_proc where oid = 'public.painel_do_dia()'::regprocedure), array['search_path=""'], 'com o search_path vazio');
+select ok(has_function_privilege('authenticated', 'public.painel_do_dia()', 'execute') and not has_function_privilege('anon', 'public.painel_do_dia()', 'execute'),
+  'só quem entrou executa (anônimo não)');
+set local role authenticated;
 
 -- O administrador cria a conta da TV
 select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-a000-000000000034","role":"authenticated"}', true);

@@ -113,13 +113,29 @@ export const METEOROLOGIA_DE_TESTE = {
   ]
 };
 
+// A configuração do painel que painel_do_dia entrega (migração 20261120150000_painel_do_dia_com_a_configuracao.sql): o
+// campo "painel" do cadastro, só no formato do app (o quadro da lista; as colunas conhecidas, uma vez, com "on"
+// booleano); sem ela, null
+const QUADROS_DO_PAINEL = ['missoes', 'alternar', 'partidas', 'chegadas'];
+const COLUNAS_DO_PAINEL = ['horario', 'aeronave', 'modelo', 'aluno', 'instrutor', 'missao', 'previsto', 'observacao'];
+function painelDoCadastro(cadastro) {
+  const guardado = cadastro && cadastro.painel;
+  if (!guardado || typeof guardado !== 'object' || Array.isArray(guardado)) return null;
+  const vistas = new Set();
+  const colunas = (Array.isArray(guardado.colunas) ? guardado.colunas : [])
+    .filter(c => c && typeof c === 'object' && !Array.isArray(c) && COLUNAS_DO_PAINEL.includes(c.id) && !vistas.has(c.id) && vistas.add(c.id))
+    .map(c => ({ id: c.id, on: c.on === true }));
+  return { ...(QUADROS_DO_PAINEL.includes(guardado.quadro) ? { quadro: guardado.quadro } : {}), colunas };
+}
+
 // Um servidor pode atender vários contextos do navegador (ex.: operador e gestor vendo os mesmos dados)
 // agora: o relógio do servidor para o prazo da agenda (o mesmo instante do relógio fixo das páginas)
 // cursos: o programa dos cursos nas tabelas, no formato de programa_dos_cursos (sem comResultados, que vem dos
 // resultados; as alteracoes de cada curso, a mais recente primeiro, são as versões registradas dele, e podem faltar);
 // sem ele, os cursos com que o banco começa (PP, PC e INVA, vazios)
 // meteorologia: o que a função meteorologia entrega; null: a função não foi publicada (404 do Supabase)
-export function criarSupabaseFalso({ documentos = {}, dias = {}, historico: historicoInicial = [], cursos: cursosGuardados = cursosIniciais(), agora = new Date(RELOGIO_DAS_PAGINAS), nomes = {}, meteorologia: meteorologiaInicial = METEOROLOGIA_DE_TESTE } = {}) {
+// painelDoDiaAntigo: o painel_do_dia de antes da migração 20261120150000 (sem a configuração do painel)
+export function criarSupabaseFalso({ documentos = {}, dias = {}, historico: historicoInicial = [], cursos: cursosGuardados = cursosIniciais(), agora = new Date(RELOGIO_DAS_PAGINAS), nomes = {}, meteorologia: meteorologiaInicial = METEOROLOGIA_DE_TESTE, painelDoDiaAntigo = false } = {}) {
   const banco = new Map(Object.entries(documentos).map(([chave, conteudo]) => [chave, { conteudo, versao: 1 }]));
   const tabelaDias = new Map(Object.entries(dias).map(([data, conteudo]) => [data, { conteudo, versao: 1 }]));
   // As entradas do histórico já gravadas (no formato da tabela historico)
@@ -351,7 +367,9 @@ export function criarSupabaseFalso({ documentos = {}, dias = {}, historico: hist
         if (!comPerfil) return responder(403, { code: '42501', message: 'sem acesso ao painel' });
         const hoje = new Date(agora.getTime() - 3 * 3600e3).toISOString().slice(0, 10);
         const dia = tabelaDias.get(hoje);
-        return responder(200, { data: hoje, ...quadroDoDia(dia ? dia.conteudo : null) });
+        const quadro = { data: hoje, ...quadroDoDia(dia ? dia.conteudo : null) };
+        const cadastro = banco.get('cadastro');
+        return responder(200, painelDoDiaAntigo ? quadro : { ...quadro, painel: painelDoCadastro(cadastro ? cadastro.conteudo : null) });
       }
       // A situação de cada missão (o último registro); quem não lê a escala recebe a lista vazia
       if (funcao === 'situacao_das_missoes') return responder(200, leEscala ? [...situacaoPorMissao(resultados).values()].map(({ id, ...r }) => r) : []);
