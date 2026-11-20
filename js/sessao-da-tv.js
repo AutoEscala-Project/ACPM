@@ -64,19 +64,23 @@ export function guardaDaEntrada(chave, armazenamento = globalThis.localStorage) 
 // TV tenta de novo) ou 'expirada' (renovar e entrar de novo não deram certo: falta o login)
 export function criarSessaoDaTV({ auth, entrada, perfil, agora = () => Date.now() }) {
   // Entra de novo com o e-mail e a senha guardados. Sem eles, ou com eles recusados (a senha mudou, a conta deixou de
-  // ser a da TV), a sessão que sobrou sai deste navegador e eles também
-  async function entrarDeNovo() {
+  // ser a da TV), eles saem, e a sessão que sobrou (sobrou: a renovação recusada deixou a sessão morta guardada; a conta
+  // que entrou e não é a da TV) sai deste navegador. Sem sessão nenhuma, nada a tirar: um login feito na tela enquanto
+  // isto corria continua
+  async function entrarDeNovo({ sobrou = false } = {}) {
     const guardada = entrada.ler();
+    let sair = sobrou;
     if (guardada) {
       const { error } = await auth.signInWithPassword({ email: guardada.email, password: guardada.senha });
       if (error && falhaPassageira(error)) return 'rede';
       if (!error) {
         const p = await perfil();
         if (p === undefined || soPainel(p)) return 'ok';
+        sair = true;
       }
       entrada.limpar();
     }
-    await auth.signOut({ scope: 'local' }).catch(() => {});
+    if (sair) await auth.signOut({ scope: 'local' }).catch(() => {});
     return 'expirada';
   }
 
@@ -87,7 +91,7 @@ export function criarSessaoDaTV({ auth, entrada, perfil, agora = () => Date.now(
     if (!forcar && !precisaRenovar(sessao.expires_at, agora())) return 'ok';
     const { error: recusa } = await auth.refreshSession();
     if (!recusa) return 'ok';
-    return falhaPassageira(recusa) ? 'rede' : entrarDeNovo();
+    return falhaPassageira(recusa) ? 'rede' : entrarDeNovo({ sobrou: true });
   }
 
   // Uma renovação por vez (a busca do quadro, a da meteorologia e o tique podem pedir juntas)

@@ -224,6 +224,8 @@ describe('A renovação da sessão da TV', () => {
     assert.equal(nomes(comEntrada.chamadas).includes('signInWithPassword'), true);
     const semEntrada = montar({ sessao: null });
     assert.equal(await semEntrada.sessao.renovar(), 'expirada');
+    // Sem sessão, nada a tirar (um login feito na tela enquanto isso corria continua)
+    assert.deepEqual(semEntrada.chamadas, ['getSession']);
   });
 
   it('uma renovação por vez: a segunda espera a primeira (e já encontra a sessão nova)', async () => {
