@@ -247,7 +247,8 @@ test.describe('Modo compartilhado: gravação, conflitos e link da escala', () =
     await page.locator('#eqs input[data-id="PR-BTB"]').uncheck();
     await irPara(page, 'cur');
     await expect(page.locator('#cursos')).toContainText('Só o Administrador muda.');
-    await expect(page.locator('#cursos [data-act="missao-nova"]')).toHaveCount(3);
+    // Um curso de cada vez: o "+ Missão" do PP, ainda sem programa
+    await expect(page.locator('#cursos [data-act="missao-nova"]')).toHaveCount(1);
     liberar();
     await expect(page.locator('#aviso-sync')).toBeVisible();
     await expect(page.locator('#s-cur')).toBeVisible();

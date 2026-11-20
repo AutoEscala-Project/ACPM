@@ -1,15 +1,17 @@
 // A aba Cursos: os cursos (as tabelas dos cursos, em S.programa) e o programa de cada um, fase a fase, com as missões na
-// ordem em que o aluno voa. As fases seguidas com o mesmo módulo ficam sob um título só; cada fase diz quando abre, e cada
-// missão, quando voar ("Depois das anteriores", "Livre na fase" ou "Depois de…" missões anteriores), as marcas
-// (dispensada, avaliação) e, no Noturno em trechos, o trecho. No alto, o filtro (um curso ou todos; os encerrados só com
-// "Mostrar encerrados"). O Administrador (neste navegador, o Operador) cria cursos ("+ Novo curso", com o programa vazio
-// ou um modelo), muda o nome, encerra e reativa, põe o cronograma do PP no PP ainda vazio ou numa fase só, e inclui, muda,
-// reordena e tira fases e missões e volta com as retiradas; os outros perfis leem o programa em texto. Cada curso lista
-// os alunos dele, com o progresso. A cada alteração a aba é refeita no lugar: o foco continua onde estava, e as caixas
-// abertas ("Depois de…", as retiradas, os alunos, as alterações) e o formulário do curso novo continuam como estavam. Ela
-// é refeita também ao abrir e junto com as outras abas (a data carregada, os dados lidos de novo, o conflito, a troca de
-// perfil): aberta, nunca fica com os controles de antes. Sem os programas (a leitura falhou, ou eles ainda esperam a
-// conversão do cadastro), ela diz por quê.
+// ordem em que o aluno voa. Um curso de cada vez: no alto, um botão por curso (os encerrados só com "Mostrar
+// encerrados"); a aba abre no último curso escolhido (até a página recarregar) ou no primeiro ativo. Sob o título do
+// curso, os alunos dele por fase e o índice das fases (por módulo, com quantos alunos estão em cada uma), que leva à fase.
+// As fases seguidas com o mesmo módulo ficam sob um título só; cada fase recolhe e abre no título dela ("Abrir todas" e
+// "Recolher todas" no índice), diz quando abre, e cada missão, quando voar ("Depois das anteriores", "Livre na fase" ou
+// "Depois de…" missões anteriores), as marcas (dispensada, avaliação) e, no Noturno em trechos, o trecho. O
+// Administrador (neste navegador, o Operador) cria cursos ("+ Novo curso", com o programa vazio ou um modelo), muda o
+// nome, encerra e reativa, põe o cronograma do PP no PP ainda vazio ou numa fase só, e inclui, muda, reordena e tira
+// fases e missões e volta com as retiradas; os outros perfis leem o programa em texto. A cada alteração a aba é refeita
+// no lugar: o foco continua onde estava, e as caixas abertas ("Depois de…", as retiradas, os alunos, as alterações), as
+// fases recolhidas e o formulário do curso novo continuam como estavam. Ela é refeita também ao abrir e junto com as
+// outras abas (a data carregada, os dados lidos de novo, o conflito, a troca de perfil): aberta, nunca fica com os
+// controles de antes. Sem os programas (a leitura falhou, ou eles ainda esperam a conversão do cadastro), ela diz por quê.
 import { MIS, DURACAO_MAXIMA_H } from '../config.js';
 import { percursoDoCurso, rotuloDaFase, nomeDaFase, requisitosPossiveis } from '../programa.js';
 import { MODELOS } from '../modelos-de-curso.js';
@@ -20,7 +22,7 @@ import { gerenciaContas } from '../perfis.js';
 import { S, RES, DATA, isGestor, dadoIndisponivel } from '../state.js';
 import { esc, opts, fmtH, hojeISO } from '../format.js';
 import { $, trocarConteudo, trocarElemento } from '../dom.js';
-import { progressoDoAluno, cursoDoResultado } from './etapas.js';
+import { progressoDoAluno, cursoDoResultado, faseDoAluno } from './etapas.js';
 
 // Os programas que não foram lidos, ou que ainda estão no cadastro: o que a aba mostra no lugar deles (o mesmo texto do
 // aviso do topo, em js/actions.js). A próxima missão e o progresso ficam desligados
@@ -177,14 +179,25 @@ function linhaDeConsulta(curso, fase, m, i) {
   </tr>`;
 }
 
-// O cabeçalho da fase, para quem muda: o título (para o leitor de tela e o nome da tabela), o nome, o módulo (com os
-// módulos em uso), quando ela abre (com a caixa "Depois de…") e os botões: subir, descer e tirar (só a fase sem missões).
-// Os nomes dos campos e dos botões dizem a fase ("Nome da Fase 2", "Subir a fase Programa": nomeDaFase)
+// As fases recolhidas, pelo id: continuam assim quando a aba é refeita e quando outro curso é escolhido, até a página
+// recarregar. A fase vem aberta
+const recolhidas = new Set();
+// O título da fase: um botão que recolhe e abre a fase (as missões e o "+ Missão"; o cabeçalho fica), com a seta. É o
+// nome da tabela da fase (o id) e o destino do índice. Para quem muda, o nome fica no campo ao lado: no botão, só a seta
+// (o nome vai para o leitor de tela)
+function tituloDaFase(f, nivel, edita) {
+  const nome = edita ? `<span class="sr">${esc(f.nome)}</span>` : esc(f.nome);
+  return `<${nivel} class="fase-titulo" id="fase-${esc(f.id)}"><button type="button" class="fase-btn" data-recolher-fase="${esc(f.id)}" aria-expanded="${!recolhidas.has(f.id)}"><svg class="ico seta" aria-hidden="true"><use href="#i-baixo"/></svg>${nome}</button></${nivel}>`;
+}
+
+// O cabeçalho da fase, para quem muda: o título (a seta; o nome, para o leitor de tela e a tabela), o nome, o módulo (com
+// os módulos em uso), quando ela abre (com a caixa "Depois de…") e os botões: subir, descer e tirar (só a fase sem
+// missões). Os nomes dos campos e dos botões dizem a fase ("Nome da Fase 2", "Subir a fase Programa": nomeDaFase)
 function cabecalhoQueEdita(curso, f, i, total, comMissoes, nivel, abertas) {
   const rotulo = esc(nomeDaFase(f));
   const botao = (act, texto, nome, desligado, dica = '') => `<button type="button" class="x" data-act="${act}" aria-label="${nome}"${dica ? ` title="${dica}"` : ''}${desligado ? ' disabled' : ''}>${texto}</button>`;
   return `<div class="fase-cab">
-    <${nivel} class="sr" id="fase-${esc(f.id)}">${esc(f.nome)}</${nivel}>
+    ${tituloDaFase(f, nivel, true)}
     <label class="campo-da-fase nome-da-fase"><span>Nome</span> <input data-cfa="nome" value="${esc(f.nome)}" maxlength="80" autocomplete="off" aria-label="Nome da ${rotulo}"></label>
     <label class="campo-da-fase modulo-da-fase"><span>Módulo</span> <input data-cfa="modulo" value="${esc(f.modulo || '')}" maxlength="80" autocomplete="off" list="cur-modulos" aria-label="Módulo da ${rotulo}"></label>
     <label class="campo-da-fase"><span>Abre</span> <select data-cfa="regra" aria-label="Quando a ${rotulo} abre">${opcoesDaRegra(QUANDO_ABRE, f.regra, i === 0)}</select></label>
@@ -193,16 +206,17 @@ function cabecalhoQueEdita(curso, f, i, total, comMissoes, nivel, abertas) {
   </div>`;
 }
 
-// O cabeçalho da fase, para quem só consulta: o nome e, quando ela não espera só as fases anteriores, quando abre
+// O cabeçalho da fase, para quem só consulta: o título (o nome, no botão que recolhe e abre) e, quando ela não espera só
+// as fases anteriores, quando abre
 function cabecalhoDeConsulta(curso, f, nivel) {
   const abre = f.regra === 'livre' ? 'Abre desde o início do curso'
     : f.regra === 'depois' ? `Abre depois ${listaComE(nomesDosRequisitos(curso, f, nomeDaFase).map(nome => `da ${nome}`))}` : '';
-  return `<div class="fase-cab"><${nivel} id="fase-${esc(f.id)}">${esc(f.nome)}</${nivel}>${abre ? `<p class="regra">${esc(abre)}</p>` : ''}</div>`;
+  return `<div class="fase-cab">${tituloDaFase(f, nivel, false)}${abre ? `<p class="regra">${esc(abre)}</p>` : ''}</div>`;
 }
 
-// Uma fase do programa: o cabeçalho, a tabela das missões e, para quem muda, o "+ Missão" dela. nivel: o título da fase
-// (h5 sob o título de um módulo; h4 sem módulo). No curso com mais de uma fase, os nomes dizem a fase ("da Fase 2", "na
-// fase Programa": nomeDaFase)
+// Uma fase do programa: o cabeçalho, a tabela das missões e, para quem muda, o "+ Missão" dela; recolhida, só o
+// cabeçalho. nivel: o título da fase (h5 sob o título de um módulo; h4 sem módulo). No curso com mais de uma fase, os
+// nomes dizem a fase ("da Fase 2", "na fase Programa": nomeDaFase)
 function blocoDaFase(curso, fase, i, fases, missoes, edita, nivel, abertas) {
   const rotulo = nomeDaFase(fase), variasFases = fases.length > 1, onde = variasFases ? `da ${rotulo}` : `do ${curso.sigla}`;
   const cabecalho = edita ? cabecalhoQueEdita(curso, fase, i, fases.length, missoes.length > 0, nivel, abertas) : cabecalhoDeConsulta(curso, fase, nivel);
@@ -211,7 +225,7 @@ function blocoDaFase(curso, fase, i, fases, missoes, edita, nivel, abertas) {
   const tabela = missoes.length
     ? `<div class="tw"><table class="cadastro programa${edita ? '' : ' consulta'}" aria-labelledby="fase-${esc(fase.id)}"><thead><tr>${colunas}</tr></thead><tbody>${linhas.join('')}</tbody></table></div>`
     : '<p class="h">Nenhuma missão nesta fase.</p>';
-  return `<div class="fase" data-fase="${esc(fase.id)}">
+  return `<div class="fase${recolhidas.has(fase.id) ? ' recolhida' : ''}" data-fase="${esc(fase.id)}">
     ${cabecalho}
     ${tabela}
     ${edita ? `<button type="button" class="btn sec" data-act="missao-nova" data-fase="${esc(fase.id)}">+ Missão${variasFases ? ` na ${esc(rotulo)}` : ''}</button>` : ''}
@@ -249,16 +263,62 @@ function alteracoesDoCurso(curso, aberta) {
   return `<details class="alteracoes"${aberta ? ' open' : ''}><summary id="alteracoes-${esc(curso.sigla)}">Alterações do programa</summary><ol>${lista.map(item).join('')}</ol></details>`;
 }
 
-// Os alunos do curso (os de Alunos com este curso), pelo nome, cada um com o progresso no programa (como em Alunos)
-function alunosDoCurso(curso, abertas) {
+// A turma do curso: os alunos dele (os de Alunos com este curso), pelo nome, e, quando o progresso se conhece (com os
+// programas e os resultados, num curso com missões que contam), a fase em que cada um está (a do progresso: a primeira
+// fase aberta em que falta missão) e os que concluíram. porFase: os alunos de cada fase (pelo id), na ordem do nome
+function turmaDoCurso(curso) {
   const alunos = (S.stu || []).filter(s => s.curso === curso.sigla).sort((a, b) => a.nm.localeCompare(b.nm, 'pt-BR'));
+  const onde = alunos.map(faseDoAluno);
+  if (!alunos.length || onde.some(o => !o || (!o.concluido && !o.fase))) return { alunos, porFase: new Map(), concluidos: [], porFaseConhecida: false };
+  const porFase = new Map(), concluidos = [];
+  alunos.forEach((s, i) => {
+    const { fase, concluido } = onde[i];
+    if (concluido) concluidos.push(s);
+    else porFase.set(fase.id, [...(porFase.get(fase.id) || []), s]);
+  });
+  return { alunos, porFase, concluidos, porFaseConhecida: true };
+}
+
+// Os alunos do curso, cada um com o progresso no programa (como em Alunos): no curso com mais de uma fase, por fase, na
+// ordem do programa (os que concluíram no fim); senão, pelo nome
+function alunosDoCurso(curso, fases, turma, abertas) {
+  const { alunos, porFase, concluidos, porFaseConhecida } = turma;
   if (!alunos.length) return '';
   const id = `alunos-${curso.sigla}`;
   const aluno = s => {
     const progresso = progressoDoAluno(s);
     return `<li>${esc(s.nm)}${progresso ? ` · ${progresso}` : ''}</li>`;
   };
-  return `<details class="alunos-do-curso"${abertas.has(id) ? ' open' : ''}><summary id="${esc(id)}">${quantas(alunos.length, 'aluno', 'alunos')} no ${esc(curso.sigla)}</summary><ul>${alunos.map(aluno).join('')}</ul></details>`;
+  // Um grupo: o nome dele, com quantos são, e a lista (que o leitor de tela lê com o nome do grupo)
+  const grupo = (chave, nome, lista) => `<p class="turma-da-fase" id="${esc(`${id}-${chave}`)}">${esc(nome)} <span class="quantos">(${lista.length})</span></p><ul aria-labelledby="${esc(`${id}-${chave}`)}">${lista.map(aluno).join('')}</ul>`;
+  const corpo = porFaseConhecida && fases.length > 1
+    ? [...fases.filter(f => porFase.has(f.id)).map(f => grupo(f.id, f.nome, porFase.get(f.id))), concluidos.length ? grupo('concluidos', 'Concluíram o curso', concluidos) : ''].join('')
+    : `<ul>${alunos.map(aluno).join('')}</ul>`;
+  return `<details class="alunos-do-curso"${abertas.has(id) ? ' open' : ''}><summary id="${esc(id)}">${quantas(alunos.length, 'aluno', 'alunos')} no ${esc(curso.sigla)}</summary>${corpo}</details>`;
+}
+
+// O índice das fases do curso (com mais de uma fase): os módulos e, em cada um, as fases, cada uma com quantos alunos
+// estão nela; o clique leva à fase (js/eventos/cursos.js, irParaFase). No celular, o nome curto ("Fase 4"). No fim, "Abrir
+// todas" e "Recolher todas"
+function indiceDasFases(curso, fases, turma) {
+  if (fases.length < 2) return '';
+  // As fases seguidas do mesmo módulo, juntas (como os títulos dos módulos no programa)
+  const modulos = [];
+  for (const f of fases) {
+    if (modulos.length && modulos.at(-1).modulo === f.modulo) modulos.at(-1).fases.push(f);
+    else modulos.push({ modulo: f.modulo, fases: [f] });
+  }
+  const link = f => {
+    const rotulo = rotuloDaFase(f), resto = f.nome.slice(rotulo.length), n = (turma.porFase.get(f.id) || []).length;
+    return `<li><a href="#fase-${esc(f.id)}" data-ir-fase="${esc(f.id)}">${esc(rotulo)}${resto ? `<span class="resto-do-nome">${esc(resto)}</span>` : ''}</a>${n ? ` <span class="alunos-na-fase" data-dica="alunos-na-fase">${quantas(n, 'aluno', 'alunos')}</span>` : ''}</li>`;
+  };
+  const modulo = ({ modulo: nome, fases: lista }, i) => (nome
+    ? `<div class="indice-modulo"><span class="indice-modulo-nome" id="indice-modulo-${i}">${esc(nome)}</span><ul aria-labelledby="indice-modulo-${i}">${lista.map(link).join('')}</ul></div>`
+    : `<div class="indice-modulo"><ul>${lista.map(link).join('')}</ul></div>`);
+  return `<nav class="indice-das-fases" aria-label="Fases do ${esc(curso.sigla)}">
+    <div class="indice-modulos">${modulos.map(modulo).join('')}</div>
+    <div class="indice-acoes"><button type="button" class="btn quiet" id="fases-abrir">Abrir todas</button><button type="button" class="btn quiet" id="fases-recolher">Recolher todas</button></div>
+  </nav>`;
 }
 
 // Os modelos de programa feitos para o curso (o cronograma do PP, no PP), oferecidos enquanto o programa está vazio ou numa
@@ -282,10 +342,10 @@ function cabecalhoDoCurso(curso, edita, { fases, missoes }) {
   </div>`;
 }
 
-// Um curso: o cabeçalho; as fases, sob o título do módulo delas; "+ Fase", as retiradas, os alunos e as alterações. O curso
-// sem nenhuma fase tem o "+ Missão" que começa a Fase 1
+// Um curso: o cabeçalho; os alunos, por fase, e o índice das fases; as fases, sob o título do módulo delas; "+ Fase", as
+// retiradas e as alterações. O curso sem nenhuma fase tem o "+ Missão" que começa a Fase 1
 function cartaoDoCurso(curso, edita, abertas) {
-  const percurso = percursoDoCurso(curso), { fases, porFase } = percurso;
+  const percurso = percursoDoCurso(curso), { fases, porFase } = percurso, turma = turmaDoCurso(curso);
   let modulo = null;
   const corpo = fases.length
     ? fases.map((f, i) => {
@@ -296,28 +356,39 @@ function cartaoDoCurso(curso, edita, abertas) {
     : `<p class="h">Nenhuma missão no programa.${edita ? ' Use “+ Missão” para incluir a primeira (ela começa a Fase 1), ou “+ Fase” para começar pelas fases.' : ''}</p>${edita ? '<button type="button" class="btn sec" data-act="missao-nova">+ Missão</button>' : ''}`;
   return `<div class="pn curso${curso.ativo ? '' : ' encerrado'}" data-curso="${esc(curso.sigla)}">
     ${cabecalhoDoCurso(curso, edita, percurso)}
+    ${alunosDoCurso(curso, fases, turma, abertas)}
+    ${indiceDasFases(curso, fases, turma)}
     ${corpo}
     ${edita ? '<button type="button" class="btn sec" data-act="fase-nova">+ Fase</button>' : ''}
     ${retiradasDoCurso(curso, edita, abertas)}
-    ${alunosDoCurso(curso, abertas)}
     ${alteracoesDoCurso(curso, abertas.has(`alteracoes-${curso.sigla}`))}
   </div>`;
 }
 
-// O filtro da aba (para todos os perfis): o curso mostrado ('': todos) e se os encerrados aparecem. O curso escolhido
-// aparece também encerrado
+// O curso na tela e "Mostrar encerrados", para todos os perfis: a escolha fica na memória até a página recarregar. O
+// encerrado aparece só com "Mostrar encerrados"
 const filtro = { curso: '', encerrados: false };
-// Muda o filtro ({ curso, encerrados }, os dois ou um só); quem muda refaz a aba
+// Muda a escolha ({ curso, encerrados }, os dois ou um só); quem muda refaz a aba
 export function filtrarCursos(mudanca) {
   Object.assign(filtro, mudanca);
 }
-const aparece = curso => curso.ativo || filtro.encerrados || curso.sigla === filtro.curso;
+const aparece = curso => curso.ativo || filtro.encerrados;
+// O curso na tela: o escolhido, se ele aparece; senão (nenhum escolhido, ou o escolhido encerrado sem "Mostrar
+// encerrados", ou que não existe mais: o curso novo que o servidor recusou), o primeiro ativo, na ordem dos cursos; sem
+// nenhum ativo, o primeiro encerrado, com "Mostrar encerrados"
+function cursoNaTela(programa) {
+  const aparecem = programa.filter(aparece);
+  return aparecem.find(c => c.sigla === filtro.curso) || aparecem.find(c => c.ativo) || aparecem[0] || null;
+}
 
-// A barra da aba: o curso (todos, ou um), "Mostrar encerrados" e, para quem muda, "+ Novo curso"
-function barraDosCursos(programa, edita, formularioAberto) {
-  const opcoes = [['', 'Todos os cursos'], ...programa.filter(aparece).map(c => [c.sigla, `${c.sigla} · ${c.nome}${c.ativo ? '' : ' (encerrado)'}`])];
+// A barra da aba: um botão por curso (o da tela, pressionado; no celular, só a sigla), "Mostrar encerrados" e, para quem
+// muda, "+ Novo curso". Os botões dos cursos não são ações (sem data-act): valem para todos os perfis, também enquanto a
+// data abre
+function barraDosCursos(programa, naTela, edita, formularioAberto) {
+  const botao = c => `<button type="button" id="cur-ver-${esc(c.sigla)}" data-ver-curso="${esc(c.sigla)}"${c === naTela ? ' class="on"' : ''} aria-pressed="${c === naTela}"><span class="sigla">${esc(c.sigla)}</span><span class="nome-do-curso"> · ${esc(c.nome)}</span>${c.ativo ? '' : '<span class="curso-encerrado"> (encerrado)</span>'}</button>`;
+  const aparecem = programa.filter(aparece);
   return `<div class="bar barra-dos-cursos">
-    <label class="flt-rotulo"><span>Curso</span> <select id="cur-sel" class="flt-ctrl">${opts(opcoes, filtro.curso)}</select></label>
+    ${aparecem.length ? `<div class="seg seg-dos-cursos" role="group" aria-label="Curso">${aparecem.map(botao).join('')}</div>` : ''}
     <label class="chk"><input type="checkbox" id="cur-encerrados" class="flt-ctrl"${filtro.encerrados ? ' checked' : ''}> Mostrar encerrados</label>
     <span class="cresce"></span>
     ${edita ? `<button type="button" class="btn" id="cur-novo" data-act="curso-novo" aria-expanded="${formularioAberto}" aria-controls="form-curso">+ Novo curso</button>` : ''}
@@ -375,20 +446,47 @@ export function rCursos() {
   // O cursor de quem digita no formulário continua onde estava
   const ativo = document.activeElement;
   const cursor = formulario.aberto && ativo && ativo.matches('#form-curso input:not([type="radio"])') ? [ativo.id, ativo.selectionStart, ativo.selectionEnd] : null;
-  // O curso escolhido que não existe mais (o curso novo que o servidor recusou) volta a todos
-  if (filtro.curso && !programa.some(c => c.sigla === filtro.curso)) filtro.curso = '';
-  const mostrados = programa.filter(c => (filtro.curso ? c.sigla === filtro.curso : aparece(c)));
+  // Um curso de cada vez. O que ficou na tela no lugar do escolhido passa a ser o escolhido: o encerrado escondido por
+  // "Mostrar encerrados" não volta sozinho quando os encerrados aparecem de novo
+  const naTela = cursoNaTela(programa);
+  if (naTela) filtro.curso = naTela.sigla;
   const modulos = [...new Set(programa.flatMap(c => percursoDoCurso(c).fases.map(f => f.modulo).filter(Boolean)))];
   const encerrados = programa.filter(c => !c.ativo).length;
   // Antes de a data abrir, sem programa: a aba é refeita quando ele chega
-  trocarConteudo(lugar, barraDosCursos(programa, edita, formulario.aberto)
+  trocarConteudo(lugar, barraDosCursos(programa, naTela, edita, formulario.aberto)
     + (edita ? formularioDoCurso(formulario) : '')
     + `<p class="h">O programa de cada curso, em fases (as fases de um módulo juntas), na ordem em que o aluno voa: quando cada fase abre e, em cada missão, o código (PP-07), o nome, o tipo de missão da escala, o recurso, as horas e quando voar. ${edita ? 'Só o Administrador muda.' : 'Só o Administrador muda; aqui é consulta.'}</p>`
-    + (programa.length && !mostrados.length ? `<p class="h">Nenhum curso ativo.${encerrados ? ' Marque “Mostrar encerrados” para ver os encerrados.' : ''}</p>` : '')
-    + mostrados.map(curso => cartaoDoCurso(curso, edita, abertas)).join('')
+    + (programa.length && !naTela ? `<p class="h">Nenhum curso ativo.${encerrados ? ' Marque “Mostrar encerrados” para ver os encerrados.' : ''}</p>` : '')
+    + (naTela ? cartaoDoCurso(naTela, edita, abertas) : '')
     + (edita ? `<datalist id="cur-modulos">${modulos.map(m => `<option value="${esc(m)}"></option>`).join('')}</datalist>` : ''));
   if (cursor && document.activeElement && document.activeElement.id === cursor[0]) document.activeElement.setSelectionRange(cursor[1], cursor[2]);
   manterRolagens(lugar, rolagens);
+}
+
+// Recolhe ou abre uma fase (aberta: true abre, false recolhe; sem ele, troca), também na tela, sem refazer a aba
+export function recolherFase(id, aberta = recolhidas.has(id)) {
+  if (aberta) recolhidas.delete(id);
+  else recolhidas.add(id);
+  const bloco = $(`#cursos .fase[data-fase="${CSS.escape(id)}"]`);
+  if (!bloco) return;
+  bloco.classList.toggle('recolhida', !aberta);
+  const botao = bloco.querySelector('[data-recolher-fase]');
+  if (botao) botao.setAttribute('aria-expanded', String(aberta));
+}
+// "Abrir todas" e "Recolher todas": as fases do curso na tela
+export function recolherTodasAsFases(recolher) {
+  for (const bloco of document.querySelectorAll('#cursos .fase[data-fase]')) recolherFase(bloco.dataset.fase, !recolher);
+}
+// Um link do índice: a fase (aberta, se estava recolhida) vem para o alto da tela, e o foco vai para o título dela (o
+// botão que a recolhe, com o nome), sem rolar de novo. O destino da rolagem é o bloco da fase: o título de quem muda é
+// só a seta
+export function irParaFase(id) {
+  const bloco = $(`#cursos .fase[data-fase="${CSS.escape(id)}"]`);
+  if (!bloco) return;
+  recolherFase(id, true);
+  bloco.scrollIntoView({ block: 'start' });
+  const titulo = bloco.querySelector('[data-recolher-fase]');
+  if (titulo) titulo.focus({ preventScroll: true });
 }
 
 // Só a lista das alterações de um curso, depois de uma gravação confirmada (o resto da aba já mostra o curso como ficou;

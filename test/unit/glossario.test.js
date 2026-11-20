@@ -45,9 +45,10 @@ describe('Glossário', () => {
   });
 
   // A seção Glossário do Manual lista os termos de cada aba na ordem do glossário: os da aba Cursos ficam no bloco dela,
-  // e o grupo começa pela fase do curso (não pelo trecho do Noturno, que fica no fim)
+  // e o grupo começa pela fase do curso e pelos alunos nela (o índice das fases), não pelo trecho do Noturno, que fica no
+  // fim
   it('os termos da aba Cursos, na ordem do bloco dela', () => {
     const daAba = Object.entries(GLOSSARIO).filter(([, t]) => t.aba === 'Cursos').map(([id]) => id);
-    assert.deepEqual(daAba, ['fase-do-curso', 'quando-voar', 'dispensada', 'trecho-do-noturno']);
+    assert.deepEqual(daAba, ['fase-do-curso', 'alunos-na-fase', 'quando-voar', 'dispensada', 'trecho-do-noturno']);
   });
 });

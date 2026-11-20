@@ -120,12 +120,12 @@ export const filtrarCursos = (page, aba, valores, opcoes) => marcarNoFiltro(page
 // O filtro das categorias de Recursos: os valores são os ids das categorias ('C152', 'C172', 'sim', 'PA-34')
 export const filtrarCategorias = (page, valores, opcoes) => marcarNoFiltro(page, 'flt-rec-cat', valores, opcoes);
 
-// As telas que não são a de abertura de uma aba: as outras vistas (Instrutores › Cadastro, Recursos › Cadastro), os
-// painéis abertos dos filtros de vários valores (o das habilitações, em Instrutores, e o dos cursos, em Alunos e na
-// Demanda, com duas marcas: o botão diz as duas), as tabelas (e a frota) que os filtros deixam sem nenhuma linha (com
-// "Limpar filtros"; também a da Demanda) e Recursos com o painel das categorias aberto, com duas marcas. Os testes do
-// celular e da acessibilidade, que conferem cada aba como ela abre, conferem também estas: conferir(nome) roda em cada
-// uma. No fim, a busca e as marcas voltam a vazias, e Recursos, à Disponibilidade do dia
+// As telas que não são a de abertura de uma aba: as outras vistas (Instrutores › Cadastro, Recursos › Cadastro, outro
+// curso em Cursos), os painéis abertos dos filtros de vários valores (o das habilitações, em Instrutores, o dos cursos, em
+// Alunos e na Demanda, e o das categorias, em Recursos, com duas marcas: o botão diz as duas) e as tabelas (e a frota)
+// que os filtros deixam sem nenhuma linha (com "Limpar filtros"; também a da Demanda). Os testes do celular e da
+// acessibilidade, que conferem cada aba como ela abre, conferem também estas: conferir(nome) roda em cada uma. No fim, a
+// busca e as marcas voltam a vazias, Recursos, à Disponibilidade do dia, e Cursos, ao primeiro curso
 export async function percorrerVistasEFiltros(page, conferir) {
   await irParaVista(page, 'ins', 'cadastro');
   await conferir('instrutores: cadastro');
@@ -174,6 +174,12 @@ export async function percorrerVistasEFiltros(page, conferir) {
   await expect(page.locator('#flt-rec-cat-painel input:checked')).toHaveCount(0);
   await expect(page.locator('#flt-rec-cat')).toHaveText('Todas as categorias');
   await expect(page.locator('#flt-rec-mat')).toHaveValue('');
+  // Cursos: um de cada vez, escolhido no alto
+  await irPara(page, 'cur');
+  await page.locator('#cur-ver-PC').click();
+  await expect(page.locator('#cursos .curso[data-curso="PC"]')).toBeVisible();
+  await conferir('cursos: PC');
+  await page.locator('#cur-ver-PP').click();
 }
 
 // A tabela que os filtros deixam sem nenhuma linha: a linha que diz por quê; a contagem já escrita (ela espera a

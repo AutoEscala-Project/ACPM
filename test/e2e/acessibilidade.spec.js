@@ -55,6 +55,28 @@ test.describe('Acessibilidade', () => {
     expect(await semNome(page, '#historico'), 'histórico').toEqual([]);
   });
 
+  // A aba Cursos com o programa em fases (o exemplo não tem programa: aqui, o cronograma do PP): os botões dos cursos, o
+  // índice das fases, o título de cada fase (o botão que a recolhe; para quem muda, só a seta, com o nome da fase para o
+  // leitor de tela) e "Abrir todas" e "Recolher todas" têm nome, para quem muda e para quem só consulta, abertas e
+  // recolhidas
+  test('a aba Cursos em fases: os cursos, o índice e o título de cada fase têm nome, abertas e recolhidas', async ({ page }) => {
+    await abrir(page, { estado: cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, {}, { curso: 'PP' })] }) });
+    await irPara(page, 'cur');
+    await confirmar(page, '#cursos [data-act="curso-modelo"]');
+    await expect(page.locator('#cursos .fase')).toHaveCount(9);
+    await expect(page.locator('#cursos [data-recolher-fase]').first()).toHaveAccessibleName('Fase 1 – Introdução ao Voo');
+    await expect(page.locator('#cursos [data-recolher-fase]').first()).toHaveAttribute('aria-expanded', 'true');
+    for (const perfil of ['operador', 'gestor']) {
+      await page.locator('#role-sel').selectOption(perfil);
+      for (const fases of ['#fases-abrir', '#fases-recolher']) {
+        await page.locator(fases).click();
+        expect(await semNome(page, 'main section.on'), `${perfil}, ${fases}`).toEqual([]);
+      }
+    }
+    await expect(page.getByRole('navigation', { name: 'Fases do PP' }).getByRole('link')).toHaveCount(9);
+    await expect(page.getByRole('group', { name: 'Curso' }).getByRole('button', { name: 'PP · Piloto Privado' })).toHaveAttribute('aria-pressed', 'true');
+  });
+
   // O "+" que agenda é só o ícone (escondido do leitor de tela): o nome diz onde o voo vai, o recurso ou o instrutor da
   // linha no mapa e o horário na lista
   test('o "+" que agenda tem nome em cada vista: o recurso e o instrutor da linha no mapa, o horário na lista', async ({ page }) => {

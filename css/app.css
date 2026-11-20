@@ -862,6 +862,41 @@ tbody tr.sem-resultado .sem-resultado-texto { position: sticky; left: 8px; max-w
 #cursos details.alunos-do-curso ul { margin: 6px 0 0; padding-left: 20px; font-size: 13.5px; }
 #cursos details.alunos-do-curso li { margin: 2px 0; }
 #cursos details.alunos-do-curso .progresso { color: var(--mu); font-variant-numeric: tabular-nums; }
+/* Os alunos por fase: o nome da fase (com quantos são) em cima de cada lista */
+#cursos .turma-da-fase { margin: 8px 0 0; font-size: 13.5px; font-weight: 600; }
+#cursos .turma-da-fase .quantos { color: var(--mu); font-weight: 400; font-variant-numeric: tabular-nums; }
+#cursos .turma-da-fase + ul { margin-top: 2px; }
+/* Um curso de cada vez: um botão por curso no controle segmentado (vários cursos quebram a linha); o encerrado diz que
+   é. A sigla (PC-IFR) e "(encerrado)" não se partem. No celular, só a sigla */
+#cursos .seg-dos-cursos { flex-wrap: wrap; }
+#cursos .seg-dos-cursos .curso-encerrado { font-weight: 400; }
+#cursos .seg-dos-cursos :is(.sigla, .curso-encerrado) { white-space: nowrap; }
+/* O índice das fases: os módulos, cada um com as fases (o link leva à fase) e quantos alunos estão em cada uma; "Abrir
+   todas" e "Recolher todas" ao lado */
+#cursos .indice-das-fases {
+  display: flex; flex-wrap: wrap; align-items: flex-start; gap: 6px 16px; margin: 12px 0 4px; padding: 8px 12px;
+  border: 1px solid var(--ln); border-radius: 8px; background: var(--pn2);
+}
+#cursos .indice-modulos { flex: 1 1 28em; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+#cursos .indice-modulo-nome { display: block; font: 600 12.5px 'Barlow Semi Condensed', sans-serif; color: var(--mu); letter-spacing: .02em; text-transform: uppercase; }
+#cursos .indice-das-fases ul { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 2px 16px; }
+#cursos .indice-das-fases li { display: inline-flex; align-items: baseline; flex-wrap: wrap; gap: 0 6px; }
+#cursos .indice-das-fases a { display: inline-block; padding: 2px 0; font-weight: 600; text-decoration: none; }
+#cursos .indice-das-fases a:hover { text-decoration: underline; }
+#cursos .indice-das-fases a:focus-visible { outline: 2px solid var(--ac); outline-offset: 2px; border-radius: 3px; }
+#cursos .alunos-na-fase { color: var(--mu); font-size: 13px; white-space: nowrap; }
+#cursos .indice-acoes { display: flex; flex-wrap: wrap; gap: 4px; margin-left: auto; }
+/* A fase recolhe e abre no título (a seta gira, como nos grupos de Recursos e nos horários da Lista); recolhida, só o
+   cabeçalho fica. O link do índice a traz para o alto da tela, com uma folga */
+#cursos .fase { scroll-margin-top: 8px; }
+#cursos .fase.recolhida > :not(.fase-cab) { display: none; }
+#cursos .fase-cab .fase-titulo { display: inline-flex; }
+#cursos .fase-btn {
+  display: inline-flex; align-items: center; gap: 6px; min-width: 24px; min-height: 24px; padding: 2px 4px 2px 0; border: 0; border-radius: 4px;
+  background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer;
+}
+#cursos .fase-btn .seta { flex: none; transition: transform .15s; }
+#cursos .fase-btn[aria-expanded="false"] .seta { transform: rotate(-90deg); }
 /* A tabela das missões: as marcas uma embaixo da outra e, nos botões, a fase da missão embaixo de subir, descer e tirar;
    numa missão Noturno, o trecho embaixo do tipo de missão */
 table.cadastro.programa td { padding: 4px 6px; }
@@ -928,6 +963,17 @@ td.c-curso .progresso { display: block; margin-top: 2px; color: var(--mu); font-
   /* O botão do cronograma ("Usar o cronograma do PP (P.I PPA 001A)") quebra a linha em vez de passar da tela */
   #cursos .acoes-do-curso .btn, #form-curso .chk { flex-shrink: 1; max-width: 100%; text-align: left; }
   table.cadastro.programa label.trecho-do-noturno select { flex: 1; }
+  /* Os cursos pela sigla; as fases do índice pelo nome curto ("Fase 4"), com 44 px para o dedo; a seta da fase ao lado
+     do nome dela, na mesma linha (o campo do nome encolhe, também nos 320 px). Os botões dos cursos não encolhem abaixo
+     do texto: com muitos cursos (ou um encerrado à mostra), o que não cabe vai para a linha de baixo, em vez de cortar a
+     sigla e o "(encerrado)" */
+  #cursos .seg-dos-cursos .nome-do-curso, #cursos .indice-das-fases .resto-do-nome { display: none; }
+  #cursos .seg-dos-cursos button { flex: 1 0 auto; min-width: 44px; }
+  #cursos .indice-das-fases ul { gap: 0 12px; }
+  #cursos .indice-das-fases a { display: inline-flex; align-items: center; min-width: 44px; min-height: 44px; }
+  #cursos .indice-acoes { margin-left: 0; }
+  #cursos .fase-btn { min-width: 44px; min-height: 44px; }
+  #cursos .fase-cab > .nome-da-fase { flex-basis: calc(100% - 58px); min-width: 0; }
 }
 .legenda-disp { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; margin: 0 0 8px; font-size: 13.5px; color: var(--mu); }
 .legenda-disp span { display: inline-flex; align-items: center; gap: 6px; }

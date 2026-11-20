@@ -163,14 +163,15 @@ export function ligarMenu(botao, menu, { fecharAoEscolher = true } = {}) {
 //   seguinte;
 // - um botão (o ✕ do voo tirado da escala, o Reverter já usado, o Subir de quem chegou ao topo da fila): o item dele, ou
 //   o que ficou no lugar, que não faz nada com o Enter. Assim o Enter repetido ou segurado não age nos itens seguintes.
-// Na aba Cursos: os campos do curso (data-cc), da fase (data-cfa) e da missão (data-cf), e a fase ou a missão de que um
-// botão ou uma caixa de "depois de…" fala (data-fase, data-missao); as linhas são a missão (tr[data-missao]), a fase
-// (.fase[data-fase]) e o curso (.curso[data-curso]). No filtro de vários valores (js/views/filtro-multiplo.js), a caixa
-// de cada opção: o filtro (data-filtro) e o valor (data-valor)
+// Na aba Cursos: os campos do curso (data-cc), da fase (data-cfa) e da missão (data-cf), a fase ou a missão de que um
+// botão ou uma caixa de "depois de…" fala (data-fase, data-missao), o título que recolhe a fase (data-recolher-fase) e o
+// link do índice (data-ir-fase); as linhas são a missão (tr[data-missao]), a fase (.fase[data-fase]) e o curso
+// (.curso[data-curso]). Os botões dos cursos, no alto, têm o id. No filtro de vários valores (js/views/filtro-multiplo.js),
+// a caixa de cada opção: o filtro (data-filtro) e o valor (data-valor)
 const QUEM_E = ['id', 'data-f', 'data-a', 'data-act', 'data-w', 'data-i', 'data-h', 'data-b', 'data-cat', 'data-min', 'data-cal',
   'data-dia', 'data-delta', 'data-criterio', 'data-valor', 'data-logid', 'data-horas', 'data-fkey', 'data-resultado',
   'data-reparo', 'data-dados', 'data-id', 'data-mid', 'data-recolher-tempo', 'data-recolher-grupo', 'data-agendar', 'data-cc',
-  'data-cfa', 'data-cf', 'data-fase', 'data-missao', 'data-filtro'];
+  'data-cfa', 'data-cf', 'data-fase', 'data-missao', 'data-filtro', 'data-recolher-fase', 'data-ir-fase'];
 const DA_LINHA = ['data-k', 'data-id', 'data-mid', 'data-fkey', 'data-cat', 'data-missao', 'data-fase', 'data-curso'];
 // O tipo do campo: os atributos que dizem o que ele é, sem os que dizem de quem (o voo, o aluno, o recurso) ou qual
 // (o valor da caixa do filtro)

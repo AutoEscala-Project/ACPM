@@ -7,7 +7,8 @@
 // parte da versão 0, que o cria). Uma recusa (ou a falta de conexão) descarta o resto da fila do curso, e a tela volta a
 // mostrar o programa gravado, lido de novo, com o aviso do motivo; nada disso trava o resto da tela (outra pessoa que
 // mudou o programa não é um conflito da escala). As alterações do programa não entram no histórico da data: ficam nas
-// versões do curso, que a aba lista. O filtro da aba (o curso mostrado e os encerrados) vale para todos os perfis.
+// versões do curso, que a aba lista. O que só muda o que se vê (o curso na tela, "Mostrar encerrados", recolher e abrir
+// as fases e o índice das fases) vale para todos os perfis, também enquanto a data abre: não são ações (data-act).
 // Antes de a escala abrir (js/actions.js, aindaNaoAbriu), o programa não muda: os botões recusam em registro.js, e os
 // campos e o curso novo, aqui, com o mesmo aviso
 import { aindaNaoAbriu } from '../actions.js';
@@ -26,7 +27,7 @@ import { confirmado } from './confirmacao.js';
 import { aoAcionar } from './registro.js';
 import {
   rCursos, podeEditarCursos, programasIndisponiveis, codigoTravado, codigoComResultados, codigoNaDemanda, codigosReservados, mostrarAlteracoes,
-  nomesDosRequisitos, listaComE, filtrarCursos
+  nomesDosRequisitos, listaComE, filtrarCursos, recolherFase, recolherTodasAsFases, irParaFase
 } from '../views/cursos.js';
 import { rAlu } from '../views/cadastros.js';
 import { rDem } from '../views/demanda.js';
@@ -235,10 +236,13 @@ function ondeNoPrograma(el) {
   return { curso, fase, missao, tr };
 }
 
-// O foco depois de refazer a aba: o primeiro dos elementos que existe e está ligado (selecionar: o texto do campo)
+// O foco depois de refazer a aba: o primeiro dos elementos que existe e está ligado (selecionar: o texto do campo). O que
+// fica numa fase recolhida (a missão levada para outra fase ou de volta ao programa) abre a fase
 function focar(seletores, { selecionar = false } = {}) {
   const el = seletores.map(s => s && $(s)).find(x => x && !x.disabled);
   if (!el) return;
+  const fase = el.closest('#cursos .fase.recolhida');
+  if (fase && !el.closest('.fase-cab')) recolherFase(fase.dataset.fase, true);
   el.focus();
   if (selecionar) el.select();
 }
@@ -502,12 +506,30 @@ document.addEventListener('change', e => {
   }
 });
 
-// O filtro da aba, para todos os perfis (também quem só consulta): o curso mostrado (ou todos) e "Mostrar encerrados"
+// "Mostrar encerrados", para todos os perfis (também quem só consulta): os botões dos cursos encerrados aparecem ou somem
+// (o encerrado que estava na tela dá o lugar ao primeiro ativo)
 document.addEventListener('change', e => {
-  if (e.target.id === 'cur-sel') filtrarCursos({ curso: e.target.value });
-  else if (e.target.id === 'cur-encerrados') filtrarCursos({ encerrados: e.target.checked });
-  else return;
+  if (e.target.id !== 'cur-encerrados') return;
+  filtrarCursos({ encerrados: e.target.checked });
   rCursos();
+});
+
+// O que só muda o que se vê, para todos os perfis: o curso na tela (o foco fica no botão dele), recolher e abrir uma fase
+// (no título dela) ou todas, e os links do índice das fases
+document.addEventListener('click', e => {
+  if (!(e.target instanceof Element) || !e.target.closest('#cursos')) return;
+  const curso = e.target.closest('[data-ver-curso]'), fase = e.target.closest('[data-recolher-fase]'), link = e.target.closest('[data-ir-fase]');
+  if (curso) {
+    filtrarCursos({ curso: curso.dataset.verCurso });
+    rCursos();
+  } else if (fase) {
+    recolherFase(fase.dataset.recolherFase);
+  } else if (link) {
+    e.preventDefault();
+    irParaFase(link.dataset.irFase);
+  } else if (e.target.closest('#fases-abrir, #fases-recolher')) {
+    recolherTodasAsFases(Boolean(e.target.closest('#fases-recolher')));
+  }
 });
 
 // Os cursos ------------------------------------------------------------------------------------------------------------

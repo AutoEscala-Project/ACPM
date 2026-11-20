@@ -13,6 +13,8 @@ const dia = (extra = {}) => ({ ...cenario({ ins: [instrutor(1, 9)], stu: [aluno(
 const PROGRAMA = { PP: [{ id: 'PP-01', nome: 'Familiarização', mis: 'Voo Local', eq: 'C152', nb: 1 }, { id: 'PP-02', nome: 'Navegação', mis: 'Navegação', eq: 'C152', nb: 2 }], PC: [], INVA: [] };
 const curso = (page, id) => page.locator(`#cursos .curso[data-curso="${id}"]`);
 const linhas = (page, id) => curso(page, id).locator('tbody tr[data-i]');
+// Os cursos na aba (um de cada vez), pela sigla
+const siglasNaAba = page => page.locator('#cursos .curso').evaluateAll(els => els.map(e => e.dataset.curso));
 
 // O programa gravado neste navegador (acpm4_cursos): as missões de um curso, as do programa e as tiradas dele, e as
 // alterações registradas
@@ -519,7 +521,8 @@ test.describe('Cursos no servidor (modo compartilhado)', () => {
     await expect(admin.page.locator('#alu tr[data-id="1000"] .progresso')).toHaveText('0/2 · próxima PP-01');
     await irPara(admin.page, 'cur');
     await expect(linhas(admin.page, 'PP')).toHaveCount(2);
-    await expect(admin.page.locator('#cursos [data-act="missao-nova"]')).toHaveCount(3);
+    // Um curso de cada vez: o PP, com o "+ Missão" da fase dele
+    await expect(admin.page.locator('#cursos [data-act="missao-nova"]')).toHaveCount(1);
     expect(admin.erros).toEqual([]);
     await admin.contexto.close();
   });
@@ -595,7 +598,7 @@ test.describe('Cursos no servidor (modo compartilhado)', () => {
     await expect(operador.page.locator('#cursos')).toContainText('Só o Administrador muda; aqui é consulta.');
     await expect(operador.page.locator('#cursos [data-act="missao-nova"]')).toHaveCount(0);
     await expect(linhas(operador.page, 'PP').nth(0).locator('td.c-nome')).toHaveText('Familiarização');
-    // Só o filtro da aba (o curso e "Mostrar encerrados") fica para quem consulta: nenhum campo do programa nem o curso novo
+    // Só "Mostrar encerrados" fica para quem consulta (e os botões dos cursos): nenhum campo do programa nem o curso novo
     await expect(operador.page.locator('#cursos :is(input, select):not(.flt-ctrl), #cur-novo, #form-curso')).toHaveCount(0);
     const recusa = await operador.page.evaluate(async () => {
       const { ApiClient } = await import('./js/storage.js');
@@ -639,11 +642,18 @@ test.describe('Cursos no servidor (modo compartilhado)', () => {
     expect(admin.erros).toEqual([]);
     await admin.contexto.close();
 
-    // O Gestor vê o curso encerrado só com "Mostrar encerrados", em texto
+    // O Gestor vê o curso encerrado só com "Mostrar encerrados", em texto: um curso de cada vez, escolhido no alto (os
+    // botões dos cursos valem para quem só consulta)
     const gestor = await entrar(browser, servidor, CONTAS.gestor);
     await irPara(gestor.page, 'cur');
-    await expect(gestor.page.locator('#cursos .curso')).toHaveCount(3);
+    await expect(gestor.page.locator('#cursos .curso')).toHaveCount(1);
+    await expect(gestor.page.locator('#cursos .seg-dos-cursos button')).toHaveText(['PP · Piloto Privado', 'PC · Piloto Comercial', 'INVA · Instrutor de Voo']);
     await gestor.page.locator('#cur-encerrados').check();
+    await expect(gestor.page.locator('#cursos .seg-dos-cursos button')).toHaveText(['PP · Piloto Privado', 'PC · Piloto Comercial', 'INVA · Instrutor de Voo', 'PP-B · Piloto Privado (turma B) (encerrado)']);
+    await expect(curso(gestor.page, 'PP')).toBeVisible();
+    await gestor.page.locator('#cur-ver-PP-B').click();
+    await expect(gestor.page.locator('#cur-ver-PP-B')).toHaveAttribute('aria-pressed', 'true');
+    await expect(gestor.page.locator('#cursos .curso')).toHaveCount(1);
     await expect(curso(gestor.page, 'PP-B').locator('h3')).toHaveText('PP-B Piloto Privado (turma B) · 9 fases · 46 missões (1 dispensada) encerrado');
     await expect(curso(gestor.page, 'PP-B').locator('input, select, [data-act]')).toHaveCount(0);
     await expect(curso(gestor.page, 'PP-B').locator('tr[data-missao] td.c-mis', { hasText: 'Noturno' })).toHaveText(['Noturno · ida', 'Noturno · noite', 'Noturno · volta']);
@@ -675,12 +685,14 @@ test.describe('Cursos no servidor (modo compartilhado)', () => {
     await expect(curso(admin.page, 'MLTE').locator('h3 small')).toHaveText('Multimotor · 0 missões');
     expect([doServidor(servidor, 'MLTE').nome, doServidor(servidor, 'MLTE').versao]).toEqual(['Multimotor', 1]);
 
-    // A gravação que falha: o curso novo sai da tela e do filtro
+    // A gravação que falha: o curso novo sai da tela e dos botões dos cursos, e a tela fica com o primeiro ativo
     servidor.falhar('/rpc/salvar_curso');
     await criar(admin.page, 'PC-IFR', 'Piloto Comercial IFR');
     await expect(admin.page.locator('#toast-box')).toContainText('Sem conexão: a alteração do programa não foi gravada.');
     await expect(curso(admin.page, 'PC-IFR')).toHaveCount(0);
-    await expect(admin.page.locator('#cur-sel')).toHaveValue('');
+    await expect(admin.page.locator('#cur-ver-PC-IFR')).toHaveCount(0);
+    await expect(admin.page.locator('#cur-ver-PP')).toHaveAttribute('aria-pressed', 'true');
+    await expect(curso(admin.page, 'PP')).toBeVisible();
     await expect(admin.page.locator('#cur-novo')).toBeFocused();
     expect(doServidor(servidor, 'PC-IFR')).toBeUndefined();
     // De novo, agora gravado
@@ -689,6 +701,39 @@ test.describe('Cursos no servidor (modo compartilhado)', () => {
     await expect(curso(admin.page, 'PC-IFR').getByRole('button', { name: '+ Fase' })).toBeFocused();
     expect(admin.erros).toEqual([]);
     await admin.contexto.close();
+  });
+
+  // Sem os resultados (a leitura falhou), a fase de cada aluno não se conhece: os alunos do curso vêm pelo nome, e o índice
+  // das fases, sem as contas; "Tentar de novo" lê os resultados, e os alunos vão para as fases
+  test('sem os resultados, os alunos do curso vêm pelo nome e o índice das fases, sem as contas', async ({ browser }) => {
+    const { f1, f2, m1, m2 } = IDS;
+    const { cursos } = gravarCurso({ cursos: cursosIniciais() }, {
+      sigla: 'PP', versaoLida: 1, descricao: 'PP: o programa em fases', conteudo: {
+        nome: 'Piloto Privado', ativo: true,
+        fases: [{ id: f1, nome: 'Fase 1 – Duplo comando' }, { id: f2, nome: 'Fase 2 – Navegação' }],
+        missoes: [
+          { id: m1, fase: f1, codigo: 'TMA-01', nome: 'Tráfego', mis: 'Voo Local', eq: 'C152', nb: 1 },
+          { id: m2, fase: f2, codigo: 'NAV-01', nome: 'Navegação', mis: 'Navegação', eq: 'C152', nb: 2.5 }
+        ]
+      }
+    });
+    const estado = cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, {}, { nm: 'Bia', curso: 'PP' }), aluno(1001, {}, { nm: 'Ana', curso: 'PP' })] });
+    const servidor = criarSupabaseFalso({ ...documentosAtuais(estado, AMANHA), cursos });
+    servidor.falhar('/rpc/situacao_das_missoes');
+    const gestor = await entrar(browser, servidor, CONTAS.gestor, { statusEsperados: [503] });
+    await irPara(gestor.page, 'cur');
+    const pp = curso(gestor.page, 'PP'), alunos = pp.locator('details.alunos-do-curso');
+    await alunos.locator('summary').click();
+    await expect(alunos.locator('.turma-da-fase')).toHaveCount(0);
+    await expect(alunos.locator('li')).toHaveText(['Ana', 'Bia']);
+    await expect(pp.locator('.indice-das-fases li')).toHaveText(['Fase 1 – Duplo comando', 'Fase 2 – Navegação']);
+    await gestor.page.locator('#btn-tentar-dados').click();
+    await expect(gestor.page.locator('#aviso-dados')).toBeHidden();
+    await expect(alunos.locator('.turma-da-fase')).toHaveText(['Fase 1 – Duplo comando (2)']);
+    await expect(alunos.locator('li')).toHaveText(['Ana · 0/2 · Fase 1 · próxima TMA-01', 'Bia · 0/2 · Fase 1 · próxima TMA-01']);
+    await expect(pp.locator('.indice-das-fases li')).toHaveText(['Fase 1 – Duplo comando 2 alunos', 'Fase 2 – Navegação']);
+    expect(gestor.erros).toEqual([]);
+    await gestor.contexto.close();
   });
 
   // A aba aberta enquanto os dados carregam é refeita quando eles chegam: a Secretaria, que consulta os cursos, fica na
@@ -716,6 +761,12 @@ test.describe('Cursos no servidor (modo compartilhado)', () => {
     await expect(linhas(page, 'PP').nth(0).locator('td')).toHaveText(['1', 'PP-01', 'Familiarização', 'Voo Local', 'C152', '1 h', 'Depois das anteriores', '']);
     await expect(page.locator('#cursos :is(input, select):not(.flt-ctrl), #cur-novo, #form-curso')).toHaveCount(0);
     await expect(page.locator('#cursos')).toContainText('Só o Administrador muda; aqui é consulta.');
+    // Ela recolhe a fase e troca de curso (o que só muda o que se vê não é uma ação: vale para quem só consulta)
+    await page.locator('#cursos [data-recolher-fase]').click();
+    await expect(linhas(page, 'PP').nth(0)).toBeHidden();
+    await page.locator('#cur-ver-PC').click();
+    await expect(curso(page, 'PC')).toBeVisible();
+    await expect(curso(page, 'PP')).toHaveCount(0);
     expect(servidor.gravacoes).toEqual([]);
     expect(erros).toEqual([]);
     await contexto.close();
@@ -1130,8 +1181,9 @@ test.describe('Cursos: fases, módulos e quando voar', () => {
 });
 
 // Os cursos: "+ Novo curso" (a sigla e o nome conferidos no formulário, o programa vazio ou o cronograma do PP), o nome,
-// encerrar e reativar, o filtro da aba, os alunos de cada curso, o cronograma do PP no PP ainda vazio ou numa fase só e o
-// trecho do Noturno. Neste navegador, com o cadastro e o dia no formato atual
+// encerrar e reativar, um curso de cada vez (os botões dos cursos e "Mostrar encerrados"), os alunos de cada curso, o
+// cronograma do PP no PP ainda vazio ou numa fase só e o trecho do Noturno. Neste navegador, com o cadastro e o dia no
+// formato atual
 test.describe('Cursos: cursos novos, encerrar, o cronograma do PP e o curso de cada aluno', () => {
   const u = n => `00000000-0000-4000-8015-${String(n).padStart(12, '0')}`;
   // O cadastro e o dia, os cursos (como as tabelas dos cursos os guardam) e os resultados, neste navegador
@@ -1148,8 +1200,7 @@ test.describe('Cursos: cursos novos, encerrar, o cronograma do PP e o curso de c
   const comPP = conteudo => gravarCurso({ cursos: cursosIniciais() }, { sigla: 'PP', versaoLida: 1, conteudo, descricao: 'PP: programa' }).cursos;
   const descricoes = async page => (await programaGuardado(page)).alteracoes.map(a => a.descricao);
   const opcoesDoCurso = (page, id) => page.locator(`#alu tr[data-id="${id}"] [data-f="curso"] option`);
-  // Os cursos na aba, pela sigla; os valores de uma lista de campos
-  const siglasNaAba = page => page.locator('#cursos .curso').evaluateAll(els => els.map(e => e.dataset.curso));
+  // Os valores de uma lista de campos
   const valores = campos => campos.evaluateAll(els => els.map(e => e.value));
   const aprovada = (aluno, missao, id) => ({ id, aluno, curso: 'PP', missao, resultado: 'aprovado', data: '2026-11-05', voo: null, registrado_em: '2026-11-05T12:00:00.000Z', registrado_por: 'Operador' });
 
@@ -1184,20 +1235,23 @@ test.describe('Cursos: cursos novos, encerrar, o cronograma do PP e o curso de c
     await page.locator('#cur-nome').fill('Multimotor');
     await page.locator('#cur-nome').press('Enter');
 
-    // Criado: escolhido no filtro, só ele na aba, com o foco em "+ Fase"; a gravação o cria (versão 1)
+    // Criado: escolhido no alto (o botão dele, no fim, pressionado), só ele na aba, com o foco em "+ Fase"; a gravação o
+    // cria (versão 1)
     await expect(form).toBeHidden();
     await expect(novo).toHaveAttribute('aria-expanded', 'false');
-    await expect(page.locator('#cur-sel')).toHaveValue('MLTE');
-    await expect(page.locator('#cursos .curso')).toHaveCount(1);
+    await expect(page.locator('#cursos .seg-dos-cursos button')).toHaveText(['PP · Piloto Privado', 'PC · Piloto Comercial', 'INVA · Instrutor de Voo', 'MLTE · Multimotor']);
+    await expect(page.locator('#cur-ver-MLTE')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('#cur-ver-PP')).toHaveAttribute('aria-pressed', 'false');
+    await expect.poll(() => siglasNaAba(page)).toEqual(['MLTE']);
     await expect(curso(page, 'MLTE').locator('h3')).toHaveText('MLTE Multimotor · 0 missões');
     await expect(curso(page, 'MLTE').getByRole('button', { name: '+ Fase' })).toBeFocused();
     await expect.poll(async () => (await programaGuardado(page)).alteracoes.map(a => [a.curso, a.versao, a.descricao])).toEqual([['MLTE', 1, 'Curso MLTE criado: Multimotor']]);
     await curso(page, 'MLTE').getByRole('button', { name: '+ Missão' }).click();
     await expect(linhas(page, 'MLTE').nth(0).locator('[data-cf="codigo"]')).toHaveValue('MLTE-01');
-    // O filtro volta a todos os cursos: o novo vem no fim
-    await page.locator('#cur-sel').selectOption('');
-    await expect.poll(() => siglasNaAba(page)).toEqual(['PP', 'PC', 'INVA', 'MLTE']);
-    await expect(page.locator('#cur-sel option')).toHaveText(['Todos os cursos', 'PP · Piloto Privado', 'PC · Piloto Comercial', 'INVA · Instrutor de Voo', 'MLTE · Multimotor']);
+    // Outro curso no alto: só ele na aba, com o foco no botão dele
+    await page.locator('#cur-ver-PP').click();
+    await expect.poll(() => siglasNaAba(page)).toEqual(['PP']);
+    await expect(page.locator('#cur-ver-PP')).toBeFocused();
 
     // Em Alunos, o curso novo está na lista; com ele, a próxima missão, a escala e o resultado no MLTE
     await irPara(page, 'alu');
@@ -1218,8 +1272,10 @@ test.describe('Cursos: cursos novos, encerrar, o cronograma do PP e o curso de c
       return r && [r.aluno, r.curso, r.missao, r.resultado];
     });
     await expect.poll(ultimo).toEqual([1001, 'MLTE', 'MLTE-01', 'aprovado']);
-    // Os alunos do curso, com o progresso
+    // Os alunos do curso, com o progresso (a aba volta no curso escolhido antes)
     await irPara(page, 'cur');
+    await expect(page.locator('#cur-ver-PP')).toHaveAttribute('aria-pressed', 'true');
+    await page.locator('#cur-ver-MLTE').click();
     const alunos = curso(page, 'MLTE').locator('details.alunos-do-curso');
     await expect(alunos.locator('summary')).toHaveText('1 aluno no MLTE');
     await alunos.locator('summary').click();
@@ -1261,6 +1317,7 @@ test.describe('Cursos: cursos novos, encerrar, o cronograma do PP e o curso de c
     const estado = cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, {}, { curso: 'PC' }), aluno(1001), aluno(1002, {}, { curso: 'ZZ9' })] });
     await abrirComCursos(page, { estado });
     await irPara(page, 'cur');
+    await page.locator('#cur-ver-PC').click();
     const pc = curso(page, 'PC');
     await confirmar(page, '#cursos .curso[data-curso="PC"] [data-act="curso-encerrar"]');
     // Ele continua na aba ("Mostrar encerrados" fica marcado), com a etiqueta, e o foco vai para "Reativar o curso"
@@ -1268,10 +1325,18 @@ test.describe('Cursos: cursos novos, encerrar, o cronograma do PP e o curso de c
     await expect(pc.locator('h3 .tag')).toHaveText('encerrado');
     await expect(pc.getByRole('button', { name: 'Reativar o curso PC' })).toBeFocused();
     await expect(page.locator('#toast-box')).toContainText('PC encerrado: ele sai da lista dos cursos em Alunos; quem já está nele continua.');
-    await expect(page.locator('#cur-sel option')).toHaveText(['Todos os cursos', 'PP · Piloto Privado', 'PC · Piloto Comercial (encerrado)', 'INVA · Instrutor de Voo']);
+    const botoes = page.locator('#cursos .seg-dos-cursos button');
+    await expect(botoes).toHaveText(['PP · Piloto Privado', 'PC · Piloto Comercial (encerrado)', 'INVA · Instrutor de Voo']);
+    // Sem "Mostrar encerrados", o PC sai do alto e da tela: fica o primeiro ativo, e ele continua quando os encerrados
+    // aparecem de novo
     await page.locator('#cur-encerrados').uncheck();
-    await expect.poll(() => siglasNaAba(page)).toEqual(['PP', 'INVA']);
-    await expect(page.locator('#cur-sel option')).toHaveText(['Todos os cursos', 'PP · Piloto Privado', 'INVA · Instrutor de Voo']);
+    await expect.poll(() => siglasNaAba(page)).toEqual(['PP']);
+    await expect(botoes).toHaveText(['PP · Piloto Privado', 'INVA · Instrutor de Voo']);
+    await expect(page.locator('#cur-ver-PP')).toHaveAttribute('aria-pressed', 'true');
+    await page.locator('#cur-encerrados').check();
+    await expect(botoes).toHaveText(['PP · Piloto Privado', 'PC · Piloto Comercial (encerrado)', 'INVA · Instrutor de Voo']);
+    await expect.poll(() => siglasNaAba(page)).toEqual(['PP']);
+    await page.locator('#cur-encerrados').uncheck();
 
     // Em Alunos: o PC não aparece para quem não está nele; quem está continua, com o curso marcado como encerrado
     await irPara(page, 'alu');
@@ -1285,10 +1350,10 @@ test.describe('Cursos: cursos novos, encerrar, o cronograma do PP e o curso de c
     await page.locator('#alu tr[data-id="1000"] [data-f="curso"]').selectOption('PP');
     await expect(opcoesDoCurso(page, 1000)).toHaveText(['—', 'PP · Piloto Privado', 'INVA · Instrutor de Voo']);
 
-    // Reativado (o filtro escolhe o encerrado), ele volta às matrículas
+    // Reativado (o encerrado escolhido no alto), ele volta às matrículas
     await irPara(page, 'cur');
     await page.locator('#cur-encerrados').check();
-    await page.locator('#cur-sel').selectOption('PC');
+    await page.locator('#cur-ver-PC').click();
     await expect.poll(() => siglasNaAba(page)).toEqual(['PC']);
     await pc.getByRole('button', { name: 'Reativar o curso PC' }).click();
     await expect(pc.locator('h3 .tag')).toHaveCount(0);
@@ -1315,6 +1380,12 @@ test.describe('Cursos: cursos novos, encerrar, o cronograma do PP e o curso de c
     const pp = curso(page, 'PP');
     // Só no PP (o curso do cronograma)
     await expect(page.locator('#cursos [data-act="curso-modelo"]')).toHaveCount(1);
+    for (const sigla of ['PC', 'INVA']) {
+      await page.locator(`#cur-ver-${sigla}`).click();
+      await expect(curso(page, sigla).getByRole('button', { name: '+ Fase' })).toBeVisible();
+      await expect(page.locator('#cursos [data-act="curso-modelo"]')).toHaveCount(0);
+    }
+    await page.locator('#cur-ver-PP').click();
     const usar = pp.getByRole('button', { name: 'Usar o cronograma do PP (P.I PPA 001A)' });
     await usar.click();
     await expect(pp.locator('[data-act="curso-modelo"]')).toHaveText('Confirmar: 47 missões entram');
@@ -1414,5 +1485,250 @@ test.describe('Cursos: cursos novos, encerrar, o cronograma do PP e o curso de c
     await irPara(page, 'cur');
     await expect(pp.locator('td.c-mis')).toHaveText(['Voo Local', 'Noturno · ida', 'Noturno · noite', 'Noturno · volta']);
     await expect(pp.locator('input, select')).toHaveCount(0);
+  });
+});
+
+// Um curso de cada vez (os botões dos cursos no alto), o índice das fases com os alunos de cada uma e as fases que
+// recolhem: o que só muda o que se vê vale para todos os perfis e fica na memória até a página recarregar. Neste
+// navegador, com o PP em três fases (dois módulos), o MLTE encerrado e alunos em fases diferentes
+test.describe('Cursos: um de cada vez, o índice das fases, as fases recolhíveis e os alunos por fase', () => {
+  const u = n => `00000000-0000-4000-8016-${String(n).padStart(12, '0')}`;
+  const [F1, F2, F3] = [1, 2, 3].map(u);
+  const [IN01, IN02, CT01, CT02] = [11, 12, 21, 22].map(u);
+  const M01 = 'Módulo 01 – Duplo Comando', M02 = 'Módulo 02 – Voo Solo';
+  const local = (id, fase, codigo, mis = 'Voo Local') => ({ id, fase, codigo, nome: codigo, mis, eq: 'C152', nb: 1 });
+  const PROGRAMA_EM_FASES = {
+    nome: 'Piloto Privado', ativo: true,
+    fases: [{ id: F1, nome: 'Fase 1 – Introdução ao Voo', modulo: M01 }, { id: F2, nome: 'Fase 2 – O Controle da Aeronave', modulo: M01 }, { id: F3, nome: 'Fase 3 – Voo Solo', modulo: M02 }],
+    missoes: [local(IN01, F1, 'IN-01'), local(IN02, F1, 'IN-02'), local(CT01, F2, 'CT-01'), local(CT02, F2, 'CT-02'),
+      ...[31, 32, 33, 34].map((n, i) => local(u(n), F3, `SOLO-0${i + 1}`, 'Voo Solo'))]
+  };
+  const SOLOS = ['SOLO-01', 'SOLO-02', 'SOLO-03', 'SOLO-04'];
+  const aprovadas = (aluno, codigos, primeiro) => codigos.map((missao, i) => ({
+    id: primeiro + i, aluno, curso: 'PP', missao, resultado: 'aprovado', data: '2026-11-05', voo: null, registrado_em: '2026-11-05T12:00:00.000Z', registrado_por: 'Operador'
+  }));
+  // A Ana na Fase 1, o Bruno na Fase 2 (fez a Fase 1) e a Carla com o curso concluído; o Davi, no PC
+  const RESULTADOS = [...aprovadas(1001, ['IN-01', 'IN-02'], 1), ...aprovadas(1002, ['IN-01', 'IN-02', 'CT-01', 'CT-02', ...SOLOS], 10)];
+  async function abrirComOsCursos(page, { url = './', resultados = RESULTADOS, mudarCursos = cursos => cursos } = {}) {
+    const estado = cenario({
+      ins: [instrutor(1, 9)],
+      stu: [aluno(1000, { fly: false }, { nm: 'Ana', curso: 'PP' }), aluno(1001, { fly: false }, { nm: 'Bruno', curso: 'PP' }),
+        aluno(1002, { fly: false }, { nm: 'Carla', curso: 'PP' }), aluno(1003, { fly: false }, { nm: 'Davi', curso: 'PC' })]
+    });
+    const comPP = gravarCurso({ cursos: cursosIniciais() }, { sigla: 'PP', versaoLida: 1, conteudo: PROGRAMA_EM_FASES, descricao: 'PP: programa' }).cursos;
+    const { cursos } = gravarCurso({ cursos: comPP }, { sigla: 'MLTE', versaoLida: 0, conteudo: { nome: 'Multimotor', ativo: false, fases: [], missoes: [] }, descricao: 'Curso MLTE criado: Multimotor' });
+    const { documentos: { cadastro }, dias } = documentosAtuais(estado, AMANHA);
+    const docs = { acpm4_cadastro: cadastro, [`acpm4_dia_${AMANHA}`]: dias[AMANHA], acpm4_cursos: { cursos: mudarCursos(cursos), alteracoes: [] }, acpm4_resultados: resultados };
+    await page.addInitScript(json => {
+      if (localStorage.getItem('acpm4_cadastro')) return;
+      for (const [chave, valor] of Object.entries(JSON.parse(json))) localStorage.setItem(chave, JSON.stringify(valor));
+    }, JSON.stringify(docs));
+    await page.goto(url);
+    await expect(page.locator('#wins input[data-a="win"]').first()).toBeAttached();
+  }
+  const pressionados = page => page.locator('#cursos .seg-dos-cursos button').evaluateAll(bs => bs.map(b => b.getAttribute('aria-pressed')));
+  const titulo = (page, fase) => page.locator(`#cursos .fase[data-fase="${fase}"] [data-recolher-fase]`);
+  const abertas = page => page.locator('#cursos [data-recolher-fase]').evaluateAll(bs => bs.map(b => b.getAttribute('aria-expanded')));
+
+  test('um curso de cada vez: a aba abre no primeiro ativo e fica no escolhido até recarregar; o encerrado, só com "Mostrar encerrados"', async ({ page }) => {
+    await abrirComOsCursos(page);
+    await irPara(page, 'cur');
+    const botoes = page.locator('#cursos .seg-dos-cursos button');
+    await expect(page.getByRole('group', { name: 'Curso' })).toBeVisible();
+    await expect(botoes).toHaveText(['PP · Piloto Privado', 'PC · Piloto Comercial', 'INVA · Instrutor de Voo']);
+    expect(await pressionados(page)).toEqual(['true', 'false', 'false']);
+    expect(await siglasNaAba(page)).toEqual(['PP']);
+    // Outro curso: só ele na aba, com o botão pressionado e o foco nele
+    await page.locator('#cur-ver-PC').click();
+    await expect.poll(() => siglasNaAba(page)).toEqual(['PC']);
+    expect(await pressionados(page)).toEqual(['false', 'true', 'false']);
+    await expect(page.locator('#cur-ver-PC')).toBeFocused();
+    await expect(curso(page, 'PC').locator('details.alunos-do-curso summary')).toHaveText('1 aluno no PC');
+    // Pelo teclado, também
+    await page.keyboard.press('Tab');
+    await expect(page.locator('#cur-ver-INVA')).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect.poll(() => siglasNaAba(page)).toEqual(['INVA']);
+    await expect(page.locator('#cur-ver-INVA')).toBeFocused();
+    // A escolha fica em outra aba e em outra data, até a página recarregar
+    await irPara(page, 'alu');
+    await irPara(page, 'cur');
+    expect(await siglasNaAba(page)).toEqual(['INVA']);
+    await page.locator('#dt-prox').click();
+    await expect(page.locator('#dt-rotulo')).toContainText('12/11');
+    await expect.poll(() => siglasNaAba(page)).toEqual(['INVA']);
+    await page.reload();
+    await irPara(page, 'cur');
+    await expect.poll(() => siglasNaAba(page)).toEqual(['PP']);
+    // O encerrado, só com "Mostrar encerrados" (na ordem dos cursos, com a marca); sem ele, o primeiro ativo volta à tela
+    await page.locator('#cur-encerrados').check();
+    await expect(botoes).toHaveText(['PP · Piloto Privado', 'PC · Piloto Comercial', 'INVA · Instrutor de Voo', 'MLTE · Multimotor (encerrado)']);
+    await page.locator('#cur-ver-MLTE').click();
+    await expect(curso(page, 'MLTE').locator('h3 .tag')).toHaveText('encerrado');
+    await page.locator('#cur-encerrados').uncheck();
+    await expect.poll(() => siglasNaAba(page)).toEqual(['PP']);
+    await expect(botoes).toHaveText(['PP · Piloto Privado', 'PC · Piloto Comercial', 'INVA · Instrutor de Voo']);
+  });
+
+  test('os alunos por fase e o índice das fases: o link leva à fase, sem mudar o endereço, com o foco no título dela', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 400 });
+    await abrirComOsCursos(page);
+    await irPara(page, 'cur');
+    const pp = curso(page, 'PP'), indice = pp.getByRole('navigation', { name: 'Fases do PP' });
+    // Os alunos do curso, na ordem das fases em que estão (a do progresso); quem concluiu, no fim
+    const alunos = pp.locator('details.alunos-do-curso');
+    await expect(alunos.locator('summary')).toHaveText('3 alunos no PP');
+    await alunos.locator('summary').click();
+    await expect(alunos.locator('.turma-da-fase')).toHaveText(['Fase 1 – Introdução ao Voo (1)', 'Fase 2 – O Controle da Aeronave (1)', 'Concluíram o curso (1)']);
+    await expect(alunos.locator('li')).toHaveText(['Ana · 0/8 · Fase 1 · próxima IN-01', 'Bruno · 2/8 · Fase 2 · próxima CT-01', 'Carla · 8/8 · concluído']);
+    await expect(alunos.getByRole('list', { name: 'Fase 2 – O Controle da Aeronave (1)' }).locator('li')).toHaveText(['Bruno · 2/8 · Fase 2 · próxima CT-01']);
+    // O índice: os módulos, e em cada um as fases, com quantos alunos estão em cada fase
+    await expect(indice.locator('.indice-modulo-nome')).toHaveText([M01, M02]);
+    await expect(indice.getByRole('list', { name: M01 }).locator('li')).toHaveText(['Fase 1 – Introdução ao Voo 1 aluno', 'Fase 2 – O Controle da Aeronave 1 aluno']);
+    await expect(indice.getByRole('list', { name: M02 }).locator('li')).toHaveText(['Fase 3 – Voo Solo']);
+    await expect(indice.locator('.alunos-na-fase').first()).toHaveAttribute('data-dica', 'alunos-na-fase');
+    // O link: a fase vem para o alto da tela (com a folga), o foco vai para o título dela e o endereço não muda
+    const enderecoAntes = page.url();
+    await indice.getByRole('link', { name: 'Fase 2 – O Controle da Aeronave' }).click();
+    await expect(titulo(page, F2)).toBeFocused();
+    await expect(titulo(page, F2)).toHaveAccessibleName('Fase 2 – O Controle da Aeronave');
+    await expect.poll(() => pp.locator(`.fase[data-fase="${F2}"]`).evaluate(el => Math.round(el.getBoundingClientRect().top))).toBe(8);
+    expect(page.url()).toBe(enderecoAntes);
+    // Pelo teclado: Enter no link, e o Tab seguinte entra na fase (o nome dela, para quem muda)
+    await indice.getByRole('link', { name: 'Fase 1 – Introdução ao Voo' }).focus();
+    await page.keyboard.press('Enter');
+    await expect(titulo(page, F1)).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(pp.locator(`.fase[data-fase="${F1}"] [data-cfa="nome"]`)).toBeFocused();
+  });
+
+  test('as fases recolhem e abrem: no título, em "Recolher todas" e "Abrir todas"; continuam assim depois de uma alteração e de outro curso', async ({ page }) => {
+    await abrirComOsCursos(page);
+    await irPara(page, 'cur');
+    const pp = curso(page, 'PP');
+    const linhasDa = fase => pp.locator(`.fase[data-fase="${fase}"] tbody tr`);
+    // Abertas: as missões à vista
+    expect(await abertas(page)).toEqual(['true', 'true', 'true']);
+    await expect(linhasDa(F1).first()).toBeVisible();
+    // O título recolhe a fase: as missões e o "+ Missão" somem; o cabeçalho (o nome, o módulo, quando abre) fica
+    await titulo(page, F1).click();
+    await expect(titulo(page, F1)).toHaveAttribute('aria-expanded', 'false');
+    await expect(linhasDa(F1).first()).toBeHidden();
+    await expect(pp.getByRole('button', { name: '+ Missão na Fase 1' })).toBeHidden();
+    await expect(pp.locator(`.fase[data-fase="${F1}"] [data-cfa="nome"]`)).toBeVisible();
+    await expect(titulo(page, F1)).toBeFocused();
+    // Uma alteração em outra fase refaz a aba: a Fase 1 continua recolhida, e o Tab segue do campo
+    const nomeCT01 = pp.locator(`tr[data-missao="${CT01}"] [data-cf="nome"]`);
+    await nomeCT01.fill('Controle da aeronave');
+    await nomeCT01.press('Tab');
+    await expect(pp.locator(`tr[data-missao="${CT01}"] [data-cf="mis"]`)).toBeFocused();
+    await expect(titulo(page, F1)).toHaveAttribute('aria-expanded', 'false');
+    await expect(linhasDa(F1).first()).toBeHidden();
+    // Outro curso e de volta: continua recolhida
+    await page.locator('#cur-ver-PC').click();
+    await page.locator('#cur-ver-PP').click();
+    expect(await abertas(page)).toEqual(['false', 'true', 'true']);
+    // A missão levada para a fase recolhida abre a fase, com o foco na lista da fase dela
+    await pp.locator(`tr[data-missao="${CT02}"] [data-cf="fase"]`).selectOption(F1);
+    await expect(titulo(page, F1)).toHaveAttribute('aria-expanded', 'true');
+    await expect(linhasDa(F1)).toHaveCount(3);
+    await expect(pp.locator(`tr[data-missao="${CT02}"] [data-cf="fase"]`)).toBeFocused();
+    // Todas de uma vez; o link do índice abre a fase recolhida
+    await pp.getByRole('button', { name: 'Recolher todas' }).click();
+    expect(await abertas(page)).toEqual(['false', 'false', 'false']);
+    await expect(pp.locator('tbody tr:visible')).toHaveCount(0);
+    await expect(pp.getByRole('button', { name: 'Recolher todas' })).toBeFocused();
+    await pp.getByRole('navigation', { name: 'Fases do PP' }).getByRole('link', { name: 'Fase 3 – Voo Solo' }).click();
+    expect(await abertas(page)).toEqual(['false', 'false', 'true']);
+    await expect(titulo(page, F3)).toBeFocused();
+    await pp.getByRole('button', { name: 'Abrir todas' }).click();
+    expect(await abertas(page)).toEqual(['true', 'true', 'true']);
+    await expect.poll(async () => (await programaGuardado(page)).alteracoes.map(a => a.descricao)).toEqual(['PP: CT-01 alterada', 'PP: CT-02 passou para a Fase 1']);
+    // Recarregada a página, as fases voltam abertas
+    await titulo(page, F2).click();
+    await page.reload();
+    await irPara(page, 'cur');
+    expect(await abertas(page)).toEqual(['true', 'true', 'true']);
+  });
+
+  // Com todos os cursos encerrados, a aba diz por que não mostra nenhum; com "Mostrar encerrados", o primeiro deles (na
+  // ordem dos cursos) fica na tela. Reativado um, sem "Mostrar encerrados" fica só ele
+  test('todos os cursos encerrados: o aviso; com "Mostrar encerrados", o primeiro deles', async ({ page }) => {
+    await abrirComOsCursos(page, { mudarCursos: cursos => cursos.map(c => ({ ...c, ativo: false })) });
+    await irPara(page, 'cur');
+    await expect(page.locator('#cursos')).toContainText('Nenhum curso ativo. Marque “Mostrar encerrados” para ver os encerrados.');
+    await expect(page.locator('#cursos .curso')).toHaveCount(0);
+    await expect(page.locator('#cursos .seg-dos-cursos')).toHaveCount(0);
+    await page.locator('#cur-encerrados').check();
+    await expect.poll(() => siglasNaAba(page)).toEqual(['PP']);
+    await expect(page.locator('#cursos .seg-dos-cursos button')).toHaveText(['PP · Piloto Privado (encerrado)', 'PC · Piloto Comercial (encerrado)', 'INVA · Instrutor de Voo (encerrado)', 'MLTE · Multimotor (encerrado)']);
+    await expect(page.locator('#cur-encerrados')).toBeFocused();
+    await page.locator('#cur-ver-INVA').click();
+    await curso(page, 'INVA').getByRole('button', { name: 'Reativar o curso INVA' }).click();
+    await page.locator('#cur-encerrados').uncheck();
+    await expect(page.locator('#cursos .seg-dos-cursos button')).toHaveText(['INVA · Instrutor de Voo']);
+    await expect.poll(() => siglasNaAba(page)).toEqual(['INVA']);
+  });
+
+  // O Gestor (e a Secretaria, no modo compartilhado, acima) só consulta o programa, mas troca de curso, recolhe as fases e
+  // usa o índice: nada disso é uma ação (data-act), que quem só consulta não usa
+  test('quem só consulta troca de curso, recolhe e abre as fases e usa o índice', async ({ page }) => {
+    await abrirComOsCursos(page, { url: './?role=gestor' });
+    await irPara(page, 'cur');
+    const pp = curso(page, 'PP');
+    await expect(pp.locator('input, select, [data-act]')).toHaveCount(0);
+    // O título da fase, em texto, é o botão que a recolhe
+    await expect(titulo(page, F2)).toHaveText('Fase 2 – O Controle da Aeronave');
+    await expect(pp.locator(`.fase[data-fase="${F2}"] h4, .fase[data-fase="${F2}"] h5`)).toHaveText('Fase 2 – O Controle da Aeronave');
+    await titulo(page, F2).click();
+    await expect(titulo(page, F2)).toHaveAttribute('aria-expanded', 'false');
+    await expect(pp.locator(`.fase[data-fase="${F2}"] tbody tr`).first()).toBeHidden();
+    await pp.getByRole('button', { name: 'Recolher todas' }).click();
+    expect(await abertas(page)).toEqual(['false', 'false', 'false']);
+    await pp.getByRole('link', { name: 'Fase 2 – O Controle da Aeronave' }).click();
+    await expect(titulo(page, F2)).toBeFocused();
+    expect(await abertas(page)).toEqual(['false', 'true', 'false']);
+    await page.locator('#cur-ver-PC').click();
+    await expect.poll(() => siglasNaAba(page)).toEqual(['PC']);
+    await page.locator('#cur-encerrados').check();
+    await page.locator('#cur-ver-MLTE').click();
+    await expect.poll(() => siglasNaAba(page)).toEqual(['MLTE']);
+    await expect(curso(page, 'MLTE').locator('input, select, [data-act]')).toHaveCount(0);
+  });
+
+  // O foco de quem usa o teclado sobrevive à aba refeita (trocarConteudo, js/dom.js): o botão do curso (o id), o título
+  // da fase (data-recolher-fase), o link do índice (data-ir-fase) e "Recolher todas" (o id)
+  test('a aba refeita deixa o foco no botão do curso, no título da fase, no link do índice e em "Recolher todas"', async ({ page }) => {
+    await abrirComOsCursos(page);
+    await irPara(page, 'cur');
+    const refazer = () => page.evaluate(async () => (await import('./js/views/cursos.js')).rCursos());
+    for (const seletor of ['#cur-ver-INVA', `#cursos [data-recolher-fase="${F2}"]`, `#cursos [data-ir-fase="${F3}"]`, '#fases-recolher']) {
+      await page.locator(seletor).focus();
+      await refazer();
+      await expect(page.locator(seletor), seletor).toBeFocused();
+    }
+  });
+
+  // Sem nenhum resultado, os três estão na Fase 1; o programa com uma fase só não tem índice, e os alunos vêm pelo nome
+  test('sem resultados, todos na primeira fase; com uma fase só, sem o índice e com os alunos pelo nome', async ({ page }) => {
+    await abrirComOsCursos(page, { resultados: [] });
+    await irPara(page, 'cur');
+    const pp = curso(page, 'PP');
+    await pp.locator('details.alunos-do-curso summary').click();
+    await expect(pp.locator('.turma-da-fase')).toHaveText(['Fase 1 – Introdução ao Voo (3)']);
+    await expect(pp.locator('.indice-das-fases li')).toHaveText(['Fase 1 – Introdução ao Voo 3 alunos', 'Fase 2 – O Controle da Aeronave', 'Fase 3 – Voo Solo']);
+    // A Fase 2 e a Fase 3 tiradas do programa (as missões delas levadas para a Fase 1): uma fase só
+    for (const fase of [F2, F3]) {
+      const missoes = pp.locator(`.fase[data-fase="${fase}"] tbody tr`);
+      while (await missoes.count()) await missoes.first().locator('[data-cf="fase"]').selectOption(F1);
+      await confirmar(page, `#cursos .fase[data-fase="${fase}"] [data-act="fase-retirar"]`);
+    }
+    await expect(pp.locator('.fase')).toHaveCount(1);
+    await expect(pp.locator('.indice-das-fases')).toHaveCount(0);
+    await expect(pp.locator('.turma-da-fase')).toHaveCount(0);
+    await expect(pp.locator('details.alunos-do-curso li')).toHaveText(['Ana · 0/8 · próxima IN-01', 'Bruno · 0/8 · próxima IN-01', 'Carla · 0/8 · próxima IN-01']);
+    // A fase única também recolhe
+    await titulo(page, F1).click();
+    await expect(pp.locator('tbody tr').first()).toBeHidden();
   });
 });

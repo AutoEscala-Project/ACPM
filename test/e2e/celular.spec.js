@@ -1,5 +1,5 @@
 // No celular (390 px): a escala em cartões, um por voo, e nenhuma aba rola para o lado.
-import { test, expect, abrir, abrirComExemplo, abrirEscala, irPara, irParaVista, percorrerVistasEFiltros, filtrarHabilitacoes, filtrarCursos, AMANHA } from './fixtures.js';
+import { test, expect, abrir, abrirComExemplo, abrirEscala, irPara, irParaVista, confirmar, percorrerVistasEFiltros, filtrarHabilitacoes, filtrarCursos, AMANHA } from './fixtures.js';
 import { documentosAtuais } from './supabase-falso.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
 import { cursosIniciais, gravarCurso } from '../../js/programa.js';
@@ -279,6 +279,78 @@ test.describe('Celular', () => {
     await expect(page.locator('#cursos .curso[data-curso="PP"] details[open]')).toHaveCount(5);
     expect(await larguraDaPagina(page)).toBeLessThanOrEqual(390);
     expect(await alvosPequenos(page)).toEqual([]);
+    // Os cursos pela sigla e as fases do índice pelo nome curto; as fases recolhidas, também para quem só consulta, e
+    // nos 320 px: a aba continua na tela, com alvos de 44 px
+    await expect(page.locator('#cursos .seg-dos-cursos button')).toHaveText(['PP', 'PC', 'INVA'], { useInnerText: true });
+    await expect(page.locator('#cursos .indice-das-fases a')).toHaveText(['Fase 1', 'Fase 2'], { useInnerText: true });
+    await page.locator('#fases-recolher').click();
+    await expect(page.locator('#cursos .curso[data-curso="PP"] tr[data-i]:visible')).toHaveCount(0);
+    // Para quem muda, a seta da fase fica na linha do nome dela (não sozinha numa linha acima dele), também nos 320 px
+    await expect(page.locator('#cursos .fase-cab .nome-da-fase')).toHaveCount(2);
+    const setasForaDaLinha = () => page.locator('#cursos .fase-cab').evaluateAll(cabs => cabs.filter(cab => {
+      const nome = cab.querySelector('.nome-da-fase');
+      if (!nome) return false;
+      const seta = cab.querySelector('.fase-titulo').getBoundingClientRect(), campo = nome.getBoundingClientRect();
+      return seta.bottom <= campo.top || campo.bottom <= seta.top;
+    }).map(cab => cab.closest('.fase').dataset.fase));
+    for (const perfil of ['operador', 'gestor']) {
+      await page.locator('#role-sel').selectOption(perfil);
+      for (const largura of [390, 320]) {
+        await page.setViewportSize({ width: largura, height: 844 });
+        for (const fases of ['#fases-abrir', '#fases-recolher']) {
+          await page.locator(fases).click();
+          expect(await larguraDaPagina(page), `${perfil}, ${largura} px, ${fases}`).toBeLessThanOrEqual(largura);
+          expect(await alvosPequenos(page), `${perfil}, ${largura} px, ${fases}`).toEqual([]);
+          if (perfil === 'operador') expect(await setasForaDaLinha(), `${largura} px, ${fases}`).toEqual([]);
+        }
+      }
+    }
+    // O curso encerrado à mostra: o botão dele, com a marca, também cabe nos 320 px
+    await page.locator('#role-sel').selectOption('operador');
+    await page.locator('#cur-ver-PC').click();
+    await confirmar(page, '#cursos .curso[data-curso="PC"] [data-act="curso-encerrar"]');
+    await expect(page.locator('#cur-ver-PC')).toHaveText('PC (encerrado)', { useInnerText: true });
+    expect(await larguraDaPagina(page)).toBeLessThanOrEqual(320);
+    expect(await alvosPequenos(page)).toEqual([]);
+  });
+
+  // Com os cursos que o Administrador cria (as siglas com hífen, como PC-IFR) e um encerrado à mostra, os botões dos
+  // cursos não encolhem abaixo do texto: a sigla e "(encerrado)" ficam inteiros, e o botão que não cabe vai para a linha de
+  // baixo, nos 390 e nos 320 px, para quem muda e para quem só consulta
+  test('com muitos cursos, os botões dos cursos ficam inteiros no celular', async ({ page }) => {
+    let cursos = cursosIniciais();
+    for (const [sigla, nome, ativo] of [['PC-IFR', 'Piloto Comercial IFR', true], ['MLTE', 'Multimotor', false], ['INVA-B', 'Instrutor de Voo (turma B)', true]]) {
+      ({ cursos } = gravarCurso({ cursos }, { sigla, versaoLida: 0, conteudo: { nome, ativo, fases: [], missoes: [] }, descricao: `Curso ${sigla} criado: ${nome}` }));
+    }
+    const { documentos: { cadastro }, dias } = documentosAtuais(cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, {}, { curso: 'PP' })] }), AMANHA);
+    const docs = { acpm4_cadastro: cadastro, [`acpm4_dia_${AMANHA}`]: dias[AMANHA], acpm4_cursos: { cursos, alteracoes: [] } };
+    await page.addInitScript(json => {
+      if (localStorage.getItem('acpm4_cadastro')) return;
+      for (const [chave, valor] of Object.entries(JSON.parse(json))) localStorage.setItem(chave, JSON.stringify(valor));
+    }, JSON.stringify(docs));
+    await page.goto('./');
+    await irPara(page, 'cur');
+    await page.locator('#cur-encerrados').check();
+    const botoes = page.locator('#cursos .seg-dos-cursos button');
+    // O botão com o texto cortado (mais largo que ele), ou com a sigla ou o "(encerrado)" partidos em duas linhas
+    const cortados = () => botoes.evaluateAll(bs => bs.filter(b => {
+      const linhas = el => {
+        const faixa = document.createRange();
+        faixa.selectNodeContents(el);
+        return new Set([...faixa.getClientRects()].map(r => Math.round(r.top))).size;
+      };
+      return b.scrollWidth > b.clientWidth || [...b.querySelectorAll('.sigla, .curso-encerrado')].some(el => linhas(el) > 1);
+    }).map(b => `${b.id} ${b.clientWidth}/${b.scrollWidth}`));
+    for (const perfil of ['operador', 'gestor']) {
+      await page.locator('#role-sel').selectOption(perfil);
+      for (const largura of [390, 320]) {
+        await page.setViewportSize({ width: largura, height: 844 });
+        await expect(botoes).toHaveText(['PP', 'PC', 'INVA', 'PC-IFR', 'MLTE (encerrado)', 'INVA-B'], { useInnerText: true });
+        expect(await cortados(), `${perfil}, ${largura} px`).toEqual([]);
+        expect(await larguraDaPagina(page), `${perfil}, ${largura} px`).toBeLessThanOrEqual(largura);
+        expect(await alvosPequenos(page), `${perfil}, ${largura} px`).toEqual([]);
+      }
+    }
   });
 
   // O "+" que agenda, na lista (um por horário) e em cada linha do mapa, por recurso e por instrutor
