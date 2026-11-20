@@ -40,17 +40,18 @@ const historico = page => page.locator('#audit-log-list');
 const painelGravado = page => page.evaluate(() => JSON.parse(localStorage.getItem('acpm4_cadastro')).painel);
 
 test.describe('Painel: o quadro Missões', () => {
-  test('o painel abre em Missões, o primeiro dos quadros: todos os voos do dia pelo horário, sem o cancelado', async ({ page }) => {
+  test('o painel abre em Missões, o primeiro dos quadros: todos os voos do dia pelo horário, com o cancelado', async ({ page }) => {
     await abrir(page, { estado: dia() });
     await abrirPainel(page);
     await expect(page.locator('#out .seg [data-fids]')).toHaveText(['Missões', 'Partidas e chegadas', 'Partidas', 'Chegadas']);
     await expect(page.locator('#out [data-fids="missoes"]')).toHaveAttribute('aria-pressed', 'true');
     await expect(titulo(page)).toHaveText('Missões');
     await expect(cabecalho(page)).toHaveText(PADRAO);
-    // Pelo horário programado; a turma de Ground numa linha só; o cancelado das 11:30 não aparece
-    await expect(linhas(page).locator('.f-hora')).toHaveText(['06:30', '08:20', '10:10']);
-    await expect(linhas(page).locator('.f-aluno')).toHaveText(['Aluno 1000', '2 alunos', 'Aluno 1001']);
-    await expect(linhas(page).locator('.f-missao')).toHaveText(['Voo Local', 'Ground C152', 'Voo Local']);
+    // Pelo horário programado; a turma de Ground numa linha só; o cancelado das 11:30 também aparece
+    await expect(linhas(page).locator('.f-hora')).toHaveText(['06:30', '08:20', '10:10', '11:30']);
+    await expect(linhas(page).locator('.f-aluno')).toHaveText(['Aluno 1000', '2 alunos', 'Aluno 1001', 'Aluno 1002']);
+    await expect(linhas(page).locator('.f-missao')).toHaveText(['Voo Local', 'Ground C152', 'Voo Local', 'Voo Local']);
+    await expect(linhas(page).nth(3)).toHaveClass(/\bfids-Cancelado\b/);
     await expect(linhas(page).nth(1).locator('.f-aeronave')).toHaveText('Sala Ground');
     await expect(page.locator('#out .fids .f-obs, #out .fids .f-prev')).toHaveCount(0);
     // As linhas vazias completam a página com as colunas à vista
@@ -122,7 +123,7 @@ test.describe('Configurar painel', () => {
     // Liga a Observação: o painel atrás muda na hora
     await dialogo(page).getByRole('checkbox', { name: 'Observação' }).check();
     await expect(cabecalho(page)).toHaveText([...PADRAO, 'Observação']);
-    await expect(linhas(page).first().locator('.f-obs')).toHaveText('Atrasado');
+    await expect(linhas(page).locator('.f-obs')).toHaveText(['Atrasado', 'Confirmado', 'Confirmado', 'Cancelado · Meteorologia']);
     await expect(dialogo(page).locator('#pn-padrao')).toBeEnabled();
 
     // Pelo teclado: Missão sobe uma posição e o foco continua no botão

@@ -1,7 +1,7 @@
 // A TV da recepção: painel.html mostra o mesmo painel da Escala, na tela toda e sem botões, com o quadro de hoje e o
 // aluno abreviado, no quadro e com as colunas da configuração do painel (sem ela, Missões com as colunas do padrão). No
 // modo compartilhado, a conta da TV (perfil "painel") só vê o quadro, que ela busca de novo a cada minuto; a função do
-// servidor ainda não entrega a configuração, e a TV mostra o padrão.
+// servidor ainda não entrega a configuração, e a TV mostra o padrão. Missões mostra também o voo cancelado.
 import { test, expect, prepararContexto, vigiarErros, preencherLogin, URL_APP } from './fixtures.js';
 import { instalarSupabaseFalso, documentosAtuais, CONTAS } from './supabase-falso.js';
 import { runAllocationEngine } from '../../js/engine.js';
@@ -70,16 +70,18 @@ test.describe('TV da recepção', () => {
     expect(caixa.height).toBeGreaterThanOrEqual(tela.height - 1);
   });
 
-  test('sem configuração, a TV mostra Missões com as colunas do padrão: todos os voos do dia, menos o cancelado', async ({ page }) => {
+  test('sem configuração, a TV mostra Missões com as colunas do padrão: todos os voos do dia, com o cancelado', async ({ page }) => {
     await gravarNesteNavegador(page, documentosDeHoje());
     await page.clock.setFixedTime(new Date('2026-11-10T12:00:00-03:00'));
     await page.goto('./painel.html');
     await expect(page.locator('.fids .fids-titulo')).toHaveText('Missões');
     await expect(page.locator('.fids thead th')).toHaveText(PADRAO);
-    // O voo das 08:20, atrasado para 08:50, já passou: no quadro de Missões, ele continua (sem partidas e chegadas)
-    await expect(linhas(page).locator('.f-aluno')).toHaveText(['Maria S.']);
-    await expect(linhas(page).locator('.f-hora')).toHaveText(['08:20']);
-    await expect(linhas(page).locator('td')).toHaveCount(PADRAO.length);
+    // O voo das 08:20, atrasado para 08:50, já passou: no quadro de Missões, ele continua (sem partidas e chegadas); o
+    // cancelado das 10:10 também aparece
+    await expect(linhas(page).locator('.f-aluno')).toHaveText(['Maria S.', 'João']);
+    await expect(linhas(page).locator('.f-hora')).toHaveText(['08:20', '10:10']);
+    await expect(linhas(page).nth(1)).toHaveClass(/\bfids-Cancelado\b/);
+    await expect(linhas(page).locator('td')).toHaveCount(2 * PADRAO.length);
     await expect(page.locator('.fids .f-obs, .fids .f-prev')).toHaveCount(0);
     // As linhas vazias que completam a página ocupam as colunas que estão à vista
     await expect(page.locator('.fids tr.fids-vazia td').first()).toHaveAttribute('colspan', String(PADRAO.length));
@@ -93,7 +95,7 @@ test.describe('TV da recepção', () => {
     await page.goto('./painel.html');
     await expect(page.locator('.fids .fids-titulo')).toHaveText('Missões');
     await expect(page.locator('.fids thead th')).toHaveText(PADRAO);
-    await expect(linhas(page).locator('.f-aluno')).toHaveText(['Maria S.']);
+    await expect(linhas(page).locator('.f-aluno')).toHaveText(['Maria S.', 'João']);
     expect(erros).toEqual([]);
   });
 
@@ -181,9 +183,10 @@ test.describe('TV da recepção', () => {
     await page.clock.install({ time: new Date('2026-11-10T12:00:00-03:00') });
     await page.goto('./painel.html?supabase=teste');
     await preencherLogin(page, CONTAS.painel);
-    // O quadro de Missões, sem o voo cancelado
+    // O quadro de Missões, com o voo cancelado
     await expect(page.locator('.fids .fids-titulo')).toHaveText('Missões');
-    await expect(linhas(page).locator('.f-aluno')).toHaveText(['Maria S.']);
+    await expect(linhas(page).locator('.f-aluno')).toHaveText(['Maria S.', 'João']);
+    await expect(linhas(page).nth(1)).toHaveClass(/\bfids-Cancelado\b/);
     await expect(page.locator('.fids .fids-aviso')).toHaveText('');
 
     // O operador muda um status (o voo cancelado volta): a TV mostra na próxima busca
@@ -192,6 +195,7 @@ test.describe('TV da recepção', () => {
     delete dia.fObs['1001_0_1'];
     servidor.alterarDiaPorOutraPessoa(HOJE, dia);
     await page.clock.runFor(60_000);
+    await expect(linhas(page).nth(1)).toHaveClass(/\bfids-Confirmado\b/);
     await expect(linhas(page).locator('.f-aluno')).toHaveText(['Maria S.', 'João']);
     expect(erros).toEqual([]);
     await context.close();
@@ -218,7 +222,7 @@ test.describe('TV da recepção', () => {
     await page.goto(URL_APP);
     await preencherLogin(page, CONTAS.painel);
     await expect(page).toHaveURL(/painel\.html\?supabase=teste$/);
-    await expect(linhas(page).locator('.f-aluno')).toHaveText(['Maria S.']);
+    await expect(linhas(page).locator('.f-aluno')).toHaveText(['Maria S.', 'João']);
     await page.goto(URL_APP);
     await expect(page.locator('#form-login')).toBeVisible();
     expect(erros).toEqual([]);
@@ -236,7 +240,7 @@ test.describe('TV da recepção', () => {
     await page.reload();
     await expect(page.locator('#form-login')).toBeVisible();
     await preencherLogin(page, CONTAS.painel);
-    await expect(linhas(page).locator('.f-aluno')).toHaveText(['Maria S.']);
+    await expect(linhas(page).locator('.f-aluno')).toHaveText(['Maria S.', 'João']);
     expect(erros).toEqual([]);
     await context.close();
   });
@@ -249,7 +253,7 @@ test.describe('TV da recepção', () => {
     await page.goto('./painel.html?supabase=teste');
     await expect(page.locator('#form-login')).toBeVisible();
     await preencherLogin(page, CONTAS.painel);
-    await expect(linhas(page)).toHaveCount(1);
+    await expect(linhas(page)).toHaveCount(2);
     // O app continua com a conta do operador
     await page.goto(URL_APP);
     await expect(page.locator('#usuario')).toContainText(CONTAS.operador.nome);
@@ -261,14 +265,14 @@ test.describe('TV da recepção', () => {
     const { context, page, erros } = await novaTV(browser);
     await page.goto('./painel.html?supabase=teste');
     await preencherLogin(page, CONTAS.painel);
-    await expect(linhas(page)).toHaveCount(1);
+    await expect(linhas(page)).toHaveCount(2);
     // Uma TV conectada por uma versão antiga do app tem a sessão na chave do app
     await page.evaluate(() => {
       localStorage.setItem('acpm-teste', localStorage.getItem('acpm-teste-painel'));
       localStorage.removeItem('acpm-teste-painel');
     });
     await page.reload();
-    await expect(linhas(page)).toHaveCount(1);
+    await expect(linhas(page)).toHaveCount(2);
     await page.goto(URL_APP);
     await expect(page.locator('#form-login')).toBeVisible();
     expect(erros).toEqual([]);

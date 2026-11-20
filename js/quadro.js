@@ -83,8 +83,8 @@ function linhaDoAeroporto(l, momento, agora) {
 const peloEfetivo = (x, y) => x.efetivo - y.efetivo;
 
 // Missões: todos os voos do dia, na ordem do horário programado (o que o quadro mostra), sem a chamada do embarque. O
-// cancelado não entra: sem a coluna Observação (desligada no padrão), ele pareceria um voo de pé
-export const quadroDeMissoes = linhas => linhas.filter(l => l.status !== 'Cancelado')
+// cancelado também aparece (Pedro, 2026-11-20): com a coluna Observação ligada, ele diz "Cancelado" e o motivo
+export const quadroDeMissoes = linhas => linhas
   .map(l => linhaDoAeroporto(l, 'missao'))
   .sort((x, y) => x.horario - y.horario || peloEfetivo(x, y));
 

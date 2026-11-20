@@ -109,17 +109,19 @@ describe('Quadro de missões', () => {
     ]);
   });
 
-  it('sem partidas e chegadas: o voo que já pousou continua; o cancelado não entra; ninguém é chamado para o embarque', () => {
+  it('sem partidas e chegadas: o voo que já pousou continua; o cancelado aparece, com o motivo; ninguém é chamado para o embarque', () => {
     const out = [voo('1000_0_1', 390), voo('1001_0_1', 760), voo('1002_0_1', 820), voo('1003_0_1', 900)];
     const fStatus = { '1000_0_1': 'Pousou', '1002_0_1': 'Cancelado' };
     const missoes = quadroDeMissoes(linhasDoQuadro(out, fStatus, { '1002_0_1': { motivo: 'Meteorologia' } }));
-    assert.deepEqual(missoes.map(l => [l.aluno, l.observacao, l.classe]), [
-      ['Aluno 1000', 'Pousou', 'Pousou'], ['Aluno 1001', 'Confirmado', 'Confirmado'], ['Aluno 1003', 'Confirmado', 'Confirmado']
+    assert.deepEqual(missoes.map(l => [l.aluno, l.horario, l.observacao, l.classe]), [
+      ['Aluno 1000', 390, 'Pousou', 'Pousou'], ['Aluno 1001', 760, 'Confirmado', 'Confirmado'],
+      ['Aluno 1002', 820, 'Cancelado · Meteorologia', 'Cancelado'], ['Aluno 1003', 900, 'Confirmado', 'Confirmado']
     ]);
-    // A turma de Ground só sai quando todos os alunos estão cancelados
+    // A turma de Ground meio cancelada continua de pé; toda cancelada, aparece cancelada
     const turmaMeioCancelada = linhasDoQuadro(turma([1004, 1005]), { '1004_0_1': 'Cancelado' });
-    assert.deepEqual(quadroDeMissoes(turmaMeioCancelada).map(l => l.aluno), ['2 alunos']);
-    assert.deepEqual(quadroDeMissoes(linhasDoQuadro(turma([1004, 1005]), { '1004_0_1': 'Cancelado', '1005_0_1': 'Cancelado' })), []);
+    assert.deepEqual(quadroDeMissoes(turmaMeioCancelada).map(l => [l.aluno, l.observacao]), [['2 alunos', 'Confirmado']]);
+    const turmaCancelada = linhasDoQuadro(turma([1004, 1005]), { '1004_0_1': 'Cancelado', '1005_0_1': 'Cancelado' });
+    assert.deepEqual(quadroDeMissoes(turmaCancelada).map(l => [l.aluno, l.observacao, l.classe]), [['2 alunos', 'Cancelado', 'Cancelado']]);
   });
 });
 
