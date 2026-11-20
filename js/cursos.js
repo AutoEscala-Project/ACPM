@@ -44,6 +44,23 @@ export function normalizarCursos(cursos) {
 // tabelas dos cursos) continua valendo: a matrícula não se perde na próxima gravação
 export const normalizarCursoDoAluno = c => (siglaValida(c) ? c : undefined);
 
+// O filtro dos cursos, em Alunos e na Demanda (js/views/filtro-dos-cursos.js). O valor de "Sem curso" não é uma sigla (a
+// sigla começa por letra maiúscula). As opções, [valor, rótulo no botão, texto da caixa]: os cursos ativos, na ordem do
+// programa; os encerrados, marcados "(encerrado)"; o curso de um aluno que não está no programa, marcado "(curso
+// desconhecido)" (sem os programas lidos, só a sigla: nada é dito sobre ele); e "Sem curso". programa: os cursos
+// conhecidos ([{ sigla, nome, ativo }]); cursosDosAlunos: o curso de cada aluno (vazio, sem curso)
+export const SEM_CURSO = 'sem-curso';
+export function opcoesDoFiltroDosCursos(programa, cursosDosAlunos, { semProgramas = false } = {}) {
+  const conhecidos = new Set(programa.map(c => c.sigla));
+  const outros = [...new Set(cursosDosAlunos.filter(c => c && !conhecidos.has(c)))].sort();
+  return [
+    ...programa.filter(c => c.ativo).map(c => [c.sigla, c.sigla, `${c.sigla} · ${c.nome}`]),
+    ...programa.filter(c => !c.ativo).map(c => [c.sigla, c.sigla, `${c.sigla} · ${c.nome} (encerrado)`]),
+    ...outros.map(sigla => [sigla, sigla, semProgramas ? sigla : `${sigla} (curso desconhecido)`]),
+    [SEM_CURSO, 'sem curso', 'Sem curso']
+  ];
+}
+
 // A missão nova do programa: o próximo número livre do curso (PP-01, PP-02…), um voo local de 1 h no C152
 export function novaMissaoDoCurso(curso, missoes) {
   const numeros = missoes.map(m => new RegExp(`^${curso}-(\\d+)$`).exec(m.id)).filter(Boolean).map(r => +r[1]);

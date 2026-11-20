@@ -98,11 +98,10 @@ export async function irParaVista(page, aba, vista) {
   await expect(page.locator(`#s-${aba}`)).toHaveAttribute('data-vista', vista);
 }
 
-// O filtro das habilitações de Instrutores (js/views/filtro-multiplo.js): abre o painel, deixa marcadas só as
-// habilitações dadas (os valores: 'mlte', 'aviao:PR-VOM'…) e fecha o painel pelo botão (com fechar: false, ele fica
-// aberto). Sem nenhuma, todas desmarcadas
-export async function filtrarHabilitacoes(page, valores, { fechar = true } = {}) {
-  const botao = page.locator('#flt-ins-hab'), painel = page.locator('#flt-ins-hab-painel');
+// Um filtro de vários valores (js/views/filtro-multiplo.js; id: o do botão): abre o painel, deixa marcados só os valores
+// dados e fecha o painel pelo botão (com fechar: false, ele fica aberto). Sem nenhum, todos desmarcados
+async function marcarNoFiltro(page, id, valores, { fechar = true } = {}) {
+  const botao = page.locator(`#${id}`), painel = page.locator(`#${id}-painel`);
   if (await botao.getAttribute('aria-expanded') !== 'true') await botao.click();
   await expect(painel).toBeVisible();
   const mudar = await painel.locator('input[data-filtro]').evaluateAll((caixas, marcar) =>
@@ -114,10 +113,16 @@ export async function filtrarHabilitacoes(page, valores, { fechar = true } = {})
   await expect(painel).toBeHidden();
 }
 
-// As telas que não são a de abertura de uma aba: as outras vistas (Instrutores › Cadastro), o painel aberto do filtro
-// das habilitações (com duas marcas: o botão diz as duas) e as tabelas que os filtros deixam sem nenhuma linha (com
-// "Limpar filtros"). Os testes do celular e da acessibilidade, que conferem cada aba como ela abre, conferem também
-// estas: conferir(nome) roda em cada uma. No fim, a busca e as marcas voltam a vazias
+// O filtro das habilitações de Instrutores: os valores são as habilitações ('mlte', 'aviao:PR-VOM'…)
+export const filtrarHabilitacoes = (page, valores, opcoes) => marcarNoFiltro(page, 'flt-ins-hab', valores, opcoes);
+// O filtro dos cursos de Alunos ('alu') ou da Demanda ('dem'): os valores são as siglas ('PP', 'PC'…) e 'sem-curso'
+export const filtrarCursos = (page, aba, valores, opcoes) => marcarNoFiltro(page, `flt-${aba}-cur`, valores, opcoes);
+
+// As telas que não são a de abertura de uma aba: as outras vistas (Instrutores › Cadastro), os painéis abertos dos filtros
+// de vários valores (o das habilitações, em Instrutores, e o dos cursos, em Alunos e na Demanda, com duas marcas: o botão
+// diz as duas) e as tabelas que os filtros deixam sem nenhuma linha (com "Limpar filtros"). Os testes do celular e da
+// acessibilidade, que conferem cada aba como ela abre, conferem também estas: conferir(nome) roda em cada uma. No fim, a
+// busca e as marcas voltam a vazias
 export async function percorrerVistasEFiltros(page, conferir) {
   await irParaVista(page, 'ins', 'cadastro');
   await conferir('instrutores: cadastro');
@@ -137,6 +142,13 @@ export async function percorrerVistasEFiltros(page, conferir) {
   await nenhumComOsFiltros(page, 'alu', 'alu');
   await conferir('alunos: nenhum com os filtros');
   await page.locator('[data-flt="alu"]').fill('');
+  for (const [aba, nome] of [['alu', 'alunos'], ['dem', 'demanda']]) {
+    await irPara(page, aba);
+    await filtrarCursos(page, aba, ['PP', 'sem-curso'], { fechar: false });
+    await expect(page.locator(`#flt-${aba}-cur`)).toHaveText('Curso: PP ou sem curso');
+    await conferir(`${nome}: o filtro dos cursos aberto, com duas marcas`);
+    await filtrarCursos(page, aba, []);
+  }
 }
 
 // A tabela que os filtros deixam sem nenhuma linha: a linha que diz por quê; a contagem já escrita (ela espera a

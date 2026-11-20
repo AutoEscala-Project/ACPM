@@ -12,7 +12,7 @@ import { chaveDoVoo } from '../voo.js';
 import { escolherInstrutor } from '../instrutor-escolhido.js';
 import { confirmado, comConfirmacao } from './confirmacao.js';
 import { aoAcionar, aoMudarCampo } from './registro.js';
-import { singleDemandRowHTML, cnt, rDem, applyDemandFilters } from '../views/demanda.js';
+import { singleDemandRowHTML, cnt, rDem, filtrarDemanda, manterNaDemanda, prepararFiltroDosCursos } from '../views/demanda.js';
 import { renderAuditPanel } from '../views/escala.js';
 import { proximaDoPedido, outraMissaoDoPedido, botaoForaDaOrdem, confirmacaoDaMissao } from '../views/etapas.js';
 
@@ -40,6 +40,8 @@ function incluirAluno() {
   if (s.fly) { showToast(`${s.nm} já está na demanda.`); return; }
   s.fly = true;
   gravarAlteracao('inc', `${s.nm} incluído na demanda`, { kind: 'setFly', stuId: s.id, mid: 0, val: false, label: '↶ Reverter' });
+  // Fora dos filtros da barra (as marcas dos cursos podem ter vindo de Alunos), o pedido incluído continua à vista
+  manterNaDemanda(s.id);
   rDem();
   const linha = document.querySelector(`#dem tr[data-k="d"][data-id="${s.id}"][data-mid="0"]`);
   if (linha) linha.scrollIntoView({ block: 'center' });
@@ -53,9 +55,11 @@ $('#incluir-aluno').addEventListener('keydown', e => {
 $('#incluir-aluno').addEventListener('input', e => { if (e.inputType === 'insertReplacementText') incluirAluno(); });
 
 document.addEventListener('input', e => {
-  if (e.target.id === 'flt-dem') applyDemandFilters();
+  if (e.target.id === 'flt-dem') filtrarDemanda();
 });
-$('#flt-dem-mis').onchange = applyDemandFilters;
+// O curso do aluno: o filtro de vários valores, que ouve as próprias caixas (js/views/filtro-multiplo.js)
+prepararFiltroDosCursos();
+$('#flt-dem-mis').onchange = filtrarDemanda;
 $('#flt-dem-mis').insertAdjacentHTML('beforeend', Object.keys(MIS).map(m => `<option value="${m}">${m}</option>`).join(''));
 // "Só quem voa": a tabela mostra só os pedidos marcados (vale também para quem só consulta)
 document.addEventListener('change', e => {

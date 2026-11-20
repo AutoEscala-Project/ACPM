@@ -2,7 +2,7 @@
 // (em grupos, cada um com a sua legenda), a frase da regra ("Mostra quem tem todas as marcadas") e "Limpar". O botão
 // diz o que está marcado ("Habilitações: Noturno + C172"; sem nenhuma, "Todas as habilitações"). A regra é de cada uso
 // (js/filtro-multiplo.js): "todas" nas habilitações de Instrutores (js/views/cadastros.js), "alguma" num valor só por
-// linha (o curso, a categoria).
+// linha (o curso do aluno, em Alunos e na Demanda: js/views/filtro-dos-cursos.js; a categoria).
 // - O painel fica no fluxo da página, na linha de baixo da barra: ele empurra a tabela em vez de cobri-la, e no celular
 //   não sai da tela. No HTML, ele vem logo depois do botão (o Tab e o leitor de tela passam do botão para as caixas).
 // - Quem só consulta (o Gestor, a Secretaria) usa o filtro como o Operador: as caixas têm a classe flt-ctrl (js/somente-
@@ -10,7 +10,8 @@
 //   data-f ou data-a (a mudança seria tratada como uma alteração dos dados).
 // - As marcas ficam aqui, e não só nas caixas: elas valem de novo quando as opções são refeitas (desenhar, quando a frota
 //   muda), e a marcada que sumiu das opções sai do filtro. As caixas refeitas guardam o foco de quem usa o teclado
-//   (trocarConteudo: cada uma é achada pelo filtro e pelo valor, data-filtro e data-valor, js/dom.js).
+//   (trocarConteudo: cada uma é achada pelo filtro e pelo valor, data-filtro e data-valor, js/dom.js). Dois filtros podem
+//   dividir as mesmas marcas (o dos cursos, em Alunos e na Demanda: js/views/filtro-dos-cursos.js).
 // - O Esc com o foco no filtro (ou em lugar nenhum, sem gaveta aberta) fecha o painel e leva o foco ao botão: ouvido na
 //   captura, ele para ali, e as gavetas abertas continuam abertas. Um clique fora também fecha o painel.
 import { $, trocarConteudo, fecharNoEsc } from '../dom.js';
@@ -19,15 +20,16 @@ import { botaoDeDica } from '../dicas.js';
 import { REGRAS_DO_FILTRO, passaNoFiltro, resumoDoFiltro } from '../filtro-multiplo.js';
 
 // id: o do botão, que já está na página (o painel é "<id>-painel"); nome e todas: o texto do botão, com e sem marcas;
-// regra: 'todas' ou 'alguma'; grupos(): as opções agora, [{ titulo, opcoes: [[valor, rotulo], …] }]; dica: [termo do
-// glossário, rótulo] do "?" ao lado da regra; aoMudar(): as marcas mudaram (marcar, desmarcar, Limpar, a marcada que
-// sumiu das opções)
-export function criarFiltroMultiplo({ id, nome, todas, regra = 'todas', grupos, dica = null, aoMudar }) {
+// regra: 'todas' ou 'alguma'; grupos(): as opções agora, [{ titulo, opcoes: [[valor, rotulo, naCaixa], …] }] (o rótulo vai
+// no botão; naCaixa, quando há, é o texto mais longo da caixa: "PP · Piloto Privado" no lugar de "PP"); frase: a regra
+// com as palavras do uso ("Mostra os alunos de algum dos cursos marcados."; sem ela, a frase da regra); dica: [termo do
+// glossário, rótulo] do "?" ao lado da regra; marcados: as marcas (um Set), quando o filtro as divide com outro (sem ele,
+// as marcas são só deste); aoMudar(): as marcas mudaram (marcar, desmarcar, Limpar, a marcada que sumiu das opções)
+export function criarFiltroMultiplo({ id, nome, todas, regra = 'todas', grupos, frase = REGRAS_DO_FILTRO[regra].frase, dica = null, marcados = new Set(), aoMudar }) {
   const botao = $(`#${id}`), painel = $(`#${id}-painel`);
-  const marcados = new Set();
   let opcoes = [], assinatura = null;
   // A frase da regra, com o "?" junto da última palavra (a quebra da linha não deixa o "?" sozinho embaixo)
-  const frase = REGRAS_DO_FILTRO[regra].frase, corte = frase.lastIndexOf(' ') + 1;
+  const corte = frase.lastIndexOf(' ') + 1;
   const regraComDica = dica ? `${frase.slice(0, corte)}<span class="filtro-fim">${frase.slice(corte)}${botaoDeDica(...dica)}</span>` : frase;
   painel.innerHTML = `<div class="filtro-cab"><p class="filtro-regra">${regraComDica}</p>` +
     `<button type="button" class="btn quiet" id="${id}-limpar" data-limpar-filtro="${id}">Limpar</button></div><div class="filtro-grupos"></div>`;
@@ -42,7 +44,7 @@ export function criarFiltroMultiplo({ id, nome, todas, regra = 'todas', grupos, 
     botao.classList.toggle('com-marcas', marcados.size > 0);
   }
 
-  const caixa = ([valor, rotulo]) => `<label class="filtro-opcao"><input type="checkbox" class="flt-ctrl" data-filtro="${id}" data-valor="${esc(valor)}"${marcados.has(valor) ? ' checked' : ''}>${esc(rotulo)}</label>`;
+  const caixa = ([valor, rotulo, naCaixa]) => `<label class="filtro-opcao"><input type="checkbox" class="flt-ctrl" data-filtro="${id}" data-valor="${esc(valor)}"${marcados.has(valor) ? ' checked' : ''}>${esc(naCaixa || rotulo)}</label>`;
 
   // As opções de agora: as caixas são refeitas só quando elas mudam; a marcada que sumiu sai do filtro
   function desenhar() {

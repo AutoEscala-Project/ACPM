@@ -1,5 +1,6 @@
-// Aba Demanda: pedidos de missão por aluno (inclusive missões extras) e filtros. Os campos são discretos (parecem
-// texto até o mouse passar ou o foco chegar); o que a missão exige do instrutor fica na dica do campo da missão.
+// Aba Demanda: pedidos de missão por aluno (inclusive missões extras) e filtros (só quem voa, o nome, o curso do aluno e a
+// missão). Os campos são discretos (parecem texto até o mouse passar ou o foco chegar); o que a missão exige do instrutor
+// fica na dica do campo da missão.
 import { MIS, GROUND_EQ_TYPE, T, NI, DURACAO_MAXIMA_H, GROUND_DURATION_H } from '../config.js';
 import { matriculasDoTipo } from '../frota.js';
 import { esc, opts, hm, chaveDeBusca } from '../format.js';
@@ -13,6 +14,7 @@ import { etapaNaDemanda } from './etapas.js';
 import { instrutoresDoPedido } from '../instrutor-escolhido.js';
 import { chaveDoVoo } from '../voo.js';
 import { nomeDoRecurso } from '../categorias.js';
+import { criarFiltroDosCursos, cursoDaLinha } from './filtro-dos-cursos.js';
 
 function allowedEqOptionsForMission(mis, currentEq) {
   const m = MIS[mis] || MIS['Voo Local'];
@@ -65,7 +67,7 @@ export const singleDemandRowHTML = (stu, d, mid = 0) => {
     // A duração digitada, fracionada, até 5 h
     : `<input type="number" class="duracao" data-f="nb" min="0.1" max="${DURACAO_MAXIMA_H}" step="0.1" inputmode="decimal" value="${esc(d.nb)}" aria-label="Duração de ${esc(stu.nm)}, em horas">`;
 
-  return `<tr data-k="d" data-id="${stu.id}" data-mid="${mid}" data-nm="${esc(chaveDeBusca(stu.nm))}" data-mis="${esc(d.mis)}" class="${trCls}">
+  return `<tr data-k="d" data-id="${stu.id}" data-mid="${mid}" data-nm="${esc(chaveDeBusca(stu.nm))}" data-curso="${esc(stu.curso || '')}" data-mis="${esc(d.mis)}" class="${trCls}">
     <td>${firstCell}</td>
     <td><label class="alvo"><input type="checkbox" class="sw" data-f="fly"${d.fly ? ' checked' : ''} aria-label="${esc(stu.nm)} vai voar"></label></td>
     <td><select data-f="mis" title="${esc(exige)}" aria-label="Missão${de}">${opts(Object.keys(MIS).map(m => [m, m]), d.mis)}</select></td>
@@ -103,6 +105,8 @@ export const cnt = () => {
 };
 
 export const rDem = () => {
+  // As opções do filtro dos cursos acompanham os programas e os cursos dos alunos
+  if (filtroDosCursos) filtroDosCursos.desenhar();
   if (!S.stu.length) {
     trocarConteudo($('#dem'), `<tr class="empty-dem"><td colspan="10" class="h" style="padding:16px">Nenhum aluno cadastrado. Cadastre os alunos na aba Alunos.</td></tr>`);
     cnt();
@@ -115,13 +119,32 @@ export const rDem = () => {
   renderAuditPanel();
 };
 
-export function applyDemandFilters() {
+// O filtro dos cursos na Demanda (js/views/filtro-dos-cursos.js), o mesmo de Alunos, com as mesmas marcas: o pedido
+// aparece se o aluno está em algum dos cursos marcados, junto com os outros filtros da barra
+let filtroDosCursos = null;
+export function prepararFiltroDosCursos() {
+  filtroDosCursos = criarFiltroDosCursos('flt-dem-cur', filtrarDemanda);
+}
+
+// O aluno posto agora na demanda ("Pôr um aluno na demanda") continua à vista mesmo fora dos filtros, até eles mudarem:
+// as marcas dos cursos podem ter vindo de Alunos, e o pedido incluído não some na hora
+const mantidosNaDemanda = new Set();
+export const manterNaDemanda = id => mantidosNaDemanda.add(id);
+
+// Um filtro da barra mudou (a busca, a missão, as marcas dos cursos, aqui ou em Alunos): vale para todos os pedidos
+export function filtrarDemanda() {
+  mantidosNaDemanda.clear();
+  applyDemandFilters();
+}
+
+function applyDemandFilters() {
   // O nome sem acentos: "joao" acha "João"
   const q = chaveDeBusca($('#flt-dem') && $('#flt-dem').value);
   const mis = $('#flt-dem-mis') ? $('#flt-dem-mis').value : '';
+  const noCurso = filtroDosCursos ? filtroDosCursos.quemPassa() : () => true;
   document.querySelectorAll('#dem tr[data-k="d"]').forEach(tr => {
     const matchName = !q || tr.dataset.nm.includes(q);
     const matchMis = !mis || tr.dataset.mis === mis;
-    tr.hidden = !(matchName && matchMis);
+    tr.hidden = !(mantidosNaDemanda.has(+tr.dataset.id) || (matchName && matchMis && noCurso(cursoDaLinha(tr))));
   });
 }

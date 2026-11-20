@@ -1,11 +1,13 @@
 // Abas Instrutores e Alunos. Os instrutores têm duas visões: a disponibilidade do dia (uma grade com as janelas e os
-// voos de cada um na escala) e o cadastro (nome, CANAC, peso e habilitações, editadas num painel lateral). Os dados
-// pessoais (CPF, CANAC, nascimento, celular e e-mail) abrem noutro painel, só para quem pode vê-los (.so-dados).
+// voos de cada um na escala) e o cadastro (nome, CANAC, peso e habilitações, editadas num painel lateral). Os alunos, uma
+// tabela com as mesmas colunas na frente (nome, CANAC e peso) e a barra no mesmo lugar (a busca, o filtro, quantos
+// aparecem e "+ Novo"). Os dados pessoais (CPF, CANAC, nascimento, celular e e-mail) abrem noutro painel, só para quem
+// pode vê-los (.so-dados).
 import { WIN, PRE, T, AIRCRAFT_EQ_TYPES, MINUTOS_DO_DIA } from '../config.js';
 import { HABILITACOES, nomeDaHabilitacao } from '../habilitacoes.js';
 import { FROTA_INICIAL, habilitacaoDoAviao } from '../frota.js';
 import { esc, hm, opts, LIMITE_DO_NOME, numeroBr, chaveDeBusca } from '../format.js';
-import { S, DATA, insBy, isGestor, voosQueVoam, dadoIndisponivel } from '../state.js';
+import { S, DATA, insBy, isGestor, voosQueVoam } from '../state.js';
 import { $, abrirGaveta } from '../dom.js';
 import { botaoDeDica } from '../dicas.js';
 import { canacDe } from './dados-pessoais.js';
@@ -14,9 +16,9 @@ import { ApiClient } from '../storage.js';
 import { gerenciaContas } from '../perfis.js';
 import { progressoDoAluno } from './etapas.js';
 import { unidadeDoVoo, umPorUnidade } from '../voo.js';
-import { CURSOS } from '../cursos.js';
 import { mostrarVista } from './vistas.js';
 import { criarFiltroMultiplo } from './filtro-multiplo.js';
+import { criarFiltroDosCursos, cursosConhecidos, cursoDaLinha } from './filtro-dos-cursos.js';
 
 const ROTULO = new Map(HABILITACOES.map(h => [h.id, h.curto]));
 // No cadastro, todas na ordem do painel; na grade do dia, só as que mais distinguem o instrutor
@@ -100,13 +102,17 @@ function colunaDoMes(x) {
   return `<td class="mes${atencao ? ' perto' : ''}" title="${esc(titulo)}">${numeroBr(h.mes)} h</td>`;
 }
 
+// As células do cadastro (Instrutores e Alunos) têm a classe da coluna: no celular, cada pessoa vira um cartão, com as
+// partes postas pela classe (css/app.css), e o nome da coluna (data-rotulo) aparece pequeno em cima de cada uma. Os
+// botões: "Editar habilitações" (o das habilitações; no celular, na linha de baixo delas) e depois "Dados pessoais" e o
+// ✕, como em Alunos: o Tab segue a ordem da tela, também no cartão do celular
 function linhaDoCadastro(x) {
   return `<tr class="cd" ${atributos(x)}>
-    <td><input class="nm" data-f="nm" value="${esc(x.nm)}" maxlength="${LIMITE_DO_NOME}" aria-label="Nome do instrutor"></td>
-    <td class="c-canac so-dados">${esc(canacDe('instrutor', x.id))}</td>
-    <td><input type="number" min="1" max="300" data-f="kg" value="${x.kg || ''}" placeholder="sem peso" aria-label="Peso de ${esc(x.nm)} em kg"${x.kg ? '' : ' class="falta"'}></td>
-    <td><span class="habs-resumo">${esc(resumoDasHabilitacoes(x)) || 'Nenhuma'}</span></td>
-    <td class="acoes"><button type="button" class="btn quiet so-dados" data-dados="instrutor:${x.id}" aria-label="Dados pessoais de ${esc(x.nm)}">Dados pessoais</button><button class="btn quiet edit-only" data-act="editar-habs" data-id="${x.id}">Editar habilitações</button><button class="x edit-only" data-act="deli" aria-label="Excluir ${esc(x.nm)}">✕</button></td>
+    <td class="c-nome"><input class="nm" data-f="nm" value="${esc(x.nm)}" maxlength="${LIMITE_DO_NOME}" aria-label="Nome do instrutor"></td>
+    <td class="c-canac so-dados" data-rotulo="CANAC">${esc(canacDe('instrutor', x.id))}</td>
+    <td class="c-peso" data-rotulo="Peso (kg)"><input type="number" min="1" max="300" data-f="kg" value="${x.kg || ''}" placeholder="sem peso" aria-label="Peso de ${esc(x.nm)} em kg"${x.kg ? '' : ' class="falta"'}></td>
+    <td class="c-habs" data-rotulo="Habilitações"><span class="habs-resumo">${esc(resumoDasHabilitacoes(x)) || 'Nenhuma'}</span></td>
+    <td class="acoes"><button class="btn quiet edit-only" data-act="editar-habs" data-id="${x.id}">Editar habilitações</button><button type="button" class="btn quiet so-dados" data-dados="instrutor:${x.id}" aria-label="Dados pessoais de ${esc(x.nm)}">Dados pessoais</button><button class="x edit-only" data-act="deli" aria-label="Excluir ${esc(x.nm)}">✕</button></td>
   </tr>`;
 }
 
@@ -240,7 +246,7 @@ export function fecharPainelDoInstrutor(devolverFoco = false) {
   if (devolverFoco && botao) botao.focus();
 }
 
-// Alunos: uma tabela (nome, curso, peso e os instrutores com quem o aluno não deve ser escalado)
+// Alunos: uma tabela (nome, CANAC, peso, curso e os instrutores com quem o aluno voa de preferência ou não deve ser escalado)
 function naoEscalarCom(s) {
   return s.bl.map(b => insBy(b) ? `<span class="tg">${esc(insBy(b).nm)}<button class="edit-only" data-act="unbl" data-b="${b}" aria-label="Voltar a escalar com ${esc(insBy(b).nm)}">✕</button></span>` : '').join('') +
     `<select data-f="bl" class="edit-only" aria-label="Não escalar com"><option value="">Não escalar com…</option>${S.ins.filter(x => !s.bl.includes(x.id)).map(x => `<option value="${x.id}">${esc(x.nm)}</option>`).join('')}</select>`;
@@ -258,25 +264,28 @@ function voaCom(s) {
 // ("(curso desconhecido)"). Sem os programas lidos, os três cursos com que o app começa (o servidor sempre os tem:
 // nenhum curso é apagado) e o curso dele que não é um deles, só pela sigla (nada é dito sobre ele)
 function opcoesDoCurso(s) {
-  const semProgramas = dadoIndisponivel('cursos') || !(S.programa || []).length;
-  const programa = semProgramas ? CURSOS.map(([sigla, nome]) => ({ sigla, nome, ativo: true })) : S.programa;
+  const { semProgramas, programa } = cursosConhecidos();
   const atual = s.curso ? programa.find(c => c.sigla === s.curso) : null;
   const doAluno = !s.curso || (atual && atual.ativo) ? []
     : [[s.curso, atual ? `${s.curso} · ${atual.nome} (encerrado)` : semProgramas ? s.curso : `${s.curso} (curso desconhecido)`]];
   return opts([['', '—'], ...programa.filter(c => c.ativo).map(c => [c.sigla, `${c.sigla} · ${c.nome}`]), ...doAluno], s.curso || '');
 }
 
-const linhaDoAluno = s => `<tr class="cd" data-k="s" data-id="${s.id}" data-nm="${esc(chaveDeBusca(s.nm))}">
-  <td><input class="nm" data-f="nm" value="${esc(s.nm)}" maxlength="${LIMITE_DO_NOME}" aria-label="Nome do aluno"></td>
-  <td class="c-canac so-dados">${esc(canacDe('aluno', s.id))}</td>
-  <td class="c-curso"><select data-f="curso" aria-label="Curso de ${esc(s.nm)}"${isGestor() ? ' disabled' : ''}>${opcoesDoCurso(s)}</select>${progressoDoAluno(s)}</td>
-  <td><input type="number" min="1" max="300" data-f="kg" value="${s.kg || ''}" placeholder="sem peso" aria-label="Peso de ${esc(s.nm)} em kg"${s.kg ? '' : ' class="falta"'}></td>
-  <td class="c-voa-com"><div class="bl voa-com">${voaCom(s)}</div></td>
-  <td><div class="bl nao-escalar">${naoEscalarCom(s)}</div></td>
+// As colunas na ordem das de Instrutores (o nome, o CANAC e o peso; depois, as do aluno). data-curso: o curso do aluno,
+// para o filtro dos cursos
+const linhaDoAluno = s => `<tr class="cd" data-k="s" data-id="${s.id}" data-nm="${esc(chaveDeBusca(s.nm))}" data-curso="${esc(s.curso || '')}">
+  <td class="c-nome"><input class="nm" data-f="nm" value="${esc(s.nm)}" maxlength="${LIMITE_DO_NOME}" aria-label="Nome do aluno"></td>
+  <td class="c-canac so-dados" data-rotulo="CANAC">${esc(canacDe('aluno', s.id))}</td>
+  <td class="c-peso" data-rotulo="Peso (kg)"><input type="number" min="1" max="300" data-f="kg" value="${s.kg || ''}" placeholder="sem peso" aria-label="Peso de ${esc(s.nm)} em kg"${s.kg ? '' : ' class="falta"'}></td>
+  <td class="c-curso" data-rotulo="Curso"><select data-f="curso" aria-label="Curso de ${esc(s.nm)}"${isGestor() ? ' disabled' : ''}>${opcoesDoCurso(s)}</select>${progressoDoAluno(s)}</td>
+  <td class="c-voa-com" data-rotulo="Priorizar com"><div class="bl voa-com">${voaCom(s)}</div></td>
+  <td class="c-nao-escalar" data-rotulo="Não escalar com"><div class="bl nao-escalar">${naoEscalarCom(s)}</div></td>
   <td class="acoes"><button type="button" class="btn quiet so-dados" data-dados="aluno:${s.id}" aria-label="Dados pessoais de ${esc(s.nm)}">Dados pessoais</button><button class="x edit-only" data-act="dels" aria-label="Excluir ${esc(s.nm)}">✕</button></td>
 </tr>`;
 
 export const rAlu = () => {
+  // As opções do filtro dos cursos acompanham os programas e os cursos dos alunos
+  if (filtroDosCursos) filtroDosCursos.desenhar();
   $('#alu').innerHTML = S.stu.length ? S.stu.map(linhaDoAluno).join('')
     : '<tr><td colspan="7" class="h">Nenhum aluno cadastrado. Clique em “+ Novo aluno” acima para cadastrar.</td></tr>';
   aplicarFiltrosDosAlunos();
@@ -284,11 +293,12 @@ export const rAlu = () => {
 
 // Atualiza a linha do aluno no lugar. "Priorizar com" e "Não escalar com" são refeitos só quando mudam (um tira o instrutor
 // da lista do outro), e o foco volta para o seletor que mudou. Ela é a do aluno alterado agora: continua à vista mesmo
-// fora da busca, até ela mudar
+// fora dos filtros (o curso mudado para um que não está marcado), até eles mudarem
 export function atualizarLinhaDoAluno(s, { naoEscalar = false, voaComMudou = false } = {}) {
   const linha = document.querySelector(`#alu tr.cd[data-id="${s.id}"]`);
   if (!linha) return;
   linha.dataset.nm = chaveDeBusca(s.nm);
+  linha.dataset.curso = s.curso || '';
   linha.querySelector('[data-f="nm"]').value = s.nm;
   const kg = linha.querySelector('[data-f="kg"]');
   kg.value = s.kg || '';
@@ -309,21 +319,24 @@ export function atualizarLinhaDoAluno(s, { naoEscalar = false, voaComMudou = fal
     linha.querySelector('.bl.voa-com').innerHTML = voaCom(s);
     linha.querySelector(naoEscalar ? '[data-f="bl"]' : '[data-f="voaCom"]').focus();
   }
+  // O curso desconhecido de que o aluno saiu deixa de ser opção do filtro
+  if (filtroDosCursos) filtroDosCursos.desenhar();
   manterAVista('alu', s.id);
   aplicarFiltrosDosAlunos();
 }
 
-// Os filtros de Instrutores (o nome e as habilitações, nas duas vistas) e de Alunos (o nome). Eles ficam aqui (a busca)
-// e no filtro de vários valores (as marcas), e não só nos campos, e valem de novo a cada redesenho das linhas: o cadastro
-// novo, outra data, um nome mudado, um resultado registrado. O nome é comparado pela chave da busca (sem acentos). Quem
-// acabou de ser cadastrado (+ Novo) ou alterado na linha dele (o nome, a habilitação tirada no painel) continua à vista
-// mesmo fora dos filtros, até eles mudarem: é na linha do novo que se digita o nome, e a linha alterada não some com o
-// foco de quem usa o teclado (o Tab depois do nome, o botão a que o painel devolve o foco)
+// Os filtros de Instrutores (o nome e as habilitações, nas duas vistas) e de Alunos (o nome e o curso). Eles ficam aqui
+// (a busca) e nos filtros de vários valores (as marcas), e não só nos campos, e valem de novo a cada redesenho das linhas:
+// o cadastro novo, outra data, um nome mudado, um resultado registrado. O nome é comparado pela chave da busca (sem
+// acentos). Quem acabou de ser cadastrado (+ Novo) ou alterado na linha dele (o nome, o curso, a habilitação tirada no
+// painel) continua à vista mesmo fora dos filtros, até eles mudarem: é na linha do novo que se digita o nome, e a linha
+// alterada não some com o foco de quem usa o teclado (o Tab depois do nome, o botão a que o painel devolve o foco)
 const filtros = { ins: { nome: '' }, alu: { nome: '' } };
 const mantidos = { ins: new Set(), alu: new Set() };
 const BUSCA_DA_ABA = { ins: '[data-flt="inst"]', alu: '[data-flt="alu"]' };
-// Os filtros de vários valores de cada aba (js/views/filtro-multiplo.js): em Instrutores, o das habilitações
-let filtroDasHabilitacoes = null;
+// Os filtros de vários valores de cada aba (js/views/filtro-multiplo.js): em Instrutores, o das habilitações; em Alunos, o
+// dos cursos (js/views/filtro-dos-cursos.js)
+let filtroDasHabilitacoes = null, filtroDosCursos = null;
 const multiplos = { ins: [], alu: [] };
 const NOMES_DA_ABA = { ins: ['instrutor', 'instrutores'], alu: ['aluno', 'alunos'] };
 // Na digitação, a contagem espera a pessoa parar (o leitor de tela não a dita a cada letra)
@@ -334,15 +347,18 @@ const ESPERA_DA_DIGITACAO = 500;
 const opcoesDasHabilitacoes = () => [...GRUPOS_DE_HABILITACAO, ...gruposDosRecursos()]
   .map(([titulo, ids]) => ({ titulo, opcoes: ids.map(h => [h, rotuloDa(h)]) }));
 
-// Ao abrir: o filtro das habilitações, e a busca como o filtro, vazia (o navegador que devolve o texto de antes de
-// recarregar a página não deixa o campo diferente do filtro). Nas habilitações, o instrutor aparece se tem todas as
-// marcadas: uma missão pede várias juntas (o Noturno no C172, Noturno e C172)
+// Ao abrir: o filtro das habilitações e o dos cursos, e a busca como o filtro, vazia (o navegador que devolve o texto de
+// antes de recarregar a página não deixa o campo diferente do filtro). Nas habilitações, o instrutor aparece se tem todas
+// as marcadas: uma missão pede várias juntas (o Noturno no C172, Noturno e C172); nos cursos, o aluno aparece se está em
+// algum dos marcados
 export function prepararFiltros() {
   filtroDasHabilitacoes = criarFiltroMultiplo({
     id: 'flt-ins-hab', nome: 'Habilitações', todas: 'Todas as habilitações', regra: 'todas',
     dica: ['filtro-das-habilitacoes', 'Filtro das habilitações'], grupos: opcoesDasHabilitacoes, aoMudar: () => filtrar('ins')
   });
+  filtroDosCursos = criarFiltroDosCursos('flt-alu-cur', () => filtrar('alu'));
   multiplos.ins = [filtroDasHabilitacoes];
+  multiplos.alu = [filtroDosCursos];
   for (const [aba, seletor] of Object.entries(BUSCA_DA_ABA)) $(seletor).value = filtros[aba].nome;
 }
 
@@ -380,9 +396,11 @@ function applyInstructorFilters({ esperar = 0 } = {}) {
     l => mantidos.ins.has(+l.dataset.id) || ((!q || l.dataset.nm.includes(q)) && temAsMarcadas(l.dataset.hab.split(' '))));
 }
 
+// Os filtros dos alunos: o nome e o curso (o aluno está em algum dos cursos marcados; data-curso)
 function aplicarFiltrosDosAlunos({ esperar = 0 } = {}) {
   const q = chaveDeBusca(filtros.alu.nome);
-  filtrarLinhas('alu', ['#alu'], esperar, l => mantidos.alu.has(+l.dataset.id) || !q || l.dataset.nm.includes(q));
+  const noCurso = filtroDosCursos ? filtroDosCursos.quemPassa() : () => true;
+  filtrarLinhas('alu', ['#alu'], esperar, l => mantidos.alu.has(+l.dataset.id) || ((!q || l.dataset.nm.includes(q)) && noCurso(cursoDaLinha(l))));
 }
 const APLICAR = { ins: applyInstructorFilters, alu: aplicarFiltrosDosAlunos };
 

@@ -1,7 +1,7 @@
 // Dados pessoais de alunos e instrutores: CPF, CANAC, nascimento, celular e e-mail, num painel ao lado da tabela.
 // Ficam fora do cadastro; o histórico registra só os campos que mudaram. No modo compartilhado, operadores,
 // administradores e a secretaria veem e editam; o gestor não vê.
-import { test, expect, abrir, irPara, irParaVista, prepararContexto, vigiarErros, filtrarHabilitacoes, AMANHA, entrar as entrarNoApp } from './fixtures.js';
+import { test, expect, abrir, irPara, irParaVista, prepararContexto, vigiarErros, filtrarHabilitacoes, filtrarCursos, AMANHA, entrar as entrarNoApp } from './fixtures.js';
 import { criarSupabaseFalso, instalarSupabaseFalso, documentosAtuais, CONTAS } from './supabase-falso.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
 
@@ -20,7 +20,7 @@ test.describe('Dados pessoais (neste navegador)', () => {
   test('Alunos: o painel valida e salva; a tabela mostra o CANAC; o histórico registra só os campos', async ({ page }) => {
     await abrir(page, { estado: estado() });
     await irPara(page, 'alu');
-    await expect(page.locator('#s-alu thead th')).toHaveText(['Nome', 'CANAC', 'Curso', 'Peso (kg)', 'Priorizar com', 'Não escalar com', '']);
+    await expect(page.locator('#s-alu thead th')).toHaveText(['Nome', 'CANAC', 'Peso (kg)', 'Curso', 'Priorizar com', 'Não escalar com', '']);
     await abrirDadosDoAluno(page, 1000);
     await expect(painel(page).locator('h2')).toHaveText('Dados pessoais Aluno 1000');
     await campo(page, 'CPF').fill('529.982.247-24');
@@ -99,9 +99,9 @@ test.describe('Dados pessoais (neste navegador)', () => {
 });
 
 test.describe('Dados pessoais (modo compartilhado)', () => {
-  // Cada conta no seu navegador; com servidor, os navegadores dividem o mesmo servidor
-  async function entrar(browser, conta, servidorComum = null) {
-    const context = await browser.newContext({ baseURL: test.info().project.use.baseURL, locale: 'pt-BR', timezoneId: 'America/Sao_Paulo' });
+  // Cada conta no seu navegador; com servidor, os navegadores dividem o mesmo servidor. viewport: a tela (o celular)
+  async function entrar(browser, conta, servidorComum = null, { viewport } = {}) {
+    const context = await browser.newContext({ baseURL: test.info().project.use.baseURL, locale: 'pt-BR', timezoneId: 'America/Sao_Paulo', ...(viewport ? { viewport } : {}) });
     await prepararContexto(context);
     const servidor = servidorComum || await instalarSupabaseFalso(context, documentosAtuais(estado(), AMANHA));
     if (servidorComum) await servidorComum.instalar(context);
@@ -115,6 +115,15 @@ test.describe('Dados pessoais (modo compartilhado)', () => {
     const { context, servidor, page, erros } = await entrar(browser, CONTAS.secretaria);
     await expect(page.locator('#nav button[data-t]:visible')).toHaveText(['Escala', 'Agenda', 'Instrutores', 'Alunos', 'Cursos']);
     await irPara(page, 'alu');
+    // Sem a Demanda, também sem o link para ela; o filtro dos cursos vale para ela (as caixas não ficam desligadas)
+    await expect(page.locator('#s-alu .ir-para-demanda')).toBeHidden();
+    await page.locator('#flt-alu-cur').click();
+    await expect(page.locator('#flt-alu-cur-painel input[data-filtro]:disabled')).toHaveCount(0);
+    await filtrarCursos(page, 'alu', ['PP']);
+    await expect(page.locator('#alu tr.sem-resultado')).toBeVisible();
+    await filtrarCursos(page, 'alu', ['sem-curso']);
+    await expect(page.locator('#alu tr.cd:visible')).toHaveCount(2);
+    await filtrarCursos(page, 'alu', []);
     await expect(page.locator('#alu tr[data-id="1000"] [data-f="kg"]')).toBeDisabled();
     await page.locator('#alu tr[data-id="1000"] [data-dados]').click();
     await campo(page, 'CANAC').fill('123456');
@@ -122,6 +131,37 @@ test.describe('Dados pessoais (modo compartilhado)', () => {
     await expect(painel(page)).toBeHidden();
     await expect(page.locator('#alu tr[data-id="1000"] .c-canac')).toHaveText('123456');
     expect(servidor.dadosPessoais.get('aluno:1000')).toMatchObject({ canac: '123456', atualizado_por: 'Secretaria de Teste' });
+    expect(erros).toEqual([]);
+    await context.close();
+  });
+
+  // No celular (390 px), o trabalho da Secretaria em Instrutores e Alunos fica no cartão de cada pessoa: a parte dos
+  // botões aparece para ela (só com o "Dados pessoais", dentro do cartão e com 44 px para o dedo; para o Gestor, ela some),
+  // e "Priorizar com" e "Não escalar com" sem ninguém não aparecem. O toque abre o painel, e o Esc devolve o foco ao botão
+  test('no celular, o cartão de cada pessoa tem o "Dados pessoais" da Secretaria, em Instrutores e em Alunos', async ({ browser }) => {
+    const { context, page, erros } = await entrar(browser, CONTAS.secretaria, null, { viewport: { width: 390, height: 844 } });
+    await irPara(page, 'ins');
+    await expect(page.locator('#s-ins')).toHaveAttribute('data-vista', 'cadastro');
+    for (const [aba, corpo, id, nome] of [['ins', 'inst', 1, 'Instrutor 01'], ['alu', 'alu', 1000, 'Aluno 1000']]) {
+      await irPara(page, aba);
+      const linha = page.locator(`#${corpo} tr.cd[data-id="${id}"]`);
+      await expect(linha.locator('td.acoes')).toBeVisible();
+      const botoes = linha.locator('td.acoes button:visible');
+      await expect(botoes).toHaveText(['Dados pessoais']);
+      const [cartao, botao] = await Promise.all([linha.boundingBox(), botoes.first().boundingBox()]);
+      expect(botao.height, nome).toBeGreaterThanOrEqual(44);
+      expect(botao.x >= cartao.x && botao.x + botao.width <= cartao.x + cartao.width, `${nome}: o botão dentro do cartão`).toBe(true);
+      if (corpo === 'alu') {
+        await expect(linha.locator('td.c-voa-com, td.c-nao-escalar')).toHaveCount(2);
+        await expect(linha.locator('td.c-voa-com:visible, td.c-nao-escalar:visible')).toHaveCount(0);
+      }
+      await botoes.first().click();
+      await expect(painel(page).locator('h2')).toHaveText(`Dados pessoais ${nome}`);
+      await page.keyboard.press('Escape');
+      await expect(painel(page)).toBeHidden();
+      await expect(botoes.first()).toBeFocused();
+    }
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
     expect(erros).toEqual([]);
     await context.close();
   });

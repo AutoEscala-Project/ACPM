@@ -1,4 +1,4 @@
-import { test, expect, abrir, abrirSintetico, abrirComExemplo, irPara, abrirEscala, lerEscala, confirmar, AMANHA } from './fixtures.js';
+import { test, expect, abrir, abrirSintetico, abrirComExemplo, irPara, abrirEscala, lerEscala, confirmar, filtrarCursos, AMANHA } from './fixtures.js';
 import { aluno, cenario, instrutor, missaoExtra } from '../helpers/montar.js';
 
 const linhaDoAluno = (page, nome) => page.locator(`#dem tr[data-k="d"][data-mid="0"][data-nm="${nome.toLowerCase()}"]`);
@@ -270,6 +270,93 @@ test.describe('Demanda', () => {
     await page.locator('#flt-dem').fill('');
     await page.locator('#flt-dem-mis').selectOption('Ground C152');
     await expect(visiveis).toHaveCount(6);
+  });
+
+  // O filtro dos cursos, o mesmo de Alunos (o filtro de vários valores, com a regra "alguma"), com as mesmas marcas: o
+  // pedido aparece se o aluno está em algum dos cursos marcados, junto com a busca, a missão e "Só quem voa"; as missões
+  // extras vão com o aluno, e as marcas duram quando a tabela é refeita e em outra data
+  test('o filtro dos cursos, com a busca, a missão e "Só quem voa"; as missões extras vão com o aluno; as marcas são as de Alunos e duram em outra data', async ({ page }) => {
+    const estado = cenario({
+      ins: [instrutor(1, 9)],
+      stu: [aluno(1000, {}, { nm: 'Ana', curso: 'PP', extra: [missaoExtra(1, { mis: 'Navegação' })] }), aluno(1001, {}, { nm: 'Bruno', curso: 'PC' }),
+        aluno(1002, { fly: false }, { nm: 'Carla' }), aluno(1003, { mis: 'Navegação' }, { nm: 'Davi', curso: 'PP' }), aluno(1004, { fly: false }, { nm: 'Eva', curso: 'ZZ9' })]
+    });
+    await abrir(page, { estado });
+    await irPara(page, 'dem');
+    const aVista = () => page.locator('#dem tr[data-k="d"]:visible').evaluateAll(linhas => linhas.map(l => `${l.dataset.id}:${l.dataset.mid}`));
+    const botao = page.locator('#flt-dem-cur');
+    await expect(botao).toHaveText('Todos os cursos');
+    // As opções são as de Alunos, com o curso desconhecido da Eva
+    await botao.click();
+    await expect(page.locator('#flt-dem-cur-painel label')).toHaveText(['PP · Piloto Privado', 'PC · Piloto Comercial', 'INVA · Instrutor de Voo', 'ZZ9 (curso desconhecido)', 'Sem curso']);
+    await botao.click();
+    await expect(page.locator('#dem tr[data-k="d"][data-id="1000"][data-mid="1"]')).toHaveAttribute('data-curso', 'PP');
+    // "Só quem voa" esconde a Carla
+    await expect.poll(aVista).toEqual(['1000:0', '1000:1', '1001:0', '1003:0']);
+    await filtrarCursos(page, 'dem', ['PP']);
+    await expect(botao).toHaveText('Curso: PP');
+    await expect.poll(aVista).toEqual(['1000:0', '1000:1', '1003:0']);
+    // Com a missão e com a busca
+    await page.locator('#flt-dem-mis').selectOption('Navegação');
+    await expect.poll(aVista).toEqual(['1000:1', '1003:0']);
+    await page.locator('#flt-dem-mis').selectOption('');
+    await page.locator('#flt-dem').fill('davi');
+    await expect.poll(aVista).toEqual(['1003:0']);
+    await page.locator('#flt-dem').fill('');
+    // "Sem curso": a Carla não voa, e aparece só sem "Só quem voa"
+    await filtrarCursos(page, 'dem', ['sem-curso']);
+    await expect.poll(aVista).toEqual([]);
+    await page.locator('#onlyfly').uncheck();
+    await expect.poll(aVista).toEqual(['1002:0']);
+    await page.locator('#onlyfly').check();
+    // A tabela refeita (a missão extra nova do Bruno): as marcas continuam
+    await filtrarCursos(page, 'dem', ['PC', 'PP']);
+    await expect(botao).toHaveText('Curso: PP ou PC');
+    await filtrarCursos(page, 'dem', ['PC']);
+    await page.locator('#dem tr[data-id="1001"][data-mid="0"] [data-act="add-mis"]').click();
+    await expect(page.locator('#dem tr[data-k="d"][data-id="1001"]')).toHaveCount(2);
+    await expect.poll(async () => (await aVista()).map(l => l.split(':')[0])).toEqual(['1001', '1001']);
+    // As marcas são as de Alunos (um filtro só): lá, aparece o aluno do PC
+    await irPara(page, 'alu');
+    await expect(page.locator('#flt-alu-cur')).toHaveText('Curso: PC');
+    await expect(page.locator('#alu tr.cd:visible')).toHaveCount(1);
+    await expect(page.locator('#alu tr.cd:visible')).toHaveAttribute('data-id', '1001');
+    // Outra data: as linhas são outras, e as marcas continuam
+    await irPara(page, 'dem');
+    await page.locator('#dt-prox').click();
+    await expect(page.locator('#dt')).toHaveValue('2026-11-12');
+    await expect(botao).toHaveText('Curso: PC');
+    await page.locator('#onlyfly').uncheck();
+    await expect.poll(async () => [...new Set((await aVista()).map(l => l.split(':')[0]))]).toEqual(['1001']);
+  });
+
+  // As marcas do filtro dos cursos vêm de Alunos, e a pessoa pode não as ter visto na Demanda: o aluno posto na demanda
+  // ("Pôr um aluno na demanda") fora dos filtros continua à vista, como o cadastrado agora em Alunos, até eles mudarem
+  // (sem isso, o pedido incluído sumia na hora, e nada na tabela dizia que ele entrou)
+  test('"Pôr um aluno na demanda" fora dos filtros: o pedido incluído fica à vista até os filtros mudarem', async ({ page }) => {
+    await abrir(page, { estado: cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, {}, { nm: 'Ana', curso: 'PP' }), aluno(1001, { fly: false }, { nm: 'Bruno', curso: 'PC' }), aluno(1002, { fly: false }, { nm: 'Carla', curso: 'PC' })] }) });
+    const aVista = () => page.locator('#dem tr[data-k="d"]:visible').evaluateAll(linhas => linhas.map(l => l.dataset.id));
+    await irPara(page, 'alu');
+    await filtrarCursos(page, 'alu', ['PP']);
+    await page.getByRole('button', { name: 'Abrir a Demanda' }).click();
+    await expect.poll(aVista).toEqual(['1000']);
+    const incluir = async nome => {
+      await page.locator('#incluir-aluno').fill(nome);
+      await page.locator('#incluir-aluno').press('Enter');
+      await expect(page.locator('#incluir-aluno')).toHaveValue('');
+    };
+    await incluir('Bruno');
+    await expect.poll(aVista).toEqual(['1000', '1001']);
+    // Também com a busca (por outro nome) e depois de a tabela ser refeita (outro aluno incluído)
+    await page.locator('#flt-dem').fill('ana');
+    await expect.poll(aVista).toEqual(['1000']);
+    await incluir('Carla');
+    await expect.poll(aVista).toEqual(['1000', '1002']);
+    // Os filtros mudam: valem para todos de novo
+    await page.locator('#flt-dem').fill('');
+    await expect.poll(aVista).toEqual(['1000']);
+    await filtrarCursos(page, 'dem', ['PP', 'PC']);
+    await expect.poll(aVista).toEqual(['1000', '1001', '1002']);
   });
 
   // As buscas da Demanda, da Escala (o aluno, o instrutor ou a missão) e do BI acham o nome sem os acentos e sem diferença

@@ -1,5 +1,5 @@
-// A navegação: as abas, as vistas de cada aba (lista, por recurso, por instrutor, painel; dia e cadastro), os grupos que
-// recolhem e os links para o Manual
+// A navegação: as abas (também pelo botão de uma aba que leva a outra, data-go), as vistas de cada aba (lista, por
+// recurso, por instrutor, painel; dia e cadastro), os grupos que recolhem e os links para o Manual
 import { carregarBI } from '../actions.js';
 import { $, focarNoTitulo } from '../dom.js';
 import { setTLMode } from '../state.js';
@@ -24,6 +24,9 @@ document.addEventListener('click', e => {
     if (aba === 'bi') carregarBI();
     if (aba === 'age') abrirAgenda();
     window.scrollTo(0, 0);
+    // O botão de dentro de uma aba que leva a outra ("Abrir a Demanda", em Alunos) some com a aba dele: o foco vai para o
+    // título da aba aberta (sem isso, ele ficaria num botão escondido)
+    if (g.dataset.go) focarNoTitulo($(`#s-${aba}`));
     return;
   }
   const tlBtn = e.target.closest('[data-tl]');
