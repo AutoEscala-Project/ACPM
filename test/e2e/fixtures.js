@@ -90,6 +90,48 @@ export async function irPara(page, aba) {
   await expect(page.locator(`#s-${aba}`)).toBeVisible();
 }
 
+// Abre uma vista de uma aba (Instrutores: 'dia' ou 'cadastro'): a aba e o botão da vista no controle segmentado do alto
+// dela. O Playwright só age no que está à vista: o que fica na outra vista pede a troca antes
+export async function irParaVista(page, aba, vista) {
+  await irPara(page, aba);
+  await page.locator(`#s-${aba} [data-vista-${aba}="${vista}"]`).click();
+  await expect(page.locator(`#s-${aba}`)).toHaveAttribute('data-vista', vista);
+}
+
+// As telas que não são a de abertura de uma aba: as outras vistas (Instrutores › Cadastro) e as tabelas que os filtros
+// deixam sem nenhuma linha (com "Limpar filtros"). Os testes do celular e da acessibilidade, que conferem cada aba como
+// ela abre, conferem também estas: conferir(nome) roda em cada uma. No fim, a busca volta a vazia
+export async function percorrerVistasEFiltros(page, conferir) {
+  await irParaVista(page, 'ins', 'cadastro');
+  await conferir('instrutores: cadastro');
+  await page.locator('[data-flt="inst"]').fill('nenhum assim');
+  await nenhumComOsFiltros(page, 'inst', 'ins');
+  await conferir('instrutores: cadastro, nenhum com os filtros');
+  await irParaVista(page, 'ins', 'dia');
+  await nenhumComOsFiltros(page, 'inst-dia', 'ins');
+  await conferir('instrutores: disponibilidade do dia, nenhum com os filtros');
+  await page.locator('[data-flt="inst"]').fill('');
+  await irPara(page, 'alu');
+  await page.locator('[data-flt="alu"]').fill('nenhum assim');
+  await nenhumComOsFiltros(page, 'alu', 'alu');
+  await conferir('alunos: nenhum com os filtros');
+  await page.locator('[data-flt="alu"]').fill('');
+}
+
+// A tabela que os filtros deixam sem nenhuma linha: a linha que diz por quê; a contagem já escrita (ela espera a
+// digitação parar: a tela é conferida com o texto mais longo, "0 de 40 instrutores"); e o "Limpar filtros" inteiro na
+// parte à vista da tabela e da tela (a grade do dia, mais larga que o celular, rola para o lado)
+async function nenhumComOsFiltros(page, corpo, aba) {
+  await expect(page.locator(`#${corpo} tr.sem-resultado`)).toBeVisible();
+  await expect(page.locator(`#${aba}-contagem`)).toHaveText(/^0 de \d+ /);
+  const fora = await page.locator(`#limpar-filtros-${corpo}`).evaluate(botao => {
+    const caixa = botao.getBoundingClientRect(), tabela = botao.closest('.tw');
+    const esquerda = tabela.getBoundingClientRect().left + tabela.clientLeft, direita = esquerda + tabela.clientWidth;
+    return caixa.left < esquerda || caixa.right > direita || caixa.right > document.documentElement.clientWidth;
+  });
+  expect(fora, `"Limpar filtros" fora da parte à vista de #${corpo}`).toBe(false);
+}
+
 // Minha conta, Usuários, Tema e Sair ficam no menu da conta, no topo
 export async function abrirMenuDaConta(page) {
   await page.locator('#btn-menu-conta').click();

@@ -2,7 +2,7 @@
 // texto até o mouse passar ou o foco chegar); o que a missão exige do instrutor fica na dica do campo da missão.
 import { MIS, GROUND_EQ_TYPE, T, NI, DURACAO_MAXIMA_H, GROUND_DURATION_H } from '../config.js';
 import { matriculasDoTipo } from '../frota.js';
-import { esc, opts, hm } from '../format.js';
+import { esc, opts, hm, chaveDeBusca } from '../format.js';
 import { isGroundMission, opcoesDeDisponibilidade, duracaoFixaDaMissao } from '../rules.js';
 import { horariosDaMissao } from '../horarios.js';
 import { descreverExigencias } from '../habilitacoes.js';
@@ -65,7 +65,7 @@ export const singleDemandRowHTML = (stu, d, mid = 0) => {
     // A duração digitada, fracionada, até 5 h
     : `<input type="number" class="duracao" data-f="nb" min="0.1" max="${DURACAO_MAXIMA_H}" step="0.1" inputmode="decimal" value="${esc(d.nb)}" aria-label="Duração de ${esc(stu.nm)}, em horas">`;
 
-  return `<tr data-k="d" data-id="${stu.id}" data-mid="${mid}" data-nm="${esc(stu.nm.toLowerCase())}" data-mis="${esc(d.mis)}" class="${trCls}">
+  return `<tr data-k="d" data-id="${stu.id}" data-mid="${mid}" data-nm="${esc(chaveDeBusca(stu.nm))}" data-mis="${esc(d.mis)}" class="${trCls}">
     <td>${firstCell}</td>
     <td><label class="alvo"><input type="checkbox" class="sw" data-f="fly"${d.fly ? ' checked' : ''} aria-label="${esc(stu.nm)} vai voar"></label></td>
     <td><select data-f="mis" title="${esc(exige)}" aria-label="Missão${de}">${opts(Object.keys(MIS).map(m => [m, m]), d.mis)}</select></td>
@@ -116,7 +116,8 @@ export const rDem = () => {
 };
 
 export function applyDemandFilters() {
-  const q = ($('#flt-dem') && $('#flt-dem').value || '').toLowerCase();
+  // O nome sem acentos: "joao" acha "João"
+  const q = chaveDeBusca($('#flt-dem') && $('#flt-dem').value);
   const mis = $('#flt-dem-mis') ? $('#flt-dem-mis').value : '';
   document.querySelectorAll('#dem tr[data-k="d"]').forEach(tr => {
     const matchName = !q || tr.dataset.nm.includes(q);

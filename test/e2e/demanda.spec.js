@@ -272,6 +272,37 @@ test.describe('Demanda', () => {
     await expect(visiveis).toHaveCount(6);
   });
 
+  // As buscas da Demanda, da Escala (o aluno, o instrutor ou a missão) e do BI acham o nome sem os acentos e sem diferença
+  // de maiúsculas, como as de Instrutores e Alunos
+  test('as buscas da Demanda, da Escala e do BI acham o nome sem acentos', async ({ page }) => {
+    const estado = cenario({ ins: [instrutor(1, 9, { nm: 'Ângelo Brandão' }), instrutor(2, 9)], stu: [aluno(1000, {}, { nm: 'João Conceição' }), aluno(1001)] });
+    await abrir(page, { estado });
+    await irPara(page, 'dem');
+    const naDemanda = page.locator('#dem tr[data-k="d"]:visible');
+    await page.locator('#flt-dem').fill('joao conceicao');
+    await expect(naDemanda).toHaveCount(1);
+    await expect(naDemanda).toHaveAttribute('data-id', '1000');
+    await page.locator('#flt-dem').fill('JOÃO');
+    await expect(naDemanda).toHaveCount(1);
+
+    // As linhas dos voos (sem a do horário)
+    await abrirEscala(page);
+    const voos = async () => (await lerEscala(page)).linhas.filter(l => l.includes(' | '));
+    expect(await voos()).toHaveLength(2);
+    await page.locator('#flt-esc-q').fill('conceicao');
+    await expect.poll(async () => (await voos()).map(l => l.includes('| João Conceição |'))).toEqual([true]);
+    await page.locator('#flt-esc-q').fill('angelo brandao');
+    await expect.poll(async () => (await voos()).map(l => l.includes('| Ângelo Brandão |'))).toEqual([true]);
+    await page.locator('#flt-esc-q').fill('');
+
+    await irPara(page, 'bi');
+    const noBI = page.locator('#bi-content [data-bi="ins"] tbody tr');
+    await expect(noBI).toHaveCount(2);
+    await page.locator('#bi-flt-ins').fill('angelo');
+    await expect(noBI).toHaveCount(1);
+    await expect(noBI).toContainText('Ângelo Brandão');
+  });
+
 });
 
 // O voo agendado na Escala (o voo fixo com a marca agendado) é do pedido como ele estava. Tirar da escala e pôr de volta

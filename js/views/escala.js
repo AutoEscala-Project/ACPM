@@ -2,7 +2,7 @@
 import { FLIGHT_STATUSES, GROUND_REG, GROUND_EQ_TYPE, NOTURNO, T } from '../config.js';
 import { CODIGOS_DE_AVISO, CODIGOS_DO_AGENDADO } from '../conflitos.js';
 import { textoDoCombustivel } from '../combustivel.js';
-import { hm, WLB, fmtH, esc, rotuloDaData, hojeISO, duracaoHm, DURACAO_DO_GROUND, pesoBr } from '../format.js';
+import { hm, WLB, fmtH, esc, rotuloDaData, hojeISO, duracaoHm, DURACAO_DO_GROUND, pesoBr, chaveDeBusca } from '../format.js';
 import { isGroundMission } from '../rules.js';
 import { categoriaDoTipo, nomeDoRecurso } from '../categorias.js';
 import { textoDoDetalhe, classeDoStatus, rotuloDoStatus, STATUS_COM_DETALHE } from '../status.js';
@@ -559,7 +559,7 @@ function painelDoDia(voos) {
 }
 
 // Os filtros da Escala: a categoria (o tipo de cada recurso vem da escala, da frota ou é a sala de Ground), o recurso (só
-// os que estão na escala da data) e a busca
+// os que estão na escala da data) e a busca (o aluno, o instrutor ou a missão, sem acentos)
 function filtrosDaEscala(out) {
   const categoria = ($('#flt-esc-cat') && $('#flt-esc-cat').value) || '';
   const tipoDoRecurso = new Map([...(S.frota || []).map(f => [f.reg, f.tipo]), [GROUND_REG, GROUND_EQ_TYPE], ...out.map(o => [o.r, o.eqType])]);
@@ -567,7 +567,7 @@ function filtrosDaEscala(out) {
   const usados = [...new Set(out.map(o => o.r))].filter(daCategoria).sort();
   const eqFilterEl = $('#flt-esc-eq');
   const recurso = eqFilterEl && usados.includes(eqFilterEl.value) ? eqFilterEl.value : '';
-  const texto = ($('#flt-esc-q') && $('#flt-esc-q').value || '').toLowerCase();
+  const texto = chaveDeBusca($('#flt-esc-q') && $('#flt-esc-q').value);
   return { categoria, daCategoria, usados, recurso, texto };
 }
 
@@ -611,7 +611,7 @@ export function rOut() {
   }
   const voos = out.filter(o => {
     if (!daCategoria(o.r) || (curEqFilter && o.r !== curEqFilter)) return false;
-    if (qFilter && !o.s.toLowerCase().includes(qFilter) && !o.ins.toLowerCase().includes(qFilter) && !o.mis.toLowerCase().includes(qFilter)) return false;
+    if (qFilter && ![o.s, o.ins, o.mis].some(t => chaveDeBusca(t).includes(qFilter))) return false;
     return true;
   });
 

@@ -1,4 +1,4 @@
-import { test, expect, abrir, abrirSintetico, abrirComExemplo, irPara, abrirEscala, lerEscala, AGORA } from './fixtures.js';
+import { test, expect, abrir, abrirSintetico, abrirComExemplo, irPara, irParaVista, abrirEscala, lerEscala, AGORA } from './fixtures.js';
 import { aluno, apenas, cenario, instrutor } from '../helpers/montar.js';
 
 test.describe('Recursos', () => {
@@ -240,6 +240,29 @@ test.describe('Recursos: horários de decolagem por categoria', () => {
     await expect(page.locator('#horarios [data-act="editar-horarios"]').first()).toBeHidden();
   });
 
+  // O Esc fecha só a camada de cima: com o foco no editor, ele fecha o editor (o rascunho é descartado), e o Histórico
+  // aberto continua aberto; o Esc seguinte, com o foco fora das gavetas, fecha o Histórico
+  test('o Esc no editor fecha só o editor; o Histórico aberto continua aberto', async ({ page }) => {
+    await abrirSintetico(page);
+    await irPara(page, 'rec');
+    const c152 = page.locator('#horarios [data-cat="C152"]');
+    const editar = c152.locator('[data-act="editar-horarios"]');
+    await editar.click();
+    await editor(page).locator('[data-act="rascunho-tirar"]').first().click();
+    await expect(editor(page).locator('.hr-chip')).toHaveCount(7);
+    const historico = page.locator('#historico');
+    await page.locator('#btn-open-log').click();
+    await expect(historico).toBeVisible();
+    await editor(page).locator('.hr-novo').focus();
+    await page.keyboard.press('Escape');
+    await expect(editor(page)).toHaveCount(0);
+    await expect(editar).toBeFocused();
+    await expect(c152.locator('.horarios-qtd')).toHaveText('8 horários');
+    await expect(historico).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(historico).toBeHidden();
+  });
+
   test('a lista mudou depois que o editor abriu (o histórico a reverteu): Salvar não grava o rascunho por cima, com o aviso', async ({ page }) => {
     await abrirSintetico(page);
     await irPara(page, 'rec');
@@ -396,12 +419,123 @@ test.describe('Instrutores', () => {
     await expect(page.locator('#inst .cd:visible .nm').first()).toHaveValue('Instrutor 09');
   });
 
+  // A busca acha o nome sem os acentos, nas duas vistas, e o número ao lado diz quantos aparecem (numa região de status).
+  // Sem nenhum, a tabela diz por quê, e "Limpar filtros" (a busca e a habilitação) mostra todos de novo, com o foco na
+  // busca. O instrutor novo aparece mesmo fora da busca (é nele que se digita o nome), até ela mudar
+  test('a busca acha o nome sem acentos, com quantos aparecem; sem nenhum, "Limpar filtros"; o instrutor novo aparece', async ({ page }) => {
+    await abrir(page, { estado: cenario({ ins: [instrutor(1, 9, { nm: 'Ângelo Brandão' }), instrutor(2, 9), instrutor(3, 1)] }) });
+    await irPara(page, 'ins');
+    const busca = page.locator('[data-flt="inst"]');
+    const contagem = page.locator('#ins-contagem');
+    const dia = page.locator('#inst-dia tr[data-k="i"]:visible');
+    await expect(contagem).toHaveAttribute('role', 'status');
+    await expect(contagem).toHaveText('3 instrutores');
+    await busca.fill('angelo brandao');
+    await expect(dia).toHaveCount(1);
+    await expect(dia.locator('.nome')).toHaveText('Ângelo Brandão');
+    await expect(contagem).toHaveText('1 de 3 instrutores');
+    await busca.fill('  BRANDÃO ');
+    await expect(dia).toHaveCount(1);
+    // A grade refeita com a escala (a cada alteração) continua filtrada
+    await dia.locator('[data-f="on"]').uncheck();
+    await expect(page.locator('#inst-dia tr[data-id="1"]')).toHaveClass(/\boff\b/);
+    await expect(dia).toHaveCount(1);
+    await irParaVista(page, 'ins', 'cadastro');
+    await expect(page.locator('#inst .cd:visible')).toHaveCount(1);
+
+    // Nenhum com esses filtros, nas duas vistas
+    await busca.fill('xyz');
+    await expect(page.locator('#inst tr.sem-resultado')).toHaveText('Nenhum instrutor com esses filtros. Limpar filtros');
+    await expect(page.locator('#inst .cd:visible')).toHaveCount(0);
+    await expect(contagem).toHaveText('0 de 3 instrutores');
+    await irParaVista(page, 'ins', 'dia');
+    await page.locator('#flt-ins-hab').selectOption('mlte');
+    await page.locator('#inst-dia tr.sem-resultado').getByRole('button', { name: 'Limpar filtros' }).click();
+    await expect(busca).toHaveValue('');
+    await expect(busca).toBeFocused();
+    await expect(page.locator('#flt-ins-hab')).toHaveValue('');
+    await expect(dia).toHaveCount(3);
+    await expect(page.locator('#s-ins tr.sem-resultado')).toHaveCount(0);
+    await expect(contagem).toHaveText('3 instrutores');
+
+    // O instrutor novo, com a busca: ele aparece (o nome em foco), e os outros continuam filtrados
+    const nomesAVista = () => page.locator('#inst .cd:visible .nm').evaluateAll(campos => campos.map(c => c.value));
+    await busca.fill('brandao');
+    await page.locator('[data-act="addi"]').click();
+    await expect(page.locator('#s-ins')).toHaveAttribute('data-vista', 'cadastro');
+    await expect.poll(nomesAVista).toEqual(['Ângelo Brandão', 'Novo instrutor']);
+    const novo = page.locator('#inst .cd').last().locator('.nm');
+    await expect(novo).toBeFocused();
+    await expect(busca).toHaveValue('brandao');
+    await expect(contagem).toHaveText('2 de 4 instrutores');
+    await novo.fill('Carlos Antônio');
+    await novo.blur();
+    await expect(page.locator('#audit-log-list')).toContainText('Instrutor: Novo instrutor → Carlos Antônio');
+    await expect.poll(nomesAVista).toEqual(['Ângelo Brandão', 'Carlos Antônio']);
+    // A busca mudou: vale também para ele
+    await busca.fill('antonio');
+    await expect.poll(nomesAVista).toEqual(['Carlos Antônio']);
+    await busca.fill('brandão');
+    await expect.poll(nomesAVista).toEqual(['Ângelo Brandão']);
+  });
+
+  // A linha alterada continua à vista mesmo fora dos filtros, até eles mudarem: o foco de quem usa o teclado não some com
+  // ela. A habilitação tirada no painel, com o filtro dela: o Esc fecha o painel e devolve o foco a "Editar
+  // habilitações". O nome mudado, com a busca: o Tab leva ao peso
+  test('a linha alterada continua à vista fora dos filtros, até eles mudarem: o foco não some com ela', async ({ page }) => {
+    await abrir(page, { estado: cenario({ ins: [instrutor(1, 9, { nm: 'Ângelo Brandão' }), instrutor(2, 9), instrutor(3, 1)] }) });
+    await irParaVista(page, 'ins', 'cadastro');
+    const busca = page.locator('[data-flt="inst"]'), hab = page.locator('#flt-ins-hab'), contagem = page.locator('#ins-contagem');
+    const nomesAVista = () => page.locator('#inst .cd:visible .nm').evaluateAll(campos => campos.map(c => c.value));
+    await hab.selectOption('mlte');
+    await expect.poll(nomesAVista).toEqual(['Ângelo Brandão', 'Instrutor 02']);
+    const editar = page.locator('#inst tr.cd[data-id="1"] [data-act="editar-habs"]');
+    await editar.click();
+    const mlte = page.locator('#painel-instrutor [data-h="mlte"]');
+    await mlte.focus();
+    await page.keyboard.press('Space');
+    await expect(page.locator('#audit-log-list')).toContainText('Habilitação retirada: Ângelo Brandão');
+    await expect(page.locator('#inst tr.cd[data-id="1"]')).not.toHaveAttribute('data-hab', /\bmlte\b/);
+    await expect.poll(nomesAVista).toEqual(['Ângelo Brandão', 'Instrutor 02']);
+    await expect(contagem).toHaveText('2 de 3 instrutores');
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#painel-instrutor')).toBeHidden();
+    await expect(editar).toBeFocused();
+    // Na grade do dia também; mudado o filtro, ele vale para ela
+    await irParaVista(page, 'ins', 'dia');
+    const naGrade = page.locator('#inst-dia tr[data-k="i"]:visible .nome');
+    await expect(naGrade).toHaveText(['Ângelo Brandão', 'Instrutor 02']);
+    await hab.selectOption('');
+    await hab.selectOption('mlte');
+    await expect(naGrade).toHaveText(['Instrutor 02']);
+
+    // O nome mudado pelo teclado, com a busca: a linha fica, e o Tab leva ao peso dela; mudada a busca, ela vale para ela
+    await irParaVista(page, 'ins', 'cadastro');
+    await hab.selectOption('');
+    await busca.fill('instrutor 02');
+    await expect.poll(nomesAVista).toEqual(['Instrutor 02']);
+    await page.locator('#inst tr.cd[data-id="2"] .nm').fill('Bruno Peçanha');
+    await page.keyboard.press('Tab');
+    await expect(page.locator('#audit-log-list')).toContainText('Instrutor: Instrutor 02 → Bruno Peçanha');
+    await expect(page.locator('#inst tr.cd[data-id="2"] [data-f="kg"]')).toBeFocused();
+    await expect.poll(nomesAVista).toEqual(['Bruno Peçanha']);
+    await expect(contagem).toHaveText('1 de 3 instrutores');
+    await busca.fill('instrutor 0');
+    await expect.poll(nomesAVista).toEqual(['Instrutor 03']);
+    await busca.fill('pecanha');
+    await expect.poll(nomesAVista).toEqual(['Bruno Peçanha']);
+  });
+
   test('disponibilidade do dia: a grade mostra as janelas e os voos de cada instrutor', async ({ page }) => {
     await abrirComExemplo(page);
     await abrirEscala(page);
     const linhasDaEscala = (await lerEscala(page)).linhas;
     await irPara(page, 'ins');
     await expect(page.locator('#s-ins [data-vista-ins="dia"]')).toHaveClass(/\bon\b/);
+    // "Vem": o instrutor vem na data aberta no topo (o app abre em amanhã: não é "hoje")
+    await expect(page.locator('#inst-dia-cab th').nth(1)).toHaveText('Vem');
+    await expect(page.locator('#inst-dia-cab [data-dica="vem-nesta-data"]')).toHaveAccessibleName('O que é Vem?');
+    await expect(page.locator('#s-ins .legenda-disp')).toContainText('Clique numa janela para mudar a disponibilidade desta data.');
     // A grade bate com a escala: o número de voos e aulas do instrutor (a turma de Ground conta uma vez)
     const comVoos = page.locator('#inst-dia tr[data-k="i"]').filter({ has: page.locator('.voos:not(:empty)') }).first();
     const id = await comVoos.getAttribute('data-id');
@@ -619,14 +753,94 @@ test.describe('Alunos', () => {
     await expect(peso).toHaveValue('');
   });
 
-  test('busca alunos pelo nome', async ({ page }) => {
-    await abrirSintetico(page);
+  // A busca acha o nome sem os acentos e continua depois de cada redesenho da tabela (que antes trazia todos de volta, com
+  // a busca ainda no campo): outra data, um instrutor renomeado (a tabela mostra os nomes deles), o aluno renomeado e o
+  // aluno novo, que ficam à vista mesmo fora da busca, até ela mudar. O número ao lado diz quantos aparecem; sem nenhum,
+  // "Limpar filtros"
+  test('a busca acha o nome sem acentos e continua depois de cada redesenho: outra data, um instrutor renomeado, o aluno renomeado, + Novo aluno', async ({ page }) => {
+    // O aluno novo recebe o id seguinte ao dos que já existem (nid)
+    const estado = { ...cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, {}, { nm: 'João Silva' }), aluno(1001, {}, { nm: 'Maria da Conceição' }), aluno(1002)] }), nid: 1003 };
+    await abrir(page, { estado });
     await irPara(page, 'alu');
-    for (let i = 0; i < 3; i++) await page.locator('[data-act="adds"]').click();
-    await page.locator('#alu .cd').nth(1).locator('.nm').fill('Carla');
-    await page.locator('#alu .cd').nth(1).locator('.nm').blur();
-    await page.locator('[data-flt="alu"]').fill('carla');
-    await expect(page.locator('#alu .cd:visible')).toHaveCount(1);
+    const busca = page.locator('[data-flt="alu"]');
+    const contagem = page.locator('#alu-contagem');
+    const nomesAVista = () => page.locator('#alu tr.cd:visible .nm').evaluateAll(campos => campos.map(c => c.value));
+    // As linhas de antes ficam marcadas: redesenhada a tabela, nenhuma linha tem a marca
+    const marcarAsLinhas = () => page.locator('#alu tr').evaluateAll(linhas => linhas.forEach(l => { l.dataset.antes = ''; }));
+    const redesenhada = () => expect(page.locator('#alu tr[data-antes]')).toHaveCount(0);
+    await expect(contagem).toHaveAttribute('role', 'status');
+    await expect(contagem).toHaveText('3 alunos');
+    await busca.fill('joao');
+    await expect.poll(nomesAVista).toEqual(['João Silva']);
+    await expect(contagem).toHaveText('1 de 3 alunos');
+    await busca.fill('CONCEICAO');
+    await expect.poll(nomesAVista).toEqual(['Maria da Conceição']);
+    await busca.fill('  maria   da ');
+    await expect.poll(nomesAVista).toEqual(['Maria da Conceição']);
+    await busca.fill('joão');
+    await expect.poll(nomesAVista).toEqual(['João Silva']);
+
+    // Outra data
+    await marcarAsLinhas();
+    await page.locator('#dt-prox').click();
+    await expect(page.locator('#dt')).toHaveValue('2026-11-12');
+    await redesenhada();
+    await expect.poll(nomesAVista).toEqual(['João Silva']);
+    await expect(busca).toHaveValue('joão');
+    await expect(contagem).toHaveText('1 de 3 alunos');
+
+    // Um instrutor renomeado
+    await marcarAsLinhas();
+    await irParaVista(page, 'ins', 'cadastro');
+    await page.locator('#inst .cd[data-id="1"] .nm').fill('Instrutor Um');
+    await page.locator('#inst .cd[data-id="1"] .nm').blur();
+    await expect(page.locator('#audit-log-list')).toContainText('Instrutor: Instrutor 01 → Instrutor Um');
+    await irPara(page, 'alu');
+    await redesenhada();
+    await expect.poll(nomesAVista).toEqual(['João Silva']);
+
+    // O aluno renomeado na tabela, pelo teclado: a linha continua à vista, mesmo fora da busca, e o Tab leva ao campo
+    // seguinte dela (o foco não some com a linha). Mudada a busca, ela vale para o nome novo (fora dela, a linha sai, e a
+    // tabela diz por quê)
+    const joao = page.locator('#alu tr.cd[data-id="1000"] .nm');
+    await joao.fill('Joaquim Silva');
+    await page.keyboard.press('Tab');
+    await expect(page.locator('#audit-log-list')).toContainText('Aluno: João Silva → Joaquim Silva');
+    await expect(page.locator('#alu tr.cd[data-id="1000"] [data-f="curso"]')).toBeFocused();
+    await expect.poll(nomesAVista).toEqual(['Joaquim Silva']);
+    await expect(contagem).toHaveText('1 de 3 alunos');
+    await busca.fill('joao');
+    await expect(page.locator('#alu tr.sem-resultado')).toBeVisible();
+    await expect.poll(nomesAVista).toEqual([]);
+    await expect(contagem).toHaveText('0 de 3 alunos');
+    await busca.fill('joaquim');
+    await expect.poll(nomesAVista).toEqual(['Joaquim Silva']);
+
+    // O aluno novo aparece, com o nome em foco; os outros continuam filtrados. Renomeado, ele continua à vista
+    await page.locator('[data-act="adds"]').click();
+    await expect.poll(nomesAVista).toEqual(['Joaquim Silva', 'Novo aluno']);
+    const novo = page.locator('#alu tr.cd').last().locator('.nm');
+    await expect(novo).toBeFocused();
+    await expect(busca).toHaveValue('joaquim');
+    await expect(contagem).toHaveText('2 de 4 alunos');
+    await novo.fill('Pedro Álvares');
+    await novo.blur();
+    await expect(page.locator('#audit-log-list')).toContainText('Aluno: Novo aluno → Pedro Álvares');
+    await expect.poll(nomesAVista).toEqual(['Joaquim Silva', 'Pedro Álvares']);
+    // A busca mudou: vale para todos, também para o novo, pelo nome que ele tem agora
+    await busca.fill('alvares');
+    await expect.poll(nomesAVista).toEqual(['Pedro Álvares']);
+
+    // Nenhum com esses filtros: a tabela diz por quê; "Limpar filtros" mostra todos de novo, com o foco na busca
+    await busca.fill('xyz');
+    await expect(page.locator('#alu tr.sem-resultado')).toHaveText('Nenhum aluno com esses filtros. Limpar filtros');
+    await expect(contagem).toHaveText('0 de 4 alunos');
+    await page.getByRole('button', { name: 'Limpar filtros' }).click();
+    await expect(busca).toHaveValue('');
+    await expect(busca).toBeFocused();
+    await expect(page.locator('#alu tr.cd:visible')).toHaveCount(4);
+    await expect(page.locator('#alu tr.sem-resultado')).toHaveCount(0);
+    await expect(contagem).toHaveText('4 alunos');
   });
 });
 

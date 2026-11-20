@@ -1226,6 +1226,37 @@ test.describe('Cursos: cursos novos, encerrar, o cronograma do PP e o curso de c
     await expect(alunos.locator('li')).toHaveText(['Aluno 1001 · 1/1 · concluído']);
   });
 
+  // O Esc com o foco no formulário fecha só ele, como Cancelar (nada é criado, e o foco volta ao botão); o Histórico aberto
+  // continua aberto, e o Esc seguinte, com o foco fora das gavetas, o fecha
+  test('o Esc no formulário do curso novo fecha só ele, sem criar nada; o Histórico aberto continua aberto', async ({ page }) => {
+    await abrirComCursos(page, { estado: cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000)] }) });
+    await irPara(page, 'cur');
+    const historico = page.locator('#historico');
+    await page.locator('#btn-open-log').click();
+    await expect(historico).toBeVisible();
+    const novo = page.locator('#cur-novo'), form = page.locator('#form-curso');
+    // O Histórico cobre o botão: pelo teclado
+    await novo.focus();
+    await page.keyboard.press('Enter');
+    await expect(form).toBeVisible();
+    await expect(page.locator('#cur-sigla')).toBeFocused();
+    await page.locator('#cur-sigla').fill('MLTE');
+    await page.locator('#cur-nome').fill('Multimotor');
+    await page.keyboard.press('Escape');
+    await expect(form).toBeHidden();
+    await expect(novo).toBeFocused();
+    await expect(novo).toHaveAttribute('aria-expanded', 'false');
+    await expect(historico).toBeVisible();
+    await expect(curso(page, 'MLTE')).toHaveCount(0);
+    expect((await programaGuardado(page)).cursos.map(c => c.sigla)).toEqual(['PP', 'PC', 'INVA']);
+    await page.keyboard.press('Escape');
+    await expect(historico).toBeHidden();
+    // Aberto de novo, ele vem vazio
+    await novo.click();
+    await expect(page.locator('#cur-sigla')).toHaveValue('');
+    await expect(page.locator('#cur-nome')).toHaveValue('');
+  });
+
   test('encerrar e reativar: o encerrado sai das matrículas novas, e quem já está nele continua; o nome do curso muda', async ({ page }) => {
     const estado = cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, {}, { curso: 'PC' }), aluno(1001), aluno(1002, {}, { curso: 'ZZ9' })] });
     await abrirComCursos(page, { estado });

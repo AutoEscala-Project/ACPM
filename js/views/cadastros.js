@@ -4,7 +4,7 @@
 import { WIN, PRE, T, AIRCRAFT_EQ_TYPES, MINUTOS_DO_DIA } from '../config.js';
 import { HABILITACOES, nomeDaHabilitacao } from '../habilitacoes.js';
 import { FROTA_INICIAL, habilitacaoDoAviao } from '../frota.js';
-import { esc, hm, opts, LIMITE_DO_NOME, numeroBr } from '../format.js';
+import { esc, hm, opts, LIMITE_DO_NOME, numeroBr, chaveDeBusca } from '../format.js';
 import { S, DATA, insBy, isGestor, voosQueVoam, dadoIndisponivel } from '../state.js';
 import { $, abrirGaveta } from '../dom.js';
 import { botaoDeDica } from '../dicas.js';
@@ -15,6 +15,7 @@ import { gerenciaContas } from '../perfis.js';
 import { progressoDoAluno } from './etapas.js';
 import { unidadeDoVoo, umPorUnidade } from '../voo.js';
 import { CURSOS } from '../cursos.js';
+import { mostrarVista } from './vistas.js';
 
 const ROTULO = new Map(HABILITACOES.map(h => [h.id, h.curto]));
 // No cadastro, todas na ordem do painel; na grade do dia, só as que mais distinguem o instrutor
@@ -38,16 +39,6 @@ const GRUPOS_DE_HABILITACAO = [
   ['Checador: regras', ['checa_vfr', 'checa_ifr']]
 ];
 
-let vistaDosInstrutores = 'dia';
-export function mostrarVistaDosInstrutores(vista) {
-  vistaDosInstrutores = vista;
-  $('#s-ins').dataset.vista = vista;
-  document.querySelectorAll('#s-ins [data-vista-ins]').forEach(b => {
-    b.classList.toggle('on', b.dataset.vistaIns === vista);
-    b.setAttribute('aria-pressed', String(b.dataset.vistaIns === vista));
-  });
-}
-
 // Voos e aulas de cada instrutor na escala da data, sem os cancelados (a turma de Ground conta uma vez) e as janelas em que ele está ocupado
 function ocupacaoDosInstrutores() {
   const porInstrutor = new Map();
@@ -63,7 +54,8 @@ function ocupacaoDosInstrutores() {
   return porInstrutor;
 }
 
-const atributos = x => `data-k="i" data-id="${x.id}" data-hab="${x.hab.join(' ')}" data-nm="${esc(x.nm.toLowerCase())}"`;
+// data-nm: a chave da busca pelo nome (sem acentos), que os filtros comparam
+const atributos = x => `data-k="i" data-id="${x.id}" data-hab="${x.hab.join(' ')}" data-nm="${esc(chaveDeBusca(x.nm))}"`;
 
 // Limites da lei: as horas de voo do instrutor com a escala desta data (as de antes, as de fora do app e as de hoje, só
 // voo em avião) no mês, no semestre e no ano
@@ -117,34 +109,38 @@ function linhaDoCadastro(x) {
   </tr>`;
 }
 
-// A grade do dia depende da escala: é refeita junto com ela
+// A grade do dia depende da escala: é refeita junto com ela. A coluna "Vem" é a da data aberta no topo (o app abre em
+// amanhã: não é "hoje")
 export function rInsDia() {
   // Os termos da grade com o "?"
-  $('#inst-dia-cab').innerHTML = `<tr><th>Instrutor</th><th>Hoje${botaoDeDica('vem-nesta-data', 'Hoje')}</th>${WIN.map(w => `<th class="jan">${w}</th>`).join('')}<th>Voos${botaoDeDica('voos-do-instrutor', 'Voos')}</th><th>Mês${botaoDeDica('horas-do-mes', 'Mês')}</th><th>Turno${botaoDeDica('turno', 'Turno')}</th><th>Habilitações</th></tr>`;
-  if (!S.ins.length) {
-    $('#inst-dia').innerHTML = `<tr><td colspan="${WIN.length + 6}" class="h">${SEM_INSTRUTORES}</td></tr>`;
-    return;
-  }
-  const ocupacao = ocupacaoDosInstrutores();
-  // Quem usa o teclado continua no mesmo campo depois que a grade é refeita
+  $('#inst-dia-cab').innerHTML = `<tr><th>Instrutor</th><th>Vem${botaoDeDica('vem-nesta-data', 'Vem')}</th>${WIN.map(w => `<th class="jan">${w}</th>`).join('')}<th>Voos${botaoDeDica('voos-do-instrutor', 'Voos')}</th><th>Mês${botaoDeDica('horas-do-mes', 'Mês')}</th><th>Turno${botaoDeDica('turno', 'Turno')}</th><th>Habilitações</th></tr>`;
+  // Quem usa o teclado continua no mesmo campo (ou no "Limpar filtros") depois que a grade é refeita e filtrada
   const foco = $('#inst-dia').contains(document.activeElement) ? seletorDoCampo(document.activeElement) : null;
-  $('#inst-dia').innerHTML = S.ins.map(x => linhaDoDia(x, ocupacao)).join('');
-  if (foco && $('#inst-dia').querySelector(foco)) $('#inst-dia').querySelector(foco).focus();
+  if (S.ins.length) {
+    const ocupacao = ocupacaoDosInstrutores();
+    $('#inst-dia').innerHTML = S.ins.map(x => linhaDoDia(x, ocupacao)).join('');
+  } else {
+    $('#inst-dia').innerHTML = `<tr><td colspan="${WIN.length + 6}" class="h">${SEM_INSTRUTORES}</td></tr>`;
+  }
   applyInstructorFilters();
+  const alvo = foco && $('#inst-dia').querySelector(foco);
+  if (alvo) alvo.focus();
 }
 
 function seletorDoCampo(el) {
+  if (el.id) return `#${CSS.escape(el.id)}`;
   const linha = el.closest('tr[data-id]');
   const campo = ['data-f', 'data-w'].filter(a => el.hasAttribute(a)).map(a => `[${a}="${el.getAttribute(a)}"]`).join('');
   return linha && campo ? `tr[data-id="${linha.dataset.id}"] ${campo}` : null;
 }
 
-// Atualiza a linha do cadastro no lugar, sem trocar os campos (o foco de quem usa o teclado continua onde estava)
+// Atualiza a linha do cadastro no lugar, sem trocar os campos (o foco de quem usa o teclado continua onde estava). Ela é
+// a do instrutor alterado agora: continua à vista mesmo fora dos filtros, até eles mudarem
 export function atualizarLinhaDoCadastro(x) {
   const linha = document.querySelector(`#inst tr.cd[data-id="${x.id}"]`);
   if (!linha) return;
   linha.dataset.hab = x.hab.join(' ');
-  linha.dataset.nm = x.nm.toLowerCase();
+  linha.dataset.nm = chaveDeBusca(x.nm);
   linha.querySelector('[data-f="nm"]').value = x.nm;
   const kg = linha.querySelector('[data-f="kg"]');
   kg.value = x.kg || '';
@@ -155,11 +151,12 @@ export function atualizarLinhaDoCadastro(x) {
   linha.querySelector('.habs-resumo').textContent = resumoDasHabilitacoes(x) || 'Nenhuma';
   const titulo = $('#painel-instrutor-titulo');
   if (titulo && !$('#painel-instrutor').hidden && +$('#painel-instrutor').dataset.id === x.id) titulo.querySelector('small').textContent = x.nm;
+  manterAVista('ins', x.id);
   applyInstructorFilters();
 }
 
 export function rIns() {
-  mostrarVistaDosInstrutores(vistaDosInstrutores);
+  mostrarVista('ins');
   rLimites();
   $('#inst').innerHTML = S.ins.length ? S.ins.map(linhaDoCadastro).join('') : `<tr><td colspan="5" class="h">${SEM_INSTRUTORES}</td></tr>`;
   rInsDia();
@@ -266,7 +263,7 @@ function opcoesDoCurso(s) {
   return opts([['', '—'], ...programa.filter(c => c.ativo).map(c => [c.sigla, `${c.sigla} · ${c.nome}`]), ...doAluno], s.curso || '');
 }
 
-const linhaDoAluno = s => `<tr class="cd" data-k="s" data-id="${s.id}" data-nm="${esc(s.nm.toLowerCase())}">
+const linhaDoAluno = s => `<tr class="cd" data-k="s" data-id="${s.id}" data-nm="${esc(chaveDeBusca(s.nm))}">
   <td><input class="nm" data-f="nm" value="${esc(s.nm)}" maxlength="${LIMITE_DO_NOME}" aria-label="Nome do aluno"></td>
   <td class="c-canac so-dados">${esc(canacDe('aluno', s.id))}</td>
   <td class="c-curso"><select data-f="curso" aria-label="Curso de ${esc(s.nm)}"${isGestor() ? ' disabled' : ''}>${opcoesDoCurso(s)}</select>${progressoDoAluno(s)}</td>
@@ -279,14 +276,16 @@ const linhaDoAluno = s => `<tr class="cd" data-k="s" data-id="${s.id}" data-nm="
 export const rAlu = () => {
   $('#alu').innerHTML = S.stu.length ? S.stu.map(linhaDoAluno).join('')
     : '<tr><td colspan="7" class="h">Nenhum aluno cadastrado. Clique em “+ Novo aluno” acima para cadastrar.</td></tr>';
+  aplicarFiltrosDosAlunos();
 };
 
 // Atualiza a linha do aluno no lugar. "Priorizar com" e "Não escalar com" são refeitos só quando mudam (um tira o instrutor
-// da lista do outro), e o foco volta para o seletor que mudou
+// da lista do outro), e o foco volta para o seletor que mudou. Ela é a do aluno alterado agora: continua à vista mesmo
+// fora da busca, até ela mudar
 export function atualizarLinhaDoAluno(s, { naoEscalar = false, voaComMudou = false } = {}) {
   const linha = document.querySelector(`#alu tr.cd[data-id="${s.id}"]`);
   if (!linha) return;
-  linha.dataset.nm = s.nm.toLowerCase();
+  linha.dataset.nm = chaveDeBusca(s.nm);
   linha.querySelector('[data-f="nm"]').value = s.nm;
   const kg = linha.querySelector('[data-f="kg"]');
   kg.value = s.kg || '';
@@ -302,24 +301,116 @@ export function atualizarLinhaDoAluno(s, { naoEscalar = false, voaComMudou = fal
   curso.insertAdjacentHTML('afterend', progressoDoAluno(s));
   linha.querySelector('[data-act="dels"]').setAttribute('aria-label', `Excluir ${s.nm}`);
   linha.querySelector('[data-dados]').setAttribute('aria-label', `Dados pessoais de ${s.nm}`);
-  if (!naoEscalar && !voaComMudou) return;
-  linha.querySelector('.bl.nao-escalar').innerHTML = naoEscalarCom(s);
-  linha.querySelector('.bl.voa-com').innerHTML = voaCom(s);
-  linha.querySelector(naoEscalar ? '[data-f="bl"]' : '[data-f="voaCom"]').focus();
+  if (naoEscalar || voaComMudou) {
+    linha.querySelector('.bl.nao-escalar').innerHTML = naoEscalarCom(s);
+    linha.querySelector('.bl.voa-com').innerHTML = voaCom(s);
+    linha.querySelector(naoEscalar ? '[data-f="bl"]' : '[data-f="voaCom"]').focus();
+  }
+  manterAVista('alu', s.id);
+  aplicarFiltrosDosAlunos();
 }
 
-// Filtro da aba Instrutores: uma opção por habilitação
-export function preencherFiltroDeHabilitacoes() {
+// Os filtros de Instrutores (o nome e a habilitação, nas duas vistas) e de Alunos (o nome). Eles ficam aqui, e não só
+// nos campos, e valem de novo a cada redesenho das linhas: o cadastro novo, outra data, um nome mudado, um resultado
+// registrado. O nome é comparado pela chave da busca (sem acentos). Quem acabou de ser cadastrado (+ Novo) ou alterado
+// na linha dele (o nome, a habilitação tirada no painel) continua à vista mesmo fora dos filtros, até eles mudarem: é na
+// linha do novo que se digita o nome, e a linha alterada não some com o foco de quem usa o teclado (o Tab depois do nome,
+// o botão a que o painel devolve o foco)
+const SEM_FILTROS = { ins: { nome: '', hab: '' }, alu: { nome: '' } };
+const filtros = { ins: { ...SEM_FILTROS.ins }, alu: { ...SEM_FILTROS.alu } };
+const mantidos = { ins: new Set(), alu: new Set() };
+const CAMPOS_DOS_FILTROS = { ins: { nome: '[data-flt="inst"]', hab: '#flt-ins-hab' }, alu: { nome: '[data-flt="alu"]' } };
+const NOMES_DA_ABA = { ins: ['instrutor', 'instrutores'], alu: ['aluno', 'alunos'] };
+// Na digitação, a contagem espera a pessoa parar (o leitor de tela não a dita a cada letra)
+const ESPERA_DA_DIGITACAO = 500;
+
+// Ao abrir: as opções do filtro de habilitação (uma por habilitação), e os campos como os filtros, vazios (o navegador
+// que devolve o texto de antes de recarregar a página não deixa o campo diferente do filtro)
+export function prepararFiltros() {
   $('#flt-ins-hab').insertAdjacentHTML('beforeend', HABILITACOES.map(h => `<option value="${h.id}">${esc(h.nome)}</option>`).join(''));
+  for (const aba of Object.keys(CAMPOS_DOS_FILTROS)) {
+    for (const [chave, seletor] of Object.entries(CAMPOS_DOS_FILTROS[aba])) $(seletor).value = filtros[aba][chave];
+  }
 }
 
-// Os filtros valem para as duas visões
-export function applyInstructorFilters() {
-  const q = ($('[data-flt="inst"]') && $('[data-flt="inst"]').value || '').toLowerCase();
-  const hab = ($('#flt-ins-hab') && $('#flt-ins-hab').value) || '';
-  document.querySelectorAll('#inst tr.cd, #inst-dia tr[data-k="i"]').forEach(c => {
-    const matchName = !q || c.dataset.nm.includes(q);
-    const matchHab = !hab || c.dataset.hab.split(' ').includes(hab);
-    c.hidden = !(matchName && matchHab);
-  });
+// Um filtro da aba mudou ({ nome } ou { hab }): vale para todas as linhas, também as do cadastrado e do alterado agora
+export function filtrar(aba, mudanca) {
+  Object.assign(filtros[aba], mudanca);
+  mantidos[aba].clear();
+  APLICAR[aba]({ esperar: 'nome' in mudanca ? ESPERA_DA_DIGITACAO : 0 });
+}
+
+// O cadastrado (+ Novo) ou alterado agora continua à vista mesmo fora dos filtros, até eles mudarem
+export function manterAVista(aba, id) {
+  mantidos[aba].add(id);
+}
+
+// "Limpar filtros": os filtros e os campos voltam a vazio, todas as linhas aparecem, e o foco vai para a busca
+export function limparFiltros(aba) {
+  Object.assign(filtros[aba], SEM_FILTROS[aba]);
+  mantidos[aba].clear();
+  for (const [chave, seletor] of Object.entries(CAMPOS_DOS_FILTROS[aba])) $(seletor).value = filtros[aba][chave];
+  APLICAR[aba]();
+  $(CAMPOS_DOS_FILTROS[aba].nome).focus();
+}
+
+const filtrando = aba => Object.keys(SEM_FILTROS[aba]).some(chave => filtros[aba][chave]);
+
+// Os filtros dos instrutores valem para as duas vistas: a habilitação é uma das do instrutor
+function applyInstructorFilters({ esperar = 0 } = {}) {
+  const { nome, hab } = filtros.ins;
+  const q = chaveDeBusca(nome);
+  filtrarLinhas('ins', ['#inst-dia', '#inst'], esperar,
+    l => mantidos.ins.has(+l.dataset.id) || ((!q || l.dataset.nm.includes(q)) && (!hab || l.dataset.hab.split(' ').includes(hab))));
+}
+
+function aplicarFiltrosDosAlunos({ esperar = 0 } = {}) {
+  const q = chaveDeBusca(filtros.alu.nome);
+  filtrarLinhas('alu', ['#alu'], esperar, l => mantidos.alu.has(+l.dataset.id) || !q || l.dataset.nm.includes(q));
+}
+const APLICAR = { ins: applyInstructorFilters, alu: aplicarFiltrosDosAlunos };
+
+// Esconde as linhas (data-k) que não passam nos filtros; a de "Nenhum … cadastrado" fica. Com todas escondidas, uma linha
+// diz que nenhuma passa, com "Limpar filtros". A contagem é a da primeira tabela (as duas vistas dos instrutores mostram
+// as mesmas linhas)
+function filtrarLinhas(aba, corpos, esperar, passa) {
+  let contagem = null;
+  for (const seletor of corpos) {
+    const corpo = $(seletor);
+    if (!corpo) continue;
+    const linhas = [...corpo.querySelectorAll(':scope > tr[data-k]')];
+    for (const linha of linhas) linha.hidden = !passa(linha);
+    const aVista = linhas.filter(l => !l.hidden).length;
+    nenhumComOsFiltros(aba, corpo, linhas.length > 0 && aVista === 0);
+    if (!contagem) contagem = { aVista, total: linhas.length };
+  }
+  if (contagem) contar(aba, contagem, esperar);
+}
+
+// A linha "Nenhum … com esses filtros", no fim da tabela, só enquanto os filtros escondem todas as linhas. Ela continua a
+// mesma enquanto vale (o foco no "Limpar filtros" fica nele). O texto e o botão ficam na parte à vista da tabela que
+// rola para o lado (a grade do dia, no celular: css/app.css)
+function nenhumComOsFiltros(aba, corpo, mostrar) {
+  const atual = corpo.querySelector(':scope > tr.sem-resultado');
+  if (!mostrar) { if (atual) atual.remove(); return; }
+  if (atual) return;
+  const cabecalho = corpo.parentElement.tHead;
+  const colunas = cabecalho && cabecalho.rows.length ? cabecalho.rows[0].cells.length : 1;
+  corpo.insertAdjacentHTML('beforeend', `<tr class="sem-resultado"><td colspan="${colunas}" class="h"><div class="sem-resultado-texto">Nenhum ${NOMES_DA_ABA[aba][0]} com esses filtros. <button type="button" class="btn quiet" id="limpar-filtros-${corpo.id}" data-limpar-filtros="${aba}">Limpar filtros</button></div></td></tr>`);
+}
+
+// Quantos aparecem: "12 de 40 instrutores" com algum filtro, "40 instrutores" sem nenhum. A região é de status (o leitor de
+// tela dita quando o texto muda)
+const esperasDaContagem = {};
+function contar(aba, { aVista, total }, esperar) {
+  const [um, varios] = NOMES_DA_ABA[aba];
+  const nome = total === 1 ? um : varios;
+  const texto = !total ? '' : filtrando(aba) ? `${aVista} de ${total} ${nome}` : `${total} ${nome}`;
+  clearTimeout(esperasDaContagem[aba]);
+  const escrever = () => {
+    const lugar = $(`#${aba}-contagem`);
+    if (lugar && lugar.textContent !== texto) lugar.textContent = texto;
+  };
+  if (esperar) esperasDaContagem[aba] = setTimeout(escrever, esperar);
+  else escrever();
 }

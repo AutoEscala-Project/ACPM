@@ -58,6 +58,20 @@ export function gavetaDoEsc(evento) {
   return gavetaDoEscEscolhida.get(evento);
 }
 
+// O Esc num painel da própria página (o editor dos horários de decolagem, o formulário do curso novo) fecha só ele, quando
+// o foco está dentro dele. Ouvido na captura, ele para aqui e não chega aos ouvintes das gavetas (o Histórico aberto
+// continua aberto); a dica e o menu abertos por cima são ouvidos antes e ficam com o Esc, e com um diálogo aberto o Esc
+// é do diálogo. aberto() devolve o painel aberto (ou null)
+export function fecharNoEsc(aberto, fechar) {
+  document.addEventListener('keydown', e => {
+    if (e.key !== 'Escape' || algumDialogoAberto()) return;
+    const painel = aberto();
+    if (!painel || !(e.target instanceof Node) || !painel.contains(e.target)) return;
+    e.stopPropagation();
+    fechar();
+  }, true);
+}
+
 // Aviso sobre o link que abriu o app (a volta da confirmação da troca de e-mail, um link antigo), com o botão "OK"
 export function avisarDoLink(texto, tipo) {
   $('#aviso-link-texto').textContent = texto;

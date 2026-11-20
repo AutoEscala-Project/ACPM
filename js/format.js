@@ -54,6 +54,11 @@ export const dataIsoValida = texto => {
 export const LIMITE_DO_NOME = 80;
 export const nomeLimpo = (valor, anterior) => String(valor).trim().replace(/\s+/g, ' ').slice(0, LIMITE_DO_NOME).trim() || anterior;
 
+// A chave de uma busca: o texto sem os acentos (os sinais que a forma NFD separa da letra: “joao” acha “João”, “conceicao”
+// acha “Conceição”), em minúsculas, sem os espaços das pontas e com um espaço só entre as palavras. As buscas comparam a
+// chave do que se digita com a de cada nome
+export const chaveDeBusca = texto => String(texto ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim().replace(/\s+/g, ' ');
+
 // Texto para dentro de HTML, inclusive de atributos com aspas duplas ou simples
 export const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 

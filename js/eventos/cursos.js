@@ -19,7 +19,7 @@ import {
 import { MODELOS } from '../modelos-de-curso.js';
 import { codigoValido } from '../cursos.js';
 import { ApiClient } from '../storage.js';
-import { $, showToast } from '../dom.js';
+import { $, showToast, fecharNoEsc } from '../dom.js';
 import { duracaoDigitada, ERRO_DA_DURACAO } from '../rules.js';
 import { S } from '../state.js';
 import { confirmado } from './confirmacao.js';
@@ -552,7 +552,8 @@ aoAcionar('curso-modelo', b => {
   focar([`#cursos .curso[data-curso="${curso.sigla}"] [data-cc="nome"]`]);
 });
 
-// "+ Novo curso": o formulário abre (e fecha) embaixo da barra, vazio e com o foco na sigla; fechado, o foco volta ao botão
+// "+ Novo curso": o formulário abre (e fecha) embaixo da barra, vazio e com o foco na sigla; fechado, o foco volta ao botão.
+// Cancelar e Esc (com o foco no formulário) fecham sem criar nada
 function mostrarFormularioDoCurso(abrir) {
   const form = $('#form-curso'), botao = $('#cur-novo');
   if (!form || !botao) return;
@@ -579,6 +580,7 @@ aoAcionar('curso-novo', () => {
 document.addEventListener('click', e => {
   if (e.target.closest('#cur-cancelar')) mostrarFormularioDoCurso(false);
 });
+fecharNoEsc(() => { const form = $('#form-curso'); return form && !form.hidden ? form : null; }, () => mostrarFormularioDoCurso(false));
 
 // "Criar o curso": a sigla (em maiúsculas; no formato e uma vez só, também entre os encerrados) e o nome, conferidos no
 // formulário (o erro fica embaixo dos campos, com o campo marcado); o programa vazio ou o modelo escolhido. O curso entra
