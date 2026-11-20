@@ -490,12 +490,9 @@ test.describe('TV da recepção', () => {
   });
 });
 
-// As medidas do quadro na tela: as listas na largura (sobra: o menor espaço livre de uma lista; negativo, ela não cabe),
-// a faixa do topo, a página, o fundo, as linhas fora da tela, as linhas e as páginas, o tamanho das letras e as listas
 // As linhas que cabem numa lista na tela toda: da altura entre o cabeçalho da tabela e a faixa da meteorologia, com a
-// folga de 4 px do painel (js/views/painel-aeroporto.js)
-// As linhas que cabem em cada lista entre o cabeçalho e a faixa da meteorologia, com as letras inteiras (sem o ajuste da
-// largura, que é só da página na tela: a página seguinte pode ter as letras inteiras, e as linhas são as mesmas em todas)
+// folga de 4 px do painel (js/views/painel-aeroporto.js), e com as letras inteiras (sem o ajuste da largura, que é só da
+// página na tela: a página seguinte pode ter as letras inteiras, e as linhas são as mesmas em todas)
 async function linhasQueCabem(page) {
   return page.evaluate(() => {
     const quadro = document.querySelector('.fids');
@@ -508,6 +505,8 @@ async function linhasQueCabem(page) {
   });
 }
 
+// As medidas do quadro na tela: as listas na largura (sobra: o menor espaço livre de uma lista; negativo, ela não cabe),
+// a faixa do topo, a página, o fundo, as linhas fora da tela, as linhas e as páginas, o tamanho das letras e as listas
 async function medirOQuadro(page) {
   return page.evaluate(() => {
     const quadro = document.querySelector('.fids');
