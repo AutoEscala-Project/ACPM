@@ -3,9 +3,10 @@
 // função painel_do_dia) e busca o quadro a cada minuto; neste navegador (sem servidor), lê o dia e a configuração
 // gravados aqui. O perfil da TV não lê o cadastro: a configuração vem no campo "painel" da função painel_do_dia
 // (migração 20261120150000_painel_do_dia_com_a_configuracao.sql), e a TV a normaliza como o app. Sem o campo (o banco
-// ainda sem a migração) ou sem a configuração, a TV mostra o padrão (Missões, com as colunas do padrão). Recarrega toda madrugada, para pegar as versões novas do app, e mantém a tela acesa. A TV fica
-// numa tela pública: ela só aceita a conta da TV e guarda a sessão numa chave só dela. Embaixo do quadro, a meteorologia
-// (js/meteorologia.js), pela função meteorologia do servidor, com a sessão da TV; neste navegador, "indisponível".
+// ainda sem a migração) ou sem a configuração, a TV mostra o padrão (Missões, com as colunas do padrão). Recarrega toda
+// madrugada, para pegar as versões novas do app, e mantém a tela acesa. A TV fica numa tela pública: ela só aceita a
+// conta da TV e guarda a sessão numa chave só dela. Embaixo do quadro, a meteorologia (js/meteorologia.js), pela função
+// meteorologia do servidor, com a sessão da TV; neste navegador, "indisponível".
 import { projetoSupabase, chaveDaSessao } from './config-supabase.js';
 import { soPainel } from './perfis.js';
 import { backendLocal } from './backends/local.js';

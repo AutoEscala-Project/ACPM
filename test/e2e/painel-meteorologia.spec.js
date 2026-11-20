@@ -166,6 +166,18 @@ test.describe('Meteorologia no painel', () => {
     await context.close();
   });
 
+  test('sem conexão com a função (erro de rede): "Meteorologia indisponível", e o painel como antes', async ({ browser }) => {
+    const { context, page, erros } = await novoContexto(browser, {}, { statusEsperados: [] });
+    await context.route('**/functions/v1/meteorologia', route => route.abort('failed'));
+    await entrar(page, CONTAS.operador);
+    await abrirPainelDaEscala(page);
+    await expect(faixa(page)).toHaveText('Meteorologia indisponível');
+    await expect(page.locator('#out .fids tbody tr')).toHaveCount(12);
+    // Só o aviso do próprio navegador sobre a requisição que não chegou; nenhum erro do app
+    expect(erros.filter(e => !/Failed to load resource: net::ERR_FAILED/.test(e))).toEqual([]);
+    await context.close();
+  });
+
   test('neste navegador (sem servidor): "Meteorologia indisponível", sem buscar nada', async ({ page }) => {
     const pedidos = [];
     page.on('request', r => { if (!r.url().startsWith('http://localhost')) pedidos.push(r.url()); });
@@ -249,6 +261,35 @@ test.describe('Meteorologia no painel', () => {
     expect(m.linhas, `${rotulo}: as linhas da página`).toBeGreaterThanOrEqual(5);
     expect(m.largura, `${rotulo}: sem rolar para o lado`).toBe(true);
   };
+  // A função que demora (o aviationweather.gov lento): o painel e a TV abrem na hora, sem esperar por ela; quando as
+  // mensagens chegam, a faixa cresce e a página da TV passa a ter as linhas que cabem acima dela
+  test('a função lenta não segura nada: o painel e a TV abrem, e a faixa espera as mensagens', async ({ browser }) => {
+    const { context, servidor, page, erros } = await novoContexto(browser, { meteorologia: LONGAS }, { viewport: { width: 1280, height: 720 } });
+    const soltar = servidor.segurar('/functions/v1/meteorologia');
+    await entrar(page, CONTAS.operador);
+    await abrirPainelDaEscala(page);
+    await expect(page.locator('#out .fids tbody tr')).toHaveCount(12);
+    await expect(faixa(page)).toHaveText('Buscando o METAR e o TAF…');
+    await page.locator('#s-esc [data-tl="lista"]').click();
+    await expect(page.locator('#out .tabela-escala')).toBeVisible();
+    const tv = await context.newPage();
+    await tv.setViewportSize({ width: 1280, height: 720 });
+    const errosDaTV = vigiarErros(tv);
+    await tv.goto('./painel.html?supabase=teste');
+    await preencherLogin(tv, CONTAS.painel);
+    await expect(linhas(tv).first()).toBeVisible();
+    await expect(faixa(tv)).toHaveText('Buscando o METAR e o TAF…');
+    const antes = await linhas(tv).count();
+    soltar();
+    await expect(caixa(tv, 'SBCF').locator('.meteo-taf')).toBeVisible();
+    await ladoALado(tv);
+    await expect.poll(async () => { const m = await medirTela(tv); return m.fundoDaTabela <= m.topoDaFaixa + 0.5 && m.foraDaTela === 0; }).toBe(true);
+    expect(await linhas(tv).count(), 'a faixa maior tira linhas da página').toBeLessThan(antes);
+    expect(erros).toEqual([]);
+    expect(errosDaTV).toEqual([]);
+    await context.close();
+  });
+
   for (const [largura, altura] of [[1920, 1080], [1280, 720], [1024, 768]]) {
     test(`na TV de ${largura}×${altura}, o quadro pagina as linhas que cabem acima da faixa, com as duas caixas inteiras`, async ({ browser }) => {
       const { context, page, erros } = await novoContexto(browser, { meteorologia: LONGAS }, { viewport: { width: largura, height: altura } });
