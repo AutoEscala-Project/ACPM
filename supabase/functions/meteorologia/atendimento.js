@@ -67,9 +67,13 @@ async function consultar(buscar, endereco, tempoMaximo) {
   return lerLista(await resposta.text());
 }
 
-// conferirSessao(req): true para uma sessão válida do app; buscar: o fetch; agora: o relógio (ms); tempoMaximo: a espera
-// pelo aviationweather.gov (ms)
-export function criarAtendimento({ conferirSessao, buscar = fetch, agora = Date.now, tempoMaximo = TEMPO_MAXIMO_MS } = {}) {
+// conferirSessao(req): true para uma sessão válida do app (sem ela, ninguém entra); buscar: o fetch; agora: o relógio
+// (ms); tempoMaximo: a espera pelo aviationweather.gov (ms). O tipo em JSDoc é o que o Deno lê ao conferir o index.ts
+// (deno check): sem ele, o Deno deduz os tipos dos valores padrão, e conferirSessao, sem padrão, ficaria de fora
+/**
+ * @param {{ conferirSessao: (req: Request) => Promise<boolean>, buscar?: typeof fetch, agora?: () => number, tempoMaximo?: number }} opcoes
+ */
+export function criarAtendimento({ conferirSessao, buscar = fetch, agora = Date.now, tempoMaximo = TEMPO_MAXIMO_MS }) {
   let guardado = null;   // { em, dados }
   let emAndamento = null;
 

@@ -104,7 +104,14 @@ supabase db push --remote=<ref de produção>
 ```
 
 O `verify_jwt = true` de `supabase/config.toml` vale no deploy (é o padrão; não use `--no-verify-jwt`). A função não usa
-segredos: o Supabase já dá a ela `SUPABASE_URL` e `SUPABASE_ANON_KEY`.
+segredos: o Supabase já dá a ela `SUPABASE_URL` e `SUPABASE_ANON_KEY`. No Supabase CLI 3, o projeto vai em
+`--remote=<ref>` (o `--project-ref <ref>` das versões anteriores). Antes do deploy, `npx deno check
+supabase/functions/meteorologia/index.ts` confere os tipos.
+
+Se, na prévia, o pé do painel disser "Meteorologia indisponível" com a conta conectada e os logs da função mostrarem
+401 "Invalid JWT" (o gateway pode recusar a sessão nos projetos que passaram às chaves de assinatura novas do JWT),
+publique a função de novo com `--no-verify-jwt`: ela continua exigindo a sessão de uma conta, que confere no Auth
+do projeto.
 
 **A ordem:** a função e a migração na prévia, conferidas na prévia (https://thephfernandes.github.io/ACPM/: o pé do
 painel com as duas caixas, e a TV com o quadro e as colunas do "Configurar painel"), depois as duas na produção, e só
