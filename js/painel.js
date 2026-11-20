@@ -109,14 +109,19 @@ function pedirLogin({ expirada = false, email = '' } = {}) {
       botao.disabled = true;
       const credenciais = { email: campoEmail.value.trim(), password: campoSenha.value };
       const { error } = await cliente.auth.signInWithPassword(credenciais);
+      // A senha recusada (ou a de outra conta) não fica no campo, numa tela pública: alguns navegadores têm o botão de
+      // mostrar a senha. Sem conexão, ela fica, para tentar de novo
       if (error) {
         botao.disabled = false;
-        erro.textContent = error.status === 400 ? 'E-mail ou senha incorretos.' : 'Não foi possível entrar. Verifique a conexão e tente de novo.';
+        const recusada = error.status === 400;
+        if (recusada) campoSenha.value = '';
+        erro.textContent = recusada ? 'E-mail ou senha incorretos.' : 'Não foi possível entrar. Verifique a conexão e tente de novo.';
         return;
       }
       const perfil = await perfilDaConta(cliente);
       botao.disabled = false;
       if (!soPainel(perfil)) {
+        if (perfil !== undefined) campoSenha.value = '';
         await cliente.auth.signOut({ scope: 'local' }).catch(() => {});
         // Outra conta nunca fica guardada na TV (e o que estava guardado sai)
         if (perfil !== undefined) entrada.limpar();

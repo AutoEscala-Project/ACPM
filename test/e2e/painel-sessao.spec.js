@@ -173,6 +173,13 @@ test.describe('A sessão da TV da recepção', () => {
     await entrarNaTV(page, CONTAS.operador, { manter: true });
     await expect(page.locator('#login-erro')).toHaveText('Esta conta não é a da TV. Entre com a conta da TV (perfil Painel).');
     expect(await guardada(page)).toBeNull();
+    // A senha do operador também não fica no campo, numa tela pública (o botão de mostrar a senha de alguns navegadores)
+    await expect(page.locator('#login-senha')).toHaveValue('');
+    // Nem a senha errada
+    await entrarNaTV(page, CONTAS.painel, { manter: true, senha: 'senha-errada' });
+    await expect(page.locator('#login-erro')).toHaveText('E-mail ou senha incorretos.');
+    await expect(page.locator('#login-senha')).toHaveValue('');
+    expect(await guardada(page)).toBeNull();
     // Sem marcar, a conta da TV entra, e nada fica guardado
     await entrarNaTV(page, CONTAS.painel);
     await expect(linhas(page)).toHaveCount(2);
