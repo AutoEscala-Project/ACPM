@@ -1,5 +1,6 @@
 // "Configurar painel" (o botão ao lado dos quadros do Painel, na Escala): o quadro com que o painel abre (e a TV da
-// recepção mostra) e as colunas, cada uma ligada ou não e na ordem escolhida (↑ e ↓, pelo teclado também). Cada mudança
+// recepção mostra), as listas (Automático, uma ou duas lado a lado) e as colunas, cada uma ligada ou não e na ordem
+// escolhida (↑ e ↓, pelo teclado também). Cada mudança
 // vale na hora: vai para o cadastro (js/config-do-painel.js) e para o Histórico, por gravarAlteracao. O Operador e o
 // Administrador mudam; quem só consulta vê a configuração, com os campos desligados. Fechar e Esc fecham; o foco volta
 // para o botão que abriu.
@@ -8,13 +9,13 @@ import { $ } from '../dom.js';
 import { esc } from '../format.js';
 import { S, isGestor } from '../state.js';
 import {
-  QUADROS_DO_PAINEL, COLUNAS_DO_PAINEL, normalizarPainel, painelPadrao, ehPadrao, alternarColuna, moverColuna, escolherQuadro,
-  rotuloDaColuna, rotuloDoQuadro
+  QUADROS_DO_PAINEL, COLUNAS_DO_PAINEL, LISTAS_DO_PAINEL, LARGURA_DAS_DUAS_LISTAS, normalizarPainel, painelPadrao, ehPadrao,
+  alternarColuna, moverColuna, escolherQuadro, escolherListas, rotuloDaColuna, rotuloDoQuadro, rotuloDasListas
 } from '../config-do-painel.js';
 import { seguirConfiguracaoDoPainel } from './painel-aeroporto.js';
 
 const PADRAO = painelPadrao();
-const PADRAO_EM_TEXTO = `${rotuloDoQuadro(PADRAO.quadro)}; ${PADRAO.colunas.filter(c => c.on).map(c => rotuloDaColuna(c.id)).join(', ')}`;
+const PADRAO_EM_TEXTO = `${rotuloDoQuadro(PADRAO.quadro)}; ${PADRAO.colunas.filter(c => c.on).map(c => rotuloDaColuna(c.id)).join(', ')}; listas: ${rotuloDasListas(PADRAO.listas)}`;
 
 const podeMudar = () => !isGestor();
 
@@ -23,6 +24,7 @@ function camposHtml() {
   const desligado = podeMudar() ? '' : ' disabled';
   const ultima = painel.colunas.length - 1;
   const quadros = QUADROS_DO_PAINEL.map(q => `<label class="chk"><input type="radio" name="pn-quadro" value="${q.id}"${q.id === painel.quadro ? ' checked' : ''}${desligado}> ${esc(q.rotulo)}</label>`).join('');
+  const listas = LISTAS_DO_PAINEL.map(l => `<label class="chk"><input type="radio" name="pn-listas" value="${l.id}"${l.id === painel.listas ? ' checked' : ''}${l.id === 'auto' ? ' aria-describedby="pn-listas-dica"' : ''}${desligado}> ${esc(l.rotulo)}</label>`).join('');
   const colunas = painel.colunas.map((c, i) => {
     const rotulo = esc(rotuloDaColuna(c.id));
     const mover = (passo, icone, verbo, naPonta) => `<button type="button" class="btn sec pn-mover" data-pn-mover="${passo}" data-pn-coluna="${c.id}" aria-label="${verbo} ${rotulo}"${naPonta || !podeMudar() ? ' disabled' : ''}><svg class="ico" aria-hidden="true"><use href="#${icone}"/></svg></button>`;
@@ -34,6 +36,11 @@ function camposHtml() {
   return `<fieldset class="pn-grupo">
       <legend>O painel abre em</legend>
       ${quadros}
+    </fieldset>
+    <fieldset class="pn-grupo">
+      <legend>Listas</legend>
+      ${listas}
+      <small class="h" id="pn-listas-dica">Automático: duas listas lado a lado (a página continua da esquerda na da direita) quando o painel tem pelo menos ${LARGURA_DAS_DUAS_LISTAS.toLocaleString('pt-BR')} px de largura, como a TV Full HD, e elas cabem.</small>
     </fieldset>
     <fieldset class="pn-grupo">
       <legend>Colunas, na ordem do painel</legend>
@@ -82,6 +89,14 @@ function ligar() {
       if (!novo || novo.quadro === antes) return;
       mudar(novo, `abre em ${rotuloDoQuadro(novo.quadro)} (antes: ${rotuloDoQuadro(antes)})`, { quadro: true });
       desenhar(`input[name="pn-quadro"][value="${novo.quadro}"]`);
+      return;
+    }
+    if (campo.name === 'pn-listas') {
+      const antes = normalizarPainel(S.painel).listas;
+      const novo = escolherListas(S.painel, campo.value);
+      if (!novo || novo.listas === antes) return;
+      mudar(novo, `listas: ${rotuloDasListas(novo.listas)} (antes: ${rotuloDasListas(antes)})`);
+      desenhar(`input[name="pn-listas"][value="${novo.listas}"]`);
       return;
     }
     const id = campo.dataset.pnColuna;

@@ -3,7 +3,7 @@
 // painéis da INFRAERO. Servem à visão "Painel" da Escala e à tela da recepção.
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { linhasDoQuadro, quadroDeMissoes, quadroDePartidas, quadroDeChegadas, minutoDoQuadro, paginar, telasDosQuadros, EMBARQUE_ANTES_MIN } from '../../js/quadro.js';
+import { linhasDoQuadro, quadroDeMissoes, quadroDePartidas, quadroDeChegadas, minutoDoQuadro, paginar, telasDosQuadros, EMBARQUE_ANTES_MIN, MISSAO_FICA_MIN } from '../../js/quadro.js';
 
 const voo = (fKey, a, extra = {}) => ({
   fKey, classKey: fKey, isGround: false, a, b: a + 60, o: 0, r: 'PR-VOB', eqType: 'C152', s: `Aluno ${fKey.split('_')[0]}`,
@@ -109,17 +109,41 @@ describe('Quadro de missões', () => {
     ]);
   });
 
-  it('sem partidas e chegadas: o voo que já pousou continua; o cancelado não entra; ninguém é chamado para o embarque', () => {
+  it('sem partidas e chegadas: o voo que já pousou continua; o cancelado aparece, com o motivo; ninguém é chamado para o embarque', () => {
     const out = [voo('1000_0_1', 390), voo('1001_0_1', 760), voo('1002_0_1', 820), voo('1003_0_1', 900)];
     const fStatus = { '1000_0_1': 'Pousou', '1002_0_1': 'Cancelado' };
     const missoes = quadroDeMissoes(linhasDoQuadro(out, fStatus, { '1002_0_1': { motivo: 'Meteorologia' } }));
-    assert.deepEqual(missoes.map(l => [l.aluno, l.observacao, l.classe]), [
-      ['Aluno 1000', 'Pousou', 'Pousou'], ['Aluno 1001', 'Confirmado', 'Confirmado'], ['Aluno 1003', 'Confirmado', 'Confirmado']
+    assert.deepEqual(missoes.map(l => [l.aluno, l.horario, l.observacao, l.classe]), [
+      ['Aluno 1000', 390, 'Pousou', 'Pousou'], ['Aluno 1001', 760, 'Confirmado', 'Confirmado'],
+      ['Aluno 1002', 820, 'Cancelado · Meteorologia', 'Cancelado'], ['Aluno 1003', 900, 'Confirmado', 'Confirmado']
     ]);
-    // A turma de Ground só sai quando todos os alunos estão cancelados
+    // A turma de Ground meio cancelada continua de pé; toda cancelada, aparece cancelada
     const turmaMeioCancelada = linhasDoQuadro(turma([1004, 1005]), { '1004_0_1': 'Cancelado' });
-    assert.deepEqual(quadroDeMissoes(turmaMeioCancelada).map(l => l.aluno), ['2 alunos']);
-    assert.deepEqual(quadroDeMissoes(linhasDoQuadro(turma([1004, 1005]), { '1004_0_1': 'Cancelado', '1005_0_1': 'Cancelado' })), []);
+    assert.deepEqual(quadroDeMissoes(turmaMeioCancelada).map(l => [l.aluno, l.observacao]), [['2 alunos', 'Confirmado']]);
+    const turmaCancelada = linhasDoQuadro(turma([1004, 1005]), { '1004_0_1': 'Cancelado', '1005_0_1': 'Cancelado' });
+    assert.deepEqual(quadroDeMissoes(turmaCancelada).map(l => [l.aluno, l.observacao, l.classe]), [['2 alunos', 'Cancelado', 'Cancelado']]);
+  });
+  // Pedro, 2026-11-20: a primeira página é sempre o que acontece agora e o que vem depois
+  it('o voo sai 30 minutos depois do fim efetivo (o novo, no atraso; o programado, no cancelado); a turma de Ground, no fim', () => {
+    assert.equal(MISSAO_FICA_MIN, 30);
+    // 06:30–07:30; 08:00–09:00 atrasado para 09:00–10:00; 09:00–10:00 cancelado; Ground 08:00–09:30; 10:00–11:00 em voo
+    const out = [voo('1000_0_1', 390), voo('1001_0_1', 480), voo('1002_0_1', 540), ...turma([1003, 1004], 480), voo('1005_0_1', 600)];
+    const fStatus = { '1001_0_1': 'Atrasado', '1002_0_1': 'Cancelado', '1005_0_1': 'Em Voo' };
+    const linhas = linhasDoQuadro(out, fStatus, { '1001_0_1': { novoInicio: 540 }, '1002_0_1': { motivo: 'Meteorologia' } });
+    const alunos = agora => quadroDeMissoes(linhas, agora).map(l => l.aluno);
+    assert.deepEqual(alunos(479), ['Aluno 1000', '2 alunos', 'Aluno 1001', 'Aluno 1002', 'Aluno 1005'], '07:59: o das 06:30 terminou há 29 minutos');
+    assert.deepEqual(alunos(480), ['Aluno 1000', '2 alunos', 'Aluno 1001', 'Aluno 1002', 'Aluno 1005'], 'há 30 minutos, ainda fica');
+    assert.deepEqual(alunos(481), ['2 alunos', 'Aluno 1001', 'Aluno 1002', 'Aluno 1005'], 'há 31 minutos, sai');
+    // A turma de Ground (até 09:30) sai quando o fim passa, sem os 30 minutos
+    assert.deepEqual(alunos(569), ['2 alunos', 'Aluno 1001', 'Aluno 1002', 'Aluno 1005']);
+    assert.deepEqual(alunos(570), ['Aluno 1001', 'Aluno 1002', 'Aluno 1005']);
+    // O atrasado conta do fim novo (10:00) e o cancelado do programado (10:00), não do original (09:00)
+    assert.deepEqual(alunos(630), ['Aluno 1001', 'Aluno 1002', 'Aluno 1005']);
+    assert.deepEqual(alunos(631), ['Aluno 1005'], 'o atrasado e o cancelado saem às 10:31');
+    // O que está em voo fica até mudar de status, mesmo depois do fim
+    assert.deepEqual(alunos(800), ['Aluno 1005']);
+    // Num dia futuro (-Infinity), num dia passado (Infinity) e sem a hora, o dia todo
+    for (const agora of [-Infinity, Infinity, undefined]) assert.equal(alunos(agora).length, 5, String(agora));
   });
 });
 
@@ -176,6 +200,25 @@ describe('Páginas e alternância', () => {
       ['partidas', 1, 2, [1, 2]], ['partidas', 2, 2, [3]], ['chegadas', 1, 1, [4]]
     ]);
     assert.deepEqual(telasDosQuadros([['partidas', []], ['chegadas', []]], 16).map(t => [t.quadro, t.linhas]), [['partidas', []], ['chegadas', []]]);
+  });
+
+  // Pedro, 2026-11-20: na tela grande, duas listas lado a lado (umas 28 linhas de uma vez), em todos os quadros
+  it('duas listas lado a lado: a página tem o dobro das linhas, a da esquerda primeiro e o resto na da direita', () => {
+    const voos = Array.from({ length: 33 }, (_, i) => i + 1);
+    const telas = telasDosQuadros([['missoes', voos]], 14, 2);
+    assert.deepEqual(telas.map(t => [t.pagina, t.paginas, t.linhas.length, t.listas.map(l => l.length)]), [[1, 2, 28, [14, 14]], [2, 2, 5, [5, 0]]]);
+    assert.deepEqual(telas[0].listas[0], voos.slice(0, 14));
+    assert.deepEqual(telas[0].listas[1], voos.slice(14, 28));
+    assert.deepEqual(telas[1].listas, [[29, 30, 31, 32, 33], []]);
+    // Os quadros do aeroporto também: as páginas de partidas e depois as de chegadas
+    const alternar = telasDosQuadros([['partidas', [1, 2, 3, 4, 5]], ['chegadas', [6]]], 2, 2);
+    assert.deepEqual(alternar.map(t => [t.quadro, t.pagina, t.paginas, t.listas]), [
+      ['partidas', 1, 2, [[1, 2], [3, 4]]], ['partidas', 2, 2, [[5], []]], ['chegadas', 1, 1, [[6], []]]
+    ]);
+    // Nada no quadro: uma página, com as duas listas vazias
+    assert.deepEqual(telasDosQuadros([['missoes', []]], 14, 2).map(t => t.listas), [[[], []]]);
+    // Uma lista (o padrão): a página inteira nela
+    assert.deepEqual(telasDosQuadros([['missoes', [1, 2, 3]]], 2).map(t => t.listas), [[[1, 2]], [[3]]]);
   });
 
   it('Missões é um quadro só, paginado como os outros', () => {

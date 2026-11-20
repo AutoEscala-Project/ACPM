@@ -1,5 +1,5 @@
-// Painel do dia: o quadro de Missões (todos os voos do dia, na ordem do horário, sem partidas e chegadas: sem o status
-// ao vivo, separar os dois não ajuda) e, no estilo dos aeroportos, um quadro de Partidas (todas as do dia) e um de
+// Painel do dia: o quadro de Missões (os voos do dia, na ordem do horário, sem partidas e chegadas: sem o status ao
+// vivo, separar os dois não ajuda; o que terminou há mais de 30 minutos sai) e, no estilo dos aeroportos, um quadro de Partidas (todas as do dia) e um de
 // Chegadas (as que ainda não pousaram ou terminaram), que se alternam página a página, como nos painéis da INFRAERO.
 // Partidas e Chegadas seguem o horário efetivo (o atrasado no previsto); os três mostram o horário programado e, no
 // atraso, o previsto. A turma de Ground é uma linha só, sem os nomes dos alunos. Servem à visão "Painel" da Escala e à
@@ -82,9 +82,20 @@ function linhaDoAeroporto(l, momento, agora) {
 
 const peloEfetivo = (x, y) => x.efetivo - y.efetivo;
 
-// Missões: todos os voos do dia, na ordem do horário programado (o que o quadro mostra), sem a chamada do embarque. O
-// cancelado não entra: sem a coluna Observação (desligada no padrão), ele pareceria um voo de pé
-export const quadroDeMissoes = linhas => linhas.filter(l => l.status !== 'Cancelado')
+// Quanto tempo o voo fica no quadro Missões depois do fim efetivo (o novo, no atraso; o programado, no cancelado)
+export const MISSAO_FICA_MIN = 30;
+
+// O voo continua no quadro Missões até 30 minutos depois do fim efetivo; a turma de Ground sai quando o fim dela passa.
+// O que está em voo fica até mudar de status, como nas chegadas. Sem o minuto (num dia futuro, -Infinity; num dia
+// passado, Infinity; ou sem a hora), o dia todo: o dia que já passou fica inteiro, para conferir
+const aindaNasMissoes = (l, agora) => !Number.isFinite(agora) || l.status === 'Em Voo'
+  || (l.ground ? l.fim > agora : agora - l.fim <= MISSAO_FICA_MIN);
+
+// Missões: os voos do dia, na ordem do horário programado (o que o quadro mostra), sem a chamada do embarque, menos os
+// que terminaram há mais de 30 minutos (agora: o minuto do quadro), para a primeira página ser sempre o que acontece agora
+// e o que vem depois. O cancelado também aparece (Pedro, 2026-11-20): com a coluna Observação ligada, ele diz
+// "Cancelado" e o motivo
+export const quadroDeMissoes = (linhas, agora) => linhas.filter(l => aindaNasMissoes(l, agora))
   .map(l => linhaDoAeroporto(l, 'missao'))
   .sort((x, y) => x.horario - y.horario || peloEfetivo(x, y));
 
@@ -108,11 +119,15 @@ export function paginar(lista, porPagina) {
 }
 
 // As telas na ordem em que se alternam: as páginas de cada quadro ([nome, linhas]), um quadro depois do outro (como no
-// aeroporto, as páginas de partidas e depois as de chegadas)
-export function telasDosQuadros(quadros, porPagina) {
+// aeroporto, as páginas de partidas e depois as de chegadas). Cada página tem uma lista ou duas lado a lado (porLista
+// linhas em cada uma): a página começa na lista da esquerda e continua na da direita
+export function telasDosQuadros(quadros, porLista, listas = 1) {
   return quadros.flatMap(([quadro, lista]) => {
-    const paginas = paginar(lista, porPagina);
-    return paginas.map((linhas, i) => ({ quadro, pagina: i + 1, paginas: paginas.length, linhas }));
+    const paginas = paginar(lista, porLista * listas);
+    return paginas.map((linhas, i) => ({
+      quadro, pagina: i + 1, paginas: paginas.length, linhas,
+      listas: Array.from({ length: listas }, (_, n) => linhas.slice(n * porLista, (n + 1) * porLista))
+    }));
   });
 }
 

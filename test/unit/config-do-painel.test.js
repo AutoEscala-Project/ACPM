@@ -3,8 +3,8 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  QUADROS_DO_PAINEL, COLUNAS_DO_PAINEL, painelPadrao, normalizarPainel, colunasVisiveis, ehPadrao, alternarColuna, moverColuna,
-  escolherQuadro, rotuloDaColuna
+  QUADROS_DO_PAINEL, COLUNAS_DO_PAINEL, LISTAS_DO_PAINEL, painelPadrao, normalizarPainel, colunasVisiveis, ehPadrao, alternarColuna,
+  moverColuna, escolherQuadro, escolherListas, listasNaLargura, rotuloDaColuna, rotuloDasListas
 } from '../../js/config-do-painel.js';
 import { separar, juntar } from '../../js/dias.js';
 import { ApiClient } from '../../js/storage.js';
@@ -64,6 +64,37 @@ describe('Configuração do painel', () => {
     assert.equal(ehPadrao(moverColuna(subiu, 'missao', 1)), true);
   });
 
+  // Pedro, 2026-11-20: "Listas", com Automático (o padrão: duas a partir de 1.600 px de largura), "Sempre uma lista" e
+  // "Sempre duas listas lado a lado"
+  it('as listas: Automático no padrão e na configuração gravada antes delas; só auto, uma ou duas', () => {
+    assert.deepEqual(LISTAS_DO_PAINEL.map(l => [l.id, l.rotulo]), [
+      ['auto', 'Automático'], ['uma', 'Sempre uma lista'], ['duas', 'Sempre duas listas lado a lado']
+    ]);
+    assert.equal(painelPadrao().listas, 'auto');
+    assert.equal(normalizarPainel({ quadro: 'partidas', colunas: [] }).listas, 'auto', 'gravada antes das listas');
+    for (const listas of ['uma', 'duas', 'auto']) assert.equal(normalizarPainel({ listas }).listas, listas);
+    for (const listas of ['tres', 2, null, '__proto__', 'Duas', ['duas'], { duas: true }]) assert.equal(normalizarPainel({ listas }).listas, 'auto', JSON.stringify(listas));
+    assert.equal(escolherListas(undefined, 'duas').listas, 'duas');
+    assert.deepEqual(escolherListas(undefined, 'duas').colunas, painelPadrao().colunas);
+    assert.equal(escolherListas(undefined, 'muitas'), null);
+    assert.equal(ehPadrao(escolherListas(undefined, 'uma')), false);
+    assert.equal(ehPadrao(escolherListas(undefined, 'auto')), true);
+    assert.equal(rotuloDasListas('duas'), 'Sempre duas listas lado a lado');
+    // Mudar o quadro ou as colunas não muda as listas
+    assert.equal(escolherQuadro({ listas: 'duas' }, 'chegadas').listas, 'duas');
+    assert.equal(alternarColuna({ listas: 'uma' }, 'previsto', true).listas, 'uma');
+    assert.equal(moverColuna({ listas: 'duas' }, 'aluno', 1).listas, 'duas');
+  });
+
+  it('quantas listas: no Automático, duas a partir de 1.600 px de largura; nas outras, sempre as escolhidas', () => {
+    assert.equal(listasNaLargura(undefined, 1599), 1);
+    assert.equal(listasNaLargura(undefined, 1600), 2);
+    assert.equal(listasNaLargura({ listas: 'auto' }, 2560), 2);
+    assert.equal(listasNaLargura({ listas: 'auto' }, 1280), 1);
+    assert.equal(listasNaLargura({ listas: 'uma' }, 2560), 1);
+    assert.equal(listasNaLargura({ listas: 'duas' }, 1024), 2);
+  });
+
   it('o quadro com que o painel abre: só os da lista', () => {
     assert.equal(escolherQuadro(undefined, 'alternar').quadro, 'alternar');
     assert.deepEqual(escolherQuadro(undefined, 'alternar').colunas, painelPadrao().colunas);
@@ -79,7 +110,7 @@ describe('A configuração do painel no cadastro', () => {
     const semConfig = ApiClient.normalizeAndMigrateState(juntar(cadastro));
     assert.equal(semConfig.painel, undefined);
     assert.equal(Object.hasOwn(separar(semConfig).cadastro, 'painel'), false);
-    const painel = moverColuna(escolherQuadro(undefined, 'partidas'), 'aluno', -1);
+    const painel = escolherListas(moverColuna(escolherQuadro(undefined, 'partidas'), 'aluno', -1), 'duas');
     const comConfig = ApiClient.normalizeAndMigrateState(juntar({ ...cadastro, painel }));
     assert.deepEqual(comConfig.painel, painel);
     const partes = separar(comConfig);

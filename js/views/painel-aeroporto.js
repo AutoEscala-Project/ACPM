@@ -1,14 +1,15 @@
 // O painel do dia. O quadro de Missões mostra todos os voos do dia, na ordem do horário; no estilo dos aeroportos, como
 // os painéis da INFRAERO, o quadro de Partidas (todas as do dia) e o de Chegadas (as que ainda não pousaram) se alternam
 // página a página a cada 10 segundos, com o relógio e a página no canto. O quadro com que o painel abre e as colunas
-// (quais e em que ordem) vêm da configuração do painel (js/config-do-painel.js); o operador pode ver outro quadro na
-// hora, pausar a troca e abrir em tela cheia (para um monitor ou TV). Só mostra: o status muda na Lista e no mapa. A TV
-// da recepção (painel.html) usa o mesmo painel, na tela toda e sem os botões. Embaixo do quadro, a faixa da meteorologia
+// (quais e em que ordem) e as listas (uma, ou duas lado a lado na tela grande) vêm da configuração do painel
+// (js/config-do-painel.js); o operador pode ver outro quadro na hora, pausar a troca e abrir em tela cheia (para um
+// monitor ou TV). Só mostra: o status muda na Lista e no mapa. A TV da recepção (painel.html) usa o mesmo painel, na
+// tela toda e sem os botões. Embaixo do quadro (das duas listas, quando são duas), a faixa da meteorologia
 // (js/views/meteorologia.js): o METAR e o TAF de Pampulha e de Confins, as duas caixas sempre à vista; o quadro fica em
 // .fids-quadro, e a faixa, em .fids-meteo, ao lado dele (trocar o quadro não refaz a faixa, nem o contrário).
 import { hm, esc, hojeISO, rotuloDaData, minutoDoDia } from '../format.js';
 import { quadroDeMissoes, quadroDePartidas, quadroDeChegadas, minutoDoQuadro, telasDosQuadros } from '../quadro.js';
-import { QUADROS_DO_PAINEL, normalizarPainel, colunasVisiveis, rotuloDaColuna, quadroValido } from '../config-do-painel.js';
+import { QUADROS_DO_PAINEL, normalizarPainel, colunasVisiveis, rotuloDaColuna, quadroValido, listasNaLargura } from '../config-do-painel.js';
 import { estadoDaMeteorologia, pedirMeteorologia, aoMudarMeteorologia } from '../meteorologia.js';
 import { faixaDaMeteorologia, secaoDaMeteorologia } from './meteorologia.js';
 
@@ -41,22 +42,26 @@ const CELULAS = {
 };
 
 const linhaHtml = (l, colunas) => `<tr class="fids-${l.classe}">${colunas.map(id => `<td class="${CELULAS[id].classe}">${CELULAS[id].html(l)}</td>`).join('')}</tr>`;
+const cabecalhoHtml = colunas => `<tr>${colunas.map(id => `<th scope="col">${rotuloDaColuna(id)}</th>`).join('')}</tr>`;
 
 // A configuração do painel que a fonte entrega (sem ela, o padrão)
 const configuracao = () => normalizarPainel(estado.fonte && estado.fonte().painel);
 const modoAtual = () => (estado.modo && quadroValido(estado.modo) ? estado.modo : configuracao().quadro);
 
-// A altura da linha em px. A variável do CSS vem como foi escrita: na tela toda, em vh (parseFloat sozinho leria 5.4 px, e
-// a página teria dez vezes as linhas que cabem: as de baixo ficariam fora da tela, sem nunca aparecer)
-const emPixels = valor => parseFloat(valor) * (/vh\s*$/.test(valor) ? innerHeight / 100 : 1);
+// Um tamanho do CSS em px. A variável do CSS vem como foi escrita: na tela toda, em vh ou vw (parseFloat sozinho leria
+// 5.4 px, e a página teria dez vezes as linhas que cabem: as de baixo ficariam fora da tela, sem nunca aparecer)
+const emPixels = valor => parseFloat(valor) * (/vh\s*$/.test(valor) ? innerHeight / 100 : /vw\s*$/.test(valor) ? innerWidth / 100 : 1);
 
-// Quantas linhas cabem: na página, 12; em tela cheia, as que couberem na altura da tela, tirados o topo, o cabeçalho da
-// tabela e a faixa da meteorologia (as linhas que não cabem vão para a página seguinte). Antes do primeiro desenho (sem
-// o topo e o cabeçalho para medir), as linhas de 80% da tela
+// O quadro na tela toda (a tela cheia da Escala ou a TV), ou null
+const telaCheia = () => (document.fullscreenElement && document.fullscreenElement.classList.contains('fids') ? document.fullscreenElement : null);
+const naTelaToda = () => telaCheia() || (estado.inteiro && document.querySelector(estado.seletor)) || null;
+
+// Quantas linhas cabem em cada lista: na página, 12; em tela cheia, as que couberem na altura da tela, tirados o topo, o
+// cabeçalho da tabela e a faixa da meteorologia, que fica embaixo das duas listas (as linhas que não cabem vão para a
+// página seguinte). Antes do primeiro desenho (sem o topo e o cabeçalho para medir), as linhas de 80% da tela
 const FOLGA = 4;
-function porPagina() {
-  const cheia = document.fullscreenElement && document.fullscreenElement.classList.contains('fids') ? document.fullscreenElement : null;
-  const quadro = cheia || (estado.inteiro && document.querySelector(estado.seletor));
+function porLista() {
+  const quadro = naTelaToda();
   if (!quadro) return POR_PAGINA;
   const linha = emPixels(getComputedStyle(quadro).getPropertyValue('--fids-linha')) || 48;
   const altura = seletor => { const el = quadro.querySelector(seletor); return el ? el.offsetHeight : 0; };
@@ -65,19 +70,73 @@ function porPagina() {
   return Math.max(4, Math.floor((livre - altura('.fids-meteo')) / linha));
 }
 
+// A largura do quadro (px CSS). Antes de a Escala desenhar o painel, a da área da escala, que ele ocupa inteira
+function larguraDoQuadro() {
+  const quadro = telaCheia() || document.querySelector(estado.seletor);
+  const largura = quadro ? quadro.getBoundingClientRect().width : 0;
+  if (largura) return largura;
+  const area = document.querySelector('#out');
+  if (!area) return innerWidth;
+  const estilo = getComputedStyle(area);
+  return area.clientWidth - parseFloat(estilo.paddingLeft) - parseFloat(estilo.paddingRight);
+}
+
+// O preenchimento das células (10 px de cada lado), que não diminui com as letras
+const PREENCHIMENTO = 20;
+
+// No Automático, as duas listas valem só quando cabem: uma tabela com todas as linhas do quadro (de todas as páginas, para
+// as listas não irem e voltarem a cada página), fora da vista e nas letras do painel sem o ajuste, diz a largura de que
+// elas precisam; na tela toda, as letras podem diminuir até o mínimo (AJUSTE_MINIMO), e na página, não
+function duasListasCabem(colunas, todas, largura) {
+  const telaToda = Boolean(naTelaToda());
+  const medida = document.createElement('div');
+  medida.className = `fids fids-medida${telaToda ? ' inteiro' : ''}`;
+  medida.setAttribute('aria-hidden', 'true');
+  medida.innerHTML = `<table class="fids-tabela"><thead>${cabecalhoHtml(colunas)}</thead><tbody>${todas.map(l => linhaHtml(l, colunas)).join('')}</tbody></table>`;
+  document.body.append(medida);
+  const precisa = medida.firstElementChild.getBoundingClientRect().width;
+  const vao = emPixels(getComputedStyle(medida).getPropertyValue('--fids-vao')) || 0;
+  medida.remove();
+  const preenchimento = PREENCHIMENTO * colunas.length;
+  const cabe = (largura - vao) / 2 - preenchimento;
+  return cabe >= (precisa - preenchimento) * (telaToda ? AJUSTE_MINIMO : 1);
+}
+
 function telasAgora() {
   const { linhas, data } = estado.fonte();
   const agora = new Date();
   const minuto = minutoDoQuadro(data, hojeISO(), minutoDoDia(agora));
   const modo = modoAtual();
-  const quadros = modo === 'missoes' ? [['missoes', quadroDeMissoes(linhas)]]
+  const quadros = modo === 'missoes' ? [['missoes', quadroDeMissoes(linhas, minuto)]]
     : [['partidas', quadroDePartidas], ['chegadas', quadroDeChegadas]].filter(([quadro]) => modo === 'alternar' || modo === quadro)
       .map(([quadro, montar]) => [quadro, montar(linhas, minuto)]);
-  return telasDosQuadros(quadros, porPagina());
+  const painel = configuracao();
+  const colunas = colunasVisiveis(painel);
+  const largura = larguraDoQuadro();
+  let listas = listasNaLargura(painel, largura);
+  if (listas === 2 && painel.listas === 'auto' && !duasListasCabem(colunas, quadros.flatMap(([, lista]) => lista), largura)) listas = 1;
+  const linhasPorLista = porLista();
+  return { telas: telasDosQuadros(quadros, linhasPorLista, listas), colunas, linhasPorLista };
+}
+
+// Uma lista da página: as linhas e as vazias que a completam (o quadro tem sempre a mesma altura, como no aeroporto). A
+// primeira diz quando não há nada; a segunda, sem nada, fica fora do leitor de tela
+function listaHtml(tela, n, { titulo, vazio, colunas, linhasPorLista }) {
+  const itens = tela.listas[n];
+  const duas = tela.listas.length > 1;
+  const nada = !itens.length && n === 0;
+  const corpo = nada ? `<tr class="fids-nada"><td colspan="${colunas.length}">${vazio}</td></tr>` : itens.map(l => linhaHtml(l, colunas)).join('');
+  const vazias = `<tr class="fids-vazia" aria-hidden="true"><td colspan="${colunas.length}">&nbsp;</td></tr>`.repeat(Math.max(0, linhasPorLista - (nada ? 1 : itens.length)));
+  const legenda = `${titulo}${tela.paginas > 1 ? `, página ${tela.pagina} de ${tela.paginas}` : ''}${duas ? `, lista ${n + 1} de ${tela.listas.length}` : ''}`;
+  return `<div class="fids-lista"${duas && n > 0 && !itens.length ? ' aria-hidden="true"' : ''}><table class="fids-tabela">
+      <caption class="sr">${legenda}</caption>
+      <thead>${cabecalhoHtml(colunas)}</thead>
+      <tbody>${corpo}${vazias}</tbody>
+    </table></div>`;
 }
 
 function quadroHtml() {
-  const telas = telasAgora();
+  const { telas, colunas, linhasPorLista } = telasAgora();
   estado.telas = telas.length;
   estado.tela = estado.tela % telas.length;
   const tela = telas[estado.tela];
@@ -86,23 +145,14 @@ function quadroHtml() {
   const vazio = semEscala ? 'A escala de hoje ainda não foi publicada.' : QUADROS[tela.quadro].vazio;
   const hoje = hojeISO();
   const agora = new Date();
-  const colunas = colunasVisiveis(configuracao());
-  const linhas = tela.linhas.length
-    ? tela.linhas.map(l => linhaHtml(l, colunas)).join('')
-    : `<tr class="fids-nada"><td colspan="${colunas.length}">${vazio}</td></tr>`;
-  // Linhas vazias completam a página: o quadro tem sempre a mesma altura, como no aeroporto
-  const vazias = `<tr class="fids-vazia" aria-hidden="true"><td colspan="${colunas.length}">&nbsp;</td></tr>`.repeat(Math.max(0, porPagina() - Math.max(1, tela.linhas.length)));
+  const listas = tela.listas.map((_, n) => listaHtml(tela, n, { titulo, vazio, colunas, linhasPorLista })).join('');
   return `<div class="fids-topo">
       <img class="fids-logo" src="img/acpm-aguia.png" alt="ACPM">
       <div class="fids-nome"><h3 class="fids-titulo">${titulo}</h3>${data === hoje ? '' : `<small class="fids-data">${esc(rotuloDaData(data, hoje).dia)}</small>`}</div>
       <svg class="fids-aviao" aria-hidden="true"><use href="#${icone}"/></svg>
       <div class="fids-relogio"><b class="fids-hora">${hm(minutoDoDia(agora))}</b><small>página ${tela.pagina}/${tela.paginas}</small>${aviso === null ? '' : `<small class="fids-aviso">${esc(aviso)}</small>`}</div>
     </div>
-    <table class="fids-tabela">
-      <caption class="sr">${titulo}${tela.paginas > 1 ? `, página ${tela.pagina} de ${tela.paginas}` : ''}</caption>
-      <thead><tr>${colunas.map(id => `<th scope="col">${rotuloDaColuna(id)}</th>`).join('')}</tr></thead>
-      <tbody>${linhas}${vazias}</tbody>
-    </table>`;
+    <div class="fids-listas${tela.listas.length > 1 ? ' duas' : ''}">${listas}</div>`;
 }
 
 // O que o quadro mostra, sem a hora: um quadro igual ao que está na tela não é trocado (a hora muda à parte)
@@ -157,20 +207,22 @@ function redesenhar() {
 }
 
 // Na tela toda, o quadro cabe na largura: com muitas colunas e textos longos (um nome comprido, o embarque), as letras
-// diminuem até a tabela caber (até 60%), em vez de as colunas da direita ficarem cortadas fora da tela. O preenchimento
-// das células (10 px de cada lado) não diminui com as letras
+// diminuem até cada lista caber (até 60%, o mínimo também com duas listas), em vez de as colunas da direita ficarem
+// cortadas fora da tela. O preenchimento das células não diminui com as letras
 const AJUSTE_MINIMO = 0.6;
 function caberNaLargura() {
   const quadro = document.querySelector(estado.seletor);
   if (!quadro) return;
   quadro.style.removeProperty('--fids-ajuste');
-  const tabela = quadro.querySelector('.fids-tabela');
-  if (!tabela || (!estado.inteiro && document.fullscreenElement !== quadro)) return;
-  const largura = tabela.scrollWidth;
-  if (largura <= quadro.clientWidth) return;
-  const preenchimento = 20 * (tabela.rows[0] ? tabela.rows[0].cells.length : 0);
-  const ajuste = (quadro.clientWidth - preenchimento) / (largura - preenchimento);
-  quadro.style.setProperty('--fids-ajuste', String(Math.max(AJUSTE_MINIMO, Math.floor(ajuste * 100) / 100)));
+  if (!estado.inteiro && document.fullscreenElement !== quadro) return;
+  let ajuste = 1;
+  for (const tabela of quadro.querySelectorAll('.fids-tabela')) {
+    const largura = tabela.scrollWidth, lugar = tabela.parentElement.clientWidth;
+    if (largura <= lugar) continue;
+    const preenchimento = PREENCHIMENTO * (tabela.rows[0] ? tabela.rows[0].cells.length : 0);
+    ajuste = Math.min(ajuste, (lugar - preenchimento) / (largura - preenchimento));
+  }
+  if (ajuste < 1) quadro.style.setProperty('--fids-ajuste', String(Math.max(AJUSTE_MINIMO, Math.floor(ajuste * 100) / 100)));
 }
 
 // A TV da recepção: o painel na tela toda, sem os botões, no quadro e com as colunas da configuração do painel.
@@ -276,8 +328,17 @@ export function acaoDoPainel(acao) {
   redesenhar();
 }
 
-// Ao entrar e sair da tela cheia, o número de linhas por página e o tamanho das letras mudam
-document.addEventListener('fullscreenchange', () => {
+// Ao entrar e sair da tela cheia e quando a janela muda de tamanho, o número de linhas por página, as listas (uma ou duas)
+// e o tamanho das letras mudam. As letras novas mudam a altura do cabeçalho da tabela, e com ela as linhas que cabem acima
+// da faixa da meteorologia: o quadro é medido de novo depois delas
+const refazerNoTamanhoNovo = () => {
   redesenhar();
   caberNaLargura();
+  redesenhar();
+};
+document.addEventListener('fullscreenchange', refazerNoTamanhoNovo);
+let esperaDoTamanho = null;
+addEventListener('resize', () => {
+  clearTimeout(esperaDoTamanho);
+  esperaDoTamanho = setTimeout(refazerNoTamanhoNovo, 150);
 });

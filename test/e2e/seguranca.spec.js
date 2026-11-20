@@ -253,8 +253,10 @@ test.describe('Conteúdo gravado malicioso', () => {
   });
 
   test('a TV da recepção (modo local) com o dia de hoje adulterado', async ({ page }) => {
+    // 06:00: os voos de hoje ainda estão no quadro Missões
+    await page.clock.setFixedTime(new Date('2026-11-10T06:00:00-03:00'));
     await abrirCom(page, documentos(adulterados), './painel.html');
-    await expect(page.locator('.fids tbody tr:not(.fids-vazia)').first()).toBeVisible();
+    await expect(page.locator('.fids tbody tr:not(.fids-vazia):not(.fids-nada)').first()).toBeVisible();
     await nada(page);
   });
 
@@ -269,6 +271,8 @@ test.describe('Conteúdo gravado malicioso', () => {
       cursos: noServidor(docs.acpm4_cursos)
     });
     for (const [url, conta] of [[URL_APP, CONTAS.operador], ['./painel.html?supabase=teste', CONTAS.painel]]) {
+      // A TV às 06:00: os voos de hoje ainda estão no quadro Missões (ao meio-dia, eles já terminaram há mais de 30 minutos)
+      if (conta === CONTAS.painel) await contexto.clock.setFixedTime(new Date('2026-11-10T06:00:00-03:00'));
       const page = await contexto.newPage();
       const erros = vigiarErros(page);
       await vigiarPolitica(page);
