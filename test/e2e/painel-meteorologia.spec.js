@@ -308,6 +308,62 @@ test.describe('Meteorologia no painel', () => {
     });
   }
 
+  // Pedro, 2026-11-20: na TV Full HD, duas listas lado a lado (o Automático) e a faixa embaixo das duas, da largura da
+  // tela: cada lista com as mesmas linhas, as que cabem acima da faixa com os TAFs longos (mais uma não caberia), e a
+  // página continua da lista da esquerda na da direita
+  test('na TV de 1920×1080, duas listas lado a lado e a faixa embaixo das duas, com as linhas que cabem acima dela', async ({ browser }) => {
+    const { context, page, erros } = await novoContexto(browser, { meteorologia: LONGAS }, { viewport: { width: 1920, height: 1080 } });
+    await page.clock.install({ time: new Date('2026-11-10T06:00:00-03:00') });
+    await page.goto('./painel.html?supabase=teste');
+    await preencherLogin(page, CONTAS.painel);
+    await expect(caixa(page, 'SBCF').locator('.meteo-taf')).toBeVisible();
+    await expect(page.locator('.fids .fids-lista')).toHaveCount(2);
+    await ladoALado(page);
+    const medir = () => page.evaluate(() => {
+      const quadro = document.querySelector('.fids');
+      const listas = [...quadro.querySelectorAll('.fids-lista')].map(l => l.getBoundingClientRect());
+      const tabelas = [...quadro.querySelectorAll('.fids-tabela')];
+      const faixa = quadro.querySelector('.fids-meteo').getBoundingClientRect();
+      const dados = [...quadro.querySelectorAll('tbody tr:not(.fids-vazia):not(.fids-nada)')];
+      return {
+        listas: listas.map(l => ({ left: l.left, right: l.right, top: l.top, bottom: l.bottom })),
+        faixa: { left: faixa.left, right: faixa.right, top: faixa.top, bottom: faixa.bottom },
+        porLista: tabelas.map(t => t.tBodies[0].rows.length),
+        dados: tabelas.map(t => [...t.tBodies[0].rows].filter(tr => !tr.matches('.fids-vazia, .fids-nada')).length),
+        linha: quadro.querySelector('tbody tr').getBoundingClientRect().height,
+        atras: dados.filter(tr => tr.getBoundingClientRect().bottom > faixa.top + 0.5).length,
+        pagina: quadro.querySelector('.fids-relogio small').textContent,
+        largura: document.documentElement.scrollWidth
+      };
+    });
+    await expect.poll(async () => (await medir()).atras).toBe(0);
+    const m = await medir();
+    const [esquerda, direita] = m.listas;
+    expect(direita.left, 'lado a lado').toBeGreaterThanOrEqual(esquerda.right);
+    expect(Math.abs(direita.top - esquerda.top)).toBeLessThan(1);
+    // A faixa embaixo das duas listas, de uma ponta à outra da tela, no pé
+    expect(m.faixa.top, 'a faixa embaixo das duas').toBeGreaterThanOrEqual(Math.max(esquerda.bottom, direita.bottom) - 0.5);
+    expect(m.faixa.left).toBeLessThanOrEqual(esquerda.left);
+    expect(m.faixa.right).toBeGreaterThanOrEqual(direita.right);
+    expect(m.faixa.bottom).toBeCloseTo(1080, 0);
+    expect(m.largura).toBeLessThanOrEqual(1920);
+    // As duas com as mesmas linhas, as que cabem acima da faixa: mais uma não caberia
+    expect(m.porLista[1]).toBe(m.porLista[0]);
+    expect(m.porLista[0]).toBeGreaterThanOrEqual(8);
+    expect(m.faixa.top - Math.max(esquerda.bottom, direita.bottom), 'mais uma linha não caberia').toBeLessThan(m.linha + 5);
+    // A primeira página cheia nas duas listas, e o que não cabe vai para a página seguinte
+    expect(m.dados).toEqual([m.porLista[0], m.porLista[0]]);
+    expect(m.pagina).toMatch(/^página 1\/[2-9]$/);
+    // A troca de página não mexe na faixa, e a página seguinte começa de novo na lista da esquerda
+    await page.clock.runFor(10_000);
+    await expect(page.locator('.fids-relogio small').first()).toHaveText(/^página 2\//);
+    await expect.poll(async () => (await medir()).atras).toBe(0);
+    await ladoALado(page);
+    expect((await medir()).dados[0]).toBeGreaterThan(0);
+    expect(erros).toEqual([]);
+    await context.close();
+  });
+
   test('em tela cheia na Escala: o quadro pagina acima da faixa; fora dela, volta às 12 linhas', async ({ browser }) => {
     const { context, page, erros } = await novoContexto(browser, { meteorologia: LONGAS }, { viewport: { width: 1280, height: 720 } });
     await context.clock.setFixedTime(new Date('2026-11-10T06:00:00-03:00'));

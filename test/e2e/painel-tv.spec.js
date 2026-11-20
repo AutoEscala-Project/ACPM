@@ -342,6 +342,72 @@ test.describe('TV da recepção', () => {
     await context.close();
   });
 
+  // As listas também vêm de painel_do_dia: "Sempre duas listas" vale na TV de 720p (no Automático, uma), e a mudança do
+  // operador para "Sempre uma lista" chega na busca seguinte
+  test('com o servidor, a TV segue as listas que painel_do_dia entrega, e a mudança delas', async ({ browser }) => {
+    const context = await browser.newContext({ baseURL: test.info().project.use.baseURL, locale: 'pt-BR', timezoneId: 'America/Sao_Paulo', viewport: { width: 1280, height: 720 } });
+    await prepararContexto(context);
+    const servidor = await instalarSupabaseFalso(context, documentosDeHoje({ quadro: 'missoes', colunas: [], listas: 'duas' }));
+    const page = await context.newPage();
+    const erros = vigiarErros(page);
+    await page.clock.install({ time: MANHA });
+    await page.goto('./painel.html?supabase=teste');
+    await preencherLogin(page, CONTAS.painel);
+    const listas = page.locator('.fids .fids-lista');
+    await expect(listas).toHaveCount(2);
+    await expect(page.locator('.fids .fids-listas')).toHaveClass(/\bduas\b/);
+    await expect(linhas(page).locator('.f-aluno')).toHaveText(['Maria S.', 'João']);
+    // A faixa da meteorologia, embaixo das duas
+    const [esquerda, direita, faixa] = await Promise.all([listas.nth(0).boundingBox(), listas.nth(1).boundingBox(), page.locator('.fids .fids-meteo').boundingBox()]);
+    expect(faixa.y).toBeGreaterThanOrEqual(Math.max(esquerda.y + esquerda.height, direita.y + direita.height) - 0.5);
+    expect(faixa.x).toBeLessThanOrEqual(esquerda.x);
+    expect(faixa.x + faixa.width).toBeGreaterThanOrEqual(direita.x + direita.width);
+    // O operador escolhe "Sempre uma lista": a TV segue na busca seguinte
+    const cadastro = structuredClone(servidor.banco.get('cadastro').conteudo);
+    cadastro.painel = { ...cadastro.painel, listas: 'uma' };
+    servidor.alterarPorOutraPessoa('cadastro', cadastro);
+    await page.clock.runFor(60_000);
+    await expect(listas).toHaveCount(1);
+    await expect(linhas(page).locator('.f-aluno')).toHaveText(['Maria S.', 'João']);
+    expect(erros).toEqual([]);
+    await context.close();
+  });
+
+  // Sem as listas no que painel_do_dia entrega (o banco ainda sem a migração, a configuração gravada antes das listas ou
+  // as listas fora do formato, que o servidor tira): o Automático, duas listas na TV Full HD
+  const SEM_AS_LISTAS = [
+    ['o banco ainda sem a migração', { painel: { quadro: 'missoes', colunas: [], listas: 'uma' }, antigo: true }],
+    ['a configuração gravada antes das listas', { painel: { quadro: 'missoes', colunas: [] } }],
+    ['as listas fora do formato', { painel: { quadro: 'missoes', colunas: [], listas: 'tres' } }]
+  ];
+  for (const [caso, { painel, antigo = false }] of SEM_AS_LISTAS) {
+    test(`com o servidor e ${caso}, a TV fica no Automático: duas listas na TV Full HD`, async ({ browser }) => {
+      const context = await browser.newContext({ baseURL: test.info().project.use.baseURL, locale: 'pt-BR', timezoneId: 'America/Sao_Paulo', viewport: { width: 1920, height: 1080 } });
+      await prepararContexto(context);
+      await context.clock.setFixedTime(MANHA);
+      // A configuração gravada como está (documentosAtuais a normalizaria, com as listas)
+      const docs = documentosDeHoje();
+      docs.documentos.cadastro = { ...docs.documentos.cadastro, painel };
+      const servidor = await instalarSupabaseFalso(context, { ...docs, painelDoDiaAntigo: antigo });
+      const page = await context.newPage();
+      const erros = vigiarErros(page);
+      const respostas = [];
+      page.on('response', r => { if (r.url().includes('/rpc/painel_do_dia')) respostas.push(r.json()); });
+      await page.goto('./painel.html?supabase=teste');
+      await preencherLogin(page, CONTAS.painel);
+      await expect(page.locator('.fids .fids-titulo')).toHaveText('Missões');
+      await expect(page.locator('.fids .fids-lista')).toHaveCount(2);
+      await expect(linhas(page).locator('.f-aluno')).toHaveText(['Maria S.', 'João']);
+      // O que chegou do servidor não tem as listas
+      const resposta = await respostas[0];
+      if (antigo) expect(resposta).not.toHaveProperty('painel');
+      else expect(resposta.painel).not.toHaveProperty('listas');
+      expect(servidor.banco.get('cadastro').conteudo.painel).toEqual(painel);
+      expect(erros).toEqual([]);
+      await context.close();
+    });
+  }
+
   // O banco ainda sem a migração (painel_do_dia sem o campo "painel"): a TV mostra o padrão, como antes, mesmo com o
   // painel configurado
   test('com o servidor ainda sem a migração, a TV mostra o padrão (Missões, com as colunas do padrão)', async ({ browser }) => {

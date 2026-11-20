@@ -87,8 +87,9 @@ Auth do projeto), guarda as mensagens 5 minutos na memória, desiste do aviation
 
 A TV da recepção também passa a seguir o "Configurar painel" com o servidor: a migração
 `20261120150000_painel_do_dia_com_a_configuracao.sql` faz `painel_do_dia()` entregar, além do quadro do dia, o campo
-`painel` do cadastro (só o quadro da lista e as colunas conhecidas, com `on` booleano; sem a configuração, `null`). O
-perfil da TV continua sem ler o cadastro.
+`painel` do cadastro (só o quadro da lista, as colunas conhecidas, com `on` booleano, e as listas `auto`, `uma` ou
+`duas`; o quadro ou as listas fora do formato saem; sem a configuração, `null`). O perfil da TV continua sem ler o
+cadastro.
 
 ### Publicar (a função e a migração)
 
@@ -114,7 +115,7 @@ publique a função de novo com `--no-verify-jwt`: ela continua exigindo a sess�
 do projeto.
 
 **A ordem:** a função e a migração na prévia, conferidas na prévia (https://thephfernandes.github.io/ACPM/: o pé do
-painel com as duas caixas, e a TV com o quadro e as colunas do "Configurar painel"), depois as duas na produção, e só
+painel com as duas caixas, e a TV com o quadro, as colunas e as listas do "Configurar painel"), depois as duas na produção, e só
 então o merge. As duas só acrescentam: o app no ar continua igual com elas (ele não chama a função e ignora o campo
 novo). E o app novo não depende delas:
 
@@ -122,7 +123,7 @@ novo). E o app novo não depende delas:
   funcionam como antes, e o pé do painel diz **"Meteorologia indisponível"** (com mensagens já recebidas, elas ficam,
   com "Sem atualização desde…"). No modo local (sem servidor), o pé diz sempre "Meteorologia indisponível", sem busca.
 - **Sem a migração**, `painel_do_dia()` responde como antes, sem o campo `painel`, e a TV mostra o padrão (Missões, com
-  as colunas do padrão), como hoje; a Escala segue a configuração de qualquer jeito (ela lê o cadastro).
+  as colunas do padrão e as listas no Automático: duas lado a lado na TV Full HD), como hoje; a Escala segue a configuração de qualquer jeito (ela lê o cadastro).
 
 ## Formato dos dados
 
@@ -159,7 +160,7 @@ banco (e a chamada dela no app). A cópia `cadastro.cursos` fica.
 | Caminho | Conteúdo |
 |---|---|
 | `index.html` | Marcação das nove abas |
-| `painel.html`, `js/painel.js` | TV da recepção: o painel de hoje na tela toda, no quadro e com as colunas da configuração do painel (com o servidor, a que `painel_do_dia` entrega; sem ela, o padrão), e a meteorologia no pé |
+| `painel.html`, `js/painel.js` | TV da recepção: o painel de hoje na tela toda, no quadro, com as colunas e as listas da configuração do painel (com o servidor, a que `painel_do_dia` entrega; sem ela, o padrão), e a meteorologia no pé |
 | `css/app.css` | Estilos e temas claro/escuro |
 | `js/config.js` | Janelas, missões, limites de peso e a frota inicial |
 | `js/frota.js` | A frota no cadastro (matrícula, tipo e "Só Parafuso"): validação de um recurso novo e as matrículas de cada tipo |
