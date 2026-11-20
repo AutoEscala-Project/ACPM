@@ -286,7 +286,7 @@ test.describe('TV da recepção', () => {
     await expect(page.locator('.fids .fids-titulo')).toHaveText('Missões');
     await expect(linhas(page).locator('.f-aluno')).toHaveText(['Maria S.', 'João']);
     await expect(linhas(page).nth(1)).toHaveClass(/\bfids-Cancelado\b/);
-    await expect(page.locator('.fids .fids-aviso')).toHaveText('');
+    await expect(page.locator('#aviso-da-tv')).toBeHidden();
 
     // O operador muda um status (o voo cancelado volta): a TV mostra na próxima busca
     const dia = structuredClone(servidor.dias.get(HOJE).conteudo);

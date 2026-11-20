@@ -147,7 +147,7 @@ function quadroHtml() {
   estado.tela = estado.tela % telas.length;
   const tela = telas[estado.tela];
   const { titulo, icone } = QUADROS[tela.quadro];
-  const { data, semEscala = false, aviso = null } = estado.fonte();
+  const { data, semEscala = false } = estado.fonte();
   const vazio = semEscala ? 'A escala de hoje ainda não foi publicada.' : QUADROS[tela.quadro].vazio;
   const hoje = hojeISO();
   const agora = new Date();
@@ -156,7 +156,7 @@ function quadroHtml() {
       <img class="fids-logo" src="img/acpm-aguia.png" alt="ACPM">
       <div class="fids-nome"><h3 class="fids-titulo">${titulo}</h3>${data === hoje ? '' : `<small class="fids-data">${esc(rotuloDaData(data, hoje).dia)}</small>`}</div>
       <svg class="fids-aviao" aria-hidden="true"><use href="#${icone}"/></svg>
-      <div class="fids-relogio"><b class="fids-hora">${hm(minutoDoDia(agora))}</b><small>página ${tela.pagina}/${tela.paginas}</small>${aviso === null ? '' : `<small class="fids-aviso">${esc(aviso)}</small>`}</div>
+      <div class="fids-relogio"><b class="fids-hora">${hm(minutoDoDia(agora))}</b><small>página ${tela.pagina}/${tela.paginas}</small></div>
     </div>
     <div class="fids-listas${tela.listas.length > 1 ? ' duas' : ''}">${listas}</div>`;
 }

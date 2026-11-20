@@ -22,6 +22,10 @@ export function projetoSupabase(endereco = window.location) {
 // quem usar a TV não abre o app com a conta dela, e uma conta do app não fica conectada na TV
 export const chaveDaSessao = (projeto, { painel = false } = {}) => `acpm-${projeto.nome}${painel ? '-painel' : ''}`;
 
+// Onde a TV guarda o e-mail e a senha da conta dela, com "Manter esta TV conectada" (js/sessao-da-tv.js): uma chave por
+// projeto, ao lado da sessão da TV (o supabase-js usa a chave da sessão e as que começam por ela com -code-verifier e -user)
+export const chaveDaEntradaDaTV = projeto => `${chaveDaSessao(projeto, { painel: true })}-entrada`;
+
 // A conta da TV que entrou pelo app: a sessão passa para a chave da TV (o app não fica conectado com ela)
 export function passarSessaoParaATV(projeto) {
   const sessao = localStorage.getItem(chaveDaSessao(projeto));

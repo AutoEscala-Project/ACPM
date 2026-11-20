@@ -25,13 +25,22 @@
   <form class="login-painel" id="form-login" hidden novalidate>
     <img class="login-logo" src="img/acpm-aguia.png" alt="ACPM">
     <h1>Painel da recepção</h1>
+    <p class="login-aviso" id="login-aviso" role="alert" hidden>Sessão expirada: entre de novo nesta TV</p>
     <p class="h">Entre com a conta da TV (perfil Painel). Depois disso, a TV continua conectada.</p>
     <label>E-mail <input type="email" id="login-email" autocomplete="username"></label>
     <label>Senha <input type="password" id="login-senha" autocomplete="current-password"></label>
+    <label class="login-manter"><input type="checkbox" id="login-manter" aria-describedby="login-manter-dica"> Manter esta TV conectada</label>
+    <p class="h" id="login-manter-dica">A senha fica guardada no navegador desta TV, para ela entrar de novo sozinha quando a conexão com a conta acabar. Só para a conta da TV; <i>Sair desta TV</i> apaga.</p>
     <p class="erro-campo" id="login-erro" role="alert"></p>
     <button type="submit" class="btn" id="btn-entrar">Entrar</button>
   </form>
   <div id="quadro" hidden></div>
+  <!-- Sem uma busca boa há mais de 3 minutos, o quadro sai da tela e fica este aviso (js/painel.js) -->
+  <div class="aviso-da-tv" id="aviso-da-tv" role="status" hidden>
+    <img class="aviso-da-tv-logo" src="img/acpm-aguia.png" alt="">
+    <p id="aviso-da-tv-texto"></p>
+  </div>
+  <button type="button" class="btn sec sair-da-tv" id="btn-sair-tv" hidden>Sair desta TV</button>
 </main>
 <script type="module" src="js/painel.js"></script>
 </body>
