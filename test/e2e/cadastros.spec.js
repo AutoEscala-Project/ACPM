@@ -894,8 +894,9 @@ test.describe('Instrutores', () => {
     const botao = page.locator('#flt-ins-hab'), painel = page.locator('#flt-ins-hab-painel');
     const propria = painel.locator('fieldset', { has: page.locator('legend', { hasText: 'Habilitação própria do recurso' }) }).locator('label');
     const naGrade = page.locator('#inst-dia tr[data-k="i"]:visible .nome');
+    // A frota fica no Cadastro de Recursos
     const atributo = async (reg, marcar) => {
-      await irPara(page, 'rec');
+      await irParaVista(page, 'rec', 'cadastro');
       await page.locator(`#frota li.frota-item[data-r="${reg}"] [data-act="atributos-recurso"]`).click();
       await page.locator(`#frota li.frota-item[data-r="${reg}"] [data-atributo="habilitacaoPropria"]`).setChecked(marcar);
       await expect(page.locator('#audit-log-list')).toContainText(`${reg}: Habilitação própria ${marcar ? 'marcado' : 'desmarcado'}`);
@@ -913,7 +914,7 @@ test.describe('Instrutores', () => {
     await expect(painel.locator('input[data-valor="aviao:PR-VOM"]')).toHaveCount(0);
     await expect(naGrade).toHaveText(['Ana']);
     // O PR-HAR sai da frota: o filtro fica sem marca, e o grupo da habilitação própria some
-    await irPara(page, 'rec');
+    await irParaVista(page, 'rec', 'cadastro');
     await confirmar(page, '#frota li.frota-item[data-r="PR-HAR"] [data-act="retirar-recurso"]');
     await expect(page.locator('#frota li.frota-item[data-r="PR-HAR"]')).toHaveCount(0);
     await irPara(page, 'ins');
