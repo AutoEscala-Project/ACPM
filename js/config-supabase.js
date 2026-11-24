@@ -24,6 +24,11 @@ export function projetoSupabase(endereco = window.location) {
   return nome && Object.hasOwn(PROJETOS, nome) ? { nome, ...PROJETOS[nome] } : null;
 }
 
+// Um endereço que não é o do app nem o localhost: o app funciona ali no modo local, sem o banco (o que se faz fica só
+// naquele navegador), e avisa no alto (js/main.js). No localhost o modo local é o de quem desenvolve: sem o aviso
+export const enderecoSemBanco = (endereco = window.location) =>
+  !Object.hasOwn(POR_ENDERECO, endereco.hostname) && !LOCAIS.includes(endereco.hostname);
+
 // Onde cada página guarda a sessão: o app numa chave, a TV da recepção em outra. A TV fica numa tela pública:
 // quem usar a TV não abre o app com a conta dela, e uma conta do app não fica conectada na TV
 export const chaveDaSessao = (projeto, { painel = false } = {}) => `acpm-${projeto.nome}${painel ? '-painel' : ''}`;
