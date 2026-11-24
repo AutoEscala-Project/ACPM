@@ -21,7 +21,10 @@ const ler = caminho => readFileSync(join(RAIZ, caminho), 'utf8');
 const junto = (base, ref) => posix.normalize(posix.join(posix.dirname(base), ref));
 
 // O que as duas páginas carregam: src e href das tags, os módulos importados (estáticos e import() com texto), o CSS
-// (@import e url()) e os arquivos que o JS pede pelo caminho a partir da página ('modelos/…', 'img/…', 'painel.html')
+// (@import e url()) e os arquivos que o JS pede pelo caminho a partir da página ('modelos/…', './img/…', 'painel.html').
+// Limites: um caminho montado em tempo de execução (import() com template, new URL('../x', import.meta.url)) não é
+// seguido; um texto com cara de arquivo que não é do site (o nome de um download como 'escala.pdf') seria tomado por um
+// arquivo e acusado como faltando (hoje esses nomes são montados com template e não entram)
 function arquivosCarregados() {
   const achados = new Set(PAGINAS);
   const fila = [];
@@ -34,11 +37,12 @@ function arquivosCarregados() {
   }
   while (fila.length) {
     const arquivo = fila.shift();
-    if (!existsSync(join(RAIZ, arquivo))) continue;
+    // Só o CSS e o JS carregam outros arquivos (imagens e planilhas não são lidas)
+    if (!/\.(css|js)$/.test(arquivo) || !existsSync(join(RAIZ, arquivo))) continue;
     const texto = ler(arquivo);
     if (arquivo.endsWith('.css')) {
-      for (const [, ref] of texto.matchAll(/@import\s+(?:url\()?\s*["']?([^"')\s;]+)|url\(\s*["']?([^"')]+)/g)) {
-        const caminho = local(ref);
+      for (const m of texto.matchAll(/@import\s+(?:url\()?\s*["']?([^"')\s;]+)|url\(\s*["']?([^"')]+)/g)) {
+        const caminho = local((m[1] ?? m[2]).trim());
         if (caminho) incluir(junto(arquivo, caminho));
       }
     }
@@ -49,7 +53,7 @@ function arquivosCarregados() {
         if (caminho) incluir(junto(arquivo, caminho));
       }
       // Caminhos a partir da página (fetch, <img> montado no JS, a troca para painel.html)
-      for (const [, ref] of texto.matchAll(/['"`]((?:[a-z0-9_-]+\/)*[a-z0-9_-]+\.(?:png|jpe?g|svg|ico|webp|gif|xlsx|pdf|json|css|html|woff2?))(?=['"`?$])/gi)) {
+      for (const [, ref] of texto.matchAll(/['"`]((?:\.\/)?(?:[a-z0-9_-]+\/)*[a-z0-9_-]+\.(?:png|jpe?g|svg|ico|webp|gif|xlsx|pdf|json|css|html|woff2?))(?=['"`?$])/gi)) {
         incluir(posix.normalize(ref));
       }
     }
@@ -83,12 +87,9 @@ describe('A pasta publicada', () => {
     assert.deepEqual(deFora, [], `fora de scripts/pasta-publicada.mjs: ${deFora.join(', ')}`);
   });
 
-  it('nada além do app vai para o ar: testes, migrações, documentos, scripts e a configuração ficam de fora', () => {
-    const noAr = readdirSync(pasta).sort();
-    for (const nunca of ['test', 'supabase', 'docs', 'scripts', 'node_modules', '.git', '.github', '.redesenho', 'README.md',
-      'package.json', 'package-lock.json', 'wrangler.jsonc', 'LICENSE', 'playwright.config.js', 'eslint.config.js']) {
-      assert.ok(!noAr.includes(nunca), nunca);
-    }
-    assert.deepEqual(noAr, ['css', 'img', 'index.html', 'js', 'modelos', 'painel.html']);
+  // Exatamente o app: testes, migrações, documentos, scripts, .redesenho e a configuração nunca vão para o ar. Uma pasta
+  // nova do app entra aqui e em scripts/pasta-publicada.mjs
+  it('nada além do app vai para o ar', () => {
+    assert.deepEqual(readdirSync(pasta).sort(), ['css', 'img', 'index.html', 'js', 'modelos', 'painel.html']);
   });
 });

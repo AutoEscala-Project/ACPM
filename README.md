@@ -261,7 +261,8 @@ segredos `CLOUDFLARE_API_TOKEN` e `CLOUDFLARE_ACCOUNT_ID` do repositório.
 
 `test/unit/pasta-publicada.test.js` monta a pasta e confere que tudo o que as páginas carregam (as tags, os módulos, o
 CSS, os caminhos que o JS pede) está nela, e nada além do app: os testes E2E servem o repositório inteiro e não pegariam
-um arquivo novo fora da lista, que no ar daria 404. Uma pasta nova do app entra em `scripts/pasta-publicada.mjs`.
+um arquivo novo fora da lista, que no ar daria 404. Uma pasta nova do app entra em `scripts/pasta-publicada.mjs` e na lista
+exata que esse teste espera.
 
 O Cloudflare serve `painel.html` também como `/painel` (redireciona o primeiro para o segundo). O login do Supabase
 (`supabase/config.toml`, `site_url` e `additional_redirect_urls`) e as origens da função `meteorologia` precisam
