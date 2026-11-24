@@ -1,6 +1,6 @@
 // Acessibilidade: cada botão e cada campo tem um nome para o leitor de tela, e nenhum se chama só "✕" (que o leitor
 // lê como "multiplicação"). Vale para todas as abas, o Histórico e o painel de habilitações.
-import { test, expect, abrir, abrirComExemplo, irPara, entrar, abrirEscala, confirmar, prepararContexto, vigiarErros, REGIOES, abasVisiveis, abrirHistorico, aprovar, botaoAprovar, botaoDiaAnterior, botaoDoHistorico, botaoDoMenuDaConta, botaoReabrir, percorrerTelas, reabrir, relativoDaData, rotuloDaData, semNome, alternarVem, botaoDiaSeguinte } from './fixtures.js';
+import { test, expect, abrir, abrirComExemplo, irPara, entrar, abrirEscala, confirmar, prepararContexto, vigiarErros, REGIOES, abasVisiveis, abrirHistorico, aprovar, botaoAprovar, botaoDiaAnterior, botaoDoHistorico, botaoDoMenuDaConta, botaoReabrir, percorrerTelas, reabrir, relativoDaData, rotuloDaData, semNome, alternarVem, botaoDiaSeguinte, campoDaData } from './fixtures.js';
 import { instalarSupabaseFalso, documentosAtuais, CONTAS } from './supabase-falso.js';
 import { comExemplo } from '../helpers/exemplo.js';
 import { estadoSintetico } from '../helpers/estado.js';
@@ -151,7 +151,7 @@ test.describe('O foco do teclado na barra do topo', () => {
     await botaoDiaAnterior(page).focus();
     await page.keyboard.press('Tab');
     let paradas = 0;
-    while (paradas < 8 && await page.evaluate(() => document.activeElement.id === 'dt')) {
+    while (paradas < 8 && await campoDaData(page).evaluate(el => el === document.activeElement)) {
       expect(await page.locator('.topo-data-campo').evaluate(el => getComputedStyle(el).outlineStyle), `parada ${paradas + 1}`).toBe('solid');
       paradas++;
       await page.keyboard.press('Tab');

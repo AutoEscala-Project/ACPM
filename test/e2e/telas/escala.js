@@ -37,6 +37,9 @@ export const botaoReabrir = page => page.locator('#btn-reabrir');
 export const aprovar = page => confirmar(page, '#btn-aprovar');
 export const reabrir = page => confirmar(page, '#btn-reabrir');
 
-// Baixa um arquivo da escala ('csv', 'pdf' ou 'xlsx'): devolve [o download], como o Promise.all do clique
+// O botão que exporta a escala ('csv', 'pdf' ou 'xlsx'), para o clique que não espera o download (o modelo da planilha
+// que não chega, o segundo clique)
 const BOTOES_DE_EXPORTAR = { csv: '#exp', pdf: '#pdf', xlsx: '#xlsx' };
-export const exportar = (page, tipo) => Promise.all([page.waitForEvent('download'), page.locator(BOTOES_DE_EXPORTAR[tipo]).click()]);
+export const botaoExportar = (page, tipo) => page.locator(BOTOES_DE_EXPORTAR[tipo]);
+// Baixa um arquivo da escala: devolve [o download], como o Promise.all do clique
+export const exportar = (page, tipo) => Promise.all([page.waitForEvent('download'), botaoExportar(page, tipo).click()]);
