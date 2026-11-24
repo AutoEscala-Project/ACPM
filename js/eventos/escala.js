@@ -15,12 +15,15 @@ import { ApiClient } from '../storage.js';
 import { agendarNoMapa } from './agendamento.js';
 import { confirmado } from './confirmacao.js';
 import { aoAcionar, aoMudarCampo } from './registro.js';
-import { rAlu } from '../views/alunos.js';
-import { rDem } from '../views/demanda.js';
 import { pedirDetalheDoStatus } from '../views/dialogo-status.js';
 import { cursoDoResultado } from '../views/etapas.js';
 import { rOut, botaoDoInstrutor, seletorDeInstrutor, abrirPopupDoMapa, fecharPopupDoMapa, popupDoMapaAberto, reposicionarPopupDoMapa, tabNoPopup } from '../views/escala.js';
 import { abrirPainelDeReparo, fecharPainelDeReparo, opcaoDoPainel } from '../views/reparo.js';
+
+import { registrarDesenho, redesenharPorNome } from '../redesenho.js';
+
+// O desenho da Escala (js/redesenho.js): refeito em todos os momentos, quando há escala
+registrarDesenho('escala', () => { if (RES) rOut(); }, { em: ['dados', 'consulta', 'releitura', 'escala'], ordem: 80 });
 
 // O minuto de um clique na faixa de uma linha do mapa: a posição dele dentro da faixa (sem a borda), entre o início e o
 // fim do mapa (data-inicio e data-fim), de 5 em 5 minutos
@@ -181,7 +184,7 @@ aoMudarCampo('insVoo', t => {
   const { antes, alunos } = escolherInstrutor(S, RES, { stuId: voo.stuId, mid: voo.mid || 0 }, x ? x.id : null, { noLugar: true });
   const quem = alunos > 1 ? `turma de ${voo.mis}` : voo.s;
   gravarAlteracao('mod', `Instrutor de ${quem} (${hm(voo.a)}–${hm(voo.b)}): ${x ? x.nm : 'automático'}`, { kind: 'restaurarEscolha', ...antes, label: '↶ Reverter' });
-  rDem();
+  redesenharPorNome('pedidos-do-dia');
   showToast(x ? `${x.nm} fica com o voo; o resto da escala foi refeito em volta.` : 'O app volta a escolher o instrutor deste voo.', 'ok');
 });
 
@@ -257,7 +260,7 @@ document.addEventListener('change', async e => {
   } catch {
     showToast('Não foi possível registrar o resultado. Verifique a conexão e tente de novo.');
   }
-  rOut(); rAlu(); rDem();
+  rOut(); redesenharPorNome('alunos', 'pedidos-do-dia');
 });
 
 // Sugestões para um conflito: a gaveta abre pelo botão do conflito. "Aplicar" muda o voo fixo (na turma de
@@ -289,7 +292,7 @@ document.addEventListener('click', e => {
   gravarAlteracao('mod', `Reparo: ${voo.s} (${hm(voo.a)}–${hm(voo.b)}): ${opcao.soltar ? 'Soltar o voo' : opcao.texto}`, {
     kind: 'restaurarFixos', fixos: Object.fromEntries(mudados.map(k => [k, antes[k]])), ...(escolhas.length ? { pedidos: escolhas } : {}), label: '↶ Reverter'
   });
-  if (escolhas.length) rDem();
+  if (escolhas.length) redesenharPorNome('pedidos-do-dia');
   showToast(opcao.soltar ? 'Voo solto: o app escalou de novo.' : 'Sugestão aplicada: o voo continua fixo.', 'ok');
 });
 // O Esc fecha a gaveta quando ela é a de cima ou tem o foco (js/dom.js); com um diálogo aberto por cima (o do status, o

@@ -12,6 +12,10 @@ import { S, isGestor, modoCompartilhado } from '../state.js';
 import { ApiClient } from '../storage.js';
 import { comConfirmacao } from './confirmacao.js';
 import { rBI } from '../views/bi.js';
+import { registrarDesenho } from '../redesenho.js';
+
+// O desenho do BI (js/redesenho.js): a escala refeita entra no BI da data
+registrarDesenho('bi', rBI, { em: ['escala'], ordem: 90 });
 
 $('#bi-dt').onchange = () => carregarBI();
 $('#bi-flt-eq').onchange = () => rBI();

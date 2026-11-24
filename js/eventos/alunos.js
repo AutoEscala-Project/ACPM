@@ -7,10 +7,12 @@ import { blank, pesoDoTexto, ERRO_DO_PESO } from '../rules.js';
 import { S, insBy, stuBy } from '../state.js';
 import { confirmado } from './confirmacao.js';
 import { aoAcionar, aoMudarCampo } from './registro.js';
+import { registrarDesenho, redesenharPorNome } from '../redesenho.js';
 import { rAlu, prepararFiltrosDosAlunos, filtrarAlunos, limparFiltrosDosAlunos, manterAlunoAVista, atualizarLinhaDoAluno, atualizarCanacDosAlunos } from '../views/alunos.js';
 import { aoMudarDadosPessoais } from '../views/dados-pessoais.js';
-import { rDem } from '../views/demanda.js';
-import { rIns } from '../views/instrutores.js';
+
+// O desenho de Alunos (js/redesenho.js)
+registrarDesenho('alunos', rAlu, { em: ['dados', 'consulta', 'releitura'], ordem: 30 });
 
 // A coluna CANAC acompanha os dados pessoais
 aoMudarDadosPessoais(atualizarCanacDosAlunos);
@@ -32,7 +34,7 @@ aoAcionar('adds', () => {
   S.stu.push(newStu);
   manterAlunoAVista(newStu.id);
   gravarAlteracao('inc', `Aluno cadastrado: ${newStu.nm}`);
-  rAlu(); rDem(); focusLast('#alu .nm');
+  rAlu(); redesenharPorNome('pedidos-do-dia'); focusLast('#alu .nm');
 });
 
 aoAcionar('unbl', (b, { id }) => {
@@ -41,7 +43,7 @@ aoAcionar('unbl', (b, { id }) => {
   s.bl = s.bl.filter(v => v !== +b.dataset.b);
   gravarAlteracao('mod', `${s.nm}: volta a ser escalado com ${blkIns ? blkIns.nm : ''}`);
   atualizarLinhaDoAluno(s, { naoEscalar: true });
-  rDem();
+  redesenharPorNome('pedidos-do-dia');
 });
 
 aoAcionar('unvc', (b, { id }) => {
@@ -51,7 +53,7 @@ aoAcionar('unvc', (b, { id }) => {
   if (!s.voaCom.length) delete s.voaCom;
   gravarAlteracao('mod', `${s.nm}: deixa de priorizar ${ins ? ins.nm : ''}`);
   atualizarLinhaDoAluno(s, { voaComMudou: true });
-  rDem();
+  redesenharPorNome('pedidos-do-dia');
 });
 
 aoAcionar('dels', (b, { id }) => {
@@ -59,7 +61,7 @@ aoAcionar('dels', (b, { id }) => {
   const target = stuBy(id);
   S.stu = S.stu.filter(x => x.id !== id);
   gravarAlteracao('exc', `Aluno excluído: ${target ? target.nm : id}`);
-  rIns(); rAlu(); rDem();
+  redesenharPorNome('instrutores'); rAlu(); redesenharPorNome('pedidos-do-dia');
 });
 
 // Os campos de um aluno
@@ -96,5 +98,5 @@ aoMudarCampo('s', (t, { f, id }) => {
   gravarAlteracao(...historico);
   atualizarLinhaDoAluno(s, { naoEscalar: f === 'bl', voaComMudou: f === 'voaCom' });
   // A Demanda mostra o nome do aluno, o “Priorizar com” dele (no Automático do instrutor) e as missões do curso dele
-  if (['nm', 'voaCom', 'bl', 'curso'].includes(f)) rDem();
+  if (['nm', 'voaCom', 'bl', 'curso'].includes(f)) redesenharPorNome('pedidos-do-dia');
 });

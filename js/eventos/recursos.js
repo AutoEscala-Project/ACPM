@@ -11,12 +11,16 @@ import { horariosDaMissao, ajustarPreferencias, descreverHorarios } from '../hor
 import { S, isGestor } from '../state.js';
 import { confirmado } from './confirmacao.js';
 import { aoAcionar, aoMudarCampo } from './registro.js';
-import { rDem } from '../views/demanda.js';
+import { registrarDesenho, redesenharPorNome } from '../redesenho.js';
 import { filtrarRecursos, limparFiltrosDosRecursos, manterRecursoAVista, criarFiltroDasCategorias } from '../views/filtros-dos-recursos.js';
 import { NOMES_DAS_CATEGORIAS, abrirEditorDosHorarios, fecharEditorDosHorarios, tirarDoRascunho, porNoRascunho, escolherModelo, rascunhoDosHorarios, editorDosHorariosAberto } from '../views/horarios.js';
-import { rRec, rHangar, alternarAtributos, aplicarFiltrosDosRecursos } from '../views/recursos.js';
-import { rIns, rPainelDoInstrutor } from '../views/instrutores.js';
+import { rRec, rRevisao, rHangar, alternarAtributos, aplicarFiltrosDosRecursos } from '../views/recursos.js';
 import { mostrarVista, vistaDa } from '../views/vistas.js';
+
+// Os desenhos de Recursos (js/redesenho.js): a revisão de 50 horas e o hangar acompanham a escala
+registrarDesenho('revisao', rRevisao, { em: ['escala'], ordem: 5 });
+registrarDesenho('hangar', rHangar, { em: ['escala'], ordem: 6 });
+registrarDesenho('recursos', rRec, { em: ['dados', 'consulta'], ordem: 10 });
 
 // O campo do recurso com erro (aria-invalid); o motivo (#rec-erro) é a descrição dele: o leitor de tela diz os dois
 const CAMPOS_DO_RECURSO = { reg: '#rec-reg', tipo: '#rec-tipo' };
@@ -85,7 +89,7 @@ aoMudarCampo('atributo', t => {
   gravarAlteracao('mod', `${reg}: ${ATRIBUTOS_DO_RECURSO[atributo].nome} ${t.checked ? 'marcado' : 'desmarcado'}`, {
     kind: 'setAtributo', reg, atributo, val: !t.checked, label: '↶ Reverter'
   });
-  rRec(); rIns(); rPainelDoInstrutor(); rDem();
+  rRec(); redesenharPorNome('instrutores', 'habilitacoes-do-instrutor', 'pedidos-do-dia');
   document.querySelector(`[data-a="atributo"][data-r="${CSS.escape(reg)}"][data-atributo="${atributo}"]`)?.focus();
 });
 
@@ -154,7 +158,7 @@ aoAcionar('retirar-recurso', b => {
   gravarAlteracao('exc', `Recurso retirado: ${recurso.reg} (${recurso.tipo})`, {
     kind: 'readicionarRecurso', recurso: { ...recurso }, av: S.av[recurso.reg] !== false, label: '↶ Reverter'
   });
-  rRec(); rIns();
+  rRec(); redesenharPorNome('instrutores');
   showToast(`${recurso.reg} retirado da frota.`, 'ok');
 });
 
@@ -211,7 +215,7 @@ function salvarHorarios() {
   }));
   gravarAlteracao('mod', `Horários de decolagem do ${NOMES_DAS_CATEGORIAS[cat]}: ${descreverHorarios(lista)}`,
     { kind: 'restaurarHorarios', cat, lista: anterior, pedidos, label: '↶ Reverter' });
-  rRec(); rDem();
+  rRec(); redesenharPorNome('pedidos-do-dia');
   fecharEditorDosHorarios();
 }
 // O modelo escolhido no editor troca a lista do rascunho; Enter no campo põe o horário; Esc, com o foco nos horários,

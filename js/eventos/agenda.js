@@ -10,9 +10,13 @@ import { ApiClient } from '../storage.js';
 import { confirmado } from './confirmacao.js';
 import { aoAcionar } from './registro.js';
 import { carregarMes, mudarMes, escolherDia, diaDaAgenda, lembrarRegistradoPor, podeEditarAgenda, rAgenda, preencherHorariosDaAgenda, pedidosDoAluno, descreverPedido, pedidosCarregados } from '../views/agenda.js';
-import { rDem } from '../views/demanda.js';
 import { programaParaInferir } from '../views/etapas.js';
 import { lerPedidosDaData } from '../views/selos.js';
+
+import { registrarDesenho, redesenharPorNome } from '../redesenho.js';
+
+// O desenho da Agenda (js/redesenho.js), pelo papel: os pedidos. Ele não faz nada até a Agenda ser aberta
+registrarDesenho('pedidos', rAgenda, { em: ['dados'], ordem: 95 });
 
 // Agenda: o calendário é livre para navegar (inclusive para o Gestor)
 document.addEventListener('click', e => {
@@ -53,7 +57,7 @@ async function importarDaAgenda() {
   const resumo = importarSolicitacoes(S, pendentes, { situacao: (S.resultados && S.resultados.situacao) || [], programa: programaParaInferir() });
   gravarAlteracao('inc', pendentes.filter(s => S.stu.some(x => x.id === s.aluno))
     .map(s => `Agenda: ${s.aluno_nome} incluído (${s.missao} · ${rotuloDaDisponibilidade(disponibilidadeDaSolicitacao(s))}${s.horas ? ` · ${fmtH(+s.horas)}` : ''})`));
-  rDem(); rAgenda();
+  redesenharPorNome('pedidos-do-dia'); rAgenda();
   showToast(`${resumo.novos + resumo.atualizados} pedido(s) da agenda na demanda` +
     (resumo.semAluno ? ` · ${resumo.semAluno} de aluno que não está no cadastro (entra depois de cadastrado)` : '') + '.', 'ok');
 }

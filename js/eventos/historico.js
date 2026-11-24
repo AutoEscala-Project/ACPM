@@ -8,10 +8,11 @@ import { reverterEscolha, reverterReparo } from '../instrutor-escolhido.js';
 import { S, AUDIT_LOG, DATA, setAuditLog, isGestor, insBy, stuBy, getMissionTarget } from '../state.js';
 import { ApiClient } from '../storage.js';
 import { aoAcionar } from './registro.js';
-import { rIns } from '../views/instrutores.js';
-import { rDem } from '../views/demanda.js';
 import { renderAuditPanel } from '../views/escala.js';
-import { rRec } from '../views/recursos.js';
+import { registrarDesenho, redesenharPorNome } from '../redesenho.js';
+
+// O desenho do Histórico (js/redesenho.js): outra data, e a escala refeita (a entrada nova)
+registrarDesenho('historico', renderAuditPanel, { em: ['dados', 'escala'], ordem: 85 });
 
 // Histórico: gaveta lateral sobre a aba aberta (por cima das outras gavetas abertas); o botão abre e fecha, ✕ e Esc
 // fecham (o Esc, quando ela é a gaveta de cima ou tem o foco: js/dom.js). Com um diálogo aberto por cima (o do status de
@@ -57,26 +58,26 @@ aoAcionar('rev-log', b => {
       target.fly = rev.val;
       (rev.extras || []).forEach(m => { const ex = getMissionTarget(rev.stuId, m); if (ex) ex.fly = rev.val; });
       gravarAlteracao(rev.val ? 'inc' : 'exc', `Revertido: ${st.nm} (${target.mis})`, null, entry.id);
-      rDem();
+      redesenharPorNome('pedidos-do-dia');
     }
   } else if (rev.kind === 'setAv') {
     S.av[rev.reg] = rev.val;
     gravarAlteracao(rev.val ? 'inc' : 'exc', `Revertido: ${rev.reg} ${rev.val ? 'disponível' : 'em manutenção'}`, null, entry.id);
-    rRec();
+    redesenharPorNome('recursos');
   } else if (rev.kind === 'setAtributo') {
     const recurso = (S.frota || []).find(f => f.reg === rev.reg);
     if (recurso && atributoVale(rev.atributo, recurso.tipo)) {
       if (rev.val) recurso[rev.atributo] = true;
       else delete recurso[rev.atributo];
       gravarAlteracao('mod', `Revertido: ${entry.desc}`, null, entry.id);
-      rRec(); rIns(); rDem();
+      redesenharPorNome('recursos', 'instrutores', 'pedidos-do-dia');
     }
   } else if (rev.kind === 'setInsOn') {
     const ins = insBy(rev.insId);
     if (ins) {
       ins.on = rev.val;
       gravarAlteracao(rev.val ? 'inc' : 'exc', `Revertido: ${ins.nm} ${rev.val ? 'disponível' : 'indisponível'}`, null, entry.id);
-      rIns();
+      redesenharPorNome('instrutores');
     }
   } else if (rev.kind === 'restaurarFixos') {
     // Um reparo desfeito: os voos voltam a ser fixos como antes dele, e o instrutor escolhido dos pedidos também. O voo
@@ -84,7 +85,7 @@ aoAcionar('rev-log', b => {
     // (js/reversoes.js e js/instrutor-escolhido.js)
     reverterReparo(S, rev, agendamentosEmVolta(S, AUDIT_LOG, entry, S.frota));
     S.fixos = normalizarFixos(S.fixos);
-    if (rev.pedidos) rDem();
+    if (rev.pedidos) redesenharPorNome('pedidos-do-dia');
     gravarAlteracao('mod', `Revertido: ${entry.desc}`, null, entry.id);
   } else if (rev.kind === 'restaurarEscolha') {
     // O instrutor escolhido volta como estava, e os voos fixos também; o voo agendado, só enquanto o agendamento
@@ -92,7 +93,7 @@ aoAcionar('rev-log', b => {
     reverterEscolha(S, rev, agendamentosEmVolta(S, AUDIT_LOG, entry, S.frota));
     S.fixos = normalizarFixos(S.fixos);
     gravarAlteracao('mod', `Revertido: ${entry.desc}`, null, entry.id);
-    rDem();
+    redesenharPorNome('pedidos-do-dia');
   } else if (rev.kind === 'restaurarHorarios') {
     // Os horários de uma categoria voltam como estavam, e os pedidos que mudaram com eles também
     S.horarios = { ...S.horarios, [rev.cat]: [...rev.lista] };
@@ -103,13 +104,13 @@ aoAcionar('rev-log', b => {
       if (jan !== undefined) alvo.jan = jan;
     });
     gravarAlteracao('mod', `Revertido: ${entry.desc}`, null, entry.id);
-    rRec(); rDem();
+    redesenharPorNome('recursos', 'pedidos-do-dia');
   } else if (rev.kind === 'readicionarRecurso') {
     // Um recurso retirado volta para a frota, como estava (com a habilitação própria, em Instrutores)
     S.frota.push({ ...rev.recurso });
     S.av[rev.recurso.reg] = rev.av !== false;
     gravarAlteracao('inc', `Revertido: ${rev.recurso.reg} de volta à frota`, null, entry.id);
-    rRec(); rIns();
+    redesenharPorNome('recursos', 'instrutores');
   } else if (rev.kind === 'desfazerAgendamento') {
     // Um voo agendado na Escala: o criado sai, o movido volta para onde estava, e o instrutor marcado disponível volta
     // como estava (js/reversoes.js). O voo já em andamento ou com resultado registrado fica, com o aviso; o movido cujo
@@ -118,7 +119,7 @@ aoAcionar('rev-log', b => {
     if (motivo) { showToast(motivo); return; }
     if (desfazerAgendamento(S, rev)) {
       gravarAlteracao(rev.criado ? 'exc' : 'mod', `Revertido: ${entry.desc}`, null, entry.id);
-      rDem(); rIns();
+      redesenharPorNome('pedidos-do-dia', 'instrutores');
     }
   }
 });

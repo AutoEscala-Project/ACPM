@@ -7,16 +7,10 @@ import { S, RES, AUDIT_LOG, BI_HISTORY, DATA, setS, setRES, setAuditLog, setBIHi
 import { $, mostrarAviso, avisoAberto, showToast } from './dom.js';
 import { comHorasExternas } from './limites.js';
 import { comRepousoDoNoturno } from './noturno.js';
-import { rBI } from './views/bi.js';
-import { renderAuditPanel, rOut } from './views/escala.js';
-import { rDem } from './views/demanda.js';
-import { rAlu } from './views/alunos.js';
-import { rIns, rInsDia } from './views/instrutores.js';
-import { rCursos, SEM_OS_PROGRAMAS } from './views/cursos.js';
-import { rRec, rRevisao, rHangar } from './views/recursos.js';
-import { rRodizio } from './views/rodizio.js';
-import { podeEditarAgenda, rAgenda } from './views/agenda.js';
-import { atualizarSelosDaEscala, atualizarSeloDaAgenda, lerPedidosDaData } from './views/selos.js';
+import { redesenhar, redesenharPorNome } from './redesenho.js';
+import { SEM_OS_PROGRAMAS } from './views/cursos.js';
+import { podeEditarAgenda } from './views/agenda.js';
+import { atualizarSeloDaAgenda, lerPedidosDaData } from './views/selos.js';
 
 // Abre uma data na tela (a data da escala e a data base do BI)
 export function abrirData(data) {
@@ -105,7 +99,7 @@ export async function lerDadosDeNovo() {
   avisarDadosIndisponiveis();
   if (!S.indisponiveis.length) showToast('Dados lidos.', 'ok');
   if (horasBase && !isGestor()) save();
-  rIns(); rAlu(); rCursos(); rDem(); rOut();
+  redesenhar('releitura');
 }
 
 // Uma gravação que não deu certo. Sem conexão, o aviso conta as alterações esperando (as entradas "gravando…" do
@@ -138,8 +132,7 @@ function avisarAlteracoesEsperando() {
 // Depois de um conflito nada mais é gravado: a tela fica só para consulta até recarregar, com o aviso
 export function travarAposConflito({ formato = false } = {}) {
   setRole('gestor', true);
-  rRec(); rIns(); rAlu(); rCursos(); rDem();
-  if (RES) rOut();
+  redesenhar('consulta');
   mostrarAviso('conflito', formato
     ? 'O app foi atualizado. Recarregue a página para continuar (a sua última alteração não foi salva).'
     : 'Outra pessoa alterou a escala enquanto você editava. A tela ficou só para consulta: recarregue para ver a versão atual e continuar (a sua última alteração não foi salva).');
@@ -225,7 +218,7 @@ export function logChange(type, texto, revertAction = null, reverte = null) {
     estado: 'gravando'
   };
   AUDIT_LOG.unshift(entry);
-  renderAuditPanel();
+  redesenharPorNome('historico');
   if (avisoAberto() === 'espera') avisarAlteracoesEsperando();
   const data = DATA;
   queueMicrotask(() => gravacaoAtual.then(async gravou => {
@@ -235,7 +228,7 @@ export function logChange(type, texto, revertAction = null, reverte = null) {
       entry.id = id;
       delete entry.estado;
     }
-    renderAuditPanel();
+    redesenharPorNome('historico');
   }));
 }
 
@@ -249,7 +242,7 @@ function horario(iso, importado) {
 // Uma entrada que o servidor já registrou (os dados pessoais: a própria função registra os campos que mudaram)
 export function mostrarNoHistorico({ id, descricao }) {
   AUDIT_LOG.unshift({ id, ts: new Date().toTimeString().slice(0, 8), type: 'mod', desc: descricao, revert: null, reverte: null, autor: ApiClient.autorAtual, importado: false });
-  renderAuditPanel();
+  redesenharPorNome('historico');
 }
 
 async function historicoParaPainel(data) {
@@ -322,8 +315,7 @@ export async function lerData(data) {
 export async function carregarData(data) {
   if (!await lerData(data)) return;
   $('#escala-atualizada').hidden = true;
-  rRec(); rIns(); rAlu(); rCursos(); rRodizio(); rDem(); renderAuditPanel(); rOut(); rAgenda();
-  atualizarSelosDaEscala();
+  redesenhar('dados');
   lerPedidosDaData();
   await carregarBI();
 }
@@ -345,7 +337,7 @@ export async function carregarBI() {
   if (pedido !== pedidoDeBI) return;
   setBIHistory(bi);
   syncBIHistoryForCurrentDate();
-  rBI();
+  redesenharPorNome('bi');
 }
 
 // O BI em memória acompanha a escala da tela (que pode ainda estar sendo gravada)
@@ -371,11 +363,5 @@ const escalaCalculada = () => ({ ...runAllocationEngine(S), data: DATA });
 function refazerEscala() {
   setRES(escalaCalculada());
   syncBIHistoryForCurrentDate();
-  rRevisao();
-  rHangar();
-  rInsDia();
-  rOut();
-  renderAuditPanel();
-  rBI();
-  atualizarSelosDaEscala();
+  redesenhar('escala');
 }

@@ -14,11 +14,16 @@ import { confirmado } from './confirmacao.js';
 import './limites.js';
 import './painel-de-dados.js';
 import { aoAcionar, aoMudarCampo } from './registro.js';
-import { rAlu } from '../views/alunos.js';
+import { registrarDesenho, redesenharPorNome } from '../redesenho.js';
 import { aoMudarDadosPessoais } from '../views/dados-pessoais.js';
-import { rDem } from '../views/demanda.js';
-import { rIns, prepararFiltrosDosInstrutores, filtrarInstrutores, limparFiltrosDosInstrutores, manterInstrutorAVista, abrirPainelDoInstrutor, fecharPainelDoInstrutor, atualizarLinhaDoCadastro, rPainelDoInstrutor, atualizarCanacDosInstrutores } from '../views/instrutores.js';
+import { rIns, rInsDia, prepararFiltrosDosInstrutores, filtrarInstrutores, limparFiltrosDosInstrutores, manterInstrutorAVista, abrirPainelDoInstrutor, fecharPainelDoInstrutor, atualizarLinhaDoCadastro, rPainelDoInstrutor, atualizarCanacDosInstrutores } from '../views/instrutores.js';
 import { mostrarVista } from '../views/vistas.js';
+
+// Os desenhos de Instrutores (js/redesenho.js): a grade do dia acompanha a escala; o painel das habilitações é refeito
+// pelo nome (Recursos, quando muda a habilitação própria de um recurso)
+registrarDesenho('instrutores-dia', rInsDia, { em: ['escala'], ordem: 7 });
+registrarDesenho('instrutores', rIns, { em: ['dados', 'consulta', 'releitura'], ordem: 20 });
+registrarDesenho('habilitacoes-do-instrutor', rPainelDoInstrutor);
 
 // A coluna CANAC acompanha os dados pessoais
 aoMudarDadosPessoais(atualizarCanacDosInstrutores);
@@ -54,7 +59,7 @@ aoAcionar('addi', () => {
   mostrarVista('ins', 'cadastro');
   manterInstrutorAVista(newIns.id);
   gravarAlteracao('inc', `Instrutor adicionado: ${newIns.nm}`);
-  rIns(); rAlu(); rDem(); focusLast('#inst .nm');
+  rIns(); redesenharPorNome('alunos', 'pedidos-do-dia'); focusLast('#inst .nm');
 });
 
 aoAcionar('deli', (b, { id }) => {
@@ -70,7 +75,7 @@ aoAcionar('deli', (b, { id }) => {
   S.stu.forEach(s => [s, ...(s.extra || [])].forEach(p => { if (p.insId === id) delete p.insId; }));
   S.fixos = Object.fromEntries(Object.entries(S.fixos || {}).filter(([k, p]) => !(p.escolhido && !p.agendado && p.insId === id && !S.aprovacao && !fixoPeloStatus(k, S.fStatus))));
   gravarAlteracao('exc', `Instrutor excluído: ${target ? target.nm : id}`);
-  rIns(); rAlu(); rDem();
+  rIns(); redesenharPorNome('alunos', 'pedidos-do-dia');
 });
 
 // Os campos de um instrutor
@@ -117,7 +122,7 @@ aoMudarCampo('i', (t, { f, id }) => {
   // instrutor gravam sem entrar no histórico
   gravarAlteracao(...historico);
   atualizarLinhaDoCadastro(x);
-  if (f === 'nm') rAlu();
+  if (f === 'nm') redesenharPorNome('alunos');
   // A Demanda mostra os instrutores de cada pedido: o nome, quem vem na data e quem tem a habilitação
-  if (['nm', 'on', 'hab'].includes(f)) rDem();
+  if (['nm', 'on', 'hab'].includes(f)) redesenharPorNome('pedidos-do-dia');
 });

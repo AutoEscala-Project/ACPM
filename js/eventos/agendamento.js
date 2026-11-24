@@ -15,9 +15,7 @@ import { S, isGestor, stuBy } from '../state.js';
 import { ApiClient } from '../storage.js';
 import { aoAcionar } from './registro.js';
 import { abrirAgendamento } from '../views/agendamento.js';
-import { rAlu } from '../views/alunos.js';
-import { rIns } from '../views/instrutores.js';
-import { rDem } from '../views/demanda.js';
+import { redesenharPorNome } from '../redesenho.js';
 
 // O voo novo na escala: o status dele na lista, ou a barra no mapa; fora da vista (um filtro), o botão que abriu o diálogo
 function focarNoVoo(fKey, contexto) {
@@ -37,7 +35,7 @@ function confirmarAgendamento({ proposta, base, avaliacao, contexto }) {
   gravarAlteracao(proposta.pedido ? 'mod' : 'inc', descricao, reversaoDoAgendamento(antes));
   // Os pesos digitados: no cadastro de cada um, na mesma gravação, sem reversão (como os pesos editados no cadastro)
   historicoDosPesos(antes).forEach(texto => logChange('mod', texto));
-  rDem(); rAlu(); rIns();
+  redesenharPorNome('pedidos-do-dia', 'alunos', 'instrutores');
   focarNoVoo(chaveDoVoo(antes.stuId, antes.mid), contexto);
   const aluno = stuBy(proposta.stuId);
   const feito = (proposta.pedido && FEITO[proposta.pedido.acao]) || 'Voo agendado';
