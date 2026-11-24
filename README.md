@@ -27,7 +27,7 @@ a escala juntos. O manual de uso está no botão "Manual", no topo do app.
 | https://gdruumond.github.io/ACPM/, https://thephfernandes.github.io/ACPM/ | os mesmos, enquanto os endereços antigos existirem |
 
 Um endereço fora desta tabela (e fora do localhost) abre o app no modo local, sem banco: `js/config-supabase.js` só
-liga a produção ou a prévia pelo nome exato do site. Ali o app mostra no alto um aviso fixo (`#aviso-endereco`): o que se
+liga a produção ou a prévia pelo nome exato do site. Ali o app mostra no alto um aviso que não se fecha (`#aviso-endereco`): o que se
 faz fica só naquele navegador, e o endereço do app é o da produção. No localhost o modo local não tem o aviso.
 
 ## Rodar localmente

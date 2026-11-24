@@ -6,7 +6,7 @@ import { test, expect, abrir, URL_APP } from './fixtures.js';
 const OUTRO = 'copia-do-autoescala.invalid';
 
 test.describe('O endereço do app', () => {
-  test('em outro endereço, o aviso fixo no alto: sem o banco, só neste navegador, e o endereço do app', async ({ page, context, baseURL }) => {
+  test('em outro endereço, o aviso no alto, que não se fecha: sem o banco, só neste navegador, e o endereço do app', async ({ page, context, baseURL }) => {
     // O outro endereço serve os arquivos do servidor dos testes
     await context.route(url => url.hostname === OUTRO, async route => {
       const pedido = new URL(route.request().url());
@@ -30,7 +30,8 @@ test.describe('O endereço do app', () => {
     await expect(page.locator('#aviso-endereco')).toBeHidden();
   });
 
-  test('no modo compartilhado, sem o aviso (também no login)', async ({ page }) => {
+  // Os endereços de verdade do app (produção e prévia) ficam nos testes unitários: aqui eles chamariam o Supabase real
+  test('no localhost com o servidor falso dos testes (o modo compartilhado), sem o aviso, também no login', async ({ page }) => {
     await page.goto(URL_APP);
     await expect(page.locator('#s-login')).toBeVisible();
     await expect(page.locator('#aviso-endereco')).toBeHidden();

@@ -39,6 +39,7 @@ describe('Projeto Supabase por endereço', () => {
   it('em localhost, ?supabase= escolhe a prévia ou o servidor falso dos testes', () => {
     assert.equal(projetoSupabase(endereco('http://localhost:4173/?supabase=previa')).nome, 'previa');
     assert.equal(projetoSupabase(endereco('http://127.0.0.1:4173/?supabase=teste')).nome, 'teste');
+    assert.equal(projetoSupabase(endereco('http://[::1]:4173/?supabase=previa')).nome, 'previa');
   });
 
   it('fora do localhost o parâmetro ?supabase é ignorado', () => {
@@ -75,7 +76,7 @@ describe('Endereço sem banco', () => {
   });
 
   it('o localhost é o modo local de quem desenvolve: sem o aviso, com ou sem ?supabase=', () => {
-    for (const href of ['http://localhost:4173/', 'http://127.0.0.1:4173/', 'http://localhost:4173/?supabase=teste']) {
+    for (const href of ['http://localhost:4173/', 'http://127.0.0.1:4173/', 'http://[::1]:4173/', 'http://localhost:4173/?supabase=teste']) {
       assert.equal(enderecoSemBanco(endereco(href)), false, href);
     }
   });
