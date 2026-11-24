@@ -8,7 +8,13 @@ export const PROJETOS = {
   teste: { url: 'https://acpm-teste.supabase.invalid', chave: 'sb_publishable_teste' }
 };
 
-const POR_ENDERECO = { 'gdruumond.github.io': 'producao', 'thephfernandes.github.io': 'previa' };
+// O Cloudflare (wrangler.jsonc) é o endereço oficial; os do GitHub Pages ficam enquanto houver quem os abra
+const POR_ENDERECO = {
+  'autoescala.autoescala-acpm.workers.dev': 'producao',
+  'autoescala-previa.autoescala-acpm.workers.dev': 'previa',
+  'gdruumond.github.io': 'producao',
+  'thephfernandes.github.io': 'previa'
+};
 const LOCAIS = ['localhost', '127.0.0.1'];
 
 export function projetoSupabase(endereco = window.location) {
