@@ -9,6 +9,12 @@ import { EQ } from '../../js/config.js';
 import { habilitacoesDoNivel } from '../../js/habilitacoes.js';
 
 describe('Migrações do formato dos dados', () => {
+  // O único lugar que fixa o número: cada passo que muda o formato muda este número, o PASSOS de js/migracoes.js e o
+  // README ("Formato dos dados"); os outros testes usam ESQUEMA
+  it('o formato dos dados gravados é o 25', () => {
+    assert.equal(ESQUEMA, 25);
+  });
+
   it('dia: renomeia os simuladores na disponibilidade e na escala, sem perder nada', () => {
     const antigo = {
       win: [true, false],
