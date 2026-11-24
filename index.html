@@ -104,6 +104,11 @@
 </header>
 
 <main id="conteudo">
+  <!-- ENDEREÇO SEM BANCO: fora dos endereços do app (e do localhost) o app funciona sem o banco (js/config-supabase.js) -->
+  <div class="aviso-link erro" id="aviso-endereco" role="alert" hidden>
+    <span>Este endereço não é o do AutoEscala: aqui o app funciona sem o banco, e o que você fizer fica só neste navegador (ninguém mais vê). O app fica em <a href="https://autoescala.autoescala-acpm.workers.dev/">autoescala.autoescala-acpm.workers.dev</a>.</span>
+  </div>
+
   <!-- AVISO DE SINCRONIZAÇÃO (modo compartilhado): conflito de versão ou falha ao salvar -->
   <div class="aviso-sync" id="aviso-sync" role="alert" hidden>
     <span id="aviso-sync-texto"></span>
