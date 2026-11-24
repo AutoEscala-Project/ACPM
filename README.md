@@ -245,8 +245,10 @@ banco (e a chamada dela no app). A cópia `cadastro.cursos` fica.
 
 ## Fluxo de trabalho
 
-Alterações entram por branch + pull request. O GitHub Actions roda todos os testes em cada push e PR;
-ao entrar na `main`, o GitHub Pages publica a nova versão.
+Alterações entram por branch + pull request. O GitHub Actions (`.github/workflows/testes.yml`) roda todos os testes em
+todo PR e em cada push no `main` e no `previa`; um push num branch sem PR não roda nada (o PR roda), e um commit novo no
+mesmo PR cancela os testes do anterior. O lint e os unitários correm num job, o E2E em duas partes paralelas
+(`--shard`). Ao entrar no `main` (ou no `previa`) com os testes verdes, a nova versão vai para o ar (veja "Publicação").
 
 ## Publicação
 
