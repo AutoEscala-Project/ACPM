@@ -165,10 +165,10 @@ describe('meteorologia: o atendimento da função', () => {
   const comChave = (opcoes = {}) => criarAtendimento({ conferirSessao: async () => true, chave: CHAVE, ...opcoes });
 
   it('CORS só para as origens do app (o GitHub Pages da produção e da prévia, e o localhost)', async () => {
-    for (const origem of ['https://gdruumond.github.io', 'https://thephfernandes.github.io', 'http://localhost:4173', 'http://127.0.0.1:8080', 'http://localhost']) {
+    for (const origem of ['https://autoescala.autoescala-acpm.workers.dev', 'https://autoescala-previa.autoescala-acpm.workers.dev', 'https://gdruumond.github.io', 'https://thephfernandes.github.io', 'http://localhost:4173', 'http://127.0.0.1:8080', 'http://localhost']) {
       assert.ok(origemPermitida(origem), origem);
     }
-    for (const origem of ['https://evil.github.io', 'https://gdruumond.github.io.evil.com', 'http://localhost.evil.com', 'null', null]) {
+    for (const origem of ['https://evil.github.io', 'https://gdruumond.github.io.evil.com', 'https://evil.autoescala-acpm.workers.dev', 'https://autoescala.autoescala-acpm.workers.dev.evil.com', 'http://localhost.evil.com', 'null', null]) {
       assert.ok(!origemPermitida(origem), String(origem));
     }
     const atender = comChave({ buscar: redemetFalsa().buscar });

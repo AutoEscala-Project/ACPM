@@ -1,0 +1,31 @@
+AutoEscala - ACPM
+Copyright (c) 2026 Gabriel Drumond e Pedro Henrique Fernandes. Todos os direitos reservados.
+
+Este software, incluindo o código-fonte, o motor de alocação, a interface, a documentação, os modelos e os demais
+arquivos deste repositório (o "Software"), é de propriedade exclusiva dos titulares acima.
+
+Nenhuma licença é concedida por este arquivo. Sem autorização prévia e por escrito dos titulares, é proibido usar,
+copiar, modificar, adaptar, mesclar, publicar, distribuir, sublicenciar, vender, alugar, oferecer como serviço
+(hospedado ou não) ou revender o Software, no todo ou em parte, inclusive sob outro nome ou outra marca.
+
+O fato de o código-fonte estar visível em um repositório público não concede nenhum direito de uso, cópia ou
+modificação. Colaborar com o repositório (abrir issues ou pull requests) não transfere aos colaboradores nenhum direito
+sobre o Software, salvo acordo escrito.
+
+O uso do Software pela ACPM, ou por qualquer outra instituição, rege-se exclusivamente pelos termos da autorização ou do
+contrato firmado com os titulares.
+
+Componentes de terceiros usados pelo Software (por exemplo, as bibliotecas carregadas por CDN e as dependências de
+desenvolvimento listadas em package.json) continuam regidos por suas próprias licenças.
+
+O SOFTWARE É FORNECIDO "NO ESTADO EM QUE SE ENCONTRA", SEM GARANTIAS DE QUALQUER TIPO, EXPRESSAS OU IMPLÍCITAS. EM
+NENHUMA HIPÓTESE OS TITULARES SERÃO RESPONSÁVEIS POR DANOS DECORRENTES DO USO OU DA IMPOSSIBILIDADE DE USO DO SOFTWARE,
+NA MÁXIMA EXTENSÃO PERMITIDA PELA LEI APLICÁVEL.
+
+Contato para autorizações de uso: os titulares, pelo repositório https://github.com/AutoEscala-Project/ACPM.
+
+---
+
+English summary: Copyright (c) 2026 Gabriel Drumond and Pedro Henrique Fernandes. All rights reserved. No license is
+granted; any use, copy, modification, distribution, resale or white-label offering requires the holders' prior written
+permission. The Portuguese text above prevails.

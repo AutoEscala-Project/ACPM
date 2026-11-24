@@ -1,7 +1,8 @@
 # AutoEscala - ACPM
 
 Planejamento da escala diária de voo, simulador e Ground School do ACPM.
-Publicada pelo GitHub Pages em https://gdruumond.github.io/ACPM/ (branch `main`, sem etapa de build).
+Publicada no Cloudflare em https://autoescala.autoescala-acpm.workers.dev/ (branch `main`, sem etapa de build; veja
+"Publicação"). Código em https://github.com/AutoEscala-Project/ACPM.
 
 A escala é automática: cada alteração refaz a escala da data na hora (o motor leva milissegundos) e grava os dados e
 a escala juntos. O manual de uso está no botão "Manual", no topo do app.
@@ -21,8 +22,13 @@ a escala juntos. O manual de uso está no botão "Manual", no topo do app.
 
 | Endereço | Projeto Supabase |
 |---|---|
-| https://gdruumond.github.io/ACPM/ | `acpm-escala` (produção) |
-| https://thephfernandes.github.io/ACPM/ (prévia) | `acpm-escala-preview` |
+| https://autoescala.autoescala-acpm.workers.dev/ | `acpm-escala` (produção) |
+| https://autoescala-previa.autoescala-acpm.workers.dev/ (prévia, branch `previa`) | `acpm-escala-preview` |
+| https://gdruumond.github.io/ACPM/, https://thephfernandes.github.io/ACPM/ | os mesmos, enquanto os endereços antigos existirem |
+
+Um endereço fora desta tabela (e fora do localhost) abre o app no modo local, sem banco: `js/config-supabase.js` só
+liga a produção ou a prévia pelo nome exato do site. Ali o app mostra no alto um aviso que não se fecha (`#aviso-endereco`): o que se
+faz fica só naquele navegador, e o endereço do app é o da produção. No localhost o modo local não tem o aviso.
 
 ## Rodar localmente
 
@@ -66,7 +72,7 @@ npm run test:e2e       # aplicação no navegador (Playwright)
 - Na primeira vez, `npx playwright install chromium` baixa o navegador dos testes.
   Para usar o Google Chrome já instalado: `PW_CHANNEL=chrome npm run test:e2e`.
 - Para testar uma versão publicada em vez do servidor local:
-  `BASE_URL=https://gdruumond.github.io/ACPM/ npm run test:e2e` (com a barra final).
+  `BASE_URL=https://autoescala.autoescala-acpm.workers.dev/ npm run test:e2e` (com a barra final).
 - Os testes E2E comparam a escala gerada com snapshots em `test/e2e/__snapshots__/`. Se uma mudança
   de comportamento for intencional, atualize-os com `npx playwright test --update-snapshots` e revise o diff.
 - `test/fixtures/goldens-do-motor/` guarda a escala aprovada do motor para 40 cenários aleatórios e para o
@@ -207,7 +213,7 @@ Para pôr o formato 24 no ar, nesta ordem:
 2. a mesma migração na produção (`--remote=<ref de produção>`), **antes do merge**: ela acrescenta as tabelas e as
    funções e só alarga a regra dos resultados (PP, PC e INVA já vêm na tabela dos cursos, ainda sem programa), então o
    app no ar, no formato 23, continua como está;
-3. o merge, e o GitHub Pages publica o app no formato 24;
+3. o merge, e o app vai para o ar ("Publicação") no formato 24;
 4. **uma abertura do app como Operador ou Administrador**, que faz a conversão única.
 
 Depois, num PR à parte, com a conversão feita e nenhuma aba de antes do formato 24 aberta: tirar `importar_cursos` do
@@ -264,5 +270,34 @@ banco (e a chamada dela no app). A cópia `cadastro.cursos` fica.
 
 ## Fluxo de trabalho
 
-Alterações entram por branch + pull request. O GitHub Actions roda todos os testes em cada push e PR;
-ao entrar na `main`, o GitHub Pages publica a nova versão.
+Alterações entram por branch + pull request. O GitHub Actions (`.github/workflows/testes.yml`) roda todos os testes em
+todo PR e em cada push no `main` e no `previa`; um push num branch sem PR não roda nada (o PR roda), e um commit novo no
+mesmo PR cancela os testes do anterior; os pushes num mesmo branch rodam um de cada vez, na ordem. Um PR com conflito
+com a base não roda os testes (o GitHub não monta o merge): resolva o conflito primeiro. O lint e os unitários rodam
+num job, o E2E em duas partes paralelas (`--shard`). Ao entrar no `main` (ou no `previa`) com os testes verdes, a nova
+versão vai para o ar (veja "Publicação").
+
+## Publicação
+
+O site é estático e vai para o Cloudflare (Workers com arquivos estáticos, a versão atual do Cloudflare Pages), pela
+configuração `wrangler.jsonc`. Depois de um push em `main` ou `previa` com os testes verdes, o workflow
+`.github/workflows/publicar.yml` monta a pasta `publicar/` (`scripts/pasta-publicada.mjs`: só `index.html`,
+`painel.html`, `css/`, `js/`, `img/` e `modelos/`) e a publica: `main` na produção, `previa` na prévia. Ele usa os
+segredos `CLOUDFLARE_API_TOKEN` e `CLOUDFLARE_ACCOUNT_ID` do repositório.
+
+À mão (com `npx wrangler login` feito): `node scripts/pasta-publicada.mjs && npx --yes wrangler@4.165.0 deploy`
+(produção) ou `... deploy --env previa`. Nunca publique a raiz do repositório.
+
+`test/unit/pasta-publicada.test.js` monta a pasta e confere que tudo o que as páginas carregam (as tags, os módulos, o
+CSS, os caminhos que o JS pede) está nela, e nada além do app: os testes E2E servem o repositório inteiro e não pegariam
+um arquivo novo fora da lista, que no ar daria 404. Uma pasta nova do app entra em `scripts/pasta-publicada.mjs` e na lista
+exata que esse teste espera.
+
+O Cloudflare serve `painel.html` também como `/painel` (redireciona o primeiro para o segundo). O login do Supabase
+(`supabase/config.toml`, `site_url` e `additional_redirect_urls`) e as origens da função `meteorologia` precisam
+listar todo endereço novo do app.
+
+## Licença
+
+Software proprietário: todos os direitos reservados a Gabriel Drumond e Pedro Henrique Fernandes. Veja `LICENSE`. O
+código estar visível não concede nenhum direito de uso, cópia, modificação ou revenda.
