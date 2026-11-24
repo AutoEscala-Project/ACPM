@@ -1,7 +1,8 @@
 {
   "name": "autoescala-acpm",
   "private": true,
-  "description": "AutoEscala - ACPM (aplicação estática servida pelo GitHub Pages)",
+  "description": "AutoEscala - ACPM (aplicação estática servida pelo Cloudflare)",
+  "license": "UNLICENSED",
   "type": "module",
   "engines": {
     "node": ">=22.13"

@@ -21,6 +21,17 @@ describe('Projeto Supabase por endereço', () => {
     assert.equal(projeto.url, 'https://llylkdgfuagzdaualvqa.supabase.co');
   });
 
+  it('no Cloudflare, o Worker da produção usa a produção e o da prévia usa a prévia', () => {
+    assert.equal(projetoSupabase(endereco('https://autoescala.autoescala-acpm.workers.dev/')).nome, 'producao');
+    assert.equal(projetoSupabase(endereco('https://autoescala.autoescala-acpm.workers.dev/painel')).nome, 'producao');
+    assert.equal(projetoSupabase(endereco('https://autoescala-previa.autoescala-acpm.workers.dev/')).nome, 'previa');
+  });
+
+  it('um endereço que não é o do app nunca abre a produção', () => {
+    assert.equal(projetoSupabase(endereco('https://outro.autoescala-acpm.workers.dev/')), null);
+    assert.equal(projetoSupabase(endereco('https://autoescala.autoescala-acpm.workers.dev.exemplo.com/')), null);
+  });
+
   it('localhost fica no modo local, sem login', () => {
     assert.equal(projetoSupabase(endereco('http://localhost:4173/')), null);
   });
