@@ -1,4 +1,4 @@
-import { test, expect, abrir, abrirSintetico, abrirComExemplo, irPara, abrirEscala, lerEscala, confirmar, filtrarCursos, AMANHA } from './fixtures.js';
+import { test, expect, abrir, abrirSintetico, abrirComExemplo, irPara, abrirEscala, lerEscala, confirmar, filtrarCursos, AMANHA, abrirHistorico, aprovar, botaoAprovar, caixaVoa, campoDaAgenda, campoDaData, diaSeguinte, importarDaAgenda, reabrir, tabelaDoDia, voar } from './fixtures.js';
 import { aluno, cenario, instrutor, missaoExtra } from '../helpers/montar.js';
 
 const linhaDoAluno = (page, nome) => page.locator(`#dem tr[data-k="d"][data-mid="0"][data-nm="${nome.toLowerCase()}"]`);
@@ -66,20 +66,20 @@ test.describe('Demanda', () => {
     // O Voa religado à mão: qualquer horário, no automático
     await page.locator('#onlyfly').uncheck();
     const linha = page.locator('#dem tr[data-k="d"][data-id="1000"][data-mid="0"]');
-    await linha.locator('[data-f="fly"]').check();
+    await caixaVoa(linha).check();
     await expect(linha.locator('[data-f="jan"]')).toHaveValue('');
     await expect(linha.locator('[data-f="insId"]')).toHaveValue('');
 
     // O pedido da agenda para a mesma missão (Voo Local) toma este voo, em vez de virar um segundo
     await irPara(page, 'age');
-    await page.locator('#ag-aluno').selectOption({ label: 'Aluno 1000' });
-    await page.locator('#ag-missao').selectOption('Voo Local');
-    await page.locator('#ag-horario').selectOption('10:10');
-    await page.locator('#ag-por').fill('Maria');
+    await campoDaAgenda(page, 'aluno').selectOption({ label: 'Aluno 1000' });
+    await campoDaAgenda(page, 'missao').selectOption('Voo Local');
+    await campoDaAgenda(page, 'horario').selectOption('10:10');
+    await campoDaAgenda(page, 'por').fill('Maria');
     await page.locator('#form-agenda [type="submit"]').click();
     await expect(page.locator('#agenda-lista tbody tr')).toHaveCount(1);
     await irPara(page, 'dem');
-    await page.locator('#importar-agenda').click();
+    await importarDaAgenda(page);
     await expect(page.locator('#dem tr[data-k="d"][data-id="1000"]')).toHaveCount(1);
     await expect(linha.locator('[data-f="jan"]')).toHaveValue('h610');
   });
@@ -95,7 +95,7 @@ test.describe('Demanda', () => {
     await abrir(page, { estado });
     await abrirEscala(page);
     const voo = nome => page.locator('#out tbody tr:not(.win)', { hasText: nome });
-    await confirmar(page, '#btn-aprovar');
+    await aprovar(page);
     // O Aluno 1000 com o outro instrutor, escolhido na Escala; o Aluno 1002 já pousou
     const doApp = (await voo('Aluno 1000').locator('.c-instr').innerText()).trim();
     await voo('Aluno 1000').locator('[data-act="trocar-instrutor"]').click();
@@ -123,10 +123,10 @@ test.describe('Demanda', () => {
 
     // O Voa religado: o app escala o pedido em branco de novo (na 1ª preferência dele, 08:20), solto e Confirmado
     await page.locator('#onlyfly').uncheck();
-    for (const id of [1000, 1001]) await page.locator(`#dem tr[data-k="d"][data-id="${id}"][data-mid="0"] [data-f="fly"]`).check();
+    for (const id of [1000, 1001]) await voar(page, id, true, { mid: 0 });
     await abrirEscala(page);
     await expect(page.locator('#selo-aprovada')).toBeHidden();
-    await expect(page.locator('#btn-aprovar')).toBeVisible();
+    await expect(botaoAprovar(page)).toBeVisible();
     for (const nome of ['Aluno 1000', 'Aluno 1001']) {
       await expect(voo(nome).locator('.c-hr')).toContainText('08:20–09:20');
       await expect(voo(nome).locator('.fixo')).toHaveCount(0);
@@ -164,18 +164,18 @@ test.describe('Demanda', () => {
   test('tirar o "Voa" do aluno tira também as missões extras; reverter volta todas', async ({ page }) => {
     await abrirComExemplo(page);
     await irPara(page, 'dem');
-    const extras = page.locator('#dem tr.extra-row[data-nm="aluno 01"] [data-f="fly"]');
+    const extras = caixaVoa(page.locator('#dem tr.extra-row[data-nm="aluno 01"]'));
     await expect(extras).toHaveCount(2);
     for (const caixa of await extras.all()) await expect(caixa).toBeChecked();
-    await linhaDoAluno(page, 'Aluno 01').locator('[data-f="fly"]').uncheck();
+    await caixaVoa(linhaDoAluno(page, 'Aluno 01')).uncheck();
     // As extras continuam na demanda, só desmarcadas (sem elas, reverter não teria o que voltar)
     await expect(extras).toHaveCount(2);
     for (const caixa of await extras.all()) await expect(caixa).not.toBeChecked();
-    await page.locator('#btn-open-log').click();
+    await abrirHistorico(page);
     await expect(page.locator('#audit-log-list')).toContainText('Aluno 01 retirado (Ground PA-34 · Sala Ground · 01h30 (1,5 h)), com as 2 missões extras');
     await page.locator('#audit-log-list [data-act="rev-log"]').first().click();
     await page.keyboard.press('Escape');
-    await expect(linhaDoAluno(page, 'Aluno 01').locator('[data-f="fly"]')).toBeChecked();
+    await expect(caixaVoa(linhaDoAluno(page, 'Aluno 01'))).toBeChecked();
     await expect(extras).toHaveCount(2);
     for (const caixa of await extras.all()) await expect(caixa).toBeChecked();
   });
@@ -323,8 +323,8 @@ test.describe('Demanda', () => {
     await expect(page.locator('#alu tr.cd:visible')).toHaveAttribute('data-id', '1001');
     // Outra data: as linhas são outras, e as marcas continuam
     await irPara(page, 'dem');
-    await page.locator('#dt-prox').click();
-    await expect(page.locator('#dt')).toHaveValue('2026-11-12');
+    await diaSeguinte(page);
+    await expect(campoDaData(page)).toHaveValue('2026-11-12');
     await expect(botao).toHaveText('Curso: PC');
     await page.locator('#onlyfly').uncheck();
     await expect.poll(async () => [...new Set((await aVista()).map(l => l.split(':')[0]))]).toEqual(['1001']);
@@ -410,12 +410,12 @@ test.describe('Demanda', () => {
     // O Voa desligado no último pedido à vista: os outros que voam ficam escondidos pela busca, e a linha aparece
     await busca.fill('ana');
     await expect.poll(aVista).toEqual(['1000']);
-    await linhaDoAluno(page, 'Ana').locator('[data-f="fly"]').uncheck();
+    await caixaVoa(linhaDoAluno(page, 'Ana')).uncheck();
     await expect.poll(aVista).toEqual([]);
     await expect(nenhum).toBeVisible();
     // Sem ninguém voando, a linha não aparece (a contagem de cima já diz), nem com a busca; sem "Só quem voa", ela volta
     await busca.fill('');
-    await linhaDoAluno(page, 'Bruno').locator('[data-f="fly"]').uncheck();
+    await caixaVoa(linhaDoAluno(page, 'Bruno')).uncheck();
     await expect(page.locator('#cnt')).toHaveText('0 / 3 aluno(s) · 0 missão(ões) marcada(s)');
     await expect(nenhum).toHaveCount(0);
     await busca.fill('nenhum assim');
@@ -515,11 +515,11 @@ test.describe('Voo agendado na Escala', () => {
     await expect(voo(page, 'Aluno 1000').locator('.fixo')).toHaveAttribute('aria-label', 'Voo fixo: agendado na escala');
 
     await naDemanda(page);
-    await pedido(page, 1000).locator('[data-f="fly"]').uncheck();
+    await caixaVoa(pedido(page, 1000)).uncheck();
     await abrirEscala(page);
     await expect(voo(page, 'Aluno 1000')).toHaveCount(0);
     await naDemanda(page);
-    await pedido(page, 1000).locator('[data-f="fly"]').check();
+    await caixaVoa(pedido(page, 1000)).check();
     await abrirEscala(page);
     await expect(voo(page, 'Aluno 1000').locator('.c-hr')).toContainText('10:10–11:10');
     await expect(voo(page, 'Aluno 1000').locator('.fixo')).toHaveAttribute('aria-label', 'Voo fixo: agendado na escala');
@@ -616,7 +616,7 @@ test.describe('Voo agendado na Escala', () => {
     await expect(pedido(page, 1000).locator('[data-dica="voo-agendado"]')).toHaveCount(0);
     await expect.poll(() => fixosGravados(page)).toEqual(['1001_0_1']);
     // O Voa religado: o pedido em branco vai para a 1ª preferência dele (08:20), solto, não para o lugar do agendamento
-    await pedido(page, 1000).locator('[data-f="fly"]').check();
+    await caixaVoa(pedido(page, 1000)).check();
     await abrirEscala(page);
     await expect(voo(page, 'Aluno 1000').locator('.c-hr')).toContainText('08:20–09:20');
     await expect(voo(page, 'Aluno 1000').locator('.fixo')).toHaveCount(0);
@@ -635,20 +635,68 @@ test.describe('Voo agendado na Escala', () => {
 
     // Fora da escala quando ela é aprovada: de volta, ele fica no lugar do agendamento
     await naDemanda(page);
-    await pedido(page, 1000).locator('[data-f="fly"]').uncheck();
+    await caixaVoa(pedido(page, 1000)).uncheck();
     await abrirEscala(page);
-    await confirmar(page, '#btn-aprovar');
+    await aprovar(page);
     await expect(page.locator('#selo-aprovada')).toBeVisible();
     await naDemanda(page);
-    await pedido(page, 1000).locator('[data-f="fly"]').check();
+    await caixaVoa(pedido(page, 1000)).check();
     await abrirEscala(page);
     await expect(voo(page, 'Aluno 1000').locator('.c-hr')).toContainText('10:10–11:10');
     await expect(cadeado).toHaveAttribute('aria-label', 'Voo fixo: agendado na escala');
     await expect(voo(page, 'Aluno 1001').locator('.fixo')).toHaveAttribute('aria-label', 'Voo fixo: escala aprovada');
 
-    await confirmar(page, '#btn-reabrir');
+    await reabrir(page);
     await expect(page.locator('#selo-aprovada')).toBeHidden();
     await expect(cadeado).toHaveAttribute('aria-label', 'Voo fixo: agendado na escala');
     await expect(voo(page, 'Aluno 1001').locator('.fixo')).toHaveCount(0);
   });
+});
+
+// O foco depois de uma ação, na Demanda (vieram de acessibilidade.spec.js)
+test.describe('O foco depois de uma ação', () => {
+  const emFoco = page => page.evaluate(() => {
+    const el = document.activeElement;
+    return el === document.body ? 'body' : `${el.tagName.toLowerCase()}${['data-f', 'data-a', 'data-act', 'data-fkey', 'data-id', 'id'].filter(a => el.hasAttribute(a)).map(a => `[${a}="${el.getAttribute(a)}"]`).join('')}`;
+  });
+
+  test('o Voa da Demanda (a linha que some com "Só quem voa" passa o foco para a seguinte) e a disponibilidade em Recursos', async ({ page }) => {
+    await abrirComExemplo(page);
+    await irPara(page, 'dem');
+    const voando = page.locator('#dem tr[data-k="d"]:not(.off)');
+    // As missões extras do aluno saem junto com a principal: o foco vai para o Voa do próximo aluno
+    const ids = await voando.evaluateAll(linhas => linhas.map(l => l.dataset.id));
+    const [primeira, segunda] = [ids[0], ids.find(id => id !== ids[0])];
+    await caixaVoa(voando.nth(0)).focus();
+    await page.keyboard.press('Space');
+    await expect(page.locator(`#dem tr[data-k="d"][data-id="${primeira}"][data-mid="0"]`)).toBeHidden();
+    await expect(caixaVoa(page.locator(`#dem tr[data-k="d"][data-id="${segunda}"]`)).first()).toBeFocused();
+    await irPara(page, 'rec');
+    await tabelaDoDia(page).locator('input[data-a="av"][data-id="PR-BTB"]').focus();
+    await page.keyboard.press('Space');
+    expect(await emFoco(page)).toBe('input[data-a="av"][data-id="PR-BTB"]');
+  });
+
+  // O Tab que sai de um campo digitado: o change chega com o foco já fora do campo, e a linha é redesenhada
+  const vizinho = page => page.evaluate(() => {
+    const el = document.activeElement;
+    if (el === document.body) return 'body';
+    const tr = el.closest('tr');
+    return `${el.tagName.toLowerCase()}[${el.dataset.f || el.dataset.a || el.dataset.act || ''}] linha=${tr ? `${tr.dataset.id || tr.dataset.r || ''}/${tr.dataset.mid || ''}` : '-'}`;
+  });
+  for (const [nome, aba, seletor, valores] of [['a duração na Demanda', 'dem', '#dem tr[data-k="d"]:not(.off) input[data-f="nb"]', ['1.5', '2']]]) {
+    test(`digitar ${nome} e sair com Tab ou Shift+Tab leva ao mesmo vizinho que sem digitar, com a linha redesenhada`, async ({ page }) => {
+      await abrirComExemplo(page);
+      await irPara(page, aba);
+      const campo = page.locator(seletor).nth(2);
+      for (const [i, tecla] of ['Tab', 'Shift+Tab'].entries()) {
+        await campo.focus();
+        await page.keyboard.press(tecla);
+        const semDigitar = await vizinho(page);
+        await campo.fill(valores[i]);
+        await page.keyboard.press(tecla);
+        expect(await vizinho(page), tecla).toBe(semDigitar);
+      }
+    });
+  }
 });

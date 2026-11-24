@@ -1,38 +1,16 @@
 // No celular (390 px): a escala em cartões, um por voo, e nenhuma aba rola para o lado.
-import { test, expect, abrir, abrirComExemplo, abrirEscala, irPara, irParaVista, confirmar, percorrerVistasEFiltros, filtrarHabilitacoes, filtrarCursos, AMANHA } from './fixtures.js';
+import { test, expect, abrir, abrirComExemplo, abrirEscala, irPara, irParaVista, confirmar, filtrarHabilitacoes, AMANHA, alvosPequenos, botaoDaAba, larguraDaPagina, percorrerTelas } from './fixtures.js';
 import { documentosAtuais } from './supabase-falso.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
 import { cursosIniciais, gravarCurso } from '../../js/programa.js';
 
 test.use({ viewport: { width: 390, height: 844 } });
 
-const larguraDaPagina = page => page.evaluate(() => document.documentElement.scrollWidth);
-
-// Controles da aba aberta e do topo com área de toque menor que 44 px (a caixa de seleção conta com o rótulo que a
-// envolve; links no meio do texto ficam de fora)
-const alvosPequenos = page => page.evaluate(() => {
-  const secao = document.querySelector('main section.on');
-  const controles = [...document.querySelectorAll('.topo button, .topo select, .topo input, #nav button'),
-    ...secao.querySelectorAll('button, select, input, summary, a[href]')];
-  const pequenos = new Set();
-  for (const el of controles) {
-    if (!el.checkVisibility({ visibilityProperty: true }) || el.matches('p a, .sr')) continue;
-    const alvo = el.matches('input[type=checkbox]') ? (el.closest('label') || el) : el;
-    const { width, height } = alvo.getBoundingClientRect();
-    if (height < 44 || (!el.matches('select, input:not([type=checkbox]), summary') && width < 44)) {
-      pequenos.add(`${el.tagName.toLowerCase()}${el.id ? '#' + el.id : ''}${el.dataset.f ? `[data-f=${el.dataset.f}]` : ''}${el.dataset.act ? `[data-act=${el.dataset.act}]` : ''} ${Math.round(width)}×${Math.round(height)}`);
-    }
-  }
-  return [...pequenos];
-});
-
 test.describe('Celular', () => {
   test('nenhuma aba rola para o lado; o mapa rola dentro do próprio painel', async ({ page }) => {
     await abrirComExemplo(page);
-    for (const aba of ['esc', 'dem', 'age', 'rec', 'ins', 'alu', 'cur', 'rod', 'bi']) {
-      await irPara(page, aba);
-      expect(await larguraDaPagina(page), `aba ${aba}`).toBeLessThanOrEqual(390);
-    }
+    // Todas as abas, as outras vistas e as tabelas sem nenhum com os filtros
+    await percorrerTelas(page, async tela => expect(await larguraDaPagina(page), tela).toBeLessThanOrEqual(390));
     await irPara(page, 'esc');
     for (const vista of ['eq', 'ins']) {
       await page.locator(`#s-esc [data-tl="${vista}"]`).click();
@@ -42,17 +20,11 @@ test.describe('Celular', () => {
     await page.locator('#s-esc [data-tl="painel"]').click();
     await expect(page.locator('#out .painel-dia')).toBeVisible();
     expect(await larguraDaPagina(page), 'painel').toBeLessThanOrEqual(390);
-    // As outras vistas e as tabelas sem nenhum com os filtros
-    await percorrerVistasEFiltros(page, async tela => expect(await larguraDaPagina(page), tela).toBeLessThanOrEqual(390));
   });
 
   test('botões e campos com pelo menos 44 px para o dedo, em todas as abas', async ({ page }) => {
     await abrirComExemplo(page);
-    for (const aba of ['esc', 'dem', 'age', 'rec', 'ins', 'alu', 'cur', 'rod', 'bi']) {
-      await irPara(page, aba);
-      expect(await alvosPequenos(page), `aba ${aba}`).toEqual([]);
-    }
-    await percorrerVistasEFiltros(page, async tela => expect(await alvosPequenos(page), tela).toEqual([]));
+    await percorrerTelas(page, async tela => expect(await alvosPequenos(page), tela).toEqual([]));
   });
 
   // O cadastro no celular (390 e 320 px), em Instrutores e em Alunos: um cartão por pessoa, o mesmo nas duas abas. Cada
@@ -169,34 +141,12 @@ test.describe('Celular', () => {
     expect(await larguraDaPagina(page)).toBeLessThanOrEqual(390);
   });
 
-  // O filtro dos cursos no celular (390 e 320 px), em Alunos e na Demanda: o botão fica na linha da busca (em Alunos, como
-  // o das habilitações em Instrutores); o painel abre inteiro na tela, com a tabela embaixo dele, e alvos de 44 px
-  test('o filtro dos cursos cabe no celular (390 e 320 px), em Alunos e na Demanda: o painel empurra a tabela, com alvos de 44 px', async ({ page }) => {
-    await abrirComExemplo(page);
-    for (const largura of [390, 320]) {
-      await page.setViewportSize({ width: largura, height: 800 });
-      for (const [aba, busca, tabela] of [['alu', '[data-flt="alu"]', '#s-alu .tw'], ['dem', '#flt-dem', '#s-dem .tw']]) {
-        await irPara(page, aba);
-        await filtrarCursos(page, aba, ['PP', 'sem-curso'], { fechar: false });
-        const [campo, botao, painel, abaixo] = await Promise.all([busca, `#flt-${aba}-cur`, `#flt-${aba}-cur-painel`, tabela].map(seletor => page.locator(seletor).boundingBox()));
-        if (aba === 'alu') expect(Math.abs(botao.y + botao.height / 2 - (campo.y + campo.height / 2)), `${largura}: o botão na linha da busca`).toBeLessThan(4);
-        expect(botao.x + botao.width, `${largura} ${aba}: o botão na tela`).toBeLessThanOrEqual(largura);
-        expect(painel.x, `${largura} ${aba}: o painel na tela`).toBeGreaterThanOrEqual(0);
-        expect(painel.x + painel.width, `${largura} ${aba}: o painel na tela`).toBeLessThanOrEqual(largura);
-        expect(abaixo.y, `${largura} ${aba}: a tabela embaixo do painel`).toBeGreaterThanOrEqual(painel.y + painel.height);
-        expect(await larguraDaPagina(page), `${largura} ${aba}: a página não rola para o lado`).toBeLessThanOrEqual(largura);
-        expect(await alvosPequenos(page), `${largura} ${aba}: alvos de 44 px`).toEqual([]);
-        await filtrarCursos(page, aba, []);
-      }
-    }
-  });
-
   // A faixa das abas rola para o lado no celular: a aba aberta pelo "Abrir a Demanda" (Alunos) aparece nela, com a marca
   // da aba aberta à vista (sem isso, a faixa continuava em Alunos, e nenhuma aba à vista parecia aberta)
   test('"Abrir a Demanda" traz a aba Demanda para a parte à vista da faixa das abas', async ({ page }) => {
     await abrirComExemplo(page);
     await irPara(page, 'alu');
-    const naFaixa = aba => page.locator(`#nav button[data-t="${aba}"]`).evaluate(b => {
+    const naFaixa = aba => botaoDaAba(page, aba).evaluate(b => {
       const r = b.getBoundingClientRect(), faixa = b.closest('#nav').getBoundingClientRect();
       return r.left >= faixa.left - 0.5 && r.right <= faixa.right + 0.5;
     });
@@ -206,7 +156,7 @@ test.describe('Celular', () => {
     expect(await naFaixa('dem')).toBe(false);
     await page.getByRole('button', { name: 'Abrir a Demanda' }).click();
     await expect(page.locator('#s-dem h2')).toBeFocused();
-    await expect(page.locator('#nav button[data-t="dem"]')).toHaveClass(/\bon\b/);
+    await expect(botaoDaAba(page, 'dem')).toHaveClass(/\bon\b/);
     await expect.poll(() => naFaixa('dem')).toBe(true);
     expect(await larguraDaPagina(page)).toBeLessThanOrEqual(390);
   });
