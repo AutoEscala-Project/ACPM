@@ -325,9 +325,14 @@ test.describe('A sessão da TV da recepção', () => {
     await entrarNaTV(page, CONTAS.painel, { manter: true });
     await expect(linhas(page)).toHaveCount(2);
     await page.evaluate(() => { window.antesDaRecarga = true; });
-    // 02:59: a internet cai (o servidor e o próprio endereço do app)
+    // 02:59: uma busca boa, e só depois a internet cai (o servidor e o próprio endereço do app). A busca do minuto sai
+    // depois de etapas assíncronas do supabase-js; sem esperar a resposta, a queda corria com ela e o aviso dizia o
+    // horário da busca boa anterior. A página que volta à vista busca na hora (ou aproveita a busca a caminho)
     const semInternet = route => route.abort('internetdisconnected');
     await page.clock.runFor(4 * MINUTO);
+    const buscaDas0259 = page.waitForResponse(r => r.url().includes('/rpc/painel_do_dia') && r.ok());
+    await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+    await buscaDas0259;
     servidor.desconectar();
     await context.route(/\/painel\.html/, semInternet);
     // 03:00 passa: a página não recarregou, e o app continua na tela (com o aviso, quando passar dos 3 minutos)

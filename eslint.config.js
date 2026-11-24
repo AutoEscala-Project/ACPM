@@ -5,7 +5,8 @@ import js from '@eslint/js';
 import globals from 'globals';
 
 export default [
-  { ignores: ['node_modules/', 'test-results/', 'playwright-report/'] },
+  // publicar/ e .wrangler/: a cópia que vai para o Cloudflare (scripts/pasta-publicada.mjs) e os temporários do wrangler
+  { ignores: ['node_modules/', 'test-results/', 'playwright-report/', 'publicar/', '.wrangler/'] },
   js.configs.recommended,
   { files: ['js/**/*.js'], languageOptions: { globals: globals.browser } },
   { files: ['scripts/**/*.mjs', '*.js', 'test/unit/**/*.js', 'test/helpers/**/*.js'], languageOptions: { globals: globals.node } },
