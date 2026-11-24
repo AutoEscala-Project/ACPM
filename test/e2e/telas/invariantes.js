@@ -62,10 +62,10 @@ export const semNome = (page, raiz) => page.evaluate(seletor => {
 const ESTADOS = [...DE_INSTRUTORES, ...DE_ALUNOS, ...DA_DEMANDA, ...DE_RECURSOS, ...DE_CURSOS];
 
 // Todas as telas: cada aba como ela abre (naAba(aba); sem ela, conferir(`aba ${aba}`)) e, depois, cada estado dos drivers
-// (conferir(nome)). No fim, a busca e as marcas voltam a vazias, Recursos, à Disponibilidade do dia, e Cursos, ao
-// primeiro curso
-export async function percorrerTelas(page, conferir, { naAba = aba => conferir(`aba ${aba}`) } = {}) {
-  for (const aba of ABAS) {
+// (conferir(nome)). As abas são ABAS, ou as que o teste leu da página (abas: uma aba nova também é conferida). No fim, a
+// busca e as marcas voltam a vazias, Recursos, à Disponibilidade do dia, e Cursos, ao primeiro curso
+export async function percorrerTelas(page, conferir, { abas = ABAS, naAba = aba => conferir(`aba ${aba}`) } = {}) {
+  for (const aba of abas) {
     await irPara(page, aba);
     await naAba(aba);
   }

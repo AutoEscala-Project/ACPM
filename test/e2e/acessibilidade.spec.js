@@ -172,8 +172,8 @@ test.describe('Telas de 320 px', () => {
       const largura = await page.evaluate(() => document.documentElement.scrollWidth);
       if (largura > 320) largas.push(`${tela}: ${largura}px`);
     };
-    // Todas as abas, as outras vistas e as tabelas sem nenhum com os filtros
-    await percorrerTelas(page, conferir, { naAba: conferir });
+    // As abas à vista, as outras vistas e as tabelas sem nenhum com os filtros
+    await percorrerTelas(page, conferir, { abas, naAba: conferir });
     expect(largas).toEqual([]);
   });
 
