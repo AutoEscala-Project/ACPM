@@ -1,13 +1,26 @@
 name: Testes
 
+# Os testes rodam em todo pull request e em cada push no main e no previa (os dois que vão para o ar: publicar.yml espera
+# este workflow terminar verde). Um push num branch sem PR não roda nada: o PR roda. À mão: "Run workflow" no Actions.
 on:
   push:
+    branches: [main, previa]
   pull_request:
+  workflow_dispatch:
+
+# Um commit novo no mesmo PR cancela os testes do anterior. Os pushes num mesmo branch (main, previa) rodam um de cada
+# vez, na ordem: um push que chega enquanto outro roda espera, e um terceiro toma o lugar do que esperava (o mais novo já
+# o contém). Assim a publicação que vem depois dos testes (publicar.yml) não leva ao ar um commit mais velho depois de
+# um mais novo (a não ser que alguém rode de novo, à mão, os testes de um push antigo)
+concurrency:
+  group: testes-${{ github.event.pull_request.number && format('pr-{0}', github.event.pull_request.number) || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  testes:
+  verificar:
+    name: lint e unitários
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -17,6 +30,25 @@ jobs:
       - run: npm ci
       - name: Lint (ESLint e exportações sem uso)
         run: npm run lint
+      - name: Testes unitários (motor, regras, dados)
+        run: npm run test:unit
+
+  # O E2E em duas partes paralelas (o Playwright reparte os testes, fullyParallel): cada parte leva metade do tempo
+  e2e:
+    name: e2e (parte ${{ matrix.parte }} de 2)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        parte: [1, 2]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
       # Chromium com as bibliotecas do sistema, que vêm dos espelhos do Ubuntu (uns 20 s). Se o runner não alcança os
       # espelhos (aconteceu em 11/11/2026: a instalação travou até o fim do tempo do job), instala só o navegador; a
       # imagem do GitHub já tem as bibliotecas de que ele precisa
@@ -28,14 +60,12 @@ jobs:
       - name: Só o Chromium (espelhos do Ubuntu fora do alcance)
         if: steps.chromium.outcome != 'success'
         run: npx playwright install chromium
-      - name: Testes unitários (motor, regras, dados)
-        run: npm run test:unit
-      - name: Testes E2E (Playwright)
-        run: npm run test:e2e
+      - name: Testes E2E (Playwright, parte ${{ matrix.parte }} de 2)
+        run: npx playwright test --shard=${{ matrix.parte }}/2
       - uses: actions/upload-artifact@v7
         if: failure()
         with:
-          name: relatorio-playwright
+          name: relatorio-playwright-parte-${{ matrix.parte }}
           path: |
             playwright-report/
             test-results/

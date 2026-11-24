@@ -30,7 +30,7 @@ import './eventos/cursos.js';
 import './eventos/agendamento.js';
 import { setRole, abrirData, lerData, dadosPreparados, carregarBI } from './actions.js';
 import { ehDomingo } from './agenda.js';
-import { projetoSupabase } from './config-supabase.js';
+import { projetoSupabase, enderecoSemBanco } from './config-supabase.js';
 import { iniciarDicas } from './dicas.js';
 import { configurarMeteorologia } from './meteorologia.js';
 import { $, showToast, mostrarAviso, avisoAberto, avisarDoLink } from './dom.js';
@@ -88,6 +88,9 @@ window.addEventListener('beforeunload', e => {
   // O aeroclube não opera aos domingos: um link para um domingo abre a segunda
   const domingo = dataIsoValida(pedida) && ehDomingo(pedida);
   const data = dataIsoValida(pedida) ? (domingo ? somarDias(pedida, 1) : pedida) : amanha;
+
+  // Num endereço que não é o do app, o modo local (sem o banco) avisa no alto, antes dos dados (e também se eles falharem)
+  if (enderecoSemBanco()) $('#aviso-endereco').hidden = false;
 
   // Sessão e dados. Se algo falhar (sem conexão, conversão pela metade), o app não abre com dados incompletos:
   // fica o aviso para recarregar (nada se perde; o que faltou é retomado na próxima abertura)
