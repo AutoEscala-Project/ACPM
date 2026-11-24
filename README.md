@@ -30,17 +30,36 @@ A aplicação usa módulos ES, então precisa ser servida por HTTP (abrir o `ind
 
 ```sh
 npm install
-npm run serve      # http://localhost:4173
+npm run serve      # o endereço sai no terminal: http://localhost:<a porta desta pasta>
 ```
+
+Cada pasta do repositório (o clone e cada worktree) tem a sua porta, tirada do caminho dela (`scripts/porta.mjs`: de
+4200 a 4898, par): o app de duas pastas roda ao mesmo tempo sem disputar a porta. `PORT=4173 npm run serve` escolhe
+outra (a 4173 é a que o login do Supabase aceita na volta de um link de e-mail, `supabase/config.toml`). Duas pastas
+coincidem 1 vez em 350: a segunda para com `EADDRINUSE` e escolhe outra com `PORT`.
 
 ## Testes
 
 ```sh
-npm test               # unitários + E2E
+npm test               # lint + unitários + E2E (o "verde" de cada mudança: CI=1 npm test)
+npm run lint           # ESLint e as exportações sem uso (scripts/exportacoes-sem-uso.mjs)
 npm run test:unit      # motor de alocação, regras e camada de dados (node:test)
 npm run test:e2e       # aplicação no navegador (Playwright)
 ```
 
+- Quanto leva: `CI=1 npm test` leva uns 4 minutos num Mac de 10 núcleos (medido em 24/11/2026: o lint em segundos, os
+  unitários em uns 5 s, os 578 testes E2E em 3,6 min, 6 deles pulados sem as senhas do site publicado). No CI, o job
+  tem 15 minutos; se os E2E passarem de 10, o passo deles vira dois shards (`npx playwright test --shard=1/2` e `2/2`).
+- Os testes E2E sobem o próprio servidor na porta seguinte à da pasta (`playwright.config.js`), sem reaproveitar um
+  servidor que já esteja rodando: uma porta ocupada é erro, nunca os arquivos de outra pasta.
+- Os testes E2E chegam às telas pelos drivers de `test/e2e/telas/` (reexportados por `test/e2e/fixtures.js`): `casca.js`
+  (abrir e entrar, `appPronto`, as abas, a data, o Histórico, o menu da conta), `recursos.js`, `instrutores.js`,
+  `alunos.js`, `demanda.js`, `pedidos.js` (o formulário da Agenda), `escala.js` (ler, aprovar, reabrir, exportar) e
+  `cursos.js`; `invariantes.js` tem as conferências de todas as telas (o nome para o leitor de tela, os 44 px, a página
+  que não rola de lado) e `percorrerTelas`, que passa por todas as abas e pelos `ESTADOS` de cada driver. Um seletor
+  reservado (`#dt`, `#eqs`, `#inst-dia`, `data-f="fly"`, `#ag-*`…) aparece só no driver dele e nos testes da tela dona
+  dele (`test/unit/donos-dos-seletores.test.js`): quando uma tela muda, mudam o driver e os testes dela. As frases que o
+  Manual precisa dizer (e as que saíram) ficam em `test/e2e/manual-frases.js`, num bloco por tela.
 - Na primeira vez, `npx playwright install chromium` baixa o navegador dos testes.
   Para usar o Google Chrome já instalado: `PW_CHANNEL=chrome npm run test:e2e`.
 - Para testar uma versão publicada em vez do servidor local:
@@ -55,9 +74,11 @@ npm run test:e2e       # aplicação no navegador (Playwright)
 - A planilha do Excel (o modelo do aeroclube) é conferida por fora em `test/helpers/xlsx.js`: o ZIP é lido com o zlib
   do Node, a estrutura é comparada com a do modelo e o lugar de cada voo sai dos rótulos da própria planilha, em dias
   aleatórios (`test/unit/planilha.test.js`) e contra o CSV da mesma tela (`test/e2e/planilha.spec.js`).
-- O modo compartilhado é testado com um servidor Supabase falso (`test/e2e/supabase-falso.js`) que segue o mesmo
-  contrato do banco. `test/e2e/publicado.spec.js` entra no site publicado com login real (só roda com as senhas
-  das contas no ambiente: veja o cabeçalho do arquivo).
+- O modo compartilhado é testado com um servidor Supabase falso (`test/e2e/supabase-falso.js`, o roteador; a agenda e
+  os dados pessoais em `test/e2e/falso/`) que segue o mesmo contrato do banco. `test/e2e/publicado.spec.js` entra no
+  site publicado com login real (só roda com as senhas das contas no ambiente: veja o cabeçalho do arquivo);
+  `ACPM_INICIO='./?supabase=previa'` o faz entrar na prévia pelo app de uma pasta (`BASE_URL=http://localhost:<porta>/`).
+- `npm run test:db` (os testes pgTAP, no banco da prévia) recusa o projeto de produção.
 
 ## Banco de dados (Supabase)
 
