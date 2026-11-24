@@ -2,7 +2,7 @@
 // clique (ou toque) no espaço livre de uma linha (o horário da lista do recurso mais perto do clique) e "+ Aluno na turma"
 // no popup da turma de Ground abrem o diálogo "Agendar voo" (test/e2e/agendamento.spec.js). O mapa mostra também as
 // linhas livres: todos os recursos (o avião em manutenção, riscado e sem o "+") e os instrutores disponíveis no dia
-import { test, expect, abrir, abrirEscala, irPara, AMANHA } from './fixtures.js';
+import { test, expect, abrir, abrirEscala, irPara, AMANHA, diaSeguinte, rotuloDaData } from './fixtures.js';
 import { aluno, cenario, instrutor, GROUND_C152 } from '../helpers/montar.js';
 import { FROTA } from '../helpers/estado.js';
 
@@ -257,8 +257,8 @@ test.describe('Agendar pelo mapa', () => {
     await expect(noturno.locator('.c-hr')).toContainText('17:30–21:30');
     // Uma alteração grava a escala do dia (o dia seguinte lê a escala gravada)
     await noturno.locator('select[data-f="fstatus"]').selectOption('Pendente');
-    await page.locator('#dt-prox').click();
-    await expect(page.locator('#dt-rotulo')).toContainText('12/11');
+    await diaSeguinte(page);
+    await expect(rotuloDaData(page)).toContainText('12/11');
     await abrirEscala(page);
     await abrirMapa(page);
     const volta = page.locator('#out .tl-row:has(.tl-bar)');

@@ -1,5 +1,5 @@
 // Tela da Escala: Lista, Por recurso ou Por instrutor; resumo com erros e avisos agrupados; uma linha por voo.
-import { test, expect, abrir, abrirComExemplo, abrirEscala, irPara, lerEscala } from './fixtures.js';
+import { test, expect, abrir, abrirComExemplo, abrirEscala, irPara, lerEscala, alternarDisponivel } from './fixtures.js';
 import { aluno, cenario, instrutor, GROUND_C152 } from '../helpers/montar.js';
 import { GLOSSARIO } from '../../js/glossario.js';
 import { COLUNAS_DO_PAINEL } from '../../js/config-do-painel.js';
@@ -209,7 +209,7 @@ test.describe('Tela da Escala', () => {
     await abrirComExemplo(page);
     await expect(page.locator('#escala-atualizada')).toBeHidden();
     await irPara(page, 'rec');
-    await page.locator('#eqs input[data-id="PR-BTB"]').uncheck();
+    await alternarDisponivel(page, 'PR-BTB', false);
     await irPara(page, 'esc');
     // Discreta, com um relógio, ao lado do título (e não na barra)
     const atualizada = page.locator('#s-esc h2 #escala-atualizada');

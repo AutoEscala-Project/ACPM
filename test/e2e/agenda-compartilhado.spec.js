@@ -1,6 +1,6 @@
 // Agenda de Solicitações no modo compartilhado: a Secretaria registra pedidos (a escala ela só consulta), o
 // Operador usa a exceção da coordenação e o Gestor só consulta. O servidor falso aplica o mesmo prazo do banco.
-import { test, expect, entrar, preencherLogin, irPara, abrirMenuDaConta, AMANHA, URL_APP } from './fixtures.js';
+import { test, expect, entrar, preencherLogin, irPara, abrirMenuDaConta, AMANHA, URL_APP, botaoDaAba, campoDaAgenda, campoDaData, diaSeguinte, importarDaAgenda, rotuloDaData, rotulosDasAbas } from './fixtures.js';
 import { instalarSupabaseFalso, documentosAtuais, CONTAS } from './supabase-falso.js';
 import { estadoSintetico } from '../helpers/estado.js';
 import { aluno } from '../helpers/montar.js';
@@ -34,7 +34,7 @@ test.describe('Agenda de Solicitações (modo compartilhado)', () => {
   test('a Agenda aberta enquanto os dados carregavam é lida de novo quando eles chegam (com os alunos)', async ({ page, context }) => {
     await enquantoCarrega(page, context, () => irPara(page, 'age'));
     await expect(page.locator('#s-age')).toBeVisible();
-    await expect(page.locator('#ag-aluno option', { hasText: 'Aluno 1001' })).toHaveCount(1);
+    await expect(campoDaAgenda(page, 'aluno').locator('option', { hasText: 'Aluno 1001' })).toHaveCount(1);
   });
 
   test('o dia escolhido na Agenda enquanto os dados carregavam continua escolhido, na Agenda e no app', async ({ page, context }) => {
@@ -43,7 +43,7 @@ test.describe('Agenda de Solicitações (modo compartilhado)', () => {
       await page.locator('[data-cal][data-dia="2026-11-13"]').click();
     }, CONTAS.operador);
     await expect(page.locator('#agenda-data')).toContainText('13/11');
-    await expect(page.locator('#dt')).toHaveValue('2026-11-13');
+    await expect(campoDaData(page)).toHaveValue('2026-11-13');
   });
 
   test('a Secretaria abre na agenda, registra pedidos e só consulta a escala', async ({ page, context }) => {
@@ -51,12 +51,12 @@ test.describe('Agenda de Solicitações (modo compartilhado)', () => {
     await entrar(page, CONTAS.secretaria);
     await expect(page.locator('#usuario')).toHaveText('Secretaria de Teste · Secretaria');
     await expect(page.locator('#s-age')).toBeVisible();
-    await expect(page.locator('#ag-aluno option', { hasText: 'Aluno 1001' })).toHaveCount(1);
+    await expect(campoDaAgenda(page, 'aluno').locator('option', { hasText: 'Aluno 1001' })).toHaveCount(1);
 
-    await page.locator('#ag-aluno').selectOption({ label: 'Aluno 1001' });
-    await page.locator('#ag-horario').selectOption('12:40');
-    await page.locator('#ag-horas').fill('2.5');
-    await page.locator('#ag-por').fill('Maria');
+    await campoDaAgenda(page, 'aluno').selectOption({ label: 'Aluno 1001' });
+    await campoDaAgenda(page, 'horario').selectOption('12:40');
+    await campoDaAgenda(page, 'horas').fill('2.5');
+    await campoDaAgenda(page, 'por').fill('Maria');
     await page.locator('#form-agenda [type="submit"]').click();
     await expect(page.locator('#agenda-lista tbody tr')).toHaveCount(1);
     const pedido = page.locator('#agenda-lista tbody tr').first();
@@ -68,11 +68,11 @@ test.describe('Agenda de Solicitações (modo compartilhado)', () => {
 
     await page.locator('#agenda-cal [data-dia="2026-11-10"]').click();
     await expect(page.locator('#form-agenda [type="submit"]')).toBeDisabled();
-    await expect(page.locator('#ag-excecao')).toBeHidden();
+    await expect(campoDaAgenda(page, 'excecao')).toBeHidden();
 
     // Ela vê a Agenda, a Escala e os Cursos (que só consulta) e, pelos dados pessoais, Instrutores e Alunos
-    await expect(page.locator('#nav button:visible .aba-rotulo')).toHaveText(['Escala', 'Agenda', 'Instrutores', 'Alunos', 'Cursos']);
-    await page.locator('#nav button[data-t="esc"]').click();
+    await expect(rotulosDasAbas(page, { visiveis: true })).toHaveText(['Escala', 'Agenda', 'Instrutores', 'Alunos', 'Cursos']);
+    await botaoDaAba(page, 'esc').click();
     await expect(page.locator('body')).toHaveAttribute('data-role', 'gestor');
     expect(servidor.gravacoes).toEqual([]);
   });
@@ -80,11 +80,11 @@ test.describe('Agenda de Solicitações (modo compartilhado)', () => {
   test('o Operador registra fora do prazo pela exceção da coordenação', async ({ page, context }) => {
     const servidor = await instalarSupabaseFalso(context, comAlunos());
     await entrar(page, CONTAS.operador);
-    await page.locator('#nav button[data-t="age"]').click();
+    await botaoDaAba(page, 'age').click();
     await page.locator('#agenda-cal [data-dia="2026-11-10"]').click();
-    await page.locator('#ag-aluno').selectOption({ label: 'Aluno 1000' });
-    await page.locator('#ag-por').fill('Coordenação');
-    await page.locator('#ag-excecao').click();
+    await campoDaAgenda(page, 'aluno').selectOption({ label: 'Aluno 1000' });
+    await campoDaAgenda(page, 'por').fill('Coordenação');
+    await campoDaAgenda(page, 'excecao').click();
     await expect(page.locator('#agenda-lista tbody tr').first()).toContainText('Exceção da coordenação');
     expect(servidor.solicitacoes.map(s => [s.data, s.excecao])).toEqual([['2026-11-10', true]]);
   });
@@ -94,7 +94,7 @@ test.describe('Agenda de Solicitações (modo compartilhado)', () => {
     servidor.solicitacoes.push({ id: 1, data: AMANHA, aluno: 1000, aluno_nome: 'Aluno 1000', missao: 'Voo Local', janela: 'manha', horario: null,
       observacao: null, registrado_por: 'Maria', registrado_em: '2026-11-10T14:00:00.000Z', conta: 'Secretaria de Teste', excecao: false, cancelada_em: null, cancelada_por: null });
     await entrar(page, CONTAS.gestor);
-    await page.locator('#nav button[data-t="age"]').click();
+    await botaoDaAba(page, 'age').click();
     await expect(page.locator('#agenda-lista tbody tr')).toHaveCount(1);
     await expect(page.locator('#form-agenda')).toBeHidden();
     await expect(page.locator('#agenda-lista [data-act="cancelar-pedido"]')).toBeHidden();
@@ -108,12 +108,12 @@ test.describe('Agenda de Solicitações (modo compartilhado)', () => {
       registrado_por: 'Secretaria', registrado_em: '2026-11-10T12:00:00.000Z', excecao: false, cancelada_em: null, cancelada_por: null
     });
     await entrar(page, CONTAS.operador);
-    await page.locator('#nav button[data-t="dem"]').click();
+    await botaoDaAba(page, 'dem').click();
     const liberar = servidor.segurar('/rest/v1/solicitacoes');
-    await page.locator('#importar-agenda').click();
-    await page.locator('#dt-prox').click();
+    await importarDaAgenda(page);
+    await diaSeguinte(page);
     // A data nova já aberta (o rótulo muda depois de carregar)
-    await expect(page.locator('#dt-rotulo')).toContainText('12/11');
+    await expect(rotuloDaData(page)).toContainText('12/11');
     liberar();
     await expect(page.locator('#toast-box')).toContainText('A data mudou durante a importação da agenda: nada foi importado.');
     const dia = servidor.dias.get('2026-11-12');

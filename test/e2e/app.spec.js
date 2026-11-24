@@ -1,4 +1,4 @@
-import { test, expect, abrir, irPara, abrirMenuDaConta } from './fixtures.js';
+import { test, expect, abrir, irPara, abrirMenuDaConta, botaoDaAba, campoDaData, diaAnterior, diaSeguinte, relativoDaData, rotuloDaData, rotulosDasAbas, SETAS_DA_DATA } from './fixtures.js';
 import { GLOSSARIO } from '../../js/glossario.js';
 
 test.describe('Aplicação', () => {
@@ -7,9 +7,9 @@ test.describe('Aplicação', () => {
     await expect(page).toHaveTitle('AutoEscala - ACPM');
     await expect(page.locator('meta[name="application-name"]')).toHaveAttribute('content', 'AutoEscala - ACPM');
     await expect(page.locator('meta[name="apple-mobile-web-app-title"]')).toHaveAttribute('content', 'AutoEscala');
-    await expect(page.locator('#nav button .aba-rotulo')).toHaveText(['Escala', 'Demanda', 'Agenda', 'Recursos', 'Instrutores', 'Alunos', 'Cursos', 'Rodízio', 'BI']);
+    await expect(rotulosDasAbas(page)).toHaveText(['Escala', 'Demanda', 'Agenda', 'Recursos', 'Instrutores', 'Alunos', 'Cursos', 'Rodízio', 'BI']);
     await expect(page.locator('#s-esc')).toBeVisible();
-    await expect(page.locator('#nav button[data-t="esc"]')).toHaveClass(/\bon\b/);
+    await expect(botaoDaAba(page, 'esc')).toHaveClass(/\bon\b/);
     await expect(page.locator('#s-rec')).toBeHidden();
   });
 
@@ -33,32 +33,32 @@ test.describe('Aplicação', () => {
 
   test('a data em uso fica no topo, em todas as abas; os botões ‹ e › trocam o dia', async ({ page }) => {
     await abrir(page);
-    await expect(page.locator('#dt-rotulo')).toHaveText('quarta-feira, 11/11', { useInnerText: true });
-    await expect(page.locator('#dt-rel')).toHaveText('amanhã');
+    await expect(rotuloDaData(page)).toHaveText('quarta-feira, 11/11', { useInnerText: true });
+    await expect(relativoDaData(page)).toHaveText('amanhã');
     await irPara(page, 'dem');
-    await expect(page.locator('#dt-rotulo')).toBeVisible();
-    await page.locator('#dt-prox').click();
-    await expect(page.locator('#dt')).toHaveValue('2026-11-12');
-    await expect(page.locator('#dt-rotulo')).toHaveText('quinta-feira, 12/11', { useInnerText: true });
-    await expect(page.locator('#dt-rel')).toBeHidden();
-    await page.locator('#dt-ant').click();
-    await expect(page.locator('#dt')).toHaveValue('2026-11-11');
-    await page.locator('#dt-ant').click();
-    await expect(page.locator('#dt')).toHaveValue('2026-11-10');
-    await expect(page.locator('#dt-rel')).toHaveText('hoje');
+    await expect(rotuloDaData(page)).toBeVisible();
+    await diaSeguinte(page);
+    await expect(campoDaData(page)).toHaveValue('2026-11-12');
+    await expect(rotuloDaData(page)).toHaveText('quinta-feira, 12/11', { useInnerText: true });
+    await expect(relativoDaData(page)).toBeHidden();
+    await diaAnterior(page);
+    await expect(campoDaData(page)).toHaveValue('2026-11-11');
+    await diaAnterior(page);
+    await expect(campoDaData(page)).toHaveValue('2026-11-10');
+    await expect(relativoDaData(page)).toHaveText('hoje');
   });
 
   for (const largura of [1280, 560, 360]) test(`o controle da data tem tamanho fixo: as setas não saem do lugar quando o texto muda (${largura} px)`, async ({ page }) => {
     await page.setViewportSize({ width: largura, height: 800 });
     await abrir(page);
-    const caixas = () => page.evaluate(() => ['.topo-data', '#dt-ant', '#dt-prox'].map(s => {
+    const caixas = () => page.evaluate(seletores => seletores.map(s => {
       const r = document.querySelector(s).getBoundingClientRect();
       return [Math.round(r.x), Math.round(r.width)];
-    }));
+    }), ['.topo-data', ...SETAS_DA_DATA]);
     const inicial = await caixas();
     for (const data of ['2026-11-12', '2026-11-10', '2026-11-14', '2026-11-16', '2027-01-04', '2026-12-31']) {
-      await page.locator('#dt').fill(data);
-      await expect(page.locator('#dt')).toHaveValue(data);
+      await campoDaData(page).fill(data);
+      await expect(campoDaData(page)).toHaveValue(data);
       expect(await caixas(), data).toEqual(inicial);
     }
   });
@@ -68,7 +68,7 @@ test.describe('Aplicação', () => {
     await abrir(page);
     for (const aba of ['ins', 'alu', 'cur', 'dem', 'esc', 'bi', 'rec']) {
       await irPara(page, aba);
-      await expect(page.locator(`#nav button[data-t="${aba}"]`)).toHaveClass(/\bon\b/);
+      await expect(botaoDaAba(page, aba)).toHaveClass(/\bon\b/);
       await expect(page.locator('section.on')).toHaveCount(1);
     }
     await expect(page.getByRole('button', { name: /^Próximo:/ })).toHaveCount(0);

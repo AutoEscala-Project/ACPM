@@ -1,6 +1,6 @@
 // Selos de atenção nas abas: avisos da escala, aviões parados ou perto da revisão de 50 horas e pedidos da agenda
 // que ainda não estão na demanda.
-import { test, expect, abrir, irPara, irParaVista, AMANHA, entrar } from './fixtures.js';
+import { test, expect, abrir, irPara, irParaVista, AMANHA, entrar, botaoDaAba, botaoImportarDaAgenda, caixaVoa, importarDaAgenda, tabelaDoDia } from './fixtures.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
 import { instalarSupabaseFalso, documentosAtuais, CONTAS } from './supabase-falso.js';
 import { estadoSintetico } from '../helpers/estado.js';
@@ -23,7 +23,7 @@ test.describe('Selos nas abas', () => {
     await expect(page.locator('#selo-esc')).toHaveClass(/\berro\b/);
 
     await irPara(page, 'dem');
-    await page.locator('#dem tr[data-k="d"] [data-f="fly"]').uncheck();
+    await caixaVoa(page.locator('#dem tr[data-k="d"]')).uncheck();
     await expect(page.locator('#selo-esc')).toBeHidden();
   });
 
@@ -42,8 +42,8 @@ test.describe('Selos nas abas', () => {
     await expect(doDia).toHaveAttribute('title', '1 avião parado ou perto da revisão de 50 horas');
     // A revisão feita: os dois somem
     await irParaVista(page, 'rec', 'dia');
-    await page.locator('#eqs tr[data-r="PR-BTB"] [data-act="revisao"]').click();
-    await page.locator('#eqs tr[data-r="PR-BTB"] [data-act="revisao"]').click();
+    await tabelaDoDia(page).locator('tr[data-r="PR-BTB"] [data-act="revisao"]').click();
+    await tabelaDoDia(page).locator('tr[data-r="PR-BTB"] [data-act="revisao"]').click();
     await expect(page.locator('#selo-rec')).toBeHidden();
     await expect(doDia).toBeHidden();
   });
@@ -55,19 +55,19 @@ test.describe('Selos nas abas', () => {
     await expect(page.locator('#selo-age')).toHaveText('1');
 
     await irPara(page, 'dem');
-    await expect(page.locator('#importar-agenda')).toHaveText('Importar 1 pedido da agenda');
-    await expect(page.locator('#importar-agenda')).not.toHaveClass(/\bsec\b/);
-    await page.locator('#importar-agenda').click();
+    await expect(botaoImportarDaAgenda(page)).toHaveText('Importar 1 pedido da agenda');
+    await expect(botaoImportarDaAgenda(page)).not.toHaveClass(/\bsec\b/);
+    await importarDaAgenda(page);
     await expect(page.locator('#selo-age')).toBeHidden();
-    await expect(page.locator('#importar-agenda')).toHaveText('Importar da agenda');
-    await expect(page.locator('#importar-agenda')).toHaveClass(/\bsec\b/);
+    await expect(botaoImportarDaAgenda(page)).toHaveText('Importar da agenda');
+    await expect(botaoImportarDaAgenda(page)).toHaveClass(/\bsec\b/);
   });
 
   test('o Gestor não vê o selo da agenda (ele não importa pedidos)', async ({ page, context }) => {
     const servidor = await instalarSupabaseFalso(context, documentosAtuais({ ...estadoSintetico(), stu: [aluno(1000)] }, AMANHA));
     servidor.solicitacoes.push(pedido(1));
     await entrar(page, CONTAS.gestor);
-    await expect(page.locator('#nav button[data-t="esc"]')).toHaveClass(/\bon\b/);
+    await expect(botaoDaAba(page, 'esc')).toHaveClass(/\bon\b/);
     await expect(page.locator('#selo-age')).toBeHidden();
   });
 });

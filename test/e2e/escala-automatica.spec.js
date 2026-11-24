@@ -1,5 +1,5 @@
 // A escala acompanha os dados: é refeita a cada alteração do operador e já está pronta ao abrir a aba Escala.
-import { test, expect, abrirSintetico, abrirComExemplo, irPara, lerEscala, AMANHA, entrar } from './fixtures.js';
+import { test, expect, abrirSintetico, abrirComExemplo, irPara, lerEscala, AMANHA, entrar, alternarDisponivel, exportar } from './fixtures.js';
 import { instalarSupabaseFalso, documentosAtuais, CONTAS } from './supabase-falso.js';
 import { estadoSintetico } from '../helpers/estado.js';
 import { comExemplo } from '../helpers/exemplo.js';
@@ -15,13 +15,13 @@ test.describe('Escala automática', () => {
     expect(matricula).toBeTruthy();
 
     await irPara(page, 'rec');
-    await page.locator(`#eqs input[data-id="${matricula}"]`).uncheck();
+    await alternarDisponivel(page, matricula, false);
     await irPara(page, 'esc');
     expect((await lerEscala(page)).linhas.some(l => l.includes(matricula))).toBe(false);
 
     // Para voltar atrás, basta alterar de novo
     await irPara(page, 'rec');
-    await page.locator(`#eqs input[data-id="${matricula}"]`).check();
+    await alternarDisponivel(page, matricula, true);
     await irPara(page, 'esc');
     expect(await lerEscala(page)).toEqual(antes);
   });
@@ -41,7 +41,7 @@ test.describe('Escala automática', () => {
     expect(servidor.gravacoes).toEqual([]);
 
     await irPara(page, 'rec');
-    await page.locator('#eqs input[data-id="PR-BTB"]').uncheck();
+    await alternarDisponivel(page, 'PR-BTB', false);
     await expect.poll(() => servidor.dias.get(AMANHA).conteudo.av['PR-BTB']).toBe(false);
     const { resultado } = servidor.dias.get(AMANHA).conteudo;
     expect(resultado.data).toBe(AMANHA);
@@ -54,11 +54,11 @@ test.describe('Escala automática', () => {
     const servidor = await instalarSupabaseFalso(context, documentosAtuais(comExemplo(estadoSintetico()), AMANHA));
     await entrar(page, CONTAS.operador);
     await irPara(page, 'esc');
-    await Promise.all([page.waitForEvent('download'), page.locator('#exp').click()]);
+    await exportar(page, 'csv');
     await expect.poll(() => (servidor.dias.get(AMANHA).conteudo.resultado || { out: [] }).out.length).toBeGreaterThan(20);
-    await Promise.all([page.waitForEvent('download'), page.locator('#pdf').click()]);
-    await Promise.all([page.waitForEvent('download'), page.locator('#exp').click()]);
-    await Promise.all([page.waitForEvent('download'), page.locator('#xlsx').click()]);
+    await exportar(page, 'pdf');
+    await exportar(page, 'csv');
+    await exportar(page, 'xlsx');
     expect(servidor.gravacoes.filter(g => g.chave === `dia:${AMANHA}`)).toHaveLength(1);
   });
 
@@ -66,7 +66,7 @@ test.describe('Escala automática', () => {
     const servidor = await instalarSupabaseFalso(context, documentosAtuais(comExemplo(estadoSintetico()), AMANHA));
     await entrar(page, CONTAS.operador);
     await irPara(page, 'esc');
-    await Promise.all([page.waitForEvent('download'), page.locator('#xlsx').click()]);
+    await exportar(page, 'xlsx');
     await expect.poll(() => (servidor.dias.get(AMANHA).conteudo.resultado || { out: [] }).out.length).toBeGreaterThan(20);
     expect(servidor.gravacoes.filter(g => g.chave === `dia:${AMANHA}`)).toHaveLength(1);
   });
@@ -75,8 +75,8 @@ test.describe('Escala automática', () => {
     const servidor = await instalarSupabaseFalso(context, documentosAtuais(comExemplo(estadoSintetico()), AMANHA));
     await entrar(page, CONTAS.gestor);
     await irPara(page, 'esc');
-    await Promise.all([page.waitForEvent('download'), page.locator('#exp').click()]);
-    const [planilha] = await Promise.all([page.waitForEvent('download'), page.locator('#xlsx').click()]);
+    await exportar(page, 'csv');
+    const [planilha] = await exportar(page, 'xlsx');
     expect(planilha.suggestedFilename()).toBe(`escala-acpm-${AMANHA}.xlsx`);
     expect(servidor.gravacoes).toEqual([]);
   });

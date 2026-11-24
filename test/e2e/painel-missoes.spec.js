@@ -2,7 +2,7 @@
 // com as colunas Horário, Aeronave, Modelo, Aluno, Instrutor e Missão. "Configurar painel" escolhe o quadro com que o
 // painel abre (e a TV mostra) e as colunas: ligadas ou não e na ordem (↑ e ↓, pelo teclado também). Cada mudança vale na
 // hora, para todos, e fica no Histórico; o Gestor só vê.
-import { test, expect, abrir, abrirEscala, prepararContexto, vigiarErros, entrar, AMANHA } from './fixtures.js';
+import { test, expect, abrir, abrirEscala, prepararContexto, vigiarErros, entrar, AMANHA, abrirHistorico } from './fixtures.js';
 import { instalarSupabaseFalso, documentosAtuais, CONTAS } from './supabase-falso.js';
 import { aluno, cenario, instrutor, GROUND_C152 } from '../helpers/montar.js';
 import { estadoSintetico } from '../helpers/estado.js';
@@ -344,7 +344,7 @@ test.describe('Configurar painel', () => {
   test('Esc fecha só o diálogo, a camada de cima', async ({ page }) => {
     await abrir(page, { estado: dia() });
     await abrirPainel(page);
-    await page.locator('#btn-open-log').click();
+    await abrirHistorico(page);
     await expect(page.locator('#historico')).toBeVisible();
     await configurar(page).click();
     await expect(dialogo(page)).toBeVisible();

@@ -2,7 +2,7 @@
 // acpm4_cursos). O Administrador inclui, muda, reordena e tira missões; os outros perfis só consultam. Cada alteração
 // grava o curso inteiro (não o cadastro nem o dia) e não entra no histórico da data. Cada aluno tem o curso dele, em
 // Alunos.
-import { test, expect, abrir, irPara, confirmar, abrirEscala, prepararContexto, vigiarErros, preencherLogin, AMANHA, URL_APP, entrar as entrarNoApp } from './fixtures.js';
+import { test, expect, abrir, irPara, confirmar, abrirEscala, prepararContexto, vigiarErros, preencherLogin, AMANHA, URL_APP, entrar as entrarNoApp, abrirHistorico, appPronto, caixaVoa, diaSeguinte, rotuloDaData } from './fixtures.js';
 import { criarSupabaseFalso, documentosAtuais, documentosFase3, CONTAS } from './supabase-falso.js';
 import { aluno, cenario, instrutor, missaoExtra } from '../helpers/montar.js';
 import { IDS } from '../helpers/casos-do-programa.js';
@@ -187,14 +187,14 @@ test.describe('Cursos no dia', () => {
     await expect(linha.locator('[data-act="usar-proxima"]')).toHaveText('Próxima: PP-01 · Usar');
     await expect(page.locator('#dem tr[data-id="1001"] [data-act="usar-proxima"]')).toHaveCount(0);
     await linha.locator('[data-act="usar-proxima"]').click();
-    await expect(linha.locator('[data-f="fly"]')).toBeChecked();
+    await expect(caixaVoa(linha)).toBeChecked();
     await expect(linha.locator('.etapa')).toHaveText('PP-01');
     await expect(linha.locator('[data-act="usar-proxima"]')).toHaveCount(0);
 
     await abrirEscala(page);
     await expect(vooNaEscala(page).locator('.c-status .etapa')).toHaveText('PP-01');
     await vooNaEscala(page).locator('[data-resultado]').selectOption('aprovado');
-    await page.locator('#btn-open-log').click();
+    await abrirHistorico(page);
     await expect(page.locator('#audit-log-list')).toContainText('Resultado de Aluno 1000 em PP-01: aprovado');
     await page.keyboard.press('Escape');
 
@@ -282,9 +282,9 @@ test.describe('Cursos no servidor (modo compartilhado)', () => {
     await abrirEscala(operador.page);
     const liberar = servidor.segurar('/rpc/registrar_resultado');
     await operador.page.locator('#out tbody tr:not(.win)', { hasText: 'Aluno 1000' }).locator('[data-resultado]').selectOption('aprovado');
-    await operador.page.locator('#dt-prox').click();
+    await diaSeguinte(operador.page);
     // A data nova já aberta (o rótulo muda depois de carregar)
-    await expect(operador.page.locator('#dt-rotulo')).toContainText('12/11');
+    await expect(rotuloDaData(operador.page)).toContainText('12/11');
     liberar();
     await expect.poll(() => servidor.historico.filter(h => h.descricao.startsWith('Resultado de')).map(h => h.data)).toEqual([AMANHA]);
     expect(servidor.resultados.map(r => r.data)).toEqual([AMANHA]);
@@ -301,11 +301,11 @@ test.describe('Cursos no servidor (modo compartilhado)', () => {
     const liberarResultado = servidor.segurar('/rpc/registrar_resultado');
     await operador.page.locator('#out tbody tr:not(.win)', { hasText: 'Aluno 1000' }).locator('[data-resultado]').selectOption('aprovado');
     const liberarDias = servidor.segurarLeiturasDeDias();
-    await operador.page.locator('#dt-prox').click();
+    await diaSeguinte(operador.page);
     liberarResultado();
     await expect.poll(() => servidor.historico.filter(h => h.descricao.startsWith('Resultado de')).map(h => h.data)).toEqual([AMANHA]);
     liberarDias();
-    await expect(operador.page.locator('#dt-rotulo')).toContainText('12/11');
+    await expect(rotuloDaData(operador.page)).toContainText('12/11');
     expect(servidor.resultados.map(r => r.data)).toEqual([AMANHA]);
     expect(operador.erros).toEqual([]);
     await operador.contexto.close();
@@ -324,8 +324,8 @@ test.describe('Cursos no servidor (modo compartilhado)', () => {
     await expect.poll(() => noPrograma(servidor)).toEqual([['PP-02', 'Navegação']]);
     expect(admin.erros).toEqual([]);
     await admin.contexto.close();
-    await gestor.page.locator('#dt-prox').click();
-    await expect(gestor.page.locator('#dt-rotulo')).toContainText('12/11');
+    await diaSeguinte(gestor.page);
+    await expect(rotuloDaData(gestor.page)).toContainText('12/11');
     await expect(gestor.page.locator('#s-cur')).toBeVisible();
     await expect(linhas(gestor.page, 'PP')).toHaveCount(1);
     await expect(linhas(gestor.page, 'PP').nth(0).locator('td.c-codigo')).toHaveText('PP-02');
@@ -388,8 +388,8 @@ test.describe('Cursos no servidor (modo compartilhado)', () => {
     const nome = linhas(admin.page, 'PP').nth(0).locator('[data-cf="nome"]');
     await nome.fill('Familiarização no C152');
     await nome.press('Tab');
-    await admin.page.locator('#dt-prox').click();
-    await expect(admin.page.locator('#dt-rotulo')).toContainText('12/11');
+    await diaSeguinte(admin.page);
+    await expect(rotuloDaData(admin.page)).toContainText('12/11');
     await expect(nome).toHaveValue('Familiarização');
     liberar();
     await expect(nome).toHaveValue('Familiarização no C152');
@@ -817,7 +817,7 @@ test.describe('Cursos: fases, módulos e quando voar', () => {
       for (const [chave, valor] of Object.entries(JSON.parse(json))) localStorage.setItem(chave, JSON.stringify(valor));
     }, JSON.stringify(docs));
     await page.goto(url);
-    await expect(page.locator('#wins input[data-a="win"]').first()).toBeAttached();
+    await appPronto(page);
   }
   const descricoesGuardadas = async page => (await programaGuardado(page)).alteracoes.map(a => a.descricao);
   const proxima = (page, id) => page.locator(`#dem tr[data-id="${id}"][data-mid="0"] [data-act="usar-proxima"]`);
@@ -1195,7 +1195,7 @@ test.describe('Cursos: cursos novos, encerrar, o cronograma do PP e o curso de c
       for (const [chave, valor] of Object.entries(JSON.parse(json))) localStorage.setItem(chave, JSON.stringify(valor));
     }, JSON.stringify(docs));
     await page.goto(url);
-    await expect(page.locator('#wins input[data-a="win"]').first()).toBeAttached();
+    await appPronto(page);
   }
   const comPP = conteudo => gravarCurso({ cursos: cursosIniciais() }, { sigla: 'PP', versaoLida: 1, conteudo, descricao: 'PP: programa' }).cursos;
   const descricoes = async page => (await programaGuardado(page)).alteracoes.map(a => a.descricao);
@@ -1288,7 +1288,7 @@ test.describe('Cursos: cursos novos, encerrar, o cronograma do PP e o curso de c
     await abrirComCursos(page, { estado: cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000)] }) });
     await irPara(page, 'cur');
     const historico = page.locator('#historico');
-    await page.locator('#btn-open-log').click();
+    await abrirHistorico(page);
     await expect(historico).toBeVisible();
     const novo = page.locator('#cur-novo'), form = page.locator('#form-curso');
     // O Histórico cobre o botão: pelo teclado
@@ -1524,7 +1524,7 @@ test.describe('Cursos: um de cada vez, o índice das fases, as fases recolhívei
       for (const [chave, valor] of Object.entries(JSON.parse(json))) localStorage.setItem(chave, JSON.stringify(valor));
     }, JSON.stringify(docs));
     await page.goto(url);
-    await expect(page.locator('#wins input[data-a="win"]').first()).toBeAttached();
+    await appPronto(page);
   }
   const pressionados = page => page.locator('#cursos .seg-dos-cursos button').evaluateAll(bs => bs.map(b => b.getAttribute('aria-pressed')));
   const titulo = (page, fase) => page.locator(`#cursos .fase[data-fase="${fase}"] [data-recolher-fase]`);
@@ -1554,8 +1554,8 @@ test.describe('Cursos: um de cada vez, o índice das fases, as fases recolhívei
     await irPara(page, 'alu');
     await irPara(page, 'cur');
     expect(await siglasNaAba(page)).toEqual(['INVA']);
-    await page.locator('#dt-prox').click();
-    await expect(page.locator('#dt-rotulo')).toContainText('12/11');
+    await diaSeguinte(page);
+    await expect(rotuloDaData(page)).toContainText('12/11');
     await expect.poll(() => siglasNaAba(page)).toEqual(['INVA']);
     await page.reload();
     await irPara(page, 'cur');
