@@ -5,10 +5,10 @@ import { createServer } from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
 import { extname, join, normalize, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { portaDaPasta } from './porta.mjs';
+import { portaDoApp } from './porta.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
-const PORT = Number(process.env.PORT) || portaDaPasta(ROOT);
+const PORT = portaDoApp(ROOT);
 const TYPES = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',

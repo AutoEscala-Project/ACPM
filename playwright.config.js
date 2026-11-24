@@ -1,10 +1,10 @@
 import { defineConfig, devices } from '@playwright/test';
 import { fileURLToPath } from 'node:url';
-import { portaDaPasta } from './scripts/porta.mjs';
+import { portaDosTestes } from './scripts/porta.mjs';
 
-// A porta seguinte à do app desta pasta (scripts/porta.mjs): os testes sobem o próprio servidor, e uma porta ocupada é
-// erro (nunca os arquivos de outra pasta)
-const PORT = portaDaPasta(fileURLToPath(new URL('.', import.meta.url))) + 1;
+// A porta seguinte à do app desta pasta (scripts/porta.mjs; com PORT, a seguinte a ela): os testes sobem o próprio
+// servidor, e uma porta ocupada é erro (nunca os arquivos de outra pasta)
+const PORT = portaDosTestes(fileURLToPath(new URL('.', import.meta.url)));
 // BASE_URL=https://usuario.github.io/ACPM/ roda os testes contra uma versão publicada (com a barra final)
 const BASE_URL = process.env.BASE_URL;
 

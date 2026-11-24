@@ -3,7 +3,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { portaDaPasta } from '../../scripts/porta.mjs';
+import { portaDaPasta, portaDoApp, portaDosTestes } from '../../scripts/porta.mjs';
 
 describe('portaDaPasta', () => {
   it('4200 + 2 × (os seis primeiros dígitos do sha1 da pasta, módulo 350): par, de 4200 a 4898', () => {
@@ -26,5 +26,24 @@ describe('portaDaPasta', () => {
   it('a porta seguinte (a dos testes E2E) nunca é a de outra pasta', () => {
     // As portas das pastas são pares: a + 1 de uma é ímpar e não coincide com a porta do app de nenhuma
     for (const pasta of ['/a', '/b', '/c']) assert.equal((portaDaPasta(pasta) + 1) % 2, 1);
+  });
+});
+
+// Duas pastas que coincidem: PORT escolhe outra porta para o app (npm run serve) e, com ela, a dos testes E2E (a
+// seguinte), sem editar playwright.config.js
+describe('portaDoApp e portaDosTestes', () => {
+  it('sem PORT: a porta da pasta e a seguinte', () => {
+    assert.equal(portaDoApp('/x/ACPM', {}), portaDaPasta('/x/ACPM'));
+    assert.equal(portaDosTestes('/x/ACPM', {}), portaDaPasta('/x/ACPM') + 1);
+  });
+
+  it('com PORT: PORT para o app e PORT + 1 para os testes, qualquer que seja a pasta', () => {
+    assert.equal(portaDoApp('/x/ACPM', { PORT: '4400' }), 4400);
+    assert.equal(portaDosTestes('/x/ACPM', { PORT: '4400' }), 4401);
+    assert.equal(portaDosTestes('/y/outra', { PORT: '4400' }), 4401);
+  });
+
+  it('PORT vazio ou que não é número vale como sem PORT', () => {
+    for (const PORT of ['', 'abc', '0']) assert.equal(portaDosTestes('/x/ACPM', { PORT }), portaDaPasta('/x/ACPM') + 1, `PORT=${PORT}`);
   });
 });
