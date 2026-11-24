@@ -56,8 +56,8 @@ npm run test:e2e       # aplicação no navegador (Playwright)
 ```
 
 - Quanto leva: `CI=1 npm test` leva uns 4 minutos num Mac de 10 núcleos (medido em 24/11/2026: o lint em segundos, os
-  unitários em uns 5 s, os 578 testes E2E em 3,6 min, 6 deles pulados sem as senhas do site publicado). No CI, o job
-  tem 15 minutos; se os E2E passarem de 10, o passo deles vira dois shards (`npx playwright test --shard=1/2` e `2/2`).
+  unitários em uns 5 s, os 578 testes E2E em 3,6 min, 6 deles pulados sem as senhas do site publicado). No CI, o E2E
+  roda em duas partes paralelas (`npx playwright test --shard=1/2` e `2/2`), cada uma com 15 minutos.
 - Os testes E2E sobem o próprio servidor na porta seguinte à da pasta (com `PORT`, na seguinte a ela;
   `playwright.config.js`), sem reaproveitar um servidor que já esteja rodando: uma porta ocupada é erro ("is already
   used"), nunca os arquivos de outra pasta.
@@ -283,7 +283,8 @@ O site é estático e vai para o Cloudflare (Workers com arquivos estáticos, a 
 configuração `wrangler.jsonc`. Depois de um push em `main` ou `previa` com os testes verdes, o workflow
 `.github/workflows/publicar.yml` monta a pasta `publicar/` (`scripts/pasta-publicada.mjs`: só `index.html`,
 `painel.html`, `css/`, `js/`, `img/` e `modelos/`) e a publica: `main` na produção, `previa` na prévia. Ele usa os
-segredos `CLOUDFLARE_API_TOKEN` e `CLOUDFLARE_ACCOUNT_ID` do repositório.
+segredos `CLOUDFLARE_API_TOKEN` e `CLOUDFLARE_ACCOUNT_ID` do repositório e só roda em `AutoEscala-Project/ACPM`: no
+fork `thephfernandes/ACPM`, o `main` é a prévia do redesenho, servida pelo GitHub Pages (no banco da prévia).
 
 À mão (com `npx wrangler login` feito): `node scripts/pasta-publicada.mjs && npx --yes wrangler@4.165.0 deploy`
 (produção) ou `... deploy --env previa`. Nunca publique a raiz do repositório.

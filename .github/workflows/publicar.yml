@@ -18,7 +18,10 @@ concurrency:
 
 jobs:
   publicar:
+    # Só no repositório da organização: num fork (o thephfernandes/ACPM, a prévia do redesenho no GitHub Pages) não
+    # há o que publicar no Cloudflare
     if: >-
+      github.repository == 'AutoEscala-Project/ACPM' &&
       github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.event == 'push' &&
       github.event.workflow_run.head_repository.full_name == github.repository
