@@ -188,7 +188,7 @@ Para pôr o formato 24 no ar, nesta ordem:
 2. a mesma migração na produção (`--remote=<ref de produção>`), **antes do merge**: ela acrescenta as tabelas e as
    funções e só alarga a regra dos resultados (PP, PC e INVA já vêm na tabela dos cursos, ainda sem programa), então o
    app no ar, no formato 23, continua como está;
-3. o merge, e o GitHub Pages publica o app no formato 24;
+3. o merge, e o app vai para o ar ("Publicação") no formato 24;
 4. **uma abertura do app como Operador ou Administrador**, que faz a conversão única.
 
 Depois, num PR à parte, com a conversão feita e nenhuma aba de antes do formato 24 aberta: tirar `importar_cursos` do
@@ -245,8 +245,12 @@ banco (e a chamada dela no app). A cópia `cadastro.cursos` fica.
 
 ## Fluxo de trabalho
 
-Alterações entram por branch + pull request. O GitHub Actions roda todos os testes em cada push e PR;
-ao entrar na `main`, o GitHub Pages publica a nova versão.
+Alterações entram por branch + pull request. O GitHub Actions (`.github/workflows/testes.yml`) roda todos os testes em
+todo PR e em cada push no `main` e no `previa`; um push num branch sem PR não roda nada (o PR roda), e um commit novo no
+mesmo PR cancela os testes do anterior; os pushes num mesmo branch rodam um de cada vez, na ordem. Um PR com conflito
+com a base não roda os testes (o GitHub não monta o merge): resolva o conflito primeiro. O lint e os unitários rodam
+num job, o E2E em duas partes paralelas (`--shard`). Ao entrar no `main` (ou no `previa`) com os testes verdes, a nova
+versão vai para o ar (veja "Publicação").
 
 ## Publicação
 
