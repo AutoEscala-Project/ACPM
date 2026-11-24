@@ -8,11 +8,13 @@ on:
   pull_request:
   workflow_dispatch:
 
-# Um commit novo no mesmo PR cancela os testes do anterior. Os pushes no main e no previa nunca se cancelam (cada um
-# tem o seu grupo): todos terminam e o publicar.yml decide
+# Um commit novo no mesmo PR cancela os testes do anterior. Os pushes num mesmo branch (main, previa) rodam um de cada
+# vez, na ordem: um push que chega enquanto outro roda espera, e um terceiro toma o lugar do que esperava (o mais novo já
+# o contém). Assim a publicação que vem depois dos testes (publicar.yml) não leva ao ar um commit mais velho depois de
+# um mais novo (a não ser que alguém rode de novo, à mão, os testes de um push antigo)
 concurrency:
-  group: testes-${{ github.event.pull_request.number && format('pr-{0}', github.event.pull_request.number) || github.run_id }}
-  cancel-in-progress: true
+  group: testes-${{ github.event.pull_request.number && format('pr-{0}', github.event.pull_request.number) || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   verificar:
