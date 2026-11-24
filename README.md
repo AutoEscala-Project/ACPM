@@ -275,7 +275,7 @@ todo PR e em cada push no `main` e no `previa`; um push num branch sem PR não r
 mesmo PR cancela os testes do anterior; os pushes num mesmo branch rodam um de cada vez, na ordem. Um PR com conflito
 com a base não roda os testes (o GitHub não monta o merge): resolva o conflito primeiro. O lint e os unitários rodam
 num job, o E2E em duas partes paralelas (`--shard`). Ao entrar no `main` (ou no `previa`) com os testes verdes, a nova
-versão vai para o ar (veja "Publicação").
+versão vai para o ar (veja "Publicação"; no fork, o `main` é servido pelo GitHub Pages).
 
 ## Publicação
 
