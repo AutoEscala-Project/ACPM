@@ -1,19 +1,18 @@
 // O dia de operação: "Aprovar escala" fixa os voos. Depois disso, uma alteração não tira ninguém do lugar:
 // o pedido novo entra em volta, e o voo fixo que ficou impossível aparece em conflito. "Reabrir" volta ao normal.
 // Em Voo, Atrasado, Pousou e Cancelado também fixam o voo.
-import { test, expect, abrir, irPara, abrirEscala, lerEscala } from './fixtures.js';
+import { test, expect, abrir, abrirComExemplo, irPara, abrirEscala, lerEscala, abrirHistorico, alternarVem, aprovar, botaoAprovar, botaoReabrir, caixaVoa, reabrir } from './fixtures.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
 
 const dia = () => cenario({ ins: [instrutor(1, 9), instrutor(2, 9)], stu: [aluno(1000, { p1: 390, p2: -1 }), aluno(1001, { p1: 500, p2: -1 }), aluno(1002, { fly: false, p1: 390, p2: -1 })] });
 const linhas = async page => (await lerEscala(page)).linhas.filter(l => l.includes('Aluno 100'));
-const confirmar = async (page, botao) => { await botao.click(); await expect(botao).toHaveText(/^Confirmar/); await botao.click(); };
 
 test.describe('Escala aprovada', () => {
   test('aprovar fixa os voos: o selo diz quando e quem; um pedido novo de prioridade 5 não tira ninguém do lugar; reabrir volta ao normal', async ({ page }) => {
     await abrir(page, { estado: dia() });
     await abrirEscala(page);
     const antes = await linhas(page);
-    await confirmar(page, page.locator('#btn-aprovar'));
+    await aprovar(page);
     await expect(page.locator('#selo-aprovada')).toHaveText('Aprovada às 12:00');
     await expect(page.locator('#out tbody tr:not(.win) .fixo')).toHaveCount(2);
 
@@ -21,31 +20,31 @@ test.describe('Escala aprovada', () => {
     await irPara(page, 'dem');
     await page.locator('#onlyfly').uncheck();
     const novo = page.locator('#dem tr[data-id="1002"]');
-    await novo.locator('[data-f="fly"]').check();
+    await caixaVoa(novo).check();
     await novo.locator('[data-f="pr"]').selectOption('5');
     await abrirEscala(page);
     const depois = await linhas(page);
     for (const linha of antes) expect(depois).toContain(linha);
     expect(depois.some(l => l.includes('Aluno 1002'))).toBe(true);
 
-    await page.locator('#btn-open-log').click();
+    await abrirHistorico(page);
     await expect(page.locator('#historico')).toContainText('Escala aprovada: 2 voos fixados');
     await page.keyboard.press('Escape');
-    await confirmar(page, page.locator('#btn-reabrir'));
+    await reabrir(page);
     await expect(page.locator('#selo-aprovada')).toBeHidden();
-    await expect(page.locator('#btn-aprovar')).toBeVisible();
+    await expect(botaoAprovar(page)).toBeVisible();
     await expect(page.locator('#out tbody tr:not(.win) .fixo')).toHaveCount(0);
   });
 
   test('o instrutor que não vem mais: o voo fixo dele fica no lugar, em conflito', async ({ page }) => {
     await abrir(page, { estado: dia() });
     await abrirEscala(page);
-    await confirmar(page, page.locator('#btn-aprovar'));
+    await aprovar(page);
     const primeiro = page.locator('#out tbody tr:not(.win)', { hasText: 'Aluno 1000' });
     const instrutor = (await primeiro.locator('.c-instr').innerText()).trim();
     const id = instrutor.endsWith('01') ? 1 : 2;
     await irPara(page, 'ins');
-    await page.locator(`#inst-dia tr[data-id="${id}"] [data-f="on"]`).uncheck();
+    await alternarVem(page, id, false);
     await abrirEscala(page);
     const conflitos = page.locator('#out details.caixa.conflitos');
     await expect(conflitos).toHaveAttribute('open', '');
@@ -69,7 +68,7 @@ test.describe('Escala aprovada', () => {
     await abrir(page, { estado, url: './?role=gestor' });
     await abrirEscala(page);
     await expect(page.locator('#selo-aprovada')).toHaveText('Aprovada às 18:05 por Operador 01');
-    await expect(page.locator('#btn-reabrir')).toBeHidden();
+    await expect(botaoReabrir(page)).toBeHidden();
   });
 });
 
@@ -89,11 +88,23 @@ test.describe('O cadeado do voo', () => {
   test('Reabrir mantém fixo o voo em andamento', async ({ page }) => {
     await abrir(page, { estado: dia() });
     await abrirEscala(page);
-    await confirmar(page, page.locator('#btn-aprovar'));
+    await aprovar(page);
     await expect(linha(page, 'Aluno 1001').locator('.fixo')).toHaveAttribute('aria-label', 'Voo fixo: escala aprovada');
     await linha(page, 'Aluno 1000').locator('.st-sel').selectOption('Em Voo');
-    await confirmar(page, page.locator('#btn-reabrir'));
+    await reabrir(page);
     await expect(linha(page, 'Aluno 1000').locator('.fixo')).toHaveAttribute('aria-label', 'Voo fixo: Em Voo');
     await expect(linha(page, 'Aluno 1001').locator('.fixo')).toHaveCount(0);
+  });
+});
+
+// O foco depois de aprovar e de reabrir (vindo de acessibilidade.spec.js)
+test.describe('O foco depois de uma ação', () => {
+  test('aprovar a escala leva o foco ao Reabrir, e reabrir, ao Aprovar', async ({ page }) => {
+    await abrirComExemplo(page);
+    await abrirEscala(page);
+    await aprovar(page);
+    await expect(botaoReabrir(page)).toBeFocused();
+    await reabrir(page);
+    await expect(botaoAprovar(page)).toBeFocused();
   });
 });

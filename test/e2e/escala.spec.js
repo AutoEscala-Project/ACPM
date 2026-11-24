@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises';
-import { test, expect, abrir, abrirComExemplo, irPara, abrirEscala, lerEscala, json, AMANHA } from './fixtures.js';
+import { test, expect, abrir, abrirComExemplo, irPara, abrirEscala, lerEscala, json, AMANHA, abrirHistorico, campoDaData, exportar } from './fixtures.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
 
 test.describe('Escala', () => {
@@ -9,7 +9,7 @@ test.describe('Escala', () => {
   });
 
   test('gera a escala do exemplo: resumo, alertas, tabela e mapa por aeronave', async ({ page }) => {
-    await expect(page.locator('#dt')).toHaveValue(AMANHA);
+    await expect(campoDaData(page)).toHaveValue(AMANHA);
     expect(json(await lerEscala(page))).toMatchSnapshot('escala-exemplo.json');
   });
 
@@ -47,13 +47,13 @@ test.describe('Escala', () => {
     const antes = await lerEscala(page);
     await page.locator('#out table [data-act="rm-fly"]').last().click();
     expect(json((await lerEscala(page)).resumo)).toMatchSnapshot('exclusao-resumo.json');
-    await page.locator('#btn-open-log').click();
+    await abrirHistorico(page);
     await page.locator('#audit-log-list [data-act="rev-log"]', { hasText: 'Restaurar' }).first().click();
     expect(await lerEscala(page)).toEqual(antes);
   });
 
   test('exporta CSV com BOM, separador ";" e quebras CRLF', async ({ page }) => {
-    const [download] = await Promise.all([page.waitForEvent('download'), page.locator('#exp').click()]);
+    const [download] = await exportar(page, 'csv');
     expect(download.suggestedFilename()).toBe(`escala-acpm-${AMANHA}.csv`);
     const conteudo = await readFile(await download.path(), 'utf8');
     expect(conteudo[0]).toBe('﻿');
@@ -63,7 +63,7 @@ test.describe('Escala', () => {
   });
 
   test('emite o PDF da escala com título, quadros e mais de uma página', async ({ page }) => {
-    const [download] = await Promise.all([page.waitForEvent('download'), page.locator('#pdf').click()]);
+    const [download] = await exportar(page, 'pdf');
     expect(download.suggestedFilename()).toBe(`escala-acpm-${AMANHA}.pdf`);
     const pdf = await readFile(await download.path());
     expect(pdf.subarray(0, 5).toString()).toBe('%PDF-');
@@ -103,11 +103,11 @@ test('o PDF e o CSV levam o peso da tripulação com décimos em décimos, com a
   await abrir(page, { estado: cenario({ ins: [instrutor(1, 9, { kg: 40.7 })], stu: [aluno(1000, { p1: 390, p2: -1 }, { kg: 40.1 })] }) });
   await abrirEscala(page);
   await expect(page.locator('#out tbody tr:not(.win) .c-peso')).toHaveText('80,8 / 170 kg');
-  const [pdf] = await Promise.all([page.waitForEvent('download'), page.locator('#pdf').click()]);
+  const [pdf] = await exportar(page, 'pdf');
   const conteudoDoPdf = (await readFile(await pdf.path())).toString('latin1');
   expect(conteudoDoPdf).toContain('(80,8 kg)');
   expect(conteudoDoPdf).not.toContain('80.80000000000001');
-  const [csv] = await Promise.all([page.waitForEvent('download'), page.locator('#exp').click()]);
+  const [csv] = await exportar(page, 'csv');
   const conteudoDoCsv = await readFile(await csv.path(), 'utf8');
   expect(conteudoDoCsv).toContain('"Peso aluno + instrutor: 80,8 kg (limite do C152: 170 kg) · dentro do envelope"');
   expect(conteudoDoCsv).not.toContain('80.80000000000001');

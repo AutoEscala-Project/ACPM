@@ -1,5 +1,5 @@
 // Histórico da data numa gaveta lateral, que abre sobre a aba aberta (sem trocar de aba).
-import { test, expect, abrir, abrirSintetico, irPara, abrirEscala, AMANHA, prepararContexto, vigiarErros, entrar } from './fixtures.js';
+import { test, expect, abrir, abrirSintetico, irPara, abrirEscala, AMANHA, prepararContexto, vigiarErros, entrar, abrirHistorico, alternarDisponivel, alternarVem, appPronto, caixaVem, caixaVoa, campoDaData, diaSeguinte, linhaDoInstrutor } from './fixtures.js';
 import { documentosAtuais, instalarSupabaseFalso, CONTAS } from './supabase-falso.js';
 import { aluno, cenario, instrutor, missaoExtra } from '../helpers/montar.js';
 
@@ -12,7 +12,7 @@ async function abrirComHistorico(page, estado, historico) {
     for (const [chave, valor] of Object.entries(JSON.parse(json))) localStorage.setItem(chave, JSON.stringify(valor));
   }, JSON.stringify(docs));
   await page.goto('./');
-  await expect(page.locator('#wins input[data-a="win"]').first()).toBeAttached();
+  await appPronto(page);
 }
 
 // Uma entrada de amanhã com a reversão de um voo agendado na Escala (a que o diálogo do agendamento grava)
@@ -25,10 +25,10 @@ test.describe('Histórico', () => {
   test('abre numa gaveta sobre a aba aberta, sem trocar de aba; Esc e ✕ fecham', async ({ page }) => {
     await abrirSintetico(page);
     await irPara(page, 'rec');
-    await page.locator('#eqs input[data-id="PR-BTB"]').uncheck();
+    await alternarDisponivel(page, 'PR-BTB', false);
     await expect(page.locator('#log-cnt')).toHaveText('1');
 
-    await page.locator('#btn-open-log').click();
+    await abrirHistorico(page);
     await expect(page.locator('#historico')).toBeVisible();
     await expect(page.locator('#s-rec')).toBeVisible();
     await expect(page.locator('#historico-data')).toHaveText('quarta-feira, 11/11');
@@ -36,17 +36,17 @@ test.describe('Histórico', () => {
 
     await page.keyboard.press('Escape');
     await expect(page.locator('#historico')).toBeHidden();
-    await page.locator('#btn-open-log').click();
+    await abrirHistorico(page);
     await page.locator('#btn-fechar-historico').click();
     await expect(page.locator('#historico')).toBeHidden();
   });
 
   test('com o histórico aberto, trocar a data troca também a data do histórico', async ({ page }) => {
     await abrirSintetico(page);
-    await page.locator('#btn-open-log').click();
+    await abrirHistorico(page);
     await expect(page.locator('#historico-data')).toHaveText('quarta-feira, 11/11');
-    await page.locator('#dt-prox').click();
-    await expect(page.locator('#dt')).toHaveValue('2026-11-12');
+    await diaSeguinte(page);
+    await expect(campoDaData(page)).toHaveValue('2026-11-12');
     await expect(page.locator('#historico-data')).toHaveText('quinta-feira, 12/11');
   });
 
@@ -64,14 +64,14 @@ test.describe('Histórico', () => {
       stuId: 1000, mid: 1, criado: true, disponibilidade: { insId: 2, on: false, aw: Array(9).fill(true) }
     })]);
     await irPara(page, 'ins');
-    await expect(page.locator('#inst-dia tr[data-id="2"] [data-f="on"]')).toBeChecked();
+    await expect(caixaVem(linhaDoInstrutor(page, '2'))).toBeChecked();
     await abrirEscala(page);
     const voos = page.locator('#out tbody tr:not(.win)', { hasText: 'Aluno 1000' });
     await expect(voos).toHaveCount(2);
     await expect(voos.filter({ hasText: '10:10–11:10' }).locator('.fixo')).toHaveCount(1);
     await expect(voos.filter({ hasText: '10:10–11:10' }).locator('.c-instr')).toHaveText('Instrutor 02');
 
-    await page.locator('#btn-open-log').click();
+    await abrirHistorico(page);
     const desfazer = page.locator('#audit-log-list [data-act="rev-log"]');
     await expect(desfazer).toHaveText('↶ Desfazer');
     await desfazer.click();
@@ -86,18 +86,18 @@ test.describe('Histórico', () => {
     await irPara(page, 'dem');
     await expect(page.locator('#dem tr[data-k="d"][data-id="1000"]')).toHaveCount(1);
     await irPara(page, 'ins');
-    await expect(page.locator('#inst-dia tr[data-id="2"] [data-f="on"]')).not.toBeChecked();
+    await expect(caixaVem(linhaDoInstrutor(page, '2'))).not.toBeChecked();
 
     // Gravado: depois de recarregar, continua desfeito (o instrutor também), e a entrada desfeita não volta
     await page.reload();
     await abrirEscala(page);
     await expect(voos).toHaveCount(1);
-    await page.locator('#btn-open-log').click();
+    await abrirHistorico(page);
     await expect(revertido).toHaveCount(1);
     await expect(desfazer).toHaveCount(0);
     await page.keyboard.press('Escape');
     await irPara(page, 'ins');
-    await expect(page.locator('#inst-dia tr[data-id="2"] [data-f="on"]')).not.toBeChecked();
+    await expect(caixaVem(linhaDoInstrutor(page, '2'))).not.toBeChecked();
   });
 
   // A reversão vem gravada no histórico (no servidor, por quem tem conta de operador): adulterada, ela não vira botão, e a
@@ -113,7 +113,7 @@ test.describe('Histórico', () => {
     ]);
     await abrirEscala(page);
     await expect(page.locator('#out tbody tr:not(.win)', { hasText: 'Aluno 1000' }).locator('.c-hr')).toContainText('08:20–09:20');
-    await page.locator('#btn-open-log').click();
+    await abrirHistorico(page);
     const entrada = texto => page.locator('#audit-log-list .audit-item', { hasText: texto });
     await expect(entrada('prioridade adulterada')).toHaveCount(1);
     await expect(entrada('prioridade adulterada').locator('[data-act="rev-log"]')).toHaveCount(0);
@@ -146,7 +146,7 @@ test.describe('Histórico', () => {
     await expect(voos).toHaveCount(2);
 
     const desfazer = page.locator('#audit-log-list [data-act="rev-log"]');
-    await page.locator('#btn-open-log').click();
+    await abrirHistorico(page);
     await desfazer.click();
     await expect(page.locator('#toast-box')).toContainText('Sem os resultados dos cursos, o app não confere se o voo já tem resultado: clique em "Tentar de novo" no aviso e desfaça depois.');
     await expect(desfazer).toHaveText('↶ Desfazer');
@@ -154,7 +154,7 @@ test.describe('Histórico', () => {
 
     await page.locator('#btn-tentar-dados').click();
     await expect(page.locator('#aviso-dados')).toBeHidden();
-    await page.locator('#btn-open-log').click();
+    await abrirHistorico(page);
     await desfazer.click();
     await expect(page.locator('#toast-box')).toContainText('O voo já tem resultado registrado.');
     await expect(desfazer).toHaveText('↶ Desfazer');
@@ -189,7 +189,7 @@ test.describe('Histórico', () => {
     await expect(voo.locator('.c-hr')).toContainText('10:10–11:10');
     await expect(voo.locator('.c-instr')).toHaveText('Instrutor 01');
 
-    await page.locator('#btn-open-log').click();
+    await abrirHistorico(page);
     const entrada = texto => page.locator('#audit-log-list .audit-item', { hasText: texto });
     // O voo em andamento não é desfeito: o aviso diz por quê, e a entrada continua com o botão
     await entrada('Agendado na escala: Aluno 1001').locator('[data-act="rev-log"]').click();
@@ -216,7 +216,7 @@ test.describe('Histórico', () => {
     const descricao = 'Agendado na escala: Aluno 1000 (Voo Local) · Voo Local · 12:40–13:40 · PR-VOB · Instrutor 01 (era 10:10 no PR-VOB)';
     await abrirComHistorico(page, estado, [agendamento(1, descricao, { stuId: 1000, mid: 1, criado: false, pedido })]);
     await abrirEscala(page);
-    await page.locator('#btn-open-log').click();
+    await abrirHistorico(page);
     const desfazer = page.locator('#audit-log-list [data-act="rev-log"]');
     await desfazer.click();
     await expect(page.locator('#toast-box')).toContainText('O pedido deste voo saiu da Demanda: não há o que desfazer.');
@@ -238,14 +238,14 @@ test.describe('Histórico', () => {
     await abrirEscala(page);
     const voo = page.locator('#out tbody tr:not(.win)', { hasText: 'Aluno 1000' });
     await expect(voo).toHaveCount(0);
-    await page.locator('#btn-open-log').click();
+    await abrirHistorico(page);
     await page.locator('#audit-log-list [data-act="rev-log"]').click();
     await expect(page.locator('#audit-log-list .audit-item', { hasText: 'Revertido: Agendado na escala: Aluno 1000' })).toHaveCount(1);
     await page.keyboard.press('Escape');
     // Continua fora da escala, e a Demanda continua com "Voa" desligado
     await expect(voo).toHaveCount(0);
     await irPara(page, 'dem');
-    const voa = page.locator('#dem tr[data-k="d"][data-id="1000"][data-mid="0"] [data-f="fly"]');
+    const voa = caixaVoa(page.locator('#dem tr[data-k="d"][data-id="1000"][data-mid="0"]'));
     await expect(voa).not.toBeChecked();
     // Voando de novo, o voo vai para o horário de antes do agendamento (08:20), sem o cadeado
     await page.locator('#onlyfly').uncheck();
@@ -279,7 +279,7 @@ test.describe('Histórico', () => {
     await irPara(page, 'dem');
     const pedido = page.locator('#dem tr[data-k="d"][data-id="1001"][data-mid="0"]');
     await pedido.locator('[data-f="insId"]').selectOption(ins === '1' ? '2' : '1');
-    await page.locator('#btn-open-log').click();
+    await abrirHistorico(page);
     const lista = page.locator('#audit-log-list');
     await lista.locator('.audit-item', { hasText: 'Agendado na escala' }).getByRole('button', { name: '↶ Desfazer' }).click();
     await expect(lista).toContainText('Revertido: Agendado na escala: Maria Silva');
@@ -287,14 +287,14 @@ test.describe('Histórico', () => {
     await expect(lista).toContainText('Revertido: Pedido Maria Silva: instrutor');
     await page.locator('#btn-fechar-historico').click();
     // O pedido é o de antes do agendamento: sem voar e sem o instrutor escolhido; o dia não guarda o voo fixo
-    await expect(pedido.locator('[data-f="fly"]')).not.toBeChecked();
+    await expect(caixaVoa(pedido)).not.toBeChecked();
     await expect(pedido.locator('[data-f="insId"]')).toHaveValue('');
     expect(await page.evaluate(data => JSON.parse(localStorage.getItem(`acpm4_dia_${data}`)).fixos, AMANHA)).toEqual({});
 
     // A Maria volta a voar: o voo vai para a preferência dela (14:30), sem o cadeado
     await page.locator('#incluir-aluno').fill('Maria Silva');
     await page.locator('#incluir-aluno').press('Enter');
-    await expect(pedido.locator('[data-f="fly"]')).toBeChecked();
+    await expect(caixaVoa(pedido)).toBeChecked();
     await abrirEscala(page);
     await expect(voo.locator('.c-hr')).toContainText('14:30–15:30');
     await expect(voo.locator('.fixo')).toHaveCount(0);
@@ -319,14 +319,14 @@ test.describe('Histórico', () => {
 
     // O instrutor do agendamento não vem mais: o voo agendado fica em conflito, e as Sugestões o soltam
     await irPara(page, 'ins');
-    await page.locator(`#inst-dia tr[data-id="${ins}"] [data-f="on"]`).uncheck();
+    await alternarVem(page, ins, false);
     await abrirEscala(page);
     await page.locator('#out details.conflitos [data-reparo]').click();
     const soltar = page.locator('#painel-reparo .opcoes-reparo li', { hasText: 'Soltar o voo' });
     await soltar.getByRole('button', { name: 'Soltar' }).click();
     await expect(page.locator('#painel-reparo')).toBeHidden();
 
-    await page.locator('#btn-open-log').click();
+    await abrirHistorico(page);
     const lista = page.locator('#audit-log-list');
     await lista.locator('.audit-item', { hasText: 'Agendado na escala' }).getByRole('button', { name: '↶ Desfazer' }).click();
     await expect(lista).toContainText('Revertido: Agendado na escala: Maria Silva');
@@ -336,7 +336,7 @@ test.describe('Histórico', () => {
     expect(await page.evaluate(data => JSON.parse(localStorage.getItem(`acpm4_dia_${data}`)).fixos, AMANHA)).toEqual({});
     await irPara(page, 'dem');
     const pedido = page.locator('#dem tr[data-k="d"][data-id="1001"][data-mid="0"]');
-    await expect(pedido.locator('[data-f="fly"]')).not.toBeChecked();
+    await expect(caixaVoa(pedido)).not.toBeChecked();
     await expect(pedido.locator('[data-f="insId"]')).toHaveValue('');
   });
 
@@ -362,7 +362,7 @@ test.describe('Histórico', () => {
     await irPara(page, 'dem');
     const pedido = page.locator('#dem tr[data-k="d"][data-id="1000"][data-mid="0"]');
     await pedido.locator('[data-f="insId"]').selectOption(ins === '1' ? '2' : '1');
-    await page.locator('#btn-open-log').click();
+    await abrirHistorico(page);
     const lista = page.locator('#audit-log-list');
     await lista.locator('.audit-item', { hasText: 'Agendado na escala' }).getByRole('button', { name: '↶ Desfazer' }).click();
     await expect(lista).toContainText('Revertido: Agendado na escala: Maria Silva');

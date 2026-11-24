@@ -1,6 +1,6 @@
 // Ordem dos aviões no hangar: em Recursos, da frente para o fundo, com subir, descer e pôr na frente. A escala tira
 // primeiro os da frente e junta os voos nos aviões que já saíram; a data seguinte começa com a mesma ordem.
-import { test, expect, abrir, irPara, abrirEscala, filtrarCategorias } from './fixtures.js';
+import { test, expect, abrir, irPara, abrirEscala, filtrarCategorias, abrirHistorico, diaSeguinte } from './fixtures.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
 
 const posicoes = page => page.locator('#hangar li').evaluateAll(lis => lis.map(li => li.dataset.id));
@@ -22,10 +22,10 @@ test.describe('Ordem no hangar', () => {
     await abrirEscala(page);
     const recursos = await page.locator('#out tbody tr:not(.win) .c-aviao').allTextContents();
     expect(recursos.map(t => t.trim().split(/\s+/)[0])).toEqual(['PR-VOB', 'PR-VOB']);
-    await page.locator('#btn-open-log').click();
+    await abrirHistorico(page);
     await expect(page.locator('#historico')).toContainText('Hangar: PR-VOB passou para 1º');
 
-    await page.locator('#dt-prox').click();
+    await diaSeguinte(page);
     await irPara(page, 'rec');
     expect((await posicoes(page))[0]).toBe('PR-VOB');
   });

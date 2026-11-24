@@ -2,7 +2,7 @@
 // (INVA, Avião ou Maior buraco) e até onde os horários mudam (na disponibilidade, só 1ª e 2ª preferência, ou não
 // mudam); a escala é refeita na hora e o tempo parado, ao lado do resumo, mostra o efeito. Os critérios ficam com
 // o dia; com a escala aprovada e no Gestor, só aparecem
-import { test, expect, abrir, abrirEscala, confirmar } from './fixtures.js';
+import { test, expect, abrir, abrirEscala, abrirHistorico, aprovar } from './fixtures.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
 
 // Um instrutor: às 06:30 (o aluno 1000 só pode nessa hora) e o aluno 1001, que pediu 13:40 e pode a qualquer hora
@@ -25,7 +25,7 @@ test.describe('Compactação da escala', () => {
     await expect(linha(page, 'Aluno 1001').locator('.c-hr')).toContainText('13:40–14:40');
     await expect(linha(page, 'Aluno 1001').locator('.c-hr')).not.toContainText('horário ajustado');
     await expect(page.locator('#tempo-parado > div')).toHaveText(['6h10 INVAs parados', '6h10 aviões parados', '2 saídas do hangar']);
-    await page.locator('#btn-open-log').click();
+    await abrirHistorico(page);
     await expect(page.locator('#audit-log-list')).toContainText('Compactação: horários Na disponibilidade → Não mudar');
     await page.keyboard.press('Escape');
 
@@ -37,7 +37,7 @@ test.describe('Compactação da escala', () => {
   test('com a escala aprovada, os critérios só aparecem', async ({ page }) => {
     await abrir(page, { estado: dia() });
     await abrirEscala(page);
-    await confirmar(page, '#btn-aprovar');
+    await aprovar(page);
     await expect(botao(page, 'Avião')).toBeDisabled();
     await expect(botao(page, 'Não mudar')).toBeDisabled();
   });

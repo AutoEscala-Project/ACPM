@@ -1,7 +1,7 @@
 // Dados pessoais de alunos e instrutores: CPF, CANAC, nascimento, celular e e-mail, num painel ao lado da tabela.
 // Ficam fora do cadastro; o histórico registra só os campos que mudaram. No modo compartilhado, operadores,
 // administradores e a secretaria veem e editam; o gestor não vê.
-import { test, expect, abrir, irPara, irParaVista, prepararContexto, vigiarErros, filtrarHabilitacoes, filtrarCursos, AMANHA, entrar as entrarNoApp } from './fixtures.js';
+import { test, expect, abrir, irPara, irParaVista, prepararContexto, vigiarErros, filtrarHabilitacoes, filtrarCursos, AMANHA, entrar as entrarNoApp, abrirHistorico, botoesDasAbas, gradeDoDia, linhaDoInstrutor } from './fixtures.js';
 import { criarSupabaseFalso, instalarSupabaseFalso, documentosAtuais, CONTAS } from './supabase-falso.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
 
@@ -44,7 +44,7 @@ test.describe('Dados pessoais (neste navegador)', () => {
     await expect(campo(page, 'Celular')).toHaveValue('(37) 99123-4567');
     await page.keyboard.press('Escape');
     await expect(painel(page)).toBeHidden();
-    await page.locator('#btn-open-log').click();
+    await abrirHistorico(page);
     await expect(page.locator('#historico')).toContainText('Dados pessoais de Aluno 1000 atualizados: CPF, CANAC, Celular');
     await expect(page.locator('#historico')).not.toContainText('529');
   });
@@ -113,7 +113,7 @@ test.describe('Dados pessoais (modo compartilhado)', () => {
 
   test('a Secretaria vê Alunos e Instrutores e edita só os dados pessoais', async ({ browser }) => {
     const { context, servidor, page, erros } = await entrar(browser, CONTAS.secretaria);
-    await expect(page.locator('#nav button[data-t]:visible')).toHaveText(['Escala', 'Agenda', 'Instrutores', 'Alunos', 'Cursos']);
+    await expect(botoesDasAbas(page, { visiveis: true })).toHaveText(['Escala', 'Agenda', 'Instrutores', 'Alunos', 'Cursos']);
     await irPara(page, 'alu');
     // Sem a Demanda, também sem o link para ela; o filtro dos cursos vale para ela (as caixas não ficam desligadas)
     await expect(page.locator('#s-alu .ir-para-demanda')).toBeHidden();
@@ -176,7 +176,7 @@ test.describe('Dados pessoais (modo compartilhado)', () => {
     await expect(page.locator('#s-ins [data-vista-ins="cadastro"]')).toHaveAttribute('aria-pressed', 'true');
     await expect(page.locator('#s-ins [data-vista-ins="dia"]')).toHaveAttribute('aria-pressed', 'false');
     await expect(page.locator('#inst tr[data-id="1"] [data-dados]')).toBeVisible();
-    await expect(page.locator('#inst-dia')).toBeHidden();
+    await expect(gradeDoDia(page)).toBeHidden();
     // Ela busca, filtra pelas habilitações (as caixas não ficam desligadas para quem só consulta) e usa o "Limpar
     // filtros" (sem data-act: vale também para quem só consulta)
     const busca = page.locator('[data-flt="inst"]');
@@ -199,7 +199,7 @@ test.describe('Dados pessoais (modo compartilhado)', () => {
     await irPara(page, 'alu');
     await irPara(page, 'ins');
     await expect(page.locator('#s-ins')).toHaveAttribute('data-vista', 'dia');
-    await expect(page.locator('#inst-dia tr[data-id="1"]')).toBeVisible();
+    await expect(linhaDoInstrutor(page, '1')).toBeVisible();
     // Recarregada a página, vale de novo a do perfil
     await page.reload();
     await expect(page.locator('body[data-pronto]')).toBeAttached();

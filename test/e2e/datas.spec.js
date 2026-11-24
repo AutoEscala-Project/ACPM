@@ -1,6 +1,6 @@
 // Escala por data no modo local: cada data guarda a sua escala, a nova data começa com a demanda vazia,
 // histórico e BI por data, e os dados antigos deste navegador são convertidos na primeira abertura.
-import { test, expect, abrir, abrirSintetico, abrirComExemplo, irPara, abrirEscala, lerEscala, AMANHA } from './fixtures.js';
+import { test, expect, abrir, abrirSintetico, abrirComExemplo, irPara, abrirEscala, lerEscala, AMANHA, abrirHistorico, alternarDisponivel, botaoDaAba, caixaDisponivel, caixaVoa, campoDaData, escreverData, exportar, mudarData } from './fixtures.js';
 import { estadoSintetico } from '../helpers/estado.js';
 import { aluno } from '../helpers/montar.js';
 import { runAllocationEngine } from '../../js/engine.js';
@@ -10,13 +10,6 @@ import { ESQUEMA } from '../../js/migracoes.js';
 import { comNomesAntigos } from '../helpers/formato.js';
 
 const DEPOIS = '2026-11-12';
-
-async function mudarData(page, data) {
-  await page.locator('#nav button[data-t="esc"]').click();
-  await page.locator('#dt').fill(data);
-  await page.locator('#dt').dispatchEvent('change');
-  await expect(page.locator('#dt')).toHaveValue(data);
-}
 
 test.describe('Escala por data', () => {
   // A demanda é zerada a cada dia; a agenda é o centro dos agendamentos
@@ -32,7 +25,7 @@ test.describe('Escala por data', () => {
     await expect(page.locator('#cnt')).toContainText('0 missão(ões) marcada(s)');
 
     await page.locator('#onlyfly').uncheck();
-    await page.locator('#dem tr[data-k="d"][data-mid="0"]').first().locator('[data-f="fly"]').check();
+    await caixaVoa(page.locator('#dem tr[data-k="d"][data-mid="0"]').first()).check();
     await abrirEscala(page);
     const escalaDia12 = await lerEscala(page);
     expect(escalaDia12.linhas.length).toBeGreaterThan(0);
@@ -56,17 +49,17 @@ test.describe('Escala por data', () => {
       };
     });
     await irPara(page, 'rec');
-    await page.locator('#eqs input[data-id="PR-BTB"]').uncheck();
+    await alternarDisponivel(page, 'PR-BTB', false);
     await expect(page.locator('#aviso-sync-texto')).toHaveText(
       'Não foi possível salvar neste navegador (o espaço de armazenamento pode ter acabado): a última alteração não foi salva. Exporte o CSV para não perder a escala.');
-    await page.locator('#btn-open-log').click();
+    await abrirHistorico(page);
     await expect(page.locator('#audit-log-list .audit-item').filter({ hasText: 'PR-BTB' }).locator('.audit-estado')).toHaveText('não gravada');
   });
 
   test('o histórico é separado por data', async ({ page }) => {
     await abrirSintetico(page);
     await irPara(page, 'rec');
-    await page.locator('#eqs input[data-id="PR-BTB"]').uncheck();
+    await alternarDisponivel(page, 'PR-BTB', false);
     await expect(page.locator('#log-cnt')).toHaveText('1');
     await mudarData(page, DEPOIS);
     await expect(page.locator('#log-cnt')).toHaveText('0');
@@ -78,52 +71,51 @@ test.describe('Escala por data', () => {
   test('reverter pelo histórico vale também depois de recarregar', async ({ page }) => {
     await abrirSintetico(page);
     await irPara(page, 'rec');
-    await page.locator('#eqs input[data-id="PR-BTB"]').uncheck();
-    await page.locator('#btn-open-log').click();
+    await alternarDisponivel(page, 'PR-BTB', false);
+    await abrirHistorico(page);
     await page.locator('#audit-log-list [data-act="rev-log"]').first().click();
     await expect(page.locator('#audit-log-list')).toContainText('Revertido: PR-BTB');
     await page.reload();
     await irPara(page, 'rec');
-    await expect(page.locator('#eqs input[data-id="PR-BTB"]')).toBeChecked();
-    await page.locator('#btn-open-log').click();
+    await expect(caixaDisponivel(page, 'PR-BTB')).toBeChecked();
+    await abrirHistorico(page);
     await expect(page.locator('#audit-log-list [data-act="rev-log"]')).toHaveCount(0);
     await expect(page.locator('#log-cnt')).toHaveText('1');
   });
 
   test('o link com ?data= abre aquela data; uma data que não existe abre amanhã, com o aviso', async ({ page }) => {
     await abrir(page, { url: `./?data=${DEPOIS}` });
-    await expect(page.locator('#dt')).toHaveValue(DEPOIS);
+    await expect(campoDaData(page)).toHaveValue(DEPOIS);
     await page.goto('./?data=2026-02-30');
-    await expect(page.locator('#dt')).toHaveValue(AMANHA);
+    await expect(campoDaData(page)).toHaveValue(AMANHA);
     await expect(page.locator('#toast-box')).toContainText('A data do link não existe (2026-02-30). A escala aberta é a de amanhã.');
   });
 
   test('com o campo de data vazio, a tela volta para a data aberta e as alterações continuam indo para ela', async ({ page }) => {
     await abrirSintetico(page);
-    await page.locator('#nav button[data-t="esc"]').click();
-    await page.locator('#dt').fill('');
-    await page.locator('#dt').dispatchEvent('change');
-    await expect(page.locator('#dt')).toHaveValue(AMANHA);
+    await botaoDaAba(page, 'esc').click();
+    await escreverData(page, '');
+    await expect(campoDaData(page)).toHaveValue(AMANHA);
     await irPara(page, 'rec');
-    await page.locator('#eqs input[data-id="PR-BTB"]').uncheck();
+    await alternarDisponivel(page, 'PR-BTB', false);
     await page.reload();
     await irPara(page, 'rec');
-    await expect(page.locator('#eqs input[data-id="PR-BTB"]')).not.toBeChecked();
+    await expect(caixaDisponivel(page, 'PR-BTB')).not.toBeChecked();
   });
 
   test('o BI soma as escalas guardadas de cada data', async ({ page }) => {
     // Exportar grava a escala calculada de cada data
-    const exportar = () => Promise.all([page.waitForEvent('download'), page.locator('#exp').click()]);
+    const exportarCsv = () => exportar(page, 'csv');
     await abrirComExemplo(page);
     await abrirEscala(page);
-    await exportar();
+    await exportarCsv();
     // A data nova começa com a demanda vazia: um aluno (um voo de 1 h) entra à mão
     await mudarData(page, DEPOIS);
     await irPara(page, 'dem');
     await page.locator('#onlyfly').uncheck();
-    await page.locator('#dem tr[data-k="d"][data-mid="0"]').first().locator('[data-f="fly"]').check();
+    await caixaVoa(page.locator('#dem tr[data-k="d"][data-mid="0"]').first()).check();
     await abrirEscala(page);
-    await exportar();
+    await exportarCsv();
     await irPara(page, 'bi');
     // O exemplo tem dois noturnos (4 h cada no dia) e, na data seguinte, as duas voltas de BH (1 h cada) e o voo de 1 h
     await expect(page.locator('#bi-content .st > div').nth(1)).toContainText('31 h');
@@ -142,7 +134,7 @@ test.describe('Escala por data', () => {
     }, JSON.stringify(fase3));
     await abrir(page);
     await irPara(page, 'rec');
-    await expect(page.locator('#eqs input[data-id="SIM-MONO-A"]')).not.toBeChecked();
+    await expect(caixaDisponivel(page, 'SIM-MONO-A')).not.toBeChecked();
     const gravado = await page.evaluate(d => ({ cadastro: JSON.parse(localStorage.getItem('acpm4_cadastro')), dia: JSON.parse(localStorage.getItem(`acpm4_dia_${d}`)) }), AMANHA);
     expect([gravado.cadastro.esquema, gravado.dia.esquema, gravado.dia.av['SIM-MONO-A']]).toEqual([ESQUEMA, ESQUEMA, false]);
     expect(Object.keys(gravado.dia.av).filter(r => /^SIM-(MONO|MULTI)-\d$/.test(r))).toEqual([]);

@@ -1,12 +1,14 @@
 // Servidor estático mínimo (sem dependências) para desenvolvimento local e testes E2E.
-// Uso: npm run serve  →  http://localhost:4173
+// Uso: npm run serve  →  http://localhost:<a porta da pasta> (scripts/porta.mjs; o endereço sai no terminal). PORT=… escolhe
+// outra (a das portas de duas pastas que coincidem)
 import { createServer } from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
 import { extname, join, normalize, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { portaDoApp } from './porta.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
-const PORT = Number(process.env.PORT) || 4173;
+const PORT = portaDoApp(ROOT);
 const TYPES = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',
