@@ -1,6 +1,10 @@
 import { defineConfig, devices } from '@playwright/test';
+import { fileURLToPath } from 'node:url';
+import { portaDaPasta } from './scripts/porta.mjs';
 
-const PORT = 4173;
+// A porta seguinte à do app desta pasta (scripts/porta.mjs): os testes sobem o próprio servidor, e uma porta ocupada é
+// erro (nunca os arquivos de outra pasta)
+const PORT = portaDaPasta(fileURLToPath(new URL('.', import.meta.url))) + 1;
 // BASE_URL=https://usuario.github.io/ACPM/ roda os testes contra uma versão publicada (com a barra final)
 const BASE_URL = process.env.BASE_URL;
 
@@ -23,7 +27,8 @@ export default defineConfig({
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'], channel: process.env.PW_CHANNEL || undefined } }],
   webServer: BASE_URL ? undefined : {
     command: 'node scripts/serve.mjs',
+    env: { PORT: String(PORT) },
     url: `http://localhost:${PORT}`,
-    reuseExistingServer: !process.env.CI
+    reuseExistingServer: false
   }
 });
