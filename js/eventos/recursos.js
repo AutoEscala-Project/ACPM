@@ -15,7 +15,7 @@ import { rDem } from '../views/demanda.js';
 import { filtrarRecursos, limparFiltrosDosRecursos, manterRecursoAVista, criarFiltroDasCategorias } from '../views/filtros-dos-recursos.js';
 import { NOMES_DAS_CATEGORIAS, abrirEditorDosHorarios, fecharEditorDosHorarios, tirarDoRascunho, porNoRascunho, escolherModelo, rascunhoDosHorarios, editorDosHorariosAberto } from '../views/horarios.js';
 import { rRec, rHangar, alternarAtributos, aplicarFiltrosDosRecursos } from '../views/recursos.js';
-import { rIns, rPainelDoInstrutor } from '../views/cadastros.js';
+import { rIns, rPainelDoInstrutor } from '../views/instrutores.js';
 import { mostrarVista, vistaDa } from '../views/vistas.js';
 
 // O campo do recurso com erro (aria-invalid); o motivo (#rec-erro) é a descrição dele: o leitor de tela diz os dois

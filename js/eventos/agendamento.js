@@ -15,7 +15,8 @@ import { S, isGestor, stuBy } from '../state.js';
 import { ApiClient } from '../storage.js';
 import { aoAcionar } from './registro.js';
 import { abrirAgendamento } from '../views/agendamento.js';
-import { rIns, rAlu } from '../views/cadastros.js';
+import { rAlu } from '../views/alunos.js';
+import { rIns } from '../views/instrutores.js';
 import { rDem } from '../views/demanda.js';
 
 // O voo novo na escala: o status dele na lista, ou a barra no mapa; fora da vista (um filtro), o botão que abriu o diálogo

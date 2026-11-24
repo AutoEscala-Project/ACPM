@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   isGroundMission, doesGroundGateFlight, migrateLegacyMissionName, normalizeMissionFields, blank, disponibilidadeDoAluno, disponibilidadeAtual,
   rotuloDaDisponibilidade, opcoesDeDisponibilidade, proximoMid, duracaoDigitada, ERRO_DA_DURACAO, chaveTemSobras, alvoDoNovoPedido,
-  pesoValido, pesoDigitado, ERRO_DO_PESO
+  pesoValido, pesoDigitado, pesoDoTexto, ERRO_DO_PESO
 } from '../../js/rules.js';
 import { podeFazer, descreverExigencias } from '../../js/habilitacoes.js';
 
@@ -229,5 +229,13 @@ describe('O peso', () => {
       [72, 72.5, 80.3, 68.3, 0.1, 250, 300, 300, 75, 90]);
     for (const fora of ['0', '0,04', '-1', '300,1', '350', '', 'abc', 'Infinity']) assert.equal(pesoDigitado(fora), null, fora);
     assert.equal(ERRO_DO_PESO, 'O peso vai de 1 a 300 kg.');
+  });
+
+  it('o do campo do cadastro: vazio é sem peso (0); o texto que não é número (validity.badInput) não apaga o peso', () => {
+    assert.equal(pesoDoTexto(''), 0);
+    assert.equal(pesoDoTexto('   '), 0);
+    assert.equal(pesoDoTexto('72,5'), 72.5);
+    assert.equal(pesoDoTexto('', true), null);
+    for (const fora of ['0', '-1', '301', 'abc']) assert.equal(pesoDoTexto(fora), null, fora);
   });
 });

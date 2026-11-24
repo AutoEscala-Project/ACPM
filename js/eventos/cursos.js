@@ -29,7 +29,7 @@ import {
   rCursos, podeEditarCursos, programasIndisponiveis, codigoTravado, codigoComResultados, codigoNaDemanda, codigosReservados, mostrarAlteracoes,
   nomesDosRequisitos, listaComE, filtrarCursos, recolherFase, recolherTodasAsFases, irParaFase
 } from '../views/cursos.js';
-import { rAlu } from '../views/cadastros.js';
+import { rAlu } from '../views/alunos.js';
 import { rDem } from '../views/demanda.js';
 
 // As últimas alterações de cada curso, como o servidor as devolve; o tamanho da descrição de uma alteração

@@ -15,7 +15,7 @@ import { instrutoresDoPedido } from '../instrutor-escolhido.js';
 import { chaveDoVoo } from '../voo.js';
 import { nomeDoRecurso } from '../categorias.js';
 import { criarFiltroDosCursos, cursoDaLinha } from './filtro-dos-cursos.js';
-import { nenhumComOsFiltros } from './cadastros.js';
+import { nenhumComOsFiltros } from './linhas-filtradas.js';
 
 function allowedEqOptionsForMission(mis, currentEq) {
   const m = MIS[mis] || MIS['Voo Local'];

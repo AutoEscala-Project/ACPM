@@ -15,7 +15,7 @@ import { ApiClient } from '../storage.js';
 import { agendarNoMapa } from './agendamento.js';
 import { confirmado } from './confirmacao.js';
 import { aoAcionar, aoMudarCampo } from './registro.js';
-import { rAlu } from '../views/cadastros.js';
+import { rAlu } from '../views/alunos.js';
 import { rDem } from '../views/demanda.js';
 import { pedirDetalheDoStatus } from '../views/dialogo-status.js';
 import { cursoDoResultado } from '../views/etapas.js';

@@ -17,7 +17,8 @@
  */
 import './eventos/navegacao.js';
 import './eventos/escala.js';
-import './eventos/cadastros.js';
+import './eventos/instrutores.js';
+import './eventos/alunos.js';
 import './eventos/historico.js';
 import './eventos/topo.js';
 import './eventos/demanda.js';
@@ -43,7 +44,8 @@ import { abaFoiEscolhida } from './eventos/navegacao.js';
 import { avisoDeDomingo, iniciarTema } from './eventos/topo.js';
 import { programaSendoGravado } from './eventos/cursos.js';
 import { abrirAgenda, diaDaAgenda, podeEditarAgenda } from './views/agenda.js';
-import { rIns, rAlu } from './views/cadastros.js';
+import { rAlu } from './views/alunos.js';
+import { rIns } from './views/instrutores.js';
 import { rCursos } from './views/cursos.js';
 import { carregarDadosPessoais } from './views/dados-pessoais.js';
 import { rDem } from './views/demanda.js';

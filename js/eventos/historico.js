@@ -8,7 +8,7 @@ import { reverterEscolha, reverterReparo } from '../instrutor-escolhido.js';
 import { S, AUDIT_LOG, DATA, setAuditLog, isGestor, insBy, stuBy, getMissionTarget } from '../state.js';
 import { ApiClient } from '../storage.js';
 import { aoAcionar } from './registro.js';
-import { rIns } from '../views/cadastros.js';
+import { rIns } from '../views/instrutores.js';
 import { rDem } from '../views/demanda.js';
 import { renderAuditPanel } from '../views/escala.js';
 import { rRec } from '../views/recursos.js';

@@ -2,7 +2,8 @@
 // registra o que faz com eles (js/eventos/), e quem só consulta não muda nada, nem quem muda antes de a escala abrir
 import { aindaNaoAbriu } from '../actions.js';
 import { RES, isGestor } from '../state.js';
-import { rIns, rAlu } from '../views/cadastros.js';
+import { rAlu } from '../views/alunos.js';
+import { rIns } from '../views/instrutores.js';
 import { rCursos } from '../views/cursos.js';
 import { rDem } from '../views/demanda.js';
 import { rOut } from '../views/escala.js';

@@ -138,6 +138,10 @@ export const pesoDigitado = texto => {
   const kg = Math.round(parseFloat(String(texto).replace(',', '.')) * 10) / 10;
   return kg > 0 && kg <= PESO_MAXIMO ? kg : null;
 };
+// O peso do campo do cadastro (aluno ou instrutor): vazio é sem peso (0); zero, negativo, acima de PESO_MAXIMO ou um texto
+// que não é número não vale (null). O texto que não é número chega vazio (o campo é type=number), mas com
+// validity.badInput (naoENumero): ele não apaga o peso
+export const pesoDoTexto = (texto, naoENumero = false) => (String(texto ?? '').trim() === '' && !naoENumero ? 0 : pesoDigitado(texto));
 
 export function normalizeMissionFields(target) {
   target.mis = migrateLegacyMissionName(target.mis);
