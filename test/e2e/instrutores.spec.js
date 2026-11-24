@@ -1,5 +1,5 @@
 // Instrutores: os filtros, a disponibilidade do dia (a grade e o "Vem"), as habilitações, o peso e o turno.
-import { test, expect, abrir, abrirSintetico, abrirComExemplo, irPara, irParaVista, abrirEscala, lerEscala, filtrarHabilitacoes, confirmar, abrirHistorico, cabecalhoDaGrade, caixaVem, campoDaData, diaSeguinte, gradeDoDia, linhaDoInstrutor } from './fixtures.js';
+import { test, expect, abrir, abrirSintetico, abrirComExemplo, irPara, irParaVista, abrirEscala, lerEscala, filtrarHabilitacoes, confirmar, abrirHistorico, cabecalhoDaGrade, caixaVem, campoDaData, diaSeguinte, gradeDoDia, linhaDoInstrutor, alvosPequenos, larguraDaPagina } from './fixtures.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
 
 test.describe('Instrutores', () => {
@@ -450,5 +450,33 @@ test.describe('Instrutores', () => {
     await page.locator('#audit-log-list [data-act="rev-log"]').first().click();
     await irPara(page, 'ins');
     await expect(gradeDoDia(page).locator('tr[data-k="i"]').first()).not.toHaveClass(/\boff\b/);
+  });
+});
+
+// No celular (390 px; os testes que mudam a largura dizem qual), vindos de celular.spec.js
+test.describe('Celular', () => {
+  test.use({ viewport: { width: 390, height: 844 } });
+
+  // O filtro das habilitações no celular (390 e 320 px): o botão divide a linha com a busca; o painel abre no fluxo da
+  // página, inteiro na largura da tela (a grade desce para baixo dele: nada fica coberto), e as caixas, o "Limpar" e o
+  // "?" têm 44 px para o dedo
+  test('o filtro das habilitações cabe no celular (390 e 320 px): o painel empurra a grade, com alvos de 44 px', async ({ page }) => {
+    await abrirComExemplo(page);
+    for (const largura of [390, 320]) {
+      await page.setViewportSize({ width: largura, height: 800 });
+      await irPara(page, 'ins');
+      await filtrarHabilitacoes(page, ['noturno', 'c172'], { fechar: false });
+      const caixas = await Promise.all(['[data-flt="inst"]', '#flt-ins-hab', '#flt-ins-hab-painel', '#s-ins .vista-dia .tw']
+        .map(seletor => page.locator(seletor).boundingBox()));
+      const [busca, botao, painel, grade] = caixas;
+      expect(Math.abs(botao.y + botao.height / 2 - (busca.y + busca.height / 2)), `${largura}: o botão na linha da busca`).toBeLessThan(4);
+      expect(botao.x + botao.width, `${largura}: o botão na tela`).toBeLessThanOrEqual(largura);
+      expect(painel.x, `${largura}: o painel na tela`).toBeGreaterThanOrEqual(0);
+      expect(painel.x + painel.width, `${largura}: o painel na tela`).toBeLessThanOrEqual(largura);
+      expect(grade.y, `${largura}: a grade embaixo do painel`).toBeGreaterThanOrEqual(painel.y + painel.height);
+      expect(await larguraDaPagina(page), `${largura}: a página não rola para o lado`).toBeLessThanOrEqual(largura);
+      expect(await alvosPequenos(page), `${largura}: alvos de 44 px`).toEqual([]);
+      await filtrarHabilitacoes(page, []);
+    }
   });
 });

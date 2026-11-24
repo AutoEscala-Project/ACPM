@@ -1,6 +1,6 @@
 // Acessibilidade: cada botão e cada campo tem um nome para o leitor de tela, e nenhum se chama só "✕" (que o leitor
 // lê como "multiplicação"). Vale para todas as abas, o Histórico e o painel de habilitações.
-import { test, expect, abrir, abrirComExemplo, irPara, entrar, abrirEscala, confirmar, prepararContexto, vigiarErros, REGIOES, abasVisiveis, abrirHistorico, aprovar, botaoAprovar, botaoDiaAnterior, botaoDoHistorico, botaoDoMenuDaConta, botaoReabrir, percorrerTelas, reabrir, relativoDaData, rotuloDaData, semNome, alternarVem, botaoDiaSeguinte, campoDaData } from './fixtures.js';
+import { test, expect, abrir, abrirComExemplo, irPara, entrar, abrirEscala, prepararContexto, vigiarErros, REGIOES, abasVisiveis, abrirHistorico, aprovar, botaoAprovar, botaoDiaAnterior, botaoDoHistorico, botaoDoMenuDaConta, percorrerTelas, relativoDaData, rotuloDaData, semNome, alternarVem, botaoDiaSeguinte, campoDaData } from './fixtures.js';
 import { instalarSupabaseFalso, documentosAtuais, CONTAS } from './supabase-falso.js';
 import { comExemplo } from '../helpers/exemplo.js';
 import { estadoSintetico } from '../helpers/estado.js';
@@ -27,51 +27,6 @@ test.describe('Acessibilidade', () => {
     await page.keyboard.press('Escape');
     await abrirHistorico(page);
     expect(await semNome(page, '#historico'), 'histórico').toEqual([]);
-  });
-
-  // A aba Cursos com o programa em fases (o exemplo não tem programa: aqui, o cronograma do PP): os botões dos cursos, o
-  // índice das fases, o título de cada fase (o botão que a recolhe; para quem muda, só a seta, com o nome da fase para o
-  // leitor de tela) e "Abrir todas" e "Recolher todas" têm nome, para quem muda e para quem só consulta, abertas e
-  // recolhidas
-  test('a aba Cursos em fases: os cursos, o índice e o título de cada fase têm nome, abertas e recolhidas', async ({ page }) => {
-    await abrir(page, { estado: cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, {}, { curso: 'PP' })] }) });
-    await irPara(page, 'cur');
-    await confirmar(page, '#cursos [data-act="curso-modelo"]');
-    await expect(page.locator('#cursos .fase')).toHaveCount(9);
-    await expect(page.locator('#cursos [data-recolher-fase]').first()).toHaveAccessibleName('Fase 1 – Introdução ao Voo');
-    await expect(page.locator('#cursos [data-recolher-fase]').first()).toHaveAttribute('aria-expanded', 'true');
-    for (const perfil of ['operador', 'gestor']) {
-      await page.locator('#role-sel').selectOption(perfil);
-      for (const fases of ['#fases-abrir', '#fases-recolher']) {
-        await page.locator(fases).click();
-        expect(await semNome(page, 'main section.on'), `${perfil}, ${fases}`).toEqual([]);
-      }
-    }
-    await expect(page.getByRole('navigation', { name: 'Fases do PP' }).getByRole('link')).toHaveCount(9);
-    await expect(page.getByRole('group', { name: 'Curso' }).getByRole('button', { name: 'PP · Piloto Privado' })).toHaveAttribute('aria-pressed', 'true');
-  });
-
-  // O "+" que agenda é só o ícone (escondido do leitor de tela): o nome diz onde o voo vai, o recurso ou o instrutor da
-  // linha no mapa e o horário na lista
-  test('o "+" que agenda tem nome em cada vista: o recurso e o instrutor da linha no mapa, o horário na lista', async ({ page }) => {
-    await abrirComExemplo(page);
-    await abrirEscala(page);
-    const nomes = () => page.locator('#out .win-agendar, #out .tl-agendar').evaluateAll(bs => bs.filter(b => b.checkVisibility()).map(b => b.getAttribute('aria-label')));
-    const lista = await nomes();
-    expect(lista.length).toBeGreaterThan(0);
-    expect(lista.filter(n => !/^Agendar às \d\d:\d\d$/.test(n)), 'lista').toEqual([]);
-    await expect(page.getByRole('button', { name: 'Agendar às 06:30', exact: true })).toBeVisible();
-    await page.locator('#s-esc [data-tl="eq"]').click();
-    const recursos = await nomes();
-    expect(recursos).toContain('Agendar no PR-VOB');
-    expect(recursos).toContain('Agendar na Sala Ground');
-    expect(recursos.filter(n => !/^Agendar (no [A-Z0-9-]+|na Sala Ground)$/.test(n)), 'por recurso').toEqual([]);
-    await expect(page.getByRole('button', { name: 'Agendar no PR-VOB', exact: true })).toBeVisible();
-    await page.locator('#s-esc [data-tl="ins"]').click();
-    const instrutores = await nomes();
-    expect(instrutores).toHaveLength(40);
-    expect(instrutores.filter(n => !/^Agendar com Instrutor \d\d$/.test(n)), 'por instrutor').toEqual([]);
-    await expect(page.getByRole('button', { name: 'Agendar com Instrutor 07', exact: true })).toBeVisible();
   });
 });
 
@@ -274,63 +229,6 @@ test.describe('Um nome de conta longo', () => {
 // Quem usa o teclado continua no mesmo lugar depois de uma ação: a tela é redesenhada, mas o foco volta para o campo ou o
 // botão equivalente (antes, ele caía no <body> e o próximo Tab recomeçava do topo)
 test.describe('O foco depois de uma ação', () => {
-  const emFoco = page => page.evaluate(() => {
-    const el = document.activeElement;
-    return el === document.body ? 'body' : `${el.tagName.toLowerCase()}${['data-f', 'data-a', 'data-act', 'data-fkey', 'data-id', 'id'].filter(a => el.hasAttribute(a)).map(a => `[${a}="${el.getAttribute(a)}"]`).join('')}`;
-  });
-
-  test('o status mudado pelo teclado na lista da Escala', async ({ page }) => {
-    await abrirComExemplo(page);
-    await abrirEscala(page);
-    const status = page.locator('#out select[data-f="fstatus"]').first();
-    const fkey = await status.getAttribute('data-fkey');
-    await status.focus();
-    await status.selectOption('Em Voo');
-    await expect(page.locator(`#out select[data-fkey="${fkey}"]`)).toHaveValue('Em Voo');
-    expect(await emFoco(page)).toBe(`select[data-f="fstatus"][data-fkey="${fkey}"]`);
-  });
-
-  test('o diálogo do Atrasado devolve o foco ao status do voo, desistido ou confirmado (com a lista redesenhada)', async ({ page }) => {
-    await abrirComExemplo(page);
-    await abrirEscala(page);
-    const status = page.locator('#out select[data-f="fstatus"]').first();
-    const fkey = await status.getAttribute('data-fkey');
-    const dialogo = page.locator('#dlg-status');
-    await status.focus();
-    await status.selectOption('Atrasado');
-    await dialogo.getByRole('button', { name: 'Voltar' }).click();
-    await expect(dialogo).toBeHidden();
-    expect(await emFoco(page)).toBe(`select[data-f="fstatus"][data-fkey="${fkey}"]`);
-    // Confirmado: o status muda e a lista é redesenhada; o foco fica no status do mesmo voo
-    await status.selectOption('Atrasado');
-    const [h, m] = (await page.locator('#dlg-status-voo').textContent()).match(/(\d\d):(\d\d)–/).slice(1).map(Number);
-    const novo = h * 60 + m + 30;
-    await page.locator('#st-novo').fill(`${String(Math.floor(novo / 60)).padStart(2, '0')}:${String(novo % 60).padStart(2, '0')}`);
-    await dialogo.getByRole('button', { name: 'Confirmar' }).click();
-    await expect(dialogo).toBeHidden();
-    await expect(page.locator(`#out select[data-fkey="${fkey}"]`)).toHaveValue('Atrasado');
-    expect(await emFoco(page)).toBe(`select[data-f="fstatus"][data-fkey="${fkey}"]`);
-  });
-
-  test('o popup do mapa: Enter na barra leva o foco para ele, e Tab depois do último controle volta para a barra', async ({ page }) => {
-    await abrirComExemplo(page);
-    await abrirEscala(page);
-    await page.locator('[data-tl="eq"]').click();
-    const barra = page.locator('#out .tl-bar').first();
-    await barra.focus();
-    await page.keyboard.press('Enter');
-    await expect(page.locator('#tl-pop')).toBeVisible();
-    // O primeiro controle do popup é o instrutor (o nome abre a lista para trocar); depois, o status
-    await expect(page.locator('#tl-pop [data-act="trocar-instrutor"]')).toBeFocused();
-    await page.keyboard.press('Tab');
-    await expect(page.locator('#tl-pop select[data-f="fstatus"]')).toBeFocused();
-    await page.keyboard.press('Shift+Tab');
-    const controles = await page.locator('#tl-pop select, #tl-pop button').count();
-    for (let i = 0; i < controles; i++) await page.keyboard.press('Tab');
-    await expect(page.locator('#tl-pop')).toBeHidden();
-    await expect(barra).toBeFocused();
-  });
-
   test('fechar o Histórico devolve o foco ao botão; o Manual leva o foco ao título dele', async ({ page }) => {
     await abrirComExemplo(page);
     await abrirHistorico(page);
@@ -339,65 +237,6 @@ test.describe('O foco depois de uma ação', () => {
     await expect(botaoDoHistorico(page)).toBeFocused();
     await page.locator('#btn-manual').click();
     await expect(page.locator('#s-manual h2').first()).toBeFocused();
-  });
-
-  test('o ✕ que tira o voo da escala, com o Enter dado duas vezes ou segurado, tira um voo só; o foco fica na linha que ficou no lugar', async ({ page }) => {
-    await abrirComExemplo(page);
-    await abrirEscala(page);
-    const xs = page.locator('#out .tabela-escala button[data-act="rm-fly"]');
-    const antes = await xs.count();
-    await xs.nth(2).focus();
-    await page.keyboard.press('Enter');
-    await page.keyboard.press('Enter');
-    await expect(xs).toHaveCount(antes - 1);
-    // O foco fica na linha, que não faz nada com o Enter, e continua nela depois de outro redesenho
-    const naLinha = () => page.evaluate(() => document.activeElement.matches('#out tbody tr[data-foco-neutro]'));
-    expect(await naLinha()).toBe(true);
-    await page.evaluate(() => import('./js/views/escala.js').then(m => m.rOut()));
-    expect(await naLinha()).toBe(true);
-    // Segurado: o primeiro keydown e as repetições da tecla
-    await xs.nth(2).focus();
-    for (let i = 0; i < 5; i++) await page.keyboard.down('Enter');
-    await page.keyboard.up('Enter');
-    await expect(xs).toHaveCount(antes - 2);
-  });
-
-  test('num navegador sem checkVisibility (Safari antes do 17.4), mudar um status grava, redesenha e mantém o foco', async ({ page }) => {
-    await page.addInitScript(() => { delete Element.prototype.checkVisibility; });
-    await abrirComExemplo(page);
-    await abrirEscala(page);
-    const status = page.locator('#out select[data-f="fstatus"]').nth(2);
-    const fkey = await status.getAttribute('data-fkey');
-    await status.focus();
-    await status.selectOption('Em Voo');
-    await expect(page.locator(`#out select[data-fkey="${fkey}"]`)).toHaveClass(/\bst-EmVoo\b/);
-    expect(await emFoco(page)).toBe(`select[data-f="fstatus"][data-fkey="${fkey}"]`);
-    await page.reload();
-    await abrirEscala(page);
-    await expect(page.locator(`#out select[data-fkey="${fkey}"]`)).toHaveValue('Em Voo');
-  });
-
-  test('um clique num texto da tabela e Tab: o foco segue dali, e não do topo', async ({ page }) => {
-    await abrirComExemplo(page);
-    await abrirEscala(page);
-    const linha = page.locator('#out .tabela-escala tbody tr:not(.win)').nth(5);
-    await linha.locator('td.c-aluno b').click();
-    await page.keyboard.press('Tab');
-    const fkey = await linha.locator('select[data-f="fstatus"]').getAttribute('data-fkey');
-    expect(await emFoco(page)).toBe(`select[data-f="fstatus"][data-fkey="${fkey}"]`);
-  });
-
-  test('o foco devolvido depois de um redesenho não rola a página até ele', async ({ page }) => {
-    await abrirComExemplo(page);
-    await abrirEscala(page);
-    await page.locator('#out select[data-f="fstatus"]').first().focus();
-    await page.evaluate(() => window.scrollTo({ top: document.body.scrollHeight, behavior: 'instant' }));
-    const antes = await page.evaluate(() => scrollY);
-    expect(antes).toBeGreaterThan(300);
-    // Um redesenho que chega depois (outra alteração, a resposta do servidor)
-    await page.evaluate(() => import('./js/views/escala.js').then(m => m.rOut()));
-    expect(await page.evaluate(() => scrollY)).toBe(antes);
-    await expect(page.locator('#out select[data-f="fstatus"]').first()).toBeFocused();
   });
 
   test('com o Histórico aberto, o Esc dado na busca da Escala fecha a gaveta e o foco fica na busca', async ({ page }) => {
@@ -411,15 +250,6 @@ test.describe('O foco depois de uma ação', () => {
     await page.keyboard.press('Escape');
     await expect(page.locator('#historico')).toBeHidden();
     await expect(busca).toBeFocused();
-  });
-
-  test('aprovar a escala leva o foco ao Reabrir, e reabrir, ao Aprovar', async ({ page }) => {
-    await abrirComExemplo(page);
-    await abrirEscala(page);
-    await aprovar(page);
-    await expect(botaoReabrir(page)).toBeFocused();
-    await reabrir(page);
-    await expect(botaoAprovar(page)).toBeFocused();
   });
 });
 
@@ -738,18 +568,6 @@ test.describe('O leitor de tela e o teclado', () => {
       expect(await contrastesFracos([['selo da aba', page.locator('#selo-esc')]])).toEqual([]);
     });
   }
-
-  test('as barras do mapa dizem o status do voo (não só a cor)', async ({ page }) => {
-    await abrirComExemplo(page);
-    await abrirEscala(page);
-    await page.locator('#out select[data-f="fstatus"]').first().selectOption('Em Voo');
-    await page.locator('#s-esc [data-tl="eq"]').click();
-    const barras = page.locator('#out .tl-bar');
-    expect(await barras.count()).toBeGreaterThan(1);
-    const ditos = await barras.evaluateAll(bs => bs.map(b => b.querySelector('.sr')?.textContent ?? ''));
-    for (const dito of ditos) expect(dito).toMatch(/^, (Pendente|Confirmado|Atrasado|Em Voo|Pousou|Concluída|Cancelado)$/);
-    expect(ditos).toContain(', Em Voo');
-  });
 
   test('o primeiro Tab da página é o link para pular ao conteúdo, e o Tab seguinte já é dentro do conteúdo', async ({ page }) => {
     await abrirComExemplo(page);

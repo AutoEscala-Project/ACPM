@@ -1,7 +1,7 @@
 // O dia de operação: "Aprovar escala" fixa os voos. Depois disso, uma alteração não tira ninguém do lugar:
 // o pedido novo entra em volta, e o voo fixo que ficou impossível aparece em conflito. "Reabrir" volta ao normal.
 // Em Voo, Atrasado, Pousou e Cancelado também fixam o voo.
-import { test, expect, abrir, irPara, abrirEscala, lerEscala, abrirHistorico, alternarVem, aprovar, botaoAprovar, botaoReabrir, caixaVoa, reabrir } from './fixtures.js';
+import { test, expect, abrir, abrirComExemplo, irPara, abrirEscala, lerEscala, abrirHistorico, alternarVem, aprovar, botaoAprovar, botaoReabrir, caixaVoa, reabrir } from './fixtures.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
 
 const dia = () => cenario({ ins: [instrutor(1, 9), instrutor(2, 9)], stu: [aluno(1000, { p1: 390, p2: -1 }), aluno(1001, { p1: 500, p2: -1 }), aluno(1002, { fly: false, p1: 390, p2: -1 })] });
@@ -94,5 +94,17 @@ test.describe('O cadeado do voo', () => {
     await reabrir(page);
     await expect(linha(page, 'Aluno 1000').locator('.fixo')).toHaveAttribute('aria-label', 'Voo fixo: Em Voo');
     await expect(linha(page, 'Aluno 1001').locator('.fixo')).toHaveCount(0);
+  });
+});
+
+// O foco depois de aprovar e de reabrir (vindo de acessibilidade.spec.js)
+test.describe('O foco depois de uma ação', () => {
+  test('aprovar a escala leva o foco ao Reabrir, e reabrir, ao Aprovar', async ({ page }) => {
+    await abrirComExemplo(page);
+    await abrirEscala(page);
+    await aprovar(page);
+    await expect(botaoReabrir(page)).toBeFocused();
+    await reabrir(page);
+    await expect(botaoAprovar(page)).toBeFocused();
   });
 });
