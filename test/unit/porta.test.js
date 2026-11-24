@@ -3,13 +3,17 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
+import { resolve, sep } from 'node:path';
 import { portaDaPasta, portaDoApp, portaDosTestes } from '../../scripts/porta.mjs';
 
 describe('portaDaPasta', () => {
   it('4200 + 2 × (os seis primeiros dígitos do sha1 da pasta, módulo 350): par, de 4200 a 4898', () => {
     const pasta = '/Users/alguem/ACPM';
-    const n = parseInt(createHash('sha1').update(pasta).digest('hex').slice(0, 6), 16);
+    // O caminho resolvido, como o script o lê (no Windows, /Users/alguem vira C:\Users\alguem)
+    const n = parseInt(createHash('sha1').update(resolve(pasta)).digest('hex').slice(0, 6), 16);
     assert.equal(portaDaPasta(pasta), 4200 + 2 * (n % 350));
+    // Um valor fixo, conferido à parte: no POSIX o caminho já está resolvido
+    if (sep === '/') assert.equal(portaDaPasta(pasta), 4378);
     for (const outra of ['/a', '/b/c', '/Users/alguem/ACPM/.redesenho/wt-f0a', 'C:\\ACPM']) {
       const porta = portaDaPasta(outra);
       assert.ok(porta >= 4200 && porta <= 4898 && porta % 2 === 0, `${outra}: ${porta}`);

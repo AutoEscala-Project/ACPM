@@ -1,0 +1,21 @@
+// Publicação no Cloudflare (Workers com arquivos estáticos, a versão atual do Cloudflare Pages). Sem código de servidor:
+// só os arquivos da pasta publicar/, montada por scripts/pasta-publicada.mjs. NUNCA aponte "directory" para a raiz do
+// repositório: ela tem testes, migrações, documentos e arquivos fora do git, que iriam para o ar.
+//   produção: node scripts/pasta-publicada.mjs && npx --yes wrangler@4.165.0 deploy
+//   prévia:   node scripts/pasta-publicada.mjs && npx --yes wrangler@4.165.0 deploy --env previa
+// O GitHub Actions faz isso sozinho (.github/workflows/publicar.yml). O endereço escolhe o banco (js/config-supabase.js).
+{
+  "name": "autoescala",
+  "compatibility_date": "2026-11-10",
+  "workers_dev": true,
+  "preview_urls": false,
+  "assets": { "directory": "./publicar", "html_handling": "auto-trailing-slash", "not_found_handling": "none" },
+  "env": {
+    "previa": {
+      "name": "autoescala-previa",
+      "workers_dev": true,
+      "preview_urls": false,
+      "assets": { "directory": "./publicar", "html_handling": "auto-trailing-slash", "not_found_handling": "none" }
+    }
+  }
+}

@@ -18,7 +18,12 @@ const VELHO_DEMAIS_MS = 3 * 3600000;
 const TEMPO_MAXIMO_MS = 12000;
 const SESSAO_MS = 5 * 60000;
 
-const ORIGENS = ['https://gdruumond.github.io', 'https://thephfernandes.github.io'];
+const ORIGENS = [
+  'https://autoescala.autoescala-acpm.workers.dev',
+  'https://autoescala-previa.autoescala-acpm.workers.dev',
+  'https://gdruumond.github.io',
+  'https://thephfernandes.github.io'
+];
 const LOCAL = /^http:\/\/(localhost|127\.0\.0\.1)(:\d{1,5})?$/;
 export const origemPermitida = origem => typeof origem === 'string' && (ORIGENS.includes(origem) || LOCAL.test(origem));
 

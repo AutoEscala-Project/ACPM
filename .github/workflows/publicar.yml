@@ -1,0 +1,48 @@
+name: Publicar
+
+# Publica o app no Cloudflare (wrangler.jsonc) depois que os testes de um push passam:
+#   main   → Worker "autoescala"        https://autoescala.autoescala-acpm.workers.dev        (banco acpm-escala)
+#   previa → Worker "autoescala-previa" https://autoescala-previa.autoescala-acpm.workers.dev (banco acpm-escala-preview)
+# O endereço escolhe o banco (js/config-supabase.js). Só a pasta de scripts/pasta-publicada.mjs vai para o ar.
+# Segredos do repositório: CLOUDFLARE_API_TOKEN (modelo "Edit Cloudflare Workers") e CLOUDFLARE_ACCOUNT_ID.
+
+on:
+  workflow_run:
+    workflows: [Testes]
+    types: [completed]
+    branches: [main, previa]
+
+concurrency:
+  group: publicar-${{ github.event.workflow_run.head_branch }}
+  cancel-in-progress: false
+
+jobs:
+  publicar:
+    # Só no repositório da organização: num fork (o thephfernandes/ACPM, a prévia do redesenho no GitHub Pages) não
+    # há o que publicar no Cloudflare
+    if: >-
+      github.repository == 'AutoEscala-Project/ACPM' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - name: Pasta publicada (só o que o navegador carrega)
+        run: node scripts/pasta-publicada.mjs publicar
+      - name: Cloudflare
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          RAMO: ${{ github.event.workflow_run.head_branch }}
+        run: |
+          if [ "$RAMO" = main ]; then AMBIENTE=""; else AMBIENTE="--env previa"; fi
+          npx --yes wrangler@4.165.0 deploy $AMBIENTE
