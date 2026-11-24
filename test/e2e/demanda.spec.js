@@ -1,4 +1,4 @@
-import { test, expect, abrir, abrirSintetico, abrirComExemplo, irPara, abrirEscala, lerEscala, confirmar, filtrarCursos, AMANHA, abrirHistorico, aprovar, botaoAprovar, caixaVoa, campoDaAgenda, campoDaData, diaSeguinte, importarDaAgenda, reabrir, tabelaDoDia, voar } from './fixtures.js';
+import { test, expect, abrir, abrirSintetico, abrirComExemplo, irPara, abrirEscala, lerEscala, confirmar, filtrarCursos, AMANHA, abrirHistorico, aprovar, botaoAprovar, caixaVoa, campoDaData, diaSeguinte, importarDaAgenda, reabrir, tabelaDoDia, voar, registrarPedido } from './fixtures.js';
 import { aluno, cenario, instrutor, missaoExtra } from '../helpers/montar.js';
 
 const linhaDoAluno = (page, nome) => page.locator(`#dem tr[data-k="d"][data-mid="0"][data-nm="${nome.toLowerCase()}"]`);
@@ -72,11 +72,7 @@ test.describe('Demanda', () => {
 
     // O pedido da agenda para a mesma missão (Voo Local) toma este voo, em vez de virar um segundo
     await irPara(page, 'age');
-    await campoDaAgenda(page, 'aluno').selectOption({ label: 'Aluno 1000' });
-    await campoDaAgenda(page, 'missao').selectOption('Voo Local');
-    await campoDaAgenda(page, 'horario').selectOption('10:10');
-    await campoDaAgenda(page, 'por').fill('Maria');
-    await page.locator('#form-agenda [type="submit"]').click();
+    await registrarPedido(page, { aluno: 'Aluno 1000', missao: 'Voo Local', horario: '10:10', por: 'Maria' });
     await expect(page.locator('#agenda-lista tbody tr')).toHaveCount(1);
     await irPara(page, 'dem');
     await importarDaAgenda(page);

@@ -1,20 +1,9 @@
 // Aba Agenda de Solicitações (modo local): calendário, prazo das 13:00, registro com "Registrado por", exceção da
 // coordenação e cancelamento. O relógio dos testes está em 10/11/2026, 12:00 em São Paulo.
-import { test, expect, abrir, irPara, abrirEscala, lerEscala, caixaVoa, campoDaAgenda, campoDaData, diaAnterior, diaSeguinte, importarDaAgenda } from './fixtures.js';
+import { test, expect, abrir, irPara, abrirEscala, lerEscala, caixaVoa, campoDaAgenda, campoDaData, diaAnterior, diaSeguinte, importarDaAgenda, registrarPedido } from './fixtures.js';
 import { aluno, cenario } from '../helpers/montar.js';
 
 const comAlunos = () => cenario({ stu: [aluno(1000), aluno(1001)] });
-
-// O pedido é sempre num horário específico, com a duração
-async function registrar(page, { aluno: nome = 'Aluno 1000', missao = 'Voo Local', horario = '06:30', horas = null, por = 'Maria', obs = '' } = {}) {
-  await campoDaAgenda(page, 'aluno').selectOption({ label: nome });
-  await campoDaAgenda(page, 'missao').selectOption(missao);
-  await campoDaAgenda(page, 'horario').selectOption(horario);
-  if (horas !== null) await campoDaAgenda(page, 'horas').fill(String(horas));
-  await campoDaAgenda(page, 'por').fill(por);
-  await campoDaAgenda(page, 'obs').fill(obs);
-  await page.locator('#form-agenda [type="submit"]').click();
-}
 
 test.describe('Agenda de Solicitações', () => {
   test('registra pedidos para amanhã (antes das 13:00) com quem anotou e a hora', async ({ page }) => {
@@ -23,7 +12,7 @@ test.describe('Agenda de Solicitações', () => {
     await expect(page.locator('#agenda-data')).toHaveText('quarta-feira, 11/11/2026');
     await expect(page.locator('#agenda-prazo')).toContainText('Pedidos para amanhã (11/11) até hoje às 13:00');
 
-    await registrar(page, { obs: 'Prefere o PR-BTB' });
+    await registrarPedido(page, { obs: 'Prefere o PR-BTB' });
     const pedidos = page.locator('#agenda-lista tbody tr');
     await expect(pedidos).toHaveCount(1);
     await expect(pedidos.first()).toContainText('Aluno 1000');
@@ -35,7 +24,7 @@ test.describe('Agenda de Solicitações', () => {
     await expect(page.locator('#agenda-cal [data-dia="2026-11-11"] .qtd')).toHaveText('1');
     await expect(campoDaAgenda(page, 'por')).toHaveValue('Maria', { timeout: 1000 });
 
-    await registrar(page, { aluno: 'Aluno 1001', missao: 'IFR', horario: '14:30', horas: 2.6, por: 'João' });
+    await registrarPedido(page, { aluno: 'Aluno 1001', missao: 'IFR', horario: '14:30', horas: 2.6, por: 'João' });
     await expect(pedidos).toHaveCount(2);
     await expect(pedidos.nth(1)).toContainText('14:30 · 2,6 h');
     await expect(page.locator('#agenda-cal [data-dia="2026-11-11"] .qtd')).toHaveText('2');
@@ -47,7 +36,7 @@ test.describe('Agenda de Solicitações', () => {
     await expect(campoDaAgenda(page, 'horario').locator('option')).toHaveText(['06:30', '08:20', '10:10', '11:30', '12:40', '13:40', '14:30', '16:20']);
     await campoDaAgenda(page, 'missao').selectOption('Multimotor');
     await expect(campoDaAgenda(page, 'horario').locator('option')).toHaveCount(21);
-    await registrar(page, { missao: 'Multimotor', horario: '07:30' });
+    await registrarPedido(page, { missao: 'Multimotor', horario: '07:30' });
     await expect(page.locator('#agenda-lista tbody tr').first()).toContainText('07:30');
     await campoDaAgenda(page, 'missao').selectOption('Noturno');
     await expect(campoDaAgenda(page, 'horario').locator('option')).toHaveText(['17:30']);
@@ -72,7 +61,7 @@ test.describe('Agenda de Solicitações', () => {
     await abrir(page, { estado: comAlunos() });
     await irPara(page, 'age');
     await expect(campoDaAgenda(page, 'horas')).toHaveValue('1');
-    await registrar(page, { horas: 6 });
+    await registrarPedido(page, { horas: 6 });
     await expect(campoDaAgenda(page, 'erro')).toHaveText('A duração vai de 0,1 h a 5 h.');
     // O campo errado é o marcado, e o motivo é a descrição dele (o que o leitor de tela diz no campo)
     await expect(campoDaAgenda(page, 'horas')).toHaveAttribute('aria-invalid', 'true');
@@ -88,8 +77,8 @@ test.describe('Agenda de Solicitações', () => {
   test('o aluno que já tem voo marcado na data: o app avisa e pede para confirmar', async ({ page }) => {
     await abrir(page, { estado: comAlunos() });
     await irPara(page, 'age');
-    await registrar(page, { horario: '06:30' });
-    await registrar(page, { horario: '10:10', por: 'Júlia' });
+    await registrarPedido(page, { horario: '06:30' });
+    await registrarPedido(page, { horario: '10:10', por: 'Júlia' });
     await expect(campoDaAgenda(page, 'erro')).toHaveText('Aluno 1000 já tem voo marcado em 11/11: Voo Local às 06:30. É um reagendamento ou mais um voo? Para registrar mais este, clique em “Registrar mesmo assim”.');
     await expect(page.locator('#agenda-lista tbody tr')).toHaveCount(1);
     await expect(page.locator('#form-agenda [type="submit"]')).toHaveText('Registrar mesmo assim');
@@ -103,19 +92,19 @@ test.describe('Agenda de Solicitações', () => {
     const alunos = Array.from({ length: 8 }, (_, i) => aluno(1000 + i));
     await abrir(page, { estado: cenario({ stu: alunos }) });
     await irPara(page, 'age');
-    for (let i = 0; i < 6; i++) await registrar(page, { aluno: `Aluno ${1000 + i}`, missao: ['Voo Local', 'TGL (TMA)'][i % 2], horario: '08:20' });
+    for (let i = 0; i < 6; i++) await registrarPedido(page, { aluno: `Aluno ${1000 + i}`, missao: ['Voo Local', 'TGL (TMA)'][i % 2], horario: '08:20' });
     await expect(page.locator('#agenda-lista tbody tr')).toHaveCount(6);
-    await registrar(page, { aluno: 'Aluno 1006', horario: '08:20' });
+    await registrarPedido(page, { aluno: 'Aluno 1006', horario: '08:20' });
     await expect(campoDaAgenda(page, 'erro')).toHaveText('Horário indisponível: já há 6 voos locais (Voo Local, Voo Solo e TGL) às 08:20, o máximo no mesmo horário (determinação da diretoria). Próximo horário possível: 10:10.');
     await expect(page.locator('#agenda-lista tbody tr')).toHaveCount(6);
-    await registrar(page, { aluno: 'Aluno 1006', missao: 'Navegação', horario: '08:20' });
+    await registrarPedido(page, { aluno: 'Aluno 1006', missao: 'Navegação', horario: '08:20' });
     await expect(page.locator('#agenda-lista tbody tr')).toHaveCount(7);
   });
 
   test('"Registrado por" é obrigatório', async ({ page }) => {
     await abrir(page, { estado: comAlunos() });
     await irPara(page, 'age');
-    await registrar(page, { por: '' });
+    await registrarPedido(page, { por: '' });
     await expect(page.locator('#agenda-lista tbody tr')).toHaveCount(0);
   });
 
@@ -135,7 +124,7 @@ test.describe('Agenda de Solicitações', () => {
   test('cancelar pede confirmação e o pedido continua na agenda como cancelado', async ({ page }) => {
     await abrir(page, { estado: comAlunos() });
     await irPara(page, 'age');
-    await registrar(page);
+    await registrarPedido(page);
     const cancelar = page.locator('#agenda-lista [data-act="cancelar-pedido"]').first();
     await cancelar.click();
     await expect(cancelar).toHaveText('Confirmar cancelamento');
@@ -152,8 +141,8 @@ test.describe('Agenda de Solicitações', () => {
   test('a coluna Situação diz se o pedido já está na demanda; o operador importa pela própria agenda', async ({ page }) => {
     await abrir(page, { estado: cenario({ stu: [aluno(1000, { fly: false }), aluno(1001, { fly: false })] }) });
     await irPara(page, 'age');
-    await registrar(page, { aluno: 'Aluno 1000' });
-    await registrar(page, { aluno: 'Aluno 1001', horario: '12:40' });
+    await registrarPedido(page, { aluno: 'Aluno 1000' });
+    await registrarPedido(page, { aluno: 'Aluno 1001', horario: '12:40' });
     const situacao = page.locator('#agenda-lista tbody tr .situacao');
     await expect(situacao).toHaveText(['Ainda não importado', 'Ainda não importado']);
     const importar = page.locator('#agenda-importar');
@@ -169,7 +158,7 @@ test.describe('Agenda de Solicitações', () => {
     await irPara(page, 'age');
     await page.locator('#agenda-cal [data-dia="2026-11-12"]').click();
     await expect(campoDaData(page)).toHaveValue('2026-11-12');
-    await registrar(page, { aluno: 'Aluno 1000' });
+    await registrarPedido(page, { aluno: 'Aluno 1000' });
     await expect(situacao).toHaveText(['Ainda não importado']);
     await expect(importar).toHaveText('Importar 1 pedido para a demanda');
   });
@@ -177,8 +166,8 @@ test.describe('Agenda de Solicitações', () => {
   test('"Importar Solicitações da Agenda" põe os pedidos da data na demanda, prontos para a escala', async ({ page }) => {
     await abrir(page, { estado: cenario({ stu: [aluno(1000, { fly: false }), aluno(1001, { fly: false })] }) });
     await irPara(page, 'age');
-    await registrar(page, { aluno: 'Aluno 1000', horario: '08:20', horas: 2.5 });
-    await registrar(page, { aluno: 'Aluno 1001', missao: 'IFR', horario: '14:30' });
+    await registrarPedido(page, { aluno: 'Aluno 1000', horario: '08:20', horas: 2.5 });
+    await registrarPedido(page, { aluno: 'Aluno 1001', missao: 'IFR', horario: '14:30' });
 
     await irPara(page, 'dem');
     await importarDaAgenda(page);
