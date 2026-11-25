@@ -244,7 +244,7 @@ número): o primeiro acesso de um Operador ou Administrador regrava os dias e o 
 | `js/modelos-de-curso.js` | Os programas prontos que o Administrador põe num curso: o cronograma do Piloto Privado (P.I PPA 001A), com 9 fases e 47 missões |
 | `js/progresso.js` | A próxima missão de cada aluno pelas regras do programa (a liberada; as fora da ordem, com o motivo) e o progresso no curso |
 | `js/resultados.js` | Os resultados das missões (aprovado ou reprovado; pendente desfaz um engano): a situação de cada missão do aluno e as regras do registro, as do servidor |
-| `js/agenda.js` | Prazo da agenda de solicitações (13:00 do dia anterior), o limite de voos locais e o pedido que cada solicitação vira |
+| `js/agenda.js` | Prazo da agenda de solicitações (13:00 do dia anterior), as datas em que um pedido pode ser registrado (`datasParaRegistrar`, a "Data do pedido"), o limite de voos locais e o pedido que cada solicitação vira |
 | `js/processamento.js` | A importação dos pedidos da agenda para a demanda da data (função pura; o botão "Importar da agenda" é `js/eventos/importacao.js`) |
 | `js/csv.js` | CSV da escala agrupado por avião, para o lançamento no portal do aeroclube |
 | `js/planilha.js`, `modelos/escala-cavok.xlsx` | A escala na planilha do modelo do aeroclube (o Excel do lançamento no CAVOK): onde cada voo cai e o arquivo preenchido. O modelo é o arquivo da operação sem os dados do dia; as células que o app preenche estão em `BLOCOS` e `GROUND` (um modelo novo precisa delas nos mesmos lugares, e `test/unit/planilha.test.js` confere) |

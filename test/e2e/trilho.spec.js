@@ -4,7 +4,7 @@
 import {
   test, expect, abrir, abrirComExemplo, entrar, preencherLogin, irPara, abrirHistorico, AMANHA, URL_APP, REGIOES, dataAberta, botaoDaData,
   rotuloDaData, trilho, diaDoCalendario, diasDoCalendario, contagemDoDia, paradasDoCalendario, escolherNoCalendario, mudarData, alvosPequenos,
-  larguraDaPagina, semNome
+  larguraDaPagina, semNome, prepararContexto, vigiarErros
 } from './fixtures.js';
 import { instalarSupabaseFalso, documentosAtuais, CONTAS } from './supabase-falso.js';
 import { estadoSintetico } from '../helpers/estado.js';
@@ -219,22 +219,23 @@ test.describe('A data abrindo', () => {
     await expect(busca).toBeFocused();
   });
 
-  test('a data que não abre: o aviso, e nada muda', async ({ page, context }) => {
+  test('a data que não abre: o aviso, e nada muda', async ({ browser }) => {
     // As tentativas de novo do supabase-js demoram
     test.slow();
+    const context = await browser.newContext();
+    await prepararContexto(context, { preferencias: false });
     const servidor = await instalarSupabaseFalso(context, comAluno());
-    const outra = await context.newPage();
-    const erros = [];
-    outra.on('pageerror', e => erros.push(e.message));
-    await entrar(outra, CONTAS.operador);
+    const page = await context.newPage();
+    const erros = vigiarErros(page, { statusEsperados: [503] });
+    await entrar(page, CONTAS.operador);
     servidor.falhar('/rest/v1/dias', 1000);
-    await diaDoCalendario(outra, '2026-11-12').click();
-    await expect(outra.locator('#toast-box')).toContainText('Não foi possível abrir essa data. Verifique a conexão e tente de novo.', { timeout: 15000 });
-    await expect(diaDoCalendario(outra, '2026-11-12')).not.toHaveClass(/\babrindo\b/);
-    await expect(dataAberta(outra)).toHaveAttribute('data-data', AMANHA);
-    await expect(page.locator('body')).toBeAttached();
-    await expect(outra.locator('#trilho-data')).toHaveText('Amanhã · quarta-feira · 11 de novembro');
+    await diaDoCalendario(page, '2026-11-12').click();
+    await expect(page.locator('#toast-box')).toContainText('Não foi possível abrir essa data. Verifique a conexão e tente de novo.', { timeout: 15000 });
+    await expect(diaDoCalendario(page, '2026-11-12')).not.toHaveClass(/\babrindo\b/);
+    await expect(dataAberta(page)).toHaveAttribute('data-data', AMANHA);
+    await expect(page.locator('#trilho-data')).toHaveText('Amanhã · quarta-feira · 11 de novembro');
     expect(erros).toEqual([]);
+    await context.close();
   });
 
   test('a data escolhida enquanto o app abre fica no lugar da abertura', async ({ page, context }) => {
@@ -453,6 +454,18 @@ test.describe('Os pedidos de cada dia', () => {
     expect(lidas.filter(l => l.includes(' a '))).toEqual([]);
     await page.locator('#cal-mes-prox').click();
     await expect.poll(() => lidas.filter(l => l.includes(' a '))).toEqual(['29/11 a 02/01']);
+  });
+
+  test('o número da data aberta segue os pedidos dela; a Agenda aberta lê de novo os pedidos da data e a contagem', async ({ page, context }) => {
+    const servidor = await instalarSupabaseFalso(context, comAluno());
+    servidor.solicitacoes.push(pedido(1, AMANHA));
+    await entrar(page, CONTAS.operador);
+    await expect(contagemDoDia(page, AMANHA)).toHaveText('1');
+    // Outra pessoa registra
+    servidor.solicitacoes.push(pedido(2, AMANHA), pedido(3, '2026-11-13'));
+    await irPara(page, 'age');
+    await expect(contagemDoDia(page, AMANHA)).toHaveText('2');
+    await expect(contagemDoDia(page, '2026-11-13')).toHaveText('1');
   });
 
   test('a contagem que não veio deixa os dias sem número', async ({ page, context }) => {

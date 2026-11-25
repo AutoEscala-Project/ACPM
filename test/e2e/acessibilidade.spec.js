@@ -276,7 +276,7 @@ const contrastesFracos = async (itens) => {
 
 // O que a tela mostra pela cor ou pela posição também é dito ao leitor de tela; o teclado chega aonde o mouse chega
 test.describe('O leitor de tela e o teclado', () => {
-  test('a aba aberta (e o Manual), a vista escolhida e o dia da agenda são ditos, não só coloridos', async ({ page }) => {
+  test('a aba aberta (e o Manual), a vista escolhida e a data aberta são ditos, não só coloridos', async ({ page }) => {
     await abrirComExemplo(page);
     const atual = page.locator('[aria-current="page"]');
     await expect(atual).toHaveAttribute('href', '#/esc');
@@ -299,15 +299,13 @@ test.describe('O leitor de tela e o teclado', () => {
     await irPara(page, 'cur');
     await expect(atual).toHaveCount(1);
     await expect(atual).toHaveAttribute('href', '#/cur');
-    // O dia escolhido no calendário da agenda, e o que passa a ser escolhido
-    await irPara(page, 'age');
-    const escolhido = page.locator('#agenda-cal [aria-current="date"]');
-    await expect(escolhido).toHaveCount(1);
-    await expect(escolhido).toHaveClass(/\bsel\b/);
-    const outro = page.locator('#agenda-cal [data-cal="dia"]:not(.sel):not(.fora)').first();
-    const dia = await outro.getAttribute('data-dia');
-    await outro.click();
-    await expect(escolhido).toHaveAttribute('data-dia', dia);
+    // A data aberta no calendário, e a que passa a ser aberta
+    const aberta = page.locator('#cal [aria-current="date"]');
+    await expect(aberta).toHaveCount(1);
+    await expect(aberta).toHaveAttribute('data-dia', AMANHA);
+    await mudarData(page, '2026-11-12');
+    await expect(aberta).toHaveCount(1);
+    await expect(aberta).toHaveAttribute('data-dia', '2026-11-12');
   });
 
   test('o pedido de confirmação é dito na região de status (o nome trocado do botão nem sempre é lido)', async ({ page }) => {

@@ -1,6 +1,6 @@
 // Agenda de Solicitações no modo compartilhado: a Secretaria registra pedidos (a escala ela só consulta), o
 // Operador usa a exceção da coordenação e o Gestor só consulta. O servidor falso aplica o mesmo prazo do banco.
-import { test, expect, entrar, preencherLogin, irPara, abrirMenuDaConta, AMANHA, URL_APP, botaoDaAba, campoDaAgenda, dataAberta, diaSeguinte, importarDaAgenda, rotuloDaData, rotulosDasAbas } from './fixtures.js';
+import { test, expect, entrar, preencherLogin, irPara, abrirMenuDaConta, AMANHA, URL_APP, botaoDaAba, campoDaAgenda, dataAberta, diaSeguinte, escolherNoCalendario, registrarPedido, contagemDoDia, prepararContexto, vigiarErros, importarDaAgenda, rotuloDaData, rotulosDasAbas } from './fixtures.js';
 import { instalarSupabaseFalso, documentosAtuais, CONTAS } from './supabase-falso.js';
 import { estadoSintetico } from '../helpers/estado.js';
 import { aluno } from '../helpers/montar.js';
@@ -50,10 +50,10 @@ test.describe('Agenda de Solicitações (modo compartilhado)', () => {
     await expect(campoDaAgenda(page, 'aluno').locator('option', { hasText: 'Aluno 1001' })).toHaveCount(1);
   });
 
-  test('o dia escolhido na Agenda enquanto os dados carregavam continua escolhido, na Agenda e no app', async ({ page, context }) => {
+  test('a data escolhida no calendário enquanto os dados carregavam continua escolhida, na Agenda e no app', async ({ page, context }) => {
     await enquantoCarrega(page, context, async () => {
       await irPara(page, 'age');
-      await page.locator('[data-cal][data-dia="2026-11-13"]').click();
+      await escolherNoCalendario(page, '2026-11-13');
     }, CONTAS.operador);
     await expect(page.locator('#agenda-data')).toContainText('13/11');
     await expect(dataAberta(page)).toHaveAttribute('data-data', '2026-11-13');
@@ -79,8 +79,9 @@ test.describe('Agenda de Solicitações (modo compartilhado)', () => {
     await expect(page.locator('#agenda-importar')).toBeHidden();
     expect(servidor.solicitacoes.map(s => [s.data, s.aluno, s.janela, s.horario, s.horas, s.registrado_por, s.usuario])).toEqual([[AMANHA, 1001, 'horario', '12:40', 2.5, 'Maria', CONTAS.secretaria.id]]);
 
-    await page.locator('#agenda-cal [data-dia="2026-11-10"]').click();
-    await expect(page.locator('#form-agenda [type="submit"]')).toBeDisabled();
+    // Só as datas que aceitam pedidos: hoje não está na lista dela
+    await expect(campoDaAgenda(page, 'data').locator('option').first()).toHaveText('qua 11/11 (amanhã)');
+    await expect(campoDaAgenda(page, 'data').locator('option', { hasText: 'prazo encerrado' })).toHaveCount(0);
     await expect(campoDaAgenda(page, 'excecao')).toBeHidden();
 
     // Ela vê a Agenda, a Escala e os Cursos (que só consulta) e, pelos dados pessoais, Instrutores e Alunos
@@ -94,12 +95,78 @@ test.describe('Agenda de Solicitações (modo compartilhado)', () => {
     const servidor = await instalarSupabaseFalso(context, comAlunos());
     await entrar(page, CONTAS.operador);
     await botaoDaAba(page, 'age').click();
-    await page.locator('#agenda-cal [data-dia="2026-11-10"]').click();
+    await campoDaAgenda(page, 'data').selectOption('2026-11-10');
     await campoDaAgenda(page, 'aluno').selectOption({ label: 'Aluno 1000' });
     await campoDaAgenda(page, 'por').fill('Coordenação');
     await campoDaAgenda(page, 'excecao').click();
-    await expect(page.locator('#agenda-lista tbody tr').first()).toContainText('Exceção da coordenação');
+    await expect(page.locator('#toast-box')).toContainText('Pedido registrado para ter 10/11 pela Exceção da Coordenação.');
     expect(servidor.solicitacoes.map(s => [s.data, s.excecao])).toEqual([['2026-11-10', true]]);
+  });
+
+  test('a Agenda lê os pedidos da data uma vez e diz enquanto lê e quando não lê', async ({ page, context }) => {
+    const servidor = await instalarSupabaseFalso(context, comAlunos());
+    await entrar(page, CONTAS.operador);
+    let resposta;
+    const erro = new Promise(resolve => { resposta = resolve; });
+    let doDia12 = true;
+    await context.route(url => url.pathname.endsWith('/rest/v1/solicitacoes') && url.searchParams.getAll('data').includes('gte.2026-11-12'), async route => {
+      if (!doDia12) { await route.fallback(); return; }
+      await erro;
+      await route.fulfill({ status: 200, contentType: 'application/json', body: '{' });
+    });
+    await botaoDaAba(page, 'age').click();
+    await expect(page.locator('#agenda-lista')).toHaveText('Nenhum pedido para esta data.');
+    await diaSeguinte(page);
+    await expect(page.locator('#agenda-lista')).toHaveText('Lendo os pedidos desta data…');
+    resposta();
+    await expect(page.locator('#agenda-lista')).toHaveText('Não foi possível ler os pedidos desta data. Verifique a conexão.');
+    // O clique na tela já aberta lê de novo
+    doDia12 = false;
+    servidor.solicitacoes.push({ id: 1, data: '2026-11-12', aluno: 1000, aluno_nome: 'Aluno 1000', missao: 'Voo Local', janela: 'horario', horario: '08:20', horas: 1,
+      observacao: null, registrado_por: 'Maria', registrado_em: '2026-11-10T14:00:00.000Z', conta: 'Secretaria de Teste', excecao: false, cancelada_em: null, cancelada_por: null });
+    await botaoDaAba(page, 'age').click();
+    await expect(page.locator('#agenda-lista tbody tr')).toHaveCount(1);
+  });
+
+  // As duas conferências do formulário são da data do pedido, lida uma vez quando o campo muda
+  test('a data do pedido que não é a aberta: os pedidos dela são lidos uma vez; sem eles, quem recusa o 7º voo local é o servidor', async ({ browser }) => {
+    const context = await browser.newContext();
+    await prepararContexto(context);
+    const page = await context.newPage();
+    // A recusa do servidor (400)
+    const erros = vigiarErros(page, { statusEsperados: [400] });
+    const servidor = await instalarSupabaseFalso(context, comAlunos());
+    for (let i = 0; i < 6; i++) {
+      servidor.solicitacoes.push({ id: 50 + i, data: '2026-11-13', aluno: 1001, aluno_nome: 'Aluno 1001', missao: 'Voo Local', janela: 'horario', horario: '08:20', horas: 1,
+        observacao: null, registrado_por: 'Maria', registrado_em: '2026-11-10T14:00:00.000Z', conta: 'Secretaria de Teste', excecao: false, cancelada_em: null, cancelada_por: null });
+    }
+    let leituras = 0, falhar = false;
+    await context.route(url => url.pathname.endsWith('/rest/v1/solicitacoes') && url.searchParams.getAll('data').join() === 'gte.2026-11-13,lte.2026-11-13', async route => {
+      leituras++;
+      if (falhar) await route.fulfill({ status: 200, contentType: 'application/json', body: '{' });
+      else await route.fallback();
+    });
+    await entrar(page, CONTAS.operador);
+    await irPara(page, 'age');
+    await campoDaAgenda(page, 'data').selectOption('2026-11-13');
+    await registrarPedido(page, { horario: '08:20' });
+    await expect(campoDaAgenda(page, 'erro')).toContainText('Horário indisponível: já há 6 voos locais');
+    expect(leituras).toBe(1);
+    expect(servidor.solicitacoes).toHaveLength(6);
+    // A leitura falha: as conferências não são feitas, e o servidor recusa
+    falhar = true;
+    await campoDaAgenda(page, 'data').selectOption('2026-11-12');
+    await campoDaAgenda(page, 'data').selectOption('2026-11-13');
+    await registrarPedido(page, { aluno: 'Aluno 1001', horario: '08:20' });
+    await expect(campoDaAgenda(page, 'erro')).toContainText('Horário indisponível: já há 6 voos locais');
+    expect(servidor.solicitacoes).toHaveLength(6);
+    // Registrado, só duas leituras: os pedidos da data dele e os de cada dia do calendário
+    falhar = false;
+    await registrarPedido(page, { horario: '10:10' });
+    await expect(page.locator('#toast-box')).toContainText('Pedido registrado para sex 13/11.');
+    await expect(contagemDoDia(page, '2026-11-13')).toHaveText('7');
+    expect(erros).toEqual([]);
+    await context.close();
   });
 
   test('o Gestor vê a agenda, sem registrar nem cancelar', async ({ page, context }) => {

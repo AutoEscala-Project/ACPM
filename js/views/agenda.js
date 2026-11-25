@@ -1,6 +1,5 @@
-// Agenda de Solicitações: a agenda de papel da secretaria, digitalizada. Calendário do mês com os pedidos de cada dia,
-// a lista do dia escolhido (com a situação de cada pedido na demanda) e o registro de pedidos, com o prazo das 13:00
-// do dia anterior.
+// Agenda de Solicitações: a agenda de papel da secretaria, digitalizada. Os pedidos da data aberta (com a situação de cada um
+// na demanda) e o registro de pedidos, cada um para a data dele ("Data do pedido"), com o prazo das 13:00 do dia anterior.
 import { MIS } from '../config.js';
 import { duracaoFixaDaMissao } from '../rules.js';
 import { horariosDaMissao } from '../horarios.js';
@@ -10,14 +9,14 @@ import { ApiClient } from '../storage.js';
 import { $, trocarConteudo } from '../dom.js';
 import { esc, opts, hm, fmtH, somarDias } from '../format.js';
 import { registraNaAgenda, operaEscala } from '../perfis.js';
-import { JANELAS_DA_AGENDA, FUSO_DO_AEROCLUBE, prazoDaAgendaPermite, prazoDaData, primeiraDataAberta, hojeEmSaoPaulo } from '../agenda.js';
+import { JANELAS_DA_AGENDA, FUSO_DO_AEROCLUBE, prazoDaAgendaPermite, prazoDaData, datasParaRegistrar, hojeEmSaoPaulo } from '../agenda.js';
+import { pedidosDaDataAberta, lerPedidosDaData } from './selos.js';
 
-const SEMANA = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
 const CHAVE_REGISTRADO_POR = 'acpm_agenda_registrado_por';
 
-let diaEscolhido = null;
-let mesVisivel = null;
-let pedidos = [];
+// Até a Agenda ser aberta uma vez, ela não é desenhada
+let agendaAberta = false;
+export function abrirAgenda() { agendaAberta = true; }
 
 // Quem pode registrar e cancelar: no modo local, quem não está no perfil Gestor; no compartilhado, operadores,
 // administradores e a secretaria. A exceção da coordenação é de quem opera a escala (o servidor confere de novo)
@@ -25,7 +24,6 @@ export const podeEditarAgenda = () => (ApiClient.perfil ? registraNaAgenda(ApiCl
 const podeUsarExcecao = () => (ApiClient.perfil ? operaEscala(ApiClient.perfil) : !isGestor());
 // Importar para a demanda também é de quem opera a escala
 const podeImportar = podeUsarExcecao;
-export const diaDaAgenda = () => diaEscolhido;
 
 const ddmm = iso => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`;
 const dataPorExtenso = iso => {
@@ -40,55 +38,62 @@ const disponibilidade = p => (p.janela === 'horario'
   ? `${p.horario} · ${fmtH(p.horas === null || p.horas === undefined ? 1 : +p.horas)}`
   : JANELAS_DA_AGENDA.find(([j]) => j === p.janela)?.[1] ?? p.janela);
 
-// Os pedidos (não cancelados) de um aluno numa data, para o aviso de voo já marcado
-export const pedidosCarregados = () => pedidos;
-export const pedidosDoAluno = (aluno, dia) => pedidos.filter(p => p.aluno === aluno && p.data === dia && !p.cancelada_em);
 export const descreverPedido = p => `${p.missao} às ${p.horario || disponibilidade(p)}`;
 
-// Semanas inteiras (de domingo a sábado) que cobrem o mês
-function gradeDoMes(mes) {
-  const primeiro = `${mes}-01`;
-  const inicio = somarDias(primeiro, -new Date(primeiro + 'T12:00:00Z').getUTCDay());
-  const ultimo = new Date(Date.UTC(+mes.slice(0, 4), +mes.slice(5, 7), 0)).toISOString().slice(0, 10);
-  const fim = somarDias(ultimo, 6 - new Date(ultimo + 'T12:00:00Z').getUTCDay());
-  return [inicio, fim];
+// "Data do pedido": a data em que o pedido vai ser registrado, um campo dele (a tela continua na data aberta). Começa na data
+// aberta, se ela aceita pedidos, ou na primeira que aceita; volta a isso quando a data aberta muda e fica entre um registro
+// e outro
+let dataDoPedido = null;
+let abertaDoCampo = null;
+let opcoesDesenhadas = null;
+export const dataDoFormulario = () => dataDoPedido;
+export function escolherDataDoPedido(data) {
+  dataDoPedido = data;
+  mudouADataDoPedido();
+  desenharFormulario();
+}
+// Outra data: o que o formulário dizia da anterior (o erro, a confirmação armada) sai, e os pedidos dela são lidos
+function mudouADataDoPedido() {
+  desarmarConfirmacaoDaAgenda();
+  apagarErroDaAgenda();
+  if (podeEditarAgenda()) lerPedidosDoFormulario();
+}
+// O "Registrar mesmo assim" (o aluno que já tem voo marcado) volta a ser "Registrar pedido"
+export function desarmarConfirmacaoDaAgenda() {
+  delete $('#form-agenda').dataset.confirmado;
+  $('#form-agenda [type="submit"]').textContent = 'Registrar pedido';
+}
+// Os campos do pedido com erro (aria-invalid): o leitor de tela diz qual campo e lê o motivo (#ag-erro é a descrição deles)
+export const marcarInvalidos = (...ids) => ['#ag-aluno', '#ag-horario', '#ag-horas', '#ag-por'].forEach(id => $(id).setAttribute('aria-invalid', String(ids.includes(id))));
+export function apagarErroDaAgenda() {
+  $('#ag-erro').textContent = '';
+  marcarInvalidos();
 }
 
-// A agenda abre na data aberta no topo; quando ela já fechou para pedidos (amanhã, depois das 13:00), no primeiro dia
-// que ainda aceita pedidos
-const diaPadrao = () => (DATA && DATA >= primeiraDataAberta() ? DATA : primeiraDataAberta());
-export async function abrirAgenda(dia = diaPadrao()) {
-  diaEscolhido = dia;
-  mesVisivel = dia.slice(0, 7);
-  await carregarMes();
+// "sex 20/11 (amanhã) · prazo encerrado"
+const DIAS_CURTOS = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
+export const dataCurta = iso => `${DIAS_CURTOS[new Date(iso + 'T12:00:00Z').getUTCDay()]} ${ddmm(iso)}`;
+function rotuloDaOpcao({ data, fechada }, hoje) {
+  const relativo = data === hoje ? ' (hoje)' : data === somarDias(hoje, 1) ? ' (amanhã)' : '';
+  return `${dataCurta(data)}${relativo}${fechada ? ' · prazo encerrado' : ''}`;
 }
 
-export async function carregarMes() {
-  const [inicio, fim] = gradeDoMes(mesVisivel);
-  try {
-    pedidos = await ApiClient.agenda(inicio, fim);
-  } catch {
-    pedidos = [];
-    $('#ag-erro').textContent = 'Não foi possível carregar a agenda. Verifique a conexão.';
-  }
-  rAgenda();
+// Os pedidos da data do formulário, para o aviso de voo já marcado e o limite de voos locais: os da data aberta já estão
+// lidos (js/views/selos.js); os de outra data são lidos uma vez, quando o campo muda. Sem a leitura (null), as duas
+// conferências não são feitas (o servidor ainda recusa o 7º voo local)
+let deOutraData = { data: null, leitura: null };
+function lerPedidosDoFormulario() {
+  const data = dataDoPedido;
+  if (data && data !== DATA) deOutraData = { data, leitura: ApiClient.agenda(data, data).catch(() => null) };
 }
-
-export function mudarMes(delta) {
-  const [ano, mes] = mesVisivel.split('-').map(Number);
-  const novo = new Date(Date.UTC(ano, mes - 1 + delta, 1)).toISOString().slice(0, 7);
-  diaEscolhido = `${novo}-01`;
-  mesVisivel = novo;
-  return carregarMes();
+export async function pedidosDoFormulario() {
+  if (dataDoPedido === DATA) return pedidosDaDataAberta().lista;
+  return deOutraData.data === dataDoPedido ? deOutraData.leitura : null;
 }
-
-export function escolherDia(dia) {
-  diaEscolhido = dia;
-  if (dia.slice(0, 7) !== mesVisivel) {
-    mesVisivel = dia.slice(0, 7);
-    return carregarMes();
-  }
-  rAgenda();
+// Depois de registrar: os pedidos da data em que ele entrou são lidos de novo
+export async function lerPedidosDaAgenda(data) {
+  if (data !== DATA && data === dataDoPedido) lerPedidosDoFormulario();
+  else await lerPedidosDaData();
 }
 
 export function lembrarRegistradoPor(nome) {
@@ -99,61 +104,41 @@ export function lembrarRegistradoPor(nome) {
   }
 }
 
-// O prazo do dia escolhido: até as 13:00 do dia de operação anterior; a segunda, até sábado às 10:00; o domingo não
-// opera
+// O prazo da data do pedido: até as 13:00 do dia de operação anterior; a segunda, até sábado às 10:00
 const DIAS_DA_SEMANA = ['domingo', 'segunda-feira', 'terça-feira', 'quarta-feira', 'quinta-feira', 'sexta-feira', 'sábado'];
 const diaDaSemana = iso => DIAS_DA_SEMANA[new Date(iso + 'T12:00:00Z').getUTCDay()];
-function prazoDoDia() {
-  const prazo = prazoDaData(diaEscolhido);
+function textoDoPrazo() {
+  const prazo = prazoDaData(dataDoPedido);
   if (!prazo) return 'O aeroclube não opera aos domingos: não há escala nem pedidos.';
   const hoje = hojeEmSaoPaulo();
   const quando = prazo.dia === hoje ? 'hoje' : prazo.dia === somarDias(hoje, 1) ? `amanhã (${ddmm(prazo.dia)})` : `${diaDaSemana(prazo.dia)} (${ddmm(prazo.dia)})`;
-  const dia = diaEscolhido === somarDias(hoje, 1) ? `amanhã (${ddmm(diaEscolhido)})` : `${diaDaSemana(diaEscolhido)} (${ddmm(diaEscolhido)})`;
-  if (!prazoDaAgendaPermite(diaEscolhido)) {
-    return `Prazo encerrado para ${ddmm(diaEscolhido)}: os pedidos iam até ${quando === 'hoje' ? 'hoje' : quando} às ${prazo.hora}.` +
+  const dia = dataDoPedido === somarDias(hoje, 1) ? `amanhã (${ddmm(dataDoPedido)})` : `${diaDaSemana(dataDoPedido)} (${ddmm(dataDoPedido)})`;
+  if (!prazoDaAgendaPermite(dataDoPedido)) {
+    return `Prazo encerrado para ${ddmm(dataDoPedido)}: os pedidos iam até ${quando} às ${prazo.hora}.` +
       (podeUsarExcecao() ? ' Se for estritamente necessário, use a Exceção da Coordenação.' : '');
   }
   return `Pedidos para ${dia} até ${quando} às ${prazo.hora}.`;
 }
 
-function calendarioHTML() {
-  const [inicio, fim] = gradeDoMes(mesVisivel);
-  const ativos = pedidos.filter(p => !p.cancelada_em);
-  const dias = [];
-  for (let d = inicio; d <= fim; d = somarDias(d, 1)) dias.push(d);
-  const mes = new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${mesVisivel}-15T12:00:00Z`));
-  const nomeDoMes = mes.charAt(0).toUpperCase() + mes.slice(1);
-  return `<div class="cal-cab">
-      <button class="x" type="button" data-cal="mes" data-delta="-1" aria-label="Mês anterior">‹</button>
-      <b>${nomeDoMes}</b>
-      <button class="x" type="button" data-cal="mes" data-delta="1" aria-label="Próximo mês">›</button>
-    </div>
-    <div class="cal">${SEMANA.map(s => `<span class="sem">${s}</span>`).join('')}${dias.map(d => {
-      const qtd = ativos.filter(p => p.data === d).length;
-      const classes = ['dia', d.slice(0, 7) !== mesVisivel && 'fora', !prazoDaAgendaPermite(d) && 'fechado', d === diaEscolhido && 'sel'].filter(Boolean).join(' ');
-      return `<button type="button" class="${classes}" data-cal="dia" data-dia="${d}"${d === diaEscolhido ? ' aria-current="date"' : ''} aria-label="${dataPorExtenso(d)}${qtd ? `: ${qtd} pedido(s)` : ''}">${+d.slice(8)}${qtd ? `<span class="qtd">${qtd}</span>` : ''}</button>`;
-    }).join('')}</div>`;
-}
-
-// Na data aberta no topo, a situação de cada pedido: já importado para a demanda ou ainda não (nas outras datas a
-// demanda não está carregada)
+// A situação de cada pedido da data aberta: já importado para a demanda ou ainda não
 const importado = p => (S.importadas || []).includes(p.id);
 // O pedido do aluno inativo no cadastro fica registrado, fora dos pendentes: ele entra quando o aluno voltar a ativo
 const deAlunoInativo = p => inativoNaDataAberta(stuBy(p.aluno));
-const pendentesDaDataAberta = () => (diaEscolhido === DATA ? pedidos.filter(p => p.data === DATA && !p.cancelada_em && !importado(p) && !deAlunoInativo(p)) : []);
+const pendentesDaDataAberta = () => (pedidosDaDataAberta().lista || []).filter(p => !p.cancelada_em && !importado(p) && !deAlunoInativo(p));
 function situacao(p) {
   // Cancelado: a etiqueta numa linha; quem cancelou e quando ficam na dica (e para o leitor de tela)
   if (p.cancelada_em) {
     const detalhe = `por ${esc(p.cancelada_por)} em ${quando(p.cancelada_em)}`;
     return `<span class="tag" title="Cancelado ${detalhe}">Cancelado</span><span class="sr"> ${detalhe}</span>`;
   }
-  if (p.data !== DATA) return '';
   if (importado(p)) return '<span class="tag grp">Na demanda</span>';
   return deAlunoInativo(p) ? '<span class="tag">Aluno inativo</span>' : '<span class="tag fb">Ainda não importado</span>';
 }
 
 function listaHTML() {
-  const doDia = pedidos.filter(p => p.data === diaEscolhido);
+  const { lista: doDia, leitura } = pedidosDaDataAberta();
+  if (leitura === 'lendo') return '<p class="h">Lendo os pedidos desta data…</p>';
+  if (leitura === 'erro') return '<p class="h">Não foi possível ler os pedidos desta data. Verifique a conexão.</p>';
   if (!doDia.length) return '<p class="h">Nenhum pedido para esta data.</p>';
   // Uma linha por pedido: a observação fica sob o nome do aluno e a conta que registrou, na dica de "Registrado por"
   // (quase sempre é a mesma em todas as linhas)
@@ -187,17 +172,35 @@ export function preencherHorariosDaAgenda() {
   $('#ag-horario').innerHTML = opts(lista.map(h => [h, h]), lista.includes(atual) ? atual : lista[0]);
 }
 
+// A data do pedido, o prazo dela e os botões: registrar, até o prazo; a exceção, depois dele, de quem opera a escala
+function desenharFormulario() {
+  const hoje = hojeEmSaoPaulo();
+  const { opcoes, padrao } = datasParaRegistrar(hoje, DATA, { excecao: podeUsarExcecao() });
+  const antes = dataDoPedido;
+  if (abertaDoCampo !== DATA || !opcoes.some(o => o.data === dataDoPedido)) dataDoPedido = padrao;
+  abertaDoCampo = DATA;
+  if (dataDoPedido !== antes) mudouADataDoPedido();
+  const campo = $('#ag-data');
+  const html = opts(opcoes.map(o => [o.data, rotuloDaOpcao(o, hoje)]), dataDoPedido);
+  // Iguais, as opções ficam (a lista pode estar aberta)
+  if (opcoesDesenhadas !== html) { campo.innerHTML = html; opcoesDesenhadas = html; }
+  campo.value = dataDoPedido;
+  $('#agenda-prazo').textContent = textoDoPrazo();
+  const aberto = prazoDaAgendaPermite(dataDoPedido);
+  $('#form-agenda [type="submit"]').disabled = !aberto;
+  $('#ag-excecao').hidden = aberto || !podeUsarExcecao();
+}
+
 export function rAgenda() {
-  if (!diaEscolhido) return;
-  $('#agenda-prazo').textContent = prazoDoDia();
-  $('#agenda-data').textContent = dataPorExtenso(diaEscolhido);
-  trocarConteudo($('#agenda-cal'), calendarioHTML());
+  if (!agendaAberta || !DATA) return;
+  $('#agenda-data').textContent = dataPorExtenso(DATA);
   trocarConteudo($('#agenda-lista'), listaHTML());
   const pendentes = pendentesDaDataAberta().length;
   $('#agenda-importar').hidden = !pendentes || !podeImportar();
   $('#agenda-importar').textContent = `Importar ${pendentes} ${pendentes === 1 ? 'pedido' : 'pedidos'} para a demanda`;
 
-  // Formulário: alunos do cadastro, missões, disponibilidade e quem anotou (lembrado neste computador)
+  // Formulário: a data, os alunos do cadastro, as missões, a disponibilidade e quem anotou (lembrado neste computador)
+  desenharFormulario();
   const aluno = $('#ag-aluno').value;
   $('#ag-aluno').innerHTML = `<option value="">Escolha o aluno…</option>` +
     [...S.stu].filter(s => !inativo(s)).sort((a, b) => a.nm.localeCompare(b.nm)).map(s => `<option value="${s.id}">${esc(s.nm)}</option>`).join('');
@@ -211,7 +214,4 @@ export function rAgenda() {
       // Sem o armazenamento do navegador, o campo começa vazio
     }
   }
-  const aberto = prazoDaAgendaPermite(diaEscolhido);
-  $('#form-agenda [type="submit"]').disabled = !aberto;
-  $('#ag-excecao').hidden = aberto || !podeUsarExcecao();
 }

@@ -1,45 +1,38 @@
-// A Agenda: o calendário e registrar e cancelar pedidos (importar os pedidos da data para a Demanda:
-// js/eventos/importacao.js)
-import { carregarData } from '../actions.js';
-import { vagaDeVooLocal, ehDomingo } from '../agenda.js';
+// A Agenda: os pedidos da data aberta, registrar (cada pedido para a data dele, "Data do pedido") e cancelar (importar os
+// pedidos da data para a Demanda: js/eventos/importacao.js)
+import { vagaDeVooLocal } from '../agenda.js';
 import { DURACAO_MAXIMA_H, LIMITE_DE_VOOS_LOCAIS } from '../config.js';
 import { $, showToast } from '../dom.js';
-import { dataIsoValida } from '../format.js';
 import { duracaoDigitada, ERRO_DA_DURACAO } from '../rules.js';
 import { S, DATA } from '../state.js';
 import { ApiClient } from '../storage.js';
 import { confirmado } from './confirmacao.js';
 import { aoAcionar } from './registro.js';
-import { abrirAgenda, carregarMes, mudarMes, escolherDia, diaDaAgenda, lembrarRegistradoPor, podeEditarAgenda, rAgenda, preencherHorariosDaAgenda, pedidosDoAluno, descreverPedido, pedidosCarregados } from '../views/agenda.js';
+import {
+  abrirAgenda, rAgenda, podeEditarAgenda, lembrarRegistradoPor, preencherHorariosDaAgenda, descreverPedido, dataCurta, dataDoFormulario,
+  escolherDataDoPedido, pedidosDoFormulario, lerPedidosDaAgenda, marcarInvalidos, apagarErroDaAgenda, desarmarConfirmacaoDaAgenda
+} from '../views/agenda.js';
 import { lerPedidosDaData } from '../views/selos.js';
+import { lerContagemDosDias } from '../views/trilho.js';
 import { registrarDesenho } from '../redesenho.js';
 import { registrarTela } from '../views/telas.js';
 
 // O desenho da Agenda (js/redesenho.js), pelo papel: os pedidos. Ele não faz nada até a Agenda ser aberta
-registrarDesenho('pedidos', rAgenda, { em: ['dados'], ordem: 95 });
-// Aberta, a Agenda lê o mês: no dia do item (o dia escolhido nela enquanto os dados da abertura chegavam) ou no dia padrão
-registrarTela('age', { aoMostrar: item => abrirAgenda(dataIsoValida(item) ? item : undefined) });
-
-// Agenda: o calendário é livre para navegar (inclusive para o Gestor)
-document.addEventListener('click', e => {
-  const cal = e.target.closest('[data-cal]');
-  if (!cal) return;
-  if (cal.dataset.cal === 'mes') { mudarMes(+cal.dataset.delta); return; }
-  escolherDia(cal.dataset.dia);
-  // O dia escolhido na agenda abre no app inteiro (as outras abas ficam nessa data); o domingo não tem escala
-  if (cal.dataset.dia !== DATA && dataIsoValida(cal.dataset.dia) && !ehDomingo(cal.dataset.dia)) {
-    carregarData(cal.dataset.dia).catch(() => showToast('Não foi possível abrir essa data. Verifique a conexão e tente de novo.'));
+registrarDesenho('pedidos', rAgenda, { em: ['dados', 'perfil', 'pedidos'], ordem: 95 });
+// Aberta, a Agenda lê de novo os pedidos da data aberta e os de cada dia do calendário
+registrarTela('age', {
+  aoMostrar: () => {
+    abrirAgenda();
+    lerPedidosDaData();
+    lerContagemDosDias();
+    rAgenda();
   }
 });
-
-// Os campos do pedido com erro (aria-invalid): o leitor de tela diz qual campo e lê o motivo (#ag-erro é a descrição deles)
-const marcarInvalidos = (...ids) => ['#ag-aluno', '#ag-horario', '#ag-horas', '#ag-por'].forEach(id => $(id).setAttribute('aria-invalid', String(ids.includes(id))));
 
 // Agenda: registrar um pedido (pela exceção da coordenação, fora do prazo) e cancelar (com confirmação)
 async function registrarPedido(excecao) {
   if (!podeEditarAgenda()) return;
-  $('#ag-erro').textContent = '';
-  marcarInvalidos();
+  apagarErroDaAgenda();
   const aluno = S.stu.find(s => s.id === +$('#ag-aluno').value);
   const por = $('#ag-por').value.trim();
   if (!aluno || !por) {
@@ -54,13 +47,16 @@ async function registrarPedido(excecao) {
     marcarInvalidos('#ag-horas');
     return;
   }
-  const dia = diaDaAgenda(), confirmacao = `${aluno.id}|${dia}`;
-  // No máximo 6 voos locais no mesmo horário: o horário está indisponível, com o próximo
+  const dia = dataDoFormulario(), confirmacao = `${aluno.id}|${dia}`;
+  // No máximo 6 voos locais no mesmo horário: o horário está indisponível, com o próximo (sem os pedidos da data lidos, esta
+  // conferência e a do voo já marcado não são feitas)
   const pedido = { data: dia, horario: $('#ag-horario').value, missao: $('#ag-missao').value };
-  const vaga = vagaDeVooLocal(pedidosCarregados(), pedido, S.horarios);
+  const observacao = $('#ag-obs').value;
+  const pedidos = await pedidosDoFormulario() || [];
+  const vaga = vagaDeVooLocal(pedidos, pedido, S.horarios);
   if (!vaga.ok) { $('#ag-erro').textContent = semVagaDeVooLocal(pedido, vaga.proximo); marcarInvalidos('#ag-horario'); return; }
   // O aluno que já tem voo marcado na data: pode ser um reagendamento feito por outra pessoa; o segundo clique confirma
-  const marcados = pedidosDoAluno(aluno.id, dia);
+  const marcados = pedidos.filter(p => p.aluno === aluno.id && p.data === dia && !p.cancelada_em);
   if (marcados.length && $('#form-agenda').dataset.confirmado !== confirmacao) {
     $('#form-agenda').dataset.confirmado = confirmacao;
     $('#form-agenda [type="submit"]').textContent = 'Registrar mesmo assim';
@@ -69,8 +65,7 @@ async function registrarPedido(excecao) {
   }
   try {
     await ApiClient.registrarSolicitacao({
-      data: dia, aluno: aluno.id, aluno_nome: aluno.nm, missao: $('#ag-missao').value, janela: 'horario',
-      horario: $('#ag-horario').value, horas, observacao: $('#ag-obs').value, registrado_por: por, excecao
+      ...pedido, aluno: aluno.id, aluno_nome: aluno.nm, janela: 'horario', horas, observacao, registrado_por: por, excecao
     });
   } catch (err) {
     $('#ag-erro').textContent = {
@@ -79,7 +74,7 @@ async function registrarPedido(excecao) {
       23514: 'Pedido incompleto: confira aluno, missão, horário e quem anotou.',
       22023: `Pedido inválido: o horário é obrigatório, e a duração vai de 0,1 h a ${DURACAO_MAXIMA_H} h.`,
       // Outra pessoa agendou o 6º local no mesmo horário enquanto isso: o servidor recusou
-      PT422: semVagaDeVooLocal(pedido, vagaDeVooLocal([...pedidosCarregados(), ...Array.from({ length: LIMITE_DE_VOOS_LOCAIS }, () => ({ ...pedido, janela: 'horario', cancelada_em: null }))], pedido, S.horarios).proximo)
+      PT422: semVagaDeVooLocal(pedido, vagaDeVooLocal([...pedidos, ...Array.from({ length: LIMITE_DE_VOOS_LOCAIS }, () => ({ ...pedido, janela: 'horario', cancelada_em: null }))], pedido, S.horarios).proximo)
     }[err.code] || 'Não foi possível registrar o pedido. Verifique a conexão e tente de novo.';
     return;
   }
@@ -87,9 +82,10 @@ async function registrarPedido(excecao) {
   desarmarConfirmacaoDaAgenda();
   $('#ag-obs').value = '';
   $('#ag-aluno').value = '';
-  showToast(excecao ? 'Pedido registrado pela Exceção da Coordenação.' : 'Pedido registrado.', 'ok');
-  await carregarMes();
-  lerPedidosDaData();
+  // A lista é a da data aberta: o pedido de outra data diz para qual ele foi
+  const para = dia === DATA ? '' : ` para ${dataCurta(dia)}`;
+  showToast(excecao ? `Pedido registrado${para} pela Exceção da Coordenação.` : `Pedido registrado${para}.`, 'ok');
+  await Promise.all([lerPedidosDaAgenda(dia), lerContagemDosDias()]);
 }
 // O horário sem vaga de voo local: o motivo e o próximo horário possível
 function semVagaDeVooLocal({ horario, missao }, proximo) {
@@ -97,14 +93,11 @@ function semVagaDeVooLocal({ horario, missao }, proximo) {
   return `Horário indisponível: já há ${LIMITE_DE_VOOS_LOCAIS} voos locais (Voo Local, Voo Solo e TGL) às ${horario}, o máximo no mesmo horário (determinação da diretoria). ${depois}`;
 }
 
-// Trocar o aluno desfaz a confirmação do voo já marcado
-function desarmarConfirmacaoDaAgenda() {
-  delete $('#form-agenda').dataset.confirmado;
-  $('#form-agenda [type="submit"]').textContent = 'Registrar pedido';
-}
 $('#form-agenda').onsubmit = e => { e.preventDefault(); registrarPedido(false); };
 $('#ag-excecao').onclick = () => registrarPedido(true);
-$('#ag-aluno').addEventListener('change', () => { desarmarConfirmacaoDaAgenda(); $('#ag-erro').textContent = ''; marcarInvalidos(); });
+// Trocar o aluno ou a data desfaz a confirmação do voo já marcado
+$('#ag-aluno').addEventListener('change', () => { desarmarConfirmacaoDaAgenda(); apagarErroDaAgenda(); });
+$('#ag-data').onchange = e => escolherDataDoPedido(e.target.value);
 $('#ag-missao').onchange = preencherHorariosDaAgenda;
 
 async function cancelarPedido(b) {
@@ -121,7 +114,6 @@ async function cancelarPedido(b) {
   } catch {
     $('#ag-erro').textContent = 'Não foi possível cancelar o pedido. Verifique a conexão e tente de novo.';
   }
-  await carregarMes();
-  lerPedidosDaData();
+  await Promise.all([lerPedidosDaData(), lerContagemDosDias()]);
 }
 aoAcionar('cancelar-pedido', cancelarPedido, { confereAPermissao: true });

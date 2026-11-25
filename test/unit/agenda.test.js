@@ -2,7 +2,7 @@
 // importação para a demanda: test/unit/processamento.test.js).
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { prazoDaAgendaPermite, primeiraDataAberta, disponibilidadeDaSolicitacao, pedidoDaSolicitacao } from '../../js/agenda.js';
+import { prazoDaAgendaPermite, primeiraDataAberta, datasParaRegistrar, disponibilidadeDaSolicitacao, pedidoDaSolicitacao } from '../../js/agenda.js';
 
 const em = iso => new Date(iso);
 
@@ -97,5 +97,40 @@ describe('Agenda: o limite de voos locais no mesmo horário', async () => {
   it('outra missão não tem o limite; o Solo (só às 06:30) não tem próximo horário', () => {
     assert.deepEqual(vagaDeVooLocal(seisAs('08:20'), { data: '2026-11-11', horario: '08:20', missao: 'Navegação' }), { ok: true });
     assert.deepEqual(vagaDeVooLocal(seisAs('06:30'), { data: '2026-11-11', horario: '06:30', missao: 'Voo Solo' }), { ok: false, proximo: null });
+  });
+});
+
+describe('A data do pedido (datasParaRegistrar)', () => {
+  const HOJE = '2026-11-10';
+  const meioDia = em('2026-11-10T12:00:00-03:00'), tarde = em('2026-11-10T14:00:00-03:00');
+
+  it('os dias de operação de hoje a 14 dias, sem domingo, com as fechadas marcadas (com a exceção)', () => {
+    const { opcoes, padrao } = datasParaRegistrar(HOJE, '2026-11-11', { excecao: true, agora: meioDia });
+    assert.deepEqual([opcoes[0], opcoes[1], opcoes.at(-1)], [{ data: '2026-11-10', fechada: true }, { data: '2026-11-11', fechada: false }, { data: '2026-11-24', fechada: false }]);
+    assert.equal(opcoes.length, 13);
+    assert.equal(opcoes.some(o => ['2026-11-15', '2026-11-22'].includes(o.data)), false);
+    assert.equal(padrao, '2026-11-11');
+  });
+
+  it('a Secretaria só recebe as datas que aceitam pedidos', () => {
+    assert.equal(datasParaRegistrar(HOJE, '2026-11-11', { agora: meioDia }).opcoes[0].data, '2026-11-11');
+    assert.equal(datasParaRegistrar(HOJE, '2026-11-11', { agora: tarde }).opcoes[0].data, '2026-11-12');
+    assert.equal(datasParaRegistrar(HOJE, '2026-11-11', { agora: tarde }).opcoes.some(o => o.fechada), false);
+  });
+
+  it('a data aberta mais adiante entra na lista, e só ela; uma passada não', () => {
+    const longe = datasParaRegistrar(HOJE, '2026-12-18', { excecao: true, agora: meioDia });
+    assert.deepEqual([longe.opcoes.at(-2).data, longe.opcoes.at(-1).data], ['2026-11-24', '2026-12-18']);
+    assert.equal(longe.padrao, '2026-12-18');
+    const passada = datasParaRegistrar(HOJE, '2026-11-03', { excecao: true, agora: meioDia });
+    assert.equal(passada.opcoes[0].data, HOJE);
+    assert.equal(passada.padrao, '2026-11-11');
+  });
+
+  it('a data com que o campo começa: a aberta, se aceita pedidos; senão, a primeira que aceita', () => {
+    assert.equal(datasParaRegistrar(HOJE, '2026-11-13', { agora: tarde }).padrao, '2026-11-13');
+    assert.equal(datasParaRegistrar(HOJE, '2026-11-11', { excecao: true, agora: tarde }).padrao, '2026-11-12');
+    // Sábado depois das 10:00: segunda já fechou
+    assert.equal(datasParaRegistrar('2026-11-14', '2026-11-16', { excecao: true, agora: em('2026-11-14T10:30:00-03:00') }).padrao, '2026-11-17');
   });
 });

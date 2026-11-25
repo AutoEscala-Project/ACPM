@@ -1,4 +1,4 @@
-// Os pedidos da data aberta (a linha e a Demanda leem daqui) e os dois selos que ainda não são da linha: o de Recursos no
+// Os pedidos da data aberta (a linha, o trilho, a Agenda e a Demanda leem daqui) e os dois selos que ainda não são da linha: o de Recursos no
 // botão da Disponibilidade do dia (aviões parados ou com menos de 5 h até a revisão de 50 horas) e o número de pedidos no
 // botão de importar, na Demanda
 import { $ } from '../dom.js';
@@ -12,16 +12,18 @@ const PERTO_DA_REVISAO_H = 5;
 // Pedidos da agenda para a data aberta: lidos ao abrir a data e depois de mudanças na agenda. leitura: 'lendo', 'lidos' ou
 // 'erro' (sem conexão: a linha diz que falhou)
 let pedidosDaData = { data: null, lista: null, leitura: 'lendo' };
+let leituras = 0;
 
 export async function lerPedidosDaData() {
-  const data = DATA;
+  const data = DATA, vez = ++leituras;
   let lista = null, leitura = 'lidos';
   try {
     lista = await ApiClient.agenda(data, data);
   } catch {
     leitura = 'erro';
   }
-  if (data !== DATA) return;
+  // Outra data aberta, ou uma leitura pedida depois desta (a resposta dela é a que vale)
+  if (data !== DATA || vez !== leituras) return;
   pedidosDaData = { data, lista, leitura };
   redesenhar('pedidos');
 }

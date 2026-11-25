@@ -1,5 +1,5 @@
-// Agenda de solicitações da secretaria: a regra do prazo (a mesma do servidor, no horário de São Paulo), o limite de voos
-// locais e o pedido da demanda que cada solicitação vira ao ser importada (a importação: js/processamento.js).
+// Agenda de solicitações da secretaria: a regra do prazo (a mesma do servidor, no horário de São Paulo), as datas em que um
+// pedido pode ser registrado, o limite de voos locais e o pedido da demanda que cada solicitação vira ao ser importada (a importação: js/processamento.js).
 import { MIS, MISSOES_LOCAIS, LIMITE_DE_VOOS_LOCAIS } from './config.js';
 import { disponibilidadeAtual, disponibilidadeDoAluno, normalizeMissionFields, duracaoPadraoDaMissao } from './rules.js';
 import { horariosDaMissao, preferenciasPadrao, paraMinuto } from './horarios.js';
@@ -43,6 +43,17 @@ export const primeiraDataAberta = (agora = new Date()) => {
   while (!prazoDaAgendaPermite(data, agora)) data = somarDias(data, 1);
   return data;
 };
+
+// As datas em que um pedido pode ser registrado ("Data do pedido"): os dias de operação (sem domingo) de hoje (São Paulo) a
+// 14 dias, e a data aberta, quando é mais adiante. Com a exceção da Coordenação, também as que já fecharam (fechada); sem
+// ela, só as abertas. padrao: a data aberta, se ela está na lista e aceita pedidos; senão, a primeira que aceita
+export function datasParaRegistrar(hoje, dataAberta, { excecao = false, agora = new Date() } = {}) {
+  const datas = Array.from({ length: 15 }, (_, i) => somarDias(hoje, i));
+  if (dataAberta && dataAberta > datas.at(-1)) datas.push(dataAberta);
+  const opcoes = datas.filter(data => !ehDomingo(data)).map(data => ({ data, fechada: !prazoDaAgendaPermite(data, agora) })).filter(o => excecao || !o.fechada);
+  const aberta = opcoes.find(o => o.data === dataAberta);
+  return { opcoes, padrao: aberta && !aberta.fechada ? aberta.data : primeiraDataAberta(agora) };
+}
 
 export function disponibilidadeDaSolicitacao({ janela, horario }) {
   if (janela !== 'horario') return disponibilidadeAtual(janela);

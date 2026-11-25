@@ -240,7 +240,7 @@ test.describe('A escala abrindo: nada é gravado antes de os dados da data chega
     await contexto.close();
   });
 
-  // A abertura (amanhã) e o dia 13, escolhido na Agenda enquanto ela lia: as datas são lidas uma de cada vez, e o dia 13
+  // A abertura (amanhã) e o dia 13, escolhido no calendário enquanto ela lia: as datas são lidas uma de cada vez, e o dia 13
   // só é lido depois da abertura (a resposta dela nunca chega depois da dele). Depois, a tela e a gravação ficam com os
   // dados do dia 13 (o PR-BTB em manutenção)
   test('a data escolhida enquanto a escala abria espera a leitura da abertura e fica no lugar dela', async ({ browser }) => {
@@ -264,7 +264,7 @@ test.describe('A escala abrindo: nada é gravado antes de os dados da data chega
     await preencherLogin(page, CONTAS.operador);
     await expect(page.locator('#usuario')).toBeVisible();
     await irPara(page, 'age');
-    await page.locator('[data-cal][data-dia="2026-11-13"]').click();
+    await escolherNoCalendario(page, '2026-11-13');
     liberar();
     // O dia 13 espera: nada dele é lido enquanto a abertura lê
     await page.waitForTimeout(300);
@@ -305,7 +305,7 @@ test.describe('A escala abrindo: nada é gravado antes de os dados da data chega
     await preencherLogin(page, CONTAS.operador);
     await expect(page.locator('#usuario')).toBeVisible();
     await irPara(page, 'age');
-    await page.locator('[data-cal][data-dia="2026-11-13"]').click();
+    await escolherNoCalendario(page, '2026-11-13');
     liberar();
     await expect(page.locator('body[data-pronto]')).toBeAttached();
     await irPara(page, 'alu');

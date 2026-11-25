@@ -352,25 +352,24 @@
   <!-- AGENDA DE SOLICITAÇÕES (secretaria) -->
   <section id="s-age" class="tela">
     <h2>Agenda de Solicitações</h2>
-    <p class="h" id="agenda-prazo"></p>
-    <div class="agenda">
-      <div class="pn" id="agenda-cal"></div>
-      <div class="pn">
-        <h3 id="agenda-data"></h3>
-        <form id="form-agenda" autocomplete="off" novalidate>
-          <label>Aluno<select id="ag-aluno" class="agenda-campo" required aria-describedby="ag-erro"></select></label>
-          <label>Fase / missão<select id="ag-missao" class="agenda-campo"></select></label>
-          <label>Horário<select id="ag-horario" class="agenda-campo" aria-describedby="ag-erro"></select></label>
-          <label>Duração (h)<input type="number" id="ag-horas" class="agenda-campo" min="0.1" max="5" step="0.1" inputmode="decimal" value="1" aria-describedby="ag-erro"></label>
-          <label>Registrado por<input id="ag-por" class="agenda-campo" maxlength="80" required placeholder="Quem anotou o pedido" aria-describedby="ag-erro"></label>
-          <label>Observação<input id="ag-obs" class="agenda-campo" maxlength="300" placeholder="Opcional"></label>
-          <button class="btn" type="submit">Registrar pedido</button>
-          <button class="x" type="button" id="ag-excecao" hidden data-dica="excecao">Exceção da Coordenação</button>
-          <p id="ag-erro" role="alert"></p>
-        </form>
-        <button class="btn edit-only" type="button" id="agenda-importar" data-act="importar-agenda" hidden></button>
-        <div class="tw" id="agenda-lista"></div>
-      </div>
+    <div class="pn">
+      <form id="form-agenda" autocomplete="off" novalidate>
+        <label>Data do pedido<select id="ag-data" class="agenda-campo" aria-describedby="agenda-prazo"></select></label>
+        <p class="h" id="agenda-prazo"></p>
+        <label>Aluno<select id="ag-aluno" class="agenda-campo" required aria-describedby="ag-erro"></select></label>
+        <label>Fase / missão<select id="ag-missao" class="agenda-campo"></select></label>
+        <label>Horário<select id="ag-horario" class="agenda-campo" aria-describedby="ag-erro"></select></label>
+        <label>Duração (h)<input type="number" id="ag-horas" class="agenda-campo" min="0.1" max="5" step="0.1" inputmode="decimal" value="1" aria-describedby="ag-erro"></label>
+        <label>Registrado por<input id="ag-por" class="agenda-campo" maxlength="80" required placeholder="Quem anotou o pedido" aria-describedby="ag-erro"></label>
+        <label>Observação<input id="ag-obs" class="agenda-campo" maxlength="300" placeholder="Opcional"></label>
+        <button class="btn" type="submit">Registrar pedido</button>
+        <button class="x" type="button" id="ag-excecao" hidden data-dica="excecao">Exceção da Coordenação</button>
+        <p id="ag-erro" role="alert"></p>
+      </form>
+      <!-- A lista: os pedidos da data aberta -->
+      <h3 id="agenda-data"></h3>
+      <button class="btn edit-only" type="button" id="agenda-importar" data-act="importar-agenda" hidden></button>
+      <div class="tw" id="agenda-lista"></div>
     </div>
   </section>
 
@@ -600,16 +599,18 @@
       <p>A linha, no alto, segue as etapas do dia, cada uma num cartão: Agenda, Demanda, Escala e Aprovar.
       Ao lado dela (ou embaixo, quando não cabe) ficam os cadastros (Alunos, Instrutores, Recursos e Cursos), o Rodízio e o BI.</p>
       <h4>Agenda</h4>
-      <p>A agenda de pedidos da secretaria, com um calendário.
+      <p>A agenda de pedidos da secretaria: a lista dos pedidos da data aberta e o formulário que registra um pedido.
+      Cada pedido é registrado para a <i>Data do pedido</i>, um campo do formulário: ela começa na data aberta, ou na primeira que ainda aceita pedidos, e não muda a data aberta no app.
+      Para ver os pedidos de outro dia, escolha o dia no calendário, que mostra quantos cada um tem.
       Cada pedido tem o aluno, a missão, o horário (os horários da missão: o Multimotor, por exemplo, tem os do PA-34), a duração (fracionada, até 5 h; o Ground tem 01h30) e quem anotou.
       No máximo 6 voos locais (Voo Local, Voo Solo e TGL) saem no mesmo horário (determinação da diretoria): ao agendar o 7º, o horário fica indisponível, e o app diz o próximo horário possível.
       O Voo Solo sai sempre às 06:30.
       Se o aluno já tem voo marcado na data, o app avisa (pode ser um reagendamento feito por outra pessoa) e só registra mais um com “Registrar mesmo assim”.
       Cada pedido vira um voo na demanda, com o horário e a duração dele.
       O pedido para o dia seguinte só pode ser registrado até as 13:00 (horário de Brasília); depois disso, só para os próximos dias.
-      O aeroclube não opera aos domingos: domingo não tem escala nem pedidos (o app pula o domingo), e os voos de segunda são agendados até sábado às 10:00.
-      Operadores e Administradores podem registrar fora do prazo com a <i>Exceção da Coordenação</i>, que fica marcada no pedido.</p>
-      <p>Na data aberta no topo, a coluna <i>Situação</i> diz se o pedido já está na demanda (“Na demanda”) ou não (“Ainda não importado”), e o operador pode importar por ali mesmo.
+      O aeroclube não opera aos domingos: domingo não tem escala nem pedidos (no calendário, o domingo não abre), e os voos de segunda são agendados até sábado às 10:00.
+      Operadores e Administradores podem registrar fora do prazo com a <i>Exceção da Coordenação</i>, que fica marcada no pedido: para eles, as datas fechadas aparecem na <i>Data do pedido</i> com “prazo encerrado”.</p>
+      <p>Na lista, a coluna <i>Situação</i> diz se o pedido já está na demanda (“Na demanda”) ou não (“Ainda não importado”), e o operador pode importar por ali mesmo.
       O pedido cancelado continua na lista, esmaecido; deixe o mouse sobre “Cancelado” para ver quem cancelou e quando.</p>
 
       <h4>Demanda</h4>
