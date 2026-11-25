@@ -28,7 +28,7 @@ describe('registrarDesenho', () => {
   it('um momento que não está na lista é erro (também o "solicitacoes" que ninguém criou)', async () => {
     const { registrarDesenho } = await registroNovo();
     assert.throws(() => registrarDesenho('pedidos', () => {}, { em: ['solicitacoes'] }), /momento que não existe/);
-    assert.throws(() => registrarDesenho('outro', () => {}, { em: ['dados', 'perfil'] }), /momento que não existe/);
+    assert.throws(() => registrarDesenho('outro', () => {}, { em: ['dados', 'trilho'] }), /momento que não existe/);
   });
 
   it('o desenho é uma função', async () => {
@@ -66,7 +66,7 @@ describe('redesenhar', () => {
 
   it('um momento que não existe é erro', async () => {
     const { redesenhar } = await registroNovo();
-    assert.throws(() => redesenhar('pedidos'), /não existe/);
+    assert.throws(() => redesenhar('solicitacoes'), /não existe/);
   });
 
   it('um desenho que falha vai para o console, e os seguintes são feitos', async () => {

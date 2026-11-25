@@ -334,7 +334,7 @@ test.describe('Demanda', () => {
     const aVista = () => page.locator('#dem tr[data-k="d"]:visible').evaluateAll(linhas => linhas.map(l => l.dataset.id));
     await irPara(page, 'alu');
     await filtrarCursos(page, 'alu', ['PP']);
-    await page.getByRole('button', { name: 'Abrir a Demanda' }).click();
+    await page.getByRole('link', { name: 'Abrir a Demanda' }).click();
     await expect.poll(aVista).toEqual(['1000']);
     const incluir = async nome => {
       await page.locator('#incluir-aluno').fill(nome);
@@ -427,7 +427,7 @@ test.describe('Demanda', () => {
     await irPara(page, 'alu');
     await filtrarCursos(page, 'alu', ['PC']);
     await expect(page.locator('#alu-contagem')).toHaveText('1 de 2 alunos');
-    await page.getByRole('button', { name: 'Abrir a Demanda' }).click();
+    await page.getByRole('link', { name: 'Abrir a Demanda' }).click();
     await expect(page.locator('#flt-dem-cur')).toHaveText('Curso: PC');
     await expect(page.locator('#dem tr[data-k="d"]:visible')).toHaveCount(0);
     await expect(page.locator('#dem tr.sem-resultado')).toHaveText('Nenhum aluno com esses filtros. Limpar filtros');

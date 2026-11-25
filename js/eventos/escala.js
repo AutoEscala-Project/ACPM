@@ -4,7 +4,7 @@
 import { gravarAlteracao, gravarEscalaCalculada, aindaNaoAbriu } from '../actions.js';
 import { opcoesDeCategoria } from '../categorias.js';
 import { OPCOES_DE_BURACOS, OPCOES_DE_HORARIOS, normalizarCriterios } from '../criterios.js';
-import { $, showToast, anunciar, algumDialogoAberto, gavetaDoEsc } from '../dom.js';
+import { $, showToast, anunciar, algumDialogoAberto, gavetaDoEsc, focarNoTitulo } from '../dom.js';
 import { exp, pdf, planilha } from '../export.js';
 import { fixosAoMudarStatus, fixosAoReabrir, fixosAoAprovar, normalizarFixos } from '../fixos.js';
 import { hm, hojeISO } from '../format.js';
@@ -23,6 +23,7 @@ import { rOut, lembrarCaixa, botaoDoInstrutor, seletorDeInstrutor, abrirPopupDoM
 import { abrirPainelDeReparo, fecharPainelDeReparo, opcaoDoPainel } from '../views/reparo.js';
 import { registrarDesenho, redesenharPorNome } from '../redesenho.js';
 import { voosComInativos } from '../inativos.js';
+import { registrarTela } from '../views/telas.js';
 
 // O desenho da Escala (js/redesenho.js): refeito em todos os momentos, quando há escala
 registrarDesenho('escala', () => { if (RES) rOut(); }, { em: ['dados', 'consulta', 'releitura', 'escala'], ordem: 80 });
@@ -112,7 +113,9 @@ $('#xlsx').onclick = () => { gravarEscalaCalculada(); planilha(); };
 function linkDaData(data) {
   const url = new URL(window.location.href);
   const projeto = url.searchParams.get('supabase');
+  // Só a data: sem a tela (o fragmento) e sem os outros parâmetros
   url.search = '';
+  url.hash = '';
   if (projeto) url.searchParams.set('supabase', projeto);
   url.searchParams.set('data', data);
   return url.toString();
@@ -310,3 +313,31 @@ aoAcionar('refazer-escala', () => {
   const nomes = voosComInativos(S, RES, { data: DATA, hoje: hojeISO() }).filter(i => i.de !== 'aluno').map(i => i.nome);
   gravarAlteracao('mod', nomes.length ? `Escala refeita: ${nomes.join(', ')} ${nomes.length > 1 ? 'estão inativos' : 'está inativo'}` : 'Escala refeita sem os inativos do cadastro');
 });
+
+// Aprovar (#/apr): até ter a tela dela, a aprovação fica na barra da compactação da Escala. Ela vem à vista, contornada por
+// um instante, e o foco vai para o botão dela (Aprovar escala ou Reabrir), com o estado dito ao leitor de tela; sem botão
+// (quem só consulta, a escala sem voo ou sem as horas dos instrutores), o foco vai para o título da Escala, com o porquê
+const DESTAQUE_MS = 1200;
+function mostrarAprovacao() {
+  const barra = $('#compactacao');
+  const alvo = S.aprovacao ? $('#selo-aprovada') : $('#aprovacao');
+  const botao = [...document.querySelectorAll('#aprovacao button')].find(b => !b.disabled && b.getClientRects().length);
+  const semVoo = !RES || !RES.out.length;
+  let texto;
+  if (S.aprovacao) {
+    const em = new Date(S.aprovacao.em);
+    texto = `Escala aprovada às ${hm(em.getHours() * 60 + em.getMinutes())}${S.aprovacao.por ? ` por ${S.aprovacao.por}` : ''}.`;
+  } else if (semVoo) texto = 'Nenhum voo nesta data: não há escala para aprovar.';
+  else if (!botao && isGestor()) texto = 'Escala ainda não aprovada. Quem só consulta não aprova.';
+  else if (!botao) texto = 'Escala ainda não aprovada: as horas de voo dos instrutores não foram lidas.';
+  else texto = 'Escala ainda não aprovada.';
+  if (alvo && !alvo.hidden && alvo.getClientRects().length) {
+    alvo.classList.add('destaque');
+    setTimeout(() => alvo.classList.remove('destaque'), DESTAQUE_MS);
+  }
+  if (botao) botao.focus({ preventScroll: true });
+  else focarNoTitulo($('#s-esc'));
+  anunciar(texto);
+  return { lugar: barra && !barra.hidden ? barra : null, focou: true };
+}
+registrarTela('apr', { aoMostrar: () => mostrarAprovacao() });

@@ -79,6 +79,31 @@ test('o padrão do app: o hangar e o progresso desligados; no localhost, ?funcio
   await expect(page.locator('#alu tr[data-id="1001"] .progresso')).toHaveText('1/46 · Fase 1 · próxima IN-02');
 });
 
+// A tela, Voltar e a data mudam o endereço (js/endereco.js) sem tirar dele a escolha
+test('?funcionalidades= fica no endereço ao trocar de tela e de data, ao voltar e ao recarregar', async ({ page }) => {
+  await abrirCom(page, docs(), './?funcionalidades=hangar');
+  const conferir = async (tela, data) => {
+    await expect(page).toHaveURL(new RegExp(`#/${tela}$`));
+    const { searchParams } = new URL(page.url());
+    expect([searchParams.get('funcionalidades'), searchParams.get('data')]).toEqual(['hangar', data]);
+  };
+  await conferir('esc', AMANHA);
+  await irPara(page, 'cur');
+  await irPara(page, 'rec');
+  await conferir('rec', AMANHA);
+  await diaSeguinte(page);
+  await expect(page).toHaveURL(new RegExp(`data=${DEPOIS}`));
+  await conferir('rec', DEPOIS);
+  await page.goBack();
+  await conferir('cur', DEPOIS);
+  await page.goForward();
+  await conferir('rec', DEPOIS);
+  await page.reload();
+  await appPronto(page);
+  await conferir('rec', DEPOIS);
+  await expect(page.locator('#hangar li').first()).toHaveAttribute('data-id', 'PR-VOB');
+});
+
 test.describe('O hangar desligado', () => {
   test.use({ funcionalidades: '' });
 
@@ -99,7 +124,7 @@ test.describe('O hangar desligado', () => {
     await abrirEscala(page);
     await expect(page.locator('#tempo-parado > div')).toHaveCount(2);
     await expect(page.locator('#tempo-parado')).not.toContainText('hangar');
-    for (const aba of ['dem', 'age', 'rec', 'ins', 'alu', 'cur', 'rod', 'bi']) await irPara(page, aba);
+    for (const tela of ['age', 'dem', 'esc', 'apr', 'alu', 'ins', 'rec', 'cur', 'rod', 'bi']) await irPara(page, tela);
     expect(await textoDaPagina(page)).not.toMatch(/hangar/i);
     expect(await page.locator('[aria-label*="hangar" i], [title*="hangar" i]').count()).toBe(0);
     await expect(page.locator('#glossario-hangar')).toHaveCount(0);
@@ -234,7 +259,7 @@ test.describe('O progresso nos cursos desligado', () => {
     expect((await doBanco(page, 'acpm4_resultados')).map(r => r.resultado)).toEqual(['aprovado', 'aprovado']);
   });
 
-  test('em Alunos, o curso sem o progresso; em Cursos, a lista dos alunos pelo nome, e a aba funciona', async ({ page }) => {
+  test('em Alunos, o curso sem o progresso; em Cursos, a lista dos alunos pelo nome, e a tela funciona', async ({ page }) => {
     await abrirCom(page);
     await irPara(page, 'alu');
     await expect(page.locator('#alu tr[data-id="1000"] [data-f="curso"]')).toHaveValue('PP');
@@ -359,7 +384,7 @@ test.describe('O progresso nos cursos desligado', () => {
     const page = await contexto.newPage();
     const erros = vigiarErros(page, { statusEsperados: [503] });
     await entrar(page, CONTAS.operador);
-    const semProgramas = 'Não foi possível ler os programas dos cursos: a aba Cursos fica sem eles.';
+    const semProgramas = 'Não foi possível ler os programas dos cursos: a tela Cursos fica sem eles.';
     await expect(page.locator('#aviso-dados-texto')).toHaveText(
       `Não foi possível ler os resultados das missões dos cursos: o app não confere se um código do programa ou um voo agendado já tem resultado. ${semProgramas}`);
     await irPara(page, 'cur');
@@ -386,6 +411,29 @@ test.describe('O progresso nos cursos desligado', () => {
     await expect.poll(async () => (await gravado(page)).pedidos[1001].fly).toBe(true);
     const { pedidos } = await gravado(page);
     expect([pedidos[1000].etapa, pedidos[1000].cursoDaEtapa, pedidos[1001].etapa]).toEqual(['IN-01', 'PP', undefined]);
+  });
+});
+
+// A linha das etapas (js/linha-do-dia.js), com as tarefas, e os endereços das telas
+test.describe('Os dois desligados, na linha e no endereço', () => {
+  test.use({ funcionalidades: '' });
+
+  test('a linha não fala deles, aberta ou recolhida, e um endereço não chega a eles', async ({ page }) => {
+    await abrirCom(page);
+    const linha = page.locator('#linha');
+    const dito = () => linha.evaluate(nav => [nav.textContent, ...[...nav.querySelectorAll('[title], [aria-label]')].flatMap(el => [el.title, el.getAttribute('aria-label')])].join(' '));
+    for (const estado of ['recolhida', 'aberta']) {
+      if (await linha.getAttribute('data-estado') !== estado) await page.locator('#btn-linha').click();
+      await expect(linha).toHaveAttribute('data-estado', estado);
+      expect(await dito(), estado).not.toMatch(/hangar|progresso|próxima|aprovado\b|reprovado|IN-0/i);
+    }
+    for (const [n, endereco] of ['#glossario-hangar', '#glossario-progresso', '#/rec/hangar', '#/alu/1001', '#/cur/PP'].entries()) {
+      // Um parâmetro diferente em cada um: só o fragmento diferente não abre o app de novo
+      await page.goto(`./?vez=${n}${endereco}`);
+      await appPronto(page);
+      await expect(page.locator('main#conteudo > section.on'), endereco).toHaveCount(1);
+      await expect(page.locator('#hangar, #glossario-hangar, #glossario-progresso, .progresso, .alunos-na-fase, .turma-da-fase'), endereco).toHaveCount(0);
+    }
   });
 });
 

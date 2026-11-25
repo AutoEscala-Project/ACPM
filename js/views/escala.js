@@ -497,7 +497,7 @@ function caixaDosInativos(out) {
   const itens = voosComInativos(S, { out }, { data: DATA, hoje: hojeISO() });
   if (!itens.length) return '';
   const n = itens.reduce((total, i) => total + i.voos, 0);
-  const linha = i => `<li class="al warn">${esc(textoDoVooComInativo(i))}${i.de === 'aluno' ? ' <button type="button" class="btn quiet" data-go="dem">Abrir a Demanda</button>' : ''}</li>`;
+  const linha = i => `<li class="al warn">${esc(textoDoVooComInativo(i))}${i.de === 'aluno' ? ' <a class="btn quiet" href="#/dem" data-focar>Abrir a Demanda</a>' : ''}</li>`;
   const refazer = itens.some(i => i.de !== 'aluno') ? '<button type="button" class="btn quiet edit-only" data-act="refazer-escala">Refazer a escala</button>' : '';
   return caixa('inativos', 'avisos inativos', `<summary>${n} ${n === 1 ? 'voo' : 'voos'} com quem está inativo no cadastro</summary><ul>${itens.map(linha).join('')}</ul>${refazer}`);
 }
@@ -634,7 +634,7 @@ export function rOut() {
   if (!RES || (!RES.out.length && !RES.al.length)) {
     // Sem voos, nas vistas do mapa, a grade das linhas livres fica embaixo do texto: o "+" e o clique agendam nela
     const grade = renderVisualTimeline([], linhasLivres(filtrosDaEscala([])));
-    trocarConteudo($('#out'), `<p class="h">Nenhum voo nesta data. Marque quem vai voar na aba Demanda: a escala é montada automaticamente.</p>${grade}`);
+    trocarConteudo($('#out'), `<p class="h">Nenhum voo nesta data. Marque quem vai voar na Demanda: a escala é montada automaticamente.</p>${grade}`);
     rCompactacao([]);
     rAprovacao(false);
     atualizarPainelDeReparo();

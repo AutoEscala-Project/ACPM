@@ -381,3 +381,6 @@ body[data-role="gestor"] #out .tl-track { cursor: default; }
   .tl-pop-btn[data-act="agendar"] { min-height: 44px; }
   .tabela-escala tr.win .win-btn { padding-right: 52px; }
 }
+/* Aprovar (#/apr, js/eventos/escala.js): a aprovação contornada por um instante, para o clique que levou o foco até ela
+   (sem anel do foco depois de um clique do mouse) mostrar onde ela está */
+#aprovacao.destaque, #selo-aprovada.destaque { outline: 3px solid var(--ac); outline-offset: 3px; border-radius: 6px; }

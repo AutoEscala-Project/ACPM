@@ -13,10 +13,13 @@ import { ApiClient } from '../storage.js';
 import { comConfirmacao } from './confirmacao.js';
 import { rBI } from '../views/bi.js';
 import { registrarDesenho } from '../redesenho.js';
+import { registrarTela } from '../views/telas.js';
 import { inativo } from '../inativos.js';
 
 // O desenho do BI (js/redesenho.js): a escala refeita entra no BI da data
 registrarDesenho('bi', rBI, { em: ['escala'], ordem: 90 });
+// Aberto (também de novo, pelo link dele), o BI é desenhado e lido outra vez
+registrarTela('bi', { aoMostrar: () => { rBI(); carregarBI(); } });
 
 $('#bi-dt').onchange = () => carregarBI();
 $('#bi-flt-eq').onchange = () => rBI();
