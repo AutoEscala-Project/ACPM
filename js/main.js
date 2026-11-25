@@ -7,6 +7,7 @@
  *   js/engine.js    Motor de alocação determinístico (função pura)
  *   js/storage.js   Camada de dados (estado inicial e migrações) sobre js/backends/ (local ou Supabase)
  *   js/sessao.js    Login e perfil de acesso no modo compartilhado (Supabase)
+ *   js/funcionalidades.js  As funcionalidades que podem ficar desligadas (o hangar e o progresso nos cursos)
  *   js/state.js     Estado compartilhado entre os módulos
  *   js/actions.js   Perfil de acesso, data, histórico e escala; gravarAlteracao, o jeito de os eventos mudarem os dados
  *   js/dom.js       Utilitários de DOM
@@ -35,6 +36,7 @@ import { setRole, abrirData, lerData, dadosPreparados, carregarBI } from './acti
 import { redesenhar } from './redesenho.js';
 import { ehDomingo } from './agenda.js';
 import { projetoSupabase, enderecoSemBanco } from './config-supabase.js';
+import { aplicarFuncionalidades } from './funcionalidades.js';
 import { iniciarDicas } from './dicas.js';
 import { configurarMeteorologia } from './meteorologia.js';
 import { $, showToast, mostrarAviso, avisoAberto, avisarDoLink } from './dom.js';
@@ -63,6 +65,8 @@ window.addEventListener('beforeunload', e => {
 // Inicialização Assíncrona
 (async function bootstrap() {
   iniciarTema();
+  // O que a página diz das funcionalidades desligadas sai dela (e o que só vale sem as ligadas)
+  aplicarFuncionalidades(document);
   // O endereço é lido antes de tudo: abrir uma data, ou uma tela, põe a data nele
   const params = new URLSearchParams(window.location.search);
   // O endereço: os links #/<tela>, Voltar e Avançar. A tela do endereço aparece já (no modo compartilhado, o login fica por

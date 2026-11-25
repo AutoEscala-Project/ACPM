@@ -15,7 +15,8 @@ const POR_ENDERECO = {
   'gdruumond.github.io': 'producao',
   'thephfernandes.github.io': 'previa'
 };
-const LOCAIS = ['localhost', '127.0.0.1', '[::1]'];
+// Os endereços de quem desenvolve e dos testes (js/funcionalidades.js também lê)
+export const LOCAIS = ['localhost', '127.0.0.1', '[::1]'];
 
 export function projetoSupabase(endereco = window.location) {
   const nome = Object.hasOwn(POR_ENDERECO, endereco.hostname)

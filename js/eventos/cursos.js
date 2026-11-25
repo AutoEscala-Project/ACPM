@@ -405,7 +405,7 @@ function recusaDoCodigo(curso, m, valor) {
   if (outra) return outra.removida ? `O código ${valor} é de uma missão tirada do programa do ${curso.sigla} (ela guarda o código).` : `O código ${valor} já existe no ${curso.sigla}.`;
   if (codigoComResultados(curso.sigla, valor)) return `Já há resultados com o código ${valor} no ${curso.sigla}: ele não vai para outra missão (os resultados passariam para ela).`;
   const doPedido = codigoNaDemanda(curso.sigla, valor);
-  return doPedido ? `O código ${valor} está ${doPedido}: ele não vai para outra missão (o resultado do voo passaria para ela).` : '';
+  return doPedido ? `O código ${valor} está ${doPedido}: ele não vai para outra missão (o voo passaria para ela).` : '';
 }
 
 // Os campos de uma missão: o código (recusaDoCodigo), o nome, o tipo de missão, o trecho do Noturno, o recurso, as

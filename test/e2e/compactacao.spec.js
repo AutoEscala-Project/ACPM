@@ -2,7 +2,7 @@
 // (INVA, Avião ou Maior buraco) e até onde os horários mudam (na disponibilidade, só 1ª e 2ª preferência, ou não
 // mudam); a escala é refeita na hora e o tempo parado, ao lado do resumo, mostra o efeito. Os critérios ficam com
 // o dia; com a escala aprovada e no Gestor, só aparecem
-import { test, expect, abrir, abrirEscala, abrirHistorico, aprovar } from './fixtures.js';
+import { test, comHangar, expect, abrir, abrirEscala, abrirHistorico, aprovar } from './fixtures.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
 
 // Um instrutor: às 06:30 (o aluno 1000 só pode nessa hora) e o aluno 1001, que pediu 13:40 e pode a qualquer hora
@@ -18,13 +18,13 @@ test.describe('Compactação da escala', () => {
     await expect(botao(page, 'Na disponibilidade')).toHaveAttribute('aria-pressed', 'true');
     await expect(linha(page, 'Aluno 1001').locator('.c-hr')).toContainText('08:20–09:20');
     await expect(linha(page, 'Aluno 1001').locator('.c-hr')).toContainText('horário ajustado');
-    await expect(page.locator('#tempo-parado > div')).toHaveText(['0h50 INVAs parados', '0h50 aviões parados', '1 saída do hangar']);
+    await expect(page.locator('#tempo-parado > div')).toHaveText(['0h50 INVAs parados', '0h50 aviões parados']);
 
     await botao(page, 'Não mudar').click();
     await expect(botao(page, 'Não mudar')).toHaveAttribute('aria-pressed', 'true');
     await expect(linha(page, 'Aluno 1001').locator('.c-hr')).toContainText('13:40–14:40');
     await expect(linha(page, 'Aluno 1001').locator('.c-hr')).not.toContainText('horário ajustado');
-    await expect(page.locator('#tempo-parado > div')).toHaveText(['6h10 INVAs parados', '6h10 aviões parados', '2 saídas do hangar']);
+    await expect(page.locator('#tempo-parado > div')).toHaveText(['6h10 INVAs parados', '6h10 aviões parados']);
     await abrirHistorico(page);
     await expect(page.locator('#audit-log-list')).toContainText('Compactação: horários Na disponibilidade → Não mudar');
     await page.keyboard.press('Escape');
@@ -32,6 +32,15 @@ test.describe('Compactação da escala', () => {
     await page.reload();
     await abrirEscala(page);
     await expect(botao(page, 'Não mudar')).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  // Com o hangar ligado (js/funcionalidades.js), o quadro também conta as saídas do hangar, e a compactação é a mesma
+  comHangar('com o hangar ligado, o quadro também conta as saídas do hangar', async ({ page }) => {
+    await abrir(page, { estado: dia() });
+    await abrirEscala(page);
+    await expect(page.locator('#tempo-parado > div')).toHaveText(['0h50 INVAs parados', '0h50 aviões parados', '1 saída do hangar']);
+    await botao(page, 'Não mudar').click();
+    await expect(page.locator('#tempo-parado > div')).toHaveText(['6h10 INVAs parados', '6h10 aviões parados', '2 saídas do hangar']);
   });
 
   test('com a escala aprovada, os critérios só aparecem', async ({ page }) => {

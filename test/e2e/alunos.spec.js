@@ -1,5 +1,5 @@
 // Alunos: o cadastro, a busca, o filtro dos cursos e o botão armado de excluir.
-import { test, expect, abrir, abrirSintetico, abrirComExemplo, irPara, irParaVista, filtrarCursos, confirmar, AGORA, AMANHA, alvosPequenos, appPronto, botaoDaAba, campoDaData, diaSeguinte, larguraDaPagina } from './fixtures.js';
+import { test, comProgresso, expect, abrir, abrirSintetico, abrirComExemplo, irPara, irParaVista, filtrarCursos, confirmar, AGORA, AMANHA, alvosPequenos, appPronto, botaoDaAba, campoDaData, diaSeguinte, larguraDaPagina } from './fixtures.js';
 import { documentosAtuais } from './supabase-falso.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
 import { cursosIniciais } from '../../js/programa.js';
@@ -486,7 +486,7 @@ test.describe('Celular', () => {
   // cartão (o "Dados pessoais" e o ✕ saíam dele, em Alunos e, nos 320 px, em Instrutores), e a tabela não rola para o
   // lado. Na tela grande, os nomes não aparecem (a linha dos títulos está lá). Para quem só consulta, "Priorizar com" e
   // "Não escalar com" sem ninguém não aparecem (o nome sozinho, sem nada embaixo)
-  test('o cadastro no celular: um cartão por pessoa, as partes no lugar pela classe, com o nome em cima e tudo dentro dele (390 e 320 px)', async ({ page }) => {
+  comProgresso('o cadastro no celular: um cartão por pessoa, as partes no lugar pela classe, com o nome em cima e tudo dentro dele (390 e 320 px)', async ({ page }) => {
     const estado = cenario({
       ins: [instrutor(1, 9, { nm: 'Maria Fernanda dos Santos Oliveira' }), instrutor(2, 1)],
       stu: [aluno(1000, {}, { nm: 'João Pedro de Alcântara Albuquerque', curso: 'PP', voaCom: [1], bl: [2] }), aluno(1001)]

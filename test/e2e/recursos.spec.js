@@ -1,6 +1,6 @@
 // Recursos: a disponibilidade do dia (janelas, aviões e simuladores, hangar), o cadastro da frota, os horários de
 // decolagem por categoria e os filtros.
-import { test, expect, abrir, abrirSintetico, abrirComExemplo, irPara, irParaVista, abrirEscala, lerEscala, filtrarCategorias, abrirHistorico, alternarDisponivel, caixaDisponivel, janelasDeOperacao, tabelaDoDia } from './fixtures.js';
+import { test, comHangar, expect, abrir, abrirSintetico, abrirComExemplo, irPara, irParaVista, abrirEscala, lerEscala, filtrarCategorias, abrirHistorico, alternarDisponivel, caixaDisponivel, janelasDeOperacao, tabelaDoDia } from './fixtures.js';
 import { aluno, apenas, cenario, instrutor } from '../helpers/montar.js';
 import { GLOSSARIO } from '../../js/glossario.js';
 
@@ -174,7 +174,7 @@ test.describe('Recursos: acrescentar e retirar', () => {
   // Duas vistas, pelo escopo: a Disponibilidade do dia (o que vale para a data aberta: as janelas, os aviões e
   // simuladores e, ao lado da tabela, o hangar) e o Cadastro (o que vale para todas as datas: a frota e os horários de
   // decolagem). Todos os ids continuam na página, e a vista escolhida fica ao voltar à aba, até a página recarregar
-  test('Recursos em duas vistas: a Disponibilidade do dia (janelas, aviões e simuladores, hangar) e o Cadastro (frota e horários, para todas as datas)', async ({ page }) => {
+  comHangar('Recursos em duas vistas: a Disponibilidade do dia (janelas, aviões e simuladores, hangar) e o Cadastro (frota e horários, para todas as datas)', async ({ page }) => {
     await abrirSintetico(page);
     await irPara(page, 'rec');
     const secao = page.locator('#s-rec');
@@ -215,7 +215,7 @@ test.describe('Recursos: acrescentar e retirar', () => {
 
   // A partir de 1.100 px, a ordem no hangar fica ao lado da tabela dos aviões; abaixo disso, embaixo dela. A página não
   // rola de lado
-  test('a ordem no hangar fica ao lado da tabela a partir de 1.100 px, e embaixo dela nas telas menores', async ({ page }) => {
+  comHangar('a ordem no hangar fica ao lado da tabela a partir de 1.100 px, e embaixo dela nas telas menores', async ({ page }) => {
     await abrirSintetico(page);
     await irPara(page, 'rec');
     for (const [largura, aoLado] of [[1280, true], [1100, true], [1099, false], [800, false]]) {
@@ -475,7 +475,7 @@ test.describe('Recursos: a busca pela matrícula, as categorias e os grupos reco
   // As categorias ficam no filtro de vários valores, "Categoria ▾" (uma ou outra: a regra "alguma"; nenhuma marcada,
   // todas), e a busca acha a matrícula sem os acentos, sem o hífen e sem diferença de maiúsculas. Os dois valem nas duas vistas: na tabela, na frota e nos horários de
   // decolagem (por categoria), nunca no hangar. A barra diz quantos recursos aparecem; sem nenhum, "Limpar filtros"
-  test('as categorias (uma ou outra) e a busca valem para a tabela, a frota e os horários, nunca para o hangar; sem nenhum, "Limpar filtros"', async ({ page }) => {
+  comHangar('as categorias (uma ou outra) e a busca valem para a tabela, a frota e os horários, nunca para o hangar; sem nenhum, "Limpar filtros"', async ({ page }) => {
     await abrirSintetico(page);
     await irPara(page, 'rec');
     const categorias = page.locator('#flt-rec-cat'), painel = page.locator('#flt-rec-cat-painel');

@@ -15,6 +15,7 @@ import { atualizarAgendamento } from './agendamento.js';
 import { resultadoNaEscala } from './etapas.js';
 import { OPCOES_DE_BURACOS, OPCOES_DE_HORARIOS, normalizarCriterios } from '../criterios.js';
 import { metricasDaEscala } from '../metricas.js';
+import { ligada } from '../funcionalidades.js';
 import { sumUniqueOperationalHours, consolidateTimelineSlots } from '../engine.js';
 import { S, RES, AUDIT_LOG, TL_MODE, EIXO_INVERTIDO, OCULTAR_INDISPONIVEIS, DATA, isGestor, dadoIndisponivel, estadoDaEscala, inativoNaDataAberta } from '../state.js';
 import { motivoDoFixo } from '../fixos.js';
@@ -414,13 +415,14 @@ function rCompactacao(out) {
 
 const horasEMinutos = min => duracaoHm(Math.round(min));
 
-// O tempo parado que sobra na escala (sem os voos cancelados), ao lado do resumo: o efeito dos critérios da compactação
+// O tempo parado que sobra na escala (sem os voos cancelados), ao lado do resumo: o efeito dos critérios da compactação (as
+// saídas do hangar, só com o hangar ligado)
 function tempoParado(out) {
   const m = metricasDaEscala(out.filter(o => statusDe(o) !== 'Cancelado'));
   return `<div class="parado" id="tempo-parado" data-dica="tempo-parado">
       <div><strong>${horasEMinutos(m.instrutoresParadoMin)}</strong> INVAs parados</div>
       <div><strong>${horasEMinutos(m.avioesParadoMin)}</strong> aviões parados</div>
-      <div><strong>${m.saidasDoHangar}</strong> ${m.saidasDoHangar === 1 ? 'saída' : 'saídas'} do hangar</div>
+      ${ligada('hangar') ? `<div><strong>${m.saidasDoHangar}</strong> ${m.saidasDoHangar === 1 ? 'saída' : 'saídas'} do hangar</div>` : ''}
     </div>`;
 }
 

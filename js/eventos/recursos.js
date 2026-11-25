@@ -5,6 +5,7 @@ import { categoriaDoTipo } from '../categorias.js';
 import { WIN, REVISAO_H } from '../config.js';
 import { $, showToast, fecharNoEsc } from '../dom.js';
 import { fmtH, lerHoras } from '../format.js';
+import { ligada } from '../funcionalidades.js';
 import { novoRecurso, ATRIBUTOS_DO_RECURSO, atributoVale, comAtributo } from '../frota.js';
 import { normalizarHangar, moverNoHangar } from '../hangar.js';
 import { horariosDaMissao, ajustarPreferencias, descreverHorarios } from '../horarios.js';
@@ -173,6 +174,7 @@ aoAcionar('retirar-recurso', b => {
 
 // Hangar: sobe, desce ou põe na frente um avião (na data aberta; a data seguinte começa com esta ordem)
 aoAcionar(['hangar-subir', 'hangar-descer', 'hangar-frente'], b => {
+  if (!ligada('hangar')) return;
   const a = b.dataset.act;
   const r = b.dataset.id;
   S.hangar = moverNoHangar(normalizarHangar(S.hangar, S.frota.filter(f => !inativoNaDataAberta(f))), r, a.slice('hangar-'.length));

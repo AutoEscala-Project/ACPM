@@ -1,4 +1,4 @@
-import { test, expect, abrir, abrirSintetico, abrirComExemplo, irPara, abrirEscala, lerEscala, confirmar, filtrarCursos, AMANHA, abrirHistorico, aprovar, botaoAprovar, caixaVoa, campoDaData, diaSeguinte, importarDaAgenda, reabrir, tabelaDoDia, voar, registrarPedido } from './fixtures.js';
+import { test, comProgresso, expect, abrir, abrirSintetico, abrirComExemplo, irPara, abrirEscala, lerEscala, confirmar, filtrarCursos, AMANHA, abrirHistorico, aprovar, botaoAprovar, caixaVoa, campoDaData, diaSeguinte, importarDaAgenda, reabrir, tabelaDoDia, voar, registrarPedido } from './fixtures.js';
 import { aluno, cenario, instrutor, missaoExtra } from '../helpers/montar.js';
 
 const linhaDoAluno = (page, nome) => page.locator(`#dem tr[data-k="d"][data-mid="0"][data-nm="${nome.toLowerCase()}"]`);
@@ -529,7 +529,7 @@ test.describe('Voo agendado na Escala', () => {
     await expect.poll(() => fixosGravados(page)).toEqual([]);
   });
 
-  test('a próxima missão do curso (Usar) também solta o voo agendado do pedido', async ({ page }) => {
+  comProgresso('a próxima missão do curso (Usar) também solta o voo agendado do pedido', async ({ page }) => {
     const cursos = { PP: [{ id: 'PP-01', nome: 'Familiarização', mis: 'Voo Local', eq: 'C152', nb: 1 }], PC: [], INVA: [] };
     await abrir(page, { estado: dia({ pedido1000: { mis: 'Navegação' }, aluno1000: { curso: 'PP' }, cursos }) });
     await abrirEscala(page);
