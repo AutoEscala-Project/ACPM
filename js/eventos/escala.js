@@ -21,7 +21,6 @@ import { vooDaChave } from './resultados.js';
 import { pedirDetalheDoStatus } from '../views/dialogo-status.js';
 import { rOut, botaoDoInstrutor, seletorDeInstrutor, abrirPopupDoMapa, fecharPopupDoMapa, popupDoMapaAberto, reposicionarPopupDoMapa, tabNoPopup } from '../views/escala.js';
 import { abrirPainelDeReparo, fecharPainelDeReparo, opcaoDoPainel } from '../views/reparo.js';
-
 import { registrarDesenho, redesenharPorNome } from '../redesenho.js';
 
 // O desenho da Escala (js/redesenho.js): refeito em todos os momentos, quando há escala

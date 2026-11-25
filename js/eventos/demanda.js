@@ -15,7 +15,6 @@ import './importacao.js';
 import { aoAcionar, aoMudarCampo, aoReverter } from './registro.js';
 import { singleDemandRowHTML, cnt, rDem, filtrarDemanda, manterNaDemanda, prepararFiltroDosCursos, conferirNenhumNaDemanda, limparFiltrosDaDemanda } from '../views/demanda.js';
 import { proximaDoPedido, outraMissaoDoPedido, botaoForaDaOrdem, confirmacaoDaMissao } from '../views/etapas.js';
-
 import { registrarDesenho, redesenharPorNome } from '../redesenho.js';
 
 // O desenho da Demanda (js/redesenho.js), pelo papel: os pedidos do dia

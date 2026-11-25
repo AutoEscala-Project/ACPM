@@ -236,7 +236,8 @@ banco (e a chamada dela no app). A cópia `cadastro.cursos` fica.
 | `js/modelos-de-curso.js` | Os programas prontos que o Administrador põe num curso: o cronograma do Piloto Privado (P.I PPA 001A), com 9 fases e 47 missões |
 | `js/progresso.js` | A próxima missão de cada aluno pelas regras do programa (a liberada; as fora da ordem, com o motivo) e o progresso no curso |
 | `js/resultados.js` | Os resultados das missões (aprovado ou reprovado; pendente desfaz um engano): a situação de cada missão do aluno e as regras do registro, as do servidor |
-| `js/agenda.js` | Prazo da agenda de solicitações (13:00 do dia anterior) e a importação para a demanda |
+| `js/agenda.js` | Prazo da agenda de solicitações (13:00 do dia anterior), o limite de voos locais e o pedido que cada solicitação vira |
+| `js/processamento.js` | A importação dos pedidos da agenda para a demanda da data (função pura; o botão "Importar da agenda" é `js/eventos/importacao.js`) |
 | `js/csv.js` | CSV da escala agrupado por avião, para o lançamento no portal do aeroclube |
 | `js/planilha.js`, `modelos/escala-cavok.xlsx` | A escala na planilha do modelo do aeroclube (o Excel do lançamento no CAVOK): onde cada voo cai e o arquivo preenchido. O modelo é o arquivo da operação sem os dados do dia; as células que o app preenche estão em `BLOCOS` e `GROUND` (um modelo novo precisa delas nos mesmos lugares, e `test/unit/planilha.test.js` confere) |
 | `js/zip.js` | Leitura e montagem do ZIP do .xlsx, com a compressão do navegador |
@@ -261,11 +262,13 @@ banco (e a chamada dela no app). A cópia `cadastro.cursos` fica.
 | `js/dias.js` | Cadastro separado do dia, cópia do dia anterior, conversão dos dados da fase 2 e BI das escalas |
 | `js/migracoes.js` | Versões do formato dos dados guardados e os passos de uma versão para a seguinte |
 | `js/sessao.js`, `js/config-supabase.js` | Login, perfil de acesso e projeto Supabase de cada endereço |
-| `js/state.js`, `js/actions.js` | Estado da aplicação e ações (perfil, data, histórico e a escala refeita a cada alteração); `gravarAlteracao` é o único jeito de os eventos mudarem os dados, e nada grava antes de os dados da data aberta serem lidos (`lerData` lê uma data de cada vez; `aindaNaoAbriu` recusa a mudança com o aviso) |
+| `js/state.js`, `js/actions.js` | Estado da aplicação e ações (perfil, data, histórico e a escala refeita a cada alteração); `gravarAlteracao` é o único jeito de os eventos mudarem os dados, e nada grava antes de os dados da data aberta serem lidos (`lerData` lê uma data de cada vez; `aindaNaoAbriu` recusa a mudança com o aviso). A alteração é gravada antes de a tela ser redesenhada: um desenho que falha não impede a gravação nem o histórico |
+| `js/redesenho.js` | O registro dos desenhos da tela: cada tela registra o dela no módulo de eventos (`registrarDesenho`, com o nome e os momentos `dados`, `consulta`, `releitura` e `escala`); quem muda os dados redesenha por momento (`redesenhar`) ou pelo nome (`redesenharPorNome`), sem importar a tela. `test/unit/desenhos-registrados.test.js` confere os nomes e os momentos |
+| `js/sem-falhar.js` | Faz sem deixar o erro parar quem chamou (vai para o console): o foco depois de redesenhar e cada desenho da tela |
 | `js/manual.js` | Tabelas do manual geradas das regras (missões, habilitações exigidas, janelas, pesos e rodízio) |
-| `js/views/` | Renderização de cada aba |
+| `js/views/` | Renderização de cada aba: Instrutores (`instrutores.js`, com os limites da lei em `limites.js`), Alunos (`alunos.js`) e as linhas que os filtros escondem (`linhas-filtradas.js`, também da Demanda); os dados pessoais guardados fora do estado (`dados-pessoais.js`) e o painel que os edita (`painel-de-dados.js`) |
 | `js/export.js` | CSV, PDF e a planilha (Excel) |
-| `js/eventos/` | Os eventos de cada aba (um módulo por aba); `registro.js` recebe os botões com `data-act` e os campos das tabelas, com a trava de quem só consulta e a de antes de a data abrir, e `confirmacao.js` é o único jeito de confirmar (dois cliques) |
+| `js/eventos/` | Os eventos de cada aba (um módulo por aba, que registra os desenhos dela e o que "↶ Reverter" faz com os tipos de reversão dela); `registro.js` recebe os botões com `data-act`, os campos das tabelas e as reversões do Histórico (`aoAcionar`, `aoMudarCampo`, `aoReverter`), com a trava de quem só consulta e a de antes de a data abrir, e `confirmacao.js` é o único jeito de confirmar (dois cliques). Um módulo que liga eventos ao ser carregado é importado por um arquivo só, `js/main.js` ou o módulo da tela dele (`limites.js`, `painel-de-dados.js` e `importacao.js` são de Instrutores e da Demanda), e cada seletor que ele lê existe em `index.html` (`test/unit/eventos-ligados.test.js`) |
 | `js/main.js` | A abertura do app (liga os eventos, lê a sessão e os dados e abre a data) |
 
 ## Fluxo de trabalho
