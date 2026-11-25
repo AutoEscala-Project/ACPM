@@ -2,7 +2,7 @@
 // seguinte, a volta de BH às 07:30 entra sozinha na escala, com o instrutor, o aluno e o avião livres só às 10:10, e o
 // repouso antes dela é um aviso. No programa do curso, o Noturno pode vir em trechos (a ida, a noite e a volta): é um voo
 // só, oferecido pela noite
-import { test, expect, abrir, irPara, abrirEscala, prepararContexto, vigiarErros, AMANHA, entrar, campoDaAgenda, diaSeguinte, rotuloDaData } from './fixtures.js';
+import { test, comProgresso, expect, abrir, irPara, abrirEscala, prepararContexto, vigiarErros, AMANHA, entrar, campoDaAgenda, diaSeguinte, rotuloDaData } from './fixtures.js';
 import { criarSupabaseFalso, documentosAtuais, CONTAS } from './supabase-falso.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
 import { cursosIniciais, gravarCurso } from '../../js/programa.js';
@@ -69,7 +69,7 @@ test.describe('O Noturno em trechos no programa do curso', () => {
   const u = n => `00000000-0000-4000-8e00-${String(n).padStart(12, '0')}`;
   const trecho = (n, codigo, nb, nome) => ({ id: u(n), fase: u(2), codigo, nome: codigo, mis: 'Noturno', eq: 'C172', nb, trecho: nome });
 
-  test('a Demanda oferece o Noturno uma vez; Usar põe o pedido Noturno com a NOT, e o resultado dela faz os três', async ({ browser }) => {
+  comProgresso('a Demanda oferece o Noturno uma vez; Usar põe o pedido Noturno com a NOT, e o resultado dela faz os três', async ({ browser }) => {
     const { cursos } = gravarCurso({ cursos: cursosIniciais() }, {
       sigla: 'PP', versaoLida: 1, descricao: 'PP: o Noturno em trechos', conteudo: {
         nome: 'Piloto Privado', ativo: true,

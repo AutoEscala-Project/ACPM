@@ -2,6 +2,7 @@
 // situação do aluno. É parte da Escala, que importa este módulo (e vooDaChave)
 import { logChange, aindaNaoAbriu, dadosLidos } from '../actions.js';
 import { showToast } from '../dom.js';
+import { ligada } from '../funcionalidades.js';
 import { redesenharPorNome } from '../redesenho.js';
 import { S, RES, DATA, isGestor } from '../state.js';
 import { ApiClient } from '../storage.js';
@@ -16,7 +17,7 @@ export const vooDaChave = fKey => (RES && Array.isArray(RES.out) ? RES.out.find(
 // Sem conexão, o seletor volta ao que estava
 document.addEventListener('change', async e => {
   const sel = e.target.closest('[data-resultado]');
-  if (!sel || isGestor()) return;
+  if (!sel || isGestor() || !ligada('progresso')) return;
   if (aindaNaoAbriu()) { rOut(); return; }
   const o = vooDaChave(sel.dataset.resultado), curso = o ? cursoDoResultado(o) : null;
   if (!o || !o.etapa || !curso) return;

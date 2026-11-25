@@ -60,6 +60,8 @@ table.frota .acoes-frota { white-space: nowrap; text-align: right; }
 .rec-aeronaves > p.h { margin-bottom: 0; }
 @media (min-width: 1100px) {
   .rec-dia { grid-template-columns: minmax(0, 1fr) minmax(260px, 300px); align-items: start; }
+  /* Com o hangar desligado (js/funcionalidades.js), a tabela fica com a largura toda */
+  .rec-dia > :only-child { grid-column: 1 / -1; }
 }
 /* Quando os filtros não deixam nenhum recurso na frota ou nenhuma categoria nos horários de decolagem */
 .frota-cadastro > li.sem-resultado { padding: 2px 0; }

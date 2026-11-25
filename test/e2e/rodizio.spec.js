@@ -1,5 +1,5 @@
 // Aba Rodízio: as filas de cada categoria, os botões para ajustar a ordem e o efeito na escala.
-import { test, expect, abrir, irPara, abrirEscala, lerEscala, linhaDoInstrutor } from './fixtures.js';
+import { test, comHangar, expect, abrir, irPara, abrirEscala, lerEscala, linhaDoInstrutor } from './fixtures.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
 
 const doC172 = id => instrutor(id, 1, { hab: ['local', 'noturno', 'c172'] });
@@ -50,7 +50,7 @@ test.describe('Rodízio', () => {
 });
 
 // O voo cancelado não voa: não conta nos contadores da data
-test('o voo cancelado não conta no Rodízio, nos Recursos nem nos Instrutores', async ({ page }) => {
+comHangar('o voo cancelado não conta no Rodízio, nos Recursos nem nos Instrutores', async ({ page }) => {
   const estado = {
     ...cenario({ ins: [doC172(1), doC172(2)], stu: [aluno(1000, { eq: 'C172', p1: 390, p2: -1 })] }),
     fixos: { '1000_0_1': { a: 390, b: 450, r: 'PP-ABP', insId: 1 } }, fStatus: { '1000_0_1': 'Cancelado' },

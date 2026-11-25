@@ -2,7 +2,7 @@
 // acpm4_cursos). O Administrador inclui, muda, reordena e tira missões; os outros perfis só consultam. Cada alteração
 // grava o curso inteiro (não o cadastro nem o dia) e não entra no histórico da data. Cada aluno tem o curso dele, em
 // Alunos.
-import { test, expect, abrir, irPara, confirmar, abrirEscala, prepararContexto, vigiarErros, preencherLogin, AMANHA, URL_APP, entrar as entrarNoApp, abrirHistorico, appPronto, caixaVoa, diaSeguinte, rotuloDaData, alvosPequenos, larguraDaPagina, semNome } from './fixtures.js';
+import { test, comProgresso, expect, abrir, irPara, confirmar, abrirEscala, prepararContexto, vigiarErros, preencherLogin, AMANHA, URL_APP, entrar as entrarNoApp, abrirHistorico, appPronto, caixaVoa, diaSeguinte, rotuloDaData, alvosPequenos, larguraDaPagina, semNome } from './fixtures.js';
 import { criarSupabaseFalso, documentosAtuais, documentosFase3, CONTAS } from './supabase-falso.js';
 import { aluno, cenario, instrutor, missaoExtra } from '../helpers/montar.js';
 import { IDS } from '../helpers/casos-do-programa.js';
@@ -181,7 +181,7 @@ test.describe('Cursos no dia', () => {
   };
   const vooNaEscala = page => page.locator('#out tbody tr:not(.win)', { hasText: 'Aluno 1000' });
 
-  test('Usar a próxima missão; registrar o resultado na escala; o progresso e a próxima avançam; o resultado fica gravado', async ({ page }) => {
+  comProgresso('Usar a próxima missão; registrar o resultado na escala; o progresso e a próxima avançam; o resultado fica gravado', async ({ page }) => {
     await abrir(page, { estado: dia() });
     const linha = await naDemanda(page);
     await expect(linha.locator('[data-act="usar-proxima"]')).toHaveText('Próxima: PP-01 · Usar');
@@ -218,7 +218,7 @@ test.describe('Cursos no dia', () => {
     await travado();
   });
 
-  test('mudar a missão à mão tira o código do curso', async ({ page }) => {
+  comProgresso('mudar a missão à mão tira o código do curso', async ({ page }) => {
     await abrir(page, { estado: dia() });
     const linha = await naDemanda(page);
     await linha.locator('[data-act="usar-proxima"]').click();
@@ -227,7 +227,7 @@ test.describe('Cursos no dia', () => {
     await expect(linha.locator('[data-act="usar-proxima"]')).toHaveText('Próxima: PP-01 · Usar');
   });
 
-  test('no Gestor, o código e o resultado só aparecem', async ({ page }) => {
+  comProgresso('no Gestor, o código e o resultado só aparecem', async ({ page }) => {
     const estado = { ...dia(), stu: [aluno(1000, { p1: 500, p2: -1, etapa: 'PP-01' }, { curso: 'PP' })] };
     await abrir(page, { estado, url: './?role=gestor' });
     await abrirEscala(page);
@@ -253,7 +253,7 @@ test.describe('Cursos no servidor (modo compartilhado)', () => {
   const doServidor = (servidor, sigla = 'PP') => servidor.cursos.find(c => c.sigla === sigla);
   const noPrograma = (servidor, sigla = 'PP') => doServidor(servidor, sigla).missoes.filter(m => !m.removida).sort((a, b) => a.ordem - b.ordem).map(m => [m.codigo, m.nome]);
 
-  test('o operador registra; o servidor guarda com quem registrou; o gestor vê o resultado e o progresso', async ({ browser }) => {
+  comProgresso('o operador registra; o servidor guarda com quem registrou; o gestor vê o resultado e o progresso', async ({ browser }) => {
     const estado = { ...cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, { p1: 500, p2: -1, etapa: 'PP-01' }, { curso: 'PP' })] }), cursos: PROGRAMA };
     const servidor = criarSupabaseFalso(documentosAtuais(estado, AMANHA));
     const operador = await entrar(browser, servidor, CONTAS.operador);
@@ -275,7 +275,7 @@ test.describe('Cursos no servidor (modo compartilhado)', () => {
   });
 
   // A resposta que chega depois de trocar de data não vai para a data nova
-  test('o resultado registrado antes de trocar de data fica no histórico da data do voo', async ({ browser }) => {
+  comProgresso('o resultado registrado antes de trocar de data fica no histórico da data do voo', async ({ browser }) => {
     const estado = { ...cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, { p1: 500, p2: -1, etapa: 'PP-01' }, { curso: 'PP' })] }), cursos: PROGRAMA };
     const servidor = criarSupabaseFalso(documentosAtuais(estado, AMANHA));
     const operador = await entrar(browser, servidor, CONTAS.operador);
@@ -293,7 +293,7 @@ test.describe('Cursos no servidor (modo compartilhado)', () => {
   });
 
   // A resposta que chega com a data seguinte ainda abrindo (nada mais grava até ela abrir) também vai para a data do voo
-  test('o resultado que chega enquanto outra data abre fica no histórico da data do voo', async ({ browser }) => {
+  comProgresso('o resultado que chega enquanto outra data abre fica no histórico da data do voo', async ({ browser }) => {
     const estado = { ...cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, { p1: 500, p2: -1, etapa: 'PP-01' }, { curso: 'PP' })] }), cursos: PROGRAMA };
     const servidor = criarSupabaseFalso(documentosAtuais(estado, AMANHA));
     const operador = await entrar(browser, servidor, CONTAS.operador);
@@ -335,7 +335,7 @@ test.describe('Cursos no servidor (modo compartilhado)', () => {
 
   // Cada alteração grava o curso inteiro, a partir da versão confirmada pela gravação anterior, com a descrição dela; o
   // cadastro (com a cópia do programa de antes), o dia e o histórico da data não mudam
-  test('o Administrador muda o programa: só as tabelas dos cursos gravam, uma alteração depois da outra; quem abre depois vê', async ({ browser }) => {
+  comProgresso('o Administrador muda o programa: só as tabelas dos cursos gravam, uma alteração depois da outra; quem abre depois vê', async ({ browser }) => {
     const servidor = servidorComPrograma();
     const admin = await entrar(browser, servidor, CONTAS.administrador);
     const enviadas = [];
@@ -508,7 +508,7 @@ test.describe('Cursos no servidor (modo compartilhado)', () => {
 
   // Sem os programas, nada é inferido de um programa vazio: o aviso do topo e a aba Cursos dizem por quê, e "Tentar de
   // novo" lê os programas de novo
-  test('sem os programas dos cursos: o aviso, a aba Cursos sem o programa e "Tentar de novo"', async ({ browser }) => {
+  comProgresso('sem os programas dos cursos: o aviso, a aba Cursos sem o programa e "Tentar de novo"', async ({ browser }) => {
     const servidor = servidorComPrograma();
     servidor.falhar('/rpc/programa_dos_cursos');
     const admin = await entrar(browser, servidor, CONTAS.administrador, { statusEsperados: [503] });
@@ -533,7 +533,7 @@ test.describe('Cursos no servidor (modo compartilhado)', () => {
   // A Gestora (ou a Secretaria) que abriu antes da primeira abertura de um Operador vê o aviso dos programas que ainda
   // estão no cadastro. Depois que o Operador abre (e faz a conversão), "Tentar de novo" lê de novo o formato do cadastro
   // e os programas: o aviso sai, e a próxima missão, o progresso e a aba Cursos voltam, sem recarregar e sem gravar nada
-  test('depois da conversão por um Operador, "Tentar de novo" tira o aviso dos programas que esperavam por ela', async ({ browser }) => {
+  comProgresso('depois da conversão por um Operador, "Tentar de novo" tira o aviso dos programas que esperavam por ela', async ({ browser }) => {
     const estado = ApiClient.normalizeAndMigrateState({ ...cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, {}, { curso: 'PP' })] }), cursos: PROGRAMA });
     const servidor = criarSupabaseFalso(documentosFase3(estado, AMANHA));
     const gestor = await entrar(browser, servidor, CONTAS.gestor);
@@ -708,7 +708,7 @@ test.describe('Cursos no servidor (modo compartilhado)', () => {
 
   // Sem os resultados (a leitura falhou), a fase de cada aluno não se conhece: os alunos do curso vêm pelo nome, e o índice
   // das fases, sem as contas; "Tentar de novo" lê os resultados, e os alunos vão para as fases
-  test('sem os resultados, os alunos do curso vêm pelo nome e o índice das fases, sem as contas', async ({ browser }) => {
+  comProgresso('sem os resultados, os alunos do curso vêm pelo nome e o índice das fases, sem as contas', async ({ browser }) => {
     const { f1, f2, m1, m2 } = IDS;
     const { cursos } = gravarCurso({ cursos: cursosIniciais() }, {
       sigla: 'PP', versaoLida: 1, descricao: 'PP: o programa em fases', conteudo: {
@@ -831,7 +831,7 @@ test.describe('Cursos: fases, módulos e quando voar', () => {
 
   // As exceções do PP são dados do programa: o SPIN livre na Fase 5, a Fase 6 (impressa depois da 8) depois da Fase 4 e
   // a ADAPTAÇÃO dispensada. A próxima missão da Demanda (a primeira liberada, na ordem do programa) as segue
-  test('o Administrador monta as exceções do PP, e a próxima missão da Demanda as segue', async ({ page }) => {
+  comProgresso('o Administrador monta as exceções do PP, e a próxima missão da Demanda as segue', async ({ page }) => {
     const resultados = [...aprovadas(1000, ['TMA-05', 'PE-03', 'PE-04'], 1), ...aprovadas(1001, ['TMA-05', 'PE-03', 'PE-04', 'END-SOLO', 'NAV-SOLO-01'], 10)];
     await abrirComPrograma(page, { conteudo: CRONOGRAMA, resultados });
     await naDemanda(page);
@@ -1066,7 +1066,7 @@ test.describe('Cursos: fases, módulos e quando voar', () => {
     await expect(nova).toHaveValue('PP-02');
     await nova.fill('TMA-06');
     await nova.press('Tab');
-    await expect(toast).toContainText('O código TMA-06 está na Demanda de amanhã (João): ele não vai para outra missão (o resultado do voo passaria para ela).');
+    await expect(toast).toContainText('O código TMA-06 está na Demanda de amanhã (João): ele não vai para outra missão (o voo passaria para ela).');
     await expect(nova).toHaveValue('PP-02');
 
     // O código livre muda; a alteração diz o de antes
@@ -1207,7 +1207,7 @@ test.describe('Cursos: cursos novos, encerrar, o cronograma do PP e o curso de c
   const valores = campos => campos.evaluateAll(els => els.map(e => e.value));
   const aprovada = (aluno, missao, id) => ({ id, aluno, curso: 'PP', missao, resultado: 'aprovado', data: '2026-11-05', voo: null, registrado_em: '2026-11-05T12:00:00.000Z', registrado_por: 'Operador' });
 
-  test('um curso novo: a sigla e o nome conferidos no formulário; criado, ele vale em Alunos, e o resultado de um voo vai para ele', async ({ page }) => {
+  comProgresso('um curso novo: a sigla e o nome conferidos no formulário; criado, ele vale em Alunos, e o resultado de um voo vai para ele', async ({ page }) => {
     const estado = cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, {}, { curso: 'PP' }), aluno(1001, { fly: false, p1: 500, p2: -1 })] });
     await abrirComCursos(page, { estado });
     await irPara(page, 'cur');
@@ -1376,7 +1376,7 @@ test.describe('Cursos: cursos novos, encerrar, o cronograma do PP e o curso de c
     expect((await programaGuardado(page)).cursos.find(c => c.sigla === 'PC')).toMatchObject({ nome: 'Piloto Comercial ACPM', ativo: true, versao: 4 });
   });
 
-  test('no PP vazio, "Usar o cronograma do PP": dois cliques, com o resumo; as 9 fases, com a Fase 6 depois da Fase 4 e o Noturno em trechos', async ({ page }) => {
+  comProgresso('no PP vazio, "Usar o cronograma do PP": dois cliques, com o resumo; as 9 fases, com a Fase 6 depois da Fase 4 e o Noturno em trechos', async ({ page }) => {
     const estado = cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, { fly: false }, { curso: 'PP' })] });
     await abrirComCursos(page, { estado });
     await irPara(page, 'cur');
@@ -1410,7 +1410,7 @@ test.describe('Cursos: cursos novos, encerrar, o cronograma do PP e o curso de c
 
   // O PP trazido do cadastro (uma fase só, "Programa"), com resultados na IN-01 e na PP-02: a IN-01 (código do cronograma)
   // fica, com o mesmo id e os resultados; a PP-02 sai do programa (os resultados ficam); a fase "Programa" também sai
-  test('no PP trazido do cadastro, o cronograma mantém o código que já tem resultados e tira o resto do programa', async ({ page }) => {
+  comProgresso('no PP trazido do cadastro, o cronograma mantém o código que já tem resultados e tira o resto do programa', async ({ page }) => {
     const plano = {
       nome: 'Piloto Privado', ativo: true, fases: [{ id: u(1), nome: 'Programa' }],
       missoes: [
@@ -1447,7 +1447,7 @@ test.describe('Cursos: cursos novos, encerrar, o cronograma do PP e o curso de c
 
   // O trecho do Noturno de cada missão Noturno: o Noturno desmanchado é recusado com o motivo (a tela volta a mostrar como
   // estava); quem só consulta lê o trecho em texto
-  test('o trecho do Noturno: a lista nas missões Noturno, a recusa do Noturno desmanchado e o texto para quem só consulta', async ({ page }) => {
+  comProgresso('o trecho do Noturno: a lista nas missões Noturno, a recusa do Noturno desmanchado e o texto para quem só consulta', async ({ page }) => {
     const [F4, F6, TMA05, TSL01, NOT, TSL02] = [4, 6, 21, 22, 23, 24].map(u);
     const noturno = (id, codigo, nb = 1) => ({ id, fase: F6, codigo, nome: codigo, mis: 'Noturno', eq: 'C172', nb });
     const plano = {
@@ -1573,7 +1573,7 @@ test.describe('Cursos: um de cada vez, o índice das fases, as fases recolhívei
     await expect(botoes).toHaveText(['PP · Piloto Privado', 'PC · Piloto Comercial', 'INVA · Instrutor de Voo']);
   });
 
-  test('os alunos por fase e o índice das fases: o link leva à fase, sem mudar o endereço, com o foco no título dela', async ({ page }) => {
+  comProgresso('os alunos por fase e o índice das fases: o link leva à fase, sem mudar o endereço, com o foco no título dela', async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 400 });
     await abrirComOsCursos(page);
     await irPara(page, 'cur');
@@ -1716,7 +1716,7 @@ test.describe('Cursos: um de cada vez, o índice das fases, as fases recolhívei
   });
 
   // Sem nenhum resultado, os três estão na Fase 1; o programa com uma fase só não tem índice, e os alunos vêm pelo nome
-  test('sem resultados, todos na primeira fase; com uma fase só, sem o índice e com os alunos pelo nome', async ({ page }) => {
+  comProgresso('sem resultados, todos na primeira fase; com uma fase só, sem o índice e com os alunos pelo nome', async ({ page }) => {
     await abrirComOsCursos(page, { resultados: [] });
     await irPara(page, 'cur');
     const pp = curso(page, 'PP');

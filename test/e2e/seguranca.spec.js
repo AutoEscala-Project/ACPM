@@ -1,7 +1,7 @@
 // Conteúdo gravado malicioso: quem tem uma conta de operador consegue gravar qualquer coisa no
 // cadastro, no dia, na escala salva e no histórico pela API. Nada disso pode virar HTML ou script em nenhuma tela: o
 // app escapa tudo o que mostra (texto e atributos) e, ao abrir, só aceita os valores que ele mesmo produz.
-import { test, expect, irPara, prepararContexto, vigiarErros, AMANHA, preencherLogin, URL_APP, ABAS, abrirHistorico, appPronto, botaoDaAba, caixaDisponivel } from './fixtures.js';
+import { test, comTodasAsFuncionalidades, expect, irPara, prepararContexto, vigiarErros, AMANHA, preencherLogin, URL_APP, ABAS, abrirHistorico, appPronto, botaoDaAba, caixaDisponivel } from './fixtures.js';
 import { documentosAtuais, instalarSupabaseFalso, CONTAS } from './supabase-falso.js';
 import { runAllocationEngine } from '../../js/engine.js';
 import { aluno, cenario, instrutor, missaoExtra, GROUND_C152 } from '../helpers/montar.js';
@@ -120,7 +120,8 @@ async function percorrer(page) {
 }
 
 test.describe('Conteúdo gravado malicioso', () => {
-  test('textos maliciosos nos campos de texto aparecem como texto, em todas as telas', async ({ page }) => {
+  // Com as funcionalidades que podem ficar desligadas: o hangar, a próxima missão, o progresso e os resultados também
+  comTodasAsFuncionalidades('textos maliciosos nos campos de texto aparecem como texto, em todas as telas', async ({ page }) => {
     await abrirCom(page, documentos());
     await percorrer(page);
     await irPara(page, 'alu');
@@ -220,7 +221,7 @@ test.describe('Conteúdo gravado malicioso', () => {
     return docs;
   };
 
-  test('valores fora do formato gravados no dia, na escala, no histórico e no programa não viram HTML nem quebram a tela', async ({ page }) => {
+  comTodasAsFuncionalidades('valores fora do formato gravados no dia, na escala, no histórico e no programa não viram HTML nem quebram a tela', async ({ page }) => {
     await abrirCom(page, documentos(adulterados));
     await percorrer(page);
     // Do programa adulterado, a aba Cursos mostra o que está no formato: os cursos de sigla certa (um botão para cada, no
@@ -260,7 +261,7 @@ test.describe('Conteúdo gravado malicioso', () => {
     await nada(page);
   });
 
-  test('no modo compartilhado: o conteúdo adulterado vindo do servidor, no app e na TV', async ({ browser }) => {
+  comTodasAsFuncionalidades('no modo compartilhado: o conteúdo adulterado vindo do servidor, no app e na TV', async ({ browser }) => {
     const docs = documentos(adulterados);
     const contexto = await browser.newContext({ baseURL: test.info().project.use.baseURL, locale: 'pt-BR', timezoneId: 'America/Sao_Paulo' });
     await prepararContexto(contexto);

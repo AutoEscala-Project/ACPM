@@ -10,6 +10,7 @@ import { situacaoPorMissao, resultadoDoVoo } from '../resultados.js';
 import { S, isGestor, stuBy, dadoIndisponivel, getMissionTarget } from '../state.js';
 import { esc, opts, fmtDurLabel } from '../format.js';
 import { duracaoFixaDaMissao } from '../rules.js';
+import { ligada } from '../funcionalidades.js';
 
 const resultados = () => S.resultados || { situacao: [], doDia: [] };
 // A situação de cada missão, calculada uma vez por leitura dos resultados (registrar um resultado troca a lista)
@@ -22,8 +23,10 @@ function situacao() {
 
 // O programa de onde saem a próxima missão, o progresso e a missão dos pedidos da agenda: o das tabelas dos cursos, lido
 // com a data; nenhum quando faltam os resultados ou os programas, ou quando eles ainda esperam a conversão do cadastro
-// (nada é inferido de uma situação ou de um programa vazios), e nenhum antes de a data abrir
+// (nada é inferido de uma situação ou de um programa vazios), e nenhum antes de a data abrir. Com o progresso desligado
+// (js/funcionalidades.js), nenhum: sem a próxima missão, as outras do curso, o progresso, a fase e a missão na importação
 export function programaParaInferir() {
+  if (!ligada('progresso')) return [];
   if (['resultados', 'cursos', 'cursos-pendentes'].some(parte => dadoIndisponivel(parte))) return [];
   return S.programa || [];
 }
@@ -172,12 +175,14 @@ export function cursoDoResultado(o) {
   return (pedido && pedido.etapa === o.etapa && pedido.cursoDaEtapa) || (stu && stu.curso) || null;
 }
 
-// Na escala, com o status do aluno: o código da missão do curso e o resultado (o operador registra; os outros veem)
+// Na escala, com o status do aluno: o código da missão do curso e o resultado (o operador registra; os outros veem). Com o
+// progresso desligado, só o código (os resultados registrados continuam guardados)
 export function resultadoNaEscala(o) {
   if (!o.etapa) return '';
+  const codigo = `<span class="etapa" data-dica="missao-do-curso">${esc(o.etapa)}</span>`;
+  if (!ligada('progresso')) return `<span class="resultado">${codigo}</span>`;
   const registrado = resultadoDoVoo(resultados().doDia, o.fKey);
   const atual = ['aprovado', 'reprovado'].includes(registrado) ? registrado : 'pendente';
-  const codigo = `<span class="etapa" data-dica="missao-do-curso">${esc(o.etapa)}</span>`;
   if (isGestor() || !cursoDoResultado(o)) {
     return `<span class="resultado">${codigo}${atual !== 'pendente' ? ` <span class="res res-${atual}">${atual === 'aprovado' ? 'Aprovado' : 'Reprovado'}</span>` : ''}</span>`;
   }
