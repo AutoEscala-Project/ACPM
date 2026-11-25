@@ -7,7 +7,8 @@ import assert from 'node:assert/strict';
 import { runAllocationEngine } from '../../js/engine.js';
 import { pinoDoVoo } from '../../js/fixos.js';
 import { hm } from '../../js/format.js';
-import { cancelamentoAproveitavel, sugerirParaCancelado, aproveitarCancelado, desfazerAproveitamento, sugestoesDoRejeitado } from '../../js/reparo.js';
+import { cancelamentoAproveitavel, sugerirParaCancelado, aproveitarCancelado, desfazerAproveitamento, sugestoesDoRejeitado, sugerirReparos } from '../../js/reparo.js';
+import { validarReversao } from '../../js/reversoes.js';
 import { rejeicoesDosPedidos } from '../../js/rejeicoes.js';
 import { pedidoDoAluno } from '../../js/voo.js';
 import { gerarCenario, comEscolhas } from '../helpers/cenarios.js';
@@ -170,5 +171,45 @@ describe('O pedido recusado pelo instrutor escolhido', () => {
       }
     }
     assert.ok(vistas > 0, 'nenhuma sugestão nas sementes');
+  });
+});
+
+describe('A disponibilidade do pedido e a lista do conflito', () => {
+  it('o horário dentro da disponibilidade vem antes do mais perto fora dela', () => {
+    // O voo das 11:30, disponível só de manhã, cancelado pela meteorologia: as 10:10 (manhã) antes das 12:40 (tarde)
+    const { estado, resultado, voo } = cancelado(cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, { p1: 690, p2: -1, jan: 'manha' })] }), 1000, 'Meteorologia');
+    assert.equal(hm(voo.a), '11:30');
+    const [primeira] = sugerirParaCancelado(estado, resultado, voo.fKey).opcoes;
+    assert.equal(hm(primeira.mudancas.a), '10:10');
+    assert.equal(primeira.confirmar, undefined);
+  });
+
+  it('o conflito sem nada no mesmo horário nem depois ganha o horário mais perto antes, dentro da disponibilidade', () => {
+    // O instrutor só pode até as 12:00 (período da tarde fechado para ele): o voo das 14:30 não tem nada depois
+    const base = cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, { p1: 870, p2: -1 })] });
+    const antes = runAllocationEngine(base);
+    const v0 = antes.out[0];
+    const aw = Array(9).fill(true); for (let w = 4; w < 9; w++) aw[w] = false;
+    const estado = { ...base, fixos: { [v0.fKey]: pinoDoVoo(v0) }, ins: [instrutor(1, 9, { aw })] };
+    const resultado = runAllocationEngine(estado);
+    const voo = resultado.out[0];
+    assert.ok(voo.conflito);
+    const opcoes = sugerirReparos(estado, resultado, voo.fKey).filter(o => o.mudancas);
+    assert.ok(opcoes.length > 0, 'o horário de antes aparece');
+    assert.ok(opcoes.every(o => o.mudancas.a < voo.a && !o.confirmar));
+  });
+});
+
+describe('A reversão do aproveitamento', () => {
+  it('validarReversao aceita a que aproveitarCancelado devolve e recusa as malformadas', () => {
+    const { estado, resultado, voo } = cancelado(cenario({ ins: [instrutor(1, 9), instrutor(2, 9)], stu: [aluno(1000, { p1: 390, p2: -1 })] }), 1000, 'Instrutor indisponível');
+    const [opcao] = sugerirParaCancelado(estado, resultado, voo.fKey).opcoes;
+    const rev = aproveitarCancelado(estado, resultado, voo.fKey, opcao);
+    const valida = validarReversao({ ...rev, label: '↶ Reverter' }, estado.frota);
+    assert.deepEqual(valida.voos, rev.voos);
+    assert.equal(valida.pedidos.length, 1);
+    for (const ruim of [{ ...rev, voos: [] }, { ...rev, voos: [{ fKey: 'x' }] }, { ...rev, pedidos: [{ stuId: 1000, mid: 0, pedido: { mis: 'Inexistente', fly: true } }] }]) {
+      assert.equal(validarReversao(ruim, estado.frota), null);
+    }
   });
 });

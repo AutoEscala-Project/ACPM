@@ -208,8 +208,10 @@ function buscaDoVoo(estado, resultado, voo, grupo, { depoisDe = null, semInstrut
       ...(fora || outroTipo ? { confirmar: `Confirme com o aluno: ${[fora ? `às ${hm(m)}, fora da disponibilidade do pedido` : '', outroTipo ? `no ${tipo}` : ''].filter(Boolean).join(', ')}.` } : {})
     };
   };
-  // Os horários de um tipo, do mais perto do voo para o mais longe (empatados, o mais cedo)
-  const pertoDoVoo = lista => [...lista].sort((x, y) => Math.abs(x - voo.a) - Math.abs(y - voo.a) || x - y);
+  // Os horários de um tipo: primeiro os da disponibilidade do pedido, depois os de fora (que pedem a confirmação com o
+  // aluno); em cada parte, do mais perto do voo para o mais longe (empatados, o mais cedo)
+  const pertoDoVoo = lista => [...lista].sort((x, y) => Number(!naDisponibilidade(x)) - Number(!naDisponibilidade(y))
+    || Math.abs(x - voo.a) - Math.abs(y - voo.a) || x - y);
 
   return {
     tipoDoVoo,
