@@ -417,7 +417,10 @@ test.describe('Cursos no servidor (modo compartilhado)', () => {
     expect(admin.page.isClosed(), 'quem desiste continua na página').toBe(false);
     liberar();
     await expect.poll(() => noPrograma(servidor)).toEqual([['PP-01', 'Familiarização no C152'], ['PP-02', 'Navegação']]);
-    await expect.poll(() => admin.page.evaluate(async () => (await import('./js/eventos/cursos.js')).programaSendoGravado())).toBe(false);
+    await expect.poll(() => admin.page.evaluate(async () => {
+      const { programaSendoGravado } = await import('./js/eventos/cursos.js');
+      return programaSendoGravado();
+    })).toBe(false);
     let perguntou = false;
     admin.page.once('dialog', async d => { perguntou = true; await d.dismiss(); });
     await admin.page.close({ runBeforeUnload: true });
@@ -1701,7 +1704,10 @@ test.describe('Cursos: um de cada vez, o índice das fases, as fases recolhívei
   test('a aba refeita deixa o foco no botão do curso, no título da fase, no link do índice e em "Recolher todas"', async ({ page }) => {
     await abrirComOsCursos(page);
     await irPara(page, 'cur');
-    const refazer = () => page.evaluate(async () => (await import('./js/views/cursos.js')).rCursos());
+    const refazer = () => page.evaluate(async () => {
+      const { rCursos } = await import('./js/views/cursos.js');
+      rCursos();
+    });
     for (const seletor of ['#cur-ver-INVA', `#cursos [data-recolher-fase="${F2}"]`, `#cursos [data-ir-fase="${F3}"]`, '#fases-recolher']) {
       await page.locator(seletor).focus();
       await refazer();

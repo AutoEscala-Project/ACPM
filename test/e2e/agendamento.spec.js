@@ -339,7 +339,10 @@ test.describe('Agendar um voo na Escala', () => {
       await abrirComCurso(page);
       await abrirDialogo(page);
       await page.locator(alvo).focus();
-      await page.evaluate(() => import('./js/actions.js').then(m => m.travarAposConflito()));
+      await page.evaluate(async () => {
+        const { travarAposConflito } = await import('./js/actions.js');
+        travarAposConflito();
+      });
       await expect(page.locator('#agd-erro')).toHaveText('A tela ficou só para consulta: o voo não foi agendado.');
       await expect(page.locator(alvo)).toBeDisabled();
       await expect(page.locator('#agd-voltar')).toBeFocused();
