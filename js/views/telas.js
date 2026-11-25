@@ -28,15 +28,15 @@ const perfilAtual = () => ApiClient.perfil || null;
 
 // No celular, a faixa da navegação rola para o lado: o link da tela aberta vem inteiro para a parte à vista dela
 function mostrarNaFaixa(link) {
-  const faixa = link && link.closest('#nav, #linha');
+  const faixa = link && link.closest('#linha .linha-corpo');
   if (!faixa) return;
   const b = link.getBoundingClientRect(), f = faixa.getBoundingClientRect();
   if (b.left < f.left) faixa.scrollLeft -= f.left - b.left;
   else if (b.right > f.right) faixa.scrollLeft += b.right - f.right;
 }
 
-// A tela de um controle da navegação: o href (#/<tela>) ou, nas abas, data-t
-const telaDoControle = el => el.dataset.t || (destinoDoEndereco(el.getAttribute('href')) || {}).tela;
+// A tela de um controle da navegação: o href (#/<tela>)
+const telaDoControle = el => (destinoDoEndereco(el.getAttribute('href')) || {}).tela;
 
 // Um id de elemento dentro de uma tela ('#manual-aba-rodizio', do índice do Manual): a tela dele, com o lugar deixado ao
 // navegador; senão, a tela do endereço
@@ -134,7 +134,7 @@ export function ligarEndereco() {
   window.addEventListener('hashchange', aoMudarEndereco);
 }
 
-// A navegação feita por um controle que não é um link (as abas, o menu da conta)
+// A navegação feita por um controle que não é um link (o menu da conta)
 export function escolherTela(id, opcoes = {}) {
   escolhida = true;
   return mostrarTela(id, { historico: id === aberta && !opcoes.item ? 'nenhum' : 'empilhar', ...opcoes });

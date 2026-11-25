@@ -1,19 +1,13 @@
-// A navegação: as abas (as telas e o endereço ficam em js/views/telas.js), as vistas da Escala (por recurso, por
+// Os controles das telas que não são navegação (as telas, a linha e o endereço ficam em js/views/telas.js e
+// js/eventos/linha.js): as vistas da Escala (por recurso, por
 // instrutor, lista, painel), o eixo invertido do mapa e os recursos indisponíveis fora dele, os horários que recolhem na Lista e os botões de todos do BI
 import { setTLMode, setEixoInvertido, EIXO_INVERTIDO, setOcultarIndisponiveis, OCULTAR_INDISPONIVEIS } from '../state.js';
 import { alternarTodosDoBI } from '../views/bi.js';
 import { abrirConfigDoPainel } from '../views/config-do-painel.js';
 import { rOut, alternarTempo } from '../views/escala.js';
 import { acaoDoPainel } from '../views/painel-aeroporto.js';
-import { escolherTela } from '../views/telas.js';
 
 document.addEventListener('click', e => {
-  // Uma aba: a tela dela (o foco fica na aba; de novo na aba aberta, a tela lê os dados outra vez)
-  const aba = e.target.closest('#nav [data-t]');
-  if (aba) {
-    escolherTela(aba.dataset.t);
-    return;
-  }
   const tlBtn = e.target.closest('[data-tl]');
   if (tlBtn) {
     setTLMode(tlBtn.dataset.tl);

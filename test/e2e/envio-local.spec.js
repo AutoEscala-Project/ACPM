@@ -32,10 +32,10 @@ test.describe('Envio dos dados do navegador para o servidor', () => {
 
     await expect(page.locator('#envio-local')).toBeVisible();
     await expect(page.locator('#envio-local')).toContainText('40 instrutores e 3 alunos');
-    await expect(page.locator('#nav')).toBeHidden();
+    await expect(page.locator('#linha')).toBeHidden();
     await page.locator('#btn-enviar-local').click();
 
-    await expect(page.locator('#nav')).toBeVisible();
+    await expect(page.locator('#linha')).toBeVisible();
     await expect.poll(() => servidor.banco.get('cadastro') && servidor.banco.get('cadastro').conteudo.stu.length).toBe(3);
     expect([...servidor.dias.keys()].sort()).toEqual(['2026-11-09', '2026-11-11']);
     expect(servidor.historico.filter(h => h.importado).map(h => h.descricao)).toEqual(['Aluno cadastrado: Aluno 1000']);
@@ -49,7 +49,7 @@ test.describe('Envio dos dados do navegador para o servidor', () => {
     await abrirComDadosLocais(page, dadosLocais());
     await preencherLogin(page, CONTAS.operador);
     await page.locator('#btn-ignorar-local').click();
-    await expect(page.locator('#nav')).toBeVisible();
+    await expect(page.locator('#linha')).toBeVisible();
     await irPara(page, 'alu');
     await expect(page.locator('#alu .cd')).toHaveCount(0);
     expect(servidor.banco.has('cadastro')).toBe(false);
@@ -59,7 +59,7 @@ test.describe('Envio dos dados do navegador para o servidor', () => {
     const servidor = await instalarSupabaseFalso(context, documentosAtuais(estadoSintetico(), '2026-11-11'));
     await abrirComDadosLocais(page, dadosLocais());
     await preencherLogin(page, CONTAS.operador);
-    await expect(page.locator('#nav')).toBeVisible();
+    await expect(page.locator('#linha')).toBeVisible();
     await expect(page.locator('#envio-local')).toBeHidden();
     await irPara(page, 'alu');
     await expect(page.locator('#alu .cd')).toHaveCount(0);
@@ -70,7 +70,7 @@ test.describe('Envio dos dados do navegador para o servidor', () => {
     const servidor = await instalarSupabaseFalso(context);
     await abrirComDadosLocais(page, dadosLocais());
     await preencherLogin(page, CONTAS.gestor);
-    await expect(page.locator('#nav')).toBeVisible();
+    await expect(page.locator('#linha')).toBeVisible();
     await expect(page.locator('#envio-local')).toBeHidden();
     expect(servidor.gravacoes).toEqual([]);
   });

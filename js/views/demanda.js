@@ -110,7 +110,7 @@ export const rDem = () => {
   // As opções do filtro dos cursos acompanham os programas e os cursos dos alunos
   if (filtroDosCursos) filtroDosCursos.desenhar();
   if (!S.stu.length) {
-    trocarConteudo($('#dem'), `<tr class="empty-dem"><td colspan="10" class="h" style="padding:16px">Nenhum aluno cadastrado. Cadastre os alunos na aba Alunos.</td></tr>`);
+    trocarConteudo($('#dem'), `<tr class="empty-dem"><td colspan="10" class="h" style="padding:16px">Nenhum aluno cadastrado. Cadastre os alunos em Alunos.</td></tr>`);
     cnt();
     renderAuditPanel();
     return;

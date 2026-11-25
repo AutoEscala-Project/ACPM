@@ -1,13 +1,13 @@
-/* A casca do app: a barra do topo, a data, o menu da conta, as abas, o que cada perfil vê, as seções, o link que pula a barra,
-   o login, o modo compartilhado, os avisos do alto e a impressão */
-/* Topo: marca, a data em uso no meio e as ferramentas à direita; as abas logo abaixo */
+/* A casca do app: a barra do topo, a data, o menu da conta, o que cada perfil vê, as telas, o link que pula a barra, o
+   login, o modo compartilhado, os avisos do alto e a impressão (a linha de produção fica em css/linha.css) */
+/* Topo, numa fileira: marca, a data em uso no meio e as ferramentas à direita */
 header.topo {
   background: var(--hd);
   color: var(--hdT);
-  padding: 8px 20px 0;
+  padding: 8px 20px;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-  grid-template-areas: "marca data ferramentas" "abas abas abas";
+  grid-template-areas: "marca data ferramentas";
   align-items: center;
   column-gap: 12px;
   row-gap: 4px;
@@ -103,27 +103,13 @@ a.hd-btn { text-decoration: none; }
 #btn-theme[aria-checked="true"] .tema-trilho { background: var(--ac); }
 #btn-theme[aria-checked="true"] .tema-botao { left: 16px; }
 #btn-theme[aria-checked="false"] .ico:first-child, #btn-theme[aria-checked="true"] .ico:last-child { color: var(--ink); }
-/* Abas: sem número, na ordem de uso; a ativa sublinhada em amarelo; selos de atenção */
-nav#nav { grid-area: abas; display: flex; align-items: center; gap: 2px; margin: 0 -8px; overflow-x: auto; scrollbar-width: none; }
-nav#nav::-webkit-scrollbar { display: none; }
-nav#nav button {
-  background: transparent; color: #C9D6E2; border: 0; border-bottom: 3px solid transparent; border-radius: 0;
-  padding: 9px 12px 8px; font: 600 15px 'Barlow Semi Condensed', sans-serif; cursor: pointer; white-space: nowrap;
-  display: inline-flex; gap: 6px; align-items: center; transition: color .15s;
-}
-nav#nav button:hover:not(.on) { color: #fff; }
-nav#nav button.on { color: #fff; border-bottom-color: var(--ye); }
-/* As abas rolam de lado (overflow): o anel desenhado fora da aba seria cortado em cima e embaixo; fica por dentro */
-nav#nav button:focus-visible { outline-offset: -4px; }
-.aba-sep { width: 1px; height: 18px; background: rgba(255,255,255,.15); margin: 0 6px; flex: none; }
+/* O selo do botão da Disponibilidade do dia, em Recursos (os aviões parados ou perto da revisão) */
 .aba-selo { min-width: 18px; height: 18px; border-radius: 9px; padding: 0 5px; font: 700 11px/18px 'Barlow', sans-serif; background: rgba(255,255,255,.18); color: #fff; text-align: center; }
 .aba-selo.aviso { background: var(--ye); color: #12263A; }
 .aba-selo.erro { background: #C62828; color: #fff; }
-/* A Secretaria trabalha na agenda: só a Agenda e as abas que ela consulta (Escala, Instrutores, Alunos e Cursos); sem a
-   Demanda, também sem o link para ela, em Alunos */
-body[data-perfil="secretaria"] #nav button:not([data-t="age"]):not([data-t="esc"]):not([data-t="ins"]):not([data-t="alu"]):not([data-t="cur"]),
+/* A Secretaria trabalha na agenda: as telas que ela vê são as da linha (js/telas.js); sem a Demanda, também sem o link
+   para ela, em Alunos, nem o Histórico e o Compartilhar */
 body[data-perfil="secretaria"] .ir-para-demanda,
-body[data-perfil="secretaria"] .aba-sep,
 body[data-perfil="secretaria"] #btn-open-log,
 body[data-perfil="secretaria"] #btn-share-link { display: none !important; }
 /* Com a data no meio, as ferramentas precisam de cerca de 1290 px; sem caber, elas cobririam a data. Abaixo disso, a data
@@ -133,13 +119,13 @@ body[data-perfil="secretaria"] #btn-share-link { display: none !important; }
   header.topo { grid-template-columns: minmax(0, 1fr) auto auto; }
 }
 @media (max-width: 1029px) {
-  header.topo { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "marca data" "ferramentas ferramentas" "abas abas"; }
+  header.topo { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "marca data" "ferramentas ferramentas"; }
 }
 /* No celular não cabem a marca e a data na mesma linha: a data ocupa a segunda linha inteira (o tamanho fixo mantém as
    setas no lugar quando a data muda), e as ferramentas, só com os ícones, ficam ao lado da marca. Aqui o Tab passa pela
    data antes das ferramentas, que estão acima dela */
 @media (max-width: 640px) {
-  header.topo { grid-template-areas: "marca ferramentas" "data data" "abas abas"; padding: 8px 12px 0; }
+  header.topo { grid-template-areas: "marca ferramentas" "data data"; padding: 8px 12px; }
   .hd-sel { max-width: 110px; }
   .topo-marca { font-size: 18px; }
   .topo-logo { height: 20px; }
@@ -179,7 +165,7 @@ body[data-role="gestor"] main select:not(.flt-ctrl):not(.agenda-campo):not(.cont
 #s-login { display: none; max-width: 420px; margin: 32px auto; }
 body[data-login] #s-login { display: block; }
 body[data-login] main#conteudo > section:not(#s-login),
-body[data-login] #nav,
+body[data-login] #linha,
 body[data-login] .topo-data,
 body[data-login] .hd-tools > :not(.menu-conta) { display: none !important; }
 body[data-backend="supabase"] #role-sel { display: none; }
@@ -198,7 +184,7 @@ body[data-backend="supabase"] #btn-bi-clr { display: none !important; }
 }
 .aviso-link.ok { border-color: var(--ok); }
 @media print {
-  header.topo, #nav, .avisos-do-app, .gaveta, #tl-pop, .bar, main#conteudo > section:not(#s-esc), #toast-box { display: none !important; }
+  header.topo, #linha, .avisos-do-app, .gaveta, #tl-pop, .bar, main#conteudo > section:not(#s-esc), #toast-box { display: none !important; }
   main#conteudo > section#s-esc { display: block; }
   .casca { display: block; max-width: none; }
   /* Os botões que agendam não vão para o papel */
@@ -209,5 +195,4 @@ body[data-backend="supabase"] #btn-bi-clr { display: none !important; }
   /* Com largura mínima, o item não encolhe mais que o próprio texto (flex-shrink: 0) */
   .topo-ico, .hd-btn, .hd-conta { min-width: 44px; min-height: 44px; justify-content: center; flex-shrink: 0; }
   .hd-sel, .topo-data-campo { min-height: 44px; }
-  nav#nav button { min-width: 44px; min-height: 44px; justify-content: center; flex: none; }
 }

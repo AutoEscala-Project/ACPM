@@ -632,7 +632,7 @@ export function rOut() {
   if (!RES || (!RES.out.length && !RES.al.length)) {
     // Sem voos, nas vistas do mapa, a grade das linhas livres fica embaixo do texto: o "+" e o clique agendam nela
     const grade = renderVisualTimeline([], linhasLivres(filtrosDaEscala([])));
-    trocarConteudo($('#out'), `<p class="h">Nenhum voo nesta data. Marque quem vai voar na aba Demanda: a escala é montada automaticamente.</p>${grade}`);
+    trocarConteudo($('#out'), `<p class="h">Nenhum voo nesta data. Marque quem vai voar na Demanda: a escala é montada automaticamente.</p>${grade}`);
     rCompactacao([]);
     rAprovacao(false);
     atualizarPainelDeReparo();

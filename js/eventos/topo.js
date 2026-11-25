@@ -8,13 +8,13 @@ import { DATA, isGestor, modoCompartilhado } from '../state.js';
 import { ApiClient } from '../storage.js';
 import { abrirConta } from '../views/conta.js';
 import { rManual } from '../views/manual.js';
-import { atualizarSelosDaEscala } from '../views/selos.js';
+import { atualizarSelos } from '../views/selos.js';
 import { registrarDesenho, redesenharPorNome } from '../redesenho.js';
 import { registrarTela, escolherTela } from '../views/telas.js';
 import { gerenciaContas } from '../perfis.js';
 
-// Os selos das abas (js/redesenho.js): os dados de outra data e a escala refeita
-registrarDesenho('selos', atualizarSelosDaEscala, { em: ['dados', 'escala'], ordem: 99 });
+// Os selos que ficam fora da linha (js/views/selos.js): o de Recursos na Disponibilidade do dia e o botão de importar
+registrarDesenho('selos', atualizarSelos, { em: ['dados', 'escala', 'perfil', 'pedidos'], ordem: 99 });
 
 // O perfil (neste navegador). A aba Cursos é refeita: aberta, ela mostra ou tira na hora os controles de quem muda o
 // programa

@@ -9,7 +9,7 @@ import { ESTADOS as DE_RECURSOS } from './recursos.js';
 import { ESTADOS as DE_CURSOS } from './cursos.js';
 
 // As regiões da página que as conferências olham: a casca (o topo e as abas) e a tela aberta
-export const REGIOES = { casca: 'header.topo, #nav', tela: 'main#conteudo > section.on' };
+export const REGIOES = { casca: 'header.topo, #linha', tela: 'main#conteudo > section.on' };
 
 // A largura do documento: maior que a da janela, a página rola para o lado
 export const larguraDaPagina = page => page.evaluate(() => document.documentElement.scrollWidth);
@@ -18,7 +18,7 @@ export const larguraDaPagina = page => page.evaluate(() => document.documentElem
 // envolve; links no meio do texto ficam de fora)
 export const alvosPequenos = page => page.evaluate(() => {
   const secao = document.querySelector('main section.on');
-  const controles = [...document.querySelectorAll('.topo button, .topo select, .topo input, #nav button'),
+  const controles = [...document.querySelectorAll('.topo button, .topo select, .topo input, .topo a[href], #linha a[href]:not(.tarefa), #linha button'),
     ...secao.querySelectorAll('button, select, input, summary, a[href]')];
   const pequenos = new Set();
   for (const el of controles) {

@@ -16,6 +16,7 @@
  *   js/export.js    Exportação CSV, PDF e a planilha do Excel
  */
 import './eventos/navegacao.js';
+import './eventos/linha.js';
 import './eventos/escala.js';
 import './eventos/instrutores.js';
 import './eventos/alunos.js';
@@ -42,7 +43,6 @@ import { iniciarSessaoSupabase } from './sessao.js';
 import { iniciarSomenteLeitura } from './somente-leitura.js';
 import { RES, modoCompartilhado } from './state.js';
 import { ApiClient } from './storage.js';
-import './eventos/navegacao.js';
 import { avisoDeDomingo, iniciarTema } from './eventos/topo.js';
 import { programaSendoGravado } from './eventos/cursos.js';
 import { diaDaAgenda, podeEditarAgenda } from './views/agenda.js';
@@ -63,6 +63,8 @@ window.addEventListener('beforeunload', e => {
 // Inicialização Assíncrona
 (async function bootstrap() {
   iniciarTema();
+  // O endereço é lido antes de tudo: abrir uma data, ou uma tela, põe a data nele
+  const params = new URLSearchParams(window.location.search);
   // O endereço: os links #/<tela>, Voltar e Avançar. A tela do endereço aparece já (no modo compartilhado, o login fica por
   // cima dela até a sessão abrir)
   ligarEndereco();
@@ -74,8 +76,6 @@ window.addEventListener('beforeunload', e => {
   // A meteorologia do painel vem do servidor (a função meteorologia); neste navegador, não há
   configurarMeteorologia(() => ApiClient.meteorologia());
 
-  // O endereço é lido antes: abrir uma data põe a data nele
-  const params = new URLSearchParams(window.location.search);
   // Amanhã, ou a segunda quando amanhã é domingo
   const amanha = ehDomingo(amanhaISO()) ? somarDias(amanhaISO(), 1) : amanhaISO();
   abrirData(amanha);
@@ -141,7 +141,8 @@ window.addEventListener('beforeunload', e => {
   // A tela da abertura: a que a pessoa escolheu enquanto os dados carregavam (um clique, Voltar, um endereço digitado), a do
   // endereço ou a do perfil (a Agenda para a Secretaria, a Escala para os outros). Ela é mostrada de novo agora, com os
   // dados lidos e o perfil conferido; a Agenda, no dia que já estiver escolhido nela
-  const destino = telaFoiEscolhida() ? { tela: telaAberta(), item: null } : (destinoDoHash(window.location.hash) || { tela: telaDeAbertura(ApiClient.perfil), item: null });
+  // (o destino lido no começo: o item do endereço vale uma vez e já saiu dele)
+  const destino = telaFoiEscolhida() ? { tela: telaAberta(), item: null } : (doEndereco || { tela: telaDeAbertura(ApiClient.perfil), item: null });
   const item = destino.tela === 'age' && !destino.item ? diaDaAgenda() : destino.item;
   await mostrarTela(destino.tela, { item, nativo: Boolean(destino.nativo), historico: 'substituir' });
 

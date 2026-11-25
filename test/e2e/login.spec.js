@@ -11,7 +11,7 @@ test.describe('Login e perfis (modo compartilhado)', () => {
     await instalarSupabaseFalso(context);
     await page.goto(URL_APP);
     await expect(page.locator('#form-login')).toBeVisible();
-    await expect(page.locator('#nav')).toBeHidden();
+    await expect(page.locator('#linha')).toBeHidden();
     await expect(page.locator('#s-rec')).toBeHidden();
     await expect(page.locator('#btn-share-link')).toBeHidden();
   });
@@ -26,7 +26,7 @@ test.describe('Login e perfis (modo compartilhado)', () => {
     await preencherLogin(page, CONTAS.operador, 'senha-errada');
     await expect(page.locator('#login-erro')).toHaveText('E-mail ou senha incorretos.');
     await expect(page.locator('#form-login')).toBeVisible();
-    await expect(page.locator('#nav')).toBeHidden();
+    await expect(page.locator('#linha')).toBeHidden();
     // Para o leitor de tela, os dois campos ficam marcados com o erro, que é a descrição deles; o foco vai para a senha
     await expect(page.locator('#login-senha')).toBeFocused();
     for (const campo of ['#login-email', '#login-senha']) {
@@ -76,7 +76,7 @@ test.describe('Login e perfis (modo compartilhado)', () => {
     await expect(page.locator('#sem-acesso')).toBeVisible();
     await expect(page.locator('#sem-acesso')).toContainText(CONTAS.semPerfil.email);
     await expect(page.locator('#form-login')).toBeHidden();
-    await expect(page.locator('#nav')).toBeHidden();
+    await expect(page.locator('#linha')).toBeHidden();
     await page.locator('#btn-sair-sem-acesso').click();
     await expect(page.locator('#form-login')).toBeVisible();
   });

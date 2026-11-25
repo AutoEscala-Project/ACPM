@@ -39,7 +39,7 @@ function incluirAluno() {
   const nome = campo.value.trim().toLowerCase();
   if (!nome || isGestor() || aindaNaoAbriu()) return;
   const s = S.stu.find(x => x.nm.toLowerCase() === nome);
-  if (!s) { showToast('Aluno não encontrado. Cadastre-o na aba Alunos.'); return; }
+  if (!s) { showToast('Aluno não encontrado. Cadastre-o em Alunos.'); return; }
   campo.value = '';
   if (s.fly) { showToast(`${s.nm} já está na demanda.`); return; }
   s.fly = true;

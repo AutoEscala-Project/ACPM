@@ -1,11 +1,16 @@
 // As telas do app (js/telas.js): quem vê cada uma, a tela da abertura e o endereço (#/<tela>[/<item>])
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { TELAS, podeVer, telaDeAbertura, destinoDoEndereco, enderecoDoDestino } from '../../js/telas.js';
+import { TELAS, ESTAGIOS, podeVer, telaDeAbertura, destinoDoEndereco, enderecoDoDestino, linhaAbertaPorPadrao } from '../../js/telas.js';
 
 const PERFIS = ['operador', 'administrador', 'gestor', 'secretaria'];
 
 describe('Quem vê cada tela', () => {
+  it('as quatro etapas, na ordem, cada uma com a sua tela', () => {
+    assert.deepEqual(ESTAGIOS, ['pedidos', 'processamento', 'escala', 'aprovar']);
+    assert.deepEqual(ESTAGIOS.map(e => Object.keys(TELAS).find(t => TELAS[t].estagio === e)), ['age', 'dem', 'esc', 'apr']);
+  });
+
   it('o rótulo de cada tela é o nome dela hoje', () => {
     assert.deepEqual(Object.fromEntries(Object.entries(TELAS).map(([id, t]) => [id, t.rotulo])), {
       age: 'Agenda', dem: 'Demanda', esc: 'Escala', apr: 'Aprovar', alu: 'Alunos', ins: 'Instrutores', rec: 'Recursos',
@@ -57,5 +62,13 @@ describe('O endereço', () => {
   it('enderecoDoDestino é o inverso', () => {
     for (const hash of ['#/alu', '#/alu/1012', '#/rec/PR-VOB', '#/apr', '#/conta/usuarios']) assert.equal(enderecoDoDestino(destinoDoEndereco(hash)), hash);
     assert.equal(enderecoDoDestino({ tela: 'esc' }), '#/esc');
+  });
+});
+
+describe('A linha aberta por padrão', () => {
+  it('só quando cabe numa fileira e a janela é alta', () => {
+    assert.equal(linhaAbertaPorPadrao(1540, 760), true);
+    assert.equal(linhaAbertaPorPadrao(1539, 1080), false);
+    assert.equal(linhaAbertaPorPadrao(1888, 759), false);
   });
 });

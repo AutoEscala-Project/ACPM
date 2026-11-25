@@ -372,7 +372,7 @@ test.describe('Alunos: o filtro dos cursos e a barra dos Instrutores', () => {
     await abrir(page, { estado: cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000)] }) });
     await irPara(page, 'alu');
     await expect(page.locator('#s-alu .ir-para-demanda')).toHaveText('Os pedidos de cada data ficam na Demanda. Abrir a Demanda');
-    const abrirDemanda = page.getByRole('button', { name: 'Abrir a Demanda' });
+    const abrirDemanda = page.getByRole('link', { name: 'Abrir a Demanda' });
     await abrirDemanda.click();
     await expect(page.locator('#s-dem')).toBeVisible();
     await expect(page.locator('#s-alu')).toBeHidden();
@@ -395,7 +395,7 @@ test.describe('Alunos: o filtro dos cursos e a barra dos Instrutores', () => {
     await irPara(page, 'alu');
     await filtrarCursos(page, 'alu', ['PP']);
     await expect.poll(() => nomesAVista(page)).toEqual(['Ana']);
-    await page.getByRole('button', { name: 'Abrir a Demanda' }).click();
+    await page.getByRole('link', { name: 'Abrir a Demanda' }).click();
     await expect(page.locator('#flt-dem-cur')).toHaveText('Curso: PP');
     await expect.poll(pedidos).toEqual(['1000']);
     // Marcado na Demanda, vale em Alunos (as caixas e o botão de lá também)

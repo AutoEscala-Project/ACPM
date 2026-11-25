@@ -71,7 +71,7 @@ test.describe('Agenda de Solicitações (modo compartilhado)', () => {
     await expect(campoDaAgenda(page, 'excecao')).toBeHidden();
 
     // Ela vê a Agenda, a Escala e os Cursos (que só consulta) e, pelos dados pessoais, Instrutores e Alunos
-    await expect(rotulosDasAbas(page, { visiveis: true })).toHaveText(['Escala', 'Agenda', 'Instrutores', 'Alunos', 'Cursos']);
+    await expect(rotulosDasAbas(page, { visiveis: true })).toHaveText(['Agenda', 'Escala', 'Aprovar', 'Alunos', 'Instrutores', 'Cursos']);
     await botaoDaAba(page, 'esc').click();
     await expect(page.locator('body')).toHaveAttribute('data-role', 'gestor');
     expect(servidor.gravacoes).toEqual([]);

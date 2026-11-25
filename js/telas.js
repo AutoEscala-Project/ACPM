@@ -20,6 +20,9 @@ export const TELAS = {
   conta: { rotulo: 'Minha conta', grupo: 'conta', perfis: TODOS, soCompartilhado: true }
 };
 
+// As quatro etapas da linha, na ordem ("etapa" já é a missão do curso)
+export const ESTAGIOS = ['pedidos', 'processamento', 'escala', 'aprovar'];
+
 // O perfil da conta; null no modo local, que vê todas as telas menos a conta (que só existe com o servidor)
 export function podeVer(tela, perfil) {
   const t = Object.hasOwn(TELAS, tela) ? TELAS[tela] : null;
@@ -46,3 +49,6 @@ export function destinoDoEndereco(hash) {
 }
 
 export const enderecoDoDestino = ({ tela, item = null }) => `#/${tela}${item ? `/${item}` : ''}`;
+
+// A linha abre com as tarefas só quando cabe numa fileira e a janela é alta o bastante
+export const linhaAbertaPorPadrao = (larguraDaLinha, alturaDaJanela) => larguraDaLinha >= 1540 && alturaDaJanela >= 760;
