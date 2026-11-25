@@ -1,6 +1,7 @@
 // A Escala: o mapa e o popup do voo (e o clique no mapa que agenda), os filtros, exportar e compartilhar, o status do voo,
-// aprovar e reabrir, os critérios da compactação, o resultado da missão do curso e as sugestões para um conflito
-import { gravarAlteracao, logChange, gravarEscalaCalculada, aindaNaoAbriu, dadosLidos } from '../actions.js';
+// aprovar e reabrir, os critérios da compactação e as sugestões para um conflito (o resultado da missão do curso:
+// js/eventos/resultados.js)
+import { gravarAlteracao, gravarEscalaCalculada, aindaNaoAbriu } from '../actions.js';
 import { opcoesDeCategoria } from '../categorias.js';
 import { OPCOES_DE_BURACOS, OPCOES_DE_HORARIOS, normalizarCriterios } from '../criterios.js';
 import { $, showToast, anunciar, algumDialogoAberto, gavetaDoEsc } from '../dom.js';
@@ -16,8 +17,8 @@ import { ApiClient } from '../storage.js';
 import { agendarNoMapa } from './agendamento.js';
 import { confirmado } from './confirmacao.js';
 import { aoAcionar, aoMudarCampo, aoReverter } from './registro.js';
+import { vooDaChave } from './resultados.js';
 import { pedirDetalheDoStatus } from '../views/dialogo-status.js';
-import { cursoDoResultado } from '../views/etapas.js';
 import { rOut, botaoDoInstrutor, seletorDeInstrutor, abrirPopupDoMapa, fecharPopupDoMapa, popupDoMapaAberto, reposicionarPopupDoMapa, tabNoPopup } from '../views/escala.js';
 import { abrirPainelDeReparo, fecharPainelDeReparo, opcaoDoPainel } from '../views/reparo.js';
 
@@ -123,7 +124,6 @@ $('#btn-share-link').onclick = async () => {
 
 // Status do voo: Atrasado e Cancelado pedem o detalhe (a nova decolagem ou o motivo) antes de valer; desistir deixa o
 // status anterior. O histórico registra só a categoria do motivo
-const vooDaChave = fKey => (RES && Array.isArray(RES.out) ? RES.out.find(o => o.fKey === fKey) : null);
 function aplicarStatus(fKey, status, detalhe) {
   if (!S.fStatus) S.fStatus = {};
   if (!S.fObs) S.fObs = {};
@@ -232,36 +232,6 @@ document.addEventListener('click', e => {
   const opcoes = campo === 'buracos' ? OPCOES_DE_BURACOS : OPCOES_DE_HORARIOS;
   const nome = id => opcoes.find(([v]) => v === id)[1];
   gravarAlteracao('mod', `Compactação: ${campo === 'buracos' ? 'buracos' : 'horários'} ${nome(antes[campo])} → ${nome(S.criterios[campo])}`);
-});
-
-// O resultado da missão do curso, na linha do voo: vai para o servidor (só acréscimo), no curso da missão do pedido (o
-// aluno pode ter trocado de curso no mesmo dia), e entra na situação do aluno (o progresso e a próxima missão mudam).
-// Sem conexão, o seletor volta ao que estava
-document.addEventListener('change', async e => {
-  const sel = e.target.closest('[data-resultado]');
-  if (!sel || isGestor()) return;
-  if (aindaNaoAbriu()) { rOut(); return; }
-  const o = vooDaChave(sel.dataset.resultado), curso = o ? cursoDoResultado(o) : null;
-  if (!o || !o.etapa || !curso) return;
-  const registro = { aluno: o.stuId, curso, missao: o.etapa, resultado: sel.value, data: DATA, voo: o.fKey };
-  sel.disabled = true;
-  try {
-    const id = await ApiClient.registrarResultado(registro);
-    const novo = { id, ...registro, registrado_em: new Date().toISOString(), registrado_por: ApiClient.autorAtual || null };
-    const atual = S.resultados || { situacao: [], doDia: [] };
-    const mesmaMissao = r => r.aluno === novo.aluno && r.curso === novo.curso && r.missao === novo.missao;
-    // A situação de cada missão vale para todas as datas; os registros do dia e o histórico, só para a data do voo (a
-    // resposta pode chegar depois de trocar de data, ou com outra data abrindo: a entrada vai direto para a data do voo)
-    const mesmaData = DATA === registro.data && dadosLidos;
-    S.resultados = { situacao: [...atual.situacao.filter(r => !mesmaMissao(r)), novo], doDia: mesmaData ? [...atual.doDia, novo] : atual.doDia };
-    const descricao = `Resultado de ${o.s} em ${o.etapa}: ${registro.resultado}`;
-    // O resultado fica no servidor, não nos dados do dia: só a entrada do histórico, sem gravar o dia
-    if (mesmaData) logChange('mod', descricao);
-    else ApiClient.registrarHistorico(registro.data, { tipo: 'mod', descricao });
-  } catch {
-    showToast('Não foi possível registrar o resultado. Verifique a conexão e tente de novo.');
-  }
-  rOut(); redesenharPorNome('alunos', 'pedidos-do-dia');
 });
 
 // Sugestões para um conflito: a gaveta abre pelo botão do conflito. "Aplicar" muda o voo fixo (na turma de

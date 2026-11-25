@@ -25,6 +25,12 @@ registrarDesenho('instrutores-dia', rInsDia, { em: ['escala'], ordem: 7 });
 registrarDesenho('instrutores', rIns, { em: ['dados', 'consulta', 'releitura'], ordem: 20 });
 registrarDesenho('habilitacoes-do-instrutor', rPainelDoInstrutor);
 
+// As duas vistas de Instrutores (Disponibilidade do dia e Cadastro, no controle segmentado: js/views/vistas.js)
+document.addEventListener('click', e => {
+  const vista = e.target.closest('[data-vista-ins]');
+  if (vista) mostrarVista('ins', vista.dataset.vistaIns);
+});
+
 // A coluna CANAC acompanha os dados pessoais
 aoMudarDadosPessoais(atualizarCanacDosInstrutores);
 

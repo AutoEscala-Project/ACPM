@@ -14,13 +14,22 @@ import { aoAcionar, aoMudarCampo, aoReverter } from './registro.js';
 import { registrarDesenho, redesenharPorNome } from '../redesenho.js';
 import { filtrarRecursos, limparFiltrosDosRecursos, manterRecursoAVista, criarFiltroDasCategorias } from '../views/filtros-dos-recursos.js';
 import { NOMES_DAS_CATEGORIAS, abrirEditorDosHorarios, fecharEditorDosHorarios, tirarDoRascunho, porNoRascunho, escolherModelo, rascunhoDosHorarios, editorDosHorariosAberto } from '../views/horarios.js';
-import { rRec, rRevisao, rHangar, alternarAtributos, aplicarFiltrosDosRecursos } from '../views/recursos.js';
+import { rRec, rRevisao, rHangar, alternarAtributos, aplicarFiltrosDosRecursos, alternarGrupoDaFrota } from '../views/recursos.js';
 import { mostrarVista, vistaDa } from '../views/vistas.js';
 
 // Os desenhos de Recursos (js/redesenho.js): a revisão de 50 horas e o hangar acompanham a escala
 registrarDesenho('revisao', rRevisao, { em: ['escala'], ordem: 5 });
 registrarDesenho('hangar', rHangar, { em: ['escala'], ordem: 6 });
 registrarDesenho('recursos', rRec, { em: ['dados', 'consulta'], ordem: 10 });
+
+// As categorias da frota que recolhem (Disponibilidade do dia) e as duas vistas de Recursos (Disponibilidade do dia e
+// Cadastro, no controle segmentado: js/views/vistas.js)
+document.addEventListener('click', e => {
+  const grupo = e.target.closest('[data-recolher-grupo]');
+  if (grupo) { alternarGrupoDaFrota(grupo.dataset.recolherGrupo); return; }
+  const vista = e.target.closest('[data-vista-rec]');
+  if (vista) mostrarVista('rec', vista.dataset.vistaRec);
+});
 
 // O campo do recurso com erro (aria-invalid); o motivo (#rec-erro) é a descrição dele: o leitor de tela diz os dois
 const CAMPOS_DO_RECURSO = { reg: '#rec-reg', tipo: '#rec-tipo' };
