@@ -124,6 +124,9 @@ const MISSAO_DO_PEDIDO = ['mis', 'eq', 'nb', 'etapa'];
 const IDENTIDADE_DO_PEDIDO = [...MISSAO_DO_PEDIDO, 'p1', 'p2'];
 const mesmoPedido = (p, q) => IDENTIDADE_DO_PEDIDO.every(c => p[c] === q[c]);
 
+// O motivo do voo com resultado registrado (js/eventos/agendamento.js diz o que fazer, sem o resultado na tela)
+export const VOO_COM_RESULTADO = 'O voo já tem resultado registrado.';
+
 // O voo agendado na Escala que já está em andamento (Em Voo, Atrasado ou Pousou) ou que já tem resultado registrado não
 // é desfeito: o texto do aviso, ou ''. Sem os resultados dos cursos (a leitura falhou: estado.indisponiveis), os
 // registros do dia vêm vazios e não dá para conferir; desfazer fica desligado até "Tentar de novo" (o aviso do topo)
@@ -144,7 +147,7 @@ export function motivoParaNaoDesfazer(estado, { stuId, mid, criado, criadoComo =
   if ((estado.indisponiveis || []).includes('resultados')) {
     return 'Sem os resultados dos cursos, o app não confere se o voo já tem resultado: clique em "Tentar de novo" no aviso e desfaça depois.';
   }
-  if (((estado.resultados || {}).doDia || []).some(r => r && r.voo === fKey)) return 'O voo já tem resultado registrado.';
+  if (((estado.resultados || {}).doDia || []).some(r => r && r.voo === fKey)) return VOO_COM_RESULTADO;
   return '';
 }
 

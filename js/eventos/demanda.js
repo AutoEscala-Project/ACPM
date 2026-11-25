@@ -5,6 +5,7 @@ import { T, GROUND_EQ_TYPE, GROUND_DURATION_H, MIS } from '../config.js';
 import { $, showToast, ligarMenu, trocarElemento } from '../dom.js';
 import { semAgendados, limparDemanda } from '../fixos.js';
 import { fmtDurLabel } from '../format.js';
+import { ligada } from '../funcionalidades.js';
 import { horariosDaMissao, ajustarPreferencias } from '../horarios.js';
 import { isGroundMission, rotuloDaDisponibilidade, normalizeMissionFields, proximoMid, duracaoDigitada, ERRO_DA_DURACAO, duracaoPadraoDaMissao } from '../rules.js';
 import { S, RES, isGestor, stuBy, insBy, getMissionTarget } from '../state.js';
@@ -109,8 +110,9 @@ const comOCursoEncerrado = (encerrado, sigla) => (encerrado ? `, com o curso ${s
 
 // A próxima missão do curso: o pedido vira a missão do programa (tipo, recurso e horas) e o aluno voa. No curso
 // encerrado, o primeiro acionamento arma o botão e o segundo confirma (como no agendamento, desenho §4.9), e o histórico
-// diz que o curso estava encerrado
+// diz que o curso estava encerrado. Com o progresso desligado (js/funcionalidades.js), nada acontece: aqui e na lista
 aoAcionar('usar-proxima', (b, { id, mid }) => {
+  if (!ligada('progresso')) return;
   const s = stuBy(id), target = getMissionTarget(id, mid);
   const m = s && target ? proximaDoPedido(s, mid) : null;
   if (!m) return;
@@ -125,7 +127,7 @@ aoAcionar('usar-proxima', (b, { id, mid }) => {
 // o segundo acionamento põe a missão no pedido; o histórico diz por que ela estava fora da ordem. No curso encerrado,
 // também a liberada pede confirmação, e o histórico diz que o curso estava encerrado
 function escolherOutraMissao(t, c, s, target, mid) {
-  const escolha = t.value ? outraMissaoDoPedido(s, target, mid, t.value) : null;
+  const escolha = t.value && ligada('progresso') ? outraMissaoDoPedido(s, target, mid, t.value) : null;
   if (!escolha) { trocarElemento(c, singleDemandRowHTML(s, target, mid)); return; }
   const { missao: m } = escolha;
   if (escolha.liberada && !escolha.encerrado) {
@@ -142,6 +144,7 @@ function escolherOutraMissao(t, c, s, target, mid) {
 }
 
 aoAcionar('usar-fora-da-ordem', (b, { id, mid }) => {
+  if (!ligada('progresso')) return;
   const s = stuBy(id), target = getMissionTarget(id, mid);
   const escolha = s && target ? outraMissaoDoPedido(s, target, mid, b.dataset.codigo) : null;
   // A missão já não é uma das outras do pedido (o programa ou os resultados mudaram): a linha volta a mostrar as de agora

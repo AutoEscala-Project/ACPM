@@ -31,7 +31,9 @@ const NOVAS = {
     'Encaixar o voo', 'Mover o voo', 'Entrar na turma das', 'Horários livres', 'O que muda na escala', 'Agendar mesmo assim',
     'agendado 10:10 · PR-VOB', 'fora da regra', 'ao lado do nome de cada linha', 'não entram no Histórico da data', 'de 1 a 300 kg',
     // Acima do limite de voos locais do horário, todo voo local agendado pede a confirmação (não só o 7º)
-    'mais de 6 voos locais no mesmo horário'],
+    'mais de 6 voos locais no mesmo horário',
+    // O voo com resultado não é desfeito, também com o progresso desligado
+    'o que já tem resultado nem o pedido que mudou depois na Demanda'],
   demanda: ['Pôr um aluno na demanda'],
   pedidos: ['Ainda não importado'],
   // A busca sem acentos, quantos aparecem e o "Limpar filtros"; a coluna Vem (a data aberta não é sempre hoje); o filtro
@@ -43,14 +45,27 @@ const NOVAS = {
   alunos: ['Não escalar com', 'Nome, CANAC, peso e curso', 'Filtro dos cursos', 'aparecem os alunos de algum dos marcados', 'Curso: PP ou PC',
     'Abrir a Demanda', 'aparecem os pedidos dos alunos de algum dos cursos marcados', 'O filtro dos cursos é um só nas duas abas',
     'um cartão por pessoa'],
-  // Recursos: as duas vistas, a busca pela matrícula, o filtro das categorias (a regra "alguma das marcadas") e o hangar
-  // sem filtros; o cadastro da frota e os horários de decolagem
+  // Recursos: as duas vistas, a busca pela matrícula, o filtro das categorias (a regra "alguma das marcadas") e o
+  // cadastro da frota e os horários de decolagem
   recursos: ['Disponibilidade do dia', 'Novo recurso', 'Retirar', 'Horários de decolagem', 'de 30 em 30 minutos', 'divide as horas do dia',
     'em Disponibilidade do dia, desligue', 'abre o Cadastro com o formulário', 'Buscar matrícula', '3 de 26 recursos',
     'os recursos de alguma das marcadas', 'Categoria: C152 ou PA-34', 'Filtro das categorias',
-    'nunca para a ordem no hangar', 'cujo botão mostra o mesmo número', 'Veja em Recursos, na Disponibilidade do dia, se ele está ligado'],
+    'cujo botão mostra o mesmo número', 'Veja em Recursos, na Disponibilidade do dia, se ele está ligado'],
   // Cursos: um de cada vez, o índice das fases, as fases recolhidas e os alunos por fase
-  cursos: ['um curso de cada vez', 'índice das fases', 'Recolher todas', 'Abrir todas', 'agrupados pela fase em que estão']
+  cursos: ['um curso de cada vez', 'índice das fases', 'Recolher todas', 'Abrir todas']
+};
+
+// As do que pode ficar desligado (js/funcionalidades.js): o Manual só as diz com a funcionalidade ligada
+export const FRASES_DAS_FUNCIONALIDADES = {
+  hangar: ['nunca para a ordem no hangar', 'Ordem no hangar', 'a ordem no hangar.', 'depois o da frente do hangar', 'as saídas do hangar', 'menos saídas do hangar'],
+  progresso: ['agrupados pela fase em que estão', 'Próxima: PP-07 · Usar', 'Outra missão…', 'próxima missão', 'progresso', 'Aprovado ou Reprovado',
+    '12/40 · próxima PP-13', 'fora da ordem', 'com quantos alunos estão em cada uma',
+    'o resultado do voo vai para o código do pedido']
+};
+// E as que ele só diz com ela desligada
+export const FRASES_SEM_AS_FUNCIONALIDADES = {
+  hangar: ['sai o primeiro livre na ordem da frota', 'uma parada de 2 h ou mais pesa mais', 'as janelas de operação e a tabela dos aviões'],
+  progresso: ['o código da missão do curso que o pedido já tem', 'para o aluno de um curso, escolha a missão na lista', 'oferece esse voo', 'e um clique leva à fase']
 };
 
 export const FRASES_QUE_SAIRAM = Object.values(ANTIGAS).flat();

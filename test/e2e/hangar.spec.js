@@ -3,6 +3,9 @@
 import { test, expect, abrir, irPara, abrirEscala, filtrarCategorias, abrirHistorico, diaSeguinte } from './fixtures.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
 
+// Com o hangar ligado (desligado: funcionalidades.spec.js)
+test.use({ funcionalidades: 'hangar' });
+
 const posicoes = page => page.locator('#hangar li').evaluateAll(lis => lis.map(li => li.dataset.id));
 
 test.describe('Ordem no hangar', () => {

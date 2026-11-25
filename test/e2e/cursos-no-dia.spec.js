@@ -10,6 +10,9 @@ import { aluno, cenario, instrutor } from '../helpers/montar.js';
 import { cursosIniciais, percursoDoCurso, novoCurso } from '../../js/programa.js';
 import { MODELOS } from '../../js/modelos-de-curso.js';
 
+// Com o progresso nos cursos ligado (desligado: funcionalidades.spec.js)
+test.use({ funcionalidades: 'progresso' });
+
 // O cronograma do PP (o modelo do app) como as tabelas dos cursos o guardam (neste navegador, acpm4_cursos), na versão 1:
 // os ids das fases e das missões são uuids, os únicos que o programa lido aceita
 function programaPP() {

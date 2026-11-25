@@ -9,6 +9,9 @@ import { FROTA_INICIAL } from '../../js/frota.js';
 import { normalizarHorarios } from '../../js/horarios.js';
 import { normalizarLimites } from '../../js/limites.js';
 
+// Com o progresso nos cursos ligado (desligado: funcionalidades.spec.js)
+test.use({ funcionalidades: 'progresso' });
+
 // O programa do PP (no cadastro, como antes do formato dos cursos: a conversão leva para as tabelas dos cursos)
 const PROGRAMA = {
   PP: [

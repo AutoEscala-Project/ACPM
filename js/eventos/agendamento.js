@@ -7,7 +7,8 @@
 // nada: nem o voo, nem os pesos, nem o instrutor marcado disponível
 import { gravarAlteracao, logChange, aindaNaoAbriu } from '../actions.js';
 import { aplicarAgendamento, descricaoDoAgendamento, reversaoDoAgendamento, historicoDosPesos } from '../agendamento.js';
-import { motivoParaNaoDesfazer, desfazerAgendamento } from '../reversoes.js';
+import { motivoParaNaoDesfazer, desfazerAgendamento, VOO_COM_RESULTADO } from '../reversoes.js';
+import { ligada } from '../funcionalidades.js';
 import { isGroundMission } from '../rules.js';
 import { hm } from '../format.js';
 import { chaveDoVoo } from '../voo.js';
@@ -56,9 +57,14 @@ export function agendarNoMapa(contexto) {
 aoReverter('desfazerAgendamento', (rev, entry) => {
   // Um voo agendado na Escala: o criado sai, o movido volta para onde estava, e o instrutor marcado disponível volta
   // como estava (js/reversoes.js). O voo já em andamento ou com resultado registrado fica, com o aviso; o movido cujo
-  // pedido saiu da Demanda também (não há o que desfazer)
+  // pedido saiu da Demanda também (não há o que desfazer). Com o progresso desligado (js/funcionalidades.js), o resultado
+  // não aparece na Escala nem muda nela: o aviso diz como tirar ou mudar o voo
   const motivo = motivoParaNaoDesfazer(S, rev);
-  if (motivo) { showToast(motivo); return; }
+  if (motivo) {
+    const semOResultadoNaTela = motivo === VOO_COM_RESULTADO && !ligada('progresso');
+    showToast(semOResultadoNaTela ? `${motivo} Para tirar o voo, use Tirar da escala; para mudar, Agendar voo.` : motivo);
+    return;
+  }
   if (desfazerAgendamento(S, rev)) {
     gravarAlteracao(rev.criado ? 'exc' : 'mod', `Revertido: ${entry.desc}`, null, entry.id);
     redesenharPorNome('pedidos-do-dia', 'instrutores');
