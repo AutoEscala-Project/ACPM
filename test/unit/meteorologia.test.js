@@ -147,28 +147,40 @@ describe('meteorologia: a faixa do painel', () => {
     assert.equal(faixaDaMeteorologia({ indisponivel: false, dados: null, recebidoEm: null, falhou: false, buscando: true }), '<p class="meteo-aviso">Buscando o METAR e o TAF…</p>');
   });
 
-  it('as duas caixas, cada uma com "Atualizado às" a hora da observação do METAR (a local e a Z), o METAR e o TAF em linhas; sem TAF, o aviso; nada de HTML das mensagens', () => {
-    const html = faixaDaMeteorologia(estado());
-    assert.match(html, /<div class="meteo-topo"><span class="meteo-titulo">METAR e TAF<\/span><\/div>/);
+  it('as duas caixas, cada uma só com o nome (o código, para o leitor de tela), o METAR e o TAF em linhas; sem TAF, o aviso; nada de HTML das mensagens', () => {
+    const html = faixaDaMeteorologia(estado(), AGORA);
     assert.match(html, /<div class="meteo-estacao" role="group" aria-labelledby="meteo-SBBH" data-icao="SBBH">/);
-    assert.match(html, /id="meteo-SBBH">SBBH · Pampulha<\/h4><span class="meteo-hora">Atualizado às 11:00 \(14:00Z\)<\/span><\/div>/);
-    assert.match(html, /id="meteo-SBCF">SBCF · Confins<\/h4><span class="meteo-hora">Atualizado às 12:00 \(15:00Z\)<\/span><\/div>/);
-    assert.equal((html.match(/Atualizado às/g) || []).length, 2, 'só nas caixas');
+    assert.match(html, /id="meteo-SBBH"><span class="sr">SBBH · <\/span>Pampulha<\/h4><\/div>/);
+    assert.match(html, /id="meteo-SBCF"><span class="sr">SBCF · <\/span>Confins<\/h4><\/div>/);
+    assert.ok(!/Atualizado às|METAR e TAF/.test(html), 'nem a hora nem o título da faixa');
     assert.match(html, /<p class="meteo-msg meteo-sem">Sem TAF em vigor<\/p>/);
     assert.match(html, /TAF SBCF 100800Z 1012\/1112 34005KT 7000 SCT016<br>BECMG 1015\/1017 9999 SCT035/);
     const injetado = { ...RESPOSTA, estacoes: [{ ...RESPOSTA.estacoes[0], metar: 'METAR <img src=x onerror=alert(1)>' }] };
-    assert.ok(!faixaDaMeteorologia(estado({ dados: normalizarMeteorologia(injetado) })).includes('<img'));
+    assert.ok(!faixaDaMeteorologia(estado({ dados: normalizarMeteorologia(injetado) }), AGORA).includes('<img'));
   });
 
-  it('o METAR velho e a busca que falhou: só a hora da atualização de cada caixa, sem marca nem idade', () => {
-    const html = faixaDaMeteorologia(estado({ falhou: true, recebidoEm: AGORA - 3 * 60 * MIN }));
-    assert.match(html, /<span class="meteo-hora">Atualizado às 11:00 \(14:00Z\)<\/span>/);
+  it('o tempo leve (-RA) não quebra a linha depois do sinal', () => {
+    const chuva = { ...RESPOSTA, estacoes: [{ ...RESPOSTA.estacoes[0], metar: 'METAR SBBH 101400Z 25004KT 9999 -RA FEW020', taf: 'TAF SBBH 100800Z 1012/1112 34005KT 7000 TEMPO 1018/1021 -TSRA SCT035' }] };
+    const html = faixaDaMeteorologia(estado({ dados: normalizarMeteorologia(chuva) }), AGORA);
+    assert.match(html, /9999 <span class="meteo-junto">-RA<\/span> FEW020<\/p>/);
+    assert.match(html, /<br>TEMPO 1018\/1021 <span class="meteo-junto">-TSRA<\/span> SCT035<\/p>/);
+  });
+
+  it('a busca que falhou e o METAR com mais de 90 minutos: "Atualizado às" a hora da observação (a local e a Z), sem marca nem idade', () => {
+    const html = faixaDaMeteorologia(estado({ falhou: true, recebidoEm: AGORA - 3 * 60 * MIN }), AGORA);
+    assert.match(html, /id="meteo-SBBH"><span class="sr">SBBH · <\/span>Pampulha<\/h4><span class="meteo-hora">Atualizado às 11:00 \(14:00Z\)<\/span><\/div>/);
+    assert.match(html, /<span class="meteo-hora">Atualizado às 12:00 \(15:00Z\)<\/span>/);
     assert.match(html, /METAR SBCF 101500Z/);
     assert.ok(!/antigo|desatualizada|Sem atualização|há \d/.test(html), html);
+    // Sem falha, só a caixa da observação com mais de 90 minutos (a de Pampulha, das 14:00Z)
+    const observadoEm = Date.parse(RESPOSTA.estacoes[0].observado);
+    assert.ok(!faixaDaMeteorologia(estado(), observadoEm + 90 * MIN).includes('meteo-hora'));
+    const velha = faixaDaMeteorologia(estado(), observadoEm + 91 * MIN);
+    assert.deepEqual(velha.match(/Atualizado às [^<]*/g), ['Atualizado às 11:00 (14:00Z)']);
     // Sem METAR, a caixa fica sem a hora (e com o aviso)
     const semMetar = { ...RESPOSTA, estacoes: [{ ...RESPOSTA.estacoes[0], metar: null, observado: null }, RESPOSTA.estacoes[1]] };
-    const so = faixaDaMeteorologia(estado({ dados: normalizarMeteorologia(semMetar) }));
-    assert.match(so, /id="meteo-SBBH">SBBH · Pampulha<\/h4><\/div>\s*<p class="meteo-msg meteo-sem">Sem METAR<\/p>/);
+    const so = faixaDaMeteorologia(estado({ falhou: true, dados: normalizarMeteorologia(semMetar) }), AGORA);
+    assert.match(so, /id="meteo-SBBH"><span class="sr">SBBH · <\/span>Pampulha<\/h4><\/div>\s*<p class="meteo-msg meteo-sem">Sem METAR<\/p>/);
   });
 });
 
