@@ -306,7 +306,8 @@ test.describe('Instrutores', () => {
       const recurso = S.frota.find(f => f.reg === reg);
       if (propria) recurso.habilitacaoPropria = true;
       else delete recurso.habilitacaoPropria;
-      (await import('./js/views/cadastros.js')).rIns();
+      const { rIns } = await import('./js/views/instrutores.js');
+      rIns();
     }, [reg, propria]);
     await botao.click();
     const c172 = painel.locator('input[data-valor="c172"]');

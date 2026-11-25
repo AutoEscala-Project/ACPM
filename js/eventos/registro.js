@@ -1,12 +1,8 @@
 // Os cliques nos botões com data-act e as mudanças nos campos das tabelas (data-f, data-a) passam por aqui: cada aba
 // registra o que faz com eles (js/eventos/), e quem só consulta não muda nada, nem quem muda antes de a escala abrir
 import { aindaNaoAbriu } from '../actions.js';
-import { RES, isGestor } from '../state.js';
-import { rIns, rAlu } from '../views/cadastros.js';
-import { rCursos } from '../views/cursos.js';
-import { rDem } from '../views/demanda.js';
-import { rOut } from '../views/escala.js';
-import { rRec } from '../views/recursos.js';
+import { redesenhar } from '../redesenho.js';
+import { isGestor } from '../state.js';
 
 const acoes = new Map();
 // Uma ação de botão (data-act). Ela recebe o botão, o id e a missão (mid) da linha da tabela (data-k) ou do próprio
@@ -40,8 +36,7 @@ document.addEventListener('change', e => {
   // Quem só consulta não muda nada, nem antes de a escala abrir: a tela volta a mostrar os dados
   if (isGestor() || aindaNaoAbriu()) {
     e.preventDefault();
-    rRec(); rIns(); rAlu(); rCursos(); rDem();
-    if (RES) rOut();
+    redesenhar('consulta');
     return;
   }
   if (f === 'fstatus') { campos.get('fstatus')(t); return; }
@@ -50,3 +45,13 @@ document.addEventListener('change', e => {
   if (!c || !campos.has(c.dataset.k)) return;
   campos.get(c.dataset.k)(t, { f, c, id: +c.dataset.id, mid: c.dataset.mid !== undefined ? +c.dataset.mid : 0 });
 });
+
+const reversoes = new Map();
+// O que "↶ Reverter" faz com um tipo de reversão do histórico (o kind gravado na entrada): desfazer(rev, entrada) recebe a
+// reversão já validada (validarReversao, js/reversoes.js) e a entrada revertida. Um tipo registrado duas vezes é erro, e
+// um tipo sem registro (um botão que não faria nada) falha em test/unit/reversoes-registradas.test.js
+export function aoReverter(tipo, desfazer) {
+  if (reversoes.has(tipo)) throw new Error(`A reversão "${tipo}" já está registrada.`);
+  reversoes.set(tipo, desfazer);
+}
+export const desfazerDoTipo = tipo => reversoes.get(tipo);

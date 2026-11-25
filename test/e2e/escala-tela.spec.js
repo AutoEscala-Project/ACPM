@@ -700,7 +700,10 @@ test.describe('O foco depois de uma ação', () => {
     // O foco fica na linha, que não faz nada com o Enter, e continua nela depois de outro redesenho
     const naLinha = () => page.evaluate(() => document.activeElement.matches('#out tbody tr[data-foco-neutro]'));
     expect(await naLinha()).toBe(true);
-    await page.evaluate(() => import('./js/views/escala.js').then(m => m.rOut()));
+    await page.evaluate(async () => {
+      const { rOut } = await import('./js/views/escala.js');
+      rOut();
+    });
     expect(await naLinha()).toBe(true);
     // Segurado: o primeiro keydown e as repetições da tecla
     await xs.nth(2).focus();
@@ -742,7 +745,10 @@ test.describe('O foco depois de uma ação', () => {
     const antes = await page.evaluate(() => scrollY);
     expect(antes).toBeGreaterThan(300);
     // Um redesenho que chega depois (outra alteração, a resposta do servidor)
-    await page.evaluate(() => import('./js/views/escala.js').then(m => m.rOut()));
+    await page.evaluate(async () => {
+      const { rOut } = await import('./js/views/escala.js');
+      rOut();
+    });
     expect(await page.evaluate(() => scrollY)).toBe(antes);
     await expect(page.locator('#out select[data-f="fstatus"]').first()).toBeFocused();
   });

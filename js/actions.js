@@ -7,15 +7,10 @@ import { S, RES, AUDIT_LOG, BI_HISTORY, DATA, setS, setRES, setAuditLog, setBIHi
 import { $, mostrarAviso, avisoAberto, showToast } from './dom.js';
 import { comHorasExternas } from './limites.js';
 import { comRepousoDoNoturno } from './noturno.js';
-import { rBI } from './views/bi.js';
-import { renderAuditPanel, rOut } from './views/escala.js';
-import { rDem } from './views/demanda.js';
-import { rIns, rInsDia, rAlu } from './views/cadastros.js';
-import { rCursos, SEM_OS_PROGRAMAS } from './views/cursos.js';
-import { rRec, rRevisao, rHangar } from './views/recursos.js';
-import { rRodizio } from './views/rodizio.js';
-import { podeEditarAgenda, rAgenda } from './views/agenda.js';
-import { atualizarSelosDaEscala, atualizarSeloDaAgenda, lerPedidosDaData } from './views/selos.js';
+import { redesenhar, redesenharPorNome } from './redesenho.js';
+import { SEM_OS_PROGRAMAS } from './views/cursos.js';
+import { podeEditarAgenda } from './views/agenda.js';
+import { atualizarSeloDaAgenda, lerPedidosDaData } from './views/selos.js';
 
 // Abre uma data na tela (a data da escala e a data base do BI)
 export function abrirData(data) {
@@ -104,7 +99,7 @@ export async function lerDadosDeNovo() {
   avisarDadosIndisponiveis();
   if (!S.indisponiveis.length) showToast('Dados lidos.', 'ok');
   if (horasBase && !isGestor()) save();
-  rIns(); rAlu(); rCursos(); rDem(); rOut();
+  redesenhar('releitura');
 }
 
 // Uma gravação que não deu certo. Sem conexão, o aviso conta as alterações esperando (as entradas "gravando…" do
@@ -137,8 +132,7 @@ function avisarAlteracoesEsperando() {
 // Depois de um conflito nada mais é gravado: a tela fica só para consulta até recarregar, com o aviso
 export function travarAposConflito({ formato = false } = {}) {
   setRole('gestor', true);
-  rRec(); rIns(); rAlu(); rCursos(); rDem();
-  if (RES) rOut();
+  redesenhar('consulta');
   mostrarAviso('conflito', formato
     ? 'O app foi atualizado. Recarregue a página para continuar (a sua última alteração não foi salva).'
     : 'Outra pessoa alterou a escala enquanto você editava. A tela ficou só para consulta: recarregue para ver a versão atual e continuar (a sua última alteração não foi salva).');
@@ -163,9 +157,13 @@ export function aindaNaoAbriu() {
 let gravacaoAtual = Promise.resolve(true);
 
 // Refaz e grava a escala; responde se a gravação deu certo. Os eventos da tela gravam por gravarAlteracao
+// A ordem: a escala é refeita com os dados da tela (sem desenhar), gravada, e só então redesenhada. salvarDia copia os dados
+// antes de esperar o servidor (js/storage.js), e um desenho que falha (js/redesenho.js, semFalhar) não impede a gravação
+// nem a entrada do histórico que vem depois dela
 function save() {
   if (isGestor() || !dadosLidos) return Promise.resolve(false);
-  refazerEscala();
+  setRES(escalaCalculada());
+  syncBIHistoryForCurrentDate();
   gravacaoAtual = ApiClient.salvarDia(DATA, S, RES);
   // Neste navegador (sem servidor), a gravação só falha quando o armazenamento recusa (o espaço pode ter acabado)
   if (!modoCompartilhado()) {
@@ -174,10 +172,15 @@ function save() {
     });
   }
   escalaSoCalculada = false;
-  // A barra da escala mostra quando ela foi refeita
-  const agora = new Date();
-  $('#escala-atualizada-texto').textContent = `Atualizada às ${String(agora.getHours()).padStart(2, '0')}:${String(agora.getMinutes()).padStart(2, '0')}`;
-  $('#escala-atualizada').hidden = false;
+  // A escala refeita e o que depende dela (a revisão de 50 horas, o hangar, a grade dos instrutores, o Histórico, o BI e
+  // os selos)
+  redesenhar('escala');
+  // A barra da escala mostra quando ela foi refeita (sem a barra na página, só não mostra)
+  const agora = new Date(), texto = $('#escala-atualizada-texto'), marca = $('#escala-atualizada');
+  if (texto && marca) {
+    texto.textContent = `Atualizada às ${String(agora.getHours()).padStart(2, '0')}:${String(agora.getMinutes()).padStart(2, '0')}`;
+    marca.hidden = false;
+  }
   return gravacaoAtual;
 }
 
@@ -224,7 +227,7 @@ export function logChange(type, texto, revertAction = null, reverte = null) {
     estado: 'gravando'
   };
   AUDIT_LOG.unshift(entry);
-  renderAuditPanel();
+  redesenharPorNome('historico');
   if (avisoAberto() === 'espera') avisarAlteracoesEsperando();
   const data = DATA;
   queueMicrotask(() => gravacaoAtual.then(async gravou => {
@@ -234,7 +237,7 @@ export function logChange(type, texto, revertAction = null, reverte = null) {
       entry.id = id;
       delete entry.estado;
     }
-    renderAuditPanel();
+    redesenharPorNome('historico');
   }));
 }
 
@@ -248,7 +251,7 @@ function horario(iso, importado) {
 // Uma entrada que o servidor já registrou (os dados pessoais: a própria função registra os campos que mudaram)
 export function mostrarNoHistorico({ id, descricao }) {
   AUDIT_LOG.unshift({ id, ts: new Date().toTimeString().slice(0, 8), type: 'mod', desc: descricao, revert: null, reverte: null, autor: ApiClient.autorAtual, importado: false });
-  renderAuditPanel();
+  redesenharPorNome('historico');
 }
 
 async function historicoParaPainel(data) {
@@ -321,8 +324,7 @@ export async function lerData(data) {
 export async function carregarData(data) {
   if (!await lerData(data)) return;
   $('#escala-atualizada').hidden = true;
-  rRec(); rIns(); rAlu(); rCursos(); rRodizio(); rDem(); renderAuditPanel(); rOut(); rAgenda();
-  atualizarSelosDaEscala();
+  redesenhar('dados');
   lerPedidosDaData();
   await carregarBI();
 }
@@ -344,7 +346,7 @@ export async function carregarBI() {
   if (pedido !== pedidoDeBI) return;
   setBIHistory(bi);
   syncBIHistoryForCurrentDate();
-  rBI();
+  redesenharPorNome('bi');
 }
 
 // O BI em memória acompanha a escala da tela (que pode ainda estar sendo gravada)
@@ -366,15 +368,3 @@ function syncBIHistoryForCurrentDate() {
 // compartilhado, todos veem essa data)
 const escalaCalculada = () => ({ ...runAllocationEngine(S), data: DATA });
 
-// Refaz a escala e o que depende dela (revisão de 50 horas, painel do dia e BI), sem gravar: quem grava é save
-function refazerEscala() {
-  setRES(escalaCalculada());
-  syncBIHistoryForCurrentDate();
-  rRevisao();
-  rHangar();
-  rInsDia();
-  rOut();
-  renderAuditPanel();
-  rBI();
-  atualizarSelosDaEscala();
-}

@@ -29,8 +29,11 @@ import {
   rCursos, podeEditarCursos, programasIndisponiveis, codigoTravado, codigoComResultados, codigoNaDemanda, codigosReservados, mostrarAlteracoes,
   nomesDosRequisitos, listaComE, filtrarCursos, recolherFase, recolherTodasAsFases, irParaFase
 } from '../views/cursos.js';
-import { rAlu } from '../views/cadastros.js';
-import { rDem } from '../views/demanda.js';
+
+import { registrarDesenho, redesenharPorNome } from '../redesenho.js';
+
+// O desenho de Cursos (js/redesenho.js)
+registrarDesenho('cursos', rCursos, { em: ['dados', 'consulta', 'releitura'], ordem: 40 });
 
 // As últimas alterações de cada curso, como o servidor as devolve; o tamanho da descrição de uma alteração
 const ALTERACOES_NA_TELA = 20, LIMITE_DA_DESCRICAO = 500;
@@ -169,7 +172,7 @@ async function mostrarOGravado(sigla, gravado, erro) {
   }
   const ativo = document.activeElement;
   const focoNoCurso = Boolean(ativo && ativo.closest(`#cursos .curso[data-curso="${sigla}"]`));
-  rCursos(); rAlu(); rDem();
+  rCursos(); redesenharPorNome('alunos', 'pedidos-do-dia');
   if (focoNoCurso && !naTela(sigla)) focar(['#cur-novo']);
   showToast(avisoDaRecusa(erro, sigla));
 }
@@ -201,7 +204,7 @@ async function enviar(sigla, fila) {
   const mostrado = naTela(sigla);
   porNaTela(fila.gravado);
   if (mostrado !== fila.curso) {
-    rCursos(); rAlu(); rDem();
+    rCursos(); redesenharPorNome('alunos', 'pedidos-do-dia');
   } else {
     mostrarAlteracoes(fila.gravado);
   }
@@ -220,8 +223,9 @@ function alterar(curso, novo, descricao, { comSigla = true } = {}) {
   fila.curso = novo;
   fila.itens.push({ curso: novo, conteudo: conteudoDoCurso(novo), descricao: comSigla ? `${sigla}: ${descricao}` : descricao });
   porNaTela(novo);
-  rAlu(); rDem();
+  // Primeiro a fila sai para o servidor; depois Alunos e a Demanda são refeitos (um desenho que falha não a segura)
   if (!fila.enviando) enviar(sigla, fila);
+  redesenharPorNome('alunos', 'pedidos-do-dia');
 }
 
 // Quem muda o programa, com ele na tela (lido das tabelas dos cursos)

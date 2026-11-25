@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { runAllocationEngine } from '../../js/engine.js';
 import { escolherInstrutor, instrutoresDoPedido, instrutoresDoVoo, reverterEscolha, escolhasDaUnidade, escolherNosPedidos } from '../../js/instrutor-escolhido.js';
 import { motivoDoFixo, fixosAoMudarStatus, fixosAoReabrir, normalizarFixos } from '../../js/fixos.js';
-import { importarSolicitacoes } from '../../js/agenda.js';
+import { importarSolicitacoes } from '../../js/processamento.js';
 import { validarReversao } from '../../js/reversoes.js';
 import { normalizeMissionFields } from '../../js/rules.js';
 import { separar, juntar } from '../../js/dias.js';
