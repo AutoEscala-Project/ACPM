@@ -107,15 +107,17 @@ npm run test:e2e       # aplicação no navegador (Playwright)
 ## Meteorologia no painel (função `meteorologia`)
 
 O pé do painel (a vista Painel da Escala e a TV da recepção) mostra o METAR e o TAF oficiais de Pampulha (SBBH) e de
-Confins (SBCF), lado a lado, cada caixa com "Atualizado às" a hora da observação do METAR (a local e a Z). As mensagens
-vêm da REDEMET (https://api-redemet.decea.mil.br, a API do DECEA), a única fonte. A REDEMET pede uma chave, que não pode
-ir para o navegador, então quem busca é a Edge Function `supabase/functions/meteorologia` (Deno): ela exige a sessão de
-uma conta do app (o JWT, conferido pelo gateway e pelo Auth do projeto), manda a chave só no cabeçalho `x-api-key`
-(nunca no endereço), pede o METAR das últimas 3 horas (`data_ini` e `data_fim`, em UTC: sem eles, a REDEMET manda só a
-hora de agora, e a estação cujo METAR da hora ainda não chegou ficaria sem) e fica com o mais recente de cada estação,
-pede o TAF sem janela (os em vigor) e fica com o que cobre agora, o emitido por último, guarda as mensagens 5 minutos na
-memória, desiste da REDEMET em 12 segundos e responde `{ gerado, estacoes: [{ icao, nome, metar, taf, observado }] }`
-só às origens do app. A leitura das mensagens (`mensagens.js`) e o atendimento (`atendimento.js`) são JavaScript puro,
+Confins (SBCF), lado a lado, cada caixa com o nome do aeródromo em letras grandes e as mensagens; "Atualizado às" a hora
+da observação do METAR (a local e a Z) só aparece quando a última busca falhou ou a observação passou de 90 minutos. As
+mensagens vêm da REDEMET (https://api-redemet.decea.mil.br, a API do DECEA), a única fonte. A REDEMET pede uma chave,
+que não pode ir para o navegador, então quem busca é a Edge Function `supabase/functions/meteorologia` (Deno): ela exige
+a sessão de uma conta do app (o JWT, conferido pelo gateway e pelo Auth do projeto), manda a chave só no cabeçalho
+`x-api-key` (nunca no endereço), pede o METAR das últimas 3 horas (`data_ini` e `data_fim`, em UTC: sem eles, a REDEMET
+manda só a hora de agora, e a estação cujo METAR da hora ainda não chegou ficaria sem) e fica com o mais recente de cada
+estação, pede o TAF sem janela (os em vigor) e fica com o que cobre agora, o emitido por último, guarda as mensagens 5
+minutos na memória, desiste da REDEMET em 12 segundos e responde `{ gerado, estacoes: [{ icao, nome, metar, taf,
+observado }] }` só às origens do app. A leitura das mensagens (`mensagens.js`) e o atendimento (`atendimento.js`) são
+JavaScript puro,
 testados também no Node (`test/unit/meteorologia-funcao.test.js`, com respostas de verdade da REDEMET em
 `test/fixtures/meteorologia/`).
 
