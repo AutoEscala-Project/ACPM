@@ -1,5 +1,5 @@
 // Histórico da data numa gaveta lateral, que abre sobre a aba aberta (sem trocar de aba).
-import { test, expect, abrir, abrirSintetico, irPara, abrirEscala, AMANHA, prepararContexto, vigiarErros, entrar, abrirHistorico, alternarDisponivel, alternarVem, appPronto, caixaVem, caixaVoa, campoDaData, diaSeguinte, linhaDoInstrutor } from './fixtures.js';
+import { test, expect, abrir, abrirSintetico, irPara, abrirEscala, abrirCaixa, AMANHA, prepararContexto, vigiarErros, entrar, abrirHistorico, alternarDisponivel, alternarVem, appPronto, caixaVem, caixaVoa, campoDaData, diaSeguinte, linhaDoInstrutor } from './fixtures.js';
 import { documentosAtuais, instalarSupabaseFalso, CONTAS } from './supabase-falso.js';
 import { aluno, cenario, instrutor, missaoExtra } from '../helpers/montar.js';
 
@@ -321,6 +321,7 @@ test.describe('Histórico', () => {
     await irPara(page, 'ins');
     await alternarVem(page, ins, false);
     await abrirEscala(page);
+    await abrirCaixa(page, 'conflitos');
     await page.locator('#out details.conflitos [data-reparo]').click();
     const soltar = page.locator('#painel-reparo .opcoes-reparo li', { hasText: 'Soltar o voo' });
     await soltar.getByRole('button', { name: 'Soltar' }).click();

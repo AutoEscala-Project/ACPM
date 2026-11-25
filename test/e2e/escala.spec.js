@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises';
-import { test, expect, abrir, abrirComExemplo, irPara, abrirEscala, lerEscala, json, AMANHA, abrirHistorico, campoDaData, exportar } from './fixtures.js';
+import { test, expect, abrir, abrirComExemplo, abrirEscala, lerEscala, json, AMANHA, abrirHistorico, campoDaData, exportar } from './fixtures.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
 
 test.describe('Escala', () => {
@@ -91,7 +91,7 @@ test.describe('Escala', () => {
     await expect(voo.locator('.fixo')).toHaveAttribute('aria-label', 'Voo fixo: Em Voo');
     const alterada = await lerEscala(page);
     await page.reload();
-    await irPara(page, 'esc');
+    await abrirEscala(page);
     await expect(voo.locator('.st-sel')).toHaveValue('Em Voo');
     expect(await lerEscala(page)).toEqual(alterada);
   });

@@ -1,7 +1,7 @@
 // Sugestões para um conflito: o botão "Sugestões" da caixa de conflitos abre uma gaveta com o que pode voar
 // no lugar do voo fixo; "Aplicar" muda o voo (que continua fixo) e o histórico desfaz. Cancelar pede o motivo, como no
 // status, já com o motivo do conflito marcado
-import { test, expect, abrir, irPara, abrirEscala, abrirHistorico, alternarVem, aprovar } from './fixtures.js';
+import { test, expect, abrir, irPara, abrirEscala, abrirCaixa, abrirHistorico, alternarVem, aprovar } from './fixtures.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
 
 const dia = () => cenario({ ins: [instrutor(1, 9), instrutor(2, 9)], stu: [aluno(1000, { p1: 390, p2: -1 }), aluno(1001, { p1: 500, p2: -1 })] });
@@ -18,6 +18,7 @@ async function aprovarETirarOInstrutor(page, url) {
   await irPara(page, 'ins');
   await alternarVem(page, id, false);
   await abrirEscala(page);
+  await abrirCaixa(page, 'conflitos');
   return { instrutor, outro: id === 1 ? 'Instrutor 02' : 'Instrutor 01' };
 }
 
@@ -91,6 +92,7 @@ test.describe('Sugestões para um conflito', () => {
     await abrir(page, { estado });
     await abrirEscala(page);
     await expect(page.locator('#out details.conflitos')).toContainText('a duração do pedido mudou');
+    await abrirCaixa(page, 'conflitos');
     await page.locator('#out details.conflitos [data-reparo]').click();
     const opcoes = gaveta(page).locator('.opcoes-reparo li');
     await expect(opcoes).toHaveCount(2);

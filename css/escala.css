@@ -54,6 +54,26 @@ details.caixa.avisos summary { color: var(--wa); }
 /* O mapa rola dentro do próprio painel quando não cabe na tela */
 .mapa { overflow-x: auto; }
 .mapa .tl-wrap { min-width: 720px; }
+/* O eixo invertido (Inverter eixo X:Y): cada recurso (ou instrutor) uma coluna, com o nome em cima, e as horas descendo à
+   esquerda, 56 px por hora (--horas vem do mapa). As colunas dividem a largura e, quando não cabem, o mapa rola de lado */
+.mapa .tl-wrap.transposto { display: flex; align-items: flex-start; min-width: 0; --altura: calc(var(--horas, 12) * 56px); }
+.transposto .tl-axis { flex: none; width: 42px; height: calc(var(--altura) - 2px); margin: 51px 6px 0 0; }
+.transposto .tl-axis span { left: auto; right: 0; top: var(--pos); transform: translateY(-50%); }
+.transposto .tl-axis span.fim { transform: translateY(-100%); }
+.transposto .tl-row { flex: 1 0 112px; flex-direction: column; align-items: stretch; gap: 6px; padding: 0 3px; border-top: 0; border-left: 1px solid var(--ln); }
+.transposto .tl-lbl { width: auto; height: 44px; align-content: center; overflow: hidden; }
+.transposto .tl-lbl > span, .transposto .tl-lbl > small { white-space: nowrap; }
+.transposto .tl-track {
+  flex: none;
+  height: var(--altura);
+  background-image: linear-gradient(to bottom, transparent calc(100% - 1px), var(--ln) calc(100% - 1px));
+  background-size: 100% var(--hora, 8.333%);
+}
+.transposto .tl-bar { left: 2px; right: 2px; width: auto; top: var(--ini); height: var(--dur); bottom: auto; justify-content: flex-start; }
+.transposto .tl-bar:hover, .transposto .tl-bar:focus-visible, .transposto .tl-bar[aria-expanded="true"] { transform: translateX(-1px); }
+/* A barra em pé é alta e estreita: o texto quebra em linhas (o horário, o aluno, a missão e o instrutor à vista) */
+.transposto .tl-bar-t1, .transposto .tl-bar-t2 { white-space: normal; overflow-wrap: anywhere; }
+#btn-eixo.on { background: var(--info-bg); border-color: var(--ac); }
 @media (max-width: 640px) {
   #s-esc .flt-rotulo, #flt-esc-q { flex: 1 1 140px; min-width: 0; }
   .resumo .st, .resumo .parado { width: 100%; justify-content: space-between; gap: 8px; }
@@ -177,7 +197,7 @@ details.caixa.conflitos .btn.quiet { padding: 1px 8px; margin-left: 4px; font-si
   font-weight: 600;
   color: var(--mu);
 }
-.tl-axis span { position: absolute; top: 0; transform: translateX(-50%); white-space: nowrap; }
+.tl-axis span { position: absolute; top: 0; left: var(--pos); transform: translateX(-50%); white-space: nowrap; }
 .tl-axis span.fim { transform: translateX(-100%); }
 .tl-row {
   display: flex;
@@ -238,6 +258,8 @@ body[data-role="gestor"] #out .tl-track { cursor: default; }
   position: absolute;
   top: 2px;
   bottom: 2px;
+  left: var(--ini);
+  width: var(--dur);
   border-radius: 4px;
   padding: 2px 6px;
   cursor: pointer;
@@ -350,6 +372,8 @@ body[data-role="gestor"] #out .tl-track { cursor: default; }
   .win-btn { min-height: 44px; }
   /* O "+" que agenda: na linha do mapa, no horário da lista e na turma de Ground */
   .tl-agendar, .win-agendar { min-width: 44px; min-height: 44px; }
+  /* A barra do voo com 46 px de altura para o dedo (a faixa com 52 px; no eixo invertido, a altura é a duração) */
+  .tl-track { height: 52px; }
   /* Com o "+" de 44 px, sobram uns 107 px para o nome da linha do mapa: o nome (e as horas) quebram em quantas linhas
      precisarem, em vez de terminar em reticências (no toque, não há o title para ler o resto). Até duas linhas, a linha
      do mapa fica da altura do "+" */

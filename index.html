@@ -369,11 +369,12 @@
     <h2>Escala do dia <span class="atualizada" id="escala-atualizada" role="status" hidden><svg class="ico" aria-hidden="true"><use href="#i-relogio"/></svg><span id="escala-atualizada-texto"></span></span><span class="selo-aprovada" id="selo-aprovada" hidden></span></h2>
     <div class="bar">
       <div class="seg" role="group" aria-label="Como ver a escala">
-        <button type="button" aria-pressed="true" data-tl="lista" class="on"><svg class="ico"><use href="#i-lista"/></svg>Lista</button>
-        <button type="button" aria-pressed="false" data-tl="eq"><svg class="ico"><use href="#i-aviao"/></svg>Por recurso</button>
+        <button type="button" aria-pressed="true" data-tl="eq" class="on"><svg class="ico"><use href="#i-aviao"/></svg>Por recurso</button>
         <button type="button" aria-pressed="false" data-tl="ins"><svg class="ico"><use href="#i-instrutor"/></svg>Por instrutor</button>
+        <button type="button" aria-pressed="false" data-tl="lista"><svg class="ico"><use href="#i-lista"/></svg>Lista</button>
         <button type="button" aria-pressed="false" data-tl="painel"><svg class="ico"><use href="#i-painel"/></svg>Painel</button>
       </div>
+      <button type="button" class="btn sec" id="btn-eixo" aria-pressed="false" title="Os recursos (ou os instrutores) nas colunas e as horas nas linhas do mapa">Inverter eixo X:Y</button>
       <button type="button" class="btn edit-only" id="btn-agendar" data-act="agendar" data-agendar="dia" aria-haspopup="dialog">+ Agendar voo</button>
       <span class="cresce"></span>
       <label class="flt-rotulo"><span>Categoria</span> <select id="flt-esc-cat" class="flt-ctrl"></select></label>
@@ -540,13 +541,15 @@
       <p>As abas seguem a ordem de uso: Escala, Demanda e Agenda; Recursos, Instrutores, Alunos, Cursos e Rodízio; e o BI.</p>
       <h4>Escala</h4>
       <p>No alto, o resumo do dia (missões pedidas, escaladas e as horas de voo e aula), as missões que não entraram, cada uma com o motivo (caixa vermelha), e os avisos agrupados (caixa amarela).
-      Depois, a escala em três vistas:</p>
+      As caixas abrem recolhidas, só com o título: um clique no título abre ou recolhe, e a caixa fica como você deixou ao trocar de vista.
+      Depois, a escala em quatro vistas (a Escala abre em Por recurso):</p>
       <ul>
+        <li><b>Por recurso</b> e <b>Por instrutor:</b> o mapa do dia, com a ocupação de cada um, e também as linhas livres: todos os recursos (o avião em manutenção fica riscado) e os instrutores disponíveis no dia.
+        Um clique num voo abre os detalhes dele (aluno, instrutor, recurso, missão, peso e status); Esc ou um clique fora fecha (com os detalhes abertos, o clique fora só fecha).
+        <b>Inverter eixo X:Y</b> põe os recursos (ou os instrutores) nas colunas e as horas descendo nas linhas; outro clique volta.</li>
         <li><b>Lista:</b> uma linha por voo, por horário.
         A turma de Ground ocupa uma linha só, com os alunos logo abaixo.
         A preferência aparece só quando o voo não ficou na 1ª (“2ª preferência” ou “horário livre”), e o peso fica em destaque quando chega perto do limite do avião.</li>
-        <li><b>Por recurso</b> e <b>Por instrutor:</b> o mapa do dia, com a ocupação de cada um, e também as linhas livres: todos os recursos (o avião em manutenção fica riscado) e os instrutores disponíveis no dia.
-        Um clique num voo abre os detalhes dele (aluno, instrutor, recurso, missão, peso e status); Esc ou um clique fora fecha (com os detalhes abertos, o clique fora só fecha).</li>
         <li><b>Painel:</b> o quadro do dia para um monitor ou a TV.
         <i>Missões</i> (o quadro padrão) mostra os voos e aulas do dia, na ordem do horário, sem separar partidas e chegadas, também o cancelado (ligue a coluna Observação para ver <i>Cancelado</i> e o motivo).
         Para a primeira página ser sempre o que acontece agora e o que vem depois, o voo sai do quadro 30 minutos depois do fim (no atraso, o fim novo; no cancelado, o programado), e a aula de Ground sai quando termina; o que está <i>Em Voo</i> fica até mudar de status.

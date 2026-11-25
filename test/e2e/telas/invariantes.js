@@ -25,7 +25,8 @@ export const alvosPequenos = page => page.evaluate(() => {
     if (!el.checkVisibility({ visibilityProperty: true }) || el.matches('p a, .sr')) continue;
     const alvo = el.matches('input[type=checkbox]') ? (el.closest('label') || el) : el;
     const { width, height } = alvo.getBoundingClientRect();
-    if (height < 44 || (!el.matches('select, input:not([type=checkbox]), summary') && width < 44)) {
+    // A barra do voo no mapa tem a largura da duração dele (a escala do mapa): só a altura conta
+    if (height < 44 || (!el.matches('select, input:not([type=checkbox]), summary, .tl-bar') && width < 44)) {
       pequenos.add(`${el.tagName.toLowerCase()}${el.id ? '#' + el.id : ''}${el.dataset.f ? `[data-f=${el.dataset.f}]` : ''}${el.dataset.act ? `[data-act=${el.dataset.act}]` : ''} ${Math.round(width)}×${Math.round(height)}`);
     }
   }

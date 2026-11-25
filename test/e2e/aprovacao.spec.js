@@ -46,8 +46,9 @@ test.describe('Escala aprovada', () => {
     await irPara(page, 'ins');
     await alternarVem(page, id, false);
     await abrirEscala(page);
+    // A caixa abre recolhida, só com o título
     const conflitos = page.locator('#out details.caixa.conflitos');
-    await expect(conflitos).toHaveAttribute('open', '');
+    await expect(conflitos).not.toHaveAttribute('open', '');
     await expect(conflitos.locator('summary')).toHaveText('1 voo em conflito na escala aprovada');
     await expect(conflitos).toContainText('o instrutor não está disponível');
     await expect(primeiro).toHaveClass(/\bem-conflito\b/);

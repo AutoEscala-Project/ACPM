@@ -1,6 +1,6 @@
 // Acessibilidade: cada botão e cada campo tem um nome para o leitor de tela, e nenhum se chama só "✕" (que o leitor
 // lê como "multiplicação"). Vale para todas as abas, o Histórico e o painel de habilitações.
-import { test, expect, abrir, abrirComExemplo, irPara, entrar, abrirEscala, prepararContexto, vigiarErros, REGIOES, abasVisiveis, abrirHistorico, aprovar, botaoAprovar, botaoDiaAnterior, botaoDoHistorico, botaoDoMenuDaConta, percorrerTelas, relativoDaData, rotuloDaData, semNome, alternarVem, botaoDiaSeguinte, campoDaData } from './fixtures.js';
+import { test, expect, abrir, abrirComExemplo, irPara, entrar, abrirEscala, abrirCaixa, prepararContexto, vigiarErros, REGIOES, abasVisiveis, abrirHistorico, aprovar, botaoAprovar, botaoDiaAnterior, botaoDoHistorico, botaoDoMenuDaConta, percorrerTelas, relativoDaData, rotuloDaData, semNome, alternarVem, botaoDiaSeguinte, campoDaData } from './fixtures.js';
 import { instalarSupabaseFalso, documentosAtuais, CONTAS } from './supabase-falso.js';
 import { comExemplo } from '../helpers/exemplo.js';
 import { estadoSintetico } from '../helpers/estado.js';
@@ -288,11 +288,11 @@ test.describe('O leitor de tela e o teclado', () => {
     await page.locator('#btn-manual').click();
     await expect(atual).toHaveCount(1);
     await expect(atual).toHaveId('btn-manual');
-    // A vista escolhida fica "pressionada"; as outras, não
-    await abrirEscala(page);
-    await expect(page.locator('#s-esc [data-tl][aria-pressed="true"]')).toHaveAttribute('data-tl', 'lista');
-    await page.locator('#s-esc [data-tl="eq"]').click();
+    // A vista escolhida fica "pressionada"; as outras, não (a Escala abre em Por recurso)
+    await abrirEscala(page, { vista: null });
     await expect(page.locator('#s-esc [data-tl][aria-pressed="true"]')).toHaveAttribute('data-tl', 'eq');
+    await page.locator('#s-esc [data-tl="lista"]').click();
+    await expect(page.locator('#s-esc [data-tl][aria-pressed="true"]')).toHaveAttribute('data-tl', 'lista');
     await expect(page.locator('#s-esc [data-tl][aria-pressed="false"]')).toHaveCount(3);
     await irPara(page, 'ins');
     await page.locator('[data-vista-ins="cadastro"]').click();
@@ -443,6 +443,7 @@ test.describe('O leitor de tela e o teclado', () => {
     await irPara(page, 'ins');
     await alternarVem(page, doVoo.endsWith('01') ? 1 : 2, false);
     await abrirEscala(page);
+    await abrirCaixa(page, 'conflitos');
     const botao = page.locator('#out details.conflitos [data-reparo]');
     await botao.click();
     await expect(page.locator('#painel-reparo')).toBeVisible();
