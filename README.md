@@ -66,7 +66,7 @@ npm run test:e2e       # aplicação no navegador (Playwright)
   `alunos.js`, `demanda.js`, `pedidos.js` (o formulário da Agenda), `escala.js` (ler, aprovar, reabrir, exportar) e
   `cursos.js`; `invariantes.js` tem as conferências de todas as telas (o nome para o leitor de tela, os 44 px, a página
   que não rola de lado) e `percorrerTelas`, que passa por todas as abas e pelos `ESTADOS` de cada driver. Um seletor
-  reservado (`#dt`, `#eqs`, `#inst-dia`, `data-f="fly"`, `#ag-*`…) aparece só no driver dele e nos testes da tela dona
+  reservado (`#btn-data`, `#eqs`, `#inst-dia`, `data-f="fly"`, `#ag-*`…) aparece só no driver dele e nos testes da tela dona
   dele (`test/unit/donos-dos-seletores.test.js`): quando uma tela muda, mudam o driver e os testes dela. As frases que o
   Manual precisa dizer (e as que saíram) ficam em `test/e2e/manual-frases.js`, num bloco por tela.
 - Na primeira vez, `npx playwright install chromium` baixa o navegador dos testes.
