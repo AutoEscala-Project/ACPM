@@ -1,4 +1,4 @@
-/* O trilho (aside#trilho, js/views/trilho.js): o calendário da data aberta, com os pedidos de cada dia, e a linha da data.
+/* O trilho (aside#trilho, js/views/trilho.js): o calendário da data aberta, com os pedidos de cada dia, e os avisos dela.
    Fixo, ao lado da tela; solto, um painel entre a linha e a tela (abaixo de 1024 px, de ponta a ponta) */
 #trilho { background: var(--pn); border: 1px solid var(--ln); border-radius: 8px; padding: 10px 12px 12px; margin-bottom: 14px; }
 /* De ponta a ponta, 6 px de cada lado: 320 = 7 × 44 + 12. O título e a linha da data ficam a 16 px, como o resto da página */
@@ -57,6 +57,21 @@ body[data-trilho="aberto"] #trilho :is(.trilho-cab, #cal) { width: 100%; max-wid
 }
 #cal .cal-dia.hoje .cal-qtd { background: var(--pn); color: var(--ac); }
 
-/* A linha da data aberta (os avisos dela vêm embaixo) */
-#trilho .trilho-avisos { border-top: 1px solid var(--ln); margin-top: 10px; padding-top: 8px; }
+/* A linha da data aberta e os avisos dela: o horário (ou "—"), a barra da gravidade, o que é e o porquê */
+#trilho .trilho-avisos { border-top: 1px solid var(--ln); margin-top: 10px; padding-top: 8px; min-width: 0; }
 #trilho .trilho-data { margin: 0 0 6px; font: 600 14.5px 'Barlow Semi Condensed', sans-serif; }
+.avisos-da-data { list-style: none; margin: 0; padding: 0; }
+.aviso + .aviso { border-top: 1px solid var(--ln); }
+.aviso-item { display: flex; gap: 8px; padding: 7px 0; border-radius: 6px; color: var(--ink); text-decoration: none; }
+a.aviso-item:hover { background: var(--pn2); }
+/* Dentro da lista, que rola: o anel fica por dentro do item */
+a.aviso-item:focus-visible { outline-offset: -2px; }
+.aviso-hora { flex: none; width: 42px; font-size: 13px; font-variant-numeric: tabular-nums; }
+.aviso-hora small { display: block; color: var(--mu); font-size: 11.5px; }
+.aviso-barra { flex: none; width: 4px; border-radius: 2px; background: var(--mu); }
+.aviso[data-gravidade="erro"] .aviso-barra { background: var(--er); }
+.aviso[data-gravidade="aviso"] .aviso-barra { background: var(--wa); }
+.aviso-corpo { flex: 1; min-width: 0; overflow-wrap: anywhere; font-size: 13.5px; line-height: 1.35; }
+.aviso-titulo { display: block; font-weight: 600; }
+.aviso-texto { display: block; color: var(--mu); font-size: 12.5px; }
+@media (max-width: 1023px) { .aviso-item { min-height: 44px; } }

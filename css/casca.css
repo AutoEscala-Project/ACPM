@@ -26,7 +26,8 @@ header.topo {
 .topo-data-botao:hover { background: rgba(255,255,255,.12); }
 .topo-data-botao[aria-expanded="true"] { background: rgba(255,255,255,.16); }
 #dt-rotulo { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.dt-semana-curta { display: none; }
+.dt-semana-curta, .abreviada .dt-semana { display: none; }
+.abreviada .dt-semana-curta { display: inline; }
 @media (max-width: 400px) {
   .dt-semana { display: none; }
   .dt-semana-curta { display: inline; }

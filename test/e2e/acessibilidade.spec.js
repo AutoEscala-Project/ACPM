@@ -1,6 +1,6 @@
 // Acessibilidade: cada botão e cada campo tem um nome para o leitor de tela, e nenhum se chama só "✕" (que o leitor
 // lê como "multiplicação"). Vale para todas as abas, o Histórico e o painel de habilitações.
-import { test, expect, abrir, abrirComExemplo, irPara, entrar, abrirEscala, abrirCaixa, prepararContexto, vigiarErros, REGIOES, abasVisiveis, abrirHistorico, aprovar, botaoAprovar, botaoDoHistorico, botaoDoMenuDaConta, percorrerTelas, relativoDaData, rotuloDaData, semNome, alternarVem, botoesDasAbas, botaoDaData, mudarData, contagemDoDia, diaDoCalendario, trilho, AMANHA } from './fixtures.js';
+import { test, expect, abrir, abrirComExemplo, irPara, entrar, abrirEscala, abrirCaixa, prepararContexto, vigiarErros, REGIOES, abasVisiveis, abrirHistorico, aprovar, botaoAprovar, botaoDoHistorico, botaoDoMenuDaConta, percorrerTelas, relativoDaData, rotuloDaData, semNome, alternarVem, botoesDasAbas, botaoDaData, mudarData, contagemDoDia, diaDoCalendario, trilho, AMANHA, avisosDaData, contagemDosAvisos } from './fixtures.js';
 import { instalarSupabaseFalso, documentosAtuais, CONTAS } from './supabase-falso.js';
 import { comExemplo } from '../helpers/exemplo.js';
 import { estadoSintetico } from '../helpers/estado.js';
@@ -146,6 +146,16 @@ test.describe('Telas de 320 px', () => {
     expect(await rotulo.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
     await expect(rotulo).toHaveText('qua., 11/11', { useInnerText: true });
   });
+});
+
+// O botão da data tem a largura fixa: com o ano, o "amanhã" e o número de avisos, o dia da semana vai abreviado
+test('na tela grande, na virada do ano, a data aparece inteira com o número de avisos', async ({ page }) => {
+  await page.clock.setFixedTime(new Date('2026-12-31T12:00:00-03:00'));
+  await abrir(page, { estado: cenario({ ins: [instrutor(1, 1)], stu: [aluno(1000, { mis: 'Multimotor', eq: 'PA-34' })] }) });
+  await expect(contagemDosAvisos(page)).toBeVisible();
+  const rotulo = rotuloDaData(page);
+  await expect(rotulo).toHaveText('sex., 01/01/2027', { useInnerText: true });
+  expect(await rotulo.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
 });
 
 test('na tela grande, o dia da semana aparece por extenso', async ({ page }) => {
@@ -604,7 +614,7 @@ test.describe('O leitor de tela e o teclado', () => {
     // anel do foco dos controles dele, com o fundo do painel
     test(`os textos do trilho contrastam, e o anel do foco dele também, no tema ${nome}`, async ({ page, context }) => {
       const servidor = await instalarSupabaseFalso(context, documentosAtuais(comExemplo(estadoSintetico()), AMANHA));
-      for (const [id, data] of [[1, '2026-11-10'], [2, '2026-11-13']]) {
+      for (const [id, data] of [[1, '2026-11-10'], [2, '2026-11-13'], [3, AMANHA]]) {
         servidor.solicitacoes.push({ id, data, aluno: 1000, aluno_nome: 'Aluno 1000', missao: 'Voo Local', janela: 'horario', horario: '08:20', horas: 1, observacao: null,
           registrado_por: 'Maria', registrado_em: '2026-11-10T14:00:00.000Z', conta: 'Secretaria de Teste', excecao: false, cancelada_em: null, cancelada_por: null });
       }
@@ -616,7 +626,8 @@ test.describe('O leitor de tela e o teclado', () => {
         ['o mês', page.locator('#cal-mes')], ['o dia da semana', page.locator('#cal th').first()], ['um dia', diaDoCalendario(page, '2026-11-12')],
         ['a data aberta', diaDoCalendario(page, AMANHA)], ['hoje', diaDoCalendario(page, '2026-11-10')], ['um domingo', diaDoCalendario(page, '2026-11-15')],
         ['um dia de outro mês', diaDoCalendario(page, '2026-12-01')], ['os pedidos de um dia', contagemDoDia(page, '2026-11-13')],
-        ['os pedidos de hoje', contagemDoDia(page, '2026-11-10')], ['a linha da data', page.locator('#trilho-data')]
+        ['os pedidos de hoje', contagemDoDia(page, '2026-11-10')], ['a linha da data', page.locator('#trilho-data')],
+        ['o título de um aviso', avisosDaData(page).first().locator('.aviso-titulo')], ['o número de avisos', contagemDosAvisos(page)]
       ])).toEqual([]);
       const fundo = await trilho(page).evaluate(el => getComputedStyle(el).backgroundColor);
       const fracos = [];

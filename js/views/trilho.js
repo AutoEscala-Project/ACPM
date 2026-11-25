@@ -1,12 +1,16 @@
-// O trilho (aside#trilho): o calendário da data aberta, com os pedidos de cada dia, e a linha da data. Fica ao lado da tela
+// O trilho (aside#trilho): o calendário da data aberta, com os pedidos de cada dia, e os avisos dela. Fica ao lado da tela
 // (fixo: na largura larga, por padrão; na média, quando a pessoa escolhe) ou abre como painel entre a linha e a
 // tela pelo botão da data (#btn-data). Só "Fixar ao lado" fica guardado, por classe de largura (acpm_trilho)
 import { $, trocarConteudo } from '../dom.js';
-import { esc, hojeISO, rotuloDaData } from '../format.js';
+import { dadosLidos } from '../actions.js';
+import { esc, fmtH, hm, hojeISO, rotuloDaData } from '../format.js';
+import { avisosDaData } from '../linha-do-dia.js';
 import { semanasDoMes, paradaDoTab, descricaoDoDia, linhaDaData, nomeDoMes } from '../calendario.js';
 import { ehDomingo } from '../agenda.js';
 import { DATA } from '../state.js';
 import { ApiClient } from '../storage.js';
+import { enderecoDoDestino } from '../telas.js';
+import { contextoDoDia } from './linha.js';
 import { pedidosDaDataAberta } from './selos.js';
 
 const ABREVIADOS = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
@@ -76,6 +80,8 @@ export function rRotuloDaData() {
   const { semana, semanaCurta, data: diaMes, relativo } = rotuloDaData(DATA, hojeISO());
   const parte = (classe, texto) => Object.assign(document.createElement('span'), { className: classe, textContent: texto });
   $('#dt-rotulo').replaceChildren(parte('dt-semana', semana), parte('dt-semana-curta', semanaCurta), `, ${diaMes}`);
+  // Com o ano e o "amanhã" (na virada do ano), o dia da semana abreviado: a data não é cortada ao lado do número de avisos
+  $('#dt-rotulo').classList.toggle('abreviada', Boolean(relativo) && diaMes.length > 5);
   $('#dt-rel').textContent = relativo;
   $('#dt-rel').hidden = !relativo;
 }
@@ -94,7 +100,7 @@ function botaoDoDia(dia, { mes, hoje, parada }) {
   return `<td role="gridcell"><button type="button" class="${classes.join(' ')}" ${atributos}>${+dia.slice(8, 10)}${mesCurto}${numero}</button></td>`;
 }
 
-// O calendário do mês à vista e a linha da data aberta (ou da que está abrindo)
+// O calendário do mês à vista, a linha da data aberta (ou da que está abrindo) e os avisos dela
 export function rTrilho() {
   const trilho = $('#trilho');
   if (!trilho || !DATA) return;
@@ -114,6 +120,34 @@ export function rTrilho() {
   const corpo = `<tbody>${semanas.map(semana => `<tr>${semana.map(dia => botaoDoDia(dia, { mes, hoje, parada })).join('')}</tr>`).join('')}</tbody>`;
   trocarConteudo($('#cal'), cabeca + corpo);
   $('#trilho-data').textContent = abrindo ? `Abrindo ${rotuloDaData(abrindo, hoje).dia}…` : linhaDaData(DATA, hoje);
+  rAvisos();
+}
+
+// Os avisos da data aberta, na ordem de js/linha-do-dia.js: o horário e a duração do voo, o que é e o porquê; o que tem destino
+// leva à tela onde se resolve. No botão da data, quantos são (erros e avisos). Enquanto outra data abre, e antes dos dados da
+// primeira, a lista fica como estava
+const DITO = { erro: 'erro', aviso: 'aviso', info: 'informação' };
+function avisoHTML(a) {
+  const hora = a.minuto === null ? '<span aria-hidden="true">—</span><span class="sr">sem horário</span>'
+    : `<time>${hm(a.minuto)}</time><small>${fmtH(a.duracaoMin / 60)}</small>`;
+  const conteudo = `<span class="aviso-hora">${hora}</span><span class="aviso-barra" aria-hidden="true"></span>`
+    + `<span class="aviso-corpo"><b class="aviso-titulo">${esc(a.titulo)}</b>${a.texto ? `<small class="aviso-texto">${esc(a.texto)}</small>` : ''}</span>`
+    + `<span class="sr">, ${DITO[a.gravidade]}</span>`;
+  const item = `data-aviso="${esc(a.id)}"`;
+  return a.destino
+    ? `<li class="aviso" data-gravidade="${a.gravidade}"><a class="aviso-item" href="${enderecoDoDestino(a.destino)}" ${item} data-focar>${conteudo}</a></li>`
+    : `<li class="aviso" data-gravidade="${a.gravidade}"><div class="aviso-item" ${item}>${conteudo}</div></li>`;
+}
+function rAvisos() {
+  if (!dadosLidos) return;
+  const avisos = avisosDaData(contextoDoDia());
+  trocarConteudo($('#avisos-da-data'), avisos.map(avisoHTML).join(''));
+  $('#avisos-da-data').hidden = !avisos.length;
+  $('#avisos-vazio').hidden = avisos.length > 0;
+  const n = avisos.filter(a => a.gravidade !== 'info').length;
+  const marca = $('#avisos-cnt');
+  marca.hidden = !n;
+  trocarConteudo(marca, n ? `<span aria-hidden="true">${n}</span><span class="sr">, ${n} ${n === 1 ? 'aviso' : 'avisos'} nesta data</span>` : '');
 }
 
 // O dia do calendário que recebe o foco: o pedido ou a parada do Tab

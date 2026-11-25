@@ -4,11 +4,12 @@
 import {
   test, expect, abrir, abrirComExemplo, entrar, preencherLogin, irPara, abrirHistorico, AMANHA, URL_APP, REGIOES, dataAberta, botaoDaData,
   rotuloDaData, trilho, diaDoCalendario, diasDoCalendario, contagemDoDia, paradasDoCalendario, escolherNoCalendario, mudarData, alvosPequenos,
-  larguraDaPagina, semNome, prepararContexto, vigiarErros
+  larguraDaPagina, semNome, prepararContexto, vigiarErros, avisosDaData, contagemDosAvisos, abrirEscala, aprovar, alternarDisponivel, botaoDaAba
 } from './fixtures.js';
 import { instalarSupabaseFalso, documentosAtuais, CONTAS } from './supabase-falso.js';
 import { estadoSintetico } from '../helpers/estado.js';
-import { aluno } from '../helpers/montar.js';
+import { comExemplo } from '../helpers/exemplo.js';
+import { aluno, cenario, instrutor } from '../helpers/montar.js';
 
 test.use({ preferencias: false });
 
@@ -475,6 +476,124 @@ test.describe('Os pedidos de cada dia', () => {
     await entrar(page, CONTAS.operador);
     await expect(diaDoCalendario(page, '2026-11-13')).toBeVisible();
     await expect(contagemDoDia(page, '2026-11-13')).toHaveCount(0);
+  });
+});
+
+test.describe('Os avisos da data', () => {
+  test('sem nada a resolver: a frase, e o botão da data sem número', async ({ page }) => {
+    await abrir(page);
+    await expect(page.locator('#avisos-vazio')).toHaveText('Nada a resolver nesta data.');
+    await expect(avisosDaData(page)).toHaveCount(0);
+    await expect(page.locator('#avisos-da-data')).toBeHidden();
+    await expect(contagemDosAvisos(page)).toBeHidden();
+  });
+
+  test('cada item com o horário do voo, o que é e o porquê; o clique leva à tela, com o foco no título; o número está no botão da data', async ({ page }) => {
+    await abrirComExemplo(page);
+    await abrirEscala(page);
+    await aprovar(page);
+    await irPara(page, 'rec');
+    for (const reg of ['PR-IGU', 'PR-MLB']) await alternarDisponivel(page, reg, false);
+    // Dois aviões em manutenção: os voos aprovados deles estão em conflito, na ordem do horário
+    const avisos = avisosDaData(page, 'Conflito na escala aprovada');
+    await expect(avisos.first()).toBeVisible();
+    const n = await avisos.count();
+    expect(n).toBeGreaterThan(1);
+    const horas = await avisos.locator('time').allTextContents();
+    expect(horas).toHaveLength(n);
+    expect(horas).toEqual([...horas].sort());
+    await expect(avisos.first()).toHaveAttribute('data-gravidade', 'erro');
+    await expect(avisos.first().locator('a')).toHaveAccessibleName(/^06:30 2 h Aluno \d+.* Conflito na escala aprovada: .*, erro$/);
+    await expect(avisos.first().locator('a')).toHaveAttribute('data-aviso', /^conf:\d+_\d+_1$/);
+    await expect(page.locator('#avisos-vazio')).toBeHidden();
+    await expect(contagemDosAvisos(page)).toHaveText(new RegExp(`^${await avisosDaData(page).count()}, \\d+ avisos nesta data$`));
+    await expect(botaoDaData(page)).toHaveAccessibleName(/amanhã ?, \d+ avisos nesta data$/);
+    await avisos.first().locator('a').click();
+    await expect(page.locator('#s-esc h2')).toBeFocused();
+    await expect(botaoDaAba(page, 'esc')).toHaveAttribute('aria-current', 'page');
+  });
+
+  test('o foco no aviso sobrevive a um redesenho dos avisos', async ({ page, context }) => {
+    const servidor = await instalarSupabaseFalso(context, comAluno());
+    servidor.solicitacoes.push(pedido(1, AMANHA));
+    await entrar(page, CONTAS.operador);
+    const item = avisosDaData(page, 'ainda não está na demanda').locator('a');
+    await item.focus();
+    await page.evaluate(async () => {
+      const { redesenhar } = await import('./js/redesenho.js');
+      redesenhar('pedidos');
+    });
+    await expect(item).toBeFocused();
+  });
+
+  test('os pedidos da agenda: quantos ainda não estão na demanda (só para quem opera), e a leitura que falhou', async ({ page, context }) => {
+    const servidor = await instalarSupabaseFalso(context, comAluno());
+    servidor.solicitacoes.push(pedido(1, AMANHA), pedido(2, AMANHA));
+    await entrar(page, CONTAS.operador);
+    await expect(avisosDaData(page)).toHaveText([/—sem horário2 pedidos da agenda ainda não estão na demanda, aviso/]);
+    await avisosDaData(page).locator('a').click();
+    await expect(page.locator('#s-age h2')).toBeFocused();
+    // Enquanto outra data abre, a lista continua a da data aberta; aberta, é a dela
+    const liberar = servidor.segurarLeiturasDeDias();
+    await diaDoCalendario(page, '2026-11-12').click();
+    await expect(page.locator('#trilho-data')).toHaveText('Abrindo quinta-feira, 12/11…');
+    await expect(avisosDaData(page)).toHaveCount(1);
+    liberar();
+    await expect(page.locator('#avisos-vazio')).toBeVisible();
+    // A leitura dos pedidos da data que falha
+    await context.route(url => url.pathname.endsWith('/rest/v1/solicitacoes') && url.searchParams.getAll('data').join() === 'gte.2026-11-13,lte.2026-11-13', route => route.fulfill({ status: 200, contentType: 'application/json', body: '{' }));
+    await diaDoCalendario(page, '2026-11-13').click();
+    await expect(avisosDaData(page)).toHaveText([/Não foi possível ler os pedidos desta data\., aviso/]);
+  });
+
+  for (const [perfil, href] of [['gestor', '#/rec'], ['secretaria', null]]) {
+    test(`o perfil ${perfil} não importa, sem o aviso dos pedidos; o dos aviões ${href ? 'leva a Recursos' : 'fica sem o link, que ele não abre'}`, async ({ page, context }) => {
+      const estado = comExemplo(estadoSintetico());
+      estado.horas = { ...estado.horas, 'PR-MLB': 49.5 };
+      const servidor = await instalarSupabaseFalso(context, documentosAtuais(estado, AMANHA));
+      servidor.solicitacoes.push(pedido(1, AMANHA));
+      await entrar(page, CONTAS[perfil]);
+      const dosAvioes = avisosDaData(page, /avião parado ou perto|aviões parados ou perto/);
+      await expect(dosAvioes).toHaveCount(1);
+      if (href) await expect(dosAvioes.locator('a')).toHaveAttribute('href', href);
+      else await expect(dosAvioes.locator('a')).toHaveCount(0);
+      await expect(avisosDaData(page, 'pedido da agenda')).toHaveCount(0);
+    });
+  }
+
+  test('o que a data não leu está na lista: as horas como erro, sem link', async ({ browser }) => {
+    const context = await browser.newContext();
+    await prepararContexto(context, { preferencias: false });
+    const servidor = await instalarSupabaseFalso(context, comAluno());
+    servidor.falhar('/rpc/horas_dos_instrutores');
+    const page = await context.newPage();
+    const erros = vigiarErros(page, { statusEsperados: [503] });
+    await entrar(page, CONTAS.operador);
+    const horas = avisosDaData(page, 'Não foi possível ler as horas de voo dos instrutores');
+    await expect(horas).toHaveAttribute('data-gravidade', 'erro');
+    await expect(horas.locator('a')).toHaveCount(0);
+    await expect(contagemDosAvisos(page)).toContainText('1 aviso nesta data');
+    // "Tentar de novo" (na faixa do alto) lê, e o aviso sai
+    await page.locator('#btn-tentar-dados').click();
+    await expect(horas).toHaveCount(0);
+    expect(erros).toEqual([]);
+    await context.close();
+  });
+
+  test('no celular, o aviso fecha o painel e leva à tela; os itens têm 44 px', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    // Um instrutor só, sem habilitação para o Multimotor: a missão não entra
+    await abrir(page, { estado: cenario({ ins: [instrutor(1, 1)], stu: [aluno(1000, { mis: 'Multimotor', eq: 'PA-34' })] }) });
+    await irPara(page, 'bi');
+    await expect(contagemDosAvisos(page)).toBeVisible();
+    await botaoDaData(page).click();
+    const item = avisosDaData(page, 'Rejeitado').locator('a');
+    await expect(item).toBeVisible();
+    expect(await alvosPequenos(page)).toEqual([]);
+    expect(await larguraDaPagina(page)).toBeLessThanOrEqual(390);
+    await item.click();
+    await expect(trilho(page)).toBeHidden();
+    await expect(page.locator('#s-esc h2')).toBeFocused();
   });
 });
 

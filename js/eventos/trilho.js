@@ -1,7 +1,7 @@
 // O trilho: o botão da data no topo, o calendário (um clique, Enter ou Espaço abre a data; as setas, Home, End, PageUp e
 // PageDown andam pela grade; Esc volta ao botão da data), as setas do mês, "Fixar ao lado" e o painel que fecha. É o único
 // que troca a data depois da abertura (carregarData). Os desenhos: o nome da data no botão, o mês da data aberta, o
-// calendário e os pedidos de cada dia
+// calendário com os avisos da data e os pedidos de cada dia
 import { carregarData } from '../actions.js';
 import { ehDomingo } from '../agenda.js';
 import { $, showToast, anunciar, fecharNoEsc } from '../dom.js';
@@ -100,7 +100,9 @@ $('#btn-data').onclick = () => {
 
 $('#trilho').addEventListener('click', e => {
   const botao = e.target.closest('.cal-dia');
-  if (botao) escolherData(botao.dataset.dia);
+  if (botao) { escolherData(botao.dataset.dia); return; }
+  // O aviso leva à tela onde se resolve: o painel aberto sai da frente dela
+  if (e.target.closest('a.aviso-item') && estadoDoTrilho() === 'aberto' && !e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey) mostrarTrilho('fechado');
 });
 $('#cal-mes-ant').onclick = () => mudarMes(-1);
 $('#cal-mes-prox').onclick = () => mudarMes(1);

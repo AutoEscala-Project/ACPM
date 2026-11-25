@@ -85,6 +85,7 @@
     <svg class="ico" aria-hidden="true"><use href="#i-calendario"/></svg>
     <span class="sr">Data da escala: </span><span id="dt-rotulo"></span>
     <span class="topo-data-rel" id="dt-rel" hidden></span>
+    <span class="badge-cnt" id="avisos-cnt" hidden></span>
     <svg class="ico hd-seta" aria-hidden="true"><use href="#i-baixo"/></svg>
   </button>
   <div class="hd-tools">
@@ -184,7 +185,7 @@
   </div>
 </nav>
 
-<!-- O trilho: o calendário da data aberta (cada dia com os pedidos dele) e a linha da data. Ao lado da tela ou aberto
+<!-- O trilho: o calendário da data aberta (cada dia com os pedidos dele) e os avisos dela. Ao lado da tela ou aberto
      pelo botão da data (js/views/trilho.js) -->
 <aside class="trilho" id="trilho" aria-label="Data e avisos" data-regiao="trilho" hidden>
   <div class="trilho-cab">
@@ -197,6 +198,8 @@
   <table class="cal" id="cal" role="grid" aria-labelledby="cal-mes"></table>
   <div class="trilho-avisos" role="region" aria-labelledby="trilho-data">
     <h2 class="trilho-data" id="trilho-data"></h2>
+    <ol class="avisos-da-data" id="avisos-da-data" hidden></ol>
+    <p class="h" id="avisos-vazio" hidden>Nada a resolver nesta data.</p>
   </div>
 </aside>
 
@@ -570,6 +573,8 @@
       <p>A linha, no alto, avisa o que pede atenção: cada cartão tem um número e um estado (feito, pendente, precisa de atenção ou falhou, cada um com o seu símbolo).
       Aberta (o botão no fim dela), ela mostra as tarefas de cada etapa, e cada tarefa leva à tela onde ela se resolve: na Agenda, os pedidos que ainda não estão na demanda; na Escala, as missões que não entraram e os conflitos e avisos.
       O link de Recursos mostra os aviões parados ou perto da revisão de 50 horas (na <i>Disponibilidade do dia</i>, cujo botão mostra o mesmo número).</p>
+      <p>Embaixo do calendário ficam os avisos da data: as missões que não entraram, os conflitos, os pedidos que ainda não estão na demanda e o que não foi lido, primeiro os erros.
+      Cada um leva à tela onde se resolve, e o botão da data, no topo, diz quantos são.</p>
     </div>
 
     <div class="pn" id="manual-perfis">

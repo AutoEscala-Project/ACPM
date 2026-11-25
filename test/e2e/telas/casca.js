@@ -98,6 +98,10 @@ export const diasDoCalendario = page => page.locator('#cal .cal-dia');
 export const contagemDoDia = (page, dia) => diaDoCalendario(page, dia).locator('.cal-qtd');
 export const paradasDoCalendario = page => page.locator('#cal .cal-dia[tabindex="0"]');
 
+// Os avisos da data no trilho (com texto, só os que o têm) e quantos são, no botão da data
+export const avisosDaData = (page, texto) => page.locator('#avisos-da-data > li', texto === undefined ? {} : { hasText: texto });
+export const contagemDosAvisos = page => page.locator('#avisos-cnt');
+
 const ehDomingo = iso => new Date(iso + 'T12:00:00Z').getUTCDay() === 0;
 const somarDias = (iso, dias) => new Date(Date.parse(iso + 'T12:00:00Z') + dias * 864e5).toISOString().slice(0, 10);
 

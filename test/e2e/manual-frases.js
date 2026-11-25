@@ -26,7 +26,7 @@ const ANTIGAS = {
 
 // Os nomes dos botões e das vistas, e as regras em vigor
 const NOVAS = {
-  casca: ['menu da conta', 'Fixar o calendário ao lado da tela', 'ou no botão da data, no topo'],
+  casca: ['menu da conta', 'Fixar o calendário ao lado da tela', 'ou no botão da data, no topo', 'os avisos da data'],
   escala: ['Atualizada às', 'Ver todos', 'Compartilhar', 'Por recurso',
     // O agendamento na Escala (mover e encaixar, as turmas, as alternativas, a prévia, os avisos), o voo agendado na
     // Demanda, as alterações dos cursos fora do Histórico e o peso aceito
