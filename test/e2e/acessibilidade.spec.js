@@ -562,6 +562,30 @@ test.describe('O leitor de tela e o teclado', () => {
       expect(fracos).toEqual([]);
     });
 
+    // Os tokens da casca (F1a): o símbolo sobre o disco de cada estado, o disco e o anel sobre o cartão, a linha selecionada
+    // e os avatares (F2), com as cores como o navegador as resolve no tema
+    test(`os tokens dos estados, da seleção e dos avatares contrastam, no tema ${nome}`, async ({ page }) => {
+      await abrir(page);
+      await page.evaluate(t => { document.documentElement.dataset.theme = t; }, tema);
+      const pares = [
+        ['--okT', '--ok', 4.5], ['--waT', '--wa', 4.5], ['--erT', '--er', 4.5], ['--anT', '--an', 4.5],
+        ['--ok', '--pn', 3], ['--wa', '--pn', 3], ['--er', '--pn', 3], ['--an', '--pn', 3], ['--pe', '--pn', 3],
+        ['--ink', '--sel', 4.5], ['--mu', '--sel', 4.5],
+        ['--avT', '--av1', 4.5], ['--avT', '--av2', 4.5], ['--avT', '--av3', 4.5], ['--avT', '--av4', 4.5], ['--avT', '--av5', 4.5]
+      ];
+      const cores = await page.evaluate(nomes => {
+        const el = document.createElement('span');
+        document.body.append(el);
+        const cor = nome => { el.style.color = `var(${nome})`; return getComputedStyle(el).color; };
+        const lidas = Object.fromEntries(nomes.map(n => [n, cor(n)]));
+        el.remove();
+        return lidas;
+      }, [...new Set(pares.flat().filter(x => typeof x === 'string'))]);
+      const fracos = pares.filter(([a, b, minimo]) => razaoDeContraste(cores[a], cores[b]) < minimo)
+        .map(([a, b]) => `${a} sobre ${b}: ${razaoDeContraste(cores[a], cores[b]).toFixed(2)}`);
+      expect(fracos).toEqual([]);
+    });
+
     test(`o selo vermelho da aba (missões que não entraram na escala) contrasta, no tema ${nome}`, async ({ page }) => {
       await abrir(page, { estado: cenario({ ins: [instrutor(1, 1)], stu: [aluno(1000, { mis: 'Multimotor', eq: 'PA-34' })] }) });
       await page.evaluate(t => { document.documentElement.dataset.theme = t; }, tema);

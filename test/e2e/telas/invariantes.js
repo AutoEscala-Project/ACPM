@@ -9,7 +9,7 @@ import { ESTADOS as DE_RECURSOS } from './recursos.js';
 import { ESTADOS as DE_CURSOS } from './cursos.js';
 
 // As regiões da página que as conferências olham: a casca (o topo e as abas) e a tela aberta
-export const REGIOES = { casca: '.topo, #nav', tela: 'main section.on' };
+export const REGIOES = { casca: 'header.topo, #nav', tela: 'main#conteudo > section.on' };
 
 // A largura do documento: maior que a da janela, a página rola para o lado
 export const larguraDaPagina = page => page.evaluate(() => document.documentElement.scrollWidth);
