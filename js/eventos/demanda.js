@@ -11,10 +11,14 @@ import { S, RES, isGestor, stuBy, insBy, getMissionTarget } from '../state.js';
 import { chaveDoVoo } from '../voo.js';
 import { escolherInstrutor } from '../instrutor-escolhido.js';
 import { confirmado, comConfirmacao } from './confirmacao.js';
-import { aoAcionar, aoMudarCampo } from './registro.js';
+import './importacao.js';
+import { aoAcionar, aoMudarCampo, aoReverter } from './registro.js';
 import { singleDemandRowHTML, cnt, rDem, filtrarDemanda, manterNaDemanda, prepararFiltroDosCursos, conferirNenhumNaDemanda, limparFiltrosDaDemanda } from '../views/demanda.js';
-import { renderAuditPanel } from '../views/escala.js';
 import { proximaDoPedido, outraMissaoDoPedido, botaoForaDaOrdem, confirmacaoDaMissao } from '../views/etapas.js';
+import { registrarDesenho, redesenharPorNome } from '../redesenho.js';
+
+// O desenho da Demanda (js/redesenho.js), pelo papel: os pedidos do dia
+registrarDesenho('pedidos-do-dia', rDem, { em: ['dados', 'consulta', 'releitura'], ordem: 60 });
 
 // "Limpar demanda" pede confirmação no próprio menu (dois cliques): o menu só fecha depois
 const fecharMenuMais = ligarMenu($('#btn-mais-dem'), $('#menu-mais-dem'), { fecharAoEscolher: false });
@@ -269,5 +273,17 @@ aoMudarCampo('d', (t, { f, c, id, mid }) => {
   // O pedido que deixa de voar some com "Só quem voa": sem outro à vista, a linha "Nenhum aluno com esses filtros"
   if (f === 'fly') conferirNenhumNaDemanda();
   cnt();
-  renderAuditPanel();
+  redesenharPorNome('historico');
+});
+
+// "↶ Reverter" no histórico (js/eventos/historico.js): os tipos desta tela. A reversão chega validada (js/reversoes.js)
+aoReverter('setFly', (rev, entry) => {
+  const st = stuBy(rev.stuId);
+  const target = getMissionTarget(rev.stuId, rev.mid || 0);
+  if (st && target) {
+    target.fly = rev.val;
+    (rev.extras || []).forEach(m => { const ex = getMissionTarget(rev.stuId, m); if (ex) ex.fly = rev.val; });
+    gravarAlteracao(rev.val ? 'inc' : 'exc', `Revertido: ${st.nm} (${target.mis})`, null, entry.id);
+    rDem();
+  }
 });

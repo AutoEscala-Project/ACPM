@@ -1,4 +1,4 @@
-import { test, expect, abrir, abrirSintetico, abrirComExemplo, irPara, irParaVista, abrirEscala, filtrarHabilitacoes, filtrarCursos, filtrarCategorias, AMANHA } from './fixtures.js';
+import { test, expect, abrir, abrirSintetico, abrirComExemplo, irPara, irParaVista, abrirEscala, filtrarHabilitacoes, filtrarCursos, filtrarCategorias, AMANHA, caixaVem, campoDaData, gradeDoDia } from './fixtures.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
 
 test.describe('Perfis de acesso', () => {
@@ -11,13 +11,13 @@ test.describe('Perfis de acesso', () => {
     await expect(page.locator('#out [data-act="rm-fly"]').first()).toBeHidden();
     // O Gestor não agenda voos na Escala
     await expect(page.locator('#btn-agendar')).toBeHidden();
-    await expect(page.locator('#dt')).toBeDisabled();
+    await expect(campoDaData(page)).toBeDisabled();
     await expect(page.locator('#out .st-sel').first()).toBeDisabled();
     await irPara(page, 'ins');
     await expect(page.locator('[data-act="addi"]')).toBeHidden();
     // A grade do dia fica travada (os campos desligados) e as habilitações não abrem (o Gestor vê o resumo)
-    await expect(page.locator('#inst-dia .cel input').first()).toBeDisabled();
-    await expect(page.locator('#inst-dia [data-f="on"]').first()).toBeDisabled();
+    await expect(gradeDoDia(page).locator('.cel input').first()).toBeDisabled();
+    await expect(caixaVem(gradeDoDia(page)).first()).toBeDisabled();
     await page.locator('#s-ins [data-vista-ins="cadastro"]').click();
     await expect(page.locator('#inst [data-act="editar-habs"]').first()).toBeHidden();
     await expect(page.locator('#inst .habs-resumo').first()).toBeVisible();
@@ -28,8 +28,8 @@ test.describe('Perfis de acesso', () => {
     await expect(page.locator('#btn-agendar')).toBeVisible();
     await irPara(page, 'ins');
     await page.locator('#s-ins [data-vista-ins="dia"]').click();
-    await expect(page.locator('#inst-dia .cel input').first()).toBeEnabled();
-    await expect(page.locator('#dt')).toBeEnabled();
+    await expect(gradeDoDia(page).locator('.cel input').first()).toBeEnabled();
+    await expect(campoDaData(page)).toBeEnabled();
   });
 
   test('?role=gestor abre no Gestor sem travar o seletor', async ({ page }) => {
@@ -52,7 +52,7 @@ test.describe('Perfis de acesso', () => {
     await expect(page.locator('body')).toHaveAttribute('data-role', 'gestor');
     await irPara(page, 'ins');
     const busca = page.locator('[data-flt="inst"]'), botao = page.locator('#flt-ins-hab'), painel = page.locator('#flt-ins-hab-painel');
-    const dia = page.locator('#inst-dia tr[data-k="i"]:visible');
+    const dia = gradeDoDia(page).locator('tr[data-k="i"]:visible');
     await busca.fill('angelo');
     await expect(dia).toHaveCount(1);
     await expect(page.locator('#ins-contagem')).toHaveText('1 de 4 instrutores');
@@ -172,7 +172,7 @@ test.describe('Perfis de acesso', () => {
     await abrirComExemplo(page, { url: `./?role=gestor&share=${share}` });
     await expect(page.locator('#aviso-link-texto')).toHaveText(AVISO_DO_LINK_ANTIGO);
     await expect(page.locator('#role-sel')).toBeEnabled();
-    await expect(page.locator('#dt')).toHaveValue(AMANHA);
+    await expect(campoDaData(page)).toHaveValue(AMANHA);
     await abrirEscala(page);
     await expect(page.locator('#out')).not.toContainText('Aluno do Link');
     expect(new URL(page.url()).searchParams.has('share')).toBe(false);

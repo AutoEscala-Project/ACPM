@@ -3,12 +3,12 @@
 // documentos e escalas por data com versão (salvar_documento e salvar_dia respondem 409 / PT409 em conflito e
 // 403 sem perfil de operador), histórico que só cresce (registrar_historico e importar_historico) e o programa dos
 // cursos nas tabelas (programa_dos_cursos, salvar_curso e importar_cursos, com as regras da gravação de js/programa.js,
-// as mesmas do modo local).
+// as mesmas do modo local). Este arquivo é o roteador; a agenda e os dados pessoais ficam em test/e2e/falso/.
 import { createHash } from 'node:crypto';
 import { separar } from '../../js/dias.js';
 import { migrarCadastro, migrarDia } from '../../js/migracoes.js';
-import { prazoDaAgendaPermite } from '../../js/agenda.js';
-import { gravarDadosPessoais, semQuemSaiu } from '../../js/dados-pessoais.js';
+import { criarAgenda, FUNCOES_DA_AGENDA } from './falso/agenda.js';
+import { criarDadosPessoais, veDadosPessoais } from './falso/dados-pessoais.js';
 import { quadroDoDia } from '../../js/quadro.js';
 import { acumularHoras } from '../../js/limites.js';
 import { situacaoPorMissao, validarRegistro } from '../../js/resultados.js';
@@ -148,9 +148,11 @@ export function criarSupabaseFalso({ documentos = {}, dias = {}, historico: hist
   const tabelaDias = new Map(Object.entries(dias).map(([data, conteudo]) => [data, { conteudo, versao: 1 }]));
   // As entradas do histórico já gravadas (no formato da tabela historico)
   const historico = historicoInicial.map(h => ({ ...h }));
-  const solicitacoes = [];
-  // Dados pessoais ('aluno:1000' → campos, atualizado_em e atualizado_por): operadores e secretaria leem e gravam
-  const dadosPessoais = new Map();
+  // A agenda (as solicitações) e os dados pessoais: test/e2e/falso/
+  const agenda = criarAgenda({ agora });
+  const { solicitacoes } = agenda;
+  const pessoais = criarDadosPessoais({ agora, historico, cadastro: () => banco.get('cadastro') });
+  const { dadosPessoais } = pessoais;
   // Resultados das missões dos cursos: só acréscimo
   const resultados = [];
   // O programa dos cursos (cursos, fases e missões), com o padrão das colunas no que faltar (ordem 0, ativo, versão 1;
@@ -202,7 +204,6 @@ export function criarSupabaseFalso({ documentos = {}, dias = {}, historico: hist
   const saidas = [];
   const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': '*', 'Access-Control-Allow-Methods': '*' };
   let falhasDeGravacao = 0;
-  let gravacoesDeDados = 0;
   let statusDaFalha = 503;
   let leiturasDeDiasSeguras = null;
   let gravacoesSeguras = null;
@@ -265,7 +266,7 @@ export function criarSupabaseFalso({ documentos = {}, dias = {}, historico: hist
     }
     const comPerfil = conta && conta.perfil;
     const operador = conta && ['operador', 'administrador'].includes(conta.perfil);
-    const veDados = conta && ['operador', 'administrador', 'secretaria'].includes(conta.perfil);
+    const veDados = veDadosPessoais(conta);
     // Os perfis da escala leem os documentos, os dias, o histórico e a agenda (a TV, perfil "painel", não)
     const leEscala = conta && ['operador', 'administrador', 'gestor', 'secretaria'].includes(conta.perfil);
 
@@ -328,8 +329,7 @@ export function criarSupabaseFalso({ documentos = {}, dias = {}, historico: hist
       if (url.pathname === '/rest/v1/resultados_de_missao') return responder(200, leEscala ? consultar(resultados, url) : []);
       if (url.pathname === '/rest/v1/dados_pessoais') {
         if (!veDados) return responder(200, []);
-        const linhas = [...dadosPessoais].map(([chave, d]) => ({ tipo: chave.split(':')[0], id_cadastro: Number(chave.split(':')[1]), cpf: null, canac: null, nascimento: null, celular: null, email: null, ...d }));
-        return responder(200, consultar(linhas, url).map(({ tipo, ...linha }) => linha));
+        return responder(200, consultar(pessoais.linhas(), url).map(({ tipo, ...linha }) => linha));
       }
     }
 
@@ -365,39 +365,8 @@ export function criarSupabaseFalso({ documentos = {}, dias = {}, historico: hist
         return responder(204);
       }
 
-      // Agenda: secretaria e operadores registram; fora do prazo, só operadores pela exceção da coordenação
-      if (funcao === 'registrar_solicitacao' || funcao === 'cancelar_solicitacao') {
-        if (!conta || !['secretaria', 'operador', 'administrador'].includes(conta.perfil)) return responder(403, { code: '42501', message: 'sem permissão na agenda' });
-        if (funcao === 'cancelar_solicitacao') {
-          const s = solicitacoes.find(x => x.id === args.p_id && !x.cancelada_em);
-          if (!s) return responder(404, { code: 'P0002', message: 'pedido não encontrado' });
-          Object.assign(s, { cancelada_em: agora.toISOString(), cancelada_por: args.p_cancelada_por.trim() });
-          return responder(204);
-        }
-        // A função com a duração (p_horas): só horário específico e duração de 0,1 a 5 h
-        let horas = null;
-        if (Object.hasOwn(args, 'p_horas')) {
-          if (args.p_janela !== 'horario' || !args.p_horario) return responder(400, { code: '22023', message: 'o pedido é num horário específico' });
-          horas = String(args.p_missao).startsWith('Ground') ? 1.5 : Math.round(+args.p_horas * 10) / 10;
-          if (!(horas > 0 && horas <= 5)) return responder(400, { code: '22023', message: 'a duração vai de 0,1 h a 5 h' });
-        }
-        // No máximo 6 voos locais no mesmo horário
-        const locais = ['Voo Local', 'Voo Solo', 'TGL (TMA)'];
-        if (Object.hasOwn(args, 'p_horas') && locais.includes(args.p_missao)
-            && solicitacoes.filter(s => s.data === args.p_data && !s.cancelada_em && s.horario === args.p_horario && locais.includes(s.missao)).length >= 6) {
-          return responder(400, { code: 'PT422', message: 'já há 6 voos locais no horário', hint: 'locais' });
-        }
-        const noPrazo = prazoDaAgendaPermite(args.p_data, agora);
-        if (!noPrazo && !args.p_excecao) return responder(403, { code: 'PT403', message: 'prazo encerrado' });
-        if (!noPrazo && !['operador', 'administrador'].includes(conta.perfil)) return responder(403, { code: '42501', message: 'exceção só para operadores' });
-        const id = solicitacoes.length + 1;
-        solicitacoes.push({
-          id, data: args.p_data, aluno: args.p_aluno, aluno_nome: args.p_aluno_nome.trim(), missao: args.p_missao, janela: args.p_janela,
-          horario: args.p_horario, horas, observacao: (args.p_observacao || '').trim() || null, registrado_por: args.p_registrado_por.trim(),
-          registrado_em: agora.toISOString(), usuario: conta.id, conta: conta.nome, excecao: !noPrazo, cancelada_em: null, cancelada_por: null
-        });
-        return responder(200, id);
-      }
+      // Agenda: test/e2e/falso/agenda.js
+      if (FUNCOES_DA_AGENDA.includes(funcao)) return responder(...agenda.atender(funcao, args, conta));
       // As horas de voo de cada instrutor antes da data (limites da lei); quem não lê as escalas recebe vazio
       if (funcao === 'horas_dos_instrutores') {
         if (!leEscala) return responder(200, {});
@@ -414,27 +383,8 @@ export function criarSupabaseFalso({ documentos = {}, dias = {}, historico: hist
       }
       // A situação de cada missão (o último registro); quem não lê a escala recebe a lista vazia
       if (funcao === 'situacao_das_missoes') return responder(200, leEscala ? [...situacaoPorMissao(resultados).values()].map(({ id, ...r }) => r) : []);
-      if (funcao === 'salvar_dados_pessoais') {
-        if (!veDados) return responder(403, { code: '42501', message: 'somente operadores e a secretaria alteram dados pessoais' });
-        try {
-          const cadastro = banco.get('cadastro');
-          // Cada gravação com a sua data (como o clock_timestamp do banco)
-          const quando = new Date(agora.getTime() + gravacoesDeDados++).toISOString();
-          const r = gravarDadosPessoais(Object.fromEntries(dadosPessoais), args.p_tipo, args.p_id, args.p_dados,
-            { hoje: agora.toISOString().slice(0, 10), autor: conta.nome, agora: quando, atualizadoEmLido: args.p_atualizado_em, cadastro: cadastro && cadastro.conteudo });
-          dadosPessoais.clear();
-          Object.entries(r.tabela).forEach(([chave, d]) => dadosPessoais.set(chave, d));
-          let entrada = null;
-          if (r.descricao) {
-            const id = historico.length + 1;
-            historico.push({ id, data: args.p_data, registrado_em: quando, usuario: conta.id, autor: conta.nome, tipo: 'mod', descricao: r.descricao, reverter: null, reverte: null, importado: false });
-            entrada = { id, descricao: r.descricao };
-          }
-          return responder(200, { atualizado_em: r.atualizado_em, atualizado_por: conta.nome, historico: entrada });
-        } catch (e) {
-          return responder({ 23505: 409, PT409: 409, P0002: 404 }[e.code] || 400, { code: e.code, message: e.message.replace(/\.$/, ''), hint: e.campo });
-        }
-      }
+      // Dados pessoais: test/e2e/falso/dados-pessoais.js
+      if (funcao === 'salvar_dados_pessoais') return responder(...pessoais.salvar(args, conta));
       // O programa dos cursos: quem lê a escala lê todos os cursos num documento só (os outros perfis recebem a lista
       // vazia), com os códigos que já têm resultados e as últimas alterações de cada curso
       if (funcao === 'programa_dos_cursos') {
@@ -461,10 +411,7 @@ export function criarSupabaseFalso({ documentos = {}, dias = {}, historico: hist
         if (args.p_chave !== 'cadastro' && banco.has('cadastro')) return responder(409, { code: 'PT409', message: `${args.p_chave} é da versão anterior do app`, hint: 'formato' });
         const resposta = salvar(banco, args.p_chave, args.p_conteudo, args.p_versao_lida);
         // Quem sai do cadastro leva os dados pessoais junto
-        if (resposta[0] === 200 && args.p_chave === 'cadastro') {
-          const ficam = semQuemSaiu(Object.fromEntries(dadosPessoais), args.p_conteudo);
-          for (const chave of [...dadosPessoais.keys()]) if (!Object.hasOwn(ficam, chave)) dadosPessoais.delete(chave);
-        }
+        if (resposta[0] === 200 && args.p_chave === 'cadastro') pessoais.aposGravarCadastro(args.p_conteudo);
         return responder(...resposta);
       }
       if (funcao === 'salvar_dia') {

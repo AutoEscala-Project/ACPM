@@ -4,7 +4,7 @@
 // programa ainda não libera, a já aprovada, a dispensada) pede confirmação num botão que aparece armado, e o histórico
 // diz por quê. O pedido guarda o curso da missão (cursoDaEtapa): o resultado vai para ele, mesmo que o aluno troque de
 // curso no mesmo dia.
-import { test, expect, irPara, abrirEscala, confirmar, AMANHA } from './fixtures.js';
+import { test, expect, irPara, abrirEscala, confirmar, AMANHA, appPronto, caixaVoa } from './fixtures.js';
 import { documentosAtuais } from './supabase-falso.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
 import { cursosIniciais, percursoDoCurso, novoCurso } from '../../js/programa.js';
@@ -42,7 +42,7 @@ async function abrirComOPP(page, { resultados, pedido = {}, fixos = {}, url = '.
     for (const [chave, valor] of Object.entries(JSON.parse(json))) localStorage.setItem(chave, JSON.stringify(valor));
   }, JSON.stringify(docs));
   await page.goto(url);
-  await expect(page.locator('#wins input[data-a="win"]').first()).toBeAttached();
+  await appPronto(page);
 }
 
 const naDemanda = async page => {
@@ -79,7 +79,7 @@ test.describe('Cursos no dia: outra missão do curso', () => {
     await lista.selectOption('NOT');
     await expect(linha.locator('.etapa')).toHaveText('NOT');
     await expect(linha.locator('.etapa')).toHaveAttribute('title', 'Missão do curso PP');
-    await expect(linha.locator('[data-f="fly"]')).toBeChecked();
+    await expect(caixaVoa(linha)).toBeChecked();
     await expect(linha.locator('[data-f="mis"]')).toHaveValue('Noturno');
     await expect(linha.locator('[data-f="eq"]')).toHaveValue('C172');
     await expect(linha.locator('[data-act="usar-fora-da-ordem"]')).toHaveCount(0);
@@ -107,7 +107,7 @@ test.describe('Cursos no dia: outra missão do curso', () => {
     await expect(botao).toHaveAccessibleName('Confirmar: PE-04 fora da ordem: Usar PE-04 fora da ordem para Maria (falta TMA-05)');
     // Ainda nada mudou: o pedido não tem a missão, e o histórico não registrou
     await expect(linha.locator('.etapa')).toHaveCount(0);
-    await expect(linha.locator('[data-f="fly"]')).not.toBeChecked();
+    await expect(caixaVoa(linha)).not.toBeChecked();
     await expect(page.locator('#audit-log-list')).not.toContainText('PE-04');
 
     // O segundo acionamento (o Enter no botão em foco) confirma
@@ -181,7 +181,7 @@ test.describe('Cursos no dia: outra missão do curso', () => {
     await usar.click();
     await expect(usar).toHaveText('Confirmar: NAV-01 do curso encerrado');
     await expect(linha.locator('.etapa')).toHaveCount(0);
-    await expect(linha.locator('[data-f="fly"]')).not.toBeChecked();
+    await expect(caixaVoa(linha)).not.toBeChecked();
     await expect(page.locator('#audit-log-list')).not.toContainText('NAV-01');
     await usar.click();
     await expect(linha.locator('.etapa')).toHaveText('NAV-01');

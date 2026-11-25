@@ -36,17 +36,39 @@ A aplicação usa módulos ES, então precisa ser servida por HTTP (abrir o `ind
 
 ```sh
 npm install
-npm run serve      # http://localhost:4173
+npm run serve      # o endereço sai no terminal: http://localhost:<a porta desta pasta>
 ```
+
+Cada pasta do repositório (o clone e cada worktree) tem a sua porta, tirada do caminho dela (`scripts/porta.mjs`: de
+4200 a 4898, par): o app de duas pastas roda ao mesmo tempo sem disputar a porta. `PORT=4173 npm run serve` escolhe
+outra (a 4173 é a que o login do Supabase aceita na volta de um link de e-mail, `supabase/config.toml`). Duas pastas
+coincidem 1 vez em 350: na segunda, `npm run serve` para com `EADDRINUSE` e os testes E2E com o "is already used" do
+Playwright; `PORT=<outra porta par> npm run serve` e `PORT=<a mesma> npm test` mudam o app e os testes juntos (os testes
+na porta seguinte à de `PORT`).
 
 ## Testes
 
 ```sh
-npm test               # unitários + E2E
+npm test               # lint + unitários + E2E (o "verde" de cada mudança: CI=1 npm test)
+npm run lint           # ESLint e as exportações sem uso (scripts/exportacoes-sem-uso.mjs)
 npm run test:unit      # motor de alocação, regras e camada de dados (node:test)
 npm run test:e2e       # aplicação no navegador (Playwright)
 ```
 
+- Quanto leva: `CI=1 npm test` leva uns 4 minutos num Mac de 10 núcleos (medido em 24/11/2026: o lint em segundos, os
+  unitários em uns 5 s, os 578 testes E2E em 3,6 min, 6 deles pulados sem as senhas do site publicado). No CI, o E2E
+  roda em duas partes paralelas (`npx playwright test --shard=1/2` e `2/2`), cada uma com 15 minutos.
+- Os testes E2E sobem o próprio servidor na porta seguinte à da pasta (com `PORT`, na seguinte a ela;
+  `playwright.config.js`), sem reaproveitar um servidor que já esteja rodando: uma porta ocupada é erro ("is already
+  used"), nunca os arquivos de outra pasta.
+- Os testes E2E chegam às telas pelos drivers de `test/e2e/telas/` (reexportados por `test/e2e/fixtures.js`): `casca.js`
+  (abrir e entrar, `appPronto`, as abas, a data, o Histórico, o menu da conta), `recursos.js`, `instrutores.js`,
+  `alunos.js`, `demanda.js`, `pedidos.js` (o formulário da Agenda), `escala.js` (ler, aprovar, reabrir, exportar) e
+  `cursos.js`; `invariantes.js` tem as conferências de todas as telas (o nome para o leitor de tela, os 44 px, a página
+  que não rola de lado) e `percorrerTelas`, que passa por todas as abas e pelos `ESTADOS` de cada driver. Um seletor
+  reservado (`#dt`, `#eqs`, `#inst-dia`, `data-f="fly"`, `#ag-*`…) aparece só no driver dele e nos testes da tela dona
+  dele (`test/unit/donos-dos-seletores.test.js`): quando uma tela muda, mudam o driver e os testes dela. As frases que o
+  Manual precisa dizer (e as que saíram) ficam em `test/e2e/manual-frases.js`, num bloco por tela.
 - Na primeira vez, `npx playwright install chromium` baixa o navegador dos testes.
   Para usar o Google Chrome já instalado: `PW_CHANNEL=chrome npm run test:e2e`.
 - Para testar uma versão publicada em vez do servidor local:
@@ -61,9 +83,11 @@ npm run test:e2e       # aplicação no navegador (Playwright)
 - A planilha do Excel (o modelo do aeroclube) é conferida por fora em `test/helpers/xlsx.js`: o ZIP é lido com o zlib
   do Node, a estrutura é comparada com a do modelo e o lugar de cada voo sai dos rótulos da própria planilha, em dias
   aleatórios (`test/unit/planilha.test.js`) e contra o CSV da mesma tela (`test/e2e/planilha.spec.js`).
-- O modo compartilhado é testado com um servidor Supabase falso (`test/e2e/supabase-falso.js`) que segue o mesmo
-  contrato do banco. `test/e2e/publicado.spec.js` entra no site publicado com login real (só roda com as senhas
-  das contas no ambiente: veja o cabeçalho do arquivo).
+- O modo compartilhado é testado com um servidor Supabase falso (`test/e2e/supabase-falso.js`, o roteador; a agenda e
+  os dados pessoais em `test/e2e/falso/`) que segue o mesmo contrato do banco. `test/e2e/publicado.spec.js` entra no
+  site publicado com login real (só roda com as senhas das contas no ambiente: veja o cabeçalho do arquivo);
+  `ACPM_INICIO='./?supabase=previa'` o faz entrar na prévia pelo app de uma pasta (`BASE_URL=http://localhost:<porta>/`).
+- `npm run test:db` (os testes pgTAP, no banco da prévia) recusa o projeto de produção.
 
 ## Banco de dados (Supabase)
 
@@ -195,24 +219,33 @@ Para pôr o formato 24 no ar, nesta ordem:
 Depois, num PR à parte, com a conversão feita e nenhuma aba de antes do formato 24 aberta: tirar `importar_cursos` do
 banco (e a chamada dela no app). A cópia `cadastro.cursos` fica.
 
+No formato 26, o que um recurso exige do instrutor é uma lista no cadastro, `frota[].exige` (ids do registro de
+`js/habilitacoes.js` ou a habilitação própria `aviao:<matrícula>`); o recurso com a habilitação própria e sem a lista
+ganha `exige: ['aviao:<matrícula>']`, e a marca `habilitacaoPropria` fica como espelho dela. O número também protege o
+`inativo` de alunos, instrutores e recursos (`stu[].inativo`, `ins[].inativo`, `frota[].inativo`, só `true`), que a aba
+do formato 25 tiraria ao gravar o cadastro. O dia não muda. Só o app muda (o banco recusa o conteúdo de antes pelo
+número): o primeiro acesso de um Operador ou Administrador regrava os dias e o cadastro no 26.
+
 ## Estrutura
 
 | Caminho | Conteúdo |
 |---|---|
 | `index.html` | Marcação das nove abas |
 | `painel.html`, `js/painel.js` | TV da recepção: o painel de hoje na tela toda, no quadro, com as colunas e as listas da configuração do painel (com o servidor, a que `painel_do_dia` entrega; sem ela, o padrão), e a meteorologia no pé |
-| `css/app.css` | Estilos e temas claro/escuro |
+| `css/*.css` | Os estilos, uma folha por dona, que `index.html` carrega nesta ordem (a da cascata): `base` (as cores e os temas claro e escuro, os títulos, os campos), `componentes` (botões, barras, tabelas, etiquetas, o filtro de vários valores, os avisos, as dicas), `painel` (o painel no estilo dos aeroportos e a meteorologia), `tv`, `casca` (a barra do topo, as abas, o login, a impressão), uma por tela (`escala`, `demanda`, `agenda`, `recursos`, `instrutores`, `alunos`, `cadastros`, `cursos`, `rodizio`, `bi`, `conta`, `manual`), `gavetas`, `dialogos` e `toque` (os alvos de 44 px dos componentes no celular, por último). A TV carrega `css/app.css`, que importa as cinco das duas páginas (`base`, `componentes`, `painel`, `tv`, `toque`). `test/unit/estilos.test.js` confere as listas; `node scripts/medir-estilos.mjs` mede o estilo de cada elemento das duas páginas em várias larguras, temas e telas (com `--comparar antes.json depois.json`, a diferença entre duas versões) |
 | `js/config.js` | Janelas, missões, limites de peso e a frota inicial |
-| `js/frota.js` | A frota no cadastro (matrícula, tipo e "Só Parafuso"): validação de um recurso novo e as matrículas de cada tipo |
+| `js/frota.js` | A frota no cadastro (matrícula, tipo, os atributos "Só Parafuso", "Só VFR" e "Habilitação própria", o que o recurso exige do instrutor, `exige`, e o inativo): validação de um recurso novo, `comAtributo` (marcar e desmarcar um atributo; a habilitação própria também em `exige`) e as matrículas de cada tipo |
 | `js/categorias.js` | Categorias de recurso dos filtros (C152, C172, Simulador, PA-34 e Sala Ground) |
-| `js/habilitacoes.js` | Habilitações individuais dos instrutores e o que cada missão exige |
+| `js/inativos.js` | O inativo no cadastro (`inativo: true` em alunos, instrutores e recursos; ainda sem a chave na tela): vale na data aberta de hoje em diante. O motor, a simulação do agendamento e as listas da escala leem o estado derivado (`estadoParaEscalar`: o instrutor inativo não vem, o recurso inativo fica indisponível), nunca gravado, e só nele tiram o inativo (`inativoNoEstado`); as listas do cadastro ("Não escalar com", "Priorizar com", o formulário da Agenda, os alunos de um curso) ficam sem ele em qualquer data; as filas do rodízio e o hangar ficam com os ativos (`ativosNaData`); a Escala avisa dos voos de quem ficou inativo (`voosComInativos`), com "Refazer a escala"; o pedido do aluno inativo fica registrado, "Aluno inativo", fora dos pendentes e da importação |
+| `js/habilitacoes.js` | O registro das habilitações: as individuais dos instrutores, os grupos do painel e do filtro (`GRUPOS_DE_HABILITACAO`), o que cada missão exige e o que cada recurso exige (`exige`: ids do registro ou a habilitação própria `aviao:<matrícula>`) |
 | `js/rodizio.js` | Filas do rodízio (cheque, MLTE, noturno e C172) e a rotação de uma data para a seguinte |
 | `js/cursos.js` | Os cursos iniciais (PP, PC e INVA), o formato da sigla e do código da missão, o curso de cada aluno e o programa guardado no cadastro (`cursos`, a cópia de antes do formato 24, que ninguém mais grava) |
 | `js/programa.js` | O programa dos cursos em fases (as tabelas dos cursos; no modo local, `acpm4_cursos`): a regra de quando voar cada fase e cada missão, o Noturno em trechos, as operações do editor da aba Cursos e a gravação e a conversão única do cadastro, com as regras e os erros do servidor |
 | `js/modelos-de-curso.js` | Os programas prontos que o Administrador põe num curso: o cronograma do Piloto Privado (P.I PPA 001A), com 9 fases e 47 missões |
 | `js/progresso.js` | A próxima missão de cada aluno pelas regras do programa (a liberada; as fora da ordem, com o motivo) e o progresso no curso |
 | `js/resultados.js` | Os resultados das missões (aprovado ou reprovado; pendente desfaz um engano): a situação de cada missão do aluno e as regras do registro, as do servidor |
-| `js/agenda.js` | Prazo da agenda de solicitações (13:00 do dia anterior) e a importação para a demanda |
+| `js/agenda.js` | Prazo da agenda de solicitações (13:00 do dia anterior), o limite de voos locais e o pedido que cada solicitação vira |
+| `js/processamento.js` | A importação dos pedidos da agenda para a demanda da data (função pura; o botão "Importar da agenda" é `js/eventos/importacao.js`) |
 | `js/csv.js` | CSV da escala agrupado por avião, para o lançamento no portal do aeroclube |
 | `js/planilha.js`, `modelos/escala-cavok.xlsx` | A escala na planilha do modelo do aeroclube (o Excel do lançamento no CAVOK): onde cada voo cai e o arquivo preenchido. O modelo é o arquivo da operação sem os dados do dia; as células que o app preenche estão em `BLOCOS` e `GROUND` (um modelo novo precisa delas nos mesmos lugares, e `test/unit/planilha.test.js` confere) |
 | `js/zip.js` | Leitura e montagem do ZIP do .xlsx, com a compressão do navegador |
@@ -237,11 +270,13 @@ banco (e a chamada dela no app). A cópia `cadastro.cursos` fica.
 | `js/dias.js` | Cadastro separado do dia, cópia do dia anterior, conversão dos dados da fase 2 e BI das escalas |
 | `js/migracoes.js` | Versões do formato dos dados guardados e os passos de uma versão para a seguinte |
 | `js/sessao.js`, `js/config-supabase.js` | Login, perfil de acesso e projeto Supabase de cada endereço |
-| `js/state.js`, `js/actions.js` | Estado da aplicação e ações (perfil, data, histórico e a escala refeita a cada alteração); `gravarAlteracao` é o único jeito de os eventos mudarem os dados, e nada grava antes de os dados da data aberta serem lidos (`lerData` lê uma data de cada vez; `aindaNaoAbriu` recusa a mudança com o aviso) |
+| `js/state.js`, `js/actions.js` | Estado da aplicação e ações (perfil, data, histórico e a escala refeita a cada alteração); `gravarAlteracao` é o único jeito de os eventos mudarem os dados, e nada grava antes de os dados da data aberta serem lidos (`lerData` lê uma data de cada vez; `aindaNaoAbriu` recusa a mudança com o aviso). A alteração é gravada antes de a tela ser redesenhada: um desenho que falha não impede a gravação nem o histórico |
+| `js/redesenho.js` | O registro dos desenhos da tela: cada tela registra o dela no módulo de eventos (`registrarDesenho`, com o nome e os momentos `dados`, `consulta`, `releitura` e `escala`); quem muda os dados redesenha por momento (`redesenhar`) ou pelo nome (`redesenharPorNome`), sem importar a tela. `test/unit/desenhos-registrados.test.js` confere os nomes e os momentos |
+| `js/sem-falhar.js` | Faz sem deixar o erro parar quem chamou (vai para o console): o foco depois de redesenhar e cada desenho da tela |
 | `js/manual.js` | Tabelas do manual geradas das regras (missões, habilitações exigidas, janelas, pesos e rodízio) |
-| `js/views/` | Renderização de cada aba |
+| `js/views/` | Renderização de cada aba: Instrutores (`instrutores.js`, com os limites da lei em `limites.js`), Alunos (`alunos.js`) e as linhas que os filtros escondem (`linhas-filtradas.js`, também da Demanda); os dados pessoais guardados fora do estado (`dados-pessoais.js`) e o painel que os edita (`painel-de-dados.js`) |
 | `js/export.js` | CSV, PDF e a planilha (Excel) |
-| `js/eventos/` | Os eventos de cada aba (um módulo por aba); `registro.js` recebe os botões com `data-act` e os campos das tabelas, com a trava de quem só consulta e a de antes de a data abrir, e `confirmacao.js` é o único jeito de confirmar (dois cliques) |
+| `js/eventos/` | Os eventos de cada aba (um módulo por aba, que registra os desenhos dela e o que "↶ Reverter" faz com os tipos de reversão dela); `registro.js` recebe os botões com `data-act`, os campos das tabelas e as reversões do Histórico (`aoAcionar`, `aoMudarCampo`, `aoReverter`), com a trava de quem só consulta e a de antes de a data abrir, e `confirmacao.js` é o único jeito de confirmar (dois cliques). Um módulo que liga eventos ao ser carregado é importado por um arquivo só, `js/main.js` ou o módulo da tela dele (`limites.js`, `painel-de-dados.js` e `importacao.js` são de Instrutores e da Demanda), e cada seletor que ele lê existe em `index.html` (`test/unit/eventos-ligados.test.js`) |
 | `js/main.js` | A abertura do app (liga os eventos, lê a sessão e os dados e abre a data) |
 
 ## Fluxo de trabalho
@@ -251,7 +286,7 @@ todo PR e em cada push no `main` e no `previa`; um push num branch sem PR não r
 mesmo PR cancela os testes do anterior; os pushes num mesmo branch rodam um de cada vez, na ordem. Um PR com conflito
 com a base não roda os testes (o GitHub não monta o merge): resolva o conflito primeiro. O lint e os unitários rodam
 num job, o E2E em duas partes paralelas (`--shard`). Ao entrar no `main` (ou no `previa`) com os testes verdes, a nova
-versão vai para o ar (veja "Publicação").
+versão vai para o ar (veja "Publicação"; no fork, o `main` é servido pelo GitHub Pages).
 
 ## Publicação
 
@@ -259,7 +294,8 @@ O site é estático e vai para o Cloudflare (Workers com arquivos estáticos, a 
 configuração `wrangler.jsonc`. Depois de um push em `main` ou `previa` com os testes verdes, o workflow
 `.github/workflows/publicar.yml` monta a pasta `publicar/` (`scripts/pasta-publicada.mjs`: só `index.html`,
 `painel.html`, `css/`, `js/`, `img/` e `modelos/`) e a publica: `main` na produção, `previa` na prévia. Ele usa os
-segredos `CLOUDFLARE_API_TOKEN` e `CLOUDFLARE_ACCOUNT_ID` do repositório.
+segredos `CLOUDFLARE_API_TOKEN` e `CLOUDFLARE_ACCOUNT_ID` do repositório e só roda em `AutoEscala-Project/ACPM`: no
+fork `thephfernandes/ACPM`, o `main` é a prévia do redesenho, servida pelo GitHub Pages (no banco da prévia).
 
 À mão (com `npx wrangler login` feito): `node scripts/pasta-publicada.mjs && npx --yes wrangler@4.165.0 deploy`
 (produção) ou `... deploy --env previa`. Nunca publique a raiz do repositório.

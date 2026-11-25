@@ -1,6 +1,6 @@
 // Escala por data no modo compartilhado: migração dos documentos antigos no servidor, gestor navegando
 // entre as datas sem gravar e autor das alterações no histórico.
-import { test, expect, prepararContexto, vigiarErros, irPara, AMANHA, entrar, preencherLogin, URL_APP } from './fixtures.js';
+import { test, expect, prepararContexto, vigiarErros, irPara, AMANHA, entrar, preencherLogin, URL_APP, alternarDisponivel, appPronto, caixaDisponivel, campoDaData, mudarData, rotuloDaData } from './fixtures.js';
 import { instalarSupabaseFalso, documentosAtuais, documentosFase3, CONTAS } from './supabase-falso.js';
 import { comNomesAntigos } from '../helpers/formato.js';
 import { ESQUEMA } from '../../js/migracoes.js';
@@ -24,13 +24,6 @@ function funcoesChamadas(page) {
   return chamadas;
 }
 
-async function mudarData(page, data) {
-  await page.locator('#nav button[data-t="esc"]').click();
-  await page.locator('#dt').fill(data);
-  await page.locator('#dt').dispatchEvent('change');
-  await expect(page.locator('#dt')).toHaveValue(data);
-}
-
 test.describe('Escala por data (modo compartilhado)', () => {
   test('no primeiro acesso de um operador, os documentos antigos viram o formato por data', async ({ page, context }) => {
     const estado = ApiClient.normalizeAndMigrateState({ ...estadoSintetico(), stu: [aluno(1000), aluno(1001, { p1: 2 })], cursos: PROGRAMA });
@@ -45,7 +38,7 @@ test.describe('Escala por data (modo compartilhado)', () => {
     });
     await entrar(page, CONTAS.operador);
 
-    await expect(page.locator('#dt')).toHaveValue(AMANHA);
+    await expect(campoDaData(page)).toHaveValue(AMANHA);
     await irPara(page, 'esc');
     await expect(page.locator('#out table tbody tr')).not.toHaveCount(0);
     await expect(page.locator('#audit-log-list')).toContainText('Alteração antiga');
@@ -118,8 +111,8 @@ test.describe('Escala por data (modo compartilhado)', () => {
     expect(servidor.dias.get('2026-11-03').conteudo.resultado.out[0].r).toBe('SIM-MONO-1');
     const chamadas = funcoesChamadas(page);
     await entrar(page, CONTAS.operador);
-    await expect(page.locator('#eqs input[data-id="SIM-MLTE-D"]')).not.toBeChecked();
-    await expect(page.locator('#eqs input[data-id="SIM-MULTI-2"]')).toHaveCount(0);
+    await expect(caixaDisponivel(page, 'SIM-MLTE-D')).not.toBeChecked();
+    await expect(caixaDisponivel(page, 'SIM-MULTI-2')).toHaveCount(0);
     // A conversão do programa (importar_cursos) vem depois dos dias e antes do cadastro; ela não é a gravação de um
     // documento, e as gravações continuam as mesmas
     expect(chamadas.filter(f => ['salvar_dia', 'importar_cursos', 'salvar_documento'].includes(f))).toEqual(['salvar_dia', 'salvar_dia', 'importar_cursos', 'salvar_documento']);
@@ -142,7 +135,7 @@ test.describe('Escala por data (modo compartilhado)', () => {
     const servidor = await instalarSupabaseFalso(context, servidorNoFormatoAnterior());
     const chamadas = funcoesChamadas(page);
     await entrar(page, CONTAS.gestor);
-    await expect(page.locator('#eqs input[data-id="SIM-MLTE-D"]')).not.toBeChecked();
+    await expect(caixaDisponivel(page, 'SIM-MLTE-D')).not.toBeChecked();
     const pendentes = 'Os programas dos cursos ainda não foram trazidos do cadastro (isso acontece na primeira abertura de um Operador ou Administrador depois da atualização): a próxima missão e o progresso ficam desligados.';
     await expect(page.locator('#aviso-dados-texto')).toHaveText(pendentes);
     await irPara(page, 'alu');
@@ -162,10 +155,10 @@ test.describe('Escala por data (modo compartilhado)', () => {
     const servidor = await instalarSupabaseFalso(context, { documentos, dias: { ...dias, [DEPOIS]: outroDia } });
 
     await entrar(page, CONTAS.gestor);
-    await expect(page.locator('#dt')).toBeEnabled();
-    await expect(page.locator('#eqs input[data-id="PR-BTB"]')).toBeChecked();
+    await expect(campoDaData(page)).toBeEnabled();
+    await expect(caixaDisponivel(page, 'PR-BTB')).toBeChecked();
     await mudarData(page, DEPOIS);
-    await expect(page.locator('#eqs input[data-id="PR-BTB"]')).not.toBeChecked();
+    await expect(caixaDisponivel(page, 'PR-BTB')).not.toBeChecked();
     expect(servidor.gravacoes).toEqual([]);
     expect(servidor.historico).toEqual([]);
   });
@@ -181,12 +174,12 @@ test.describe('Escala por data (modo compartilhado)', () => {
     const liberar = servidor.segurarLeiturasDeDias();
     await mudarData(page, DEPOIS);
     await irPara(page, 'rec');
-    await page.locator('#eqs input[data-id="PR-BTB"]').click();
+    await caixaDisponivel(page, 'PR-BTB').click();
     await expect(page.locator('#toast-box')).toContainText('A escala ainda não abriu: nada foi mudado.');
-    await expect(page.locator('#eqs input[data-id="PR-BTB"]')).toBeChecked();
+    await expect(caixaDisponivel(page, 'PR-BTB')).toBeChecked();
     liberar();
-    await expect(page.locator('#dt-rotulo')).toContainText('12/11');
-    await page.locator('#eqs input[data-id="PR-BTB"]').uncheck();
+    await expect(rotuloDaData(page)).toContainText('12/11');
+    await alternarDisponivel(page, 'PR-BTB', false);
     await expect.poll(() => servidor.dias.get(DEPOIS)?.conteudo.av['PR-BTB']).toBe(false);
     expect(servidor.gravacoes.map(g => g.chave)).not.toContain(`dia:${AMANHA}`);
     expect(servidor.dias.get(AMANHA).conteudo.av['PR-BTB']).toBe(true);
@@ -198,9 +191,9 @@ test.describe('Escala por data (modo compartilhado)', () => {
     await instalarSupabaseFalso(context, documentosAtuais(estadoSintetico(), AMANHA));
     await entrar(page, CONTAS.operador);
     await irPara(page, 'rec');
-    await page.locator('#eqs input[data-id="PR-BTB"]').uncheck();
+    await alternarDisponivel(page, 'PR-BTB', false);
     await page.reload();
-    await expect(page.locator('#wins input[data-a="win"]').first()).toBeAttached();
+    await appPronto(page);
     await expect(page.locator('#audit-log-list')).toContainText('Operador de Teste');
     await expect(page.locator('#audit-log-list')).toContainText('PR-BTB: Manutenção');
   });

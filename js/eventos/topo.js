@@ -4,20 +4,22 @@ import { setRole, carregarData, lerDadosDeNovo } from '../actions.js';
 import { ehDomingo } from '../agenda.js';
 import { $, showToast, ligarMenu, focarNoTitulo } from '../dom.js';
 import { somarDias, dataIsoValida } from '../format.js';
-import { RES, DATA, isGestor, modoCompartilhado } from '../state.js';
+import { DATA, isGestor, modoCompartilhado } from '../state.js';
 import { ApiClient } from '../storage.js';
 import { abrirConta } from '../views/conta.js';
-import { rCursos } from '../views/cursos.js';
-import { rOut } from '../views/escala.js';
 import { rManual } from '../views/manual.js';
+import { atualizarSelosDaEscala } from '../views/selos.js';
 import { show } from '../views/tabs.js';
+import { registrarDesenho, redesenharPorNome } from '../redesenho.js';
+
+// Os selos das abas (js/redesenho.js): os dados de outra data e a escala refeita
+registrarDesenho('selos', atualizarSelosDaEscala, { em: ['dados', 'escala'], ordem: 99 });
 
 // O perfil (neste navegador). A aba Cursos é refeita: aberta, ela mostra ou tira na hora os controles de quem muda o
 // programa
 $('#role-sel').onchange = e => {
   setRole(e.target.value);
-  rCursos();
-  if (RES) rOut();
+  redesenharPorNome('cursos', 'escala');
 };
 
 // O aviso do domingo (o app abre a segunda)

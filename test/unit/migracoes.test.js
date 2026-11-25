@@ -9,6 +9,12 @@ import { EQ } from '../../js/config.js';
 import { habilitacoesDoNivel } from '../../js/habilitacoes.js';
 
 describe('Migrações do formato dos dados', () => {
+  // O único lugar que fixa o número: cada passo que muda o formato muda este número, o PASSOS de js/migracoes.js e o
+  // README ("Formato dos dados"); os outros testes usam ESQUEMA
+  it('o formato dos dados gravados é o 26', () => {
+    assert.equal(ESQUEMA, 26);
+  });
+
   it('dia: renomeia os simuladores na disponibilidade e na escala, sem perder nada', () => {
     const antigo = {
       win: [true, false],
@@ -220,5 +226,35 @@ describe('Migrações do formato dos dados', () => {
     for (const esquema of [24, 25]) assert.equal(antesDosCursosProprios({ esquema }), false, String(esquema));
     for (const doc of [null, undefined, 'cadastro', 24]) assert.equal(antesDosCursosProprios(doc), false, String(doc));
     assert.equal(antesDosCursosProprios(migrarCadastro({ nid: 1000, ins: [], stu: [], esquema: 23 })), false, 'regravado, já no formato atual');
+  });
+});
+
+// Formato 26: o recurso com a habilitação própria e sem a lista exige ganha exige: ['aviao:<matrícula>'] (a marca fica);
+// o dia não muda. O número também protege o inativo de alunos, instrutores e recursos
+describe('Formato 26', () => {
+  const no25 = frota => ({ esquema: 25, nid: 1000, ins: [], stu: [], frota });
+  it('a habilitação própria vira a lista exige, com a marca; o que o passo não conhece fica', () => {
+    const cadastro = no25([
+      { reg: 'PR-VOM', tipo: 'PA-34', habilitacaoPropria: true, outro: 1 },
+      { reg: 'pr-low ', tipo: 'C152', habilitacaoPropria: true },
+      { reg: 'PR-X', tipo: 'C172', habilitacaoPropria: true, exige: ['ifr'] },
+      { reg: 'PR-Y', tipo: 'C152', inativo: true },
+      null, 'texto'
+    ]);
+    const novo = migrarCadastro(cadastro);
+    assert.equal(novo.esquema, 26);
+    assert.deepEqual(novo.frota, [
+      { reg: 'PR-VOM', tipo: 'PA-34', habilitacaoPropria: true, outro: 1, exige: ['aviao:PR-VOM'] },
+      { reg: 'pr-low ', tipo: 'C152', habilitacaoPropria: true, exige: ['aviao:PR-LOW'] },
+      { reg: 'PR-X', tipo: 'C172', habilitacaoPropria: true, exige: ['ifr'] },
+      { reg: 'PR-Y', tipo: 'C152', inativo: true },
+      null, 'texto'
+    ]);
+    assert.deepEqual(migrarCadastro({ esquema: 25, nid: 1000, ins: [], stu: [] }), { esquema: 26, nid: 1000, ins: [], stu: [] });
+  });
+
+  it('o dia não muda', () => {
+    const dia = { esquema: 25, win: [true], av: { 'PR-VOM': true } };
+    assert.deepEqual(migrarDia(dia), { ...dia, esquema: 26 });
   });
 });

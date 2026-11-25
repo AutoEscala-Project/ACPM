@@ -20,6 +20,7 @@ import { nomeDaData } from '../agendamento.js';
 import { ApiClient } from '../storage.js';
 import { gerenciaContas } from '../perfis.js';
 import { S, RES, DATA, isGestor, dadoIndisponivel } from '../state.js';
+import { inativo } from '../inativos.js';
 import { esc, opts, fmtH, hojeISO } from '../format.js';
 import { $, trocarConteudo, trocarElemento } from '../dom.js';
 import { progressoDoAluno, cursoDoResultado, faseDoAluno } from './etapas.js';
@@ -267,7 +268,7 @@ function alteracoesDoCurso(curso, aberta) {
 // programas e os resultados, num curso com missões que contam), a fase em que cada um está (a do progresso: a primeira
 // fase aberta em que falta missão) e os que concluíram. porFase: os alunos de cada fase (pelo id), na ordem do nome
 function turmaDoCurso(curso) {
-  const alunos = (S.stu || []).filter(s => s.curso === curso.sigla).sort((a, b) => a.nm.localeCompare(b.nm, 'pt-BR'));
+  const alunos = (S.stu || []).filter(s => s.curso === curso.sigla && !inativo(s)).sort((a, b) => a.nm.localeCompare(b.nm, 'pt-BR'));
   const onde = alunos.map(faseDoAluno);
   if (!alunos.length || onde.some(o => !o || (!o.concluido && !o.fase))) return { alunos, porFase: new Map(), concluidos: [], porFaseConhecida: false };
   const porFase = new Map(), concluidos = [];

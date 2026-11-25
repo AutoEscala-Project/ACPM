@@ -1,5 +1,5 @@
 // Minha conta (trocar a senha e o e-mail) e Usuários (o administrador cria e exclui contas), no modo compartilhado.
-import { test, expect, prepararContexto, vigiarErros, abrirMenuDaConta, AMANHA, irPara, entrar, preencherLogin, URL_APP } from './fixtures.js';
+import { test, expect, prepararContexto, vigiarErros, abrirMenuDaConta, AMANHA, irPara, entrar, preencherLogin, URL_APP, alternarDisponivel, appPronto } from './fixtures.js';
 import { instalarSupabaseFalso, documentosAtuais, CONTAS } from './supabase-falso.js';
 import { estadoSintetico } from '../helpers/estado.js';
 
@@ -172,8 +172,8 @@ test.describe('Usuários (administrador)', () => {
     const servidor = await instalarSupabaseFalso(context, documentosAtuais(estadoSintetico(), AMANHA));
     await entrar(page, CONTAS.administrador);
     await irPara(page, 'rec');
-    await expect(page.locator('#wins input[data-a="win"]').first()).toBeAttached();
-    await page.locator('#eqs input[data-id="PR-BTB"]').uncheck();
+    await appPronto(page);
+    await alternarDisponivel(page, 'PR-BTB', false);
     await expect.poll(() => servidor.dias.get(AMANHA).conteudo.av['PR-BTB']).toBe(false);
   });
 

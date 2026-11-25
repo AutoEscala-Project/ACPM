@@ -1,0 +1,31 @@
+/* A TV da recepção (painel.html): a tela, o login, os avisos e "Sair desta TV" */
+/* TV da recepção (painel.html): o painel na tela toda; antes do login, um cartão para entrar */
+body.tela-painel { min-height: 100vh; background: #07122B; overflow: hidden; }
+.login-painel {
+  position: relative; z-index: 2;
+  width: min(380px, calc(100vw - 32px)); margin: 12vh auto 0; display: flex; flex-direction: column; gap: 10px;
+  padding: 22px 24px; background: var(--pn); color: var(--ink); border-radius: 10px; box-shadow: 0 12px 32px rgba(0,0,0,.4);
+}
+.login-painel[hidden] { display: none; }
+.login-painel h1 { margin: 0; font: 700 22px 'Barlow Semi Condensed', sans-serif; }
+.login-painel label { display: flex; flex-direction: column; gap: 4px; font-weight: 600; }
+.login-logo { height: 44px; width: auto; align-self: flex-start; }
+/* O aviso da sessão expirada, em cima do login; "Manter esta TV conectada" na mesma linha da caixa */
+.login-aviso { margin: 0; padding: 10px 12px; border-radius: 6px; background: #FFF3CD; color: #5C4200; font-weight: 700; }
+.login-aviso[hidden] { display: none; }
+.login-painel label.login-manter { flex-direction: row; align-items: center; gap: 8px; }
+.login-painel label.login-manter input { width: 20px; height: 20px; margin: 0; }
+/* O quadro sem atualização ou com a sessão expirada sai da tela (continua medido: volta como estava); o aviso fica na
+   tela toda */
+body.tela-painel[data-tela="sem-atualizacao"] #quadro, body.tela-painel[data-tela="sessao-expirada"] #quadro { visibility: hidden; }
+.aviso-da-tv {
+  position: fixed; inset: 0; z-index: 3; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 4vh; padding: 0 6vw; background: #07122B; color: #FFC233; text-align: center;
+}
+.aviso-da-tv[hidden] { display: none; }
+.aviso-da-tv-logo { height: 12vh; width: auto; }
+.aviso-da-tv p { margin: 0; font: 700 clamp(22px, 5vh, 64px)/1.2 'Barlow Semi Condensed', sans-serif; }
+/* Sair desta TV: no canto, só com o mouse mexendo ou com o foco do teclado */
+.sair-da-tv { position: fixed; top: 12px; left: 50%; transform: translateX(-50%); z-index: 4; opacity: 0; transition: opacity .2s; }
+.sair-da-tv[hidden], body[data-tela="sessao-expirada"] .sair-da-tv { display: none; }
+body.mexeu .sair-da-tv, .sair-da-tv:focus-visible { opacity: 1; }

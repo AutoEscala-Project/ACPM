@@ -1,5 +1,8 @@
 // As exportações dos módulos do app (js/) que não precisam existir: as que ninguém usa, as que só os testes usam (o app
-// não) e as que só o próprio módulo usa (não precisam ser exportadas). Uma parte interna exportada para os testes, e
+// não) e as que só o próprio módulo usa (não precisam ser exportadas). E o contrário: um nome importado pelo nome (import { a },
+// export { a } from, const { a } = await import(…)) que o módulo de destino não exporta (nada mais confere isso antes de o
+// navegador carregar a página; o import * as m não é conferido), e um import() de um módulo do app
+// num teste que não diz os nomes (const { a } = await import(…)): sem os nomes, o módulo todo conta como usado. Uma parte interna exportada para os testes, e
 // usada pelo próprio módulo, vale. Os arquivos são lidos com o analisador do ESLint (espree), não com expressões
 // regulares: "export const a = 1, b = 2" exporta os dois nomes, e um ".nome" de objeto não conta como uso.
 // Uso: node scripts/exportacoes-sem-uso.mjs (sai com erro se achar alguma)
@@ -27,7 +30,7 @@ let erros = 0;
 const arvores = new Map();
 for (const arquivo of todos) {
   try {
-    arvores.set(arquivo, espree.parse(readFileSync(arquivo, 'utf8'), { ecmaVersion: 'latest', sourceType: 'module' }));
+    arvores.set(arquivo, espree.parse(readFileSync(arquivo, 'utf8'), { ecmaVersion: 'latest', sourceType: 'module', loc: true }));
   } catch (e) {
     console.log(`${relative(RAIZ, arquivo)}: não deu para ler (${e.message})`);
     erros++;
@@ -78,9 +81,12 @@ function alvoDe(arquivo, caminho) {
 // import(): const { a, b } = await import(…) usa a e b; outro uso do import() conta como o módulo inteiro
 const importados = new Map();
 const ehTeste = arquivo => relative(RAIZ, arquivo).startsWith('test');
+// Os pedidos de nomes, conferidos depois que todos os arquivos foram lidos: { arquivo, alvo, nomes }
+const pedidos = [];
 function registrar(arquivo, caminho, nomes) {
   const alvo = alvoDe(arquivo, caminho);
   if (!alvo) return;
+  if (nomes !== 'todos') pedidos.push({ arquivo, alvo, nomes });
   const atual = importados.get(alvo) || { nomes: new Set(), doApp: new Set(), todos: false };
   if (nomes === 'todos') atual.todos = true;
   else nomes.forEach(n => { atual.nomes.add(n); if (!ehTeste(arquivo)) atual.doApp.add(n); });
@@ -105,10 +111,47 @@ for (const [arquivo, arvore] of arvores) {
       registrar(arquivo, no.source.value, 'todos');
     }
   });
-  // Os import() depois da primeira volta: os pais de todos os nós já estão guardados
+  // Os import() depois da primeira volta: os pais de todos os nós já estão guardados. Num teste, o import() de um
+  // módulo do app diz os nomes que usa
   percorrer(arvore, no => {
-    if (no.type === 'ImportExpression' && no.source.type === 'Literal') registrar(arquivo, no.source.value, nomesDoImportDinamico(no));
+    if (no.type !== 'ImportExpression' || no.source.type !== 'Literal') return;
+    const nomes = nomesDoImportDinamico(no);
+    const alvo = nomes === 'todos' && ehTeste(arquivo) ? alvoDe(arquivo, no.source.value) : null;
+    if (alvo && doApp.includes(alvo)) {
+      console.log(`${relative(RAIZ, arquivo)}:${no.loc.start.line}: import('${no.source.value}') sem dizer os nomes (escreva const { … } = await import(…))`);
+      erros++;
+    }
+    registrar(arquivo, no.source.value, nomes);
   });
+}
+
+// Os nomes que um módulo exporta, também os que ele reexporta (export { a } from, export * from: o fixtures.js dos testes)
+const todosOsNomes = new Map();
+function nomesExportados(arquivo, visitando = new Set()) {
+  if (todosOsNomes.has(arquivo)) return todosOsNomes.get(arquivo);
+  const arvore = arvores.get(arquivo);
+  if (!arvore || visitando.has(arquivo)) return null;
+  visitando.add(arquivo);
+  const nomes = exportacoes(arvore);
+  for (const no of arvore.body) {
+    if (no.type === 'ExportNamedDeclaration' && no.source) no.specifiers.forEach(s => nomes.add(nomeDe(s.exported)));
+    if (no.type === 'ExportAllDeclaration' && no.source) {
+      const de = resolve(dirname(arquivo), no.source.value);
+      if (no.exported) nomes.add(nomeDe(no.exported));
+      else for (const n of nomesExportados(de, visitando) || []) nomes.add(n);
+    }
+  }
+  todosOsNomes.set(arquivo, nomes);
+  return nomes;
+}
+for (const { arquivo, alvo, nomes } of pedidos) {
+  const exportados = nomesExportados(alvo);
+  if (!exportados) continue;
+  for (const nome of nomes) {
+    if (nome === 'default' || exportados.has(nome)) continue;
+    console.log(`${relative(RAIZ, arquivo)}: importa ${nome} de ${relative(RAIZ, alvo)}, que não o exporta`);
+    erros++;
+  }
 }
 
 // Quantas vezes um nome é usado no próprio módulo, fora de onde é declarado, das propriedades de objeto e dos exports

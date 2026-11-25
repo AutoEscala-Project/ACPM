@@ -2,7 +2,7 @@
 // seguinte, a volta de BH às 07:30 entra sozinha na escala, com o instrutor, o aluno e o avião livres só às 10:10, e o
 // repouso antes dela é um aviso. No programa do curso, o Noturno pode vir em trechos (a ida, a noite e a volta): é um voo
 // só, oferecido pela noite
-import { test, expect, abrir, irPara, abrirEscala, prepararContexto, vigiarErros, AMANHA, entrar } from './fixtures.js';
+import { test, expect, abrir, irPara, abrirEscala, prepararContexto, vigiarErros, AMANHA, entrar, campoDaAgenda, diaSeguinte, rotuloDaData } from './fixtures.js';
 import { criarSupabaseFalso, documentosAtuais, CONTAS } from './supabase-falso.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
 import { cursosIniciais, gravarCurso } from '../../js/programa.js';
@@ -23,9 +23,9 @@ test.describe('Noturno de dois dias', () => {
     await expect(page.locator('#dem tr[data-k="d"][data-id="1000"] [data-f="nb"]')).toHaveValue('1');
     await page.locator('#dem tr[data-k="d"][data-id="1000"] [data-f="mis"]').selectOption('Noturno');
     await irPara(page, 'age');
-    await page.locator('#ag-missao').selectOption('Noturno');
-    await expect(page.locator('#ag-horas')).toHaveValue('4');
-    await expect(page.locator('#ag-horas')).toBeDisabled();
+    await campoDaAgenda(page, 'missao').selectOption('Noturno');
+    await expect(campoDaAgenda(page, 'horas')).toHaveValue('4');
+    await expect(campoDaAgenda(page, 'horas')).toBeDisabled();
   });
 
   test('no dia seguinte, a volta de BH entra às 07:30 e ninguém dela voa antes das 10:10', async ({ page }) => {
@@ -39,8 +39,8 @@ test.describe('Noturno de dois dias', () => {
     // Uma alteração grava a escala do dia (o dia seguinte lê a escala gravada)
     await noturno.locator('select[data-f="fstatus"]').selectOption('Pendente');
 
-    await page.locator('#dt-prox').click();
-    await expect(page.locator('#dt-rotulo')).toContainText('12/11');
+    await diaSeguinte(page);
+    await expect(rotuloDaData(page)).toContainText('12/11');
     await abrirEscala(page);
     const volta = linha(page, 'Aluno 1000');
     await expect(volta.locator('.c-hr')).toContainText('07:30–08:30');

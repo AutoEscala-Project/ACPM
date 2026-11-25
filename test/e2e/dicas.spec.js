@@ -1,7 +1,7 @@
 // As dicas: o balão que explica um termo da tela. Abre com o mouse parado no termo (depois de um
 // instante), na hora com o foco do teclado, e num toque no "?" ou na etiqueta; Esc, um toque fora e sair do termo
 // fecham. O texto vem do glossário.
-import { test, expect, abrir, abrirComExemplo, abrirEscala, irPara, confirmar, AGORA } from './fixtures.js';
+import { test, expect, abrir, abrirComExemplo, abrirEscala, irPara, AGORA, aprovar } from './fixtures.js';
 import { aluno, cenario, instrutor, apenas } from '../helpers/montar.js';
 import { GLOSSARIO } from '../../js/glossario.js';
 
@@ -61,7 +61,7 @@ test.describe('Dicas dos termos', () => {
   test('o selo da escala aprovada, que ganha a dica depois de a tela aberta, também é descrito e entra no Tab', async ({ page }) => {
     await abrir(page, { estado: diaComHorarioLivre() });
     await abrirEscala(page);
-    await confirmar(page, '#btn-aprovar');
+    await aprovar(page);
     const selo = page.locator('#selo-aprovada');
     await expect(selo).toBeVisible();
     await expect(selo).toHaveAccessibleDescription(GLOSSARIO['aprovar-escala'].texto);

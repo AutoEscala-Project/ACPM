@@ -1,7 +1,7 @@
 // Conteúdo gravado malicioso: quem tem uma conta de operador consegue gravar qualquer coisa no
 // cadastro, no dia, na escala salva e no histórico pela API. Nada disso pode virar HTML ou script em nenhuma tela: o
 // app escapa tudo o que mostra (texto e atributos) e, ao abrir, só aceita os valores que ele mesmo produz.
-import { test, expect, irPara, prepararContexto, vigiarErros, AMANHA, preencherLogin, URL_APP } from './fixtures.js';
+import { test, expect, irPara, prepararContexto, vigiarErros, AMANHA, preencherLogin, URL_APP, ABAS, abrirHistorico, appPronto, botaoDaAba, caixaDisponivel } from './fixtures.js';
 import { documentosAtuais, instalarSupabaseFalso, CONTAS } from './supabase-falso.js';
 import { runAllocationEngine } from '../../js/engine.js';
 import { aluno, cenario, instrutor, missaoExtra, GROUND_C152 } from '../helpers/montar.js';
@@ -91,8 +91,8 @@ async function abrirCom(page, docs, url = './') {
 
 // Todas as abas e visões, as gavetas e o popup do mapa
 async function percorrer(page) {
-  await expect(page.locator('#wins input[data-a="win"]').first()).toBeAttached();
-  for (const aba of ['esc', 'dem', 'age', 'rec', 'ins', 'alu', 'cur', 'rod', 'bi']) {
+  await appPronto(page);
+  for (const aba of ABAS) {
     await irPara(page, aba);
     await nada(page);
   }
@@ -106,7 +106,7 @@ async function percorrer(page) {
   await expect(page.locator('#tl-pop')).toBeVisible();
   await nada(page);
   await page.keyboard.press('Escape');
-  await page.locator('#btn-open-log').click();
+  await abrirHistorico(page);
   await expect(page.locator('#historico')).toBeVisible();
   await nada(page);
   await page.keyboard.press('Escape');
@@ -159,7 +159,7 @@ test.describe('Conteúdo gravado malicioso', () => {
     await nada(page);
     await page.keyboard.press('Escape');
     await expect(page.locator('#dlg-agendar')).toBeHidden();
-    await page.locator('#btn-open-log').click();
+    await abrirHistorico(page);
     const longa = page.locator('#audit-log-list .audit-item').filter({ hasText: 'Longo Longo' });
     await expect(longa.locator('.audit-desc')).toHaveText('Longo '.repeat(400).slice(0, 500).trim());
     await expect(longa.locator('.audit-autor')).toHaveText('Autor '.repeat(100).slice(0, 80).trim());
@@ -237,7 +237,7 @@ test.describe('Conteúdo gravado malicioso', () => {
     await expect(corrigida.locator('[data-cf="nb"]')).toHaveValue('1');
     // A reversão adulterada (um recurso com matrícula impossível, um atributo que não é texto) não vira botão; a que está
     // no formato certo mostra o rótulo como texto, e revertê-la não injeta nada
-    await page.locator('#btn-open-log').click();
+    await abrirHistorico(page);
     const entrada = descricao => page.locator('#audit-log-list .audit-item', { hasText: descricao });
     await expect(entrada('Recurso retirado').locator('[data-act="rev-log"]')).toHaveCount(0);
     await expect(entrada('PR-CPL: Só VFR')).toBeVisible();
@@ -248,7 +248,7 @@ test.describe('Conteúdo gravado malicioso', () => {
     await expect(page.locator('#audit-log-list')).toContainText('Revertido: PR-VOB disponível');
     await page.keyboard.press('Escape');
     await irPara(page, 'rec');
-    await expect(page.locator('#eqs input[data-id="PR-VOB"]')).toBeChecked();
+    await expect(caixaDisponivel(page, 'PR-VOB')).toBeChecked();
     await nada(page);
   });
 
@@ -322,7 +322,7 @@ test.describe('Link antigo com os dados na URL', () => {
     const erros = vigiarErros(page);
     await page.goto(`./?role=gestor&share=${codificar(payloadMalicioso())}`);
     await expect(page.locator('#aviso-link-texto')).toContainText('não vale mais');
-    for (const aba of ['rec', 'ins', 'alu', 'dem', 'bi', 'esc']) await page.locator(`#nav button[data-t="${aba}"]`).click();
+    for (const aba of ['rec', 'ins', 'alu', 'dem', 'bi', 'esc']) await botaoDaAba(page, aba).click();
 
     expect(await page.evaluate(() => window.__xss)).toBeUndefined();
     await expect(page.locator('img[src="x"]')).toHaveCount(0);

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   isGroundMission, doesGroundGateFlight, migrateLegacyMissionName, normalizeMissionFields, blank, disponibilidadeDoAluno, disponibilidadeAtual,
   rotuloDaDisponibilidade, opcoesDeDisponibilidade, proximoMid, duracaoDigitada, ERRO_DA_DURACAO, chaveTemSobras, alvoDoNovoPedido,
-  pesoValido, pesoDigitado, ERRO_DO_PESO
+  pesoValido, pesoDigitado, pesoDoTexto, ERRO_DO_PESO
 } from '../../js/rules.js';
 import { podeFazer, descreverExigencias } from '../../js/habilitacoes.js';
 
@@ -37,6 +37,22 @@ describe('Regras de missão', () => {
     const pedido = { mis: 'Ground C172', eq: 'C172', p1: 8, p2: 1050, nb: 3, ss: 2 };
     normalizeMissionFields(pedido);
     assert.deepEqual(pedido, { mis: 'Ground C172', eq: 'Sala Ground', p1: 390, p2: 500, nb: 1.5, ss: 1 });
+  });
+
+  it('um valor gravado que não é texto nem número (um objeto que não vira texto) não para a abertura: vale o padrão', () => {
+    // JSON.parse('{"toString": null}'): converter para texto ou número dá TypeError (docs/PLAN.md:440)
+    const hostil = () => JSON.parse('{"toString": null}');
+    const pedido = { fly: true, mis: hostil(), eq: 'C152', p1: 500, p2: 610, nb: hostil(), ss: 1, pr: hostil(), jan: hostil() };
+    assert.doesNotThrow(() => normalizeMissionFields(pedido));
+    assert.deepEqual(pedido, { fly: true, mis: 'Voo Local', eq: 'C152', p1: 500, p2: 610, nb: 1, ss: 1, pr: 3 });
+    // Cada campo sozinho, também numa lista (que vira texto) e num número válido ao lado
+    for (const campo of ['mis', 'nb', 'pr', 'jan']) {
+      const um = { mis: 'Navegação', eq: 'C152', p1: 500, p2: 610, nb: 2, ss: 1, pr: 2, jan: 'manha', [campo]: hostil() };
+      assert.doesNotThrow(() => normalizeMissionFields(um), campo);
+    }
+    const comLista = { mis: ['Navegação'], eq: 'C152', p1: 500, p2: -1, nb: [2], ss: 1 };
+    assert.doesNotThrow(() => normalizeMissionFields(comLista));
+    assert.equal(comLista.mis, 'Voo Local');
   });
 
   it('uma sessão por missão: pedidos antigos com 2 ou 3 sessões passam a ter uma só (para dividir, "+ missão")', () => {
@@ -229,5 +245,13 @@ describe('O peso', () => {
       [72, 72.5, 80.3, 68.3, 0.1, 250, 300, 300, 75, 90]);
     for (const fora of ['0', '0,04', '-1', '300,1', '350', '', 'abc', 'Infinity']) assert.equal(pesoDigitado(fora), null, fora);
     assert.equal(ERRO_DO_PESO, 'O peso vai de 1 a 300 kg.');
+  });
+
+  it('o do campo do cadastro: vazio é sem peso (0); o texto que não é número (validity.badInput) não apaga o peso', () => {
+    assert.equal(pesoDoTexto(''), 0);
+    assert.equal(pesoDoTexto('   '), 0);
+    assert.equal(pesoDoTexto('72,5'), 72.5);
+    assert.equal(pesoDoTexto('', true), null);
+    for (const fora of ['0', '-1', '301', 'abc']) assert.equal(pesoDoTexto(fora), null, fora);
   });
 });

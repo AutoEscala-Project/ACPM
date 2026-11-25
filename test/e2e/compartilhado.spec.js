@@ -1,4 +1,4 @@
-import { test, expect, prepararContexto, vigiarErros, irPara, abrirEscala, lerEscala, AMANHA, entrar, URL_APP } from './fixtures.js';
+import { test, expect, prepararContexto, vigiarErros, irPara, abrirEscala, lerEscala, AMANHA, entrar, URL_APP, abrirHistorico, alternarDisponivel, botaoAprovar, caixaDisponivel, campoDaData, exportar } from './fixtures.js';
 import { criarSupabaseFalso, instalarSupabaseFalso, documentosAtuais, CONTAS } from './supabase-falso.js';
 import { estadoSintetico } from '../helpers/estado.js';
 import { comExemplo } from '../helpers/exemplo.js';
@@ -25,7 +25,7 @@ test.describe('Modo compartilhado: gravação, conflitos e link da escala', () =
     doColega.av['PR-IGU'] = false;
     servidor.alterarDiaPorOutraPessoa(AMANHA, doColega);
     await irPara(page, 'rec');
-    await page.locator('#eqs input[data-id="PR-BTB"]').uncheck();
+    await alternarDisponivel(page, 'PR-BTB', false);
     await expect(page.locator('#aviso-sync')).toBeVisible();
     await expect(page.locator('#aviso-sync-texto')).toHaveText(
       'Outra pessoa alterou a escala enquanto você editava. A tela ficou só para consulta: recarregue para ver a versão atual e continuar (a sua última alteração não foi salva).');
@@ -35,15 +35,15 @@ test.describe('Modo compartilhado: gravação, conflitos e link da escala', () =
 
     await page.waitForTimeout(300);
     const enviadas = servidor.gravacoes.length;
-    await page.locator('#eqs input[data-id="PR-JPL"]').evaluate(el => { el.checked = false; el.dispatchEvent(new Event('change', { bubbles: true })); });
+    await caixaDisponivel(page, 'PR-JPL').evaluate(el => { el.checked = false; el.dispatchEvent(new Event('change', { bubbles: true })); });
     await page.waitForTimeout(300);
     expect(servidor.gravacoes.length, 'depois do conflito nada mais é enviado').toBe(enviadas);
 
     await page.locator('#btn-recarregar').click();
     await expect(page.locator('#usuario')).toBeVisible();
     await expect(page.locator('#aviso-sync')).toBeHidden();
-    await expect(page.locator('#eqs input[data-id="PR-IGU"]')).not.toBeChecked();
-    await expect(page.locator('#eqs input[data-id="PR-BTB"]')).toBeChecked();
+    await expect(caixaDisponivel(page, 'PR-IGU')).not.toBeChecked();
+    await expect(caixaDisponivel(page, 'PR-BTB')).toBeChecked();
     expect(erros).toEqual([]);
     await contexto.close();
   });
@@ -59,7 +59,7 @@ test.describe('Modo compartilhado: gravação, conflitos e link da escala', () =
     servidor.alterarPorOutraPessoa('cadastro', { ...cadastro, esquema: cadastro.esquema + 1 });
 
     await irPara(page, 'rec');
-    await page.locator('#eqs input[data-id="PR-BTB"]').uncheck();
+    await alternarDisponivel(page, 'PR-BTB', false);
     await expect(page.locator('#aviso-sync-texto')).toHaveText('O app foi atualizado. Recarregue a página para continuar (a sua última alteração não foi salva).');
     await expect(page.locator('body')).toHaveAttribute('data-role', 'gestor');
     expect(erros).toEqual([]);
@@ -79,9 +79,9 @@ test.describe('Modo compartilhado: gravação, conflitos e link da escala', () =
     const registradas = servidor.historico.length;
 
     await irPara(page, 'rec');
-    await page.locator('#eqs input[data-id="PR-BTB"]').uncheck();
+    await alternarDisponivel(page, 'PR-BTB', false);
     await expect(page.locator('#aviso-sync')).toBeVisible();
-    await page.locator('#btn-open-log').click();
+    await abrirHistorico(page);
     const entrada = page.locator('#audit-log-list .audit-item').filter({ hasText: 'PR-BTB' });
     await expect(entrada.locator('.audit-estado')).toHaveText('não gravada');
     await expect(entrada.locator('[data-act="rev-log"]')).toHaveCount(0);
@@ -100,8 +100,8 @@ test.describe('Modo compartilhado: gravação, conflitos e link da escala', () =
 
     const liberar = servidor.segurarGravacoes();
     await irPara(page, 'rec');
-    await page.locator('#eqs input[data-id="PR-BTB"]').uncheck();
-    await page.locator('#btn-open-log').click();
+    await alternarDisponivel(page, 'PR-BTB', false);
+    await abrirHistorico(page);
     const entrada = page.locator('#audit-log-list .audit-item').filter({ hasText: 'PR-BTB' });
     await expect(entrada.locator('.audit-estado')).toHaveText('gravando…');
     await expect(entrada.locator('[data-act="rev-log"]')).toHaveCount(0);
@@ -147,11 +147,11 @@ test.describe('Modo compartilhado: gravação, conflitos e link da escala', () =
       'Não foi possível ler as horas de voo dos instrutores: os limites do mês e do ano não estão sendo conferidos, e Aprovar escala fica desligado. ' +
       'Não foi possível ler os resultados das missões dos cursos: a próxima missão e o registro de resultados ficam desligados.');
     await abrirEscala(page);
-    await expect(page.locator('#btn-aprovar')).toBeDisabled();
+    await expect(botaoAprovar(page)).toBeDisabled();
 
     await page.locator('#btn-tentar-dados').click();
     await expect(page.locator('#aviso-dados')).toBeHidden();
-    await expect(page.locator('#btn-aprovar')).toBeEnabled();
+    await expect(botaoAprovar(page)).toBeEnabled();
     expect(erros).toEqual([]);
     await contexto.close();
   });
@@ -167,7 +167,7 @@ test.describe('Modo compartilhado: gravação, conflitos e link da escala', () =
 
     servidor.expirarSessoes();
     await irPara(page, 'rec');
-    await page.locator('#eqs input[data-id="PR-BTB"]').uncheck();
+    await alternarDisponivel(page, 'PR-BTB', false);
     const dialogo = page.locator('#dlg-sessao');
     await expect(dialogo).toBeVisible();
     await expect(dialogo).toContainText(CONTAS.operador.email);
@@ -180,7 +180,7 @@ test.describe('Modo compartilhado: gravação, conflitos e link da escala', () =
     await expect(dialogo).toBeHidden();
     await expect.poll(() => servidor.dias.get(AMANHA).conteudo.av['PR-BTB']).toBe(false);
     await expect.poll(() => servidor.historico.length).toBe(registradas + 1);
-    await page.locator('#btn-open-log').click();
+    await abrirHistorico(page);
     await expect(page.locator('#audit-log-list .audit-item').filter({ hasText: 'PR-BTB' }).locator('[data-act="rev-log"]')).toBeVisible();
     expect(erros).toEqual([]);
     await contexto.close();
@@ -195,14 +195,14 @@ test.describe('Modo compartilhado: gravação, conflitos e link da escala', () =
 
     servidor.falharGravacoes(2);
     await irPara(page, 'rec');
-    await page.locator('#eqs input[data-id="PR-BTB"]').uncheck();
+    await alternarDisponivel(page, 'PR-BTB', false);
     await expect(page.locator('#aviso-sync-texto')).toHaveText(
       'Sem conexão com o servidor: 1 alteração esperando para ser gravada. Ela é gravada sozinha quando a conexão voltar; não feche esta página.');
     await expect(page.locator('#btn-recarregar'), 'recarregar perderia a alteração').toBeHidden();
     // Sem nenhuma outra alteração, a gravação tenta de novo e o aviso some
     await expect(page.locator('#aviso-sync')).toBeHidden({ timeout: 15000 });
     expect(servidor.dias.get(AMANHA).conteudo.av['PR-BTB']).toBe(false);
-    await page.locator('#btn-open-log').click();
+    await abrirHistorico(page);
     await expect(page.locator('#audit-log-list .audit-item').filter({ hasText: 'PR-BTB' }).locator('[data-act="rev-log"]')).toBeVisible();
     expect(erros).toEqual([]);
     await contexto.close();
@@ -218,7 +218,7 @@ test.describe('Modo compartilhado: gravação, conflitos e link da escala', () =
     doColega.av['PR-IGU'] = false;
     servidor.alterarDiaPorOutraPessoa(AMANHA, doColega);
     await irPara(page, 'rec');
-    await page.locator('#eqs input[data-id="PR-BTB"]').uncheck();
+    await alternarDisponivel(page, 'PR-BTB', false);
     await expect(page.locator('#aviso-sync')).toBeVisible();
     await irPara(page, 'cur');
     await expect(page.locator('#cursos')).toContainText('Só o Administrador muda; aqui é consulta.');
@@ -244,7 +244,7 @@ test.describe('Modo compartilhado: gravação, conflitos e link da escala', () =
     servidor.alterarDiaPorOutraPessoa(AMANHA, doColega);
     const liberar = servidor.segurarGravacoes();
     await irPara(page, 'rec');
-    await page.locator('#eqs input[data-id="PR-BTB"]').uncheck();
+    await alternarDisponivel(page, 'PR-BTB', false);
     await irPara(page, 'cur');
     await expect(page.locator('#cursos')).toContainText('Só o Administrador muda.');
     // Um curso de cada vez: o "+ Missão" do PP, ainda sem programa
@@ -269,8 +269,8 @@ test.describe('Modo compartilhado: gravação, conflitos e link da escala', () =
     servidor.desconectar();
     await contexto.setOffline(true);
     await irPara(page, 'rec');
-    await page.locator('#eqs input[data-id="PR-BTB"]').uncheck();
-    await page.locator('#eqs input[data-id="PR-IGU"]').uncheck();
+    await alternarDisponivel(page, 'PR-BTB', false);
+    await alternarDisponivel(page, 'PR-IGU', false);
     await expect(page.locator('#aviso-sync-texto')).toHaveText(
       'Sem conexão com o servidor: 2 alterações esperando para serem gravadas. Elas são gravadas sozinhas quando a conexão voltar; não feche esta página.');
     const dialogo = new Promise(resolve => page.once('dialog', async d => { resolve(d.type()); await d.dismiss(); }));
@@ -295,7 +295,7 @@ test.describe('Modo compartilhado: gravação, conflitos e link da escala', () =
     await entrar(pgOperador, CONTAS.operador);
     await abrirEscala(pgOperador);
     // A escala calculada fica gravada (com a data) ao ser exportada
-    await Promise.all([pgOperador.waitForEvent('download'), pgOperador.locator('#exp').click()]);
+    await exportar(pgOperador, 'csv');
     await expect.poll(() => servidor.dias.get(AMANHA).conteudo.resultado && servidor.dias.get(AMANHA).conteudo.resultado.data).toBe(AMANHA);
     const escalaOperador = await lerEscala(pgOperador);
     await pgOperador.locator('#btn-share-link').click();
@@ -308,7 +308,7 @@ test.describe('Modo compartilhado: gravação, conflitos e link da escala', () =
     const pgGestor = await gestor.newPage();
     const erros = vigiarErros(pgGestor);
     await entrar(pgGestor, CONTAS.gestor, { url: link });
-    await expect(pgGestor.locator('#dt')).toHaveValue(AMANHA);
+    await expect(campoDaData(pgGestor)).toHaveValue(AMANHA);
     await irPara(pgGestor, 'esc');
     const escalaGestor = await lerEscala(pgGestor);
     expect(escalaGestor.linhas).toEqual(escalaOperador.linhas);

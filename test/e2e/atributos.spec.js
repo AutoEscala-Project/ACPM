@@ -1,6 +1,6 @@
 // Atributos dos recursos na aba Recursos (Só VFR, Habilitação própria, Só Parafuso), a habilitação própria nas
 // habilitações do instrutor e o simulador com 2 h na Demanda e na Agenda
-import { test, expect, abrir, irPara, irParaVista, abrirEscala } from './fixtures.js';
+import { test, expect, abrir, irPara, irParaVista, abrirEscala, abrirHistorico, campoDaAgenda } from './fixtures.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
 
 const linha = (page, nome) => page.locator('#out tbody tr:not(.win)', { hasText: nome });
@@ -29,7 +29,7 @@ test.describe('Atributos dos recursos', () => {
     await abrirEscala(page);
     await expect(page.locator('#out details.erros')).toContainText('nenhum C172 homologado IFR disponível');
 
-    await page.locator('#btn-open-log').click();
+    await abrirHistorico(page);
     await expect(page.locator('#audit-log-list')).toContainText('PR-HAR: Só VFR marcado');
     await page.locator('#audit-log-list [data-act="rev-log"]').first().click();
     await page.keyboard.press('Escape');
@@ -63,9 +63,9 @@ test.describe('Atributos dos recursos', () => {
     await expect(page.locator('#dem tr[data-k="d"][data-id="1000"][data-mid="0"] [data-f="nb"]')).toHaveValue('1');
 
     await irPara(page, 'age');
-    await page.locator('#ag-missao').selectOption('Simulador');
-    await expect(page.locator('#ag-horas')).toHaveValue('2');
-    await page.locator('#ag-missao').selectOption('Voo Local');
-    await expect(page.locator('#ag-horas')).toHaveValue('1');
+    await campoDaAgenda(page, 'missao').selectOption('Simulador');
+    await expect(campoDaAgenda(page, 'horas')).toHaveValue('2');
+    await campoDaAgenda(page, 'missao').selectOption('Voo Local');
+    await expect(campoDaAgenda(page, 'horas')).toHaveValue('1');
   });
 });

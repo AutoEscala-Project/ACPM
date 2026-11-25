@@ -2,7 +2,7 @@
 // de 5 h até a revisão de 50 horas e pedidos da agenda para a data que ainda não estão na demanda. O selo de Recursos
 // aparece também no botão da Disponibilidade do dia, a vista da tabela dos aviões (quem está no Cadastro vê onde olhar).
 import { $ } from '../dom.js';
-import { RES, S, DATA, isGestor } from '../state.js';
+import { RES, S, DATA, isGestor, inativoNaDataAberta, stuBy } from '../state.js';
 import { REVISAO_H } from '../config.js';
 import { ApiClient } from '../storage.js';
 
@@ -25,7 +25,7 @@ export function atualizarSelosDaEscala() {
 
   const revisao = (RES && RES.revisao) || {};
   const atencao = Object.entries(revisao)
-    .filter(([r, v]) => S.av[r] !== false && (v.paraAs !== null || REVISAO_H - v.fim < PERTO_DA_REVISAO_H)).length;
+    .filter(([r, v]) => S.av[r] !== false && !inativoNaDataAberta((S.frota || []).find(f => f.reg === r)) && (v.paraAs !== null || REVISAO_H - v.fim < PERTO_DA_REVISAO_H)).length;
   const avioes = `${atencao} ${atencao === 1 ? 'avião parado ou perto' : 'aviões parados ou perto'} da revisão de 50 horas`;
   selo('rec', atencao, 'aviso', `${avioes} (Recursos › Disponibilidade do dia)`);
   selo('rec-dia', atencao, 'aviso', avioes);
@@ -45,7 +45,7 @@ export async function lerPedidosDaData() {
 }
 
 const pedidosPendentes = () => (pedidosDaData.data === DATA
-  ? pedidosDaData.lista.filter(s => !s.cancelada_em && !(S.importadas || []).includes(s.id))
+  ? pedidosDaData.lista.filter(s => !s.cancelada_em && !(S.importadas || []).includes(s.id) && !inativoNaDataAberta(stuBy(s.aluno)))
   : []);
 
 // Quem consulta (Gestor e Secretaria) não importa pedidos: o selo é para quem opera a escala

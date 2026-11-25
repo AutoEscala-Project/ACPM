@@ -3,14 +3,14 @@
 // que faltam, então o app sempre trabalha no formato atual; no primeiro acesso de um operador depois de uma mudança,
 // os dados guardados são regravados no formato atual (ApiClient.atualizarFormatoGravado).
 // Sem o campo "esquema": versão 4 (o primeiro formato por data).
-import { habilitacoesDoNivel, marcasDoChecadorAntigo } from './habilitacoes.js';
+import { habilitacoesDoNivel, marcasDoChecadorAntigo, habilitacaoDoAviao } from './habilitacoes.js';
 import { FROTA_INICIAL } from './frota.js';
 import { HORARIOS_INICIAIS, minutoDaPreferencia, ajustarPreferencias } from './horarios.js';
 import { disponibilidadeAtual } from './rules.js';
 import { LIMITES_DA_LEI } from './limites.js';
 import { cursosVazios } from './cursos.js';
 
-export const ESQUEMA = 25;
+export const ESQUEMA = 26;
 // O formato dos cursos: o formato do cadastro a partir do qual os programas vivem nas tabelas próprias (antes dele, vale
 // o programa guardado no cadastro, que a conversão única traz para as tabelas). O 22 é o do instrutor escolhido e o 23,
 // o dos atributos da frota; um aumento é esta linha mais public.formato_dos_cursos() (a migração dos cursos), com o
@@ -209,6 +209,18 @@ const PASSOS = {
   // gravar o cadastro, e o painel e a TV voltariam ao padrão) recusar a gravação e pedir para recarregar
   25: {
     cadastro: cadastro => cadastro,
+    dia: dia => dia
+  },
+  // Versão 26: o que o recurso exige do instrutor é uma lista, "exige" (ids do registro das habilitações, js/habilitacoes.js,
+  // ou a habilitação própria "aviao:<matrícula>"). O recurso com a habilitação própria e sem a lista ganha a dele; a marca
+  // fica, como espelho. O número também protege o "inativo" de alunos, instrutores e recursos (só true), que a aba da
+  // versão anterior tiraria ao gravar o cadastro
+  26: {
+    cadastro: cadastro => (Array.isArray(cadastro.frota) ? {
+      ...cadastro,
+      frota: cadastro.frota.map(f => (f && typeof f === 'object' && f.habilitacaoPropria === true && f.exige === undefined && typeof f.reg === 'string'
+        ? { ...f, exige: [habilitacaoDoAviao(f.reg.trim().toUpperCase())] } : f))
+    } : cadastro),
     dia: dia => dia
   }
 };

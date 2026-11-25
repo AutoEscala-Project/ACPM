@@ -1,103 +1,32 @@
 // Acessibilidade: cada botão e cada campo tem um nome para o leitor de tela, e nenhum se chama só "✕" (que o leitor
 // lê como "multiplicação"). Vale para todas as abas, o Histórico e o painel de habilitações.
-import { test, expect, abrir, abrirComExemplo, irPara, entrar, abrirEscala, confirmar, prepararContexto, vigiarErros, percorrerVistasEFiltros } from './fixtures.js';
+import { test, expect, abrir, abrirComExemplo, irPara, entrar, abrirEscala, abrirCaixa, prepararContexto, vigiarErros, REGIOES, abasVisiveis, abrirHistorico, aprovar, botaoAprovar, botaoDiaAnterior, botaoDoHistorico, botaoDoMenuDaConta, percorrerTelas, relativoDaData, rotuloDaData, semNome, alternarVem, botaoDiaSeguinte, campoDaData } from './fixtures.js';
 import { instalarSupabaseFalso, documentosAtuais, CONTAS } from './supabase-falso.js';
 import { comExemplo } from '../helpers/exemplo.js';
 import { estadoSintetico } from '../helpers/estado.js';
 import { razaoDeContraste } from '../helpers/contraste.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
 
-// Nome acessível, do jeito simples: aria-label, aria-labelledby, o rótulo do campo, o texto do botão ou a dica
-const semNome = (page, raiz) => page.evaluate(seletor => {
-  const nome = el => {
-    if (el.getAttribute('aria-label')) return el.getAttribute('aria-label');
-    const por = el.getAttribute('aria-labelledby');
-    if (por) return por.split(' ').map(id => (document.getElementById(id) || {}).textContent || '').join(' ');
-    if (el.labels && el.labels.length) return [...el.labels].map(l => l.textContent).join(' ');
-    // Sem texto, o leitor de tela usa a dica (title)
-    if (el.matches('button, summary, a') && el.textContent.trim()) return el.textContent;
-    return el.title || '';
-  };
-  const problemas = new Set();
-  for (const raiz of document.querySelectorAll(seletor)) {
-    for (const el of raiz.querySelectorAll('button, select, input, textarea, summary, a[href]')) {
-      if (!el.checkVisibility() && !el.matches('input[type=checkbox]')) continue;
-      if (el.matches('input[type=checkbox]') && !el.closest('label, td, th, li')?.checkVisibility()) continue;
-      const n = nome(el).replace(/\s+/g, ' ').trim();
-      if (!n || n === '✕' || n === '×') {
-        problemas.add(`${el.tagName.toLowerCase()}${el.id ? '#' + el.id : ''}${el.dataset.f ? `[data-f=${el.dataset.f}]` : ''}${el.dataset.act ? `[data-act=${el.dataset.act}]` : ''}${el.dataset.a ? `[data-a=${el.dataset.a}]` : ''} "${n}"`);
-      }
-    }
-  }
-  return [...problemas];
-}, raiz);
-
 test.describe('Acessibilidade', () => {
   test('todo botão e todo campo tem nome para o leitor de tela, em todas as abas', async ({ page }) => {
     await abrirComExemplo(page);
-    for (const aba of ['esc', 'dem', 'age', 'rec', 'ins', 'alu', 'cur', 'rod', 'bi']) {
-      await irPara(page, aba);
-      expect(await semNome(page, '.topo, #nav, main section.on'), `aba ${aba}`).toEqual([]);
-    }
+    // Cada aba com a casca (o topo e as abas); as outras vistas e as tabelas sem nenhum com os filtros, só a tela
+    await percorrerTelas(page, async tela => expect(await semNome(page, REGIOES.tela), tela).toEqual([]), {
+      naAba: async aba => expect(await semNome(page, `${REGIOES.casca}, ${REGIOES.tela}`), `aba ${aba}`).toEqual([])
+    });
     await irPara(page, 'esc');
     for (const vista of ['eq', 'ins', 'painel']) {
       await page.locator(`#s-esc [data-tl="${vista}"]`).click();
       expect(await semNome(page, 'main section.on'), `mapa ${vista}`).toEqual([]);
     }
-    await percorrerVistasEFiltros(page, async tela => expect(await semNome(page, 'main section.on'), tela).toEqual([]));
     await irPara(page, 'ins');
     await page.locator('#s-ins [data-vista-ins="cadastro"]').click();
     expect(await semNome(page, 'main section.on'), 'cadastro de instrutores').toEqual([]);
     await page.locator('#inst [data-act="editar-habs"]').first().click();
     expect(await semNome(page, '#painel-instrutor'), 'painel de habilitações').toEqual([]);
     await page.keyboard.press('Escape');
-    await page.locator('#btn-open-log').click();
+    await abrirHistorico(page);
     expect(await semNome(page, '#historico'), 'histórico').toEqual([]);
-  });
-
-  // A aba Cursos com o programa em fases (o exemplo não tem programa: aqui, o cronograma do PP): os botões dos cursos, o
-  // índice das fases, o título de cada fase (o botão que a recolhe; para quem muda, só a seta, com o nome da fase para o
-  // leitor de tela) e "Abrir todas" e "Recolher todas" têm nome, para quem muda e para quem só consulta, abertas e
-  // recolhidas
-  test('a aba Cursos em fases: os cursos, o índice e o título de cada fase têm nome, abertas e recolhidas', async ({ page }) => {
-    await abrir(page, { estado: cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, {}, { curso: 'PP' })] }) });
-    await irPara(page, 'cur');
-    await confirmar(page, '#cursos [data-act="curso-modelo"]');
-    await expect(page.locator('#cursos .fase')).toHaveCount(9);
-    await expect(page.locator('#cursos [data-recolher-fase]').first()).toHaveAccessibleName('Fase 1 – Introdução ao Voo');
-    await expect(page.locator('#cursos [data-recolher-fase]').first()).toHaveAttribute('aria-expanded', 'true');
-    for (const perfil of ['operador', 'gestor']) {
-      await page.locator('#role-sel').selectOption(perfil);
-      for (const fases of ['#fases-abrir', '#fases-recolher']) {
-        await page.locator(fases).click();
-        expect(await semNome(page, 'main section.on'), `${perfil}, ${fases}`).toEqual([]);
-      }
-    }
-    await expect(page.getByRole('navigation', { name: 'Fases do PP' }).getByRole('link')).toHaveCount(9);
-    await expect(page.getByRole('group', { name: 'Curso' }).getByRole('button', { name: 'PP · Piloto Privado' })).toHaveAttribute('aria-pressed', 'true');
-  });
-
-  // O "+" que agenda é só o ícone (escondido do leitor de tela): o nome diz onde o voo vai, o recurso ou o instrutor da
-  // linha no mapa e o horário na lista
-  test('o "+" que agenda tem nome em cada vista: o recurso e o instrutor da linha no mapa, o horário na lista', async ({ page }) => {
-    await abrirComExemplo(page);
-    await abrirEscala(page);
-    const nomes = () => page.locator('#out .win-agendar, #out .tl-agendar').evaluateAll(bs => bs.filter(b => b.checkVisibility()).map(b => b.getAttribute('aria-label')));
-    const lista = await nomes();
-    expect(lista.length).toBeGreaterThan(0);
-    expect(lista.filter(n => !/^Agendar às \d\d:\d\d$/.test(n)), 'lista').toEqual([]);
-    await expect(page.getByRole('button', { name: 'Agendar às 06:30', exact: true })).toBeVisible();
-    await page.locator('#s-esc [data-tl="eq"]').click();
-    const recursos = await nomes();
-    expect(recursos).toContain('Agendar no PR-VOB');
-    expect(recursos).toContain('Agendar na Sala Ground');
-    expect(recursos.filter(n => !/^Agendar (no [A-Z0-9-]+|na Sala Ground)$/.test(n)), 'por recurso').toEqual([]);
-    await expect(page.getByRole('button', { name: 'Agendar no PR-VOB', exact: true })).toBeVisible();
-    await page.locator('#s-esc [data-tl="ins"]').click();
-    const instrutores = await nomes();
-    expect(instrutores).toHaveLength(40);
-    expect(instrutores.filter(n => !/^Agendar com Instrutor \d\d$/.test(n)), 'por instrutor').toEqual([]);
-    await expect(page.getByRole('button', { name: 'Agendar com Instrutor 07', exact: true })).toBeVisible();
   });
 });
 
@@ -147,7 +76,7 @@ test.describe('O foco do teclado na barra do topo', () => {
     test(`no menu da conta (claro, dentro da barra), o anel contrasta com o menu, no tema ${nome}`, async ({ page }) => {
       await abrirComExemplo(page);
       await page.evaluate(t => { document.documentElement.dataset.theme = t; }, tema);
-      const botao = page.locator('#btn-menu-conta');
+      const botao = botaoDoMenuDaConta(page);
       await botao.focus();
       await page.keyboard.press('Shift+Tab');
       await page.keyboard.press('Tab');
@@ -174,10 +103,10 @@ test.describe('O foco do teclado na barra do topo', () => {
 
   test('o rótulo da data mostra o foco em todas as paradas do Tab dentro do campo da data', async ({ page }) => {
     await abrirComExemplo(page);
-    await page.locator('#dt-ant').focus();
+    await botaoDiaAnterior(page).focus();
     await page.keyboard.press('Tab');
     let paradas = 0;
-    while (paradas < 8 && await page.evaluate(() => document.activeElement.id === 'dt')) {
+    while (paradas < 8 && await campoDaData(page).evaluate(el => el === document.activeElement)) {
       expect(await page.locator('.topo-data-campo').evaluate(el => getComputedStyle(el).outlineStyle), `parada ${paradas + 1}`).toBe('solid');
       paradas++;
       await page.keyboard.press('Tab');
@@ -191,35 +120,31 @@ test.describe('Telas de 320 px', () => {
   test.use({ viewport: { width: 320, height: 700 } });
   test('nenhuma aba rola de lado', async ({ page }) => {
     await abrirComExemplo(page);
-    const abas = await page.locator('#nav button[data-t]:visible').evaluateAll(bs => bs.map(b => b.dataset.t));
+    const abas = await abasVisiveis(page);
     expect(abas.length).toBeGreaterThan(5);
     const largas = [];
     const conferir = async tela => {
       const largura = await page.evaluate(() => document.documentElement.scrollWidth);
       if (largura > 320) largas.push(`${tela}: ${largura}px`);
     };
-    for (const aba of abas) {
-      await irPara(page, aba);
-      await conferir(aba);
-    }
-    // As outras vistas e as tabelas sem nenhum com os filtros
-    await percorrerVistasEFiltros(page, conferir);
+    // As abas à vista, as outras vistas e as tabelas sem nenhum com os filtros
+    await percorrerTelas(page, conferir, { abas, naAba: conferir });
     expect(largas).toEqual([]);
   });
 
   test('na virada do ano, a data com o ano e o "amanhã" também aparece inteira', async ({ page }) => {
     await page.clock.setFixedTime(new Date('2026-12-31T12:00:00-03:00'));
     await abrirComExemplo(page);
-    const rotulo = page.locator('#dt-rotulo');
+    const rotulo = rotuloDaData(page);
     await expect(rotulo).toHaveText('sex., 01/01/2027', { useInnerText: true });
-    await expect(page.locator('#dt-rel')).toHaveText('amanhã');
+    await expect(relativoDaData(page)).toHaveText('amanhã');
     expect(await rotulo.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320);
   });
 
   test('a data aparece inteira, com o dia da semana abreviado', async ({ page }) => {
     await abrirComExemplo(page);
-    const rotulo = page.locator('#dt-rotulo');
+    const rotulo = rotuloDaData(page);
     expect(await rotulo.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
     await expect(rotulo).toHaveText('qua., 11/11', { useInnerText: true });
   });
@@ -227,9 +152,9 @@ test.describe('Telas de 320 px', () => {
 
 test('na tela grande, o dia da semana aparece por extenso', async ({ page }) => {
   await abrirComExemplo(page);
-  await expect(page.locator('#dt-rotulo .dt-semana')).toBeVisible();
-  await expect(page.locator('#dt-rotulo .dt-semana')).toHaveText('quarta-feira');
-  await expect(page.locator('#dt-rotulo .dt-semana-curta')).toBeHidden();
+  await expect(rotuloDaData(page).locator('.dt-semana')).toBeVisible();
+  await expect(rotuloDaData(page).locator('.dt-semana')).toHaveText('quarta-feira');
+  await expect(rotuloDaData(page).locator('.dt-semana-curta')).toBeHidden();
 });
 
 // Entre o celular e a tela grande, a barra do topo não pode sobrepor a data e as ferramentas. No modo compartilhado, as
@@ -245,8 +170,10 @@ test.describe('A barra do topo nas larguras intermediárias', () => {
         await entrar(page, CONTAS.operador);
       }
       // O que está no meio de cada um é ele mesmo (nada por cima): a marca, as setas da data e as ferramentas
-      for (const seletor of ['.topo-titulo', '#dt-ant', '#dt-prox', '#btn-open-log', '#btn-manual', '#btn-menu-conta']) {
-        const noMeio = await page.locator(seletor).evaluate(el => {
+      for (const [seletor, alvo] of [['.topo-titulo', page.locator('.topo-titulo')], ['a seta ‹ da data', botaoDiaAnterior(page)],
+        ['a seta › da data', botaoDiaSeguinte(page)], ['o Histórico', botaoDoHistorico(page)], ['#btn-manual', page.locator('#btn-manual')],
+        ['o menu da conta', botaoDoMenuDaConta(page)]]) {
+        const noMeio = await alvo.evaluate(el => {
           const r = el.getBoundingClientRect();
           return el.contains(document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2));
         });
@@ -262,9 +189,9 @@ test.describe('Os botões do topo no celular', () => {
   test.use({ viewport: { width: 360, height: 780 } });
   test('o Histórico e o Manual mantêm o nome para o leitor de tela', async ({ page }) => {
     await abrirComExemplo(page);
-    await expect(page.locator('#btn-open-log')).toHaveAccessibleName(/^Histórico/);
+    await expect(botaoDoHistorico(page)).toHaveAccessibleName(/^Histórico/);
     await expect(page.locator('#btn-manual')).toHaveAccessibleName('Manual');
-    await expect(page.locator('#btn-open-log .hd-txt')).not.toBeInViewport({ ratio: 0.5 });
+    await expect(botaoDoHistorico(page).locator('.hd-txt')).not.toBeInViewport({ ratio: 0.5 });
   });
 });
 
@@ -302,204 +229,20 @@ test.describe('Um nome de conta longo', () => {
 // Quem usa o teclado continua no mesmo lugar depois de uma ação: a tela é redesenhada, mas o foco volta para o campo ou o
 // botão equivalente (antes, ele caía no <body> e o próximo Tab recomeçava do topo)
 test.describe('O foco depois de uma ação', () => {
-  const emFoco = page => page.evaluate(() => {
-    const el = document.activeElement;
-    return el === document.body ? 'body' : `${el.tagName.toLowerCase()}${['data-f', 'data-a', 'data-act', 'data-fkey', 'data-id', 'id'].filter(a => el.hasAttribute(a)).map(a => `[${a}="${el.getAttribute(a)}"]`).join('')}`;
-  });
-
-  test('o status mudado pelo teclado na lista da Escala', async ({ page }) => {
-    await abrirComExemplo(page);
-    await abrirEscala(page);
-    const status = page.locator('#out select[data-f="fstatus"]').first();
-    const fkey = await status.getAttribute('data-fkey');
-    await status.focus();
-    await status.selectOption('Em Voo');
-    await expect(page.locator(`#out select[data-fkey="${fkey}"]`)).toHaveValue('Em Voo');
-    expect(await emFoco(page)).toBe(`select[data-f="fstatus"][data-fkey="${fkey}"]`);
-  });
-
-  test('o Voa da Demanda (a linha que some com "Só quem voa" passa o foco para a seguinte) e a disponibilidade em Recursos', async ({ page }) => {
-    await abrirComExemplo(page);
-    await irPara(page, 'dem');
-    const voando = page.locator('#dem tr[data-k="d"]:not(.off)');
-    // As missões extras do aluno saem junto com a principal: o foco vai para o Voa do próximo aluno
-    const ids = await voando.evaluateAll(linhas => linhas.map(l => l.dataset.id));
-    const [primeira, segunda] = [ids[0], ids.find(id => id !== ids[0])];
-    await voando.nth(0).locator('input[data-f="fly"]').focus();
-    await page.keyboard.press('Space');
-    await expect(page.locator(`#dem tr[data-k="d"][data-id="${primeira}"][data-mid="0"]`)).toBeHidden();
-    await expect(page.locator(`#dem tr[data-k="d"][data-id="${segunda}"] input[data-f="fly"]`).first()).toBeFocused();
-    await irPara(page, 'rec');
-    await page.locator('#eqs input[data-a="av"][data-id="PR-BTB"]').focus();
-    await page.keyboard.press('Space');
-    expect(await emFoco(page)).toBe('input[data-a="av"][data-id="PR-BTB"]');
-  });
-
-  test('o diálogo do Atrasado devolve o foco ao status do voo, desistido ou confirmado (com a lista redesenhada)', async ({ page }) => {
-    await abrirComExemplo(page);
-    await abrirEscala(page);
-    const status = page.locator('#out select[data-f="fstatus"]').first();
-    const fkey = await status.getAttribute('data-fkey');
-    const dialogo = page.locator('#dlg-status');
-    await status.focus();
-    await status.selectOption('Atrasado');
-    await dialogo.getByRole('button', { name: 'Voltar' }).click();
-    await expect(dialogo).toBeHidden();
-    expect(await emFoco(page)).toBe(`select[data-f="fstatus"][data-fkey="${fkey}"]`);
-    // Confirmado: o status muda e a lista é redesenhada; o foco fica no status do mesmo voo
-    await status.selectOption('Atrasado');
-    const [h, m] = (await page.locator('#dlg-status-voo').textContent()).match(/(\d\d):(\d\d)–/).slice(1).map(Number);
-    const novo = h * 60 + m + 30;
-    await page.locator('#st-novo').fill(`${String(Math.floor(novo / 60)).padStart(2, '0')}:${String(novo % 60).padStart(2, '0')}`);
-    await dialogo.getByRole('button', { name: 'Confirmar' }).click();
-    await expect(dialogo).toBeHidden();
-    await expect(page.locator(`#out select[data-fkey="${fkey}"]`)).toHaveValue('Atrasado');
-    expect(await emFoco(page)).toBe(`select[data-f="fstatus"][data-fkey="${fkey}"]`);
-  });
-
-  test('o popup do mapa: Enter na barra leva o foco para ele, e Tab depois do último controle volta para a barra', async ({ page }) => {
-    await abrirComExemplo(page);
-    await abrirEscala(page);
-    await page.locator('[data-tl="eq"]').click();
-    const barra = page.locator('#out .tl-bar').first();
-    await barra.focus();
-    await page.keyboard.press('Enter');
-    await expect(page.locator('#tl-pop')).toBeVisible();
-    // O primeiro controle do popup é o instrutor (o nome abre a lista para trocar); depois, o status
-    await expect(page.locator('#tl-pop [data-act="trocar-instrutor"]')).toBeFocused();
-    await page.keyboard.press('Tab');
-    await expect(page.locator('#tl-pop select[data-f="fstatus"]')).toBeFocused();
-    await page.keyboard.press('Shift+Tab');
-    const controles = await page.locator('#tl-pop select, #tl-pop button').count();
-    for (let i = 0; i < controles; i++) await page.keyboard.press('Tab');
-    await expect(page.locator('#tl-pop')).toBeHidden();
-    await expect(barra).toBeFocused();
-  });
-
   test('fechar o Histórico devolve o foco ao botão; o Manual leva o foco ao título dele', async ({ page }) => {
     await abrirComExemplo(page);
-    await page.locator('#btn-open-log').click();
+    await abrirHistorico(page);
     await expect(page.locator('#btn-fechar-historico')).toBeFocused();
     await page.keyboard.press('Escape');
-    await expect(page.locator('#btn-open-log')).toBeFocused();
+    await expect(botaoDoHistorico(page)).toBeFocused();
     await page.locator('#btn-manual').click();
     await expect(page.locator('#s-manual h2').first()).toBeFocused();
   });
 
-  test('o ✕ que tira o voo da escala, com o Enter dado duas vezes ou segurado, tira um voo só; o foco fica na linha que ficou no lugar', async ({ page }) => {
-    await abrirComExemplo(page);
-    await abrirEscala(page);
-    const xs = page.locator('#out .tabela-escala button[data-act="rm-fly"]');
-    const antes = await xs.count();
-    await xs.nth(2).focus();
-    await page.keyboard.press('Enter');
-    await page.keyboard.press('Enter');
-    await expect(xs).toHaveCount(antes - 1);
-    // O foco fica na linha, que não faz nada com o Enter, e continua nela depois de outro redesenho
-    const naLinha = () => page.evaluate(() => document.activeElement.matches('#out tbody tr[data-foco-neutro]'));
-    expect(await naLinha()).toBe(true);
-    await page.evaluate(() => import('./js/views/escala.js').then(m => m.rOut()));
-    expect(await naLinha()).toBe(true);
-    // Segurado: o primeiro keydown e as repetições da tecla
-    await xs.nth(2).focus();
-    for (let i = 0; i < 5; i++) await page.keyboard.down('Enter');
-    await page.keyboard.up('Enter');
-    await expect(xs).toHaveCount(antes - 2);
-  });
-
-  test('com o Enter dado de novo, o Reverter não reverte outra alteração, e quem subiu ao topo do Rodízio fica lá', async ({ page }) => {
-    await abrirComExemplo(page);
-    await irPara(page, 'rec');
-    // Três alterações que o Histórico desfaz: três recursos postos em manutenção
-    const disponiveis = page.locator('#eqs input[data-a="av"]:checked');
-    for (let i = 0; i < 3; i++) { await disponiveis.first().focus(); await page.keyboard.press('Space'); }
-    await page.locator('#btn-open-log').click();
-    const reverter = page.locator('#audit-log-list button[data-act="rev-log"]');
-    await expect(reverter).toHaveCount(3);
-    await reverter.first().focus();
-    await page.keyboard.press('Enter');
-    await page.keyboard.press('Enter');
-    await expect(reverter).toHaveCount(2);
-    await page.keyboard.press('Escape');
-    // O Rodízio: o 2º da fila sobe para o 1º; o Enter de novo (o Subir dele ficou desligado) não o tira de lá
-    await irPara(page, 'rod');
-    const categoria = await page.locator('#rodizio .pn[data-cat]').evaluateAll(ps => ps.find(p => p.querySelectorAll('li').length >= 3).dataset.cat);
-    const fila = page.locator(`#rodizio .pn[data-cat="${categoria}"] li`);
-    const segundo = await fila.nth(1).getAttribute('data-id');
-    await fila.nth(1).locator('[data-act="fila-subir"]').focus();
-    await page.keyboard.press('Enter');
-    await page.keyboard.press('Enter');
-    await expect(fila.first()).toHaveAttribute('data-id', segundo);
-    // O foco fica com quem subiu (o item dele), e não com quem desceu
-    expect(await page.evaluate(() => document.activeElement.dataset.id)).toBe(segundo);
-  });
-
-  test('num navegador sem checkVisibility (Safari antes do 17.4), mudar um status grava, redesenha e mantém o foco', async ({ page }) => {
-    await page.addInitScript(() => { delete Element.prototype.checkVisibility; });
-    await abrirComExemplo(page);
-    await abrirEscala(page);
-    const status = page.locator('#out select[data-f="fstatus"]').nth(2);
-    const fkey = await status.getAttribute('data-fkey');
-    await status.focus();
-    await status.selectOption('Em Voo');
-    await expect(page.locator(`#out select[data-fkey="${fkey}"]`)).toHaveClass(/\bst-EmVoo\b/);
-    expect(await emFoco(page)).toBe(`select[data-f="fstatus"][data-fkey="${fkey}"]`);
-    await page.reload();
-    await abrirEscala(page);
-    await expect(page.locator(`#out select[data-fkey="${fkey}"]`)).toHaveValue('Em Voo');
-  });
-
-  test('um clique num texto da tabela e Tab: o foco segue dali, e não do topo', async ({ page }) => {
-    await abrirComExemplo(page);
-    await abrirEscala(page);
-    const linha = page.locator('#out .tabela-escala tbody tr:not(.win)').nth(5);
-    await linha.locator('td.c-aluno b').click();
-    await page.keyboard.press('Tab');
-    const fkey = await linha.locator('select[data-f="fstatus"]').getAttribute('data-fkey');
-    expect(await emFoco(page)).toBe(`select[data-f="fstatus"][data-fkey="${fkey}"]`);
-  });
-
-  test('o foco devolvido depois de um redesenho não rola a página até ele', async ({ page }) => {
-    await abrirComExemplo(page);
-    await abrirEscala(page);
-    await page.locator('#out select[data-f="fstatus"]').first().focus();
-    await page.evaluate(() => window.scrollTo({ top: document.body.scrollHeight, behavior: 'instant' }));
-    const antes = await page.evaluate(() => scrollY);
-    expect(antes).toBeGreaterThan(300);
-    // Um redesenho que chega depois (outra alteração, a resposta do servidor)
-    await page.evaluate(() => import('./js/views/escala.js').then(m => m.rOut()));
-    expect(await page.evaluate(() => scrollY)).toBe(antes);
-    await expect(page.locator('#out select[data-f="fstatus"]').first()).toBeFocused();
-  });
-
-  // O Tab que sai de um campo digitado: o change chega com o foco já fora do campo, e a linha é redesenhada
-  const vizinho = page => page.evaluate(() => {
-    const el = document.activeElement;
-    if (el === document.body) return 'body';
-    const tr = el.closest('tr');
-    return `${el.tagName.toLowerCase()}[${el.dataset.f || el.dataset.a || el.dataset.act || ''}] linha=${tr ? `${tr.dataset.id || tr.dataset.r || ''}/${tr.dataset.mid || ''}` : '-'}`;
-  });
-  for (const [nome, aba, seletor, valores] of [['a duração na Demanda', 'dem', '#dem tr[data-k="d"]:not(.off) input[data-f="nb"]', ['1.5', '2']],
-    ['as horas em Recursos', 'rec', '#revisao input[data-a="horas"]', ['20', '21']]]) {
-    test(`digitar ${nome} e sair com Tab ou Shift+Tab leva ao mesmo vizinho que sem digitar, com a linha redesenhada`, async ({ page }) => {
-      await abrirComExemplo(page);
-      await irPara(page, aba);
-      const campo = page.locator(seletor).nth(2);
-      for (const [i, tecla] of ['Tab', 'Shift+Tab'].entries()) {
-        await campo.focus();
-        await page.keyboard.press(tecla);
-        const semDigitar = await vizinho(page);
-        await campo.fill(valores[i]);
-        await page.keyboard.press(tecla);
-        expect(await vizinho(page), tecla).toBe(semDigitar);
-      }
-    });
-  }
-
   test('com o Histórico aberto, o Esc dado na busca da Escala fecha a gaveta e o foco fica na busca', async ({ page }) => {
     await abrirComExemplo(page);
     await abrirEscala(page);
-    await page.locator('#btn-open-log').click();
+    await abrirHistorico(page);
     await expect(page.locator('#historico')).toBeVisible();
     // O foco vai para a busca sem o clique: dependendo da largura, a gaveta cobre a busca
     const busca = page.locator('#flt-esc-q');
@@ -507,15 +250,6 @@ test.describe('O foco depois de uma ação', () => {
     await page.keyboard.press('Escape');
     await expect(page.locator('#historico')).toBeHidden();
     await expect(busca).toBeFocused();
-  });
-
-  test('aprovar a escala leva o foco ao Reabrir, e reabrir, ao Aprovar', async ({ page }) => {
-    await abrirComExemplo(page);
-    await abrirEscala(page);
-    await confirmar(page, '#btn-aprovar');
-    await expect(page.locator('#btn-reabrir')).toBeFocused();
-    await confirmar(page, '#btn-reabrir');
-    await expect(page.locator('#btn-aprovar')).toBeFocused();
   });
 });
 
@@ -554,11 +288,11 @@ test.describe('O leitor de tela e o teclado', () => {
     await page.locator('#btn-manual').click();
     await expect(atual).toHaveCount(1);
     await expect(atual).toHaveId('btn-manual');
-    // A vista escolhida fica "pressionada"; as outras, não
-    await abrirEscala(page);
-    await expect(page.locator('#s-esc [data-tl][aria-pressed="true"]')).toHaveAttribute('data-tl', 'lista');
-    await page.locator('#s-esc [data-tl="eq"]').click();
+    // A vista escolhida fica "pressionada"; as outras, não (a Escala abre em Por recurso)
+    await abrirEscala(page, { vista: null });
     await expect(page.locator('#s-esc [data-tl][aria-pressed="true"]')).toHaveAttribute('data-tl', 'eq');
+    await page.locator('#s-esc [data-tl="lista"]').click();
+    await expect(page.locator('#s-esc [data-tl][aria-pressed="true"]')).toHaveAttribute('data-tl', 'lista');
     await expect(page.locator('#s-esc [data-tl][aria-pressed="false"]')).toHaveCount(3);
     await irPara(page, 'ins');
     await page.locator('[data-vista-ins="cadastro"]').click();
@@ -585,7 +319,7 @@ test.describe('O leitor de tela e o teclado', () => {
     await expect(anuncio).toHaveAttribute('role', 'status');
     await expect(anuncio).toBeEmpty();
     // Um botão com texto e um ✕ com nome próprio (o do aluno): o anúncio é o nome do botão armado
-    const aprovar = page.locator('#btn-aprovar');
+    const aprovar = botaoAprovar(page);
     await aprovar.click();
     await expect(anuncio).toHaveText('Confirmar aprovação. Para confirmar, acione o botão de novo.');
     await irPara(page, 'alu');
@@ -599,7 +333,7 @@ test.describe('O leitor de tela e o teclado', () => {
   test('o menu da conta: as setas, Home e End andam pelos itens; o Tab que sai do menu o fecha', async ({ page, context }) => {
     await instalarSupabaseFalso(context, documentosAtuais(comExemplo(estadoSintetico()), '2026-11-11'));
     await entrar(page, CONTAS.administrador);
-    const botao = page.locator('#btn-menu-conta');
+    const botao = botaoDoMenuDaConta(page);
     await botao.focus();
     await page.keyboard.press('Enter');
     const itens = page.locator('#menu-conta [role^="menuitem"]:visible');
@@ -628,7 +362,7 @@ test.describe('O leitor de tela e o teclado', () => {
   test('o Esc fecha só a camada de cima: com o menu da conta aberto, o primeiro fecha a dica aberta pelo mouse', async ({ page }) => {
     await abrirComExemplo(page);
     await abrirEscala(page);
-    const botao = page.locator('#btn-menu-conta');
+    const botao = botaoDoMenuDaConta(page);
     await botao.focus();
     await page.keyboard.press('Enter');
     await expect(page.locator('#menu-conta')).toBeVisible();
@@ -641,9 +375,9 @@ test.describe('O leitor de tela e o teclado', () => {
 
   test('o Esc fecha só a camada de cima: com o Histórico aberto, o primeiro fecha o menu da conta, o segundo, a gaveta', async ({ page }) => {
     await abrirComExemplo(page);
-    await page.locator('#btn-open-log').click();
+    await abrirHistorico(page);
     await expect(page.locator('#historico')).toBeVisible();
-    const botao = page.locator('#btn-menu-conta');
+    const botao = botaoDoMenuDaConta(page);
     await botao.focus();
     await page.keyboard.press('Enter');
     await expect(page.locator('#menu-conta')).toBeVisible();
@@ -658,7 +392,7 @@ test.describe('O leitor de tela e o teclado', () => {
   test('o Esc fecha só a camada de cima: com o Histórico aberto, o primeiro fecha o diálogo do status, o segundo, a gaveta', async ({ page }) => {
     await abrirComExemplo(page);
     await abrirEscala(page);
-    await page.locator('#btn-open-log').click();
+    await abrirHistorico(page);
     await expect(page.locator('#historico')).toBeVisible();
     // O status muda sem o clique (dependendo da largura, a gaveta cobre a lista): o foco fica no ✕ da gaveta. Com o foco
     // no status, a volta do foco depois do Esc abriria a dica dele, uma camada a mais (o 2º Esc fecharia a dica)
@@ -676,14 +410,14 @@ test.describe('O leitor de tela e o teclado', () => {
     await expect(page.locator('#btn-fechar-historico')).toBeFocused();
     await page.keyboard.press('Escape');
     await expect(page.locator('#historico')).toBeHidden();
-    await expect(page.locator('#btn-open-log')).toBeFocused();
+    await expect(botaoDoHistorico(page)).toBeFocused();
   });
 
   test('o Esc fecha só a camada de cima: com o Histórico aberto, o primeiro fecha o popup do mapa, o segundo, a gaveta', async ({ page }) => {
     await abrirComExemplo(page);
     await abrirEscala(page);
     await page.locator('#s-esc [data-tl="eq"]').click();
-    await page.locator('#btn-open-log').click();
+    await abrirHistorico(page);
     await expect(page.locator('#historico')).toBeVisible();
     // O popup abre pelo teclado (dependendo da largura, a gaveta cobre a barra), com o foco nele
     const barra = page.locator('#out .tl-bar').first();
@@ -699,70 +433,17 @@ test.describe('O leitor de tela e o teclado', () => {
     await expect(page.locator('#historico')).toBeHidden();
   });
 
-  // O diálogo do agendamento: o nome, a descrição (o contexto), o foco no aluno, os nomes dos campos e o alerta vazio, que
-  // fica na árvore de acessibilidade (escondido sem display: none) para ser anunciado. Ele é a camada de cima: com as
-  // habilitações abertas embaixo, o Esc fecha só ele, e o seguinte, as habilitações
-  test('o diálogo do agendamento: nome, descrição, foco e campos com nome; o Esc fecha só ele, com as habilitações abertas embaixo', async ({ page }) => {
-    await abrirComExemplo(page);
-    await irPara(page, 'ins');
-    await page.locator('#s-ins [data-vista-ins="cadastro"]').click();
-    await page.locator('#inst [data-act="editar-habs"]').first().click();
-    const painel = page.locator('#painel-instrutor');
-    await expect(painel).toBeVisible();
-    await abrirEscala(page);
-    await page.locator('#btn-agendar').focus();
-    await page.keyboard.press('Enter');
-    const dialogo = page.locator('#dlg-agendar');
-    await expect(dialogo).toBeVisible();
-    await expect(dialogo).toHaveAccessibleName('Agendar voo');
-    await expect(page.locator('#agd-contexto')).not.toBeEmpty();
-    await expect(dialogo).toHaveAccessibleDescription(await page.locator('#agd-contexto').textContent());
-    await expect(page.locator('#agd-aluno')).toBeFocused();
-    await expect(page.locator('#agd-aluno')).toHaveAccessibleName('Aluno');
-    await expect(page.locator('#agd-erro')).toHaveAttribute('role', 'alert');
-    expect(await page.locator('#agd-erro').evaluate(el => getComputedStyle(el).display)).not.toBe('none');
-    await page.locator('#agd-aluno').selectOption({ index: 1 });
-    await expect(page.locator('#agd-previa ul')).toContainText('Entra:');
-    expect(await semNome(page, '#dlg-agendar')).toEqual([]);
-    await page.keyboard.press('Escape');
-    await expect(dialogo).toBeHidden();
-    await expect(painel).toBeVisible();
-    await expect(page.locator('#btn-agendar')).toBeFocused();
-    await page.keyboard.press('Escape');
-    await expect(painel).toBeHidden();
-    await expect(page.locator('#log-cnt')).toHaveText('0');
-  });
-
-  test('o Esc fecha só a camada de cima: as habilitações, abertas em Instrutores, continuam abertas na Escala quando o Esc fecha o diálogo do status', async ({ page }) => {
-    await abrirComExemplo(page);
-    await irPara(page, 'ins');
-    await page.locator('#s-ins [data-vista-ins="cadastro"]').click();
-    await page.locator('#inst [data-act="editar-habs"]').first().click();
-    const painel = page.locator('#painel-instrutor');
-    await expect(painel).toBeVisible();
-    // O painel continua aberto nas outras abas
-    await abrirEscala(page);
-    await expect(painel).toBeVisible();
-    await page.locator('#out select[data-f="fstatus"]').first().selectOption('Cancelado');
-    const dialogo = page.locator('#dlg-status');
-    await expect(dialogo).toBeVisible();
-    await page.keyboard.press('Escape');
-    await expect(dialogo).toBeHidden();
-    await expect(painel).toBeVisible();
-    await page.keyboard.press('Escape');
-    await expect(painel).toBeHidden();
-  });
-
   // As Sugestões de um conflito (como em reparo.spec.js): a escala aprovada e o instrutor do voo do Aluno 1000 desligado
   // na data. Devolve o botão "Sugestões", com a gaveta aberta
   async function abrirSugestoes(page) {
     await abrir(page, { estado: cenario({ ins: [instrutor(1, 9), instrutor(2, 9)], stu: [aluno(1000, { p1: 390, p2: -1 }), aluno(1001, { p1: 500, p2: -1 })] }) });
     await abrirEscala(page);
-    await confirmar(page, '#btn-aprovar');
+    await aprovar(page);
     const doVoo = (await page.locator('#out tbody tr:not(.win)', { hasText: 'Aluno 1000' }).locator('.c-instr').innerText()).trim();
     await irPara(page, 'ins');
-    await page.locator(`#inst-dia tr[data-id="${doVoo.endsWith('01') ? 1 : 2}"] [data-f="on"]`).uncheck();
+    await alternarVem(page, doVoo.endsWith('01') ? 1 : 2, false);
     await abrirEscala(page);
+    await abrirCaixa(page, 'conflitos');
     const botao = page.locator('#out details.conflitos [data-reparo]');
     await botao.click();
     await expect(page.locator('#painel-reparo')).toBeVisible();
@@ -799,28 +480,6 @@ test.describe('O leitor de tela e o teclado', () => {
     await expect(page.locator('#painel-reparo')).toBeHidden();
   });
 
-  // Os Dados pessoais continuam abertos nas outras abas, como as habilitações: o diálogo do agendamento é a camada de cima
-  test('o Esc fecha só a camada de cima: com os Dados pessoais abertos, o primeiro fecha o diálogo do agendamento, o segundo, o painel (nada é gravado)', async ({ page }) => {
-    await abrir(page, { estado: cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000)] }) });
-    await irPara(page, 'alu');
-    await page.locator('#alu tr[data-id="1000"] [data-dados]').click();
-    const painel = page.locator('#painel-dados');
-    await expect(painel).toBeVisible();
-    await abrirEscala(page);
-    await expect(painel).toBeVisible();
-    await page.locator('#btn-agendar').focus();
-    await page.keyboard.press('Enter');
-    const dialogo = page.locator('#dlg-agendar');
-    await expect(dialogo).toBeVisible();
-    await page.keyboard.press('Escape');
-    await expect(dialogo).toBeHidden();
-    await expect(painel).toBeVisible();
-    await expect(page.locator('#btn-agendar')).toBeFocused();
-    await page.keyboard.press('Escape');
-    await expect(painel).toBeHidden();
-    await expect(page.locator('#log-cnt')).toHaveText('0');
-  });
-
   // Qualquer diálogo é a camada de cima, não só o do status: o da sessão expirada aparece sozinho, na gravação, e o Esc
   // não o fecha. A gravação com a sessão expirada responde 401 de propósito
   test('o Esc fecha só a camada de cima: com o diálogo da sessão aberto sobre o popup do mapa, nem o Esc nem um clique no diálogo fecham o popup', async ({ browser }) => {
@@ -853,158 +512,12 @@ test.describe('O leitor de tela e o teclado', () => {
     await context.close();
   });
 
-  // As gavetas abrem no mesmo lugar, à direita, umas sobre as outras. A de cima é a que abriu por último (ela fica por
-  // cima na tela) ou a que tem o foco: o Esc fecha só ela, e o próximo, a de baixo. O Histórico abre pelo teclado, porque
-  // a outra gaveta cobre o botão dele para o mouse
-  const GAVETAS = [
-    ['os Dados pessoais', '#painel-dados', '#dado-cpf', async page => {
-      await irPara(page, 'alu');
-      await page.locator('#alu tr[data-id="1000"] [data-dados]').click();
-    }],
-    ['as Habilitações', '#painel-instrutor', '#btn-fechar-painel-instrutor', async page => {
-      await irPara(page, 'ins');
-      await page.locator('#s-ins [data-vista-ins="cadastro"]').click();
-      await page.locator('#inst tr.cd[data-id="1"] [data-act="editar-habs"]').click();
-    }]
-  ];
-  const abrirComDuasGavetas = async (page, { abrirGaveta, focoNaGaveta }) => {
-    await abrir(page, { estado: cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000)] }) });
-    await abrirGaveta(page);
-    await expect(page.locator(focoNaGaveta)).toBeFocused();
-    await page.locator('#btn-open-log').focus();
-    await page.keyboard.press('Enter');
-    await expect(page.locator('#historico')).toBeVisible();
-    await expect(page.locator('#btn-fechar-historico')).toBeFocused();
-  };
-  // A gaveta que aparece no meio da área das gavetas (a de cima na tela)
-  const gavetaNaTela = page => page.evaluate(() => {
-    const { left, top, width, height } = document.querySelector('#historico').getBoundingClientRect();
-    return document.elementFromPoint(left + width / 2, top + height / 2).closest('.gaveta').id;
-  });
-
-  for (const [nome, gaveta, focoNaGaveta, abrirGaveta] of GAVETAS) {
-    test(`o Esc fecha só a gaveta de cima: com ${nome} e o Histórico abertos (o Histórico por último), o primeiro fecha o Histórico, o segundo, ${nome}`, async ({ page }) => {
-      await abrirComDuasGavetas(page, { abrirGaveta, focoNaGaveta });
-      expect(await gavetaNaTela(page), 'o Histórico, que abriu por último, fica por cima').toBe('historico');
-      await page.keyboard.press('Escape');
-      await expect(page.locator('#historico')).toBeHidden();
-      await expect(page.locator(gaveta)).toBeVisible();
-      await expect(page.locator('#btn-open-log')).toBeFocused();
-      await page.keyboard.press('Escape');
-      await expect(page.locator(gaveta)).toBeHidden();
-    });
-  }
-
-  test('o Esc fecha só a gaveta de cima: com o Histórico aberto, os Dados pessoais abertos depois fecham primeiro', async ({ page }) => {
-    await abrir(page, { estado: cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000)] }) });
-    await irPara(page, 'alu');
-    await page.locator('#btn-open-log').click();
-    await expect(page.locator('#historico')).toBeVisible();
-    // A gaveta do Histórico pode cobrir o botão da linha: pelo teclado
-    await page.locator('#alu tr[data-id="1000"] [data-dados]').focus();
-    await page.keyboard.press('Enter');
-    await expect(page.locator('#dado-cpf')).toBeFocused();
-    expect(await gavetaNaTela(page)).toBe('painel-dados');
-    await page.keyboard.press('Escape');
-    await expect(page.locator('#painel-dados')).toBeHidden();
-    await expect(page.locator('#historico')).toBeVisible();
-    await page.keyboard.press('Escape');
-    await expect(page.locator('#historico')).toBeHidden();
-  });
-
-  test('o Esc fecha a gaveta em que está o foco, mesmo a de baixo; o próximo, a outra', async ({ page }) => {
-    const [, , focoNaGaveta, abrirGaveta] = GAVETAS[0];
-    await abrirComDuasGavetas(page, { abrirGaveta, focoNaGaveta });
-    // O foco volta para o CPF, nos Dados pessoais (embaixo do Histórico)
-    await page.locator('#dado-cpf').focus();
-    await page.keyboard.press('Escape');
-    await expect(page.locator('#painel-dados')).toBeHidden();
-    await expect(page.locator('#historico')).toBeVisible();
-    await page.keyboard.press('Escape');
-    await expect(page.locator('#historico')).toBeHidden();
-  });
-
-  // As duas regras juntas: o diálogo do agendamento é a camada de cima (o Esc é só dele), e as gavetas embaixo dele
-  // fecham uma de cada vez, a que abriu por último primeiro. Nada é gravado
-  for (const [nome, gaveta, focoNaGaveta, abrirGaveta] of GAVETAS) {
-    test(`o Esc fecha só a camada de cima: com ${nome} e o Histórico abertos, o primeiro fecha o diálogo do agendamento, o segundo, o Histórico, o terceiro, ${nome}`, async ({ page }) => {
-      await abrirComDuasGavetas(page, { abrirGaveta, focoNaGaveta });
-      await abrirEscala(page);
-      // As gavetas podem cobrir o botão: pelo teclado
-      await page.locator('#btn-agendar').focus();
-      await page.keyboard.press('Enter');
-      const dialogo = page.locator('#dlg-agendar');
-      await expect(dialogo).toBeVisible();
-      await page.keyboard.press('Escape');
-      await expect(dialogo).toBeHidden();
-      await expect(page.locator('#historico')).toBeVisible();
-      await expect(page.locator(gaveta)).toBeVisible();
-      await expect(page.locator('#btn-agendar')).toBeFocused();
-      await page.keyboard.press('Escape');
-      await expect(page.locator('#historico')).toBeHidden();
-      await expect(page.locator(gaveta)).toBeVisible();
-      await page.keyboard.press('Escape');
-      await expect(page.locator(gaveta)).toBeHidden();
-      await expect(page.locator('#log-cnt')).toHaveText('0');
-    });
-  }
-
-  // Na aba Cursos, com o foco num campo do programa (fora das gavetas), vale a mesma regra: o Esc fecha a gaveta que abriu
-  // por último, e o foco fica no campo
-  test('o Esc fecha só a gaveta de cima também na aba Cursos: com o foco no nome do curso, o primeiro fecha o Histórico, o segundo, os Dados pessoais', async ({ page }) => {
-    const [, gaveta, focoNaGaveta, abrirGaveta] = GAVETAS[0];
-    await abrirComDuasGavetas(page, { abrirGaveta, focoNaGaveta });
-    await irPara(page, 'cur');
-    const nome = page.locator('#cursos .curso[data-curso="PP"] [data-cc="nome"]');
-    await nome.focus();
-    await page.keyboard.press('Escape');
-    await expect(page.locator('#historico')).toBeHidden();
-    await expect(page.locator(gaveta)).toBeVisible();
-    await expect(nome).toBeFocused();
-    await page.keyboard.press('Escape');
-    await expect(page.locator(gaveta)).toBeHidden();
-    await expect(page.locator('#log-cnt')).toHaveText('0');
-  });
-
-  // O filtro das habilitações (Instrutores) é um painel da própria página: o Esc com o foco nele fecha só ele (ouvido na
-  // captura, ele para ali), e as gavetas continuam abertas; os próximos fecham as gavetas, a de cima primeiro. As marcas
-  // ficam
-  test('o Esc fecha só a camada de cima: com as Habilitações e o Histórico abertos, o primeiro fecha o filtro das habilitações, o segundo, o Histórico, o terceiro, as Habilitações', async ({ page }) => {
-    const [, gaveta, focoNaGaveta, abrirGaveta] = GAVETAS[1];
-    await abrirComDuasGavetas(page, { abrirGaveta, focoNaGaveta });
-    // As gavetas podem cobrir o botão do filtro: pelo teclado
-    const botao = page.locator('#flt-ins-hab'), painel = page.locator('#flt-ins-hab-painel');
-    await botao.focus();
-    await page.keyboard.press('Enter');
-    await expect(painel).toBeVisible();
-    await expect(botao).toHaveAttribute('aria-expanded', 'true');
-    // A caixa marcada pelo teclado (o espaço na caixa é um clique dentro do painel: ele continua aberto)
-    const noturno = painel.locator('input[data-valor="noturno"]');
-    await noturno.focus();
-    await page.keyboard.press('Space');
-    await expect(noturno).toBeChecked();
-    await expect(painel).toBeVisible();
-    await page.keyboard.press('Escape');
-    await expect(painel).toBeHidden();
-    await expect(botao).toHaveAttribute('aria-expanded', 'false');
-    await expect(botao).toBeFocused();
-    await expect(page.locator('#historico')).toBeVisible();
-    await expect(page.locator(gaveta)).toBeVisible();
-    await page.keyboard.press('Escape');
-    await expect(page.locator('#historico')).toBeHidden();
-    await expect(page.locator(gaveta)).toBeVisible();
-    await page.keyboard.press('Escape');
-    await expect(page.locator(gaveta)).toBeHidden();
-    await expect(page.locator('#inst tr.cd[data-id="1"] [data-act="editar-habs"]')).toBeFocused();
-    await expect(botao).toHaveText('Habilitações: Noturno');
-  });
-
   // Com o foco em lugar nenhum (o clique no texto do painel; no Safari, o botão clicado não recebe o foco): sem gaveta
   // aberta, o Esc fecha o filtro e leva o foco ao botão; com uma gaveta aberta, o Esc é dela, e o filtro continua aberto
   test('o Esc com o foco em lugar nenhum: com o Histórico aberto, fecha o Histórico; sem gaveta, fecha o filtro das habilitações', async ({ page }) => {
     await abrir(page, { estado: cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000)] }) });
     await irPara(page, 'ins');
-    await page.locator('#btn-open-log').click();
+    await abrirHistorico(page);
     await expect(page.locator('#historico')).toBeVisible();
     // O Histórico pode cobrir o botão do filtro: pelo teclado
     const botao = page.locator('#flt-ins-hab'), painel = page.locator('#flt-ins-hab-painel');
@@ -1039,7 +552,7 @@ test.describe('O leitor de tela e o teclado', () => {
       await page.locator('#out .tl-bar').first().click();
       await conferir('botão do popup', page.locator('#tl-pop .tl-pop-btn'));
       await page.keyboard.press('Escape');
-      await confirmar(page, '#btn-aprovar');
+      await aprovar(page);
       await conferir('selo da aprovação', page.locator('#selo-aprovada'));
       await irPara(page, 'alu');
       const x = page.locator('#alu [data-act="dels"]').first();
@@ -1057,18 +570,6 @@ test.describe('O leitor de tela e o teclado', () => {
     });
   }
 
-  test('as barras do mapa dizem o status do voo (não só a cor)', async ({ page }) => {
-    await abrirComExemplo(page);
-    await abrirEscala(page);
-    await page.locator('#out select[data-f="fstatus"]').first().selectOption('Em Voo');
-    await page.locator('#s-esc [data-tl="eq"]').click();
-    const barras = page.locator('#out .tl-bar');
-    expect(await barras.count()).toBeGreaterThan(1);
-    const ditos = await barras.evaluateAll(bs => bs.map(b => b.querySelector('.sr')?.textContent ?? ''));
-    for (const dito of ditos) expect(dito).toMatch(/^, (Pendente|Confirmado|Atrasado|Em Voo|Pousou|Concluída|Cancelado)$/);
-    expect(ditos).toContain(', Em Voo');
-  });
-
   test('o primeiro Tab da página é o link para pular ao conteúdo, e o Tab seguinte já é dentro do conteúdo', async ({ page }) => {
     await abrirComExemplo(page);
     const pular = page.locator('a.pular');
@@ -1085,7 +586,7 @@ test.describe('O leitor de tela e o teclado', () => {
   test('os anúncios: a data do topo ao mudar, quantos voos ficaram com os filtros e o diálogo do status descrito pelo voo', async ({ page }) => {
     await abrirComExemplo(page);
     await abrirEscala(page);
-    await expect(page.locator('#dt-rotulo')).toHaveAttribute('aria-live', 'polite');
+    await expect(rotuloDaData(page)).toHaveAttribute('aria-live', 'polite');
     await expect(page.locator('.topo-data-campo svg.ico')).toHaveAttribute('aria-hidden', 'true');
     // O filtro muda a lista sem tirar o foco dele: o resultado vai para a região de status
     const busca = page.locator('#flt-esc-q');

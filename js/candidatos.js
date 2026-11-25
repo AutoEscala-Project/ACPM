@@ -4,7 +4,7 @@
 // motor, cada uma no lugar dela: os requisitos do voo e os atributos do avião (js/frota.js), as do instrutor
 // (js/viabilidade.js) e o que cada voo ocupa (js/voo.js).
 import { GROUND_EQ_TYPE, GROUND_REG } from './config.js';
-import { FROTA_INICIAL, motivoDoAviao, recursoDaFrota, instrutorVoaNoAviao, habilitacaoDoAviao } from './frota.js';
+import { FROTA_INICIAL, motivoDoAviao, recursoDaFrota, instrutorVoaNoAviao, habilitacaoQueFalta } from './frota.js';
 import { sobrepoe, cabeNoSaldo, folgaAte, saldoAteARevisao, problemasDoInstrutor } from './viabilidade.js';
 import { reducaoNecessaria } from './combustivel.js';
 import { normalizarLimites } from './limites.js';
@@ -13,6 +13,7 @@ import { historicoDoDia } from './noturno.js';
 import { intervaloEfetivo } from './status.js';
 import { statusDoVoo, unidadeDoVoo, ocupacaoDoVoo, compromissoDoVoo } from './voo.js';
 import { agrupar, menorPrimeiro, soma } from './util.js';
+import { inativoNoEstado } from './inativos.js';
 
 const frotaDo = estado => (Array.isArray(estado.frota) ? estado.frota : FROTA_INICIAL);
 // O intervalo que cada voo da escala ocupa: o do voo, ou mais na volta do noturno, que ocupa o instrutor, o aluno e o
@@ -70,11 +71,11 @@ export function problemaDoAluno(ocupacao, stuId, { a, b }) {
 }
 
 // O que os atributos do avião impedem, ou null: o voo a que ele não serve (so-parafuso, so-vfr) e, com o instrutor, a
-// habilitação própria que o avião exige e ele não tem (o problema do instrutor, com o motivo, como no conflito do voo fixo)
+// habilitação que o recurso exige e ele não tem, a primeira (o problema do instrutor, com o motivo, como no conflito do voo fixo)
 function problemaDoAviao(recurso, voo, instrutor) {
   const motivo = motivoDoAviao(recurso, voo);
   if (motivo) return { codigo: motivo };
-  return instrutor && !instrutorVoaNoAviao(instrutor, recurso) ? { codigo: 'habilitacao', motivo: habilitacaoDoAviao(recurso.reg) } : null;
+  return instrutor && !instrutorVoaNoAviao(instrutor, recurso) ? { codigo: 'habilitacao', motivo: habilitacaoQueFalta(instrutor, recurso) } : null;
 }
 
 // Os recursos do tipo para o voo [a, b) (no Ground, a sala), cada um com o problema (null quando serve) e a folga até o
@@ -86,7 +87,8 @@ function problemaDoAviao(recurso, voo, instrutor) {
 export function avioesQueServem(estado, ocupacao, { tipo, mis, curso, a, b, ground = false, instrutor = null }) {
   const frota = frotaDo(estado);
   const hangar = normalizarHangar(estado.hangar, frota);
-  const doTipo = ground ? [GROUND_REG] : frota.filter(f => f.tipo === tipo).map(f => f.reg);
+  // O recurso inativo no cadastro não entra na lista (js/inativos.js)
+  const doTipo = ground ? [GROUND_REG] : frota.filter(f => f.tipo === tipo && !inativoNoEstado(estado, f)).map(f => f.reg);
   return doTipo.map(r => ({
     r,
     problema: (!ground && problemaDoAviao(recursoDaFrota(frota, r), { mis, eq: tipo, curso }, instrutor)) || problemaDoRecurso(estado, ocupacao, r, { a, b, ground }),
@@ -108,7 +110,8 @@ export function instrutoresQueServem(estado, ocupacao, { mis, tipo, a, b, alunos
   const recurso = r && tipo !== GROUND_EQ_TYPE ? recursoDaFrota(frotaDo(estado), r) : null;
   const voosDo = x => ocupacao.instrutores.get(x.id) || [];
   const horasNoDia = new Map(estado.ins.map(x => [x, horas(voosDo(x))]));
-  return estado.ins.map(x => ({
+  // O instrutor inativo no cadastro não entra na lista (js/inativos.js)
+  return estado.ins.filter(x => !inativoNoEstado(estado, x)).map(x => ({
     x,
     problemas: problemasDoInstrutor(x, { mis, tipo, a, b, alunos, stuKg, curso, recurso }, {
       compromissos: voosDo(x).map(o => compromissoDoVoo(o)), historico: historicoDe(x.id), limites, todos: true

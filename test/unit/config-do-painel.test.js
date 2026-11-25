@@ -124,8 +124,9 @@ describe('A configuração do painel no cadastro', () => {
   });
 
   it('o formato 25 traz o cadastro de antes sem mudar nada (o número novo faz a aba da versão anterior recarregar)', () => {
-    assert.equal(ESQUEMA, 25);
+    // O número do formato fica fixado num lugar só (test/unit/migracoes.test.js); aqui, o formato atual
+    assert.ok(ESQUEMA >= 25);
     const antes = { ...cadastro, frota: [], esquema: 24 };
-    assert.deepEqual(migrarCadastro(antes), { ...antes, esquema: 25 });
+    assert.deepEqual(migrarCadastro(antes), { ...antes, esquema: ESQUEMA });
   });
 });

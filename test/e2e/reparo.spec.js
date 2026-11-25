@@ -1,7 +1,7 @@
 // Sugestões para um conflito: o botão "Sugestões" da caixa de conflitos abre uma gaveta com o que pode voar
 // no lugar do voo fixo; "Aplicar" muda o voo (que continua fixo) e o histórico desfaz. Cancelar pede o motivo, como no
 // status, já com o motivo do conflito marcado
-import { test, expect, abrir, irPara, abrirEscala, confirmar } from './fixtures.js';
+import { test, expect, abrir, irPara, abrirEscala, abrirCaixa, abrirHistorico, alternarVem, aprovar } from './fixtures.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
 
 const dia = () => cenario({ ins: [instrutor(1, 9), instrutor(2, 9)], stu: [aluno(1000, { p1: 390, p2: -1 }), aluno(1001, { p1: 500, p2: -1 })] });
@@ -12,12 +12,13 @@ const gaveta = page => page.locator('#painel-reparo');
 async function aprovarETirarOInstrutor(page, url) {
   await abrir(page, { estado: dia(), url });
   await abrirEscala(page);
-  await confirmar(page, '#btn-aprovar');
+  await aprovar(page);
   const instrutor = (await linha(page, 'Aluno 1000').locator('.c-instr').innerText()).trim();
   const id = instrutor.endsWith('01') ? 1 : 2;
   await irPara(page, 'ins');
-  await page.locator(`#inst-dia tr[data-id="${id}"] [data-f="on"]`).uncheck();
+  await alternarVem(page, id, false);
   await abrirEscala(page);
+  await abrirCaixa(page, 'conflitos');
   return { instrutor, outro: id === 1 ? 'Instrutor 02' : 'Instrutor 01' };
 }
 
@@ -36,7 +37,7 @@ test.describe('Sugestões para um conflito', () => {
     await expect(linha(page, 'Aluno 1000').locator('.c-instr')).toHaveText(outro);
     await expect(linha(page, 'Aluno 1000').locator('.fixo')).toHaveCount(1);
 
-    await page.locator('#btn-open-log').click();
+    await abrirHistorico(page);
     await expect(page.locator('#audit-log-list')).toContainText(`Reparo: Aluno 1000 (06:30–07:30): Trocar o instrutor: ${outro}`);
     await page.locator('#audit-log-list [data-act="rev-log"]').first().click();
     await page.keyboard.press('Escape');
@@ -72,7 +73,7 @@ test.describe('Sugestões para um conflito', () => {
   // As gavetas ficam umas sobre as outras: o Esc fecha só a de cima (a que abriu por último), e o próximo, a de baixo
   test('com o Histórico aberto, o Esc fecha primeiro as Sugestões, abertas depois; o segundo, o Histórico', async ({ page }) => {
     await aprovarETirarOInstrutor(page);
-    await page.locator('#btn-open-log').click();
+    await abrirHistorico(page);
     await expect(page.locator('#historico')).toBeVisible();
     // A gaveta do Histórico pode cobrir o botão: pelo teclado
     await page.locator('#out details.conflitos [data-reparo]').focus();
@@ -91,6 +92,7 @@ test.describe('Sugestões para um conflito', () => {
     await abrir(page, { estado });
     await abrirEscala(page);
     await expect(page.locator('#out details.conflitos')).toContainText('a duração do pedido mudou');
+    await abrirCaixa(page, 'conflitos');
     await page.locator('#out details.conflitos [data-reparo]').click();
     const opcoes = gaveta(page).locator('.opcoes-reparo li');
     await expect(opcoes).toHaveCount(2);
@@ -101,7 +103,7 @@ test.describe('Sugestões para um conflito', () => {
     await expect(linha(page, 'Aluno 1000').locator('.fixo')).toHaveCount(0);
     await expect(linha(page, 'Aluno 1000').locator('.c-hr')).toContainText('06:30–08:30');
 
-    await page.locator('#btn-open-log').click();
+    await abrirHistorico(page);
     await expect(page.locator('#audit-log-list')).toContainText('Reparo: Aluno 1000 (06:30–07:30): Soltar o voo');
     await page.locator('#audit-log-list [data-act="rev-log"]').first().click();
     await page.keyboard.press('Escape');
