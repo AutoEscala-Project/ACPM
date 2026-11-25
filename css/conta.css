@@ -1,0 +1,10 @@
+/* Minha conta e Usuários */
+/* Minha conta e Usuários */
+.conta { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); align-items: start; }
+.conta form { display: grid; gap: 8px; }
+#form-nova-conta { display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); align-items: end; }
+.conta label, #form-nova-conta label { display: flex; flex-direction: column; gap: 2px; font-size: 13px; }
+.conta-msg { margin: 0; grid-column: 1 / -1; }
+.conta-msg:empty { display: none; }
+.conta-msg.erro { color: var(--er); }
+.conta-msg.ok { color: var(--ok); }

@@ -1,0 +1,360 @@
+/* A Escala: a barra, o resumo, a lista, o instrutor e o status do voo, a aprovação, a compactação, as sugestões, o mapa e o popup */
+/* Até 1400 px, a barra da Escala fica numa linha só sem os ícones das visões */
+@media (max-width: 1400px) {
+  #s-esc .seg .ico { display: none; }
+}
+/* Escala: resumo numa linha, erros e avisos agrupados, uma linha por voo e o mapa como outra visão */
+.resumo { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 10px; margin: 0 0 12px; }
+.resumo .st, .resumo .parado { display: flex; gap: 22px; margin: 0; background: var(--pn); border: 1px solid var(--ln); border-radius: 8px; padding: 8px 16px; }
+.resumo .st div, .resumo .parado div { border: 0; padding: 0; background: transparent; font: 400 12.5px 'Barlow', sans-serif; }
+.resumo .st strong, .resumo .parado strong { font: 700 22px 'Barlow Semi Condensed', sans-serif; line-height: 1.05; }
+details.caixa { flex: 1; min-width: 280px; border-radius: 8px; padding: 9px 14px; font-size: 14px; }
+details.caixa summary { cursor: pointer; font-weight: 600; }
+details.caixa ul { margin: 6px 0 2px; padding-left: 18px; }
+details.caixa .al { border: 0; padding: 0; margin: 3px 0; background: transparent; }
+details.caixa.erros { background: var(--er-bg); border: 1px solid var(--er); }
+details.caixa.erros summary { color: var(--er); }
+details.caixa.avisos { background: var(--wa-bg); border: 1px solid var(--wa); }
+details.caixa.avisos summary { color: var(--wa); }
+.tabela-escala table { min-width: 760px; font-size: 14.5px; }
+.tabela-escala td { padding: 7px 10px; }
+/* Uma linha por voo: a duração, o tipo do avião e a turma ficam ao lado, discretos */
+.tabela-escala td small { color: var(--mu); font-size: 12.5px; margin-left: 4px; }
+.tabela-escala tr.win td small { margin-left: 8px; font: 500 12.5px 'Barlow', sans-serif; }
+.tabela-escala td.hr { white-space: nowrap; }
+.tabela-escala td.hr .tag { margin-left: 4px; }
+.tabela-escala .nw { white-space: nowrap; }
+.tabela-escala .perto { color: var(--wa); font-weight: 700; }
+/* Status discreto quando confirmado; colorido só nas exceções */
+.tabela-escala .st-sel.st-Confirmado { border-color: transparent; color: var(--mu); background: transparent; }
+.tabela-escala tr:hover .st-sel.st-Confirmado, .tabela-escala .st-sel.st-Confirmado:focus { border-color: var(--ln2); }
+.tabela-escala .st-sel.st-EmVoo { background: var(--info-bg); }
+.tabela-escala .st-sel.st-Pousou { background: var(--ok-bg); }
+.tabela-escala .st-sel.st-Pendente { background: var(--neutro-bg); }
+.tabela-escala .st-sel.st-Atrasado { background: var(--wa-bg); }
+.tabela-escala .st-sel.st-Cancelado { background: var(--er-bg); }
+/* O instrutor do voo: o nome, como texto, é o botão que troca; o escolhido pelo operador fica em destaque */
+.ins-btn { font: inherit; color: inherit; background: none; border: 1px dashed transparent; border-radius: 4px; padding: 1px 4px; margin: -2px -5px; cursor: pointer; }
+.ins-btn:hover, .ins-btn:focus-visible { border-color: var(--ln2); }
+.ins-btn.escolhido { font-weight: 700; color: var(--ac); }
+.ins-sel { max-width: 16rem; }
+/* Os controles que aparecem com o mouse também aparecem com o foco em qualquer campo da linha (:focus-within) e em
+   telas de toque (pointer: coarse, como um notebook com tela de toque) */
+/* Tirar da escala: aparece ao passar o mouse ou com o foco (em tela de toque, sempre) */
+.tabela-escala .acao .x { opacity: 0; transition: opacity .1s; }
+.tabela-escala tr:hover .acao .x, .tabela-escala tr:focus-within .acao .x { opacity: 1; }
+@media (hover: none), (pointer: coarse) {
+  .tabela-escala .acao .x { opacity: 1; }
+}
+#out[data-vista="lista"] .mapa, #out[data-vista="mapa"] .tabela-escala { display: none; }
+#out[data-vista="painel"] .mapa, #out[data-vista="painel"] .tabela-escala, #out:not([data-vista="painel"]) .painel-dia { display: none; }
+/* A hora da última atualização da escala: discreta, com um relógio, ao lado do título */
+.atualizada { display: inline-flex; align-items: center; gap: 4px; margin-left: 10px; vertical-align: middle; font: 400 13px 'Barlow', sans-serif; color: var(--mu); }
+.atualizada .ico { width: 14px; height: 14px; vertical-align: 0; }
+/* O mapa rola dentro do próprio painel quando não cabe na tela */
+.mapa { overflow-x: auto; }
+.mapa .tl-wrap { min-width: 720px; }
+@media (max-width: 640px) {
+  #s-esc .flt-rotulo, #flt-esc-q { flex: 1 1 140px; min-width: 0; }
+  .resumo .st, .resumo .parado { width: 100%; justify-content: space-between; gap: 8px; }
+  details.caixa { min-width: 0; flex-basis: 100%; }
+  /* (A lista é .tw.tabela-escala: o "overflow: visible; border: 0; background: transparent" que estava aqui nunca valeu, porque
+     a regra de .tw vinha depois em css/app.css e ganhava; saiu na divisão, para a tela continuar igual. O H decide os cartões
+     sem a moldura) */
+  .tabela-escala table { min-width: 0; }
+  .tabela-escala table, .tabela-escala tbody, .tabela-escala tr, .tabela-escala td { display: block; }
+  .tabela-escala thead { display: none; }
+  .tabela-escala tr.win td { border-radius: 6px; margin-top: 10px; }
+  .tabela-escala tbody tr:not(.win) {
+    display: grid; grid-template-columns: 1fr auto; column-gap: 8px; row-gap: 2px; align-items: center;
+    padding: 8px 12px; background: var(--pn); border: 1px solid var(--ln); border-radius: 8px; margin-top: 6px;
+  }
+  .tabela-escala tbody tr:not(.win) td { padding: 0; border: 0; white-space: normal; }
+  .tabela-escala .c-hr { grid-column: 1; grid-row: 1; font-weight: 600; }
+  .tabela-escala .c-status { grid-column: 2; grid-row: 1; justify-self: end; }
+  .tabela-escala .c-aluno { grid-column: 1; grid-row: 2; font-size: 16px; }
+  .tabela-escala .c-acao { grid-column: 2; grid-row: 2; justify-self: end; }
+  .tabela-escala .c-missao { grid-column: 1 / -1; grid-row: 3; color: var(--mu); }
+  .tabela-escala .c-aviao { grid-column: 1; grid-row: 4; }
+  .tabela-escala .c-instr { grid-column: 2; grid-row: 4; justify-self: end; }
+  .tabela-escala .c-instr::before { content: 'Instr. '; color: var(--mu); }
+  .tabela-escala .c-peso { grid-column: 1 / -1; grid-row: 5; }
+  .tabela-escala .c-peso:empty { display: none; }
+  /* Alunos da mesma turma: logo abaixo do cartão da turma, recuados */
+  .tabela-escala tr.membro { margin-left: 16px; margin-top: 4px; }
+  .tabela-escala tr.membro .c-aluno { grid-row: 1; }
+  .tabela-escala tr.membro .c-acao { grid-row: 2; }
+}
+/* Voo cancelado: riscado e apagado, menos o status (com o motivo), que continua legível */
+tr.st-Cancelado td:not(.c-status) { opacity: 0.45; text-decoration: line-through; }
+/* Detalhe do status (motivo do cancelamento, nova decolagem do atraso): um clique altera */
+.st-detalhe {
+  display: block; max-width: 22ch; margin-top: 2px; padding: 0; border: 0; background: none; text-align: left;
+  font: 500 12px 'Barlow', sans-serif; color: var(--mu); overflow-wrap: anywhere;
+}
+button.st-detalhe { cursor: pointer; text-decoration: underline dotted; }
+button.st-detalhe:hover { color: var(--ink); }
+.tl-pop .st-detalhe { color: var(--pop-txt); opacity: .85; }
+/* Escala aprovada */
+.aprovacao { display: inline-flex; align-items: center; gap: 8px; }
+.aprovacao:empty { display: none; }
+.selo-aprovada { display: inline-flex; align-items: center; gap: 6px; margin-left: 10px; padding: 2px 10px; border-radius: 14px; background: var(--ok-bg); color: var(--ok); font: 600 13px 'Barlow', sans-serif; vertical-align: middle; }
+.selo-aprovada[hidden] { display: none; }
+.ico.fixo { width: 14px; height: 14px; margin-left: 4px; vertical-align: -2px; color: var(--ok); }
+details.caixa.conflitos { background: var(--er-bg); border: 1px solid var(--er); }
+details.caixa.conflitos summary { color: var(--er); }
+.tabela-escala tr.em-conflito td:first-child { box-shadow: inset 3px 0 0 var(--er); }
+details.caixa.conflitos .btn.quiet { padding: 1px 8px; margin-left: 4px; font-size: 13.5px; }
+/* Compactação: os critérios do dia, o tempo parado e a aprovação numa segunda linha da barra da Escala; no celular,
+   cada controle ocupa a linha, com o rótulo em cima */
+.bar.compactacao { margin-top: -2px; }
+.bar.compactacao[hidden] { display: none; }
+.criterios { display: inline-flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; }
+@media (max-width: 600px) {
+  .criterios, .criterios .flt-rotulo { display: flex; flex-direction: column; align-items: stretch; width: 100%; gap: 4px; }
+  #s-esc .criterios .flt-rotulo { flex: none; }
+  .criterios { gap: 10px; }
+  .criterios .seg button { flex: 1; justify-content: center; padding: 6px 6px; }
+}
+.bar.compactacao .seg button[aria-disabled="true"] { cursor: default; opacity: .75; }
+.bar.compactacao .seg button.on[aria-disabled="true"] { opacity: 1; }
+.resumo .parado strong { display: block; color: var(--ink); font-variant-numeric: tabular-nums; }
+/* Sugestões para um conflito: a gaveta com as opções, a melhor primeiro */
+.motivo-conflito { margin: 0; padding: 8px 12px; border-radius: 8px; background: var(--er-bg); color: var(--er); }
+.opcoes-reparo { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; overflow-y: auto; }
+.opcoes-reparo li { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px; border: 1px solid var(--ln); border-radius: 8px; background: var(--pn2); }
+.opcoes-reparo li.cancelar { background: transparent; border-style: dashed; }
+.opcoes-reparo .btn { flex: none; }
+.win td {
+  background: var(--pn2);
+  font: 600 14.5px 'Barlow Semi Condensed', sans-serif;
+  border-top: 1px solid var(--ln2);
+}
+.stu-cell .etapa, .stu-cell .usar-proxima { margin-left: 6px; }
+.resultado { display: flex; align-items: center; gap: 6px; margin-top: 4px; flex-wrap: wrap; }
+.res-sel { font-size: 13px; padding: 2px 4px; }
+.res-sel.res-aprovado, .res.res-aprovado { color: var(--ok); font-weight: 600; }
+.res-sel.res-reprovado, .res.res-reprovado { color: var(--er); font-weight: 600; }
+/* Status Operacional do Voo */
+.st-sel {
+  font: 600 13px 'Barlow', sans-serif;
+  padding: 2px 6px;
+  border-radius: 6px;
+}
+.st-Confirmado { border-color: var(--ok); color: var(--ok); }
+.st-EmVoo { border-color: var(--fly); color: var(--fly); }
+/* Pousou: o voo terminou (verde, com a borda tracejada para não confundir com o Confirmado) */
+.st-Pousou { border-color: var(--ok); border-style: dashed; color: var(--ok); }
+.st-Pendente { border-color: var(--wa); color: var(--wa); }
+.st-Cancelado { border-color: var(--er); color: var(--er); }
+.al {
+  border-left: 5px solid;
+  border-radius: 4px;
+  padding: 8px 12px;
+  margin: 6px 0;
+  background: var(--pn);
+  border-top: 1px solid var(--ln);
+  border-right: 1px solid var(--ln);
+  border-bottom: 1px solid var(--ln);
+}
+.al.err { border-left-color: var(--er); }
+.al.warn { border-left-color: var(--wa); }
+.al b { margin-right: 6px; }
+/* Mapa de ocupação */
+.tl-legend { display: flex; gap: 12px; flex-wrap: wrap; font-size: 12px; color: var(--mu); align-items: center; margin-bottom: 8px; }
+.tl-dot { width: 10px; height: 10px; border-radius: 2px; display: inline-block; margin-right: 4px; vertical-align: middle; }
+.tl-dot-emvoo { border: 2px solid var(--ye); }
+.tl-dot-atrasado { border: 2px solid var(--at); }
+.tl-dot-pendente { border: 1.5px dashed var(--ye); }
+.tl-dot-cancelado { background: var(--mu); opacity: .42; }
+.tl-wrap { position: relative; padding-top: 4px; }
+/* Cada marca do eixo no minuto dela, centrada nela (o clique na faixa cai no horário da marca); a do fim do mapa, para
+   dentro. O eixo tem a largura de dentro das faixas (sem a borda delas) */
+.tl-axis {
+  position: relative;
+  height: 20px;
+  margin: 0 1px 0 166px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--mu);
+}
+.tl-axis span { position: absolute; top: 0; transform: translateX(-50%); white-space: nowrap; }
+.tl-axis span.fim { transform: translateX(-100%); }
+.tl-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 0;
+  border-top: 1px solid var(--ln);
+  font-size: 13px;
+}
+/* O nome e as horas da linha, com o "+" que agenda nela ao lado */
+.tl-lbl {
+  width: 155px;
+  font-weight: 600;
+  flex-shrink: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 4px;
+  line-height: 1.2;
+}
+.tl-lbl > span, .tl-lbl > small { grid-column: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tl-lbl small { font-weight: 400; font-size: 11px; color: var(--mu); }
+.tl-lbl .tl-agendar { grid-column: 2; grid-row: 1 / span 2; }
+/* Uma listra por hora (--hora vem do mapa, pelo início e o fim dele), em qualquer largura */
+.tl-track {
+  flex: 1;
+  position: relative;
+  height: 40px;
+  background-color: var(--bg);
+  background-image: linear-gradient(to right, transparent calc(100% - 1px), var(--ln) calc(100% - 1px));
+  background-size: var(--hora, 8.333%) 100%;
+  border-radius: 4px;
+  border: 1px solid var(--ln);
+  overflow: visible;
+}
+/* O espaço livre da faixa agenda com um clique; quem só consulta e a linha inerte não agendam */
+#out .tl-track:not(.inerte) { cursor: cell; }
+body[data-role="gestor"] #out .tl-track { cursor: default; }
+/* O avião em manutenção: a faixa riscada, sem o "+" e sem agendar com um clique */
+.tl-manutencao .tl-lbl > span { color: var(--mu); }
+.tl-manutencao .tl-track { background-image: repeating-linear-gradient(-45deg, transparent 0 6px, var(--ln) 6px 7px); background-size: auto; }
+/* O "+" que agenda: no fim de cada linha do mapa e de cada horário da lista (só o ícone; o nome fica no aria-label) */
+.tl-agendar, .win-agendar {
+  display: inline-grid; place-items: center; padding: 3px; border: 1px solid transparent; border-radius: 6px;
+  background: transparent; color: var(--ac); cursor: pointer;
+}
+.tl-agendar:hover, .win-agendar:hover { background: var(--info-bg); border-color: var(--ln2); }
+.tabela-escala tr.win td { position: relative; }
+.tabela-escala tr.win .win-btn { padding-right: 40px; }
+.win-agendar { position: absolute; top: 50%; right: 8px; transform: translateY(-50%); }
+.m-gnd { background: #2E6F40; color: #fff; }
+.m-sim { background: #3A506B; color: #fff; }
+.m-pp  { background: #1F5FA8; color: #fff; }
+.m-pc  { background: #0E7C6B; color: #fff; }
+.m-nt  { background: #5A3E85; color: #fff; }
+.m-mu  { background: #B86B11; color: #fff; }
+.tl-bar {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  border-radius: 4px;
+  padding: 2px 6px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  overflow: hidden;
+  font: inherit;
+  text-align: left;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+  border: 1px solid rgba(255,255,255,0.25);
+  transition: transform .12s, z-index .12s, box-shadow .12s, opacity .15s;
+  z-index: 2;
+}
+.tl-bar:hover, .tl-bar:focus-visible, .tl-bar[aria-expanded="true"] {
+  transform: translateY(-1px);
+  z-index: 30;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.35);
+}
+.tl-bar[aria-expanded="true"] { outline: 2px solid var(--ac); outline-offset: 1px; }
+.tl-bar.tl-st-EmVoo {
+  border: 2px solid var(--ye);
+  box-shadow: 0 0 8px rgba(242, 183, 5, 0.55);
+}
+.tl-bar.tl-st-Atrasado { border: 2px solid var(--at); }
+/* Pousou: a barra fica mais clara (o voo já terminou), sem riscar como o cancelado */
+.tl-bar.tl-st-Pousou { opacity: 0.6; border: 1.5px solid var(--ok); }
+.tl-bar.tl-st-Pendente {
+  border: 1.5px dashed var(--ye);
+  opacity: 0.85;
+}
+.tl-bar.tl-st-Cancelado {
+  background: var(--mu) !important;
+  opacity: 0.42;
+  text-decoration: line-through;
+}
+.tl-bar-t1 {
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.15;
+}
+.tl-bar-t2 {
+  font-size: 10px;
+  opacity: 0.92;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.15;
+}
+/* Popup do voo: um só, fixo na tela (fora do painel do mapa, que rola e o cortaria); posicionado pelo script */
+.tl-pop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: min(280px, calc(100vw - 16px));
+  background: var(--pop-bg);
+  color: var(--pop-txt);
+  border: 1px solid var(--ln);
+  border-radius: 6px;
+  padding: 10px 12px;
+  font-size: 12px;
+  line-height: 1.4;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.45);
+  z-index: 150;
+}
+.tl-pop[hidden] { display: none; }
+.tl-pop::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: var(--seta, 50%);
+  margin-left: -6px;
+  border-width: 6px;
+  border-style: solid;
+  border-color: var(--pop-bg) transparent transparent transparent;
+}
+.tl-pop.abaixo::after { top: auto; bottom: 100%; border-color: transparent transparent var(--pop-bg) transparent; }
+.tl-pop-hd {
+  font: 700 13px 'Barlow Semi Condensed', sans-serif;
+  border-bottom: 1px solid rgba(255,255,255,0.18);
+  padding-bottom: 4px;
+  margin-bottom: 6px;
+  display: flex;
+  justify-content: space-between;
+  color: var(--ye);
+}
+.tl-pop-grid { display: grid; grid-template-columns: 74px 1fr; gap: 3px 6px; margin-bottom: 8px; align-items: start; }
+.tl-pop-grid span:nth-child(odd) { opacity: 0.75; }
+.tl-pop-grid span:nth-child(even) { font-weight: 600; white-space: normal; }
+.tl-pop-btn {
+  width: 100%;
+  background: var(--er);
+  color: var(--erT);
+  border: 0;
+  border-radius: 4px;
+  padding: 4px 8px;
+  font: 600 12px 'Barlow Semi Condensed', sans-serif;
+  cursor: pointer;
+}
+/* "+ Aluno na turma" (a turma de Ground): agenda, não exclui */
+.tl-pop-btn[data-act="agendar"] { background: var(--ac); color: var(--acT); }
+.tl-pop-btn + .tl-pop-btn { margin-top: 6px; }
+@media (max-width: 640px) {
+  button.st-detalhe { min-height: 44px; }
+  .ins-btn { min-width: 44px; min-height: 44px; margin: 0; }
+  details.caixa summary { padding: 12px 0; }
+  .win-btn { min-height: 44px; }
+  /* O "+" que agenda: na linha do mapa, no horário da lista e na turma de Ground */
+  .tl-agendar, .win-agendar { min-width: 44px; min-height: 44px; }
+  /* Com o "+" de 44 px, sobram uns 107 px para o nome da linha do mapa: o nome (e as horas) quebram em quantas linhas
+     precisarem, em vez de terminar em reticências (no toque, não há o title para ler o resto). Até duas linhas, a linha
+     do mapa fica da altura do "+" */
+  .tl-lbl > span, .tl-lbl > small { white-space: normal; overflow-wrap: anywhere; }
+  .tl-pop-btn[data-act="agendar"] { min-height: 44px; }
+  .tabela-escala tr.win .win-btn { padding-right: 52px; }
+}

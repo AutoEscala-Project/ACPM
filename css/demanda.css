@@ -1,0 +1,56 @@
+/* A Demanda: os campos discretos, o aluno e as missões extras, "Mais", a missão do curso e a duração */
+#dem select.escolhido { border-color: var(--ac); color: var(--ac); font-weight: 600; }
+tr.off td { opacity: .5; }
+tr.on td:first-child { font-weight: 600; }
+/* Demanda: campos discretos (parecem texto até o mouse passar ou o foco chegar), sem rolar para o lado */
+#s-dem table { min-width: 0; font-size: 14.5px; }
+#s-dem td { padding: 4px 6px; }
+#dem select, #dem input[type="number"] {
+  border: 1px solid transparent; background: transparent; -webkit-appearance: none; appearance: none;
+  padding: 4px 6px; border-radius: 6px; color: var(--ink); max-width: 100%;
+}
+#dem tr:hover select:not(:disabled), #dem select:focus { border-color: var(--ln2); background: var(--pn); }
+#dem select:disabled { color: var(--mu); opacity: 1; }
+#s-dem tr.extra-row td:first-child { padding-left: 22px; }
+#s-dem .btn-add-mis, #s-dem .stu-cell .x { opacity: 0; transition: opacity .1s; }
+#s-dem tr:hover .btn-add-mis, #s-dem tr:hover .stu-cell .x, #s-dem tr:focus-within .btn-add-mis, #s-dem tr:focus-within .stu-cell .x { opacity: 1; }
+@media (hover: none), (pointer: coarse) {
+  #s-dem .btn-add-mis, #s-dem .stu-cell .x { opacity: 1; }
+}
+/* Prioridade 5 em destaque */
+#s-dem tr.p5 [data-f="pr"] { background: var(--wa-bg); color: var(--wa); font-weight: 700; }
+#incluir-aluno { min-width: 240px; }
+#cnt { margin: -4px 0 8px; font-size: 13px; }
+.menu-mais { position: relative; }
+.menu-mais .menu-itens { right: 0; }
+.stu-cell {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+.btn-add-mis {
+  background: transparent;
+  border: 0;
+  color: var(--ac);
+  border-radius: 6px;
+  padding: 2px 6px;
+  font: 600 13px 'Barlow', sans-serif;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.btn-add-mis:hover { background: var(--info-bg); }
+.usar-proxima { padding: 1px 6px; font-size: 13px; }
+/* "Outra missão do curso" (Demanda): estreita como o botão da próxima missão (sem a largura da missão mais longa, a
+   coluna do aluno não caberia na tela); as missões aparecem ao abrir a lista */
+#dem select.outra-missao { width: 7.5em; flex-shrink: 0; padding: 1px 6px; font-size: 13px; color: var(--ac); }
+#dem select.outra-missao optgroup, #dem select.outra-missao option { color: var(--ink); font-weight: 400; }
+/* Com o nome comprido, o código (ou a próxima missão) e a lista descem para a linha de baixo do nome, em vez de alargar
+   a coluna do aluno até a tabela passar da tela */
+#s-dem .stu-cell:has(.outra-missao) { flex-wrap: wrap; }
+.only tr.off { display: none; }
+@media (max-width: 640px) {
+  .btn-add-mis { min-width: 44px; min-height: 44px; flex-shrink: 0; }
+}
+/* A duração digitada na Demanda (horas, fracionadas) */
+#s-dem input.duracao { width: 5.5em; }

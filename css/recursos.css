@@ -1,0 +1,116 @@
+/* Recursos: os horários de decolagem, o recurso novo, as janelas, as duas vistas, a frota e a revisão */
+/* Os campos do Gestor ficam desligados (js/somente-leitura.js): sem tirar os cliques, as dicas continuam aparecendo */
+body[data-role="gestor"] #s-rec .janela { cursor: default !important; }
+/* Horários de decolagem: uma linha de resumo por categoria; o editor abre na própria linha */
+.horarios { display: flex; flex-direction: column; gap: 12px; }
+.horarios-cat { display: flex; flex-direction: column; gap: 4px; padding-bottom: 10px; border-bottom: 1px solid var(--ln); }
+.horarios-cat:last-child { border-bottom: 0; padding-bottom: 0; }
+.horarios-cab { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+.horarios-cab .btn { margin-left: auto; }
+.horarios-nome { min-width: 80px; font: 600 14px 'Barlow Semi Condensed', sans-serif; }
+.horarios-modelo { font-weight: 600; }
+.horarios-qtd { color: var(--mu); }
+.horarios-periodos { display: flex; flex-direction: column; gap: 2px; }
+.horarios-periodo { display: flex; align-items: baseline; gap: 8px; }
+.horarios-periodo > small { min-width: 44px; color: var(--mu); }
+.horarios-lista { display: flex; flex-wrap: wrap; gap: 2px 10px; flex: 1; }
+.horarios-cat .hr { font-variant-numeric: tabular-nums; font-size: 13.5px; }
+.horarios-cat .hr.fechado { color: var(--mu); text-decoration: line-through; opacity: .7; cursor: help; }
+.horarios-editor { display: flex; flex-direction: column; gap: 8px; padding: 10px; border: 1px solid var(--ln2); border-radius: 8px; background: var(--pn2); }
+.horarios-editor .horarios-lista { gap: 4px; }
+.horarios-modelos { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 0; padding: 0; border: 0; }
+.horarios-modelos legend { padding: 0; margin-bottom: 2px; font-weight: 600; }
+.horarios-novo { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.horarios-efeito { margin: 0; font-weight: 600; }
+.horarios-botoes { display: flex; gap: 8px; }
+/* O alerta vazio continua na árvore de acessibilidade (escondido com display: none, não seria anunciado quando o erro
+   aparecer), mas sem ocupar espaço no editor */
+.horarios-editor .erro-campo:empty { display: block; position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+.hr-chip { display: inline-flex; align-items: center; gap: 2px; padding: 1px 2px 1px 8px; border: 1px solid var(--ln2); border-radius: 12px; font-size: 13.5px; font-variant-numeric: tabular-nums; }
+.hr-chip button { display: inline-grid; place-items: center; border: 0; background: transparent; color: var(--mu); border-radius: 50%; padding: 2px; cursor: pointer; }
+.hr-chip button:hover { color: var(--er); }
+.hr-chip .ico { width: 12px; height: 12px; }
+.hr-novo { width: 110px; }
+/* Recurso novo: matrícula, categoria e, no C152, "Só Parafuso" */
+.form-recurso { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px 12px; margin: 0 0 10px; }
+.form-recurso label:not(.chk) { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--mu); }
+.form-recurso .chk { align-self: center; }
+table.frota .acoes-frota { white-space: nowrap; text-align: right; }
+/* Recursos: as janelas como interruptores e a frota numa tabela só */
+.janelas { display: flex; flex-wrap: wrap; gap: 6px; }
+.janela {
+  display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px 4px 6px; cursor: pointer; user-select: none;
+  border: 1px solid var(--ln2); border-radius: 18px; background: var(--pn); font: 600 14.5px 'Barlow Semi Condensed', sans-serif;
+}
+.janela small { color: var(--mu); font-weight: 500; }
+.janela.off { color: var(--mu); }
+/* Recursos em duas vistas: a disponibilidade do dia (nesta data) e o cadastro (para todas as datas) */
+.rec-parte { display: flex; flex-direction: column; gap: 12px; margin-bottom: 24px; }
+.rec-parte > .pn { margin: 0; }
+/* Os filhos do flex encolhem (a tabela larga rola dentro da caixa dela, e a página não rola de lado) */
+.rec-parte > * { min-width: 0; }
+.rec-parte-titulo { margin: 4px 0 0; padding-bottom: 4px; border-bottom: 2px solid var(--ln2); font-size: 18px; }
+.rec-parte-titulo small { font: 400 13px 'Barlow', sans-serif; color: var(--mu); margin-left: 6px; }
+.rec-parte h4 { margin: 0 0 8px; font: 600 15px 'Barlow Semi Condensed', sans-serif; }
+/* Na disponibilidade do dia, a ordem no hangar fica ao lado da tabela dos aviões a partir de 1.100 px (embaixo, nas telas
+   menores). A coluna da tabela encolhe, e a tabela larga rola dentro da caixa dela */
+.rec-dia { display: grid; gap: 12px; }
+.rec-dia > * { min-width: 0; }
+.rec-dia > .pn { margin: 0; }
+.rec-aeronaves > p.h { margin-bottom: 0; }
+@media (min-width: 1100px) {
+  .rec-dia { grid-template-columns: minmax(0, 1fr) minmax(260px, 300px); align-items: start; }
+}
+/* Quando os filtros não deixam nenhum recurso na frota ou nenhuma categoria nos horários de decolagem */
+.frota-cadastro > li.sem-resultado { padding: 2px 0; }
+.horarios > .sem-resultado { margin: 0; }
+.frota-cadastro { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.frota-cadastro h5 { margin: 0 0 4px; font: 600 14px 'Barlow Semi Condensed', sans-serif; }
+.frota-cadastro h5 small { color: var(--mu); font-weight: 500; margin-left: 6px; }
+.frota-itens { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.frota-item { display: inline-flex; max-width: 100%; align-items: center; gap: 6px; padding: 2px 4px 2px 10px; border: 1px solid var(--ln2); border-radius: 8px; font-size: 14px; }
+/* Retirar aparece com o mouse ou o foco no recurso (na tela de toque, sempre) */
+.frota-item .ret { padding: 2px 8px; opacity: 0; transition: opacity .1s; }
+.frota-item:hover .ret, .frota-item:focus-within .ret, .frota-item .ret[data-arm="1"] { opacity: 1; }
+@media (hover: none), (pointer: coarse) {
+  .frota-item .ret { opacity: 1; }
+}
+.frota-titulo small { font: 400 13px 'Barlow', sans-serif; color: var(--mu); margin-left: 6px; }
+/* Os atributos do recurso abertos: as caixas na linha de baixo do próprio recurso */
+.frota-item.aberto { flex-wrap: wrap; }
+.frota-item.aberto .ret { opacity: 1; }
+/* A matrícula é o botão que abre os atributos (como o nome do instrutor na Escala) */
+.frota-reg { font: inherit; font-weight: 700; color: inherit; background: none; border: 1px dashed transparent; border-radius: 4px; padding: 1px 4px; margin: -2px -5px; cursor: pointer; }
+.frota-reg:hover, .frota-reg:focus-visible, .frota-reg[aria-expanded="true"] { border-color: var(--ln2); }
+.atributos-recurso { flex-basis: 100%; display: flex; flex-wrap: wrap; gap: 4px 14px; border: 0; margin: 2px 0 4px; padding: 0; }
+table.frota { min-width: 640px; font-size: 14.5px; }
+table.frota td { padding: 6px 10px; }
+table.frota tr.grupo td { background: var(--pn2); font: 600 14px 'Barlow Semi Condensed', sans-serif; }
+table.frota tr.grupo small { color: var(--mu); font-weight: 500; margin-left: 6px; }
+table.frota tr.manutencao td:not(:first-child) { color: var(--mu); }
+table.frota input.horas { width: 72px; text-align: right; border-color: transparent; background: transparent; }
+table.frota tr:hover input.horas, table.frota input.horas:focus { border-color: var(--ln2); background: var(--pn); }
+.barra { display: inline-block; width: 90px; height: 6px; border-radius: 3px; background: var(--neutro-bg); vertical-align: middle; margin-left: 8px; overflow: hidden; }
+.barra i { display: block; height: 100%; background: var(--ok); }
+.barra.wa i { background: #D9A400; }
+.barra.er i { background: var(--er); }
+table.frota .rev { opacity: 0; transition: opacity .1s; }
+table.frota tr:hover .rev, table.frota tr:focus-within .rev { opacity: 1; }
+@media (hover: none), (pointer: coarse) {
+  table.frota .rev { opacity: 1; }
+}
+@media (max-width: 640px) {
+  #flt-rec-mat, #flt-rec-cat { flex: 1 1 140px; min-width: 0; }
+}
+@media (max-width: 640px) {
+  .hr-chip button { min-width: 44px; min-height: 44px; flex-shrink: 0; }
+  .frota-reg { min-width: 44px; min-height: 44px; margin: 0; }
+  .janela { min-width: 44px; min-height: 44px; }
+  .grupo-btn { min-height: 44px; }
+  /* Horários de decolagem: o nome da categoria em cima, as etiquetas na largura toda */
+  .horarios-nome { flex-basis: 100%; }
+  .horarios-lista { flex-basis: 100%; }
+}
+/* As horas disponíveis com a barra ao lado (Recursos) */
+.horas-disp { display: inline-flex; align-items: center; gap: 6px; }
+.horas-disp .barra { width: 90px; }

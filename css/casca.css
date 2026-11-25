@@ -1,0 +1,209 @@
+/* A casca do app: a barra do topo, a data, o menu da conta, as abas, o que cada perfil vê, as seções, o link que pula a barra,
+   o login, o modo compartilhado, os avisos do alto e a impressão */
+/* Topo: marca, a data em uso no meio e as ferramentas à direita; as abas logo abaixo */
+header.topo {
+  background: var(--hd);
+  color: var(--hdT);
+  padding: 8px 20px 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  grid-template-areas: "marca data ferramentas" "abas abas abas";
+  align-items: center;
+  column-gap: 12px;
+  row-gap: 4px;
+}
+/* Marca: a águia do ACPM e "AutoEscala", centralizados na mesma linha */
+.topo-marca { grid-area: marca; margin: 0; min-width: 0; display: flex; align-items: center; gap: 8px; font: 700 21px/1.2 'Barlow Semi Condensed', sans-serif; letter-spacing: .2px; }
+.topo-logo { flex: none; width: auto; height: 24px; }
+.topo-titulo { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.topo-data {
+  grid-area: data; display: flex; align-items: center; gap: 2px;
+  background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.16); border-radius: 8px; padding: 2px;
+}
+.topo-ico { width: 32px; height: 32px; border: 0; background: transparent; color: var(--hdT); border-radius: 6px; cursor: pointer; display: grid; place-items: center; }
+.topo-ico:hover:not(:disabled) { background: rgba(255,255,255,.1); }
+.topo-ico:disabled { opacity: .35; cursor: default; }
+/* Largura fixa (cabe a data mais longa, com o ano e "amanhã"): as setas não mudam de lugar quando a data muda */
+.topo-data-campo {
+  position: relative; display: inline-flex; align-items: center; justify-content: center; gap: 6px; width: 256px;
+  padding: 4px 10px; border-radius: 6px; font: 600 15.5px 'Barlow Semi Condensed', sans-serif; white-space: nowrap; cursor: pointer;
+}
+#dt-rotulo { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.dt-semana-curta { display: none; }
+@media (max-width: 400px) {
+  .dt-semana { display: none; }
+  .dt-semana-curta { display: inline; }
+  /* Com o ano e o "amanhã" (na virada do ano), a data quebra a linha em vez de ser cortada */
+  .topo-data-campo { white-space: normal; }
+  #dt-rotulo { overflow: visible; text-overflow: clip; text-align: center; }
+}
+.topo-data-campo:hover { background: rgba(255,255,255,.1); }
+/* O campo da data é transparente por cima do rótulo: o foco aparece no rótulo. :focus-within, porque o botão do
+   calendário dentro do campo recebe o foco sem que o campo tenha :focus ou :focus-visible */
+.topo-data-campo:focus-within { outline: 2px solid #fff; outline-offset: 2px; background: rgba(255,255,255,.1); }
+.topo-data-rel { font: 700 12px 'Barlow', sans-serif; background: var(--ye); color: #12263A; border-radius: 10px; padding: 1px 8px; }
+/* O campo de data cobre o rótulo: um clique abre o calendário do navegador */
+#dt { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; padding: 0; border: 0; cursor: pointer; }
+#dt:disabled { cursor: default; }
+.hd-tools { grid-area: ferramentas; display: flex; gap: 4px; align-items: center; justify-content: flex-end; }
+.hd-btn, .hd-sel {
+  background: transparent;
+  color: var(--hdT);
+  border: 1px solid transparent;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font: 600 14px 'Barlow Semi Condensed', sans-serif;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.hd-sel { border-color: rgba(255,255,255,.2); }
+.hd-sel option { background: var(--hd); color: var(--hdT); }
+.hd-btn:hover:not(:disabled) { background: rgba(255,255,255,.1); }
+.hd-btn:disabled, .hd-sel:disabled { opacity: 0.65; cursor: not-allowed; }
+.badge-cnt {
+  background: rgba(255,255,255,.18);
+  color: var(--hdT);
+  border-radius: 10px;
+  padding: 0 7px;
+  font-size: 12px;
+  font-weight: 700;
+}
+/* Menu da conta */
+.menu-conta { position: relative; margin-left: 4px; }
+.hd-conta {
+  display: inline-flex; align-items: center; gap: 8px; cursor: pointer;
+  background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.16); color: var(--hdT);
+  border-radius: 18px; padding: 3px 8px 3px 3px; font: 600 14px 'Barlow Semi Condensed', sans-serif;
+}
+.hd-conta:hover { background: rgba(255,255,255,.14); }
+.hd-avatar { width: 26px; height: 26px; border-radius: 50%; background: var(--ye); color: #12263A; display: grid; place-items: center; font: 700 12px 'Barlow', sans-serif; }
+.hd-usuario { display: flex; flex-direction: column; line-height: 1.1; text-align: left; max-width: 140px; }
+/* Um nome longo termina em reticências: sem o limite, as ferramentas cresceriam por cima da data ou da marca */
+.hd-usuario > * { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hd-usuario small { font: 500 11.5px 'Barlow', sans-serif; opacity: .75; }
+.hd-usuario .hd-sep { display: none; }
+.menu-itens {
+  position: absolute; right: 0; top: calc(100% + 6px); z-index: 100; min-width: 210px; padding: 4px;
+  display: flex; flex-direction: column; background: var(--pn); color: var(--ink);
+  border: 1px solid var(--ln); border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,.18);
+}
+.menu-itens button {
+  text-align: left; background: transparent; border: 0; border-radius: 6px; padding: 8px 12px;
+  font: 500 14.5px 'Barlow', sans-serif; color: var(--ink); cursor: pointer;
+}
+.menu-itens button:hover, .menu-itens button:focus-visible { background: var(--info-bg); }
+#btn-sair { color: var(--er); }
+/* Tema: interruptor com o sol (claro) e a lua (escuro); o lado em uso fica destacado */
+.menu-itens button.tema { display: flex; align-items: center; gap: 8px; color: var(--mu); }
+.tema-trilho { position: relative; width: 34px; height: 20px; border-radius: 10px; background: var(--ln2); transition: background .15s; flex: none; }
+.tema-botao { position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.25); transition: left .15s; }
+#btn-theme[aria-checked="true"] .tema-trilho { background: var(--ac); }
+#btn-theme[aria-checked="true"] .tema-botao { left: 16px; }
+#btn-theme[aria-checked="false"] .ico:first-child, #btn-theme[aria-checked="true"] .ico:last-child { color: var(--ink); }
+/* Abas: sem número, na ordem de uso; a ativa sublinhada em amarelo; selos de atenção */
+nav#nav { grid-area: abas; display: flex; align-items: center; gap: 2px; margin: 0 -8px; overflow-x: auto; scrollbar-width: none; }
+nav#nav::-webkit-scrollbar { display: none; }
+nav#nav button {
+  background: transparent; color: #C9D6E2; border: 0; border-bottom: 3px solid transparent; border-radius: 0;
+  padding: 9px 12px 8px; font: 600 15px 'Barlow Semi Condensed', sans-serif; cursor: pointer; white-space: nowrap;
+  display: inline-flex; gap: 6px; align-items: center; transition: color .15s;
+}
+nav#nav button:hover:not(.on) { color: #fff; }
+nav#nav button.on { color: #fff; border-bottom-color: var(--ye); }
+/* As abas rolam de lado (overflow): o anel desenhado fora da aba seria cortado em cima e embaixo; fica por dentro */
+nav#nav button:focus-visible { outline-offset: -4px; }
+.aba-sep { width: 1px; height: 18px; background: rgba(255,255,255,.15); margin: 0 6px; flex: none; }
+.aba-selo { min-width: 18px; height: 18px; border-radius: 9px; padding: 0 5px; font: 700 11px/18px 'Barlow', sans-serif; background: rgba(255,255,255,.18); color: #fff; text-align: center; }
+.aba-selo.aviso { background: var(--ye); color: #12263A; }
+.aba-selo.erro { background: #C62828; color: #fff; }
+/* A Secretaria trabalha na agenda: só a Agenda e as abas que ela consulta (Escala, Instrutores, Alunos e Cursos); sem a
+   Demanda, também sem o link para ela, em Alunos */
+body[data-perfil="secretaria"] #nav button:not([data-t="age"]):not([data-t="esc"]):not([data-t="ins"]):not([data-t="alu"]):not([data-t="cur"]),
+body[data-perfil="secretaria"] .ir-para-demanda,
+body[data-perfil="secretaria"] .aba-sep,
+body[data-perfil="secretaria"] #btn-open-log,
+body[data-perfil="secretaria"] #btn-share-link { display: none !important; }
+/* Com a data no meio, as ferramentas precisam de cerca de 1290 px; sem caber, elas cobririam a data. Abaixo disso, a data
+   vem logo depois da marca; abaixo de 1030 px, a marca e a data ficam na primeira linha e as ferramentas na segunda, na
+   ordem do Tab (marca, data, ferramentas) */
+@media (max-width: 1289px) {
+  header.topo { grid-template-columns: minmax(0, 1fr) auto auto; }
+}
+@media (max-width: 1029px) {
+  header.topo { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "marca data" "ferramentas ferramentas" "abas abas"; }
+}
+/* No celular não cabem a marca e a data na mesma linha: a data ocupa a segunda linha inteira (o tamanho fixo mantém as
+   setas no lugar quando a data muda), e as ferramentas, só com os ícones, ficam ao lado da marca. Aqui o Tab passa pela
+   data antes das ferramentas, que estão acima dela */
+@media (max-width: 640px) {
+  header.topo { grid-template-areas: "marca ferramentas" "data data" "abas abas"; padding: 8px 12px 0; }
+  .hd-sel { max-width: 110px; }
+  .topo-marca { font-size: 18px; }
+  .topo-logo { height: 20px; }
+  /* A data ocupa a linha dela: a largura fixa da tela grande faria a página rolar de lado a 320 px */
+  .topo-data-campo { width: auto; flex: 1; min-width: 0; }
+  .hd-usuario, .hd-seta { display: none; }
+  /* Só o ícone aparece; a palavra continua no nome do botão, para o leitor de tela */
+  .hd-txt { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .hd-conta { padding: 3px; }
+  .hd-btn { padding: 6px 8px; }
+}
+/* Na barra do topo, azul-escura nos dois temas, o azul de destaque não contrasta (2,4:1): o anel é branco. O menu da
+   conta, claro, fica dentro da barra e mantém o azul */
+header.topo :focus-visible { outline-color: #fff; }
+header.topo .menu-itens :focus-visible { outline-color: var(--ac); }
+section { display: none; }
+section.on { display: block; }
+/* Perfil Gestor: só consulta */
+body[data-role="gestor"] .edit-only { display: none !important; }
+/* Dados pessoais: só operadores, administradores e a secretaria (que no resto entra como consulta) */
+body[data-role="gestor"]:not([data-perfil="secretaria"]) .so-dados { display: none !important; }
+body[data-role="gestor"] main label.alvo { cursor: default !important; }
+body[data-role="gestor"]:not([data-backend="supabase"]) #dt,
+body[data-role="gestor"] .st-sel,
+body[data-role="gestor"] main input:not(.flt-ctrl):not(.agenda-campo):not(.conta-campo):not(#onlyfly):not(#bi-dt):not(#dt),
+body[data-role="gestor"] main select:not(.flt-ctrl):not(.agenda-campo):not(.conta-campo) {
+  opacity: 0.82;
+}
+/* O link para pular a barra do topo e as abas: aparece só com o foco do teclado. O <main> não recebe o foco (um
+   tabindex nele faria um clique num texto levar o próximo Tab ao topo): o link leva o próximo Tab para dentro dele */
+.pular { position: absolute; left: 8px; top: -64px; z-index: 100; padding: 10px 14px; border-radius: 6px; background: var(--ac); color: var(--acT); font-weight: 600; text-decoration: none; }
+.pular:focus { top: 8px; }
+/* Login (modo compartilhado, Supabase) */
+#s-login { display: none; max-width: 420px; margin: 32px auto; }
+body[data-login] #s-login { display: block; }
+body[data-login] main > section:not(#s-login),
+body[data-login] #nav,
+body[data-login] .topo-data,
+body[data-login] .hd-tools > :not(.menu-conta) { display: none !important; }
+body[data-backend="supabase"] #role-sel { display: none; }
+.login label { display: block; margin-bottom: 12px; font-weight: 600; }
+.login input { display: block; width: 100%; margin-top: 4px; }
+.login .btn { width: 100%; }
+/* Modo compartilhado: o histórico só cresce e o BI vem das escalas guardadas */
+body[data-backend="supabase"] #btn-clear-log,
+body[data-backend="supabase"] #btn-bi-sim,
+body[data-backend="supabase"] #btn-bi-clr { display: none !important; }
+.hd-usuario { color: var(--hdT); font: 600 13px 'Barlow Semi Condensed', sans-serif; opacity: .9; }
+.aviso-sync, .aviso-link {
+  display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap;
+  border: 1px solid var(--er); border-left-width: 5px; border-radius: 6px;
+  background: var(--pn); color: var(--ink); padding: 10px 14px; margin-bottom: 12px; font-weight: 600;
+}
+.aviso-link.ok { border-color: var(--ok); }
+@media print {
+  header, .bar, nav, section:not(#s-esc), #toast-box { display: none !important; }
+  section#s-esc { display: block; }
+  body { background: #fff; color: #000; }
+  /* Os botões que agendam não vão para o papel */
+  .tl-agendar, .win-agendar, .tl-pop-btn[data-act="agendar"] { display: none !important; }
+}
+/* Alvos de toque no celular: botões, campos e interruptores com pelo menos 44 px */
+@media (max-width: 640px) {
+  /* Com largura mínima, o item não encolhe mais que o próprio texto (flex-shrink: 0) */
+  .topo-ico, .hd-btn, .hd-conta { min-width: 44px; min-height: 44px; justify-content: center; flex-shrink: 0; }
+  .hd-sel, .topo-data-campo { min-height: 44px; }
+  nav#nav button { min-width: 44px; min-height: 44px; justify-content: center; flex: none; }
+}
