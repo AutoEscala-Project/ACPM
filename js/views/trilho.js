@@ -78,6 +78,10 @@ export function mostrarTrilho(estado) {
 export function rRotuloDaData() {
   if (!DATA) return;
   const { semana, semanaCurta, data: diaMes, relativo } = rotuloDaData(DATA, hojeISO());
+  // Igual, o rótulo fica: trocado entre apertar e soltar o mouse, o botão perderia o clique
+  const texto = [semana, diaMes, relativo].join(' ');
+  if ($('#dt-rotulo').dataset.texto === texto) return;
+  $('#dt-rotulo').dataset.texto = texto;
   const parte = (classe, texto) => Object.assign(document.createElement('span'), { className: classe, textContent: texto });
   $('#dt-rotulo').replaceChildren(parte('dt-semana', semana), parte('dt-semana-curta', semanaCurta), `, ${diaMes}`);
   // Com o ano e o "amanhã" (na virada do ano), o dia da semana abreviado: a data não é cortada ao lado do número de avisos
@@ -100,10 +104,30 @@ function botaoDoDia(dia, { mes, hoje, parada }) {
   return `<td role="gridcell"><button type="button" class="${classes.join(' ')}" ${atributos}>${+dia.slice(8, 10)}${mesCurto}${numero}</button></td>`;
 }
 
-// O calendário do mês à vista, a linha da data aberta (ou da que está abrindo) e os avisos dela
+// A grade: com os mesmos dias, cada botão é atualizado no lugar (trocado entre apertar e soltar o mouse, o clique se perderia)
+function desenharGrade(html) {
+  const cal = $('#cal');
+  const nova = document.createElement('table');
+  nova.innerHTML = html;
+  const antes = [...cal.querySelectorAll('.cal-dia')], depois = [...nova.querySelectorAll('.cal-dia')];
+  if (antes.length !== depois.length || antes.some((b, i) => b.dataset.dia !== depois[i].dataset.dia)) {
+    trocarConteudo(cal, html);
+    return;
+  }
+  antes.forEach((botao, i) => {
+    const novo = depois[i];
+    for (const nome of botao.getAttributeNames()) if (!novo.hasAttribute(nome)) botao.removeAttribute(nome);
+    for (const nome of novo.getAttributeNames()) if (botao.getAttribute(nome) !== novo.getAttribute(nome)) botao.setAttribute(nome, novo.getAttribute(nome));
+    if (botao.innerHTML !== novo.innerHTML) botao.innerHTML = novo.innerHTML;
+  });
+}
+
+// O calendário do mês à vista, o nome da data no topo, a linha dela (ou da que está abrindo) e os avisos. O topo e a linha
+// dizem "hoje" e "amanhã" juntos, também com a página aberta depois da meia-noite
 export function rTrilho() {
   const trilho = $('#trilho');
   if (!trilho || !DATA) return;
+  rRotuloDaData();
   const mes = mesDoTrilho();
   const hoje = hojeISO();
   const semanas = semanasDoMes(mes);
@@ -118,7 +142,7 @@ export function rTrilho() {
   if ($('#cal-mes').textContent !== nomeDoMes(mes)) $('#cal-mes').textContent = nomeDoMes(mes);
   const cabeca = `<thead><tr>${CABECA.map(([letra, nome]) => `<th scope="col" aria-label="${nome}"><span aria-hidden="true">${letra}</span></th>`).join('')}</tr></thead>`;
   const corpo = `<tbody>${semanas.map(semana => `<tr>${semana.map(dia => botaoDoDia(dia, { mes, hoje, parada })).join('')}</tr>`).join('')}</tbody>`;
-  trocarConteudo($('#cal'), cabeca + corpo);
+  desenharGrade(cabeca + corpo);
   $('#trilho-data').textContent = abrindo ? `Abrindo ${rotuloDaData(abrindo, hoje).dia}…` : linhaDaData(DATA, hoje);
   rAvisos();
 }
@@ -140,10 +164,12 @@ function avisoHTML(a) {
 }
 function rAvisos() {
   if (!dadosLidos) return;
-  const avisos = avisosDaData(contextoDoDia());
+  const contexto = contextoDoDia();
+  const avisos = avisosDaData(contexto);
   trocarConteudo($('#avisos-da-data'), avisos.map(avisoHTML).join(''));
   $('#avisos-da-data').hidden = !avisos.length;
-  $('#avisos-vazio').hidden = avisos.length > 0;
+  // Enquanto os pedidos da data não chegam, ainda não se sabe se não há nada
+  $('#avisos-vazio').hidden = avisos.length > 0 || contexto.leituraDosPedidos === 'lendo';
   const n = avisos.filter(a => a.gravidade !== 'info').length;
   const marca = $('#avisos-cnt');
   marca.hidden = !n;

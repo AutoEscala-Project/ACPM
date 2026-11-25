@@ -4,7 +4,7 @@
 import {
   test, expect, abrir, abrirComExemplo, entrar, preencherLogin, irPara, abrirHistorico, AMANHA, URL_APP, REGIOES, dataAberta, botaoDaData,
   rotuloDaData, trilho, diaDoCalendario, diasDoCalendario, contagemDoDia, paradasDoCalendario, escolherNoCalendario, mudarData, alvosPequenos,
-  larguraDaPagina, semNome, prepararContexto, vigiarErros, avisosDaData, contagemDosAvisos, abrirEscala, aprovar, alternarDisponivel, botaoDaAba
+  larguraDaPagina, semNome, prepararContexto, vigiarErros, avisosDaData, contagemDosAvisos, abrirEscala, aprovar, alternarDisponivel, botaoDaAba, abrirMenuDaConta
 } from './fixtures.js';
 import { instalarSupabaseFalso, documentosAtuais, CONTAS } from './supabase-falso.js';
 import { estadoSintetico } from '../helpers/estado.js';
@@ -30,6 +30,16 @@ function leiturasDePedidos(page) {
   });
   return lidas;
 }
+// Segura as leituras que o filtro escolhe até soltar() (as seguintes seguem)
+async function segurar(context, quais) {
+  let soltar;
+  const espera = new Promise(resolve => { soltar = resolve; });
+  await context.route(quais, async route => { await espera; await route.fallback(); });
+  return soltar;
+}
+const pedidosDoDia = dia => url => url.pathname.endsWith('/rest/v1/solicitacoes') && url.searchParams.getAll('data').join() === `gte.${dia},lte.${dia}`;
+const contagemDoMes = url => url.pathname.endsWith('/rest/v1/solicitacoes') && new Set(url.searchParams.getAll('data').map(v => v.slice(4))).size > 1;
+const leituraDoDia = dia => url => url.pathname.endsWith('/rest/v1/dias') && url.searchParams.get('data') === `eq.${dia}`;
 
 test.describe('O trilho ao lado', () => {
   test('a 1280 px, o calendário fica ao lado da tela: hoje, a data aberta e o domingo', async ({ page }) => {
@@ -152,6 +162,66 @@ test.describe('O trilho ao lado', () => {
     await expect(fora).toBeFocused();
   });
 
+  // Alt e ← (ou Cmd e ←) é o Voltar do navegador, e Ctrl e Home o alto da página: a grade só fica com as teclas sozinhas
+  test('as teclas com Alt, Ctrl ou Cmd são do navegador', async ({ page }) => {
+    await abrirComExemplo(page);
+    await botaoDaData(page).click();
+    await expect(diaDoCalendario(page, AMANHA)).toBeFocused();
+    const tecla = (key, com) => diaDoCalendario(page, AMANHA).evaluate((dia, [k, c]) => !dia.dispatchEvent(new KeyboardEvent('keydown', { key: k, [c]: true, bubbles: true, cancelable: true })), [key, com]);
+    for (const [key, com] of [['ArrowLeft', 'altKey'], ['ArrowLeft', 'metaKey'], ['Home', 'ctrlKey']]) {
+      expect(await tecla(key, com), `${com} ${key}`).toBe(false);
+      await expect(diaDoCalendario(page, AMANHA)).toBeFocused();
+    }
+    expect(await tecla('ArrowLeft', 'shiftKey')).toBe(true);
+  });
+
+  test('a página rola e o trilho continua à vista', async ({ page }) => {
+    await page.setViewportSize({ width: 1400, height: 800 });
+    await abrirComExemplo(page);
+    await page.locator('#btn-manual').click();
+    await expect(page.locator('#s-manual')).toBeVisible();
+    await page.evaluate(() => window.scrollTo(0, 3000));
+    await expect.poll(() => trilho(page).evaluate(t => Math.round(t.getBoundingClientRect().top))).toBe(12);
+    await expect(diaDoCalendario(page, AMANHA)).toBeInViewport();
+    // Mais alto que a janela, ele rola por dentro
+    await page.setViewportSize({ width: 1400, height: 300 });
+    expect(await trilho(page).evaluate(t => [t.scrollHeight > t.clientHeight, t.getBoundingClientRect().height <= 300 - 24])).toEqual([true, true]);
+  });
+
+  test('a impressão leva só a Escala: sem o trilho e sem os avisos do app', async ({ page }) => {
+    await abrirComExemplo(page, { url: './?share=1' });
+    await expect(page.locator('#aviso-link')).toBeVisible();
+    await page.emulateMedia({ media: 'print' });
+    await expect(trilho(page)).toBeHidden();
+    await expect(page.locator('#aviso-link')).toBeHidden();
+    await expect(page.locator('#s-esc')).toBeVisible();
+  });
+
+  // A página aberta passa da meia-noite: as duas partes que dizem a data são refeitas juntas
+  test('depois da meia-noite, o topo e o trilho dizem o mesmo dia', async ({ page, context }) => {
+    await abrirComExemplo(page);
+    await expect(page.locator('#trilho-data')).toHaveText('Amanhã · quarta-feira · 11 de novembro');
+    await context.clock.setFixedTime(new Date('2026-11-11T08:00:00-03:00'));
+    await page.locator('#cal-mes-prox').click();
+    await expect(page.locator('#trilho-data')).toHaveText('Hoje · quarta-feira · 11 de novembro');
+    await expect(botaoDaData(page)).toContainText('hoje');
+  });
+
+  test('a largura muda de classe com o foco no trilho: o foco vai para o botão da data', async ({ page }) => {
+    await page.setViewportSize({ width: 1400, height: 800 });
+    await abrirComExemplo(page);
+    await diaDoCalendario(page, '2026-11-12').focus();
+    await page.setViewportSize({ width: 1200, height: 800 });
+    await expect(trilho(page)).toBeHidden();
+    await expect(botaoDaData(page)).toBeFocused();
+    // Com o foco na tela, ele fica
+    await page.setViewportSize({ width: 1400, height: 800 });
+    await page.locator('#flt-esc-q').focus();
+    await page.setViewportSize({ width: 1200, height: 800 });
+    await expect(trilho(page)).toBeHidden();
+    await expect(page.locator('#flt-esc-q')).toBeFocused();
+  });
+
   test('a gaveta do Histórico abre à esquerda do trilho, e a data muda com ela aberta', async ({ page }) => {
     for (const largura of [1280, 1920]) {
       await page.setViewportSize({ width: largura, height: 800 });
@@ -237,6 +307,107 @@ test.describe('A data abrindo', () => {
     await expect(page.locator('#trilho-data')).toHaveText('Amanhã · quarta-feira · 11 de novembro');
     expect(erros).toEqual([]);
     await context.close();
+  });
+
+  // O último clique vale, também quando volta a uma data que já estava sendo lida
+  for (const largura of [1400, 1100]) {
+    test(`a ${largura} px, uma data, outra e a primeira de novo: ela fica abrindo até abrir, e o fim da abertura é o dela`, async ({ page, context }) => {
+      await page.setViewportSize({ width: largura, height: 800 });
+      await instalarSupabaseFalso(context, comAluno());
+      await entrar(page, CONTAS.operador);
+      const soltar13 = await segurar(context, leituraDoDia('2026-11-13'));
+      let n = 0, soltar1, soltar2;
+      const esperas = [new Promise(resolve => { soltar1 = resolve; }), new Promise(resolve => { soltar2 = resolve; })];
+      await context.route(leituraDoDia('2026-11-12'), async route => { await esperas[Math.min(n++, 1)]; await route.fallback(); });
+      for (const dia of ['2026-11-12', '2026-11-13', '2026-11-12']) await escolherNoCalendario(page, dia);
+      const dia = diaDoCalendario(page, '2026-11-12');
+      await expect.poll(() => n).toBe(1);
+      soltar1();
+      // A segunda leitura do dia 12 começou: a primeira acabou
+      await expect.poll(() => n).toBe(2);
+      await expect(dia).toHaveClass(/\babrindo\b/);
+      await expect(page.locator('#trilho-data')).toHaveText('Abrindo quinta-feira, 12/11…');
+      soltar2();
+      soltar13();
+      await expect(dataAberta(page)).toHaveAttribute('data-data', '2026-11-12');
+      await expect(page.locator('#anuncio')).toHaveText('Data aberta: quinta-feira, 12/11');
+      await expect(dia).not.toHaveClass(/\babrindo\b/);
+      if (largura === 1100) {
+        await expect(trilho(page)).toBeHidden();
+        await expect(botaoDaData(page)).toBeFocused();
+      }
+    });
+  }
+
+  test('o clique na data que continua aberta desfaz a troca que ainda abria', async ({ page, context }) => {
+    const servidor = await instalarSupabaseFalso(context, comAluno());
+    await entrar(page, CONTAS.operador);
+    const liberar = servidor.segurarLeiturasDeDias();
+    await diaDoCalendario(page, '2026-11-12').click();
+    await expect(page.locator('#trilho-data')).toHaveText('Abrindo quinta-feira, 12/11…');
+    await diaDoCalendario(page, AMANHA).click();
+    await expect(page.locator('#trilho-data')).toHaveText('Abrindo quarta-feira, 11/11…');
+    liberar();
+    await expect(page.locator('#trilho-data')).toHaveText('Amanhã · quarta-feira · 11 de novembro');
+    await expect(dataAberta(page)).toHaveAttribute('data-data', AMANHA);
+    await expect(page.locator('#anuncio')).toHaveText('Data aberta: quarta-feira, 11/11');
+    // Nada ficou preso: a data aberta grava
+    await irPara(page, 'rec');
+    await alternarDisponivel(page, 'PR-BTB', false);
+    await expect.poll(() => servidor.dias.get(AMANHA).conteudo.av['PR-BTB']).toBe(false);
+  });
+
+  test('depois de uma data não abrir, o clique na que continua aberta a lê de novo, e ela volta a gravar', async ({ browser }) => {
+    test.slow();
+    const context = await browser.newContext();
+    await prepararContexto(context, { preferencias: false });
+    const servidor = await instalarSupabaseFalso(context, comAluno());
+    const page = await context.newPage();
+    const erros = vigiarErros(page, { statusEsperados: [503] });
+    await entrar(page, CONTAS.operador);
+    servidor.falhar('/rest/v1/dias', 1000);
+    await diaDoCalendario(page, '2026-11-12').click();
+    await expect(page.locator('#toast-box')).toContainText('Não foi possível abrir essa data.', { timeout: 15000 });
+    servidor.falhar('/rest/v1/dias', 0);
+    await diaDoCalendario(page, AMANHA).click();
+    await expect(page.locator('#anuncio')).toHaveText('Data aberta: quarta-feira, 11/11');
+    await irPara(page, 'rec');
+    await alternarDisponivel(page, 'PR-BTB', false);
+    await expect.poll(() => servidor.dias.get(AMANHA).conteudo.av['PR-BTB']).toBe(false);
+    expect(erros).toEqual([]);
+    await context.close();
+  });
+
+  // Aberta e lida, a data aberta não é lida de novo por um clique nela
+  test('o clique na data aberta não faz nada', async ({ page, context }) => {
+    await instalarSupabaseFalso(context, comAluno());
+    await entrar(page, CONTAS.operador);
+    let leituras = 0;
+    await context.route(leituraDoDia(AMANHA), route => { leituras++; return route.fallback(); });
+    await diaDoCalendario(page, AMANHA).click();
+    await page.waitForTimeout(200);
+    await expect(page.locator('#trilho-data')).toHaveText('Amanhã · quarta-feira · 11 de novembro');
+    expect(leituras).toBe(0);
+  });
+
+  // O calendário está à vista desde o começo: o dia escolhido antes de a abertura preparar os dados é o que abre, no lugar
+  // da data do link
+  test('a data escolhida antes de o app preparar os dados é a que abre', async ({ page, context }) => {
+    const servidor = await instalarSupabaseFalso(context, comAluno());
+    const liberar = servidor.segurar('/rest/v1/documentos');
+    await page.goto(`${URL_APP}&data=2026-11-20`);
+    await preencherLogin(page, CONTAS.operador);
+    await expect(page.locator('#usuario')).toBeVisible();
+    await diaDoCalendario(page, '2026-11-13').click();
+    await expect(page.locator('#trilho-data')).toHaveText('Abrindo sexta-feira, 13/11…');
+    liberar();
+    await expect(page.locator('body[data-pronto]')).toBeAttached();
+    await expect(dataAberta(page)).toHaveAttribute('data-data', '2026-11-13');
+    await expect(page.locator('#trilho-data')).toHaveText('Sexta-feira · 13 de novembro');
+    await expect(page).toHaveURL(/data=2026-11-13/);
+    await irPara(page, 'rec');
+    await alternarDisponivel(page, 'PR-BTB', false);
+    await expect.poll(() => servidor.dias.get('2026-11-13')?.conteudo.av['PR-BTB']).toBe(false);
   });
 
   test('a data escolhida enquanto o app abre fica no lugar da abertura', async ({ page, context }) => {
@@ -377,6 +548,29 @@ test.describe('O trilho solto', () => {
     await expect(botaoDaData(page)).toHaveAttribute('aria-expanded', 'false');
   });
 
+  // Os números chegam com o botão do mouse apertado: o dia é o mesmo elemento, e o clique vale
+  test('a contagem que chega entre apertar e soltar o botão do mouse não perde o clique no dia', async ({ page, context }) => {
+    const servidor = await instalarSupabaseFalso(context, comAluno());
+    servidor.solicitacoes.push(pedido(1, '2026-11-12'));
+    await entrar(page, CONTAS.operador);
+    await escolherNoCalendario(page, AMANHA);
+    const numero = contagemDoDia(page, '2026-11-12');
+    await expect(numero).toHaveText('1');
+    servidor.solicitacoes.push(pedido(2, '2026-11-12'), pedido(3, '2026-11-13'));
+    const soltar = await segurar(context, contagemDoMes);
+    await page.locator('#cal-mes-prox').click();
+    await page.locator('#cal-mes-ant').click();
+    await expect(numero).toHaveText('1');
+    const caixa = await numero.boundingBox();
+    await page.mouse.move(caixa.x + caixa.width / 2, caixa.y + caixa.height / 2);
+    await page.mouse.down();
+    soltar();
+    await expect(numero).toHaveText('2');
+    await expect(contagemDoDia(page, '2026-11-13')).toHaveText('1');
+    await page.mouse.up();
+    await expect(dataAberta(page)).toHaveAttribute('data-data', '2026-11-12');
+  });
+
   test('o Gestor deste navegador também muda a data, e nada é gravado', async ({ page }) => {
     await abrirComExemplo(page, { url: './?role=gestor' });
     const antes = await page.evaluate(() => JSON.stringify(Object.keys(localStorage).sort().map(k => [k, localStorage.getItem(k)])));
@@ -457,7 +651,16 @@ test.describe('Os pedidos de cada dia', () => {
     await expect.poll(() => lidas.filter(l => l.includes(' a '))).toEqual(['29/11 a 02/01']);
   });
 
-  test('o número da data aberta segue os pedidos dela; a Agenda aberta lê de novo os pedidos da data e a contagem', async ({ page, context }) => {
+  test('o número da data aberta é o dos pedidos dela, também sem a contagem do mês', async ({ page, context }) => {
+    const servidor = await instalarSupabaseFalso(context, comAluno());
+    servidor.solicitacoes.push(pedido(1, AMANHA), pedido(2, AMANHA), pedido(3, AMANHA, { cancelada_em: '2026-11-10T15:00:00.000Z' }), pedido(4, '2026-11-13'));
+    await context.route(contagemDoMes, route => route.fulfill({ status: 200, contentType: 'application/json', body: '{' }));
+    await entrar(page, CONTAS.operador);
+    await expect(contagemDoDia(page, AMANHA)).toHaveText('2');
+    await expect(contagemDoDia(page, '2026-11-13')).toHaveCount(0);
+  });
+
+  test('a Agenda aberta lê de novo os pedidos da data e a contagem', async ({ page, context }) => {
     const servidor = await instalarSupabaseFalso(context, comAluno());
     servidor.solicitacoes.push(pedido(1, AMANHA));
     await entrar(page, CONTAS.operador);
@@ -467,6 +670,45 @@ test.describe('Os pedidos de cada dia', () => {
     await irPara(page, 'age');
     await expect(contagemDoDia(page, AMANHA)).toHaveText('2');
     await expect(contagemDoDia(page, '2026-11-13')).toHaveText('1');
+  });
+
+  test('a contagem é lida de novo ao abrir o painel e quando uma tecla muda o mês', async ({ page, context }) => {
+    await page.setViewportSize({ width: 1100, height: 800 });
+    await instalarSupabaseFalso(context, comAluno());
+    const lidas = leiturasDePedidos(page);
+    await entrar(page, CONTAS.operador);
+    await expect.poll(() => [...lidas].sort()).toEqual(['01/11 a 05/12', '11/11']);
+    lidas.length = 0;
+    await botaoDaData(page).click();
+    await expect.poll(() => lidas).toEqual(['01/11 a 05/12']);
+    await expect(diaDoCalendario(page, AMANHA)).toBeFocused();
+    await page.keyboard.press('PageDown');
+    await expect.poll(() => lidas).toEqual(['01/11 a 05/12', '29/11 a 02/01']);
+  });
+
+  // Duas leituras da mesma data: a resposta da mais antiga, chegando por último, não fica no lugar da mais nova
+  test('a resposta atrasada de uma leitura anterior dos pedidos da data não vale', async ({ page, context }) => {
+    const servidor = await instalarSupabaseFalso(context, comAluno());
+    await entrar(page, CONTAS.operador);
+    await irPara(page, 'age');
+    await expect(page.locator('#agenda-lista')).toHaveText('Nenhum pedido para esta data.');
+    let n = 0, soltar;
+    const espera = new Promise(resolve => { soltar = resolve; });
+    await context.route(pedidosDoDia(AMANHA), async route => {
+      if (n++) { await route.fallback(); return; }
+      await espera;
+      await route.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
+    });
+    await irPara(page, 'age');
+    await expect.poll(() => n).toBe(1);
+    servidor.solicitacoes.push(pedido(1, AMANHA));
+    await irPara(page, 'age');
+    await expect(page.locator('#agenda-lista tbody tr')).toHaveCount(1);
+    const atrasada = page.waitForResponse(r => pedidosDoDia(AMANHA)(new URL(r.url())));
+    soltar();
+    await atrasada;
+    await page.waitForTimeout(100);
+    await expect(page.locator('#agenda-lista tbody tr')).toHaveCount(1);
   });
 
   test('a contagem que não veio deixa os dias sem número', async ({ page, context }) => {
@@ -511,6 +753,20 @@ test.describe('Os avisos da data', () => {
     await avisos.first().locator('a').click();
     await expect(page.locator('#s-esc h2')).toBeFocused();
     await expect(botaoDaAba(page, 'esc')).toHaveAttribute('aria-current', 'page');
+  });
+
+  test('enquanto os pedidos da data não chegam, a lista não diz que não há nada a resolver', async ({ page, context }) => {
+    const servidor = await instalarSupabaseFalso(context, comAluno());
+    servidor.solicitacoes.push(pedido(1, '2026-11-12'));
+    await entrar(page, CONTAS.operador);
+    await expect(page.locator('#avisos-vazio')).toBeVisible();
+    const soltar = await segurar(context, pedidosDoDia('2026-11-12'));
+    await mudarData(page, '2026-11-12');
+    await expect(page.locator('#trilho-data')).toHaveText('Quinta-feira · 12 de novembro');
+    await expect(page.locator('#avisos-vazio')).toBeHidden();
+    soltar();
+    await expect(avisosDaData(page)).toHaveText([/1 pedido da agenda ainda não está na demanda/]);
+    await expect(page.locator('#avisos-vazio')).toBeHidden();
   });
 
   test('o foco no aviso sobrevive a um redesenho dos avisos', async ({ page, context }) => {
@@ -602,6 +858,68 @@ test('sem a data no endereço, a Secretaria abre na primeira data que ainda acei
   await instalarSupabaseFalso(context, comAluno());
   await entrar(page, CONTAS.secretaria);
   await expect(dataAberta(page)).toHaveAttribute('data-data', '2026-11-12');
+});
+
+// O login: sem a data e sem o calendário, o cartão no meio da página, e o endereço como a pessoa o abriu
+test.describe('No login', () => {
+  test('a data e o calendário não aparecem, e o cartão fica no meio da página', async ({ page, context }) => {
+    await page.setViewportSize({ width: 1400, height: 800 });
+    await instalarSupabaseFalso(context, comAluno());
+    await page.goto(URL_APP);
+    const cartao = page.locator('#s-login');
+    await expect(cartao).toBeVisible();
+    await expect(trilho(page)).toBeHidden();
+    await expect(botaoDaData(page)).toBeHidden();
+    const { x, width } = await cartao.boundingBox();
+    expect(Math.abs(x + width / 2 - 700)).toBeLessThanOrEqual(1);
+  });
+
+  test('recarregar o login não escolhe a data: a da Secretaria continua a primeira que aceita pedidos, e a do link, a do link', async ({ page, context }) => {
+    await context.clock.setFixedTime(new Date('2026-11-10T14:30:00-03:00'));
+    await instalarSupabaseFalso(context, comAluno());
+    await page.goto(URL_APP);
+    await expect(page.locator('#s-login')).toBeVisible();
+    await expect(dataAberta(page)).toHaveAttribute('data-data', AMANHA);
+    expect(new URL(page.url()).searchParams.get('data')).toBe(null);
+    // Também pelo Voltar e por um endereço digitado
+    await page.evaluate(() => { location.hash = '#/alu'; });
+    await page.goBack();
+    await page.reload();
+    await preencherLogin(page, CONTAS.secretaria);
+    await expect(page.locator('body[data-pronto]')).toBeAttached();
+    await expect(dataAberta(page)).toHaveAttribute('data-data', '2026-11-12');
+    await expect(page).toHaveURL(/data=2026-11-12/);
+  });
+
+  test('o link com a data continua no endereço durante o login', async ({ page, context }) => {
+    await instalarSupabaseFalso(context, comAluno());
+    await page.goto(`${URL_APP}&data=2026-11-20`);
+    await expect(page.locator('#s-login')).toBeVisible();
+    await expect(page.locator('body')).toHaveAttribute('data-data', AMANHA);
+    await expect(page).toHaveURL(/data=2026-11-20/);
+    await page.reload();
+    await preencherLogin(page, CONTAS.operador);
+    await expect(page.locator('body[data-pronto]')).toBeAttached();
+    await expect(dataAberta(page)).toHaveAttribute('data-data', '2026-11-20');
+  });
+});
+
+// Voltar a uma tela que lê o servidor (Minha conta, do Administrador): a data aberta vai para o endereço na hora
+test('Voltar com o servidor lento: o endereço já tem a data aberta', async ({ page, context }) => {
+  await instalarSupabaseFalso(context, comAluno());
+  await entrar(page, CONTAS.administrador);
+  await abrirMenuDaConta(page);
+  await page.locator('#btn-conta').click();
+  await expect(page.locator('#s-conta')).toBeVisible();
+  await irPara(page, 'dem');
+  await mudarData(page, '2026-11-12');
+  let soltar;
+  const espera = new Promise(resolve => { soltar = resolve; });
+  await context.route(url => url.hostname !== 'localhost' && /\/(rest|functions|auth)\/v1\//.test(url.pathname), async route => { await espera; await route.fallback(); });
+  await page.goBack();
+  await expect(page.locator('#s-conta')).toBeVisible();
+  await expect(page).toHaveURL(/data=2026-11-12#\/conta$/, { timeout: 1000 });
+  soltar();
 });
 
 test('o link para um domingo abre a segunda, com o aviso', async ({ page }) => {

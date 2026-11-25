@@ -50,7 +50,8 @@ body[data-trilho="aberto"] #trilho :is(.trilho-cab, #cal) { width: 100%; max-wid
 }
 @keyframes cal-girar { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { #cal .cal-dia.abrindo::after { animation: none; border-color: var(--ac); border-style: dashed; } }
-/* O número de pedidos do dia, no canto */
+/* O número de pedidos do dia, no canto. O clique nele (e no mês curto) é do dia, que continua o mesmo quando o número muda */
+#cal .cal-dia > * { pointer-events: none; }
 #cal .cal-qtd {
   position: absolute; top: -2px; right: -2px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px;
   font: 700 10px/16px 'Barlow', sans-serif; background: var(--ac); color: var(--acT);

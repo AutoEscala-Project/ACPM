@@ -146,7 +146,7 @@ header.topo .menu-itens :focus-visible { outline-color: var(--ac); }
 main#conteudo { grid-area: tela; min-width: 0; }
 @media (max-width: 1023px) { #trilho { margin-inline: -16px; } }
 @media (min-width: 1024px) {
-  body[data-trilho="fixo"] .casca { grid-template-columns: minmax(0, 1fr) var(--trilho); grid-template-areas: "avisos avisos" "linha linha" "tela trilho"; }
+  body[data-trilho="fixo"]:not([data-login]) .casca { grid-template-columns: minmax(0, 1fr) var(--trilho); grid-template-areas: "avisos avisos" "linha linha" "tela trilho"; }
   body[data-trilho="fixo"] #trilho { position: sticky; top: 12px; max-height: calc(100dvh - 24px); overflow-y: auto; }
 }
 /* As telas de lista e detalhe (F2), a partir de 800 × 600 px: a página tem a altura da janela, e os painéis e o trilho rolam

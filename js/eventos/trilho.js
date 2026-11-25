@@ -2,7 +2,7 @@
 // PageDown andam pela grade; Esc volta ao botão da data), as setas do mês, "Fixar ao lado" e o painel que fecha. É o único
 // que troca a data depois da abertura (carregarData). Os desenhos: o nome da data no botão, o mês da data aberta, o
 // calendário com os avisos da data e os pedidos de cada dia
-import { carregarData } from '../actions.js';
+import { carregarData, dadosLidos } from '../actions.js';
 import { ehDomingo } from '../agenda.js';
 import { $, showToast, anunciar, fecharNoEsc } from '../dom.js';
 import { dataIsoValida, hojeISO, rotuloDaData } from '../format.js';
@@ -38,8 +38,11 @@ function preferencias() {
 
 // Ao lado ou não, pela largura da janela e pelo que a pessoa guardou; o painel aberto fecha quando a largura muda de classe
 function aplicarLargura() {
+  const foco = document.activeElement, noTrilho = $('#trilho').contains(foco);
   mostrarTrilho(trilhoFixo(classeDaLargura(window.innerWidth), preferencias()) ? 'fixo' : 'fechado');
   rTrilho();
+  // O foco que sumiu com o trilho (ou com o botão de fechar dele) vai para o botão da data
+  if (noTrilho && (!foco.isConnected || foco.closest('[hidden]'))) $('#btn-data').focus();
 }
 aplicarLargura();
 matchMedia('(min-width: 1024px)').addEventListener('change', aplicarLargura);
@@ -53,10 +56,13 @@ function fecharPainel() {
 
 // Abre a data escolhida no calendário. Até os dados dela chegarem, a data aberta, o anel e o topo continuam na de antes; o
 // dia escolhido fica "abrindo". Aberta, ela é anunciada; o painel fecha e o foco volta ao botão da data (ao lado, o foco
-// fica no dia). Quem foi para outro lugar enquanto ela abria (um campo da tela) continua lá
+// fica no dia). Quem foi para outro lugar enquanto ela abria (um campo da tela) continua lá. Vale a última escolha: o clique
+// na data que continua aberta, com outra abrindo ou depois de outra não abrir, a lê de novo (e ela volta a gravar)
+let escolhas = 0;
 async function escolherData(dia) {
-  if (dia === DATA || dia === diaAbrindo() || !dataIsoValida(dia)) return;
+  if ((dia === DATA && dadosLidos) || dia === diaAbrindo() || !dataIsoValida(dia)) return;
   if (ehDomingo(dia)) { showToast(DOMINGO); return; }
+  const vez = ++escolhas;
   marcarAbrindo(dia);
   rTrilho();
   let falhou = false;
@@ -65,12 +71,11 @@ async function escolherData(dia) {
   } catch {
     falhou = true;
   }
-  // Outra data foi escolhida depois desta: a marca e o aviso são dela
-  if (diaAbrindo() !== dia) return;
+  // Outra data foi escolhida depois desta (ou esta, de novo): a marca e o aviso são dela
+  if (vez !== escolhas) return;
   marcarAbrindo(null);
   rTrilho();
   if (falhou) { showToast('Não foi possível abrir essa data. Verifique a conexão e tente de novo.'); return; }
-  if (DATA !== dia) return;
   anunciar(`Data aberta: ${rotuloDaData(dia, hojeISO()).dia}`);
   const foco = document.activeElement;
   const emLugarNenhum = !foco || foco === document.body;
@@ -131,6 +136,8 @@ $('#cal').addEventListener('keydown', e => {
     $('#btn-data').focus();
     return;
   }
+  // Alt e ← ou Cmd e ← (Voltar), Ctrl e Home: do navegador
+  if (e.altKey || e.ctrlKey || e.metaKey) return;
   const botao = e.target.closest('.cal-dia');
   const alvo = botao && diaDaTecla(botao.dataset.dia, e.key);
   if (!alvo) return;
