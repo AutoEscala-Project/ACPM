@@ -168,3 +168,16 @@ describe('Persistência local (escala por data)', () => {
     for (const k of ['acpm4_cadastro', 'acpm4_dia_2026-11-11', 'acpm4_historico']) assert.equal(localStorage.getItem(k), null, k);
   });
 });
+
+// Formato 26: o inativo de alunos e instrutores fica só quando é true
+describe('O inativo no estado', () => {
+  it('só true fica, em alunos e instrutores', () => {
+    const x = ApiClient.normalizeAndMigrateState({
+      schemaVer: 4, nid: 1002, win: [],
+      ins: [{ id: 1, nm: 'Instrutor 01', inativo: true }, { id: 2, nm: 'Instrutor 02', inativo: 'sim' }],
+      stu: [{ id: 1000, nm: 'Aluno 1000', inativo: true }, { id: 1001, nm: 'Aluno 1001', inativo: 1 }]
+    });
+    assert.deepEqual(x.ins.map(i => i.inativo), [true, undefined]);
+    assert.deepEqual(x.stu.map(s => s.inativo), [true, undefined]);
+  });
+});

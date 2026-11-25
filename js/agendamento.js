@@ -36,7 +36,7 @@ import { repousoAntesDaVolta } from './noturno.js';
 import { nomeDoRecurso } from './categorias.js';
 import { CATEGORIAS_DO_RODIZIO, categoriaDoRodizio, ajustarFilas } from './rodizio.js';
 import { FROTA_INICIAL, recursoDaFrota, motivoDoAviao } from './frota.js';
-import { podeFazer } from './habilitacoes.js';
+import { podeFazer, nomeDaHabilitacao, PREFIXO_DA_HABILITACAO_DO_AVIAO } from './habilitacoes.js';
 import { ehDomingo } from './agenda.js';
 
 const frotaDo = estado => (Array.isArray(estado.frota) ? estado.frota : FROTA_INICIAL);
@@ -497,8 +497,14 @@ function textoDoRecurso(problema, { mis, instrutor }) {
     'so-parafuso': () => (mis === 'Parafuso' ? 'não é Só Parafuso' : 'só Parafuso'),
     'so-vfr': () => 'só VFR (o voo é IFR)',
     'tipo-de-aviao': () => 'outro tipo',
-    habilitacao: () => (instrutor ? `exige a habilitação própria (${instrutor.nm} não tem)` : 'exige a habilitação própria')
+    habilitacao: () => textoDaHabilitacaoQueFalta(problema.motivo, instrutor)
   }[problema.codigo]?.() || problema.codigo;
+}
+
+// O que o recurso exige e o instrutor não tem: a habilitação própria (aviao:<matrícula>) como sempre; outra, pelo nome
+function textoDaHabilitacaoQueFalta(motivo, instrutor) {
+  const quem = instrutor ? ` (${instrutor.nm} não tem)` : '';
+  return !motivo || motivo.startsWith(PREFIXO_DA_HABILITACAO_DO_AVIAO) ? `exige a habilitação própria${quem}` : `exige a habilitação ${nomeDaHabilitacao(motivo)}${quem}`;
 }
 
 // Os recursos para a missão no horário [a, b) (o select Recurso), contra os voos fixos. O que não serve vem desligado, com

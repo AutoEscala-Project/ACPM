@@ -143,11 +143,14 @@ export const ApiClient = {
     x.ins = x.ins.filter(comId);
     x.ins.forEach(i => {
       Object.assign(i, { nm: nome(i.nm, `Instrutor ${i.id}`), on: i.on !== false, kg: pesoValido(i.kg) });
+      // Inativo no cadastro (formato 26): só true fica
+      if (i.inativo !== true) delete i.inativo;
       i.aw = Array.isArray(i.aw) && i.aw.length === WIN.length ? i.aw.map(v => v === true) : WIN.map(() => true);
     });
     x.stu = x.stu.filter(comId);
     x.stu.forEach(s => {
       Object.assign(s, { nm: nome(s.nm, `Aluno ${s.id}`), kg: pesoValido(s.kg), bl: Array.isArray(s.bl) ? s.bl.filter(id => Number.isInteger(id) && id > 0) : [] });
+      if (s.inativo !== true) delete s.inativo;
       // “Priorizar com”: só ids, sem repetir e sem os de “Não escalar com”; vazio, o campo sai
       const pares = Array.isArray(s.voaCom) ? [...new Set(s.voaCom.filter(id => Number.isInteger(id) && id > 0 && !s.bl.includes(id)))] : [];
       if (pares.length) s.voaCom = pares;

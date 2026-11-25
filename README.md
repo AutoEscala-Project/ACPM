@@ -219,6 +219,13 @@ Para pôr o formato 24 no ar, nesta ordem:
 Depois, num PR à parte, com a conversão feita e nenhuma aba de antes do formato 24 aberta: tirar `importar_cursos` do
 banco (e a chamada dela no app). A cópia `cadastro.cursos` fica.
 
+No formato 26, o que um recurso exige do instrutor é uma lista no cadastro, `frota[].exige` (ids do registro de
+`js/habilitacoes.js` ou a habilitação própria `aviao:<matrícula>`); o recurso com a habilitação própria e sem a lista
+ganha `exige: ['aviao:<matrícula>']`, e a marca `habilitacaoPropria` fica como espelho dela. O número também protege o
+`inativo` de alunos, instrutores e recursos (`stu[].inativo`, `ins[].inativo`, `frota[].inativo`, só `true`), que a aba
+do formato 25 tiraria ao gravar o cadastro. O dia não muda. Só o app muda (o banco recusa o conteúdo de antes pelo
+número): o primeiro acesso de um Operador ou Administrador regrava os dias e o cadastro no 26.
+
 ## Estrutura
 
 | Caminho | Conteúdo |
@@ -227,9 +234,9 @@ banco (e a chamada dela no app). A cópia `cadastro.cursos` fica.
 | `painel.html`, `js/painel.js` | TV da recepção: o painel de hoje na tela toda, no quadro, com as colunas e as listas da configuração do painel (com o servidor, a que `painel_do_dia` entrega; sem ela, o padrão), e a meteorologia no pé |
 | `css/*.css` | Os estilos, uma folha por dona, que `index.html` carrega nesta ordem (a da cascata): `base` (as cores e os temas claro e escuro, os títulos, os campos), `componentes` (botões, barras, tabelas, etiquetas, o filtro de vários valores, os avisos, as dicas), `painel` (o painel no estilo dos aeroportos e a meteorologia), `tv`, `casca` (a barra do topo, as abas, o login, a impressão), uma por tela (`escala`, `demanda`, `agenda`, `recursos`, `instrutores`, `alunos`, `cadastros`, `cursos`, `rodizio`, `bi`, `conta`, `manual`), `gavetas`, `dialogos` e `toque` (os alvos de 44 px dos componentes no celular, por último). A TV carrega `css/app.css`, que importa as cinco das duas páginas (`base`, `componentes`, `painel`, `tv`, `toque`). `test/unit/estilos.test.js` confere as listas; `node scripts/medir-estilos.mjs` mede o estilo de cada elemento das duas páginas em várias larguras, temas e telas (com `--comparar antes.json depois.json`, a diferença entre duas versões) |
 | `js/config.js` | Janelas, missões, limites de peso e a frota inicial |
-| `js/frota.js` | A frota no cadastro (matrícula, tipo e "Só Parafuso"): validação de um recurso novo e as matrículas de cada tipo |
+| `js/frota.js` | A frota no cadastro (matrícula, tipo, os atributos "Só Parafuso", "Só VFR" e "Habilitação própria", o que o recurso exige do instrutor, `exige`, e o inativo): validação de um recurso novo, `comAtributo` (marcar e desmarcar um atributo; a habilitação própria também em `exige`) e as matrículas de cada tipo |
 | `js/categorias.js` | Categorias de recurso dos filtros (C152, C172, Simulador, PA-34 e Sala Ground) |
-| `js/habilitacoes.js` | Habilitações individuais dos instrutores e o que cada missão exige |
+| `js/habilitacoes.js` | O registro das habilitações: as individuais dos instrutores, os grupos do painel e do filtro (`GRUPOS_DE_HABILITACAO`), o que cada missão exige e o que cada recurso exige (`exige`: ids do registro ou a habilitação própria `aviao:<matrícula>`) |
 | `js/rodizio.js` | Filas do rodízio (cheque, MLTE, noturno e C172) e a rotação de uma data para a seguinte |
 | `js/cursos.js` | Os cursos iniciais (PP, PC e INVA), o formato da sigla e do código da missão, o curso de cada aluno e o programa guardado no cadastro (`cursos`, a cópia de antes do formato 24, que ninguém mais grava) |
 | `js/programa.js` | O programa dos cursos em fases (as tabelas dos cursos; no modo local, `acpm4_cursos`): a regra de quando voar cada fase e cada missão, o Noturno em trechos, as operações do editor da aba Cursos e a gravação e a conversão única do cadastro, com as regras e os erros do servidor |

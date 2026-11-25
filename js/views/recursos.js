@@ -6,7 +6,8 @@
 // hangar; a barra diz quantos recursos aparecem.
 import { WIN, NI, AIRCRAFT_EQ_TYPES, SIM_EQ_TYPES, REVISAO_H } from '../config.js';
 import { normalizarHangar } from '../hangar.js';
-import { FROTA_INICIAL, ATRIBUTOS_DO_RECURSO, atributoVale } from '../frota.js';
+import { FROTA_INICIAL, ATRIBUTOS_DO_RECURSO, atributoVale, exigenciasDoAviao, habilitacaoDoAviao } from '../frota.js';
+import { nomeDaHabilitacao } from '../habilitacoes.js';
 import { S, RES, voosQueVoam, isGestor } from '../state.js';
 import { $, trocarConteudo } from '../dom.js';
 import { hm, fmtH, esc } from '../format.js';
@@ -93,8 +94,11 @@ export function rRevisao() {
 
 // Os atributos marcados de um recurso, como etiquetas (a dica explica cada um)
 const DICA_DO_ATRIBUTO = { soParafuso: 'so-parafuso', soVfr: 'so-vfr', habilitacaoPropria: 'habilitacao-propria' };
-const etiquetasDoRecurso = f => Object.keys(ATRIBUTOS_DO_RECURSO).filter(a => f[a])
-  .map(a => ` <span class="tag fb" data-dica="${DICA_DO_ATRIBUTO[a]}">${ATRIBUTOS_DO_RECURSO[a].nome}</span>`).join('');
+// (a habilitação própria é a do recurso em exige; o que mais ele exige do instrutor aparece pelo nome)
+const etiquetasDoRecurso = f => [
+  ...Object.keys(ATRIBUTOS_DO_RECURSO).filter(a => f[a]).map(a => ` <span class="tag fb" data-dica="${DICA_DO_ATRIBUTO[a]}">${ATRIBUTOS_DO_RECURSO[a].nome}</span>`),
+  ...exigenciasDoAviao(f).filter(h => h !== habilitacaoDoAviao(f.reg)).map(h => ` <span class="tag fb" data-dica="habilitacao-propria">Exige ${esc(nomeDaHabilitacao(h))}</span>`)
+].join('');
 // O recurso com os atributos abertos para editar (um por vez)
 let atributosAbertos = null;
 export function alternarAtributos(reg) { atributosAbertos = atributosAbertos === reg ? null : reg; rFrota(); }

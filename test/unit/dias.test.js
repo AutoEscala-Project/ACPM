@@ -300,3 +300,22 @@ describe('Solicitações da agenda importadas', () => {
     assert.deepEqual(diaParaCopiar(dia).importadas, []);
   });
 });
+
+// Formato 26: o inativo de alunos e instrutores fica no cadastro (só true), e o que o recurso exige vai com a frota
+describe('O inativo e o que o recurso exige, no cadastro (formato 26)', () => {
+  it('separar guarda inativo (só true) de alunos e instrutores e exige dos recursos; juntar os devolve', () => {
+    const estado = juntar({
+      nid: 1003,
+      ins: [{ id: 1, nm: 'Instrutor 01', kg: 70, hab: ['local'], inativo: true }, { id: 2, nm: 'Instrutor 02', kg: 70, hab: ['local'] }],
+      stu: [{ id: 1000, nm: 'Aluno 1000', kg: 70, bl: [], inativo: true }],
+      frota: [{ reg: 'PR-X', tipo: 'C172', exige: ['ifr'], inativo: true }]
+    }, diaPadrao());
+    const { cadastro } = separar(estado);
+    assert.equal(cadastro.ins[0].inativo, true);
+    assert.equal('inativo' in cadastro.ins[1], false);
+    assert.equal(cadastro.stu[0].inativo, true);
+    assert.deepEqual(cadastro.frota, [{ reg: 'PR-X', tipo: 'C172', exige: ['ifr'], inativo: true }]);
+    estado.ins[1].inativo = 'sim';
+    assert.equal('inativo' in separar(estado).cadastro.ins[1], false);
+  });
+});

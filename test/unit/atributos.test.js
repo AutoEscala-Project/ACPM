@@ -4,7 +4,8 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { runAllocationEngine } from '../../js/engine.js';
-import { aviaoServe, motivoDoAviao, exigenciasDoAviao, matriculasParaOVoo, normalizarFrota, novoRecurso, instrutorVoaNoAviao } from '../../js/frota.js';
+import { aviaoServe, motivoDoAviao, exigenciasDoAviao, matriculasParaOVoo, normalizarFrota, novoRecurso, instrutorVoaNoAviao, habilitacaoQueFalta } from '../../js/frota.js';
+import { TEXTO_DO_PROBLEMA } from '../../js/conflitos.js';
 import { exigencias, podeFazer, normalizarHabilitacoes, nomeDaHabilitacao, descreverExigencias, habilitacoesDoNivel } from '../../js/habilitacoes.js';
 import { duracaoPadraoDaMissao } from '../../js/rules.js';
 import { migrarCadastro } from '../../js/migracoes.js';
@@ -57,8 +58,9 @@ describe('Atributos dos recursos (js/frota.js)', () => {
       { reg: 'PR-A', tipo: 'C172', soVfr: true, soParafuso: true, habilitacaoPropria: 'sim' },
       { reg: 'PR-B', tipo: 'C152', soVfr: true, habilitacaoPropria: true },
       { reg: 'SIM-X', tipo: 'Sim. Mono', habilitacaoPropria: true, soVfr: true }
-    ]), [{ reg: 'PR-A', tipo: 'C172', soVfr: true }, { reg: 'PR-B', tipo: 'C152', habilitacaoPropria: true }, { reg: 'SIM-X', tipo: 'Sim. Mono', habilitacaoPropria: true }]);
-    assert.deepEqual(novoRecurso([], { reg: 'pr-new', tipo: 'PA-34', soVfr: true, habilitacaoPropria: true }), { recurso: { reg: 'PR-NEW', tipo: 'PA-34', soVfr: true, habilitacaoPropria: true } });
+    // A habilitação própria vem com a lista exige (formato 26), de que ela é o espelho
+    ]), [{ reg: 'PR-A', tipo: 'C172', soVfr: true }, { reg: 'PR-B', tipo: 'C152', habilitacaoPropria: true, exige: ['aviao:PR-B'] }, { reg: 'SIM-X', tipo: 'Sim. Mono', habilitacaoPropria: true, exige: ['aviao:SIM-X'] }]);
+    assert.deepEqual(novoRecurso([], { reg: 'pr-new', tipo: 'PA-34', soVfr: true, habilitacaoPropria: true }), { recurso: { reg: 'PR-NEW', tipo: 'PA-34', soVfr: true, habilitacaoPropria: true, exige: ['aviao:PR-NEW'] } });
   });
 });
 
@@ -172,7 +174,8 @@ describe('Duração padrão, dados e histórico', () => {
   it('formato 23: o PR-CPL fica "Só VFR" e o PR-VOM com habilitação própria; o que já estava marcado fica', () => {
     const frota = [{ reg: 'PR-CPL', tipo: 'C172' }, { reg: 'PR-VOM', tipo: 'PA-34' }, { reg: 'PR-HAR', tipo: 'C172' }];
     assert.deepEqual(migrarCadastro({ esquema: 22, nid: 1000, ins: [], stu: [], frota }).frota,
-      [{ reg: 'PR-CPL', tipo: 'C172', soVfr: true }, { reg: 'PR-VOM', tipo: 'PA-34', habilitacaoPropria: true }, { reg: 'PR-HAR', tipo: 'C172' }]);
+      // (e o 26 põe a habilitação própria do PR-VOM na lista exige)
+      [{ reg: 'PR-CPL', tipo: 'C172', soVfr: true }, { reg: 'PR-VOM', tipo: 'PA-34', habilitacaoPropria: true, exige: ['aviao:PR-VOM'] }, { reg: 'PR-HAR', tipo: 'C172' }]);
     const desmarcado = [{ reg: 'PR-CPL', tipo: 'C172', soVfr: false }];
     assert.deepEqual(migrarCadastro({ esquema: 22, nid: 1000, ins: [], stu: [], frota: desmarcado }).frota, desmarcado);
     assert.ok(FROTA_INICIAL.find(f => f.reg === 'PR-CPL').soVfr);
@@ -184,5 +187,22 @@ describe('Duração padrão, dados e histórico', () => {
     for (const ruim of [{ ...rev, atributo: 'outro' }, { ...rev, atributo: '__proto__' }, { ...rev, reg: 'x y' }, { ...rev, val: 'sim' }]) {
       assert.equal(validarReversao(ruim, FROTA_INICIAL), null, JSON.stringify(ruim));
     }
+  });
+});
+
+// O que o recurso exige além da habilitação própria (formato 26): o motivo é a primeira que falta ao instrutor, e o texto a
+// diz pelo nome (a habilitação própria continua com o texto de antes)
+describe('O que o recurso exige: o motivo e o texto', () => {
+  const instrutor = { hab: ['local', 'c172'] };
+  it('o motivo é a primeira habilitação da lista exige que o instrutor não tem', () => {
+    assert.equal(habilitacaoQueFalta(instrutor, { reg: 'PR-X', tipo: 'C172', exige: ['ifr', 'aviao:PR-X'] }), 'ifr');
+    assert.equal(habilitacaoQueFalta({ hab: ['ifr'] }, { reg: 'PR-X', tipo: 'C172', exige: ['ifr', 'aviao:PR-X'] }), 'aviao:PR-X');
+    assert.equal(habilitacaoQueFalta({ hab: ['ifr', 'aviao:PR-X'] }, { reg: 'PR-X', tipo: 'C172', exige: ['ifr', 'aviao:PR-X'] }), null);
+  });
+
+  it('o conflito do voo fixo: a habilitação própria pela matrícula; outra, pelo nome', () => {
+    assert.equal(TEXTO_DO_PROBLEMA.habilitacao({ motivo: 'aviao:PR-VOM' }), 'o instrutor não tem a habilitação própria do PR-VOM');
+    assert.equal(TEXTO_DO_PROBLEMA.habilitacao({ motivo: 'ifr' }), 'o instrutor não tem a habilitação que o recurso exige (Voo IFR)');
+    assert.equal(TEXTO_DO_PROBLEMA.habilitacao({}), 'o instrutor não tem a habilitação da missão');
   });
 });

@@ -4,7 +4,7 @@
 // motor, cada uma no lugar dela: os requisitos do voo e os atributos do avião (js/frota.js), as do instrutor
 // (js/viabilidade.js) e o que cada voo ocupa (js/voo.js).
 import { GROUND_EQ_TYPE, GROUND_REG } from './config.js';
-import { FROTA_INICIAL, motivoDoAviao, recursoDaFrota, instrutorVoaNoAviao, habilitacaoDoAviao } from './frota.js';
+import { FROTA_INICIAL, motivoDoAviao, recursoDaFrota, instrutorVoaNoAviao, habilitacaoQueFalta } from './frota.js';
 import { sobrepoe, cabeNoSaldo, folgaAte, saldoAteARevisao, problemasDoInstrutor } from './viabilidade.js';
 import { reducaoNecessaria } from './combustivel.js';
 import { normalizarLimites } from './limites.js';
@@ -70,11 +70,11 @@ export function problemaDoAluno(ocupacao, stuId, { a, b }) {
 }
 
 // O que os atributos do avião impedem, ou null: o voo a que ele não serve (so-parafuso, so-vfr) e, com o instrutor, a
-// habilitação própria que o avião exige e ele não tem (o problema do instrutor, com o motivo, como no conflito do voo fixo)
+// habilitação que o recurso exige e ele não tem, a primeira (o problema do instrutor, com o motivo, como no conflito do voo fixo)
 function problemaDoAviao(recurso, voo, instrutor) {
   const motivo = motivoDoAviao(recurso, voo);
   if (motivo) return { codigo: motivo };
-  return instrutor && !instrutorVoaNoAviao(instrutor, recurso) ? { codigo: 'habilitacao', motivo: habilitacaoDoAviao(recurso.reg) } : null;
+  return instrutor && !instrutorVoaNoAviao(instrutor, recurso) ? { codigo: 'habilitacao', motivo: habilitacaoQueFalta(instrutor, recurso) } : null;
 }
 
 // Os recursos do tipo para o voo [a, b) (no Ground, a sala), cada um com o problema (null quando serve) e a folga até o

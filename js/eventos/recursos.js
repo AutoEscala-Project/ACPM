@@ -5,7 +5,7 @@ import { categoriaDoTipo } from '../categorias.js';
 import { WIN, REVISAO_H } from '../config.js';
 import { $, showToast, fecharNoEsc } from '../dom.js';
 import { fmtH, lerHoras } from '../format.js';
-import { novoRecurso, ATRIBUTOS_DO_RECURSO, atributoVale } from '../frota.js';
+import { novoRecurso, ATRIBUTOS_DO_RECURSO, atributoVale, comAtributo } from '../frota.js';
 import { normalizarHangar, moverNoHangar } from '../hangar.js';
 import { horariosDaMissao, ajustarPreferencias, descreverHorarios } from '../horarios.js';
 import { S, isGestor, getMissionTarget } from '../state.js';
@@ -85,11 +85,11 @@ $('#form-recurso').onsubmit = e => {
 // Os atributos de um recurso (Só Parafuso, Só VFR e Habilitação própria): o botão abre as caixas no próprio recurso, e
 // cada mudança vale para todas as datas (a escala é refeita) e entra no histórico, que desfaz
 aoAcionar('atributos-recurso', b => alternarAtributos(b.dataset.id));
+// O atributo marcado ou desmarcado no recurso (a habilitação própria também em exige: js/frota.js, comAtributo)
 function marcarAtributo(reg, atributo, val) {
-  const recurso = (S.frota || []).find(f => f.reg === reg);
-  if (!recurso || !atributoVale(atributo, recurso.tipo)) return false;
-  if (val) recurso[atributo] = true;
-  else delete recurso[atributo];
+  const i = (S.frota || []).findIndex(f => f.reg === reg);
+  if (i < 0 || !atributoVale(atributo, S.frota[i].tipo)) return false;
+  S.frota[i] = comAtributo(S.frota[i], atributo, val);
   return true;
 }
 aoMudarCampo('atributo', t => {
@@ -246,10 +246,7 @@ aoReverter('setAv', (rev, entry) => {
 });
 
 aoReverter('setAtributo', (rev, entry) => {
-  const recurso = (S.frota || []).find(f => f.reg === rev.reg);
-  if (recurso && atributoVale(rev.atributo, recurso.tipo)) {
-    if (rev.val) recurso[rev.atributo] = true;
-    else delete recurso[rev.atributo];
+  if (marcarAtributo(rev.reg, rev.atributo, rev.val)) {
     gravarAlteracao('mod', `Revertido: ${entry.desc}`, null, entry.id);
     rRec(); redesenharPorNome('instrutores', 'pedidos-do-dia');
   }

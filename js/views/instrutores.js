@@ -2,8 +2,8 @@
 // cadastro (nome, CANAC, peso e habilitações, editadas num painel lateral). Os dados pessoais abrem noutro painel
 // (js/views/painel-de-dados.js), só para quem pode vê-los (.so-dados); os limites da lei, em js/views/limites.js
 import { WIN, PRE, T, AIRCRAFT_EQ_TYPES, MINUTOS_DO_DIA } from '../config.js';
-import { HABILITACOES, nomeDaHabilitacao } from '../habilitacoes.js';
-import { FROTA_INICIAL, habilitacaoDoAviao } from '../frota.js';
+import { HABILITACOES, nomeDaHabilitacao, GRUPOS_DE_HABILITACAO, gruposDosRecursos } from '../habilitacoes.js';
+import { FROTA_INICIAL } from '../frota.js';
 import { esc, hm, LIMITE_DO_NOME, numeroBr, chaveDeBusca } from '../format.js';
 import { S, DATA, insBy, voosQueVoam } from '../state.js';
 import { $, abrirGaveta } from '../dom.js';
@@ -28,15 +28,6 @@ function resumoNaGrade(x) {
   const rotulos = [...checador, ...ORDEM_DA_GRADE.filter(h => x.hab.includes(h)).map(h => ROTULO.get(h))];
   return rotulos.length > 3 ? `${rotulos.slice(0, 3).join(' · ')} · +${rotulos.length - 3}` : rotulos.join(' · ');
 }
-const GRUPOS_DE_HABILITACAO = [
-  ['Ground e simulador', ['grounds', 'ground_pa34', 'sim_mono', 'sim_multi']],
-  ['Voo', ['tgl', 'local', 'navegacao', 'solo', 'parafuso', 'ifr', 'noturno']],
-  ['Aviões', ['c152', 'c172', 'mlte']],
-  // O voo de cheque exige uma marca de cada grupo do checador (o "?" do primeiro explica)
-  ['Checador: curso', ['checa_pp', 'checa_pc', 'checa_inva'], 'checador'],
-  ['Checador: motor', ['checa_mnte', 'checa_mlte']],
-  ['Checador: regras', ['checa_vfr', 'checa_ifr']]
-];
 
 // Voos e aulas de cada instrutor na escala da data, sem os cancelados (a turma de Ground conta uma vez) e as janelas em que ele está ocupado
 function ocupacaoDosInstrutores() {
@@ -165,11 +156,8 @@ export function rIns() {
   rPainelDoInstrutor();
 }
 
-// Os recursos com habilitação própria (Recursos › Frota › Atributos): uma habilitação para cada, como o PR-VOM
-function gruposDosRecursos() {
-  const ids = (Array.isArray(S.frota) ? S.frota : FROTA_INICIAL).filter(f => f.habilitacaoPropria).map(f => habilitacaoDoAviao(f.reg));
-  return ids.length ? [['Habilitação própria do recurso', ids, 'habilitacao-propria']] : [];
-}
+// Os grupos do painel e do filtro: os do registro (js/habilitacoes.js) e as habilitações próprias que a frota exige
+const gruposDoPainel = () => [...GRUPOS_DE_HABILITACAO, ...gruposDosRecursos(Array.isArray(S.frota) ? S.frota : FROTA_INICIAL)];
 
 // Painel lateral com as habilitações de um instrutor, em grupos
 export function rPainelDoInstrutor() {
@@ -183,7 +171,7 @@ export function rPainelDoInstrutor() {
     </div>
     <p class="h">Marque o que o instrutor pode fazer. Nos aviões (C152, C172 e PA-34), a missão exige também a habilitação do avião; o voo de cheque exige uma marca de cada grupo do checador.</p>
     <div class="habs-painel" data-k="i" data-id="${x.id}">
-      ${[...GRUPOS_DE_HABILITACAO, ...gruposDosRecursos()].map(([titulo, ids, dica]) => `<fieldset><legend>${titulo}${dica ? botaoDeDica(dica, dica === 'checador' ? 'checador' : 'habilitação própria') : ''}</legend>${ids.map(h =>
+      ${gruposDoPainel().map(({ titulo, ids, dica }) => `<fieldset><legend>${titulo}${dica ? botaoDeDica(dica, dica === 'checador' ? 'checador' : 'habilitação própria') : ''}</legend>${ids.map(h =>
         `<label class="hab"><input type="checkbox" class="sw" data-f="hab" data-h="${h}"${x.hab.includes(h) ? ' checked' : ''}>${esc(nomeDaHabilitacao(h))}</label>`).join('')}</fieldset>`).join('')}
       ${horasDoInstrutor(x)}
     </div>`;
@@ -242,8 +230,8 @@ const ESPERA_DA_DIGITACAO = 500;
 
 // As opções do filtro das habilitações: os grupos do painel "Editar habilitações", com a habilitação própria de cada
 // recurso da frota, e os rótulos da coluna Habilitações
-const opcoesDasHabilitacoes = () => [...GRUPOS_DE_HABILITACAO, ...gruposDosRecursos()]
-  .map(([titulo, ids]) => ({ titulo, opcoes: ids.map(h => [h, rotuloDa(h)]) }));
+const opcoesDasHabilitacoes = () => gruposDoPainel()
+  .map(({ titulo, ids }) => ({ titulo, opcoes: ids.map(h => [h, rotuloDa(h)]) }));
 
 // Ao abrir: o filtro das habilitações, e a busca como o filtro, vazia (o navegador que devolve o texto de antes de
 // recarregar a página não deixa o campo diferente do filtro). O instrutor aparece se tem todas as marcadas: uma missão

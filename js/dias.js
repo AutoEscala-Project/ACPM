@@ -38,14 +38,17 @@ export function separar(estado) {
     cadastro: {
       nid: estado.nid,
       // O nível A01–A09 (lv) fica só como cópia, em quem o tem: as habilitações (hab) valem no lugar dele
-      ins: estado.ins.map(({ id, nm, lv, kg, hab, horasExternas }) => ({
+      ins: estado.ins.map(({ id, nm, lv, kg, hab, horasExternas, inativo }) => ({
         id, nm, ...(lv === undefined ? {} : { lv }), kg, hab: [...(hab || [])],
+        // O instrutor inativo (formato 26): só true fica
+        ...(inativo === true ? { inativo: true } : {}),
         // Horas de voo fora do app, por mês ('AAAA-MM'; 'AAAA-00': antes deste mês, no ano)
         ...(horasExternas && Object.keys(horasExternas).length ? { horasExternas: { ...horasExternas } } : {})
       })),
       // voaCom: os instrutores do aluno (o par permanente), só quando há
-      stu: estado.stu.map(({ id, nm, kg, bl, voaCom, curso }) => ({ id, nm, kg, bl: [...(bl || [])], ...(voaCom && voaCom.length ? { voaCom: [...voaCom] } : {}), ...(curso ? { curso } : {}) })),
-      ...(Array.isArray(estado.frota) ? { frota: estado.frota.map(f => ({ ...f })) } : {}),
+      // O aluno inativo (formato 26): só true fica
+      stu: estado.stu.map(({ id, nm, kg, bl, voaCom, curso, inativo }) => ({ id, nm, kg, bl: [...(bl || [])], ...(voaCom && voaCom.length ? { voaCom: [...voaCom] } : {}), ...(curso ? { curso } : {}), ...(inativo === true ? { inativo: true } : {}) })),
+      ...(Array.isArray(estado.frota) ? { frota: estado.frota.map(f => ({ ...f, ...(Array.isArray(f.exige) ? { exige: [...f.exige] } : {}) })) } : {}),
       ...(estado.horarios ? { horarios: structuredClone(estado.horarios) } : {}),
       ...(estado.limites ? { limites: { ...estado.limites } } : {}),
       ...(estado.cursos ? { cursos: structuredClone(estado.cursos) } : {}),
