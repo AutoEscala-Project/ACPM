@@ -199,7 +199,7 @@ function buildTimelineGroup(linhas, porInstrutor, barLine1Fn, barLine2Fn, minSta
     const mais = agendar ? `<button type="button" class="tl-agendar edit-only" data-act="agendar" data-agendar="${esc(agendar.valor)}" aria-label="${esc(agendar.nome)}" aria-haspopup="dialog"><svg class="ico" aria-hidden="true"><use href="#i-mais"/></svg></button>` : '';
 
     // O nome que não cabe na coluna termina em reticências: o title mostra o nome inteiro (no celular, ele quebra em
-    // linhas, css/app.css)
+    // linhas, css/escala.css)
     return `<div class="tl-row${manutencao ? ' tl-manutencao' : ''}" ${dados}>
       <div class="tl-lbl"><span title="${esc(linha.rotulo)}">${esc(linha.rotulo)}</span> <small>${esc(sub)}</small>${mais}</div>
       <div class="tl-track${inerte ? ' inerte' : ''}" ${dados}>${bars}</div>

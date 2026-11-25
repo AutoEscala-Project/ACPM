@@ -1,0 +1,76 @@
+/* Os diálogos: o status do voo, Configurar painel e Agendar voo */
+/* Diálogos (status do voo): por cima de tudo, centrados */
+dialog.dlg {
+  width: min(440px, calc(100vw - 32px)); padding: 18px 20px; border: 1px solid var(--ln); border-radius: 10px;
+  background: var(--pn); color: var(--ink); box-shadow: 0 16px 40px rgba(0,0,0,.3);
+}
+dialog.dlg::backdrop { background: rgba(10, 20, 30, .45); }
+dialog.dlg h2 { margin: 0 0 4px; }
+dialog.dlg .motivos { display: grid; gap: 6px; margin: 10px 0; padding: 10px 12px; border: 1px solid var(--ln); border-radius: 8px; }
+dialog.dlg .motivos legend { padding: 0 4px; font-weight: 600; }
+dialog.dlg .campo { display: flex; flex-direction: column; gap: 4px; margin: 10px 0; font-weight: 600; }
+dialog.dlg .campo[hidden] { display: none; }
+dialog.dlg .campo small { font-weight: 400; }
+dialog.dlg .dlg-acoes, .form-dados .dlg-acoes { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+/* Configurar painel (js/views/config-do-painel.js): o quadro com que o painel abre e as colunas, numeradas na ordem do
+   painel, cada uma com ↑ e ↓; rola por dentro quando não cabe na altura */
+dialog.dlg-painel { width: min(460px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); overflow-y: auto; }
+dialog.dlg-painel .pn-grupo { margin: 10px 0; padding: 6px 12px 8px; border: 1px solid var(--ln); border-radius: 8px; min-width: 0; }
+dialog.dlg-painel .pn-grupo legend { padding: 0 4px; font-weight: 600; }
+dialog.dlg-painel .pn-grupo > .chk { display: flex; padding: 3px 0; }
+dialog.dlg-painel .pn-grupo > small.h { display: block; margin: 4px 0 0; }
+.pn-colunas { margin: 0; padding: 0; list-style: none; counter-reset: pn-coluna; }
+.pn-coluna { display: flex; align-items: center; gap: 6px; padding: 3px 0; border-bottom: 1px solid var(--ln); counter-increment: pn-coluna; }
+.pn-coluna:last-child { border-bottom: 0; }
+.pn-coluna::before { content: counter(pn-coluna) "."; min-width: 1.6em; color: var(--mu); font-variant-numeric: tabular-nums; }
+.pn-coluna .chk { flex: 1; min-width: 0; }
+dialog.dlg-painel .chk input { flex: none; }
+.pn-coluna.desligada .chk { color: var(--mu); }
+.pn-mover { padding: 4px 8px; }
+.pn-mover:disabled { opacity: .45; cursor: default; }
+dialog.dlg-painel .btn.quiet:disabled { color: var(--mu); cursor: default; }
+/* Agendar um voo na Escala (js/views/agendamento.js): mais largo, rola por dentro quando não cabe na altura */
+dialog.dlg-agendar { width: min(560px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); overflow-y: auto; }
+dialog.dlg-agendar .campos-agendar { display: flex; flex-direction: column; }
+dialog.dlg-agendar .campo { margin: 8px 0 2px; }
+dialog.dlg-agendar .campos-agendar > small.h { margin: 0 0 4px; overflow-wrap: anywhere; }
+dialog.dlg-agendar .campos-agendar > small.h:empty { display: none; }
+dialog.dlg-agendar select { max-width: 100%; }
+.campo-duplo { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
+#agd-peso { margin: 10px 0 4px; padding: 4px 12px 8px; border: 1px solid var(--ln); border-radius: 8px; }
+#agd-peso[hidden] { display: none; }
+#agd-peso legend { padding: 0 4px; font-weight: 600; }
+#agd-peso .campo { display: inline-flex; width: calc(50% - 8px); margin-right: 8px; vertical-align: top; }
+#agd-peso-resumo { margin: 6px 0 2px; }
+#agd-peso-resumo:empty { display: none; }
+/* A conferência: os bloqueios em vermelho, os avisos em amarelo, as notas em cinza; vazias, as listas somem */
+#agd-conferencia { margin-top: 10px; font-size: 14px; }
+#agd-conferencia ul { margin: 6px 0; padding: 6px 10px 6px 26px; border-radius: 6px; }
+#agd-conferencia ul:empty { display: none; }
+#agd-conferencia ul li + li { margin-top: 3px; }
+.agd-bloqueios { background: var(--er-bg); color: var(--er); }
+.agd-avisos { background: var(--wa-bg); color: var(--ink); }
+.agd-avisos li::marker { color: var(--wa); }
+.agd-notas { background: var(--pn2); color: var(--mu); }
+#agd-conferencia [data-agd-opcao] { padding: 1px 8px; margin-left: 4px; font-size: 13.5px; }
+/* As alternativas (os chips) e a prévia do que muda na escala */
+.agd-chips { display: flex; flex-wrap: wrap; gap: 4px 6px; margin-top: 4px; }
+.agd-chips .btn { padding: 2px 10px; border: 1px solid var(--ln2); border-radius: 14px; font-size: 13.5px; }
+#agd-previa { margin: 6px 0 0; padding: 6px 10px; border: 1px solid var(--ln); border-radius: 6px; }
+#agd-previa summary { cursor: pointer; font-weight: 600; }
+#agd-previa summary:focus-visible { outline: 2px solid var(--ac); outline-offset: 2px; border-radius: 3px; }
+#agd-conferencia #agd-previa ul { margin: 6px 0 2px; padding: 0 0 0 18px; background: none; }
+/* O alerta vazio continua na árvore de acessibilidade (escondido com display: none, ele não seria anunciado quando o
+   erro aparecer), sem ocupar espaço */
+#agd-erro { margin-top: 8px; font-weight: 600; }
+#agd-erro:empty { display: block; position: absolute; width: 1px; height: 1px; margin: 0; overflow: hidden; clip: rect(0 0 0 0); }
+/* O campo com erro: a borda e a sombra vermelhas, sem mexer no contorno, que é o anel do foco: o campo que recebe o foco
+   no envio mostra o anel de 2 px como os outros (um contorno aqui, mais específico, tomaria o lugar dele) */
+dialog.dlg-agendar [aria-invalid="true"] { border-color: var(--er); box-shadow: 0 0 0 1px var(--er); }
+@media (max-width: 640px) {
+  dialog.dlg-agendar { padding: 14px; }
+  .campo-duplo { grid-template-columns: 1fr; }
+  #agd-peso .campo { display: flex; width: auto; margin-right: 0; }
+  /* "O que muda na escala" com 44 px para o dedo, como os campos e os botões do diálogo */
+  #agd-previa summary { min-height: 44px; padding: 12px 0; box-sizing: border-box; }
+}

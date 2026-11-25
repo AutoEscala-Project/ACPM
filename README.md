@@ -225,7 +225,7 @@ banco (e a chamada dela no app). A cópia `cadastro.cursos` fica.
 |---|---|
 | `index.html` | Marcação das nove abas |
 | `painel.html`, `js/painel.js` | TV da recepção: o painel de hoje na tela toda, no quadro, com as colunas e as listas da configuração do painel (com o servidor, a que `painel_do_dia` entrega; sem ela, o padrão), e a meteorologia no pé |
-| `css/app.css` | Estilos e temas claro/escuro |
+| `css/*.css` | Os estilos, uma folha por dona, que `index.html` carrega nesta ordem (a da cascata): `base` (as cores e os temas claro e escuro, os títulos, os campos), `componentes` (botões, barras, tabelas, etiquetas, o filtro de vários valores, os avisos, as dicas), `painel` (o painel no estilo dos aeroportos e a meteorologia), `tv`, `casca` (a barra do topo, as abas, o login, a impressão), uma por tela (`escala`, `demanda`, `agenda`, `recursos`, `instrutores`, `alunos`, `cadastros`, `cursos`, `rodizio`, `bi`, `conta`, `manual`), `gavetas`, `dialogos` e `toque` (os alvos de 44 px dos componentes no celular, por último). A TV carrega `css/app.css`, que importa as cinco das duas páginas (`base`, `componentes`, `painel`, `tv`, `toque`). `test/unit/estilos.test.js` confere as listas; `node scripts/medir-estilos.mjs` mede o estilo de cada elemento das duas páginas em várias larguras, temas e telas (com `--comparar antes.json depois.json`, a diferença entre duas versões) |
 | `js/config.js` | Janelas, missões, limites de peso e a frota inicial |
 | `js/frota.js` | A frota no cadastro (matrícula, tipo e "Só Parafuso"): validação de um recurso novo e as matrículas de cada tipo |
 | `js/categorias.js` | Categorias de recurso dos filtros (C152, C172, Simulador, PA-34 e Sala Ground) |

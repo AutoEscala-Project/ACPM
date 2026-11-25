@@ -1,0 +1,10 @@
+/* Alvos de toque no celular dos componentes (botões, campos, caixas, interruptores, o controle segmentado, os menus e a fila):
+   por último, como estavam no fim de css/app.css; os de cada tela ficam na folha dela, depois das regras dela */
+@media (max-width: 640px) {
+  .seg button, .menu-itens button { min-height: 44px; }
+  .btn, .x { min-width: 44px; min-height: 44px; flex-shrink: 0; }
+  select, input:not([type="checkbox"]):not([type="radio"]) { min-height: 44px; }
+  label.alvo, label.chk { min-width: 44px; min-height: 44px; }
+  input[type="checkbox"]:not(.sw) { width: 24px; height: 24px; }
+  .fila li { min-height: 48px; }
+}

@@ -1,0 +1,50 @@
+/* As gavetas: a moldura, o Histórico e o painel dos dados pessoais */
+/* Painel dos dados pessoais */
+.form-dados { display: flex; flex-direction: column; gap: 10px; overflow-y: auto; }
+.campo-dado { display: flex; flex-direction: column; gap: 4px; }
+.campo-dado label { font-weight: 600; }
+.campo-dado input[aria-invalid="true"] { border-color: var(--er); }
+.campo-dado .erro-campo:empty { display: none; }
+/* Histórico, BI, Manual e toasts */
+/* Histórico da data: gaveta lateral sobre a aba aberta. As gavetas abertas ficam umas sobre as outras, a que abriu por
+   último em cima (--camada, posta por abrirGaveta em js/dom.js) */
+.gaveta {
+  position: fixed; top: 0; right: 0; bottom: 0; width: min(440px, 100vw); z-index: calc(200 + var(--camada, 0));
+  display: flex; flex-direction: column; gap: 8px; padding: 14px 16px; overflow: hidden;
+  background: var(--pn); color: var(--ink); border-left: 1px solid var(--ln); box-shadow: -8px 0 24px rgba(0,0,0,.18);
+}
+.gaveta-cab { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.gaveta-cab h2 { margin: 0; }
+.gaveta-cab small { font: 500 14px 'Barlow', sans-serif; color: var(--mu); margin-left: 6px; }
+.gaveta .h { margin: 0; }
+.gaveta #btn-clear-log { align-self: flex-start; }
+.audit-list {
+  flex: 1;
+  overflow-y: auto;
+  border: 1px solid var(--ln);
+  border-radius: 8px;
+  background: var(--pn2);
+}
+.audit-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--ln);
+  font-size: 13px;
+  background: var(--pn);
+}
+.audit-item:last-child { border-bottom: 0; }
+.audit-badge {
+  font: 600 11.5px 'Barlow', sans-serif;
+  padding: 1px 8px;
+  border-radius: 10px;
+}
+.audit-badge.inc { background: var(--ok-bg); color: var(--ok); }
+.audit-badge.exc { background: var(--er-bg); color: var(--er); }
+/* A alteração ainda sendo gravada, ou recusada pelo servidor (riscada, em vermelho) */
+.audit-estado { font-style: italic; }
+.audit-estado.nao-gravada { color: var(--er); font-style: normal; font-weight: 600; }
+.audit-item:has(.nao-gravada) .audit-desc { text-decoration: line-through; }
+.audit-badge.mod { background: var(--info-bg); color: var(--ac); }

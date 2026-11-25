@@ -11,7 +11,18 @@ import { duracaoHm, hm } from './format.js';
 const duracao = min => (min % 60 ? duracaoHm(min) : `${min / 60} h`);
 const lei = LIMITES_DA_LEI;
 
-export const ABAS_DO_GLOSSARIO = ['Escala', 'Critérios', 'Demanda', 'Agenda', 'Recursos', 'Instrutores', 'Alunos', 'Cursos', 'Rodízio'];
+// Um grupo por linha: cada passo do redesenho muda só a linha da tela dele
+export const ABAS_DO_GLOSSARIO = [
+  'Escala',
+  'Critérios',
+  'Demanda',
+  'Agenda',
+  'Recursos',
+  'Instrutores',
+  'Alunos',
+  'Cursos',
+  'Rodízio'
+];
 
 export const GLOSSARIO = {
   // Escala

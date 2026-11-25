@@ -22,7 +22,7 @@ export function filtrarLinhas(corpos, passa, { aba, nomes, filtrando, esperar = 
 
 // A linha "Nenhum … com esses filtros", no fim da tabela, só enquanto os filtros escondem todas as linhas. Ela continua a
 // mesma enquanto vale (o foco no "Limpar filtros" fica nele). O texto e o botão ficam na parte à vista da tabela que
-// rola para o lado (a grade do dia, no celular: css/app.css). nome: "instrutor", "aluno"; botao: o atributo de quem ouve
+// rola para o lado (a grade do dia, no celular: css/componentes.css). nome: "instrutor", "aluno"; botao: o atributo de quem ouve
 // o "Limpar filtros" (o id dele é limpar-filtros-<id da tabela>). A Demanda usa a mesma linha (js/views/demanda.js)
 export function nenhumComOsFiltros(corpo, mostrar, { nome, botao = '' }) {
   const atual = corpo.querySelector(':scope > tr.sem-resultado');
