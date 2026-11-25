@@ -1,6 +1,7 @@
 // As exportações dos módulos do app (js/) que não precisam existir: as que ninguém usa, as que só os testes usam (o app
-// não) e as que só o próprio módulo usa (não precisam ser exportadas). E o contrário: um nome importado que o módulo de
-// destino não exporta (nada mais confere isso antes de o navegador carregar a página), e um import() de um módulo do app
+// não) e as que só o próprio módulo usa (não precisam ser exportadas). E o contrário: um nome importado pelo nome (import { a },
+// export { a } from, const { a } = await import(…)) que o módulo de destino não exporta (nada mais confere isso antes de o
+// navegador carregar a página; o import * as m não é conferido), e um import() de um módulo do app
 // num teste que não diz os nomes (const { a } = await import(…)): sem os nomes, o módulo todo conta como usado. Uma parte interna exportada para os testes, e
 // usada pelo próprio módulo, vale. Os arquivos são lidos com o analisador do ESLint (espree), não com expressões
 // regulares: "export const a = 1, b = 2" exporta os dois nomes, e um ".nome" de objeto não conta como uso.

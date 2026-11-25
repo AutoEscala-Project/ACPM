@@ -271,10 +271,9 @@ function devolverFoco(lugar, foco) {
   if (destino) focarSemAcao(destino);
 }
 
-// O foco é um cuidado a mais: um erro nele não pode impedir o redesenho, nem a gravação, que vem depois dele (semFalhar)
-
 // Troca o conteúdo de um lugar da tela mantendo o foco no elemento equivalente
 export function trocarConteudo(lugar, html) {
+  // O foco é um cuidado a mais: um erro nele não pode impedir o redesenho, nem a gravação, que vem depois dele
   const foco = semFalhar(() => focoEm(lugar));
   lugar.innerHTML = html;
   semFalhar(() => devolverFoco(lugar, foco));

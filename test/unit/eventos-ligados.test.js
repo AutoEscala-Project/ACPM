@@ -31,12 +31,20 @@ function percorrer(no, visitar, { dentroDeFuncoes = true } = {}) {
     else if (valor && typeof valor.type === 'string') percorrer(valor, visitar, { dentroDeFuncoes });
   }
 }
-const texto = no => (no && no.type === 'Literal' && typeof no.value === 'string' ? no.value : null);
+const literal = no => (no && no.type === 'Literal' && typeof no.value === 'string' ? no.value : null);
+
+// As constantes de texto de cada módulo (const BUSCA = '[data-flt="inst"]'): um seletor guardado numa delas também conta
+const constantes = new Map([...arvores].map(([arquivo, arvore]) => [arquivo, new Map(arvore.body
+  .flatMap(no => (no.type === 'VariableDeclaration' && no.kind === 'const' ? no.declarations : []))
+  .filter(d => d.id.type === 'Identifier' && literal(d.init) !== null)
+  .map(d => [d.id.name, literal(d.init)]))]));
 
 // Os seletores escritos num trecho: $('…'), document.querySelector('…'), document.getElementById('…'), e os filtros de
 // vários valores (criarFiltroMultiplo({ id }), criarFiltroDosCursos('id'), criarFiltroDasCategorias('id')), que leem o
 // botão #<id> e o painel #<id>-painel
-function seletoresEm(no, opcoes) {
+function seletoresEm(no, opcoes, arquivo) {
+  const doModulo = constantes.get(arquivo) || new Map();
+  const texto = n => literal(n) ?? (n && n.type === 'Identifier' && doModulo.has(n.name) ? doModulo.get(n.name) : null);
   const achados = [];
   percorrer(no, n => {
     if (n.type !== 'CallExpression') return;
@@ -45,7 +53,7 @@ function seletoresEm(no, opcoes) {
     if (['$', 'querySelector'].includes(nomeDaFuncao) && texto(primeiro)) achados.push({ seletor: texto(primeiro), linha: n.loc.start.line });
     if (nomeDaFuncao === 'getElementById' && texto(primeiro)) achados.push({ seletor: `#${texto(primeiro)}`, linha: n.loc.start.line });
     if (/^criarFiltro/.test(nomeDaFuncao || '')) {
-      const id = texto(primeiro) || (primeiro && primeiro.type === 'ObjectExpression' && texto((primeiro.properties.find(p => p.key && p.key.name === 'id') || {}).value));
+      const id = texto(primeiro) || (primeiro && primeiro.type === 'ObjectExpression' && literal((primeiro.properties.find(p => p.key && p.key.name === 'id') || {}).value));
       if (id) achados.push({ seletor: `#${id}`, linha: n.loc.start.line }, { seletor: `#${id}-painel`, linha: n.loc.start.line });
     }
   }, opcoes);
@@ -77,13 +85,13 @@ function declaracao(arquivo, nomeDaFuncao) {
 function lidosAoCarregar(arquivo) {
   const arvore = arvores.get(arquivo);
   const corpo = arvore.body.filter(no => no.type !== 'ImportDeclaration');
-  const lidos = corpo.flatMap(no => seletoresEm(no, { dentroDeFuncoes: false }).map(s => ({ ...s, onde: `${nome(arquivo)}:${s.linha}` })));
+  const lidos = corpo.flatMap(no => seletoresEm(no, { dentroDeFuncoes: false }, arquivo).map(s => ({ ...s, onde: `${nome(arquivo)}:${s.linha}` })));
   for (const no of corpo) {
     percorrer(no, n => {
       if (n.type !== 'CallExpression' || n.callee.type !== 'Identifier') return;
       const d = declaracao(arquivo, n.callee.name);
       if (!d) return;
-      lidos.push(...seletoresEm(d.no.body || d.no).map(s => ({ ...s, onde: `${nome(arquivo)}:${n.loc.start.line} → ${nome(d.arquivo)}:${s.linha}` })));
+      lidos.push(...seletoresEm(d.no.body || d.no, {}, d.arquivo).map(s => ({ ...s, onde: `${nome(arquivo)}:${n.loc.start.line} → ${nome(d.arquivo)}:${s.linha}` })));
     }, { dentroDeFuncoes: false });
   }
   return lidos;
@@ -101,8 +109,9 @@ function naPagina(seletor) {
 describe('Os eventos ligados ao carregar', () => {
   it('cada seletor que um módulo de eventos lê ao ser carregado existe em index.html', () => {
     const lidos = EVENTOS.flatMap(lidosAoCarregar);
-    // Os da descoberta (lacuna-1-importadores 2): dezenas, em nove módulos
-    assert.ok(lidos.length >= 50, `só ${lidos.length} seletores achados`);
+    // 65 ao fim do F0b (os 66 da abertura, menos o #importar-agenda, que passou a ser delegado): menos que isso é o teste
+    // que deixou de achar uma forma de ler a página
+    assert.ok(lidos.length >= 65, `só ${lidos.length} seletores achados`);
     const faltam = lidos.filter(l => naPagina(l.seletor) === false).map(l => `${l.onde}: ${l.seletor}`);
     assert.deepEqual(faltam, []);
   });

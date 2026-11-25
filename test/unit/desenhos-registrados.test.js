@@ -35,20 +35,22 @@ for (const arquivo of doApp) {
   const arvore = espree.parse(readFileSync(arquivo, 'utf8'), { ecmaVersion: 'latest', sourceType: 'module', loc: true });
   const onde = no => `${nomeDoArquivo(arquivo)}:${no.loc.start.line}`;
   // Só contam as funções importadas de js/redesenho.js (o painel da TV tem um redesenhar() dele)
-  const doRegistro = new Set(arvore.body.filter(no => no.type === 'ImportDeclaration' && /(^|\/)redesenho\.js$/.test(no.source.value))
-    .flatMap(no => no.specifiers.map(s => s.imported.name)));
+  // (o nome local, também o de um import { redesenhar as outro }, leva ao nome importado)
+  const doRegistro = new Map(arvore.body.filter(no => no.type === 'ImportDeclaration' && /(^|\/)redesenho\.js$/.test(no.source.value))
+    .flatMap(no => no.specifiers.map(s => [s.local.name, s.imported ? s.imported.name : '*'])));
   percorrer(arvore, no => {
     if (no.type === 'VariableDeclarator' && no.id.name === 'MOMENTOS' && nomeDoArquivo(arquivo) === 'js/redesenho.js') {
       momentos = no.init.elements.map(literal);
     }
     if (no.type !== 'CallExpression' || no.callee.type !== 'Identifier' || !doRegistro.has(no.callee.name)) return;
     const [primeiro, , opcoes] = no.arguments;
-    if (no.callee.name === 'registrarDesenho') {
+    const funcao = doRegistro.get(no.callee.name);
+    if (funcao === 'registrarDesenho') {
       const em = opcoes && opcoes.properties && opcoes.properties.find(p => p.key.name === 'em');
       registros.push({ nome: literal(primeiro), em: em ? em.value.elements.map(literal) : [], arquivo: nomeDoArquivo(arquivo), onde: onde(no) });
-    } else if (no.callee.name === 'redesenharPorNome') {
+    } else if (funcao === 'redesenharPorNome') {
       no.arguments.forEach(a => porNome.push({ nome: literal(a), onde: onde(no) }));
-    } else if (no.callee.name === 'redesenhar') {
+    } else if (funcao === 'redesenhar') {
       porMomento.push({ momento: literal(primeiro), onde: onde(no) });
     }
   });

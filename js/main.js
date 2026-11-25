@@ -40,13 +40,14 @@ import { $, showToast, mostrarAviso, avisoAberto, avisarDoLink } from './dom.js'
 import { amanhaISO, somarDias, dataIsoValida } from './format.js';
 import { iniciarSessaoSupabase } from './sessao.js';
 import { iniciarSomenteLeitura } from './somente-leitura.js';
-import { modoCompartilhado } from './state.js';
+import { RES, modoCompartilhado } from './state.js';
 import { ApiClient } from './storage.js';
 import { abaFoiEscolhida } from './eventos/navegacao.js';
 import { avisoDeDomingo, iniciarTema } from './eventos/topo.js';
 import { programaSendoGravado } from './eventos/cursos.js';
 import { abrirAgenda, diaDaAgenda, podeEditarAgenda } from './views/agenda.js';
 import { carregarDadosPessoais } from './views/dados-pessoais.js';
+import { rOut } from './views/escala.js';
 import { lerPedidosDaData } from './views/selos.js';
 import { show } from './views/tabs.js';
 
@@ -124,6 +125,9 @@ window.addEventListener('beforeunload', e => {
 
   // As abas com os dados lidos, também a que a pessoa abriu enquanto eles carregavam (Cursos ou Rodízio, por exemplo)
   redesenhar('dados');
+  // Sem a escala da data (outra data foi escolhida enquanto esta abria), a Escala mostra a data vazia até a outra chegar,
+  // como antes do registro: o desenho registrado só refaz a Escala quando há escala
+  if (!RES) rOut();
   document.body.dataset.agenda = podeEditarAgenda() ? 'edita' : 'consulta';
   // Dados pessoais (para a coluna CANAC das tabelas), para quem pode vê-los
   carregarDadosPessoais();
