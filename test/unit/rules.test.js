@@ -39,6 +39,22 @@ describe('Regras de missão', () => {
     assert.deepEqual(pedido, { mis: 'Ground C172', eq: 'Sala Ground', p1: 390, p2: 500, nb: 1.5, ss: 1 });
   });
 
+  it('um valor gravado que não é texto nem número (um objeto que não vira texto) não para a abertura: vale o padrão', () => {
+    // JSON.parse('{"toString": null}'): converter para texto ou número dá TypeError (docs/PLAN.md:440)
+    const hostil = () => JSON.parse('{"toString": null}');
+    const pedido = { fly: true, mis: hostil(), eq: 'C152', p1: 500, p2: 610, nb: hostil(), ss: 1, pr: hostil(), jan: hostil() };
+    assert.doesNotThrow(() => normalizeMissionFields(pedido));
+    assert.deepEqual(pedido, { fly: true, mis: 'Voo Local', eq: 'C152', p1: 500, p2: 610, nb: 1, ss: 1, pr: 3 });
+    // Cada campo sozinho, também numa lista (que vira texto) e num número válido ao lado
+    for (const campo of ['mis', 'nb', 'pr', 'jan']) {
+      const um = { mis: 'Navegação', eq: 'C152', p1: 500, p2: 610, nb: 2, ss: 1, pr: 2, jan: 'manha', [campo]: hostil() };
+      assert.doesNotThrow(() => normalizeMissionFields(um), campo);
+    }
+    const comLista = { mis: ['Navegação'], eq: 'C152', p1: 500, p2: -1, nb: [2], ss: 1 };
+    assert.doesNotThrow(() => normalizeMissionFields(comLista));
+    assert.equal(comLista.mis, 'Voo Local');
+  });
+
   it('uma sessão por missão: pedidos antigos com 2 ou 3 sessões passam a ter uma só (para dividir, "+ missão")', () => {
     const pedido = { mis: 'Navegação', eq: 'C152', p1: 500, p2: 610, nb: 3, ss: 2 };
     normalizeMissionFields(pedido);

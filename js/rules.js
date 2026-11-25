@@ -143,7 +143,19 @@ export const pesoDigitado = texto => {
 // validity.badInput (naoENumero): ele não apaga o peso
 export const pesoDoTexto = (texto, naoENumero = false) => (String(texto ?? '').trim() === '' && !naoENumero ? 0 : pesoDigitado(texto));
 
+// Um valor gravado que não é texto, número nem booleano (um objeto ou uma lista) não é convertido: um objeto que não vira
+// texto ({"toString": null}, num JSON gravado) daria TypeError ao converter, e a data não abriria. Esses campos ficam
+// sem o valor e valem os padrões, como os outros fora do formato (docs/PLAN.md:440)
+const valorSimples = v => v === null || v === undefined || ['string', 'number', 'boolean'].includes(typeof v);
+const CAMPOS_CONVERTIDOS = ['mis', 'nb', 'pr', 'jan'];
+
 export function normalizeMissionFields(target) {
+  for (const campo of CAMPOS_CONVERTIDOS) {
+    if (Object.hasOwn(target, campo) && !valorSimples(target[campo])) {
+      if (campo === 'pr') target.pr = 3;
+      else delete target[campo];
+    }
+  }
   target.mis = migrateLegacyMissionName(target.mis);
   // Uma sessão por missão (para dividir o voo no dia, "+ missão"): o campo fica nos dados, sempre 1, e o motor
   // recebe cada missão como um voo só
