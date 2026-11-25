@@ -4,6 +4,7 @@
 import { $, trocarConteudo } from '../dom.js';
 import { esc, hojeISO } from '../format.js';
 import { linhaDoDia, selosDosCadastros } from '../linha-do-dia.js';
+import { dadosLidos } from '../actions.js';
 import { S, RES, DATA, isGestor, dadoIndisponivel } from '../state.js';
 import { ApiClient } from '../storage.js';
 import { podeVer, destinoDoEndereco } from '../telas.js';
@@ -45,7 +46,8 @@ function frase(cartao) {
 
 export function rLinha() {
   const nav = $('#linha');
-  if (!nav) return;
+  // Antes de os dados da data chegarem, os números seriam os do estado vazio: a linha fica como estava
+  if (!nav || !dadosLidos) return;
   const ctx = contextoDoDia();
   const perfil = ctx.perfil;
   const aberta = nav.dataset.estado === 'aberta';

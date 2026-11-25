@@ -89,9 +89,13 @@ test.describe('Login e perfis (modo compartilhado)', () => {
     await page.reload();
     await expect(page.locator('#usuario')).toHaveText('Operador de Teste · Operador');
     await expect(page.locator('#form-login')).toBeHidden();
+    // A tela aberta fica no endereço; "Sair" a tira de lá (a próxima conta abre na tela dela)
+    await irPara(page, 'alu');
+    await expect(page).toHaveURL(/#\/alu$/);
     await abrirMenuDaConta(page);
     await page.locator('#btn-sair').click();
     await expect(page.locator('#form-login')).toBeVisible();
+    expect(new URL(page.url()).hash).toBe('');
     expect(servidor.saidas, 'as sessões em outros aparelhos continuam').toEqual(['local']);
     await page.reload();
     await expect(page.locator('#form-login')).toBeVisible();

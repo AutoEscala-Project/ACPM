@@ -564,13 +564,13 @@ test.describe('O leitor de tela e o teclado', () => {
     });
 
     // Os tokens da casca (F1a): o símbolo sobre o disco de cada estado, o disco e o anel sobre o cartão, a linha selecionada
-    // e os avatares (F2), com as cores como o navegador as resolve no tema
+    // e os avatares (F2), com as cores como o navegador as resolve no tema: todos com 4,5:1
     test(`os tokens dos estados, da seleção e dos avatares contrastam, no tema ${nome}`, async ({ page }) => {
       await abrir(page);
       await page.evaluate(t => { document.documentElement.dataset.theme = t; }, tema);
       const pares = [
         ['--okT', '--ok', 4.5], ['--waT', '--wa', 4.5], ['--erT', '--er', 4.5], ['--anT', '--an', 4.5],
-        ['--ok', '--pn', 3], ['--wa', '--pn', 3], ['--er', '--pn', 3], ['--an', '--pn', 3], ['--pe', '--pn', 3],
+        ['--ok', '--pn', 4.5], ['--wa', '--pn', 4.5], ['--er', '--pn', 4.5], ['--an', '--pn', 4.5], ['--pe', '--pn', 4.5],
         ['--ink', '--sel', 4.5], ['--mu', '--sel', 4.5],
         ['--avT', '--av1', 4.5], ['--avT', '--av2', 4.5], ['--avT', '--av3', 4.5], ['--avT', '--av4', 4.5], ['--avT', '--av5', 4.5]
       ];

@@ -302,6 +302,9 @@ test.describe('Modo compartilhado: gravação, conflitos e link da escala', () =
     const link = await pgOperador.evaluate(() => navigator.clipboard.readText());
     expect(new URL(link).searchParams.get('data')).toBe(AMANHA);
     expect(link).not.toContain('share=');
+    // Só a data: a tela aberta (o fragmento) não vai no link
+    expect(pgOperador.url()).toContain('#/esc');
+    expect(new URL(link).hash).toBe('');
 
     const gestor = await novoContexto(browser);
     await servidor.instalar(gestor);

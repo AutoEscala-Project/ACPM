@@ -150,7 +150,7 @@ test.describe('Agenda de Solicitações', () => {
     await importar.click();
     await expect(situacao).toHaveText(['Na demanda', 'Na demanda']);
     await expect(importar).toBeHidden();
-    await expect(page.locator('#selo-age')).toBeHidden();
+    await expect(page.locator('#linha a.tarefa[data-tarefa="nao-importados"]')).toHaveAttribute('data-estado', 'feito');
     await irPara(page, 'dem');
     await expect(caixaVoa(page.locator('#dem tr[data-k="d"][data-id="1001"]'))).toBeChecked();
 

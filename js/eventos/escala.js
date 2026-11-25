@@ -338,6 +338,6 @@ function mostrarAprovacao() {
   if (botao) botao.focus({ preventScroll: true });
   else focarNoTitulo($('#s-esc'));
   anunciar(texto);
-  return barra && !barra.hidden ? barra : null;
+  return { lugar: barra && !barra.hidden ? barra : null, focou: true };
 }
 registrarTela('apr', { aoMostrar: () => mostrarAprovacao() });

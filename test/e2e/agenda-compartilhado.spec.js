@@ -31,6 +31,19 @@ test.describe('Agenda de Solicitações (modo compartilhado)', () => {
     });
   }
 
+  // Voltar enquanto os dados carregam também é uma escolha: a entrada de antes (sem tela no endereço) é a tela da abertura,
+  // e ela fica quando os dados chegam
+  test('Voltar enquanto os dados carregavam: a Secretaria volta para a tela da abertura dela, a Agenda, e fica lá', async ({ page, context }) => {
+    await enquantoCarrega(page, context, async () => {
+      await irPara(page, 'cur');
+      await page.goBack();
+      await expect(page.locator('#s-age')).toBeVisible();
+    });
+    await expect(page.locator('#s-age')).toBeVisible();
+    await expect(page.locator('#s-cur')).toBeHidden();
+    await expect(page).toHaveURL(/#\/age$/);
+  });
+
   test('a Agenda aberta enquanto os dados carregavam é lida de novo quando eles chegam (com os alunos)', async ({ page, context }) => {
     await enquantoCarrega(page, context, () => irPara(page, 'age'));
     await expect(page.locator('#s-age')).toBeVisible();

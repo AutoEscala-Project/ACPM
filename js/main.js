@@ -69,7 +69,7 @@ window.addEventListener('beforeunload', e => {
   // cima dela até a sessão abrir)
   ligarEndereco();
   const doEndereco = destinoDoHash(window.location.hash);
-  if (doEndereco) mostrarTela(doEndereco.tela, { item: doEndereco.item, nativo: Boolean(doEndereco.nativo), historico: 'nenhum' });
+  if (doEndereco) mostrarTela(doEndereco.tela, { item: doEndereco.item, nativo: Boolean(doEndereco.nativo), historico: 'nenhum', ler: false });
   // As dicas dos termos e a tela só de consulta do Gestor
   iniciarDicas();
   iniciarSomenteLeitura();

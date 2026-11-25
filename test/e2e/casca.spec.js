@@ -130,10 +130,19 @@ test.describe('Aprovar', () => {
     await expect(atual(page)).toHaveAttribute('href', '#/apr');
     await expect(page.locator('#compactacao')).toBeInViewport();
     await expect(page.locator('#aprovacao')).toHaveClass(/\bdestaque\b/);
+    expect(await page.locator('#aprovacao').evaluate(el => getComputedStyle(el).outlineStyle)).toBe('solid');
     await expect(botaoAprovar(page)).toBeFocused();
     await expect(page.locator('#anuncio')).toHaveText('Escala ainda não aprovada.');
     await expect(page.locator('#aprovacao')).not.toHaveClass(/\bdestaque\b/, { timeout: 3000 });
     expect(endereco(page).hash).toBe('#/apr');
+
+    // A tarefa da linha aberta faz o mesmo: o foco no botão, não na barra
+    await irPara(page, 'alu');
+    await page.locator('#btn-linha').click();
+    await page.locator('#linha a.tarefa[data-tarefa="aprovada"]').click();
+    await expect(botaoAprovar(page)).toBeFocused();
+    await expect(page.locator('#compactacao')).not.toHaveAttribute('tabindex');
+    await page.locator('#btn-linha').click();
 
     // Aprovada: o selo e o Reabrir; o cartão diz a hora
     await aprovar(page);

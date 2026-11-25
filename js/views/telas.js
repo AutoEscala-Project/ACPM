@@ -13,7 +13,8 @@ let escolhida = false;
 let navegacao = 0;
 
 // O que a tela faz ao aparecer (ler os dados dela, desenhar, ir a um lugar). Pode devolver o elemento do lugar do item, que
-// vem à vista (e recebe o foco, quando a navegação leva o foco)
+// vem à vista (e recebe o foco, quando a navegação leva o foco), ou { lugar, focou: true }, quando ela mesma já pôs o foco
+// (Aprovar, no botão da aprovação)
 export function registrarTela(id, { aoMostrar = () => {} } = {}) {
   aoMostrarDe.set(id, aoMostrar);
 }
@@ -52,10 +53,15 @@ export function destinoDoHash(hash) {
 }
 
 // Mostra a tela. historico: 'empilhar' (uma entrada nova), 'substituir' (a entrada atual) ou 'nenhum' (veio do endereço).
-// focar: o foco vai para o lugar do item ou para o título da tela. rolagem: a de uma entrada do histórico (Voltar)
-export async function mostrarTela(id, { item = null, historico = 'empilhar', focar = false, rolagem = null, nativo = false } = {}) {
+// focar: o foco vai para o lugar do item ou para o título da tela. rolagem: a de uma entrada do histórico (Voltar). ler:
+// false na abertura, antes da sessão e dos dados (a tela só aparece; o que ela faz ao aparecer vem com os dados)
+export async function mostrarTela(id, { item = null, historico = 'empilhar', focar = false, rolagem = null, nativo = false, ler = true } = {}) {
   const vez = ++navegacao;
-  if (!podeVer(id, perfilAtual())) { id = telaDeAbertura(perfilAtual()); item = null; nativo = false; }
+  // A tela que o perfil não vê: a da abertura dele, também no endereço
+  if (!podeVer(id, perfilAtual())) {
+    id = telaDeAbertura(perfilAtual()); item = null; nativo = false;
+    if (historico === 'nenhum') historico = 'substituir';
+  }
   const tela = TELAS[id];
   if (historico === 'empilhar') empilharTela({ tela: id, item: nativo ? null : item });
   else if (historico === 'substituir') substituirTela({ tela: id, item: nativo ? null : item });
@@ -75,9 +81,11 @@ export async function mostrarTela(id, { item = null, historico = 'empilhar', foc
     if (essa && !atual) { atual = el; el.setAttribute('aria-current', 'page'); } else el.removeAttribute('aria-current');
   });
 
-  const aoMostrar = aoMostrarDe.get(id);
-  const lugar = aoMostrar ? await aoMostrar(item ?? tela.item ?? null) : null;
+  const aoMostrar = ler ? aoMostrarDe.get(id) : null;
+  const feito = aoMostrar ? await aoMostrar(item ?? tela.item ?? null) : null;
   if (vez !== navegacao) return;
+  const lugar = feito && !(feito instanceof Element) && 'lugar' in feito ? feito.lugar : feito;
+  const focou = Boolean(feito && feito.focou);
 
   // A rolagem: a da entrada (Voltar), o lugar do item, o topo; o lugar de um id do próprio Manual fica com o navegador
   const elemento = lugar instanceof Element ? lugar : null;
@@ -85,7 +93,7 @@ export async function mostrarTela(id, { item = null, historico = 'empilhar', foc
   else if (elemento) elemento.scrollIntoView({ block: 'start' });
   else if (!nativo) window.scrollTo(0, 0);
 
-  if (focar) focarNoTitulo(elemento || secao);
+  if (focar && !focou) focarNoTitulo(elemento || secao);
   // O item vale uma vez: o endereço fica só com a tela (recarregar não repete o que ele fez)
   if (item && !nativo && item !== tela.item) substituirTela({ tela: id });
   mostrarNaFaixa(atual);
@@ -119,7 +127,8 @@ export function ligarEndereco() {
   });
   // Voltar, Avançar e um endereço digitado: os dois eventos de uma mesma troca abrem a tela uma vez
   const aoMudarEndereco = () => {
-    const destino = destinoDoHash(window.location.hash);
+    // A entrada sem tela no endereço (a da abertura, antes de os dados chegarem): a tela da abertura do perfil
+    const destino = destinoDoHash(window.location.hash) || (window.location.hash ? null : { tela: telaDeAbertura(perfilAtual()), item: null });
     const rolagem = window.history.state && Number.isFinite(window.history.state.rolagem) ? window.history.state.rolagem : null;
     if (!destino) { escreverDataNoEndereco(DATA); return; }
     if (destino.tela === aberta && !destino.item) {
