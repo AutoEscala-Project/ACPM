@@ -7,7 +7,7 @@ import { OPCOES_DE_BURACOS, OPCOES_DE_HORARIOS, normalizarCriterios } from '../c
 import { $, showToast, anunciar, algumDialogoAberto, gavetaDoEsc } from '../dom.js';
 import { exp, pdf, planilha } from '../export.js';
 import { fixosAoMudarStatus, fixosAoReabrir, fixosAoAprovar, normalizarFixos } from '../fixos.js';
-import { hm } from '../format.js';
+import { hm, hojeISO } from '../format.js';
 import { aplicarReparo } from '../reparo.js';
 import { S, RES, DATA, AUDIT_LOG, isGestor, modoCompartilhado, insBy } from '../state.js';
 import { escolherInstrutor, escolhasDaUnidade, escolherNosPedidos, reverterEscolha, reverterReparo } from '../instrutor-escolhido.js';
@@ -22,6 +22,7 @@ import { pedirDetalheDoStatus } from '../views/dialogo-status.js';
 import { rOut, botaoDoInstrutor, seletorDeInstrutor, abrirPopupDoMapa, fecharPopupDoMapa, popupDoMapaAberto, reposicionarPopupDoMapa, tabNoPopup } from '../views/escala.js';
 import { abrirPainelDeReparo, fecharPainelDeReparo, opcaoDoPainel } from '../views/reparo.js';
 import { registrarDesenho, redesenharPorNome } from '../redesenho.js';
+import { voosComInativos } from '../inativos.js';
 
 // O desenho da Escala (js/redesenho.js): refeito em todos os momentos, quando há escala
 registrarDesenho('escala', () => { if (RES) rOut(); }, { em: ['dados', 'consulta', 'releitura', 'escala'], ordem: 80 });
@@ -289,4 +290,11 @@ aoReverter('restaurarEscolha', (rev, entry) => {
   S.fixos = normalizarFixos(S.fixos);
   gravarAlteracao('mod', `Revertido: ${entry.desc}`, null, entry.id);
   redesenharPorNome('pedidos-do-dia');
+});
+
+// "Refazer a escala" (o aviso dos voos com quem ficou inativo): a escala é refeita sem o instrutor ou o recurso inativo e
+// gravada, com a entrada no histórico; nada mais muda
+aoAcionar('refazer-escala', () => {
+  const nomes = voosComInativos(S, RES, { data: DATA, hoje: hojeISO() }).filter(i => i.de !== 'aluno').map(i => i.nome);
+  gravarAlteracao('mod', nomes.length ? `Escala refeita: ${nomes.join(', ')} ${nomes.length > 1 ? 'estão inativos' : 'está inativo'}` : 'Escala refeita sem os inativos do cadastro');
 });

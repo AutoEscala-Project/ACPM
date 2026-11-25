@@ -7,6 +7,7 @@ import { proximasMissoes, missoesDoDia } from './progresso.js';
 import { situacaoPorMissao, resultadoDoVoo } from './resultados.js';
 import { chaveDoVoo } from './voo.js';
 import { fixoPeloStatus } from './fixos.js';
+import { inativo } from './inativos.js';
 
 // O voo da mesma missão (mis) que está na demanda do aluno sem pedido da agenda (posto à mão: a demanda começa vazia a
 // cada data): ele dá lugar ao pedido, para não duplicar. O voo fixo (agendado, aprovado ou com o instrutor escolhido na
@@ -32,16 +33,18 @@ function vooQueDaLugar(estado, aluno, mis) {
 // missão do curso que o operador pôs nesse voo (Usar, "Outra missão do curso") continua a dele, com o recurso e as horas
 // que ele tem (as registradas na agenda valem mais, como na missão do programa): a escolha do operador vale mais que a
 // próxima missão do programa. situacao: o último resultado de cada missão; programa: os cursos (vazio quando os
-// resultados ou os programas não foram lidos: nenhum pedido entra como missão do curso)
-export function importarSolicitacoes(estado, solicitacoes, { situacao = [], programa = [] } = {}) {
+// resultados ou os programas não foram lidos: nenhum pedido entra como missão do curso). semInativos: o inativo do cadastro
+// vale na data (de hoje em diante): o pedido do aluno inativo não entra nem conta como visto (entra quando ele voltar a ativo)
+export function importarSolicitacoes(estado, solicitacoes, { situacao = [], programa = [], semInativos = false } = {}) {
   const indice = indiceDoPrograma(programa), mapa = situacaoPorMissao(situacao);
-  const resumo = { novos: 0, atualizados: 0, semAluno: 0 };
+  const resumo = { novos: 0, atualizados: 0, semAluno: 0, deInativo: 0 };
   if (!Array.isArray(estado.importadas)) estado.importadas = [];
   for (const solicitacao of solicitacoes) {
     if (solicitacao.cancelada_em || estado.importadas.includes(solicitacao.id)) continue;
     // O pedido de quem não está no cadastro não conta como visto: entra quando o aluno for cadastrado
     const aluno = estado.stu.find(x => x.id === solicitacao.aluno);
     if (!aluno) { resumo.semAluno++; continue; }
+    if (semInativos && inativo(aluno)) { resumo.deInativo++; continue; }
     estado.importadas.push(solicitacao.id);
     const copiada = vooQueDaLugar(estado, aluno, migrateLegacyMissionName(solicitacao.missao));
     const escolhida = copiada && copiada.etapa ? copiada : null;

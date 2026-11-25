@@ -1,10 +1,10 @@
 // Habilitações individuais dos instrutores. No aeroclube as funções não são cumulativas: há instrutor
 // de C172 que não dá simulador e instrutor de PA-34 que não faz parafuso. Cada instrutor tem a lista do que pode
 // fazer; uma missão exige a habilitação da missão e, no C152, no C172 e no PA-34, também a do avião. O voo pode exigir
-// mais: pelo curso do aluno (o Noturno do PC exige IFR) e pelo próprio recurso (o avião com habilitação própria, como o
-// PR-VOM, exige a habilitação "aviao:<matrícula>", que aparece na grade quando o recurso é marcado em Recursos).
-import { MIS } from './config.js';
-import { exigenciasDoAviao, PREFIXO_DA_HABILITACAO_DO_AVIAO, MATRICULA } from './frota.js';
+// mais: pelo curso do aluno (o Noturno do PC exige IFR) e pelo próprio recurso, que exige do instrutor a lista "exige"
+// (ids deste registro; a habilitação própria do PR-VOM é "aviao:PR-VOM", que aparece na grade quando o recurso a exige).
+// Este registro não importa a frota: a frota (js/frota.js) é que lê dele
+import { MIS, MATRICULA } from './config.js';
 
 // Ordem da grade na aba Instrutores (curto: rótulo da grade; nome: o nome completo, na dica e nas mensagens)
 export const HABILITACOES = [
@@ -32,8 +32,21 @@ export const HABILITACOES = [
   { id: 'checa_ifr', nome: 'Checador IFR', curto: 'Checador IFR' }
 ];
 const ORDEM = new Map(HABILITACOES.map((h, i) => [h.id, i]));
+
+// Os grupos do painel "Editar habilitações" e do filtro das habilitações, na ordem da tela. O voo de cheque exige uma marca
+// de cada grupo do checador (o "?" do primeiro explica)
+export const GRUPOS_DE_HABILITACAO = [
+  { id: 'ground-e-simulador', titulo: 'Ground e simulador', ids: ['grounds', 'ground_pa34', 'sim_mono', 'sim_multi'] },
+  { id: 'voo', titulo: 'Voo', ids: ['tgl', 'local', 'navegacao', 'solo', 'parafuso', 'ifr', 'noturno'] },
+  { id: 'avioes', titulo: 'Aviões', ids: ['c152', 'c172', 'mlte'] },
+  { id: 'checador-curso', titulo: 'Checador: curso', ids: ['checa_pp', 'checa_pc', 'checa_inva'], dica: 'checador' },
+  { id: 'checador-motor', titulo: 'Checador: motor', ids: ['checa_mnte', 'checa_mlte'] },
+  { id: 'checador-regras', titulo: 'Checador: regras', ids: ['checa_vfr', 'checa_ifr'] }
+];
 const NOME = new Map(HABILITACOES.map(h => [h.id, h.nome]));
 // A habilitação própria de um recurso: "aviao:PR-VOM"
+export const PREFIXO_DA_HABILITACAO_DO_AVIAO = 'aviao:';
+export const habilitacaoDoAviao = reg => `${PREFIXO_DA_HABILITACAO_DO_AVIAO}${reg}`;
 const ehDoAviao = id => typeof id === 'string' && id.startsWith(PREFIXO_DA_HABILITACAO_DO_AVIAO) && MATRICULA.test(id.slice(PREFIXO_DA_HABILITACAO_DO_AVIAO.length));
 export const nomeDaHabilitacao = id => NOME.get(id) || (ehDoAviao(id) ? `Avião ${id.slice(PREFIXO_DA_HABILITACAO_DO_AVIAO.length)}` : id);
 
@@ -43,6 +56,21 @@ const posicao = h => (ORDEM.has(h) ? ORDEM.get(h) : HABILITACOES.length);
 export const normalizarHabilitacoes = lista =>
   (Array.isArray(lista) ? [...new Set(lista.filter(h => ORDEM.has(h) || ehDoAviao(h)))] : [])
     .sort((a, b) => posicao(a) - posicao(b) || (a < b ? -1 : a > b ? 1 : 0));
+
+// O que um recurso exige do instrutor (formato 26): a lista exige; o recurso sem a lista, de antes do 26 (os de uma
+// reversão do histórico, os estados dos testes), com a habilitação própria marcada: a dele
+export function exigenciasDoRecurso(recurso) {
+  if (!recurso || typeof recurso !== 'object') return [];
+  if (Array.isArray(recurso.exige)) return recurso.exige;
+  return recurso.habilitacaoPropria === true && typeof recurso.reg === 'string' ? [habilitacaoDoAviao(recurso.reg)] : [];
+}
+
+// O grupo das habilitações próprias que os recursos exigem (uma para cada, como o PR-VOM), na ordem da frota, para o painel
+// das habilitações e o filtro: também as dos recursos inativos (o par continua quando ele volta)
+export function gruposDosRecursos(frota) {
+  const ids = [...new Set((Array.isArray(frota) ? frota : []).flatMap(exigenciasDoRecurso).filter(ehDoAviao))];
+  return ids.length ? [{ id: 'habilitacao-propria', titulo: 'Habilitação própria do recurso', ids, dica: 'habilitacao-propria' }] : [];
+}
 
 // Habilitação de cada missão (o simulador depende do equipamento) e a exigida pelo avião
 const DA_MISSAO = {
@@ -85,14 +113,14 @@ const DO_AVIAO = { 'C152': 'c152', 'C172': 'c172', 'PA-34': 'mlte' };
 const doMapa = (mapa, chave, padrao) => (Object.hasOwn(mapa, chave) ? mapa[chave] : padrao);
 
 // Exigências da missão no equipamento: todos os grupos, e em cada grupo basta uma das habilitações. Com o contexto do
-// voo, também as do curso do aluno (MIS[mis].porCurso: o Noturno do PC exige IFR) e as do recurso (habilitação própria)
+// voo, também as do curso do aluno (MIS[mis].porCurso: o Noturno do PC exige IFR) e as que o recurso exige (exige)
 export function exigencias(mis, eq, { curso, recurso } = {}) {
   const grupos = ehCheque(mis) ? CHEQUES[mis].map(h => [h])
     : [[mis === 'Simulador' ? doMapa(DO_SIMULADOR, eq, 'sim_mono') : doMapa(DA_MISSAO, mis, 'local')]];
   if (!ehCheque(mis) && Object.hasOwn(DO_AVIAO, eq) && !grupos.some(g => g.includes(DO_AVIAO[eq]))) grupos.push([DO_AVIAO[eq]]);
   const regra = Object.hasOwn(MIS, mis) ? MIS[mis] : null;
   const doCurso = regra && regra.porCurso && typeof curso === 'string' && Object.hasOwn(regra.porCurso, curso) ? regra.porCurso[curso].habilitacoes || [] : [];
-  for (const h of [...doCurso, ...exigenciasDoAviao(recurso)]) if (!grupos.some(g => g.length === 1 && g[0] === h)) grupos.push([h]);
+  for (const h of [...doCurso, ...exigenciasDoRecurso(recurso)]) if (!grupos.some(g => g.length === 1 && g[0] === h)) grupos.push([h]);
   return grupos;
 }
 
