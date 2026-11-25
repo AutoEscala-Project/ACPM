@@ -1,5 +1,5 @@
 /* A base das duas páginas (o app e a TV): as cores e os temas, html, body, o anel do foco, os títulos, os campos, o texto discreto,
-   os links, o texto só para o leitor de tela e [hidden]; e main e #login-erro, que as duas páginas têm */
+   os links, o texto só para o leitor de tela e [hidden]; e #login-erro, que as duas páginas têm (a moldura do conteúdo é de cada página: .casca no app, main na TV) */
 /* Cores e temas (claro e escuro) */
 :root {
   --bg: #EEF2F5;
@@ -64,7 +64,6 @@ button:focus-visible, select:focus-visible, input:focus-visible {
   outline: 2px solid var(--ac);
   outline-offset: 2px;
 }
-main { max-width: 1280px; margin: 0 auto; padding: 16px 16px 60px; }
 h2 { font: 600 20px 'Barlow Semi Condensed', sans-serif; margin: 18px 0 10px; }
 h3 { font: 600 15px 'Barlow Semi Condensed', sans-serif; margin: 10px 0 6px; color: var(--ink); }
 select, input:not([type=checkbox]) {

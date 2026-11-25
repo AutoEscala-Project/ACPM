@@ -109,9 +109,9 @@ function naPagina(seletor) {
 describe('Os eventos ligados ao carregar', () => {
   it('cada seletor que um módulo de eventos lê ao ser carregado existe em index.html', () => {
     const lidos = EVENTOS.flatMap(lidosAoCarregar);
-    // 65 ao fim do F0b (os 66 da abertura, menos o #importar-agenda, que passou a ser delegado): menos que isso é o teste
-    // que deixou de achar uma forma de ler a página
-    assert.ok(lidos.length >= 65, `só ${lidos.length} seletores achados`);
+    // 65 ao fim do F0b (os 66 da abertura, menos o #importar-agenda, que passou a ser delegado); 64 no F1a (o Manual do
+    // topo virou um link, js/views/telas.js): menos que isso é o teste que deixou de achar uma forma de ler a página
+    assert.ok(lidos.length >= 64, `só ${lidos.length} seletores achados`);
     const faltam = lidos.filter(l => naPagina(l.seletor) === false).map(l => `${l.onde}: ${l.seletor}`);
     assert.deepEqual(faltam, []);
   });

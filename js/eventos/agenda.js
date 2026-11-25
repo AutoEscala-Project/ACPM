@@ -10,12 +10,15 @@ import { S, DATA } from '../state.js';
 import { ApiClient } from '../storage.js';
 import { confirmado } from './confirmacao.js';
 import { aoAcionar } from './registro.js';
-import { carregarMes, mudarMes, escolherDia, diaDaAgenda, lembrarRegistradoPor, podeEditarAgenda, rAgenda, preencherHorariosDaAgenda, pedidosDoAluno, descreverPedido, pedidosCarregados } from '../views/agenda.js';
+import { abrirAgenda, carregarMes, mudarMes, escolherDia, diaDaAgenda, lembrarRegistradoPor, podeEditarAgenda, rAgenda, preencherHorariosDaAgenda, pedidosDoAluno, descreverPedido, pedidosCarregados } from '../views/agenda.js';
 import { lerPedidosDaData } from '../views/selos.js';
 import { registrarDesenho } from '../redesenho.js';
+import { registrarTela } from '../views/telas.js';
 
 // O desenho da Agenda (js/redesenho.js), pelo papel: os pedidos. Ele não faz nada até a Agenda ser aberta
 registrarDesenho('pedidos', rAgenda, { em: ['dados'], ordem: 95 });
+// Aberta, a Agenda lê o mês: no dia do item (o dia escolhido nela enquanto os dados da abertura chegavam) ou no dia padrão
+registrarTela('age', { aoMostrar: item => abrirAgenda(dataIsoValida(item) ? item : undefined) });
 
 // Agenda: o calendário é livre para navegar (inclusive para o Gestor)
 document.addEventListener('click', e => {

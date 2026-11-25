@@ -90,7 +90,7 @@
       <option value="gestor">Gestor</option>
     </select>
     <button class="hd-btn" id="btn-open-log" title="Alterações desta data"><svg class="ico"><use href="#i-historico"/></svg><span class="hd-txt">Histórico</span><span class="badge-cnt" id="log-cnt">0</span></button>
-    <button class="hd-btn" id="btn-manual" title="Como usar a escala e as regras que ela segue"><svg class="ico"><use href="#i-manual"/></svg><span class="hd-txt">Manual</span></button>
+    <a class="hd-btn" id="btn-manual" href="#/manual" data-nav data-focar title="Como usar a escala e as regras que ela segue"><svg class="ico"><use href="#i-manual"/></svg><span class="hd-txt">Manual</span></a>
     <!-- Menu da conta: Minha conta, Usuários (administrador), tema e Sair -->
     <div class="menu-conta">
       <button class="hd-conta" type="button" id="btn-menu-conta" aria-haspopup="menu" aria-expanded="false" aria-controls="menu-conta" title="Conta e preferências">
@@ -108,21 +108,23 @@
   </div>
   <!-- Abas na ordem de uso: a escala e o que a alimenta no dia; o cadastro; o BI -->
   <nav id="nav" aria-label="Abas">
-    <button data-t="esc" class="on" aria-current="page"><span class="aba-rotulo">Escala</span><span class="aba-selo" id="selo-esc" hidden></span></button>
-    <button data-t="dem"><span class="aba-rotulo">Demanda</span></button>
-    <button data-t="age"><span class="aba-rotulo">Agenda</span><span class="aba-selo" id="selo-age" hidden></span></button>
+    <button type="button" data-nav data-t="esc" class="on" aria-current="page"><span class="aba-rotulo">Escala</span><span class="aba-selo" id="selo-esc" hidden></span></button>
+    <button type="button" data-nav data-t="dem"><span class="aba-rotulo">Demanda</span></button>
+    <button type="button" data-nav data-t="age"><span class="aba-rotulo">Agenda</span><span class="aba-selo" id="selo-age" hidden></span></button>
     <span class="aba-sep" aria-hidden="true"></span>
-    <button data-t="rec"><span class="aba-rotulo">Recursos</span><span class="aba-selo" id="selo-rec" hidden></span></button>
-    <button data-t="ins"><span class="aba-rotulo">Instrutores</span></button>
-    <button data-t="alu"><span class="aba-rotulo">Alunos</span></button>
-    <button data-t="cur"><span class="aba-rotulo">Cursos</span></button>
-    <button data-t="rod"><span class="aba-rotulo">Rodízio</span></button>
+    <button type="button" data-nav data-t="rec"><span class="aba-rotulo">Recursos</span><span class="aba-selo" id="selo-rec" hidden></span></button>
+    <button type="button" data-nav data-t="ins"><span class="aba-rotulo">Instrutores</span></button>
+    <button type="button" data-nav data-t="alu"><span class="aba-rotulo">Alunos</span></button>
+    <button type="button" data-nav data-t="cur"><span class="aba-rotulo">Cursos</span></button>
+    <button type="button" data-nav data-t="rod"><span class="aba-rotulo">Rodízio</span></button>
     <span class="aba-sep" aria-hidden="true"></span>
-    <button data-t="bi"><span class="aba-rotulo">BI</span></button>
+    <button type="button" data-nav data-t="bi"><span class="aba-rotulo">BI</span></button>
   </nav>
 </header>
 
-<main id="conteudo">
+<div class="casca" id="casca">
+<!-- Os avisos do app (não de uma tela), acima da navegação e do conteúdo -->
+<div class="avisos-do-app">
   <!-- ENDEREÇO SEM BANCO: fora dos endereços do app (e do localhost) o app funciona sem o banco (js/config-supabase.js) -->
   <div class="aviso-link erro" id="aviso-endereco" role="alert" hidden>
     <span>Este endereço não é o do AutoEscala: aqui o app funciona sem o banco, e o que você fizer fica só neste navegador (ninguém mais vê). O app fica em <a href="https://autoescala.autoescala-acpm.workers.dev/">autoescala.autoescala-acpm.workers.dev</a>.</span>
@@ -145,7 +147,9 @@
     <span id="aviso-dados-texto"></span>
     <button class="btn" type="button" id="btn-tentar-dados">Tentar de novo</button>
   </div>
+</div>
 
+<main id="conteudo">
   <!-- LOGIN (modo compartilhado: dados no Supabase) -->
   <section id="s-login">
     <h2>Entrar</h2>
@@ -170,7 +174,7 @@
 
   <!-- RECURSOS: duas vistas (js/views/vistas.js). A disponibilidade do dia vale só para a data aberta no topo; o cadastro
        (a frota e os horários de decolagem), para todas as datas. A busca e as categorias valem nas duas, nunca no hangar -->
-  <section id="s-rec" data-vista="dia">
+  <section id="s-rec" class="tela" data-vista="dia">
     <h2>Recursos</h2>
     <div class="bar">
       <div class="seg" role="group" aria-label="O que ver">
@@ -235,7 +239,7 @@
   </section>
 
   <!-- INSTRUTORES: disponibilidade do dia e cadastro (as vistas: js/views/vistas.js) -->
-  <section id="s-ins" data-vista="dia">
+  <section id="s-ins" class="tela" data-vista="dia">
     <h2>Instrutores</h2>
     <div class="bar">
       <div class="seg" role="group" aria-label="O que ver">
@@ -270,7 +274,7 @@
 
   <!-- ALUNOS: a barra no lugar da de Instrutores (a busca, o filtro dos cursos, quantos aparecem e "+ Novo aluno"); os
        pedidos de cada data ficam na Demanda (o link não aparece para a Secretaria, que não vê a Demanda) -->
-  <section id="s-alu">
+  <section id="s-alu" class="tela">
     <h2>Alunos</h2>
     <div class="bar">
       <span class="cresce"></span>
@@ -281,7 +285,7 @@
       <span class="contagem" id="alu-contagem" role="status"></span>
       <button class="btn edit-only" data-act="adds">+ Novo aluno</button>
     </div>
-    <p class="h ir-para-demanda">Os pedidos de cada data ficam na Demanda. <button type="button" class="btn quiet" data-go="dem">Abrir a Demanda</button></p>
+    <p class="h ir-para-demanda">Os pedidos de cada data ficam na Demanda. <a class="btn quiet" href="#/dem" data-focar>Abrir a Demanda</a></p>
     <div class="tw"><table class="cadastro alunos">
       <thead><tr><th>Nome</th><th class="so-dados">CANAC</th><th>Peso (kg)</th><th>Curso</th><th>Priorizar com<button type="button" class="dica-btn" data-dica="voa-com" aria-label="O que é Priorizar com?" aria-expanded="false"></button></th><th>Não escalar com<button type="button" class="dica-btn" data-dica="nao-escalar-com" aria-label="O que é Não escalar com?" aria-expanded="false"></button></th><th aria-label="Ações"></th></tr></thead>
       <tbody id="alu"></tbody>
@@ -289,13 +293,13 @@
   </section>
 
   <!-- CURSOS: o programa de cada curso (js/views/cursos.js); o curso de cada aluno fica em Alunos -->
-  <section id="s-cur">
+  <section id="s-cur" class="tela">
     <h2>Cursos</h2>
     <div id="cursos"></div>
   </section>
 
   <!-- AGENDA DE SOLICITAÇÕES (secretaria) -->
-  <section id="s-age">
+  <section id="s-age" class="tela">
     <h2>Agenda de Solicitações</h2>
     <p class="h" id="agenda-prazo"></p>
     <div class="agenda">
@@ -320,7 +324,7 @@
   </section>
 
   <!-- DEMANDA -->
-  <section id="s-dem">
+  <section id="s-dem" class="tela">
     <h2>Demanda</h2>
     <div class="bar">
       <button class="btn sec edit-only" id="importar-agenda" data-act="importar-agenda" title="Traz os pedidos da agenda da secretaria para esta data (só acrescenta; não repete)">Importar da agenda</button>
@@ -365,7 +369,7 @@
   </section>
 
   <!-- ESCALA DO DIA -->
-  <section id="s-esc" class="on">
+  <section id="s-esc" class="tela on">
     <h2>Escala do dia <span class="atualizada" id="escala-atualizada" role="status" hidden><svg class="ico" aria-hidden="true"><use href="#i-relogio"/></svg><span id="escala-atualizada-texto"></span></span><span class="selo-aprovada" id="selo-aprovada" hidden></span></h2>
     <div class="bar">
       <div class="seg" role="group" aria-label="Como ver a escala">
@@ -401,14 +405,14 @@
   </section>
 
   <!-- RODÍZIO -->
-  <section id="s-rod">
+  <section id="s-rod" class="tela">
     <h2>Rodízio</h2>
-    <p class="h">Cada voo destas categorias vai para o primeiro livre da fila; quem voa vai para o fim na data seguinte. <a href="#manual-aba-rodizio" data-manual="manual-aba-rodizio">Como funciona o rodízio</a></p>
+    <p class="h">Cada voo destas categorias vai para o primeiro livre da fila; quem voa vai para o fim na data seguinte. <a href="#/manual/manual-aba-rodizio" data-focar>Como funciona o rodízio</a></p>
     <div id="rodizio" class="rodizio"></div>
   </section>
 
   <!-- MINHA CONTA E USUÁRIOS -->
-  <section id="s-conta">
+  <section id="s-conta" class="tela">
     <h2>Minha conta</h2>
     <p class="h" id="conta-dados"></p>
     <div class="conta">
@@ -452,7 +456,7 @@
   </section>
 
   <!-- MANUAL (botão "Manual" no topo). As tabelas de regras vêm do código (js/manual.js) -->
-  <section id="s-manual" class="manual">
+  <section id="s-manual" class="tela manual">
     <h2>Manual do AutoEscala</h2>
     <p class="manual-intro">O AutoEscala monta a escala diária do aeroclube: quem voa, com qual instrutor, em qual avião e em qual horário.
     Você informa os recursos do dia e quem vai voar; o sistema monta a escala sozinho, seguindo as regras do aeroclube, e a refaz a cada alteração.</p>
@@ -936,7 +940,7 @@
   </section>
 
   <!-- BI -->
-  <section id="s-bi">
+  <section id="s-bi" class="tela">
     <h2>BI</h2>
     <div class="bar">
       <label class="chip">Data base <input type="date" id="bi-dt"></label>
@@ -949,6 +953,7 @@
     <div id="bi-content"></div>
   </section>
 </main>
+</div>
 
 <!-- HISTÓRICO DA DATA: gaveta lateral que abre sobre qualquer aba -->
 <aside class="gaveta" id="historico" aria-labelledby="historico-titulo" hidden>

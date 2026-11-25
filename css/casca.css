@@ -61,6 +61,7 @@ header.topo {
 .hd-sel { border-color: rgba(255,255,255,.2); }
 .hd-sel option { background: var(--hd); color: var(--hdT); }
 .hd-btn:hover:not(:disabled) { background: rgba(255,255,255,.1); }
+a.hd-btn { text-decoration: none; }
 .hd-btn:disabled, .hd-sel:disabled { opacity: 0.65; cursor: not-allowed; }
 .badge-cnt {
   background: rgba(255,255,255,.18);
@@ -154,8 +155,11 @@ body[data-perfil="secretaria"] #btn-share-link { display: none !important; }
    conta, claro, fica dentro da barra e mantém o azul */
 header.topo :focus-visible { outline-color: #fff; }
 header.topo .menu-itens :focus-visible { outline-color: var(--ac); }
-section { display: none; }
-section.on { display: block; }
+/* A moldura do conteúdo: os avisos do app e as telas; só a tela aberta aparece (js/views/telas.js) */
+.casca { max-width: 1280px; margin: 0 auto; padding: 16px 16px 60px; }
+main#conteudo:focus { outline: none; }
+main#conteudo > section { display: none; }
+main#conteudo > section.on { display: block; }
 /* Perfil Gestor: só consulta */
 body[data-role="gestor"] .edit-only { display: none !important; }
 /* Dados pessoais: só operadores, administradores e a secretaria (que no resto entra como consulta) */
@@ -167,14 +171,14 @@ body[data-role="gestor"] main input:not(.flt-ctrl):not(.agenda-campo):not(.conta
 body[data-role="gestor"] main select:not(.flt-ctrl):not(.agenda-campo):not(.conta-campo) {
   opacity: 0.82;
 }
-/* O link para pular a barra do topo e as abas: aparece só com o foco do teclado. O <main> não recebe o foco (um
-   tabindex nele faria um clique num texto levar o próximo Tab ao topo): o link leva o próximo Tab para dentro dele */
+/* O link para pular a barra do topo e as abas: aparece só com o foco do teclado. O <main> recebe o foco só por ele, até o
+   foco sair (js/views/telas.js; um tabindex fixo faria um clique num texto levar o próximo Tab ao topo) */
 .pular { position: absolute; left: 8px; top: -64px; z-index: 100; padding: 10px 14px; border-radius: 6px; background: var(--ac); color: var(--acT); font-weight: 600; text-decoration: none; }
 .pular:focus { top: 8px; }
 /* Login (modo compartilhado, Supabase) */
 #s-login { display: none; max-width: 420px; margin: 32px auto; }
 body[data-login] #s-login { display: block; }
-body[data-login] main > section:not(#s-login),
+body[data-login] main#conteudo > section:not(#s-login),
 body[data-login] #nav,
 body[data-login] .topo-data,
 body[data-login] .hd-tools > :not(.menu-conta) { display: none !important; }
@@ -194,8 +198,9 @@ body[data-backend="supabase"] #btn-bi-clr { display: none !important; }
 }
 .aviso-link.ok { border-color: var(--ok); }
 @media print {
-  header, .bar, nav, section:not(#s-esc), #toast-box { display: none !important; }
-  section#s-esc { display: block; }
+  header.topo, #nav, .avisos-do-app, .gaveta, #tl-pop, .bar, main#conteudo > section:not(#s-esc), #toast-box { display: none !important; }
+  main#conteudo > section#s-esc { display: block; }
+  .casca { display: block; max-width: none; }
   /* Os botões que agendam não vão para o papel */
   .tl-agendar, .win-agendar, .tl-pop-btn[data-act="agendar"] { display: none !important; }
 }

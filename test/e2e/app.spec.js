@@ -64,17 +64,18 @@ test.describe('Aplicação', () => {
     }
   });
 
-  // O único botão que leva a outra aba (data-go) é o "Abrir a Demanda", em Alunos: os pedidos de cada data ficam lá
+  // O único link de dentro de uma tela para outra é o "Abrir a Demanda", em Alunos: os pedidos de cada data ficam lá
   test('navega pelas abas; sem os botões "Próximo" de um passo a passo', async ({ page }) => {
     await abrir(page);
     for (const aba of ['ins', 'alu', 'cur', 'dem', 'esc', 'bi', 'rec']) {
       await irPara(page, aba);
       await expect(botaoDaAba(page, aba)).toHaveClass(/\bon\b/);
-      await expect(page.locator('section.on')).toHaveCount(1);
+      await expect(page.locator('main#conteudo > section.on')).toHaveCount(1);
+      await expect(page).toHaveURL(new RegExp(`#/${aba}$`));
     }
     await expect(page.getByRole('button', { name: /^Próximo:/ })).toHaveCount(0);
-    await expect(page.locator('[data-go]')).toHaveCount(1);
-    await expect(page.locator('#s-alu [data-go="dem"]')).toHaveText('Abrir a Demanda');
+    await expect(page.locator('main#conteudo a[href^="#/"]:not([href^="#/manual"])')).toHaveCount(1);
+    await expect(page.locator('#s-alu a[href="#/dem"]')).toHaveText('Abrir a Demanda');
   });
 
   test('aplica a folha de estilos (tokens de cor, layout e fontes)', async ({ page }) => {
@@ -86,7 +87,7 @@ test.describe('Aplicação', () => {
       fundo: getComputedStyle(document.body).backgroundColor,
       fonte: getComputedStyle(document.body).fontFamily,
       secaoInativa: getComputedStyle(document.querySelector('#s-bi')).display,
-      principalMax: getComputedStyle(document.querySelector('main')).maxWidth
+      principalMax: getComputedStyle(document.querySelector('.casca')).maxWidth
     }));
     expect(await estilos()).toEqual({
       tinta: '#12263A', fundo: 'rgb(238, 242, 245)', fonte: expect.stringContaining('Barlow'), secaoInativa: 'none', principalMax: '1280px'
