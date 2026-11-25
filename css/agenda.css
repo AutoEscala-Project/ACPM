@@ -6,7 +6,7 @@
   .agenda { grid-template-columns: 1fr; }
 }
 .cal-cab { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-.cal { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+#agenda-cal .cal { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
 .cal .sem { font-size: 11px; color: var(--mu); text-align: center; }
 .cal .dia { position: relative; border: 1px solid var(--ln); border-radius: 4px; background: var(--pn); color: var(--ink); padding: 8px 0; font: inherit; cursor: pointer; }
 .cal .dia.fora { opacity: .45; }
@@ -27,5 +27,5 @@ body:not([data-agenda="edita"]) .agenda-acao { display: none !important; }
 #agenda-importar { margin: 10px 0 8px; }
 @media (max-width: 640px) {
   .cal .dia { min-height: 44px; }
-  .cal { gap: 2px; }
+  #agenda-cal .cal { gap: 2px; }
 }

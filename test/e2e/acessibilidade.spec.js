@@ -1,6 +1,6 @@
 // Acessibilidade: cada botão e cada campo tem um nome para o leitor de tela, e nenhum se chama só "✕" (que o leitor
 // lê como "multiplicação"). Vale para todas as abas, o Histórico e o painel de habilitações.
-import { test, expect, abrir, abrirComExemplo, irPara, entrar, abrirEscala, abrirCaixa, prepararContexto, vigiarErros, REGIOES, abasVisiveis, abrirHistorico, aprovar, botaoAprovar, botaoDoHistorico, botaoDoMenuDaConta, percorrerTelas, relativoDaData, rotuloDaData, semNome, alternarVem, botoesDasAbas, botaoDaData, mudarData } from './fixtures.js';
+import { test, expect, abrir, abrirComExemplo, irPara, entrar, abrirEscala, abrirCaixa, prepararContexto, vigiarErros, REGIOES, abasVisiveis, abrirHistorico, aprovar, botaoAprovar, botaoDoHistorico, botaoDoMenuDaConta, percorrerTelas, relativoDaData, rotuloDaData, semNome, alternarVem, botoesDasAbas, botaoDaData, mudarData, contagemDoDia, diaDoCalendario, trilho, AMANHA } from './fixtures.js';
 import { instalarSupabaseFalso, documentosAtuais, CONTAS } from './supabase-falso.js';
 import { comExemplo } from '../helpers/exemplo.js';
 import { estadoSintetico } from '../helpers/estado.js';
@@ -38,10 +38,10 @@ test.describe('O foco do teclado na barra do topo', () => {
       await abrirComExemplo(page);
       await page.evaluate(t => { document.documentElement.dataset.theme = t; }, tema);
       const fundo = await page.locator('header.topo').evaluate(el => getComputedStyle(el).backgroundColor);
-      // A data (as setas), o perfil, o Histórico, o Manual (um link) e o menu da conta
+      // O botão da data, o perfil, o Histórico, o Manual (um link) e o menu da conta
       const controles = page.locator('header.topo :is(button, select, a[href]):visible:not(:disabled)');
       const total = await controles.count();
-      expect(total).toBeGreaterThanOrEqual(6);
+      expect(total).toBeGreaterThanOrEqual(5);
       const fracos = [];
       for (let i = 0; i < total; i++) {
         const controle = controles.nth(i);
@@ -598,6 +598,35 @@ test.describe('O leitor de tela e o teclado', () => {
         await link.focus();
         const anel = await link.evaluate(el => getComputedStyle(el).outlineColor);
         if (razaoDeContraste(anel, fundo) < 3) fracos.push(await link.getAttribute('href'));
+      }
+      expect(fracos).toEqual([]);
+    });
+
+    // O trilho (F1b): os dias (o número sobre o círculo de hoje, os discretos, o número de pedidos) e a linha da data; e o
+    // anel do foco dos controles dele, com o fundo do painel
+    test(`os textos do trilho contrastam, e o anel do foco dele também, no tema ${nome}`, async ({ page, context }) => {
+      const servidor = await instalarSupabaseFalso(context, documentosAtuais(comExemplo(estadoSintetico()), AMANHA));
+      for (const [id, data] of [[1, '2026-11-10'], [2, '2026-11-13']]) {
+        servidor.solicitacoes.push({ id, data, aluno: 1000, aluno_nome: 'Aluno 1000', missao: 'Voo Local', janela: 'horario', horario: '08:20', horas: 1, observacao: null,
+          registrado_por: 'Maria', registrado_em: '2026-11-10T14:00:00.000Z', conta: 'Secretaria de Teste', excecao: false, cancelada_em: null, cancelada_por: null });
+      }
+      await entrar(page, CONTAS.operador);
+      await page.evaluate(t => { document.documentElement.dataset.theme = t; }, tema);
+      await botaoDaData(page).click();
+      await expect(contagemDoDia(page, '2026-11-13')).toBeVisible();
+      expect(await contrastesFracos([
+        ['o mês', page.locator('#cal-mes')], ['o dia da semana', page.locator('#cal th').first()], ['um dia', diaDoCalendario(page, '2026-11-12')],
+        ['a data aberta', diaDoCalendario(page, AMANHA)], ['hoje', diaDoCalendario(page, '2026-11-10')], ['um domingo', diaDoCalendario(page, '2026-11-15')],
+        ['um dia de outro mês', diaDoCalendario(page, '2026-12-01')], ['os pedidos de um dia', contagemDoDia(page, '2026-11-13')],
+        ['os pedidos de hoje', contagemDoDia(page, '2026-11-10')], ['a linha da data', page.locator('#trilho-data')]
+      ])).toEqual([]);
+      const fundo = await trilho(page).evaluate(el => getComputedStyle(el).backgroundColor);
+      const fracos = [];
+      for (const controle of await trilho(page).locator('button:visible, a:visible').all()) {
+        await controle.focus();
+        await page.keyboard.press('Shift');
+        const { cor, estilo, quem } = await controle.evaluate(el => ({ cor: getComputedStyle(el).outlineColor, estilo: getComputedStyle(el).outlineStyle, quem: el.id || el.dataset.dia }));
+        if (estilo === 'none' || razaoDeContraste(cor, fundo) < 3) fracos.push(`${quem}: ${estilo} ${razaoDeContraste(cor, fundo).toFixed(2)}:1`);
       }
       expect(fracos).toEqual([]);
     });

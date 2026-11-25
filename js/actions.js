@@ -302,13 +302,16 @@ export async function lerData(data) {
 }
 
 // Abre a escala de outra data. As abas são refeitas com os dados dela, também a do Rodízio: aberta, ela mostraria as
-// filas da data anterior, e o clique agiria sobre uma fila que a pessoa não está vendo
+// filas da data anterior, e o clique agiria sobre uma fila que a pessoa não está vendo. A data está aberta com os dados na
+// tela: os pedidos dela e o BI do período chegam depois, sem segurar quem a abriu. Responde se ela abriu (false: outra
+// data foi pedida depois)
 export async function carregarData(data) {
-  if (!await lerData(data)) return;
+  if (!await lerData(data)) return false;
   $('#escala-atualizada').hidden = true;
   redesenhar('dados');
   lerPedidosDaData();
-  await carregarBI();
+  carregarBI();
+  return true;
 }
 
 // BI das escalas guardadas no mês da data base (e nos 7 dias até ela), com a escala da tela já incluída.

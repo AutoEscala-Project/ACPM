@@ -166,7 +166,7 @@ test.describe('A escala abrindo: nada é gravado antes de os dados da data chega
     await entrar(page, CONTAS.administrador);
     await abrirEscala(page);
     const liberar = servidor.segurarLeiturasDeDias();
-    await diaSeguinte(page);
+    await diaSeguinte(page, { esperar: false });
 
     const resultado = page.locator('#out tbody tr:not(.win)', { hasText: 'Aluno 1000' }).locator('[data-resultado]');
     await recusada(page, 'o resultado da missão', () => resultado.selectOption('aprovado'));
@@ -223,7 +223,7 @@ test.describe('A escala abrindo: nada é gravado antes de os dados da data chega
     await expect(page.locator('#aviso-dados')).toBeVisible();
     await abrirEscala(page);
     const liberar = servidor.segurarLeiturasDeDias();
-    await diaSeguinte(page);
+    await diaSeguinte(page, { esperar: false });
     // A escala de amanhã só foi calculada: exportar a gravaria
     await exportar(page, 'csv');
     await page.locator('#btn-tentar-dados').click();
@@ -373,8 +373,8 @@ test.describe('A escala abrindo: nada é gravado antes de os dados da data chega
       if (segurar) { segurar = false; await espera; }
       await route.fallback();
     });
-    await diaSeguinte(page);
-    await diaSeguinte(page);
+    await diaSeguinte(page, { esperar: false });
+    await diaSeguinte(page, { esperar: false });
     await page.waitForTimeout(300);
     await expect(rotuloDaData(page)).toContainText('11/11');
     soltar();
@@ -403,7 +403,7 @@ test.describe('A escala abrindo: nada é gravado antes de os dados da data chega
     await preencherLogin(page, CONTAS.operador);
     await expect(page.locator('#aviso-sync-texto')).toHaveText(FALHA);
     await page.locator('#toast-box').evaluate(caixa => caixa.replaceChildren());
-    await diaSeguinte(page);
+    await diaSeguinte(page, { esperar: false });
     await expect(page.locator('#toast-box .toast')).toHaveText(['Não foi possível abrir essa data. Verifique a conexão e tente de novo.']);
     await expect(dataAberta(page)).toHaveAttribute('data-data', AMANHA);
     await recusada(page, '+ Novo aluno', async () => { await irPara(page, 'alu'); await page.locator('#s-alu [data-act="adds"]').click(); });
@@ -430,7 +430,7 @@ test.describe('A escala abrindo: nada é gravado antes de os dados da data chega
     }, JSON.stringify(estado()));
     await page.goto('./');
     await expect(page.locator('#aviso-sync-texto')).toHaveText(FALHA);
-    await diaSeguinte(page);
+    await diaSeguinte(page, { esperar: false });
     await expect(page.locator('#toast-box')).toContainText('Não foi possível abrir essa data.');
     await expect(dataAberta(page)).toHaveAttribute('data-data', AMANHA);
     await recusada(page, '+ Novo aluno', async () => { await irPara(page, 'alu'); await page.locator('#s-alu [data-act="adds"]').click(); });
@@ -595,7 +595,7 @@ test.describe('Os cursos, o agendamento e a missão do curso: nada muda antes de
     const servidor = servidorDoDia();
     const { contexto, page, erros } = await abrirODia(browser, servidor);
     const liberar = servidor.segurarLeiturasDeDias();
-    await diaSeguinte(page);
+    await diaSeguinte(page, { esperar: false });
     await nadaMuda(page, servidor);
     liberar();
     await valemNaDataNova(page, servidor);
@@ -609,7 +609,7 @@ test.describe('Os cursos, o agendamento e a missão do curso: nada muda antes de
     const { contexto, page, erros } = await abrirODia(browser, servidor, { statusEsperados: [503] });
     // A leitura da data falha, também nas tentativas de novo do supabase-js: a tela continua a da data anterior
     servidor.falhar('/rest/v1/dias', 1000);
-    await diaSeguinte(page);
+    await diaSeguinte(page, { esperar: false });
     await expect(page.locator('#toast-box')).toContainText('Não foi possível abrir essa data.', { timeout: 15000 });
     await expect(dataAberta(page)).toHaveAttribute('data-data', AMANHA);
     await nadaMuda(page, servidor);

@@ -93,6 +93,10 @@ export const rotuloDaData = page => page.locator('#dt-rotulo');
 export const relativoDaData = page => page.locator('#dt-rel');
 export const trilho = page => page.locator('#trilho');
 export const diaDoCalendario = (page, dia) => page.locator(`#cal .cal-dia[data-dia="${dia}"]`);
+export const diasDoCalendario = page => page.locator('#cal .cal-dia');
+// O número de pedidos de um dia, e os dias em que o Tab para (um só)
+export const contagemDoDia = (page, dia) => diaDoCalendario(page, dia).locator('.cal-qtd');
+export const paradasDoCalendario = page => page.locator('#cal .cal-dia[tabindex="0"]');
 
 const ehDomingo = iso => new Date(iso + 'T12:00:00Z').getUTCDay() === 0;
 const somarDias = (iso, dias) => new Date(Date.parse(iso + 'T12:00:00Z') + dias * 864e5).toISOString().slice(0, 10);
@@ -116,15 +120,16 @@ export async function mudarData(page, data) {
   await expect(dataAberta(page)).toHaveAttribute('data-data', data);
 }
 
-// O dia de operação seguinte e o anterior (o domingo fica de fora), pelo trilho
-async function andarDias(page, dias) {
+// O dia de operação seguinte e o anterior (o domingo fica de fora), pelo trilho, até ele abrir. esperar: false, sem esperar
+// (o teste segura ou derruba a leitura da data)
+async function andarDias(page, dias, { esperar = true } = {}) {
   const aberta = await dataAberta(page).getAttribute('data-data');
   let destino = somarDias(aberta, dias);
   if (ehDomingo(destino)) destino = somarDias(destino, dias);
-  await mudarData(page, destino);
+  await (esperar ? mudarData : escolherNoCalendario)(page, destino);
 }
-export const diaSeguinte = page => andarDias(page, 1);
-export const diaAnterior = page => andarDias(page, -1);
+export const diaSeguinte = (page, opcoes) => andarDias(page, 1, opcoes);
+export const diaAnterior = (page, opcoes) => andarDias(page, -1, opcoes);
 
 // O Histórico da data: o botão no topo e a lista das entradas (com texto, só as que o têm)
 export const botaoDoHistorico = page => page.locator('#btn-open-log');

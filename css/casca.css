@@ -111,9 +111,8 @@ body[data-perfil="secretaria"] #btn-share-link { display: none !important; }
 @media (max-width: 1029px) {
   header.topo { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "marca data" "ferramentas ferramentas"; }
 }
-/* No celular não cabem a marca e a data na mesma linha: a data ocupa a segunda linha inteira (o tamanho fixo mantém as
-   setas no lugar quando a data muda), e as ferramentas, só com os ícones, ficam ao lado da marca. Aqui o Tab passa pela
-   data antes das ferramentas, que estão acima dela */
+/* No celular não cabem a marca e a data na mesma linha: a data ocupa a segunda linha inteira, e as ferramentas, só com os
+   ícones, ficam ao lado da marca. Aqui o Tab passa pela data antes das ferramentas, que estão acima dela */
 @media (max-width: 640px) {
   header.topo { grid-template-areas: "marca ferramentas" "data data"; padding: 8px 12px; }
   .hd-sel { max-width: 110px; }

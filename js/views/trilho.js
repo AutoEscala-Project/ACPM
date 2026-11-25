@@ -1,10 +1,13 @@
 // O trilho (aside#trilho): o calendário da data aberta, com os pedidos de cada dia, e a linha da data. Fica ao lado da tela
-// (fixo, da largura média em diante, quando a pessoa escolhe; na larga, por padrão) ou abre como painel entre a linha e a
+// (fixo: na largura larga, por padrão; na média, quando a pessoa escolhe) ou abre como painel entre a linha e a
 // tela pelo botão da data (#btn-data). Só "Fixar ao lado" fica guardado, por classe de largura (acpm_trilho)
 import { $, trocarConteudo } from '../dom.js';
 import { esc, hojeISO, rotuloDaData } from '../format.js';
 import { semanasDoMes, paradaDoTab, descricaoDoDia, linhaDaData, nomeDoMes } from '../calendario.js';
+import { ehDomingo } from '../agenda.js';
 import { DATA } from '../state.js';
+import { ApiClient } from '../storage.js';
+import { pedidosDaDataAberta } from './selos.js';
 
 const ABREVIADOS = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
 const CABECA = [['D', 'domingo'], ['S', 'segunda-feira'], ['T', 'terça-feira'], ['Q', 'quarta-feira'], ['Q', 'quinta-feira'], ['S', 'sexta-feira'], ['S', 'sábado']];
@@ -18,8 +21,35 @@ export const mesDoTrilho = () => mesVisivel || (DATA || hojeISO()).slice(0, 7);
 export function mostrarMes(mes) { mesVisivel = mes; }
 export function marcarAbrindo(dia) { abrindo = dia; }
 export const diaAbrindo = () => abrindo;
-export function guardarContagem(valores) { contagem = valores || {}; }
 export const semanasAVista = () => semanasDoMes(mesDoTrilho());
+
+// Os pedidos (não cancelados) de cada dia das semanas à vista, para todos os perfis: lidos com os dados da primeira data
+// (antes deles, e da sessão, o app ainda lê deste navegador: nada é pedido), ao mudar o mês à vista, ao abrir o painel ou a
+// Agenda e depois de registrar ou cancelar um pedido. Sem resposta, os dias ficam sem número
+let dadosChegaram = false;
+let mesContado = null;
+let leituraDaContagem = 0;
+export async function lerContagemDosDias() {
+  if (!dadosChegaram) return;
+  const vez = ++leituraDaContagem;
+  const semanas = semanasAVista();
+  mesContado = mesDoTrilho();
+  let lidos = null;
+  try {
+    lidos = await ApiClient.contagemDaAgenda(semanas[0][0], semanas.at(-1).at(-1));
+  } catch {
+    // Sem a leitura, sem números (os dados da próxima data pedem de novo)
+  }
+  if (vez !== leituraDaContagem) return;
+  if (!lidos) mesContado = null;
+  contagem = lidos || {};
+  rTrilho();
+}
+// Os dados de uma data chegaram: a contagem é lida se o mês à vista ainda não foi contado
+export function contarComOsDados() {
+  dadosChegaram = true;
+  if (mesContado !== mesDoTrilho()) lerContagemDosDias();
+}
 
 // O estado do trilho: 'fixo' (ao lado), 'aberto' (o painel) ou 'fechado'
 export const estadoDoTrilho = () => document.body.dataset.trilho || 'fechado';
@@ -52,7 +82,7 @@ export function rRotuloDaData() {
 
 function botaoDoDia(dia, { mes, hoje, parada }) {
   const qtd = contagem[dia] || 0;
-  const domingo = new Date(dia + 'T12:00:00Z').getUTCDay() === 0;
+  const domingo = ehDomingo(dia);
   const classes = ['cal-dia', dia === hoje && 'hoje', dia === DATA && 'aberta', dia.slice(0, 7) !== mes && 'fora', domingo && 'domingo', dia === abrindo && 'abrindo'].filter(Boolean);
   const mesCurto = dia.slice(8, 10) === '01' && dia.slice(0, 7) !== mes ? `<small class="cal-mes-curto" aria-hidden="true">${ABREVIADOS[+dia.slice(5, 7) - 1]}</small>` : '';
   const atributos = [
@@ -71,9 +101,15 @@ export function rTrilho() {
   const mes = mesDoTrilho();
   const hoje = hojeISO();
   const semanas = semanasDoMes(mes);
-  const parada = paradaDoTab(semanas, { aberta: DATA, hoje });
+  // O dia em foco continua a parada do Tab num redesenho
+  const emFoco = document.activeElement && document.activeElement.closest('#cal .cal-dia');
+  const parada = emFoco && semanas.flat().includes(emFoco.dataset.dia) ? emFoco.dataset.dia : paradaDoTab(semanas, { aberta: DATA, hoje });
+  // O número da data aberta segue os pedidos dela já lidos
+  const { lista, leitura } = pedidosDaDataAberta();
+  if (leitura === 'lidos') contagem[DATA] = lista.filter(p => !p.cancelada_em).length;
   trilho.dataset.mes = mes;
-  $('#cal-mes').textContent = nomeDoMes(mes);
+  // O mês é dito quando muda (aria-live): o mesmo texto escrito de novo seria lido a cada redesenho
+  if ($('#cal-mes').textContent !== nomeDoMes(mes)) $('#cal-mes').textContent = nomeDoMes(mes);
   const cabeca = `<thead><tr>${CABECA.map(([letra, nome]) => `<th scope="col" aria-label="${nome}"><span aria-hidden="true">${letra}</span></th>`).join('')}</tr></thead>`;
   const corpo = `<tbody>${semanas.map(semana => `<tr>${semana.map(dia => botaoDoDia(dia, { mes, hoje, parada })).join('')}</tr>`).join('')}</tbody>`;
   trocarConteudo($('#cal'), cabeca + corpo);
