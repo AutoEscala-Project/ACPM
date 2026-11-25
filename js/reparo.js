@@ -22,6 +22,8 @@ import { hm } from './format.js';
 import { gruposDoConflito } from './conflitos.js';
 import { statusDoVoo, pedidosDosVoos } from './voo.js';
 import { pinoDoVoo } from './fixos.js';
+import { runAllocationEngine } from './engine.js';
+import { instrutoresDoPedido } from './instrutor-escolhido.js';
 import { ocupacaoDaEscala, problemaDoAluno, avioesQueServem, instrutoresQueServem } from './candidatos.js';
 import { inativoNoEstado } from './inativos.js';
 
@@ -342,3 +344,39 @@ export function desfazerAproveitamento(estado, { voos, pedidos }) {
   return true;
 }
 
+// ---------------------------------------------------------------------------------------------------------------------
+// O pedido recusado porque o instrutor escolhido não serve
+
+// O que encaixa o pedido recusado (fKey: a chave do voo que ele seria): o motor roda numa cópia com cada outro instrutor
+// que pode fazer o pedido e com "Automático"; só fica o que faz o pedido entrar sem tirar nem mudar nenhum outro voo
+// ("Automático" diz quem o app daria). A recusa do motor continua até o operador escolher. [{ insId (0: Automático),
+// texto }]
+export function sugestoesDoRejeitado(estado, resultado, fKey, motor = runAllocationEngine) {
+  const [stuId, mid] = fKey.split('_').map(Number);
+  const aluno = estado.stu.find(s => s.id === stuId);
+  const pedido = aluno ? pedidoDoAluno(aluno, mid) : null;
+  if (!pedido || !resultado) return [];
+  const antes = new Map(resultado.out.map(o => [o.fKey, o]));
+  const candidatos = [
+    ...instrutoresDoPedido(estado, aluno, pedido).filter(o => o.nota === '' && o.id !== pedido.insId).map(o => o.id),
+    ...(pedido.insId ? [0] : [])
+  ];
+  const opcoes = [];
+  for (const insId of candidatos) {
+    const copia = { ...estado, stu: structuredClone(estado.stu) };
+    const ref = pedidoDoAluno(copia.stu.find(s => s.id === stuId), mid);
+    if (insId) ref.insId = insId; else delete ref.insId;
+    const sim = motor(copia);
+    const novo = sim.out.find(o => o.fKey === fKey);
+    if (!novo) continue;
+    const outros = sim.out.filter(o => o.fKey !== fKey);
+    const mudou = outros.length !== resultado.out.length || outros.some(o => {
+      const era = antes.get(o.fKey);
+      return !era || era.a !== o.a || era.b !== o.b || era.r !== o.r || era.insId !== o.insId;
+    });
+    if (mudou) continue;
+    const lugar = `${hm(novo.a)} ${novo.isGround ? 'na' : 'no'} ${nomeDoRecurso(novo.r)}`;
+    opcoes.push({ insId, texto: insId ? `Com ${novo.ins}: ${lugar}` : `Automático (o app escolhe ${novo.ins}): ${lugar}` });
+  }
+  return opcoes;
+}

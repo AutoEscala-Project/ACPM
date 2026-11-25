@@ -179,3 +179,22 @@ test.describe('Sugestões para um voo cancelado', () => {
     await expect(gaveta(page).locator('.impossivel li')).toHaveCount(3);
   });
 });
+
+// A recusa do pedido cujo instrutor escolhido não serve também tem "Sugestões" (F1e): outro instrutor que o encaixa sem
+// mudar outro voo; aplicada, a escolha do pedido muda e ele entra; o histórico desfaz
+test('o pedido recusado pelo instrutor escolhido: "Sugestões" na linha da recusa encaixa com outro instrutor', async ({ page }) => {
+  await abrir(page, { estado: cenario({ ins: [instrutor(1, 9, { on: false }), instrutor(2, 9)], stu: [aluno(1000, { p1: 610, p2: -1, insId: 1 })] }) });
+  await abrirEscala(page);
+  await abrirCaixa(page, 'erros');
+  await page.locator('#out details.caixa.erros').getByRole('button', { name: 'Sugestões' }).click();
+  await expect(gaveta(page).locator('h2')).toContainText('Encaixar o pedido');
+  const primeira = gaveta(page).locator('.opcoes-reparo li').first();
+  await expect(primeira).toContainText('Com Instrutor 02');
+  await primeira.getByRole('button', { name: 'Aplicar' }).click();
+  await expect(gaveta(page)).toBeHidden();
+  await expect(linha(page, 'Aluno 1000').locator('.c-instr')).toContainText('Instrutor 02');
+  await abrirHistorico(page);
+  await page.locator('#audit-log-list [data-act="rev-log"]').first().click();
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#out details.caixa.erros')).toContainText('Aluno 1000');
+});

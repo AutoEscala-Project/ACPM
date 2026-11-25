@@ -19,6 +19,7 @@ import { ligada } from '../funcionalidades.js';
 import { sumUniqueOperationalHours, consolidateTimelineSlots } from '../engine.js';
 import { S, RES, AUDIT_LOG, TL_MODE, EIXO_INVERTIDO, OCULTAR_INDISPONIVEIS, DATA, isGestor, dadoIndisponivel, estadoDaEscala, inativoNaDataAberta } from '../state.js';
 import { cancelamentoAproveitavel } from '../reparo.js';
+import { rejeicoesDosPedidos } from '../rejeicoes.js';
 import { motivoDoFixo } from '../fixos.js';
 import { instrutoresDoVoo } from '../instrutor-escolhido.js';
 import { $, posicionarJunto, trocarConteudo, visivel } from '../dom.js';
@@ -475,6 +476,12 @@ function resumo(out, al, tot) {
   const avisos = al.filter(a => a.t !== 'err' && a.t !== 'conf');
   const horas = sumUniqueOperationalHours(out, statusDe);
   const item = a => `<li class="al ${a.t}"><b>${esc(a.s)}</b> ${esc(a.m)}</li>`;
+  // A recusa do pedido cujo instrutor escolhido não serve: "Sugestões" (o pedido dela vem do pareamento, js/rejeicoes.js)
+  const pedidoDaRecusa = new Map([...rejeicoesDosPedidos(estadoDaEscala(), RES)].map(([fKey, a]) => [a, fKey]));
+  const erro = a => {
+    const fKey = a.codigo === 'instrutor-escolhido' ? pedidoDaRecusa.get(a) : null;
+    return `<li class="al ${a.t}"><b>${esc(a.s)}</b> ${esc(a.m)}${fKey ? ` <button type="button" class="btn quiet edit-only" data-rejeitado="${esc(fKey)}" title="Outro instrutor que encaixa este pedido">Sugestões</button>` : ''}</li>`;
+  };
   const nomes = [...new Set(erros.map(a => a.s))].join(', ');
   let h = `<div class="resumo">
     <div class="st">
@@ -484,7 +491,7 @@ function resumo(out, al, tot) {
     </div>${tempoParado(out)}`;
   if (erros.length) {
     h += caixa('erros', 'erros', `<summary>${erros.length === 1 ? '1 missão não entrou' : `${erros.length} missões não entraram`} na escala: ${esc(nomes)}</summary>
-      <ul>${erros.map(item).join('')}</ul>`);
+      <ul>${erros.map(erro).join('')}</ul>`);
   }
   // Voos fixos que ficaram impossíveis (da escala aprovada, agendados ou com o instrutor escolhido na Escala): continuam no
   // lugar até o operador resolver

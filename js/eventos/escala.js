@@ -20,7 +20,7 @@ import { aoAcionar, aoMudarCampo, aoReverter } from './registro.js';
 import { vooDaChave } from './resultados.js';
 import { pedirDetalheDoStatus } from '../views/dialogo-status.js';
 import { rOut, lembrarCaixa, botaoDoInstrutor, seletorDeInstrutor, abrirPopupDoMapa, fecharPopupDoMapa, popupDoMapaAberto, reposicionarPopupDoMapa, tabNoPopup } from '../views/escala.js';
-import { abrirPainelDeReparo, fecharPainelDeReparo, opcaoDoPainel } from '../views/reparo.js';
+import { abrirPainelDeReparo, abrirPainelDoRejeitado, fecharPainelDeReparo, opcaoDoPainel } from '../views/reparo.js';
 import { registrarDesenho, redesenharPorNome } from '../redesenho.js';
 import { voosComInativos } from '../inativos.js';
 import { registrarTela } from '../views/telas.js';
@@ -255,12 +255,25 @@ document.addEventListener('click', e => {
 document.addEventListener('click', e => {
   const abrirSugestoes = e.target.closest('[data-reparo]');
   if (abrirSugestoes) { if (!isGestor()) abrirPainelDeReparo(abrirSugestoes.dataset.reparo); return; }
+  const doRejeitado = e.target.closest('[data-rejeitado]');
+  if (doRejeitado) { if (!isGestor()) abrirPainelDoRejeitado(doRejeitado.dataset.rejeitado); return; }
   if (e.target.closest('#btn-fechar-reparo')) { fecharPainelDeReparo(true); return; }
   const botao = e.target.closest('[data-reparo-aplicar]');
   if (!botao || isGestor() || aindaNaoAbriu()) return;
   const escolha = opcaoDoPainel(+botao.dataset.reparoAplicar);
   if (!escolha) return;
-  const { fKey, voo, opcao, cancelado } = escolha;
+  const { fKey, voo, opcao, cancelado, rejeitado } = escolha;
+  // O pedido recusado: a escolha do instrutor muda (0: "Automático"), com a reversão da escolha de sempre
+  if (rejeitado) {
+    fecharPainelDeReparo();
+    const [stuId, mid] = fKey.split('_').map(Number);
+    const x = opcao.insId ? insBy(opcao.insId) : null;
+    const { antes } = escolherInstrutor(S, RES, { stuId, mid }, x ? x.id : null);
+    gravarAlteracao('mod', `Pedido recusado encaixado: ${opcao.texto}`, { kind: 'restaurarEscolha', ...antes, label: '↶ Reverter' });
+    redesenharPorNome('pedidos-do-dia');
+    showToast('Instrutor escolhido: o pedido entra na escala.', 'ok');
+    return;
+  }
   // O voo cancelado aproveitado: a sugestão fora da disponibilidade do pedido ou em outro tipo pede a confirmação com o
   // aluno (dois cliques); aplicada, o voo fica fixo no lugar dela e volta para Pendente, e o pedido muda com ela
   if (cancelado) {
