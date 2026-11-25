@@ -19,8 +19,8 @@ test.describe('A gravação antes dos desenhos', () => {
     const { contexto, page, erros } = await novaPagina(browser);
     await abrirSintetico(page);
     await irPara(page, 'rec');
-    // A grade do dia dos instrutores é desenhada a cada escala refeita: sem o cabeçalho dela, o desenho falha
-    await page.evaluate(() => document.getElementById('inst-dia-cab').remove());
+    // A Escala é desenhada a cada escala refeita: sem o lugar dos critérios da compactação, o desenho dela falha
+    await page.evaluate(() => document.getElementById('criterios').remove());
     await alternarDisponivel(page, 'PR-BTB', false);
     await expect.poll(() => diaGravado(page)).toContain('"PR-BTB":false');
     await expect.poll(() => historicoGravado(page)).toEqual(['PR-BTB: Manutenção']);
