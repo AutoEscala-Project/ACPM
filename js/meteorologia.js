@@ -1,8 +1,8 @@
 // A meteorologia do painel (a vista Painel da Escala e a TV da recepção): o METAR e o TAF oficiais de Pampulha (SBBH) e
 // de Confins (SBCF), da função meteorologia do servidor (supabase/functions/meteorologia, que os busca na REDEMET, a
 // API do DECEA). O painel pede as mensagens quando aparece e, enquanto está na tela, a cada 10 minutos; uma busca que
-// falha não apaga as últimas mensagens boas (cada caixa diz a hora da observação do METAR dela). Sem servidor (este
-// navegador) ou sem a função publicada, o painel diz "Meteorologia indisponível", e nada mais muda.
+// falha não apaga as últimas mensagens boas (cada caixa passa a dizer a hora da observação do METAR dela). Sem servidor
+// (este navegador) ou sem a função publicada, o painel diz "Meteorologia indisponível", e nada mais muda.
 
 export const ATUALIZAR_MS = 10 * 60000;
 // O painel pede a cada virada do minuto: a tentativa de 10 minutos atrás, por alguns segundos, já vale (senão a busca
