@@ -11,7 +11,7 @@ import { S, RES, isGestor, stuBy, insBy, getMissionTarget } from '../state.js';
 import { chaveDoVoo } from '../voo.js';
 import { escolherInstrutor } from '../instrutor-escolhido.js';
 import { confirmado, comConfirmacao } from './confirmacao.js';
-import { aoAcionar, aoMudarCampo } from './registro.js';
+import { aoAcionar, aoMudarCampo, aoReverter } from './registro.js';
 import { singleDemandRowHTML, cnt, rDem, filtrarDemanda, manterNaDemanda, prepararFiltroDosCursos, conferirNenhumNaDemanda, limparFiltrosDaDemanda } from '../views/demanda.js';
 import { proximaDoPedido, outraMissaoDoPedido, botaoForaDaOrdem, confirmacaoDaMissao } from '../views/etapas.js';
 
@@ -274,4 +274,16 @@ aoMudarCampo('d', (t, { f, c, id, mid }) => {
   if (f === 'fly') conferirNenhumNaDemanda();
   cnt();
   redesenharPorNome('historico');
+});
+
+// "↶ Reverter" no histórico (js/eventos/historico.js): os tipos desta tela. A reversão chega validada (js/reversoes.js)
+aoReverter('setFly', (rev, entry) => {
+  const st = stuBy(rev.stuId);
+  const target = getMissionTarget(rev.stuId, rev.mid || 0);
+  if (st && target) {
+    target.fly = rev.val;
+    (rev.extras || []).forEach(m => { const ex = getMissionTarget(rev.stuId, m); if (ex) ex.fly = rev.val; });
+    gravarAlteracao(rev.val ? 'inc' : 'exc', `Revertido: ${st.nm} (${target.mis})`, null, entry.id);
+    rDem();
+  }
 });

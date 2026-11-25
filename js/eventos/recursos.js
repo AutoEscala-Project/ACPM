@@ -8,9 +8,9 @@ import { fmtH, lerHoras } from '../format.js';
 import { novoRecurso, ATRIBUTOS_DO_RECURSO, atributoVale } from '../frota.js';
 import { normalizarHangar, moverNoHangar } from '../hangar.js';
 import { horariosDaMissao, ajustarPreferencias, descreverHorarios } from '../horarios.js';
-import { S, isGestor } from '../state.js';
+import { S, isGestor, getMissionTarget } from '../state.js';
 import { confirmado } from './confirmacao.js';
-import { aoAcionar, aoMudarCampo } from './registro.js';
+import { aoAcionar, aoMudarCampo, aoReverter } from './registro.js';
 import { registrarDesenho, redesenharPorNome } from '../redesenho.js';
 import { filtrarRecursos, limparFiltrosDosRecursos, manterRecursoAVista, criarFiltroDasCategorias } from '../views/filtros-dos-recursos.js';
 import { NOMES_DAS_CATEGORIAS, abrirEditorDosHorarios, fecharEditorDosHorarios, tirarDoRascunho, porNoRascunho, escolherModelo, rascunhoDosHorarios, editorDosHorariosAberto } from '../views/horarios.js';
@@ -228,3 +228,41 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Enter' && e.target.classList.contains('hr-novo')) { e.preventDefault(); porNoRascunho(); }
 });
 fecharNoEsc(() => (editorDosHorariosAberto() ? $('#horarios') : null), fecharEditorDosHorarios);
+
+// "↶ Reverter" no histórico (js/eventos/historico.js): os tipos desta tela. A reversão chega validada (js/reversoes.js)
+aoReverter('setAv', (rev, entry) => {
+  S.av[rev.reg] = rev.val;
+  gravarAlteracao(rev.val ? 'inc' : 'exc', `Revertido: ${rev.reg} ${rev.val ? 'disponível' : 'em manutenção'}`, null, entry.id);
+  rRec();
+});
+
+aoReverter('setAtributo', (rev, entry) => {
+  const recurso = (S.frota || []).find(f => f.reg === rev.reg);
+  if (recurso && atributoVale(rev.atributo, recurso.tipo)) {
+    if (rev.val) recurso[rev.atributo] = true;
+    else delete recurso[rev.atributo];
+    gravarAlteracao('mod', `Revertido: ${entry.desc}`, null, entry.id);
+    rRec(); redesenharPorNome('instrutores', 'pedidos-do-dia');
+  }
+});
+
+aoReverter('restaurarHorarios', (rev, entry) => {
+  // Os horários de uma categoria voltam como estavam, e os pedidos que mudaram com eles também
+  S.horarios = { ...S.horarios, [rev.cat]: [...rev.lista] };
+  rev.pedidos.forEach(({ stuId, mid, p1, p2, jan }) => {
+    const alvo = getMissionTarget(stuId, mid);
+    if (!alvo) return;
+    Object.assign(alvo, { p1, p2 });
+    if (jan !== undefined) alvo.jan = jan;
+  });
+  gravarAlteracao('mod', `Revertido: ${entry.desc}`, null, entry.id);
+  rRec(); redesenharPorNome('pedidos-do-dia');
+});
+
+aoReverter('readicionarRecurso', (rev, entry) => {
+  // Um recurso retirado volta para a frota, como estava (com a habilitação própria, em Instrutores)
+  S.frota.push({ ...rev.recurso });
+  S.av[rev.recurso.reg] = rev.av !== false;
+  gravarAlteracao('inc', `Revertido: ${rev.recurso.reg} de volta à frota`, null, entry.id);
+  rRec(); redesenharPorNome('instrutores');
+});

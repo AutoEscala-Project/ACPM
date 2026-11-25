@@ -5,16 +5,17 @@ import { opcoesDeCategoria } from '../categorias.js';
 import { OPCOES_DE_BURACOS, OPCOES_DE_HORARIOS, normalizarCriterios } from '../criterios.js';
 import { $, showToast, anunciar, algumDialogoAberto, gavetaDoEsc } from '../dom.js';
 import { exp, pdf, planilha } from '../export.js';
-import { fixosAoMudarStatus, fixosAoReabrir, fixosAoAprovar } from '../fixos.js';
+import { fixosAoMudarStatus, fixosAoReabrir, fixosAoAprovar, normalizarFixos } from '../fixos.js';
 import { hm } from '../format.js';
 import { aplicarReparo } from '../reparo.js';
-import { S, RES, DATA, isGestor, modoCompartilhado, insBy } from '../state.js';
-import { escolherInstrutor, escolhasDaUnidade, escolherNosPedidos } from '../instrutor-escolhido.js';
+import { S, RES, DATA, AUDIT_LOG, isGestor, modoCompartilhado, insBy } from '../state.js';
+import { escolherInstrutor, escolhasDaUnidade, escolherNosPedidos, reverterEscolha, reverterReparo } from '../instrutor-escolhido.js';
+import { agendamentosEmVolta } from '../reversoes.js';
 import { STATUS_COM_DETALHE, textoParaOHistorico, detalheAoMudarStatus, rotuloDoStatus } from '../status.js';
 import { ApiClient } from '../storage.js';
 import { agendarNoMapa } from './agendamento.js';
 import { confirmado } from './confirmacao.js';
-import { aoAcionar, aoMudarCampo } from './registro.js';
+import { aoAcionar, aoMudarCampo, aoReverter } from './registro.js';
 import { pedirDetalheDoStatus } from '../views/dialogo-status.js';
 import { cursoDoResultado } from '../views/etapas.js';
 import { rOut, botaoDoInstrutor, seletorDeInstrutor, abrirPopupDoMapa, fecharPopupDoMapa, popupDoMapaAberto, reposicionarPopupDoMapa, tabNoPopup } from '../views/escala.js';
@@ -299,4 +300,24 @@ document.addEventListener('click', e => {
 // do agendamento), o Esc fecha só o diálogo
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape' && gavetaDoEsc(e) === $('#painel-reparo') && !algumDialogoAberto()) fecharPainelDeReparo(true);
+});
+
+// "↶ Reverter" no histórico (js/eventos/historico.js): os tipos desta tela. A reversão chega validada (js/reversoes.js)
+aoReverter('restaurarFixos', (rev, entry) => {
+  // Um reparo desfeito: os voos voltam a ser fixos como antes dele, e o instrutor escolhido dos pedidos também. O voo
+  // agendado volta só enquanto o agendamento continua: o histórico diz qual foi desfeito ou feito depois do reparo
+  // (js/reversoes.js e js/instrutor-escolhido.js)
+  reverterReparo(S, rev, agendamentosEmVolta(S, AUDIT_LOG, entry, S.frota));
+  S.fixos = normalizarFixos(S.fixos);
+  if (rev.pedidos) redesenharPorNome('pedidos-do-dia');
+  gravarAlteracao('mod', `Revertido: ${entry.desc}`, null, entry.id);
+});
+
+aoReverter('restaurarEscolha', (rev, entry) => {
+  // O instrutor escolhido volta como estava, e os voos fixos também; o voo agendado, só enquanto o agendamento
+  // continua (js/reversoes.js e js/instrutor-escolhido.js)
+  reverterEscolha(S, rev, agendamentosEmVolta(S, AUDIT_LOG, entry, S.frota));
+  S.fixos = normalizarFixos(S.fixos);
+  gravarAlteracao('mod', `Revertido: ${entry.desc}`, null, entry.id);
+  redesenharPorNome('pedidos-do-dia');
 });

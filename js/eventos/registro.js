@@ -45,3 +45,13 @@ document.addEventListener('change', e => {
   if (!c || !campos.has(c.dataset.k)) return;
   campos.get(c.dataset.k)(t, { f, c, id: +c.dataset.id, mid: c.dataset.mid !== undefined ? +c.dataset.mid : 0 });
 });
+
+const reversoes = new Map();
+// O que "↶ Reverter" faz com um tipo de reversão do histórico (o kind gravado na entrada): desfazer(rev, entrada) recebe a
+// reversão já validada (validarReversao, js/reversoes.js) e a entrada revertida. Um tipo registrado duas vezes é erro, e
+// um tipo sem registro (um botão que não faria nada) falha em test/unit/reversoes-registradas.test.js
+export function aoReverter(tipo, desfazer) {
+  if (reversoes.has(tipo)) throw new Error(`A reversão "${tipo}" já está registrada.`);
+  reversoes.set(tipo, desfazer);
+}
+export const desfazerDoTipo = tipo => reversoes.get(tipo);

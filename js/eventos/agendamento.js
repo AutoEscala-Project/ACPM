@@ -7,13 +7,14 @@
 // nada: nem o voo, nem os pesos, nem o instrutor marcado disponível
 import { gravarAlteracao, logChange, aindaNaoAbriu } from '../actions.js';
 import { aplicarAgendamento, descricaoDoAgendamento, reversaoDoAgendamento, historicoDosPesos } from '../agendamento.js';
+import { motivoParaNaoDesfazer, desfazerAgendamento } from '../reversoes.js';
 import { isGroundMission } from '../rules.js';
 import { hm } from '../format.js';
 import { chaveDoVoo } from '../voo.js';
 import { $, showToast, visivel } from '../dom.js';
 import { S, isGestor, stuBy } from '../state.js';
 import { ApiClient } from '../storage.js';
-import { aoAcionar } from './registro.js';
+import { aoAcionar, aoReverter } from './registro.js';
 import { abrirAgendamento } from '../views/agendamento.js';
 import { redesenharPorNome } from '../redesenho.js';
 
@@ -50,3 +51,16 @@ export function agendarNoMapa(contexto) {
   if (aindaNaoAbriu()) return;
   abrirAgendamento(contexto, { aoConfirmar: confirmarAgendamento });
 }
+
+// "↶ Reverter" no histórico (js/eventos/historico.js): os tipos desta tela. A reversão chega validada (js/reversoes.js)
+aoReverter('desfazerAgendamento', (rev, entry) => {
+  // Um voo agendado na Escala: o criado sai, o movido volta para onde estava, e o instrutor marcado disponível volta
+  // como estava (js/reversoes.js). O voo já em andamento ou com resultado registrado fica, com o aviso; o movido cujo
+  // pedido saiu da Demanda também (não há o que desfazer)
+  const motivo = motivoParaNaoDesfazer(S, rev);
+  if (motivo) { showToast(motivo); return; }
+  if (desfazerAgendamento(S, rev)) {
+    gravarAlteracao(rev.criado ? 'exc' : 'mod', `Revertido: ${entry.desc}`, null, entry.id);
+    redesenharPorNome('pedidos-do-dia', 'instrutores');
+  }
+});

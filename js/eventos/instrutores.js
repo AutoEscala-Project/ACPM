@@ -13,7 +13,7 @@ import { S, DATA, insBy } from '../state.js';
 import { confirmado } from './confirmacao.js';
 import './limites.js';
 import './painel-de-dados.js';
-import { aoAcionar, aoMudarCampo } from './registro.js';
+import { aoAcionar, aoMudarCampo, aoReverter } from './registro.js';
 import { registrarDesenho, redesenharPorNome } from '../redesenho.js';
 import { aoMudarDadosPessoais } from '../views/dados-pessoais.js';
 import { rIns, rInsDia, prepararFiltrosDosInstrutores, filtrarInstrutores, limparFiltrosDosInstrutores, manterInstrutorAVista, abrirPainelDoInstrutor, fecharPainelDoInstrutor, atualizarLinhaDoCadastro, rPainelDoInstrutor, atualizarCanacDosInstrutores } from '../views/instrutores.js';
@@ -125,4 +125,14 @@ aoMudarCampo('i', (t, { f, id }) => {
   if (f === 'nm') redesenharPorNome('alunos');
   // A Demanda mostra os instrutores de cada pedido: o nome, quem vem na data e quem tem a habilitação
   if (['nm', 'on', 'hab'].includes(f)) redesenharPorNome('pedidos-do-dia');
+});
+
+// "↶ Reverter" no histórico (js/eventos/historico.js): os tipos desta tela. A reversão chega validada (js/reversoes.js)
+aoReverter('setInsOn', (rev, entry) => {
+  const ins = insBy(rev.insId);
+  if (ins) {
+    ins.on = rev.val;
+    gravarAlteracao(rev.val ? 'inc' : 'exc', `Revertido: ${ins.nm} ${rev.val ? 'disponível' : 'indisponível'}`, null, entry.id);
+    rIns();
+  }
 });
