@@ -181,7 +181,11 @@ function buscaDoVoo(estado, resultado, voo, grupo, { depoisDe = null, semInstrut
   // O horário serve ao aluno (livre nele) e está na disponibilidade do pedido? (fora dela, só com o aluno)
   const alunoLivre = (a, b) => grupo.every(v => !problemaDoAluno(ocupacao, v.stuId, { a, b }));
   const naDisponibilidade = a => grupo.every(v => { const permitidas = disponibilidadeDoAluno((pedidoDo(v) || {}).jan); return !permitidas || permitidas(a); });
-  const horarioAberto = m => m + duracao <= limite && Boolean(estado.win[periodoDoMinuto(m)]) && !passou(m) && alunoLivre(m, m + duracao);
+  // O voo começa depois do fim do Ground de que depende (o do aluno no dia, no tipo do voo)
+  const inicioMinimo = tipo => (voo.isGround ? 0 : Math.max(0, ...grupo.flatMap(v => ocupacao.alunos.get(v.stuId) || [])
+    .filter(o => o.isGround && doesGroundGateFlight(o.mis, { mis: voo.mis, eq: tipo })).map(o => o.b)));
+  const horarioAberto = (m, tipo = tipoDoVoo) => m + duracao <= limite && m >= inicioMinimo(tipo) && Boolean(estado.win[periodoDoMinuto(m)])
+    && !passou(m) && alunoLivre(m, m + duracao);
   const inicios = tipo => (voo.isGround ? T.slice(0, NI) : horariosDaMissao(estado.horarios || HORARIOS_INICIAIS, voo.mis, tipo));
   const atual = estado.ins.find(x => x.id === voo.insId);
   const comCombustivel = (texto, { reducao }) => (reducao > 0 ? `${texto} · reduzir ${reducao} gal` : texto);
@@ -220,7 +224,8 @@ function buscaDoVoo(estado, resultado, voo, grupo, { depoisDe = null, semInstrut
     mesmoAviao(maximo = 2) {
       if (semAviao === voo.r) return [];
       const { a, b } = voo;
-      if (!avioes(tipoDoVoo, a, b).includes(voo.r) && !voo.isGround) return [];
+      // O avião, ou a sala de Ground, livre no horário
+      if (!avioes(tipoDoVoo, a, b).includes(voo.r)) return [];
       return instrutores(tipoDoVoo, a, b, voo.r).slice(0, maximo).map(c => opcao('instrutor', tipoDoVoo, a, { r: voo.r, c },
         `${hm(a)} ${noOuNa(voo.r)}, com ${c.x.nm}`));
     },
@@ -248,7 +253,7 @@ function buscaDoVoo(estado, resultado, voo, grupo, { depoisDe = null, semInstrut
       if (voo.isGround) return null;
       for (const tipo of ((MIS[voo.mis] || {}).eq || []).filter(t => t !== tipoDoVoo)) {
         for (const m of pertoDoVoo(inicios(tipo).filter(x => (semHorario ? x !== voo.a : true)))) {
-          if (!horarioAberto(m)) continue;
+          if (!horarioAberto(m, tipo)) continue;
           const l = lugar(tipo, m);
           if (l) return opcao('tipo', tipo, m, l, `No ${tipo}: ${hm(m)} ${noOuNa(l.r)}, com ${l.c.x.nm}`);
         }
@@ -269,7 +274,8 @@ export function sugerirParaCancelado(estado, resultado, fKey, { depoisDe = null,
   const busca = buscaDoVoo(estado, resultado, voo, grupo, {
     depoisDe,
     semInstrutor: motivo === 'Instrutor indisponível' ? voo.insId : null,
-    semAviao: motivo === 'Manutenção da aeronave' ? voo.r : null,
+    // O Ground não tem avião: a manutenção não tira a sala da busca
+    semAviao: motivo === 'Manutenção da aeronave' && !voo.isGround ? voo.r : null,
     semHorario: motivo === 'Meteorologia' || motivo === 'Operacional'
   });
   const opcoes = [];
@@ -307,6 +313,19 @@ export function aproveitarCancelado(estado, resultado, fKey, opcao) {
   if (!voo || !opcao || !opcao.mudancas) return null;
   const grupo = doGrupo(resultado, voo).filter(v => statusDoVoo(v, estado.fStatus) === 'Cancelado');
   const voos = [], pedidos = [];
+  // A turma de Ground que muda de horário ou de instrutor é outra turma: uma chave nova para os alunos aproveitados, a não
+  // ser que eles voltem para a turma de mesmo horário e instrutor (duas turmas com a mesma chave seriam uma só no motor)
+  // (os outros da turma: as linhas do resultado, fixas ou não)
+  let chave = null;
+  if (voo.isGround && grupo.length) {
+    const { a, b, insId } = { ...pinoDoVoo(grupo[0]), ...opcao.mudancas };
+    const fica = resultado.out.filter(o => o.isGround && o.classKey === voo.classKey && !grupo.includes(o));
+    const usadas = new Set(resultado.out.filter(o => o.isGround).map(o => o.classKey));
+    if (fica.length && !fica.every(o => o.a === a && o.b === b && o.insId === insId)) {
+      chave = grupo[0].fKey;
+      for (let n = 2; usadas.has(chave); n++) chave = `${grupo[0].fKey}_${n}`;
+    }
+  }
   estado.fixos = { ...(estado.fixos || {}) };
   estado.fStatus = { ...(estado.fStatus || {}) };
   estado.fObs = { ...(estado.fObs || {}) };
@@ -316,7 +335,7 @@ export function aproveitarCancelado(estado, resultado, fKey, opcao) {
     if (!ref) continue;
     voos.push({ fKey: v.fKey, fixo: estado.fixos[v.fKey] || null, status: estado.fStatus[v.fKey] || null, detalhe: estado.fObs[v.fKey] || null });
     pedidos.push({ stuId: v.stuId, mid: v.mid || 0, pedido: camposDoPedido(ref) });
-    estado.fixos[v.fKey] = { ...pinoDoVoo(v), ...opcao.mudancas, agendado: true };
+    estado.fixos[v.fKey] = { ...pinoDoVoo(v), ...opcao.mudancas, ...(chave ? { classKey: chave } : {}), agendado: true };
     estado.fStatus[v.fKey] = 'Pendente';
     delete estado.fObs[v.fKey];
     Object.assign(ref, opcao.pedido || {});

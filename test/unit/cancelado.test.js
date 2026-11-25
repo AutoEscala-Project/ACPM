@@ -12,7 +12,7 @@ import { validarReversao } from '../../js/reversoes.js';
 import { rejeicoesDosPedidos } from '../../js/rejeicoes.js';
 import { pedidoDoAluno } from '../../js/voo.js';
 import { gerarCenario, comEscolhas } from '../helpers/cenarios.js';
-import { aluno, cenario, instrutor, apenas } from '../helpers/montar.js';
+import { aluno, cenario, instrutor, apenas, GROUND_C152 } from '../helpers/montar.js';
 
 // Escala o dia, cancela o voo do aluno com o motivo e devolve o estado e a escala de depois
 function cancelado(base, stuId, motivo, extra = {}) {
@@ -211,5 +211,55 @@ describe('A reversão do aproveitamento', () => {
     for (const ruim of [{ ...rev, voos: [] }, { ...rev, voos: [{ fKey: 'x' }] }, { ...rev, pedidos: [{ stuId: 1000, mid: 0, pedido: { mis: 'Inexistente', fly: true } }] }]) {
       assert.equal(validarReversao(ruim, estado.frota), null);
     }
+  });
+});
+
+// A turma de Ground (revisão de mecânica): o aluno aproveitado em outro horário sai da turma; a sala ocupada não entra
+// no mesmo horário; o voo não sai antes do Ground de que depende
+describe('O Ground no voo cancelado', () => {
+  const turma = () => cenario({ ins: [instrutor(1, 9), instrutor(2, 9)], stu: [aluno(1000, { ...GROUND_C152, p1: 390, p2: -1 }), aluno(1001, { ...GROUND_C152, p1: 390, p2: -1 })] });
+
+  it('um aluno da turma aproveitado em outro horário vira outra turma: ocupa a sala e o instrutor no horário novo', () => {
+    const base = turma();
+    const antes = runAllocationEngine(base);
+    const [v0, v1] = antes.out.filter(o => o.isGround);
+    assert.equal(v0.classKey, v1.classKey);
+    const estado = { ...base, fixos: { [v0.fKey]: pinoDoVoo(v0), [v1.fKey]: pinoDoVoo(v1) }, fStatus: { [v1.fKey]: 'Cancelado' }, fObs: { [v1.fKey]: { motivo: 'Meteorologia' } } };
+    const resultado = runAllocationEngine(estado);
+    const opcao = sugerirParaCancelado(estado, resultado, v1.fKey).opcoes.find(o => o.mudancas.a !== v0.a);
+    assert.ok(opcao, 'um horário novo');
+    aproveitarCancelado(estado, resultado, v1.fKey, opcao);
+    assert.notEqual(estado.fixos[v1.fKey].classKey, v0.classKey);
+    const depois = runAllocationEngine(estado);
+    const novo = depois.out.find(o => o.fKey === v1.fKey);
+    assert.equal(novo.conflito, undefined);
+    assert.notEqual(novo.classKey, depois.out.find(o => o.fKey === v0.fKey).classKey);
+  });
+
+  it('no mesmo horário, só com a sala livre', () => {
+    // Ground C152 cancelado às 06:30 e, de novo, outra turma (C172) na sala às 06:30
+    const base = cenario({ ins: [instrutor(1, 9), instrutor(2, 9), instrutor(3, 9)], stu: [aluno(1000, { ...GROUND_C152, p1: 390, p2: -1 })] });
+    const { estado, voo } = cancelado(base, 1000, 'Instrutor indisponível');
+    estado.stu = [...estado.stu, aluno(1002, { mis: 'Ground C172', eq: 'Sala Ground', nb: 1.5, p1: 390, p2: -1 })];
+    const resultado = runAllocationEngine(estado);
+    const outra = resultado.out.find(o => o.stuId === 1002);
+    assert.equal(outra.a, voo.a, 'a outra turma ocupa a sala no horário');
+    const opcoes = sugerirParaCancelado(estado, resultado, voo.fKey).opcoes;
+    assert.ok(opcoes.every(o => o.mudancas.a !== voo.a), 'nada no mesmo horário com a sala ocupada');
+  });
+
+  it('o voo não vai para antes do fim do Ground de que depende', () => {
+    // Ground às 08:20–09:50 e o voo às 10:10, cancelado pela meteorologia, com o resto do dia fechado: no C152, nada às
+    // 06:30 (o Ground C152 vem antes); no C172, que esse Ground não trava, as 06:30 servem
+    const base = cenario({ ins: [instrutor(1, 9)], janelasOff: [3, 4, 5, 6, 7, 8],
+      stu: [aluno(1000, { ...GROUND_C152, p1: 500, p2: -1 }, { extra: [{ mid: 1, mis: 'Voo Local', eq: 'C152', nb: 1, p1: 610, p2: -1, fly: true }] })] });
+    const antes = runAllocationEngine(base);
+    const ground = antes.out.find(o => o.isGround), local = antes.out.find(o => !o.isGround);
+    assert.ok(ground && local && local.a >= ground.b, 'o dia montado');
+    const estado = { ...base, fixos: { [ground.fKey]: pinoDoVoo(ground), [local.fKey]: pinoDoVoo(local) }, fStatus: { [local.fKey]: 'Cancelado' }, fObs: { [local.fKey]: { motivo: 'Meteorologia' } } };
+    const resultado = runAllocationEngine(estado);
+    const opcoes = sugerirParaCancelado(estado, resultado, local.fKey).opcoes;
+    assert.deepEqual(opcoes.filter(o => !o.pedido.eq).map(o => o.texto), []);
+    assert.deepEqual(opcoes.map(o => [o.pedido.eq, hm(o.mudancas.a)]), [['C172', '06:30']]);
   });
 });
