@@ -173,7 +173,8 @@ function listaHTML() {
 
 // O formulário: a missão decide os recursos, e os dois, os horários. O campo com um valor só o recebe sozinho (data-sozinho):
 // ele não é uma escolha da pessoa, e não fica para a missão seguinte. O horário escolhido que espera a lista (a missão ou o
-// recurso ainda por escolher) volta quando ela o tem; quando ela não o tem, o campo diz por que ele saiu
+// recurso ainda por escolher, ou a missão de um horário só) volta quando ela o tem; quando ela não o tem, o campo diz por que
+// ele saiu. O campo diz também quando o horário posto pelo app sai ou dá lugar a outro
 let horarioEscolhido = '';
 let avisoDoHorario = '';
 
@@ -199,11 +200,14 @@ function atualizarRecurso() {
 function atualizarHorario() {
   const campo = $('#ag-horario'), aluno = $('#ag-aluno').value, missao = $('#ag-missao').value, recurso = $('#ag-recurso').value;
   const lista = missao && recurso ? horariosDaMissao(S.horarios, missao, recurso).map(hm) : [];
+  const doApp = campo.dataset.sozinho ? campo.value : '';
   const escolhido = escolhaDaPessoa(campo) || horarioEscolhido;
   const valor = valorNaLista(lista, escolhido);
-  horarioEscolhido = lista.length ? '' : escolhido;
-  if (lista.length && escolhido && valor !== escolhido) {
-    avisoDoHorario = `O horário ${escolhido} não é um dos de ${missao} (${recurso}). ${valor ? `Agora é ${valor}.` : 'Escolha outro.'}`;
+  horarioEscolhido = lista.length > 1 || valor === escolhido ? '' : escolhido;
+  // O horário do app que continua no campo não é dito de novo
+  if (lista.length && !(doApp && valor === doApp)) {
+    if (escolhido && valor !== escolhido) avisoDoHorario = `O horário ${escolhido} não é um dos de ${missao} (${recurso}). ${valor ? `Agora é ${valor}.` : 'Escolha outro.'}`;
+    else if (doApp) avisoDoHorario = valor ? `O horário agora é ${valor}.` : `O horário ${doApp} era o único da escolha anterior. Escolha o horário.`;
   }
   preencher(campo, lista, lista.length === 1 ? null : 'Escolha o horário…', valor, escolhido);
   campo.disabled = !(aluno && missao && recurso);
@@ -223,6 +227,20 @@ export function atualizarRecursoEHorario() {
 export function escolherNaAgenda() {
   avisoDoHorario = '';
   atualizarRecursoEHorario();
+}
+
+// Os horários que mudaram no cadastro com a Agenda aberta (o "↶ Reverter" do Histórico, por exemplo): só eles são refeitos
+export function rHorariosDoPedido() {
+  if ($('#ag-missao').options.length) atualizarRecursoEHorario();
+}
+
+// Depois de registrar, saem o aluno e a observação; a missão, o recurso e o horário do pedido ficam, e o horário escolhido
+// antes dele não vale mais
+export function esvaziarPedidoRegistrado() {
+  $('#ag-obs').value = '';
+  $('#ag-aluno').value = '';
+  horarioEscolhido = '';
+  escolherNaAgenda();
 }
 
 // A missão nova: a duração dela, os recursos e os horários

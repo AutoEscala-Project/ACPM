@@ -124,8 +124,37 @@ test.describe('Agenda de Solicitações (modo compartilhado)', () => {
     await registrarPedido(page, { aluno: 'Aluno 1000', missao: 'Navegação', recurso: 'C152', horario: '08:20' });
     await expect(page.locator('#agenda-lista tbody tr')).toHaveCount(1);
     expect(servidor.solicitacoes.map(s => [s.missao, s.horario, Object.hasOwn(s, 'recurso')])).toEqual([['Navegação', '08:20', false]]);
+    // A recusa com o botão armado ("Registrar mesmo assim"): escolhido o recurso padrão, ela sai, e o campo não fica marcado
+    await registrarPedido(page, { aluno: 'Aluno 1000', missao: 'Navegação', recurso: 'PA-34', horario: '10:00' });
+    await expect(campoDaAgenda(page, 'erro')).toContainText('já tem voo marcado');
+    await page.locator('#form-agenda [type="submit"]').click();
+    await expect(campoDaAgenda(page, 'erro')).toContainText('O servidor precisa ser atualizado');
+    await campoDaAgenda(page, 'recurso').selectOption('C152');
+    await expect(campoDaAgenda(page, 'recurso')).toHaveAttribute('aria-invalid', 'false');
+    await expect(campoDaAgenda(page, 'erro')).toContainText('Aluno 1000 já tem voo marcado');
+    expect(servidor.solicitacoes).toHaveLength(1);
     expect(erros).toEqual([]);
     await contexto.close();
+  });
+
+  // Um clique a mais enquanto o servidor não respondeu não é outro pedido (nem outro voo na demanda)
+  test('o segundo clique em "Registrar pedido" antes da resposta não registra de novo', async ({ page, context }) => {
+    const servidor = await instalarSupabaseFalso(context, comAlunos());
+    await entrar(page, CONTAS.secretaria);
+    let chamadas = 0;
+    page.on('request', r => { if (r.method() === 'POST' && r.url().endsWith('/rpc/registrar_solicitacao')) chamadas++; });
+    const liberar = servidor.segurar('/rpc/registrar_solicitacao');
+    await registrarPedido(page, { aluno: 'Aluno 1000', missao: 'Navegação', recurso: 'PA-34', horario: '07:30' });
+    await page.locator('#form-agenda [type="submit"]').click();
+    await campoDaAgenda(page, 'por').press('Enter');
+    liberar();
+    await expect(page.locator('#agenda-lista tbody tr')).toHaveCount(1);
+    await expect(campoDaAgenda(page, 'aluno')).toHaveValue('');
+    expect(chamadas).toBe(1);
+    // O pedido seguinte é registrado normalmente
+    await registrarPedido(page, { aluno: 'Aluno 1001', missao: 'Navegação', recurso: 'PA-34', horario: '08:00' });
+    await expect(page.locator('#agenda-lista tbody tr')).toHaveCount(2);
+    expect(servidor.solicitacoes.map(s => [s.aluno, s.horario])).toEqual([[1000, '07:30'], [1001, '08:00']]);
   });
 
   // A rede que cai no meio do registro: não se sabe se ele chegou, e o app não tenta de novo sozinho

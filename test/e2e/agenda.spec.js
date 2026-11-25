@@ -131,14 +131,51 @@ test.describe('Agenda de Solicitações', () => {
     await missao.selectOption('Noturno');
     await expect(horario).toHaveValue('17:30');
     await expect(motivo).toHaveText('O horário 08:20 não é um dos de Noturno (C172). Agora é 17:30.');
-    // O horário posto pelo app (o único da missão) não fica para a missão seguinte
+    // O Voo Solo tem um horário só; o escolhido antes volta na missão que o tem, e o app diz
     await missao.selectOption('Voo Solo');
     await expect(recurso).toHaveValue('');
     await recurso.selectOption('C152');
     await expect(horario).toHaveValue('06:30');
+    await expect(motivo).toHaveText('O horário 08:20 não é um dos de Voo Solo (C152). Agora é 06:30.');
+    await missao.selectOption('Parafuso');
+    await expect(horario).toHaveValue('08:20');
+    await expect(motivo).toHaveText('O horário agora é 08:20.');
+    await horario.selectOption('10:10');
+    await expect(motivo).toBeEmpty();
+  });
+
+  test('o horário posto pelo app (o único da missão) não fica para a seguinte, e o app diz', async ({ page }) => {
+    await abrir(page, { estado: comAlunos() });
+    await irPara(page, 'age');
+    const [missao, horario, motivo] = ['missao', 'horario', 'horario-motivo'].map(c => campoDaAgenda(page, c));
+    await campoDaAgenda(page, 'aluno').selectOption({ label: 'Aluno 1000' });
+    await missao.selectOption('Voo Solo');
+    await campoDaAgenda(page, 'recurso').selectOption('C152');
+    await expect(horario).toHaveValue('06:30');
+    await expect(motivo).toBeEmpty();
     await missao.selectOption('Voo Local');
     await expect(horario).toHaveValue('');
+    await expect(motivo).toHaveText('O horário 06:30 era o único da escolha anterior. Escolha o horário.');
+    // O teclado, que passa por cada missão da lista: o horário escolhido não se perde no Voo Solo
+    await horario.selectOption('11:30');
     await expect(motivo).toBeEmpty();
+    for (const m of ['TGL (TMA)', 'Navegação', 'Voo Solo']) await missao.selectOption(m);
+    await expect(motivo).toHaveText('O horário 11:30 não é um dos de Voo Solo (C152). Agora é 06:30.');
+    // Outro aluno: o horário é o mesmo, sem o aviso de novo
+    await campoDaAgenda(page, 'aluno').selectOption({ label: 'Aluno 1001' });
+    await expect(horario).toHaveValue('06:30');
+    await expect(motivo).toBeEmpty();
+    await missao.selectOption('Parafuso');
+    await expect(horario).toHaveValue('11:30');
+    await expect(motivo).toHaveText('O horário agora é 11:30.');
+    // Registrado no Voo Solo, o horário escolhido antes não vale mais
+    await missao.selectOption('Voo Solo');
+    await campoDaAgenda(page, 'por').fill('Maria');
+    await page.locator('#form-agenda [type="submit"]').click();
+    await expect(page.locator('#agenda-lista tbody tr')).toContainText(['06:30']);
+    await missao.selectOption('Parafuso');
+    await campoDaAgenda(page, 'aluno').selectOption({ label: 'Aluno 1000' });
+    await expect(horario).toHaveValue('');
   });
 
   test('a missão, o recurso e o horário são obrigatórios, com o erro no campo certo', async ({ page }) => {
@@ -286,6 +323,35 @@ test.describe('Agenda de Solicitações', () => {
     await page.locator('#form-agenda [type="submit"]').click();
     await expect(page.locator('#agenda-lista tbody tr')).toHaveCount(2);
     await expect(page.locator('#form-agenda [type="submit"]')).toHaveText('Registrar pedido');
+  });
+
+  // Com o botão armado, um erro de outro campo substitui o aviso: corrigido o campo, o aviso volta, e o campo não fica marcado
+  test('com "Registrar mesmo assim", o erro de um campo sai quando ele é corrigido, e o aviso do voo já marcado volta', async ({ page }) => {
+    await abrir(page, { estado: comAlunos() });
+    await irPara(page, 'age');
+    const [recurso, horario, erro] = ['recurso', 'horario', 'erro'].map(c => campoDaAgenda(page, c));
+    const enviar = page.locator('#form-agenda [type="submit"]');
+    const aviso = 'Aluno 1000 já tem voo marcado em 11/11: Voo Local · C152 às 06:30. É um reagendamento ou mais um voo? Para registrar mais este, clique em “Registrar mesmo assim”.';
+    await registrarPedido(page, { horario: '06:30' });
+    await expect(page.locator('#agenda-lista tbody tr')).toHaveCount(1);
+    await registrarPedido(page, { missao: 'Navegação', recurso: 'PA-34', horario: '07:00' });
+    await expect(erro).toHaveText(aviso);
+    await recurso.selectOption('C152');
+    await expect(erro).toHaveText(aviso);
+    await enviar.click();
+    await expect(erro).toHaveText('Escolha o horário.');
+    await expect(horario).toHaveAttribute('aria-invalid', 'true');
+    await horario.selectOption('08:20');
+    await expect(horario).toHaveAttribute('aria-invalid', 'false');
+    await expect(erro).toHaveText(aviso);
+    await expect(enviar).toHaveText('Registrar mesmo assim');
+    // Noutra data, o aviso e o botão armado não valem
+    await page.locator('#agenda-cal [data-dia="2026-11-12"]').click();
+    await horario.selectOption('10:10');
+    await expect(erro).toBeEmpty();
+    await expect(enviar).toHaveText('Registrar pedido');
+    await enviar.click();
+    await expect(page.locator('#agenda-lista tbody tr')).toContainText(['Navegação · C152']);
   });
 
   // No máximo 6 voos locais (Voo Local, Voo Solo e TGL) no mesmo horário

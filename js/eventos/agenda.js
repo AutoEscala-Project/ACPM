@@ -10,12 +10,14 @@ import { S, DATA } from '../state.js';
 import { ApiClient } from '../storage.js';
 import { confirmado } from './confirmacao.js';
 import { aoAcionar } from './registro.js';
-import { carregarMes, mudarMes, escolherDia, diaDaAgenda, lembrarRegistradoPor, podeEditarAgenda, rAgenda, atualizarRecursoEHorario, escolherNaAgenda, escolherMissaoNaAgenda, emLista, pedidosDoAluno, descreverPedido, missaoDoPedido, pedidosCarregados } from '../views/agenda.js';
+import { carregarMes, mudarMes, escolherDia, diaDaAgenda, lembrarRegistradoPor, podeEditarAgenda, rAgenda, rHorariosDoPedido, atualizarRecursoEHorario, esvaziarPedidoRegistrado, escolherNaAgenda, escolherMissaoNaAgenda, emLista, pedidosDoAluno, descreverPedido, missaoDoPedido, pedidosCarregados } from '../views/agenda.js';
 import { lerPedidosDaData } from '../views/selos.js';
 import { registrarDesenho } from '../redesenho.js';
 
 // O desenho da Agenda (js/redesenho.js), pelo papel: os pedidos. Ele não faz nada até a Agenda ser aberta
 registrarDesenho('pedidos', rAgenda, { em: ['dados'], ordem: 95 });
+// Cada alteração refaz a escala: os horários do cadastro podem ter mudado com a Agenda aberta
+registrarDesenho('horarios-do-pedido', rHorariosDoPedido, { em: ['escala'], ordem: 96 });
 
 // Agenda: o calendário é livre para navegar (inclusive para o Gestor)
 document.addEventListener('click', e => {
@@ -33,8 +35,10 @@ document.addEventListener('click', e => {
 const marcarInvalidos = (...ids) => ['#ag-aluno', '#ag-missao', '#ag-recurso', '#ag-horario', '#ag-horas', '#ag-por'].forEach(id => $(id).setAttribute('aria-invalid', String(ids.includes(id))));
 
 // Agenda: registrar um pedido (pela exceção da coordenação, fora do prazo) e cancelar (com confirmação)
+// Até o servidor responder, outro clique (ou Enter) não registra o mesmo pedido de novo
+let registrando = false;
 async function registrarPedido(excecao) {
-  if (!podeEditarAgenda()) return;
+  if (!podeEditarAgenda() || registrando) return;
   $('#ag-erro').textContent = '';
   marcarInvalidos();
   const aluno = S.stu.find(s => s.id === +$('#ag-aluno').value);
@@ -67,7 +71,7 @@ async function registrarPedido(excecao) {
     marcarInvalidos('#ag-horas');
     return;
   }
-  const dia = diaDaAgenda(), confirmacao = `${aluno.id}|${dia}`;
+  const dia = diaDaAgenda(), confirmacao = chaveDaConfirmacao();
   // No máximo 6 voos locais no mesmo horário: o horário está indisponível, com o próximo
   const pedido = { data: dia, horario, missao, recurso };
   const vaga = vagaDeVooLocal(pedidosCarregados(), pedido, S.horarios);
@@ -77,9 +81,11 @@ async function registrarPedido(excecao) {
   if (marcados.length && $('#form-agenda').dataset.confirmado !== confirmacao) {
     $('#form-agenda').dataset.confirmado = confirmacao;
     $('#form-agenda [type="submit"]').textContent = 'Registrar mesmo assim';
-    $('#ag-erro').textContent = `${aluno.nm} já tem voo marcado em ${dia.slice(8, 10)}/${dia.slice(5, 7)}: ${marcados.map(descreverPedido).join('; ')}. É um reagendamento ou mais um voo? Para registrar mais este, clique em “Registrar mesmo assim”.`;
+    avisoDoVooMarcado = `${aluno.nm} já tem voo marcado em ${dia.slice(8, 10)}/${dia.slice(5, 7)}: ${marcados.map(descreverPedido).join('; ')}. É um reagendamento ou mais um voo? Para registrar mais este, clique em “Registrar mesmo assim”.`;
+    $('#ag-erro').textContent = avisoDoVooMarcado;
     return;
   }
+  registrando = true;
   try {
     await ApiClient.registrarSolicitacao({
       data: dia, aluno: aluno.id, aluno_nome: aluno.nm, missao, recurso, janela: 'horario',
@@ -98,12 +104,12 @@ async function registrarPedido(excecao) {
       PT422: semVagaDeVooLocal(pedido, vagaDeVooLocal([...pedidosCarregados(), ...Array.from({ length: LIMITE_DE_VOOS_LOCAIS }, () => ({ ...pedido, janela: 'horario', cancelada_em: null }))], pedido, S.horarios).proximo)
     }[err.code] || 'Não foi possível registrar o pedido. Verifique a conexão e tente de novo.';
     return;
+  } finally {
+    registrando = false;
   }
   lembrarRegistradoPor(por);
   desarmarConfirmacaoDaAgenda();
-  $('#ag-obs').value = '';
-  $('#ag-aluno').value = '';
-  escolherNaAgenda();
+  esvaziarPedidoRegistrado();
   showToast(excecao ? 'Pedido registrado pela Exceção da Coordenação.' : 'Pedido registrado.', 'ok');
   await carregarMes();
   lerPedidosDaData();
@@ -114,23 +120,26 @@ function semVagaDeVooLocal({ horario, missao }, proximo) {
   return `Horário indisponível: já há ${LIMITE_DE_VOOS_LOCAIS} voos locais (Voo Local, Voo Solo e TGL) às ${horario}, o máximo no mesmo horário (determinação da diretoria). ${depois}`;
 }
 
-// Trocar o aluno desfaz a confirmação do voo já marcado
+// O aviso do voo já marcado arma o botão para um aluno numa data: trocar um dos dois desfaz a confirmação
+let avisoDoVooMarcado = '';
+const chaveDaConfirmacao = () => `${+$('#ag-aluno').value}|${diaDaAgenda()}`;
 function desarmarConfirmacaoDaAgenda() {
   delete $('#form-agenda').dataset.confirmado;
   $('#form-agenda [type="submit"]').textContent = 'Registrar pedido';
 }
 $('#form-agenda').onsubmit = e => { e.preventDefault(); registrarPedido(false); };
 $('#ag-excecao').onclick = () => registrarPedido(true);
-function limparErro() {
-  $('#ag-erro').textContent = '';
-  marcarInvalidos();
-}
-$('#ag-aluno').addEventListener('change', () => { desarmarConfirmacaoDaAgenda(); limparErro(); escolherNaAgenda(); });
-// Outra missão, recurso ou horário: o erro era do pedido de antes (o aviso do voo já marcado fica, com o botão armado)
+// Uma escolha nova: o erro era do pedido de antes. Com o botão ainda armado, o aviso do voo já marcado fica (ou volta, no
+// lugar do erro que o substituiu)
 const aoEscolher = escolher => () => {
   escolher();
-  if (!$('#form-agenda').dataset.confirmado) limparErro();
+  const armado = $('#form-agenda').dataset.confirmado === chaveDaConfirmacao();
+  if (!armado) desarmarConfirmacaoDaAgenda();
+  const texto = armado ? avisoDoVooMarcado : '';
+  if ($('#ag-erro').textContent !== texto) $('#ag-erro').textContent = texto;
+  marcarInvalidos();
 };
+$('#ag-aluno').onchange = aoEscolher(escolherNaAgenda);
 $('#ag-missao').onchange = aoEscolher(escolherMissaoNaAgenda);
 $('#ag-recurso').onchange = aoEscolher(escolherNaAgenda);
 $('#ag-horario').onchange = aoEscolher(escolherNaAgenda);
