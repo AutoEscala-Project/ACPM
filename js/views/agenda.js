@@ -10,13 +10,17 @@ import { $, trocarConteudo } from '../dom.js';
 import { esc, opts, hm, fmtH, somarDias } from '../format.js';
 import { registraNaAgenda, operaEscala } from '../perfis.js';
 import { JANELAS_DA_AGENDA, FUSO_DO_AEROCLUBE, prazoDaAgendaPermite, prazoDaData, datasParaRegistrar, hojeEmSaoPaulo } from '../agenda.js';
-import { pedidosDaDataAberta, lerPedidosDaData } from './selos.js';
+import { pedidosDaDataAberta, pedidosDaDataAbertaLidos, lerPedidosDaData } from './selos.js';
 
 const CHAVE_REGISTRADO_POR = 'acpm_agenda_registrado_por';
 
 // Até a Agenda ser aberta uma vez, ela não é desenhada
 let agendaAberta = false;
-export function abrirAgenda() { agendaAberta = true; }
+export function abrirAgenda() {
+  agendaAberta = true;
+  // Aberta de novo, os pedidos da data do formulário também são lidos de novo
+  lidosPara = null;
+}
 
 // Quem pode registrar e cancelar: no modo local, quem não está no perfil Gestor; no compartilhado, operadores,
 // administradores e a secretaria. A exceção da coordenação é de quem opera a escala (o servidor confere de novo)
@@ -52,16 +56,20 @@ export function escolherDataDoPedido(data) {
   mudouADataDoPedido();
   desenharFormulario();
 }
-// Outra data: o que o formulário dizia da anterior (o erro, a confirmação armada) sai, e os pedidos dela são lidos
+// Outra data: o que o formulário dizia da anterior (o erro, a confirmação armada) sai
 function mudouADataDoPedido() {
   desarmarConfirmacaoDaAgenda();
   apagarErroDaAgenda();
-  if (podeEditarAgenda()) lerPedidosDoFormulario();
 }
 // O "Registrar mesmo assim" (o aluno que já tem voo marcado) volta a ser "Registrar pedido"
 export function desarmarConfirmacaoDaAgenda() {
   delete $('#form-agenda').dataset.confirmado;
-  $('#form-agenda [type="submit"]').textContent = 'Registrar pedido';
+  nomearRegistrar();
+}
+// Enquanto um pedido é registrado (a leitura dos pedidos da data dele, a gravação), o botão clicado diz "Registrando…"
+export function nomearRegistrar() {
+  const form = $('#form-agenda');
+  if (!form.hasAttribute('aria-busy')) form.querySelector('[type="submit"]').textContent = form.dataset.confirmado ? 'Registrar mesmo assim' : 'Registrar pedido';
 }
 // Os campos do pedido com erro (aria-invalid): o leitor de tela diz qual campo e lê o motivo (#ag-erro é a descrição deles)
 export const marcarInvalidos = (...ids) => ['#ag-aluno', '#ag-horario', '#ag-horas', '#ag-por'].forEach(id => $(id).setAttribute('aria-invalid', String(ids.includes(id))));
@@ -78,21 +86,34 @@ function rotuloDaOpcao({ data, fechada }, hoje) {
   return `${dataCurta(data)}${relativo}${fechada ? ' · prazo encerrado' : ''}`;
 }
 
-// Os pedidos da data do formulário, para o aviso de voo já marcado e o limite de voos locais: os da data aberta já estão
-// lidos (js/views/selos.js); os de outra data são lidos uma vez, quando o campo muda. Sem a leitura (null), as duas
-// conferências não são feitas (o servidor ainda recusa o 7º voo local)
+// Os pedidos da data do formulário, para o aviso de voo já marcado e o limite de voos locais: os da data aberta são os de
+// js/views/selos.js; os de outra data são lidos uma vez para cada par de data aberta e data do campo (o que foi lido antes
+// de a data aberta mudar pode ser de antes de um pedido), quando o perfil passa a registrar e ao abrir a Agenda. Quem
+// registra espera pela leitura; se ela falhou (null), as duas conferências não são feitas (o servidor ainda recusa o 7º
+// voo local)
 let deOutraData = { data: null, leitura: null };
-function lerPedidosDoFormulario() {
-  const data = dataDoPedido;
-  if (data && data !== DATA) deOutraData = { data, leitura: ApiClient.agenda(data, data).catch(() => null) };
+let lidosPara = null;
+function lerDeOutraData(data) {
+  deOutraData = { data, leitura: ApiClient.agenda(data, data).catch(() => null) };
 }
-export async function pedidosDoFormulario() {
-  if (dataDoPedido === DATA) return pedidosDaDataAberta().lista;
-  return deOutraData.data === dataDoPedido ? deOutraData.leitura : null;
+function lerPedidosDoFormulario() {
+  const para = podeEditarAgenda() && dataDoPedido !== DATA ? `${DATA} ${dataDoPedido}` : null;
+  if (para === lidosPara) return;
+  lidosPara = para;
+  if (para) lerDeOutraData(dataDoPedido);
+}
+export async function pedidosDoFormulario(data) {
+  if (data === DATA) {
+    const daData = await pedidosDaDataAbertaLidos();
+    // Outra data pode ter aberto durante a espera
+    if (daData.data === data) return daData.lista;
+  }
+  if (deOutraData.data !== data) lerDeOutraData(data);
+  return deOutraData.leitura;
 }
 // Depois de registrar: os pedidos da data em que ele entrou são lidos de novo
 export async function lerPedidosDaAgenda(data) {
-  if (data !== DATA && data === dataDoPedido) lerPedidosDoFormulario();
+  if (data !== DATA && data === dataDoPedido) lerDeOutraData(data);
   else await lerPedidosDaData();
 }
 
@@ -180,6 +201,7 @@ function desenharFormulario() {
   if (abertaDoCampo !== DATA || !opcoes.some(o => o.data === dataDoPedido)) dataDoPedido = padrao;
   abertaDoCampo = DATA;
   if (dataDoPedido !== antes) mudouADataDoPedido();
+  lerPedidosDoFormulario();
   const campo = $('#ag-data');
   const html = opts(opcoes.map(o => [o.data, rotuloDaOpcao(o, hoje)]), dataDoPedido);
   // Iguais, as opções ficam (a lista pode estar aberta)

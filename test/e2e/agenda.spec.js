@@ -152,6 +152,54 @@ test.describe('Agenda de Solicitações', () => {
     await expect(data).toHaveValue('2026-11-14');
   });
 
+  // A data do campo pode ser a mesma enquanto a data aberta muda: os pedidos dela, lidos antes, podem ter mudado
+  test('a data do pedido que continua a mesma: o aviso do voo já marcado vê o pedido registrado com ela aberta', async ({ page, context }) => {
+    await context.clock.setFixedTime(new Date('2026-11-10T13:30:00-03:00'));
+    await abrir(page, { estado: comAlunos() });
+    await irPara(page, 'age');
+    await expect(campoDaAgenda(page, 'data')).toHaveValue('2026-11-12');
+    await mudarData(page, '2026-11-12');
+    await registrarPedido(page, { horario: '08:20' });
+    await expect(page.locator('#agenda-lista tbody tr')).toHaveCount(1);
+    await mudarData(page, '2026-11-11');
+    await expect(campoDaAgenda(page, 'data')).toHaveValue('2026-11-12');
+    await registrarPedido(page, { horario: '10:10' });
+    await expect(campoDaAgenda(page, 'erro')).toContainText('Aluno 1000 já tem voo marcado em 12/11: Voo Local às 08:20.');
+    await expect(contagemDoDia(page, '2026-11-12')).toHaveText('1');
+  });
+
+  test('a data de hoje, já fechada, aberta: o pedido continua o de amanhã, com o aviso do voo já marcado', async ({ page }) => {
+    await abrir(page, { estado: comAlunos() });
+    await irPara(page, 'age');
+    await registrarPedido(page, { horario: '06:30' });
+    await expect(page.locator('#agenda-lista tbody tr')).toHaveCount(1);
+    await mudarData(page, '2026-11-10');
+    await expect(campoDaAgenda(page, 'data')).toHaveValue('2026-11-11');
+    await registrarPedido(page, { horario: '10:10' });
+    await expect(campoDaAgenda(page, 'erro')).toContainText('Aluno 1000 já tem voo marcado em 11/11: Voo Local às 06:30.');
+    await expect(contagemDoDia(page, '2026-11-11')).toHaveText('1');
+  });
+
+  // O Gestor (deste navegador) não registra: os pedidos da data do campo são lidos quando o perfil passa a registrar, e as
+  // datas seguem o perfil
+  test('trocar o perfil para o Operador com a Agenda aberta: as datas da exceção e o aviso do voo já marcado', async ({ page, context }) => {
+    await context.clock.setFixedTime(new Date('2026-11-10T13:30:00-03:00'));
+    await abrir(page, { estado: comAlunos() });
+    await irPara(page, 'age');
+    await registrarPedido(page, { horario: '08:20' });
+    await expect(contagemDoDia(page, '2026-11-12')).toHaveText('1');
+    await abrir(page, { url: './?role=gestor' });
+    await irPara(page, 'age');
+    const primeira = campoDaAgenda(page, 'data').locator('option').first();
+    await expect(primeira).toHaveText('qui 12/11');
+    await page.locator('#role-sel').selectOption('operador');
+    await expect(primeira).toHaveText('ter 10/11 (hoje) · prazo encerrado');
+    await expect(campoDaAgenda(page, 'data')).toHaveValue('2026-11-12');
+    await registrarPedido(page, { horario: '10:10' });
+    await expect(campoDaAgenda(page, 'erro')).toContainText('Aluno 1000 já tem voo marcado em 12/11: Voo Local às 08:20.');
+    await expect(contagemDoDia(page, '2026-11-12')).toHaveText('1');
+  });
+
   test('a data aberta além de duas semanas também está na data do pedido', async ({ page }) => {
     await abrir(page, { estado: comAlunos(), url: './?data=2026-12-18' });
     await irPara(page, 'age');

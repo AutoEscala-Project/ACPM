@@ -10,7 +10,7 @@ import { confirmado } from './confirmacao.js';
 import { aoAcionar } from './registro.js';
 import {
   abrirAgenda, rAgenda, podeEditarAgenda, lembrarRegistradoPor, preencherHorariosDaAgenda, descreverPedido, dataCurta, dataDoFormulario,
-  escolherDataDoPedido, pedidosDoFormulario, lerPedidosDaAgenda, marcarInvalidos, apagarErroDaAgenda, desarmarConfirmacaoDaAgenda
+  escolherDataDoPedido, pedidosDoFormulario, lerPedidosDaAgenda, marcarInvalidos, apagarErroDaAgenda, desarmarConfirmacaoDaAgenda, nomearRegistrar
 } from '../views/agenda.js';
 import { lerPedidosDaData } from '../views/selos.js';
 import { lerContagemDosDias } from '../views/trilho.js';
@@ -19,7 +19,7 @@ import { registrarTela } from '../views/telas.js';
 
 // O desenho da Agenda (js/redesenho.js), pelo papel: os pedidos. Ele não faz nada até a Agenda ser aberta
 registrarDesenho('pedidos', rAgenda, { em: ['dados', 'perfil', 'pedidos'], ordem: 95 });
-// Aberta, a Agenda lê de novo os pedidos da data aberta e os de cada dia do calendário
+// Aberta, a Agenda lê de novo os pedidos da data aberta, os da data do pedido e os de cada dia do calendário
 registrarTela('age', {
   aoMostrar: () => {
     abrirAgenda();
@@ -29,39 +29,56 @@ registrarTela('age', {
   }
 });
 
-// Agenda: registrar um pedido (pela exceção da coordenação, fora do prazo) e cancelar (com confirmação)
-async function registrarPedido(excecao) {
-  if (!podeEditarAgenda()) return;
+// Agenda: registrar um pedido (pela exceção da coordenação, fora do prazo) e cancelar (com confirmação). Um de cada vez: o
+// segundo clique, enquanto o primeiro espera a leitura ou a gravação, registraria o mesmo pedido de novo
+async function registrarPedido(botao, excecao) {
+  const form = $('#form-agenda');
+  if (!podeEditarAgenda() || form.hasAttribute('aria-busy')) return;
+  const nome = botao.textContent;
+  form.setAttribute('aria-busy', 'true');
+  botao.textContent = 'Registrando…';
+  let depois;
+  try {
+    depois = await conferirERegistrar(excecao);
+  } finally {
+    form.removeAttribute('aria-busy');
+    botao.textContent = nome;
+    nomearRegistrar();
+  }
+  await depois?.();
+}
+
+// Confere o pedido do formulário e o registra. Registrado, devolve o que falta fazer: ler os pedidos de novo
+async function conferirERegistrar(excecao) {
   apagarErroDaAgenda();
   const aluno = S.stu.find(s => s.id === +$('#ag-aluno').value);
   const por = $('#ag-por').value.trim();
   if (!aluno || !por) {
     $('#ag-erro').textContent = 'Escolha o aluno e informe quem anotou o pedido (“Registrado por”).';
     marcarInvalidos(...[!aluno && '#ag-aluno', !por && '#ag-por'].filter(Boolean));
-    return;
+    return null;
   }
   // A duração: de 0,1 h a 5 h, em décimos (o Ground tem 01h30)
   const horas = duracaoDigitada($('#ag-horas').value);
   if (horas === null) {
     $('#ag-erro').textContent = ERRO_DA_DURACAO;
     marcarInvalidos('#ag-horas');
-    return;
+    return null;
   }
   const dia = dataDoFormulario(), confirmacao = `${aluno.id}|${dia}`;
   // No máximo 6 voos locais no mesmo horário: o horário está indisponível, com o próximo (sem os pedidos da data lidos, esta
   // conferência e a do voo já marcado não são feitas)
   const pedido = { data: dia, horario: $('#ag-horario').value, missao: $('#ag-missao').value };
   const observacao = $('#ag-obs').value;
-  const pedidos = await pedidosDoFormulario() || [];
+  const pedidos = await pedidosDoFormulario(dia) || [];
   const vaga = vagaDeVooLocal(pedidos, pedido, S.horarios);
-  if (!vaga.ok) { $('#ag-erro').textContent = semVagaDeVooLocal(pedido, vaga.proximo); marcarInvalidos('#ag-horario'); return; }
+  if (!vaga.ok) { $('#ag-erro').textContent = semVagaDeVooLocal(pedido, vaga.proximo); marcarInvalidos('#ag-horario'); return null; }
   // O aluno que já tem voo marcado na data: pode ser um reagendamento feito por outra pessoa; o segundo clique confirma
   const marcados = pedidos.filter(p => p.aluno === aluno.id && p.data === dia && !p.cancelada_em);
   if (marcados.length && $('#form-agenda').dataset.confirmado !== confirmacao) {
     $('#form-agenda').dataset.confirmado = confirmacao;
-    $('#form-agenda [type="submit"]').textContent = 'Registrar mesmo assim';
     $('#ag-erro').textContent = `${aluno.nm} já tem voo marcado em ${dia.slice(8, 10)}/${dia.slice(5, 7)}: ${marcados.map(descreverPedido).join('; ')}. É um reagendamento ou mais um voo? Para registrar mais este, clique em “Registrar mesmo assim”.`;
-    return;
+    return null;
   }
   try {
     await ApiClient.registrarSolicitacao({
@@ -76,7 +93,7 @@ async function registrarPedido(excecao) {
       // Outra pessoa agendou o 6º local no mesmo horário enquanto isso: o servidor recusou
       PT422: semVagaDeVooLocal(pedido, vagaDeVooLocal([...pedidos, ...Array.from({ length: LIMITE_DE_VOOS_LOCAIS }, () => ({ ...pedido, janela: 'horario', cancelada_em: null }))], pedido, S.horarios).proximo)
     }[err.code] || 'Não foi possível registrar o pedido. Verifique a conexão e tente de novo.';
-    return;
+    return null;
   }
   lembrarRegistradoPor(por);
   desarmarConfirmacaoDaAgenda();
@@ -85,7 +102,7 @@ async function registrarPedido(excecao) {
   // A lista é a da data aberta: o pedido de outra data diz para qual ele foi
   const para = dia === DATA ? '' : ` para ${dataCurta(dia)}`;
   showToast(excecao ? `Pedido registrado${para} pela Exceção da Coordenação.` : `Pedido registrado${para}.`, 'ok');
-  await Promise.all([lerPedidosDaAgenda(dia), lerContagemDosDias()]);
+  return () => Promise.all([lerPedidosDaAgenda(dia), lerContagemDosDias()]);
 }
 // O horário sem vaga de voo local: o motivo e o próximo horário possível
 function semVagaDeVooLocal({ horario, missao }, proximo) {
@@ -93,8 +110,8 @@ function semVagaDeVooLocal({ horario, missao }, proximo) {
   return `Horário indisponível: já há ${LIMITE_DE_VOOS_LOCAIS} voos locais (Voo Local, Voo Solo e TGL) às ${horario}, o máximo no mesmo horário (determinação da diretoria). ${depois}`;
 }
 
-$('#form-agenda').onsubmit = e => { e.preventDefault(); registrarPedido(false); };
-$('#ag-excecao').onclick = () => registrarPedido(true);
+$('#form-agenda').onsubmit = e => { e.preventDefault(); registrarPedido($('#form-agenda [type="submit"]'), false); };
+$('#ag-excecao').onclick = () => registrarPedido($('#ag-excecao'), true);
 // Trocar o aluno ou a data desfaz a confirmação do voo já marcado
 $('#ag-aluno').addEventListener('change', () => { desarmarConfirmacaoDaAgenda(); apagarErroDaAgenda(); });
 $('#ag-data').onchange = e => escolherDataDoPedido(e.target.value);

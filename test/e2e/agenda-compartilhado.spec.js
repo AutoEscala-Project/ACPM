@@ -6,6 +6,17 @@ import { estadoSintetico } from '../helpers/estado.js';
 import { aluno } from '../helpers/montar.js';
 
 const comAlunos = () => documentosAtuais({ ...estadoSintetico(), stu: [aluno(1000), aluno(1001)] }, AMANHA);
+const pedidoDe = (id, data, extra = {}) => ({
+  id, data, aluno: 1000, aluno_nome: 'Aluno 1000', missao: 'Voo Local', janela: 'horario', horario: '08:20', horas: 1, observacao: null,
+  registrado_por: 'Maria', registrado_em: '2026-11-10T14:00:00.000Z', conta: 'Secretaria de Teste', excecao: false, cancelada_em: null, cancelada_por: null, ...extra
+});
+// Segura as leituras dos pedidos de uma data até soltar()
+async function segurarPedidos(context, dia) {
+  let soltar;
+  const espera = new Promise(resolve => { soltar = resolve; });
+  await context.route(url => url.pathname.endsWith('/rest/v1/solicitacoes') && url.searchParams.getAll('data').join() === `gte.${dia},lte.${dia}`, async route => { await espera; await route.fallback(); });
+  return soltar;
+}
 
 test.describe('Agenda de Solicitações (modo compartilhado)', () => {
   // A Secretaria vai para a Agenda quando os dados terminam de carregar, a menos que já tenha saído da Escala
@@ -167,6 +178,98 @@ test.describe('Agenda de Solicitações (modo compartilhado)', () => {
     await expect(contagemDoDia(page, '2026-11-13')).toHaveText('7');
     expect(erros).toEqual([]);
     await context.close();
+  });
+
+  // Outra pessoa registra para a data do campo, que não é a aberta: abrir a Agenda de novo lê os pedidos dela
+  test('a Agenda aberta de novo lê também os pedidos da data do pedido', async ({ page, context }) => {
+    await context.clock.setFixedTime(new Date('2026-11-10T13:30:00-03:00'));
+    const servidor = await instalarSupabaseFalso(context, comAlunos());
+    await entrar(page, CONTAS.operador);
+    await irPara(page, 'age');
+    await expect(campoDaAgenda(page, 'data')).toHaveValue('2026-11-12');
+    servidor.solicitacoes.push(pedidoDe(1, '2026-11-12'));
+    await irPara(page, 'esc');
+    await irPara(page, 'age');
+    await registrarPedido(page, { horario: '10:10' });
+    await expect(campoDaAgenda(page, 'erro')).toContainText('Aluno 1000 já tem voo marcado em 12/11: Voo Local às 08:20.');
+    expect(servidor.solicitacoes).toHaveLength(1);
+  });
+
+  // A data acabou de abrir e os pedidos dela ainda chegam: o registro espera por eles
+  test('registrar enquanto os pedidos da data aberta chegam espera por eles', async ({ page, context }) => {
+    const servidor = await instalarSupabaseFalso(context, comAlunos());
+    servidor.solicitacoes.push(pedidoDe(1, '2026-11-12'));
+    await entrar(page, CONTAS.operador);
+    await irPara(page, 'age');
+    const soltar = await segurarPedidos(context, '2026-11-12');
+    await diaSeguinte(page);
+    await expect(page.locator('#agenda-lista')).toHaveText('Lendo os pedidos desta data…');
+    await registrarPedido(page, { horario: '10:10' });
+    const registrar = page.locator('#form-agenda [type="submit"]');
+    await expect(registrar).toHaveText('Registrando…');
+    soltar();
+    await expect(campoDaAgenda(page, 'erro')).toContainText('Aluno 1000 já tem voo marcado em 12/11: Voo Local às 08:20.');
+    await expect(registrar).toHaveText('Registrar mesmo assim');
+    expect(servidor.solicitacoes).toHaveLength(1);
+  });
+
+  test('dois cliques em Registrar enquanto os pedidos da outra data chegam registram um pedido só', async ({ page, context }) => {
+    const servidor = await instalarSupabaseFalso(context, comAlunos());
+    await entrar(page, CONTAS.operador);
+    await irPara(page, 'age');
+    const soltar = await segurarPedidos(context, '2026-11-13');
+    await campoDaAgenda(page, 'data').selectOption('2026-11-13');
+    await registrarPedido(page, { horario: '10:10' });
+    const registrar = page.locator('#form-agenda [type="submit"]');
+    await expect(registrar).toHaveText('Registrando…');
+    await expect(page.locator('#form-agenda')).toHaveAttribute('aria-busy', 'true');
+    await registrar.click();
+    soltar();
+    await expect(page.locator('#toast-box')).toContainText('Pedido registrado para sex 13/11.');
+    await expect(registrar).toHaveText('Registrar pedido');
+    await expect(page.locator('#form-agenda')).not.toHaveAttribute('aria-busy');
+    await expect(contagemDoDia(page, '2026-11-13')).toHaveText('1');
+    expect(servidor.solicitacoes).toHaveLength(1);
+    // O seguinte já vê o registrado
+    await registrarPedido(page, { horario: '10:10' });
+    await expect(campoDaAgenda(page, 'erro')).toContainText('Aluno 1000 já tem voo marcado em 13/11: Voo Local às 10:10.');
+    expect(servidor.solicitacoes).toHaveLength(1);
+  });
+
+  test('a exceção da coordenação também registra uma vez só, e o botão volta ao nome dele', async ({ page, context }) => {
+    const servidor = await instalarSupabaseFalso(context, comAlunos());
+    await entrar(page, CONTAS.operador);
+    await irPara(page, 'age');
+    const excecao = campoDaAgenda(page, 'excecao');
+    const nome = await excecao.textContent();
+    const soltar = await segurarPedidos(context, '2026-11-10');
+    await campoDaAgenda(page, 'data').selectOption('2026-11-10');
+    await campoDaAgenda(page, 'aluno').selectOption({ label: 'Aluno 1000' });
+    await campoDaAgenda(page, 'por').fill('Coordenação');
+    await excecao.click();
+    await expect(excecao).toHaveText('Registrando…');
+    await excecao.click();
+    soltar();
+    await expect(page.locator('#toast-box')).toContainText('Pedido registrado para ter 10/11 pela Exceção da Coordenação.');
+    await expect(excecao).toHaveText(nome);
+    expect(servidor.solicitacoes).toHaveLength(1);
+  });
+
+  test('cancelar lê de novo os pedidos da data e os de cada dia do calendário', async ({ page, context }) => {
+    const servidor = await instalarSupabaseFalso(context, comAlunos());
+    servidor.solicitacoes.push(pedidoDe(1, AMANHA));
+    await entrar(page, CONTAS.operador);
+    await irPara(page, 'age');
+    await campoDaAgenda(page, 'por').fill('Maria');
+    const cancelar = page.locator('#agenda-lista [data-act="cancelar-pedido"]');
+    await expect(contagemDoDia(page, AMANHA)).toHaveText('1');
+    await cancelar.click();
+    // Enquanto isso, outra pessoa registrou para o dia 13
+    servidor.solicitacoes.push(pedidoDe(2, '2026-11-13'));
+    await cancelar.click();
+    await expect(contagemDoDia(page, '2026-11-13')).toHaveText('1');
+    await expect(contagemDoDia(page, AMANHA)).toHaveCount(0);
+    await expect(page.locator('#agenda-lista tbody tr')).toHaveClass(/\bcancel\b/);
   });
 
   test('o Gestor vê a agenda, sem registrar nem cancelar', async ({ page, context }) => {
