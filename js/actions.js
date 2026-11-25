@@ -157,9 +157,13 @@ export function aindaNaoAbriu() {
 let gravacaoAtual = Promise.resolve(true);
 
 // Refaz e grava a escala; responde se a gravação deu certo. Os eventos da tela gravam por gravarAlteracao
+// A ordem: a escala é refeita com os dados da tela (sem desenhar), gravada, e só então redesenhada. salvarDia copia os dados
+// antes de esperar o servidor (js/storage.js), e um desenho que falha (js/redesenho.js, semFalhar) não impede a gravação
+// nem a entrada do histórico que vem depois dela
 function save() {
   if (isGestor() || !dadosLidos) return Promise.resolve(false);
-  refazerEscala();
+  setRES(escalaCalculada());
+  syncBIHistoryForCurrentDate();
   gravacaoAtual = ApiClient.salvarDia(DATA, S, RES);
   // Neste navegador (sem servidor), a gravação só falha quando o armazenamento recusa (o espaço pode ter acabado)
   if (!modoCompartilhado()) {
@@ -168,10 +172,15 @@ function save() {
     });
   }
   escalaSoCalculada = false;
-  // A barra da escala mostra quando ela foi refeita
-  const agora = new Date();
-  $('#escala-atualizada-texto').textContent = `Atualizada às ${String(agora.getHours()).padStart(2, '0')}:${String(agora.getMinutes()).padStart(2, '0')}`;
-  $('#escala-atualizada').hidden = false;
+  // A escala refeita e o que depende dela (a revisão de 50 horas, o hangar, a grade dos instrutores, o Histórico, o BI e
+  // os selos)
+  redesenhar('escala');
+  // A barra da escala mostra quando ela foi refeita (sem a barra na página, só não mostra)
+  const agora = new Date(), texto = $('#escala-atualizada-texto'), marca = $('#escala-atualizada');
+  if (texto && marca) {
+    texto.textContent = `Atualizada às ${String(agora.getHours()).padStart(2, '0')}:${String(agora.getMinutes()).padStart(2, '0')}`;
+    marca.hidden = false;
+  }
   return gravacaoAtual;
 }
 
@@ -359,9 +368,3 @@ function syncBIHistoryForCurrentDate() {
 // compartilhado, todos veem essa data)
 const escalaCalculada = () => ({ ...runAllocationEngine(S), data: DATA });
 
-// Refaz a escala e o que depende dela (revisão de 50 horas, painel do dia e BI), sem gravar: quem grava é save
-function refazerEscala() {
-  setRES(escalaCalculada());
-  syncBIHistoryForCurrentDate();
-  redesenhar('escala');
-}

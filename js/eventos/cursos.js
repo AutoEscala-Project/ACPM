@@ -223,8 +223,9 @@ function alterar(curso, novo, descricao, { comSigla = true } = {}) {
   fila.curso = novo;
   fila.itens.push({ curso: novo, conteudo: conteudoDoCurso(novo), descricao: comSigla ? `${sigla}: ${descricao}` : descricao });
   porNaTela(novo);
-  redesenharPorNome('alunos', 'pedidos-do-dia');
+  // Primeiro a fila sai para o servidor; depois Alunos e a Demanda são refeitos (um desenho que falha não a segura)
   if (!fila.enviando) enviar(sigla, fila);
+  redesenharPorNome('alunos', 'pedidos-do-dia');
 }
 
 // Quem muda o programa, com ele na tela (lido das tabelas dos cursos)
