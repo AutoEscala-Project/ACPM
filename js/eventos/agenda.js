@@ -1,19 +1,18 @@
-// A Agenda: o calendário, registrar e cancelar pedidos e importar os pedidos da data para a Demanda
-import { gravarAlteracao, carregarData, aindaNaoAbriu } from '../actions.js';
-import { importarSolicitacoes, disponibilidadeDaSolicitacao, vagaDeVooLocal, ehDomingo } from '../agenda.js';
+// A Agenda: o calendário e registrar e cancelar pedidos (importar os pedidos da data para a Demanda:
+// js/eventos/importacao.js)
+import { carregarData } from '../actions.js';
+import { vagaDeVooLocal, ehDomingo } from '../agenda.js';
 import { DURACAO_MAXIMA_H, LIMITE_DE_VOOS_LOCAIS } from '../config.js';
 import { $, showToast } from '../dom.js';
-import { fmtH, dataIsoValida } from '../format.js';
-import { rotuloDaDisponibilidade, duracaoDigitada, ERRO_DA_DURACAO } from '../rules.js';
-import { S, DATA, isGestor } from '../state.js';
+import { dataIsoValida } from '../format.js';
+import { duracaoDigitada, ERRO_DA_DURACAO } from '../rules.js';
+import { S, DATA } from '../state.js';
 import { ApiClient } from '../storage.js';
 import { confirmado } from './confirmacao.js';
 import { aoAcionar } from './registro.js';
 import { carregarMes, mudarMes, escolherDia, diaDaAgenda, lembrarRegistradoPor, podeEditarAgenda, rAgenda, preencherHorariosDaAgenda, pedidosDoAluno, descreverPedido, pedidosCarregados } from '../views/agenda.js';
-import { programaParaInferir } from '../views/etapas.js';
 import { lerPedidosDaData } from '../views/selos.js';
-
-import { registrarDesenho, redesenharPorNome } from '../redesenho.js';
+import { registrarDesenho } from '../redesenho.js';
 
 // O desenho da Agenda (js/redesenho.js), pelo papel: os pedidos. Ele não faz nada até a Agenda ser aberta
 registrarDesenho('pedidos', rAgenda, { em: ['dados'], ordem: 95 });
@@ -29,40 +28,6 @@ document.addEventListener('click', e => {
     carregarData(cal.dataset.dia).catch(() => showToast('Não foi possível abrir essa data. Verifique a conexão e tente de novo.'));
   }
 });
-
-// Demanda e Agenda: traz os pedidos da agenda da secretaria para a data aberta (só acrescenta; não importa o mesmo
-// pedido de novo)
-async function importarDaAgenda() {
-  if (isGestor() || aindaNaoAbriu()) return;
-  const data = DATA;
-  let solicitacoes;
-  try {
-    solicitacoes = await ApiClient.agenda(data, data);
-  } catch {
-    showToast('Não foi possível ler a agenda. Verifique a conexão e tente de novo.');
-    return;
-  }
-  // A resposta chegou depois de trocar de data: os pedidos são de outra data
-  if (DATA !== data) {
-    showToast('A data mudou durante a importação da agenda: nada foi importado. Importe de novo na data certa.');
-    return;
-  }
-  // Outra data começou a abrir enquanto a agenda era lida
-  if (aindaNaoAbriu()) return;
-  const pendentes = solicitacoes.filter(s => !s.cancelada_em && !S.importadas.includes(s.id));
-  if (!pendentes.length) {
-    showToast(`Nenhum pedido novo na agenda para ${DATA.slice(8, 10)}/${DATA.slice(5, 7)}.`);
-    return;
-  }
-  const resumo = importarSolicitacoes(S, pendentes, { situacao: (S.resultados && S.resultados.situacao) || [], programa: programaParaInferir() });
-  gravarAlteracao('inc', pendentes.filter(s => S.stu.some(x => x.id === s.aluno))
-    .map(s => `Agenda: ${s.aluno_nome} incluído (${s.missao} · ${rotuloDaDisponibilidade(disponibilidadeDaSolicitacao(s))}${s.horas ? ` · ${fmtH(+s.horas)}` : ''})`));
-  redesenharPorNome('pedidos-do-dia'); rAgenda();
-  showToast(`${resumo.novos + resumo.atualizados} pedido(s) da agenda na demanda` +
-    (resumo.semAluno ? ` · ${resumo.semAluno} de aluno que não está no cadastro (entra depois de cadastrado)` : '') + '.', 'ok');
-}
-$('#importar-agenda').onclick = importarDaAgenda;
-$('#agenda-importar').onclick = importarDaAgenda;
 
 // Os campos do pedido com erro (aria-invalid): o leitor de tela diz qual campo e lê o motivo (#ag-erro é a descrição deles)
 const marcarInvalidos = (...ids) => ['#ag-aluno', '#ag-horario', '#ag-horas', '#ag-por'].forEach(id => $(id).setAttribute('aria-invalid', String(ids.includes(id))));

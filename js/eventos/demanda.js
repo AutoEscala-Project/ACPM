@@ -11,6 +11,7 @@ import { S, RES, isGestor, stuBy, insBy, getMissionTarget } from '../state.js';
 import { chaveDoVoo } from '../voo.js';
 import { escolherInstrutor } from '../instrutor-escolhido.js';
 import { confirmado, comConfirmacao } from './confirmacao.js';
+import './importacao.js';
 import { aoAcionar, aoMudarCampo, aoReverter } from './registro.js';
 import { singleDemandRowHTML, cnt, rDem, filtrarDemanda, manterNaDemanda, prepararFiltroDosCursos, conferirNenhumNaDemanda, limparFiltrosDaDemanda } from '../views/demanda.js';
 import { proximaDoPedido, outraMissaoDoPedido, botaoForaDaOrdem, confirmacaoDaMissao } from '../views/etapas.js';

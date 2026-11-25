@@ -294,7 +294,7 @@
           <button class="x" type="button" id="ag-excecao" hidden data-dica="excecao">Exceção da Coordenação</button>
           <p id="ag-erro" role="alert"></p>
         </form>
-        <button class="btn edit-only" type="button" id="agenda-importar" hidden></button>
+        <button class="btn edit-only" type="button" id="agenda-importar" data-act="importar-agenda" hidden></button>
         <div class="tw" id="agenda-lista"></div>
       </div>
     </div>
@@ -304,7 +304,7 @@
   <section id="s-dem">
     <h2>Demanda</h2>
     <div class="bar">
-      <button class="btn sec edit-only" id="importar-agenda" title="Traz os pedidos da agenda da secretaria para esta data (só acrescenta; não repete)">Importar da agenda</button>
+      <button class="btn sec edit-only" id="importar-agenda" data-act="importar-agenda" title="Traz os pedidos da agenda da secretaria para esta data (só acrescenta; não repete)">Importar da agenda</button>
       <input class="edit-only" id="incluir-aluno" list="alunos-fora" placeholder="+ Pôr um aluno na demanda…" aria-label="Pôr um aluno na demanda" autocomplete="off">
       <datalist id="alunos-fora"></datalist>
       <span class="cresce"></span>

@@ -14,7 +14,7 @@ import { MIS } from '../../js/config.js';
 import { setS } from '../../js/state.js';
 import { etapaNaDemanda, progressoDoAluno, outraMissaoDoPedido, cursoDoResultado, confirmacaoDaMissao, botaoForaDaOrdem } from '../../js/views/etapas.js';
 import { mulberry32 } from '../helpers/cenarios.js';
-import { importarSolicitacoes } from '../../js/agenda.js';
+import { importarSolicitacoes } from '../../js/processamento.js';
 import { aluno as alunoDoCenario } from '../helpers/montar.js';
 
 const ALUNO = 1000;
