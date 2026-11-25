@@ -2,7 +2,7 @@
 // clique (ou toque) no espaço livre de uma linha (o horário da lista do recurso mais perto do clique) e "+ Aluno na turma"
 // no popup da turma de Ground abrem o diálogo "Agendar voo" (test/e2e/agendamento.spec.js). O mapa mostra também as
 // linhas livres: todos os recursos (o avião em manutenção, riscado e sem o "+") e os instrutores disponíveis no dia
-import { test, expect, abrir, abrirEscala, irPara, AMANHA, diaSeguinte, rotuloDaData } from './fixtures.js';
+import { test, expect, abrir, abrirEscala, alternarDisponivel, irPara, AMANHA, diaSeguinte, rotuloDaData } from './fixtures.js';
 import { aluno, cenario, instrutor, GROUND_C152 } from '../helpers/montar.js';
 import { FROTA } from '../helpers/estado.js';
 
@@ -216,6 +216,57 @@ test.describe('Agendar pelo mapa', () => {
     await clicarNoMinuto(vob.locator('.tl-track'), 610);
     await expect(dialogo(page)).toBeHidden();
     await expect(linha(page, 'PR-VOC').locator('.tl-agendar')).toHaveCount(1);
+  });
+
+  test('Ocultar indisponíveis tira do mapa Por recurso as linhas dos recursos desligados, e outro clique as mostra', async ({ page }) => {
+    await abrir(page, { estado: dia({ semAeronaves: ['PR-VOB'] }) });
+    await abrirEscala(page);
+    const ocultar = page.locator('#btn-indisponiveis');
+    await expect(ocultar).toBeHidden(); // a Lista
+    await abrirMapa(page);
+    await expect(ocultar).toBeVisible();
+    await expect(ocultar).toHaveAttribute('aria-pressed', 'false');
+    const linhas = page.locator('#out .mapa .tl-row');
+    const todas = await linhas.count();
+    await expect(linha(page, 'PR-VOB')).toHaveCount(1);
+
+    await ocultar.click();
+    await expect(ocultar).toHaveAttribute('aria-pressed', 'true');
+    await expect(linha(page, 'PR-VOB')).toHaveCount(0);
+    await expect(linhas).toHaveCount(todas - 1);
+    await expect(linha(page, 'PR-VOC')).toHaveCount(1);
+    await expect(page.locator('#out .tl-bar')).toHaveCount(1);
+
+    // Por instrutor não tem recursos para esconder; de volta, continua oculto, também com o eixo invertido
+    await abrirMapa(page, 'ins');
+    await expect(ocultar).toBeHidden();
+    await expect(page.locator('#out .tl-row[data-ins]')).toHaveCount(3);
+    await abrirMapa(page);
+    await expect(linha(page, 'PR-VOB')).toHaveCount(0);
+    await page.locator('#btn-eixo').click();
+    await expect(linha(page, 'PR-VOB')).toHaveCount(0);
+
+    await ocultar.click();
+    await expect(ocultar).toHaveAttribute('aria-pressed', 'false');
+    await expect(linha(page, 'PR-VOB')).toHaveCount(1);
+    await expect(linhas).toHaveCount(todas);
+  });
+
+  // O voo fixo num recurso que ficou indisponível está em conflito: escondê-lo tiraria o voo da tela
+  test('Ocultar indisponíveis deixa no mapa o recurso desligado que ainda tem voo', async ({ page }) => {
+    await abrir(page, { estado: dia() });
+    await abrirEscala(page);
+    await abrirMapa(page);
+    await clicarNoMinuto(faixa(page, 'PR-VOB'), 625);
+    await escolherAluno(page);
+    await agendar(page);
+    await expect(linha(page, 'PR-VOB').locator('.tl-bar')).not.toHaveCount(0);
+    await irPara(page, 'rec');
+    await alternarDisponivel(page, 'PR-VOB', false);
+    await abrirEscala(page, { vista: null });
+    await page.locator('#btn-indisponiveis').click();
+    await expect(linha(page, 'PR-VOB').locator('.tl-bar')).not.toHaveCount(0);
+    await expect(linha(page, 'PR-VOB')).toHaveClass(/\btl-manutencao\b/);
   });
 
   test('os filtros: a categoria mostra as linhas livres dela; o recurso e a busca, só as linhas com voos', async ({ page }) => {

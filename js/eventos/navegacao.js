@@ -1,8 +1,8 @@
 // A navegação: as abas (também pelo botão de uma aba que leva a outra, data-go), as vistas da Escala (por recurso, por
-// instrutor, lista, painel) e o eixo invertido do mapa, os horários que recolhem na Lista e os links para o Manual
+// instrutor, lista, painel), o eixo invertido do mapa e os recursos indisponíveis fora dele, os horários que recolhem na Lista e os links para o Manual
 import { carregarBI } from '../actions.js';
 import { $, focarNoTitulo } from '../dom.js';
-import { setTLMode, setEixoInvertido, EIXO_INVERTIDO } from '../state.js';
+import { setTLMode, setEixoInvertido, EIXO_INVERTIDO, setOcultarIndisponiveis, OCULTAR_INDISPONIVEIS } from '../state.js';
 import { abrirAgenda } from '../views/agenda.js';
 import { alternarTodosDoBI } from '../views/bi.js';
 import { abrirConfigDoPainel } from '../views/config-do-painel.js';
@@ -37,6 +37,12 @@ document.addEventListener('click', e => {
   // Inverter eixo X:Y: o mapa com os recursos (ou os instrutores) nas colunas e as horas nas linhas, e de volta
   if (e.target.closest('#btn-eixo')) {
     setEixoInvertido(!EIXO_INVERTIDO);
+    rOut();
+    return;
+  }
+  // Ocultar indisponíveis: o mapa Por recurso sem as linhas dos recursos desligados na data, e de volta
+  if (e.target.closest('#btn-indisponiveis')) {
+    setOcultarIndisponiveis(!OCULTAR_INDISPONIVEIS);
     rOut();
     return;
   }
