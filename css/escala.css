@@ -73,7 +73,7 @@ details.caixa.avisos summary { color: var(--wa); }
 .transposto .tl-bar:hover, .transposto .tl-bar:focus-visible, .transposto .tl-bar[aria-expanded="true"] { transform: translateX(-1px); }
 /* A barra em pé é alta e estreita: o texto quebra em linhas (o horário, o aluno, a missão e o instrutor à vista) */
 .transposto .tl-bar-t1, .transposto .tl-bar-t2 { white-space: normal; overflow-wrap: anywhere; }
-#btn-eixo.on { background: var(--info-bg); border-color: var(--ac); }
+#btn-eixo.on, #btn-indisponiveis.on { background: var(--info-bg); border-color: var(--ac); }
 @media (max-width: 640px) {
   #s-esc .flt-rotulo, #flt-esc-q { flex: 1 1 140px; min-width: 0; }
   .resumo .st, .resumo .parado { width: 100%; justify-content: space-between; gap: 8px; }

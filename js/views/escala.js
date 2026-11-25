@@ -16,7 +16,7 @@ import { resultadoNaEscala } from './etapas.js';
 import { OPCOES_DE_BURACOS, OPCOES_DE_HORARIOS, normalizarCriterios } from '../criterios.js';
 import { metricasDaEscala } from '../metricas.js';
 import { sumUniqueOperationalHours, consolidateTimelineSlots } from '../engine.js';
-import { S, RES, AUDIT_LOG, TL_MODE, EIXO_INVERTIDO, DATA, isGestor, dadoIndisponivel, estadoDaEscala, inativoNaDataAberta } from '../state.js';
+import { S, RES, AUDIT_LOG, TL_MODE, EIXO_INVERTIDO, OCULTAR_INDISPONIVEIS, DATA, isGestor, dadoIndisponivel, estadoDaEscala, inativoNaDataAberta } from '../state.js';
 import { motivoDoFixo } from '../fixos.js';
 import { instrutoresDoVoo } from '../instrutor-escolhido.js';
 import { $, posicionarJunto, trocarConteudo, visivel } from '../dom.js';
@@ -599,11 +599,12 @@ function filtrosDaEscala(out) {
 // As linhas sem voo do mapa (só nas vistas do mapa), para agendar nelas: Por recurso, todos os recursos da frota e a sala
 // de Ground, na categoria do filtro; Por instrutor, os instrutores disponíveis no dia (os inativos, não). Com um recurso escolhido ou uma
 // busca (Por instrutor, também com uma categoria: o instrutor com voos só de outra categoria pareceria livre), só as linhas
-// com voos
+// com voos. "Ocultar indisponíveis" tira os recursos desligados na data; o que ainda tem voo (um fixo em conflito) continua,
+// com o voo à vista
 function linhasLivres({ categoria, daCategoria, recurso, texto }) {
   if (!vistaDoMapa() || recurso || texto) return [];
   if (TL_MODE === 'ins') return categoria ? [] : S.ins.filter(x => x.on && !inativoNaDataAberta(x)).map(x => [x.id, x.nm]);
-  return [...(S.frota || []).filter(f => !inativoNaDataAberta(f)).map(f => f.reg), GROUND_REG].filter(daCategoria).map(r => [r, nomeDoRecurso(r)]);
+  return [...(S.frota || []).filter(f => !inativoNaDataAberta(f) && !(OCULTAR_INDISPONIVEIS && !S.av[f.reg])).map(f => f.reg), GROUND_REG].filter(daCategoria).map(r => [r, nomeDoRecurso(r)]);
 }
 
 // A escala é refeita a cada alteração (save em actions.js): aqui ela só é desenhada, na visão escolhida na barra.
@@ -620,6 +621,13 @@ export function rOut() {
     eixo.hidden = !vistaDoMapa();
     eixo.setAttribute('aria-pressed', String(EIXO_INVERTIDO));
     eixo.classList.toggle('on', EIXO_INVERTIDO);
+  }
+  // Ocultar indisponíveis só vale no mapa Por recurso
+  const indisponiveis = $('#btn-indisponiveis');
+  if (indisponiveis) {
+    indisponiveis.hidden = TL_MODE !== 'eq';
+    indisponiveis.setAttribute('aria-pressed', String(OCULTAR_INDISPONIVEIS));
+    indisponiveis.classList.toggle('on', OCULTAR_INDISPONIVEIS);
   }
   if (!RES || (!RES.out.length && !RES.al.length)) {
     // Sem voos, nas vistas do mapa, a grade das linhas livres fica embaixo do texto: o "+" e o clique agendam nela
