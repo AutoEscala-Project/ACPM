@@ -5,6 +5,7 @@ import { MIS } from '../config.js';
 import { duracaoFixaDaMissao } from '../rules.js';
 import { horariosDaMissao } from '../horarios.js';
 import { S, DATA, isGestor, inativoNaDataAberta, stuBy } from '../state.js';
+import { inativo } from '../inativos.js';
 import { ApiClient } from '../storage.js';
 import { $, trocarConteudo } from '../dom.js';
 import { esc, opts, hm, fmtH, somarDias } from '../format.js';
@@ -199,7 +200,7 @@ export function rAgenda() {
   // Formulário: alunos do cadastro, missões, disponibilidade e quem anotou (lembrado neste computador)
   const aluno = $('#ag-aluno').value;
   $('#ag-aluno').innerHTML = `<option value="">Escolha o aluno…</option>` +
-    [...S.stu].filter(s => !inativoNaDataAberta(s)).sort((a, b) => a.nm.localeCompare(b.nm)).map(s => `<option value="${s.id}">${esc(s.nm)}</option>`).join('');
+    [...S.stu].filter(s => !inativo(s)).sort((a, b) => a.nm.localeCompare(b.nm)).map(s => `<option value="${s.id}">${esc(s.nm)}</option>`).join('');
   $('#ag-aluno').value = aluno;
   if (!$('#ag-missao').options.length) {
     $('#ag-missao').innerHTML = opts(Object.keys(MIS).map(m => [m, m]), 'Voo Local');

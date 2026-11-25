@@ -2,7 +2,11 @@
 // inativo sem vir, o recurso inativo indisponível), nunca gravado; a Escala avisa dos voos de quem ficou inativo
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { inativo, inativoValeEm, ativosNaData, estadoParaEscalar, voosComInativos, textoDoVooComInativo } from '../../js/inativos.js';
+import { inativo, inativoNoEstado, inativoValeEm, ativosNaData, estadoParaEscalar, voosComInativos, textoDoVooComInativo } from '../../js/inativos.js';
+import { ocupacaoDaEscala, avioesQueServem, instrutoresQueServem } from '../../js/candidatos.js';
+import { instrutoresDoPedido, instrutoresDoVoo } from '../../js/instrutor-escolhido.js';
+import { sugerirReparos } from '../../js/reparo.js';
+import { ApiClient } from '../../js/storage.js';
 import { runAllocationEngine } from '../../js/engine.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
 import { FROTA_INICIAL } from '../../js/frota.js';
@@ -79,9 +83,9 @@ describe('Os voos com inativos', () => {
     ] };
     const itens = voosComInativos(estado, resultado, { data: '2026-11-11', hoje: HOJE });
     assert.deepEqual(itens, [
-      { tipo: 'instrutor', id: 2, nome: 'Instrutor 02', voos: 2 },
-      { tipo: 'recurso', id: 'PR-B', nome: 'PR-B', voos: 1 },
-      { tipo: 'aluno', id: 1000, nome: 'Aluno 1000', voos: 1 }
+      { de: 'instrutor', id: 2, nome: 'Instrutor 02', voos: 2 },
+      { de: 'recurso', id: 'PR-B', nome: 'PR-B', voos: 1 },
+      { de: 'aluno', id: 1000, nome: 'Aluno 1000', voos: 1 }
     ]);
     assert.deepEqual(itens.map(textoDoVooComInativo), [
       '2 voos com Instrutor 02 (inativo) na escala desta data',
@@ -89,5 +93,79 @@ describe('Os voos com inativos', () => {
       '1 voo com o aluno Aluno 1000 (inativo) na escala desta data'
     ]);
     assert.deepEqual(voosComInativos(estado, resultado, { data: '2026-11-01', hoje: HOJE }), []);
+  });
+});
+
+// As listas da escala recebem o estado derivado da data aberta: tiram o inativo só nele. Numa data passada, recebem o
+// estado como está (estadoParaEscalar o devolve) e ninguém fica de fora, como no resto da tela dessa data
+describe('As listas da escala, pela data', () => {
+  const base = () => {
+    const estado = cenario({ ins: [instrutor(1, 9), instrutor(2, 9, { inativo: true })], stu: [aluno(1000)] });
+    estado.frota = FROTA_INICIAL.map(f => (f.reg === INATIVO ? { ...f, inativo: true } : { ...f }));
+    return estado;
+  };
+  const C152 = FROTA_INICIAL.filter(f => f.tipo === 'C152').map(f => f.reg).sort();
+  const INATIVO = C152[0];
+  const futura = estado => estadoParaEscalar(estado, { data: '2026-11-11', hoje: HOJE });
+  const passada = estado => estadoParaEscalar(estado, { data: '2026-11-01', hoje: HOJE });
+  const voo = { mis: 'Voo Local', tipo: 'C152', a: 600, b: 660 };
+
+  it('inativoNoEstado: só no estado derivado de uma data em que o inativo vale', () => {
+    const estado = base();
+    const x = estado.ins[1];
+    assert.equal(inativoNoEstado(futura(estado), x), true);
+    assert.equal(inativoNoEstado(passada(estado), x), false);
+    assert.equal(inativoNoEstado(estado, x), false);
+    assert.equal(inativoNoEstado(futura(estado), estado.ins[0]), false);
+  });
+
+  it('os instrutores e os aviões que servem: sem o inativo de hoje em diante; numa data passada, com ele', () => {
+    const ocupacao = ocupacaoDaEscala([]);
+    const estado = base();
+    const ids = e => instrutoresQueServem(e, ocupacao, { ...voo, alunos: [e.stu[0]] }).map(c => c.x.id);
+    assert.deepEqual(ids(futura(estado)), [1]);
+    assert.deepEqual(ids(passada(estado)).sort(), [1, 2]);
+    const regs = e => avioesQueServem(e, ocupacao, voo).map(c => c.r);
+    assert.deepEqual(regs(futura(estado)).sort(), C152.slice(1));
+    assert.deepEqual(regs(passada(estado)).sort(), C152);
+  });
+
+  it('a Demanda e a Escala: o instrutor inativo fora (ou com a nota) de hoje em diante; numa data passada, como os outros', () => {
+    const estado = base();
+    const nota = e => (instrutoresDoPedido(e, e.stu[0], e.stu[0]).find(o => o.id === 2) || {}).nota;
+    assert.equal(nota(futura(estado)), undefined);
+    assert.equal(nota(passada(estado)), '');
+    const resultado = runAllocationEngine({ ...estado, ins: estado.ins.map(x => ({ ...x, inativo: undefined })) });
+    const fKey = resultado.out[0].fKey;
+    const opcoes = e => instrutoresDoVoo(e, resultado, fKey).map(o => o.id).sort();
+    assert.equal(opcoes(futura(estado)).includes(2), resultado.out[0].insId === 2);
+    assert.deepEqual(opcoes(passada(estado)), [1, 2]);
+  });
+
+  it('as Sugestões: o avião inativo indisponível não sugere "Manutenção da aeronave"; o que está em manutenção, sim', () => {
+    const estado = base();
+    const ativo = runAllocationEngine({ ...estado, frota: FROTA_INICIAL.map(f => ({ ...f })) }).out.find(o => o.stuId === 1000);
+    estado.fixos = { [ativo.fKey]: { a: ativo.a, b: ativo.b, r: INATIVO, insId: ativo.insId } };
+    const motivo = e => {
+      const resultado = runAllocationEngine(e);
+      const voo = resultado.out.find(o => o.stuId === 1000);
+      assert.ok(voo.conflito && voo.conflito.length, 'o voo fixo fica em conflito');
+      return sugerirReparos(e, resultado, voo.fKey).find(o => o.tipo === 'cancelar').motivo;
+    };
+    assert.equal(motivo(futura(estado)), null);
+    const emManutencao = { ...estado, frota: FROTA_INICIAL.map(f => ({ ...f })), av: { ...estado.av, [INATIVO]: false } };
+    assert.equal(motivo(emManutencao), 'Manutenção da aeronave');
+  });
+});
+
+// Ao carregar uma data em que o inativo vale, o hangar e as filas do rodízio ficam só com os ativos; numa data passada, como
+// estão gravados
+describe('A carga da data', () => {
+  it('normalizeAndMigrateState com ativos: o recurso inativo sai do hangar; sem a opção, fica', () => {
+    const estado = { nid: 1001, ins: [instrutor(1, 9)], stu: [], frota: [{ reg: 'PR-A', tipo: 'C152' }, { reg: 'PR-B', tipo: 'C152', inativo: true }], hangar: ['PR-B', 'PR-A'] };
+    const comAtivos = ApiClient.normalizeAndMigrateState(structuredClone(estado), { ativos: true });
+    const semAtivos = ApiClient.normalizeAndMigrateState(structuredClone(estado));
+    assert.equal(comAtivos.hangar.includes('PR-B'), false);
+    assert.equal(semAtivos.hangar.includes('PR-B'), true);
   });
 });

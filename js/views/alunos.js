@@ -3,6 +3,7 @@
 // só para quem pode vê-los (.so-dados)
 import { esc, opts, LIMITE_DO_NOME, chaveDeBusca } from '../format.js';
 import { S, insBy, isGestor, inativoNaDataAberta } from '../state.js';
+import { inativo } from '../inativos.js';
 import { $ } from '../dom.js';
 import { canacDe } from './dados-pessoais.js';
 import { progressoDoAluno } from './etapas.js';
@@ -15,7 +16,7 @@ const nomeComInativo = x => (inativoNaDataAberta(x) ? `${x.nm} (inativo)` : x.nm
 // Alunos: uma tabela (nome, CANAC, peso, curso e os instrutores com quem o aluno voa de preferência ou não deve ser escalado)
 function naoEscalarCom(s) {
   return s.bl.map(b => insBy(b) ? `<span class="tg">${esc(nomeComInativo(insBy(b)))}<button class="edit-only" data-act="unbl" data-b="${b}" aria-label="Voltar a escalar com ${esc(insBy(b).nm)}">✕</button></span>` : '').join('') +
-    `<select data-f="bl" class="edit-only" aria-label="Não escalar com"><option value="">Não escalar com…</option>${S.ins.filter(x => !s.bl.includes(x.id) && !inativoNaDataAberta(x)).map(x => `<option value="${x.id}">${esc(x.nm)}</option>`).join('')}</select>`;
+    `<select data-f="bl" class="edit-only" aria-label="Não escalar com"><option value="">Não escalar com…</option>${S.ins.filter(x => !s.bl.includes(x.id) && !inativo(x)).map(x => `<option value="${x.id}">${esc(x.nm)}</option>`).join('')}</select>`;
 }
 
 // “Priorizar com”: os instrutores do aluno (o par permanente). A escala põe o aluno com um deles sempre que algum pode voar o
@@ -23,7 +24,7 @@ function naoEscalarCom(s) {
 function voaCom(s) {
   const pares = s.voaCom || [];
   return pares.map(b => insBy(b) ? `<span class="tg par">${esc(nomeComInativo(insBy(b)))}<button class="edit-only" data-act="unvc" data-b="${b}" aria-label="Tirar ${esc(insBy(b).nm)} de Priorizar com">✕</button></span>` : '').join('') +
-    `<select data-f="voaCom" class="edit-only" aria-label="Priorizar com"><option value="">Priorizar com…</option>${S.ins.filter(x => !pares.includes(x.id) && !s.bl.includes(x.id) && !inativoNaDataAberta(x)).map(x => `<option value="${x.id}">${esc(x.nm)}</option>`).join('')}</select>`;
+    `<select data-f="voaCom" class="edit-only" aria-label="Priorizar com"><option value="">Priorizar com…</option>${S.ins.filter(x => !pares.includes(x.id) && !s.bl.includes(x.id) && !inativo(x)).map(x => `<option value="${x.id}">${esc(x.nm)}</option>`).join('')}</select>`;
 }
 
 // O curso do aluno: os cursos ativos (a aba Cursos), e o curso dele quando está encerrado ("(encerrado)") ou não existe

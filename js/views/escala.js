@@ -486,8 +486,8 @@ function caixaDosInativos(out) {
   const itens = voosComInativos(S, { out }, { data: DATA, hoje: hojeISO() });
   if (!itens.length) return '';
   const n = itens.reduce((total, i) => total + i.voos, 0);
-  const linha = i => `<li class="al warn">${esc(textoDoVooComInativo(i))}${i.tipo === 'aluno' ? ' <button type="button" class="btn quiet" data-go="dem">Abrir a Demanda</button>' : ''}</li>`;
-  const refazer = itens.some(i => i.tipo !== 'aluno') ? '<button type="button" class="btn quiet edit-only" data-act="refazer-escala">Refazer a escala</button>' : '';
+  const linha = i => `<li class="al warn">${esc(textoDoVooComInativo(i))}${i.de === 'aluno' ? ' <button type="button" class="btn quiet" data-go="dem">Abrir a Demanda</button>' : ''}</li>`;
+  const refazer = itens.some(i => i.de !== 'aluno') ? '<button type="button" class="btn quiet edit-only" data-act="refazer-escala">Refazer a escala</button>' : '';
   return `<details class="caixa avisos inativos" open><summary>${n} ${n === 1 ? 'voo' : 'voos'} com quem está inativo no cadastro</summary><ul>${itens.map(linha).join('')}</ul>${refazer}</details>`;
 }
 

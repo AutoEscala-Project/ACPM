@@ -5,6 +5,12 @@
 
 export const inativo = item => Boolean(item) && typeof item === 'object' && item.inativo === true;
 
+// A marca do estado derivado (estadoParaEscalar) numa data em que o inativo vale. As listas da escala (candidatos, o
+// instrutor escolhido, o agendamento, as Sugestões) recebem esse estado e tiram o inativo só com ela: numa data passada,
+// elas recebem o estado como está e ninguém fica de fora
+const INATIVOS_FORA = Symbol('inativos fora');
+export const inativoNoEstado = (estado, item) => Boolean(estado && estado[INATIVOS_FORA]) && inativo(item);
+
 // O inativo vale na data: hoje ou depois (datas AAAA-MM-DD comparadas como texto)
 export const inativoValeEm = (data, hoje) => typeof data === 'string' && typeof hoje === 'string' && data >= hoje;
 
@@ -24,6 +30,7 @@ export function estadoParaEscalar(estado, { data, hoje }) {
   if (!instrutoresInativos.size && !recursosInativos.length) return estado;
   return {
     ...estado,
+    [INATIVOS_FORA]: true,
     ins: ins.map(x => (instrutoresInativos.has(x.id) ? { ...x, on: false } : x)),
     av: { ...(estado.av || {}), ...Object.fromEntries(recursosInativos.map(reg => [reg, false])) },
     stu: (Array.isArray(estado.stu) ? estado.stu : []).map(s => {
@@ -41,9 +48,9 @@ export function voosComInativos(estado, resultado, { data, hoje }) {
   if (!estado || !resultado || !Array.isArray(resultado.out) || !inativoValeEm(data, hoje)) return [];
   const status = estado.fStatus || {};
   const voos = resultado.out.filter(o => (status[o.fKey] || o.status) !== 'Cancelado');
-  const contar = (lista, chave, deVoo, tipo, nome) => lista.filter(inativo).map(item => {
+  const contar = (lista, chave, deVoo, de, nome) => lista.filter(inativo).map(item => {
     const n = voos.filter(o => deVoo(o) === item[chave]).length;
-    return n ? { tipo, id: item[chave], nome: nome(item), voos: n } : null;
+    return n ? { de, id: item[chave], nome: nome(item), voos: n } : null;
   }).filter(Boolean).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
   return [
     ...contar(estado.ins || [], 'id', o => o.insId, 'instrutor', x => x.nm),
@@ -53,5 +60,5 @@ export function voosComInativos(estado, resultado, { data, hoje }) {
 }
 
 // O texto de um item: "2 voos com Instrutor 02 (inativo) na escala desta data"
-export const textoDoVooComInativo = ({ tipo, nome, voos }) =>
-  `${voos} ${voos === 1 ? 'voo' : 'voos'} com ${tipo === 'aluno' ? 'o aluno ' : ''}${nome} (inativo) na escala desta data`;
+export const textoDoVooComInativo = ({ de, nome, voos }) =>
+  `${voos} ${voos === 1 ? 'voo' : 'voos'} com ${de === 'aluno' ? 'o aluno ' : ''}${nome} (inativo) na escala desta data`;

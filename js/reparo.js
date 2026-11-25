@@ -15,7 +15,7 @@ import { hm } from './format.js';
 import { gruposDoConflito } from './conflitos.js';
 import { statusDoVoo, pedidosDosVoos } from './voo.js';
 import { ocupacaoDaEscala, problemaDoAluno, avioesQueServem, instrutoresQueServem } from './candidatos.js';
-import { inativo } from './inativos.js';
+import { inativoNoEstado } from './inativos.js';
 
 // A turma de Ground muda inteira; o voo, sozinho
 const doGrupo = (resultado, voo) => (voo.isGround ? resultado.out.filter(o => o.classKey === voo.classKey) : [voo]);
@@ -105,7 +105,7 @@ export function sugerirReparos(estado, resultado, fKey, { maximo = 3, depoisDe =
   // Soltar: o voo deixa de ser fixo e o motor o escala de novo, em volta dos outros (não vale para o voo em andamento)
   const emAndamento = grupo.some(v => STATUS_EM_ANDAMENTO.includes(statusDoVoo(v, estado.fStatus)));
   const soltar = emAndamento ? [] : [{ tipo: 'soltar', texto: 'Soltar o voo: o app escolhe de novo o horário, o avião e o instrutor', mudancas: null, soltar: true }];
-  return [...opcoes.slice(0, maximo), ...soltar, { tipo: 'cancelar', texto: 'Cancelar o voo (pede o motivo)', mudancas: null, motivo: motivoDoConflito(voo.conflito, inativo((Array.isArray(estado.frota) ? estado.frota : []).find(f => f.reg === voo.r))) }];
+  return [...opcoes.slice(0, maximo), ...soltar, { tipo: 'cancelar', texto: 'Cancelar o voo (pede o motivo)', mudancas: null, motivo: motivoDoConflito(voo.conflito, inativoNoEstado(estado, (Array.isArray(estado.frota) ? estado.frota : []).find(f => f.reg === voo.r))) }];
 }
 
 // O motivo de cancelamento que o conflito sugere (o diálogo do status já abre com ele marcado). O avião inativo no cadastro

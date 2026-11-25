@@ -295,6 +295,6 @@ aoReverter('restaurarEscolha', (rev, entry) => {
 // "Refazer a escala" (o aviso dos voos com quem ficou inativo): a escala é refeita sem o instrutor ou o recurso inativo e
 // gravada, com a entrada no histórico; nada mais muda
 aoAcionar('refazer-escala', () => {
-  const nomes = voosComInativos(S, RES, { data: DATA, hoje: hojeISO() }).filter(i => i.tipo !== 'aluno').map(i => i.nome);
-  gravarAlteracao('mod', `Escala refeita: ${nomes.join(', ') || 'os inativos'} ${nomes.length > 1 ? 'estão inativos' : 'está inativo'}`);
+  const nomes = voosComInativos(S, RES, { data: DATA, hoje: hojeISO() }).filter(i => i.de !== 'aluno').map(i => i.nome);
+  gravarAlteracao('mod', nomes.length ? `Escala refeita: ${nomes.join(', ')} ${nomes.length > 1 ? 'estão inativos' : 'está inativo'}` : 'Escala refeita sem os inativos do cadastro');
 });
