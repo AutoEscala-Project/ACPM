@@ -3,7 +3,7 @@
 // missão, o progresso, o motivo de uma missão estar fora da ordem, as missões do dia, o que a Demanda, Alunos e a escala
 // mostram (js/views/etapas.js) e a paridade com a próxima missão de antes (o programa do cadastro numa fase só, todas as
 // missões depois das anteriores).
-import { describe, it } from 'node:test';
+import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { estadoDoAluno, proximasMissoes, progressoNoCurso, missoesDoDia, motivoDoBloqueio } from '../../js/progresso.js';
 import { programaDoLegado, percursoDoCurso, indiceDoPrograma, novoCurso } from '../../js/programa.js';
@@ -16,6 +16,11 @@ import { etapaNaDemanda, progressoDoAluno, outraMissaoDoPedido, cursoDoResultado
 import { mulberry32 } from '../helpers/cenarios.js';
 import { importarSolicitacoes } from '../../js/processamento.js';
 import { aluno as alunoDoCenario } from '../helpers/montar.js';
+import { ligarFuncionalidades } from '../helpers/funcionalidades.js';
+
+// O que a Demanda, Alunos e a escala mostram com o progresso ligado (desligado: funcionalidades.test.js)
+before(() => ligarFuncionalidades('progresso'));
+after(() => ligarFuncionalidades());
 
 const ALUNO = 1000;
 // O cronograma do PP como o curso PP, com os ids tirados da sigla e da chave (PP:F4, PP:TSL-01), novo a cada chamada (os

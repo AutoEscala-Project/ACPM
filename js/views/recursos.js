@@ -5,6 +5,7 @@
 // matrícula e as categorias (js/views/filtros-dos-recursos.js) valem para a tabela, a frota e os horários, nunca para o
 // hangar; a barra diz quantos recursos aparecem.
 import { WIN, NI, AIRCRAFT_EQ_TYPES, SIM_EQ_TYPES, REVISAO_H } from '../config.js';
+import { ligada } from '../funcionalidades.js';
 import { normalizarHangar } from '../hangar.js';
 import { FROTA_INICIAL, ATRIBUTOS_DO_RECURSO, atributoVale, exigenciasDoAviao, habilitacaoDoAviao } from '../frota.js';
 import { nomeDaHabilitacao } from '../habilitacoes.js';
@@ -154,10 +155,10 @@ export function rRec() {
 
 // A ordem dos aviões no hangar, da frente para o fundo, com o que cada um voa na escala da data; os botões aparecem com
 // o mouse ou o foco (como no Rodízio). Sempre com todos os aviões: os filtros não valem aqui (Subir e Descer andam na
-// lista inteira)
+// lista inteira). Com o hangar desligado (js/funcionalidades.js), o painel não está na página
 export function rHangar() {
   const lista = $('#hangar');
-  if (!lista) return;
+  if (!lista || !ligada('hangar')) return;
   // Na data em que o inativo vale, a ordem é a dos ativos: o inativo sai e volta no fundo (js/inativos.js)
   const frota = (S.frota || FROTA_INICIAL).filter(f => !inativoNaDataAberta(f));
   const hangar = normalizarHangar(S.hangar, frota);

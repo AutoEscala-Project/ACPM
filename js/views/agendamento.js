@@ -8,9 +8,10 @@
 // campo dele); outro conjunto de avisos pede outra confirmação. Um voo de hoje do aluno muda de lugar ("Mover o voo") ou
 // entra na escala ("Encaixar o voo"); no Ground, o select Instrutor também tem as turmas do dia. Esc e Voltar desistem,
 // e nada muda.
-import { S, DATA, isGestor, dadoIndisponivel, estadoDaEscala } from '../state.js';
+import { S, DATA, isGestor, stuBy, dadoIndisponivel, estadoDaEscala } from '../state.js';
 import { ApiClient } from '../storage.js';
 import { runAllocationEngine } from '../engine.js';
+import { ligada } from '../funcionalidades.js';
 import { situacaoPorMissao } from '../resultados.js';
 import { contextoInicial, formularioDoAgendamento, simularAgendamento, avaliarAgendamento, comPesos, assinaturaDosAvisos, escolhasDaAlternativa } from '../agendamento.js';
 import { $ } from '../dom.js';
@@ -30,9 +31,10 @@ function situacao() {
 
 // O que o diálogo sabe da data: o programa (sem os programas, nenhum, e a missão do aluno com curso não é sugerida), se
 // a ordem do curso pode ser conferida (sem os resultados, não), a data, hoje, agora e se as horas dos instrutores foram
-// lidas
+// lidas. Com o progresso desligado (js/funcionalidades.js), como sem os programas: nenhuma missão do curso nas opções, e a
+// missão do aluno com curso não é sugerida
 function ambiente() {
-  const programaIndisponivel = ['cursos', 'cursos-pendentes'].some(dadoIndisponivel);
+  const programaIndisponivel = !ligada('progresso') || ['cursos', 'cursos-pendentes'].some(dadoIndisponivel);
   const programa = programaIndisponivel ? [] : S.programa || [];
   return {
     programa, programaIndisponivel, inferir: !dadoIndisponivel('resultados') && programa.length > 0, situacao: situacao(),
@@ -72,14 +74,29 @@ const TITULO = { agendar: 'Agendar voo', mover: 'Mover o voo', encaixar: 'Encaix
 // O valor de uma turma de Ground do dia no select Instrutor ("turma:<chave>")
 const turmaDoValor = valor => typeof valor === 'string' && valor.startsWith('turma:');
 
+// Com o progresso desligado (js/funcionalidades.js), o formulário vai sem os programas (ambiente): o curso encerrado do
+// aluno, que é do cadastro dos cursos, é marcado aqui, e o grupo dos tipos de missão não fala da missão do curso (nenhuma
+// está na lista)
+function infoDoAluno(f) {
+  const info = f.alunoInfo || '';
+  const sigla = !ligada('progresso') && f.aluno ? (stuBy(Number(f.aluno)) || {}).curso : '';
+  const encerrado = Boolean(sigla) && (S.programa || []).some(c => c.sigla === sigla && c.ativo === false);
+  return encerrado && info.startsWith(sigla) ? `${sigla} (encerrado)${info.slice(sigla.length)}` : info;
+}
+function gruposDeMissao(f) {
+  if (ligada('progresso')) return f.missoes.grupos;
+  return f.missoes.grupos.map(g => (g.opcoes.some(o => o.valor.startsWith('tipo:')) ? { ...g, rotulo: 'Tipos de missão' } : g));
+}
+
 function desenharFormulario() {
   const f = pedido.formulario;
   const sem = !f.aluno;
   preencher('agd-aluno', `<option value="">Escolha o aluno</option>${emGrupos(f.alunos, f.aluno)}`, f.aluno);
-  campo('agd-aluno-info').textContent = f.alunoInfo || '';
-  const missoes = f.missoes ? `${f.missao ? '' : '<option value="">Escolha a missão</option>'}${emGrupos(f.missoes.grupos, f.missao)}` : '';
+  campo('agd-aluno-info').textContent = infoDoAluno(f);
+  const missoes = f.missoes ? `${f.missao ? '' : '<option value="">Escolha a missão</option>'}${emGrupos(gruposDeMissao(f), f.missao)}` : '';
   preencher('agd-missao', missoes, f.missao || '');
-  campo('agd-missao-nota').textContent = (f.missoes && f.missoes.nota) || '';
+  // Com o progresso desligado, sem a nota (ela só diria que faltam os programas, que não são mostrados de propósito)
+  campo('agd-missao-nota').textContent = (ligada('progresso') && f.missoes && f.missoes.nota) || '';
   campo('agd-tipo-rotulo').hidden = !f.tipos;
   preencher('agd-tipo', f.tipos ? `<option value="">Escolha o tipo</option>${f.tipos.map(m => opcao({ valor: m, texto: m }, f.tipo)).join('')}` : '', f.tipo || '');
   preencher('agd-recurso', (f.recursos || []).map(o => opcao(o, f.recurso)).join(''), f.recurso || '');

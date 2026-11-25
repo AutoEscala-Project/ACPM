@@ -1,6 +1,6 @@
 // A importação dos pedidos da agenda para a demanda da data (js/processamento.js): cada pedido vira um voo, no lugar do
 // voo da mesma missão posto à mão ou numa missão nova; o aluno de um curso entra com a missão do programa
-import { describe, it } from 'node:test';
+import { describe, it, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { importarSolicitacoes } from '../../js/processamento.js';
 import { normalizarCursos } from '../../js/cursos.js';
@@ -11,11 +11,13 @@ import { blank } from '../../js/rules.js';
 import { setS } from '../../js/state.js';
 import { programaParaInferir } from '../../js/views/etapas.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
+import { ligarFuncionalidades } from '../helpers/funcionalidades.js';
 
 // O cronograma do PP (o modelo do app, com o Noturno em trechos) como o curso PP, com os ids tirados da sigla e da chave
 const cursoPP = () => novoCurso([], { sigla: 'PP', nome: 'Piloto Privado', modelo: MODELOS['pp-acpm'] }, (s, c) => `${s}:${c}`).curso;
 
 describe('Importar as solicitações da agenda para a demanda', () => {
+  afterEach(() => ligarFuncionalidades());
   const pedido = (id, alunoId, extra = {}) => ({ id, data: '2026-11-11', aluno: alunoId, aluno_nome: `Aluno ${alunoId}`, missao: 'Voo Local', janela: 'tarde', horario: null, cancelada_em: null, ...extra });
   const estado = () => ({ nid: 2000, importadas: [], stu: [aluno(1000, { fly: false }), aluno(1001, { mis: 'IFR', eq: 'C172' }), aluno(1002)] });
   // O programa do cadastro (a lista de missões de cada curso) no formato dos cursos, como a tela o passa
@@ -248,7 +250,7 @@ describe('Importar as solicitações da agenda para a demanda', () => {
   });
 
   // A Agenda importa com o programa da tela (programaParaInferir, em js/eventos/agenda.js): sem os resultados ou os
-  // programas, vazio. Nenhum pedido entra como missão do curso (antes, inferia de uma situação vazia: a primeira missão)
+  // programas (ou com o progresso desligado), vazio. Nenhum pedido entra como missão do curso (antes, inferia de uma situação vazia: a primeira missão)
   it('sem os resultados ou os programas lidos, nenhum pedido entra como missão do curso', () => {
     const importar = indisponiveis => {
       setS({ stu: [], fStatus: {}, resultados: { situacao: [], doDia: [] }, programa: [cursoPP()], indisponiveis });
@@ -256,9 +258,22 @@ describe('Importar as solicitações da agenda para a demanda', () => {
       importarSolicitacoes(e, [pedido(66, 1000)], { situacao: [], programa: programaParaInferir() });
       return e.stu[0].etapa;
     };
+    ligarFuncionalidades('progresso');
     assert.equal(importar([]), 'IN-01');
     assert.equal(importar(['horas']), 'IN-01');
     for (const parte of ['resultados', 'cursos', 'cursos-pendentes']) assert.equal(importar([parte]), undefined, parte);
+  });
+
+  it('com o progresso desligado (js/funcionalidades.js), nenhum pedido novo entra como missão do curso, e o que já tem a missão fica com ela', () => {
+    ligarFuncionalidades('');
+    setS({ stu: [], fStatus: {}, resultados: { situacao: [], doDia: [] }, programa: [cursoPP()] });
+    const comEtapa = aluno(1001, { mis: 'Voo Local', eq: 'C152', etapa: 'PP-07', cursoDaEtapa: 'PP' }, { curso: 'PP' });
+    const e = { ...estado(), stu: [aluno(1000, { fly: false }, { curso: 'PP' }), comEtapa] };
+    importarSolicitacoes(e, [pedido(67, 1000), pedido(68, 1001)], { situacao: [], programa: programaParaInferir() });
+    assert.equal(e.stu[0].fly, true);
+    assert.equal(e.stu[0].etapa, undefined);
+    assert.deepEqual([e.stu[1].etapa, e.stu[1].cursoDaEtapa], ['PP-07', 'PP']);
+    assert.deepEqual(e.importadas, [67, 68]);
   });
 });
 
