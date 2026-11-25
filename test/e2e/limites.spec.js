@@ -1,6 +1,6 @@
 // Limites dos instrutores pela Lei do Aeronauta: as horas de voo do mês na disponibilidade do dia, as horas
 // de fora do app no painel do instrutor e os limites (só o Administrador muda; neste navegador, o Operador).
-import { test, expect, abrir, irPara, abrirEscala } from './fixtures.js';
+import { test, expect, abrir, irPara, abrirEscala, abrirHistorico, cabecalhoDaGrade, linhaDoInstrutor } from './fixtures.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
 
 const umInstrutorDoisVoos = () => cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, { p1: 390, p2: -1 }), aluno(1001, { p1: 610, p2: -1 })] });
@@ -9,8 +9,8 @@ test.describe('Limites da lei', () => {
   test('a disponibilidade do dia mostra as horas de voo do mês; as de fora do app entram pelo painel do instrutor', async ({ page }) => {
     await abrir(page, { estado: umInstrutorDoisVoos() });
     await irPara(page, 'ins');
-    await expect(page.locator('#inst-dia-cab th')).toContainText(['Mês']);
-    const mes = page.locator('#inst-dia tr[data-id="1"] td.mes');
+    await expect(cabecalhoDaGrade(page).locator('th')).toContainText(['Mês']);
+    const mes = linhaDoInstrutor(page, '1').locator('td.mes');
     await expect(mes).toHaveText('2 h');
 
     await page.locator('#s-ins [data-vista-ins="cadastro"]').click();
@@ -41,7 +41,7 @@ test.describe('Limites da lei', () => {
     await limites.getByLabel('Voo no mês (h)').dispatchEvent('change');
     await abrirEscala(page);
     await expect(page.locator('#out details.caixa.erros')).toContainText('nenhum instrutor dentro dos limites da Lei do Aeronauta');
-    await page.locator('#btn-open-log').click();
+    await abrirHistorico(page);
     await expect(page.locator('#historico')).toContainText('Limites da lei: voo no mês 100 h → 1 h');
 
     await irPara(page, 'ins');

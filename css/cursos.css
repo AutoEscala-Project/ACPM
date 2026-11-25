@@ -1,0 +1,152 @@
+/* Cursos: o programa em fases, o formulário, os alunos, o índice, a tabela das missões e os cartões no celular */
+/* Cursos: o programa de cada curso, em fases (sob o título do módulo), cada fase com o cabeçalho (nome, módulo, quando
+   abre, "Depois de…" e os botões) e a tabela das missões; no fim, "+ Fase", as retiradas e as alterações */
+#cursos { display: flex; flex-direction: column; gap: 12px; }
+#cursos .curso h3 small { font: 500 14px 'Barlow', sans-serif; color: var(--mu); margin-left: 6px; }
+#cursos .curso-cab { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px; }
+#cursos h4.modulo { margin: 18px 0 2px; padding-bottom: 4px; border-bottom: 1px solid var(--ln); font: 600 13.5px 'Barlow Semi Condensed', sans-serif; color: var(--mu); letter-spacing: .02em; text-transform: uppercase; }
+#cursos .fase { margin: 12px 0 16px; }
+#cursos .fase-cab { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; margin: 0 0 8px; }
+#cursos .fase-cab :is(h4, h5) { margin: 0; font: 600 15px 'Barlow Semi Condensed', sans-serif; color: var(--ink); }
+#cursos .fase-cab p.regra { margin: 0; color: var(--mu); font-size: 13.5px; }
+#cursos .campo-da-fase { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--mu); }
+#cursos .campo-da-fase :is(input, select) { color: var(--ink); }
+#cursos .nome-da-fase { flex: 1 1 24em; }
+#cursos .nome-da-fase input { flex: 1; min-width: 12em; font: 600 15px 'Barlow Semi Condensed', sans-serif; }
+#cursos .modulo-da-fase { flex: 0 1 22em; }
+#cursos .modulo-da-fase input { flex: 1; min-width: 10em; }
+#cursos .fase-cab .acoes { margin-left: auto; display: inline-flex; gap: 4px; }
+#cursos .fase > .btn, #cursos .curso > .btn { margin-top: 6px; }
+#cursos summary { cursor: pointer; }
+#cursos summary:focus-visible { outline: 2px solid var(--ac); outline-offset: 2px; border-radius: 3px; }
+/* "Depois de…": o resumo do que o item espera e, aberta, uma marca para cada fase ou missão anterior (as missões, por fase) */
+#cursos details.requisitos summary { color: var(--ac); font-size: 13.5px; }
+#cursos details.requisitos fieldset { display: flex; flex-wrap: wrap; gap: 0 14px; margin: 6px 0 0; padding: 2px 10px 6px; border: 1px solid var(--ln); border-radius: 6px; }
+#cursos details.requisitos legend { padding: 0 4px; font-size: 12.5px; color: var(--mu); }
+#cursos details.requisitos .chk { font-size: 13.5px; white-space: nowrap; }
+#cursos details.retiradas, #cursos details.alteracoes { margin-top: 12px; }
+#cursos details.retiradas summary, #cursos details.alteracoes summary { font-weight: 600; }
+#cursos details.retiradas ul { list-style: none; margin: 6px 0 0; padding: 0; }
+#cursos details.retiradas li { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; padding: 2px 0; border-bottom: 1px solid var(--ln); }
+#cursos details.alteracoes ol { margin: 6px 0 0; padding-left: 20px; font-size: 13.5px; }
+#cursos details.alteracoes li { margin: 2px 0; }
+/* Os cursos: o filtro e "+ Novo curso" na barra; o formulário do curso novo (a sigla, o nome e com que programa começar);
+   no cabeçalho do curso, o nome, encerrar ou reativar e o modelo do programa; o encerrado, esmaecido; os alunos do curso */
+#cursos .barra-dos-cursos { margin: 0; }
+#form-curso { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px 16px; margin: 0; }
+#form-curso[hidden] { display: none; }
+#form-curso .campo { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--mu); }
+#form-curso .campo input { color: var(--ink); }
+#form-curso #cur-sigla { width: 9em; text-transform: uppercase; }
+#form-curso #cur-nome { width: 22em; max-width: 100%; }
+#form-curso [aria-invalid="true"] { border-color: var(--er); }
+#form-curso fieldset { display: flex; flex-wrap: wrap; gap: 2px 16px; margin: 0; padding: 0; border: 0; }
+#form-curso legend { padding: 0; margin-bottom: 4px; font-size: 13px; color: var(--mu); }
+#form-curso .dlg-acoes { display: flex; gap: 8px; margin-left: auto; }
+#cursos .campo-do-curso { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--mu); }
+#cursos .campo-do-curso input { width: 18em; max-width: 100%; color: var(--ink); }
+#cursos .acoes-do-curso { margin-left: auto; display: inline-flex; flex-wrap: wrap; gap: 6px; }
+#cursos .curso.encerrado > .curso-cab h3 { color: var(--mu); }
+#cursos .curso-cab .tag { margin-left: 6px; vertical-align: 1px; }
+#cursos details.alunos-do-curso { margin-top: 12px; }
+#cursos details.alunos-do-curso summary { font-weight: 600; }
+#cursos details.alunos-do-curso ul { margin: 6px 0 0; padding-left: 20px; font-size: 13.5px; }
+#cursos details.alunos-do-curso li { margin: 2px 0; }
+#cursos details.alunos-do-curso .progresso { color: var(--mu); font-variant-numeric: tabular-nums; }
+/* Os alunos por fase: o nome da fase (com quantos são) em cima de cada lista */
+#cursos .turma-da-fase { margin: 8px 0 0; font-size: 13.5px; font-weight: 600; }
+#cursos .turma-da-fase .quantos { color: var(--mu); font-weight: 400; font-variant-numeric: tabular-nums; }
+#cursos .turma-da-fase + ul { margin-top: 2px; }
+/* Um curso de cada vez: um botão por curso no controle segmentado (vários cursos quebram a linha); o encerrado diz que
+   é. A sigla (PC-IFR) e "(encerrado)" não se partem. No celular, só a sigla */
+#cursos .seg-dos-cursos { flex-wrap: wrap; }
+#cursos .seg-dos-cursos .curso-encerrado { font-weight: 400; }
+#cursos .seg-dos-cursos :is(.sigla, .curso-encerrado) { white-space: nowrap; }
+/* O índice das fases: os módulos, cada um com as fases (o link leva à fase) e quantos alunos estão em cada uma; "Abrir
+   todas" e "Recolher todas" ao lado */
+#cursos .indice-das-fases {
+  display: flex; flex-wrap: wrap; align-items: flex-start; gap: 6px 16px; margin: 12px 0 4px; padding: 8px 12px;
+  border: 1px solid var(--ln); border-radius: 8px; background: var(--pn2);
+}
+#cursos .indice-modulos { flex: 1 1 28em; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+#cursos .indice-modulo-nome { display: block; font: 600 12.5px 'Barlow Semi Condensed', sans-serif; color: var(--mu); letter-spacing: .02em; text-transform: uppercase; }
+#cursos .indice-das-fases ul { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 2px 16px; }
+#cursos .indice-das-fases li { display: inline-flex; align-items: baseline; flex-wrap: wrap; gap: 0 6px; }
+#cursos .indice-das-fases a { display: inline-block; padding: 2px 0; font-weight: 600; text-decoration: none; }
+#cursos .indice-das-fases a:hover { text-decoration: underline; }
+#cursos .indice-das-fases a:focus-visible { outline: 2px solid var(--ac); outline-offset: 2px; border-radius: 3px; }
+#cursos .alunos-na-fase { color: var(--mu); font-size: 13px; white-space: nowrap; }
+#cursos .indice-acoes { display: flex; flex-wrap: wrap; gap: 4px; margin-left: auto; }
+/* A fase recolhe e abre no título (a seta gira, como nos grupos de Recursos e nos horários da Lista); recolhida, só o
+   cabeçalho fica. O link do índice a traz para o alto da tela, com uma folga */
+#cursos .fase { scroll-margin-top: 8px; }
+#cursos .fase.recolhida > :not(.fase-cab) { display: none; }
+#cursos .fase-cab .fase-titulo { display: inline-flex; }
+#cursos .fase-btn {
+  display: inline-flex; align-items: center; gap: 6px; min-width: 24px; min-height: 24px; padding: 2px 4px 2px 0; border: 0; border-radius: 4px;
+  background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer;
+}
+#cursos .fase-btn .seta { flex: none; transition: transform .15s; }
+#cursos .fase-btn[aria-expanded="false"] .seta { transform: rotate(-90deg); }
+/* A tabela das missões: as marcas uma embaixo da outra e, nos botões, a fase da missão embaixo de subir, descer e tirar;
+   numa missão Noturno, o trecho embaixo do tipo de missão */
+table.cadastro.programa td { padding: 4px 6px; }
+.programa label.trecho-do-noturno { display: flex; align-items: center; gap: 6px; margin-top: 4px; font-size: 13px; color: var(--mu); }
+.programa label.trecho-do-noturno select { color: var(--ink); }
+.programa td.n { color: var(--mu); font-variant-numeric: tabular-nums; width: 2.5em; }
+.programa input.codigo { width: 7.5em; font-variant-numeric: tabular-nums; }
+.programa input[data-cf="nome"] { width: 100%; min-width: 10em; }
+.programa input.duracao { width: 5em; }
+.programa td.c-quando { min-width: 11em; }
+.programa td.c-marcas .chk { display: flex; font-size: 13.5px; white-space: nowrap; }
+.programa .acoes-da-missao { display: grid; grid-template-columns: repeat(3, max-content); justify-content: end; gap: 4px; }
+.programa .acoes-da-missao select[data-cf="fase"] { grid-column: 1 / -1; max-width: 9em; }
+.programa.consulta td.codigo { font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+@media (max-width: 640px) {
+  /* Um cartão por missão: o número, o código e o nome; a missão; o recurso e as horas; quando voar; as marcas; a fase da
+     missão e os botões. Para quem só consulta, o mesmo cartão, em texto */
+  table.cadastro.programa tr[data-i] {
+    display: grid; grid-template-columns: 2em 1fr 1fr 1fr; gap: 6px 8px; align-items: center; padding: 10px 8px; border-top: 1px solid var(--ln);
+    grid-template-areas: "n codigo nome nome" "mis mis mis mis" "eq eq nb nb" "quando quando quando quando" "marcas marcas marcas marcas" "acoes acoes acoes acoes";
+  }
+  table.cadastro.programa.consulta tr[data-i] { grid-template-areas: "n codigo nome nome" "mis mis eq nb" "quando quando quando quando" "marcas marcas marcas marcas"; }
+  table.cadastro.programa tr[data-i]:first-child { border-top: 0; }
+  table.cadastro.programa td { padding: 0; }
+  table.cadastro.programa td.n { grid-area: n; }
+  table.cadastro.programa td.c-codigo { grid-area: codigo; }
+  table.cadastro.programa td.c-nome { grid-area: nome; }
+  table.cadastro.programa td.c-mis { grid-area: mis; }
+  table.cadastro.programa td.c-eq { grid-area: eq; }
+  table.cadastro.programa td.c-nb { grid-area: nb; }
+  table.cadastro.programa td.c-quando { grid-area: quando; min-width: 0; }
+  table.cadastro.programa td.c-marcas { grid-area: marcas; white-space: normal; }
+  table.cadastro.programa td.c-marcas:empty { display: none; }
+  table.cadastro.programa td.acoes { grid-area: acoes; padding: 0; display: block; }
+  table.cadastro.programa .acoes-da-missao { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 8px; }
+  table.cadastro.programa input, table.cadastro.programa select { width: 100%; min-width: 0; }
+  /* O cadeado do código travado (a missão com resultados) fica ao lado do campo, não embaixo dele */
+  table.cadastro.programa td.c-codigo { display: flex; align-items: center; gap: 4px; }
+  table.cadastro.programa td.c-codigo input { flex: 1; }
+  table.cadastro.programa .acoes-da-missao select[data-cf="fase"] { order: -1; flex: 1 1 4em; width: auto; max-width: none; }
+  table.cadastro.programa td.c-marcas .chk { display: inline-flex; margin-right: 12px; }
+  #cursos .campo-da-fase, #cursos details.requisitos { flex: 1 1 100%; }
+  #cursos .campo-da-fase :is(input, select), #cursos .campo-da-fase input[data-cfa] { flex: 1; min-width: 0; }
+  #cursos summary { min-height: 44px; padding: 12px 0; box-sizing: border-box; }
+  #cursos .campo-do-curso, #cursos .acoes-do-curso, #form-curso .campo, #form-curso .dlg-acoes { flex: 1 1 100%; }
+  #cursos .campo-do-curso input, #form-curso .campo input { flex: 1; width: auto; min-width: 0; }
+  #cursos .acoes-do-curso { margin-left: 0; }
+  /* O botão do cronograma ("Usar o cronograma do PP (P.I PPA 001A)") quebra a linha em vez de passar da tela */
+  #cursos .acoes-do-curso .btn, #form-curso .chk { flex-shrink: 1; max-width: 100%; text-align: left; }
+  table.cadastro.programa label.trecho-do-noturno select { flex: 1; }
+  /* Os cursos pela sigla; as fases do índice pelo nome curto ("Fase 4"), com 44 px para o dedo; a seta da fase ao lado
+     do nome dela, na mesma linha (o campo do nome encolhe, também nos 320 px). Os botões dos cursos não encolhem abaixo
+     do texto: com muitos cursos (ou um encerrado à mostra), o que não cabe vai para a linha de baixo, em vez de cortar a
+     sigla e o "(encerrado)" */
+  #cursos .seg-dos-cursos .nome-do-curso, #cursos .indice-das-fases .resto-do-nome { display: none; }
+  #cursos .seg-dos-cursos button { flex: 1 0 auto; min-width: 44px; }
+  #cursos .indice-das-fases ul { gap: 0 12px; }
+  #cursos .indice-das-fases a { display: inline-flex; align-items: center; min-width: 44px; min-height: 44px; }
+  #cursos .indice-acoes { margin-left: 0; }
+  #cursos .fase-btn { min-width: 44px; min-height: 44px; }
+  #cursos .fase-cab > .nome-da-fase { flex-basis: calc(100% - 58px); min-width: 0; }
+}

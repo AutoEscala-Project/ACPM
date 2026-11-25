@@ -28,12 +28,3 @@ export function mostrarVista(aba, vista) {
     b.setAttribute('aria-pressed', String(essa));
   });
 }
-
-// O botão de vista em que o clique caiu: a aba e a vista dele (ou null)
-export function vistaDoBotao(alvo) {
-  for (const aba of Object.keys(DO_PERFIL)) {
-    const botao = alvo.closest(`[data-vista-${aba}]`);
-    if (botao) return { aba, vista: botao.getAttribute(`data-vista-${aba}`) };
-  }
-  return null;
-}

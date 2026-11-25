@@ -1,0 +1,2 @@
+/* O Rodízio */
+.rodizio { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }

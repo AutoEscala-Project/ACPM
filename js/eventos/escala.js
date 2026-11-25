@@ -1,34 +1,51 @@
 // A Escala: o mapa e o popup do voo (e o clique no mapa que agenda), os filtros, exportar e compartilhar, o status do voo,
-// aprovar e reabrir, os critérios da compactação, o resultado da missão do curso e as sugestões para um conflito
-import { gravarAlteracao, logChange, gravarEscalaCalculada, aindaNaoAbriu, dadosLidos } from '../actions.js';
+// aprovar e reabrir, os critérios da compactação e as sugestões para um conflito (o resultado da missão do curso:
+// js/eventos/resultados.js)
+import { gravarAlteracao, gravarEscalaCalculada, aindaNaoAbriu } from '../actions.js';
 import { opcoesDeCategoria } from '../categorias.js';
 import { OPCOES_DE_BURACOS, OPCOES_DE_HORARIOS, normalizarCriterios } from '../criterios.js';
 import { $, showToast, anunciar, algumDialogoAberto, gavetaDoEsc } from '../dom.js';
 import { exp, pdf, planilha } from '../export.js';
-import { fixosAoMudarStatus, fixosAoReabrir, fixosAoAprovar } from '../fixos.js';
-import { hm } from '../format.js';
+import { fixosAoMudarStatus, fixosAoReabrir, fixosAoAprovar, normalizarFixos } from '../fixos.js';
+import { hm, hojeISO } from '../format.js';
 import { aplicarReparo } from '../reparo.js';
-import { S, RES, DATA, isGestor, modoCompartilhado, insBy } from '../state.js';
-import { escolherInstrutor, escolhasDaUnidade, escolherNosPedidos } from '../instrutor-escolhido.js';
+import { S, RES, DATA, AUDIT_LOG, isGestor, modoCompartilhado, insBy } from '../state.js';
+import { escolherInstrutor, escolhasDaUnidade, escolherNosPedidos, reverterEscolha, reverterReparo } from '../instrutor-escolhido.js';
+import { agendamentosEmVolta } from '../reversoes.js';
 import { STATUS_COM_DETALHE, textoParaOHistorico, detalheAoMudarStatus, rotuloDoStatus } from '../status.js';
 import { ApiClient } from '../storage.js';
 import { agendarNoMapa } from './agendamento.js';
 import { confirmado } from './confirmacao.js';
-import { aoAcionar, aoMudarCampo } from './registro.js';
-import { rAlu } from '../views/cadastros.js';
-import { rDem } from '../views/demanda.js';
+import { aoAcionar, aoMudarCampo, aoReverter } from './registro.js';
+import { vooDaChave } from './resultados.js';
 import { pedirDetalheDoStatus } from '../views/dialogo-status.js';
-import { cursoDoResultado } from '../views/etapas.js';
-import { rOut, botaoDoInstrutor, seletorDeInstrutor, abrirPopupDoMapa, fecharPopupDoMapa, popupDoMapaAberto, reposicionarPopupDoMapa, tabNoPopup } from '../views/escala.js';
+import { rOut, lembrarCaixa, botaoDoInstrutor, seletorDeInstrutor, abrirPopupDoMapa, fecharPopupDoMapa, popupDoMapaAberto, reposicionarPopupDoMapa, tabNoPopup } from '../views/escala.js';
 import { abrirPainelDeReparo, fecharPainelDeReparo, opcaoDoPainel } from '../views/reparo.js';
+import { registrarDesenho, redesenharPorNome } from '../redesenho.js';
+import { voosComInativos } from '../inativos.js';
+
+// O desenho da Escala (js/redesenho.js): refeito em todos os momentos, quando há escala
+registrarDesenho('escala', () => { if (RES) rOut(); }, { em: ['dados', 'consulta', 'releitura', 'escala'], ordem: 80 });
 
 // O minuto de um clique na faixa de uma linha do mapa: a posição dele dentro da faixa (sem a borda), entre o início e o
-// fim do mapa (data-inicio e data-fim), de 5 em 5 minutos
-function minutoDoClique(faixa, clientX) {
-  const { inicio, fim } = faixa.closest('.tl-wrap').dataset;
-  const fracao = (clientX - faixa.getBoundingClientRect().left - faixa.clientLeft) / faixa.clientWidth;
+// fim do mapa (data-inicio e data-fim), de 5 em 5 minutos; na largura da faixa ou, com o eixo invertido, na altura
+function minutoDoClique(faixa, { clientX, clientY }) {
+  const mapa = faixa.closest('.tl-wrap');
+  const { inicio, fim } = mapa.dataset;
+  const caixa = faixa.getBoundingClientRect();
+  // Com o eixo invertido, as horas descem: a posição é a do clique na altura da faixa
+  const fracao = mapa.classList.contains('transposto')
+    ? (clientY - caixa.top - faixa.clientTop) / faixa.clientHeight
+    : (clientX - caixa.left - faixa.clientLeft) / faixa.clientWidth;
   return Math.round((+inicio + Math.min(1, Math.max(0, fracao)) * (fim - inicio)) / 5) * 5;
 }
+
+// A caixa do resumo que a pessoa abre ou recolhe fica assim nos redesenhos (o toggle não sobe: ouvido na captura). O
+// redesenho cria a caixa já no estado lembrado, então o toggle dela só repete o que já está guardado
+document.addEventListener('toggle', e => {
+  const caixa = e.target instanceof Element && e.target.closest('#out details.caixa[data-caixa]');
+  if (caixa === e.target) lembrarCaixa(caixa.dataset.caixa, caixa.open);
+}, true);
 
 // Popup do voo no mapa da escala: a barra abre e fecha; Esc (o foco volta para a barra) e um clique fora fecham, e ele
 // acompanha a barra quando a página ou o mapa rolam. Um diálogo aberto por cima (o do status) fica com o Esc e com os
@@ -52,7 +69,7 @@ document.addEventListener('click', e => {
   const faixa = e.target.closest('#out .tl-track:not(.inerte)');
   if (!faixa || isGestor()) return;
   const { r, ins } = faixa.dataset;
-  agendarNoMapa({ ...(ins ? { insId: +ins } : { r }), minuto: minutoDoClique(faixa, e.clientX) });
+  agendarNoMapa({ ...(ins ? { insId: +ins } : { r }), minuto: minutoDoClique(faixa, e) });
 });
 // O Esc fecha só o popup, a camada de cima: ouvido na captura, ele para aqui e não chega às gavetas e aos painéis
 // de trás (o Histórico, as Sugestões, as habilitações), que continuam abertos. O Esc na lista do instrutor é dela
@@ -119,7 +136,6 @@ $('#btn-share-link').onclick = async () => {
 
 // Status do voo: Atrasado e Cancelado pedem o detalhe (a nova decolagem ou o motivo) antes de valer; desistir deixa o
 // status anterior. O histórico registra só a categoria do motivo
-const vooDaChave = fKey => (RES && Array.isArray(RES.out) ? RES.out.find(o => o.fKey === fKey) : null);
 function aplicarStatus(fKey, status, detalhe) {
   if (!S.fStatus) S.fStatus = {};
   if (!S.fObs) S.fObs = {};
@@ -181,7 +197,7 @@ aoMudarCampo('insVoo', t => {
   const { antes, alunos } = escolherInstrutor(S, RES, { stuId: voo.stuId, mid: voo.mid || 0 }, x ? x.id : null, { noLugar: true });
   const quem = alunos > 1 ? `turma de ${voo.mis}` : voo.s;
   gravarAlteracao('mod', `Instrutor de ${quem} (${hm(voo.a)}–${hm(voo.b)}): ${x ? x.nm : 'automático'}`, { kind: 'restaurarEscolha', ...antes, label: '↶ Reverter' });
-  rDem();
+  redesenharPorNome('pedidos-do-dia');
   showToast(x ? `${x.nm} fica com o voo; o resto da escala foi refeito em volta.` : 'O app volta a escolher o instrutor deste voo.', 'ok');
 });
 
@@ -230,36 +246,6 @@ document.addEventListener('click', e => {
   gravarAlteracao('mod', `Compactação: ${campo === 'buracos' ? 'buracos' : 'horários'} ${nome(antes[campo])} → ${nome(S.criterios[campo])}`);
 });
 
-// O resultado da missão do curso, na linha do voo: vai para o servidor (só acréscimo), no curso da missão do pedido (o
-// aluno pode ter trocado de curso no mesmo dia), e entra na situação do aluno (o progresso e a próxima missão mudam).
-// Sem conexão, o seletor volta ao que estava
-document.addEventListener('change', async e => {
-  const sel = e.target.closest('[data-resultado]');
-  if (!sel || isGestor()) return;
-  if (aindaNaoAbriu()) { rOut(); return; }
-  const o = vooDaChave(sel.dataset.resultado), curso = o ? cursoDoResultado(o) : null;
-  if (!o || !o.etapa || !curso) return;
-  const registro = { aluno: o.stuId, curso, missao: o.etapa, resultado: sel.value, data: DATA, voo: o.fKey };
-  sel.disabled = true;
-  try {
-    const id = await ApiClient.registrarResultado(registro);
-    const novo = { id, ...registro, registrado_em: new Date().toISOString(), registrado_por: ApiClient.autorAtual || null };
-    const atual = S.resultados || { situacao: [], doDia: [] };
-    const mesmaMissao = r => r.aluno === novo.aluno && r.curso === novo.curso && r.missao === novo.missao;
-    // A situação de cada missão vale para todas as datas; os registros do dia e o histórico, só para a data do voo (a
-    // resposta pode chegar depois de trocar de data, ou com outra data abrindo: a entrada vai direto para a data do voo)
-    const mesmaData = DATA === registro.data && dadosLidos;
-    S.resultados = { situacao: [...atual.situacao.filter(r => !mesmaMissao(r)), novo], doDia: mesmaData ? [...atual.doDia, novo] : atual.doDia };
-    const descricao = `Resultado de ${o.s} em ${o.etapa}: ${registro.resultado}`;
-    // O resultado fica no servidor, não nos dados do dia: só a entrada do histórico, sem gravar o dia
-    if (mesmaData) logChange('mod', descricao);
-    else ApiClient.registrarHistorico(registro.data, { tipo: 'mod', descricao });
-  } catch {
-    showToast('Não foi possível registrar o resultado. Verifique a conexão e tente de novo.');
-  }
-  rOut(); rAlu(); rDem();
-});
-
 // Sugestões para um conflito: a gaveta abre pelo botão do conflito. "Aplicar" muda o voo fixo (na turma de
 // Ground, a turma inteira) e "Soltar" o tira dos fixos; o histórico guarda os fixos de antes, para reverter. Cancelar
 // abre o diálogo do status, já com o motivo do conflito marcado
@@ -289,11 +275,38 @@ document.addEventListener('click', e => {
   gravarAlteracao('mod', `Reparo: ${voo.s} (${hm(voo.a)}–${hm(voo.b)}): ${opcao.soltar ? 'Soltar o voo' : opcao.texto}`, {
     kind: 'restaurarFixos', fixos: Object.fromEntries(mudados.map(k => [k, antes[k]])), ...(escolhas.length ? { pedidos: escolhas } : {}), label: '↶ Reverter'
   });
-  if (escolhas.length) rDem();
+  if (escolhas.length) redesenharPorNome('pedidos-do-dia');
   showToast(opcao.soltar ? 'Voo solto: o app escalou de novo.' : 'Sugestão aplicada: o voo continua fixo.', 'ok');
 });
 // O Esc fecha a gaveta quando ela é a de cima ou tem o foco (js/dom.js); com um diálogo aberto por cima (o do status, o
 // do agendamento), o Esc fecha só o diálogo
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape' && gavetaDoEsc(e) === $('#painel-reparo') && !algumDialogoAberto()) fecharPainelDeReparo(true);
+});
+
+// "↶ Reverter" no histórico (js/eventos/historico.js): os tipos desta tela. A reversão chega validada (js/reversoes.js)
+aoReverter('restaurarFixos', (rev, entry) => {
+  // Um reparo desfeito: os voos voltam a ser fixos como antes dele, e o instrutor escolhido dos pedidos também. O voo
+  // agendado volta só enquanto o agendamento continua: o histórico diz qual foi desfeito ou feito depois do reparo
+  // (js/reversoes.js e js/instrutor-escolhido.js)
+  reverterReparo(S, rev, agendamentosEmVolta(S, AUDIT_LOG, entry, S.frota));
+  S.fixos = normalizarFixos(S.fixos);
+  if (rev.pedidos) redesenharPorNome('pedidos-do-dia');
+  gravarAlteracao('mod', `Revertido: ${entry.desc}`, null, entry.id);
+});
+
+aoReverter('restaurarEscolha', (rev, entry) => {
+  // O instrutor escolhido volta como estava, e os voos fixos também; o voo agendado, só enquanto o agendamento
+  // continua (js/reversoes.js e js/instrutor-escolhido.js)
+  reverterEscolha(S, rev, agendamentosEmVolta(S, AUDIT_LOG, entry, S.frota));
+  S.fixos = normalizarFixos(S.fixos);
+  gravarAlteracao('mod', `Revertido: ${entry.desc}`, null, entry.id);
+  redesenharPorNome('pedidos-do-dia');
+});
+
+// "Refazer a escala" (o aviso dos voos com quem ficou inativo): a escala é refeita sem o instrutor ou o recurso inativo e
+// gravada, com a entrada no histórico; nada mais muda
+aoAcionar('refazer-escala', () => {
+  const nomes = voosComInativos(S, RES, { data: DATA, hoje: hojeISO() }).filter(i => i.de !== 'aluno').map(i => i.nome);
+  gravarAlteracao('mod', nomes.length ? `Escala refeita: ${nomes.join(', ')} ${nomes.length > 1 ? 'estão inativos' : 'está inativo'}` : 'Escala refeita sem os inativos do cadastro');
 });

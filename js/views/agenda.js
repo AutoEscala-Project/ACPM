@@ -4,7 +4,8 @@
 import { MIS } from '../config.js';
 import { duracaoFixaDaMissao } from '../rules.js';
 import { horariosDaMissao } from '../horarios.js';
-import { S, DATA, isGestor } from '../state.js';
+import { S, DATA, isGestor, inativoNaDataAberta, stuBy } from '../state.js';
+import { inativo } from '../inativos.js';
 import { ApiClient } from '../storage.js';
 import { $, trocarConteudo } from '../dom.js';
 import { esc, opts, hm, fmtH, somarDias } from '../format.js';
@@ -137,7 +138,9 @@ function calendarioHTML() {
 // Na data aberta no topo, a situação de cada pedido: já importado para a demanda ou ainda não (nas outras datas a
 // demanda não está carregada)
 const importado = p => (S.importadas || []).includes(p.id);
-const pendentesDaDataAberta = () => (diaEscolhido === DATA ? pedidos.filter(p => p.data === DATA && !p.cancelada_em && !importado(p)) : []);
+// O pedido do aluno inativo no cadastro fica registrado, fora dos pendentes: ele entra quando o aluno voltar a ativo
+const deAlunoInativo = p => inativoNaDataAberta(stuBy(p.aluno));
+const pendentesDaDataAberta = () => (diaEscolhido === DATA ? pedidos.filter(p => p.data === DATA && !p.cancelada_em && !importado(p) && !deAlunoInativo(p)) : []);
 function situacao(p) {
   // Cancelado: a etiqueta numa linha; quem cancelou e quando ficam na dica (e para o leitor de tela)
   if (p.cancelada_em) {
@@ -145,7 +148,8 @@ function situacao(p) {
     return `<span class="tag" title="Cancelado ${detalhe}">Cancelado</span><span class="sr"> ${detalhe}</span>`;
   }
   if (p.data !== DATA) return '';
-  return importado(p) ? '<span class="tag grp">Na demanda</span>' : '<span class="tag fb">Ainda não importado</span>';
+  if (importado(p)) return '<span class="tag grp">Na demanda</span>';
+  return deAlunoInativo(p) ? '<span class="tag">Aluno inativo</span>' : '<span class="tag fb">Ainda não importado</span>';
 }
 
 function listaHTML() {
@@ -196,7 +200,7 @@ export function rAgenda() {
   // Formulário: alunos do cadastro, missões, disponibilidade e quem anotou (lembrado neste computador)
   const aluno = $('#ag-aluno').value;
   $('#ag-aluno').innerHTML = `<option value="">Escolha o aluno…</option>` +
-    [...S.stu].sort((a, b) => a.nm.localeCompare(b.nm)).map(s => `<option value="${s.id}">${esc(s.nm)}</option>`).join('');
+    [...S.stu].filter(s => !inativo(s)).sort((a, b) => a.nm.localeCompare(b.nm)).map(s => `<option value="${s.id}">${esc(s.nm)}</option>`).join('');
   $('#ag-aluno').value = aluno;
   if (!$('#ag-missao').options.length) {
     $('#ag-missao').innerHTML = opts(Object.keys(MIS).map(m => [m, m]), 'Voo Local');

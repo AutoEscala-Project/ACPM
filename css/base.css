@@ -1,0 +1,86 @@
+/* A base das duas páginas (o app e a TV): as cores e os temas, html, body, o anel do foco, os títulos, os campos, o texto discreto,
+   os links, o texto só para o leitor de tela e [hidden]; e main e #login-erro, que as duas páginas têm */
+/* Cores e temas (claro e escuro) */
+:root {
+  --bg: #EEF2F5;
+  --pn: #FFFFFF;
+  --pn2: #F6F8FA;
+  --ink: #12263A;
+  --mu: #5B6B7A;
+  --ln: #DCE3E9;
+  --ln2: #C5CFD8;
+  --ac: #1F5FA8;
+  --acT: #ffffff;
+  --ye: #F2B705;
+  --er: #B3261E;
+  --erT: #ffffff;
+  --er-bg: #FCEBEA;
+  --wa: #8A5A00;
+  --wa-bg: #FFF5DB;
+  --ok: #197A47;
+  --ok-bg: #E7F4EC;
+  --info-bg: #E8F1FB;
+  --neutro-bg: #EDF1F4;
+  --fly: #01639E;
+  --hd: #12263A;
+  --hdT: #EAF0F5;
+  --pop-bg: #12263A;
+  --pop-txt: #F8FAFB;
+  --at: #D9711C;
+  box-sizing: border-box;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0F1822; --pn: #17232F; --pn2: #1C2B39; --ink: #E6EDF3; --mu: #93A3B2;
+    --ln: #2B3B4A; --ln2: #3A4E60; --ac: #6AA8F0; --acT: #0F1822; --er: #FF8A80; --erT: #0F1822; --er-bg: rgba(255,138,128,.14);
+    --wa: #F2C94C; --wa-bg: rgba(242,201,76,.14); --ok: #5FD39A; --ok-bg: rgba(95,211,154,.14);
+    --info-bg: rgba(106,168,240,.14); --neutro-bg: rgba(147,163,178,.14); --fly: #4FC3F7; --hd: #0A1119; --hdT: #E6EDF3;
+    --pop-bg: #223446; --pop-txt: #E6EDF3; --at: #F0954A;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0F1822; --pn: #17232F; --pn2: #1C2B39; --ink: #E6EDF3; --mu: #93A3B2;
+  --ln: #2B3B4A; --ln2: #3A4E60; --ac: #6AA8F0; --acT: #0F1822; --er: #FF8A80; --erT: #0F1822; --er-bg: rgba(255,138,128,.14);
+  --wa: #F2C94C; --wa-bg: rgba(242,201,76,.14); --ok: #5FD39A; --ok-bg: rgba(95,211,154,.14);
+  --info-bg: rgba(106,168,240,.14); --neutro-bg: rgba(147,163,178,.14); --fly: #4FC3F7; --hd: #0A1119; --hdT: #E6EDF3;
+  --pop-bg: #223446; --pop-txt: #E6EDF3; --at: #F0954A;
+}
+/* Base e barra do topo */
+html { scroll-padding-top: env(safe-area-inset-top, 0px); }
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 15px/1.45 'Barlow', system-ui, -apple-system, sans-serif;
+}
+/* No papel, fundo branco e texto preto (as duas páginas; o resto da impressão está em css/casca.css) */
+@media print {
+  body { background: #fff; color: #000; }
+}
+button:focus-visible, select:focus-visible, input:focus-visible {
+  outline: 2px solid var(--ac);
+  outline-offset: 2px;
+}
+main { max-width: 1280px; margin: 0 auto; padding: 16px 16px 60px; }
+h2 { font: 600 20px 'Barlow Semi Condensed', sans-serif; margin: 18px 0 10px; }
+h3 { font: 600 15px 'Barlow Semi Condensed', sans-serif; margin: 10px 0 6px; color: var(--ink); }
+select, input:not([type=checkbox]) {
+  font: inherit;
+  background: var(--pn);
+  color: var(--ink);
+  border: 1px solid var(--ln2);
+  border-radius: 6px;
+  padding: 4px 6px;
+  max-width: 100%;
+}
+input[type=number] { width: 88px; }
+p.h { color: var(--mu); margin: 4px 0 8px; }
+a { color: var(--ac); }
+/* Só para o leitor de tela */
+.sr { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+[hidden] { display: none !important; }
+#login-erro { color: var(--er); margin: 10px 0 0; }
+#login-erro:empty { display: none; }

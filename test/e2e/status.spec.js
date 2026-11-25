@@ -1,6 +1,6 @@
 // Status do voo com detalhes: Cancelado pede o motivo e Atrasado, a nova decolagem. O detalhe aparece junto do status,
 // vai para o CSV e fica guardado no dia; o histórico registra só a categoria do motivo.
-import { test, expect, abrir, abrirEscala } from './fixtures.js';
+import { test, expect, abrir, abrirEscala, botaoDoHistorico } from './fixtures.js';
 import { aluno, cenario, instrutor, GROUND_C152 } from '../helpers/montar.js';
 
 // Dois voos seguidos do mesmo instrutor (e no mesmo avião): 10:10 e 11:30
@@ -10,7 +10,7 @@ const dialogo = page => page.locator('#dlg-status');
 const confirmar = page => dialogo(page).getByRole('button', { name: 'Confirmar' }).click();
 
 async function abrirHistorico(page) {
-  await page.locator('#btn-open-log').click();
+  await botaoDoHistorico(page).click();
   await expect(page.locator('#historico')).toBeVisible();
   return page.locator('#historico');
 }

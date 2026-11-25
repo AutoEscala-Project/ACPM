@@ -3,7 +3,7 @@
 // regras.
 import { T, NI, MINUTOS_DO_DIA, REVISAO_H, AIRCRAFT_EQ_TYPES, DEFAULT_LIM } from './config.js';
 import { podeFazer } from './habilitacoes.js';
-import { instrutorVoaNoAviao } from './frota.js';
+import { instrutorVoaNoAviao, habilitacaoQueFalta } from './frota.js';
 import { dentroDosLimites } from './limites.js';
 import { reducaoNecessaria } from './combustivel.js';
 
@@ -54,7 +54,7 @@ export function problemasDoInstrutor(x, { mis, tipo, a, b, efetivo = { a, b }, a
     ['instrutor-indisponivel', () => x.on && cobre(x.aw, a, b)],
     // A habilitação da missão e do tipo; com o contexto, a do curso do aluno e a própria do avião (o motivo diz qual faltou)
     ['habilitacao', () => (!podeFazer(x, mis, tipo) ? false : podeFazer(x, mis, tipo, { curso, recurso }) ||
-      { motivo: recurso && !instrutorVoaNoAviao(x, recurso) ? `aviao:${recurso.reg}` : 'curso' })],
+      { motivo: recurso && !instrutorVoaNoAviao(x, recurso) ? habilitacaoQueFalta(x, recurso) : 'curso' })],
     ['instrutor-ocupado', () => jaOcupa || livre(compromissos.map(c => [c.ocupaDe ?? c.a, c.ocupaAte ?? c.b]), a, b)],
     ['bloqueio', () => !alunos.some(s => s && (s.bl || []).includes(x.id))],
     ['limite-da-lei', dentroDaLei],

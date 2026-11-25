@@ -8,7 +8,7 @@
 // campo dele); outro conjunto de avisos pede outra confirmação. Um voo de hoje do aluno muda de lugar ("Mover o voo") ou
 // entra na escala ("Encaixar o voo"); no Ground, o select Instrutor também tem as turmas do dia. Esc e Voltar desistem,
 // e nada muda.
-import { S, DATA, isGestor, dadoIndisponivel } from '../state.js';
+import { S, DATA, isGestor, dadoIndisponivel, estadoDaEscala } from '../state.js';
 import { ApiClient } from '../storage.js';
 import { runAllocationEngine } from '../engine.js';
 import { situacaoPorMissao } from '../resultados.js';
@@ -154,7 +154,7 @@ function marcarInvalido(id = null) {
 // O formulário de novo (na hora) e a conferência depois da espera
 function recalcular({ conferirJa = false } = {}) {
   pedido.ambiente = ambiente();
-  pedido.formulario = formularioDoAgendamento(S, pedido.base, pedido.ambiente, pedido.contexto, pedido.escolhas, pedido.tocados);
+  pedido.formulario = formularioDoAgendamento(estadoDaEscala(), pedido.base, pedido.ambiente, pedido.contexto, pedido.escolhas, pedido.tocados);
   desenharFormulario();
   clearTimeout(pedido.temporizador);
   if (pedido.formulario.formato.length) {
@@ -174,15 +174,17 @@ function conferir() {
   if (!pedido || !pedido.pendente) return;
   clearTimeout(pedido.temporizador);
   const f = pedido.formulario;
-  const estadoComPesos = comPesos(S, f.proposta);
+  // A lista e a simulação leem o estado da escala (sem os inativos de hoje em diante, js/inativos.js)
+  const estado = estadoDaEscala();
+  const estadoComPesos = comPesos(estado, f.proposta);
   let baseComPesos = pedido.base;
-  if (estadoComPesos !== S) {
+  if (estadoComPesos !== estado) {
     const chave = `${f.proposta.stuId}:${f.proposta.pesos.aluno}|${f.proposta.insId}:${f.proposta.pesos.instrutor}`;
     if (!pedido.comPesos.has(chave)) pedido.comPesos.set(chave, runAllocationEngine(estadoComPesos));
     baseComPesos = pedido.comPesos.get(chave);
   }
-  const { sim, fKey } = simularAgendamento(S, pedido.base, f.proposta);
-  pedido.avaliacao = avaliarAgendamento({ estado: S, base: pedido.base, baseComPesos, sim, fKey, formulario: f, ambiente: pedido.ambiente });
+  const { sim, fKey } = simularAgendamento(estado, pedido.base, f.proposta);
+  pedido.avaliacao = avaliarAgendamento({ estado, base: pedido.base, baseComPesos, sim, fKey, formulario: f, ambiente: pedido.ambiente });
   pedido.pendente = false;
   desenharConferencia();
 }
@@ -335,7 +337,7 @@ export function abrirAgendamento(valor, { aoConfirmar }) {
   ligar();
   const amb = ambiente();
   pedido = {
-    contexto: contextoInicial(valor, amb), ambiente: amb, base: runAllocationEngine(S), escolhas: {}, tocados: new Set(), aoConfirmar,
+    contexto: contextoInicial(valor, amb), ambiente: amb, base: runAllocationEngine(estadoDaEscala()), escolhas: {}, tocados: new Set(), aoConfirmar,
     comPesos: new Map(), pendente: false, travado: false, temporizador: null
   };
   desarmar();
@@ -353,7 +355,7 @@ export function abrirAgendamento(valor, { aoConfirmar }) {
 export function atualizarAgendamento() {
   if (!pedido || pedido.travado) return;
   if (isGestor() || ApiClient.readOnly) { travar(); return; }
-  pedido.base = runAllocationEngine(S);
+  pedido.base = runAllocationEngine(estadoDaEscala());
   pedido.comPesos.clear();
   recalcular();
 }

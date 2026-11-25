@@ -2,7 +2,7 @@
 // config.js); o formato 11 dos dados a leva para o cadastro, e o motor e as telas a leem de lá.
 import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { FROTA_INICIAL, TIPOS_DA_FROTA, normalizarFrota, matriculasDoTipo, novoRecurso } from '../../js/frota.js';
+import { FROTA_INICIAL, TIPOS_DA_FROTA, normalizarFrota, matriculasDoTipo, novoRecurso, comAtributo } from '../../js/frota.js';
 import { ESQUEMA, migrarCadastro } from '../../js/migracoes.js';
 import { separar, juntar } from '../../js/dias.js';
 import { ApiClient } from '../../js/storage.js';
@@ -20,7 +20,8 @@ describe('Frota: o que ela guarda', () => {
     assert.equal(FROTA_INICIAL.length, 26);
     assert.deepEqual(FROTA_INICIAL.find(f => f.reg === 'PR-JPL'), { reg: 'PR-JPL', tipo: 'C152', soParafuso: true });
     assert.deepEqual(FROTA_INICIAL.find(f => f.reg === 'PR-CPL'), { reg: 'PR-CPL', tipo: 'C172', soVfr: true });
-    assert.deepEqual(FROTA_INICIAL.find(f => f.reg === 'PR-VOM'), { reg: 'PR-VOM', tipo: 'PA-34', habilitacaoPropria: true });
+    // Desde o formato 26, o que o recurso exige está na lista exige; a habilitação própria fica como espelho dela
+    assert.deepEqual(FROTA_INICIAL.find(f => f.reg === 'PR-VOM'), { reg: 'PR-VOM', tipo: 'PA-34', habilitacaoPropria: true, exige: ['aviao:PR-VOM'] });
     assert.deepEqual(FROTA_INICIAL.find(f => f.reg === 'PT-JOB'), { reg: 'PT-JOB', tipo: 'PA-34' });
     assert.deepEqual(TIPOS_DA_FROTA, ['C152', 'C172', 'PA-34', 'Sim. Mono', 'Sim. Multi']);
   });
@@ -111,5 +112,39 @@ describe('Frota: o motor usa a frota dos dados', () => {
     const { out, al } = runAllocationEngine(estado);
     assert.equal(out.length, 0);
     assert.match(al[0].m, /PR-ACR/);
+  });
+});
+
+// Formato 26: o que o recurso exige do instrutor (exige) e o recurso inativo (inativo: só true fica)
+describe('Frota: o que o recurso exige e o inativo (formato 26)', () => {
+  it('exige: só ids do registro ou habilitações próprias, sem repetir, na ordem do registro; a habilitação própria é o espelho', () => {
+    assert.deepEqual(normalizarFrota([
+      { reg: 'PR-A', tipo: 'C172', exige: ['ifr', 'xyz', 'ifr', 'aviao:PR-A', 7, null] },
+      { reg: 'PR-B', tipo: 'C152', habilitacaoPropria: true },
+      { reg: 'PR-C', tipo: 'C152', habilitacaoPropria: true, exige: [] },
+      { reg: 'PR-D', tipo: 'C152', exige: 'ifr' },
+      { reg: 'PR-E', tipo: 'C152', exige: ['aviao:PR-E'] }
+    ]), [
+      { reg: 'PR-A', tipo: 'C172', habilitacaoPropria: true, exige: ['ifr', 'aviao:PR-A'] },
+      { reg: 'PR-B', tipo: 'C152', habilitacaoPropria: true, exige: ['aviao:PR-B'] },
+      { reg: 'PR-C', tipo: 'C152' },
+      { reg: 'PR-D', tipo: 'C152' },
+      { reg: 'PR-E', tipo: 'C152', habilitacaoPropria: true, exige: ['aviao:PR-E'] }
+    ]);
+  });
+
+  it('inativo: só true fica', () => {
+    assert.deepEqual(normalizarFrota([{ reg: 'PR-A', tipo: 'C152', inativo: true }, { reg: 'PR-B', tipo: 'C152', inativo: 'sim' }, { reg: 'PR-C', tipo: 'C152', inativo: false }]),
+      [{ reg: 'PR-A', tipo: 'C152', inativo: true }, { reg: 'PR-B', tipo: 'C152' }, { reg: 'PR-C', tipo: 'C152' }]);
+  });
+
+  it('comAtributo: marcar a habilitação própria põe o id do recurso em exige, e desmarcar o tira (o resto de exige fica)', () => {
+    const marcado = comAtributo({ reg: 'PR-X', tipo: 'C172', exige: ['ifr'] }, 'habilitacaoPropria', true);
+    assert.deepEqual(marcado, { reg: 'PR-X', tipo: 'C172', habilitacaoPropria: true, exige: ['ifr', 'aviao:PR-X'] });
+    assert.deepEqual(comAtributo(marcado, 'habilitacaoPropria', false), { reg: 'PR-X', tipo: 'C172', exige: ['ifr'] });
+    assert.deepEqual(comAtributo({ reg: 'PR-X', tipo: 'C172' }, 'soVfr', true), { reg: 'PR-X', tipo: 'C172', soVfr: true });
+    assert.deepEqual(comAtributo({ reg: 'PR-X', tipo: 'C172', soVfr: true, inativo: true }, 'soVfr', false), { reg: 'PR-X', tipo: 'C172', inativo: true });
+    // O atributo que não vale no tipo não muda nada
+    assert.deepEqual(comAtributo({ reg: 'PR-X', tipo: 'C172' }, 'soParafuso', true), { reg: 'PR-X', tipo: 'C172' });
   });
 });

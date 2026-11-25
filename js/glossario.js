@@ -11,7 +11,18 @@ import { duracaoHm, hm } from './format.js';
 const duracao = min => (min % 60 ? duracaoHm(min) : `${min / 60} h`);
 const lei = LIMITES_DA_LEI;
 
-export const ABAS_DO_GLOSSARIO = ['Escala', 'Critérios', 'Demanda', 'Agenda', 'Recursos', 'Instrutores', 'Alunos', 'Cursos', 'Rodízio'];
+// Um grupo por linha: cada passo do redesenho muda só a linha da tela dele
+export const ABAS_DO_GLOSSARIO = [
+  'Escala',
+  'Critérios',
+  'Demanda',
+  'Agenda',
+  'Recursos',
+  'Instrutores',
+  'Alunos',
+  'Cursos',
+  'Rodízio'
+];
 
 export const GLOSSARIO = {
   // Escala
@@ -81,7 +92,7 @@ export const GLOSSARIO = {
   hangar: { aba: 'Recursos', termo: 'Ordem no hangar', texto: 'Da frente para o fundo, sempre com todos os aviões (Recursos › Disponibilidade do dia): entre aviões livres, o da frente sai primeiro.' },
   noturno: { aba: 'Escala', termo: 'Noturno', texto: 'Missão de dois dias: sai às 17:30 para BH (1 h de translado) e voa 3 h de noturno em BH; no dia seguinte, a volta decola de BH às 07:30, e o instrutor, o aluno e o avião ficam livres às 10:10.' },
   'so-vfr': { aba: 'Recursos', termo: 'Só VFR', texto: 'Avião não homologado IFR: voa as missões VFR, e nenhum voo IFR (IFR, cheques IFR, o noturno do PC) vai para ele. Marque na frota, em Recursos › Cadastro.' },
-  'habilitacao-propria': { aba: 'Recursos', termo: 'Habilitação própria', texto: 'O recurso (marcado na frota, em Recursos › Cadastro) exige do instrutor uma habilitação só dele, além da do tipo (por exemplo, o PR-VOM). Marque-a em Instrutores › Cadastro › Editar habilitações.' },
+  'habilitacao-propria': { aba: 'Recursos', termo: 'Habilitação própria', texto: 'O que o próprio recurso exige do instrutor, além da habilitação do tipo: uma habilitação só dele (por exemplo, a do PR-VOM), marcada na frota, em Recursos › Cadastro. Marque-a no instrutor em Instrutores › Cadastro › Editar habilitações.' },
   'so-parafuso': { aba: 'Recursos', termo: 'Só Parafuso', texto: 'Avião reservado para a missão de Parafuso no C152: as outras missões não usam ele, e o Parafuso só voa nele. Marque na frota, em Recursos › Cadastro.' },
 
   // Instrutores

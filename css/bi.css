@@ -1,0 +1,16 @@
+/* O BI: a data base, as barras e a grade */
+.chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--ln);
+  border-radius: 4px;
+  padding: 5px 9px;
+  background: var(--bg);
+  font-weight: 500;
+  cursor: pointer;
+  user-select: none;
+}
+.bi-bar-wrap { width: 130px; background: var(--bg); height: 10px; border-radius: 5px; overflow: hidden; border: 1px solid var(--ln); display: inline-block; vertical-align: middle; margin-right: 6px; }
+.bi-bar-fill { height: 100%; background: var(--ac); }
+.bi-grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(440px, 100%), 1fr)); gap: 14px; }

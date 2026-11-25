@@ -16,11 +16,12 @@ import { resultadoNaEscala } from './etapas.js';
 import { OPCOES_DE_BURACOS, OPCOES_DE_HORARIOS, normalizarCriterios } from '../criterios.js';
 import { metricasDaEscala } from '../metricas.js';
 import { sumUniqueOperationalHours, consolidateTimelineSlots } from '../engine.js';
-import { S, RES, AUDIT_LOG, TL_MODE, DATA, isGestor, dadoIndisponivel } from '../state.js';
+import { S, RES, AUDIT_LOG, TL_MODE, EIXO_INVERTIDO, OCULTAR_INDISPONIVEIS, DATA, isGestor, dadoIndisponivel, estadoDaEscala, inativoNaDataAberta } from '../state.js';
 import { motivoDoFixo } from '../fixos.js';
 import { instrutoresDoVoo } from '../instrutor-escolhido.js';
 import { $, posicionarJunto, trocarConteudo, visivel } from '../dom.js';
 import { statusDoVoo, unidadeDoVoo } from '../voo.js';
+import { voosComInativos, textoDoVooComInativo } from '../inativos.js';
 
 export const HT = o => (o.isGround || isGroundMission(o.mis) ? DURACAO_DO_GROUND : fmtH(o.h) + (o.ss !== '1/1' ? ` (sessão ${o.ss})` : ''));
 
@@ -143,11 +144,11 @@ function linhasDoMapa(voos, porInstrutor, livres) {
 
 // O que a linha diz e faz: as horas do dia (no recurso, com o tipo antes). Nas vistas do mapa, o "+" que agenda nela (no
 // recurso ou com o instrutor) e o clique no espaço livre da faixa; o avião em manutenção fica apagado ("em manutenção"),
-// e ele, o recurso que saiu da frota e o instrutor fora do cadastro não agendam (a faixa fica inerte)
+// e ele, o recurso que saiu da frota, o instrutor fora do cadastro e o inativo não agendam (a faixa fica inerte)
 function detalhesDaLinha(linha, porInstrutor, mapa) {
   const horas = fmtH(sumUniqueOperationalHours(linha.voos, statusDe));
   if (porInstrutor) {
-    const agenda = mapa && S.ins.some(x => x.id === linha.chave);
+    const agenda = mapa && S.ins.some(x => x.id === linha.chave && !inativoNaDataAberta(x));
     return {
       sub: horas, dados: `data-ins="${esc(linha.chave)}"`, manutencao: false, inerte: mapa && !agenda,
       agendar: agenda ? { valor: `i:${linha.chave}`, nome: `Agendar com ${linha.rotulo}` } : null
@@ -156,22 +157,25 @@ function detalhesDaLinha(linha, porInstrutor, mapa) {
   const r = linha.chave, ground = r === GROUND_REG;
   const recurso = ground ? null : (S.frota || []).find(f => f.reg === r) || null;
   const manutencao = mapa && Boolean(recurso) && !S.av[r];
-  const agenda = mapa && (ground || (Boolean(recurso) && !manutencao));
+  const inativoAqui = mapa && Boolean(recurso) && inativoNaDataAberta(recurso);
+  const agenda = mapa && (ground || (Boolean(recurso) && !manutencao && !inativoAqui));
   const tipo = ground ? '' : (linha.voos.length ? linha.voos[0].eqType : recurso && recurso.tipo) || '';
   return {
-    sub: [tipo, horas, manutencao ? 'em manutenção' : ''].filter(Boolean).join(' · '), dados: `data-r="${esc(r)}"`, manutencao, inerte: mapa && !agenda,
+    sub: [tipo, horas, manutencao ? 'em manutenção' : '', inativoAqui ? 'inativo' : ''].filter(Boolean).join(' · '), dados: `data-r="${esc(r)}"`, manutencao, inerte: mapa && !agenda,
     agendar: agenda ? { valor: `r:${r}`, nome: `Agendar ${ground ? 'na Sala Ground' : `no ${r}`}` } : null
   };
 }
 
-// O mapa: as marcas do eixo ficam no minuto delas e cada listra da faixa é uma hora (--hora), em qualquer largura; o
-// início e o fim do mapa (data-inicio e data-fim, em minutos) dão o horário de um clique na faixa (js/eventos/escala.js)
+// O mapa: as marcas do eixo ficam no minuto delas (--pos), cada voo do início (--ini) ao fim (--dur) e cada listra da
+// faixa é uma hora (--hora), em qualquer largura; o início e o fim do mapa (data-inicio e data-fim, em minutos) dão o
+// horário de um clique na faixa (js/eventos/escala.js). Com o eixo invertido (.transposto), o CSS põe as linhas em
+// colunas e as horas descendo (--horas dá a altura)
 function buildTimelineGroup(linhas, porInstrutor, barLine1Fn, barLine2Fn, minStart, maxEnd) {
   const span = maxEnd - minStart;
   const mapa = vistaDoMapa();
 
   const ticks = [];
-  for (let m = minStart; m <= maxEnd; m += 60) ticks.push(`<span${m === maxEnd ? ' class="fim"' : ''} style="left:${(((m - minStart) / span) * 100).toFixed(2)}%">${hm(m)}</span>`);
+  for (let m = minStart; m <= maxEnd; m += 60) ticks.push(`<span${m === maxEnd ? ' class="fim"' : ''} style="--pos:${(((m - minStart) / span) * 100).toFixed(2)}%">${hm(m)}</span>`);
 
   const rowsHTML = linhas.map(linha => {
     const { sub, dados, manutencao, inerte, agendar } = detalhesDaLinha(linha, porInstrutor, mapa);
@@ -189,7 +193,7 @@ function buildTimelineGroup(linhas, porInstrutor, barLine1Fn, barLine2Fn, minSta
       const chave = unidadeDoVoo(o) || `${porInstrutor ? 'ins' : 'r'}:${linha.chave}:${o.a}`;
       VOOS_DO_MAPA.set(chave, o);
 
-      return `<button type="button" class="tl-bar ${cls} tl-st-${stKey}" data-pop="${esc(chave)}" aria-haspopup="dialog" aria-controls="tl-pop" aria-expanded="false" style="left:${left.toFixed(2)}%;width:${width.toFixed(2)}%">
+      return `<button type="button" class="tl-bar ${cls} tl-st-${stKey}" data-pop="${esc(chave)}" aria-haspopup="dialog" aria-controls="tl-pop" aria-expanded="false" style="--ini:${left.toFixed(2)}%;--dur:${width.toFixed(2)}%">
         <span class="tl-bar-t1">${barLine1Fn(o)}</span>
         <span class="tl-bar-t2">${barLine2Fn(o)}</span>
         <span class="sr">, ${esc(rotuloDoStatus(status, o))}</span>
@@ -199,14 +203,15 @@ function buildTimelineGroup(linhas, porInstrutor, barLine1Fn, barLine2Fn, minSta
     const mais = agendar ? `<button type="button" class="tl-agendar edit-only" data-act="agendar" data-agendar="${esc(agendar.valor)}" aria-label="${esc(agendar.nome)}" aria-haspopup="dialog"><svg class="ico" aria-hidden="true"><use href="#i-mais"/></svg></button>` : '';
 
     // O nome que não cabe na coluna termina em reticências: o title mostra o nome inteiro (no celular, ele quebra em
-    // linhas, css/app.css)
+    // linhas, css/escala.css)
     return `<div class="tl-row${manutencao ? ' tl-manutencao' : ''}" ${dados}>
       <div class="tl-lbl"><span title="${esc(linha.rotulo)}">${esc(linha.rotulo)}</span> <small>${esc(sub)}</small>${mais}</div>
       <div class="tl-track${inerte ? ' inerte' : ''}" ${dados}>${bars}</div>
     </div>`;
   }).join('');
 
-  return `<div class="tl-wrap" data-inicio="${minStart}" data-fim="${maxEnd}" style="--hora:${(6000 / span).toFixed(4)}%"><div class="tl-axis">${ticks.join('')}</div>${rowsHTML}</div>`;
+  const transposto = mapa && EIXO_INVERTIDO;
+  return `<div class="tl-wrap${transposto ? ' transposto' : ''}" data-inicio="${minStart}" data-fim="${maxEnd}" style="--hora:${(6000 / span).toFixed(4)}%;--horas:${(span / 60).toFixed(2)}"><div class="tl-axis">${ticks.join('')}</div>${rowsHTML}</div>`;
 }
 
 // O mapa dos voos (com as linhas livres, nas vistas do mapa). Sem voo nenhum à vista, só a grade das linhas livres, sem a
@@ -351,7 +356,7 @@ export function botaoDoInstrutor(o, rotulo) {
 // A lista do instrutor do voo: sem escolha, a primeira opção é quem o app pôs; os instrutores que não servem no horário
 // aparecem com o motivo, e o operador pode escolher mesmo assim (o voo fica em conflito, com as sugestões)
 export function seletorDeInstrutor(o, rotulo) {
-  const lista = instrutoresDoVoo(S, RES, o.fKey).filter(x => o.insEscolhido || x.id !== o.insId)
+  const lista = instrutoresDoVoo(estadoDaEscala(), RES, o.fKey).filter(x => o.insEscolhido || x.id !== o.insId)
     .map(x => `<option value="${x.id}"${o.insEscolhido && x.id === o.insId ? ' selected' : ''}>${esc(x.nota ? `${x.nm} (${x.nota})` : x.nm)}</option>`);
   const automatico = o.insEscolhido ? 'Automático (o app escolhe)' : `${o.ins} (${o.insPar ? 'Priorizar com do aluno' : 'escolhido pelo app'})`;
   return `<select class="ins-sel" data-a="insVoo" data-fkey="${esc(o.fKey)}" data-rotulo="${esc(rotulo)}" aria-label="${esc(rotulo)}"><option value=""${o.insEscolhido ? '' : ' selected'}>${esc(automatico)}</option>${lista.join('')}</select>`;
@@ -450,6 +455,12 @@ function resumoDosAvisos(avisos) {
   return `${avisos.length} ${avisos.length === 1 ? 'aviso' : 'avisos'}: ${partes.join(' · ')}`;
 }
 
+// As caixas do resumo (erros, conflitos, avisos, inativos) abrem recolhidas; a que a pessoa abriu continua aberta quando
+// a escala é redesenhada (a troca de vista, do eixo, de filtro ou uma alteração), até recarregar a página
+const caixasAbertas = new Set();
+export const lembrarCaixa = (nome, aberta) => { if (aberta) caixasAbertas.add(nome); else caixasAbertas.delete(nome); };
+const caixa = (nome, classes, conteudo) => `<details class="caixa ${classes}" data-caixa="${nome}"${caixasAbertas.has(nome) ? ' open' : ''}>${conteudo}</details>`;
+
 function resumo(out, al, tot) {
   const erros = al.filter(a => a.t === 'err');
   const conflitos = al.filter(a => a.t === 'conf');
@@ -464,17 +475,29 @@ function resumo(out, al, tot) {
       <div><strong>${fmtH(horas)}</strong> de voo e aula</div>
     </div>${tempoParado(out)}`;
   if (erros.length) {
-    h += `<details class="caixa erros" open><summary>${erros.length === 1 ? '1 missão não entrou' : `${erros.length} missões não entraram`} na escala: ${esc(nomes)}</summary>
-      <ul>${erros.map(item).join('')}</ul></details>`;
+    h += caixa('erros', 'erros', `<summary>${erros.length === 1 ? '1 missão não entrou' : `${erros.length} missões não entraram`} na escala: ${esc(nomes)}</summary>
+      <ul>${erros.map(item).join('')}</ul>`);
   }
   // Voos fixos que ficaram impossíveis (da escala aprovada, agendados ou com o instrutor escolhido na Escala): continuam no
   // lugar até o operador resolver
   const conflito = a => `<li class="al ${a.t}"><b>${esc(a.s)}</b> ${esc(a.m)}${a.fKey ? ` <button type="button" class="btn quiet edit-only" data-reparo="${esc(a.fKey)}" title="O que pode voar no lugar deste voo">Sugestões</button>` : ''}</li>`;
   const n = conflitos.length;
   const emConflito = S.aprovacao ? `${n} ${n === 1 ? 'voo em conflito' : 'voos em conflito'} na escala aprovada` : `${n} ${n === 1 ? 'voo fixo' : 'voos fixos'} em conflito`;
-  if (n) h += `<details class="caixa conflitos" open><summary>${emConflito}</summary><ul>${conflitos.map(conflito).join('')}</ul></details>`;
-  if (avisos.length) h += `<details class="caixa avisos"><summary>${resumoDosAvisos(avisos)}</summary><ul>${avisos.map(item).join('')}</ul></details>`;
-  return h + '</div>';
+  if (n) h += caixa('conflitos', 'conflitos', `<summary>${emConflito}</summary><ul>${conflitos.map(conflito).join('')}</ul>`);
+  if (avisos.length) h += caixa('avisos', 'avisos', `<summary>${resumoDosAvisos(avisos)}</summary><ul>${avisos.map(item).join('')}</ul>`);
+  return h + caixaDosInativos(out) + '</div>';
+}
+
+// Os voos da escala com quem ficou inativo no cadastro (a escala gravada continua mostrando os voos dele até ser refeita):
+// um item por pessoa ou recurso. Com um instrutor ou um recurso, "Refazer a escala" a refaz sem ele; o voo do aluno inativo
+// não muda ao refazer (o pedido dele continua): ele se resolve na Demanda
+function caixaDosInativos(out) {
+  const itens = voosComInativos(S, { out }, { data: DATA, hoje: hojeISO() });
+  if (!itens.length) return '';
+  const n = itens.reduce((total, i) => total + i.voos, 0);
+  const linha = i => `<li class="al warn">${esc(textoDoVooComInativo(i))}${i.de === 'aluno' ? ' <button type="button" class="btn quiet" data-go="dem">Abrir a Demanda</button>' : ''}</li>`;
+  const refazer = itens.some(i => i.de !== 'aluno') ? '<button type="button" class="btn quiet edit-only" data-act="refazer-escala">Refazer a escala</button>' : '';
+  return caixa('inativos', 'avisos inativos', `<summary>${n} ${n === 1 ? 'voo' : 'voos'} com quem está inativo no cadastro</summary><ul>${itens.map(linha).join('')}</ul>${refazer}`);
 }
 
 // Horários recolhidos na Lista (continuam assim quando a escala é refeita, até recarregar a página)
@@ -574,13 +597,14 @@ function filtrosDaEscala(out) {
 }
 
 // As linhas sem voo do mapa (só nas vistas do mapa), para agendar nelas: Por recurso, todos os recursos da frota e a sala
-// de Ground, na categoria do filtro; Por instrutor, os instrutores disponíveis no dia. Com um recurso escolhido ou uma
+// de Ground, na categoria do filtro; Por instrutor, os instrutores disponíveis no dia (os inativos, não). Com um recurso escolhido ou uma
 // busca (Por instrutor, também com uma categoria: o instrutor com voos só de outra categoria pareceria livre), só as linhas
-// com voos
+// com voos. "Ocultar indisponíveis" tira os recursos desligados na data; o que ainda tem voo (um fixo em conflito) continua,
+// com o voo à vista
 function linhasLivres({ categoria, daCategoria, recurso, texto }) {
   if (!vistaDoMapa() || recurso || texto) return [];
-  if (TL_MODE === 'ins') return categoria ? [] : S.ins.filter(x => x.on).map(x => [x.id, x.nm]);
-  return [...(S.frota || []).map(f => f.reg), GROUND_REG].filter(daCategoria).map(r => [r, nomeDoRecurso(r)]);
+  if (TL_MODE === 'ins') return categoria ? [] : S.ins.filter(x => x.on && !inativoNaDataAberta(x)).map(x => [x.id, x.nm]);
+  return [...(S.frota || []).filter(f => !inativoNaDataAberta(f) && !(OCULTAR_INDISPONIVEIS && !S.av[f.reg])).map(f => f.reg), GROUND_REG].filter(daCategoria).map(r => [r, nomeDoRecurso(r)]);
 }
 
 // A escala é refeita a cada alteração (save em actions.js): aqui ela só é desenhada, na visão escolhida na barra.
@@ -591,6 +615,20 @@ export function rOut() {
     b.setAttribute('aria-pressed', String(b.dataset.tl === TL_MODE));
   });
   $('#out').dataset.vista = TL_MODE === 'lista' || TL_MODE === 'painel' ? TL_MODE : 'mapa';
+  // Inverter o eixo só vale nas vistas do mapa
+  const eixo = $('#btn-eixo');
+  if (eixo) {
+    eixo.hidden = !vistaDoMapa();
+    eixo.setAttribute('aria-pressed', String(EIXO_INVERTIDO));
+    eixo.classList.toggle('on', EIXO_INVERTIDO);
+  }
+  // Ocultar indisponíveis só vale no mapa Por recurso
+  const indisponiveis = $('#btn-indisponiveis');
+  if (indisponiveis) {
+    indisponiveis.hidden = TL_MODE !== 'eq';
+    indisponiveis.setAttribute('aria-pressed', String(OCULTAR_INDISPONIVEIS));
+    indisponiveis.classList.toggle('on', OCULTAR_INDISPONIVEIS);
+  }
   if (!RES || (!RES.out.length && !RES.al.length)) {
     // Sem voos, nas vistas do mapa, a grade das linhas livres fica embaixo do texto: o "+" e o clique agendam nela
     const grade = renderVisualTimeline([], linhasLivres(filtrosDaEscala([])));

@@ -8,7 +8,13 @@ import { execFileSync } from 'node:child_process';
 import { readFileSync, readdirSync } from 'node:fs';
 
 const raiz = new URL('..', import.meta.url);
+// O projeto de produção (como em scripts/semear-previa.mjs): os testes rodam só na prévia
+const PRODUCAO = 'iszaomkinojwxymyglmh';
 const url = process.env.SUPABASE_DB_URL || readFileSync(new URL('supabase/.temp/pooler-url', raiz), 'utf8').trim();
+if (url.includes(PRODUCAO)) {
+  console.error('Os testes do banco são só para o projeto de prévia, não para produção.');
+  process.exit(2);
+}
 if (!process.env.SUPABASE_DB_PASSWORD) {
   console.error('Defina SUPABASE_DB_PASSWORD (senha do banco do projeto de prévia).');
   process.exit(2);

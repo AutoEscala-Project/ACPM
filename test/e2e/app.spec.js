@@ -1,5 +1,6 @@
-import { test, expect, abrir, irPara, abrirMenuDaConta } from './fixtures.js';
+import { test, expect, abrir, irPara, abrirMenuDaConta, botaoDaAba, campoDaData, diaAnterior, diaSeguinte, relativoDaData, rotuloDaData, rotulosDasAbas, SETAS_DA_DATA } from './fixtures.js';
 import { GLOSSARIO } from '../../js/glossario.js';
+import { FRASES_QUE_SAIRAM, FRASES_DO_MANUAL } from './manual-frases.js';
 
 test.describe('Aplicação', () => {
   test('abre na Escala, com as abas na ordem de uso e sem números', async ({ page }) => {
@@ -7,9 +8,9 @@ test.describe('Aplicação', () => {
     await expect(page).toHaveTitle('AutoEscala - ACPM');
     await expect(page.locator('meta[name="application-name"]')).toHaveAttribute('content', 'AutoEscala - ACPM');
     await expect(page.locator('meta[name="apple-mobile-web-app-title"]')).toHaveAttribute('content', 'AutoEscala');
-    await expect(page.locator('#nav button .aba-rotulo')).toHaveText(['Escala', 'Demanda', 'Agenda', 'Recursos', 'Instrutores', 'Alunos', 'Cursos', 'Rodízio', 'BI']);
+    await expect(rotulosDasAbas(page)).toHaveText(['Escala', 'Demanda', 'Agenda', 'Recursos', 'Instrutores', 'Alunos', 'Cursos', 'Rodízio', 'BI']);
     await expect(page.locator('#s-esc')).toBeVisible();
-    await expect(page.locator('#nav button[data-t="esc"]')).toHaveClass(/\bon\b/);
+    await expect(botaoDaAba(page, 'esc')).toHaveClass(/\bon\b/);
     await expect(page.locator('#s-rec')).toBeHidden();
   });
 
@@ -33,32 +34,32 @@ test.describe('Aplicação', () => {
 
   test('a data em uso fica no topo, em todas as abas; os botões ‹ e › trocam o dia', async ({ page }) => {
     await abrir(page);
-    await expect(page.locator('#dt-rotulo')).toHaveText('quarta-feira, 11/11', { useInnerText: true });
-    await expect(page.locator('#dt-rel')).toHaveText('amanhã');
+    await expect(rotuloDaData(page)).toHaveText('quarta-feira, 11/11', { useInnerText: true });
+    await expect(relativoDaData(page)).toHaveText('amanhã');
     await irPara(page, 'dem');
-    await expect(page.locator('#dt-rotulo')).toBeVisible();
-    await page.locator('#dt-prox').click();
-    await expect(page.locator('#dt')).toHaveValue('2026-11-12');
-    await expect(page.locator('#dt-rotulo')).toHaveText('quinta-feira, 12/11', { useInnerText: true });
-    await expect(page.locator('#dt-rel')).toBeHidden();
-    await page.locator('#dt-ant').click();
-    await expect(page.locator('#dt')).toHaveValue('2026-11-11');
-    await page.locator('#dt-ant').click();
-    await expect(page.locator('#dt')).toHaveValue('2026-11-10');
-    await expect(page.locator('#dt-rel')).toHaveText('hoje');
+    await expect(rotuloDaData(page)).toBeVisible();
+    await diaSeguinte(page);
+    await expect(campoDaData(page)).toHaveValue('2026-11-12');
+    await expect(rotuloDaData(page)).toHaveText('quinta-feira, 12/11', { useInnerText: true });
+    await expect(relativoDaData(page)).toBeHidden();
+    await diaAnterior(page);
+    await expect(campoDaData(page)).toHaveValue('2026-11-11');
+    await diaAnterior(page);
+    await expect(campoDaData(page)).toHaveValue('2026-11-10');
+    await expect(relativoDaData(page)).toHaveText('hoje');
   });
 
   for (const largura of [1280, 560, 360]) test(`o controle da data tem tamanho fixo: as setas não saem do lugar quando o texto muda (${largura} px)`, async ({ page }) => {
     await page.setViewportSize({ width: largura, height: 800 });
     await abrir(page);
-    const caixas = () => page.evaluate(() => ['.topo-data', '#dt-ant', '#dt-prox'].map(s => {
+    const caixas = () => page.evaluate(seletores => seletores.map(s => {
       const r = document.querySelector(s).getBoundingClientRect();
       return [Math.round(r.x), Math.round(r.width)];
-    }));
+    }), ['.topo-data', ...SETAS_DA_DATA]);
     const inicial = await caixas();
     for (const data of ['2026-11-12', '2026-11-10', '2026-11-14', '2026-11-16', '2027-01-04', '2026-12-31']) {
-      await page.locator('#dt').fill(data);
-      await expect(page.locator('#dt')).toHaveValue(data);
+      await campoDaData(page).fill(data);
+      await expect(campoDaData(page)).toHaveValue(data);
       expect(await caixas(), data).toEqual(inicial);
     }
   });
@@ -68,7 +69,7 @@ test.describe('Aplicação', () => {
     await abrir(page);
     for (const aba of ['ins', 'alu', 'cur', 'dem', 'esc', 'bi', 'rec']) {
       await irPara(page, aba);
-      await expect(page.locator(`#nav button[data-t="${aba}"]`)).toHaveClass(/\bon\b/);
+      await expect(botaoDaAba(page, aba)).toHaveClass(/\bon\b/);
       await expect(page.locator('section.on')).toHaveCount(1);
     }
     await expect(page.getByRole('button', { name: /^Próximo:/ })).toHaveCount(0);
@@ -135,19 +136,9 @@ test.describe('Aplicação', () => {
     await expect(page.locator('#manual-rodizio li')).toHaveText(['Voos de cheque', 'Voo MLTE (PA-34)', 'Voo noturno', 'Voo C172']);
 
     await expect(manual.locator('h2')).toHaveText('Manual do AutoEscala');
-    // Nada das regras e dos nomes antigos
+    // Nada das regras e dos nomes antigos (test/e2e/manual-frases.js)
     const texto = await manual.innerText();
-    for (const antigo of ['A01', 'A09', 'Gerar escala', 'Preencher exemplo', 'Link Blindado', 'Importar Solicitações da Agenda',
-      'Vai voar?', 'Início pref', 'Exportar CSV', 'Emitir PDF', 'Turno rápido', 'Cada cartão', 'campo Data', 'Equipamento', 'Bloquear',
-      'Sessões', 'sessão', 'Desfazer', 'Escala de Voo', 'Por avião e sala', 'Avião / sala', 'Aviões e salas', 'o botão ao lado de Alunos',
-      // O "+" do mapa fica ao lado do nome da linha; o Operador não muda os Cursos nem os limites da lei; a coluna de quem
-      // vem é "Vem" (a data aberta não é sempre hoje); o filtro das habilitações tem várias marcas; o peso vem antes do
-      // curso em Alunos; Cursos mostra um curso de cada vez (sem "todos")
-      'no fim de cada linha', 'altera tudo e opera a escala', 'o interruptor de quem vem', 'filtro por habilitação', 'Nome, CANAC, curso e peso',
-      'mostra um curso só ou todos',
-      // Recursos em duas vistas (não mais em duas partes), com as categorias marcadas na barra
-      'A aba tem duas partes', 'Escolha uma categoria para ver só a frota dela', 'na Frota, em “Vale para todas as datas”',
-      'Veja na aba Recursos se ele está ligado']) {
+    for (const antigo of FRASES_QUE_SAIRAM) {
       expect(texto, antigo).not.toContain(antigo);
     }
     await expect(manual.locator('h3')).toHaveText(['Primeiros passos: a rotina do operador', 'Perfis de acesso', 'As abas',
@@ -157,30 +148,7 @@ test.describe('Aplicação', () => {
     await expect(page.locator('#manual-glossario-lista')).toContainText(GLOSSARIO['horario-livre'].texto);
     // As abas na ordem do app, sem números, com os nomes dos botões e das vistas
     await expect(manual.locator('#manual-abas h4')).toHaveText(['Escala', 'Demanda', 'Agenda', 'Recursos', 'Instrutores', 'Alunos', 'Cursos', 'Rodízio', 'BI']);
-    for (const novo of ['menu da conta', 'Pôr um aluno na demanda', 'Disponibilidade do dia', 'Editar habilitações', 'Não escalar com',
-      'Ainda não importado', 'Atualizada às', 'Ver todos', 'Compartilhar', 'Por recurso', 'Novo recurso', 'Retirar', 'Horários de decolagem',
-      'de 30 em 30 minutos', 'divide as horas do dia',
-      // O agendamento na Escala (mover e encaixar, as turmas, as alternativas, a prévia, os avisos), o voo agendado na
-      // Demanda, as alterações dos cursos fora do Histórico e o peso aceito
-      'Encaixar o voo', 'Mover o voo', 'Entrar na turma das', 'Horários livres', 'O que muda na escala', 'Agendar mesmo assim',
-      'agendado 10:10 · PR-VOB', 'fora da regra', 'ao lado do nome de cada linha', 'não entram no Histórico da data', 'de 1 a 300 kg',
-      // Acima do limite de voos locais do horário, todo voo local agendado pede a confirmação (não só o 7º)
-      'mais de 6 voos locais no mesmo horário',
-      // A busca sem acentos, quantos aparecem e o "Limpar filtros"; a coluna Vem (a data aberta não é sempre hoje); o filtro
-      // das habilitações, com várias marcas e a regra ("todas as marcadas")
-      'sem os acentos', '12 de 40 instrutores', 'Limpar filtros', 'o interruptor Vem', 'Filtro das habilitações',
-      'que têm todas as marcadas', 'Habilitações: Noturno + C172',
-      // Alunos com a barra de Instrutores: as colunas na mesma ordem, o filtro dos cursos (a regra "algum dos marcados"),
-      // o link para a Demanda (o filtro dos cursos é um só nas duas abas) e o cartão do celular
-      'Nome, CANAC, peso e curso', 'Filtro dos cursos', 'aparecem os alunos de algum dos marcados', 'Curso: PP ou PC', 'Abrir a Demanda',
-      'aparecem os pedidos dos alunos de algum dos cursos marcados', 'O filtro dos cursos é um só nas duas abas', 'um cartão por pessoa',
-      // Recursos: as duas vistas, a busca pela matrícula, o filtro das categorias (a regra "alguma das marcadas") e o hangar
-      // sem filtros
-      'em Disponibilidade do dia, desligue', 'abre o Cadastro com o formulário', 'Buscar matrícula', '3 de 26 recursos',
-      'os recursos de alguma das marcadas', 'Categoria: C152 ou PA-34', 'Filtro das categorias',
-      'nunca para a ordem no hangar', 'cujo botão mostra o mesmo número', 'Veja em Recursos, na Disponibilidade do dia, se ele está ligado',
-      // Cursos: um de cada vez, o índice das fases, as fases recolhidas e os alunos por fase
-      'um curso de cada vez', 'índice das fases', 'Recolher todas', 'Abrir todas', 'agrupados pela fase em que estão']) {
+    for (const novo of FRASES_DO_MANUAL) {
       expect(texto, novo).toContain(novo);
     }
 

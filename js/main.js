@@ -17,7 +17,8 @@
  */
 import './eventos/navegacao.js';
 import './eventos/escala.js';
-import './eventos/cadastros.js';
+import './eventos/instrutores.js';
+import './eventos/alunos.js';
 import './eventos/historico.js';
 import './eventos/topo.js';
 import './eventos/demanda.js';
@@ -27,8 +28,10 @@ import './eventos/conta.js';
 import './eventos/agenda.js';
 import './eventos/rodizio.js';
 import './eventos/cursos.js';
-import './eventos/agendamento.js';
+// O diálogo "Agendar voo" (js/eventos/agendamento.js) vem com a Escala, que o importa; Instrutores traz os limites da lei e
+// o painel dos dados pessoais, e a Demanda, o "Importar da agenda" (test/unit/eventos-ligados.test.js)
 import { setRole, abrirData, lerData, dadosPreparados, carregarBI } from './actions.js';
+import { redesenhar } from './redesenho.js';
 import { ehDomingo } from './agenda.js';
 import { projetoSupabase, enderecoSemBanco } from './config-supabase.js';
 import { iniciarDicas } from './dicas.js';
@@ -37,20 +40,15 @@ import { $, showToast, mostrarAviso, avisoAberto, avisarDoLink } from './dom.js'
 import { amanhaISO, somarDias, dataIsoValida } from './format.js';
 import { iniciarSessaoSupabase } from './sessao.js';
 import { iniciarSomenteLeitura } from './somente-leitura.js';
-import { modoCompartilhado } from './state.js';
+import { RES, modoCompartilhado } from './state.js';
 import { ApiClient } from './storage.js';
 import { abaFoiEscolhida } from './eventos/navegacao.js';
 import { avisoDeDomingo, iniciarTema } from './eventos/topo.js';
 import { programaSendoGravado } from './eventos/cursos.js';
 import { abrirAgenda, diaDaAgenda, podeEditarAgenda } from './views/agenda.js';
-import { rIns, rAlu } from './views/cadastros.js';
-import { rCursos } from './views/cursos.js';
 import { carregarDadosPessoais } from './views/dados-pessoais.js';
-import { rDem } from './views/demanda.js';
-import { renderAuditPanel, rOut } from './views/escala.js';
-import { rRec } from './views/recursos.js';
-import { rRodizio } from './views/rodizio.js';
-import { atualizarSelosDaEscala, lerPedidosDaData } from './views/selos.js';
+import { rOut } from './views/escala.js';
+import { lerPedidosDaData } from './views/selos.js';
 import { show } from './views/tabs.js';
 
 // Fechar ou recarregar a página com alterações esperando a conexão, ou com o programa de um curso ainda sendo gravado, pede
@@ -126,7 +124,10 @@ window.addEventListener('beforeunload', e => {
   if (!modoCompartilhado() && params.get('role')) setRole(params.get('role'), false);
 
   // As abas com os dados lidos, também a que a pessoa abriu enquanto eles carregavam (Cursos ou Rodízio, por exemplo)
-  rRec(); rIns(); rAlu(); rCursos(); rRodizio(); rDem(); renderAuditPanel();
+  redesenhar('dados');
+  // Sem a escala da data (outra data foi escolhida enquanto esta abria), a Escala mostra a data vazia até a outra chegar,
+  // como antes do registro: o desenho registrado só refaz a Escala quando há escala
+  if (!RES) rOut();
   document.body.dataset.agenda = podeEditarAgenda() ? 'edita' : 'consulta';
   // Dados pessoais (para a coluna CANAC das tabelas), para quem pode vê-los
   carregarDadosPessoais();
@@ -137,10 +138,9 @@ window.addEventListener('beforeunload', e => {
   if (ApiClient.perfil === 'secretaria' && !abaFoiEscolhida() && $('#s-esc').classList.contains('on')) show('age');
   if ($('#s-age').classList.contains('on')) abrirAgenda(diaDaAgenda() || undefined);
 
-  rOut();
-  atualizarSelosDaEscala();
   lerPedidosDaData();
   carregarBI();
-  // Fim da abertura: daqui em diante, só a pessoa muda a aba. Os testes E2E esperam por esta marca (fixtures.js, entrar)
+  // Fim da abertura: daqui em diante, só a pessoa muda a aba. Os testes E2E esperam por esta marca (appPronto, em
+  // test/e2e/telas/casca.js)
   document.body.dataset.pronto = '1';
 })();

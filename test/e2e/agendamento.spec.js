@@ -2,7 +2,7 @@
 // peso; a conferência roda o motor numa cópia da escala (o conflito não deixa agendar; a regra do curso pede "Agendar
 // mesmo assim"). O voo agendado fica fixo (o cadeado), o pedido aparece na Demanda com a missão do curso, o peso
 // digitado vai para o cadastro e o Histórico desfaz
-import { test, expect, abrir, irPara, abrirEscala, confirmar, entrar, AMANHA } from './fixtures.js';
+import { test, expect, abrir, irPara, abrirEscala, entrar, AMANHA, abrirHistorico, aprovar, caixaVem, caixaVoa, linhaDoInstrutor, reabrir, relativoDaData } from './fixtures.js';
 import { instalarSupabaseFalso, documentosAtuais, CONTAS } from './supabase-falso.js';
 import { aluno, cenario, instrutor, GROUND_C152 } from '../helpers/montar.js';
 import { FROTA_INICIAL } from '../../js/frota.js';
@@ -56,7 +56,7 @@ async function agendar(page) {
 }
 
 const historico = async page => {
-  if (await page.locator('#historico').isHidden()) await page.locator('#btn-open-log').click();
+  if (await page.locator('#historico').isHidden()) await abrirHistorico(page);
   return page.locator('#audit-log-list');
 };
 
@@ -88,7 +88,7 @@ test.describe('Agendar um voo na Escala', () => {
 
     // Na Demanda: o pedido voa, com a missão do curso e o instrutor escolhido
     await irPara(page, 'dem');
-    await expect(pedido(page, 1001).locator('[data-f="fly"]')).toBeChecked();
+    await expect(caixaVoa(pedido(page, 1001))).toBeChecked();
     await expect(pedido(page, 1001).locator('.etapa')).toHaveText('PP-02');
     await expect(pedido(page, 1001).locator('[data-f="insId"]')).toHaveValue('2');
 
@@ -98,7 +98,7 @@ test.describe('Agendar um voo na Escala', () => {
     await expect(entrada.locator('.audit-desc')).toHaveText(`Agendado na escala: Maria Silva · PP-02 (Voo Local) · 06:30–07:30 · ${recurso} · Instrutor 02`);
     await entrada.getByRole('button', { name: '↶ Desfazer' }).click();
     await expect(lista).toContainText(`Revertido: Agendado na escala: Maria Silva`);
-    await expect(pedido(page, 1001).locator('[data-f="fly"]')).not.toBeChecked();
+    await expect(caixaVoa(pedido(page, 1001))).not.toBeChecked();
     await page.locator('#btn-fechar-historico').click();
     await abrirEscala(page);
     await expect(voo(page, 'Maria Silva')).toHaveCount(0);
@@ -234,9 +234,9 @@ test.describe('Agendar um voo na Escala', () => {
     await expect(entrada.locator('.audit-desc')).toContainText('· Instrutor 02 · Instrutor 02 marcado disponível às 06:30');
     await page.locator('#btn-fechar-historico').click();
     await irPara(page, 'ins');
-    await expect(page.locator('#inst-dia tr[data-id="2"] [data-f="on"]')).toBeChecked();
+    await expect(caixaVem(linhaDoInstrutor(page, '2'))).toBeChecked();
     await (await historico(page)).locator('.audit-item', { hasText: 'Agendado na escala' }).getByRole('button', { name: '↶ Desfazer' }).click();
-    await expect(page.locator('#inst-dia tr[data-id="2"] [data-f="on"]')).not.toBeChecked();
+    await expect(caixaVem(linhaDoInstrutor(page, '2'))).not.toBeChecked();
   });
 
   test('o peso digitado vai para o cadastro (Alunos e Instrutores), com uma entrada no histórico cada; sem peso, o envio para no campo', async ({ page }) => {
@@ -279,10 +279,10 @@ test.describe('Agendar um voo na Escala', () => {
     await expect(linha().locator('.c-hr')).toContainText('10:10–11:10');
     await linha().locator('select[data-f="fstatus"]').selectOption('Confirmado');
     await expect(linha().locator('.fixo')).toHaveAttribute('aria-label', 'Voo fixo: agendado na escala');
-    await confirmar(page, '#btn-aprovar');
+    await aprovar(page);
     await expect(page.locator('#selo-aprovada')).toBeVisible();
     await expect(linha().locator('.fixo')).toHaveAttribute('aria-label', 'Voo fixo: agendado na escala');
-    await confirmar(page, '#btn-reabrir');
+    await reabrir(page);
     await expect(page.locator('#selo-aprovada')).toBeHidden();
     await expect(linha().locator('.c-hr')).toContainText('10:10–11:10');
     await expect(linha().locator('.fixo')).toHaveAttribute('aria-label', 'Voo fixo: agendado na escala');
@@ -290,7 +290,7 @@ test.describe('Agendar um voo na Escala', () => {
 
   test('na escala aprovada, o voo novo entra fixo e nenhum outro voo muda', async ({ page }) => {
     await abrirComCurso(page);
-    await confirmar(page, '#btn-aprovar');
+    await aprovar(page);
     const antes = await voo(page, 'Aluno 1000').innerText();
     await abrirDialogo(page);
     await expect(page.locator('#agd-conferencia .agd-notas')).toContainText('A escala está aprovada: o voo novo entra fixo e os outros não mudam.');
@@ -319,7 +319,7 @@ test.describe('Agendar um voo na Escala', () => {
 
   test('Esc com o Histórico aberto fecha só o diálogo; o segundo fecha a gaveta', async ({ page }) => {
     await abrirComCurso(page);
-    await page.locator('#btn-open-log').click();
+    await abrirHistorico(page);
     await expect(page.locator('#historico')).toBeVisible();
     await page.locator('#btn-agendar').focus();
     await page.keyboard.press('Enter');
@@ -339,7 +339,10 @@ test.describe('Agendar um voo na Escala', () => {
       await abrirComCurso(page);
       await abrirDialogo(page);
       await page.locator(alvo).focus();
-      await page.evaluate(() => import('./js/actions.js').then(m => m.travarAposConflito()));
+      await page.evaluate(async () => {
+        const { travarAposConflito } = await import('./js/actions.js');
+        travarAposConflito();
+      });
       await expect(page.locator('#agd-erro')).toHaveText('A tela ficou só para consulta: o voo não foi agendado.');
       await expect(page.locator(alvo)).toBeDisabled();
       await expect(page.locator('#agd-voltar')).toBeFocused();
@@ -389,7 +392,7 @@ test.describe('Agendar um voo na Escala', () => {
     const estado = dia();
     Object.assign(estado.stu[0], { etapa: 'PP-01', cursoDaEtapa: 'PP' });
     await abrirComCurso(page, estado);
-    await expect(page.locator('#dt-rel')).toHaveText('amanhã');
+    await expect(relativoDaData(page)).toHaveText('amanhã');
     await page.locator('#btn-agendar').click();
     const grupos = id => page.locator(id).evaluate(s => [...s.querySelectorAll('optgroup')].map(g => `${g.label}: ${[...g.children].map(o => o.textContent).join(' | ')}`).join(' / '));
     expect(await grupos('#agd-aluno')).toMatch(/^Na demanda de amanhã: Aluno 1000 — PP · próxima PP-02 · voa amanhã às 06:30 \/ /);
@@ -446,7 +449,7 @@ test.describe('Mover e encaixar o voo de hoje do aluno, as turmas de Ground e as
     await entrada.getByRole('button', { name: '↶ Desfazer' }).click();
     await expect(lista).toContainText('Revertido: Agendado na escala: Maria Silva');
     await expect(pedido(page, 1001).locator('.tag[data-dica="voo-agendado"]')).toHaveCount(0);
-    await expect(pedido(page, 1001).locator('[data-f="fly"]')).toBeChecked();
+    await expect(caixaVoa(pedido(page, 1001))).toBeChecked();
     await page.locator('#btn-fechar-historico').click();
     await abrirEscala(page);
     await expect(voo(page, 'Maria Silva').locator('.c-hr')).toContainText('08:20–09:20');
@@ -476,7 +479,7 @@ test.describe('Mover e encaixar o voo de hoje do aluno, as turmas de Ground e as
     await expect(voo(page, 'Aluno 1000').locator('.c-hr')).not.toContainText('06:30');
     // O mesmo pedido: nenhuma missão extra
     await irPara(page, 'dem');
-    await expect(pedido(page, 1001).locator('[data-f="fly"]')).toBeChecked();
+    await expect(caixaVoa(pedido(page, 1001))).toBeChecked();
     await expect(pedido(page, 1001, 1)).toHaveCount(0);
     await expect(pedido(page, 1001).locator('.tag[data-dica="voo-agendado"]')).toContainText('agendado 06:30 · ');
     await expect((await historico(page)).locator('.audit-desc', { hasText: 'Agendado na escala' })).toContainText('(estava fora da escala)');

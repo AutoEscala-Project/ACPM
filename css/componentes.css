@@ -1,0 +1,248 @@
+/* Os componentes das duas páginas: ícones, painéis, botões, barras, o controle segmentado, os botões que recolhem, os rótulos dos
+   filtros, o erro de um campo, as tabelas, as caixas, etiquetas e interruptores, as vistas e a contagem, o filtro de vários
+   valores, a fila, os números em destaque, o ✕, os avisos que somem, as dicas e o foco neutro */
+/* Ícones de traço do sprite em index.html */
+.ico { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none; vertical-align: -3px; }
+/* Componentes */
+.pn {
+  background: var(--pn);
+  border: 1px solid var(--ln);
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin-bottom: 12px;
+}
+.btn {
+  background: var(--ac);
+  color: var(--acT);
+  border: 1px solid var(--ac);
+  border-radius: 6px;
+  padding: 7px 14px;
+  font: 600 14.5px 'Barlow Semi Condensed', sans-serif;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.btn:hover:not(:disabled) { filter: brightness(1.08); }
+.btn.sec { background: var(--pn); color: var(--ink); border-color: var(--ln2); }
+.btn.sec:hover:not(:disabled) { filter: none; border-color: var(--ac); }
+.btn.quiet { background: transparent; color: var(--ac); border-color: transparent; padding: 7px 8px; }
+.btn.quiet:hover:not(:disabled) { filter: none; background: var(--info-bg); }
+.bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 10px 0; }
+.bar .cresce { flex: 1; }
+/* Controle segmentado (uma opção de cada vez) */
+.seg { display: inline-flex; background: var(--pn); border: 1px solid var(--ln2); border-radius: 8px; padding: 2px; }
+.seg button {
+  border: 0; background: transparent; padding: 6px 12px; border-radius: 6px; cursor: pointer;
+  font: 600 14px 'Barlow Semi Condensed', sans-serif; color: var(--mu); display: inline-flex; align-items: center; gap: 6px;
+}
+.seg button.on { background: var(--hd); color: #fff; }
+/* Horários da Lista e categorias da frota: um clique recolhe ou abre (a seta gira) */
+.win-btn, .grupo-btn {
+  display: flex; align-items: center; gap: 6px; width: 100%; padding: 0; border: 0; background: transparent;
+  color: inherit; font: inherit; text-align: left; cursor: pointer;
+}
+.win-btn .seta, .grupo-btn .seta { flex: none; transition: transform .15s; }
+.win-btn[aria-expanded="false"] .seta, .grupo-btn[aria-expanded="false"] .seta { transform: rotate(-90deg); }
+.tabela-escala tbody tr[hidden], table.frota tr[hidden] { display: none !important; }
+/* Filtros com rótulo visível (Categoria e Avião / sala começam os dois em "Todos") */
+.flt-rotulo { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--mu); }
+.erro-campo { flex-basis: 100%; margin: 0; color: var(--er); }
+.erro-campo:empty { display: none; }
+/* Celular: um cartão por voo (horário e status; aluno; missão; avião e instrutor), sem rolar para o lado */
+@media (max-width: 640px) {
+  .seg { width: 100%; }
+  .seg button { flex: 1; justify-content: center; padding: 6px 4px; font-size: 13.5px; }
+  .seg .ico { display: none; }
+  .flt-rotulo select { flex: 1; min-width: 0; }
+  .bar .cresce { display: none; }
+}
+/* position: o texto só para o leitor de tela (.sr) fica dentro da rolagem e não alarga a página */
+.tw { position: relative; overflow-x: auto; border: 1px solid var(--ln); border-radius: 8px; background: var(--pn); }
+table { border-collapse: collapse; width: 100%; min-width: 840px; }
+th {
+  font: 600 12.5px 'Barlow', sans-serif;
+  letter-spacing: .02em;
+  text-align: left;
+  background: var(--pn2);
+  color: var(--mu);
+  border-bottom: 1px solid var(--ln2);
+  padding: 8px 10px;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+td { padding: 5px 10px; border-top: 1px solid var(--ln); vertical-align: middle; }
+td, .st strong { font-variant-numeric: tabular-nums; }
+.chk { display: inline-flex; align-items: center; gap: 6px; font-weight: 500; cursor: pointer; }
+/* Etiquetas em escrita normal, com fundo suave: cinza neutro, âmbar atenção, verde certo, vermelho erro */
+.tag {
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 10px;
+  padding: 1px 8px;
+  background: var(--neutro-bg);
+  color: var(--mu);
+  white-space: nowrap;
+}
+.tag.fb { background: var(--wa-bg); color: var(--wa); }
+.tag.grp { background: var(--ok-bg); color: var(--ok); }
+.tag.er { background: var(--er-bg); color: var(--er); }
+.tag.comb { background: var(--wa-bg); color: var(--wa); cursor: help; }
+/* Interruptor (é uma caixa de seleção com outra aparência) */
+input.sw {
+  -webkit-appearance: none; appearance: none; width: 32px; height: 18px; border-radius: 9px; margin: 0; flex: none;
+  background: var(--ln2); position: relative; cursor: pointer; transition: background .15s; vertical-align: middle;
+}
+input.sw::after {
+  content: ''; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%;
+  background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.25); transition: left .15s;
+}
+input.sw:checked { background: var(--ok); }
+input.sw:checked::after { left: 16px; }
+/* Rótulo em volta de um interruptor sem texto: aumenta a área de toque */
+label.alvo { display: inline-flex; align-items: center; justify-content: center; cursor: pointer; vertical-align: middle; }
+/* As vistas de uma aba (js/views/vistas.js): a seção diz a vista escolhida (data-vista), e só a parte dela aparece. Em
+   Instrutores, a disponibilidade do dia numa grade; o cadastro numa tabela, com as habilitações num painel lateral */
+section[data-vista="dia"] .vista-cadastro, section[data-vista="cadastro"] .vista-dia { display: none; }
+/* Instrutores e Alunos: quantos os filtros mostram ("12 de 40 instrutores"), e a linha de quando eles não deixam nenhum */
+.contagem { color: var(--mu); font-size: 13.5px; white-space: nowrap; }
+.contagem:empty { display: none; }
+tbody tr.sem-resultado td { padding: 10px 8px; color: var(--mu); }
+/* Na tabela mais larga que a tela (a grade do dia, no celular, rola para o lado), o texto e o "Limpar filtros" ficam na
+   parte à vista: presos à esquerda e da largura da tela, com o botão embaixo do texto quando não cabe ao lado */
+tbody tr.sem-resultado .sem-resultado-texto { position: sticky; left: 8px; max-width: calc(100vw - 50px); }
+/* O filtro de vários valores (js/views/filtro-multiplo.js): o botão diz o que está marcado, e a seta vira com o painel
+   aberto. O painel vem logo depois do botão no HTML (o Tab passa do botão para as caixas), mas na tela fica na linha de
+   baixo da barra, no fluxo da página: ele empurra a tabela em vez de cobri-la. Os grupos ficam lado a lado, cada um com as
+   caixas em coluna */
+.filtro-botao { max-width: min(100%, 24em); justify-content: space-between; }
+.filtro-botao .filtro-resumo { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.filtro-botao .seta { flex: none; transition: transform .15s; }
+.filtro-botao[aria-expanded="true"] .seta { transform: rotate(180deg); }
+.filtro-botao.com-marcas { border-color: var(--ac); }
+.filtro-painel { order: 1; flex: 1 1 100%; min-width: 0; padding: 6px 12px 12px; background: var(--pn); border: 1px solid var(--ln2); border-radius: 8px; }
+.filtro-painel[hidden] { display: none; }
+/* A regra e "Limpar" na mesma linha: na tela estreita, a frase quebra e "Limpar" fica à direita */
+.filtro-cab { display: flex; align-items: center; gap: 2px 12px; }
+.filtro-regra { flex: 1 1 auto; min-width: 0; margin: 0; font-size: 13.5px; color: var(--mu); }
+.filtro-regra .filtro-fim { white-space: nowrap; }
+.filtro-grupos { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 4px; }
+.filtro-grupos fieldset { margin: 0; padding: 2px 12px 6px; border: 1px solid var(--ln); border-radius: 8px; }
+.filtro-grupos legend { padding: 0 4px; font: 600 14px 'Barlow Semi Condensed', sans-serif; }
+.filtro-opcao { display: flex; align-items: center; gap: 8px; padding: 3px 0; cursor: pointer; white-space: nowrap; }
+/* A missão do curso no dia: o código, a próxima missão, o resultado e o progresso */
+.etapa { display: inline-block; padding: 0 6px; border-radius: 4px; background: var(--info-bg); color: var(--ac); font: 600 12.5px 'Barlow Semi Condensed', sans-serif; font-variant-numeric: tabular-nums; white-space: nowrap; }
+@media (max-width: 640px) {
+  /* O botão do filtro divide a linha com a busca: o que está marcado ("Habilitações: Noturno + C172") ocupa até duas
+     linhas, em vez de virar "Habilitaçõ…" */
+  .filtro-botao { padding: 4px 8px 4px 10px; }
+  .filtro-botao .filtro-resumo { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; white-space: normal; line-height: 1.2; text-align: left; }
+  /* O painel do filtro: os grupos um embaixo do outro, cada um com as caixas em duas colunas quando cabem, e cada caixa
+     com o rótulo inteiro (o texto quebra) e 44 px para o dedo */
+  .filtro-grupos fieldset { flex: 1 1 100%; min-width: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(128px, 1fr)); column-gap: 12px; }
+  .filtro-opcao { min-height: 44px; white-space: normal; }
+}
+.fila { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; }
+.fila li { position: relative; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; min-height: 34px; padding: 2px 0; border-bottom: 1px solid var(--ln); }
+.fila .pos { min-width: 2.2em; color: var(--mu); }
+/* Os botões de mover aparecem por cima da linha ao passar o mouse ou com o foco (em tela de toque, sempre, no fim
+   da linha) */
+.fila .acoes { position: absolute; right: 0; top: 50%; transform: translateY(-50%); display: flex; gap: 2px; padding-left: 8px; background: var(--pn); opacity: 0; transition: opacity .1s; }
+.fila li:hover .acoes, .fila li:focus-within .acoes { opacity: 1; }
+@media (hover: none), (pointer: coarse) {
+  .fila .acoes { position: static; transform: none; margin-left: auto; opacity: 1; }
+}
+.fila .acoes .x { display: inline-flex; align-items: center; padding: 3px 5px; }
+.st { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; margin: 8px 0 12px; }
+.st div {
+  font: 600 13px 'Barlow Semi Condensed', sans-serif;
+  color: var(--mu);
+  background: var(--pn);
+  border: 1px solid var(--ln);
+  border-radius: 8px;
+  padding: 8px 12px;
+}
+.st strong { font-size: 24px; color: var(--ink); display: block; line-height: 1.15; }
+.st small { font-weight: 400; font-size: 12px; color: var(--mu); display: block; margin-top: 2px; }
+.x {
+  background: transparent;
+  border: 1px solid var(--ln2);
+  color: var(--mu);
+  border-radius: 6px;
+  cursor: pointer;
+  padding: 3px 8px;
+  font: inherit;
+}
+.x:hover:not(:disabled) { border-color: var(--er); color: var(--er); }
+.x:disabled { opacity: .4; cursor: not-allowed; }
+/* Armado, também com o mouse ainda em cima (sem isso, o :hover acima deixava o texto vermelho sobre o vermelho) */
+.x.arm, .x.arm:hover:not(:disabled) { background: var(--er); color: var(--erT); border-color: var(--er); }
+#toast-box {
+  position: fixed;
+  bottom: 18px;
+  right: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 9999;
+  pointer-events: none;
+}
+.toast {
+  display: flex; align-items: center; gap: 10px; max-width: min(460px, calc(100vw - 36px));
+  background: var(--hd);
+  color: var(--hdT);
+  border-left: 5px solid var(--ye);
+  padding: 13px 18px;
+  border-radius: 8px;
+  font: 500 15px 'Barlow', sans-serif;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.35);
+  animation: fadeIn .2s ease;
+}
+.toast.ok { background: #14532F; color: #fff; border-left-color: #5FD39A; }
+.toast.ok .ico { width: 20px; height: 20px; color: #5FD39A; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+.sm { font-size: 13px; color: var(--mu); white-space: nowrap; }
+/* As dicas: o balão do glossário e o botão "?" ao lado de um rótulo */
+.dica {
+  position: fixed; top: 0; left: 0; z-index: 60;
+  width: max-content; max-width: min(300px, calc(100vw - 16px));
+  padding: 8px 10px; border: 1px solid var(--ln); border-radius: 6px;
+  background: var(--pop-bg); color: var(--pop-txt);
+  font-size: 12.5px; line-height: 1.45; box-shadow: 0 8px 24px rgba(0,0,0,.35);
+  /* Aberto pelo teclado ou pelo toque, o clique passa para o que estiver embaixo; aberto pelo mouse, o mouse pode ir até
+     ele para ler (js/dicas.js) */
+  pointer-events: none;
+}
+.dica.pelo-mouse { pointer-events: auto; }
+.dica[hidden] { display: none; }
+.dica strong { font-weight: 700; }
+.dica::after {
+  content: ""; position: absolute; top: 100%; left: var(--seta, 50%); margin-left: -6px;
+  border: 6px solid transparent; border-top-color: var(--pop-bg);
+}
+.dica.abaixo::after { top: auto; bottom: 100%; border-top-color: transparent; border-bottom-color: var(--pop-bg); }
+.dica-btn {
+  display: inline-grid; place-items: center; width: 18px; height: 18px; margin: 0 2px; padding: 0;
+  border: 1px solid var(--ln); border-radius: 50%; background: transparent; color: var(--mu);
+  font: 700 11px/1 inherit; cursor: help; vertical-align: middle;
+}
+/* O "?" é desenhado (o botão tem o nome "O que é…?"): o texto do rótulo continua limpo */
+.dica-btn::before { content: "?"; }
+.dica-btn:hover, .dica-btn[aria-expanded="true"] { border-color: currentColor; color: var(--ink); }
+.dica-btn:focus-visible { outline: 2px solid var(--ac); outline-offset: 2px; }
+[data-dica]:not(button):not(.dica-btn) { cursor: help; }
+.tag[data-dica] { text-decoration: underline dotted; text-underline-offset: 2px; }
+/* O item que fica com o foco quando o botão usado some (focarSemAcao, js/dom.js): só marca o lugar */
+[data-foco-neutro]:focus { outline: 2px solid var(--ac); outline-offset: -2px; }
+tr[data-foco-neutro]:focus > td { background: var(--info-bg); }
+/* A etiqueta com a dica recebe o foco pelo Tab (para abrir a dica sem o mouse) */
+[data-dica]:not(button):focus-visible { outline: 2px solid var(--ac); outline-offset: 2px; border-radius: 3px; }
+/* No celular e no toque, o "?" tem 44 px para o dedo; o círculo continua pequeno */
+@media (max-width: 640px), (pointer: coarse) {
+  .dica-btn {
+    width: 44px; height: 44px; margin: -13px -11px; border-color: transparent;
+    background: radial-gradient(circle, transparent 8px, var(--ln) 8.5px, var(--ln) 9.5px, transparent 10px);
+  }
+  .dica-btn:hover, .dica-btn[aria-expanded="true"] { border-color: transparent; }
+}

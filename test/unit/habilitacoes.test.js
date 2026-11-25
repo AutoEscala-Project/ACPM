@@ -1,7 +1,7 @@
 // Habilitações individuais dos instrutores: substituem os níveis cumulativos A01–A09.
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { HABILITACOES, habilitacoesDoNivel, normalizarHabilitacoes, podeFazer, podeAlgumCheque, descreverExigencias, marcasDoChecadorAntigo } from '../../js/habilitacoes.js';
+import { HABILITACOES, habilitacoesDoNivel, normalizarHabilitacoes, podeFazer, podeAlgumCheque, descreverExigencias, marcasDoChecadorAntigo, GRUPOS_DE_HABILITACAO, exigenciasDoRecurso, gruposDosRecursos } from '../../js/habilitacoes.js';
 import { MIS } from '../../js/config.js';
 
 // Regra dos níveis cumulativos, congelada aqui: a migração não pode mudar quem pode fazer o quê
@@ -112,5 +112,38 @@ describe('Habilitações individuais', () => {
     assert.equal(descreverExigencias('Ground Navegação', 'Sala Ground'), 'Grounds (C152, C172 e Navegação)');
     assert.equal(descreverExigencias('TGL (TMA)', 'C172'), 'TGL (TMA) + C172');
     assert.equal(descreverExigencias('Cheque PC MNTE IFR', 'C172'), 'Checador do curso PC + Checador MNTE + Checador IFR');
+  });
+});
+
+// O registro das habilitações (formato 26): os grupos do painel e o que cada recurso exige do instrutor (exige: ids do
+// registro ou "aviao:<matrícula>"). O motor não muda: ele pergunta ao recurso o que ele exige
+describe('O registro das habilitações', () => {
+  it('os grupos do painel das habilitações usam só ids do registro, cada um uma vez', () => {
+    assert.deepEqual(GRUPOS_DE_HABILITACAO.map(g => g.titulo), ['Ground e simulador', 'Voo', 'Aviões', 'Checador: curso', 'Checador: motor', 'Checador: regras']);
+    const ids = GRUPOS_DE_HABILITACAO.flatMap(g => g.ids);
+    assert.deepEqual([...ids].sort(), HABILITACOES.map(h => h.id).sort());
+    assert.equal(GRUPOS_DE_HABILITACAO.find(g => g.titulo === 'Checador: curso').dica, 'checador');
+    for (const g of GRUPOS_DE_HABILITACAO) assert.match(g.id, /^[a-z-]+$/);
+  });
+
+  it('o recurso exige a lista exige; sem ela, o gravado antes do 26 com a habilitação própria exige a dele', () => {
+    assert.deepEqual(exigenciasDoRecurso({ reg: 'PR-VOM', tipo: 'PA-34', exige: ['aviao:PR-VOM'] }), ['aviao:PR-VOM']);
+    assert.deepEqual(exigenciasDoRecurso({ reg: 'PR-VOM', tipo: 'PA-34', habilitacaoPropria: true }), ['aviao:PR-VOM']);
+    assert.deepEqual(exigenciasDoRecurso({ reg: 'PR-X', tipo: 'C172', exige: ['ifr'] }), ['ifr']);
+    assert.deepEqual(exigenciasDoRecurso({ reg: 'PR-X', tipo: 'C172' }), []);
+    assert.deepEqual(exigenciasDoRecurso(null), []);
+  });
+
+  it('um C172 que exige IFR só voa com o instrutor que tem IFR (além do C172 e da missão)', () => {
+    const recurso = { reg: 'PR-X', tipo: 'C172', exige: ['ifr'] };
+    assert.equal(podeFazer(com('local', 'c172'), 'Voo Local', 'C172', { recurso }), false);
+    assert.equal(podeFazer(com('local', 'c172', 'ifr'), 'Voo Local', 'C172', { recurso }), true);
+    assert.equal(descreverExigencias('Voo Local', 'C172', { recurso }), 'Voo Local + C172 + Voo IFR');
+  });
+
+  it('os grupos dos recursos: as habilitações próprias que algum recurso exige, na ordem da frota', () => {
+    const frota = [{ reg: 'PR-A', tipo: 'C152' }, { reg: 'PR-VOM', tipo: 'PA-34', exige: ['aviao:PR-VOM'] }, { reg: 'PR-X', tipo: 'C172', exige: ['ifr', 'aviao:PR-X'] }];
+    assert.deepEqual(gruposDosRecursos(frota), [{ id: 'habilitacao-propria', titulo: 'Habilitação própria do recurso', ids: ['aviao:PR-VOM', 'aviao:PR-X'], dica: 'habilitacao-propria' }]);
+    assert.deepEqual(gruposDosRecursos([{ reg: 'PR-A', tipo: 'C152' }]), []);
   });
 });

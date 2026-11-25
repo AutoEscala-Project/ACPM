@@ -2,7 +2,7 @@
 // acpm4_cursos). O Administrador inclui, muda, reordena e tira missões; os outros perfis só consultam. Cada alteração
 // grava o curso inteiro (não o cadastro nem o dia) e não entra no histórico da data. Cada aluno tem o curso dele, em
 // Alunos.
-import { test, expect, abrir, irPara, confirmar, abrirEscala, prepararContexto, vigiarErros, preencherLogin, AMANHA, URL_APP, entrar as entrarNoApp } from './fixtures.js';
+import { test, expect, abrir, irPara, confirmar, abrirEscala, prepararContexto, vigiarErros, preencherLogin, AMANHA, URL_APP, entrar as entrarNoApp, abrirHistorico, appPronto, caixaVoa, diaSeguinte, rotuloDaData, alvosPequenos, larguraDaPagina, semNome } from './fixtures.js';
 import { criarSupabaseFalso, documentosAtuais, documentosFase3, CONTAS } from './supabase-falso.js';
 import { aluno, cenario, instrutor, missaoExtra } from '../helpers/montar.js';
 import { IDS } from '../helpers/casos-do-programa.js';
@@ -187,14 +187,14 @@ test.describe('Cursos no dia', () => {
     await expect(linha.locator('[data-act="usar-proxima"]')).toHaveText('Próxima: PP-01 · Usar');
     await expect(page.locator('#dem tr[data-id="1001"] [data-act="usar-proxima"]')).toHaveCount(0);
     await linha.locator('[data-act="usar-proxima"]').click();
-    await expect(linha.locator('[data-f="fly"]')).toBeChecked();
+    await expect(caixaVoa(linha)).toBeChecked();
     await expect(linha.locator('.etapa')).toHaveText('PP-01');
     await expect(linha.locator('[data-act="usar-proxima"]')).toHaveCount(0);
 
     await abrirEscala(page);
     await expect(vooNaEscala(page).locator('.c-status .etapa')).toHaveText('PP-01');
     await vooNaEscala(page).locator('[data-resultado]').selectOption('aprovado');
-    await page.locator('#btn-open-log').click();
+    await abrirHistorico(page);
     await expect(page.locator('#audit-log-list')).toContainText('Resultado de Aluno 1000 em PP-01: aprovado');
     await page.keyboard.press('Escape');
 
@@ -282,9 +282,9 @@ test.describe('Cursos no servidor (modo compartilhado)', () => {
     await abrirEscala(operador.page);
     const liberar = servidor.segurar('/rpc/registrar_resultado');
     await operador.page.locator('#out tbody tr:not(.win)', { hasText: 'Aluno 1000' }).locator('[data-resultado]').selectOption('aprovado');
-    await operador.page.locator('#dt-prox').click();
+    await diaSeguinte(operador.page);
     // A data nova já aberta (o rótulo muda depois de carregar)
-    await expect(operador.page.locator('#dt-rotulo')).toContainText('12/11');
+    await expect(rotuloDaData(operador.page)).toContainText('12/11');
     liberar();
     await expect.poll(() => servidor.historico.filter(h => h.descricao.startsWith('Resultado de')).map(h => h.data)).toEqual([AMANHA]);
     expect(servidor.resultados.map(r => r.data)).toEqual([AMANHA]);
@@ -301,11 +301,11 @@ test.describe('Cursos no servidor (modo compartilhado)', () => {
     const liberarResultado = servidor.segurar('/rpc/registrar_resultado');
     await operador.page.locator('#out tbody tr:not(.win)', { hasText: 'Aluno 1000' }).locator('[data-resultado]').selectOption('aprovado');
     const liberarDias = servidor.segurarLeiturasDeDias();
-    await operador.page.locator('#dt-prox').click();
+    await diaSeguinte(operador.page);
     liberarResultado();
     await expect.poll(() => servidor.historico.filter(h => h.descricao.startsWith('Resultado de')).map(h => h.data)).toEqual([AMANHA]);
     liberarDias();
-    await expect(operador.page.locator('#dt-rotulo')).toContainText('12/11');
+    await expect(rotuloDaData(operador.page)).toContainText('12/11');
     expect(servidor.resultados.map(r => r.data)).toEqual([AMANHA]);
     expect(operador.erros).toEqual([]);
     await operador.contexto.close();
@@ -324,8 +324,8 @@ test.describe('Cursos no servidor (modo compartilhado)', () => {
     await expect.poll(() => noPrograma(servidor)).toEqual([['PP-02', 'Navegação']]);
     expect(admin.erros).toEqual([]);
     await admin.contexto.close();
-    await gestor.page.locator('#dt-prox').click();
-    await expect(gestor.page.locator('#dt-rotulo')).toContainText('12/11');
+    await diaSeguinte(gestor.page);
+    await expect(rotuloDaData(gestor.page)).toContainText('12/11');
     await expect(gestor.page.locator('#s-cur')).toBeVisible();
     await expect(linhas(gestor.page, 'PP')).toHaveCount(1);
     await expect(linhas(gestor.page, 'PP').nth(0).locator('td.c-codigo')).toHaveText('PP-02');
@@ -388,8 +388,8 @@ test.describe('Cursos no servidor (modo compartilhado)', () => {
     const nome = linhas(admin.page, 'PP').nth(0).locator('[data-cf="nome"]');
     await nome.fill('Familiarização no C152');
     await nome.press('Tab');
-    await admin.page.locator('#dt-prox').click();
-    await expect(admin.page.locator('#dt-rotulo')).toContainText('12/11');
+    await diaSeguinte(admin.page);
+    await expect(rotuloDaData(admin.page)).toContainText('12/11');
     await expect(nome).toHaveValue('Familiarização');
     liberar();
     await expect(nome).toHaveValue('Familiarização no C152');
@@ -417,7 +417,10 @@ test.describe('Cursos no servidor (modo compartilhado)', () => {
     expect(admin.page.isClosed(), 'quem desiste continua na página').toBe(false);
     liberar();
     await expect.poll(() => noPrograma(servidor)).toEqual([['PP-01', 'Familiarização no C152'], ['PP-02', 'Navegação']]);
-    await expect.poll(() => admin.page.evaluate(async () => (await import('./js/eventos/cursos.js')).programaSendoGravado())).toBe(false);
+    await expect.poll(() => admin.page.evaluate(async () => {
+      const { programaSendoGravado } = await import('./js/eventos/cursos.js');
+      return programaSendoGravado();
+    })).toBe(false);
     let perguntou = false;
     admin.page.once('dialog', async d => { perguntou = true; await d.dismiss(); });
     await admin.page.close({ runBeforeUnload: true });
@@ -817,7 +820,7 @@ test.describe('Cursos: fases, módulos e quando voar', () => {
       for (const [chave, valor] of Object.entries(JSON.parse(json))) localStorage.setItem(chave, JSON.stringify(valor));
     }, JSON.stringify(docs));
     await page.goto(url);
-    await expect(page.locator('#wins input[data-a="win"]').first()).toBeAttached();
+    await appPronto(page);
   }
   const descricoesGuardadas = async page => (await programaGuardado(page)).alteracoes.map(a => a.descricao);
   const proxima = (page, id) => page.locator(`#dem tr[data-id="${id}"][data-mid="0"] [data-act="usar-proxima"]`);
@@ -1195,7 +1198,7 @@ test.describe('Cursos: cursos novos, encerrar, o cronograma do PP e o curso de c
       for (const [chave, valor] of Object.entries(JSON.parse(json))) localStorage.setItem(chave, JSON.stringify(valor));
     }, JSON.stringify(docs));
     await page.goto(url);
-    await expect(page.locator('#wins input[data-a="win"]').first()).toBeAttached();
+    await appPronto(page);
   }
   const comPP = conteudo => gravarCurso({ cursos: cursosIniciais() }, { sigla: 'PP', versaoLida: 1, conteudo, descricao: 'PP: programa' }).cursos;
   const descricoes = async page => (await programaGuardado(page)).alteracoes.map(a => a.descricao);
@@ -1288,7 +1291,7 @@ test.describe('Cursos: cursos novos, encerrar, o cronograma do PP e o curso de c
     await abrirComCursos(page, { estado: cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000)] }) });
     await irPara(page, 'cur');
     const historico = page.locator('#historico');
-    await page.locator('#btn-open-log').click();
+    await abrirHistorico(page);
     await expect(historico).toBeVisible();
     const novo = page.locator('#cur-novo'), form = page.locator('#form-curso');
     // O Histórico cobre o botão: pelo teclado
@@ -1524,7 +1527,7 @@ test.describe('Cursos: um de cada vez, o índice das fases, as fases recolhívei
       for (const [chave, valor] of Object.entries(JSON.parse(json))) localStorage.setItem(chave, JSON.stringify(valor));
     }, JSON.stringify(docs));
     await page.goto(url);
-    await expect(page.locator('#wins input[data-a="win"]').first()).toBeAttached();
+    await appPronto(page);
   }
   const pressionados = page => page.locator('#cursos .seg-dos-cursos button').evaluateAll(bs => bs.map(b => b.getAttribute('aria-pressed')));
   const titulo = (page, fase) => page.locator(`#cursos .fase[data-fase="${fase}"] [data-recolher-fase]`);
@@ -1554,8 +1557,8 @@ test.describe('Cursos: um de cada vez, o índice das fases, as fases recolhívei
     await irPara(page, 'alu');
     await irPara(page, 'cur');
     expect(await siglasNaAba(page)).toEqual(['INVA']);
-    await page.locator('#dt-prox').click();
-    await expect(page.locator('#dt-rotulo')).toContainText('12/11');
+    await diaSeguinte(page);
+    await expect(rotuloDaData(page)).toContainText('12/11');
     await expect.poll(() => siglasNaAba(page)).toEqual(['INVA']);
     await page.reload();
     await irPara(page, 'cur');
@@ -1701,7 +1704,10 @@ test.describe('Cursos: um de cada vez, o índice das fases, as fases recolhívei
   test('a aba refeita deixa o foco no botão do curso, no título da fase, no link do índice e em "Recolher todas"', async ({ page }) => {
     await abrirComOsCursos(page);
     await irPara(page, 'cur');
-    const refazer = () => page.evaluate(async () => (await import('./js/views/cursos.js')).rCursos());
+    const refazer = () => page.evaluate(async () => {
+      const { rCursos } = await import('./js/views/cursos.js');
+      rCursos();
+    });
     for (const seletor of ['#cur-ver-INVA', `#cursos [data-recolher-fase="${F2}"]`, `#cursos [data-ir-fase="${F3}"]`, '#fases-recolher']) {
       await page.locator(seletor).focus();
       await refazer();
@@ -1730,5 +1736,154 @@ test.describe('Cursos: um de cada vez, o índice das fases, as fases recolhívei
     // A fase única também recolhe
     await titulo(page, F1).click();
     await expect(pp.locator('tbody tr').first()).toBeHidden();
+  });
+});
+
+// No celular (390 px; os testes que mudam a largura dizem qual), vindos de celular.spec.js
+test.describe('Celular', () => {
+  test.use({ viewport: { width: 390, height: 844 } });
+
+  // O exemplo não tem programa: aqui, a aba Cursos com missões, um cartão por missão (o Ground, com o recurso e as horas
+  // desligados)
+  test('a aba Cursos com o programa cabe na tela, com alvos de 44 px', async ({ page }) => {
+    const cursos = { PP: [{ id: 'PP-01', nome: 'Familiarização', mis: 'Voo Local', eq: 'C152', nb: 1 }, { id: 'PP-02', nome: 'Ground', mis: 'Ground C152', eq: 'Sala Ground', nb: 1.5 }], PC: [], INVA: [] };
+    await abrir(page, { estado: { ...cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, {}, { curso: 'PP' })] }), cursos } });
+    await irPara(page, 'cur');
+    await expect(page.locator('#cursos tr[data-i]')).toHaveCount(2);
+    expect(await larguraDaPagina(page)).toBeLessThanOrEqual(390);
+    expect(await alvosPequenos(page)).toEqual([]);
+  });
+
+  // O programa em fases (gravado neste navegador, como as tabelas dos cursos o guardam): os cabeçalhos das fases, a
+  // missão "Depois de…" com a escolha aberta, a fase de cada missão, as retiradas, os alunos do curso e as alterações
+  // também cabem na tela, com alvos de 44 px
+  test('a aba Cursos em fases cabe na tela, com as caixas abertas e alvos de 44 px', async ({ page }) => {
+    const u = n => `00000000-0000-4000-8013-${String(n).padStart(12, '0')}`;
+    const modulo = 'Módulo 01 – Treinamento Duplo Comando';
+    const conteudo = {
+      nome: 'Piloto Privado', ativo: true,
+      fases: [{ id: u(1), nome: 'Fase 1 – Introdução ao Voo', modulo }, { id: u(2), nome: 'Fase 2 – O Controle da Aeronave', modulo, regra: 'depois', requer: [u(1)] }],
+      missoes: [
+        { id: u(11), fase: u(1), codigo: 'IN-01', nome: 'IN-01', mis: 'Voo Local', eq: 'C152', nb: 1 },
+        { id: u(12), fase: u(1), codigo: 'IN-02', nome: 'IN-02', mis: 'Ground C152', eq: 'Sala Ground', nb: 1.5, dispensada: true },
+        { id: u(13), fase: u(2), codigo: 'AVP-SOLO-05', nome: 'AV PROF. SOLO 05', mis: 'Voo Local', eq: 'C152', nb: 0.3, regra: 'depois', requer: [u(11), u(12)], avaliacao: true },
+        { id: u(14), fase: u(2), codigo: 'CT-09', nome: 'CT-09', mis: 'Voo Local', eq: 'C152', nb: 1 }
+      ]
+    };
+    // A CT-09 tirada do programa: fica nas retiradas
+    const comCt09 = gravarCurso({ cursos: cursosIniciais() }, { sigla: 'PP', versaoLida: 1, conteudo, descricao: 'PP: cronograma' });
+    const semCt09 = gravarCurso({ cursos: comCt09.cursos }, { sigla: 'PP', versaoLida: 2, conteudo: { ...conteudo, missoes: conteudo.missoes.slice(0, 3) }, descricao: 'PP: CT-09 tirada do programa' });
+    const { documentos: { cadastro }, dias } = documentosAtuais(cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, {}, { curso: 'PP' })] }), AMANHA);
+    const docs = {
+      acpm4_cadastro: cadastro, [`acpm4_dia_${AMANHA}`]: dias[AMANHA], acpm4_cursos: { cursos: semCt09.cursos, alteracoes: [comCt09.alteracao, semCt09.alteracao] }
+    };
+    await page.addInitScript(json => {
+      if (localStorage.getItem('acpm4_cadastro')) return;
+      for (const [chave, valor] of Object.entries(JSON.parse(json))) localStorage.setItem(chave, JSON.stringify(valor));
+    }, JSON.stringify(docs));
+    await page.goto('./');
+    await irPara(page, 'cur');
+    await expect(page.locator('#cursos .curso[data-curso="PP"] tr[data-i]')).toHaveCount(3);
+    for (const resumo of await page.locator('#cursos .curso[data-curso="PP"] summary').all()) await resumo.click();
+    await expect(page.locator('#cursos .curso[data-curso="PP"] details[open]')).toHaveCount(5);
+    expect(await larguraDaPagina(page)).toBeLessThanOrEqual(390);
+    expect(await alvosPequenos(page)).toEqual([]);
+    // Os cursos pela sigla e as fases do índice pelo nome curto; as fases recolhidas, também para quem só consulta, e
+    // nos 320 px: a aba continua na tela, com alvos de 44 px
+    await expect(page.locator('#cursos .seg-dos-cursos button')).toHaveText(['PP', 'PC', 'INVA'], { useInnerText: true });
+    await expect(page.locator('#cursos .indice-das-fases a')).toHaveText(['Fase 1', 'Fase 2'], { useInnerText: true });
+    await page.locator('#fases-recolher').click();
+    await expect(page.locator('#cursos .curso[data-curso="PP"] tr[data-i]:visible')).toHaveCount(0);
+    // Para quem muda, a seta da fase fica na linha do nome dela (não sozinha numa linha acima dele), também nos 320 px
+    await expect(page.locator('#cursos .fase-cab .nome-da-fase')).toHaveCount(2);
+    const setasForaDaLinha = () => page.locator('#cursos .fase-cab').evaluateAll(cabs => cabs.filter(cab => {
+      const nome = cab.querySelector('.nome-da-fase');
+      if (!nome) return false;
+      const seta = cab.querySelector('.fase-titulo').getBoundingClientRect(), campo = nome.getBoundingClientRect();
+      return seta.bottom <= campo.top || campo.bottom <= seta.top;
+    }).map(cab => cab.closest('.fase').dataset.fase));
+    for (const perfil of ['operador', 'gestor']) {
+      await page.locator('#role-sel').selectOption(perfil);
+      for (const largura of [390, 320]) {
+        await page.setViewportSize({ width: largura, height: 844 });
+        for (const fases of ['#fases-abrir', '#fases-recolher']) {
+          await page.locator(fases).click();
+          expect(await larguraDaPagina(page), `${perfil}, ${largura} px, ${fases}`).toBeLessThanOrEqual(largura);
+          expect(await alvosPequenos(page), `${perfil}, ${largura} px, ${fases}`).toEqual([]);
+          if (perfil === 'operador') expect(await setasForaDaLinha(), `${largura} px, ${fases}`).toEqual([]);
+        }
+      }
+    }
+    // O curso encerrado à mostra: o botão dele, com a marca, também cabe nos 320 px
+    await page.locator('#role-sel').selectOption('operador');
+    await page.locator('#cur-ver-PC').click();
+    await confirmar(page, '#cursos .curso[data-curso="PC"] [data-act="curso-encerrar"]');
+    await expect(page.locator('#cur-ver-PC')).toHaveText('PC (encerrado)', { useInnerText: true });
+    expect(await larguraDaPagina(page)).toBeLessThanOrEqual(320);
+    expect(await alvosPequenos(page)).toEqual([]);
+  });
+
+  // Com os cursos que o Administrador cria (as siglas com hífen, como PC-IFR) e um encerrado à mostra, os botões dos
+  // cursos não encolhem abaixo do texto: a sigla e "(encerrado)" ficam inteiros, e o botão que não cabe vai para a linha de
+  // baixo, nos 390 e nos 320 px, para quem muda e para quem só consulta
+  test('com muitos cursos, os botões dos cursos ficam inteiros no celular', async ({ page }) => {
+    let cursos = cursosIniciais();
+    for (const [sigla, nome, ativo] of [['PC-IFR', 'Piloto Comercial IFR', true], ['MLTE', 'Multimotor', false], ['INVA-B', 'Instrutor de Voo (turma B)', true]]) {
+      ({ cursos } = gravarCurso({ cursos }, { sigla, versaoLida: 0, conteudo: { nome, ativo, fases: [], missoes: [] }, descricao: `Curso ${sigla} criado: ${nome}` }));
+    }
+    const { documentos: { cadastro }, dias } = documentosAtuais(cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, {}, { curso: 'PP' })] }), AMANHA);
+    const docs = { acpm4_cadastro: cadastro, [`acpm4_dia_${AMANHA}`]: dias[AMANHA], acpm4_cursos: { cursos, alteracoes: [] } };
+    await page.addInitScript(json => {
+      if (localStorage.getItem('acpm4_cadastro')) return;
+      for (const [chave, valor] of Object.entries(JSON.parse(json))) localStorage.setItem(chave, JSON.stringify(valor));
+    }, JSON.stringify(docs));
+    await page.goto('./');
+    await irPara(page, 'cur');
+    await page.locator('#cur-encerrados').check();
+    const botoes = page.locator('#cursos .seg-dos-cursos button');
+    // O botão com o texto cortado (mais largo que ele), ou com a sigla ou o "(encerrado)" partidos em duas linhas
+    const cortados = () => botoes.evaluateAll(bs => bs.filter(b => {
+      const linhas = el => {
+        const faixa = document.createRange();
+        faixa.selectNodeContents(el);
+        return new Set([...faixa.getClientRects()].map(r => Math.round(r.top))).size;
+      };
+      return b.scrollWidth > b.clientWidth || [...b.querySelectorAll('.sigla, .curso-encerrado')].some(el => linhas(el) > 1);
+    }).map(b => `${b.id} ${b.clientWidth}/${b.scrollWidth}`));
+    for (const perfil of ['operador', 'gestor']) {
+      await page.locator('#role-sel').selectOption(perfil);
+      for (const largura of [390, 320]) {
+        await page.setViewportSize({ width: largura, height: 844 });
+        await expect(botoes).toHaveText(['PP', 'PC', 'INVA', 'PC-IFR', 'MLTE (encerrado)', 'INVA-B'], { useInnerText: true });
+        expect(await cortados(), `${perfil}, ${largura} px`).toEqual([]);
+        expect(await larguraDaPagina(page), `${perfil}, ${largura} px`).toBeLessThanOrEqual(largura);
+        expect(await alvosPequenos(page), `${perfil}, ${largura} px`).toEqual([]);
+      }
+    }
+  });
+});
+
+// O leitor de tela, vindo de acessibilidade.spec.js
+test.describe('Acessibilidade', () => {
+  // A aba Cursos com o programa em fases (o exemplo não tem programa: aqui, o cronograma do PP): os botões dos cursos, o
+  // índice das fases, o título de cada fase (o botão que a recolhe; para quem muda, só a seta, com o nome da fase para o
+  // leitor de tela) e "Abrir todas" e "Recolher todas" têm nome, para quem muda e para quem só consulta, abertas e
+  // recolhidas
+  test('a aba Cursos em fases: os cursos, o índice e o título de cada fase têm nome, abertas e recolhidas', async ({ page }) => {
+    await abrir(page, { estado: cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, {}, { curso: 'PP' })] }) });
+    await irPara(page, 'cur');
+    await confirmar(page, '#cursos [data-act="curso-modelo"]');
+    await expect(page.locator('#cursos .fase')).toHaveCount(9);
+    await expect(page.locator('#cursos [data-recolher-fase]').first()).toHaveAccessibleName('Fase 1 – Introdução ao Voo');
+    await expect(page.locator('#cursos [data-recolher-fase]').first()).toHaveAttribute('aria-expanded', 'true');
+    for (const perfil of ['operador', 'gestor']) {
+      await page.locator('#role-sel').selectOption(perfil);
+      for (const fases of ['#fases-abrir', '#fases-recolher']) {
+        await page.locator(fases).click();
+        expect(await semNome(page, 'main section.on'), `${perfil}, ${fases}`).toEqual([]);
+      }
+    }
+    await expect(page.getByRole('navigation', { name: 'Fases do PP' }).getByRole('link')).toHaveCount(9);
+    await expect(page.getByRole('group', { name: 'Curso' }).getByRole('button', { name: 'PP · Piloto Privado' })).toHaveAttribute('aria-pressed', 'true');
   });
 });

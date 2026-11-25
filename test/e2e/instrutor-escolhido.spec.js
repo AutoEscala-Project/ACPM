@@ -1,6 +1,6 @@
 // O instrutor escolhido pelo operador: na Demanda (o app encaixa o voo com ele) e na Escala (o nome do instrutor abre a
 // lista; o voo fica onde está, fixo, com o escolhido, e o resto é refeito em volta). O histórico desfaz
-import { test, expect, abrir, irPara, abrirEscala, confirmar } from './fixtures.js';
+import { test, expect, abrir, irPara, abrirEscala, confirmar, abrirHistorico, alternarVem, aprovar, reabrir } from './fixtures.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
 
 // Dois voos às 08:20: o app põe o Instrutor 02 (menos habilitações) com o Aluno 1000 e o Instrutor 01 com o 1001
@@ -25,7 +25,7 @@ test.describe('Instrutor escolhido', () => {
     await expect(linha(page, 'Aluno 1000').locator('.ins-btn')).toHaveClass(/\bescolhido\b/);
     await expect(linha(page, 'Aluno 1001').locator('.c-instr')).toHaveText('Instrutor 02');
 
-    await page.locator('#btn-open-log').click();
+    await abrirHistorico(page);
     await expect(page.locator('#audit-log-list')).toContainText('Pedido Aluno 1000: instrutor Instrutor 01 (Voo Local)');
     await page.locator('#audit-log-list [data-act="rev-log"]').first().click();
     await page.keyboard.press('Escape');
@@ -111,7 +111,7 @@ test.describe('Instrutor escolhido', () => {
 
     // O Instrutor 01 não vem: o voo fica com outro, com o aviso
     await irPara(page, 'ins');
-    await page.locator('#inst-dia tr[data-id="1"] [data-f="on"]').uncheck();
+    await alternarVem(page, '1', false);
     await abrirEscala(page);
     await expect(linha(page, 'Aluno 1000')).toHaveCount(1);
     await expect(linha(page, 'Aluno 1000').locator('.c-instr')).toHaveText('Instrutor 02');
@@ -161,9 +161,9 @@ test.describe('Instrutor escolhido', () => {
     const voo = linha(page, 'Aluno 1001');
     await voo.locator('[data-act="trocar-instrutor"]').click();
     await voo.locator('select[data-a="insVoo"]').selectOption({ label: 'Instrutor 02 (ocupado com Aluno 1000)' });
-    await confirmar(page, '#btn-aprovar');
+    await aprovar(page);
     await expect(voo.locator('.fixo')).toHaveAttribute('aria-label', 'Voo fixo: escala aprovada');
-    await confirmar(page, '#btn-reabrir');
+    await reabrir(page);
     await expect(voo.locator('.fixo')).toHaveAttribute('aria-label', 'Voo fixo: instrutor escolhido na escala');
     await expect(linha(page, 'Aluno 1000').locator('.fixo')).toHaveCount(0);
   });

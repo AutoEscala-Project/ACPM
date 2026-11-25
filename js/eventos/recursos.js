@@ -5,18 +5,31 @@ import { categoriaDoTipo } from '../categorias.js';
 import { WIN, REVISAO_H } from '../config.js';
 import { $, showToast, fecharNoEsc } from '../dom.js';
 import { fmtH, lerHoras } from '../format.js';
-import { novoRecurso, ATRIBUTOS_DO_RECURSO, atributoVale } from '../frota.js';
+import { novoRecurso, ATRIBUTOS_DO_RECURSO, atributoVale, comAtributo } from '../frota.js';
 import { normalizarHangar, moverNoHangar } from '../hangar.js';
 import { horariosDaMissao, ajustarPreferencias, descreverHorarios } from '../horarios.js';
-import { S, isGestor } from '../state.js';
+import { S, isGestor, getMissionTarget, inativoNaDataAberta } from '../state.js';
 import { confirmado } from './confirmacao.js';
-import { aoAcionar, aoMudarCampo } from './registro.js';
-import { rDem } from '../views/demanda.js';
+import { aoAcionar, aoMudarCampo, aoReverter } from './registro.js';
+import { registrarDesenho, redesenharPorNome } from '../redesenho.js';
 import { filtrarRecursos, limparFiltrosDosRecursos, manterRecursoAVista, criarFiltroDasCategorias } from '../views/filtros-dos-recursos.js';
 import { NOMES_DAS_CATEGORIAS, abrirEditorDosHorarios, fecharEditorDosHorarios, tirarDoRascunho, porNoRascunho, escolherModelo, rascunhoDosHorarios, editorDosHorariosAberto } from '../views/horarios.js';
-import { rRec, rHangar, alternarAtributos, aplicarFiltrosDosRecursos } from '../views/recursos.js';
-import { rIns, rPainelDoInstrutor } from '../views/cadastros.js';
+import { rRec, rRevisao, rHangar, alternarAtributos, aplicarFiltrosDosRecursos, alternarGrupoDaFrota } from '../views/recursos.js';
 import { mostrarVista, vistaDa } from '../views/vistas.js';
+
+// Os desenhos de Recursos (js/redesenho.js): a revisão de 50 horas e o hangar acompanham a escala
+registrarDesenho('revisao', rRevisao, { em: ['escala'], ordem: 5 });
+registrarDesenho('hangar', rHangar, { em: ['escala'], ordem: 6 });
+registrarDesenho('recursos', rRec, { em: ['dados', 'consulta'], ordem: 10 });
+
+// As categorias da frota que recolhem (Disponibilidade do dia) e as duas vistas de Recursos (Disponibilidade do dia e
+// Cadastro, no controle segmentado: js/views/vistas.js)
+document.addEventListener('click', e => {
+  const grupo = e.target.closest('[data-recolher-grupo]');
+  if (grupo) { alternarGrupoDaFrota(grupo.dataset.recolherGrupo); return; }
+  const vista = e.target.closest('[data-vista-rec]');
+  if (vista) mostrarVista('rec', vista.dataset.vistaRec);
+});
 
 // O campo do recurso com erro (aria-invalid); o motivo (#rec-erro) é a descrição dele: o leitor de tela diz os dois
 const CAMPOS_DO_RECURSO = { reg: '#rec-reg', tipo: '#rec-tipo' };
@@ -72,11 +85,11 @@ $('#form-recurso').onsubmit = e => {
 // Os atributos de um recurso (Só Parafuso, Só VFR e Habilitação própria): o botão abre as caixas no próprio recurso, e
 // cada mudança vale para todas as datas (a escala é refeita) e entra no histórico, que desfaz
 aoAcionar('atributos-recurso', b => alternarAtributos(b.dataset.id));
+// O atributo marcado ou desmarcado no recurso (a habilitação própria também em exige: js/frota.js, comAtributo)
 function marcarAtributo(reg, atributo, val) {
-  const recurso = (S.frota || []).find(f => f.reg === reg);
-  if (!recurso || !atributoVale(atributo, recurso.tipo)) return false;
-  if (val) recurso[atributo] = true;
-  else delete recurso[atributo];
+  const i = (S.frota || []).findIndex(f => f.reg === reg);
+  if (i < 0 || !atributoVale(atributo, S.frota[i].tipo)) return false;
+  S.frota[i] = comAtributo(S.frota[i], atributo, val);
   return true;
 }
 aoMudarCampo('atributo', t => {
@@ -85,7 +98,7 @@ aoMudarCampo('atributo', t => {
   gravarAlteracao('mod', `${reg}: ${ATRIBUTOS_DO_RECURSO[atributo].nome} ${t.checked ? 'marcado' : 'desmarcado'}`, {
     kind: 'setAtributo', reg, atributo, val: !t.checked, label: '↶ Reverter'
   });
-  rRec(); rIns(); rPainelDoInstrutor(); rDem();
+  rRec(); redesenharPorNome('instrutores', 'habilitacoes-do-instrutor', 'pedidos-do-dia');
   document.querySelector(`[data-a="atributo"][data-r="${CSS.escape(reg)}"][data-atributo="${atributo}"]`)?.focus();
 });
 
@@ -154,7 +167,7 @@ aoAcionar('retirar-recurso', b => {
   gravarAlteracao('exc', `Recurso retirado: ${recurso.reg} (${recurso.tipo})`, {
     kind: 'readicionarRecurso', recurso: { ...recurso }, av: S.av[recurso.reg] !== false, label: '↶ Reverter'
   });
-  rRec(); rIns();
+  rRec(); redesenharPorNome('instrutores');
   showToast(`${recurso.reg} retirado da frota.`, 'ok');
 });
 
@@ -162,7 +175,7 @@ aoAcionar('retirar-recurso', b => {
 aoAcionar(['hangar-subir', 'hangar-descer', 'hangar-frente'], b => {
   const a = b.dataset.act;
   const r = b.dataset.id;
-  S.hangar = moverNoHangar(normalizarHangar(S.hangar, S.frota), r, a.slice('hangar-'.length));
+  S.hangar = moverNoHangar(normalizarHangar(S.hangar, S.frota.filter(f => !inativoNaDataAberta(f))), r, a.slice('hangar-'.length));
   gravarAlteracao('mod', `Hangar: ${r} passou para ${S.hangar.indexOf(r) + 1}º`);
   rHangar();
 });
@@ -211,7 +224,7 @@ function salvarHorarios() {
   }));
   gravarAlteracao('mod', `Horários de decolagem do ${NOMES_DAS_CATEGORIAS[cat]}: ${descreverHorarios(lista)}`,
     { kind: 'restaurarHorarios', cat, lista: anterior, pedidos, label: '↶ Reverter' });
-  rRec(); rDem();
+  rRec(); redesenharPorNome('pedidos-do-dia');
   fecharEditorDosHorarios();
 }
 // O modelo escolhido no editor troca a lista do rascunho; Enter no campo põe o horário; Esc, com o foco nos horários,
@@ -224,3 +237,38 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Enter' && e.target.classList.contains('hr-novo')) { e.preventDefault(); porNoRascunho(); }
 });
 fecharNoEsc(() => (editorDosHorariosAberto() ? $('#horarios') : null), fecharEditorDosHorarios);
+
+// "↶ Reverter" no histórico (js/eventos/historico.js): os tipos desta tela. A reversão chega validada (js/reversoes.js)
+aoReverter('setAv', (rev, entry) => {
+  S.av[rev.reg] = rev.val;
+  gravarAlteracao(rev.val ? 'inc' : 'exc', `Revertido: ${rev.reg} ${rev.val ? 'disponível' : 'em manutenção'}`, null, entry.id);
+  rRec();
+});
+
+aoReverter('setAtributo', (rev, entry) => {
+  if (marcarAtributo(rev.reg, rev.atributo, rev.val)) {
+    gravarAlteracao('mod', `Revertido: ${entry.desc}`, null, entry.id);
+    rRec(); redesenharPorNome('instrutores', 'pedidos-do-dia');
+  }
+});
+
+aoReverter('restaurarHorarios', (rev, entry) => {
+  // Os horários de uma categoria voltam como estavam, e os pedidos que mudaram com eles também
+  S.horarios = { ...S.horarios, [rev.cat]: [...rev.lista] };
+  rev.pedidos.forEach(({ stuId, mid, p1, p2, jan }) => {
+    const alvo = getMissionTarget(stuId, mid);
+    if (!alvo) return;
+    Object.assign(alvo, { p1, p2 });
+    if (jan !== undefined) alvo.jan = jan;
+  });
+  gravarAlteracao('mod', `Revertido: ${entry.desc}`, null, entry.id);
+  rRec(); redesenharPorNome('pedidos-do-dia');
+});
+
+aoReverter('readicionarRecurso', (rev, entry) => {
+  // Um recurso retirado volta para a frota, como estava (com a habilitação própria, em Instrutores)
+  S.frota.push({ ...rev.recurso });
+  S.av[rev.recurso.reg] = rev.av !== false;
+  gravarAlteracao('inc', `Revertido: ${rev.recurso.reg} de volta à frota`, null, entry.id);
+  rRec(); redesenharPorNome('instrutores');
+});

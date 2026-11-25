@@ -29,6 +29,8 @@ export const ACROBAT_REG = 'PR-JPL'; // Exclusivo para missão de Parafuso
 // instrutor uma habilitação própria (a habilitação de multimotor não basta)
 export const SO_VFR_INICIAL = ['PR-CPL'];
 export const HABILITACAO_PROPRIA_INICIAL = ['PR-VOM'];
+// A matrícula de um avião (PR-ABC) ou o código de um recurso (SALA-GROUND): letras, números e hífen
+export const MATRICULA = /^[A-Z0-9][A-Z0-9-]{1,14}$/;
 
 /**
  * Fases / Missões do CIAC (incluindo Ground School de 01h30 e Missões de Voo/Simulador). Quem pode ministrar cada
