@@ -2,7 +2,7 @@
 // js/eventos/importacao.js)
 import { carregarData } from '../actions.js';
 import { vagaDeVooLocal, ehDomingo } from '../agenda.js';
-import { DURACAO_MAXIMA_H, LIMITE_DE_VOOS_LOCAIS } from '../config.js';
+import { DURACAO_MAXIMA_H, LIMITE_DE_VOOS_LOCAIS, MIS } from '../config.js';
 import { $, showToast } from '../dom.js';
 import { dataIsoValida } from '../format.js';
 import { duracaoDigitada, ERRO_DA_DURACAO } from '../rules.js';
@@ -10,7 +10,7 @@ import { S, DATA } from '../state.js';
 import { ApiClient } from '../storage.js';
 import { confirmado } from './confirmacao.js';
 import { aoAcionar } from './registro.js';
-import { carregarMes, mudarMes, escolherDia, diaDaAgenda, lembrarRegistradoPor, podeEditarAgenda, rAgenda, preencherHorariosDaAgenda, pedidosDoAluno, descreverPedido, pedidosCarregados } from '../views/agenda.js';
+import { carregarMes, mudarMes, escolherDia, diaDaAgenda, lembrarRegistradoPor, podeEditarAgenda, rAgenda, atualizarRecursoEHorario, escolherNaAgenda, escolherMissaoNaAgenda, emLista, pedidosDoAluno, descreverPedido, missaoDoPedido, pedidosCarregados } from '../views/agenda.js';
 import { lerPedidosDaData } from '../views/selos.js';
 import { registrarDesenho } from '../redesenho.js';
 
@@ -30,7 +30,7 @@ document.addEventListener('click', e => {
 });
 
 // Os campos do pedido com erro (aria-invalid): o leitor de tela diz qual campo e lê o motivo (#ag-erro é a descrição deles)
-const marcarInvalidos = (...ids) => ['#ag-aluno', '#ag-horario', '#ag-horas', '#ag-por'].forEach(id => $(id).setAttribute('aria-invalid', String(ids.includes(id))));
+const marcarInvalidos = (...ids) => ['#ag-aluno', '#ag-missao', '#ag-recurso', '#ag-horario', '#ag-horas', '#ag-por'].forEach(id => $(id).setAttribute('aria-invalid', String(ids.includes(id))));
 
 // Agenda: registrar um pedido (pela exceção da coordenação, fora do prazo) e cancelar (com confirmação)
 async function registrarPedido(excecao) {
@@ -39,9 +39,25 @@ async function registrarPedido(excecao) {
   marcarInvalidos();
   const aluno = S.stu.find(s => s.id === +$('#ag-aluno').value);
   const por = $('#ag-por').value.trim();
-  if (!aluno || !por) {
-    $('#ag-erro').textContent = 'Escolha o aluno e informe quem anotou o pedido (“Registrado por”).';
-    marcarInvalidos(...[!aluno && '#ag-aluno', !por && '#ag-por'].filter(Boolean));
+  // A lista dos horários como está agora no cadastro: o horário que saiu dela não é registrado
+  const horarioNaTela = $('#ag-horario').value;
+  atualizarRecursoEHorario();
+  const missao = $('#ag-missao').value, recurso = $('#ag-recurso').value, horario = $('#ag-horario').value;
+  // O recurso espera a missão, e o horário, os três: só falta o que já pode ser escolhido
+  const faltam = [
+    !aluno && ['#ag-aluno', 'o aluno'], !missao && ['#ag-missao', 'a missão'], missao && !recurso && ['#ag-recurso', 'o recurso'],
+    aluno && missao && recurso && !horario && ['#ag-horario', 'o horário']
+  ].filter(Boolean);
+  if (faltam.length || !por) {
+    $('#ag-erro').textContent = [
+      faltam.length ? `Escolha ${emLista(faltam.map(([, nome]) => nome))}.` : '', por ? '' : 'Informe quem anotou o pedido (“Registrado por”).'
+    ].filter(Boolean).join(' ');
+    marcarInvalidos(...faltam.map(([campo]) => campo), ...(por ? [] : ['#ag-por']));
+    return;
+  }
+  if (horario !== horarioNaTela) {
+    $('#ag-erro').textContent = 'Os horários deste recurso mudaram no cadastro: confira o horário e registre de novo.';
+    marcarInvalidos('#ag-horario');
     return;
   }
   // A duração: de 0,1 h a 5 h, em décimos (o Ground tem 01h30)
@@ -53,7 +69,7 @@ async function registrarPedido(excecao) {
   }
   const dia = diaDaAgenda(), confirmacao = `${aluno.id}|${dia}`;
   // No máximo 6 voos locais no mesmo horário: o horário está indisponível, com o próximo
-  const pedido = { data: dia, horario: $('#ag-horario').value, missao: $('#ag-missao').value };
+  const pedido = { data: dia, horario, missao, recurso };
   const vaga = vagaDeVooLocal(pedidosCarregados(), pedido, S.horarios);
   if (!vaga.ok) { $('#ag-erro').textContent = semVagaDeVooLocal(pedido, vaga.proximo); marcarInvalidos('#ag-horario'); return; }
   // O aluno que já tem voo marcado na data: pode ser um reagendamento feito por outra pessoa; o segundo clique confirma
@@ -66,14 +82,17 @@ async function registrarPedido(excecao) {
   }
   try {
     await ApiClient.registrarSolicitacao({
-      data: dia, aluno: aluno.id, aluno_nome: aluno.nm, missao: $('#ag-missao').value, janela: 'horario',
-      horario: $('#ag-horario').value, horas, observacao: $('#ag-obs').value, registrado_por: por, excecao
+      data: dia, aluno: aluno.id, aluno_nome: aluno.nm, missao, recurso, janela: 'horario',
+      horario, horas, observacao: $('#ag-obs').value, registrado_por: por, excecao
     });
   } catch (err) {
+    if (err.code === 'agenda-sem-recurso') marcarInvalidos('#ag-recurso');
     $('#ag-erro').textContent = {
+      // O app novo com o servidor de antes (a migração agenda_com_recurso): o recurso se perderia, e nada foi registrado
+      'agenda-sem-recurso': `O servidor precisa ser atualizado para guardar o recurso do pedido: até lá, ${missao} só pode ser pedida no ${MIS[missao].defEq}. Nada foi registrado. Avise a administração do app.`,
       PT403: 'Prazo encerrado para esta data: os pedidos vão até as 13:00 do dia anterior (a segunda, até sábado às 10:00).',
       42501: 'Esta conta não pode registrar este pedido (a Exceção da Coordenação é só para operadores).',
-      23514: 'Pedido incompleto: confira aluno, missão, horário e quem anotou.',
+      23514: 'Pedido incompleto: confira aluno, missão, recurso, horário e quem anotou.',
       22023: `Pedido inválido: o horário é obrigatório, e a duração vai de 0,1 h a ${DURACAO_MAXIMA_H} h.`,
       // Outra pessoa agendou o 6º local no mesmo horário enquanto isso: o servidor recusou
       PT422: semVagaDeVooLocal(pedido, vagaDeVooLocal([...pedidosCarregados(), ...Array.from({ length: LIMITE_DE_VOOS_LOCAIS }, () => ({ ...pedido, janela: 'horario', cancelada_em: null }))], pedido, S.horarios).proximo)
@@ -84,6 +103,7 @@ async function registrarPedido(excecao) {
   desarmarConfirmacaoDaAgenda();
   $('#ag-obs').value = '';
   $('#ag-aluno').value = '';
+  escolherNaAgenda();
   showToast(excecao ? 'Pedido registrado pela Exceção da Coordenação.' : 'Pedido registrado.', 'ok');
   await carregarMes();
   lerPedidosDaData();
@@ -101,11 +121,23 @@ function desarmarConfirmacaoDaAgenda() {
 }
 $('#form-agenda').onsubmit = e => { e.preventDefault(); registrarPedido(false); };
 $('#ag-excecao').onclick = () => registrarPedido(true);
-$('#ag-aluno').addEventListener('change', () => { desarmarConfirmacaoDaAgenda(); $('#ag-erro').textContent = ''; marcarInvalidos(); });
-$('#ag-missao').onchange = preencherHorariosDaAgenda;
+function limparErro() {
+  $('#ag-erro').textContent = '';
+  marcarInvalidos();
+}
+$('#ag-aluno').addEventListener('change', () => { desarmarConfirmacaoDaAgenda(); limparErro(); escolherNaAgenda(); });
+// Outra missão, recurso ou horário: o erro era do pedido de antes (o aviso do voo já marcado fica, com o botão armado)
+const aoEscolher = escolher => () => {
+  escolher();
+  if (!$('#form-agenda').dataset.confirmado) limparErro();
+};
+$('#ag-missao').onchange = aoEscolher(escolherMissaoNaAgenda);
+$('#ag-recurso').onchange = aoEscolher(escolherNaAgenda);
+$('#ag-horario').onchange = aoEscolher(escolherNaAgenda);
 
 async function cancelarPedido(b) {
-  if (!podeEditarAgenda() || !confirmado(b, 'Confirmar cancelamento')) return;
+  const pedido = pedidosCarregados().find(p => p.id === +b.dataset.id);
+  if (!podeEditarAgenda() || !confirmado(b, `Confirmar cancelamento${pedido ? `: ${missaoDoPedido(pedido)}` : ''}`)) return;
   const por = $('#ag-por').value.trim();
   if (!por) {
     $('#ag-erro').textContent = 'Informe seu nome em “Registrado por” para cancelar o pedido.';
