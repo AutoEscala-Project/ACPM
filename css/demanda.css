@@ -40,6 +40,7 @@ tr.on td:first-child { font-weight: 600; }
   white-space: nowrap;
 }
 .btn-add-mis:hover { background: var(--info-bg); }
+.stu-cell .etapa, .stu-cell .usar-proxima { margin-left: 6px; }
 .usar-proxima { padding: 1px 6px; font-size: 13px; }
 /* "Outra missão do curso" (Demanda): estreita como o botão da próxima missão (sem a largura da missão mais longa, a
    coluna do aluno não caberia na tela); as missões aparecem ao abrir a lista */

@@ -56,6 +56,10 @@ body {
   color: var(--ink);
   font: 15px/1.45 'Barlow', system-ui, -apple-system, sans-serif;
 }
+/* No papel, fundo branco e texto preto (as duas páginas; o resto da impressão está em css/casca.css) */
+@media print {
+  body { background: #fff; color: #000; }
+}
 button:focus-visible, select:focus-visible, input:focus-visible {
   outline: 2px solid var(--ac);
   outline-offset: 2px;

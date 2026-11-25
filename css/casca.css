@@ -196,7 +196,6 @@ body[data-backend="supabase"] #btn-bi-clr { display: none !important; }
 @media print {
   header, .bar, nav, section:not(#s-esc), #toast-box { display: none !important; }
   section#s-esc { display: block; }
-  body { background: #fff; color: #000; }
   /* Os botões que agendam não vão para o papel */
   .tl-agendar, .win-agendar, .tl-pop-btn[data-act="agendar"] { display: none !important; }
 }

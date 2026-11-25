@@ -130,7 +130,6 @@ details.caixa.conflitos .btn.quiet { padding: 1px 8px; margin-left: 4px; font-si
   font: 600 14.5px 'Barlow Semi Condensed', sans-serif;
   border-top: 1px solid var(--ln2);
 }
-.stu-cell .etapa, .stu-cell .usar-proxima { margin-left: 6px; }
 .resultado { display: flex; align-items: center; gap: 6px; margin-top: 4px; flex-wrap: wrap; }
 .res-sel { font-size: 13px; padding: 2px 4px; }
 .res-sel.res-aprovado, .res.res-aprovado { color: var(--ok); font-weight: 600; }

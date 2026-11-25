@@ -96,7 +96,7 @@ function colunaDoMes(x) {
 }
 
 // As células do cadastro (Instrutores e Alunos) têm a classe da coluna: no celular, cada pessoa vira um cartão, com as
-// partes postas pela classe (css/app.css), e o nome da coluna (data-rotulo) aparece pequeno em cima de cada uma. Os
+// partes postas pela classe (css/cadastros.css), e o nome da coluna (data-rotulo) aparece pequeno em cima de cada uma. Os
 // botões: "Editar habilitações" (o das habilitações; no celular, na linha de baixo delas) e depois "Dados pessoais" e o
 // ✕, como em Alunos: o Tab segue a ordem da tela, também no cartão do celular
 function linhaDoCadastro(x) {
