@@ -1,6 +1,6 @@
 // Agenda de Solicitações no modo compartilhado: a Secretaria registra pedidos (a escala ela só consulta), o
 // Operador usa a exceção da coordenação e o Gestor só consulta. O servidor falso aplica o mesmo prazo do banco.
-import { test, expect, entrar, preencherLogin, irPara, abrirMenuDaConta, AMANHA, URL_APP, botaoDaAba, campoDaAgenda, campoDaData, diaSeguinte, importarDaAgenda, rotuloDaData, rotulosDasAbas } from './fixtures.js';
+import { test, expect, entrar, preencherLogin, irPara, abrirMenuDaConta, AMANHA, URL_APP, botaoDaAba, campoDaAgenda, dataAberta, diaSeguinte, importarDaAgenda, rotuloDaData, rotulosDasAbas } from './fixtures.js';
 import { instalarSupabaseFalso, documentosAtuais, CONTAS } from './supabase-falso.js';
 import { estadoSintetico } from '../helpers/estado.js';
 import { aluno } from '../helpers/montar.js';
@@ -56,7 +56,7 @@ test.describe('Agenda de Solicitações (modo compartilhado)', () => {
       await page.locator('[data-cal][data-dia="2026-11-13"]').click();
     }, CONTAS.operador);
     await expect(page.locator('#agenda-data')).toContainText('13/11');
-    await expect(campoDaData(page)).toHaveValue('2026-11-13');
+    await expect(dataAberta(page)).toHaveAttribute('data-data', '2026-11-13');
   });
 
   test('a Secretaria abre na agenda, registra pedidos e só consulta a escala', async ({ page, context }) => {

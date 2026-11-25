@@ -17,6 +17,7 @@
  */
 import './eventos/navegacao.js';
 import './eventos/linha.js';
+import './eventos/trilho.js';
 import './eventos/escala.js';
 import './eventos/instrutores.js';
 import './eventos/alunos.js';
@@ -33,24 +34,25 @@ import './eventos/cursos.js';
 // o painel dos dados pessoais, e a Demanda, o "Importar da agenda" (test/unit/eventos-ligados.test.js)
 import { setRole, abrirData, lerData, dadosPreparados, carregarBI } from './actions.js';
 import { redesenhar } from './redesenho.js';
-import { ehDomingo } from './agenda.js';
+import { ehDomingo, primeiraDataAberta } from './agenda.js';
 import { projetoSupabase, enderecoSemBanco } from './config-supabase.js';
 import { iniciarDicas } from './dicas.js';
 import { configurarMeteorologia } from './meteorologia.js';
 import { $, showToast, mostrarAviso, avisoAberto, avisarDoLink } from './dom.js';
-import { amanhaISO, somarDias, dataIsoValida } from './format.js';
+import { amanhaISO, somarDias } from './format.js';
 import { iniciarSessaoSupabase } from './sessao.js';
 import { iniciarSomenteLeitura } from './somente-leitura.js';
 import { RES, modoCompartilhado } from './state.js';
 import { ApiClient } from './storage.js';
-import { avisoDeDomingo, iniciarTema } from './eventos/topo.js';
+import { iniciarTema } from './eventos/topo.js';
+import { avisoDeDomingo } from './eventos/trilho.js';
 import { programaSendoGravado } from './eventos/cursos.js';
 import { diaDaAgenda, podeEditarAgenda } from './views/agenda.js';
 import { carregarDadosPessoais } from './views/dados-pessoais.js';
 import { rOut } from './views/escala.js';
 import { lerPedidosDaData } from './views/selos.js';
 import { ligarEndereco, mostrarTela, telaAberta, telaFoiEscolhida, destinoDoHash } from './views/telas.js';
-import { telaDeAbertura } from './telas.js';
+import { telaDeAbertura, dataDeAbertura } from './telas.js';
 
 // Fechar ou recarregar a página com alterações esperando a conexão, ou com o programa de um curso ainda sendo gravado, pede
 // confirmação (elas se perderiam)
@@ -87,11 +89,8 @@ window.addEventListener('beforeunload', e => {
     window.history.replaceState(window.history.state, '', url);
     avisarDoLink('Este link antigo levava a escala no próprio endereço e não vale mais. Peça um link novo a quem compartilhou.', 'erro');
   }
-  // A data do link (?data=); uma data que não existe abre amanhã, com o aviso
+  // A data do link (?data=): vale para todos os perfis (js/telas.js, dataDeAbertura)
   const pedida = params.get('data');
-  // O aeroclube não opera aos domingos: um link para um domingo abre a segunda
-  const domingo = dataIsoValida(pedida) && ehDomingo(pedida);
-  const data = dataIsoValida(pedida) ? (domingo ? somarDias(pedida, 1) : pedida) : amanha;
 
   // Num endereço que não é o do app, o modo local (sem o banco) avisa no alto, antes dos dados (e também se eles falharem)
   if (enderecoSemBanco()) $('#aviso-endereco').hidden = false;
@@ -112,12 +111,15 @@ window.addEventListener('beforeunload', e => {
     // depois, fica no lugar dela); se algo falhou até aqui, nenhuma data abre (js/actions.js, dadosPreparados)
     dadosPreparados();
 
+    // A data da abertura: a do link (um domingo abre a segunda; uma que não existe, amanhã); sem link, a Secretaria abre na
+    // primeira data que ainda aceita pedidos e os outros amanhã
+    const { data, aviso } = dataDeAbertura({ pedida, perfil: ApiClient.perfil, amanha, primeiraAberta: primeiraDataAberta() });
     // Os dados da data. Até eles chegarem, e se a leitura falhar, nada é gravado (js/actions.js, lerData); uma data
     // escolhida enquanto eles chegavam abre depois, no lugar deles
     abrirData(data);
     if (await lerData(data)) {
-      if (domingo) showToast(avisoDeDomingo(data));
-      else if (pedida && data !== pedida) showToast(`A data do link não existe (${pedida.slice(0, 20)}). A escala aberta é a de amanhã.`);
+      if (aviso === 'domingo') showToast(avisoDeDomingo(data));
+      else if (aviso === 'invalida') showToast(`A data do link não existe (${pedida.slice(0, 20)}). A escala aberta é a de amanhã.`);
     }
   } catch (e) {
     console.warn(e);

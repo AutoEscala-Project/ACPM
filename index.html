@@ -20,6 +20,7 @@
 <link rel="stylesheet" href="css/tv.css">
 <link rel="stylesheet" href="css/casca.css">
 <link rel="stylesheet" href="css/linha.css">
+<link rel="stylesheet" href="css/trilho.css">
 <link rel="stylesheet" href="css/escala.css">
 <link rel="stylesheet" href="css/demanda.css">
 <link rel="stylesheet" href="css/agenda.css">
@@ -74,21 +75,18 @@
   <symbol id="i-exclamacao" viewBox="0 0 24 24"><path d="M12 5v9"/><path d="M12 18.5h.01"/></symbol>
   <symbol id="i-andamento" viewBox="0 0 24 24"><path d="M12 4a8 8 0 1 1-7.4 5"/></symbol>
   <symbol id="i-grafico" viewBox="0 0 24 24"><path d="M5 20V11M12 20V5M19 20v-6"/></symbol>
+  <symbol id="i-trilho" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16"/></symbol>
 </svg>
 
 <header class="topo" data-regiao="topo">
   <h1 class="topo-marca"><img class="topo-logo" src="img/acpm-aguia.png" alt="" width="64" height="24"><span class="topo-titulo">AutoEscala</span></h1>
-  <!-- A data em uso: o contexto de todas as telas -->
-  <div class="topo-data" role="group" aria-label="Data da escala">
-    <button class="topo-ico" type="button" id="dt-ant" aria-label="Dia anterior" title="Dia anterior"><svg class="ico" aria-hidden="true"><use href="#i-esquerda"/></svg></button>
-    <label class="topo-data-campo" title="Escolher a data">
-      <svg class="ico" aria-hidden="true"><use href="#i-calendario"/></svg>
-      <span id="dt-rotulo" aria-live="polite" aria-atomic="true"></span>
-      <span class="topo-data-rel" id="dt-rel" hidden></span>
-      <input type="date" id="dt" aria-label="Data da escala">
-    </label>
-    <button class="topo-ico" type="button" id="dt-prox" aria-label="Próximo dia" title="Próximo dia"><svg class="ico" aria-hidden="true"><use href="#i-direita"/></svg></button>
-  </div>
+  <!-- A data em uso, o contexto de todas as telas: o botão abre o calendário do trilho (ao lado, leva o foco até ele) -->
+  <button type="button" class="topo-data-botao" id="btn-data" aria-controls="trilho" aria-expanded="false">
+    <svg class="ico" aria-hidden="true"><use href="#i-calendario"/></svg>
+    <span class="sr">Data da escala: </span><span id="dt-rotulo"></span>
+    <span class="topo-data-rel" id="dt-rel" hidden></span>
+    <svg class="ico hd-seta" aria-hidden="true"><use href="#i-baixo"/></svg>
+  </button>
   <div class="hd-tools">
     <select class="hd-sel" id="role-sel" aria-label="Perfil de acesso">
       <option value="operador">Operador</option>
@@ -185,6 +183,22 @@
   <button type="button" class="x linha-alternar" id="btn-linha" aria-expanded="false" aria-controls="linha-estagios" aria-label="Mostrar as tarefas das etapas" title="Mostrar as tarefas das etapas"><svg class="ico" aria-hidden="true"><use href="#i-baixo"/></svg></button>
   </div>
 </nav>
+
+<!-- O trilho: o calendário da data aberta (cada dia com os pedidos dele) e a linha da data. Ao lado da tela ou aberto
+     pelo botão da data (js/views/trilho.js) -->
+<aside class="trilho" id="trilho" aria-label="Data e avisos" data-regiao="trilho" hidden>
+  <div class="trilho-cab">
+    <h2 class="trilho-mes" id="cal-mes" aria-live="polite"></h2>
+    <button type="button" class="x" id="cal-mes-ant" aria-label="Mês anterior" title="Mês anterior"><svg class="ico" aria-hidden="true"><use href="#i-esquerda"/></svg></button>
+    <button type="button" class="x" id="cal-mes-prox" aria-label="Próximo mês" title="Próximo mês"><svg class="ico" aria-hidden="true"><use href="#i-direita"/></svg></button>
+    <button type="button" class="x" id="btn-fixar-trilho" aria-pressed="false" aria-label="Fixar o calendário ao lado da tela" title="Fixar o calendário ao lado da tela"><svg class="ico" aria-hidden="true"><use href="#i-trilho"/></svg></button>
+    <button type="button" class="x" id="btn-fechar-trilho" aria-label="Fechar o calendário" title="Fechar o calendário" hidden><svg class="ico" aria-hidden="true"><use href="#i-fechar"/></svg></button>
+  </div>
+  <table class="cal" id="cal" role="grid" aria-labelledby="cal-mes"></table>
+  <div class="trilho-avisos" role="region" aria-labelledby="trilho-data">
+    <h2 class="trilho-data" id="trilho-data"></h2>
+  </div>
+</aside>
 
 <main id="conteudo" data-regiao="tela">
   <!-- LOGIN (modo compartilhado: dados no Supabase) -->

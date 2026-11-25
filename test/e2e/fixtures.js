@@ -27,7 +27,19 @@ const LIBS = {
   'supabase.js': fileURLToPath(new URL('../../node_modules/@supabase/supabase-js/dist/umd/supabase.js', import.meta.url))
 };
 
-export async function prepararContexto(context) {
+// preferencias: o trilho solto e a linha recolhida guardados neste navegador, para os testes de cada tela verem a largura de
+// sempre; os testes da casca e do trilho (casca.spec.js, trilho.spec.js) usam os padrões do produto (false)
+export async function prepararContexto(context, { preferencias = true } = {}) {
+  if (preferencias) {
+    await context.addInitScript(() => {
+      try {
+        if (!localStorage.getItem('acpm_trilho')) localStorage.setItem('acpm_trilho', '{"media":"solto","larga":"solto"}');
+        if (!localStorage.getItem('acpm_linha')) localStorage.setItem('acpm_linha', 'recolhida');
+      } catch {
+        // Sem o armazenamento do navegador, valem os padrões
+      }
+    });
+  }
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   await context.clock.setFixedTime(AGORA);
   await context.route(/^https:\/\/fonts\.(googleapis|gstatic)\.com\//, r => r.fulfill({ status: 200, contentType: 'text/css', body: '' }));
@@ -50,8 +62,9 @@ export function vigiarErros(page, { statusEsperados = [], ignorar = [] } = {}) {
 }
 
 export const test = base.extend({
-  context: async ({ context }, use) => {
-    await prepararContexto(context);
+  preferencias: [true, { option: true }],
+  context: async ({ context, preferencias }, use) => {
+    await prepararContexto(context, { preferencias });
     await use(context);
   },
   page: async ({ page }, use) => {
