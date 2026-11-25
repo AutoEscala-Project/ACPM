@@ -9,13 +9,19 @@ import { COLUNAS_DO_PAINEL } from '../../js/config-do-painel.js';
 const PAINEL_DO_AEROPORTO = { quadro: 'alternar', colunas: COLUNAS_DO_PAINEL.map(c => ({ id: c.id, on: true })) };
 
 test.describe('Tela da Escala', () => {
-  test('a barra troca entre Lista, Por recurso, Por instrutor e Painel', async ({ page }) => {
+  test('a barra troca entre Por recurso (a que abre), Por instrutor, Lista e Painel', async ({ page }) => {
     await abrirComExemplo(page);
-    await abrirEscala(page);
-    await expect(page.locator('#s-esc [data-tl]')).toHaveText(['Lista', 'Por recurso', 'Por instrutor', 'Painel']);
-    await expect(page.locator('#s-esc [data-tl="lista"]')).toHaveClass(/\bon\b/);
+    await abrirEscala(page, { vista: null });
+    await expect(page.locator('#s-esc [data-tl]')).toHaveText(['Por recurso', 'Por instrutor', 'Lista', 'Painel']);
+    await expect(page.locator('#s-esc [data-tl="eq"]')).toHaveClass(/\bon\b/);
+    await expect(page.locator('#out .mapa')).toBeVisible();
+    await expect(page.locator('#out table')).toBeHidden();
+    await expect(page.locator('#btn-eixo')).toBeVisible();
+
+    await page.locator('#s-esc [data-tl="lista"]').click();
     await expect(page.locator('#out table')).toBeVisible();
     await expect(page.locator('#out .mapa')).toBeHidden();
+    await expect(page.locator('#btn-eixo')).toBeHidden();
 
     await page.locator('#s-esc [data-tl="eq"]').click();
     await expect(page.locator('#out .mapa')).toBeVisible();
@@ -41,14 +47,83 @@ test.describe('Tela da Escala', () => {
     ] }) });
     await abrirEscala(page);
     await expect(page.locator('#out .st > div')).toHaveText(['3 missões pedidas', '2 escaladas', '2 h de voo e aula']);
+    // As duas caixas abrem recolhidas, só com o título
     const erros = page.locator('#out details.caixa.erros');
-    await expect(erros).toHaveAttribute('open', '');
+    await expect(erros).not.toHaveAttribute('open', '');
     await expect(erros.locator('summary')).toHaveText('1 missão não entrou na escala: Aluno 1000');
+    await erros.locator('summary').click();
     await expect(erros.locator('.al.err')).toContainText('nenhum instrutor ativo tem a habilitação');
     const avisos = page.locator('#out details.caixa.avisos');
     await expect(avisos).not.toHaveAttribute('open', '');
     await expect(avisos.locator('summary')).toHaveText('2 avisos: 2 alunos sem peso');
     await expect(avisos.locator('.al.warn')).toHaveCount(2);
+
+    // Trocar de vista ou inverter o eixo redesenha a escala: cada caixa continua como a pessoa deixou
+    for (const troca of ['#s-esc [data-tl="ins"]', '#s-esc [data-tl="eq"]', '#btn-eixo', '#s-esc [data-tl="lista"]', '#s-esc [data-tl="eq"]']) {
+      await page.locator(troca).click();
+      await expect(erros).toHaveAttribute('open', '');
+      await expect(avisos).not.toHaveAttribute('open', '');
+    }
+    await erros.locator('summary').click();
+    await page.locator('#s-esc [data-tl="ins"]').click();
+    await expect(erros).not.toHaveAttribute('open', '');
+  });
+
+  // Inverter eixo X:Y: os recursos (ou os instrutores) viram colunas e as horas descem à esquerda; o voo continua o mesmo
+  // botão (abre os detalhes) e o clique no espaço livre agenda no horário da altura dele
+  test('Inverter eixo X:Y: recursos nas colunas, horas nas linhas, os voos e o clique continuam', async ({ page }) => {
+    const erros = [];
+    page.on('pageerror', e => erros.push(e.message));
+    page.on('console', m => { if (m.type() === 'error') erros.push(m.text()); });
+    await abrirComExemplo(page);
+    await abrirEscala(page, { vista: 'eq' });
+    const eixo = page.locator('#btn-eixo');
+    await expect(eixo).toHaveAttribute('aria-pressed', 'false');
+    await expect(page.locator('#out .tl-wrap')).not.toHaveClass(/transposto/);
+    const barra = page.locator('#out .tl-bar').first();
+    const antes = await barra.boundingBox();
+    expect(antes.width).toBeGreaterThan(antes.height);
+
+    await eixo.click();
+    await expect(eixo).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('#out .tl-wrap')).toHaveClass(/\btransposto\b/);
+    // As linhas lado a lado (colunas) e as faixas em pé
+    const [r1, r2] = await page.locator('#out .tl-row').evaluateAll(rs => rs.slice(0, 2).map(r => r.getBoundingClientRect().toJSON()));
+    expect(Math.abs(r1.top - r2.top)).toBeLessThan(1);
+    expect(r2.left).toBeGreaterThan(r1.left);
+    const faixa = await page.locator('#out .tl-track').first().boundingBox();
+    expect(faixa.height).toBeGreaterThan(faixa.width);
+    // As marcas do eixo descem: 06:00 em cima, as seguintes abaixo
+    const marcas = await page.locator('#out .tl-axis span').evaluateAll(ms => ms.slice(0, 3).map(m => m.getBoundingClientRect().top));
+    expect(marcas[1]).toBeGreaterThan(marcas[0]);
+    expect(marcas[2]).toBeGreaterThan(marcas[1]);
+    // O voo: mais alto que largo, abre e fecha os detalhes como antes
+    const depois = await barra.boundingBox();
+    expect(depois.height).toBeGreaterThan(depois.width / 3);
+    await barra.click();
+    await expect(page.locator('#tl-pop')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#tl-pop')).toBeHidden();
+
+    // O clique no espaço livre de uma coluna agenda no horário da altura dele (contada da borda de dentro da faixa)
+    const livre = page.locator('#out .tl-row:not(:has(.tl-bar)) .tl-track:not(.inerte)').first();
+    const ponto = await livre.evaluate((el, m) => {
+      const { inicio, fim } = el.closest('.tl-wrap').dataset;
+      return { x: el.clientWidth / 2, y: ((m - inicio) / (fim - inicio)) * el.clientHeight };
+    }, 625);
+    await livre.click({ position: ponto });
+    await expect(page.locator('#dlg-agendar')).toBeVisible();
+    await expect(page.locator('#dlg-agendar')).toHaveAccessibleDescription(/clique perto das 10:25$/);
+    await page.keyboard.press('Escape');
+
+    // Na Lista o botão some; de volta ao mapa, o eixo continua invertido até outro clique
+    await page.locator('#s-esc [data-tl="lista"]').click();
+    await expect(eixo).toBeHidden();
+    await page.locator('#s-esc [data-tl="ins"]').click();
+    await expect(page.locator('#out .tl-wrap')).toHaveClass(/\btransposto\b/);
+    await eixo.click();
+    await expect(page.locator('#out .tl-wrap')).not.toHaveClass(/transposto/);
+    expect(erros).toEqual([]);
   });
 
   // O aviso de peso diz de quem é o peso que falta; o resumo conta alunos e instrutores

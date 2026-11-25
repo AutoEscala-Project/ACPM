@@ -19,7 +19,7 @@ import { confirmado } from './confirmacao.js';
 import { aoAcionar, aoMudarCampo, aoReverter } from './registro.js';
 import { vooDaChave } from './resultados.js';
 import { pedirDetalheDoStatus } from '../views/dialogo-status.js';
-import { rOut, botaoDoInstrutor, seletorDeInstrutor, abrirPopupDoMapa, fecharPopupDoMapa, popupDoMapaAberto, reposicionarPopupDoMapa, tabNoPopup } from '../views/escala.js';
+import { rOut, lembrarCaixa, botaoDoInstrutor, seletorDeInstrutor, abrirPopupDoMapa, fecharPopupDoMapa, popupDoMapaAberto, reposicionarPopupDoMapa, tabNoPopup } from '../views/escala.js';
 import { abrirPainelDeReparo, fecharPainelDeReparo, opcaoDoPainel } from '../views/reparo.js';
 import { registrarDesenho, redesenharPorNome } from '../redesenho.js';
 import { voosComInativos } from '../inativos.js';
@@ -28,12 +28,24 @@ import { voosComInativos } from '../inativos.js';
 registrarDesenho('escala', () => { if (RES) rOut(); }, { em: ['dados', 'consulta', 'releitura', 'escala'], ordem: 80 });
 
 // O minuto de um clique na faixa de uma linha do mapa: a posição dele dentro da faixa (sem a borda), entre o início e o
-// fim do mapa (data-inicio e data-fim), de 5 em 5 minutos
-function minutoDoClique(faixa, clientX) {
-  const { inicio, fim } = faixa.closest('.tl-wrap').dataset;
-  const fracao = (clientX - faixa.getBoundingClientRect().left - faixa.clientLeft) / faixa.clientWidth;
+// fim do mapa (data-inicio e data-fim), de 5 em 5 minutos; na largura da faixa ou, com o eixo invertido, na altura
+function minutoDoClique(faixa, { clientX, clientY }) {
+  const mapa = faixa.closest('.tl-wrap');
+  const { inicio, fim } = mapa.dataset;
+  const caixa = faixa.getBoundingClientRect();
+  // Com o eixo invertido, as horas descem: a posição é a do clique na altura da faixa
+  const fracao = mapa.classList.contains('transposto')
+    ? (clientY - caixa.top - faixa.clientTop) / faixa.clientHeight
+    : (clientX - caixa.left - faixa.clientLeft) / faixa.clientWidth;
   return Math.round((+inicio + Math.min(1, Math.max(0, fracao)) * (fim - inicio)) / 5) * 5;
 }
+
+// A caixa do resumo que a pessoa abre ou recolhe fica assim nos redesenhos (o toggle não sobe: ouvido na captura). O
+// redesenho cria a caixa já no estado lembrado, então o toggle dela só repete o que já está guardado
+document.addEventListener('toggle', e => {
+  const caixa = e.target instanceof Element && e.target.closest('#out details.caixa[data-caixa]');
+  if (caixa === e.target) lembrarCaixa(caixa.dataset.caixa, caixa.open);
+}, true);
 
 // Popup do voo no mapa da escala: a barra abre e fecha; Esc (o foco volta para a barra) e um clique fora fecham, e ele
 // acompanha a barra quando a página ou o mapa rolam. Um diálogo aberto por cima (o do status) fica com o Esc e com os
@@ -57,7 +69,7 @@ document.addEventListener('click', e => {
   const faixa = e.target.closest('#out .tl-track:not(.inerte)');
   if (!faixa || isGestor()) return;
   const { r, ins } = faixa.dataset;
-  agendarNoMapa({ ...(ins ? { insId: +ins } : { r }), minuto: minutoDoClique(faixa, e.clientX) });
+  agendarNoMapa({ ...(ins ? { insId: +ins } : { r }), minuto: minutoDoClique(faixa, e) });
 });
 // O Esc fecha só o popup, a camada de cima: ouvido na captura, ele para aqui e não chega às gavetas e aos painéis
 // de trás (o Histórico, as Sugestões, as habilitações), que continuam abertos. O Esc na lista do instrutor é dela

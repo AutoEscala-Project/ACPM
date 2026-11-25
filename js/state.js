@@ -9,7 +9,8 @@ export let S = ApiClient.createFreshState();
 export let RES = null;
 export let AUDIT_LOG = [];
 export let BI_HISTORY = {};
-export let TL_MODE = 'lista'; // visão da escala: 'lista', 'eq' (por recurso), 'ins' (por instrutor) ou 'painel' (o quadro do dia)
+export let TL_MODE = 'eq'; // visão da escala: 'eq' (por recurso, a que abre), 'ins' (por instrutor), 'lista' ou 'painel' (o quadro do dia)
+export let EIXO_INVERTIDO = false; // o mapa com os eixos trocados: os recursos (ou instrutores) nas colunas, as horas nas linhas
 // Data (AAAA-MM-DD) da escala aberta na tela. O campo de data pode já mostrar outra enquanto ela carrega
 // (ou ficar vazio): as alterações vão sempre para esta data
 export let DATA = '';
@@ -19,6 +20,7 @@ export const setRES = v => { RES = v; };
 export const setAuditLog = v => { AUDIT_LOG = v; };
 export const setBIHistory = v => { BI_HISTORY = v; };
 export const setTLMode = v => { TL_MODE = v; };
+export const setEixoInvertido = v => { EIXO_INVERTIDO = Boolean(v); };
 export const setData = v => { DATA = v; };
 
 // O que não foi lido ao abrir a data: 'horas' (dos instrutores), 'resultados' (dos cursos), 'cursos' (os programas, das

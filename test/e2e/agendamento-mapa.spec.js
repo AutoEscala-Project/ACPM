@@ -170,6 +170,9 @@ test.describe('Agendar pelo mapa', () => {
     await irPara(page, 'esc');
     const aviso = page.locator('#out > p.h');
     await expect(aviso).toHaveText('Nenhum voo nesta data. Marque quem vai voar na aba Demanda: a escala é montada automaticamente.');
+    // A Escala abre em Por recurso, com a grade; na Lista, só o aviso
+    await expect(page.locator('#out .mapa')).toBeVisible();
+    await page.locator('#s-esc [data-tl="lista"]').click();
     await expect(page.locator('#out .mapa')).toHaveCount(0);
     await abrirMapa(page);
     await expect(aviso).toBeVisible();

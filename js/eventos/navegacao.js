@@ -1,8 +1,8 @@
-// A navegação: as abas (também pelo botão de uma aba que leva a outra, data-go), as vistas da Escala (lista, por recurso,
-// por instrutor, painel), os horários que recolhem na Lista e os links para o Manual
+// A navegação: as abas (também pelo botão de uma aba que leva a outra, data-go), as vistas da Escala (por recurso, por
+// instrutor, lista, painel) e o eixo invertido do mapa, os horários que recolhem na Lista e os links para o Manual
 import { carregarBI } from '../actions.js';
 import { $, focarNoTitulo } from '../dom.js';
-import { setTLMode } from '../state.js';
+import { setTLMode, setEixoInvertido, EIXO_INVERTIDO } from '../state.js';
 import { abrirAgenda } from '../views/agenda.js';
 import { alternarTodosDoBI } from '../views/bi.js';
 import { abrirConfigDoPainel } from '../views/config-do-painel.js';
@@ -31,6 +31,12 @@ document.addEventListener('click', e => {
   const tlBtn = e.target.closest('[data-tl]');
   if (tlBtn) {
     setTLMode(tlBtn.dataset.tl);
+    rOut();
+    return;
+  }
+  // Inverter eixo X:Y: o mapa com os recursos (ou os instrutores) nas colunas e as horas nas linhas, e de volta
+  if (e.target.closest('#btn-eixo')) {
+    setEixoInvertido(!EIXO_INVERTIDO);
     rOut();
     return;
   }
