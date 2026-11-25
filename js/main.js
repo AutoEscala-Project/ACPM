@@ -28,7 +28,8 @@ import './eventos/conta.js';
 import './eventos/agenda.js';
 import './eventos/rodizio.js';
 import './eventos/cursos.js';
-import './eventos/agendamento.js';
+// O diálogo "Agendar voo" (js/eventos/agendamento.js) vem com a Escala, que o importa; Instrutores traz os limites da lei e
+// o painel dos dados pessoais, e a Demanda, o "Importar da agenda" (test/unit/eventos-ligados.test.js)
 import { setRole, abrirData, lerData, dadosPreparados, carregarBI } from './actions.js';
 import { redesenhar } from './redesenho.js';
 import { ehDomingo } from './agenda.js';
@@ -135,6 +136,7 @@ window.addEventListener('beforeunload', e => {
 
   lerPedidosDaData();
   carregarBI();
-  // Fim da abertura: daqui em diante, só a pessoa muda a aba. Os testes E2E esperam por esta marca (fixtures.js, entrar)
+  // Fim da abertura: daqui em diante, só a pessoa muda a aba. Os testes E2E esperam por esta marca (appPronto, em
+  // test/e2e/telas/casca.js)
   document.body.dataset.pronto = '1';
 })();
