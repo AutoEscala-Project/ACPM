@@ -14,11 +14,14 @@ import { problemasDoInstrutor } from './viabilidade.js';
 import { isGroundMission } from './rules.js';
 import { pinoDoVoo, fixoPeloStatus, fixosQueVoltam } from './fixos.js';
 import { chaveDoVoo, pedidoDoAluno, statusDoVoo, umPorUnidade, compromissoDoVoo } from './voo.js';
+import { inativo } from './inativos.js';
 
 const instrutorValido = v => Number.isInteger(v) && v > 0;
 
 // Por que o pedido não pode voar com o instrutor em nenhum horário (o texto curto das opções), ou ''
 function impedimentoDoPedido(x, aluno, pedido) {
+  // O inativo no cadastro primeiro: no estado da escala ele também não vem
+  if (inativo(x)) return 'inativo';
   if (!x.on) return 'fora nesta data';
   if (!podeFazer(x, pedido.mis, isGroundMission(pedido.mis) ? GROUND_EQ_TYPE : pedido.eq, { curso: aluno.curso })) return 'sem a habilitação';
   if ((aluno.bl || []).includes(x.id)) return 'em Não escalar com';
@@ -56,14 +59,15 @@ export function instrutoresDoVoo(estado, resultado, fKey) {
   const alunos = new Map(estado.stu.map(s => [s.id, s]));
   const limites = normalizarLimites(estado.limites);
   const historicoDe = historicoDoDia(estado);
-  const opcoes = estado.ins.map(x => {
+  // O instrutor inativo no cadastro não é opção, a não ser o do próprio voo (com a nota)
+  const opcoes = estado.ins.filter(x => !inativo(x) || x.id === voo.insId).map(x => {
     // Com o curso do aluno (o noturno do PC é IFR) e o avião do voo (a habilitação própria dele)
     const contexto = { curso: (alunos.get(voo.stuId) || {}).curso, recurso: voo.isGround ? null : recursoDaFrota(Array.isArray(estado.frota) ? estado.frota : FROTA_INICIAL, voo.r) };
     const [problema] = problemasDoInstrutor(x, { mis: voo.mis, tipo: voo.isGround ? GROUND_EQ_TYPE : voo.eqType, a: voo.a, b: voo.b, alunos: grupo.map(o => alunos.get(o.stuId)), stuKg: voo.stuKg, ...contexto }, {
       compromissos: outros.filter(o => o.insId === x.id).map(o => compromissoDoVoo(o)),
       historico: historicoDe(x.id), limites, peso: voo.isGround ? null : {}
     });
-    if (x.id === voo.insId || !problema) return { id: x.id, nm: x.nm, nota: '' };
+    if (x.id === voo.insId || !problema) return { id: x.id, nm: x.nm, nota: x.id === voo.insId && inativo(x) ? 'inativo' : '' };
     const comQuem = problema.codigo === 'instrutor-ocupado' && outros.find(o => o.insId === x.id && o.a < voo.b && o.b > voo.a);
     return { id: x.id, nm: x.nm, nota: comQuem ? `ocupado com ${comQuem.isGround ? `a turma de ${comQuem.mis}` : comQuem.s}` : NOTA_DO_PROBLEMA[problema.codigo] || '' };
   });

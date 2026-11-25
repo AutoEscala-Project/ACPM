@@ -1,7 +1,7 @@
 // Gaveta das sugestões para um conflito na escala aprovada: o voo, o motivo do conflito e o que pode voar no lugar,
 // cada sugestão com "Aplicar"; soltar o voo (o app escala de novo); por último, cancelar o voo (pede o motivo, como no
 // status). Na escala de hoje, só horários que ainda não passaram
-import { S, RES, DATA } from '../state.js';
+import { RES, DATA, estadoDaEscala } from '../state.js';
 import { sugerirReparos } from '../reparo.js';
 import { GRUPO_DO_CONFLITO } from '../conflitos.js';
 import { nomeDoRecurso } from '../categorias.js';
@@ -20,7 +20,7 @@ export function abrirPainelDeReparo(fKey, { focar = true } = {}) {
   const voo = vooDaChave(fKey);
   if (!voo || !voo.conflito) return;
   const painel = $('#painel-reparo');
-  opcoesAbertas = sugerirReparos(S, RES, fKey, { depoisDe: DATA === hojeISO() ? minutoDoDia() : null });
+  opcoesAbertas = sugerirReparos(estadoDaEscala(), RES, fKey, { depoisDe: DATA === hojeISO() ? minutoDoDia() : null });
   painel.dataset.fkey = fKey;
   const sugestoes = opcoesAbertas.filter(o => o.mudancas);
   const pedidoMudou = (voo.conflitoCodigos || []).some(c => GRUPO_DO_CONFLITO[c] === 'pedido');

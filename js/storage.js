@@ -2,7 +2,7 @@
 // Supabase).
 import { WIN } from './config.js';
 import { FROTA_INICIAL, normalizarFrota } from './frota.js';
-import { pad, LIMITE_DO_NOME } from './format.js';
+import { pad, LIMITE_DO_NOME, hojeISO } from './format.js';
 import { normalizeMissionFields, proximoMid, pesoValido } from './rules.js';
 import { HORARIOS_INICIAIS, normalizarHorarios } from './horarios.js';
 import { backendLocal } from './backends/local.js';
@@ -20,6 +20,7 @@ import { normalizarCriterios } from './criterios.js';
 import { normalizarPainel } from './config-do-painel.js';
 import { normalizarCursos, normalizarCursoDoAluno } from './cursos.js';
 import { normalizarProgramas, programaDoLegado } from './programa.js';
+import { inativo, inativoValeEm, ativosNaData } from './inativos.js';
 
 // A recusa de quem só consulta (o Gestor e a Secretaria no modo compartilhado, ou a tela travada depois de um
 // conflito), com o código do servidor
@@ -65,7 +66,8 @@ export const ApiClient = {
     return state;
   },
 
-  normalizeAndMigrateState(x) {
+  // ativos: o inativo do cadastro vale na data (de hoje em diante): as filas do rodízio e o hangar ficam com os ativos
+  normalizeAndMigrateState(x, { ativos = false } = {}) {
     if (!x || !Array.isArray(x.stu) || !Array.isArray(x.ins)) return this.createFreshState();
     // Os limites de peso de cada avião não ficam no estado (o motor usa os da configuração): um estado antigo com eles
     // fica sem
@@ -90,7 +92,7 @@ export const ApiClient = {
     // Horários de decolagem de cada categoria
     x.horarios = normalizarHorarios(x.horarios);
     // Ordem dos aviões no hangar: só os da frota; quem falta entra no fundo
-    x.hangar = normalizarHangar(x.hangar, x.frota);
+    x.hangar = normalizarHangar(x.hangar, ativos ? x.frota.filter(f => !inativo(f)) : x.frota);
     // Limites da Lei do Aeronauta e as horas de voo fora do app de cada instrutor ('AAAA-MM' ou 'AAAA-00')
     x.limites = normalizarLimites(x.limites);
     // O programa dos cursos e o curso de cada aluno
@@ -162,7 +164,7 @@ export const ApiClient = {
     x.ins.forEach(i => { i.hab = Array.isArray(i.hab) ? normalizarHabilitacoes(i.hab) : habilitacoesDoNivel(i.lv); });
 
     // Filas do rodízio só com os instrutores habilitados (um instrutor recém-habilitado entra no fim)
-    x.filas = ajustarFilas(x.filas, x.ins);
+    x.filas = ajustarFilas(x.filas, ativos ? x.ins.filter(i => !inativo(i)) : x.ins);
 
     x.stu.forEach(s => {
       normalizeMissionFields(s);
@@ -187,11 +189,13 @@ export const ApiClient = {
     this.cadastroGravado = guardado ? JSON.stringify(guardado) : undefined;
     const cadastro = migrarCadastro(guardado);
     const dia = migrarDia(await this.backend.ler(`dia:${data}`));
-    const instrutores = (cadastro && cadastro.ins) || [];
+    // O inativo do cadastro vale de hoje em diante: as filas e o hangar da data são os dos ativos
+    const vale = inativoValeEm(data, hojeISO());
+    const instrutores = ativosNaData((cadastro && cadastro.ins) || [], data, hojeISO());
     // O dia guardado antes da data: a cópia da data nova e, quando é ontem, os noturnos que voltam de BH hoje
     const anterior = await this.backend.diaAnterior(data);
     const base = dia || diaParaCopiar(migrarDia((anterior || {}).conteudo), instrutores);
-    const estado = this.normalizeAndMigrateState(juntar(cadastro || { nid: 1000, ins: [], stu: [] }, base || diaPadrao()));
+    const estado = this.normalizeAndMigrateState(juntar(cadastro || { nid: 1000, ins: [], stu: [] }, base || diaPadrao()), { ativos: vale });
     // As horas de voo de cada instrutor antes da data e o fim de ontem (limites da lei), mais as de fora do app. Não são
     // gravadas (vão à parte, para o estado da tela): saem das escalas guardadas a cada abertura. Sem resposta, o motor
     // confere só os limites do dia

@@ -2,7 +2,7 @@
 // aeroclube (Excel, js/planilha.js).
 import { hm, WLB, fmtH, pesoBr } from './format.js';
 import { sumUniqueOperationalHours, consolidateTimelineSlots } from './engine.js';
-import { S, RES, DATA } from './state.js';
+import { S, RES, DATA, inativoNaDataAberta, estadoDaEscala } from './state.js';
 import { showToast } from './dom.js';
 import { HT } from './views/escala.js';
 import { montarCsv, nomeDoCsv } from './csv.js';
@@ -122,7 +122,8 @@ export async function planilha() {
   if (montando) return;
   montando = true;
   try {
-    await baixarPlanilha(RES, DATA, { frota: S.frota ? [...S.frota] : undefined, av: { ...S.av }, fStatus: { ...S.fStatus }, fObs: { ...S.fObs } });
+    // O recurso inativo no cadastro solta a coluna dele (um com voo na escala continua com a sua)
+    await baixarPlanilha(RES, DATA, { frota: S.frota ? S.frota.filter(f => !inativoNaDataAberta(f)) : undefined, av: { ...estadoDaEscala().av }, fStatus: { ...S.fStatus }, fObs: { ...S.fObs } });
   } finally {
     montando = false;
   }

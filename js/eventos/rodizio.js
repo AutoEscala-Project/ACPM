@@ -1,7 +1,7 @@
 // Rodízio: a posição de cada instrutor na fila da categoria (na data aberta)
 import { gravarAlteracao } from '../actions.js';
 import { CATEGORIAS_DO_RODIZIO, ajustarFilas } from '../rodizio.js';
-import { S, insBy } from '../state.js';
+import { S, insBy, inativoNaDataAberta } from '../state.js';
 import { aoAcionar } from './registro.js';
 import { rRodizio } from '../views/rodizio.js';
 import { registrarDesenho } from '../redesenho.js';
@@ -12,7 +12,7 @@ registrarDesenho('rodizio', rRodizio, { em: ['dados'], ordem: 50 });
 aoAcionar(['fila-subir', 'fila-descer', 'fila-inicio'], b => {
   const a = b.dataset.act;
   const cat = b.dataset.cat, insId = +b.dataset.id;
-  S.filas = ajustarFilas(S.filas, S.ins);
+  S.filas = ajustarFilas(S.filas, S.ins.filter(x => !inativoNaDataAberta(x)));
   const fila = S.filas[cat].filter(x => x !== insId);
   const antes = S.filas[cat].indexOf(insId);
   const depois = a === 'fila-inicio' ? 0 : Math.max(0, Math.min(fila.length, antes + (a === 'fila-subir' ? -1 : 1)));

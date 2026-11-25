@@ -38,6 +38,7 @@ import { CATEGORIAS_DO_RODIZIO, categoriaDoRodizio, ajustarFilas } from './rodiz
 import { FROTA_INICIAL, recursoDaFrota, motivoDoAviao } from './frota.js';
 import { podeFazer, nomeDaHabilitacao, PREFIXO_DA_HABILITACAO_DO_AVIAO } from './habilitacoes.js';
 import { ehDomingo } from './agenda.js';
+import { inativo } from './inativos.js';
 
 const frotaDo = estado => (Array.isArray(estado.frota) ? estado.frota : FROTA_INICIAL);
 const ativo = (o, fStatus) => statusDoVoo(o, fStatus) !== 'Cancelado';
@@ -360,7 +361,10 @@ export function opcoesDeAluno(estado, base, ambiente, contexto = {}) {
       instrutor && (stu.bl || []).includes(instrutor.id) ? ` · não voa com ${instrutor.nm}` : ''
     ].join('');
     const fora = pedidos.some(p => !naEscala.has(chaveDoVoo(stu.id, p.mid || 0)));
-    grupos[fora ? 0 : pedidos.length ? 1 : 2][1].push({ valor: stu.id, texto });
+    const grupo = fora ? 0 : pedidos.length ? 1 : 2;
+    // O aluno inativo no cadastro só aparece com um pedido na data (fora da escala ou nela), nunca em "Outros alunos"
+    if (grupo === 2 && inativo(stu)) continue;
+    grupos[grupo][1].push({ valor: stu.id, texto });
   }
   return grupos.filter(([, opcoes]) => opcoes.length).map(([rotulo, opcoes]) => ({ rotulo, opcoes }));
 }

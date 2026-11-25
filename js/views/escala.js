@@ -16,11 +16,12 @@ import { resultadoNaEscala } from './etapas.js';
 import { OPCOES_DE_BURACOS, OPCOES_DE_HORARIOS, normalizarCriterios } from '../criterios.js';
 import { metricasDaEscala } from '../metricas.js';
 import { sumUniqueOperationalHours, consolidateTimelineSlots } from '../engine.js';
-import { S, RES, AUDIT_LOG, TL_MODE, DATA, isGestor, dadoIndisponivel } from '../state.js';
+import { S, RES, AUDIT_LOG, TL_MODE, DATA, isGestor, dadoIndisponivel, estadoDaEscala, inativoNaDataAberta } from '../state.js';
 import { motivoDoFixo } from '../fixos.js';
 import { instrutoresDoVoo } from '../instrutor-escolhido.js';
 import { $, posicionarJunto, trocarConteudo, visivel } from '../dom.js';
 import { statusDoVoo, unidadeDoVoo } from '../voo.js';
+import { voosComInativos, textoDoVooComInativo } from '../inativos.js';
 
 export const HT = o => (o.isGround || isGroundMission(o.mis) ? DURACAO_DO_GROUND : fmtH(o.h) + (o.ss !== '1/1' ? ` (sessão ${o.ss})` : ''));
 
@@ -143,11 +144,11 @@ function linhasDoMapa(voos, porInstrutor, livres) {
 
 // O que a linha diz e faz: as horas do dia (no recurso, com o tipo antes). Nas vistas do mapa, o "+" que agenda nela (no
 // recurso ou com o instrutor) e o clique no espaço livre da faixa; o avião em manutenção fica apagado ("em manutenção"),
-// e ele, o recurso que saiu da frota e o instrutor fora do cadastro não agendam (a faixa fica inerte)
+// e ele, o recurso que saiu da frota, o instrutor fora do cadastro e o inativo não agendam (a faixa fica inerte)
 function detalhesDaLinha(linha, porInstrutor, mapa) {
   const horas = fmtH(sumUniqueOperationalHours(linha.voos, statusDe));
   if (porInstrutor) {
-    const agenda = mapa && S.ins.some(x => x.id === linha.chave);
+    const agenda = mapa && S.ins.some(x => x.id === linha.chave && !inativoNaDataAberta(x));
     return {
       sub: horas, dados: `data-ins="${esc(linha.chave)}"`, manutencao: false, inerte: mapa && !agenda,
       agendar: agenda ? { valor: `i:${linha.chave}`, nome: `Agendar com ${linha.rotulo}` } : null
@@ -156,10 +157,11 @@ function detalhesDaLinha(linha, porInstrutor, mapa) {
   const r = linha.chave, ground = r === GROUND_REG;
   const recurso = ground ? null : (S.frota || []).find(f => f.reg === r) || null;
   const manutencao = mapa && Boolean(recurso) && !S.av[r];
-  const agenda = mapa && (ground || (Boolean(recurso) && !manutencao));
+  const inativoAqui = mapa && Boolean(recurso) && inativoNaDataAberta(recurso);
+  const agenda = mapa && (ground || (Boolean(recurso) && !manutencao && !inativoAqui));
   const tipo = ground ? '' : (linha.voos.length ? linha.voos[0].eqType : recurso && recurso.tipo) || '';
   return {
-    sub: [tipo, horas, manutencao ? 'em manutenção' : ''].filter(Boolean).join(' · '), dados: `data-r="${esc(r)}"`, manutencao, inerte: mapa && !agenda,
+    sub: [tipo, horas, manutencao ? 'em manutenção' : '', inativoAqui ? 'inativo' : ''].filter(Boolean).join(' · '), dados: `data-r="${esc(r)}"`, manutencao, inerte: mapa && !agenda,
     agendar: agenda ? { valor: `r:${r}`, nome: `Agendar ${ground ? 'na Sala Ground' : `no ${r}`}` } : null
   };
 }
@@ -351,7 +353,7 @@ export function botaoDoInstrutor(o, rotulo) {
 // A lista do instrutor do voo: sem escolha, a primeira opção é quem o app pôs; os instrutores que não servem no horário
 // aparecem com o motivo, e o operador pode escolher mesmo assim (o voo fica em conflito, com as sugestões)
 export function seletorDeInstrutor(o, rotulo) {
-  const lista = instrutoresDoVoo(S, RES, o.fKey).filter(x => o.insEscolhido || x.id !== o.insId)
+  const lista = instrutoresDoVoo(estadoDaEscala(), RES, o.fKey).filter(x => o.insEscolhido || x.id !== o.insId)
     .map(x => `<option value="${x.id}"${o.insEscolhido && x.id === o.insId ? ' selected' : ''}>${esc(x.nota ? `${x.nm} (${x.nota})` : x.nm)}</option>`);
   const automatico = o.insEscolhido ? 'Automático (o app escolhe)' : `${o.ins} (${o.insPar ? 'Priorizar com do aluno' : 'escolhido pelo app'})`;
   return `<select class="ins-sel" data-a="insVoo" data-fkey="${esc(o.fKey)}" data-rotulo="${esc(rotulo)}" aria-label="${esc(rotulo)}"><option value=""${o.insEscolhido ? '' : ' selected'}>${esc(automatico)}</option>${lista.join('')}</select>`;
@@ -474,7 +476,19 @@ function resumo(out, al, tot) {
   const emConflito = S.aprovacao ? `${n} ${n === 1 ? 'voo em conflito' : 'voos em conflito'} na escala aprovada` : `${n} ${n === 1 ? 'voo fixo' : 'voos fixos'} em conflito`;
   if (n) h += `<details class="caixa conflitos" open><summary>${emConflito}</summary><ul>${conflitos.map(conflito).join('')}</ul></details>`;
   if (avisos.length) h += `<details class="caixa avisos"><summary>${resumoDosAvisos(avisos)}</summary><ul>${avisos.map(item).join('')}</ul></details>`;
-  return h + '</div>';
+  return h + caixaDosInativos(out) + '</div>';
+}
+
+// Os voos da escala com quem ficou inativo no cadastro (a escala gravada continua mostrando os voos dele até ser refeita):
+// um item por pessoa ou recurso. Com um instrutor ou um recurso, "Refazer a escala" a refaz sem ele; o voo do aluno inativo
+// não muda ao refazer (o pedido dele continua): ele se resolve na Demanda
+function caixaDosInativos(out) {
+  const itens = voosComInativos(S, { out }, { data: DATA, hoje: hojeISO() });
+  if (!itens.length) return '';
+  const n = itens.reduce((total, i) => total + i.voos, 0);
+  const linha = i => `<li class="al warn">${esc(textoDoVooComInativo(i))}${i.tipo === 'aluno' ? ' <button type="button" class="btn quiet" data-go="dem">Abrir a Demanda</button>' : ''}</li>`;
+  const refazer = itens.some(i => i.tipo !== 'aluno') ? '<button type="button" class="btn quiet edit-only" data-act="refazer-escala">Refazer a escala</button>' : '';
+  return `<details class="caixa avisos inativos" open><summary>${n} ${n === 1 ? 'voo' : 'voos'} com quem está inativo no cadastro</summary><ul>${itens.map(linha).join('')}</ul>${refazer}</details>`;
 }
 
 // Horários recolhidos na Lista (continuam assim quando a escala é refeita, até recarregar a página)
@@ -574,13 +588,13 @@ function filtrosDaEscala(out) {
 }
 
 // As linhas sem voo do mapa (só nas vistas do mapa), para agendar nelas: Por recurso, todos os recursos da frota e a sala
-// de Ground, na categoria do filtro; Por instrutor, os instrutores disponíveis no dia. Com um recurso escolhido ou uma
+// de Ground, na categoria do filtro; Por instrutor, os instrutores disponíveis no dia (os inativos, não). Com um recurso escolhido ou uma
 // busca (Por instrutor, também com uma categoria: o instrutor com voos só de outra categoria pareceria livre), só as linhas
 // com voos
 function linhasLivres({ categoria, daCategoria, recurso, texto }) {
   if (!vistaDoMapa() || recurso || texto) return [];
-  if (TL_MODE === 'ins') return categoria ? [] : S.ins.filter(x => x.on).map(x => [x.id, x.nm]);
-  return [...(S.frota || []).map(f => f.reg), GROUND_REG].filter(daCategoria).map(r => [r, nomeDoRecurso(r)]);
+  if (TL_MODE === 'ins') return categoria ? [] : S.ins.filter(x => x.on && !inativoNaDataAberta(x)).map(x => [x.id, x.nm]);
+  return [...(S.frota || []).filter(f => !inativoNaDataAberta(f)).map(f => f.reg), GROUND_REG].filter(daCategoria).map(r => [r, nomeDoRecurso(r)]);
 }
 
 // A escala é refeita a cada alteração (save em actions.js): aqui ela só é desenhada, na visão escolhida na barra.

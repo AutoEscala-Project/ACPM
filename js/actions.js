@@ -3,7 +3,7 @@ import { somarDias, fimDoMes, rotuloDaData, hojeISO, LIMITE_DO_NOME } from './fo
 import { aplicarSomenteLeitura } from './somente-leitura.js';
 import { runAllocationEngine } from './engine.js';
 import { ApiClient } from './storage.js';
-import { S, RES, AUDIT_LOG, BI_HISTORY, DATA, setS, setRES, setAuditLog, setBIHistory, setData, isGestor, dadoIndisponivel, modoCompartilhado } from './state.js';
+import { S, RES, AUDIT_LOG, BI_HISTORY, DATA, setS, setRES, setAuditLog, setBIHistory, setData, isGestor, dadoIndisponivel, modoCompartilhado, estadoDaEscala } from './state.js';
 import { $, mostrarAviso, avisoAberto, showToast } from './dom.js';
 import { comHorasExternas } from './limites.js';
 import { comRepousoDoNoturno } from './noturno.js';
@@ -364,7 +364,7 @@ function syncBIHistoryForCurrentDate() {
   }
 }
 
-// Escala da data calculada a partir dos dados da tela. Ela guarda a data para a qual foi feita (no modo
-// compartilhado, todos veem essa data)
-const escalaCalculada = () => ({ ...runAllocationEngine(S), data: DATA });
+// Escala da data calculada a partir dos dados da tela (sem os inativos do cadastro, de hoje em diante: estadoDaEscala). Ela
+// guarda a data para a qual foi feita (no modo compartilhado, todos veem essa data)
+const escalaCalculada = () => ({ ...runAllocationEngine(estadoDaEscala()), data: DATA });
 

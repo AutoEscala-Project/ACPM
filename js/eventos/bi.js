@@ -13,6 +13,7 @@ import { ApiClient } from '../storage.js';
 import { comConfirmacao } from './confirmacao.js';
 import { rBI } from '../views/bi.js';
 import { registrarDesenho } from '../redesenho.js';
+import { inativo } from '../inativos.js';
 
 // O desenho do BI (js/redesenho.js): a escala refeita entra no BI da data
 registrarDesenho('bi', rBI, { em: ['escala'], ordem: 90 });
@@ -36,8 +37,12 @@ comConfirmacao('#btn-bi-sim', 'Confirmar simulação', async () => {
   const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
   const pick = a => a[Math.floor(rnd() * a.length)];
   // Só missões que algum instrutor ativo pode fazer (sem checadores cadastrados, não há voo de cheque simulado)
-  const allMis = Object.keys(MIS).filter(m => S.ins.some(x => x.on && MIS[m].eq.some(eq => podeFazer(x, m, eq))));
-  const stuPool = S.stu.length ? S.stu : Array.from({ length: 15 }, (_, i) => ({ nm: pad(i) }));
+  // Só os ativos do cadastro (os inativos não voam)
+  const instrutores = S.ins.filter(x => !inativo(x));
+  const alunos = S.stu.filter(s => !inativo(s));
+  const frota = (S.frota || []).filter(f => !inativo(f));
+  const allMis = Object.keys(MIS).filter(m => instrutores.some(x => x.on && MIS[m].eq.some(eq => podeFazer(x, m, eq))));
+  const stuPool = alunos.length ? alunos : Array.from({ length: 15 }, (_, i) => ({ nm: pad(i) }));
 
   for (let dayOffset = 0; dayOffset < 30; dayOffset++) {
     const d = new Date(baseDate.getTime() - dayOffset * 864e5);
@@ -52,14 +57,14 @@ comConfirmacao('#btn-bi-sim', 'Confirmar simulação', async () => {
       const eqType = isGnd ? GROUND_EQ_TYPE : pick(MIS[mis].eq);
       // Um recurso da frota do tipo (o Parafuso no C152, num avião "Só Parafuso"); tipo sem recurso: sem esse voo.
       // Com um recurso só (a sala de Ground, o avião do Parafuso), não há sorteio
-      const doTipo = isGnd ? [GROUND_REG] : matriculasDoTipo(S.frota, eqType, { parafuso: mis === 'Parafuso' });
+      const doTipo = isGnd ? [GROUND_REG] : matriculasDoTipo(frota, eqType, { parafuso: mis === 'Parafuso' });
       if (!doTipo.length) continue;
       const reg = doTipo.length === 1 ? doTipo[0] : pick(doTipo);
       // Grounds simulados com os instrutores menos habilitados (até o nível 2)
       const qualIns = isGnd
-        ? S.ins.filter(x => podeFazer(x, mis, eqType) && x.hab.length <= habilitacoesDoNivel(2).length)
-        : S.ins.filter(x => podeFazer(x, mis, eqType));
-      const ins = pick(qualIns.length ? qualIns : S.ins);
+        ? instrutores.filter(x => podeFazer(x, mis, eqType) && x.hab.length <= habilitacoesDoNivel(2).length)
+        : instrutores.filter(x => podeFazer(x, mis, eqType));
+      const ins = pick(qualIns.length ? qualIns : instrutores);
       const stu = pick(stuPool);
       const h = isGnd ? GROUND_DURATION_H : 1 + Math.floor(rnd() * 3);
       const durMin = isGnd ? GROUND_DURATION_MIN : h * 60;

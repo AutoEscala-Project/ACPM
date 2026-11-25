@@ -8,7 +8,7 @@ import { fmtH, lerHoras } from '../format.js';
 import { novoRecurso, ATRIBUTOS_DO_RECURSO, atributoVale, comAtributo } from '../frota.js';
 import { normalizarHangar, moverNoHangar } from '../hangar.js';
 import { horariosDaMissao, ajustarPreferencias, descreverHorarios } from '../horarios.js';
-import { S, isGestor, getMissionTarget } from '../state.js';
+import { S, isGestor, getMissionTarget, inativoNaDataAberta } from '../state.js';
 import { confirmado } from './confirmacao.js';
 import { aoAcionar, aoMudarCampo, aoReverter } from './registro.js';
 import { registrarDesenho, redesenharPorNome } from '../redesenho.js';
@@ -175,7 +175,7 @@ aoAcionar('retirar-recurso', b => {
 aoAcionar(['hangar-subir', 'hangar-descer', 'hangar-frente'], b => {
   const a = b.dataset.act;
   const r = b.dataset.id;
-  S.hangar = moverNoHangar(normalizarHangar(S.hangar, S.frota), r, a.slice('hangar-'.length));
+  S.hangar = moverNoHangar(normalizarHangar(S.hangar, S.frota.filter(f => !inativoNaDataAberta(f))), r, a.slice('hangar-'.length));
   gravarAlteracao('mod', `Hangar: ${r} passou para ${S.hangar.indexOf(r) + 1}º`);
   rHangar();
 });

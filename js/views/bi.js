@@ -3,7 +3,7 @@
 import { GROUND_EQ_TYPE, GROUND_REG, MIS } from '../config.js';
 import { fmtH, esc, chaveDeBusca } from '../format.js';
 import { isGroundMission, migrateLegacyMissionName } from '../rules.js';
-import { S, BI_HISTORY } from '../state.js';
+import { S, BI_HISTORY, inativoNaDataAberta } from '../state.js';
 import { categoriaDoTipo, nomeDoRecurso } from '../categorias.js';
 import { $ } from '../dom.js';
 
@@ -37,11 +37,15 @@ export function rBI() {
 
   const eqStats = {};
   const frota = S.frota || [];
-  frota.forEach(({ reg, tipo }) => { eqStats[reg] = { reg, type: tipo, d: 0, w: 0, m: 0, flightsM: 0 }; });
+  // Os números do alto contam os ativos (os recursos e os instrutores inativos no cadastro não contam)
+  const ativos = frota.filter(f => !inativoNaDataAberta(f));
+  const instrutoresAtivos = S.ins.filter(x => !inativoNaDataAberta(x));
+  ativos.forEach(({ reg, tipo }) => { eqStats[reg] = { reg, type: tipo, d: 0, w: 0, m: 0, flightsM: 0 }; });
   eqStats[GROUND_REG] = { reg: GROUND_REG, type: GROUND_EQ_TYPE, d: 0, w: 0, m: 0, flightsM: 0 };
 
   const insStats = {};
-  S.ins.forEach(x => { insStats[x.nm] = { nm: x.nm, on: x.on, d: 0, w: 0, m: 0, flightsM: 0 }; });
+  // O instrutor inativo sem horas no período não tem linha; com horas, a linha fica (as horas vêm das escalas)
+  S.ins.filter(x => !inativoNaDataAberta(x)).forEach(x => { insStats[x.nm] = { nm: x.nm, on: x.on, d: 0, w: 0, m: 0, flightsM: 0 }; });
 
   const misStats = {};
   Object.keys(MIS).forEach(m => { misStats[m] = { mis: m, d: 0, w: 0, m: 0 }; });
@@ -124,7 +128,7 @@ export function rBI() {
       <div><strong>${fmtH(totH_D)}</strong>No dia (${fmtDateBR})<small>${totF_D} voos/aulas ativas</small></div>
       <div><strong>${fmtH(totH_W)}</strong>Na semana (7 dias)<small>${totF_W} voos/aulas ativas</small></div>
       <div><strong>${fmtH(totH_M)}</strong>No mês (${refMonth.split('-').reverse().join('/')})<small>${daysRecordedInMonth} dias registrados</small></div>
-      <div><strong>${frota.filter(f => S.av[f.reg]).length}/${frota.length}</strong>Recursos disponíveis<small>${S.ins.filter(x => x.on).length}/${S.ins.length} instrutores</small></div>
+      <div><strong>${ativos.filter(f => S.av[f.reg]).length}/${ativos.length}</strong>Recursos disponíveis<small>${instrutoresAtivos.filter(x => x.on).length}/${instrutoresAtivos.length} instrutores</small></div>
     </div>
 
     <div class="bi-grid-2">
@@ -139,6 +143,7 @@ export function rBI() {
                 const naFrota = frota.find(f => f.reg === e.reg);
                 const disp = e.reg === GROUND_REG ? ''
                   : !naFrota ? ' <span class="tag">Retirado</span>'
+                  : inativoNaDataAberta(naFrota) ? ' <span class="tag">Inativo</span>'
                   : !S.av[e.reg] ? ' <span class="tag fb">Manut.</span>' : '';
                 const acro = naFrota && naFrota.soParafuso ? ' <span class="tag">Acrobat</span>' : '';
                 return `<tr>

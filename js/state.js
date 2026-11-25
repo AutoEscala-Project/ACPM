@@ -2,6 +2,8 @@
 // leia-as diretamente e use os setters para substituí-las.
 import { ApiClient } from './storage.js';
 import { pedidoDoAluno } from './voo.js';
+import { hojeISO } from './format.js';
+import { estadoParaEscalar, inativo, inativoValeEm } from './inativos.js';
 
 export let S = ApiClient.createFreshState();
 export let RES = null;
@@ -37,3 +39,9 @@ export function getMissionTarget(stuId, mid = 0) {
   const s = stuBy(stuId);
   return s ? pedidoDoAluno(s, mid) || null : null;
 }
+
+// O estado que a escala da data aberta lê (o motor, a simulação do agendamento, as listas da Escala, da Demanda e das
+// Sugestões): de hoje em diante, sem os inativos do cadastro (js/inativos.js). Nunca é gravado: quem muda os dados muda S
+export const estadoDaEscala = () => estadoParaEscalar(S, { data: DATA, hoje: hojeISO() });
+// O aluno, o instrutor ou o recurso inativo no cadastro, na data aberta (de hoje em diante)
+export const inativoNaDataAberta = item => inativo(item) && inativoValeEm(DATA, hojeISO());

@@ -8,7 +8,7 @@ import { WIN, NI, AIRCRAFT_EQ_TYPES, SIM_EQ_TYPES, REVISAO_H } from '../config.j
 import { normalizarHangar } from '../hangar.js';
 import { FROTA_INICIAL, ATRIBUTOS_DO_RECURSO, atributoVale, exigenciasDoAviao, habilitacaoDoAviao } from '../frota.js';
 import { nomeDaHabilitacao } from '../habilitacoes.js';
-import { S, RES, voosQueVoam, isGestor } from '../state.js';
+import { S, RES, voosQueVoam, isGestor, inativoNaDataAberta } from '../state.js';
 import { $, trocarConteudo } from '../dom.js';
 import { hm, fmtH, esc } from '../format.js';
 import { rHorarios } from './horarios.js';
@@ -158,7 +158,8 @@ export function rRec() {
 export function rHangar() {
   const lista = $('#hangar');
   if (!lista) return;
-  const frota = S.frota || FROTA_INICIAL;
+  // Na data em que o inativo vale, a ordem é a dos ativos: o inativo sai e volta no fundo (js/inativos.js)
+  const frota = (S.frota || FROTA_INICIAL).filter(f => !inativoNaDataAberta(f));
   const hangar = normalizarHangar(S.hangar, frota);
   const voos = voosQueVoam();
   trocarConteudo(lista, hangar.map((r, i) => {
