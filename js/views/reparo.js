@@ -1,14 +1,16 @@
 // Gaveta das sugestões para um conflito na escala aprovada: o voo, o motivo do conflito e o que pode voar no lugar,
 // cada sugestão com "Aplicar"; soltar o voo (o app escala de novo); por último, cancelar o voo (pede o motivo, como no
-// status). Na escala de hoje, só horários que ainda não passaram
-import { RES, DATA, estadoDaEscala } from '../state.js';
-import { sugerirReparos } from '../reparo.js';
+// status). Também para o voo cancelado (aproveitar o voo: js/reparo.js, sugerirParaCancelado), com o motivo do
+// cancelamento e, sem nada, "Impossível nesta data" com o porquê. Na escala de hoje, só horários que ainda não passaram
+import { S, RES, DATA, estadoDaEscala } from '../state.js';
+import { sugerirReparos, sugerirParaCancelado, cancelamentoAproveitavel } from '../reparo.js';
 import { GRUPO_DO_CONFLITO } from '../conflitos.js';
 import { nomeDoRecurso } from '../categorias.js';
 import { esc, hm, hojeISO, minutoDoDia } from '../format.js';
 import { $, abrirGaveta } from '../dom.js';
 
 let opcoesAbertas = [];
+let doCancelado = false;
 
 const vooDaChave = fKey => (RES && Array.isArray(RES.out) ? RES.out.find(o => o.fKey === fKey) : null);
 
@@ -18,7 +20,9 @@ const painelDeReparoAberto = () => Boolean($('#painel-reparo') && !$('#painel-re
 // sem focar, a gaveta aberta é redesenhada no lugar em que está
 export function abrirPainelDeReparo(fKey, { focar = true } = {}) {
   const voo = vooDaChave(fKey);
+  if (voo && !voo.conflito && cancelamentoAproveitavel(S, voo, { data: DATA, hoje: hojeISO() })) { abrirParaCancelado(voo, { focar }); return; }
   if (!voo || !voo.conflito) return;
+  doCancelado = false;
   const painel = $('#painel-reparo');
   opcoesAbertas = sugerirReparos(estadoDaEscala(), RES, fKey, { depoisDe: DATA === hojeISO() ? minutoDoDia() : null });
   painel.dataset.fkey = fKey;
@@ -44,6 +48,33 @@ export function abrirPainelDeReparo(fKey, { focar = true } = {}) {
   if (focar && primeiro) primeiro.focus();
 }
 
+// O voo cancelado: o que pode voar no lugar dele, cada sugestão com "Aplicar" (a que pede a confirmação com o aluno diz
+// por quê, e o primeiro clique só arma o botão); sem nada, "Impossível nesta data", com o porquê de cada grupo
+function abrirParaCancelado(voo, { focar }) {
+  const painel = $('#painel-reparo');
+  const { opcoes, impossivel } = sugerirParaCancelado(estadoDaEscala(), RES, voo.fKey, { depoisDe: DATA === hojeISO() ? minutoDoDia() : null });
+  opcoesAbertas = opcoes;
+  doCancelado = true;
+  painel.dataset.fkey = voo.fKey;
+  const detalhe = (S.fObs || {})[voo.fKey];
+  painel.innerHTML = `<div class="gaveta-cab">
+      <h2 id="painel-reparo-titulo">Aproveitar o voo cancelado <small>${esc(voo.s)}</small></h2>
+      <button class="x" type="button" id="btn-fechar-reparo" aria-label="Fechar as sugestões">✕</button>
+    </div>
+    <p class="h">${[`${hm(voo.a)}–${hm(voo.b)}`, voo.mis, nomeDoRecurso(voo.r), voo.ins].map(esc).join(' · ')}</p>
+    <p class="motivo-conflito"><b>Cancelado:</b> ${esc(detalhe && detalhe.motivo ? detalhe.motivo : 'sem o motivo')}.</p>
+    ${opcoes.length
+    ? `<p class="h">O que pode voar no lugar, sem mexer nos outros voos. Aplicada, a sugestão volta o voo para Pendente, no lugar dela, e fica no histórico (dá para reverter).</p>
+      <ol class="opcoes-reparo">${opcoes.map((o, i) => `<li class="${esc(o.tipo)}">
+        <span>${esc(o.texto)}${o.confirmar ? `<small class="confirmar-aluno">${esc(o.confirmar)}</small>` : ''}</span>
+        <button type="button" class="btn" data-reparo-aplicar="${i}"${o.confirmar ? ' data-confirmar' : ''}>Aplicar</button>
+      </li>`).join('')}</ol>`
+    : `<p class="motivo-conflito"><b>Impossível nesta data.</b></p><ul class="impossivel">${impossivel.map(t => `<li>${esc(t)}</li>`).join('')}</ul>`}`;
+  if (focar || painel.hidden) abrirGaveta(painel);
+  const primeiro = painel.querySelector('[data-reparo-aplicar]') || painel.querySelector('#btn-fechar-reparo');
+  if (focar && primeiro) primeiro.focus();
+}
+
 // devolverFoco: volta ao botão "Sugestões" do voo (quando ele ainda está na tela)
 export function fecharPainelDeReparo(devolverFoco = false) {
   const painel = $('#painel-reparo');
@@ -57,13 +88,13 @@ export function fecharPainelDeReparo(devolverFoco = false) {
 export function opcaoDoPainel(i) {
   const fKey = $('#painel-reparo').dataset.fkey;
   const voo = vooDaChave(fKey), opcao = opcoesAbertas[i];
-  return voo && opcao ? { fKey, voo, opcao } : null;
+  return voo && opcao ? { fKey, voo, opcao, cancelado: doCancelado } : null;
 }
 
 // A escala mudou com a gaveta aberta: as sugestões são refeitas; sem o conflito, a gaveta fecha
 export function atualizarPainelDeReparo() {
   if (!painelDeReparoAberto()) return;
   const voo = vooDaChave($('#painel-reparo').dataset.fkey);
-  if (voo && voo.conflito) abrirPainelDeReparo(voo.fKey, { focar: false });
+  if (voo && (voo.conflito || (doCancelado && cancelamentoAproveitavel(S, voo, { data: DATA, hoje: hojeISO() })))) abrirPainelDeReparo(voo.fKey, { focar: false });
   else fecharPainelDeReparo();
 }

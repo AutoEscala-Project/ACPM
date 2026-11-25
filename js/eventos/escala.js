@@ -8,7 +8,7 @@ import { $, showToast, anunciar, algumDialogoAberto, gavetaDoEsc, focarNoTitulo 
 import { exp, pdf, planilha } from '../export.js';
 import { fixosAoMudarStatus, fixosAoReabrir, fixosAoAprovar, normalizarFixos } from '../fixos.js';
 import { hm, hojeISO } from '../format.js';
-import { aplicarReparo } from '../reparo.js';
+import { aplicarReparo, aproveitarCancelado, desfazerAproveitamento } from '../reparo.js';
 import { S, RES, DATA, AUDIT_LOG, isGestor, modoCompartilhado, insBy } from '../state.js';
 import { escolherInstrutor, escolhasDaUnidade, escolherNosPedidos, reverterEscolha, reverterReparo } from '../instrutor-escolhido.js';
 import { agendamentosEmVolta } from '../reversoes.js';
@@ -260,7 +260,19 @@ document.addEventListener('click', e => {
   if (!botao || isGestor() || aindaNaoAbriu()) return;
   const escolha = opcaoDoPainel(+botao.dataset.reparoAplicar);
   if (!escolha) return;
-  const { fKey, voo, opcao } = escolha;
+  const { fKey, voo, opcao, cancelado } = escolha;
+  // O voo cancelado aproveitado: a sugestão fora da disponibilidade do pedido ou em outro tipo pede a confirmação com o
+  // aluno (dois cliques); aplicada, o voo fica fixo no lugar dela e volta para Pendente, e o pedido muda com ela
+  if (cancelado) {
+    if (opcao.confirmar && !confirmado(botao, 'Confirmei com o aluno')) return;
+    fecharPainelDeReparo();
+    const rev = aproveitarCancelado(S, RES, fKey, opcao);
+    if (!rev) return;
+    gravarAlteracao('mod', `Voo cancelado aproveitado: ${voo.s} (${hm(voo.a)}–${hm(voo.b)}): ${opcao.texto}`, { ...rev, label: '↶ Reverter' });
+    redesenharPorNome('pedidos-do-dia');
+    showToast('Voo aproveitado: ele volta para Pendente, no lugar da sugestão.', 'ok');
+    return;
+  }
   fecharPainelDeReparo();
   if (!opcao.mudancas && !opcao.soltar) {
     pedirDetalheDoStatus({ voo, status: 'Cancelado', detalhe: opcao.motivo ? { motivo: opcao.motivo } : null, aoConfirmar: detalhe => aplicarStatus(fKey, 'Cancelado', detalhe) });
@@ -288,6 +300,13 @@ document.addEventListener('keydown', e => {
 });
 
 // "↶ Reverter" no histórico (js/eventos/historico.js): os tipos desta tela. A reversão chega validada (js/reversoes.js)
+// O voo cancelado aproveitado, desfeito: o pino, o status, o motivo e o pedido de antes
+aoReverter('aproveitarCancelado', (rev, entry) => {
+  desfazerAproveitamento(S, rev);
+  S.fixos = normalizarFixos(S.fixos);
+  redesenharPorNome('pedidos-do-dia');
+  gravarAlteracao('mod', `Revertido: ${entry.desc}`, null, entry.id);
+});
 aoReverter('restaurarFixos', (rev, entry) => {
   // Um reparo desfeito: os voos voltam a ser fixos como antes dele, e o instrutor escolhido dos pedidos também. O voo
   // agendado volta só enquanto o agendamento continua: o histórico diz qual foi desfeito ou feito depois do reparo

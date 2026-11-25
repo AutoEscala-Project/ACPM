@@ -18,6 +18,7 @@ import { metricasDaEscala } from '../metricas.js';
 import { ligada } from '../funcionalidades.js';
 import { sumUniqueOperationalHours, consolidateTimelineSlots } from '../engine.js';
 import { S, RES, AUDIT_LOG, TL_MODE, EIXO_INVERTIDO, OCULTAR_INDISPONIVEIS, DATA, isGestor, dadoIndisponivel, estadoDaEscala, inativoNaDataAberta } from '../state.js';
+import { cancelamentoAproveitavel } from '../reparo.js';
 import { motivoDoFixo } from '../fixos.js';
 import { instrutoresDoVoo } from '../instrutor-escolhido.js';
 import { $, posicionarJunto, trocarConteudo, visivel } from '../dom.js';
@@ -59,7 +60,7 @@ function conteudoDoPopup(o) {
         <select class="st-sel st-${classeDoStatus(st)}" data-f="fstatus" data-fkey="${esc(principal.fKey)}" aria-label="Status do voo"${isGestor() ? ' disabled' : ''}>
           ${FLIGHT_STATUSES.map(v => `<option value="${v}"${v === st ? ' selected' : ''}>${rotuloDoStatus(v, principal)}</option>`).join('')}
         </select>
-        ${detalheDoStatus(principal)}
+        ${detalheDoStatus(principal)}${st === 'Cancelado' ? botaoDoCancelado(principal) : ''}
       </span>
     </div>
     ${ehGround(o) && ativos.length ? `<button type="button" class="tl-pop-btn edit-only" data-act="agendar" data-agendar="t:${esc(unidadeDoVoo(o))}" aria-haspopup="dialog">+ Aluno na turma</button>` : ''}
@@ -373,6 +374,11 @@ function detalheDoStatus(o) {
     : `<button type="button" class="st-detalhe" data-act="detalhe-status" data-fkey="${esc(o.fKey)}" title="Alterar o detalhe do status">${esc(texto)}</button>`;
 }
 
+// "Sugestões" no voo cancelado que ainda pode voar (a data aberta de hoje em diante, sem resultado, sem "Aluno ausente")
+const botaoDoCancelado = o => (cancelamentoAproveitavel(S, o, { data: DATA, hoje: hojeISO() })
+  ? ` <button type="button" class="btn quiet edit-only" data-reparo="${esc(o.fKey)}" title="O que pode voar no lugar deste voo cancelado">Sugestões</button>`
+  : '');
+
 const acao = o => (o.stuId && !o.trecho
   ? `<button class="x" data-act="rm-fly" data-id="${esc(o.stuId)}" data-mid="${esc(o.mid || 0)}" aria-label="Tirar ${esc(o.s)} da escala" title="Tirar da escala">✕</button>`
   : '');
@@ -567,11 +573,11 @@ function tabela(voos, al) {
       <td class="c-aviao nw"${rs}>${esc(nomeDoRecurso(o.r))}${ehGround(o) ? '' : ` <small>${esc(o.eqType || '')}</small>`}</td>
       <td class="c-instr nw"${rs}>${botaoDoInstrutor(o, `Instrutor de ${grupo.length > 1 ? `${o.mis} (turma)` : o.s}`)}</td>
       <td class="c-peso nw"${rs}>${peso(o)}</td>
-      <td class="c-status">${seletorDeStatus(o)}${resultadoNaEscala(o)}</td>
+      <td class="c-status">${seletorDeStatus(o)}${resultadoNaEscala(o)}${botaoDoCancelado(o)}</td>
       <td class="c-acao edit-only acao">${acao(o)}</td>
     </tr>`;
     for (const aluno of grupo.slice(1)) {
-      h += `<tr class="membro${statusDe(aluno) === 'Cancelado' ? ' st-Cancelado' : ''}"${doTempo}><td class="c-aluno"><b>${esc(aluno.s)}</b></td><td class="c-status">${seletorDeStatus(aluno)}${resultadoNaEscala(aluno)}</td><td class="c-acao edit-only acao">${acao(aluno)}</td></tr>`;
+      h += `<tr class="membro${statusDe(aluno) === 'Cancelado' ? ' st-Cancelado' : ''}"${doTempo}><td class="c-aluno"><b>${esc(aluno.s)}</b></td><td class="c-status">${seletorDeStatus(aluno)}${resultadoNaEscala(aluno)}${botaoDoCancelado(aluno)}</td><td class="c-acao edit-only acao">${acao(aluno)}</td></tr>`;
     }
   }
   return h + '</tbody></table></div>';
