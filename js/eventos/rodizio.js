@@ -5,9 +5,11 @@ import { S, insBy, inativoNaDataAberta } from '../state.js';
 import { aoAcionar } from './registro.js';
 import { rRodizio } from '../views/rodizio.js';
 import { registrarDesenho } from '../redesenho.js';
+import { registrarTela } from '../views/telas.js';
 
 // O desenho do Rodízio (js/redesenho.js): outra data mostra as filas dela
 registrarDesenho('rodizio', rRodizio, { em: ['dados'], ordem: 50 });
+registrarTela('rod', { aoMostrar: () => rRodizio() });
 
 aoAcionar(['fila-subir', 'fila-descer', 'fila-inicio'], b => {
   const a = b.dataset.act;

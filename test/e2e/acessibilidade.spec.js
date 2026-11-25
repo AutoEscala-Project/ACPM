@@ -1,6 +1,6 @@
 // Acessibilidade: cada botão e cada campo tem um nome para o leitor de tela, e nenhum se chama só "✕" (que o leitor
 // lê como "multiplicação"). Vale para todas as abas, o Histórico e o painel de habilitações.
-import { test, expect, abrir, abrirComExemplo, irPara, entrar, abrirEscala, abrirCaixa, prepararContexto, vigiarErros, REGIOES, abasVisiveis, abrirHistorico, aprovar, botaoAprovar, botaoDiaAnterior, botaoDoHistorico, botaoDoMenuDaConta, percorrerTelas, relativoDaData, rotuloDaData, semNome, alternarVem, botaoDiaSeguinte, campoDaData } from './fixtures.js';
+import { test, expect, abrir, abrirComExemplo, irPara, entrar, abrirEscala, abrirCaixa, prepararContexto, vigiarErros, REGIOES, abasVisiveis, abrirHistorico, aprovar, botaoAprovar, botaoDiaAnterior, botaoDoHistorico, botaoDoMenuDaConta, percorrerTelas, relativoDaData, rotuloDaData, semNome, alternarVem, botaoDiaSeguinte, campoDaData , botoesDasAbas } from './fixtures.js';
 import { instalarSupabaseFalso, documentosAtuais, CONTAS } from './supabase-falso.js';
 import { comExemplo } from '../helpers/exemplo.js';
 import { estadoSintetico } from '../helpers/estado.js';
@@ -38,9 +38,10 @@ test.describe('O foco do teclado na barra do topo', () => {
       await abrirComExemplo(page);
       await page.evaluate(t => { document.documentElement.dataset.theme = t; }, tema);
       const fundo = await page.locator('header.topo').evaluate(el => getComputedStyle(el).backgroundColor);
-      const controles = page.locator('header.topo :is(button, select):visible:not(:disabled)');
+      // A data (as setas), o perfil, o Histórico, o Manual (um link) e o menu da conta
+      const controles = page.locator('header.topo :is(button, select, a[href]):visible:not(:disabled)');
       const total = await controles.count();
-      expect(total).toBeGreaterThan(8);
+      expect(total).toBeGreaterThanOrEqual(6);
       const fracos = [];
       for (let i = 0; i < total; i++) {
         const controle = controles.nth(i);
@@ -281,10 +282,10 @@ test.describe('O leitor de tela e o teclado', () => {
   test('a aba aberta (e o Manual), a vista escolhida e o dia da agenda são ditos, não só coloridos', async ({ page }) => {
     await abrirComExemplo(page);
     const atual = page.locator('[aria-current="page"]');
-    await expect(atual).toHaveAttribute('data-t', 'esc');
+    await expect(atual).toHaveAttribute('href', '#/esc');
     await irPara(page, 'dem');
     await expect(atual).toHaveCount(1);
-    await expect(atual).toHaveAttribute('data-t', 'dem');
+    await expect(atual).toHaveAttribute('href', '#/dem');
     await page.locator('#btn-manual').click();
     await expect(atual).toHaveCount(1);
     await expect(atual).toHaveId('btn-manual');
@@ -300,7 +301,7 @@ test.describe('O leitor de tela e o teclado', () => {
     // Cursos é uma aba, não uma vista de Alunos: a aba aberta é a atual
     await irPara(page, 'cur');
     await expect(atual).toHaveCount(1);
-    await expect(atual).toHaveAttribute('data-t', 'cur');
+    await expect(atual).toHaveAttribute('href', '#/cur');
     // O dia escolhido no calendário da agenda, e o que passa a ser escolhido
     await irPara(page, 'age');
     const escolhido = page.locator('#agenda-cal [aria-current="date"]');
@@ -562,11 +563,46 @@ test.describe('O leitor de tela e o teclado', () => {
       expect(fracos).toEqual([]);
     });
 
-    test(`o selo vermelho da aba (missões que não entraram na escala) contrasta, no tema ${nome}`, async ({ page }) => {
+    // Os tokens da casca (F1a): o símbolo sobre o disco de cada estado, o disco e o anel sobre o cartão, a linha selecionada
+    // e os avatares (F2), com as cores como o navegador as resolve no tema: todos com 4,5:1
+    test(`os tokens dos estados, da seleção e dos avatares contrastam, no tema ${nome}`, async ({ page }) => {
+      await abrir(page);
+      await page.evaluate(t => { document.documentElement.dataset.theme = t; }, tema);
+      const pares = [
+        ['--okT', '--ok', 4.5], ['--waT', '--wa', 4.5], ['--erT', '--er', 4.5], ['--anT', '--an', 4.5],
+        ['--ok', '--pn', 4.5], ['--wa', '--pn', 4.5], ['--er', '--pn', 4.5], ['--an', '--pn', 4.5], ['--pe', '--pn', 4.5],
+        ['--ink', '--sel', 4.5], ['--mu', '--sel', 4.5],
+        ['--avT', '--av1', 4.5], ['--avT', '--av2', 4.5], ['--avT', '--av3', 4.5], ['--avT', '--av4', 4.5], ['--avT', '--av5', 4.5]
+      ];
+      const cores = await page.evaluate(nomes => {
+        const el = document.createElement('span');
+        document.body.append(el);
+        const cor = nome => { el.style.color = `var(${nome})`; return getComputedStyle(el).color; };
+        const lidas = Object.fromEntries(nomes.map(n => [n, cor(n)]));
+        el.remove();
+        return lidas;
+      }, [...new Set(pares.flat().filter(x => typeof x === 'string'))]);
+      const fracos = pares.filter(([a, b, minimo]) => razaoDeContraste(cores[a], cores[b]) < minimo)
+        .map(([a, b]) => `${a} sobre ${b}: ${razaoDeContraste(cores[a], cores[b]).toFixed(2)}`);
+      expect(fracos).toEqual([]);
+    });
+
+    // O disco "falhou" do cartão da Escala (missões que não entraram): o símbolo contrasta com o disco, e o anel do foco dos
+    // links da linha, com a página
+    test(`o disco de "falhou" na linha contrasta, e o anel do foco dos links da linha também, no tema ${nome}`, async ({ page }) => {
       await abrir(page, { estado: cenario({ ins: [instrutor(1, 1)], stu: [aluno(1000, { mis: 'Multimotor', eq: 'PA-34' })] }) });
       await page.evaluate(t => { document.documentElement.dataset.theme = t; }, tema);
-      await expect(page.locator('#selo-esc')).toHaveClass(/\berro\b/);
-      expect(await contrastesFracos([['selo da aba', page.locator('#selo-esc')]])).toEqual([]);
+      const disco = page.locator('#linha li.estagio[data-estagio="escala"] .estagio-titulo .estado');
+      await expect(disco).toHaveAttribute('data-estado', 'falhou');
+      expect(await contrastesFracos([['disco falhou', disco]])).toEqual([]);
+      const fundo = await page.locator('body').evaluate(el => getComputedStyle(el).backgroundColor);
+      const fracos = [];
+      for (const link of await botoesDasAbas(page, { visiveis: true }).all()) {
+        await link.focus();
+        const anel = await link.evaluate(el => getComputedStyle(el).outlineColor);
+        if (razaoDeContraste(anel, fundo) < 3) fracos.push(await link.getAttribute('href'));
+      }
+      expect(fracos).toEqual([]);
     });
   }
 

@@ -929,7 +929,7 @@ export function runAllocationEngine(state, opcoes = {}) {
       if (isParafuso && d.eq === 'C152' && !soParafuso.some(r => state.av[r])) {
         [codigo, why] = ['so-parafuso', soParafuso.length
           ? `o ${nomesSoParafuso} (só para Parafuso no C152) está em manutenção`
-          : 'não há na frota um C152 marcado como “Só Parafuso” (aba Recursos)'];
+          : 'não há na frota um C152 marcado como “Só Parafuso” (em Recursos)'];
       } else if (frota.some(f => f.tipo === d.eq && state.av[f.reg] && motivoDoAviao(f, vooDoPedido) === 'so-vfr') && !fleetPool.some(r => state.av[r])) {
         [codigo, why] = ['sem-aviao', `nenhum ${d.eq} homologado IFR disponível (o voo é IFR; os disponíveis são “Só VFR”)`];
       } else if (!fleetPool.some(r => state.av[r])) {

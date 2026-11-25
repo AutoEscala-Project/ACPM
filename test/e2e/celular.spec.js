@@ -25,22 +25,22 @@ test.describe('Celular', () => {
     await percorrerTelas(page, async tela => expect(await alvosPequenos(page), tela).toEqual([]));
   });
 
-  // A faixa das abas rola para o lado no celular: a aba aberta pelo "Abrir a Demanda" (Alunos) aparece nela, com a marca
-  // da aba aberta à vista (sem isso, a faixa continuava em Alunos, e nenhuma aba à vista parecia aberta)
-  test('"Abrir a Demanda" traz a aba Demanda para a parte à vista da faixa das abas', async ({ page }) => {
+  // A linha vira uma faixa que rola para o lado no celular: a tela aberta pelo "Abrir a Demanda" (Alunos) aparece nela, com
+  // a marca da tela aberta à vista (sem isso, a faixa continuava onde estava, e nenhum link à vista parecia aberto)
+  test('"Abrir a Demanda" traz a Demanda para a parte à vista da faixa da linha', async ({ page }) => {
     await abrirComExemplo(page);
     await irPara(page, 'alu');
     const naFaixa = aba => botaoDaAba(page, aba).evaluate(b => {
-      const r = b.getBoundingClientRect(), faixa = b.closest('#nav').getBoundingClientRect();
+      const r = b.getBoundingClientRect(), faixa = b.closest('.linha-corpo').getBoundingClientRect();
       return r.left >= faixa.left - 0.5 && r.right <= faixa.right + 0.5;
     });
-    // A faixa rolada até o fim, como depois de tocar numa das últimas abas: a Demanda fica fora, à esquerda
-    await page.locator('#nav').evaluate(faixa => { faixa.scrollLeft = faixa.scrollWidth; });
     expect(await naFaixa('alu')).toBe(true);
+    // A faixa rolada até o fim, como depois de tocar num dos últimos links: a Demanda fica fora, à esquerda
+    await page.locator('#linha .linha-corpo').evaluate(faixa => { faixa.scrollLeft = faixa.scrollWidth; });
     expect(await naFaixa('dem')).toBe(false);
-    await page.getByRole('button', { name: 'Abrir a Demanda' }).click();
+    await page.getByRole('link', { name: 'Abrir a Demanda' }).click();
     await expect(page.locator('#s-dem h2')).toBeFocused();
-    await expect(botaoDaAba(page, 'dem')).toHaveClass(/\bon\b/);
+    await expect(botaoDaAba(page, 'dem')).toHaveAttribute('aria-current', 'page');
     await expect.poll(() => naFaixa('dem')).toBe(true);
     expect(await larguraDaPagina(page)).toBeLessThanOrEqual(390);
   });

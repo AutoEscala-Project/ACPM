@@ -2,18 +2,19 @@
 // conta, Usuários, o tema e o Manual) e o aviso dos dados que não foram lidos
 import { setRole, carregarData, lerDadosDeNovo } from '../actions.js';
 import { ehDomingo } from '../agenda.js';
-import { $, showToast, ligarMenu, focarNoTitulo } from '../dom.js';
+import { $, showToast, ligarMenu } from '../dom.js';
 import { somarDias, dataIsoValida } from '../format.js';
 import { DATA, isGestor, modoCompartilhado } from '../state.js';
 import { ApiClient } from '../storage.js';
 import { abrirConta } from '../views/conta.js';
 import { rManual } from '../views/manual.js';
-import { atualizarSelosDaEscala } from '../views/selos.js';
-import { show } from '../views/tabs.js';
+import { atualizarSelos } from '../views/selos.js';
 import { registrarDesenho, redesenharPorNome } from '../redesenho.js';
+import { registrarTela, escolherTela } from '../views/telas.js';
+import { gerenciaContas } from '../perfis.js';
 
-// Os selos das abas (js/redesenho.js): os dados de outra data e a escala refeita
-registrarDesenho('selos', atualizarSelosDaEscala, { em: ['dados', 'escala'], ordem: 99 });
+// Os selos que ficam fora da linha (js/views/selos.js): o de Recursos na Disponibilidade do dia e o botão de importar
+registrarDesenho('selos', atualizarSelos, { em: ['dados', 'escala', 'perfil', 'pedidos'], ordem: 99 });
 
 // O perfil (neste navegador). A aba Cursos é refeita: aberta, ela mostra ou tira na hora os controles de quem muda o
 // programa
@@ -96,21 +97,19 @@ export function iniciarTema() {
 
 // Manual: abre de qualquer aba (as tabelas de regras são montadas uma vez, a partir do código)
 rManual();
-$('#btn-manual').onclick = () => {
-  show('manual');
-  focarNoTitulo($('#s-manual'));
-  window.scrollTo(0, 0);
-};
+// O Manual (o link #/manual do topo; #/manual/<id>, uma parte dele): o lugar do item vem à vista
+registrarTela('manual', { aoMostrar: item => (item && document.getElementById(item)) || null });
 
-// O foco vai para o título da página aberta pelo menu
-$('#btn-conta').onclick = () => { show('conta'); abrirConta(); focarNoTitulo($('#s-conta')); };
-// Usuários (administrador): a mesma página, direto na lista de contas
-$('#btn-usuarios').onclick = async () => {
-  show('conta');
-  await abrirConta();
-  $('#usuarios').scrollIntoView({ block: 'start' });
-  focarNoTitulo($('#usuarios'));
-};
+// Minha conta e Usuários (administrador: a mesma página, direto na lista de contas). O foco vai para o título da página
+// aberta pelo menu
+registrarTela('conta', {
+  aoMostrar: async item => {
+    await abrirConta();
+    return item === 'usuarios' && gerenciaContas(ApiClient.perfil) ? $('#usuarios') : null;
+  }
+});
+$('#btn-conta').onclick = () => escolherTela('conta', { focar: true });
+$('#btn-usuarios').onclick = () => escolherTela('conta', { item: 'usuarios', focar: true });
 
 // As horas dos instrutores ou os resultados dos cursos que não foram lidos: "Tentar de novo" lê outra vez
 $('#btn-tentar-dados').onclick = async e => {
