@@ -3,14 +3,14 @@ import { GLOSSARIO } from '../../js/glossario.js';
 import { FRASES_QUE_SAIRAM, FRASES_DO_MANUAL } from './manual-frases.js';
 
 test.describe('Aplicação', () => {
-  test('abre na Escala, com as abas na ordem de uso e sem números', async ({ page }) => {
+  test('abre na Escala, com a linha das etapas, os cadastros, o Rodízio e o BI na ordem de uso', async ({ page }) => {
     await abrir(page);
     await expect(page).toHaveTitle('AutoEscala - ACPM');
     await expect(page.locator('meta[name="application-name"]')).toHaveAttribute('content', 'AutoEscala - ACPM');
     await expect(page.locator('meta[name="apple-mobile-web-app-title"]')).toHaveAttribute('content', 'AutoEscala');
-    await expect(rotulosDasAbas(page)).toHaveText(['Escala', 'Demanda', 'Agenda', 'Recursos', 'Instrutores', 'Alunos', 'Cursos', 'Rodízio', 'BI']);
+    await expect(rotulosDasAbas(page)).toHaveText(['Agenda', 'Demanda', 'Escala', 'Aprovar', 'Alunos', 'Instrutores', 'Recursos', 'Cursos', 'Rodízio', 'BI']);
     await expect(page.locator('#s-esc')).toBeVisible();
-    await expect(botaoDaAba(page, 'esc')).toHaveClass(/\bon\b/);
+    await expect(botaoDaAba(page, 'esc')).toHaveAttribute('aria-current', 'page');
     await expect(page.locator('#s-rec')).toBeHidden();
   });
 
@@ -64,17 +64,18 @@ test.describe('Aplicação', () => {
     }
   });
 
-  // O único botão que leva a outra aba (data-go) é o "Abrir a Demanda", em Alunos: os pedidos de cada data ficam lá
+  // O único link de dentro de uma tela para outra é o "Abrir a Demanda", em Alunos: os pedidos de cada data ficam lá
   test('navega pelas abas; sem os botões "Próximo" de um passo a passo', async ({ page }) => {
     await abrir(page);
     for (const aba of ['ins', 'alu', 'cur', 'dem', 'esc', 'bi', 'rec']) {
       await irPara(page, aba);
-      await expect(botaoDaAba(page, aba)).toHaveClass(/\bon\b/);
-      await expect(page.locator('section.on')).toHaveCount(1);
+      await expect(botaoDaAba(page, aba)).toHaveAttribute('aria-current', 'page');
+      await expect(page.locator('main#conteudo > section.on')).toHaveCount(1);
+      await expect(page).toHaveURL(new RegExp(`#/${aba}$`));
     }
     await expect(page.getByRole('button', { name: /^Próximo:/ })).toHaveCount(0);
-    await expect(page.locator('[data-go]')).toHaveCount(1);
-    await expect(page.locator('#s-alu [data-go="dem"]')).toHaveText('Abrir a Demanda');
+    await expect(page.locator('main#conteudo a[href^="#/"]:not([href^="#/manual"])')).toHaveCount(1);
+    await expect(page.locator('#s-alu a[href="#/dem"]')).toHaveText('Abrir a Demanda');
   });
 
   test('aplica a folha de estilos (tokens de cor, layout e fontes)', async ({ page }) => {
@@ -86,7 +87,7 @@ test.describe('Aplicação', () => {
       fundo: getComputedStyle(document.body).backgroundColor,
       fonte: getComputedStyle(document.body).fontFamily,
       secaoInativa: getComputedStyle(document.querySelector('#s-bi')).display,
-      principalMax: getComputedStyle(document.querySelector('main')).maxWidth
+      principalMax: getComputedStyle(document.querySelector('.casca')).maxWidth
     }));
     expect(await estilos()).toEqual({
       tinta: '#12263A', fundo: 'rgb(238, 242, 245)', fonte: expect.stringContaining('Barlow'), secaoInativa: 'none', principalMax: '1280px'
@@ -120,7 +121,7 @@ test.describe('Aplicação', () => {
     await expect(html).toHaveAttribute('data-theme', 'light');
   });
 
-  test('o botão Manual abre, de qualquer aba, o manual com as regras em vigor', async ({ page }) => {
+  test('o botão Manual abre, de qualquer tela, o manual com as regras em vigor', async ({ page }) => {
     await abrir(page);
     await irPara(page, 'dem');
     await page.locator('#btn-manual').click();
@@ -141,18 +142,18 @@ test.describe('Aplicação', () => {
     for (const antigo of FRASES_QUE_SAIRAM) {
       expect(texto, antigo).not.toContain(antigo);
     }
-    await expect(manual.locator('h3')).toHaveText(['Primeiros passos: a rotina do operador', 'Perfis de acesso', 'As abas',
+    await expect(manual.locator('h3')).toHaveText(['Primeiros passos: a rotina do operador', 'Perfis de acesso', 'As telas',
       'Como a escala é montada', 'Para o gestor', 'TV da recepção', 'Glossário', 'Perguntas frequentes']);
     // O Glossário sai do glossário das dicas
     await expect(page.locator('#manual-glossario-lista dt')).toHaveCount(Object.keys(GLOSSARIO).length);
     await expect(page.locator('#manual-glossario-lista')).toContainText(GLOSSARIO['horario-livre'].texto);
-    // As abas na ordem do app, sem números, com os nomes dos botões e das vistas
-    await expect(manual.locator('#manual-abas h4')).toHaveText(['Escala', 'Demanda', 'Agenda', 'Recursos', 'Instrutores', 'Alunos', 'Cursos', 'Rodízio', 'BI']);
+    // As telas na ordem da linha (as etapas, os cadastros, o Rodízio e o BI), com os nomes dos botões e das vistas
+    await expect(manual.locator('#manual-abas h4')).toHaveText(['Agenda', 'Demanda', 'Escala', 'Alunos', 'Instrutores', 'Recursos', 'Cursos', 'Rodízio', 'BI']);
     for (const novo of FRASES_DO_MANUAL) {
       expect(texto, novo).toContain(novo);
     }
 
-    // O índice leva às seções e as abas continuam funcionando
+    // O índice leva às seções e a linha continua funcionando
     await manual.locator('.manual-indice a[href="#manual-regras"]').click();
     await expect(page.locator('#manual-regras')).toBeInViewport();
     await irPara(page, 'esc');

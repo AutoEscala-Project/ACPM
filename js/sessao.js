@@ -6,6 +6,7 @@ import { backendLocal } from './backends/local.js';
 import { setRole, travarAposConflito, avisarFalhaDeGravacao } from './actions.js';
 import { $, fecharAviso, avisarDoLink } from './dom.js';
 import { amanhaISO, esc } from './format.js';
+import { limparTelaDoEndereco } from './endereco.js';
 import { ROTULOS, operaEscala, gerenciaContas, soPainel } from './perfis.js';
 import { retornoDoLink } from './retorno-do-link.js';
 import { chaveDaSessao, passarSessaoParaATV } from './config-supabase.js';
@@ -65,6 +66,8 @@ async function oferecerEnvioDosDadosLocais() {
 // Sai só deste navegador (o padrão do Supabase encerra as sessões da conta em todos os aparelhos)
 async function sair(cliente) {
   await cliente.auth.signOut({ scope: 'local' });
+  // A próxima conta abre na tela dela, não na desta
+  limparTelaDoEndereco();
   window.location.reload();
 }
 

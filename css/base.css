@@ -1,5 +1,5 @@
 /* A base das duas páginas (o app e a TV): as cores e os temas, html, body, o anel do foco, os títulos, os campos, o texto discreto,
-   os links, o texto só para o leitor de tela e [hidden]; e main e #login-erro, que as duas páginas têm */
+   os links, o texto só para o leitor de tela e [hidden]; e #login-erro, que as duas páginas têm (a moldura do conteúdo é de cada página: .casca no app, main na TV) */
 /* Cores e temas (claro e escuro) */
 :root {
   --bg: #EEF2F5;
@@ -27,6 +27,20 @@
   --pop-bg: #12263A;
   --pop-txt: #F8FAFB;
   --at: #D9711C;
+  /* O símbolo sobre os discos dos estados (feito, atenção); a linha selecionada e as cinco cores dos avatares (F2) */
+  --okT: #FFFFFF;
+  --waT: #FFFFFF;
+  --sel: #EAF2FB;
+  --avT: #FFFFFF;
+  --av1: #1F5FA8;
+  --av2: #0B6E78;
+  --av3: #6A4BB0;
+  --av4: #A1387C;
+  --av5: #4B5D6E;
+  /* Os estados "pendente" (o anel) e "em andamento" seguem o texto discreto e o destaque, nos dois temas */
+  --pe: var(--mu);
+  --an: var(--ac);
+  --anT: var(--acT);
   box-sizing: border-box;
   padding-top: env(safe-area-inset-top, 0px);
   padding-bottom: env(safe-area-inset-bottom, 0px);
@@ -38,6 +52,8 @@
     --wa: #F2C94C; --wa-bg: rgba(242,201,76,.14); --ok: #5FD39A; --ok-bg: rgba(95,211,154,.14);
     --info-bg: rgba(106,168,240,.14); --neutro-bg: rgba(147,163,178,.14); --fly: #4FC3F7; --hd: #0A1119; --hdT: #E6EDF3;
     --pop-bg: #223446; --pop-txt: #E6EDF3; --at: #F0954A;
+    --okT: #0F1822; --waT: #0F1822; --sel: #1F3144; --avT: #0F1822;
+    --av1: #8AB8F2; --av2: #62C3CC; --av3: #B79CF0; --av4: #F09AC8; --av5: #A9B8C6;
   }
 }
 :root[data-theme="dark"] {
@@ -46,6 +62,8 @@
   --wa: #F2C94C; --wa-bg: rgba(242,201,76,.14); --ok: #5FD39A; --ok-bg: rgba(95,211,154,.14);
   --info-bg: rgba(106,168,240,.14); --neutro-bg: rgba(147,163,178,.14); --fly: #4FC3F7; --hd: #0A1119; --hdT: #E6EDF3;
   --pop-bg: #223446; --pop-txt: #E6EDF3; --at: #F0954A;
+  --okT: #0F1822; --waT: #0F1822; --sel: #1F3144; --avT: #0F1822;
+  --av1: #8AB8F2; --av2: #62C3CC; --av3: #B79CF0; --av4: #F09AC8; --av5: #A9B8C6;
 }
 /* Base e barra do topo */
 html { scroll-padding-top: env(safe-area-inset-top, 0px); }
@@ -60,11 +78,10 @@ body {
 @media print {
   body { background: #fff; color: #000; }
 }
-button:focus-visible, select:focus-visible, input:focus-visible {
+button:focus-visible, select:focus-visible, input:focus-visible, a:focus-visible {
   outline: 2px solid var(--ac);
   outline-offset: 2px;
 }
-main { max-width: 1280px; margin: 0 auto; padding: 16px 16px 60px; }
 h2 { font: 600 20px 'Barlow Semi Condensed', sans-serif; margin: 18px 0 10px; }
 h3 { font: 600 15px 'Barlow Semi Condensed', sans-serif; margin: 10px 0 6px; color: var(--ink); }
 select, input:not([type=checkbox]) {

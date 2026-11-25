@@ -4,11 +4,13 @@
 // quem a redesenha. Cada desenho roda por semFalhar (js/sem-falhar.js): um que falha vai para o console (e os testes E2E
 // falham com ele), e os outros, a gravação e o histórico continuam.
 // Os momentos: 'dados' (os dados de uma data chegaram: a abertura e carregarData), 'consulta' (a tela volta ao que está
-// gravado: quem só consulta, e depois de um conflito), 'releitura' (lerDadosDeNovo) e 'escala' (a escala foi refeita).
+// gravado: quem só consulta, e depois de um conflito), 'releitura' (lerDadosDeNovo), 'escala' (a escala foi refeita),
+// 'perfil' (setRole), 'pedidos' (os pedidos da data foram lidos), 'data-aberta' (uma data aberta, antes dos dados dela) e
+// 'sessao' (a abertura e a gravação da data).
 // Este módulo não importa nenhuma tela
 import { semFalhar } from './sem-falhar.js';
 
-const MOMENTOS = ['dados', 'consulta', 'releitura', 'escala'];
+const MOMENTOS = ['dados', 'consulta', 'releitura', 'escala', 'perfil', 'pedidos', 'data-aberta', 'sessao'];
 const desenhos = new Map();
 
 // Um nome repetido ou um momento que não está na lista é erro (o teste dos desenhos registrados confere os dois)

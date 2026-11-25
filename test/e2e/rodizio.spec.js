@@ -43,7 +43,7 @@ test.describe('Rodízio', () => {
     await expect.poll(opacidade).toBe('1');
     await expect(segundo.locator('[data-act="fila-inicio"]')).toHaveAttribute('aria-label', 'Pôr Instrutor 02 no início da fila');
 
-    await page.locator('#s-rod [data-manual="manual-aba-rodizio"]').click();
+    await page.locator('#s-rod a[href="#/manual/manual-aba-rodizio"]').click();
     await expect(page.locator('#s-manual')).toBeVisible();
     await expect(page.locator('#manual-aba-rodizio')).toBeInViewport();
   });

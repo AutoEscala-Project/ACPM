@@ -11,7 +11,7 @@ import { comRepousoDoNoturno } from './noturno.js';
 import { redesenhar, redesenharPorNome } from './redesenho.js';
 import { SEM_OS_PROGRAMAS } from './views/cursos.js';
 import { podeEditarAgenda } from './views/agenda.js';
-import { atualizarSeloDaAgenda, lerPedidosDaData } from './views/selos.js';
+import { lerPedidosDaData } from './views/selos.js';
 
 // Abre uma data na tela (a data da escala e a data base do BI)
 export function abrirData(data) {
@@ -54,7 +54,8 @@ export function setRole(role, somenteConsulta = false) {
   }
   // Agenda: quem pode registrar pedidos (operadores e secretaria; no modo local, fora do perfil Gestor)
   document.body.dataset.agenda = podeEditarAgenda() ? 'edita' : 'consulta';
-  atualizarSeloDaAgenda();
+  // A linha, os selos e o que muda com o perfil
+  redesenhar('perfil');
   // Os campos da tela, desligados ou ligados conforme o perfil
   aplicarSomenteLeitura();
 }

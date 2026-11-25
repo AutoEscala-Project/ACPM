@@ -17,6 +17,7 @@
  *   js/export.js    Exportação CSV, PDF e a planilha do Excel
  */
 import './eventos/navegacao.js';
+import './eventos/linha.js';
 import './eventos/escala.js';
 import './eventos/instrutores.js';
 import './eventos/alunos.js';
@@ -44,14 +45,14 @@ import { iniciarSessaoSupabase } from './sessao.js';
 import { iniciarSomenteLeitura } from './somente-leitura.js';
 import { RES, modoCompartilhado } from './state.js';
 import { ApiClient } from './storage.js';
-import { abaFoiEscolhida } from './eventos/navegacao.js';
 import { avisoDeDomingo, iniciarTema } from './eventos/topo.js';
 import { programaSendoGravado } from './eventos/cursos.js';
-import { abrirAgenda, diaDaAgenda, podeEditarAgenda } from './views/agenda.js';
+import { diaDaAgenda, podeEditarAgenda } from './views/agenda.js';
 import { carregarDadosPessoais } from './views/dados-pessoais.js';
 import { rOut } from './views/escala.js';
 import { lerPedidosDaData } from './views/selos.js';
-import { show } from './views/tabs.js';
+import { ligarEndereco, mostrarTela, telaAberta, telaFoiEscolhida, destinoDoHash } from './views/telas.js';
+import { telaDeAbertura } from './telas.js';
 
 // Fechar ou recarregar a página com alterações esperando a conexão, ou com o programa de um curso ainda sendo gravado, pede
 // confirmação (elas se perderiam)
@@ -66,14 +67,19 @@ window.addEventListener('beforeunload', e => {
   iniciarTema();
   // O que a página diz das funcionalidades desligadas sai dela (e o que só vale sem as ligadas)
   aplicarFuncionalidades(document);
+  // O endereço é lido antes de tudo: abrir uma data, ou uma tela, põe a data nele
+  const params = new URLSearchParams(window.location.search);
+  // O endereço: os links #/<tela>, Voltar e Avançar. A tela do endereço aparece já (no modo compartilhado, o login fica por
+  // cima dela até a sessão abrir)
+  ligarEndereco();
+  const doEndereco = destinoDoHash(window.location.hash);
+  if (doEndereco) mostrarTela(doEndereco.tela, { item: doEndereco.item, nativo: Boolean(doEndereco.nativo), historico: 'nenhum', ler: false });
   // As dicas dos termos e a tela só de consulta do Gestor
   iniciarDicas();
   iniciarSomenteLeitura();
   // A meteorologia do painel vem do servidor (a função meteorologia); neste navegador, não há
   configurarMeteorologia(() => ApiClient.meteorologia());
 
-  // O endereço é lido antes: abrir uma data põe a data nele
-  const params = new URLSearchParams(window.location.search);
   // Amanhã, ou a segunda quando amanhã é domingo
   const amanha = ehDomingo(amanhaISO()) ? somarDias(amanhaISO(), 1) : amanhaISO();
   abrirData(amanha);
@@ -136,11 +142,13 @@ window.addEventListener('beforeunload', e => {
   // Dados pessoais (para a coluna CANAC das tabelas), para quem pode vê-los
   carregarDadosPessoais();
 
-  // A Secretaria trabalha na agenda: o app abre nela, a menos que ela já tenha saído da Escala (uma aba, o Manual, Minha
-  // conta) ou escolhido uma aba enquanto os dados carregavam. A Agenda aberta, por ela ou pela abertura, é lida agora,
-  // com os alunos, no dia que já estiver escolhido nela
-  if (ApiClient.perfil === 'secretaria' && !abaFoiEscolhida() && $('#s-esc').classList.contains('on')) show('age');
-  if ($('#s-age').classList.contains('on')) abrirAgenda(diaDaAgenda() || undefined);
+  // A tela da abertura: a que a pessoa escolheu enquanto os dados carregavam (um clique, Voltar, um endereço digitado), a do
+  // endereço ou a do perfil (a Agenda para a Secretaria, a Escala para os outros). Ela é mostrada de novo agora, com os
+  // dados lidos e o perfil conferido; a Agenda, no dia que já estiver escolhido nela
+  // (o destino lido no começo: o item do endereço vale uma vez e já saiu dele)
+  const destino = telaFoiEscolhida() ? { tela: telaAberta(), item: null } : (doEndereco || { tela: telaDeAbertura(ApiClient.perfil), item: null });
+  const item = destino.tela === 'age' && !destino.item ? diaDaAgenda() : destino.item;
+  await mostrarTela(destino.tela, { item, nativo: Boolean(destino.nativo), historico: 'substituir' });
 
   lerPedidosDaData();
   carregarBI();

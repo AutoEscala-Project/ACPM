@@ -99,7 +99,7 @@ test.describe('Perfis de acesso', () => {
     await filtrarCursos(page, 'alu', ['PP']);
     await expect(page.locator('#alu tr.cd:visible')).toHaveCount(1);
     await expect(page.locator('#alu-contagem')).toHaveText('1 de 2 alunos');
-    await page.getByRole('button', { name: 'Abrir a Demanda' }).click();
+    await page.getByRole('link', { name: 'Abrir a Demanda' }).click();
     await expect(page.locator('#s-dem')).toBeVisible();
     await expect(page.locator('#flt-dem-cur')).toHaveText('Curso: PP');
     await expect(page.locator('#dem tr[data-k="d"]:visible')).toHaveCount(1);
