@@ -3,9 +3,10 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
-import { GLOSSARIO, ABAS_DO_GLOSSARIO } from '../../js/glossario.js';
+import { GLOSSARIO, montarGlossario, ABAS_DO_GLOSSARIO } from '../../js/glossario.js';
 import { REVISAO_H, MENOR_VOO_H, LIMITE_DE_VOOS_LOCAIS, T, NI } from '../../js/config.js';
 import { hm } from '../../js/format.js';
+import { ligada } from '../../js/funcionalidades.js';
 import { LIMITES_DA_LEI } from '../../js/limites.js';
 import { INTERVALO_DO_HANGAR } from '../../js/metricas.js';
 
@@ -16,10 +17,13 @@ const fontes = [
   ...readdirSync(new URL('js/views/', raiz)).filter(f => f.endsWith('.js')).map(f => readFileSync(new URL(`js/views/${f}`, raiz), 'utf8'))
 ].join('\n');
 
+// O glossário inteiro (com todas as funcionalidades ligadas) e o de nenhuma (js/funcionalidades.js)
+const INTEIRO = montarGlossario(() => true), SEM_FUNCIONALIDADES = montarGlossario(() => false);
+
 describe('Glossário', () => {
   it('cada termo tem o nome, uma frase curta (até 240 caracteres, texto puro, termina com ponto) e a aba', () => {
-    assert.ok(Object.keys(GLOSSARIO).length >= 25);
-    for (const [id, { termo, texto, aba }] of Object.entries(GLOSSARIO)) {
+    assert.ok(Object.keys(INTEIRO).length >= 25);
+    for (const [id, { termo, texto, aba }] of [...Object.entries(INTEIRO), ...Object.entries(SEM_FUNCIONALIDADES)]) {
       assert.match(id, /^[a-z0-9-]+$/, id);
       assert.ok(termo && termo.length <= 40, id);
       assert.ok(texto.length <= 240, `${id}: ${texto.length} caracteres`);
@@ -31,7 +35,7 @@ describe('Glossário', () => {
 
   it('toda dica usada nas telas existe no glossário', () => {
     const usadas = [...fontes.matchAll(/data-dica="([a-z0-9-]+)"/g)].map(m => m[1]);
-    const desconhecidas = [...new Set(usadas)].filter(id => !Object.hasOwn(GLOSSARIO, id));
+    const desconhecidas = [...new Set(usadas)].filter(id => !Object.hasOwn(INTEIRO, id));
     assert.deepEqual(desconhecidas, []);
   });
 
@@ -48,7 +52,22 @@ describe('Glossário', () => {
   // e o grupo começa pela fase do curso e pelos alunos nela (o índice das fases), não pelo trecho do Noturno, que fica no
   // fim
   it('os termos da aba Cursos, na ordem do bloco dela', () => {
-    const daAba = Object.entries(GLOSSARIO).filter(([, t]) => t.aba === 'Cursos').map(([id]) => id);
+    const daAba = Object.entries(INTEIRO).filter(([, t]) => t.aba === 'Cursos').map(([id]) => id);
     assert.deepEqual(daAba, ['fase-do-curso', 'alunos-na-fase', 'quando-voar', 'dispensada', 'trecho-do-noturno']);
   });
+
+  it('com o hangar e o progresso desligados, os termos deles saem, e os outros não falam deles', () => {
+    const saem = Object.keys(INTEIRO).filter(id => !Object.hasOwn(SEM_FUNCIONALIDADES, id));
+    assert.deepEqual(saem, ['resultado', 'fora-da-ordem', 'curso-encerrado', 'hangar', 'progresso', 'alunos-na-fase']);
+    for (const [id, { termo, texto }] of Object.entries(SEM_FUNCIONALIDADES)) {
+      assert.doesNotMatch(`${termo} ${texto}`, /hangar|progresso|próxima missão|ainda não aprovou|sugerida|o resultado/i, id);
+    }
+    // Uma só: os termos dela saem, e os da outra ficam como estão
+    const semHangar = montarGlossario(nome => nome !== 'hangar');
+    assert.deepEqual(Object.keys(INTEIRO).filter(id => !Object.hasOwn(semHangar, id)), ['hangar']);
+    assert.equal(semHangar['missao-do-curso'].texto, INTEIRO['missao-do-curso'].texto);
+    assert.doesNotMatch(Object.values(semHangar).map(t => t.texto).join(' '), /hangar/i);
+  });
+
+  it('o glossário das telas é o das funcionalidades ligadas no app', () => assert.deepEqual(GLOSSARIO, montarGlossario(ligada)));
 });

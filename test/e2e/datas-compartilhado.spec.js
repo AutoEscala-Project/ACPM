@@ -1,6 +1,6 @@
 // Escala por data no modo compartilhado: migração dos documentos antigos no servidor, gestor navegando
 // entre as datas sem gravar e autor das alterações no histórico.
-import { test, expect, prepararContexto, vigiarErros, irPara, AMANHA, entrar, preencherLogin, URL_APP, alternarDisponivel, appPronto, caixaDisponivel, dataAberta, escolherNoCalendario, mudarData, rotuloDaData, botaoDaData } from './fixtures.js';
+import { test, comProgresso, expect, prepararContexto, vigiarErros, irPara, AMANHA, entrar, preencherLogin, URL_APP, alternarDisponivel, appPronto, caixaDisponivel, dataAberta, escolherNoCalendario, mudarData, rotuloDaData, botaoDaData } from './fixtures.js';
 import { instalarSupabaseFalso, documentosAtuais, documentosFase3, CONTAS } from './supabase-falso.js';
 import { comNomesAntigos } from '../helpers/formato.js';
 import { ESQUEMA } from '../../js/migracoes.js';
@@ -106,7 +106,7 @@ test.describe('Escala por data (modo compartilhado)', () => {
     });
   }
 
-  test('no primeiro acesso de um operador, os dados no formato anterior são regravados no formato atual', async ({ page, context }) => {
+  comProgresso('no primeiro acesso de um operador, os dados no formato anterior são regravados no formato atual', async ({ page, context }) => {
     const servidor = await instalarSupabaseFalso(context, servidorNoFormatoAnterior());
     expect(servidor.dias.get('2026-11-03').conteudo.resultado.out[0].r).toBe('SIM-MONO-1');
     const chamadas = funcoesChamadas(page);
@@ -131,7 +131,7 @@ test.describe('Escala por data (modo compartilhado)', () => {
 
   // Antes da primeira abertura de um Operador, o programa ainda está só no cadastro: a próxima missão e o progresso
   // ficam desligados, e a Gestora vê por quê (na aba Cursos também)
-  test('gestor vê os dados no formato atual antes da atualização, sem gravar nada', async ({ page, context }) => {
+  comProgresso('gestor vê os dados no formato atual antes da atualização, sem gravar nada', async ({ page, context }) => {
     const servidor = await instalarSupabaseFalso(context, servidorNoFormatoAnterior());
     const chamadas = funcoesChamadas(page);
     await entrar(page, CONTAS.gestor);

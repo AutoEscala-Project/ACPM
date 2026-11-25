@@ -23,13 +23,19 @@ import { S, RES, DATA, isGestor, dadoIndisponivel } from '../state.js';
 import { inativo } from '../inativos.js';
 import { esc, opts, fmtH, hojeISO } from '../format.js';
 import { $, trocarConteudo, trocarElemento } from '../dom.js';
+import { ligada } from '../funcionalidades.js';
 import { progressoDoAluno, cursoDoResultado, faseDoAluno } from './etapas.js';
 
 // Os programas que não foram lidos, ou que ainda estão no cadastro: o que a aba mostra no lugar deles (o mesmo texto do
-// aviso do topo, em js/actions.js). A próxima missão e o progresso ficam desligados
-export const SEM_OS_PROGRAMAS = {
+// aviso do topo, em js/actions.js). A próxima missão e o progresso ficam desligados; com o progresso desligado para todos
+// (js/funcionalidades.js), só a tela fica sem os programas
+const PENDENTES = 'Os programas dos cursos ainda não foram trazidos do cadastro (isso acontece na primeira abertura de um Operador ou Administrador depois da atualização)';
+export const SEM_OS_PROGRAMAS = ligada('progresso') ? {
   cursos: 'Não foi possível ler os programas dos cursos: a próxima missão, o progresso e a missão do curso no agendamento ficam desligados.',
-  'cursos-pendentes': 'Os programas dos cursos ainda não foram trazidos do cadastro (isso acontece na primeira abertura de um Operador ou Administrador depois da atualização): a próxima missão e o progresso ficam desligados.'
+  'cursos-pendentes': `${PENDENTES}: a próxima missão e o progresso ficam desligados.`
+} : {
+  cursos: 'Não foi possível ler os programas dos cursos: a tela Cursos fica sem eles.',
+  'cursos-pendentes': `${PENDENTES}: a tela Cursos espera por eles.`
 };
 export const programasIndisponiveis = () => Object.keys(SEM_OS_PROGRAMAS).filter(parte => dadoIndisponivel(parte));
 
@@ -281,7 +287,8 @@ function turmaDoCurso(curso) {
 }
 
 // Os alunos do curso, cada um com o progresso no programa (como em Alunos): no curso com mais de uma fase, por fase, na
-// ordem do programa (os que concluíram no fim); senão, pelo nome
+// ordem do programa (os que concluíram no fim); senão, pelo nome. Com o progresso desligado (js/funcionalidades.js), só os
+// nomes
 function alunosDoCurso(curso, fases, turma, abertas) {
   const { alunos, porFase, concluidos, porFaseConhecida } = turma;
   if (!alunos.length) return '';

@@ -107,15 +107,17 @@ npm run test:e2e       # aplicação no navegador (Playwright)
 ## Meteorologia no painel (função `meteorologia`)
 
 O pé do painel (a vista Painel da Escala e a TV da recepção) mostra o METAR e o TAF oficiais de Pampulha (SBBH) e de
-Confins (SBCF), lado a lado, cada caixa com "Atualizado às" a hora da observação do METAR (a local e a Z). As mensagens
-vêm da REDEMET (https://api-redemet.decea.mil.br, a API do DECEA), a única fonte. A REDEMET pede uma chave, que não pode
-ir para o navegador, então quem busca é a Edge Function `supabase/functions/meteorologia` (Deno): ela exige a sessão de
-uma conta do app (o JWT, conferido pelo gateway e pelo Auth do projeto), manda a chave só no cabeçalho `x-api-key`
-(nunca no endereço), pede o METAR das últimas 3 horas (`data_ini` e `data_fim`, em UTC: sem eles, a REDEMET manda só a
-hora de agora, e a estação cujo METAR da hora ainda não chegou ficaria sem) e fica com o mais recente de cada estação,
-pede o TAF sem janela (os em vigor) e fica com o que cobre agora, o emitido por último, guarda as mensagens 5 minutos na
-memória, desiste da REDEMET em 12 segundos e responde `{ gerado, estacoes: [{ icao, nome, metar, taf, observado }] }`
-só às origens do app. A leitura das mensagens (`mensagens.js`) e o atendimento (`atendimento.js`) são JavaScript puro,
+Confins (SBCF), lado a lado, cada caixa com o nome do aeródromo em letras grandes e as mensagens; "Atualizado às" a hora
+da observação do METAR (a local e a Z) só aparece quando a última busca falhou ou a observação passou de 90 minutos. As
+mensagens vêm da REDEMET (https://api-redemet.decea.mil.br, a API do DECEA), a única fonte. A REDEMET pede uma chave,
+que não pode ir para o navegador, então quem busca é a Edge Function `supabase/functions/meteorologia` (Deno): ela exige
+a sessão de uma conta do app (o JWT, conferido pelo gateway e pelo Auth do projeto), manda a chave só no cabeçalho
+`x-api-key` (nunca no endereço), pede o METAR das últimas 3 horas (`data_ini` e `data_fim`, em UTC: sem eles, a REDEMET
+manda só a hora de agora, e a estação cujo METAR da hora ainda não chegou ficaria sem) e fica com o mais recente de cada
+estação, pede o TAF sem janela (os em vigor) e fica com o que cobre agora, o emitido por último, guarda as mensagens 5
+minutos na memória, desiste da REDEMET em 12 segundos e responde `{ gerado, estacoes: [{ icao, nome, metar, taf,
+observado }] }` só às origens do app. A leitura das mensagens (`mensagens.js`) e o atendimento (`atendimento.js`) são
+JavaScript puro,
 testados também no Node (`test/unit/meteorologia-funcao.test.js`, com respostas de verdade da REDEMET em
 `test/fixtures/meteorologia/`).
 
@@ -270,6 +272,7 @@ número): o primeiro acesso de um Operador ou Administrador regrava os dias e o 
 | `js/dias.js` | Cadastro separado do dia, cópia do dia anterior, conversão dos dados da fase 2 e BI das escalas |
 | `js/migracoes.js` | Versões do formato dos dados guardados e os passos de uma versão para a seguinte |
 | `js/sessao.js`, `js/config-supabase.js` | Login, perfil de acesso e projeto Supabase de cada endereço |
+| `js/funcionalidades.js` | As funcionalidades que podem ficar desligadas, hoje as duas em todos os endereços: `hangar` (a ordem no hangar, em Recursos; o motor segue a ordem da frota) e `progresso` (a próxima missão, o progresso, a fase dos alunos e os resultados; a tela Cursos continua). Ligar é trocar `false` por `true` em `LIGADAS`; nada do que está guardado muda. No localhost, `?funcionalidades=hangar,progresso` liga para testar (nos testes, `test.use({ funcionalidades })`, `comHangar` e `comProgresso`, em `test/e2e/fixtures.js`). No `index.html`, `data-funcionalidade` e `data-sem-funcionalidade` marcam os textos |
 | `js/state.js`, `js/actions.js` | Estado da aplicação e ações (perfil, data, histórico e a escala refeita a cada alteração; o perfil trocado redesenha pelo momento `perfil`); `gravarAlteracao` é o único jeito de os eventos mudarem os dados, e nada grava antes de os dados da data aberta serem lidos (`lerData` lê uma data de cada vez; `aindaNaoAbriu` recusa a mudança com o aviso). A alteração é gravada antes de a tela ser redesenhada: um desenho que falha não impede a gravação nem o histórico |
 | `js/redesenho.js` | O registro dos desenhos da tela: cada tela registra o dela no módulo de eventos (`registrarDesenho`, com o nome e os momentos `dados`, `consulta`, `releitura`, `escala`, `perfil`, `pedidos` e `data-aberta`; `sessao` fica reservado para a aprovação); quem muda os dados redesenha por momento (`redesenhar`) ou pelo nome (`redesenharPorNome`), sem importar a tela. `test/unit/desenhos-registrados.test.js` confere os nomes e os momentos |
 | `js/sem-falhar.js` | Faz sem deixar o erro parar quem chamou (vai para o console): o foco depois de redesenhar e cada desenho da tela |

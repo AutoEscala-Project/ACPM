@@ -1,6 +1,8 @@
 // Fixtures e utilitários compartilhados pelos testes E2E.
 // - Relógio fixo (amanhã = 2026-11-11) para datas determinísticas na escala, no PDF e no BI
 // - jsPDF e supabase-js servidos de node_modules e Google Fonts neutralizado: os testes não dependem da rede
+// - As funcionalidades que podem ficar desligadas (js/funcionalidades.js) como no app; um teste escolhe as ligadas com
+//   test.use({ funcionalidades: 'hangar,progresso' }) ('' desliga todas), que só valem no localhost
 // - Qualquer erro de página ou de console falha o teste
 // - Os drivers das telas (test/e2e/telas/*.js), reexportados daqui: os testes chegam aos controles das telas por eles
 //   (test/unit/donos-dos-seletores.test.js)
@@ -27,9 +29,16 @@ const LIBS = {
   'supabase.js': fileURLToPath(new URL('../../node_modules/@supabase/supabase-js/dist/umd/supabase.js', import.meta.url))
 };
 
+// As funcionalidades do teste em andamento (undefined: as do app), para todo contexto que ele prepara, também os que abre à
+// parte (browser.newContext)
+let funcionalidadesDoTeste;
+
 // preferencias: o trilho solto e a linha recolhida guardados neste navegador, para os testes de cada tela verem a largura de
 // sempre; os testes da casca e do trilho (casca.spec.js, trilho.spec.js) usam os padrões do produto (false)
 export async function prepararContexto(context, { preferencias = true } = {}) {
+  if (funcionalidadesDoTeste !== undefined) {
+    await context.addInitScript(lista => { window.FUNCIONALIDADES_LIGADAS = lista; }, funcionalidadesDoTeste);
+  }
   if (preferencias) {
     await context.addInitScript(() => {
       try {
@@ -62,6 +71,13 @@ export function vigiarErros(page, { statusEsperados = [], ignorar = [] } = {}) {
 }
 
 export const test = base.extend({
+  funcionalidades: [undefined, { option: true }],
+  // auto: antes do contexto do teste e dos que ele abre à parte
+  funcionalidadesNaPagina: [async ({ funcionalidades }, use) => {
+    funcionalidadesDoTeste = funcionalidades;
+    await use();
+    funcionalidadesDoTeste = undefined;
+  }, { auto: true }],
   preferencias: [true, { option: true }],
   context: async ({ context, preferencias }, use) => {
     await prepararContexto(context, { preferencias });
@@ -73,5 +89,10 @@ export const test = base.extend({
     expect(erros, 'a página não deve registrar erros').toEqual([]);
   }
 });
+
+// O test com uma funcionalidade ligada, para um teste no meio dos outros (o arquivo inteiro: test.use)
+export const comHangar = test.extend({ funcionalidades: ['hangar', { option: true }] });
+export const comProgresso = test.extend({ funcionalidades: ['progresso', { option: true }] });
+export const comTodasAsFuncionalidades = test.extend({ funcionalidades: ['hangar,progresso', { option: true }] });
 
 export const json = valor => JSON.stringify(valor, null, 2) + '\n';

@@ -1,4 +1,4 @@
-import { test, expect, prepararContexto, vigiarErros, irPara, abrirEscala, lerEscala, AMANHA, entrar, URL_APP, abrirHistorico, alternarDisponivel, botaoAprovar, caixaDisponivel, exportar, dataAberta } from './fixtures.js';
+import { test, comProgresso, expect, prepararContexto, vigiarErros, irPara, abrirEscala, lerEscala, AMANHA, entrar, URL_APP, abrirHistorico, alternarDisponivel, botaoAprovar, caixaDisponivel, exportar, dataAberta } from './fixtures.js';
 import { criarSupabaseFalso, instalarSupabaseFalso, documentosAtuais, CONTAS } from './supabase-falso.js';
 import { estadoSintetico } from '../helpers/estado.js';
 import { comExemplo } from '../helpers/exemplo.js';
@@ -135,7 +135,7 @@ test.describe('Modo compartilhado: gravação, conflitos e link da escala', () =
   });
 
   // Sem as horas dos instrutores, os limites do mês e do ano não são conferidos; o app avisa
-  test('sem as horas dos instrutores ou os resultados: aviso fixo, Aprovar escala desligado e "Tentar de novo"', async ({ browser }) => {
+  comProgresso('sem as horas dos instrutores ou os resultados: aviso fixo, Aprovar escala desligado e "Tentar de novo"', async ({ browser }) => {
     const contexto = await novoContexto(browser);
     const servidor = await instalarSupabaseFalso(contexto, documentosAtuais(comExemplo(estadoSintetico()), AMANHA));
     const page = await contexto.newPage();

@@ -6,7 +6,7 @@
 // lidas uma de cada vez (a versão que a gravação leva é a da leitura dos dados da tela), e nenhuma data é lida antes de a
 // abertura preparar os dados, nem depois de a preparação falhar. O que fica aberto na tela quando a data abre passa a
 // mostrar os dados dela
-import { test, expect, prepararContexto, vigiarErros, preencherLogin, entrar, irPara, irParaVista, abrirEscala, AMANHA, URL_APP, abrirHistorico, alternarDisponivel, botaoAprovar, caixaDisponivel, caixaVoa, dataAberta, diaAnterior, diaSeguinte, exportar, importarDaAgenda, rotuloDaData, escolherNoCalendario } from './fixtures.js';
+import { test, comProgresso, expect, prepararContexto, vigiarErros, preencherLogin, entrar, irPara, irParaVista, abrirEscala, AMANHA, URL_APP, abrirHistorico, alternarDisponivel, botaoAprovar, caixaDisponivel, caixaVoa, dataAberta, diaAnterior, diaSeguinte, exportar, importarDaAgenda, rotuloDaData, escolherNoCalendario } from './fixtures.js';
 import { criarSupabaseFalso, documentosAtuais, CONTAS } from './supabase-falso.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
 import { runAllocationEngine } from '../../js/engine.js';
@@ -157,7 +157,7 @@ test.describe('A escala abrindo: nada é gravado antes de os dados da data chega
 
   // Fora dos botões fixos, as mudanças da tela da data anterior: o resultado da missão, aprovar, a compactação, a Demanda,
   // os limites da lei e o programa do curso
-  test('enquanto outra data abre, nenhuma mudança grava e a tela fica como estava; na data nova, vale de novo', async ({ browser }) => {
+  comProgresso('enquanto outra data abre, nenhuma mudança grava e a tela fica como estava; na data nova, vale de novo', async ({ browser }) => {
     const servidor = criarServidor();
     const contexto = await novoContexto(browser, servidor);
     const page = await contexto.newPage();
@@ -591,7 +591,7 @@ test.describe('Os cursos, o agendamento e a missão do curso: nada muda antes de
     expect(servidor.gravacoes.map(g => g.chave)).toContain(`dia:${DEPOIS}`);
   }
 
-  test('enquanto outra data abre, nenhuma entrada dos cursos, do agendamento ou da missão do curso muda nada; na data nova, valem', async ({ browser }) => {
+  comProgresso('enquanto outra data abre, nenhuma entrada dos cursos, do agendamento ou da missão do curso muda nada; na data nova, valem', async ({ browser }) => {
     const servidor = servidorDoDia();
     const { contexto, page, erros } = await abrirODia(browser, servidor);
     const liberar = servidor.segurarLeiturasDeDias();
@@ -603,7 +603,7 @@ test.describe('Os cursos, o agendamento e a missão do curso: nada muda antes de
     await contexto.close();
   });
 
-  test('depois de a troca de data falhar, nenhuma entrada dos cursos, do agendamento ou da missão do curso muda nada; abrindo a data, valem', async ({ browser }) => {
+  comProgresso('depois de a troca de data falhar, nenhuma entrada dos cursos, do agendamento ou da missão do curso muda nada; abrindo a data, valem', async ({ browser }) => {
     test.slow();
     const servidor = servidorDoDia();
     const { contexto, page, erros } = await abrirODia(browser, servidor, { statusEsperados: [503] });
