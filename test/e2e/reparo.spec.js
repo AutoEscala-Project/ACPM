@@ -188,6 +188,32 @@ test.describe('Sugestões para um voo cancelado', () => {
     await expect(voo.locator('.st-detalhe')).toHaveText('Instrutor indisponível');
   });
 
+  test('o 7º voo local do horário: a sugestão avisa e pede dois cliques ("Aplicar mesmo assim")', async ({ page }) => {
+    // Seis Voos Locais às 10:10; o do Aluno 1006, às 08:20 e só disponível às 10:10, cancelado pela meteorologia
+    const estado = {
+      ...cenario({
+        ins: [1, 2, 3, 4, 5, 6, 7].map(id => instrutor(id, 9)),
+        stu: [...[1000, 1001, 1002, 1003, 1004, 1005].map(id => aluno(id, { p1: 610, p2: -1 })), aluno(1006, { p1: 500, p2: -1, jan: 'h610' })]
+      }),
+      fixos: { '1006_0_1': { a: 500, b: 560, r: 'PP-LJV', insId: 7 } },
+      fStatus: { '1006_0_1': 'Cancelado' }, fObs: { '1006_0_1': { motivo: 'Meteorologia' } }
+    };
+    await abrir(page, { estado });
+    await abrirEscala(page);
+    const voo = linha(page, 'Aluno 1006');
+    await voo.getByRole('button', { name: 'Sugestões' }).click();
+    const primeira = gaveta(page).locator('.opcoes-reparo li').first();
+    await expect(primeira).toContainText('10:10');
+    await expect(primeira).toContainText('Às 10:10, o 7º voo local do horário: no máximo 6 voos locais saem no mesmo horário.');
+    await primeira.getByRole('button', { name: 'Aplicar' }).click();
+    await expect(primeira.locator('[data-reparo-aplicar]')).toHaveText('Aplicar mesmo assim');
+    await expect(voo.locator('.st-sel')).toHaveValue('Cancelado');
+    await primeira.locator('[data-reparo-aplicar]').click();
+    await expect(gaveta(page)).toBeHidden();
+    await expect(voo.locator('.st-sel')).toHaveValue('Pendente');
+    await expect(voo.locator('.c-hr')).toContainText('10:10');
+  });
+
   test('cancelado porque o aluno faltou: sem "Sugestões"', async ({ page }) => {
     await abrir(page, { estado: doisInstrutores() });
     await abrirEscala(page);

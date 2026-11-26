@@ -144,6 +144,68 @@ describe('Aplicar e desfazer', () => {
   });
 });
 
+// No máximo 6 voos locais saem no mesmo horário (a regra do 7º local do plano: avisa e pede a confirmação). A sugestão
+// que põe o voo local num horário que já tem 6 diz que ele será o 7º e pede a confirmação (dois cliques, "Aplicar mesmo
+// assim"); a ordem não muda
+describe('O limite de voos locais no horário', () => {
+  // Seis Voos Locais às 10:10 e o do Aluno 1006 às 08:20, com sete instrutores
+  const seisAs1010 = () => cenario({
+    ins: [1, 2, 3, 4, 5, 6, 7].map(id => instrutor(id, 9)),
+    stu: [...[1000, 1001, 1002, 1003, 1004, 1005].map(id => aluno(id, { p1: 610, p2: -1 })), aluno(1006, { p1: 500, p2: -1 })]
+  });
+
+  it('o cancelado que só pode às 10:10: a sugestão das 10:10 avisa que ele será o 7º e pede a confirmação', () => {
+    const { estado, voo } = cancelado(seisAs1010(), 1006, 'Meteorologia');
+    assert.equal(hm(voo.a), '08:20');
+    estado.stu.find(s => s.id === 1006).jan = 'h610';
+    const resultado = runAllocationEngine(estado);
+    assert.equal(resultado.out.filter(o => o.a === 610).length, 6);
+    const [primeira] = sugerirParaCancelado(estado, resultado, voo.fKey).opcoes;
+    assert.equal(hm(primeira.mudancas.a), '10:10');
+    assert.equal(primeira.confirmar, 'Às 10:10, o 7º voo local do horário: no máximo 6 voos locais saem no mesmo horário.');
+    assert.equal(primeira.armado, 'Aplicar mesmo assim');
+  });
+
+  it('com a confirmação com o aluno também, as duas frases, e o botão armado é o do aluno', () => {
+    // Só às 06:30, com o período das 06:30 fechado: o mais perto fora da disponibilidade é o das 10:10
+    const { estado, voo } = cancelado(seisAs1010(), 1006, 'Meteorologia');
+    estado.stu.find(s => s.id === 1006).jan = 'h390';
+    estado.win = estado.win.map((w, i) => (i === 0 ? false : w));
+    const resultado = runAllocationEngine(estado);
+    const [primeira] = sugerirParaCancelado(estado, resultado, voo.fKey).opcoes;
+    assert.equal(hm(primeira.mudancas.a), '10:10');
+    assert.equal(primeira.confirmar, 'Confirme com o aluno: às 10:10, fora da disponibilidade do pedido. Às 10:10, o 7º voo local do horário: no máximo 6 voos locais saem no mesmo horário.');
+    assert.equal(primeira.armado, 'Confirmei com o aluno');
+  });
+
+  it('o conflito que passa para as 10:10: a sugestão avisa que ele será o 7º', () => {
+    const base = seisAs1010();
+    const v0 = runAllocationEngine(base).out.find(o => o.stuId === 1006);
+    // Às 08:20 nenhum instrutor vem mais
+    const aw = Array(9).fill(true); aw[1] = false;
+    const estado = { ...base, fixos: { [v0.fKey]: pinoDoVoo(v0) }, ins: base.ins.map(x => ({ ...x, aw: [...aw] })) };
+    const resultado = runAllocationEngine(estado);
+    const voo = resultado.out.find(o => o.fKey === v0.fKey);
+    assert.ok(voo.conflito);
+    const [primeira] = sugerirReparos(estado, resultado, voo.fKey).filter(o => o.mudancas);
+    assert.equal(hm(primeira.mudancas.a), '10:10');
+    assert.match(primeira.confirmar, /^Às 10:10, o 7º voo local do horário/);
+    assert.equal(primeira.armado, 'Aplicar mesmo assim');
+  });
+
+  it('a troca no mesmo horário do conflito não avisa (o voo já sai nele); o horário com menos de 6 não avisa', () => {
+    const base = seisAs1010();
+    const v0 = runAllocationEngine(base).out.find(o => o.stuId === 1000);
+    const estado = { ...base, fixos: { [v0.fKey]: pinoDoVoo(v0) }, ins: base.ins.map(x => (x.id === v0.insId ? { ...x, on: false } : x)) };
+    const resultado = runAllocationEngine(estado);
+    const opcoes = sugerirReparos(estado, resultado, v0.fKey).filter(o => o.mudancas);
+    assert.ok(opcoes.length > 0);
+    assert.ok(opcoes.every(o => !o.confirmar), opcoes.map(o => o.texto).join(' | '));
+    const outro = cancelado(cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, { p1: 610, p2: -1 })] }), 1000, 'Meteorologia');
+    assert.ok(sugerirParaCancelado(outro.estado, outro.resultado, outro.voo.fKey).opcoes.every(o => !o.confirmar || !/voo local/.test(o.confirmar)));
+  });
+});
+
 // O pedido recusado porque o instrutor escolhido não serve (js/reparo.js, sugestoesDoRejeitado): outro instrutor, ou
 // "Automático", que encaixa o pedido sem tirar nem mudar nenhum outro voo
 describe('O pedido recusado pelo instrutor escolhido', () => {
