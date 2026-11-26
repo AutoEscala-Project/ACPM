@@ -252,6 +252,12 @@ ganha `exige: ['aviao:<matrícula>']`, e a marca `habilitacaoPropria` fica como 
 do formato 25 tiraria ao gravar o cadastro. O dia não muda. Só o app muda (o banco recusa o conteúdo de antes pelo
 número): o primeiro acesso de um Operador ou Administrador regrava os dias e o cadastro no 26.
 
+No formato 27, os instrutores podem ter duas habilitações novas do registro, `endosso_solo` (Endosso Solo) e
+`navegacao_150` (Voo de Navegação ≥ 150 NM), que a aba do formato 26 tiraria como desconhecidas ao gravar o cadastro.
+Nada é convertido: ninguém as recebe (são marcadas em Instrutores › "Editar habilitações"), e nenhum tipo de missão as
+exige; só uma missão do curso que as peça (Cursos). Só o app muda: o primeiro acesso de um Operador ou Administrador
+regrava os dias e o cadastro no 27.
+
 ## Estrutura
 
 | Caminho | Conteúdo |

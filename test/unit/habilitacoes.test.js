@@ -2,7 +2,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
-import { HABILITACOES, habilitacoesDoNivel, normalizarHabilitacoes, podeFazer, podeAlgumCheque, descreverExigencias, marcasDoChecadorAntigo, GRUPOS_DE_HABILITACAO, exigenciasDoRecurso, gruposDosRecursos, exigencias } from '../../js/habilitacoes.js';
+import { HABILITACOES, habilitacoesDoNivel, normalizarHabilitacoes, podeFazer, podeAlgumCheque, descreverExigencias, marcasDoChecadorAntigo, GRUPOS_DE_HABILITACAO, exigenciasDoRecurso, gruposDosRecursos, exigencias, nomeDaHabilitacao } from '../../js/habilitacoes.js';
 import { MIS, MATRICULA } from '../../js/config.js';
 import { MODELOS } from '../../js/modelos-de-curso.js';
 
@@ -31,7 +31,8 @@ describe('Habilitações individuais', () => {
   it('o que cada nível recebe; quem tem mais nível tem mais habilitações (os checadores começam desmarcados)', () => {
     assert.deepEqual(habilitacoesDoNivel(1), ['grounds', 'ground_pa34', 'local', 'c152']);
     assert.deepEqual(habilitacoesDoNivel(3), ['grounds', 'ground_pa34', 'sim_mono', 'sim_multi', 'tgl', 'local', 'c152']);
-    assert.deepEqual(habilitacoesDoNivel(9), HABILITACOES.map(h => h.id).filter(h => !h.startsWith('checa_')));
+    // As habilitações novas do F1d (Endosso Solo e Nav. ≥ 150 NM) não vêm de nível nenhum
+    assert.deepEqual(habilitacoesDoNivel(9), HABILITACOES.map(h => h.id).filter(h => !h.startsWith('checa_') && !['endosso_solo', 'navegacao_150'].includes(h)));
     assert.deepEqual(habilitacoesDoNivel('x'), habilitacoesDoNivel(1), 'nível inválido conta como A01');
     for (let lv = 2; lv <= 9; lv++) assert.ok(habilitacoesDoNivel(lv).length > habilitacoesDoNivel(lv - 1).length);
   });
@@ -241,3 +242,33 @@ function arquivosDoApp(pasta = 'js') {
   return readdirSync(new URL(`../../${pasta}`, import.meta.url), { withFileTypes: true })
     .flatMap(e => (e.isDirectory() ? arquivosDoApp(`${pasta}/${e.name}`) : e.name.endsWith('.js') ? [`${pasta}/${e.name}`] : []));
 }
+
+// N5 (F1d, "novas habilitações", formato 27): Endosso Solo e o voo de navegação de 150 NM ou mais têm habilitação própria,
+// no grupo Voo, ao lado da Liberação de Solo e da Navegação (que continuam com as missões delas). Ninguém começa com elas
+// (regra a), nenhum tipo de missão nem nível as exige: valem quando uma missão do curso as pede
+describe('As habilitações novas: Endosso Solo e Nav. ≥ 150 NM', () => {
+  it('estão no registro, com os nomes, no grupo Voo, ao lado de solo e navegacao', () => {
+    const porId = new Map(HABILITACOES.map(h => [h.id, h]));
+    assert.deepEqual(porId.get('endosso_solo'), { id: 'endosso_solo', nome: 'Endosso Solo', curto: 'Endosso Solo' });
+    assert.deepEqual(porId.get('navegacao_150'), { id: 'navegacao_150', nome: 'Voo de Navegação ≥ 150 NM', curto: 'Nav. ≥ 150 NM' });
+    assert.deepEqual(GRUPOS_DE_HABILITACAO.find(g => g.id === 'voo').ids,
+      ['tgl', 'local', 'navegacao', 'navegacao_150', 'solo', 'endosso_solo', 'parafuso', 'ifr', 'noturno']);
+    assert.deepEqual(normalizarHabilitacoes(['endosso_solo', 'ifr', 'navegacao_150', 'solo', 'navegacao']), ['navegacao', 'navegacao_150', 'solo', 'endosso_solo', 'ifr']);
+    assert.equal(nomeDaHabilitacao('navegacao_150'), 'Voo de Navegação ≥ 150 NM');
+  });
+
+  it('ninguém as recebe de um nível, e nenhum tipo de missão, cheque ou curso as exige', () => {
+    for (let lv = 1; lv <= 9; lv++) assert.ok(!habilitacoesDoNivel(lv).some(h => ['endosso_solo', 'navegacao_150'].includes(h)), `A0${lv}`);
+    for (const [mis, m] of Object.entries(MIS)) {
+      for (const eq of m.eq) {
+        for (const curso of [undefined, 'PP', 'PC', 'INVA']) {
+          assert.ok(!exigencias(mis, eq, { curso }).flat().some(h => ['endosso_solo', 'navegacao_150'].includes(h)), `${mis} no ${eq}`);
+        }
+      }
+    }
+    // Voo Solo e Navegação continuam pedindo só o de antes: quem tem só a nova não dá a missão
+    assert.equal(podeFazer(com('endosso_solo', 'c152'), 'Voo Solo', 'C152'), false);
+    assert.equal(podeFazer(com('solo', 'c152'), 'Voo Solo', 'C152'), true);
+    assert.equal(podeFazer(com('navegacao_150', 'c152'), 'Navegação', 'C152'), false);
+  });
+});

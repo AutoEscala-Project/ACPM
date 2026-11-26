@@ -15,7 +15,11 @@ export const HABILITACOES = [
   { id: 'tgl', nome: 'TGL (TMA)', curto: 'TGL (TMA)' },
   { id: 'local', nome: 'Voo Local', curto: 'Local' },
   { id: 'navegacao', nome: 'Voo de Navegação', curto: 'Navegação' },
+  // O voo de navegação de 150 NM ou mais e o endosso do solo (formato 27): ninguém começa com elas, e só uma missão do curso
+  // as exige (marcadas em Cursos); a Navegação e a Liberação de Solo continuam com as missões delas
+  { id: 'navegacao_150', nome: 'Voo de Navegação ≥ 150 NM', curto: 'Nav. ≥ 150 NM' },
   { id: 'solo', nome: 'Voo para liberação de Solo', curto: 'Liberação de Solo' },
+  { id: 'endosso_solo', nome: 'Endosso Solo', curto: 'Endosso Solo' },
   { id: 'parafuso', nome: 'Voo de Parafuso (SPIN)', curto: 'Parafuso (SPIN)' },
   { id: 'ifr', nome: 'Voo IFR', curto: 'IFR' },
   { id: 'noturno', nome: 'Voo Noturno', curto: 'Noturno' },
@@ -37,7 +41,7 @@ const ORDEM = new Map(HABILITACOES.map((h, i) => [h.id, i]));
 // de cada grupo do checador (o "?" do primeiro explica)
 export const GRUPOS_DE_HABILITACAO = [
   { id: 'ground-e-simulador', titulo: 'Ground e simulador', ids: ['grounds', 'ground_pa34', 'sim_mono', 'sim_multi'] },
-  { id: 'voo', titulo: 'Voo', ids: ['tgl', 'local', 'navegacao', 'solo', 'parafuso', 'ifr', 'noturno'] },
+  { id: 'voo', titulo: 'Voo', ids: ['tgl', 'local', 'navegacao', 'navegacao_150', 'solo', 'endosso_solo', 'parafuso', 'ifr', 'noturno'] },
   { id: 'avioes', titulo: 'Aviões', ids: ['c152', 'c172', 'mlte'] },
   { id: 'checador-curso', titulo: 'Checador: curso', ids: ['checa_pp', 'checa_pc', 'checa_inva'], dica: 'checador' },
   { id: 'checador-motor', titulo: 'Checador: motor', ids: ['checa_mnte', 'checa_mlte'] },
@@ -146,7 +150,7 @@ export const podeAlgumCheque = instrutor => Object.keys(CHEQUES).some(mis => pod
 export const descreverExigencias = (mis, eq, contexto) => exigencias(mis, eq, contexto).map(g => g.map(nomeDaHabilitacao).join(' ou ')).join(' + ');
 
 // Migração dos níveis cumulativos A01–A09: o instrutor recebe exatamente o que o nível permitia
-// (checadores não existiam: começam desmarcados)
+// (checadores não existiam: começam desmarcados; Endosso Solo e Nav. ≥ 150 NM nunca vêm de um nível)
 const POR_NIVEL = [
   [1, ['grounds', 'ground_pa34', 'local', 'c152']],
   [2, ['sim_mono', 'sim_multi']],
