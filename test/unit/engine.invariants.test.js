@@ -437,6 +437,28 @@ describe('Invariantes das escolhas do operador, em 300 cenários', () => {
     }
   }));
 
+  // F1h (Pedro, 2026-11-26): o “Priorizar com” escolhe o instrutor, não o horário. O pareamento no horário (js/engine.js)
+  // só troca o instrutor de voos de um mesmo horário: contra o motor sem ele, nenhum horário muda, ninguém sai de um
+  // instrutor do “Priorizar com”, e o voo fixo, o do instrutor escolhido, a turma de Ground e a volta do noturno ficam com o
+  // instrutor deles
+  it('o pareamento no horário só troca o instrutor: o horário, o “Priorizar com” de quem já tinha, os fixos e os escolhidos ficam', () => {
+    let trocados = 0;
+    emTodasAsEscolhas(({ estado, todos }) => {
+      const sem = new Map(runAllocationEngine(estado, { parearNoHorario: false }).out.map(o => [o.fKey, o]));
+      assert.equal(todos.length, sem.size, 'outros voos');
+      for (const o of todos) {
+        const v = sem.get(o.fKey);
+        assert.ok(v && v.a === o.a && v.b === o.b, `${o.fKey}: o horário mudou`);
+        if (v.insId === o.insId) continue;
+        trocados++;
+        const pares = (estado.stu.find(s => s.id === o.stuId) || {}).voaCom || [];
+        assert.ok(!pares.includes(v.insId) || pares.includes(o.insId), `${o.fKey}: saiu do “Priorizar com”`);
+        assert.ok(!v.fixo && !v.insEscolhido && !v.isGround && !v.trecho, `${o.fKey}: o instrutor de um voo preso mudou`);
+      }
+    });
+    assert.ok(trocados > 0, 'nenhum voo trocou de instrutor (o teste não passa por falta deles)');
+  });
+
   it('a divisão das horas e a compactação não trocam o instrutor escolhido nem o do “Priorizar com”', () => emTodasAsEscolhas(({ estado, out }) => {
     const antes = new Map(runAllocationEngine(estado, { compactar: false, dividirHoras: false }).out.map(o => [o.fKey, o]));
     for (const o of antes.values()) {

@@ -16,20 +16,25 @@ describe('O motor com voos fixos: a mesma saída de antes da conferência sair d
     assert.ok(contagem.fixos > 10000 && contagem.conflitos > 3000 && contagem.avisos > 3000 && contagem.recusas > 5000, JSON.stringify(contagem));
   });
 
-  // A gravação é de antes do F1h, que muda de propósito a escala dos alunos com “Priorizar com” (o primeiro da fila e as
-  // disputas: js/engine.js). Ela continua a mesma: o motor sem o F1h (opcoes.priorizarComPrimeiro: false) devolve a saída
-  // gravada em todos os dias, e o motor de agora, em todos os dias sem “Priorizar com”
+  // A gravação é de antes do F1h, que muda de propósito os avisos do “Priorizar com” (as disputas, um aviso por voo, com a
+  // chave dele) e, quando há um caminho, o instrutor dos voos de um mesmo horário (o pareamento no horário: js/engine.js).
+  // Ela continua a mesma: o motor sem o pareamento e com os avisos de antes (opcoes.parearNoHorario: false) devolve a saída
+  // gravada em todos os dias, e o motor de agora, em todos os dias sem “Priorizar com”. Com ele, nenhum horário muda: em
+  // todos os dias, os horários são os do motor sem o pareamento (o “Priorizar com” escolhe o instrutor, não o horário)
   const comPar = estado => estado.stu.some(s => (s.voaCom || []).length > 0);
+  const horarios = saida => JSON.stringify(saida.out.map(o => [o.fKey, o.a, o.b]).sort((p, q) => (p[0] < q[0] ? -1 : 1)));
   for (const tipo of TIPOS_DE_PINO) {
-    it(`${tipo}: em 300 sementes, a saída gravada (sem o F1h; com ele, nos dias sem “Priorizar com”)`, () => {
-      const diferentes = [], comOF1h = [];
+    it(`${tipo}: em 300 sementes, a saída gravada (sem o pareamento; com ele, nos dias sem “Priorizar com”, e os mesmos horários em todos)`, () => {
+      const diferentes = [], comOF1h = [], outroHorario = [];
+      const semOF1h = { parearNoHorario: false };
       for (const seed of SEMENTES_DOS_PINOS) {
-        const semOF1h = { priorizarComPrimeiro: false };
         if (impressaoDaSaida(runAllocationEngine(diaComPinos(seed, tipo, semOF1h), semOF1h)) !== GRAVADA.dias[seed][tipo]) diferentes.push(seed);
         const estado = diaComPinos(seed, tipo);
-        if (!comPar(estado) && impressaoDaSaida(runAllocationEngine(estado)) !== GRAVADA.dias[seed][tipo]) comOF1h.push(seed);
+        const agora = runAllocationEngine(estado);
+        if (!comPar(estado) && impressaoDaSaida(agora) !== GRAVADA.dias[seed][tipo]) comOF1h.push(seed);
+        if (horarios(agora) !== horarios(runAllocationEngine(estado, semOF1h))) outroHorario.push(seed);
       }
-      assert.deepEqual([diferentes, comOF1h], [[], []]);
+      assert.deepEqual([diferentes, comOF1h, outroHorario], [[], [], []]);
     });
   }
 });
@@ -133,8 +138,9 @@ describe('conferirEscala: a escala conferida sem o motor', async () => {
     assert.equal(conferirEscala(novo, motor, { antes: estado }), null);
   });
 
-  // Revisão do F1h: a primeira visita do “Priorizar com” encaixa fora da ordem da fila, e o aviso do instrutor escolhido
-  // que saiu do cadastro saía na ordem do encaixe; a conferência o dá na ordem da fila. Os dois dão a ordem da fila
+  // Revisão do F1h: a primeira visita do “Priorizar com” (que o F1h teve até a resposta de Pedro de 2026-11-26) encaixava
+  // fora da ordem da fila, e o aviso do instrutor escolhido que saiu do cadastro saía na ordem do encaixe; a conferência o dá
+  // na ordem da fila. Os dois dão a ordem da fila
   it('com “Priorizar com”, a escala do motor conferida de novo é a mesma: os avisos na ordem da fila', async () => {
     const { aluno, cenario, instrutor } = await import('../helpers/montar.js');
     // O INVA 99 (escolhido) saiu do cadastro; o de prioridade 1 tem “Priorizar com”
