@@ -56,7 +56,9 @@ describe('conferirEscala: a escala conferida sem o motor', async () => {
     if (tipo < 0.5) {
       const a = pick([390, 420, 500, 610, 690, 760, 820, 870, 980]);
       const r2 = o.isGround ? o.r : pick(FROTA_POR_TIPO[o.eqType] || [o.r]);
-      novo.fixos[o.fKey] = { ...pinoDoVoo(o), a, b: a + (o.b - o.a), r: r2, insId: pick(novo.ins).id, agendado: true, ...(o.isGround ? { classKey: o.classKey } : {}) };
+      // O aluno de uma turma de Ground que muda de lugar sai dela: uma turma só dele (a chave do voo)
+      const { classKey: _, ...pino } = pinoDoVoo(o);
+      novo.fixos[o.fKey] = { ...pino, a, b: a + (o.b - o.a), r: r2, insId: pick(novo.ins).id, agendado: true };
       return { novo, mudou: o.fKey };
     }
     if (tipo < 0.75) {
@@ -97,13 +99,16 @@ describe('conferirEscala: a escala conferida sem o motor', async () => {
         const c = depois.get(o.fKey);
         if (!c || lugar(c) !== lugar(o)) falhas.push(`${seed} ${tipo}: o fixo ${o.fKey} noutro lugar`);
       }
+      // Sem pedido entrando ou saindo: o mesmo total e as mesmas recusas; com todos no mesmo lugar, as mesmas turmas
       const chaves = lista => lista.map(o => o.fKey).sort().join();
       if (chaves(refeita.out) === chaves(conferida.out)) {
         comparados++;
-        const turmas = lista => lista.filter(o => o.isGround).map(o => `${o.fKey}:${o.groupSize}`).sort().join();
         if (refeita.tot !== conferida.tot) falhas.push(`${seed} ${tipo}: tot`);
         if (refeita.al.filter(a => a.t === 'err').length !== conferida.al.filter(a => a.t === 'err').length) falhas.push(`${seed} ${tipo}: recusas`);
-        if (turmas(refeita.out) !== turmas(conferida.out)) falhas.push(`${seed} ${tipo}: turmas`);
+        // As turmas (quem está com quem; o motor pode juntar numa turma aberta um aluno sem pino) e o tamanho de cada uma
+        const membros = lista => lista.filter(o => o.isGround).map(o => `${lugar(o)}:${lista.filter(v => v.classKey === o.classKey).map(v => v.fKey).sort()}`).sort().join();
+        const tamanhos = lista => lista.filter(o => o.isGround).map(o => `${o.fKey}:${o.groupSize}`).sort().join();
+        if (membros(refeita.out) === membros(conferida.out) && tamanhos(refeita.out) !== tamanhos(conferida.out)) falhas.push(`${seed} ${tipo}: turmas`);
       }
     }
     assert.deepEqual(falhas.slice(0, 8), [], `${falhas.length} falha(s)`);
