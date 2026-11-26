@@ -156,8 +156,8 @@ test.describe('Agenda de Solicitações (modo compartilhado)', () => {
     const context = await browser.newContext();
     await prepararContexto(context);
     const page = await context.newPage();
-    // A recusa do servidor (400)
-    const erros = vigiarErros(page, { statusEsperados: [400] });
+    // A recusa do servidor (PT422: o PostgREST responde 422)
+    const erros = vigiarErros(page, { statusEsperados: [422] });
     const servidor = await instalarSupabaseFalso(context, comAlunos());
     for (let i = 0; i < 6; i++) {
       servidor.solicitacoes.push({ id: 50 + i, data: '2026-11-13', aluno: 1001, aluno_nome: 'Aluno 1001', missao: 'Voo Local', janela: 'horario', horario: '08:20', horas: 1,

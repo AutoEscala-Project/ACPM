@@ -36,7 +36,7 @@ export function criarAgenda({ agora, cursos = () => [] }) {
     // No máximo 6 voos locais no mesmo horário; o 7º, com a confirmação, fica registrado com quem confirmou
     const alemDoLimite = MISSOES_LOCAIS.includes(args.p_missao)
       && solicitacoes.filter(s => s.data === args.p_data && !s.cancelada_em && s.horario === args.p_horario && MISSOES_LOCAIS.includes(s.missao)).length >= LIMITE_DE_VOOS_LOCAIS;
-    if (alemDoLimite && !args.p_confirmar_limite) return recusa(400, 'PT422', 'já há 6 voos locais no horário', 'locais');
+    if (alemDoLimite && !args.p_confirmar_limite) return recusa(422, 'PT422', 'já há 6 voos locais no horário', 'locais');
     const noPrazo = prazoDaAgendaPermite(args.p_data, agora);
     if (!noPrazo && !args.p_excecao) return recusa(403, 'PT403', 'prazo encerrado');
     if (!noPrazo && !['operador', 'administrador'].includes(conta.perfil)) return recusa(403, '42501', 'exceção só para operadores');

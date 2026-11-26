@@ -14,8 +14,8 @@ import { novoId, programaDoLegado, cursosIniciais } from '../../js/programa.js';
 
 const DATA = '2026-11-11';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
-// Os status do PostgREST para os códigos das funções dos cursos
-const STATUS = { 42501: 403, PT409: 409, 23505: 409, P0002: 404, 22023: 400, 23514: 400 };
+// Os status do PostgREST para os códigos das funções (PTxyz: o status xyz)
+const STATUS = { 42501: 403, PT403: 403, PT409: 409, PT422: 422, 23505: 409, P0002: 404, 22023: 400, 23514: 400 };
 const LEGADO = { PP: [{ id: 'PP-01', nome: 'Familiarização', mis: 'Voo Local', eq: 'C152', nb: 1 }, { id: 'PP-02', nome: 'Navegação', mis: 'Navegação', eq: 'C152', nb: 2 }], PC: [], INVA: [] };
 const comPrograma = () => ({ ...cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, {}, { curso: 'PP' })] }), cursos: LEGADO });
 
