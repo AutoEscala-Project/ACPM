@@ -3,7 +3,7 @@
 import {
   test, comProgresso, expect, abrir, abrirSintetico, abrirComExemplo, irPara, irParaVista, filtrarCursos, confirmar, AGORA, AMANHA, alvosPequenos,
   appPronto, botaoDaAba, dataAberta, diaSeguinte, larguraDaPagina, abrirAluno, campoDoAberto, linhaDoAluno, linhasDosAlunos, nomesNaLista,
-  etiquetasDoAberto, nenhumNaLista
+  etiquetasDoAberto, nenhumNaLista, abrirHistorico, campoDaAgenda
 } from './fixtures.js';
 import { documentosAtuais } from './supabase-falso.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
@@ -211,6 +211,72 @@ test.describe('Alunos', () => {
     await expect(linhasDosAlunos(page)).toHaveCount(4);
     await expect(page.locator('#alu > li.lista-vazia')).toHaveCount(0);
     await expect(contagem).toHaveText('4 alunos');
+  });
+});
+
+// O "Ativo" do cadastro (F2): a chave da linha, um clique em cada sentido, o aviso, o Histórico e "Mostrar inativos"
+test.describe('Alunos: Ativo e Mostrar inativos', () => {
+  const estado = () => ({ ...cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, {}, { nm: 'Ana' }), aluno(1001, {}, { nm: 'Bruno' }), aluno(1002, {}, { nm: 'Carla' })] }), nid: 1003 });
+  const chave = (page, id) => linhaDoAluno(page, id).locator('.lista-chave');
+
+  test('um clique desliga: a linha fica, discreta, com "inativo"; o aviso diz o que muda; o Histórico reverte; outro clique liga', async ({ page }) => {
+    await abrir(page, { estado: estado() });
+    await irPara(page, 'alu');
+    await expect(chave(page, 1000)).toHaveAttribute('role', 'switch');
+    await expect(chave(page, 1000)).toHaveAttribute('aria-checked', 'true');
+    await expect(chave(page, 1000)).toHaveAccessibleName('Ana ativo no cadastro');
+    await expect(page.locator('#alu-inativos')).toBeHidden();
+    await chave(page, 1000).click();
+    await expect(chave(page, 1000)).toHaveAttribute('aria-checked', 'false');
+    await expect(page.locator('#toast-box')).toContainText('Ana inativo de hoje em diante. Os voos dele nesta data continuam; os pedidos ficam registrados e só entram quando ele voltar a ativo. As datas passadas não mudam.');
+    // A linha continua à vista (até um filtro mudar), discreta e com a etiqueta
+    await expect(linhaDoAluno(page, 1000)).toHaveClass(/\binativo\b/);
+    await expect(linhaDoAluno(page, 1000).locator('.lista-inativo')).toHaveText('inativo');
+    await expect(page.locator('#alu-inativos')).toHaveText('Mostrar inativos (1)');
+    await expect(page.locator('#alu-contagem')).toHaveText('2 alunos');
+    // O detalhe dele diz o que o inativo quer dizer
+    await abrirAluno(page, 1000);
+    await expect(page.locator('#det-alu-aviso')).toContainText('Inativo no cadastro');
+    // Gravado no cadastro, com a entrada do Histórico, que reverte
+    await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('acpm4_cadastro')).stu.find(s => s.id === 1000).inativo)).toBe(true);
+    await abrirHistorico(page);
+    const entrada = page.locator('#audit-log-list .audit-item', { hasText: 'Ana: inativo no cadastro' });
+    await entrada.locator('[data-act="rev-log"]').click();
+    await expect(chave(page, 1000)).toHaveAttribute('aria-checked', 'true');
+    await expect(page.locator('#audit-log-list')).toContainText('Revertido: Ana: ativo no cadastro');
+    await page.locator('#btn-fechar-historico').click();
+    // Um clique liga de novo, e outro desliga
+    await chave(page, 1001).click();
+    await expect(chave(page, 1001)).toHaveAttribute('aria-checked', 'false');
+    await chave(page, 1001).click();
+    await expect(chave(page, 1001)).toHaveAttribute('aria-checked', 'true');
+    await expect(page.locator('#toast-box')).toContainText('Bruno ativo de novo, de hoje em diante.');
+    await expect.poll(() => page.evaluate(() => 'inativo' in JSON.parse(localStorage.getItem('acpm4_cadastro')).stu.find(s => s.id === 1001))).toBe(false);
+  });
+
+  test('"Mostrar inativos": o inativo sai da lista quando um filtro muda e volta com o botão; a busca vazia diz quantos inativos passam', async ({ page }) => {
+    await abrir(page, { estado: estado() });
+    await irPara(page, 'alu');
+    await chave(page, 1002).click();
+    await expect(chave(page, 1002)).toHaveAttribute('aria-checked', 'false');
+    await page.locator('[data-flt="alu"]').fill('carla');
+    await expect(page.locator('#alu > li.lista-vazia')).toHaveText('Nenhum aluno ativo com esses filtros; 1 inativo passa. Mostrar inativos Limpar filtros');
+    await page.locator('#alu [data-lista-inativos="alu"]').click();
+    await expect(page.locator('#alu-inativos')).toHaveAttribute('aria-pressed', 'true');
+    await expect.poll(() => nomesNaLista(page)).toEqual(['Carla']);
+    await expect(page.locator('#alu-contagem')).toHaveText('1 de 3 alunos');
+    await page.locator('[data-flt="alu"]').fill('');
+    await page.locator('#alu-inativos').click();
+    await expect(page.locator('#alu-inativos')).toHaveAttribute('aria-pressed', 'false');
+    await expect.poll(() => nomesNaLista(page)).toEqual(['Ana', 'Bruno']);
+    await expect(page.locator('#alu-contagem')).toHaveText('2 alunos');
+    // O aluno inativo não entra num pedido novo (a lista de alunos do formulário da Agenda fica sem ele)
+    await irPara(page, 'age');
+    await expect(campoDaAgenda(page, 'aluno').locator('option', { hasText: 'Carla' })).toHaveCount(0);
+    // Quem só consulta não vê a chave
+    await page.locator('#role-sel').selectOption('gestor');
+    await irPara(page, 'alu');
+    await expect(chave(page, 1000)).toBeHidden();
   });
 });
 

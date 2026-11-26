@@ -53,6 +53,8 @@ function itemDoAluno(s) {
     linha3: progresso ? progresso.resto : '',
     ...pontoDoAluno(s),
     inativo: inativo(s),
+    // O "Ativo" do cadastro (js/eventos/inativos.js): um clique em cada sentido
+    chave: { marcado: !inativo(s), texto: 'Ativo', rotulo: `${s.nm} ativo no cadastro`, atributos: 'data-act="ativo" data-de="aluno"' },
     atributos: `data-k="s" data-id="${s.id}"`,
     busca: [s.nm, canac].filter(Boolean),
     valores: { curso: [s.curso || SEM_CURSO] }
@@ -104,7 +106,7 @@ export function detalheDoAluno(id) {
     id: s.id,
     titulo: s.nm,
     subtitulo: [canac ? `CANAC ${canac}` : '', nomeDoCurso(s) || 'sem curso'].filter(Boolean).join(' · '),
-    aviso: '',
+    aviso: inativo(s) ? 'Inativo no cadastro: não entra em pedido novo de hoje em diante (os voos que ele já tem continuam). As datas passadas ficam como estão. Para ativar de novo, ligue “Ativo” na linha dele.' : '',
     secoes,
     rodape: [{ id: 'excluir', texto: 'Excluir aluno…', rotulo: `Excluir ${s.nm}`, atributos: 'data-act="dels"', soEdicao: true }]
   };

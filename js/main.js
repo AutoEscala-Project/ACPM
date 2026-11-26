@@ -31,8 +31,10 @@ import './eventos/conta.js';
 import './eventos/agenda.js';
 import './eventos/rodizio.js';
 import './eventos/cursos.js';
-// Os dados pessoais no detalhe de uma pessoa (Alunos; INVAs depois): um módulo só, para as telas de lista e detalhe
+// Os dados pessoais no detalhe de uma pessoa (Alunos; INVAs depois) e o "Ativo" dos três cadastros: um módulo só cada um,
+// para as telas de lista e detalhe
 import './eventos/editor-de-dados-pessoais.js';
+import './eventos/inativos.js';
 // O diálogo "Agendar voo" (js/eventos/agendamento.js) vem com a Escala, que o importa; Instrutores traz os limites da lei e
 // o painel dos dados pessoais, e a Demanda, o "Importar da agenda" (test/unit/eventos-ligados.test.js)
 import { setRole, abrirData, lerData, dadosPreparados, carregarBI } from './actions.js';

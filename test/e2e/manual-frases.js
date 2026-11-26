@@ -56,7 +56,8 @@ const NOVAS = {
   alunos: ['Não escalar com', 'A lista dos alunos fica à esquerda e o aluno escolhido à direita', '#/alu/1000', '‹ Alunos',
     'gravado ao sair dele', 'Ctrl+, e Ctrl+.', 'Filtro dos cursos', 'aparecem os alunos de algum dos marcados', 'Curso: PP ou PC',
     'Abrir a Demanda', 'aparecem os pedidos dos alunos de algum dos cursos marcados', 'O filtro dos cursos é um só nas duas telas',
-    'um cartão por pessoa', 'e Desfazer volta ao que está gravado', 'Outra pessoa alterou o cadastro enquanto você editava'],
+    'um cartão por pessoa', 'e Desfazer volta ao que está gravado', 'Outra pessoa alterou o cadastro enquanto você editava',
+    'desligue Ativo, na linha dele', 'Mostrar inativos'],
   // Recursos: as duas vistas, a busca pela matrícula, o filtro das categorias (a regra "alguma das marcadas") e o
   // cadastro da frota e os horários de decolagem
   recursos: ['Disponibilidade do dia', 'Novo recurso', 'Retirar', 'Horários de decolagem', 'de 30 em 30 minutos', 'divide as horas do dia',
