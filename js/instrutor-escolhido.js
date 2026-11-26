@@ -12,7 +12,7 @@ import { FROTA_INICIAL, recursoDaFrota } from './frota.js';
 import { normalizarLimites } from './limites.js';
 import { problemasDoInstrutor } from './viabilidade.js';
 import { isGroundMission } from './rules.js';
-import { pinoDoVoo, fixoPeloStatus, fixosQueVoltam } from './fixos.js';
+import { pinoDoVoo, fixoPeloStatus, fixosQueVoltam, pinosQueVoltam } from './fixos.js';
 import { chaveDoVoo, pedidoDoAluno, statusDoVoo, umPorUnidade, compromissoDoVoo, exigeDosVoos } from './voo.js';
 import { inativoNoEstado } from './inativos.js';
 
@@ -93,6 +93,7 @@ const soltavel = (estado, fKey, pino) => !estado.aprovacao && !fixoPeloStatus(fK
 //   (a mudança de status e a reabertura da escala não o soltam).
 // - "Automático", na Demanda ou na Escala, devolve a escolha ao app: o voo fixo pela escolha na Escala é solto; o da
 //   escala aprovada, o fixado pelo status e o agendado na Escala continuam fixos, com o instrutor de agora.
+// A reversão diz também se a escolha foi feita na escala aprovada (aprovada: os pinos dela são os da aprovação)
 export function escolherInstrutor(estado, resultado, { stuId, mid = 0 }, insId, { noLugar = false } = {}) {
   const fixos = estado.fixos || {};
   const fKey = chaveDoVoo(stuId, mid);
@@ -105,7 +106,8 @@ export function escolherInstrutor(estado, resultado, { stuId, mid = 0 }, insId, 
   const antes = {
     pedidos: alvos.map(p => ({ ...p, insId: (pedidoDe(estado, p.stuId, p.mid) || {}).insId || 0 })),
     fixos: Object.fromEntries(grupo.filter(o => fixos[o.fKey]).map(o => [o.fKey, fixos[o.fKey]])),
-    soltar: grupo.filter(o => !fixos[o.fKey]).map(o => o.fKey)
+    soltar: grupo.filter(o => !fixos[o.fKey]).map(o => o.fKey),
+    ...(estado.aprovacao ? { aprovada: true } : {})
   };
 
   for (const p of alvos) {
@@ -141,9 +143,12 @@ const SEM_AGENDAMENTOS = { mudados: new Set(), soltos: new Set() };
 // já ter outro voo no horário: a escala foi refeita em volta da escolha). O voo agendado volta só enquanto o
 // agendamento continua (js/fixos.js, fixosQueVoltam; emVolta: o que o histórico diz): a chave de um agendamento
 // desfeito depois da escolha, ou feito depois dela, fica como está, com o instrutor escolhido de agora; e, como a troca
-// do instrutor não solta o voo agendado, o que o soltou depois dela continua valendo
-export function reverterEscolha(estado, { pedidos, fixos, soltar }, emVolta = SEM_AGENDAMENTOS) {
-  const { fixos: voltam, semInstrutor } = fixosQueVoltam(estado, fixos, { ...emVolta, soltaAgendado: false });
+// do instrutor não solta o voo agendado, o que o soltou depois dela continua valendo. Numa data reaberta depois da escolha,
+// o pino da aprovação de antes dela não volta (pinosQueVoltam): o voo fica como o que não era fixo (a escolha na escala
+// aprovada fixou antes no lugar o voo sem pino, e esse pino não tem marca: o motor nunca mais o moveria)
+export function reverterEscolha(estado, { pedidos, fixos, soltar, aprovada = false }, emVolta = SEM_AGENDAMENTOS) {
+  const { fixos: deAntes, semInstrutor } = fixosQueVoltam(estado, fixos, { ...emVolta, soltaAgendado: false });
+  const { voltam, saem } = pinosQueVoltam(deAntes, estado, aprovada);
   for (const { stuId, mid, insId } of pedidos) {
     const pedido = pedidoDe(estado, stuId, mid);
     if (!pedido || semInstrutor.has(chaveDoVoo(stuId, mid))) continue;
@@ -151,7 +156,7 @@ export function reverterEscolha(estado, { pedidos, fixos, soltar }, emVolta = SE
     else delete pedido.insId;
   }
   const novos = { ...(estado.fixos || {}), ...voltam };
-  for (const k of soltar) {
+  for (const k of [...soltar, ...saem]) {
     if (!novos[k] || emVolta.mudados.has(k)) continue;
     if (soltavel(estado, k, novos[k])) delete novos[k];
     else { const { escolhido: _, ...resto } = novos[k]; novos[k] = resto; }
@@ -180,9 +185,11 @@ export function escolherNosPedidos(estado, pedidos, insId) {
 
 // Desfaz um reparo das Sugestões (a reversão do histórico): os voos voltam a ser fixos como antes dele, e o instrutor
 // escolhido dos pedidos também. O voo agendado volta só enquanto o agendamento continua (js/fixos.js, fixosQueVoltam;
-// emVolta: o que o histórico diz): o que o próprio reparo soltou ("Soltar o voo"), com o pedido voando, volta
-export function reverterReparo(estado, { fixos, pedidos = [] }, emVolta = SEM_AGENDAMENTOS) {
-  const { fixos: voltam, semInstrutor } = fixosQueVoltam(estado, fixos, { ...emVolta, soltaAgendado: true });
+// emVolta: o que o histórico diz): o que o próprio reparo soltou ("Soltar o voo"), com o pedido voando, volta. Numa data
+// reaberta depois do reparo feito na escala aprovada, o pino da aprovação de antes dele não volta (pinosQueVoltam)
+export function reverterReparo(estado, { fixos, pedidos = [], aprovada = false }, emVolta = SEM_AGENDAMENTOS) {
+  const { fixos: deAntes, semInstrutor } = fixosQueVoltam(estado, fixos, { ...emVolta, soltaAgendado: true });
+  const { voltam } = pinosQueVoltam(deAntes, estado, aprovada);
   estado.fixos = { ...(estado.fixos || {}), ...voltam };
   for (const p of pedidos) {
     if (!semInstrutor.has(chaveDoVoo(p.stuId, p.mid))) escolherNosPedidos(estado, [p], p.insId);

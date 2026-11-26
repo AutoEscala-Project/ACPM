@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises';
-import { test, expect, abrir, abrirComExemplo, abrirEscala, lerEscala, json, AMANHA, abrirHistorico, dataAberta, exportar } from './fixtures.js';
+import { test, expect, abrir, abrirComExemplo, abrirEscala, lerEscala, json, AMANHA, abrirHistorico, dataAberta, exportar, refazer } from './fixtures.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
 
 test.describe('Escala', () => {
@@ -35,6 +35,8 @@ test.describe('Escala', () => {
     // O cancelamento pede o motivo
     await page.locator('#dlg-status').getByLabel('Meteorologia').check();
     await page.locator('#dlg-status').getByRole('button', { name: 'Confirmar' }).click();
+    // A escala não está aprovada: a pergunta antes de refazer (F1g)
+    await refazer(page);
     await expect(page.locator('#out table tbody tr.st-Cancelado')).toHaveCount(1);
     // O cancelado fica fixo onde estava: não ocupa nada, e os outros voos podem usar o horário
     await expect(page.locator('#out table tbody tr.st-Cancelado .fixo')).toHaveCount(1);
@@ -46,6 +48,7 @@ test.describe('Escala', () => {
   test('excluir da escala e restaurar pelo histórico', async ({ page }) => {
     const antes = await lerEscala(page);
     await page.locator('#out table [data-act="rm-fly"]').last().click();
+    await refazer(page);
     expect(json((await lerEscala(page)).resumo)).toMatchSnapshot('exclusao-resumo.json');
     await abrirHistorico(page);
     await page.locator('#audit-log-list [data-act="rev-log"]', { hasText: 'Restaurar' }).first().click();
@@ -88,6 +91,7 @@ test.describe('Escala', () => {
   test('mantém a escala após recarregar a página', async ({ page }) => {
     const voo = page.locator('#out tbody tr:not(.win)', { hasText: 'Aluno 12' });
     await voo.locator('.st-sel').selectOption('Em Voo');
+    await refazer(page);
     await expect(voo.locator('.fixo')).toHaveAttribute('aria-label', 'Voo fixo: Em Voo');
     const alterada = await lerEscala(page);
     await page.reload();

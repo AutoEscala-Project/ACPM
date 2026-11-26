@@ -36,7 +36,10 @@ const ambiente = ({ registros = [], ...resto } = {}) => ({
 });
 const codigos = lista => lista.map(i => i.codigo);
 const opcoes = grupos => grupos.flatMap(g => g.opcoes);
-const semAlternativas = ({ alternativas, ...item }) => item;
+const semAlternativas = ({ alternativas, resumo, conflito, ...item }) => item;
+// O que parava o agendamento: os bloqueios e, desde a decisão 4 (F1g), os conflitos, que avisam e pedem "Agendar mesmo
+// assim" (conflito: true) em vez de bloquear
+const pararia = av => [...av.bloqueios, ...av.avisos.filter(a => a.conflito)];
 
 // O agendamento inteiro, como o diálogo faz: o formulário, a escala com os pesos digitados, a simulação e a conferência
 function agendar(estado, { amb = ambiente(), contexto = 'dia', escolhas = {}, tocados = [] } = {}) {
@@ -279,13 +282,13 @@ describe('Agendamento: os padrões do formulário', () => {
     delete estado.stu[1].curso;
     const multi = agendar(estado, { amb, escolhas: { aluno: 1001, missao: 'tipo:Multimotor' }, tocados: ['missao'] });
     assert.ok(['PT-JOB', 'PT-KIW'].includes(multi.formulario.recurso), multi.formulario.recurso);
-    assert.deepEqual(codigos(multi.avaliacao.bloqueios), []);
+    assert.deepEqual(codigos(pararia(multi.avaliacao)), []);
     const nome = estado.ins.find(x => x.id === multi.formulario.instrutor).nm;
     assert.equal(multi.formulario.recursos.find(o => o.valor === 'PR-VOM').texto, `PR-VOM · PA-34 — exige a habilitação própria (${nome} não tem)`);
     // Com o Instrutor 02 habilitado nele, o PR-VOM (o primeiro do hangar) serve, com o Instrutor 02
     estado.ins[1].hab = [...estado.ins[1].hab, 'aviao:PR-VOM'];
     const habilitado = agendar(estado, { amb, escolhas: { aluno: 1001, missao: 'tipo:Multimotor' }, tocados: ['missao'] });
-    assert.deepEqual([habilitado.formulario.recurso, habilitado.formulario.instrutor, codigos(habilitado.avaliacao.bloqueios)], ['PR-VOM', 2, []]);
+    assert.deepEqual([habilitado.formulario.recurso, habilitado.formulario.instrutor, codigos(pararia(habilitado.avaliacao))], ['PR-VOM', 2, []]);
   });
 
   it('o recurso padrão é do tipo do programa, mesmo ocupado agora por um voo que o app reorganiza: o livre de outro tipo pediria confirmação', () => {
@@ -295,7 +298,7 @@ describe('Agendamento: os padrões do formulário', () => {
     const { formulario, avaliacao, sim } = agendar(estado, { amb, escolhas: { aluno: 1001 } });
     assert.deepEqual([formulario.missao, formulario.recurso, formulario.horario], ['missao:PP:IN-02', 'PR-VOB', 390]);
     assert.equal(formulario.recursos[0].texto, 'PR-VOB · C152 — ocupado agora (o app reorganiza)');
-    assert.deepEqual([codigos(avaliacao.bloqueios), codigos(avaliacao.avisos)], [[], []]);
+    assert.deepEqual([codigos(pararia(avaliacao)), codigos(avaliacao.avisos)], [[], []]);
     assert.deepEqual(sim.out.filter(o => o.stuId === 1000).map(o => [o.r, o.a]), [['PR-VOB', 500]]);
     // Com o C152 ocupado por um voo fixo, o padrão é o livre de outro tipo, com o aviso do recurso do programa
     estado.fixos = { '1000_0_1': { a: 390, b: 450, r: 'PR-VOB', insId: 1 } };
@@ -309,7 +312,7 @@ describe('Agendamento: os padrões do formulário', () => {
     assert.equal(formulario.missao, 'missao:PP:IN-02');
     assert.notEqual(formulario.recurso, 'PR-JPL');
     assert.ok(formulario.contextoTexto.endsWith(`. O PR-JPL não serve ao Voo Local: o voo vai no ${formulario.recurso}.`), formulario.contextoTexto);
-    assert.deepEqual(codigos(avaliacao.bloqueios), []);
+    assert.deepEqual(codigos(pararia(avaliacao)), []);
     assert.equal(formulario.recursos.find(o => o.valor === 'PR-JPL').texto, 'PR-JPL · C152 — só Parafuso');
     // No Parafuso (a PE-04, fora da ordem), o PR-JPL clicado fica, e os outros C152 não servem (o Só Parafuso vale nos dois
     // sentidos); escolhido nele, o voo local troca de avião
@@ -318,7 +321,7 @@ describe('Agendamento: os padrões do formulário', () => {
     assert.equal(parafuso.recursos.find(o => o.valor === 'PR-VOB').texto, 'PR-VOB · C152 — não é Só Parafuso');
     const trocado = agendar(doDia(), { amb, escolhas: { aluno: 1001, recurso: 'PR-JPL', missao: 'missao:PP:IN-02' }, tocados: ['recurso', 'missao'] });
     assert.notEqual(trocado.formulario.recurso, 'PR-JPL');
-    assert.deepEqual(codigos(trocado.avaliacao.bloqueios), []);
+    assert.deepEqual(codigos(pararia(trocado.avaliacao)), []);
   });
 
   it('sem os programas dos cursos, a missão do aluno com curso não é sugerida: o operador escolhe, com a nota', () => {
@@ -327,10 +330,10 @@ describe('Agendamento: os padrões do formulário', () => {
     assert.equal(formulario.missao, '');
     assert.equal(formulario.missoes.nota, 'Sem os programas dos cursos, as missões do PP não aparecem: escolha a missão.');
     assert.deepEqual(formulario.missoes.grupos.map(g => g.rotulo), ['Sem missão do curso']);
-    assert.deepEqual(codigos(avaliacao.bloqueios), ['sem-missao']);
+    assert.deepEqual(codigos(pararia(avaliacao)), ['sem-missao']);
     // Escolhido o tipo, o voo vai sem a missão do curso; o aluno sem curso continua com o tipo padrão
     const escolhida = agendar(doDia(), { amb: semProgramas, escolhas: { aluno: 1001, missao: 'tipo:Voo Local' }, tocados: ['missao'] });
-    assert.deepEqual([escolhida.formulario.proposta.missao, codigos(escolhida.avaliacao.bloqueios)], [null, []]);
+    assert.deepEqual([escolhida.formulario.proposta.missao, codigos(pararia(escolhida.avaliacao))], [null, []]);
     const semCurso = doDia();
     delete semCurso.stu[1].curso;
     assert.equal(agendar(semCurso, { amb: semProgramas, escolhas: { aluno: 1001 } }).formulario.missao, 'tipo:Voo Local');
@@ -360,7 +363,7 @@ describe('Agendamento: os padrões do formulário', () => {
     const semResultados = ambiente({ inferir: false });
     const { formulario, avaliacao } = agendar(doDia(), { amb: semResultados, escolhas: { aluno: 1001 } });
     assert.equal(formulario.missao, '');
-    assert.deepEqual(codigos(avaliacao.bloqueios), ['sem-missao']);
+    assert.deepEqual(codigos(pararia(avaliacao)), ['sem-missao']);
     assert.deepEqual(formulario.missoes.grupos.map(g => g.rotulo), ['Missões do PP (a ordem não foi conferida)', 'Sem missão do curso']);
     const escolhida = agendar(doDia(), { amb: semResultados, escolhas: { aluno: 1001, missao: 'missao:PP:CT-02' }, tocados: ['missao'] });
     assert.deepEqual(codigos(escolhida.avaliacao.avisos), ['ordem-nao-conferida']);
@@ -484,7 +487,7 @@ describe('Agendamento: os padrões do formulário', () => {
     const sala = opcoesDeRecurso(estado, base, { mis: 'Ground C152', a: 610, b: 700 });
     assert.deepEqual(sala.map(o => [o.valor, o.desligada]), [['SALA-GROUND', false]]);
     const novo = agendar(estado, { escolhas: { aluno: 1002, missao: 'tipo:Ground C152', horario: 610 }, tocados: ['missao', 'horario'] });
-    assert.deepEqual(codigos(novo.avaliacao.bloqueios), []);
+    assert.deepEqual(codigos(pararia(novo.avaliacao)), []);
     assert.equal(opcoesDeRecurso(estado, base, { mis: 'Ground C152', a: 500, b: 590 })[0].texto, 'Sala Ground — turma fixa 08:20–09:50 (Ground C152)');
   });
 });
@@ -597,41 +600,43 @@ describe('Agendamento: a conferência', () => {
     assert.deepEqual(semRecurso.map(b => [b.codigo, b.texto]), [['sem-recurso', 'Nenhum recurso para Simulador na frota.']]);
   });
 
-  it('o instrutor indisponível bloqueia, com "Marcar disponível": marcado, o voo passa, com a nota, e o histórico diz', () => {
+  it('o instrutor indisponível avisa (não bloqueia, decisão 4), com "Marcar disponível": marcado, o voo passa, com a nota, e o histórico diz', () => {
     const estado = doDia();
     estado.ins[1].on = false;
     const { avaliacao } = agendar(estado, { amb, escolhas: { aluno: 1001, instrutor: 2 }, tocados: ['instrutor'] });
-    assert.deepEqual(avaliacao.bloqueios, [{ codigo: 'instrutor-indisponivel', texto: 'O instrutor não está disponível.', campo: 'agd-instrutor', opcoes: [{ opcao: 'disponibilizar', texto: 'Marcar Instrutor 02 disponível às 06:30' }] }]);
+    assert.deepEqual(pararia(avaliacao).map(semAlternativas), [{ codigo: 'instrutor-indisponivel', texto: 'O instrutor não está disponível.', campo: 'agd-instrutor', opcoes: [{ opcao: 'disponibilizar', texto: 'Marcar Instrutor 02 disponível às 06:30' }] }]);
+    // O conflito avisa e pede a confirmação (decisão 4): não bloqueia
+    assert.deepEqual([avaliacao.bloqueios, avaliacao.avisos[0].conflito], [[], true]);
     const marcado = agendar(estado, { amb, escolhas: { aluno: 1001, instrutor: 2, disponibilizar: 2 }, tocados: ['instrutor'] });
-    assert.deepEqual(codigos(marcado.avaliacao.bloqueios), []);
+    assert.deepEqual(codigos(pararia(marcado.avaliacao)), []);
     assert.ok(codigos(marcado.avaliacao.notas).includes('disponibilizar'));
     assert.equal(descricaoDoAgendamento(estado, marcado.formulario.proposta, marcado.avaliacao),
       `Agendado na escala: Aluno 1001 · IN-02 (Voo Local) · 06:30–07:30 · ${marcado.formulario.recurso} · Instrutor 02 · Instrutor 02 marcado disponível às 06:30`);
   });
 
-  it('o avião, o aluno e o instrutor ocupados por um voo fixo, o horário fechado e o peso acima do limite bloqueiam', () => {
+  it('o avião, o aluno e o instrutor ocupados por um voo fixo, o horário fechado e o peso acima do limite avisam como conflitos (decisão 4)', () => {
     // O Aluno 1000 está em voo no PR-VOB às 06:30 com o Instrutor 01
     const emVoo = doDia({ extra: { fixos: { '1000_0_1': { a: 390, b: 450, r: 'PR-VOB', insId: 1 } }, fStatus: { '1000_0_1': 'Em Voo' } } });
     const aviao = conferir(emVoo, { escolhas: { aluno: 1001, recurso: 'PR-VOB', horario: 390 }, tocados: ['recurso', 'horario'] });
-    assert.deepEqual(aviao.bloqueios.map(semAlternativas), [{ codigo: 'aviao-ocupado', texto: 'O avião já está ocupado neste horário.', campo: 'agd-recurso' }]);
+    assert.deepEqual(pararia(aviao).map(semAlternativas), [{ codigo: 'aviao-ocupado', texto: 'O avião já está ocupado neste horário.', campo: 'agd-recurso' }]);
     const instrutor = conferir(emVoo, { escolhas: { aluno: 1001, instrutor: 1, horario: 390 }, tocados: ['instrutor', 'horario'] });
-    assert.deepEqual(codigos(instrutor.bloqueios), ['instrutor-ocupado']);
+    assert.deepEqual(codigos(pararia(instrutor)), ['instrutor-ocupado']);
     // O próprio aluno: uma missão extra às 06:30
     const aluno1000 = conferir(emVoo, { escolhas: { aluno: 1000, horario: 390 }, tocados: ['horario'] });
-    assert.deepEqual(codigos(aluno1000.bloqueios), ['aluno-ocupado']);
+    assert.deepEqual(codigos(pararia(aluno1000)), ['aluno-ocupado']);
     const fechada = doDia({ extra: { win: Array(9).fill(true).map((v, w) => w !== 2) } });
-    assert.deepEqual(codigos(conferir(fechada, { escolhas: { aluno: 1001, horario: 'outro', outroHorario: '10:25' } }).bloqueios), ['horario-fechado']);
+    assert.deepEqual(codigos(pararia(conferir(fechada, { escolhas: { aluno: 1001, horario: 'outro', outroHorario: '10:25' } }))), ['horario-fechado']);
     const pesado = conferir(doDia(), { escolhas: { aluno: 1001, kgAluno: '150', kgInstrutor: { 2: '110' } }, tocados: ['kgAluno'] });
-    assert.deepEqual(codigos(pesado.bloqueios), ['peso']);
+    assert.deepEqual(codigos(pararia(pesado)), ['peso']);
   });
 
-  it('o voo de outro aluno que fica em conflito por causa do agendamento bloqueia', () => {
+  it('o voo de outro aluno que fica em conflito por causa do agendamento avisa (decisão 4)', () => {
     // O Aluno 1001 já está agendado no PR-VOB às 06:30; o Aluno 1000 agendado no mesmo avião e horário passa na frente
     // (o pedido com o instrutor escolhido) e deixa o outro em conflito
     const estado = doDia({ s1001: { fly: true, p1: 390, p2: -1 }, extra: { fixos: { '1001_0_1': { a: 390, b: 450, r: 'PR-VOB', insId: 2, agendado: true } } } });
     estado.stu[0].fly = false;
     const { avaliacao } = agendar(estado, { amb, escolhas: { aluno: 1000, recurso: 'PR-VOB', horario: 390, instrutor: 1 }, tocados: ['recurso', 'horario', 'instrutor'] });
-    assert.deepEqual(avaliacao.bloqueios.map(semAlternativas), [{ codigo: 'conflito-em-outro-voo', texto: 'Agendar aqui deixa o voo de Aluno 1001 em conflito: o avião já está ocupado neste horário.', campo: 'agd-horario' }]);
+    assert.deepEqual(pararia(avaliacao).map(semAlternativas), [{ codigo: 'conflito-em-outro-voo', texto: 'Agendar aqui deixa o voo de Aluno 1001 em conflito: o avião já está ocupado neste horário.', campo: 'agd-horario' }]);
   });
 
   it('as regras do curso pedem confirmação: fora da ordem, já aprovada, dispensada, repetida no dia, de outro curso, curso encerrado', () => {
@@ -707,7 +712,7 @@ describe('Agendamento: a conferência', () => {
     aprovado.fixos = { [voo.fKey]: { a: voo.a, b: voo.b, r: voo.r, insId: voo.insId } };
     aprovado.aprovacao = { em: '2026-11-10T20:00:00.000Z', por: '' };
     const comPeso = conferir(aprovado, { escolhas: { aluno: 1001, instrutor: 2, horario: 610, kgInstrutor: { 2: '120' } }, tocados: ['instrutor', 'horario'] });
-    assert.deepEqual(codigos(comPeso.bloqueios), []);
+    assert.deepEqual(codigos(pararia(comPeso)), []);
     assert.deepEqual(codigos(comPeso.avisos), ['peso-muda-outro-voo']);
     assert.match(comPeso.avisos[0].texto, /^Com o peso digitado, o voo de Aluno 1000 fica em conflito: o peso do aluno e do instrutor passa do limite/);
     assert.deepEqual(codigos(comPeso.notas), ['reduzir-combustivel', 'escala-aprovada']);
@@ -898,7 +903,7 @@ describe('Agendamento: os voos de hoje do aluno (mover e encaixar)', () => {
   it('encaixar: o pedido que ficou fora entra na escala sem outra missão extra; a prévia diz o voo que mudou de lugar', () => {
     const estado = comFora();
     const { formulario: f, sim, avaliacao } = agendar(estado, { escolhas: { aluno: 1000 } });
-    assert.deepEqual(codigos(avaliacao.bloqueios), []);
+    assert.deepEqual(codigos(pararia(avaliacao)), []);
     const novo = sim.out.find(o => o.fKey === '1000_0_1');
     const outro = sim.out.find(o => o.stuId === 1001);
     assert.deepEqual(avaliacao.previa.linhas, [
@@ -922,7 +927,7 @@ describe('Agendamento: os voos de hoje do aluno (mover e encaixar)', () => {
     assert.deepEqual(tarde.avaliacao.avisos.map(a => [a.codigo, a.texto, a.resumo]), [
       ['disponibilidade-do-aluno', 'Aluno 1000 está disponível só de manhã: agendado às 13:40, o pedido fica sem a disponibilidade.', 'fora da disponibilidade do aluno']
     ]);
-    assert.deepEqual(codigos(tarde.avaliacao.bloqueios), []);
+    assert.deepEqual(codigos(pararia(tarde.avaliacao)), []);
     // Na escala aprovada, o voo fixo muda de lugar
     const aprovada = doDia({ s1000: { etapa: 'IN-01', cursoDaEtapa: 'PP' } });
     const voo = runAllocationEngine(aprovada).out.find(o => o.stuId === 1000);
@@ -1005,7 +1010,7 @@ describe('Agendamento: as turmas de Ground', () => {
     assert.deepEqual([f.instrutor, f.horario, f.recurso, f.recursos.map(o => o.texto)], [`turma:${turma.classKey}`, 500, 'SALA-GROUND', ['Sala Ground · turma das 08:20']]);
     assert.equal(f.horarios.opcoes.find(o => o.valor === 500).texto, '08:20 (turma)');
     assert.deepEqual([f.proposta.a, f.proposta.b, f.proposta.insId, f.proposta.turma], [500, 590, 1, { classKey: turma.classKey }]);
-    assert.deepEqual(codigos(avaliacao.bloqueios), []);
+    assert.deepEqual(codigos(pararia(avaliacao)), []);
     const linha = sim.out.find(o => o.stuId === 1001);
     assert.deepEqual([linha.classKey, linha.groupSize, linha.tag], [turma.classKey, 3, 'Pref. 1 · Turma (3)']);
     assert.ok(normalizarLinhaGravada(linha), 'a chave da turma do motor');
@@ -1047,9 +1052,9 @@ describe('Agendamento: as turmas de Ground', () => {
     assert.ok(turmas.every(o => normalizarLinhaGravada(o)), 'as chaves são aceitas pela escala gravada');
     // Cada turma ocupa a sala e o instrutor dela: o Instrutor 01 num voo às 08:20, ou outra turma na sala às 08:20, bloqueiam
     const voo = agendar(estado, { escolhas: { aluno: 1002, missao: 'tipo:Voo Local', instrutor: 1, horario: 500 }, tocados: ['missao', 'instrutor', 'horario'] });
-    assert.deepEqual(codigos(voo.avaliacao.bloqueios), ['instrutor-ocupado']);
+    assert.deepEqual(codigos(pararia(voo.avaliacao)), ['instrutor-ocupado']);
     const outra = agendar(estado, { escolhas: { aluno: 1002, missao: 'tipo:Ground C152', instrutor: 3, horario: 500 }, tocados: ['missao', 'instrutor', 'horario'] });
-    assert.deepEqual(codigos(outra.avaliacao.bloqueios), ['sala-ocupada']);
+    assert.deepEqual(codigos(pararia(outra.avaliacao)), ['sala-ocupada']);
     // Sem outra turma com a chave do voo, a turma nova continua sem chave (vale a do voo)
     const sozinho = cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, { ...GROUND_C152, p1: 500, p2: -1 })] });
     const mudou = agendar(sozinho, { escolhas: { aluno: 1000, missao: 'pedido:0', horario: 610 }, tocados: ['missao', 'horario'] }).formulario;
@@ -1063,7 +1068,7 @@ describe('Agendamento: as turmas de Ground', () => {
     const { formulario: f, avaliacao } = agendar(estado, { contexto: `t:${turma.classKey}`, escolhas: { aluno: 1001 } });
     assert.deepEqual([f.missao, f.instrutor, f.horario, f.proposta.turma], ['tipo:Ground C152', `turma:${turma.classKey}`, 500, { classKey: turma.classKey }]);
     assert.equal(f.contextoTexto, 'Turma de Ground C152 das 08:20 com Instrutor 01');
-    assert.deepEqual(codigos(avaliacao.bloqueios), []);
+    assert.deepEqual(codigos(pararia(avaliacao)), []);
     // O aluno com o Ground no pedido dele (numa turma das 06:30): ele muda para a turma com o pedido dele
     estado.stu[1] = { ...estado.stu[1], ...GROUND_C152, fly: true, p1: 390, p2: -1, jan: 'h390' };
     const comPedido = agendar(estado, { contexto: `t:${turma.classKey}`, escolhas: { aluno: 1001 } }).formulario;
@@ -1073,7 +1078,7 @@ describe('Agendamento: as turmas de Ground', () => {
     estado.stu[1].insId = 3;
     const fora = agendar(estado, { contexto: `t:${turma.classKey}`, escolhas: { aluno: 1001 } });
     assert.deepEqual([fora.formulario.missao, fora.formulario.acao, fora.formulario.proposta.insId], ['pedido:0', 'encaixar', 1]);
-    assert.deepEqual(codigos(fora.avaliacao.bloqueios), []);
+    assert.deepEqual(codigos(pararia(fora.avaliacao)), []);
   });
 });
 
@@ -1084,22 +1089,22 @@ describe('Agendamento: as alternativas de cada bloqueio', () => {
   const alternativas = item => (item.alternativas || []).map(g => [g.rotulo, g.opcoes.map(o => [o.opcao, o.texto])]);
 
   it('o avião ocupado: os recursos e os horários livres; o instrutor ocupado: os instrutores e os horários; o aluno ocupado: os horários', () => {
-    const aviao = agendar(emVoo(), { amb, escolhas: { aluno: 1001, recurso: 'PR-VOB', horario: 390 }, tocados: ['recurso', 'horario'] }).avaliacao.bloqueios;
+    const aviao = pararia(agendar(emVoo(), { amb, escolhas: { aluno: 1001, recurso: 'PR-VOB', horario: 390 }, tocados: ['recurso', 'horario'] }).avaliacao);
     assert.deepEqual(alternativas(aviao[0]), [
       ['Recursos livres', [['recurso:PP-LJV', 'PP-LJV'], ['recurso:PR-BTB', 'PR-BTB'], ['recurso:PR-IGU', 'PR-IGU']]],
       ['Horários livres', [['horario:500', '08:20'], ['horario:610', '10:10'], ['horario:690', '11:30']]]
     ]);
-    const instrutor = agendar(emVoo(), { amb, escolhas: { aluno: 1001, instrutor: 1, horario: 390 }, tocados: ['instrutor', 'horario'] }).avaliacao.bloqueios;
+    const instrutor = pararia(agendar(emVoo(), { amb, escolhas: { aluno: 1001, instrutor: 1, horario: 390 }, tocados: ['instrutor', 'horario'] }).avaliacao);
     assert.deepEqual(alternativas(instrutor[0]), [
       ['Instrutores livres', [['instrutor:2', 'Instrutor 02']]], ['Horários livres', [['horario:500', '08:20'], ['horario:610', '10:10'], ['horario:690', '11:30']]]
     ]);
-    const aluno1000 = agendar(emVoo(), { amb, escolhas: { aluno: 1000, missao: 'tipo:Voo Local', horario: 390 }, tocados: ['missao', 'horario'] }).avaliacao.bloqueios;
+    const aluno1000 = pararia(agendar(emVoo(), { amb, escolhas: { aluno: 1000, missao: 'tipo:Voo Local', horario: 390 }, tocados: ['missao', 'horario'] }).avaliacao);
     assert.deepEqual(alternativas(aluno1000[0]), [['Horários livres', [['horario:500', '08:20'], ['horario:610', '10:10'], ['horario:690', '11:30']]]]);
     // A alternativa escolhida (com os outros campos como estavam) resolve o bloqueio
     const outroAviao = agendar(emVoo(), { amb, escolhas: { aluno: 1001, recurso: 'PP-LJV', horario: 390, instrutor: 2 }, tocados: ['recurso', 'horario', 'instrutor'] });
-    assert.deepEqual(codigos(outroAviao.avaliacao.bloqueios), []);
+    assert.deepEqual(codigos(pararia(outroAviao.avaliacao)), []);
     const outroHorario = agendar(emVoo(), { amb, escolhas: { aluno: 1001, recurso: 'PR-VOB', horario: 500, instrutor: 2 }, tocados: ['recurso', 'horario', 'instrutor'] });
-    assert.deepEqual(codigos(outroHorario.avaliacao.bloqueios), []);
+    assert.deepEqual(codigos(pararia(outroHorario.avaliacao)), []);
   });
 
   it('os recursos livres são do mesmo tipo: trocar de tipo muda os horários, o peso e a habilitação, e fica com o operador', () => {
@@ -1107,7 +1112,7 @@ describe('Agendamento: as alternativas de cada bloqueio', () => {
     const estado = { ...emVoo(), av: Object.fromEntries(Object.entries(emVoo().av).map(([r, v]) => [r, apenas('C152', 'PR-VOB').includes(r) ? false : v])) };
     const { formulario: f, avaliacao } = agendar(estado, { amb, escolhas: { aluno: 1001, recurso: 'PR-VOB', horario: 390 }, tocados: ['recurso', 'horario'] });
     assert.ok(f.recursos.some(o => o.tipo !== 'C152' && !o.desligada), 'há outro tipo livre no horário');
-    assert.deepEqual(alternativas(avaliacao.bloqueios[0]).map(([rotulo]) => rotulo), ['Horários livres']);
+    assert.deepEqual(alternativas(pararia(avaliacao)[0]).map(([rotulo]) => rotulo), ['Horários livres']);
   });
 
   it('a alternativa escolhida muda só o campo dela: os outros ficam como o formulário os mostra, e o valor que ele trocou não volta', () => {
@@ -1116,7 +1121,7 @@ describe('Agendamento: as alternativas de cada bloqueio', () => {
     const escolhas = { aluno: 1001, missao: 'tipo:Voo Local', recurso: 'PR-VOB', horario: 390, instrutor: 'turma:GND_X' };
     const tocados = new Set(['missao', 'recurso', 'horario', 'instrutor']);
     const { formulario: f, avaliacao } = agendar(emVoo(), { amb, escolhas, tocados: [...tocados] });
-    assert.ok(Number.isInteger(f.instrutor) && codigos(avaliacao.bloqueios).includes('aviao-ocupado'));
+    assert.ok(Number.isInteger(f.instrutor) && codigos(pararia(avaliacao)).includes('aviao-ocupado'));
     const horario = escolhasDaAlternativa(f, escolhas, tocados, 'horario:500');
     assert.deepEqual(horario.escolhas, { aluno: 1001, missao: 'tipo:Voo Local', recurso: 'PR-VOB', horario: 500, instrutor: f.instrutor });
     assert.deepEqual([...horario.tocados].sort(), ['horario', 'instrutor', 'missao', 'recurso']);
@@ -1134,7 +1139,7 @@ describe('Agendamento: as alternativas de cada bloqueio', () => {
         const tentativa = { aluno: stu.id, recurso: r, horario: a };
         const feito = agendar(dia, { escolhas: tentativa, tocados: ['recurso', 'horario'] });
         if (r === 'PR-VOY') assert.equal(feito.formulario.horario, 390, 'as 08:20 não estão nos horários do C172');
-        for (const b of (feito.avaliacao.bloqueios || []).filter(x => x.alternativas)) {
+        for (const b of (pararia(feito.avaliacao) || []).filter(x => x.alternativas)) {
           for (const o of b.alternativas.flatMap(g => g.opcoes)) {
             const nova = escolhasDaAlternativa(feito.formulario, tentativa, new Set(['recurso', 'horario']), o.opcao);
             const depois = agendar(dia, { escolhas: nova.escolhas, tocados: [...nova.tocados] });
@@ -1154,7 +1159,7 @@ describe('Agendamento: as alternativas de cada bloqueio', () => {
   it('o peso acima do limite: os instrutores com peso informado que cabem nele', () => {
     const estado = doDia({ ins: [instrutor(1, 9, { kg: 95 }), instrutor(2, 9, { kg: 110 }), instrutor(3, 9, { kg: 55 }), instrutor(4, 9, { kg: 0 })] });
     const { avaliacao } = agendar(estado, { amb, escolhas: { aluno: 1001, kgAluno: '120', instrutor: 2 }, tocados: ['kgAluno', 'instrutor'] });
-    const peso = avaliacao.bloqueios.find(b => b.codigo === 'peso');
+    const peso = pararia(avaliacao).find(b => b.codigo === 'peso');
     assert.deepEqual(alternativas(peso), [['Instrutores que cabem no peso', [['instrutor:3', 'Instrutor 03 (55 kg)']]]]);
   });
 });
@@ -1212,20 +1217,20 @@ describe('Agendamento: o que a missão do curso exige do INVA', () => {
   };
   const conflitos = (res, fKey) => (res.out.find(o => o.fKey === fKey) || {}).conflitoCodigos || [];
 
-  it('a missão do curso escolhida exige do INVA: sem quem tenha, o diálogo bloqueia, como a escala gravada', () => {
+  it('a missão do curso escolhida exige do INVA: sem quem tenha, o diálogo avisa o conflito (decisão 4), como a escala gravada', () => {
     const estado = doDia();
     const { formulario, sim, fKey, avaliacao } = agendar(comExigenciasDasMissoes(estado, [PP_EXIGE]), { amb: amb(), escolhas: { aluno: 1001, missao: 'missao:PP:PE-04' }, tocados: ['missao'] });
     assert.deepEqual(formulario.selecao.exige, ['endosso_solo']);
     assert.deepEqual(conflitos(sim, fKey), ['habilitacao']);
     assert.deepEqual(conflitos(depoisDeGravar(estado, formulario.proposta), fKey), ['habilitacao']);
-    const bloqueio = avaliacao.bloqueios.find(b => b.codigo === 'habilitacao');
-    assert.ok(bloqueio, avaliacao.bloqueios.map(b => b.codigo).join());
+    const bloqueio = pararia(avaliacao).find(b => b.codigo === 'habilitacao');
+    assert.ok(bloqueio, pararia(avaliacao).map(b => b.codigo).join());
     assert.equal(bloqueio.texto, 'O instrutor não tem a habilitação que a missão do curso exige (Endosso Solo).');
     // Com o INVA 02 habilitado, ele é o padrão e nada bloqueia
     const habilitado = doDia({ ins: [instrutor(1, 9), { ...instrutor(2, 9), hab: [...instrutor(2, 9).hab, 'endosso_solo'] }] });
     const ok = agendar(comExigenciasDasMissoes(habilitado, [PP_EXIGE]), { amb: amb(), escolhas: { aluno: 1001, missao: 'missao:PP:PE-04' }, tocados: ['missao'] });
     assert.equal(ok.formulario.proposta.insId, 2);
-    assert.deepEqual(ok.avaliacao.bloqueios, []);
+    assert.deepEqual(pararia(ok.avaliacao), []);
   });
 
   it('o pedido que não voa e guarda uma missão do curso não leva a exigência dela para o voo novo de outro tipo', () => {
@@ -1236,6 +1241,6 @@ describe('Agendamento: o que a missão do curso exige do INVA', () => {
     assert.deepEqual(formulario.selecao.exige, []);
     assert.deepEqual(conflitos(sim, fKey), []);
     assert.deepEqual(conflitos(depoisDeGravar(estado, formulario.proposta), fKey), []);
-    assert.equal(avaliacao.bloqueios.find(b => b.codigo === 'habilitacao'), undefined);
+    assert.equal(pararia(avaliacao).find(b => b.codigo === 'habilitacao'), undefined);
   });
 });

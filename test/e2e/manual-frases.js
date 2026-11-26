@@ -9,8 +9,9 @@ const ANTIGAS = {
     'Sessões', 'sessão', 'Desfazer', 'Escala de Voo', 'Por avião e sala', 'Avião / sala', 'Aviões e salas', 'o botão ao lado de Alunos', 'As abas seguem a ordem de uso', 'ao lado do nome das abas'],
   // A data aberta é escolhida no calendário do trilho (sem as setas e sem o calendário da Agenda), e um domingo não abre
   casca: ['setas ‹ ›', 'use as setas', 'com um calendário', 'o app pula o domingo'],
-  // O "+" do mapa fica ao lado do nome da linha
-  escala: ['no fim de cada linha'],
+  // O "+" do mapa fica ao lado do nome do recurso; o mapa abre com os recursos nas colunas, e o Manual não fala dele
+  // como linhas
+  escala: ['no fim de cada linha', 'ao lado do nome de cada linha', 'as linhas livres', 'de uma linha do mapa', 'a linha dele não agenda'],
   // O Operador não muda os Cursos nem os limites da lei
   perfis: ['altera tudo e opera a escala'],
   // A coluna de quem vem é "Vem" (a data aberta não é sempre hoje); o filtro das habilitações tem várias marcas
@@ -35,7 +36,7 @@ const NOVAS = {
     // O agendamento na Escala (mover e encaixar, as turmas, as alternativas, a prévia, os avisos), o voo agendado na
     // Demanda, as alterações dos cursos fora do Histórico e o peso aceito
     'Encaixar o voo', 'Mover o voo', 'Entrar na turma das', 'Horários livres', 'O que muda na escala', 'Agendar mesmo assim',
-    'agendado 10:10 · PR-VOB', 'fora da regra', 'ao lado do nome de cada linha', 'não entram no Histórico da data', 'de 1 a 300 kg',
+    'agendado 10:10 · PR-VOB', 'fora da regra', 'ao lado do nome de cada recurso (ou instrutor)', 'não entram no Histórico da data', 'de 1 a 300 kg',
     // Acima do limite de voos locais do horário, todo voo local agendado pede a confirmação (não só o 7º)
     'mais de 6 voos locais no mesmo horário',
     // O voo com resultado não é desfeito, também com o progresso desligado

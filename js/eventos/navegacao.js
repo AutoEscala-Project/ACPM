@@ -1,7 +1,7 @@
 // Os controles das telas que não são navegação (as telas, a linha e o endereço ficam em js/views/telas.js e
 // js/eventos/linha.js): as vistas da Escala (por recurso, por
-// instrutor, lista, painel), o eixo invertido do mapa e os recursos indisponíveis fora dele, os horários que recolhem na Lista e os botões de todos do BI
-import { setTLMode, setEixoInvertido, EIXO_INVERTIDO, setOcultarIndisponiveis, OCULTAR_INDISPONIVEIS } from '../state.js';
+// instrutor, lista, painel), o eixo do mapa (Inverter eixo X:Y) e os recursos indisponíveis fora dele, os horários que recolhem na Lista e os botões de todos do BI
+import { setTLMode, setHorasNasColunas, HORAS_NAS_COLUNAS, setOcultarIndisponiveis, OCULTAR_INDISPONIVEIS } from '../state.js';
 import { alternarTodosDoBI } from '../views/bi.js';
 import { abrirConfigDoPainel } from '../views/config-do-painel.js';
 import { rOut, alternarTempo } from '../views/escala.js';
@@ -14,9 +14,10 @@ document.addEventListener('click', e => {
     rOut();
     return;
   }
-  // Inverter eixo X:Y: o mapa com os recursos (ou os instrutores) nas colunas e as horas nas linhas, e de volta
+  // Inverter eixo X:Y: o mapa com as horas nas colunas e um recurso (ou instrutor) por linha, e de volta aos recursos nas
+  // colunas (o padrão)
   if (e.target.closest('#btn-eixo')) {
-    setEixoInvertido(!EIXO_INVERTIDO);
+    setHorasNasColunas(!HORAS_NAS_COLUNAS);
     rOut();
     return;
   }

@@ -49,8 +49,30 @@ export function fixosAoMudarStatus(fixos, voo, status, { aprovada }) {
   return resto;
 }
 
+// A alteração de um voo na escala aprovada (F1g) fixa antes o voo que ela toca onde ele está (o voo sem pino, que entrou
+// depois da aprovação): todo pedido que voa numa data aprovada continua com um pino, uma linha ou a recusa dele, e a
+// reversão devolve a linha pelo pino. Os voos fixos com os das chaves (fKeys) que estão na escala (resultado)
+export function fixarNoLugar(fixos, resultado, fKeys) {
+  const novos = { ...(fixos || {}) };
+  for (const fKey of fKeys) {
+    const o = !novos[fKey] && resultado && Array.isArray(resultado.out) ? resultado.out.find(v => v.fKey === fKey && !v.trecho) : null;
+    if (o) novos[fKey] = pinoDoVoo(o);
+  }
+  return novos;
+}
+
 export const fixosAoReabrir = (fixos, fStatus) =>
   Object.fromEntries(Object.entries(fixos || {}).filter(([fKey, p]) => fixoPeloOperador(p) || fixoPeloStatus(fKey, fStatus)));
+
+// Os pinos de antes que uma reversão devolve, pela aprovação de agora (como a aprovação e a reabertura os teriam deixado
+// sem a mudança revertida). A mudança feita na escala aprovada (aprovada) e revertida depois de reabrir a escala: o pino da
+// aprovação (o do voo sem pino fixado no lugar antes da mudança, ou o que a aprovação deu) não volta, só o do operador e o
+// do status que fixa (fixosAoReabrir, com o status de agora). Na escala aprovada, ou com a mudança feita fora dela, todos
+// voltam. { voltam, saem: as chaves cujo pino de antes não volta }
+export function pinosQueVoltam(fixos, { aprovacao, fStatus }, aprovada) {
+  const voltam = aprovacao || !aprovada ? { ...(fixos || {}) } : fixosAoReabrir(fixos, fStatus);
+  return { voltam, saem: Object.keys(fixos || {}).filter(k => !Object.hasOwn(voltam, k)) };
+}
 
 // Aprovar a escala: cada voo dela fica fixo onde está (out: a escala da tela, calculada ou gravada). O fixo pelo
 // operador na Escala continua com a marca (o instrutor escolhido, do pino; o agendado, do pino ou da linha da escala), e

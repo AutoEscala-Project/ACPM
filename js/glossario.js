@@ -56,7 +56,8 @@ const TERMOS = {
     funcionalidade: 'hangar',
     textoSem: `O tempo entre um voo e o seguinte de cada instrutor e de cada avião, sem os cancelados. Nos critérios INVA e Avião, a compactação evita mais a parada de avião de ${INTERVALO_DO_HANGAR / 60} h ou mais.`
   },
-  'aprovar-escala': { aba: 'Escala', termo: 'Aprovar escala', texto: 'Fixa todos os voos: depois disso, uma alteração não tira ninguém do lugar. O pedido novo entra em volta, e o voo impossível vira conflito.' },
+  'aprovar-escala': { aba: 'Escala', termo: 'Aprovar escala', texto: 'Fixa todos os voos: depois disso, uma alteração não tira ninguém do lugar, e a de um voo na Escala muda só ele, sem refazer a escala. O pedido novo entra em volta, e o voo impossível vira conflito.' },
+  'editar-voo': { aba: 'Escala', termo: 'Editar o voo', texto: 'Todos os campos do voo: aluno, missão, recurso, horário, duração, instrutor e status. Na escala aprovada só ele muda; fora dela, a pergunta vem antes, e a escala inteira é refeita.' },
   reabrir: { aba: 'Escala', termo: 'Reabrir', texto: 'Solta os voos (menos os em andamento) e a escala volta a ser refeita inteira a cada alteração.' },
   'listas-do-painel': { aba: 'Escala', termo: 'Listas (painel)', texto: 'Na tela grande, duas listas lado a lado, com as mesmas colunas: a página começa na da esquerda e continua na da direita. Automático: duas a partir de 1.600 px de largura, quando cabem.' },
   'painel-missoes': { aba: 'Escala', termo: 'Missões (painel)', texto: 'O quadro do painel com os voos e aulas do dia, pelo horário, sem separar partidas e chegadas; o voo sai 30 minutos depois do fim, e a aula de Ground no fim. É o padrão do painel e da TV; Configurar painel muda o quadro e as colunas.' },

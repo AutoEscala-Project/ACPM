@@ -2,7 +2,7 @@
 // peso; a conferência roda o motor numa cópia da escala (o conflito não deixa agendar; a regra do curso pede "Agendar
 // mesmo assim"). O voo agendado fica fixo (o cadeado), o pedido aparece na Demanda com a missão do curso, o peso
 // digitado vai para o cadastro e o Histórico desfaz
-import { test, expect, abrir, irPara, abrirEscala, entrar, AMANHA, abrirHistorico, aprovar, caixaVem, caixaVoa, linhaDoInstrutor, reabrir, relativoDaData } from './fixtures.js';
+import { test, expect, abrir, irPara, abrirEscala, entrar, AMANHA, abrirHistorico, aprovar, caixaVem, caixaVoa, linhaDoInstrutor, reabrir, relativoDaData, confirmarAgendamento, refazer } from './fixtures.js';
 import { instalarSupabaseFalso, documentosAtuais, CONTAS } from './supabase-falso.js';
 import { aluno, cenario, instrutor, GROUND_C152 } from '../helpers/montar.js';
 import { FROTA_INICIAL } from '../../js/frota.js';
@@ -53,10 +53,8 @@ async function abrirDialogo(page, stuId = 1001) {
   }
 }
 
-async function agendar(page) {
-  await page.locator('#agd-confirmar').click();
-  await expect(dialogo(page)).toBeHidden();
-}
+// Fora da escala aprovada, a confirmação pede o segundo clique (F1g: a escala inteira será refeita)
+const agendar = confirmarAgendamento;
 
 const historico = async page => {
   if (await page.locator('#historico').isHidden()) await abrirHistorico(page);
@@ -117,7 +115,7 @@ test.describe('Agendar um voo na Escala', () => {
     await expect(page.locator('#agd-conferencia .agd-avisos li')).toHaveText(['PP-03 fora da ordem: falta PP-02.']);
     await page.locator('#agd-confirmar').click();
     await expect(page.locator('#agd-confirmar')).toHaveText('Agendar mesmo assim');
-    await expect(page.locator('#agd-erro')).toHaveText('Confira o aviso acima; para agendar assim mesmo, clique em “Agendar mesmo assim”.');
+    await expect(page.locator('#agd-erro')).toHaveText('A escala de qua 11/11 não está aprovada. Com esta alteração, a escala inteira será refeita, e outros voos podem mudar de horário, de recurso ou de INVA. Confira o aviso acima; para agendar assim mesmo, clique em “Agendar mesmo assim”.');
     await expect(dialogo(page)).toBeVisible();
     // Outra missão (liberada) desarma a confirmação; de volta à fora da ordem, pede de novo
     await page.locator('#agd-missao').selectOption({ label: 'PP-02 · Voo Local · C152 · 1 h' });
@@ -153,31 +151,30 @@ test.describe('Agendar um voo na Escala', () => {
     await expect((await historico(page)).locator('.audit-desc', { hasText: 'Agendado na escala' })).toContainText('· confirmado: acima do limite de voos locais no horário');
   });
 
-  test('o avião com um voo fixo no horário não serve: a opção diz por quê, e escolhido mesmo assim, não deixa agendar', async ({ page }) => {
+  test('o avião com um voo fixo no horário não serve: a opção diz por quê, e escolhido mesmo assim, avisa e pede "Agendar mesmo assim" (decisão 4)', async ({ page }) => {
     // O Aluno 1000 está em voo no PR-VOB às 06:30
     await abrirComCurso(page, dia({ fixos: { '1000_0_1': { a: 390, b: 450, r: 'PR-VOB', insId: 1 } }, fStatus: { '1000_0_1': 'Em Voo' } }));
     await abrirDialogo(page);
     const vob = page.locator('#agd-recurso option[value="PR-VOB"]');
     await expect(vob).toHaveText('PR-VOB · C152 — voo fixo 06:30–07:30 (Aluno 1000)');
-    await expect(vob).toBeDisabled();
-    // Às 08:20 o PR-VOB está livre: escolhido, ele fica quando o horário volta para as 06:30
-    await page.locator('#agd-horario').selectOption('500');
+    // Nada fica desligado: escolhido, ele avisa
     await expect(vob).toBeEnabled();
     await page.locator('#agd-recurso').selectOption('PR-VOB');
     await page.locator('#agd-horario').selectOption('390');
     await expect(page.locator('#agd-recurso')).toHaveValue('PR-VOB');
-    // O bloqueio, com as alternativas livres
-    await expect(page.locator('#agd-conferencia .agd-bloqueios li')).toHaveCount(1);
-    await expect(page.locator('#agd-conferencia .agd-bloqueios li')).toContainText('O avião já está ocupado neste horário.');
+    // O conflito avisa, com as alternativas livres, e nada bloqueia
+    await expect(page.locator('#agd-conferencia .agd-bloqueios li')).toHaveCount(0);
+    await expect(page.locator('#agd-conferencia .agd-avisos li', { hasText: 'O avião já está ocupado neste horário.' })).toHaveCount(1);
     await page.locator('#agd-confirmar').click();
-    await expect(page.locator('#agd-erro')).toHaveText('O avião já está ocupado neste horário.');
+    await expect(page.locator('#agd-confirmar')).toHaveText('Agendar mesmo assim');
+    await expect(page.locator('#agd-erro')).toContainText('para agendar assim mesmo, clique em “Agendar mesmo assim”.');
     await expect(page.locator('#agd-recurso')).toBeFocused();
     await expect(page.locator('#agd-recurso')).toHaveAttribute('aria-invalid', 'true');
-    await expect(dialogo(page)).toBeVisible();
-    await page.locator('#agd-voltar').click();
+    await page.locator('#agd-confirmar').click();
     await expect(dialogo(page)).toBeHidden();
-    await expect(voo(page, 'Maria Silva')).toHaveCount(0);
-    await expect(page.locator('#log-cnt')).toHaveText('0');
+    // O voo fica onde ela o pôs, em conflito na Escala
+    await expect(voo(page, 'Maria Silva')).toHaveClass(/\bem-conflito\b/);
+    await expect(voo(page, 'Maria Silva')).toContainText('PR-VOB');
   });
 
   // O envio leva o foco ao campo do bloqueio: ele mostra o anel de 2 px do foco, como qualquer campo, e o erro fica na
@@ -188,7 +185,7 @@ test.describe('Agendar um voo na Escala', () => {
     await page.locator('#agd-horario').selectOption('500');
     await page.locator('#agd-recurso').selectOption('PR-VOB');
     await page.locator('#agd-horario').selectOption('390');
-    await expect(page.locator('#agd-conferencia .agd-bloqueios li')).toHaveCount(1);
+    await expect(page.locator('#agd-conferencia .agd-avisos li', { hasText: 'O avião já está ocupado' })).toHaveCount(1);
     await page.locator('#agd-confirmar').focus();
     await page.keyboard.press('Enter');
     const recurso = page.locator('#agd-recurso');
@@ -227,9 +224,9 @@ test.describe('Agendar um voo na Escala', () => {
     await abrirDialogo(page);
     await expect(page.locator('#agd-instrutor option[value="2"]')).toHaveText('Instrutor 02 — indisponível');
     await page.locator('#agd-instrutor').selectOption('2');
-    await expect(page.locator('#agd-conferencia .agd-bloqueios li')).toContainText('O instrutor não está disponível.');
+    await expect(page.locator('#agd-conferencia .agd-avisos li', { hasText: 'O instrutor não está disponível.' })).toHaveCount(1);
     await page.locator('#agd-conferencia').getByRole('button', { name: 'Marcar Instrutor 02 disponível às 06:30' }).click();
-    await expect(page.locator('#agd-conferencia .agd-bloqueios li')).toHaveCount(0);
+    await expect(page.locator('#agd-conferencia .agd-avisos li', { hasText: 'O instrutor não está disponível.' })).toHaveCount(0);
     await expect(page.locator('#agd-conferencia .agd-notas')).toContainText('Instrutor 02 fica disponível às 06:30 com o agendamento.');
     await expect(page.locator('#agd-confirmar')).toBeFocused();
     await agendar(page);
@@ -281,6 +278,7 @@ test.describe('Agendar um voo na Escala', () => {
     const linha = () => voo(page, 'Maria Silva');
     await expect(linha().locator('.c-hr')).toContainText('10:10–11:10');
     await linha().locator('select[data-f="fstatus"]').selectOption('Confirmado');
+    await refazer(page);
     await expect(linha().locator('.fixo')).toHaveAttribute('aria-label', 'Voo fixo: agendado na escala');
     await aprovar(page);
     await expect(page.locator('#selo-aprovada')).toBeVisible();
@@ -315,6 +313,9 @@ test.describe('Agendar um voo na Escala', () => {
     await conferido(page);
     for (let i = 0; i < 20 && !(await page.locator('#agd-confirmar').evaluate(b => b === document.activeElement)); i++) await page.keyboard.press('Tab');
     await expect(page.locator('#agd-confirmar')).toBeFocused();
+    await page.keyboard.press('Enter');
+    // Fora da escala aprovada, a confirmação diz que a escala inteira será refeita: o segundo Enter agenda
+    await expect(page.locator('#agd-erro')).toContainText('a escala inteira será refeita');
     await page.keyboard.press('Enter');
     await expect(dialogo(page)).toBeHidden();
     await expect(voo(page, 'Maria Silva').locator('select[data-f="fstatus"]')).toBeFocused();
@@ -514,14 +515,14 @@ test.describe('Mover e encaixar o voo de hoje do aluno, as turmas de Ground e as
       .toHaveText('Agendado na escala: Maria Silva · Ground C152 · 08:20–09:50 · Sala Ground · Instrutor 01 · entrou na turma');
   });
 
-  test('o bloqueio traz as alternativas livres: um clique escolhe outro avião, e o voo é agendado', async ({ page }) => {
+  test('o conflito traz as alternativas livres: um clique escolhe outro avião, e o voo é agendado', async ({ page }) => {
     // O Aluno 1000 está em voo no PR-VOB às 06:30
     await abrirComCurso(page, dia({ fixos: { '1000_0_1': { a: 390, b: 450, r: 'PR-VOB', insId: 1 } }, fStatus: { '1000_0_1': 'Em Voo' } }));
     await abrirDialogo(page);
     await page.locator('#agd-horario').selectOption('500');
     await page.locator('#agd-recurso').selectOption('PR-VOB');
     await page.locator('#agd-horario').selectOption('390');
-    const bloqueio = page.locator('#agd-conferencia .agd-bloqueios li');
+    const bloqueio = page.locator('#agd-conferencia .agd-avisos li', { hasText: 'O avião já está ocupado' });
     await expect(bloqueio).toContainText('O avião já está ocupado neste horário.');
     await expect(bloqueio.locator('.agd-chips')).toHaveText([/^Recursos livres: /, 'Horários livres: 08:20 10:10 11:30']);
     // Cada grupo de alternativas tem o nome dele: o leitor de tela diz "Horários livres" antes de "08:20"
@@ -530,7 +531,7 @@ test.describe('Mover e encaixar o voo de hoje do aluno, as turmas de Ground e as
     const chip = bloqueio.getByRole('group', { name: 'Recursos livres', exact: true }).getByRole('button').first();
     const reg = (await chip.textContent()).trim();
     await chip.click();
-    await expect(page.locator('#agd-conferencia .agd-bloqueios li')).toHaveCount(0);
+    await expect(page.locator('#agd-conferencia .agd-avisos li')).toHaveCount(0);
     await expect(page.locator('#agd-confirmar')).toBeFocused();
     await expect(page.locator('#agd-recurso')).toHaveValue(reg);
     await expect(page.locator('#agd-horario')).toHaveValue('390');

@@ -2,7 +2,7 @@
 // clique (ou toque) no espaço livre de uma linha (o horário da lista do recurso mais perto do clique) e "+ Aluno na turma"
 // no popup da turma de Ground abrem o diálogo "Agendar voo" (test/e2e/agendamento.spec.js). O mapa mostra também as
 // linhas livres: todos os recursos (o avião em manutenção, riscado e sem o "+") e os instrutores disponíveis no dia
-import { test, expect, abrir, abrirEscala, alternarDisponivel, irPara, AMANHA, diaSeguinte, rotuloDaData } from './fixtures.js';
+import { test, expect, abrir, abrirEscala, alternarDisponivel, irPara, AMANHA, diaSeguinte, rotuloDaData, confirmarAgendamento, refazer } from './fixtures.js';
 import { aluno, cenario, instrutor, GROUND_C152 } from '../helpers/montar.js';
 import { FROTA } from '../helpers/estado.js';
 
@@ -15,18 +15,23 @@ const dialogo = page => page.locator('#dlg-agendar');
 const linha = (page, r) => page.locator(`#out .tl-row[data-r="${r}"]`);
 const linhaDoInstrutor = (page, id) => page.locator(`#out .tl-row[data-ins="${id}"]`);
 const faixa = (page, r) => linha(page, r).locator('.tl-track');
-const popup = page => page.locator('#tl-pop');
+// O editor do voo (F1g), que a barra do mapa abre no lugar do popup
+const popup = page => page.locator('#dlg-voo');
 
 async function abrirMapa(page, vista = 'eq') {
   await page.locator(`#s-esc [data-tl="${vista}"]`).click();
   await expect(page.locator('#out .mapa')).toBeVisible();
 }
 
-// Um clique na faixa no ponto do minuto (o ponto é contado da borda de dentro da faixa, como o app conta o clique)
+// Um clique na faixa no ponto do minuto (o ponto é contado da borda de dentro da faixa, como o app conta o clique): na
+// altura dela no mapa transposto (o padrão, as horas descendo) e na largura com as horas nas colunas
 async function clicarNoMinuto(trilha, minuto) {
   const ponto = await trilha.evaluate((el, m) => {
-    const { inicio, fim } = el.closest('.tl-wrap').dataset;
-    return { x: ((m - inicio) / (fim - inicio)) * el.clientWidth, y: el.clientHeight / 2 };
+    const mapa = el.closest('.tl-wrap');
+    const fracao = (m - mapa.dataset.inicio) / (mapa.dataset.fim - mapa.dataset.inicio);
+    return mapa.classList.contains('transposto')
+      ? { x: el.clientWidth / 2, y: fracao * el.clientHeight }
+      : { x: fracao * el.clientWidth, y: el.clientHeight / 2 };
   }, minuto);
   await trilha.click({ position: ponto });
 }
@@ -38,10 +43,8 @@ async function escolherAluno(page, stuId = 1001) {
   await expect(page.locator('#agd-previa ul')).toContainText('Entra:');
 }
 
-async function agendar(page) {
-  await page.locator('#agd-confirmar').click();
-  await expect(dialogo(page)).toBeHidden();
-}
+// Fora da escala aprovada, a confirmação pede o segundo clique (F1g: a escala inteira será refeita)
+const agendar = confirmarAgendamento;
 
 test.describe('Agendar pelo mapa', () => {
   test('um clique na linha livre do PR-VOB, perto das 10:25, agenda no PR-VOB às 10:10 (os horários do C152); o foco vai para o voo novo', async ({ page }) => {
@@ -129,6 +132,9 @@ test.describe('Agendar pelo mapa', () => {
     await expect(page.locator('#agd-previa ul')).toContainText('Entra: Maria Silva · Voo Local · 06:30–07:30 · PP-AJS');
     await page.locator('#agd-confirmar').focus();
     await page.keyboard.press('Enter');
+    // Fora da escala aprovada, o segundo Enter (a escala inteira será refeita)
+    await expect(page.locator('#agd-confirmar')).toHaveText('Agendar mesmo assim');
+    await page.keyboard.press('Enter');
     await expect(dialogo(page)).toBeHidden();
     await expect(page.locator('#toast-box')).toContainText('Voo agendado: Maria Silva às 06:30 no PP-AJS.');
     await expect(linha(page, 'PP-AJS')).toHaveCount(0);
@@ -191,15 +197,14 @@ test.describe('Agendar pelo mapa', () => {
     await expect(page.locator('#out .st > div').first()).toHaveText('1 missões pedidas');
   });
 
-  test('com o popup de um voo aberto, um clique na linha livre só fecha o popup; o clique seguinte agenda', async ({ page }) => {
+  test('o editor de um voo é modal: o clique na linha livre só acontece depois de fechá-lo', async ({ page }) => {
     await abrir(page, { estado: dia() });
     await abrirEscala(page);
     await abrirMapa(page);
     await page.locator('#out .tl-bar').first().click();
     await expect(popup(page)).toBeVisible();
-    await clicarNoMinuto(faixa(page, 'PR-VOB'), 610);
+    await page.keyboard.press('Escape');
     await expect(popup(page)).toBeHidden();
-    await expect(dialogo(page)).toBeHidden();
     await clicarNoMinuto(faixa(page, 'PR-VOB'), 610);
     await expect(dialogo(page)).toBeVisible();
   });
@@ -237,13 +242,16 @@ test.describe('Agendar pelo mapa', () => {
     await expect(linha(page, 'PR-VOC')).toHaveCount(1);
     await expect(page.locator('#out .tl-bar')).toHaveCount(1);
 
-    // Por instrutor não tem recursos para esconder; de volta, continua oculto, também com o eixo invertido
+    // Por instrutor não tem recursos para esconder; de volta, continua oculto, nas colunas (o padrão) e com as horas nas
+    // colunas (Inverter eixo X:Y)
     await abrirMapa(page, 'ins');
     await expect(ocultar).toBeHidden();
     await expect(page.locator('#out .tl-row[data-ins]')).toHaveCount(3);
     await abrirMapa(page);
+    await expect(page.locator('#out .tl-wrap')).toHaveClass(/\btransposto\b/);
     await expect(linha(page, 'PR-VOB')).toHaveCount(0);
     await page.locator('#btn-eixo').click();
+    await expect(page.locator('#out .tl-wrap')).not.toHaveClass(/transposto/);
     await expect(linha(page, 'PR-VOB')).toHaveCount(0);
 
     await ocultar.click();
@@ -311,6 +319,7 @@ test.describe('Agendar pelo mapa', () => {
     await expect(noturno.locator('.c-hr')).toContainText('17:30–21:30');
     // Uma alteração grava a escala do dia (o dia seguinte lê a escala gravada)
     await noturno.locator('select[data-f="fstatus"]').selectOption('Pendente');
+    await refazer(page);
     await diaSeguinte(page);
     await expect(rotuloDaData(page)).toContainText('12/11');
     await abrirEscala(page);
@@ -337,6 +346,7 @@ test.describe('Agendar pelo mapa', () => {
     await abrir(page, { estado: dia({ stu: [aluno(1002, { p1: 390, p2: -1 }), aluno(1003, { p1: 390, p2: -1 })] }) });
     await abrirEscala(page);
     await page.locator('#out tbody tr:not(.win)', { hasText: 'Aluno 1000' }).locator('select[data-f="fstatus"]').selectOption('Pendente');
+    await refazer(page);
     const chave = `acpm4_dia_${AMANHA}`;
     await expect.poll(() => page.evaluate(c => (JSON.parse(localStorage.getItem(c) || 'null')?.resultado?.out || []).length, chave)).toBe(3);
     await page.evaluate(c => {
@@ -380,7 +390,7 @@ test.describe('Agendar pela lista e pela turma de Ground', () => {
     await expect(page.locator('#out tr.win[data-w="2"]')).toHaveText('10:10 · 3º tempo 2 decolagens e aulas');
   });
 
-  test('"+ Aluno na turma", no popup da turma de Ground, abre o diálogo; o Esc fecha só ele, e o foco volta ao botão', async ({ page }) => {
+  test('"+ Aluno na turma", no editor da turma de Ground, fecha o editor e abre o diálogo; o Esc fecha o diálogo, e o foco volta à barra', async ({ page }) => {
     await abrir(page, { estado: dia({ stu: [1002, 1003].map(id => aluno(id, { ...GROUND_C152, p1: 500, p2: -1 })) }) });
     await abrirEscala(page);
     await abrirMapa(page);
@@ -395,12 +405,10 @@ test.describe('Agendar pela lista e pela turma de Ground', () => {
     await expect(dialogo(page)).toHaveAccessibleDescription(/^Turma de Ground C152 das 08:20 com Instrutor \d\d$/);
     await page.keyboard.press('Escape');
     await expect(dialogo(page)).toBeHidden();
-    await expect(popup(page)).toBeVisible();
-    await expect(naTurma).toBeFocused();
+    await expect(popup(page)).toBeHidden();
+    await expect(linha(page, 'SALA-GROUND').locator('.tl-bar')).toBeFocused();
     await expect(page.locator('#log-cnt')).toHaveText('0');
     // Um voo que não é de Ground não tem o botão
-    await page.keyboard.press('Escape');
-    await expect(popup(page)).toBeHidden();
     await page.locator('#out .tl-bar', { hasText: 'Aluno 1000' }).click();
     await expect(popup(page)).toBeVisible();
     await expect(popup(page).locator('[data-act="agendar"]')).toHaveCount(0);

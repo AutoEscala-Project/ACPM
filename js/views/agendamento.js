@@ -8,7 +8,9 @@
 // campo dele); outro conjunto de avisos pede outra confirmação. Um voo de hoje do aluno muda de lugar ("Mover o voo") ou
 // entra na escala ("Encaixar o voo"); no Ground, o select Instrutor também tem as turmas do dia. Esc e Voltar desistem,
 // e nada muda.
-import { S, DATA, isGestor, stuBy, dadoIndisponivel, estadoDaEscala } from '../state.js';
+import { S, RES, DATA, isGestor, stuBy, dadoIndisponivel, estadoDaEscala } from '../state.js';
+import { escalaDaAlteracao } from '../edicao-do-voo.js';
+import { fraseDoRefazer } from './dialogo-refazer.js';
 import { ApiClient } from '../storage.js';
 import { runAllocationEngine } from '../engine.js';
 import { ligada } from '../funcionalidades.js';
@@ -45,10 +47,19 @@ function ambiente() {
 // Os campos que o formulário preenche (o select ou o input de cada um)
 const CAMPOS = ['agd-aluno', 'agd-missao', 'agd-tipo', 'agd-recurso', 'agd-instrutor', 'agd-horario', 'agd-outro-horario', 'agd-horas', 'agd-kg-aluno', 'agd-kg-instrutor'];
 const campo = id => document.getElementById(id);
+// A confirmação vale para estes avisos e, fora da escala aprovada, para a escala refeita inteira
+const assinaturaDaConfirmacao = avisos => `${assinaturaDosAvisos(avisos)}${S.aprovacao ? '' : '|refazer'}`;
+// Na escala aprovada, o agendamento não roda o motor, nem ao gravar nem na prévia (d45): a base é a escala da tela, e a
+// simulação, ela conferida com o voo novo (js/conferencia.js), como será gravada; o pedido que entraria no dia sem lugar
+// pede o motor (R5)
+const escalaDeAgora = estado => (S.aprovacao && RES ? RES : runAllocationEngine(estado));
+const motorDaTela = antes => (S.aprovacao && RES ? copia => escalaDaAlteracao(copia, RES, { aprovada: true, antes }).resultado : runAllocationEngine);
 // O texto de um campo numérico: o que não é número (validity.badInput: o navegador esvazia o value) fica inválido
 const textoDoCampo = el => (el.validity && el.validity.badInput ? '?' : el.value);
 
-const opcao = (o, valor) => `<option value="${esc(o.valor)}"${String(o.valor) === String(valor) ? ' selected' : ''}${o.desligada ? ' disabled' : ''}>${esc(o.texto)}</option>`;
+// Nada fica desligado: o recurso ou o instrutor que não serve diz por quê, e escolhido avisa e pede "Agendar mesmo assim"
+// (decisão 4, F1g)
+const opcao = (o, valor) => `<option value="${esc(o.valor)}"${String(o.valor) === String(valor) ? ' selected' : ''}>${esc(o.texto)}</option>`;
 const emGrupos = (grupos, valor) => grupos.map(g => `<optgroup label="${esc(g.rotulo)}">${g.opcoes.map(o => opcao(o, valor)).join('')}</optgroup>`).join('');
 // Troca o conteúdo só quando muda (o select com o foco continua o mesmo elemento, com a mesma lista aberta)
 const desenhado = new WeakMap();
@@ -142,7 +153,7 @@ function desenharConferencia() {
   desenharPrevia();
   // Outro conjunto de avisos desarma a confirmação
   const form = $('#form-agendar');
-  if (form.dataset.confirmado !== undefined && form.dataset.confirmado !== assinaturaDosAvisos(av.avisos)) desarmar();
+  if (form.dataset.confirmado !== undefined && form.dataset.confirmado !== assinaturaDaConfirmacao(av.avisos)) desarmar();
 }
 
 // A prévia ("O que muda na escala"): o voo agendado e cada voo que muda de lugar, sai ou entra (js/agendamento.js)
@@ -197,10 +208,10 @@ function conferir() {
   let baseComPesos = pedido.base;
   if (estadoComPesos !== estado) {
     const chave = `${f.proposta.stuId}:${f.proposta.pesos.aluno}|${f.proposta.insId}:${f.proposta.pesos.instrutor}`;
-    if (!pedido.comPesos.has(chave)) pedido.comPesos.set(chave, runAllocationEngine(estadoComPesos));
+    if (!pedido.comPesos.has(chave)) pedido.comPesos.set(chave, motorDaTela(estado)(estadoComPesos));
     baseComPesos = pedido.comPesos.get(chave);
   }
-  const { sim, estadoDaSim, fKey } = simularAgendamento(estado, pedido.base, f.proposta);
+  const { sim, estadoDaSim, fKey } = simularAgendamento(estado, pedido.base, f.proposta, motorDaTela(estado));
   pedido.avaliacao = avaliarAgendamento({ estado, base: pedido.base, baseComPesos, sim, estadoDaSim, fKey, formulario: f, ambiente: pedido.ambiente });
   pedido.pendente = false;
   desenharConferencia();
@@ -317,15 +328,20 @@ function enviar() {
     if (el && !el.disabled && !el.closest('[hidden]')) el.focus();
     return;
   }
-  const assinatura = assinaturaDosAvisos(avisos);
-  if (avisos.length && form.dataset.confirmado !== assinatura) {
+  // Os avisos e, na escala não aprovada, a escala refeita inteira (a pergunta do F1g, na confirmação do agendamento) pedem
+  // o segundo clique
+  const assinatura = assinaturaDaConfirmacao(avisos);
+  if ((avisos.length || !S.aprovacao) && form.dataset.confirmado !== assinatura) {
     form.dataset.confirmado = assinatura;
     $('#agd-confirmar').textContent = 'Agendar mesmo assim';
-    erro.textContent = `${avisos.length === 1 ? 'Confira o aviso acima' : `Confira os ${avisos.length} avisos acima`}; para agendar assim mesmo, clique em “Agendar mesmo assim”.`;
-    // O peso que falta para antes, no campo dele
-    const semPeso = avisos.find(a => a.codigo === 'sem-peso');
-    marcarInvalido(semPeso ? semPeso.campo : null);
-    if (semPeso && campo(semPeso.campo)) campo(semPeso.campo).focus();
+    const refazer = S.aprovacao ? '' : `${fraseDoRefazer('')} `;
+    erro.textContent = avisos.length
+      ? `${refazer}${avisos.length === 1 ? 'Confira o aviso acima' : `Confira os ${avisos.length} avisos acima`}; para agendar assim mesmo, clique em “Agendar mesmo assim”.`
+      : `${refazer}Para agendar, clique em “Agendar mesmo assim”.`;
+    // O peso que falta, ou o campo do primeiro conflito, para antes, no campo dele
+    const doCampo = avisos.find(a => a.codigo === 'sem-peso') || avisos.find(a => a.conflito && a.campo);
+    marcarInvalido(doCampo ? doCampo.campo : null);
+    if (doCampo && campo(doCampo.campo) && !campo(doCampo.campo).disabled) campo(doCampo.campo).focus();
     return;
   }
   const { aoConfirmar, base, contexto, formulario, avaliacao } = pedido;
@@ -354,7 +370,7 @@ export function abrirAgendamento(valor, { aoConfirmar }) {
   ligar();
   const amb = ambiente();
   pedido = {
-    contexto: contextoInicial(valor, amb), ambiente: amb, base: runAllocationEngine(estadoDaEscala()), escolhas: {}, tocados: new Set(), aoConfirmar,
+    contexto: contextoInicial(valor, amb), ambiente: amb, base: escalaDeAgora(estadoDaEscala()), escolhas: {}, tocados: new Set(), aoConfirmar,
     comPesos: new Map(), pendente: false, travado: false, temporizador: null
   };
   desarmar();
@@ -372,7 +388,7 @@ export function abrirAgendamento(valor, { aoConfirmar }) {
 export function atualizarAgendamento() {
   if (!pedido || pedido.travado) return;
   if (isGestor() || ApiClient.readOnly) { travar(); return; }
-  pedido.base = runAllocationEngine(estadoDaEscala());
+  pedido.base = escalaDeAgora(estadoDaEscala());
   pedido.comPesos.clear();
   recalcular();
 }
