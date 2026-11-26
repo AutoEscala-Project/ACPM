@@ -189,14 +189,17 @@ test.describe('Sugestões para um voo cancelado', () => {
     await expect(voo.locator('.st-detalhe')).toHaveText('Instrutor indisponível');
   });
 
-  test('o 7º voo local do horário: a sugestão avisa e pede dois cliques ("Aplicar mesmo assim")', async ({ page }) => {
-    // Seis Voos Locais às 10:10; o do Aluno 1006, às 08:20 e só disponível às 10:10, cancelado pela meteorologia
+  test('o 7º voo local do horário, na escala aprovada: a sugestão avisa e pede dois cliques ("Aplicar mesmo assim")', async ({ page }) => {
+    // Seis Voos Locais às 10:10, fixos pela aprovação; o do Aluno 1006, às 08:20 e só disponível às 10:10, cancelado
+    // pela meteorologia
+    const seis = ['PP-LJV', 'PR-BTB', 'PR-IGU', 'PR-MLB', 'PR-TBT', 'PR-THI'];
     const estado = {
       ...cenario({
         ins: [1, 2, 3, 4, 5, 6, 7].map(id => instrutor(id, 9)),
         stu: [...[1000, 1001, 1002, 1003, 1004, 1005].map(id => aluno(id, { p1: 610, p2: -1 })), aluno(1006, { p1: 500, p2: -1, jan: 'h610' })]
       }),
-      fixos: { '1006_0_1': { a: 500, b: 560, r: 'PP-LJV', insId: 7 } },
+      fixos: { ...Object.fromEntries(seis.map((r, i) => [`${1000 + i}_0_1`, { a: 610, b: 670, r, insId: i + 1 }])), '1006_0_1': { a: 500, b: 560, r: 'PP-LJV', insId: 7 } },
+      aprovacao: { em: '2026-11-10T21:05:00.000Z', por: 'Operador 01' },
       fStatus: { '1006_0_1': 'Cancelado' }, fObs: { '1006_0_1': { motivo: 'Meteorologia' } }
     };
     await abrir(page, { estado });
@@ -213,6 +216,31 @@ test.describe('Sugestões para um voo cancelado', () => {
     await expect(gaveta(page)).toBeHidden();
     await expect(voo.locator('.st-sel')).toHaveValue('Pendente');
     await expect(voo.locator('.c-hr')).toContainText('10:10');
+    await expect(page.locator('#out tbody tr:not(.win) .c-hr', { hasText: '10:10–11:10' })).toHaveCount(7);
+  });
+
+  test('na escala não aprovada, a sugestão que muda outro voo diz qual e pede dois cliques; a gaveta não promete "sem mexer"', async ({ page }) => {
+    // 08:20 Aluno 1001 com um instrutor e 10:10 Aluno 1000 com o outro; o 1001 cancelado pelo instrutor: o motor refaz o
+    // das 10:10 em volta da sugestão
+    await abrir(page, { estado: cenario({ ins: [instrutor(1, 9), instrutor(2, 9)], stu: [aluno(1000, { p1: 610, p2: 870 }), aluno(1001, { p1: 500, p2: 760 })] }) });
+    await abrirEscala(page);
+    const voo = linha(page, 'Aluno 1001');
+    await voo.locator('.st-sel').selectOption('Cancelado');
+    await page.locator('#dlg-status').getByLabel('Instrutor indisponível').check();
+    await page.locator('#dlg-status').getByRole('button', { name: 'Confirmar' }).click();
+    const outro = (await linha(page, 'Aluno 1000').innerText()).replace(/\s+/g, ' ');
+    await voo.getByRole('button', { name: 'Sugestões' }).click();
+    await expect(gaveta(page)).not.toContainText('sem mexer nos outros voos');
+    const comMudanca = gaveta(page).locator('.opcoes-reparo li', { hasText: 'Muda também outro voo: Aluno 1000' }).first();
+    await expect(comMudanca).toBeVisible();
+    const botao = comMudanca.locator('[data-reparo-aplicar]');
+    await botao.click();
+    await expect(botao).toHaveText('Aplicar mesmo assim');
+    await expect(voo.locator('.st-sel')).toHaveValue('Cancelado');
+    expect((await linha(page, 'Aluno 1000').innerText()).replace(/\s+/g, ' ')).toBe(outro);
+    await botao.click();
+    await expect(gaveta(page)).toBeHidden();
+    await expect(voo.locator('.st-sel')).toHaveValue('Pendente');
   });
 
   test('cancelado porque o aluno faltou: sem "Sugestões"', async ({ page }) => {

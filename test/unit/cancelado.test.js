@@ -5,7 +5,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { runAllocationEngine } from '../../js/engine.js';
-import { pinoDoVoo } from '../../js/fixos.js';
+import { pinoDoVoo, fixosAoAprovar } from '../../js/fixos.js';
 import { hm } from '../../js/format.js';
 import { cancelamentoAproveitavel, sugerirParaCancelado, aproveitarCancelado, desfazerAproveitamento, sugestoesDoRejeitado, sugerirReparos, repararComOPedido, dataQueAindaVoa } from '../../js/reparo.js';
 import { validarReversao } from '../../js/reversoes.js';
@@ -170,8 +170,15 @@ describe('O limite de voos locais no horário', () => {
     stu: [...[1000, 1001, 1002, 1003, 1004, 1005].map(id => aluno(id, { p1: 610, p2: -1 })), aluno(1006, { p1: 500, p2: -1 })]
   });
 
+  // A escala aprovada: os seis das 10:10 ficam fixos, e o 7º sai com eles (o motor avisa)
+  const aprovada = (estado) => {
+    const v = runAllocationEngine(seisAs1010()).out;
+    return { ...estado, fixos: { ...fixosAoAprovar({}, v.filter(o => o.stuId !== 1006)), ...estado.fixos }, aprovacao: { em: '2026-11-10T21:05:00.000Z', por: 'Operador 01' } };
+  };
+
   it('o cancelado que só pode às 10:10: a sugestão das 10:10 avisa que ele será o 7º e pede a confirmação', () => {
-    const { estado, voo } = cancelado(seisAs1010(), 1006, 'Meteorologia');
+    const c = cancelado(seisAs1010(), 1006, 'Meteorologia');
+    const estado = aprovada(c.estado), voo = c.voo;
     assert.equal(hm(voo.a), '08:20');
     estado.stu.find(s => s.id === 1006).jan = 'h610';
     const resultado = runAllocationEngine(estado);
@@ -180,11 +187,27 @@ describe('O limite de voos locais no horário', () => {
     assert.equal(hm(primeira.mudancas.a), '10:10');
     assert.equal(primeira.confirmar, 'Às 10:10, o 7º voo local do horário: no máximo 6 voos locais saem no mesmo horário.');
     assert.equal(primeira.armado, 'Aplicar mesmo assim');
+    // Aplicada, são 7 às 10:10, e nenhum dos seis muda
+    aproveitarCancelado(estado, resultado, voo.fKey, primeira);
+    assert.equal(runAllocationEngine(estado).out.filter(o => o.a === 610).length, 7);
+  });
+
+  it('na escala não aprovada, o motor tira um dos seis do horário: a sugestão diz qual, e não que o voo é o 7º', () => {
+    const { estado, voo } = cancelado(seisAs1010(), 1006, 'Meteorologia');
+    estado.stu.find(s => s.id === 1006).jan = 'h610';
+    const resultado = runAllocationEngine(estado);
+    const [primeira] = sugerirParaCancelado(estado, resultado, voo.fKey).opcoes;
+    assert.equal(hm(primeira.mudancas.a), '10:10');
+    assert.doesNotMatch(primeira.confirmar, /7º voo local/);
+    assert.match(primeira.confirmar, /^Muda também outro voo: Aluno 1005, das 10:10 para as 11:30/);
+    assert.deepEqual(primeira.muda, ['1005_0_1']);
+    assert.equal(primeira.armado, 'Aplicar mesmo assim');
   });
 
   it('com a confirmação com o aluno também, as duas frases, e o botão armado é o do aluno', () => {
     // Só às 06:30, com o período das 06:30 fechado: o mais perto fora da disponibilidade é o das 10:10
-    const { estado, voo } = cancelado(seisAs1010(), 1006, 'Meteorologia');
+    const c = cancelado(seisAs1010(), 1006, 'Meteorologia');
+    const estado = aprovada(c.estado), voo = c.voo;
     estado.stu.find(s => s.id === 1006).jan = 'h390';
     estado.win = estado.win.map((w, i) => (i === 0 ? false : w));
     const resultado = runAllocationEngine(estado);
@@ -196,10 +219,10 @@ describe('O limite de voos locais no horário', () => {
 
   it('o conflito que passa para as 10:10: a sugestão avisa que ele será o 7º', () => {
     const base = seisAs1010();
-    const v0 = runAllocationEngine(base).out.find(o => o.stuId === 1006);
-    // Às 08:20 nenhum instrutor vem mais
+    const v = runAllocationEngine(base).out, v0 = v.find(o => o.stuId === 1006);
+    // A escala aprovada; às 08:20 nenhum instrutor vem mais
     const aw = Array(9).fill(true); aw[1] = false;
-    const estado = { ...base, fixos: { [v0.fKey]: pinoDoVoo(v0) }, ins: base.ins.map(x => ({ ...x, aw: [...aw] })) };
+    const estado = { ...base, fixos: fixosAoAprovar({}, v), aprovacao: { em: '2026-11-10T21:05:00.000Z', por: 'Operador 01' }, ins: base.ins.map(x => ({ ...x, aw: [...aw] })) };
     const resultado = runAllocationEngine(estado);
     const voo = resultado.out.find(o => o.fKey === v0.fKey);
     assert.ok(voo.conflito);
@@ -210,9 +233,10 @@ describe('O limite de voos locais no horário', () => {
   });
 
   it('a troca no mesmo horário do conflito não avisa (o voo já sai nele); o horário com menos de 6 não avisa', () => {
+    // A escala aprovada (na não aprovada, o motor refaz o voo das 08:20 em volta da troca, e a sugestão diz isso)
     const base = seisAs1010();
-    const v0 = runAllocationEngine(base).out.find(o => o.stuId === 1000);
-    const estado = { ...base, fixos: { [v0.fKey]: pinoDoVoo(v0) }, ins: base.ins.map(x => (x.id === v0.insId ? { ...x, on: false } : x)) };
+    const v = runAllocationEngine(base).out, v0 = v.find(o => o.stuId === 1000);
+    const estado = { ...base, fixos: fixosAoAprovar({}, v), aprovacao: { em: '2026-11-10T21:05:00.000Z', por: 'Operador 01' }, ins: base.ins.map(x => (x.id === v0.insId ? { ...x, on: false } : x)) };
     const resultado = runAllocationEngine(estado);
     const opcoes = sugerirReparos(estado, resultado, v0.fKey).filter(o => o.mudancas);
     assert.ok(opcoes.length > 0);
@@ -357,6 +381,84 @@ describe('O conflito: outro tipo e o horário fora da disponibilidade', () => {
     const opcoes = sugerirReparos(estado, runAllocationEngine(estado), v0.fKey).filter(o => o.mudancas);
     assert.ok(opcoes.length > 0);
     assert.ok(opcoes.every(o => o.pedido === undefined), opcoes.map(o => o.texto).join(' | '));
+  });
+});
+
+// A sugestão conferida no motor: na escala não aprovada, o motor refaz em volta dos fixos os voos que não são fixos. A
+// sugestão que muda ou tira um deles diz quais e pede a confirmação ("Aplicar mesmo assim"); a que não muda nenhum é a
+// "sem mexer nos outros voos"
+describe('O que a sugestão muda nos outros voos', () => {
+  const lugar = o => [o.a, o.b, o.r, o.insId].join('|');
+  // Os outros voos que mudam ou saem quando a sugestão é aplicada (aplicar: no estado), contra a escala de antes
+  function mudados(estado, resultado, unidade, aplicar) {
+    const copia = { ...estado, stu: structuredClone(estado.stu) };
+    aplicar(copia);
+    const depois = new Map(runAllocationEngine(copia).out.map(o => [o.fKey, o]));
+    return { depois, chaves: runAllocationEngine(estado).out.filter(o => !unidade.includes(o.fKey) && (!depois.has(o.fKey) || lugar(depois.get(o.fKey)) !== lugar(o))).map(o => o.fKey) };
+  }
+
+  it('cancelado pelo instrutor, na escala não aprovada: a sugestão que dá o voo de outro aluno ao instrutor que faltou diz isso', () => {
+    // 08:20 Aluno 1001 com o Instrutor 02 e 10:10 Aluno 1000 com o Instrutor 01 (o motor refaz o das 10:10)
+    const base = cenario({ ins: [instrutor(1, 9), instrutor(2, 9)], stu: [aluno(1000, { p1: 610, p2: 870 }), aluno(1001, { p1: 500, p2: 760 })] });
+    const { estado, resultado, voo } = cancelado(base, 1001, 'Instrutor indisponível');
+    const { opcoes } = sugerirParaCancelado(estado, resultado, voo.fKey);
+    assert.ok(opcoes.length > 0);
+    for (const opcao of opcoes) {
+      const { chaves } = mudados(estado, resultado, [voo.fKey], e => aproveitarCancelado(e, resultado, voo.fKey, opcao));
+      assert.deepEqual(opcao.muda || [], chaves, opcao.texto);
+      if (chaves.length) {
+        assert.match(opcao.confirmar, /Muda também outro voo: Aluno 1000/, opcao.texto);
+        assert.equal(opcao.armado, /^Confirme com o aluno/.test(opcao.confirmar) ? 'Confirmei com o aluno' : 'Aplicar mesmo assim');
+      }
+    }
+    assert.ok(opcoes.some(o => o.muda && o.muda.length), opcoes.map(o => o.texto).join(' | '));
+  });
+
+  it('o aluno da turma de Ground aproveitado, na escala não aprovada: os colegas que o motor junta a ele aparecem', () => {
+    const g = { ...GROUND_C152, p1: 390, p2: -1 };
+    const { estado, resultado, voo } = cancelado(cenario({ ins: [instrutor(1, 9), instrutor(2, 9)], stu: [aluno(1000, g), aluno(1001, g), aluno(1002, g)] }), 1001, 'Instrutor indisponível');
+    const [opcao] = sugerirParaCancelado(estado, resultado, voo.fKey).opcoes;
+    assert.ok(opcao);
+    assert.deepEqual(opcao.muda, ['1000_0_1', '1002_0_1']);
+    assert.match(opcao.confirmar, /^Muda também 2 outros voos: Aluno 1000, das 06:30 para as 08:20, com Instrutor 02; Aluno 1002, das 06:30 para as 08:20, com Instrutor 02\.$/);
+  });
+
+  it('na escala aprovada, os mesmos casos não mudam nenhum outro voo', () => {
+    const g = { ...GROUND_C152, p1: 390, p2: -1 };
+    const base = cenario({ ins: [instrutor(1, 9), instrutor(2, 9)], stu: [aluno(1000, g), aluno(1001, g), aluno(1002, g)] });
+    const v = runAllocationEngine(base).out, v1 = v.find(o => o.stuId === 1001);
+    const estado = { ...base, fixos: fixosAoAprovar({}, v), aprovacao: { em: '2026-11-10T21:05:00.000Z', por: 'Operador 01' }, fStatus: { [v1.fKey]: 'Cancelado' }, fObs: { [v1.fKey]: { motivo: 'Instrutor indisponível' } } };
+    const resultado = runAllocationEngine(estado);
+    const { opcoes } = sugerirParaCancelado(estado, resultado, v1.fKey);
+    assert.ok(opcoes.length > 0);
+    assert.ok(opcoes.every(o => !o.muda && !o.confirmar), opcoes.map(o => `${o.texto} ${o.confirmar}`).join(' | '));
+  });
+
+  it('em 40 dias gerados, aprovados ou não: o voo fica onde a sugestão diz, e ela lista exatamente os outros voos que mudam', () => {
+    const MOTIVOS = ['Meteorologia', 'Manutenção da aeronave', 'Instrutor indisponível', 'Operacional', 'Outro'];
+    let vistas = 0, comMudanca = 0;
+    for (let seed = 1; seed <= 40; seed++) {
+      const base = gerarCenario(seed);
+      const v = runAllocationEngine(base).out.filter(o => !o.trecho);
+      if (!v.length) continue;
+      const voo = v[(seed * 7) % v.length];
+      for (const aprovadaAgora of [false, true]) {
+        const motivo = MOTIVOS[seed % MOTIVOS.length];
+        const fixos = aprovadaAgora ? fixosAoAprovar({}, v) : { [voo.fKey]: pinoDoVoo(voo) };
+        const estado = { ...base, fixos, ...(aprovadaAgora ? { aprovacao: { em: '2026-11-10T21:05:00.000Z', por: 'Operador 01' } } : {}), fStatus: { [voo.fKey]: 'Cancelado' }, fObs: { [voo.fKey]: { motivo } } };
+        const resultado = runAllocationEngine(estado);
+        for (const opcao of sugerirParaCancelado(estado, resultado, voo.fKey).opcoes) {
+          vistas++;
+          const { depois, chaves } = mudados(estado, resultado, [voo.fKey], e => aproveitarCancelado(e, resultado, voo.fKey, opcao));
+          const novo = depois.get(voo.fKey);
+          assert.deepEqual([novo.a, novo.insId, ...(voo.isGround ? [] : [novo.r])], [opcao.mudancas.a, opcao.mudancas.insId, ...(voo.isGround ? [] : [opcao.mudancas.r])], `seed ${seed}: ${opcao.texto}`);
+          assert.deepEqual(opcao.muda || [], chaves, `seed ${seed} (aprovada: ${aprovadaAgora}): ${opcao.texto}`);
+          if (aprovadaAgora) assert.deepEqual(chaves, [], `seed ${seed}: na aprovada nada muda`);
+          if (chaves.length) comMudanca++;
+        }
+      }
+    }
+    assert.ok(vistas > 20 && comMudanca > 0, `${vistas} sugestões, ${comMudanca} com mudança`);
   });
 });
 
