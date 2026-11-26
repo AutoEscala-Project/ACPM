@@ -29,12 +29,12 @@ import { registrarTela } from '../views/telas.js';
 registrarDesenho('escala', () => { if (RES) rOut(); }, { em: ['dados', 'consulta', 'releitura', 'escala'], ordem: 80 });
 
 // O minuto de um clique na faixa de uma linha do mapa: a posição dele dentro da faixa (sem a borda), entre o início e o
-// fim do mapa (data-inicio e data-fim), de 5 em 5 minutos; na largura da faixa ou, com o eixo invertido, na altura
+// fim do mapa (data-inicio e data-fim), de 5 em 5 minutos; na altura da faixa (o mapa transposto, o padrão) ou, com as horas nas colunas, na largura
 function minutoDoClique(faixa, { clientX, clientY }) {
   const mapa = faixa.closest('.tl-wrap');
   const { inicio, fim } = mapa.dataset;
   const caixa = faixa.getBoundingClientRect();
-  // Com o eixo invertido, as horas descem: a posição é a do clique na altura da faixa
+  // No mapa transposto (o padrão), as horas descem: a posição é a do clique na altura da faixa
   const fracao = mapa.classList.contains('transposto')
     ? (clientY - caixa.top - faixa.clientTop) / faixa.clientHeight
     : (clientX - caixa.left - faixa.clientLeft) / faixa.clientWidth;
