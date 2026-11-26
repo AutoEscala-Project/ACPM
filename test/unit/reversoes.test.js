@@ -541,3 +541,43 @@ describe('Reverter depois de um agendamento na Escala', () => {
     assert.deepEqual([estado.fixos[K], estado.stu[1].insId], [undefined, undefined]);
   });
 });
+
+// A alteração de um voo feita na Escala (F1g): o pino, o status e o detalhe de antes de cada voo tocado, o pedido de antes
+// (null: a missão extra criada, que sai) e as recusas que ela tirou
+describe('desfazerEdicao', async () => {
+  const { validarReversao, desfazerEdicao } = await import('../../js/reversoes.js');
+  const pedido = { fly: true, mis: 'Voo Local', eq: 'C152', p1: 390, p2: -1, nb: 1, ss: 1, pr: 3, jan: 'manha' };
+  const valida = {
+    kind: 'desfazerEdicao', voos: [{ fKey: '1000_0_1', fixo: { a: 390, b: 450, r: 'PR-AAA', insId: 1 }, status: 'Confirmado', detalhe: null }, { fKey: '1001_7_1', fixo: null, status: null, detalhe: null }],
+    pedidos: [{ stuId: 1000, mid: 0, pedido }, { stuId: 1001, mid: 7, pedido: null }],
+    recusas: [{ fKey: '1002_0_1', s: 'Aluno 2', m: 'Rejeitado: nenhum C152 livre.', codigo: 'avioes-ocupados' }], label: '↶ Reverter'
+  };
+
+  it('aceita a reversão no formato do app e recusa a adulterada', () => {
+    const limpa = validarReversao(valida, []);
+    assert.equal(limpa.kind, 'desfazerEdicao');
+    assert.equal(limpa.pedidos[1].pedido, null);
+    assert.equal(limpa.recusas.length, 1);
+    for (const ruim of [
+      { ...valida, voos: [] }, { ...valida, pedidos: [] }, { ...valida, pedidos: [{ stuId: 1000, mid: 0, pedido: null }] },
+      { ...valida, pedidos: [{ stuId: 1000, mid: 0, pedido: { ...pedido, mis: 'Nada' } }] }, { ...valida, recusas: [{ fKey: 'x', s: 'a', m: 'b' }] },
+      { ...valida, recusas: [{ fKey: '1002_0_1', s: 'a', m: 'b', codigo: 'inventado' }] }, { ...valida, voos: [{ fKey: '1000_0_1', fixo: { a: 'x' } }] }
+    ]) assert.equal(validarReversao(ruim, []), null, JSON.stringify(ruim).slice(0, 80));
+  });
+
+  it('desfaz: o pedido de antes (a extra criada sai), o pino, o status e o detalhe de antes', () => {
+    const estado = {
+      stu: [{ id: 1000, nm: 'A', ...pedido, p1: 610, jan: 'tarde', insId: 4, extra: [] }, { id: 1001, nm: 'B', ...pedido, extra: [{ mid: 7, ...pedido }] }],
+      fixos: { '1000_0_1': { a: 610, b: 670, r: 'PR-BBB', insId: 4, agendado: true }, '1001_7_1': { a: 390, b: 450, r: 'PR-AAA', insId: 1, agendado: true } },
+      fStatus: { '1000_0_1': 'Pendente', '1001_7_1': 'Atrasado' }, fObs: { '1001_7_1': { novoInicio: 400 } }
+    };
+    desfazerEdicao(estado, validarReversao(valida, []));
+    assert.equal(estado.stu[0].p1, 390);
+    assert.equal(estado.stu[0].jan, 'manha');
+    assert.equal(estado.stu[0].insId, undefined);
+    assert.deepEqual(estado.stu[1].extra, []);
+    assert.deepEqual(estado.fixos, { '1000_0_1': { a: 390, b: 450, r: 'PR-AAA', insId: 1 } });
+    assert.deepEqual(estado.fStatus, { '1000_0_1': 'Confirmado' });
+    assert.deepEqual(estado.fObs, {});
+  });
+});
