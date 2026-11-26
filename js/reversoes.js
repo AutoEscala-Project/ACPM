@@ -5,7 +5,7 @@
 // Desfazer um voo agendado na Escala também fica aqui: quando ele não é desfeito e o que volta como estava; e o que a
 // reversão de uma mudança nos voos fixos não devolve depois de um agendamento.
 import { novoRecurso, MATRICULA, ATRIBUTOS_DO_RECURSO } from './frota.js';
-import { normalizarFixos, fixoPeloStatus, pinoDeVoltaNaTurma } from './fixos.js';
+import { normalizarFixos, fixoPeloStatus, fixosAoReabrir, pinoDeVoltaNaTurma } from './fixos.js';
 import { CATEGORIAS_COM_HORARIOS, normalizarHorarios } from './horarios.js';
 import { disponibilidadeValida, normalizeMissionFields } from './rules.js';
 import { MINUTOS_DO_DIA, MIS, WIN, FLIGHT_STATUSES } from './config.js';
@@ -108,11 +108,16 @@ export function validarReversao(rev, frota) {
     return voos.every(Boolean) && pedidos.every(Boolean) ? { kind: 'aproveitarCancelado', voos, pedidos, label } : null;
   }
   // A alteração de um voo feita na Escala (o editor e a sugestão aplicada no pedido recusado, F1g): de cada voo tocado,
-  // o pino, o status e o detalhe de antes (null: não havia); de cada pedido tocado, o pedido de antes (null: a alteração
-  // criou a missão extra, que sai; o principal sempre tem o de antes); e as recusas que ela tirou (voltam no lugar delas)
+  // o pino, o status e o detalhe de antes (null: não havia) e, do voo sem pino que estava na escala, o lugar dele (lugar:
+  // o horário, o recurso e o instrutor); de cada pedido tocado, o pedido de antes (null: a alteração criou a missão extra,
+  // que sai; o principal sempre tem o de antes; a volta do noturno de ontem não tem pedido no dia: nenhum); e as recusas
+  // que ela tirou (voltam no lugar delas)
   if (rev.kind === 'desfazerEdicao') {
     const voos = validarReversao({ ...rev, kind: 'aproveitarCancelado', pedidos: [] }, frota);
-    if (!voos || !Array.isArray(rev.pedidos) || !rev.pedidos.length || rev.pedidos.length > 100) return null;
+    if (!voos || !Array.isArray(rev.pedidos) || rev.pedidos.length > 100) return null;
+    const lugares = rev.voos.map(v => (ausente(v.lugar) ? null : normalizarFixos({ [v.fKey]: v.lugar })[v.fKey] || undefined));
+    if (lugares.includes(undefined)) return null;
+    const comLugar = voos.voos.map((v, i) => (lugares[i] ? { ...v, lugar: { a: lugares[i].a, b: lugares[i].b, r: lugares[i].r, insId: lugares[i].insId, ...(lugares[i].classKey ? { classKey: lugares[i].classKey } : {}) } } : v));
     const pedidos = rev.pedidos.map(p => {
       if (!objeto(p) || !idValido(p.stuId) || !Number.isInteger(p.mid) || p.mid < 0) return null;
       if (ausente(p.pedido)) return p.mid > 0 ? { stuId: p.stuId, mid: p.mid, pedido: null } : null;
@@ -125,7 +130,7 @@ export function validarReversao(rev, frota) {
       && typeof r.m === 'string' && r.m.length <= 1000 && (r.codigo === undefined || CODIGOS_DE_REJEICAO.includes(r.codigo))
       ? { fKey: r.fKey, s: r.s, m: r.m, ...(r.codigo === undefined ? {} : { codigo: r.codigo }) } : null));
     if (!pedidos.every(Boolean) || !limpas.every(Boolean)) return null;
-    return { kind: 'desfazerEdicao', voos: voos.voos, pedidos, recusas: limpas, label };
+    return { kind: 'desfazerEdicao', voos: comLugar, pedidos, recusas: limpas, label };
   }
   if (rev.kind === 'readicionarRecurso') {
     const { recurso } = novoRecurso(frota, rev.recurso && typeof rev.recurso === 'object' ? rev.recurso : {});
@@ -278,8 +283,13 @@ export function motivoParaNaoDesfazerEdicao(estado, { pedidos }) {
 }
 
 // Desfaz a alteração de um voo feita na Escala (a reversão validada acima): cada pedido volta como estava (a missão extra
-// que ela criou sai) e cada voo tocado volta com o pino, o status e o detalhe de antes. As recusas voltam pela escala (na
-// escala aprovada, js/actions.js gravarNaEscala; fora dela, o motor as refaz)
+// que ela criou sai) e cada voo tocado volta com o status, o detalhe e o pino de antes, pela aprovação de agora (como a
+// aprovação e a reabertura o teriam deixado sem a alteração):
+// - na escala aprovada, o voo que não tinha pino (a alteração foi feita antes da aprovação) fica fixo no lugar de antes
+//   dela (lugar), sem marca: a data aprovada não roda o motor, e o pedido de antes voltaria sem o voo voltar;
+// - fora dela (a escala foi reaberta depois da alteração), o pino da aprovação não volta: só o do operador (o instrutor
+//   escolhido, o agendado) e o do status que fixa (fixosAoReabrir).
+// As recusas voltam pela escala (na escala aprovada, js/actions.js gravarNaEscala; fora dela, o motor as refaz)
 export function desfazerEdicao(estado, { voos, pedidos }) {
   for (const { stuId, mid, pedido } of pedidos) {
     const aluno = estado.stu.find(s => s.id === stuId);
@@ -294,15 +304,16 @@ export function desfazerEdicao(estado, { voos, pedidos }) {
     Object.assign(alvo, pedido);
     normalizeMissionFields(alvo);
   }
-  for (const { fKey, fixo, status, detalhe } of voos) {
+  for (const { fKey, fixo, lugar = null, status, detalhe } of voos) {
     estado.fixos = { ...(estado.fixos || {}) };
     estado.fStatus = { ...(estado.fStatus || {}) };
     estado.fObs = { ...(estado.fObs || {}) };
-    if (fixo) estado.fixos[fKey] = { ...fixo };
-    else delete estado.fixos[fKey];
     if (status) estado.fStatus[fKey] = status;
     else delete estado.fStatus[fKey];
     if (detalhe) estado.fObs[fKey] = { ...detalhe };
     else delete estado.fObs[fKey];
+    const pino = estado.aprovacao ? fixo || lugar : fixo && fixosAoReabrir({ [fKey]: fixo }, estado.fStatus)[fKey];
+    if (pino) estado.fixos[fKey] = { ...pino };
+    else delete estado.fixos[fKey];
   }
 }

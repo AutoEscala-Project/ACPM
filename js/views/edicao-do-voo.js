@@ -66,7 +66,7 @@ const nomeDoAluno = id => (S.stu.find(s => s.id === id) || {}).nm || `Aluno ${id
 function avisosDeAgora() {
   const { voo, valores } = aberto;
   if (!mudancasDoVoo(voo, valores).alguma && valores.missao) return [];
-  return avisosDaEdicao(estadoDaEscala(), RES, voo, valores, { aprovada: Boolean(S.aprovacao) });
+  return avisosDaEdicao(estadoDaEscala(), RES, voo, valores, { aprovada: Boolean(S.aprovacao), programa: programaLido() });
 }
 
 export const assinaturaDosAvisosDoVoo = avisos => avisos.map(a => `${a.codigo}:${a.texto}`).join('|');

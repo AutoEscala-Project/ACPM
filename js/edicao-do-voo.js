@@ -16,6 +16,7 @@ import { chaveDoVoo, pedidoDoAluno, statusDoVoo } from './voo.js';
 import { hm, fmtH } from './format.js';
 import { nomeDoRecurso } from './categorias.js';
 import { FROTA_INICIAL } from './frota.js';
+import { comExigenciasDasMissoes, exigeDaMissaoDoPedido } from './programa.js';
 
 // A escala que a alteração deixa (estado: o estado da escala depois dela). Na escala aprovada (aprovada), a da tela
 // (resultado) conferida de novo, sem o motor (antes: o estado que fez a escala da tela; recusas: as que a reversão devolve).
@@ -118,7 +119,7 @@ export function opcoesDoVoo(estado, resultado, voo, valores, ambiente = {}) {
   const missoes = missoesDoVoo(estado, voo, stuId, ambiente.programa);
   const semDesligar = o => ({ ...o, desligada: false });
   const recursos = !missao || voo.ground ? [] : opcoesDeRecurso(estado, resultado, { mis: missao.mis, eq: missao.eq, curso: aluno && aluno.curso, a, b, instrutor, exceto }).map(semDesligar);
-  const exige = Array.isArray((pedidoDoVoo(estado, voo.principal) || {}).exige) ? pedidoDoVoo(estado, voo.principal).exige : [];
+  const exige = exigeDaMissao(estado, voo, valores, ambiente.programa);
   const instrutores = !missao || !aluno ? [] : opcoesDeInstrutor(estado, resultado, {
     mis: missao.mis, tipo: tipo || missao.eq, a, b, stu: aluno, stuKg: aluno.kg || 0, curso: aluno.curso, r: voo.ground ? null : r, exige, exceto
   }).map(g => ({ ...g, opcoes: g.opcoes.map(semDesligar) }));
@@ -136,6 +137,17 @@ export function opcoesDoVoo(estado, resultado, voo, valores, ambiente = {}) {
 }
 
 const frotaDe = estado => (Array.isArray(estado.frota) ? estado.frota : FROTA_INICIAL);
+
+// O que a missão escolhida no editor exige do INVA (a missão do curso, pelo programa: a de agora ou outra, também com o
+// aluno mudado); sem os programas lidos, o que o estado da escala derivou para o pedido de agora (nada), e só enquanto a
+// missão é a mesma
+function exigeDaMissao(estado, voo, { missao, stuId }, programa) {
+  if (!missao) return [];
+  const aluno = estado.stu.find(s => s.id === stuId) || null;
+  if (Array.isArray(programa)) return [...exigeDaMissaoDoPedido(programa, missao.etapa ? { etapa: missao.etapa, cursoDaEtapa: missao.cursoDaEtapa } : null, aluno)];
+  const pedido = pedidoDoVoo(estado, voo.principal) || {};
+  return chaveDaMissao(missao) === chaveDaMissao(voo.valores.missao) && Array.isArray(pedido.exige) ? pedido.exige : [];
+}
 
 // O que mudou (valores contra os de agora, voo.valores): o lugar (o aluno, a missão, o recurso, o horário ou a duração), o
 // instrutor e o status de cada voo da unidade
@@ -185,10 +197,16 @@ export function aplicarEdicao(estado, resultado, voo, valores, { aprovada = Bool
   if (!m.alguma) return null;
   const { principal } = voo;
   const voos = new Map(), pedidos = new Map();
-  const guardarVoo = fKey => { if (!voos.has(fKey)) voos.set(fKey, { fKey, fixo: (estado.fixos || {})[fKey] || null, status: (estado.fStatus || {})[fKey] || null, detalhe: (estado.fObs || {})[fKey] || null }); };
+  // O voo sem pino que está na escala guarda o lugar dele: na escala aprovada depois, desfazer o põe de volta ali
+  const guardarVoo = (fKey, o = null) => {
+    if (voos.has(fKey)) return;
+    const fixo = (estado.fixos || {})[fKey] || null;
+    const lugar = !fixo && o && !o.trecho ? { a: o.a, b: o.b, r: o.r, insId: o.insId, ...(o.isGround && o.classKey ? { classKey: o.classKey } : {}) } : null;
+    voos.set(fKey, { fKey, fixo, status: (estado.fStatus || {})[fKey] || null, detalhe: (estado.fObs || {})[fKey] || null, ...(lugar ? { lugar } : {}) });
+  };
   const guardarPedido = (stuId, mid, pedido) => { const k = `${stuId}_${mid}`; if (!pedidos.has(k)) pedidos.set(k, { stuId, mid, pedido: pedido ? camposDoPedido(pedido) : null }); };
   voo.unidade.forEach(o => {
-    guardarVoo(o.fKey);
+    guardarVoo(o.fKey, o);
     const p = pedidoDoVoo(estado, o);
     if (p) guardarPedido(o.stuId, o.mid || 0, p);
   });
@@ -209,14 +227,16 @@ export function aplicarEdicao(estado, resultado, voo, valores, { aprovada = Bool
         if (valores.missao.etapa) Object.assign(p, { etapa: valores.missao.etapa, cursoDaEtapa: valores.missao.cursoDaEtapa });
         else { delete p.etapa; delete p.cursoDaEtapa; }
       }
+      const outroTipo = p.eq !== tipo;
       Object.assign(p, { fly: true, eq: tipo, p1: valores.a, ...(voo.ground ? {} : { nb: valores.minutos / 60 }) });
       if (novo) p.p2 = -1;
       if (valores.a !== voo.valores.a || novo) {
         const permitidas = disponibilidadeDoAluno(p.jan);
         if (typeof p.jan === 'string' && /^h\d+$/.test(p.jan)) p.jan = `h${valores.a}`;
         else if (permitidas && !permitidas(valores.a)) { delete p.jan; janSaiu = true; }
-        delete p.limiteConfirmado;
       }
+      // A confirmação do 7º local foi dada para o horário, a missão e o tipo: sai quando um deles muda (como na Demanda)
+      if (valores.a !== voo.valores.a || novo || m.missao || outroTipo) delete p.limiteConfirmado;
       if (valores.insId !== voo.valores.insId || novo) {
         if (valores.insId) p.insId = valores.insId;
         else if (!novo) delete p.insId;
@@ -278,13 +298,15 @@ const CAMPO_DO_AVISO = { 'fora-dos-horarios': 'voo-horario', 'depois-das-17h30':
 // (conflito: pedem "Salvar mesmo assim" e ficam na Escala), as regras que o voo posto à mão pula, o peso que falta; na
 // escala aprovada, os outros voos que ficam em conflito; a disponibilidade do aluno que sai do pedido; o voo em andamento.
 // [{ codigo, texto, campo, conflito }]
-export function avisosDaEdicao(estado, resultado, voo, valores, { aprovada = Boolean(estado.aprovacao) } = {}) {
+export function avisosDaEdicao(estado, resultado, voo, valores, { aprovada = Boolean(estado.aprovacao), programa = null } = {}) {
   const avisos = [];
   if (!valores.missao) return [{ codigo: 'sem-missao', texto: 'Escolha a missão do aluno.', campo: 'voo-missao', conflito: false, bloqueia: true }];
   const copia = structuredClone(estado);
   const feito = aplicarEdicao(copia, resultado, voo, valores, { aprovada });
   if (!feito) return avisos;
-  const sim = conferirEscala(copia, resultado, { antes: estado });
+  // O que a missão do curso de cada pedido exige do INVA, de novo: a missão ou o aluno mudados deixam o pedido sem o exige
+  // de antes (como no estado da escala, js/state.js)
+  const sim = conferirEscala(comExigenciasDasMissoes(copia, programa), resultado, { antes: estado });
   if (sim) {
     const meus = new Set(feito.chaves);
     const antes = new Map(resultado.out.map(o => [o.fKey, o]));
