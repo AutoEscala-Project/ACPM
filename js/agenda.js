@@ -1,8 +1,8 @@
 // Agenda de solicitações da secretaria: a regra do prazo (a mesma do servidor, no horário de São Paulo), as datas em que um
 // pedido pode ser registrado, o limite de voos locais e o pedido da demanda que cada solicitação vira ao ser importada (a importação: js/processamento.js).
-import { MIS, MISSOES_LOCAIS, LIMITE_DE_VOOS_LOCAIS } from './config.js';
+import { MIS, MISSOES_LOCAIS, LIMITE_DE_VOOS_LOCAIS, T, NI, GROUND_DURATION_H, DURACAO_MAXIMA_H } from './config.js';
 import { disponibilidadeAtual, disponibilidadeDoAluno, normalizeMissionFields, duracaoPadraoDaMissao } from './rules.js';
-import { horariosDaMissao, preferenciasPadrao, paraMinuto } from './horarios.js';
+import { horariosDaMissao, preferenciasPadrao, paraMinuto, HORARIO_DO_SOLO } from './horarios.js';
 import { hm, somarDias } from './format.js';
 
 export const FUSO_DO_AEROCLUBE = 'America/Sao_Paulo';
@@ -66,6 +66,49 @@ export function disponibilidadeDaSolicitacao({ janela, horario }) {
 export const RECURSO_DO_PEDIDO = /^[A-Za-z0-9]([A-Za-z0-9 .-]{0,28}[A-Za-z0-9])?$/;
 export const recursosDaMissao = missao => (Object.hasOwn(MIS, missao) ? MIS[missao].eq : []);
 export const recursoValido = ({ missao, recurso }) => (recursosDaMissao(missao).includes(recurso) ? recurso : null);
+
+// As regras do pedido na função de 13 argumentos (a migração missao_do_curso_e_limite_do_pedido), depois de quem pode, do
+// horário específico e da duração, e antes do limite de voos locais e do prazo. As três cópias delas (o modo local, o
+// servidor falso e o cliente falso dos testes) passam pelos casos de test/helpers/casos-da-agenda.js, que o banco também
+// tem. Os horários fixos: o Noturno sai às 17:30 e o Voo Solo, às 06:30 (os de horariosDaMissao)
+export const HORARIOS_FIXOS = Object.freeze({ Noturno: hm(T[NI]), 'Voo Solo': hm(HORARIO_DO_SOLO) });
+
+// A missão do curso pelo id, nos cursos guardados (o formato de programa_do_curso: as fases e as missões, também as
+// retiradas): { curso, missao, retirada } (retirada: ela ou a fase dela saiu do programa); null, quando não há
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+function missaoDoCursoGuardada(cursos, id) {
+  if (typeof id !== 'string' || !UUID.test(id)) return null;
+  for (const curso of Array.isArray(cursos) ? cursos : []) {
+    const missao = (curso.missoes || []).find(m => m.id === id);
+    if (!missao) continue;
+    const fase = (curso.fases || []).find(f => f.id === missao.fase);
+    return { curso, missao, retirada: missao.removida === true || Boolean(fase && fase.removida === true) };
+  }
+  return null;
+}
+
+// A recusa do pedido (horas: as que o servidor guarda, o Ground já com 1,5 h), com o código, o campo (a dica do servidor)
+// e a mensagem; null, quando passa:
+// - o recurso é obrigatório e é um dos que a missão permite, com as horas (public.missao_e_recurso_validos);
+// - o Noturno e o Voo Solo saem nos horários fixos deles;
+// - a missão do curso, quando há uma, existe, está no programa e é do tipo do pedido (o recurso dela e o curso do aluno
+//   não são comparados: são do cadastro, e uma limitação do aluno pode trocar o recurso)
+export function recusaDoPedido({ missao, recurso, horario, horas, missaoDoCurso = null }, cursos = []) {
+  const tipo = typeof recurso === 'string' ? recurso.trim() : '';
+  const recusa = (campo, mensagem) => ({ code: '22023', campo, mensagem });
+  if (!tipo) return recusa('recurso', 'o pedido precisa do recurso');
+  const permitido = Object.hasOwn(MIS, missao) && MIS[missao].eq.includes(tipo) && (!MIS[missao].isGround || horas === GROUND_DURATION_H)
+    && horas > 0 && horas <= DURACAO_MAXIMA_H;
+  if (!permitido) return recusa('recurso', `a missão ${missao} não é feita no ${tipo} com essas horas`);
+  if (Object.hasOwn(HORARIOS_FIXOS, missao) && horario !== HORARIOS_FIXOS[missao]) return recusa('horario', `${missao} sai sempre às ${HORARIOS_FIXOS[missao]}`);
+  if (missaoDoCurso !== null && missaoDoCurso !== undefined) {
+    const doCurso = missaoDoCursoGuardada(cursos, missaoDoCurso);
+    if (!doCurso || doCurso.retirada || doCurso.missao.mis !== missao) {
+      return recusa('missao', 'a missão do curso não existe, saiu do programa ou é de outro tipo');
+    }
+  }
+  return null;
+}
 
 // Pedido da demanda: a missão com o recurso do pedido (sem ele, o padrão da missão); como preferências, os dois primeiros horários dela que a
 // disponibilidade permite (sem disponibilidade, os primeiros a partir das 08:20 e das 10:10); prioridade 3. Os horários

@@ -1,7 +1,7 @@
 // A Agenda: os pedidos da data aberta, registrar (cada pedido para a data dele, "Data do pedido") e cancelar (importar os
 // pedidos da data para a Demanda: js/eventos/importacao.js)
 import { vagaDeVooLocal } from '../agenda.js';
-import { DURACAO_MAXIMA_H, LIMITE_DE_VOOS_LOCAIS, MIS } from '../config.js';
+import { DURACAO_MAXIMA_H, LIMITE_DE_VOOS_LOCAIS } from '../config.js';
 import { $, showToast } from '../dom.js';
 import { duracaoDigitada, ERRO_DA_DURACAO } from '../rules.js';
 import { S, DATA } from '../state.js';
@@ -105,10 +105,7 @@ async function conferirERegistrar(excecao) {
       ...pedido, aluno: aluno.id, aluno_nome: aluno.nm, janela: 'horario', horas, observacao, registrado_por: por, excecao
     });
   } catch (err) {
-    if (err.code === 'agenda-sem-recurso') marcarInvalidos('#ag-recurso');
     $('#ag-erro').textContent = {
-      // O app novo com o servidor de antes (a migração agenda_com_recurso): o recurso se perderia, e nada foi registrado
-      'agenda-sem-recurso': `O servidor precisa ser atualizado para guardar o recurso do pedido: até lá, ${missao} só pode ser pedida no ${MIS[missao].defEq}. Nada foi registrado. Avise a administração do app.`,
       PT403: 'Prazo encerrado para esta data: os pedidos vão até as 13:00 do dia anterior (a segunda, até sábado às 10:00).',
       42501: 'Esta conta não pode registrar este pedido (a Exceção da Coordenação é só para operadores).',
       23514: 'Pedido incompleto: confira aluno, missão, recurso, horário e quem anotou.',

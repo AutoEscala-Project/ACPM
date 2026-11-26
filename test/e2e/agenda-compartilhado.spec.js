@@ -296,36 +296,6 @@ test.describe('Agenda de Solicitações (modo compartilhado)', () => {
     await expect(page.locator('#agenda-lista [data-act="cancelar-pedido"]')).toBeHidden();
   });
 
-  // O app novo no ar antes da migração agenda_com_recurso: o recurso padrão da missão ainda é registrado (pela função de
-  // antes), o outro não, e nada é registrado duas vezes
-  test('o servidor de antes do recurso: só o recurso padrão da missão é registrado, uma vez; o outro diz por quê', async ({ browser }) => {
-    const contexto = await browser.newContext({ baseURL: test.info().project.use.baseURL, locale: 'pt-BR', timezoneId: 'America/Sao_Paulo' });
-    await prepararContexto(contexto);
-    const servidor = await instalarSupabaseFalso(contexto, { ...comAlunos(), agendaSemRecurso: true });
-    const page = await contexto.newPage();
-    const erros = vigiarErros(page, { statusEsperados: [404] });
-    await entrar(page, CONTAS.secretaria);
-    await registrarPedido(page, { aluno: 'Aluno 1000', missao: 'Navegação', recurso: 'PA-34', horario: '07:30' });
-    await expect(campoDaAgenda(page, 'erro')).toHaveText('O servidor precisa ser atualizado para guardar o recurso do pedido: até lá, Navegação só pode ser pedida no C152. Nada foi registrado. Avise a administração do app.');
-    await expect(campoDaAgenda(page, 'recurso')).toHaveAttribute('aria-invalid', 'true');
-    expect(servidor.solicitacoes).toEqual([]);
-    await expect(campoDaAgenda(page, 'aluno')).not.toHaveValue('');
-    await registrarPedido(page, { aluno: 'Aluno 1000', missao: 'Navegação', recurso: 'C152', horario: '08:20' });
-    await expect(page.locator('#agenda-lista tbody tr')).toHaveCount(1);
-    expect(servidor.solicitacoes.map(s => [s.missao, s.horario, Object.hasOwn(s, 'recurso')])).toEqual([['Navegação', '08:20', false]]);
-    // A recusa com o botão armado ("Registrar mesmo assim"): escolhido o recurso padrão, ela sai, e o campo não fica marcado
-    await registrarPedido(page, { aluno: 'Aluno 1000', missao: 'Navegação', recurso: 'PA-34', horario: '10:00' });
-    await expect(campoDaAgenda(page, 'erro')).toContainText('já tem voo marcado');
-    await page.locator('#form-agenda [type="submit"]').click();
-    await expect(campoDaAgenda(page, 'erro')).toContainText('O servidor precisa ser atualizado');
-    await campoDaAgenda(page, 'recurso').selectOption('C152');
-    await expect(campoDaAgenda(page, 'recurso')).toHaveAttribute('aria-invalid', 'false');
-    await expect(campoDaAgenda(page, 'erro')).toContainText('Aluno 1000 já tem voo marcado');
-    expect(servidor.solicitacoes).toHaveLength(1);
-    expect(erros).toEqual([]);
-    await contexto.close();
-  });
-
   // Um clique a mais enquanto o servidor não respondeu não é outro pedido (nem outro voo na demanda)
   test('o segundo clique em "Registrar pedido" antes da resposta não registra de novo', async ({ page, context }) => {
     const servidor = await instalarSupabaseFalso(context, comAlunos());
@@ -347,7 +317,7 @@ test.describe('Agenda de Solicitações (modo compartilhado)', () => {
   });
 
   // A rede que cai no meio do registro: não se sabe se ele chegou, e o app não tenta de novo sozinho
-  test('o registro sem resposta não é repetido pela função de antes', async ({ browser }) => {
+  test('o registro sem resposta não é repetido', async ({ browser }) => {
     const contexto = await browser.newContext({ baseURL: test.info().project.use.baseURL, locale: 'pt-BR', timezoneId: 'America/Sao_Paulo' });
     await prepararContexto(contexto);
     const servidor = await instalarSupabaseFalso(contexto, comAlunos());
