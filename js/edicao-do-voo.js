@@ -296,7 +296,8 @@ const CAMPO_DO_AVISO = { 'fora-dos-horarios': 'voo-horario', 'depois-das-17h30':
 // Os avisos da alteração (recalculados a cada campo), na escala da tela com ela aplicada, conferida sem o motor
 // (js/conferencia.js; fora da escala aprovada, sem simular o que o motor mudaria nos outros voos, d46): os conflitos do voo
 // (conflito: pedem "Salvar mesmo assim" e ficam na Escala), as regras que o voo posto à mão pula, o peso que falta; na
-// escala aprovada, os outros voos que ficam em conflito; a disponibilidade do aluno que sai do pedido; o voo em andamento.
+// escala aprovada, os outros voos que ficam em conflito; o INVA fora do “Priorizar com” do aluno; a disponibilidade do aluno
+// que sai do pedido; o voo em andamento.
 // [{ codigo, texto, campo, conflito }]
 export function avisosDaEdicao(estado, resultado, voo, valores, { aprovada = Boolean(estado.aprovacao), programa = null } = {}) {
   const avisos = [];
@@ -321,6 +322,11 @@ export function avisosDaEdicao(estado, resultado, voo, valores, { aprovada = Boo
     }
     for (const a of sim.al.filter(v => v.t === 'warn' && meus.has(v.fKey) && Object.hasOwn(CAMPO_DO_AVISO, v.codigo))) {
       if (!avisos.some(v => v.texto === a.m)) avisos.push({ codigo: a.codigo, texto: a.m, campo: CAMPO_DO_AVISO[a.codigo], conflito: false });
+    }
+    // O INVA fora do “Priorizar com” do aluno (N9, F1h): o voo posto à mão avisa na Escala (voa-com), e o editor pede a
+    // confirmação
+    for (const a of sim.al.filter(v => v.codigo === 'voa-com' && meus.has(v.fKey))) {
+      if (!avisos.some(v => v.texto === a.m)) avisos.push({ codigo: 'fora-do-priorizar', texto: a.m, campo: 'voo-instrutor', conflito: false });
     }
     if (aprovada) {
       for (const o of sim.out.filter(v => !meus.has(v.fKey) && v.conflito && !(antes.get(v.fKey) || {}).conflito)) {

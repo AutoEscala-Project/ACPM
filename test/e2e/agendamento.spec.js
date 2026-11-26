@@ -133,11 +133,13 @@ test.describe('Agendar um voo na Escala', () => {
   // F1h (N9): o instrutor fora do “Priorizar com” da aluna era uma nota; agora é um aviso, que pede a confirmação, e a Escala
   // guarda a observação do voo posto à mão
   test('o instrutor fora do “Priorizar com” pede "Agendar mesmo assim"; agendado, a Escala tem a observação', async ({ page }) => {
+    // O Aluno 1000 voa às 14:30: às 06:30 os dois instrutores estão livres, e o do “Priorizar com” vem antes
     const estado = dia();
+    Object.assign(estado.stu[0], { p1: 870 });
     estado.stu[1].voaCom = [1];
     await abrirComCurso(page, estado);
     await abrirDialogo(page);
-    await expect(page.locator('#agd-instrutor option:checked')).toHaveText('Instrutor 01');
+    await expect(page.locator('#agd-instrutor option:checked')).toHaveText('Instrutor 01 · Priorizar com');
     await expect(page.locator('#agd-conferencia .agd-avisos li')).toHaveCount(0);
     await page.locator('#agd-instrutor').selectOption('2');
     await expect(page.locator('#agd-conferencia .agd-avisos li')).toHaveText(['Instrutor 02 está fora do Priorizar com de Maria Silva.']);
