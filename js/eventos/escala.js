@@ -4,7 +4,7 @@
 import { gravarAlteracao, gravarEscalaCalculada, aindaNaoAbriu, fotoDaEscalaTravada, gravarNaEscala } from '../actions.js';
 import { opcoesDeCategoria } from '../categorias.js';
 import { OPCOES_DE_BURACOS, OPCOES_DE_HORARIOS, normalizarCriterios } from '../criterios.js';
-import { $, showToast, anunciar, algumDialogoAberto, gavetaDoEsc, focarNoTitulo } from '../dom.js';
+import { $, showToast, anunciar, algumDialogoAberto, gavetaDoEsc, focarNoTitulo, visivel } from '../dom.js';
 import { exp, pdf, planilha } from '../export.js';
 import { fixosAoMudarStatus, fixosAoReabrir, fixosAoAprovar, normalizarFixos, fixarNoLugar } from '../fixos.js';
 import { hm, hojeISO } from '../format.js';
@@ -143,9 +143,9 @@ function aplicarStatus(fKey, status, detalhe) {
 }
 // Na escala não aprovada, toda alteração feita na Escala pergunta antes (R6, js/views/dialogo-refazer.js): "Cancelar"
 // redesenha o valor de antes, e nada muda; na aprovada, não pergunta (o motor não roda)
-function perguntarSeAberta(resumo, fazer) {
+function perguntarSeAberta(resumo, fazer, { focar = null } = {}) {
   if (S.aprovacao) { fazer(); return; }
-  perguntarAntesDeRefazer({ resumo, aoConfirmar: fazer, aoDesistir: () => rOut() });
+  perguntarAntesDeRefazer({ resumo, aoConfirmar: fazer, aoDesistir: () => { rOut(); if (focar) focar(); } });
 }
 // O status (e o detalhe, depois do diálogo dele), com a pergunta
 function statusComPergunta(fKey, status, detalhe) {
@@ -197,7 +197,9 @@ aoMudarCampo('insVoo', t => {
   const voo = vooDaChave(t.dataset.fkey);
   if (!voo) return;
   const x = t.value ? insBy(+t.value) : null;
-  perguntarSeAberta(`${voo.isGround ? `turma de ${voo.mis}` : voo.s}: ${voo.ins} → ${x ? x.nm : 'Automático'}`, () => trocarInstrutor(voo, x));
+  // Desistir: o foco volta ao nome do instrutor (a lista já voltou a ser o nome quando a pergunta abriu)
+  const focar = () => { const nome = [...document.querySelectorAll(`#out [data-act="trocar-instrutor"][data-fkey="${CSS.escape(voo.fKey)}"]`)].find(visivel); if (nome) nome.focus(); };
+  perguntarSeAberta(`${voo.isGround ? `turma de ${voo.mis}` : voo.s}: ${voo.ins} → ${x ? x.nm : 'Automático'}`, () => trocarInstrutor(voo, x), { focar });
 });
 function trocarInstrutor(voo, x) {
   const foto = fotoDaEscalaTravada();

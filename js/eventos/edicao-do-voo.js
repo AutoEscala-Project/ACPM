@@ -27,9 +27,27 @@ const ambiente = () => ({ programa: programaLido(), resultados: S.resultados || 
 
 // O campo mudou: os valores, depois as opções e os avisos de novo, com o foco no mesmo campo
 function redesenharNoCampo(id) {
+  redesenharJa();
   desenharEditor();
   const campo = id && document.getElementById(id);
   if (campo && !campo.disabled) campo.focus();
+}
+
+// O campo digitado (o "Outro horário" e a duração): o navegador avisa a mudança a cada parte do horário e ao sair do
+// campo, antes de o foco chegar ao campo seguinte. O editor é redesenhado logo depois, com o campo digitado e o que tem o
+// foco no mesmo lugar (não são trocados: o horário continua na parte em que se digita, e o Tab e o clique levam ao campo
+// seguinte). "Salvar" redesenha antes, para valer com os avisos de agora
+let pendente = null;
+function redesenharDepois(campo) {
+  if (pendente) clearTimeout(pendente.relogio);
+  pendente = { campo, relogio: setTimeout(redesenharJa) };
+}
+function redesenharJa() {
+  if (!pendente) return;
+  const { campo, relogio } = pendente;
+  clearTimeout(relogio);
+  pendente = null;
+  desenharEditor({ manter: [campo, document.activeElement] });
 }
 
 function mudarStatus(alvo) {
@@ -83,11 +101,18 @@ dlg.addEventListener('change', e => {
     if (!aberto.outroHorario) valores.a = +t.value;
   } else if (t.id === 'voo-outro-horario') {
     const m = paraMinuto(t.value);
-    if (m !== null) valores.a = m;
+    if (m === null) return;
+    valores.a = m;
+    $('#voo-erro').textContent = '';
+    redesenharDepois(t);
+    return;
   } else if (t.id === 'voo-duracao') {
     const h = duracaoDigitada(t.value);
     if (h === null) { $('#voo-erro').textContent = 'A duração vai de 0,1 h a 5 h.'; return; }
     valores.minutos = Math.round(h * 60);
+    $('#voo-erro').textContent = '';
+    redesenharDepois(t);
+    return;
   } else if (t.id === 'voo-instrutor') {
     valores.insId = +t.value;
   } else return;
@@ -152,6 +177,7 @@ function gravar(chave, valores) {
 
 $('#form-voo').addEventListener('submit', e => {
   e.preventDefault();
+  redesenharJa();
   const aberto = vooDoEditor();
   if (!aberto || isGestor()) return;
   const { voo, valores } = aberto;

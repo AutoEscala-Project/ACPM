@@ -140,11 +140,14 @@ export function fecharPainelDeReparo(devolverFoco = false) {
 }
 
 // O foco no voo, o primeiro visível: o botão "Sugestões" dele (botao: na caixa ou na linha), o status dele na lista ou a
-// barra dele no mapa. Depois de aplicar, sem o botão: o voo mudou de lugar ou de status
+// barra dele no mapa (a do aluno da turma de Ground é a da turma). Depois de aplicar, sem o botão: o voo mudou de lugar ou
+// de status
 export function focarNoVoo(fKey, { botao = false } = {}) {
   const k = CSS.escape(fKey);
+  const voo = vooDaChave(fKey);
+  const turma = voo && voo.isGround && voo.classKey ? [`#out .tl-bar[data-pop="${CSS.escape(voo.classKey)}"]`] : [];
   const seletores = [...(botao ? [`#out [data-reparo="${k}"]`, `#out [data-rejeitado="${k}"]`] : []),
-    `#out select[data-f="fstatus"][data-fkey="${k}"]`, `#out .tl-bar[data-pop="${k}"]`];
+    `#out select[data-f="fstatus"][data-fkey="${k}"]`, `#out .tl-bar[data-pop="${k}"]`, ...turma];
   const alvo = seletores.map(s => [...document.querySelectorAll(s)].find(visivel)).find(Boolean);
   if (alvo) alvo.focus();
 }

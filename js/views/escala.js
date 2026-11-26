@@ -291,8 +291,9 @@ const botaoDoCancelado = o => (cancelamentoAproveitavel(S, o, { data: DATA, hoje
   ? ` <button type="button" class="btn quiet edit-only" data-reparo="${esc(o.fKey)}" title="O que pode voar no lugar deste voo cancelado">Sugestões</button>`
   : '');
 
-// "Editar" abre o editor do voo (na turma de Ground, a turma inteira); "✕" tira o voo da escala
-const acao = o => `<button type="button" class="btn quiet editar-voo" data-act="editar-voo" data-fkey="${esc(o.isGround ? o.classKey || o.fKey : o.fKey)}" aria-label="Editar o voo de ${esc(o.s)}" aria-haspopup="dialog" data-dica="editar-voo">Editar</button>${o.stuId && !o.trecho
+// "Editar" abre o editor do voo (na turma de Ground, a turma inteira: o nome do botão diz); "✕" tira o voo da escala
+const rotuloDoEditar = o => (o.isGround && (o.groupSize || 1) > 1 ? `Editar a turma de ${o.mis} (${o.s})` : `Editar o voo de ${o.s}`);
+const acao = o => `<button type="button" class="btn quiet editar-voo" data-act="editar-voo" data-fkey="${esc(o.isGround ? o.classKey || o.fKey : o.fKey)}" aria-label="${esc(rotuloDoEditar(o))}" aria-haspopup="dialog" data-dica="editar-voo">Editar</button>${o.stuId && !o.trecho
   ? `<button class="x" data-act="rm-fly" data-id="${esc(o.stuId)}" data-mid="${esc(o.mid || 0)}" aria-label="Tirar ${esc(o.s)} da escala" title="Tirar da escala">✕</button>`
   : ''}`;
 
