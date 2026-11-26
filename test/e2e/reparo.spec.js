@@ -286,21 +286,35 @@ test('o pedido recusado pelo instrutor escolhido: "Sugestões" na linha da recus
   await expect(page.locator('#out details.caixa.erros')).toContainText('Aluno 1000');
 });
 
-// Uma data que já passou (hoje, nos testes, é 10/11): o cadastro e o dia gravados como o app grava, abertos pelo endereço
-const ONTEM = '2026-11-09';
-async function abrirNaDataPassada(page, estado) {
-  const { documentos, dias } = documentosAtuais(estado, ONTEM);
+// Uma data que já passou (hoje, nos testes, é 10/11, ao meio-dia), ou hoje: o cadastro e o dia gravados como o app grava,
+// abertos pelo endereço
+const ONTEM = '2026-11-09', HOJE = '2026-11-10';
+async function abrirNaData(page, estado, data) {
+  const { documentos, dias } = documentosAtuais(estado, data);
   await page.addInitScript(([cadastro, dia, data]) => {
     if (localStorage.getItem('acpm4_cadastro')) return;
     localStorage.setItem('acpm4_cadastro', cadastro);
     localStorage.setItem(`acpm4_dia_${data}`, dia);
-  }, [JSON.stringify(documentos.cadastro), JSON.stringify(dias[ONTEM]), ONTEM]);
-  await abrir(page, { url: `./?data=${ONTEM}` });
+  }, [JSON.stringify(documentos.cadastro), JSON.stringify(dias[data]), data]);
+  await abrir(page, { url: `./?data=${data}` });
   await abrirEscala(page);
-  await expect(rotuloDaData(page)).toContainText('09/11');
+  await expect(rotuloDaData(page)).toContainText(`${data.slice(8)}/${data.slice(5, 7)}`);
 }
+const abrirNaDataPassada = (page, estado) => abrirNaData(page, estado, ONTEM);
 
 test.describe('Sugestões só de hoje em diante', () => {
+  test('hoje, a recusa que outro instrutor só encaixaria num horário que já passou diz isso, e aponta "+ Agendar voo"', async ({ page }) => {
+    // Às 12:00, o pedido das 06:30 (2ª preferência 14:30) cujo escolhido não vem: o app o poria às 06:30
+    await abrirNaData(page, cenario({ ins: [instrutor(1, 9, { on: false }), instrutor(2, 9)], stu: [aluno(1001, { p1: 390, p2: 870, insId: 1 })] }), HOJE);
+    await abrirCaixa(page, 'erros');
+    await page.locator('#out details.caixa.erros [data-rejeitado]').click();
+    await expect(gaveta(page).locator('.opcoes-reparo li')).toHaveCount(0);
+    await expect(gaveta(page)).not.toContainText('sem mudar outro voo');
+    await expect(gaveta(page)).toContainText('Com outro instrutor, o app escala este pedido num horário que já passou.');
+    await expect(gaveta(page)).toContainText('+ Agendar voo');
+  });
+
+
   test('na data passada, a recusa do instrutor escolhido não tem "Sugestões"', async ({ page }) => {
     await abrirNaDataPassada(page, cenario({ ins: [instrutor(1, 9, { on: false }), instrutor(2, 9)], stu: [aluno(1000, { p1: 610, p2: -1, insId: 1 })] }));
     await abrirCaixa(page, 'erros');
@@ -368,6 +382,50 @@ test.describe('Sugestões do voo cancelado: o mapa, a confirmação, o resultado
     await expect(gaveta(page)).toBeVisible();
     await expect(gaveta(page).locator('h2')).toContainText('Aproveitar o voo cancelado');
     await expect(gaveta(page)).toContainText('Cancelado: Meteorologia.');
+  });
+
+  // O popup é a camada de baixo: aberta a gaveta, ele fecha, e o Esc fecha a gaveta e volta para a barra do voo
+  test('pelo teclado, do popup do mapa: a gaveta abre no lugar do popup, e o Esc a fecha e volta para a barra', async ({ page }) => {
+    await abrir(page, { estado: canceladoSoAs1010() });
+    await abrirEscala(page, { vista: 'eq' });
+    const barra = page.locator('#out .tl-bar.tl-st-Cancelado');
+    await barra.focus();
+    await page.keyboard.press('Enter');
+    await expect(page.locator('#tl-pop')).toBeVisible();
+    await page.locator('#tl-pop').getByRole('button', { name: 'Sugestões' }).focus();
+    await page.keyboard.press('Enter');
+    await expect(gaveta(page)).toBeVisible();
+    await expect(page.locator('#tl-pop')).toBeHidden();
+    await page.keyboard.press('Escape');
+    await expect(gaveta(page)).toBeHidden();
+    await expect(barra).toBeFocused();
+  });
+
+  test('aplicada pelo teclado, o foco vai para o voo (o status dele na lista)', async ({ page }) => {
+    await abrir(page, {
+      estado: {
+        ...cenario({ ins: [instrutor(1, 9), instrutor(2, 9)], stu: [aluno(1000, { p1: 610, p2: -1 })] }),
+        fixos: { '1000_0_1': { a: 610, b: 670, r: 'PP-LJV', insId: 1 } },
+        fStatus: { '1000_0_1': 'Cancelado' }, fObs: { '1000_0_1': { motivo: 'Instrutor indisponível' } }
+      }
+    });
+    await abrirEscala(page);
+    const voo = linha(page, 'Aluno 1000');
+    await voo.getByRole('button', { name: 'Sugestões' }).click();
+    await expect(gaveta(page).locator('[data-reparo-aplicar]').first()).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(gaveta(page)).toBeHidden();
+    await expect(voo.locator('.st-sel')).toHaveValue('Pendente');
+    await expect(voo.locator('.st-sel')).toBeFocused();
+  });
+
+  test('a frase da confirmação fica numa linha própria, separada do texto da sugestão', async ({ page }) => {
+    await abrir(page, { estado: canceladoSoAs1010() });
+    await abrirEscala(page);
+    await linha(page, 'Aluno 1000').getByRole('button', { name: 'Sugestões' }).click();
+    const primeira = gaveta(page).locator('.opcoes-reparo li').first();
+    await expect(primeira.locator('.confirmar-aluno')).toHaveCSS('display', 'block');
+    await expect(primeira.locator('span').first()).toHaveText(/Instrutor 01 Confirme com o aluno/);
   });
 
   test('o voo cancelado que já tem resultado registrado não tem "Sugestões"', async ({ page }) => {
