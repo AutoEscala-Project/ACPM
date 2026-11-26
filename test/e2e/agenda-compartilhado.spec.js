@@ -208,6 +208,37 @@ test.describe('Agenda de Solicitações (modo compartilhado)', () => {
     expect(servidor.solicitacoes.map(s => [s.missao, s.recurso, s.horas, s.missao_do_curso])).toEqual([['Navegação', 'C152', 3, pp.missoes.find(m => m.codigo === 'NAV-150NM').id]]);
   });
 
+  // Sem os programas lidos, a importação não sabe se a missão do curso do pedido saiu do programa: o pedido espera (não
+  // conta como importado), o app diz, e ele entra com ela depois de "Tentar de novo"
+  test('importar sem os programas dos cursos lidos: o pedido com a missão do curso espera e entra com ela depois', async ({ browser }) => {
+    const context = await browser.newContext();
+    await prepararContexto(context);
+    const page = await context.newPage();
+    let n = 0;
+    const uuid = () => `00000000-0000-4000-8000-${String(++n).padStart(12, '0')}`;
+    const pp = { ...novoCurso([], { sigla: 'PP', nome: 'Piloto Privado', modelo: MODELOS['pp-acpm'] }, uuid).curso, versao: 1 };
+    const docs = documentosAtuais({ ...estadoSintetico(), stu: [aluno(1000, { fly: false }, { nm: 'Maria', curso: 'PP' }), aluno(1001, { fly: false })] }, AMANHA);
+    const servidor = await instalarSupabaseFalso(context, { ...docs, cursos: cursosIniciais().map(c => (c.sigla === 'PP' ? pp : c)) });
+    servidor.solicitacoes.push(pedidoDe(1, AMANHA, { aluno_nome: 'Maria', missao: 'Navegação', horas: 3, recurso: 'C152', missao_do_curso: pp.missoes.find(m => m.codigo === 'NAV-150NM').id }),
+      pedidoDe(2, AMANHA, { aluno: 1001, aluno_nome: 'Aluno 1001', horario: '10:10', recurso: 'C152' }));
+    servidor.falhar('/rpc/programa_dos_cursos');
+    const erros = vigiarErros(page, { statusEsperados: [503] });
+    await entrar(page, CONTAS.operador);
+    await expect(page.locator('#aviso-dados')).toBeVisible();
+    await botaoDaAba(page, 'dem').click();
+    await importarDaAgenda(page);
+    await expect(page.locator('#toast-box')).toContainText('1 pedido(s) da agenda na demanda · 1 pedido com a missão do curso espera os programas dos cursos, que não foram lidos: importe de novo depois de lê-los.');
+    await expect.poll(() => servidor.dias.get(AMANHA).conteudo.importadas).toEqual([2]);
+    expect(servidor.dias.get(AMANHA).conteudo.pedidos[1000].fly).toBe(false);
+    await page.locator('#btn-tentar-dados').click();
+    await expect(page.locator('#aviso-dados')).toBeHidden();
+    await importarDaAgenda(page);
+    await expect(page.locator('#toast-box')).toContainText('1 pedido(s) da agenda na demanda.');
+    await expect.poll(() => { const p = servidor.dias.get(AMANHA).conteudo.pedidos[1000]; return [p.fly, p.etapa, p.cursoDaEtapa]; }).toEqual([true, 'NAV-150NM', 'PP']);
+    expect(erros).toEqual([]);
+    await context.close();
+  });
+
   // Outra pessoa registra para a data do campo, que não é a aberta: abrir a Agenda de novo lê os pedidos dela
   test('a Agenda aberta de novo lê também os pedidos da data do pedido', async ({ page, context }) => {
     await context.clock.setFixedTime(new Date('2026-11-10T13:30:00-03:00'));

@@ -42,7 +42,9 @@ function missaoDoCursoDoPedido(cursos, solicitacao) {
 // solicitações vistas ficam anotadas no dia (estado.importadas) para não repetir.
 // O pedido com a missão do curso escolhida na Agenda (missao_do_curso) entra como ela, qualquer que seja o progresso: o
 // código e o curso dela, com o recurso e as horas do pedido. A que saiu do programa ou mudou de tipo depois do registro não
-// entra: o pedido entra como o que não tem nenhuma, e o resumo o conta (foraDoPrograma).
+// entra: o pedido entra como o que não tem nenhuma, e o resumo o conta (foraDoPrograma, com a missão do curso como a qual
+// ele entrou, entrouComo: a inferida ou a do operador; null, pelo tipo). Sem os programas lidos (cursos: null), não se
+// sabe se ela saiu: o pedido espera, sem contar como visto, e entra na importação depois de lidos (esperamOsProgramas).
 // O pedido sem missão do curso, do aluno de um curso: entra como a primeira missão liberada do programa que é do tipo
 // pedido (o código e o curso dela, o recurso e as horas do programa); nenhuma, ele entra como veio, e o resumo diz
 // (semMissaoDoCurso, só quando havia o que inferir). O pedido com recurso só entra como uma missão do
@@ -52,12 +54,12 @@ function missaoDoCursoDoPedido(cursos, solicitacao) {
 // que ele tem (as registradas na agenda valem mais, como na missão do programa): a escolha do operador vale mais que a
 // próxima missão do programa. situacao: o último resultado de cada missão; programa: os cursos de onde a missão é
 // inferida (vazio quando os resultados ou os programas não foram lidos, ou com o progresso desligado: nenhum pedido entra
-// como missão inferida); cursos: os programas lidos, onde está a missão do curso do pedido. semInativos: o inativo do
+// como missão inferida); cursos: os programas lidos, onde está a missão do curso do pedido (null: não lidos). semInativos: o inativo do
 // cadastro vale na data (de hoje em diante): o pedido do aluno inativo não entra nem conta como visto (entra quando ele
 // voltar a ativo)
 export function importarSolicitacoes(estado, solicitacoes, { situacao = [], programa = [], cursos = [], semInativos = false } = {}) {
   const indice = indiceDoPrograma(programa), mapa = situacaoPorMissao(situacao);
-  const resumo = { novos: 0, atualizados: 0, semAluno: 0, deInativo: 0, foraDoPrograma: [], semMissaoDoCurso: [] };
+  const resumo = { novos: 0, atualizados: 0, semAluno: 0, deInativo: 0, foraDoPrograma: [], semMissaoDoCurso: [], esperamOsProgramas: 0 };
   if (!Array.isArray(estado.importadas)) estado.importadas = [];
   for (const solicitacao of solicitacoes) {
     if (solicitacao.cancelada_em || estado.importadas.includes(solicitacao.id)) continue;
@@ -65,9 +67,9 @@ export function importarSolicitacoes(estado, solicitacoes, { situacao = [], prog
     const aluno = estado.stu.find(x => x.id === solicitacao.aluno);
     if (!aluno) { resumo.semAluno++; continue; }
     if (semInativos && inativo(aluno)) { resumo.deInativo++; continue; }
+    if (cursos === null && solicitacao.missao_do_curso) { resumo.esperamOsProgramas++; continue; }
     estado.importadas.push(solicitacao.id);
-    const vinculada = missaoDoCursoDoPedido(cursos, solicitacao) || null;
-    if (vinculada === null && solicitacao.missao_do_curso) resumo.foraDoPrograma.push({ missao: solicitacao.missao });
+    const vinculada = missaoDoCursoDoPedido(cursos || [], solicitacao) || null;
     const copiada = vooQueDaLugar(estado, aluno, migrateLegacyMissionName(solicitacao.missao), vinculada);
     const escolhida = !vinculada && copiada && copiada.etapa ? copiada : null;
     const curso = !vinculada && !escolhida && aluno.curso ? indice.curso(aluno.curso) : null;
@@ -84,6 +86,7 @@ export function importarSolicitacoes(estado, solicitacoes, { situacao = [], prog
     if (vinculada) Object.assign(pedido, { etapa: vinculada.codigo, cursoDaEtapa: vinculada.sigla });
     else if (escolhida) Object.assign(pedido, { etapa: escolhida.etapa }, escolhida.cursoDaEtapa ? { cursoDaEtapa: escolhida.cursoDaEtapa } : {});
     else if (missao) Object.assign(pedido, { etapa: missao.codigo, cursoDaEtapa: curso.sigla });
+    if (!vinculada && solicitacao.missao_do_curso) resumo.foraDoPrograma.push({ missao: solicitacao.missao, entrouComo: pedido.etapa || null });
     pedido.solicitacao = solicitacao.id;
     if (copiada) {
       // O voo continua com o instrutor escolhido; a disponibilidade e a missão do curso passam a ser as do pedido

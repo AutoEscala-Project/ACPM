@@ -941,6 +941,27 @@ comProgresso.describe('A missão do curso do pedido, com o progresso ligado', ()
     await expect(page.locator('#toast-box')).toContainText('1 pedido(s) da agenda na demanda · 1 pedido sem missão do curso: nenhuma Navegação liberada é no PA-34.');
   });
 
+  // A missão do curso que saiu do programa depois do registro não entra; com o progresso ligado, a próxima do programa entra
+  // no lugar dela, e o app diz qual (não "pelo tipo da missão")
+  comProgresso('a missão do curso do pedido que saiu do programa: entra a próxima do programa, e o app diz qual', async ({ page }) => {
+    await abrirComOsCursos(page);
+    await registrarPedido(page, { aluno: 'Maria', codigo: 'IN-01', horario: '08:20' });
+    await expect(page.locator('#agenda-lista tbody tr')).toHaveCount(1);
+    await page.evaluate(() => {
+      const guardado = JSON.parse(localStorage.getItem('acpm4_cursos'));
+      guardado.cursos.find(c => c.sigla === 'PP').missoes.find(m => m.codigo === 'IN-01').removida = true;
+      localStorage.setItem('acpm4_cursos', JSON.stringify(guardado));
+    });
+    await page.reload();
+    await appPronto(page);
+    await irPara(page, 'age');
+    await page.locator('#agenda-importar').click();
+    await expect.poll(() => page.evaluate(d => JSON.parse(localStorage.getItem(`acpm4_dia_${d}`)).pedidos[1000]?.etapa, AMANHA)).toMatch(/^IN-/);
+    const etapa = await page.evaluate(d => JSON.parse(localStorage.getItem(`acpm4_dia_${d}`)).pedidos[1000].etapa, AMANHA);
+    await expect(page.locator('#toast-box')).toContainText(`1 pedido(s) da agenda na demanda · 1 pedido com a missão do curso fora do programa: entrou como ${etapa}.`);
+    await expect(page.locator('#toast-box')).not.toContainText('pelo tipo da missão');
+  });
+
   comProgresso('a missão do curso do pedido vale mais que a próxima do programa', async ({ page }) => {
     await abrirComOsCursos(page);
     await registrarPedido(page, { aluno: 'Maria', codigo: 'NAV-150NM', horario: '08:20' });
