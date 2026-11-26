@@ -777,7 +777,7 @@
         Clique numa janela para mudar; <i>Aplicar turno</i> marca várias de uma vez.
         A coluna <i>Mês</i> mostra as horas de voo do instrutor no mês com a escala desta data (em destaque a partir de 90% do limite).</li>
         <li><b>Cadastro:</b> nome, CANAC, peso (em destaque quando falta) e as habilitações.
-        <i>Editar habilitações</i> abre um painel ao lado com as 21 habilitações em grupos: Ground e simulador, Voo, Aviões e os três do checador (o curso PP, PC ou INVA; o motor MNTE ou MLTE; as regras VFR ou IFR: o voo de cheque exige uma marca de cada), e as horas de voo do instrutor no mês, no semestre e no ano; ali também se informam as horas de voo feitas fora do app (neste mês e, no ano, antes deste mês).
+        <i>Editar habilitações</i> abre um painel ao lado com as 23 habilitações em grupos: Ground e simulador, Voo (com <i>Endosso Solo</i> e <i>Voo de Navegação ≥ 150 NM</i>, que ninguém começa tendo), Aviões e os três do checador (o curso PP, PC ou INVA; o motor MNTE ou MLTE; as regras VFR ou IFR: o voo de cheque exige uma marca de cada), e as horas de voo do instrutor no mês, no semestre e no ano; ali também se informam as horas de voo feitas fora do app (neste mês e, no ano, antes deste mês).
         <i>Dados pessoais</i> abre os dados do instrutor (veja Alunos).
         Embaixo ficam os <b>limites da Lei do Aeronauta</b> (veja <a href="#manual-regras">Como a escala é montada</a>), que só o Administrador muda.</li>
       </ul>
@@ -791,7 +791,8 @@
       O Esc ou um clique fora fecha o filtro, que continua valendo; a habilitação própria que sai da frota, em Recursos, sai também do filtro.
       O Gestor e a Secretaria também filtram.</p>
       <p>O instrutor só recebe uma missão se tiver as habilitações que ela exige (veja a tabela em <a href="#manual-regras">Como a escala é montada</a>) e se estiver disponível durante o voo inteiro.
-      O voo pode exigir mais: o noturno do aluno do PC é IFR (o instrutor precisa da habilitação IFR), e o recurso com <i>Habilitação própria</i> (Recursos) exige a dele, que aparece num grupo próprio em <i>Editar habilitações</i>.</p>
+      O voo pode exigir mais: o noturno do aluno do PC é IFR (o instrutor precisa da habilitação IFR), o recurso com <i>Habilitação própria</i> (Recursos) exige a dele, que aparece num grupo próprio em <i>Editar habilitações</i>, e a missão do curso do pedido exige as que estão marcadas nela, em Cursos (<i>Habilitações que o INVA precisa</i>).
+      Marque primeiro os INVAs que têm a habilitação (aqui) e depois as missões que a exigem (em Cursos): a missão marcada antes de algum INVA ativo ter fica com o voo fora da escala, com o motivo.</p>
 
       <h4>Recursos</h4>
       <p>Duas vistas, com a busca e as categorias valendo nas duas.
@@ -840,6 +841,9 @@
       Cada fase tem um nome, o módulo e quando abre: <i>Depois das fases anteriores</i> (o padrão), <i>Desde o início do curso</i> ou <i>Depois de…</i> as fases escolhidas, sempre anteriores (no PP, a Fase 6, do voo noturno, abre depois da Fase 4, embora venha depois da Fase 8).
       Cada missão tem um código (por exemplo, PP-07, até 15 letras, números, pontos e hífens, sem repetir no curso), um nome, o tipo de missão da escala, o recurso, as horas (o Ground é sempre na sala, com 1h30) e quando voar: <i>Depois das anteriores</i> (o padrão), <i>Livre na fase</i> (a qualquer hora com a fase aberta, como o SPIN do PP; a fase só fica completa com ela) ou <i>Depois de…</i> as missões escolhidas, sempre anteriores, de qualquer fase.
       <i>Dispensada</i> vale como feita para todos os alunos<span data-funcionalidade="progresso"> (não é sugerida e não entra no progresso)</span>; <i>Avaliação</i> marca as missões de avaliação.
+      <i>Habilitações que o INVA precisa</i> marca o que a missão exige do INVA além do tipo de missão e do recurso (por exemplo, <i>Endosso Solo</i> ou <i>Voo de Navegação ≥ 150 NM</i>), nos grupos de <i>Editar habilitações</i>: o voo do pedido que escolheu essa missão do curso só vai para quem tem todas.
+      Nenhuma missão começa com alguma marcada; marque os INVAs antes, em Instrutores: enquanto nenhum INVA ativo tem a habilitação, a linha da missão diz <i>Nenhum INVA ativo tem…</i>, e os voos dela ficam fora da escala.
+      Sem os programas dos cursos lidos, a escala não confere essas habilitações, e a Escala avisa.
       Numa missão Noturno, <i>Trecho</i> diz se ela é a ida (o translado para BH), a noite (o noturno em BH) ou a volta (o translado do dia seguinte): as missões de um Noturno vêm juntas na fase, nesta ordem, e são um voo só<span data-funcionalidade="progresso">; a próxima missão oferece a noite com os translados (<i>NOT (com TSL-01 e TSL-02)</i>), e o resultado dela vale para os três</span>.<span data-funcionalidade="progresso">
       A próxima missão na Demanda e o progresso em Alunos seguem essas regras.</span></p>
       <p>Embaixo do título do curso ficam os alunos dele e, no curso com mais de uma fase, o índice das fases.

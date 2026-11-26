@@ -125,20 +125,22 @@ const DO_CURSO = { 'Noturno': { PC: ['ifr'] } };
 const doMapa = (mapa, chave, padrao) => (Object.hasOwn(mapa, chave) ? mapa[chave] : padrao);
 
 // Exigências da missão no equipamento: todos os grupos, e em cada grupo basta uma das habilitações. Com o contexto do
-// voo, também as do curso do aluno (o Noturno do PC exige IFR) e as que o recurso exige (exige)
-export function exigencias(mis, eq, { curso, recurso } = {}) {
+// voo, também as do curso do aluno (o Noturno do PC exige IFR), as que o recurso exige (recurso.exige) e as que a missão
+// do curso do pedido exige (exige: missoes_do_curso.exige, que o estado da escala deriva; js/programa.js)
+export function exigencias(mis, eq, { curso, recurso, exige } = {}) {
   const grupos = ehCheque(mis) ? CHEQUES[mis].map(h => [h])
     : (mis === 'Simulador' ? doMapa(DO_SIMULADOR, eq, DO_SIMULADOR_PADRAO) : doMapa(DA_MISSAO, mis, DA_MISSAO_PADRAO)).map(h => [h]);
   if (!ehCheque(mis)) for (const h of doMapa(DO_AVIAO, eq, [])) if (!grupos.some(g => g.includes(h))) grupos.push([h]);
   const doCurso = typeof curso === 'string' && Object.hasOwn(DO_CURSO, mis) ? doMapa(DO_CURSO[mis], curso, []) : [];
-  for (const h of [...doCurso, ...exigenciasDoRecurso(recurso)]) if (!grupos.some(g => g.length === 1 && g[0] === h)) grupos.push([h]);
+  const daMissaoDoCurso = Array.isArray(exige) ? exige.filter(h => typeof h === 'string') : [];
+  for (const h of [...doCurso, ...exigenciasDoRecurso(recurso), ...daMissaoDoCurso]) if (!grupos.some(g => g.length === 1 && g[0] === h)) grupos.push([h]);
   return grupos;
 }
 
 // O instrutor tem o que o tipo de recurso exige (a fila do C172 no rodízio)
 export const habilitadoNoTipo = (instrutor, tipo) => doMapa(DO_AVIAO, tipo, []).every(h => Array.isArray(instrutor.hab) && instrutor.hab.includes(h));
 
-// contexto: { curso, recurso } do voo (sem ele, só a missão e o tipo)
+// contexto: { curso, recurso, exige } do voo (sem ele, só a missão e o tipo)
 export const podeFazer = (instrutor, mis, eq, contexto) => {
   const hab = Array.isArray(instrutor.hab) ? instrutor.hab : [];
   return exigencias(mis, eq, contexto).every(grupo => grupo.some(h => hab.includes(h)));
@@ -146,6 +148,11 @@ export const podeFazer = (instrutor, mis, eq, contexto) => {
 
 // Quem pode dar ao menos um dos voos de cheque (a fila do rodízio dos cheques)
 export const podeAlgumCheque = instrutor => Object.keys(CHEQUES).some(mis => podeFazer(instrutor, mis));
+
+// O motivo da habilitação que falta quando ela é da missão do curso: "missao-do-curso:endosso_solo"
+export const PREFIXO_DA_MISSAO_DO_CURSO = 'missao-do-curso:';
+// A primeira habilitação que a missão do curso exige (exige) e o instrutor não tem, ou null
+export const faltaDaMissaoDoCurso = (instrutor, exige) => (Array.isArray(exige) ? exige.find(h => !(Array.isArray(instrutor.hab) && instrutor.hab.includes(h))) || null : null);
 
 export const descreverExigencias = (mis, eq, contexto) => exigencias(mis, eq, contexto).map(g => g.map(nomeDaHabilitacao).join(' ou ')).join(' + ');
 

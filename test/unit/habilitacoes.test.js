@@ -2,7 +2,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
-import { HABILITACOES, habilitacoesDoNivel, normalizarHabilitacoes, podeFazer, podeAlgumCheque, descreverExigencias, marcasDoChecadorAntigo, GRUPOS_DE_HABILITACAO, exigenciasDoRecurso, gruposDosRecursos, exigencias, nomeDaHabilitacao } from '../../js/habilitacoes.js';
+import { HABILITACOES, habilitacoesDoNivel, normalizarHabilitacoes, podeFazer, podeAlgumCheque, descreverExigencias, marcasDoChecadorAntigo, GRUPOS_DE_HABILITACAO, exigenciasDoRecurso, gruposDosRecursos, exigencias, nomeDaHabilitacao, faltaDaMissaoDoCurso } from '../../js/habilitacoes.js';
 import { MIS, MATRICULA } from '../../js/config.js';
 import { MODELOS } from '../../js/modelos-de-curso.js';
 
@@ -270,5 +270,26 @@ describe('As habilitações novas: Endosso Solo e Nav. ≥ 150 NM', () => {
     assert.equal(podeFazer(com('endosso_solo', 'c152'), 'Voo Solo', 'C152'), false);
     assert.equal(podeFazer(com('solo', 'c152'), 'Voo Solo', 'C152'), true);
     assert.equal(podeFazer(com('navegacao_150', 'c152'), 'Navegação', 'C152'), false);
+  });
+});
+
+// F1d, "missão do curso": o que a missão do curso exige (exige, no contexto do voo) soma às do tipo, do curso e do recurso
+describe('O que a missão do curso exige do INVA, no contexto do voo', () => {
+  it('cada id de exige é mais um grupo (todos exigidos), sem repetir o que já se exige', () => {
+    assert.deepEqual(exigencias('Voo Solo', 'C152', { exige: ['endosso_solo'] }), [['solo'], ['c152'], ['endosso_solo']]);
+    assert.deepEqual(exigencias('Navegação', 'C172', { exige: ['navegacao_150', 'c172', 'ifr'] }), [['navegacao'], ['c172'], ['navegacao_150'], ['ifr']]);
+    assert.deepEqual(exigencias('Noturno', 'C172', { curso: 'PC', exige: ['ifr', 'endosso_solo'] }), [['noturno'], ['c172'], ['ifr'], ['endosso_solo']]);
+    assert.deepEqual(exigencias('Voo Solo', 'C152', { exige: [] }), exigencias('Voo Solo', 'C152'));
+    assert.deepEqual(exigencias('Voo Solo', 'C152', { exige: 'endosso_solo' }), exigencias('Voo Solo', 'C152'), 'só uma lista conta');
+    assert.equal(podeFazer(com('solo', 'c152'), 'Voo Solo', 'C152', { exige: ['endosso_solo'] }), false);
+    assert.equal(podeFazer(com('solo', 'c152', 'endosso_solo'), 'Voo Solo', 'C152', { exige: ['endosso_solo'] }), true);
+    assert.equal(descreverExigencias('Voo Solo', 'C152', { exige: ['endosso_solo'] }), 'Voo para liberação de Solo + C152 + Endosso Solo');
+  });
+
+  it('a primeira habilitação da missão do curso que o instrutor não tem', () => {
+    assert.equal(faltaDaMissaoDoCurso(com('solo', 'endosso_solo'), ['endosso_solo', 'navegacao_150']), 'navegacao_150');
+    assert.equal(faltaDaMissaoDoCurso(com('solo'), []), null);
+    assert.equal(faltaDaMissaoDoCurso({}, ['ifr']), 'ifr');
+    assert.equal(faltaDaMissaoDoCurso(com('ifr'), undefined), null);
   });
 });

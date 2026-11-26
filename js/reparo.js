@@ -13,7 +13,7 @@ import { disponibilidadeDoAluno, doesGroundGateFlight } from './rules.js';
 import { nomeDoRecurso } from './categorias.js';
 import { hm } from './format.js';
 import { gruposDoConflito } from './conflitos.js';
-import { statusDoVoo, pedidosDosVoos } from './voo.js';
+import { statusDoVoo, pedidosDosVoos, exigeDosVoos } from './voo.js';
 import { ocupacaoDaEscala, problemaDoAluno, avioesQueServem, instrutoresQueServem } from './candidatos.js';
 import { inativoNoEstado } from './inativos.js';
 
@@ -29,8 +29,10 @@ export function sugerirReparos(estado, resultado, fKey, { maximo = 3, depoisDe =
   const alunos = new Map(estado.stu.map(s => [s.id, s]));
   const pedidoDo = pedidosDosVoos(estado.stu);
   const tipo = voo.isGround ? GROUND_EQ_TYPE : voo.eqType;
-  // Os requisitos do voo: a missão, o tipo e o curso do aluno (o noturno do PC é IFR; js/frota.js)
+  // Os requisitos do voo: a missão, o tipo e o curso do aluno (o noturno do PC é IFR; js/frota.js), e o que a missão do
+  // curso dos pedidos exige do INVA
   const curso = (alunos.get(voo.stuId) || {}).curso;
+  const exige = exigeDosVoos(estado.stu)(grupo);
 
   // Os aviões que servem ao voo (o tipo, o "Só Parafuso" e o "Só VFR") e, com o instrutor, os em que ele voa
   const avioesPara = (a, b, instrutor = null) => avioesQueServem(estado, ocupacao, { tipo, mis: voo.mis, curso, a, b, ground: voo.isGround, instrutor })
@@ -38,7 +40,7 @@ export function sugerirReparos(estado, resultado, fKey, { maximo = 3, depoisDe =
   // Os instrutores que servem no avião r (o avião com habilitação própria exige a dele), cada um com o combustível a
   // menos com ele ({ x, problemas, reducao })
   const instrutoresPara = (a, b, r = voo.r) => instrutoresQueServem(estado, ocupacao,
-    { mis: voo.mis, tipo, a, b, alunos: grupo.map(v => alunos.get(v.stuId)), stuKg: voo.stuKg, curso, r }).filter(c => !c.problemas.length);
+    { mis: voo.mis, tipo, a, b, alunos: grupo.map(v => alunos.get(v.stuId)), stuKg: voo.stuKg, curso, r, exige }).filter(c => !c.problemas.length);
   const comCombustivel = (texto, { reducao }) => (reducao > 0 ? `${texto} · reduzir ${reducao} gal` : texto);
 
   // O que o conflito pede, pelo código: o pedido mudou (só soltar), o horário não serve (outro

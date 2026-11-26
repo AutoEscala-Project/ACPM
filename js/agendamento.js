@@ -171,13 +171,13 @@ function ocupacoes(estado, base, exceto = []) {
 
 // O horário s serve ao voo de minutos no recurso r, com o instrutor x (sem ele, qualquer um) e para o aluno, contra os
 // voos fixos (sem os de exceto): o recurso, o aluno e o instrutor livres (a volta do noturno ocupa até as 10:10)
-function livreNosFixos(estado, base, { stu, r, x, mis, tipo, minutos, ground, stuKg, curso, exceto = [] }) {
+function livreNosFixos(estado, base, { stu, r, x, mis, tipo, minutos, ground, stuKg, curso, exige = [], exceto = [] }) {
   const { fixos } = ocupacoes(estado, base, exceto);
   return s => {
     if (r && problemaDoRecurso(estado, fixos, r, { a: s, b: s + minutos, ground })) return false;
     if (problemaDoAluno(fixos, stu.id, { a: s, b: s + minutos })) return false;
     if (!x) return true;
-    const doInstrutor = instrutoresQueServem(estado, fixos, { mis, tipo, a: s, b: s + minutos, alunos: [stu], stuKg, curso, r }).find(c => c.x === x);
+    const doInstrutor = instrutoresQueServem(estado, fixos, { mis, tipo, a: s, b: s + minutos, alunos: [stu], stuKg, curso, r, exige }).find(c => c.x === x);
     return Boolean(doInstrutor) && !doInstrutor.problemas.length;
   };
 }
@@ -296,7 +296,8 @@ function preferenciaDoContexto(estado, contexto, curso) {
   }
   if (contexto.insId) {
     const x = estado.ins.find(i => i.id === contexto.insId);
-    return m => (x && podeFazer(x, m.mis, isGroundMission(m.mis) ? GROUND_EQ_TYPE : m.eq, { curso }) ? 2 : 0);
+    // A missão do curso também com o que ela exige do INVA
+    return m => (x && podeFazer(x, m.mis, isGroundMission(m.mis) ? GROUND_EQ_TYPE : m.eq, { curso, exige: m.exige }) ? 2 : 0);
   }
   return () => 2;
 }
@@ -553,12 +554,12 @@ function rodizioDoDia(estado, base, categoria, exceto = []) {
 // acima do limite mesmo com o mínimo de combustível), com os textos curtos da Escala. Na ordem: o tanque cheio; nas
 // categorias do rodízio, menos voos da categoria no dia e a fila; menos horas no dia, menos habilitações, o id. exceto: o
 // voo que muda de lugar (não ocupa o instrutor no horário de onde sai, nem conta no rodízio)
-export function opcoesDeInstrutor(estado, base, { mis, tipo, a, b, stu, stuKg = 0, curso, r = null, exceto = [] }) {
+export function opcoesDeInstrutor(estado, base, { mis, tipo, a, b, stu, stuKg = 0, curso, r = null, exige = [], exceto = [] }) {
   const { fixos, todos } = ocupacoes(estado, base, exceto);
   const categoria = categoriaDoRodizio(mis, tipo);
   const { naCategoria, posicao } = rodizioDoDia(estado, base, categoria, exceto);
   const pares = new Set(stu.voaCom || []);
-  const lista = instrutoresQueServem(estado, fixos, { mis, tipo, a, b, alunos: [stu], stuKg, curso, r })
+  const lista = instrutoresQueServem(estado, fixos, { mis, tipo, a, b, alunos: [stu], stuKg, curso, r, exige })
     .map((c, k) => ({ ...c, k }))
     .sort((p, q) => (p.reducao > 0) - (q.reducao > 0)
       || (categoria ? (naCategoria.get(p.x.id) || 0) - (naCategoria.get(q.x.id) || 0) || (posicao(p.x.id) === posicao(q.x.id) ? 0 : posicao(p.x.id) - posicao(q.x.id)) : 0)
@@ -653,6 +654,8 @@ export function formularioDoAgendamento(estado, base, ambiente, contexto, escolh
   }
   const { mis } = info;
   const ground = isGroundMission(mis);
+  // O que a missão do curso exige do INVA: a escolhida, ou a do pedido que muda de lugar (o estado da escala a deriva)
+  const exige = info.tipo === 'missao' ? (info.missao.exige || []) : movido && movido.pedido ? (movido.pedido.exige || []) : [];
 
   // A duração (o Ground e o Noturno: fixa; a do programa; a do pedido que muda de lugar)
   const padraoDaDuracao = duracaoDoAgendamento({ mis, missao: info.tipo === 'missao' ? info.missao : null, pedido: movido ? movido.pedido : null });
@@ -679,7 +682,7 @@ export function formularioDoAgendamento(estado, base, ambiente, contexto, escolh
   };
   // Algum instrutor serve no recurso no horário, contra os voos fixos (o avião com habilitação própria pede a dele)
   const algumInstrutorServe = (a, r) => instrutoresQueServem(estado, ocupacoes(estado, base, exceto).fixos, {
-    mis, tipo: tipoDe(r), a, b: a + minutos, alunos: [stu], stuKg: alunoKg || 0, curso, r
+    mis, tipo: tipoDe(r), a, b: a + minutos, alunos: [stu], stuKg: alunoKg || 0, curso, r, exige
   }).some(c => !c.problemas.length);
   // O recurso que o operador escolheu (ou o do contexto) fica enquanto serve à missão. Sem ele, o do voo que muda de
   // lugar, quando está livre no horário; senão o primeiro que serve; sem o instrutor escolhido, o primeiro do mesmo tipo
@@ -702,7 +705,7 @@ export function formularioDoAgendamento(estado, base, ambiente, contexto, escolh
   // "Priorizar com" do aluno que serve; o do voo que muda de lugar, quando serve; a ordem da lista
   const doPedido = movido && movido.pedido.insId ? movido.pedido.insId : null;
   const escolherInstrutor = (a, r) => {
-    const grupos = opcoesDeInstrutor(estado, base, { mis, tipo: tipoDe(r), a, b: a + minutos, stu, stuKg: alunoKg || 0, curso, r, exceto });
+    const grupos = opcoesDeInstrutor(estado, base, { mis, tipo: tipoDe(r), a, b: a + minutos, stu, stuKg: alunoKg || 0, curso, r, exige, exceto });
     const todas = grupos.flatMap(g => g.opcoes);
     const habilitadas = todas.filter(o => !o.desligada);
     const servem = (grupos.find(g => g.rotulo === 'Servem neste horário') || { opcoes: [] }).opcoes;
@@ -738,7 +741,7 @@ export function formularioDoAgendamento(estado, base, ambiente, contexto, escolh
     // lugar sai do horário em que está, no mesmo recurso
     lista = listaDoTipo(tipoDe(rec.r));
     const instrutor = estado.ins.find(i => i.id === ins.insId) || null;
-    const livreAgora = livreNosFixos(estado, base, { stu, r: rec.r, x: instrutor, mis, tipo: tipoDe(rec.r), minutos, ground, stuKg: alunoKg || 0, curso, exceto });
+    const livreAgora = livreNosFixos(estado, base, { stu, r: rec.r, x: instrutor, mis, tipo: tipoDe(rec.r), minutos, ground, stuKg: alunoKg || 0, curso, exige, exceto });
     const livre = s => !(doVoo && s === doVoo.a && rec.r === doVoo.r) && livreAgora(s);
     const naJanela = lista.filter(s => (ctx.desde === null || s >= ctx.desde) && (ctx.ate === null || s < ctx.ate));
     a = ctx.perto || !naJanela.length ? encaixarHorario(ancora, lista, livre) : encaixarHorario(naJanela[0], naJanela, livre);
@@ -833,7 +836,7 @@ export function formularioDoAgendamento(estado, base, ambiente, contexto, escolh
   };
   f.selecao = {
     stu, x, r: rec.r, tipo, a, b, mis, info, ground, horas, fixa: padraoDaDuracao.fixa, minutos: b - a, lista, exceto, turma, movido,
-    stuKg: alunoKg || 0, curso
+    stuKg: alunoKg || 0, curso, exige
   };
   return f;
 }
@@ -997,14 +1000,14 @@ const ALTERNATIVAS_DO_GRUPO = { instrutor: ['instrutores', 'horarios'], aviao: [
 // instrutores que servem no horário (na ordem da lista); no peso, os que servem com peso informado (o peso deles cabe no
 // avião). Na turma de Ground, o horário e o instrutor são os da turma: sem alternativas deles
 function alternativasDoVoo(estado, base, selecao) {
-  const { stu, x, r, tipo, a, b, mis, ground, lista, exceto, turma, stuKg, curso } = selecao;
+  const { stu, x, r, tipo, a, b, mis, ground, lista, exceto, turma, stuKg, curso, exige } = selecao;
   const minutos = b - a;
-  const servem = () => ((opcoesDeInstrutor(estado, base, { mis, tipo, a, b, stu, stuKg, curso, r, exceto })
+  const servem = () => ((opcoesDeInstrutor(estado, base, { mis, tipo, a, b, stu, stuKg, curso, r, exige, exceto })
     .find(g => g.rotulo === 'Servem neste horário') || { opcoes: [] }).opcoes.filter(o => o.valor !== x.id));
   return {
     horarios: () => {
       if (turma) return [];
-      const livre = livreNosFixos(estado, base, { stu, r, x, mis, tipo, minutos, ground, stuKg, curso, exceto });
+      const livre = livreNosFixos(estado, base, { stu, r, x, mis, tipo, minutos, ground, stuKg, curso, exige, exceto });
       return lista.filter(s => s !== a && s + minutos <= MINUTOS_DO_DIA && livre(s))
         .sort((p, q) => Math.abs(p - a) - Math.abs(q - a) || p - q).slice(0, ALTERNATIVAS).sort((p, q) => p - q)
         .map(s => ({ opcao: `horario:${s}`, texto: hm(s) }));
@@ -1216,7 +1219,7 @@ export function avaliarAgendamento({ estado, baseComPesos, base = baseComPesos, 
   const categoria = ground ? null : categoriaDoRodizio(mis, tipo);
   if (categoria) {
     const { naCategoria, posicao } = rodizioDoDia(estado, base, categoria, exceto);
-    const vez = instrutoresQueServem(estado, ocupacoes(estado, base, exceto).fixos, { mis, tipo, a, b, alunos: [stu], stuKg: formulario.selecao.stuKg, curso: formulario.selecao.curso, r })
+    const vez = instrutoresQueServem(estado, ocupacoes(estado, base, exceto).fixos, { mis, tipo, a, b, alunos: [stu], stuKg: formulario.selecao.stuKg, curso: formulario.selecao.curso, r, exige: formulario.selecao.exige })
       .filter(c => !c.problemas.length).map(c => c.x)
       .sort((p, q) => (naCategoria.get(p.id) || 0) - (naCategoria.get(q.id) || 0) || (posicao(p.id) === posicao(q.id) ? 0 : posicao(p.id) - posicao(q.id)) || p.id - q.id)[0];
     if (vez) notas.push({ codigo: 'rodizio', texto: `Na fila do rodízio (${CATEGORIAS_DO_RODIZIO.find(c => c.id === categoria).nome}), a vez é de ${vez.nm}.` });

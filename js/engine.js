@@ -15,7 +15,7 @@ import { TEXTO_DO_PROBLEMA } from './conflitos.js';
 import { normalizarHangar, posicaoNoHangar } from './hangar.js';
 import { normalizarLimites } from './limites.js';
 import { compactar, custoDaEscala } from './compactar.js';
-import { chaveDoVoo, statusDoVoo, unidadeDoVoo, umPorUnidade, pedidosDosVoos, ocupacaoDoVoo, compromissoDoVoo } from './voo.js';
+import { chaveDoVoo, statusDoVoo, unidadeDoVoo, umPorUnidade, pedidosDosVoos, ocupacaoDoVoo, compromissoDoVoo, exigeDosVoos } from './voo.js';
 import { menorPrimeiro, soma, paradasEntre } from './util.js';
 
 // Entre os instrutores possíveis, primeiro os que têm menos habilitações: os mais versáteis ficam livres
@@ -171,6 +171,8 @@ function paradoDasUnidades(unidades) {
 function equalizarHoras(out, state, limites, historico) {
   const ativos = state.ins.filter(x => x.on);
   const alunos = new Map(state.stu.map(s => [s.id, s]));
+  // O que a missão do curso dos pedidos da unidade exige do INVA (quem recebe a unidade também precisa ter)
+  const exigeDa = exigeDosVoos(state.stu);
   const grupos = new Map();
   out.forEach(o => {
     const chave = unidadeDoVoo(o);
@@ -199,7 +201,7 @@ function equalizarHoras(out, state, limites, historico) {
     const [v] = u.voos;
     // O curso do aluno e o avião do voo (o noturno do PC exige IFR; o avião com habilitação própria, a dele)
     const recurso = u.isGround ? null : recursoDaFrota(Array.isArray(state.frota) ? state.frota : FROTA_INICIAL, v.r);
-    return !problemasDoInstrutor(x, { mis: u.mis, tipo: u.isGround ? GROUND_EQ_TYPE : u.eqType, a: u.a, b: u.b, alunos: u.voos.map(o => alunos.get(o.stuId)), stuKg: v.stuKg, curso: (alunos.get(v.stuId) || {}).curso, recurso },
+    return !problemasDoInstrutor(x, { mis: u.mis, tipo: u.isGround ? GROUND_EQ_TYPE : u.eqType, a: u.a, b: u.b, alunos: u.voos.map(o => alunos.get(o.stuId)), stuKg: v.stuKg, curso: (alunos.get(v.stuId) || {}).curso, recurso, exige: exigeDa(u.voos) },
       { compromissos: deles.map(compromisso), historico: historico(x.id), limites, peso: { reducaoMaxima: v.comb ? v.comb.reduzirGal : 0, exigirPesoDoInstrutor: true } }).length;
   };
 
@@ -245,7 +247,7 @@ const MOTIVO_SEM_PAR = {
 };
 function motivoSemPar(doPar, stu, d, tipo, fc) {
   if (doPar.every(x => !x.on)) return 'fora nesta data';
-  const habilitado = x => podeFazer(x, d.mis, tipo, { curso: stu.curso });
+  const habilitado = x => podeFazer(x, d.mis, tipo, { curso: stu.curso, exige: d.exige });
   if (doPar.every(x => !x.on || !habilitado(x))) return 'sem a habilitação da missão';
   if (doPar.every(x => !x.on || !habilitado(x) || (stu.bl || []).includes(x.id))) return 'em “Não escalar com”';
   const contagens = Object.entries(fc || {}).filter(([k, n]) => n && Object.hasOwn(MOTIVO_SEM_PAR, k)).sort((a, b) => b[1] - a[1]);
@@ -426,7 +428,7 @@ export function runAllocationEngine(state, opcoes = {}) {
     if (status !== 'Cancelado') {
       // O aluno que entra na turma do instrutor não muda a ocupação dele nem a lei
       const recursoDoPino = ground || mudouDeTipo ? null : recursoDaFrota(frota, r);
-      problemasDoInstrutor(x, { mis: d.mis, tipo, a, b, efetivo, alunos: [stu], stuKg: stu.kg, curso: stu.curso, recurso: recursoDoPino }, {
+      problemasDoInstrutor(x, { mis: d.mis, tipo, a, b, efetivo, alunos: [stu], stuKg: stu.kg, curso: stu.curso, recurso: recursoDoPino, exige: d.exige }, {
         compromissos: (x && compromissos[x.id]) || [], historico: x ? historico(x.id) : null, limites, jaOcupa: daMesmaTurma,
         peso: ground || mudouDeTipo ? null : {}, todos: true
       }).forEach(p => marcar(p.codigo, TEXTO_DO_PROBLEMA[p.codigo](p)));
@@ -575,7 +577,7 @@ export function runAllocationEngine(state, opcoes = {}) {
     const quem = escolhido ? `o instrutor escolhido (${escolhido.nm})` : '';
     const impedimento = !escolhido ? null
       : !escolhido.on ? `${quem} não está disponível nesta data`
-        : !podeFazer(escolhido, d.mis, tipoDoPedido, { curso: stu.curso }) ? `${quem} não tem a habilitação de ${d.mis}${isGnd ? '' : ` no ${d.eq}`} (${descreverExigencias(d.mis, tipoDoPedido, { curso: stu.curso })})`
+        : !podeFazer(escolhido, d.mis, tipoDoPedido, { curso: stu.curso, exige: d.exige }) ? `${quem} não tem a habilitação de ${d.mis}${isGnd ? '' : ` no ${d.eq}`} (${descreverExigencias(d.mis, tipoDoPedido, { curso: stu.curso, exige: d.exige })})`
           : (stu.bl || []).includes(escolhido.id) ? `${quem} está em “Não escalar com” deste aluno` : null;
     if (impedimento) {
       al.push({ t: 'err', s: labelStu, m: `Rejeitado: ${impedimento}.`, codigo: 'instrutor-escolhido' });
@@ -595,7 +597,9 @@ export function runAllocationEngine(state, opcoes = {}) {
     // RAMO A: ALOCAÇÃO DE GROUND SCHOOL (01h30 = 90 MIN · TURMA COLETIVA)
     // ========================================================================
     if (isGnd) {
-      const habilitado = x => podeFazer(x, d.mis, GROUND_EQ_TYPE);
+      // A missão do curso do pedido pode exigir mais do INVA (exige): a turma aberta também precisa servir a ele
+      const habilitado = x => podeFazer(x, d.mis, GROUND_EQ_TYPE, { exige: d.exige });
+      const exigeMais = Array.isArray(d.exige) && d.exige.length > 0;
       const durMin = GROUND_DURATION_MIN; // 90 min (1.5 h)
       const endMax = fimDoAluno(stuId, d.mis, GROUND_EQ_TYPE);
       const starts = DAY.filter(w => state.win[w] && T[w] + durMin <= endMax && naDisponibilidade(T[w]));
@@ -644,6 +648,7 @@ export function runAllocationEngine(state, opcoes = {}) {
           if (!free(stuBusy, stuId, cls.a, cls.b)) continue;
           if (stu.bl.includes(cls.x.id)) continue;
           if (!naPassada(cls.x)) continue;
+          if (exigeMais && !habilitado(cls.x)) continue;
           if (cls.b > earliestFlightPrefMin && candidateWins.some(w => T[w] + durMin <= earliestFlightPrefMin)) continue;
           chosenClass = cls;
           break;
@@ -662,7 +667,7 @@ export function runAllocationEngine(state, opcoes = {}) {
             const a = T[w], b = a + durMin;
             if (!free(stuBusy, stuId, a, b)) { fcGnd.stu_busy++; continue; }
 
-            const sameWinCls = existingClasses.find(c => c.w === w && !stu.bl.includes(c.x.id) && naPassada(c.x));
+            const sameWinCls = existingClasses.find(c => c.w === w && !stu.bl.includes(c.x.id) && naPassada(c.x) && (!exigeMais || habilitado(c.x)));
             if (sameWinCls) {
               chosenClass = sameWinCls;
               break;
@@ -671,7 +676,7 @@ export function runAllocationEngine(state, opcoes = {}) {
             // Há uma única sala de Ground: só abre turma nova com a sala livre durante toda a 01h30
             if (!free(used, GROUND_REG, a, b)) { fcGnd.sala++; continue; }
 
-            const { servem: f2, barrou } = instrutoresQueServem(passada.pool, x => problemasDoInstrutor(x, { mis: d.mis, tipo: GROUND_EQ_TYPE, a, b, alunos: [stu] },
+            const { servem: f2, barrou } = instrutoresQueServem(passada.pool, x => problemasDoInstrutor(x, { mis: d.mis, tipo: GROUND_EQ_TYPE, a, b, alunos: [stu], exige: d.exige },
               { compromissos: compromissos[x.id] || [], historico: historico(x.id), limites }));
             if (barrou) { fcGnd[barrou]++; continue; }
 
@@ -744,7 +749,7 @@ export function runAllocationEngine(state, opcoes = {}) {
         // O motivo, com o código que diz onde resolver
         let codigo, why;
         if (!state.ins.some(x => x.on && habilitado(x))) {
-          [codigo, why] = ['sem-instrutor-habilitado', `nenhum instrutor ativo tem a habilitação de ${d.mis} (${descreverExigencias(d.mis, GROUND_EQ_TYPE)})`];
+          [codigo, why] = ['sem-instrutor-habilitado', `nenhum instrutor ativo tem a habilitação de ${d.mis} (${descreverExigencias(d.mis, GROUND_EQ_TYPE, { exige: d.exige })})`];
         } else if (semPrazo.length && !candidateWins.length) {
           [codigo, why] = ['ground-antes-do-voo-fixo', `o Ground precisa terminar antes do voo fixo das ${hm(prazoFixo)}, e não há horário para ele antes disso`];
         } else if (!starts.length) {
@@ -776,7 +781,7 @@ export function runAllocationEngine(state, opcoes = {}) {
     const night = d.mis === 'Noturno';
     const isParafuso = d.mis === 'Parafuso';
     const local = MISSOES_LOCAIS.includes(d.mis);
-    const exige = descreverExigencias(d.mis, d.eq, { curso: stu.curso });
+    const exige = descreverExigencias(d.mis, d.eq, { curso: stu.curso, exige: d.exige });
     // Voo de categoria do rodízio: primeiro quem ainda não voou nela hoje, depois a ordem da fila
     const categoria = categoriaDoRodizio(d.mis, d.eq);
     const voosHoje = x => (categoria ? voosNaCategoria[`${categoria}:${x.id}`] || 0 : 0);
@@ -845,7 +850,7 @@ export function runAllocationEngine(state, opcoes = {}) {
           if (!eqs.length) { fc.revisao++; continue; }
 
           // Na primeira tentativa, só com o tanque cheio
-          const { servem: habilitados, barrou } = instrutoresQueServem(passada.pool, x => problemasDoInstrutor(x, { mis: d.mis, tipo: d.eq, a: p.a, b: p.b, alunos: [stu], stuKg: stu.kg, curso: stu.curso },
+          const { servem: habilitados, barrou } = instrutoresQueServem(passada.pool, x => problemasDoInstrutor(x, { mis: d.mis, tipo: d.eq, a: p.a, b: p.b, alunos: [stu], stuKg: stu.kg, curso: stu.curso, exige: d.exige },
             { compromissos: compromissos[x.id] || [], historico: historico(x.id), limites, peso: { reducaoMaxima: comMenosCombustivel ? Infinity : 0 } }));
           if (barrou) { fc[barrou]++; continue; }
           // O par instrutor e avião: só quem voa em algum dos aviões livres (o avião com habilitação própria exige a dele)
@@ -934,7 +939,7 @@ export function runAllocationEngine(state, opcoes = {}) {
         [codigo, why] = ['sem-aviao', `nenhum ${d.eq} homologado IFR disponível (o voo é IFR; os disponíveis são “Só VFR”)`];
       } else if (!fleetPool.some(r => state.av[r])) {
         [codigo, why] = ['sem-aviao', `nenhum ${d.eq} disponível (todos em manutenção)`];
-      } else if (!state.ins.some(x => x.on && podeFazer(x, d.mis, d.eq, { curso: stu.curso }))) {
+      } else if (!state.ins.some(x => x.on && podeFazer(x, d.mis, d.eq, { curso: stu.curso, exige: d.exige }))) {
         [codigo, why] = ['sem-instrutor-habilitado', `nenhum instrutor ativo tem a habilitação de ${d.mis} no ${d.eq} (${exige})`];
       } else if (!inicios.length && permitidas) {
         [codigo, why] = ['disponibilidade-do-aluno', `nenhum horário aberto na disponibilidade do aluno (${rotuloDaDisponibilidade(d.jan)}) comporta ${fmtH(H)}`];

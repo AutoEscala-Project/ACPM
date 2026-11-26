@@ -589,3 +589,72 @@ describe('Voo agendado na Escala', () => {
     assert.deepEqual(semMarca, { ...resultado, out: resultado.out.map(({ agendado: _, ...o }) => o) });
   });
 });
+
+// F1d, "missão do curso": o pedido com a missão do curso leva o que ela exige do INVA (exige, derivado no estado da escala
+// a partir do programa: js/programa.js, comExigenciasDasMissoes). O INVA também precisa ter cada id da lista; sem ninguém
+// que tenha, o voo fica fora com sem-instrutor-habilitado (regra a). Sem exige, o motor é o de antes (os goldens)
+describe('O que a missão do curso exige do INVA', () => {
+  const comEndosso = (id, lv) => instrutor(id, lv, { hab: [...instrutor(id, lv).hab, 'endosso_solo'] });
+  const solo = (id, extra = {}) => aluno(id, { mis: 'Voo Solo', etapa: 'PP-SOLO-01', cursoDaEtapa: 'PP', exige: ['endosso_solo'], ...extra }, { curso: 'PP' });
+
+  it('só o INVA que tem a habilitação da missão do curso dá o voo, mesmo com mais habilitações', () => {
+    const { out, al } = alocar({ ins: [instrutor(1, 5), comEndosso(2, 9)], stu: [solo(1000)] });
+    assert.deepEqual(al.filter(a => a.t === 'err'), []);
+    assert.equal(out.length, 1);
+    assert.equal(out[0].insId, 2);
+    // Sem a lista, o de menos habilitações, como antes
+    const antes = alocar({ ins: [instrutor(1, 5), comEndosso(2, 9)], stu: [solo(1000, { exige: undefined })] });
+    assert.equal(antes.out[0].insId, 1);
+  });
+
+  it('sem nenhum INVA ativo com a habilitação, o voo fica fora com sem-instrutor-habilitado, dizendo qual', () => {
+    const { out, al } = alocar({ ins: [instrutor(1, 9), instrutor(2, 5)], stu: [solo(1000)] });
+    assert.equal(out.length, 0);
+    assert.deepEqual(al.map(a => [a.t, a.codigo]), [['err', 'sem-instrutor-habilitado']]);
+    assert.match(al[0].m, /nenhum instrutor ativo tem a habilitação de Voo Solo no C152 \(Voo para liberação de Solo \+ C152 \+ Endosso Solo\)/);
+    // O INVA que tem, fora nesta data, não conta
+    const fora = alocar({ ins: [{ ...comEndosso(1, 9), on: false }, instrutor(2, 5)], stu: [solo(1000)] });
+    assert.deepEqual(fora.al.map(a => a.codigo), ['sem-instrutor-habilitado']);
+  });
+
+  it('o INVA escolhido sem a habilitação da missão do curso recusa o pedido', () => {
+    const { out, al } = alocar({ ins: [instrutor(1, 9), comEndosso(2, 9)], stu: [solo(1000, { insId: 1 })] });
+    assert.equal(out.length, 0);
+    assert.equal(al[0].codigo, 'instrutor-escolhido');
+    assert.match(al[0].m, /o instrutor escolhido \(Instrutor 01\) não tem a habilitação de Voo Solo no C152 \(.*Endosso Solo\)/);
+  });
+
+  it('no Ground, a turma só recebe o aluno cuja missão do curso o INVA dela pode dar', () => {
+    const ground = (id, extra = {}) => aluno(id, { ...GROUND_C152, ...extra }, { curso: 'PP' });
+    const { out, al } = alocar({
+      ins: [instrutor(1, 1), comEndosso(2, 9)],
+      stu: [ground(1000, { pr: 5 }), ground(1001, { etapa: 'PP-GND-01', cursoDaEtapa: 'PP', exige: ['endosso_solo'] })]
+    });
+    assert.deepEqual(al, []);
+    const porAluno = Object.fromEntries(out.map(o => [o.stuId, o]));
+    assert.equal(porAluno[1000].insId, 1);
+    assert.equal(porAluno[1001].insId, 2);
+    assert.notEqual(porAluno[1000].classKey, porAluno[1001].classKey);
+    const semNinguem = alocar({ ins: [instrutor(1, 9)], stu: [ground(1001, { exige: ['endosso_solo'] })] });
+    assert.equal(semNinguem.al[0].codigo, 'sem-instrutor-habilitado');
+    assert.match(semNinguem.al[0].m, /\(Grounds \(C152, C172 e Navegação\) \+ Endosso Solo\)/);
+  });
+
+  it('o voo fixo cujo INVA não tem a habilitação da missão do curso fica em conflito, dizendo qual', () => {
+    const estado = cenario({ ins: [instrutor(1, 9)], stu: [solo(1000)] });
+    estado.fixos = { '1000_0_1': { a: 500, b: 560, r: 'PP-LJV', insId: 1 } };
+    const { out } = runAllocationEngine(estado, { compactar: false });
+    assert.deepEqual(out[0].conflitoCodigos, ['habilitacao']);
+    assert.deepEqual(out[0].conflito, ['o instrutor não tem a habilitação que a missão do curso exige (Endosso Solo)']);
+  });
+
+  it('a divisão das horas não passa o voo para quem não tem a habilitação da missão do curso', () => {
+    const { out } = runAllocationEngine(cenario({
+      ins: [comEndosso(1, 9), instrutor(2, 9)],
+      // Voo Local da missão do curso (o Voo Solo só sai às 06:30), em três horários
+      stu: [0, 1, 2].map(i => solo(1000 + i, { mis: 'Voo Local', p1: i * 2, p2: i * 2 + 1 }))
+    }));
+    assert.equal(out.length, 3);
+    assert.deepEqual([...new Set(out.map(o => o.insId))], [1]);
+  });
+});

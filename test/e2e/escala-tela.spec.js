@@ -1,5 +1,8 @@
 // Tela da Escala: Lista, Por recurso ou Por instrutor; resumo com erros e avisos agrupados; uma linha por voo.
-import { test, expect, abrir, abrirComExemplo, abrirEscala, irPara, lerEscala, alternarDisponivel, alvosPequenos, larguraDaPagina } from './fixtures.js';
+import { test, expect, abrir, abrirComExemplo, abrirEscala, irPara, irParaVista, lerEscala, alternarDisponivel, alvosPequenos, larguraDaPagina, appPronto, AMANHA, prepararContexto, vigiarErros, entrar } from './fixtures.js';
+import { criarSupabaseFalso, documentosAtuais, CONTAS } from './supabase-falso.js';
+import { IDS } from '../helpers/casos-do-programa.js';
+import { cursosIniciais, gravarCurso } from '../../js/programa.js';
 import { aluno, cenario, instrutor, GROUND_C152 } from '../helpers/montar.js';
 import { GLOSSARIO } from '../../js/glossario.js';
 import { COLUNAS_DO_PAINEL } from '../../js/config-do-painel.js';
@@ -826,5 +829,63 @@ test.describe('O foco depois de uma ação', () => {
     });
     expect(await page.evaluate(() => scrollY)).toBe(antes);
     await expect(page.locator('#out select[data-f="fstatus"]').first()).toBeFocused();
+  });
+});
+
+// F1d, "missão do curso": o pedido com a missão do curso leva o que ela exige do INVA (exige, de S.programa, também com
+// o progresso desligado). Sem nenhum INVA ativo com a habilitação, o voo fica fora (regra a); com os programas não lidos,
+// nada é exigido e a Escala diz que as habilitações das missões do curso não foram conferidas
+test.describe('O que a missão do curso exige do INVA, na Escala', () => {
+  const PROGRAMA = gravarCurso({ cursos: cursosIniciais() }, {
+    sigla: 'PP', versaoLida: 1, descricao: 'PP: programa', conteudo: {
+      nome: 'Piloto Privado', ativo: true, fases: [{ id: IDS.f1, nome: 'Fase 1' }],
+      missoes: [{ id: IDS.m1, fase: IDS.f1, codigo: 'NAV-150NM', nome: 'Navegação longa', mis: 'Voo Local', eq: 'C152', nb: 1, exige: ['endosso_solo'] }]
+    }
+  }).cursos;
+  const estado = () => cenario({
+    ins: [instrutor(1, 9), instrutor(2, 1)],
+    stu: [aluno(1000, { etapa: 'NAV-150NM', cursoDaEtapa: 'PP' }, { curso: 'PP' })]
+  });
+
+  test('sem nenhum INVA ativo com a habilitação, o voo fica fora; marcada num INVA, ele voa com esse INVA', async ({ page }) => {
+    const { documentos: { cadastro }, dias } = documentosAtuais(estado(), AMANHA);
+    await page.addInitScript(json => {
+      if (localStorage.getItem('acpm4_cadastro')) return;
+      for (const [chave, valor] of Object.entries(JSON.parse(json))) localStorage.setItem(chave, JSON.stringify(valor));
+    }, JSON.stringify({ acpm4_cadastro: cadastro, [`acpm4_dia_${AMANHA}`]: dias[AMANHA], acpm4_cursos: { cursos: PROGRAMA, alteracoes: [] } }));
+    await page.goto('./');
+    await appPronto(page);
+    await abrirEscala(page, { vista: 'lista' });
+    await expect(page.locator('#out')).toContainText('nenhum instrutor ativo tem a habilitação de Voo Local no C152 (Voo Local + C152 + Endosso Solo)');
+    expect((await lerEscala(page)).linhas.filter(l => l.includes('Aluno 1000'))).toEqual([]);
+    await irParaVista(page, 'ins', 'cadastro');
+    await page.locator('#inst .cd[data-id="2"] [data-act="editar-habs"]').click();
+    await page.locator('#painel-instrutor [data-f="hab"][data-h="endosso_solo"]').check();
+    await page.locator('#btn-fechar-painel-instrutor').click();
+    await abrirEscala(page, { vista: 'lista' });
+    const voos = (await lerEscala(page)).linhas.filter(l => l.includes('Aluno 1000'));
+    expect(voos).toHaveLength(1);
+    expect(voos[0]).toContain('| Instrutor 02 |');
+    await expect(page.locator('#out [data-caixa="habilitacoes"]')).toHaveCount(0);
+  });
+
+  test('sem os programas dos cursos lidos, a Escala diz que as habilitações das missões do curso não foram conferidas', async ({ browser }) => {
+    const servidor = criarSupabaseFalso({ ...documentosAtuais(estado(), AMANHA), cursos: PROGRAMA });
+    servidor.falhar('/rpc/programa_dos_cursos', 1000);
+    const contexto = await browser.newContext({ baseURL: test.info().project.use.baseURL, locale: 'pt-BR', timezoneId: 'America/Sao_Paulo' });
+    await prepararContexto(contexto);
+    await servidor.instalar(contexto);
+    const page = await contexto.newPage();
+    const erros = vigiarErros(page, { statusEsperados: [503] });
+    await entrar(page, CONTAS.operador);
+    await abrirEscala(page, { vista: 'lista' });
+    const caixa = page.locator('#out [data-caixa="habilitacoes"]');
+    await expect(caixa.locator('summary')).toHaveText('As habilitações das missões do curso não foram conferidas');
+    await caixa.locator('summary').click();
+    await expect(caixa.locator('li')).toHaveText('Os programas dos cursos não foram lidos: o que a missão do curso exige do INVA não foi conferido em 1 pedido desta data: a escala foi montada sem essa conferência.');
+    // Nada é exigido: o voo entra
+    expect((await lerEscala(page)).linhas.filter(l => l.includes('Aluno 1000'))).toHaveLength(1);
+    expect(erros).toEqual([]);
+    await contexto.close();
   });
 });

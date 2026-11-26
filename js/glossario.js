@@ -152,6 +152,7 @@ const TERMOS = {
     funcionalidade: 'progresso',
     textoSem: 'O Noturno é um voo só em três trechos: a ida para BH, a noite em BH e a volta no dia seguinte. No programa, as missões dos trechos vêm juntas na fase.'
   },
+  'habilitacoes-da-missao': { aba: 'Cursos', termo: 'Habilitações que o INVA precisa', texto: 'O que a missão do curso exige do INVA além da missão e do recurso, como o Endosso Solo. Marque antes os INVAs que a têm: sem nenhum INVA ativo com ela, os voos da missão ficam fora da escala.' },
 
   // Rodízio
   rodizio: { aba: 'Rodízio', termo: 'Rodízio', texto: 'Os voos de cheque, MLTE, noturno e C172 seguem uma fila por categoria: vai o primeiro livre; quem voou vai para o fim na data seguinte.' }
