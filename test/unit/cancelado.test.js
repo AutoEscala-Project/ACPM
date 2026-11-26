@@ -170,6 +170,35 @@ describe('O que pode voar no lugar do cancelado', () => {
   });
 });
 
+// "Impossível nesta data": o porquê de cada grupo é o que de fato impediu cada horário (o período fechado, o horário que
+// já passou, o aluno ocupado, nenhum avião ou instrutor), com os horários
+describe('O porquê do impossível', () => {
+  it('todos os períodos fechados, com o avião e os instrutores livres: os outros horários e o outro tipo dizem o período', () => {
+    const { estado, voo } = cancelado(cenario({ ins: [instrutor(1, 9), instrutor(2, 9)], stu: [aluno(1000, { p1: 610, p2: -1 })] }), 1000, 'Meteorologia');
+    estado.win = estado.win.map(() => false);
+    const r = sugerirParaCancelado(estado, runAllocationEngine(estado), voo.fKey);
+    assert.deepEqual(r.opcoes, []);
+    assert.equal(r.impossivel[0], 'No mesmo horário: o voo foi cancelado por meteorologia nele.');
+    assert.match(r.impossivel[1], /^Em outro horário: o período está fechado \(06:30, 08:20, 11:30/);
+    assert.doesNotMatch(r.impossivel[1], /livres/);
+    assert.match(r.impossivel[2], /^Em outro tipo de recurso: no C172, o período está fechado \(06:30/);
+  });
+
+  it('hoje, depois do último horário: os outros horários já passaram', () => {
+    const { estado, resultado, voo } = cancelado(cenario({ ins: [instrutor(1, 9), instrutor(2, 9)], stu: [aluno(1000, { p1: 610, p2: -1 })] }), 1000, 'Meteorologia');
+    const r = sugerirParaCancelado(estado, resultado, voo.fKey, { depoisDe: 1200 });
+    assert.deepEqual(r.opcoes, []);
+    assert.match(r.impossivel[1], /^Em outro horário: já passou \(06:30, 08:20/);
+  });
+
+  it('um instrutor só, o que faltou: em cada horário, nenhum instrutor que sirva', () => {
+    const { estado, resultado, voo } = cancelado(cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, { p1: 390, p2: -1 })] }), 1000, 'Instrutor indisponível');
+    const r = sugerirParaCancelado(estado, resultado, voo.fKey);
+    assert.match(r.impossivel[1], /^Em outro horário: nenhum instrutor que sirva \(08:20/);
+    assert.equal(r.impossivel[0], 'No mesmo horário: nenhum avião com um instrutor que sirva.');
+  });
+});
+
 describe('Aplicar e desfazer', () => {
   it('o pedido com o instrutor escolhido recebe o instrutor da sugestão; o sem escolha continua sem (o pino guarda o instrutor)', () => {
     const comEscolha = cancelado(cenario({ ins: [instrutor(1, 9), instrutor(2, 9)], stu: [aluno(1000, { p1: 390, p2: -1, insId: 1 })] }), 1000, 'Instrutor indisponível');
