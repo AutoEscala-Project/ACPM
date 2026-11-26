@@ -12,9 +12,10 @@ import { inativoNoEstado } from '../../js/inativos.js';
 import { hojeISO, somarDias } from '../../js/format.js';
 import { novoCurso } from '../../js/programa.js';
 import { MODELOS } from '../../js/modelos-de-curso.js';
-import { S, setS, setData, estadoDaEscala } from '../../js/state.js';
+import { S, setS, setData, estadoDaEscala, escalaDoMotor } from '../../js/state.js';
 import { etapaNaDemanda, progressoDoAluno, faseDoAluno, proximaDoPedido, outraMissaoDoPedido, resultadoNaEscala } from '../../js/views/etapas.js';
 import { aluno, apenas, cenario, instrutor, missaoExtra } from '../helpers/montar.js';
+import { escalaDaAlteracao } from '../../js/edicao-do-voo.js';
 import { ligarFuncionalidades } from '../helpers/funcionalidades.js';
 
 afterEach(() => ligarFuncionalidades());
@@ -142,6 +143,28 @@ describe('Com a prioridade desligada, o motor recebe a prioridade padrão', () =
     ligarFuncionalidades('prioridade');
     assert.equal(naPreferencia(estadoDaEscala()), 1001);
     assert.equal(estadoDaEscala().stu[1], S.stu[1]);
+  });
+
+  // O motor das telas (a escala calculada, a prévia do agendamento, as Sugestões e o R5 da escala aprovada): o motivo do
+  // avião ocupado não fala da prioridade; ligada, fala
+  it('o motor das telas tira a prioridade do motivo do avião ocupado, também no R5 da escala aprovada; ligada, continua', () => {
+    // Dois instrutores e um avião, os dois alunos só às 06:30: o Aluno 1001 fica sem avião
+    setS(cenario({
+      ins: [instrutor(1, 9), instrutor(2, 9)], semAeronaves: apenas('C152', 'PP-LJV'),
+      stu: [aluno(1000, { p1: 390, p2: -1, jan: 'h390' }), aluno(1001, { p1: 390, p2: -1, jan: 'h390' })]
+    }));
+    setData(somarDias(hojeISO(), 1));
+    const motivo = r => r.al.find(a => a.t === 'err' && a.s === 'Aluno 1001').m;
+    const SEM = 'Rejeitado: nenhum C152 livre nos horários possíveis.';
+    const COM = 'Rejeitado: nenhum C152 livre nos horários possíveis (ocupados por pedidos de prioridade maior).';
+    assert.equal(motivo(runAllocationEngine(estadoDaEscala())), COM);
+    assert.equal(motivo(escalaDoMotor(estadoDaEscala())), SEM);
+    // Na escala aprovada, o pedido que entra no dia sem lugar (sem linha nem recusa) pede o motor: o das telas
+    const r5 = escalaDaAlteracao(estadoDaEscala(), { out: [], al: [], tot: 0 }, { aprovada: true, motor: escalaDoMotor });
+    assert.equal(r5.motor, true);
+    assert.equal(motivo(r5.resultado), SEM);
+    ligarFuncionalidades('prioridade');
+    assert.equal(motivo(escalaDoMotor(estadoDaEscala())), COM);
   });
 });
 

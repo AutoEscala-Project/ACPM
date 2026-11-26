@@ -6,7 +6,7 @@ import { hojeISO } from './format.js';
 import { ligada } from './funcionalidades.js';
 import { estadoParaEscalar, inativo, inativoValeEm } from './inativos.js';
 import { comAPrioridadePadrao } from './rules.js';
-import { semAPrioridadeNosMotivos } from './engine.js';
+import { runAllocationEngine, semAPrioridadeNosMotivos } from './engine.js';
 import { comExigenciasDasMissoes } from './programa.js';
 
 export let S = ApiClient.createFreshState();
@@ -66,6 +66,9 @@ export function estadoDaEscala() {
 // O resultado do motor (a escala da data, a gravada e a da simulação do agendamento) como a tela o mostra: com a prioridade
 // desligada, o motivo do avião ocupado não fala dela (js/engine.js, semAPrioridadeNosMotivos)
 export const comOsMotivosDaTela = resultado => (ligada('prioridade') ? resultado : semAPrioridadeNosMotivos(resultado));
+// O motor das telas, com os motivos da tela: a escala calculada da data, a prévia do agendamento, as Sugestões e o motor
+// que a escala aprovada pede para o pedido que entra no dia sem lugar (R5, js/edicao-do-voo.js, escalaDaAlteracao)
+export const escalaDoMotor = estado => comOsMotivosDaTela(runAllocationEngine(estado));
 // Os programas dos cursos lidos (null quando a leitura falhou ou eles ainda esperam a conversão do cadastro)
 export const programaLido = () => (dadoIndisponivel('cursos') || dadoIndisponivel('cursos-pendentes') ? null : S.programa || null);
 // Sem os programas lidos, o que as missões do curso dos pedidos que voam exigem do INVA não foi conferido: quantos

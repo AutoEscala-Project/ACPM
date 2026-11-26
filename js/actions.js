@@ -2,12 +2,11 @@
 import { escreverDataNoEndereco } from './endereco.js';
 import { somarDias, fimDoMes, LIMITE_DO_NOME } from './format.js';
 import { aplicarSomenteLeitura } from './somente-leitura.js';
-import { runAllocationEngine } from './engine.js';
 import { escalaDaAlteracao } from './edicao-do-voo.js';
 import { normalizarEscalaGravada } from './escala-gravada.js';
 import { ligada } from './funcionalidades.js';
 import { ApiClient } from './storage.js';
-import { S, RES, AUDIT_LOG, BI_HISTORY, DATA, setS, setRES, setAuditLog, setBIHistory, setData, isGestor, dadoIndisponivel, modoCompartilhado, estadoDaEscala, comOsMotivosDaTela } from './state.js';
+import { S, RES, AUDIT_LOG, BI_HISTORY, DATA, setS, setRES, setAuditLog, setBIHistory, setData, isGestor, dadoIndisponivel, modoCompartilhado, estadoDaEscala, comOsMotivosDaTela, escalaDoMotor } from './state.js';
 import { $, mostrarAviso, avisoAberto, showToast } from './dom.js';
 import { comHorasExternas } from './limites.js';
 import { comRepousoDoNoturno } from './noturno.js';
@@ -388,6 +387,6 @@ function syncBIHistoryForCurrentDate() {
 
 // Escala da data calculada a partir dos dados da tela (sem os inativos do cadastro, de hoje em diante: estadoDaEscala). Ela
 // guarda a data para a qual foi feita (no modo compartilhado, todos veem essa data). Os motivos são os da tela
-// (comOsMotivosDaTela, como os da escala gravada)
-const escalaCalculada = () => ({ ...comOsMotivosDaTela(runAllocationEngine(estadoDaEscala())), data: DATA });
+// (escalaDoMotor, como os da escala gravada)
+const escalaCalculada = () => ({ ...escalaDoMotor(estadoDaEscala()), data: DATA });
 

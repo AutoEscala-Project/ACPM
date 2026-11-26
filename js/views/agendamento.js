@@ -8,11 +8,10 @@
 // campo dele); outro conjunto de avisos pede outra confirmação. Um voo de hoje do aluno muda de lugar ("Mover o voo") ou
 // entra na escala ("Encaixar o voo"); no Ground, o select Instrutor também tem as turmas do dia. Esc e Voltar desistem,
 // e nada muda.
-import { S, RES, DATA, isGestor, stuBy, dadoIndisponivel, estadoDaEscala, comOsMotivosDaTela } from '../state.js';
+import { S, RES, DATA, isGestor, stuBy, dadoIndisponivel, estadoDaEscala, escalaDoMotor } from '../state.js';
 import { escalaDaAlteracao } from '../edicao-do-voo.js';
 import { fraseDoRefazer } from './dialogo-refazer.js';
 import { ApiClient } from '../storage.js';
-import { runAllocationEngine } from '../engine.js';
 import { ligada } from '../funcionalidades.js';
 import { situacaoPorMissao } from '../resultados.js';
 import { contextoInicial, formularioDoAgendamento, simularAgendamento, avaliarAgendamento, comPesos, assinaturaDosAvisos, escolhasDaAlternativa } from '../agendamento.js';
@@ -51,11 +50,10 @@ const campo = id => document.getElementById(id);
 const assinaturaDaConfirmacao = avisos => `${assinaturaDosAvisos(avisos)}${S.aprovacao ? '' : '|refazer'}`;
 // Na escala aprovada, o agendamento não roda o motor, nem ao gravar nem na prévia (d45): a base é a escala da tela, e a
 // simulação, ela conferida com o voo novo (js/conferencia.js), como será gravada; o pedido que entraria no dia sem lugar
-// pede o motor (R5). O motor, com os motivos da tela (comOsMotivosDaTela): o voo que sai da escala diz o motivo dele na
-// prévia
-const motor = estado => comOsMotivosDaTela(runAllocationEngine(estado));
-const escalaDeAgora = estado => (S.aprovacao && RES ? RES : motor(estado));
-const motorDaTela = antes => (S.aprovacao && RES ? copia => escalaDaAlteracao(copia, RES, { aprovada: true, antes, motor }).resultado : motor);
+// pede o motor (R5). O motor, com os motivos da tela (js/state.js, escalaDoMotor): o voo que sai da escala diz o motivo
+// dele na prévia
+const escalaDeAgora = estado => (S.aprovacao && RES ? RES : escalaDoMotor(estado));
+const motorDaTela = antes => (S.aprovacao && RES ? copia => escalaDaAlteracao(copia, RES, { aprovada: true, antes, motor: escalaDoMotor }).resultado : escalaDoMotor);
 // O texto de um campo numérico: o que não é número (validity.badInput: o navegador esvazia o value) fica inválido
 const textoDoCampo = el => (el.validity && el.validity.badInput ? '?' : el.value);
 
