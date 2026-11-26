@@ -117,7 +117,15 @@ describe('O que pode voar no lugar do cancelado', () => {
 });
 
 describe('Aplicar e desfazer', () => {
-  it('o voo fica fixo no lugar novo, volta a Pendente sem o motivo; o pedido recebe o instrutor; desfeito, tudo volta', () => {
+  it('o pedido com o instrutor escolhido recebe o instrutor da sugestão; o sem escolha continua sem (o pino guarda o instrutor)', () => {
+    const comEscolha = cancelado(cenario({ ins: [instrutor(1, 9), instrutor(2, 9)], stu: [aluno(1000, { p1: 390, p2: -1, insId: 1 })] }), 1000, 'Instrutor indisponível');
+    assert.equal(comEscolha.voo.insId, 1);
+    const [opcao] = sugerirParaCancelado(comEscolha.estado, comEscolha.resultado, comEscolha.voo.fKey).opcoes;
+    aproveitarCancelado(comEscolha.estado, comEscolha.resultado, comEscolha.voo.fKey, opcao);
+    assert.equal(comEscolha.estado.stu[0].insId, 2);
+  });
+
+  it('o voo fica fixo no lugar novo, volta a Pendente sem o motivo; o pedido sem escolha fica sem; desfeito, tudo volta', () => {
     const { estado, resultado, voo } = cancelado(cenario({ ins: [instrutor(1, 9), instrutor(2, 9)], stu: [aluno(1000, { p1: 390, p2: -1 })] }), 1000, 'Instrutor indisponível');
     const antes = structuredClone({ fixos: estado.fixos, fStatus: estado.fStatus, fObs: estado.fObs, stu: estado.stu });
     const [opcao] = sugerirParaCancelado(estado, resultado, voo.fKey).opcoes;
@@ -126,7 +134,7 @@ describe('Aplicar e desfazer', () => {
     assert.equal(estado.fStatus[voo.fKey], 'Pendente');
     assert.equal(estado.fObs[voo.fKey], undefined);
     assert.deepEqual(estado.fixos[voo.fKey], { ...opcao.mudancas, agendado: true });
-    assert.equal(estado.stu[0].insId, opcao.mudancas.insId);
+    assert.equal(estado.stu[0].insId, undefined, 'o instrutor fica no pino, não vira escolha do pedido');
     // O motor deixa o voo no lugar, sem conflito
     const depois = runAllocationEngine(estado);
     const linha = depois.out.find(o => o.fKey === voo.fKey);
