@@ -4,7 +4,7 @@
 // mais: pelo curso do aluno (o Noturno do PC exige IFR) e pelo próprio recurso, que exige do instrutor a lista "exige"
 // (ids deste registro; a habilitação própria do PR-VOM é "aviao:PR-VOM", que aparece na grade quando o recurso a exige).
 // Este registro não importa a frota: a frota (js/frota.js) é que lê dele
-import { MIS, MATRICULA } from './config.js';
+import { MATRICULA } from './config.js';
 
 // Ordem da grade na aba Instrutores (curto: rótulo da grade; nome: o nome completo, na dica e nas mensagens)
 export const HABILITACOES = [
@@ -72,22 +72,27 @@ export function gruposDosRecursos(frota) {
   return ids.length ? [{ id: 'habilitacao-propria', titulo: 'Habilitação própria do recurso', ids, dica: 'habilitacao-propria' }] : [];
 }
 
-// Habilitação de cada missão (o simulador depende do equipamento) e a exigida pelo avião
+// O que cada tipo de missão, cada tipo de recurso, cada cheque e o curso do aluno exigem do instrutor: listas de ids deste
+// registro, lidas só por exigencias() (são código; o que um recurso exige é dado, a lista exige). Cada id da lista é um
+// grupo de uma habilitação só (todas são exigidas)
+// O tipo de missão (o simulador depende do equipamento)
 const DA_MISSAO = {
-  'Ground C152': 'grounds',
-  'Ground C172': 'grounds',
-  'Ground Navegação': 'grounds',
-  'Ground PA-34': 'ground_pa34',
-  'Voo Local': 'local',
-  'TGL (TMA)': 'tgl',
-  'Navegação': 'navegacao',
-  'Voo Solo': 'solo',
-  'Parafuso': 'parafuso',
-  'IFR': 'ifr',
-  'Noturno': 'noturno',
-  'Multimotor': 'mlte'
+  'Ground C152': ['grounds'],
+  'Ground C172': ['grounds'],
+  'Ground Navegação': ['grounds'],
+  'Ground PA-34': ['ground_pa34'],
+  'Voo Local': ['local'],
+  'TGL (TMA)': ['tgl'],
+  'Navegação': ['navegacao'],
+  'Voo Solo': ['solo'],
+  'Parafuso': ['parafuso'],
+  'IFR': ['ifr'],
+  'Noturno': ['noturno'],
+  'Multimotor': ['mlte']
 };
-const DO_SIMULADOR = { 'Sim. Mono': 'sim_mono', 'Sim. Multi': 'sim_multi' };
+const DO_SIMULADOR = { 'Sim. Mono': ['sim_mono'], 'Sim. Multi': ['sim_multi'] };
+// Sem o tipo na lista: o simulador exige o Mono, a missão, o Voo Local
+const DO_SIMULADOR_PADRAO = DO_SIMULADOR['Sim. Mono'], DA_MISSAO_PADRAO = DA_MISSAO['Voo Local'];
 
 // Voos de cheque: o checador precisa das três marcas do cheque (o curso, o motor e as regras), em qualquer avião permitido
 const CHEQUES = {
@@ -106,23 +111,28 @@ const CHECADOR_ANTIGO = {
   checador_mlte: ['checa_pp', 'checa_pc', 'checa_inva', 'checa_mnte', 'checa_mlte', 'checa_vfr', 'checa_ifr']
 };
 export const marcasDoChecadorAntigo = hab => [...new Set(hab.flatMap(h => (Object.hasOwn(CHECADOR_ANTIGO, h) ? CHECADOR_ANTIGO[h] : [h])))];
-// O C152 também exige a habilitação do avião (na migração para o formato 19, todo instrutor do cadastro a recebe)
-const DO_AVIAO = { 'C152': 'c152', 'C172': 'c172', 'PA-34': 'mlte' };
+// O tipo de recurso: o avião exige a habilitação dele (na migração para o formato 19, todo instrutor do cadastro recebe a
+// do C152)
+const DO_AVIAO = { 'C152': ['c152'], 'C172': ['c172'], 'PA-34': ['mlte'] };
+// O curso do aluno, por tipo de missão: o Noturno do PC exige IFR (as regras do voo, IFR, ficam em MIS[mis].porCurso)
+const DO_CURSO = { 'Noturno': { PC: ['ifr'] } };
 
 // Só as chaves do próprio mapa (nomes como "constructor" ou "toString" não contam)
 const doMapa = (mapa, chave, padrao) => (Object.hasOwn(mapa, chave) ? mapa[chave] : padrao);
 
 // Exigências da missão no equipamento: todos os grupos, e em cada grupo basta uma das habilitações. Com o contexto do
-// voo, também as do curso do aluno (MIS[mis].porCurso: o Noturno do PC exige IFR) e as que o recurso exige (exige)
+// voo, também as do curso do aluno (o Noturno do PC exige IFR) e as que o recurso exige (exige)
 export function exigencias(mis, eq, { curso, recurso } = {}) {
   const grupos = ehCheque(mis) ? CHEQUES[mis].map(h => [h])
-    : [[mis === 'Simulador' ? doMapa(DO_SIMULADOR, eq, 'sim_mono') : doMapa(DA_MISSAO, mis, 'local')]];
-  if (!ehCheque(mis) && Object.hasOwn(DO_AVIAO, eq) && !grupos.some(g => g.includes(DO_AVIAO[eq]))) grupos.push([DO_AVIAO[eq]]);
-  const regra = Object.hasOwn(MIS, mis) ? MIS[mis] : null;
-  const doCurso = regra && regra.porCurso && typeof curso === 'string' && Object.hasOwn(regra.porCurso, curso) ? regra.porCurso[curso].habilitacoes || [] : [];
+    : (mis === 'Simulador' ? doMapa(DO_SIMULADOR, eq, DO_SIMULADOR_PADRAO) : doMapa(DA_MISSAO, mis, DA_MISSAO_PADRAO)).map(h => [h]);
+  if (!ehCheque(mis)) for (const h of doMapa(DO_AVIAO, eq, [])) if (!grupos.some(g => g.includes(h))) grupos.push([h]);
+  const doCurso = typeof curso === 'string' && Object.hasOwn(DO_CURSO, mis) ? doMapa(DO_CURSO[mis], curso, []) : [];
   for (const h of [...doCurso, ...exigenciasDoRecurso(recurso)]) if (!grupos.some(g => g.length === 1 && g[0] === h)) grupos.push([h]);
   return grupos;
 }
+
+// O instrutor tem o que o tipo de recurso exige (a fila do C172 no rodízio)
+export const habilitadoNoTipo = (instrutor, tipo) => doMapa(DO_AVIAO, tipo, []).every(h => Array.isArray(instrutor.hab) && instrutor.hab.includes(h));
 
 // contexto: { curso, recurso } do voo (sem ele, só a missão e o tipo)
 export const podeFazer = (instrutor, mis, eq, contexto) => {

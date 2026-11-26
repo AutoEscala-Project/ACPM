@@ -1,8 +1,10 @@
 // Habilitações individuais dos instrutores: substituem os níveis cumulativos A01–A09.
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { HABILITACOES, habilitacoesDoNivel, normalizarHabilitacoes, podeFazer, podeAlgumCheque, descreverExigencias, marcasDoChecadorAntigo, GRUPOS_DE_HABILITACAO, exigenciasDoRecurso, gruposDosRecursos } from '../../js/habilitacoes.js';
-import { MIS } from '../../js/config.js';
+import { readFileSync, readdirSync } from 'node:fs';
+import { HABILITACOES, habilitacoesDoNivel, normalizarHabilitacoes, podeFazer, podeAlgumCheque, descreverExigencias, marcasDoChecadorAntigo, GRUPOS_DE_HABILITACAO, exigenciasDoRecurso, gruposDosRecursos, exigencias } from '../../js/habilitacoes.js';
+import { MIS, MATRICULA } from '../../js/config.js';
+import { MODELOS } from '../../js/modelos-de-curso.js';
 
 // Regra dos níveis cumulativos, congelada aqui: a migração não pode mudar quem pode fazer o quê
 const NIVEL_DA_MISSAO = { 'Simulador': 2, 'Voo Local': 1, 'Navegação': 4, 'Voo Solo': 5, 'Parafuso': 6, 'IFR': 8, 'Noturno': 7, 'Multimotor': 9 };
@@ -147,3 +149,95 @@ describe('O registro das habilitações', () => {
     assert.deepEqual(gruposDosRecursos([{ reg: 'PR-A', tipo: 'C152' }]), []);
   });
 });
+
+// Um registro só (F1d, "registro"): o que cada tipo de missão, cada tipo de recurso, cada cheque e o curso do aluno exigem
+// são listas de ids ao lado de HABILITACOES, lidas só por exigencias(). As respostas de antes, congeladas aqui: os 32
+// pares de missão e tipo de MIS e o Noturno do PC
+describe('Um registro só das habilitações', () => {
+  const ANTES = [
+    ['Ground C152', 'Sala Ground', [['grounds']]], ['Ground C172', 'Sala Ground', [['grounds']]],
+    ['Ground PA-34', 'Sala Ground', [['ground_pa34']]], ['Ground Navegação', 'Sala Ground', [['grounds']]],
+    ['Simulador', 'Sim. Mono', [['sim_mono']]], ['Simulador', 'Sim. Multi', [['sim_multi']]],
+    ['Voo Local', 'C152', [['local'], ['c152']]], ['Voo Local', 'C172', [['local'], ['c172']]], ['Voo Local', 'PA-34', [['local'], ['mlte']]],
+    ['TGL (TMA)', 'C152', [['tgl'], ['c152']]], ['TGL (TMA)', 'C172', [['tgl'], ['c172']]], ['TGL (TMA)', 'PA-34', [['tgl'], ['mlte']]],
+    ['Navegação', 'C152', [['navegacao'], ['c152']]], ['Navegação', 'C172', [['navegacao'], ['c172']]], ['Navegação', 'PA-34', [['navegacao'], ['mlte']]],
+    ['Voo Solo', 'C152', [['solo'], ['c152']]], ['Voo Solo', 'C172', [['solo'], ['c172']]], ['Voo Solo', 'PA-34', [['solo'], ['mlte']]],
+    ['Parafuso', 'C152', [['parafuso'], ['c152']]], ['Parafuso', 'C172', [['parafuso'], ['c172']]], ['Parafuso', 'PA-34', [['parafuso'], ['mlte']]],
+    ['IFR', 'C172', [['ifr'], ['c172']]], ['IFR', 'PA-34', [['ifr'], ['mlte']]],
+    ['Noturno', 'C172', [['noturno'], ['c172']]],
+    ['Multimotor', 'PA-34', [['mlte']]],
+    ['Cheque PP', 'C152', [['checa_pp'], ['checa_mnte'], ['checa_vfr']]], ['Cheque PP', 'C172', [['checa_pp'], ['checa_mnte'], ['checa_vfr']]],
+    ['Cheque PC MNTE VFR', 'C152', [['checa_pc'], ['checa_mnte'], ['checa_vfr']]], ['Cheque PC MNTE VFR', 'C172', [['checa_pc'], ['checa_mnte'], ['checa_vfr']]],
+    ['Cheque PC MNTE IFR', 'C172', [['checa_pc'], ['checa_mnte'], ['checa_ifr']]],
+    ['Cheque PC MLTE VFR', 'PA-34', [['checa_pc'], ['checa_mlte'], ['checa_vfr']]],
+    ['Cheque PC MLTE IFR', 'PA-34', [['checa_pc'], ['checa_mlte'], ['checa_ifr']]]
+  ];
+
+  it('os 32 pares de missão e tipo e o Noturno do PC exigem o mesmo que antes, na mesma ordem e com o mesmo texto', () => {
+    const pares = Object.entries(MIS).flatMap(([mis, m]) => m.eq.map(eq => [mis, eq]));
+    assert.equal(pares.length, 32);
+    assert.deepEqual(pares, ANTES.map(([mis, eq]) => [mis, eq]));
+    for (const [mis, eq, grupos] of ANTES) assert.deepEqual(exigencias(mis, eq), grupos, `${mis} no ${eq}`);
+    assert.deepEqual(exigencias('Noturno', 'C172', { curso: 'PC' }), [['noturno'], ['c172'], ['ifr']]);
+    assert.deepEqual(exigencias('Noturno', 'C172', { curso: 'PP' }), [['noturno'], ['c172']]);
+    assert.equal(descreverExigencias('Noturno', 'C172', { curso: 'PC' }), 'Voo Noturno + C172 + Voo IFR');
+    // Os padrões de antes: o simulador sem o tipo dele, a missão fora de MIS, a missão sem o avião
+    assert.deepEqual(exigencias('Simulador', 'C152'), [['sim_mono'], ['c152']]);
+    assert.deepEqual(exigencias('Xyz', 'C152'), [['local'], ['c152']]);
+    assert.deepEqual(exigencias('Voo Local', 'Sala Ground'), [['local']]);
+    assert.deepEqual(exigencias('constructor', 'toString', { curso: 'constructor' }), [['local']]);
+  });
+
+  it('cada id das listas, dos grupos, dos níveis, da grade e dos modelos de curso está no registro (ou é aviao:<matrícula>)', () => {
+    const ids = new Set(HABILITACOES.map(h => h.id));
+    const valido = id => ids.has(id) || (/^aviao:/.test(id) && MATRICULA.test(id.slice('aviao:'.length)));
+    const cursos = ['PP', 'PC', 'INVA', 'ZZ9'];
+    const dasMissoes = Object.entries(MIS).flatMap(([mis, m]) => [...m.eq, 'Sala Ground', 'Xyz']
+      .flatMap(eq => [undefined, ...cursos].flatMap(curso => exigencias(mis, eq, { curso }).flat())));
+    const dosGrupos = GRUPOS_DE_HABILITACAO.flatMap(g => g.ids);
+    const dosNiveis = Array.from({ length: 9 }, (_, i) => habilitacoesDoNivel(i + 1)).flat();
+    const fonte = readFileSync(new URL('../../js/views/instrutores.js', import.meta.url), 'utf8');
+    const grade = fonte.match(/const ORDEM_DA_GRADE = \[([^\]]*)\]/);
+    assert.ok(grade, 'ORDEM_DA_GRADE em js/views/instrutores.js');
+    const daGrade = [...grade[1].matchAll(/'([^']+)'/g)].map(m => m[1]);
+    assert.ok(daGrade.length >= 13);
+    const dosModelos = Object.values(MODELOS).flatMap(m => m.fases.flatMap(f => f.missoes.flatMap(x => x.exige || [])));
+    for (const [onde, lista] of [['missões', dasMissoes], ['grupos', dosGrupos], ['níveis', dosNiveis], ['grade', daGrade], ['modelos', dosModelos]]) {
+      for (const id of lista) assert.ok(valido(id), `${onde}: ${id}`);
+    }
+  });
+
+  it('nenhum módulo além de js/habilitacoes.js compara uma lista de habilitações com um id escrito no código', () => {
+    // As exceções, pelo nome: os passos de js/migracoes.js e a marca "Checador" da grade (só exibição, até o C)
+    const PERMITIDOS = [{ arquivo: 'js/migracoes.js' }, { arquivo: 'js/views/instrutores.js', trecho: "startsWith('checa_')" }];
+    assert.deepEqual(comparacoesComIdLiteral("const c = x.hab.includes('c172');"), ["x.hab.includes('c172')"]);
+    assert.deepEqual(comparacoesComIdLiteral('ok = (i.hab || []).some(h => h === "ifr") && 1'), ['(i.hab || []).some(h => h === "ifr")']);
+    assert.deepEqual(comparacoesComIdLiteral('x.hab.indexOf(`mlte`) >= 0'), ['x.hab.indexOf(`mlte`)']);
+    assert.deepEqual(comparacoesComIdLiteral('x.hab.includes(h); filas[id].indexOf(x.id); eq === \'C172\''), []);
+    const achados = [];
+    for (const arquivo of arquivosDoApp()) {
+      if (arquivo === 'js/habilitacoes.js') continue;
+      const texto = readFileSync(new URL(`../../${arquivo}`, import.meta.url), 'utf8');
+      for (const trecho of comparacoesComIdLiteral(texto)) {
+        if (PERMITIDOS.some(p => p.arquivo === arquivo && (!p.trecho || trecho.includes(p.trecho)))) continue;
+        achados.push(`${arquivo}: ${trecho}`);
+      }
+    }
+    assert.deepEqual(achados, []);
+  });
+});
+
+// As comparações de uma lista de habilitações (hab) com um id escrito no código: hab.includes('x') (indexOf), e
+// hab.some(h => h === 'x') (every, find, filter; também startsWith e includes no elemento)
+function comparacoesComIdLiteral(texto) {
+  const lista = String.raw`(?:\(\s*)?[\w.$]*\bhab\b(?:\s*\|\|\s*\[\])?(?:\s*\))?`;
+  const literal = String.raw`(?:'[^'\n]*'|"[^"\n]*"|\x60[^\x60\n]*\x60)`;
+  const direta = new RegExp(String.raw`${lista}\.(?:includes|indexOf|lastIndexOf)\(\s*${literal}\s*\)`, 'g');
+  const callback = new RegExp(String.raw`${lista}\.(?:some|every|find|findIndex|filter)\(\s*\(?\s*(\w+)\s*\)?\s*=>[^;\n]*?\b\1\s*(?:===|!==|==|!=|\.startsWith\(|\.includes\()\s*${literal}[^;\n]*?\)`, 'g');
+  return [...texto.matchAll(direta), ...texto.matchAll(callback)].map(m => m[0]);
+}
+
+function arquivosDoApp(pasta = 'js') {
+  return readdirSync(new URL(`../../${pasta}`, import.meta.url), { withFileTypes: true })
+    .flatMap(e => (e.isDirectory() ? arquivosDoApp(`${pasta}/${e.name}`) : e.name.endsWith('.js') ? [`${pasta}/${e.name}`] : []));
+}
