@@ -173,10 +173,14 @@ export function aplicarReparo(fixos, resultado, fKey, opcao) {
 // ---------------------------------------------------------------------------------------------------------------------
 // O voo cancelado
 
+// As Sugestões do voo cancelado e da recusa do instrutor escolhido valem para a data aberta de hoje em diante: o que já
+// passou não muda
+export const dataQueAindaVoa = ({ data, hoje }) => Boolean(data && hoje && data >= hoje);
+
 // O voo cancelado que ainda pode ser aproveitado: o da data aberta de hoje em diante, sem resultado registrado, que não foi
 // cancelado porque o aluno faltou (e não é a volta do noturno de ontem)
 export function cancelamentoAproveitavel(estado, voo, { data, hoje }) {
-  if (!voo || voo.trecho || statusDoVoo(voo, estado.fStatus) !== 'Cancelado' || !data || !hoje || data < hoje) return false;
+  if (!voo || voo.trecho || statusDoVoo(voo, estado.fStatus) !== 'Cancelado' || !dataQueAindaVoa({ data, hoje })) return false;
   const detalhe = (estado.fObs || {})[voo.fKey];
   if (detalhe && detalhe.motivo === 'Aluno ausente') return false;
   return !((estado.resultados || {}).doDia || []).some(r => r && r.voo === voo.fKey);
@@ -425,9 +429,10 @@ export function desfazerAproveitamento(estado, { voos, pedidos }) {
 
 // O que encaixa o pedido recusado (fKey: a chave do voo que ele seria): o motor roda numa cópia com cada outro instrutor
 // que pode fazer o pedido e com "Automático"; só fica o que faz o pedido entrar sem tirar nem mudar nenhum outro voo
-// ("Automático" diz quem o app daria). A recusa do motor continua até o operador escolher. [{ insId (0: Automático),
+// ("Automático" diz quem o app daria). A recusa do motor continua até o operador escolher. depoisDe: na escala de hoje, o
+// minuto de agora (o pedido que entraria nele ou antes fica de fora, como no voo cancelado). [{ insId (0: Automático),
 // texto }]
-export function sugestoesDoRejeitado(estado, resultado, fKey, motor = runAllocationEngine) {
+export function sugestoesDoRejeitado(estado, resultado, fKey, { depoisDe = null, motor = runAllocationEngine } = {}) {
   const [stuId, mid] = fKey.split('_').map(Number);
   const aluno = estado.stu.find(s => s.id === stuId);
   const pedido = aluno ? pedidoDoAluno(aluno, mid) : null;
@@ -444,7 +449,7 @@ export function sugestoesDoRejeitado(estado, resultado, fKey, motor = runAllocat
     if (insId) ref.insId = insId; else delete ref.insId;
     const sim = motor(copia);
     const novo = sim.out.find(o => o.fKey === fKey);
-    if (!novo) continue;
+    if (!novo || (depoisDe !== null && novo.a <= depoisDe)) continue;
     const outros = sim.out.filter(o => o.fKey !== fKey);
     const mudou = outros.length !== resultado.out.length || outros.some(o => {
       const era = antes.get(o.fKey);

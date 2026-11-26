@@ -3,7 +3,7 @@
 // status). Também para o voo cancelado (aproveitar o voo: js/reparo.js, sugerirParaCancelado), com o motivo do
 // cancelamento e, sem nada, "Impossível nesta data" com o porquê. Na escala de hoje, só horários que ainda não passaram
 import { S, RES, DATA, estadoDaEscala } from '../state.js';
-import { sugerirReparos, sugerirParaCancelado, cancelamentoAproveitavel, sugestoesDoRejeitado } from '../reparo.js';
+import { sugerirReparos, sugerirParaCancelado, cancelamentoAproveitavel, sugestoesDoRejeitado, dataQueAindaVoa } from '../reparo.js';
 import { rejeicoesDosPedidos } from '../rejeicoes.js';
 import { GRUPO_DO_CONFLITO } from '../conflitos.js';
 import { nomeDoRecurso } from '../categorias.js';
@@ -80,13 +80,14 @@ function abrirParaCancelado(voo, { focar }) {
 }
 
 // O pedido recusado porque o instrutor escolhido não serve: outro instrutor (ou "Automático") que o encaixa sem mudar
-// nenhum outro voo; aplicada, a escolha do pedido muda (a recusa do motor fica até o operador escolher)
+// nenhum outro voo; aplicada, a escolha do pedido muda (a recusa do motor fica até o operador escolher). Só de hoje em
+// diante e, hoje, num horário que ainda não passou
 export function abrirPainelDoRejeitado(fKey, { focar = true } = {}) {
   const estado = estadoDaEscala();
   const recusa = rejeicoesDosPedidos(estado, RES).get(fKey);
-  if (!recusa) return;
+  if (!recusa || !dataQueAindaVoa({ data: DATA, hoje: hojeISO() })) return;
   const painel = $('#painel-reparo');
-  opcoesAbertas = sugestoesDoRejeitado(estado, RES, fKey);
+  opcoesAbertas = sugestoesDoRejeitado(estado, RES, fKey, { depoisDe: DATA === hojeISO() ? minutoDoDia() : null });
   doCancelado = false;
   doRejeitado = true;
   painel.dataset.fkey = fKey;
@@ -127,7 +128,7 @@ export function atualizarPainelDeReparo() {
   if (!painelDeReparoAberto()) return;
   if (doRejeitado) {
     const fKey = $('#painel-reparo').dataset.fkey;
-    if (rejeicoesDosPedidos(estadoDaEscala(), RES).has(fKey)) abrirPainelDoRejeitado(fKey, { focar: false });
+    if (dataQueAindaVoa({ data: DATA, hoje: hojeISO() }) && rejeicoesDosPedidos(estadoDaEscala(), RES).has(fKey)) abrirPainelDoRejeitado(fKey, { focar: false });
     else fecharPainelDeReparo();
     return;
   }
