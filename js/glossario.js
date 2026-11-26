@@ -128,8 +128,8 @@ const TERMOS = {
   },
 
   // Alunos
-  'voa-com': { aba: 'Alunos', termo: 'Priorizar com', texto: 'Os instrutores do aluno: a escala põe o aluno com um deles sempre que algum pode voar. Quando nenhum pode, o voo fica com outro instrutor, com aviso.' },
-  'nao-escalar-com': { aba: 'Alunos', termo: 'Não escalar com', texto: 'Instrutores que não voam com este aluno: a escala nunca põe o aluno com eles.' },
+  'voa-com': { aba: 'Alunos', termo: 'Priorizar com', texto: 'Os instrutores do aluno, a prioridade máxima: a escala o põe com um deles antes dos outros pedidos. Sem nenhum que possa, com outro, com aviso; na disputa pelo mesmo horário, o aviso diz quem ficou com ele.' },
+  'nao-escalar-com': { aba: 'Alunos', termo: 'Não escalar com', texto: 'Instrutores que nunca voam com este aluno: a escala não põe o aluno com eles por nenhum caminho; o voo posto à mão com um deles fica em conflito.' },
   progresso: { funcionalidade: 'progresso', aba: 'Alunos', termo: 'Progresso', texto: 'Missões do curso aprovadas sobre o total do programa, a fase em que o aluno está (no curso com mais de uma) e a próxima missão.' },
   'filtro-dos-cursos': { aba: 'Alunos', termo: 'Filtro dos cursos', texto: 'Mostra só os alunos de algum dos cursos marcados, em Alunos e na Demanda (as marcas valem nas duas): PP e PC mostram os alunos dos dois. “Sem curso” mostra quem não tem curso; sem nenhum marcado, mostra todos.' },
 
