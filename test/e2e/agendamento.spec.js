@@ -130,6 +130,29 @@ test.describe('Agendar um voo na Escala', () => {
     await expect((await historico(page)).locator('.audit-desc', { hasText: 'Agendado na escala' })).toContainText('· confirmado: fora da ordem (falta PP-02)');
   });
 
+  // F1h (N9): o instrutor fora do “Priorizar com” da aluna era uma nota; agora é um aviso, que pede a confirmação, e a Escala
+  // guarda a observação do voo posto à mão
+  test('o instrutor fora do “Priorizar com” pede "Agendar mesmo assim"; agendado, a Escala tem a observação', async ({ page }) => {
+    const estado = dia();
+    estado.stu[1].voaCom = [1];
+    await abrirComCurso(page, estado);
+    await abrirDialogo(page);
+    await expect(page.locator('#agd-instrutor option:checked')).toHaveText('Instrutor 01');
+    await expect(page.locator('#agd-conferencia .agd-avisos li')).toHaveCount(0);
+    await page.locator('#agd-instrutor').selectOption('2');
+    await expect(page.locator('#agd-conferencia .agd-avisos li')).toHaveText(['Instrutor 02 está fora do Priorizar com de Maria Silva.']);
+    await expect(page.locator('#agd-conferencia .agd-notas li', { hasText: 'Priorizar com' })).toHaveCount(0);
+    await page.locator('#agd-confirmar').click();
+    await expect(page.locator('#agd-confirmar')).toHaveText('Agendar mesmo assim');
+    await agendar(page);
+    await expect((await historico(page)).locator('.audit-desc', { hasText: 'Agendado na escala' })).toContainText('· confirmado: fora do Priorizar com');
+    await page.locator('#btn-fechar-historico').click();
+    await abrirEscala(page);
+    const avisos = page.locator('#out details.caixa.avisos');
+    await avisos.locator('summary').click();
+    await expect(avisos.locator('li', { hasText: 'Priorizar com' })).toHaveText(['Maria Silva Fora do “Priorizar com” de Maria Silva (Instrutor 01): o voo foi posto à mão com Instrutor 02.']);
+  });
+
   test('o 7º voo local do horário pede "Agendar mesmo assim", também quando a aluna vem antes no cadastro', async ({ page }) => {
     // Seis voos locais agendados às 08:20; a Maria é a primeira do cadastro: o motor confere o agendado dela antes dos
     // outros, e o aviso dele fica no último dos seis

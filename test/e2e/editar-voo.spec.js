@@ -103,6 +103,28 @@ test.describe('O editor do voo', () => {
     await expect(barraDoVoo(page, '1002_0_1')).toBeFocused();
   });
 
+  // F1h (N9): o INVA fora do “Priorizar com” do aluno avisa e pede a confirmação; salvo, a Escala guarda a observação
+  test('o INVA fora do “Priorizar com”: o aviso pede "Salvar mesmo assim"; salvo, a Escala tem a observação (na aprovada)', async ({ page }) => {
+    const estado = dia();
+    estado.stu[0].voaCom = [1];
+    await abrir(page, { estado });
+    await abrirEscala(page);
+    await aprovar(page);
+    await editarPelaLista(page, '1000_0_1');
+    await expect(page.locator('#voo-instrutor')).toHaveValue('1');
+    await page.locator('#voo-instrutor').selectOption('2');
+    const aviso = page.locator('#voo-avisos li', { hasText: 'Priorizar com' });
+    await expect(aviso).toHaveText('Fora do “Priorizar com” de Aluno 1000 (Instrutor 01): o voo foi posto à mão com Instrutor 02.');
+    await expect(page.locator('#voo-instrutor')).toHaveAttribute('aria-describedby', /voo-aviso-/);
+    await salvarVoo(page);
+    await expect(page.locator('#voo-salvar')).toHaveText('Salvar mesmo assim');
+    await salvarVoo(page);
+    await expect(editorDoVoo(page)).toBeHidden();
+    const avisos = await abrirCaixa(page, 'avisos');
+    await expect(avisos.locator('li', { hasText: 'Priorizar com' })).toHaveText(['Aluno 1000 Fora do “Priorizar com” de Aluno 1000 (Instrutor 01): o voo foi posto à mão com Instrutor 02.']);
+    await expect(page.locator('#out details.caixa.avisos summary')).toContainText('1 aviso de Priorizar com');
+  });
+
   test('um conflito avisa e pede "Salvar mesmo assim"; salvo, o voo fica em conflito na Escala (na aprovada)', async ({ page }) => {
     await abrir(page, { estado: dia() });
     await abrirEscala(page);
