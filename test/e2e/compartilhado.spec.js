@@ -1,4 +1,4 @@
-import { test, comProgresso, expect, prepararContexto, vigiarErros, irPara, abrirEscala, lerEscala, AMANHA, entrar, URL_APP, abrirHistorico, alternarDisponivel, botaoAprovar, caixaDisponivel, exportar, dataAberta } from './fixtures.js';
+import { test, comProgresso, expect, abrirInstrutores, prepararContexto, vigiarErros, irPara, abrirEscala, lerEscala, AMANHA, entrar, URL_APP, abrirHistorico, alternarDisponivel, botaoAprovar, caixaDisponivel, exportar, dataAberta } from './fixtures.js';
 import { criarSupabaseFalso, instalarSupabaseFalso, documentosAtuais, CONTAS } from './supabase-falso.js';
 import { estadoSintetico } from '../helpers/estado.js';
 import { comExemplo } from '../helpers/exemplo.js';
@@ -62,6 +62,40 @@ test.describe('Modo compartilhado: gravação, conflitos e link da escala', () =
     await alternarDisponivel(page, 'PR-BTB', false);
     await expect(page.locator('#aviso-sync-texto')).toHaveText('O app foi atualizado. Recarregue a página para continuar (a sua última alteração não foi salva).');
     await expect(page.locator('body')).toHaveAttribute('data-role', 'gestor');
+    expect(erros).toEqual([]);
+    await contexto.close();
+  });
+
+  // O cadastro alterado por outra pessoa (F2): a data é lida de novo, a tela não trava e o aviso diz o que não foi gravado.
+  // A alteração refeita é gravada sem recarregar
+  test('conflito no cadastro: a data é lida de novo, o aviso diz o que não foi gravado, e a alteração refeita é gravada', async ({ browser }) => {
+    const contexto = await novoContexto(browser);
+    const servidor = await instalarSupabaseFalso(contexto, comDados());
+    const page = await contexto.newPage();
+    const erros = vigiarErros(page, { statusEsperados: [409] });
+    await entrar(page, CONTAS.operador);
+    // Uma colega cadastra um aluno antes desta pessoa mudar o peso de um instrutor
+    const cadastro = structuredClone(servidor.banco.get('cadastro').conteudo);
+    servidor.alterarPorOutraPessoa('cadastro', { ...cadastro, nid: cadastro.nid + 1, stu: [...cadastro.stu, { ...cadastro.stu[0], id: cadastro.nid, nm: 'Aluno da colega' }] });
+    const id = cadastro.ins[0].id, nome = cadastro.ins[0].nm;
+    await abrirInstrutores(page, 'cadastro');
+    const peso = page.locator(`#inst tr[data-id="${id}"] [data-f="kg"]`);
+    await peso.fill('77');
+    await peso.press('Tab');
+    await expect(page.locator('#aviso-sync-texto')).toHaveText(
+      `Outra pessoa alterou o cadastro enquanto você editava: a tela mostra a versão atual, e esta alteração não foi gravada: Peso ${nome}: 77 kg. Refaça o que ainda for preciso.`);
+    await expect(page.locator('#btn-recarregar')).toBeHidden();
+    // A tela não trava: o perfil continua o de quem edita, e a versão da colega está na tela
+    await expect(page.locator('body')).toHaveAttribute('data-role', 'operador');
+    await expect(peso).not.toHaveValue('77');
+    await page.locator('#btn-fechar-aviso').click();
+    await expect(page.locator('#aviso-sync')).toBeHidden();
+    // Refeita, a alteração é gravada em cima da versão da colega
+    await peso.fill('77');
+    await peso.press('Tab');
+    await expect.poll(() => servidor.banco.get('cadastro').conteudo.ins.find(x => x.id === id).kg).toBe(77);
+    expect(servidor.banco.get('cadastro').conteudo.stu.some(s => s.nm === 'Aluno da colega')).toBe(true);
+    await expect(page.locator('#aviso-sync')).toBeHidden();
     expect(erros).toEqual([]);
     await contexto.close();
   });

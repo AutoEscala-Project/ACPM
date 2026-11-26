@@ -3,7 +3,7 @@
 import { ApiClient } from './storage.js';
 import { criarBackendSupabase } from './backends/supabase.js';
 import { backendLocal } from './backends/local.js';
-import { setRole, travarAposConflito, avisarFalhaDeGravacao } from './actions.js';
+import { setRole, aposConflito, avisarFalhaDeGravacao } from './actions.js';
 import { $, fecharAviso, avisarDoLink } from './dom.js';
 import { amanhaISO, esc } from './format.js';
 import { limparTelaDoEndereco } from './endereco.js';
@@ -151,7 +151,7 @@ export async function iniciarSessaoSupabase(projeto) {
 
   delete document.body.dataset.login;
   ApiClient.backend = criarBackendSupabase(cliente, {
-    aoConflito: (documento, motivo) => travarAposConflito(motivo),
+    aoConflito: aposConflito,
     aoErro: avisarFalhaDeGravacao,
     aoSessaoExpirada: () => pedirNovoLogin(cliente),
     aoGravar: () => fecharAviso('espera')
