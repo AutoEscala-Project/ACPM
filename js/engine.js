@@ -4,7 +4,7 @@ import { NOTURNO, T, DAY, MIS, DEFAULT_LIM, GROUND_EQ_TYPE, GROUND_REG, GROUND_D
 import { FROTA_INICIAL, matriculasDoTipo, matriculasParaOVoo, motivoDoAviao, aviaoServe, instrutorVoaNoAviao, recursoDaFrota } from './frota.js';
 import { hm, fmtH, numeroBr, duracaoHm } from './format.js';
 import { repousoAntesDaVolta, historicoDoDia } from './noturno.js';
-import { isGroundMission, doesGroundGateFlight, disponibilidadeDoAluno, rotuloDaDisponibilidade, duracaoValida, duracaoFixaDaMissao, minutoExato } from './rules.js';
+import { isGroundMission, doesGroundGateFlight, disponibilidadeDoAluno, rotuloDaDisponibilidade, duracaoValida, duracaoFixaDaMissao, minutoConfirmado } from './rules.js';
 import { HORARIOS_INICIAIS, horariosDaMissao, periodoDoMinuto, minutoDaPreferencia, ordenarPelaPreferencia, fimDasMissoesDoDia } from './horarios.js';
 import { podeFazer, descreverExigencias } from './habilitacoes.js';
 import { categoriaDoRodizio, ajustarFilas } from './rodizio.js';
@@ -366,7 +366,6 @@ export function runAllocationEngine(state, opcoes = {}) {
   // Agenda (limiteConfirmado, Q8) passa do limite no minuto exato do pedido (jan), fixo ou não, e não conta aqui, então
   // não toma lugar dos outros, onde quer que caia na fila (no máximo 6 sem os confirmados, mais os confirmados)
   const locaisNoHorario = {};
-  const minutoConfirmado = d => (MISSOES_LOCAIS.includes(d.mis) && d.limiteConfirmado === true ? minutoExato(d.jan) : null);
 
   // A volta do noturno de ontem (state.noturnosDaVespera, lido da escala gravada da véspera): o translado de BH decola às
   // 07:30 e pousa às 08:30. O instrutor, o aluno e o avião passaram a noite em BH e só ficam livres às 10:10. Entra como um

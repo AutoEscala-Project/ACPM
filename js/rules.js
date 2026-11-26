@@ -1,6 +1,6 @@
 // Regras das missões: Ground School, precedência Ground → voo
 // e normalização de pedidos (inclusive nomes de missão de versões anteriores).
-import { MIS, NI, T, PRE, GROUND_EQ_TYPE, GROUND_DURATION_H, DURACAO_MAXIMA_H } from './config.js';
+import { MIS, NI, T, PRE, GROUND_EQ_TYPE, GROUND_DURATION_H, DURACAO_MAXIMA_H, MISSOES_LOCAIS } from './config.js';
 import { hm, lerHoras } from './format.js';
 import { periodoDoMinuto, minutoDaPreferencia, preferenciaValida, HORARIO_DO_SOLO } from './horarios.js';
 import { codigoValido, siglaValida } from './cursos.js';
@@ -10,11 +10,14 @@ import { chaveDoVoo } from './voo.js';
 // horários. "manha", "tarde" e "noite" valem por período (as janelas de operação de cada um); "h450" é um horário
 // exato (07:30, em minutos; "h5", dos dados antigos, é a janela 5). Sem disponibilidade, qualquer horário habilitado
 const PERIODOS = { manha: ['Manhã', PRE['Manhã']], tarde: ['Tarde', PRE['Tarde']], noite: ['Noite', PRE['Noturno']] };
-export function minutoExato(jan) {
+function minutoExato(jan) {
   const horario = /^h(\d{1,4})$/.exec(jan);
   const minuto = horario ? minutoDaPreferencia(+horario[1]) : -1;
   return minuto >= T[0] && minuto <= T[NI] ? minuto : null;
 }
+// O minuto em que o 7º voo local confirmado na Agenda (limiteConfirmado, Q8) passa do limite de 6: o horário exato do
+// pedido (jan); null no pedido não confirmado, sem horário exato ou que não é local. O motor e as Sugestões contam assim
+export const minutoConfirmado = d => (Boolean(d) && MISSOES_LOCAIS.includes(d.mis) && d.limiteConfirmado === true ? minutoExato(d.jan) : null);
 // O que a disponibilidade permite: uma função do horário de início, ou null (sem disponibilidade: qualquer horário)
 export function disponibilidadeDoAluno(jan) {
   if (typeof jan !== 'string') return null;
