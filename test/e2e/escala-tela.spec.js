@@ -72,23 +72,19 @@ test.describe('Tela da Escala', () => {
     await expect(erros).not.toHaveAttribute('open', '');
   });
 
-  // Inverter eixo X:Y: os recursos (ou os instrutores) viram colunas e as horas descem à esquerda; o voo continua o mesmo
-  // botão (abre os detalhes) e o clique no espaço livre agenda no horário da altura dele
-  test('Inverter eixo X:Y: recursos nas colunas, horas nas linhas, os voos e o clique continuam', async ({ page }) => {
+  // O mapa abre transposto: os recursos (ou os instrutores) em colunas e as horas descendo à esquerda. Inverter eixo X:Y
+  // põe as horas nas colunas e um recurso por linha, e outro clique volta; o voo continua o mesmo botão (abre o editor do voo)
+  // e o clique no espaço livre agenda no horário da posição dele, nos dois eixos
+  test('o mapa abre com os recursos nas colunas e as horas nas linhas; Inverter eixo X:Y troca e volta, os voos e o clique continuam', async ({ page }) => {
     const erros = [];
     page.on('pageerror', e => erros.push(e.message));
     page.on('console', m => { if (m.type() === 'error') erros.push(m.text()); });
     await abrirComExemplo(page);
     await abrirEscala(page, { vista: 'eq' });
     const eixo = page.locator('#btn-eixo');
+    await expect(eixo).toHaveText('Inverter eixo X:Y');
     await expect(eixo).toHaveAttribute('aria-pressed', 'false');
-    await expect(page.locator('#out .tl-wrap')).not.toHaveClass(/transposto/);
-    const barra = page.locator('#out .tl-bar').first();
-    const antes = await barra.boundingBox();
-    expect(antes.width).toBeGreaterThan(antes.height);
-
-    await eixo.click();
-    await expect(eixo).toHaveAttribute('aria-pressed', 'true');
+    await expect(eixo).not.toHaveClass(/\bon\b/);
     await expect(page.locator('#out .tl-wrap')).toHaveClass(/\btransposto\b/);
     // As linhas lado a lado (colunas) e as faixas em pé
     const [r1, r2] = await page.locator('#out .tl-row').evaluateAll(rs => rs.slice(0, 2).map(r => r.getBoundingClientRect().toJSON()));
@@ -100,9 +96,23 @@ test.describe('Tela da Escala', () => {
     const marcas = await page.locator('#out .tl-axis span').evaluateAll(ms => ms.slice(0, 3).map(m => m.getBoundingClientRect().top));
     expect(marcas[1]).toBeGreaterThan(marcas[0]);
     expect(marcas[2]).toBeGreaterThan(marcas[1]);
+    // As marcas na altura das faixas: o eixo começa na borda de dentro de cada faixa e tem a altura dela
+    const alinhamento = await page.locator('#out .tl-wrap').evaluate(w => {
+      const eixoDasHoras = w.querySelector('.tl-axis').getBoundingClientRect();
+      return [...w.querySelectorAll('.tl-track')].map(t => ({
+        topo: t.getBoundingClientRect().top + t.clientTop - eixoDasHoras.top,
+        altura: t.clientHeight - eixoDasHoras.height
+      }));
+    });
+    expect(alinhamento.length).toBeGreaterThan(1);
+    for (const { topo, altura } of alinhamento) {
+      expect(Math.abs(topo)).toBeLessThan(0.5);
+      expect(Math.abs(altura)).toBeLessThan(0.5);
+    }
     // O voo: mais alto que largo, abre e fecha o editor do voo como antes
-    const depois = await barra.boundingBox();
-    expect(depois.height).toBeGreaterThan(depois.width / 3);
+    const barra = page.locator('#out .tl-bar').first();
+    const emPe = await barra.boundingBox();
+    expect(emPe.height).toBeGreaterThan(emPe.width / 3);
     await barra.click();
     await expect(editorDoVoo(page)).toBeVisible();
     await page.keyboard.press('Escape');
@@ -110,22 +120,57 @@ test.describe('Tela da Escala', () => {
 
     // O clique no espaço livre de uma coluna agenda no horário da altura dele (contada da borda de dentro da faixa)
     const livre = page.locator('#out .tl-row:not(:has(.tl-bar)) .tl-track:not(.inerte)').first();
-    const ponto = await livre.evaluate((el, m) => {
+    const naAltura = await livre.evaluate((el, m) => {
       const { inicio, fim } = el.closest('.tl-wrap').dataset;
       return { x: el.clientWidth / 2, y: ((m - inicio) / (fim - inicio)) * el.clientHeight };
     }, 625);
-    await livre.click({ position: ponto });
+    await livre.click({ position: naAltura });
+    await expect(page.locator('#dlg-agendar')).toBeVisible();
+    await expect(page.locator('#dlg-agendar')).toHaveAccessibleDescription(/clique perto das 10:25$/);
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#dlg-agendar')).toBeHidden();
+
+    // Inverter: as horas nas colunas, um recurso por linha, o botão apertado
+    await eixo.click();
+    await expect(eixo).toHaveAttribute('aria-pressed', 'true');
+    await expect(eixo).toHaveClass(/\bon\b/);
+    await expect(page.locator('#out .tl-wrap')).not.toHaveClass(/transposto/);
+    const [d1, d2] = await page.locator('#out .tl-row').evaluateAll(rs => rs.slice(0, 2).map(r => r.getBoundingClientRect().toJSON()));
+    expect(d2.top).toBeGreaterThan(d1.top);
+    expect(Math.abs(d1.left - d2.left)).toBeLessThan(1);
+    const deitada = await barra.boundingBox();
+    expect(deitada.width).toBeGreaterThan(deitada.height);
+    // As marcas do eixo vão para a direita
+    const marcasDeitadas = await page.locator('#out .tl-axis span').evaluateAll(ms => ms.slice(0, 3).map(m => m.getBoundingClientRect().left));
+    expect(marcasDeitadas[1]).toBeGreaterThan(marcasDeitadas[0]);
+    expect(marcasDeitadas[2]).toBeGreaterThan(marcasDeitadas[1]);
+    // O clique no espaço livre de uma linha agenda no horário da largura dele
+    const naLargura = await livre.evaluate((el, m) => {
+      const { inicio, fim } = el.closest('.tl-wrap').dataset;
+      return { x: ((m - inicio) / (fim - inicio)) * el.clientWidth, y: el.clientHeight / 2 };
+    }, 625);
+    await livre.click({ position: naLargura });
     await expect(page.locator('#dlg-agendar')).toBeVisible();
     await expect(page.locator('#dlg-agendar')).toHaveAccessibleDescription(/clique perto das 10:25$/);
     await page.keyboard.press('Escape');
 
-    // Na Lista o botão some; de volta ao mapa, o eixo continua invertido até outro clique
+    // Na Lista o botão some; de volta ao mapa, as horas continuam nas colunas até outro clique, que volta ao padrão
     await page.locator('#s-esc [data-tl="lista"]').click();
     await expect(eixo).toBeHidden();
     await page.locator('#s-esc [data-tl="ins"]').click();
-    await expect(page.locator('#out .tl-wrap')).toHaveClass(/\btransposto\b/);
-    await eixo.click();
     await expect(page.locator('#out .tl-wrap')).not.toHaveClass(/transposto/);
+    await expect(eixo).toHaveAttribute('aria-pressed', 'true');
+    await eixo.click();
+    await expect(page.locator('#out .tl-wrap')).toHaveClass(/\btransposto\b/);
+    await expect(eixo).toHaveAttribute('aria-pressed', 'false');
+    // Recarregar a página: o mapa abre de novo com os recursos nas colunas
+    await eixo.click();
+    await expect(eixo).toHaveAttribute('aria-pressed', 'true');
+    await page.reload();
+    await appPronto(page);
+    await abrirEscala(page, { vista: 'eq' });
+    await expect(page.locator('#out .tl-wrap')).toHaveClass(/\btransposto\b/);
+    await expect(page.locator('#btn-eixo')).toHaveAttribute('aria-pressed', 'false');
     expect(erros).toEqual([]);
   });
 
@@ -584,24 +629,33 @@ test.describe('Celular', () => {
     }
   });
 
-  // Com o "+" de 44 px, sobram uns 107 px para o nome da linha do mapa: o nome longo quebra em linhas e fica inteiro à
-  // vista (no toque, não há o title para ler o resto)
-  test('no mapa, o nome longo da linha quebra em linhas, inteiro, sem reticências', async ({ page }) => {
+  // O nome longo da linha do mapa quebra em linhas e fica inteiro à vista (no toque, não há o title para ler o resto),
+  // nos dois eixos: no padrão, a coluna tem uns 60 px para o nome; com as horas nas colunas (Inverter eixo X:Y), o "+" de
+  // 44 px deixa uns 107 px para o nome ao lado dele
+  test('no mapa, o nome longo da linha quebra em linhas, inteiro, sem reticências, nos dois eixos', async ({ page }) => {
     const longo = 'Maria Fernanda dos Santos Oliveira';
     await abrir(page, { estado: cenario({ ins: [instrutor(1, 9, { nm: longo }), instrutor(2, 9)], stu: [aluno(1000, { p1: 390, p2: -1 })] }) });
     await abrirEscala(page);
     await page.locator('#s-esc [data-tl="ins"]').click();
     const linha = page.locator('#out .mapa .tl-row', { has: page.locator('.tl-lbl > span', { hasText: longo }) });
-    await expect(linha.locator('.tl-agendar')).toBeVisible();
-    const nome = await linha.locator('.tl-lbl > span').evaluate(span => ({
-      cortado: span.scrollWidth > span.clientWidth || span.scrollHeight > span.clientHeight,
-      linhas: Math.round(span.getBoundingClientRect().height / parseFloat(getComputedStyle(span).lineHeight))
-    }));
-    expect(nome.cortado).toBe(false);
-    expect(nome.linhas).toBeGreaterThan(1);
-    // Com o mouse (na tela larga, o nome continua numa linha só), o title mostra o nome inteiro
-    await expect(linha.locator('.tl-lbl > span')).toHaveAttribute('title', longo);
-    expect(await larguraDaPagina(page)).toBeLessThanOrEqual(390);
+    for (const eixo of ['recursos nas colunas', 'horas nas colunas']) {
+      if (eixo === 'horas nas colunas') {
+        await page.locator('#btn-eixo').click();
+        await expect(page.locator('#out .tl-wrap')).not.toHaveClass(/transposto/);
+      } else {
+        await expect(page.locator('#out .tl-wrap')).toHaveClass(/\btransposto\b/);
+      }
+      await expect(linha.locator('.tl-agendar'), eixo).toBeVisible();
+      const nome = await linha.locator('.tl-lbl > span').evaluate(span => ({
+        cortado: span.scrollWidth > span.clientWidth || span.scrollHeight > span.clientHeight,
+        linhas: Math.round(span.getBoundingClientRect().height / parseFloat(getComputedStyle(span).lineHeight))
+      }));
+      expect(nome.cortado, eixo).toBe(false);
+      expect(nome.linhas, eixo).toBeGreaterThan(1);
+      // Com o mouse (na tela larga, o nome continua numa linha só), o title mostra o nome inteiro
+      await expect(linha.locator('.tl-lbl > span'), eixo).toHaveAttribute('title', longo);
+      expect(await larguraDaPagina(page), eixo).toBeLessThanOrEqual(390);
+    }
   });
 
   test('a escala vira um cartão por voo, com horário, aluno, missão, avião, instrutor e status à vista', async ({ page }) => {

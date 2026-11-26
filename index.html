@@ -437,7 +437,7 @@
         <button type="button" aria-pressed="false" data-tl="lista"><svg class="ico"><use href="#i-lista"/></svg>Lista</button>
         <button type="button" aria-pressed="false" data-tl="painel"><svg class="ico"><use href="#i-painel"/></svg>Painel</button>
       </div>
-      <button type="button" class="btn sec" id="btn-eixo" aria-pressed="false" title="Os recursos (ou os instrutores) nas colunas e as horas nas linhas do mapa">Inverter eixo X:Y</button>
+      <button type="button" class="btn sec" id="btn-eixo" aria-pressed="false" title="As horas nas colunas e um recurso (ou instrutor) por linha do mapa; outro clique volta aos recursos nas colunas">Inverter eixo X:Y</button>
       <button type="button" class="btn sec" id="btn-indisponiveis" aria-pressed="false" title="Esconder do mapa os recursos indisponíveis nesta data (em manutenção); o que ainda tem voo continua no mapa">Ocultar indisponíveis</button>
       <button type="button" class="btn edit-only" id="btn-agendar" data-act="agendar" data-agendar="dia" aria-haspopup="dialog">+ Agendar voo</button>
       <span class="cresce"></span>
@@ -687,9 +687,9 @@
       As caixas abrem recolhidas, só com o título: um clique no título abre ou recolhe, e a caixa fica como você deixou ao trocar de vista.
       Depois, a escala em quatro vistas (a Escala abre em Por recurso):</p>
       <ul>
-        <li><b>Por recurso</b> e <b>Por instrutor:</b> o mapa do dia, com a ocupação de cada um, e também as linhas livres: todos os recursos (o avião em manutenção fica riscado) e os instrutores disponíveis no dia.
+        <li><b>Por recurso</b> e <b>Por instrutor:</b> o mapa do dia, com a ocupação de cada um, e também os livres: todos os recursos (o avião em manutenção fica riscado) e os instrutores disponíveis no dia.
         Um clique num voo abre o voo para editar (veja <i>Editar um voo</i>, abaixo); Esc ou <i>Cancelar</i> fecham sem mudar nada.
-        <b>Inverter eixo X:Y</b> põe os recursos (ou os instrutores) nas colunas e as horas descendo nas linhas; outro clique volta.
+        O mapa abre com os recursos (ou os instrutores) nas colunas e as horas descendo nas linhas; <b>Inverter eixo X:Y</b> põe as horas nas colunas e um recurso (ou instrutor) por linha, e outro clique volta (ao recarregar a página, o mapa abre de novo com os recursos nas colunas).
         Em Por recurso, <b>Ocultar indisponíveis</b> tira do mapa os recursos desligados na data (em manutenção); o que ainda tem voo continua, e outro clique mostra todos.</li>
         <li><b>Lista:</b> uma linha por voo, por horário.
         A turma de Ground ocupa uma linha só, com os alunos logo abaixo.
@@ -746,12 +746,12 @@
       O ↶ do Histórico desfaz o agendamento: o voo novo sai, o que mudou de lugar ou entrou na escala volta a ser como era (o aluno tirado da escala depois continua fora dela), e o instrutor marcado disponível também (o peso digitado fica no cadastro; não se desfaz o voo em andamento, o que já tem resultado nem o pedido que mudou depois na Demanda ou saiu dela).
       O voo agendado que depois ficar impossível (o instrutor que não vem mais, o avião em manutenção, outro voo fixo no mesmo lugar: o agendado cede o lugar aos outros fixos) vai para a caixa vermelha de conflitos, também sem a escala aprovada, com as <i>Sugestões</i>.
       O voo agendado fora dos horários de decolagem, do pouso até as 17:30, do limite de voos locais ou do Ground antes do voo mostra <i>fora da regra</i> ao lado do horário (a dica diz qual), e a caixa amarela conta esses agendamentos.</p>
-      <p><b>Pelo mapa e pela lista:</b> no mapa, o <i>+</i> ao lado do nome de cada linha agenda nela (no recurso ou com o instrutor), no primeiro horário livre; um clique (ou toque) no espaço livre de uma linha agenda nela, no horário de decolagem livre mais perto do clique (o Noturno, às 17:30; o Voo Solo, às 06:30).
-      <span data-funcionalidade="progresso">Pela linha de um recurso ou de um instrutor, a missão sugerida é a primeira liberada do curso que serve nela (no tipo do recurso, ou que o instrutor pode dar).</span>
-      O avião em manutenção não tem o <i>+</i>, e a linha dele não agenda.
+      <p><b>Pelo mapa e pela lista:</b> no mapa, o <i>+</i> ao lado do nome de cada recurso (ou instrutor) agenda no recurso (ou com o instrutor), no primeiro horário livre; um clique (ou toque) no espaço livre da coluna dele (da linha, com as horas nas colunas) agenda nele, no horário de decolagem livre mais perto do clique (o Noturno, às 17:30; o Voo Solo, às 06:30).
+      <span data-funcionalidade="progresso">Pelo mapa de um recurso ou de um instrutor, a missão sugerida é a primeira liberada do curso que serve nele (no tipo do recurso, ou que o instrutor pode dar).</span>
+      O avião em manutenção não tem o <i>+</i>, e o clique nele não agenda.
       Na lista, o <i>+</i> de cada horário agenda nele, ou no primeiro horário livre antes do seguinte.
       No voo de uma turma de Ground, <i>+ Aluno na turma</i> abre o mesmo diálogo, já com a turma, para pôr mais um aluno nela.
-      Sem voos na data, o mapa mostra as linhas livres embaixo do aviso.</p>
+      Sem voos na data, o mapa mostra os recursos (ou os instrutores) livres embaixo do aviso.</p>
       <p id="manual-editar-voo"><b>Editar um voo:</b> um clique num voo do mapa, ou <i>Editar</i> na linha da Lista, abre todos os campos dele: o aluno (o voo passa para outro aluno; o pedido de antes deixa de voar), a missão (as do curso do aluno; sem curso, os tipos de missão; o tipo do recurso e as horas acompanham a missão e continuam editáveis), o recurso (de outro tipo, o pedido muda de tipo), o horário (os de decolagem do tipo, ou <i>Outro horário…</i>), a duração (a do Ground e a do Noturno não mudam), o instrutor (<i>Automático</i> devolve a escolha ao app) e o status.
       Na turma de Ground, a turma inteira muda junto, e <i>Turma</i> mostra cada aluno, com o status dele, <i>Tirar</i> e <i>+ Aluno na turma</i>.
       O peso do aluno e o do instrutor aparecem com o link para o cadastro: o peso é da pessoa, em todas as datas, e muda em Alunos ou Instrutores.
@@ -1021,7 +1021,7 @@
         <dd>A escala é refeita inteira a cada alteração, seguindo as prioridades, e uma mudança pode abrir ou ocupar vagas de outros voos.
         Com o dia já em andamento, aprove a escala: os voos ficam fixos, e um cancelamento ou um atraso só mexe no próprio voo.</dd>
         <dt>Quero um voo num horário, num avião e com um instrutor que eu escolho.</dt>
-        <dd>Use <i>+ Agendar voo</i>, na barra da Escala, ou o <i>+</i> de uma linha do mapa: o voo fica fixo onde você o pôs, e a escala é refeita em volta dele.
+        <dd>Use <i>+ Agendar voo</i>, na barra da Escala, ou o <i>+</i> de um recurso (ou instrutor) no mapa: o voo fica fixo onde você o pôs, e a escala é refeita em volta dele.
         Se o aluno já tem voo na data, o mesmo diálogo muda esse voo de lugar (veja Escala).</dd>
         <dt>Fiz uma alteração sem querer.
         Como volto?</dt>

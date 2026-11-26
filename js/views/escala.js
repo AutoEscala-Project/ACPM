@@ -17,7 +17,7 @@ import { OPCOES_DE_BURACOS, OPCOES_DE_HORARIOS, normalizarCriterios } from '../c
 import { metricasDaEscala } from '../metricas.js';
 import { ligada } from '../funcionalidades.js';
 import { sumUniqueOperationalHours, consolidateTimelineSlots } from '../engine.js';
-import { S, RES, AUDIT_LOG, TL_MODE, EIXO_INVERTIDO, OCULTAR_INDISPONIVEIS, DATA, isGestor, dadoIndisponivel, estadoDaEscala, inativoNaDataAberta, habilitacoesNaoConferidas } from '../state.js';
+import { S, RES, AUDIT_LOG, TL_MODE, HORAS_NAS_COLUNAS, OCULTAR_INDISPONIVEIS, DATA, isGestor, dadoIndisponivel, estadoDaEscala, inativoNaDataAberta, habilitacoesNaoConferidas } from '../state.js';
 import { cancelamentoAproveitavel, dataQueAindaVoa } from '../reparo.js';
 import { rejeicoesDosPedidos } from '../rejeicoes.js';
 import { motivoDoFixo } from '../fixos.js';
@@ -83,8 +83,8 @@ function detalhesDaLinha(linha, porInstrutor, mapa) {
 
 // O mapa: as marcas do eixo ficam no minuto delas (--pos), cada voo do início (--ini) ao fim (--dur) e cada listra da
 // faixa é uma hora (--hora), em qualquer largura; o início e o fim do mapa (data-inicio e data-fim, em minutos) dão o
-// horário de um clique na faixa (js/eventos/escala.js). Com o eixo invertido (.transposto), o CSS põe as linhas em
-// colunas e as horas descendo (--horas dá a altura)
+// horário de um clique na faixa (js/eventos/escala.js). O mapa abre transposto (.transposto): o CSS põe as linhas em
+// colunas e as horas descendo (--horas dá a altura); com Inverter eixo X:Y, as horas nas colunas e uma linha por recurso
 function buildTimelineGroup(linhas, porInstrutor, barLine1Fn, barLine2Fn, minStart, maxEnd) {
   const span = maxEnd - minStart;
   const mapa = vistaDoMapa();
@@ -125,7 +125,7 @@ function buildTimelineGroup(linhas, porInstrutor, barLine1Fn, barLine2Fn, minSta
     </div>`;
   }).join('');
 
-  const transposto = mapa && EIXO_INVERTIDO;
+  const transposto = mapa && !HORAS_NAS_COLUNAS;
   return `<div class="tl-wrap${transposto ? ' transposto' : ''}" data-inicio="${minStart}" data-fim="${maxEnd}" style="--hora:${(6000 / span).toFixed(4)}%;--horas:${(span / 60).toFixed(2)}"><div class="tl-axis">${ticks.join('')}</div>${rowsHTML}</div>`;
 }
 
@@ -554,12 +554,12 @@ export function rOut() {
     b.setAttribute('aria-pressed', String(b.dataset.tl === TL_MODE));
   });
   $('#out').dataset.vista = TL_MODE === 'lista' || TL_MODE === 'painel' ? TL_MODE : 'mapa';
-  // Inverter o eixo só vale nas vistas do mapa
+  // Inverter o eixo só vale nas vistas do mapa; apertado, as horas estão nas colunas (o padrão são os recursos nas colunas)
   const eixo = $('#btn-eixo');
   if (eixo) {
     eixo.hidden = !vistaDoMapa();
-    eixo.setAttribute('aria-pressed', String(EIXO_INVERTIDO));
-    eixo.classList.toggle('on', EIXO_INVERTIDO);
+    eixo.setAttribute('aria-pressed', String(HORAS_NAS_COLUNAS));
+    eixo.classList.toggle('on', HORAS_NAS_COLUNAS);
   }
   // Ocultar indisponíveis só vale no mapa Por recurso
   const indisponiveis = $('#btn-indisponiveis');
