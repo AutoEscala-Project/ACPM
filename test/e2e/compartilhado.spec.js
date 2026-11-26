@@ -1,4 +1,4 @@
-import { test, comProgresso, expect, abrirInstrutores, prepararContexto, vigiarErros, irPara, abrirEscala, lerEscala, AMANHA, entrar, URL_APP, abrirHistorico, alternarDisponivel, botaoAprovar, caixaDisponivel, exportar, dataAberta } from './fixtures.js';
+import { test, comProgresso, expect, abrirInstrutores, linhaDoAluno, prepararContexto, vigiarErros, irPara, abrirEscala, lerEscala, AMANHA, entrar, URL_APP, abrirHistorico, alternarDisponivel, botaoAprovar, caixaDisponivel, exportar, dataAberta, linhasDosAlunos } from './fixtures.js';
 import { criarSupabaseFalso, instalarSupabaseFalso, documentosAtuais, CONTAS } from './supabase-falso.js';
 import { estadoSintetico } from '../helpers/estado.js';
 import { comExemplo } from '../helpers/exemplo.js';
@@ -96,6 +96,40 @@ test.describe('Modo compartilhado: gravação, conflitos e link da escala', () =
     await expect.poll(() => servidor.banco.get('cadastro').conteudo.ins.find(x => x.id === id).kg).toBe(77);
     expect(servidor.banco.get('cadastro').conteudo.stu.some(s => s.nm === 'Aluno da colega')).toBe(true);
     await expect(page.locator('#aviso-sync')).toBeHidden();
+    expect(erros).toEqual([]);
+    await contexto.close();
+  });
+
+  // A aba velha inclui um aluno depois de uma colega incluir outro: os dois recebem o mesmo id (o nid do cadastro). A
+  // inclusão é recusada; o aluno da colega fica como está, o detalhe diz que a inclusão não foi confirmada, e o endereço
+  // nunca leva o id do aluno da colega
+  test('conflito no cadastro ao incluir um aluno: o da colega fica, o detalhe diz que a inclusão não foi confirmada, e o endereço não leva o id dele', async ({ browser }) => {
+    const contexto = await novoContexto(browser);
+    const servidor = await instalarSupabaseFalso(contexto, comDados());
+    const page = await contexto.newPage();
+    const erros = vigiarErros(page, { statusEsperados: [409] });
+    await entrar(page, CONTAS.operador);
+    const cadastro = structuredClone(servidor.banco.get('cadastro').conteudo);
+    const id = cadastro.nid;
+    servidor.alterarPorOutraPessoa('cadastro', { ...cadastro, nid: id + 1, stu: [...cadastro.stu, { ...cadastro.stu[0], id, nm: 'Aluno da colega' }] });
+    const enderecos = [];
+    page.on('framenavigated', f => { if (f === page.mainFrame()) enderecos.push(f.url()); });
+    await irPara(page, 'alu');
+    await page.locator('[data-act="adds"]').click();
+    await expect(page.locator('#aviso-sync-texto')).toHaveText(
+      'Outra pessoa alterou o cadastro enquanto você editava: a tela mostra a versão atual, e esta alteração não foi gravada: Aluno cadastrado: Novo aluno. Refaça o que ainda for preciso.');
+    await expect(page.locator('#det-alu')).toContainText('A inclusão do aluno novo não foi confirmada pelo servidor.');
+    await expect(page).toHaveURL(/#\/alu$/);
+    await expect(linhaDoAluno(page, id).locator('.lista-titulo')).toHaveText('Aluno da colega');
+    await expect(linhaDoAluno(page, id).locator('.lista-botao')).not.toHaveAttribute('aria-current', 'true');
+    expect(servidor.banco.get('cadastro').conteudo.stu.find(s => s.id === id).nm).toBe('Aluno da colega');
+    expect(await page.evaluate(() => location.hash)).not.toContain(String(id));
+    expect(enderecos.filter(u => u.includes(`#/alu/${id}`))).toEqual([]);
+    // Refeito, o aluno novo entra com o id seguinte
+    await page.locator('#btn-fechar-aviso').click();
+    await page.locator('[data-act="adds"]').click();
+    await expect(page).toHaveURL(new RegExp(`#/alu/${id + 1}$`));
+    await expect.poll(() => servidor.banco.get('cadastro').conteudo.stu.map(s => s.nm)).toContain('Novo aluno');
     expect(erros).toEqual([]);
     await contexto.close();
   });
@@ -363,6 +397,6 @@ test.describe('Modo compartilhado: gravação, conflitos e link da escala', () =
     await expect(page.locator('#aviso-link-texto')).toHaveText(/^Este link antigo levava a escala no próprio endereço e não vale mais/);
     await expect(page.locator('body')).toHaveAttribute('data-role', 'operador');
     await irPara(page, 'alu');
-    await expect(page.locator('#alu .cd')).toHaveCount(0);
+    await expect(linhasDosAlunos(page)).toHaveCount(0);
   });
 });

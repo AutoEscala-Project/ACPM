@@ -287,6 +287,67 @@ export function trocarConteudo(lugar, html) {
   semFalhar(() => devolverFoco(lugar, foco));
 }
 
+// Troca as partes de um lugar (as linhas de uma lista, as seções de um detalhe), cada uma um elemento com data-chave,
+// mexendo só no que mudou. partes: [{ chave, html }], na ordem. A parte que já está na tela com o mesmo HTML, e com os
+// controles mostrando o que foi desenhado, fica (o mesmo elemento: o foco, a rolagem e o clique em andamento continuam);
+// a que mudou é trocada; a que sumiu sai. Uma parte com um botão armado (o primeiro dos dois cliques) ou com o campo de
+// texto em foco (o que se digita nele, e o cursor, ficam onde estão) é retida: fica como está, e quem desenha a refaz
+// depois (responde quantas reteve). reter: false troca também essas (o Esc que devolve o valor gravado, a gravação dos
+// dados pessoais). O foco de quem usa o teclado vai para o equivalente, como em trocarConteudo
+const HTML_DA_PARTE = new WeakMap();
+const DIGITAVEL = 'input:not([type="checkbox"]):not([type="radio"]), textarea';
+function comoFoiDesenhada(parte) {
+  for (const el of parte.querySelectorAll('input, select, textarea')) {
+    if (el.matches('input[type="checkbox"], input[type="radio"]') ? el.checked !== el.defaultChecked
+      : el.matches('select') ? [...el.options].some(o => o.selected !== o.defaultSelected)
+        : el.value !== el.defaultValue) return false;
+  }
+  return true;
+}
+function retida(parte) {
+  if (parte.querySelector('[data-arm="1"]')) return true;
+  const ativo = document.activeElement;
+  return Boolean(ativo && parte.contains(ativo) && ativo.matches(DIGITAVEL));
+}
+export function trocarPorChave(lugar, partes, { reter = true } = {}) {
+  const ativoAntes = document.activeElement;
+  const foco = semFalhar(() => focoEm(lugar));
+  const atuais = new Map();
+  for (const el of [...lugar.children]) {
+    if (el.dataset.chave !== undefined && !atuais.has(el.dataset.chave)) atuais.set(el.dataset.chave, el);
+  }
+  const molde = document.createElement('template');
+  const novaParte = html => {
+    molde.innerHTML = html;
+    const el = molde.content.firstElementChild;
+    HTML_DA_PARTE.set(el, html);
+    return el;
+  };
+  let retidas = 0;
+  const ficam = new Set();
+  const ordem = partes.map(({ chave, html }) => {
+    const atual = atuais.get(chave);
+    let el = atual && HTML_DA_PARTE.get(atual) === html && comoFoiDesenhada(atual) ? atual : null;
+    if (!el && atual && reter && retida(atual)) { el = atual; retidas++; }
+    if (!el) el = novaParte(html);
+    ficam.add(el);
+    return el;
+  });
+  // A parte que saiu do desenho e está retida também fica, onde está
+  for (const el of atuais.values()) if (!ficam.has(el) && reter && retida(el)) { ficam.add(el); retidas++; }
+  for (const el of [...lugar.children]) if (!ficam.has(el)) el.remove();
+  let cursor = lugar.firstElementChild;
+  for (const el of ordem) {
+    if (el === cursor) { cursor = cursor.nextElementSibling; continue; }
+    lugar.insertBefore(el, cursor);
+  }
+  // O foco que continua no mesmo elemento fica; o que se perdeu vai para o equivalente
+  if (!(ativoAntes && ativoAntes !== document.body && document.activeElement === ativoAntes && lugar.contains(ativoAntes))) {
+    semFalhar(() => devolverFoco(lugar, foco));
+  }
+  return { retidas };
+}
+
 // O botão do mouse apertado (o clique ainda não acabou). Um campo digitado avisa a mudança (change) no mousedown que tira
 // o foco dele, antes do mouseup e do click: um redesenho nessa hora tiraria da tela o que está sendo clicado, e o clique
 // se perderia. Quem redesenha espera o clique acabar (depoisDoClique): o botão solto, uma tecla ou a janela sem o foco

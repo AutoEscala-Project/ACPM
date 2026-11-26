@@ -5,7 +5,7 @@ import { criarBackendSupabase } from './backends/supabase.js';
 import { backendLocal } from './backends/local.js';
 import { setRole, aposConflito, avisarFalhaDeGravacao } from './actions.js';
 import { $, fecharAviso, avisarDoLink } from './dom.js';
-import { amanhaISO, esc } from './format.js';
+import { amanhaISO, esc, iniciais } from './format.js';
 import { limparTelaDoEndereco } from './endereco.js';
 import { ROTULOS, operaEscala, gerenciaContas, soPainel } from './perfis.js';
 import { retornoDoLink } from './retorno-do-link.js';
@@ -107,11 +107,6 @@ function pedirNovoLogin(cliente) {
   return novoLogin;
 }
 
-// Iniciais do primeiro e do último nome (ou a primeira letra do e-mail)
-const iniciais = nome => {
-  const partes = nome.split(/[\s@.]+/).filter(Boolean);
-  return ((partes[0] || '?')[0] + (partes.length > 1 && !nome.includes('@') ? partes[partes.length - 1][0] : '')).toUpperCase();
-};
 
 // Devolve true quando o app pode carregar os dados (conta com perfil); false deixa o aviso na tela
 export async function iniciarSessaoSupabase(projeto) {

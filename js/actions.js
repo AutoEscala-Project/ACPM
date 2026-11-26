@@ -184,6 +184,9 @@ export function aindaNaoAbriu() {
 // grava os dados e a escala juntos. Ao abrir a aba Escala, ela já está pronta
 // A gravação mais recente da escala: as entradas do histórico esperam por ela
 let gravacaoAtual = Promise.resolve(true);
+// A gravação mais recente, para quem espera a alteração que acabou de fazer (o aluno novo fica "novo" no endereço até ela;
+// os dados pessoais dele esperam por ela): responde se deu certo
+export const ultimaGravacao = () => gravacaoAtual;
 
 // Refaz e grava a escala; responde se a gravação deu certo. Os eventos da tela gravam por gravarAlteracao
 // A ordem: a escala é refeita com os dados da tela (sem desenhar), gravada, e só então redesenhada. salvarDia copia os dados
