@@ -337,6 +337,28 @@ function buscaDoVoo(estado, resultado, voo, grupo, { depoisDe = null, semInstrut
       }
       return null;
     },
+    // Por que nenhum horário do tipo serve: cada motivo com os seus horários ("o período está fechado (06:30, 08:20)"),
+    // na ordem das regras; o mesmo horário do voo fica de fora no tipo dele (ele tem a linha própria) e quando saiu pelo
+    // motivo. Vazio quando o tipo não tem outro horário
+    porQueNao(tipo = tipoDoVoo) {
+      const motivos = new Map();
+      for (const m of inicios(tipo).filter(x => x !== voo.a || (tipo !== tipoDoVoo && !semHorario))) {
+        const b = m + duracao;
+        const motivo = passou(m) ? 'já passou'
+          : !estado.win[periodoDoMinuto(m)] ? 'o período está fechado'
+            : b > limite ? (b > fimDoDia ? 'passa do fim do dia do aluno' : 'passa do voo que depende do Ground')
+              : m < inicioMinimo(tipo) ? 'antes do fim do Ground do aluno'
+                : !alunoLivre(m, b) ? 'o aluno não está livre'
+                  : !avioes(tipo, m, b).length ? (voo.isGround ? 'a sala não está livre' : 'nenhum avião livre')
+                    : !lugar(tipo, m) ? 'nenhum instrutor que sirva'
+                      : 'o voo não fica nele com os outros voos';
+        if (!motivos.has(motivo)) motivos.set(motivo, []);
+        motivos.get(motivo).push(m);
+      }
+      // (uma lista longa, como a dos horários de meia em meia hora, vai do primeiro ao último)
+      const horarios = ms => (ms.length > 8 ? `${hm(ms[0])} a ${hm(ms.at(-1))}, ${ms.length} horários` : ms.map(hm).join(', '));
+      return [...motivos].map(([motivo, ms]) => `${motivo} (${horarios(ms)})`).join('; ');
+    },
     // 4. Outro tipo de recurso que a missão permite, no horário mais perto
     outroTipo() {
       if (voo.isGround) return null;
@@ -388,8 +410,9 @@ export function sugerirParaCancelado(estado, resultado, fKey, { depoisDe = null,
       motivo === 'Meteorologia' || motivo === 'Operacional' ? `No mesmo horário: o voo foi cancelado por ${motivo.toLowerCase()} nele.`
         : !busca.mesmoHorarioDisponivel ? `No mesmo horário: ${depoisDe !== null && voo.a <= depoisDe ? 'ele já passou' : busca.periodoFechado ? 'o período está fechado' : 'o aluno não está livre nele'}.`
           : 'No mesmo horário: nenhum avião com um instrutor que sirva.',
-      'Em outro horário: nenhum, até o fim do dia, com o avião e o instrutor livres.',
-      tipos.length ? `Em outro tipo de recurso (${tipos.join(', ')}): nenhum livre.` : `Em outro tipo de recurso: a missão só voa no ${busca.tipoDoVoo}.`
+      `Em outro horário: ${busca.porQueNao() || 'a missão não tem outro horário'}.`,
+      tipos.length ? `Em outro tipo de recurso: ${tipos.map(t => `no ${t}, ${busca.porQueNao(t) || 'nenhum horário'}`).join('; ')}.`
+        : `Em outro tipo de recurso: a missão só voa no ${busca.tipoDoVoo}.`
     ]
   };
 }
