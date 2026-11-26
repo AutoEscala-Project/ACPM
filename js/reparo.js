@@ -311,7 +311,8 @@ const camposDoPedido = p => Object.fromEntries(CAMPOS_DO_PEDIDO.filter(c => p[c]
 
 // Aplica a sugestão no voo cancelado (no estado, como gravarAlteracao espera): o voo fica fixo no lugar da sugestão
 // (agendado: o lugar é do operador), volta para Pendente sem o motivo do cancelamento, e o pedido recebe o que a sugestão
-// muda (o instrutor, a disponibilidade, o tipo). Na turma de Ground, todos os cancelados dela. Devolve a reversão
+// muda (a disponibilidade, o tipo e, no pedido que tem um, o instrutor escolhido; o pino guarda o instrutor da sugestão).
+// Na turma de Ground, todos os cancelados dela. Devolve a reversão
 // (aproveitarCancelado), com o pino, o status, o detalhe e o pedido de antes de cada um; null quando não aplica
 export function aproveitarCancelado(estado, resultado, fKey, opcao) {
   const voo = resultado.out.find(o => o.fKey === fKey);
@@ -322,7 +323,7 @@ export function aproveitarCancelado(estado, resultado, fKey, opcao) {
 
 // Aplica no conflito a sugestão que também muda o pedido (o horário fora da disponibilidade, outro tipo): o voo fixo (na
 // turma de Ground, os fixos dela) muda como no reparo de sempre, o status fica, e o pedido recebe a disponibilidade e o
-// tipo da sugestão (o instrutor escolhido muda só no pedido que tem um, como no reparo). A reversão é a do aproveitamento
+// tipo da sugestão (o instrutor escolhido, só no pedido que tem um, como no reparo). A reversão é a do aproveitamento
 // do cancelado (o pino, o status, o detalhe e o pedido de antes); null quando não aplica
 export function repararComOPedido(estado, resultado, fKey, opcao) {
   const voo = resultado.out.find(o => o.fKey === fKey);
@@ -332,7 +333,8 @@ export function repararComOPedido(estado, resultado, fKey, opcao) {
 }
 
 // O voo (o grupo) no lugar da sugestão e o pedido com o que ela muda, devolvendo a reversão. cancelado: o voo volta para
-// Pendente, sem o motivo, e o pino passa a ser do operador (agendado); sem ele, o pino de antes recebe as mudanças
+// Pendente, sem o motivo, e o pino passa a ser do operador (agendado); sem ele, o pino de antes recebe as mudanças. O
+// instrutor da sugestão vira o escolhido só no pedido que já tinha um: no outro, ele fica no pino
 function mudarOVooEOPedido(estado, resultado, voo, grupo, opcao, { cancelado }) {
   const voos = [], pedidos = [];
   // A turma de Ground que muda de horário ou de instrutor é outra turma: uma chave nova para os alunos aproveitados, a não
@@ -367,7 +369,7 @@ function mudarOVooEOPedido(estado, resultado, voo, grupo, opcao, { cancelado }) 
     } else estado.fixos[v.fKey] = { ...estado.fixos[v.fKey], ...opcao.mudancas, ...novaTurma };
     const { insId, ...doPedido } = opcao.pedido || {};
     Object.assign(ref, doPedido);
-    if (insId && (cancelado || ref.insId)) ref.insId = insId;
+    if (insId && ref.insId) ref.insId = insId;
     normalizeMissionFields(ref);
   }
   return voos.length ? { kind: 'aproveitarCancelado', voos, pedidos } : null;
