@@ -110,6 +110,38 @@ test.describe('Sugestões para um conflito', () => {
     await expect(page.locator('#out details.conflitos')).toHaveCount(1);
   });
 
+  test('fora da disponibilidade do pedido: dois cliques ("Confirmei com o aluno"); o voo e o pedido mudam; o histórico desfaz os dois', async ({ page }) => {
+    // O voo das 08:20, de quem só pode de manhã, fixo com o único instrutor, que agora só vem à tarde
+    const aw = Array(9).fill(true).map((_, w) => w >= 4);
+    const estado = {
+      ...cenario({ ins: [instrutor(1, 9, { aw })], stu: [aluno(1000, { p1: 500, p2: -1, jan: 'manha' })] }),
+      fixos: { '1000_0_1': { a: 500, b: 560, r: 'PP-LJV', insId: 1 } }
+    };
+    await abrir(page, { estado });
+    await abrirEscala(page);
+    await abrirCaixa(page, 'conflitos');
+    await page.locator('#out details.conflitos [data-reparo]').click();
+    const primeira = gaveta(page).locator('.opcoes-reparo li').first();
+    await expect(primeira).toContainText('Passar para as 12:40');
+    await expect(primeira).toContainText('Confirme com o aluno: às 12:40, fora da disponibilidade do pedido.');
+    const aplicar = primeira.getByRole('button', { name: 'Aplicar' });
+    await aplicar.click();
+    await expect(primeira.locator('[data-reparo-aplicar]')).toHaveText('Confirmei com o aluno');
+    await expect(gaveta(page)).toBeVisible();
+    await primeira.locator('[data-reparo-aplicar]').click();
+    await expect(gaveta(page)).toBeHidden();
+    await expect(page.locator('#out details.conflitos')).toHaveCount(0);
+    await expect(linha(page, 'Aluno 1000').locator('.c-hr')).toContainText('12:40');
+    await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('acpm4_dia_2026-11-11')).pedidos[1000].jan)).toBe('h760');
+
+    await abrirHistorico(page);
+    await expect(page.locator('#audit-log-list')).toContainText('Reparo: Aluno 1000 (08:20–09:20): Passar para as 12:40');
+    await page.locator('#audit-log-list [data-act="rev-log"]').first().click();
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#out details.conflitos')).toHaveCount(1);
+    await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('acpm4_dia_2026-11-11')).pedidos[1000].jan)).toBe('manha');
+  });
+
   test('no Gestor, a caixa de conflitos aparece sem o botão Sugestões', async ({ page }) => {
     const estado = { ...dia(), ins: [instrutor(1, 9, { on: false }), instrutor(2, 9)], fixos: { '1000_0_1': { a: 390, b: 450, r: 'PP-LJV', insId: 1 } }, aprovacao: { em: '2026-11-10T21:05:00.000Z', por: 'Operador 01' } };
     await abrir(page, { estado, url: './?role=gestor' });

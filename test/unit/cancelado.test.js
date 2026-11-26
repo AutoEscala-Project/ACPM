@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import { runAllocationEngine } from '../../js/engine.js';
 import { pinoDoVoo } from '../../js/fixos.js';
 import { hm } from '../../js/format.js';
-import { cancelamentoAproveitavel, sugerirParaCancelado, aproveitarCancelado, desfazerAproveitamento, sugestoesDoRejeitado, sugerirReparos } from '../../js/reparo.js';
+import { cancelamentoAproveitavel, sugerirParaCancelado, aproveitarCancelado, desfazerAproveitamento, sugestoesDoRejeitado, sugerirReparos, repararComOPedido } from '../../js/reparo.js';
 import { validarReversao } from '../../js/reversoes.js';
 import { rejeicoesDosPedidos } from '../../js/rejeicoes.js';
 import { pedidoDoAluno } from '../../js/voo.js';
@@ -196,7 +196,65 @@ describe('A disponibilidade do pedido e a lista do conflito', () => {
     assert.ok(voo.conflito);
     const opcoes = sugerirReparos(estado, resultado, voo.fKey).filter(o => o.mudancas);
     assert.ok(opcoes.length > 0, 'o horário de antes aparece');
-    assert.ok(opcoes.every(o => o.mudancas.a < voo.a && !o.confirmar));
+    assert.equal(opcoes[0].tipo, 'horario');
+    assert.ok(opcoes[0].mudancas.a < voo.a && !opcoes[0].confirmar && !opcoes[0].pedido, 'o de antes, sem a confirmação, não muda o pedido');
+    // Depois dele, só o outro tipo, que pede a confirmação com o aluno
+    assert.deepEqual(opcoes.slice(1).map(o => o.tipo), ['tipo']);
+  });
+});
+
+// A lista do conflito também ganha os dois últimos grupos do voo cancelado: o horário mais perto fora da disponibilidade
+// do pedido e outro tipo de recurso, os dois com a confirmação com o aluno. Aplicada, a sugestão muda o voo fixo e o
+// pedido (a disponibilidade, o tipo), e desfeita devolve os dois como estavam
+describe('O conflito: outro tipo e o horário fora da disponibilidade', () => {
+  // O voo das 08:20, de quem só pode de manhã, fixo com o único instrutor, que agora só vem à tarde: nada de manhã
+  function conflitoDeManha() {
+    const base = cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, { p1: 500, p2: -1, jan: 'manha' })] });
+    const v0 = runAllocationEngine(base).out[0];
+    const aw = Array(9).fill(true); for (let w = 0; w < 4; w++) aw[w] = false;
+    const estado = { ...base, fixos: { [v0.fKey]: pinoDoVoo(v0) }, fObs: {}, ins: [instrutor(1, 9, { aw })] };
+    const resultado = runAllocationEngine(estado);
+    return { estado, resultado, voo: resultado.out[0] };
+  }
+
+  it('sem nada na disponibilidade: o horário mais perto fora dela e outro tipo, com a confirmação e o que muda no pedido', () => {
+    const { estado, resultado, voo } = conflitoDeManha();
+    assert.equal(hm(voo.a), '08:20');
+    assert.ok(voo.conflito, 'o instrutor não vem de manhã');
+    const opcoes = sugerirReparos(estado, resultado, voo.fKey).filter(o => o.mudancas);
+    assert.deepEqual(opcoes.map(o => o.tipo), ['horario', 'tipo'], opcoes.map(o => o.texto).join(' | '));
+    const [horario, tipo] = opcoes;
+    assert.equal(hm(horario.mudancas.a), '12:40');
+    assert.match(horario.confirmar, /^Confirme com o aluno: às 12:40, fora da disponibilidade do pedido\./);
+    assert.deepEqual(horario.pedido, { insId: 1, jan: 'h760' });
+    assert.equal(tipo.pedido.eq, 'C172');
+    assert.match(tipo.confirmar, /no C172/);
+  });
+
+  it('aplicada, o voo fixo muda e o pedido também; desfeita, os dois voltam como estavam', () => {
+    const { estado, resultado, voo } = conflitoDeManha();
+    const antes = structuredClone({ fixos: estado.fixos, fStatus: estado.fStatus, fObs: estado.fObs, stu: estado.stu });
+    const tipo = sugerirReparos(estado, resultado, voo.fKey).find(o => o.tipo === 'tipo');
+    const rev = repararComOPedido(estado, resultado, voo.fKey, tipo);
+    assert.equal(rev.kind, 'aproveitarCancelado');
+    assert.deepEqual(estado.fixos[voo.fKey], { ...antes.fixos[voo.fKey], ...tipo.mudancas });
+    assert.equal(estado.stu[0].eq, 'C172');
+    assert.equal(estado.fStatus[voo.fKey], antes.fStatus[voo.fKey], 'o status fica');
+    const depois = runAllocationEngine(estado).out.find(o => o.fKey === voo.fKey);
+    assert.deepEqual([depois.a, depois.r, depois.conflito], [tipo.mudancas.a, tipo.mudancas.r, undefined]);
+    assert.ok(validarReversao({ ...rev, label: '↶ Reverter' }, estado.frota), 'a reversão é válida');
+    desfazerAproveitamento(estado, validarReversao({ ...rev, label: '↶ Reverter' }, estado.frota));
+    assert.deepEqual({ fixos: estado.fixos, fStatus: estado.fStatus, fObs: estado.fObs, stu: estado.stu }, antes);
+  });
+
+  it('a sugestão que não muda o pedido não traz o pedido (o reparo de sempre, com a escolha do instrutor)', () => {
+    // O instrutor do voo fixo não vem mais: outro no mesmo horário
+    const base = cenario({ ins: [instrutor(1, 9), instrutor(2, 9)], stu: [aluno(1000, { p1: 390, p2: -1 })] });
+    const v0 = runAllocationEngine(base).out[0];
+    const estado = { ...base, fixos: { [v0.fKey]: pinoDoVoo(v0) }, ins: base.ins.map(x => (x.id === v0.insId ? { ...x, on: false } : x)) };
+    const opcoes = sugerirReparos(estado, runAllocationEngine(estado), v0.fKey).filter(o => o.mudancas);
+    assert.ok(opcoes.length > 0);
+    assert.ok(opcoes.every(o => o.pedido === undefined), opcoes.map(o => o.texto).join(' | '));
   });
 });
 

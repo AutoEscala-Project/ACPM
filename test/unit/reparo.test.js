@@ -4,7 +4,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { runAllocationEngine } from '../../js/engine.js';
-import { sugerirReparos, aplicarReparo } from '../../js/reparo.js';
+import { sugerirReparos, aplicarReparo, repararComOPedido } from '../../js/reparo.js';
 import { LIMITES_DA_LEI, dentroDosLimites } from '../../js/limites.js';
 import { AIRCRAFT_EQ_TYPES } from '../../js/config.js';
 import { hm } from '../../js/format.js';
@@ -18,7 +18,13 @@ function aprovadoEMudado(base, mudar) {
   const estado = mudar({ ...base, fixos: fixarTudo(antes.out) });
   return { estado, resultado: runAllocationEngine(estado) };
 }
-const aplicar = (estado, resultado, fKey, opcao) => ({ ...estado, fixos: aplicarReparo(estado.fixos, resultado, fKey, opcao) });
+// A sugestão que muda também o pedido (outro tipo, fora da disponibilidade) muda o voo fixo e o pedido, numa cópia
+const aplicar = (estado, resultado, fKey, opcao) => {
+  if (!opcao.pedido) return { ...estado, fixos: aplicarReparo(estado.fixos, resultado, fKey, opcao) };
+  const copia = { ...estado, stu: structuredClone(estado.stu) };
+  repararComOPedido(copia, resultado, fKey, opcao);
+  return copia;
+};
 const semInstrutor = id => e => ({ ...e, ins: e.ins.map(x => (x.id === id ? { ...x, on: false } : x)) });
 
 describe('Sugestões para um conflito', () => {
