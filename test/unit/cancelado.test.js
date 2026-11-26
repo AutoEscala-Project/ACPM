@@ -138,6 +138,28 @@ describe('O que pode voar no lugar do cancelado', () => {
     assert.equal(nada.impossivel[0], 'No mesmo horário: o período está fechado.');
   });
 
+  it('o voo atrasado ocupa o avião e o instrutor no horário novo: nada sobre a nova decolagem dele', () => {
+    // Um C152 só: o Aluno 1001 às 06:30, atrasado para as 10:10; o Aluno 1000, às 08:20 e só disponível às 10:10,
+    // cancelado pela meteorologia
+    const base = cenario({ ins: [instrutor(1, 9), instrutor(2, 9), instrutor(3, 9)], stu: [aluno(1000, { p1: 500, p2: -1, jan: 'h610' }), aluno(1001, { p1: 390, p2: -1 })] });
+    for (const r of Object.keys(base.av)) if (r !== 'PP-LJV') base.av[r] = false;
+    const estado = {
+      ...base,
+      fixos: { '1000_0_1': { a: 500, b: 560, r: 'PP-LJV', insId: 1 }, '1001_0_1': { a: 390, b: 450, r: 'PP-LJV', insId: 2 } },
+      fStatus: { '1000_0_1': 'Cancelado', '1001_0_1': 'Atrasado' },
+      fObs: { '1000_0_1': { motivo: 'Meteorologia' }, '1001_0_1': { novoInicio: 610 } }
+    };
+    const resultado = runAllocationEngine(estado);
+    const { opcoes } = sugerirParaCancelado(estado, resultado, '1000_0_1');
+    const sobre = o => o.mudancas.r === 'PP-LJV' && o.mudancas.a < 670 && o.mudancas.b > 610;
+    assert.ok(!opcoes.some(sobre), opcoes.map(o => o.texto).join(' | '));
+    // Aplicada, a primeira não cria o aviso do atraso sobre ela
+    if (opcoes.length) {
+      aproveitarCancelado(estado, resultado, '1000_0_1', opcoes[0]);
+      assert.ok(!runAllocationEngine(estado).al.some(a => /se sobrepõe/.test(a.m)));
+    }
+  });
+
   it('sem nada: "impossível", com o porquê de cada grupo', () => {
     // Um instrutor só, que faltou
     const { estado, resultado, voo } = cancelado(cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, { p1: 390, p2: -1 })] }), 1000, 'Instrutor indisponível');
