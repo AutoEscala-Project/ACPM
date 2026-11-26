@@ -858,14 +858,16 @@ test.describe('O que a missão do curso exige do INVA, na Escala', () => {
     await abrirEscala(page, { vista: 'lista' });
     await expect(page.locator('#out')).toContainText('nenhum instrutor ativo tem a habilitação de Voo Local no C152 (Voo Local + C152 + Endosso Solo)');
     expect((await lerEscala(page)).linhas.filter(l => l.includes('Aluno 1000'))).toEqual([]);
+    // Marcada no INVA 01 (nível 9): sem a exigência, o desempate pelas menos habilitações daria o voo ao 02 (nível 1), então
+    // só ela leva o voo ao 01
     await irParaVista(page, 'ins', 'cadastro');
-    await page.locator('#inst .cd[data-id="2"] [data-act="editar-habs"]').click();
+    await page.locator('#inst .cd[data-id="1"] [data-act="editar-habs"]').click();
     await page.locator('#painel-instrutor [data-f="hab"][data-h="endosso_solo"]').check();
     await page.locator('#btn-fechar-painel-instrutor').click();
     await abrirEscala(page, { vista: 'lista' });
     const voos = (await lerEscala(page)).linhas.filter(l => l.includes('Aluno 1000'));
     expect(voos).toHaveLength(1);
-    expect(voos[0]).toContain('| Instrutor 02 |');
+    expect(voos[0]).toContain('| Instrutor 01 |');
     await expect(page.locator('#out [data-caixa="habilitacoes"]')).toHaveCount(0);
   });
 
