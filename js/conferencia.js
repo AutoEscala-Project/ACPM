@@ -93,7 +93,7 @@ export function contextoDaEscala(state) {
 }
 
 // Monta fila de pedidos de missão (suporta múltiplas missões por aluno no mesmo dia) e registra os Grounds de cada aluno
-export function filaDosPedidos(state, ctx) {
+export function filaDosPedidos(state, ctx, { antesDoF1h = false } = {}) {
   const act = [];
   state.stu.forEach((st, stuIdx) => {
     if (st.fly) {
@@ -127,20 +127,21 @@ export function filaDosPedidos(state, ctx) {
    * 3º: Maior prioridade (5 a 1).
    * 4º: A ordem dos agendamentos: o pedido da agenda que foi registrado antes (o id do
    *     pedido cresce com o registro) vem antes; o pedido posto à mão, sem a agenda, vem depois dos agendados. Num
-   *     horário cheio, quem registrou antes fica com ele (N14; Pedro, 2026-11-26: o “Priorizar com” escolhe o instrutor, não
-   *     o horário: js/engine.js, parearNoHorario).
-   * 5º: Entre os postos à mão (sem a agenda) com a mesma prioridade, o do aluno com “Priorizar com” (o par permanente do
-   *     cadastro) antes: ele tem menos instrutores possíveis.
-   * 6º: Ordem de cadastro do aluno e ordem da missão.
+   *     horário cheio, quem registrou antes fica com ele (N14).
+   * 5º: Ordem de cadastro do aluno e ordem da missão.
+   * O “Priorizar com” não é chave da fila e não ganha horário de ninguém (Pedro, 2026-11-26: ele é para escolher o INVA,
+   * não o horário): ele escolhe o instrutor entre os que ficaram com o horário (js/engine.js, parearNoHorario).
+   * antesDoF1h: a fila do motor de antes do F1h (com a mesma prioridade, o aluno com “Priorizar com” antes da ordem dos
+   * agendamentos), a que gravou test/fixtures/conferencia-do-motor.json
    */
   const ordemDoAgendamento = item => (Number.isInteger(item.ref.solicitacao) ? item.ref.solicitacao : Infinity);
   const semEscolha = item => (item.ref.insId && ctx.noCadastro.has(item.ref.insId) ? 0 : 1);
-  const semVoaCom = item => ((item.stu.voaCom || []).length ? 0 : 1);
+  const semVoaCom = item => (antesDoF1h && (item.stu.voaCom || []).length ? 0 : 1);
   act.sort((a, b) => {
     const gA = isGroundMission(a.ref.mis) ? 1 : 0;
     const gB = isGroundMission(b.ref.mis) ? 1 : 0;
     if (gA !== gB) return gB - gA;
-    return semEscolha(a) - semEscolha(b) || b.ref.pr - a.ref.pr || menorPrimeiro(ordemDoAgendamento(a), ordemDoAgendamento(b)) || semVoaCom(a) - semVoaCom(b) || a.stuOrder - b.stuOrder || a.misOrder - b.misOrder;
+    return semEscolha(a) - semEscolha(b) || b.ref.pr - a.ref.pr || semVoaCom(a) - semVoaCom(b) || menorPrimeiro(ordemDoAgendamento(a), ordemDoAgendamento(b)) || a.stuOrder - b.stuOrder || a.misOrder - b.misOrder;
   });
   return act;
 }

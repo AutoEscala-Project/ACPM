@@ -232,12 +232,15 @@ function motivoSemPar(doPar, stu, d, tipo, fc) {
 // um instrutor do “Priorizar com”: na ordem da fila, cada aluno que ficou com outro instrutor procura o caminho mais curto
 // (ele vai para um instrutor do “Priorizar com” dele; quem estava com esse vai para outro que sirva ao voo dele; e assim por
 // diante, até um instrutor sem voo no horário ou o que o aluno deixou), na ordem dos instrutores do aluno e do cadastro.
-// Nenhum horário muda (nem o avião, aqui: a troca de matrículas de depois pode mudá-lo), e todas as regras continuam valendo: a habilitação (com o que a missão do curso exige e a
+// Nenhum horário nem avião muda, e todas as regras continuam valendo: a habilitação (com o que a missão do curso exige e a
 // habilitação própria do avião), a disponibilidade durante o voo inteiro, o horário livre, a lei, o “Não escalar com” e o
 // peso (com o peso do instrutor informado, sem menos combustível que antes). Não trocam de instrutor: os voos fixos e os com
 // status, o do instrutor escolhido para o dia, as turmas de Ground, a volta do noturno e o voo cujo aviso do peso nomeia o
-// instrutor (sem o peso dele); quem já está com um instrutor do “Priorizar com” e os voos do rodízio só passam para outro do
-// “Priorizar com” deles. Devolve se algum voo mudou
+// instrutor (sem o peso dele); quem já está com um instrutor do “Priorizar com” só passa para outro do “Priorizar com” dele.
+// O rodízio (C172, PA-34, cheques, Noturno) não muda: o voo de uma categoria do rodízio troca de instrutor com um voo da
+// mesma categoria (cada instrutor continua com os mesmos voos da categoria), e só passa para um instrutor sem voo no
+// horário quando ele é do “Priorizar com” do aluno (como na fila, onde o “Priorizar com” vem antes da vez no rodízio);
+// nenhum voo tira o instrutor de um voo do rodízio sem pôr nele outro da mesma categoria. Devolve se algum voo mudou
 function parearNoHorario(out, state, { limites, historico, frota, act }) {
   const alunos = new Map(state.stu.map(s => [s.id, s]));
   const porId = new Map(state.ins.map(x => [x.id, x]));
@@ -270,10 +273,16 @@ function parearNoHorario(out, state, { limites, historico, frota, act }) {
     return !problemasDoInstrutor(x, { mis: o.mis, tipo: o.eqType, a: o.a, b: o.b, alunos: [s], stuKg: s.kg, curso: s.curso, recurso: recursoDaFrota(frota, o.r), exige: pedidoDe(o).exige },
       { compromissos: compromissosDe(x.id, sai), historico: historico(x.id), limites, peso: { reducaoMaxima: o.comb ? o.comb.reduzirGal : 0, exigirPesoDoInstrutor: true } }).length;
   };
-  // Para quem o voo pode passar: o aluno sem o instrutor dele e quem está com um, ou no rodízio, só para os do “Priorizar
-  // com”; os outros, para qualquer um do cadastro
-  const destinos = (o, b) => (o === b || paresDe(o).includes(o.insId) || categoriaDoRodizio(o.mis, o.eqType) ? paresDe(o) : state.ins.map(x => x.id))
+  // Para quem o voo pode passar: o aluno sem o instrutor dele e quem está com um, só para os do “Priorizar com”; os outros,
+  // para qualquer um do cadastro
+  const destinos = (o, b) => (o === b || paresDe(o).includes(o.insId) ? paresDe(o) : state.ins.map(x => x.id))
     .filter(id => id !== o.insId);
+  // O voo o passar para o instrutor id, que está com o voo dono no horário (ou com nenhum), mexe no rodízio: tira um voo do
+  // rodízio do instrutor sem pôr outro da mesma categoria, ou põe um voo do rodízio num instrutor no lugar de outro de
+  // outra categoria (a não ser que o instrutor seja do “Priorizar com” do aluno)
+  const categoria = o => categoriaDoRodizio(o.mis, o.eqType);
+  const mexeNoRodizio = (o, id, dono) => (dono && categoria(dono) && categoria(dono) !== categoria(o))
+    || (categoria(o) && !paresDe(o).includes(id) && (!dono || categoria(dono) !== categoria(o)));
   const caminho = b => {
     const doHorario = out.filter(v => v.a === b.a && movel(v));
     const comO = id => doHorario.find(v => v.insId === id) || null;
@@ -284,7 +293,7 @@ function parearNoHorario(out, state, { limites, historico, frota, act }) {
       for (const id of destinos(o, b)) {
         if (visto.has(id)) continue;
         const dono = comO(id);
-        if (!serve(o, porId.get(id), dono)) continue;
+        if (mexeNoRodizio(o, id, dono) || !serve(o, porId.get(id), dono)) continue;
         visto.add(id);
         const ate = [...passos, [o, porId.get(id)]];
         // Termina num instrutor sem voo no horário ou no que o aluno deixou
@@ -319,16 +328,18 @@ function parearNoHorario(out, state, { limites, historico, frota, act }) {
 
 // opcoes.compactar: false monta a escala sem a compactação; opcoes.dividirHoras: false, sem a divisão igual das horas;
 // opcoes.trocarMatriculas: false, sem a troca de matrículas para o instrutor ficar no mesmo avião; opcoes.parearNoHorario:
-// false, sem o pareamento do “Priorizar com” no horário e com os avisos dele de antes do F1h (o motor que gravou
-// test/fixtures/conferencia-do-motor.json) (para comparar, medir e testar)
+// false, sem o pareamento do “Priorizar com” no horário; opcoes.antesDoF1h: true, o motor de antes do F1h (na fila, o aluno
+// com “Priorizar com” antes da ordem dos agendamentos, sem o pareamento, sem a lista de espera e com os avisos do “Priorizar
+// com” de antes: o motor que gravou test/fixtures/conferencia-do-motor.json) (para comparar, medir e testar)
 export function runAllocationEngine(state, opcoes = {}) {
+  const antesDoF1h = opcoes.antesDoF1h === true;
   // O que a escala gasta enquanto é montada e o que o estado diz de fixo (js/conferencia.js)
   const ctx = contextoDaEscala(state);
   const { used, stuBusy, stuLastPick, load, eu, compromissos, insAircraft, openGroundClasses, stuGroundStatus, voosNaCategoria, locaisNoHorario } = ctx;
   const { frota, soParafuso, nomesSoParafuso, serveAoVoo, horarios, posicao, limites, historico, fimDoAluno, filas, saldo, fixos, chaveFixa } = ctx;
   const out = [], al = [];
   // A fila dos pedidos, na ordem do motor (js/conferencia.js)
-  const act = filaDosPedidos(state, ctx);
+  const act = filaDosPedidos(state, ctx, { antesDoF1h });
   const free = (mp, id, s, e) => livre(mp[id], s, e);
   // Os voos que ficaram sem o instrutor do “Priorizar com” do aluno (fKey → o aviso, que sai no fim)
   const semPar = new Map();
@@ -765,9 +776,10 @@ export function runAllocationEngine(state, opcoes = {}) {
   } else {
     trocarMatriculas(out);
   }
-  // O “Priorizar com” escolhe o instrutor entre os voos de cada horário, sem mudar nenhum horário (F1h); quem mudou de
-  // instrutor pode ficar em outro avião: a troca de matrículas de novo
-  if (opcoes.parearNoHorario !== false && parearNoHorario(out, state, { limites, historico, frota, act })) trocarMatriculas(out);
+  // O “Priorizar com” escolhe o instrutor entre os voos de cada horário, sem mudar nenhum horário nem avião (F1h): a troca
+  // de matrículas não roda de novo (o avião de cada voo já serve ao instrutor novo: parearNoHorario confere a habilitação
+  // própria do avião)
+  if (!antesDoF1h && opcoes.parearNoHorario !== false) parearNoHorario(out, state, { limites, historico, frota, act });
   // O voo sem o instrutor do “Priorizar com”: o aviso diz quem ficou com ele (se a divisão das horas, a compactação ou o
   // pareamento no horário o passaram para um instrutor do “Priorizar com”, não há aviso). Com o F1h, os avisos do
   // “Priorizar com” saem de js/conferencia.js (avisosDoPriorizarCom): também as disputas e os voos postos à mão fora dele,
@@ -776,9 +788,9 @@ export function runAllocationEngine(state, opcoes = {}) {
     const sem = semPar.get(o.fKey);
     if (!sem) continue;
     if (sem.pares.includes(o.insId)) { o.insPar = true; continue; }
-    if (opcoes.parearNoHorario === false) al.push({ t: 'warn', s: sem.s, m: `Sem o instrutor de “Priorizar com” (${sem.nomes}: ${sem.motivo}): o voo ficou com ${o.ins}.`, codigo: 'voa-com', stuId: o.stuId, insId: o.insId });
+    if (antesDoF1h) al.push({ t: 'warn', s: sem.s, m: `Sem o instrutor de “Priorizar com” (${sem.nomes}: ${sem.motivo}): o voo ficou com ${o.ins}.`, codigo: 'voa-com', stuId: o.stuId, insId: o.insId });
   }
-  if (opcoes.parearNoHorario !== false) al.push(...avisosDoPriorizarCom(state, out, { semPar }));
+  if (!antesDoF1h) al.push(...avisosDoPriorizarCom(state, out, { semPar }));
   // O que o motor confere depois de montar a escala, sem mover nenhum voo (js/conferencia.js)
   const revisao = concluirEscala(state, ctx, out, al);
   return { out, al, tot: act.length, revisao };

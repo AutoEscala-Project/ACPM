@@ -797,8 +797,31 @@ describe('O “Priorizar com” escolhe o instrutor, não o horário', () => {
     assert.deepEqual(horarios(alocar({ ins: um, stu: [aluno(1000, { solicitacao: 9 }, { voaCom: [1] }), aluno(1001, { solicitacao: 5 })] })), [[1001, 500], [1000, 610]]);
     // O posto à mão (sem a agenda) vem depois dos agendados, também com “Priorizar com”
     assert.deepEqual(horarios(alocar({ ins: um, stu: [aluno(1000, {}, { voaCom: [1] }), aluno(1001, { solicitacao: 5 })] })), [[1001, 500], [1000, 610]]);
-    // Entre os postos à mão de mesma prioridade, o do “Priorizar com” antes (ele tem menos instrutores possíveis)
-    assert.deepEqual(horarios(alocar({ ins: um, stu: [aluno(1000), aluno(1001, {}, { voaCom: [1] })] })), [[1001, 500], [1000, 610]]);
+    // Entre os postos à mão de mesma prioridade, a ordem do cadastro: o “Priorizar com” não passa na frente (também o de um
+    // instrutor de fora do cadastro)
+    assert.deepEqual(horarios(alocar({ ins: um, stu: [aluno(1000), aluno(1001, {}, { voaCom: [1] })] })), [[1000, 500], [1001, 610]]);
+    assert.deepEqual(horarios(alocar({ ins: um, stu: [aluno(1000), aluno(1001, {}, { voaCom: [99] })] })), [[1000, 500], [1001, 610]]);
+    // Entre os agendados de mesma prioridade, o registro: o “Priorizar com” do que registrou depois não passa na frente
+    assert.deepEqual(horarios(alocar({ ins: um, stu: [aluno(1000, { solicitacao: 5 }), aluno(1001, { solicitacao: 9 }, { voaCom: [1] })] })), [[1000, 500], [1001, 610]]);
+  });
+
+  it('o “Priorizar com” não é chave da fila (nem em naOrdemDoMotor): com ele ou sem ele, a mesma ordem em 300 dias gerados', async () => {
+    const { gerarCenario, comEscolhas } = await import('../helpers/cenarios.js');
+    const { contextoDaEscala, filaDosPedidos } = await import('../../js/conferencia.js');
+    const { naOrdemDoMotor } = await import('../../js/rejeicoes.js');
+    const fila = estado => filaDosPedidos(estado, contextoDaEscala(estado)).map(item => `${item.stuId}_${item.mid}`).join(' ');
+    const ordem = (estado, out) => naOrdemDoMotor(estado, out).map(o => o.fKey).join(' ');
+    const diferentes = [];
+    let comLista = 0;
+    for (let seed = 1; seed <= 300; seed++) {
+      const estado = comEscolhas(gerarCenario(seed), seed);
+      const semLista = { ...estado, stu: estado.stu.map(s => ({ ...s, voaCom: [] })) };
+      const { out } = runAllocationEngine(estado);
+      if (estado.stu.some(s => (s.voaCom || []).length)) comLista++;
+      if (fila(estado) !== fila(semLista) || ordem(estado, out) !== ordem(semLista, out)) diferentes.push(seed);
+    }
+    assert.ok(comLista > 100, String(comLista));
+    assert.deepEqual(diferentes, []);
   });
 
   // O 1002 (prioridade 5, sem “Priorizar com”) fica com o INVA 1 às 08:20 (o que tem menos habilitações); o 1000 (prioridade
@@ -842,6 +865,33 @@ describe('O “Priorizar com” escolhe o instrutor, não o horário', () => {
     const pesado = instrutor(2, 9, { kg: 105 });
     assert.deepEqual(quem(tres({ ins: [instrutor(1, 1), pesado], de1000: { kg: 60 }, extra1002: { kg: 60 } })), [[1000, 500, 1], [1002, 500, 2]]);
     assert.deepEqual(quem(tres({ ins: [instrutor(1, 1), pesado], de1000: { kg: 60 }, extra1002: { kg: 80 } })), semTroca);
+  });
+
+  // O rodízio (C172, PA-34, cheques, Noturno): os dois voos de uma categoria trocam de INVA no mesmo horário (cada INVA
+  // continua com um voo dela); o voo do rodízio não troca com um de outra categoria nem passa para um INVA livre
+  it('no rodízio, os voos da mesma categoria trocam de INVA; com outra categoria ou para um INVA livre, não', () => {
+    const c172 = { eq: 'C172' };
+    const nove = [instrutor(1, 9), instrutor(2, 9)];
+    const mesma = tres({ ins: nove, de1000: c172, de1002: c172 });
+    assert.deepEqual(quem(mesma), [[1000, 500, 1], [1002, 500, 2]]);
+    assert.deepEqual(doPar(mesma.al), []);
+    assert.deepEqual(quem(tres({ ins: nove, de1000: c172, de1002: c172, opcoes: { compactar: false, parearNoHorario: false } })), [[1000, 500, 2], [1002, 500, 1]]);
+    // O 1000 no C152 e o 1002 no C172: trocar tiraria o voo do rodízio do INVA 1
+    assert.deepEqual(quem(tres({ ins: nove, de1002: c172 })), [[1000, 500, 2], [1002, 500, 1]]);
+    // O 1002 não voa com o INVA 2: só sobraria passar para o INVA 3, livre, fora da vez dele no rodízio
+    assert.deepEqual(quem(tres({ ins: [...nove, instrutor(3, 9)], de1000: c172, de1002: c172, extra1002: { bl: [2] } })), [[1000, 500, 2], [1002, 500, 1]]);
+  });
+
+  it('a troca não muda o avião de nenhum voo, nem dos voos de outros horários', () => {
+    const ins = [instrutor(1, 1), instrutor(2, 9)];
+    const as = minuto => ({ pr: 5, jan: `h${minuto}`, p2: -1 });
+    const stu = () => [aluno(1000, { pr: 1, jan: 'h500', p2: -1 }, { voaCom: [1] }), aluno(1002, as(500)), aluno(1003, as(390)), aluno(1004, as(390))];
+    for (const alunos of [stu(), stu().slice(0, 3)]) {
+      const avioes = opcoes => runAllocationEngine(cenario({ ins, stu: alunos }), opcoes).out.map(o => [o.stuId, o.a, o.r]).sort((p, q) => p[0] - q[0]);
+      const pareado = runAllocationEngine(cenario({ ins, stu: alunos }));
+      assert.equal(pareado.out.find(o => o.stuId === 1000).insId, 1);
+      assert.deepEqual(avioes({}), avioes({ parearNoHorario: false }));
+    }
   });
 
   it('um caminho: quem está com o INVA vai para outro do “Priorizar com” dele, e os dois voam com um dos seus', () => {
@@ -1093,7 +1143,7 @@ describe('As disputas do “Priorizar com”', () => {
     assert.deepEqual(doPar(runAllocationEngine(estado).al).map(a => a[3]), ['Sem o instrutor de “Priorizar com” (Instrutor 01, Instrutor 03: em “Não escalar com”): o voo ficou com Instrutor 02.']);
   });
 
-  it('sem o F1h (opcoes.parearNoHorario: false), os avisos de antes', () => {
-    assert.deepEqual(doPar(dupla({ pr: 3 }, { pr: 4 }, { parearNoHorario: false }).al), []);
+  it('sem o F1h (opcoes.antesDoF1h: true), os avisos de antes', () => {
+    assert.deepEqual(doPar(dupla({ pr: 3 }, { pr: 4 }, { antesDoF1h: true }).al), []);
   });
 });

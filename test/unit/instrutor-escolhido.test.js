@@ -319,9 +319,12 @@ describe('Priorizar com: os instrutores do aluno (o par permanente do cadastro)'
     assert.deepEqual(out.map(o => [o.s, o.tag]), [['Aluno 1001', 'Pref. 1'], ['Aluno 1000', 'Pref. 2']]);
   });
 
-  it('entre os postos à mão (sem a agenda) de mesma prioridade, o do “Priorizar com” vai antes', () => {
+  it('entre os postos à mão (sem a agenda) de mesma prioridade, o cadastro: o do “Priorizar com” não vai antes', () => {
     const mesma = semCompactar(cenario({ ins: [instrutor(1, 1), instrutor(2, 1)], stu: [aluno(1000), aluno(1001, {}, { voaCom: [2] })], semAeronaves: SO_PP_LJV }));
-    assert.deepEqual(mesma.out.map(o => [o.s, o.tag]), [['Aluno 1001', 'Pref. 1'], ['Aluno 1000', 'Pref. 2']]);
+    assert.deepEqual(mesma.out.map(o => [o.s, o.tag]), [['Aluno 1000', 'Pref. 1'], ['Aluno 1001', 'Pref. 2']]);
+    // O motor de antes do F1h (opcoes.antesDoF1h: true): o do “Priorizar com” antes
+    const antes = runAllocationEngine(cenario({ ins: [instrutor(1, 1), instrutor(2, 1)], stu: [aluno(1000), aluno(1001, {}, { voaCom: [2] })], semAeronaves: SO_PP_LJV }), { compactar: false, antesDoF1h: true });
+    assert.deepEqual(antes.out.map(o => [o.s, o.tag]), [['Aluno 1001', 'Pref. 1'], ['Aluno 1000', 'Pref. 2']]);
   });
 
   const avisos = al => al.filter(a => a.codigo === 'voa-com').map(a => a.m);
@@ -391,7 +394,7 @@ describe('Priorizar com: os instrutores do aluno (o par permanente do cadastro)'
   // primeira visita que o F1h teve antes da resposta de Pedro de 2026-11-26, as duas sementes voltam a levar um voo assim; a
   // propriedade também é conferida em todo voo que termina com um instrutor do “Priorizar com”, em 300 cenários
   it('o voo que a divisão das horas leva para o instrutor do “Priorizar com” não tem aviso', () => {
-    for (const seed of [487, 786]) {
+    for (const seed of [434, 786]) {
       const estado = comEscolhas(gerarCenario(seed), seed);
       const antes = runAllocationEngine(estado, { compactar: false, dividirHoras: false });
       const depois = runAllocationEngine(estado);

@@ -6,6 +6,7 @@ import { runAllocationEngine } from '../../js/engine.js';
 import { EQ, GROUND_REG, ACROBAT_REG, T, NI, DEFAULT_LIM, AIRCRAFT_EQ_TYPES } from '../../js/config.js';
 import { isGroundMission, doesGroundGateFlight } from '../../js/rules.js';
 import { podeFazer } from '../../js/habilitacoes.js';
+import { categoriaDoRodizio } from '../../js/rodizio.js';
 import { gerarCenario, comEscolhas, comAtributos, comVolta, FORA_DO_CADASTRO, mulberry32 } from '../helpers/cenarios.js';
 import { FROTA_POR_TIPO } from '../helpers/estado.js';
 import { FROTA_INICIAL, recursoDaFrota, aviaoServe, instrutorVoaNoAviao } from '../../js/frota.js';
@@ -440,15 +441,21 @@ describe('Invariantes das escolhas do operador, em 300 cenários', () => {
   // F1h (Pedro, 2026-11-26): o “Priorizar com” escolhe o instrutor, não o horário. O pareamento no horário (js/engine.js)
   // só troca o instrutor de voos de um mesmo horário: contra o motor sem ele, nenhum horário muda, ninguém sai de um
   // instrutor do “Priorizar com”, e o voo fixo, o do instrutor escolhido, a turma de Ground e a volta do noturno ficam com o
-  // instrutor deles
-  it('o pareamento no horário só troca o instrutor: o horário, o “Priorizar com” de quem já tinha, os fixos e os escolhidos ficam', () => {
-    let trocados = 0;
+  // instrutor deles; nenhum avião muda, e cada instrutor fica com os mesmos voos de cada categoria do rodízio
+  it('o pareamento no horário só troca o instrutor: o horário, o avião, o rodízio, o “Priorizar com” de quem já tinha, os fixos e os escolhidos ficam', () => {
+    let trocados = 0, noRodizio = 0;
+    const doRodizio = out => JSON.stringify(out.filter(o => !o.trecho && categoriaDoRodizio(o.mis, o.eqType))
+      .map(o => `${categoriaDoRodizio(o.mis, o.eqType)} ${o.insId}`).sort());
     emTodasAsEscolhas(({ estado, todos }) => {
-      const sem = new Map(runAllocationEngine(estado, { parearNoHorario: false }).out.map(o => [o.fKey, o]));
+      const semOPareamento = runAllocationEngine(estado, { parearNoHorario: false }).out;
+      const sem = new Map(semOPareamento.map(o => [o.fKey, o]));
       assert.equal(todos.length, sem.size, 'outros voos');
+      assert.equal(doRodizio(todos), doRodizio(semOPareamento), 'o rodízio mudou');
       for (const o of todos) {
         const v = sem.get(o.fKey);
         assert.ok(v && v.a === o.a && v.b === o.b, `${o.fKey}: o horário mudou`);
+        assert.equal(o.r, v.r, `${o.fKey}: o avião mudou`);
+        if (v.insId !== o.insId && categoriaDoRodizio(o.mis, o.eqType)) noRodizio++;
         if (v.insId === o.insId) continue;
         trocados++;
         const pares = (estado.stu.find(s => s.id === o.stuId) || {}).voaCom || [];
@@ -456,11 +463,13 @@ describe('Invariantes das escolhas do operador, em 300 cenários', () => {
         assert.ok(!v.fixo && !v.insEscolhido && !v.isGround && !v.trecho, `${o.fKey}: o instrutor de um voo preso mudou`);
       }
     });
-    assert.ok(trocados > 0, 'nenhum voo trocou de instrutor (o teste não passa por falta deles)');
+    assert.ok(trocados > 0 && noRodizio > 0, `${trocados} voos trocaram de instrutor, ${noRodizio} do rodízio (o teste não passa por falta deles)`);
   });
 
-  it('a divisão das horas e a compactação não trocam o instrutor escolhido nem o do “Priorizar com”', () => emTodasAsEscolhas(({ estado, out }) => {
-    const antes = new Map(runAllocationEngine(estado, { compactar: false, dividirHoras: false }).out.map(o => [o.fKey, o]));
+  // Sem o pareamento no horário, que vem depois delas (e tem o invariante dele, acima): a escala antes e depois delas
+  it('a divisão das horas e a compactação não trocam o instrutor escolhido nem o do “Priorizar com”', () => emTodasAsEscolhas(({ estado }) => {
+    const antes = new Map(runAllocationEngine(estado, { compactar: false, dividirHoras: false, parearNoHorario: false }).out.map(o => [o.fKey, o]));
+    const { out } = runAllocationEngine(estado, { parearNoHorario: false });
     for (const o of antes.values()) {
       if (!o.insEscolhido && !o.insPar) continue;
       const depois = out.find(v => v.fKey === o.fKey);
