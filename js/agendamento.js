@@ -826,7 +826,8 @@ export function formularioDoAgendamento(estado, base, ambiente, contexto, escolh
 
   f.proposta = {
     stuId: stu.id, mis, eq: ground ? GROUND_EQ_TYPE : tipo, nb: ground ? GROUND_DURATION_MIN / 60 : horas, a, b, r: rec.r, insId: x.id,
-    missao: info.tipo === 'missao' ? { sigla: info.sigla, codigo: info.missao.codigo } : null,
+    // exige (quando há): o que a missão do curso exige do INVA, só para a simulação (aplicarAgendamento não o grava)
+    missao: info.tipo === 'missao' ? { sigla: info.sigla, codigo: info.missao.codigo, ...(exige.length ? { exige: [...exige] } : {}) } : null,
     pesos: lim ? { aluno: alunoKg, instrutor: insKg } : null,
     disponibilizar: escolhas.disponibilizar === x.id ? { insId: x.id } : null,
     // O voo de hoje do aluno que muda de lugar (de onde: o horário e o recurso de agora) ou entra na escala
@@ -923,6 +924,9 @@ export function aplicarAgendamento(estado, base, proposta) {
   Object.assign(alvo, { fly: true, eq: proposta.eq, nb: proposta.nb, p1: proposta.a, p2: -1, insId: proposta.insId });
   if (!movido) {
     alvo.mis = proposta.mis;
+    // O que a missão do curso exige do INVA é derivado no estado da escala (comExigenciasDasMissoes): o de antes vai com a
+    // missão de antes (no estado do app ele nunca está; na cópia da simulação, simularAgendamento põe o da missão nova)
+    delete alvo.exige;
     if (proposta.missao) Object.assign(alvo, { etapa: proposta.missao.codigo, cursoDaEtapa: proposta.missao.sigla });
     else { delete alvo.etapa; delete alvo.cursoDaEtapa; }
   }
@@ -969,13 +973,17 @@ export function comPesos(estado, proposta) {
   };
 }
 
-// A simulação: a mesma função que grava, numa cópia do estado, e o motor nela (a escala que fica se o operador confirmar)
+// A simulação: a mesma função que grava, numa cópia do estado, e o motor nela (a escala que fica se o operador confirmar).
+// O pedido que recebe o voo novo leva o que a missão do curso escolhida exige do INVA (proposta.missao.exige, do programa
+// do formulário), como o estado da escala o derivaria depois de gravar; o pedido que muda de lugar fica com o dele
 export function simularAgendamento(estado, base, proposta, motor = runAllocationEngine) {
   const copia = {
     ...estado, stu: structuredClone(estado.stu), ins: structuredClone(estado.ins), fixos: { ...(estado.fixos || {}) },
     fStatus: { ...(estado.fStatus || {}) }, fObs: { ...(estado.fObs || {}) }
   };
   const antes = aplicarAgendamento(copia, base, proposta);
+  const exige = proposta.missao && Array.isArray(proposta.missao.exige) ? proposta.missao.exige : [];
+  if (!proposta.pedido && exige.length) pedidoDoAluno(copia.stu.find(s => s.id === antes.stuId), antes.mid).exige = [...exige];
   return { sim: motor(copia), antes, fKey: chaveDoVoo(antes.stuId, antes.mid) };
 }
 
