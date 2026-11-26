@@ -930,8 +930,30 @@ describe('As disputas do “Priorizar com”', () => {
     const { out, al } = runAllocationEngine(cenario({
       ins, stu: [aluno(1000, { ...GROUND_C152, p1: 500, p2: -1, pr: 4 }, { voaCom: [1] }), aluno(1001, { mis: 'Ground C172', eq: 'Sala Ground', nb: 1.5, p1: 500, p2: -1 }, { voaCom: [1] })]
     }));
-    const tarde = out.find(o => o.stuId === 1001);
-    assert.deepEqual(doPar(al), [['1001_0_1', 1001, tarde.insId, `${tarde.insId === 1 ? '' : 'Sem o instrutor de “Priorizar com” (Instrutor 01: ocupado nos horários possíveis): o voo ficou com Instrutor 02. '}Aluno 1001 e Aluno 1000 priorizam Instrutor 01 às 08:20: ficou com Aluno 1000 (prioridade 4)${tarde.insId === 1 ? `; Aluno 1001 voa às ${hm(tarde.a)}` : `; Aluno 1001 voa às ${hm(tarde.a)}`}.`]]);
+    assert.deepEqual(out.map(o => [o.stuId, o.a, o.insId]), [[1001, 390, 1], [1000, 500, 1]]);
+    assert.deepEqual(doPar(al), [['1001_0_1', 1001, 1, 'Aluno 1001 e Aluno 1000 priorizam Instrutor 01 às 08:20: ficou com Aluno 1000 (prioridade 4); Aluno 1001 voa às 06:30.']]);
+  });
+
+  // Achado pela busca em cenários aleatórios: antes da compactação, o Aluno 17 está com o Instrutor 11 às 10:10, o horário
+  // que o Aluno 19 pediu; a compactação o leva para as 16:20, e às 10:10 não há mais ninguém com ele: a frase sai
+  it('a disputa que a compactação desfaz não é dita (a frase usa os horários do fim)', async () => {
+    const { gerarCenario, comEscolhas } = await import('../helpers/cenarios.js');
+    const estado = comEscolhas(gerarCenario(126), 126);
+    const disputaDe = opcoes => runAllocationEngine(estado, opcoes).al.filter(a => a.fKey === '1025_1026_1').map(a => a.m);
+    assert.deepEqual(disputaDe({ compactar: false }), ['Aluno 19 e Aluno 17 priorizam Instrutor 11 às 10:10: ficou com Aluno 17 (prioridade 5); Aluno 19 voa às 14:30.']);
+    const { out } = runAllocationEngine(estado);
+    assert.deepEqual(out.filter(o => o.insId === 11 && o.a < 700 && 610 < o.b), []);
+    assert.deepEqual(disputaDe({}), []);
+  });
+
+  it('o aluno que vem antes na fila e perdeu o horário por outro motivo: a frase sem o porquê', () => {
+    // O 1000 (prioridade 5) quer as 08:20, mas a aula de Ground dele (com o INVA 2, escolhido) é às 08:20 e o voo vem
+    // depois dela: o 1001 (prioridade 1) fica com o INVA 1 às 08:20, sem ter vindo antes na fila
+    const { al } = runAllocationEngine(cenario({
+      ins: [instrutor(1, 1), instrutor(2, 1)],
+      stu: [aluno(1000, { pr: 5 }, { voaCom: [1], extra: [missaoExtra(1, { ...GROUND_C152, p1: 500, p2: -1, jan: 'h500', insId: 2 })] }), aluno(1001, { pr: 1 }, { voaCom: [1] })]
+    }), { compactar: false });
+    assert.deepEqual(doPar(al), [['1000_0_1', 1000, 1, 'Aluno 1000 e Aluno 1001 priorizam Instrutor 01 às 08:20: ficou com Aluno 1001; Aluno 1000 voa às 10:10.']]);
   });
 
   it('um aviso por voo, com a chave dele', () => {
