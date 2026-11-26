@@ -16,6 +16,12 @@ let doRejeitado = false;
 
 const vooDaChave = fKey => (RES && Array.isArray(RES.out) ? RES.out.find(o => o.fKey === fKey) : null);
 
+// A frase de cima das sugestões: "sem mexer nos outros voos" só quando nenhuma muda outro voo (na escala não aprovada, o
+// motor refaz os voos que não são fixos: a sugestão que muda algum diz qual)
+const oQuePodeVoar = opcoes => (opcoes.some(o => o.muda)
+  ? 'O que pode voar no lugar. A sugestão que muda outros voos diz quais e pede a confirmação.'
+  : 'O que pode voar no lugar, sem mexer nos outros voos.');
+
 const painelDeReparoAberto = () => Boolean($('#painel-reparo') && !$('#painel-reparo').hidden);
 
 // focar: aberta pelo botão "Sugestões" (o foco vai para a primeira sugestão, e a gaveta, por cima das outras abertas);
@@ -40,7 +46,7 @@ export function abrirPainelDeReparo(fKey, { focar = true } = {}) {
     <p class="h">${pedidoMudou
       ? 'O pedido mudou depois da aprovação: solte o voo para o app escalar de novo, ou cancele. Fica no histórico (dá para reverter).'
       : sugestoes.length
-        ? 'O que pode voar no lugar, sem mexer nos outros voos. Aplicada, a sugestão vale para o voo fixo e fica no histórico (dá para reverter).'
+        ? `${oQuePodeVoar(sugestoes)} Aplicada, a sugestão vale para o voo fixo e fica no histórico (dá para reverter).`
         : 'Nenhum avião ou instrutor serve neste horário, nem mais tarde hoje.'}</p>
     <ol class="opcoes-reparo">${opcoesAbertas.map((o, i) => `<li class="${esc(o.tipo)}">
       <span>${esc(o.mudancas || o.soltar ? o.texto : o.motivo ? `Motivo: ${o.motivo}` : 'Pede o motivo')}${o.confirmar ? `<small class="confirmar-aluno">${esc(o.confirmar)}</small>` : ''}</span>
@@ -68,7 +74,7 @@ function abrirParaCancelado(voo, { focar }) {
     <p class="h">${[`${hm(voo.a)}–${hm(voo.b)}`, voo.mis, nomeDoRecurso(voo.r), voo.ins].map(esc).join(' · ')}</p>
     <p class="motivo-conflito"><b>Cancelado:</b> ${esc(detalhe && detalhe.motivo ? detalhe.motivo : 'sem o motivo')}.</p>
     ${opcoes.length
-    ? `<p class="h">O que pode voar no lugar, sem mexer nos outros voos. Aplicada, a sugestão volta o voo para Pendente, no lugar dela, e fica no histórico (dá para reverter).</p>
+    ? `<p class="h">${oQuePodeVoar(opcoes)} Aplicada, a sugestão volta o voo para Pendente, no lugar dela, e fica no histórico (dá para reverter).</p>
       <ol class="opcoes-reparo">${opcoes.map((o, i) => `<li class="${esc(o.tipo)}">
         <span>${esc(o.texto)}${o.confirmar ? `<small class="confirmar-aluno">${esc(o.confirmar)}</small>` : ''}</span>
         <button type="button" class="btn" data-reparo-aplicar="${i}"${o.confirmar ? ' data-confirmar' : ''}>Aplicar</button>
