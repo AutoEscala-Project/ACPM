@@ -6,7 +6,7 @@
 // lidas uma de cada vez (a versão que a gravação leva é a da leitura dos dados da tela), e nenhuma data é lida antes de a
 // abertura preparar os dados, nem depois de a preparação falhar. O que fica aberto na tela quando a data abre passa a
 // mostrar os dados dela
-import { test, comProgresso, expect, prepararContexto, vigiarErros, preencherLogin, entrar, irPara, irParaVista, abrirEscala, AMANHA, URL_APP, abrirHistorico, alternarDisponivel, botaoAprovar, caixaDisponivel, caixaVoa, dataAberta, diaAnterior, diaSeguinte, exportar, importarDaAgenda, rotuloDaData, escolherNoCalendario } from './fixtures.js';
+import { test, comProgresso, expect, prepararContexto, vigiarErros, preencherLogin, entrar, irPara, irParaVista, abrirEscala, AMANHA, URL_APP, abrirHistorico, alternarDisponivel, botaoAprovar, caixaDisponivel, caixaVoa, dataAberta, diaAnterior, diaSeguinte, exportar, importarDaAgenda, rotuloDaData, escolherNoCalendario, confirmarAgendamento } from './fixtures.js';
 import { criarSupabaseFalso, documentosAtuais, CONTAS } from './supabase-falso.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
 import { runAllocationEngine } from '../../js/engine.js';
@@ -485,8 +485,7 @@ test.describe('Os cursos, o agendamento e a missão do curso: nada muda antes de
     await expect(dialogo(page)).toBeVisible();
     await page.locator('#agd-aluno').selectOption('1001');
     await expect(page.locator('#agd-previa ul')).toContainText('Entra:');
-    await page.locator('#agd-confirmar').click();
-    await expect(dialogo(page)).toBeHidden();
+    await confirmarAgendamento(page);
   }
 
   async function abrirODia(browser, servidor, opcoes) {

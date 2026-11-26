@@ -1,4 +1,4 @@
-import { test, comProgresso, expect, abrir, abrirSintetico, abrirComExemplo, irPara, abrirEscala, lerEscala, confirmar, filtrarCursos, AMANHA, abrirHistorico, aprovar, botaoAprovar, caixaVoa, dataAberta, diaSeguinte, importarDaAgenda, reabrir, tabelaDoDia, voar, registrarPedido } from './fixtures.js';
+import { test, comProgresso, expect, abrir, abrirSintetico, abrirComExemplo, irPara, abrirEscala, lerEscala, confirmar, filtrarCursos, AMANHA, abrirHistorico, aprovar, botaoAprovar, caixaVoa, dataAberta, diaSeguinte, importarDaAgenda, reabrir, tabelaDoDia, voar, registrarPedido, refazer } from './fixtures.js';
 import { aluno, cenario, instrutor, missaoExtra } from '../helpers/montar.js';
 
 const linhaDoAluno = (page, nome) => page.locator(`#dem tr[data-k="d"][data-mid="0"][data-nm="${nome.toLowerCase()}"]`);
@@ -656,6 +656,7 @@ test.describe('Voo agendado na Escala', () => {
     const cadeado = voo(page, 'Aluno 1000').locator('.fixo');
     for (const status of ['Pendente', 'Confirmado']) {
       await voo(page, 'Aluno 1000').locator('.st-sel').selectOption(status);
+      await refazer(page);
       await expect(voo(page, 'Aluno 1000').locator('.st-sel')).toHaveValue(status);
       await expect(cadeado).toHaveAttribute('aria-label', 'Voo fixo: agendado na escala');
     }
