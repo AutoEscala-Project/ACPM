@@ -409,7 +409,7 @@ const inicioDoSemPar = porque => `Sem o instrutor de “Priorizar com” (${porq
 // divisão das horas e da compactação, com os horários do fim:
 // - o voo posto à mão (o pino agendado, ou o do INVA trocado na Escala) ou com o INVA escolhido para o dia na Demanda fora
 //   do “Priorizar com”, quando um do “Priorizar com” poderia dar o voo: o aviso de que está fora; sem nenhum que possa, o
-//   aviso de sempre, com o motivo de cada um (o voo com outro INVA não vai contra a limitação);
+//   aviso de sempre, com o motivo como o do motor (o voo com outro INVA não vai contra a limitação);
 // - o voo sem pino que ficou sem o instrutor do “Priorizar com” (semPar: a chave do voo → os nomes e o motivo, da busca do
 //   motor, ou o começo do aviso, de conferirEscala): o aviso de sempre, com a disputa dentro dele quando há uma;
 // - o voo sem pino que ficou com um instrutor do “Priorizar com” fora do horário pedido: a disputa, quando há uma (por
@@ -621,9 +621,9 @@ function comOsPesosDe(velha, nova) {
 // estado que fez a escala, para ligar cada recusa ao pedido dela). O pedido que deixou de voar sai (com a linha e a
 // recusa); a recusa do pedido que ganhou um pino também. Refeitos: as marcas de conflito e os alertas deles, os avisos
 // (dos agendados, do peso, do 7º local confirmado, da lei, da revisão, dos atrasos e do “Priorizar com”, este com o motivo
-// de antes do voo sem o instrutor dele), a revisão, o total de missões pedidas e o tamanho das turmas. Um pedido que voa sem pino, sem linha e
-// sem recusa (um pedido que entrou no dia) precisa do motor: devolve null. recusas: as recusas que voltam (a reversão de
-// uma alteração que tirou a recusa de um pedido: [chave do voo, alerta]), no lugar da linha dele
+// de antes do voo sem o instrutor dele), a revisão, o total de missões pedidas e o tamanho das turmas. Um pedido que voa
+// sem pino, sem linha e sem recusa (um pedido que entrou no dia) precisa do motor: devolve null. recusas: as recusas que
+// voltam (a reversão de uma alteração que tirou a recusa de um pedido: [chave do voo, alerta]), no lugar da linha dele
 export function conferirEscala(estado, resultado, { antes = estado, recusas: deVolta = [] } = {}) {
   const ctx = contextoDaEscala(estado);
   const act = filaDosPedidos(estado, ctx);
