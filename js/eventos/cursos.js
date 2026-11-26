@@ -15,7 +15,7 @@ import { aindaNaoAbriu, gravarAlteracao } from '../actions.js';
 import {
   conteudoDoCurso, incluirMissao, mudarMissao, moverMissao, retirarMissao, validarCurso, percursoDoCurso, nomeDaFase, incluirFase, mudarFase,
   moverFase, retirarFase, restaurarFase, restaurarMissao, definirRegra, marcarMissao, moverMissaoParaFase, ordemRecusada, definirTrecho, mudarCurso,
-  aplicarModelo, novoCurso, exigirNaMissao
+  aplicarModelo, novoCurso, exigirNaMissao, LIMITE_DO_EXIGE
 } from '../programa.js';
 import { nomeDaHabilitacao } from '../habilitacoes.js';
 import { MODELOS } from '../modelos-de-curso.js';
@@ -439,8 +439,11 @@ function mudarCampoDaMissao(campo) {
   } else if (cf === 'dispensada' || cf === 'avaliacao') {
     novo = marcarMissao(curso, m.id, cf, campo.checked);
   } else if (cf === 'exige') {
-    // As habilitações que o INVA precisa: a lista inteira, como está marcada na caixa da missão
-    novo = exigirNaMissao(curso, m.id, [...tr.querySelectorAll('[data-cf="exige"]:checked')].map(x => x.value));
+    // As habilitações que o INVA precisa: a lista inteira, como está marcada na caixa da missão (até 10, como o servidor
+    // guarda: a 11ª é recusada com o motivo)
+    const lista = [...tr.querySelectorAll('[data-cf="exige"]:checked')].map(x => x.value);
+    if (lista.length > LIMITE_DO_EXIGE) return recusar(`A missão ${m.codigo} exige do INVA no máximo ${LIMITE_DO_EXIGE} habilitações além da missão e do recurso: desmarque uma antes de marcar outra.`);
+    novo = exigirNaMissao(curso, m.id, lista);
   } else if (cf === 'trecho') {
     // O Noturno desmanchado (a ida sem a noite logo depois, por exemplo) é recusado na conferência, com o motivo
     novo = definirTrecho(curso, m.id, campo.value);
