@@ -5,6 +5,7 @@ import { pedidoDoAluno } from './voo.js';
 import { hojeISO } from './format.js';
 import { ligada } from './funcionalidades.js';
 import { estadoParaEscalar, inativo, inativoValeEm } from './inativos.js';
+import { comAPrioridadePadrao } from './rules.js';
 
 export let S = ApiClient.createFreshState();
 export let RES = null;
@@ -49,10 +50,13 @@ export function getMissionTarget(stuId, mid = 0) {
 // Sugestões): de hoje em diante, sem os inativos do cadastro (js/inativos.js); com o hangar desligado
 // (js/funcionalidades.js), sem a ordem guardada (hangar: null é a ordem da frota), que continua em S. Também numa data
 // passada: a ordem guardada passa de uma data para a outra mesmo desligada, e com ela a data feita na ordem da frota
-// mudaria de aviões ao ser alterada no dia seguinte. Nunca é gravado: quem muda os dados muda S
+// mudaria de aviões ao ser alterada no dia seguinte. Com a prioridade desligada, todos os pedidos na prioridade padrão
+// (js/rules.js, comAPrioridadePadrao): valem a ordem dos agendamentos e a do cadastro, e a guardada continua em S. Nunca é
+// gravado: quem muda os dados muda S
 export function estadoDaEscala() {
   const estado = estadoParaEscalar(S, { data: DATA, hoje: hojeISO() });
-  return ligada('hangar') ? estado : { ...estado, hangar: null };
+  const comHangar = ligada('hangar') ? estado : { ...estado, hangar: null };
+  return ligada('prioridade') ? comHangar : comAPrioridadePadrao(comHangar);
 }
 // O aluno, o instrutor ou o recurso inativo no cadastro, na data aberta (de hoje em diante)
 export const inativoNaDataAberta = item => inativo(item) && inativoValeEm(DATA, hojeISO());

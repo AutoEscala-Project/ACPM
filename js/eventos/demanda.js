@@ -7,7 +7,7 @@ import { semAgendados, limparDemanda } from '../fixos.js';
 import { fmtDurLabel } from '../format.js';
 import { ligada } from '../funcionalidades.js';
 import { horariosDaMissao, ajustarPreferencias } from '../horarios.js';
-import { isGroundMission, rotuloDaDisponibilidade, normalizeMissionFields, proximoMid, duracaoDigitada, ERRO_DA_DURACAO, duracaoPadraoDaMissao } from '../rules.js';
+import { isGroundMission, rotuloDaDisponibilidade, normalizeMissionFields, proximoMid, duracaoDigitada, ERRO_DA_DURACAO, duracaoPadraoDaMissao, prioridadeGuardada, PRIORIDADE_PADRAO } from '../rules.js';
 import { S, RES, isGestor, stuBy, insBy, getMissionTarget } from '../state.js';
 import { chaveDoVoo } from '../voo.js';
 import { escolherInstrutor } from '../instrutor-escolhido.js';
@@ -170,7 +170,7 @@ aoAcionar('add-mis', (b, { id }) => {
     p2: T[6],
     nb: 1,
     ss: 1,
-    pr: s.pr || 3
+    pr: s.pr || PRIORIDADE_PADRAO
   };
   s.extra.push(newEx);
   gravarAlteracao('inc', `Missão extra adicionada para ${s.nm}`);
@@ -206,6 +206,8 @@ aoMudarCampo('d', (t, { f, c, id, mid }) => {
   const target = getMissionTarget(id, mid);
   if (!target) return;
   if (f === 'outra-missao') { escolherOutraMissao(t, c, s, target, mid); return; }
+  // A prioridade desligada (js/funcionalidades.js): um campo que sobrou na tela não muda nada
+  if (f === 'pr' && !ligada('prioridade')) return;
   let historico;
   if (f === 'insId') {
     // O instrutor escolhido: o app procura o horário e o avião com ele. O voo que já está fixo fica onde está, com o
@@ -248,7 +250,8 @@ aoMudarCampo('d', (t, { f, c, id, mid }) => {
     // Saindo de uma missão com duração padrão ou fixa (o simulador, o Noturno), a missão nova começa com a dela
     const tinhaPadrao = Boolean((MIS[target.mis] || {}).duracaoPadrao || (MIS[target.mis] || {}).duracaoFixaH);
     const anterior = target[f];
-    target[f] = (f === 'mis' || f === 'eq') ? t.value : +t.value;
+    // A prioridade: a tela mostra 1 como a mais alta, e o pedido guarda 5 (js/rules.js, prioridadeGuardada)
+    target[f] = (f === 'mis' || f === 'eq') ? t.value : f === 'pr' ? prioridadeGuardada(+t.value) : +t.value;
     // Missão, recurso ou horas mudados à mão: o pedido deixa de ser a missão do curso (o código e o curso dela), e o voo
     // agendado dele na Escala deixa de ser fixo. A mesma duração digitada de outro jeito (1.0 no lugar de 1) não muda o voo
     const mudouOVoo = ['mis', 'eq', 'nb'].includes(f) && target[f] !== anterior;

@@ -1,7 +1,7 @@
 // As funcionalidades que podem ficar desligadas (js/funcionalidades.js): o que sai das telas com o hangar e o progresso nos
 // cursos desligados, o que continua e o que fica guardado (ligar de novo traz tudo de volta). Com elas ligadas, os testes
 // de cada tela (hangar.spec.js, cursos-no-dia.spec.js, agendamento.spec.js, cursos.spec.js e os outros com comHangar ou
-// comProgresso)
+// comProgresso). A prioridade, desligada e ligada: prioridade.spec.js
 import { test, comTodasAsFuncionalidades, expect, irPara, abrirEscala, abrirHistorico, diaSeguinte, entrar, prepararContexto, appPronto, vigiarErros, tabelaDoDia, importarDaAgenda, alternarDisponivel, escreverData, AMANHA } from './fixtures.js';
 import { FRASES_DAS_FUNCIONALIDADES, FRASES_SEM_AS_FUNCIONALIDADES } from './manual-frases.js';
 import { instalarSupabaseFalso, documentosAtuais, CONTAS } from './supabase-falso.js';
@@ -55,10 +55,11 @@ const doBanco = (page, chave) => page.evaluate(c => JSON.parse(localStorage.getI
 const pedido = (page, id, mid = 0) => page.locator(`#dem tr[data-k="d"][data-id="${id}"][data-mid="${mid}"]`);
 const voo = (page, nome) => page.locator('#out tbody tr:not(.win)', { hasText: nome });
 const avioes = page => page.locator('#out tbody tr:not(.win) .c-aviao').evaluateAll(tds => tds.map(td => td.textContent.trim().split(/\s+/)[0]));
-// Uma alteração qualquer (grava o dia): a prioridade do João
+// Uma alteração qualquer (grava o dia): a prioridade do João, guardada com o valor (5 a mais alta), que a tela mostra ao
+// contrário (6 - valor: 1 a mais alta). Com a prioridade ligada, que estes testes ligam
 async function mudarAPrioridade(page, valor) {
   await irPara(page, 'dem');
-  await pedido(page, 1001).locator('[data-f="pr"]').selectOption(String(valor));
+  await pedido(page, 1001).locator('[data-f="pr"]').selectOption(String(6 - valor));
   await expect.poll(async () => (await gravado(page)).pedidos[1001].pr).toBe(valor);
 }
 const rotulosDosGrupos = page => page.locator('#agd-missao optgroup').evaluateAll(gs => gs.map(g => g.label));
@@ -79,8 +80,9 @@ test('o padrão do app: o hangar e o progresso desligados; no localhost, ?funcio
   await expect(page.locator('#alu tr[data-id="1001"] .progresso')).toHaveText('1/46 · Fase 1 · próxima IN-02');
 });
 
+// Só com a prioridade ligada (a alteração que grava o dia é a prioridade: mudarAPrioridade)
 test.describe('O hangar desligado', () => {
-  test.use({ funcionalidades: '' });
+  test.use({ funcionalidades: 'prioridade' });
 
   test('em Recursos, sem o painel, e a tabela fica com a largura toda, também no celular', async ({ page }) => {
     await abrirCom(page);
@@ -130,7 +132,7 @@ test('a data feita na ordem da frota não muda de aviões ao ser alterada no dia
   const documentos = docs();
   documentos[`acpm4_dia_${AMANHA}`].hangar = [...FROTA].reverse();
   documentos[`acpm4_dia_${AMANHA}`].pedidos[1001].p1 = 390;
-  await abrirCom(page, documentos, './?funcionalidades=');
+  await abrirCom(page, documentos, './?funcionalidades=prioridade');
   await mudarAPrioridade(page, 5);
   const gravados = async () => (await gravado(page)).resultado.out.map(o => `${o.s} ${o.r} ${o.a}`).sort();
   const antes = await gravados();
@@ -173,8 +175,9 @@ comTodasAsFuncionalidades('ligados, a ordem guardada vale na escala, e o progres
   await expect(page.locator('#hangar li').first()).toHaveAttribute('data-id', 'PR-VOB');
 });
 
+// Só com a prioridade ligada (a alteração que grava o dia é a prioridade: mudarAPrioridade)
 test.describe('O progresso nos cursos desligado', () => {
-  test.use({ funcionalidades: '' });
+  test.use({ funcionalidades: 'prioridade' });
 
   test('na Demanda, só o código que o pedido já tem; ele fica guardado com uma alteração e depois de recarregar', async ({ page }) => {
     await abrirCom(page);
@@ -186,7 +189,7 @@ test.describe('O progresso nos cursos desligado', () => {
     await expect(page.locator('#dem [data-act="usar-proxima"], #dem [data-f="outra-missao"], #dem [data-act="usar-fora-da-ordem"]')).toHaveCount(0);
     await expect(page.locator('#s-dem')).not.toContainText('Próxima');
     await mudarAPrioridade(page, 4);
-    await pedido(page, 1000).locator('[data-f="pr"]').selectOption('5');
+    await pedido(page, 1000).locator('[data-f="pr"]').selectOption('1');
     await expect.poll(async () => (await gravado(page)).pedidos[1000].pr).toBe(5);
     await page.reload();
     await appPronto(page);
@@ -403,11 +406,11 @@ test.describe('O Manual e o glossário', () => {
 
     test('desligados, o Manual não fala deles, nem em texto escondido', async ({ page }) => {
       const { texto, naPagina } = await manual(page);
-      for (const nome of ['hangar', 'progresso']) {
+      for (const nome of ['hangar', 'progresso', 'prioridade']) {
         for (const frase of FRASES_DAS_FUNCIONALIDADES[nome]) expect(naPagina, frase).not.toContain(frase);
         for (const frase of FRASES_SEM_AS_FUNCIONALIDADES[nome]) expect(texto, frase).toContain(frase);
       }
-      expect(naPagina).not.toMatch(/hangar|progresso|próxima missão/i);
+      expect(naPagina).not.toMatch(/hangar|progresso|próxima missão|prioridade/i);
       await expect(page.locator('[data-funcionalidade]')).toHaveCount(0);
       const glossario = montarGlossario(() => false);
       const termos = await page.locator('#manual-glossario-lista dt').allTextContents();
@@ -421,7 +424,7 @@ test.describe('O Manual e o glossário', () => {
 
   comTodasAsFuncionalidades('ligados, o Manual fala deles como antes', async ({ page }) => {
     const { texto, naPagina } = await manual(page);
-    for (const nome of ['hangar', 'progresso']) {
+    for (const nome of ['hangar', 'progresso', 'prioridade']) {
       for (const frase of FRASES_DAS_FUNCIONALIDADES[nome]) expect(texto, frase).toContain(frase);
       for (const frase of FRASES_SEM_AS_FUNCIONALIDADES[nome].filter(f => f !== 'e um clique leva à fase')) expect(naPagina, frase).not.toContain(frase);
     }

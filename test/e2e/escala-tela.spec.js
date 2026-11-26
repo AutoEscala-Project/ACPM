@@ -1,5 +1,5 @@
 // Tela da Escala: Lista, Por recurso ou Por instrutor; resumo com erros e avisos agrupados; uma linha por voo.
-import { test, expect, abrir, abrirComExemplo, abrirEscala, irPara, lerEscala, alternarDisponivel, alvosPequenos, larguraDaPagina } from './fixtures.js';
+import { test, comPrioridade, expect, abrir, abrirComExemplo, abrirEscala, irPara, lerEscala, alternarDisponivel, alvosPequenos, larguraDaPagina } from './fixtures.js';
 import { aluno, cenario, instrutor, GROUND_C152 } from '../helpers/montar.js';
 import { GLOSSARIO } from '../../js/glossario.js';
 import { COLUNAS_DO_PAINEL } from '../../js/config-do-painel.js';
@@ -615,7 +615,8 @@ test.describe('Celular', () => {
     expect(await larguraDaPagina(page)).toBeLessThanOrEqual(390);
   });
 
-  test('a escala vira um cartão por voo, com horário, aluno, missão, avião, instrutor e status à vista', async ({ page }) => {
+  // O instrutor do Aluno 12 é o da escala do exemplo com as prioridades dele: com a prioridade ligada (js/funcionalidades.js)
+  comPrioridade('a escala vira um cartão por voo, com horário, aluno, missão, avião, instrutor e status à vista', async ({ page }) => {
     await abrirComExemplo(page);
     await abrirEscala(page);
     await expect(page.locator('#out thead')).toBeHidden();

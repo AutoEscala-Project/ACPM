@@ -3,6 +3,10 @@ import { test, expect, abrir, abrirComExemplo, abrirEscala, lerEscala, json, AMA
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
 
 test.describe('Escala', () => {
+  // Os snapshots são da escala do exemplo com as prioridades dele (5, 4 e as sorteadas): com a prioridade ligada
+  // (js/funcionalidades.js), como os goldens do motor
+  test.use({ funcionalidades: 'prioridade' });
+
   test.beforeEach(async ({ page }) => {
     await abrirComExemplo(page);
     await abrirEscala(page);

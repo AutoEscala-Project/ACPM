@@ -1,6 +1,6 @@
-// As funcionalidades que podem ficar desligadas (js/funcionalidades.js): o padrão (as duas desligadas em todos os
-// endereços), a escolha que só vale no localhost, o que o motor recebe com o hangar desligado e o que a Demanda, Alunos e a
-// escala mostram com o progresso desligado.
+// As funcionalidades que podem ficar desligadas (js/funcionalidades.js): o padrão (as três desligadas em todos os
+// endereços), a escolha que só vale no localhost, o que o motor recebe com o hangar ou a prioridade desligados e o que a
+// Demanda, Alunos e a escala mostram com o progresso desligado.
 import { describe, it, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -14,7 +14,7 @@ import { novoCurso } from '../../js/programa.js';
 import { MODELOS } from '../../js/modelos-de-curso.js';
 import { S, setS, setData, estadoDaEscala } from '../../js/state.js';
 import { etapaNaDemanda, progressoDoAluno, faseDoAluno, proximaDoPedido, outraMissaoDoPedido, resultadoNaEscala } from '../../js/views/etapas.js';
-import { aluno, cenario, instrutor } from '../helpers/montar.js';
+import { aluno, apenas, cenario, instrutor, missaoExtra } from '../helpers/montar.js';
 import { ligarFuncionalidades } from '../helpers/funcionalidades.js';
 
 afterEach(() => ligarFuncionalidades());
@@ -27,8 +27,8 @@ describe('Funcionalidades: o padrão e a escolha do localhost', () => {
   const SITES = ['https://autoescala.autoescala-acpm.workers.dev/', 'https://autoescala-previa.autoescala-acpm.workers.dev/', 'https://gdruumond.github.io/ACPM/',
     'https://thephfernandes.github.io/ACPM/', 'https://localhost.example.com/', 'https://outro.example.com/'];
 
-  it('o hangar e o progresso ficam desligados', () => {
-    assert.deepEqual([ligada('hangar'), ligada('progresso')], [false, false]);
+  it('o hangar, o progresso e a prioridade ficam desligados', () => {
+    assert.deepEqual([ligada('hangar'), ligada('progresso'), ligada('prioridade')], [false, false, false]);
   });
 
   it('nos sites publicados, nem o endereço nem a janela ligam: valem as do app', () => {
@@ -107,6 +107,44 @@ describe('Com o hangar desligado, o motor não lê a ordem guardada', () => {
   });
 });
 
+// O motor (e a compactação, os candidatos, as Sugestões e a simulação do agendamento, que leem o mesmo estado) recebe
+// todos os pedidos na prioridade padrão: valem a ordem dos agendamentos e a do cadastro. A guardada continua em S
+describe('Com a prioridade desligada, o motor recebe a prioridade padrão', () => {
+  // Um instrutor e um avião, os dois na mesma 1ª preferência (06:30): quem o motor confere antes fica com ela. O Aluno
+  // 1000, primeiro no cadastro, tem a prioridade mais baixa (1); o Aluno 1001, a mais alta (5), e uma missão extra com 4
+  const abrir = () => {
+    const estado = cenario({
+      ins: [instrutor(1, 9)], semAeronaves: apenas('C152', 'PP-LJV'),
+      stu: [aluno(1000, { p1: 390, p2: -1, pr: 1 }), aluno(1001, { p1: 390, p2: -1, pr: 5, extra: [missaoExtra(1, { fly: false, pr: 4 })] }), aluno(1002, { fly: false })]
+    });
+    setS(estado);
+    setData(somarDias(hojeISO(), 1));
+    return estado;
+  };
+  const naPreferencia = e => runAllocationEngine(e).out.find(o => o.a === 390).stuId;
+
+  it('o estado da escala vai com todos na prioridade padrão; a de S continua, e o aluno que já tem 3 é o mesmo', () => {
+    abrir();
+    const antes = structuredClone(S);
+    const daEscala = estadoDaEscala();
+    assert.deepEqual(daEscala.stu.map(s => [s.pr, ...s.extra.map(ex => ex.pr)]), [[3], [3, 3], [3]]);
+    assert.deepEqual(S, antes);
+    assert.equal(daEscala.stu[2], S.stu[2]);
+    // Com o hangar ligado, também: uma não muda a outra
+    ligarFuncionalidades('hangar');
+    assert.deepEqual(estadoDaEscala().stu.map(s => s.pr), [3, 3, 3]);
+    assert.deepEqual(S, antes);
+  });
+
+  it('a escala segue a ordem do cadastro; ligada, a prioridade guardada vale de novo', () => {
+    abrir();
+    assert.equal(naPreferencia(estadoDaEscala()), 1000);
+    ligarFuncionalidades('prioridade');
+    assert.equal(naPreferencia(estadoDaEscala()), 1001);
+    assert.equal(estadoDaEscala().stu[1], S.stu[1]);
+  });
+});
+
 describe('Com o progresso desligado, na Demanda, em Alunos, em Cursos e na escala', () => {
   const PP = () => novoCurso([], { sigla: 'PP', nome: 'Piloto Privado', modelo: MODELOS['pp-acpm'] }, (s, c) => `${s}:${c}`).curso;
   const stu = extra => aluno(1000, extra, { curso: 'PP' });
@@ -144,6 +182,6 @@ describe('O texto da página, sem as funcionalidades desligadas', () => {
     const html = readFileSync(new URL('../../index.html', import.meta.url), 'utf8');
     const marcas = [...html.matchAll(/data-(?:sem-)?funcionalidade="([^"]*)"/g)].map(m => m[1]);
     assert.ok(marcas.length > 20);
-    assert.deepEqual([...new Set(marcas)].sort(), ['hangar', 'progresso']);
+    assert.deepEqual([...new Set(marcas)].sort(), ['hangar', 'prioridade', 'progresso']);
   });
 });

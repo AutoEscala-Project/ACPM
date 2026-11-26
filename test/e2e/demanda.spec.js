@@ -35,10 +35,12 @@ test.describe('Demanda', () => {
     await expect(page.locator('#audit-log-list')).toContainText(`${nome.replace(/^a/, 'A')} incluído na demanda`);
   });
 
-  test('10 colunas que cabem na tela (sem Sessões); "Limpar demanda" fica no menu Mais', async ({ page }) => {
+  // A Prioridade só com ela ligada (js/funcionalidades.js; prioridade.spec.js)
+  test('9 colunas que cabem na tela (sem Sessões nem Prioridade); "Limpar demanda" fica no menu Mais', async ({ page }) => {
     await abrirComExemplo(page);
     await irPara(page, 'dem');
-    await expect(page.locator('#s-dem thead th')).toHaveText(['Aluno', 'Voa', 'Missão', 'Recurso', 'Instrutor', '1ª preferência', '2ª preferência', 'Disponibilidade', 'Duração', 'Prioridade']);
+    await expect(page.locator('#s-dem thead th')).toHaveText(['Aluno', 'Voa', 'Missão', 'Recurso', 'Instrutor', '1ª preferência', '2ª preferência', 'Disponibilidade', 'Duração']);
+    await expect(page.locator('#dem [data-f="pr"]')).toHaveCount(0);
     await expect(page.locator('#dem [data-f="ss"]')).toHaveCount(0);
     expect(await page.evaluate(() => document.querySelector('#s-dem .tw').scrollWidth <= document.querySelector('#s-dem .tw').clientWidth)).toBe(true);
     await expect(page.locator('#clr')).toBeHidden();
@@ -368,7 +370,8 @@ test.describe('Demanda', () => {
     // A busca, a missão e os cursos, cada um sozinho
     await busca.fill('nenhum assim');
     await expect(nenhum).toHaveText('Nenhum aluno com esses filtros. Limpar filtros');
-    await expect(nenhum.locator('td')).toHaveAttribute('colspan', '10');
+    // Todas as colunas: 9, sem a Prioridade desligada (js/funcionalidades.js)
+    await expect(nenhum.locator('td')).toHaveAttribute('colspan', '9');
     await expect(limpar).not.toHaveAttribute('data-act');
     await busca.fill('');
     await expect(nenhum).toHaveCount(0);
