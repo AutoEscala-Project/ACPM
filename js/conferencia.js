@@ -425,7 +425,8 @@ export function avisosDoPriorizarCom(state, out, { semPar = new Map(), soPinos =
     const pares = (s.voaCom || []).filter(id => instrutores.has(id));
     if (!pares.length) continue;
     const rotulo = o.mid ? `${s.nm} (${d.mis})` : s.nm;
-    const aviso = m => avisos.push({ t: 'warn', s: rotulo, m, codigo: 'voa-com', stuId: o.stuId, insId: o.insId, fKey: o.fKey });
+    // Na ordem dos campos da escala gravada (js/escala-gravada.js)
+    const aviso = m => avisos.push({ t: 'warn', s: rotulo, fKey: o.fKey, m, codigo: 'voa-com', stuId: o.stuId, insId: o.insId });
     const pino = Object.hasOwn(fixos, o.fKey) ? fixos[o.fKey] : null;
     if (pino) {
       if ((pino.agendado || pino.escolhido) && ativo(o) && !pares.includes(o.insId)) {
