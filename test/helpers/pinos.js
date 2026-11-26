@@ -122,7 +122,7 @@ function agendado(estado, antes, r, seed) {
 }
 
 // O estado do dia com os voos fixos do tipo pedido, para a semente. opcoes: as do motor que monta as escalas de antes (a
-// gravação é de antes do F1h: { priorizarComPrimeiro: false })
+// gravação é de antes do F1h: { parearNoHorario: false })
 export function diaComPinos(seed, tipo, opcoes = {}) {
   const r = mulberry32(seed * 3301 + TIPOS_DE_PINO.indexOf(tipo) * 17 + 5);
   const inicial = base(seed);

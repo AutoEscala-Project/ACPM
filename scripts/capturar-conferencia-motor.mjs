@@ -8,9 +8,9 @@ import { writeFile } from 'node:fs/promises';
 import { runAllocationEngine } from '../js/engine.js';
 import { TIPOS_DE_PINO, SEMENTES_DOS_PINOS, diaComPinos, impressaoDaSaida } from '../test/helpers/pinos.js';
 
-// A gravação é do motor de antes do F1h (o “Priorizar com” primeiro e as disputas dele): test/unit/conferencia.test.js
-// confere o motor de agora com ela nos dias sem “Priorizar com”
-const SEM_O_F1H = { priorizarComPrimeiro: false };
+// A gravação é do motor de antes do F1h (sem o pareamento do “Priorizar com” no horário e com os avisos dele de antes):
+// test/unit/conferencia.test.js confere o motor de agora com ela nos dias sem “Priorizar com”
+const SEM_O_F1H = { parearNoHorario: false };
 const dias = {};
 const contagem = { voos: 0, fixos: 0, conflitos: 0, avisos: 0, recusas: 0 };
 for (const seed of SEMENTES_DOS_PINOS) {

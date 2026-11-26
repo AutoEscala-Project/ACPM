@@ -125,11 +125,12 @@ export function filaDosPedidos(state, ctx) {
    * 2º: O pedido com o instrutor escolhido pelo operador para o dia antes dos outros: o que o operador definiu para o
    *     dia vale primeiro, e o pedido com um instrutor só é o que tem menos opções (os outros se encaixam em volta dele).
    * 3º: Maior prioridade (5 a 1).
-   * 4º: Com a mesma prioridade, o do aluno com “Priorizar com” (o par permanente do cadastro) antes: ele tem menos
-   *     instrutores possíveis. Antes desta ordem, o motor visita primeiro os pedidos com “Priorizar com”, só com os
-   *     instrutores deles (N9, js/engine.js); a ordem da fila, a das recusas e a dos fixos não mudam.
-   * 5º: A ordem dos agendamentos: o pedido da agenda que foi registrado antes (o id do
-   *     pedido cresce com o registro) vem antes; o pedido posto à mão, sem a agenda, vem depois dos agendados.
+   * 4º: A ordem dos agendamentos: o pedido da agenda que foi registrado antes (o id do
+   *     pedido cresce com o registro) vem antes; o pedido posto à mão, sem a agenda, vem depois dos agendados. Num
+   *     horário cheio, quem registrou antes fica com ele (N14; Pedro, 2026-11-26: o “Priorizar com” escolhe o instrutor, não
+   *     o horário: js/engine.js, parearNoHorario).
+   * 5º: Entre os postos à mão (sem a agenda) com a mesma prioridade, o do aluno com “Priorizar com” (o par permanente do
+   *     cadastro) antes: ele tem menos instrutores possíveis.
    * 6º: Ordem de cadastro do aluno e ordem da missão.
    */
   const ordemDoAgendamento = item => (Number.isInteger(item.ref.solicitacao) ? item.ref.solicitacao : Infinity);
@@ -139,7 +140,7 @@ export function filaDosPedidos(state, ctx) {
     const gA = isGroundMission(a.ref.mis) ? 1 : 0;
     const gB = isGroundMission(b.ref.mis) ? 1 : 0;
     if (gA !== gB) return gB - gA;
-    return semEscolha(a) - semEscolha(b) || b.ref.pr - a.ref.pr || semVoaCom(a) - semVoaCom(b) || menorPrimeiro(ordemDoAgendamento(a), ordemDoAgendamento(b)) || a.stuOrder - b.stuOrder || a.misOrder - b.misOrder;
+    return semEscolha(a) - semEscolha(b) || b.ref.pr - a.ref.pr || menorPrimeiro(ordemDoAgendamento(a), ordemDoAgendamento(b)) || semVoaCom(a) - semVoaCom(b) || a.stuOrder - b.stuOrder || a.misOrder - b.misOrder;
   });
   return act;
 }
@@ -366,9 +367,12 @@ function horarioPedido(d) {
   return p1 >= 0 ? p1 : null;
 }
 
-// Por que o outro pedido ficou com o horário: a chave da fila em que ele vem antes (a prioridade; com a mesma, a agenda e
-// o cadastro). Quando ele não vem antes na fila (o aluno não ficou com o horário por outro motivo: o avião, a aula), null
+// Por que o outro pedido ficou com o horário: a chave da fila em que ele vem antes (o Ground antes dos voos; a prioridade;
+// com a mesma, a ordem de registro na agenda e o cadastro: filaDosPedidos). Quando ele não vem antes na fila (o aluno não
+// ficou com o horário por outro motivo: o avião, a sala de Ground), null
 function porQueFicou(outro, d, ordemDoOutro, ordem) {
+  const ground = p => isGroundMission(p.mis);
+  if (ground(outro) !== ground(d)) return ground(outro) ? 'o Ground vem antes dos voos' : null;
   const pr = outro.pr ?? 3;
   const agenda = p => (Number.isInteger(p.solicitacao) ? p.solicitacao : Infinity);
   if (pr !== (d.pr ?? 3)) return pr > (d.pr ?? 3) ? `prioridade ${pr}` : null;
