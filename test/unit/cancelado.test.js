@@ -106,6 +106,22 @@ describe('O que pode voar no lugar do cancelado', () => {
     assert.equal(r.opcoes.at(-1), tipo);
   });
 
+  it('os períodos fechados valem também no mesmo horário: fechado o período do voo, nada nele, e o porquê diz isso', () => {
+    // Cancelado pelo instrutor às 10:10, com outro instrutor livre; depois, o período das 10:10 fechado no dia
+    const { estado, voo } = cancelado(cenario({ ins: [instrutor(1, 9), instrutor(2, 9)], stu: [aluno(1000, { p1: 610, p2: -1 })] }), 1000, 'Instrutor indisponível');
+    assert.equal(hm(voo.a), '10:10');
+    estado.win = estado.win.map((w, i) => (i === 2 ? false : w));
+    const resultado = runAllocationEngine(estado);
+    const r = sugerirParaCancelado(estado, resultado, voo.fKey);
+    assert.ok(r.opcoes.length > 0, 'os outros horários continuam');
+    assert.ok(r.opcoes.every(o => o.mudancas.a !== voo.a), r.opcoes.map(o => o.texto).join(' | '));
+    // Sem nenhum outro período aberto: impossível, com o período fechado no mesmo horário
+    estado.win = estado.win.map(() => false);
+    const nada = sugerirParaCancelado(estado, runAllocationEngine(estado), voo.fKey);
+    assert.deepEqual(nada.opcoes, []);
+    assert.equal(nada.impossivel[0], 'No mesmo horário: o período está fechado.');
+  });
+
   it('sem nada: "impossível", com o porquê de cada grupo', () => {
     // Um instrutor só, que faltou
     const { estado, resultado, voo } = cancelado(cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, { p1: 390, p2: -1 })] }), 1000, 'Instrutor indisponível');
