@@ -6,6 +6,7 @@ import { hojeISO } from './format.js';
 import { ligada } from './funcionalidades.js';
 import { estadoParaEscalar, inativo, inativoValeEm } from './inativos.js';
 import { comAPrioridadePadrao } from './rules.js';
+import { semAPrioridadeNosMotivos } from './engine.js';
 
 export let S = ApiClient.createFreshState();
 export let RES = null;
@@ -58,5 +59,8 @@ export function estadoDaEscala() {
   const comHangar = ligada('hangar') ? estado : { ...estado, hangar: null };
   return ligada('prioridade') ? comHangar : comAPrioridadePadrao(comHangar);
 }
+// O resultado do motor (a escala da data, a gravada e a da simulação do agendamento) como a tela o mostra: com a prioridade
+// desligada, o motivo do avião ocupado não fala dela (js/engine.js, semAPrioridadeNosMotivos)
+export const comOsMotivosDaTela = resultado => (ligada('prioridade') ? resultado : semAPrioridadeNosMotivos(resultado));
 // O aluno, o instrutor ou o recurso inativo no cadastro, na data aberta (de hoje em diante)
 export const inativoNaDataAberta = item => inativo(item) && inativoValeEm(DATA, hojeISO());

@@ -9,7 +9,8 @@
 //              Cursos, o curso do aluno e o código da missão que o pedido já tem continuam
 //   prioridade: a prioridade do pedido, na Demanda (a coluna), nas dicas, no glossário e no Manual; o motor (e a
 //              compactação, os candidatos, as Sugestões e a simulação do agendamento) recebe todos os pedidos na prioridade
-//              padrão, e valem a ordem dos agendamentos e a do cadastro. A prioridade guardada (pr) continua em S
+//              padrão, e valem a ordem dos agendamentos e a do cadastro; o motivo do avião ocupado deixa de falar dela
+//              (js/state.js, comOsMotivosDaTela). A prioridade guardada (pr) continua em S
 import { LOCAIS } from './config-supabase.js';
 
 // true liga a funcionalidade em todos os endereços

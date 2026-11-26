@@ -71,7 +71,50 @@ test.describe('A prioridade desligada (o padrão)', () => {
     expect(await naPreferencia(page)).toBe('Aluno 1001');
     expect(await guardadas(page)).toEqual([1, 5]);
   });
+
+  test('o motivo do avião ocupado não fala da prioridade: na Escala e na prévia do agendamento', async ({ page }) => {
+    await abrir(page, { estado: semAviao() });
+    await abrirEscala(page);
+    await expect(motivoDaEscala(page)).toHaveText('Aluno 1001 Rejeitado: nenhum C152 livre nos horários possíveis.');
+    // Agendar o Aluno 1002 às 06:30 tira o Aluno 1000, pelo mesmo motivo
+    await page.locator('#btn-agendar').click();
+    await page.locator('#agd-aluno').selectOption('1002');
+    await page.locator('#agd-horario').selectOption('390');
+    await page.locator('#agd-previa summary').click();
+    await expect(page.locator('#agd-previa ul')).toContainText('Sai: Aluno 1000 (nenhum C152 livre nos horários possíveis)');
+    await expect(page.locator('#agd-previa ul')).not.toContainText(/prioridade/i);
+  });
+
+  test('a escala gravada com a prioridade ligada aparece sem o motivo da prioridade', async ({ page }) => {
+    await abrir(page, { estado: semAviao() });
+    // Ligada, uma alteração grava a escala com o motivo da prioridade
+    await page.goto('./?funcionalidades=prioridade');
+    await appPronto(page);
+    await irPara(page, 'dem');
+    await page.locator('#onlyfly').uncheck();
+    await voar(page, 1002, true);
+    await voar(page, 1002, false);
+    const gravado = () => page.evaluate(d => {
+      const { resultado } = JSON.parse(localStorage.getItem(`acpm4_dia_${d}`) || '{}');
+      return ((resultado && resultado.al) || []).filter(a => a.s === 'Aluno 1001').map(a => a.m);
+    }, AMANHA);
+    await expect.poll(gravado).toEqual(['Rejeitado: nenhum C152 livre nos horários possíveis (ocupados por pedidos de prioridade maior).']);
+    // Desligada, a mesma escala gravada (nada a refaz) aparece sem ele, e continua gravada como estava
+    await page.goto('./');
+    await appPronto(page);
+    await abrirEscala(page);
+    await expect(motivoDaEscala(page)).toHaveText('Aluno 1001 Rejeitado: nenhum C152 livre nos horários possíveis.');
+    expect(await gravado()).toEqual(['Rejeitado: nenhum C152 livre nos horários possíveis (ocupados por pedidos de prioridade maior).']);
+  });
 });
+
+// Dois instrutores e um avião, os dois alunos só podem às 06:30 (na disponibilidade): o Aluno 1001 fica sem avião. O
+// Aluno 1002 não voa (o agendamento o põe às 06:30, e o Aluno 1000 sai)
+const semAviao = () => cenario({
+  ins: [instrutor(1, 9), instrutor(2, 9)], semAeronaves: apenas('C152', 'PP-LJV'),
+  stu: [aluno(1000, { p1: 390, p2: -1, jan: 'h390' }), aluno(1001, { p1: 390, p2: -1, jan: 'h390' }), aluno(1002, { fly: false })]
+});
+const motivoDaEscala = page => page.locator('#s-esc [data-caixa="erros"] li', { hasText: 'Aluno 1001' });
 
 comPrioridade.describe('A prioridade ligada: 1 é a mais alta', () => {
   comPrioridade('a tela mostra 1 para a guardada 5; escolher 1 guarda 5, e a escala segue a guardada', async ({ page }) => {
@@ -100,6 +143,12 @@ comPrioridade.describe('A prioridade ligada: 1 é a mais alta', () => {
     await appPronto(page);
     await irPara(page, 'dem');
     await expect(campoDoPedido(page, 1001, 'pr')).toHaveValue('4');
+  });
+
+  comPrioridade('o motivo do avião ocupado continua com a prioridade', async ({ page }) => {
+    await abrir(page, { estado: semAviao() });
+    await abrirEscala(page);
+    await expect(motivoDaEscala(page)).toHaveText('Aluno 1001 Rejeitado: nenhum C152 livre nos horários possíveis (ocupados por pedidos de prioridade maior).');
   });
 
   comPrioridade('a dica e o Manual dizem que 1 é a mais alta', async ({ page }) => {

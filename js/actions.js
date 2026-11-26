@@ -4,7 +4,7 @@ import { aplicarSomenteLeitura } from './somente-leitura.js';
 import { runAllocationEngine } from './engine.js';
 import { ligada } from './funcionalidades.js';
 import { ApiClient } from './storage.js';
-import { S, RES, AUDIT_LOG, BI_HISTORY, DATA, setS, setRES, setAuditLog, setBIHistory, setData, isGestor, dadoIndisponivel, modoCompartilhado, estadoDaEscala } from './state.js';
+import { S, RES, AUDIT_LOG, BI_HISTORY, DATA, setS, setRES, setAuditLog, setBIHistory, setData, isGestor, dadoIndisponivel, modoCompartilhado, estadoDaEscala, comOsMotivosDaTela } from './state.js';
 import { $, mostrarAviso, avisoAberto, showToast } from './dom.js';
 import { comHorasExternas } from './limites.js';
 import { comRepousoDoNoturno } from './noturno.js';
@@ -312,7 +312,7 @@ export async function lerData(data) {
     avisarDadosIndisponiveis();
     // Data sem escala gravada (por exemplo, uma data nova, copiada da anterior): a escala calculada aparece na hora
     // e é gravada junto com a primeira alteração
-    setRES(escala || escalaCalculada());
+    setRES(escala ? comOsMotivosDaTela(escala) : escalaCalculada());
     escalaSoCalculada = !escala;
     setAuditLog(historico);
     dadosLidos = maisNova;
@@ -368,6 +368,7 @@ function syncBIHistoryForCurrentDate() {
 }
 
 // Escala da data calculada a partir dos dados da tela (sem os inativos do cadastro, de hoje em diante: estadoDaEscala). Ela
-// guarda a data para a qual foi feita (no modo compartilhado, todos veem essa data)
-const escalaCalculada = () => ({ ...runAllocationEngine(estadoDaEscala()), data: DATA });
+// guarda a data para a qual foi feita (no modo compartilhado, todos veem essa data). Os motivos são os da tela
+// (comOsMotivosDaTela, como os da escala gravada)
+const escalaCalculada = () => ({ ...comOsMotivosDaTela(runAllocationEngine(estadoDaEscala())), data: DATA });
 
