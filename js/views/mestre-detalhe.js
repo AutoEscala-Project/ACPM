@@ -95,8 +95,10 @@ export function criarMestreDetalhe(opcoes) {
     if (novo !== null && origem !== 'endereco') estado.perdidos.delete(novo);
     if (estado.selecionado !== novo) detalhe.trocouDeRegistro();
     detalhe.avisarSemEscolha('');
-    estado.selecionado = novo;
-    estado.pedida = null;
+    // Do endereço, o registro é pedido: vira a escolha no primeiro desenho cujo modelo o tem (os dados podem não ter
+    // chegado); os outros escolhem na hora
+    if (origem === 'endereco' && novo !== null) estado.pedida = novo;
+    else { estado.selecionado = novo; estado.pedida = null; }
     // A parada do Tab vai para a escolhida (a que a lista ainda não tem, um registro novo: a da escolha, no desenho)
     estado.parada = novo !== null ? lista.chaveDe(novo) : estado.parada;
     desenhar();
@@ -273,7 +275,6 @@ export function criarMestreDetalhe(opcoes) {
       if (item !== null && item !== undefined) {
         const sel = item === 'novo' ? [...estado.naoConfirmados.keys()].find(k => k === estado.selecionado) ?? null : String(item);
         if (sel === null) { voltarParaALista({ focar: false }); return { item: null }; }
-        estado.pedida = sel;
         escolher(sel, { origem: 'endereco' });
         const escolhido = estado.selecionado === sel;
         if (umaVista() && escolhido) { if (s) s.dataset.vendo = 'detalhe'; return { item: noEndereco(sel), lugar: detalhe.regiao(), focou: false }; }
