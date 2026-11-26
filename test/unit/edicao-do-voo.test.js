@@ -674,7 +674,7 @@ describe('O editor do voo: a segunda revisão', async () => {
       const antes = S.fixos;
       S.fixos = aplicarReparo(antes, RES, '1002_0_1', { mudancas: { a: 690, b: 750 } });
       const mudados = Object.keys(antes).filter(k => S.fixos[k] !== antes[k]);
-      const rev = ida({ kind: 'restaurarFixos', fixos: Object.fromEntries(mudados.map(k => [k, antes[k]])) });
+      const rev = ida({ kind: 'restaurarFixos', fixos: Object.fromEntries(mudados.map(k => [k, antes[k]])), aprovada: true });
       reabrir(S);
       reverterReparo(S, rev);
       assert.equal(S.fixos['1002_0_1'], undefined, JSON.stringify(S.fixos['1002_0_1']));
@@ -690,7 +690,7 @@ describe('O editor do voo: a segunda revisão', async () => {
       const c = aprovado();
       c.S.fStatus = { ...(c.S.fStatus || {}), '1002_0_1': 'Cancelado' };
       c.S.fObs = { '1002_0_1': { motivo: 'Meteorologia' } };
-      const revC = ida({ kind: 'aproveitarCancelado', voos: [{ fKey: '1002_0_1', fixo: c.S.fixos['1002_0_1'], status: 'Cancelado', detalhe: { motivo: 'Meteorologia' } }], pedidos: [] });
+      const revC = ida({ kind: 'aproveitarCancelado', voos: [{ fKey: '1002_0_1', fixo: c.S.fixos['1002_0_1'], status: 'Cancelado', detalhe: { motivo: 'Meteorologia' } }], pedidos: [], aprovada: true });
       c.S.fixos['1002_0_1'] = { ...c.S.fixos['1002_0_1'], a: 690, b: 750, agendado: true };
       c.S.fStatus['1002_0_1'] = 'Pendente';
       reabrir(c.S);
@@ -699,10 +699,26 @@ describe('O editor do voo: a segunda revisão', async () => {
     });
   });
 
+  it('a mudança feita fora da escala aprovada devolve o pino de antes como estava; a marca "aprovada" fora do formato invalida a reversão', () => {
+    const S = dia();
+    const RES = runAllocationEngine(S);
+    S.fixos = { '1002_0_1': { a: 610, b: 670, r: 'PP-LJV', insId: RES.out.find(o => o.fKey === '1002_0_1').insId } };
+    const rev = ida({ kind: 'restaurarEscolha', ...escolherInstrutor(S, RES, { stuId: 1002, mid: 0 }, 1, { noLugar: true }).antes });
+    assert.equal(rev.aprovada, undefined);
+    reverterEscolha(S, rev);
+    assert.deepEqual(Object.keys(S.fixos['1002_0_1']).sort(), ['a', 'b', 'insId', 'r']);
+    for (const kind of ['restaurarEscolha', 'restaurarFixos', 'aproveitarCancelado']) {
+      const base = { kind, pedidos: [], soltar: [], fixos: { '1002_0_1': { a: 610, b: 670, r: 'PP-LJV', insId: 1 } }, voos: [{ fKey: '1002_0_1', fixo: null, status: null, detalhe: null }] };
+      if (kind === 'restaurarEscolha') base.pedidos = [{ stuId: 1002, mid: 0, insId: 0 }];
+      assert.ok(ida(base), kind);
+      assert.equal(ida({ ...base, aprovada: true }).aprovada, true, kind);
+      assert.equal(ida({ ...base, aprovada: 'sim' }), null, kind);
+    }
+  });
+
   it('o minuto exato da disponibilidade fora das 06:30 às 17:30 sai do pedido, com o aviso', () => {
     const S = dia();
-    S.stu[2].jan = 'h750';
-    S.stu[2].p1 = 750;
+    S.stu[2].jan = 'h610';
     const RES = runAllocationEngine(S);
     const voo = vooParaEditar(S, RES, '1002_0_1');
     const valores = { ...structuredClone(voo.valores), a: 1080 };

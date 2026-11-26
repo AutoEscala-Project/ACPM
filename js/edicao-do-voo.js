@@ -4,10 +4,10 @@
 // Funções puras: recebem o estado e a escala e não leem a tela
 import { runAllocationEngine } from './engine.js';
 import { conferirEscala } from './conferencia.js';
-import { GROUND_EQ_TYPE, GROUND_REG, MIS } from './config.js';
+import { GROUND_EQ_TYPE, GROUND_REG, MIS, MINUTOS_DO_DIA } from './config.js';
 import { CAMPOS_DO_PEDIDO } from './dias.js';
 import { GRUPO_DO_CONFLITO } from './conflitos.js';
-import { isGroundMission, duracaoFixaDaMissao, duracaoPadraoDaMissao, disponibilidadeDoAluno, normalizeMissionFields, alvoDoNovoPedido } from './rules.js';
+import { isGroundMission, duracaoFixaDaMissao, duracaoPadraoDaMissao, disponibilidadeDoAluno, disponibilidadeValida, normalizeMissionFields, alvoDoNovoPedido } from './rules.js';
 import { missoesDoAluno } from './agenda.js';
 import { opcoesDeRecurso, opcoesDeInstrutor, horariosDoAgendamento } from './agendamento.js';
 import { escolherInstrutor } from './instrutor-escolhido.js';
@@ -159,6 +159,13 @@ export function mudancasDoVoo(voo, valores) {
   return { aluno: valores.stuId !== de.stuId, missao, lugar, instrutor: valores.insId !== de.insId, status, alguma: lugar || valores.insId !== de.insId || status.length > 0 };
 }
 
+// O que impede salvar a alteração, como no "+ Agendar voo" (js/agendamento.js): o voo que terminaria depois da meia-noite
+// (o "Outro horário" tarde, a duração longa, o Noturno depois das 20:00), ligado ao campo do horário. O aviso, ou null
+export function bloqueioDaEdicao(voo, valores) {
+  if (voo.volta || !mudancasDoVoo(voo, valores).lugar || valores.a + valores.minutos <= MINUTOS_DO_DIA) return null;
+  return { codigo: 'depois-da-meia-noite', texto: 'O voo terminaria depois da meia-noite.', campo: 'voo-horario', conflito: true, bloqueia: true };
+}
+
 // O resumo da alteração, para a pergunta e o histórico: "Maria: 08:20 → 09:10, PR-AAA → PR-BBB"
 export function resumoDaEdicao(estado, voo, valores) {
   const de = voo.valores;
@@ -191,10 +198,12 @@ export function resumoDaEdicao(estado, voo, valores) {
 //   livre ou numa missão extra nova (alvoDoNovoPedido), com o tipo, as horas, o horário e o instrutor (nunca o pedido da
 //   agenda, a disponibilidade, a 2ª preferência, a prioridade ou a confirmação do 7º local, que são do pedido de antes); o
 //   pedido de antes deixa de voar, e o pino, o status e o detalhe passam para a chave nova.
+// A reversão guarda também o status que a alteração deixou em cada voo (statusDepois): desfazer não troca o status mudado
+// depois dela. O voo que terminaria depois da meia-noite não é gravado (bloqueioDaEdicao): null.
 // aprovada: a escala está aprovada (o status Pendente ou Confirmado não solta o voo)
 export function aplicarEdicao(estado, resultado, voo, valores, { aprovada = Boolean(estado.aprovacao) } = {}) {
   const m = mudancasDoVoo(voo, valores);
-  if (!m.alguma) return null;
+  if (!m.alguma || bloqueioDaEdicao(voo, valores)) return null;
   const { principal } = voo;
   const voos = new Map(), pedidos = new Map();
   // O voo sem pino que está na escala guarda o lugar dele: na escala aprovada depois, desfazer o põe de volta ali
@@ -231,8 +240,11 @@ export function aplicarEdicao(estado, resultado, voo, valores, { aprovada = Bool
       Object.assign(p, { fly: true, eq: tipo, p1: valores.a, ...(voo.ground ? {} : { nb: valores.minutos / 60 }) });
       if (novo) p.p2 = -1;
       if (valores.a !== voo.valores.a || novo) {
+        // A de um minuto exato vira o minuto novo, enquanto ele é um horário da disponibilidade (das 06:30 às 17:30); fora
+        // disso, ela sai, como a mais larga que não inclui o horário novo
         const permitidas = disponibilidadeDoAluno(p.jan);
-        if (typeof p.jan === 'string' && /^h\d+$/.test(p.jan)) p.jan = `h${valores.a}`;
+        const exato = typeof p.jan === 'string' && /^h\d+$/.test(p.jan) ? `h${valores.a}` : null;
+        if (exato && disponibilidadeValida(exato)) p.jan = exato;
         else if (permitidas && !permitidas(valores.a)) { delete p.jan; janSaiu = true; }
       }
       // A confirmação do 7º local foi dada para o horário, a missão e o tipo: sai quando um deles muda (como na Demanda)
@@ -286,7 +298,8 @@ export function aplicarEdicao(estado, resultado, voo, valores, { aprovada = Bool
     else delete estado.fObs[fKey];
     estado.fixos = fixosAoMudarStatus(estado.fixos, { ...o, fKey, ...(m.lugar ? { a: valores.a, b: valores.a + valores.minutos, r: voo.ground ? GROUND_REG : valores.r, insId: valores.insId || principal.insId } : {}) }, status, { aprovada });
   }
-  return { rev: { kind: 'desfazerEdicao', voos: [...voos.values()], pedidos: [...pedidos.values()], recusas: [] }, chaves, janSaiu };
+  const tocados = [...voos.values()].map(v => ({ ...v, statusDepois: estado.fStatus[v.fKey] || null }));
+  return { rev: { kind: 'desfazerEdicao', voos: tocados, pedidos: [...pedidos.values()], recusas: [] }, chaves, janSaiu };
 }
 
 // O campo do editor de cada grupo de conflito (o aviso fica ligado a ele)
@@ -297,10 +310,13 @@ const CAMPO_DO_AVISO = { 'fora-dos-horarios': 'voo-horario', 'depois-das-17h30':
 // (js/conferencia.js; fora da escala aprovada, sem simular o que o motor mudaria nos outros voos, d46): os conflitos do voo
 // (conflito: pedem "Salvar mesmo assim" e ficam na Escala), as regras que o voo posto à mão pula, o peso que falta; na
 // escala aprovada, os outros voos que ficam em conflito; a disponibilidade do aluno que sai do pedido; o voo em andamento.
-// [{ codigo, texto, campo, conflito }]
+// A missão para escolher e o voo que terminaria depois da meia-noite vêm sozinhos e não deixam salvar (bloqueia).
+// [{ codigo, texto, campo, conflito, bloqueia }]
 export function avisosDaEdicao(estado, resultado, voo, valores, { aprovada = Boolean(estado.aprovacao), programa = null } = {}) {
   const avisos = [];
   if (!valores.missao) return [{ codigo: 'sem-missao', texto: 'Escolha a missão do aluno.', campo: 'voo-missao', conflito: false, bloqueia: true }];
+  const bloqueio = bloqueioDaEdicao(voo, valores);
+  if (bloqueio) return [bloqueio];
   const copia = structuredClone(estado);
   const feito = aplicarEdicao(copia, resultado, voo, valores, { aprovada });
   if (!feito) return avisos;
