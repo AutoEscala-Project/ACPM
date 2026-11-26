@@ -1,7 +1,7 @@
 // Sugestões para um conflito: o botão "Sugestões" da caixa de conflitos abre uma gaveta com o que pode voar
 // no lugar do voo fixo; "Aplicar" muda o voo (que continua fixo) e o histórico desfaz. Cancelar pede o motivo, como no
 // status, já com o motivo do conflito marcado
-import { test, expect, abrir, irPara, abrirEscala, abrirCaixa, abrirHistorico, alternarVem, aprovar, rotuloDaData } from './fixtures.js';
+import { test, expect, abrir, irPara, abrirEscala, abrirCaixa, abrirHistorico, alternarVem, aprovar, rotuloDaData, AMANHA } from './fixtures.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
 import { documentosAtuais } from './supabase-falso.js';
 
@@ -288,5 +288,88 @@ test.describe('Sugestões só de hoje em diante', () => {
     const voo = linha(page, 'Aluno 1000');
     await expect(voo.locator('.st-sel')).toHaveValue('Cancelado');
     await expect(voo.getByRole('button', { name: 'Sugestões' })).toHaveCount(0);
+  });
+});
+
+// O voo cancelado pela meteorologia, de quem só pode às 10:10 (fixo, como o status deixa)
+const canceladoSoAs1010 = (extra = {}) => ({
+  ...cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, { p1: 610, p2: -1, jan: 'h610' })], ...extra }),
+  fixos: { '1000_0_1': { a: 610, b: 670, r: 'PP-LJV', insId: 1 } },
+  fStatus: { '1000_0_1': 'Cancelado' }, fObs: { '1000_0_1': { motivo: 'Meteorologia' } }
+});
+
+test.describe('Sugestões do voo cancelado: o mapa, a confirmação, o resultado e o Gestor', () => {
+  test('fora da disponibilidade: o primeiro clique arma "Confirmei com o aluno" e não muda nada; o segundo aplica e muda o pedido', async ({ page }) => {
+    await abrir(page, { estado: canceladoSoAs1010() });
+    await abrirEscala(page);
+    const voo = linha(page, 'Aluno 1000');
+    await voo.getByRole('button', { name: 'Sugestões' }).click();
+    const primeira = gaveta(page).locator('.opcoes-reparo li').first();
+    await expect(primeira).toContainText('Confirme com o aluno:');
+    await expect(primeira.locator('.confirmar-aluno')).toContainText('fora da disponibilidade do pedido');
+    const botao = primeira.locator('[data-reparo-aplicar]');
+    await botao.click();
+    await expect(botao).toHaveText('Confirmei com o aluno');
+    await expect(gaveta(page)).toBeVisible();
+    await expect(voo.locator('.st-sel')).toHaveValue('Cancelado');
+    await botao.click();
+    await expect(gaveta(page)).toBeHidden();
+    await expect(voo.locator('.st-sel')).toHaveValue('Pendente');
+    await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('acpm4_dia_2026-11-11')).pedidos[1000].jan)).not.toBe('h610');
+  });
+
+  test('sem o segundo clique, o botão volta a "Aplicar" e o voo continua cancelado', async ({ page }) => {
+    await abrir(page, { estado: canceladoSoAs1010() });
+    await abrirEscala(page);
+    const voo = linha(page, 'Aluno 1000');
+    await voo.getByRole('button', { name: 'Sugestões' }).click();
+    const botao = gaveta(page).locator('.opcoes-reparo li').first().locator('[data-reparo-aplicar]');
+    await botao.click();
+    await expect(botao).toHaveText('Confirmei com o aluno');
+    await page.clock.runFor(4000);
+    await expect(botao).toHaveText('Aplicar');
+    await expect(voo.locator('.st-sel')).toHaveValue('Cancelado');
+  });
+
+  test('no mapa, o popup do voo cancelado tem "Sugestões", que abre a gaveta', async ({ page }) => {
+    await abrir(page, { estado: canceladoSoAs1010() });
+    await abrirEscala(page, { vista: 'eq' });
+    await page.locator('#out .tl-bar.tl-st-Cancelado').click();
+    await expect(page.locator('#tl-pop')).toBeVisible();
+    await page.locator('#tl-pop').getByRole('button', { name: 'Sugestões' }).click();
+    await expect(gaveta(page)).toBeVisible();
+    await expect(gaveta(page).locator('h2')).toContainText('Aproveitar o voo cancelado');
+    await expect(gaveta(page)).toContainText('Cancelado: Meteorologia.');
+  });
+
+  test('o voo cancelado que já tem resultado registrado não tem "Sugestões"', async ({ page }) => {
+    const resultado = { id: 1, aluno: 1000, curso: 'PP', missao: 'PP-01', resultado: 'reprovado', data: AMANHA, voo: '1000_0_1', registrado_em: '2026-11-10T12:00:00.000Z', registrado_por: 'Operador 01' };
+    await page.addInitScript(json => { if (!localStorage.getItem('acpm4_resultados')) localStorage.setItem('acpm4_resultados', json); }, JSON.stringify([resultado]));
+    await abrir(page, { estado: canceladoSoAs1010() });
+    await abrirEscala(page);
+    const voo = linha(page, 'Aluno 1000');
+    await expect(voo.locator('.st-sel')).toHaveValue('Cancelado');
+    await expect(voo.getByRole('button', { name: 'Sugestões' })).toHaveCount(0);
+    await abrirEscala(page, { vista: 'eq' });
+    await page.locator('#out .tl-bar.tl-st-Cancelado').click();
+    await expect(page.locator('#tl-pop')).toBeVisible();
+    await expect(page.locator('#tl-pop').getByRole('button', { name: 'Sugestões' })).toHaveCount(0);
+  });
+
+  test('no Gestor, o voo cancelado e a recusa do instrutor escolhido ficam sem "Sugestões", e a gaveta não abre', async ({ page }) => {
+    const estado = canceladoSoAs1010({ ins: [instrutor(1, 9), instrutor(2, 9, { on: false })] });
+    estado.stu = [...estado.stu, aluno(1001, { p1: 390, p2: -1, insId: 2 })];
+    await abrir(page, { estado, url: './?role=gestor' });
+    await abrirEscala(page);
+    const doCancelado = linha(page, 'Aluno 1000').locator('[data-reparo]');
+    await expect(doCancelado).toHaveCount(1);
+    await expect(doCancelado).toBeHidden();
+    await abrirCaixa(page, 'erros');
+    const daRecusa = page.locator('#out details.caixa.erros [data-rejeitado]');
+    await expect(daRecusa).toHaveCount(1);
+    await expect(daRecusa).toBeHidden();
+    await doCancelado.dispatchEvent('click');
+    await daRecusa.dispatchEvent('click');
+    await expect(gaveta(page)).toBeHidden();
   });
 });
