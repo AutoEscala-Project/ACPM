@@ -88,7 +88,7 @@ async function conferirERegistrar(excecao) {
   const marcados = pedidos.filter(p => p.aluno === aluno.id && p.data === dia && !p.cancelada_em);
   const causas = [...(marcados.length ? ['marcado'] : []), ...(vaga.ok ? [] : ['locais'])];
   const confirmadas = $('#form-agenda').dataset.confirmado === chave ? causasConfirmadas : [];
-  const contexto = { aluno, dia, marcados, pedido, proximo: vaga.proximo };
+  const contexto = { aluno, dia, marcados, pedido, locais: vaga.locais, proximo: vaga.proximo };
   if (causas.some(c => !confirmadas.includes(c))) return armarConfirmacao(chave, causas, contexto);
   try {
     await ApiClient.registrarSolicitacao({
@@ -97,10 +97,11 @@ async function conferirERegistrar(excecao) {
     });
   } catch (err) {
     // Outra pessoa registrou o 6º local no mesmo horário enquanto isso (ou os pedidos da data não foram lidos): o servidor
-    // recusou, e o formulário pede a confirmação dele, com as causas já mostradas
+    // recusou, e o formulário pede a confirmação dele, com as causas já mostradas (quantos já há: os 6 que o servidor contou)
     if (err.code === 'PT422') {
       const cheio = [...pedidos, ...Array.from({ length: LIMITE_DE_VOOS_LOCAIS }, () => ({ ...pedido, janela: 'horario', cancelada_em: null }))];
-      return armarConfirmacao(chave, [...new Set([...confirmadas, 'locais'])], { ...contexto, proximo: vagaDeVooLocal(cheio, pedido, S.horarios).proximo });
+      return armarConfirmacao(chave, [...new Set([...confirmadas, 'locais'])],
+        { ...contexto, locais: Math.max(LIMITE_DE_VOOS_LOCAIS, vaga.locais || 0), proximo: vagaDeVooLocal(cheio, pedido, S.horarios).proximo });
     }
     return recusar(...recusaDoServidor(err, missao));
   }
@@ -135,12 +136,12 @@ function recusaDoServidor(err, missao) {
 let causasConfirmadas = [];
 let avisoDaConfirmacao = '';
 const chaveDaConfirmacao = botao => [+$('#ag-aluno').value, dataDoFormulario(), $('#ag-missao').value, $('#ag-recurso').value, $('#ag-horario').value, botao].join('|');
-function armarConfirmacao(chave, causas, { aluno, dia, marcados, pedido, proximo }) {
+function armarConfirmacao(chave, causas, { aluno, dia, marcados, pedido, locais: quantos, proximo }) {
   const marcado = causas.includes('marcado')
     ? `${aluno.nm} já tem voo marcado em ${dia.slice(8, 10)}/${dia.slice(5, 7)}: ${marcados.map(descreverPedido).join('; ')}. É um reagendamento ou mais um voo?` : '';
-  const locais = causas.includes('locais') ? semVagaDeVooLocal(pedido, proximo) : '';
+  const locais = causas.includes('locais') ? semVagaDeVooLocal(pedido, quantos, proximo) : '';
   const fim = !locais ? 'Para registrar mais este, clique em “Registrar mesmo assim”.'
-    : !marcado ? 'Para registrar este como o 7º, clique em “Registrar mesmo assim”.' : 'Para registrar mesmo assim, clique em “Registrar mesmo assim”.';
+    : !marcado ? `Para registrar este como o ${quantos + 1}º, clique em “Registrar mesmo assim”.` : 'Para registrar mesmo assim, clique em “Registrar mesmo assim”.';
   causasConfirmadas = causas;
   avisoDaConfirmacao = [marcado, locais, fim].filter(Boolean).join(' ');
   $('#form-agenda').dataset.confirmado = chave;
@@ -148,10 +149,10 @@ function armarConfirmacao(chave, causas, { aluno, dia, marcados, pedido, proximo
   marcarInvalidos();
   return null;
 }
-// O horário cheio de voos locais: o motivo e o próximo horário com vaga
-function semVagaDeVooLocal({ horario, missao }, proximo) {
+// O horário cheio de voos locais: o motivo (quantos já há: 6, ou mais com o 7º confirmado) e o próximo horário com vaga
+function semVagaDeVooLocal({ horario, missao }, quantos, proximo) {
   const depois = missao === 'Voo Solo' ? 'O Voo Solo sai sempre às 06:30.' : proximo ? `Próximo horário com vaga: ${proximo}.` : 'Nenhum horário mais tarde tem vaga.';
-  return `Horário cheio: já há ${LIMITE_DE_VOOS_LOCAIS} voos locais (Voo Local, Voo Solo e TGL) às ${horario}, o máximo no mesmo horário (determinação da diretoria). ${depois}`;
+  return `Horário cheio: já há ${quantos} voos locais (Voo Local, Voo Solo e TGL) às ${horario}, o máximo no mesmo horário (determinação da diretoria). ${depois}`;
 }
 
 // O segundo clique de um duplo clique (detail 2 ou mais) não faz nada: o primeiro arma a confirmação, e o segundo a daria

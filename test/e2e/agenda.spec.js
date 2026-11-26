@@ -813,6 +813,9 @@ test.describe('A Agenda pelo curso do aluno', () => {
     await expect(page.locator('#agenda-lista tbody tr')).toHaveCount(8);
     const outro = (await agendaGuardada(page)).at(-1);
     expect([outro.missao, outro.limite_confirmado_por, outro.limite_confirmado_em]).toEqual(['Navegação', null, null]);
+    // Com o 7º registrado, o aviso do seguinte conta os 7
+    await registrarPedido(page, { aluno: 'Ana', codigo: 'IN-01', horario: '08:20' });
+    await expect(erro).toHaveText('Horário cheio: já há 7 voos locais (Voo Local, Voo Solo e TGL) às 08:20, o máximo no mesmo horário (determinação da diretoria). Próximo horário com vaga: 10:10. Para registrar este como o 8º, clique em “Registrar mesmo assim”.');
   });
 
   // O duplo clique arma a confirmação com o primeiro clique; o segundo, do mesmo duplo clique, não confirma o que o aviso

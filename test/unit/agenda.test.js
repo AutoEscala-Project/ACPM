@@ -117,18 +117,24 @@ describe('Agenda: o limite de voos locais no mesmo horário', async () => {
 
   it('com 6 locais no horário, não há vaga: o próximo horário possível', () => {
     const pedidos = [...seisAs('08:20'), ...seisAs('10:10').map(p => ({ ...p, id: p.id + 20 }))];
-    assert.deepEqual(vagaDeVooLocal(pedidos, { data: '2026-11-11', horario: '08:20', missao: 'TGL (TMA)' }), { ok: false, proximo: '11:30' });
+    assert.deepEqual(vagaDeVooLocal(pedidos, { data: '2026-11-11', horario: '08:20', missao: 'TGL (TMA)' }), { ok: false, locais: 6, proximo: '11:30' });
+  });
+
+  // O 7º confirmado (F1c) fica registrado: o aviso do pedido seguinte diz quantos já há, não o limite
+  it('com o 7º confirmado já registrado, a conta é a dos locais no horário (locais)', () => {
+    const pedidos = [...seisAs('08:20'), pedido(7, '08:20', 'Voo Local', { limite_confirmado_por: 'Maria' })];
+    assert.deepEqual(vagaDeVooLocal(pedidos, { data: '2026-11-11', horario: '08:20', missao: 'Voo Local' }), { ok: false, locais: 7, proximo: '10:10' });
   });
 
   it('o próximo horário possível é um dos horários do recurso do pedido', () => {
     const local = extra => vagaDeVooLocal(seisAs('08:30'), { data: '2026-11-11', horario: '08:30', missao: 'Voo Local', ...extra });
     assert.deepEqual([local({ recurso: 'PA-34' }), local({}), local({ recurso: 'Sim. Mono' })],
-      [{ ok: false, proximo: '09:00' }, { ok: false, proximo: '10:10' }, { ok: false, proximo: '10:10' }]);
+      [{ ok: false, locais: 6, proximo: '09:00' }, { ok: false, locais: 6, proximo: '10:10' }, { ok: false, locais: 6, proximo: '10:10' }]);
   });
 
   it('outra missão não tem o limite; o Solo (só às 06:30) não tem próximo horário', () => {
     assert.deepEqual(vagaDeVooLocal(seisAs('08:20'), { data: '2026-11-11', horario: '08:20', missao: 'Navegação' }), { ok: true });
-    assert.deepEqual(vagaDeVooLocal(seisAs('06:30'), { data: '2026-11-11', horario: '06:30', missao: 'Voo Solo' }), { ok: false, proximo: null });
+    assert.deepEqual(vagaDeVooLocal(seisAs('06:30'), { data: '2026-11-11', horario: '06:30', missao: 'Voo Solo' }), { ok: false, locais: 6, proximo: null });
   });
 });
 

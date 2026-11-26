@@ -166,14 +166,15 @@ export function pedidoDaSolicitacao(solicitacao, horarios, { eq, nb } = {}) {
 }
 
 // No máximo 6 voos locais (Voo Local, Voo Solo e TGL) saindo no mesmo horário (determinação da diretoria). Ao agendar
-// mais um local num horário que já tem 6 (pedidos não cancelados da data), não há vaga: o próximo horário possível é o
-// primeiro mais tarde, entre os horários da missão no recurso do pedido (sem ele, no padrão dela), que ainda tem vaga (null:
-// nenhum)
+// mais um local num horário que já tem 6 (pedidos não cancelados da data), não há vaga: quantos já há (locais: mais de 6
+// com o 7º confirmado) e o próximo horário possível, o primeiro mais tarde, entre os horários da missão no recurso do
+// pedido (sem ele, no padrão dela), que ainda tem vaga (null: nenhum)
 export function vagaDeVooLocal(pedidos, { data, horario, missao, recurso }, horarios) {
   if (!MISSOES_LOCAIS.includes(missao)) return { ok: true };
   const noHorario = h => pedidos.filter(p => p.data === data && !p.cancelada_em && p.janela === 'horario' && p.horario === h && MISSOES_LOCAIS.includes(p.missao)).length;
-  if (noHorario(horario) < LIMITE_DE_VOOS_LOCAIS) return { ok: true };
+  const locais = noHorario(horario);
+  if (locais < LIMITE_DE_VOOS_LOCAIS) return { ok: true };
   const regra = Object.hasOwn(MIS, missao) ? MIS[missao] : MIS['Voo Local'];
   const depois = horariosDaMissao(horarios, missao, recursoValido({ missao, recurso }) || regra.defEq).map(hm).filter(h => h > horario);
-  return { ok: false, proximo: depois.find(h => noHorario(h) < LIMITE_DE_VOOS_LOCAIS) || null };
+  return { ok: false, locais, proximo: depois.find(h => noHorario(h) < LIMITE_DE_VOOS_LOCAIS) || null };
 }
