@@ -748,3 +748,134 @@ describe('O 7º voo local confirmado', () => {
     ]);
   });
 });
+
+// F1h (N9): as limitações do aluno são a prioridade máxima. Antes de percorrer a fila (a ordem não muda), dentro do Ground e
+// depois dentro dos voos, o motor faz uma primeira visita, depois dos pedidos com o instrutor escolhido para o dia e antes
+// de todos os outros, aos pedidos dos alunos com “Priorizar com”: só com os instrutores deles, em todos os horários
+// possíveis, com as duas tentativas de combustível. O que entra fica; o que não entra tenta de novo no lugar de sempre
+describe('O “Priorizar com” primeiro', () => {
+  // Dois alunos que priorizam o mesmo INVA e querem o mesmo horário (08:20); o outro INVA está livre
+  const ins = [instrutor(1, 1), instrutor(2, 1)];
+  const dupla = (a = {}, b = {}) => alocar({ ins, stu: [aluno(1000, a, { voaCom: [1] }), aluno(1001, b, { voaCom: [1] })] });
+  const comOInstrutor = ({ out }) => out.filter(o => o.insId === 1).map(o => [o.stuId, o.a]);
+
+  it('o desempate: a prioridade maior', () => {
+    assert.deepEqual(comOInstrutor(dupla({ pr: 3 }, { pr: 4 })), [[1001, 500], [1000, 610]]);
+  });
+
+  it('o desempate: com a mesma prioridade, o pedido da agenda registrado antes; o posto à mão, depois', () => {
+    assert.deepEqual(comOInstrutor(dupla({ solicitacao: 9 }, { solicitacao: 5 })), [[1001, 500], [1000, 610]]);
+    assert.deepEqual(comOInstrutor(dupla({}, { solicitacao: 5 })), [[1001, 500], [1000, 610]]);
+  });
+
+  it('o desempate: a ordem do cadastro', () => {
+    assert.deepEqual(comOInstrutor(dupla()), [[1000, 500], [1001, 610]]);
+  });
+
+  it('o desempate: a ordem das missões do aluno', () => {
+    const { out } = alocar({ ins, stu: [aluno(1000, {}, { voaCom: [1], extra: [missaoExtra(1)] })] });
+    assert.deepEqual(out.map(o => [o.mid, o.a, o.insId]), [[0, 500, 1], [1, 610, 1]]);
+  });
+
+  it('o outro voa com o INVA em outro horário; sem outro horário na disponibilidade, com outro INVA (o de sempre)', () => {
+    const { out } = dupla({}, { jan: 'h500', p2: -1 });
+    assert.deepEqual(out.map(o => [o.stuId, o.a, o.insId, Boolean(o.insPar)]), [[1000, 500, 1, true], [1001, 500, 2, false]]);
+  });
+
+  it('o primeiro passa na frente de quem não prioriza ninguém, mesmo de prioridade maior; quem não pôde fica no lugar de sempre', () => {
+    // O 1002 (prioridade 5, sem “Priorizar com”) ficaria com o INVA 1 às 08:20 (o que tem menos habilitações)
+    const tres = (voaCom, extra = {}) => alocar({ ins: [instrutor(1, 1), instrutor(2, 9)], stu: [aluno(1000, { pr: 1, jan: 'h500', p2: -1 }, { voaCom, ...extra }), aluno(1002, { pr: 5, jan: 'h500', p2: -1 })] });
+    assert.deepEqual(tres([1]).out.map(o => [o.stuId, o.insId]), [[1000, 1], [1002, 2]]);
+    // O INVA dele bloqueado pelo aluno não serve nem na primeira visita: a ordem de sempre, com outro INVA
+    assert.deepEqual(tres([1], { bl: [1] }).out.map(o => [o.stuId, o.insId]), [[1002, 1], [1000, 2]]);
+  });
+
+  it('Ground: o aluno com “Priorizar com” fica com a sala no horário dele antes de outro Ground de prioridade maior', () => {
+    const ground = (pedido, extra = {}) => aluno(pedido.id, { ...GROUND_C152, p1: 500, p2: -1, ...pedido.p }, extra);
+    const caso = voaCom => alocar({
+      ins: [instrutor(1, 1), instrutor(2, 1)],
+      stu: [ground({ id: 1000, p: { pr: 5 } }), ground({ id: 1001, p: { mis: 'Ground C172', pr: 1 } }, voaCom ? { voaCom } : {})]
+    }).out.map(o => [o.stuId, o.a, o.insId]);
+    // Sem o “Priorizar com”, o de prioridade 5 fica com a sala às 08:20; com ele, o de prioridade 1, com o INVA dele
+    assert.deepEqual(caso(null).filter(o => o[1] === 500).map(o => o[0]), [1000]);
+    assert.deepEqual(caso([2]).filter(o => o[1] === 500), [[1001, 500, 2]]);
+  });
+
+  it('com o “Priorizar com” só de instrutores de fora do cadastro, nada muda', () => {
+    const semPar = alocar({ ins: [instrutor(1, 1)], stu: [aluno(1000, { pr: 1 }), aluno(1001, { pr: 5 })] });
+    const foraDoCadastro = alocar({ ins: [instrutor(1, 1)], stu: [aluno(1000, { pr: 1 }, { voaCom: [99] }), aluno(1001, { pr: 5 })] });
+    assert.deepEqual(foraDoCadastro.out.map(o => [o.stuId, o.a]), semPar.out.map(o => [o.stuId, o.a]));
+  });
+
+  it('a recusa continua na ordem dos pedidos (o pareamento das recusas não muda)', () => {
+    // Os dois não cabem (um avião só, uma janela só): as recusas saem na ordem da fila
+    const { out, al } = alocar({
+      ins: [instrutor(1, 1)], semAeronaves: apenas('C152'),
+      stu: [aluno(1000, { pr: 5 }), aluno(1001, { pr: 1 }, { voaCom: [1] })]
+    });
+    assert.deepEqual([out.length, al.map(a => [a.s, a.codigo])], [0, [['Aluno 1000', 'sem-aviao'], ['Aluno 1001', 'sem-aviao']]]);
+  });
+});
+
+// O INVA em “Não escalar com” do aluno nunca dá o voo, por nenhum caminho do motor: a fila (também quando está no “Priorizar
+// com”), a turma de Ground, a divisão das horas, a compactação e as Sugestões. O bloqueio depois da escala montada: o voo
+// sem pino troca de INVA na rodada seguinte; o fixo fica onde está, em conflito
+describe('“Não escalar com”: nunca, por nenhum caminho', () => {
+  it('a fila: nem quando o INVA também está no “Priorizar com” (um estado que o cadastro não grava)', () => {
+    const { out, al } = runAllocationEngine(cenario({ ins: [instrutor(1, 1), instrutor(2, 9)], stu: [aluno(1000, {}, { voaCom: [1], bl: [1] })] }));
+    assert.deepEqual(out.map(o => o.insId), [2]);
+    assert.deepEqual(al.map(a => a.m), ['Sem o instrutor de “Priorizar com” (Instrutor 01: em “Não escalar com”): o voo ficou com Instrutor 02.']);
+  });
+
+  it('a turma de Ground: o aluno não entra na turma do INVA bloqueado', () => {
+    const { out } = runAllocationEngine(cenario({
+      ins: [instrutor(1, 1), instrutor(2, 9)],
+      stu: [aluno(1000, { ...GROUND_C152, p1: 500, p2: -1, insId: 1 }), aluno(1001, { ...GROUND_C152, p1: 500, p2: -1 }, { bl: [1] })]
+    }));
+    assert.deepEqual(out.map(o => [o.stuId, o.insId, o.a]), [[1001, 2, 390], [1000, 1, 500]]);
+  });
+
+  it('a divisão das horas: o voo não passa para o INVA bloqueado', () => {
+    const ins = [instrutor(1, 1), instrutor(2, 9)];
+    const stu = bl => [aluno(1000, { p1: 390 }, { bl }), aluno(1001, { p1: 500 }, { bl })];
+    assert.deepEqual(runAllocationEngine(cenario({ ins, stu: stu([]) }), { compactar: false }).out.map(o => o.insId).sort(), [1, 2]);
+    assert.deepEqual(runAllocationEngine(cenario({ ins, stu: stu([2]) }), { compactar: false }).out.map(o => o.insId), [1, 1]);
+  });
+
+  it('a compactação: nenhum voo vai para o INVA bloqueado, em 300 cenários com bloqueios', async () => {
+    const { gerarCenario } = await import('../helpers/cenarios.js');
+    const falhas = [];
+    for (let seed = 1; seed <= 300; seed++) {
+      const estado = gerarCenario(seed);
+      for (const [rotulo, opcoes] of [['compactada', {}], ['sem a divisão', { dividirHoras: false }]]) {
+        for (const o of runAllocationEngine(estado, opcoes).out) {
+          const s = estado.stu.find(x => x.id === o.stuId);
+          if (!o.trecho && s.bl.includes(o.insId)) falhas.push(`${seed} ${rotulo} ${o.fKey}`);
+        }
+      }
+    }
+    assert.deepEqual(falhas, []);
+  });
+
+  it('as Sugestões do pedido recusado não oferecem o INVA bloqueado', async () => {
+    const { sugestoesDoRejeitado } = await import('../../js/reparo.js');
+    const estado = cenario({ ins: [instrutor(1, 1), instrutor(2, 1), instrutor(3, 1)], stu: [aluno(1000, { p1: 500, p2: -1, jan: 'h500', insId: 3 }, { bl: [1] })] });
+    estado.ins[2].on = false;
+    const resultado = runAllocationEngine(estado);
+    assert.deepEqual(resultado.al.map(a => a.codigo), ['instrutor-escolhido']);
+    const instrutores = sugestoesDoRejeitado(estado, resultado, '1000_0_1').map(o => o.insId ?? (o.mudancas || {}).insId ?? (o.pino || {}).insId);
+    assert.ok(instrutores.length >= 1, JSON.stringify(instrutores));
+    assert.ok(!instrutores.includes(1), JSON.stringify(instrutores));
+  });
+
+  it('bloqueado depois da escala: o voo sem pino troca de INVA; o fixo fica, em conflito', () => {
+    const base = cenario({ ins: [instrutor(1, 1), instrutor(2, 9)], stu: [aluno(1000)] });
+    const antes = runAllocationEngine(base);
+    assert.equal(antes.out[0].insId, 1);
+    const bloqueado = { ...base, stu: [{ ...base.stu[0], bl: [1] }] };
+    assert.deepEqual(runAllocationEngine(bloqueado).out.map(o => [o.insId, Boolean(o.conflito)]), [[2, false]]);
+    const o = antes.out[0];
+    const fixo = runAllocationEngine({ ...bloqueado, fixos: { [o.fKey]: { a: o.a, b: o.b, r: o.r, insId: o.insId } } });
+    assert.deepEqual(fixo.out.map(v => [v.insId, v.conflitoCodigos]), [[1, ['bloqueio']]]);
+  });
+});
