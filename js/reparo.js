@@ -10,11 +10,11 @@
 // o avião faltou, a não ser que seja impossível. O motivo do cancelamento sai da busca (o instrutor, o avião ou o horário).
 // Na ordem: o mesmo horário e o mesmo avião, com outro instrutor; o mesmo horário, outro avião; o horário mais perto, antes
 // ou depois; outro tipo de recurso que a missão permite. A lista do conflito também ganha o horário mais perto antes dele
-import { GROUND_EQ_TYPE, T, NI, MIS } from './config.js';
+import { GROUND_EQ_TYPE, T, NI, MIS, MISSOES_LOCAIS, LIMITE_DE_VOOS_LOCAIS } from './config.js';
 import { CAMPOS_DO_PEDIDO } from './dias.js';
 import { normalizeMissionFields } from './rules.js';
 import { HORARIOS_INICIAIS, horariosDaMissao, periodoDoMinuto, fimDasMissoesDoDia } from './horarios.js';
-import { STATUS_EM_ANDAMENTO } from './status.js';
+import { STATUS_EM_ANDAMENTO, intervaloEfetivo } from './status.js';
 import { disponibilidadeDoAluno, doesGroundGateFlight } from './rules.js';
 import { pedidoDoAluno } from './voo.js';
 import { nomeDoRecurso } from './categorias.js';
@@ -103,11 +103,11 @@ export function sugerirReparos(estado, resultado, fKey, { maximo = 3, depoisDe =
       const instrutores = r ? instrutoresPara(m, m + duracao, r) : [];
       const c = instrutores.find(i => i.x === atual) || instrutores[0];
       if (!r || !c) continue;
-      opcoes.push({
+      opcoes.push(comConfirmacao({
         tipo: 'horario',
         texto: comCombustivel(`Passar para as ${hm(m)}, ${voo.isGround ? 'na' : 'no'} ${nomeDoRecurso(r)}, com ${c.x.nm}`, c),
         mudancas: { a: m, b: m + duracao, ...(voo.isGround ? {} : { r }), insId: c.x.id }
-      });
+      }, { locais: avisoDosLocais(estado, resultado, voo, grupo, m) }));
       break;
     }
   }
@@ -124,6 +124,28 @@ export function sugerirReparos(estado, resultado, fKey, { maximo = 3, depoisDe =
   const emAndamento = grupo.some(v => STATUS_EM_ANDAMENTO.includes(statusDoVoo(v, estado.fStatus)));
   const soltar = emAndamento ? [] : [{ tipo: 'soltar', texto: 'Soltar o voo: o app escolhe de novo o horário, o avião e o instrutor', mudancas: null, soltar: true }];
   return [...opcoes.slice(0, maximo), ...soltar, { tipo: 'cancelar', texto: 'Cancelar o voo (pede o motivo)', mudancas: null, motivo: motivoDoConflito(voo.conflito, inativoNoEstado(estado, (Array.isArray(estado.frota) ? estado.frota : []).find(f => f.reg === voo.r))) }];
+}
+
+// No máximo 6 voos locais saem no mesmo horário (a regra do 7º local: avisa e pede a confirmação). O aviso da sugestão que
+// põe o voo local às m, onde já saem 6 (os outros voos da escala que não foram cancelados, no horário efetivo, sem o voo
+// e a turma dele), ou null. A troca no mesmo horário do conflito não passa por aqui: o voo já sai nele
+function avisoDosLocais(estado, resultado, voo, grupo, m) {
+  if (voo.isGround || !MISSOES_LOCAIS.includes(voo.mis)) return null;
+  const daUnidade = new Set(grupo.map(o => o.fKey));
+  const locais = resultado.out.filter(o => {
+    if (daUnidade.has(o.fKey) || o.isGround || !MISSOES_LOCAIS.includes(o.mis)) return false;
+    const status = statusDoVoo(o, estado.fStatus);
+    return status !== 'Cancelado' && intervaloEfetivo(o, status, (estado.fObs || {})[o.fKey]).a === m;
+  }).length;
+  return locais >= LIMITE_DE_VOOS_LOCAIS
+    ? `Às ${hm(m)}, o ${locais + 1}º voo local do horário: no máximo ${LIMITE_DE_VOOS_LOCAIS} voos locais saem no mesmo horário.` : null;
+}
+
+// A sugestão que pede a confirmação: a com o aluno (fora da disponibilidade do pedido, outro tipo) e a do limite de locais,
+// uma frase cada; o botão armado diz qual ("Confirmei com o aluno" quando ela é com o aluno)
+function comConfirmacao(opcao, { aluno = null, locais = null }) {
+  if (!aluno && !locais) return opcao;
+  return { ...opcao, confirmar: [aluno, locais].filter(Boolean).join(' '), armado: aluno ? 'Confirmei com o aluno' : 'Aplicar mesmo assim' };
 }
 
 // A sugestão da busca na lista do conflito: o instrutor escolhido acompanha o reparo como sempre (escolhasDaUnidade, no
@@ -209,13 +231,15 @@ function buscaDoVoo(estado, resultado, voo, grupo, { depoisDe = null, semInstrut
   }
   const opcao = (tipoDaOpcao, tipo, m, { r, c }, rotulo) => {
     const fora = !naDisponibilidade(m), outroTipo = tipo !== tipoDoVoo;
-    return {
+    return comConfirmacao({
       tipo: tipoDaOpcao,
       texto: comCombustivel(rotulo, c),
       mudancas: { a: m, b: m + duracao, ...(voo.isGround ? {} : { r }), insId: c.x.id },
-      pedido: { insId: c.x.id, ...(fora ? { jan: `h${m}` } : {}), ...(outroTipo ? { eq: tipo } : {}) },
-      ...(fora || outroTipo ? { confirmar: `Confirme com o aluno: ${[fora ? `às ${hm(m)}, fora da disponibilidade do pedido` : '', outroTipo ? `no ${tipo}` : ''].filter(Boolean).join(', ')}.` } : {})
-    };
+      pedido: { insId: c.x.id, ...(fora ? { jan: `h${m}` } : {}), ...(outroTipo ? { eq: tipo } : {}) }
+    }, {
+      aluno: fora || outroTipo ? `Confirme com o aluno: ${[fora ? `às ${hm(m)}, fora da disponibilidade do pedido` : '', outroTipo ? `no ${tipo}` : ''].filter(Boolean).join(', ')}.` : null,
+      locais: avisoDosLocais(estado, resultado, voo, grupo, m)
+    });
   };
   // Os horários de um tipo: primeiro os da disponibilidade do pedido, depois os de fora (que pedem a confirmação com o
   // aluno); em cada parte, do mais perto do voo para o mais longe (empatados, o mais cedo)

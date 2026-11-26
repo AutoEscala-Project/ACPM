@@ -274,8 +274,9 @@ document.addEventListener('click', e => {
     showToast('Instrutor escolhido: o pedido entra na escala.', 'ok');
     return;
   }
-  // A sugestão fora da disponibilidade do pedido ou em outro tipo pede a confirmação com o aluno (dois cliques)
-  if (opcao.confirmar && !confirmado(botao, 'Confirmei com o aluno')) return;
+  // A sugestão fora da disponibilidade do pedido ou em outro tipo pede a confirmação com o aluno, e a que faz do voo o 7º
+  // local do horário, a do operador (dois cliques)
+  if (opcao.confirmar && !confirmado(botao, opcao.armado || 'Confirmei com o aluno')) return;
   // O voo cancelado aproveitado: aplicada, a sugestão fixa o voo no lugar dela e o volta para Pendente, e o pedido muda
   // com ela
   if (cancelado) {
