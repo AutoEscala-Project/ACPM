@@ -72,23 +72,19 @@ test.describe('Tela da Escala', () => {
     await expect(erros).not.toHaveAttribute('open', '');
   });
 
-  // Inverter eixo X:Y: os recursos (ou os instrutores) viram colunas e as horas descem à esquerda; o voo continua o mesmo
-  // botão (abre os detalhes) e o clique no espaço livre agenda no horário da altura dele
-  test('Inverter eixo X:Y: recursos nas colunas, horas nas linhas, os voos e o clique continuam', async ({ page }) => {
+  // O mapa abre transposto: os recursos (ou os instrutores) em colunas e as horas descendo à esquerda. Inverter eixo X:Y
+  // põe as horas nas colunas e um recurso por linha, e outro clique volta; o voo continua o mesmo botão (abre os detalhes)
+  // e o clique no espaço livre agenda no horário da posição dele, nos dois eixos
+  test('o mapa abre com os recursos nas colunas e as horas nas linhas; Inverter eixo X:Y troca e volta, os voos e o clique continuam', async ({ page }) => {
     const erros = [];
     page.on('pageerror', e => erros.push(e.message));
     page.on('console', m => { if (m.type() === 'error') erros.push(m.text()); });
     await abrirComExemplo(page);
     await abrirEscala(page, { vista: 'eq' });
     const eixo = page.locator('#btn-eixo');
+    await expect(eixo).toHaveText('Inverter eixo X:Y');
     await expect(eixo).toHaveAttribute('aria-pressed', 'false');
-    await expect(page.locator('#out .tl-wrap')).not.toHaveClass(/transposto/);
-    const barra = page.locator('#out .tl-bar').first();
-    const antes = await barra.boundingBox();
-    expect(antes.width).toBeGreaterThan(antes.height);
-
-    await eixo.click();
-    await expect(eixo).toHaveAttribute('aria-pressed', 'true');
+    await expect(eixo).not.toHaveClass(/\bon\b/);
     await expect(page.locator('#out .tl-wrap')).toHaveClass(/\btransposto\b/);
     // As linhas lado a lado (colunas) e as faixas em pé
     const [r1, r2] = await page.locator('#out .tl-row').evaluateAll(rs => rs.slice(0, 2).map(r => r.getBoundingClientRect().toJSON()));
@@ -100,9 +96,10 @@ test.describe('Tela da Escala', () => {
     const marcas = await page.locator('#out .tl-axis span').evaluateAll(ms => ms.slice(0, 3).map(m => m.getBoundingClientRect().top));
     expect(marcas[1]).toBeGreaterThan(marcas[0]);
     expect(marcas[2]).toBeGreaterThan(marcas[1]);
-    // O voo: mais alto que largo, abre e fecha os detalhes como antes
-    const depois = await barra.boundingBox();
-    expect(depois.height).toBeGreaterThan(depois.width / 3);
+    // O voo: mais alto que largo, abre e fecha os detalhes
+    const barra = page.locator('#out .tl-bar').first();
+    const emPe = await barra.boundingBox();
+    expect(emPe.height).toBeGreaterThan(emPe.width / 3);
     await barra.click();
     await expect(page.locator('#tl-pop')).toBeVisible();
     await page.keyboard.press('Escape');
@@ -110,22 +107,57 @@ test.describe('Tela da Escala', () => {
 
     // O clique no espaço livre de uma coluna agenda no horário da altura dele (contada da borda de dentro da faixa)
     const livre = page.locator('#out .tl-row:not(:has(.tl-bar)) .tl-track:not(.inerte)').first();
-    const ponto = await livre.evaluate((el, m) => {
+    const naAltura = await livre.evaluate((el, m) => {
       const { inicio, fim } = el.closest('.tl-wrap').dataset;
       return { x: el.clientWidth / 2, y: ((m - inicio) / (fim - inicio)) * el.clientHeight };
     }, 625);
-    await livre.click({ position: ponto });
+    await livre.click({ position: naAltura });
+    await expect(page.locator('#dlg-agendar')).toBeVisible();
+    await expect(page.locator('#dlg-agendar')).toHaveAccessibleDescription(/clique perto das 10:25$/);
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#dlg-agendar')).toBeHidden();
+
+    // Inverter: as horas nas colunas, um recurso por linha, o botão apertado
+    await eixo.click();
+    await expect(eixo).toHaveAttribute('aria-pressed', 'true');
+    await expect(eixo).toHaveClass(/\bon\b/);
+    await expect(page.locator('#out .tl-wrap')).not.toHaveClass(/transposto/);
+    const [d1, d2] = await page.locator('#out .tl-row').evaluateAll(rs => rs.slice(0, 2).map(r => r.getBoundingClientRect().toJSON()));
+    expect(d2.top).toBeGreaterThan(d1.top);
+    expect(Math.abs(d1.left - d2.left)).toBeLessThan(1);
+    const deitada = await barra.boundingBox();
+    expect(deitada.width).toBeGreaterThan(deitada.height);
+    // As marcas do eixo vão para a direita
+    const marcasDeitadas = await page.locator('#out .tl-axis span').evaluateAll(ms => ms.slice(0, 3).map(m => m.getBoundingClientRect().left));
+    expect(marcasDeitadas[1]).toBeGreaterThan(marcasDeitadas[0]);
+    expect(marcasDeitadas[2]).toBeGreaterThan(marcasDeitadas[1]);
+    // O clique no espaço livre de uma linha agenda no horário da largura dele
+    const naLargura = await livre.evaluate((el, m) => {
+      const { inicio, fim } = el.closest('.tl-wrap').dataset;
+      return { x: ((m - inicio) / (fim - inicio)) * el.clientWidth, y: el.clientHeight / 2 };
+    }, 625);
+    await livre.click({ position: naLargura });
     await expect(page.locator('#dlg-agendar')).toBeVisible();
     await expect(page.locator('#dlg-agendar')).toHaveAccessibleDescription(/clique perto das 10:25$/);
     await page.keyboard.press('Escape');
 
-    // Na Lista o botão some; de volta ao mapa, o eixo continua invertido até outro clique
+    // Na Lista o botão some; de volta ao mapa, as horas continuam nas colunas até outro clique, que volta ao padrão
     await page.locator('#s-esc [data-tl="lista"]').click();
     await expect(eixo).toBeHidden();
     await page.locator('#s-esc [data-tl="ins"]').click();
-    await expect(page.locator('#out .tl-wrap')).toHaveClass(/\btransposto\b/);
-    await eixo.click();
     await expect(page.locator('#out .tl-wrap')).not.toHaveClass(/transposto/);
+    await expect(eixo).toHaveAttribute('aria-pressed', 'true');
+    await eixo.click();
+    await expect(page.locator('#out .tl-wrap')).toHaveClass(/\btransposto\b/);
+    await expect(eixo).toHaveAttribute('aria-pressed', 'false');
+    // Recarregar a página: o mapa abre de novo com os recursos nas colunas
+    await eixo.click();
+    await expect(eixo).toHaveAttribute('aria-pressed', 'true');
+    await page.reload();
+    await appPronto(page);
+    await abrirEscala(page, { vista: 'eq' });
+    await expect(page.locator('#out .tl-wrap')).toHaveClass(/\btransposto\b/);
+    await expect(page.locator('#btn-eixo')).toHaveAttribute('aria-pressed', 'false');
     expect(erros).toEqual([]);
   });
 

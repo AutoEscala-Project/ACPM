@@ -54,14 +54,20 @@ details.caixa.avisos summary { color: var(--wa); }
 /* O mapa rola dentro do próprio painel quando não cabe na tela */
 .mapa { overflow-x: auto; }
 .mapa .tl-wrap { min-width: 720px; }
-/* O eixo invertido (Inverter eixo X:Y): cada recurso (ou instrutor) uma coluna, com o nome em cima, e as horas descendo à
-   esquerda, 56 px por hora (--horas vem do mapa). As colunas dividem a largura e, quando não cabem, o mapa rola de lado */
-.mapa .tl-wrap.transposto { display: flex; align-items: flex-start; min-width: 0; --altura: calc(var(--horas, 12) * 56px); }
-.transposto .tl-axis { flex: none; width: 42px; height: calc(var(--altura) - 2px); margin: 51px 6px 0 0; }
+/* O mapa transposto (o padrão; Inverter eixo X:Y volta às horas nas colunas): cada recurso (ou instrutor) uma coluna, com
+   o nome em cima, e as horas descendo à esquerda, 56 px por hora (--horas vem do mapa). As colunas dividem a largura e,
+   quando não cabem, o mapa rola de lado. Uma grade de duas linhas, os nomes e as faixas: cada coluna usa as linhas da
+   grade (subgrid), então o nome mais alto (o nome longo que quebra no celular) desce todas as faixas juntas, e as horas
+   continuam na altura delas */
+.mapa .tl-wrap.transposto {
+  display: grid; grid-template-columns: 48px; grid-template-rows: auto var(--altura); grid-auto-flow: column;
+  grid-auto-columns: minmax(112px, 1fr); row-gap: 6px; align-items: start; min-width: 0; --altura: calc(var(--horas, 12) * 56px);
+}
+.transposto .tl-axis { grid-row: 2; grid-column: 1; width: 42px; height: calc(var(--altura) - 2px); margin: 1px 6px 0 0; }
 .transposto .tl-axis span { left: auto; right: 0; top: var(--pos); transform: translateY(-50%); }
 .transposto .tl-axis span.fim { transform: translateY(-100%); }
-.transposto .tl-row { flex: 1 0 112px; flex-direction: column; align-items: stretch; gap: 6px; padding: 0 3px; border-top: 0; border-left: 1px solid var(--ln); }
-.transposto .tl-lbl { width: auto; height: 44px; align-content: center; overflow: hidden; }
+.transposto .tl-row { grid-row: span 2; display: grid; grid-template-rows: subgrid; align-items: stretch; min-width: 0; padding: 0 3px; border-top: 0; border-left: 1px solid var(--ln); }
+.transposto .tl-lbl { width: auto; min-height: 44px; align-content: center; }
 .transposto .tl-lbl > span, .transposto .tl-lbl > small { white-space: nowrap; }
 .transposto .tl-track {
   flex: none;
@@ -373,12 +379,13 @@ body[data-role="gestor"] #out .tl-track { cursor: default; }
   .win-btn { min-height: 44px; }
   /* O "+" que agenda: na linha do mapa, no horário da lista e na turma de Ground */
   .tl-agendar, .win-agendar { min-width: 44px; min-height: 44px; }
-  /* A barra do voo com 46 px de altura para o dedo (a faixa com 52 px; no eixo invertido, a altura é a duração) */
+  /* A barra do voo com 46 px de altura para o dedo (a faixa com 52 px, com as horas nas colunas; no mapa transposto, a altura é a duração) */
   .tl-track { height: 52px; }
   /* Com o "+" de 44 px, sobram uns 107 px para o nome da linha do mapa: o nome (e as horas) quebram em quantas linhas
      precisarem, em vez de terminar em reticências (no toque, não há o title para ler o resto). Até duas linhas, a linha
-     do mapa fica da altura do "+" */
-  .tl-lbl > span, .tl-lbl > small { white-space: normal; overflow-wrap: anywhere; }
+     do mapa fica da altura do "+". No mapa transposto, a coluna tem uns 60 px para o nome, e o nome mais alto desce todas
+     as faixas juntas */
+  .tl-lbl > span, .tl-lbl > small, .transposto .tl-lbl > span, .transposto .tl-lbl > small { white-space: normal; overflow-wrap: anywhere; }
   .tl-pop-btn[data-act="agendar"] { min-height: 44px; }
   .tabela-escala tr.win .win-btn { padding-right: 52px; }
 }

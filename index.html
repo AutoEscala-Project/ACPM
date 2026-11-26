@@ -437,7 +437,7 @@
         <button type="button" aria-pressed="false" data-tl="lista"><svg class="ico"><use href="#i-lista"/></svg>Lista</button>
         <button type="button" aria-pressed="false" data-tl="painel"><svg class="ico"><use href="#i-painel"/></svg>Painel</button>
       </div>
-      <button type="button" class="btn sec" id="btn-eixo" aria-pressed="false" title="Os recursos (ou os instrutores) nas colunas e as horas nas linhas do mapa">Inverter eixo X:Y</button>
+      <button type="button" class="btn sec" id="btn-eixo" aria-pressed="false" title="As horas nas colunas e um recurso (ou instrutor) por linha do mapa; outro clique volta aos recursos nas colunas">Inverter eixo X:Y</button>
       <button type="button" class="btn sec" id="btn-indisponiveis" aria-pressed="false" title="Esconder do mapa os recursos indisponíveis nesta data (em manutenção); o que ainda tem voo continua no mapa">Ocultar indisponíveis</button>
       <button type="button" class="btn edit-only" id="btn-agendar" data-act="agendar" data-agendar="dia" aria-haspopup="dialog">+ Agendar voo</button>
       <span class="cresce"></span>
@@ -689,7 +689,7 @@
       <ul>
         <li><b>Por recurso</b> e <b>Por instrutor:</b> o mapa do dia, com a ocupação de cada um, e também as linhas livres: todos os recursos (o avião em manutenção fica riscado) e os instrutores disponíveis no dia.
         Um clique num voo abre os detalhes dele (aluno, instrutor, recurso, missão, peso e status); Esc ou um clique fora fecha (com os detalhes abertos, o clique fora só fecha).
-        <b>Inverter eixo X:Y</b> põe os recursos (ou os instrutores) nas colunas e as horas descendo nas linhas; outro clique volta.
+        O mapa abre com os recursos (ou os instrutores) nas colunas e as horas descendo nas linhas; <b>Inverter eixo X:Y</b> põe as horas nas colunas e um recurso (ou instrutor) por linha, e outro clique volta (ao recarregar a página, o mapa abre de novo com os recursos nas colunas).
         Em Por recurso, <b>Ocultar indisponíveis</b> tira do mapa os recursos desligados na data (em manutenção); o que ainda tem voo continua, e outro clique mostra todos.</li>
         <li><b>Lista:</b> uma linha por voo, por horário.
         A turma de Ground ocupa uma linha só, com os alunos logo abaixo.
