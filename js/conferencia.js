@@ -420,8 +420,10 @@ const inicioDoSemPar = porque => `Sem o instrutor de “Priorizar com” (${porq
 // - o voo sem pino que ficou com um instrutor do “Priorizar com” fora do horário pedido: a disputa, quando há uma (por
 //   qualquer instrutor do “Priorizar com” que pudesse dar o voo).
 // A disputa: no horário pedido (horarioPedido), o instrutor do “Priorizar com” está com outro aluno que também o prioriza,
-// com um voo fixo ou com um pedido que tem o instrutor escolhido para o dia; sem ninguém assim, não há frase. O fixo pela
-// aprovação ou pelo status não avisa, nem o voo posto à mão cancelado (o voo sem pino cancelado avisa, como antes)
+// com um voo fixo, com um pedido que tem o instrutor escolhido para o dia, ou, quando o aluno voa nesse horário, com outro
+// voo do mesmo minuto que não o prioriza (“; a troca não serve a <aluno>”: a troca de INVAs não serviu); sem ninguém assim,
+// não há frase. O fixo pela aprovação ou pelo status não avisa, nem o voo posto à mão cancelado (o voo sem pino cancelado
+// avisa, como antes)
 export function avisosDoPriorizarCom(state, out, { semPar = new Map() } = {}) {
   const alunos = new Map(state.stu.map((s, i) => [s.id, { s, i }]));
   const instrutores = new Map(state.ins.map(x => [x.id, x]));
@@ -429,12 +431,14 @@ export function avisosDoPriorizarCom(state, out, { semPar = new Map() } = {}) {
   const pedido = o => { const a = alunos.get(o.stuId); return a && !o.trecho ? pedidoDoAluno(a.s, o.mid || 0) : null; };
   const ativo = o => statusDoVoo(o, state.fStatus) !== 'Cancelado';
   const fimDe = o => (o.trecho ? o.livreAs || o.b : o.b);
-  // Quem está com o instrutor x no horário pedido (a, b), além do aluno: o primeiro pelo horário e pela ordem do cadastro
+  // Quem está com o instrutor x no horário pedido (a, b), além do aluno: o primeiro pelo horário e pela ordem do cadastro.
+  // Um voo fixo, um com o instrutor escolhido, um de outro aluno que também prioriza x, ou um voo que sai no mesmo minuto
+  // que o do aluno, no horário pedido (a troca de INVAs do pareamento não serviu a ele: js/engine.js, parearNoHorario)
   const quemEsta = (o, x, a, b) => out.filter(v => v !== o && v.stuId !== o.stuId && v.insId === x && ativo(v) && v.a < b && a < fimDe(v) && !(o.isGround && v.classKey === o.classKey))
     .filter(v => {
       if (v.fixo || v.insEscolhido) return true;
       const outro = alunos.get(v.stuId);
-      return Boolean(outro && (outro.s.voaCom || []).includes(x));
+      return Boolean(outro && ((outro.s.voaCom || []).includes(x) || (!v.isGround && !v.trecho && !o.isGround && v.a === a && o.a === a)));
     })
     .sort((p, q) => p.a - q.a || p.o - q.o || (p.mid || 0) - (q.mid || 0))[0] || null;
   const disputa = (o, d, s, lista) => {
@@ -450,7 +454,9 @@ export function avisosDoPriorizarCom(state, out, { semPar = new Map() } = {}) {
       const quem = outro ? outro.s.nm : v.s;
       // Quando ele voa: o horário, e o instrutor quando é outro do “Priorizar com”
       const quando = o.a !== t ? `; ${s.nm} voa às ${hm(o.a)}${lista.includes(o.insId) && o.insId !== x ? ` com ${o.ins}` : ''}` : '';
-      return `${s.nm} ${ambos ? `e ${quem} priorizam` : 'prioriza'} ${instrutores.get(x).nm} às ${hm(t)}: ficou com ${quem}${porQue ? ` (${porQue})` : ''}${quando}.`;
+      // O outro, no mesmo minuto, não prioriza x e não tem pino nem escolha: a troca de INVAs não serve a ele
+      const troca = !ambos && !v.fixo && !v.insEscolhido ? `; a troca não serve a ${quem}` : '';
+      return `${s.nm} ${ambos ? `e ${quem} priorizam` : 'prioriza'} ${instrutores.get(x).nm} às ${hm(t)}: ficou com ${quem}${porQue ? ` (${porQue})` : ''}${quando}${troca}.`;
     }
     return null;
   };

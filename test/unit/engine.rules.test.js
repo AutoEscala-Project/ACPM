@@ -894,6 +894,18 @@ describe('O “Priorizar com” escolhe o instrutor, não o horário', () => {
     }
   });
 
+  it('a troca que não serve ao outro aluno do mesmo minuto é dita: “a troca não serve a”', () => {
+    const inicio = 'Sem o instrutor de “Priorizar com” (Instrutor 01: ocupado nos horários possíveis): o voo ficou com Instrutor 02. Aluno 1000 prioriza Instrutor 01 às 08:20: ficou com Aluno 1002 (prioridade 5)';
+    // O 1002 não voa com o INVA 2 (“Não escalar com”)
+    assert.deepEqual(doPar(tres({ extra1002: { bl: [2] } }).al), [`${inicio}; a troca não serve a Aluno 1002.`]);
+    // O 1002 no C172 (o rodízio) e o 1000 no C152: trocar mudaria o rodízio
+    assert.deepEqual(doPar(tres({ ins: [instrutor(1, 9), instrutor(2, 9)], de1002: { eq: 'C172' } }).al), [`${inicio}; a troca não serve a Aluno 1002.`]);
+    // Com o instrutor escolhido para o dia ou num voo fixo, o porquê de sempre, sem a troca
+    assert.deepEqual(doPar(tres({ de1002: { insId: 1 } }).al), [`${inicio.replace('prioridade 5', 'instrutor escolhido para o dia')}.`]);
+    // O motor de antes do F1h: o aviso de antes
+    assert.deepEqual(doPar(tres({ extra1002: { bl: [2] }, opcoes: { compactar: false, antesDoF1h: true } }).al), ['Sem o instrutor de “Priorizar com” (Instrutor 01: ocupado nos horários possíveis): o voo ficou com Instrutor 02.']);
+  });
+
   it('um caminho: quem está com o INVA vai para outro do “Priorizar com” dele, e os dois voam com um dos seus', () => {
     // O 1000 prioriza o 1 e o 2 e fica com o 1; o 1001 só prioriza o 1 e fica com o 2 (só às 08:20). O 1000 passa para o 2
     const { out, al } = alocar({ ins: [instrutor(1, 1), instrutor(2, 1), instrutor(3, 1)], stu: [aluno(1000, { pr: 4, jan: 'h500', p2: -1 }, { voaCom: [1, 2] }), aluno(1001, { jan: 'h500', p2: -1 }, { voaCom: [1] })] });
