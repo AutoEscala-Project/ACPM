@@ -131,7 +131,8 @@ describe('Sugestões para um conflito', () => {
     const base = cenario({ ins: [instrutor(1, 9), instrutor(2, 9)], stu: [aluno(1000, { p1: 390, p2: -1 })] });
     const { estado, resultado } = aprovadoEMudado(base, e => ({ ...e, win: e.win.map((v, w) => (w === 0 ? false : v)) }));
     assert.deepEqual(resultado.out[0].conflitoCodigos, ['horario-fechado']);
-    const opcoes = sugerirReparos(estado, resultado, '1000_0_1');
+    // (o outro tipo, que a lista do conflito também ganha, fica de fora daqui)
+    const opcoes = sugerirReparos(estado, resultado, '1000_0_1').filter(o => o.tipo !== 'tipo');
     assert.deepEqual(opcoes.map(o => o.tipo), ['horario', 'soltar', 'cancelar']);
     const [voo] = runAllocationEngine(aplicar(estado, resultado, '1000_0_1', opcoes[0])).out;
     assert.equal(voo.conflito, undefined);
@@ -150,8 +151,9 @@ describe('Sugestões para um conflito', () => {
       const { estado, resultado } = aprovadoEMudado(base, e => ({ ...e, ins: [instrutor(1, 9, { aw })] }));
       const voo = resultado.out.find(o => o.mis === mis);
       assert.deepEqual([hm(voo.a), voo.conflitoCodigos], ['14:30', ['instrutor-indisponivel']]);
-      // (o horário mais perto antes, que a lista do conflito também ganha, fica de fora daqui: a regra é a dos de depois)
-      return sugerirReparos(estado, resultado, voo.fKey).filter(o => !o.mudancas || o.mudancas.a > voo.a)
+      // (o horário mais perto antes e o outro tipo, que a lista do conflito também ganha, ficam de fora daqui: a regra é a
+      // dos de depois)
+      return sugerirReparos(estado, resultado, voo.fKey).filter(o => !o.mudancas || (o.tipo !== 'tipo' && o.mudancas.a > voo.a))
         .map(o => (o.mudancas ? `${hm(o.mudancas.a)}–${hm(o.mudancas.b)}` : o.tipo));
     };
     const simulador = (fly, nb) => sugestoes([aluno(1000, noturno(fly), { extra: [missaoExtra(1, { mis: 'Simulador', eq: 'Sim. Mono', nb, p1: 870, p2: -1 })] })], 'Simulador');

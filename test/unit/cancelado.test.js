@@ -305,7 +305,8 @@ describe('O limite de voos locais no horário', () => {
     const v = runAllocationEngine(base).out, v0 = v.find(o => o.stuId === 1000);
     const estado = { ...base, fixos: fixosAoAprovar({}, v), aprovacao: { em: '2026-11-10T21:05:00.000Z', por: 'Operador 01' }, ins: base.ins.map(x => (x.id === v0.insId ? { ...x, on: false } : x)) };
     const resultado = runAllocationEngine(estado);
-    const opcoes = sugerirReparos(estado, resultado, v0.fKey).filter(o => o.mudancas);
+    // (as trocas no mesmo horário: o horário mais perto e o outro tipo vêm depois delas)
+    const opcoes = sugerirReparos(estado, resultado, v0.fKey).filter(o => o.mudancas && o.mudancas.a === undefined);
     assert.ok(opcoes.length > 0);
     assert.ok(opcoes.every(o => !o.confirmar), opcoes.map(o => o.texto).join(' | '));
     const outro = cancelado(cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, { p1: 610, p2: -1 })] }), 1000, 'Meteorologia');
@@ -445,7 +446,8 @@ describe('O conflito: outro tipo e o horário fora da disponibilidade', () => {
     const base = cenario({ ins: [instrutor(1, 9), instrutor(2, 9)], stu: [aluno(1000, { p1: 390, p2: -1 })] });
     const v0 = runAllocationEngine(base).out[0];
     const estado = { ...base, fixos: { [v0.fKey]: pinoDoVoo(v0) }, ins: base.ins.map(x => (x.id === v0.insId ? { ...x, on: false } : x)) };
-    const opcoes = sugerirReparos(estado, runAllocationEngine(estado), v0.fKey).filter(o => o.mudancas);
+    // (a troca no mesmo horário; o outro tipo, que vem depois, muda o pedido)
+    const opcoes = sugerirReparos(estado, runAllocationEngine(estado), v0.fKey).filter(o => o.mudancas && o.tipo !== 'tipo');
     assert.ok(opcoes.length > 0);
     assert.ok(opcoes.every(o => o.pedido === undefined), opcoes.map(o => o.texto).join(' | '));
   });
@@ -526,6 +528,34 @@ describe('O que a sugestão muda nos outros voos', () => {
       }
     }
     assert.ok(vistas > 20 && comMudanca > 0, `${vistas} sugestões, ${comMudanca} com mudança`);
+  });
+});
+
+// A lista do conflito ganha os dois últimos grupos sempre (até o máximo), não só quando nada mais serve: o horário mais
+// perto (o de antes, ou fora da disponibilidade, quando já há um mais tarde) e outro tipo
+describe('O conflito: os dois últimos grupos sempre', () => {
+  const aprovacao = { em: '2026-11-10T21:05:00.000Z', por: 'Operador 01' };
+  it('com um horário mais tarde, o outro tipo também aparece', () => {
+    // O único instrutor só vem à tarde: o voo das 08:20 passa para as 12:40 ou vai para o C172
+    const base = cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, { p1: 500, p2: -1 })] });
+    const v0 = runAllocationEngine(base).out[0];
+    const aw = Array(9).fill(true); for (let w = 0; w < 4; w++) aw[w] = false;
+    const estado = { ...base, fixos: { [v0.fKey]: pinoDoVoo(v0) }, aprovacao, ins: [instrutor(1, 9, { aw })] };
+    const resultado = runAllocationEngine(estado);
+    const opcoes = sugerirReparos(estado, resultado, v0.fKey).filter(o => o.mudancas);
+    assert.deepEqual(opcoes.map(o => o.tipo), ['horario', 'tipo'], opcoes.map(o => o.texto).join(' | '));
+    assert.ok(opcoes[0].mudancas.a > v0.a && !opcoes[0].confirmar);
+    assert.match(opcoes[1].confirmar, /^Confirme com o aluno: .*no C172\./);
+  });
+
+  it('com outro instrutor no mesmo horário, o horário mais perto e o outro tipo vêm depois, até o máximo', () => {
+    const base = cenario({ ins: [instrutor(1, 9), instrutor(2, 9)], stu: [aluno(1000, { p1: 610, p2: -1 })] });
+    const v = runAllocationEngine(base).out;
+    const estado = { ...base, fixos: fixosAoAprovar({}, v), aprovacao, ins: base.ins.map(x => (x.id === v[0].insId ? { ...x, on: false } : x)) };
+    const resultado = runAllocationEngine(estado);
+    const opcoes = sugerirReparos(estado, resultado, v[0].fKey, { maximo: 5 }).filter(o => o.mudancas);
+    assert.deepEqual(opcoes.map(o => o.tipo), ['instrutor', 'horario', 'tipo'], opcoes.map(o => o.texto).join(' | '));
+    assert.equal(sugerirReparos(estado, resultado, v[0].fKey).filter(o => o.mudancas).length, 3);
   });
 });
 
