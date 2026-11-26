@@ -12,12 +12,12 @@
 // do aluno também é agendado: o que está na escala muda de lugar ("Mover"), e o que ficou fora entra ("Encaixar"), com o
 // mesmo pedido. No Ground, o aluno entra numa turma do dia ou abre uma turma nova. Tudo aqui é puro: a tela só desenha o
 // que sai daqui.
-import { MIS, T, NI, DAY, GROUND_EQ_TYPE, GROUND_REG, GROUND_DURATION_MIN, DEFAULT_LIM, MINUTOS_DO_DIA, NOTURNO, MISSOES_LOCAIS, LIMITE_DE_VOOS_LOCAIS } from './config.js';
+import { MIS, GROUND_EQ_TYPE, GROUND_REG, GROUND_DURATION_MIN, DEFAULT_LIM, MINUTOS_DO_DIA, NOTURNO, MISSOES_LOCAIS, LIMITE_DE_VOOS_LOCAIS } from './config.js';
 import {
   alvoDoNovoPedido, normalizeMissionFields, duracaoFixaDaMissao, duracaoPadraoDaMissao, duracaoValida, duracaoDigitada, isGroundMission,
   disponibilidadeDoAluno, rotuloDaDisponibilidade, pesoDigitado, ERRO_DA_DURACAO, ERRO_DO_PESO
 } from './rules.js';
-import { horariosDaMissao, periodoDoMinuto, paraMinuto } from './horarios.js';
+import { horariosDaMissao, periodoDoMinuto, paraMinuto, INICIOS_DOS_TEMPOS, HORARIOS_PADRAO } from './horarios.js';
 import { ocupacaoDaEscala, avioesQueServem, instrutoresQueServem, problemaDoRecurso, problemaDoAluno } from './candidatos.js';
 import { estadoDoAluno, proximasMissoes, progressoNoCurso, missoesDoDia } from './progresso.js';
 import { indiceDoPrograma, percursoDoCurso, rotuloDaFase, rotuloDaMissao, noturnosDoCurso } from './programa.js';
@@ -95,17 +95,17 @@ export function contextoInicial(valor, { data, hoje, agora = 0 } = {}) {
   if (tipo === 'i' && /^\d+$/.test(arg) && +arg > 0) return { ...contexto, origem: 'instrutor', insId: +arg };
   if (tipo === 'w' && /^[0-8]$/.test(arg)) {
     const w = +arg;
-    return { ...contexto, origem: 'periodo', w, minuto: T[w], desde: T[w], ate: w < NI ? T[w + 1] : MINUTOS_DO_DIA };
+    return { ...contexto, origem: 'periodo', w, minuto: INICIOS_DOS_TEMPOS[w], desde: INICIOS_DOS_TEMPOS[w], ate: w < INICIOS_DOS_TEMPOS.length - 1 ? INICIOS_DOS_TEMPOS[w + 1] : MINUTOS_DO_DIA };
   }
   if (tipo === 't' && arg) return { ...contexto, origem: 'turma', classKey: arg };
   return contexto;
 }
 
-// Os horários de decolagem do agendamento: o Ground, só nas janelas do dia (T[0] a T[7]); o resto, os da missão no tipo
+// Os horários de decolagem do agendamento: o Ground, nos horários padrão (HORARIOS_PADRAO), só nas janelas abertas; o resto, os da missão no tipo
 // (o Noturno às 17:30, o Voo Solo às 06:30, o PA-34 de 30 em 30 minutos, os outros, a lista da categoria). Só os que caem
 // numa janela de operação aberta nesta data
 export function horariosDoAgendamento(estado, { mis, tipo }) {
-  const lista = isGroundMission(mis) ? DAY.map(w => T[w]) : horariosDaMissao(estado.horarios, mis, tipo);
+  const lista = isGroundMission(mis) ? [...HORARIOS_PADRAO] : horariosDaMissao(estado.horarios, mis, tipo);
   return lista.filter(m => !Array.isArray(estado.win) || estado.win[periodoDoMinuto(m)]);
 }
 
@@ -872,7 +872,7 @@ function textoDoContexto(contexto, ambiente, { r = null, tipo = null, a, recurso
 function chaveDaTurmaNova(fixos, fKey, { mis, a, insId }) {
   const usadas = new Set(Object.entries(fixos).filter(([chave]) => chave !== fKey).map(([, p]) => p.classKey).filter(Boolean));
   if (!usadas.has(fKey)) return null;
-  const base = `GND_${mis}_${T.includes(a) ? T.indexOf(a) : periodoDoMinuto(a)}_${insId}`;
+  const base = `GND_${mis}_${INICIOS_DOS_TEMPOS.includes(a) ? INICIOS_DOS_TEMPOS.indexOf(a) : periodoDoMinuto(a)}_${insId}`;
   let chave = base;
   for (let n = 2; usadas.has(chave); n++) chave = `${base}_${n}`;
   return chave;
@@ -930,7 +930,7 @@ export function aplicarAgendamento(estado, base, proposta) {
   if (proposta.disponibilizar && x) {
     disponibilidade = { insId: x.id, on: x.on, aw: [...x.aw] };
     x.on = true;
-    x.aw = x.aw.map((v, k) => v || sobrepoe(proposta.a, proposta.b, T[k], k < NI ? T[k + 1] : MINUTOS_DO_DIA));
+    x.aw = x.aw.map((v, k) => v || sobrepoe(proposta.a, proposta.b, INICIOS_DOS_TEMPOS[k], k < INICIOS_DOS_TEMPOS.length - 1 ? INICIOS_DOS_TEMPOS[k + 1] : MINUTOS_DO_DIA));
   }
   return {
     stuId: aluno.id, mid, criado: !movido, pedido: movido ? doMovido : mid === 0 ? principal : null, fixo, disponibilidade, pesos, criadoComo: camposDoPedido(alvo)

@@ -4,7 +4,7 @@
 // todas as datas: a frota, com os atributos e o Retirar, e os horários de decolagem (js/views/horarios.js). A busca pela
 // matrícula e as categorias (js/views/filtros-dos-recursos.js) valem para a tabela, a frota e os horários, nunca para o
 // hangar; a barra diz quantos recursos aparecem.
-import { WIN, NI, AIRCRAFT_EQ_TYPES, SIM_EQ_TYPES, REVISAO_H } from '../config.js';
+import { AIRCRAFT_EQ_TYPES, SIM_EQ_TYPES, REVISAO_H } from '../config.js';
 import { ligada } from '../funcionalidades.js';
 import { normalizarHangar } from '../hangar.js';
 import { FROTA_INICIAL, ATRIBUTOS_DO_RECURSO, atributoVale, exigenciasDoAviao, habilitacaoDoAviao } from '../frota.js';
@@ -13,6 +13,7 @@ import { S, RES, voosQueVoam, isGestor, inativoNaDataAberta } from '../state.js'
 import { $, trocarConteudo } from '../dom.js';
 import { hm, fmtH, esc } from '../format.js';
 import { rHorarios } from './horarios.js';
+import { INICIOS_DOS_TEMPOS, HORARIO_DO_NOTURNO } from '../horarios.js';
 import { recursoAVista, filtrandoRecursos } from './filtros-dos-recursos.js';
 import { mostrarVista } from './vistas.js';
 
@@ -148,7 +149,7 @@ export function aplicarFiltrosDosRecursos({ esperar = 0 } = {}) {
 
 export function rRec() {
   mostrarVista('rec');
-  trocarConteudo($('#wins'), WIN.map((w, i) => `<label class="janela${S.win[i] ? '' : ' off'}"><input type="checkbox" class="sw" data-a="win" data-i="${i}"${S.win[i] ? ' checked' : ''}><b>${w}</b> <small>${i == NI ? 'noturno' : (i + 1) + 'º'}</small></label>`).join(''));
+  trocarConteudo($('#wins'), INICIOS_DOS_TEMPOS.map((m, i) => `<label class="janela${S.win[i] ? '' : ' off'}"><input type="checkbox" class="sw" data-a="win" data-i="${i}"${S.win[i] ? ' checked' : ''}><b>${hm(m)}</b> <small>${m === HORARIO_DO_NOTURNO ? 'noturno' : (i + 1) + 'º'}</small></label>`).join(''));
   rHangar();
   aplicarFiltrosDosRecursos();
 }

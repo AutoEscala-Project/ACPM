@@ -5,12 +5,12 @@
 // conferirEscala confere uma escala já montada sem o motor: a escala aprovada que o operador muda na Escala (F1g). Ela não
 // põe, não move e não tira nenhum voo: refaz as marcas de conflito, os alertas deles, os avisos e a revisão, e os pesos e o
 // combustível de cada linha pelo cadastro
-import { NOTURNO, T, DAY, DEFAULT_LIM, GROUND_EQ_TYPE, GROUND_REG, GROUND_DURATION_MIN, GROUND_DURATION_H, REVISAO_H, MENOR_VOO_H, AIRCRAFT_EQ_TYPES, MISSOES_LOCAIS, LIMITE_DE_VOOS_LOCAIS } from './config.js';
+import { NOTURNO, DEFAULT_LIM, GROUND_EQ_TYPE, GROUND_REG, GROUND_DURATION_MIN, GROUND_DURATION_H, REVISAO_H, MENOR_VOO_H, AIRCRAFT_EQ_TYPES, MISSOES_LOCAIS, LIMITE_DE_VOOS_LOCAIS } from './config.js';
 import { FROTA_INICIAL, matriculasDoTipo, motivoDoAviao, aviaoServe, instrutorVoaNoAviao, recursoDaFrota } from './frota.js';
 import { hm, fmtH, numeroBr, duracaoHm } from './format.js';
 import { repousoAntesDaVolta, historicoDoDia } from './noturno.js';
 import { isGroundMission, doesGroundGateFlight, disponibilidadeDoAluno, duracaoValida, duracaoFixaDaMissao, minutoConfirmado } from './rules.js';
-import { HORARIOS_INICIAIS, horariosDaMissao, periodoDoMinuto, minutoDaPreferencia, fimDasMissoesDoDia } from './horarios.js';
+import { HORARIOS_INICIAIS, horariosDaMissao, periodoDoMinuto, minutoDaPreferencia, fimDasMissoesDoDia, INICIOS_DOS_TEMPOS, HORARIOS_PADRAO, HORARIO_DO_SOLO } from './horarios.js';
 import { ajustarFilas, categoriaDoRodizio } from './rodizio.js';
 import { avisosDeAtraso, intervaloEfetivo, STATUS_EM_ANDAMENTO } from './status.js';
 import { livre, cabeNoSaldo, saldoAteARevisao, problemasDoInstrutor } from './viabilidade.js';
@@ -227,7 +227,7 @@ function linhaDoFixo(state, ctx, item, pino, fKey = chaveDoVoo(item.stuId, item.
       comAviso = true;
       const avisar = (codigo, m) => avisos.push({ t: 'warn', s: rotulo, fKey, m, codigo, stuId });
       // Os horários de decolagem da missão (o Ground, nas janelas do dia; o Noturno, às 17:30; o Voo Solo, às 06:30)
-      const lista = ground ? DAY.map(w => T[w]) : horariosDaMissao(horarios, d.mis, d.eq);
+      const lista = ground ? [...HORARIOS_PADRAO] : horariosDaMissao(horarios, d.mis, d.eq);
       if (!lista.includes(a)) {
         avisar('fora-dos-horarios', ground ? `Agendado às ${hm(a)}, fora dos horários das aulas de Ground.`
           : d.mis === 'Noturno' || d.mis === 'Voo Solo' ? `Agendado às ${hm(a)}: o ${d.mis} sai às ${hm(lista[0])}.`
@@ -283,7 +283,7 @@ function linhaDoFixo(state, ctx, item, pino, fKey = chaveDoVoo(item.stuId, item.
       // A turma fixa fica aberta: um aluno novo do mesmo Ground pode entrar nela, se ela não está em conflito (sem o
       // instrutor, por exemplo)
       const turmas = (openGroundClasses[d.mis] = openGroundClasses[d.mis] || []);
-      if (x && !daMesmaTurma && !conflito.length && !turmas.some(c => c.classKey === classKey)) turmas.push({ classKey, mis: d.mis, w: T.indexOf(a), a, b, x, count: 0 });
+      if (x && !daMesmaTurma && !conflito.length && !turmas.some(c => c.classKey === classKey)) turmas.push({ classKey, mis: d.mis, w: INICIOS_DOS_TEMPOS.indexOf(a), a, b, x, count: 0 });
       const turma = turmas.find(c => c.classKey === classKey);
       if (turma) turma.count++;
       const gRec = (stuGroundStatus[stuId] || []).find(g => g.mis === d.mis && g.allocatedEnd === null);
@@ -294,7 +294,7 @@ function linhaDoFixo(state, ctx, item, pino, fKey = chaveDoVoo(item.stuId, item.
   const baseTag = a === pf[0] ? 'Pref. 1' : a === pf[1] ? 'Pref. 2' : 'Próximo livre';
   const linha = {
     fKey, classKey, isGround: ground,
-    w: ground && T.indexOf(a) >= 0 ? T.indexOf(a) : periodoDoMinuto(a), a, b,
+    w: ground && INICIOS_DOS_TEMPOS.indexOf(a) >= 0 ? INICIOS_DOS_TEMPOS.indexOf(a) : periodoDoMinuto(a), a, b,
     o: stuOrder, stuId, mid, insId, eqType: tipo,
     s: stu.nm, mis: d.mis, h: ground ? GROUND_DURATION_H : (b - a) / 60, ss: '1/1',
     ...(d.etapa ? { etapa: d.etapa } : {}),
@@ -434,7 +434,7 @@ export function concluirEscala(state, ctx, out, al) {
     const voadas = Math.round(meus.reduce((total, o) => total + o.h, 0) * 10) / 10;
     const fim = Math.round((horas[r] + voadas) * 10) / 10;
     const para = state.av[r] !== false && REVISAO_H - fim < MENOR_VOO_H;
-    const paraAs = !para ? null : meus.length ? Math.max(...meus.map(o => o.b)) : T[0];
+    const paraAs = !para ? null : meus.length ? Math.max(...meus.map(o => o.b)) : HORARIO_DO_SOLO;
     revisao[r] = { inicio: horas[r], voadas, fim, paraAs };
     if (para) {
       al.push({

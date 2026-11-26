@@ -1,5 +1,6 @@
 // Aba Escala: resumo do dia, a lista dos voos (ou o mapa por recurso ou por instrutor) e o histórico da data.
-import { FLIGHT_STATUSES, GROUND_REG, GROUND_EQ_TYPE, NOTURNO, T } from '../config.js';
+import { FLIGHT_STATUSES, GROUND_REG, GROUND_EQ_TYPE, NOTURNO } from '../config.js';
+import { INICIOS_DOS_TEMPOS } from '../horarios.js';
 import { CODIGOS_DE_AVISO, CODIGOS_DO_AGENDADO } from '../conflitos.js';
 import { textoDoCombustivel } from '../combustivel.js';
 import { hm, WLB, fmtH, esc, rotuloDaData, hojeISO, duracaoHm, DURACAO_DO_GROUND, pesoBr, chaveDeBusca } from '../format.js';
@@ -485,7 +486,7 @@ function tabela(voos, al) {
       tempo = o.w;
       const n = porTempo[o.w];
       // O "+" do horário agenda a partir dele: só o ícone (o nome fica no aria-label), e o texto da linha continua o mesmo
-      h += `<tr class="win" data-w="${o.w}"><td colspan="8"><button type="button" class="win-btn" data-recolher-tempo="${o.w}" aria-expanded="${!recolhido}"><svg class="ico seta" aria-hidden="true"><use href="#i-baixo"/></svg>${WLB(o.w)} <small>${n} ${n === 1 ? 'decolagem ou aula' : 'decolagens e aulas'}</small></button><button type="button" class="win-agendar edit-only" data-act="agendar" data-agendar="w:${o.w}" aria-label="Agendar às ${hm(T[o.w])}" aria-haspopup="dialog"><svg class="ico" aria-hidden="true"><use href="#i-mais"/></svg></button></td></tr>`;
+      h += `<tr class="win" data-w="${o.w}"><td colspan="8"><button type="button" class="win-btn" data-recolher-tempo="${o.w}" aria-expanded="${!recolhido}"><svg class="ico seta" aria-hidden="true"><use href="#i-baixo"/></svg>${WLB(o.w)} <small>${n} ${n === 1 ? 'decolagem ou aula' : 'decolagens e aulas'}</small></button><button type="button" class="win-agendar edit-only" data-act="agendar" data-agendar="w:${o.w}" aria-label="Agendar às ${hm(INICIOS_DOS_TEMPOS[o.w])}" aria-haspopup="dialog"><svg class="ico" aria-hidden="true"><use href="#i-mais"/></svg></button></td></tr>`;
     }
     const rs = grupo.length > 1 ? ` rowspan="${grupo.length}"` : '';
     const cancelado = voo => {

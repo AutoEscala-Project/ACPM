@@ -6,9 +6,9 @@
 // reversão de uma mudança nos voos fixos não devolve depois de um agendamento.
 import { novoRecurso, MATRICULA, ATRIBUTOS_DO_RECURSO } from './frota.js';
 import { normalizarFixos, fixoPeloStatus, fixosAoReabrir, pinoDeVoltaNaTurma } from './fixos.js';
-import { CATEGORIAS_COM_HORARIOS, normalizarHorarios } from './horarios.js';
+import { CATEGORIAS_COM_HORARIOS, normalizarHorarios, INICIOS_DOS_TEMPOS } from './horarios.js';
 import { disponibilidadeValida, normalizeMissionFields } from './rules.js';
-import { MINUTOS_DO_DIA, MIS, WIN, FLIGHT_STATUSES } from './config.js';
+import { MINUTOS_DO_DIA, MIS, FLIGHT_STATUSES } from './config.js';
 import { CHAVE_DO_VOO, chaveDoVoo, pedidoDoAluno } from './voo.js';
 import { CAMPOS_DO_PEDIDO } from './dias.js';
 import { STATUS_EM_ANDAMENTO, normalizarDetalhes } from './status.js';
@@ -41,7 +41,7 @@ function pedidoDeAntes(p) {
 
 // A disponibilidade de antes de um instrutor no dia: se ele vem (on) e cada horário do dia (aw); fora disso, null
 const disponibilidadeDeAntes = d => (objeto(d) && idValido(d.insId) && typeof d.on === 'boolean' && Array.isArray(d.aw)
-  && d.aw.length === WIN.length && d.aw.every(v => typeof v === 'boolean') ? { insId: d.insId, on: d.on, aw: [...d.aw] } : null);
+  && d.aw.length === INICIOS_DOS_TEMPOS.length && d.aw.every(v => typeof v === 'boolean') ? { insId: d.insId, on: d.on, aw: [...d.aw] } : null);
 
 // A reversão limpa (só os campos dela), ou null
 export function validarReversao(rev, frota) {

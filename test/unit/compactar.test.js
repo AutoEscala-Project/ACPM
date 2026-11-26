@@ -8,11 +8,11 @@ import assert from 'node:assert/strict';
 import { runAllocationEngine } from '../../js/engine.js';
 import { compactar, custoDaEscala } from '../../js/compactar.js';
 import { CRITERIOS_PADRAO, normalizarCriterios } from '../../js/criterios.js';
-import { AIRCRAFT_EQ_TYPES, T, NI } from '../../js/config.js';
+import { AIRCRAFT_EQ_TYPES } from '../../js/config.js';
 import { categoriaDoRodizio } from '../../js/rodizio.js';
 import { LIMITES_DA_LEI, dentroDosLimites } from '../../js/limites.js';
 import { disponibilidadeDoAluno } from '../../js/rules.js';
-import { minutoDaPreferencia } from '../../js/horarios.js';
+import { minutoDaPreferencia, HORARIO_DO_NOTURNO } from '../../js/horarios.js';
 import { metricasDaEscala } from '../../js/metricas.js';
 import { hm } from '../../js/format.js';
 import { aluno, cenario, instrutor, missaoExtra, apenas } from '../helpers/montar.js';
@@ -86,7 +86,7 @@ describe('Compactação: os horários', () => {
       ['241 com escolhas', comEscolhas(gerarCenario(241), 241)], ['277', gerarCenario(277)], ['277 com atributos', comAtributos(gerarCenario(277), 277)]];
     for (const [seed, estado] of dias) {
       const comNoturno = new Set(estado.stu.filter(s => [s, ...s.extra].some(p => p.fly && p.mis === 'Noturno')).map(s => s.id));
-      const depois = runAllocationEngine(estado).out.filter(o => comNoturno.has(o.stuId) && o.mis !== 'Noturno' && o.b > T[NI]);
+      const depois = runAllocationEngine(estado).out.filter(o => comNoturno.has(o.stuId) && o.mis !== 'Noturno' && o.b > HORARIO_DO_NOTURNO);
       assert.deepEqual(depois.map(o => `${o.fKey} ${o.mis} ${hm(o.a)}–${hm(o.b)}`), [], `seed ${seed}`);
     }
   });

@@ -1,10 +1,11 @@
 // Partes do manual geradas das regras do código (missões, janelas, pesos, combustível, rodízio e glossário): quando
 // uma regra muda, o manual muda junto. O texto explicativo fica em index.html (seção Manual).
-import { MIS, WIN, NI, DEFAULT_LIM, GROUND_DURATION_MIN, COMBUSTIVEL } from './config.js';
+import { MIS, DEFAULT_LIM, GROUND_DURATION_MIN, COMBUSTIVEL } from './config.js';
+import { INICIOS_DOS_TEMPOS, HORARIO_DO_NOTURNO } from './horarios.js';
 import { HABILITACOES, exigencias } from './habilitacoes.js';
 import { CATEGORIAS_DO_RODIZIO } from './rodizio.js';
 import { GLOSSARIO, ABAS_DO_GLOSSARIO } from './glossario.js';
-import { duracaoHm } from './format.js';
+import { hm, duracaoHm } from './format.js';
 
 // Os rótulos curtos são os da grade de habilitações da aba Instrutores
 const ROTULO = new Map(HABILITACOES.map(h => [h.id, h.curto]));
@@ -29,7 +30,7 @@ export function quemPodeDar(mis, equipamentos) {
 function observacao(missao, regra) {
   if (regra.isGround) return `Aula de ${duracaoHm(GROUND_DURATION_MIN)}, em turma; antes do primeiro voo de ${regra.gatesEq || regra.gatesMis} do aluno no dia`;
   if (missao === 'Parafuso') return 'No C152, sempre num avião marcado “Só Parafuso” em Recursos (que só voa Parafuso)';
-  if (missao === 'Noturno') return `Só na janela das ${WIN[NI]}`;
+  if (missao === 'Noturno') return `Só na janela das ${hm(HORARIO_DO_NOTURNO)}`;
   return '';
 }
 
@@ -40,7 +41,7 @@ export const missoesDoManual = () => Object.entries(MIS).map(([missao, regra]) =
   obs: observacao(missao, regra)
 }));
 
-export const janelasDoManual = () => WIN.map((w, i) => (i === NI ? `${w} (noturno)` : w));
+export const janelasDoManual = () => INICIOS_DOS_TEMPOS.map(m => (m === HORARIO_DO_NOTURNO ? `${hm(m)} (noturno)` : hm(m)));
 export const pesosDoManual = () => Object.entries(DEFAULT_LIM).map(([tipo, kg]) => [tipo, `${kg} kg`]);
 // Tanque e autonomia de cada avião (o limite de peso vale com os tanques cheios)
 export const combustivelDoManual = () => Object.entries(COMBUSTIVEL).map(([tipo, { galoes, autonomiaMin }]) =>

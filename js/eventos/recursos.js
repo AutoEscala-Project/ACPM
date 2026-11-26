@@ -2,13 +2,13 @@
 // operação, o hangar, os horários de decolagem e os filtros (a busca pela matrícula e as categorias)
 import { gravarAlteracao, aindaNaoAbriu } from '../actions.js';
 import { categoriaDoTipo } from '../categorias.js';
-import { WIN, REVISAO_H } from '../config.js';
+import { REVISAO_H } from '../config.js';
 import { $, showToast, fecharNoEsc } from '../dom.js';
-import { fmtH, lerHoras } from '../format.js';
+import { hm, fmtH, lerHoras } from '../format.js';
 import { ligada } from '../funcionalidades.js';
 import { novoRecurso, ATRIBUTOS_DO_RECURSO, atributoVale, comAtributo } from '../frota.js';
 import { normalizarHangar, moverNoHangar } from '../hangar.js';
-import { horariosDaMissao, ajustarPreferencias, descreverHorarios } from '../horarios.js';
+import { horariosDaMissao, ajustarPreferencias, descreverHorarios, INICIOS_DOS_TEMPOS } from '../horarios.js';
 import { S, isGestor, getMissionTarget, inativoNaDataAberta } from '../state.js';
 import { confirmado } from './confirmacao.js';
 import { aoAcionar, aoMudarCampo, aoReverter } from './registro.js';
@@ -129,7 +129,7 @@ document.addEventListener('click', e => {
 aoMudarCampo('win', t => {
   const idx = +t.dataset.i;
   S.win[idx] = t.checked;
-  gravarAlteracao(t.checked ? 'inc' : 'exc', `Janela ${WIN[idx]} ${t.checked ? 'ativa' : 'inativa'}`);
+  gravarAlteracao(t.checked ? 'inc' : 'exc', `Janela ${hm(INICIOS_DOS_TEMPOS[idx])} ${t.checked ? 'ativa' : 'inativa'}`);
   rRec();
 });
 

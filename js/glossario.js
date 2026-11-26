@@ -2,7 +2,8 @@
 // foco do teclado ou um toque; js/dicas.js) e para a seção Glossário do Manual. Os números das regras vêm da
 // configuração, para o texto nunca contradizer o motor. Um termo de uma funcionalidade que pode ficar desligada
 // (js/funcionalidades.js) diz qual (funcionalidade) e, com ela desligada, some ou troca de texto (textoSem).
-import { REVISAO_H, MENOR_VOO_H, GROUND_DURATION_MIN, LIMITE_DE_VOOS_LOCAIS, T, NI } from './config.js';
+import { REVISAO_H, MENOR_VOO_H, GROUND_DURATION_MIN, LIMITE_DE_VOOS_LOCAIS } from './config.js';
+import { HORARIO_DO_NOTURNO } from './horarios.js';
 import { ligada } from './funcionalidades.js';
 import { LIMITES_DA_LEI } from './limites.js';
 import { INTERVALO_DO_HANGAR } from './metricas.js';
@@ -36,7 +37,7 @@ const TERMOS = {
   'voo-agendado': { aba: 'Escala', termo: 'Voo agendado', texto: 'Marcado pelo operador em “+ Agendar voo”: fica fixo no horário, no recurso e com o instrutor confirmados, e a escala é refeita em volta dele. O Histórico desfaz o agendamento.' },
   'fora-da-regra': {
     aba: 'Escala', termo: 'Fora da regra',
-    texto: `O voo agendado na Escala está fora de uma regra que a escala segue sozinha: os horários de decolagem, o pouso do voo de dia até as ${hm(T[NI])}, no máximo ${LIMITE_DE_VOOS_LOCAIS} voos locais por horário ou o Ground antes do voo. Ele fica onde foi agendado.`
+    texto: `O voo agendado na Escala está fora de uma regra que a escala segue sozinha: os horários de decolagem, o pouso do voo de dia até as ${hm(HORARIO_DO_NOTURNO)}, no máximo ${LIMITE_DE_VOOS_LOCAIS} voos locais por horário ou o Ground antes do voo. Ele fica onde foi agendado.`
   },
   'reduzir-combustivel': {
     aba: 'Escala', termo: 'Reduzir combustível',

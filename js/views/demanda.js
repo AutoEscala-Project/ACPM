@@ -1,11 +1,11 @@
 // Aba Demanda: pedidos de missão por aluno (inclusive missões extras) e filtros (só quem voa, o nome, o curso do aluno e a
 // missão). Os campos são discretos (parecem texto até o mouse passar ou o foco chegar); o que a missão exige do instrutor
 // fica na dica do campo da missão.
-import { MIS, GROUND_EQ_TYPE, T, NI, DURACAO_MAXIMA_H, GROUND_DURATION_H } from '../config.js';
+import { MIS, GROUND_EQ_TYPE, DURACAO_MAXIMA_H, GROUND_DURATION_H } from '../config.js';
 import { matriculasDoTipo } from '../frota.js';
 import { esc, opts, hm, chaveDeBusca } from '../format.js';
 import { isGroundMission, opcoesDeDisponibilidade, duracaoFixaDaMissao } from '../rules.js';
-import { horariosDaMissao } from '../horarios.js';
+import { horariosDaMissao, HORARIO_DO_NOTURNO } from '../horarios.js';
 import { descreverExigencias } from '../habilitacoes.js';
 import { S, estadoDaEscala, inativoNaDataAberta, programaLido } from '../state.js';
 import { exigeDaMissaoDoPedido } from '../programa.js';
@@ -26,7 +26,7 @@ function allowedEqOptionsForMission(mis, currentEq) {
 // Os horários do pedido são os da categoria do avião (o PA-34 tem os seus; o Noturno, 17:30). Uma preferência que
 // não está na lista (a lista mudou depois) aparece marcada
 function opcoesDeHorario(lista, valor) {
-  const itens = [[-1, '—'], ...lista.map(m => [m, hm(m) + (m === T[NI] ? ' (noturno)' : '')])];
+  const itens = [[-1, '—'], ...lista.map(m => [m, hm(m) + (m === HORARIO_DO_NOTURNO ? ' (noturno)' : '')])];
   if (Number.isInteger(valor) && valor >= 0 && !lista.includes(valor)) itens.push([valor, `${hm(valor)} (fora da lista)`]);
   return opts(itens, valor);
 }

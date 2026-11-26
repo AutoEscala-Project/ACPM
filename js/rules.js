@@ -1,8 +1,8 @@
 // Regras das missões: Ground School, precedência Ground → voo
 // e normalização de pedidos (inclusive nomes de missão de versões anteriores).
-import { MIS, NI, T, PRE, GROUND_EQ_TYPE, GROUND_DURATION_H, DURACAO_MAXIMA_H, MISSOES_LOCAIS } from './config.js';
+import { MIS, PRE, GROUND_EQ_TYPE, GROUND_DURATION_H, DURACAO_MAXIMA_H, MISSOES_LOCAIS } from './config.js';
 import { hm, lerHoras } from './format.js';
-import { periodoDoMinuto, minutoDaPreferencia, preferenciaValida, HORARIO_DO_SOLO } from './horarios.js';
+import { periodoDoMinuto, minutoDaPreferencia, preferenciaValida, HORARIO_DO_SOLO, HORARIO_DO_NOTURNO, HORARIOS_PADRAO } from './horarios.js';
 import { codigoValido, siglaValida } from './cursos.js';
 import { chaveDoVoo } from './voo.js';
 
@@ -13,7 +13,7 @@ const PERIODOS = { manha: ['Manhã', PRE['Manhã']], tarde: ['Tarde', PRE['Tarde
 function minutoExato(jan) {
   const horario = /^h(\d{1,4})$/.exec(jan);
   const minuto = horario ? minutoDaPreferencia(+horario[1]) : -1;
-  return minuto >= T[0] && minuto <= T[NI] ? minuto : null;
+  return minuto >= HORARIO_DO_SOLO && minuto <= HORARIO_DO_NOTURNO ? minuto : null;
 }
 // O minuto em que o 7º voo local confirmado na Agenda (limiteConfirmado, Q8) passa do limite de 6: o horário exato do
 // pedido (jan); null no pedido não confirmado, sem horário exato ou que não é local. O motor e as Sugestões contam assim
@@ -82,7 +82,7 @@ export const duracaoPadraoDaMissao = mis => (isGroundMission(mis) ? GROUND_DURAT
 export const duracaoFixaDaMissao = mis => (isGroundMission(mis) ? GROUND_DURATION_H
   : Object.hasOwn(MIS, mis) && MIS[mis].duracaoFixaH ? MIS[mis].duracaoFixaH : null);
 
-export const blank = () => ({ fly: false, mis: 'Voo Local', eq: 'C152', p1: T[1], p2: T[2], nb: 1, ss: 1, pr: 3 });
+export const blank = () => ({ fly: false, mis: 'Voo Local', eq: 'C152', p1: HORARIOS_PADRAO[1], p2: HORARIOS_PADRAO[2], nb: 1, ss: 1, pr: 3 });
 // O pedido em branco, sem nada do voo de antes: saem a disponibilidade, a missão do curso (o código e o curso), o pedido
 // da agenda e o instrutor escolhido. Assim ficam o pedido que a agenda reaproveita (alvoDoNovoPedido) e o pedido limpo
 // por "Limpar demanda" (js/fixos.js). Muda o pedido e o devolve
@@ -190,11 +190,11 @@ export function normalizeMissionFields(target) {
   if (mRule.isGround) {
     target.eq = GROUND_EQ_TYPE;
     target.nb = GROUND_DURATION_H;
-    if (target.p1 === T[NI]) target.p1 = T[0];
-    if (target.p2 === T[NI]) target.p2 = T[1];
+    if (target.p1 === HORARIO_DO_NOTURNO) target.p1 = HORARIO_DO_SOLO;
+    if (target.p2 === HORARIO_DO_NOTURNO) target.p2 = HORARIOS_PADRAO[1];
   } else {
     target.nb = duracaoFixaDaMissao(target.mis) || duracaoValida(target.nb);
   }
   // Missão de horário fixo (o Noturno às 17:30; o Voo Solo às 06:30): a preferência é ele
-  if (target.mis === 'Noturno' || target.mis === 'Voo Solo') { target.p1 = target.mis === 'Noturno' ? T[NI] : HORARIO_DO_SOLO; target.p2 = -1; }
+  if (target.mis === 'Noturno' || target.mis === 'Voo Solo') { target.p1 = target.mis === 'Noturno' ? HORARIO_DO_NOTURNO : HORARIO_DO_SOLO; target.p2 = -1; }
 }

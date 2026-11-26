@@ -1,10 +1,10 @@
 // Motor de alocação determinístico da escala do dia e utilitários de horas e de ocupação.
 // runAllocationEngine é uma função pura: recebe o estado e devolve { out, al, tot } sem alterá-lo.
-import { T, DAY, MIS, DEFAULT_LIM, GROUND_EQ_TYPE, GROUND_REG, GROUND_DURATION_MIN, GROUND_DURATION_H, AIRCRAFT_EQ_TYPES, MISSOES_LOCAIS, LIMITE_DE_VOOS_LOCAIS, MINUTOS_DO_DIA } from './config.js';
+import { MIS, DEFAULT_LIM, GROUND_EQ_TYPE, GROUND_REG, GROUND_DURATION_MIN, GROUND_DURATION_H, AIRCRAFT_EQ_TYPES, MISSOES_LOCAIS, LIMITE_DE_VOOS_LOCAIS, MINUTOS_DO_DIA } from './config.js';
 import { FROTA_INICIAL, matriculasDoTipo, matriculasParaOVoo, motivoDoAviao, instrutorVoaNoAviao, recursoDaFrota } from './frota.js';
 import { hm, fmtH } from './format.js';
 import { isGroundMission, doesGroundGateFlight, disponibilidadeDoAluno, rotuloDaDisponibilidade, duracaoValida, duracaoFixaDaMissao, minutoConfirmado } from './rules.js';
-import { horariosDaMissao, periodoDoMinuto, minutoDaPreferencia, ordenarPelaPreferencia } from './horarios.js';
+import { horariosDaMissao, periodoDoMinuto, minutoDaPreferencia, ordenarPelaPreferencia, INICIOS_DOS_TEMPOS, HORARIOS_PADRAO } from './horarios.js';
 import { podeFazer, descreverExigencias } from './habilitacoes.js';
 import { categoriaDoRodizio } from './rodizio.js';
 import { intervaloEfetivo, STATUS_EM_ANDAMENTO } from './status.js';
@@ -291,7 +291,7 @@ export function runAllocationEngine(state, opcoes = {}) {
       const exigeMais = Array.isArray(d.exige) && d.exige.length > 0;
       const durMin = GROUND_DURATION_MIN; // 90 min (1.5 h)
       const endMax = fimDoAluno(stuId, d.mis, GROUND_EQ_TYPE);
-      const starts = DAY.filter(w => state.win[w] && T[w] + durMin <= endMax && naDisponibilidade(T[w]));
+      const starts = HORARIOS_PADRAO.map((_, w) => w).filter(w => state.win[w] && INICIOS_DOS_TEMPOS[w] + durMin <= endMax && naDisponibilidade(INICIOS_DOS_TEMPOS[w]));
 
       // Se o aluno também tem um voo dependente hoje com horário preferido, prioriza janelas que terminem antes do voo
       const dependentFlights = act.filter(other => other.stuId === stuId && doesGroundGateFlight(d.mis, other.ref));
@@ -304,12 +304,12 @@ export function runAllocationEngine(state, opcoes = {}) {
       }, Infinity));
 
       // A 1ª e a 2ª preferência, depois os outros horários pela distância da 1ª
-      const semPrazo = ordenarPelaPreferencia(starts.map(w => T[w]), preferidos[0], preferidos[1]).map(m => T.indexOf(m));
-      const candidateWins = semPrazo.filter(w => T[w] + durMin <= prazoFixo);
+      const semPrazo = ordenarPelaPreferencia(starts.map(w => INICIOS_DOS_TEMPOS[w]), preferidos[0], preferidos[1]).map(m => INICIOS_DOS_TEMPOS.indexOf(m));
+      const candidateWins = semPrazo.filter(w => INICIOS_DOS_TEMPOS[w] + durMin <= prazoFixo);
       // Prioriza janelas que terminam antes do voo preferido do aluno, mantendo a cascata Pref.1 -> Pref.2 -> Próximo livre
       candidateWins.sort((w1, w2) => {
-        const ok1 = T[w1] + durMin <= earliestFlightPrefMin ? 0 : 1;
-        const ok2 = T[w2] + durMin <= earliestFlightPrefMin ? 0 : 1;
+        const ok1 = INICIOS_DOS_TEMPOS[w1] + durMin <= earliestFlightPrefMin ? 0 : 1;
+        const ok2 = INICIOS_DOS_TEMPOS[w2] + durMin <= earliestFlightPrefMin ? 0 : 1;
         return ok1 - ok2;
       });
 
@@ -338,7 +338,7 @@ export function runAllocationEngine(state, opcoes = {}) {
           if (stu.bl.includes(cls.x.id)) continue;
           if (!naPassada(cls.x)) continue;
           if (exigeMais && !habilitado(cls.x)) continue;
-          if (cls.b > earliestFlightPrefMin && candidateWins.some(w => T[w] + durMin <= earliestFlightPrefMin)) continue;
+          if (cls.b > earliestFlightPrefMin && candidateWins.some(w => INICIOS_DOS_TEMPOS[w] + durMin <= earliestFlightPrefMin)) continue;
           chosenClass = cls;
           break;
         }
@@ -353,7 +353,7 @@ export function runAllocationEngine(state, opcoes = {}) {
           });
 
           for (const w of candidateWins) {
-            const a = T[w], b = a + durMin;
+            const a = INICIOS_DOS_TEMPOS[w], b = a + durMin;
             if (!free(stuBusy, stuId, a, b)) { fcGnd.stu_busy++; continue; }
 
             const sameWinCls = existingClasses.find(c => c.w === w && !stu.bl.includes(c.x.id) && naPassada(c.x) && (!exigeMais || habilitado(c.x)));
@@ -413,7 +413,7 @@ export function runAllocationEngine(state, opcoes = {}) {
           fKey,
           classKey: chosenClass.classKey,
           isGround: true,
-          // A turma fixa fora das janelas do dia (T.indexOf do horário dela é -1) fica no período em que começa
+          // A turma fixa fora das janelas do dia (INICIOS_DOS_TEMPOS.indexOf do horário dela é -1) fica no período em que começa
           w: chosenClass.w >= 0 ? chosenClass.w : periodoDoMinuto(chosenClass.a), a: chosenClass.a, b: chosenClass.b,
           o: stuOrder,
           stuId,

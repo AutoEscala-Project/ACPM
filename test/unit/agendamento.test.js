@@ -18,9 +18,9 @@ import { fixosAoAprovar, fixosAoMudarStatus } from '../../js/fixos.js';
 import { normalizeMissionFields } from '../../js/rules.js';
 import { gerarCenario } from '../helpers/cenarios.js';
 import { situacaoPorMissao } from '../../js/resultados.js';
-import { T } from '../../js/config.js';
+
 import { hm } from '../../js/format.js';
-import { HORARIOS_PADRAO, DE_30_EM_30 } from '../../js/horarios.js';
+import { HORARIOS_PADRAO, DE_30_EM_30, HORARIO_DO_NOTURNO, HORARIO_DO_SOLO } from '../../js/horarios.js';
 import { aluno, cenario, instrutor, missaoExtra, apenas, GROUND_C152 } from '../helpers/montar.js';
 import { novoCurso, comExigenciasDasMissoes } from '../../js/programa.js';
 import { MODELOS } from '../../js/modelos-de-curso.js';
@@ -63,10 +63,10 @@ describe('Agendamento: os horários e o encaixe', () => {
     const estado = cenario();
     assert.deepEqual(horariosDoAgendamento(estado, { mis: 'Voo Local', tipo: 'C152' }), HORARIOS_PADRAO);
     assert.deepEqual(horariosDoAgendamento(estado, { mis: 'Voo Local', tipo: 'PA-34' }), DE_30_EM_30);
-    assert.deepEqual(horariosDoAgendamento(estado, { mis: 'Noturno', tipo: 'C172' }), [T[8]]);
-    assert.deepEqual(horariosDoAgendamento(estado, { mis: 'Voo Solo', tipo: 'C152' }), [T[0]]);
+    assert.deepEqual(horariosDoAgendamento(estado, { mis: 'Noturno', tipo: 'C172' }), [HORARIO_DO_NOTURNO]);
+    assert.deepEqual(horariosDoAgendamento(estado, { mis: 'Voo Solo', tipo: 'C152' }), [HORARIO_DO_SOLO]);
     const comHorarios = { ...estado, horarios: { C152: [420, 480], C172: [420], sim: [420], 'PA-34': [420] } };
-    assert.deepEqual(horariosDoAgendamento(comHorarios, { mis: 'Ground C152', tipo: 'Sala Ground' }), T.slice(0, 8));
+    assert.deepEqual(horariosDoAgendamento(comHorarios, { mis: 'Ground C152', tipo: 'Sala Ground' }), HORARIOS_PADRAO);
     assert.deepEqual(horariosDoAgendamento(comHorarios, { mis: 'Voo Local', tipo: 'C152' }), [420, 480]);
     // A janela das 10:10 fechada: os horários que caem nela saem
     const fechada = { ...estado, win: estado.win.map((v, w) => w !== 2) };
@@ -382,7 +382,7 @@ describe('Agendamento: os padrões do formulário', () => {
     delete estado.stu[1].curso;
     const ground = agendar(estado, { amb, escolhas: { aluno: 1001, missao: 'tipo:Ground C152' }, tocados: ['missao'] });
     assert.deepEqual([ground.formulario.recurso, ground.formulario.horas, ground.formulario.peso.visivel], ['SALA-GROUND', { valor: '1.5', fixa: true }, false]);
-    assert.deepEqual(ground.formulario.horarios, { opcoes: T.slice(0, 8).map(m => ({ valor: m, texto: `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}` })), outro: false });
+    assert.deepEqual(ground.formulario.horarios, { opcoes: HORARIOS_PADRAO.map(m => ({ valor: m, texto: `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}` })), outro: false });
     assert.equal(ground.formulario.proposta.b - ground.formulario.proposta.a, 90);
     const linha = ground.sim.out.find(o => o.fKey === ground.fKey);
     assert.ok(normalizarLinhaGravada(linha), 'a turma nova é aceita pela escala gravada');
@@ -961,7 +961,7 @@ describe('Agendamento: os voos de hoje do aluno (mover e encaixar)', () => {
     // O Ground muda de turma só nas janelas do dia, com 1h30
     const ground = doDia({ s1000: { ...GROUND_C152, p1: 500, p2: -1 } });
     const g = agendar(ground, { escolhas: { aluno: 1000, missao: 'pedido:0', horario: 760 }, tocados: ['missao', 'horario'] }).formulario;
-    assert.deepEqual([g.acao, g.horas, g.horarios.opcoes.map(o => o.valor), g.proposta.b - g.proposta.a], ['mover', { valor: '1.5', fixa: true }, T.slice(0, 8), 90]);
+    assert.deepEqual([g.acao, g.horas, g.horarios.opcoes.map(o => o.valor), g.proposta.b - g.proposta.a], ['mover', { valor: '1.5', fixa: true }, HORARIOS_PADRAO, 90]);
   });
 
   it('a descrição do histórico do voo que mudou de lugar diz de onde ele saiu', () => {

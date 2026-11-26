@@ -1,14 +1,23 @@
 // Horários de decolagem por categoria. Cada categoria (C152, C172, Simulador e PA-34) tem a sua lista, em
-// minutos, editada na aba Recursos; o padrão são as 8 janelas diurnas, e o PA-34 sai de 30 em 30 minutos. O voo
-// noturno sai sempre às 17:30, e o Ground, nas janelas do dia. As 9 janelas viram os períodos do dia: a janela de
-// operação fechada fecha os horários que caem nela, e a disponibilidade dos instrutores e "manhã, tarde e noite"
-// valem por período.
-import { T, NI, DAY, AIRCRAFT_EQ_TYPES, MINUTOS_DO_DIA } from './config.js';
+// minutos, editada na aba Recursos; o padrão são os oito horários do dia (HORARIOS_PADRAO), e o PA-34 sai de 30 em 30
+// minutos. O voo noturno sai sempre às 17:30 (HORARIO_DO_NOTURNO), e o Ground, nos oito horários padrão. Os nove inícios
+// dos tempos de antes (js/tempos.js) ficam congelados só para o w da linha, as chaves das turmas de Ground e os dados
+// antigos; enquanto o win existir, a janela de operação fechada fecha os horários que caem nela.
+import { AIRCRAFT_EQ_TYPES, MINUTOS_DO_DIA } from './config.js';
+import { INICIOS_DOS_TEMPOS } from './tempos.js';
 import { categoriaDoTipo } from './categorias.js';
 import { hm } from './format.js';
 
-export const HORARIOS_PADRAO = DAY.map(w => T[w]);
-export const DE_30_EM_30 = Array.from({ length: 21 }, (_, i) => T[0] + 30 * i);
+export { INICIOS_DOS_TEMPOS };
+// A última janela de antes, a das 17:30 (a preferência antiga de 0 a 8, o "hN")
+const ULTIMO_TEMPO = INICIOS_DOS_TEMPOS.length - 1;
+// 17:30: o início do Noturno, o pouso mais tarde de um voo de dia no avião e a preferência mais tarde
+export const HORARIO_DO_NOTURNO = INICIOS_DOS_TEMPOS[ULTIMO_TEMPO];
+// 06:30: o Voo Solo sai sempre neste horário, e é o primeiro início do dia
+export const HORARIO_DO_SOLO = INICIOS_DOS_TEMPOS[0];
+// Os oito horários do dia, a lista padrão de cada categoria e a do Ground
+export const HORARIOS_PADRAO = INICIOS_DOS_TEMPOS.slice(0, ULTIMO_TEMPO);
+export const DE_30_EM_30 = Array.from({ length: 21 }, (_, i) => HORARIO_DO_SOLO + 30 * i);
 
 export const HORARIOS_INICIAIS = { C152: [...HORARIOS_PADRAO], C172: [...HORARIOS_PADRAO], sim: [...HORARIOS_PADRAO], 'PA-34': DE_30_EM_30 };
 export const CATEGORIAS_COM_HORARIOS = Object.keys(HORARIOS_INICIAIS);
@@ -36,34 +45,33 @@ export function horariosDoTipo(horarios, tipo) {
 }
 
 // Os horários de uma missão: o Noturno sai às 17:30 e o Voo Solo, sempre às 06:30 (local ou navegação); as demais,
-// na lista do tipo pedido (o Ground, nas janelas do dia)
-export const HORARIO_DO_SOLO = T[0];
+// na lista do tipo pedido (o Ground, nos horários padrão)
 // Até quando a missão pode ir: o voo de dia no avião pousa até as 17:30, quando começa a noite; o Noturno, o simulador
 // e a aula de Ground, que não dependem da luz do dia, vão até o fim do dia
-export const fimDaMissao = (mis, tipo) => (mis !== 'Noturno' && AIRCRAFT_EQ_TYPES.includes(tipo) ? T[NI] : MINUTOS_DO_DIA);
+export const fimDaMissao = (mis, tipo) => (mis !== 'Noturno' && AIRCRAFT_EQ_TYPES.includes(tipo) ? HORARIO_DO_NOTURNO : MINUTOS_DO_DIA);
 // Até quando a missão de cada aluno pode ir no dia (o motor, a compactação e as Sugestões usam esta): o Noturno só sai
 // às 17:30, então o aluno que tem um na demanda do dia (o pedido ou uma missão extra marcados para voar, entre ou não o
 // Noturno na escala) termina as outras missões (o simulador e a aula, que podem passar das 17:30) antes dele
 export function fimDasMissoesDoDia(alunos) {
   const comNoturno = new Set(alunos.filter(s => [s, ...(Array.isArray(s.extra) ? s.extra : [])].some(p => p.fly && p.mis === 'Noturno')).map(s => s.id));
-  return (stuId, mis, tipo) => (mis !== 'Noturno' && comNoturno.has(stuId) ? Math.min(T[NI], fimDaMissao(mis, tipo)) : fimDaMissao(mis, tipo));
+  return (stuId, mis, tipo) => (mis !== 'Noturno' && comNoturno.has(stuId) ? Math.min(HORARIO_DO_NOTURNO, fimDaMissao(mis, tipo)) : fimDaMissao(mis, tipo));
 }
 
-export const horariosDaMissao = (horarios, mis, tipo) => (mis === 'Noturno' ? [T[NI]] : mis === 'Voo Solo' ? [HORARIO_DO_SOLO] : horariosDoTipo(horarios, tipo));
+export const horariosDaMissao = (horarios, mis, tipo) => (mis === 'Noturno' ? [HORARIO_DO_NOTURNO] : mis === 'Voo Solo' ? [HORARIO_DO_SOLO] : horariosDoTipo(horarios, tipo));
 
 // O período (janela de operação) em que um horário cai: a última janela que começa até ele
 export function periodoDoMinuto(minuto) {
   let periodo = 0;
-  T.forEach((inicio, i) => { if (minuto >= inicio) periodo = i; });
+  INICIOS_DOS_TEMPOS.forEach((inicio, i) => { if (minuto >= inicio) periodo = i; });
   return periodo;
 }
 
 // Preferências em minutos; o número da janela (0 a 8) dos dados anteriores ao formato 12 vira o horário da janela
-export const minutoDaPreferencia = p => (!Number.isInteger(p) || p < 0 ? -1 : p <= NI ? T[p] : p);
+export const minutoDaPreferencia = p => (!Number.isInteger(p) || p < 0 ? -1 : p <= ULTIMO_TEMPO ? INICIOS_DOS_TEMPOS[p] : p);
 // Uma preferência válida: um horário entre 06:00 e 17:30 (ou a janela antiga); o resto vira "sem preferência"
 export function preferenciaValida(p) {
   const minuto = minutoDaPreferencia(p);
-  return minuto >= PRIMEIRO_HORARIO && minuto <= T[NI] ? minuto : -1;
+  return minuto >= PRIMEIRO_HORARIO && minuto <= HORARIO_DO_NOTURNO ? minuto : -1;
 }
 
 export function paraMinuto(texto) {
@@ -74,7 +82,7 @@ export function paraMinuto(texto) {
 // As preferências de um pedido novo: os primeiros horários da lista a partir das 08:20 e das 10:10
 export function preferenciasPadrao(lista) {
   const aPartirDe = minuto => lista.find(m => m >= minuto) ?? lista[lista.length - 1];
-  return [aPartirDe(T[1]), aPartirDe(T[2])];
+  return [aPartirDe(HORARIOS_PADRAO[1]), aPartirDe(HORARIOS_PADRAO[2])];
 }
 
 // Depois de trocar a missão ou o avião de um pedido: cada preferência vai para o horário mais próximo da lista nova,
@@ -84,7 +92,7 @@ export function ajustarPreferencias(pedido, lista) {
   const [padrao1, padrao2] = preferenciasPadrao(lista);
   const ajustar = (minuto, padrao) => {
     if (!Number.isInteger(minuto) || minuto < 0 || lista.includes(minuto)) return minuto;
-    if (minuto === T[NI]) return padrao;
+    if (minuto === HORARIO_DO_NOTURNO) return padrao;
     return lista.find(m => m >= minuto) ?? lista[lista.length - 1];
   };
   pedido.p1 = ajustar(pedido.p1, padrao1);
