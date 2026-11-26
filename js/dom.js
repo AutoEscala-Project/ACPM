@@ -287,6 +287,34 @@ export function trocarConteudo(lugar, html) {
   semFalhar(() => devolverFoco(lugar, foco));
 }
 
+// O botão do mouse apertado (o clique ainda não acabou). Um campo digitado avisa a mudança (change) no mousedown que tira
+// o foco dele, antes do mouseup e do click: um redesenho nessa hora tiraria da tela o que está sendo clicado, e o clique
+// se perderia. Quem redesenha espera o clique acabar (depoisDoClique): o botão solto, uma tecla ou a janela sem o foco
+let apertado = false;
+addEventListener('mousedown', () => { apertado = true; }, true);
+addEventListener('mouseup', () => { apertado = false; }, true);
+addEventListener('keydown', () => { apertado = false; }, true);
+addEventListener('blur', () => { apertado = false; });
+export const ponteiroApertado = () => apertado;
+// Faz agora ou, com o botão apertado, logo depois do clique (o click vem depois do mouseup, na mesma tarefa: a espera é
+// a tarefa seguinte), na próxima tecla ou quando a janela perde o foco; uma vez só
+export function depoisDoClique(fazer) {
+  if (!apertado) { fazer(); return; }
+  let feito = false;
+  const agora = () => {
+    if (feito) return;
+    feito = true;
+    removeEventListener('mouseup', soltou, true);
+    removeEventListener('keydown', agora, true);
+    removeEventListener('blur', agora);
+    fazer();
+  };
+  const soltou = () => setTimeout(agora);
+  addEventListener('mouseup', soltou, true);
+  addEventListener('keydown', agora, true);
+  addEventListener('blur', agora);
+}
+
 // Troca um elemento inteiro (a linha de uma tabela) mantendo o foco no equivalente da versão nova
 export function trocarElemento(el, html) {
   const pai = el.parentElement;
