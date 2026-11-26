@@ -6,7 +6,7 @@
 // põe, não move e não tira nenhum voo: refaz as marcas de conflito, os alertas deles, os avisos e a revisão, e os pesos e o
 // combustível de cada linha pelo cadastro
 import { NOTURNO, DEFAULT_LIM, GROUND_EQ_TYPE, GROUND_REG, GROUND_DURATION_MIN, GROUND_DURATION_H, REVISAO_H, MENOR_VOO_H, AIRCRAFT_EQ_TYPES, MISSOES_LOCAIS, LIMITE_DE_VOOS_LOCAIS } from './config.js';
-import { FROTA_INICIAL, matriculasDoTipo, motivoDoAviao, aviaoServe, instrutorVoaNoAviao, recursoDaFrota } from './frota.js';
+import { FROTA_INICIAL, matriculasDoTipo, motivoDoAviao, aviaoServe, instrutorVoaNoAviao, recursoDaFrota, salaDisponivel } from './frota.js';
 import { hm, fmtH, numeroBr, duracaoHm } from './format.js';
 import { repousoAntesDaVolta, historicoDoDia } from './noturno.js';
 import { isGroundMission, doesGroundGateFlight, disponibilidadeDoAluno, duracaoValida, duracaoFixaDaMissao, minutoConfirmado } from './rules.js';
@@ -217,7 +217,11 @@ function linhaDoFixo(state, ctx, item, pino, fKey = chaveDoVoo(item.stuId, item.
       if (motivo === 'so-parafuso') marcar('so-parafuso', d.mis === 'Parafuso' ? `o Parafuso só voa no ${nomesSoParafuso}` : `o ${r} é só para o Parafuso`);
       if (motivo === 'so-vfr') marcar('so-vfr', `o ${r} não é homologado IFR, e o voo é IFR`);
       if (!cabeNoSaldo(eu[r] || 0, (b - a) / 60, saldo(r))) marcar('revisao', 'o avião passaria da revisão de 50 horas');
-    } else if (!daMesmaTurma && !free(used, GROUND_REG, a, b)) marcar('sala-ocupada', 'a sala de Ground já está ocupada neste horário');
+    } else {
+      // A Sala Ground indisponível na data (S4), como o avião indisponível
+      if (!salaDisponivel(state.av)) marcar('sala-indisponivel', 'a Sala Ground está indisponível nesta data');
+      if (!daMesmaTurma && !free(used, GROUND_REG, a, b)) marcar('sala-ocupada', 'a sala de Ground já está ocupada neste horário');
+    }
     if (!free(stuBusy, stuId, a, b)) marcar('aluno-ocupado', 'o aluno já tem outro voo neste horário');
     if (!state.win[periodoDoMinuto(a)]) marcar('horario-fechado', 'o horário está fechado nesta data');
     const permitidas = disponibilidadeDoAluno(d.jan);

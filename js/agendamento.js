@@ -198,7 +198,7 @@ const FORA_DA_ESCALA = {
   'ground-antes-do-voo-fixo': 'sem horário antes do voo fixo', 'so-parafuso': 'sem o avião do Parafuso', 'sem-aviao': 'sem avião disponível',
   'sem-instrutor-habilitado': 'sem instrutor habilitado', 'disponibilidade-do-aluno': 'fora da disponibilidade do aluno',
   'depois-do-ground': 'sem horário depois do Ground', 'sem-horario': 'sem horário aberto', 'aluno-ocupado': 'o aluno já voa nos horários',
-  'avioes-ocupados': 'sem avião livre', 'sala-ocupada': 'a sala de Ground ocupada', revisao: 'sem saldo até a revisão de 50 h',
+  'avioes-ocupados': 'sem avião livre', 'sala-ocupada': 'a sala de Ground ocupada', 'sala-indisponivel': 'a Sala Ground indisponível', revisao: 'sem saldo até a revisão de 50 h',
   'instrutores-indisponiveis': 'sem instrutor disponível', 'instrutores-ocupados': 'sem instrutor livre', bloqueio: 'em Não escalar com',
   'limite-da-lei': 'o limite da lei', peso: 'o peso acima do limite', 'limite-de-locais': 'o limite de voos locais no horário',
   'instrutor-escolhido': 'o instrutor escolhido não serve', 'habilitacao-do-aviao': 'sem a habilitação própria do avião'
@@ -476,6 +476,7 @@ function textoDoRecurso(problema, { mis, instrutor }) {
     'aviao-indisponivel': () => 'em manutenção',
     'aviao-ocupado': () => textoDoVooFixo(problema.voo),
     'sala-ocupada': () => textoDoVooFixo(problema.voo),
+    'sala-indisponivel': () => 'indisponível nesta data',
     revisao: () => 'sem saldo até a revisão de 50 h',
     'so-parafuso': () => (mis === 'Parafuso' ? 'não é Só Parafuso' : 'só Parafuso'),
     'so-vfr': () => 'só VFR (o voo é IFR)',

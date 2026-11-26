@@ -161,7 +161,8 @@ describe('A Sala Ground disponível nesta data (S4)', () => {
   });
 
   it('o estado normalizado guarda a chave booleana da sala, e deixa ausente a que não existe', () => {
-    const base = juntar(separar(cenario()));
+    const { cadastro, dia } = separar(cenario());
+    const base = juntar(cadastro, dia);
     const sem = ApiClient.normalizeAndMigrateState(structuredClone(base));
     assert.equal(Object.hasOwn(sem.av, 'SALA-GROUND'), false);
     const desligada = ApiClient.normalizeAndMigrateState({ ...structuredClone(base), av: { ...base.av, 'SALA-GROUND': false } });

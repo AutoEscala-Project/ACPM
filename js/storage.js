@@ -1,6 +1,7 @@
 // Camada de acesso a dados: estado inicial, migrações de schema e persistência por um backend (localStorage ou
 // Supabase).
 
+import { GROUND_REG } from './config.js';
 import { FROTA_INICIAL, normalizarFrota } from './frota.js';
 import { pad, LIMITE_DO_NOME, hojeISO } from './format.js';
 import { normalizeMissionFields, proximoMid, pesoValido } from './rules.js';
@@ -114,6 +115,8 @@ export const ApiClient = {
     const naFrota = r => x.frota.some(f => f.reg === r);
     const av = Object.fromEntries(Object.entries(x.av && typeof x.av === 'object' ? x.av : {}).map(([r, v]) => [renomearSimulador(r), v]));
     x.av = Object.fromEntries(x.frota.map(f => [f.reg, typeof av[f.reg] === 'boolean' ? av[f.reg] : true]));
+    // A Sala Ground não é da frota: a chave dela fica só quando é booleana (S4; sem ela, a sala está disponível)
+    if (typeof av[GROUND_REG] === 'boolean') x.av[GROUND_REG] = av[GROUND_REG];
     x.horas = Object.fromEntries(Object.entries(x.horas).map(([r, h]) => [renomearSimulador(r), h]).filter(([r]) => naFrota(r)));
 
     if (!x.schemaVer || x.schemaVer < 3) {

@@ -1,7 +1,7 @@
 // Motor de alocação determinístico da escala do dia e utilitários de horas e de ocupação.
 // runAllocationEngine é uma função pura: recebe o estado e devolve { out, al, tot } sem alterá-lo.
 import { MIS, DEFAULT_LIM, GROUND_EQ_TYPE, GROUND_REG, GROUND_DURATION_MIN, GROUND_DURATION_H, AIRCRAFT_EQ_TYPES, MISSOES_LOCAIS, LIMITE_DE_VOOS_LOCAIS, MINUTOS_DO_DIA } from './config.js';
-import { FROTA_INICIAL, matriculasDoTipo, matriculasParaOVoo, motivoDoAviao, instrutorVoaNoAviao, recursoDaFrota } from './frota.js';
+import { FROTA_INICIAL, matriculasDoTipo, matriculasParaOVoo, motivoDoAviao, instrutorVoaNoAviao, recursoDaFrota, salaDisponivel } from './frota.js';
 import { hm, fmtH } from './format.js';
 import { isGroundMission, doesGroundGateFlight, disponibilidadeDoAluno, rotuloDaDisponibilidade, duracaoValida, duracaoFixaDaMissao, minutoConfirmado } from './rules.js';
 import { horariosDaMissao, horariosDoTipo, periodoDoMinuto, minutoDaPreferencia, ordenarPelaPreferencia } from './horarios.js';
@@ -291,8 +291,10 @@ export function runAllocationEngine(state, opcoes = {}) {
       const exigeMais = Array.isArray(d.exige) && d.exige.length > 0;
       const durMin = GROUND_DURATION_MIN; // 90 min (1.5 h)
       const endMax = fimDoAluno(stuId, d.mis, GROUND_EQ_TYPE);
-      // Os horários de decolagem da Sala Ground (Recursos; sem a lista dela, os oito horários padrão), em minutos
-      const starts = horariosDoTipo(horarios, GROUND_EQ_TYPE).filter(m => state.win[periodoDoMinuto(m)] && m + durMin <= endMax && naDisponibilidade(m));
+      // Os horários de decolagem da Sala Ground (Recursos; sem a lista dela, os oito horários padrão), em minutos. Com a
+      // sala indisponível na data (S4), nenhum: nenhuma aula entra, e o voo que depende dela espera (ground-pendente)
+      const salaLivre = salaDisponivel(state.av);
+      const starts = !salaLivre ? [] : horariosDoTipo(horarios, GROUND_EQ_TYPE).filter(m => state.win[periodoDoMinuto(m)] && m + durMin <= endMax && naDisponibilidade(m));
 
       // Se o aluno também tem um voo dependente hoje com horário preferido, prioriza janelas que terminem antes do voo
       const dependentFlights = act.filter(other => other.stuId === stuId && doesGroundGateFlight(d.mis, other.ref));
@@ -314,7 +316,7 @@ export function runAllocationEngine(state, opcoes = {}) {
         return ok1 - ok2;
       });
 
-      const existingClasses = openGroundClasses[d.mis] || [];
+      const existingClasses = salaLivre ? openGroundClasses[d.mis] || [] : [];
       let chosenClass = null, fcGnd, fcDoPar = null, passadaUsada = null;
       for (const passada of passadas) {
         const naPassada = x => passada.pool.includes(x);
@@ -440,7 +442,9 @@ export function runAllocationEngine(state, opcoes = {}) {
       } else {
         // O motivo, com o código que diz onde resolver
         let codigo, why;
-        if (!state.ins.some(x => x.on && habilitado(x))) {
+        if (!salaLivre) {
+          [codigo, why] = ['sala-indisponivel', 'a Sala Ground está indisponível nesta data'];
+        } else if (!state.ins.some(x => x.on && habilitado(x))) {
           [codigo, why] = ['sem-instrutor-habilitado', `nenhum instrutor ativo tem a habilitação de ${d.mis} (${descreverExigencias(d.mis, GROUND_EQ_TYPE, { exige: d.exige })})`];
         } else if (semPrazo.length && !candidatos.length) {
           [codigo, why] = ['ground-antes-do-voo-fixo', `o Ground precisa terminar antes do voo fixo das ${hm(prazoFixo)}, e não há horário para ele antes disso`];

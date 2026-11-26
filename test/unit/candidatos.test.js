@@ -3,7 +3,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { ocupacaoDaEscala, problemaDoRecurso, problemaDoAluno, avioesQueServem, instrutoresQueServem } from '../../js/candidatos.js';
-import { TEXTO_DO_PROBLEMA } from '../../js/conflitos.js';
+import { TEXTO_DO_PROBLEMA, CODIGOS_DE_REJEICAO, GRUPO_DO_CONFLITO } from '../../js/conflitos.js';
 import { runAllocationEngine } from '../../js/engine.js';
 import { aluno, cenario, instrutor, GROUND_C152 } from '../helpers/montar.js';
 
@@ -97,7 +97,7 @@ describe('Candidatos: os recursos', () => {
     assert.deepEqual(sala({ ...estado, av: { ...estado.av, 'SALA-GROUND': true } }, 610, 700), [['SALA-GROUND', null]]);
     const fechada = { ...estado, av: { ...estado.av, 'SALA-GROUND': false } };
     assert.deepEqual(sala(fechada, 610, 700), [['SALA-GROUND', 'sala-indisponivel']]);
-    assert.equal(typeof TEXTO_DO_PROBLEMA['sala-indisponivel'], 'function');
+    assert.ok(CODIGOS_DE_REJEICAO.includes('sala-indisponivel') && GRUPO_DO_CONFLITO['sala-indisponivel'] === 'aviao');
   });
 });
 
