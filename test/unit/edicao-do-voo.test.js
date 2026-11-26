@@ -334,3 +334,169 @@ describe('O editor do voo: cada campo e o que ele grava', async () => {
     }
   });
 });
+
+// A revisão do F1g: desfazer a alteração depois de aprovar ou de reabrir a escala, o que a missão do curso escolhida no
+// editor exige do INVA, a volta do noturno e a confirmação do 7º local
+describe('O editor do voo: o que a revisão achou', async () => {
+  const { vooParaEditar, opcoesDoVoo, aplicarEdicao, avisosDaEdicao, missoesDoVoo } = await import('../../js/edicao-do-voo.js');
+  const { novoCurso, comExigenciasDasMissoes } = await import('../../js/programa.js');
+  const { MODELOS } = await import('../../js/modelos-de-curso.js');
+  const { fixosAoReabrir, normalizarFixos } = await import('../../js/fixos.js');
+  const { apenas } = await import('../helpers/montar.js');
+  const { comVolta, gerarCenario } = await import('../helpers/cenarios.js');
+  const aprovacao = { em: '2026-11-26T10:00:00Z', por: 'Operador' };
+  const dia = () => cenario({
+    ins: [instrutor(1, 9), instrutor(2, 9), instrutor(3, 9)], semAeronaves: apenas('C152', 'PP-LJV'),
+    stu: [aluno(1000, { p1: 390, p2: -1 }), aluno(1001, { p1: 500, p2: -1 }), aluno(1002, { p1: 610, p2: -1 }), aluno(1003, { p1: 390, p2: -1, jan: 'h390' })]
+  });
+  const ida = rev => validarReversao(JSON.parse(JSON.stringify({ ...rev, label: '↶ Reverter' })), []);
+  const linha = (r, fKey) => { const o = r.out.find(v => v.fKey === fKey); return o ? `${o.a}-${o.b} ${o.r} ${o.insId}` : null; };
+
+  it('a alteração feita antes da aprovação, desfeita na escala aprovada: o voo volta para o lugar de antes dela, fixo, e o motor o deixa lá', () => {
+    const S = dia();
+    let RES = runAllocationEngine(S);
+    const antesDaEdicao = linha(RES, '1002_0_1');
+    const voo = vooParaEditar(S, RES, '1002_0_1');
+    const feito = aplicarEdicao(S, RES, voo, { ...structuredClone(voo.valores), a: 870 }, { aprovada: false });
+    RES = runAllocationEngine(S);
+    assert.equal(linha(RES, '1002_0_1'), '870-930 PP-LJV 3');
+    S.fixos = fixosAoAprovar(S.fixos, RES.out);
+    S.aprovacao = aprovacao;
+    const antes = structuredClone(S);
+    desfazerEdicao(S, ida(feito.rev));
+    S.fixos = normalizarFixos(S.fixos);
+    assert.deepEqual(S.fixos['1002_0_1'], { a: 610, b: 670, r: 'PP-LJV', insId: 3 }, 'o pino do lugar de antes, sem a marca do agendamento');
+    const { resultado, motor } = escalaDaAlteracao(S, RES, { aprovada: true, antes, motor: () => assert.fail('o motor rodou') });
+    assert.equal(motor, false);
+    assert.equal(linha(resultado, '1002_0_1'), antesDaEdicao);
+    // Uma alteração fora da Escala depois (R5): o motor deixa o voo onde ele voltou
+    assert.equal(linha(runAllocationEngine(S), '1002_0_1'), antesDaEdicao);
+  });
+
+  it('a alteração feita na escala aprovada, desfeita depois de reabrir: o pino da aprovação não volta, e o motor põe o voo', () => {
+    const S = dia();
+    let RES = runAllocationEngine(S);
+    S.fixos = fixosAoAprovar(S.fixos, RES.out);
+    S.aprovacao = aprovacao;
+    RES = runAllocationEngine(S);
+    // Como gravar(): o voo fixo no lugar antes, e a alteração
+    S.fixos = fixarNoLugar(S.fixos, RES, ['1002_0_1']);
+    const voo = vooParaEditar(S, RES, '1002_0_1');
+    const feito = aplicarEdicao(S, RES, voo, { ...structuredClone(voo.valores), a: 870 }, { aprovada: true });
+    S.fixos = fixosAoReabrir(S.fixos, S.fStatus);
+    S.aprovacao = null;
+    desfazerEdicao(S, ida(feito.rev));
+    S.fixos = normalizarFixos(S.fixos);
+    assert.equal(S.fixos['1002_0_1'], undefined, JSON.stringify(S.fixos));
+    // Depois, 1001 sai e 1002 pede 08:20: o motor o move (não ficou fixo)
+    S.stu[2].p1 = 500;
+    S.stu[1].fly = false;
+    assert.match(linha(runAllocationEngine(S), '1002_0_1'), /^500-560 /);
+  });
+
+  it('desfeita depois de reabrir, o voo com o status que fixa e o com o instrutor escolhido continuam fixos', () => {
+    const S = dia();
+    let RES = runAllocationEngine(S);
+    S.fixos = fixosAoAprovar(S.fixos, RES.out);
+    S.aprovacao = aprovacao;
+    RES = runAllocationEngine(S);
+    S.fixos = fixarNoLugar(S.fixos, RES, ['1001_0_1']);
+    S.fixos['1001_0_1'] = { ...S.fixos['1001_0_1'], escolhido: true };
+    S.fStatus = { ...(S.fStatus || {}), '1000_0_1': 'Atrasado' };
+    const editar = (fKey, mudar) => {
+      const voo = vooParaEditar(S, RES, fKey);
+      return aplicarEdicao(S, RES, voo, { ...structuredClone(voo.valores), ...mudar(voo.valores) }, { aprovada: true });
+    };
+    const revs = [editar('1001_0_1', () => ({ a: 690 })), editar('1000_0_1', v => ({ minutos: v.minutos + 30 }))];
+    S.fixos = fixosAoReabrir(S.fixos, S.fStatus);
+    S.aprovacao = null;
+    for (const f of revs.reverse()) desfazerEdicao(S, ida(f.rev));
+    S.fixos = normalizarFixos(S.fixos);
+    assert.ok(S.fixos['1001_0_1'] && S.fixos['1001_0_1'].escolhido, 'o escolhido fica');
+    assert.ok(S.fixos['1000_0_1'], 'o Atrasado fica');
+  });
+
+  it('a missão do curso escolhida no editor: o que ela exige do INVA avisa, separa os instrutores e não deixa o de antes', () => {
+    const pp = novoCurso([], { sigla: 'PP', nome: 'PP', modelo: MODELOS['pp-acpm'] }, (s, c) => `${s}:${c}`).curso;
+    pp.missoes.find(m => m.codigo === 'IN-02').exige = ['endosso_solo'];
+    const programa = [pp];
+    const S = cenario({ ins: [instrutor(1, 9), instrutor(3, 9)], stu: [aluno(1000, { p1: 610, p2: -1, etapa: 'IN-01', cursoDaEtapa: 'PP' }, { curso: 'PP' })] });
+    const tela = () => comExigenciasDasMissoes(S, programa);
+    let RES = runAllocationEngine(tela());
+    S.fixos = fixosAoAprovar({}, RES.out);
+    S.aprovacao = aprovacao;
+    RES = runAllocationEngine(tela());
+    const voo = vooParaEditar(tela(), RES, '1000_0_1', { programa });
+    const missao = k => missoesDoVoo(tela(), voo, 1000, programa).grupos.flatMap(g => g.opcoes).find(o => o.missao.etapa === k).missao;
+    const valores = { ...structuredClone(voo.valores), missao: { ...missao('IN-02') } };
+    const avisos = avisosDaEdicao(tela(), RES, voo, valores, { aprovada: true, programa });
+    assert.ok(avisos.some(a => a.codigo === 'habilitacao' && a.conflito && a.campo === 'voo-instrutor'), JSON.stringify(avisos));
+    const servem = opcoesDoVoo(tela(), RES, voo, valores, { programa }).instrutores.filter(g => /^Servem/.test(g.rotulo)).flatMap(g => g.opcoes);
+    assert.deepEqual(servem, [], 'ninguém tem o endosso');
+    // A volta: de IN-02 (com o exige) para IN-01, os dois servem de novo
+    const comExige = tela();
+    pedidoDe(comExige, '1000_0_1').exige = ['endosso_solo'];
+    Object.assign(pedidoDe(comExige, '1000_0_1'), { etapa: 'IN-02' });
+    const voo2 = vooParaEditar(comExige, RES, '1000_0_1', { programa });
+    const valores2 = { ...structuredClone(voo2.valores), missao: { ...missao('IN-01') } };
+    const servem2 = opcoesDoVoo(comExige, RES, voo2, valores2, { programa }).instrutores.filter(g => /^Servem/.test(g.rotulo)).flatMap(g => g.opcoes.map(o => o.valor));
+    assert.deepEqual(servem2.sort(), [1, 3]);
+    assert.ok(!avisosDaEdicao(comExige, RES, voo2, valores2, { aprovada: true, programa }).some(a => a.codigo === 'habilitacao'));
+  });
+
+  it('o aluno mudado no editor: o que a missão do curso dele exige do INVA avisa', () => {
+    const pp = novoCurso([], { sigla: 'PP', nome: 'PP', modelo: MODELOS['pp-acpm'] }, (s, c) => `${s}:${c}`).curso;
+    const programa = [pp];
+    const S = cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, { p1: 610, p2: -1, etapa: 'IN-01', cursoDaEtapa: 'PP' }, { curso: 'PP' }), aluno(1001, { p1: 390, p2: -1, fly: false }, { curso: 'PP' })] });
+    const tela = () => comExigenciasDasMissoes(S, programa);
+    // Aprovada antes de a missão passar a exigir o endosso: o voo fica, em conflito
+    S.fixos = fixosAoAprovar({}, runAllocationEngine(tela()).out);
+    S.aprovacao = aprovacao;
+    pp.missoes.find(m => m.codigo === 'IN-01').exige = ['endosso_solo'];
+    const RES = runAllocationEngine(tela());
+    assert.ok(RES.out.find(o => o.fKey === '1000_0_1').conflito);
+    const voo = vooParaEditar(tela(), RES, '1000_0_1', { programa });
+    const avisos = avisosDaEdicao(tela(), RES, voo, { ...structuredClone(voo.valores), stuId: 1001 }, { aprovada: true, programa });
+    assert.ok(avisos.some(a => a.codigo === 'habilitacao'), JSON.stringify(avisos));
+  });
+
+  it('a volta do noturno de ontem: o status mudado no editor tem a reversão', () => {
+    let vista = false;
+    for (let seed = 1; seed < 400 && !vista; seed++) {
+      const e = comVolta(gerarCenario(seed), seed);
+      const r = runAllocationEngine(e);
+      const volta = r.out.find(o => o.trecho);
+      if (!volta) continue;
+      vista = true;
+      const v = vooParaEditar(e, r, volta.fKey);
+      const valores = structuredClone(v.valores);
+      valores.status[volta.fKey] = 'Pousou';
+      const copia = structuredClone(e);
+      const feito = aplicarEdicao(copia, r, v, valores, { aprovada: false });
+      const rev = ida(feito.rev);
+      assert.ok(rev, 'sem reversão');
+      desfazerEdicao(copia, rev);
+      assert.equal((copia.fStatus || {})[volta.fKey], (e.fStatus || {})[volta.fKey]);
+    }
+    assert.ok(vista);
+  });
+
+  it('a confirmação do 7º local sai quando a missão ou o tipo muda no mesmo minuto, como na Demanda', () => {
+    const pp = novoCurso([], { sigla: 'PP', nome: 'PP', modelo: MODELOS['pp-acpm'] }, (s, c) => `${s}:${c}`).curso;
+    const S = cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, { p1: 500, p2: -1, jan: 'h500', limiteConfirmado: true, etapa: 'IN-01', cursoDaEtapa: 'PP' }, { curso: 'PP' })] });
+    const R = runAllocationEngine(S);
+    const voo = vooParaEditar(S, R, '1000_0_1');
+    const op = missoesDoVoo(S, voo, 1000, [pp]).grupos.flatMap(g => g.opcoes).find(o => o.missao.etapa === 'IN-02');
+    const outra = structuredClone(S);
+    aplicarEdicao(outra, R, voo, { ...structuredClone(voo.valores), missao: { ...op.missao } }, { aprovada: false });
+    assert.equal(outra.stu[0].limiteConfirmado, undefined, 'outra missão');
+    const outroTipo = structuredClone(S);
+    aplicarEdicao(outroTipo, R, voo, { ...structuredClone(voo.valores), r: 'PP-ABP' }, { aprovada: false });
+    assert.equal(outroTipo.stu[0].eq, 'C172');
+    assert.equal(outroTipo.stu[0].limiteConfirmado, undefined, 'outro tipo');
+    // O mesmo tipo e a mesma missão (só o instrutor ou o status): a confirmação fica
+    const mesmo = structuredClone(S);
+    aplicarEdicao(mesmo, R, voo, { ...structuredClone(voo.valores), minutos: voo.valores.minutos + 30 }, { aprovada: false });
+    assert.equal(mesmo.stu[0].limiteConfirmado, true);
+  });
+});

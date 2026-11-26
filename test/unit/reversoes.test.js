@@ -558,8 +558,14 @@ describe('desfazerEdicao', async () => {
     assert.equal(limpa.kind, 'desfazerEdicao');
     assert.equal(limpa.pedidos[1].pedido, null);
     assert.equal(limpa.recusas.length, 1);
+    // A volta do noturno de ontem não tem pedido no dia: só o voo (o status)
+    assert.deepEqual(validarReversao({ ...valida, pedidos: [] }, []).pedidos, []);
+    // O lugar do voo sem pino: só o horário, o recurso, o instrutor e a turma
+    const comLugar = validarReversao({ ...valida, voos: [{ ...valida.voos[1], lugar: { a: 390, b: 450, r: 'PR-AAA', insId: 1, agendado: true } }] }, []);
+    assert.deepEqual(comLugar.voos[0].lugar, { a: 390, b: 450, r: 'PR-AAA', insId: 1 });
     for (const ruim of [
-      { ...valida, voos: [] }, { ...valida, pedidos: [] }, { ...valida, pedidos: [{ stuId: 1000, mid: 0, pedido: null }] },
+      { ...valida, voos: [] }, { ...valida, pedidos: [{ stuId: 1000, mid: 0, pedido: null }] },
+      { ...valida, voos: [{ ...valida.voos[0], lugar: { a: 'x' } }] },
       { ...valida, pedidos: [{ stuId: 1000, mid: 0, pedido: { ...pedido, mis: 'Nada' } }] }, { ...valida, recusas: [{ fKey: 'x', s: 'a', m: 'b' }] },
       { ...valida, recusas: [{ fKey: '1002_0_1', s: 'a', m: 'b', codigo: 'inventado' }] }, { ...valida, voos: [{ fKey: '1000_0_1', fixo: { a: 'x' } }] }
     ]) assert.equal(validarReversao(ruim, []), null, JSON.stringify(ruim).slice(0, 80));
@@ -567,6 +573,7 @@ describe('desfazerEdicao', async () => {
 
   it('desfaz: o pedido de antes (a extra criada sai), o pino, o status e o detalhe de antes', () => {
     const estado = {
+      aprovacao: { em: '2026-11-26T10:00:00Z', por: 'Operador' },
       stu: [{ id: 1000, nm: 'A', ...pedido, p1: 610, jan: 'tarde', insId: 4, extra: [] }, { id: 1001, nm: 'B', ...pedido, extra: [{ mid: 7, ...pedido }] }],
       fixos: { '1000_0_1': { a: 610, b: 670, r: 'PR-BBB', insId: 4, agendado: true }, '1001_7_1': { a: 390, b: 450, r: 'PR-AAA', insId: 1, agendado: true } },
       fStatus: { '1000_0_1': 'Pendente', '1001_7_1': 'Atrasado' }, fObs: { '1001_7_1': { novoInicio: 400 } }
