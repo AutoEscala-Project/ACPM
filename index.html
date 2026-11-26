@@ -362,8 +362,10 @@
         <label>Data do pedido<select id="ag-data" class="agenda-campo" aria-describedby="agenda-prazo"></select></label>
         <p class="h" id="agenda-prazo"></p>
         <label>Aluno<select id="ag-aluno" class="agenda-campo" required aria-describedby="ag-erro"></select></label>
-        <label>Fase / missão<select id="ag-missao" class="agenda-campo"></select></label>
-        <label>Horário<select id="ag-horario" class="agenda-campo" aria-describedby="ag-erro"></select></label>
+        <label>Fase / missão<select id="ag-missao" class="agenda-campo" required aria-describedby="ag-erro"></select></label>
+        <label>Recurso<select id="ag-recurso" class="agenda-campo" required disabled aria-describedby="ag-erro"></select></label>
+        <div><label>Horário<select id="ag-horario" class="agenda-campo" required disabled aria-describedby="ag-horario-motivo ag-erro"></select></label>
+          <small id="ag-horario-motivo" aria-live="polite"></small></div>
         <label>Duração (h)<input type="number" id="ag-horas" class="agenda-campo" min="0.1" max="5" step="0.1" inputmode="decimal" value="1" aria-describedby="ag-erro"></label>
         <label>Registrado por<input id="ag-por" class="agenda-campo" maxlength="80" required placeholder="Quem anotou o pedido" aria-describedby="ag-erro"></label>
         <label>Observação<input id="ag-obs" class="agenda-campo" maxlength="300" placeholder="Opcional"></label>
@@ -610,11 +612,13 @@
       <p>A agenda de pedidos da secretaria: a lista dos pedidos da data aberta e o formulário que registra um pedido.
       Cada pedido é registrado para a <i>Data do pedido</i>, um campo do formulário: ela começa na data aberta, ou na primeira que ainda aceita pedidos, e não muda a data aberta no app.
       Para ver os pedidos de outro dia, escolha o dia no calendário, que mostra quantos cada um tem.
-      Cada pedido tem o aluno, a missão, o horário (os horários da missão: o Multimotor, por exemplo, tem os do PA-34), a duração (fracionada, até 5 h; o Ground tem 01h30) e quem anotou.
+      Cada pedido tem o aluno, a missão, o recurso, o horário, a duração (fracionada, até 5 h; o Ground tem 01h30) e quem anotou.
+      A missão decide os recursos que podem ser escolhidos (quando ela só permite um, ele já vem escolhido), e o recurso decide os horários, que são os configurados para ele em Recursos: a Navegação no PA-34, por exemplo, tem os horários do PA-34, e no C152, os do C152.
+      O campo <i>Horário</i> só abre depois do aluno, da missão e do recurso; ao trocar a missão ou o recurso, o horário que a lista nova não tem sai, e o app diz.
       No máximo 6 voos locais (Voo Local, Voo Solo e TGL) saem no mesmo horário (determinação da diretoria): ao agendar o 7º, o horário fica indisponível, e o app diz o próximo horário possível.
       O Voo Solo sai sempre às 06:30.
       Se o aluno já tem voo marcado na data, o app avisa (pode ser um reagendamento feito por outra pessoa) e só registra mais um com “Registrar mesmo assim”.
-      Cada pedido vira um voo na demanda, com o horário e a duração dele.
+      Cada pedido vira um voo na demanda, com o recurso, o horário e a duração dele (o pedido de antes de a agenda guardar o recurso entra no recurso padrão da missão).
       O pedido para o dia seguinte só pode ser registrado até as 13:00 (horário de Brasília); depois disso, só para os próximos dias.
       O aeroclube não opera aos domingos: domingo não tem escala nem pedidos (no calendário, o domingo não abre), e os voos de segunda são agendados até sábado às 10:00.
       Operadores e Administradores podem registrar fora do prazo com a <i>Exceção da Coordenação</i>, que fica marcada no pedido: para eles, as datas fechadas aparecem na <i>Data do pedido</i> com “prazo encerrado”.</p>
