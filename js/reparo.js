@@ -9,7 +9,9 @@
 // O voo cancelado da data aberta também tem sugestões (sugerirParaCancelado): o aluno não perde o voo porque o instrutor ou
 // o avião faltou, a não ser que seja impossível. O motivo do cancelamento sai da busca (o instrutor, o avião ou o horário).
 // Na ordem: o mesmo horário e o mesmo avião, com outro instrutor; o mesmo horário, outro avião; o horário mais perto, antes
-// ou depois; outro tipo de recurso que a missão permite. A lista do conflito também ganha o horário mais perto antes dele
+// ou depois; outro tipo de recurso que a missão permite. A lista do conflito também ganha os dois últimos (o horário fora da
+// disponibilidade e outro tipo mudam também o pedido: repararComOPedido). Fora da disponibilidade e em outro tipo, a
+// sugestão pede a confirmação com o aluno; a que faz do voo local o 7º do horário, a do operador
 import { GROUND_EQ_TYPE, T, NI, MIS, MISSOES_LOCAIS, LIMITE_DE_VOOS_LOCAIS } from './config.js';
 import { CAMPOS_DO_PEDIDO } from './dias.js';
 import { normalizeMissionFields } from './rules.js';
