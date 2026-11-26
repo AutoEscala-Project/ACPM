@@ -303,21 +303,25 @@ function buscaDoVoo(estado, resultado, voo, grupo, { depoisDe = null, semInstrut
     // O mesmo horário, com as regras dos outros (o período aberto também)
     mesmoHorarioDisponivel: !semHorario && horarioAberto(voo.a),
     periodoFechado: !estado.win[periodoDoMinuto(voo.a)],
-    // 1. O mesmo horário e o mesmo avião, com outro instrutor (até dois)
+    // 1. O mesmo horário e o mesmo avião, com outro instrutor (até dois; o de antes seria o próprio voo cancelado)
     mesmoAviao(maximo = 2) {
       if (semAviao === voo.r) return [];
       const { a, b } = voo;
       // O avião, ou a sala de Ground, livre no horário
       if (!avioes(tipoDoVoo, a, b).includes(voo.r)) return [];
-      return instrutores(tipoDoVoo, a, b, voo.r).slice(0, maximo).map(c => opcao('instrutor', tipoDoVoo, a, { r: voo.r, c },
-        `${hm(a)} ${noOuNa(voo.r)}, com ${c.x.nm}`));
+      return instrutores(tipoDoVoo, a, b, voo.r).filter(c => c.x.id !== voo.insId).slice(0, maximo)
+        .map(c => opcao('instrutor', tipoDoVoo, a, { r: voo.r, c }, `${hm(a)} ${noOuNa(voo.r)}, com ${c.x.nm}`));
     },
-    // 2. O mesmo horário, outro avião (e o instrutor que serve nele)
+    // 2. O mesmo horário, outro avião e o instrutor que serve nele: primeiro um avião em que o instrutor de antes voa, com
+    // ele (só o avião faltou); senão, outro avião e o primeiro instrutor que serve
     outroAviao() {
       if (voo.isGround) return null;
       const { a, b } = voo;
-      for (const r of avioes(tipoDoVoo, a, b).filter(x => x !== voo.r)) {
-        const c = instrutores(tipoDoVoo, a, b, r)[0];
+      const outros = avioes(tipoDoVoo, a, b).filter(x => x !== voo.r);
+      const comOAtual = atual && atual.id !== semInstrutor ? avioes(tipoDoVoo, a, b, atual).filter(x => x !== voo.r) : [];
+      for (const r of [...comOAtual, ...outros.filter(x => !comOAtual.includes(x))]) {
+        const lista = instrutores(tipoDoVoo, a, b, r);
+        const c = lista.find(i => i.x === atual) || lista[0];
         if (c) return opcao('aviao', tipoDoVoo, a, { r, c }, `${hm(a)} ${noOuNa(r)}, com ${c.x.nm}`);
       }
       return null;
