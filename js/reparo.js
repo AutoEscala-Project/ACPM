@@ -114,12 +114,16 @@ export function sugerirReparos(estado, resultado, fKey, { maximo = 3, depoisDe =
     }
   }
 
-  // Sem nada até aqui: os dois últimos grupos do voo cancelado (buscaDoVoo). O horário mais perto: antes deste, dentro da
-  // disponibilidade do pedido, ou fora dela, antes ou depois; e outro tipo de recurso que a missão permite. Fora da
-  // disponibilidade e em outro tipo, a sugestão pede a confirmação com o aluno e muda também o pedido (repararComOPedido)
-  if (!opcoes.length && !pedidoMudou) {
+  // Depois, sempre (até o máximo): os dois últimos grupos do voo cancelado (buscaDoVoo). O horário mais perto, antes ou
+  // depois, dentro da disponibilidade do pedido ou fora dela (com o horário mais tarde já sugerido acima, só os de antes e
+  // os de fora); e outro tipo de recurso que a missão permite. Fora da disponibilidade e em outro tipo, a sugestão pede a
+  // confirmação com o aluno e muda também o pedido (repararComOPedido)
+  if (!pedidoMudou) {
     const busca = buscaDoVoo(estado, resultado, voo, grupo, { depoisDe });
-    for (const opcao of [busca.outroHorario(), busca.outroTipo()]) if (opcao) opcoes.push(noReparo(opcao));
+    const maisTarde = opcoes.some(o => o.tipo === 'horario');
+    const horario = busca.outroHorario(maisTarde ? { so: x => x < voo.a || !busca.naDisponibilidade(x) } : {});
+    const repetida = o => opcoes.some(x => x.mudancas && ['a', 'r', 'insId'].every(c => (x.mudancas[c] ?? voo[c]) === (o.mudancas[c] ?? voo[c])));
+    for (const opcao of [horario, busca.outroTipo()]) if (opcao && !repetida(opcao)) opcoes.push(noReparo(opcao));
   }
 
   // Cada sugestão conferida no motor, aplicada como o reparo a aplica (com o pedido, quando ela o muda)
@@ -302,6 +306,7 @@ function buscaDoVoo(estado, resultado, voo, grupo, { depoisDe = null, semInstrut
 
   return {
     tipoDoVoo,
+    naDisponibilidade,
     // O mesmo horário, com as regras dos outros (o período aberto também)
     mesmoHorarioDisponivel: !semHorario && horarioAberto(voo.a),
     periodoFechado: !estado.win[periodoDoMinuto(voo.a)],
