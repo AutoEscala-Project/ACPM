@@ -11,7 +11,7 @@
 // as fases e o índice das fases) vale para todos os perfis, também enquanto a data abre: não são ações (data-act).
 // Antes de a escala abrir (js/actions.js, aindaNaoAbriu), o programa não muda: os botões recusam em registro.js, e os
 // campos e o curso novo, aqui, com o mesmo aviso
-import { aindaNaoAbriu } from '../actions.js';
+import { aindaNaoAbriu, gravarAlteracao } from '../actions.js';
 import {
   conteudoDoCurso, incluirMissao, mudarMissao, moverMissao, retirarMissao, validarCurso, percursoDoCurso, nomeDaFase, incluirFase, mudarFase,
   moverFase, retirarFase, restaurarFase, restaurarMissao, definirRegra, marcarMissao, moverMissaoParaFase, ordemRecusada, definirTrecho, mudarCurso,
@@ -23,7 +23,7 @@ import { codigoValido } from '../cursos.js';
 import { ApiClient } from '../storage.js';
 import { $, showToast, fecharNoEsc } from '../dom.js';
 import { duracaoDigitada, ERRO_DA_DURACAO } from '../rules.js';
-import { S } from '../state.js';
+import { S, estadoDaEscala } from '../state.js';
 import { confirmado } from './confirmacao.js';
 import { aoAcionar } from './registro.js';
 import {
@@ -58,6 +58,15 @@ const porNaTela = curso => {
   const programa = S.programa || [];
   S.programa = programa.some(c => c.sigla === curso.sigla) ? programa.map(c => (c.sigla === curso.sigla ? curso : c)) : [...programa, curso];
 };
+
+// O que as missões do curso exigem do INVA nos pedidos da data aberta (o estado da escala o deriva de S.programa, F1d).
+// Uma alteração do programa que muda isso refaz e grava a escala da data (gravarAlteracao sem descrição: a alteração fica
+// nas versões do curso, não no histórico da data), como uma habilitação marcada em Instrutores; também a escala já
+// gravada, que a data mostraria como estava ao abrir de novo
+const exigenciasDaData = () => JSON.stringify(estadoDaEscala().stu.map(s => [s.exige || null, (s.extra || []).map(ex => ex.exige || null)]));
+function refazerEscalaSeMudou(antes) {
+  if (exigenciasDaData() !== antes) gravarAlteracao('mod', null);
+}
 
 // O curso de onde a alteração parte: com gravações esperando, o da fila (com todas elas); senão, o da tela, a não ser
 // que ele seja mais antigo que o confirmado aqui
@@ -165,6 +174,7 @@ async function mostrarOGravado(sigla, gravado, erro) {
   } catch {
     // Sem conexão: fica o último curso confirmado
   }
+  const exigenciasAntes = exigenciasDaData();
   if (programa) {
     const esperando = [...filas.values()].map(f => f.curso).filter(c => !programa.some(p => p.sigla === c.sigla));
     S.programa = [...programa.map(c => (filas.has(c.sigla) ? filas.get(c.sigla).curso : c)), ...esperando];
@@ -173,6 +183,7 @@ async function mostrarOGravado(sigla, gravado, erro) {
   } else {
     S.programa = (S.programa || []).filter(c => c.sigla !== sigla);
   }
+  refazerEscalaSeMudou(exigenciasAntes);
   const ativo = document.activeElement;
   const focoNoCurso = Boolean(ativo && ativo.closest(`#cursos .curso[data-curso="${sigla}"]`));
   rCursos(); redesenharPorNome('alunos', 'pedidos-do-dia');
@@ -225,9 +236,12 @@ function alterar(curso, novo, descricao, { comSigla = true } = {}) {
   const fila = filas.get(sigla);
   fila.curso = novo;
   fila.itens.push({ curso: novo, conteudo: conteudoDoCurso(novo), descricao: comSigla ? `${sigla}: ${descricao}` : descricao });
+  const exigenciasAntes = exigenciasDaData();
   porNaTela(novo);
-  // Primeiro a fila sai para o servidor; depois Alunos e a Demanda são refeitos (um desenho que falha não a segura)
+  // Primeiro a fila sai para o servidor; depois a escala (quando o que as missões exigem do INVA mudou), Alunos e a
+  // Demanda são refeitos (um desenho que falha não a segura)
   if (!fila.enviando) enviar(sigla, fila);
+  refazerEscalaSeMudou(exigenciasAntes);
   redesenharPorNome('alunos', 'pedidos-do-dia');
 }
 

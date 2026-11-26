@@ -869,6 +869,53 @@ test.describe('O que a missão do curso exige do INVA, na Escala', () => {
     await expect(page.locator('#out [data-caixa="habilitacoes"]')).toHaveCount(0);
   });
 
+  // A missão marcada (ou desmarcada) em Cursos muda o que o motor pede: a escala da data aberta é refeita e gravada na hora
+  // (sem entrada no histórico da data: a alteração fica nas versões do curso), também a que já estava gravada
+  test('marcar e desmarcar em Cursos o que a missão exige do INVA refaz a escala gravada da data aberta', async ({ page }) => {
+    const semExige = gravarCurso({ cursos: cursosIniciais() }, {
+      sigla: 'PP', versaoLida: 1, descricao: 'PP: programa', conteudo: {
+        nome: 'Piloto Privado', ativo: true, fases: [{ id: IDS.f1, nome: 'Fase 1' }],
+        missoes: [{ id: IDS.m1, fase: IDS.f1, codigo: 'NAV-150NM', nome: 'Navegação longa', mis: 'Voo Local', eq: 'C152', nb: 1 }]
+      }
+    }).cursos;
+    const { documentos: { cadastro }, dias } = documentosAtuais(cenario({
+      ins: [instrutor(1, 9), instrutor(2, 9)], stu: [aluno(1000, { etapa: 'NAV-150NM', cursoDaEtapa: 'PP' }, { curso: 'PP' })]
+    }), AMANHA);
+    await page.addInitScript(json => {
+      if (localStorage.getItem('acpm4_cadastro')) return;
+      for (const [chave, valor] of Object.entries(JSON.parse(json))) localStorage.setItem(chave, JSON.stringify(valor));
+    }, JSON.stringify({ acpm4_cadastro: cadastro, [`acpm4_dia_${AMANHA}`]: dias[AMANHA], acpm4_cursos: { cursos: semExige, alteracoes: [] } }));
+    await page.goto('./');
+    await appPronto(page);
+    // A escala gravada (uma alteração da Demanda grava a data), com o voo
+    await irPara(page, 'dem');
+    await page.locator('select[aria-label="Prioridade de Aluno 1000"]').selectOption('4');
+    const voosGravados = () => page.evaluate(d => (JSON.parse(localStorage.getItem(`acpm4_dia_${d}`)).resultado || { out: [] }).out.filter(o => o.stuId === 1000).length, AMANHA);
+    await expect.poll(voosGravados).toBe(1);
+    const historico = await page.locator('#audit-log-list li').count();
+    const marca = () => page.locator('#cursos .curso[data-curso="PP"] tr[data-missao]').first().getByRole('checkbox', { name: 'NAV-150NM exige Endosso Solo' });
+    const naEscala = async () => (await lerEscala(page)).linhas.filter(l => l.includes('Aluno 1000'));
+    await irPara(page, 'cur');
+    await page.locator('#cursos .curso[data-curso="PP"] tr[data-missao]').first().locator('details.exige summary').click();
+    await marca().check();
+    await abrirEscala(page, { vista: 'lista' });
+    expect(await naEscala()).toEqual([]);
+    await expect(page.locator('#out')).toContainText('nenhum instrutor ativo tem a habilitação de Voo Local no C152 (Voo Local + C152 + Endosso Solo)');
+    await expect.poll(voosGravados).toBe(0);
+    await expect(page.locator('#audit-log-list li')).toHaveCount(historico);
+    await page.reload();
+    await appPronto(page);
+    await abrirEscala(page, { vista: 'lista' });
+    expect(await naEscala()).toEqual([]);
+    // Desmarcada, o voo volta
+    await irPara(page, 'cur');
+    await page.locator('#cursos .curso[data-curso="PP"] tr[data-missao]').first().locator('details.exige summary').click();
+    await marca().uncheck();
+    await abrirEscala(page, { vista: 'lista' });
+    expect(await naEscala()).toHaveLength(1);
+    await expect.poll(voosGravados).toBe(1);
+  });
+
   test('sem os programas dos cursos lidos, a Escala diz que as habilitações das missões do curso não foram conferidas', async ({ browser }) => {
     const servidor = criarSupabaseFalso({ ...documentosAtuais(estado(), AMANHA), cursos: PROGRAMA });
     servidor.falhar('/rpc/programa_dos_cursos', 1000);
