@@ -1,6 +1,6 @@
 // Acessibilidade: cada botão e cada campo tem um nome para o leitor de tela, e nenhum se chama só "✕" (que o leitor
 // lê como "multiplicação"). Vale para todas as abas, o Histórico e o painel de habilitações.
-import { test, expect, abrir, abrirComExemplo, irPara, entrar, abrirEscala, abrirCaixa, prepararContexto, vigiarErros, REGIOES, abasVisiveis, abrirHistorico, aprovar, botaoAprovar, botaoDiaAnterior, botaoDoHistorico, botaoDoMenuDaConta, percorrerTelas, relativoDaData, rotuloDaData, semNome, alternarVem, botaoDiaSeguinte, campoDaData } from './fixtures.js';
+import { test, expect, abrir, abrirComExemplo, irPara, entrar, abrirEscala, abrirCaixa, prepararContexto, vigiarErros, REGIOES, abasVisiveis, abrirHistorico, aprovar, botaoAprovar, botaoDoHistorico, botaoDoMenuDaConta, percorrerTelas, relativoDaData, rotuloDaData, semNome, alternarVem, botoesDasAbas, botaoDaData, mudarData, contagemDoDia, diaDoCalendario, trilho, AMANHA, avisosDaData, contagemDosAvisos } from './fixtures.js';
 import { instalarSupabaseFalso, documentosAtuais, CONTAS } from './supabase-falso.js';
 import { comExemplo } from '../helpers/exemplo.js';
 import { estadoSintetico } from '../helpers/estado.js';
@@ -38,9 +38,10 @@ test.describe('O foco do teclado na barra do topo', () => {
       await abrirComExemplo(page);
       await page.evaluate(t => { document.documentElement.dataset.theme = t; }, tema);
       const fundo = await page.locator('header.topo').evaluate(el => getComputedStyle(el).backgroundColor);
-      const controles = page.locator('header.topo :is(button, select):visible:not(:disabled)');
+      // O botão da data, o perfil, o Histórico, o Manual (um link) e o menu da conta
+      const controles = page.locator('header.topo :is(button, select, a[href]):visible:not(:disabled)');
       const total = await controles.count();
-      expect(total).toBeGreaterThan(8);
+      expect(total).toBeGreaterThanOrEqual(5);
       const fracos = [];
       for (let i = 0; i < total; i++) {
         const controle = controles.nth(i);
@@ -101,17 +102,14 @@ test.describe('O foco do teclado na barra do topo', () => {
     });
   }
 
-  test('o rótulo da data mostra o foco em todas as paradas do Tab dentro do campo da data', async ({ page }) => {
+  test('o botão da data mostra o foco do teclado, com o anel branco da barra', async ({ page }) => {
     await abrirComExemplo(page);
-    await botaoDiaAnterior(page).focus();
+    await page.locator('.topo-marca').click();
+    await botaoDaData(page).focus();
+    await page.keyboard.press('Shift+Tab');
     await page.keyboard.press('Tab');
-    let paradas = 0;
-    while (paradas < 8 && await campoDaData(page).evaluate(el => el === document.activeElement)) {
-      expect(await page.locator('.topo-data-campo').evaluate(el => getComputedStyle(el).outlineStyle), `parada ${paradas + 1}`).toBe('solid');
-      paradas++;
-      await page.keyboard.press('Tab');
-    }
-    expect(paradas).toBeGreaterThan(0);
+    await expect(botaoDaData(page)).toBeFocused();
+    expect(await botaoDaData(page).evaluate(el => [getComputedStyle(el).outlineStyle, getComputedStyle(el).outlineColor])).toEqual(['solid', 'rgb(255, 255, 255)']);
   });
 });
 
@@ -150,6 +148,16 @@ test.describe('Telas de 320 px', () => {
   });
 });
 
+// O botão da data tem a largura fixa: com o ano, o "amanhã" e o número de avisos, o dia da semana vai abreviado
+test('na tela grande, na virada do ano, a data aparece inteira com o número de avisos', async ({ page }) => {
+  await page.clock.setFixedTime(new Date('2026-12-31T12:00:00-03:00'));
+  await abrir(page, { estado: cenario({ ins: [instrutor(1, 1)], stu: [aluno(1000, { mis: 'Multimotor', eq: 'PA-34' })] }) });
+  await expect(contagemDosAvisos(page)).toBeVisible();
+  const rotulo = rotuloDaData(page);
+  await expect(rotulo).toHaveText('sex., 01/01/2027', { useInnerText: true });
+  expect(await rotulo.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
+});
+
 test('na tela grande, o dia da semana aparece por extenso', async ({ page }) => {
   await abrirComExemplo(page);
   await expect(rotuloDaData(page).locator('.dt-semana')).toBeVisible();
@@ -162,16 +170,16 @@ test('na tela grande, o dia da semana aparece por extenso', async ({ page }) => 
 test.describe('A barra do topo nas larguras intermediárias', () => {
   for (const [largura, modo] of [[641, 'local'], [700, 'local'], [820, 'local'], [900, 'local'], [1024, 'local'], [1029, 'compartilhado'],
     [1030, 'compartilhado'], [1110, 'local'], [1280, 'local'], [1289, 'compartilhado'], [1290, 'compartilhado']]) {
-    test(`a ${largura} px (modo ${modo}), nada na barra cobre a marca, as setas da data ou as ferramentas`, async ({ page, context }) => {
+    test(`a ${largura} px (modo ${modo}), nada na barra cobre a marca, o botão da data ou as ferramentas`, async ({ page, context }) => {
       await page.setViewportSize({ width: largura, height: 800 });
       if (modo === 'local') await abrirComExemplo(page);
       else {
         await instalarSupabaseFalso(context, documentosAtuais(comExemplo(estadoSintetico()), '2026-11-11'));
         await entrar(page, CONTAS.operador);
       }
-      // O que está no meio de cada um é ele mesmo (nada por cima): a marca, as setas da data e as ferramentas
-      for (const [seletor, alvo] of [['.topo-titulo', page.locator('.topo-titulo')], ['a seta ‹ da data', botaoDiaAnterior(page)],
-        ['a seta › da data', botaoDiaSeguinte(page)], ['o Histórico', botaoDoHistorico(page)], ['#btn-manual', page.locator('#btn-manual')],
+      // O que está no meio de cada um é ele mesmo (nada por cima): a marca, o botão da data e as ferramentas
+      for (const [seletor, alvo] of [['.topo-titulo', page.locator('.topo-titulo')], ['o botão da data', botaoDaData(page)],
+        ['o Histórico', botaoDoHistorico(page)], ['#btn-manual', page.locator('#btn-manual')],
         ['o menu da conta', botaoDoMenuDaConta(page)]]) {
         const noMeio = await alvo.evaluate(el => {
           const r = el.getBoundingClientRect();
@@ -278,13 +286,13 @@ const contrastesFracos = async (itens) => {
 
 // O que a tela mostra pela cor ou pela posição também é dito ao leitor de tela; o teclado chega aonde o mouse chega
 test.describe('O leitor de tela e o teclado', () => {
-  test('a aba aberta (e o Manual), a vista escolhida e o dia da agenda são ditos, não só coloridos', async ({ page }) => {
+  test('a aba aberta (e o Manual), a vista escolhida e a data aberta são ditos, não só coloridos', async ({ page }) => {
     await abrirComExemplo(page);
     const atual = page.locator('[aria-current="page"]');
-    await expect(atual).toHaveAttribute('data-t', 'esc');
+    await expect(atual).toHaveAttribute('href', '#/esc');
     await irPara(page, 'dem');
     await expect(atual).toHaveCount(1);
-    await expect(atual).toHaveAttribute('data-t', 'dem');
+    await expect(atual).toHaveAttribute('href', '#/dem');
     await page.locator('#btn-manual').click();
     await expect(atual).toHaveCount(1);
     await expect(atual).toHaveId('btn-manual');
@@ -300,16 +308,14 @@ test.describe('O leitor de tela e o teclado', () => {
     // Cursos é uma aba, não uma vista de Alunos: a aba aberta é a atual
     await irPara(page, 'cur');
     await expect(atual).toHaveCount(1);
-    await expect(atual).toHaveAttribute('data-t', 'cur');
-    // O dia escolhido no calendário da agenda, e o que passa a ser escolhido
-    await irPara(page, 'age');
-    const escolhido = page.locator('#agenda-cal [aria-current="date"]');
-    await expect(escolhido).toHaveCount(1);
-    await expect(escolhido).toHaveClass(/\bsel\b/);
-    const outro = page.locator('#agenda-cal [data-cal="dia"]:not(.sel):not(.fora)').first();
-    const dia = await outro.getAttribute('data-dia');
-    await outro.click();
-    await expect(escolhido).toHaveAttribute('data-dia', dia);
+    await expect(atual).toHaveAttribute('href', '#/cur');
+    // A data aberta no calendário, e a que passa a ser aberta
+    const aberta = page.locator('#cal [aria-current="date"]');
+    await expect(aberta).toHaveCount(1);
+    await expect(aberta).toHaveAttribute('data-dia', AMANHA);
+    await mudarData(page, '2026-11-12');
+    await expect(aberta).toHaveCount(1);
+    await expect(aberta).toHaveAttribute('data-dia', '2026-11-12');
   });
 
   test('o pedido de confirmação é dito na região de status (o nome trocado do botão nem sempre é lido)', async ({ page }) => {
@@ -562,11 +568,76 @@ test.describe('O leitor de tela e o teclado', () => {
       expect(fracos).toEqual([]);
     });
 
-    test(`o selo vermelho da aba (missões que não entraram na escala) contrasta, no tema ${nome}`, async ({ page }) => {
+    // Os tokens da casca (F1a): o símbolo sobre o disco de cada estado, o disco e o anel sobre o cartão, a linha selecionada
+    // e os avatares (F2), com as cores como o navegador as resolve no tema: todos com 4,5:1
+    test(`os tokens dos estados, da seleção e dos avatares contrastam, no tema ${nome}`, async ({ page }) => {
+      await abrir(page);
+      await page.evaluate(t => { document.documentElement.dataset.theme = t; }, tema);
+      const pares = [
+        ['--okT', '--ok', 4.5], ['--waT', '--wa', 4.5], ['--erT', '--er', 4.5], ['--anT', '--an', 4.5],
+        ['--ok', '--pn', 4.5], ['--wa', '--pn', 4.5], ['--er', '--pn', 4.5], ['--an', '--pn', 4.5], ['--pe', '--pn', 4.5],
+        ['--ink', '--sel', 4.5], ['--mu', '--sel', 4.5],
+        ['--avT', '--av1', 4.5], ['--avT', '--av2', 4.5], ['--avT', '--av3', 4.5], ['--avT', '--av4', 4.5], ['--avT', '--av5', 4.5]
+      ];
+      const cores = await page.evaluate(nomes => {
+        const el = document.createElement('span');
+        document.body.append(el);
+        const cor = nome => { el.style.color = `var(${nome})`; return getComputedStyle(el).color; };
+        const lidas = Object.fromEntries(nomes.map(n => [n, cor(n)]));
+        el.remove();
+        return lidas;
+      }, [...new Set(pares.flat().filter(x => typeof x === 'string'))]);
+      const fracos = pares.filter(([a, b, minimo]) => razaoDeContraste(cores[a], cores[b]) < minimo)
+        .map(([a, b]) => `${a} sobre ${b}: ${razaoDeContraste(cores[a], cores[b]).toFixed(2)}`);
+      expect(fracos).toEqual([]);
+    });
+
+    // O disco "falhou" do cartão da Escala (missões que não entraram): o símbolo contrasta com o disco, e o anel do foco dos
+    // links da linha, com a página
+    test(`o disco de "falhou" na linha contrasta, e o anel do foco dos links da linha também, no tema ${nome}`, async ({ page }) => {
       await abrir(page, { estado: cenario({ ins: [instrutor(1, 1)], stu: [aluno(1000, { mis: 'Multimotor', eq: 'PA-34' })] }) });
       await page.evaluate(t => { document.documentElement.dataset.theme = t; }, tema);
-      await expect(page.locator('#selo-esc')).toHaveClass(/\berro\b/);
-      expect(await contrastesFracos([['selo da aba', page.locator('#selo-esc')]])).toEqual([]);
+      const disco = page.locator('#linha li.estagio[data-estagio="escala"] .estagio-titulo .estado');
+      await expect(disco).toHaveAttribute('data-estado', 'falhou');
+      expect(await contrastesFracos([['disco falhou', disco]])).toEqual([]);
+      const fundo = await page.locator('body').evaluate(el => getComputedStyle(el).backgroundColor);
+      const fracos = [];
+      for (const link of await botoesDasAbas(page, { visiveis: true }).all()) {
+        await link.focus();
+        const anel = await link.evaluate(el => getComputedStyle(el).outlineColor);
+        if (razaoDeContraste(anel, fundo) < 3) fracos.push(await link.getAttribute('href'));
+      }
+      expect(fracos).toEqual([]);
+    });
+
+    // O trilho (F1b): os dias (o número sobre o círculo de hoje, os discretos, o número de pedidos) e a linha da data; e o
+    // anel do foco dos controles dele, com o fundo do painel
+    test(`os textos do trilho contrastam, e o anel do foco dele também, no tema ${nome}`, async ({ page, context }) => {
+      const servidor = await instalarSupabaseFalso(context, documentosAtuais(comExemplo(estadoSintetico()), AMANHA));
+      for (const [id, data] of [[1, '2026-11-10'], [2, '2026-11-13'], [3, AMANHA]]) {
+        servidor.solicitacoes.push({ id, data, aluno: 1000, aluno_nome: 'Aluno 1000', missao: 'Voo Local', janela: 'horario', horario: '08:20', horas: 1, observacao: null,
+          registrado_por: 'Maria', registrado_em: '2026-11-10T14:00:00.000Z', conta: 'Secretaria de Teste', excecao: false, cancelada_em: null, cancelada_por: null });
+      }
+      await entrar(page, CONTAS.operador);
+      await page.evaluate(t => { document.documentElement.dataset.theme = t; }, tema);
+      await botaoDaData(page).click();
+      await expect(contagemDoDia(page, '2026-11-13')).toBeVisible();
+      expect(await contrastesFracos([
+        ['o mês', page.locator('#cal-mes')], ['o dia da semana', page.locator('#cal th').first()], ['um dia', diaDoCalendario(page, '2026-11-12')],
+        ['a data aberta', diaDoCalendario(page, AMANHA)], ['hoje', diaDoCalendario(page, '2026-11-10')], ['um domingo', diaDoCalendario(page, '2026-11-15')],
+        ['um dia de outro mês', diaDoCalendario(page, '2026-12-01')], ['os pedidos de um dia', contagemDoDia(page, '2026-11-13')],
+        ['os pedidos de hoje', contagemDoDia(page, '2026-11-10')], ['a linha da data', page.locator('#trilho-data')],
+        ['o título de um aviso', avisosDaData(page).first().locator('.aviso-titulo')], ['o número de avisos', contagemDosAvisos(page)]
+      ])).toEqual([]);
+      const fundo = await trilho(page).evaluate(el => getComputedStyle(el).backgroundColor);
+      const fracos = [];
+      for (const controle of await trilho(page).locator('button:visible, a:visible').all()) {
+        await controle.focus();
+        await page.keyboard.press('Shift');
+        const { cor, estilo, quem } = await controle.evaluate(el => ({ cor: getComputedStyle(el).outlineColor, estilo: getComputedStyle(el).outlineStyle, quem: el.id || el.dataset.dia }));
+        if (estilo === 'none' || razaoDeContraste(cor, fundo) < 3) fracos.push(`${quem}: ${estilo} ${razaoDeContraste(cor, fundo).toFixed(2)}:1`);
+      }
+      expect(fracos).toEqual([]);
     });
   }
 
@@ -586,8 +657,12 @@ test.describe('O leitor de tela e o teclado', () => {
   test('os anúncios: a data do topo ao mudar, quantos voos ficaram com os filtros e o diálogo do status descrito pelo voo', async ({ page }) => {
     await abrirComExemplo(page);
     await abrirEscala(page);
-    await expect(rotuloDaData(page)).toHaveAttribute('aria-live', 'polite');
-    await expect(page.locator('.topo-data-campo svg.ico')).toHaveAttribute('aria-hidden', 'true');
+    // A data nova é anunciada (o nome dela, dentro do botão, não é uma região viva: seria lido duas vezes com o foco nele)
+    await expect(rotuloDaData(page)).not.toHaveAttribute('aria-live');
+    await expect(botaoDaData(page).locator('svg.ico').first()).toHaveAttribute('aria-hidden', 'true');
+    await mudarData(page, '2026-11-12');
+    await expect(page.locator('#anuncio')).toHaveText('Data aberta: quinta-feira, 12/11');
+    await mudarData(page, '2026-11-11');
     // O filtro muda a lista sem tirar o foco dele: o resultado vai para a região de status
     const busca = page.locator('#flt-esc-q');
     await busca.fill('zzzz');

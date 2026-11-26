@@ -53,7 +53,7 @@ describe('Glossário', () => {
   // fim
   it('os termos da aba Cursos, na ordem do bloco dela', () => {
     const daAba = Object.entries(INTEIRO).filter(([, t]) => t.aba === 'Cursos').map(([id]) => id);
-    assert.deepEqual(daAba, ['fase-do-curso', 'alunos-na-fase', 'quando-voar', 'dispensada', 'trecho-do-noturno']);
+    assert.deepEqual(daAba, ['fase-do-curso', 'alunos-na-fase', 'quando-voar', 'dispensada', 'trecho-do-noturno', 'habilitacoes-da-missao']);
   });
 
   it('com o hangar, o progresso e a prioridade desligados, os termos deles saem, e os outros não falam deles', () => {
@@ -78,4 +78,13 @@ describe('Glossário', () => {
   });
 
   it('o glossário das telas é o das funcionalidades ligadas no app', () => assert.deepEqual(GLOSSARIO, montarGlossario(ligada)));
+});
+
+// A Agenda pelo curso do aluno (F1c): a missão do pedido e o 7º voo local, com o limite da configuração
+describe('Glossário: a Agenda', () => {
+  it('a missão do pedido vem do curso do aluno, e o 7º voo local pede a confirmação', () => {
+    assert.match(GLOSSARIO['missao-do-pedido'].texto, /as missões do programa dele, por fase/);
+    assert.equal(GLOSSARIO['setimo-voo-local'].termo, `${LIMITE_DE_VOOS_LOCAIS + 1}º voo local`);
+    assert.match(GLOSSARIO['setimo-voo-local'].texto, new RegExp(`No máximo ${LIMITE_DE_VOOS_LOCAIS} voos locais .*“Registrar mesmo assim”`));
+  });
 });

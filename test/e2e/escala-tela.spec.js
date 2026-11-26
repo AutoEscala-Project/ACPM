@@ -1,5 +1,8 @@
 // Tela da Escala: Lista, Por recurso ou Por instrutor; resumo com erros e avisos agrupados; uma linha por voo.
-import { test, comPrioridade, expect, abrir, abrirComExemplo, abrirEscala, irPara, lerEscala, alternarDisponivel, alvosPequenos, larguraDaPagina } from './fixtures.js';
+import { test, comPrioridade, expect, abrir, abrirComExemplo, abrirEscala, irPara, irParaVista, lerEscala, alternarDisponivel, alvosPequenos, larguraDaPagina, appPronto, AMANHA, prepararContexto, vigiarErros, entrar, importarDaAgenda, abrirCaixa } from './fixtures.js';
+import { criarSupabaseFalso, documentosAtuais, CONTAS } from './supabase-falso.js';
+import { IDS } from '../helpers/casos-do-programa.js';
+import { cursosIniciais, gravarCurso } from '../../js/programa.js';
 import { aluno, cenario, instrutor, GROUND_C152 } from '../helpers/montar.js';
 import { GLOSSARIO } from '../../js/glossario.js';
 import { COLUNAS_DO_PAINEL } from '../../js/config-do-painel.js';
@@ -69,23 +72,19 @@ test.describe('Tela da Escala', () => {
     await expect(erros).not.toHaveAttribute('open', '');
   });
 
-  // Inverter eixo X:Y: os recursos (ou os instrutores) viram colunas e as horas descem à esquerda; o voo continua o mesmo
-  // botão (abre os detalhes) e o clique no espaço livre agenda no horário da altura dele
-  test('Inverter eixo X:Y: recursos nas colunas, horas nas linhas, os voos e o clique continuam', async ({ page }) => {
+  // O mapa abre transposto: os recursos (ou os instrutores) em colunas e as horas descendo à esquerda. Inverter eixo X:Y
+  // põe as horas nas colunas e um recurso por linha, e outro clique volta; o voo continua o mesmo botão (abre os detalhes)
+  // e o clique no espaço livre agenda no horário da posição dele, nos dois eixos
+  test('o mapa abre com os recursos nas colunas e as horas nas linhas; Inverter eixo X:Y troca e volta, os voos e o clique continuam', async ({ page }) => {
     const erros = [];
     page.on('pageerror', e => erros.push(e.message));
     page.on('console', m => { if (m.type() === 'error') erros.push(m.text()); });
     await abrirComExemplo(page);
     await abrirEscala(page, { vista: 'eq' });
     const eixo = page.locator('#btn-eixo');
+    await expect(eixo).toHaveText('Inverter eixo X:Y');
     await expect(eixo).toHaveAttribute('aria-pressed', 'false');
-    await expect(page.locator('#out .tl-wrap')).not.toHaveClass(/transposto/);
-    const barra = page.locator('#out .tl-bar').first();
-    const antes = await barra.boundingBox();
-    expect(antes.width).toBeGreaterThan(antes.height);
-
-    await eixo.click();
-    await expect(eixo).toHaveAttribute('aria-pressed', 'true');
+    await expect(eixo).not.toHaveClass(/\bon\b/);
     await expect(page.locator('#out .tl-wrap')).toHaveClass(/\btransposto\b/);
     // As linhas lado a lado (colunas) e as faixas em pé
     const [r1, r2] = await page.locator('#out .tl-row').evaluateAll(rs => rs.slice(0, 2).map(r => r.getBoundingClientRect().toJSON()));
@@ -97,9 +96,23 @@ test.describe('Tela da Escala', () => {
     const marcas = await page.locator('#out .tl-axis span').evaluateAll(ms => ms.slice(0, 3).map(m => m.getBoundingClientRect().top));
     expect(marcas[1]).toBeGreaterThan(marcas[0]);
     expect(marcas[2]).toBeGreaterThan(marcas[1]);
-    // O voo: mais alto que largo, abre e fecha os detalhes como antes
-    const depois = await barra.boundingBox();
-    expect(depois.height).toBeGreaterThan(depois.width / 3);
+    // As marcas na altura das faixas: o eixo começa na borda de dentro de cada faixa e tem a altura dela
+    const alinhamento = await page.locator('#out .tl-wrap').evaluate(w => {
+      const eixoDasHoras = w.querySelector('.tl-axis').getBoundingClientRect();
+      return [...w.querySelectorAll('.tl-track')].map(t => ({
+        topo: t.getBoundingClientRect().top + t.clientTop - eixoDasHoras.top,
+        altura: t.clientHeight - eixoDasHoras.height
+      }));
+    });
+    expect(alinhamento.length).toBeGreaterThan(1);
+    for (const { topo, altura } of alinhamento) {
+      expect(Math.abs(topo)).toBeLessThan(0.5);
+      expect(Math.abs(altura)).toBeLessThan(0.5);
+    }
+    // O voo: mais alto que largo, abre e fecha os detalhes
+    const barra = page.locator('#out .tl-bar').first();
+    const emPe = await barra.boundingBox();
+    expect(emPe.height).toBeGreaterThan(emPe.width / 3);
     await barra.click();
     await expect(page.locator('#tl-pop')).toBeVisible();
     await page.keyboard.press('Escape');
@@ -107,22 +120,57 @@ test.describe('Tela da Escala', () => {
 
     // O clique no espaço livre de uma coluna agenda no horário da altura dele (contada da borda de dentro da faixa)
     const livre = page.locator('#out .tl-row:not(:has(.tl-bar)) .tl-track:not(.inerte)').first();
-    const ponto = await livre.evaluate((el, m) => {
+    const naAltura = await livre.evaluate((el, m) => {
       const { inicio, fim } = el.closest('.tl-wrap').dataset;
       return { x: el.clientWidth / 2, y: ((m - inicio) / (fim - inicio)) * el.clientHeight };
     }, 625);
-    await livre.click({ position: ponto });
+    await livre.click({ position: naAltura });
+    await expect(page.locator('#dlg-agendar')).toBeVisible();
+    await expect(page.locator('#dlg-agendar')).toHaveAccessibleDescription(/clique perto das 10:25$/);
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#dlg-agendar')).toBeHidden();
+
+    // Inverter: as horas nas colunas, um recurso por linha, o botão apertado
+    await eixo.click();
+    await expect(eixo).toHaveAttribute('aria-pressed', 'true');
+    await expect(eixo).toHaveClass(/\bon\b/);
+    await expect(page.locator('#out .tl-wrap')).not.toHaveClass(/transposto/);
+    const [d1, d2] = await page.locator('#out .tl-row').evaluateAll(rs => rs.slice(0, 2).map(r => r.getBoundingClientRect().toJSON()));
+    expect(d2.top).toBeGreaterThan(d1.top);
+    expect(Math.abs(d1.left - d2.left)).toBeLessThan(1);
+    const deitada = await barra.boundingBox();
+    expect(deitada.width).toBeGreaterThan(deitada.height);
+    // As marcas do eixo vão para a direita
+    const marcasDeitadas = await page.locator('#out .tl-axis span').evaluateAll(ms => ms.slice(0, 3).map(m => m.getBoundingClientRect().left));
+    expect(marcasDeitadas[1]).toBeGreaterThan(marcasDeitadas[0]);
+    expect(marcasDeitadas[2]).toBeGreaterThan(marcasDeitadas[1]);
+    // O clique no espaço livre de uma linha agenda no horário da largura dele
+    const naLargura = await livre.evaluate((el, m) => {
+      const { inicio, fim } = el.closest('.tl-wrap').dataset;
+      return { x: ((m - inicio) / (fim - inicio)) * el.clientWidth, y: el.clientHeight / 2 };
+    }, 625);
+    await livre.click({ position: naLargura });
     await expect(page.locator('#dlg-agendar')).toBeVisible();
     await expect(page.locator('#dlg-agendar')).toHaveAccessibleDescription(/clique perto das 10:25$/);
     await page.keyboard.press('Escape');
 
-    // Na Lista o botão some; de volta ao mapa, o eixo continua invertido até outro clique
+    // Na Lista o botão some; de volta ao mapa, as horas continuam nas colunas até outro clique, que volta ao padrão
     await page.locator('#s-esc [data-tl="lista"]').click();
     await expect(eixo).toBeHidden();
     await page.locator('#s-esc [data-tl="ins"]').click();
-    await expect(page.locator('#out .tl-wrap')).toHaveClass(/\btransposto\b/);
-    await eixo.click();
     await expect(page.locator('#out .tl-wrap')).not.toHaveClass(/transposto/);
+    await expect(eixo).toHaveAttribute('aria-pressed', 'true');
+    await eixo.click();
+    await expect(page.locator('#out .tl-wrap')).toHaveClass(/\btransposto\b/);
+    await expect(eixo).toHaveAttribute('aria-pressed', 'false');
+    // Recarregar a página: o mapa abre de novo com os recursos nas colunas
+    await eixo.click();
+    await expect(eixo).toHaveAttribute('aria-pressed', 'true');
+    await page.reload();
+    await appPronto(page);
+    await abrirEscala(page, { vista: 'eq' });
+    await expect(page.locator('#out .tl-wrap')).toHaveClass(/\btransposto\b/);
+    await expect(page.locator('#btn-eixo')).toHaveAttribute('aria-pressed', 'false');
     expect(erros).toEqual([]);
   });
 
@@ -595,24 +643,33 @@ test.describe('Celular', () => {
     }
   });
 
-  // Com o "+" de 44 px, sobram uns 107 px para o nome da linha do mapa: o nome longo quebra em linhas e fica inteiro à
-  // vista (no toque, não há o title para ler o resto)
-  test('no mapa, o nome longo da linha quebra em linhas, inteiro, sem reticências', async ({ page }) => {
+  // O nome longo da linha do mapa quebra em linhas e fica inteiro à vista (no toque, não há o title para ler o resto),
+  // nos dois eixos: no padrão, a coluna tem uns 60 px para o nome; com as horas nas colunas (Inverter eixo X:Y), o "+" de
+  // 44 px deixa uns 107 px para o nome ao lado dele
+  test('no mapa, o nome longo da linha quebra em linhas, inteiro, sem reticências, nos dois eixos', async ({ page }) => {
     const longo = 'Maria Fernanda dos Santos Oliveira';
     await abrir(page, { estado: cenario({ ins: [instrutor(1, 9, { nm: longo }), instrutor(2, 9)], stu: [aluno(1000, { p1: 390, p2: -1 })] }) });
     await abrirEscala(page);
     await page.locator('#s-esc [data-tl="ins"]').click();
     const linha = page.locator('#out .mapa .tl-row', { has: page.locator('.tl-lbl > span', { hasText: longo }) });
-    await expect(linha.locator('.tl-agendar')).toBeVisible();
-    const nome = await linha.locator('.tl-lbl > span').evaluate(span => ({
-      cortado: span.scrollWidth > span.clientWidth || span.scrollHeight > span.clientHeight,
-      linhas: Math.round(span.getBoundingClientRect().height / parseFloat(getComputedStyle(span).lineHeight))
-    }));
-    expect(nome.cortado).toBe(false);
-    expect(nome.linhas).toBeGreaterThan(1);
-    // Com o mouse (na tela larga, o nome continua numa linha só), o title mostra o nome inteiro
-    await expect(linha.locator('.tl-lbl > span')).toHaveAttribute('title', longo);
-    expect(await larguraDaPagina(page)).toBeLessThanOrEqual(390);
+    for (const eixo of ['recursos nas colunas', 'horas nas colunas']) {
+      if (eixo === 'horas nas colunas') {
+        await page.locator('#btn-eixo').click();
+        await expect(page.locator('#out .tl-wrap')).not.toHaveClass(/transposto/);
+      } else {
+        await expect(page.locator('#out .tl-wrap')).toHaveClass(/\btransposto\b/);
+      }
+      await expect(linha.locator('.tl-agendar'), eixo).toBeVisible();
+      const nome = await linha.locator('.tl-lbl > span').evaluate(span => ({
+        cortado: span.scrollWidth > span.clientWidth || span.scrollHeight > span.clientHeight,
+        linhas: Math.round(span.getBoundingClientRect().height / parseFloat(getComputedStyle(span).lineHeight))
+      }));
+      expect(nome.cortado, eixo).toBe(false);
+      expect(nome.linhas, eixo).toBeGreaterThan(1);
+      // Com o mouse (na tela larga, o nome continua numa linha só), o title mostra o nome inteiro
+      await expect(linha.locator('.tl-lbl > span'), eixo).toHaveAttribute('title', longo);
+      expect(await larguraDaPagina(page), eixo).toBeLessThanOrEqual(390);
+    }
   });
 
   // O instrutor do Aluno 12 é o da escala do exemplo com as prioridades dele: com a prioridade ligada (js/funcionalidades.js)
@@ -827,5 +884,155 @@ test.describe('O foco depois de uma ação', () => {
     });
     expect(await page.evaluate(() => scrollY)).toBe(antes);
     await expect(page.locator('#out select[data-f="fstatus"]').first()).toBeFocused();
+  });
+});
+
+// F1d, "missão do curso": o pedido com a missão do curso leva o que ela exige do INVA (exige, de S.programa, também com
+// o progresso desligado). Sem nenhum INVA ativo com a habilitação, o voo fica fora (regra a); com os programas não lidos,
+// nada é exigido e a Escala diz que as habilitações das missões do curso não foram conferidas
+test.describe('O que a missão do curso exige do INVA, na Escala', () => {
+  const PROGRAMA = gravarCurso({ cursos: cursosIniciais() }, {
+    sigla: 'PP', versaoLida: 1, descricao: 'PP: programa', conteudo: {
+      nome: 'Piloto Privado', ativo: true, fases: [{ id: IDS.f1, nome: 'Fase 1' }],
+      missoes: [{ id: IDS.m1, fase: IDS.f1, codigo: 'NAV-150NM', nome: 'Navegação longa', mis: 'Voo Local', eq: 'C152', nb: 1, exige: ['endosso_solo'] }]
+    }
+  }).cursos;
+  const estado = () => cenario({
+    ins: [instrutor(1, 9), instrutor(2, 1)],
+    stu: [aluno(1000, { etapa: 'NAV-150NM', cursoDaEtapa: 'PP' }, { curso: 'PP' })]
+  });
+
+  test('sem nenhum INVA ativo com a habilitação, o voo fica fora; marcada num INVA, ele voa com esse INVA', async ({ page }) => {
+    const { documentos: { cadastro }, dias } = documentosAtuais(estado(), AMANHA);
+    await page.addInitScript(json => {
+      if (localStorage.getItem('acpm4_cadastro')) return;
+      for (const [chave, valor] of Object.entries(JSON.parse(json))) localStorage.setItem(chave, JSON.stringify(valor));
+    }, JSON.stringify({ acpm4_cadastro: cadastro, [`acpm4_dia_${AMANHA}`]: dias[AMANHA], acpm4_cursos: { cursos: PROGRAMA, alteracoes: [] } }));
+    await page.goto('./');
+    await appPronto(page);
+    await abrirEscala(page, { vista: 'lista' });
+    await expect(page.locator('#out')).toContainText('nenhum instrutor ativo tem a habilitação de Voo Local no C152 (Voo Local + C152 + Endosso Solo)');
+    expect((await lerEscala(page)).linhas.filter(l => l.includes('Aluno 1000'))).toEqual([]);
+    // Marcada no INVA 01 (nível 9): sem a exigência, o desempate pelas menos habilitações daria o voo ao 02 (nível 1), então
+    // só ela leva o voo ao 01
+    await irParaVista(page, 'ins', 'cadastro');
+    await page.locator('#inst .cd[data-id="1"] [data-act="editar-habs"]').click();
+    await page.locator('#painel-instrutor [data-f="hab"][data-h="endosso_solo"]').check();
+    await page.locator('#btn-fechar-painel-instrutor').click();
+    await abrirEscala(page, { vista: 'lista' });
+    const voos = (await lerEscala(page)).linhas.filter(l => l.includes('Aluno 1000'));
+    expect(voos).toHaveLength(1);
+    expect(voos[0]).toContain('| Instrutor 01 |');
+    await expect(page.locator('#out [data-caixa="habilitacoes"]')).toHaveCount(0);
+  });
+
+  // A missão marcada (ou desmarcada) em Cursos muda o que o motor pede: a escala da data aberta é refeita e gravada na hora
+  // (sem entrada no histórico da data: a alteração fica nas versões do curso), também a que já estava gravada. Com a
+  // prioridade ligada (a alteração que grava a data é a prioridade)
+  comPrioridade('marcar e desmarcar em Cursos o que a missão exige do INVA refaz a escala gravada da data aberta', async ({ page }) => {
+    const semExige = gravarCurso({ cursos: cursosIniciais() }, {
+      sigla: 'PP', versaoLida: 1, descricao: 'PP: programa', conteudo: {
+        nome: 'Piloto Privado', ativo: true, fases: [{ id: IDS.f1, nome: 'Fase 1' }],
+        missoes: [{ id: IDS.m1, fase: IDS.f1, codigo: 'NAV-150NM', nome: 'Navegação longa', mis: 'Voo Local', eq: 'C152', nb: 1 }]
+      }
+    }).cursos;
+    const { documentos: { cadastro }, dias } = documentosAtuais(cenario({
+      ins: [instrutor(1, 9), instrutor(2, 9)], stu: [aluno(1000, { etapa: 'NAV-150NM', cursoDaEtapa: 'PP' }, { curso: 'PP' })]
+    }), AMANHA);
+    await page.addInitScript(json => {
+      if (localStorage.getItem('acpm4_cadastro')) return;
+      for (const [chave, valor] of Object.entries(JSON.parse(json))) localStorage.setItem(chave, JSON.stringify(valor));
+    }, JSON.stringify({ acpm4_cadastro: cadastro, [`acpm4_dia_${AMANHA}`]: dias[AMANHA], acpm4_cursos: { cursos: semExige, alteracoes: [] } }));
+    await page.goto('./');
+    await appPronto(page);
+    // A escala gravada (uma alteração da Demanda grava a data), com o voo
+    await irPara(page, 'dem');
+    await page.locator('select[aria-label="Prioridade de Aluno 1000"]').selectOption('4');
+    const voosGravados = () => page.evaluate(d => (JSON.parse(localStorage.getItem(`acpm4_dia_${d}`)).resultado || { out: [] }).out.filter(o => o.stuId === 1000).length, AMANHA);
+    await expect.poll(voosGravados).toBe(1);
+    const historico = await page.locator('#audit-log-list li').count();
+    const marca = () => page.locator('#cursos .curso[data-curso="PP"] tr[data-missao]').first().getByRole('checkbox', { name: 'NAV-150NM exige Endosso Solo' });
+    const naEscala = async () => (await lerEscala(page)).linhas.filter(l => l.includes('Aluno 1000'));
+    await irPara(page, 'cur');
+    await page.locator('#cursos .curso[data-curso="PP"] tr[data-missao]').first().locator('details.exige summary').click();
+    await marca().check();
+    await abrirEscala(page, { vista: 'lista' });
+    expect(await naEscala()).toEqual([]);
+    await expect(page.locator('#out')).toContainText('nenhum instrutor ativo tem a habilitação de Voo Local no C152 (Voo Local + C152 + Endosso Solo)');
+    await expect.poll(voosGravados).toBe(0);
+    await expect(page.locator('#audit-log-list li')).toHaveCount(historico);
+    await page.reload();
+    await appPronto(page);
+    await abrirEscala(page, { vista: 'lista' });
+    expect(await naEscala()).toEqual([]);
+    // Desmarcada, o voo volta
+    await irPara(page, 'cur');
+    await page.locator('#cursos .curso[data-curso="PP"] tr[data-missao]').first().locator('details.exige summary').click();
+    await marca().uncheck();
+    await abrirEscala(page, { vista: 'lista' });
+    expect(await naEscala()).toHaveLength(1);
+    await expect.poll(voosGravados).toBe(1);
+  });
+
+  test('sem os programas dos cursos lidos, a Escala diz que as habilitações das missões do curso não foram conferidas', async ({ browser }) => {
+    const servidor = criarSupabaseFalso({ ...documentosAtuais(estado(), AMANHA), cursos: PROGRAMA });
+    servidor.falhar('/rpc/programa_dos_cursos', 1000);
+    const contexto = await browser.newContext({ baseURL: test.info().project.use.baseURL, locale: 'pt-BR', timezoneId: 'America/Sao_Paulo' });
+    await prepararContexto(contexto);
+    await servidor.instalar(contexto);
+    const page = await contexto.newPage();
+    const erros = vigiarErros(page, { statusEsperados: [503] });
+    await entrar(page, CONTAS.operador);
+    await abrirEscala(page, { vista: 'lista' });
+    const caixa = page.locator('#out [data-caixa="habilitacoes"]');
+    await expect(caixa.locator('summary')).toHaveText('As habilitações das missões do curso não foram conferidas');
+    await caixa.locator('summary').click();
+    await expect(caixa.locator('li')).toHaveText('Os programas dos cursos não foram lidos: o que a missão do curso exige do INVA não foi conferido em 1 pedido desta data: a escala foi montada sem essa conferência.');
+    // Nada é exigido: o voo entra
+    expect((await lerEscala(page)).linhas.filter(l => l.includes('Aluno 1000'))).toHaveLength(1);
+    expect(erros).toEqual([]);
+    await contexto.close();
+  });
+});
+
+// Q8 (F1d, "limite confirmado"): o 7º voo local do horário confirmado na Agenda ("Registrar mesmo assim") entra na demanda
+// com a confirmação e voa no horário dele, sem tomar a vaga dos seis; a Escala avisa nele, com o texto do agendado
+test.describe('O 7º voo local confirmado, na Escala', () => {
+  const pedido = (id, extra = {}) => ({
+    id, data: AMANHA, aluno: 2000 + id, aluno_nome: `Aluno ${2000 + id}`, missao: 'Voo Local', janela: 'horario', horario: '08:20', horas: 1, recurso: 'C152',
+    observacao: null, registrado_por: 'Maria', registrado_em: '2026-11-10T14:00:00.000Z', conta: null, excecao: false, cancelada_em: null, cancelada_por: null,
+    missao_do_curso: null, limite_confirmado_por: null, limite_confirmado_em: null, ...extra
+  });
+
+  test('os sete voam às 08:20, e o confirmado tem o aviso do limite', async ({ page }) => {
+    const estado = cenario({
+      ins: Array.from({ length: 8 }, (_, i) => instrutor(i + 1, 9)),
+      stu: Array.from({ length: 7 }, (_, i) => aluno(2001 + i, { fly: false }))
+    });
+    const agenda = [...Array.from({ length: 6 }, (_, i) => pedido(i + 1)),
+      pedido(7, { limite_confirmado_por: 'Maria', limite_confirmado_em: '2026-11-10T14:05:00.000Z', registrado_em: '2026-11-10T14:05:00.000Z' })];
+    const { documentos: { cadastro }, dias } = documentosAtuais(estado, AMANHA);
+    await page.addInitScript(json => {
+      if (localStorage.getItem('acpm4_cadastro')) return;
+      for (const [chave, valor] of Object.entries(JSON.parse(json))) localStorage.setItem(chave, JSON.stringify(valor));
+    }, JSON.stringify({ acpm4_cadastro: cadastro, [`acpm4_dia_${AMANHA}`]: dias[AMANHA], acpm4_agenda: agenda }));
+    await page.goto('./');
+    await appPronto(page);
+    await irPara(page, 'dem');
+    await importarDaAgenda(page);
+    await expect(page.locator('#toast-box')).toContainText('7');
+    await abrirEscala(page, { vista: 'lista' });
+    const linhas = (await lerEscala(page)).linhas.filter(l => /Aluno 20\d\d/.test(l));
+    expect(linhas).toHaveLength(7);
+    expect(linhas.every(l => l.includes('08:20'))).toBe(true);
+    await expect(page.locator('#out')).not.toContainText('Rejeitado');
+    const avisos = await abrirCaixa(page, 'avisos');
+    await expect(avisos.locator('li', { hasText: 'voo local' })).toHaveText(['Aluno 2007 Agendado às 08:20 como o 7º voo local do horário: no máximo 6 voos locais saem no mesmo horário.']);
+    // A linha do confirmado tem a marca "fora da regra"; as outras, não
+    await expect(page.locator('#out tr', { hasText: 'Aluno 2007' }).locator('[data-dica="fora-da-regra"]')).toHaveCount(1);
+    await expect(page.locator('#out [data-dica="fora-da-regra"]')).toHaveCount(1);
+    // O dia guarda a confirmação no pedido
+    const dia = await page.evaluate(d => JSON.parse(localStorage.getItem(`acpm4_dia_${d}`)), AMANHA);
+    expect(Object.entries(dia.pedidos).filter(([, p]) => p.limiteConfirmado).map(([id]) => id)).toEqual(['2007']);
   });
 });

@@ -7,10 +7,15 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { MIS, GROUND_EQ_TYPE, GROUND_DURATION_H, DURACAO_MAXIMA_H, NOTURNO } from '../../js/config.js';
-import { RECURSO_DO_PEDIDO } from '../../js/agenda.js';
+import { MIS, GROUND_EQ_TYPE, GROUND_DURATION_H, DURACAO_MAXIMA_H, NOTURNO, MISSOES_LOCAIS, LIMITE_DE_VOOS_LOCAIS } from '../../js/config.js';
+import { RECURSO_DO_PEDIDO, HORARIOS_FIXOS } from '../../js/agenda.js';
+import { horariosDaMissao } from '../../js/horarios.js';
+import { hm } from '../../js/format.js';
+import { CASOS_DA_AGENDA } from '../helpers/casos-da-agenda.js';
 import { ESQUEMA, FORMATO_DOS_CURSOS, migrarCadastro, antesDosCursosProprios } from '../../js/migracoes.js';
 import { CASOS_DO_PROGRAMA, PROGRAMA, NOTURNO_EM_TRECHOS } from '../helpers/casos-do-programa.js';
+import { LIMITE_DO_EXIGE, ID_DA_HABILITACAO } from '../../js/programa.js';
+import { HABILITACOES } from '../../js/habilitacoes.js';
 
 const ler = caminho => readFileSync(new URL(`../../${caminho}`, import.meta.url), 'utf8');
 const MIGRACAO = ler('supabase/migrations/20261117200000_cursos_e_missoes.sql');
@@ -131,13 +136,56 @@ describe('O banco espelha o app', () => {
   // registrar_resultado, que o app confere em validarRegistro
   it('cada código de erro da migração, com a dica, tem um caso, e nenhum caso espera um erro que a migração não dá', () => {
     const chave = (code, campo) => (campo ? `${code} ${campo}` : code);
-    const recusas = [...MIGRACAO.matchAll(/errcode = '(\w+)'(?:, hint = '(\w+)')?/g)];
-    assert.equal(recusas.length, (MIGRACAO.match(/\braise exception\b/g) || []).length, 'cada recusa com o código no formato conhecido');
+    // Com a gravação recriada pela migração do que a missão exige do INVA (20261127110000)
+    const migracoes = `${MIGRACAO}\n${ler('supabase/migrations/20261127110000_habilitacoes_da_missao_do_curso.sql')}`;
+    const recusas = [...migracoes.matchAll(/errcode = '(\w+)'(?:, hint = '(\w+)')?/g)];
+    assert.equal(recusas.length, (migracoes.match(/\braise exception\b/g) || []).length, 'cada recusa com o código no formato conhecido');
     const doBanco = new Set(recusas.map(([, code, campo]) => chave(code, campo)));
     const dosCasos = new Set(CASOS_DO_PROGRAMA.filter(c => c.erro).map(c => chave(c.erro.code, c.erro.campo)));
     const foraDaRegra = ['42501', '23514'];
     assert.deepEqual([...doBanco].filter(k => !foraDaRegra.includes(k) && !dosCasos.has(k)).sort(), [], 'erros sem caso');
     assert.deepEqual([...dosCasos].filter(k => !doBanco.has(k)), [], 'casos com um erro que a migração não dá');
+  });
+});
+
+// O que a missão do curso exige do INVA (F1d, migração 20261127110000): a coluna e a gravação (public.gravar_programa,
+// recriada nela) conferem o formato que o app confere, e a gravação de antes continua inteira, com a lista a mais
+describe('O banco espelha o app: o que a missão do curso exige do INVA', () => {
+  const EXIGE = ler('supabase/migrations/20261127110000_habilitacoes_da_missao_do_curso.sql');
+  const corpo = (texto, nome, criar = 'create or replace function') => {
+    const inicio = texto.indexOf(`${criar} public.${nome}(`);
+    assert.ok(inicio >= 0, `${criar} ${nome}`);
+    return texto.slice(inicio, texto.indexOf('$$;', inicio));
+  };
+  const recusas = texto => [...texto.matchAll(/raise exception '([^']*)'[^;]*?errcode = '(\w+)'(?:, hint = '(\w+)')?/g)].map(([, msg, code, campo]) => `${code} ${campo || ''} ${msg}`);
+
+  it('o formato da lista é o do app: até LIMITE_DO_EXIGE ids, cada um em ID_DA_HABILITACAO; os ids do registro cabem nele', () => {
+    const valido = corpo(EXIGE, 'exige_da_missao_valido', 'create function');
+    assert.match(valido, new RegExp(`cardinality\\(p_exige\\) <= ${LIMITE_DO_EXIGE}\\b`));
+    assert.ok(valido.includes(`'${ID_DA_HABILITACAO.source}'`), 'a mesma expressão do app na tabela');
+    const gravar = corpo(EXIGE, 'gravar_programa');
+    assert.match(gravar, new RegExp(`jsonb_array_length\\(e -> 'exige'\\) > ${LIMITE_DO_EXIGE}\\b`));
+    assert.ok(gravar.includes(`'${ID_DA_HABILITACAO.source}'`), 'a mesma expressão do app na gravação');
+    assert.match(EXIGE, /add constraint missoes_do_curso_exige check \(public\.exige_da_missao_valido\(exige\)\)/);
+    assert.match(EXIGE, /add column exige text\[\] not null default '\{\}'/);
+    for (const { id } of HABILITACOES) assert.match(id, ID_DA_HABILITACAO, id);
+  });
+
+  it('a gravação recriada recusa o mesmo que a de antes, mais a lista exige (22023, exige), e a leitura devolve a lista', () => {
+    const antes = recusas(corpo(MIGRACAO, 'gravar_programa', 'create function'));
+    const depois = recusas(corpo(EXIGE, 'gravar_programa'));
+    assert.deepEqual(depois.filter(r => !r.startsWith('22023 exige ')), antes);
+    assert.equal(depois.filter(r => r.startsWith('22023 exige ')).length, 1);
+    const ler = corpo(EXIGE, 'programa_do_curso');
+    assert.match(ler, /'exige', to_jsonb\(m\.exige\)/);
+    assert.deepEqual(ler.replace(", 'exige', to_jsonb(m.exige)", '').replace('create or replace function', 'create function'), corpo(MIGRACAO, 'programa_do_curso', 'create function'));
+  });
+
+  it('cada recusa da migração tem um caso, com a dica', () => {
+    const doBanco = new Set([...EXIGE.matchAll(/errcode = '(\w+)'(?:, hint = '(\w+)')?/g)].map(([, code, campo]) => `${code} ${campo}`));
+    const dosCasos = new Set(CASOS_DO_PROGRAMA.filter(c => c.erro).map(c => `${c.erro.code} ${c.erro.campo}`));
+    assert.ok(doBanco.has('22023 exige'));
+    assert.deepEqual([...doBanco].filter(k => !dosCasos.has(k)), []);
   });
 });
 
@@ -166,5 +214,55 @@ describe('O banco espelha o app: o recurso do pedido da agenda', () => {
   it('só quem está conectado chama a função nova', () => {
     assert.ok(COM_RECURSO.includes(`revoke execute on function public.registrar_solicitacao(${ASSINATURA}, text) from public, anon;`));
     assert.ok(COM_RECURSO.includes(`grant execute on function public.registrar_solicitacao(${ASSINATURA}, text) to authenticated;`));
+  });
+});
+
+// A função de 13 argumentos (a migração #0b): a de 11 com a missão do curso e a confirmação do 7º voo local; os horários
+// fixos, a lista dos voos locais e o limite são os do app, e cada caso de test/helpers/casos-da-agenda.js é uma
+// verificação do banco
+describe('O banco espelha o app: a missão do curso e o limite do pedido da agenda', () => {
+  const MIGRACAO_0B = ler('supabase/migrations/20261127100000_missao_do_curso_e_limite_do_pedido.sql');
+  const TESTES = ['agenda-missao-do-curso', 'agenda-locais'].map(nome => ler(`supabase/tests/database/${nome}.test.sql`)).join('\n');
+  const ASSINATURA = 'date, integer, text, text, text, text, numeric, text, text, boolean, text, uuid, boolean';
+  const corpo = MIGRACAO_0B.slice(MIGRACAO_0B.indexOf('create function public.registrar_solicitacao('), MIGRACAO_0B.indexOf('$$;'));
+
+  it('o Noturno às 17:30 e o Voo Solo às 06:30, como os horários da missão no app', () => {
+    const fixos = Object.fromEntries([...corpo.matchAll(/p_missao = '([^']+)' and p_horario is distinct from '(\d\d:\d\d)'/g)].map(r => [r[1], r[2]]));
+    assert.deepEqual(fixos, HORARIOS_FIXOS);
+    assert.deepEqual(fixos, { Noturno: hm(horariosDaMissao(null, 'Noturno', 'C172')[0]), 'Voo Solo': hm(horariosDaMissao(null, 'Voo Solo', 'C152')[0]) });
+  });
+
+  it('os voos locais e o limite são os do app', () => {
+    const listas = [...corpo.matchAll(/missao in \(((?:'[^']*'(?:, )?)+)\)/g)].map(r => [...r[1].matchAll(/'([^']+)'/g)].map(x => x[1]));
+    assert.equal(listas.length, 2, 'o pedido e os que já estão na agenda');
+    for (const lista of listas) assert.deepEqual(lista, MISSOES_LOCAIS);
+    assert.match(corpo, new RegExp(`\\) >= ${LIMITE_DE_VOOS_LOCAIS} then`));
+  });
+
+  it('a função nova não tem valor padrão, só quem está conectado a chama, e as de antes ficam', () => {
+    const cabeca = corpo.slice(0, corpo.indexOf(')'));
+    assert.doesNotMatch(cabeca, /default|=/i);
+    assert.ok(MIGRACAO_0B.includes(`revoke execute on function public.registrar_solicitacao(${ASSINATURA}) from public, anon;`));
+    assert.ok(MIGRACAO_0B.includes(`grant execute on function public.registrar_solicitacao(${ASSINATURA}) to authenticated;`));
+    assert.doesNotMatch(MIGRACAO_0B, /drop function|create or replace|drop column/);
+    assert.match(corpo, /public\.missao_e_recurso_validos\(p_missao, v_recurso, v_horas\)/);
+  });
+
+  it('cada caso da agenda é uma verificação do banco (o nome é a descrição)', () => {
+    const nomes = CASOS_DA_AGENDA.map(c => c.nome);
+    assert.equal(new Set(nomes).size, nomes.length, 'sem nomes repetidos');
+    for (const nome of nomes) assert.ok(!nome.includes("'"), `${nome}: sem aspas simples (o texto igual no SQL)`);
+    assert.deepEqual(nomes.filter(nome => !TESTES.includes(`'${nome}');`)), []);
+  });
+
+  // As recusas novas (o recurso, o horário fixo e a missão do curso, a de 22023; o limite, PT422) têm um caso; as de
+  // antes (quem pode, o horário específico, a duração e o prazo) são as da função de 11
+  it('cada recusa nova da função tem um caso, e nenhum caso espera uma recusa que a função não dá', () => {
+    const chave = (code, campo) => `${code} ${campo}`;
+    const daFuncao = new Set([...corpo.matchAll(/errcode = '(\w+)', hint = '(\w+)'/g)].map(([, code, campo]) => chave(code, campo)));
+    const dosCasos = new Set(CASOS_DA_AGENDA.filter(c => c.erro).map(c => chave(c.erro.code, c.erro.campo)));
+    const deAntes = ['22023 horas'];
+    assert.deepEqual([...daFuncao].filter(k => !deAntes.includes(k) && !dosCasos.has(k)).sort(), [], 'recusas sem caso');
+    assert.deepEqual([...dosCasos].filter(k => !daFuncao.has(k)), [], 'casos com uma recusa que a função não dá');
   });
 });

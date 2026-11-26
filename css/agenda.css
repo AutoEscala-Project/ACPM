@@ -1,23 +1,16 @@
-/* A Agenda de solicitações: o calendário, o formulário e a lista do dia */
-/* Agenda de Solicitações */
-.agenda { display: grid; gap: 12px; grid-template-columns: minmax(260px, 340px) 1fr; align-items: start; }
-.agenda > * { min-width: 0; }
-@media (max-width: 760px) {
-  .agenda { grid-template-columns: 1fr; }
-}
-.cal-cab { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-.cal { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
-.cal .sem { font-size: 11px; color: var(--mu); text-align: center; }
-.cal .dia { position: relative; border: 1px solid var(--ln); border-radius: 4px; background: var(--pn); color: var(--ink); padding: 8px 0; font: inherit; cursor: pointer; }
-.cal .dia.fora { opacity: .45; }
-.cal .dia.fechado { color: var(--mu); background: transparent; }
-.cal .dia.sel { outline: 2px solid var(--ac); }
-.cal .dia .qtd { position: absolute; top: 1px; right: 2px; font-size: 10px; line-height: 14px; background: var(--ac); color: var(--acT); border-radius: 7px; padding: 0 4px; }
+/* A Agenda de solicitações: o formulário (com a data do pedido) e a lista dos pedidos da data aberta */
 #form-agenda { display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); align-items: start; margin-bottom: 12px; }
 #form-agenda label { display: flex; flex-direction: column; gap: 2px; font-size: 13px; }
 #form-agenda .btn, #form-agenda .x { align-self: end; }
-#ag-horario-motivo { display: block; margin-top: 2px; color: var(--mu); font-size: 12.5px; }
+/* O motivo sob a missão, o recurso e o horário: o que falta escolher, o que saiu e quantos horários a lista tem */
+#form-agenda .ag-motivo { display: block; margin-top: 2px; color: var(--mu); font-size: 12.5px; }
+#form-agenda optgroup { font-style: normal; }
+/* A missão do curso diz o código, o tipo, o recurso e as horas: o campo dela ocupa duas colunas na tela larga */
+@media (min-width: 900px) { #form-agenda .ag-campo-missao { grid-column: span 2; } }
 #form-agenda [aria-invalid="true"] { border-color: var(--er); }
+/* O prazo da data escolhida, ao lado do campo dela (embaixo, no celular) */
+#agenda-prazo { margin: 0; grid-column: 2 / -1; }
+@media (max-width: 640px) { #agenda-prazo { grid-column: 1 / -1; } }
 #ag-erro { color: var(--er); margin: 0; grid-column: 1 / -1; }
 #ag-erro:empty { display: none; }
 body:not([data-agenda="edita"]) #form-agenda,
@@ -30,7 +23,3 @@ body:not([data-agenda="edita"]) .agenda-acao { display: none !important; }
 #agenda-lista tr.cancel td { color: var(--mu); }
 #agenda-lista tr.cancel td b { font-weight: 500; text-decoration: line-through; }
 #agenda-importar { margin: 10px 0 8px; }
-@media (max-width: 640px) {
-  .cal .dia { min-height: 44px; }
-  .cal { gap: 2px; }
-}

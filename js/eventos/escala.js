@@ -4,11 +4,11 @@
 import { gravarAlteracao, gravarEscalaCalculada, aindaNaoAbriu } from '../actions.js';
 import { opcoesDeCategoria } from '../categorias.js';
 import { OPCOES_DE_BURACOS, OPCOES_DE_HORARIOS, normalizarCriterios } from '../criterios.js';
-import { $, showToast, anunciar, algumDialogoAberto, gavetaDoEsc } from '../dom.js';
+import { $, showToast, anunciar, algumDialogoAberto, gavetaDoEsc, focarNoTitulo } from '../dom.js';
 import { exp, pdf, planilha } from '../export.js';
 import { fixosAoMudarStatus, fixosAoReabrir, fixosAoAprovar, normalizarFixos } from '../fixos.js';
 import { hm, hojeISO } from '../format.js';
-import { aplicarReparo } from '../reparo.js';
+import { aplicarReparo, aproveitarCancelado, desfazerAproveitamento, repararComOPedido } from '../reparo.js';
 import { S, RES, DATA, AUDIT_LOG, isGestor, modoCompartilhado, insBy } from '../state.js';
 import { escolherInstrutor, escolhasDaUnidade, escolherNosPedidos, reverterEscolha, reverterReparo } from '../instrutor-escolhido.js';
 import { agendamentosEmVolta } from '../reversoes.js';
@@ -20,20 +20,21 @@ import { aoAcionar, aoMudarCampo, aoReverter } from './registro.js';
 import { vooDaChave } from './resultados.js';
 import { pedirDetalheDoStatus } from '../views/dialogo-status.js';
 import { rOut, lembrarCaixa, botaoDoInstrutor, seletorDeInstrutor, abrirPopupDoMapa, fecharPopupDoMapa, popupDoMapaAberto, reposicionarPopupDoMapa, tabNoPopup } from '../views/escala.js';
-import { abrirPainelDeReparo, fecharPainelDeReparo, opcaoDoPainel } from '../views/reparo.js';
+import { abrirPainelDeReparo, abrirPainelDoRejeitado, fecharPainelDeReparo, opcaoDoPainel, focarNoVoo } from '../views/reparo.js';
 import { registrarDesenho, redesenharPorNome } from '../redesenho.js';
 import { voosComInativos } from '../inativos.js';
+import { registrarTela } from '../views/telas.js';
 
 // O desenho da Escala (js/redesenho.js): refeito em todos os momentos, quando há escala
 registrarDesenho('escala', () => { if (RES) rOut(); }, { em: ['dados', 'consulta', 'releitura', 'escala'], ordem: 80 });
 
 // O minuto de um clique na faixa de uma linha do mapa: a posição dele dentro da faixa (sem a borda), entre o início e o
-// fim do mapa (data-inicio e data-fim), de 5 em 5 minutos; na largura da faixa ou, com o eixo invertido, na altura
+// fim do mapa (data-inicio e data-fim), de 5 em 5 minutos; na altura da faixa (o mapa transposto, o padrão) ou, com as horas nas colunas, na largura
 function minutoDoClique(faixa, { clientX, clientY }) {
   const mapa = faixa.closest('.tl-wrap');
   const { inicio, fim } = mapa.dataset;
   const caixa = faixa.getBoundingClientRect();
-  // Com o eixo invertido, as horas descem: a posição é a do clique na altura da faixa
+  // No mapa transposto (o padrão), as horas descem: a posição é a do clique na altura da faixa
   const fracao = mapa.classList.contains('transposto')
     ? (clientY - caixa.top - faixa.clientTop) / faixa.clientHeight
     : (clientX - caixa.left - faixa.clientLeft) / faixa.clientWidth;
@@ -112,7 +113,9 @@ $('#xlsx').onclick = () => { gravarEscalaCalculada(); planilha(); };
 function linkDaData(data) {
   const url = new URL(window.location.href);
   const projeto = url.searchParams.get('supabase');
+  // Só a data: sem a tela (o fragmento) e sem os outros parâmetros
   url.search = '';
+  url.hash = '';
   if (projeto) url.searchParams.set('supabase', projeto);
   url.searchParams.set('data', data);
   return url.toString();
@@ -249,18 +252,61 @@ document.addEventListener('click', e => {
 // Sugestões para um conflito: a gaveta abre pelo botão do conflito. "Aplicar" muda o voo fixo (na turma de
 // Ground, a turma inteira) e "Soltar" o tira dos fixos; o histórico guarda os fixos de antes, para reverter. Cancelar
 // abre o diálogo do status, já com o motivo do conflito marcado
+// Aberta do popup do mapa, a gaveta fica no lugar dele (o popup fecha): o Esc fecha a gaveta e volta para o voo. Aplicada a
+// sugestão, o foco vai para o voo (o botão "Sugestões" dele não existe mais)
 document.addEventListener('click', e => {
   const abrirSugestoes = e.target.closest('[data-reparo]');
+  const doRejeitado = !abrirSugestoes && e.target.closest('[data-rejeitado]');
+  if ((abrirSugestoes || doRejeitado) && !isGestor() && popupDoMapaAberto()) fecharPopupDoMapa();
   if (abrirSugestoes) { if (!isGestor()) abrirPainelDeReparo(abrirSugestoes.dataset.reparo); return; }
+  if (doRejeitado) { if (!isGestor()) abrirPainelDoRejeitado(doRejeitado.dataset.rejeitado); return; }
   if (e.target.closest('#btn-fechar-reparo')) { fecharPainelDeReparo(true); return; }
   const botao = e.target.closest('[data-reparo-aplicar]');
   if (!botao || isGestor() || aindaNaoAbriu()) return;
   const escolha = opcaoDoPainel(+botao.dataset.reparoAplicar);
   if (!escolha) return;
-  const { fKey, voo, opcao } = escolha;
+  const { fKey, voo, opcao, cancelado, rejeitado } = escolha;
+  // O pedido recusado: a escolha do instrutor muda (0: "Automático"), com a reversão da escolha de sempre
+  if (rejeitado) {
+    fecharPainelDeReparo();
+    const [stuId, mid] = fKey.split('_').map(Number);
+    const x = opcao.insId ? insBy(opcao.insId) : null;
+    const { antes } = escolherInstrutor(S, RES, { stuId, mid }, x ? x.id : null);
+    gravarAlteracao('mod', `Pedido recusado encaixado: ${opcao.texto}`, { kind: 'restaurarEscolha', ...antes, label: '↶ Reverter' });
+    redesenharPorNome('pedidos-do-dia');
+    focarNoVoo(fKey);
+    showToast('Instrutor escolhido: o pedido entra na escala.', 'ok');
+    return;
+  }
+  // A sugestão fora da disponibilidade do pedido ou em outro tipo pede a confirmação com o aluno, e a que faz do voo o 7º
+  // local do horário, a do operador (dois cliques)
+  if (opcao.confirmar && !confirmado(botao, opcao.armado || 'Confirmei com o aluno')) return;
+  // O voo cancelado aproveitado: aplicada, a sugestão fixa o voo no lugar dela e o volta para Pendente, e o pedido muda
+  // com ela
+  if (cancelado) {
+    fecharPainelDeReparo();
+    const rev = aproveitarCancelado(S, RES, fKey, opcao);
+    if (!rev) return;
+    gravarAlteracao('mod', `Voo cancelado aproveitado: ${voo.s} (${hm(voo.a)}–${hm(voo.b)}): ${opcao.texto}`, { ...rev, label: '↶ Reverter' });
+    redesenharPorNome('pedidos-do-dia');
+    focarNoVoo(fKey);
+    showToast('Voo aproveitado: ele volta para Pendente, no lugar da sugestão.', 'ok');
+    return;
+  }
   fecharPainelDeReparo();
   if (!opcao.mudancas && !opcao.soltar) {
     pedirDetalheDoStatus({ voo, status: 'Cancelado', detalhe: opcao.motivo ? { motivo: opcao.motivo } : null, aoConfirmar: detalhe => aplicarStatus(fKey, 'Cancelado', detalhe) });
+    return;
+  }
+  // A sugestão do conflito que muda também o pedido (a disponibilidade, o tipo): o voo fixo e o pedido mudam juntos, e o
+  // histórico desfaz os dois (a reversão do aproveitamento)
+  if (opcao.pedido) {
+    const rev = repararComOPedido(S, RES, fKey, opcao);
+    if (!rev) return;
+    gravarAlteracao('mod', `Reparo: ${voo.s} (${hm(voo.a)}–${hm(voo.b)}): ${opcao.texto}`, { ...rev, label: '↶ Reverter' });
+    redesenharPorNome('pedidos-do-dia');
+    focarNoVoo(fKey);
+    showToast('Sugestão aplicada: o voo continua fixo, e o pedido muda com ela.', 'ok');
     return;
   }
   const antes = S.fixos || {};
@@ -276,6 +322,7 @@ document.addEventListener('click', e => {
     kind: 'restaurarFixos', fixos: Object.fromEntries(mudados.map(k => [k, antes[k]])), ...(escolhas.length ? { pedidos: escolhas } : {}), label: '↶ Reverter'
   });
   if (escolhas.length) redesenharPorNome('pedidos-do-dia');
+  focarNoVoo(fKey);
   showToast(opcao.soltar ? 'Voo solto: o app escalou de novo.' : 'Sugestão aplicada: o voo continua fixo.', 'ok');
 });
 // O Esc fecha a gaveta quando ela é a de cima ou tem o foco (js/dom.js); com um diálogo aberto por cima (o do status, o
@@ -285,6 +332,13 @@ document.addEventListener('keydown', e => {
 });
 
 // "↶ Reverter" no histórico (js/eventos/historico.js): os tipos desta tela. A reversão chega validada (js/reversoes.js)
+// O voo cancelado aproveitado, desfeito: o pino, o status, o motivo e o pedido de antes
+aoReverter('aproveitarCancelado', (rev, entry) => {
+  desfazerAproveitamento(S, rev);
+  S.fixos = normalizarFixos(S.fixos);
+  redesenharPorNome('pedidos-do-dia');
+  gravarAlteracao('mod', `Revertido: ${entry.desc}`, null, entry.id);
+});
 aoReverter('restaurarFixos', (rev, entry) => {
   // Um reparo desfeito: os voos voltam a ser fixos como antes dele, e o instrutor escolhido dos pedidos também. O voo
   // agendado volta só enquanto o agendamento continua: o histórico diz qual foi desfeito ou feito depois do reparo
@@ -310,3 +364,31 @@ aoAcionar('refazer-escala', () => {
   const nomes = voosComInativos(S, RES, { data: DATA, hoje: hojeISO() }).filter(i => i.de !== 'aluno').map(i => i.nome);
   gravarAlteracao('mod', nomes.length ? `Escala refeita: ${nomes.join(', ')} ${nomes.length > 1 ? 'estão inativos' : 'está inativo'}` : 'Escala refeita sem os inativos do cadastro');
 });
+
+// Aprovar (#/apr): até ter a tela dela, a aprovação fica na barra da compactação da Escala. Ela vem à vista, contornada por
+// um instante, e o foco vai para o botão dela (Aprovar escala ou Reabrir), com o estado dito ao leitor de tela; sem botão
+// (quem só consulta, a escala sem voo ou sem as horas dos instrutores), o foco vai para o título da Escala, com o porquê
+const DESTAQUE_MS = 1200;
+function mostrarAprovacao() {
+  const barra = $('#compactacao');
+  const alvo = S.aprovacao ? $('#selo-aprovada') : $('#aprovacao');
+  const botao = [...document.querySelectorAll('#aprovacao button')].find(b => !b.disabled && b.getClientRects().length);
+  const semVoo = !RES || !RES.out.length;
+  let texto;
+  if (S.aprovacao) {
+    const em = new Date(S.aprovacao.em);
+    texto = `Escala aprovada às ${hm(em.getHours() * 60 + em.getMinutes())}${S.aprovacao.por ? ` por ${S.aprovacao.por}` : ''}.`;
+  } else if (semVoo) texto = 'Nenhum voo nesta data: não há escala para aprovar.';
+  else if (!botao && isGestor()) texto = 'Escala ainda não aprovada. Quem só consulta não aprova.';
+  else if (!botao) texto = 'Escala ainda não aprovada: as horas de voo dos instrutores não foram lidas.';
+  else texto = 'Escala ainda não aprovada.';
+  if (alvo && !alvo.hidden && alvo.getClientRects().length) {
+    alvo.classList.add('destaque');
+    setTimeout(() => alvo.classList.remove('destaque'), DESTAQUE_MS);
+  }
+  if (botao) botao.focus({ preventScroll: true });
+  else focarNoTitulo($('#s-esc'));
+  anunciar(texto);
+  return { lugar: barra && !barra.hidden ? barra : null, focou: true };
+}
+registrarTela('apr', { aoMostrar: () => mostrarAprovacao() });

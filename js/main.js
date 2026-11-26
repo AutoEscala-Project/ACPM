@@ -17,6 +17,8 @@
  *   js/export.js    Exportação CSV, PDF e a planilha do Excel
  */
 import './eventos/navegacao.js';
+import './eventos/linha.js';
+import './eventos/trilho.js';
 import './eventos/escala.js';
 import './eventos/instrutores.js';
 import './eventos/alunos.js';
@@ -33,25 +35,27 @@ import './eventos/cursos.js';
 // o painel dos dados pessoais, e a Demanda, o "Importar da agenda" (test/unit/eventos-ligados.test.js)
 import { setRole, abrirData, lerData, dadosPreparados, carregarBI } from './actions.js';
 import { redesenhar } from './redesenho.js';
-import { ehDomingo } from './agenda.js';
+import { ehDomingo, primeiraDataAberta } from './agenda.js';
 import { projetoSupabase, enderecoSemBanco } from './config-supabase.js';
 import { aplicarFuncionalidades } from './funcionalidades.js';
 import { iniciarDicas } from './dicas.js';
 import { configurarMeteorologia } from './meteorologia.js';
 import { $, showToast, mostrarAviso, avisoAberto, avisarDoLink } from './dom.js';
-import { amanhaISO, somarDias, dataIsoValida } from './format.js';
+import { amanhaISO, somarDias } from './format.js';
 import { iniciarSessaoSupabase } from './sessao.js';
 import { iniciarSomenteLeitura } from './somente-leitura.js';
 import { RES, modoCompartilhado } from './state.js';
 import { ApiClient } from './storage.js';
-import { abaFoiEscolhida } from './eventos/navegacao.js';
-import { avisoDeDomingo, iniciarTema } from './eventos/topo.js';
+import { iniciarTema } from './eventos/topo.js';
+import { avisoDeDomingo } from './eventos/trilho.js';
 import { programaSendoGravado } from './eventos/cursos.js';
-import { abrirAgenda, diaDaAgenda, podeEditarAgenda } from './views/agenda.js';
+import { podeEditarAgenda } from './views/agenda.js';
 import { carregarDadosPessoais } from './views/dados-pessoais.js';
 import { rOut } from './views/escala.js';
 import { lerPedidosDaData } from './views/selos.js';
-import { show } from './views/tabs.js';
+import { diaAbrindo } from './views/trilho.js';
+import { ligarEndereco, mostrarTela, telaAberta, telaFoiEscolhida, destinoDoHash } from './views/telas.js';
+import { telaDeAbertura, dataDeAbertura } from './telas.js';
 
 // Fechar ou recarregar a página com alterações esperando a conexão, ou com o programa de um curso ainda sendo gravado, pede
 // confirmação (elas se perderiam)
@@ -66,17 +70,22 @@ window.addEventListener('beforeunload', e => {
   iniciarTema();
   // O que a página diz das funcionalidades desligadas sai dela (e o que só vale sem as ligadas)
   aplicarFuncionalidades(document);
+  // O endereço é lido antes de tudo: abrir uma data, ou uma tela, põe a data nele
+  const params = new URLSearchParams(window.location.search);
+  // O endereço: os links #/<tela>, Voltar e Avançar. A tela do endereço aparece já (no modo compartilhado, o login fica por
+  // cima dela até a sessão abrir)
+  ligarEndereco();
+  const doEndereco = destinoDoHash(window.location.hash);
+  if (doEndereco) mostrarTela(doEndereco.tela, { item: doEndereco.item, nativo: Boolean(doEndereco.nativo), historico: 'nenhum', ler: false });
   // As dicas dos termos e a tela só de consulta do Gestor
   iniciarDicas();
   iniciarSomenteLeitura();
   // A meteorologia do painel vem do servidor (a função meteorologia); neste navegador, não há
   configurarMeteorologia(() => ApiClient.meteorologia());
 
-  // O endereço é lido antes: abrir uma data põe a data nele
-  const params = new URLSearchParams(window.location.search);
   // Amanhã, ou a segunda quando amanhã é domingo
   const amanha = ehDomingo(amanhaISO()) ? somarDias(amanhaISO(), 1) : amanhaISO();
-  abrirData(amanha);
+  abrirData(amanha, { naoEscolhida: true });
 
   // Um link com a escala inteira no endereço (share=) não vale: sai do endereço, com o aviso
   if (params.has('share')) {
@@ -85,11 +94,8 @@ window.addEventListener('beforeunload', e => {
     window.history.replaceState(window.history.state, '', url);
     avisarDoLink('Este link antigo levava a escala no próprio endereço e não vale mais. Peça um link novo a quem compartilhou.', 'erro');
   }
-  // A data do link (?data=); uma data que não existe abre amanhã, com o aviso
+  // A data do link (?data=): vale para todos os perfis (js/telas.js, dataDeAbertura)
   const pedida = params.get('data');
-  // O aeroclube não opera aos domingos: um link para um domingo abre a segunda
-  const domingo = dataIsoValida(pedida) && ehDomingo(pedida);
-  const data = dataIsoValida(pedida) ? (domingo ? somarDias(pedida, 1) : pedida) : amanha;
 
   // Num endereço que não é o do app, o modo local (sem o banco) avisa no alto, antes dos dados (e também se eles falharem)
   if (enderecoSemBanco()) $('#aviso-endereco').hidden = false;
@@ -110,12 +116,18 @@ window.addEventListener('beforeunload', e => {
     // depois, fica no lugar dela); se algo falhou até aqui, nenhuma data abre (js/actions.js, dadosPreparados)
     dadosPreparados();
 
+    // A data da abertura: a do link (um domingo abre a segunda; uma que não existe, amanhã); sem link, a Secretaria abre na
+    // primeira data que ainda aceita pedidos e os outros amanhã
+    // A que a pessoa já escolheu no calendário, à vista desde o começo, vale mais que as duas
+    const escolhida = diaAbrindo();
+    const { data, aviso } = escolhida ? { data: escolhida, aviso: null }
+      : dataDeAbertura({ pedida, perfil: ApiClient.perfil, amanha, primeiraAberta: primeiraDataAberta() });
     // Os dados da data. Até eles chegarem, e se a leitura falhar, nada é gravado (js/actions.js, lerData); uma data
     // escolhida enquanto eles chegavam abre depois, no lugar deles
     abrirData(data);
     if (await lerData(data)) {
-      if (domingo) showToast(avisoDeDomingo(data));
-      else if (pedida && data !== pedida) showToast(`A data do link não existe (${pedida.slice(0, 20)}). A escala aberta é a de amanhã.`);
+      if (aviso === 'domingo') showToast(avisoDeDomingo(data));
+      else if (aviso === 'invalida') showToast(`A data do link não existe (${pedida.slice(0, 20)}). A escala aberta é a de amanhã.`);
     }
   } catch (e) {
     console.warn(e);
@@ -136,11 +148,12 @@ window.addEventListener('beforeunload', e => {
   // Dados pessoais (para a coluna CANAC das tabelas), para quem pode vê-los
   carregarDadosPessoais();
 
-  // A Secretaria trabalha na agenda: o app abre nela, a menos que ela já tenha saído da Escala (uma aba, o Manual, Minha
-  // conta) ou escolhido uma aba enquanto os dados carregavam. A Agenda aberta, por ela ou pela abertura, é lida agora,
-  // com os alunos, no dia que já estiver escolhido nela
-  if (ApiClient.perfil === 'secretaria' && !abaFoiEscolhida() && $('#s-esc').classList.contains('on')) show('age');
-  if ($('#s-age').classList.contains('on')) abrirAgenda(diaDaAgenda() || undefined);
+  // A tela da abertura: a que a pessoa escolheu enquanto os dados carregavam (um clique, Voltar, um endereço digitado), a do
+  // endereço ou a do perfil (a Agenda para a Secretaria, a Escala para os outros). Ela é mostrada de novo agora, com os
+  // dados lidos e o perfil conferido
+  // (o destino lido no começo: o item do endereço vale uma vez e já saiu dele)
+  const destino = telaFoiEscolhida() ? { tela: telaAberta(), item: null } : (doEndereco || { tela: telaDeAbertura(ApiClient.perfil), item: null });
+  await mostrarTela(destino.tela, { item: destino.item, nativo: Boolean(destino.nativo), historico: 'substituir' });
 
   lerPedidosDaData();
   carregarBI();

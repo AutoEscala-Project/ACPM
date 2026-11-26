@@ -2,7 +2,7 @@
 // cursos desligados, o que continua e o que fica guardado (ligar de novo traz tudo de volta). Com elas ligadas, os testes
 // de cada tela (hangar.spec.js, cursos-no-dia.spec.js, agendamento.spec.js, cursos.spec.js e os outros com comHangar ou
 // comProgresso). A prioridade, desligada e ligada: prioridade.spec.js
-import { test, comTodasAsFuncionalidades, expect, irPara, abrirEscala, abrirHistorico, diaSeguinte, entrar, prepararContexto, appPronto, vigiarErros, tabelaDoDia, importarDaAgenda, alternarDisponivel, escreverData, AMANHA } from './fixtures.js';
+import { test, comTodasAsFuncionalidades, expect, irPara, abrirEscala, abrirHistorico, diaSeguinte, entrar, prepararContexto, appPronto, vigiarErros, tabelaDoDia, importarDaAgenda, alternarDisponivel, mudarData, botaoDaData, trilho, avisosDaData, contagemDosAvisos, contagemDoDia, AMANHA } from './fixtures.js';
 import { FRASES_DAS_FUNCIONALIDADES, FRASES_SEM_AS_FUNCIONALIDADES } from './manual-frases.js';
 import { instalarSupabaseFalso, documentosAtuais, CONTAS } from './supabase-falso.js';
 import { montarGlossario } from '../../js/glossario.js';
@@ -50,6 +50,11 @@ async function abrirCom(page, documentos = docs(), url = './') {
   await page.goto(url);
   await appPronto(page);
 }
+// Um pedido da agenda para amanhã, na manhã
+const solicitacao = (id, stu, nome) => ({
+  id, data: AMANHA, aluno: stu, aluno_nome: nome, missao: 'Voo Local', janela: 'manha', horario: null, horas: null, observacao: null, excecao: false,
+  registrado_em: '2026-11-10T11:00:00.000Z', registrado_por: 'Secretaria', cancelada_em: null, cancelada_por: null
+});
 const gravado = (page, data = AMANHA) => page.evaluate(d => JSON.parse(localStorage.getItem(`acpm4_dia_${d}`) || 'null'), data);
 const doBanco = (page, chave) => page.evaluate(c => JSON.parse(localStorage.getItem(c)), chave);
 const pedido = (page, id, mid = 0) => page.locator(`#dem tr[data-k="d"][data-id="${id}"][data-mid="${mid}"]`);
@@ -80,6 +85,31 @@ test('o padrão do app: o hangar e o progresso desligados; no localhost, ?funcio
   await expect(page.locator('#alu tr[data-id="1001"] .progresso')).toHaveText('1/46 · Fase 1 · próxima IN-02');
 });
 
+// A tela, Voltar e a data mudam o endereço (js/endereco.js) sem tirar dele a escolha
+test('?funcionalidades= fica no endereço ao trocar de tela e de data, ao voltar e ao recarregar', async ({ page }) => {
+  await abrirCom(page, docs(), './?funcionalidades=hangar');
+  const conferir = async (tela, data) => {
+    await expect(page).toHaveURL(new RegExp(`#/${tela}$`));
+    const { searchParams } = new URL(page.url());
+    expect([searchParams.get('funcionalidades'), searchParams.get('data')]).toEqual(['hangar', data]);
+  };
+  await conferir('esc', AMANHA);
+  await irPara(page, 'cur');
+  await irPara(page, 'rec');
+  await conferir('rec', AMANHA);
+  await diaSeguinte(page);
+  await expect(page).toHaveURL(new RegExp(`data=${DEPOIS}`));
+  await conferir('rec', DEPOIS);
+  await page.goBack();
+  await conferir('cur', DEPOIS);
+  await page.goForward();
+  await conferir('rec', DEPOIS);
+  await page.reload();
+  await appPronto(page);
+  await conferir('rec', DEPOIS);
+  await expect(page.locator('#hangar li').first()).toHaveAttribute('data-id', 'PR-VOB');
+});
+
 // Só com a prioridade ligada (a alteração que grava o dia é a prioridade: mudarAPrioridade)
 test.describe('O hangar desligado', () => {
   test.use({ funcionalidades: 'prioridade' });
@@ -101,7 +131,7 @@ test.describe('O hangar desligado', () => {
     await abrirEscala(page);
     await expect(page.locator('#tempo-parado > div')).toHaveCount(2);
     await expect(page.locator('#tempo-parado')).not.toContainText('hangar');
-    for (const aba of ['dem', 'age', 'rec', 'ins', 'alu', 'cur', 'rod', 'bi']) await irPara(page, aba);
+    for (const tela of ['age', 'dem', 'esc', 'apr', 'alu', 'ins', 'rec', 'cur', 'rod', 'bi']) await irPara(page, tela);
     expect(await textoDaPagina(page)).not.toMatch(/hangar/i);
     expect(await page.locator('[aria-label*="hangar" i], [title*="hangar" i]').count()).toBe(0);
     await expect(page.locator('#glossario-hangar')).toHaveCount(0);
@@ -140,7 +170,7 @@ test('a data feita na ordem da frota não muda de aviões ao ser alterada no dia
   await page.clock.setFixedTime(new Date('2026-11-12T12:00:00-03:00'));
   await page.reload();
   await appPronto(page);
-  await escreverData(page, AMANHA);
+  await mudarData(page, AMANHA);
   await expect(page.locator('#out')).toContainText('Maria');
   await abrirEscala(page);
   await voo(page, 'Maria').locator('select[data-f="fstatus"]').selectOption('Pousou');
@@ -237,7 +267,7 @@ test.describe('O progresso nos cursos desligado', () => {
     expect((await doBanco(page, 'acpm4_resultados')).map(r => r.resultado)).toEqual(['aprovado', 'aprovado']);
   });
 
-  test('em Alunos, o curso sem o progresso; em Cursos, a lista dos alunos pelo nome, e a aba funciona', async ({ page }) => {
+  test('em Alunos, o curso sem o progresso; em Cursos, a lista dos alunos pelo nome, e a tela funciona', async ({ page }) => {
     await abrirCom(page);
     await irPara(page, 'alu');
     await expect(page.locator('#alu tr[data-id="1000"] [data-f="curso"]')).toHaveValue('PP');
@@ -362,9 +392,12 @@ test.describe('O progresso nos cursos desligado', () => {
     const page = await contexto.newPage();
     const erros = vigiarErros(page, { statusEsperados: [503] });
     await entrar(page, CONTAS.operador);
-    const semProgramas = 'Não foi possível ler os programas dos cursos: a aba Cursos fica sem eles.';
+    const semProgramas = 'Não foi possível ler os programas dos cursos: a tela Cursos fica sem eles.';
     await expect(page.locator('#aviso-dados-texto')).toHaveText(
       `Não foi possível ler os resultados das missões dos cursos: o app não confere se um código do programa ou um voo agendado já tem resultado. ${semProgramas}`);
+    // Nos avisos da data, no trilho, o mesmo texto
+    await expect(avisosDaData(page, 'Não foi possível ler os resultados')).toHaveText(/o app não confere se um código do programa ou um voo agendado já tem resultado/);
+    await expect(avisosDaData(page, /próxima missão/)).toHaveCount(0);
     await irPara(page, 'cur');
     await expect(page.locator('#cursos')).toHaveText(semProgramas);
     await page.locator('#btn-tentar-dados').click();
@@ -378,10 +411,6 @@ test.describe('O progresso nos cursos desligado', () => {
     const documentos = docs();
     const dia = documentos[`acpm4_dia_${AMANHA}`];
     Object.assign(dia.pedidos[1001], { fly: false });
-    const solicitacao = (id, stu, nome) => ({
-      id, data: AMANHA, aluno: stu, aluno_nome: nome, missao: 'Voo Local', janela: 'manha', horario: null, horas: null, obs: null, anotado_por: 'Secretaria', excecao: false,
-      criada_em: '2026-11-10T11:00:00.000Z', criada_por: 'Secretaria', cancelada_em: null, cancelada_por: null
-    });
     documentos.acpm4_agenda = [solicitacao(1, 1000, 'Maria'), solicitacao(2, 1001, 'João')];
     await abrirCom(page, documentos);
     await irPara(page, 'dem');
@@ -389,6 +418,49 @@ test.describe('O progresso nos cursos desligado', () => {
     await expect.poll(async () => (await gravado(page)).pedidos[1001].fly).toBe(true);
     const { pedidos } = await gravado(page);
     expect([pedidos[1000].etapa, pedidos[1000].cursoDaEtapa, pedidos[1001].etapa]).toEqual(['IN-01', 'PP', undefined]);
+  });
+});
+
+// A linha das etapas (js/linha-do-dia.js), com as tarefas, e os endereços das telas
+test.describe('Os dois desligados, na linha, no trilho e no endereço', () => {
+  test.use({ funcionalidades: '' });
+
+  // O trilho (o calendário com os pedidos de cada dia, os avisos da data e quantos são) e a Agenda da data aberta. O código
+  // da missão que o pedido já tem continua (como na Escala)
+  test('o trilho e a Agenda da data aberta não falam deles', async ({ page }) => {
+    const documentos = docs();
+    documentos.acpm4_agenda = [solicitacao(1, 1000, 'Maria'), solicitacao(2, 1002, 'Ana')];
+    await abrirCom(page, documentos);
+    const dito = alvo => alvo.evaluate(el => [el.textContent, ...[...el.querySelectorAll('[title], [aria-label]')].flatMap(n => [n.title, n.getAttribute('aria-label')])].join(' '));
+    await botaoDaData(page).click();
+    await expect(trilho(page)).toBeVisible();
+    await expect(contagemDoDia(page, AMANHA)).toHaveText('2');
+    await expect(avisosDaData(page, '2 pedidos da agenda ainda não estão na demanda')).toHaveCount(1);
+    await expect(contagemDosAvisos(page)).toBeVisible();
+    for (const [nome, alvo] of [['trilho', trilho(page)], ['botão da data', botaoDaData(page)]]) {
+      expect(await dito(alvo), nome).not.toMatch(/hangar|progresso|próxima|aprovado\b|reprovado/i);
+    }
+    await irPara(page, 'age');
+    await expect(page.locator('#agenda-lista tbody tr')).toHaveCount(2);
+    expect(await dito(page.locator('#s-age'))).not.toMatch(/hangar|progresso|próxima|aprovado\b|reprovado|IN-0/i);
+  });
+
+  test('a linha não fala deles, aberta ou recolhida, e um endereço não chega a eles', async ({ page }) => {
+    await abrirCom(page);
+    const linha = page.locator('#linha');
+    const dito = () => linha.evaluate(nav => [nav.textContent, ...[...nav.querySelectorAll('[title], [aria-label]')].flatMap(el => [el.title, el.getAttribute('aria-label')])].join(' '));
+    for (const estado of ['recolhida', 'aberta']) {
+      if (await linha.getAttribute('data-estado') !== estado) await page.locator('#btn-linha').click();
+      await expect(linha).toHaveAttribute('data-estado', estado);
+      expect(await dito(), estado).not.toMatch(/hangar|progresso|próxima|aprovado\b|reprovado|IN-0/i);
+    }
+    for (const [n, endereco] of ['#glossario-hangar', '#glossario-progresso', '#/rec/hangar', '#/alu/1001', '#/cur/PP'].entries()) {
+      // Um parâmetro diferente em cada um: só o fragmento diferente não abre o app de novo
+      await page.goto(`./?vez=${n}${endereco}`);
+      await appPronto(page);
+      await expect(page.locator('main#conteudo > section.on'), endereco).toHaveCount(1);
+      await expect(page.locator('#hangar, #glossario-hangar, #glossario-progresso, .progresso, .alunos-na-fase, .turma-da-fase'), endereco).toHaveCount(0);
+    }
   });
 });
 

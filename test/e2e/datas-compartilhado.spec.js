@@ -1,6 +1,6 @@
 // Escala por data no modo compartilhado: migração dos documentos antigos no servidor, gestor navegando
 // entre as datas sem gravar e autor das alterações no histórico.
-import { test, comProgresso, expect, prepararContexto, vigiarErros, irPara, AMANHA, entrar, preencherLogin, URL_APP, alternarDisponivel, appPronto, caixaDisponivel, campoDaData, mudarData, rotuloDaData } from './fixtures.js';
+import { test, comProgresso, expect, prepararContexto, vigiarErros, irPara, AMANHA, entrar, preencherLogin, URL_APP, alternarDisponivel, appPronto, caixaDisponivel, dataAberta, escolherNoCalendario, mudarData, rotuloDaData, botaoDaData } from './fixtures.js';
 import { instalarSupabaseFalso, documentosAtuais, documentosFase3, CONTAS } from './supabase-falso.js';
 import { comNomesAntigos } from '../helpers/formato.js';
 import { ESQUEMA } from '../../js/migracoes.js';
@@ -38,7 +38,7 @@ test.describe('Escala por data (modo compartilhado)', () => {
     });
     await entrar(page, CONTAS.operador);
 
-    await expect(campoDaData(page)).toHaveValue(AMANHA);
+    await expect(dataAberta(page)).toHaveAttribute('data-data', AMANHA);
     await irPara(page, 'esc');
     await expect(page.locator('#out table tbody tr')).not.toHaveCount(0);
     await expect(page.locator('#audit-log-list')).toContainText('Alteração antiga');
@@ -155,7 +155,7 @@ test.describe('Escala por data (modo compartilhado)', () => {
     const servidor = await instalarSupabaseFalso(context, { documentos, dias: { ...dias, [DEPOIS]: outroDia } });
 
     await entrar(page, CONTAS.gestor);
-    await expect(campoDaData(page)).toBeEnabled();
+    await expect(botaoDaData(page)).toBeEnabled();
     await expect(caixaDisponivel(page, 'PR-BTB')).toBeChecked();
     await mudarData(page, DEPOIS);
     await expect(caixaDisponivel(page, 'PR-BTB')).not.toBeChecked();
@@ -172,7 +172,7 @@ test.describe('Escala por data (modo compartilhado)', () => {
     const { conteudo } = servidor.banco.get('cadastro');
     servidor.alterarPorOutraPessoa('cadastro', { ...conteudo, nid: 1002, stu: [...conteudo.stu, { ...conteudo.stu[0], id: 1001, nm: 'Aluno da colega' }] });
     const liberar = servidor.segurarLeiturasDeDias();
-    await mudarData(page, DEPOIS);
+    await escolherNoCalendario(page, DEPOIS);
     await irPara(page, 'rec');
     await caixaDisponivel(page, 'PR-BTB').click();
     await expect(page.locator('#toast-box')).toContainText('A escala ainda não abriu: nada foi mudado.');

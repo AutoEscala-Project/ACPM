@@ -22,11 +22,15 @@ async function abrirMapa(page, vista = 'eq') {
   await expect(page.locator('#out .mapa')).toBeVisible();
 }
 
-// Um clique na faixa no ponto do minuto (o ponto é contado da borda de dentro da faixa, como o app conta o clique)
+// Um clique na faixa no ponto do minuto (o ponto é contado da borda de dentro da faixa, como o app conta o clique): na
+// altura dela no mapa transposto (o padrão, as horas descendo) e na largura com as horas nas colunas
 async function clicarNoMinuto(trilha, minuto) {
   const ponto = await trilha.evaluate((el, m) => {
-    const { inicio, fim } = el.closest('.tl-wrap').dataset;
-    return { x: ((m - inicio) / (fim - inicio)) * el.clientWidth, y: el.clientHeight / 2 };
+    const mapa = el.closest('.tl-wrap');
+    const fracao = (m - mapa.dataset.inicio) / (mapa.dataset.fim - mapa.dataset.inicio);
+    return mapa.classList.contains('transposto')
+      ? { x: el.clientWidth / 2, y: fracao * el.clientHeight }
+      : { x: fracao * el.clientWidth, y: el.clientHeight / 2 };
   }, minuto);
   await trilha.click({ position: ponto });
 }
@@ -169,7 +173,7 @@ test.describe('Agendar pelo mapa', () => {
     await abrir(page, { estado: cenario({ ins: [instrutor(1, 9)], stu: [aluno(1001, { fly: false }, { nm: 'Maria Silva' })] }) });
     await irPara(page, 'esc');
     const aviso = page.locator('#out > p.h');
-    await expect(aviso).toHaveText('Nenhum voo nesta data. Marque quem vai voar na aba Demanda: a escala é montada automaticamente.');
+    await expect(aviso).toHaveText('Nenhum voo nesta data. Marque quem vai voar na Demanda: a escala é montada automaticamente.');
     // A Escala abre em Por recurso, com a grade; na Lista, só o aviso
     await expect(page.locator('#out .mapa')).toBeVisible();
     await page.locator('#s-esc [data-tl="lista"]').click();
@@ -237,13 +241,16 @@ test.describe('Agendar pelo mapa', () => {
     await expect(linha(page, 'PR-VOC')).toHaveCount(1);
     await expect(page.locator('#out .tl-bar')).toHaveCount(1);
 
-    // Por instrutor não tem recursos para esconder; de volta, continua oculto, também com o eixo invertido
+    // Por instrutor não tem recursos para esconder; de volta, continua oculto, nas colunas (o padrão) e com as horas nas
+    // colunas (Inverter eixo X:Y)
     await abrirMapa(page, 'ins');
     await expect(ocultar).toBeHidden();
     await expect(page.locator('#out .tl-row[data-ins]')).toHaveCount(3);
     await abrirMapa(page);
+    await expect(page.locator('#out .tl-wrap')).toHaveClass(/\btransposto\b/);
     await expect(linha(page, 'PR-VOB')).toHaveCount(0);
     await page.locator('#btn-eixo').click();
+    await expect(page.locator('#out .tl-wrap')).not.toHaveClass(/transposto/);
     await expect(linha(page, 'PR-VOB')).toHaveCount(0);
 
     await ocultar.click();

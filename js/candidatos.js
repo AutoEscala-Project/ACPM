@@ -35,7 +35,7 @@ const primeiraDaUnidade = lista => {
 // horário novo (sem ele, o marcado); soFixos: só os voos fixos (os outros, o motor encaixa de novo em volta). A turma
 // ocupa a sala e o instrutor pelo primeiro aluno dela na lista que não foi cancelado, como no motor (o primeiro que ele
 // confere): com atrasos diferentes na turma, quem precisa do intervalo do motor passa os voos na ordem dele
-// (js/agendamento.js, naOrdemDoMotor)
+// (js/rejeicoes.js, naOrdemDoMotor)
 export function ocupacaoDaEscala(out, { fStatus = {}, fObs = {}, efetivo = false, exceto = [], soFixos = false } = {}) {
   const fora = new Set(exceto);
   const voos = out.filter(o => !fora.has(o.fKey) && (!soFixos || o.fixo) && statusDoVoo(o, fStatus) !== 'Cancelado')
@@ -98,13 +98,14 @@ export function avioesQueServem(estado, ocupacao, { tipo, mis, curso, a, b, grou
 }
 
 // Os instrutores para o voo [a, b) com os alunos dele (o "Não escalar com" de cada um), o peso e o curso do aluno (o
-// noturno do PC exige IFR) e o recurso r, quando já se sabe qual (o avião com habilitação própria exige a dele), cada um
+// noturno do PC exige IFR), o recurso r, quando já se sabe qual (o avião com habilitação própria exige a dele), e o que a
+// missão do curso do pedido exige do INVA (exige), cada um
 // com os problemas (todos os de js/viabilidade.js; vazio quando serve) e a redução de combustível com ele (0 com o tanque
 // cheio ou sem um dos pesos; Infinity quando nem o mínimo dá). Cada voo dele na escala é um compromisso (compromissoDoVoo:
 // a lei conta o voo, e a volta do noturno o ocupa mais) e o histórico é o do dia (historicoDoDia: quem volta hoje do
 // noturno de ontem não fica barrado pelo repouso, que é um aviso). Na ordem: os que servem; o tanque cheio primeiro,
 // depois quem tem menos horas no dia e menos habilitações (os mais versáteis ficam livres)
-export function instrutoresQueServem(estado, ocupacao, { mis, tipo, a, b, alunos = [], stuKg = 0, curso, r = null }) {
+export function instrutoresQueServem(estado, ocupacao, { mis, tipo, a, b, alunos = [], stuKg = 0, curso, r = null, exige = [] }) {
   const limites = normalizarLimites(estado.limites);
   const historicoDe = historicoDoDia(estado);
   const recurso = r && tipo !== GROUND_EQ_TYPE ? recursoDaFrota(frotaDo(estado), r) : null;
@@ -113,7 +114,7 @@ export function instrutoresQueServem(estado, ocupacao, { mis, tipo, a, b, alunos
   // O instrutor inativo no cadastro não entra na lista (js/inativos.js)
   return estado.ins.filter(x => !inativoNoEstado(estado, x)).map(x => ({
     x,
-    problemas: problemasDoInstrutor(x, { mis, tipo, a, b, alunos, stuKg, curso, recurso }, {
+    problemas: problemasDoInstrutor(x, { mis, tipo, a, b, alunos, stuKg, curso, recurso, exige }, {
       compromissos: voosDo(x).map(o => compromissoDoVoo(o)), historico: historicoDe(x.id), limites, todos: true
     }),
     reducao: reducaoNecessaria({ stuKg, insKg: x.kg, tipo, minutos: b - a, mis })

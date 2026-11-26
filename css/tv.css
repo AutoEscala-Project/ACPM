@@ -1,6 +1,8 @@
 /* A TV da recepção (painel.html): a tela, o login, os avisos e "Sair desta TV" */
 /* TV da recepção (painel.html): o painel na tela toda; antes do login, um cartão para entrar */
 body.tela-painel { min-height: 100vh; background: #07122B; overflow: hidden; }
+/* A moldura do conteúdo da TV (a do app é .casca, em css/casca.css) */
+.tela-painel main { max-width: 1280px; margin: 0 auto; padding: 16px 16px 60px; }
 .login-painel {
   position: relative; z-index: 2;
   width: min(380px, calc(100vw - 32px)); margin: 12vh auto 0; display: flex; flex-direction: column; gap: 10px;

@@ -85,10 +85,12 @@ const TERMOS = {
   duracao: { aba: 'Demanda', termo: 'Duração', texto: `As horas do voo, de uma vez. O Ground tem ${duracao(GROUND_DURATION_MIN)}. Para dois voos do aluno no mesmo dia, use “+ missão”.` },
   prioridade: { funcionalidade: 'prioridade', aba: 'Demanda', termo: 'Prioridade', texto: 'De 1 a 5, e 1 é a mais alta: o pedido de prioridade mais alta é escalado antes. Com a mesma prioridade, quem agendou primeiro vai antes; o pedido posto à mão, depois.' },
   'fora-da-ordem': { funcionalidade: 'progresso', aba: 'Demanda', termo: 'Fora da ordem', texto: 'A missão do curso que o programa ainda não libera (falta uma anterior ou a fase não abriu), a já aprovada, a dispensada ou a que o aluno já tem em outro voo do dia. Escolhê-la pede confirmação, e o histórico diz por quê.' },
-  'curso-encerrado': { funcionalidade: 'progresso', aba: 'Demanda', termo: 'Curso encerrado', texto: 'O curso do aluno foi encerrado na aba Cursos. A próxima missão e as outras do curso continuam, mas cada uma pede confirmação, aqui e no agendamento, e o histórico diz que o curso estava encerrado.' },
+  'curso-encerrado': { funcionalidade: 'progresso', aba: 'Demanda', termo: 'Curso encerrado', texto: 'O curso do aluno foi encerrado em Cursos. A próxima missão e as outras do curso continuam, mas cada uma pede confirmação, aqui e no agendamento, e o histórico diz que o curso estava encerrado.' },
 
   // Agenda
+  'missao-do-pedido': { aba: 'Agenda', termo: 'Fase / missão do pedido', texto: 'Para o aluno de um curso, as missões do programa dele, por fase, sem as dispensadas; sem curso, os tipos de missão. A missão do curso traz o recurso e as horas dela e vai com o pedido para a demanda.' },
   'recurso-do-pedido': { aba: 'Agenda', termo: 'Recurso do pedido', texto: 'O tipo de avião, o simulador ou a sala que a missão permite, escolhido no pedido. Ele decide os horários (os de decolagem dele, em Recursos) e vai com o pedido para a demanda.' },
+  'setimo-voo-local': { aba: 'Agenda', termo: `${LIMITE_DE_VOOS_LOCAIS + 1}º voo local`, texto: `No máximo ${LIMITE_DE_VOOS_LOCAIS} voos locais (Voo Local, Voo Solo e TGL) saem no mesmo horário. O ${LIMITE_DE_VOOS_LOCAIS + 1}º só é registrado com “Registrar mesmo assim”, guarda quem confirmou e voa no horário, a mais.` },
   excecao: { aba: 'Agenda', termo: 'Exceção da Coordenação', texto: 'Registra o pedido depois do prazo (13:00 da véspera; a segunda, sábado às 10:00). O pedido fica marcado como exceção, para auditoria.' },
 
   // Recursos
@@ -150,6 +152,7 @@ const TERMOS = {
     funcionalidade: 'progresso',
     textoSem: 'O Noturno é um voo só em três trechos: a ida para BH, a noite em BH e a volta no dia seguinte. No programa, as missões dos trechos vêm juntas na fase.'
   },
+  'habilitacoes-da-missao': { aba: 'Cursos', termo: 'Habilitações que o INVA precisa', texto: 'O que a missão do curso exige do INVA além da missão e do recurso, como o Endosso Solo. Marque antes os INVAs que a têm: sem nenhum INVA ativo com ela, os voos da missão ficam fora da escala.' },
 
   // Rodízio
   rodizio: { aba: 'Rodízio', termo: 'Rodízio', texto: 'Os voos de cheque, MLTE, noturno e C172 seguem uma fila por categoria: vai o primeiro livre; quem voou vai para o fim na data seguinte.' }

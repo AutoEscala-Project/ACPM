@@ -1,4 +1,4 @@
-import { test, comProgresso, expect, abrir, abrirSintetico, abrirComExemplo, irPara, abrirEscala, lerEscala, confirmar, filtrarCursos, AMANHA, abrirHistorico, aprovar, botaoAprovar, caixaVoa, campoDaData, diaSeguinte, importarDaAgenda, reabrir, tabelaDoDia, voar, registrarPedido } from './fixtures.js';
+import { test, comProgresso, expect, abrir, abrirSintetico, abrirComExemplo, irPara, abrirEscala, lerEscala, confirmar, filtrarCursos, AMANHA, abrirHistorico, aprovar, botaoAprovar, caixaVoa, dataAberta, diaSeguinte, importarDaAgenda, reabrir, tabelaDoDia, voar, registrarPedido } from './fixtures.js';
 import { aluno, cenario, instrutor, missaoExtra } from '../helpers/montar.js';
 
 const linhaDoAluno = (page, nome) => page.locator(`#dem tr[data-k="d"][data-mid="0"][data-nm="${nome.toLowerCase()}"]`);
@@ -80,6 +80,25 @@ test.describe('Demanda', () => {
     await importarDaAgenda(page);
     await expect(page.locator('#dem tr[data-k="d"][data-id="1000"]')).toHaveCount(1);
     await expect(linha.locator('[data-f="jan"]')).toHaveValue('h610');
+  });
+
+  // Q8 (F1d): a confirmação do 7º voo local foi dada na Agenda para a missão e o horário do pedido: mudados na Demanda, ela
+  // sai do pedido (noutro horário ele conta como os outros); a duração mudada não a tira
+  test('a disponibilidade ou a missão mudada tira do pedido a confirmação do 7º voo local; a duração, não', async ({ page }) => {
+    const confirmado = { p1: 500, p2: -1, jan: 'h500', limiteConfirmado: true };
+    await abrir(page, { estado: cenario({ ins: [instrutor(1, 9), instrutor(2, 9), instrutor(3, 9)], stu: [aluno(1000, confirmado), aluno(1001, confirmado), aluno(1002, confirmado)] }) });
+    await irPara(page, 'dem');
+    const guardado = () => page.evaluate(data => {
+      const pedidos = JSON.parse(localStorage.getItem(`acpm4_dia_${data}`)).pedidos;
+      return Object.fromEntries(['1000', '1001', '1002'].map(id => [id, pedidos[id].limiteConfirmado === true]));
+    }, AMANHA);
+    await expect.poll(guardado).toEqual({ 1000: true, 1001: true, 1002: true });
+    await linhaDoAluno(page, 'Aluno 1000').locator('[data-f="jan"]').selectOption('h610');
+    await linhaDoAluno(page, 'Aluno 1001').locator('[data-f="mis"]').selectOption('TGL (TMA)');
+    await linhaDoAluno(page, 'Aluno 1002').locator('[data-f="nb"]').fill('1.5');
+    await linhaDoAluno(page, 'Aluno 1002').locator('[data-f="nb"]').press('Enter');
+    await expect(page.locator('#audit-log-list')).toContainText('Pedido Aluno 1002: Voo Local');
+    await expect.poll(guardado).toEqual({ 1000: false, 1001: false, 1002: true });
   });
 
   // A limpeza também solta os voos que limpa, seja qual for o motivo do cadeado (a escala aprovada, o instrutor escolhido
@@ -322,7 +341,7 @@ test.describe('Demanda', () => {
     // Outra data: as linhas são outras, e as marcas continuam
     await irPara(page, 'dem');
     await diaSeguinte(page);
-    await expect(campoDaData(page)).toHaveValue('2026-11-12');
+    await expect(dataAberta(page)).toHaveAttribute('data-data', '2026-11-12');
     await expect(botao).toHaveText('Curso: PC');
     await page.locator('#onlyfly').uncheck();
     await expect.poll(async () => [...new Set((await aVista()).map(l => l.split(':')[0]))]).toEqual(['1001']);
@@ -336,7 +355,7 @@ test.describe('Demanda', () => {
     const aVista = () => page.locator('#dem tr[data-k="d"]:visible').evaluateAll(linhas => linhas.map(l => l.dataset.id));
     await irPara(page, 'alu');
     await filtrarCursos(page, 'alu', ['PP']);
-    await page.getByRole('button', { name: 'Abrir a Demanda' }).click();
+    await page.getByRole('link', { name: 'Abrir a Demanda' }).click();
     await expect.poll(aVista).toEqual(['1000']);
     const incluir = async nome => {
       await page.locator('#incluir-aluno').fill(nome);
@@ -430,7 +449,7 @@ test.describe('Demanda', () => {
     await irPara(page, 'alu');
     await filtrarCursos(page, 'alu', ['PC']);
     await expect(page.locator('#alu-contagem')).toHaveText('1 de 2 alunos');
-    await page.getByRole('button', { name: 'Abrir a Demanda' }).click();
+    await page.getByRole('link', { name: 'Abrir a Demanda' }).click();
     await expect(page.locator('#flt-dem-cur')).toHaveText('Curso: PC');
     await expect(page.locator('#dem tr[data-k="d"]:visible')).toHaveCount(0);
     await expect(page.locator('#dem tr.sem-resultado')).toHaveText('Nenhum aluno com esses filtros. Limpar filtros');
@@ -543,6 +562,18 @@ test.describe('Voo agendado na Escala', () => {
     await expect(page.locator('#audit-log-list')).toContainText('Aluno 1000: PP-01 na demanda (Voo Local · C152 · 1 h) (deixa de ser fixo)');
     await abrirEscala(page);
     await expect(voo(page, 'Aluno 1000').locator('.fixo')).toHaveCount(0);
+  });
+
+  // Q8 (F1d): a confirmação do 7º voo local era da missão de antes; a missão do curso posta no pedido a tira
+  comProgresso('a próxima missão do curso (Usar) tira do pedido a confirmação do 7º voo local', async ({ page }) => {
+    const cursos = { PP: [{ id: 'PP-01', nome: 'Familiarização', mis: 'Voo Local', eq: 'C152', nb: 1 }], PC: [], INVA: [] };
+    await abrir(page, { estado: dia({ pedido1000: { mis: 'TGL (TMA)', limiteConfirmado: true }, aluno1000: { curso: 'PP' }, cursos }) });
+    const confirmado = () => page.evaluate(d => JSON.parse(localStorage.getItem(`acpm4_dia_${d}`)).pedidos[1000].limiteConfirmado === true, AMANHA);
+    await naDemanda(page);
+    await expect.poll(confirmado).toBe(true);
+    await pedido(page, 1000).locator('[data-act="usar-proxima"]').click();
+    await expect(pedido(page, 1000).locator('.etapa')).toHaveText('PP-01');
+    await expect.poll(confirmado).toBe(false);
   });
 
   test('a mesma duração digitada de outro jeito (1.0 no lugar de 1) não muda o pedido: o voo continua agendado', async ({ page }) => {

@@ -5,7 +5,7 @@
 // js/state.js).
 //   hangar:    a ordem dos aviões no hangar (Recursos), que o motor passa a não ler (vale a ordem da frota), e as saídas do
 //              hangar no tempo parado
-//   progresso: a próxima missão e as outras missões do curso, o progresso, a fase de cada aluno e os resultados. A aba
+//   progresso: a próxima missão e as outras missões do curso, o progresso, a fase de cada aluno e os resultados. A tela
 //              Cursos, o curso do aluno e o código da missão que o pedido já tem continuam
 //   prioridade: a prioridade do pedido, na Demanda (a coluna), nas dicas, no glossário e no Manual; o motor (e a
 //              compactação, os candidatos, as Sugestões e a simulação do agendamento) recebe todos os pedidos na prioridade

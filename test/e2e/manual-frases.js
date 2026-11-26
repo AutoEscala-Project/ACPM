@@ -6,13 +6,18 @@
 const ANTIGAS = {
   geral: ['A01', 'A09', 'Gerar escala', 'Preencher exemplo', 'Link Blindado', 'Importar Solicitações da Agenda',
     'Vai voar?', 'Início pref', 'Exportar CSV', 'Emitir PDF', 'Turno rápido', 'Cada cartão', 'campo Data', 'Equipamento', 'Bloquear',
-    'Sessões', 'sessão', 'Desfazer', 'Escala de Voo', 'Por avião e sala', 'Avião / sala', 'Aviões e salas', 'o botão ao lado de Alunos'],
-  // O "+" do mapa fica ao lado do nome da linha
-  escala: ['no fim de cada linha'],
+    'Sessões', 'sessão', 'Desfazer', 'Escala de Voo', 'Por avião e sala', 'Avião / sala', 'Aviões e salas', 'o botão ao lado de Alunos', 'As abas seguem a ordem de uso', 'ao lado do nome das abas'],
+  // A data aberta é escolhida no calendário do trilho (sem as setas e sem o calendário da Agenda), e um domingo não abre
+  casca: ['setas ‹ ›', 'use as setas', 'com um calendário', 'o app pula o domingo'],
+  // O "+" do mapa fica ao lado do nome do recurso; o mapa abre com os recursos nas colunas, e o Manual não fala dele
+  // como linhas
+  escala: ['no fim de cada linha', 'ao lado do nome de cada linha', 'as linhas livres', 'de uma linha do mapa', 'a linha dele não agenda'],
   // O Operador não muda os Cursos nem os limites da lei
   perfis: ['altera tudo e opera a escala'],
   // A coluna de quem vem é "Vem" (a data aberta não é sempre hoje); o filtro das habilitações tem várias marcas
   instrutores: ['o interruptor de quem vem', 'filtro por habilitação'],
+  // O 7º voo local não fica mais indisponível: o app avisa e pede a confirmação (F1c)
+  pedidos: ['o horário fica indisponível, e o app diz o próximo horário possível'],
   // O peso vem antes do curso em Alunos
   alunos: ['Nome, CANAC, curso e peso'],
   // Cursos mostra um curso de cada vez (sem "todos")
@@ -24,26 +29,30 @@ const ANTIGAS = {
 
 // Os nomes dos botões e das vistas, e as regras em vigor
 const NOVAS = {
-  casca: ['menu da conta'],
+  casca: ['menu da conta', 'Fixar o calendário ao lado da tela', 'ou no botão da data, no topo', 'os avisos da data',
+    'os aviões parados ou perto da revisão de 50 horas, os pedidos', 'leva à tela onde se resolve, quando você a vê'],
+  perfis: ['na primeira data que ainda aceita pedidos'],
   escala: ['Atualizada às', 'Ver todos', 'Compartilhar', 'Por recurso',
     // O agendamento na Escala (mover e encaixar, as turmas, as alternativas, a prévia, os avisos), o voo agendado na
     // Demanda, as alterações dos cursos fora do Histórico e o peso aceito
     'Encaixar o voo', 'Mover o voo', 'Entrar na turma das', 'Horários livres', 'O que muda na escala', 'Agendar mesmo assim',
-    'agendado 10:10 · PR-VOB', 'fora da regra', 'ao lado do nome de cada linha', 'não entram no Histórico da data', 'de 1 a 300 kg',
+    'agendado 10:10 · PR-VOB', 'fora da regra', 'ao lado do nome de cada recurso (ou instrutor)', 'não entram no Histórico da data', 'de 1 a 300 kg',
     // Acima do limite de voos locais do horário, todo voo local agendado pede a confirmação (não só o 7º)
     'mais de 6 voos locais no mesmo horário',
     // O voo com resultado não é desfeito, também com o progresso desligado
     'o que já tem resultado nem o pedido que mudou depois na Demanda'],
   demanda: ['Pôr um aluno na demanda'],
-  pedidos: ['Ainda não importado'],
+  // A missão espera o aluno e vem do curso dele; o 7º voo local pede a confirmação (F1c)
+  pedidos: ['Ainda não importado', 'Data do pedido', 'prazo encerrado', 'as missões do curso dele', 'NAV-150NM · Navegação · C152 · 3 h', '(nenhum ativo)',
+    'só registra com “Registrar mesmo assim”; o pedido guarda quem confirmou e quando'],
   // A busca sem acentos, quantos aparecem e o "Limpar filtros"; a coluna Vem (a data aberta não é sempre hoje); o filtro
   // das habilitações, com várias marcas e a regra ("todas as marcadas")
   instrutores: ['Editar habilitações', 'sem os acentos', '12 de 40 instrutores', 'Limpar filtros', 'o interruptor Vem', 'Filtro das habilitações',
     'que têm todas as marcadas', 'Habilitações: Noturno + C172'],
   // Alunos com a barra de Instrutores: as colunas na mesma ordem, o filtro dos cursos (a regra "algum dos marcados"),
-  // o link para a Demanda (o filtro dos cursos é um só nas duas abas) e o cartão do celular
+  // o link para a Demanda (o filtro dos cursos é um só nas duas telas) e o cartão do celular
   alunos: ['Não escalar com', 'Nome, CANAC, peso e curso', 'Filtro dos cursos', 'aparecem os alunos de algum dos marcados', 'Curso: PP ou PC',
-    'Abrir a Demanda', 'aparecem os pedidos dos alunos de algum dos cursos marcados', 'O filtro dos cursos é um só nas duas abas',
+    'Abrir a Demanda', 'aparecem os pedidos dos alunos de algum dos cursos marcados', 'O filtro dos cursos é um só nas duas telas',
     'um cartão por pessoa'],
   // Recursos: as duas vistas, a busca pela matrícula, o filtro das categorias (a regra "alguma das marcadas") e o
   // cadastro da frota e os horários de decolagem

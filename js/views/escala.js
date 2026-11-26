@@ -17,7 +17,9 @@ import { OPCOES_DE_BURACOS, OPCOES_DE_HORARIOS, normalizarCriterios } from '../c
 import { metricasDaEscala } from '../metricas.js';
 import { ligada } from '../funcionalidades.js';
 import { sumUniqueOperationalHours, consolidateTimelineSlots } from '../engine.js';
-import { S, RES, AUDIT_LOG, TL_MODE, EIXO_INVERTIDO, OCULTAR_INDISPONIVEIS, DATA, isGestor, dadoIndisponivel, estadoDaEscala, inativoNaDataAberta } from '../state.js';
+import { S, RES, AUDIT_LOG, TL_MODE, HORAS_NAS_COLUNAS, OCULTAR_INDISPONIVEIS, DATA, isGestor, dadoIndisponivel, estadoDaEscala, inativoNaDataAberta, habilitacoesNaoConferidas } from '../state.js';
+import { cancelamentoAproveitavel, dataQueAindaVoa } from '../reparo.js';
+import { rejeicoesDosPedidos } from '../rejeicoes.js';
 import { motivoDoFixo } from '../fixos.js';
 import { instrutoresDoVoo } from '../instrutor-escolhido.js';
 import { $, posicionarJunto, trocarConteudo, visivel } from '../dom.js';
@@ -59,7 +61,7 @@ function conteudoDoPopup(o) {
         <select class="st-sel st-${classeDoStatus(st)}" data-f="fstatus" data-fkey="${esc(principal.fKey)}" aria-label="Status do voo"${isGestor() ? ' disabled' : ''}>
           ${FLIGHT_STATUSES.map(v => `<option value="${v}"${v === st ? ' selected' : ''}>${rotuloDoStatus(v, principal)}</option>`).join('')}
         </select>
-        ${detalheDoStatus(principal)}
+        ${detalheDoStatus(principal)}${st === 'Cancelado' ? botaoDoCancelado(principal) : ''}
       </span>
     </div>
     ${ehGround(o) && ativos.length ? `<button type="button" class="tl-pop-btn edit-only" data-act="agendar" data-agendar="t:${esc(unidadeDoVoo(o))}" aria-haspopup="dialog">+ Aluno na turma</button>` : ''}
@@ -169,8 +171,8 @@ function detalhesDaLinha(linha, porInstrutor, mapa) {
 
 // O mapa: as marcas do eixo ficam no minuto delas (--pos), cada voo do início (--ini) ao fim (--dur) e cada listra da
 // faixa é uma hora (--hora), em qualquer largura; o início e o fim do mapa (data-inicio e data-fim, em minutos) dão o
-// horário de um clique na faixa (js/eventos/escala.js). Com o eixo invertido (.transposto), o CSS põe as linhas em
-// colunas e as horas descendo (--horas dá a altura)
+// horário de um clique na faixa (js/eventos/escala.js). O mapa abre transposto (.transposto): o CSS põe as linhas em
+// colunas e as horas descendo (--horas dá a altura); com Inverter eixo X:Y, as horas nas colunas e uma linha por recurso
 function buildTimelineGroup(linhas, porInstrutor, barLine1Fn, barLine2Fn, minStart, maxEnd) {
   const span = maxEnd - minStart;
   const mapa = vistaDoMapa();
@@ -211,7 +213,7 @@ function buildTimelineGroup(linhas, porInstrutor, barLine1Fn, barLine2Fn, minSta
     </div>`;
   }).join('');
 
-  const transposto = mapa && EIXO_INVERTIDO;
+  const transposto = mapa && !HORAS_NAS_COLUNAS;
   return `<div class="tl-wrap${transposto ? ' transposto' : ''}" data-inicio="${minStart}" data-fim="${maxEnd}" style="--hora:${(6000 / span).toFixed(4)}%;--horas:${(span / 60).toFixed(2)}"><div class="tl-axis">${ticks.join('')}</div>${rowsHTML}</div>`;
 }
 
@@ -373,6 +375,11 @@ function detalheDoStatus(o) {
     : `<button type="button" class="st-detalhe" data-act="detalhe-status" data-fkey="${esc(o.fKey)}" title="Alterar o detalhe do status">${esc(texto)}</button>`;
 }
 
+// "Sugestões" no voo cancelado que ainda pode voar (a data aberta de hoje em diante, sem resultado, sem "Aluno ausente")
+const botaoDoCancelado = o => (cancelamentoAproveitavel(S, o, { data: DATA, hoje: hojeISO() })
+  ? ` <button type="button" class="btn quiet edit-only" data-reparo="${esc(o.fKey)}" title="O que pode voar no lugar deste voo cancelado">Sugestões</button>`
+  : '');
+
 const acao = o => (o.stuId && !o.trecho
   ? `<button class="x" data-act="rm-fly" data-id="${esc(o.stuId)}" data-mid="${esc(o.mid || 0)}" aria-label="Tirar ${esc(o.s)} da escala" title="Tirar da escala">✕</button>`
   : '');
@@ -469,6 +476,14 @@ function resumo(out, al, tot) {
   const avisos = al.filter(a => a.t !== 'err' && a.t !== 'conf');
   const horas = sumUniqueOperationalHours(out, statusDe);
   const item = a => `<li class="al ${a.t}"><b>${esc(a.s)}</b> ${esc(a.m)}</li>`;
+  // A recusa do pedido cujo instrutor escolhido não serve: "Sugestões" (o pedido dela vem do pareamento, js/rejeicoes.js),
+  // da data aberta de hoje em diante
+  const pedidoDaRecusa = new Map(dataQueAindaVoa({ data: DATA, hoje: hojeISO() })
+    ? [...rejeicoesDosPedidos(estadoDaEscala(), RES)].map(([fKey, a]) => [a, fKey]) : []);
+  const erro = a => {
+    const fKey = a.codigo === 'instrutor-escolhido' ? pedidoDaRecusa.get(a) : null;
+    return `<li class="al ${a.t}"><b>${esc(a.s)}</b> ${esc(a.m)}${fKey ? ` <button type="button" class="btn quiet edit-only" data-rejeitado="${esc(fKey)}" title="Outro instrutor que encaixa este pedido">Sugestões</button>` : ''}</li>`;
+  };
   const nomes = [...new Set(erros.map(a => a.s))].join(', ');
   let h = `<div class="resumo">
     <div class="st">
@@ -478,7 +493,7 @@ function resumo(out, al, tot) {
     </div>${tempoParado(out)}`;
   if (erros.length) {
     h += caixa('erros', 'erros', `<summary>${erros.length === 1 ? '1 missão não entrou' : `${erros.length} missões não entraram`} na escala: ${esc(nomes)}</summary>
-      <ul>${erros.map(item).join('')}</ul>`);
+      <ul>${erros.map(erro).join('')}</ul>`);
   }
   // Voos fixos que ficaram impossíveis (da escala aprovada, agendados ou com o instrutor escolhido na Escala): continuam no
   // lugar até o operador resolver
@@ -487,7 +502,16 @@ function resumo(out, al, tot) {
   const emConflito = S.aprovacao ? `${n} ${n === 1 ? 'voo em conflito' : 'voos em conflito'} na escala aprovada` : `${n} ${n === 1 ? 'voo fixo' : 'voos fixos'} em conflito`;
   if (n) h += caixa('conflitos', 'conflitos', `<summary>${emConflito}</summary><ul>${conflitos.map(conflito).join('')}</ul>`);
   if (avisos.length) h += caixa('avisos', 'avisos', `<summary>${resumoDosAvisos(avisos)}</summary><ul>${avisos.map(item).join('')}</ul>`);
-  return h + caixaDosInativos(out) + '</div>';
+  return h + caixaDosInativos(out) + caixaDasHabilitacoesNaoConferidas() + '</div>';
+}
+
+// Sem os programas dos cursos lidos, o que a missão do curso de cada pedido exige do INVA não entra na escala (nada é
+// exigido): o aviso diz quantos pedidos com missão do curso ficaram sem a conferência (js/state.js)
+function caixaDasHabilitacoesNaoConferidas() {
+  const n = habilitacoesNaoConferidas();
+  if (!n) return '';
+  return caixa('habilitacoes', 'avisos habilitacoes', `<summary>As habilitações das missões do curso não foram conferidas</summary>
+    <ul><li class="al warn">Os programas dos cursos não foram lidos: o que a missão do curso exige do INVA não foi conferido em ${n === 1 ? '1 pedido' : `${n} pedidos`} desta data: a escala foi montada sem essa conferência.</li></ul>`);
 }
 
 // Os voos da escala com quem ficou inativo no cadastro (a escala gravada continua mostrando os voos dele até ser refeita):
@@ -497,7 +521,7 @@ function caixaDosInativos(out) {
   const itens = voosComInativos(S, { out }, { data: DATA, hoje: hojeISO() });
   if (!itens.length) return '';
   const n = itens.reduce((total, i) => total + i.voos, 0);
-  const linha = i => `<li class="al warn">${esc(textoDoVooComInativo(i))}${i.de === 'aluno' ? ' <button type="button" class="btn quiet" data-go="dem">Abrir a Demanda</button>' : ''}</li>`;
+  const linha = i => `<li class="al warn">${esc(textoDoVooComInativo(i))}${i.de === 'aluno' ? ' <a class="btn quiet" href="#/dem" data-focar>Abrir a Demanda</a>' : ''}</li>`;
   const refazer = itens.some(i => i.de !== 'aluno') ? '<button type="button" class="btn quiet edit-only" data-act="refazer-escala">Refazer a escala</button>' : '';
   return caixa('inativos', 'avisos inativos', `<summary>${n} ${n === 1 ? 'voo' : 'voos'} com quem está inativo no cadastro</summary><ul>${itens.map(linha).join('')}</ul>${refazer}`);
 }
@@ -567,11 +591,11 @@ function tabela(voos, al) {
       <td class="c-aviao nw"${rs}>${esc(nomeDoRecurso(o.r))}${ehGround(o) ? '' : ` <small>${esc(o.eqType || '')}</small>`}</td>
       <td class="c-instr nw"${rs}>${botaoDoInstrutor(o, `Instrutor de ${grupo.length > 1 ? `${o.mis} (turma)` : o.s}`)}</td>
       <td class="c-peso nw"${rs}>${peso(o)}</td>
-      <td class="c-status">${seletorDeStatus(o)}${resultadoNaEscala(o)}</td>
+      <td class="c-status">${seletorDeStatus(o)}${resultadoNaEscala(o)}${botaoDoCancelado(o)}</td>
       <td class="c-acao edit-only acao">${acao(o)}</td>
     </tr>`;
     for (const aluno of grupo.slice(1)) {
-      h += `<tr class="membro${statusDe(aluno) === 'Cancelado' ? ' st-Cancelado' : ''}"${doTempo}><td class="c-aluno"><b>${esc(aluno.s)}</b></td><td class="c-status">${seletorDeStatus(aluno)}${resultadoNaEscala(aluno)}</td><td class="c-acao edit-only acao">${acao(aluno)}</td></tr>`;
+      h += `<tr class="membro${statusDe(aluno) === 'Cancelado' ? ' st-Cancelado' : ''}"${doTempo}><td class="c-aluno"><b>${esc(aluno.s)}</b></td><td class="c-status">${seletorDeStatus(aluno)}${resultadoNaEscala(aluno)}${botaoDoCancelado(aluno)}</td><td class="c-acao edit-only acao">${acao(aluno)}</td></tr>`;
     }
   }
   return h + '</tbody></table></div>';
@@ -617,12 +641,12 @@ export function rOut() {
     b.setAttribute('aria-pressed', String(b.dataset.tl === TL_MODE));
   });
   $('#out').dataset.vista = TL_MODE === 'lista' || TL_MODE === 'painel' ? TL_MODE : 'mapa';
-  // Inverter o eixo só vale nas vistas do mapa
+  // Inverter o eixo só vale nas vistas do mapa; apertado, as horas estão nas colunas (o padrão são os recursos nas colunas)
   const eixo = $('#btn-eixo');
   if (eixo) {
     eixo.hidden = !vistaDoMapa();
-    eixo.setAttribute('aria-pressed', String(EIXO_INVERTIDO));
-    eixo.classList.toggle('on', EIXO_INVERTIDO);
+    eixo.setAttribute('aria-pressed', String(HORAS_NAS_COLUNAS));
+    eixo.classList.toggle('on', HORAS_NAS_COLUNAS);
   }
   // Ocultar indisponíveis só vale no mapa Por recurso
   const indisponiveis = $('#btn-indisponiveis');
@@ -634,7 +658,7 @@ export function rOut() {
   if (!RES || (!RES.out.length && !RES.al.length)) {
     // Sem voos, nas vistas do mapa, a grade das linhas livres fica embaixo do texto: o "+" e o clique agendam nela
     const grade = renderVisualTimeline([], linhasLivres(filtrosDaEscala([])));
-    trocarConteudo($('#out'), `<p class="h">Nenhum voo nesta data. Marque quem vai voar na aba Demanda: a escala é montada automaticamente.</p>${grade}`);
+    trocarConteudo($('#out'), `<p class="h">Nenhum voo nesta data. Marque quem vai voar na Demanda: a escala é montada automaticamente.</p>${grade}`);
     rCompactacao([]);
     rAprovacao(false);
     atualizarPainelDeReparo();
