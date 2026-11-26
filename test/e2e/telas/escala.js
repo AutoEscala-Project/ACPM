@@ -58,3 +58,40 @@ const BOTOES_DE_EXPORTAR = { csv: '#exp', pdf: '#pdf', xlsx: '#xlsx' };
 export const botaoExportar = (page, tipo) => page.locator(BOTOES_DE_EXPORTAR[tipo]);
 // Baixa um arquivo da escala: devolve [o download], como o Promise.all do clique
 export const exportar = (page, tipo) => Promise.all([page.waitForEvent('download'), botaoExportar(page, tipo).click()]);
+
+// O editor do voo (F1g): a barra do mapa ou o "Editar" da Lista o abre (na turma de Ground, pela chave da turma)
+export const editorDoVoo = page => page.locator('#dlg-voo');
+export const botaoEditar = (page, fKey) => page.locator(`#out [data-act="editar-voo"][data-fkey="${fKey}"]`);
+export async function editarPelaLista(page, fKey) {
+  await botaoEditar(page, fKey).click();
+  await expect(editorDoVoo(page)).toBeVisible();
+}
+export const barraDoVoo = (page, chave) => page.locator(`#out .tl-bar[data-pop="${chave}"]`);
+export async function editarPeloMapa(page, chave) {
+  await barraDoVoo(page, chave).click();
+  await expect(editorDoVoo(page)).toBeVisible();
+}
+export const salvarVoo = page => page.locator('#voo-salvar').click();
+
+// A pergunta antes de refazer a escala não aprovada (F1g, R6): "Salvar e refazer" grava e roda o motor; "Cancelar" não
+// muda nada
+export const perguntaDoRefazer = page => page.locator('#dlg-refazer');
+export async function refazer(page) {
+  await expect(perguntaDoRefazer(page)).toBeVisible();
+  await page.locator('#refazer-salvar').click();
+  await expect(perguntaDoRefazer(page)).toBeHidden();
+}
+export async function naoRefazer(page) {
+  await expect(perguntaDoRefazer(page)).toBeVisible();
+  await page.locator('#refazer-cancelar').click();
+  await expect(perguntaDoRefazer(page)).toBeHidden();
+}
+
+// "Agendar" no diálogo do agendamento: fora da escala aprovada, a confirmação diz que a escala inteira será refeita (F1g)
+// e pede o segundo clique, "Agendar mesmo assim"; na aprovada, um clique basta (sem outros avisos)
+export async function confirmarAgendamento(page) {
+  const botao = page.locator('#agd-confirmar');
+  await botao.click();
+  if (await page.locator('#dlg-agendar').isVisible() && (await botao.textContent()) === 'Agendar mesmo assim') await botao.click();
+  await expect(page.locator('#dlg-agendar')).toBeHidden();
+}

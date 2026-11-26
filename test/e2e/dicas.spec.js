@@ -71,6 +71,8 @@ test.describe('Dicas dos termos', () => {
   test('depois de mudar um status com o mouse, a dica do status não fica aberta e o clique no status de cima chega a ele', async ({ page }) => {
     await abrirComExemplo(page);
     await abrirEscala(page);
+    // Na escala aprovada o status muda sem a pergunta (F1g): o foco fica no status
+    await aprovar(page);
     await page.clock.install({ time: AGORA });
     const selects = page.locator('#out .tabela-escala select[data-f="fstatus"]');
     const fkeyCima = await selects.nth(3).getAttribute('data-fkey');

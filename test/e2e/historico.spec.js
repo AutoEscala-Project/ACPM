@@ -1,5 +1,5 @@
 // Histórico da data numa gaveta lateral, que abre sobre a aba aberta (sem trocar de aba).
-import { test, expect, abrir, abrirSintetico, irPara, abrirEscala, abrirCaixa, AMANHA, prepararContexto, vigiarErros, entrar, abrirHistorico, alternarDisponivel, alternarVem, appPronto, caixaVem, caixaVoa, dataAberta, diaSeguinte, linhaDoInstrutor } from './fixtures.js';
+import { test, expect, abrir, abrirSintetico, irPara, abrirEscala, abrirCaixa, AMANHA, prepararContexto, vigiarErros, entrar, abrirHistorico, alternarDisponivel, alternarVem, appPronto, caixaVem, caixaVoa, dataAberta, diaSeguinte, linhaDoInstrutor, confirmarAgendamento, refazer } from './fixtures.js';
 import { documentosAtuais, instalarSupabaseFalso, CONTAS } from './supabase-falso.js';
 import { aluno, cenario, instrutor, missaoExtra } from '../helpers/montar.js';
 
@@ -270,8 +270,7 @@ test.describe('Histórico', () => {
     await page.locator('#agd-horario').selectOption('610');
     await expect(page.locator('#agd-previa ul')).toContainText('Entra:');
     const ins = await page.locator('#agd-instrutor').inputValue();
-    await page.locator('#agd-confirmar').click();
-    await expect(page.locator('#dlg-agendar')).toBeHidden();
+    await confirmarAgendamento(page);
     const voo = page.locator('#out tbody tr:not(.win)', { hasText: 'Maria Silva' });
     await expect(voo.locator('.c-hr')).toContainText('10:10–11:10');
 
@@ -314,8 +313,7 @@ test.describe('Histórico', () => {
     await page.locator('#agd-horario').selectOption('610');
     await expect(page.locator('#agd-previa ul')).toContainText('Entra:');
     const ins = await page.locator('#agd-instrutor').inputValue();
-    await page.locator('#agd-confirmar').click();
-    await expect(page.locator('#dlg-agendar')).toBeHidden();
+    await confirmarAgendamento(page);
 
     // O instrutor do agendamento não vem mais: o voo agendado fica em conflito, e as Sugestões o soltam
     await irPara(page, 'ins');
@@ -326,6 +324,7 @@ test.describe('Histórico', () => {
     const soltar = page.locator('#painel-reparo .opcoes-reparo li', { hasText: 'Soltar o voo' });
     await soltar.getByRole('button', { name: 'Soltar' }).click();
     await expect(page.locator('#painel-reparo')).toBeHidden();
+    await refazer(page);
 
     await abrirHistorico(page);
     const lista = page.locator('#audit-log-list');
@@ -356,8 +355,7 @@ test.describe('Histórico', () => {
     await page.locator('#agd-horario').selectOption('760');
     await expect(page.locator('#agd-previa ul')).toContainText('Muda:');
     const ins = await page.locator('#agd-instrutor').inputValue();
-    await page.locator('#agd-confirmar').click();
-    await expect(page.locator('#dlg-agendar')).toBeHidden();
+    await confirmarAgendamento(page);
     await expect(voo.locator('.c-hr')).toContainText('12:40–13:40');
 
     await irPara(page, 'dem');

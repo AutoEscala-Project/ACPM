@@ -1,7 +1,7 @@
 // Sugestões para um conflito: o botão "Sugestões" da caixa de conflitos abre uma gaveta com o que pode voar
 // no lugar do voo fixo; "Aplicar" muda o voo (que continua fixo) e o histórico desfaz. Cancelar pede o motivo, como no
 // status, já com o motivo do conflito marcado
-import { test, expect, abrir, irPara, abrirEscala, abrirCaixa, abrirHistorico, alternarVem, aprovar, rotuloDaData, AMANHA } from './fixtures.js';
+import { test, expect, abrir, irPara, abrirEscala, abrirCaixa, abrirHistorico, alternarVem, aprovar, rotuloDaData, AMANHA, refazer } from './fixtures.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
 import { documentosAtuais } from './supabase-falso.js';
 
@@ -87,9 +87,10 @@ test.describe('Sugestões para um conflito', () => {
     await expect(page.locator('#historico')).toBeHidden();
   });
 
-  // O pedido mudou depois da aprovação (a duração): a única sugestão é soltar o voo
+  // O pedido mudou depois do agendamento (a duração): a única sugestão é soltar o voo. "Soltar" precisa do motor: fora da
+  // escala aprovada (na aprovada ele fica desligado, test/e2e/editar-voo.spec.js), com a pergunta antes
   test('soltar o voo: o app escala de novo, sem o cadeado; o histórico desfaz', async ({ page }) => {
-    const estado = { ...dia(), stu: [aluno(1000, { p1: 390, p2: -1, nb: 2 })], fixos: { '1000_0_1': { a: 390, b: 450, r: 'PP-LJV', insId: 1 } }, aprovacao: { em: '2026-11-10T21:05:00.000Z', por: 'Operador 01' } };
+    const estado = { ...dia(), stu: [aluno(1000, { p1: 390, p2: -1, nb: 2 })], fixos: { '1000_0_1': { a: 390, b: 450, r: 'PP-LJV', insId: 1, agendado: true } } };
     await abrir(page, { estado });
     await abrirEscala(page);
     await expect(page.locator('#out details.conflitos')).toContainText('a duração do pedido mudou');
@@ -100,6 +101,7 @@ test.describe('Sugestões para um conflito', () => {
     await expect(opcoes.first()).toContainText('Soltar o voo: o app escolhe de novo o horário, o avião e o instrutor');
     await opcoes.first().getByRole('button', { name: 'Soltar' }).click();
     await expect(gaveta(page)).toBeHidden();
+    await refazer(page);
     await expect(page.locator('#out details.conflitos')).toHaveCount(0);
     await expect(linha(page, 'Aluno 1000').locator('.fixo')).toHaveCount(0);
     await expect(linha(page, 'Aluno 1000').locator('.c-hr')).toContainText('06:30–08:30');
@@ -131,6 +133,7 @@ test.describe('Sugestões para um conflito', () => {
     await expect(gaveta(page)).toBeVisible();
     await primeira.locator('[data-reparo-aplicar]').click();
     await expect(gaveta(page)).toBeHidden();
+    await refazer(page);
     await expect(page.locator('#out details.conflitos')).toHaveCount(0);
     await expect(linha(page, 'Aluno 1000').locator('.c-hr')).toContainText('12:40');
     await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('acpm4_dia_2026-11-11')).pedidos[1000].jan)).toBe('h760');
@@ -166,6 +169,7 @@ test.describe('Sugestões para um voo cancelado', () => {
     await voo.locator('.st-sel').selectOption('Cancelado');
     await page.locator('#dlg-status').getByLabel('Instrutor indisponível').check();
     await page.locator('#dlg-status').getByRole('button', { name: 'Confirmar' }).click();
+    await refazer(page);
     await expect(voo).toHaveClass(/\bst-Cancelado\b/);
 
     await voo.getByRole('button', { name: 'Sugestões' }).click();
@@ -177,6 +181,7 @@ test.describe('Sugestões para um voo cancelado', () => {
     await expect(primeira).not.toContainText(instrutor);
     await primeira.getByRole('button', { name: 'Aplicar' }).click();
     await expect(gaveta(page)).toBeHidden();
+    await refazer(page);
     await expect(voo.locator('.st-sel')).toHaveValue('Pendente');
     await expect(voo.locator('.c-instr')).not.toHaveText(instrutor);
     await expect(voo.locator('.fixo')).toHaveCount(1);
@@ -228,6 +233,7 @@ test.describe('Sugestões para um voo cancelado', () => {
     await voo.locator('.st-sel').selectOption('Cancelado');
     await page.locator('#dlg-status').getByLabel('Instrutor indisponível').check();
     await page.locator('#dlg-status').getByRole('button', { name: 'Confirmar' }).click();
+    await refazer(page);
     const outro = (await linha(page, 'Aluno 1000').innerText()).replace(/\s+/g, ' ');
     await voo.getByRole('button', { name: 'Sugestões' }).click();
     await expect(gaveta(page)).not.toContainText('sem mexer nos outros voos');
@@ -240,6 +246,7 @@ test.describe('Sugestões para um voo cancelado', () => {
     expect((await linha(page, 'Aluno 1000').innerText()).replace(/\s+/g, ' ')).toBe(outro);
     await botao.click();
     await expect(gaveta(page)).toBeHidden();
+    await refazer(page);
     await expect(voo.locator('.st-sel')).toHaveValue('Pendente');
   });
 
@@ -250,6 +257,7 @@ test.describe('Sugestões para um voo cancelado', () => {
     await voo.locator('.st-sel').selectOption('Cancelado');
     await page.locator('#dlg-status').getByLabel('Aluno ausente').check();
     await page.locator('#dlg-status').getByRole('button', { name: 'Confirmar' }).click();
+    await refazer(page);
     await expect(voo).toHaveClass(/\bst-Cancelado\b/);
     await expect(voo.getByRole('button', { name: 'Sugestões' })).toHaveCount(0);
   });
@@ -261,6 +269,7 @@ test.describe('Sugestões para um voo cancelado', () => {
     await voo.locator('.st-sel').selectOption('Cancelado');
     await page.locator('#dlg-status').getByLabel('Instrutor indisponível').check();
     await page.locator('#dlg-status').getByRole('button', { name: 'Confirmar' }).click();
+    await refazer(page);
     await voo.getByRole('button', { name: 'Sugestões' }).click();
     await expect(gaveta(page)).toContainText('Impossível nesta data.');
     await expect(gaveta(page).locator('.impossivel li')).toHaveCount(3);
@@ -279,6 +288,7 @@ test('o pedido recusado pelo instrutor escolhido: "Sugestões" na linha da recus
   await expect(primeira).toContainText('Com Instrutor 02');
   await primeira.getByRole('button', { name: 'Aplicar' }).click();
   await expect(gaveta(page)).toBeHidden();
+  await refazer(page);
   await expect(linha(page, 'Aluno 1000').locator('.c-instr')).toContainText('Instrutor 02');
   await abrirHistorico(page);
   await page.locator('#audit-log-list [data-act="rev-log"]').first().click();
@@ -356,6 +366,7 @@ test.describe('Sugestões do voo cancelado: o mapa, a confirmação, o resultado
     await expect(voo.locator('.st-sel')).toHaveValue('Cancelado');
     await botao.click();
     await expect(gaveta(page)).toBeHidden();
+    await refazer(page);
     await expect(voo.locator('.st-sel')).toHaveValue('Pendente');
     await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('acpm4_dia_2026-11-11')).pedidos[1000].jan)).not.toBe('h610');
   });
@@ -373,29 +384,29 @@ test.describe('Sugestões do voo cancelado: o mapa, a confirmação, o resultado
     await expect(voo.locator('.st-sel')).toHaveValue('Cancelado');
   });
 
-  test('no mapa, o popup do voo cancelado tem "Sugestões", que abre a gaveta', async ({ page }) => {
+  test('no mapa, o editor do voo cancelado tem "Sugestões", que fecha o editor e abre a gaveta', async ({ page }) => {
     await abrir(page, { estado: canceladoSoAs1010() });
     await abrirEscala(page, { vista: 'eq' });
     await page.locator('#out .tl-bar.tl-st-Cancelado').click();
-    await expect(page.locator('#tl-pop')).toBeVisible();
-    await page.locator('#tl-pop').getByRole('button', { name: 'Sugestões' }).click();
+    await expect(page.locator('#dlg-voo')).toBeVisible();
+    await page.locator('#dlg-voo').getByRole('button', { name: 'Sugestões' }).click();
     await expect(gaveta(page)).toBeVisible();
     await expect(gaveta(page).locator('h2')).toContainText('Aproveitar o voo cancelado');
     await expect(gaveta(page)).toContainText('Cancelado: Meteorologia.');
   });
 
-  // O popup é a camada de baixo: aberta a gaveta, ele fecha, e o Esc fecha a gaveta e volta para a barra do voo
-  test('pelo teclado, do popup do mapa: a gaveta abre no lugar do popup, e o Esc a fecha e volta para a barra', async ({ page }) => {
+  // Aberta a gaveta, o editor do voo fecha, e o Esc fecha a gaveta e volta para a barra do voo
+  test('pelo teclado, do editor do voo: a gaveta abre no lugar do editor, e o Esc a fecha e volta para a barra', async ({ page }) => {
     await abrir(page, { estado: canceladoSoAs1010() });
     await abrirEscala(page, { vista: 'eq' });
     const barra = page.locator('#out .tl-bar.tl-st-Cancelado');
     await barra.focus();
     await page.keyboard.press('Enter');
-    await expect(page.locator('#tl-pop')).toBeVisible();
-    await page.locator('#tl-pop').getByRole('button', { name: 'Sugestões' }).focus();
+    await expect(page.locator('#dlg-voo')).toBeVisible();
+    await page.locator('#dlg-voo').getByRole('button', { name: 'Sugestões' }).focus();
     await page.keyboard.press('Enter');
     await expect(gaveta(page)).toBeVisible();
-    await expect(page.locator('#tl-pop')).toBeHidden();
+    await expect(page.locator('#dlg-voo')).toBeHidden();
     await page.keyboard.press('Escape');
     await expect(gaveta(page)).toBeHidden();
     await expect(barra).toBeFocused();
@@ -415,6 +426,10 @@ test.describe('Sugestões do voo cancelado: o mapa, a confirmação, o resultado
     await expect(gaveta(page).locator('[data-reparo-aplicar]').first()).toBeFocused();
     await page.keyboard.press('Enter');
     await expect(gaveta(page)).toBeHidden();
+    // A escala não está aprovada: a pergunta, com o foco em "Cancelar"; Tab até "Salvar e refazer" e Enter
+    await expect(page.locator('#refazer-cancelar')).toBeFocused();
+    await page.keyboard.press('Tab');
+    await page.keyboard.press('Enter');
     await expect(voo.locator('.st-sel')).toHaveValue('Pendente');
     await expect(voo.locator('.st-sel')).toBeFocused();
   });
@@ -438,8 +453,8 @@ test.describe('Sugestões do voo cancelado: o mapa, a confirmação, o resultado
     await expect(voo.getByRole('button', { name: 'Sugestões' })).toHaveCount(0);
     await abrirEscala(page, { vista: 'eq' });
     await page.locator('#out .tl-bar.tl-st-Cancelado').click();
-    await expect(page.locator('#tl-pop')).toBeVisible();
-    await expect(page.locator('#tl-pop').getByRole('button', { name: 'Sugestões' })).toHaveCount(0);
+    await expect(page.locator('#dlg-voo')).toBeVisible();
+    await expect(page.locator('#dlg-voo').getByRole('button', { name: 'Sugestões' })).toHaveCount(0);
   });
 
   test('no Gestor, o voo cancelado e a recusa do instrutor escolhido ficam sem "Sugestões", e a gaveta não abre', async ({ page }) => {

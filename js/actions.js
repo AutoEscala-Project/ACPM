@@ -3,6 +3,8 @@ import { escreverDataNoEndereco } from './endereco.js';
 import { somarDias, fimDoMes, LIMITE_DO_NOME } from './format.js';
 import { aplicarSomenteLeitura } from './somente-leitura.js';
 import { runAllocationEngine } from './engine.js';
+import { escalaDaAlteracao } from './edicao-do-voo.js';
+import { normalizarEscalaGravada } from './escala-gravada.js';
 import { ligada } from './funcionalidades.js';
 import { ApiClient } from './storage.js';
 import { S, RES, AUDIT_LOG, BI_HISTORY, DATA, setS, setRES, setAuditLog, setBIHistory, setData, isGestor, dadoIndisponivel, modoCompartilhado, estadoDaEscala, comOsMotivosDaTela } from './state.js';
@@ -147,9 +149,10 @@ let gravacaoAtual = Promise.resolve(true);
 // A ordem: a escala é refeita com os dados da tela (sem desenhar), gravada, e só então redesenhada. salvarDia copia os dados
 // antes de esperar o servidor (js/storage.js), e um desenho que falha (js/redesenho.js, semFalhar) não impede a gravação
 // nem a entrada do histórico que vem depois dela
-function save() {
+// resultado: a escala que a alteração deixou sem o motor (a escala aprovada, gravarAlteracao); sem ela, a escala refeita
+function save(resultado = null) {
   if (isGestor() || !dadosLidos) return Promise.resolve(false);
-  setRES(escalaCalculada());
+  setRES(resultado || escalaCalculada());
   syncBIHistoryForCurrentDate();
   gravacaoAtual = ApiClient.salvarDia(DATA, S, RES);
   // Neste navegador (sem servidor), a gravação só falha quando o armazenamento recusa (o espaço pode ter acabado)
@@ -175,13 +178,44 @@ function save() {
 // mesmo evento (a entrada do histórico espera pela gravação que leva a alteração). É o único jeito de os eventos da
 // tela mudarem os dados. Sem descrição, só grava (as janelas de um instrutor, por exemplo, não entram no histórico); com
 // uma lista, registra uma entrada por item (a importação da Agenda, um aluno por entrada). Quem só consulta não grava, e
-// nada é gravado antes de a escala abrir
-export function gravarAlteracao(tipo, descricao, reverter = null, reverte = null) {
-  if (isGestor() || aindaNaoAbriu()) return;
-  save();
+// nada é gravado antes de a escala abrir. Responde se gravou.
+// { resultado }: a alteração de um voo na escala aprovada, sem o motor (F1g): a escala que ela deixou é gravada como
+// está. Só vale na data aprovada, para a escala da data aberta e no formato da escala gravada (normalizarEscalaGravada);
+// fora disso nada é gravado, S volta como estava (foto: o dia antes da alteração, fotoDaEscalaTravada) e a escala da tela
+// também
+export function gravarAlteracao(tipo, descricao, reverter = null, reverte = null, { resultado = null, foto = null } = {}) {
+  if (isGestor() || aindaNaoAbriu()) return false;
+  if (resultado) {
+    const escala = S.aprovacao && resultado.data === DATA ? normalizarEscalaGravada(resultado) : null;
+    if (!escala) {
+      if (foto) setS(foto.S);
+      showToast('A alteração não pôde ser gravada; recarregue a página.');
+      redesenhar('escala');
+      return false;
+    }
+    save(escala);
+  } else save();
   for (const texto of Array.isArray(descricao) ? descricao : [descricao]) {
     if (texto) logChange(tipo, texto, reverter, reverte);
   }
+  return true;
+}
+
+// A escala aprovada não é refeita por uma alteração de voo feita na Escala (o editor, o instrutor, o status, o "✕", as
+// Sugestões, o agendamento e as reversões deles): antes de mudar S, a foto do dia (para voltar se a gravação for
+// recusada), o estado que fez a escala da tela (para ligar as recusas aos pedidos) e a data. Fora da escala aprovada, null
+export function fotoDaEscalaTravada() {
+  if (!S.aprovacao || !RES) return null;
+  return { S: structuredClone(S), estado: structuredClone(estadoDaEscala()), data: DATA };
+}
+
+// Grava uma alteração de voo feita na Escala. Com a foto (a escala aprovada), sem o motor: a escala da tela conferida de
+// novo (js/edicao-do-voo.js); o pedido que entra no dia (sem pino, linha nem recusa) pede o motor, em volta dos voos
+// fixos (R5). Sem a foto, como as outras alterações (o motor refaz a escala). recusas: as que a reversão devolve
+export function gravarNaEscala(foto, tipo, descricao, reverter = null, reverte = null, { recusas = [] } = {}) {
+  if (!foto) return gravarAlteracao(tipo, descricao, reverter, reverte);
+  const { resultado, motor } = escalaDaAlteracao(estadoDaEscala(), { ...RES, data: foto.data }, { aprovada: true, antes: foto.estado, recusas, motor: () => null });
+  return gravarAlteracao(tipo, descricao, reverter, reverte, motor ? {} : { resultado, foto });
 }
 
 // Escala só calculada (data aberta ainda sem escala gravada): é gravada na primeira alteração ou quando é exportada

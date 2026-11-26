@@ -2,7 +2,7 @@
 // seguinte, a volta de BH às 07:30 entra sozinha na escala, com o instrutor, o aluno e o avião livres só às 10:10, e o
 // repouso antes dela é um aviso. No programa do curso, o Noturno pode vir em trechos (a ida, a noite e a volta): é um voo
 // só, oferecido pela noite
-import { test, comProgresso, expect, abrir, irPara, abrirEscala, prepararContexto, vigiarErros, AMANHA, entrar, campoDaAgenda, diaSeguinte, rotuloDaData } from './fixtures.js';
+import { test, comProgresso, expect, abrir, irPara, abrirEscala, prepararContexto, vigiarErros, AMANHA, entrar, campoDaAgenda, diaSeguinte, rotuloDaData, refazer } from './fixtures.js';
 import { criarSupabaseFalso, documentosAtuais, CONTAS } from './supabase-falso.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
 import { cursosIniciais, gravarCurso } from '../../js/programa.js';
@@ -41,6 +41,7 @@ test.describe('Noturno de dois dias', () => {
     await expect(noturno.locator('.c-missao')).toContainText('translado + 3 h em BH · volta amanhã às 07:30');
     // Uma alteração grava a escala do dia (o dia seguinte lê a escala gravada)
     await noturno.locator('select[data-f="fstatus"]').selectOption('Pendente');
+    await refazer(page);
 
     await diaSeguinte(page);
     await expect(rotuloDaData(page)).toContainText('12/11');
