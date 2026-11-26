@@ -1,9 +1,12 @@
 // Agenda de Solicitações no modo compartilhado: a Secretaria registra pedidos (a escala ela só consulta), o
 // Operador usa a exceção da coordenação e o Gestor só consulta. O servidor falso aplica o mesmo prazo do banco.
-import { test, expect, entrar, preencherLogin, irPara, abrirMenuDaConta, AMANHA, URL_APP, botaoDaAba, campoDaAgenda, dataAberta, diaSeguinte, escolherNoCalendario, registrarPedido, contagemDoDia, prepararContexto, vigiarErros, importarDaAgenda, rotuloDaData, rotulosDasAbas } from './fixtures.js';
+import { test, expect, entrar, preencherLogin, irPara, abrirMenuDaConta, AMANHA, URL_APP, botaoDaAba, campoDaAgenda, dataAberta, diaSeguinte, escolherNoCalendario, registrarPedido, contagemDoDia, prepararContexto, vigiarErros, importarDaAgenda, rotuloDaData, rotulosDasAbas,
+  missaoDoCursoNaAgenda } from './fixtures.js';
 import { instalarSupabaseFalso, documentosAtuais, CONTAS } from './supabase-falso.js';
 import { estadoSintetico } from '../helpers/estado.js';
 import { aluno } from '../helpers/montar.js';
+import { cursosIniciais, novoCurso } from '../../js/programa.js';
+import { MODELOS } from '../../js/modelos-de-curso.js';
 
 const comAlunos = () => documentosAtuais({ ...estadoSintetico(), stu: [aluno(1000), aluno(1001)] }, AMANHA);
 const pedidoDe = (id, data, extra = {}) => ({
@@ -147,8 +150,9 @@ test.describe('Agenda de Solicitações (modo compartilhado)', () => {
     await expect(page.locator('#agenda-lista tbody tr')).toHaveCount(1);
   });
 
-  // As duas conferências do formulário são da data do pedido, lida uma vez quando o campo muda
-  test('a data do pedido que não é a aberta: os pedidos dela são lidos uma vez; sem eles, quem recusa o 7º voo local é o servidor', async ({ browser }) => {
+  // As duas conferências do formulário são da data do pedido, lida uma vez quando o campo muda. Sem os pedidos dela, o
+  // servidor recusa o 7º voo local (PT422), e o formulário diz o mesmo aviso, armado
+  test('a data do pedido que não é a aberta: os pedidos dela são lidos uma vez; sem eles, o 7º voo local é avisado pela recusa do servidor', async ({ browser }) => {
     const context = await browser.newContext();
     await prepararContexto(context);
     const page = await context.newPage();
@@ -169,23 +173,39 @@ test.describe('Agenda de Solicitações (modo compartilhado)', () => {
     await irPara(page, 'age');
     await campoDaAgenda(page, 'data').selectOption('2026-11-13');
     await registrarPedido(page, { horario: '08:20' });
-    await expect(campoDaAgenda(page, 'erro')).toContainText('Horário indisponível: já há 6 voos locais');
+    await expect(campoDaAgenda(page, 'erro')).toContainText('Horário cheio: já há 6 voos locais');
     expect(leituras).toBe(1);
     expect(servidor.solicitacoes).toHaveLength(6);
-    // A leitura falha: as conferências não são feitas, e o servidor recusa
+    // A leitura falha: as conferências não são feitas, o servidor recusa, e o aviso é o mesmo; confirmado, o 7º fica registrado
     falhar = true;
     await campoDaAgenda(page, 'data').selectOption('2026-11-12');
     await campoDaAgenda(page, 'data').selectOption('2026-11-13');
-    await registrarPedido(page, { aluno: 'Aluno 1001', horario: '08:20' });
-    await expect(campoDaAgenda(page, 'erro')).toContainText('Horário indisponível: já há 6 voos locais');
+    await registrarPedido(page, { aluno: 'Aluno 1000', horario: '08:20' });
+    await expect(campoDaAgenda(page, 'erro')).toHaveText('Horário cheio: já há 6 voos locais (Voo Local, Voo Solo e TGL) às 08:20, o máximo no mesmo horário (determinação da diretoria). Próximo horário com vaga: 10:10. Para registrar este como o 7º, clique em “Registrar mesmo assim”.');
     expect(servidor.solicitacoes).toHaveLength(6);
-    // Registrado, só duas leituras: os pedidos da data dele e os de cada dia do calendário
     falhar = false;
-    await registrarPedido(page, { horario: '10:10' });
+    await page.locator('#form-agenda [type="submit"]').click();
     await expect(page.locator('#toast-box')).toContainText('Pedido registrado para sex 13/11.');
+    expect(servidor.solicitacoes.map(s => [s.aluno, s.limite_confirmado_por])).toContainEqual([1000, 'Operador de Teste']);
+    // Registrado, só duas leituras: os pedidos da data dele e os de cada dia do calendário
     await expect(contagemDoDia(page, '2026-11-13')).toHaveText('7');
     expect(erros).toEqual([]);
     await context.close();
+  });
+
+  // A Secretaria lê os programas dos cursos: o aluno de um curso tem as missões dele, e o pedido leva a missão do curso
+  test('a Secretaria vê as missões do curso do aluno e registra a missão do curso', async ({ page, context }) => {
+    let n = 0;
+    const uuid = () => `00000000-0000-4000-8000-${String(++n).padStart(12, '0')}`;
+    const pp = { ...novoCurso([], { sigla: 'PP', nome: 'Piloto Privado', modelo: MODELOS['pp-acpm'] }, uuid).curso, versao: 1 };
+    const docs = documentosAtuais({ ...estadoSintetico(), stu: [aluno(1000, {}, { nm: 'Maria', curso: 'PP' }), aluno(1001)] }, AMANHA);
+    const servidor = await instalarSupabaseFalso(context, { ...docs, cursos: cursosIniciais().map(c => (c.sigla === 'PP' ? pp : c)) });
+    await entrar(page, CONTAS.secretaria);
+    await campoDaAgenda(page, 'aluno').selectOption({ label: 'Maria' });
+    await expect(missaoDoCursoNaAgenda(page, 'NAV-150NM')).toHaveText('NAV-150NM · Navegação · C152 · 3 h');
+    await registrarPedido(page, { aluno: 'Maria', codigo: 'NAV-150NM', horario: '10:10' });
+    await expect(page.locator('#agenda-lista tbody tr').first()).toContainText('NAV-150NM · C152');
+    expect(servidor.solicitacoes.map(s => [s.missao, s.recurso, s.horas, s.missao_do_curso])).toEqual([['Navegação', 'C152', 3, pp.missoes.find(m => m.codigo === 'NAV-150NM').id]]);
   });
 
   // Outra pessoa registra para a data do campo, que não é a aberta: abrir a Agenda de novo lê os pedidos dela

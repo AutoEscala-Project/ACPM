@@ -166,3 +166,74 @@ describe('A data do pedido (datasParaRegistrar)', () => {
     assert.equal(datasParaRegistrar('2026-11-14', '2026-11-16', { excecao: true, agora: em('2026-11-14T10:30:00-03:00') }).padrao, '2026-11-17');
   });
 });
+
+// As missões que a Agenda oferece para o aluno (N8): as do programa do curso dele, por fase, na ordem do programa, sem as
+// retiradas e as dispensadas, o Noturno pela noite; sem curso (ou com o curso encerrado, fora dos programas, sem missões,
+// ou sem os programas lidos), os tipos de missão, com a frase que diz por quê. O programa é o lido (S.programa), não o da
+// próxima missão: a lista é a mesma com o progresso ligado ou desligado, e nada de ordem, aprovação ou "já voada" conta
+describe('Agenda: as missões do curso do aluno (missoesDoAluno)', async () => {
+  const { missoesDoAluno } = await import('../../js/agenda.js');
+  const { novoCurso, retirarMissao, retirarFase, mudarCurso, incluirFase } = await import('../../js/programa.js');
+  const { MODELOS } = await import('../../js/modelos-de-curso.js');
+  const { ligarFuncionalidades } = await import('../helpers/funcionalidades.js');
+  const gerarId = (sigla, codigo) => `${sigla}:${codigo}`;
+  const cursoPP = () => novoCurso([], { sigla: 'PP', nome: 'Piloto Privado', modelo: MODELOS['pp-acpm'] }, gerarId).curso;
+  const maria = { id: 1000, nm: 'Maria', curso: 'PP' };
+  const textos = r => r.grupos.map(g => [g.fase, g.missoes.map(m => m.texto)]);
+
+  it('um grupo por fase, na ordem do programa, com "NAV-150NM · Navegação · C152 · 3 h"; sem a dispensada; o Noturno pela noite', () => {
+    const r = missoesDoAluno(maria, [cursoPP()]);
+    assert.equal(r.motivo, null);
+    assert.deepEqual(r.grupos.map(g => g.fase), ['Fase 1 – Introdução ao Voo', 'Fase 2 – O Controle da Aeronave', 'Fase 3 – A Coordenação de Atitude e Potência',
+      'Fase 4 – Treinamento de Manobras e Aproximações', 'Fase 5 – Procedimentos Avançados e de Emergência', 'Fase 7 – Treinamento de Voo Solo',
+      'Fase 8 – Procedimentos de Navegação Solo', 'Fase 6 – Treinamento de Voo Noturno', 'Fase 9 – Avaliação para Voo de Cheque']);
+    assert.deepEqual(textos(r)[0], ['Fase 1 – Introdução ao Voo', ['IN-01 · Voo Local · C152 · 1 h', 'IN-02 · Voo Local · C152 · 1 h']]);
+    assert.deepEqual(textos(r)[4][1].slice(0, 3), ['NAV-01 · Navegação · C152 · 1,5 h', 'NAV-02 · Navegação · C152 · 1,5 h', 'NAV-150NM · Navegação · C152 · 3 h']);
+    const fase7 = r.grupos[5].missoes.map(m => m.codigo);
+    assert.equal(fase7.includes('ADAPT-C152'), false, 'a dispensada não é oferecida');
+    assert.deepEqual(fase7.slice(0, 3), ['END-SOLO', 'AVP-SOLO-01', 'SOLO-01']);
+    // O Noturno de dois dias é um voo só: a noite, com os translados, e as 4 h do dia
+    assert.deepEqual(textos(r)[7], ['Fase 6 – Treinamento de Voo Noturno', ['NOT (com TSL-01 e TSL-02) · Noturno · C172 · 4 h']]);
+    const nav = r.grupos[4].missoes[2];
+    assert.deepEqual({ id: nav.id, codigo: nav.codigo, mis: nav.mis, eq: nav.eq, nb: nav.nb }, { id: 'PP:NAV-150NM', codigo: 'NAV-150NM', mis: 'Navegação', eq: 'C152', nb: 3 });
+    assert.equal(r.grupos.flatMap(g => g.missoes).length, 47 - 1 - 2, 'as 47 missões, sem a dispensada e sem os dois translados');
+  });
+
+  it('a missão e a fase retiradas do programa saem; a fase que fica sem missão também', () => {
+    let curso = cursoPP();
+    curso = retirarMissao(curso, 'PP:IN-02');
+    curso = retirarMissao(curso, 'PP:AVX-CQ');
+    curso = retirarFase(curso, 'PP:F9');
+    const r = missoesDoAluno(maria, [curso]);
+    assert.deepEqual(textos(r)[0][1], ['IN-01 · Voo Local · C152 · 1 h']);
+    assert.equal(r.grupos.some(g => g.fase.startsWith('Fase 9')), false);
+    // Uma fase nova, vazia, não vira um grupo
+    const comVazia = incluirFase(cursoPP(), () => '00000000-0000-4000-8000-000000000001').curso;
+    assert.equal(missoesDoAluno(maria, [comVazia]).grupos.length, 9);
+  });
+
+  it('sem curso, com o curso encerrado, fora dos programas, sem missões ou sem os programas lidos: os tipos de missão, com o motivo', () => {
+    const vazio = novoCurso([], { sigla: 'PC', nome: 'Piloto Comercial' }).curso;
+    const casos = [
+      [{ id: 1, nm: 'Ana' }, [cursoPP()], 'Aluno sem curso: escolha o tipo da missão.'],
+      [maria, [mudarCurso(cursoPP(), 'ativo', false)], 'O curso PP está encerrado: escolha o tipo da missão.'],
+      [maria, [vazio], 'O curso PP não está nos programas dos cursos: escolha o tipo da missão.'],
+      [{ ...maria, curso: 'PC' }, [cursoPP(), vazio], 'O curso PC não tem missões no programa: escolha o tipo da missão.'],
+      [maria, null, 'Os programas dos cursos não foram lidos: escolha o tipo da missão.']
+    ];
+    for (const [aluno, programa, motivo] of casos) assert.deepEqual(missoesDoAluno(aluno, programa), { curso: null, grupos: [], motivo }, motivo);
+  });
+
+  it('a lista é a mesma com o progresso ligado e desligado (o programa lido, sem a ordem nem os resultados)', () => {
+    const programa = [cursoPP()];
+    try {
+      ligarFuncionalidades('progresso');
+      const ligado = missoesDoAluno(maria, programa);
+      ligarFuncionalidades('');
+      assert.deepEqual(missoesDoAluno(maria, programa), ligado);
+      assert.equal(ligado.grupos.length, 9);
+    } finally {
+      ligarFuncionalidades(undefined);
+    }
+  });
+});

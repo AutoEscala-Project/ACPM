@@ -1,9 +1,11 @@
 // Agenda de solicitações da secretaria: a regra do prazo (a mesma do servidor, no horário de São Paulo), as datas em que um
-// pedido pode ser registrado, o limite de voos locais e o pedido da demanda que cada solicitação vira ao ser importada (a importação: js/processamento.js).
+// pedido pode ser registrado, as missões que o pedido do aluno pode ter (as do curso dele), as regras do registro, o limite
+// de voos locais e o pedido da demanda que cada solicitação vira ao ser importada (a importação: js/processamento.js).
 import { MIS, MISSOES_LOCAIS, LIMITE_DE_VOOS_LOCAIS, T, NI, GROUND_DURATION_H, DURACAO_MAXIMA_H } from './config.js';
-import { disponibilidadeAtual, disponibilidadeDoAluno, normalizeMissionFields, duracaoPadraoDaMissao } from './rules.js';
+import { disponibilidadeAtual, disponibilidadeDoAluno, normalizeMissionFields, duracaoPadraoDaMissao, duracaoFixaDaMissao } from './rules.js';
 import { horariosDaMissao, preferenciasPadrao, paraMinuto, HORARIO_DO_SOLO } from './horarios.js';
-import { hm, somarDias } from './format.js';
+import { percursoDoCurso, noturnosDoCurso, rotuloDaMissao } from './programa.js';
+import { hm, fmtH, somarDias } from './format.js';
 
 export const FUSO_DO_AEROCLUBE = 'America/Sao_Paulo';
 
@@ -66,6 +68,35 @@ export function disponibilidadeDaSolicitacao({ janela, horario }) {
 export const RECURSO_DO_PEDIDO = /^[A-Za-z0-9]([A-Za-z0-9 .-]{0,28}[A-Za-z0-9])?$/;
 export const recursosDaMissao = missao => (Object.hasOwn(MIS, missao) ? MIS[missao].eq : []);
 export const recursoValido = ({ missao, recurso }) => (recursosDaMissao(missao).includes(recurso) ? recurso : null);
+
+// As missões que o pedido do aluno pode ter (N8): as do programa do curso dele (programa: os cursos lidos, S.programa;
+// null, quando não foram lidos), uma lista por fase, na ordem do programa: as que estão nele e não são dispensadas, e o
+// Noturno de dois dias pela noite (os translados voam com ela). Nada da próxima missão conta (a ordem, a aprovação, o "já
+// voada"): uma missão voada continua na lista, e o progresso desligado não muda nada. Cada missão: o id, o código, o
+// tipo, o recurso, as horas (as fixas do tipo, no Ground e no Noturno) e o texto, "NAV-150NM · Navegação · C152 · 3 h".
+// Sem curso, com o curso encerrado, fora dos programas ou sem missões, e sem os programas lidos, nenhuma (grupos vazio):
+// o campo oferece os tipos de missão, e motivo diz por quê
+export function missoesDoAluno(aluno, programa) {
+  const tipos = motivo => ({ curso: null, grupos: [], motivo: `${motivo}: escolha o tipo da missão.` });
+  const sigla = aluno && aluno.curso;
+  if (!sigla) return tipos('Aluno sem curso');
+  if (!Array.isArray(programa)) return tipos('Os programas dos cursos não foram lidos');
+  const curso = programa.find(c => c.sigla === sigla);
+  if (!curso) return tipos(`O curso ${sigla} não está nos programas dos cursos`);
+  if (curso.ativo === false) return tipos(`O curso ${sigla} está encerrado`);
+  const { fases, porFase } = percursoDoCurso(curso);
+  const doNoturno = noturnosDoCurso(curso);
+  const oferecida = m => !m.dispensada && (!doNoturno.has(m.id) || doNoturno.get(m.id).noite.id === m.id);
+  const grupos = fases.map(f => ({
+    fase: f.nome,
+    missoes: porFase.get(f.id).filter(oferecida).map(m => {
+      const nb = duracaoFixaDaMissao(m.mis) || m.nb;
+      return { id: m.id, codigo: m.codigo, mis: m.mis, eq: m.eq, nb, texto: `${rotuloDaMissao(curso, m)} · ${m.mis} · ${m.eq} · ${fmtH(nb)}` };
+    })
+  })).filter(g => g.missoes.length);
+  if (!grupos.length) return tipos(`O curso ${sigla} não tem missões no programa`);
+  return { curso, grupos, motivo: null };
+}
 
 // As regras do pedido na função de 13 argumentos (a migração missao_do_curso_e_limite_do_pedido), depois de quem pode, do
 // horário específico e da duração, e antes do limite de voos locais e do prazo. As três cópias delas (o modo local, o
