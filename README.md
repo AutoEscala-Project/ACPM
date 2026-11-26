@@ -269,8 +269,10 @@ número): o primeiro acesso de um Operador ou Administrador regrava os dias e o 
 No formato 27, os instrutores podem ter duas habilitações novas do registro, `endosso_solo` (Endosso Solo) e
 `navegacao_150` (Voo de Navegação ≥ 150 NM), que a aba do formato 26 tiraria como desconhecidas ao gravar o cadastro.
 Nada é convertido: ninguém as recebe (são marcadas em Instrutores › "Editar habilitações"), e nenhum tipo de missão as
-exige; só uma missão do curso que as peça (Cursos). Só o app muda: o primeiro acesso de um Operador ou Administrador
-regrava os dias e o cadastro no 27.
+exige; só uma missão do curso que as peça (Cursos). O número também protege, no dia, a confirmação do 7º voo local do
+horário no pedido (`pedidos[].limiteConfirmado`, só `true`, vinda do pedido da agenda confirmado com "Registrar mesmo
+assim"): com ela, o motor deixa esse voo passar do limite no minuto exato do pedido, sem tomar a vaga dos outros seis. Só
+o app muda: o primeiro acesso de um Operador ou Administrador regrava os dias e o cadastro no 27.
 
 ## Estrutura
 

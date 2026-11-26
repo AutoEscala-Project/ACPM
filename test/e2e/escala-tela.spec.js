@@ -1,5 +1,5 @@
 // Tela da Escala: Lista, Por recurso ou Por instrutor; resumo com erros e avisos agrupados; uma linha por voo.
-import { test, expect, abrir, abrirComExemplo, abrirEscala, irPara, irParaVista, lerEscala, alternarDisponivel, alvosPequenos, larguraDaPagina, appPronto, AMANHA, prepararContexto, vigiarErros, entrar } from './fixtures.js';
+import { test, expect, abrir, abrirComExemplo, abrirEscala, irPara, irParaVista, lerEscala, alternarDisponivel, alvosPequenos, larguraDaPagina, appPronto, AMANHA, prepararContexto, vigiarErros, entrar, importarDaAgenda, abrirCaixa } from './fixtures.js';
 import { criarSupabaseFalso, documentosAtuais, CONTAS } from './supabase-falso.js';
 import { IDS } from '../helpers/casos-do-programa.js';
 import { cursosIniciais, gravarCurso } from '../../js/programa.js';
@@ -887,5 +887,47 @@ test.describe('O que a missão do curso exige do INVA, na Escala', () => {
     expect((await lerEscala(page)).linhas.filter(l => l.includes('Aluno 1000'))).toHaveLength(1);
     expect(erros).toEqual([]);
     await contexto.close();
+  });
+});
+
+// Q8 (F1d, "limite confirmado"): o 7º voo local do horário confirmado na Agenda ("Registrar mesmo assim") entra na demanda
+// com a confirmação e voa no horário dele, sem tomar a vaga dos seis; a Escala avisa nele, com o texto do agendado
+test.describe('O 7º voo local confirmado, na Escala', () => {
+  const pedido = (id, extra = {}) => ({
+    id, data: AMANHA, aluno: 2000 + id, aluno_nome: `Aluno ${2000 + id}`, missao: 'Voo Local', janela: 'horario', horario: '08:20', horas: 1, recurso: 'C152',
+    observacao: null, registrado_por: 'Maria', registrado_em: '2026-11-10T14:00:00.000Z', conta: null, excecao: false, cancelada_em: null, cancelada_por: null,
+    missao_do_curso: null, limite_confirmado_por: null, limite_confirmado_em: null, ...extra
+  });
+
+  test('os sete voam às 08:20, e o confirmado tem o aviso do limite', async ({ page }) => {
+    const estado = cenario({
+      ins: Array.from({ length: 8 }, (_, i) => instrutor(i + 1, 9)),
+      stu: Array.from({ length: 7 }, (_, i) => aluno(2001 + i, { fly: false }))
+    });
+    const agenda = [...Array.from({ length: 6 }, (_, i) => pedido(i + 1)),
+      pedido(7, { limite_confirmado_por: 'Maria', limite_confirmado_em: '2026-11-10T14:05:00.000Z', registrado_em: '2026-11-10T14:05:00.000Z' })];
+    const { documentos: { cadastro }, dias } = documentosAtuais(estado, AMANHA);
+    await page.addInitScript(json => {
+      if (localStorage.getItem('acpm4_cadastro')) return;
+      for (const [chave, valor] of Object.entries(JSON.parse(json))) localStorage.setItem(chave, JSON.stringify(valor));
+    }, JSON.stringify({ acpm4_cadastro: cadastro, [`acpm4_dia_${AMANHA}`]: dias[AMANHA], acpm4_agenda: agenda }));
+    await page.goto('./');
+    await appPronto(page);
+    await irPara(page, 'dem');
+    await importarDaAgenda(page);
+    await expect(page.locator('#toast-box')).toContainText('7');
+    await abrirEscala(page, { vista: 'lista' });
+    const linhas = (await lerEscala(page)).linhas.filter(l => /Aluno 20\d\d/.test(l));
+    expect(linhas).toHaveLength(7);
+    expect(linhas.every(l => l.includes('08:20'))).toBe(true);
+    await expect(page.locator('#out')).not.toContainText('Rejeitado');
+    const avisos = await abrirCaixa(page, 'avisos');
+    await expect(avisos.locator('li', { hasText: 'voo local' })).toHaveText(['Aluno 2007 Agendado às 08:20 como o 7º voo local do horário: no máximo 6 voos locais saem no mesmo horário.']);
+    // A linha do confirmado tem a marca "fora da regra"; as outras, não
+    await expect(page.locator('#out tr', { hasText: 'Aluno 2007' }).locator('[data-dica="fora-da-regra"]')).toHaveCount(1);
+    await expect(page.locator('#out [data-dica="fora-da-regra"]')).toHaveCount(1);
+    // O dia guarda a confirmação no pedido
+    const dia = await page.evaluate(d => JSON.parse(localStorage.getItem(`acpm4_dia_${d}`)), AMANHA);
+    expect(Object.entries(dia.pedidos).filter(([, p]) => p.limiteConfirmado).map(([id]) => id)).toEqual(['2007']);
   });
 });

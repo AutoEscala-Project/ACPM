@@ -10,7 +10,7 @@ import { chaveDoVoo } from './voo.js';
 // horários. "manha", "tarde" e "noite" valem por período (as janelas de operação de cada um); "h450" é um horário
 // exato (07:30, em minutos; "h5", dos dados antigos, é a janela 5). Sem disponibilidade, qualquer horário habilitado
 const PERIODOS = { manha: ['Manhã', PRE['Manhã']], tarde: ['Tarde', PRE['Tarde']], noite: ['Noite', PRE['Noturno']] };
-function minutoExato(jan) {
+export function minutoExato(jan) {
   const horario = /^h(\d{1,4})$/.exec(jan);
   const minuto = horario ? minutoDaPreferencia(+horario[1]) : -1;
   return minuto >= T[0] && minuto <= T[NI] ? minuto : null;
@@ -85,7 +85,7 @@ export const blank = () => ({ fly: false, mis: 'Voo Local', eq: 'C152', p1: T[1]
 // por "Limpar demanda" (js/fixos.js). Muda o pedido e o devolve
 export function deixarEmBranco(pedido) {
   Object.assign(pedido, blank());
-  for (const campo of ['jan', 'etapa', 'cursoDaEtapa', 'solicitacao', 'insId']) delete pedido[campo];
+  for (const campo of ['jan', 'etapa', 'cursoDaEtapa', 'solicitacao', 'insId', 'limiteConfirmado']) delete pedido[campo];
   return pedido;
 }
 
@@ -180,6 +180,8 @@ export function normalizeMissionFields(target) {
   if (Object.hasOwn(target, 'solicitacao') && !(Number.isInteger(target.solicitacao) && target.solicitacao > 0)) delete target.solicitacao;
   // O instrutor escolhido pelo operador para o pedido
   if (Object.hasOwn(target, 'insId') && !(Number.isInteger(target.insId) && target.insId > 0)) delete target.insId;
+  // O 7º voo local no horário confirmado na Agenda (formato 27): só true fica
+  if (Object.hasOwn(target, 'limiteConfirmado') && target.limiteConfirmado !== true) delete target.limiteConfirmado;
   const mRule = missionRule(target.mis) || MIS['Voo Local'];
   if (!mRule.eq.includes(target.eq)) target.eq = mRule.defEq;
   if (mRule.isGround) {
