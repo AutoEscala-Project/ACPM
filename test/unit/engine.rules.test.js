@@ -787,7 +787,7 @@ describe('O “Priorizar com” primeiro', () => {
     const tres = (voaCom, extra = {}) => alocar({ ins: [instrutor(1, 1), instrutor(2, 9)], stu: [aluno(1000, { pr: 1, jan: 'h500', p2: -1 }, { voaCom, ...extra }), aluno(1002, { pr: 5, jan: 'h500', p2: -1 })] });
     assert.deepEqual(tres([1]).out.map(o => [o.stuId, o.insId]), [[1000, 1], [1002, 2]]);
     // O INVA dele bloqueado pelo aluno não serve nem na primeira visita: a ordem de sempre, com outro INVA
-    assert.deepEqual(tres([1], { bl: [1] }).out.map(o => [o.stuId, o.insId]), [[1002, 1], [1000, 2]]);
+    assert.deepEqual(tres([1], { bl: [1] }).out.map(o => [o.stuId, o.insId]), [[1000, 2], [1002, 1]]);
   });
 
   it('Ground: o aluno com “Priorizar com” fica com a sala no horário dele antes de outro Ground de prioridade maior', () => {

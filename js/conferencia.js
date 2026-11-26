@@ -125,7 +125,8 @@ export function filaDosPedidos(state, ctx) {
    *     dia vale primeiro, e o pedido com um instrutor só é o que tem menos opções (os outros se encaixam em volta dele).
    * 3º: Maior prioridade (5 a 1).
    * 4º: Com a mesma prioridade, o do aluno com “Priorizar com” (o par permanente do cadastro) antes: ele tem menos
-   *     instrutores possíveis. O “Priorizar com” vale todos os dias, então não passa na frente da prioridade.
+   *     instrutores possíveis. Antes desta ordem, o motor visita primeiro os pedidos com “Priorizar com”, só com os
+   *     instrutores deles (N9, js/engine.js); a ordem da fila, a das recusas e a dos fixos não mudam.
    * 5º: A ordem dos agendamentos: o pedido da agenda que foi registrado antes (o id do
    *     pedido cresce com o registro) vem antes; o pedido posto à mão, sem a agenda, vem depois dos agendados.
    * 6º: Ordem de cadastro do aluno e ordem da missão.

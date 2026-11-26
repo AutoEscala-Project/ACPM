@@ -389,7 +389,9 @@ describe('Invariantes das escolhas do operador, em 300 cenários', () => {
     for (const o of out) {
       const d = pedidoDoVoo(estado, o);
       const saiu = d.insId === FORA_DO_CADASTRO;
-      assert.equal(avisos.some(a => a.stuId === o.stuId && a.insId === o.insId && a.m.includes(o.ins)), saiu, `${o.fKey}: aviso ${saiu ? 'faltando' : 'a mais'}`);
+      // O aviso é do voo pelo rótulo (o aluno, e a missão na extra): duas missões do aluno podem ficar com o mesmo INVA
+      const rotulo = o.mid ? `${o.s} (${o.mis})` : o.s;
+      assert.equal(avisos.some(a => a.s === rotulo && a.stuId === o.stuId && a.insId === o.insId && a.m.includes(o.ins)), saiu, `${o.fKey}: aviso ${saiu ? 'faltando' : 'a mais'}`);
     }
   }));
 

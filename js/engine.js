@@ -227,8 +227,9 @@ function motivoSemPar(doPar, stu, d, tipo, fc) {
 }
 
 // opcoes.compactar: false monta a escala sem a compactação; opcoes.dividirHoras: false, sem a divisão igual das horas;
-// opcoes.trocarMatriculas: false, sem a troca de matrículas para o instrutor ficar no mesmo avião (para comparar, medir
-// e testar)
+// opcoes.trocarMatriculas: false, sem a troca de matrículas para o instrutor ficar no mesmo avião; opcoes.priorizarComPrimeiro:
+// false, sem a primeira visita do “Priorizar com” e sem os avisos das disputas dele (o motor de antes do F1h, que gravou
+// test/fixtures/conferencia-do-motor.json) (para comparar, medir e testar)
 export function runAllocationEngine(state, opcoes = {}) {
   // O que a escala gasta enquanto é montada e o que o estado diz de fixo (js/conferencia.js)
   const ctx = contextoDaEscala(state);
@@ -244,8 +245,38 @@ export function runAllocationEngine(state, opcoes = {}) {
   // entram primeiro, no lugar deles, e o resto é encaixado em volta
   conferirFixos(state, ctx, act, out, al);
 
-  for (const item of act) {
+  // O “Priorizar com” primeiro (N9): a ordem da fila não muda, mas, dentro do Ground e depois dentro dos voos, os pedidos
+  // dos alunos com “Priorizar com” têm uma primeira visita, depois dos pedidos com o instrutor escolhido para o dia (o que
+  // o operador define vale mais) e antes de todos os outros: só com os instrutores deles, em todos os horários possíveis,
+  // com as duas tentativas de combustível, na ordem da fila (a prioridade, a agenda, o cadastro e a missão). O que entra
+  // fica; o que não entra não é recusado ali: volta no lugar de sempre, onde tenta de novo, e depois com qualquer
+  // instrutor, com o aviso. Sem “Priorizar com” no estado, a fila de sempre
+  const comEscolha = item => Boolean(item.ref.insId && ctx.noCadastro.has(item.ref.insId));
+  const comPar = item => (item.stu.voaCom || []).some(id => ctx.noCadastro.has(id));
+  const visitas = [true, false].flatMap(ehGround => {
+    const doGrupo = act.filter(item => isGroundMission(item.ref.mis) === ehGround);
+    return [
+      ...doGrupo.filter(comEscolha).map(item => ({ item, primeira: false })),
+      ...(opcoes.priorizarComPrimeiro === false ? [] : doGrupo.filter(item => !comEscolha(item) && comPar(item) && !chaveFixa(item)).map(item => ({ item, primeira: true }))),
+      ...doGrupo.filter(item => !comEscolha(item)).map(item => ({ item, primeira: false }))
+    ];
+  });
+  // O que entrou na primeira visita: os avisos dele (o peso que falta) saem no lugar de sempre, na ordem da fila, como os
+  // da conferência (js/conferencia.js, conferirEscala)
+  const avisosDaPrimeira = new Map();
+  for (const { item, primeira } of visitas) {
     if (chaveFixa(item)) continue;
+    if (avisosDaPrimeira.has(item)) {
+      if (!primeira) al.push(...avisosDaPrimeira.get(item));
+      continue;
+    }
+    const antes = al.length;
+    if (encaixar(item, primeira) && primeira) avisosDaPrimeira.set(item, al.splice(antes));
+  }
+
+  // Encaixa o pedido da fila e devolve se ele entrou na escala. Na primeira visita (primeira: o “Priorizar com”), só com os
+  // instrutores dele e sem recusa: o pedido que não entra volta no lugar de sempre
+  function encaixar(item, primeira) {
     const { stu, stuId, mid, ref: d, stuOrder } = item;
     const m = MIS[d.mis] || MIS['Voo Local'];
     const nm = stu.nm;
@@ -270,14 +301,15 @@ export function runAllocationEngine(state, opcoes = {}) {
           : (stu.bl || []).includes(escolhido.id) ? `${quem} está em “Não escalar com” deste aluno` : null;
     if (impedimento) {
       al.push({ t: 'err', s: labelStu, m: `Rejeitado: ${impedimento}.`, codigo: 'instrutor-escolhido' });
-      continue;
+      return false;
     }
     // As passadas da busca do instrutor: só o escolhido; ou primeiro os do “Priorizar com” do aluno (o par permanente, do
     // cadastro) em todos os horários e, sem nenhum deles, todos os instrutores, com o aviso; ou todos
     const doPar = escolhido ? [] : (stu.voaCom || []).map(id => state.ins.find(x => x.id === id)).filter(Boolean);
     const passadas = escolhido ? [{ pool: [escolhido], marca: { insEscolhido: true } }]
-      : doPar.length ? [{ pool: doPar, marca: { insPar: true } }, { pool: state.ins, marca: {}, semPar: true }]
-        : [{ pool: state.ins, marca: {} }];
+      : primeira ? [{ pool: doPar, marca: { insPar: true } }]
+        : doPar.length ? [{ pool: doPar, marca: { insPar: true } }, { pool: state.ins, marca: {}, semPar: true }]
+          : [{ pool: state.ins, marca: {} }];
     // O voo que ficou sem o instrutor do “Priorizar com”: o motivo vem da passada só com eles (fc: as contagens dela). O aviso
     // sai no fim, com o instrutor que ficou com o voo depois da divisão das horas e da compactação
     const anotarSemPar = fc => semPar.set(chaveDoVoo(stuId, mid), { s: labelStu, nomes: doPar.map(i => i.nm).join(', '), motivo: motivoSemPar(doPar, stu, d, tipoDoPedido, fc), pares: doPar.map(i => i.id) });
@@ -434,7 +466,7 @@ export function runAllocationEngine(state, opcoes = {}) {
           ...passadaUsada.marca
         });
         if (passadaUsada.semPar) anotarSemPar(fcDoPar);
-      } else {
+      } else if (!primeira) {
         // O motivo, com o código que diz onde resolver
         let codigo, why;
         if (!state.ins.some(x => x.on && habilitado(x))) {
@@ -458,7 +490,7 @@ export function runAllocationEngine(state, opcoes = {}) {
         }
         al.push({ t: 'err', s: labelStu, m: `Rejeitado: ${why}.`, codigo });
       }
-      continue;
+      return Boolean(chosenClass);
     }
 
     // ========================================================================
@@ -478,28 +510,30 @@ export function runAllocationEngine(state, opcoes = {}) {
     const voosHoje = x => (categoria ? voosNaCategoria[`${categoria}:${x.id}`] || 0 : 0);
     const naFila = x => { const i = categoria ? filas[categoria].indexOf(x.id) : 0; return i < 0 ? Number.MAX_SAFE_INTEGER : i; };
 
-    // 1. Validação de equipamento permitido para a missão
+    // 1. Validação de equipamento permitido para a missão (a primeira visita não recusa: o lugar de sempre recusa)
     if (!m.eq.includes(d.eq)) {
+      if (primeira) return false;
       al.push({
         t: 'err',
         s: labelStu,
         m: `Rejeitado: a missão “${d.mis}” só voa em ${m.eq.join(' ou ')} (o pedido está no ${d.eq}).`,
         codigo: 'equipamento-da-missao'
       });
-      continue;
+      return false;
     }
 
     // 2. Validação de Precedência de Ground School (Ground deve ocorrer antes do 1º voo da temática)
     const gatingGrounds = (stuGroundStatus[stuId] || []).filter(g => doesGroundGateFlight(g.mis, d));
     const unallocatedGround = gatingGrounds.find(g => g.allocatedEnd === null);
     if (unallocatedGround) {
+      if (primeira) return false;
       al.push({
         t: 'err',
         s: labelStu,
         m: `Rejeitado: o “${unallocatedGround.mis}” de hoje, que vem antes deste voo, não entrou na escala.`,
         codigo: 'ground-pendente'
       });
-      continue;
+      return false;
     }
     const minStartAfterGround = gatingGrounds.reduce((maxEnd, g) => Math.max(maxEnd, g.allocatedEnd || 0), 0);
 
@@ -619,7 +653,7 @@ export function runAllocationEngine(state, opcoes = {}) {
         const quem = !stu.kg && !x.kg ? `Pesos do aluno e de ${x.nm} não informados` : !stu.kg ? 'Peso do aluno não informado' : `Peso de ${x.nm} não informado`;
         al.push({ t: 'warn', s: labelStu, m: `${quem} (0 kg): verificação de limite (${lim} kg) no ${d.eq} não realizada.`, codigo: 'sem-peso', ...(stu.kg ? {} : { stuId }), ...(x.kg ? {} : { insId: x.id }) });
       }
-    } else {
+    } else if (!primeira) {
       // O motivo, com o código que diz onde resolver
       let codigo, why;
       if (isParafuso && d.eq === 'C152' && !soParafuso.some(r => state.av[r])) {
@@ -659,6 +693,7 @@ export function runAllocationEngine(state, opcoes = {}) {
       }
       al.push({ t: 'err', s: labelStu, m: `Rejeitado: ${why}.`, codigo });
     }
+    return Boolean(ch);
   }
 
   if (opcoes.dividirHoras !== false) equalizarHoras(out, state, limites, historico);

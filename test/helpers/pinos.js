@@ -5,7 +5,7 @@
 // goldens, não mudam. A saída do motor nesses dias foi gravada antes de a conferência dos voos fixos sair de
 // js/engine.js (test/fixtures/conferencia-do-motor.json), e o motor depois dela devolve a mesma
 import { createHash } from 'node:crypto';
-import { runAllocationEngine } from '../../js/engine.js';
+import { runAllocationEngine as motor } from '../../js/engine.js';
 import { fixosAoAprovar, fixosAoMudarStatus, pinoDoVoo } from '../../js/fixos.js';
 import { chaveDoVoo, pedidoDoAluno } from '../../js/voo.js';
 import { gerarCenario, comAtributos, comEscolhas, comVolta, mulberry32 } from './cenarios.js';
@@ -121,10 +121,12 @@ function agendado(estado, antes, r, seed) {
   return { ...estado, stu, fixos };
 }
 
-// O estado do dia com os voos fixos do tipo pedido, para a semente
-export function diaComPinos(seed, tipo) {
+// O estado do dia com os voos fixos do tipo pedido, para a semente. opcoes: as do motor que monta as escalas de antes (a
+// gravação é de antes do F1h: { priorizarComPrimeiro: false })
+export function diaComPinos(seed, tipo, opcoes = {}) {
   const r = mulberry32(seed * 3301 + TIPOS_DE_PINO.indexOf(tipo) * 17 + 5);
   const inicial = base(seed);
+  const runAllocationEngine = estado => motor(estado, opcoes);
   const antes = runAllocationEngine(inicial);
   if (tipo === 'aprovada') return aprovada(inicial, antes, r);
   if (tipo === 'status') return peloStatus(inicial, antes, r);

@@ -16,10 +16,20 @@ describe('O motor com voos fixos: a mesma saída de antes da conferência sair d
     assert.ok(contagem.fixos > 10000 && contagem.conflitos > 3000 && contagem.avisos > 3000 && contagem.recusas > 5000, JSON.stringify(contagem));
   });
 
+  // A gravação é de antes do F1h, que muda de propósito a escala dos alunos com “Priorizar com” (o primeiro da fila e as
+  // disputas: js/engine.js). Ela continua a mesma: o motor sem o F1h (opcoes.priorizarComPrimeiro: false) devolve a saída
+  // gravada em todos os dias, e o motor de agora, em todos os dias sem “Priorizar com”
+  const comPar = estado => estado.stu.some(s => (s.voaCom || []).length > 0);
   for (const tipo of TIPOS_DE_PINO) {
-    it(`${tipo}: em 300 sementes, a saída gravada`, () => {
-      const diferentes = SEMENTES_DOS_PINOS.filter(seed => impressaoDaSaida(runAllocationEngine(diaComPinos(seed, tipo))) !== GRAVADA.dias[seed][tipo]);
-      assert.deepEqual(diferentes, []);
+    it(`${tipo}: em 300 sementes, a saída gravada (sem o F1h; com ele, nos dias sem “Priorizar com”)`, () => {
+      const diferentes = [], comOF1h = [];
+      for (const seed of SEMENTES_DOS_PINOS) {
+        const semOF1h = { priorizarComPrimeiro: false };
+        if (impressaoDaSaida(runAllocationEngine(diaComPinos(seed, tipo, semOF1h), semOF1h)) !== GRAVADA.dias[seed][tipo]) diferentes.push(seed);
+        const estado = diaComPinos(seed, tipo);
+        if (!comPar(estado) && impressaoDaSaida(runAllocationEngine(estado)) !== GRAVADA.dias[seed][tipo]) comOF1h.push(seed);
+      }
+      assert.deepEqual([diferentes, comOF1h], [[], []]);
     });
   }
 });

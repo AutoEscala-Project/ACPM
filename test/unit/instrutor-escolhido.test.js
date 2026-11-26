@@ -374,19 +374,18 @@ describe('Priorizar com: os instrutores do aluno (o par permanente do cadastro)'
     assert.deepEqual(runAllocationEngine(cenario({ ins, stu: stu({ voaCom: [1] }) })).out.map(o => o.insId), [1, 1]);
   });
 
-  // Achado pela busca em cenários aleatórios: o voo que ficou sem o “Priorizar com” e que a divisão das horas leva para um
-  // instrutor do “Priorizar com” fica marcado e sem aviso (o aviso diria o instrutor errado)
-  it('o voo que a divisão das horas leva para o instrutor do “Priorizar com” não tem aviso', () => {
-    for (const seed of [487, 786]) {
+  // Achado pela busca em cenários aleatórios (as sementes 487 e 786, antes do F1h): o voo que ficou sem o “Priorizar com” e
+  // que a divisão das horas leva para um instrutor do “Priorizar com” fica marcado e sem aviso (o aviso diria o instrutor
+  // errado). Com o “Priorizar com” primeiro (F1h), nenhuma das 6000 primeiras sementes leva um voo assim: a propriedade é
+  // conferida em todo voo que termina com um instrutor do “Priorizar com”, em 300 cenários
+  it('o voo que termina com o instrutor do “Priorizar com” fica marcado e não tem o aviso de “sem o instrutor”', () => {
+    for (let seed = 1; seed <= 300; seed++) {
       const estado = comEscolhas(gerarCenario(seed), seed);
-      const antes = runAllocationEngine(estado, { compactar: false, dividirHoras: false });
       const depois = runAllocationEngine(estado);
       const paresDe = o => estado.stu.find(s => s.id === o.stuId).voaCom || [];
-      const levados = depois.out.filter(o => { const a = antes.out.find(v => v.fKey === o.fKey); return a && paresDe(o).includes(o.insId) && !paresDe(a).includes(a.insId); });
-      assert.ok(levados.length > 0, `seed ${seed}`);
-      for (const o of levados) {
-        assert.equal(o.insPar, true);
-        assert.ok(!depois.al.some(a => a.codigo === 'voa-com' && a.stuId === o.stuId && a.insId === o.insId), o.fKey);
+      for (const o of depois.out.filter(v => !v.trecho && !v.insEscolhido && paresDe(v).includes(v.insId))) {
+        assert.equal(o.insPar, true, `seed ${seed} ${o.fKey}`);
+        assert.ok(!depois.al.some(a => a.codigo === 'voa-com' && a.stuId === o.stuId && a.insId === o.insId && a.m.startsWith('Sem o instrutor')), `seed ${seed} ${o.fKey}`);
       }
     }
   });
