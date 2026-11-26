@@ -132,4 +132,80 @@ describe('conferirEscala: a escala conferida sem o motor', async () => {
     novo.stu.push({ id: 9999, nm: 'Chegou', kg: 70, bl: [], extra: [], fly: true, mis: 'Voo Local', eq: 'C152', p1: 610, p2: -1, nb: 1, ss: 1, pr: 3 });
     assert.equal(conferirEscala(novo, motor, { antes: estado }), null);
   });
+
+  // Revisão do F1h: a primeira visita do “Priorizar com” encaixa fora da ordem da fila, e o aviso do instrutor escolhido
+  // que saiu do cadastro saía na ordem do encaixe; a conferência o dá na ordem da fila. Os dois dão a ordem da fila
+  it('com “Priorizar com”, a escala do motor conferida de novo é a mesma: os avisos na ordem da fila', async () => {
+    const { aluno, cenario, instrutor } = await import('../helpers/montar.js');
+    // O INVA 99 (escolhido) saiu do cadastro; o de prioridade 1 tem “Priorizar com”
+    const estado = cenario({ ins: [instrutor(1, 1), instrutor(2, 1)], stu: [aluno(1000, { pr: 5, insId: 99 }), aluno(1001, { pr: 1, insId: 99 }, { voaCom: [1] })] });
+    const motor = runAllocationEngine(estado);
+    assert.deepEqual(motor.al.map(a => `${a.codigo}:${a.s}`), ['escolhido-saiu:Aluno 1000', 'escolhido-saiu:Aluno 1001']);
+    assert.equal(JSON.stringify(semData(conferirEscala(estado, motor))), JSON.stringify(motor));
+  });
+
+  // Dias gerados com “Priorizar com” (às vezes dois INVAs, às vezes um deles em “Não escalar com”), o minuto exato, o que a
+  // missão exige do INVA, o 7º local confirmado, a agenda e o instrutor escolhido: a escala do motor, conferida de novo, é a mesma (a semente 1430 tinha os avisos do escolhido
+  // que saiu do cadastro fora de ordem)
+  it('em 400 dias gerados com “Priorizar com”, a escala do motor conferida de novo é a mesma', async () => {
+    const { gerarCenario, comEscolhas, comAtributos } = await import('../helpers/cenarios.js');
+    const { MISSOES_LOCAIS } = await import('../../js/config.js');
+    const EXIGE = ['ifr', 'c172', 'mlte', 'checa_pp'];
+    const gerar = seed => {
+      const base = comAtributos(comEscolhas(gerarCenario(seed), seed), seed);
+      const r = mulberry32(seed * 911 + 3);
+      const ids = base.ins.map(x => x.id);
+      const pick = a => a[Math.floor(r() * a.length)];
+      const stu = base.stu.map(s => {
+        const n = structuredClone(s);
+        if (r() < 0.35) n.voaCom = [...new Set([pick(ids), ...(r() < 0.4 ? [pick(ids)] : [])])];
+        if (r() < 0.08 && n.voaCom) n.bl = [...new Set([...n.bl, n.voaCom[0]])];
+        for (const p of [n, ...n.extra]) {
+          if (r() < 0.2) p.jan = `h${pick([390, 500, 610, 690, 760, 870, 980])}`;
+          if (r() < 0.1) p.exige = [pick(EXIGE)];
+          if (r() < 0.05 && MISSOES_LOCAIS.includes(p.mis) && p.jan) p.limiteConfirmado = true;
+          if (r() < 0.1) p.solicitacao = Math.floor(r() * 50);
+        }
+        return n;
+      });
+      return { ...base, stu };
+    };
+    const diferentes = [];
+    for (const seed of [1430, ...Array.from({ length: 399 }, (_, i) => i + 1)]) {
+      const estado = gerar(seed);
+      const motor = runAllocationEngine(estado);
+      if (JSON.stringify(semData(conferirEscala(estado, motor))) !== JSON.stringify(motor)) diferentes.push(seed);
+    }
+    assert.deepEqual(diferentes, []);
+  });
+
+  // Revisão do F1h: a disputa de um voo sem pino nomeia o lugar de outro voo; depois que o outro muda de lugar (na escala
+  // aprovada, sem o motor), a frase é refeita com os horários de agora, e o motivo de sempre do voo sem o INVA fica
+  it('na escala aprovada, a disputa é refeita quando o outro voo muda de lugar; o motivo do voo sem o INVA fica', async () => {
+    const { aluno, cenario, instrutor } = await import('../helpers/montar.js');
+    const { fixosAoAprovar } = await import('../../js/fixos.js');
+    const doPar = al => al.filter(a => a.codigo === 'voa-com').map(a => [a.fKey, a.m]);
+    // Aprovada com o 1001 às 08:20 com o INVA 1; o 1000 (prioriza o 1, quer as 08:20) entra depois, sem pino, às 10:10
+    const inicial = cenario({ ins: [instrutor(1, 1), instrutor(2, 1)], stu: [aluno(1000, { fly: false }, { voaCom: [1] }), aluno(1001, { p1: 1, p2: -1 }, { voaCom: [1] })] });
+    const aprovado = { ...structuredClone(inicial), fixos: fixosAoAprovar({}, runAllocationEngine(inicial).out), aprovacao: { em: 'x', por: 'Op' } };
+    aprovado.stu[0].fly = true;
+    const motor = runAllocationEngine(aprovado);
+    assert.deepEqual(doPar(motor.al), [['1000_0_1', 'Aluno 1000 e Aluno 1001 priorizam Instrutor 01 às 08:20: ficou com Aluno 1001 (voo fixo); Aluno 1000 voa às 10:10.']]);
+    const movido = structuredClone(aprovado);
+    movido.fixos['1001_0_1'] = { ...movido.fixos['1001_0_1'], a: 760, b: 820, agendado: true };
+    const conferida = conferirEscala(movido, motor, { antes: aprovado });
+    assert.deepEqual(conferida.out.map(o => [o.fKey, o.a, o.insId]), [['1000_0_1', 610, 1], ['1001_0_1', 760, 1]]);
+    assert.deepEqual(doPar(conferida.al), []);
+    // O motivo do voo que ficou sem o INVA (o 1001 com o INVA 1 às 08:20, o 1000 só pode às 08:20) fica; a disputa dentro
+    // dele sai quando o outro voo sai do horário
+    const soAs820 = structuredClone(aprovado);
+    soAs820.stu[0].jan = 'h500';
+    soAs820.stu[0].p2 = -1;
+    const motor2 = runAllocationEngine(soAs820);
+    const inicio = 'Sem o instrutor de “Priorizar com” (Instrutor 01: ocupado nos horários possíveis): o voo ficou com Instrutor 02.';
+    assert.deepEqual(doPar(motor2.al), [['1000_0_1', `${inicio} Aluno 1000 e Aluno 1001 priorizam Instrutor 01 às 08:20: ficou com Aluno 1001 (voo fixo).`]]);
+    const movido2 = structuredClone(soAs820);
+    movido2.fixos['1001_0_1'] = { ...movido2.fixos['1001_0_1'], a: 760, b: 820, agendado: true };
+    assert.deepEqual(doPar(conferirEscala(movido2, motor2, { antes: soAs820 }).al), [['1000_0_1', inicio]]);
+  });
 });

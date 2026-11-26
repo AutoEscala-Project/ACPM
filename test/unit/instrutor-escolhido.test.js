@@ -4,7 +4,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { runAllocationEngine } from '../../js/engine.js';
-import { escolherInstrutor, instrutoresDoPedido, instrutoresDoVoo, reverterEscolha, escolhasDaUnidade, escolherNosPedidos } from '../../js/instrutor-escolhido.js';
+import { escolherInstrutor, instrutoresDoPedido, instrutoresDoVoo, reverterEscolha, escolhasDaUnidade, escolherNosPedidos, foraDoPriorizarNoVoo } from '../../js/instrutor-escolhido.js';
 import { motivoDoFixo, fixosAoMudarStatus, fixosAoReabrir, normalizarFixos } from '../../js/fixos.js';
 import { importarSolicitacoes } from '../../js/processamento.js';
 import { validarReversao } from '../../js/reversoes.js';
@@ -333,9 +333,11 @@ describe('Priorizar com: os instrutores do aluno (o par permanente do cadastro)'
     assert.deepEqual(out.map(o => o.insId).sort(), [1, 3]);
   });
 
-  it('o instrutor escolhido para o dia vale mais que o “Priorizar com”', () => {
+  // O escolhido fica com o voo; fora do “Priorizar com”, a escala avisa (N9: o operador escala contra ele; a revisão do F1h)
+  it('o instrutor escolhido para o dia vale mais que o “Priorizar com”, com o aviso', () => {
     const { out, al } = runAllocationEngine(cenario({ ins: [instrutor(1, 9), instrutor(2, 1)], stu: [aluno(1000, { insId: 2 }, { voaCom: [1] })] }));
-    assert.deepEqual([out.map(o => [o.insId, Boolean(o.insEscolhido), Boolean(o.insPar)]), avisos(al)], [[[2, true, false]], []]);
+    assert.deepEqual([out.map(o => [o.insId, Boolean(o.insEscolhido), Boolean(o.insPar)]), avisos(al)],
+      [[[2, true, false]], ['Fora do “Priorizar com” de Aluno 1000 (Instrutor 01): Instrutor 02 foi escolhido para o dia na Demanda.']]);
   });
 
   it('quando nenhum instrutor do “Priorizar com” pode, o voo fica com outro e a escala avisa, com o motivo', () => {
@@ -388,6 +390,24 @@ describe('Priorizar com: os instrutores do aluno (o par permanente do cadastro)'
         assert.ok(!depois.al.some(a => a.codigo === 'voa-com' && a.stuId === o.stuId && a.insId === o.insId && a.m.startsWith('Sem o instrutor')), `seed ${seed} ${o.fKey}`);
       }
     }
+  });
+
+  // Revisão do F1h: na lista do instrutor da Escala, o INVA fora do “Priorizar com” do aluno diz (a opção e a pergunta da
+  // escala aberta), quando um do “Priorizar com” poderia dar o voo; na turma de Ground, cada aluno dela
+  it('a lista do instrutor na Escala: os alunos do voo que têm o INVA fora do “Priorizar com”', () => {
+    const estado = cenario({ ins: [instrutor(1, 9), instrutor(2, 9)], stu: [aluno(1000, { p1: 390 }, { voaCom: [1] }), aluno(1001, { p1: 500 })] });
+    const resultado = runAllocationEngine(estado);
+    assert.deepEqual([foraDoPriorizarNoVoo(estado, resultado, '1000_0_1', 2), foraDoPriorizarNoVoo(estado, resultado, '1000_0_1', 1)], [['Aluno 1000'], []]);
+    assert.deepEqual(foraDoPriorizarNoVoo(estado, resultado, '1001_0_1', 2), []);
+    // Sem nenhum do “Priorizar com” que possa (o INVA 01 não vem), nada
+    const semPar = { ...estado, ins: [instrutor(1, 9, { on: false }), instrutor(2, 9)] };
+    assert.deepEqual(foraDoPriorizarNoVoo(semPar, runAllocationEngine(semPar), '1000_0_1', 2), []);
+    // A turma de Ground: o aluno dela com “Priorizar com”
+    const g = { ...GROUND_C152, p1: 390, p2: -1 };
+    const turma = cenario({ ins: [instrutor(1, 9), instrutor(2, 9)], stu: [aluno(1000, g, { voaCom: [1] }), aluno(1001, g)] });
+    const r = runAllocationEngine(turma);
+    assert.equal(r.out[0].classKey, r.out[1].classKey);
+    assert.deepEqual(foraDoPriorizarNoVoo(turma, r, '1001_0_1', 2), ['Aluno 1000']);
   });
 });
 

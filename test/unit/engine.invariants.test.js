@@ -424,9 +424,16 @@ describe('Invariantes das escolhas do operador, em 300 cenários', () => {
       const s = estado.stu.find(x => x.id === a.stuId);
       const o = out.find(v => v.fKey === a.fKey);
       assert.ok(o && o.stuId === a.stuId && o.insId === a.insId, `aviso solto: ${a.m}`);
-      if (!s.voaCom.includes(a.insId)) { assert.ok(a.m.startsWith('Sem o instrutor de “Priorizar com”'), a.m); continue; }
-      const [, outro] = /: ficou com (.+?)(?: \(|;|\.$)/.exec(a.m) || [];
-      assert.ok(outro && todos.some(v => v.s === outro && v.insId === a.insId && v.stuId !== a.stuId), `disputa sem o outro: ${a.m}`);
+      // Fora do “Priorizar com”: o de sempre, ou o do INVA escolhido para o dia na Demanda (a revisão do F1h)
+      if (!s.voaCom.includes(a.insId)) {
+        const escolhido = escolhidoValido(estado, pedidoDoVoo(estado, o));
+        assert.ok(escolhido ? a.m.startsWith('Fora do “Priorizar com”') || a.m.startsWith('Sem o instrutor de “Priorizar com”') : a.m.startsWith('Sem o instrutor de “Priorizar com”'), a.m);
+        continue;
+      }
+      // A disputa nomeia o INVA do “Priorizar com” (o do voo ou outro dele) e quem está com ele
+      const [, nome, outro] = / priorizam? (.+?) às \d\d:\d\d: ficou com (.+?)(?: \(|;|\.$)/.exec(a.m) || [];
+      const x = estado.ins.find(i => i.nm === nome);
+      assert.ok(x && s.voaCom.includes(x.id) && todos.some(v => v.s === outro && v.insId === x.id && v.stuId !== a.stuId), `disputa sem o outro: ${a.m}`);
     }
   }));
 

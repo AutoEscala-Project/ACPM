@@ -275,6 +275,34 @@ describe('O editor do voo: cada campo e o que ele grava', async () => {
     }
   });
 
+  // Revisão do F1h: o voo que o motor deu a outro INVA porque nenhum do “Priorizar com” podia (o INVA 01 não vem) não vai
+  // contra ele: mudar só o horário não pede a confirmação, e a Escala guarda o motivo de sempre (não “posto à mão”). E só
+  // o INVA trocado pelo operador pede: com um do “Priorizar com” que pode, mudar só o horário não pergunta (a observação
+  // fica na Escala)
+  it('o INVA fora do “Priorizar com” só pede a confirmação quando o operador troca o INVA e um do “Priorizar com” poderia', () => {
+    for (const aprovada of [true, false]) {
+      const inicial = cenario({ ins: [instrutor(1, 9, { on: false }), instrutor(2, 9)], stu: [aluno(1000, { p1: 390 }, { voaCom: [1] })] });
+      const { estado: aprovado, resultado } = aprovar(inicial);
+      const estado = aprovada ? aprovado : inicial;
+      const voo = vooParaEditar(estado, resultado, '1000_0_1');
+      assert.equal(voo.valores.insId, 2);
+      const avisos = avisosDaEdicao(estado, resultado, voo, { ...structuredClone(voo.valores), a: 690 }, { aprovada });
+      assert.deepEqual(avisos.filter(a => a.codigo === 'fora-do-priorizar'), [], `aprovada: ${aprovada}`);
+      if (aprovada) {
+        const { conferida } = editar(estado, resultado, '1000_0_1', () => ({ a: 690 }));
+        assert.deepEqual(conferida.al.filter(a => a.codigo === 'voa-com').map(a => a.m), ['Sem o instrutor de “Priorizar com” (Instrutor 01: fora nesta data): o voo ficou com Instrutor 02.']);
+      }
+    }
+    // O INVA 01 vem, mas está com outro aluno no horário: o voo do 1000 fica com o INVA 02
+    const inicial = cenario({ ins: [instrutor(1, 9), instrutor(2, 9)], stu: [aluno(1000, { p1: 390, jan: 'h390', p2: -1 }, { voaCom: [1] }), aluno(1001, { p1: 390, jan: 'h390', p2: -1, insId: 1 })] });
+    const { estado, resultado } = aprovar(inicial);
+    const voo = vooParaEditar(estado, resultado, '1000_0_1');
+    assert.equal(voo.valores.insId, 2);
+    assert.deepEqual(avisosDaEdicao(estado, resultado, voo, { ...structuredClone(voo.valores), a: 690 }).filter(a => a.codigo === 'fora-do-priorizar'), []);
+    const { conferida } = editar(estado, resultado, '1000_0_1', () => ({ a: 690 }));
+    assert.deepEqual(conferida.al.filter(a => a.codigo === 'voa-com').map(a => a.m), ['Fora do “Priorizar com” de Aluno 1000 (Instrutor 01): o voo foi posto à mão com Instrutor 02.']);
+  });
+
   it('a turma de Ground muda inteira: o horário e o instrutor de cada aluno', () => {
     const g = { mis: 'Ground C152', eq: 'Sala Ground', nb: 1.5, p1: 390 };
     const { estado, resultado } = aprovar(cenario({ ins: [instrutor(1, 9), instrutor(2, 9)], stu: [aluno(1000, g), aluno(1001, g), aluno(1002, { p1: 870 })] }));

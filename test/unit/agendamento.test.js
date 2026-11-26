@@ -741,6 +741,12 @@ describe('Agendamento: a conferência', () => {
     assert.deepEqual(avisos.filter(a => a.codigo === 'fora-do-priorizar').map(a => [a.texto, a.campo, a.resumo]), [['Instrutor 02 está fora do Priorizar com de Aluno 1001.', 'agd-instrutor', 'fora do Priorizar com']]);
     assert.deepEqual(conferir(estado, { escolhas: { aluno: 1001, missao: 'missao:PP:CT-01', horario: 500, horas: '1,5', instrutor: 1 }, tocados: ['missao', 'horario', 'horas', 'instrutor'] }).avisos
       .filter(a => a.codigo === 'fora-do-priorizar'), []);
+    // Revisão do F1h: sem nenhum do “Priorizar com” que possa dar o voo (o INVA 01 não vem na data), o outro não vai contra
+    // ele: sem o aviso
+    const semPar = structuredClone(estado);
+    semPar.ins[0].on = false;
+    assert.deepEqual(conferir(semPar, { escolhas: { aluno: 1001, missao: 'missao:PP:CT-01', horario: 500, horas: '1,5', instrutor: 2 }, tocados: ['missao', 'horario', 'horas', 'instrutor'] }).avisos
+      .filter(a => a.codigo === 'fora-do-priorizar'), []);
     const fora = doDia({ ins: [instrutor(1, 9)], s1000: { jan: 'h390' } });
     fora.stu.push(aluno(1002, { p1: 390, p2: -1, jan: 'h390' }));
     // Um voo novo (o padrão seria encaixar o pedido que ficou fora): o outro pedido continua fora, com a nota
