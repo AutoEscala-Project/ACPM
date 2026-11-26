@@ -154,8 +154,12 @@ function semVagaDeVooLocal({ horario, missao }, proximo) {
   return `Horário cheio: já há ${LIMITE_DE_VOOS_LOCAIS} voos locais (Voo Local, Voo Solo e TGL) às ${horario}, o máximo no mesmo horário (determinação da diretoria). ${depois}`;
 }
 
+// O segundo clique de um duplo clique (detail 2 ou mais) não faz nada: o primeiro arma a confirmação, e o segundo a daria
+// sem o aviso ter sido lido (e o pedido ficaria com a confirmação do 7º voo local). Confirma um clique depois do aviso
+const segundoClique = e => e.detail > 1;
+$('#form-agenda [type="submit"]').addEventListener('click', e => { if (segundoClique(e)) e.preventDefault(); });
 $('#form-agenda').onsubmit = e => { e.preventDefault(); registrarPedido($('#form-agenda [type="submit"]'), false); };
-$('#ag-excecao').onclick = () => registrarPedido($('#ag-excecao'), true);
+$('#ag-excecao').onclick = e => { if (!segundoClique(e)) registrarPedido($('#ag-excecao'), true); };
 // Uma escolha nova: o erro era do pedido de antes. A confirmação armada vale para o pedido como estava: trocar o aluno, a
 // missão, o recurso ou o horário a desfaz (trocar a data também: escolherDataDoPedido). Com ela ainda armada (a escolha que
 // não mudou nada), o aviso fica, ou volta no lugar do erro que o substituiu

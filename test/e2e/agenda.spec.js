@@ -815,6 +815,48 @@ test.describe('A Agenda pelo curso do aluno', () => {
     expect([outro.missao, outro.limite_confirmado_por, outro.limite_confirmado_em]).toEqual(['Navegação', null, null]);
   });
 
+  // O duplo clique arma a confirmação com o primeiro clique; o segundo, do mesmo duplo clique, não confirma o que o aviso
+  // ainda nem disse. Também na Exceção da Coordenação, e no voo já marcado
+  test('o duplo clique no botão arma a confirmação e não registra: confirma só um clique depois do aviso', async ({ page }) => {
+    await abrirComOsCursos(page, { agenda: [...seisLocais(), ...seisLocais({ data: '2026-11-10' }).map((p, i) => ({ ...p, id: 20 + i }))] });
+    const [erro, registrar, excecao] = [campoDaAgenda(page, 'erro'), page.locator('#form-agenda [type="submit"]'), campoDaAgenda(page, 'excecao')];
+    await campoDaAgenda(page, 'aluno').selectOption({ label: 'Aluno 1001' });
+    await campoDaAgenda(page, 'missao').selectOption('Voo Local');
+    await campoDaAgenda(page, 'recurso').selectOption('C152');
+    await campoDaAgenda(page, 'horario').selectOption('08:20');
+    await campoDaAgenda(page, 'por').fill('Maria');
+    await registrar.dblclick();
+    await expect(erro).toContainText('Horário cheio: já há 6 voos locais');
+    await expect(registrar).toHaveText('Registrar mesmo assim');
+    await expect(page.locator('#agenda-lista tbody tr')).toHaveCount(6);
+    expect(await agendaGuardada(page)).toHaveLength(12);
+    await registrar.click();
+    await expect(page.locator('#toast-box')).toContainText('Pedido registrado.');
+    expect((await agendaGuardada(page)).at(-1).limite_confirmado_por).toBe('Maria');
+    // O voo já marcado: o duplo clique também só arma
+    await campoDaAgenda(page, 'aluno').selectOption({ label: 'Aluno 1001' });
+    await campoDaAgenda(page, 'missao').selectOption('Navegação');
+    await campoDaAgenda(page, 'recurso').selectOption('C152');
+    await campoDaAgenda(page, 'horario').selectOption('10:10');
+    await registrar.dblclick();
+    await expect(erro).toContainText('Aluno 1001 já tem voo marcado em 11/11');
+    await expect(registrar).toHaveText('Registrar mesmo assim');
+    expect(await agendaGuardada(page)).toHaveLength(13);
+    // Depois do prazo, a Exceção da Coordenação
+    await campoDaAgenda(page, 'data').selectOption('2026-11-10');
+    await campoDaAgenda(page, 'aluno').selectOption({ label: 'Aluno 1001' });
+    await campoDaAgenda(page, 'missao').selectOption('TGL (TMA)');
+    await campoDaAgenda(page, 'recurso').selectOption('C152');
+    await campoDaAgenda(page, 'horario').selectOption('08:20');
+    await excecao.dblclick();
+    await expect(erro).toContainText('Para registrar este como o 7º, clique em “Registrar mesmo assim”.');
+    await expect(excecao).toHaveText('Registrar mesmo assim');
+    expect(await agendaGuardada(page)).toHaveLength(13);
+    await excecao.click();
+    await expect(page.locator('#toast-box')).toContainText('Pedido registrado para ter 10/11 pela Exceção da Coordenação.');
+    expect((await agendaGuardada(page)).at(-1).limite_confirmado_por).toBe('Maria');
+  });
+
   test('as duas causas numa confirmação só; a que aparece depois (o 7º registrado enquanto isso) pede de novo', async ({ page }) => {
     await abrirComOsCursos(page, { agenda: [...seisLocais().slice(0, 5), pedidoGuardado(9, { aluno: 1001, aluno_nome: 'Aluno 1001', missao: 'Navegação', horario: '10:10' })] });
     const [erro, registrar] = [campoDaAgenda(page, 'erro'), page.locator('#form-agenda [type="submit"]')];
