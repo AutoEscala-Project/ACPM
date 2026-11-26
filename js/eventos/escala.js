@@ -22,7 +22,9 @@ import { confirmado } from './confirmacao.js';
 import { aoAcionar, aoMudarCampo, aoReverter } from './registro.js';
 import { vooDaChave } from './resultados.js';
 import { pedirDetalheDoStatus } from '../views/dialogo-status.js';
-import { rOut, lembrarCaixa, botaoDoInstrutor, seletorDeInstrutor, abrirPopupDoMapa, fecharPopupDoMapa, popupDoMapaAberto, reposicionarPopupDoMapa, tabNoPopup } from '../views/escala.js';
+import { rOut, lembrarCaixa, botaoDoInstrutor, seletorDeInstrutor } from '../views/escala.js';
+import { abrirEditorDoVoo } from '../views/edicao-do-voo.js';
+import './edicao-do-voo.js';
 import { abrirPainelDeReparo, abrirPainelDoRejeitado, fecharPainelDeReparo, opcaoDoPainel, focarNoVoo } from '../views/reparo.js';
 import { registrarDesenho, redesenharPorNome } from '../redesenho.js';
 import { voosComInativos } from '../inativos.js';
@@ -51,23 +53,13 @@ document.addEventListener('toggle', e => {
   if (caixa === e.target) lembrarCaixa(caixa.dataset.caixa, caixa.open);
 }, true);
 
-// Popup do voo no mapa da escala: a barra abre e fecha; Esc (o foco volta para a barra) e um clique fora fecham, e ele
-// acompanha a barra quando a página ou o mapa rolam. Um diálogo aberto por cima (o do status) fica com o Esc e com os
-// cliques dentro dele: o popup continua aberto. Dentro ou fora é pelo caminho do clique, fixado quando ele começa: o
-// nome do instrutor, já trocado pela lista (js/eventos/registro.js) e fora da página, continua dentro do popup.
-// Sem popup aberto, um clique (ou toque) no espaço livre de uma linha do mapa agenda nela: o diálogo abre com o recurso
-// ou o instrutor da linha e o horário da lista mais perto do clique (js/agendamento.js). Com o popup aberto, o clique só
-// fecha o popup
+// A barra do voo no mapa abre o editor do voo (js/eventos/edicao-do-voo.js; na turma de Ground, a turma inteira). Um clique
+// (ou toque) no espaço livre de uma linha do mapa agenda nela: o diálogo abre com o recurso ou o instrutor da linha e o
+// horário da lista mais perto do clique (js/agendamento.js)
 document.addEventListener('click', e => {
   const barra = e.target.closest('#out .tl-bar');
   if (barra) {
-    if (barra.getAttribute('aria-expanded') === 'true') fecharPopupDoMapa();
-    else abrirPopupDoMapa(barra, { focar: true });
-    return;
-  }
-  if (popupDoMapaAberto()) {
-    const dentro = e.composedPath().some(el => el instanceof Element && el.matches('#tl-pop, dialog'));
-    if (!dentro) fecharPopupDoMapa();
+    abrirEditorDoVoo(barra.dataset.pop, { origem: barra });
     return;
   }
   const faixa = e.target.closest('#out .tl-track:not(.inerte)');
@@ -75,20 +67,6 @@ document.addEventListener('click', e => {
   const { r, ins } = faixa.dataset;
   agendarNoMapa({ ...(ins ? { insId: +ins } : { r }), minuto: minutoDoClique(faixa, e) });
 });
-// O Esc fecha só o popup, a camada de cima: ouvido na captura, ele para aqui e não chega às gavetas e aos painéis
-// de trás (o Histórico, as Sugestões, as habilitações), que continuam abertos. O Esc na lista do instrutor é dela
-// (volta ao nome, abaixo, com o popup aberto)
-document.addEventListener('keydown', e => {
-  if (e.key !== 'Escape' || !popupDoMapaAberto() || algumDialogoAberto()) return;
-  if (e.target.closest && e.target.closest('select[data-a="insVoo"]')) return;
-  e.stopPropagation();
-  fecharPopupDoMapa({ devolverFoco: true });
-}, true);
-document.addEventListener('keydown', e => {
-  if (e.target.closest && e.target.closest('#tl-pop')) tabNoPopup(e);
-});
-document.addEventListener('scroll', reposicionarPopupDoMapa, { capture: true, passive: true });
-window.addEventListener('resize', reposicionarPopupDoMapa);
 
 // Depois de um filtro, o leitor de tela ouve quantos voos ficaram (a lista muda sem o foco sair do filtro); na busca,
 // quando a digitação para
@@ -263,12 +241,11 @@ document.addEventListener('click', e => {
 // Sugestões para um conflito: a gaveta abre pelo botão do conflito. "Aplicar" muda o voo fixo (na turma de
 // Ground, a turma inteira) e "Soltar" o tira dos fixos; o histórico guarda os fixos de antes, para reverter. Cancelar
 // abre o diálogo do status, já com o motivo do conflito marcado
-// Aberta do popup do mapa, a gaveta fica no lugar dele (o popup fecha): o Esc fecha a gaveta e volta para o voo. Aplicada a
-// sugestão, o foco vai para o voo (o botão "Sugestões" dele não existe mais)
+// Aberta do editor do voo, a gaveta fica no lugar dele (o editor fecha): o Esc fecha a gaveta e volta para o voo. Aplicada
+// a sugestão, o foco vai para o voo (o botão "Sugestões" dele não existe mais)
 document.addEventListener('click', e => {
   const abrirSugestoes = e.target.closest('[data-reparo]');
   const doRejeitado = !abrirSugestoes && e.target.closest('[data-rejeitado]');
-  if ((abrirSugestoes || doRejeitado) && !isGestor() && popupDoMapaAberto()) fecharPopupDoMapa();
   if (abrirSugestoes) { if (!isGestor()) abrirPainelDeReparo(abrirSugestoes.dataset.reparo); return; }
   if (doRejeitado) { if (!isGestor()) abrirPainelDoRejeitado(doRejeitado.dataset.rejeitado); return; }
   if (e.target.closest('#btn-fechar-reparo')) { fecharPainelDeReparo(true); return; }

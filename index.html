@@ -1142,8 +1142,35 @@
     </div>
   </form>
 </dialog>
-<!-- Popup do voo no mapa da escala: fora do painel do mapa (que rola) para nunca ficar cortado -->
-<div class="tl-pop" id="tl-pop" role="dialog" aria-label="Detalhes do voo" hidden></div>
+<!-- O voo da escala (js/views/edicao-do-voo.js): todos os campos dele, abertos por uma barra do mapa e pelo "Editar" da
+     Lista. Nada é gravado antes de "Salvar"; os avisos são refeitos a cada campo. Quem só consulta vê os campos como texto.
+     Os ids são voo-*; nada aqui usa os atributos dos ouvintes globais (data-f, data-a, data-act): o diálogo cuida dos seus -->
+<dialog class="dlg dlg-voo" id="dlg-voo" aria-labelledby="voo-titulo" aria-describedby="voo-contexto">
+  <form id="form-voo" novalidate>
+    <h2 id="voo-titulo">Voo</h2>
+    <p class="h" id="voo-contexto"></p>
+    <div class="campos-voo" id="voo-campos"></div>
+    <ul class="voo-avisos" id="voo-avisos" role="status"></ul>
+    <p class="erro-campo" id="voo-erro" role="alert"></p>
+    <div class="dlg-acoes">
+      <button type="button" class="btn sec" id="voo-cancelar">Cancelar</button>
+      <button type="submit" class="btn edit-only" id="voo-salvar">Salvar</button>
+    </div>
+  </form>
+</dialog>
+<!-- A pergunta antes de refazer a escala não aprovada (js/views/dialogo-refazer.js): o que muda, que a escala inteira será
+     refeita e os avisos da alteração, numa pergunta só. O foco começa em "Cancelar" -->
+<dialog class="dlg" id="dlg-refazer" role="alertdialog" aria-labelledby="refazer-titulo" aria-describedby="refazer-texto">
+  <form id="form-refazer" novalidate>
+    <h2 id="refazer-titulo">Refazer a escala?</h2>
+    <p id="refazer-texto"></p>
+    <ul class="voo-avisos" id="refazer-avisos"></ul>
+    <div class="dlg-acoes">
+      <button type="button" class="btn sec" id="refazer-cancelar">Cancelar</button>
+      <button type="submit" class="btn" id="refazer-salvar">Salvar e refazer</button>
+    </div>
+  </form>
+</dialog>
 
 <div id="toast-box" aria-live="polite"></div>
 <div id="anuncio" class="sr" role="status"></div>

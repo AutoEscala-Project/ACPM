@@ -22,7 +22,8 @@ import { cancelamentoAproveitavel, dataQueAindaVoa } from '../reparo.js';
 import { rejeicoesDosPedidos } from '../rejeicoes.js';
 import { motivoDoFixo } from '../fixos.js';
 import { instrutoresDoVoo } from '../instrutor-escolhido.js';
-import { $, posicionarJunto, trocarConteudo, visivel } from '../dom.js';
+import { $, trocarConteudo } from '../dom.js';
+import { atualizarEditorDoVoo } from './edicao-do-voo.js';
 import { statusDoVoo, unidadeDoVoo } from '../voo.js';
 import { voosComInativos, textoDoVooComInativo } from '../inativos.js';
 
@@ -35,95 +36,6 @@ function missionColorClass(mis) {
   if (mis === 'Navegação' || mis === 'Parafuso' || mis === 'IFR') return 'm-pc';
   if (mis === 'Noturno') return 'm-nt';
   return 'm-mu';
-}
-
-// Popup do voo no mapa: um só, fixo na tela e fora do painel que rola (dentro dele o popup seria cortado e, nas
-// primeiras linhas, sumiria sob os filtros e o cabeçalho). Cada barra guarda a chave do voo; o conteúdo sai do registro
-// feito no último desenho do mapa, e o popup aberto acompanha a escala refeita (ex.: depois de mudar o status nele)
-const VOOS_DO_MAPA = new Map();
-let popupDe = null;
-
-function conteudoDoPopup(o) {
-  const ativos = o.items.filter(it => statusDe(it) !== 'Cancelado');
-  const principal = ativos[0] || o.items[0];
-  const st = ativos.length ? statusDe(principal) : 'Cancelado';
-  const turma = o.students.length > 1;
-  return `<div class="tl-pop-hd"><span>${hm(o.a)} – ${hm(o.b)}</span><span>${HT(o)}</span></div>
-    <div class="tl-pop-grid">
-      <span>${turma ? 'Turma:' : 'Aluno:'}</span><span>${esc(turma ? `${o.students.length} alunos: ${o.students.join(', ')}` : o.s)}</span>
-      <span>Instrutor:</span><span>${botaoDoInstrutor(principal, 'Instrutor do voo')}</span>
-      <span>Recurso:</span><span>${esc(nomeDoRecurso(o.r))}</span>
-      <span>Missão:</span><span>${esc(o.mis)}</span>
-      <span>Peso Trip.:</span><span>${o.kg ? `${pesoBr(o.kg)} kg` : '—'}</span>
-      ${o.comb ? `<span>Combustível:</span><span>${textoDoCombustivel(o.comb)}</span>` : ''}
-      <span>Status:</span>
-      <span>
-        <select class="st-sel st-${classeDoStatus(st)}" data-f="fstatus" data-fkey="${esc(principal.fKey)}" aria-label="Status do voo"${isGestor() ? ' disabled' : ''}>
-          ${FLIGHT_STATUSES.map(v => `<option value="${v}"${v === st ? ' selected' : ''}>${rotuloDoStatus(v, principal)}</option>`).join('')}
-        </select>
-        ${detalheDoStatus(principal)}${st === 'Cancelado' ? botaoDoCancelado(principal) : ''}
-      </span>
-    </div>
-    ${ehGround(o) && ativos.length ? `<button type="button" class="tl-pop-btn edit-only" data-act="agendar" data-agendar="t:${esc(unidadeDoVoo(o))}" aria-haspopup="dialog">+ Aluno na turma</button>` : ''}
-    ${!turma && o.stuId && !principal.trecho ? `<button type="button" class="tl-pop-btn edit-only" data-act="rm-fly" data-id="${esc(o.stuId)}" data-mid="${esc(o.mid || 0)}">✕ Excluir da escala</button>` : ''}`;
-}
-
-const barraDoPopup = () => (popupDe === null ? null : document.querySelector(`#out .tl-bar[data-pop="${CSS.escape(popupDe)}"]`));
-
-// focar: aberto pela pessoa (clique ou Enter na barra), o foco vai para o primeiro controle do popup
-export function abrirPopupDoMapa(barra, { focar = false } = {}) {
-  const o = VOOS_DO_MAPA.get(barra.dataset.pop), pop = $('#tl-pop');
-  if (!o || !pop) return;
-  fecharPopupDoMapa();
-  pop.innerHTML = conteudoDoPopup(o);
-  pop.hidden = false;
-  barra.setAttribute('aria-expanded', 'true');
-  popupDe = barra.dataset.pop;
-  posicionarJunto(pop, barra);
-  if (focar) controlesDoPopup()[0]?.focus();
-}
-
-const controlesDoPopup = () => [...$('#tl-pop').querySelectorAll('select, button, input, [tabindex="0"]')].filter(c => !c.disabled && visivel(c));
-
-// Tab depois do último controle (ou Shift+Tab antes do primeiro) fecha o popup e volta para a barra, de onde o Tab segue
-export function tabNoPopup(e) {
-  if (e.key !== 'Tab' || popupDe === null) return;
-  const controles = controlesDoPopup();
-  const saindo = e.shiftKey ? document.activeElement === controles[0] : document.activeElement === controles.at(-1);
-  if (!controles.length || !saindo) return;
-  e.preventDefault();
-  fecharPopupDoMapa({ devolverFoco: true });
-}
-
-export function fecharPopupDoMapa({ devolverFoco = false } = {}) {
-  const pop = $('#tl-pop'), barra = barraDoPopup();
-  if (pop) pop.hidden = true;
-  popupDe = null;
-  if (!barra) return;
-  barra.setAttribute('aria-expanded', 'false');
-  if (devolverFoco) barra.focus();
-}
-
-export const popupDoMapaAberto = () => popupDe !== null;
-
-// Rolagem ou mudança de tamanho da janela: o popup acompanha a barra (e fecha se ela sumiu)
-export function reposicionarPopupDoMapa() {
-  if (popupDe === null) return;
-  const barra = barraDoPopup();
-  if (barra && visivel(barra)) posicionarJunto($('#tl-pop'), barra);
-  else fecharPopupDoMapa();
-}
-
-// Depois de redesenhar o mapa: o popup aberto volta para a mesma barra, com o conteúdo novo
-function reancorarPopupDoMapa() {
-  if (popupDe === null) return;
-  const barra = barraDoPopup();
-  if (!barra || !visivel(barra)) { fecharPopupDoMapa(); return; }
-  const chave = popupDe;
-  popupDe = null;
-  const foco = document.activeElement && $('#tl-pop').contains(document.activeElement) ? document.activeElement.dataset.f : null;
-  abrirPopupDoMapa(barra);
-  if (popupDe === chave && foco) { const campo = $(`#tl-pop [data-f="${foco}"]`); if (campo) campo.focus(); }
 }
 
 // O mapa é a vista escolhida (Por recurso ou Por instrutor). Na Lista e no Painel, ele fica escondido, só com as linhas
@@ -193,10 +105,10 @@ function buildTimelineGroup(linhas, porInstrutor, barLine1Fn, barLine2Fn, minSta
       const activeItems = o.items.filter(it => statusDe(it) !== 'Cancelado');
       const status = activeItems.length ? statusDe(activeItems[0]) : 'Cancelado';
       const stKey = classeDoStatus(status);
+      // A barra abre o editor do voo (a turma de Ground, pela chave dela): data-pop é a chave
       const chave = unidadeDoVoo(o) || `${porInstrutor ? 'ins' : 'r'}:${linha.chave}:${o.a}`;
-      VOOS_DO_MAPA.set(chave, o);
 
-      return `<button type="button" class="tl-bar ${cls} tl-st-${stKey}" data-pop="${esc(chave)}" aria-haspopup="dialog" aria-controls="tl-pop" aria-expanded="false" style="--ini:${left.toFixed(2)}%;--dur:${width.toFixed(2)}%">
+      return `<button type="button" class="tl-bar ${cls} tl-st-${stKey}" data-pop="${esc(chave)}" aria-haspopup="dialog" style="--ini:${left.toFixed(2)}%;--dur:${width.toFixed(2)}%">
         <span class="tl-bar-t1">${barLine1Fn(o)}</span>
         <span class="tl-bar-t2">${barLine2Fn(o)}</span>
         <span class="sr">, ${esc(rotuloDoStatus(status, o))}</span>
@@ -220,7 +132,6 @@ function buildTimelineGroup(linhas, porInstrutor, barLine1Fn, barLine2Fn, minSta
 // O mapa dos voos (com as linhas livres, nas vistas do mapa). Sem voo nenhum à vista, só a grade das linhas livres, sem a
 // legenda
 function renderVisualTimeline(voos, livres = []) {
-  VOOS_DO_MAPA.clear();
   const porInstrutor = TL_MODE === 'ins';
   const linhas = linhasDoMapa(voos, porInstrutor, livres);
   if (!linhas.length) return '';
@@ -380,9 +291,10 @@ const botaoDoCancelado = o => (cancelamentoAproveitavel(S, o, { data: DATA, hoje
   ? ` <button type="button" class="btn quiet edit-only" data-reparo="${esc(o.fKey)}" title="O que pode voar no lugar deste voo cancelado">Sugestões</button>`
   : '');
 
-const acao = o => (o.stuId && !o.trecho
+// "Editar" abre o editor do voo (na turma de Ground, a turma inteira); "✕" tira o voo da escala
+const acao = o => `<button type="button" class="btn quiet editar-voo" data-act="editar-voo" data-fkey="${esc(o.isGround ? o.classKey || o.fKey : o.fKey)}" aria-label="Editar o voo de ${esc(o.s)}" aria-haspopup="dialog">Editar</button>${o.stuId && !o.trecho
   ? `<button class="x" data-act="rm-fly" data-id="${esc(o.stuId)}" data-mid="${esc(o.mid || 0)}" aria-label="Tirar ${esc(o.s)} da escala" title="Tirar da escala">✕</button>`
-  : '');
+  : ''}`;
 
 // Escala aprovada: o selo diz quando (e quem) aprovou e o botão reabre; sem aprovação, o botão aprova
 function rAprovacao(temVoos) {
@@ -661,6 +573,7 @@ export function rOut() {
     trocarConteudo($('#out'), `<p class="h">Nenhum voo nesta data. Marque quem vai voar na Demanda: a escala é montada automaticamente.</p>${grade}`);
     rCompactacao([]);
     rAprovacao(false);
+    atualizarEditorDoVoo();
     atualizarPainelDeReparo();
     atualizarAgendamento();
     return 0;
@@ -688,7 +601,7 @@ export function rOut() {
   if (!voos.length) h += `<p class="h">${tot ? 'Nenhum voo na escala com esses filtros.' : 'Nenhuma missão marcada na Demanda.'}</p>${renderVisualTimeline([], livres)}`;
   else h += tabela(voos, al) + renderVisualTimeline(voos, livres) + (TL_MODE === 'painel' ? painelDoDia(voos) : '');
   trocarConteudo($('#out'), h);
-  reancorarPopupDoMapa();
+  atualizarEditorDoVoo();
   atualizarPainelDeReparo();
   // O diálogo do agendamento aberto confere de novo com a escala nova
   atualizarAgendamento();
