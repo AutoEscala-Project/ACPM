@@ -226,3 +226,14 @@ describe('Os avisos da data', () => {
     ]);
   });
 });
+
+// J (S4): a Sala Ground desligada na data é um aviso dos recursos na linha do dia; sem a chave dela (o normal), nada. As
+// contagens dos aviões não mudam
+describe('A Sala Ground indisponível na linha do dia', () => {
+  const daSala = ctx => avisosDaData(ctx).filter(a => a.id === 'sala-ground');
+  it('desligada na data: o aviso; sem a chave, ou ligada, nenhum', () => {
+    assert.deepEqual(daSala(contexto({ av: { 'SALA-GROUND': false } })).map(a => [a.gravidade, a.titulo]), [['aviso', 'A Sala Ground está indisponível nesta data']]);
+    assert.deepEqual(daSala(contexto()), []);
+    assert.deepEqual(daSala(contexto({ av: { 'SALA-GROUND': true } })), []);
+  });
+});

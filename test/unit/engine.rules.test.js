@@ -777,3 +777,46 @@ describe('O Ground pelos horários da Sala Ground', () => {
     assert.deepEqual(aulas(res).map(a => a[1]), ['10:00']);
   });
 });
+
+// J (S4): com a Sala Ground indisponível na data, nenhuma aula de Ground entra; o voo que depende dela espera
+// (ground-pendente, como hoje); os outros voos ficam
+describe('A Sala Ground indisponível na data', () => {
+  const comASala = (opts, disponivel) => runAllocationEngine({ ...cenario(opts), av: { ...cenario().av, 'SALA-GROUND': disponivel } }, { compactar: false });
+  const voo = aluno(1001, { mis: 'Voo Local', eq: 'C152', p1: 610, p2: -1 });
+
+  it('cada pedido de Ground recusado sala-indisponivel, o voo que ele libera ground-pendente, o resto entra', () => {
+    const gnd = aluno(1000, { ...GROUND_C152, p1: 390, p2: -1 }, { extra: [missaoExtra(1, { mis: 'Navegação', eq: 'C152', p1: 760, p2: -1 })] });
+    const res = comASala({ ins: [instrutor(1, 9), instrutor(2, 9)], stu: [gnd, voo] }, false);
+    assert.equal(res.out.some(o => o.isGround), false);
+    const codigos = res.al.filter(a => a.t === 'err').map(a => [a.s, a.codigo]);
+    assert.deepEqual(codigos.filter(([s]) => s.startsWith('Aluno 1000')).map(([, c]) => c).sort(), ['ground-pendente', 'sala-indisponivel'].sort());
+    assert.ok(res.out.some(o => o.stuId === 1001), 'o voo de outro aluno entra');
+  });
+
+  it('com a chave true, ou ausente, a aula entra', () => {
+    for (const disponivel of [true, undefined]) {
+      const res = comASala({ stu: [aluno(1000, { ...GROUND_C152, p1: 390, p2: -1 })] }, disponivel);
+      assert.equal(res.out.filter(o => o.isGround).length, 1, String(disponivel));
+    }
+  });
+
+  it('a turma fixa na sala indisponível fica em conflito sala-indisponivel', () => {
+    const estado = { ...cenario({ stu: [aluno(1000, { ...GROUND_C152, p1: 390, p2: -1 })] }) };
+    const feito = runAllocationEngine(estado, { compactar: false });
+    const aula = feito.out.find(o => o.isGround);
+    estado.fixos = { [aula.fKey]: { a: aula.a, b: aula.b, r: 'SALA-GROUND', insId: aula.insId, agendado: true } };
+    estado.av = { ...estado.av, 'SALA-GROUND': false };
+    const res = runAllocationEngine(estado, { compactar: false });
+    const fixa = res.out.find(o => o.fKey === aula.fKey);
+    assert.ok(fixa && (fixa.conflitoCodigos || []).includes('sala-indisponivel'), JSON.stringify(fixa && fixa.conflitoCodigos));
+  });
+
+  it('os 40 cenários e o exemplo com a sala disponível (a chave true) dão os goldens', async () => {
+    const { gerarCenario } = await import('../helpers/cenarios.js');
+    const { lerGoldens } = await import('../helpers/goldens.js');
+    const goldens = lerGoldens();
+    const comAChave = estado => ({ ...estado, av: { ...estado.av, 'SALA-GROUND': true } });
+    assert.deepEqual(JSON.parse(JSON.stringify(runAllocationEngine(comAChave(goldens.exemplo.estado)))), goldens.exemplo.saida);
+    for (const { seed, saida } of goldens.cenarios) assert.deepEqual(JSON.parse(JSON.stringify(runAllocationEngine(comAChave(gerarCenario(seed))))), saida, `cenário ${seed}`);
+  });
+});

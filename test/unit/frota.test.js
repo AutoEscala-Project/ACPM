@@ -2,7 +2,7 @@
 // config.js); o formato 11 dos dados a leva para o cadastro, e o motor e as telas a leem de lá.
 import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { FROTA_INICIAL, TIPOS_DA_FROTA, normalizarFrota, matriculasDoTipo, novoRecurso, comAtributo } from '../../js/frota.js';
+import { FROTA_INICIAL, TIPOS_DA_FROTA, normalizarFrota, matriculasDoTipo, novoRecurso, comAtributo, salaDisponivel } from '../../js/frota.js';
 import { ESQUEMA, migrarCadastro } from '../../js/migracoes.js';
 import { separar, juntar } from '../../js/dias.js';
 import { ApiClient } from '../../js/storage.js';
@@ -146,5 +146,27 @@ describe('Frota: o que o recurso exige e o inativo (formato 26)', () => {
     assert.deepEqual(comAtributo({ reg: 'PR-X', tipo: 'C172', soVfr: true, inativo: true }, 'soVfr', false), { reg: 'PR-X', tipo: 'C172', inativo: true });
     // O atributo que não vale no tipo não muda nada
     assert.deepEqual(comAtributo({ reg: 'PR-X', tipo: 'C172' }, 'soParafuso', true), { reg: 'PR-X', tipo: 'C172' });
+  });
+});
+
+// J (S4): a Sala Ground tem "Disponível" por data, como os outros recursos. A chave dela em av só existe depois que alguém
+// a desliga (ou liga de novo): sem a chave, a sala está disponível. Todo leitor passa por salaDisponivel, nunca por um
+// teste de verdade (S.av[r]), que diria "indisponível" em toda data sem a chave
+describe('A Sala Ground disponível nesta data (S4)', () => {
+  it('salaDisponivel: sem a chave ou true, disponível; só false a desliga', () => {
+    assert.equal(salaDisponivel({}), true);
+    assert.equal(salaDisponivel(undefined), true);
+    assert.equal(salaDisponivel({ 'SALA-GROUND': true }), true);
+    assert.equal(salaDisponivel({ 'SALA-GROUND': false }), false);
+  });
+
+  it('o estado normalizado guarda a chave booleana da sala, e deixa ausente a que não existe', () => {
+    const base = juntar(separar(cenario()));
+    const sem = ApiClient.normalizeAndMigrateState(structuredClone(base));
+    assert.equal(Object.hasOwn(sem.av, 'SALA-GROUND'), false);
+    const desligada = ApiClient.normalizeAndMigrateState({ ...structuredClone(base), av: { ...base.av, 'SALA-GROUND': false } });
+    assert.equal(desligada.av['SALA-GROUND'], false);
+    const lixo = ApiClient.normalizeAndMigrateState({ ...structuredClone(base), av: { ...base.av, 'SALA-GROUND': 'nao' } });
+    assert.equal(Object.hasOwn(lixo.av, 'SALA-GROUND'), false);
   });
 });
