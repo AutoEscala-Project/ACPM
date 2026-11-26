@@ -697,6 +697,22 @@ describe('O 7º voo local confirmado', () => {
     assert.ok(!out.some(o => o.conflito));
   });
 
+  it('fixo e atrasado para outro horário, o confirmado conta lá como os outros: a confirmação era do minuto dele', () => {
+    // Confirmado para as 08:20, o voo aprovado atrasa para as 10:10, onde seis outros pedem o horário exato: lá ele não é
+    // o 7º confirmado, e só cinco dos seis saem às 10:10, como sem a confirmação
+    const as1010 = () => [0, 1, 2, 3, 4, 5].map(i => aluno(1000 + i, { p1: 610, p2: -1, jan: 'h610' }));
+    const saemAs1010 = limiteConfirmado => {
+      const estado = cenario({ ins: instrutores, stu: [...as1010(), confirmado({ limiteConfirmado })], fStatus: { '1006_0_1': 'Atrasado' } });
+      estado.fixos = { '1006_0_1': { a: 500, b: 560, r: 'PR-VOZ', insId: 9 } };
+      estado.fObs = { '1006_0_1': { novoInicio: 610 } };
+      const { out, al } = runAllocationEngine(estado);
+      return { aos1010: out.filter(o => o.a === 610).map(o => o.stuId).sort(), erros: al.filter(a => a.t === 'err').map(a => [a.s, a.codigo]) };
+    };
+    const sem = saemAs1010(undefined);
+    assert.equal(sem.aos1010.length, 5);
+    assert.deepEqual(saemAs1010(true), sem);
+  });
+
   it('sem a confirmação, o 7º não sai às 08:20; o 8º não confirmado também não', () => {
     const sem = alocar({ ins: instrutores, stu: [...seis(), confirmado({ limiteConfirmado: undefined })] });
     assert.equal(locaisAs(sem.out, 500).length, 6);

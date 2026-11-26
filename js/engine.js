@@ -471,7 +471,7 @@ export function runAllocationEngine(state, opcoes = {}) {
         }
         // No máximo 6 voos locais saindo no mesmo horário: conferido antes de contar este (o confirmado avisa depois da fila)
         const locais = locaisNoHorario[efetivo.a] || 0;
-        if (!ground && MISSOES_LOCAIS.includes(d.mis) && minutoConfirmado(d) !== a && locais >= LIMITE_DE_VOOS_LOCAIS) {
+        if (!ground && MISSOES_LOCAIS.includes(d.mis) && minutoConfirmado(d) !== efetivo.a && locais >= LIMITE_DE_VOOS_LOCAIS) {
           avisar('limite-de-locais', `Agendado às ${hm(a)} como o ${locais + 1}º voo local do horário: no máximo ${LIMITE_DE_VOOS_LOCAIS} voos locais saem no mesmo horário.`);
         }
         // O peso que falta, como no voo escalado pelo motor (os outros voos fixos não avisam)
@@ -495,7 +495,8 @@ export function runAllocationEngine(state, opcoes = {}) {
       };
       if (efetivo.a === a) ocupar(efetivo);
       else ocupacoesDeAtraso.push(() => ocupar(efetivo));
-      if (!ground && MISSOES_LOCAIS.includes(d.mis) && minutoConfirmado(d) !== a) locaisNoHorario[efetivo.a] = (locaisNoHorario[efetivo.a] || 0) + 1;
+      // O confirmado só não conta no minuto confirmado: atrasado para outro horário, ele conta lá como os outros
+      if (!ground && MISSOES_LOCAIS.includes(d.mis) && minutoConfirmado(d) !== efetivo.a) locaisNoHorario[efetivo.a] = (locaisNoHorario[efetivo.a] || 0) + 1;
       if (!daMesmaTurma) {
         if (x) load[x.id] = (load[x.id] || 0) + h;
         eu[ground ? GROUND_REG : r] = (eu[ground ? GROUND_REG : r] || 0) + h;
