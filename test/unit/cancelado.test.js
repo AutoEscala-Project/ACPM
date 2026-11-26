@@ -73,10 +73,26 @@ describe('O que pode voar no lugar do cancelado', () => {
     }
   });
 
-  it('"Outro": nada sai da busca (o mesmo lugar primeiro)', () => {
-    const { estado, resultado, voo } = cancelado(cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, { p1: 390, p2: -1 })] }), 1000, 'Outro');
+  it('"Outro": nada sai da busca, e o primeiro é o mesmo horário e avião com outro instrutor (nunca o próprio voo cancelado)', () => {
+    const { estado, resultado, voo } = cancelado(cenario({ ins: [instrutor(1, 9), instrutor(2, 9)], stu: [aluno(1000, { p1: 610, p2: -1 })] }), 1000, 'Outro');
     const r = sugerirParaCancelado(estado, resultado, voo.fKey);
-    assert.deepEqual(r.opcoes[0].mudancas, { a: voo.a, b: voo.b, r: voo.r, insId: voo.insId });
+    assert.equal(r.opcoes[0].tipo, 'instrutor');
+    assert.deepEqual(r.opcoes[0].mudancas, { a: voo.a, b: voo.b, r: voo.r, insId: voo.insId === 1 ? 2 : 1 });
+    const mesmo = o => o.mudancas.a === voo.a && o.mudancas.r === voo.r && o.mudancas.insId === voo.insId;
+    assert.ok(!r.opcoes.some(mesmo), textos(r).join(' | '));
+    // O outro avião no mesmo horário fica com o instrutor de antes
+    assert.ok(r.opcoes.some(o => o.tipo === 'aviao' && o.mudancas.insId === voo.insId), textos(r).join(' | '));
+  });
+
+  it('"Manutenção da aeronave": o outro avião no mesmo horário fica com o instrutor de antes quando ele está livre, e o escolhido do pedido não muda', () => {
+    // O aluno escolheu o Instrutor 02; o Instrutor 01 vem antes na lista dos que servem
+    const { estado, resultado, voo } = cancelado(cenario({ ins: [instrutor(1, 9), instrutor(2, 9)], stu: [aluno(1000, { p1: 610, p2: -1, insId: 2 })] }), 1000, 'Manutenção da aeronave');
+    assert.equal(voo.insId, 2);
+    const [primeira] = sugerirParaCancelado(estado, resultado, voo.fKey).opcoes;
+    assert.equal(primeira.tipo, 'aviao');
+    assert.equal(primeira.mudancas.insId, 2, primeira.texto);
+    aproveitarCancelado(estado, resultado, voo.fKey, primeira);
+    assert.equal(estado.stu[0].insId, 2);
   });
 
   it('hoje, visto às 08:30: o voo das 08:20 não tem nada às 08:20 nem antes, e o resto do dia continua', () => {
