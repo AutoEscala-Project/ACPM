@@ -2,8 +2,8 @@
 // aprovada, só aquele voo muda e o motor não roda; fora dela, a pergunta (#dlg-refazer) vem antes, e "Salvar e refazer"
 // roda o motor. Nada é gravado antes de "Salvar"; "Cancelar" e o Esc deixam o dia gravado igual
 import { test, expect, abrir, abrirEscala, aprovar, reabrir, lerEscala, abrirHistorico, entradasDoHistorico, abrirCaixa, larguraDaPagina, AMANHA, vigiarErros,
-  editorDoVoo, editarPelaLista, editarPeloMapa, barraDoVoo, botaoEditar, salvarVoo, perguntaDoRefazer, refazer, naoRefazer } from './fixtures.js';
-import { aluno, cenario, instrutor, apenas } from '../helpers/montar.js';
+  editorDoVoo, editarPelaLista, editarPeloMapa, barraDoVoo, botaoEditar, salvarVoo, perguntaDoRefazer, refazer, naoRefazer, diaSeguinte } from './fixtures.js';
+import { aluno, cenario, instrutor, apenas, GROUND_C152 } from '../helpers/montar.js';
 
 // Um C152 só (PP-LJV): o Aluno 1000 às 06:30, o 1001 às 08:20 e o 1002 às 10:10; o 1003 só às 06:30 (o minuto exato), que
 // fica fora: o avião já está com o 1000
@@ -255,5 +255,183 @@ test.describe('A pergunta antes de refazer a escala (R6) e a escala aprovada sem
     const soltar = page.locator('#painel-reparo button', { hasText: 'Soltar' });
     await expect(soltar).toBeDisabled();
     await expect(page.locator('#soltar-travado')).toHaveText('Reabra a escala para soltar o voo.');
+  });
+});
+
+// A revisão do F1g, na tela: desfazer depois de aprovar e de reabrir; digitar o "Outro horário" e a duração; o foco depois
+// de salvar a turma e de desistir da troca do INVA; o porquê dos campos travados; o que a pergunta e o "Editar" da turma
+// dizem ao leitor de tela
+test.describe('O editor do voo: o que a revisão achou', () => {
+  const linhaDaTabela = (page, nome) => page.locator('#out tbody tr', { has: page.locator('td.c-aluno', { hasText: nome }) });
+  const fixosGuardados = async page => (JSON.parse(await diaGuardado(page)) || {}).fixos || {};
+  const ativo = page => page.evaluate(() => { const a = document.activeElement; return a ? a.id || `${a.tagName}${a.dataset.pop ? `[data-pop=${a.dataset.pop}]` : ''}${a.dataset.act ? `[data-act=${a.dataset.act}]` : ''}` : null; });
+
+  test('a alteração feita antes da aprovação, desfeita na aprovada: o voo volta para o lugar de antes, fixo', async ({ page }) => {
+    await abrir(page, { estado: dia() });
+    await abrirEscala(page);
+    await editarPelaLista(page, '1002_0_1');
+    await page.locator('#voo-horario').selectOption('870');
+    await salvarVoo(page);
+    await refazer(page);
+    expect(linhaDe(await lerEscala(page), 'Aluno 1002')).toContain('14:30–15:30');
+    await aprovar(page);
+    await abrirHistorico(page);
+    await entradasDoHistorico(page, 'Voo editado: Aluno 1002').getByRole('button', { name: '↶ Reverter' }).click();
+    await page.keyboard.press('Escape');
+    await expect.poll(async () => linhaDe(await lerEscala(page), 'Aluno 1002')).toContain('10:10–11:10');
+    expect((await fixosGuardados(page))['1002_0_1']).toMatchObject({ a: 610, b: 670 });
+    await expect(linhaDaTabela(page, 'Aluno 1002').locator('svg.fixo')).toHaveAttribute('aria-label', 'Voo fixo: escala aprovada');
+  });
+
+  test('a alteração feita na aprovada, desfeita depois de reabrir: o voo volta sem o cadeado', async ({ page }) => {
+    await abrir(page, { estado: dia() });
+    await abrirEscala(page);
+    await aprovar(page);
+    await editarPelaLista(page, '1002_0_1');
+    await page.locator('#voo-horario').selectOption('870');
+    await salvarVoo(page);
+    await expect(editorDoVoo(page)).toBeHidden();
+    await reabrir(page);
+    await abrirHistorico(page);
+    await entradasDoHistorico(page, 'Voo editado: Aluno 1002').getByRole('button', { name: '↶ Reverter' }).click();
+    await page.keyboard.press('Escape');
+    await expect.poll(async () => linhaDe(await lerEscala(page), 'Aluno 1002')).toContain('10:10–11:10');
+    await expect(linhaDaTabela(page, 'Aluno 1002').locator('svg.fixo')).toHaveCount(0);
+    expect((await fixosGuardados(page))['1002_0_1']).toBeUndefined();
+  });
+
+  test('"Outro horário…" digitado: cada parte fica onde foi digitada, e o voo é salvo no horário digitado', async ({ page }) => {
+    await abrir(page, { estado: dia() });
+    await abrirEscala(page);
+    await aprovar(page);
+    await editarPelaLista(page, '1002_0_1');
+    await page.locator('#voo-horario').selectOption('outro');
+    const campo = page.locator('#voo-outro-horario');
+    await campo.click({ position: { x: 8, y: 10 } });
+    await page.keyboard.type('1435');
+    await expect(campo).toHaveValue('14:35');
+    await expect(campo).toBeFocused();
+    await expect(page.locator('#voo-avisos')).toContainText('14:35');
+    await salvarVoo(page);
+    if (await editorDoVoo(page).isVisible()) await salvarVoo(page);
+    await expect(editorDoVoo(page)).toBeHidden();
+    expect(linhaDe(await lerEscala(page), 'Aluno 1002')).toContain('14:35–15:35');
+  });
+
+  test('a duração digitada: o Tab e o clique vão para o campo seguinte, e a duração vale', async ({ page }) => {
+    await abrir(page, { estado: dia() });
+    await abrirEscala(page);
+    await aprovar(page);
+    await editarPelaLista(page, '1002_0_1');
+    const duracao = page.locator('#voo-duracao');
+    await duracao.fill('1.5');
+    await duracao.focus();
+    await page.keyboard.press('Tab');
+    await expect(page.locator('#voo-instrutor')).toBeFocused();
+    await duracao.click();
+    await page.keyboard.press('ControlOrMeta+a');
+    await page.keyboard.type('1.2');
+    await page.locator('#voo-recurso').click();
+    await expect(page.locator('#voo-recurso')).toBeFocused();
+    await page.keyboard.press('Escape');
+    // O Esc fecha a lista do recurso (quando aberta) ou o editor: o editor fecha sem gravar
+    if (await editorDoVoo(page).isVisible()) await page.keyboard.press('Escape');
+    await editarPelaLista(page, '1002_0_1');
+    await duracao.fill('1.5');
+    await duracao.focus();
+    await page.keyboard.press('Tab');
+    await salvarVoo(page);
+    if (await editorDoVoo(page).isVisible()) await salvarVoo(page);
+    await expect(editorDoVoo(page)).toBeHidden();
+    expect(linhaDe(await lerEscala(page), 'Aluno 1002')).toContain('10:10–11:40');
+  });
+
+  for (const aprovada of [true, false]) {
+    test(`a turma de Ground salva pelo mapa: o foco volta para a barra da turma (${aprovada ? 'aprovada' : 'não aprovada'})`, async ({ page }) => {
+      const estado = cenario({ ins: [instrutor(1, 9), instrutor(2, 9)], stu: [aluno(1000, { ...GROUND_C152, p1: 500, p2: -1 }), aluno(1001, { ...GROUND_C152, p1: 500, p2: -1 }), aluno(1002, { p1: 610, p2: -1 })] });
+      await abrir(page, { estado });
+      await abrirEscala(page);
+      if (aprovada) await aprovar(page);
+      await abrirEscala(page, { vista: 'eq' });
+      await page.locator('#out .tl-bar', { hasText: 'Ground' }).first().click();
+      await expect(editorDoVoo(page)).toBeVisible();
+      await page.locator('#voo-horario').selectOption({ index: 3 });
+      await salvarVoo(page);
+      if (aprovada && await editorDoVoo(page).isVisible()) await salvarVoo(page);
+      if (!aprovada) await refazer(page);
+      await expect(editorDoVoo(page)).toBeHidden();
+      await expect.poll(() => ativo(page)).toMatch(/\[data-pop=GND_/);
+    });
+  }
+
+  for (const via of ['Cancelar', 'Esc']) {
+    test(`o INVA na Lista fora da escala aprovada: ${via} na pergunta devolve o foco ao nome do instrutor`, async ({ page }) => {
+      await abrir(page, { estado: dia() });
+      await abrirEscala(page);
+      await page.locator('#out [data-act="trocar-instrutor"][data-fkey="1001_0_1"]').focus();
+      await page.keyboard.press('Enter');
+      const lista = page.locator('#out select[data-a="insVoo"][data-fkey="1001_0_1"]');
+      await expect(lista).toBeFocused();
+      const outro = await lista.evaluate(s => [...s.options].find(o => !o.selected && o.value).value);
+      await lista.selectOption(outro);
+      await expect(perguntaDoRefazer(page)).toBeVisible();
+      if (via === 'Esc') await page.keyboard.press('Escape');
+      else await page.keyboard.press('Enter');
+      await expect(perguntaDoRefazer(page)).toBeHidden();
+      await expect(page.locator('#out [data-act="trocar-instrutor"][data-fkey="1001_0_1"]')).toBeFocused();
+    });
+  }
+
+  test('a volta do noturno de ontem: cada campo travado e o status dizem por quê', async ({ page }) => {
+    const estado = cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, { mis: 'Noturno', eq: 'C172', p1: 1050, p2: -1 }), aluno(1001, { fly: false })] });
+    await abrir(page, { estado });
+    await abrirEscala(page);
+    // O dia gravado (com o noturno), para a volta aparecer amanhã
+    await page.locator('#out tbody tr', { hasText: 'Aluno 1000' }).locator('select[data-f="fstatus"]').selectOption('Pendente');
+    await refazer(page);
+    await diaSeguinte(page);
+    await abrirEscala(page);
+    await page.locator('#out tbody tr', { hasText: 'Aluno 1000' }).locator('[data-act="editar-voo"]').click();
+    await expect(editorDoVoo(page)).toBeVisible();
+    await expect(page.locator('#voo-trava-tudo')).toHaveText('É a volta do noturno de ontem: só o status muda aqui.');
+    const semPorque = await page.evaluate(() => [...document.querySelectorAll('#voo-campos select, #voo-campos input')]
+      .filter(c => c.disabled || c.id === 'voo-status').filter(c => !(c.getAttribute('aria-describedby') || '').split(' ').includes('voo-trava-tudo')).map(c => c.id));
+    expect(semPorque).toEqual([]);
+  });
+
+  test('o aluno que deixa a missão para escolher: os campos travados apontam o aviso "Escolha a missão do aluno."', async ({ page }) => {
+    const PROGRAMA = { PP: [{ id: 'PP-01', nome: 'Familiarização', mis: 'Voo Local', eq: 'C152', nb: 1 }], PC: [], INVA: [] };
+    const estado = { ...cenario({ ins: [instrutor(1, 9), instrutor(2, 9)], stu: [aluno(1000, { p1: 390, p2: -1 }), aluno(1001, { p1: 500, p2: -1, fly: false }, { curso: 'PP', nm: 'Maria Silva' })] }), cursos: PROGRAMA };
+    await abrir(page, { estado });
+    await abrirEscala(page);
+    await editarPelaLista(page, '1000_0_1');
+    await page.locator('#voo-aluno').selectOption('1001');
+    await expect(page.locator('#voo-missao')).toHaveValue('');
+    const aviso = page.locator('#voo-avisos li', { hasText: 'Escolha a missão do aluno.' });
+    const id = await aviso.getAttribute('id');
+    const semPorque = await page.evaluate(i => [...document.querySelectorAll('#voo-campos select:disabled, #voo-campos input:disabled')]
+      .filter(c => !(c.getAttribute('aria-describedby') || '').split(' ').includes(i)).map(c => c.id), id);
+    expect(semPorque).toEqual([]);
+    expect(await page.locator('#voo-campos select:disabled, #voo-campos input:disabled').count()).toBeGreaterThan(0);
+  });
+
+  test('a pergunta antes de refazer diz ao leitor de tela os avisos que ela lista', async ({ page }) => {
+    await abrir(page, { estado: dia() });
+    await abrirEscala(page);
+    await editarPelaLista(page, '1001_0_1');
+    await page.locator('#voo-horario').selectOption('390');
+    await salvarVoo(page);
+    await expect(perguntaDoRefazer(page)).toBeVisible();
+    const descrito = await page.locator('#dlg-refazer').getAttribute('aria-describedby');
+    expect(descrito.split(' ')).toEqual(expect.arrayContaining(['refazer-texto', 'refazer-avisos']));
+    await naoRefazer(page);
+  });
+
+  test('o "Editar" de um aluno da turma de Ground na Lista diz que edita a turma', async ({ page }) => {
+    const estado = cenario({ ins: [instrutor(1, 9), instrutor(2, 9)], stu: [aluno(1000, { ...GROUND_C152, p1: 500, p2: -1 }), aluno(1001, { ...GROUND_C152, p1: 500, p2: -1 }), aluno(1002, { p1: 610, p2: -1 })] });
+    await abrir(page, { estado });
+    await abrirEscala(page);
+    const rotulos = await page.locator('#out [data-act="editar-voo"]').evaluateAll(bs => bs.map(b => b.getAttribute('aria-label')));
+    expect(rotulos).toEqual(expect.arrayContaining(['Editar a turma de Ground C152 (Aluno 1000)', 'Editar a turma de Ground C152 (Aluno 1001)', 'Editar o voo de Aluno 1002']));
   });
 });
