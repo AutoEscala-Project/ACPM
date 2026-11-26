@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import { runAllocationEngine } from '../../js/engine.js';
 import { pinoDoVoo } from '../../js/fixos.js';
 import { hm } from '../../js/format.js';
-import { cancelamentoAproveitavel, sugerirParaCancelado, aproveitarCancelado, desfazerAproveitamento, sugestoesDoRejeitado, sugerirReparos, repararComOPedido } from '../../js/reparo.js';
+import { cancelamentoAproveitavel, sugerirParaCancelado, aproveitarCancelado, desfazerAproveitamento, sugestoesDoRejeitado, sugerirReparos, repararComOPedido, dataQueAindaVoa } from '../../js/reparo.js';
 import { validarReversao } from '../../js/reversoes.js';
 import { rejeicoesDosPedidos } from '../../js/rejeicoes.js';
 import { pedidoDoAluno } from '../../js/voo.js';
@@ -218,6 +218,22 @@ describe('O pedido recusado pelo instrutor escolhido', () => {
     assert.deepEqual(opcoes.map(o => o.insId), [2, 0]);
     assert.match(opcoes[0].texto, /^Com Instrutor 02: \d\d:\d\d no /);
     assert.match(opcoes[1].texto, /^Automático \(o app escolhe Instrutor 02\)/);
+  });
+
+  it('na escala de hoje, nada num horário que já passou: o motor encaixaria às 06:30, e às 08:30 não há sugestão', () => {
+    const estado = cenario({ ins: [instrutor(1, 9, { on: false }), instrutor(2, 9)], stu: [aluno(1000, { p1: 390, p2: -1, insId: 1 })] });
+    const resultado = runAllocationEngine(estado);
+    const fKey = [...rejeicoesDosPedidos(estado, resultado).keys()][0];
+    assert.equal(sugestoesDoRejeitado(estado, resultado, fKey).length, 2);
+    assert.deepEqual(sugestoesDoRejeitado(estado, resultado, fKey, { depoisDe: 510 }), []);
+    assert.equal(sugestoesDoRejeitado(estado, resultado, fKey, { depoisDe: 380 }).length, 2, 'antes das 06:30, as duas');
+  });
+
+  it('só de hoje em diante: a data passada não tem sugestões (como o voo cancelado)', () => {
+    assert.equal(dataQueAindaVoa({ data: '2026-11-09', hoje: '2026-11-10' }), false);
+    assert.equal(dataQueAindaVoa({ data: '2026-11-10', hoje: '2026-11-10' }), true);
+    assert.equal(dataQueAindaVoa({ data: '2026-11-11', hoje: '2026-11-10' }), true);
+    assert.equal(dataQueAindaVoa({ data: null, hoje: '2026-11-10' }), false);
   });
 
   it('em 80 sementes com escolhas: cada sugestão aplicada faz o pedido entrar sem mudar nenhum outro voo', () => {

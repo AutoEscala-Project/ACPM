@@ -1,8 +1,9 @@
 // Sugestões para um conflito: o botão "Sugestões" da caixa de conflitos abre uma gaveta com o que pode voar
 // no lugar do voo fixo; "Aplicar" muda o voo (que continua fixo) e o histórico desfaz. Cancelar pede o motivo, como no
 // status, já com o motivo do conflito marcado
-import { test, expect, abrir, irPara, abrirEscala, abrirCaixa, abrirHistorico, alternarVem, aprovar } from './fixtures.js';
+import { test, expect, abrir, irPara, abrirEscala, abrirCaixa, abrirHistorico, alternarVem, aprovar, rotuloDaData } from './fixtures.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
+import { documentosAtuais } from './supabase-falso.js';
 
 const dia = () => cenario({ ins: [instrutor(1, 9), instrutor(2, 9)], stu: [aluno(1000, { p1: 390, p2: -1 }), aluno(1001, { p1: 500, p2: -1 })] });
 const linha = (page, nome) => page.locator('#out tbody tr:not(.win)', { hasText: nome });
@@ -255,4 +256,37 @@ test('o pedido recusado pelo instrutor escolhido: "Sugestões" na linha da recus
   await page.locator('#audit-log-list [data-act="rev-log"]').first().click();
   await page.keyboard.press('Escape');
   await expect(page.locator('#out details.caixa.erros')).toContainText('Aluno 1000');
+});
+
+// Uma data que já passou (hoje, nos testes, é 10/11): o cadastro e o dia gravados como o app grava, abertos pelo endereço
+const ONTEM = '2026-11-09';
+async function abrirNaDataPassada(page, estado) {
+  const { documentos, dias } = documentosAtuais(estado, ONTEM);
+  await page.addInitScript(([cadastro, dia, data]) => {
+    if (localStorage.getItem('acpm4_cadastro')) return;
+    localStorage.setItem('acpm4_cadastro', cadastro);
+    localStorage.setItem(`acpm4_dia_${data}`, dia);
+  }, [JSON.stringify(documentos.cadastro), JSON.stringify(dias[ONTEM]), ONTEM]);
+  await abrir(page, { url: `./?data=${ONTEM}` });
+  await abrirEscala(page);
+  await expect(rotuloDaData(page)).toContainText('09/11');
+}
+
+test.describe('Sugestões só de hoje em diante', () => {
+  test('na data passada, a recusa do instrutor escolhido não tem "Sugestões"', async ({ page }) => {
+    await abrirNaDataPassada(page, cenario({ ins: [instrutor(1, 9, { on: false }), instrutor(2, 9)], stu: [aluno(1000, { p1: 610, p2: -1, insId: 1 })] }));
+    await abrirCaixa(page, 'erros');
+    await expect(page.locator('#out details.caixa.erros')).toContainText('Aluno 1000');
+    await expect(page.locator('#out details.caixa.erros [data-rejeitado]')).toHaveCount(0);
+  });
+
+  test('na data passada, o voo cancelado não tem "Sugestões"', async ({ page }) => {
+    await abrirNaDataPassada(page, {
+      ...cenario({ ins: [instrutor(1, 9), instrutor(2, 9)], stu: [aluno(1000, { p1: 610, p2: -1 })] }),
+      fStatus: { '1000_0_1': 'Cancelado' }, fObs: { '1000_0_1': { motivo: 'Instrutor indisponível' } }
+    });
+    const voo = linha(page, 'Aluno 1000');
+    await expect(voo.locator('.st-sel')).toHaveValue('Cancelado');
+    await expect(voo.getByRole('button', { name: 'Sugestões' })).toHaveCount(0);
+  });
 });
