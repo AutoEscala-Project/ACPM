@@ -708,6 +708,12 @@ export function runAllocationEngine(state, opcoes = {}) {
   } else {
     trocarMatriculas(out);
   }
+  // A primeira visita do “Priorizar com” encaixa fora da ordem da fila: daqui em diante (os avisos que saem voo a voo), as
+  // linhas sem pino voltam à ordem da fila, depois dos fixos, como conferirEscala as monta (js/conferencia.js). Sem a
+  // primeira visita, a ordem já é essa
+  const lugarNaFila = new Map(act.map((item, i) => [chaveDoVoo(item.stuId, item.mid), i]));
+  const ordemNaFila = o => (o.fixo ? -1 : lugarNaFila.get(o.fKey) ?? -1);
+  out.sort((p, q) => ordemNaFila(p) - ordemNaFila(q));
   // O voo sem o instrutor do “Priorizar com”: o aviso diz quem ficou com ele (se a divisão das horas ou a compactação o
   // passaram para um instrutor do “Priorizar com”, não há aviso). Com o F1h, os avisos do “Priorizar com” saem de
   // js/conferencia.js (avisosDoPriorizarCom): também as disputas e os voos postos à mão fora dele, um por voo

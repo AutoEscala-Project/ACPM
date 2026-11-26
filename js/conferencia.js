@@ -376,18 +376,48 @@ function porQueFicou(outro, d, ordemDoOutro, ordem) {
   return ordemDoOutro < ordem ? `prioridade ${pr}, antes no cadastro` : null;
 }
 
+// Os instrutores do “Priorizar com” do aluno que estão no cadastro, cada um com o que o impede de dar o voo do pedido (mis,
+// tipo, exige) em qualquer horário, na ordem do motivo do motor (js/engine.js, motivoSemPar): 'fora nesta data', 'sem a
+// habilitação da missão', 'em “Não escalar com”'; '' quando pode
+function paresDoAluno(state, s, { mis, tipo, exige }) {
+  return (s.voaCom || []).map(id => state.ins.find(x => x.id === id)).filter(Boolean).map(x => ({
+    x, nota: !x.on ? 'fora nesta data' : !podeFazer(x, mis, tipo, { curso: s.curso, exige }) ? 'sem a habilitação da missão' : (s.bl || []).includes(x.id) ? 'em “Não escalar com”' : ''
+  }));
+}
+
+// Sem nenhum do “Priorizar com” que possa dar o voo: o motivo, como o do motor (todos fora; senão, sem a habilitação; senão,
+// em “Não escalar com”)
+const motivoSemNenhum = lista => (lista.every(p => p.nota === 'fora nesta data') ? 'fora nesta data'
+  : lista.every(p => p.nota !== 'em “Não escalar com”') ? 'sem a habilitação da missão' : 'em “Não escalar com”');
+
+// O INVA (insId) fora do “Priorizar com” do aluno quando um do “Priorizar com” poderia dar o voo: ir contra a limitação do
+// aluno (N9, F1h; o agendamento, o editor do voo e a lista do instrutor na Escala avisam). Sem nenhum que possa, o voo com
+// outro INVA não vai contra ela
+export function foraDoPriorizarCom(state, s, pedido, insId) {
+  const pares = paresDoAluno(state, s, pedido);
+  return pares.some(p => !p.nota) && !pares.some(p => p.x.id === insId);
+}
+
+// O começo do aviso do voo posto à mão (ou com o INVA escolhido na Demanda) fora do “Priorizar com” quando um dele poderia
+// (o editor do voo pede a confirmação dele: js/edicao-do-voo.js)
+export const INICIO_DO_FORA_DO_PRIORIZAR = 'Fora do “Priorizar com” de ';
+
+// O começo do aviso de sempre do voo que ficou sem o INVA do “Priorizar com”, com o porquê (o resto: “: o voo ficou com …”)
+const inicioDoSemPar = porque => `Sem o instrutor de “Priorizar com” (${porque})`;
+
 // Os avisos do “Priorizar com” da escala montada (N9, F1h; o código voa-com, um por voo, com a chave dele), depois da
 // divisão das horas e da compactação, com os horários do fim:
-// - o voo posto à mão fora do “Priorizar com” (o pino agendado, ou o do INVA trocado na Escala): o aviso de que está fora;
+// - o voo posto à mão (o pino agendado, ou o do INVA trocado na Escala) ou com o INVA escolhido para o dia na Demanda fora
+//   do “Priorizar com”, quando um do “Priorizar com” poderia dar o voo: o aviso de que está fora; sem nenhum que possa, o
+//   aviso de sempre, com o motivo de cada um (o voo com outro INVA não vai contra a limitação);
 // - o voo sem pino que ficou sem o instrutor do “Priorizar com” (semPar: a chave do voo → os nomes e o motivo, da busca do
-//   motor): o aviso de sempre, com a disputa dentro dele quando há uma;
-// - o voo sem pino que ficou com o instrutor em outro horário: a disputa, quando há uma.
+//   motor, ou o começo do aviso, de conferirEscala): o aviso de sempre, com a disputa dentro dele quando há uma;
+// - o voo sem pino que ficou com um instrutor do “Priorizar com” fora do horário pedido: a disputa, quando há uma (por
+//   qualquer instrutor do “Priorizar com” que pudesse dar o voo).
 // A disputa: no horário pedido (horarioPedido), o instrutor do “Priorizar com” está com outro aluno que também o prioriza,
-// com um voo fixo ou com um pedido que tem o instrutor escolhido para o dia; sem ninguém assim, não há frase. O voo cujo
-// pedido tem o instrutor escolhido e o fixo pela aprovação ou pelo status não avisam, nem o voo posto à mão cancelado (o
-// voo sem pino cancelado avisa, como antes). soPinos: só os voos
-// postos à mão (conferirEscala, que mantém os avisos dos voos sem pino)
-export function avisosDoPriorizarCom(state, out, { semPar = new Map(), soPinos = false } = {}) {
+// com um voo fixo ou com um pedido que tem o instrutor escolhido para o dia; sem ninguém assim, não há frase. O fixo pela
+// aprovação ou pelo status não avisa, nem o voo posto à mão cancelado (o voo sem pino cancelado avisa, como antes)
+export function avisosDoPriorizarCom(state, out, { semPar = new Map() } = {}) {
   const alunos = new Map(state.stu.map((s, i) => [s.id, { s, i }]));
   const instrutores = new Map(state.ins.map(x => [x.id, x]));
   const fixos = state.fixos && typeof state.fixos === 'object' ? state.fixos : {};
@@ -413,7 +443,9 @@ export function avisosDoPriorizarCom(state, out, { semPar = new Map(), soPinos =
       const dOutro = pedido(v);
       const porQue = v.fixo || !dOutro ? 'voo fixo' : v.insEscolhido ? 'instrutor escolhido para o dia' : porQueFicou(dOutro, d, outro.i, alunos.get(o.stuId).i);
       const quem = outro ? outro.s.nm : v.s;
-      return `${s.nm} ${ambos ? `e ${quem} priorizam` : 'prioriza'} ${instrutores.get(x).nm} às ${hm(t)}: ficou com ${quem}${porQue ? ` (${porQue})` : ''}${o.a !== t ? `; ${s.nm} voa às ${hm(o.a)}` : ''}.`;
+      // Quando ele voa: o horário, e o instrutor quando é outro do “Priorizar com”
+      const quando = o.a !== t ? `; ${s.nm} voa às ${hm(o.a)}${lista.includes(o.insId) && o.insId !== x ? ` com ${o.ins}` : ''}` : '';
+      return `${s.nm} ${ambos ? `e ${quem} priorizam` : 'prioriza'} ${instrutores.get(x).nm} às ${hm(t)}: ficou com ${quem}${porQue ? ` (${porQue})` : ''}${quando}.`;
     }
     return null;
   };
@@ -422,30 +454,34 @@ export function avisosDoPriorizarCom(state, out, { semPar = new Map(), soPinos =
     const d = pedido(o);
     if (!d) continue;
     const { s } = alunos.get(o.stuId);
-    const pares = (s.voaCom || []).filter(id => instrutores.has(id));
-    if (!pares.length) continue;
+    const lista = paresDoAluno(state, s, { mis: d.mis, tipo: o.isGround ? GROUND_EQ_TYPE : d.eq, exige: d.exige });
+    if (!lista.length) continue;
+    const pares = lista.map(p => p.x.id);
+    // Só os instrutores do “Priorizar com” que poderiam dar o voo (vêm, têm a habilitação e não estão em “Não escalar com”)
+    const capazes = lista.filter(p => !p.nota).map(p => p.x.id);
     const rotulo = o.mid ? `${s.nm} (${d.mis})` : s.nm;
     // Na ordem dos campos da escala gravada (js/escala-gravada.js)
     const aviso = m => avisos.push({ t: 'warn', s: rotulo, fKey: o.fKey, m, codigo: 'voa-com', stuId: o.stuId, insId: o.insId });
     const pino = Object.hasOwn(fixos, o.fKey) ? fixos[o.fKey] : null;
-    if (pino) {
-      if ((pino.agendado || pino.escolhido) && ativo(o) && !pares.includes(o.insId)) {
-        aviso(`Fora do “Priorizar com” de ${s.nm} (${pares.map(id => instrutores.get(id).nm).join(', ')}): o voo foi posto à mão com ${o.ins}.`);
+    const escolhidoNaDemanda = !pino && Boolean(d.insId && instrutores.has(d.insId));
+    if (pino || escolhidoNaDemanda) {
+      if (!(escolhidoNaDemanda || pino.agendado || pino.escolhido) || !ativo(o) || pares.includes(o.insId)) continue;
+      if (!capazes.length) aviso(`${inicioDoSemPar(`${lista.map(p => p.x.nm).join(', ')}: ${motivoSemNenhum(lista)}`)}: o voo ficou com ${o.ins}.`);
+      else {
+        const nomes = pares.map(id => instrutores.get(id).nm).join(', ');
+        aviso(`${INICIO_DO_FORA_DO_PRIORIZAR}${s.nm} (${nomes}): ${escolhidoNaDemanda ? `${o.ins} foi escolhido para o dia na Demanda` : `o voo foi posto à mão com ${o.ins}`}.`);
       }
       continue;
     }
-    if (soPinos || (d.insId && instrutores.has(d.insId))) continue;
     if (pares.includes(o.insId)) {
-      const frase = disputa(o, d, s, [o.insId]);
+      const frase = disputa(o, d, s, [o.insId, ...capazes.filter(id => id !== o.insId)]);
       if (frase) aviso(frase);
       continue;
     }
     const sem = semPar.get(o.fKey);
     if (!sem) continue;
-    // Só os instrutores do “Priorizar com” que poderiam dar o voo (vêm, têm a habilitação e não estão em “Não escalar com”)
-    const capazes = pares.filter(id => { const x = instrutores.get(id); return x.on && !(s.bl || []).includes(id) && podeFazer(x, d.mis, o.isGround ? GROUND_EQ_TYPE : d.eq, { curso: s.curso, exige: d.exige }); });
     const frase = disputa(o, d, s, capazes);
-    aviso(`Sem o instrutor de “Priorizar com” (${sem.nomes}: ${sem.motivo}): o voo ficou com ${o.ins}.${frase ? ` ${frase}` : ''}`);
+    aviso(`${sem.inicio || inicioDoSemPar(`${sem.nomes}: ${sem.motivo}`)}: o voo ficou com ${o.ins}.${frase ? ` ${frase}` : ''}`);
   }
   return avisos;
 }
@@ -584,8 +620,8 @@ function comOsPesosDe(velha, nova) {
 // pesos e o combustível do cadastro), e o pedido sem lugar continua com a recusa de antes (js/rejeicoes.js: antes é o
 // estado que fez a escala, para ligar cada recusa ao pedido dela). O pedido que deixou de voar sai (com a linha e a
 // recusa); a recusa do pedido que ganhou um pino também. Refeitos: as marcas de conflito e os alertas deles, os avisos
-// (dos agendados, do peso, do 7º local confirmado, da lei, da revisão e dos atrasos; o do “Priorizar com” fica com a
-// linha que ficou), a revisão, o total de missões pedidas e o tamanho das turmas. Um pedido que voa sem pino, sem linha e
+// (dos agendados, do peso, do 7º local confirmado, da lei, da revisão, dos atrasos e do “Priorizar com”, este com o motivo
+// de antes do voo sem o instrutor dele), a revisão, o total de missões pedidas e o tamanho das turmas. Um pedido que voa sem pino, sem linha e
 // sem recusa (um pedido que entrou no dia) precisa do motor: devolve null. recusas: as recusas que voltam (a reversão de
 // uma alteração que tirou a recusa de um pedido: [chave do voo, alerta]), no lugar da linha dele
 export function conferirEscala(estado, resultado, { antes = estado, recusas: deVolta = [] } = {}) {
@@ -629,11 +665,17 @@ export function conferirEscala(estado, resultado, { antes = estado, recusas: deV
   }
   ctx.ocupacoesDeAtraso.slice(atrasos).forEach(ocupar => ocupar());
   const soltos = new Set(act.map(chave).filter(fKey => !Object.hasOwn(ctx.fixos, fKey) && linhas.has(fKey)));
-  // Os avisos do “Priorizar com” dos voos postos à mão, refeitos (F1h); o do voo sem pino fica enquanto a linha dele fica com
-  // o mesmo instrutor (o aviso gravado antes do F1h não tem a chave do voo)
-  al.push(...avisosDoPriorizarCom(estado, out, { soPinos: true }));
-  const comOMesmo = new Set(out.filter(o => soltos.has(o.fKey)).map(o => `${o.stuId}:${o.insId}`));
-  al.push(...(resultado.al || []).filter(a => a.codigo === 'voa-com' && comOMesmo.has(`${a.stuId}:${a.insId}`) && (!a.fKey || soltos.has(a.fKey))));
+  // Os avisos do “Priorizar com”, refeitos com os horários de agora (F1h): as disputas e os voos postos à mão. O motivo do
+  // voo sem pino que ficou sem o instrutor do “Priorizar com” vem da busca do motor: fica o do aviso de antes do voo (pela
+  // chave; o aviso gravado antes do F1h não a tem: pelo aluno e pelo instrutor), e a disputa dentro dele é refeita
+  const velhos = (resultado.al || []).filter(a => a.codigo === 'voa-com' && typeof a.m === 'string' && a.m.startsWith('Sem o instrutor de “Priorizar com” ('));
+  const semPar = new Map();
+  for (const o of out.filter(v => soltos.has(v.fKey))) {
+    const fim = `: o voo ficou com ${o.ins}.`;
+    const velho = velhos.find(a => (a.fKey ? a.fKey === o.fKey : a.stuId === o.stuId) && a.insId === o.insId && a.m.includes(fim));
+    if (velho) semPar.set(o.fKey, { inicio: velho.m.slice(0, velho.m.indexOf(fim)) });
+  }
+  al.push(...avisosDoPriorizarCom(estado, out, { semPar }));
   const revisao = concluirEscala(estado, ctx, out, al);
   return { out, al, tot: act.length, revisao, ...(resultado.data !== undefined ? { data: resultado.data } : {}) };
 }

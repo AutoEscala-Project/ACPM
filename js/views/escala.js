@@ -21,7 +21,7 @@ import { S, RES, AUDIT_LOG, TL_MODE, EIXO_INVERTIDO, OCULTAR_INDISPONIVEIS, DATA
 import { cancelamentoAproveitavel, dataQueAindaVoa } from '../reparo.js';
 import { rejeicoesDosPedidos } from '../rejeicoes.js';
 import { motivoDoFixo } from '../fixos.js';
-import { instrutoresDoVoo } from '../instrutor-escolhido.js';
+import { instrutoresDoVoo, foraDoPriorizarNoVoo } from '../instrutor-escolhido.js';
 import { $, trocarConteudo } from '../dom.js';
 import { atualizarEditorDoVoo } from './edicao-do-voo.js';
 import { statusDoVoo, unidadeDoVoo } from '../voo.js';
@@ -268,10 +268,13 @@ export function botaoDoInstrutor(o, rotulo) {
 }
 
 // A lista do instrutor do voo: sem escolha, a primeira opção é quem o app pôs; os instrutores que não servem no horário
-// aparecem com o motivo, e o operador pode escolher mesmo assim (o voo fica em conflito, com as sugestões)
+// aparecem com o motivo, e o operador pode escolher mesmo assim (o voo fica em conflito, com as sugestões). O que serve mas
+// está fora do “Priorizar com” do aluno, quando um dele poderia dar o voo, também diz (N9, F1h)
 export function seletorDeInstrutor(o, rotulo) {
-  const lista = instrutoresDoVoo(estadoDaEscala(), RES, o.fKey).filter(x => o.insEscolhido || x.id !== o.insId)
-    .map(x => `<option value="${x.id}"${o.insEscolhido && x.id === o.insId ? ' selected' : ''}>${esc(x.nota ? `${x.nm} (${x.nota})` : x.nm)}</option>`);
+  const estado = estadoDaEscala();
+  const nota = x => x.nota || (x.id !== o.insId && foraDoPriorizarNoVoo(estado, RES, o.fKey, x.id).length ? 'fora do Priorizar com' : '');
+  const lista = instrutoresDoVoo(estado, RES, o.fKey).filter(x => o.insEscolhido || x.id !== o.insId)
+    .map(x => `<option value="${x.id}"${o.insEscolhido && x.id === o.insId ? ' selected' : ''}>${esc(nota(x) ? `${x.nm} (${nota(x)})` : x.nm)}</option>`);
   const automatico = o.insEscolhido ? 'Automático (o app escolhe)' : `${o.ins} (${o.insPar ? 'Priorizar com do aluno' : 'escolhido pelo app'})`;
   return `<select class="ins-sel" data-a="insVoo" data-fkey="${esc(o.fKey)}" data-rotulo="${esc(rotulo)}" aria-label="${esc(rotulo)}"><option value=""${o.insEscolhido ? '' : ' selected'}>${esc(automatico)}</option>${lista.join('')}</select>`;
 }

@@ -11,7 +11,7 @@ import { hm, hojeISO } from '../format.js';
 import { aplicarReparo, aproveitarCancelado, desfazerAproveitamento, repararComOPedido } from '../reparo.js';
 import { S, RES, DATA, AUDIT_LOG, isGestor, modoCompartilhado, insBy, estadoDaEscala } from '../state.js';
 import { rejeicoesDosPedidos } from '../rejeicoes.js';
-import { escolherInstrutor, escolhasDaUnidade, escolherNosPedidos, reverterEscolha, reverterReparo } from '../instrutor-escolhido.js';
+import { escolherInstrutor, escolhasDaUnidade, escolherNosPedidos, reverterEscolha, reverterReparo, foraDoPriorizarNoVoo } from '../instrutor-escolhido.js';
 import { agendamentosEmVolta, desfazerEdicao, motivoParaNaoDesfazerEdicao } from '../reversoes.js';
 import { CAMPOS_DO_PEDIDO } from '../dias.js';
 import { pedidoDoAluno } from '../voo.js';
@@ -143,9 +143,9 @@ function aplicarStatus(fKey, status, detalhe) {
 }
 // Na escala não aprovada, toda alteração feita na Escala pergunta antes (R6, js/views/dialogo-refazer.js): "Cancelar"
 // redesenha o valor de antes, e nada muda; na aprovada, não pergunta (o motor não roda)
-function perguntarSeAberta(resumo, fazer, { focar = null } = {}) {
+function perguntarSeAberta(resumo, fazer, { focar = null, avisos = [] } = {}) {
   if (S.aprovacao) { fazer(); return; }
-  perguntarAntesDeRefazer({ resumo, aoConfirmar: fazer, aoDesistir: () => { rOut(); if (focar) focar(); } });
+  perguntarAntesDeRefazer({ resumo, avisos, aoConfirmar: fazer, aoDesistir: () => { rOut(); if (focar) focar(); } });
 }
 // O status (e o detalhe, depois do diálogo dele), com a pergunta
 function statusComPergunta(fKey, status, detalhe) {
@@ -199,7 +199,10 @@ aoMudarCampo('insVoo', t => {
   const x = t.value ? insBy(+t.value) : null;
   // Desistir: o foco volta ao nome do instrutor (a lista já voltou a ser o nome quando a pergunta abriu)
   const focar = () => { const nome = [...document.querySelectorAll(`#out [data-act="trocar-instrutor"][data-fkey="${CSS.escape(voo.fKey)}"]`)].find(visivel); if (nome) nome.focus(); };
-  perguntarSeAberta(`${voo.isGround ? `turma de ${voo.mis}` : voo.s}: ${voo.ins} → ${x ? x.nm : 'Automático'}`, () => trocarInstrutor(voo, x), { focar });
+  // O INVA fora do “Priorizar com” do aluno (N9, F1h): a opção já diz; na escala aberta, a pergunta também, e a Escala
+  // guarda a observação
+  const avisos = x ? foraDoPriorizarNoVoo(estadoDaEscala(), RES, voo.fKey, x.id).map(nm => ({ texto: `${x.nm} está fora do Priorizar com de ${nm}.` })) : [];
+  perguntarSeAberta(`${voo.isGround ? `turma de ${voo.mis}` : voo.s}: ${voo.ins} → ${x ? x.nm : 'Automático'}`, () => trocarInstrutor(voo, x), { focar, avisos });
 });
 function trocarInstrutor(voo, x) {
   const foto = fotoDaEscalaTravada();

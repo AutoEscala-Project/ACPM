@@ -3,7 +3,7 @@
 // ou tirar nenhum outro voo. Fora dela, o motor refaz a escala inteira (depois da pergunta, js/eventos/edicao-do-voo.js).
 // Funções puras: recebem o estado e a escala e não leem a tela
 import { runAllocationEngine } from './engine.js';
-import { conferirEscala } from './conferencia.js';
+import { conferirEscala, INICIO_DO_FORA_DO_PRIORIZAR } from './conferencia.js';
 import { GROUND_EQ_TYPE, GROUND_REG, MIS } from './config.js';
 import { CAMPOS_DO_PEDIDO } from './dias.js';
 import { GRUPO_DO_CONFLITO } from './conflitos.js';
@@ -324,9 +324,12 @@ export function avisosDaEdicao(estado, resultado, voo, valores, { aprovada = Boo
       if (!avisos.some(v => v.texto === a.m)) avisos.push({ codigo: a.codigo, texto: a.m, campo: CAMPO_DO_AVISO[a.codigo], conflito: false });
     }
     // O INVA fora do “Priorizar com” do aluno (N9, F1h): o voo posto à mão avisa na Escala (voa-com), e o editor pede a
-    // confirmação
-    for (const a of sim.al.filter(v => v.codigo === 'voa-com' && meus.has(v.fKey))) {
-      if (!avisos.some(v => v.texto === a.m)) avisos.push({ codigo: 'fora-do-priorizar', texto: a.m, campo: 'voo-instrutor', conflito: false });
+    // confirmação quando o operador troca o INVA por um fora dele e um do “Priorizar com” poderia dar o voo (mudar só o
+    // horário ou o recurso não escolhe o INVA; sem nenhum que possa, o aviso é o motivo de sempre, sem a confirmação)
+    if (valores.insId !== voo.valores.insId) {
+      for (const a of sim.al.filter(v => v.codigo === 'voa-com' && meus.has(v.fKey) && v.m.startsWith(INICIO_DO_FORA_DO_PRIORIZAR))) {
+        if (!avisos.some(v => v.texto === a.m)) avisos.push({ codigo: 'fora-do-priorizar', texto: a.m, campo: 'voo-instrutor', conflito: false });
+      }
     }
     if (aprovada) {
       for (const o of sim.out.filter(v => !meus.has(v.fKey) && v.conflito && !(antes.get(v.fKey) || {}).conflito)) {

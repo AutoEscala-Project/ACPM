@@ -15,6 +15,7 @@ import { isGroundMission } from './rules.js';
 import { pinoDoVoo, fixoPeloStatus, fixosQueVoltam } from './fixos.js';
 import { chaveDoVoo, pedidoDoAluno, statusDoVoo, umPorUnidade, compromissoDoVoo, exigeDosVoos } from './voo.js';
 import { inativoNoEstado } from './inativos.js';
+import { foraDoPriorizarCom } from './conferencia.js';
 
 const instrutorValido = v => Number.isInteger(v) && v > 0;
 
@@ -75,6 +76,18 @@ export function instrutoresDoVoo(estado, resultado, fKey) {
     return { id: x.id, nm: x.nm, nota: comQuem ? `ocupado com ${comQuem.isGround ? `a turma de ${comQuem.mis}` : comQuem.s}` : NOTA_DO_PROBLEMA[problema.codigo] || '' };
   });
   return [...opcoes.filter(o => !o.nota), ...opcoes.filter(o => o.nota)];
+}
+
+// Escala: os alunos do voo (na turma de Ground, cada um dela) que têm o instrutor insId fora do “Priorizar com” quando um
+// dele poderia dar o voo (N9, F1h): a lista do instrutor diz na opção, e a pergunta da escala aberta, no aviso
+export function foraDoPriorizarNoVoo(estado, resultado, fKey, insId) {
+  const voo = resultado && resultado.out.find(o => o.fKey === fKey);
+  if (!voo || !instrutorValido(insId)) return [];
+  return unidadeDe(resultado, voo).flatMap(o => {
+    const aluno = estado.stu.find(s => s.id === o.stuId);
+    const pedido = aluno && !o.trecho ? pedidoDoAluno(aluno, o.mid || 0) : null;
+    return pedido && foraDoPriorizarCom(estado, aluno, { mis: pedido.mis, tipo: o.isGround ? GROUND_EQ_TYPE : pedido.eq, exige: pedido.exige }, insId) ? [aluno.nm] : [];
+  });
 }
 
 const pedidoDe = (estado, stuId, mid) => {

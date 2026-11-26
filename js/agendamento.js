@@ -24,6 +24,7 @@ import { indiceDoPrograma, percursoDoCurso, rotuloDaFase, rotuloDaMissao, noturn
 import { chaveDoVoo, statusDoVoo, pedidoDoAluno, ocupacaoDoVoo } from './voo.js';
 import { CAMPOS_DO_PEDIDO } from './dias.js';
 import { runAllocationEngine } from './engine.js';
+import { foraDoPriorizarCom } from './conferencia.js';
 import { naOrdemDoMotor, rejeicoesDosPedidos } from './rejeicoes.js';
 import { CODIGOS_DO_AGENDADO, GRUPO_DO_CONFLITO } from './conflitos.js';
 import { fixoPeloStatus, motivoDoFixo } from './fixos.js';
@@ -1188,8 +1189,9 @@ export function avaliarAgendamento({ estado, baseComPesos, base = baseComPesos, 
     }
   }
   // O instrutor fora do “Priorizar com” do aluno (N9, F1h): o operador agenda contra a limitação do aluno, confirma, e a
-  // Escala guarda a observação (voa-com, o voo posto à mão)
-  if ((stu.voaCom || []).some(id => estado.ins.some(i => i.id === id)) && !stu.voaCom.includes(x.id)) {
+  // Escala guarda a observação (voa-com, o voo posto à mão). Sem nenhum do “Priorizar com” que possa dar o voo (não vem, sem
+  // a habilitação, em “Não escalar com”), o outro não vai contra ela
+  if (foraDoPriorizarCom(estado, stu, { mis, tipo: ground ? GROUND_EQ_TYPE : tipo, exige: formulario.selecao.exige }, x.id)) {
     avisos.push({ codigo: 'fora-do-priorizar', texto: `${x.nm} está fora do Priorizar com de ${stu.nm}.`, resumo: RESUMO_DO_AVISO['fora-do-priorizar'], campo: 'agd-instrutor' });
   }
   // A data e o horário
