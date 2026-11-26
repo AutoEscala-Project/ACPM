@@ -11,7 +11,7 @@ import { intervaloEfetivo, STATUS_EM_ANDAMENTO } from './status.js';
 import { sobrepoe, livre, cabeNoSaldo, folgaAte, problemasDoInstrutor } from './viabilidade.js';
 import { reducaoNecessaria, combustivelDoVoo } from './combustivel.js';
 import { compactar, custoDaEscala } from './compactar.js';
-import { contextoDaEscala, filaDosPedidos, conferirFixos, concluirEscala } from './conferencia.js';
+import { contextoDaEscala, filaDosPedidos, conferirFixos, concluirEscala, avisosDoPriorizarCom } from './conferencia.js';
 import { chaveDoVoo, statusDoVoo, unidadeDoVoo, ocupacaoDoVoo, compromissoDoVoo, exigeDosVoos } from './voo.js';
 import { menorPrimeiro, soma, paradasEntre } from './util.js';
 
@@ -709,13 +709,15 @@ export function runAllocationEngine(state, opcoes = {}) {
     trocarMatriculas(out);
   }
   // O voo sem o instrutor do “Priorizar com”: o aviso diz quem ficou com ele (se a divisão das horas ou a compactação o
-  // passaram para um instrutor do “Priorizar com”, não há aviso)
+  // passaram para um instrutor do “Priorizar com”, não há aviso). Com o F1h, os avisos do “Priorizar com” saem de
+  // js/conferencia.js (avisosDoPriorizarCom): também as disputas e os voos postos à mão fora dele, um por voo
   for (const o of out) {
     const sem = semPar.get(o.fKey);
     if (!sem) continue;
     if (sem.pares.includes(o.insId)) { o.insPar = true; continue; }
-    al.push({ t: 'warn', s: sem.s, m: `Sem o instrutor de “Priorizar com” (${sem.nomes}: ${sem.motivo}): o voo ficou com ${o.ins}.`, codigo: 'voa-com', stuId: o.stuId, insId: o.insId });
+    if (opcoes.priorizarComPrimeiro === false) al.push({ t: 'warn', s: sem.s, m: `Sem o instrutor de “Priorizar com” (${sem.nomes}: ${sem.motivo}): o voo ficou com ${o.ins}.`, codigo: 'voa-com', stuId: o.stuId, insId: o.insId });
   }
+  if (opcoes.priorizarComPrimeiro !== false) al.push(...avisosDoPriorizarCom(state, out, { semPar }));
   // O que o motor confere depois de montar a escala, sem mover nenhum voo (js/conferencia.js)
   const revisao = concluirEscala(state, ctx, out, al);
   return { out, al, tot: act.length, revisao };

@@ -425,7 +425,7 @@ describe('Invariantes das escolhas do operador, em 300 cenários', () => {
       const o = out.find(v => v.fKey === a.fKey);
       assert.ok(o && o.stuId === a.stuId && o.insId === a.insId, `aviso solto: ${a.m}`);
       if (!s.voaCom.includes(a.insId)) { assert.ok(a.m.startsWith('Sem o instrutor de “Priorizar com”'), a.m); continue; }
-      const [, outro] = /: ficou com (.+?) \(/.exec(a.m) || [];
+      const [, outro] = /: ficou com (.+?)(?: \(|;|\.$)/.exec(a.m) || [];
       assert.ok(outro && todos.some(v => v.s === outro && v.insId === a.insId && v.stuId !== a.stuId), `disputa sem o outro: ${a.m}`);
     }
   }));

@@ -347,7 +347,8 @@ function tempoParado(out) {
 }
 
 // Avisos agrupados pelo código: alunos e instrutores sem peso, aviões que param para a revisão, atrasos, instrutores
-// perto do limite da lei e os voos agendados fora das regras (um por voo). Os avisos sem código (de uma escala gravada
+// perto do limite da lei, os do “Priorizar com” (um por voo: sem o instrutor, a disputa ou o voo posto à mão fora dele) e
+// os voos agendados fora das regras (um por voo). Os avisos sem código (de uma escala gravada
 // antes deles) entram em "outros"
 function resumoDosAvisos(avisos) {
   const doCodigo = codigo => avisos.filter(a => a.codigo === codigo);
@@ -368,7 +369,7 @@ function resumoDosAvisos(avisos) {
     revisao && `${revisao} ${revisao === 1 ? 'avião para' : 'aviões param'} para a revisão de 50 horas`,
     atrasos && `${atrasos} ${atrasos === 1 ? 'atraso com conflito' : 'atrasos com conflito'}`,
     limites && `${limites} ${limites === 1 ? 'instrutor perto' : 'instrutores perto'} do limite da lei`,
-    semPar && `${semPar} ${semPar === 1 ? 'voo sem' : 'voos sem'} o instrutor de Priorizar com`,
+    semPar && `${semPar} ${semPar === 1 ? 'aviso' : 'avisos'} de Priorizar com`,
     saiu && `${saiu} ${saiu === 1 ? 'voo com o instrutor escolhido' : 'voos com o instrutor escolhido'} fora do cadastro`,
     repouso && `${repouso} ${repouso === 1 ? 'instrutor' : 'instrutores'} sem o repouso da lei antes da volta do noturno`,
     foraDaRegra && `${foraDaRegra} ${foraDaRegra === 1 ? 'agendamento' : 'agendamentos'} fora da regra`,
