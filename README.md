@@ -165,20 +165,29 @@ novo). E o app novo não depende delas:
 - **Sem a migração**, `painel_do_dia()` responde como antes, sem o campo `painel`, e a TV mostra o padrão (Missões, com
   as colunas do padrão e as listas no Automático: duas lado a lado na TV Full HD), como hoje; a Escala segue a configuração de qualquer jeito (ela lê o cadastro).
 
-## O recurso do pedido da agenda
+## O recurso, a missão do curso e o 7º voo local do pedido da agenda
 
 O pedido da agenda guarda o recurso (o tipo: C152, PA-34, Sim. Mono…): a missão diz os permitidos, o recurso diz os
-horários, e a importação põe o pedido na demanda nele. A migração `20261125230000_agenda_com_recurso.sql` acrescenta a
+horários, e a importação põe o pedido na demanda nele. A migração `20261125230000_agenda_com_recurso.sql` acrescentou a
 coluna `recurso` (vazia nos pedidos de antes, que entram no recurso padrão da missão) e a função
-`registrar_solicitacao` com o recurso, o 11º argumento. A de 10 argumentos continua, para as abas abertas do app de antes.
+`registrar_solicitacao` com o recurso, o 11º argumento.
 
-**A ordem:** a migração na prévia (`supabase db push --remote`) com `npm run test:db`, depois na produção
-(`supabase db push --remote=<ref de produção>`), e só então o merge. Ela só acrescenta: o app no ar continua igual com
-ela. O app novo no ar **antes** da migração não perde nem repete pedidos: quando o servidor responde que a função com o
-recurso não existe (PGRST202 ou 42883), o pedido no recurso padrão da missão vai pela função de antes, e o pedido noutro
-recurso é recusado com o aviso de que o servidor precisa ser atualizado. Nenhum outro erro tenta de novo. Depois, com
-nenhuma aba de antes aberta, outra migração pode tirar a função de 10 argumentos (e a chamada dela em
-`js/backends/supabase.js`).
+A migração `20261127100000_missao_do_curso_e_limite_do_pedido.sql` acrescenta as colunas `missao_do_curso` (o id da missão
+do programa do curso que o aluno vai voar; vazia sem curso e nos pedidos de antes), `limite_confirmado_por` e
+`limite_confirmado_em` (quem confirmou o 7º voo local no mesmo horário, e quando) e a função `registrar_solicitacao` de 13
+argumentos (`p_missao_do_curso`, `p_confirmar_limite`, nenhum com valor padrão), a única que o app chama. Ela recusa
+(`22023`, com a dica do campo) o pedido sem recurso ou num recurso que a missão não permite (`recurso`), o Noturno fora das
+17:30 e o Voo Solo fora das 06:30 (`horario`) e a missão do curso que não existe, saiu do programa ou é de outro tipo
+(`missao`); o 7º voo local passa com a confirmação, que fica registrada (sem ela, `PT422`, como antes). As funções de 11 e
+de 10 argumentos ficam como estavam, para as abas abertas do app de antes. As regras estão também no modo local
+(`js/backends/local.js`), no servidor falso dos testes (`test/e2e/falso/agenda.js`) e no cliente falso de
+`test/unit/backend-supabase.test.js`, com os mesmos casos (`test/helpers/casos-da-agenda.js`), que são verificações de
+`agenda-missao-do-curso.test.sql` e `agenda-locais.test.sql`.
+
+**A ordem:** a migração na prévia (`supabase db push --remote`) com `npm run test:db`, e só então o merge: o app novo só
+chama a função de 13 argumentos, e não tenta outra quando o servidor não a tem (o pedido não é registrado, e o app diz que
+não foi possível registrar). Ela só acrescenta: o app no ar continua igual com ela. Depois, com nenhuma aba de antes aberta,
+outra migração pode tirar as funções de 10 e de 11 argumentos.
 
 ## A sessão da TV da recepção
 
