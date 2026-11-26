@@ -8,7 +8,7 @@ import { $, showToast, anunciar, algumDialogoAberto, gavetaDoEsc, focarNoTitulo 
 import { exp, pdf, planilha } from '../export.js';
 import { fixosAoMudarStatus, fixosAoReabrir, fixosAoAprovar, normalizarFixos } from '../fixos.js';
 import { hm, hojeISO } from '../format.js';
-import { aplicarReparo, aproveitarCancelado, desfazerAproveitamento } from '../reparo.js';
+import { aplicarReparo, aproveitarCancelado, desfazerAproveitamento, repararComOPedido } from '../reparo.js';
 import { S, RES, DATA, AUDIT_LOG, isGestor, modoCompartilhado, insBy } from '../state.js';
 import { escolherInstrutor, escolhasDaUnidade, escolherNosPedidos, reverterEscolha, reverterReparo } from '../instrutor-escolhido.js';
 import { agendamentosEmVolta } from '../reversoes.js';
@@ -274,10 +274,11 @@ document.addEventListener('click', e => {
     showToast('Instrutor escolhido: o pedido entra na escala.', 'ok');
     return;
   }
-  // O voo cancelado aproveitado: a sugestão fora da disponibilidade do pedido ou em outro tipo pede a confirmação com o
-  // aluno (dois cliques); aplicada, o voo fica fixo no lugar dela e volta para Pendente, e o pedido muda com ela
+  // A sugestão fora da disponibilidade do pedido ou em outro tipo pede a confirmação com o aluno (dois cliques)
+  if (opcao.confirmar && !confirmado(botao, 'Confirmei com o aluno')) return;
+  // O voo cancelado aproveitado: aplicada, a sugestão fixa o voo no lugar dela e o volta para Pendente, e o pedido muda
+  // com ela
   if (cancelado) {
-    if (opcao.confirmar && !confirmado(botao, 'Confirmei com o aluno')) return;
     fecharPainelDeReparo();
     const rev = aproveitarCancelado(S, RES, fKey, opcao);
     if (!rev) return;
@@ -289,6 +290,16 @@ document.addEventListener('click', e => {
   fecharPainelDeReparo();
   if (!opcao.mudancas && !opcao.soltar) {
     pedirDetalheDoStatus({ voo, status: 'Cancelado', detalhe: opcao.motivo ? { motivo: opcao.motivo } : null, aoConfirmar: detalhe => aplicarStatus(fKey, 'Cancelado', detalhe) });
+    return;
+  }
+  // A sugestão do conflito que muda também o pedido (a disponibilidade, o tipo): o voo fixo e o pedido mudam juntos, e o
+  // histórico desfaz os dois (a reversão do aproveitamento)
+  if (opcao.pedido) {
+    const rev = repararComOPedido(S, RES, fKey, opcao);
+    if (!rev) return;
+    gravarAlteracao('mod', `Reparo: ${voo.s} (${hm(voo.a)}–${hm(voo.b)}): ${opcao.texto}`, { ...rev, label: '↶ Reverter' });
+    redesenharPorNome('pedidos-do-dia');
+    showToast('Sugestão aplicada: o voo continua fixo, e o pedido muda com ela.', 'ok');
     return;
   }
   const antes = S.fixos || {};

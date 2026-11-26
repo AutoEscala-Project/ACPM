@@ -112,11 +112,12 @@ export function sugerirReparos(estado, resultado, fKey, { maximo = 3, depoisDe =
     }
   }
 
-  // Sem nada até aqui: o horário mais perto antes deste, dentro da disponibilidade do aluno (o reparo muda só o voo
-  // fixo e o instrutor escolhido; outro tipo e a disponibilidade mudam o pedido, e ficam com o voo cancelado)
+  // Sem nada até aqui: os dois últimos grupos do voo cancelado (buscaDoVoo). O horário mais perto: antes deste, dentro da
+  // disponibilidade do pedido, ou fora dela, antes ou depois; e outro tipo de recurso que a missão permite. Fora da
+  // disponibilidade e em outro tipo, a sugestão pede a confirmação com o aluno e muda também o pedido (repararComOPedido)
   if (!opcoes.length && !pedidoMudou) {
-    const antes = buscaDoVoo(estado, resultado, voo, grupo, { depoisDe }).outroHorario({ so: m => m < voo.a });
-    if (antes && !antes.confirmar) opcoes.push(antes);
+    const busca = buscaDoVoo(estado, resultado, voo, grupo, { depoisDe });
+    for (const opcao of [busca.outroHorario(), busca.outroTipo()]) if (opcao) opcoes.push(noReparo(opcao));
   }
 
   // Soltar: o voo deixa de ser fixo e o motor o escala de novo, em volta dos outros (não vale para o voo em andamento)
@@ -124,6 +125,10 @@ export function sugerirReparos(estado, resultado, fKey, { maximo = 3, depoisDe =
   const soltar = emAndamento ? [] : [{ tipo: 'soltar', texto: 'Soltar o voo: o app escolhe de novo o horário, o avião e o instrutor', mudancas: null, soltar: true }];
   return [...opcoes.slice(0, maximo), ...soltar, { tipo: 'cancelar', texto: 'Cancelar o voo (pede o motivo)', mudancas: null, motivo: motivoDoConflito(voo.conflito, inativoNoEstado(estado, (Array.isArray(estado.frota) ? estado.frota : []).find(f => f.reg === voo.r))) }];
 }
+
+// A sugestão da busca na lista do conflito: o instrutor escolhido acompanha o reparo como sempre (escolhasDaUnidade, no
+// aplicar); o pedido vai junto só quando a sugestão muda a disponibilidade ou o tipo
+const noReparo = ({ pedido, ...opcao }) => (pedido.jan === undefined && pedido.eq === undefined ? opcao : { ...opcao, pedido });
 
 // O motivo de cancelamento que o conflito sugere (o diálogo do status já abre com ele marcado). O avião inativo no cadastro
 // aparece indisponível, mas não está em manutenção: nenhum motivo
@@ -312,6 +317,23 @@ export function aproveitarCancelado(estado, resultado, fKey, opcao) {
   const voo = resultado.out.find(o => o.fKey === fKey);
   if (!voo || !opcao || !opcao.mudancas) return null;
   const grupo = doGrupo(resultado, voo).filter(v => statusDoVoo(v, estado.fStatus) === 'Cancelado');
+  return mudarOVooEOPedido(estado, resultado, voo, grupo, opcao, { cancelado: true });
+}
+
+// Aplica no conflito a sugestão que também muda o pedido (o horário fora da disponibilidade, outro tipo): o voo fixo (na
+// turma de Ground, os fixos dela) muda como no reparo de sempre, o status fica, e o pedido recebe a disponibilidade e o
+// tipo da sugestão (o instrutor escolhido muda só no pedido que tem um, como no reparo). A reversão é a do aproveitamento
+// do cancelado (o pino, o status, o detalhe e o pedido de antes); null quando não aplica
+export function repararComOPedido(estado, resultado, fKey, opcao) {
+  const voo = resultado.out.find(o => o.fKey === fKey);
+  if (!voo || !opcao || !opcao.mudancas || !opcao.pedido) return null;
+  const grupo = doGrupo(resultado, voo).filter(v => Object.hasOwn(estado.fixos || {}, v.fKey));
+  return mudarOVooEOPedido(estado, resultado, voo, grupo, opcao, { cancelado: false });
+}
+
+// O voo (o grupo) no lugar da sugestão e o pedido com o que ela muda, devolvendo a reversão. cancelado: o voo volta para
+// Pendente, sem o motivo, e o pino passa a ser do operador (agendado); sem ele, o pino de antes recebe as mudanças
+function mudarOVooEOPedido(estado, resultado, voo, grupo, opcao, { cancelado }) {
   const voos = [], pedidos = [];
   // A turma de Ground que muda de horário ou de instrutor é outra turma: uma chave nova para os alunos aproveitados, a não
   // ser que eles voltem para a turma de mesmo horário e instrutor (duas turmas com a mesma chave seriam uma só no motor)
@@ -327,18 +349,25 @@ export function aproveitarCancelado(estado, resultado, fKey, opcao) {
     }
   }
   estado.fixos = { ...(estado.fixos || {}) };
-  estado.fStatus = { ...(estado.fStatus || {}) };
-  estado.fObs = { ...(estado.fObs || {}) };
+  if (cancelado) {
+    estado.fStatus = { ...(estado.fStatus || {}) };
+    estado.fObs = { ...(estado.fObs || {}) };
+  }
   for (const v of grupo) {
     const aluno = estado.stu.find(s => s.id === v.stuId);
     const ref = aluno ? pedidoDoAluno(aluno, v.mid || 0) : null;
     if (!ref) continue;
-    voos.push({ fKey: v.fKey, fixo: estado.fixos[v.fKey] || null, status: estado.fStatus[v.fKey] || null, detalhe: estado.fObs[v.fKey] || null });
+    voos.push({ fKey: v.fKey, fixo: estado.fixos[v.fKey] || null, status: (estado.fStatus || {})[v.fKey] || null, detalhe: (estado.fObs || {})[v.fKey] || null });
     pedidos.push({ stuId: v.stuId, mid: v.mid || 0, pedido: camposDoPedido(ref) });
-    estado.fixos[v.fKey] = { ...pinoDoVoo(v), ...opcao.mudancas, ...(chave ? { classKey: chave } : {}), agendado: true };
-    estado.fStatus[v.fKey] = 'Pendente';
-    delete estado.fObs[v.fKey];
-    Object.assign(ref, opcao.pedido || {});
+    const novaTurma = chave ? { classKey: chave } : {};
+    if (cancelado) {
+      estado.fixos[v.fKey] = { ...pinoDoVoo(v), ...opcao.mudancas, ...novaTurma, agendado: true };
+      estado.fStatus[v.fKey] = 'Pendente';
+      delete estado.fObs[v.fKey];
+    } else estado.fixos[v.fKey] = { ...estado.fixos[v.fKey], ...opcao.mudancas, ...novaTurma };
+    const { insId, ...doPedido } = opcao.pedido || {};
+    Object.assign(ref, doPedido);
+    if (insId && (cancelado || ref.insId)) ref.insId = insId;
     normalizeMissionFields(ref);
   }
   return voos.length ? { kind: 'aproveitarCancelado', voos, pedidos } : null;

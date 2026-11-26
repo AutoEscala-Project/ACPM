@@ -43,8 +43,8 @@ export function abrirPainelDeReparo(fKey, { focar = true } = {}) {
         ? 'O que pode voar no lugar, sem mexer nos outros voos. Aplicada, a sugestão vale para o voo fixo e fica no histórico (dá para reverter).'
         : 'Nenhum avião ou instrutor serve neste horário, nem mais tarde hoje.'}</p>
     <ol class="opcoes-reparo">${opcoesAbertas.map((o, i) => `<li class="${esc(o.tipo)}">
-      <span>${esc(o.mudancas || o.soltar ? o.texto : o.motivo ? `Motivo: ${o.motivo}` : 'Pede o motivo')}</span>
-      <button type="button" class="btn${o.mudancas ? '' : ' sec'}" data-reparo-aplicar="${i}">${o.mudancas ? 'Aplicar' : o.soltar ? 'Soltar' : 'Cancelar o voo'}</button>
+      <span>${esc(o.mudancas || o.soltar ? o.texto : o.motivo ? `Motivo: ${o.motivo}` : 'Pede o motivo')}${o.confirmar ? `<small class="confirmar-aluno">${esc(o.confirmar)}</small>` : ''}</span>
+      <button type="button" class="btn${o.mudancas ? '' : ' sec'}" data-reparo-aplicar="${i}"${o.confirmar ? ' data-confirmar' : ''}>${o.mudancas ? 'Aplicar' : o.soltar ? 'Soltar' : 'Cancelar o voo'}</button>
     </li>`).join('')}</ol>`;
   if (focar || painel.hidden) abrirGaveta(painel);
   const primeiro = painel.querySelector('[data-reparo-aplicar]');
