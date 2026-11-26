@@ -107,7 +107,7 @@ export const HORARIOS_FIXOS = Object.freeze({ Noturno: hm(T[NI]), 'Voo Solo': hm
 // A missão do curso pelo id, nos cursos guardados (o formato de programa_do_curso: as fases e as missões, também as
 // retiradas): { curso, missao, retirada } (retirada: ela ou a fase dela saiu do programa); null, quando não há
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
-function missaoDoCursoGuardada(cursos, id) {
+export function missaoDoCursoGuardada(cursos, id) {
   if (typeof id !== 'string' || !UUID.test(id)) return null;
   for (const curso of Array.isArray(cursos) ? cursos : []) {
     const missao = (curso.missoes || []).find(m => m.id === id);

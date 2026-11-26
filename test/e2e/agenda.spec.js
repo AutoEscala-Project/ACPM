@@ -1,7 +1,8 @@
 // A Agenda de Solicitações (modo local): a lista da data aberta, a "Data do pedido" e o prazo das 13:00, o registro com
 // "Registrado por", a exceção da coordenação e o cancelamento. O relógio dos testes está em 10/11/2026, 12:00 em São Paulo.
-import { test, expect, abrir, irPara, abrirEscala, lerEscala, caixaVoa, campoDaAgenda, contagemDoDia, dataAberta, diaAnterior, diaSeguinte, importarDaAgenda, mudarData, registrarPedido,
-  escolherMissaoDoCurso, missaoDoCursoNaAgenda, appPronto, AMANHA } from './fixtures.js';
+import { test, comProgresso, expect, abrir, irPara, abrirEscala, lerEscala, caixaVoa, campoDaAgenda, contagemDoDia, dataAberta, diaAnterior, diaSeguinte, importarDaAgenda, mudarData, registrarPedido,
+  escolherMissaoDoCurso, missaoDoCursoNaAgenda, appPronto, exportar, AMANHA } from './fixtures.js';
+import { readFileSync } from 'node:fs';
 import { documentosAtuais } from './supabase-falso.js';
 import { aluno, cenario } from '../helpers/montar.js';
 import { cursosIniciais, novoCurso } from '../../js/programa.js';
@@ -671,10 +672,11 @@ const CURSO_PC = {
   fases: [{ id: FASE_PC, nome: 'Fase 1 – Multimotor', modulo: null, ordem: 0, regra: 'ordem', requer: [], removida: false }],
   missoes: [missaoPC(1, 'MLTE-01', 'Multimotor', 1.5), missaoPC(2, 'NAV-PA34', 'Navegação', 2)]
 };
-// A Maria e a Ana no PP, o Bruno no PC e o Aluno 1001 sem curso; o cadastro e o dia no formato atual, os cursos e a agenda
+// A Maria e a Ana no PP, o Bruno no PC e o Aluno 1001 sem curso, nenhum voando; o cadastro e o dia no formato atual, os cursos e a agenda
 // (pedidos já registrados) neste navegador
 async function abrirComOsCursos(page, { frota = null, agenda = [], url = './' } = {}) {
-  const estado = cenario({ stu: [aluno(1000, {}, { nm: 'Maria', curso: 'PP' }), aluno(1001), aluno(1002, {}, { nm: 'Ana', curso: 'PP' }), aluno(1003, {}, { nm: 'Bruno', curso: 'PC' })] });
+  const estado = cenario({ stu: [aluno(1000, { fly: false }, { nm: 'Maria', curso: 'PP' }), aluno(1001, { fly: false }), aluno(1002, { fly: false }, { nm: 'Ana', curso: 'PP' }),
+    aluno(1003, { fly: false }, { nm: 'Bruno', curso: 'PC' })] });
   if (frota) estado.frota = frota;
   const { documentos: { cadastro }, dias } = documentosAtuais(estado, AMANHA);
   const docs = {
@@ -854,5 +856,51 @@ test.describe('A Agenda pelo curso do aluno', () => {
     await expect(excecao).toHaveText('Exceção da Coordenação');
     const setimo = (await agendaGuardada(page)).at(-1);
     expect([setimo.data, setimo.excecao, setimo.limite_confirmado_por]).toEqual(['2026-11-10', true, 'Coordenação']);
+  });
+});
+
+// Na entrada do dia (a importação), a missão do curso do pedido é a etapa do voo, com o curso dela: a escala e a Lista
+// mostram o código, também com o progresso desligado (o padrão do app)
+test.describe('A missão do curso do pedido na demanda e na escala', () => {
+  const diaGuardado = page => page.evaluate(d => JSON.parse(localStorage.getItem(`acpm4_dia_${d}`)), AMANHA);
+
+  test('com o progresso desligado, o pedido entra com a missão do curso dele, e a Lista mostra o código', async ({ page }) => {
+    await abrirComOsCursos(page);
+    await registrarPedido(page, { aluno: 'Maria', codigo: 'NAV-150NM', horario: '08:20' });
+    await page.locator('#agenda-importar').click();
+    await expect(page.locator('#toast-box')).toContainText('1 pedido(s) da agenda na demanda.');
+    await expect(page.locator('#toast-box')).not.toContainText('sem missão do curso');
+    await expect.poll(async () => { const p = (await diaGuardado(page)).pedidos[1000]; return p && [p.mis, p.etapa, p.cursoDaEtapa, p.eq, p.nb]; })
+      .toEqual(['Navegação', 'NAV-150NM', 'PP', 'C152', 3]);
+    // A Lista mostra o código ao lado do status, e o CSV, "NAV-150NM · Navegação" (como antes de o progresso ser desligado)
+    await abrirEscala(page);
+    expect((await lerEscala(page)).linhas.find(l => l.includes('Maria'))).toMatch(/^08:20–11:20 3 h \| Maria \| Navegação \| PP-LJV C152/);
+    await expect(page.locator('#out tbody tr', { hasText: 'Maria' }).locator('.etapa')).toHaveText('NAV-150NM');
+    const [download] = await exportar(page, 'csv');
+    expect(readFileSync(await download.path(), 'utf8')).toContain('NAV-150NM · Navegação');
+  });
+
+  test('o pedido de antes, sem missão do curso: com o progresso desligado, nada é inferido nem dito', async ({ page }) => {
+    await abrirComOsCursos(page, { agenda: [pedidoGuardado(1, { aluno: 1000, aluno_nome: 'Maria', missao: 'Navegação', recurso: 'PA-34', horario: '07:30' })] });
+    await page.locator('#agenda-importar').click();
+    await expect(page.locator('#toast-box')).toContainText('1 pedido(s) da agenda na demanda.');
+    await expect(page.locator('#toast-box')).not.toContainText('sem missão do curso');
+    await expect.poll(async () => { const p = (await diaGuardado(page)).pedidos[1000]; return p && [p.mis, p.etapa ?? null, p.eq]; }).toEqual(['Navegação', null, 'PA-34']);
+  });
+});
+
+comProgresso.describe('A missão do curso do pedido, com o progresso ligado', () => {
+  comProgresso('o pedido de antes sem missão do curso, num recurso que nenhuma liberada tem: entra como veio, e o app diz', async ({ page }) => {
+    await abrirComOsCursos(page, { agenda: [pedidoGuardado(1, { aluno: 1000, aluno_nome: 'Maria', missao: 'Navegação', recurso: 'PA-34', horario: '07:30' })] });
+    await page.locator('#agenda-importar').click();
+    await expect(page.locator('#toast-box')).toContainText('1 pedido(s) da agenda na demanda · 1 pedido sem missão do curso: nenhuma Navegação liberada é no PA-34.');
+  });
+
+  comProgresso('a missão do curso do pedido vale mais que a próxima do programa', async ({ page }) => {
+    await abrirComOsCursos(page);
+    await registrarPedido(page, { aluno: 'Maria', codigo: 'NAV-150NM', horario: '08:20' });
+    await page.locator('#agenda-importar').click();
+    await expect(page.locator('#toast-box')).toContainText('1 pedido(s) da agenda na demanda.');
+    await expect.poll(() => page.evaluate(d => JSON.parse(localStorage.getItem(`acpm4_dia_${d}`)).pedidos[1000]?.etapa, AMANHA)).toBe('NAV-150NM');
   });
 });
