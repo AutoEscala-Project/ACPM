@@ -3,6 +3,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { runAllocationEngine, sumUniqueOperationalHours, consolidateTimelineSlots } from '../../js/engine.js';
 import { hm } from '../../js/format.js';
+import { HORARIOS_INICIAIS } from '../../js/horarios.js';
 import { aluno, apenas, cenario, instrutor, missaoExtra, GROUND_C152 } from '../helpers/montar.js';
 
 // As regras da alocação, sem a compactação que vem depois (ela tem os testes dela em compactar.test.js)
@@ -746,5 +747,33 @@ describe('O 7º voo local confirmado', () => {
       'Agendado às 08:20 como o 7º voo local do horário: no máximo 6 voos locais saem no mesmo horário.',
       'Agendado às 08:20 como o 8º voo local do horário: no máximo 6 voos locais saem no mesmo horário.'
     ]);
+  });
+});
+
+// J (N11): a Sala Ground é um recurso com os seus horários de decolagem (Recursos › "Horários de decolagem"). O Ground
+// sai da lista dela, em minutos; a turma junta quem começa no mesmo minuto; a chave e o w continuam os do tempo de antes
+// em que ela começa (periodoDoMinuto), como os goldens guardam
+describe('O Ground pelos horários da Sala Ground', () => {
+  const comHorarios = (opts, ground) => runAllocationEngine({ ...cenario(opts), horarios: { ...HORARIOS_INICIAIS, ground } }, { compactar: false });
+  const aulas = res => res.out.filter(o => o.isGround).map(o => [o.s, hm(o.a), hm(o.b), o.classKey, o.w]);
+
+  it('uma lista fora da grade de antes: a aula às 07:00, a chave e o w do tempo das 06:30', () => {
+    const res = comHorarios({ stu: [aluno(1000, { ...GROUND_C152, p1: 420, p2: -1 })] }, [420, 600]);
+    assert.deepEqual(aulas(res), [['Aluno 1000', '07:00', '08:30', 'GND_Ground C152_0_1', 0]]);
+  });
+
+  it('só os horários da sala: a preferência fora da lista vai para o horário dela mais perto', () => {
+    const res = comHorarios({ stu: [aluno(1000, { ...GROUND_C152, p1: 390, p2: -1 })] }, [420]);
+    assert.deepEqual(aulas(res).map(a => a[1]), ['07:00']);
+  });
+
+  it('a turma junta quem começa no mesmo minuto, com o mesmo INVA', () => {
+    const res = comHorarios({ stu: [1000, 1001].map(id => aluno(id, { ...GROUND_C152, p1: 420, p2: -1 })) }, [420, 600]);
+    assert.deepEqual(aulas(res), [['Aluno 1000', '07:00', '08:30', 'GND_Ground C152_0_1', 0], ['Aluno 1001', '07:00', '08:30', 'GND_Ground C152_0_1', 0]]);
+  });
+
+  it('a janela de antes fechada ainda fecha os horários da sala que caem nela', () => {
+    const res = comHorarios({ stu: [aluno(1000, { ...GROUND_C152, p1: 420, p2: -1 })], janelasOff: [0] }, [420, 600]);
+    assert.deepEqual(aulas(res).map(a => a[1]), ['10:00']);
   });
 });

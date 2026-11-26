@@ -12,8 +12,11 @@ import { hm } from '../../js/format.js';
 describe('Horários de decolagem por categoria', () => {
   it('padrão: as 8 janelas do dia; o PA-34, de 30 em 30 minutos, das 06:30 às 16:30', () => {
     assert.deepEqual(HORARIOS_PADRAO.map(hm), ['06:30', '08:20', '10:10', '11:30', '12:40', '13:40', '14:30', '16:20']);
-    assert.deepEqual(Object.keys(HORARIOS_INICIAIS), ['C152', 'C172', 'sim', 'PA-34']);
+    // J (N11): a Sala Ground é uma categoria como as outras, com os oito horários que o Ground usava
+    assert.deepEqual(Object.keys(HORARIOS_INICIAIS), ['C152', 'C172', 'sim', 'PA-34', 'ground']);
     assert.deepEqual(HORARIOS_INICIAIS.C152, HORARIOS_PADRAO);
+    assert.deepEqual(HORARIOS_INICIAIS.ground, HORARIOS_PADRAO);
+    assert.notEqual(HORARIOS_INICIAIS.ground, HORARIOS_PADRAO, 'uma cópia: editar a lista da sala não muda o padrão');
     assert.equal(HORARIOS_INICIAIS['PA-34'].length, 21);
     assert.deepEqual(HORARIOS_INICIAIS['PA-34'].slice(0, 3).map(hm), ['06:30', '07:00', '07:30']);
     assert.equal(hm(HORARIOS_INICIAIS['PA-34'].at(-1)), '16:30');
@@ -27,12 +30,30 @@ describe('Horários de decolagem por categoria', () => {
     assert.deepEqual(normalizarHorarios(undefined), HORARIOS_INICIAIS);
   });
 
-  it('a lista de cada tipo: os simuladores pela categoria Simulador; a sala de Ground, as janelas do dia', () => {
+  it('a lista de cada tipo: os simuladores pela categoria Simulador; a Sala Ground, a sua (sem ela, os horários padrão)', () => {
     const horarios = { ...HORARIOS_INICIAIS, sim: [420, 480] };
     assert.deepEqual(horariosDoTipo(horarios, 'Sim. Multi'), [420, 480]);
     assert.deepEqual(horariosDoTipo(horarios, 'PA-34'), HORARIOS_INICIAIS['PA-34']);
     assert.deepEqual(horariosDoTipo(horarios, 'Sala Ground'), HORARIOS_PADRAO);
+    assert.deepEqual(horariosDoTipo({ ...HORARIOS_INICIAIS, ground: [420, 600] }, 'Sala Ground'), [420, 600]);
+    // O cadastro gravado antes do formato 28 não tem a lista da sala: os oito horários de antes
+    const { ground, ...semASala } = HORARIOS_INICIAIS;
+    assert.ok(ground);
+    assert.deepEqual(horariosDoTipo(semASala, 'Sala Ground'), HORARIOS_PADRAO);
+    assert.deepEqual(normalizarHorarios(semASala).ground, HORARIOS_PADRAO);
     assert.deepEqual(horariosDoTipo(undefined, 'C152'), HORARIOS_PADRAO);
+  });
+
+  it('os 40 cenários e o exemplo com a lista da sala igual à padrão dão os goldens', async () => {
+    const { runAllocationEngine } = await import('../../js/engine.js');
+    const { gerarCenario } = await import('../helpers/cenarios.js');
+    const { lerGoldens } = await import('../helpers/goldens.js');
+    const comASala = estado => ({ ...estado, horarios: structuredClone(HORARIOS_INICIAIS) });
+    const goldens = lerGoldens();
+    assert.deepEqual(JSON.parse(JSON.stringify(runAllocationEngine(comASala(goldens.exemplo.estado)))), goldens.exemplo.saida);
+    for (const { seed, saida } of goldens.cenarios) {
+      assert.deepEqual(JSON.parse(JSON.stringify(runAllocationEngine(comASala(gerarCenario(seed))))), saida, `cenário ${seed}`);
+    }
   });
 
   it('o período de um horário é a janela de operação em que ele cai', () => {
@@ -187,15 +208,15 @@ describe('O Voo Solo às 06:30', () => {
 describe('O resumo dos horários e o efeito de uma lista nova', () => {
   const h = texto => paraMinuto(texto);
 
-  it('o modelo da lista: as janelas do dia, de 30 em 30 minutos, ou personalizada', () => {
-    assert.equal(modeloDosHorarios(HORARIOS_PADRAO), 'janelas');
+  it('o modelo da lista: os horários padrão, de 30 em 30 minutos, ou personalizada', () => {
+    assert.equal(modeloDosHorarios(HORARIOS_PADRAO), 'padrao');
     assert.equal(modeloDosHorarios(DE_30_EM_30), 'de30');
     assert.equal(modeloDosHorarios([390, 450]), 'personalizado');
-    assert.equal(modeloDosHorarios([...HORARIOS_PADRAO].reverse()), 'janelas', 'a ordem não importa');
+    assert.equal(modeloDosHorarios([...HORARIOS_PADRAO].reverse()), 'padrao', 'a ordem não importa');
   });
 
   it('a descrição: o nome do modelo, ou as sequências de mesmo intervalo resumidas e os horários soltos', () => {
-    assert.equal(descreverHorarios(HORARIOS_PADRAO), 'Janelas do dia');
+    assert.equal(descreverHorarios(HORARIOS_PADRAO), 'Horários padrão');
     assert.equal(descreverHorarios(DE_30_EM_30), 'De 30 em 30 min, 06:30–16:30');
     assert.equal(descreverHorarios([h('07:00'), h('07:30'), h('08:00'), h('08:30'), h('14:00'), h('15:10')]), '07:00–08:30 de 30 em 30 min, 14:00, 15:10');
     assert.equal(descreverHorarios([h('07:00'), h('09:00')]), '07:00, 09:00', 'dois horários não fazem sequência');
