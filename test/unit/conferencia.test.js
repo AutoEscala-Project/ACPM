@@ -23,3 +23,98 @@ describe('O motor com voos fixos: a mesma saída de antes da conferência sair d
     });
   }
 });
+
+// conferirEscala: a escala montada, conferida de novo sem o motor. Ela não põe, não move e não tira nenhum voo
+describe('conferirEscala: a escala conferida sem o motor', async () => {
+  const { conferirEscala } = await import('../../js/conferencia.js');
+  const { pinoDoVoo } = await import('../../js/fixos.js');
+  const { mulberry32 } = await import('../helpers/cenarios.js');
+  const { FROTA_POR_TIPO } = await import('../helpers/estado.js');
+  const lugar = o => `${o.fKey} ${o.stuId} ${o.mis} ${o.a}-${o.b} ${o.r} ${o.insId}`;
+  const semData = ({ data: _, ...resto }) => resto;
+  const dias = SEMENTES_DOS_PINOS.slice(0, 120).flatMap(seed => TIPOS_DE_PINO.map(tipo => ({ seed, tipo, estado: diaComPinos(seed, tipo) })));
+
+  it('a escala do motor, conferida de novo, é a mesma (linhas, alertas, total e revisão)', () => {
+    const diferentes = [];
+    for (const { seed, tipo, estado } of dias) {
+      const motor = runAllocationEngine(estado);
+      const conferida = conferirEscala(estado, motor);
+      if (JSON.stringify(semData(conferida)) !== JSON.stringify(motor)) diferentes.push(`${seed} ${tipo}`);
+    }
+    assert.deepEqual(diferentes, []);
+  });
+
+  // Uma alteração sem o motor: um voo de cada dia vai para outro horário, avião e INVA (o pino agendado), ou sai da
+  // escala, ou outro peso no cadastro
+  function alterar(estado, motor, r) {
+    const pick = a => a[Math.floor(r() * a.length)];
+    const novo = { ...structuredClone(estado), fixos: { ...(estado.fixos || {}) } };
+    const voos = motor.out.filter(o => !o.trecho);
+    if (!voos.length) return null;
+    const o = pick(voos);
+    const tipo = r();
+    if (tipo < 0.5) {
+      const a = pick([390, 420, 500, 610, 690, 760, 820, 870, 980]);
+      const r2 = o.isGround ? o.r : pick(FROTA_POR_TIPO[o.eqType] || [o.r]);
+      novo.fixos[o.fKey] = { ...pinoDoVoo(o), a, b: a + (o.b - o.a), r: r2, insId: pick(novo.ins).id, agendado: true, ...(o.isGround ? { classKey: o.classKey } : {}) };
+      return { novo, mudou: o.fKey };
+    }
+    if (tipo < 0.75) {
+      // "✕": o voo fica fixo onde estava (pinado) e o pedido deixa de voar
+      novo.fixos[o.fKey] = novo.fixos[o.fKey] || pinoDoVoo(o);
+      const s = novo.stu.find(x => x.id === o.stuId);
+      const d = o.mid ? s.extra.find(ex => ex.mid === o.mid) : s;
+      d.fly = false;
+      return { novo, mudou: o.fKey, saiu: true };
+    }
+    const s = novo.stu.find(x => x.id === o.stuId);
+    s.kg = 40 + Math.floor(r() * 80);
+    return { novo, mudou: null, peso: s.id };
+  }
+
+  it('depois de uma alteração, os outros voos ficam onde estavam; o motor deixa os fixos no mesmo lugar; total, recusas e turmas iguais aos do motor quando ele não põe nem tira ninguém', () => {
+    const falhas = [];
+    let comparados = 0;
+    for (const [k, { seed, tipo, estado }] of dias.entries()) {
+      const motor = runAllocationEngine(estado);
+      const alteracao = alterar(estado, motor, mulberry32(seed * 31 + k));
+      if (!alteracao) continue;
+      const { novo, mudou, saiu, peso } = alteracao;
+      const conferida = conferirEscala(novo, motor, { antes: estado });
+      if (!conferida) { falhas.push(`${seed} ${tipo}: sem escala`); continue; }
+      const antes = new Map(motor.out.map(o => [o.fKey, o]));
+      const depois = new Map(conferida.out.map(o => [o.fKey, o]));
+      for (const [fKey, o] of antes) {
+        if (fKey === mudou) continue;
+        if (!depois.has(fKey) || lugar(depois.get(fKey)) !== lugar(o)) falhas.push(`${seed} ${tipo}: ${fKey} mudou`);
+      }
+      if (saiu && depois.has(mudou)) falhas.push(`${seed} ${tipo}: ${mudou} continua`);
+      if (mudou && !saiu && lugar(depois.get(mudou)) !== lugar({ ...depois.get(mudou), ...novo.fixos[mudou] })) falhas.push(`${seed} ${tipo}: ${mudou} fora do pino`);
+      if (peso) for (const o of conferida.out.filter(v => v.stuId === peso && !v.trecho)) if (o.stuKg !== novo.stu.find(s => s.id === peso).kg) falhas.push(`${seed} ${tipo}: o peso de antes`);
+      // O motor sobre o resultado: os fixos no mesmo lugar
+      const refeita = runAllocationEngine(novo);
+      for (const o of refeita.out.filter(v => v.fixo && !v.trecho)) {
+        const c = depois.get(o.fKey);
+        if (!c || lugar(c) !== lugar(o)) falhas.push(`${seed} ${tipo}: o fixo ${o.fKey} noutro lugar`);
+      }
+      const chaves = lista => lista.map(o => o.fKey).sort().join();
+      if (chaves(refeita.out) === chaves(conferida.out)) {
+        comparados++;
+        const turmas = lista => lista.filter(o => o.isGround).map(o => `${o.fKey}:${o.groupSize}`).sort().join();
+        if (refeita.tot !== conferida.tot) falhas.push(`${seed} ${tipo}: tot`);
+        if (refeita.al.filter(a => a.t === 'err').length !== conferida.al.filter(a => a.t === 'err').length) falhas.push(`${seed} ${tipo}: recusas`);
+        if (turmas(refeita.out) !== turmas(conferida.out)) falhas.push(`${seed} ${tipo}: turmas`);
+      }
+    }
+    assert.deepEqual(falhas.slice(0, 8), [], `${falhas.length} falha(s)`);
+    assert.ok(comparados > 300, `só ${comparados} dias comparados com o motor`);
+  });
+
+  it('um pedido que voa sem pino, sem linha e sem recusa entra na escala: sem o motor não dá (null)', () => {
+    const estado = diaComPinos(3, 'aprovada');
+    const motor = runAllocationEngine(estado);
+    const novo = structuredClone(estado);
+    novo.stu.push({ id: 9999, nm: 'Chegou', kg: 70, bl: [], extra: [], fly: true, mis: 'Voo Local', eq: 'C152', p1: 610, p2: -1, nb: 1, ss: 1, pr: 3 });
+    assert.equal(conferirEscala(novo, motor, { antes: estado }), null);
+  });
+});
