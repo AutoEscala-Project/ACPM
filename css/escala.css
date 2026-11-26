@@ -66,7 +66,8 @@ details.caixa.avisos summary { color: var(--wa); }
 .transposto .tl-axis { grid-row: 2; grid-column: 1; width: 42px; height: calc(var(--altura) - 2px); margin: 1px 6px 0 0; }
 .transposto .tl-axis span { left: auto; right: 0; top: var(--pos); transform: translateY(-50%); }
 .transposto .tl-axis span.fim { transform: translateY(-100%); }
-.transposto .tl-row { grid-row: span 2; display: grid; grid-template-rows: subgrid; align-items: stretch; min-width: 0; padding: 0 3px; border-top: 0; border-left: 1px solid var(--ln); }
+/* O row-gap da coluna é o da grade (6px): o gap de 10px da .tl-row valeria na subgrid e desceria a faixa 2 px abaixo das horas */
+.transposto .tl-row { grid-row: span 2; display: grid; grid-template-rows: subgrid; row-gap: 6px; align-items: stretch; min-width: 0; padding: 0 3px; border-top: 0; border-left: 1px solid var(--ln); }
 .transposto .tl-lbl { width: auto; min-height: 44px; align-content: center; }
 .transposto .tl-lbl > span, .transposto .tl-lbl > small { white-space: nowrap; }
 .transposto .tl-track {
