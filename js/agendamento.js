@@ -17,7 +17,7 @@ import {
   alvoDoNovoPedido, normalizeMissionFields, duracaoFixaDaMissao, duracaoPadraoDaMissao, duracaoValida, duracaoDigitada, isGroundMission,
   disponibilidadeDoAluno, rotuloDaDisponibilidade, pesoDigitado, ERRO_DA_DURACAO, ERRO_DO_PESO
 } from './rules.js';
-import { horariosDaMissao, periodoDoMinuto, paraMinuto, INICIOS_DOS_TEMPOS, HORARIOS_PADRAO } from './horarios.js';
+import { horariosDaMissao, horariosDoTipo, periodoDoMinuto, paraMinuto, INICIOS_DOS_TEMPOS } from './horarios.js';
 import { ocupacaoDaEscala, avioesQueServem, instrutoresQueServem, problemaDoRecurso, problemaDoAluno } from './candidatos.js';
 import { estadoDoAluno, proximasMissoes, progressoNoCurso, missoesDoDia } from './progresso.js';
 import { indiceDoPrograma, percursoDoCurso, rotuloDaFase, rotuloDaMissao, noturnosDoCurso } from './programa.js';
@@ -55,7 +55,7 @@ const rotuloDoVoo = o => (o.mid ? `${o.s} (${o.mis})` : o.s);
 // Onde o voo está: "no PR-VOB", ou "na sala de Ground"; os horários do tipo: "horários do C152", ou "horários das aulas de
 // Ground"
 const noRecurso = r => (r === GROUND_REG ? 'na sala de Ground' : `no ${nomeDoRecurso(r)}`);
-const horariosDoTipo = tipo => (tipo === GROUND_EQ_TYPE ? 'horários das aulas de Ground' : `horários do ${tipo}`);
+const nomeDosHorariosDoTipo = tipo => (tipo === GROUND_EQ_TYPE ? 'horários das aulas de Ground' : `horários do ${tipo}`);
 
 // A data aberta nos textos do diálogo, pelo nome certo: hoje, amanhã (a data que o operador costuma montar) ou a data
 // ("12/11"; em outro ano, com o ano). Três formas: depois de "de" ("Na demanda de amanhã"), depois de um verbo ("voa
@@ -101,11 +101,11 @@ export function contextoInicial(valor, { data, hoje, agora = 0 } = {}) {
   return contexto;
 }
 
-// Os horários de decolagem do agendamento: o Ground, nos horários padrão (HORARIOS_PADRAO), só nas janelas abertas; o resto, os da missão no tipo
+// Os horários de decolagem do agendamento: o Ground, os da Sala Ground; o resto, os da missão no tipo
 // (o Noturno às 17:30, o Voo Solo às 06:30, o PA-34 de 30 em 30 minutos, os outros, a lista da categoria). Só os que caem
 // numa janela de operação aberta nesta data
 export function horariosDoAgendamento(estado, { mis, tipo }) {
-  const lista = isGroundMission(mis) ? [...HORARIOS_PADRAO] : horariosDaMissao(estado.horarios, mis, tipo);
+  const lista = isGroundMission(mis) ? horariosDoTipo(estado.horarios, GROUND_EQ_TYPE) : horariosDaMissao(estado.horarios, mis, tipo);
   return lista.filter(m => !Array.isArray(estado.win) || estado.win[periodoDoMinuto(m)]);
 }
 
@@ -848,7 +848,7 @@ function textoDoContexto(contexto, ambiente, { r = null, tipo = null, a, recurso
   if (turma) partes = [`Turma de ${turma.mis} das ${hm(turma.a)} com ${turma.ins}`];
   else if (contexto.origem === 'mapa') {
     const clique = `clique perto das ${hm(contexto.minuto)}`;
-    partes = [com, onde, !comAluno ? clique : quando ? `${clique} → ${quando} (${horariosDoTipo(tipo)})` : horario(clique)];
+    partes = [com, onde, !comAluno ? clique : quando ? `${clique} → ${quando} (${nomeDosHorariosDoTipo(tipo)})` : horario(clique)];
   } else if (contexto.origem === 'periodo') partes = [onde, horario(`o primeiro horário livre a partir das ${hm(contexto.desde)}`)];
   else if (contexto.origem === 'recurso') partes = [onde, horario('o primeiro horário livre')];
   else if (contexto.origem === 'instrutor') partes = [com, horario('o primeiro horário livre')];

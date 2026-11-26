@@ -10,7 +10,7 @@ import { FROTA_INICIAL, matriculasDoTipo, motivoDoAviao, aviaoServe, instrutorVo
 import { hm, fmtH, numeroBr, duracaoHm } from './format.js';
 import { repousoAntesDaVolta, historicoDoDia } from './noturno.js';
 import { isGroundMission, doesGroundGateFlight, disponibilidadeDoAluno, duracaoValida, duracaoFixaDaMissao, minutoConfirmado } from './rules.js';
-import { HORARIOS_INICIAIS, horariosDaMissao, periodoDoMinuto, minutoDaPreferencia, fimDasMissoesDoDia, INICIOS_DOS_TEMPOS, HORARIOS_PADRAO, HORARIO_DO_SOLO } from './horarios.js';
+import { HORARIOS_INICIAIS, horariosDaMissao, horariosDoTipo, periodoDoMinuto, minutoDaPreferencia, fimDasMissoesDoDia, INICIOS_DOS_TEMPOS, HORARIO_DO_SOLO } from './horarios.js';
 import { ajustarFilas, categoriaDoRodizio } from './rodizio.js';
 import { avisosDeAtraso, intervaloEfetivo, STATUS_EM_ANDAMENTO } from './status.js';
 import { livre, cabeNoSaldo, saldoAteARevisao, problemasDoInstrutor } from './viabilidade.js';
@@ -226,8 +226,8 @@ function linhaDoFixo(state, ctx, item, pino, fKey = chaveDoVoo(item.stuId, item.
     if (pino.agendado && !STATUS_EM_ANDAMENTO.includes(status) && !mudouDeTipo) {
       comAviso = true;
       const avisar = (codigo, m) => avisos.push({ t: 'warn', s: rotulo, fKey, m, codigo, stuId });
-      // Os horários de decolagem da missão (o Ground, nas janelas do dia; o Noturno, às 17:30; o Voo Solo, às 06:30)
-      const lista = ground ? [...HORARIOS_PADRAO] : horariosDaMissao(horarios, d.mis, d.eq);
+      // Os horários de decolagem da missão (o Ground, os da Sala Ground; o Noturno, às 17:30; o Voo Solo, às 06:30)
+      const lista = ground ? horariosDoTipo(horarios, GROUND_EQ_TYPE) : horariosDaMissao(horarios, d.mis, d.eq);
       if (!lista.includes(a)) {
         avisar('fora-dos-horarios', ground ? `Agendado às ${hm(a)}, fora dos horários das aulas de Ground.`
           : d.mis === 'Noturno' || d.mis === 'Voo Solo' ? `Agendado às ${hm(a)}: o ${d.mis} sai às ${hm(lista[0])}.`

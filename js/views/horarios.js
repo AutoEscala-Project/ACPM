@@ -17,8 +17,8 @@ import { hm, esc } from '../format.js';
 import { CATEGORIAS_COM_HORARIOS, HORARIOS_PADRAO, DE_30_EM_30, PRIMEIRO_HORARIO, ULTIMO_HORARIO, periodoDoMinuto, paraMinuto, modeloDosHorarios, descreverHorarios, porPeriodo, impactoDosHorarios, resumoDoImpacto, INICIOS_DOS_TEMPOS } from '../horarios.js';
 import { horariosAVista, manterHorariosAVista } from './filtros-dos-recursos.js';
 
-export const NOMES_DAS_CATEGORIAS = { C152: 'C152', C172: 'C172', sim: 'Simulador', 'PA-34': 'PA-34' };
-const MODELOS = [['janelas', 'Janelas do dia'], ['de30', 'De 30 em 30 min'], ['personalizado', 'Personalizado']];
+export const NOMES_DAS_CATEGORIAS = { C152: 'C152', C172: 'C172', sim: 'Simulador', 'PA-34': 'PA-34', ground: 'Sala Ground' };
+const MODELOS = [['padrao', 'Horários padrão'], ['de30', 'De 30 em 30 min'], ['personalizado', 'Personalizado']];
 const PERIODOS = [['manha', 'Manhã'], ['tarde', 'Tarde']];
 const ID_DO_ERRO = 'hr-erro', ID_DA_DICA = 'hr-dica';
 
@@ -198,6 +198,6 @@ export function porNoRascunho() {
 
 export function escolherModelo(modelo) {
   if (!rascunho) return;
-  if (modelo === 'janelas') mudar([...HORARIOS_PADRAO]);
+  if (modelo === 'padrao') mudar([...HORARIOS_PADRAO]);
   else if (modelo === 'de30') mudar([...DE_30_EM_30]);
 }

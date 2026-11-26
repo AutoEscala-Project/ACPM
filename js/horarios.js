@@ -19,7 +19,8 @@ export const HORARIO_DO_SOLO = INICIOS_DOS_TEMPOS[0];
 export const HORARIOS_PADRAO = INICIOS_DOS_TEMPOS.slice(0, ULTIMO_TEMPO);
 export const DE_30_EM_30 = Array.from({ length: 21 }, (_, i) => HORARIO_DO_SOLO + 30 * i);
 
-export const HORARIOS_INICIAIS = { C152: [...HORARIOS_PADRAO], C172: [...HORARIOS_PADRAO], sim: [...HORARIOS_PADRAO], 'PA-34': DE_30_EM_30 };
+// A Sala Ground (ground, a categoria dela em js/categorias.js) começa com os oito horários que o Ground usava (J, N11)
+export const HORARIOS_INICIAIS = { C152: [...HORARIOS_PADRAO], C172: [...HORARIOS_PADRAO], sim: [...HORARIOS_PADRAO], 'PA-34': DE_30_EM_30, ground: [...HORARIOS_PADRAO] };
 export const CATEGORIAS_COM_HORARIOS = Object.keys(HORARIOS_INICIAIS);
 
 // O primeiro horário de decolagem do dia (06:00)
@@ -37,8 +38,9 @@ export function normalizarHorarios(horarios) {
   }));
 }
 
-// A lista de um tipo (pela categoria); a sala de Ground (e um tipo sem categoria com lista) usa as janelas do dia.
-// Sem os horários do cadastro, os iniciais (como no motor)
+// A lista de um tipo (pela categoria; a Sala Ground, a dela). O tipo sem categoria com lista, e a Sala Ground no
+// cadastro gravado antes do formato 28 (sem a lista dela), usam os horários padrão. Sem os horários do cadastro, os
+// iniciais (como no motor)
 export function horariosDoTipo(horarios, tipo) {
   const lista = (horarios || HORARIOS_INICIAIS)[categoriaDoTipo(tipo)];
   return Array.isArray(lista) && lista.length ? lista : HORARIOS_PADRAO;
@@ -118,7 +120,7 @@ const mesmaLista = (a, b) => a.length === b.length && a.every((m, i) => m === b[
 
 export function modeloDosHorarios(lista) {
   const ordenada = emOrdem(lista);
-  if (mesmaLista(ordenada, HORARIOS_PADRAO)) return 'janelas';
+  if (mesmaLista(ordenada, HORARIOS_PADRAO)) return 'padrao';
   if (mesmaLista(ordenada, DE_30_EM_30)) return 'de30';
   return 'personalizado';
 }
@@ -129,7 +131,7 @@ const intervalo = passo => (passo % 60 === 0 ? `de ${passo / 60} em ${passo / 60
 export function descreverHorarios(lista) {
   const l = emOrdem(lista);
   const modelo = modeloDosHorarios(l);
-  if (modelo === 'janelas') return 'Janelas do dia';
+  if (modelo === 'padrao') return 'Horários padrão';
   if (modelo === 'de30') return `De 30 em 30 min, ${hm(l[0])}–${hm(l[l.length - 1])}`;
   const partes = [];
   for (let i = 0; i < l.length;) {

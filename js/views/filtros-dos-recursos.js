@@ -44,15 +44,15 @@ export const manterRecursoAVista = reg => { mantidos.recursos.add(reg); };
 export const manterHorariosAVista = cat => { mantidos.horarios.add(cat); };
 
 // "Categoria ▾", o filtro de vários valores (js/views/filtro-multiplo.js) com a regra "alguma": um recurso é de uma
-// categoria só, e aparece o de alguma das marcadas. As opções são as categorias sem a Sala Ground, que não está em
-// Recursos. O componente desenha as caixas (com flt-ctrl, sem data-act, data-f ou data-a: o Gestor também filtra, e
+// categoria só, e aparece o de alguma das marcadas. As opções são todas as categorias, a Sala Ground entre elas (os
+// horários de decolagem dela estão em Recursos desde o J). O componente desenha as caixas (com flt-ctrl, sem data-act, data-f ou data-a: o Gestor também filtra, e
 // marcar não é uma alteração dos dados) e guarda as marcas; aoMudar recebe as categorias marcadas, e limpar() as desmarca
 // sem avisar ("Limpar filtros")
 export function criarFiltroDasCategorias(aoMudar) {
   const filtro = criarFiltroMultiplo({
     id: 'flt-rec-cat', nome: 'Categoria', todas: 'Todas as categorias', regra: 'alguma',
     frase: 'Mostra os recursos de alguma das categorias marcadas.', dica: ['filtro-das-categorias', 'Filtro das categorias'],
-    grupos: () => [{ titulo: 'Categorias', opcoes: CATEGORIAS.filter(c => c.id !== 'ground').map(c => [c.id, c.nome]) }],
+    grupos: () => [{ titulo: 'Categorias', opcoes: CATEGORIAS.map(c => [c.id, c.nome]) }],
     aoMudar: () => aoMudar(filtro.valores())
   });
   return filtro;

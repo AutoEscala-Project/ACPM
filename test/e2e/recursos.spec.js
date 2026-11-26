@@ -242,7 +242,7 @@ test.describe('Recursos: horários de decolagem por categoria', () => {
     await abrir(page, { estado: cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000)] }) });
     await irParaVista(page, 'rec', 'cadastro');
     const c152 = page.locator('#horarios [data-cat="C152"]');
-    await expect(c152.locator('.horarios-modelo')).toHaveText('Janelas do dia');
+    await expect(c152.locator('.horarios-modelo')).toHaveText('Horários padrão');
     await expect(c152.locator('.horarios-qtd')).toHaveText('8 horários');
     await expect(c152.locator('[data-periodo="manha"] .hr')).toHaveText(['06:30', '08:20', '10:10', '11:30']);
     await expect(c152.locator('[data-periodo="tarde"] .hr')).toHaveText(['12:40', '13:40', '14:30', '16:20']);
@@ -342,7 +342,7 @@ test.describe('Recursos: horários de decolagem por categoria', () => {
     await editor(page).getByLabel('De 30 em 30 min').check();
     await expect(editor(page).locator('.hr-chip')).toHaveCount(21);
     await editor(page).locator('[data-act="cancelar-horarios"]').click();
-    await expect(c152.locator('.horarios-modelo')).toHaveText('Janelas do dia');
+    await expect(c152.locator('.horarios-modelo')).toHaveText('Horários padrão');
     await expect(c152.locator('[data-act="editar-horarios"]')).toBeFocused();
 
     await c152.locator('[data-act="editar-horarios"]').click();
@@ -408,7 +408,7 @@ test.describe('Recursos: horários de decolagem por categoria', () => {
     await expect(page.locator('#toast-box')).toContainText('Os horários do C152 mudaram depois que o editor abriu: nada foi salvo. Confira a lista e edite de novo.');
     await expect(editor(page)).toHaveCount(0);
     // Fica a lista revertida: sem o 07:45 e sem o 08:45 do rascunho
-    await expect(c152.locator('.horarios-modelo')).toHaveText('Janelas do dia');
+    await expect(c152.locator('.horarios-modelo')).toHaveText('Horários padrão');
     await expect(c152.locator('.horarios-qtd')).toHaveText('8 horários');
   });
 });
@@ -419,7 +419,7 @@ test.describe('Recursos: o editor dos horários pelo teclado e no leitor de tela
     await irParaVista(page, 'rec', 'cadastro');
     await page.locator('#horarios [data-cat="C152"] [data-act="editar-horarios"]').click();
     const editor = page.locator('#horarios .horarios-editor');
-    await editor.getByLabel('Janelas do dia').focus();
+    await editor.getByLabel('Horários padrão').focus();
     await page.keyboard.press('ArrowRight');
     await expect(editor.getByLabel('De 30 em 30 min')).toBeFocused();
     await expect(editor.getByLabel('De 30 em 30 min')).toBeChecked();
@@ -428,7 +428,7 @@ test.describe('Recursos: o editor dos horários pelo teclado e no leitor de tela
     // O efeito é uma região viva: o mesmo elemento recebe o texto novo (um elemento novo não seria anunciado)
     await editor.locator('.horarios-efeito').evaluate(el => { el.dataset.marca = '1'; });
     await page.keyboard.press('ArrowLeft');
-    await expect(editor.getByLabel('Janelas do dia')).toBeFocused();
+    await expect(editor.getByLabel('Horários padrão')).toBeFocused();
     await expect(editor.locator('.horarios-efeito[data-marca="1"]')).toHaveText('Nenhum pedido muda.');
 
     const campo = editor.locator('.hr-novo');

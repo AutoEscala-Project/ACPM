@@ -15,7 +15,7 @@
 import { GROUND_EQ_TYPE, MIS, MISSOES_LOCAIS, LIMITE_DE_VOOS_LOCAIS } from './config.js';
 import { CAMPOS_DO_PEDIDO } from './dias.js';
 import { normalizeMissionFields, minutoConfirmado } from './rules.js';
-import { HORARIOS_INICIAIS, horariosDaMissao, periodoDoMinuto, fimDasMissoesDoDia, HORARIOS_PADRAO } from './horarios.js';
+import { HORARIOS_INICIAIS, horariosDaMissao, horariosDoTipo, periodoDoMinuto, fimDasMissoesDoDia } from './horarios.js';
 import { STATUS_EM_ANDAMENTO, intervaloEfetivo } from './status.js';
 import { disponibilidadeDoAluno, doesGroundGateFlight } from './rules.js';
 import { pedidoDoAluno } from './voo.js';
@@ -87,7 +87,7 @@ export function sugerirReparos(estado, resultado, fKey, { maximo = 3, depoisDe =
   // do motor para cada aluno (fimDasMissoesDoDia): com um Noturno na demanda do dia, as outras missões até as 17:30
   if (!opcoes.length && !pedidoMudou) {
     const duracao = voo.b - voo.a;
-    const inicios = voo.isGround ? [...HORARIOS_PADRAO] : horariosDaMissao(estado.horarios || HORARIOS_INICIAIS, voo.mis, tipo);
+    const inicios = voo.isGround ? horariosDoTipo(estado.horarios, GROUND_EQ_TYPE) : horariosDaMissao(estado.horarios || HORARIOS_INICIAIS, voo.mis, tipo);
     const fimDoAluno = fimDasMissoesDoDia(estado.stu);
     const fimDoDia = Math.min(...grupo.map(v => fimDoAluno(v.stuId, voo.mis, tipo)));
     const voosDoAluno = v => ocupacao.alunos.get(v.stuId) || [];
@@ -281,7 +281,7 @@ function buscaDoVoo(estado, resultado, voo, grupo, { depoisDe = null, semInstrut
     .filter(o => o.isGround && doesGroundGateFlight(o.mis, { mis: voo.mis, eq: tipo })).map(o => o.b)));
   const horarioAberto = (m, tipo = tipoDoVoo) => m + duracao <= limite && m >= inicioMinimo(tipo) && Boolean(estado.win[periodoDoMinuto(m)])
     && !passou(m) && alunoLivre(m, m + duracao);
-  const inicios = tipo => (voo.isGround ? [...HORARIOS_PADRAO] : horariosDaMissao(estado.horarios || HORARIOS_INICIAIS, voo.mis, tipo));
+  const inicios = tipo => (voo.isGround ? horariosDoTipo(estado.horarios, GROUND_EQ_TYPE) : horariosDaMissao(estado.horarios || HORARIOS_INICIAIS, voo.mis, tipo));
   const atual = estado.ins.find(x => x.id === voo.insId);
   const comCombustivel = (texto, { reducao }) => (reducao > 0 ? `${texto} · reduzir ${reducao} gal` : texto);
   const noOuNa = r => `${voo.isGround ? 'na' : 'no'} ${nomeDoRecurso(r)}`;
