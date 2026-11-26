@@ -130,8 +130,8 @@ export function desenharEditor() {
   if (turma || ground) {
     partes.push(`<fieldset class="voo-turma"><legend>Turma</legend><ul>${voo.unidade.map((o, i) => `<li><b>${esc(o.s)}</b>
       ${campoDoStatus(o, valores, { id: `voo-status-${i}`, rotulo: `Status de ${o.s}`, travado: false })}
-      ${o.trecho ? '' : `<button type="button" class="btn quiet" data-voo-tirar="${esc(o.fKey)}" aria-label="Tirar ${esc(o.s)} da escala">Tirar</button>`}</li>`).join('')}</ul>
-      ${voo.unidade.some(o => valores.status[o.fKey] !== 'Cancelado') ? `<button type="button" class="btn quiet" data-voo-turma="${esc(voo.chave)}">+ Aluno na turma</button>` : ''}</fieldset>`);
+      ${o.trecho ? '' : `<button type="button" class="btn quiet" data-act="rm-fly" data-id="${esc(o.stuId)}" data-mid="${esc(o.mid || 0)}" aria-label="Tirar ${esc(o.s)} da escala">Tirar</button>`}</li>`).join('')}</ul>
+      ${voo.unidade.some(o => valores.status[o.fKey] !== 'Cancelado') ? `<button type="button" class="btn quiet" data-act="agendar" data-agendar="t:${esc(voo.chave)}" aria-haspopup="dialog">+ Aluno na turma</button>` : ''}</fieldset>`);
   } else {
     partes.push(`<label class="campo">Aluno <select id="voo-aluno"${tudo || travas.aluno ? ' disabled' : ''}${ligado('voo-aluno', [travas.aluno && 'voo-trava-aluno'])}>
       ${opcoes.alunos.map(a => op(a.valor, a.texto, a.valor === valores.stuId)).join('')}</select>${trava('voo-trava-aluno', travas.aluno)}</label>`);

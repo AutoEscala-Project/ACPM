@@ -5,7 +5,7 @@
 // na turma" e "Sugestões" fecham o editor e seguem pelos caminhos deles (o "✕", o agendamento e a gaveta)
 import { aindaNaoAbriu, fotoDaEscalaTravada, gravarNaEscala } from '../actions.js';
 import { MIS } from '../config.js';
-import { $, showToast } from '../dom.js';
+import { $, showToast, visivel } from '../dom.js';
 import { fixarNoLugar } from '../fixos.js';
 import { paraMinuto } from '../horarios.js';
 import { duracaoDigitada, duracaoFixaDaMissao, isGroundMission } from '../rules.js';
@@ -107,13 +107,27 @@ dlg.addEventListener('click', e => {
   });
 });
 
-// "Tirar", "+ Aluno na turma", "Sugestões" e o link do cadastro: o editor fecha antes (ouvido na captura), sem gravar nada,
-// e o clique segue para o caminho deles
+// "Tirar" (o "✕"), "+ Aluno na turma" (o agendamento), "Sugestões" e o link do cadastro: o editor fecha antes (ouvido na
+// captura), sem gravar nada, e o clique segue para o caminho deles
 document.addEventListener('click', e => {
   if (!editorDoVooAberto() || !e.target.closest) return;
   const saida = e.target.closest('#dlg-voo [data-act], #dlg-voo [data-reparo], #dlg-voo [data-voo-cadastro]');
-  if (saida) fecharEditorDoVoo({ devolverFoco: false });
+  // O foco volta para a barra ou o botão de onde o editor abriu: o diálogo que abre depois o devolve para lá
+  if (saida) fecharEditorDoVoo({ devolverFoco: !saida.matches('[data-voo-cadastro]') });
 }, true);
+
+// O Tab fica dentro do editor: depois do último controle, o primeiro; antes do primeiro, o último (o navegador levaria o
+// foco para fora da página)
+dlg.addEventListener('keydown', e => {
+  if (e.key !== 'Tab') return;
+  const controles = [...dlg.querySelectorAll('select, input, button, a[href]')].filter(c => !c.disabled && visivel(c));
+  if (!controles.length) return;
+  const [primeiro, ultimo] = [controles[0], controles.at(-1)];
+  if (e.shiftKey ? document.activeElement === primeiro : document.activeElement === ultimo) {
+    e.preventDefault();
+    (e.shiftKey ? ultimo : primeiro).focus();
+  }
+});
 
 $('#voo-cancelar').addEventListener('click', () => fecharEditorDoVoo());
 // O Esc (o cancel do <dialog>): fecha sem gravar, com o foco de volta na barra ou no botão

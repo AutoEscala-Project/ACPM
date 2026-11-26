@@ -1262,8 +1262,7 @@ export function descricaoDoAgendamento(estado, proposta, { avisos = [] } = {}) {
   const naTurma = proposta.turma ? ' · entrou na turma' : '';
   const inicio = `${estado.aprovacao ? 'Agendado na escala aprovada' : 'Agendado na escala'}: ${stu ? stu.nm : proposta.stuId} · ${missao} · ${hm(proposta.a)}–${hm(proposta.b)} · ${onde} · ${x ? x.nm : proposta.insId}${de}${naTurma}`;
   const disponivel = proposta.disponibilizar ? ` · ${x ? x.nm : proposta.insId} marcado disponível às ${hm(proposta.a)}` : '';
-  // A pergunta da escala não aprovada (a escala será refeita) não é um aviso do voo
-  const resumos = avisos.filter(a => a.codigo !== 'refazer-a-escala').map(a => a.resumo || a.codigo);
+  const resumos = avisos.map(a => a.resumo || a.codigo);
   let confirmado = resumos.length ? ` · confirmado: ${resumos.join('; ')}` : '';
   const LIMITE = 500;
   if (inicio.length + confirmado.length + disponivel.length > LIMITE) {

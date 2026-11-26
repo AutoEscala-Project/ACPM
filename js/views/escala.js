@@ -292,7 +292,7 @@ const botaoDoCancelado = o => (cancelamentoAproveitavel(S, o, { data: DATA, hoje
   : '');
 
 // "Editar" abre o editor do voo (na turma de Ground, a turma inteira); "✕" tira o voo da escala
-const acao = o => `<button type="button" class="btn quiet editar-voo" data-act="editar-voo" data-fkey="${esc(o.isGround ? o.classKey || o.fKey : o.fKey)}" aria-label="Editar o voo de ${esc(o.s)}" aria-haspopup="dialog">Editar</button>${o.stuId && !o.trecho
+const acao = o => `<button type="button" class="btn quiet editar-voo" data-act="editar-voo" data-fkey="${esc(o.isGround ? o.classKey || o.fKey : o.fKey)}" aria-label="Editar o voo de ${esc(o.s)}" aria-haspopup="dialog" data-dica="editar-voo">Editar</button>${o.stuId && !o.trecho
   ? `<button class="x" data-act="rm-fly" data-id="${esc(o.stuId)}" data-mid="${esc(o.mid || 0)}" aria-label="Tirar ${esc(o.s)} da escala" title="Tirar da escala">✕</button>`
   : ''}`;
 
