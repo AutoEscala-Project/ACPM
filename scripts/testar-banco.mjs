@@ -6,6 +6,7 @@
 //   Use sempre o projeto de prévia (acpm-escala-preview), nunca o de produção.
 import { execFileSync } from 'node:child_process';
 import { readFileSync, readdirSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 
 const raiz = new URL('..', import.meta.url);
 // O projeto de produção (como em scripts/semear-previa.mjs): os testes rodam só na prévia
@@ -27,7 +28,7 @@ let falhas = 0;
 for (const arquivo of arquivos) {
   let saida;
   try {
-    saida = execFileSync('psql', [url, '-X', '-q', '-t', '-A', '-v', 'ON_ERROR_STOP=1', '-f', new URL(arquivo, pasta).pathname], {
+    saida = execFileSync('psql', [url, '-X', '-q', '-t', '-A', '-v', 'ON_ERROR_STOP=1', '-f', fileURLToPath(new URL(arquivo, pasta))], {
       encoding: 'utf8',
       env: { ...process.env, PGPASSWORD: process.env.SUPABASE_DB_PASSWORD, PGSSLMODE: 'require' },
       stdio: ['ignore', 'pipe', 'pipe']
