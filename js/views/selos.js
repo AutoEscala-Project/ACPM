@@ -1,58 +1,68 @@
-// Selos de atenção nas abas: avisos da escala (vermelho quando alguma missão não entrou), aviões parados ou com menos
-// de 5 h até a revisão de 50 horas e pedidos da agenda para a data que ainda não estão na demanda. O selo de Recursos
-// aparece também no botão da Disponibilidade do dia, a vista da tabela dos aviões (quem está no Cadastro vê onde olhar).
+// Os pedidos da data aberta (a linha, o trilho, a Agenda e a Demanda leem daqui) e os dois selos que ainda não são da linha: o de Recursos no
+// botão da Disponibilidade do dia (aviões parados ou com menos de 5 h até a revisão de 50 horas) e o número de pedidos no
+// botão de importar, na Demanda
 import { $ } from '../dom.js';
 import { RES, S, DATA, isGestor, inativoNaDataAberta, stuBy } from '../state.js';
 import { REVISAO_H } from '../config.js';
 import { ApiClient } from '../storage.js';
+import { redesenhar } from '../redesenho.js';
 
 const PERTO_DA_REVISAO_H = 5;
 
-function selo(aba, quantidade, tipo, dica) {
-  const el = $(`#selo-${aba}`);
-  if (!el) return;
-  el.hidden = !quantidade;
-  el.textContent = quantidade ? String(quantidade) : '';
-  el.className = `aba-selo${tipo ? ' ' + tipo : ''}`;
-  el.title = quantidade ? dica : '';
+// Pedidos da agenda para a data aberta: lidos ao abrir a data e depois de mudanças na agenda. leitura: 'lendo', 'lidos' ou
+// 'erro' (sem conexão: a linha diz que falhou)
+let pedidosDaData = { data: null, lista: null, leitura: 'lendo' };
+let leituras = 0;
+let emCurso = null;
+
+export function lerPedidosDaData() {
+  const leitura = { data: DATA, vez: ++leituras };
+  emCurso = leitura;
+  leitura.fim = ler(leitura);
+  return leitura.fim;
 }
 
-export function atualizarSelosDaEscala() {
-  const alertas = (RES && RES.al) || [];
-  const erros = alertas.filter(a => a.t === 'err').length;
-  if (erros) selo('esc', erros, 'erro', erros === 1 ? '1 missão não entrou na escala' : `${erros} missões não entraram na escala`);
-  else selo('esc', alertas.length, 'aviso', `${alertas.length} ${alertas.length === 1 ? 'aviso' : 'avisos'} na escala`);
+async function ler({ data, vez }) {
+  let lista = null, leitura = 'lidos';
+  try {
+    lista = await ApiClient.agenda(data, data);
+  } catch {
+    leitura = 'erro';
+  }
+  // Outra data aberta, ou uma leitura pedida depois desta (a resposta dela é a que vale)
+  if (vez !== leituras) return;
+  emCurso = null;
+  if (data !== DATA) return;
+  pedidosDaData = { data, lista, leitura };
+  redesenhar('pedidos');
+}
 
+// Os pedidos da data aberta e o estado da leitura (de outra data: ainda lendo)
+export const pedidosDaDataAberta = () => (pedidosDaData.data === DATA ? pedidosDaData : { data: DATA, lista: null, leitura: 'lendo' });
+
+// Os mesmos, depois da leitura em curso (a data que acabou de abrir, um pedido que acabou de ser registrado)
+export async function pedidosDaDataAbertaLidos() {
+  while (emCurso && emCurso.data === DATA) await emCurso.fim;
+  if (pedidosDaDataAberta().leitura === 'lendo') await lerPedidosDaData();
+  return pedidosDaDataAberta();
+}
+
+const pedidosPendentes = () => (pedidosDaDataAberta().lista || [])
+  .filter(s => !s.cancelada_em && !(S.importadas || []).includes(s.id) && !inativoNaDataAberta(stuBy(s.aluno)));
+
+export function atualizarSelos() {
   const revisao = (RES && RES.revisao) || {};
   const atencao = Object.entries(revisao)
     .filter(([r, v]) => S.av[r] !== false && !inativoNaDataAberta((S.frota || []).find(f => f.reg === r)) && (v.paraAs !== null || REVISAO_H - v.fim < PERTO_DA_REVISAO_H)).length;
-  const avioes = `${atencao} ${atencao === 1 ? 'avião parado ou perto' : 'aviões parados ou perto'} da revisão de 50 horas`;
-  selo('rec', atencao, 'aviso', `${avioes} (Recursos › Disponibilidade do dia)`);
-  selo('rec-dia', atencao, 'aviso', avioes);
-  atualizarSeloDaAgenda();
-}
-
-// Pedidos da agenda para a data aberta: lidos ao abrir a data e depois de mudanças na agenda
-let pedidosDaData = { data: null, lista: [] };
-
-export async function lerPedidosDaData() {
-  const data = DATA;
-  // Sem a agenda (sem conexão), nenhum pedido pendente aparece no selo
-  const lista = await ApiClient.agenda(data, data).catch(() => []);
-  if (data !== DATA) return;
-  pedidosDaData = { data, lista };
-  atualizarSeloDaAgenda();
-}
-
-const pedidosPendentes = () => (pedidosDaData.data === DATA
-  ? pedidosDaData.lista.filter(s => !s.cancelada_em && !(S.importadas || []).includes(s.id) && !inativoNaDataAberta(stuBy(s.aluno)))
-  : []);
-
-// Quem consulta (Gestor e Secretaria) não importa pedidos: o selo é para quem opera a escala
-export function atualizarSeloDaAgenda() {
+  const selo = $('#selo-rec-dia');
+  if (selo) {
+    selo.hidden = !atencao;
+    selo.textContent = atencao ? String(atencao) : '';
+    selo.className = 'aba-selo aviso';
+    selo.title = atencao ? `${atencao} ${atencao === 1 ? 'avião parado ou perto' : 'aviões parados ou perto'} da revisão de 50 horas` : '';
+  }
+  // Na Demanda, o botão diz quantos pedidos há para importar (e só se destaca quando há). Quem consulta não importa
   const n = isGestor() ? 0 : pedidosPendentes().length;
-  selo('age', n, '', `${n} ${n === 1 ? 'pedido da agenda ainda não está' : 'pedidos da agenda ainda não estão'} na demanda`);
-  // Na Demanda, o botão diz quantos pedidos há para importar (e só se destaca quando há)
   const botao = $('#importar-agenda');
   if (!botao) return;
   botao.textContent = n ? `Importar ${n} ${n === 1 ? 'pedido' : 'pedidos'} da agenda` : 'Importar da agenda';

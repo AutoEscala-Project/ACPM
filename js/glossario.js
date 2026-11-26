@@ -60,7 +60,7 @@ const TERMOS = {
   reabrir: { aba: 'Escala', termo: 'Reabrir', texto: 'Solta os voos (menos os em andamento) e a escala volta a ser refeita inteira a cada alteração.' },
   'listas-do-painel': { aba: 'Escala', termo: 'Listas (painel)', texto: 'Na tela grande, duas listas lado a lado, com as mesmas colunas: a página começa na da esquerda e continua na da direita. Automático: duas a partir de 1.600 px de largura, quando cabem.' },
   'painel-missoes': { aba: 'Escala', termo: 'Missões (painel)', texto: 'O quadro do painel com os voos e aulas do dia, pelo horário, sem separar partidas e chegadas; o voo sai 30 minutos depois do fim, e a aula de Ground no fim. É o padrão do painel e da TV; Configurar painel muda o quadro e as colunas.' },
-  metar: { aba: 'Escala', termo: 'METAR', texto: 'A observação meteorológica oficial do aeródromo, de hora em hora (o SPECI, quando o tempo muda). O pé do painel mostra a de Pampulha (SBBH) e a de Confins (SBCF), da REDEMET, com a hora local e a Z.' },
+  metar: { aba: 'Escala', termo: 'METAR', texto: 'A observação meteorológica oficial do aeródromo, de hora em hora (o SPECI, quando o tempo muda). O pé do painel mostra a de Pampulha (SBBH) e a de Confins (SBCF), da REDEMET; a hora da observação, em Z, vem na mensagem.' },
   taf: { aba: 'Escala', termo: 'TAF', texto: 'A previsão oficial do aeródromo para as próximas horas. No painel, cada mudança (BECMG, TEMPO, PROB, FM) começa uma linha; sem TAF em vigor, a caixa avisa.' },
 
   // Critérios da compactação
@@ -85,9 +85,10 @@ const TERMOS = {
   duracao: { aba: 'Demanda', termo: 'Duração', texto: `As horas do voo, de uma vez. O Ground tem ${duracao(GROUND_DURATION_MIN)}. Para dois voos do aluno no mesmo dia, use “+ missão”.` },
   prioridade: { aba: 'Demanda', termo: 'Prioridade', texto: 'De 1 a 5: o pedido de prioridade maior é escalado antes. Com a mesma prioridade, quem agendou primeiro vai antes; o pedido posto à mão, depois.' },
   'fora-da-ordem': { funcionalidade: 'progresso', aba: 'Demanda', termo: 'Fora da ordem', texto: 'A missão do curso que o programa ainda não libera (falta uma anterior ou a fase não abriu), a já aprovada, a dispensada ou a que o aluno já tem em outro voo do dia. Escolhê-la pede confirmação, e o histórico diz por quê.' },
-  'curso-encerrado': { funcionalidade: 'progresso', aba: 'Demanda', termo: 'Curso encerrado', texto: 'O curso do aluno foi encerrado na aba Cursos. A próxima missão e as outras do curso continuam, mas cada uma pede confirmação, aqui e no agendamento, e o histórico diz que o curso estava encerrado.' },
+  'curso-encerrado': { funcionalidade: 'progresso', aba: 'Demanda', termo: 'Curso encerrado', texto: 'O curso do aluno foi encerrado em Cursos. A próxima missão e as outras do curso continuam, mas cada uma pede confirmação, aqui e no agendamento, e o histórico diz que o curso estava encerrado.' },
 
   // Agenda
+  'recurso-do-pedido': { aba: 'Agenda', termo: 'Recurso do pedido', texto: 'O tipo de avião, o simulador ou a sala que a missão permite, escolhido no pedido. Ele decide os horários (os de decolagem dele, em Recursos) e vai com o pedido para a demanda.' },
   excecao: { aba: 'Agenda', termo: 'Exceção da Coordenação', texto: 'Registra o pedido depois do prazo (13:00 da véspera; a segunda, sábado às 10:00). O pedido fica marcado como exceção, para auditoria.' },
 
   // Recursos

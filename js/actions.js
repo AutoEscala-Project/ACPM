@@ -1,5 +1,6 @@
 // Ações que alteram o estado: perfil de acesso, data da escala, histórico de alterações, geração da escala e BI.
-import { somarDias, fimDoMes, rotuloDaData, hojeISO, LIMITE_DO_NOME } from './format.js';
+import { escreverDataNoEndereco } from './endereco.js';
+import { somarDias, fimDoMes, LIMITE_DO_NOME } from './format.js';
 import { aplicarSomenteLeitura } from './somente-leitura.js';
 import { runAllocationEngine } from './engine.js';
 import { ligada } from './funcionalidades.js';
@@ -11,29 +12,17 @@ import { comRepousoDoNoturno } from './noturno.js';
 import { redesenhar, redesenharPorNome } from './redesenho.js';
 import { SEM_OS_PROGRAMAS } from './views/cursos.js';
 import { podeEditarAgenda } from './views/agenda.js';
-import { atualizarSeloDaAgenda, lerPedidosDaData } from './views/selos.js';
+import { lerPedidosDaData } from './views/selos.js';
 
-// Abre uma data na tela (a data da escala e a data base do BI)
-export function abrirData(data) {
+// Abre uma data: a única que escreve a data aberta e o ?data= do endereço (recarregar continua nela). Não lê nada e não
+// desenha: quem mostra a data (o nome no topo, o calendário, a data base do BI) se redesenha no momento 'data-aberta'
+// naoEscolhida: a data que aparece enquanto o app abre (o login, os dados chegando) ainda não é a da abertura e não vai para o
+// endereço (recarregar ali a tomaria pela do link)
+export function abrirData(data, { naoEscolhida = false } = {}) {
   setData(data);
-  // A data fica no endereço: recarregar a página continua nela
-  try {
-    const url = new URL(window.location.href);
-    if (url.searchParams.get('data') !== data) {
-      url.searchParams.set('data', data);
-      window.history.replaceState(window.history.state, '', url);
-    }
-  } catch {
-    // O navegador que não deixa mudar o endereço (a página dentro de um iframe, por exemplo): a data só não vai para o link
-  }
-  $('#dt').value = data;
-  $('#bi-dt').value = data;
-  // No topo: "quarta-feira, 11/11" e "amanhã"; na tela estreita, "qua., 11/11" (o CSS mostra um dos dois nomes)
-  const { semana, semanaCurta, data: diaMes, relativo } = rotuloDaData(data, hojeISO());
-  const parte = (classe, texto) => Object.assign(document.createElement('span'), { className: classe, textContent: texto });
-  $('#dt-rotulo').replaceChildren(parte('dt-semana', semana), parte('dt-semana-curta', semanaCurta), `, ${diaMes}`);
-  $('#dt-rel').textContent = relativo;
-  $('#dt-rel').hidden = !relativo;
+  if (!naoEscolhida) escreverDataNoEndereco(data);
+  document.body.dataset.data = data;
+  redesenhar('data-aberta');
 }
 
 // somenteConsulta: daqui em diante nada é gravado (o Gestor e a Secretaria no modo compartilhado, ou depois de um conflito)
@@ -46,15 +35,10 @@ export function setRole(role, somenteConsulta = false) {
     sel.value = validRole;
     sel.disabled = ApiClient.readOnly;
   }
-  // No modo compartilhado o gestor navega entre as datas (somente leitura)
-  const dtInput = $('#dt');
-  if (dtInput) {
-    dtInput.disabled = isGestor() && !modoCompartilhado();
-    $('#dt-ant').disabled = $('#dt-prox').disabled = dtInput.disabled;
-  }
   // Agenda: quem pode registrar pedidos (operadores e secretaria; no modo local, fora do perfil Gestor)
   document.body.dataset.agenda = podeEditarAgenda() ? 'edita' : 'consulta';
-  atualizarSeloDaAgenda();
+  // A linha, os selos e o que muda com o perfil
+  redesenhar('perfil');
   // Os campos da tela, desligados ou ligados conforme o perfil
   aplicarSomenteLeitura();
 }
@@ -63,7 +47,7 @@ export function setRole(role, somenteConsulta = false) {
 // no cadastro, esperando a conversão): o aviso fica até a leitura dar certo, e o que depende disso fica desligado
 // (Aprovar escala; a próxima missão, o progresso e o resultado, com o progresso ligado: js/funcionalidades.js). Os textos
 // dos programas são os que a aba Cursos mostra no lugar deles
-const SEM_OS_DADOS = {
+export const SEM_OS_DADOS = {
   horas: 'Não foi possível ler as horas de voo dos instrutores: os limites do mês e do ano não estão sendo conferidos, e Aprovar escala fica desligado.',
   resultados: ligada('progresso')
     ? 'Não foi possível ler os resultados das missões dos cursos: a próxima missão e o registro de resultados ficam desligados.'
@@ -323,13 +307,14 @@ export async function lerData(data) {
 }
 
 // Abre a escala de outra data. As abas são refeitas com os dados dela, também a do Rodízio: aberta, ela mostraria as
-// filas da data anterior, e o clique agiria sobre uma fila que a pessoa não está vendo
+// filas da data anterior, e o clique agiria sobre uma fila que a pessoa não está vendo. A data está aberta com os dados na
+// tela: os pedidos dela e o BI do período chegam depois, sem segurar quem a abriu
 export async function carregarData(data) {
   if (!await lerData(data)) return;
   $('#escala-atualizada').hidden = true;
   redesenhar('dados');
   lerPedidosDaData();
-  await carregarBI();
+  carregarBI();
 }
 
 // BI das escalas guardadas no mês da data base (e nos 7 dias até ela), com a escala da tela já incluída.

@@ -1,0 +1,105 @@
+/* A linha de produção (nav#linha, js/views/linha.js): quatro cartões das etapas ligados por uma linha, cada um com o
+   estado, o valor e (aberta) as tarefas; os links dos cadastros, do Rodízio e do BI; o botão que abre e recolhe. Tudo pela
+   largura da própria linha (container linha): abaixo de 700 px, uma faixa que rola para o lado */
+#linha { container: linha / inline-size; margin: 0 0 14px; }
+/* position: o texto só para o leitor de tela (.sr, em posição absoluta) fica dentro da faixa e é cortado com ela */
+#linha .linha-corpo { position: relative; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
+
+/* Os cartões, numa fileira, ligados por uma linha atrás deles (o fundo da lista); um ponto em cada ponta do cartão. Os
+   pontos são pseudo-elementos com box-sizing próprio (o * da base não chega a eles): 12 px com a borda */
+#linha .linha-estagios {
+  flex: 1 1 100%; min-width: 0; list-style: none; margin: 0; padding: 0;
+  display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); column-gap: 24px; align-items: start;
+  background: linear-gradient(var(--ln2), var(--ln2)) left 21px / 100% 2px no-repeat;
+}
+#linha .estagio {
+  position: relative; min-width: 0; container-type: inline-size;
+  background: var(--pn); border: 1px solid var(--ln); border-radius: 8px;
+}
+#linha .estagio::before, #linha .estagio::after {
+  content: ''; position: absolute; top: 16px; box-sizing: border-box; width: 12px; height: 12px; border-radius: 50%;
+  background: var(--mu); border: 3px solid var(--ln2);
+}
+#linha .estagio::before { left: -6px; }
+#linha .estagio::after { right: -6px; }
+/* O cartão da tela aberta: a borda de destaque */
+#linha .estagio:has(> .estagio-titulo[aria-current="page"]) { border: 2px solid var(--ac); }
+#linha .estagio-titulo {
+  display: flex; align-items: center; gap: 8px; min-height: 42px; padding: 0 12px; color: var(--ink); text-decoration: none;
+  font: 600 15.5px 'Barlow Semi Condensed', sans-serif; border-radius: 7px;
+}
+#linha .estagio-titulo:hover { background: var(--pn2); }
+#linha .estagio-titulo:focus-visible { outline-offset: -3px; }
+#linha .estagio-nome { white-space: nowrap; }
+#linha .estagio-valor { margin-left: auto; font: 700 14px 'Barlow', sans-serif; color: var(--mu); white-space: nowrap; }
+/* O valor cede o lugar ao nome: só aparece com o cartão a partir de 180 px */
+@container (max-width: 179px) {
+  #linha .estagio-valor { display: none; }
+}
+
+/* O estado: um disco com o símbolo (feito, falhou, atenção, em andamento), um anel (pendente) ou nada (nenhum) */
+#linha .estado { flex: none; display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; }
+#linha .estado .ico { width: 14px; height: 14px; stroke-width: 3; }
+#linha .estado[data-estado="feito"] { background: var(--ok); color: var(--okT); }
+#linha .estado[data-estado="falhou"] { background: var(--er); color: var(--erT); }
+#linha .estado[data-estado="atencao"] { background: var(--wa); color: var(--waT); }
+#linha .estado[data-estado="andamento"] { background: var(--an); color: var(--anT); }
+#linha .estado[data-estado="pendente"] { border: 2px solid var(--pe); }
+#linha .estado[data-estado="nenhum"] { display: none; }
+
+/* As tarefas do cartão (aberta): uma linha cada, com o estado, o nome e o valor */
+#linha .estagio-tarefas { list-style: none; margin: 0; padding: 0 6px 6px; }
+#linha .tarefa {
+  display: flex; align-items: center; gap: 6px; min-height: 28px; padding: 2px 6px; border-radius: 6px;
+  color: var(--ink); text-decoration: none; font-size: 13.5px;
+}
+#linha a.tarefa:hover { background: var(--pn2); }
+#linha .tarefa .estado { width: 16px; height: 16px; }
+#linha .tarefa .estado .ico { width: 11px; height: 11px; }
+#linha .tarefa-nome { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#linha .tarefa-valor { margin-left: auto; font-weight: 600; color: var(--mu); white-space: nowrap; }
+#linha a.tarefa:focus-visible { outline-offset: -2px; }
+
+/* Os cadastros, o Rodízio e o BI: links numa fileira, depois dos cartões (ou ao lado deles, quando cabem) */
+#linha .linha-mais { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 4px; flex: 1 1 auto; min-width: 0; }
+#linha .linha-cadastros { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 4px; }
+#linha .linha-grupo { font: 600 11.5px 'Barlow', sans-serif; text-transform: uppercase; letter-spacing: .4px; color: var(--mu); margin-right: 2px; }
+#linha .linha-mais a {
+  display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 6px; color: var(--ink);
+  text-decoration: none; font: 600 14.5px 'Barlow Semi Condensed', sans-serif; white-space: nowrap;
+}
+#linha .linha-mais a:hover { background: var(--pn2); }
+#linha .linha-mais a[aria-current="page"] { background: var(--info-bg); box-shadow: inset 0 -3px 0 var(--ac); }
+#linha .linha-mais a:focus-visible { outline-offset: -2px; }
+#linha .linha-sep { width: 1px; height: 20px; background: var(--ln2); margin: 0 6px; flex: none; }
+#linha .linha-selo { min-width: 18px; height: 18px; border-radius: 9px; padding: 0 5px; font: 700 11px/18px 'Barlow', sans-serif; text-align: center; background: var(--neutro-bg); color: var(--ink); }
+#linha .linha-selo.atencao { background: var(--wa); color: var(--waT); }
+#linha .linha-alternar { flex: none; margin-left: auto; min-width: 36px; min-height: 36px; display: inline-grid; place-items: center; }
+
+/* Recolhida, a partir de 1200 px de linha: os cartões, os links e o botão numa fileira só. Aberta, a fileira só a partir
+   de 1540 px (com menos, os links e o botão vão para a fileira de baixo) */
+@container linha (min-width: 1200px) {
+  #linha[data-estado="recolhida"] .linha-estagios { flex: 1 1 0; }
+  #linha[data-estado="recolhida"] .linha-mais { flex: none; }
+}
+@container linha (min-width: 1540px) {
+  #linha .linha-estagios { flex: 1 1 0; }
+  #linha .linha-mais { flex: none; }
+}
+
+/* Abaixo de 700 px de linha: uma faixa que rola para o lado, com as etapas (o estado e o nome), uma divisória, os
+   cadastros, o Rodízio e o BI; sem as tarefas, os pontos e o botão. Alvos de 44 px */
+@container linha (max-width: 699px) {
+  #linha .linha-corpo { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; gap: 4px; }
+  #linha .linha-corpo::-webkit-scrollbar { display: none; }
+  #linha .linha-estagios { display: flex; flex: none; gap: 4px; background: none; }
+  #linha .estagio { border: 0; background: transparent; container-type: normal; }
+  #linha .estagio:has(> .estagio-titulo[aria-current="page"]) { border: 0; }
+  #linha .estagio::before, #linha .estagio::after, #linha .estagio-valor, #linha .estagio-tarefas, #linha .linha-alternar, #linha .linha-grupo { display: none; }
+  #linha .estagio-titulo { min-height: 44px; padding: 0 10px; background: var(--pn); border: 1px solid var(--ln); border-radius: 22px; }
+  #linha .estagio-titulo[aria-current="page"] { border: 2px solid var(--ac); }
+  #linha .estagio-titulo:focus-visible, #linha .linha-mais a:focus-visible { outline-offset: -4px; }
+  #linha .linha-mais, #linha .linha-cadastros { flex-wrap: nowrap; flex: none; }
+  #linha .linha-mais a { min-height: 44px; min-width: 44px; justify-content: center; }
+  #linha .linha-sep { align-self: center; }
+}

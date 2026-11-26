@@ -81,7 +81,9 @@ test.describe('Volta dos links de confirmação da troca de e-mail', () => {
     await page.goto(URL_APP + LINK_EXPIRADO);
     await expect(page.locator('#aviso-link')).toContainText('Este link de confirmação expirou ou já foi usado.');
     await expect(page.locator('#usuario')).toHaveText('Gestor de Teste · Gestor');
-    expect(new URL(page.url()).hash).toBe('');
+    // O erro saiu do endereço: no fim da abertura ele só tem a tela aberta
+    await appPronto(page);
+    expect(new URL(page.url()).hash).toBe('#/esc');
     await page.locator('#aviso-link button').click();
     await expect(page.locator('#aviso-link')).toBeHidden();
   });
@@ -101,7 +103,9 @@ test.describe('Volta dos links de confirmação da troca de e-mail', () => {
     await link.goto(URL_APP + servidor.confirmarTrocaDeEmail());
     await expect(link.locator('#aviso-link')).toHaveText(/Troca de e-mail concluída: agora você entra com gestor\.novo@teste\.acpm\./);
     await expect(link.locator('#usuario')).toHaveText('Gestor de Teste · Gestor');
-    expect(new URL(link.url()).hash).toBe('');
+    // O token saiu do endereço: no fim da abertura ele só tem a tela aberta
+    await appPronto(link);
+    expect(new URL(link.url()).hash).toBe('#/esc');
     await abrirMinhaConta(link);
     await expect(link.locator('#conta-dados')).toContainText('gestor.novo@teste.acpm');
     expect(erros).toEqual([]);

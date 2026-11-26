@@ -7,8 +7,8 @@ import { estadoSintetico } from '../../helpers/estado.js';
 import { comExemplo } from '../../helpers/exemplo.js';
 
 // As abas, na ordem do app (o Operador e o Administrador veem todas), e as da Secretaria
-export const ABAS = ['esc', 'dem', 'age', 'rec', 'ins', 'alu', 'cur', 'rod', 'bi'];
-export const ABAS_DA_SECRETARIA = ['esc', 'age', 'ins', 'alu', 'cur'];
+export const ABAS = ['age', 'dem', 'esc', 'alu', 'ins', 'rec', 'cur', 'rod', 'bi'];
+export const ABAS_DA_SECRETARIA = ['age', 'esc', 'alu', 'ins', 'cur'];
 
 // O app terminou de abrir: os dados da data foram lidos e as telas desenhadas (js/main.js marca body[data-pronto]).
 // Antes disso, a tela ainda pode mudar sozinha (a Secretaria, por exemplo, vai para a Agenda). timeout: o do site publicado,
@@ -51,18 +51,30 @@ export async function entrar(page, conta, { url = URL_APP } = {}) {
   await appPronto(page);
 }
 
-// O botão de uma aba no alto ('esc', 'dem'…)
-export const botaoDaAba = (page, aba) => page.locator(`#nav button[data-t="${aba}"]`);
-// Os botões das abas (com visiveis, só os que aparecem para o perfil)
-export const botoesDasAbas = (page, { visiveis = false } = {}) => page.locator(`#nav button[data-t]${visiveis ? ':visible' : ''}`);
-// Os nomes das abas, na ordem (com visiveis, só os das abas que aparecem)
-export const rotulosDasAbas = (page, { visiveis = false } = {}) => page.locator(`#nav button${visiveis ? ':visible' : ''} .aba-rotulo`);
-// As abas que aparecem, pelo id ('esc', 'dem'…)
-export const abasVisiveis = page => botoesDasAbas(page, { visiveis: true }).evaluateAll(bs => bs.map(b => b.dataset.t));
+// O link de uma tela na linha ('esc', 'dem'…): o título do cartão da etapa, ou o link dos cadastros, do Rodízio ou do BI
+export const botaoDaAba = (page, aba) => page.locator(`#linha a[data-nav][href="#/${aba}"]`);
+// Os links das telas na linha, na ordem (com visiveis, só os que aparecem para o perfil)
+export const botoesDasAbas = (page, { visiveis = false } = {}) => page.locator(`#linha a[data-nav]${visiveis ? ':visible' : ''}`);
+// Os nomes das telas na linha, na ordem (com visiveis, só os das que aparecem)
+export const rotulosDasAbas = (page, { visiveis = false } = {}) => page.locator(`#linha a[data-nav]${visiveis ? ':visible' : ''} :is(.estagio-nome, .linha-rotulo)`);
+// As telas que aparecem na linha, pelo id ('esc', 'dem'…)
+export const abasVisiveis = page => botoesDasAbas(page, { visiveis: true }).evaluateAll(as => as.map(a => a.getAttribute('href').slice(2)));
 
+// Abre a tela pelo link dela na linha (sempre à vista, aberta, recolhida ou na faixa do celular). Com uma gaveta aberta por
+// cima da direita da página (o Histórico, os Dados pessoais), o link que ela cobre é alcançado pelo teclado (o foco nele e
+// Enter), como faz quem está com a gaveta aberta. Aprovar mostra a Escala (até ter a tela dela)
 export async function irPara(page, aba) {
-  await botaoDaAba(page, aba).click();
-  await expect(page.locator(`#s-${aba}`)).toBeVisible();
+  const link = botaoDaAba(page, aba);
+  const coberto = await link.evaluate(a => {
+    a.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    const r = a.getBoundingClientRect();
+    return !a.contains(document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2));
+  });
+  if (coberto) {
+    await link.focus();
+    await page.keyboard.press('Enter');
+  } else await link.click();
+  await expect(page.locator(`#s-${aba === 'apr' ? 'esc' : aba}`)).toBeVisible();
 }
 
 // Abre uma vista de uma aba (Instrutores e Recursos: 'dia' ou 'cadastro'): a aba e o botão da vista no controle
@@ -73,36 +85,55 @@ export async function irParaVista(page, aba, vista) {
   await expect(page.locator(`#s-${aba}`)).toHaveAttribute('data-vista', vista);
 }
 
-// A data em uso, no topo: o campo (o valor é a data ISO), o rótulo ("quarta-feira, 11/11"), o "amanhã"/"hoje" ao lado
-// e as setas ‹ e ›
-export const campoDaData = page => page.locator('#dt');
+// A data em uso: a aberta (body[data-data], a ISO), o botão da data no topo, com o nome ("quarta-feira, 11/11") e o
+// "amanhã"/"hoje" ao lado, e o calendário do trilho (os dias, as setas do mês)
+export const dataAberta = page => page.locator('body');
+export const botaoDaData = page => page.locator('#btn-data');
 export const rotuloDaData = page => page.locator('#dt-rotulo');
 export const relativoDaData = page => page.locator('#dt-rel');
-export const botaoDiaAnterior = page => page.locator('#dt-ant');
-export const botaoDiaSeguinte = page => page.locator('#dt-prox');
-// Os seletores das setas, para o que roda dentro da página (as caixas da barra do topo)
-export const SETAS_DA_DATA = ['#dt-ant', '#dt-prox'];
+export const trilho = page => page.locator('#trilho');
+export const diaDoCalendario = (page, dia) => page.locator(`#cal .cal-dia[data-dia="${dia}"]`);
+export const diasDoCalendario = page => page.locator('#cal .cal-dia');
+// O número de pedidos de um dia, e os dias em que o Tab para (um só)
+export const contagemDoDia = (page, dia) => diaDoCalendario(page, dia).locator('.cal-qtd');
+export const paradasDoCalendario = page => page.locator('#cal .cal-dia[tabindex="0"]');
 
-export async function diaSeguinte(page) {
-  await botaoDiaSeguinte(page).click();
+// Os avisos da data no trilho (com texto, só os que o têm) e quantos são, no botão da data
+export const avisosDaData = (page, texto) => page.locator('#avisos-da-data > li', texto === undefined ? {} : { hasText: texto });
+export const contagemDosAvisos = page => page.locator('#avisos-cnt');
+
+const ehDomingo = iso => new Date(iso + 'T12:00:00Z').getUTCDay() === 0;
+const somarDias = (iso, dias) => new Date(Date.parse(iso + 'T12:00:00Z') + dias * 864e5).toISOString().slice(0, 10);
+
+// Escolhe o dia no calendário do trilho, como quem clica nele (sem esperar a data abrir): solto, o trilho abre pelo botão
+// da data; o mês à vista anda pelas setas até o do dia
+export async function escolherNoCalendario(page, dia) {
+  if (!await trilho(page).isVisible()) await botaoDaData(page).click();
+  await expect(trilho(page)).toBeVisible();
+  for (let i = 0; i < 24 && !await diaDoCalendario(page, dia).count(); i++) {
+    const mes = await trilho(page).getAttribute('data-mes');
+    await page.locator(dia.slice(0, 7) < mes ? '#cal-mes-ant' : '#cal-mes-prox').click();
+    await expect(trilho(page)).not.toHaveAttribute('data-mes', mes);
+  }
+  await diaDoCalendario(page, dia).click();
 }
 
-export async function diaAnterior(page) {
-  await botaoDiaAnterior(page).click();
-}
-
-// Escreve uma data no campo, como quem escolhe no calendário (sem esperar a data abrir)
-export async function escreverData(page, data) {
-  await campoDaData(page).fill(data);
-  await campoDaData(page).dispatchEvent('change');
-}
-
-// Na Escala, troca a data em uso e espera o campo mostrar a nova
+// Troca a data aberta pelo trilho e espera ela abrir. Solto, o trilho fecha sozinho quando a data abre
 export async function mudarData(page, data) {
-  await botaoDaAba(page, 'esc').click();
-  await escreverData(page, data);
-  await expect(campoDaData(page)).toHaveValue(data);
+  await escolherNoCalendario(page, data);
+  await expect(dataAberta(page)).toHaveAttribute('data-data', data);
 }
+
+// O dia de operação seguinte e o anterior (o domingo fica de fora), pelo trilho, até ele abrir. esperar: false, sem esperar
+// (o teste segura ou derruba a leitura da data)
+async function andarDias(page, dias, { esperar = true } = {}) {
+  const aberta = await dataAberta(page).getAttribute('data-data');
+  let destino = somarDias(aberta, dias);
+  if (ehDomingo(destino)) destino = somarDias(destino, dias);
+  await (esperar ? mudarData : escolherNoCalendario)(page, destino);
+}
+export const diaSeguinte = (page, opcoes) => andarDias(page, 1, opcoes);
+export const diaAnterior = (page, opcoes) => andarDias(page, -1, opcoes);
 
 // O Histórico da data: o botão no topo e a lista das entradas (com texto, só as que o têm)
 export const botaoDoHistorico = page => page.locator('#btn-open-log');

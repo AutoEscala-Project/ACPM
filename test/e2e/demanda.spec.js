@@ -1,4 +1,4 @@
-import { test, comProgresso, expect, abrir, abrirSintetico, abrirComExemplo, irPara, abrirEscala, lerEscala, confirmar, filtrarCursos, AMANHA, abrirHistorico, aprovar, botaoAprovar, caixaVoa, campoDaData, diaSeguinte, importarDaAgenda, reabrir, tabelaDoDia, voar, registrarPedido } from './fixtures.js';
+import { test, comProgresso, expect, abrir, abrirSintetico, abrirComExemplo, irPara, abrirEscala, lerEscala, confirmar, filtrarCursos, AMANHA, abrirHistorico, aprovar, botaoAprovar, caixaVoa, dataAberta, diaSeguinte, importarDaAgenda, reabrir, tabelaDoDia, voar, registrarPedido } from './fixtures.js';
 import { aluno, cenario, instrutor, missaoExtra } from '../helpers/montar.js';
 
 const linhaDoAluno = (page, nome) => page.locator(`#dem tr[data-k="d"][data-mid="0"][data-nm="${nome.toLowerCase()}"]`);
@@ -320,7 +320,7 @@ test.describe('Demanda', () => {
     // Outra data: as linhas são outras, e as marcas continuam
     await irPara(page, 'dem');
     await diaSeguinte(page);
-    await expect(campoDaData(page)).toHaveValue('2026-11-12');
+    await expect(dataAberta(page)).toHaveAttribute('data-data', '2026-11-12');
     await expect(botao).toHaveText('Curso: PC');
     await page.locator('#onlyfly').uncheck();
     await expect.poll(async () => [...new Set((await aVista()).map(l => l.split(':')[0]))]).toEqual(['1001']);
@@ -334,7 +334,7 @@ test.describe('Demanda', () => {
     const aVista = () => page.locator('#dem tr[data-k="d"]:visible').evaluateAll(linhas => linhas.map(l => l.dataset.id));
     await irPara(page, 'alu');
     await filtrarCursos(page, 'alu', ['PP']);
-    await page.getByRole('button', { name: 'Abrir a Demanda' }).click();
+    await page.getByRole('link', { name: 'Abrir a Demanda' }).click();
     await expect.poll(aVista).toEqual(['1000']);
     const incluir = async nome => {
       await page.locator('#incluir-aluno').fill(nome);
@@ -427,7 +427,7 @@ test.describe('Demanda', () => {
     await irPara(page, 'alu');
     await filtrarCursos(page, 'alu', ['PC']);
     await expect(page.locator('#alu-contagem')).toHaveText('1 de 2 alunos');
-    await page.getByRole('button', { name: 'Abrir a Demanda' }).click();
+    await page.getByRole('link', { name: 'Abrir a Demanda' }).click();
     await expect(page.locator('#flt-dem-cur')).toHaveText('Curso: PC');
     await expect(page.locator('#dem tr[data-k="d"]:visible')).toHaveCount(0);
     await expect(page.locator('#dem tr.sem-resultado')).toHaveText('Nenhum aluno com esses filtros. Limpar filtros');

@@ -31,9 +31,11 @@ import {
 } from '../views/cursos.js';
 
 import { registrarDesenho, redesenharPorNome } from '../redesenho.js';
+import { registrarTela } from '../views/telas.js';
 
 // O desenho de Cursos (js/redesenho.js)
 registrarDesenho('cursos', rCursos, { em: ['dados', 'consulta', 'releitura'], ordem: 40 });
+registrarTela('cur', { aoMostrar: () => rCursos() });
 
 // As últimas alterações de cada curso, como o servidor as devolve; o tamanho da descrição de uma alteração
 const ALTERACOES_NA_TELA = 20, LIMITE_DA_DESCRICAO = 500;

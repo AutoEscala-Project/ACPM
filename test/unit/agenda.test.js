@@ -2,7 +2,9 @@
 // importação para a demanda: test/unit/processamento.test.js).
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { prazoDaAgendaPermite, primeiraDataAberta, disponibilidadeDaSolicitacao, pedidoDaSolicitacao } from '../../js/agenda.js';
+import { MIS, ALL_EQ_TYPES } from '../../js/config.js';
+import { HORARIOS_INICIAIS } from '../../js/horarios.js';
+import { prazoDaAgendaPermite, primeiraDataAberta, datasParaRegistrar, disponibilidadeDaSolicitacao, pedidoDaSolicitacao, recursosDaMissao, recursoValido, RECURSO_DO_PEDIDO } from '../../js/agenda.js';
 
 const em = iso => new Date(iso);
 
@@ -75,6 +77,30 @@ describe('Agenda de solicitações', () => {
     assert.deepEqual([horas('Voo Local', 2.6, 2), horas('Voo Local', null, 2), horas('Voo Local', undefined), horas('Simulador', null)], [2.6, 2, 1, 2]);
     assert.deepEqual([horas('Noturno', 3, 3), horas('Noturno', null, 3), horas('Ground C152', 2, 1), horas('Voo Local', 'x')], [4, 4, 1.5, 1]);
   });
+
+  // O pedido guarda o recurso escolhido; os de antes, e o que a missão não permite, valem como sem recurso
+  it('os recursos da missão, e o recurso do pedido só quando a missão o permite', () => {
+    for (const [missao, { eq }] of Object.entries(MIS)) assert.deepEqual(recursosDaMissao(missao), eq, missao);
+    assert.deepEqual([recursosDaMissao(''), recursosDaMissao('Outra'), recursosDaMissao('constructor')], [[], [], []]);
+    const valido = (missao, recurso) => recursoValido({ missao, recurso });
+    assert.deepEqual([valido('Navegação', 'PA-34'), valido('Noturno', 'C172'), valido('Ground C152', 'Sala Ground')], ['PA-34', 'C172', 'Sala Ground']);
+    assert.deepEqual([valido('Noturno', 'C152'), valido('Navegação', null), valido('Navegação', undefined), valido('Navegação', 'c152'), valido('Outra', 'C152')], [null, null, null, null, null]);
+    for (const tipo of ALL_EQ_TYPES) assert.match(tipo, RECURSO_DO_PEDIDO);
+    for (const ruim of ['', ' C152', 'C152 ', '<b>', 'C'.repeat(31), 'C152\n']) assert.doesNotMatch(ruim, RECURSO_DO_PEDIDO);
+  });
+
+  it('o recurso do pedido decide o avião, os horários e as preferências; sem ele, ou com um que a missão não permite, o padrão', () => {
+    const p = (extra, opcoes) => pedidoDaSolicitacao({ missao: 'Navegação', janela: 'horario', horario: '07:30', horas: 2, ...extra }, HORARIOS_INICIAIS, opcoes);
+    assert.deepEqual(p({ recurso: 'PA-34' }), { fly: true, mis: 'Navegação', eq: 'PA-34', p1: 450, p2: 450, nb: 2, ss: 1, pr: 3, jan: 'h450' });
+    for (const recurso of [null, undefined, 'Sim. Mono', 'x']) assert.deepEqual(p({ recurso }), p({}), String(recurso));
+    assert.equal(p({}).eq, 'C152');
+    // O recurso da missão do curso já escolhida pelo operador (eq) vale mais
+    assert.equal(p({ recurso: 'PA-34' }, { eq: 'C172' }).eq, 'C172');
+    // O horário que o cadastro não tem mais: as preferências padrão da lista do recurso, com o horário pedido na disponibilidade
+    const semAs0730 = { ...HORARIOS_INICIAIS, 'PA-34': [480, 540, 600, 660] };
+    const velho = pedidoDaSolicitacao({ missao: 'Navegação', janela: 'horario', horario: '07:30', recurso: 'PA-34' }, semAs0730);
+    assert.deepEqual([velho.eq, velho.p1, velho.p2, velho.jan], ['PA-34', 540, 660, 'h450']);
+  });
 });
 
 // No máximo 6 voos locais (Voo Local, Voo Solo e TGL) no mesmo horário; ao agendar o 7º,
@@ -94,8 +120,49 @@ describe('Agenda: o limite de voos locais no mesmo horário', async () => {
     assert.deepEqual(vagaDeVooLocal(pedidos, { data: '2026-11-11', horario: '08:20', missao: 'TGL (TMA)' }), { ok: false, proximo: '11:30' });
   });
 
+  it('o próximo horário possível é um dos horários do recurso do pedido', () => {
+    const local = extra => vagaDeVooLocal(seisAs('08:30'), { data: '2026-11-11', horario: '08:30', missao: 'Voo Local', ...extra });
+    assert.deepEqual([local({ recurso: 'PA-34' }), local({}), local({ recurso: 'Sim. Mono' })],
+      [{ ok: false, proximo: '09:00' }, { ok: false, proximo: '10:10' }, { ok: false, proximo: '10:10' }]);
+  });
+
   it('outra missão não tem o limite; o Solo (só às 06:30) não tem próximo horário', () => {
     assert.deepEqual(vagaDeVooLocal(seisAs('08:20'), { data: '2026-11-11', horario: '08:20', missao: 'Navegação' }), { ok: true });
     assert.deepEqual(vagaDeVooLocal(seisAs('06:30'), { data: '2026-11-11', horario: '06:30', missao: 'Voo Solo' }), { ok: false, proximo: null });
+  });
+});
+
+describe('A data do pedido (datasParaRegistrar)', () => {
+  const HOJE = '2026-11-10';
+  const meioDia = em('2026-11-10T12:00:00-03:00'), tarde = em('2026-11-10T14:00:00-03:00');
+
+  it('os dias de operação de hoje a 14 dias, sem domingo, com as fechadas marcadas (com a exceção)', () => {
+    const { opcoes, padrao } = datasParaRegistrar(HOJE, '2026-11-11', { excecao: true, agora: meioDia });
+    assert.deepEqual([opcoes[0], opcoes[1], opcoes.at(-1)], [{ data: '2026-11-10', fechada: true }, { data: '2026-11-11', fechada: false }, { data: '2026-11-24', fechada: false }]);
+    assert.equal(opcoes.length, 13);
+    assert.equal(opcoes.some(o => ['2026-11-15', '2026-11-22'].includes(o.data)), false);
+    assert.equal(padrao, '2026-11-11');
+  });
+
+  it('a Secretaria só recebe as datas que aceitam pedidos', () => {
+    assert.equal(datasParaRegistrar(HOJE, '2026-11-11', { agora: meioDia }).opcoes[0].data, '2026-11-11');
+    assert.equal(datasParaRegistrar(HOJE, '2026-11-11', { agora: tarde }).opcoes[0].data, '2026-11-12');
+    assert.equal(datasParaRegistrar(HOJE, '2026-11-11', { agora: tarde }).opcoes.some(o => o.fechada), false);
+  });
+
+  it('a data aberta mais adiante entra na lista, e só ela; uma passada não', () => {
+    const longe = datasParaRegistrar(HOJE, '2026-12-18', { excecao: true, agora: meioDia });
+    assert.deepEqual([longe.opcoes.at(-2).data, longe.opcoes.at(-1).data], ['2026-11-24', '2026-12-18']);
+    assert.equal(longe.padrao, '2026-12-18');
+    const passada = datasParaRegistrar(HOJE, '2026-11-03', { excecao: true, agora: meioDia });
+    assert.equal(passada.opcoes[0].data, HOJE);
+    assert.equal(passada.padrao, '2026-11-11');
+  });
+
+  it('a data com que o campo começa: a aberta, se aceita pedidos; senão, a primeira que aceita', () => {
+    assert.equal(datasParaRegistrar(HOJE, '2026-11-13', { agora: tarde }).padrao, '2026-11-13');
+    assert.equal(datasParaRegistrar(HOJE, '2026-11-11', { excecao: true, agora: tarde }).padrao, '2026-11-12');
+    // Sábado depois das 10:00: segunda já fechou
+    assert.equal(datasParaRegistrar('2026-11-14', '2026-11-16', { excecao: true, agora: em('2026-11-14T10:30:00-03:00') }).padrao, '2026-11-17');
   });
 });

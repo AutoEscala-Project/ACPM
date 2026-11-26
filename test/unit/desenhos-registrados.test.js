@@ -58,7 +58,7 @@ for (const arquivo of doApp) {
 
 describe('Os desenhos registrados', () => {
   it('a lista dos momentos foi achada em js/redesenho.js, e o próprio módulo não registra nenhum desenho', () => {
-    assert.deepEqual(momentos, ['dados', 'consulta', 'releitura', 'escala']);
+    assert.deepEqual(momentos, ['dados', 'consulta', 'releitura', 'escala', 'perfil', 'pedidos', 'data-aberta', 'sessao']);
     assert.deepEqual(desenhosRegistrados(), []);
   });
 
@@ -93,7 +93,10 @@ describe('Os desenhos registrados', () => {
       assert.ok(p.momento && momentos.includes(p.momento), `${p.onde}: o momento "${p.momento}" não existe`);
       assert.ok(usados.has(p.momento), `${p.onde}: nenhum desenho é refeito no momento "${p.momento}"`);
     }
-    // Os quatro momentos são pedidos por alguém: a abertura e outra data, quem só consulta, "Tentar de novo" e a escala refeita
-    assert.deepEqual([...new Set(porMomento.map(p => p.momento))].sort(), [...momentos].sort());
+    // Cada momento é pedido por alguém: a abertura e outra data, quem só consulta, "Tentar de novo", a escala refeita, o
+    // perfil, os pedidos lidos e a data aberta. Um está reservado para o passo que o pede: 'sessao' (H, a abertura e a
+    // gravação da data)
+    const reservados = ['sessao'];
+    assert.deepEqual([...new Set(porMomento.map(p => p.momento))].sort(), momentos.filter(m => !reservados.includes(m)).sort());
   });
 });

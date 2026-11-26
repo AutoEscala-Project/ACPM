@@ -66,7 +66,7 @@ npm run test:e2e       # aplicação no navegador (Playwright)
   `alunos.js`, `demanda.js`, `pedidos.js` (o formulário da Agenda), `escala.js` (ler, aprovar, reabrir, exportar) e
   `cursos.js`; `invariantes.js` tem as conferências de todas as telas (o nome para o leitor de tela, os 44 px, a página
   que não rola de lado) e `percorrerTelas`, que passa por todas as abas e pelos `ESTADOS` de cada driver. Um seletor
-  reservado (`#dt`, `#eqs`, `#inst-dia`, `data-f="fly"`, `#ag-*`…) aparece só no driver dele e nos testes da tela dona
+  reservado (`#btn-data`, `#eqs`, `#inst-dia`, `data-f="fly"`, `#ag-*`…) aparece só no driver dele e nos testes da tela dona
   dele (`test/unit/donos-dos-seletores.test.js`): quando uma tela muda, mudam o driver e os testes dela. As frases que o
   Manual precisa dizer (e as que saíram) ficam em `test/e2e/manual-frases.js`, num bloco por tela.
 - Na primeira vez, `npx playwright install chromium` baixa o navegador dos testes.
@@ -107,15 +107,17 @@ npm run test:e2e       # aplicação no navegador (Playwright)
 ## Meteorologia no painel (função `meteorologia`)
 
 O pé do painel (a vista Painel da Escala e a TV da recepção) mostra o METAR e o TAF oficiais de Pampulha (SBBH) e de
-Confins (SBCF), lado a lado, cada caixa com "Atualizado às" a hora da observação do METAR (a local e a Z). As mensagens
-vêm da REDEMET (https://api-redemet.decea.mil.br, a API do DECEA), a única fonte. A REDEMET pede uma chave, que não pode
-ir para o navegador, então quem busca é a Edge Function `supabase/functions/meteorologia` (Deno): ela exige a sessão de
-uma conta do app (o JWT, conferido pelo gateway e pelo Auth do projeto), manda a chave só no cabeçalho `x-api-key`
-(nunca no endereço), pede o METAR das últimas 3 horas (`data_ini` e `data_fim`, em UTC: sem eles, a REDEMET manda só a
-hora de agora, e a estação cujo METAR da hora ainda não chegou ficaria sem) e fica com o mais recente de cada estação,
-pede o TAF sem janela (os em vigor) e fica com o que cobre agora, o emitido por último, guarda as mensagens 5 minutos na
-memória, desiste da REDEMET em 12 segundos e responde `{ gerado, estacoes: [{ icao, nome, metar, taf, observado }] }`
-só às origens do app. A leitura das mensagens (`mensagens.js`) e o atendimento (`atendimento.js`) são JavaScript puro,
+Confins (SBCF), lado a lado, cada caixa com o nome do aeródromo em letras grandes e as mensagens; "Atualizado às" a hora
+da observação do METAR (a local e a Z) só aparece quando a última busca falhou ou a observação passou de 90 minutos. As
+mensagens vêm da REDEMET (https://api-redemet.decea.mil.br, a API do DECEA), a única fonte. A REDEMET pede uma chave,
+que não pode ir para o navegador, então quem busca é a Edge Function `supabase/functions/meteorologia` (Deno): ela exige
+a sessão de uma conta do app (o JWT, conferido pelo gateway e pelo Auth do projeto), manda a chave só no cabeçalho
+`x-api-key` (nunca no endereço), pede o METAR das últimas 3 horas (`data_ini` e `data_fim`, em UTC: sem eles, a REDEMET
+manda só a hora de agora, e a estação cujo METAR da hora ainda não chegou ficaria sem) e fica com o mais recente de cada
+estação, pede o TAF sem janela (os em vigor) e fica com o que cobre agora, o emitido por último, guarda as mensagens 5
+minutos na memória, desiste da REDEMET em 12 segundos e responde `{ gerado, estacoes: [{ icao, nome, metar, taf,
+observado }] }` só às origens do app. A leitura das mensagens (`mensagens.js`) e o atendimento (`atendimento.js`) são
+JavaScript puro,
 testados também no Node (`test/unit/meteorologia-funcao.test.js`, com respostas de verdade da REDEMET em
 `test/fixtures/meteorologia/`).
 
@@ -162,6 +164,21 @@ novo). E o app novo não depende delas:
   elas ficam, cada caixa com a hora da observação do METAR dela). No modo local (sem servidor), o pé diz sempre "Meteorologia indisponível", sem busca.
 - **Sem a migração**, `painel_do_dia()` responde como antes, sem o campo `painel`, e a TV mostra o padrão (Missões, com
   as colunas do padrão e as listas no Automático: duas lado a lado na TV Full HD), como hoje; a Escala segue a configuração de qualquer jeito (ela lê o cadastro).
+
+## O recurso do pedido da agenda
+
+O pedido da agenda guarda o recurso (o tipo: C152, PA-34, Sim. Mono…): a missão diz os permitidos, o recurso diz os
+horários, e a importação põe o pedido na demanda nele. A migração `20261125230000_agenda_com_recurso.sql` acrescenta a
+coluna `recurso` (vazia nos pedidos de antes, que entram no recurso padrão da missão) e a função
+`registrar_solicitacao` com o recurso, o 11º argumento. A de 10 argumentos continua, para as abas abertas do app de antes.
+
+**A ordem:** a migração na prévia (`supabase db push --remote`) com `npm run test:db`, depois na produção
+(`supabase db push --remote=<ref de produção>`), e só então o merge. Ela só acrescenta: o app no ar continua igual com
+ela. O app novo no ar **antes** da migração não perde nem repete pedidos: quando o servidor responde que a função com o
+recurso não existe (PGRST202 ou 42883), o pedido no recurso padrão da missão vai pela função de antes, e o pedido noutro
+recurso é recusado com o aviso de que o servidor precisa ser atualizado. Nenhum outro erro tenta de novo. Depois, com
+nenhuma aba de antes aberta, outra migração pode tirar a função de 10 argumentos (e a chamada dela em
+`js/backends/supabase.js`).
 
 ## A sessão da TV da recepção
 
@@ -230,9 +247,9 @@ número): o primeiro acesso de um Operador ou Administrador regrava os dias e o 
 
 | Caminho | Conteúdo |
 |---|---|
-| `index.html` | Marcação das nove abas |
+| `index.html` | A marcação do app: o topo (com o botão da data, `#btn-data`), a linha de produção (`nav#linha`: os quatro cartões das etapas, os cadastros, o Rodízio e o BI), o trilho (`aside#trilho`: o calendário da data aberta e os avisos dela) e as onze telas (`main#conteudo > section.tela`), dentro de `div.casca`, com os avisos do app acima |
 | `painel.html`, `js/painel.js` | TV da recepção: o painel de hoje na tela toda, no quadro, com as colunas e as listas da configuração do painel (com o servidor, a que `painel_do_dia` entrega; sem ela, o padrão), e a meteorologia no pé |
-| `css/*.css` | Os estilos, uma folha por dona, que `index.html` carrega nesta ordem (a da cascata): `base` (as cores e os temas claro e escuro, os títulos, os campos), `componentes` (botões, barras, tabelas, etiquetas, o filtro de vários valores, os avisos, as dicas), `painel` (o painel no estilo dos aeroportos e a meteorologia), `tv`, `casca` (a barra do topo, as abas, o login, a impressão), uma por tela (`escala`, `demanda`, `agenda`, `recursos`, `instrutores`, `alunos`, `cadastros`, `cursos`, `rodizio`, `bi`, `conta`, `manual`), `gavetas`, `dialogos` e `toque` (os alvos de 44 px dos componentes no celular, por último). A TV carrega `css/app.css`, que importa as cinco das duas páginas (`base`, `componentes`, `painel`, `tv`, `toque`). `test/unit/estilos.test.js` confere as listas; `node scripts/medir-estilos.mjs` mede o estilo de cada elemento das duas páginas em várias larguras, temas e telas (com `--comparar antes.json depois.json`, a diferença entre duas versões) |
+| `css/*.css` | Os estilos, uma folha por dona, que `index.html` carrega nesta ordem (a da cascata): `base` (as cores e os temas claro e escuro, os títulos, os campos), `componentes` (botões, barras, tabelas, etiquetas, o filtro de vários valores, os avisos, as dicas), `painel` (o painel no estilo dos aeroportos e a meteorologia), `tv`, `casca` (a barra do topo, a moldura `.casca`, as telas, o login, a impressão), `linha` (a linha de produção: os cartões, os estados, aberta, recolhida e a faixa do celular), `trilho` (o calendário e os avisos da data, ao lado da tela ou no painel do botão da data), uma por tela (`escala`, `demanda`, `agenda`, `recursos`, `instrutores`, `alunos`, `cadastros`, `cursos`, `rodizio`, `bi`, `conta`, `manual`), `gavetas`, `dialogos` e `toque` (os alvos de 44 px dos componentes no celular, por último). A TV carrega `css/app.css`, que importa as cinco das duas páginas (`base`, `componentes`, `painel`, `tv`, `toque`). `test/unit/estilos.test.js` confere as listas; `node scripts/medir-estilos.mjs` mede o estilo de cada elemento das duas páginas em várias larguras, temas e telas (com `--comparar antes.json depois.json`, a diferença entre duas versões) |
 | `js/config.js` | Janelas, missões, limites de peso e a frota inicial |
 | `js/frota.js` | A frota no cadastro (matrícula, tipo, os atributos "Só Parafuso", "Só VFR" e "Habilitação própria", o que o recurso exige do instrutor, `exige`, e o inativo): validação de um recurso novo, `comAtributo` (marcar e desmarcar um atributo; a habilitação própria também em `exige`) e as matrículas de cada tipo |
 | `js/categorias.js` | Categorias de recurso dos filtros (C152, C172, Simulador, PA-34 e Sala Ground) |
@@ -244,7 +261,7 @@ número): o primeiro acesso de um Operador ou Administrador regrava os dias e o 
 | `js/modelos-de-curso.js` | Os programas prontos que o Administrador põe num curso: o cronograma do Piloto Privado (P.I PPA 001A), com 9 fases e 47 missões |
 | `js/progresso.js` | A próxima missão de cada aluno pelas regras do programa (a liberada; as fora da ordem, com o motivo) e o progresso no curso |
 | `js/resultados.js` | Os resultados das missões (aprovado ou reprovado; pendente desfaz um engano): a situação de cada missão do aluno e as regras do registro, as do servidor |
-| `js/agenda.js` | Prazo da agenda de solicitações (13:00 do dia anterior), o limite de voos locais e o pedido que cada solicitação vira |
+| `js/agenda.js` | Prazo da agenda de solicitações (13:00 do dia anterior), as datas em que um pedido pode ser registrado (`datasParaRegistrar`, a "Data do pedido"), os recursos da missão do pedido, o limite de voos locais e o pedido que cada solicitação vira |
 | `js/processamento.js` | A importação dos pedidos da agenda para a demanda da data (função pura; o botão "Importar da agenda" é `js/eventos/importacao.js`) |
 | `js/csv.js` | CSV da escala agrupado por avião, para o lançamento no portal do aeroclube |
 | `js/planilha.js`, `modelos/escala-cavok.xlsx` | A escala na planilha do modelo do aeroclube (o Excel do lançamento no CAVOK): onde cada voo cai e o arquivo preenchido. O modelo é o arquivo da operação sem os dados do dia; as células que o app preenche estão em `BLOCOS` e `GROUND` (um modelo novo precisa delas nos mesmos lugares, e `test/unit/planilha.test.js` confere) |
@@ -270,15 +287,19 @@ número): o primeiro acesso de um Operador ou Administrador regrava os dias e o 
 | `js/dias.js` | Cadastro separado do dia, cópia do dia anterior, conversão dos dados da fase 2 e BI das escalas |
 | `js/migracoes.js` | Versões do formato dos dados guardados e os passos de uma versão para a seguinte |
 | `js/sessao.js`, `js/config-supabase.js` | Login, perfil de acesso e projeto Supabase de cada endereço |
-| `js/funcionalidades.js` | As funcionalidades que podem ficar desligadas, hoje as duas em todos os endereços: `hangar` (a ordem no hangar, em Recursos; o motor segue a ordem da frota) e `progresso` (a próxima missão, o progresso, a fase dos alunos e os resultados; a aba Cursos continua). Ligar é trocar `false` por `true` em `LIGADAS`; nada do que está guardado muda. No localhost, `?funcionalidades=hangar,progresso` liga para testar (nos testes, `test.use({ funcionalidades })`, `comHangar` e `comProgresso`, em `test/e2e/fixtures.js`). No `index.html`, `data-funcionalidade` e `data-sem-funcionalidade` marcam os textos |
-| `js/state.js`, `js/actions.js` | Estado da aplicação e ações (perfil, data, histórico e a escala refeita a cada alteração); `gravarAlteracao` é o único jeito de os eventos mudarem os dados, e nada grava antes de os dados da data aberta serem lidos (`lerData` lê uma data de cada vez; `aindaNaoAbriu` recusa a mudança com o aviso). A alteração é gravada antes de a tela ser redesenhada: um desenho que falha não impede a gravação nem o histórico |
-| `js/redesenho.js` | O registro dos desenhos da tela: cada tela registra o dela no módulo de eventos (`registrarDesenho`, com o nome e os momentos `dados`, `consulta`, `releitura` e `escala`); quem muda os dados redesenha por momento (`redesenhar`) ou pelo nome (`redesenharPorNome`), sem importar a tela. `test/unit/desenhos-registrados.test.js` confere os nomes e os momentos |
+| `js/funcionalidades.js` | As funcionalidades que podem ficar desligadas, hoje as duas em todos os endereços: `hangar` (a ordem no hangar, em Recursos; o motor segue a ordem da frota) e `progresso` (a próxima missão, o progresso, a fase dos alunos e os resultados; a tela Cursos continua). Ligar é trocar `false` por `true` em `LIGADAS`; nada do que está guardado muda. No localhost, `?funcionalidades=hangar,progresso` liga para testar (nos testes, `test.use({ funcionalidades })`, `comHangar` e `comProgresso`, em `test/e2e/fixtures.js`). No `index.html`, `data-funcionalidade` e `data-sem-funcionalidade` marcam os textos |
+| `js/state.js`, `js/actions.js` | Estado da aplicação e ações (perfil, data, histórico e a escala refeita a cada alteração; o perfil trocado redesenha pelo momento `perfil`); `gravarAlteracao` é o único jeito de os eventos mudarem os dados, e nada grava antes de os dados da data aberta serem lidos (`lerData` lê uma data de cada vez; `aindaNaoAbriu` recusa a mudança com o aviso). A alteração é gravada antes de a tela ser redesenhada: um desenho que falha não impede a gravação nem o histórico |
+| `js/redesenho.js` | O registro dos desenhos da tela: cada tela registra o dela no módulo de eventos (`registrarDesenho`, com o nome e os momentos `dados`, `consulta`, `releitura`, `escala`, `perfil`, `pedidos` e `data-aberta`; `sessao` fica reservado para a aprovação); quem muda os dados redesenha por momento (`redesenhar`) ou pelo nome (`redesenharPorNome`), sem importar a tela. `test/unit/desenhos-registrados.test.js` confere os nomes e os momentos |
 | `js/sem-falhar.js` | Faz sem deixar o erro parar quem chamou (vai para o console): o foco depois de redesenhar e cada desenho da tela |
 | `js/manual.js` | Tabelas do manual geradas das regras (missões, habilitações exigidas, janelas, pesos e rodízio) |
-| `js/views/` | Renderização de cada aba: Instrutores (`instrutores.js`, com os limites da lei em `limites.js`), Alunos (`alunos.js`) e as linhas que os filtros escondem (`linhas-filtradas.js`, também da Demanda); os dados pessoais guardados fora do estado (`dados-pessoais.js`) e o painel que os edita (`painel-de-dados.js`) |
+| `js/telas.js` | As telas, sem DOM (`TELAS`: o nome de cada uma, a etapa ou o grupo e quem a vê; `ESTAGIOS`, as quatro etapas da linha), a tela e a data da abertura de cada perfil (`telaDeAbertura`, `dataDeAbertura`), o endereço `#/<tela>[/<item>]` (`destinoDoEndereco`, `enderecoDoDestino`) e o trilho ao lado ou não, pela classe da largura da janela e pelo que a pessoa guardou (`classeDaLargura`, `trilhoFixo`, `lerPreferencias`) |
+| `js/calendario.js` | O calendário do trilho, sem DOM: as semanas de um mês, o dia de cada tecla, a única parada do Tab, o que cada dia diz ao leitor de tela e a linha da data aberta |
+| `js/endereco.js` | O endereço da página: a tela no histórico do navegador (`empilharTela`, `substituirTela`, com a rolagem de cada entrada), a data em `?data=` (fora do histórico: Voltar troca a tela, não a data) e o endereço sem a tela ao sair |
+| `js/linha-do-dia.js` | A linha do dia, sem DOM: os quatro cartões das etapas (Agenda, Demanda, Escala, Aprovar), cada um com o valor, o estado (o pior das tarefas: feito, falhou, atenção, em andamento, pendente) e as tarefas, que levam à tela onde se resolvem; o selo de Recursos; e os avisos da data, no trilho (`avisosDaData`, cada um com a gravidade, o horário do voo e a tela onde se resolve). Uma função por cartão e uma por grupo de avisos |
+| `js/views/` | Renderização de cada tela: a troca de tela (`telas.js`: `mostrarTela`, o que cada tela faz ao aparecer, `registrarTela`, e os links `#/`, Voltar e Avançar), a linha de produção (`linha.js`) e o trilho (`trilho.js`: o calendário com os pedidos de cada dia, os avisos da data, o estado dele, ao lado, aberto ou fechado, e o nome da data no topo); Instrutores (`instrutores.js`, com os limites da lei em `limites.js`), Alunos (`alunos.js`) e as linhas que os filtros escondem (`linhas-filtradas.js`, também da Demanda); os dados pessoais guardados fora do estado (`dados-pessoais.js`) e o painel que os edita (`painel-de-dados.js`) |
 | `js/export.js` | CSV, PDF e a planilha (Excel) |
-| `js/eventos/` | Os eventos de cada aba (um módulo por aba, que registra os desenhos dela e o que "↶ Reverter" faz com os tipos de reversão dela); `registro.js` recebe os botões com `data-act`, os campos das tabelas e as reversões do Histórico (`aoAcionar`, `aoMudarCampo`, `aoReverter`), com a trava de quem só consulta e a de antes de a data abrir, e `confirmacao.js` é o único jeito de confirmar (dois cliques). Um módulo que liga eventos ao ser carregado é importado por um arquivo só, `js/main.js` ou o módulo da tela dele (`limites.js`, `painel-de-dados.js` e `importacao.js` são de Instrutores e da Demanda), e cada seletor que ele lê existe em `index.html` (`test/unit/eventos-ligados.test.js`) |
-| `js/main.js` | A abertura do app (liga os eventos, lê a sessão e os dados e abre a data) |
+| `js/eventos/` | Os eventos de cada tela (um módulo por tela, que registra o que a tela faz ao aparecer, `registrarTela`, os desenhos dela e o que "↶ Reverter" faz com os tipos de reversão dela; `linha.js` é o da linha de produção: o desenho dela e o botão que abre e recolhe; `trilho.js`, o do trilho: o único que troca a data depois da abertura); `registro.js` recebe os botões com `data-act`, os campos das tabelas e as reversões do Histórico (`aoAcionar`, `aoMudarCampo`, `aoReverter`), com a trava de quem só consulta e a de antes de a data abrir, e `confirmacao.js` é o único jeito de confirmar (dois cliques). Um módulo que liga eventos ao ser carregado é importado por um arquivo só, `js/main.js` ou o módulo da tela dele (`limites.js`, `painel-de-dados.js` e `importacao.js` são de Instrutores e da Demanda), e cada seletor que ele lê existe em `index.html` (`test/unit/eventos-ligados.test.js`) |
+| `js/main.js` | A abertura do app (liga os eventos e o endereço, lê a sessão e os dados, abre a data e a tela: a escolhida enquanto os dados carregavam, a do endereço ou a do perfil) |
 
 ## Fluxo de trabalho
 
