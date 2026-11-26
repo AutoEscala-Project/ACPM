@@ -321,10 +321,10 @@ describe('Priorizar com: os instrutores do aluno (o par permanente do cadastro)'
     assert.deepEqual([out.map(o => [o.insId, o.insPar, o.tag]), al], [[[1, true, 'Pref. 1']], []]);
   });
 
-  it('com o instrutor dele ocupado na preferência, o aluno vai para outro horário com ele', () => {
+  it('com o instrutor dele ocupado na preferência, o aluno vai para outro horário com ele, e o aviso diz com quem o INVA ficou', () => {
     // O Aluno 1001 escolheu o Instrutor 01 para o dia: vai antes e fica com as 08:20
     const { out, al } = semCompactar(cenario({ ins: [instrutor(1, 9), instrutor(2, 1)], stu: [aluno(1000, {}, { voaCom: [1] }), aluno(1001, { insId: 1 })] }));
-    assert.deepEqual(avisos(al), []);
+    assert.deepEqual(avisos(al), ['Aluno 1000 prioriza Instrutor 01 às 08:20: ficou com Aluno 1001 (instrutor escolhido para o dia); Aluno 1000 voa às 10:10.']);
     assert.deepEqual(out.map(o => [o.s, o.a, o.insId]), [['Aluno 1001', 500, 1], ['Aluno 1000', 610, 1]]);
   });
 

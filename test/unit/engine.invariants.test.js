@@ -408,7 +408,7 @@ describe('Invariantes das escolhas do operador, em 300 cenários', () => {
     }
   }));
 
-  it('com o “Priorizar com”, o voo fica com um instrutor dele; senão, o aviso diz quem ficou com o voo', () => emTodasAsEscolhas(({ estado, out, al }) => {
+  it('com o “Priorizar com”, o voo fica com um instrutor dele; senão, o aviso diz quem ficou com o voo', () => emTodasAsEscolhas(({ estado, out, todos, al }) => {
     const avisos = al.filter(a => a.codigo === 'voa-com');
     for (const o of out) {
       const s = estado.stu.find(x => x.id === o.stuId), d = pedidoDoVoo(estado, o);
@@ -417,10 +417,16 @@ describe('Invariantes das escolhas do operador, em 300 cenários', () => {
       if (pares.includes(o.insId)) { assert.ok(o.insPar, `${o.fKey}: com o par sem a marca`); continue; }
       assert.ok(avisos.some(a => a.stuId === o.stuId && a.insId === o.insId && a.m.includes(o.ins)), `${o.fKey}: com ${o.insId}, fora do Priorizar com ${pares}, sem aviso`);
     }
-    // Todo aviso é de um voo que está na escala com aquele instrutor, fora do “Priorizar com”
+    // Um aviso por voo (F1h), de um voo que está na escala com aquele instrutor: fora do “Priorizar com”, o aviso de sempre;
+    // com o instrutor dele, só a disputa, que nomeia quem ficou com o instrutor no horário pedido (está com ele na escala)
+    assert.equal(new Set(avisos.map(a => a.fKey)).size, avisos.length, 'dois avisos no mesmo voo');
     for (const a of avisos) {
       const s = estado.stu.find(x => x.id === a.stuId);
-      assert.ok(out.some(o => o.stuId === a.stuId && o.insId === a.insId) && !s.voaCom.includes(a.insId), `aviso solto: ${a.m}`);
+      const o = out.find(v => v.fKey === a.fKey);
+      assert.ok(o && o.stuId === a.stuId && o.insId === a.insId, `aviso solto: ${a.m}`);
+      if (!s.voaCom.includes(a.insId)) { assert.ok(a.m.startsWith('Sem o instrutor de “Priorizar com”'), a.m); continue; }
+      const [, outro] = /: ficou com (.+?) \(/.exec(a.m) || [];
+      assert.ok(outro && todos.some(v => v.s === outro && v.insId === a.insId && v.stuId !== a.stuId), `disputa sem o outro: ${a.m}`);
     }
   }));
 

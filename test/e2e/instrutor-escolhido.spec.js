@@ -118,7 +118,7 @@ test.describe('Instrutor escolhido', () => {
     await abrirEscala(page);
     await expect(linha(page, 'Aluno 1000')).toHaveCount(1);
     await expect(linha(page, 'Aluno 1000').locator('.c-instr')).toHaveText('Instrutor 02');
-    await expect(page.locator('#out details.avisos summary')).toContainText('1 voo sem o instrutor de Priorizar com');
+    await expect(page.locator('#out details.avisos summary')).toContainText('1 aviso de Priorizar com');
     await expect(page.locator('#out details.avisos')).toContainText('Sem o instrutor de “Priorizar com” (Instrutor 01: fora nesta data)');
 
     // Tirar do “Priorizar com”: o aviso some
