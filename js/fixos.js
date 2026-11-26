@@ -49,6 +49,18 @@ export function fixosAoMudarStatus(fixos, voo, status, { aprovada }) {
   return resto;
 }
 
+// A alteração de um voo na escala aprovada (F1g) fixa antes o voo que ela toca onde ele está (o voo sem pino, que entrou
+// depois da aprovação): todo pedido que voa numa data aprovada continua com um pino, uma linha ou a recusa dele, e a
+// reversão devolve a linha pelo pino. Os voos fixos com os das chaves (fKeys) que estão na escala (resultado)
+export function fixarNoLugar(fixos, resultado, fKeys) {
+  const novos = { ...(fixos || {}) };
+  for (const fKey of fKeys) {
+    const o = !novos[fKey] && resultado && Array.isArray(resultado.out) ? resultado.out.find(v => v.fKey === fKey && !v.trecho) : null;
+    if (o) novos[fKey] = pinoDoVoo(o);
+  }
+  return novos;
+}
+
 export const fixosAoReabrir = (fixos, fStatus) =>
   Object.fromEntries(Object.entries(fixos || {}).filter(([fKey, p]) => fixoPeloOperador(p) || fixoPeloStatus(fKey, fStatus)));
 

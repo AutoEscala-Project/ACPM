@@ -4,6 +4,7 @@
 // cancelamento e, sem nada, "Impossível nesta data" com o porquê. Na escala de hoje, só horários que ainda não passaram
 import { S, RES, DATA, estadoDaEscala } from '../state.js';
 import { sugerirReparos, sugerirParaCancelado, cancelamentoAproveitavel, sugestoesDoRejeitado, dataQueAindaVoa } from '../reparo.js';
+import { escalaDaAlteracao } from '../edicao-do-voo.js';
 import { rejeicoesDosPedidos } from '../rejeicoes.js';
 import { GRUPO_DO_CONFLITO } from '../conflitos.js';
 import { nomeDoRecurso } from '../categorias.js';
@@ -27,6 +28,13 @@ const confirmacao = o => (o.confirmar ? ` <small class="confirmar-aluno">${esc(o
 
 const painelDeReparoAberto = () => Boolean($('#painel-reparo') && !$('#painel-reparo').hidden);
 
+// Na escala aprovada a sugestão aplicada não roda o motor (F1g): ela é conferida na escala da tela com ela aplicada, como
+// será gravada (os outros voos ficam onde estão); fora dela, no motor
+const motorDaTela = estado => (S.aprovacao ? { motor: copia => escalaDaAlteracao(copia, RES, { aprovada: true, antes: estado }).resultado } : {});
+
+// "Soltar" precisa do motor: na escala aprovada fica desligado
+const SOLTAR_TRAVADO = 'reabra a escala para soltar o voo';
+
 // focar: aberta pelo botão "Sugestões" (o foco vai para a primeira sugestão, e a gaveta, por cima das outras abertas);
 // sem focar, a gaveta aberta é redesenhada no lugar em que está
 export function abrirPainelDeReparo(fKey, { focar = true } = {}) {
@@ -36,7 +44,8 @@ export function abrirPainelDeReparo(fKey, { focar = true } = {}) {
   doCancelado = false;
   doRejeitado = false;
   const painel = $('#painel-reparo');
-  opcoesAbertas = sugerirReparos(estadoDaEscala(), RES, fKey, { depoisDe: DATA === hojeISO() ? minutoDoDia() : null });
+  const estado = estadoDaEscala();
+  opcoesAbertas = sugerirReparos(estado, RES, fKey, { depoisDe: DATA === hojeISO() ? minutoDoDia() : null, ...motorDaTela(estado) });
   painel.dataset.fkey = fKey;
   const sugestoes = opcoesAbertas.filter(o => o.mudancas);
   const pedidoMudou = (voo.conflitoCodigos || []).some(c => GRUPO_DO_CONFLITO[c] === 'pedido');
@@ -52,11 +61,11 @@ export function abrirPainelDeReparo(fKey, { focar = true } = {}) {
         ? `${oQuePodeVoar(sugestoes)} Aplicada, a sugestão vale para o voo fixo e fica no histórico (dá para reverter).`
         : 'Nenhum avião ou instrutor serve neste horário, nem mais tarde hoje.'}</p>
     <ol class="opcoes-reparo">${opcoesAbertas.map((o, i) => `<li class="${esc(o.tipo)}">
-      <span>${esc(o.mudancas || o.soltar ? o.texto : o.motivo ? `Motivo: ${o.motivo}` : 'Pede o motivo')}${confirmacao(o)}</span>
-      <button type="button" class="btn${o.mudancas ? '' : ' sec'}" data-reparo-aplicar="${i}"${o.confirmar ? ' data-confirmar' : ''}>${o.mudancas ? 'Aplicar' : o.soltar ? 'Soltar' : 'Cancelar o voo'}</button>
+      <span>${esc(o.mudancas || o.soltar ? o.texto : o.motivo ? `Motivo: ${o.motivo}` : 'Pede o motivo')}${confirmacao(o)}${o.soltar && S.aprovacao ? ` <small class="confirmar-aluno" id="soltar-travado">${esc(SOLTAR_TRAVADO.replace(/^r/, 'R'))}.</small>` : ''}</span>
+      <button type="button" class="btn${o.mudancas ? '' : ' sec'}" data-reparo-aplicar="${i}"${o.confirmar ? ' data-confirmar' : ''}${o.soltar && S.aprovacao ? ' disabled aria-describedby="soltar-travado"' : ''}>${o.mudancas ? 'Aplicar' : o.soltar ? 'Soltar' : 'Cancelar o voo'}</button>
     </li>`).join('')}</ol>`;
   if (focar || painel.hidden) abrirGaveta(painel);
-  const primeiro = painel.querySelector('[data-reparo-aplicar]');
+  const primeiro = painel.querySelector('[data-reparo-aplicar]:not(:disabled)') || painel.querySelector('#btn-fechar-reparo');
   if (focar && primeiro) primeiro.focus();
 }
 
@@ -64,7 +73,8 @@ export function abrirPainelDeReparo(fKey, { focar = true } = {}) {
 // por quê, e o primeiro clique só arma o botão); sem nada, "Impossível nesta data", com o porquê de cada grupo
 function abrirParaCancelado(voo, { focar }) {
   const painel = $('#painel-reparo');
-  const { opcoes, impossivel } = sugerirParaCancelado(estadoDaEscala(), RES, voo.fKey, { depoisDe: DATA === hojeISO() ? minutoDoDia() : null });
+  const estado = estadoDaEscala();
+  const { opcoes, impossivel } = sugerirParaCancelado(estado, RES, voo.fKey, { depoisDe: DATA === hojeISO() ? minutoDoDia() : null, ...motorDaTela(estado) });
   opcoesAbertas = opcoes;
   doCancelado = true;
   doRejeitado = false;

@@ -530,7 +530,7 @@ export function desfazerAproveitamento(estado, { voos, pedidos }) {
 // que pode fazer o pedido e com "Automático"; só fica o que faz o pedido entrar sem tirar nem mudar nenhum outro voo
 // ("Automático" diz quem o app daria). A recusa do motor continua até o operador escolher. depoisDe: na escala de hoje, o
 // minuto de agora (o pedido que entraria nele ou antes fica de fora, como no voo cancelado). [{ insId (0: Automático),
-// texto }]
+// texto, pino (o lugar que o motor deu ao pedido) }]
 export function sugestoesDoRejeitado(estado, resultado, fKey, { depoisDe = null, motor = runAllocationEngine } = {}) {
   const [stuId, mid] = fKey.split('_').map(Number);
   const aluno = estado.stu.find(s => s.id === stuId);
@@ -556,7 +556,8 @@ export function sugestoesDoRejeitado(estado, resultado, fKey, { depoisDe = null,
     });
     if (mudou) continue;
     const lugar = `${hm(novo.a)} ${novo.isGround ? 'na' : 'no'} ${nomeDoRecurso(novo.r)}`;
-    opcoes.push({ insId, texto: insId ? `Com ${novo.ins}: ${lugar}` : `Automático (o app escolhe ${novo.ins}): ${lugar}` });
+    // O lugar que a simulação achou (pino): na escala aprovada a sugestão o grava sem o motor (F1g)
+    opcoes.push({ insId, texto: insId ? `Com ${novo.ins}: ${lugar}` : `Automático (o app escolhe ${novo.ins}): ${lugar}`, pino: pinoDoVoo(novo) });
   }
   return opcoes;
 }

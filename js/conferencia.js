@@ -492,12 +492,18 @@ function comOsPesosDe(velha, nova) {
 // recusa); a recusa do pedido que ganhou um pino também. Refeitos: as marcas de conflito e os alertas deles, os avisos
 // (dos agendados, do peso, do 7º local confirmado, da lei, da revisão e dos atrasos; o do “Priorizar com” fica com a
 // linha que ficou), a revisão, o total de missões pedidas e o tamanho das turmas. Um pedido que voa sem pino, sem linha e
-// sem recusa (um pedido que entrou no dia) precisa do motor: devolve null
-export function conferirEscala(estado, resultado, { antes = estado } = {}) {
+// sem recusa (um pedido que entrou no dia) precisa do motor: devolve null. recusas: as recusas que voltam (a reversão de
+// uma alteração que tirou a recusa de um pedido: [chave do voo, alerta]), no lugar da linha dele
+export function conferirEscala(estado, resultado, { antes = estado, recusas: deVolta = [] } = {}) {
   const ctx = contextoDaEscala(estado);
   const act = filaDosPedidos(estado, ctx);
   const linhas = new Map((resultado.out || []).filter(o => !o.trecho).map(o => [o.fKey, o]));
   const recusas = rejeicoesDosPedidos(antes, resultado);
+  // A recusa que volta tira a linha do pedido (a reversão do encaixe: ele volta a ser recusado)
+  for (const [fKey, alerta] of deVolta) {
+    recusas.set(fKey, alerta);
+    linhas.delete(fKey);
+  }
   const chave = item => chaveDoVoo(item.stuId, item.mid);
   if (act.some(item => !Object.hasOwn(ctx.fixos, chave(item)) && !linhas.has(chave(item)) && !recusas.has(chave(item)))) return null;
   const out = [], al = [];

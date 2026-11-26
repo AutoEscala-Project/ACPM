@@ -12,6 +12,7 @@ import { MINUTOS_DO_DIA, MIS, WIN, FLIGHT_STATUSES } from './config.js';
 import { CHAVE_DO_VOO, chaveDoVoo, pedidoDoAluno } from './voo.js';
 import { CAMPOS_DO_PEDIDO } from './dias.js';
 import { STATUS_EM_ANDAMENTO, normalizarDetalhes } from './status.js';
+import { CODIGOS_DE_REJEICAO } from './conflitos.js';
 
 const idValido = v => Number.isInteger(v) && v > 0;
 const rotuloValido = v => typeof v === 'string' && v.length <= 40;
@@ -105,6 +106,26 @@ export function validarReversao(rev, frota) {
     const pedidos = rev.pedidos.map(p => (objeto(p) && idValido(p.stuId) && Number.isInteger(p.mid) && p.mid >= 0 && pedidoDeAntes(p.pedido)
       ? { stuId: p.stuId, mid: p.mid, pedido: pedidoDeAntes(p.pedido) } : null));
     return voos.every(Boolean) && pedidos.every(Boolean) ? { kind: 'aproveitarCancelado', voos, pedidos, label } : null;
+  }
+  // A alteração de um voo feita na Escala (o editor e a sugestão aplicada no pedido recusado, F1g): de cada voo tocado,
+  // o pino, o status e o detalhe de antes (null: não havia); de cada pedido tocado, o pedido de antes (null: a alteração
+  // criou a missão extra, que sai; o principal sempre tem o de antes); e as recusas que ela tirou (voltam no lugar delas)
+  if (rev.kind === 'desfazerEdicao') {
+    const voos = validarReversao({ ...rev, kind: 'aproveitarCancelado', pedidos: [] }, frota);
+    if (!voos || !Array.isArray(rev.pedidos) || !rev.pedidos.length || rev.pedidos.length > 100) return null;
+    const pedidos = rev.pedidos.map(p => {
+      if (!objeto(p) || !idValido(p.stuId) || !Number.isInteger(p.mid) || p.mid < 0) return null;
+      if (ausente(p.pedido)) return p.mid > 0 ? { stuId: p.stuId, mid: p.mid, pedido: null } : null;
+      const pedido = pedidoDeAntes(p.pedido);
+      return pedido ? { stuId: p.stuId, mid: p.mid, pedido } : null;
+    });
+    const recusas = rev.recusas === undefined ? [] : rev.recusas;
+    if (!Array.isArray(recusas) || recusas.length > 100) return null;
+    const limpas = recusas.map(r => (objeto(r) && typeof r.fKey === 'string' && CHAVE_DO_VOO.test(r.fKey) && typeof r.s === 'string' && r.s.length <= 200
+      && typeof r.m === 'string' && r.m.length <= 1000 && (r.codigo === undefined || CODIGOS_DE_REJEICAO.includes(r.codigo))
+      ? { fKey: r.fKey, s: r.s, m: r.m, ...(r.codigo === undefined ? {} : { codigo: r.codigo }) } : null));
+    if (!pedidos.every(Boolean) || !limpas.every(Boolean)) return null;
+    return { kind: 'desfazerEdicao', voos: voos.voos, pedidos, recusas: limpas, label };
   }
   if (rev.kind === 'readicionarRecurso') {
     const { recurso } = novoRecurso(frota, rev.recurso && typeof rev.recurso === 'object' ? rev.recurso : {});
@@ -232,6 +253,9 @@ export function agendamentosEmVolta(estado, historico, entrada, frota) {
   for (const e of depois) {
     const rev = agendamento(e);
     if (rev && !desfeitasDepois.has(e.id)) mudados.add(chaveDoVoo(rev.stuId, rev.mid));
+    // A alteração de um voo na Escala, feita depois e não desfeita, conta como um agendamento: os voos dela são dela
+    const edicao = validarReversao(e.revert, frota);
+    if (edicao && edicao.kind === 'desfazerEdicao' && !desfeitasDepois.has(e.id)) edicao.voos.forEach(v => mudados.add(v.fKey));
   }
   const vistas = new Set();
   for (const e of antes) {
@@ -245,4 +269,40 @@ export function agendamentosEmVolta(estado, historico, entrada, frota) {
     if (!pedido || (rev.criadoComo && MISSAO_DO_PEDIDO.some(c => pedido[c] !== rev.criadoComo[c]))) soltos.add(fKey);
   }
   return { mudados, soltos };
+}
+
+// A alteração de um voo feita na Escala não é desfeita sem o aluno no cadastro (o pedido de antes não tem onde voltar): o
+// texto do aviso, ou ''
+export function motivoParaNaoDesfazerEdicao(estado, { pedidos }) {
+  return pedidos.some(p => !estado.stu.some(s => s.id === p.stuId)) ? 'O aluno deste voo saiu do cadastro: não há o que desfazer.' : '';
+}
+
+// Desfaz a alteração de um voo feita na Escala (a reversão validada acima): cada pedido volta como estava (a missão extra
+// que ela criou sai) e cada voo tocado volta com o pino, o status e o detalhe de antes. As recusas voltam pela escala (na
+// escala aprovada, js/actions.js gravarNaEscala; fora dela, o motor as refaz)
+export function desfazerEdicao(estado, { voos, pedidos }) {
+  for (const { stuId, mid, pedido } of pedidos) {
+    const aluno = estado.stu.find(s => s.id === stuId);
+    if (!aluno) continue;
+    if (!pedido) { aluno.extra = (aluno.extra || []).filter(ex => ex.mid !== mid); continue; }
+    let alvo = pedidoDoAluno(aluno, mid);
+    if (!alvo) {
+      alvo = { mid };
+      aluno.extra = [...(aluno.extra || []), alvo];
+    }
+    CAMPOS_DO_PEDIDO.forEach(c => { delete alvo[c]; });
+    Object.assign(alvo, pedido);
+    normalizeMissionFields(alvo);
+  }
+  for (const { fKey, fixo, status, detalhe } of voos) {
+    estado.fixos = { ...(estado.fixos || {}) };
+    estado.fStatus = { ...(estado.fStatus || {}) };
+    estado.fObs = { ...(estado.fObs || {}) };
+    if (fixo) estado.fixos[fKey] = { ...fixo };
+    else delete estado.fixos[fKey];
+    if (status) estado.fStatus[fKey] = status;
+    else delete estado.fStatus[fKey];
+    if (detalhe) estado.fObs[fKey] = { ...detalhe };
+    else delete estado.fObs[fKey];
+  }
 }

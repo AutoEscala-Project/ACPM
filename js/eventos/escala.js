@@ -1,17 +1,20 @@
 // A Escala: o mapa e o popup do voo (e o clique no mapa que agenda), os filtros, exportar e compartilhar, o status do voo,
 // aprovar e reabrir, os critérios da compactação e as sugestões para um conflito (o resultado da missão do curso:
 // js/eventos/resultados.js)
-import { gravarAlteracao, gravarEscalaCalculada, aindaNaoAbriu } from '../actions.js';
+import { gravarAlteracao, gravarEscalaCalculada, aindaNaoAbriu, fotoDaEscalaTravada, gravarNaEscala } from '../actions.js';
 import { opcoesDeCategoria } from '../categorias.js';
 import { OPCOES_DE_BURACOS, OPCOES_DE_HORARIOS, normalizarCriterios } from '../criterios.js';
 import { $, showToast, anunciar, algumDialogoAberto, gavetaDoEsc, focarNoTitulo } from '../dom.js';
 import { exp, pdf, planilha } from '../export.js';
-import { fixosAoMudarStatus, fixosAoReabrir, fixosAoAprovar, normalizarFixos } from '../fixos.js';
+import { fixosAoMudarStatus, fixosAoReabrir, fixosAoAprovar, normalizarFixos, fixarNoLugar } from '../fixos.js';
 import { hm, hojeISO } from '../format.js';
 import { aplicarReparo, aproveitarCancelado, desfazerAproveitamento, repararComOPedido } from '../reparo.js';
-import { S, RES, DATA, AUDIT_LOG, isGestor, modoCompartilhado, insBy } from '../state.js';
+import { S, RES, DATA, AUDIT_LOG, isGestor, modoCompartilhado, insBy, estadoDaEscala } from '../state.js';
+import { rejeicoesDosPedidos } from '../rejeicoes.js';
 import { escolherInstrutor, escolhasDaUnidade, escolherNosPedidos, reverterEscolha, reverterReparo } from '../instrutor-escolhido.js';
-import { agendamentosEmVolta } from '../reversoes.js';
+import { agendamentosEmVolta, desfazerEdicao, motivoParaNaoDesfazerEdicao } from '../reversoes.js';
+import { CAMPOS_DO_PEDIDO } from '../dias.js';
+import { pedidoDoAluno } from '../voo.js';
 import { STATUS_COM_DETALHE, textoParaOHistorico, detalheAoMudarStatus, rotuloDoStatus } from '../status.js';
 import { ApiClient } from '../storage.js';
 import { agendarNoMapa } from './agendamento.js';
@@ -139,7 +142,10 @@ $('#btn-share-link').onclick = async () => {
 
 // Status do voo: Atrasado e Cancelado pedem o detalhe (a nova decolagem ou o motivo) antes de valer; desistir deixa o
 // status anterior. O histórico registra só a categoria do motivo
+// Na escala aprovada, sem o motor (F1g): só o voo muda, e o voo sem pino fica fixo onde está antes
 function aplicarStatus(fKey, status, detalhe) {
+  const foto = fotoDaEscalaTravada();
+  if (foto) S.fixos = fixarNoLugar(S.fixos, RES, [fKey]);
   if (!S.fStatus) S.fStatus = {};
   if (!S.fObs) S.fObs = {};
   S.fStatus[fKey] = status;
@@ -153,7 +159,7 @@ function aplicarStatus(fKey, status, detalhe) {
   // na Escala (o instrutor escolhido e o voo agendado)
   if (voo) S.fixos = fixosAoMudarStatus(S.fixos, voo, status, { aprovada: Boolean(S.aprovacao) });
   const textoDoStatus = status === 'Pousou' ? rotuloDoStatus(status, voo) : textoParaOHistorico(status, detalhe);
-  gravarAlteracao('mod', `Status de ${voo ? `${voo.s} (${hm(voo.a)}–${hm(voo.b)})` : fKey}: ${textoDoStatus}`);
+  gravarNaEscala(foto, 'mod', `Status de ${voo ? `${voo.s} (${hm(voo.a)}–${hm(voo.b)})` : fKey}: ${textoDoStatus}`);
 }
 function mudarStatus(fKey, status) {
   const voo = vooDaChave(fKey);
@@ -193,15 +199,20 @@ document.addEventListener('keydown', e => {
 // O instrutor escolhido na Escala: o voo (na turma de Ground, a turma inteira) fica onde está, fixo, com ele, e o resto
 // da escala é refeito em volta; o pedido também guarda a escolha. "Automático" devolve a escolha ao app (fora da escala
 // aprovada, o voo deixa de ser fixo). O histórico desfaz
+// Na escala aprovada, sem o motor (F1g): só o voo muda; "Automático" só tira a escolha do pedido (o voo fica com o
+// instrutor e no lugar)
 aoMudarCampo('insVoo', t => {
   const voo = vooDaChave(t.dataset.fkey);
   if (!voo) return;
   const x = t.value ? insBy(+t.value) : null;
+  const foto = fotoDaEscalaTravada();
+  if (foto) S.fixos = fixarNoLugar(S.fixos, RES, RES.out.filter(o => o.classKey === voo.classKey || o.fKey === voo.fKey).map(o => o.fKey));
   const { antes, alunos } = escolherInstrutor(S, RES, { stuId: voo.stuId, mid: voo.mid || 0 }, x ? x.id : null, { noLugar: true });
   const quem = alunos > 1 ? `turma de ${voo.mis}` : voo.s;
-  gravarAlteracao('mod', `Instrutor de ${quem} (${hm(voo.a)}–${hm(voo.b)}): ${x ? x.nm : 'automático'}`, { kind: 'restaurarEscolha', ...antes, label: '↶ Reverter' });
+  if (!gravarNaEscala(foto, 'mod', `Instrutor de ${quem} (${hm(voo.a)}–${hm(voo.b)}): ${x ? x.nm : 'automático'}`, { kind: 'restaurarEscolha', ...antes, label: '↶ Reverter' })) return;
   redesenharPorNome('pedidos-do-dia');
-  showToast(x ? `${x.nm} fica com o voo; o resto da escala foi refeito em volta.` : 'O app volta a escolher o instrutor deste voo.', 'ok');
+  showToast(foto ? (x ? `${x.nm} fica com o voo; nenhum outro voo muda (a escala está aprovada).` : 'A escolha do instrutor saiu do pedido; o voo continua com ele (a escala está aprovada).')
+    : x ? `${x.nm} fica com o voo; o resto da escala foi refeito em volta.` : 'O app volta a escolher o instrutor deste voo.', 'ok');
 });
 
 // Um clique no detalhe do status (motivo ou nova decolagem) permite alterá-lo; o status continua o mesmo
@@ -266,13 +277,33 @@ document.addEventListener('click', e => {
   const escolha = opcaoDoPainel(+botao.dataset.reparoAplicar);
   if (!escolha) return;
   const { fKey, voo, opcao, cancelado, rejeitado } = escolha;
-  // O pedido recusado: a escolha do instrutor muda (0: "Automático"), com a reversão da escolha de sempre
+  // Na escala aprovada, sem o motor (F1g): a escala da tela é conferida com a sugestão aplicada
+  const foto = fotoDaEscalaTravada();
+  // O pedido recusado: a escolha do instrutor muda (0: "Automático"), com a reversão da escolha de sempre. Na escala
+  // aprovada, o pedido entra no lugar que a simulação achou (o pino agendado), sem mexer em outro voo, e a reversão
+  // devolve o pedido e a recusa
   if (rejeitado) {
     fecharPainelDeReparo();
     const [stuId, mid] = fKey.split('_').map(Number);
     const x = opcao.insId ? insBy(opcao.insId) : null;
-    const { antes } = escolherInstrutor(S, RES, { stuId, mid }, x ? x.id : null);
-    gravarAlteracao('mod', `Pedido recusado encaixado: ${opcao.texto}`, { kind: 'restaurarEscolha', ...antes, label: '↶ Reverter' });
+    if (foto && opcao.pino) {
+      const aluno = S.stu.find(s => s.id === stuId);
+      const pedido = aluno ? pedidoDoAluno(aluno, mid) : null;
+      const recusa = rejeicoesDosPedidos(estadoDaEscala(), RES).get(fKey);
+      if (!pedido) return;
+      const rev = {
+        kind: 'desfazerEdicao', voos: [{ fKey, fixo: (S.fixos || {})[fKey] || null, status: (S.fStatus || {})[fKey] || null, detalhe: (S.fObs || {})[fKey] || null }],
+        pedidos: [{ stuId, mid, pedido: Object.fromEntries(CAMPOS_DO_PEDIDO.filter(c => pedido[c] !== undefined).map(c => [c, pedido[c]])) }],
+        recusas: recusa ? [{ fKey, s: recusa.s, m: recusa.m, ...(recusa.codigo ? { codigo: recusa.codigo } : {}) }] : [], label: '↶ Reverter'
+      };
+      if (x) pedido.insId = x.id;
+      else delete pedido.insId;
+      S.fixos = { ...(S.fixos || {}), [fKey]: { ...opcao.pino, agendado: true } };
+      if (!gravarNaEscala(foto, 'mod', `Pedido recusado encaixado: ${opcao.texto}`, rev)) return;
+    } else {
+      const { antes } = escolherInstrutor(S, RES, { stuId, mid }, x ? x.id : null);
+      gravarAlteracao('mod', `Pedido recusado encaixado: ${opcao.texto}`, { kind: 'restaurarEscolha', ...antes, label: '↶ Reverter' });
+    }
     redesenharPorNome('pedidos-do-dia');
     focarNoVoo(fKey);
     showToast('Instrutor escolhido: o pedido entra na escala.', 'ok');
@@ -286,14 +317,15 @@ document.addEventListener('click', e => {
   if (cancelado) {
     fecharPainelDeReparo();
     const rev = aproveitarCancelado(S, RES, fKey, opcao);
-    if (!rev) return;
-    gravarAlteracao('mod', `Voo cancelado aproveitado: ${voo.s} (${hm(voo.a)}–${hm(voo.b)}): ${opcao.texto}`, { ...rev, label: '↶ Reverter' });
+    if (!rev || !gravarNaEscala(foto, 'mod', `Voo cancelado aproveitado: ${voo.s} (${hm(voo.a)}–${hm(voo.b)}): ${opcao.texto}`, { ...rev, label: '↶ Reverter' })) return;
     redesenharPorNome('pedidos-do-dia');
     focarNoVoo(fKey);
     showToast('Voo aproveitado: ele volta para Pendente, no lugar da sugestão.', 'ok');
     return;
   }
   fecharPainelDeReparo();
+  // "Soltar" precisa do motor: na escala aprovada não vale (o botão fica desligado)
+  if (opcao.soltar && foto) return;
   if (!opcao.mudancas && !opcao.soltar) {
     pedirDetalheDoStatus({ voo, status: 'Cancelado', detalhe: opcao.motivo ? { motivo: opcao.motivo } : null, aoConfirmar: detalhe => aplicarStatus(fKey, 'Cancelado', detalhe) });
     return;
@@ -302,8 +334,7 @@ document.addEventListener('click', e => {
   // histórico desfaz os dois (a reversão do aproveitamento)
   if (opcao.pedido) {
     const rev = repararComOPedido(S, RES, fKey, opcao);
-    if (!rev) return;
-    gravarAlteracao('mod', `Reparo: ${voo.s} (${hm(voo.a)}–${hm(voo.b)}): ${opcao.texto}`, { ...rev, label: '↶ Reverter' });
+    if (!rev || !gravarNaEscala(foto, 'mod', `Reparo: ${voo.s} (${hm(voo.a)}–${hm(voo.b)}): ${opcao.texto}`, { ...rev, label: '↶ Reverter' })) return;
     redesenharPorNome('pedidos-do-dia');
     focarNoVoo(fKey);
     showToast('Sugestão aplicada: o voo continua fixo, e o pedido muda com ela.', 'ok');
@@ -318,9 +349,9 @@ document.addEventListener('click', e => {
   S.fixos = aplicarReparo(antes, RES, fKey, opcao);
   // Os voos que mudaram ou saíram dos fixos (soltar): o histórico guarda como estavam
   const mudados = Object.keys(antes).filter(k => S.fixos[k] !== antes[k]);
-  gravarAlteracao('mod', `Reparo: ${voo.s} (${hm(voo.a)}–${hm(voo.b)}): ${opcao.soltar ? 'Soltar o voo' : opcao.texto}`, {
+  if (!gravarNaEscala(foto, 'mod', `Reparo: ${voo.s} (${hm(voo.a)}–${hm(voo.b)}): ${opcao.soltar ? 'Soltar o voo' : opcao.texto}`, {
     kind: 'restaurarFixos', fixos: Object.fromEntries(mudados.map(k => [k, antes[k]])), ...(escolhas.length ? { pedidos: escolhas } : {}), label: '↶ Reverter'
-  });
+  })) return;
   if (escolhas.length) redesenharPorNome('pedidos-do-dia');
   focarNoVoo(fKey);
   showToast(opcao.soltar ? 'Voo solto: o app escalou de novo.' : 'Sugestão aplicada: o voo continua fixo.', 'ok');
@@ -333,28 +364,45 @@ document.addEventListener('keydown', e => {
 
 // "↶ Reverter" no histórico (js/eventos/historico.js): os tipos desta tela. A reversão chega validada (js/reversoes.js)
 // O voo cancelado aproveitado, desfeito: o pino, o status, o motivo e o pedido de antes
+// As reversões não perguntam (d47) e seguem a aprovação de agora: na escala aprovada, sem o motor (F1g)
 aoReverter('aproveitarCancelado', (rev, entry) => {
+  const foto = fotoDaEscalaTravada();
   desfazerAproveitamento(S, rev);
   S.fixos = normalizarFixos(S.fixos);
   redesenharPorNome('pedidos-do-dia');
-  gravarAlteracao('mod', `Revertido: ${entry.desc}`, null, entry.id);
+  gravarNaEscala(foto, 'mod', `Revertido: ${entry.desc}`, null, entry.id);
 });
 aoReverter('restaurarFixos', (rev, entry) => {
   // Um reparo desfeito: os voos voltam a ser fixos como antes dele, e o instrutor escolhido dos pedidos também. O voo
   // agendado volta só enquanto o agendamento continua: o histórico diz qual foi desfeito ou feito depois do reparo
   // (js/reversoes.js e js/instrutor-escolhido.js)
+  const foto = fotoDaEscalaTravada();
   reverterReparo(S, rev, agendamentosEmVolta(S, AUDIT_LOG, entry, S.frota));
   S.fixos = normalizarFixos(S.fixos);
   if (rev.pedidos) redesenharPorNome('pedidos-do-dia');
-  gravarAlteracao('mod', `Revertido: ${entry.desc}`, null, entry.id);
+  gravarNaEscala(foto, 'mod', `Revertido: ${entry.desc}`, null, entry.id);
 });
 
 aoReverter('restaurarEscolha', (rev, entry) => {
   // O instrutor escolhido volta como estava, e os voos fixos também; o voo agendado, só enquanto o agendamento
   // continua (js/reversoes.js e js/instrutor-escolhido.js)
+  const foto = fotoDaEscalaTravada();
   reverterEscolha(S, rev, agendamentosEmVolta(S, AUDIT_LOG, entry, S.frota));
   S.fixos = normalizarFixos(S.fixos);
-  gravarAlteracao('mod', `Revertido: ${entry.desc}`, null, entry.id);
+  gravarNaEscala(foto, 'mod', `Revertido: ${entry.desc}`, null, entry.id);
+  redesenharPorNome('pedidos-do-dia');
+});
+
+// A alteração de um voo feita na Escala, desfeita: os pedidos, os pinos, o status e o detalhe de antes, e as recusas que
+// ela tirou (na escala aprovada, no lugar delas)
+aoReverter('desfazerEdicao', (rev, entry) => {
+  const motivo = motivoParaNaoDesfazerEdicao(S, rev);
+  if (motivo) { showToast(motivo); return; }
+  const foto = fotoDaEscalaTravada();
+  desfazerEdicao(S, rev);
+  S.fixos = normalizarFixos(S.fixos);
+  const recusas = rev.recusas.map(({ fKey, ...r }) => [fKey, { t: 'err', ...r }]);
+  gravarNaEscala(foto, 'mod', `Revertido: ${entry.desc}`, null, entry.id, { recusas });
   redesenharPorNome('pedidos-do-dia');
 });
 
