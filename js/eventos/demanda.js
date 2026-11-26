@@ -17,6 +17,7 @@ import { aoAcionar, aoMudarCampo, aoReverter } from './registro.js';
 import { singleDemandRowHTML, cnt, rDem, filtrarDemanda, manterNaDemanda, prepararFiltroDosCursos, conferirNenhumNaDemanda, limparFiltrosDaDemanda } from '../views/demanda.js';
 import { proximaDoPedido, outraMissaoDoPedido, botaoForaDaOrdem, confirmacaoDaMissao } from '../views/etapas.js';
 import { registrarDesenho, redesenharPorNome } from '../redesenho.js';
+import { perguntarAntesDeRefazer } from '../views/dialogo-refazer.js';
 
 // O desenho da Demanda (js/redesenho.js), pelo papel: os pedidos do dia
 registrarDesenho('pedidos-do-dia', rDem, { em: ['dados', 'consulta', 'releitura'], ordem: 60 });
@@ -196,6 +197,11 @@ aoAcionar('rm-fly', (b, { id, mid }) => {
   const s = stuBy(id);
   const target = getMissionTarget(id, mid);
   if (!s || !target || !target.fly) return;
+  // Na escala não aprovada, a pergunta antes (R6); "Cancelar" não muda nada
+  if (S.aprovacao) tirarDaEscala(s, target, mid);
+  else perguntarAntesDeRefazer({ resumo: `${s.nm}: sai da escala`, aoConfirmar: () => tirarDaEscala(s, target, mid) });
+});
+function tirarDaEscala(s, target, mid) {
   const foto = fotoDaEscalaTravada();
   if (foto) S.fixos = fixarNoLugar(S.fixos, RES, [chaveDoVoo(s.id, mid)]);
   target.fly = false;
@@ -204,7 +210,7 @@ aoAcionar('rm-fly', (b, { id, mid }) => {
   })) return;
   rDem();
   showToast(`Tirado da escala: ${s.nm} (${target.mis}).`, 'ok');
-});
+}
 
 // Os campos de um pedido da demanda
 aoMudarCampo('d', (t, { f, c, id, mid }) => {

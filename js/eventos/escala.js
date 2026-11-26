@@ -24,6 +24,8 @@ import { vooDaChave } from './resultados.js';
 import { pedirDetalheDoStatus } from '../views/dialogo-status.js';
 import { rOut, lembrarCaixa, botaoDoInstrutor, seletorDeInstrutor } from '../views/escala.js';
 import { abrirEditorDoVoo } from '../views/edicao-do-voo.js';
+import { perguntarAntesDeRefazer } from '../views/dialogo-refazer.js';
+import { statusDoVoo } from '../voo.js';
 import './edicao-do-voo.js';
 import { abrirPainelDeReparo, abrirPainelDoRejeitado, fecharPainelDeReparo, opcaoDoPainel, focarNoVoo } from '../views/reparo.js';
 import { registrarDesenho, redesenharPorNome } from '../redesenho.js';
@@ -139,10 +141,22 @@ function aplicarStatus(fKey, status, detalhe) {
   const textoDoStatus = status === 'Pousou' ? rotuloDoStatus(status, voo) : textoParaOHistorico(status, detalhe);
   gravarNaEscala(foto, 'mod', `Status de ${voo ? `${voo.s} (${hm(voo.a)}–${hm(voo.b)})` : fKey}: ${textoDoStatus}`);
 }
+// Na escala não aprovada, toda alteração feita na Escala pergunta antes (R6, js/views/dialogo-refazer.js): "Cancelar"
+// redesenha o valor de antes, e nada muda; na aprovada, não pergunta (o motor não roda)
+function perguntarSeAberta(resumo, fazer) {
+  if (S.aprovacao) { fazer(); return; }
+  perguntarAntesDeRefazer({ resumo, aoConfirmar: fazer, aoDesistir: () => rOut() });
+}
+// O status (e o detalhe, depois do diálogo dele), com a pergunta
+function statusComPergunta(fKey, status, detalhe) {
+  const voo = vooDaChave(fKey);
+  const antes = voo ? statusDoVoo(voo, S.fStatus) : '';
+  perguntarSeAberta(`${voo ? voo.s : fKey}: ${antes === status ? 'detalhe do status' : `${antes} → ${status}`}`, () => aplicarStatus(fKey, status, detalhe));
+}
 function mudarStatus(fKey, status) {
   const voo = vooDaChave(fKey);
-  if (!voo || !STATUS_COM_DETALHE.includes(status)) { aplicarStatus(fKey, status, null); return; }
-  pedirDetalheDoStatus({ voo, status, aoConfirmar: detalhe => aplicarStatus(fKey, status, detalhe), aoDesistir: () => rOut() });
+  if (!voo || !STATUS_COM_DETALHE.includes(status)) { statusComPergunta(fKey, status, null); return; }
+  pedirDetalheDoStatus({ voo, status, aoConfirmar: detalhe => statusComPergunta(fKey, status, detalhe), aoDesistir: () => rOut() });
 }
 aoMudarCampo('fstatus', t => mudarStatus(t.dataset.fkey, t.value));
 
@@ -183,6 +197,9 @@ aoMudarCampo('insVoo', t => {
   const voo = vooDaChave(t.dataset.fkey);
   if (!voo) return;
   const x = t.value ? insBy(+t.value) : null;
+  perguntarSeAberta(`${voo.isGround ? `turma de ${voo.mis}` : voo.s}: ${voo.ins} → ${x ? x.nm : 'Automático'}`, () => trocarInstrutor(voo, x));
+});
+function trocarInstrutor(voo, x) {
   const foto = fotoDaEscalaTravada();
   if (foto) S.fixos = fixarNoLugar(S.fixos, RES, RES.out.filter(o => o.classKey === voo.classKey || o.fKey === voo.fKey).map(o => o.fKey));
   const { antes, alunos } = escolherInstrutor(S, RES, { stuId: voo.stuId, mid: voo.mid || 0 }, x ? x.id : null, { noLugar: true });
@@ -191,13 +208,13 @@ aoMudarCampo('insVoo', t => {
   redesenharPorNome('pedidos-do-dia');
   showToast(foto ? (x ? `${x.nm} fica com o voo; nenhum outro voo muda (a escala está aprovada).` : 'A escolha do instrutor saiu do pedido; o voo continua com ele (a escala está aprovada).')
     : x ? `${x.nm} fica com o voo; o resto da escala foi refeito em volta.` : 'O app volta a escolher o instrutor deste voo.', 'ok');
-});
+}
 
 // Um clique no detalhe do status (motivo ou nova decolagem) permite alterá-lo; o status continua o mesmo
 aoAcionar('detalhe-status', b => {
   const fKey = b.dataset.fkey, status = S.fStatus && S.fStatus[fKey], voo = vooDaChave(fKey);
   if (!voo || !STATUS_COM_DETALHE.includes(status)) return;
-  pedirDetalheDoStatus({ voo, status, detalhe: S.fObs && S.fObs[fKey], aoConfirmar: detalhe => aplicarStatus(fKey, status, detalhe) });
+  pedirDetalheDoStatus({ voo, status, detalhe: S.fObs && S.fObs[fKey], aoConfirmar: detalhe => statusComPergunta(fKey, status, detalhe) });
 });
 
 // Aprovar a escala: todos os voos ficam fixos e o selo diz quando e quem aprovou. Reabrir solta os voos: a
@@ -232,10 +249,13 @@ document.addEventListener('click', e => {
   if (!b || b.getAttribute('aria-disabled') === 'true' || isGestor() || S.aprovacao || aindaNaoAbriu()) return;
   const campo = b.dataset.criterio, antes = normalizarCriterios(S.criterios);
   if (antes[campo] === b.dataset.valor) return;
-  S.criterios = normalizarCriterios({ ...antes, [campo]: b.dataset.valor });
   const opcoes = campo === 'buracos' ? OPCOES_DE_BURACOS : OPCOES_DE_HORARIOS;
   const nome = id => opcoes.find(([v]) => v === id)[1];
-  gravarAlteracao('mod', `Compactação: ${campo === 'buracos' ? 'buracos' : 'horários'} ${nome(antes[campo])} → ${nome(S.criterios[campo])}`);
+  const texto = `Compactação: ${campo === 'buracos' ? 'buracos' : 'horários'} ${nome(antes[campo])} → ${nome(b.dataset.valor)}`;
+  perguntarSeAberta(texto, () => {
+    S.criterios = normalizarCriterios({ ...antes, [campo]: b.dataset.valor });
+    gravarAlteracao('mod', texto);
+  });
 });
 
 // Sugestões para um conflito: a gaveta abre pelo botão do conflito. "Aplicar" muda o voo fixo (na turma de
@@ -254,13 +274,25 @@ document.addEventListener('click', e => {
   const escolha = opcaoDoPainel(+botao.dataset.reparoAplicar);
   if (!escolha) return;
   const { fKey, voo, opcao, cancelado, rejeitado } = escolha;
-  // Na escala aprovada, sem o motor (F1g): a escala da tela é conferida com a sugestão aplicada
+  // A sugestão fora da disponibilidade do pedido ou em outro tipo pede a confirmação com o aluno, e a que faz do voo o 7º
+  // local do horário, a do operador (dois cliques)
+  if (!rejeitado && opcao.confirmar && !confirmado(botao, opcao.armado || 'Confirmei com o aluno')) return;
+  fecharPainelDeReparo();
+  // "Cancelar o voo" pede o motivo antes (a pergunta vem depois dele, com o status)
+  if (!rejeitado && !cancelado && !opcao.mudancas && !opcao.soltar) {
+    pedirDetalheDoStatus({ voo, status: 'Cancelado', detalhe: opcao.motivo ? { motivo: opcao.motivo } : null, aoConfirmar: detalhe => statusComPergunta(fKey, 'Cancelado', detalhe) });
+    return;
+  }
+  const quem = rejeitado ? (rejeicoesDosPedidos(estadoDaEscala(), RES).get(fKey) || {}).s || fKey : voo.s;
+  perguntarSeAberta(`${quem}: ${opcao.soltar ? 'Soltar o voo' : opcao.texto}`, () => aplicarSugestao(escolha));
+});
+// A sugestão aplicada (na escala aprovada, sem o motor: a escala da tela é conferida com ela, F1g)
+function aplicarSugestao({ fKey, voo, opcao, cancelado, rejeitado }) {
   const foto = fotoDaEscalaTravada();
   // O pedido recusado: a escolha do instrutor muda (0: "Automático"), com a reversão da escolha de sempre. Na escala
   // aprovada, o pedido entra no lugar que a simulação achou (o pino agendado), sem mexer em outro voo, e a reversão
   // devolve o pedido e a recusa
   if (rejeitado) {
-    fecharPainelDeReparo();
     const [stuId, mid] = fKey.split('_').map(Number);
     const x = opcao.insId ? insBy(opcao.insId) : null;
     if (foto && opcao.pino) {
@@ -286,13 +318,9 @@ document.addEventListener('click', e => {
     showToast('Instrutor escolhido: o pedido entra na escala.', 'ok');
     return;
   }
-  // A sugestão fora da disponibilidade do pedido ou em outro tipo pede a confirmação com o aluno, e a que faz do voo o 7º
-  // local do horário, a do operador (dois cliques)
-  if (opcao.confirmar && !confirmado(botao, opcao.armado || 'Confirmei com o aluno')) return;
   // O voo cancelado aproveitado: aplicada, a sugestão fixa o voo no lugar dela e o volta para Pendente, e o pedido muda
   // com ela
   if (cancelado) {
-    fecharPainelDeReparo();
     const rev = aproveitarCancelado(S, RES, fKey, opcao);
     if (!rev || !gravarNaEscala(foto, 'mod', `Voo cancelado aproveitado: ${voo.s} (${hm(voo.a)}–${hm(voo.b)}): ${opcao.texto}`, { ...rev, label: '↶ Reverter' })) return;
     redesenharPorNome('pedidos-do-dia');
@@ -300,13 +328,8 @@ document.addEventListener('click', e => {
     showToast('Voo aproveitado: ele volta para Pendente, no lugar da sugestão.', 'ok');
     return;
   }
-  fecharPainelDeReparo();
   // "Soltar" precisa do motor: na escala aprovada não vale (o botão fica desligado)
   if (opcao.soltar && foto) return;
-  if (!opcao.mudancas && !opcao.soltar) {
-    pedirDetalheDoStatus({ voo, status: 'Cancelado', detalhe: opcao.motivo ? { motivo: opcao.motivo } : null, aoConfirmar: detalhe => aplicarStatus(fKey, 'Cancelado', detalhe) });
-    return;
-  }
   // A sugestão do conflito que muda também o pedido (a disponibilidade, o tipo): o voo fixo e o pedido mudam juntos, e o
   // histórico desfaz os dois (a reversão do aproveitamento)
   if (opcao.pedido) {
@@ -332,7 +355,7 @@ document.addEventListener('click', e => {
   if (escolhas.length) redesenharPorNome('pedidos-do-dia');
   focarNoVoo(fKey);
   showToast(opcao.soltar ? 'Voo solto: o app escalou de novo.' : 'Sugestão aplicada: o voo continua fixo.', 'ok');
-});
+}
 // O Esc fecha a gaveta quando ela é a de cima ou tem o foco (js/dom.js); com um diálogo aberto por cima (o do status, o
 // do agendamento), o Esc fecha só o diálogo
 document.addEventListener('keydown', e => {
