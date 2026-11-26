@@ -2,7 +2,7 @@
 // (INVA, Avião ou Maior buraco) e até onde os horários mudam (na disponibilidade, só 1ª e 2ª preferência, ou não
 // mudam); a escala é refeita na hora e o tempo parado, ao lado do resumo, mostra o efeito. Os critérios ficam com
 // o dia; com a escala aprovada e no Gestor, só aparecem
-import { test, comHangar, expect, abrir, abrirEscala, abrirHistorico, aprovar } from './fixtures.js';
+import { test, comHangar, expect, abrir, abrirEscala, abrirHistorico, aprovar, refazer } from './fixtures.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
 
 // Um instrutor: às 06:30 (o aluno 1000 só pode nessa hora) e o aluno 1001, que pediu 13:40 e pode a qualquer hora
@@ -21,6 +21,7 @@ test.describe('Compactação da escala', () => {
     await expect(page.locator('#tempo-parado > div')).toHaveText(['0h50 INVAs parados', '0h50 aviões parados']);
 
     await botao(page, 'Não mudar').click();
+    await refazer(page);
     await expect(botao(page, 'Não mudar')).toHaveAttribute('aria-pressed', 'true');
     await expect(linha(page, 'Aluno 1001').locator('.c-hr')).toContainText('13:40–14:40');
     await expect(linha(page, 'Aluno 1001').locator('.c-hr')).not.toContainText('horário ajustado');
@@ -40,6 +41,7 @@ test.describe('Compactação da escala', () => {
     await abrirEscala(page);
     await expect(page.locator('#tempo-parado > div')).toHaveText(['0h50 INVAs parados', '0h50 aviões parados', '1 saída do hangar']);
     await botao(page, 'Não mudar').click();
+    await refazer(page);
     await expect(page.locator('#tempo-parado > div')).toHaveText(['6h10 INVAs parados', '6h10 aviões parados', '2 saídas do hangar']);
   });
 

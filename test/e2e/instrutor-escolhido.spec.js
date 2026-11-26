@@ -1,6 +1,6 @@
 // O instrutor escolhido pelo operador: na Demanda (o app encaixa o voo com ele) e na Escala (o nome do instrutor abre a
 // lista; o voo fica onde está, fixo, com o escolhido, e o resto é refeito em volta). O histórico desfaz
-import { test, expect, abrir, irPara, abrirEscala, confirmar, abrirHistorico, alternarVem, aprovar, reabrir } from './fixtures.js';
+import { test, expect, abrir, irPara, abrirEscala, confirmar, abrirHistorico, alternarVem, aprovar, reabrir, editorDoVoo, refazer } from './fixtures.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
 
 // Dois voos às 08:20: o app põe o Instrutor 02 (menos habilitações) com o Aluno 1000 e o Instrutor 01 com o 1001
@@ -55,6 +55,8 @@ test.describe('Instrutor escolhido', () => {
     // Quem o app escolheu é a primeira opção; o Instrutor 02 está ocupado às 08:20 e o 03 não vem
     await expect(lista.locator('option')).toHaveText(['Instrutor 01 (escolhido pelo app)', 'Instrutor 02 (ocupado com Aluno 1000)', 'Instrutor 03 (indisponível)']);
     await lista.selectOption({ label: 'Instrutor 02 (ocupado com Aluno 1000)' });
+    // A escala não está aprovada: a pergunta antes de refazer (F1g)
+    await refazer(page);
 
     // O resto da escala é refeito em volta: o Aluno 1000 passa para o Instrutor 01, no mesmo horário
     await expect(voo.locator('.c-instr')).toHaveText('Instrutor 02');
@@ -71,6 +73,7 @@ test.describe('Instrutor escolhido', () => {
     await voo.locator('[data-act="trocar-instrutor"]').click();
     await expect(voo.locator('select[data-a="insVoo"] option').first()).toHaveText('Automático (o app escolhe)');
     await voo.locator('select[data-a="insVoo"]').selectOption({ label: 'Automático (o app escolhe)' });
+    await refazer(page);
     await expect(voo.locator('.fixo')).toHaveCount(0);
     await expect(voo.locator('.ins-btn')).not.toHaveClass(/\bescolhido\b/);
   });
@@ -141,9 +144,11 @@ test.describe('Instrutor escolhido', () => {
     const voo = linha(page, 'Aluno 1001');
     await voo.locator('[data-act="trocar-instrutor"]').click();
     await voo.locator('select[data-a="insVoo"]').selectOption({ label: 'Instrutor 02 (ocupado com Aluno 1000)' });
+    await refazer(page);
     await expect(voo.locator('.fixo')).toHaveCount(1);
 
     await voo.locator('select[data-f="fstatus"]').selectOption('Pendente');
+    await refazer(page);
     await expect(voo.locator('select[data-f="fstatus"]')).toHaveValue('Pendente');
     await expect(voo.locator('.fixo')).toHaveAttribute('aria-label', 'Voo fixo: instrutor escolhido na escala');
     await expect(voo.locator('.c-instr')).toHaveText('Instrutor 02');
@@ -161,6 +166,7 @@ test.describe('Instrutor escolhido', () => {
     const voo = linha(page, 'Aluno 1001');
     await voo.locator('[data-act="trocar-instrutor"]').click();
     await voo.locator('select[data-a="insVoo"]').selectOption({ label: 'Instrutor 02 (ocupado com Aluno 1000)' });
+    await refazer(page);
     await aprovar(page);
     await expect(voo.locator('.fixo')).toHaveAttribute('aria-label', 'Voo fixo: escala aprovada');
     await reabrir(page);
@@ -218,42 +224,23 @@ test.describe('Instrutor escolhido', () => {
     await expect(linha(page, 'Aluno 1000').locator('.fixo')).toHaveCount(0);
   });
 
-  // No mapa, o nome do instrutor fica no popup do voo: a lista abre no lugar dele, e o popup continua aberto
-  test('no mapa: o nome do instrutor no popup abre a lista; o Esc volta ao nome, e o escolhido fica com o voo, fixo', async ({ page }) => {
+  // No mapa, a barra abre o editor do voo (F1g): o instrutor é um campo dele, com o motivo de cada um; mudar só o instrutor
+  // fixa o voo no lugar com ele, como na Lista (instrutor escolhido), depois da pergunta (a escala não está aprovada)
+  test('no mapa: o instrutor no editor do voo; o escolhido fica com o voo, fixo, como na Lista', async ({ page }) => {
     await abrir(page, { estado: dia() });
     await abrirEscala(page);
     await page.locator('#s-esc [data-tl="ins"]').click();
-    const popup = page.locator('#tl-pop');
-    const nome = popup.locator('[data-act="trocar-instrutor"]');
-    const lista = popup.locator('select[data-a="insVoo"]');
     const barra = page.locator('#out .tl-bar', { hasText: 'Aluno 1001' });
-    await barra.click();
-    await expect(popup).toBeVisible();
-    await nome.click();
-    await expect(lista).toBeFocused();
-    await expect(popup).toBeVisible();
-    // O primeiro Esc fecha a lista do navegador, quando ela abriu (no Linux); o seguinte volta ao nome, com o popup
-    // aberto, e o próximo fecha o popup
-    await expect(async () => {
-      await page.keyboard.press('Escape');
-      await expect(lista).toHaveCount(0, { timeout: 300 });
-    }).toPass({ timeout: 3000 });
-    await expect(popup).toBeVisible();
-    await expect(nome).toBeFocused();
-    await page.keyboard.press('Escape');
-    await expect(popup).toBeHidden();
-    await expect(barra).toBeFocused();
-
-    // Pelo teclado: Enter na barra leva ao nome, e Enter no nome abre a lista
+    await barra.focus();
     await page.keyboard.press('Enter');
-    await expect(nome).toBeFocused();
-    await page.keyboard.press('Enter');
-    await expect(lista).toBeFocused();
-    await lista.selectOption({ label: 'Instrutor 02 (ocupado com Aluno 1000)' });
-    // O popup acompanha o voo, agora na linha do Instrutor 02
-    await expect(popup).toBeVisible();
-    await expect(nome).toHaveText('Instrutor 02');
-    await expect(nome).toHaveClass(/\bescolhido\b/);
+    await expect(editorDoVoo(page)).toBeVisible();
+    const lista = page.locator('#voo-instrutor');
+    await expect(lista.locator('option', { hasText: 'Instrutor 02' })).toHaveText(/Instrutor 02 — ocupado/);
+    await lista.selectOption({ label: await lista.locator('option', { hasText: 'Instrutor 02' }).innerText() });
+    await expect(page.locator('#voo-avisos li.conflito')).toHaveCount(0);
+    await page.locator('#voo-salvar').click();
+    await refazer(page);
+    await expect(editorDoVoo(page)).toBeHidden();
     await expect(page.locator('#out .tl-row', { hasText: 'Instrutor 02' }).locator('.tl-bar', { hasText: 'Aluno 1001' })).toHaveCount(1);
 
     await page.locator('#s-esc [data-tl="lista"]').click();

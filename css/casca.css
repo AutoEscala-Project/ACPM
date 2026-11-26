@@ -203,11 +203,11 @@ body[data-backend="supabase"] #btn-bi-clr { display: none !important; }
 }
 .aviso-link.ok { border-color: var(--ok); }
 @media print {
-  header.topo, #linha, #trilho, .avisos-do-app, .gaveta, #tl-pop, .bar, main#conteudo > section:not(#s-esc), #toast-box { display: none !important; }
+  header.topo, #linha, #trilho, .avisos-do-app, .gaveta, dialog, .bar, main#conteudo > section:not(#s-esc), #toast-box { display: none !important; }
   main#conteudo > section#s-esc { display: block; }
   .casca { display: block; max-width: none; }
   /* Os botões que agendam não vão para o papel */
-  .tl-agendar, .win-agendar, .tl-pop-btn[data-act="agendar"] { display: none !important; }
+  .tl-agendar, .win-agendar { display: none !important; }
 }
 /* Alvos de toque no celular: botões, campos e interruptores com pelo menos 44 px */
 @media (max-width: 640px) {

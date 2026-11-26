@@ -1,5 +1,5 @@
 // Tela da Escala: Lista, Por recurso ou Por instrutor; resumo com erros e avisos agrupados; uma linha por voo.
-import { test, expect, abrir, abrirComExemplo, abrirEscala, irPara, irParaVista, lerEscala, alternarDisponivel, alvosPequenos, larguraDaPagina, appPronto, AMANHA, prepararContexto, vigiarErros, entrar, importarDaAgenda, abrirCaixa } from './fixtures.js';
+import { test, expect, abrir, abrirComExemplo, abrirEscala, irPara, irParaVista, lerEscala, alternarDisponivel, alvosPequenos, larguraDaPagina, appPronto, AMANHA, prepararContexto, vigiarErros, entrar, importarDaAgenda, abrirCaixa, editorDoVoo, refazer, confirmarAgendamento, aprovar } from './fixtures.js';
 import { criarSupabaseFalso, documentosAtuais, CONTAS } from './supabase-falso.js';
 import { IDS } from '../helpers/casos-do-programa.js';
 import { cursosIniciais, gravarCurso } from '../../js/programa.js';
@@ -73,7 +73,7 @@ test.describe('Tela da Escala', () => {
   });
 
   // O mapa abre transposto: os recursos (ou os instrutores) em colunas e as horas descendo à esquerda. Inverter eixo X:Y
-  // põe as horas nas colunas e um recurso por linha, e outro clique volta; o voo continua o mesmo botão (abre os detalhes)
+  // põe as horas nas colunas e um recurso por linha, e outro clique volta; o voo continua o mesmo botão (abre o editor do voo)
   // e o clique no espaço livre agenda no horário da posição dele, nos dois eixos
   test('o mapa abre com os recursos nas colunas e as horas nas linhas; Inverter eixo X:Y troca e volta, os voos e o clique continuam', async ({ page }) => {
     const erros = [];
@@ -109,14 +109,14 @@ test.describe('Tela da Escala', () => {
       expect(Math.abs(topo)).toBeLessThan(0.5);
       expect(Math.abs(altura)).toBeLessThan(0.5);
     }
-    // O voo: mais alto que largo, abre e fecha os detalhes
+    // O voo: mais alto que largo, abre e fecha o editor do voo como antes
     const barra = page.locator('#out .tl-bar').first();
     const emPe = await barra.boundingBox();
     expect(emPe.height).toBeGreaterThan(emPe.width / 3);
     await barra.click();
-    await expect(page.locator('#tl-pop')).toBeVisible();
+    await expect(editorDoVoo(page)).toBeVisible();
     await page.keyboard.press('Escape');
-    await expect(page.locator('#tl-pop')).toBeHidden();
+    await expect(editorDoVoo(page)).toBeHidden();
 
     // O clique no espaço livre de uma coluna agenda no horário da altura dele (contada da borda de dentro da faixa)
     const livre = page.locator('#out .tl-row:not(:has(.tl-bar)) .tl-track:not(.inerte)').first();
@@ -241,8 +241,8 @@ test.describe('Tela da Escala', () => {
   });
 
   // O agendamento grava no cadastro os pesos digitados, com décimos: a soma (40,1 + 40,7 dá 80.80000000000001 no ponto
-  // flutuante) aparece em décimos e com a vírgula, como no resumo do diálogo, na lista e no popup do mapa
-  test('os pesos com décimos digitados no agendamento: a lista e o popup mostram a soma em décimos, com a vírgula', async ({ page }) => {
+  // flutuante) aparece em décimos e com a vírgula, como no resumo do diálogo, na lista e no editor do voo
+  test('os pesos com décimos digitados no agendamento: a lista e o editor do voo mostram os pesos em décimos, com a vírgula', async ({ page }) => {
     await abrir(page, { estado: cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, { fly: false }), aluno(1001, { p1: 390, p2: -1 })] }) });
     await abrirEscala(page);
     await page.locator('#btn-agendar').click();
@@ -251,14 +251,13 @@ test.describe('Tela da Escala', () => {
     await page.locator('#agd-kg-aluno').fill('40.1');
     await page.locator('#agd-kg-instrutor').fill('40.7');
     await expect(page.locator('#agd-peso-resumo')).toContainText('80,8 kg de 170 kg');
-    await page.locator('#agd-confirmar').click();
-    await expect(page.locator('#dlg-agendar')).toBeHidden();
+    await confirmarAgendamento(page);
     const linha = page.locator('#out tbody tr:not(.win)', { hasText: 'Aluno 1000' });
     await expect(linha.locator('.c-peso')).toHaveText('80,8 / 170 kg');
     await page.locator('#s-esc [data-tl="eq"]').click();
     await page.locator('#out .tl-bar', { hasText: 'Aluno 1000' }).click();
-    const pesoNoPopup = page.locator('#tl-pop .tl-pop-grid > span', { hasText: 'Peso Trip.:' }).locator('xpath=following-sibling::span[1]');
-    await expect(pesoNoPopup).toHaveText('80,8 kg');
+    await expect(editorDoVoo(page).locator('.voo-pesos')).toContainText('Peso do aluno: 40,1 kg');
+    await expect(editorDoVoo(page).locator('.voo-pesos')).toContainText('Peso do INVA: 40,7 kg');
   });
 
   test('turma de Ground: horário, missão, sala e instrutor uma vez só; cada aluno com o seu status e a sua ação', async ({ page }) => {
@@ -343,26 +342,14 @@ test.describe('Tela da Escala', () => {
   });
 });
 
-// O popup do mapa fica fora do painel que rola (dentro dele, seria cortado e, nas primeiras linhas, sumiria sob os
-// filtros e o cabeçalho): abre com um clique (ou Enter) na barra e fecha com Esc ou com um clique fora
-test.describe('Mapa: o popup do voo', () => {
-  const pop = page => page.locator('#tl-pop');
+// O editor do voo (F1g) no lugar do popup do mapa: abre com um clique (ou Enter) na barra, por cima de tudo, e fecha com
+// Esc ou "Cancelar", com o foco de volta na barra
+test.describe('Mapa: a barra abre o editor do voo', () => {
   const abrirMapa = async page => {
     await abrirEscala(page);
     await page.locator('#s-esc [data-tl="eq"]').click();
     await expect(page.locator('#out .mapa')).toBeVisible();
   };
-  // A caixa inteira na tela e por cima de tudo: o ponto no centro e perto de cada canto é do próprio popup
-  const inteiroNaTela = page => page.evaluate(() => {
-    const el = document.getElementById('tl-pop');
-    if (!el || el.hidden) return 'fechado';
-    const r = el.getBoundingClientRect();
-    if (r.top < 0 || r.left < 0 || r.bottom > innerHeight || r.right > innerWidth) return `fora da tela: ${JSON.stringify(r)}`;
-    const pontos = [[r.left + 6, r.top + 6], [r.right - 6, r.top + 6], [r.left + 6, r.bottom - 6], [r.right - 6, r.bottom - 6],
-      [(r.left + r.right) / 2, (r.top + r.bottom) / 2]];
-    const cobertos = pontos.filter(([x, y]) => !el.contains(document.elementFromPoint(x, y)));
-    return cobertos.length ? `coberto em ${JSON.stringify(cobertos)}` : 'ok';
-  });
   // Opacidade efetiva (a do elemento vezes a de quem o contém)
   const opacidade = locator => locator.evaluate(el => {
     let total = 1;
@@ -370,62 +357,61 @@ test.describe('Mapa: o popup do voo', () => {
     return total;
   });
 
-  test('o voo da primeira linha abre o popup inteiro, por cima dos filtros e do cabeçalho', async ({ page }) => {
+  test('o voo da primeira linha abre o editor dele, por cima de tudo, com o horário da barra', async ({ page }) => {
     await abrirComExemplo(page);
     await abrirMapa(page);
     const barra = page.locator('#out .tl-row:has(.tl-bar)').first().locator('.tl-bar').first();
-    await expect(barra).toHaveAttribute('aria-expanded', 'false');
+    await expect(barra).toHaveAttribute('aria-haspopup', 'dialog');
     await barra.click();
-    await expect(pop(page)).toBeVisible();
-    await expect(barra).toHaveAttribute('aria-expanded', 'true');
-    expect(await inteiroNaTela(page)).toBe('ok');
-    // É o voo da barra: o mesmo horário
+    await expect(editorDoVoo(page)).toBeVisible();
     const [inicio, fim] = (await barra.locator('.tl-bar-t1').innerText()).split(' · ')[0].split('–');
-    await expect(pop(page).locator('.tl-pop-hd')).toContainText(`${inicio} – ${fim}`);
+    await expect(page.locator('#voo-contexto')).toContainText(`${inicio}–${fim}`);
   });
 
-  test('Esc fecha o popup e devolve o foco à barra; Enter abre de novo; um clique fora fecha', async ({ page }) => {
+  test('Esc fecha o editor e devolve o foco à barra; Enter abre de novo; "Cancelar" fecha', async ({ page }) => {
     await abrirComExemplo(page);
     await abrirMapa(page);
     const barra = page.locator('#out .tl-bar').first();
     await barra.click();
-    await expect(pop(page)).toBeVisible();
+    await expect(editorDoVoo(page)).toBeVisible();
     await page.keyboard.press('Escape');
-    await expect(pop(page)).toBeHidden();
+    await expect(editorDoVoo(page)).toBeHidden();
     await expect(barra).toBeFocused();
-    await expect(barra).toHaveAttribute('aria-expanded', 'false');
     await page.keyboard.press('Enter');
-    await expect(pop(page)).toBeVisible();
-    await page.locator('#s-esc h2').click();
-    await expect(pop(page)).toBeHidden();
+    await expect(editorDoVoo(page)).toBeVisible();
+    await page.locator('#voo-cancelar').click();
+    await expect(editorDoVoo(page)).toBeHidden();
+    await expect(barra).toBeFocused();
   });
 
-  test('o popup de um voo cancelado não fica apagado como a barra', async ({ page }) => {
+  test('o editor de um voo cancelado não fica apagado como a barra', async ({ page }) => {
     await abrir(page, { estado: cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, { p1: 0 })], fStatus: { '1000_0_1': 'Cancelado' } }) });
     await abrirMapa(page);
     const barra = page.locator('#out .tl-bar.tl-st-Cancelado');
     await barra.click();
-    await expect(pop(page)).toBeVisible();
+    await expect(editorDoVoo(page)).toBeVisible();
     expect(await opacidade(barra)).toBeLessThan(1);
-    expect(await opacidade(pop(page))).toBe(1);
+    expect(await opacidade(editorDoVoo(page))).toBe(1);
   });
 
-  test('mudar o status no popup atualiza a barra, e o popup continua aberto com o status novo', async ({ page }) => {
+  test('mudar o status no editor e salvar (com a pergunta, fora da escala aprovada) atualiza a barra', async ({ page }) => {
     await abrir(page, { estado: cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, { p1: 0 })] }) });
     await abrirMapa(page);
     await page.locator('#out .tl-bar').click();
-    await pop(page).locator('.st-sel').selectOption('Em Voo');
+    await page.locator('#voo-status').selectOption('Em Voo');
+    await page.locator('#voo-salvar').click();
+    await refazer(page);
     await expect(page.locator('#out .tl-bar')).toHaveClass(/\btl-st-EmVoo\b/);
-    await expect(pop(page)).toBeVisible();
-    await expect(pop(page).locator('.st-sel')).toHaveValue('Em Voo');
   });
 
-  test('no Gestor, o status do popup fica travado e não há "Excluir da escala"', async ({ page }) => {
+  test('no Gestor, o editor mostra os campos como texto, sem "Salvar" e sem tirar da escala', async ({ page }) => {
     await abrirComExemplo(page, { url: './?role=gestor' });
     await abrirMapa(page);
     await page.locator('#out .tl-bar').first().click();
-    await expect(pop(page).locator('.st-sel')).toBeDisabled();
-    await expect(pop(page).locator('[data-act="rm-fly"]')).toBeHidden();
+    await expect(editorDoVoo(page)).toBeVisible();
+    await expect(page.locator('#voo-campos select')).toHaveCount(0);
+    await expect(page.locator('#voo-salvar')).toBeHidden();
+    await expect(editorDoVoo(page).locator('[data-act="rm-fly"]')).toHaveCount(0);
   });
 });
 
@@ -751,6 +737,7 @@ test.describe('Acessibilidade', () => {
     await abrirComExemplo(page);
     await abrirEscala(page);
     await page.locator('#out select[data-f="fstatus"]').first().selectOption('Em Voo');
+    await refazer(page);
     await page.locator('#s-esc [data-tl="eq"]').click();
     const barras = page.locator('#out .tl-bar');
     expect(await barras.count()).toBeGreaterThan(1);
@@ -775,6 +762,8 @@ test.describe('O foco depois de uma ação', () => {
     const fkey = await status.getAttribute('data-fkey');
     await status.focus();
     await status.selectOption('Em Voo');
+    // A pergunta (a escala não está aprovada) fica com o foco; respondida, ele volta para o status
+    await refazer(page);
     await expect(page.locator(`#out select[data-fkey="${fkey}"]`)).toHaveValue('Em Voo');
     expect(await emFoco(page)).toBe(`select[data-f="fstatus"][data-fkey="${fkey}"]`);
   });
@@ -797,32 +786,34 @@ test.describe('O foco depois de uma ação', () => {
     await page.locator('#st-novo').fill(`${String(Math.floor(novo / 60)).padStart(2, '0')}:${String(novo % 60).padStart(2, '0')}`);
     await dialogo.getByRole('button', { name: 'Confirmar' }).click();
     await expect(dialogo).toBeHidden();
+    await refazer(page);
     await expect(page.locator(`#out select[data-fkey="${fkey}"]`)).toHaveValue('Atrasado');
     expect(await emFoco(page)).toBe(`select[data-f="fstatus"][data-fkey="${fkey}"]`);
   });
 
-  test('o popup do mapa: Enter na barra leva o foco para ele, e Tab depois do último controle volta para a barra', async ({ page }) => {
+  test('o editor do voo: Enter na barra leva o foco para o primeiro campo, e o Tab fica dentro dele', async ({ page }) => {
     await abrirComExemplo(page);
     await abrirEscala(page);
     await page.locator('[data-tl="eq"]').click();
     const barra = page.locator('#out .tl-bar').first();
     await barra.focus();
     await page.keyboard.press('Enter');
-    await expect(page.locator('#tl-pop')).toBeVisible();
-    // O primeiro controle do popup é o instrutor (o nome abre a lista para trocar); depois, o status
-    await expect(page.locator('#tl-pop [data-act="trocar-instrutor"]')).toBeFocused();
-    await page.keyboard.press('Tab');
-    await expect(page.locator('#tl-pop select[data-f="fstatus"]')).toBeFocused();
-    await page.keyboard.press('Shift+Tab');
-    const controles = await page.locator('#tl-pop select, #tl-pop button').count();
-    for (let i = 0; i < controles; i++) await page.keyboard.press('Tab');
-    await expect(page.locator('#tl-pop')).toBeHidden();
+    await expect(editorDoVoo(page)).toBeVisible();
+    expect(await page.evaluate(() => document.activeElement.closest('#dlg-voo') !== null && document.activeElement.matches('select, input, button'))).toBe(true);
+    const controles = await editorDoVoo(page).locator('select:not(:disabled), input:not(:disabled), button:visible, a[href]').count();
+    for (let i = 0; i < controles + 2; i++) {
+      await page.keyboard.press('Tab');
+      expect(await page.evaluate(() => Boolean(document.activeElement.closest('#dlg-voo')))).toBe(true);
+    }
+    await page.keyboard.press('Escape');
     await expect(barra).toBeFocused();
   });
 
   test('o ✕ que tira o voo da escala, com o Enter dado duas vezes ou segurado, tira um voo só; o foco fica na linha que ficou no lugar', async ({ page }) => {
     await abrirComExemplo(page);
     await abrirEscala(page);
+    // Na escala aprovada o ✕ não pergunta (sem o motor, F1g): o Enter repetido chegaria a ele
+    await aprovar(page);
     const xs = page.locator('#out .tabela-escala button[data-act="rm-fly"]');
     const antes = await xs.count();
     await xs.nth(2).focus();
@@ -852,6 +843,7 @@ test.describe('O foco depois de uma ação', () => {
     const fkey = await status.getAttribute('data-fkey');
     await status.focus();
     await status.selectOption('Em Voo');
+    await refazer(page);
     await expect(page.locator(`#out select[data-fkey="${fkey}"]`)).toHaveClass(/\bst-EmVoo\b/);
     expect(await emFoco(page)).toBe(`select[data-f="fstatus"][data-fkey="${fkey}"]`);
     await page.reload();

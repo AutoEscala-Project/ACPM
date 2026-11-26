@@ -688,7 +688,7 @@
       Depois, a escala em quatro vistas (a Escala abre em Por recurso):</p>
       <ul>
         <li><b>Por recurso</b> e <b>Por instrutor:</b> o mapa do dia, com a ocupação de cada um, e também os livres: todos os recursos (o avião em manutenção fica riscado) e os instrutores disponíveis no dia.
-        Um clique num voo abre os detalhes dele (aluno, instrutor, recurso, missão, peso e status); Esc ou um clique fora fecha (com os detalhes abertos, o clique fora só fecha).
+        Um clique num voo abre o voo para editar (veja <i>Editar um voo</i>, abaixo); Esc ou <i>Cancelar</i> fecham sem mudar nada.
         O mapa abre com os recursos (ou os instrutores) nas colunas e as horas descendo nas linhas; <b>Inverter eixo X:Y</b> põe as horas nas colunas e um recurso (ou instrutor) por linha, e outro clique volta (ao recarregar a página, o mapa abre de novo com os recursos nas colunas).
         Em Por recurso, <b>Ocultar indisponíveis</b> tira do mapa os recursos desligados na data (em manutenção); o que ainda tem voo continua, e outro clique mostra todos.</li>
         <li><b>Lista:</b> uma linha por voo, por horário.
@@ -716,7 +716,7 @@
       Na lista e no mapa, o nome do instrutor abre a lista para trocar: o voo fica onde está (horário e avião), fixo, com esse instrutor (mudar o status ou reabrir a escala não o solta), e o resto da escala é refeito em volta (na turma de Ground, a turma inteira muda).
       Os instrutores que não servem no horário aparecem com o motivo (ocupado, indisponível, sem a habilitação…); escolher um deles deixa o voo em conflito, com as <i>Sugestões</i>.
       A escolha fica também no pedido, na Demanda; <i>Automático</i> devolve a escolha ao app, e o Histórico desfaz.
-      Na lista, mude o status do voo ou use o ✕ do fim da linha (<i>Tirar da escala</i>, aparece com o mouse ou o foco do teclado na linha; no celular, fica à vista) para tirar um voo; o Histórico permite restaurar.
+      Na lista, mude o status do voo, abra o voo em <i>Editar</i> ou use o ✕ do fim da linha (<i>Tirar da escala</i>, aparece com o mouse ou o foco do teclado na linha; no celular, fica à vista) para tirar um voo; o Histórico permite restaurar.
       O histórico registra o motivo do cancelamento só pela categoria: a descrição de “Outro” fica no voo, não no histórico.
       <i>CSV</i> gera o arquivo do lançamento no portal, agrupado por avião e com o peso e o status (com o motivo ou a nova decolagem); <i>PDF</i> gera a escala para impressão, com o status de cada voo; <i>Excel</i> preenche a planilha da escala no modelo do aeroclube (a do lançamento no CAVOK): cada voo na linha do horário dele, com o aluno e o instrutor na coluna do avião.
       O voo das 11:30 vai na linha do almoço; o que está fora dos horários da planilha (13:40) vai na linha anterior com o horário real ao lado do nome.
@@ -727,20 +727,20 @@
       Escolha o aluno (na lista, cada um com o curso<span data-funcionalidade="progresso">, a próxima missão e os horários</span><span data-sem-funcionalidade="progresso"> e os horários</span> em que já voa; os que têm um pedido fora da escala vêm primeiro): o resto vem sugerido, e dá para mudar qualquer um.
       <span data-funcionalidade="progresso">A missão sugerida é a próxima do curso, pelas regras do programa (as outras liberadas vêm junto, e as fora da ordem, com o motivo); sem curso, um tipo de missão (o Voo Local, quando o recurso o faz); para o aluno que já tem voo na data, pode ser esse voo (veja abaixo).</span>
       <span data-sem-funcionalidade="progresso">A missão sugerida é um tipo de missão (o Voo Local, quando o recurso o faz); para o aluno de um curso, escolha a missão na lista; para o aluno com um pedido que ficou fora da escala, é esse voo (veja abaixo).</span>
-      O recurso e o instrutor são os que servem no horário (os que não servem aparecem desligados, com o motivo); o horário é o primeiro livre (na data de hoje, a partir de agora; o Ground, só nas janelas do dia; o Noturno, às 17:30), e nos aviões e simuladores <i>Outro horário…</i> aceita um fora da lista; a duração vem da missão (a do Ground e a do Noturno não mudam); nos aviões, o peso do aluno e o do instrutor vêm do cadastro.
+      O recurso e o instrutor são os que servem no horário (os que não servem aparecem com o motivo, e escolher um deles avisa); o horário é o primeiro livre (na data de hoje, a partir de agora; o Ground, só nas janelas do dia; o Noturno, às 17:30), e nos aviões e simuladores <i>Outro horário…</i> aceita um fora da lista; a duração vem da missão (a do Ground e a do Noturno não mudam); nos aviões, o peso do aluno e o do instrutor vêm do cadastro.
       <i>Voltar</i> ou Esc desistem, e nada muda.</p>
       <p><b>O voo que o aluno já tem na data:</b> em vez de marcar outro, o diálogo <span data-funcionalidade="progresso">sugere</span><span data-sem-funcionalidade="progresso">oferece</span> esse voo.
       O pedido do aluno que ficou fora da escala vem sugerido para entrar nela (<i>Encaixar o voo</i>), <span data-funcionalidade="progresso">e o que já está na escala com a próxima missão do curso, para mudar de lugar (<i>Mover o voo</i>)</span><span data-sem-funcionalidade="progresso">e o que já está na escala muda de lugar quando escolhido na lista <i>Missão</i> (<i>Mover o voo</i>)</span>; <span data-funcionalidade="progresso">os voos do aluno na data ficam no alto da lista <i>Missão</i></span><span data-sem-funcionalidade="progresso">os voos do aluno na data ficam no alto dela</span>, o título do diálogo diz o que acontece, e outra missão da lista marca um voo novo.
       O voo movido ou encaixado continua o mesmo pedido, com a missão e o código do curso; o que está em andamento ou foi cancelado não muda de lugar (mude o status), e mover um voo fixo da escala aprovada, ou para fora da disponibilidade do aluno, pede confirmação.
       No Ground, a lista <i>Instrutor</i> traz antes as turmas do mesmo Ground no dia (<i>Entrar na turma das 08:20 com Instrutor 03</i>): o aluno entra na turma, no horário e com o instrutor dela, e outro horário abre uma turma nova.</p>
       <p><b>A conferência:</b> a cada mudança, o app confere o voo na escala inteira.
-      O que deixaria um voo em conflito (o avião, a sala, o instrutor ou o aluno ocupado por um voo fixo, o instrutor indisponível, o limite da lei, o peso acima do limite mesmo com o mínimo de combustível…) não deixa agendar: embaixo do problema vêm as alternativas livres, até três de cada (<i>Horários livres</i>, <i>Recursos livres</i>, <i>Instrutores livres</i>; no peso, <i>Instrutores que cabem no peso</i>), e um clique escolhe.
+      O que deixaria um voo em conflito (o avião, a sala, o instrutor ou o aluno ocupado por um voo fixo, o instrutor indisponível, o instrutor em “Não escalar com” do aluno, o limite da lei, o peso acima do limite mesmo com o mínimo de combustível…) avisa e pede a confirmação, como as regras abaixo: o voo fica fixo onde você o pôs, e a Escala mostra o conflito, com as <i>Sugestões</i>. Embaixo do problema vêm as alternativas livres, até três de cada (<i>Horários livres</i>, <i>Recursos livres</i>, <i>Instrutores livres</i>; no peso, <i>Instrutores que cabem no peso</i>), e um clique escolhe.
       No instrutor indisponível, o botão ao lado do aviso o marca disponível ali mesmo (<i>Marcar Instrutor 03 disponível às 08:20</i>): com o agendamento, ele passa a vir na data, nos períodos do voo.
-      O que foge de uma regra pede uma confirmação em <i>Agendar mesmo assim</i>: <span data-funcionalidade="progresso">a missão fora da ordem do curso (ou já aprovada, dispensada, repetida no dia, de outro curso ou de um curso encerrado) ou num tipo de avião que não é o do programa; </span>um horário fora da lista, o pouso depois das 17:30, mais de 6 voos locais no mesmo horário, o voo antes do Ground dele; o peso que falta, ou o peso digitado que deixa outro voo em conflito; um voo que sai da escala; o horário que já passou, a data passada ou o domingo; <span data-funcionalidade="progresso">a ordem do curso ou os limites da lei que o app não pôde conferir (sem os resultados dos cursos ou as horas dos instrutores)</span><span data-sem-funcionalidade="progresso">os limites da lei que o app não pôde conferir (sem as horas dos instrutores)</span>.
+      O conflito e o que foge de uma regra pedem uma confirmação em <i>Agendar mesmo assim</i>: <span data-funcionalidade="progresso">a missão fora da ordem do curso (ou já aprovada, dispensada, repetida no dia, de outro curso ou de um curso encerrado) ou num tipo de avião que não é o do programa; </span>um horário fora da lista, o pouso depois das 17:30, mais de 6 voos locais no mesmo horário, o voo antes do Ground dele; o peso que falta, ou o peso digitado que deixa outro voo em conflito; um voo que sai da escala; o horário que já passou, a data passada ou o domingo; <span data-funcionalidade="progresso">a ordem do curso ou os limites da lei que o app não pôde conferir (sem os resultados dos cursos ou as horas dos instrutores)</span><span data-sem-funcionalidade="progresso">os limites da lei que o app não pôde conferir (sem as horas dos instrutores)</span>.
       Se os avisos mudam antes do segundo clique, a confirmação é pedida de novo.
       O resto é informação, como a vez na fila do rodízio e, no Noturno, a volta no dia seguinte.
       <i>O que muda na escala</i>, embaixo dos avisos, abre a prévia: o voo que entra (ou muda de lugar) e cada voo que muda de horário, de recurso ou de instrutor, sai da escala (com o motivo) ou entra nela.</p>
-      <p><b>Depois de agendar:</b> o voo fica fixo no horário, no recurso e com o instrutor (o cadeado diz “agendado na escala”; o instrutor fica escolhido no pedido; mudar o status ou reabrir a escala não o solta), e a escala é refeita em volta dele.
+      <p><b>Depois de agendar:</b> o voo fica fixo no horário, no recurso e com o instrutor (o cadeado diz “agendado na escala”; o instrutor fica escolhido no pedido; mudar o status ou reabrir a escala não o solta), e a escala é refeita em volta dele (na escala aprovada, não: veja <i>A escala aprovada</i>, abaixo; fora dela, a confirmação diz que a escala inteira será refeita).
       O pedido aparece na Demanda com <span data-funcionalidade="progresso">a missão do curso e </span>a marca do agendamento (veja Demanda).
       O peso digitado vai para o cadastro da pessoa, com uma linha no Histórico.
       O ↶ do Histórico desfaz o agendamento: o voo novo sai, o que mudou de lugar ou entrou na escala volta a ser como era (o aluno tirado da escala depois continua fora dela), e o instrutor marcado disponível também (o peso digitado fica no cadastro; não se desfaz o voo em andamento, o que já tem resultado nem o pedido que mudou depois na Demanda ou saiu dela).
@@ -750,8 +750,22 @@
       <span data-funcionalidade="progresso">Pelo mapa de um recurso ou de um instrutor, a missão sugerida é a primeira liberada do curso que serve nele (no tipo do recurso, ou que o instrutor pode dar).</span>
       O avião em manutenção não tem o <i>+</i>, e o clique nele não agenda.
       Na lista, o <i>+</i> de cada horário agenda nele, ou no primeiro horário livre antes do seguinte.
-      Nos detalhes de uma turma de Ground, <i>+ Aluno na turma</i> abre o mesmo diálogo, já com a turma, para pôr mais um aluno nela.
+      No voo de uma turma de Ground, <i>+ Aluno na turma</i> abre o mesmo diálogo, já com a turma, para pôr mais um aluno nela.
       Sem voos na data, o mapa mostra os recursos (ou os instrutores) livres embaixo do aviso.</p>
+      <p id="manual-editar-voo"><b>Editar um voo:</b> um clique num voo do mapa, ou <i>Editar</i> na linha da Lista, abre todos os campos dele: o aluno (o voo passa para outro aluno; o pedido de antes deixa de voar), a missão (as do curso do aluno; sem curso, os tipos de missão; o tipo do recurso e as horas acompanham a missão e continuam editáveis), o recurso (de outro tipo, o pedido muda de tipo), o horário (os de decolagem do tipo, ou <i>Outro horário…</i>; o voo que terminaria depois da meia-noite não é salvo, como no <i>+ Agendar voo</i>), a duração (a do Ground e a do Noturno não mudam), o instrutor (<i>Automático</i> devolve a escolha ao app) e o status.
+      Na turma de Ground, a turma inteira muda junto, e <i>Turma</i> mostra cada aluno, com o status dele, <i>Tirar</i> e <i>+ Aluno na turma</i>.
+      O peso do aluno e o do instrutor aparecem com o link para o cadastro: o peso é da pessoa, em todas as datas, e muda em Alunos ou Instrutores.
+      Nada muda antes de <i>Salvar</i>: a cada campo, o app confere o voo e mostra os avisos embaixo (o conflito em vermelho, ligado ao campo); nada fica desligado, e o que não serve avisa.
+      O voo salvo fica fixo onde você o pôs (o cadeado diz “agendado na escala”; mudar só o instrutor o deixa “instrutor escolhido”, como na lista), e a reabertura da escala não o solta; o ↶ do Histórico desfaz (na escala aprovada, o voo volta fixo para onde estava antes da alteração; reaberta depois dela, ele volta sem o cadeado da aprovação, como no ↶ da troca do instrutor e das <i>Sugestões</i>), menos o voo em andamento, o que já tem resultado e o que mudou de status depois da alteração (como no agendamento: mude o status em vez de desfazer).
+      A volta do noturno de ontem só muda o status, e o voo com resultado registrado não muda de aluno nem de missão (tire o resultado antes); o voo <i>Em Voo</i> ou que já pousou muda, com o aviso de que as horas, a revisão de 50 horas e o Rodízio acompanham.
+      Quem só consulta vê os mesmos campos, como texto.</p>
+      <p id="manual-escala-aprovada"><b>A escala aprovada e a que não está:</b> na escala aprovada, uma alteração de voo feita na Escala (o editor, o instrutor, o status, o ✕, as <i>Sugestões</i>, o <i>+ Agendar voo</i> e o ↶ deles no Histórico) muda só aquele voo: o app não refaz a escala, nenhum outro voo muda de lugar e nenhum pedido de fora entra no lugar que ficou livre; ele só confere de novo os conflitos, os avisos e os pesos.
+      O conflito que a alteração cria avisa antes: <i>Salvar mesmo assim</i> grava, e o voo fica em conflito na Escala.
+      <i>Soltar o voo</i>, nas <i>Sugestões</i>, fica desligado (reabra a escala para soltar o voo), e <i>Automático</i> só tira a escolha do pedido: o voo fica com o instrutor e no lugar.
+      Um pedido novo, o cadastro, Recursos e Instrutores continuam refazendo a escala em volta dos voos fixos.
+      Na escala que não está aprovada, cada alteração feita na Escala (também o status, a cada vez, e os critérios) pergunta antes: <i>A escala de qui 26/11 não está aprovada. Com esta alteração (Maria: 08:20 → 09:10), a escala inteira será refeita, e outros voos podem mudar de horário, de recurso ou de INVA.</i>
+      <i>Cancelar</i> (ou Esc) não muda nada; <i>Salvar e refazer</i> grava e refaz a escala. Os avisos da alteração vêm na mesma pergunta.
+      <i>Aprovar</i>, <i>Reabrir</i>, <i>Refazer a escala</i>, o resultado de uma missão do curso e o ↶ do Histórico não perguntam.</p>
 
       <h4>Alunos</h4>
       <p>Nome, CANAC, peso e curso de cada aluno (as três primeiras colunas são as de Instrutores, na mesma ordem)<span data-funcionalidade="progresso">; embaixo do curso, as missões aprovadas do programa e a próxima (por exemplo, <i>12/40 · próxima PP-13</i>)</span>.
@@ -1142,8 +1156,36 @@
     </div>
   </form>
 </dialog>
-<!-- Popup do voo no mapa da escala: fora do painel do mapa (que rola) para nunca ficar cortado -->
-<div class="tl-pop" id="tl-pop" role="dialog" aria-label="Detalhes do voo" hidden></div>
+<!-- O voo da escala (js/views/edicao-do-voo.js): todos os campos dele, abertos por uma barra do mapa e pelo "Editar" da
+     Lista. Nada é gravado antes de "Salvar"; os avisos são refeitos a cada campo. Quem só consulta vê os campos como texto.
+     Os ids são voo-*; os campos não usam os atributos dos ouvintes globais (data-f, data-a): o diálogo cuida dos seus. Só
+     "Tirar", "+ Aluno na turma" e "Sugestões" (data-act, data-reparo) fecham o editor e seguem pelos caminhos deles -->
+<dialog class="dlg dlg-voo" id="dlg-voo" aria-labelledby="voo-titulo" aria-describedby="voo-contexto">
+  <form id="form-voo" novalidate>
+    <h2 id="voo-titulo">Voo</h2>
+    <p class="h" id="voo-contexto"></p>
+    <div class="campos-voo" id="voo-campos"></div>
+    <ul class="voo-avisos" id="voo-avisos" role="status"></ul>
+    <p class="erro-campo" id="voo-erro" role="alert"></p>
+    <div class="dlg-acoes">
+      <button type="button" class="btn sec" id="voo-cancelar">Cancelar</button>
+      <button type="submit" class="btn edit-only" id="voo-salvar">Salvar</button>
+    </div>
+  </form>
+</dialog>
+<!-- A pergunta antes de refazer a escala não aprovada (js/views/dialogo-refazer.js): o que muda, que a escala inteira será
+     refeita e os avisos da alteração, numa pergunta só. O foco começa em "Cancelar" -->
+<dialog class="dlg" id="dlg-refazer" role="alertdialog" aria-labelledby="refazer-titulo" aria-describedby="refazer-texto refazer-avisos">
+  <form id="form-refazer" novalidate>
+    <h2 id="refazer-titulo">Refazer a escala?</h2>
+    <p id="refazer-texto"></p>
+    <ul class="voo-avisos" id="refazer-avisos"></ul>
+    <div class="dlg-acoes">
+      <button type="button" class="btn sec" id="refazer-cancelar">Cancelar</button>
+      <button type="submit" class="btn" id="refazer-salvar">Salvar e refazer</button>
+    </div>
+  </form>
+</dialog>
 
 <div id="toast-box" aria-live="polite"></div>
 <div id="anuncio" class="sr" role="status"></div>

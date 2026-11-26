@@ -5,7 +5,7 @@
 // cada, na mesma gravação. Depois, o foco vai para o voo na escala. Antes de a escala abrir (js/actions.js,
 // aindaNaoAbriu), o diálogo não abre (os botões recusam em registro.js; o clique no mapa, aqui) e confirmar não muda
 // nada: nem o voo, nem os pesos, nem o instrutor marcado disponível
-import { gravarAlteracao, logChange, aindaNaoAbriu } from '../actions.js';
+import { logChange, aindaNaoAbriu, fotoDaEscalaTravada, gravarNaEscala } from '../actions.js';
 import { aplicarAgendamento, descricaoDoAgendamento, reversaoDoAgendamento, historicoDosPesos } from '../agendamento.js';
 import { motivoParaNaoDesfazer, desfazerAgendamento, VOO_COM_RESULTADO } from '../reversoes.js';
 import { ligada } from '../funcionalidades.js';
@@ -33,8 +33,10 @@ const FEITO = { mover: 'Voo movido', encaixar: 'Voo encaixado' };
 function confirmarAgendamento({ proposta, base, avaliacao, contexto }) {
   if (isGestor() || ApiClient.readOnly || aindaNaoAbriu()) return;
   const descricao = descricaoDoAgendamento(S, proposta, avaliacao);
+  // Na escala aprovada, sem o motor (F1g, d45): a escala da tela conferida com o voo novo, como a prévia mostrou
+  const foto = fotoDaEscalaTravada();
   const antes = aplicarAgendamento(S, base, proposta);
-  gravarAlteracao(proposta.pedido ? 'mod' : 'inc', descricao, reversaoDoAgendamento(antes));
+  if (!gravarNaEscala(foto, proposta.pedido ? 'mod' : 'inc', descricao, reversaoDoAgendamento(antes))) return;
   // Os pesos digitados: no cadastro de cada um, na mesma gravação, sem reversão (como os pesos editados no cadastro)
   historicoDosPesos(antes).forEach(texto => logChange('mod', texto));
   redesenharPorNome('pedidos-do-dia', 'alunos', 'instrutores');
@@ -65,8 +67,10 @@ aoReverter('desfazerAgendamento', (rev, entry) => {
     showToast(semOResultadoNaTela ? `${motivo} Para tirar o voo, use Tirar da escala; para mudar, Agendar voo.` : motivo);
     return;
   }
+  // Segue a aprovação de agora: na escala aprovada, sem o motor (d47)
+  const foto = fotoDaEscalaTravada();
   if (desfazerAgendamento(S, rev)) {
-    gravarAlteracao(rev.criado ? 'exc' : 'mod', `Revertido: ${entry.desc}`, null, entry.id);
+    gravarNaEscala(foto, rev.criado ? 'exc' : 'mod', `Revertido: ${entry.desc}`, null, entry.id);
     redesenharPorNome('pedidos-do-dia', 'instrutores');
   }
 });

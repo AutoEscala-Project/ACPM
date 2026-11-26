@@ -1,6 +1,6 @@
 // Acessibilidade: cada botão e cada campo tem um nome para o leitor de tela, e nenhum se chama só "✕" (que o leitor
 // lê como "multiplicação"). Vale para todas as abas, o Histórico e o painel de habilitações.
-import { test, expect, abrir, abrirComExemplo, irPara, entrar, abrirEscala, abrirCaixa, prepararContexto, vigiarErros, REGIOES, abasVisiveis, abrirHistorico, aprovar, botaoAprovar, botaoDoHistorico, botaoDoMenuDaConta, percorrerTelas, relativoDaData, rotuloDaData, semNome, alternarVem, botoesDasAbas, botaoDaData, mudarData, contagemDoDia, diaDoCalendario, trilho, AMANHA, avisosDaData, contagemDosAvisos } from './fixtures.js';
+import { test, expect, abrir, abrirComExemplo, irPara, entrar, abrirEscala, abrirCaixa, prepararContexto, vigiarErros, REGIOES, abasVisiveis, abrirHistorico, aprovar, botaoAprovar, botaoDoHistorico, botaoDoMenuDaConta, percorrerTelas, relativoDaData, rotuloDaData, semNome, alternarVem, botoesDasAbas, botaoDaData, mudarData, contagemDoDia, diaDoCalendario, trilho, AMANHA, avisosDaData, contagemDosAvisos, editorDoVoo, refazer } from './fixtures.js';
 import { instalarSupabaseFalso, documentosAtuais, CONTAS } from './supabase-falso.js';
 import { comExemplo } from '../helpers/exemplo.js';
 import { estadoSintetico } from '../helpers/estado.js';
@@ -419,17 +419,17 @@ test.describe('O leitor de tela e o teclado', () => {
     await expect(botaoDoHistorico(page)).toBeFocused();
   });
 
-  test('o Esc fecha só a camada de cima: com o Histórico aberto, o primeiro fecha o popup do mapa, o segundo, a gaveta', async ({ page }) => {
+  test('o Esc fecha só a camada de cima: com o Histórico aberto, o primeiro fecha o editor do voo, o segundo, a gaveta', async ({ page }) => {
     await abrirComExemplo(page);
     await abrirEscala(page);
     await page.locator('#s-esc [data-tl="eq"]').click();
     await abrirHistorico(page);
     await expect(page.locator('#historico')).toBeVisible();
-    // O popup abre pelo teclado (dependendo da largura, a gaveta cobre a barra), com o foco nele
+    // O editor abre pelo teclado (dependendo da largura, a gaveta cobre a barra), com o foco nele
     const barra = page.locator('#out .tl-bar').first();
     await barra.focus();
     await page.keyboard.press('Enter');
-    const popup = page.locator('#tl-pop');
+    const popup = editorDoVoo(page);
     await expect(popup).toBeVisible();
     await page.keyboard.press('Escape');
     await expect(popup).toBeHidden();
@@ -488,7 +488,7 @@ test.describe('O leitor de tela e o teclado', () => {
 
   // Qualquer diálogo é a camada de cima, não só o do status: o da sessão expirada aparece sozinho, na gravação, e o Esc
   // não o fecha. A gravação com a sessão expirada responde 401 de propósito
-  test('o Esc fecha só a camada de cima: com o diálogo da sessão aberto sobre o popup do mapa, nem o Esc nem um clique no diálogo fecham o popup', async ({ browser }) => {
+  test('o Esc fecha só a camada de cima: com o diálogo da sessão aberto sobre a Escala, o Esc não o fecha, e o status mudado fica', async ({ browser }) => {
     const context = await browser.newContext({ baseURL: test.info().project.use.baseURL, locale: 'pt-BR', timezoneId: 'America/Sao_Paulo' });
     await prepararContexto(context);
     const servidor = await instalarSupabaseFalso(context, documentosAtuais(comExemplo(estadoSintetico()), '2026-11-11'));
@@ -496,24 +496,19 @@ test.describe('O leitor de tela e o teclado', () => {
     const erros = vigiarErros(page, { statusEsperados: [401] });
     await entrar(page, CONTAS.operador);
     await abrirEscala(page);
-    await page.locator('#s-esc [data-tl="eq"]').click();
-    await page.locator('#out .tl-bar').first().click();
-    const popup = page.locator('#tl-pop');
-    await expect(popup).toBeVisible();
     servidor.expirarSessoes();
-    await popup.locator('select[data-f="fstatus"]').selectOption('Em Voo');
+    const status = page.locator('#out select[data-f="fstatus"]').first();
+    await status.selectOption('Em Voo');
+    await refazer(page);
     const sessao = page.locator('#dlg-sessao');
     await expect(sessao).toBeVisible();
     await page.keyboard.press('Escape');
     await expect(sessao).toBeVisible();
-    await expect(popup).toBeVisible();
     await page.locator('#sessao-senha').click();
-    await expect(popup).toBeVisible();
     await page.locator('#sessao-senha').fill(CONTAS.operador.senha);
     await page.locator('#sessao-entrar').click();
     await expect(sessao).toBeHidden();
-    await expect(popup).toBeVisible();
-    await expect(popup.locator('select[data-f="fstatus"]')).toHaveValue('Em Voo');
+    await expect(status).toHaveValue('Em Voo');
     expect(erros).toEqual([]);
     await context.close();
   });
@@ -543,7 +538,7 @@ test.describe('O leitor de tela e o teclado', () => {
   });
 
   for (const [tema, nome] of [['light', 'claro'], ['dark', 'escuro']]) {
-    test(`os textos sobre cor (os status, o ✕ armado, o botão do popup, o selo da aprovação) contrastam, no tema ${nome}`, async ({ page }) => {
+    test(`os textos sobre cor (os status, o ✕ armado, os avisos do editor do voo, o selo da aprovação) contrastam, no tema ${nome}`, async ({ page }) => {
       await abrirComExemplo(page);
       await page.evaluate(t => { document.documentElement.dataset.theme = t; }, tema);
       await abrirEscala(page);
@@ -551,13 +546,21 @@ test.describe('O leitor de tela e o teclado', () => {
       const conferir = async (rotulo, locator) => fracos.push(...await contrastesFracos([[rotulo, locator]]));
       const status = page.locator('#out select[data-f="fstatus"]');
       await status.nth(0).selectOption('Em Voo');
+      await refazer(page);
       await status.nth(1).selectOption('Pousou');
+      await refazer(page);
       await conferir('Em Voo', page.locator('#out .st-sel.st-EmVoo').first());
       await conferir('Pousou', page.locator('#out .st-sel.st-Pousou').first());
-      await page.locator('#s-esc [data-tl="eq"]').click();
-      await page.locator('#out .tl-bar').first().click();
-      await conferir('botão do popup', page.locator('#tl-pop .tl-pop-btn'));
+      // O editor do voo: o aviso de conflito (o horário de outro voo, no avião dele)
+      const linhas = page.locator('#out tbody tr:not(.win):not(.membro)', { has: page.locator('.c-aviao small') });
+      const [hora, recurso] = await linhas.nth(0).evaluate(tr => [tr.querySelector('.c-hr').textContent.trim().slice(0, 5), tr.querySelector('.c-aviao').firstChild.textContent.trim()]);
+      await linhas.nth(1).locator('[data-act="editar-voo"]').click();
+      await page.locator('#voo-recurso').selectOption(recurso);
+      await page.locator('#voo-horario').selectOption({ label: hora });
+      await expect(page.locator('#voo-avisos li.conflito').first()).toBeVisible();
+      await conferir('aviso do editor', page.locator('#voo-avisos li.conflito').first());
       await page.keyboard.press('Escape');
+      await page.locator('#s-esc [data-tl="lista"]').click();
       await aprovar(page);
       await conferir('selo da aprovação', page.locator('#selo-aprovada'));
       await irPara(page, 'alu');

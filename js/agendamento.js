@@ -1090,20 +1090,22 @@ export function avaliarAgendamento({ estado, baseComPesos, base = baseComPesos, 
     if (grupos.length) item.alternativas = grupos;
     return item;
   };
+  // Um conflito avisa e pede "Agendar mesmo assim", nunca bloqueia (decisão 4, F1g): o voo fica fixo onde o operador o pôs e
+  // a Escala marca o conflito, como em qualquer voo fixo; o editor do voo pergunta do mesmo jeito
   if (!novo) bloqueios.push({ codigo: 'sem-voo', texto: 'O voo não entrou na escala.', campo: 'agd-horario' });
   else {
     (novo.conflitoCodigos || []).forEach((codigo, i) => {
       const grupo = GRUPO_DO_CONFLITO[codigo];
-      const item = { codigo, texto: `${maiuscula(novo.conflito[i])}.`, campo: CAMPO_DO_GRUPO[grupo] || 'agd-horario' };
+      const item = { codigo, texto: `${maiuscula(novo.conflito[i])}.`, resumo: novo.conflito[i], campo: CAMPO_DO_GRUPO[grupo] || 'agd-horario', conflito: true };
       if (codigo === 'instrutor-indisponivel') item.opcoes = [{ opcao: 'disponibilizar', texto: `Marcar ${x.nm} disponível às ${hm(a)}` }];
       else comAlternativas(item, codigo === 'peso' ? ['maisLeves'] : ALTERNATIVAS_DO_GRUPO[grupo] || []);
-      bloqueios.push(item);
+      avisos.push(item);
     });
   }
   const antes = new Map(baseComPesos.out.map(o => [o.fKey, o]));
   for (const o of sim.out) {
     if (o.fKey === fKey || !o.conflito || (antes.get(o.fKey) || {}).conflito) continue;
-    bloqueios.push(comAlternativas({ codigo: 'conflito-em-outro-voo', texto: `Agendar aqui deixa o voo de ${rotuloDoVoo(o)} em conflito: ${o.conflito.join('; ')}.`, campo: 'agd-horario' },
+    avisos.push(comAlternativas({ codigo: 'conflito-em-outro-voo', texto: `Agendar aqui deixa o voo de ${rotuloDoVoo(o)} em conflito: ${o.conflito.join('; ')}.`, resumo: `conflito no voo de ${rotuloDoVoo(o)}`, campo: 'agd-horario', conflito: true },
       ['horarios', 'recursos', 'instrutores']));
   }
 

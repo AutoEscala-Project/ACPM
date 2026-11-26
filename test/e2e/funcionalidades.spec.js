@@ -2,7 +2,7 @@
 // cursos desligados, o que continua e o que fica guardado (ligar de novo traz tudo de volta). Com elas ligadas, os testes
 // de cada tela (hangar.spec.js, cursos-no-dia.spec.js, agendamento.spec.js, cursos.spec.js e os outros com comHangar ou
 // comProgresso)
-import { test, comTodasAsFuncionalidades, expect, irPara, abrirEscala, abrirHistorico, diaSeguinte, entrar, prepararContexto, appPronto, vigiarErros, tabelaDoDia, importarDaAgenda, alternarDisponivel, mudarData, botaoDaData, trilho, avisosDaData, contagemDosAvisos, contagemDoDia, AMANHA } from './fixtures.js';
+import { test, comTodasAsFuncionalidades, expect, irPara, abrirEscala, abrirHistorico, diaSeguinte, entrar, prepararContexto, appPronto, vigiarErros, tabelaDoDia, importarDaAgenda, alternarDisponivel, mudarData, botaoDaData, trilho, avisosDaData, contagemDosAvisos, contagemDoDia, AMANHA, confirmarAgendamento, refazer } from './fixtures.js';
 import { FRASES_DAS_FUNCIONALIDADES, FRASES_SEM_AS_FUNCIONALIDADES } from './manual-frases.js';
 import { instalarSupabaseFalso, documentosAtuais, CONTAS } from './supabase-falso.js';
 import { montarGlossario } from '../../js/glossario.js';
@@ -172,6 +172,7 @@ test('a data feita na ordem da frota não muda de aviões ao ser alterada no dia
   await expect(page.locator('#out')).toContainText('Maria');
   await abrirEscala(page);
   await voo(page, 'Maria').locator('select[data-f="fstatus"]').selectOption('Pousou');
+  await refazer(page);
   await expect.poll(async () => Object.values((await gravado(page)).fStatus)).toContain('Pousou');
   expect(await gravados()).toEqual(antes);
 });
@@ -305,8 +306,7 @@ test.describe('O progresso nos cursos desligado', () => {
     await page.locator('#agd-missao').selectOption('tipo:Voo Local');
     await expect(page.locator('#agd-previa ul')).toContainText('Entra:');
     await expect(page.locator('#agd-conferencia .agd-bloqueios li, #agd-conferencia .agd-avisos li')).toHaveCount(0);
-    await page.locator('#agd-confirmar').click();
-    await expect(page.locator('#dlg-agendar')).toBeHidden();
+    await confirmarAgendamento(page);
     await expect(voo(page, 'Ana').locator('.fixo')).toHaveAttribute('aria-label', 'Voo fixo: agendado na escala');
     expect((await gravado(page)).pedidos[1002].etapa).toBeUndefined();
   });
@@ -325,7 +325,7 @@ test.describe('O progresso nos cursos desligado', () => {
     await page.locator('#agd-horario').selectOption('760');
     await expect(page.locator('#agd-previa ul')).not.toContainText('calculando');
     await expect(page.locator('#agd-conferencia .agd-bloqueios li, #agd-conferencia .agd-avisos li')).toHaveCount(0);
-    await page.locator('#agd-confirmar').click();
+    await confirmarAgendamento(page);
     await expect(voo(page, 'Maria').locator('.c-hr')).toContainText('12:40');
     await expect.poll(async () => (await gravado(page)).pedidos[1000].p1).toBe(760);
     await page.reload();
@@ -358,7 +358,7 @@ test.describe('O progresso nos cursos desligado', () => {
     await page.locator('#agd-aluno').selectOption('1002');
     await page.locator('#agd-missao').selectOption('tipo:Voo Local');
     await expect(page.locator('#agd-previa ul')).toContainText('Entra:');
-    await page.locator('#agd-confirmar').click();
+    await confirmarAgendamento(page);
     await expect(voo(page, 'Ana')).toHaveCount(1);
     await expect.poll(async () => (await gravado(page)).pedidos[1002].fly).toBe(true);
     // O resultado que o voo já tinha quando a funcionalidade foi desligada
@@ -373,6 +373,7 @@ test.describe('O progresso nos cursos desligado', () => {
     await page.keyboard.press('Escape');
     await expect(voo(page, 'Ana')).toHaveCount(1);
     await voo(page, 'Ana').getByRole('button', { name: 'Tirar Ana da escala' }).click();
+    await refazer(page);
     await expect(voo(page, 'Ana')).toHaveCount(0);
     expect(await doBanco(page, 'acpm4_resultados')).toEqual(registros);
   });

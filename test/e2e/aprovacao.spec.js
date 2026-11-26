@@ -1,7 +1,7 @@
 // O dia de operação: "Aprovar escala" fixa os voos. Depois disso, uma alteração não tira ninguém do lugar:
 // o pedido novo entra em volta, e o voo fixo que ficou impossível aparece em conflito. "Reabrir" volta ao normal.
 // Em Voo, Atrasado, Pousou e Cancelado também fixam o voo.
-import { test, expect, abrir, abrirComExemplo, irPara, abrirEscala, lerEscala, abrirHistorico, alternarVem, aprovar, botaoAprovar, botaoReabrir, caixaVoa, reabrir } from './fixtures.js';
+import { test, expect, abrir, abrirComExemplo, irPara, abrirEscala, lerEscala, abrirHistorico, alternarVem, aprovar, botaoAprovar, botaoReabrir, caixaVoa, reabrir, refazer } from './fixtures.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
 
 const dia = () => cenario({ ins: [instrutor(1, 9), instrutor(2, 9)], stu: [aluno(1000, { p1: 390, p2: -1 }), aluno(1001, { p1: 500, p2: -1 }), aluno(1002, { fly: false, p1: 390, p2: -1 })] });
@@ -60,6 +60,7 @@ test.describe('Escala aprovada', () => {
     await abrirEscala(page);
     const primeiro = page.locator('#out tbody tr:not(.win)', { hasText: 'Aluno 1000' });
     await primeiro.locator('.st-sel').selectOption('Em Voo');
+    await refazer(page);
     await expect(primeiro.locator('.fixo')).toHaveCount(1);
     await expect(page.locator('#out tbody tr:not(.win) .fixo')).toHaveCount(1);
   });
@@ -80,9 +81,11 @@ test.describe('O cadeado do voo', () => {
     await abrir(page, { estado: dia() });
     await abrirEscala(page);
     await linha(page, 'Aluno 1000').locator('.st-sel').selectOption('Em Voo');
+    await refazer(page);
     const cadeado = linha(page, 'Aluno 1000').locator('.fixo');
     await expect(cadeado).toHaveAttribute('aria-label', 'Voo fixo: Em Voo');
     await linha(page, 'Aluno 1000').locator('.st-sel').selectOption('Confirmado');
+    await refazer(page);
     await expect(cadeado).toHaveCount(0);
   });
 

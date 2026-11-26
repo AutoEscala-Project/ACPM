@@ -103,7 +103,7 @@ async function percorrer(page) {
   }
   await page.locator('#s-esc [data-tl="eq"]').click();
   await page.locator('#out .tl-bar').first().click();
-  await expect(page.locator('#tl-pop')).toBeVisible();
+  await expect(page.locator('#dlg-voo')).toBeVisible();
   await nada(page);
   await page.keyboard.press('Escape');
   await abrirHistorico(page);

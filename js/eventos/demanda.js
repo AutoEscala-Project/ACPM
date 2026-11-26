@@ -1,9 +1,9 @@
 // A Demanda: pôr um aluno, a próxima missão do curso e as outras, as missões extras, tirar da escala, limpar a demanda,
 // os filtros e os campos de cada pedido
-import { gravarAlteracao, aindaNaoAbriu } from '../actions.js';
+import { gravarAlteracao, aindaNaoAbriu, fotoDaEscalaTravada, gravarNaEscala } from '../actions.js';
 import { T, GROUND_EQ_TYPE, GROUND_DURATION_H, MIS } from '../config.js';
 import { $, showToast, ligarMenu, trocarElemento } from '../dom.js';
-import { semAgendados, limparDemanda } from '../fixos.js';
+import { semAgendados, limparDemanda, fixarNoLugar } from '../fixos.js';
 import { fmtDurLabel } from '../format.js';
 import { ligada } from '../funcionalidades.js';
 import { horariosDaMissao, ajustarPreferencias } from '../horarios.js';
@@ -17,6 +17,7 @@ import { aoAcionar, aoMudarCampo, aoReverter } from './registro.js';
 import { singleDemandRowHTML, cnt, rDem, filtrarDemanda, manterNaDemanda, prepararFiltroDosCursos, conferirNenhumNaDemanda, limparFiltrosDaDemanda } from '../views/demanda.js';
 import { proximaDoPedido, outraMissaoDoPedido, botaoForaDaOrdem, confirmacaoDaMissao } from '../views/etapas.js';
 import { registrarDesenho, redesenharPorNome } from '../redesenho.js';
+import { perguntarAntesDeRefazer } from '../views/dialogo-refazer.js';
 
 // O desenho da Demanda (js/redesenho.js), pelo papel: os pedidos do dia
 registrarDesenho('pedidos-do-dia', rDem, { em: ['dados', 'consulta', 'releitura'], ordem: 60 });
@@ -190,17 +191,26 @@ aoAcionar('del-mis', (b, { id, mid }) => {
   rDem();
 });
 
+// O "✕" da Escala tira o voo da escala. Na escala aprovada, sem o motor (F1g): o voo fica fixo onde estava antes (o pino
+// fica para "↶ Restaurar" o pôr de volta no mesmo lugar), e nenhum outro voo muda
 aoAcionar('rm-fly', (b, { id, mid }) => {
   const s = stuBy(id);
   const target = getMissionTarget(id, mid);
   if (!s || !target || !target.fly) return;
+  // Na escala não aprovada, a pergunta antes (R6); "Cancelar" não muda nada
+  if (S.aprovacao) tirarDaEscala(s, target, mid);
+  else perguntarAntesDeRefazer({ resumo: `${s.nm}: sai da escala`, aoConfirmar: () => tirarDaEscala(s, target, mid) });
+});
+function tirarDaEscala(s, target, mid) {
+  const foto = fotoDaEscalaTravada();
+  if (foto) S.fixos = fixarNoLugar(S.fixos, RES, [chaveDoVoo(s.id, mid)]);
   target.fly = false;
-  gravarAlteracao('exc', `Tirado da escala: ${s.nm} (${target.mis} · ${target.eq})`, {
+  if (!gravarNaEscala(foto, 'exc', `Tirado da escala: ${s.nm} (${target.mis} · ${target.eq})`, {
     kind: 'setFly', stuId: s.id, mid, val: true, label: '↶ Restaurar'
-  });
+  })) return;
   rDem();
   showToast(`Tirado da escala: ${s.nm} (${target.mis}).`, 'ok');
-});
+}
 
 // Os campos de um pedido da demanda
 aoMudarCampo('d', (t, { f, c, id, mid }) => {
@@ -287,13 +297,16 @@ aoMudarCampo('d', (t, { f, c, id, mid }) => {
 });
 
 // "↶ Reverter" no histórico (js/eventos/historico.js): os tipos desta tela. A reversão chega validada (js/reversoes.js)
+// Na escala aprovada, sem o motor (F1g): o voo com pino volta para o pino; o pedido sem pino (tirado antes da
+// aprovação) entra no dia, e o motor o encaixa em volta dos fixos (R5)
 aoReverter('setFly', (rev, entry) => {
   const st = stuBy(rev.stuId);
   const target = getMissionTarget(rev.stuId, rev.mid || 0);
   if (st && target) {
+    const foto = fotoDaEscalaTravada();
     target.fly = rev.val;
     (rev.extras || []).forEach(m => { const ex = getMissionTarget(rev.stuId, m); if (ex) ex.fly = rev.val; });
-    gravarAlteracao(rev.val ? 'inc' : 'exc', `Revertido: ${st.nm} (${target.mis})`, null, entry.id);
+    gravarNaEscala(foto, rev.val ? 'inc' : 'exc', `Revertido: ${st.nm} (${target.mis})`, null, entry.id);
     rDem();
   }
 });
