@@ -252,7 +252,9 @@ function buscaDoVoo(estado, resultado, voo, grupo, { depoisDe = null, semInstrut
 
   return {
     tipoDoVoo,
-    mesmoHorarioDisponivel: !semHorario && !passou(voo.a) && voo.a + duracao <= limite && alunoLivre(voo.a, voo.b),
+    // O mesmo horário, com as regras dos outros (o período aberto também)
+    mesmoHorarioDisponivel: !semHorario && horarioAberto(voo.a),
+    periodoFechado: !estado.win[periodoDoMinuto(voo.a)],
     // 1. O mesmo horário e o mesmo avião, com outro instrutor (até dois)
     mesmoAviao(maximo = 2) {
       if (semAviao === voo.r) return [];
@@ -327,7 +329,7 @@ export function sugerirParaCancelado(estado, resultado, fKey, { depoisDe = null,
     opcoes: [],
     impossivel: [
       motivo === 'Meteorologia' || motivo === 'Operacional' ? `No mesmo horário: o voo foi cancelado por ${motivo.toLowerCase()} nele.`
-        : !busca.mesmoHorarioDisponivel ? `No mesmo horário: ${depoisDe !== null && voo.a <= depoisDe ? 'ele já passou' : 'o aluno não está livre nele'}.`
+        : !busca.mesmoHorarioDisponivel ? `No mesmo horário: ${depoisDe !== null && voo.a <= depoisDe ? 'ele já passou' : busca.periodoFechado ? 'o período está fechado' : 'o aluno não está livre nele'}.`
           : 'No mesmo horário: nenhum avião com um instrutor que sirva.',
       'Em outro horário: nenhum, até o fim do dia, com o avião e o instrutor livres.',
       tipos.length ? `Em outro tipo de recurso (${tipos.join(', ')}): nenhum livre.` : `Em outro tipo de recurso: a missão só voa no ${busca.tipoDoVoo}.`
