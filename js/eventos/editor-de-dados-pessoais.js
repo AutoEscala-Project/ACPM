@@ -17,10 +17,11 @@ document.addEventListener('input', e => {
   if (!e.target.matches || !e.target.matches('.dado-campo[data-dado]')) return;
   const quem = daPessoa(e.target);
   if (!quem) return;
-  // "Desfazer" aparece na hora (o desenho da seção espera o campo com o texto digitado perder o foco)
+  // "Desfazer" aparece (e some, com os campos de volta ao que está guardado) na hora: o desenho da seção espera o campo
+  // com o texto digitado perder o foco
+  const temRascunho = digitou(quem.tipo, quem.id, e.target.form);
   const botao = quem.lugar.querySelector('[data-desfazer-dados]');
-  if (botao) botao.hidden = false;
-  digitou(quem.tipo, quem.id, e.target.form);
+  if (botao) botao.hidden = !temRascunho;
 });
 
 document.addEventListener('submit', e => {

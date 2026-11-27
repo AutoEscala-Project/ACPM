@@ -117,12 +117,17 @@ async function ler(tipo, id) {
 // A escolha parou numa pessoa: a leitura, 250 ms depois (a escolha que muda antes cancela). aoMudar: o que a tela
 // redesenha quando os dados dela chegam ou mudam
 const esperas = new Map();
+// A última pessoa escolhida de cada tipo: a leitura que falhou só se repete numa escolha nova dela (ou em "Tentar de novo"),
+// não a cada desenho (cada um, com a leitura falhando, pediria outra: as tentativas não parariam)
+const escolhidas = new Map();
 export function pessoaEscolhida(tipo, id, aoMudar) {
   aoMudarDe.set(tipo, aoMudar);
+  const nova = escolhidas.get(tipo) !== id;
+  escolhidas.set(tipo, id);
   clearTimeout(esperas.get(tipo));
   if (id === null || id === undefined || !podeVerDadosPessoais()) return;
   const p = pessoa(tipo, id);
-  if (p.lida || p.lendo || p.enviando) return;
+  if (p.lida || p.lendo || p.enviando || (p.falhou && !nova)) return;
   esperas.set(tipo, setTimeout(() => ler(tipo, id), ESPERA_DA_LEITURA));
 }
 
@@ -132,16 +137,23 @@ export function lerDeNovo(tipo, id) {
   avisar(tipo);
 }
 
-// O que foi digitado: o rascunho da pessoa (os cinco campos como estão), com a versão em que ele começou
+// O que foi digitado: o rascunho da pessoa (os cinco campos como estão), com a versão em que ele começou. Os campos de
+// volta ao que está guardado (o Esc, ou o texto apagado à mão) não são rascunho. Responde se há rascunho
 export function digitou(tipo, id, form) {
   const p = pessoa(tipo, id);
-  if (!p.rascunho) p.versaoDoRascunho = p.versao;
-  p.rascunho = Object.fromEntries(CAMPOS_PESSOAIS.map(({ id: c }) => {
+  const versaoAntes = p.rascunho ? p.versaoDoRascunho : p.versao;
+  p.rascunho = null;
+  const guardados = valores(tipo, id);
+  const digitado = Object.fromEntries(CAMPOS_PESSOAIS.map(({ id: c }) => {
     const el = form.querySelector(`[data-dado="${c}"]`);
     return [c, el ? el.value : ''];
   }));
+  const igual = CAMPOS_PESSOAIS.every(({ id: c }) => (digitado[c] || '') === (guardados[c] || ''));
+  p.rascunho = igual ? null : digitado;
+  p.versaoDoRascunho = igual ? null : versaoAntes;
   p.recusa = null;
   avisar(tipo);
+  return Boolean(p.rascunho);
 }
 
 // "Desfazer": o rascunho sai

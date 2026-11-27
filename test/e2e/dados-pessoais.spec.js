@@ -135,6 +135,23 @@ test.describe('Dados pessoais (neste navegador)', () => {
     await page.close({ runBeforeUnload: true });
     await expect.poll(() => perguntou).toBe(true);
   });
+
+  // O Esc num campo digitado devolve o valor gravado também ao rascunho: o que a tela mostra é o que "Salvar" grava
+  test('o Esc num campo digitado devolve o valor gravado, e o rascunho acompanha: nada de "Desfazer", nada gravado', async ({ page }) => {
+    await abrir(page, { estado: estado() });
+    await abrirDadosDoAluno(page, 1000);
+    await campo(page, 'E-mail').fill('ana@exemplo.com');
+    await campo(page, 'E-mail').press('Escape');
+    await expect(campo(page, 'E-mail')).toHaveValue('');
+    await expect(campo(page, 'E-mail')).toBeFocused();
+    await campo(page, 'Celular').click();
+    await expect(campo(page, 'E-mail')).toHaveValue('');
+    await expect(page.locator('#det-alu-dados-desfazer')).toBeHidden();
+    await expect(linhaDoAluno(page, 1000).locator('.lista-ponto')).not.toHaveClass(/\baviso\b/);
+    await salvar(page);
+    await expect(page.locator('#toast-box .toast.ok')).toHaveText('Dados pessoais de Aluno 1000 salvos.');
+    expect(await page.evaluate(() => localStorage.getItem('acpm4_dados_pessoais') || '')).not.toContain('ana@exemplo.com');
+  });
 });
 
 test.describe('Dados pessoais (modo compartilhado)', () => {
@@ -255,20 +272,34 @@ test.describe('Dados pessoais (modo compartilhado)', () => {
     await operador.context.close();
   });
 
+  // O mesmo servidor para os dois: o gestor entra com o CANAC e o e-mail gravados pelo operador, e não os vê
   test('o operador grava pelo servidor; o gestor não vê os dados pessoais', async ({ browser }) => {
-    const operador = await entrar(browser, CONTAS.operador);
+    const servidor = criarSupabaseFalso(documentosAtuais(estado(), AMANHA));
+    const operador = await entrar(browser, CONTAS.operador, servidor);
     await abrirDadosDoAluno(operador.page, 1001);
+    await campo(operador.page, 'CANAC').fill('654321');
     await campo(operador.page, 'E-mail').fill('bia@exemplo.com');
     await salvar(operador.page);
     await expect(rodape(operador.page)).toHaveText(/^Atualizado em/);
-    expect(operador.servidor.dadosPessoais.get('aluno:1001')).toMatchObject({ email: 'bia@exemplo.com' });
+    await expect(linhaDoAluno(operador.page, 1001).locator('.lista-l2')).toContainText('CANAC 654321');
+    expect(servidor.dadosPessoais.get('aluno:1001')).toMatchObject({ canac: '654321', email: 'bia@exemplo.com' });
     await operador.context.close();
 
-    const gestor = await entrar(browser, CONTAS.gestor);
+    const gestor = await entrar(browser, CONTAS.gestor, servidor);
+    // O cliente nem pede os dados da pessoa escolhida (o servidor também os recusaria)
+    const pedidos = [];
+    gestor.page.on('request', r => { if (r.url().includes('/rest/v1/dados_pessoais')) pedidos.push(r.url()); });
     await irPara(gestor.page, 'alu');
     await abrirAluno(gestor.page, 1001);
+    await gestor.page.waitForTimeout(600);
+    expect(pedidos).toEqual([]);
     await expect(secao(gestor.page)).toHaveCount(0);
     await expect(linhaDoAluno(gestor.page, 1001).locator('.lista-l2')).not.toContainText('CANAC');
+    await expect(gestor.page.locator('#s-alu')).not.toContainText('654321');
+    await expect(gestor.page.locator('#s-alu')).not.toContainText('bia@exemplo.com');
+    // A busca não acha o CANAC
+    await gestor.page.locator('[data-flt="alu"]').fill('654321');
+    await nenhumNaLista(gestor.page, 'alu');
     expect(gestor.erros).toEqual([]);
     await gestor.context.close();
   });
@@ -310,6 +341,11 @@ test.describe('Dados pessoais (modo compartilhado)', () => {
     await expect(page.locator('#det-alu-dados-aviso')).toHaveText('Não foi possível ler os dados pessoais. Tentar de novo', { timeout: 20000 });
     await expect(campo(page, 'CPF')).toBeDisabled();
     await expect(page.locator('#det-alu-dados-salvar')).toBeDisabled();
+    // A leitura que falhou não se repete sozinha (cada desenho não pede outra): só "Tentar de novo" lê
+    const leituras = [];
+    page.on('request', r => { if (r.url().includes('/rest/v1/dados_pessoais')) leituras.push(r.url()); });
+    await page.waitForTimeout(2000);
+    expect(leituras).toEqual([]);
     servidor.falhar('/rest/v1/dados_pessoais', 0);
     await page.locator('#det-alu-dados-tentar').click();
     await expect(campo(page, 'CPF')).toBeEnabled({ timeout: 20000 });
