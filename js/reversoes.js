@@ -14,6 +14,7 @@ import { CAMPOS_DO_PEDIDO } from './dias.js';
 import { STATUS_EM_ANDAMENTO, normalizarDetalhes } from './status.js';
 import { CODIGOS_DE_REJEICAO } from './conflitos.js';
 import { esperaValida } from './escala-gravada.js';
+import { siglaValida, codigoValido } from './cursos.js';
 
 const idValido = v => Number.isInteger(v) && v > 0;
 const rotuloValido = v => typeof v === 'string' && v.length <= 40;
@@ -89,6 +90,14 @@ export function validarReversao(rev, frota) {
     const fixos = rev.fixos && typeof rev.fixos === 'object' ? normalizarFixos(rev.fixos) : {};
     if (!pedidos.every(Boolean) || !rev.soltar.every(k => typeof k === 'string' && CHAVE_DO_VOO.test(k)) || !naAprovada(rev)) return null;
     return { kind: 'restaurarEscolha', pedidos, fixos, soltar: [...rev.soltar], ...naAprovada(rev), label };
+  }
+  // "Colocar no curso até…" (Alunos): o aluno, o curso e o resultado de antes de cada missão que a colocação aprovou sem
+  // voo (o código da missão no curso; de 1 a 60), para registrar de volta
+  if (rev.kind === 'desfazerColocacao') {
+    if (!idValido(rev.aluno) || !siglaValida(rev.curso) || !Array.isArray(rev.missoes) || !rev.missoes.length || rev.missoes.length > 60) return null;
+    const missoes = rev.missoes.map(m => (objeto(m) && typeof m.missao === 'string' && codigoValido(m.missao) && ['pendente', 'reprovado', 'aprovado'].includes(m.resultado)
+      ? { missao: m.missao, resultado: m.resultado } : null));
+    return missoes.every(Boolean) ? { kind: 'desfazerColocacao', aluno: rev.aluno, curso: rev.curso, missoes, label } : null;
   }
   // Os horários de uma categoria e os pedidos que mudaram com eles
   if (rev.kind === 'restaurarHorarios') {

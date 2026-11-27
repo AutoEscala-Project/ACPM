@@ -1,8 +1,5 @@
-/* Alunos: o link para a Demanda e as etiquetas de "Não escalar com" e "Priorizar com" (o resto é do componente: css/lista.css) */
-/* Embaixo da barra, o link para a Demanda (os pedidos de cada data) */
-/* (O parágrafo é também p.h, cuja margem vinha depois em css/app.css e ganhava: o "margin: -4px 0 8px" daqui nunca valeu e saiu
-   na divisão, para a tela continuar igual) */
-p.ir-para-demanda { display: flex; flex-wrap: wrap; align-items: center; gap: 0 4px; }
+/* Alunos: as etiquetas de "Não escalar com" e "Priorizar com", os voos de "Nesta data" e os formulários dos resultados de
+   "Curso e missões" (o resto é do componente: css/lista.css) */
 .bl { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 .tg {
   display: inline-flex;
@@ -20,4 +17,24 @@ p.ir-para-demanda { display: flex; flex-wrap: wrap; align-items: center; gap: 0 
 @media (max-width: 640px) {
   .tg button { min-width: 44px; min-height: 44px; flex-shrink: 0; }
   .tg { padding-right: 0; }
+}
+
+/* "Nesta data": um voo por linha (o horário em destaque; o resultado da missão do curso embaixo, quando não cabe) */
+.voos-do-aluno { list-style: none; margin: 4px 0; padding: 0; }
+.voos-do-aluno > li { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; padding: 6px 0; border-bottom: 1px solid var(--ln); }
+.voos-do-aluno > li:last-child { border-bottom: 0; }
+.voo-quando { font-weight: 600; font-variant-numeric: tabular-nums; }
+.voo-oque { min-width: 0; overflow-wrap: anywhere; }
+.det-sem-voo { margin: 6px 0; }
+/* "Registrar resultado sem voo" e "Colocar no curso": dois blocos com borda, um embaixo do outro */
+.det-forms { display: grid; gap: 10px; margin: 8px 0 4px; }
+.det-form { margin: 0; padding: 6px 10px 8px; border: 1px solid var(--ln); border-radius: 6px; min-width: 0; }
+.det-form > legend { padding: 0 4px; font-weight: 600; }
+.det-form > .h { margin: 2px 0 4px; }
+.det-form-acoes { display: flex; justify-content: flex-end; margin-top: 4px; }
+.det-form .btn.arm { background: var(--er); color: var(--erT); }
+.det-form > .erro-campo { display: block; color: var(--er); font-size: 13px; }
+.det-form > .erro-campo:empty { display: none; }
+@media (max-width: 640px), (pointer: coarse) {
+  .det-form-acoes .btn { min-height: 44px; }
 }

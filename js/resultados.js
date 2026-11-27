@@ -39,3 +39,32 @@ export function validarRegistro({ aluno, curso, missao, resultado, data, voo = n
   if (!certo) throw Object.assign(new Error('resultado fora do formato'), { code: '23514' });
   return { aluno, curso, missao: codigo, resultado, data, voo };
 }
+
+// O último resultado do aluno no curso que vale (aprovado ou reprovado: o pendente desfaz), entre os de cada missão
+// (registros: a situação, o último registro de cada missão), pela data do resultado e depois pela hora do registro: a
+// "Missão anterior" de Alunos. null: nenhum. A lista é indexada uma vez (a tela pergunta por cada aluno)
+const indices = new WeakMap();
+export function ultimoResultadoDoAluno(registros, aluno, curso) {
+  if (!Array.isArray(registros)) return null;
+  if (!indices.has(registros)) {
+    const ultimo = new Map();
+    const depois = (r, q) => r.data > q.data || (r.data === q.data && String(r.registrado_em || '') > String(q.registrado_em || ''));
+    for (const r of registros) {
+      if (!r || !['aprovado', 'reprovado'].includes(r.resultado)) continue;
+      const k = `${r.aluno}|${r.curso}`;
+      if (!ultimo.has(k) || depois(r, ultimo.get(k))) ultimo.set(k, r);
+    }
+    indices.set(registros, ultimo);
+  }
+  return indices.get(registros).get(`${aluno}|${curso}`) || null;
+}
+
+// "Registrar resultado sem voo" (Alunos): a data do registro começa na data aberta quando ela não é depois de hoje (o app
+// abre em amanhã: um registro de amanhã passaria à frente de um voo de verdade de hoje), senão hoje. Datas AAAA-MM-DD
+export const dataDoResultadoSemVoo = (aberta, hoje) => (aberta <= hoje ? aberta : hoje);
+// O voo do aluno com a missão do curso na escala da data (o primeiro pelo horário), ou null: a missão com voo é
+// registrada no voo (o resultado do voo é achado pelo voo)
+export function vooDaMissao(out, aluno, codigo) {
+  const voos = (Array.isArray(out) ? out : []).filter(o => o.stuId === aluno && o.etapa === codigo);
+  return voos.length ? voos.reduce((p, o) => (o.a < p.a ? o : p)) : null;
+}

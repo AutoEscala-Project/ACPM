@@ -5,8 +5,8 @@
 // no dia. A próxima missão e o progresso seguem as regras do programa (js/progresso.js).
 import { MIS } from '../config.js';
 import { indiceDoPrograma, rotuloDaFase, rotuloDaMissao, percursoDoCurso, noturnosDoCurso } from '../programa.js';
-import { estadoDoAluno, proximasMissoes, progressoNoCurso, missoesDoDia, motivoDoBloqueio } from '../progresso.js';
-import { situacaoPorMissao, resultadoDoVoo } from '../resultados.js';
+import { estadoDoAluno, proximasMissoes, progressoNoCurso, missoesDoDia, motivoDoBloqueio, alvosDaColocacao, paraColocarNoCurso } from '../progresso.js';
+import { situacaoPorMissao, situacaoDa, resultadoDoVoo, ultimoResultadoDoAluno } from '../resultados.js';
 import { S, isGestor, stuBy, dadoIndisponivel, getMissionTarget } from '../state.js';
 import { esc, opts, fmtDurLabel } from '../format.js';
 import { duracaoFixaDaMissao } from '../rules.js';
@@ -194,4 +194,48 @@ export function resultadoNaEscala(o) {
     return `<span class="resultado">${codigo}${atual !== 'pendente' ? ` <span class="res res-${atual}">${atual === 'aprovado' ? 'Aprovado' : 'Reprovado'}</span>` : ''}</span>`;
   }
   return `<span class="resultado">${codigo} <select class="res-sel res-${atual}" data-resultado="${esc(o.fKey)}" aria-label="Resultado de ${esc(o.s)} em ${esc(o.etapa)}" data-dica="resultado"${dadoIndisponivel('resultados') ? ' disabled' : ''}>${opts([['pendente', 'Resultado'], ['aprovado', 'Aprovado'], ['reprovado', 'Reprovado']], atual)}</select></span>`;
+}
+
+// Em Alunos ("Curso e missões"): a missão anterior (o último resultado do aluno no curso que vale: aprovado ou reprovado,
+// pela data), a atual (a primeira liberada, pela ordem do curso; o Noturno pela noite, com os translados no rótulo) e as
+// outras liberadas ao mesmo tempo. null sem progresso
+export function missoesDoAluno(stu) {
+  const curso = cursoDoAluno(stu);
+  if (!curso) return null;
+  const anterior = ultimoResultadoDoAluno(resultados().situacao || [], stu.id, curso.sigla);
+  const { candidatas } = proximasMissoes(curso, situacao(), stu.id);
+  return { curso, anterior, atual: candidatas[0] || null, tambem: candidatas.slice(1), rotulo: m => rotuloDaMissao(curso, m) };
+}
+
+// As missões para "Registrar resultado sem voo", na ordem do curso, sem os translados do Noturno (a noite responde por
+// eles) e sem as dispensadas: as liberadas (valem na hora), as fora da ordem (com o motivo: pedem confirmação) e as que já
+// têm resultado aprovado. null sem progresso
+export function missoesParaRegistrar(stu) {
+  const curso = cursoDoAluno(stu);
+  if (!curso) return null;
+  const mapa = situacao();
+  const { porMissao } = estadoDoAluno(curso, mapa, stu.id);
+  const liberadas = [], foraDaOrdem = [], comResultado = [];
+  for (const { missoes } of alvosDaColocacao(curso)) {
+    for (const m of missoes) {
+      const estado = porMissao.get(m.id);
+      if (['liberada', 'condicional'].includes(estado.estado)) liberadas.push(m);
+      else if (estado.estado === 'aprovada') comResultado.push(m);
+      else foraDaOrdem.push({ missao: m, motivo: motivoDoBloqueio(curso, m, estado, { mapa, aluno: stu.id }) });
+    }
+  }
+  return { curso, liberadas, foraDaOrdem, comResultado, rotulo: m => rotuloDaMissao(curso, m) };
+}
+
+// "Colocar no curso até…": as missões em que ela pode parar (por fase) e, para uma delas (o código), as que a colocação
+// aprova, com o resultado de cada uma antes (para desfazer). null sem progresso
+export function colocacaoDoAluno(stu, codigo = null) {
+  const curso = cursoDoAluno(stu);
+  if (!curso) return null;
+  const alvos = alvosDaColocacao(curso).map(({ fase, missoes }) => ({ fase: rotuloDaFase(fase), missoes: missoes.map(m => ({ codigo: m.codigo, rotulo: rotuloDaMissao(curso, m), nome: m.nome })) }));
+  const alvo = codigo ? curso.missoes.find(m => m.codigo === codigo && !m.removida) : null;
+  const mapa = situacao();
+  const aprovar = alvo ? paraColocarNoCurso(curso, mapa, stu.id, alvo.id).map(id => curso.missoes.find(m => m.id === id))
+    .map(m => ({ codigo: m.codigo, antes: situacaoDa(mapa, stu.id, curso.sigla, m.codigo) })) : [];
+  return { curso: curso.sigla, alvos, alvo: alvo ? alvo.codigo : null, aprovar };
 }

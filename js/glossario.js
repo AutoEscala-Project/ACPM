@@ -132,8 +132,13 @@ const TERMOS = {
   'voa-com': { aba: 'Alunos', termo: 'Priorizar com', texto: 'Os instrutores do aluno: escolhe o instrutor, não o horário (que é da fila). A escala o põe com um deles sempre que algum pode. Sem nenhum que possa, com outro, com aviso; na disputa pelo mesmo horário, o aviso diz quem ficou com ele.' },
   'nao-escalar-com': { aba: 'Alunos', termo: 'Não escalar com', texto: 'Instrutores que nunca voam com este aluno: a escala não põe o aluno com eles por nenhum caminho; o voo posto à mão com um deles fica em conflito.' },
   progresso: { funcionalidade: 'progresso', aba: 'Alunos', termo: 'Progresso', texto: 'Missões do curso aprovadas sobre o total do programa, a fase em que o aluno está (no curso com mais de uma) e a próxima missão.' },
+  'missao-anterior': { funcionalidade: 'progresso', aba: 'Alunos', termo: 'Missão anterior', texto: 'O último resultado do aluno no curso dele, aprovado ou reprovado, pela data: a missão, o resultado, a data, quem registrou e “sem voo” quando não veio de um voo.' },
+  'missao-atual': { funcionalidade: 'progresso', aba: 'Alunos', termo: 'Missão atual', texto: 'A primeira missão liberada pelas regras do programa, na ordem do curso (o Noturno pela noite). As outras liberadas ao mesmo tempo vêm em “Também liberadas”.' },
+  'resultado-sem-voo': { funcionalidade: 'progresso', aba: 'Alunos', termo: 'Resultado sem voo', texto: 'O resultado de uma missão do curso feita fora da escala do app, com a data (até hoje). A missão que tem voo na data aberta é registrada no voo; a fora da ordem pede confirmação.' },
+  'colocar-no-curso': { funcionalidade: 'progresso', aba: 'Alunos', termo: 'Colocar no curso', texto: 'Para o aluno que chega no meio do curso: aprova sem voo as missões antes da escolhida, na ordem do curso, menos as já aprovadas e as dispensadas. O Histórico desfaz.' },
   inativo: { aba: 'Alunos', termo: 'Inativo', texto: 'Com “Ativo” desligado na linha (um clique; outro liga de novo): de hoje em diante não entra em pedido nem em voo novo. As datas passadas e os dados ficam; “Mostrar inativos” mostra a linha.' },
   'filtro-dos-cursos': { aba: 'Alunos', termo: 'Filtro dos cursos', texto: 'Mostra só os alunos de algum dos cursos marcados, em Alunos e na Demanda (as marcas valem nas duas): PP e PC mostram os alunos dos dois. “Sem curso” mostra quem não tem curso; sem nenhum marcado, mostra todos.' },
+  'nome-completo': { aba: 'Alunos', termo: 'Nome completo', texto: 'O nome civil inteiro, nos dados pessoais: não vai para a escala, o CSV, o PDF, a TV nem o Gestor, e a busca o acha. O nome da escala é o do cadastro.' },
 
   // Cursos
   'fase-do-curso': {
