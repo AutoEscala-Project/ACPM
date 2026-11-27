@@ -205,6 +205,45 @@ test.describe('Recursos: o detalhe de um recurso', () => {
     await expect(caixaDisponivel(page, 'PP-LJV')).not.toBeChecked();
   });
 
+  // B: o que o recurso exige do instrutor, em "Cadastro · todas as datas" (setExigencias): a habilitação do tipo (fixa, sem
+  // caixa), a habilitação própria (o atributo) e "Exigir também…", com as caixas do registro por grupo, como as da missão do
+  // curso (F1d); quem pode operar acompanha; o histórico desfaz
+  test('"Habilitações que o INVA precisa": do tipo, a própria, "Exigir também…", quem pode operar; o histórico desfaz', async ({ page }) => {
+    const ins = [instrutor(1, 9, { hab: ['local', 'c152', 'ifr'] }), instrutor(2, 9, { hab: ['local', 'c152'] })];
+    await abrir(page, { estado: cenario({ ins, stu: [aluno(1000)] }) });
+    await abrirRecurso(page, 'PR-VOB');
+    const exige = campoDoRecurso(page, 'exige');
+    await expect(exige).toContainText('Habilitações que o INVA precisa');
+    await expect(exige).toContainText('Do tipo: C152');
+    await expect(exige.locator('input[data-a="exige"][value="c152"]')).toHaveCount(0);
+    await expect(exige.locator('[data-atributo="habilitacaoPropria"]')).not.toBeChecked();
+    await expect(exige.locator('.quem-opera')).toHaveText('Quem pode operar: 2 INVAs');
+    await expect(exige.locator('summary')).toHaveText('Exigir também: nenhuma');
+    await exige.locator('summary').click();
+    const ifr = exige.locator('input[data-a="exige"][value="ifr"]');
+    await expect(ifr).toHaveAccessibleName('PR-VOB exige Voo IFR');
+    await ifr.check();
+    await expect(page.locator('#audit-log-list')).toContainText('PR-VOB: exige Voo IFR');
+    await expect(linhaDoRecurso(page, 'PR-VOB').locator('.lista-l2-texto')).toHaveText('C152 · Exige Voo IFR');
+    await expect(exige.locator('.quem-opera')).toHaveText('Quem pode operar: 1 INVA');
+    // A caixa continua aberta, com o foco na marca
+    await expect(exige.locator('details')).toHaveJSProperty('open', true);
+    await expect(ifr).toBeFocused();
+    await expect(exige.locator('summary')).toHaveText('Exigir também: Voo IFR');
+    await ifr.uncheck();
+    await expect(page.locator('#audit-log-list')).toContainText('PR-VOB: deixa de exigir Voo IFR');
+    await ifr.check();
+    await abrirHistorico(page);
+    await page.locator('#audit-log-list [data-act="rev-log"]').first().click();
+    await page.keyboard.press('Escape');
+    await expect(linhaDoRecurso(page, 'PR-VOB').locator('.lista-l2-texto')).toHaveText('C152');
+    await expect(exige.locator('.quem-opera')).toHaveText('Quem pode operar: 2 INVAs');
+    // A habilitação própria também fica aqui
+    await marcarAtributo(page, 'PR-VOB', 'habilitacaoPropria', true);
+    await expect(linhaDoRecurso(page, 'PR-VOB').locator('.lista-l2-texto')).toHaveText('C152 · Exige Avião PR-VOB');
+    await expect(exige.locator('.quem-opera')).toHaveText('Quem pode operar: 0 INVAs');
+  });
+
   test('"Agendar voo no <reg>" abre o agendamento com o recurso; "Próximo" anda na lista', async ({ page }) => {
     await abrir(page, { estado: cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000)] }) });
     await abrirRecurso(page, 'PR-VOB');

@@ -23,6 +23,8 @@ const VALIDAS = [
   { kind: 'setFly', stuId: 1000, mid: 0, val: true, extras: [1001, 1002], label: '↶ Restaurar' },
   { kind: 'setAv', reg: 'PR-VOB', val: true, label: '↶ Reverter' },
   { kind: 'setAtributo', reg: 'PR-CPL', atributo: 'soVfr', val: false, label: '↶ Reverter' },
+  // O que o recurso exige do instrutor (B): a lista a restaurar
+  { kind: 'setExigencias', reg: 'PR-VOB', lista: ['ifr', 'aviao:PR-VOB'], label: '↶ Reverter' },
   { kind: 'setInsOn', insId: 3, val: true, label: '↶ Reverter' },
   // O "Ativo" do cadastro (F2): o aluno, o instrutor e o recurso, e o inativo a restaurar
   { kind: 'setInativo', de: 'aluno', id: 1000, inativo: false, label: '↶ Reverter' },
@@ -103,6 +105,17 @@ describe('Reversões do histórico', () => {
     for (const atributo of [['soVfr'], JSON.parse('{"toString":null}'), 'toString', 'hasOwnProperty']) {
       assert.equal(validarReversao({ ...rev, atributo }, FROTA_INICIAL), null, JSON.stringify(atributo));
     }
+  });
+
+  // setExigencias (B): a matrícula e a lista, de até 30 ids conhecidos (os do registro e as habilitações próprias)
+  it('setExigencias: a matrícula e a lista de ids conhecidos; fora disso, não vale', () => {
+    const base = { kind: 'setExigencias', reg: 'PR-VOB', lista: ['ifr'], label: '↶ Reverter' };
+    for (const ruim of [
+      { reg: 'pr vob' }, { reg: ['PR-VOB'] }, { lista: 'ifr' }, { lista: ['nada'] }, { lista: [7] }, { lista: [ATAQUE] },
+      { lista: Array.from({ length: 31 }, () => 'ifr') }, { lista: null }
+    ]) assert.equal(validarReversao({ ...base, ...ruim }, FROTA_INICIAL), null, JSON.stringify(ruim));
+    assert.deepEqual(validarReversao({ ...base, lista: [] }, FROTA_INICIAL), { ...base, lista: [] });
+    assert.deepEqual(validarReversao({ ...base, extra: 1 }, FROTA_INICIAL), base);
   });
 
   // setInativo: de é um dos três cadastros; o id do aluno e do instrutor é um número, o do recurso, uma matrícula; o

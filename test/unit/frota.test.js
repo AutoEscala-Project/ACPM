@@ -2,7 +2,8 @@
 // config.js); o formato 11 dos dados a leva para o cadastro, e o motor e as telas a leem de lá.
 import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { FROTA_INICIAL, TIPOS_DA_FROTA, normalizarFrota, matriculasDoTipo, novoRecurso, comAtributo, salaDisponivel } from '../../js/frota.js';
+import { FROTA_INICIAL, TIPOS_DA_FROTA, normalizarFrota, matriculasDoTipo, novoRecurso, comAtributo, comExigencias, quemOpera, salaDisponivel } from '../../js/frota.js';
+import { habilitacoesDoTipo } from '../../js/habilitacoes.js';
 import { ESQUEMA, migrarCadastro } from '../../js/migracoes.js';
 import { separar, juntar } from '../../js/dias.js';
 import { ApiClient } from '../../js/storage.js';
@@ -146,6 +147,38 @@ describe('Frota: o que o recurso exige e o inativo (formato 26)', () => {
     assert.deepEqual(comAtributo({ reg: 'PR-X', tipo: 'C172', soVfr: true, inativo: true }, 'soVfr', false), { reg: 'PR-X', tipo: 'C172', inativo: true });
     // O atributo que não vale no tipo não muda nada
     assert.deepEqual(comAtributo({ reg: 'PR-X', tipo: 'C172' }, 'soParafuso', true), { reg: 'PR-X', tipo: 'C172' });
+  });
+});
+
+// B: "Habilitações que o INVA precisa", no detalhe do recurso (setExigencias): a lista exige que o operador marca, nunca com
+// a habilitação do próprio tipo (o tipo já a exige: js/habilitacoes.js), e com a habilitação própria como espelho
+describe('Frota: as habilitações que o INVA precisa (B)', () => {
+  it('habilitacoesDoTipo: a do avião, a do simulador; nenhuma para a Sala Ground', () => {
+    assert.deepEqual(['C152', 'C172', 'PA-34', 'Sim. Mono', 'Sim. Multi', 'Sala Ground', 'outro'].map(habilitacoesDoTipo),
+      [['c152'], ['c172'], ['mlte'], ['sim_mono'], ['sim_multi'], [], []]);
+  });
+
+  it('comExigencias: a lista nova, só ids conhecidos, sem repetir, na ordem do registro, sem a do tipo; a habilitação própria acompanha', () => {
+    assert.deepEqual(comExigencias({ reg: 'PR-X', tipo: 'C172', soVfr: true }, ['noturno', 'ifr', 'ifr', 'c172', 'nada', 7]),
+      { reg: 'PR-X', tipo: 'C172', soVfr: true, exige: ['ifr', 'noturno'] });
+    assert.deepEqual(comExigencias({ reg: 'PR-X', tipo: 'C172' }, ['aviao:PR-X', 'ifr']),
+      { reg: 'PR-X', tipo: 'C172', habilitacaoPropria: true, exige: ['ifr', 'aviao:PR-X'] });
+    // Vazia: sem exige (e sem a habilitação própria); o inativo continua
+    assert.deepEqual(comExigencias({ reg: 'PR-X', tipo: 'C172', habilitacaoPropria: true, exige: ['aviao:PR-X'], inativo: true }, []),
+      { reg: 'PR-X', tipo: 'C172', inativo: true });
+    // Não é uma lista: nada muda no que o recurso exige
+    assert.deepEqual(comExigencias({ reg: 'PR-X', tipo: 'C152', exige: ['ifr'] }, 'ifr'), { reg: 'PR-X', tipo: 'C152', exige: ['ifr'] });
+  });
+
+  it('quemOpera: os instrutores ativos com a habilitação do tipo e tudo o que o recurso exige', () => {
+    const ins = [
+      { id: 1, nm: 'A', hab: ['c172', 'ifr'] }, { id: 2, nm: 'B', hab: ['c172'] }, { id: 3, nm: 'C', hab: ['ifr'] },
+      { id: 4, nm: 'D', hab: ['c172', 'ifr'], inativo: true }
+    ];
+    assert.deepEqual(quemOpera(ins, { reg: 'PR-X', tipo: 'C172' }).map(i => i.id), [1, 2]);
+    assert.deepEqual(quemOpera(ins, { reg: 'PR-X', tipo: 'C172', exige: ['ifr'] }).map(i => i.id), [1]);
+    assert.deepEqual(quemOpera(ins, { reg: 'SIM', tipo: 'Sim. Mono' }).map(i => i.id), []);
+    assert.deepEqual(quemOpera(null, { reg: 'PR-X', tipo: 'C172' }), []);
   });
 });
 
