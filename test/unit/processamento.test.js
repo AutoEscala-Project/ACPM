@@ -291,7 +291,9 @@ describe('Importar as solicitações da agenda para a demanda', () => {
     const e = { ...estado(), stu: [aluno(1000, { etapa: 'PP-01', insId: 2 }, { curso: 'PP' })] };
     const resumo = importarSolicitacoes(e, [pedido(62, 1000, { janela: 'horario', horario: '13:40' }), pedido(63, 1000, { janela: 'horario', horario: '15:20' })],
       { programa: doCadastro(programa) });
-    assert.deepEqual(resumo, { novos: 1, atualizados: 1, semAluno: 0, deInativo: 0, foraDoPrograma: [], semMissaoDoCurso: [], esperamOsProgramas: 0, foraDaLista: [] });
+    // As 15:20 não estão na lista do C152 (as janelas de antes): o minuto fica, e o resumo diz
+    assert.deepEqual(resumo, { novos: 1, atualizados: 1, semAluno: 0, deInativo: 0, foraDoPrograma: [], semMissaoDoCurso: [], esperamOsProgramas: 0,
+      foraDaLista: [{ missao: 'Voo Local', recurso: 'C152', horario: '15:20' }] });
     // O instrutor escolhido continua no voo; o segundo pedido é outro voo, a missão seguinte
     assert.deepEqual([e.stu[0].etapa, e.stu[0].solicitacao, e.stu[0].jan, e.stu[0].insId], ['PP-01', 62, 'h820', 2]);
     assert.deepEqual(e.stu[0].extra.map(x => [x.mid, x.etapa, x.solicitacao, x.insId]), [[1, 'PP-02', 63, undefined]]);
