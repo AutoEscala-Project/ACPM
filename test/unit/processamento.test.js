@@ -897,11 +897,12 @@ describe('A lista de espera: o lugar do pedido cancelado', () => {
       ['exc', 'Pedidos: Aluno 1003 saiu da lista de espera das 08:20, pedido cancelado (Voo Local · era o 1º)'],
       ['exc', 'Pedidos: Aluno 1004 saiu da lista de espera das 08:20, pedido cancelado (Voo Local · era o 2º)']
     ]);
+    // O 3 numa Navegação no PA-34 às 08:20: recusado pela disponibilidade (não por lugar), ele não espera
     const b = montar();
-    delete b.e.stu[2].jan;
+    Object.assign(b.e.stu[2], { mis: 'Navegação', eq: 'PA-34' });
     const antes = motor(b.e);
     const feitoB = aplicarConciliacao(b.e, conciliarPedidos(b.e, cancelar(b.linhas, 3), amb), { antes, escalar: motor });
-    assert.deepEqual(feitoB.historico, [['exc', 'Pedidos: Aluno 1003 saiu dos pedidos da data, pedido cancelado (Voo Local · não estava na escala)']]);
+    assert.deepEqual(feitoB.historico, [['exc', 'Pedidos: Aluno 1003 saiu dos pedidos da data, pedido cancelado (Navegação · não estava na escala)']]);
     const c = montar();
     const feitoC = aplicarConciliacao(c.e, conciliarPedidos(c.e, cancelar(c.linhas, 3), amb));
     assert.deepEqual(feitoC.historico, [['exc', 'Pedidos: Aluno 1003 saiu da escala, pedido cancelado (Voo Local)']]);

@@ -305,13 +305,17 @@ function listaDeEspera(estado, resultado) {
 // O nome do instrutor, para o Histórico
 const nomeDoInstrutor = (estado, id) => ((estado.ins || []).find(x => x.id === id) || {}).nm || null;
 
-// O texto do Histórico de um pedido que saiu da escala (só nomes, nenhum dado pessoal): o motivo, a missão, onde o voo
-// estava e, quando a rodada do motor deu o lugar dele ao primeiro da lista de espera que cabia, quem entrou
-function textoDaSaida(estado, { nome, mis, motivo, linha, deixouDeSerFixo, entrou }) {
-  const onde = linha ? ` · estava às ${hm(linha.a)}–${hm(linha.b)} no ${linha.r}${nomeDoInstrutor(estado, linha.insId) ? ` com ${nomeDoInstrutor(estado, linha.insId)}` : ''}` : '';
+// O texto do Histórico de um pedido que saiu (só nomes, nenhum dado pessoal): de onde, o motivo, a missão, onde o voo
+// estava e, quando a rodada do motor deu o lugar dele ao primeiro da lista de espera que cabia, quem entrou. Com a escala
+// de antes, o pedido sem linha nela saiu da lista de espera (esperava: { minuto, lugar }) ou dos pedidos da data (não
+// estava na escala); sem ela, não se sabe, e a linha diz "saiu da escala"
+function textoDaSaida(estado, { nome, mis, motivo, linha, deixouDeSerFixo, entrou, esperava, semLinha }) {
+  const onde = linha ? ` · estava às ${hm(linha.a)}–${hm(linha.b)} no ${linha.r}${nomeDoInstrutor(estado, linha.insId) ? ` com ${nomeDoInstrutor(estado, linha.insId)}` : ''}`
+    : esperava ? ` · era o ${esperava.lugar}º` : semLinha ? ' · não estava na escala' : '';
+  const deOnde = esperava ? `da lista de espera das ${hm(esperava.minuto)}` : semLinha ? 'dos pedidos da data' : 'da escala';
   const porque = motivo === 'cancelado' ? 'pedido cancelado' : 'aprovação retirada';
   const quem = entrou ? `; no lugar entrou ${entrou.nome} (${entrou.lugar}º da lista de espera das ${hm(entrou.minuto)})` : '';
-  return `Pedidos: ${nome} saiu da escala, ${porque} (${mis}${onde}${deixouDeSerFixo ? ' · deixa de ser fixo' : ''})${quem}`;
+  return `Pedidos: ${nome} saiu ${deOnde}, ${porque} (${mis}${onde}${deixouDeSerFixo ? ' · deixa de ser fixo' : ''})${quem}`;
 }
 
 // Aplica o plano de conciliarPedidos ao estado (o único que muda estado.importadas, além da importação feita sobre ele):
@@ -331,7 +335,8 @@ export function aplicarConciliacao(estado, plano, { programa = [], situacao = []
   const guardar = id => { if (!estado.importadas.includes(id)) estado.importadas.push(id); };
   const tirar = id => { estado.importadas = estado.importadas.filter(x => x !== id); };
   // A espera e os voos de antes, lidos antes de mudar o estado (a escala de antes pode ser o próprio estado)
-  const espera = antes && escalar ? listaDeEspera(antes.estado, antes.resultado) : [];
+  const espera = antes ? listaDeEspera(antes.estado, antes.resultado) : [];
+  const naEspera = new Map(espera.map(e => [e.fKey, e]));
   const linhasDeAntes = new Map(antes ? (antes.resultado.out || []).map(o => [o.fKey, o]) : []);
   const acertos = plano.acertos || { admitir: [], esquecer: [] };
   for (const id of acertos.admitir) { guardar(id); feito.admitidas.push(id); }
@@ -362,11 +367,13 @@ export function aplicarConciliacao(estado, plano, { programa = [], situacao = []
     tirar(x.id);
     const deixouDeSerFixo = x.motivo === 'cancelado' && Object.hasOwn(estado.fixos || {}, fKey);
     if (x.motivo === 'cancelado') [estado.fixos, estado.fStatus, estado.fObs].forEach(mapa => { if (mapa) delete mapa[fKey]; });
-    feito.sairam.push({ ...x, fKey, nome: aluno.nm, mis: registro.mis, linha: linhasDeAntes.get(fKey) || null, deixouDeSerFixo });
+    const linha = linhasDeAntes.get(fKey) || null;
+    const esperava = !linha && naEspera.has(fKey) ? naEspera.get(fKey) : null;
+    feito.sairam.push({ ...x, fKey, nome: aluno.nm, mis: registro.mis, linha, deixouDeSerFixo, esperava, semLinha: Boolean(antes) && !linha && !esperava });
   }
   // O lugar de cada voo que saiu vai, na rodada do motor, ao primeiro da lista de espera do horário dele que cabe
   const livres = feito.sairam.filter(x => x.linha);
-  if (livres.length && espera.length) {
+  if (livres.length && espera.length && escalar) {
     const depois = escalar(estado);
     const linhaDepois = new Map((depois.resultado.out || []).map(o => [o.fKey, o]));
     const usados = new Set();
