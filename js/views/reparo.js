@@ -3,7 +3,7 @@
 // status). Também para o voo cancelado (aproveitar o voo: js/reparo.js, sugerirParaCancelado), com o motivo do
 // cancelamento e, sem nada, "Impossível nesta data" com o porquê. Na escala de hoje, só horários que ainda não passaram
 import { S, RES, DATA, estadoDaEscala } from '../state.js';
-import { sugerirReparos, sugerirParaCancelado, cancelamentoAproveitavel, sugestoesDoRejeitado, dataQueAindaVoa } from '../reparo.js';
+import { sugerirReparos, sugerirParaCancelado, vagasDaListaDeEspera, cancelamentoAproveitavel, sugestoesDoRejeitado, dataQueAindaVoa } from '../reparo.js';
 import { escalaDaAlteracao } from '../edicao-do-voo.js';
 import { rejeicoesDosPedidos } from '../rejeicoes.js';
 import { GRUPO_DO_CONFLITO } from '../conflitos.js';
@@ -70,12 +70,19 @@ export function abrirPainelDeReparo(fKey, { focar = true } = {}) {
 }
 
 // O voo cancelado: o que pode voar no lugar dele, cada sugestão com "Aplicar" (a que pede a confirmação com o aluno diz
-// por quê, e o primeiro clique só arma o botão); sem nada, "Impossível nesta data", com o porquê de cada grupo
+// por quê, e o primeiro clique só arma o botão); sem nada, "Impossível nesta data", com o porquê de cada grupo. Na escala
+// aprovada, depois: dar a vaga ao 1º da lista de espera do horário que cabe nela (F1h, N14; na não aprovada, o motor a dá)
 function abrirParaCancelado(voo, { focar }) {
   const painel = $('#painel-reparo');
   const estado = estadoDaEscala();
-  const { opcoes, impossivel } = sugerirParaCancelado(estado, RES, voo.fKey, { depoisDe: DATA === hojeISO() ? minutoDoDia() : null, ...motorDaTela(estado) });
-  opcoesAbertas = opcoes;
+  const depoisDe = DATA === hojeISO() ? minutoDoDia() : null;
+  const { opcoes, impossivel } = sugerirParaCancelado(estado, RES, voo.fKey, { depoisDe, ...motorDaTela(estado) });
+  const vagas = S.aprovacao ? vagasDaListaDeEspera(estado, RES, voo.fKey, { depoisDe }) : [];
+  const listaDasVagas = (inicio = 0) => `<ol class="opcoes-reparo">${vagas.map((o, i) => `<li class="${esc(o.tipo)}">
+        <span>${esc(o.texto)}</span>
+        <button type="button" class="btn sec" data-reparo-aplicar="${inicio + i}">Dar a vaga</button>
+      </li>`).join('')}</ol>`;
+  opcoesAbertas = [...opcoes, ...vagas];
   doCancelado = true;
   doRejeitado = false;
   painel.dataset.fkey = voo.fKey;
@@ -92,7 +99,8 @@ function abrirParaCancelado(voo, { focar }) {
         <span>${esc(o.texto)}${confirmacao(o)}</span>
         <button type="button" class="btn" data-reparo-aplicar="${i}"${o.confirmar ? ' data-confirmar' : ''}>Aplicar</button>
       </li>`).join('')}</ol>`
-    : `<p class="motivo-conflito"><b>Impossível nesta data.</b></p><ul class="impossivel">${impossivel.map(t => `<li>${esc(t)}</li>`).join('')}</ul>`}`;
+    : `<p class="motivo-conflito"><b>Impossível nesta data.</b></p><ul class="impossivel">${impossivel.map(t => `<li>${esc(t)}</li>`).join('')}</ul>`}
+    ${vagas.length ? `<p class="h">Ou a vaga vai para quem espera por este horário: o pedido entra no lugar que o app achou, sem mudar nenhum outro voo, e fica no histórico (dá para reverter).</p>${listaDasVagas(opcoes.length)}` : ''}`;
   if (focar || painel.hidden) abrirGaveta(painel);
   const primeiro = painel.querySelector('[data-reparo-aplicar]') || painel.querySelector('#btn-fechar-reparo');
   if (focar && primeiro) primeiro.focus();

@@ -315,6 +315,21 @@ function linhaDoFixo(state, ctx, item, pino, fKey = chaveDoVoo(item.stuId, item.
   return { linha, alerta, avisos, comAviso };
 }
 
+// O contexto da escala já montada (out): o que ela gasta, com cada linha no lugar dela, conferida como um fixo (a volta do
+// noturno e os fixos com o pino deles; as outras com o lugar delas, e, como na fila do motor, sem o status: o status só
+// muda a ocupação de um voo fixo). O motor encaixa nele, depois da compactação, os pedidos da lista de espera
+// (js/engine.js). opcoes: as da fila (filaDosPedidos)
+export function contextoDaEscalaMontada(state, out, opcoes = {}) {
+  const fixos = state.fixos && typeof state.fixos === 'object' ? state.fixos : {};
+  const semPino = new Set(out.filter(o => !o.trecho && !Object.hasOwn(fixos, o.fKey)).map(o => o.fKey));
+  const estado = { ...state, fStatus: Object.fromEntries(Object.entries(state.fStatus || {}).filter(([fKey]) => !semPino.has(fKey))) };
+  const ctx = contextoDaEscala(estado);
+  const act = filaDosPedidos(estado, ctx, opcoes);
+  const pinos = Object.fromEntries(out.filter(o => !o.trecho).map(o => [o.fKey, semPino.has(o.fKey) ? pinoDoVoo(o) : fixos[o.fKey]]));
+  conferirFixos(estado, ctx, act, [], [], pinos);
+  return ctx;
+}
+
 // Os voos fixos do dia, na ordem do motor: a volta do noturno de ontem; depois os fixos (pelo status, pela escala
 // aprovada e pelo instrutor escolhido na Escala) e, por último, os agendados na Escala, cada grupo na ordem dos pedidos:
 // o que o agendado gasta é conferido contra os outros fixos, e o conflito fica nele, nunca no voo que já estava fixo.

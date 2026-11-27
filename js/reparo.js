@@ -28,6 +28,7 @@ import { runAllocationEngine } from './engine.js';
 import { instrutoresDoPedido } from './instrutor-escolhido.js';
 import { ocupacaoDaEscala, problemaDoAluno, avioesQueServem, instrutoresQueServem } from './candidatos.js';
 import { inativoNoEstado } from './inativos.js';
+import { rejeicoesDosPedidos } from './rejeicoes.js';
 
 // A turma de Ground muda inteira; o voo, sozinho
 const doGrupo = (resultado, voo) => (voo.isGround ? resultado.out.filter(o => o.classKey === voo.classKey) : [voo]);
@@ -429,6 +430,29 @@ export function sugerirParaCancelado(estado, resultado, fKey, { depoisDe = null,
         : `Em outro tipo de recurso: a missão só voa no ${busca.tipoDoVoo}.`
     ]
   };
+}
+
+// A vaga do voo cancelado na escala aprovada (F1h, N14): o 1º da lista de espera do horário dele (o pedido com o horário
+// exato recusado só por falta de lugar nele: a espera da recusa) que o motor põe nesse horário, com o voo cancelado sem
+// ocupar nada, sem mudar nenhum outro voo da escala; senão o 2º, e assim por diante. Vem depois das sugestões do próprio
+// aluno, e só vale com um clique, porque o motivo do cancelamento (o tempo, um INVA que faltou) pode valer para o horário
+// inteiro. Na escala não aprovada, o motor dá a vaga sozinho ao refazer a escala. [{ tipo: 'espera', texto, vaga (a chave
+// do voo do pedido que espera), pino (o lugar que o motor deu a ele) }]
+export function vagasDaListaDeEspera(estado, resultado, fKey, { depoisDe = null, motor = runAllocationEngine } = {}) {
+  const voo = resultado && resultado.out.find(o => o.fKey === fKey);
+  if (!voo || voo.trecho || statusDoVoo(voo, estado.fStatus) !== 'Cancelado' || (depoisDe !== null && voo.a <= depoisDe)) return [];
+  const esperando = [...rejeicoesDosPedidos(estado, resultado)].filter(([, a]) => a.espera && a.espera.minuto === voo.a)
+    .sort((p, q) => p[1].espera.lugar - q[1].espera.lugar);
+  if (!esperando.length) return [];
+  const sim = motor(estado);
+  const depois = new Map(sim.out.map(o => [o.fKey, o]));
+  if (resultado.out.some(o => !mesmoLugar(o, depois.get(o.fKey)))) return [];
+  for (const [chave, recusa] of esperando) {
+    const novo = depois.get(chave);
+    if (!novo || novo.a !== recusa.espera.minuto) continue;
+    return [{ tipo: 'espera', texto: `Dar a vaga a ${recusa.s} (${recusa.espera.lugar}º da lista de espera das ${hm(recusa.espera.minuto)}): ${novo.ins}, ${nomeDoRecurso(novo.r)}`, vaga: chave, pino: pinoDoVoo(novo) }];
+  }
+  return [];
 }
 
 const camposDoPedido = p => Object.fromEntries(CAMPOS_DO_PEDIDO.filter(c => p[c] !== undefined).map(c => [c, p[c]]));

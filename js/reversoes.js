@@ -13,6 +13,7 @@ import { CHAVE_DO_VOO, chaveDoVoo, pedidoDoAluno } from './voo.js';
 import { CAMPOS_DO_PEDIDO } from './dias.js';
 import { STATUS_EM_ANDAMENTO, normalizarDetalhes } from './status.js';
 import { CODIGOS_DE_REJEICAO } from './conflitos.js';
+import { esperaValida } from './escala-gravada.js';
 
 const idValido = v => Number.isInteger(v) && v > 0;
 const rotuloValido = v => typeof v === 'string' && v.length <= 40;
@@ -127,8 +128,8 @@ export function validarReversao(rev, frota) {
     const recusas = rev.recusas === undefined ? [] : rev.recusas;
     if (!Array.isArray(recusas) || recusas.length > 100) return null;
     const limpas = recusas.map(r => (objeto(r) && typeof r.fKey === 'string' && CHAVE_DO_VOO.test(r.fKey) && typeof r.s === 'string' && r.s.length <= 200
-      && typeof r.m === 'string' && r.m.length <= 1000 && (r.codigo === undefined || CODIGOS_DE_REJEICAO.includes(r.codigo))
-      ? { fKey: r.fKey, s: r.s, m: r.m, ...(r.codigo === undefined ? {} : { codigo: r.codigo }) } : null));
+      && typeof r.m === 'string' && r.m.length <= 1000 && (r.codigo === undefined || CODIGOS_DE_REJEICAO.includes(r.codigo)) && (r.espera === undefined || esperaValida(r.espera))
+      ? { fKey: r.fKey, s: r.s, m: r.m, ...(r.codigo === undefined ? {} : { codigo: r.codigo }), ...(r.espera === undefined ? {} : { espera: { minuto: r.espera.minuto, lugar: r.espera.lugar } }) } : null));
     if (!pedidos.every(Boolean) || !limpas.every(Boolean)) return null;
     return { kind: 'desfazerEdicao', voos: comLugar, pedidos, recusas: limpas, label };
   }

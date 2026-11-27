@@ -3,7 +3,7 @@
 import { T, DAY, MIS, DEFAULT_LIM, GROUND_EQ_TYPE, GROUND_REG, GROUND_DURATION_MIN, GROUND_DURATION_H, AIRCRAFT_EQ_TYPES, MISSOES_LOCAIS, LIMITE_DE_VOOS_LOCAIS, MINUTOS_DO_DIA } from './config.js';
 import { FROTA_INICIAL, matriculasDoTipo, matriculasParaOVoo, motivoDoAviao, instrutorVoaNoAviao, recursoDaFrota } from './frota.js';
 import { hm, fmtH } from './format.js';
-import { isGroundMission, doesGroundGateFlight, disponibilidadeDoAluno, rotuloDaDisponibilidade, duracaoValida, duracaoFixaDaMissao, minutoConfirmado } from './rules.js';
+import { isGroundMission, doesGroundGateFlight, disponibilidadeDoAluno, disponibilidadeAtual, rotuloDaDisponibilidade, duracaoValida, duracaoFixaDaMissao, minutoConfirmado } from './rules.js';
 import { horariosDaMissao, periodoDoMinuto, minutoDaPreferencia, ordenarPelaPreferencia } from './horarios.js';
 import { podeFazer, descreverExigencias } from './habilitacoes.js';
 import { categoriaDoRodizio } from './rodizio.js';
@@ -11,7 +11,7 @@ import { intervaloEfetivo, STATUS_EM_ANDAMENTO } from './status.js';
 import { sobrepoe, livre, cabeNoSaldo, folgaAte, problemasDoInstrutor } from './viabilidade.js';
 import { reducaoNecessaria, combustivelDoVoo } from './combustivel.js';
 import { compactar, custoDaEscala } from './compactar.js';
-import { contextoDaEscala, filaDosPedidos, conferirFixos, concluirEscala, avisosDoPriorizarCom } from './conferencia.js';
+import { contextoDaEscala, contextoDaEscalaMontada, filaDosPedidos, conferirFixos, concluirEscala, avisosDoPriorizarCom } from './conferencia.js';
 import { chaveDoVoo, statusDoVoo, unidadeDoVoo, ocupacaoDoVoo, compromissoDoVoo, exigeDosVoos, pedidosDosVoos } from './voo.js';
 import { menorPrimeiro, soma, paradasEntre } from './util.js';
 
@@ -226,6 +226,16 @@ function motivoSemPar(doPar, stu, d, tipo, fc) {
   return contagens.length ? MOTIVO_SEM_PAR[contagens[0][0]] : 'sem horário possível com ele';
 }
 
+// As recusas por falta de lugar no horário: os 6 voos locais (o 7º não confirmado), os aviões e os instrutores
+const RECUSAS_QUE_ESPERAM = ['limite-de-locais', 'avioes-ocupados', 'instrutores-ocupados'];
+
+// O minuto pelo qual o pedido (d) recusado espera: o horário exato dele (o jan h<minuto>), quando a recusa é só por falta de
+// lugar nele; senão (sem horário exato, ou recusado por outro motivo), null
+function minutoDaEspera(d, recusa) {
+  const exato = disponibilidadeAtual(d.jan);
+  return typeof exato === 'string' && /^h\d+$/.test(exato) && RECUSAS_QUE_ESPERAM.includes(recusa.codigo) ? Number(exato.slice(1)) : null;
+}
+
 // O “Priorizar com” escolhe o instrutor, não o horário (F1h, N9; Pedro, 2026-11-26: a ordem da fila fica com o horário).
 // Depois de montada a escala (a divisão das horas, a compactação e a troca de matrículas), os voos que começam no mesmo
 // horário trocam de instrutor entre si, ou passam para um instrutor sem voo nele, para que o maior número de alunos voe com
@@ -335,7 +345,6 @@ export function runAllocationEngine(state, opcoes = {}) {
   const antesDoF1h = opcoes.antesDoF1h === true;
   // O que a escala gasta enquanto é montada e o que o estado diz de fixo (js/conferencia.js)
   const ctx = contextoDaEscala(state);
-  const { used, stuBusy, stuLastPick, load, eu, compromissos, insAircraft, openGroundClasses, stuGroundStatus, voosNaCategoria, locaisNoHorario } = ctx;
   const { frota, soParafuso, nomesSoParafuso, serveAoVoo, horarios, posicao, limites, historico, fimDoAluno, filas, saldo, fixos, chaveFixa } = ctx;
   const out = [], al = [];
   // A fila dos pedidos, na ordem do motor (js/conferencia.js)
@@ -347,8 +356,10 @@ export function runAllocationEngine(state, opcoes = {}) {
   // entram primeiro, no lugar deles, e o resto é encaixado em volta
   conferirFixos(state, ctx, act, out, al);
 
-  for (const item of act) {
-    if (chaveFixa(item)) continue;
+  // Encaixa o pedido da fila (item) na escala, com o que ela gasta (c: o contexto do motor, na fila; ou o da escala já
+  // montada, para a lista de espera): a linha vai para out e o semPar; os avisos e a recusa, para alertas
+  const encaixar = (item, c, alertas) => {
+    const { used, stuBusy, stuLastPick, load, eu, compromissos, insAircraft, openGroundClasses, stuGroundStatus, voosNaCategoria, locaisNoHorario } = c;
     const { stu, stuId, mid, ref: d, stuOrder } = item;
     const m = MIS[d.mis] || MIS['Voo Local'];
     const nm = stu.nm;
@@ -372,8 +383,8 @@ export function runAllocationEngine(state, opcoes = {}) {
         : !podeFazer(escolhido, d.mis, tipoDoPedido, { curso: stu.curso, exige: d.exige }) ? `${quem} não tem a habilitação de ${d.mis}${isGnd ? '' : ` no ${d.eq}`} (${descreverExigencias(d.mis, tipoDoPedido, { curso: stu.curso, exige: d.exige })})`
           : (stu.bl || []).includes(escolhido.id) ? `${quem} está em “Não escalar com” deste aluno` : null;
     if (impedimento) {
-      al.push({ t: 'err', s: labelStu, m: `Rejeitado: ${impedimento}.`, codigo: 'instrutor-escolhido' });
-      continue;
+      alertas.push({ t: 'err', s: labelStu, m: `Rejeitado: ${impedimento}.`, codigo: 'instrutor-escolhido' });
+      return;
     }
     // As passadas da busca do instrutor: só o escolhido; ou primeiro os do “Priorizar com” do aluno (o par permanente, do
     // cadastro) em todos os horários e, sem nenhum deles, todos os instrutores, com o aviso; ou todos
@@ -559,9 +570,9 @@ export function runAllocationEngine(state, opcoes = {}) {
             limite: ['limite-da-lei', escolhido ? `${quem} passaria dos limites da Lei do Aeronauta (horas de voo, jornada ou repouso) nos horários possíveis` : 'nenhum instrutor dentro dos limites da Lei do Aeronauta (horas de voo, jornada ou repouso) nos horários possíveis']
           }[key];
         }
-        al.push({ t: 'err', s: labelStu, m: `Rejeitado: ${why}.`, codigo });
+        alertas.push({ t: 'err', s: labelStu, m: `Rejeitado: ${why}.`, codigo });
       }
-      continue;
+      return;
     }
 
     // ========================================================================
@@ -583,26 +594,26 @@ export function runAllocationEngine(state, opcoes = {}) {
 
     // 1. Validação de equipamento permitido para a missão
     if (!m.eq.includes(d.eq)) {
-      al.push({
+      alertas.push({
         t: 'err',
         s: labelStu,
         m: `Rejeitado: a missão “${d.mis}” só voa em ${m.eq.join(' ou ')} (o pedido está no ${d.eq}).`,
         codigo: 'equipamento-da-missao'
       });
-      continue;
+      return;
     }
 
     // 2. Validação de Precedência de Ground School (Ground deve ocorrer antes do 1º voo da temática)
     const gatingGrounds = (stuGroundStatus[stuId] || []).filter(g => doesGroundGateFlight(g.mis, d));
     const unallocatedGround = gatingGrounds.find(g => g.allocatedEnd === null);
     if (unallocatedGround) {
-      al.push({
+      alertas.push({
         t: 'err',
         s: labelStu,
         m: `Rejeitado: o “${unallocatedGround.mis}” de hoje, que vem antes deste voo, não entrou na escala.`,
         codigo: 'ground-pendente'
       });
-      continue;
+      return;
     }
     const minStartAfterGround = gatingGrounds.reduce((maxEnd, g) => Math.max(maxEnd, g.allocatedEnd || 0), 0);
 
@@ -720,7 +731,7 @@ export function runAllocationEngine(state, opcoes = {}) {
       if (lim && (!stu.kg || !x.kg)) {
         // O aviso diz de quem é o peso que falta
         const quem = !stu.kg && !x.kg ? `Pesos do aluno e de ${x.nm} não informados` : !stu.kg ? 'Peso do aluno não informado' : `Peso de ${x.nm} não informado`;
-        al.push({ t: 'warn', s: labelStu, m: `${quem} (0 kg): verificação de limite (${lim} kg) no ${d.eq} não realizada.`, codigo: 'sem-peso', ...(stu.kg ? {} : { stuId }), ...(x.kg ? {} : { insId: x.id }) });
+        alertas.push({ t: 'warn', s: labelStu, m: `${quem} (0 kg): verificação de limite (${lim} kg) no ${d.eq} não realizada.`, codigo: 'sem-peso', ...(stu.kg ? {} : { stuId }), ...(x.kg ? {} : { insId: x.id }) });
       }
     } else {
       // O motivo, com o código que diz onde resolver
@@ -760,8 +771,21 @@ export function runAllocationEngine(state, opcoes = {}) {
           aviaoProprio: ['habilitacao-do-aviao', `os ${d.eq} livres exigem a habilitação própria deles, e ${escolhido ? `${quem} não a tem` : 'nenhum instrutor livre a tem'} (marque em Instrutores › Cadastro)`]
         }[key];
       }
-      al.push({ t: 'err', s: labelStu, m: `Rejeitado: ${why}.`, codigo });
+      alertas.push({ t: 'err', s: labelStu, m: `Rejeitado: ${why}.`, codigo });
     }
+  };
+
+  // A fila: cada pedido sem pino, na ordem do motor. A lista de espera (N14, U3; Pedro, 2026-11-26: “if it is not
+  // confirmed we form a waiting list”): o pedido com um horário exato recusado só por falta de lugar nele (os 6 voos
+  // locais, os aviões, os instrutores) espera por esse horário, na ordem da fila
+  const naEspera = [];
+  for (const item of act) {
+    if (chaveFixa(item)) continue;
+    const antes = al.length;
+    encaixar(item, ctx, al);
+    const recusa = al.slice(antes).find(a => a.t === 'err');
+    const minuto = recusa && !antesDoF1h ? minutoDaEspera(item.ref, recusa) : null;
+    if (minuto !== null) naEspera.push({ item, recusa, minuto });
   }
 
   if (opcoes.dividirHoras !== false) equalizarHoras(out, state, limites, historico);
@@ -775,6 +799,25 @@ export function runAllocationEngine(state, opcoes = {}) {
     if (custoDaEscala(compactada, state) < custoDaEscala(out, state) - 1e-9) out.splice(0, out.length, ...compactada);
   } else {
     trocarMatriculas(out);
+  }
+  // Depois da compactação, cada pedido da lista de espera tenta de novo o horário dele, na ordem da fila, com o que a escala
+  // do fim gasta (o lugar que a compactação liberou vai para ele): encaixado, a recusa sai, e os avisos dele ficam no lugar
+  // dela. Os que continuam esperando ficam com o lugar na lista do horário deles (1º, 2º…), na recusa
+  if (naEspera.length) {
+    const c = contextoDaEscalaMontada(state, out, { antesDoF1h });
+    for (const espera of [...naEspera]) {
+      const alertas = [];
+      encaixar(espera.item, c, alertas);
+      if (!out.some(o => o.fKey === chaveDoVoo(espera.item.stuId, espera.item.mid))) continue;
+      al.splice(al.indexOf(espera.recusa), 1, ...alertas.filter(a => a.t !== 'err'));
+      naEspera.splice(naEspera.indexOf(espera), 1);
+    }
+  }
+  const lugares = {};
+  for (const { recusa, minuto } of naEspera) {
+    lugares[minuto] = (lugares[minuto] || 0) + 1;
+    recusa.m = `${recusa.m.replace(/\.$/, '')}; ${lugares[minuto]}º na lista de espera das ${hm(minuto)}.`;
+    recusa.espera = { minuto, lugar: lugares[minuto] };
   }
   // O “Priorizar com” escolhe o instrutor entre os voos de cada horário, sem mudar nenhum horário nem avião (F1h): a troca
   // de matrículas não roda de novo (o avião de cada voo já serve ao instrutor novo: parearNoHorario confere a habilitação
