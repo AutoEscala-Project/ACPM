@@ -11,7 +11,7 @@ import { hm, fmtH, numeroBr, duracaoHm } from './format.js';
 import { repousoAntesDaVolta, historicoDoDia } from './noturno.js';
 import { isGroundMission, doesGroundGateFlight, disponibilidadeDoAluno, disponibilidadeAtual, duracaoValida, duracaoFixaDaMissao, minutoConfirmado } from './rules.js';
 import { categoriaDoTipo } from './categorias.js';
-import { fechamentosDoEstado, horarioAberto } from './fechamentos.js';
+import { fechamentosDoEstado, fechamentoDoMinuto } from './fechamentos.js';
 import { HORARIOS_INICIAIS, horariosDaMissao, horariosDoTipo, periodoDoMinuto, minutoDaPreferencia, fimDasMissoesDoDia, INICIOS_DOS_TEMPOS, HORARIO_DO_SOLO } from './horarios.js';
 import { ajustarFilas, categoriaDoRodizio } from './rodizio.js';
 import { avisosDeAtraso, intervaloEfetivo, STATUS_EM_ANDAMENTO } from './status.js';
@@ -233,7 +233,9 @@ function linhaDoFixo(state, ctx, item, pino, fKey = chaveDoVoo(item.stuId, item.
       if (!daMesmaTurma && !free(used, GROUND_REG, a, b)) marcar('sala-ocupada', 'a sala de Ground já está ocupada neste horário');
     }
     if (!free(stuBusy, stuId, a, b)) marcar('aluno-ocupado', 'o aluno já tem outro voo neste horário');
-    if (!horarioAberto(fechamentos, a, categoriaDoTipo(tipo))) marcar('horario-fechado', 'o horário está fechado nesta data');
+    // O intervalo fechado que pega o início, para o operador ver qual ponta conflita (Pedro, 27/11)
+    const fechado = fechamentoDoMinuto(fechamentos, a, categoriaDoTipo(tipo));
+    if (fechado) marcar('horario-fechado', `o horário está fechado nesta data (${hm(fechado.de)}–${hm(fechado.ate)})`);
     const permitidas = disponibilidadeDoAluno(d.jan);
     if (permitidas && !permitidas(a)) marcar('disponibilidade', 'o horário está fora da disponibilidade do aluno');
     if (!mudouDeTipo && b - a !== duracaoDoPedido(d, ground)) marcar('duracao', 'a duração do pedido mudou');
