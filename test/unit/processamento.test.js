@@ -1,16 +1,18 @@
-// A importação dos pedidos da agenda para a demanda da data (js/processamento.js): cada pedido vira um voo, no lugar do
-// voo da mesma missão posto à mão ou numa missão nova; o aluno de um curso entra com a missão do programa
+// O processamento dos pedidos da agenda (js/processamento.js): a conciliação dos pedidos da data com o dia (o plano e a
+// aplicação dele, a saída com a lista de espera) e a importação para a demanda da data, feita sobre ela: cada pedido vira
+// um voo, no lugar do voo da mesma missão posto à mão ou numa missão nova; o aluno de um curso entra com a missão do programa
 import { describe, it, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { importarSolicitacoes } from '../../js/processamento.js';
+import { importarSolicitacoes, conciliarPedidos, aplicarConciliacao, ficaNaEscala, missaoDaEntrada, minutosDoPedido } from '../../js/processamento.js';
+import { fixosAoAprovar } from '../../js/fixos.js';
 import { normalizarCursos } from '../../js/cursos.js';
 import { programaDoLegado, percursoDoCurso, novoCurso } from '../../js/programa.js';
 import { MODELOS } from '../../js/modelos-de-curso.js';
 import { runAllocationEngine } from '../../js/engine.js';
-import { blank } from '../../js/rules.js';
+import { blank, comAPrioridadePadrao } from '../../js/rules.js';
 import { setS } from '../../js/state.js';
 import { programaParaInferir } from '../../js/views/etapas.js';
-import { aluno, cenario, instrutor } from '../helpers/montar.js';
+import { aluno, cenario, instrutor, apenas } from '../helpers/montar.js';
 import { ligarFuncionalidades } from '../helpers/funcionalidades.js';
 
 // O cronograma do PP (o modelo do app, com o Noturno em trechos) como o curso PP, com os ids tirados da sigla e da chave
@@ -450,5 +452,279 @@ describe('Importar: a missão do curso do pedido', () => {
     // Com o progresso desligado (nenhum programa para inferir), nada é dito
     const desligado = estado([aluno(1000, { fly: false }, { curso: 'PP' })]);
     assert.deepEqual(importarSolicitacoes(desligado, [pedido(15, 1000, { recurso: 'PA-34' })], { situacao, programa: [], cursos: [PP] }).semMissaoDoCurso, []);
+  });
+});
+
+// Os minutos exatos do pedido (jan): o horário da Agenda e, com a 2ª preferência (U1), os dois
+describe('minutosDoPedido: o horário exato do pedido, um ou dois minutos', () => {
+  it('h<minuto> e h<minuto1>|h<minuto2>; o h5 dos dados antigos é a janela 5; fora do formato, nenhum', () => {
+    assert.deepEqual(minutosDoPedido('h500'), [500]);
+    assert.deepEqual(minutosDoPedido('h500|h610'), [500, 610]);
+    assert.deepEqual(minutosDoPedido('h610|h500'), [610, 500], 'o 1º é o primeiro, qualquer que seja a hora');
+    assert.deepEqual(minutosDoPedido('h5'), [minutosDoPedido('h5')[0]]);
+    assert.equal(minutosDoPedido('h5').length, 1);
+    for (const jan of ['h500|h500', 'h500|h610|h700', 'h500|', '|h500', 'manha', 'tarde', 'h2000', 'h300', '', null, undefined, 500, ['h500']]) {
+      assert.deepEqual(minutosDoPedido(jan), [], String(jan));
+    }
+  });
+});
+
+// Por que o voo de um pedido que sai fica na escala (decisão 6 do desenho): o que aconteceu fica; o atrasado e o que já
+// decolou pedem conferência
+describe('ficaNaEscala', () => {
+  const base = (extra = {}) => ({ stu: [aluno(1000)], fixos: {}, fStatus: {}, fObs: {}, resultados: { situacao: [], doDia: [] }, ...extra });
+  const amb = { data: '2026-11-11', hoje: '2026-11-10', agora: 600 };
+  it('a data passada, os resultados não lidos, o status, o resultado, nesta ordem; nada disso: sai', () => {
+    assert.equal(ficaNaEscala(base(), { ...amb, hoje: '2026-11-12' }, 1000, 0), 'data-passada');
+    assert.equal(ficaNaEscala(base({ indisponiveis: ['resultados'], fStatus: { '1000_0_1': 'Atrasado' } }), amb, 1000, 0), 'sem-os-resultados');
+    assert.equal(ficaNaEscala(base({ fStatus: { '1000_0_1': 'Atrasado' } }), amb, 1000, 0), 'atrasado');
+    for (const st of ['Em Voo', 'Pousou']) assert.equal(ficaNaEscala(base({ fStatus: { '1000_0_1': st } }), amb, 1000, 0), 'em-voo-ou-pousou');
+    assert.equal(ficaNaEscala(base({ fStatus: { '1000_0_1': 'Cancelado' } }), amb, 1000, 0), 'cancelado-na-escala');
+    const doDia = [{ id: 1, aluno: 1000, curso: 'PP', missao: 'PP-01', resultado: 'aprovado', data: '2026-11-11', voo: '1000_0_1' }];
+    assert.equal(ficaNaEscala(base({ resultados: { situacao: [], doDia } }), amb, 1000, 0), 'com-resultado');
+    for (const st of ['Pendente', 'Confirmado', undefined]) assert.equal(ficaNaEscala(base({ fStatus: st ? { '1000_0_1': st } : {} }), amb, 1000, 0), null, String(st));
+    assert.equal(ficaNaEscala(base(), {}, 1000, 0), null, 'sem as datas, nenhuma regra de data');
+  });
+  it('hoje, o voo fixo cujo início já passou: já decolou (conferir); o que ainda não, e o de outra data, saem', () => {
+    const fixo = base({ fixos: { '1000_0_1': { a: 500, b: 560, r: 'PP-LJV', insId: 1 } } });
+    const hoje = { data: '2026-11-11', hoje: '2026-11-11' };
+    assert.equal(ficaNaEscala(fixo, { ...hoje, agora: 500 }, 1000, 0), 'ja-decolou');
+    assert.equal(ficaNaEscala(fixo, { ...hoje, agora: 499 }, 1000, 0), null);
+    assert.equal(ficaNaEscala(fixo, { ...amb, agora: 900 }, 1000, 0), null, 'amanhã: o horário ainda não chegou');
+    assert.equal(ficaNaEscala(base(), { ...hoje, agora: 900 }, 1000, 0), null, 'sem voo fixo, sem horário guardado');
+  });
+});
+
+// A missão do curso com que o pedido entra (regra 8 da Agenda): a do pedido; a do operador no voo que dá lugar; a do
+// programa; nenhuma, com a nota de por quê
+describe('missaoDaEntrada', () => {
+  const programa = programaDoLegado(normalizarCursos({ PP: [{ id: 'PP-01', nome: 'A', mis: 'Voo Local', eq: 'C152', nb: 1 }, { id: 'PP-02', nome: 'B', mis: 'Navegação', eq: 'C172', nb: 2 }], PC: [], INVA: [] }), (s, c) => `${s}:${c}`);
+  const linha = (extra = {}) => ({ id: 1, aluno: 1000, missao: 'Voo Local', janela: 'horario', horario: '08:20', recurso: 'C152', horas: 1, ...extra });
+  const e = () => ({ stu: [], fStatus: {} });
+  it('a do programa, a do operador, a do pedido; nenhuma, com a nota', () => {
+    const doCurso = aluno(1000, { fly: false }, { curso: 'PP' });
+    assert.deepEqual(missaoDaEntrada(e(), doCurso, linha(), { programa }), { missao: { codigo: 'PP-01', eq: 'C152', nb: 1 }, curso: 'PP', de: 'programa', nota: null, foraDoPrograma: false });
+    const copiada = { mis: 'Voo Local', eq: 'C152', nb: 1.5, etapa: 'PP-09', cursoDaEtapa: 'PP' };
+    assert.deepEqual(missaoDaEntrada(e(), doCurso, linha(), { programa, copiada }).missao, { codigo: 'PP-09', eq: 'C152', nb: 1.5 });
+    const vinculada = linha({ missao: 'Navegação', missao_do_curso: 'x' });
+    const PP = { ...programa[0], missoes: programa[0].missoes.map(m => ({ ...m, id: m.codigo === 'PP-02' ? '00000000-0000-4000-8000-000000000002' : m.id })) };
+    const pelaAgenda = missaoDaEntrada(e(), doCurso, { ...vinculada, missao_do_curso: '00000000-0000-4000-8000-000000000002' }, { programa: [], cursos: [PP] });
+    assert.deepEqual([pelaAgenda.missao, pelaAgenda.de], [{ codigo: 'PP-02', eq: 'C172', nb: 2 }, 'pedido']);
+    assert.equal(missaoDaEntrada(e(), doCurso, { ...vinculada, missao_do_curso: '00000000-0000-4000-8000-000000000009' }, { programa: [], cursos: [PP] }).foraDoPrograma, true);
+    assert.equal(missaoDaEntrada(e(), aluno(1000, { fly: false }), linha(), { programa }).nota, 'sem-curso');
+    assert.equal(missaoDaEntrada(e(), doCurso, linha(), { programa: [] }).nota, 'sem-dados');
+    assert.equal(missaoDaEntrada(e(), aluno(1000, { fly: false }, { curso: 'PC' }), linha({ missao: 'IFR' }), { programa: programa.filter(c => c.sigla !== 'PC') }).nota, 'sem-programa');
+    assert.deepEqual(missaoDaEntrada(e(), doCurso, linha({ recurso: 'C172' }), { programa }), { missao: null, curso: 'PP', de: null, nota: 'sem-missao-do-tipo', foraDoPrograma: false });
+  });
+});
+
+// A conciliação dos pedidos da data com o dia: o plano, que não muda nada (o desenho, 2.3)
+describe('conciliarPedidos: o plano', () => {
+  const linha = (id, alunoId, extra = {}) => ({ id, data: '2026-11-11', aluno: alunoId, aluno_nome: `Aluno ${alunoId}`, missao: 'Voo Local', janela: 'horario', horario: '08:20', recurso: 'C152', horas: 1, cancelada_em: null, ...extra });
+  const aprovada = s => s.aprovada === true;
+  const amb = { data: '2026-11-11', hoje: '2026-11-10', agora: 600, aprovada };
+  // 1000 voa com o pedido 1; 1001 com o 2, fora de importadas; 1002 tem o 3 sem voar, guardado; 1003, o 4 sem voar, não
+  // guardado; 1004 sem nada; 1005 inativo; 1006 voa sem pedido
+  const estado = () => ({
+    importadas: [1, 3, 5],
+    stu: [aluno(1000, { solicitacao: 1 }), aluno(1001, { solicitacao: 2 }), aluno(1002, { fly: false, solicitacao: 3 }), aluno(1003, { fly: false, solicitacao: 4 }),
+      aluno(1004, { fly: false }), aluno(1005, { fly: false }, { inativo: true }), aluno(1006)],
+    fixos: {}, fStatus: {}, fObs: {}, resultados: { situacao: [], doDia: [] }
+  });
+
+  it('sem a regra do pedido aprovado, recusa (a importação e o app passam a sua)', () => {
+    assert.throws(() => conciliarPedidos(estado(), []), /aprovada/);
+  });
+
+  it('cada pedido aprovado: entra, é admitido, volta, ou fica como está; nada muda no estado', () => {
+    const e = estado(), copia = structuredClone(e);
+    const plano = conciliarPedidos(e, [linha(1, 1000, { aprovada: true }), linha(2, 1001, { aprovada: true }), linha(3, 1002, { aprovada: true }),
+      linha(4, 1003, { aprovada: true }), linha(6, 1004, { aprovada: true }), linha(5, 1004, { aprovada: true }), linha(7, 9999, { aprovada: true }),
+      linha(8, 1005, { aprovada: true })], { ...amb, semInativos: true });
+    assert.deepEqual(e, copia, 'o plano não muda nada');
+    assert.deepEqual(plano.entram.map(s => s.id), [6]);
+    assert.deepEqual(plano.acertos, { admitir: [2], esquecer: [] });
+    assert.deepEqual(plano.voltam, [{ id: 4, stuId: 1003, mid: 0 }]);
+    assert.deepEqual(plano.dispensados, [5], 'guardado sem registro: tirado desta data, não volta sozinho');
+    assert.deepEqual([plano.semAluno, plano.inativos], [[7], [8]]);
+    assert.deepEqual([plano.saem, plano.ficam, plano.conferir, plano.semAprovacao], [[], [], [], []]);
+    assert.equal(plano.pendente, true);
+  });
+
+  it('cancelado ou sem a aprovação, voando: sai, fica ou pede conferência; cancelado sem voar e guardado: o id é esquecido', () => {
+    const e = estado();
+    e.fStatus = { '1001_0_1': 'Pousou' };
+    e.stu[6].solicitacao = 9;
+    e.stu.push(aluno(1007, { solicitacao: 10 }));
+    e.fStatus['1007_0_1'] = 'Atrasado';
+    const plano = conciliarPedidos(e, [linha(1, 1000, { cancelada_em: '2026-11-10T12:00:00Z', aprovada: true }), linha(2, 1001, { cancelada_em: '2026-11-10T12:00:00Z' }),
+      linha(3, 1002, { cancelada_em: '2026-11-10T12:00:00Z' }), linha(9, 1006, { aprovacao_retirada_em: '2026-11-10T12:00:00Z' }),
+      linha(10, 1007, { cancelada_em: '2026-11-10T12:00:00Z' })], amb);
+    assert.deepEqual(plano.saem, [{ id: 1, stuId: 1000, mid: 0, motivo: 'cancelado' }, { id: 9, stuId: 1006, mid: 0, motivo: 'sem-aprovacao' }]);
+    assert.deepEqual(plano.ficam, [{ id: 2, stuId: 1001, mid: 0, motivo: 'cancelado', porque: 'em-voo-ou-pousou' }]);
+    assert.deepEqual(plano.conferir, [{ id: 10, stuId: 1007, mid: 0, motivo: 'cancelado', porque: 'atrasado' }]);
+    assert.deepEqual(plano.acertos.esquecer, [3]);
+    assert.equal(plano.pendente, true);
+  });
+
+  it('esperando a aprovação: o voo que está na escala fica, listado; o registro de um pedido fora das linhas lidas não é tocado', () => {
+    const plano = conciliarPedidos(estado(), [linha(1, 1000), linha(4, 1003)], amb);
+    assert.deepEqual(plano.semAprovacao, [{ id: 1, stuId: 1000, mid: 0 }]);
+    assert.deepEqual([plano.entram, plano.voltam, plano.saem, plano.pendente], [[], [], [], false]);
+    // O pedido 2 (o voo do 1001) não está nas linhas: faltar não é cancelar
+    assert.equal(conciliarPedidos(estado(), [], amb).pendente, false);
+  });
+
+  it('numa data passada nada entra, volta ou sai: só a informação', () => {
+    const passada = { ...amb, hoje: '2026-11-12' };
+    const plano = conciliarPedidos(estado(), [linha(6, 1004, { aprovada: true }), linha(4, 1003, { aprovada: true }), linha(1, 1000, { cancelada_em: '2026-11-10T12:00:00Z' })], passada);
+    assert.deepEqual([plano.entram, plano.voltam, plano.saem], [[], [], []]);
+    assert.deepEqual(plano.naoEntrou, [6]);
+    assert.deepEqual(plano.ficam, [{ id: 1, stuId: 1000, mid: 0, motivo: 'cancelado', porque: 'data-passada' }]);
+    assert.equal(plano.pendente, false);
+  });
+
+  it('so: só os pedidos da ação; religar: o aprovado guardado volta (sem registro, entra)', () => {
+    const linhas = [linha(3, 1002, { aprovada: true }), linha(5, 1004, { aprovada: true }), linha(6, 1004, { aprovada: true })];
+    const so = conciliarPedidos(estado(), linhas, { ...amb, so: [5, 3] });
+    assert.deepEqual([so.entram.map(s => s.id), so.dispensados, so.voltam], [[], [5], []]);
+    const religar = conciliarPedidos(estado(), linhas, { ...amb, so: [5, 3], religar: true });
+    assert.deepEqual([religar.entram.map(s => s.id), religar.voltam], [[5], [{ id: 3, stuId: 1002, mid: 0 }]]);
+  });
+
+  it('com a missão do curso e os programas não lidos, o pedido espera', () => {
+    const plano = conciliarPedidos(estado(), [linha(6, 1004, { aprovada: true, missao_do_curso: '00000000-0000-4000-8000-000000000001' })], { ...amb, cursos: null });
+    assert.deepEqual([plano.entram, plano.esperamOsProgramas], [[], [6]]);
+  });
+});
+
+// A aplicação do plano: o único que muda importadas; a saída tira o voo e, no cancelado, limpa a chave
+describe('aplicarConciliacao', () => {
+  const linha = (id, alunoId, extra = {}) => ({ id, data: '2026-11-11', aluno: alunoId, aluno_nome: `Aluno ${alunoId}`, missao: 'Voo Local', janela: 'horario', horario: '08:20', recurso: 'C152', horas: 1, cancelada_em: null, aprovada: true, ...extra });
+  const amb = { data: '2026-11-11', hoje: '2026-11-10', agora: 600, aprovada: s => s.aprovada === true };
+  const cancelada = { cancelada_em: '2026-11-10T12:00:00Z' };
+
+  it('entram, voltam e os acertos; aplicar de novo o plano de agora não muda nada', () => {
+    const e = { importadas: [9], stu: [aluno(1000, { fly: false }), aluno(1001, { fly: false, solicitacao: 4, pr: 5 }), aluno(1002, { solicitacao: 2 })], fixos: {}, fStatus: {}, fObs: {} };
+    const linhas = [linha(1, 1000), linha(4, 1001), linha(2, 1002), linha(9, 1003, cancelada)];
+    const feito = aplicarConciliacao(e, conciliarPedidos(e, linhas, amb));
+    assert.deepEqual(feito.entraram.map(x => [x.id, x.stuId, x.mid, x.novo]), [[1, 1000, 0, true]]);
+    assert.deepEqual([feito.voltaram, feito.admitidas, feito.esquecidas], [[{ id: 4, stuId: 1001, mid: 0 }], [2], [9]]);
+    assert.deepEqual([e.stu[0].fly, e.stu[0].solicitacao, e.stu[0].jan], [true, 1, 'h500']);
+    assert.deepEqual([e.stu[1].fly, e.stu[1].pr], [true, 5], 'o que volta continua como estava');
+    assert.deepEqual([...e.importadas].sort(), [1, 2, 4]);
+    const depois = structuredClone(e);
+    const segundo = conciliarPedidos(e, linhas, amb);
+    assert.equal(segundo.pendente, false);
+    aplicarConciliacao(e, segundo);
+    assert.deepEqual(e, depois, 'aplicar duas vezes é aplicar uma');
+  });
+
+  it('o cancelado sai com a chave limpa; o sem aprovação sai e o fixo dele dorme; cada um com a linha do Histórico', () => {
+    const e = cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, { p1: 500, p2: -1, jan: 'h500', solicitacao: 1 }), aluno(1001, { p1: 610, p2: -1, jan: 'h610', solicitacao: 2 })] });
+    e.importadas = [1, 2];
+    const antes = { estado: e, resultado: runAllocationEngine(e) };
+    e.fixos = { '1000_0_1': { a: 500, b: 560, r: antes.resultado.out[0].r, insId: 1, agendado: true }, '1001_0_1': { a: 610, b: 670, r: antes.resultado.out[1].r, insId: 1 } };
+    e.fStatus = { '1000_0_1': 'Confirmado' };
+    e.fObs = { '1000_0_1': { motivo: 'x' } };
+    const plano = conciliarPedidos(e, [linha(1, 1000, cancelada), linha(2, 1001, { aprovada: false, aprovacao_retirada_em: '2026-11-10T12:00:00Z' })], amb);
+    const feito = aplicarConciliacao(e, plano, { antes, escalar: x => ({ estado: x, resultado: runAllocationEngine(x) }) });
+    assert.deepEqual([e.stu[0].fly, e.stu[1].fly, e.importadas], [false, false, []]);
+    assert.deepEqual([Object.keys(e.fixos), Object.keys(e.fStatus), Object.keys(e.fObs)], [['1001_0_1'], [], []]);
+    assert.equal(e.stu[0].solicitacao, 1, 'o registro fica, com o pedido: o número não volta a ser dado');
+    const r0 = antes.resultado.out[0].r, r1 = antes.resultado.out[1].r;
+    assert.deepEqual(feito.historico, [
+      ['exc', `Pedidos: Aluno 1000 saiu da escala, pedido cancelado (Voo Local · estava às 08:20–09:20 no ${r0} com Instrutor 01 · deixa de ser fixo)`],
+      ['exc', `Pedidos: Aluno 1001 saiu da escala, aprovação retirada (Voo Local · estava às 10:10–11:10 no ${r1} com Instrutor 01)`]
+    ]);
+  });
+});
+
+// N14 (Pedro, 2026-11-26): um horário cheio é preenchido na ordem de registro, e os que não cabem esperam por ele nessa
+// ordem. O voo do pedido cancelado sai pela conciliação, e a rodada do motor em volta dos fixos (o padrão do R5, também na
+// escala aprovada) dá o lugar ao primeiro da lista de espera daquele horário que cabe nele; nenhum voo fixo muda. A linha
+// do Histórico da saída diz quem saiu e quem entrou
+describe('A lista de espera: o lugar do pedido cancelado', () => {
+  const linha = (id, alunoId, extra = {}) => ({ id, data: '2026-11-11', aluno: alunoId, aluno_nome: `Aluno ${alunoId}`, missao: 'Voo Local', janela: 'horario', horario: '08:20', recurso: 'C152', horas: 1, cancelada_em: null, ...extra });
+  const amb = { data: '2026-11-11', hoje: '2026-11-10', agora: 600, aprovada: s => !s.cancelada_em };
+  const cancelar = (linhas, id) => linhas.map(s => (s.id === id ? { ...s, cancelada_em: '2026-11-10T12:00:00Z' } : s));
+  const motor = x => ({ estado: x, resultado: runAllocationEngine(x) });
+  // Dois C152 e dois INVAs às 08:20, quatro pedidos de horário exato registrados nesta ordem: o 1 (Aluno 1001, que não voa
+  // com o Instrutor 02) e o 2 (Aluno 1002, que não voa com o 01) voam; o 3 (Aluno 1003, que não voa com o 01) e o 4 esperam
+  const montar = ({ aprovada = false, prioridades = {}, comMotor = motor } = {}) => {
+    const p = (id, sol, bl) => aluno(id, { p1: 500, p2: -1, jan: 'h500', solicitacao: sol, pr: prioridades[sol] || 3 }, { bl });
+    const e = cenario({ ins: [instrutor(1, 9), instrutor(2, 9)], semAeronaves: apenas('C152', 'PP-LJV', 'PR-BTB'),
+      stu: [p(1001, 1, [2]), p(1002, 2, [1]), p(1003, 3, [1]), p(1004, 4, [])] });
+    e.importadas = [1, 2, 3, 4];
+    e.fixos = {};
+    e.fObs = {};
+    const antes = comMotor(e);
+    if (aprovada) {
+      e.aprovacao = { em: '2026-11-10T18:00:00Z', por: 'Operador' };
+      e.fixos = fixosAoAprovar({}, antes.resultado.out);
+    }
+    return { e, antes: aprovada ? comMotor(e) : antes, linhas: [1, 2, 3, 4].map(id => linha(id, 1000 + id)) };
+  };
+  const linhasDe = r => r.out.map(o => [o.fKey, o.a, o.r, o.insId]);
+
+  for (const aprovada of [false, true]) {
+    const nome = aprovada ? 'na escala aprovada' : 'na escala não aprovada';
+    it(`${nome}: o lugar vai ao 1º da lista que cabe, ao 2º quando o 1º não cabe, a nenhum quando nenhum cabe`, () => {
+      // O 2 sai: o lugar dele (o PR-BTB com o Instrutor 02) serve ao 3, o 1º da lista
+      const a = montar({ aprovada });
+      assert.deepEqual(linhasDe(a.antes.resultado).map(l => l[0]), ['1001_0_1', '1002_0_1']);
+      const fixosAntes = structuredClone(a.e.fixos);
+      const feitoA = aplicarConciliacao(a.e, conciliarPedidos(a.e, cancelar(a.linhas, 2), amb), { antes: a.antes, escalar: motor });
+      const depoisA = runAllocationEngine(a.e);
+      assert.deepEqual(linhasDe(depoisA).map(l => [l[0], l[1]]), [['1001_0_1', 500], ['1003_0_1', 500]]);
+      assert.match(feitoA.historico[0][1], /^Pedidos: Aluno 1002 saiu da escala, pedido cancelado \(Voo Local · estava às 08:20–09:20 no .+ com Instrutor 02.*\); no lugar entrou Aluno 1003 \(1º da lista de espera das 08:20\)$/);
+      if (aprovada) {
+        // Nenhum voo fixo muda; o que entrou não fica fixo por esta rodada
+        const { '1002_0_1': _, ...ficam } = fixosAntes;
+        assert.deepEqual(a.e.fixos, ficam);
+        assert.deepEqual(linhasDe(depoisA)[0], linhasDe(a.antes.resultado)[0]);
+        assert.equal(Object.hasOwn(a.e.fixos, '1003_0_1'), false);
+        assert.equal(feitoA.historico[0][1].includes('deixa de ser fixo'), true);
+      }
+      // O 1 sai: o lugar dele (o Instrutor 01) não serve ao 3, que não voa com ele; vai ao 4, o 2º da lista
+      const b = montar({ aprovada });
+      const feitoB = aplicarConciliacao(b.e, conciliarPedidos(b.e, cancelar(b.linhas, 1), amb), { antes: b.antes, escalar: motor });
+      assert.deepEqual(linhasDe(runAllocationEngine(b.e)).map(l => l[0]).sort(), ['1002_0_1', '1004_0_1']);
+      assert.match(feitoB.historico[0][1], /; no lugar entrou Aluno 1004 \(2º da lista de espera das 08:20\)$/);
+      // Sem o 4 na lista (cancelado antes), o lugar do 1 não serve a ninguém
+      const c = montar({ aprovada });
+      aplicarConciliacao(c.e, conciliarPedidos(c.e, cancelar(c.linhas, 4), amb));
+      const antesC = motor(c.e);
+      const feitoC = aplicarConciliacao(c.e, conciliarPedidos(c.e, cancelar(cancelar(c.linhas, 4), 1), amb), { antes: antesC, escalar: motor });
+      assert.deepEqual(linhasDe(runAllocationEngine(c.e)).map(l => l[0]), ['1002_0_1']);
+      assert.match(feitoC.historico[0][1], /^Pedidos: Aluno 1001 saiu da escala, pedido cancelado \([^)]*\)$/, 'ninguém entrou');
+    });
+  }
+
+  it('sem a escala de antes ou sem o motor, a saída não diz quem entrou; o pedido sem horário exato não espera', () => {
+    const a = montar();
+    const feito = aplicarConciliacao(a.e, conciliarPedidos(a.e, cancelar(a.linhas, 2), amb));
+    assert.equal(feito.historico[0][1].includes('entrou'), false);
+    // O 3 sem horário exato: recusado por falta de avião, ele não espera (pode voar em outro horário quando houver)
+    const b = montar();
+    delete b.e.stu[2].jan;
+    const antes = motor(b.e);
+    const feitoB = aplicarConciliacao(b.e, conciliarPedidos(b.e, cancelar(b.linhas, 2), amb), { antes, escalar: motor });
+    assert.equal(feitoB.historico[0][1].includes('no lugar entrou Aluno 1003'), false);
+  });
+
+  // Com a prioridade desligada (js/funcionalidades.js), o motor da tela recebe todos na padrão (estadoDaEscala,
+  // comAPrioridadePadrao): a lista é a ordem de registro, qualquer que seja a prioridade guardada
+  it('com a prioridade desligada, a lista de espera é a ordem de registro; ligada, a prioridade vem antes', () => {
+    const desligada = x => { const d = comAPrioridadePadrao(x); return { estado: d, resultado: runAllocationEngine(d) }; };
+    // O 1 e o 2 com a prioridade guardada 5, o 4 com 4 e o 3 com a padrão: ligada, o 4 espera antes do 3; desligada, depois
+    const prioridades = { 1: 5, 2: 5, 4: 4 };
+    const ligadaCaso = montar({ prioridades });
+    const feitoL = aplicarConciliacao(ligadaCaso.e, conciliarPedidos(ligadaCaso.e, cancelar(ligadaCaso.linhas, 2), amb), { antes: ligadaCaso.antes, escalar: motor });
+    assert.match(feitoL.historico[0][1], /entrou Aluno 1004 \(1º da lista de espera das 08:20\)$/);
+    const desligadaCaso = montar({ prioridades, comMotor: desligada });
+    const feitoD = aplicarConciliacao(desligadaCaso.e, conciliarPedidos(desligadaCaso.e, cancelar(desligadaCaso.linhas, 2), amb), { antes: desligadaCaso.antes, escalar: desligada });
+    assert.match(feitoD.historico[0][1], /entrou Aluno 1003 \(1º da lista de espera das 08:20\)$/);
+    assert.equal(desligadaCaso.e.stu[3].pr, 4, 'a prioridade guardada não muda');
   });
 });
