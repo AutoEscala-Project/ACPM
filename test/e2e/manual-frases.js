@@ -87,7 +87,7 @@ export const FRASES_DAS_FUNCIONALIDADES = {
 export const FRASES_SEM_AS_FUNCIONALIDADES = {
   hangar: ['sai o primeiro livre na ordem da frota', 'uma parada de 2 h ou mais pesa mais', 'os horários fechados nesta data e a tabela dos aviões'],
   progresso: ['o código da missão do curso que o pedido já tem', 'para o aluno de um curso, escolha a missão na lista', 'oferece esse voo', 'e um clique leva à fase'],
-  prioridade: ['disponibilidade e duração.', 'Depois os voos e simuladores: quem', 'seguindo a ordem dos pedidos']
+  prioridade: ['horários preferidos e duração.', 'Depois os voos e simuladores: quem', 'seguindo a ordem dos pedidos']
 };
 
 export const FRASES_QUE_SAIRAM = Object.values(ANTIGAS).flat();
