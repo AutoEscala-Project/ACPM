@@ -854,3 +854,94 @@ describe('A lista de espera: o lugar do pedido cancelado', () => {
     assert.equal(desligadaCaso.e.stu[3].pr, 4, 'a prioridade guardada não muda');
   });
 });
+
+// Uma prova por propriedade (o item E do plano: 300 sequências): ações ao acaso sobre os pedidos da data e o dia (registrar,
+// aprovar, cancelar, retirar a aprovação, tirar da escala, pôr um voo à mão, fixá-lo à mão, mudar o status), cada uma
+// seguida da conciliação. Depois de cada uma: aplicar de novo não muda nada; cada pedido tem no máximo um registro; os
+// números das missões são únicos e nenhum registro some; importadas não repete; o aprovado está na escala ou foi tirado
+// dela; o cancelado só voa quando fica (o status, o resultado); o registro com o fixo posto à mão só muda o "voa"
+describe('A conciliação, por propriedade (300 sequências)', () => {
+  const sorteio = semente => () => {
+    semente = (semente + 0x6D2B79F5) | 0;
+    let t = Math.imul(semente ^ (semente >>> 15), 1 | semente);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  const amb = { data: '2026-11-11', hoje: '2026-11-10', agora: 600, aprovada: s => s.aprovada === true };
+  const HORARIOS = ['06:30', '08:20', '10:10', '12:40', '14:30'];
+  const MISSOES = ['Voo Local', 'Navegação', 'IFR'];
+  const registros = e => e.stu.flatMap(s => [s, ...(s.extra || [])].map(r => ({ s, r, mid: r.mid || 0 })));
+  const campos = r => JSON.stringify(Object.fromEntries(Object.entries(r).filter(([c]) => c !== 'fly' && c !== 'extra').sort()));
+
+  it('as invariantes valem depois de cada ação', () => {
+    let passos = 0;
+    for (let n = 0; n < 300; n++) {
+      const acaso = sorteio(n + 1);
+      const um = lista => lista[Math.floor(acaso() * lista.length)];
+      const e = { importadas: [], stu: [1000, 1001, 1002, 1003].map(id => aluno(id, { fly: false })), fixos: {}, fStatus: {}, fObs: {}, resultados: { situacao: [], doDia: [] } };
+      const linhas = [];
+      let proximo = 1;
+      for (let k = 0; k < 14; k++) {
+        const acao = um(['registrar', 'registrar', 'aprovar', 'cancelar', 'retirar', 'tirar', 'aMao', 'fixar', 'status']);
+        const linha = linhas.length ? um(linhas) : null;
+        if (acao === 'registrar') {
+          linhas.push({ id: proximo++, data: '2026-11-11', aluno: um([1000, 1001, 1002, 1003]), missao: um(MISSOES), janela: 'horario', horario: um(HORARIOS), recurso: null, horas: 1, cancelada_em: null, aprovada: acaso() < 0.6 });
+        } else if (acao === 'aprovar' && linha && !linha.cancelada_em) Object.assign(linha, { aprovada: true, aprovacao_retirada_em: null });
+        else if (acao === 'cancelar' && linha) linha.cancelada_em = '2026-11-10T12:00:00Z';
+        else if (acao === 'retirar' && linha && linha.aprovada) Object.assign(linha, { aprovada: false, aprovacao_retirada_em: '2026-11-10T12:00:00Z' });
+        else if (acao === 'tirar') { const x = um(registros(e)); if (x.r.solicitacao !== undefined) x.r.fly = false; }
+        else if (acao === 'aMao') {
+          const s = um(e.stu);
+          s.extra = [...(s.extra || []), { mid: Math.max(0, ...registros(e).filter(x => x.s === s).map(x => x.mid)) + 1, fly: true, mis: um(MISSOES), eq: 'C152', p1: 500, p2: -1, nb: 1, ss: 1, pr: um([1, 3, 5]) }];
+        } else if (acao === 'fixar') {
+          const x = um(registros(e).filter(y => y.r.fly).concat([{ s: null }]));
+          if (x.s) e.fixos[`${x.s.id}_${x.mid}_1`] = { a: 610, b: 670, r: 'PP-LJV', insId: 1, ...(acaso() < 0.5 ? { agendado: true } : { escolhido: true }) };
+        } else if (acao === 'status') {
+          const x = um(registros(e).filter(y => y.r.fly).concat([{ s: null }]));
+          if (x.s) e.fStatus[`${x.s.id}_${x.mid}_1`] = um(['Confirmado', 'Em Voo', 'Pousou', 'Cancelado', 'Atrasado']);
+        }
+        // Os registros de antes: os com fixo à mão e os sem pedido
+        const antes = registros(e).map(x => ({ ...x, fKey: `${x.s.id}_${x.mid}_1`, campos: campos(x.r), solicitacao: x.r.solicitacao }));
+        const quantosAntes = new Map(e.stu.map(s => [s.id, registros(e).filter(x => x.s === s).length]));
+        const plano = conciliarPedidos(e, linhas, amb);
+        aplicarConciliacao(e, plano);
+        passos++;
+        const ctx = `sequência ${n}, passo ${k} (${acao})`;
+        // Aplicar de novo não muda nada
+        const depois = structuredClone(e);
+        const segundo = conciliarPedidos(e, linhas, amb);
+        assert.equal(segundo.pendente, false, ctx);
+        aplicarConciliacao(e, segundo);
+        assert.deepEqual(e, depois, ctx);
+        // Um registro por pedido; números únicos, nenhum registro some
+        const todos = registros(e);
+        const comPedido = todos.filter(x => x.r.solicitacao !== undefined).map(x => x.r.solicitacao);
+        assert.equal(new Set(comPedido).size, comPedido.length, ctx);
+        for (const s of e.stu) {
+          const mids = todos.filter(x => x.s === s).map(x => x.mid);
+          assert.equal(new Set(mids).size, mids.length, ctx);
+          assert.ok(mids.every(m => Number.isInteger(m) && m >= 0 && m <= 999999), ctx);
+          assert.ok(mids.length >= quantosAntes.get(s.id), ctx);
+        }
+        assert.equal(new Set(e.importadas).size, e.importadas.length, ctx);
+        // O aprovado voa, ou foi tirado da escala (guardado); o cancelado e o retirado só voam quando ficam
+        for (const l of linhas) {
+          const x = todos.find(y => y.r.solicitacao === l.id);
+          const guardada = e.importadas.includes(l.id);
+          if (!l.cancelada_em && l.aprovada) assert.ok((x && x.r.fly && guardada) || (guardada && (!x || !x.r.fly)), `${ctx}: aprovado ${l.id}`);
+          if ((l.cancelada_em || l.aprovacao_retirada_em) && x && x.r.fly) {
+            assert.ok(['Em Voo', 'Pousou', 'Cancelado', 'Atrasado'].includes(e.fStatus[`${x.s.id}_${x.mid}_1`]), `${ctx}: ${l.id} saiu`);
+          }
+        }
+        // O registro com o fixo posto à mão só muda o "voa"; o sem pedido fica, ou dá lugar a um pedido no mesmo número
+        for (const a of antes) {
+          const pino = e.fixos[a.fKey];
+          const agora = todos.find(x => x.s === a.s && x.mid === a.mid);
+          if (pino && (pino.agendado || pino.escolhido)) assert.equal(campos(agora.r), a.campos, `${ctx}: fixo à mão ${a.fKey}`);
+          if (a.solicitacao === undefined && agora.r.solicitacao === undefined) assert.equal(campos(agora.r), a.campos, `${ctx}: sem pedido ${a.fKey}`);
+        }
+      }
+    }
+    assert.equal(passos, 300 * 14);
+  });
+});
