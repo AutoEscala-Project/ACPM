@@ -40,6 +40,7 @@
 .form-recurso-botoes { display: flex; gap: 8px; }
 /* O detalhe do recurso: o "Disponível" desta data com o que ele quer dizer, as horas até a revisão com a barra e "Revisão
    feita", os atributos */
+.det-chave { display: inline-flex; align-items: center; gap: 8px; }
 .det-chave-texto { margin-left: 8px; color: var(--mu); }
 .det-revisao { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .det-revisao .barra { margin-left: 0; }

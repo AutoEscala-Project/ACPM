@@ -345,8 +345,12 @@ test.describe('A bancada do componente de lista e detalhe', () => {
     expect(await contorno(linhaDaBancada(page, 'PR-BBB'))).toBe('none');
     const chave = linhaDaBancada(page, 'PR-AAA').locator('.lista-chave');
     const trilho = () => chave.evaluate(el => [getComputedStyle(el, '::before').backgroundColor, getComputedStyle(el, '::after').marginLeft]);
+    // A chave anda em 0,15 s (a transição de css/lista.css): cada leitura espera ela terminar (com a máquina carregada, uma
+    // leitura no meio dela via a cor de passagem, a mesma nos dois estados)
+    await page.waitForTimeout(300);
     const ligada = await trilho();
     await chave.evaluate(el => el.setAttribute('aria-checked', 'false'));
+    await page.waitForTimeout(300);
     const desligada = await trilho();
     expect(ligada[0]).not.toBe(desligada[0]);
     expect(ligada[1]).not.toBe(desligada[1]);
