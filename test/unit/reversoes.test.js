@@ -338,6 +338,24 @@ describe('Desfazer um voo agendado na Escala', () => {
     assert.equal(Object.hasOwn(estado.fStatus, '1000_2_1'), false);
   });
 
+  // A diferença 6 do E (decisão 2 do desenho): o registro que um pedido da agenda tomou (o voo do agendamento que ficou
+  // solto e deu lugar ao pedido da mesma missão) é o voo do pedido. Desfazer o agendamento tiraria o pedido da escala:
+  // recusado, também quando o pedido ficou com a mesma missão e os mesmos horários
+  it('o voo que um pedido da agenda tomou depois do agendamento não é desfeito', () => {
+    const TOMOU = 'Este voo agora é de um pedido da agenda: desfazer o tiraria da escala.';
+    const criadoComo = { fly: true, mis: 'Voo Local', eq: 'C152', p1: 870, p2: -1, nb: 1, ss: 1, pr: 3 };
+    const comCriadoComo = validarReversao({ ...NOVO, criadoComo }, FROTA_INICIAL);
+    const tomado = () => { const e = dia(); Object.assign(e.stu[0].extra[1], { solicitacao: 7, jan: 'h870' }); return e; };
+    assert.equal(motivoParaNaoDesfazer(tomado(), comCriadoComo), TOMOU);
+    assert.equal(motivoParaNaoDesfazer(tomado(), validarReversao(NOVO, FROTA_INICIAL)), TOMOU, 'sem criadoComo: o voo criado não tinha pedido da agenda');
+    // O voo movido que já era do pedido 7 antes do agendamento continua desfazível; o que passou a ser de outro, não
+    const movido = () => { const e = dia(); e.stu[0].solicitacao = 7; return e; };
+    assert.equal(motivoParaNaoDesfazer(movido(), validarReversao({ ...MOVIDO, pedido: { ...ANTES, solicitacao: 7 } }, FROTA_INICIAL)), '');
+    assert.equal(motivoParaNaoDesfazer(movido(), validarReversao(MOVIDO, FROTA_INICIAL)), TOMOU);
+    // Sem pedido da agenda no voo, como antes
+    assert.equal(motivoParaNaoDesfazer(dia(), comCriadoComo), '');
+  });
+
   // A turma de Ground aprovada (os Alunos 1000 e 1001 às 08:20): o agendamento tira o Aluno 1000 dela, e a turma (só o
   // Aluno 1001) passa para as 12:40 pelas Sugestões. Desfazer devolvia o voo fixo de antes com a chave da turma: a turma
   // ficava às 08:20 e às 12:40, e o motor ocupava a sala e o instrutor só num dos horários (outra turma entrava no outro,
