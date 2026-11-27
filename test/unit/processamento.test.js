@@ -28,7 +28,7 @@ describe('Importar as solicitações da agenda para a demanda', () => {
   it('aluno sem voo no dia: o pedido vira a missão principal', () => {
     const e = estado();
     const resumo = importarSolicitacoes(e, [pedido(1, 1000)]);
-    assert.deepEqual(resumo, { novos: 1, atualizados: 0, semAluno: 0, deInativo: 0, foraDoPrograma: [], semMissaoDoCurso: [], esperamOsProgramas: 0, foraDaLista: [] });
+    assert.deepEqual(resumo, { novos: 1, atualizados: 0, semAluno: 0, deInativo: 0, foraDoPrograma: [], semMissaoDoCurso: [], esperamOsProgramas: 0, foraDaLista: [], semOHorario: [] });
     assert.deepEqual([e.stu[0].fly, e.stu[0].mis, e.stu[0].jan, e.stu[0].p1], [true, 'Voo Local', 'tarde', 760]);
     assert.deepEqual(e.importadas, [1]);
   });
@@ -59,7 +59,7 @@ describe('Importar as solicitações da agenda para a demanda', () => {
   it('aluno já voando a mesma missão (copiada da data anterior, sem pedido da agenda): o pedido toma o lugar dela', () => {
     const e = estado();
     const resumo = importarSolicitacoes(e, [pedido(3, 1002)]);
-    assert.deepEqual(resumo, { novos: 0, atualizados: 1, semAluno: 0, deInativo: 0, foraDoPrograma: [], semMissaoDoCurso: [], esperamOsProgramas: 0, foraDaLista: [] });
+    assert.deepEqual(resumo, { novos: 0, atualizados: 1, semAluno: 0, deInativo: 0, foraDoPrograma: [], semMissaoDoCurso: [], esperamOsProgramas: 0, foraDaLista: [], semOHorario: [] });
     assert.deepEqual([e.stu[2].jan, e.stu[2].p1, e.stu[2].solicitacao, e.stu[2].extra], ['tarde', 760, 3, []]);
   });
 
@@ -67,7 +67,7 @@ describe('Importar as solicitações da agenda para a demanda', () => {
     const e = estado();
     const pedidos = [pedido(10, 1002, { janela: 'horario', horario: '10:10' }), pedido(11, 1002, { janela: 'horario', horario: '14:30' })];
     const resumo = importarSolicitacoes(e, pedidos);
-    assert.deepEqual(resumo, { novos: 1, atualizados: 1, semAluno: 0, deInativo: 0, foraDoPrograma: [], semMissaoDoCurso: [], esperamOsProgramas: 0, foraDaLista: [] });
+    assert.deepEqual(resumo, { novos: 1, atualizados: 1, semAluno: 0, deInativo: 0, foraDoPrograma: [], semMissaoDoCurso: [], esperamOsProgramas: 0, foraDaLista: [], semOHorario: [] });
     const voos = [e.stu[2], ...e.stu[2].extra];
     assert.deepEqual(voos.map(v => [v.mis, v.jan, v.solicitacao, v.fly]), [['Voo Local', 'h610', 10, true], ['Voo Local', 'h870', 11, true]]);
   });
@@ -84,7 +84,7 @@ describe('Importar as solicitações da agenda para a demanda', () => {
   it('ignora cancelados e os já importados; conta os alunos que não estão no cadastro', () => {
     const e = { ...estado(), importadas: [5] };
     const resumo = importarSolicitacoes(e, [pedido(4, 1000, { cancelada_em: '2026-11-10T13:00:00Z' }), pedido(5, 1000), pedido(6, 9999)]);
-    assert.deepEqual(resumo, { novos: 0, atualizados: 0, semAluno: 1, deInativo: 0, foraDoPrograma: [], semMissaoDoCurso: [], esperamOsProgramas: 0, foraDaLista: [] });
+    assert.deepEqual(resumo, { novos: 0, atualizados: 0, semAluno: 1, deInativo: 0, foraDoPrograma: [], semMissaoDoCurso: [], esperamOsProgramas: 0, foraDaLista: [], semOHorario: [] });
     assert.equal(e.stu[0].fly, false);
     // O pedido de quem não está no cadastro não conta como visto (entra quando o aluno for cadastrado)
     assert.deepEqual(e.importadas, [5]);
@@ -174,7 +174,7 @@ describe('Importar as solicitações da agenda para a demanda', () => {
     const situacao = percursoDoCurso(PP).missoes.slice(0, 13).map((m, i) => ({ id: i + 1, aluno: 1000, curso: 'PP', missao: m.codigo, resultado: 'aprovado' }));
     const e = { ...estado(), stu: [aluno(1000, { mis: 'Navegação', eq: 'C152', nb: 1.5, etapa: 'NAV-02', cursoDaEtapa: 'PP', insId: 2 }, { curso: 'PC' })] };
     const resumo = importarSolicitacoes(e, [pedido(37, 1000, { missao: 'Navegação', janela: 'manha' })], { situacao, programa: [PP] });
-    assert.deepEqual(resumo, { novos: 0, atualizados: 1, semAluno: 0, deInativo: 0, foraDoPrograma: [], semMissaoDoCurso: [], esperamOsProgramas: 0, foraDaLista: [] });
+    assert.deepEqual(resumo, { novos: 0, atualizados: 1, semAluno: 0, deInativo: 0, foraDoPrograma: [], semMissaoDoCurso: [], esperamOsProgramas: 0, foraDaLista: [], semOHorario: [] });
     const p = e.stu[0];
     assert.deepEqual([p.etapa, p.cursoDaEtapa, p.eq, p.nb, p.solicitacao, p.jan, p.insId, p.extra], ['NAV-02', 'PP', 'C152', 1.5, 37, 'manha', 2, []]);
     // Sem os programas lidos, a escolha também continua (ela não é inferida); a duração registrada na agenda vale mais
@@ -210,7 +210,7 @@ describe('Importar as solicitações da agenda para a demanda', () => {
     const o = runAllocationEngine(e).out[0];
     e.fixos = { '1000_0_1': { a: o.a, b: o.b, r: o.r, insId: o.insId, agendado: true } };
     const resumo = importarSolicitacoes(e, [pedido(7, 1000, { janela: 'horario', horario: '13:40', horas: 2 })]);
-    assert.deepEqual(resumo, { novos: 1, atualizados: 0, semAluno: 0, deInativo: 0, foraDoPrograma: [], semMissaoDoCurso: [], esperamOsProgramas: 0, foraDaLista: [] });
+    assert.deepEqual(resumo, { novos: 1, atualizados: 0, semAluno: 0, deInativo: 0, foraDoPrograma: [], semMissaoDoCurso: [], esperamOsProgramas: 0, foraDaLista: [], semOHorario: [] });
     const principal = e.stu[0], [extra] = principal.extra;
     assert.deepEqual([principal.p1, principal.nb, principal.etapa, principal.solicitacao], [610, 1, 'PP-07', undefined]);
     assert.deepEqual([extra.mid, extra.mis, extra.p1, extra.nb, extra.solicitacao], [1, 'Voo Local', 820, 2, 7]);
@@ -329,7 +329,7 @@ describe('Importar as solicitações da agenda para a demanda', () => {
       { programa: doCadastro(programa) });
     // As 15:20 não estão na lista do C152 (as janelas de antes): o minuto fica, e o resumo diz
     assert.deepEqual(resumo, { novos: 1, atualizados: 1, semAluno: 0, deInativo: 0, foraDoPrograma: [], semMissaoDoCurso: [], esperamOsProgramas: 0,
-      foraDaLista: [{ missao: 'Voo Local', recurso: 'C152', horario: '15:20' }] });
+      foraDaLista: [{ missao: 'Voo Local', recurso: 'C152', horario: '15:20' }], semOHorario: [] });
     // O instrutor escolhido continua no voo; o segundo pedido é outro voo, a missão seguinte
     assert.deepEqual([e.stu[0].etapa, e.stu[0].solicitacao, e.stu[0].jan, e.stu[0].insId], ['PP-01', 62, 'h820', 2]);
     assert.deepEqual(e.stu[0].extra.map(x => [x.mid, x.etapa, x.solicitacao, x.insId]), [[1, 'PP-02', 63, undefined]]);
@@ -359,6 +359,30 @@ describe('Importar as solicitações da agenda para a demanda', () => {
     const porPedido = Object.fromEntries([e.stu[0], ...e.stu[0].extra].map(p => [p.solicitacao, [p.jan, p.etapa]]));
     assert.deepEqual(porPedido, { 70: ['h610', 'PP-02'], 71: ['h500', 'PP-01'] });
     assert.deepEqual(e.importadas, [71, 70]);
+  });
+
+  // A regra 8 antes da inferência (o item E: a missão do curso do pedido, e só para o pedido sem uma a do horário do dia):
+  // o pedido que escolheu a missão do curso na Agenda entra antes do que não escolheu, qualquer que seja o horário, e a
+  // missão dele não é dada de novo (a regra 12). Na mesma importação ou em duas, o mesmo dia
+  it('a missão do curso que o pedido escolheu na Agenda não é dada ao pedido sem uma, na mesma importação ou em duas', () => {
+    // Os ids das missões como os do banco (uuid): a Agenda guarda o id em missao_do_curso
+    let n = 0;
+    const programa = programaDoLegado(normalizarCursos({ PP: ['PP-01', 'PP-02'].map(id => ({ id, nome: id, mis: 'Voo Local', eq: 'C152', nb: 1 })) }),
+      () => `00000000-0000-4000-8000-${String(++n).padStart(12, '0')}`);
+    const idPP01 = programa[0].missoes.find(m => m.codigo === 'PP-01').id;
+    const escolheu = pedido(76, 1000, { janela: 'horario', horario: '14:30', recurso: 'C152', missao_do_curso: idPP01 });
+    const semUma = pedido(77, 1000, { janela: 'horario', horario: '08:20', recurso: 'C152' });
+    const dia = () => ({ ...estado(), stu: [aluno(1000, { fly: false }, { curso: 'PP' })] });
+    const porPedido = e => Object.fromEntries([e.stu[0], ...(e.stu[0].extra || [])].map(p => [p.solicitacao, p.etapa ?? null]));
+    const juntos = dia();
+    const resumo = importarSolicitacoes(juntos, [escolheu, semUma], { programa, cursos: programa });
+    const emDuas = dia();
+    importarSolicitacoes(emDuas, [escolheu], { programa, cursos: programa });
+    importarSolicitacoes(emDuas, [escolheu, semUma], { programa, cursos: programa });
+    // A PP-01 das 14:30 não termina antes das 08:20: a das 08:20 não é a PP-01 (já está no dia) nem a PP-02 (ainda não)
+    assert.deepEqual(porPedido(juntos), { 76: 'PP-01', 77: null });
+    assert.deepEqual(porPedido(emDuas), porPedido(juntos));
+    assert.deepEqual(resumo.semMissaoDoCurso, [{ missao: 'Voo Local', recurso: 'C152' }]);
   });
 
   it('a missão de um voo do aluno que termina depois do início do pedido não conta como feita: ela não é dada de novo, e a seguinte ainda não', () => {
@@ -402,6 +426,17 @@ describe('Importar as solicitações da agenda para a demanda', () => {
     const outra = { ...estado(), horarios: { C152: [610, 700], C172: [500], sim: [500], 'PA-34': [500] }, stu: [aluno(1000, { fly: false })] };
     const r2 = importarSolicitacoes(outra, [pedido(75, 1000, { janela: 'horario', horario: '08:20', recurso: 'C152' })]);
     assert.deepEqual([outra.stu[0].jan, r2.foraDaLista], ['h500', [{ missao: 'Voo Local', recurso: 'C152', horario: '08:20' }]]);
+  });
+
+  // O pedido da Agenda antes do primeiro horário do dia (06:30): a lista de decolagens aceita as 06:00 (js/horarios.js,
+  // PRIMEIRO_HORARIO), mas o horário exato do voo começa às 06:30 (js/rules.js, minutoExato), e o pedido entra sem ele
+  // (qualquer horário). O resumo diz (semOHorario), e não o chama de "fora da lista (o horário fica)": ele não fica
+  it('o pedido das 06:00, antes do primeiro horário do dia: entra sem o horário exato, e o resumo diz, sem dizer que ele fica', () => {
+    for (const lista of [[360, 500, 610], [390, 500, 610]]) {
+      const e = { ...estado(), horarios: { C152: lista, C172: [500], sim: [500], 'PA-34': [500] }, stu: [aluno(1000, { fly: false })] };
+      const r = importarSolicitacoes(e, [pedido(78, 1000, { janela: 'horario', horario: '06:00', recurso: 'C152' })]);
+      assert.deepEqual([e.stu[0].jan, r.foraDaLista, r.semOHorario], [undefined, [], [{ missao: 'Voo Local', recurso: 'C152', horario: '06:00' }]], String(lista));
+    }
   });
 
   // A diferença 4 do E (docs/PLAN.md:424 do desenho; a regra 2.4 "Closed course"): o curso encerrado não dá missão do
@@ -492,7 +527,7 @@ describe('Importar: a missão do curso do pedido', () => {
     const e = estado([aluno(1000, { fly: false }, { curso: 'PC' })]);
     const resumo = importarSolicitacoes(e, [pedido(1, 1000, { missao_do_curso: idDe('NAV-150NM'), recurso: 'PA-34', horario: '07:30', horas: 2.5 })],
       { situacao: [], programa: programaParaInferir(), cursos: [PP] });
-    assert.deepEqual(resumo, { novos: 1, atualizados: 0, semAluno: 0, deInativo: 0, foraDoPrograma: [], semMissaoDoCurso: [], esperamOsProgramas: 0, foraDaLista: [] });
+    assert.deepEqual(resumo, { novos: 1, atualizados: 0, semAluno: 0, deInativo: 0, foraDoPrograma: [], semMissaoDoCurso: [], esperamOsProgramas: 0, foraDaLista: [], semOHorario: [] });
     const p = e.stu[0];
     assert.deepEqual([p.fly, p.mis, p.etapa, p.cursoDaEtapa, p.eq, p.nb, p.jan, p.p1, p.solicitacao], [true, 'Navegação', 'NAV-150NM', 'PP', 'PA-34', 2.5, 'h450', 450, 1]);
     // O Noturno do curso: as 4 h do dia às 17:30
@@ -518,7 +553,7 @@ describe('Importar: a missão do curso do pedido', () => {
   it('sem os programas lidos (cursos: null), o pedido com a missão do curso espera e não conta como visto', () => {
     const e = estado([aluno(1000, { fly: false }, { curso: 'PP' }), aluno(1001, { fly: false })]);
     const resumo = importarSolicitacoes(e, [pedido(16, 1000, { missao_do_curso: idDe('NAV-150NM') }), pedido(17, 1001)], { cursos: null });
-    assert.deepEqual(resumo, { novos: 1, atualizados: 0, semAluno: 0, deInativo: 0, foraDoPrograma: [], semMissaoDoCurso: [], esperamOsProgramas: 1, foraDaLista: [] });
+    assert.deepEqual(resumo, { novos: 1, atualizados: 0, semAluno: 0, deInativo: 0, foraDoPrograma: [], semMissaoDoCurso: [], esperamOsProgramas: 1, foraDaLista: [], semOHorario: [] });
     assert.deepEqual(e.importadas, [17]);
     assert.deepEqual([e.stu[0].fly, e.stu[1].fly], [false, true]);
     // Lidos, ele entra com a missão do curso dele
@@ -746,6 +781,20 @@ describe('aplicarConciliacao', () => {
     assert.deepEqual(e, depois, 'aplicar duas vezes é aplicar uma');
   });
 
+  // O plano velho aplicado de novo (um duplo clique, um tratador reentrante depois da junção) e o religar de um pedido
+  // guardado cujo registro sumiu: um registro por pedido, o id uma vez em importadas
+  it('o mesmo plano aplicado duas vezes, ou o religar do guardado sem registro, não duplica o pedido nem o id', () => {
+    const e = { importadas: [], stu: [aluno(1000, { fly: false })], fixos: {}, fStatus: {}, fObs: {} };
+    const plano = conciliarPedidos(e, [linha(7, 1000)], amb);
+    aplicarConciliacao(e, plano);
+    const depois = structuredClone(e);
+    const feito = aplicarConciliacao(e, plano);
+    assert.deepEqual([e, feito.entraram], [depois, []], 'o pedido que já tem registro não entra de novo');
+    const r = { importadas: [7], stu: [aluno(1000, { fly: false })], fixos: {}, fStatus: {}, fObs: {} };
+    aplicarConciliacao(r, conciliarPedidos(r, [linha(7, 1000)], { ...amb, religar: true }));
+    assert.deepEqual([r.importadas, r.stu[0].solicitacao, r.stu[0].fly], [[7], 7, true]);
+  });
+
   it('o cancelado sai com a chave limpa; o sem aprovação sai e o fixo dele dorme; cada um com a linha do Histórico', () => {
     const e = cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, { p1: 500, p2: -1, jan: 'h500', solicitacao: 1 }), aluno(1001, { p1: 610, p2: -1, jan: 'h610', solicitacao: 2 })] });
     e.importadas = [1, 2];
@@ -839,6 +888,25 @@ describe('A lista de espera: o lugar do pedido cancelado', () => {
     assert.equal(feitoB.historico[0][1].includes('no lugar entrou Aluno 1003'), false);
   });
 
+  // O pedido que esperava (N14: na lista de espera, sem linha na escala) não "saiu da escala": a linha diz de onde ele saiu.
+  // O que não estava na escala por outro motivo também diz; sem a escala de antes, não se sabe, e a linha é a de sempre
+  it('o pedido cancelado que esperava sai da lista de espera, e o Histórico diz isso; o que não estava na escala, também', () => {
+    const a = montar();
+    const feitoA = aplicarConciliacao(a.e, conciliarPedidos(a.e, cancelar(cancelar(a.linhas, 3), 4), amb), { antes: a.antes, escalar: motor });
+    assert.deepEqual(feitoA.historico, [
+      ['exc', 'Pedidos: Aluno 1003 saiu da lista de espera das 08:20, pedido cancelado (Voo Local · era o 1º)'],
+      ['exc', 'Pedidos: Aluno 1004 saiu da lista de espera das 08:20, pedido cancelado (Voo Local · era o 2º)']
+    ]);
+    const b = montar();
+    delete b.e.stu[2].jan;
+    const antes = motor(b.e);
+    const feitoB = aplicarConciliacao(b.e, conciliarPedidos(b.e, cancelar(b.linhas, 3), amb), { antes, escalar: motor });
+    assert.deepEqual(feitoB.historico, [['exc', 'Pedidos: Aluno 1003 saiu dos pedidos da data, pedido cancelado (Voo Local · não estava na escala)']]);
+    const c = montar();
+    const feitoC = aplicarConciliacao(c.e, conciliarPedidos(c.e, cancelar(c.linhas, 3), amb));
+    assert.deepEqual(feitoC.historico, [['exc', 'Pedidos: Aluno 1003 saiu da escala, pedido cancelado (Voo Local)']]);
+  });
+
   // Com a prioridade desligada (js/funcionalidades.js), o motor da tela recebe todos na padrão (estadoDaEscala,
   // comAPrioridadePadrao): a lista é a ordem de registro, qualquer que seja a prioridade guardada
   it('com a prioridade desligada, a lista de espera é a ordem de registro; ligada, a prioridade vem antes', () => {
@@ -857,9 +925,11 @@ describe('A lista de espera: o lugar do pedido cancelado', () => {
 
 // Uma prova por propriedade (o item E do plano: 300 sequências): ações ao acaso sobre os pedidos da data e o dia (registrar,
 // aprovar, cancelar, retirar a aprovação, tirar da escala, pôr um voo à mão, fixá-lo à mão, mudar o status), cada uma
-// seguida da conciliação. Depois de cada uma: aplicar de novo não muda nada; cada pedido tem no máximo um registro; os
-// números das missões são únicos e nenhum registro some; importadas não repete; o aprovado está na escala ou foi tirado
-// dela; o cancelado só voa quando fica (o status, o resultado); o registro com o fixo posto à mão só muda o "voa"
+// seguida da conciliação (às vezes com o religar). Depois de cada uma: aplicar de novo não muda nada; as linhas em outra
+// ordem dão o mesmo dia; cada pedido tem no máximo um registro; os números das missões são únicos e nenhum registro some;
+// importadas não repete; o aprovado tem um registro, guardado, que voa, a menos que o teste o tenha tirado da escala (e o
+// religar o põe de volta); o cancelado só voa quando fica (o status, o resultado); o registro com o fixo posto à mão só
+// muda o "voa"
 describe('A conciliação, por propriedade (300 sequências)', () => {
   const sorteio = semente => () => {
     semente = (semente + 0x6D2B79F5) | 0;
@@ -880,16 +950,21 @@ describe('A conciliação, por propriedade (300 sequências)', () => {
       const um = lista => lista[Math.floor(acaso() * lista.length)];
       const e = { importadas: [], stu: [1000, 1001, 1002, 1003].map(id => aluno(id, { fly: false })), fixos: {}, fStatus: {}, fObs: {}, resultados: { situacao: [], doDia: [] } };
       const linhas = [];
+      // Os pedidos que o teste tirou da escala (o operador): o aprovado pode não voar só por isso
+      const tirados = new Set();
       let proximo = 1;
       for (let k = 0; k < 14; k++) {
-        const acao = um(['registrar', 'registrar', 'aprovar', 'cancelar', 'retirar', 'tirar', 'aMao', 'fixar', 'status']);
+        const acao = um(['registrar', 'registrar', 'aprovar', 'cancelar', 'retirar', 'tirar', 'aMao', 'fixar', 'status', 'religar']);
         const linha = linhas.length ? um(linhas) : null;
         if (acao === 'registrar') {
           linhas.push({ id: proximo++, data: '2026-11-11', aluno: um([1000, 1001, 1002, 1003]), missao: um(MISSOES), janela: 'horario', horario: um(HORARIOS), recurso: null, horas: 1, cancelada_em: null, aprovada: acaso() < 0.6 });
         } else if (acao === 'aprovar' && linha && !linha.cancelada_em) Object.assign(linha, { aprovada: true, aprovacao_retirada_em: null });
         else if (acao === 'cancelar' && linha) linha.cancelada_em = '2026-11-10T12:00:00Z';
         else if (acao === 'retirar' && linha && linha.aprovada) Object.assign(linha, { aprovada: false, aprovacao_retirada_em: '2026-11-10T12:00:00Z' });
-        else if (acao === 'tirar') { const x = um(registros(e)); if (x.r.solicitacao !== undefined) x.r.fly = false; }
+        else if (acao === 'tirar') {
+          const x = um(registros(e));
+          if (x.r.solicitacao !== undefined && x.r.fly) { x.r.fly = false; tirados.add(x.r.solicitacao); }
+        }
         else if (acao === 'aMao') {
           const s = um(e.stu);
           s.extra = [...(s.extra || []), { mid: Math.max(0, ...registros(e).filter(x => x.s === s).map(x => x.mid)) + 1, fly: true, mis: um(MISSOES), eq: 'C152', p1: 500, p2: -1, nb: 1, ss: 1, pr: um([1, 3, 5]) }];
@@ -903,16 +978,23 @@ describe('A conciliação, por propriedade (300 sequências)', () => {
         // Os registros de antes: os com fixo à mão e os sem pedido
         const antes = registros(e).map(x => ({ ...x, fKey: `${x.s.id}_${x.mid}_1`, campos: campos(x.r), solicitacao: x.r.solicitacao }));
         const quantosAntes = new Map(e.stu.map(s => [s.id, registros(e).filter(x => x.s === s).length]));
-        const plano = conciliarPedidos(e, linhas, amb);
+        const opcoes = { ...amb, religar: acao === 'religar' };
+        const outraOrdem = structuredClone(e);
+        const plano = conciliarPedidos(e, linhas, opcoes);
         aplicarConciliacao(e, plano);
+        if (opcoes.religar) tirados.clear();
         passos++;
         const ctx = `sequência ${n}, passo ${k} (${acao})`;
         // Aplicar de novo não muda nada
         const depois = structuredClone(e);
-        const segundo = conciliarPedidos(e, linhas, amb);
+        const segundo = conciliarPedidos(e, linhas, opcoes);
         assert.equal(segundo.pendente, false, ctx);
         aplicarConciliacao(e, segundo);
         assert.deepEqual(e, depois, ctx);
+        // As linhas em outra ordem dão o mesmo dia (importadas, na ordem em que entraram, à parte)
+        aplicarConciliacao(outraOrdem, conciliarPedidos(outraOrdem, [...linhas].sort(() => acaso() - 0.5), opcoes));
+        const semAOrdem = x => ({ ...x, importadas: [...x.importadas].sort((p, q) => p - q) });
+        assert.deepEqual(semAOrdem(outraOrdem), semAOrdem(e), `${ctx}: outra ordem`);
         // Um registro por pedido; números únicos, nenhum registro some
         const todos = registros(e);
         const comPedido = todos.filter(x => x.r.solicitacao !== undefined).map(x => x.r.solicitacao);
@@ -924,11 +1006,15 @@ describe('A conciliação, por propriedade (300 sequências)', () => {
           assert.ok(mids.length >= quantosAntes.get(s.id), ctx);
         }
         assert.equal(new Set(e.importadas).size, e.importadas.length, ctx);
-        // O aprovado voa, ou foi tirado da escala (guardado); o cancelado e o retirado só voam quando ficam
+        // O aprovado tem um registro, guardado, que voa, a menos que o teste o tenha tirado da escala; o cancelado e o
+        // retirado só voam quando ficam
         for (const l of linhas) {
           const x = todos.find(y => y.r.solicitacao === l.id);
           const guardada = e.importadas.includes(l.id);
-          if (!l.cancelada_em && l.aprovada) assert.ok((x && x.r.fly && guardada) || (guardada && (!x || !x.r.fly)), `${ctx}: aprovado ${l.id}`);
+          if (!l.cancelada_em && l.aprovada) {
+            assert.ok(x && guardada, `${ctx}: aprovado ${l.id} tem o registro, guardado`);
+            assert.ok(x.r.fly || tirados.has(l.id), `${ctx}: aprovado ${l.id} voa, ou foi tirado da escala`);
+          }
           if ((l.cancelada_em || l.aprovacao_retirada_em) && x && x.r.fly) {
             assert.ok(['Em Voo', 'Pousou', 'Cancelado', 'Atrasado'].includes(e.fStatus[`${x.s.id}_${x.mid}_1`]), `${ctx}: ${l.id} saiu`);
           }
