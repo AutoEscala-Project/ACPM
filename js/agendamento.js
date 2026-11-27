@@ -1133,7 +1133,7 @@ export function avaliarAgendamento({ estado, baseComPesos, base = baseComPesos, 
     }
   }
   // O voo de hoje que muda de lugar: a disponibilidade do aluno que não inclui o horário novo sai do pedido; o voo fixo
-  // pela escala aprovada (ou pelo status) deixa o lugar em que estava fixo
+  // pela escala aprovada (ou pelo status, ou o Noturno) deixa o lugar em que estava fixo
   if (movido) {
     const { jan } = movido.pedido;
     const permitidas = disponibilidadeDoAluno(jan);
@@ -1142,7 +1142,7 @@ export function avaliarAgendamento({ estado, baseComPesos, base = baseComPesos, 
     }
     const pino = (estado.fixos || {})[fKey];
     const muda = movido.voo && (movido.voo.a !== a || movido.voo.r !== r || movido.voo.insId !== x.id);
-    if (muda && pino && !pino.agendado && (estado.aprovacao || fixoPeloStatus(fKey, estado.fStatus))) {
+    if (muda && pino && !pino.agendado && (estado.aprovacao || fixoPeloStatus(fKey, estado.fStatus) || pino.noturno)) {
       const porque = motivoDoFixo(fKey, { fStatus: estado.fStatus, aprovacao: estado.aprovacao, voo: movido.voo, fixos: estado.fixos }).replace(/^Voo fixo: /, '');
       avisos.push({
         codigo: 'fixo-muda', texto: `O voo de ${stu.nm} está fixo (${porque}): ele sai das ${hm(movido.voo.a)} ${noRecurso(movido.voo.r)} e fica fixo no horário novo.`,

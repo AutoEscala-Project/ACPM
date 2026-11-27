@@ -8,7 +8,7 @@ import { createHash } from 'node:crypto';
 import { separar } from '../../js/dias.js';
 import { migrarCadastro, migrarDia } from '../../js/migracoes.js';
 import { criarAgenda, FUNCOES_DA_AGENDA } from './falso/agenda.js';
-import { criarDadosPessoais, veDadosPessoais } from './falso/dados-pessoais.js';
+import { criarDadosPessoais, veDadosPessoais, soAsColunas } from './falso/dados-pessoais.js';
 import { quadroDoDia } from '../../js/quadro.js';
 import { acumularHoras } from '../../js/limites.js';
 import { situacaoPorMissao, validarRegistro } from '../../js/resultados.js';
@@ -330,7 +330,7 @@ export function criarSupabaseFalso({ documentos = {}, dias = {}, historico: hist
       if (url.pathname === '/rest/v1/resultados_de_missao') return responder(200, leEscala ? consultar(resultados, url) : []);
       if (url.pathname === '/rest/v1/dados_pessoais') {
         if (!veDados) return responder(200, []);
-        return responder(200, consultar(pessoais.linhas(), url).map(({ tipo, ...linha }) => linha));
+        return responder(200, soAsColunas(consultar(pessoais.linhas(), url), url));
       }
     }
 

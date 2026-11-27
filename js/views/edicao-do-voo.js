@@ -6,7 +6,7 @@
 import { S, RES, DATA, isGestor, estadoDaEscala, programaLido } from '../state.js';
 import { vooParaEditar, opcoesDoVoo, avisosDaEdicao, mudancasDoVoo } from '../edicao-do-voo.js';
 import { FLIGHT_STATUSES } from '../config.js';
-import { esc, hm, fmtH, pesoBr, hojeISO } from '../format.js';
+import { esc, hm, fmtH, pesoBr, hojeISO, somarDias } from '../format.js';
 import { dataCurta } from './dialogo-refazer.js';
 import { nomeDoRecurso } from '../categorias.js';
 import { textoDoDetalhe, rotuloDoStatus, STATUS_COM_DETALHE } from '../status.js';
@@ -66,7 +66,7 @@ const nomeDoAluno = id => (S.stu.find(s => s.id === id) || {}).nm || `Aluno ${id
 function avisosDeAgora() {
   const { voo, valores } = aberto;
   if (!mudancasDoVoo(voo, valores).alguma && valores.missao) return [];
-  return avisosDaEdicao(estadoDaEscala(), RES, voo, valores, { aprovada: Boolean(S.aprovacao), programa: programaLido() });
+  return avisosDaEdicao(estadoDaEscala(), RES, voo, valores, { aprovada: Boolean(S.aprovacao), programa: programaLido(), diaSeguinte: somarDias(DATA, 1) });
 }
 
 export const assinaturaDosAvisosDoVoo = avisos => avisos.map(a => `${a.codigo}:${a.texto}`).join('|');

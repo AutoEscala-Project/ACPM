@@ -110,7 +110,7 @@ const TERMOS = {
     textoSem: 'Mostra só os recursos de alguma das categorias marcadas, nas duas vistas: C152 e PA-34 mostram os dois. Sem nenhuma marcada, mostra todos.'
   },
   hangar: { funcionalidade: 'hangar', aba: 'Recursos', termo: 'Ordem no hangar', texto: 'Da frente para o fundo, sempre com todos os aviões (Recursos › Disponibilidade do dia): entre aviões livres, o da frente sai primeiro.' },
-  noturno: { aba: 'Escala', termo: 'Noturno', texto: 'Missão de dois dias: sai às 17:30 para BH (1 h de translado) e voa 3 h de noturno em BH; no dia seguinte, a volta decola de BH às 07:30, e o instrutor, o aluno e o avião ficam livres às 10:10.' },
+  noturno: { aba: 'Escala', termo: 'Noturno', texto: 'Missão de dois dias, num avião só: sai às 17:30 para BH (1 h de translado) e voa 3 h de noturno em BH; no dia seguinte, a volta decola de BH às 07:30, e o instrutor, o aluno e o avião ficam livres às 10:10.' },
   'so-vfr': { aba: 'Recursos', termo: 'Só VFR', texto: 'Avião não homologado IFR: voa as missões VFR, e nenhum voo IFR (IFR, cheques IFR, o noturno do PC) vai para ele. Marque na frota, em Recursos › Cadastro.' },
   'habilitacao-propria': { aba: 'Recursos', termo: 'Habilitação própria', texto: 'O que o próprio recurso exige do instrutor, além da habilitação do tipo: uma habilitação só dele (por exemplo, a do PR-VOM), marcada na frota, em Recursos › Cadastro. Marque-a no instrutor em Instrutores › Cadastro › Editar habilitações.' },
   'so-parafuso': { aba: 'Recursos', termo: 'Só Parafuso', texto: 'Avião reservado para a missão de Parafuso no C152: as outras missões não usam ele, e o Parafuso só voa nele. Marque na frota, em Recursos › Cadastro.' },

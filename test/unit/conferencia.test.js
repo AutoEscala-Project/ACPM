@@ -22,7 +22,10 @@ describe('O motor com voos fixos: a mesma saída de antes da conferência sair d
   // mesma: o motor de antes do F1h devolve a saída gravada em todos os dias, e o motor de agora, em todos os dias sem
   // “Priorizar com”. O pareamento não muda nenhum horário nem avião: em todos os dias, os horários e os aviões são os do
   // motor de agora sem ele
+  // O aviso da volta do noturno num avião ou com um INVA indisponível (2026-11-27) é novo, e o motor de antes do F1h não o dá:
+  // o motor de agora confere com a gravação sem ele
   const comPar = estado => estado.stu.some(s => (s.voaCom || []).length > 0);
+  const semOsAvisosDasVoltas = saida => ({ ...saida, al: saida.al.filter(a => a.codigo !== 'volta-do-noturno') });
   const lugares = saida => JSON.stringify(saida.out.map(o => [o.fKey, o.a, o.b, o.r]).sort((p, q) => (p[0] < q[0] ? -1 : 1)));
   for (const tipo of TIPOS_DE_PINO) {
     it(`${tipo}: em 300 sementes, a saída gravada (antes do F1h; o de agora, nos dias sem “Priorizar com”; os mesmos horários e aviões sem o pareamento)`, () => {
@@ -32,7 +35,7 @@ describe('O motor com voos fixos: a mesma saída de antes da conferência sair d
         if (impressaoDaSaida(runAllocationEngine(diaComPinos(seed, tipo, antesDoF1h), antesDoF1h)) !== GRAVADA.dias[seed][tipo]) diferentes.push(seed);
         const estado = diaComPinos(seed, tipo);
         const agora = runAllocationEngine(estado);
-        if (!comPar(estado) && impressaoDaSaida(agora) !== GRAVADA.dias[seed][tipo]) comOF1h.push(seed);
+        if (!comPar(estado) && impressaoDaSaida(semOsAvisosDasVoltas(agora)) !== GRAVADA.dias[seed][tipo]) comOF1h.push(seed);
         if (lugares(agora) !== lugares(runAllocationEngine(estado, { parearNoHorario: false }))) outroLugar.push(seed);
       }
       assert.deepEqual([diferentes, comOF1h, outroLugar], [[], [], []]);
