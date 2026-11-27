@@ -11,8 +11,9 @@ import { LIMITES_DA_LEI } from './limites.js';
 import { cursosVazios } from './cursos.js';
 import { fechamentosDoWin } from './fechamentos.js';
 import { INICIOS_DOS_TEMPOS } from './tempos.js';
+import { faixasDoAw, awComoOAppLia } from './disponibilidade.js';
 
-export const ESQUEMA = 28;
+export const ESQUEMA = 29;
 // O formato dos cursos: o formato do cadastro a partir do qual os programas vivem nas tabelas próprias (antes dele, vale
 // o programa guardado no cadastro, que a conversão única traz para as tabelas). O 22 é o do instrutor escolhido e o 23,
 // o dos atributos da frota; um aumento é esta linha mais public.formato_dos_cursos() (a migração dos cursos), com o
@@ -63,6 +64,14 @@ function pedidoDoFormato28(pedido) {
   }
   if (Array.isArray(pedido.extra)) novo.extra = pedido.extra.map(pedidoDoFormato28);
   return novo;
+}
+
+// O instrutor do dia no formato 29 (C): ganha as faixas e as pausas do aw como a data aberta o lia; o aw fica (a cópia de
+// antes). O que já tem a lista das faixas fica com ela; o que não é objeto fica como está (a data aberta o lia como o dia
+// todo, e quem não tem faixas continua lido pelo aw)
+function instrutorDoFormato29(d) {
+  if (!d || typeof d !== 'object' || Array.isArray(d) || Array.isArray(d.faixas)) return d;
+  return { ...d, ...faixasDoAw(awComoOAppLia(d.aw)) };
 }
 
 const PASSOS = {
@@ -273,6 +282,19 @@ const PASSOS = {
           : Object.fromEntries(Object.entries(dia.pedidos).map(([id, p]) => [id, pedidoDoFormato28(p)])) };
       }
       return novo;
+    }
+  },
+  // Versão 29 (C): a disponibilidade de cada instrutor na data deixa de ser os nove tempos de antes (aw) e passa a ser as
+  // faixas, { de, ate } em minutos, e as pausas entre elas (js/disponibilidade.js): cada sequência de tempos marcados vira
+  // uma faixa e cada intervalo entre duas sequências, uma pausa (o almoço guardado continua almoço). O aw fica, como a
+  // cópia de antes, e só é lido onde não há faixas; a regra continua a de antes (o compromisso inteiro dentro de uma
+  // faixa). O cadastro não muda. O número novo faz a aba da versão anterior (que tiraria as faixas ao gravar o dia) recusar
+  29: {
+    cadastro: cadastro => cadastro,
+    dia: dia => {
+      if (!dia.ins || typeof dia.ins !== 'object') return dia;
+      return { ...dia, ins: Array.isArray(dia.ins) ? dia.ins.map(instrutorDoFormato29)
+        : Object.fromEntries(Object.entries(dia.ins).map(([id, d]) => [id, instrutorDoFormato29(d)])) };
     }
   }
 };

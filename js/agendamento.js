@@ -32,6 +32,7 @@ import { STATUS_EM_ANDAMENTO, rotuloDoStatus, intervaloEfetivo } from './status.
 import { pesoECombustivel, textoDoCombustivel } from './combustivel.js';
 import { NOTA_DO_PROBLEMA } from './instrutor-escolhido.js';
 import { sobrepoe } from './viabilidade.js';
+import { refazerFaixasDoAw } from './disponibilidade.js';
 import { hm, fmtH, numeroBr, rotuloDaData, somarDias, duracaoHm } from './format.js';
 import { normalizarLimites } from './limites.js';
 import { repousoAntesDaVolta } from './noturno.js';
@@ -934,6 +935,8 @@ export function aplicarAgendamento(estado, base, proposta) {
     disponibilidade = { insId: x.id, on: x.on, aw: [...x.aw] };
     x.on = true;
     x.aw = x.aw.map((v, k) => v || sobrepoe(proposta.a, proposta.b, INICIOS_DOS_TEMPOS[k], k < INICIOS_DOS_TEMPOS.length - 1 ? INICIOS_DOS_TEMPOS[k + 1] : MINUTOS_DO_DIA));
+    // As faixas da data (formato 29) acompanham o aw até a tela do C (desfazer devolve o aw, e as faixas com ele)
+    refazerFaixasDoAw(x);
   }
   return {
     stuId: aluno.id, mid, criado: !movido, pedido: movido ? doMovido : mid === 0 ? principal : null, fixo, disponibilidade, pesos, criadoComo: camposDoPedido(alvo)

@@ -8,6 +8,7 @@ import { filasDoDiaSeguinte } from './rodizio.js';
 import { FROTA_INICIAL, normalizarFrota } from './frota.js';
 import { normalizarHorarios, INICIOS_DOS_TEMPOS } from './horarios.js';
 import { normalizarFechamentos } from './fechamentos.js';
+import { normalizarFaixas, normalizarPausas } from './disponibilidade.js';
 import { normalizarHangar } from './hangar.js';
 import { normalizarLimites } from './limites.js';
 import { normalizarFixos, normalizarAprovacao } from './fixos.js';
@@ -22,6 +23,9 @@ import { dataIsoValida } from './format.js';
 // confirmado na Agenda (só true, formato 27). Desfazer um voo agendado na Escala devolve
 // estes campos do pedido como estavam (js/reversoes.js)
 export const CAMPOS_DO_PEDIDO = ['fly', 'mis', 'eq', 'p1', 'p2', 'nb', 'ss', 'pr', 'jan', 'etapa', 'solicitacao', 'insId', 'cursoDaEtapa', 'limiteConfirmado'];
+
+// As faixas e as pausas de um instrutor na data, normalizadas, quando ele tem a lista das faixas (C, formato 29); sem ela, nada
+const faixasEPausas = d => (d && Array.isArray(d.faixas) ? { faixas: normalizarFaixas(d.faixas), pausas: normalizarPausas(d.pausas) } : {});
 
 // Cada recurso da frota começa disponível; o dia guarda só o que muda
 const avDaFrota = frota => Object.fromEntries(frota.map(f => [f.reg, true]));
@@ -62,7 +66,9 @@ export function separar(estado) {
       // Os horários fechados da data (J); o dia sem eles fica sem eles, e os leitores usam o win
       ...(Array.isArray(estado.fechamentos) ? { fechamentos: normalizarFechamentos(estado.fechamentos) } : {}),
       av: { ...estado.av },
-      ins: Object.fromEntries(estado.ins.map(x => [x.id, { on: x.on, aw: [...x.aw] }])),
+      // As faixas e as pausas da data (C, formato 29), só de quem as tem: quem não as tem é lido pelo aw. O aw continua
+      // gravado até a tela do C (a grade de Instrutores ainda o muda)
+      ins: Object.fromEntries(estado.ins.map(x => [x.id, { on: x.on, aw: [...x.aw], ...faixasEPausas(x) }])),
       pedidos: Object.fromEntries(estado.stu.map(s => [s.id, {
         ...Object.fromEntries(CAMPOS_DO_PEDIDO.filter(c => s[c] !== undefined).map(c => [c, s[c]])),
         extra: structuredClone(s.extra || [])
@@ -99,7 +105,7 @@ export function juntar(cadastro, dia = diaPadrao()) {
     nid: cadastro.nid,
     ins: cadastro.ins.map(x => {
       const d = disponibilidade[x.id];
-      return { ...x, on: d ? d.on !== false : true, aw: d && Array.isArray(d.aw) ? [...d.aw] : INICIOS_DOS_TEMPOS.map(() => true) };
+      return { ...x, on: d ? d.on !== false : true, aw: d && Array.isArray(d.aw) ? [...d.aw] : INICIOS_DOS_TEMPOS.map(() => true), ...faixasEPausas(d) };
     }),
     stu: cadastro.stu.map(s => ({
       ...s,

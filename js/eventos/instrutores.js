@@ -3,6 +3,7 @@
 import { gravarAlteracao } from '../actions.js';
 import { PRE } from '../config.js';
 import { INICIOS_DOS_TEMPOS } from '../horarios.js';
+import { refazerFaixasDoAw } from '../disponibilidade.js';
 import { $, showToast, focusLast, algumDialogoAberto, gavetaDoEsc } from '../dom.js';
 import { nomeLimpo, numeroBr } from '../format.js';
 import { habilitacoesDoNivel, normalizarHabilitacoes, nomeDaHabilitacao } from '../habilitacoes.js';
@@ -121,9 +122,12 @@ aoMudarCampo('i', (t, { f, id }) => {
     return;
   } else if (f === 'aw') {
     x.aw[+t.dataset.w] = t.checked;
+    // As faixas da data (formato 29) acompanham o aw até a tela do C
+    refazerFaixasDoAw(x);
   } else if (f === 'pre') {
     if (!t.value) return;
     x.aw = INICIOS_DOS_TEMPOS.map((_, i) => PRE[t.value].includes(i));
+    refazerFaixasDoAw(x);
   }
   // A grade do dia é refeita com a escala; a linha do cadastro é atualizada no lugar. As janelas e a predefinição do
   // instrutor gravam sem entrar no histórico

@@ -7,6 +7,7 @@
 import { novoRecurso, MATRICULA, ATRIBUTOS_DO_RECURSO } from './frota.js';
 import { normalizarFixos, fixoPeloStatus, fixosAoReabrir, pinoDeVoltaNaTurma } from './fixos.js';
 import { CATEGORIAS_COM_HORARIOS, normalizarHorarios, INICIOS_DOS_TEMPOS } from './horarios.js';
+import { refazerFaixasDoAw } from './disponibilidade.js';
 import { normalizarFechamentos } from './fechamentos.js';
 import { disponibilidadeValida, normalizeMissionFields } from './rules.js';
 import { MINUTOS_DO_DIA, MIS, FLIGHT_STATUSES } from './config.js';
@@ -268,7 +269,9 @@ export function desfazerAgendamento(estado, { stuId, mid, criado, pedido, fixo, 
   } else if (estado.fixos) delete estado.fixos[fKey];
   if (disponibilidade) {
     const x = estado.ins.find(i => i.id === disponibilidade.insId);
-    if (x) Object.assign(x, { on: disponibilidade.on, aw: [...disponibilidade.aw] });
+    // A disponibilidade guardada leva só o aw (antes do C e até a tela dele): o instrutor com as faixas da data (formato 29)
+    // fica com as do aw devolvido
+    if (x) refazerFaixasDoAw(Object.assign(x, { on: disponibilidade.on, aw: [...disponibilidade.aw] }));
   }
   return true;
 }

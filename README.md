@@ -283,6 +283,16 @@ confirmação do 7º local sai junto) e o horário antigo `hN` e a preferência 
 horário exato fica. O cadastro não muda: sem `horarios.ground`, a Sala Ground usa os oito horários padrão, e sem a chave
 dela em `av`, fica disponível. A aba do formato 27 tiraria `fechamentos` ao gravar o dia; o número novo a faz recusar.
 
+No formato 29 (C), a disponibilidade de cada instrutor na data é `dia.ins[<id>].faixas`, uma lista de `{ de, ate }` em
+minutos (`[de, ate)`, 06:30 ≤ `de` < `ate` ≤ 24:00, em ordem, sem se tocar, no máximo 8), quando ele pode voar, e
+`dia.ins[<id>].pausas`, no mesmo formato, quando ele não voa de jeito nenhum (`js/disponibilidade.js`). O passo converte
+os nove tempos de antes (`aw`, lido como a data aberta o lia: só `true` marca; com outro tamanho, o dia todo) com os
+inícios congelados do J (`INICIOS_DOS_TEMPOS`): cada sequência de tempos marcados vira uma faixa e cada intervalo entre
+duas sequências, uma pausa, então o almoço guardado continua almoço; o instrutor que já tem `faixas` fica com elas. O
+`aw` fica e só é lido onde não há `faixas` (os dias antes do 29, os estados dos goldens). A regra não muda: o compromisso
+inteiro dentro de uma faixa, sem tocar numa pausa (o que cai antes das 06:30 não pede faixa, como antes). A aba do
+formato 28 tiraria `faixas` e `pausas` ao gravar o dia; o número novo a faz recusar.
+
 ## Estrutura
 
 | Caminho | Conteúdo |
@@ -319,6 +329,7 @@ dela em `av`, fica disponível. A aba do formato 27 tiraria `fechamentos` ao gra
 | `js/engine.js` | Motor de alocação (função pura) |
 | `js/conferencia.js` | A conferência dos voos fixos, fora do motor, que a usa: a fila dos pedidos na ordem do motor, a volta do noturno de ontem, a linha de cada voo fixo conferida com as regras do motor (`linhaDoFixo`: os conflitos e os avisos do agendado) e o que o motor confere depois de montar a escala (`concluirEscala`); `conferirEscala` confere uma escala montada sem o motor (a escala aprovada que o operador muda na Escala): não põe, não move nem tira voo, e refaz os conflitos, os avisos, a revisão, o total, as turmas e os pesos pelo cadastro |
 | `js/edicao-do-voo.js` | A alteração de um voo feita na Escala (F1g): a escala que ela deixa (`escalaDaAlteracao`: na escala aprovada, sem o motor) e o editor do voo, puro: o voo a editar e as travas, as opções de cada campo (nada desligado: o que não serve avisa), o que muda, o resumo da pergunta, o que "Salvar" grava (`aplicarEdicao`, com a reversão `desfazerEdicao`) e os avisos de cada campo |
+| `js/disponibilidade.js` | A disponibilidade de um INVA na data (formato 29): as faixas e as pausas, a conversão dos nove tempos de antes (`aw`) e `disponivelPara`, a regra que o motor, a compactação, as Sugestões e o agendamento leem (por `js/viabilidade.js`) |
 | `js/viabilidade.js` | O que torna possível um voo num horário, num recurso e com um instrutor (disponível, habilitado, livre, fora do "Não escalar com", dentro da lei e do peso; o saldo até a revisão): as mesmas regras no motor, na compactação, nas Sugestões e no agendamento |
 | `js/fixos.js` | Os voos fixos (pela escala aprovada, pelo status, pelo instrutor escolhido e pelo agendamento na Escala): o que acontece com eles ao mudar o status, aprovar, reabrir e mudar a demanda, e o motivo do cadeado |
 | `js/candidatos.js` | Os recursos e os instrutores que servem a um voo num horário, contra os outros voos do dia, cada um com o que o impede (as Sugestões e o agendamento) |

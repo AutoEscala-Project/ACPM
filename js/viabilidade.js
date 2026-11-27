@@ -1,8 +1,8 @@
 // Regras de viabilidade da escala: o que torna possível pôr um voo num horário, num recurso e com um instrutor.
 // O motor (com a divisão das horas e a troca de matrículas), a compactação e as sugestões de reparo usam as mesmas
 // regras.
-import { MINUTOS_DO_DIA, REVISAO_H, AIRCRAFT_EQ_TYPES, DEFAULT_LIM } from './config.js';
-import { INICIOS_DOS_TEMPOS } from './horarios.js';
+import { REVISAO_H, AIRCRAFT_EQ_TYPES, DEFAULT_LIM } from './config.js';
+import { disponivelPara } from './disponibilidade.js';
 import { podeFazer, faltaDaMissaoDoCurso, PREFIXO_DA_MISSAO_DO_CURSO } from './habilitacoes.js';
 import { instrutorVoaNoAviao, habilitacaoQueFalta } from './frota.js';
 import { dentroDosLimites } from './limites.js';
@@ -13,9 +13,6 @@ export const sobrepoe = (a1, b1, a2, b2) => a1 < b2 && b1 > a2;
 
 // Nenhum dos intervalos ocupados ([início, fim]) se sobrepõe ao voo
 export const livre = (ocupados, a, b) => !(ocupados || []).some(([x, y]) => sobrepoe(a, b, x, y));
-
-// O instrutor disponível durante todo o voo: em cada período do dia (as 9 janelas) que o voo toca
-export const cobre = (aw, a, b) => INICIOS_DOS_TEMPOS.every((inicio, k) => !sobrepoe(a, b, inicio, k < INICIOS_DOS_TEMPOS.length - 1 ? INICIOS_DOS_TEMPOS[k + 1] : MINUTOS_DO_DIA) || aw[k]);
 
 // O voo cabe no saldo de horas do avião até a revisão de 50 horas (sem o saldo informado, Infinity)
 export const cabeNoSaldo = (horasNoDia, h, saldo) => horasNoDia + h <= saldo + 1e-9;
@@ -53,7 +50,8 @@ export function problemasDoInstrutor(x, { mis, tipo, a, b, efetivo = { a, b }, a
     return lei.ok || { motivo: lei.motivo };
   };
   const regras = [
-    ['instrutor-indisponivel', () => x.on && cobre(x.aw, a, b)],
+    // Ele vem e está disponível em todo o compromisso: as faixas da data (C), ou o aw onde não há faixas
+    ['instrutor-indisponivel', () => disponivelPara(x, a, b)],
     // A habilitação da missão e do tipo; com o contexto, a do curso do aluno, a própria do avião e a que a missão do curso
     // exige (o motivo diz qual faltou: a do avião, a do curso, a da missão do curso)
     ['habilitacao', () => (!podeFazer(x, mis, tipo) ? false : podeFazer(x, mis, tipo, { curso, recurso, exige }) ||
