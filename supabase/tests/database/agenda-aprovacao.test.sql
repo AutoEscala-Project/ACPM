@@ -139,7 +139,8 @@ select is((select array_agg(p.prosecdef and p.proconfig = array['search_path=""'
     'public.cancelar_solicitacao(bigint, text)'::regprocedure)),
   array[true, true, true, true, true], 'as funções que gravam são security definer, com o search_path vazio');
 select ok(not has_function_privilege('authenticated', 'public.registrar_solicitacao_interna(date, integer, text, text, text, text, numeric, text, text, boolean, text, uuid, boolean, text, boolean, boolean, boolean)', 'execute')
-  and not has_function_privilege('anon', 'public.registrar_solicitacao_interna(date, integer, text, text, text, text, numeric, text, text, boolean, text, uuid, boolean, text, boolean, boolean, boolean)', 'execute'),
+  and not has_function_privilege('anon', 'public.registrar_solicitacao_interna(date, integer, text, text, text, text, numeric, text, text, boolean, text, uuid, boolean, text, boolean, boolean, boolean)', 'execute')
+  and not has_function_privilege('service_role', 'public.registrar_solicitacao_interna(date, integer, text, text, text, text, numeric, text, text, boolean, text, uuid, boolean, text, boolean, boolean, boolean)', 'execute'),
   'a função interna não é da API');
 select ok(has_function_privilege('authenticated', 'public.aprovar_solicitacoes(bigint[])', 'execute')
   and has_function_privilege('authenticated', 'public.retirar_aprovacao_da_solicitacao(bigint)', 'execute')
@@ -147,7 +148,8 @@ select ok(has_function_privilege('authenticated', 'public.aprovar_solicitacoes(b
   and not has_function_privilege('anon', 'public.retirar_aprovacao_da_solicitacao(bigint)', 'execute'),
   'só quem está conectado chama aprovar e retirar a aprovação');
 select ok(not has_function_privilege('authenticated', 'public.aprovar_solicitacoes_de_antes_da_aprovacao(boolean)', 'execute')
-  and not has_function_privilege('anon', 'public.aprovar_solicitacoes_de_antes_da_aprovacao(boolean)', 'execute'),
+  and not has_function_privilege('anon', 'public.aprovar_solicitacoes_de_antes_da_aprovacao(boolean)', 'execute')
+  and not has_function_privilege('service_role', 'public.aprovar_solicitacoes_de_antes_da_aprovacao(boolean)', 'execute'),
   'a conversão não é da API');
 select throws_ok($$ insert into public.solicitacoes (data, aluno, aluno_nome, missao, janela, horario, registrado_por, aprovada_em, aprovacao_retirada_em)
   values (current_date, 1, 'A', 'B', 'horario', '08:20', 'C', now(), now()) $$, '23514', null, 'aprovado ou retirado, nunca os dois');

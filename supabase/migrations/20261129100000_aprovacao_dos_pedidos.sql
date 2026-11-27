@@ -10,7 +10,8 @@
 -- - registrar_solicitacao com 16 argumentos (a de 13 com p_horario2, p_aprovar e p_esperar, nenhum com valor padrão: o
 --   PostgREST escolhe a função pelos nomes dos argumentos, e as quatro nunca se confundem). Ela e as de 13, 11 e 10
 --   argumentos, que ficam como atalhos para as abas abertas do app de antes, chamam uma função interna só
---   (registrar_solicitacao_interna, sem direito de execução para ninguém), com as mesmas regras, na ordem:
+--   (registrar_solicitacao_interna, sem direito de execução para ninguém: nem o service_role, a quem o Supabase dá
+--   toda função nova do esquema public), com as mesmas regras, na ordem:
 --   1. quem pode: a secretaria e os operadores (o administrador conta como operador): 42501;
 --   2. o horário específico (22023, horario; um período é recusado, como pela de 13) e a duração (22023, horas);
 --   3. pela de 16 e pela de 13, as regras da de 13 (o recurso, os horários fixos e a missão do curso: 22023 com a dica
@@ -37,8 +38,9 @@
 --   (P0002 para o que não está aprovado ou foi cancelado; PT403, passada, para uma data que já passou).
 -- - solicitacoes_por_dia(de, até): por data, os pedidos que aguardam e os aprovados (sem os cancelados), com a regra de
 --   leitura da tabela (security invoker: quem não lê a agenda recebe {}).
--- - aprovar_solicitacoes_de_antes_da_aprovacao(dos_operadores), interna (sem direito de execução para ninguém): a conversão
---   dos pedidos de antes, nunca o cancelado nem o de aprovação retirada. (a) Os que a importação já levou para a
+-- - aprovar_solicitacoes_de_antes_da_aprovacao(dos_operadores), interna (sem direito de execução para ninguém, nem o
+--   service_role): a conversão dos pedidos de antes, nunca o cancelado nem o de aprovação retirada. (a) Os que a
+--   importação já levou para a
 --   demanda: numa data que já passou, todo id em "importadas"; de hoje em diante, só o que um registro da data ainda leva
 --   (o pedido principal do aluno ou uma missão extra), voando ou não ("importação anterior"). (b) Só com dos_operadores
 --   (esta migração; a do G2 roda só a regra (a)): de hoje em diante, o que uma conta de operador ou de administrador
@@ -179,7 +181,7 @@ begin
   return nova;
 end;
 $$;
-revoke execute on function public.registrar_solicitacao_interna(date, integer, text, text, text, text, numeric, text, text, boolean, text, uuid, boolean, text, boolean, boolean, boolean) from public, anon, authenticated;
+revoke execute on function public.registrar_solicitacao_interna(date, integer, text, text, text, text, numeric, text, text, boolean, text, uuid, boolean, text, boolean, boolean, boolean) from public, anon, authenticated, service_role;
 
 -- A função que o app chama: a de 13 com a 2ª preferência, a aprovação e a lista de espera
 create function public.registrar_solicitacao(
@@ -397,6 +399,6 @@ begin
   return importados + dos_operadores;
 end;
 $$;
-revoke execute on function public.aprovar_solicitacoes_de_antes_da_aprovacao(boolean) from public, anon, authenticated;
+revoke execute on function public.aprovar_solicitacoes_de_antes_da_aprovacao(boolean) from public, anon, authenticated, service_role;
 
 select public.aprovar_solicitacoes_de_antes_da_aprovacao(true);

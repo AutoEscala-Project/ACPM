@@ -356,7 +356,7 @@ describe('O banco espelha o app: a aprovação dos pedidos', () => {
     }
   });
 
-  it('quem chama: a de 16, aprovar, retirar, cancelar, a contagem e os atalhos só quem está conectado; a interna e a conversão, ninguém; a de 9 sai', () => {
+  it('quem chama: a de 16, aprovar, retirar, cancelar, a contagem e os atalhos só quem está conectado; a interna e a conversão, ninguém (nem o service_role, a quem o Supabase dá toda função nova); a de 9 sai', () => {
     const daApi = [...Object.values(ASSINATURAS).map(a => `registrar_solicitacao(${a})`), 'cancelar_solicitacao(bigint, text)', 'aprovar_solicitacoes(bigint[])',
       'retirar_aprovacao_da_solicitacao(bigint)', 'solicitacoes_por_dia(date, date)'];
     for (const f of daApi) {
@@ -364,7 +364,7 @@ describe('O banco espelha o app: a aprovação dos pedidos', () => {
       assert.ok(D1.includes(`grant execute on function public.${f} to authenticated;`), f);
     }
     for (const f of [`registrar_solicitacao_interna(${ASSINATURAS[16]}, boolean)`, 'aprovar_solicitacoes_de_antes_da_aprovacao(boolean)']) {
-      assert.ok(D1.includes(`revoke execute on function public.${f} from public, anon, authenticated;`), f);
+      assert.ok(D1.includes(`revoke execute on function public.${f} from public, anon, authenticated, service_role;`), f);
       assert.ok(!D1.includes(`grant execute on function public.${f.slice(0, f.indexOf('('))}`), f);
     }
     assert.match(funcao('solicitacoes_por_dia'), /security invoker/);
