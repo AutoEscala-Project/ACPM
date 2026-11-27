@@ -344,14 +344,19 @@ function parearNoHorario(out, state, { limites, historico, frota, act }) {
 // O trecho do motivo do avião ocupado ('avioes-ocupados') que fala da prioridade dos pedidos (no fim do motivo, ou antes do
 // lugar na lista de espera: "; 1º na lista de espera das 08:20", F1h)
 const PELA_PRIORIDADE = ' (ocupados por pedidos de prioridade maior)';
-const PELA_PRIORIDADE_NO_MOTIVO = / \(ocupados por pedidos de prioridade maior\)(?=[.;])/;
-// O resultado com o motivo do avião ocupado sem falar da prioridade: o que a tela mostra com a prioridade desligada
+// O que fala da prioridade, por código: o trecho do avião ocupado e, na disputa do “Priorizar com” ('voa-com', F1h), por que
+// o outro ficou com o instrutor ("ficou com Aluno B (prioridade maior); ...", js/conferencia.js, porQueFicou)
+const DA_PRIORIDADE = {
+  'avioes-ocupados': / \(ocupados por pedidos de prioridade maior\)(?=[.;])/,
+  'voa-com': / \(prioridade maior\)(?=[.;])/
+};
+// O resultado com os motivos sem falar da prioridade: o que a tela mostra com a prioridade desligada
 // (js/funcionalidades.js; js/state.js, comOsMotivosDaTela), em que todos os pedidos têm a mesma. Não muda o resultado: os
-// outros alertas continuam os mesmos objetos, e, sem o motivo, devolve o próprio resultado
+// outros alertas continuam os mesmos objetos, e, sem nenhum, devolve o próprio resultado
 export function semAPrioridadeNosMotivos(resultado) {
-  const comAPrioridade = a => a.codigo === 'avioes-ocupados' && typeof a.m === 'string' && PELA_PRIORIDADE_NO_MOTIVO.test(a.m);
+  const comAPrioridade = a => Object.hasOwn(DA_PRIORIDADE, a.codigo) && typeof a.m === 'string' && DA_PRIORIDADE[a.codigo].test(a.m);
   if (!resultado.al.some(comAPrioridade)) return resultado;
-  return { ...resultado, al: resultado.al.map(a => (comAPrioridade(a) ? { ...a, m: a.m.replace(PELA_PRIORIDADE_NO_MOTIVO, '') } : a)) };
+  return { ...resultado, al: resultado.al.map(a => (comAPrioridade(a) ? { ...a, m: a.m.replace(DA_PRIORIDADE[a.codigo], '') } : a)) };
 }
 
 export function runAllocationEngine(state, opcoes = {}) {

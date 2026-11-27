@@ -385,15 +385,17 @@ function horarioPedido(d) {
 
 // Por que o outro pedido ficou com o horário: a chave da fila em que ele vem antes (o Ground antes dos voos; a prioridade;
 // com a mesma, a ordem de registro na agenda e o cadastro: filaDosPedidos). Quando ele não vem antes na fila (o aluno não
-// ficou com o horário por outro motivo: o avião, a sala de Ground), null
+// ficou com o horário por outro motivo: o avião, a sala de Ground), null. Sem o número da prioridade (a tela a mostra ao
+// contrário, 1 a mais alta, e com ela desligada todos têm a mesma: js/state.js, estadoDaEscala) e, com a mesma, sem falar
+// dela
 function porQueFicou(outro, d, ordemDoOutro, ordem) {
   const ground = p => isGroundMission(p.mis);
   if (ground(outro) !== ground(d)) return ground(outro) ? 'o Ground vem antes dos voos' : null;
   const pr = outro.pr ?? 3;
   const agenda = p => (Number.isInteger(p.solicitacao) ? p.solicitacao : Infinity);
-  if (pr !== (d.pr ?? 3)) return pr > (d.pr ?? 3) ? `prioridade ${pr}` : null;
-  if (agenda(outro) !== agenda(d)) return agenda(outro) < agenda(d) ? `prioridade ${pr}, pedido registrado antes` : null;
-  return ordemDoOutro < ordem ? `prioridade ${pr}, antes no cadastro` : null;
+  if (pr !== (d.pr ?? 3)) return pr > (d.pr ?? 3) ? 'prioridade maior' : null;
+  if (agenda(outro) !== agenda(d)) return agenda(outro) < agenda(d) ? 'pedido registrado antes' : null;
+  return ordemDoOutro < ordem ? 'antes no cadastro' : null;
 }
 
 // Os instrutores do “Priorizar com” do aluno que estão no cadastro, cada um com o que o impede de dar o voo do pedido (mis,
