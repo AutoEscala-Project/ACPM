@@ -1,7 +1,9 @@
 // Coloca escalas fictícias no projeto de PRÉVIA para as próximas datas de operação (sem domingos), para quem abre a
 // prévia (https://thephfernandes.github.io/ACPM/) ver a escala pronta. Cada data nova começa como o app começa uma data
 // (diaParaCopiar do dia anterior: disponibilidade, horas até a revisão, filas do rodízio), recebe a demanda do dia de
-// exemplo dos testes (test/helpers/exemplo.js, com os alunos em outra ordem a cada data) e a escala do motor.
+// exemplo dos testes (test/helpers/exemplo.js, com os alunos em outra ordem a cada data) e a escala do motor, com a volta
+// de BH dos noturnos de ontem (noturnosDaVespera, como o app abre a data: a volta no avião e com o INVA do Noturno) e o
+// pino de cada Noturno (pinosDoNoturno, como o app grava).
 // Só grava datas que ainda não têm escala: o que alguém já editou na prévia fica como está. Recusa a produção.
 //
 // Usa o Supabase CLI já autenticado (`supabase login`); não precisa da senha do banco.
@@ -14,6 +16,8 @@ import { PROJETOS } from '../js/config-supabase.js';
 import { comExemplo } from '../test/helpers/exemplo.js';
 import { somarDias } from '../js/format.js';
 import { ehDomingo } from '../js/agenda.js';
+import { noturnosDaVespera } from '../js/noturno.js';
+import { pinosDoNoturno } from '../js/fixos.js';
 
 const PREVIA = new URL(PROJETOS.previa.url).hostname.split('.')[0];
 const PRODUCAO = new URL(PROJETOS.producao.url).hostname.split('.')[0];
@@ -46,8 +50,10 @@ for (let d = inicio; datas.length < quantos; d = somarDias(d, 1)) if (!ehDomingo
 const existentes = new Set(sql(`select data::text as d from public.dias where data between '${datas[0]}' and '${datas.at(-1)}'`).map(l => l.d));
 
 // O dia anterior à primeira data (o app copia dele a disponibilidade, as horas e as filas)
-const [linhaAnterior] = sql(`select conteudo::text as c from public.dias where data < '${datas[0]}' order by data desc limit 1`);
+const [linhaAnterior] = sql(`select data::text as d, conteudo::text as c from public.dias where data < '${datas[0]}' order by data desc limit 1`);
 let anterior = linhaAnterior ? migrarDia(JSON.parse(linhaAnterior.c)) : null;
+// A data do dia anterior: os noturnos dele voltam de BH na data seguinte (só quando ela é o dia seguinte dele)
+let dataAnterior = linhaAnterior ? linhaAnterior.d : null;
 let nid = cadastro.nid;
 const inserts = [];
 
@@ -55,6 +61,7 @@ for (const [k, data] of datas.entries()) {
   if (existentes.has(data)) {
     const [l] = sql(`select conteudo::text as c from public.dias where data = '${data}'`);
     anterior = migrarDia(JSON.parse(l.c));
+    dataAnterior = data;
     console.log(`${data}: já tem escala, fica como está`);
     continue;
   }
@@ -65,12 +72,18 @@ for (const [k, data] of datas.entries()) {
   const estado = comExemplo({ ...base, stu: [...base.stu.slice(giro), ...base.stu.slice(0, giro)] });
   estado.stu.sort((a, b) => ordem.indexOf(a.id) - ordem.indexOf(b.id));
   nid = estado.nid;
+  // A volta de BH dos noturnos de ontem (como ApiClient.carregarDia)
+  const noturnos = noturnosDaVespera(anterior && dataAnterior ? { data: dataAnterior, conteudo: anterior } : null, data);
+  if (noturnos.length) estado.noturnosDaVespera = noturnos;
 
   const resultado = { ...runAllocationEngine(estado), data };
+  // O pino de cada Noturno, como ApiClient.salvarDia
+  estado.fixos = pinosDoNoturno(estado, resultado);
   const dia = { ...separar(estado).dia, esquema: ESQUEMA, resultado };
   inserts.push(`('${data}', $dia$${JSON.stringify(dia)}$dia$::jsonb)`);
   anterior = dia;
-  console.log(`${data}: ${resultado.out.length} lançamentos, ${resultado.al.length} alertas`, process.env.SECO ? resultado.out.slice(0, 4).map(o => `${o.s}/${o.mis}/${o.r}/${o.ins}`).join(" · ") : "");
+  dataAnterior = data;
+  console.log(`${data}: ${resultado.out.length} lançamentos, ${resultado.al.length} alertas, ${noturnos.length} voltas do noturno`, process.env.SECO ? resultado.out.slice(0, 4).map(o => `${o.s}/${o.mis}/${o.r}/${o.ins}`).join(" · ") : "");
 }
 
 if (!inserts.length || process.env.SECO) {
