@@ -1,5 +1,7 @@
 // Alunos como lista e detalhe (F2): o cadastro no detalhe, a busca, o filtro dos cursos, "Excluir aluno…" armado e o
-// celular (a lista, depois o detalhe). O componente em si (as teclas, o clique, a bancada) fica em lista.spec.js
+// celular (a lista, depois o detalhe). O componente em si (as teclas, o clique, a bancada) fica em lista.spec.js. Do
+// passo A: "Nesta data", "Curso e missões" (a missão anterior e a atual, o resultado sem voo, "Colocar no curso até…" e o
+// ↶ dela), a busca pelo nome completo e o "Apagar os dados pessoais" do aluno inativo
 import {
   test, comProgresso, expect, abrir, abrirSintetico, abrirComExemplo, irPara, irParaVista, filtrarCursos, confirmar, AGORA, AMANHA, alvosPequenos,
   appPronto, botaoDaAba, dataAberta, diaSeguinte, larguraDaPagina, abrirAluno, campoDoAberto, linhaDoAluno, linhasDosAlunos, nomesNaLista,
@@ -7,7 +9,8 @@ import {
 } from './fixtures.js';
 import { documentosAtuais } from './supabase-falso.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
-import { cursosIniciais } from '../../js/programa.js';
+import { cursosIniciais, novoCurso, percursoDoCurso } from '../../js/programa.js';
+import { MODELOS } from '../../js/modelos-de-curso.js';
 import { GLOSSARIO } from '../../js/glossario.js';
 
 test.describe('Alunos', () => {
@@ -430,31 +433,13 @@ test.describe('Alunos: o filtro dos cursos e a barra', () => {
     await expect(contagem).toHaveText('4 alunos');
   });
 
-  test('"Abrir a Demanda", embaixo da barra, leva à Demanda com o foco no título; também para o Gestor', async ({ page }) => {
-    await abrir(page, { estado: cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000)] }) });
-    await irPara(page, 'alu');
-    await expect(page.locator('#s-alu .ir-para-demanda')).toHaveText('Os pedidos de cada data ficam na Demanda. Abrir a Demanda');
-    const abrirDemanda = page.getByRole('link', { name: 'Abrir a Demanda' });
-    await abrirDemanda.click();
-    await expect(page.locator('#s-dem')).toBeVisible();
-    await expect(page.locator('#s-alu')).toBeHidden();
-    await expect(botaoDaAba(page, 'dem')).toHaveAttribute('aria-current', 'page');
-    await expect(page.locator('#s-dem h2')).toBeFocused();
-    await page.locator('#role-sel').selectOption('gestor');
-    await irPara(page, 'alu');
-    await abrirDemanda.focus();
-    await page.keyboard.press('Enter');
-    await expect(page.locator('#s-dem')).toBeVisible();
-    await expect(page.locator('#s-dem h2')).toBeFocused();
-  });
-
-  test('o filtro dos cursos é o mesmo em Alunos e na Demanda: "Abrir a Demanda" mostra os pedidos dos alunos marcados', async ({ page }) => {
+  test('o filtro dos cursos é o mesmo em Alunos e na Demanda: a Demanda mostra os pedidos dos alunos marcados', async ({ page }) => {
     await abrir(page, { estado: cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, {}, { nm: 'Ana', curso: 'PP' }), aluno(1001, {}, { nm: 'Bruno', curso: 'PC' }), aluno(1002, {}, { nm: 'Carla' })] }) });
     const pedidos = () => page.locator('#dem tr[data-k="d"]:visible').evaluateAll(linhas => linhas.map(l => l.dataset.id));
     await irPara(page, 'alu');
     await filtrarCursos(page, 'alu', ['PP']);
     await expect.poll(() => nomesNaLista(page)).toEqual(['Ana']);
-    await page.getByRole('link', { name: 'Abrir a Demanda' }).click();
+    await irPara(page, 'dem');
     await expect(page.locator('#flt-dem-cur')).toHaveText('Curso: PP');
     await expect.poll(pedidos).toEqual(['1000']);
     await filtrarCursos(page, 'dem', ['PP', 'sem-curso']);
@@ -581,5 +566,178 @@ test.describe('Celular', () => {
     await expect(page.locator('#det-alu input, #det-alu select')).toHaveCount(0);
     await expect(page.locator('#det-alu-excluir')).toHaveCount(0);
     expect(await larguraDaPagina(page)).toBeLessThanOrEqual(390);
+  });
+});
+
+// O passo A: o detalhe do aluno com "Nesta data" (os voos dele na data aberta) e "Curso e missões". O cronograma do PP (o
+// modelo do app) nas tabelas dos cursos deste navegador; a Maria (PP) voa a IN-01 na data aberta, o Aluno 1001 não voa
+function programaPP() {
+  let n = 0;
+  const uuid = () => `00000000-0000-4000-8000-${String(++n).padStart(12, '0')}`;
+  return { ...novoCurso([], { sigla: 'PP', nome: 'Piloto Privado', modelo: MODELOS['pp-acpm'] }, uuid).curso, versao: 1 };
+}
+const ORDEM_DO_PP = percursoDoCurso(programaPP()).missoes.map(m => m.codigo);
+async function abrirComOPP(page, { resultados = [], dados = null } = {}) {
+  const estado = cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, { etapa: 'IN-01', cursoDaEtapa: 'PP' }, { nm: 'Maria', curso: 'PP' }), aluno(1001, { fly: false })] });
+  const { documentos: { cadastro }, dias } = documentosAtuais(estado, AMANHA);
+  const docs = {
+    acpm4_cadastro: cadastro, [`acpm4_dia_${AMANHA}`]: dias[AMANHA],
+    acpm4_cursos: { cursos: cursosIniciais().map(c => (c.sigla === 'PP' ? programaPP() : c)), alteracoes: [] },
+    acpm4_resultados: resultados, ...(dados ? { acpm4_dados_pessoais: dados } : {})
+  };
+  await page.addInitScript(json => {
+    if (localStorage.getItem('acpm4_cadastro')) return;
+    for (const [chave, valor] of Object.entries(JSON.parse(json))) localStorage.setItem(chave, JSON.stringify(valor));
+  }, JSON.stringify(docs));
+  await page.goto('./');
+  await appPronto(page);
+  await irPara(page, 'alu');
+  await abrirAluno(page, 1000);
+}
+const valorDo = (page, campo) => page.locator(`#det-alu [data-campo="${campo}"] .det-valor`);
+const resultadosGuardados = page => page.evaluate(() => JSON.parse(localStorage.getItem('acpm4_resultados') || '[]'));
+
+comProgresso.describe('Alunos: Nesta data e Curso e missões', () => {
+  comProgresso('"Nesta data" mostra o voo com o resultado; a missão anterior e a atual acompanham o resultado registrado nele', async ({ page }) => {
+    await abrirComOPP(page);
+    await expect(page.locator('#sec-alu-data')).toHaveText(/^Nesta data qua 11\/11/);
+    const voo = page.locator('#det-alu .voos-do-aluno > li');
+    await expect(voo).toHaveCount(1);
+    await expect(voo.locator('.voo-quando')).toHaveText('08:20–09:20');
+    await expect(voo.locator('.voo-oque')).toHaveText(/^Voo Local · P[PR]-\w+ · Instrutor 01 · Confirmado$/);
+    await expect(valorDo(page, 'missao-anterior')).toHaveText('Nenhum resultado no PP');
+    await expect(valorDo(page, 'missao-atual')).toHaveText('IN-01 · IN-01');
+    await expect(page.locator('#det-alu [data-campo="curso"] select')).toHaveValue('PP');
+    await voo.locator('[data-resultado]').selectOption('aprovado');
+    await expect(valorDo(page, 'missao-anterior')).toHaveText('IN-01 · aprovado em 11/11/2026');
+    await expect(valorDo(page, 'missao-atual')).toHaveText('IN-02 · IN-02');
+    await expect(page.locator('#det-alu [data-campo="progresso"] .det-valor')).toHaveText(/^1\/\d+ · Fase 1 · próxima IN-02$/);
+    // O aluno sem voo na data, e sem curso: só o curso (vazio)
+    await abrirAluno(page, 1001);
+    await expect(page.locator('#det-alu .det-sem-voo')).toHaveText('Sem voo nesta data.');
+    await expect(page.locator('#det-alu [data-campo="missao-atual"]')).toHaveCount(0);
+    await expect(page.locator('#det-alu .det-forms')).toHaveCount(0);
+  });
+
+  comProgresso('"Registrar resultado sem voo": a data vai até hoje, a missão com voo nesta data é recusada e a fora da ordem pede o segundo clique', async ({ page }) => {
+    await abrirComOPP(page);
+    // A data aberta (amanhã) é depois de hoje: a data começa em hoje, e vai até hoje
+    await expect(page.locator('#det-alu-sv-data')).toHaveValue('2026-11-10');
+    await expect(page.locator('#det-alu-sv-data')).toHaveAttribute('max', '2026-11-10');
+    await expect(page.locator('#det-alu-sv-missao optgroup[label="Liberadas"] option')).toHaveText(['IN-01 · IN-01']);
+    // A IN-01 tem voo nesta data: registre no voo
+    await page.locator('#det-alu-sv-missao').selectOption('IN-01');
+    await page.locator('#det-alu-sv-registrar').click();
+    await expect(page.locator('#det-alu-sv-erro')).toHaveText(/^IN-01 tem voo nesta data, às 08:20 no P[PR]-\w+: registre no voo, acima\.$/);
+    await expect(page.locator('#det-alu-sv-missao')).toBeFocused();
+    expect(await resultadosGuardados(page)).toEqual([]);
+    // A CT-01 está fora da ordem (faltam as duas primeiras): o primeiro clique arma, o segundo registra
+    await page.locator('#det-alu-sv-missao').selectOption('CT-01');
+    await expect(page.locator('#det-alu-sv-erro')).toHaveText('');
+    await page.locator('#det-alu-sv-resultado').selectOption('reprovado');
+    await page.locator('#det-alu-sv-registrar').click();
+    await expect(page.locator('#det-alu-sv-registrar')).toHaveText('Confirmar: CT-01 fora da ordem');
+    expect(await resultadosGuardados(page)).toEqual([]);
+    await page.locator('#det-alu-sv-registrar').click();
+    await expect(page.locator('#toast-box .toast.ok')).toHaveText('Resultado de Maria em CT-01 registrado: reprovado (sem voo).');
+    expect((await resultadosGuardados(page)).map(r => [r.missao, r.resultado, r.data, r.voo])).toEqual([['CT-01', 'reprovado', '2026-11-10', null]]);
+    await expect(valorDo(page, 'missao-anterior')).toHaveText('CT-01 · reprovado em 10/11/2026 · sem voo');
+    await abrirHistorico(page);
+    await expect(page.locator('#historico')).toContainText('Resultado de Maria em CT-01: reprovado (sem voo)');
+  });
+
+  comProgresso('"Colocar no curso até…": as missões antes da escolhida ficam aprovadas sem voo, e o ↶ do Histórico as devolve', async ({ page }) => {
+    await abrirComOPP(page, { resultados: [{ id: 1, aluno: 1000, curso: 'PP', missao: 'IN-02', resultado: 'aprovado', data: '2026-11-09', voo: null, registrado_em: '2026-11-09T12:00:00.000Z', registrado_por: 'Operador 01' }] });
+    await expect(page.locator('#det-alu-colocar optgroup')).toHaveCount(9);
+    await expect(page.locator('#det-alu-colocar option[value="TSL-01"]')).toHaveCount(0);
+    await page.locator('#det-alu-colocar').selectOption('NAV-01');
+    const botao = page.locator('#det-alu-colocar-confirmar');
+    await botao.click();
+    // As 13 antes da NAV-01, menos a IN-02 já aprovada
+    await expect(botao).toHaveText('Confirmar: aprovar 12 missões sem voo (IN-01 … TMA-05)');
+    await botao.click();
+    await expect(page.locator('#toast-box .toast.ok')).toHaveText('Maria colocado no curso até NAV-01: 12 missões aprovadas sem voo.');
+    await expect(valorDo(page, 'missao-atual')).toHaveText('NAV-01 · NAV 01');
+    const guardados = await resultadosGuardados(page);
+    expect(guardados.slice(1).map(r => r.missao)).toEqual(ORDEM_DO_PP.slice(0, ORDEM_DO_PP.indexOf('NAV-01')).filter(c => c !== 'IN-02'));
+    expect(guardados.slice(1).every(r => r.resultado === 'aprovado' && r.voo === null && r.data === '2026-11-10')).toBe(true);
+    await abrirHistorico(page);
+    const entrada = page.locator('#audit-log-list .audit-item', { hasText: 'Maria colocado no curso PP até NAV-01' });
+    await expect(entrada).toContainText('12 missões aprovadas sem voo (IN-01 … TMA-05)');
+    await entrada.locator('[data-act="rev-log"]').click();
+    await expect(page.locator('#audit-log-list .audit-item', { hasText: 'Revertido: Maria colocado no curso PP até NAV-01' })).toHaveCount(1);
+    await expect(valorDo(page, 'missao-atual')).toHaveText('IN-01 · IN-01');
+    // Cada missão volta ao resultado de antes (pendente); a IN-02 continua aprovada
+    const depois = await resultadosGuardados(page);
+    expect(depois.slice(13).map(r => r.resultado)).toEqual(Array(12).fill('pendente'));
+  });
+
+  comProgresso('o Gestor lê o curso e as missões, sem os formulários; o resultado do voo em texto', async ({ page }) => {
+    await abrirComOPP(page, { resultados: [{ id: 1, aluno: 1000, curso: 'PP', missao: 'IN-01', resultado: 'aprovado', data: '2026-11-11', voo: '1000_0_1', registrado_em: '2026-11-10T12:00:00.000Z', registrado_por: 'Operador 01' }] });
+    await page.locator('#role-sel').selectOption('gestor');
+    await expect(valorDo(page, 'missao-anterior')).toHaveText('IN-01 · aprovado em 11/11/2026 · por Operador 01');
+    await expect(page.locator('#det-alu .det-forms')).toHaveCount(0);
+    await expect(page.locator('#det-alu [data-act]')).toHaveCount(0);
+    await expect(page.locator('#det-alu .voos-do-aluno .res-aprovado')).toHaveText('Aprovado');
+    await expect(page.locator('#det-alu [data-campo="curso"] .det-valor')).toHaveText('PP · Piloto Privado');
+  });
+
+  comProgresso('no celular (390 px), "Nesta data" e os formulários cabem, com alvos de 44 px', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await abrirComOPP(page);
+    // Depois da leitura dos dados pessoais (o detalhe redesenhado)
+    await expect(page.locator('#det-alu-nome_completo')).toBeEnabled();
+    for (const alvo of ['#det-alu-sv-registrar', '#det-alu-colocar-confirmar', '#det-alu-sv-missao', '#det-alu-colocar']) {
+      await expect(page.locator(alvo)).toBeVisible();
+      const caixa = await page.locator(alvo).boundingBox();
+      expect(caixa.height, alvo).toBeGreaterThanOrEqual(44);
+      expect(caixa.x + caixa.width, alvo).toBeLessThanOrEqual(390);
+    }
+    expect(await larguraDaPagina(page)).toBeLessThanOrEqual(390);
+  });
+});
+
+test.describe('Alunos: Curso e missões com o progresso desligado', () => {
+  test('só o curso matriculado; "Nesta data" mostra o código da missão do curso, sem o resultado', async ({ page }) => {
+    await abrirComOPP(page);
+    await expect(page.locator('#sec-alu-curso')).toContainText('Curso e missões');
+    await expect(page.locator('#det-alu [data-campo]')).toHaveText([/^Curso matriculado/, /^Nome \(na escala\)/, /^Peso/, /^Priorizar com/, /^Não escalar com/]);
+    await expect(page.locator('#det-alu .det-secao')).toHaveText([/^Nesta data/, /^Curso e missões/, /^Cadastro/, /^Dados pessoais/]);
+    await expect(page.locator('#det-alu [data-pessoa] .det-campo label')).toHaveText(['Nome completo', 'CPF', 'CANAC', 'Nascimento', 'Celular', 'E-mail']);
+    await expect(page.locator('#det-alu .det-forms')).toHaveCount(0);
+    await expect(page.locator('#det-alu .voos-do-aluno .etapa')).toHaveText('IN-01');
+    await expect(page.locator('#det-alu .voos-do-aluno [data-resultado]')).toHaveCount(0);
+  });
+});
+
+test.describe('Alunos: o nome completo e "Apagar os dados pessoais"', () => {
+  test('a busca acha o nome completo e o CANAC de quem vê os dados pessoais; o Gestor, só o nome', async ({ page }) => {
+    await abrirComOPP(page, { dados: { 'aluno:1001': { nome_completo: 'Bruno Carvalho Lima', canac: '654321', atualizado_em: '2026-11-09T12:00:00.000Z' } } });
+    const busca = page.locator('[data-flt="alu"]');
+    await busca.fill('carvalho lima');
+    await expect.poll(() => nomesNaLista(page)).toEqual(['Aluno 1001']);
+    await busca.fill('654321');
+    await expect.poll(() => nomesNaLista(page)).toEqual(['Aluno 1001']);
+    await busca.fill('');
+    await page.locator('#role-sel').selectOption('gestor');
+    await busca.fill('carvalho');
+    await nenhumNaLista(page, 'alu');
+    await expect(page.locator('#s-alu')).not.toContainText('Carvalho');
+  });
+
+  test('do aluno inativo, "Apagar os dados pessoais" (dois cliques) tira os dados e deixa o aluno no cadastro', async ({ page }) => {
+    await abrirComOPP(page, { dados: { 'aluno:1001': { nome_completo: 'Bruno Carvalho Lima', canac: '654321', atualizado_em: '2026-11-09T12:00:00.000Z' } } });
+    await abrirAluno(page, 1001);
+    await expect(page.locator('#det-alu-apagar-dados')).toHaveCount(0);
+    await linhaDoAluno(page, 1001).locator('[data-act="ativo"]').click();
+    await expect(page.locator('#det-alu-apagar-dados')).toHaveText('Apagar os dados pessoais');
+    await confirmar(page, '#det-alu-apagar-dados');
+    await expect(page.locator('#toast-box .toast.ok').last()).toHaveText('Dados pessoais de Aluno 1001 apagados.');
+    await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('acpm4_dados_pessoais') || '{}'))).toEqual({});
+    await expect(linhaDoAluno(page, 1001)).toHaveCount(1);
+    await expect(page.locator('#det-alu-apagar-dados')).toHaveCount(0);
+    await abrirHistorico(page);
+    await expect(page.locator('#historico')).toContainText('Dados pessoais de Aluno 1001 atualizados: Nome completo, CANAC');
+    await expect(page.locator('#historico')).not.toContainText('Carvalho');
   });
 });

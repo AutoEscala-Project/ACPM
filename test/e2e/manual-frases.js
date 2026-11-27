@@ -20,8 +20,10 @@ const ANTIGAS = {
   pedidos: ['o horário fica indisponível, e o app diz o próximo horário possível'],
   // O peso vem antes do curso em Alunos; Alunos é lista e detalhe (F2): sem as colunas de Instrutores, sem o cartão no
   // celular, os dados pessoais na seção do aluno (o painel fica para os instrutores)
+  // A: sem o link para a Demanda (os voos da data ficam em "Nesta data"), e a secretaria não altera os dados pessoais
   alunos: ['Nome, CANAC, curso e peso', 'Nome, CANAC, peso e curso', 'as três primeiras colunas', 'A barra é a de Instrutores',
-    'o cadastro de Alunos e o de Instrutores mostram', 'o botão na linha do aluno ou do instrutor'],
+    'o cadastro de Alunos e o de Instrutores mostram', 'o botão na linha do aluno ou do instrutor', 'Abrir a Demanda',
+    'também as alterações da secretaria', 'grava os cinco de uma vez'],
   // Cursos mostra um curso de cada vez (sem "todos")
   cursos: ['mostra um curso só ou todos'],
   // Recursos em duas vistas (não mais em duas partes), com as categorias marcadas na barra
@@ -52,13 +54,15 @@ const NOVAS = {
   instrutores: ['Editar habilitações', 'sem os acentos', '12 de 40 instrutores', 'Limpar filtros', 'o interruptor Vem', 'Filtro das habilitações',
     'que têm todas as marcadas', 'Habilitações: Noturno + C172'],
   // Alunos como lista e detalhe (F2): a escolha no endereço, os campos no lugar, Anterior e Próximo, o filtro dos cursos (a
-  // regra "algum dos marcados"), o link para a Demanda (o filtro dos cursos é um só nas duas telas) e os dados pessoais na
-  // seção do aluno, com Salvar e Desfazer; o cadastro relido depois de um conflito
+  // regra "algum dos marcados"; um só nas duas telas) e os dados pessoais na seção do aluno, com Salvar e Desfazer; o
+  // cadastro relido depois de um conflito. A: as seções do detalhe (Nesta data, Curso e missões), o nome completo (também
+  // na busca), a secretaria que consulta e "Apagar os dados pessoais"
   alunos: ['Não escalar com', 'A lista dos alunos fica à esquerda e o aluno escolhido à direita', '#/alu/1000', '‹ Alunos',
     'gravado ao sair dele', 'Ctrl+, e Ctrl+.', 'Filtro dos cursos', 'aparecem os alunos de algum dos marcados', 'Curso: PP ou PC',
-    'Abrir a Demanda', 'aparecem os pedidos dos alunos de algum dos cursos marcados', 'O filtro dos cursos é um só nas duas telas',
+    'aparecem os pedidos dos alunos de algum dos cursos marcados', 'O filtro dos cursos é um só nas duas telas',
     'um cartão por pessoa', 'e Desfazer volta ao que está gravado', 'Outra pessoa alterou o cadastro enquanto você editava',
-    'desligue Ativo, na linha dele', 'Mostrar inativos'],
+    'desligue Ativo, na linha dele', 'Mostrar inativos', 'Nesta data', 'Sem voo nesta data.', 'Curso e missões', 'Curso matriculado',
+    'Nome (na escala)', 'Nome completo', 'o nome completo e o CANAC', 'a secretaria consulta, em texto', 'Apagar os dados pessoais'],
   // Recursos: as duas vistas, a busca pela matrícula, o filtro das categorias (a regra "alguma das marcadas") e o
   // cadastro da frota e os horários de decolagem
   recursos: ['Disponibilidade do dia', 'Novo recurso', 'Retirar', 'Horários de decolagem', 'de 30 em 30 minutos', 'divide as horas do dia',
@@ -74,7 +78,9 @@ export const FRASES_DAS_FUNCIONALIDADES = {
   hangar: ['nunca para a ordem no hangar', 'Ordem no hangar', 'a ordem no hangar.', 'depois o da frente do hangar', 'as saídas do hangar', 'menos saídas do hangar'],
   progresso: ['agrupados pela fase em que estão', 'Próxima: PP-07 · Usar', 'Outra missão…', 'próxima missão', 'progresso', 'Aprovado ou Reprovado',
     '12/40 · próxima PP-13', 'fora da ordem', 'com quantos alunos estão em cada uma',
-    'o resultado do voo vai para o código do pedido'],
+    'o resultado do voo vai para o código do pedido',
+    // Alunos (A): as missões do aluno, o resultado sem voo e a colocação no curso
+    'Missão anterior', 'Missão atual', 'Também liberadas', 'Registrar resultado sem voo', 'Colocar no curso até…', 'o ↶ dela volta cada missão'],
   prioridade: ['duração e prioridade', 'de 1 a 5, e 1 é a mais alta', 'a disponibilidade, a prioridade ou o instrutor', 'por prioridade (1 primeiro)',
     'a 1ª preferência pesa mais para quem tem mais prioridade', 'seguindo as prioridades', 'Como dar preferência a um aluno?',
     'aumente a prioridade dele (1 é a mais alta)']
