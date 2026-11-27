@@ -303,8 +303,8 @@ export const ApiClient = {
     return this.backend.cancelarSolicitacao(id, por);
   },
 
-  // Dados pessoais: fora do estado e do cadastro. No modo compartilhado o servidor decide quem lê e grava
-  // (operadores, administradores e a secretaria, que entra no modo só leitura da escala)
+  // Dados pessoais: fora do estado e do cadastro. No modo compartilhado o servidor decide quem lê (operadores,
+  // administradores e a secretaria, que entra no modo só leitura da escala) e quem grava (operadores e administradores)
   listarDadosPessoais(tipo) {
     return this.backend.listarDadosPessoais(tipo);
   },
@@ -313,8 +313,10 @@ export const ApiClient = {
     return this.backend.lerDadosPessoais(tipo, id);
   },
 
-  // Grava a partir da versão lida ao abrir o painel; o histórico da data (registrado junto) vem na resposta
+  // Grava a partir da versão lida; o histórico da data (registrado junto) vem na resposta. Quem só consulta (a
+  // Secretaria, o Gestor, a tela travada) não grava, como nos resultados
   salvarDadosPessoais(tipo, id, dados, { atualizadoEm = null, data = null } = {}) {
+    if (this.readOnly) return somenteLeitura();
     return this.backend.salvarDadosPessoais(tipo, id, dados, { autor: this.autorAtual || null, atualizadoEm, data });
   },
 

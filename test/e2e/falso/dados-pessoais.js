@@ -1,10 +1,20 @@
 // Os dados pessoais do servidor falso (test/e2e/supabase-falso.js): a tabela dados_pessoais e a função
-// salvar_dados_pessoais, com as regras do banco (js/dados-pessoais.js, as mesmas do modo local). Operadores e a
-// secretaria leem e gravam; quem sai do cadastro leva os dados pessoais junto
+// salvar_dados_pessoais, com as regras do banco (js/dados-pessoais.js, as mesmas do modo local). Operadores,
+// administradores e a secretaria leem; só operadores e administradores gravam (grava_dados_pessoais, desde o passo A);
+// quem sai do cadastro leva os dados pessoais junto. A leitura devolve só as colunas pedidas (select), como o PostgREST
 import { gravarDadosPessoais, semQuemSaiu } from '../../../js/dados-pessoais.js';
 
 const PERFIS_QUE_VEEM = ['operador', 'administrador', 'secretaria'];
+const PERFIS_QUE_GRAVAM = ['operador', 'administrador'];
 export const veDadosPessoais = conta => Boolean(conta && PERFIS_QUE_VEEM.includes(conta.perfil));
+const gravaDadosPessoais = conta => Boolean(conta && PERFIS_QUE_GRAVAM.includes(conta.perfil));
+const COLUNAS = ['tipo', 'id_cadastro', 'nome_completo', 'cpf', 'canac', 'nascimento', 'celular', 'email', 'atualizado_em', 'atualizado_por'];
+// As colunas do select (sem ele, ou com *, todas)
+export function soAsColunas(linhas, url) {
+  const pedidas = (url.searchParams.get('select') || '*').split(',').map(c => c.trim()).filter(Boolean);
+  if (pedidas.includes('*')) return linhas;
+  return linhas.map(l => Object.fromEntries(pedidas.filter(c => COLUNAS.includes(c)).map(c => [c, l[c] ?? null])));
+}
 
 // agora: o relógio do servidor; historico: as entradas do histórico (uma gravação que muda algo acrescenta uma);
 // cadastro(): o documento do cadastro guardado agora (ou undefined). ler devolve as linhas; salvar, [status, corpo]
@@ -13,10 +23,10 @@ export function criarDadosPessoais({ agora, historico, cadastro }) {
   const dadosPessoais = new Map();
   let gravacoesDeDados = 0;
 
-  const linhas = () => [...dadosPessoais].map(([chave, d]) => ({ tipo: chave.split(':')[0], id_cadastro: Number(chave.split(':')[1]), cpf: null, canac: null, nascimento: null, celular: null, email: null, ...d }));
+  const linhas = () => [...dadosPessoais].map(([chave, d]) => ({ tipo: chave.split(':')[0], id_cadastro: Number(chave.split(':')[1]), nome_completo: null, cpf: null, canac: null, nascimento: null, celular: null, email: null, ...d }));
 
   function salvar(args, conta) {
-    if (!veDadosPessoais(conta)) return [403, { code: '42501', message: 'somente operadores e a secretaria alteram dados pessoais' }];
+    if (!gravaDadosPessoais(conta)) return [403, { code: '42501', message: 'somente operadores e administradores alteram dados pessoais' }];
     try {
       const doc = cadastro();
       // Cada gravação com a sua data (como o clock_timestamp do banco)

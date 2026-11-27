@@ -1,13 +1,14 @@
-// Os dados pessoais (CPF, CANAC, nascimento, celular e e-mail) no detalhe de uma pessoa: uma seção com "Salvar" e
-// "Desfazer". Os campos aparecem na hora com o que está guardado (js/views/dados-pessoais.js) e ficam desligados até a
-// pessoa ser lida, 250 ms depois de a escolha parar nela (a gravação leva de volta a versão lida). O que se digita é o
-// rascunho daquela pessoa: fica na memória quando outra é escolhida, e a linha dela ganha o ponto "dados pessoais não
-// salvos". "Salvar" (ou Enter) confere os cinco campos e grava de uma vez (uma entrada no histórico, como sempre), depois da
-// gravação que incluiu a pessoa no cadastro; "Desfazer" joga o rascunho fora. Uma recusa fica com a pessoa (o ponto, o
-// aviso da lista, a mensagem no campo quando ela é aberta de novo). Nada disso vai para o estado, o CSV, o PDF, o BI ou o
-// link: o Gestor não vê a seção
+// Os dados pessoais (nome completo, CPF, CANAC, nascimento, celular e e-mail) no detalhe de uma pessoa: uma seção com
+// "Salvar" e "Desfazer". Os campos aparecem na hora com o que a lista já trouxe (o nome completo e o CANAC:
+// js/views/dados-pessoais.js) e ficam desligados até a pessoa ser lida, 250 ms depois de a escolha parar nela (a gravação
+// leva de volta a versão lida). O que se digita é o rascunho daquela pessoa: fica na memória quando outra é escolhida, e a
+// linha dela ganha o ponto "dados pessoais não salvos". "Salvar" (ou Enter) confere os seis campos e grava de uma vez
+// (uma entrada no histórico, como sempre), depois da gravação que incluiu a pessoa no cadastro; "Desfazer" joga o rascunho
+// fora. Uma recusa fica com a pessoa (o ponto, o aviso da lista, a mensagem no campo quando ela é aberta de novo). A
+// Secretaria lê a seção em texto (não altera); o Gestor não vê a seção. "Apagar os dados pessoais" (o rodapé de quem está
+// inativo) grava os seis campos vazios a partir da versão lida. Nada disso vai para o estado, o CSV, o PDF, o BI ou o link
 import { ultimaGravacao, mostrarNoHistorico } from '../actions.js';
-import { CAMPOS_PESSOAIS, validarDadosPessoais, formatarCpf, formatarCelular } from '../dados-pessoais.js';
+import { CAMPOS_PESSOAIS, LIMITE_DO_NOME_COMPLETO, validarDadosPessoais, formatarCpf, formatarCelular, paraGravar } from '../dados-pessoais.js';
 import { anunciar, showToast } from '../dom.js';
 import { esc, hojeISO } from '../format.js';
 import { DATA } from '../state.js';
@@ -15,7 +16,7 @@ import { ApiClient } from '../storage.js';
 import { dadosDe, guardarDados, podeVerDadosPessoais, podeEditarDadosPessoais } from './dados-pessoais.js';
 
 const VALOR = { cpf: formatarCpf, celular: formatarCelular };
-const TIPOS = { cpf: ['text', 'numeric', '000.000.000-00'], canac: ['text', 'numeric', '6 dígitos'], nascimento: ['date', '', ''], celular: ['tel', 'tel', '(37) 99999-9999'], email: ['email', 'email', 'nome@exemplo.com'] };
+const TIPOS = { nome_completo: ['text', '', ''], cpf: ['text', 'numeric', '000.000.000-00'], canac: ['text', 'numeric', '6 dígitos'], nascimento: ['date', '', ''], celular: ['tel', 'tel', '(37) 99999-9999'], email: ['email', 'email', 'nome@exemplo.com'] };
 // A leitura espera a escolha parar (as setas passando por várias pessoas não leem cada uma)
 const ESPERA_DA_LEITURA = 250;
 
@@ -45,6 +46,9 @@ function valores(tipo, id) {
   return Object.fromEntries(CAMPOS_PESSOAIS.map(({ id: c }) => [c, VALOR[c] ? VALOR[c](guardados[c]) : guardados[c] || '']));
 }
 
+// A nota da seção (e do painel dos instrutores)
+export const NOTA_DOS_DADOS = 'Só operadores, administradores e a secretaria veem estes dados. Eles não vão para a escala, o CSV, o PDF nem o link compartilhado.';
+
 // A seção "Dados pessoais" do detalhe (lista: o id da lista, que dá os ids dos campos), ou null para quem não vê
 export function secaoDosDadosPessoais(lista, tipo, id) {
   if (!podeVerDadosPessoais()) return null;
@@ -53,25 +57,31 @@ export function secaoDosDadosPessoais(lista, tipo, id) {
   const v = valores(tipo, id);
   const guardados = dadosDe(tipo, id) || {};
   const prefixo = `det-${lista}`;
+  const dica = c => (c === 'nome_completo' ? '<button type="button" class="dica-btn" data-dica="nome-completo" aria-label="O que é o nome completo?" aria-expanded="false"></button>' : '');
   const campo = ({ id: c, rotulo }) => {
     const idDoCampo = `${prefixo}-${c}`;
+    // Quem só lê: o texto; antes da leitura da pessoa, só o que a lista trouxe (o nome completo e o CANAC)
     if (!edita) {
-      return `<div class="det-campo"><span class="det-rotulo" id="${idDoCampo}-rotulo">${rotulo}</span><div class="det-valor" aria-labelledby="${idDoCampo}-rotulo">${esc(v[c] || '—')}</div></div>`;
+      const valor = c === 'nascimento' && /^\d{4}-\d{2}-\d{2}$/.test(v[c] || '') ? `${v[c].slice(8, 10)}/${v[c].slice(5, 7)}/${v[c].slice(0, 4)}` : v[c];
+      const texto = valor || (p.lida || ['nome_completo', 'canac'].includes(c) ? '—' : '…');
+      return `<div class="det-campo"><span class="det-rotulo" id="${idDoCampo}-rotulo">${rotulo}${dica(c)}</span><div class="det-valor" aria-labelledby="${idDoCampo}-rotulo">${esc(texto)}</div></div>`;
     }
     const [type, inputmode, placeholder] = TIPOS[c];
     const erro = p.erros[c] || '';
-    return `<div class="det-campo"><span class="det-rotulo"><label for="${idDoCampo}">${rotulo}</label></span><div class="det-valor">`
-      + `<input id="${idDoCampo}" class="dado-campo" data-dado="${c}" type="${type}" value="${esc(v[c] || '')}"${inputmode ? ` inputmode="${inputmode}"` : ''}${placeholder ? ` placeholder="${placeholder}"` : ''} autocomplete="off"`
+    const limite = c === 'nome_completo' ? ` maxlength="${LIMITE_DO_NOME_COMPLETO}"` : '';
+    return `<div class="det-campo"><span class="det-rotulo"><label for="${idDoCampo}">${rotulo}</label>${dica(c)}</span><div class="det-valor">`
+      + `<input id="${idDoCampo}" class="dado-campo" data-dado="${c}" type="${type}" value="${esc(v[c] || '')}"${inputmode ? ` inputmode="${inputmode}"` : ''}${placeholder ? ` placeholder="${placeholder}"` : ''}${limite} autocomplete="off"`
       + `${p.lida && !p.enviando ? '' : ' disabled'} aria-describedby="${idDoCampo}-erro"${erro ? ' aria-invalid="true"' : ''}>`
       + `<small class="erro-campo" id="${idDoCampo}-erro">${esc(erro)}</small></div></div>`;
   };
-  const aviso = p.enviando ? '' : p.recusa && !p.recusa.campo ? p.recusa.texto : p.falhou ? 'Não foi possível ler os dados pessoais.' : p.lendo || (!p.lida && edita) ? 'Lendo os dados…' : p.aviso;
+  const aviso = p.enviando ? '' : p.recusa && !p.recusa.campo ? p.recusa.texto : p.falhou ? 'Não foi possível ler os dados pessoais.' : p.lendo || !p.lida ? 'Lendo os dados…' : p.aviso;
   const tentar = p.falhou && !p.lendo ? ` <button type="button" class="btn quiet" id="${prefixo}-dados-tentar" data-ler-dados="${tipo}:${id}">Tentar de novo</button>` : '';
   const rodape = p.enviando ? 'Salvando…'
     : guardados.atualizado_em ? `Atualizado em ${quando(guardados.atualizado_em)}${guardados.atualizado_por ? ` por ${esc(guardados.atualizado_por)}` : ''}.` : '';
   const acoes = edita ? `<div class="det-dados-acoes"><button type="button" class="btn quiet" id="${prefixo}-dados-desfazer" data-desfazer-dados="${tipo}:${id}"${p.rascunho ? '' : ' hidden'}>Desfazer</button>`
     + `<button type="submit" class="btn" id="${prefixo}-dados-salvar"${p.lida && !p.enviando ? '' : ' disabled'}>Salvar</button></div>` : '';
-  const html = `<div class="dados-pessoais" data-pessoa="${tipo}:${id}"><p class="h">Só operadores, administradores e a secretaria veem estes dados. Eles não vão para a escala, o CSV, o PDF nem o link compartilhado.</p>`
+  const nota = edita ? NOTA_DOS_DADOS : `${NOTA_DOS_DADOS} A secretaria consulta; quem altera são os operadores e os administradores.`;
+  const html = `<div class="dados-pessoais" data-pessoa="${tipo}:${id}"><p class="h">${nota}</p>`
     + `<form class="dados-form" data-lista="${lista}" novalidate>${CAMPOS_PESSOAIS.map(campo).join('')}`
     + `<p class="det-dados-aviso${p.recusa || p.falhou ? ' erro' : ''}" id="${prefixo}-dados-aviso" role="alert">${esc(aviso)}${tentar}</p>`
     + `${acoes}<p class="h det-dados-rodape" aria-live="polite">${rodape}</p></form></div>`;
@@ -182,8 +192,14 @@ export async function salvar(tipo, id, form, nome) {
     anunciar(Object.values(erros)[0]);
     return;
   }
+  await gravar(tipo, id, paraGravar(dados), { versao: p.rascunho ? p.versaoDoRascunho : p.versao, nome });
+}
+
+// A gravação dos dados (os seis campos, a chave do nome completo sempre: vazia apaga) a partir da versão lida, com o
+// "Salvando…", as recusas, o histórico e o aviso. apagar: "Apagar os dados pessoais" (o aviso diz apagados)
+async function gravar(tipo, id, dados, { versao, nome, apagar = false }) {
+  const p = pessoa(tipo, id);
   const data = DATA;
-  const versao = p.rascunho ? p.versaoDoRascunho : p.versao;
   p.enviando = true;
   // "Salvando…" (com o foco num campo, a seção espera: o Enter não perde o lugar)
   avisar(tipo);
@@ -222,7 +238,8 @@ export async function salvar(tipo, id, form, nome) {
     recusar('Não foi possível salvar. Verifique a conexão e tente de novo.');
     return;
   }
-  guardarDados(tipo, id, Object.keys(dados).length ? { ...dados, atualizado_em: resposta.atualizado_em, atualizado_por: resposta.atualizado_por || null } : null);
+  const guardados = Object.fromEntries(Object.entries(dados).filter(([, v]) => v !== ''));
+  guardarDados(tipo, id, resposta.atualizado_em ? { ...guardados, atualizado_em: resposta.atualizado_em, atualizado_por: resposta.atualizado_por || null } : null);
   p.versao = resposta.atualizado_em || null;
   p.rascunho = null;
   p.versaoDoRascunho = null;
@@ -231,8 +248,24 @@ export async function salvar(tipo, id, form, nome) {
   avisar(tipo, { forcar: true });
   // O histórico já foi registrado junto com a gravação (o servidor registra os campos que mudaram)
   if (resposta.historico && data === DATA) mostrarNoHistorico(resposta.historico);
-  showToast(`Dados pessoais de ${nome} salvos.`, 'ok');
-  anunciar(`Dados pessoais de ${nome} salvos.`);
+  const texto = apagar ? `Dados pessoais de ${nome} apagados.` : `Dados pessoais de ${nome} salvos.`;
+  showToast(texto, 'ok');
+  anunciar(texto);
+}
+
+// "Apagar os dados pessoais" (o rodapé de quem está inativo): lê a pessoa (a versão de agora) e grava os seis campos
+// vazios; o servidor tira a linha e o histórico diz só os nomes dos campos
+export async function apagarDadosPessoais(tipo, id, nome) {
+  const p = pessoa(tipo, id);
+  if (p.enviando) return;
+  p.rascunho = null;
+  p.versaoDoRascunho = null;
+  p.erros = {};
+  p.recusa = null;
+  p.lida = false;
+  await ler(tipo, id);
+  if (!p.lida) return;
+  await gravar(tipo, id, paraGravar({}), { versao: p.versao, nome, apagar: true });
 }
 
 // As pessoas com uma recusa (para o aviso da lista, quando ela não está aberta)
