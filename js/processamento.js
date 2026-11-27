@@ -248,7 +248,7 @@ function alvoDaEntrada(estado, aluno) {
 // na agenda valendo mais. O id do pedido vai para importadas. Devolve o que entrou
 function entrar(estado, s, { programa, situacao, cursos }) {
   const aluno = estado.stu.find(x => x.id === s.aluno);
-  estado.importadas.push(s.id);
+  if (!estado.importadas.includes(s.id)) estado.importadas.push(s.id);
   const vinculada = missaoDoCursoDoPedido(cursos || [], s) || null;
   const copiada = vooQueDaLugar(estado, aluno, migrateLegacyMissionName(s.missao), vinculada);
   const entrada = missaoDaEntrada(estado, aluno, s, { programa, situacao, cursos, copiada });
@@ -342,7 +342,13 @@ export function aplicarConciliacao(estado, plano, { programa = [], situacao = []
     guardar(v.id);
     feito.voltaram.push(v);
   }
-  for (const s of plano.entram || []) feito.entraram.push(entrar(estado, s, { programa, situacao, cursos }));
+  // Os pedidos com a missão do curso que escolheram na Agenda (a regra 8) entram antes dos sem uma, para que a missão de
+  // cada um já esteja no dia quando a dos outros é inferida (a regra 12: não é dada de novo), na mesma importação ou em
+  // duas; dentro de cada grupo, a ordem do plano. O pedido que já tem registro (um plano aplicado de novo) não entra
+  const jaTem = registrosDosPedidos(estado);
+  const entram = (plano.entram || []).filter(s => !jaTem.has(s.id));
+  const escolheu = s => Boolean(missaoDoCursoDoPedido(cursos || [], s));
+  for (const s of [...entram.filter(escolheu), ...entram.filter(s => !escolheu(s))]) feito.entraram.push(entrar(estado, s, { programa, situacao, cursos }));
   for (const x of plano.saem || []) {
     const { aluno, registro } = doRegistro(x);
     if (!registro || registro.solicitacao !== x.id) continue;
