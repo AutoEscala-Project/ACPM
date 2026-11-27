@@ -218,6 +218,29 @@ describe('Importar as solicitações da agenda para a demanda', () => {
     assert.deepEqual(out.map(v => [v.fKey, v.a, Boolean(v.fixo), v.conflito || []]), [['1000_0_1', 610, true, []], ['1000_1_1', 820, false, []]]);
   });
 
+  // A diferença 3 do E (a interação do F1g): o registro com um fixo posto à mão (agendado, pelo "+ Agendar voo" e pelo
+  // editor do voo na Escala; escolhido, pelo INVA escolhido na Escala) nunca é sobrescrito: nem por um pedido novo da
+  // mesma missão, nem pela conciliação do pedido dele (admitido ou de volta à escala, nada mais muda)
+  it('o registro com o fixo posto à mão (agendado ou escolhido) nunca é sobrescrito pela importação', () => {
+    for (const marca of [{ agendado: true }, { escolhido: true }]) {
+      const e = { ...estado(), stu: [aluno(1000, { p1: 610, p2: -1, insId: 2 })], fixos: { '1000_0_1': { a: 610, b: 670, r: 'PP-LJV', insId: 2, ...marca } } };
+      const antes = structuredClone(e.stu[0]);
+      importarSolicitacoes(e, [pedido(90, 1000, { janela: 'horario', horario: '08:20' })]);
+      const { extra, ...principal } = e.stu[0];
+      assert.deepEqual(principal, (({ extra: _, ...r }) => r)(antes), JSON.stringify(marca));
+      assert.deepEqual(extra.map(x => [x.mid, x.solicitacao, x.jan]), [[1, 90, 'h500']]);
+    }
+    // O voo do pedido 91 mudado no editor da Escala (o horário, o recurso e o INVA, com o fixo agendado): importar de novo,
+    // com o id fora de importadas (admitido) ou sem voar (volta), não traz de volta o que o pedido dizia
+    const editado = { mis: 'Voo Local', eq: 'C172', p1: 700, p2: -1, jan: 'h700', insId: 3, solicitacao: 91 };
+    for (const fly of [true, false]) {
+      const e = { ...estado(), stu: [aluno(1000, { ...editado, fly })], fixos: { '1000_0_1': { a: 700, b: 760, r: 'PP-ABP', insId: 3, agendado: true } } };
+      importarSolicitacoes(e, [pedido(91, 1000, { janela: 'horario', horario: '08:20', recurso: 'C152' })]);
+      assert.deepEqual(Object.fromEntries(Object.keys(editado).map(c => [c, e.stu[0][c]])), editado, `fly ${fly}`);
+      assert.deepEqual([e.stu[0].fly, e.stu[0].extra, e.importadas, Object.keys(e.fixos)], [true, [], [91], ['1000_0_1']]);
+    }
+  });
+
   // O voo que já tem resultado na data aconteceu: o pedido da agenda que tomasse o lugar dele mostraria o resultado dele
   it('o voo que já tem resultado na data também não dá lugar ao pedido da agenda', () => {
     const e = { ...estado(), resultados: { situacao: [], doDia: [{ id: 1, aluno: 1002, curso: 'PP', missao: 'PP-01', resultado: 'aprovado', data: '2026-11-11', voo: '1002_0_1' }] } };
