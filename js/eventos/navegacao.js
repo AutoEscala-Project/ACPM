@@ -36,8 +36,8 @@ document.addEventListener('click', e => {
   }
   // Recolher e abrir os horários da Lista (Escala); as categorias da frota e as vistas de Recursos e de Instrutores ficam
   // nos módulos delas (js/eventos/recursos.js, js/eventos/instrutores.js)
-  const tempo = e.target.closest('[data-recolher-tempo]');
-  if (tempo) { alternarTempo(+tempo.dataset.recolherTempo); return; }
+  const tempo = e.target.closest('[data-recolher-inicio]');
+  if (tempo) { alternarTempo(+tempo.dataset.recolherInicio); return; }
   const todosDoBI = e.target.closest('[data-bi-todos]');
   if (todosDoBI) alternarTodosDoBI(todosDoBI.dataset.biTodos);
 });

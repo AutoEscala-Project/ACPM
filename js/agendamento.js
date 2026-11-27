@@ -75,7 +75,7 @@ const naDataAs = (dia, verbo, horarios) => [verbo, dia.quando, `às ${horarios}`
 // O contexto e os horários
 
 // O contexto de onde o diálogo abriu (data-agendar): a barra da Escala ('dia'), a linha de um recurso ('r:PR-VOB') ou de
-// um instrutor ('i:7') no mapa, um horário da lista ('w:2'), a turma de Ground ('t:<turma>'), ou o clique no mapa
+// um instrutor ('i:7') no mapa, um horário da lista ('h:610', o início do grupo), a turma de Ground ('t:<turma>'), ou o clique no mapa
 // ({ r ou insId, minuto }). minuto: de onde a busca do horário parte; desde e ate: os limites dela (null: sem limite);
 // perto: o horário mais perto do minuto (o clique), senão o primeiro livre a partir dele. Na data de hoje, a partir de agora
 export function contextoInicial(valor, { data, hoje, agora = 0 } = {}) {
@@ -94,10 +94,8 @@ export function contextoInicial(valor, { data, hoje, agora = 0 } = {}) {
   const arg = resto.join(':');
   if (tipo === 'r' && arg) return { ...contexto, origem: 'recurso', r: arg };
   if (tipo === 'i' && /^\d+$/.test(arg) && +arg > 0) return { ...contexto, origem: 'instrutor', insId: +arg };
-  if (tipo === 'w' && /^[0-8]$/.test(arg)) {
-    const w = +arg;
-    return { ...contexto, origem: 'periodo', w, minuto: INICIOS_DOS_TEMPOS[w], desde: INICIOS_DOS_TEMPOS[w], ate: w < INICIOS_DOS_TEMPOS.length - 1 ? INICIOS_DOS_TEMPOS[w + 1] : MINUTOS_DO_DIA };
-  }
+  // O "+" de um grupo da Lista (J, S1): a busca parte do horário de início dele, sem limite até o grupo seguinte
+  if (tipo === 'h' && /^\d{1,4}$/.test(arg) && +arg < MINUTOS_DO_DIA) return { ...contexto, origem: 'horario', minuto: +arg, desde: +arg };
   if (tipo === 't' && arg) return { ...contexto, origem: 'turma', classKey: arg };
   return contexto;
 }
@@ -853,7 +851,7 @@ function textoDoContexto(contexto, ambiente, { r = null, tipo = null, a, recurso
   else if (contexto.origem === 'mapa') {
     const clique = `clique perto das ${hm(contexto.minuto)}`;
     partes = [com, onde, !comAluno ? clique : quando ? `${clique} → ${quando} (${nomeDosHorariosDoTipo(tipo)})` : horario(clique)];
-  } else if (contexto.origem === 'periodo') partes = [onde, horario(`o primeiro horário livre a partir das ${hm(contexto.desde)}`)];
+  } else if (contexto.origem === 'horario') partes = [onde, horario(`o primeiro horário livre a partir das ${hm(contexto.desde)}`)];
   else if (contexto.origem === 'recurso') partes = [onde, horario('o primeiro horário livre')];
   else if (contexto.origem === 'instrutor') partes = [com, horario('o primeiro horário livre')];
   else {
