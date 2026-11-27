@@ -6,6 +6,7 @@ import { textoDoCombustivel } from '../combustivel.js';
 import { hm, WLB, fmtH, esc, rotuloDaData, hojeISO, duracaoHm, DURACAO_DO_GROUND, pesoBr, chaveDeBusca } from '../format.js';
 import { isGroundMission } from '../rules.js';
 import { categoriaDoTipo, nomeDoRecurso } from '../categorias.js';
+import { salaDisponivel } from '../frota.js';
 import { textoDoDetalhe, classeDoStatus, rotuloDoStatus, STATUS_COM_DETALHE } from '../status.js';
 import { validarReversao } from '../reversoes.js';
 import { linhasDoQuadro, quadroDoDia } from '../quadro.js';
@@ -72,12 +73,13 @@ function detalhesDaLinha(linha, porInstrutor, mapa) {
   }
   const r = linha.chave, ground = r === GROUND_REG;
   const recurso = ground ? null : (S.frota || []).find(f => f.reg === r) || null;
-  const manutencao = mapa && Boolean(recurso) && !S.av[r];
+  // A Sala Ground indisponível na data (S4, salaDisponivel), como o avião em manutenção: a coluna diz, e não agenda
+  const manutencao = mapa && (ground ? !salaDisponivel(S.av) : Boolean(recurso) && !S.av[r]);
   const inativoAqui = mapa && Boolean(recurso) && inativoNaDataAberta(recurso);
-  const agenda = mapa && (ground || (Boolean(recurso) && !manutencao && !inativoAqui));
+  const agenda = mapa && (ground ? !manutencao : Boolean(recurso) && !manutencao && !inativoAqui);
   const tipo = ground ? '' : (linha.voos.length ? linha.voos[0].eqType : recurso && recurso.tipo) || '';
   return {
-    sub: [tipo, horas, manutencao ? 'em manutenção' : '', inativoAqui ? 'inativo' : ''].filter(Boolean).join(' · '), dados: `data-r="${esc(r)}"`, manutencao, inerte: mapa && !agenda,
+    sub: [tipo, horas, manutencao ? (ground ? 'indisponível' : 'em manutenção') : '', inativoAqui ? 'inativo' : ''].filter(Boolean).join(' · '), dados: `data-r="${esc(r)}"`, manutencao, inerte: mapa && !agenda,
     agendar: agenda ? { valor: `r:${r}`, nome: `Agendar ${ground ? 'na Sala Ground' : `no ${r}`}` } : null
   };
 }
@@ -544,7 +546,8 @@ function filtrosDaEscala(out) {
 function linhasLivres({ categoria, daCategoria, recurso, texto }) {
   if (!vistaDoMapa() || recurso || texto) return [];
   if (TL_MODE === 'ins') return categoria ? [] : S.ins.filter(x => x.on && !inativoNaDataAberta(x)).map(x => [x.id, x.nm]);
-  return [...(S.frota || []).filter(f => !inativoNaDataAberta(f) && !(OCULTAR_INDISPONIVEIS && !S.av[f.reg])).map(f => f.reg), GROUND_REG].filter(daCategoria).map(r => [r, nomeDoRecurso(r)]);
+  const sala = OCULTAR_INDISPONIVEIS && !salaDisponivel(S.av) ? [] : [GROUND_REG];
+  return [...(S.frota || []).filter(f => !inativoNaDataAberta(f) && !(OCULTAR_INDISPONIVEIS && !S.av[f.reg])).map(f => f.reg), ...sala].filter(daCategoria).map(r => [r, nomeDoRecurso(r)]);
 }
 
 // A escala é refeita a cada alteração (save em actions.js): aqui ela só é desenhada, na visão escolhida na barra.

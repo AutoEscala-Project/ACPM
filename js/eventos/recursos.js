@@ -1,8 +1,8 @@
 // Recursos: a frota (acrescentar e retirar), a disponibilidade e as horas até a revisão de 50 horas, as janelas de
 // operação, o hangar, os horários de decolagem e os filtros (a busca pela matrícula e as categorias)
 import { gravarAlteracao, aindaNaoAbriu } from '../actions.js';
-import { categoriaDoTipo } from '../categorias.js';
-import { REVISAO_H } from '../config.js';
+import { categoriaDoTipo, nomeDoRecurso } from '../categorias.js';
+import { REVISAO_H, GROUND_REG } from '../config.js';
 import { $, showToast, fecharNoEsc } from '../dom.js';
 import { hm, fmtH, lerHoras } from '../format.js';
 import { ligada } from '../funcionalidades.js';
@@ -136,7 +136,9 @@ aoMudarCampo('win', t => {
 aoMudarCampo('av', t => {
   const reg = t.dataset.id;
   S.av[reg] = t.checked;
-  gravarAlteracao(t.checked ? 'inc' : 'exc', `${reg}: ${t.checked ? 'Disponível' : 'Manutenção'}`, {
+  // A Sala Ground não entra em manutenção: fica indisponível na data (S4)
+  const fora = reg === GROUND_REG ? 'Indisponível' : 'Manutenção';
+  gravarAlteracao(t.checked ? 'inc' : 'exc', `${nomeDoRecurso(reg)}: ${t.checked ? 'Disponível' : fora}`, {
     kind: 'setAv', reg, val: !t.checked, label: '↶ Reverter'
   });
   rRec();
@@ -243,7 +245,8 @@ fecharNoEsc(() => (editorDosHorariosAberto() ? $('#horarios') : null), fecharEdi
 // "↶ Reverter" no histórico (js/eventos/historico.js): os tipos desta tela. A reversão chega validada (js/reversoes.js)
 aoReverter('setAv', (rev, entry) => {
   S.av[rev.reg] = rev.val;
-  gravarAlteracao(rev.val ? 'inc' : 'exc', `Revertido: ${rev.reg} ${rev.val ? 'disponível' : 'em manutenção'}`, null, entry.id);
+  const fora = rev.reg === GROUND_REG ? 'indisponível' : 'em manutenção';
+  gravarAlteracao(rev.val ? 'inc' : 'exc', `Revertido: ${nomeDoRecurso(rev.reg)} ${rev.val ? 'disponível' : fora}`, null, entry.id);
   rRec();
 });
 
