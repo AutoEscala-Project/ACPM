@@ -9,6 +9,7 @@ import { normalizarCursos } from '../../js/cursos.js';
 import { simularNavegador } from '../helpers/navegador.js';
 import { PROGRAMA, IDS } from '../helpers/casos-do-programa.js';
 import { CASOS_DA_AGENDA, CURSO_DOS_CASOS, pedidoDosCasos, localDosCasos } from '../helpers/casos-da-agenda.js';
+import { CASOS_DAS_SOLICITACOES, AGORA_DOS_CASOS, DATAS_DOS_CASOS, ID_QUE_NAO_EXISTE, linhaDoCaso, pedidoDoPasso, situacaoDoCaso, paraOModoLocal } from '../helpers/casos-das-solicitacoes.js';
 import { cursosIniciais } from '../../js/programa.js';
 import { CASOS_DOS_DADOS_PESSOAIS, CADASTRO_DOS_CASOS, ALUNO_DOS_CASOS, VERSAO_DOS_CASOS, tabelaDoCaso, versaoLidaDoCaso } from '../helpers/casos-dos-dados-pessoais.js';
 
@@ -150,8 +151,108 @@ describe('Backend local: agenda de solicitações', () => {
       }
       const id = await registro;
       const s = (await backendLocal.listarSolicitacoes('2026-11-16', '2026-11-16')).find(x => x.id === id);
-      assert.deepEqual({ horas: s.horas, recurso: s.recurso, missao_do_curso: s.missao_do_curso, limite_confirmado: s.limite_confirmado_por !== null && s.limite_confirmado_em !== null },
+      assert.deepEqual({ horas: s.horas, recurso: s.recurso, missao_do_curso: s.missao_do_curso, limite_confirmado: s.limite_confirmado_por !== null && s.limite_confirmado_em !== null, horario2: s.horario2 },
         caso.registrado);
+    });
+  }
+
+  // O pedido nasce aprovado com aprovar (quem aprovou: quem anotou, já que este navegador não tem conta) ou pela exceção
+  it('o pedido registrado com aprovar, ou pela exceção, nasce aprovado por quem anotou; sem, aguarda', async () => {
+    const aprovado = await backendLocal.registrarSolicitacao(pedido({ aprovar: true }), antesDas13);
+    const aguardando = await backendLocal.registrarSolicitacao(pedido({ aluno: 1001 }), antesDas13);
+    const excecao = await backendLocal.registrarSolicitacao(pedido({ aluno: 1002, excecao: true }), depoisDas13);
+    const lista = await backendLocal.listarSolicitacoes('2026-11-11', '2026-11-11');
+    const de = id => lista.find(s => s.id === id);
+    assert.deepEqual([de(aprovado).aprovada_por, de(aprovado).aprovada_em], ['Maria', antesDas13.toISOString()]);
+    assert.deepEqual([de(aguardando).aprovada_por, de(aguardando).aprovada_em, de(aguardando).horario2], [null, null, null]);
+    assert.deepEqual([de(excecao).aprovada_por, de(excecao).aprovada_em], ['Maria', depoisDas13.toISOString()]);
+  });
+
+  it('aprovar e retirar a aprovação guardam quem (o nome dado; sem ele, Operador) e quando', async () => {
+    const id = await backendLocal.registrarSolicitacao(pedido(), antesDas13);
+    assert.deepEqual(await backendLocal.aprovarSolicitacoes([id], { por: ' Coordenação ', agora: antesDas13 }), [id]);
+    let [s] = await backendLocal.listarSolicitacoes('2026-11-11', '2026-11-11');
+    assert.deepEqual([s.aprovada_por, s.aprovada_em], ['Coordenação', antesDas13.toISOString()]);
+    await backendLocal.retirarAprovacaoDaSolicitacao(id, { agora: depoisDas13 });
+    [s] = await backendLocal.listarSolicitacoes('2026-11-11', '2026-11-11');
+    assert.deepEqual([s.aprovada_por, s.aprovada_em, s.aprovacao_retirada_por, s.aprovacao_retirada_em], [null, null, 'Operador', depoisDas13.toISOString()]);
+  });
+
+  it('a contagem por dia: os que aguardam e os aprovados, sem os cancelados', async () => {
+    await backendLocal.registrarSolicitacao(pedido({ aprovar: true }), antesDas13);
+    await backendLocal.registrarSolicitacao(pedido({ aluno: 1001 }), antesDas13);
+    const cancelado = await backendLocal.registrarSolicitacao(pedido({ data: '2026-11-12', aluno: 1002 }), antesDas13);
+    await backendLocal.cancelarSolicitacao(cancelado, 'Maria', antesDas13);
+    assert.deepEqual(await backendLocal.solicitacoesPorDia('2026-11-01', '2026-11-30'), { '2026-11-11': { aguardando: 1, aprovadas: 1 } });
+    assert.deepEqual(await backendLocal.solicitacoesPorDia('2026-11-12', '2026-11-30'), {});
+  });
+
+  // A conversão dos pedidos de antes, uma vez (a marca acpm4_agenda_aprovacoes): a regra (a) do banco, sobre os dias deste
+  // navegador, e a (b) para todos os pedidos (não há contas: quem usa tem os direitos de operador)
+  it('os pedidos de antes da aprovação: convertidos uma vez, pelas regras do banco', async () => {
+    const hoje = new Date();
+    const dia = n => new Date(hoje.getTime() + n * 864e5).toISOString().slice(0, 10);
+    const linha = (id, data, extra = {}) => ({ id, data, aluno: 1000 + id, aluno_nome: 'Aluno', missao: 'Navegação', janela: 'horario', horario: '08:20', horas: 1,
+      recurso: 'C152', observacao: null, registrado_por: 'Maria', registrado_em: hoje.toISOString(), conta: null, excecao: false, cancelada_em: null, cancelada_por: null, ...extra });
+    localStorage.setItem('acpm4_agenda', JSON.stringify([
+      linha(1, dia(-3)), linha(2, dia(-3)), linha(3, dia(3)), linha(4, dia(3)), linha(5, dia(3)), linha(6, dia(3), { cancelada_em: hoje.toISOString(), cancelada_por: 'Maria' }),
+      linha(7, dia(4))
+    ]));
+    localStorage.setItem(`acpm4_dia_${dia(-3)}`, JSON.stringify({ importadas: [1], pedidos: {} }));
+    localStorage.setItem(`acpm4_dia_${dia(3)}`, JSON.stringify({ importadas: [3, 4, 5, 6], pedidos: { 1003: { fly: false, solicitacao: 3, extra: [] }, 1004: { extra: [{ solicitacao: 4 }] }, 1006: { solicitacao: 6, extra: [] } } }));
+    const lista = await backendLocal.listarSolicitacoes(dia(-10), dia(10));
+    const aprovadaPor = Object.fromEntries(lista.map(s => [s.id, s.aprovada_por]));
+    assert.deepEqual(aprovadaPor, { 1: 'importação anterior', 2: null, 3: 'importação anterior', 4: 'importação anterior', 5: null, 6: null, 7: 'Maria' });
+    assert.ok(lista.every(s => ['aprovada_em', 'aprovada_por', 'aprovacao_retirada_em', 'aprovacao_retirada_por', 'horario2'].every(c => Object.hasOwn(s, c))), 'as colunas novas em todas as linhas');
+    assert.equal(localStorage.getItem('acpm4_agenda_aprovacoes'), '1');
+    // Uma vez só: o pedido que aguarda depois da conversão continua aguardando
+    const guardada = JSON.parse(localStorage.getItem('acpm4_agenda'));
+    guardada.find(s => s.id === 7).aprovada_por = null;
+    guardada.find(s => s.id === 7).aprovada_em = null;
+    localStorage.setItem('acpm4_agenda', JSON.stringify(guardada));
+    assert.equal((await backendLocal.listarSolicitacoes(dia(-10), dia(10))).find(s => s.id === 7).aprovada_em, null);
+  });
+
+  // Os casos da aprovação (test/helpers/casos-das-solicitacoes.js) que o modo local faz (só os dos operadores), no relógio
+  // dos casos, com a conversão já feita
+  for (const caso of CASOS_DAS_SOLICITACOES.filter(paraOModoLocal)) {
+    it(`caso da aprovação: ${caso.nome}`, async () => {
+      const agora = new Date(AGORA_DOS_CASOS);
+      const NOMES = { operador: 'Operador de teste', administrador: 'Admin de teste' };
+      localStorage.setItem('acpm4_agenda_aprovacoes', '1');
+      const ids = {};
+      const existentes = (caso.existentes || []).map((e, i) => { ids[e.chave] = 100 + i; return linhaDoCaso(e, 100 + i); });
+      localStorage.setItem('acpm4_agenda', JSON.stringify(existentes));
+      let registrados = 0;
+      for (const passo of caso.passos) {
+        const id = chave => ids[chave] ?? ID_QUE_NAO_EXISTE;
+        const fazer = () => {
+          if (passo.registrar) return backendLocal.registrarSolicitacao(pedidoDoPasso(passo.registrar, 1000), agora);
+          if (passo.aprovar) return backendLocal.aprovarSolicitacoes(passo.aprovar.map(id), { por: NOMES[passo.como], agora });
+          if (passo.retirar) return backendLocal.retirarAprovacaoDaSolicitacao(id(passo.retirar), { por: NOMES[passo.como], agora });
+          if (passo.cancelar) return backendLocal.cancelarSolicitacao(id(passo.cancelar), 'Maria', agora);
+          return backendLocal.solicitacoesPorDia(DATAS_DOS_CASOS[passo.contar[0]], DATAS_DOS_CASOS[passo.contar[1]]);
+        };
+        if (passo.erro) {
+          await assert.rejects(fazer(), e => e.code === passo.erro.code && (e.campo ?? null) === passo.erro.campo, JSON.stringify(passo));
+          continue;
+        }
+        const r = await fazer();
+        if (passo.registrar) { ids[passo.chave] = r; registrados++; }
+        const chaveDe = Object.fromEntries(Object.entries(ids).map(([c, i]) => [i, c]));
+        if (passo.aprovar) assert.deepEqual(r.map(i => chaveDe[i]), passo.devolve);
+        if (passo.contar) {
+          const rotulo = Object.fromEntries(Object.entries(DATAS_DOS_CASOS).map(([r, d]) => [d, r]));
+          assert.deepEqual(Object.fromEntries(Object.entries(r).map(([d, n]) => [rotulo[d], n])), passo.devolve);
+        }
+      }
+      const lista = JSON.parse(localStorage.getItem('acpm4_agenda'));
+      assert.equal(lista.length, existentes.length + registrados);
+      for (const [chave, situacao] of Object.entries(caso.fica)) assert.equal(situacaoDoCaso(lista.find(s => s.id === ids[chave])), situacao, chave);
+      // Quem aprovou: o nome dado a aprovarSolicitacoes (o registro aprovado guarda quem anotou: não é conferido aqui)
+      if (!caso.passos.some(p => p.registrar)) {
+        for (const [chave, como] of Object.entries(caso.aprovadaPor || {})) assert.equal(lista.find(s => s.id === ids[chave]).aprovada_por, NOMES[como], chave);
+      }
     });
   }
 

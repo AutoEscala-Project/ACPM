@@ -1,6 +1,6 @@
 -- Retorno da operação (14/11): a agenda guarda a duração do voo (horas fracionadas, até 5 h) e o pedido novo é sempre
--- num horário específico. A função antiga (sem a duração) continua até o app novo estar no ar. Roda dentro de uma
--- transação desfeita no final.
+-- num horário específico. A função antiga (sem a duração) saiu no passo D1 (a migração aprovacao_dos_pedidos). Roda dentro
+-- de uma transação desfeita no final.
 begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions;
@@ -15,8 +15,8 @@ insert into public.perfis (usuario, perfil, nome) values ('00000000-0000-4000-d1
 select has_column('public', 'solicitacoes', 'horas', 'a agenda guarda a duração');
 select has_function('public', 'registrar_solicitacao', array['date', 'integer', 'text', 'text', 'text', 'text', 'numeric', 'text', 'text', 'boolean'],
   'função nova, com a duração');
-select has_function('public', 'registrar_solicitacao', array['date', 'integer', 'text', 'text', 'text', 'text', 'text', 'text', 'boolean'],
-  'a função antiga continua enquanto o app anterior estiver no ar');
+select hasnt_function('public', 'registrar_solicitacao', array['date', 'integer', 'text', 'text', 'text', 'text', 'text', 'text', 'boolean'],
+  'a função antiga (sem a duração) saiu');
 
 set local role authenticated;
 select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-d100-000000000001","role":"authenticated"}', true);

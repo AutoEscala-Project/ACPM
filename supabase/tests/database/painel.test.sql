@@ -8,7 +8,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions;
 
-select plan(58);
+select plan(60);
 
 insert into auth.users (id, email, created_at, updated_at) values
   ('00000000-0000-4000-a000-000000000031', 'painel@painel.acpm.invalid', now(), now()),
@@ -80,6 +80,8 @@ select ok(not exists (select 1 from public.documentos), 'painel não lê os docu
 select ok(not exists (select 1 from public.dias), 'painel não lê os dias');
 select ok(not exists (select 1 from public.historico), 'painel não lê o histórico');
 select ok(not exists (select 1 from public.solicitacoes), 'painel não lê a agenda');
+select is(public.solicitacoes_por_dia(current_date - 30, current_date + 30), '{}'::jsonb, 'painel não lê a contagem dos pedidos');
+select throws_ok($$ select public.aprovar_solicitacoes(array[1::bigint]) $$, '42501', null, 'painel não aprova pedidos');
 select ok(not exists (select 1 from public.dados_pessoais), 'painel não lê os dados pessoais');
 select is(pg_temp.linhas_do_zz9(), array[0, 0, 0, 0, 0, 0], 'painel não lê os cursos (nem as fases, as missões, os requisitos e as versões)');
 select throws_ok($$ select public.salvar_dia(current_date, '{}', 0) $$, '42501', null, 'painel não grava a escala');
