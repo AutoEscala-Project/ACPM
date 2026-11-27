@@ -22,7 +22,8 @@
 //   colunas, Ground sem coluna) vai na última linha da planilha.
 // - A linha com mais texto do que as 2 linhas que o modelo comporta fica mais alta (o Excel não aumenta sozinho uma
 //   linha de altura fixa).
-import { T, NI, GROUND_REG } from './config.js';
+import { GROUND_REG } from './config.js';
+import { HORARIO_DO_NOTURNO } from './horarios.js';
 import { hm } from './format.js';
 import { FROTA_INICIAL } from './frota.js';
 import { intervaloEfetivo } from './status.js';
@@ -44,7 +45,7 @@ export const BLOCOS = [
     modelo: ['PP-LJV', 'PR-BTB', 'PR-IGU', 'PR-VOB', 'PR-VOC', 'PR-VOI', 'PR-VOP', 'PR-VOZ', 'PR-VOW', 'PR-TBT', 'PR-THI', 'PR-MLB', 'PR-JPL']
   },
   {
-    tipos: ['C172'], linhaDaMatricula: 17, linhas: [...linhas(19), { linha: 26, inicio: T[NI] }],
+    tipos: ['C172'], linhaDaMatricula: 17, linhas: [...linhas(19), { linha: 26, inicio: HORARIO_DO_NOTURNO }],
     colunas: ['B', 'D', 'F', 'H', 'J', 'L'],
     modelo: ['PP-ABP', 'PP-AJS', 'PR-BUL', 'PR-CPL', 'PR-HAR', 'PR-VOY']
   },

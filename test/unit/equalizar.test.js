@@ -44,7 +44,7 @@ describe('Divisão igual das horas entre os instrutores', () => {
   it('a turma de Ground se move inteira e conta 1h30 uma vez só', () => {
     const turma = [1000, 1001, 1002].map(id => aluno(id, { ...GROUND_C152, p1: 390, p2: 500 }));
     // Outra turma à tarde: as duas cairiam com o instrutor de menos habilitações (3 h contra 0)
-    const { out } = escala({ ins: [instrutor(1, 1), instrutor(2, 9)], stu: [...turma, aluno(1003, { ...GROUND_C152, p1: 760, p2: 820, jan: 'tarde' })] });
+    const { out } = escala({ ins: [instrutor(1, 1), instrutor(2, 9)], stu: [...turma, aluno(1003, { ...GROUND_C152, p1: 760, p2: 820, jan: 'h760' })] });
     const instrutoresDaTurma = new Set(out.filter(o => turma.some(t => t.id === o.stuId)).map(o => o.insId));
     assert.equal(instrutoresDaTurma.size, 1, 'a turma continua com um instrutor só');
     assert.deepEqual(Object.values(horasPorInstrutor(out)).sort(), [1.5, 1.5]);

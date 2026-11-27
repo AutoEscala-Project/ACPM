@@ -166,7 +166,7 @@ test('o "+ missão" da Demanda aparece com o foco do teclado em qualquer campo d
   const linha = page.locator('#dem tr[data-id="1000"]');
   await page.mouse.move(0, 0);
   expect(await opacidade(linha.locator('.btn-add-mis'))).toBe('0');
-  await linha.locator('[data-f="jan"]').focus();
+  await linha.locator('[data-f="nb"]').focus();
   await expect.poll(() => opacidade(linha.locator('.btn-add-mis'))).toBe('1');
 });
 

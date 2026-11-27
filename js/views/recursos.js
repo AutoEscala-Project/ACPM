@@ -1,19 +1,22 @@
-// Aba Recursos, em duas vistas (js/views/vistas.js). A Disponibilidade do dia vale para a data aberta no topo: as janelas
-// de operação, a tabela dos aviões e simuladores (disponível ou em manutenção, as horas até a revisão de 50 horas e o que
+// Aba Recursos, em duas vistas (js/views/vistas.js). A Disponibilidade do dia vale para a data aberta no topo: os horários
+// fechados nesta data (js/views/fechamentos.js), a tabela dos aviões e simuladores (disponível ou em manutenção, as horas até a revisão de 50 horas e o que
 // o avião voa na escala do dia; cada categoria recolhe e abre) e, ao lado dela, a ordem no hangar. O Cadastro vale para
 // todas as datas: a frota, com os atributos e o Retirar, e os horários de decolagem (js/views/horarios.js). A busca pela
 // matrícula e as categorias (js/views/filtros-dos-recursos.js) valem para a tabela, a frota e os horários, nunca para o
 // hangar; a barra diz quantos recursos aparecem.
-import { WIN, NI, AIRCRAFT_EQ_TYPES, SIM_EQ_TYPES, REVISAO_H } from '../config.js';
+import { AIRCRAFT_EQ_TYPES, SIM_EQ_TYPES, REVISAO_H, GROUND_REG } from '../config.js';
 import { ligada } from '../funcionalidades.js';
 import { normalizarHangar } from '../hangar.js';
-import { FROTA_INICIAL, ATRIBUTOS_DO_RECURSO, atributoVale, exigenciasDoAviao, habilitacaoDoAviao } from '../frota.js';
+import { FROTA_INICIAL, ATRIBUTOS_DO_RECURSO, atributoVale, exigenciasDoAviao, habilitacaoDoAviao, salaDisponivel } from '../frota.js';
+import { nomeDoRecurso } from '../categorias.js';
 import { nomeDaHabilitacao } from '../habilitacoes.js';
 import { S, RES, voosQueVoam, isGestor, inativoNaDataAberta } from '../state.js';
+import { umPorUnidade } from '../voo.js';
 import { $, trocarConteudo } from '../dom.js';
 import { hm, fmtH, esc } from '../format.js';
 import { rHorarios } from './horarios.js';
-import { recursoAVista, filtrandoRecursos } from './filtros-dos-recursos.js';
+import { rFechamentos } from './fechamentos.js';
+import { recursoAVista, filtrandoRecursos, SALA_GROUND } from './filtros-dos-recursos.js';
 import { mostrarVista } from './vistas.js';
 
 // Os grupos usam os ids das categorias do filtro (js/categorias.js)
@@ -36,8 +39,12 @@ export function alternarGrupoDaFrota(id) {
   if (botao) botao.setAttribute('aria-expanded', String(!recolher));
 }
 
+// Disponível nesta data: a Sala Ground pelo "Disponível" dela (S4: sem a chave, disponível); os outros, pelo av
+const disponivel = r => (r === GROUND_REG ? salaDisponivel(S.av) : Boolean(S.av[r]));
+
 function situacao(r, voadas, revisao) {
-  if (!S.av[r]) return '<span class="tag">Em manutenção</span>';
+  if (r === GROUND_REG && !disponivel(r)) return '<span class="tag">Indisponível</span>';
+  if (!disponivel(r)) return '<span class="tag">Em manutenção</span>';
   if (revisao && revisao.paraAs !== null) {
     return `<span class="tag er">Parou para revisão de 50 horas ${revisao.voadas ? 'às ' + hm(revisao.paraAs) : '(sem saldo hoje)'}</span>`;
   }
@@ -63,9 +70,10 @@ function linha(recurso, grupo, voadas, revisao) {
   const horas = S.horas[r];
   const temHoras = typeof horas === 'number';
   const parafuso = etiquetasDoRecurso(recurso);
-  return `<tr data-r="${esc(r)}" data-grupo="${grupo}"${S.av[r] ? '' : ' class="manutencao"'}${recolhidos.has(grupo) ? ' hidden' : ''}>
-    <td><label class="alvo"><input type="checkbox" class="sw" data-a="av" data-id="${esc(r)}"${S.av[r] ? ' checked' : ''} aria-label="${esc(r)} disponível"></label></td>
-    <td><b>${esc(r)}</b>${aviao ? '' : ` <small class="sm">${tipo}</small>`}${parafuso}</td>
+  const sala = r === GROUND_REG;
+  return `<tr data-r="${esc(r)}" data-grupo="${grupo}"${disponivel(r) ? '' : ' class="manutencao"'}${recolhidos.has(grupo) ? ' hidden' : ''}>
+    <td><label class="alvo"><input type="checkbox" class="sw" data-a="av" data-id="${esc(r)}"${disponivel(r) ? ' checked' : ''} aria-label="${esc(nomeDoRecurso(r))} disponível"></label></td>
+    <td><b>${esc(nomeDoRecurso(r))}</b>${aviao || sala ? '' : ` <small class="sm">${tipo}</small>`}${parafuso}</td>
     <td>${aviao ? `<span class="horas-disp"><input type="number" class="horas" min="0" max="${REVISAO_H}" step="0.1" inputmode="decimal" data-a="horas" data-horas="${esc(r)}" value="${temHoras ? horasDisponiveis(horas) : ''}" placeholder="—" aria-label="Horas disponíveis do ${esc(r)} até a revisão"> h${temHoras ? barra(horas) : ''}</span>` : ''}</td>
     <td>${situacao(r, voadas, revisao)}</td>
     <td class="edit-only acoes-frota">${aviao ? `<button class="btn quiet rev" data-act="revisao" data-id="${esc(r)}">Revisão feita</button>` : ''}</td>
@@ -82,10 +90,16 @@ const semResultado = () => filtrandoRecursos() && (S.frota || []).length > 0;
 // conta todos os recursos da categoria, também os que os filtros escondem
 export function rRevisao() {
   const resumo = (RES && RES.revisao) || {};
+  // As horas de cada recurso na escala: uma vez por unidade (a turma de Ground tem uma linha por aluno, mas ocupa a sala
+  // uma vez só, como no mapa)
   const voadas = {};
-  voosQueVoam().forEach(o => { voadas[o.r] = (voadas[o.r] || 0) + o.h; });
-  const grupos = gruposDaFrota().map(({ id, rotulo, recursos, aVista }) => {
-    const disponiveis = recursos.filter(f => S.av[f.reg]).length;
+  umPorUnidade(voosQueVoam()).forEach(o => { voadas[o.r] = (voadas[o.r] || 0) + o.h; });
+  // A Sala Ground (S4) é o último grupo da tabela desta data, com o "Disponível" dela e sem horas: ela não é da frota (não
+  // está no Cadastro), mas passa pelos mesmos filtros (a categoria ground, a busca pela matrícula)
+  const daSala = { id: 'ground', rotulo: 'Sala Ground', recursos: [SALA_GROUND] };
+  const comASala = [...gruposDaFrota(), { ...daSala, aVista: daSala.recursos.filter(recursoAVista) }].filter(g => g.aVista.length);
+  const grupos = comASala.map(({ id, rotulo, recursos, aVista }) => {
+    const disponiveis = recursos.filter(f => disponivel(f.reg)).length;
     return `<tr class="grupo"><td colspan="5"><button type="button" class="grupo-btn" data-recolher-grupo="${id}" aria-expanded="${!recolhidos.has(id)}"><svg class="ico seta" aria-hidden="true"><use href="#i-baixo"/></svg>${rotulo} <small>${disponiveis} de ${recursos.length} disponíveis</small></button></td></tr>` +
       aVista.map(f => linha(f, id, voadas[f.reg] || 0, resumo[f.reg])).join('');
   });
@@ -122,13 +136,15 @@ function rFrota() {
     : `<li class="sem-resultado h">${NENHUM} ${botaoDeLimpar('frota')}</li>`);
 }
 
-// Quantos recursos aparecem: "3 de 26 recursos" com algum filtro, "26 recursos" sem nenhum. A região é de status (o leitor
-// de tela dita quando o texto muda); na digitação da busca, ela espera a pessoa parar
+// Quantos recursos aparecem: "3 de 27 recursos" com algum filtro, "27 recursos" sem nenhum (a frota e a Sala Ground, as
+// linhas da tabela desta data). A região é de status (o leitor de tela dita quando o texto muda); na digitação da busca,
+// ela espera a pessoa parar
 let esperaDaContagem = null;
 function contarRecursos(esperar) {
   const frota = S.frota || [];
-  const nome = frota.length === 1 ? 'recurso' : 'recursos';
-  const texto = !frota.length ? '' : filtrandoRecursos() ? `${frota.filter(recursoAVista).length} de ${frota.length} ${nome}` : `${frota.length} ${nome}`;
+  const recursos = [...frota, SALA_GROUND];
+  const nome = recursos.length === 1 ? 'recurso' : 'recursos';
+  const texto = !frota.length ? '' : filtrandoRecursos() ? `${recursos.filter(recursoAVista).length} de ${recursos.length} ${nome}` : `${recursos.length} ${nome}`;
   clearTimeout(esperaDaContagem);
   const escrever = () => {
     const lugar = $('#rec-contagem');
@@ -148,7 +164,7 @@ export function aplicarFiltrosDosRecursos({ esperar = 0 } = {}) {
 
 export function rRec() {
   mostrarVista('rec');
-  trocarConteudo($('#wins'), WIN.map((w, i) => `<label class="janela${S.win[i] ? '' : ' off'}"><input type="checkbox" class="sw" data-a="win" data-i="${i}"${S.win[i] ? ' checked' : ''}><b>${w}</b> <small>${i == NI ? 'noturno' : (i + 1) + 'º'}</small></label>`).join(''));
+  rFechamentos();
   rHangar();
   aplicarFiltrosDosRecursos();
 }

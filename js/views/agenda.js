@@ -12,7 +12,7 @@ import { ApiClient } from '../storage.js';
 import { $, trocarConteudo } from '../dom.js';
 import { esc, opts, hm, fmtH, somarDias } from '../format.js';
 import { registraNaAgenda, operaEscala } from '../perfis.js';
-import { recursosDaMissao, recursoValido, missoesDoAluno, JANELAS_DA_AGENDA, FUSO_DO_AEROCLUBE, prazoDaAgendaPermite, prazoDaData, datasParaRegistrar, hojeEmSaoPaulo } from '../agenda.js';
+import { recursosDaMissao, recursoValido, missoesDoAluno, FUSO_DO_AEROCLUBE, prazoDaAgendaPermite, prazoDaData, datasParaRegistrar, hojeEmSaoPaulo } from '../agenda.js';
 import { pedidosDaDataAberta, pedidosDaDataAbertaLidos, lerPedidosDaData } from './selos.js';
 
 const CHAVE_REGISTRADO_POR = 'acpm_agenda_registrado_por';
@@ -40,10 +40,11 @@ const dataPorExtenso = iso => {
 const quando = instante => new Intl.DateTimeFormat('pt-BR', {
   timeZone: FUSO_DO_AEROCLUBE, day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23'
 }).format(new Date(instante)).replace(',', '');
-// O horário e a duração do pedido; os pedidos feitos por período mostram o período
+// O horário e a duração do pedido; o pedido de um período (registrado antes de 14/11, ou pela função de 9 argumentos)
+// não tem horário (J, N13): "—"
 const disponibilidade = p => (p.janela === 'horario'
   ? `${p.horario} · ${fmtH(p.horas === null || p.horas === undefined ? 1 : +p.horas)}`
-  : JANELAS_DA_AGENDA.find(([j]) => j === p.janela)?.[1] ?? p.janela);
+  : '—');
 
 // A missão com o recurso (o pedido de antes não o tem); com a missão do curso, o código dela no lugar do tipo
 // ("NAV-150NM · C152"), quando os programas a têm (também a retirada depois)

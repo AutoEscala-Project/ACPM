@@ -4,7 +4,7 @@
 // motor, cada uma no lugar dela: os requisitos do voo e os atributos do avião (js/frota.js), as do instrutor
 // (js/viabilidade.js) e o que cada voo ocupa (js/voo.js).
 import { GROUND_EQ_TYPE, GROUND_REG } from './config.js';
-import { FROTA_INICIAL, motivoDoAviao, recursoDaFrota, instrutorVoaNoAviao, habilitacaoQueFalta } from './frota.js';
+import { FROTA_INICIAL, motivoDoAviao, recursoDaFrota, instrutorVoaNoAviao, habilitacaoQueFalta, salaDisponivel } from './frota.js';
 import { sobrepoe, cabeNoSaldo, folgaAte, saldoAteARevisao, problemasDoInstrutor } from './viabilidade.js';
 import { reducaoNecessaria } from './combustivel.js';
 import { normalizarLimites } from './limites.js';
@@ -52,9 +52,11 @@ export function ocupacaoDaEscala(out, { fStatus = {}, fObs = {}, efetivo = false
   };
 }
 
-// O que impede o recurso r de receber o voo [a, b), ou null: o avião em manutenção (a sala de Ground não entra), outro
-// voo nele no mesmo horário (o problema traz o primeiro que se sobrepõe) ou a revisão de 50 horas
+// O que impede o recurso r de receber o voo [a, b), ou null: o avião em manutenção, a Sala Ground indisponível na data
+// (S4: só com "Disponível" desligado, salaDisponivel), outro voo nele no mesmo horário (o problema traz o primeiro que se
+// sobrepõe) ou a revisão de 50 horas
 export function problemaDoRecurso(estado, ocupacao, r, { a, b, ground = false }) {
+  if (ground && !salaDisponivel(estado.av)) return { codigo: 'sala-indisponivel' };
   if (!ground && !estado.av[r]) return { codigo: 'aviao-indisponivel' };
   const voos = ocupacao.recursos.get(r) || [];
   const voo = oQueOcupa(voos, a, b);

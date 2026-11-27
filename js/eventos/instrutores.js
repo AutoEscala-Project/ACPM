@@ -1,7 +1,8 @@
 // Instrutores: incluir, excluir, os campos de cada linha (a grade do dia e o cadastro), as habilitações e os filtros. Os
 // dados pessoais (js/eventos/painel-de-dados.js) e os limites da lei (js/eventos/limites.js) ligam os eventos deles daqui
 import { gravarAlteracao } from '../actions.js';
-import { WIN, PRE } from '../config.js';
+import { PRE } from '../config.js';
+import { INICIOS_DOS_TEMPOS } from '../horarios.js';
 import { $, showToast, focusLast, algumDialogoAberto, gavetaDoEsc } from '../dom.js';
 import { nomeLimpo, numeroBr } from '../format.js';
 import { habilitacoesDoNivel, normalizarHabilitacoes, nomeDaHabilitacao } from '../habilitacoes.js';
@@ -60,7 +61,7 @@ aoAcionar('editar-habs', b => abrirPainelDoInstrutor(+b.dataset.id));
 // O instrutor novo aparece no cadastro, com o nome selecionado para digitar: os filtros continuam, e ele fica à vista
 // mesmo fora deles (até eles mudarem)
 aoAcionar('addi', () => {
-  const newIns = { id: S.nid++, nm: 'Novo instrutor', on: true, hab: habilitacoesDoNivel(1), kg: 0, aw: WIN.map((_, i) => i < 8) };
+  const newIns = { id: S.nid++, nm: 'Novo instrutor', on: true, hab: habilitacoesDoNivel(1), kg: 0, aw: INICIOS_DOS_TEMPOS.map((_, i) => i < INICIOS_DOS_TEMPOS.length - 1) };
   S.ins.push(newIns);
   mostrarVista('ins', 'cadastro');
   manterInstrutorAVista(newIns.id);
@@ -122,7 +123,7 @@ aoMudarCampo('i', (t, { f, id }) => {
     x.aw[+t.dataset.w] = t.checked;
   } else if (f === 'pre') {
     if (!t.value) return;
-    x.aw = WIN.map((_, i) => PRE[t.value].includes(i));
+    x.aw = INICIOS_DOS_TEMPOS.map((_, i) => PRE[t.value].includes(i));
   }
   // A grade do dia é refeita com a escala; a linha do cadastro é atualizada no lugar. As janelas e a predefinição do
   // instrutor gravam sem entrar no histórico

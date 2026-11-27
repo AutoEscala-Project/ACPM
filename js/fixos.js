@@ -5,8 +5,8 @@
 import { rotuloDoStatus, STATUS_EM_ANDAMENTO } from './status.js';
 import { CHAVE_DO_VOO, chaveDoVoo, pedidoDoAluno } from './voo.js';
 import { MATRICULA } from './frota.js';
-import { MINUTOS_DO_DIA, GROUND_REG, T } from './config.js';
-import { periodoDoMinuto } from './horarios.js';
+import { MINUTOS_DO_DIA, GROUND_REG } from './config.js';
+import { periodoDoMinuto, INICIOS_DOS_TEMPOS } from './horarios.js';
 import { deixarEmBranco } from './rules.js';
 
 const minuto = v => Number.isInteger(v) && v >= 0 && v <= MINUTOS_DO_DIA;
@@ -190,7 +190,7 @@ export function pinoDeVoltaNaTurma(fixos, fKey, pino, mis) {
   const { classKey: _, ...semChave } = pino;
   const usadas = new Set(outros.map(([k, p]) => chaveDe(k, p)));
   if (!usadas.has(fKey)) return semChave;
-  const base = `GND_${mis}_${T.includes(pino.a) ? T.indexOf(pino.a) : periodoDoMinuto(pino.a)}_${pino.insId}`;
+  const base = `GND_${mis}_${INICIOS_DOS_TEMPOS.includes(pino.a) ? INICIOS_DOS_TEMPOS.indexOf(pino.a) : periodoDoMinuto(pino.a)}_${pino.insId}`;
   let nova = base;
   for (let n = 2; usadas.has(nova); n++) nova = `${base}_${n}`;
   return { ...semChave, classKey: nova };

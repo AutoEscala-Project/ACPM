@@ -1,10 +1,11 @@
 // Camada de acesso a dados: estado inicial, migrações de schema e persistência por um backend (localStorage ou
 // Supabase).
-import { WIN } from './config.js';
+
+import { GROUND_REG } from './config.js';
 import { FROTA_INICIAL, normalizarFrota } from './frota.js';
 import { pad, LIMITE_DO_NOME, hojeISO } from './format.js';
 import { normalizeMissionFields, proximoMid, pesoValido } from './rules.js';
-import { HORARIOS_INICIAIS, normalizarHorarios } from './horarios.js';
+import { HORARIOS_INICIAIS, normalizarHorarios, INICIOS_DOS_TEMPOS } from './horarios.js';
 import { backendLocal } from './backends/local.js';
 import { separar, juntar, diaPadrao, diaParaCopiar, converterLegado, biDosDias } from './dias.js';
 import { ESQUEMA, migrarCadastro, migrarDia, precisaMigrar, antesDosCursosProprios, renomearSimulador } from './migracoes.js';
@@ -47,7 +48,7 @@ export const ApiClient = {
   createFreshState() {
     const state = {
       schemaVer: 4,
-      win: WIN.map(() => true),
+      win: INICIOS_DOS_TEMPOS.map(() => true),
       av: {},
       nid: 1000,
       // Sem cadastro: no modo compartilhado os instrutores e alunos vêm do servidor
@@ -84,7 +85,7 @@ export const ApiClient = {
     if (!x.horas || typeof x.horas !== 'object' || Array.isArray(x.horas)) x.horas = {};
     x.horas = Object.fromEntries(Object.entries(x.horas).filter(([, h]) => typeof h === 'number' && Number.isFinite(h) && h >= 0 && h <= 60));
     x.importadas = Array.isArray(x.importadas) ? x.importadas.filter(id => Number.isInteger(id) && id > 0) : [];
-    x.win = Array.isArray(x.win) && x.win.length === WIN.length ? x.win.map(v => v !== false) : WIN.map(() => true);
+    x.win = Array.isArray(x.win) && x.win.length === INICIOS_DOS_TEMPOS.length ? x.win.map(v => v !== false) : INICIOS_DOS_TEMPOS.map(() => true);
     if (!x.nid || x.nid < 1000) x.nid = 1000;
     // A frota: disponibilidade e horas só dos recursos dela; um recurso que o dia não conhece começa disponível
     // (os simuladores com os nomes anteriores à versão 5 são renomeados antes)
@@ -114,6 +115,8 @@ export const ApiClient = {
     const naFrota = r => x.frota.some(f => f.reg === r);
     const av = Object.fromEntries(Object.entries(x.av && typeof x.av === 'object' ? x.av : {}).map(([r, v]) => [renomearSimulador(r), v]));
     x.av = Object.fromEntries(x.frota.map(f => [f.reg, typeof av[f.reg] === 'boolean' ? av[f.reg] : true]));
+    // A Sala Ground não é da frota: a chave dela fica só quando é booleana (S4; sem ela, a sala está disponível)
+    if (typeof av[GROUND_REG] === 'boolean') x.av[GROUND_REG] = av[GROUND_REG];
     x.horas = Object.fromEntries(Object.entries(x.horas).map(([r, h]) => [renomearSimulador(r), h]).filter(([r]) => naFrota(r)));
 
     if (!x.schemaVer || x.schemaVer < 3) {
@@ -124,7 +127,7 @@ export const ApiClient = {
         on: old.on !== false,
         lv: old.lv >= 1 && old.lv <= 9 ? old.lv : 1,
         kg: old.kg > 0 ? old.kg : 0,
-        aw: Array.isArray(old.aw) && old.aw.length === WIN.length ? old.aw : WIN.map(() => true),
+        aw: Array.isArray(old.aw) && old.aw.length === INICIOS_DOS_TEMPOS.length ? old.aw : INICIOS_DOS_TEMPOS.map(() => true),
         ...(Array.isArray(old.hab) ? { hab: old.hab } : {})
       }));
 
@@ -147,7 +150,7 @@ export const ApiClient = {
       Object.assign(i, { nm: nome(i.nm, `Instrutor ${i.id}`), on: i.on !== false, kg: pesoValido(i.kg) });
       // Inativo no cadastro (formato 26): só true fica
       if (i.inativo !== true) delete i.inativo;
-      i.aw = Array.isArray(i.aw) && i.aw.length === WIN.length ? i.aw.map(v => v === true) : WIN.map(() => true);
+      i.aw = Array.isArray(i.aw) && i.aw.length === INICIOS_DOS_TEMPOS.length ? i.aw.map(v => v === true) : INICIOS_DOS_TEMPOS.map(() => true);
     });
     x.stu = x.stu.filter(comId);
     x.stu.forEach(s => {

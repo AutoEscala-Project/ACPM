@@ -5,12 +5,14 @@
 // conferirEscala confere uma escala já montada sem o motor: a escala aprovada que o operador muda na Escala (F1g). Ela não
 // põe, não move e não tira nenhum voo: refaz as marcas de conflito, os alertas deles, os avisos e a revisão, e os pesos e o
 // combustível de cada linha pelo cadastro
-import { NOTURNO, T, DAY, DEFAULT_LIM, GROUND_EQ_TYPE, GROUND_REG, GROUND_DURATION_MIN, GROUND_DURATION_H, REVISAO_H, MENOR_VOO_H, AIRCRAFT_EQ_TYPES, MISSOES_LOCAIS, LIMITE_DE_VOOS_LOCAIS } from './config.js';
-import { FROTA_INICIAL, matriculasDoTipo, motivoDoAviao, aviaoServe, instrutorVoaNoAviao, recursoDaFrota } from './frota.js';
+import { NOTURNO, DEFAULT_LIM, GROUND_EQ_TYPE, GROUND_REG, GROUND_DURATION_MIN, GROUND_DURATION_H, REVISAO_H, MENOR_VOO_H, AIRCRAFT_EQ_TYPES, MISSOES_LOCAIS, LIMITE_DE_VOOS_LOCAIS } from './config.js';
+import { FROTA_INICIAL, matriculasDoTipo, motivoDoAviao, aviaoServe, instrutorVoaNoAviao, recursoDaFrota, salaDisponivel } from './frota.js';
 import { hm, fmtH, numeroBr, duracaoHm } from './format.js';
 import { repousoAntesDaVolta, historicoDoDia } from './noturno.js';
 import { isGroundMission, doesGroundGateFlight, disponibilidadeDoAluno, disponibilidadeAtual, duracaoValida, duracaoFixaDaMissao, minutoConfirmado } from './rules.js';
-import { HORARIOS_INICIAIS, horariosDaMissao, periodoDoMinuto, minutoDaPreferencia, fimDasMissoesDoDia } from './horarios.js';
+import { categoriaDoTipo } from './categorias.js';
+import { fechamentosDoEstado, horarioAberto } from './fechamentos.js';
+import { HORARIOS_INICIAIS, horariosDaMissao, horariosDoTipo, periodoDoMinuto, minutoDaPreferencia, fimDasMissoesDoDia, INICIOS_DOS_TEMPOS, HORARIO_DO_SOLO } from './horarios.js';
 import { ajustarFilas, categoriaDoRodizio } from './rodizio.js';
 import { avisosDeAtraso, intervaloEfetivo, STATUS_EM_ANDAMENTO } from './status.js';
 import { livre, cabeNoSaldo, saldoAteARevisao, problemasDoInstrutor } from './viabilidade.js';
@@ -56,6 +58,8 @@ export function contextoDaEscala(state) {
     instrutorPorId, serveAoVoo,
     // Os horários de decolagem de cada categoria vêm do cadastro; sem eles, os iniciais
     horarios: state.horarios || HORARIOS_INICIAIS,
+    // Os horários fechados da data (js/fechamentos.js): os do dia; sem eles, os das nove janelas de antes
+    fechamentos: fechamentosDoEstado(state),
     posicao: r => posicaoNoHangar(hangar, r),
     // Limites da Lei do Aeronauta: as horas de voo de antes de hoje e o fim de ontem de cada instrutor, e os
     // compromissos de hoje (voo em avião conta como voo; simulador e Ground, só na jornada)
@@ -183,7 +187,7 @@ function voltasDoNoturno(state, ctx, out) {
 // sala), o instrutor e o aluno no contexto. Devolve a linha, o alerta do conflito (ou null) e os avisos das regras que o
 // agendado pulou (comAviso: o agendado que as confere)
 function linhaDoFixo(state, ctx, item, pino, fKey = chaveDoVoo(item.stuId, item.mid)) {
-  const { used, stuBusy, stuLastPick, load, eu, compromissos, insAircraft, openGroundClasses, stuGroundStatus, voosNaCategoria, locaisNoHorario, frota, nomesSoParafuso, historico, limites, horarios, fimDoAluno, saldo } = ctx;
+  const { used, stuBusy, stuLastPick, load, eu, compromissos, insAircraft, openGroundClasses, stuGroundStatus, voosNaCategoria, locaisNoHorario, frota, nomesSoParafuso, historico, limites, horarios, fechamentos, fimDoAluno, saldo } = ctx;
   const { stu, stuId, mid, ref: d, stuOrder } = item;
   const rotulo = mid ? `${stu.nm} (${d.mis})` : stu.nm;
   const ground = isGroundMission(d.mis);
@@ -221,19 +225,23 @@ function linhaDoFixo(state, ctx, item, pino, fKey = chaveDoVoo(item.stuId, item.
       if (motivo === 'so-parafuso') marcar('so-parafuso', d.mis === 'Parafuso' ? `o Parafuso só voa no ${nomesSoParafuso}` : `o ${r} é só para o Parafuso`);
       if (motivo === 'so-vfr') marcar('so-vfr', `o ${r} não é homologado IFR, e o voo é IFR`);
       if (!cabeNoSaldo(eu[r] || 0, (b - a) / 60, saldo(r))) marcar('revisao', 'o avião passaria da revisão de 50 horas');
-    } else if (!daMesmaTurma && !free(used, GROUND_REG, a, b)) marcar('sala-ocupada', 'a sala de Ground já está ocupada neste horário');
+    } else {
+      // A Sala Ground indisponível na data (S4), como o avião indisponível
+      if (!salaDisponivel(state.av)) marcar('sala-indisponivel', 'a Sala Ground está indisponível nesta data');
+      if (!daMesmaTurma && !free(used, GROUND_REG, a, b)) marcar('sala-ocupada', 'a sala de Ground já está ocupada neste horário');
+    }
     if (!free(stuBusy, stuId, a, b)) marcar('aluno-ocupado', 'o aluno já tem outro voo neste horário');
-    if (!state.win[periodoDoMinuto(a)]) marcar('horario-fechado', 'o horário está fechado nesta data');
+    if (!horarioAberto(fechamentos, a, categoriaDoTipo(tipo))) marcar('horario-fechado', 'o horário está fechado nesta data');
     const permitidas = disponibilidadeDoAluno(d.jan);
     if (permitidas && !permitidas(a)) marcar('disponibilidade', 'o horário está fora da disponibilidade do aluno');
     if (!mudouDeTipo && b - a !== duracaoDoPedido(d, ground)) marcar('duracao', 'a duração do pedido mudou');
     if (pino.agendado && !STATUS_EM_ANDAMENTO.includes(status) && !mudouDeTipo) {
       comAviso = true;
       const avisar = (codigo, m) => avisos.push({ t: 'warn', s: rotulo, fKey, m, codigo, stuId });
-      // Os horários de decolagem da missão (o Ground, nas janelas do dia; o Noturno, às 17:30; o Voo Solo, às 06:30)
-      const lista = ground ? DAY.map(w => T[w]) : horariosDaMissao(horarios, d.mis, d.eq);
+      // Os horários de decolagem da missão (o Ground, os da Sala Ground; o Noturno, às 17:30; o Voo Solo, às 06:30)
+      const lista = ground ? horariosDoTipo(horarios, GROUND_EQ_TYPE) : horariosDaMissao(horarios, d.mis, d.eq);
       if (!lista.includes(a)) {
-        avisar('fora-dos-horarios', ground ? `Agendado às ${hm(a)}, fora dos horários das aulas de Ground.`
+        avisar('fora-dos-horarios', ground ? `Agendado às ${hm(a)}, fora dos horários de decolagem da Sala Ground.`
           : d.mis === 'Noturno' || d.mis === 'Voo Solo' ? `Agendado às ${hm(a)}: o ${d.mis} sai às ${hm(lista[0])}.`
             : `Agendado às ${hm(a)}, fora dos horários de decolagem do ${d.eq}.`);
       }
@@ -287,7 +295,7 @@ function linhaDoFixo(state, ctx, item, pino, fKey = chaveDoVoo(item.stuId, item.
       // A turma fixa fica aberta: um aluno novo do mesmo Ground pode entrar nela, se ela não está em conflito (sem o
       // instrutor, por exemplo)
       const turmas = (openGroundClasses[d.mis] = openGroundClasses[d.mis] || []);
-      if (x && !daMesmaTurma && !conflito.length && !turmas.some(c => c.classKey === classKey)) turmas.push({ classKey, mis: d.mis, w: T.indexOf(a), a, b, x, count: 0 });
+      if (x && !daMesmaTurma && !conflito.length && !turmas.some(c => c.classKey === classKey)) turmas.push({ classKey, mis: d.mis, w: INICIOS_DOS_TEMPOS.indexOf(a), a, b, x, count: 0 });
       const turma = turmas.find(c => c.classKey === classKey);
       if (turma) turma.count++;
       const gRec = (stuGroundStatus[stuId] || []).find(g => g.mis === d.mis && g.allocatedEnd === null);
@@ -298,7 +306,7 @@ function linhaDoFixo(state, ctx, item, pino, fKey = chaveDoVoo(item.stuId, item.
   const baseTag = a === pf[0] ? 'Pref. 1' : a === pf[1] ? 'Pref. 2' : 'Próximo livre';
   const linha = {
     fKey, classKey, isGround: ground,
-    w: ground && T.indexOf(a) >= 0 ? T.indexOf(a) : periodoDoMinuto(a), a, b,
+    w: ground && INICIOS_DOS_TEMPOS.indexOf(a) >= 0 ? INICIOS_DOS_TEMPOS.indexOf(a) : periodoDoMinuto(a), a, b,
     o: stuOrder, stuId, mid, insId, eqType: tipo,
     s: stu.nm, mis: d.mis, h: ground ? GROUND_DURATION_H : (b - a) / 60, ss: '1/1',
     ...(d.etapa ? { etapa: d.etapa } : {}),
@@ -592,7 +600,7 @@ export function concluirEscala(state, ctx, out, al) {
     const voadas = Math.round(meus.reduce((total, o) => total + o.h, 0) * 10) / 10;
     const fim = Math.round((horas[r] + voadas) * 10) / 10;
     const para = state.av[r] !== false && REVISAO_H - fim < MENOR_VOO_H;
-    const paraAs = !para ? null : meus.length ? Math.max(...meus.map(o => o.b)) : T[0];
+    const paraAs = !para ? null : meus.length ? Math.max(...meus.map(o => o.b)) : HORARIO_DO_SOLO;
     revisao[r] = { inicio: horas[r], voadas, fim, paraAs };
     if (para) {
       al.push({

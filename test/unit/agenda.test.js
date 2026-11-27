@@ -49,26 +49,28 @@ describe('Agenda de solicitações', () => {
   });
 
   it('a disponibilidade da solicitação vira a do pedido (o horário específico vira aquele horário, em minutos)', () => {
-    assert.deepEqual(['manha', 'tarde', 'noite'].map(janela => disponibilidadeDaSolicitacao({ janela })), ['manha', 'tarde', 'noite']);
+    // J (N13): o pedido de um período (o app só manda "horario" desde 14/11; um registro de antes pode ter um) fica sem horário
+    assert.deepEqual(['manha', 'tarde', 'noite'].map(janela => disponibilidadeDaSolicitacao({ janela })), [undefined, undefined, undefined]);
     assert.equal(disponibilidadeDaSolicitacao({ janela: 'horario', horario: '14:30' }), 'h870');
     assert.equal(disponibilidadeDaSolicitacao({ janela: 'horario', horario: '07:30' }), 'h450');
     assert.equal(disponibilidadeDaSolicitacao({ janela: 'horario', horario: '25:00' }), undefined, 'horário inválido: sem restrição');
   });
 
   it('cada solicitação vira um pedido pronto para a escala, com os horários da categoria', () => {
+    // O pedido de um período: sem horário e com as preferências padrão da lista (J, N13)
     assert.deepEqual(pedidoDaSolicitacao({ missao: 'Voo Local', janela: 'tarde' }),
-      { fly: true, mis: 'Voo Local', eq: 'C152', p1: 760, p2: 820, nb: 1, ss: 1, pr: 3, jan: 'tarde' });
+      { fly: true, mis: 'Voo Local', eq: 'C152', p1: 500, p2: 610, nb: 1, ss: 1, pr: 3 });
     assert.deepEqual(pedidoDaSolicitacao({ missao: 'IFR', janela: 'horario', horario: '14:30' }),
       { fly: true, mis: 'IFR', eq: 'C172', p1: 870, p2: 870, nb: 1, ss: 1, pr: 3, jan: 'h870' });
     assert.deepEqual(pedidoDaSolicitacao({ missao: 'Noturno', janela: 'noite' }),
-      { fly: true, mis: 'Noturno', eq: 'C172', p1: 1050, p2: -1, nb: 4, ss: 1, pr: 3, jan: 'noite' });
+      { fly: true, mis: 'Noturno', eq: 'C172', p1: 1050, p2: -1, nb: 4, ss: 1, pr: 3 });
     const ground = pedidoDaSolicitacao({ missao: 'Ground C152', janela: 'manha' });
-    assert.deepEqual([ground.eq, ground.nb, ground.p1, ground.p2, ground.jan], ['Sala Ground', 1.5, 390, 500, 'manha']);
+    assert.deepEqual([ground.eq, ground.nb, ground.p1, ground.p2, ground.jan], ['Sala Ground', 1.5, 500, 610, undefined]);
     // O PA-34 tem horários de 30 em 30 minutos
     assert.deepEqual(pedidoDaSolicitacao({ missao: 'Multimotor', janela: 'horario', horario: '07:30' }),
       { fly: true, mis: 'Multimotor', eq: 'PA-34', p1: 450, p2: 450, nb: 1, ss: 1, pr: 3, jan: 'h450' });
     const manhaPa34 = pedidoDaSolicitacao({ missao: 'Multimotor', janela: 'manha' });
-    assert.deepEqual([manhaPa34.p1, manhaPa34.p2], [390, 420]);
+    assert.deepEqual([manhaPa34.p1, manhaPa34.p2, manhaPa34.jan], [510, 630, undefined]);
   });
 
   // O Ground tem 01h30 e o Noturno, 4 h às 17:30 (o translado e o noturno em BH): nem a agenda nem o programa mudam isso

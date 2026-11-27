@@ -1,6 +1,6 @@
 /* Recursos: os horários de decolagem, o recurso novo, as janelas, as duas vistas, a frota e a revisão */
 /* Os campos do Gestor ficam desligados (js/somente-leitura.js): sem tirar os cliques, as dicas continuam aparecendo */
-body[data-role="gestor"] #s-rec .janela { cursor: default !important; }
+
 /* Horários de decolagem: uma linha de resumo por categoria; o editor abre na própria linha */
 .horarios { display: flex; flex-direction: column; gap: 12px; }
 .horarios-cat { display: flex; flex-direction: column; gap: 4px; padding-bottom: 10px; border-bottom: 1px solid var(--ln); }
@@ -36,14 +36,15 @@ body[data-role="gestor"] #s-rec .janela { cursor: default !important; }
 .form-recurso label:not(.chk) { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--mu); }
 .form-recurso .chk { align-self: center; }
 table.frota .acoes-frota { white-space: nowrap; text-align: right; }
-/* Recursos: as janelas como interruptores e a frota numa tabela só */
-.janelas { display: flex; flex-wrap: wrap; gap: 6px; }
-.janela {
-  display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px 4px 6px; cursor: pointer; user-select: none;
-  border: 1px solid var(--ln2); border-radius: 18px; background: var(--pn); font: 600 14.5px 'Barlow Semi Condensed', sans-serif;
-}
-.janela small { color: var(--mu); font-weight: 500; }
-.janela.off { color: var(--mu); }
+/* Recursos: os horários fechados nesta data (J) e a frota numa tabela só */
+.fechamentos { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+.fechamentos-lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.fechamentos-lista li { display: flex; align-items: center; gap: 6px; font: 600 14.5px 'Barlow Semi Condensed', sans-serif; }
+.fechar-horarios { display: flex; flex-direction: column; gap: 10px; width: 100%; max-width: 560px; padding: 10px 12px; border: 1px solid var(--ln2); border-radius: 8px; background: var(--pn); }
+.fch-campos, .fch-acoes { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; }
+.fch-categorias { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 0; padding: 0; border: 0; }
+.fch-categorias legend { padding: 0; margin-bottom: 4px; font-weight: 600; }
+.fch-efeito { margin: 0; color: var(--mu); }
 /* Recursos em duas vistas: a disponibilidade do dia (nesta data) e o cadastro (para todas as datas) */
 .rec-parte { display: flex; flex-direction: column; gap: 12px; margin-bottom: 24px; }
 .rec-parte > .pn { margin: 0; }
@@ -107,7 +108,8 @@ table.frota tr:hover .rev, table.frota tr:focus-within .rev { opacity: 1; }
 @media (max-width: 640px) {
   .hr-chip button { min-width: 44px; min-height: 44px; flex-shrink: 0; }
   .frota-reg { min-width: 44px; min-height: 44px; margin: 0; }
-  .janela { min-width: 44px; min-height: 44px; }
+  .fechamentos-lista button, .fechar-horarios select, .fechar-horarios button, .fechamentos > .btn { min-height: 44px; }
+  .fch-categorias .chk { min-height: 44px; }
   .grupo-btn { min-height: 44px; }
   /* Horários de decolagem: o nome da categoria em cima, as etiquetas na largura toda */
   .horarios-nome { flex-basis: 100%; }

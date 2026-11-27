@@ -157,17 +157,15 @@ describe('O editor do voo: cada campo e o que ele grava', async () => {
     assert.ok(validarReversao({ ...feito.rev, label: '↶ Reverter' }, []));
   });
 
-  it('a disponibilidade mais larga que não inclui o horário novo sai do pedido, com o aviso', () => {
+  // J (N13): não há período do dia; um "manha" guardado antes do formato 28 não é disponibilidade: o horário novo não avisa
+  it('um período guardado de antes ("manha") não prende o horário: mudar o horário não avisa', () => {
     const inicial = base();
     inicial.stu[0].jan = 'manha';
     const { estado, resultado } = aprovar(inicial);
     const voo = vooParaEditar(estado, resultado, '1000_0_1');
     const valores = { ...structuredClone(voo.valores), a: 870 };
     const avisos = avisosDaEdicao(estado, resultado, voo, valores);
-    assert.ok(avisos.some(a => a.codigo === 'disponibilidade-do-aluno'), JSON.stringify(avisos));
-    const copia = structuredClone(estado);
-    aplicarEdicao(copia, resultado, voo, valores);
-    assert.equal(copia.stu[0].jan, undefined);
+    assert.ok(!avisos.some(a => a.codigo === 'disponibilidade-do-aluno'), JSON.stringify(avisos));
   });
 
   it('o recurso de outro tipo muda o tipo do pedido; a duração muda as horas e o fim do pino', () => {
@@ -729,7 +727,7 @@ describe('O editor do voo: a segunda revisão', async () => {
 
     it('o reparo que muda o pedido, desfeito depois de reabrir: o pino da aprovação não volta; o cancelado aproveitado volta fixo pelo status', () => {
       const { S, RES } = aprovado();
-      const rev = ida(repararComOPedido(S, RES, '1002_0_1', { mudancas: { a: 690, b: 750 }, pedido: { jan: 'tarde' } }));
+      const rev = ida(repararComOPedido(S, RES, '1002_0_1', { mudancas: { a: 690, b: 750 }, pedido: { jan: 'h760' } }));
       reabrir(S);
       desfazerAproveitamento(S, rev);
       assert.equal(S.fixos['1002_0_1'], undefined, JSON.stringify(S.fixos['1002_0_1']));
