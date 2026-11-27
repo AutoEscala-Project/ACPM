@@ -941,6 +941,80 @@ describe('O “Priorizar com” escolhe o instrutor, não o horário', () => {
   });
 });
 
+// A lista de espera (F1h; N14, U3; Pedro, 2026-11-26: “If it is confirmed, we warn-and-confirm. If it is not confirmed we
+// form a waiting list”): o pedido com um horário exato (jan h<minuto>) recusado só por falta de lugar nele (os 6 voos
+// locais, os aviões, os instrutores) espera por ele, na ordem da fila (a ordem de registro, depois da prioridade e do
+// instrutor escolhido), com o lugar dele na lista do horário na recusa (espera: { minuto, lugar }) e no texto
+describe('A lista de espera', () => {
+  const nove = Array.from({ length: 9 }, (_, i) => instrutor(i + 1, 9));
+  const as0820 = (id, solicitacao, extra = {}) => aluno(id, { p1: 500, p2: -1, jan: 'h500', solicitacao, ...extra });
+  const espera = al => al.filter(a => a.t === 'err').map(a => [a.s, a.codigo, a.espera, a.m]);
+  const texto = lugar => `Rejeitado: já há 6 voos locais (Voo Local, Voo Solo e TGL) em todos os horários possíveis, o máximo no mesmo horário; ${lugar}º na lista de espera das 08:20.`;
+
+  it('oito locais da Agenda às 08:20, sem confirmação: seis voam, o 7º e o 8º pelo registro esperam, 1º e 2º', () => {
+    const oito = ids => ids.map((solicitacao, i) => as0820(1000 + i, solicitacao));
+    const { out, al } = alocar({ ins: nove, stu: oito([1, 2, 3, 4, 5, 6, 7, 8]) });
+    assert.deepEqual(out.filter(o => o.a === 500).map(o => o.stuId).sort(), [1000, 1001, 1002, 1003, 1004, 1005]);
+    assert.deepEqual(espera(al), [
+      ['Aluno 1006', 'limite-de-locais', { minuto: 500, lugar: 1 }, texto(1)],
+      ['Aluno 1007', 'limite-de-locais', { minuto: 500, lugar: 2 }, texto(2)]
+    ]);
+    // Os ids ao contrário: os outros dois esperam
+    const contrario = alocar({ ins: nove, stu: oito([8, 7, 6, 5, 4, 3, 2, 1]) });
+    assert.deepEqual(espera(contrario.al).map(e => [e[0], e[2]]), [['Aluno 1001', { minuto: 500, lugar: 1 }], ['Aluno 1000', { minuto: 500, lugar: 2 }]]);
+    // A prioridade e o instrutor escolhido pelo operador vêm antes do registro
+    const operador = alocar({ ins: nove, stu: [...oito([1, 2, 3, 4, 5, 6]), as0820(1006, 7, { pr: 5 }), as0820(1007, 8, { insId: 9 })] });
+    assert.deepEqual(espera(operador.al).map(e => [e[0], e[2].lugar]), [['Aluno 1004', 1], ['Aluno 1005', 2]]);
+  });
+
+  it('o 7º confirmado voa além dos seis, com o aviso; o 8º, não confirmado, espera (U3)', () => {
+    const stu = [...[1, 2, 3, 4, 5, 6].map((id, i) => as0820(1000 + i, id)), as0820(1006, 7, { limiteConfirmado: true }), as0820(1007, 8)];
+    const { out, al } = alocar({ ins: nove, stu });
+    assert.equal(out.filter(o => o.a === 500).length, 7);
+    assert.deepEqual(espera(al), [['Aluno 1007', 'limite-de-locais', { minuto: 500, lugar: 1 }, texto(1)]]);
+    assert.ok(al.some(a => a.t === 'warn' && a.codigo === 'limite-de-locais'));
+  });
+
+  it('por falta de avião ou de instrutor no horário, também; cada horário com a sua lista', () => {
+    // Um C152 só: às 08:20 e às 10:10, um voa e o outro espera
+    const { al } = alocar({ ins: nove, semAeronaves: apenas('C152', 'PP-LJV'), stu: [as0820(1000, 1), as0820(1001, 2), aluno(1002, { p1: 610, p2: -1, jan: 'h610', solicitacao: 3 }), aluno(1003, { p1: 610, p2: -1, jan: 'h610', solicitacao: 4 })] });
+    assert.deepEqual(espera(al).map(e => [e[0], e[1], e[2]]), [['Aluno 1001', 'avioes-ocupados', { minuto: 500, lugar: 1 }], ['Aluno 1003', 'avioes-ocupados', { minuto: 610, lugar: 1 }]]);
+    // Um INVA só
+    const um = alocar({ ins: [instrutor(1, 9)], stu: [as0820(1000, 1), as0820(1001, 2)] });
+    assert.deepEqual(espera(um.al).map(e => [e[0], e[1], e[2]]), [['Aluno 1001', 'instrutores-ocupados', { minuto: 500, lugar: 1 }]]);
+  });
+
+  it('não esperam: o pedido sem horário exato, o recusado por outro motivo, o Voo Solo sem horário exato, e o motor de antes do F1h', () => {
+    // Sem horário exato (a 1ª e a 2ª preferência): procura outros horários e, sem nenhum, não espera
+    const semExato = alocar({ ins: [instrutor(1, 9)], janelasOff: [0, 2, 3, 4, 5, 6, 7, 8], stu: [aluno(1000, { p1: 500, p2: -1 }), aluno(1001, { p1: 500, p2: -1 })] });
+    assert.deepEqual(espera(semExato.al).map(e => [e[0], e[2]]), [['Aluno 1001', undefined]]);
+    // O INVA escolhido em “Não escalar com” do aluno: recusado, sem esperar
+    const bloqueado = alocar({ ins: nove, stu: [{ ...as0820(1000, 1, { insId: 1 }), bl: [1] }] });
+    assert.deepEqual(espera(bloqueado.al).map(e => [e[1], e[2]]), [['instrutor-escolhido', undefined]]);
+    // O Voo Solo sai sempre às 06:30, mas sem o jan não tem horário exato
+    const solo = alocar({ ins: [instrutor(1, 9)], stu: [aluno(1000, { mis: 'Voo Solo', nb: 1 }), aluno(1001, { mis: 'Voo Solo', nb: 1 })] });
+    assert.deepEqual(espera(solo.al).map(e => [e[0], e[1], e[2]]), [['Aluno 1001', 'instrutores-ocupados', undefined]]);
+    // O motor de antes do F1h não tem a lista de espera
+    const antes = runAllocationEngine(cenario({ ins: [instrutor(1, 9)], stu: [as0820(1000, 1), as0820(1001, 2)] }), { compactar: false, antesDoF1h: true });
+    assert.deepEqual(espera(antes.al).map(e => [e[2], e[3]]), [[undefined, 'Rejeitado: os instrutores habilitados (Voo Local + C152) já têm outro compromisso nos horários possíveis.']]);
+  });
+
+  it('o lugar que a compactação libera vai para o 1º da lista de espera do horário', async () => {
+    const { gerarCenario, comAgenda } = await import('../helpers/cenarios.js');
+    // A semente 292 com os pedidos da Agenda: sem a compactação, o Aluno 20 (só às 07:30) espera pelo INVA 12, que voa às
+    // 06:30; a compactação leva esse voo para as 14:30, e o Aluno 20 voa às 07:30 com o INVA 12, sem a recusa
+    const estado = comAgenda(gerarCenario(292), 292);
+    const semCompactar = runAllocationEngine(estado, { compactar: false });
+    assert.deepEqual(espera(semCompactar.al).filter(e => e[0] === 'Aluno 20').map(e => [e[1], e[2]]), [['instrutores-ocupados', { minuto: 450, lugar: 1 }]]);
+    const { out, al } = runAllocationEngine(estado);
+    assert.deepEqual(out.filter(o => o.stuId === 1025).map(o => [o.a, o.insId]), [[450, 12]]);
+    assert.ok(!al.some(a => a.t === 'err' && a.s === 'Aluno 20'));
+    // O INVA 12 não voa dois ao mesmo tempo
+    const doDoze = out.filter(o => o.insId === 12).sort((p, q) => p.a - q.a);
+    assert.ok(doDoze.every((o, i) => i === 0 || doDoze[i - 1].b <= o.a), JSON.stringify(doDoze.map(o => [o.a, o.b])));
+  });
+});
+
 // O INVA em “Não escalar com” do aluno nunca dá o voo, por nenhum caminho do motor: a fila (também quando está no “Priorizar
 // com”), a turma de Ground, a divisão das horas, a compactação e as Sugestões. O bloqueio depois da escala montada: o voo
 // sem pino troca de INVA na rodada seguinte; o fixo fica onde está, em conflito
