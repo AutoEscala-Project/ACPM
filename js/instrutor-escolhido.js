@@ -95,9 +95,9 @@ const pedidoDe = (estado, stuId, mid) => {
   return aluno ? pedidoDoAluno(aluno, mid) || null : null;
 };
 
-// O voo fixo pela escolha na Escala, e não pela escala aprovada, pelo status nem pelo agendamento na Escala (o pino
-// agendado), pode ser solto
-const soltavel = (estado, fKey, pino) => !estado.aprovacao && !fixoPeloStatus(fKey, estado.fStatus) && !pino.agendado;
+// O voo fixo pela escolha na Escala, e não pela escala aprovada, pelo status, pelo agendamento na Escala (o pino
+// agendado) nem pelo Noturno (o pino do Noturno: js/fixos.js), pode ser solto
+const soltavel = (estado, fKey, pino) => !estado.aprovacao && !fixoPeloStatus(fKey, estado.fStatus) && !pino.agendado && !pino.noturno;
 
 // Escolhe o instrutor (insId; null: "Automático") do pedido do aluno (stuId, mid). Muda o estado e devolve o que
 // mudou, como estava antes (a reversão do histórico) e quantos alunos da turma mudaram juntos.

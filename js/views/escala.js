@@ -352,9 +352,9 @@ function tempoParado(out) {
 }
 
 // Avisos agrupados pelo código: alunos e instrutores sem peso, aviões que param para a revisão, atrasos, instrutores
-// perto do limite da lei, os do “Priorizar com” (um por voo: sem o instrutor, a disputa ou o voo posto à mão fora dele) e
-// os voos agendados fora das regras (um por voo). Os avisos sem código (de uma escala gravada
-// antes deles) entram em "outros"
+// perto do limite da lei, os do “Priorizar com” (um por voo: sem o instrutor, a disputa ou o voo posto à mão fora dele), as
+// voltas do noturno com o avião ou o INVA indisponível (uma por volta) e os voos agendados fora das regras (um por voo).
+// Os avisos sem código (de uma escala gravada antes deles) entram em "outros"
 function resumoDosAvisos(avisos) {
   const doCodigo = codigo => avisos.filter(a => a.codigo === codigo);
   const quantos = (lista, campo) => new Set(lista.map(a => a[campo]).filter(id => id !== undefined)).size;
@@ -366,6 +366,7 @@ function resumoDosAvisos(avisos) {
   const semPar = doCodigo('voa-com').length;
   const saiu = doCodigo('escolhido-saiu').length;
   const repouso = quantos(doCodigo('repouso-do-noturno'), 'insId');
+  const voltas = doCodigo('volta-do-noturno').length;
   const foraDaRegra = quantos(avisos.filter(a => CODIGOS_DO_AGENDADO.includes(a.codigo)), 'fKey');
   const outros = avisos.filter(a => !CODIGOS_DE_AVISO.includes(a.codigo)).length;
   const partes = [
@@ -377,6 +378,7 @@ function resumoDosAvisos(avisos) {
     semPar && `${semPar} ${semPar === 1 ? 'aviso' : 'avisos'} de Priorizar com`,
     saiu && `${saiu} ${saiu === 1 ? 'voo com o instrutor escolhido' : 'voos com o instrutor escolhido'} fora do cadastro`,
     repouso && `${repouso} ${repouso === 1 ? 'instrutor' : 'instrutores'} sem o repouso da lei antes da volta do noturno`,
+    voltas && `${voltas} ${voltas === 1 ? 'volta do noturno' : 'voltas do noturno'} com o avião ou o INVA indisponível`,
     foraDaRegra && `${foraDaRegra} ${foraDaRegra === 1 ? 'agendamento' : 'agendamentos'} fora da regra`,
     outros && `${outros} ${outros === 1 ? 'outro' : 'outros'}`
   ].filter(Boolean);

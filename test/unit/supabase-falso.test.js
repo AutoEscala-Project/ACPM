@@ -290,3 +290,15 @@ describe('Servidor falso dos testes E2E: os dados pessoais (o nome completo e qu
     assert.deepEqual((await ler(await entrar(CONTAS.gestor), '/rest/v1/dados_pessoais?select=id_cadastro%2Ccanac&tipo=eq.aluno')).corpo, []);
   });
 });
+
+describe('Servidor falso dos testes E2E: os dados pessoais', () => {
+  it('a leitura devolve só as colunas do select, como o PostgREST; sem select, ou com *, todas', async () => {
+    const { soAsColunas } = await import('../e2e/falso/dados-pessoais.js');
+    const linhas = [{ tipo: 'aluno', id_cadastro: 1000, cpf: '52998224725', canac: null, nascimento: null, celular: null, email: 'a@b.c', atualizado_em: 't', atualizado_por: 'x' }];
+    const url = select => new URL(`${URL_TESTE}/rest/v1/dados_pessoais${select === undefined ? '' : `?select=${encodeURIComponent(select)}`}`);
+    assert.deepEqual(soAsColunas(linhas, url('id_cadastro, cpf, email')), [{ id_cadastro: 1000, cpf: '52998224725', email: 'a@b.c' }]);
+    assert.deepEqual(soAsColunas(linhas, url('cpf,coluna_que_nao_existe')), [{ cpf: '52998224725' }]);
+    assert.deepEqual(soAsColunas(linhas, url('*')), linhas);
+    assert.deepEqual(soAsColunas(linhas, url()), linhas);
+  });
+});

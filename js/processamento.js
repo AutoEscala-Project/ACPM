@@ -12,15 +12,19 @@ import { inativo } from './inativos.js';
 // O voo da mesma missão (mis) que está na demanda do aluno sem pedido da agenda (posto à mão: a demanda começa vazia a
 // cada data): ele dá lugar ao pedido, para não duplicar. O voo fixo (agendado, aprovado ou com o instrutor escolhido na
 // escala), o fixado pelo status (em andamento ou cancelado; também quando o cadeado saiu, como na aprovação com o Voa
-// desligado) e o que já tem resultado na data ficam como estão. Com a missão do curso do pedido (vinculada: { codigo,
-// sigla }), o voo com outra missão do curso também fica (o pedido entra como outro voo); o sem missão do curso dá lugar.
-// Nenhum: null
+// desligado) e o que já tem resultado na data ficam como estão. O Noturno fixo só pelo pino do Noturno (o que a gravação
+// põe: js/fixos.js) dá lugar, e o pino fica com ele: o pedido da agenda passa a ser esse voo, na mesma chave, no avião e com
+// o INVA dele. Com a missão do curso do pedido (vinculada: { codigo, sigla }), o voo com outra missão do curso também fica
+// (o pedido entra como outro voo); o sem missão do curso dá lugar. Nenhum: null
+const soPeloNoturno = (estado, pino) => Boolean(pino && pino.noturno && !pino.agendado && !pino.escolhido && !estado.aprovacao);
 function vooQueDaLugar(estado, aluno, mis, vinculada = null) {
   const doDia = estado.resultados ? estado.resultados.doDia : [];
+  const fixos = estado.fixos || {};
   const mesmaMissaoDoCurso = p => !vinculada || !p.etapa || (p.etapa === vinculada.codigo && (p.cursoDaEtapa || aluno.curso) === vinculada.sigla);
   return [aluno, ...(aluno.extra || [])].find(p => {
     const chave = chaveDoVoo(aluno.id, p.mid || 0);
-    return p.fly && p.mis === mis && p.solicitacao === undefined && mesmaMissaoDoCurso(p) && !Object.hasOwn(estado.fixos || {}, chave)
+    return p.fly && p.mis === mis && p.solicitacao === undefined && mesmaMissaoDoCurso(p)
+      && (!Object.hasOwn(fixos, chave) || soPeloNoturno(estado, fixos[chave]))
       && !fixoPeloStatus(chave, estado.fStatus) && resultadoDoVoo(doDia, chave) === null;
   }) || null;
 }

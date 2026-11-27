@@ -863,7 +863,7 @@ export function runAllocationEngine(state, opcoes = {}) {
   }
   if (!antesDoF1h) al.push(...avisosDoPriorizarCom(state, out, { semPar }));
   // O que o motor confere depois de montar a escala, sem mover nenhum voo (js/conferencia.js)
-  const revisao = concluirEscala(state, ctx, out, al);
+  const revisao = concluirEscala(state, ctx, out, al, { antesDoF1h });
   return { out, al, tot: act.length, revisao };
 }
 
