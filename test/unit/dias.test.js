@@ -333,3 +333,25 @@ describe('O inativo e o que o recurso exige, no cadastro (formato 26)', () => {
     assert.equal('inativo' in separar(estado).cadastro.ins[1], false);
   });
 });
+
+// J (commit "fechamentos"): o dia leva os horários fechados (fechamentos) por separar, juntar e diaParaCopiar, como leva
+// o win; o dia sem eles continua sem eles (os leitores usam o win)
+describe('Os horários fechados no dia', () => {
+  const fechamentos = [{ de: 760, ate: 1050 }, { de: 390, ate: 500, categorias: ['C152'] }];
+  it('separar e juntar levam os fechamentos, normalizados; sem eles, nada', () => {
+    const estado = { ...estadoSintetico(), fechamentos };
+    const { cadastro, dia } = separar(estado);
+    const emOrdem = [{ de: 390, ate: 500, categorias: ['C152'] }, { de: 760, ate: 1050 }];
+    assert.deepEqual(dia.fechamentos, emOrdem);
+    assert.deepEqual(juntar(cadastro, dia).fechamentos, emOrdem);
+    const semEles = separar(estadoSintetico());
+    assert.equal(Object.hasOwn(semEles.dia, 'fechamentos'), false);
+    assert.equal(Object.hasOwn(juntar(semEles.cadastro, semEles.dia), 'fechamentos'), false);
+    assert.deepEqual(juntar(cadastro, { ...dia, fechamentos: [{ de: 9, ate: 3 }, 'x'] }).fechamentos, [], 'os inválidos saem');
+  });
+  it('a data seguinte começa com os fechamentos da anterior, como com o win', () => {
+    const { dia } = separar({ ...estadoSintetico(), fechamentos });
+    assert.deepEqual(diaParaCopiar(dia).fechamentos, [{ de: 390, ate: 500, categorias: ['C152'] }, { de: 760, ate: 1050 }]);
+    assert.equal(Object.hasOwn(diaParaCopiar(separar(estadoSintetico()).dia), 'fechamentos'), false);
+  });
+});

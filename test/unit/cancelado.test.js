@@ -135,7 +135,8 @@ describe('O que pode voar no lugar do cancelado', () => {
     estado.win = estado.win.map(() => false);
     const nada = sugerirParaCancelado(estado, runAllocationEngine(estado), voo.fKey);
     assert.deepEqual(nada.opcoes, []);
-    assert.equal(nada.impossivel[0], 'No mesmo horário: o período está fechado.');
+    // Todas as janelas de antes fechadas: o dia todo fechado (fechamentosDoWin), e o texto diz o intervalo
+    assert.equal(nada.impossivel[0], 'No mesmo horário: o horário está fechado nesta data (00:00–24:00).');
   });
 
   it('o voo atrasado ocupa o avião e o instrutor no horário novo: nada sobre a nova decolagem dele', () => {
@@ -179,9 +180,9 @@ describe('O porquê do impossível', () => {
     const r = sugerirParaCancelado(estado, runAllocationEngine(estado), voo.fKey);
     assert.deepEqual(r.opcoes, []);
     assert.equal(r.impossivel[0], 'No mesmo horário: o voo foi cancelado por meteorologia nele.');
-    assert.match(r.impossivel[1], /^Em outro horário: o período está fechado \(06:30, 08:20, 11:30/);
+    assert.match(r.impossivel[1], /^Em outro horário: o horário está fechado nesta data \(06:30, 08:20, 11:30/);
     assert.doesNotMatch(r.impossivel[1], /livres/);
-    assert.match(r.impossivel[2], /^Em outro tipo de recurso: no C172, o período está fechado \(06:30/);
+    assert.match(r.impossivel[2], /^Em outro tipo de recurso: no C172, o horário está fechado nesta data \(06:30/);
   });
 
   it('hoje, depois do último horário: os outros horários já passaram', () => {
