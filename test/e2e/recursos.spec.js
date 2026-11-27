@@ -1,13 +1,15 @@
 // Recursos: a disponibilidade do dia (janelas, aviões e simuladores, hangar), o cadastro da frota, os horários de
 // decolagem por categoria e os filtros.
-import { test, comHangar, expect, abrir, abrirSintetico, abrirComExemplo, irPara, irParaVista, abrirEscala, lerEscala, filtrarCategorias, abrirHistorico, campoDaAgenda, alternarDisponivel, caixaDisponivel, horariosFechados, fecharHorarios, tabelaDoDia } from './fixtures.js';
+import { test, comHangar, expect, abrir, abrirSintetico, abrirComExemplo, irPara, irParaVista, abrirEscala, lerEscala, filtrarCategorias, abrirHistorico, campoDaAgenda, alternarDisponivel, caixaDisponivel, fecharHorarios, tabelaDoDia } from './fixtures.js';
 import { aluno, apenas, cenario, instrutor } from '../helpers/montar.js';
 import { GLOSSARIO } from '../../js/glossario.js';
 
 test.describe('Recursos', () => {
-  test('estado inicial: nenhum horário fechado, 26 recursos e a Sala Ground, nenhum instrutor e nenhum aluno', async ({ page }) => {
+  test('estado inicial: 26 recursos e a Sala Ground, nenhum instrutor e nenhum aluno', async ({ page }) => {
     await abrir(page);
-    await expect(horariosFechados(page)).toContainText('Nenhum horário fechado nesta data.');
+    await irPara(page, 'rec');
+    // Os horários fechados saíram de Recursos (B: na Escala)
+    await expect(page.locator('#s-rec #fechamentos')).toHaveCount(0);
     // Os 26 da frota e a Sala Ground (J, S4), no último grupo
     await expect(tabelaDoDia(page).locator('input[data-a="av"]')).toHaveCount(27);
     await expect(tabelaDoDia(page).locator('tr.grupo')).toHaveText([/^C152/, /^C172/, /^PA-34/, /^Simuladores/, /^Sala Ground/]);
@@ -78,14 +80,6 @@ test.describe('Recursos', () => {
     await expect(linha).toContainText('1 h na escala · termina com 7 h disponíveis');
     await expect(tabelaDoDia(page).locator('tr.grupo').first()).toContainText('1 de 13 disponíveis');
     await expect(tabelaDoDia(page).locator('tr[data-r="SIM-MONO-A"] input[data-a="horas"]')).toHaveCount(0);
-  });
-
-  test('fecha um horário nesta data (J): a lista e o Histórico', async ({ page }) => {
-    await abrirSintetico(page);
-    await irPara(page, 'rec');
-    await fecharHorarios(page, { de: '11:30', ate: '12:40' });
-    await expect(horariosFechados(page).locator('li > span')).toHaveText(['11:30–12:40 · todos os recursos']);
-    await expect(page.locator('#audit-log-list')).toContainText('Horários fechados nesta data: 11:30–12:40 (todos os recursos)');
   });
 });
 
@@ -210,7 +204,7 @@ test.describe('Recursos: acrescentar e retirar', () => {
   // Duas vistas, pelo escopo: a Disponibilidade do dia (o que vale para a data aberta: as janelas, os aviões e
   // simuladores e, ao lado da tabela, o hangar) e o Cadastro (o que vale para todas as datas: a frota e os horários de
   // decolagem). Todos os ids continuam na página, e a vista escolhida fica ao voltar à aba, até a página recarregar
-  comHangar('Recursos em duas vistas: a Disponibilidade do dia (horários fechados, aviões e simuladores, hangar) e o Cadastro (frota e horários, para todas as datas)', async ({ page }) => {
+  comHangar('Recursos em duas vistas: a Disponibilidade do dia (aviões e simuladores, hangar) e o Cadastro (frota e horários, para todas as datas)', async ({ page }) => {
     await abrirSintetico(page);
     await irPara(page, 'rec');
     const secao = page.locator('#s-rec');
@@ -220,7 +214,7 @@ test.describe('Recursos: acrescentar e retirar', () => {
     await expect(secao.locator('[data-vista-rec="dia"]')).toHaveAttribute('aria-pressed', 'true');
     await expect(secao.locator('[data-vista-rec="cadastro"]')).toHaveAttribute('aria-pressed', 'false');
     await expect(dia.locator('h3')).toContainText('Nesta data');
-    for (const id of ['#fechamentos', '#eqs', '#revisao', '#hangar']) await expect(dia.locator(id)).toBeVisible();
+    for (const id of ['#eqs', '#revisao', '#hangar']) await expect(dia.locator(id)).toBeVisible();
     for (const id of ['#frota', '#horarios', '#form-recurso']) await expect(cadastro.locator(id)).toHaveCount(1);
     await expect(cadastro).toBeHidden();
     // A barra da aba (as vistas, a busca, as categorias, a contagem e "+ Novo recurso") vale para as duas vistas
@@ -246,7 +240,7 @@ test.describe('Recursos: acrescentar e retirar', () => {
     await page.reload();
     await irPara(page, 'rec');
     await expect(secao).toHaveAttribute('data-vista', 'dia');
-    await expect(horariosFechados(page)).toBeVisible();
+    await expect(tabelaDoDia(page)).toBeVisible();
   });
 
   // A partir de 1.100 px, a ordem no hangar fica ao lado da tabela dos aviões; abaixo disso, embaixo dela. A página não
@@ -290,8 +284,7 @@ test.describe('Recursos: horários de decolagem por categoria', () => {
     await expect(page.locator('#horarios button')).toHaveCount(5);
     await expect(page.locator('#horarios .horarios-editor')).toHaveCount(0);
 
-    // Das 10:10 às 11:30 fechado nesta data (na Disponibilidade do dia): o horário fica apagado, e a dica diz por quê
-    await irParaVista(page, 'rec', 'dia');
+    // Das 10:10 às 11:30 fechado nesta data (na Escala): o horário fica apagado, e a dica diz por quê
     await fecharHorarios(page, { de: '10:10', ate: '11:30' });
     await irParaVista(page, 'rec', 'cadastro');
     await expect(c152.locator('.hr.fechado')).toHaveText(['10:10 (fechado nesta data)']);
@@ -502,9 +495,8 @@ test.describe('Recursos: o editor dos horários pelo teclado e no leitor de tela
     expect(Math.abs(espaco.entre - espaco.normal)).toBeLessThan(1);
 
     // Um horário digitado (sem pôr) continua no campo quando a aba é redesenhada por outra alteração (um horário fechado
-    // na Disponibilidade do dia: o editor continua aberto no Cadastro, escondido)
+    // na Escala: o editor continua aberto em Recursos, escondido)
     await campo.fill('09:15');
-    await irParaVista(page, 'rec', 'dia');
     await fecharHorarios(page, { de: '08:20', ate: '10:10' });
     await irParaVista(page, 'rec', 'cadastro');
     await expect(editor.locator('.hr-novo')).toHaveValue('09:15');

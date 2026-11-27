@@ -22,7 +22,7 @@ const DONOS = [
   { seletor: '#linha a[data-nav]', achar: /#linha a\[data-nav\]/, drivers: ['casca.js'] },
   { seletor: '#btn-open-log', achar: /#btn-open-log(?![\w-])/, drivers: ['casca.js'] },
   { seletor: '#btn-menu-conta', achar: /#btn-menu-conta(?![\w-])/, drivers: ['casca.js'] },
-  // Recursos (B): a disponibilidade do dia e as janelas de operação
+  // Recursos (B): a disponibilidade do dia; os horários fechados da data, na Escala (o bloco é do B)
   { seletor: '#eqs', achar: /#eqs(?![\w-])/, drivers: ['recursos.js'], testes: ['recursos.spec.js'] },
   { seletor: '#fechamentos', achar: /#fechamentos(?![\w-])/, drivers: ['recursos.js'], testes: ['recursos.spec.js', 'fechamentos.spec.js'] },
   // Instrutores (C): a grade do dia e o "Vem"

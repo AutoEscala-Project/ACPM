@@ -2,6 +2,7 @@
 // das categorias e as telas que os testes do celular e da acessibilidade percorrem (ESTADOS)
 import { expect } from '@playwright/test';
 import { irParaVista, marcarNoFiltro, nenhumComOsFiltros } from './casca.js';
+import { abrirEscala, perguntaDoRefazer, refazer } from './escala.js';
 
 // Recursos numa vista ('dia': a Disponibilidade do dia; 'cadastro')
 export const abrirRecursos = (page, vista = 'dia') => irParaVista(page, 'rec', vista);
@@ -14,11 +15,27 @@ export async function alternarDisponivel(page, id, disponivel) {
   else await caixaDisponivel(page, id).uncheck();
 }
 
-// Os horários fechados da data (Recursos › Disponibilidade do dia; J, no lugar das janelas de operação)
+// Os horários fechados da data (B: na Escala, o bloco details#fechamentos; o J os pôs em Recursos, no lugar das janelas de
+// operação), o resumo dele ("nenhum", "12:40–17:30 · todos os recursos") e a lista dos intervalos
 export const horariosFechados = page => page.locator('#fechamentos');
+export const resumoDosFechamentos = page => page.locator('#fechamentos-resumo');
+export const intervalosFechados = page => page.locator('#fechamentos .fechamentos-lista li > span');
+// Abre o bloco na Escala (de outra tela, a Escala abre antes); aberto, ele fica
+export async function abrirFechamentos(page) {
+  const bloco = horariosFechados(page);
+  if (!await bloco.isVisible()) await abrirEscala(page);
+  if (!await bloco.evaluate(d => d.open)) await bloco.locator('summary').click();
+  await expect(bloco).toHaveJSProperty('open', true);
+}
+// A pergunta do F1g (#dlg-refazer) que a mudança faz na escala não aprovada: respondida com "Salvar e refazer"; na
+// aprovada, ela não vem
+async function responderSeAberta(page) {
+  if (await perguntaDoRefazer(page).isVisible()) await refazer(page);
+}
 // "+ Fechar horários": de e ate como na tela ('12:40', '17:30'), ou diaTodo; categorias pelos ids ('C152', 'ground'…);
 // nenhuma, todos os recursos. Confere que o formulário fecha
 export async function fecharHorarios(page, { de, ate, diaTodo = false, categorias = [] } = {}) {
+  await abrirFechamentos(page);
   const secao = horariosFechados(page);
   await secao.locator('[data-act="fechar-horarios"]').click();
   const form = secao.locator('.fechar-horarios');
@@ -30,7 +47,14 @@ export async function fecharHorarios(page, { de, ate, diaTodo = false, categoria
   }
   for (const c of categorias) await form.locator(`input[data-cat="${c}"]`).check();
   await form.locator('[data-act="fch-fechar"]').click();
+  await responderSeAberta(page);
   await expect(form).toBeHidden();
+}
+// O ✕ de um intervalo (o i-ésimo da lista), que o abre de novo
+export async function abrirDeNovo(page, i = 0) {
+  await abrirFechamentos(page);
+  await horariosFechados(page).locator('[data-act="tirar-fechamento"]').nth(i).click();
+  await responderSeAberta(page);
 }
 
 // O filtro das categorias de Recursos: os valores são os ids das categorias ('C152', 'C172', 'sim', 'PA-34')
