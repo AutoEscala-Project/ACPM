@@ -208,6 +208,29 @@ test.describe('Agenda de Solicitações (modo compartilhado)', () => {
     expect(servidor.solicitacoes.map(s => [s.missao, s.recurso, s.horas, s.missao_do_curso])).toEqual([['Navegação', 'C152', 3, pp.missoes.find(m => m.codigo === 'NAV-150NM').id]]);
   });
 
+  // O horário exato que o voo não guarda (antes das 06:30 ou depois das 17:30, os do dia: minutoExato): o servidor aceita
+  // os dois (a coluna só confere o formato), o pedido entra sem ele, e o aviso não chama o das 18:00 de "antes do primeiro
+  // horário do dia"
+  test('importar os pedidos das 06:00 e das 18:00: o aviso diz que estão fora dos horários exatos do dia, antes ou depois', async ({ browser }) => {
+    const context = await browser.newContext();
+    await prepararContexto(context);
+    const page = await context.newPage();
+    const docs = documentosAtuais({ ...estadoSintetico(), stu: [aluno(1000, { fly: false }), aluno(1001, { fly: false })] }, AMANHA);
+    const servidor = await instalarSupabaseFalso(context, docs);
+    servidor.solicitacoes.push(pedidoDe(1, AMANHA, { horario: '06:00', recurso: 'C152' }),
+      pedidoDe(2, AMANHA, { aluno: 1001, aluno_nome: 'Aluno 1001', horario: '18:00', recurso: 'C152' }));
+    const erros = vigiarErros(page);
+    await entrar(page, CONTAS.operador);
+    await botaoDaAba(page, 'dem').click();
+    await importarDaAgenda(page);
+    await expect(page.locator('#toast-box')).toContainText('2 pedido(s) da agenda na demanda · 2 pedidos fora dos horários exatos do dia (das 06:30 às 17:30), ' +
+      'sem o horário exato (qualquer horário): Voo Local às 06:00 no C152; Voo Local às 18:00 no C152.');
+    await expect(page.locator('#toast-box')).not.toContainText('antes do primeiro horário do dia');
+    await expect.poll(() => servidor.dias.get(AMANHA).conteudo.importadas.toSorted()).toEqual([1, 2]);
+    expect(erros).toEqual([]);
+    await context.close();
+  });
+
   // Sem os programas lidos, a importação não sabe se a missão do curso do pedido saiu do programa: o pedido espera (não
   // conta como importado), o app diz, e ele entra com ela depois de "Tentar de novo"
   test('importar sem os programas dos cursos lidos: o pedido com a missão do curso espera e entra com ela depois', async ({ browser }) => {

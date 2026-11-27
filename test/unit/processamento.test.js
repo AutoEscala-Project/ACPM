@@ -439,6 +439,17 @@ describe('Importar as solicitações da agenda para a demanda', () => {
     }
   });
 
+  // Depois do último horário exato do dia (17:30, o do Noturno): o servidor aceita o Voo Local às 18:00 (a coluna só
+  // confere o formato), e o voo não guarda o minuto (minutoExato vai até HORARIO_DO_NOTURNO). Entra sem ele, como o das
+  // 06:00, e o resumo o conta no mesmo semOHorario (fora dos horários exatos do dia, antes ou depois), não fora da lista
+  it('o pedido das 18:00, depois do último horário exato do dia: entra sem ele, e o resumo o conta com o das 06:00', () => {
+    const e = { ...estado(), horarios: { C152: [390, 500, 610], C172: [500], sim: [500], 'PA-34': [500] }, stu: [aluno(1000, { fly: false }), aluno(1001, { fly: false })] };
+    const r = importarSolicitacoes(e, [pedido(79, 1001, { janela: 'horario', horario: '18:00', recurso: 'C152' }),
+      pedido(78, 1000, { janela: 'horario', horario: '06:00', recurso: 'C152' })]);
+    assert.deepEqual([e.stu[0].jan, e.stu[1].jan, r.foraDaLista], [undefined, undefined, []]);
+    assert.deepEqual(r.semOHorario, [{ missao: 'Voo Local', recurso: 'C152', horario: '06:00' }, { missao: 'Voo Local', recurso: 'C152', horario: '18:00' }]);
+  });
+
   // N12, N13 (o J): não há período do dia. A linha do servidor com "manha", "tarde" ou "noite" (a função de 9 argumentos
   // ainda aceita um, até o D1) entra sem horário exato, como a sem horário: nenhum jan, as preferências padrão da lista, e
   // o resumo não a conta nem fora da lista nem antes do primeiro horário (ela não tem horário a perder)
