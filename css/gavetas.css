@@ -2,7 +2,9 @@
 /* Painel dos dados pessoais */
 .form-dados { display: flex; flex-direction: column; gap: 10px; overflow-y: auto; }
 .campo-dado { display: flex; flex-direction: column; gap: 4px; }
-.campo-dado label { font-weight: 600; }
+.campo-dado label, .campo-dado .rotulo-dado { font-weight: 600; }
+/* Quem só lê (a secretaria): o valor em texto, embaixo do rótulo */
+.campo-dado .valor-dado { overflow-wrap: anywhere; }
 .campo-dado input[aria-invalid="true"] { border-color: var(--er); }
 .campo-dado .erro-campo:empty { display: none; }
 /* Histórico, BI, Manual e toasts */

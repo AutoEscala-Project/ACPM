@@ -59,7 +59,7 @@ describe('Glossário', () => {
 
   it('com o hangar, o progresso e a prioridade desligados, os termos deles saem, e os outros não falam deles', () => {
     const saem = Object.keys(INTEIRO).filter(id => !Object.hasOwn(SEM_FUNCIONALIDADES, id));
-    assert.deepEqual(saem, ['resultado', 'prioridade', 'fora-da-ordem', 'curso-encerrado', 'hangar', 'progresso', 'alunos-na-fase']);
+    assert.deepEqual(saem, ['resultado', 'prioridade', 'fora-da-ordem', 'curso-encerrado', 'hangar', 'progresso', 'missao-anterior', 'missao-atual', 'resultado-sem-voo', 'colocar-no-curso', 'alunos-na-fase']);
     for (const [id, { termo, texto }] of Object.entries(SEM_FUNCIONALIDADES)) {
       assert.doesNotMatch(`${termo} ${texto}`, /hangar|progresso|próxima missão|ainda não aprovou|sugerida|o resultado|prioridade/i, id);
     }
@@ -71,6 +71,13 @@ describe('Glossário', () => {
   });
 
   // A tela mostra a prioridade com 1 a mais alta (a guardada continua com 5 a mais alta: js/rules.js, prioridadeNaTela)
+  // Alunos (passo A): o nome completo (dado pessoal, fora da escala) e as missões do aluno, com o progresso ligado
+  it('os termos da tela Alunos, na ordem do bloco dela', () => {
+    const daAba = Object.entries(INTEIRO).filter(([, t]) => t.aba === 'Alunos').map(([id]) => id);
+    assert.deepEqual(daAba, ['voa-com', 'nao-escalar-com', 'progresso', 'missao-anterior', 'missao-atual', 'resultado-sem-voo', 'colocar-no-curso', 'inativo', 'filtro-dos-cursos', 'nome-completo']);
+    assert.match(INTEIRO['nome-completo'].texto, /não vai para a escala/);
+  });
+
   it('a prioridade, ligada: de 1 a 5, e 1 é a mais alta', () => {
     assert.equal(INTEIRO.prioridade.funcionalidade, undefined);
     assert.match(INTEIRO.prioridade.texto, /^De 1 a 5, e 1 é a mais alta/);

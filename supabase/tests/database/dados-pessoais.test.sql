@@ -1,14 +1,18 @@
 -- Fase 9: dados pessoais de alunos e instrutores (CPF, CANAC, nascimento, celular e e-mail). Só operadores,
--- administradores e a secretaria leem e gravam (pela função, que valida tudo); gestor, conta sem perfil e anônimo não.
+-- administradores e a secretaria leem; gestor, conta sem perfil e anônimo não.
 -- Revisão de 14/11: a gravação leva a versão lida (atualizado_em) e é recusada quando outra pessoa gravou antes; só vale
--- para quem está no cadastro; a própria função registra no histórico os campos que mudaram (nunca os valores), também
--- para a secretaria; e quem sai do cadastro leva os dados pessoais junto.
+-- para quem está no cadastro; a própria função registra no histórico os campos que mudaram (nunca os valores); e quem sai
+-- do cadastro leva os dados pessoais junto.
+-- Passo A (20261128100000_nome_completo_nos_dados_pessoais): o nome completo (sem a chave, fica o gravado; vazio, apaga;
+-- até 120 caracteres), e só operadores e administradores gravam (grava_dados_pessoais): a secretaria lê e não grava, e a
+-- versão de 3 argumentos saiu. Os casos do nome completo e de quem grava são os de test/helpers/casos-dos-dados-pessoais.js
+-- (o nome do caso é a descrição; test/unit/espelho-do-banco.test.js confere).
 -- Roda dentro de uma transação desfeita no final: não deixa dados no banco.
 begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions;
 
-select plan(47);
+select plan(56);
 
 insert into auth.users (id, email, created_at, updated_at) values
   ('00000000-0000-4000-a000-000000000021', 'operador@dados.acpm.invalid', now(), now()),
@@ -34,13 +38,21 @@ create function pg_temp.salvar(p_tipo text, p_id integer, p_dados jsonb)
   select public.salvar_dados_pessoais(p_tipo, p_id, p_dados,
     (select atualizado_em from public.dados_pessoais where tipo = p_tipo and id_cadastro = p_id), date '2026-11-11')
 $$;
+-- Grava e devolve o nome completo guardado depois (null: sem nome completo, ou a linha saiu)
+create function pg_temp.nome_gravado(p_tipo text, p_id integer, p_dados jsonb)
+  returns text language sql as $$
+  select pg_temp.salvar(p_tipo, p_id, p_dados);
+  select nome_completo from public.dados_pessoais where tipo = p_tipo and id_cadastro = p_id
+$$;
 
 -- Estrutura
 select has_table('public', 'dados_pessoais', 'tabela de dados pessoais existe');
 select ok((select relrowsecurity from pg_class where oid = 'public.dados_pessoais'::regclass), 'RLS ativo em dados_pessoais');
 select has_function('public', 'salvar_dados_pessoais', array['text', 'integer', 'jsonb', 'timestamptz', 'date'], 'função salvar_dados_pessoais existe (com a versão lida e a data)');
--- A versão antiga fica até o app novo estar no ar (o app em produção ainda a chama); uma migração depois a tira
-select has_function('public', 'salvar_dados_pessoais', array['text', 'integer', 'jsonb'], 'a versão antiga continua enquanto o app anterior estiver no ar');
+-- A versão antiga (sem a versão lida e sem o histórico) saiu no passo A
+select hasnt_function('public', 'salvar_dados_pessoais', array['text', 'integer', 'jsonb'], 'a versão antiga saiu');
+select has_function('public', 'grava_dados_pessoais', array[]::text[], 'função grava_dados_pessoais existe (quem grava)');
+select has_column('public', 'dados_pessoais', 'nome_completo', 'a coluna nome_completo existe');
 
 -- CPF: os dois dígitos verificadores
 select ok(public.cpf_valido('52998224725'), 'CPF válido');
@@ -98,25 +110,41 @@ select lives_ok($$ select pg_temp.salvar('instrutor', 7, '{"cpf":"52998224725"}'
 select lives_ok($$ select pg_temp.salvar('aluno', 1001, '{"canac":""}') $$, 'gravar sem nenhum dado');
 select is_empty($$ select 1 from public.dados_pessoais where tipo = 'aluno' and id_cadastro = 1001 $$, 'sem nenhum dado, a linha sai');
 
+-- O nome completo (os casos de test/helpers/casos-dos-dados-pessoais.js), no Caio
+select is(pg_temp.nome_gravado('aluno', 1002, '{"nome_completo":"  Caio   da  Silva ","canac":"222333"}'), 'Caio da Silva',
+  'o nome completo: o texto grava, com um espaço só entre as palavras');
+select is((select descricao from public.historico where descricao like 'Dados pessoais de Caio%' order by id limit 1),
+  'Dados pessoais de Caio atualizados: Nome completo, CANAC', 'o histórico registra Nome completo');
+select is(pg_temp.nome_gravado('aluno', 1002, '{"canac":"222333","email":"caio@exemplo.com"}'), 'Caio da Silva',
+  'o nome completo: sem a chave, fica o gravado');
+select is(pg_temp.nome_gravado('aluno', 1002, '{"nome_completo":"","canac":"222333"}'), null, 'o nome completo: a chave vazia apaga');
+select throws_ok($$ select pg_temp.salvar('aluno', 1002, jsonb_build_object('nome_completo', repeat('x', 121))) $$, '22023',
+  'o nome completo tem no máximo 120 caracteres', 'o nome completo: mais de 120 caracteres é recusado');
+select is(pg_temp.nome_gravado('aluno', 1002, '{"nome_completo":"Caio da Silva"}'), 'Caio da Silva', 'com só o nome completo, a linha fica');
+
 -- Escrita direta na tabela é bloqueada
 select throws_ok($$ insert into public.dados_pessoais (tipo, id_cadastro, canac) values ('aluno', 1003, '111111') $$, '42501', null, 'insert direto é bloqueado');
 select is_empty($$ update public.dados_pessoais set canac = '222222' returning 1 $$, 'update direto não altera nada');
 
--- Administrador e secretaria gravam e leem
+-- O administrador grava; a secretaria lê e não grava (nem aluno, nem instrutor; nem pela função, nem direto na tabela)
 select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-a000-000000000022","role":"authenticated"}', true);
-select lives_ok($$ select pg_temp.salvar('instrutor', 8, '{"canac":"333333"}') $$, 'administrador grava');
+select lives_ok($$ select pg_temp.salvar('instrutor', 8, '{"canac":"333333"}'), pg_temp.salvar('aluno', 1004, '{"email":"bia@exemplo.com"}') $$, 'administrador grava');
 select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-a000-000000000023","role":"authenticated"}', true);
-select lives_ok($$ select pg_temp.salvar('aluno', 1004, '{"email":"bia@exemplo.com"}') $$, 'secretaria grava');
-select is((select autor from public.historico where descricao = 'Dados pessoais de Duda atualizados: E-mail'), 'Secretaria de teste',
-  'a alteração da secretaria também vai para o histórico');
-select is((select count(*)::integer from public.dados_pessoais), 4, 'secretaria lê todos os dados pessoais');
+select throws_ok($$ select pg_temp.salvar('aluno', 1004, '{"email":"duda@exemplo.com"}') $$, '42501',
+  'somente operadores e administradores alteram dados pessoais', 'secretaria não grava os dados de um aluno');
+select throws_ok($$ select pg_temp.salvar('instrutor', 7, '{"canac":"444444"}') $$, '42501',
+  'somente operadores e administradores alteram dados pessoais', 'secretaria não grava os dados de um instrutor');
+-- (o que a função fizesse antes de recusar volta com o throws_ok; a escrita direta é o outro caminho: ela lê a tabela, e
+-- nenhuma política deixa alterar)
+select is_empty($$ update public.dados_pessoais set canac = '999999' returning 1 $$, 'secretaria não altera a tabela direto');
+select is((select count(*)::integer from public.dados_pessoais), 5, 'secretaria lê todos os dados pessoais');
 
 -- Quem sai do cadastro leva os dados pessoais junto (o cadastro gravado sem a Duda e sem o Instrutor 08)
 select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-a000-000000000021","role":"authenticated"}', true);
 select is(public.salvar_documento('cadastro', '{"esquema": 18,
   "stu": [{"id": 1000, "nm": "Ana Souza"}, {"id": 1001, "nm": "Bia"}, {"id": 1002, "nm": "Caio"}], "ins": [{"id": 7, "nm": "Instrutor 07"}]}', 1), 2,
   'o operador grava o cadastro sem uma aluna e um instrutor');
-select is((select array_agg(tipo || ':' || id_cadastro order by tipo, id_cadastro) from public.dados_pessoais), array['aluno:1000', 'instrutor:7'],
+select is((select array_agg(tipo || ':' || id_cadastro order by tipo, id_cadastro) from public.dados_pessoais), array['aluno:1000', 'aluno:1002', 'instrutor:7'],
   'os dados pessoais de quem saiu do cadastro saem junto');
 
 -- Gestor e conta sem perfil: nem leem nem gravam

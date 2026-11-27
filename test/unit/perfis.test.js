@@ -14,9 +14,10 @@ describe('Perfis de acesso', () => {
     assert.deepEqual(PERFIS.map(soPainel), [false, false, false, false, true]);
   });
 
-  // F2 separa ver de alterar; até o passo A (o servidor), a secretaria altera, como hoje
-  it('alterar os dados pessoais: operadores, administradores e, até o passo A, a secretaria; nem o Gestor nem a TV', () => {
-    assert.deepEqual(PERFIS.map(editaDadosPessoais), [true, false, true, true, false]);
+  // Desde o passo A, a secretaria lê os dados pessoais e não os altera (o servidor também recusa: grava_dados_pessoais)
+  it('alterar os dados pessoais: só operadores e administradores (quem opera a escala); nem a secretaria, nem o Gestor, nem a TV', () => {
+    assert.deepEqual(PERFIS.map(editaDadosPessoais), [true, false, false, true, false]);
+    assert.deepEqual(PERFIS.map(editaDadosPessoais), PERFIS.map(operaEscala));
     assert.equal(editaDadosPessoais(null), false);
     assert.equal(editaDadosPessoais('constructor'), false);
   });

@@ -1,24 +1,28 @@
-// Painel dos dados pessoais: CPF, CANAC, nascimento, celular e e-mail de um aluno ou instrutor, ao lado da tabela. Só
-// operadores, administradores e a secretaria veem (no modo local, fora do perfil Gestor). Os dados ficam em
-// js/views/dados-pessoais.js, fora do estado: nunca vão para o cadastro, o link compartilhado, o CSV, o PDF ou o BI.
-import { CAMPOS_PESSOAIS, validarDadosPessoais, formatarCpf, formatarCelular } from '../dados-pessoais.js';
+// Painel dos dados pessoais: nome completo, CPF, CANAC, nascimento, celular e e-mail de um instrutor, ao lado da tabela
+// (até Instrutores virar lista e detalhe). Operadores, administradores e a secretaria veem (no modo local, fora do perfil
+// Gestor); a secretaria lê em texto, sem "Salvar". Os dados ficam em js/views/dados-pessoais.js, fora do estado: nunca
+// vão para o cadastro, o link compartilhado, o CSV, o PDF ou o BI.
+import { CAMPOS_PESSOAIS, LIMITE_DO_NOME_COMPLETO, validarDadosPessoais, formatarCpf, formatarCelular, paraGravar } from '../dados-pessoais.js';
 import { ApiClient } from '../storage.js';
 import { insBy, stuBy, DATA } from '../state.js';
 import { esc, hojeISO } from '../format.js';
 import { $, abrirGaveta } from '../dom.js';
-import { dadosDe, guardarDados, podeVerDadosPessoais } from './dados-pessoais.js';
+import { dadosDe, guardarDados, podeVerDadosPessoais, podeEditarDadosPessoais } from './dados-pessoais.js';
+import { NOTA_DOS_DADOS } from './editor-de-dados-pessoais.js';
 
 const pessoa = (tipo, id) => (tipo === 'aluno' ? stuBy(id) : insBy(id));
 
 const VALOR = { cpf: formatarCpf, celular: formatarCelular };
-const TIPOS = { cpf: ['text', 'numeric', '000.000.000-00'], canac: ['text', 'numeric', '6 dígitos'], nascimento: ['date', '', ''], celular: ['tel', 'tel', '(37) 99999-9999'], email: ['email', 'email', 'nome@exemplo.com'] };
+const TIPOS = { nome_completo: ['text', '', ''], cpf: ['text', 'numeric', '000.000.000-00'], canac: ['text', 'numeric', '6 dígitos'], nascimento: ['date', '', ''], celular: ['tel', 'tel', '(37) 99999-9999'], email: ['email', 'email', 'nome@exemplo.com'] };
 
 function campoHtml({ id, rotulo }, dados) {
   const [type, inputmode, placeholder] = TIPOS[id];
   const valor = VALOR[id] ? VALOR[id](dados[id]) : dados[id] || '';
+  // Quem só lê (a secretaria): o texto
+  if (!podeEditarDadosPessoais()) return `<div class="campo-dado"><span class="rotulo-dado" id="rotulo-${id}">${rotulo}</span><span class="valor-dado" aria-labelledby="rotulo-${id}">${esc(valor || '—')}</span></div>`;
   return `<div class="campo-dado">
       <label for="dado-${id}">${rotulo}</label>
-      <input type="${type}" id="dado-${id}" name="${id}" value="${esc(valor)}"${inputmode ? ` inputmode="${inputmode}"` : ''}${placeholder ? ` placeholder="${placeholder}"` : ''} autocomplete="off" aria-describedby="erro-${id}">
+      <input type="${type}" id="dado-${id}" name="${id}" value="${esc(valor)}"${inputmode ? ` inputmode="${inputmode}"` : ''}${placeholder ? ` placeholder="${placeholder}"` : ''}${id === 'nome_completo' ? ` maxlength="${LIMITE_DO_NOME_COMPLETO}"` : ''} autocomplete="off" aria-describedby="erro-${id}">
       <small class="erro-campo" id="erro-${id}" data-erro="${id}"></small>
     </div>`;
 }
@@ -51,7 +55,8 @@ export async function abrirPainelDeDados(tipo, id, botao) {
   guardarDados(tipo, id, Object.keys(dados).length ? dados : null);
   desenharPainel(tipo, id, botao, p, dados);
   habilitarPainel(true, '');
-  $('#dado-cpf').focus();
+  const primeiro = $('#dado-nome_completo') || $('#btn-cancelar-dados');
+  if (primeiro) primeiro.focus();
 }
 
 function habilitarPainel(sim, mensagem) {
@@ -61,6 +66,7 @@ function habilitarPainel(sim, mensagem) {
 
 function desenharPainel(tipo, id, botao, p, dados) {
   const painel = $('#painel-dados');
+  const edita = podeEditarDadosPessoais();
   painel.dataset.tipo = tipo;
   painel.dataset.id = id;
   painel.dataset.botao = botao ? `[data-dados="${tipo}:${id}"]` : '';
@@ -68,13 +74,13 @@ function desenharPainel(tipo, id, botao, p, dados) {
       <h2 id="painel-dados-titulo">Dados pessoais <small>${esc(p.nm)}</small></h2>
       <button class="x" type="button" id="btn-fechar-dados" aria-label="Fechar o painel">✕</button>
     </div>
-    <p class="h">Só operadores, administradores e a secretaria veem estes dados. Eles não vão para a escala, o CSV, o PDF nem o link compartilhado.</p>
+    <p class="h">${NOTA_DOS_DADOS}${edita ? '' : ' A secretaria consulta; quem altera são os operadores e os administradores.'}</p>
     <form id="form-dados" class="form-dados" novalidate>
       ${CAMPOS_PESSOAIS.map(c => campoHtml(c, dados)).join('')}
       <p class="erro-campo" id="dados-erro" role="alert"></p>
       <div class="dlg-acoes">
-        <button type="button" class="btn sec" id="btn-cancelar-dados">Cancelar</button>
-        <button type="submit" class="btn">Salvar</button>
+        <button type="button" class="btn sec" id="btn-cancelar-dados">${edita ? 'Cancelar' : 'Fechar'}</button>
+        ${edita ? '<button type="submit" class="btn">Salvar</button>' : ''}
       </div>
       ${dados.atualizado_em ? `<p class="h">Atualizado em ${quando(dados.atualizado_em)}${dados.atualizado_por ? ` por ${esc(dados.atualizado_por)}` : ''}.</p>` : ''}
     </form>`;
@@ -108,19 +114,20 @@ export async function salvarPainelDeDados() {
   const { dados, erros } = validarDadosPessoais(entrada, hojeISO());
   mostrarErros(erros);
   if (Object.keys(erros).length) return null;
-  if (!leitura.lida) return null;
+  if (!leitura.lida || !podeEditarDadosPessoais()) return null;
   const data = DATA;
   let resposta;
   try {
-    resposta = await ApiClient.salvarDadosPessoais(tipo, id, dados, { atualizadoEm: leitura.atualizadoEm, data });
+    resposta = await ApiClient.salvarDadosPessoais(tipo, id, paraGravar(dados), { atualizadoEm: leitura.atualizadoEm, data });
   } catch (e) {
     if (e.campo) mostrarErros({ [e.campo]: comoFrase(e.message) });
     else if (e.code === 'PT409') $('#dados-erro').textContent = 'Outra pessoa alterou estes dados enquanto você editava. Feche e abra de novo para ver a versão atual.';
     else if (e.code === 'P0002') $('#dados-erro').textContent = 'Esta pessoa não está no cadastro gravado. Espere a alteração ser gravada e tente de novo.';
+    else if (e.code === '42501') $('#dados-erro').textContent = 'A sua conta não pode alterar dados pessoais.';
     else $('#dados-erro').textContent = 'Não foi possível salvar. Verifique a conexão e tente de novo.';
     return null;
   }
-  guardarDados(tipo, id, Object.keys(dados).length ? { ...dados, atualizado_em: resposta.atualizado_em, atualizado_por: resposta.atualizado_por || null } : null);
+  guardarDados(tipo, id, resposta.atualizado_em ? { ...dados, atualizado_em: resposta.atualizado_em, atualizado_por: resposta.atualizado_por || null } : null);
   leitura = { ...leitura, atualizadoEm: resposta.atualizado_em || null };
   // O histórico já foi registrado junto com a gravação (o servidor registra os campos que mudaram)
   return { nome: pessoa(tipo, id).nm, historico: resposta.historico || null, data };

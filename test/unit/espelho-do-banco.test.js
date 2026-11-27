@@ -16,6 +16,8 @@ import { ESQUEMA, FORMATO_DOS_CURSOS, migrarCadastro, antesDosCursosProprios } f
 import { CASOS_DO_PROGRAMA, PROGRAMA, NOTURNO_EM_TRECHOS } from '../helpers/casos-do-programa.js';
 import { LIMITE_DO_EXIGE, ID_DA_HABILITACAO } from '../../js/programa.js';
 import { HABILITACOES } from '../../js/habilitacoes.js';
+import { CAMPOS_PESSOAIS, LIMITE_DO_NOME_COMPLETO } from '../../js/dados-pessoais.js';
+import { CASOS_DOS_DADOS_PESSOAIS, QUEM_GRAVA_OS_DADOS_PESSOAIS } from '../helpers/casos-dos-dados-pessoais.js';
 
 const ler = caminho => readFileSync(new URL(`../../${caminho}`, import.meta.url), 'utf8');
 const MIGRACAO = ler('supabase/migrations/20261117200000_cursos_e_missoes.sql');
@@ -264,5 +266,36 @@ describe('O banco espelha o app: a missão do curso e o limite do pedido da agen
     const deAntes = ['22023 horas'];
     assert.deepEqual([...daFuncao].filter(k => !deAntes.includes(k) && !dosCasos.has(k)).sort(), [], 'recusas sem caso');
     assert.deepEqual([...dosCasos].filter(k => !daFuncao.has(k)), [], 'casos com uma recusa que a função não dá');
+  });
+});
+
+// O nome completo nos dados pessoais e quem grava (a migração do passo A): o limite e os campos do histórico são os do app,
+// a Secretaria lê e não grava, a versão de 3 argumentos saiu, e cada caso de test/helpers/casos-dos-dados-pessoais.js é
+// uma verificação do banco
+describe('O banco espelha o app: o nome completo e quem grava os dados pessoais', () => {
+  const MIGRACAO_A = ler('supabase/migrations/20261128100000_nome_completo_nos_dados_pessoais.sql');
+  const TESTE = ler('supabase/tests/database/dados-pessoais.test.sql');
+
+  it('o limite do nome completo é o do app, na coluna e na função', () => {
+    assert.match(MIGRACAO_A, new RegExp(`nome_completo text check \\(char_length\\(nome_completo\\) between 1 and ${LIMITE_DO_NOME_COMPLETO}\\)`));
+    assert.match(MIGRACAO_A, new RegExp(`char_length\\(v_nome_completo\\) > ${LIMITE_DO_NOME_COMPLETO} then`));
+  });
+
+  it('o histórico diz os campos na ordem e com os nomes da tela', () => {
+    const rotulos = [...MIGRACAO_A.matchAll(/is distinct from v_\w+ then '([^']+)' end/g)].map(r => r[1]);
+    assert.deepEqual(rotulos, CAMPOS_PESSOAIS.map(c => c.rotulo));
+  });
+
+  it('só operador (e administrador, que conta como operador) grava; a leitura fica; a versão de 3 argumentos sai', () => {
+    assert.match(MIGRACAO_A, /select coalesce\(public\.perfil_atual\(\)::text = 'operador', false\)/);
+    assert.match(MIGRACAO_A, /if not public\.grava_dados_pessoais\(\) then/);
+    assert.ok(MIGRACAO_A.includes('drop function public.salvar_dados_pessoais(text, integer, jsonb);'));
+    assert.doesNotMatch(MIGRACAO_A, /function public\.le_dados_pessoais|drop policy|create policy|alter policy/);
+  });
+
+  it('cada caso do nome completo e de quem grava é uma verificação do banco (o nome é a descrição)', () => {
+    const nomes = [...CASOS_DOS_DADOS_PESSOAIS, ...QUEM_GRAVA_OS_DADOS_PESSOAIS].map(c => c.nome);
+    assert.equal(new Set(nomes).size, nomes.length, 'sem nomes repetidos');
+    assert.deepEqual(nomes.filter(nome => !TESTE.includes(`'${nome}'`)), []);
   });
 });
