@@ -132,7 +132,10 @@ describe('Voos fixos conferidos de novo', () => {
   it('o horário fechado nesta data e fora da disponibilidade do aluno', () => {
     const fechado = fixado();
     fechado.win = fechado.win.map((v, w) => (w === 0 ? false : v));
-    assert.deepEqual(conflitoDe(fechado), { conflito: ['o horário está fechado nesta data'], codigos: ['horario-fechado'] });
+    // O intervalo fechado que pega o início vem junto (Pedro, 27/11: diz qual ponta do horário conflita)
+    assert.deepEqual(conflitoDe(fechado), { conflito: ['o horário está fechado nesta data (00:00–08:20)'], codigos: ['horario-fechado'] });
+    const fechadoNaData = { ...fixado(), fechamentos: [{ de: 360, ate: 420, categorias: ['C152'] }] };
+    assert.deepEqual(conflitoDe(fechadoNaData), { conflito: ['o horário está fechado nesta data (06:00–07:00)'], codigos: ['horario-fechado'] });
     assert.deepEqual(conflitoDe(fixado({ jan: 'h760' })),
       { conflito: ['o horário está fora da disponibilidade do aluno'], codigos: ['disponibilidade'] });
   });
