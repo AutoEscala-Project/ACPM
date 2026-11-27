@@ -115,8 +115,8 @@ const guardar = () => fs.writeFileSync(arquivo, JSON.stringify(E));
 const responder = rows => { guardar(); process.stdout.write(JSON.stringify({ rows })); process.exit(0); };
 const data = () => q.match(/'(\\d{4}-\\d\\d-\\d\\d)'/)[1];
 if (q.includes("chave = 'cadastro'")) responder([{ c: fs.readFileSync(path.join(pasta, 'cadastro.json'), 'utf8'), versao: 1 }]);
+if (q.includes('order by data desc limit 1')) { const d = Object.keys(E.dias).filter(d => d < data()).sort().at(-1); responder(d ? [{ d, c: E.dias[d] }] : []); }
 if (q.startsWith('select data::text as d')) responder(Object.keys(E.dias).map(d => ({ d })));
-if (q.includes('order by data desc limit 1')) { const d = Object.keys(E.dias).filter(d => d < data()).sort().at(-1); responder(d ? [{ c: E.dias[d] }] : []); }
 if (q.startsWith('select conteudo::text as c from public.dias where data =')) responder([{ c: E.dias[data()] }]);
 if (q.startsWith('select nextval(')) { const n = Number(q.match(/generate_series\\(1, (\\d+)\\)/)[1]); responder(Array.from({ length: n }, () => ({ id: String(++E.seq) }))); }
 if (q.startsWith('update public.documentos')) responder([]);
