@@ -11,7 +11,7 @@ import { hm, hojeISO } from '../format.js';
 import { aplicarReparo, aproveitarCancelado, desfazerAproveitamento, repararComOPedido } from '../reparo.js';
 import { S, RES, DATA, AUDIT_LOG, isGestor, modoCompartilhado, insBy, estadoDaEscala } from '../state.js';
 import { rejeicoesDosPedidos } from '../rejeicoes.js';
-import { escolherInstrutor, escolhasDaUnidade, escolherNosPedidos, reverterEscolha, reverterReparo } from '../instrutor-escolhido.js';
+import { escolherInstrutor, escolhasDaUnidade, escolherNosPedidos, reverterEscolha, reverterReparo, foraDoPriorizarNoVoo } from '../instrutor-escolhido.js';
 import { agendamentosEmVolta, desfazerEdicao, motivoParaNaoDesfazerEdicao, VOO_COM_RESULTADO } from '../reversoes.js';
 import { CAMPOS_DO_PEDIDO } from '../dias.js';
 import { pedidoDoAluno } from '../voo.js';
@@ -144,9 +144,9 @@ function aplicarStatus(fKey, status, detalhe) {
 }
 // Na escala não aprovada, toda alteração feita na Escala pergunta antes (R6, js/views/dialogo-refazer.js): "Cancelar"
 // redesenha o valor de antes, e nada muda; na aprovada, não pergunta (o motor não roda)
-function perguntarSeAberta(resumo, fazer, { focar = null } = {}) {
+function perguntarSeAberta(resumo, fazer, { focar = null, avisos = [] } = {}) {
   if (S.aprovacao) { fazer(); return; }
-  perguntarAntesDeRefazer({ resumo, aoConfirmar: fazer, aoDesistir: () => { rOut(); if (focar) focar(); } });
+  perguntarAntesDeRefazer({ resumo, avisos, aoConfirmar: fazer, aoDesistir: () => { rOut(); if (focar) focar(); } });
 }
 // O status (e o detalhe, depois do diálogo dele), com a pergunta
 function statusComPergunta(fKey, status, detalhe) {
@@ -200,7 +200,10 @@ aoMudarCampo('insVoo', t => {
   const x = t.value ? insBy(+t.value) : null;
   // Desistir: o foco volta ao nome do instrutor (a lista já voltou a ser o nome quando a pergunta abriu)
   const focar = () => { const nome = [...document.querySelectorAll(`#out [data-act="trocar-instrutor"][data-fkey="${CSS.escape(voo.fKey)}"]`)].find(visivel); if (nome) nome.focus(); };
-  perguntarSeAberta(`${voo.isGround ? `turma de ${voo.mis}` : voo.s}: ${voo.ins} → ${x ? x.nm : 'Automático'}`, () => trocarInstrutor(voo, x), { focar });
+  // O INVA fora do “Priorizar com” do aluno (N9, F1h): a opção já diz; na escala aberta, a pergunta também, e a Escala
+  // guarda a observação
+  const avisos = x ? foraDoPriorizarNoVoo(estadoDaEscala(), RES, voo.fKey, x.id).map(nm => ({ texto: `${x.nm} está fora do Priorizar com de ${nm}.` })) : [];
+  perguntarSeAberta(`${voo.isGround ? `turma de ${voo.mis}` : voo.s}: ${voo.ins} → ${x ? x.nm : 'Automático'}`, () => trocarInstrutor(voo, x), { focar, avisos });
 });
 function trocarInstrutor(voo, x) {
   const foto = fotoDaEscalaTravada();
@@ -289,6 +292,9 @@ document.addEventListener('click', e => {
   const quem = rejeitado ? (rejeicoesDosPedidos(estadoDaEscala(), RES).get(fKey) || {}).s || fKey : voo.s;
   perguntarSeAberta(`${quem}: ${opcao.soltar ? 'Soltar o voo' : opcao.texto}`, () => aplicarSugestao(escolha));
 });
+// A recusa que a reversão devolve (o pedido que a sugestão encaixou volta a ser recusado), com a espera da lista dele
+const recusaDaReversao = (fKey, recusa) => ({ fKey, s: recusa.s, m: recusa.m, ...(recusa.codigo ? { codigo: recusa.codigo } : {}), ...(recusa.espera ? { espera: recusa.espera } : {}) });
+
 // A sugestão aplicada (na escala aprovada, sem o motor: a escala da tela é conferida com ela, F1g)
 function aplicarSugestao({ fKey, voo, opcao, cancelado, rejeitado }) {
   const foto = fotoDaEscalaTravada();
@@ -306,7 +312,7 @@ function aplicarSugestao({ fKey, voo, opcao, cancelado, rejeitado }) {
       const rev = {
         kind: 'desfazerEdicao', voos: [{ fKey, fixo: (S.fixos || {})[fKey] || null, status: (S.fStatus || {})[fKey] || null, detalhe: (S.fObs || {})[fKey] || null, statusDepois: (S.fStatus || {})[fKey] || null }],
         pedidos: [{ stuId, mid, pedido: Object.fromEntries(CAMPOS_DO_PEDIDO.filter(c => pedido[c] !== undefined).map(c => [c, pedido[c]])) }],
-        recusas: recusa ? [{ fKey, s: recusa.s, m: recusa.m, ...(recusa.codigo ? { codigo: recusa.codigo } : {}) }] : [], label: '↶ Reverter'
+        recusas: recusa ? [recusaDaReversao(fKey, recusa)] : [], label: '↶ Reverter'
       };
       if (x) pedido.insId = x.id;
       else delete pedido.insId;
@@ -319,6 +325,28 @@ function aplicarSugestao({ fKey, voo, opcao, cancelado, rejeitado }) {
     redesenharPorNome('pedidos-do-dia');
     focarNoVoo(fKey);
     showToast('Instrutor escolhido: o pedido entra na escala.', 'ok');
+    return;
+  }
+  // A vaga do voo cancelado dada ao 1º da lista de espera do horário (F1h, N14): o pedido que espera entra no lugar que o
+  // app achou (o pino agendado), sem mexer em outro voo, e a reversão devolve o pedido e a recusa (com a espera)
+  if (cancelado && opcao.vaga) {
+    const [stuId, mid] = opcao.vaga.split('_').map(Number);
+    const aluno = S.stu.find(s => s.id === stuId);
+    const pedido = aluno ? pedidoDoAluno(aluno, mid) : null;
+    const recusa = rejeicoesDosPedidos(estadoDaEscala(), RES).get(opcao.vaga);
+    if (!pedido || !recusa) return;
+    const rev = {
+      kind: 'desfazerEdicao', voos: [{ fKey: opcao.vaga, fixo: (S.fixos || {})[opcao.vaga] || null, status: (S.fStatus || {})[opcao.vaga] || null, detalhe: (S.fObs || {})[opcao.vaga] || null }],
+      pedidos: [{ stuId, mid, pedido: Object.fromEntries(CAMPOS_DO_PEDIDO.filter(c => pedido[c] !== undefined).map(c => [c, pedido[c]])) }],
+      recusas: [recusaDaReversao(opcao.vaga, recusa)], label: '↶ Reverter'
+    };
+    S.fixos = { ...(S.fixos || {}), [opcao.vaga]: { ...opcao.pino, agendado: true } };
+    // O status que a vaga deixou (statusDepois): desfazer não troca o status mudado depois dela (F1g, #85)
+    rev.voos[0].statusDepois = (S.fStatus || {})[opcao.vaga] || null;
+    if (!gravarNaEscala(foto, 'mod', `Vaga do voo cancelado de ${voo.s} (${hm(voo.a)}–${hm(voo.b)}): ${opcao.texto}`, rev)) return;
+    redesenharPorNome('pedidos-do-dia');
+    focarNoVoo(opcao.vaga);
+    showToast(`A vaga foi para ${recusa.s}.`, 'ok');
     return;
   }
   // O voo cancelado aproveitado: aplicada, a sugestão fixa o voo no lugar dela e o volta para Pendente, e o pedido muda

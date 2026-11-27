@@ -474,3 +474,78 @@ test.describe('Sugestões do voo cancelado: o mapa, a confirmação, o resultado
     await expect(gaveta(page)).toBeHidden();
   });
 });
+
+// A lista de espera (F1h, N14): na escala aprovada, o voo cancelado oferece a vaga ao 1º da lista de espera do horário,
+// depois das sugestões do próprio aluno, só com o clique; aplicada, o pedido entra no lugar que o app achou (fixo), nenhum
+// outro voo muda e o Histórico desfaz (a recusa volta, com o lugar na lista)
+// A escala aprovada com três pedidos das 08:20 e um INVA: o voo do aluno 1000, e os outros dois na lista de espera
+async function abrirComAListaDeEspera(page) {
+  const as0820 = (id, solicitacao) => aluno(id, { p1: 500, p2: -1, jan: 'h500', solicitacao });
+  await abrir(page, {
+    estado: {
+      ...cenario({ ins: [instrutor(1, 9)], stu: [as0820(1000, 1), as0820(1001, 2), as0820(1002, 3)] }),
+      fixos: { '1000_0_1': { a: 500, b: 560, r: 'PP-LJV', insId: 1 } },
+      aprovacao: { em: '2026-11-10T21:05:00.000Z', por: 'Operador 01' }
+    }
+  });
+  await abrirEscala(page);
+}
+
+test('na escala aprovada, "Dar a vaga" do voo cancelado ao 1º da lista de espera do horário; o histórico desfaz', async ({ page }) => {
+  await abrirComAListaDeEspera(page);
+  await abrirCaixa(page, 'erros');
+  const recusas = page.locator('#out details.caixa.erros');
+  await expect(recusas).toContainText('1º na lista de espera das 08:20');
+  await expect(recusas).toContainText('2º na lista de espera das 08:20');
+  // Cancelado pela meteorologia na escala aprovada: sem o motor (F1g), a lista de espera fica como estava
+  await linha(page, 'Aluno 1000').locator('.st-sel').selectOption('Cancelado');
+  await page.locator('#dlg-status').getByLabel('Meteorologia').check();
+  await page.locator('#dlg-status').getByRole('button', { name: 'Confirmar' }).click();
+  await expect(linha(page, 'Aluno 1000')).toHaveClass(/\bst-Cancelado\b/);
+  await expect(linha(page, 'Aluno 1001')).toHaveCount(0);
+  await linha(page, 'Aluno 1000').getByRole('button', { name: 'Sugestões' }).click();
+  const vaga = gaveta(page).locator('.opcoes-reparo li.espera');
+  await expect(vaga).toHaveCount(1);
+  await expect(vaga).toContainText('Dar a vaga a Aluno 1001 (1º da lista de espera das 08:20): Instrutor 01');
+  await vaga.getByRole('button', { name: 'Dar a vaga' }).click();
+  await expect(gaveta(page)).toBeHidden();
+  const novo = linha(page, 'Aluno 1001');
+  await expect(novo.locator('.c-hr')).toContainText('08:20');
+  await expect(novo.locator('.fixo')).toHaveCount(1);
+  await expect(linha(page, 'Aluno 1000').locator('.st-sel')).toHaveValue('Cancelado');
+  await abrirCaixa(page, 'erros');
+  await expect(recusas).toContainText('Aluno 1002');
+  await expect(recusas).not.toContainText('Aluno 1001');
+
+  await abrirHistorico(page);
+  await expect(page.locator('#audit-log-list')).toContainText('Vaga do voo cancelado de Aluno 1000 (08:20–09:20)');
+  await page.locator('#audit-log-list [data-act="rev-log"]').first().click();
+  await page.keyboard.press('Escape');
+  await expect(linha(page, 'Aluno 1001')).toHaveCount(0);
+  await abrirCaixa(page, 'erros');
+  await expect(recusas).toContainText('Aluno 1001');
+  await expect(recusas).toContainText('1º na lista de espera das 08:20');
+});
+
+// Como a alteração no editor e o pedido recusado encaixado (F1g, #85): o status do voo de quem recebeu a vaga mudou
+// depois dela, e o Histórico não a desfaz (desfazer tiraria o voo confirmado e o status dele)
+test('"Dar a vaga": com o status do voo novo mudado depois, o histórico não a desfaz', async ({ page }) => {
+  await abrirComAListaDeEspera(page);
+  await linha(page, 'Aluno 1000').locator('.st-sel').selectOption('Cancelado');
+  await page.locator('#dlg-status').getByLabel('Meteorologia').check();
+  await page.locator('#dlg-status').getByRole('button', { name: 'Confirmar' }).click();
+  await linha(page, 'Aluno 1000').getByRole('button', { name: 'Sugestões' }).click();
+  await gaveta(page).locator('.opcoes-reparo li.espera').getByRole('button', { name: 'Dar a vaga' }).click();
+  await expect(gaveta(page)).toBeHidden();
+  await linha(page, 'Aluno 1001').locator('.st-sel').selectOption('Confirmado');
+  await expect(linha(page, 'Aluno 1001').locator('.st-sel')).toHaveValue('Confirmado');
+
+  await abrirHistorico(page);
+  const vaga = page.locator('#audit-log-list .audit-item').filter({ hasText: 'Vaga do voo cancelado de Aluno 1000 (08:20–09:20)' });
+  await vaga.locator('[data-act="rev-log"]').click();
+  await expect(page.locator('#toast-box')).toContainText('O status do voo mudou depois da alteração');
+  await page.keyboard.press('Escape');
+  await expect(linha(page, 'Aluno 1001')).toHaveCount(1);
+  await expect(linha(page, 'Aluno 1001').locator('.st-sel')).toHaveValue('Confirmado');
+  await expect(linha(page, 'Aluno 1001').locator('.fixo')).toHaveCount(1);
+});

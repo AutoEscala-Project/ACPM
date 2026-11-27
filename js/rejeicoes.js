@@ -8,8 +8,9 @@ import { chaveDoVoo, pedidoDoAluno } from './voo.js';
 
 // Os voos da escala na ordem em que o motor confere os fixos (js/engine.js): a volta do noturno de ontem, os fixos pelo
 // status, pela escala aprovada e pelo instrutor escolhido, os agendados e os outros; em cada grupo, a ordem dos pedidos do
-// motor (o Ground antes, o instrutor escolhido, a prioridade, o "Priorizar com", a agenda, o cadastro e a missão). A turma
-// de Ground ocupa a sala e o instrutor pelo primeiro aluno dela que o motor confere (js/candidatos.js)
+// motor (o Ground antes, o instrutor escolhido, a prioridade, a agenda, o cadastro e a missão; o "Priorizar com" não
+// entra: ele escolhe o instrutor, não o horário). A turma de Ground ocupa a sala e o instrutor pelo primeiro aluno dela
+// que o motor confere (js/candidatos.js)
 export function naOrdemDoMotor(estado, out) {
   const fixos = estado.fixos || {};
   const alunos = new Map(estado.stu.map((s, i) => [s.id, { s, i }]));
@@ -21,7 +22,7 @@ export function naOrdemDoMotor(estado, out) {
     const pino = fixos[o.fKey];
     return [
       !pino ? 3 : pino.agendado ? 2 : 1, isGroundMission(ref.mis) ? 0 : 1, ref.insId && noCadastro.has(ref.insId) ? 0 : 1, -(ref.pr || 3),
-      (s.voaCom || []).length ? 0 : 1, Number.isInteger(ref.solicitacao) ? ref.solicitacao : Infinity, i,
+      Number.isInteger(ref.solicitacao) ? ref.solicitacao : Infinity, i,
       o.mid ? (s.extra || []).findIndex(ex => ex.mid === o.mid) + 1 : 0
     ];
   };

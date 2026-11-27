@@ -1,6 +1,6 @@
 // O instrutor escolhido pelo operador: na Demanda (o app encaixa o voo com ele) e na Escala (o nome do instrutor abre a
 // lista; o voo fica onde está, fixo, com o escolhido, e o resto é refeito em volta). O histórico desfaz
-import { test, expect, abrir, irPara, abrirEscala, confirmar, abrirHistorico, alternarVem, aprovar, reabrir, editorDoVoo, refazer } from './fixtures.js';
+import { test, expect, abrir, irPara, abrirEscala, confirmar, abrirHistorico, alternarVem, aprovar, reabrir, editorDoVoo, refazer, abrirCaixa } from './fixtures.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
 
 // Dois voos às 08:20: o app põe o Instrutor 02 (menos habilitações) com o Aluno 1000 e o Instrutor 01 com o 1001
@@ -118,7 +118,7 @@ test.describe('Instrutor escolhido', () => {
     await abrirEscala(page);
     await expect(linha(page, 'Aluno 1000')).toHaveCount(1);
     await expect(linha(page, 'Aluno 1000').locator('.c-instr')).toHaveText('Instrutor 02');
-    await expect(page.locator('#out details.avisos summary')).toContainText('1 voo sem o instrutor de Priorizar com');
+    await expect(page.locator('#out details.avisos summary')).toContainText('1 aviso de Priorizar com');
     await expect(page.locator('#out details.avisos')).toContainText('Sem o instrutor de “Priorizar com” (Instrutor 01: fora nesta data)');
 
     // Tirar do “Priorizar com”: o aviso some
@@ -222,6 +222,47 @@ test.describe('Instrutor escolhido', () => {
     await expect(page.locator('#out details.conflitos')).toContainText('o instrutor saiu do cadastro');
     await expect(page.locator('#out details.conflitos [data-reparo="1001_0_1"]')).toHaveCount(1);
     await expect(linha(page, 'Aluno 1000').locator('.fixo')).toHaveCount(0);
+  });
+
+  // Revisão do F1h (N9): o INVA fora do “Priorizar com” do aluno, escolhido pelo operador. Na Lista, a opção diz; na escala
+  // aberta, a pergunta também; a Escala guarda a observação. Na Demanda, o instrutor do dia fora dele também fica com a
+  // observação
+  const comPriorizar = () => cenario({ ins: [instrutor(1, 9), instrutor(2, 9)], stu: [aluno(1000, { p1: 500, p2: -1 }, { voaCom: [1] })] });
+  const posto = 'Aluno 1000 Fora do “Priorizar com” de Aluno 1000 (Instrutor 01): o voo foi posto à mão com Instrutor 02.';
+  test('o INVA fora do “Priorizar com” na Lista: a opção diz, a pergunta da escala aberta avisa, e a Escala guarda a observação', async ({ page }) => {
+    await abrir(page, { estado: comPriorizar() });
+    await abrirEscala(page, { vista: 'lista' });
+    const voo = linha(page, 'Aluno 1000');
+    await expect(voo.locator('.c-instr')).toHaveText('Instrutor 01');
+    await voo.locator('[data-act="trocar-instrutor"]').click();
+    await expect(voo.locator('select[data-a="insVoo"] option')).toHaveText(['Instrutor 01 (Priorizar com do aluno)', 'Instrutor 02 (fora do Priorizar com)']);
+    await voo.locator('select[data-a="insVoo"]').selectOption('2');
+    await expect(page.locator('#refazer-avisos li')).toHaveText(['Instrutor 02 está fora do Priorizar com de Aluno 1000.']);
+    await refazer(page);
+    await expect(voo.locator('.c-instr')).toHaveText('Instrutor 02');
+    await expect((await abrirCaixa(page, 'avisos')).locator('li', { hasText: 'Priorizar com' })).toHaveText([posto]);
+  });
+
+  test('o INVA fora do “Priorizar com” na Lista da escala aprovada: a opção diz, a troca vale sem o motor, com a observação', async ({ page }) => {
+    await abrir(page, { estado: comPriorizar() });
+    await abrirEscala(page, { vista: 'lista' });
+    await aprovar(page);
+    const voo = linha(page, 'Aluno 1000');
+    await voo.locator('[data-act="trocar-instrutor"]').click();
+    await expect(voo.locator('select[data-a="insVoo"] option', { hasText: 'Instrutor 02' })).toHaveText('Instrutor 02 (fora do Priorizar com)');
+    await voo.locator('select[data-a="insVoo"]').selectOption('2');
+    await expect(voo.locator('.c-instr')).toHaveText('Instrutor 02');
+    await expect((await abrirCaixa(page, 'avisos')).locator('li', { hasText: 'Priorizar com' })).toHaveText([posto]);
+  });
+
+  test('o instrutor do dia na Demanda fora do “Priorizar com”: a observação na Escala', async ({ page }) => {
+    await abrir(page, { estado: comPriorizar() });
+    await irPara(page, 'dem');
+    await pedido(page, 1000).locator('[data-f="insId"]').selectOption({ label: 'Instrutor 02' });
+    await abrirEscala(page, { vista: 'lista' });
+    await expect(linha(page, 'Aluno 1000').locator('.c-instr')).toHaveText('Instrutor 02');
+    await expect((await abrirCaixa(page, 'avisos')).locator('li', { hasText: 'Priorizar com' }))
+      .toHaveText(['Aluno 1000 Fora do “Priorizar com” de Aluno 1000 (Instrutor 01): Instrutor 02 foi escolhido para o dia na Demanda.']);
   });
 
   // No mapa, a barra abre o editor do voo (F1g): o instrutor é um campo dele, com o motivo de cada um; mudar só o instrutor

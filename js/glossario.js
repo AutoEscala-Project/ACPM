@@ -31,6 +31,7 @@ const TERMOS = {
   'horario-livre': { aba: 'Escala', termo: 'Horário livre', texto: 'Sem vaga na 1ª nem na 2ª preferência, o voo foi para o horário livre mais perto da 1ª preferência (empatados, o mais cedo).' },
   'segunda-preferencia': { aba: 'Escala', termo: '2ª preferência', texto: 'O voo ficou na 2ª preferência do aluno: na 1ª não havia avião, instrutor ou horário livre.' },
   'horario-ajustado': { aba: 'Escala', termo: 'Horário ajustado', texto: 'A compactação mudou o horário para fechar um buraco do dia, dentro da regra de Horários escolhida nos critérios.' },
+  espera: { aba: 'Escala', termo: 'Lista de espera', texto: 'O pedido da Agenda com horário exato que não coube nele (os 6 voos locais, os aviões ou os instrutores) espera por ele, na ordem da fila: a recusa diz o lugar. A vaga que abrir vai para o 1º que cabe nela.' },
   conflito: { aba: 'Escala', termo: 'Conflito', texto: 'O voo fixo não vale mais: o instrutor, o avião, o horário ou o pedido mudou, ou outro voo fixo já ocupa o lugar (o agendado na Escala cede o lugar aos outros fixos). Ele fica onde está até ser resolvido em Sugestões.' },
   'voo-fixo': { aba: 'Escala', termo: 'Voo fixo (cadeado)', texto: 'O voo não muda quando a escala é refeita. Fica fixo pelo agendamento na Escala, pela escala aprovada, pelo instrutor escolhido na Escala ou pelo status Atrasado, Em Voo, Pousou ou Cancelado.' },
   'voo-agendado': { aba: 'Escala', termo: 'Voo agendado', texto: 'Marcado pelo operador em “+ Agendar voo”: fica fixo no horário, no recurso e com o instrutor confirmados, e a escala é refeita em volta dele. O Histórico desfaz o agendamento.' },
@@ -128,8 +129,8 @@ const TERMOS = {
   },
 
   // Alunos
-  'voa-com': { aba: 'Alunos', termo: 'Priorizar com', texto: 'Os instrutores do aluno: a escala põe o aluno com um deles sempre que algum pode voar. Quando nenhum pode, o voo fica com outro instrutor, com aviso.' },
-  'nao-escalar-com': { aba: 'Alunos', termo: 'Não escalar com', texto: 'Instrutores que não voam com este aluno: a escala nunca põe o aluno com eles.' },
+  'voa-com': { aba: 'Alunos', termo: 'Priorizar com', texto: 'Os instrutores do aluno: escolhe o instrutor, não o horário (que é da fila). A escala o põe com um deles sempre que algum pode. Sem nenhum que possa, com outro, com aviso; na disputa pelo mesmo horário, o aviso diz quem ficou com ele.' },
+  'nao-escalar-com': { aba: 'Alunos', termo: 'Não escalar com', texto: 'Instrutores que nunca voam com este aluno: a escala não põe o aluno com eles por nenhum caminho; o voo posto à mão com um deles fica em conflito.' },
   progresso: { funcionalidade: 'progresso', aba: 'Alunos', termo: 'Progresso', texto: 'Missões do curso aprovadas sobre o total do programa, a fase em que o aluno está (no curso com mais de uma) e a próxima missão.' },
   'filtro-dos-cursos': { aba: 'Alunos', termo: 'Filtro dos cursos', texto: 'Mostra só os alunos de algum dos cursos marcados, em Alunos e na Demanda (as marcas valem nas duas): PP e PC mostram os alunos dos dois. “Sem curso” mostra quem não tem curso; sem nenhum marcado, mostra todos.' },
 
