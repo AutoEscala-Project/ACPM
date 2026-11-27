@@ -303,6 +303,21 @@ export const ApiClient = {
     return this.backend.cancelarSolicitacao(id, por);
   },
 
+  // A aprovação dos pedidos (o passo D1; a tela é do D2): no modo compartilhado, só os operadores, e o servidor guarda a
+  // conta; no modo local, opcoes.por é quem aprovou ou retirou a aprovação
+  aprovarSolicitacoes(ids, opcoes) {
+    return this.backend.aprovarSolicitacoes(ids, opcoes);
+  },
+
+  retirarAprovacaoDaSolicitacao(id, opcoes) {
+    return this.backend.retirarAprovacaoDaSolicitacao(id, opcoes);
+  },
+
+  // Os pedidos por data, de de a ate: { 'AAAA-MM-DD': { aguardando, aprovadas } }, sem os cancelados
+  solicitacoesPorDia(de, ate) {
+    return this.backend.solicitacoesPorDia(de, ate);
+  },
+
   // Dados pessoais: fora do estado e do cadastro. No modo compartilhado o servidor decide quem lê (operadores,
   // administradores e a secretaria, que entra no modo só leitura da escala) e quem grava (operadores e administradores)
   listarDadosPessoais(tipo) {

@@ -141,6 +141,45 @@ export function recusaDoPedido({ missao, recurso, horario, horas, missaoDoCurso 
   return null;
 }
 
+// A 2ª preferência do pedido (U1, a migração aprovacao_dos_pedidos): outro horário exato, HH:MM e diferente do 1º; o
+// Noturno e o Voo Solo têm um horário só. A recusa (22023, horario2) ou null (sem 2ª preferência, ou válida)
+export function recusaDaSegundaPreferencia({ missao, horario, horario2 = null }) {
+  if (horario2 === null || horario2 === undefined) return null;
+  if (typeof horario2 === 'string' && /^[0-2][0-9]:[0-5][0-9]$/.test(horario2) && horario2 !== horario && !Object.hasOwn(HORARIOS_FIXOS, missao)) return null;
+  return { code: '22023', campo: 'horario2', mensagem: 'a 2ª preferência é outro horário específico (o Noturno e o Voo Solo têm um horário só)' };
+}
+
+// O domingo e a data que já passou (o dia de São Paulo) não recebem pedido, nem pela exceção da coordenação: a recusa
+// (PT403, com o campo domingo ou passada) ou null
+export function recusaDaData(data, agora = new Date()) {
+  if (ehDomingo(data)) return { code: 'PT403', campo: 'domingo', mensagem: 'o aeroclube não opera aos domingos' };
+  if (data < hojeEmSaoPaulo(agora)) return { code: 'PT403', campo: 'passada', mensagem: 'a data do pedido já passou' };
+  return null;
+}
+
+// A conversão dos pedidos de antes da aprovação (a do banco, aprovar_solicitacoes_de_antes_da_aprovacao, para o modo local):
+// cada pedido ganha as colunas da aprovação e da 2ª preferência (vazias), e fica aprovado o que não foi cancelado nem teve
+// a aprovação retirada e (a) foi importado ("importadas" do dia dele: numa data que já passou, sempre; de hoje em diante, só
+// quando um registro do aluno, o pedido principal ou uma missão extra, ainda o leva), por "importação anterior"; ou (b) de
+// hoje em diante, não foi importado, por quem anotou (o modo local não tem contas: quem usa tem os direitos de operador).
+// O pedido que já tem as colunas da aprovação foi registrado depois do passo D1 e fica como está.
+// diaDe(data): o dia guardado (null: nenhum); hoje: a data de São Paulo; agora: o instante (ISO)
+export function aprovarAsDeAntesDaAprovacao(lista, diaDe, { hoje, agora }) {
+  const vazias = { horario2: null, aprovada_em: null, aprovada_por: null, aprovacao_retirada_em: null, aprovacao_retirada_por: null };
+  return lista.map(s => {
+    if (Object.hasOwn(s, 'aprovada_em')) return s;
+    const linha = { ...vazias, ...s };
+    if (linha.cancelada_em || linha.aprovada_em || linha.aprovacao_retirada_em) return linha;
+    const dia = diaDe(linha.data);
+    const importada = Boolean(dia) && Array.isArray(dia.importadas) && dia.importadas.includes(linha.id);
+    const registro = importada && dia.pedidos && dia.pedidos[linha.aluno];
+    const levada = Boolean(registro) && (registro.solicitacao === linha.id || (Array.isArray(registro.extra) && registro.extra.some(e => e && e.solicitacao === linha.id)));
+    if (importada && (linha.data < hoje || levada)) return { ...linha, aprovada_em: agora, aprovada_por: 'importação anterior' };
+    if (!importada && linha.data >= hoje) return { ...linha, aprovada_em: agora, aprovada_por: linha.registrado_por };
+    return linha;
+  });
+}
+
 // Pedido da demanda: a missão com o recurso do pedido (sem ele, o padrão da missão); como preferências, os dois primeiros horários dela que a
 // disponibilidade permite (sem disponibilidade, os primeiros a partir das 08:20 e das 10:10); prioridade 3. Os horários
 // são os da categoria do equipamento (o PA-34 tem os seus). As horas: as fixas da missão (o Ground, 01h30; o Noturno,

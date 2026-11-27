@@ -1,7 +1,7 @@
 // Backend local: os documentos da escala ficam no localStorage deste navegador (modo sem login).
 // cadastro e dia:AAAA-MM-DD são o formato por data; estado, escala, historico e bi são os documentos antigos, que
 // migrarDocumentosAntigos (storage.js) converte para o formato por data.
-import { prazoDaAgendaPermite, RECURSO_DO_PEDIDO, recusaDoPedido } from '../agenda.js';
+import { prazoDaAgendaPermite, RECURSO_DO_PEDIDO, recusaDoPedido, recusaDaSegundaPreferencia, recusaDaData, aprovarAsDeAntesDaAprovacao, hojeEmSaoPaulo } from '../agenda.js';
 import { gravarDadosPessoais, semQuemSaiu } from '../dados-pessoais.js';
 import { acumularHoras } from '../limites.js';
 import { hojeISO } from '../format.js';
@@ -15,6 +15,8 @@ export const CHAVE_LEGADA = 'acpm2';
 const PREFIXO_DIA = 'acpm4_dia_';
 const CHAVE_HISTORICO = 'acpm4_historico';
 const CHAVE_AGENDA = 'acpm4_agenda';
+// A marca da conversão dos pedidos de antes da aprovação (feita uma vez, na primeira leitura ou gravação da agenda)
+const CHAVE_DA_CONVERSAO = 'acpm4_agenda_aprovacoes';
 const CHAVE_DADOS_PESSOAIS = 'acpm4_dados_pessoais';
 // As colunas da lista dos dados pessoais (as mesmas do modo compartilhado, js/backends/supabase.js)
 const COLUNAS_DA_LISTA = ['nome_completo', 'canac', 'atualizado_em'];
@@ -69,6 +71,18 @@ const estadoDosCursos = cursos => {
 // Erros da agenda com o mesmo código do servidor (PT403: fora do prazo; 23514: dado inválido; P0002: não achado)
 const erroDaAgenda = (code, message, campo = null) => Object.assign(new Error(message), { code, campo });
 const textoObrigatorio = (valor, max) => typeof valor === 'string' && valor.trim().length >= 1 && valor.trim().length <= max;
+
+// A agenda guardada. Na primeira vez depois do passo D1 com pedidos guardados, os de antes da aprovação (sem as colunas
+// dela) são convertidos pela regra do banco (aprovarAsDeAntesDaAprovacao, sobre os dias deste navegador), e a marca fica:
+// a conversão não volta. Sem pedidos, nada é gravado (nem a marca)
+function agendaGuardada(agora = new Date()) {
+  const lista = lerJson(CHAVE_AGENDA) || [];
+  if (!lista.length || localStorage.getItem(CHAVE_DA_CONVERSAO)) return lista;
+  const convertida = aprovarAsDeAntesDaAprovacao(lista, data => lerJson(PREFIXO_DIA + data), { hoje: hojeEmSaoPaulo(agora), agora: agora.toISOString() });
+  localStorage.setItem(CHAVE_AGENDA, JSON.stringify(convertida));
+  localStorage.setItem(CHAVE_DA_CONVERSAO, '1');
+  return convertida;
+}
 
 // Formato acpm2 (7 janelas) convertido para as 9 janelas atuais
 function converterAcpm2(o) {
@@ -152,54 +166,101 @@ export const backendLocal = {
     }
   },
 
-  // Agenda de solicitações neste navegador. Sem login, quem usa tem os direitos de operador (inclusive a exceção)
+  // Agenda de solicitações neste navegador. Sem login, quem usa tem os direitos de operador (inclusive a exceção e a
+  // aprovação)
   async listarSolicitacoes(de, ate) {
     const ordem = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
-    return (lerJson(CHAVE_AGENDA) || []).filter(s => s.data >= de && s.data <= ate)
+    return agendaGuardada().filter(s => s.data >= de && s.data <= ate)
       .sort((a, b) => ordem(a.data, b.data) || ordem(a.registrado_em, b.registrado_em));
   },
 
-  // Como a função de 13 argumentos do servidor (a migração missao_do_curso_e_limite_do_pedido), na mesma ordem: o pedido é
-  // num horário específico, com a duração de 0,1 a 5 h (o Ground, 01h30); o recurso, o horário fixo e a missão do curso
-  // (recusaDoPedido, com os cursos deste navegador); no máximo LIMITE_DE_VOOS_LOCAIS voos locais no mesmo horário, a não
-  // ser com a confirmação (confirmarLimite), que fica registrada quando o limite foi passado (quem: quem anotou, já que
-  // este navegador não tem conta); o prazo e a exceção da coordenação; e os textos e o formato do recurso
-  async registrarSolicitacao({ data, aluno, aluno_nome, missao, janela, horario = null, horas, observacao = null, registrado_por, excecao = false, recurso = null, missaoDoCurso = null, confirmarLimite = false }, agora = new Date()) {
+  // Como a função de 16 argumentos do servidor (a migração aprovacao_dos_pedidos), na mesma ordem: o pedido é num horário
+  // específico, com a duração de 0,1 a 5 h (o Ground, 01h30); o recurso, o horário fixo e a missão do curso
+  // (recusaDoPedido, com os cursos deste navegador); a 2ª preferência (recusaDaSegundaPreferencia); a confirmação e a lista
+  // de espera juntas, não; o domingo e a data que já passou (recusaDaData); no máximo LIMITE_DE_VOOS_LOCAIS voos locais no
+  // mesmo horário, a não ser com a confirmação (confirmarLimite), que fica registrada quando o limite foi passado (quem:
+  // quem anotou, já que este navegador não tem conta), ou na lista de espera (esperar), que não registra nada; o prazo e a
+  // exceção da coordenação; e os textos e o formato do recurso. Nasce aprovado (por quem anotou) com aprovar ou pela exceção
+  async registrarSolicitacao({ data, aluno, aluno_nome, missao, janela, horario = null, horas, observacao = null, registrado_por, excecao = false, recurso = null, missaoDoCurso = null, confirmarLimite = false, horario2 = null, aprovar = false, esperar = false }, agora = new Date()) {
     if (janela !== 'horario' || !/^[0-2][0-9]:[0-5][0-9]$/.test(horario || '')) throw erroDaAgenda('22023', 'o pedido é num horário específico', 'horario');
     const h = String(missao).startsWith('Ground') ? GROUND_DURATION_H : duracaoDigitada(horas);
     if (h === null) throw erroDaAgenda('22023', `a duração vai de 0,1 h a ${DURACAO_MAXIMA_H} h`, 'horas');
-    const recusa = recusaDoPedido({ missao, recurso, horario, horas: h, missaoDoCurso }, cursosGuardados().cursos);
+    const recusa = recusaDoPedido({ missao, recurso, horario, horas: h, missaoDoCurso }, cursosGuardados().cursos)
+      || recusaDaSegundaPreferencia({ missao, horario, horario2 })
+      || (confirmarLimite && esperar ? { code: '22023', campo: 'esperar', mensagem: 'o 7º voo local é confirmado ou vai para a lista de espera, não os dois' } : null)
+      || recusaDaData(data, agora);
     if (recusa) throw erroDaAgenda(recusa.code, recusa.mensagem, recusa.campo);
-    const lista = lerJson(CHAVE_AGENDA) || [];
+    const lista = agendaGuardada(agora);
     const local = m => MISSOES_LOCAIS.includes(m);
-    const alemDoLimite = local(missao) && lista.filter(s => s.data === data && !s.cancelada_em && s.horario === horario && local(s.missao)).length >= LIMITE_DE_VOOS_LOCAIS;
-    if (alemDoLimite && !confirmarLimite) throw erroDaAgenda('PT422', `já há ${LIMITE_DE_VOOS_LOCAIS} voos locais às ${horario}`, 'locais');
+    const cheio = local(missao) && lista.filter(s => s.data === data && !s.cancelada_em && s.horario === horario && local(s.missao)).length >= LIMITE_DE_VOOS_LOCAIS;
+    if (cheio && !confirmarLimite && !esperar) throw erroDaAgenda('PT422', `já há ${LIMITE_DE_VOOS_LOCAIS} voos locais às ${horario}`, 'locais');
+    const alemDoLimite = cheio && Boolean(confirmarLimite);
     const noPrazo = prazoDaAgendaPermite(data, agora);
-    if (!noPrazo && !excecao) throw erroDaAgenda('PT403', 'prazo encerrado: pedido para o dia seguinte só até as 13:00');
+    if (!noPrazo && !excecao) throw erroDaAgenda('PT403', 'prazo encerrado: pedido para o dia seguinte só até as 13:00', 'prazo');
     if (!textoObrigatorio(registrado_por, 80) || !textoObrigatorio(aluno_nome, 80) || !textoObrigatorio(missao, 60)) {
       throw erroDaAgenda('23514', 'pedido incompleto: confira aluno, missão, horário e quem anotou');
     }
     const tipo = recurso.trim();
     if (!RECURSO_DO_PEDIDO.test(tipo)) throw erroDaAgenda('23514', 'recurso inválido');
+    const aprovado = Boolean(aprovar) || !noPrazo;
     const id = proximoId(lista);
     lista.push({
-      id, data, aluno, aluno_nome: aluno_nome.trim(), missao, janela, horario, horas: h, recurso: tipo, missao_do_curso: missaoDoCurso || null,
+      id, data, aluno, aluno_nome: aluno_nome.trim(), missao, janela, horario, horario2: horario2 ?? null, horas: h, recurso: tipo, missao_do_curso: missaoDoCurso || null,
       observacao: (observacao || '').trim().slice(0, 300) || null, registrado_por: registrado_por.trim(),
       registrado_em: agora.toISOString(), conta: null, excecao: !noPrazo,
       limite_confirmado_por: alemDoLimite ? registrado_por.trim() : null, limite_confirmado_em: alemDoLimite ? agora.toISOString() : null,
+      aprovada_em: aprovado ? agora.toISOString() : null, aprovada_por: aprovado ? registrado_por.trim() : null,
+      aprovacao_retirada_em: null, aprovacao_retirada_por: null,
       cancelada_em: null, cancelada_por: null
     });
     localStorage.setItem(CHAVE_AGENDA, JSON.stringify(lista));
     return id;
   },
 
+  // Como o servidor: o pedido que aguarda e o aprovado; o aprovado de uma data que já passou, não (PT403, passada)
   async cancelarSolicitacao(id, por, agora = new Date()) {
-    const lista = lerJson(CHAVE_AGENDA) || [];
+    const lista = agendaGuardada(agora);
     const solicitacao = lista.find(s => s.id === id && !s.cancelada_em);
     if (!solicitacao) throw erroDaAgenda('P0002', `pedido ${id} não encontrado ou já cancelado`);
+    if (solicitacao.aprovada_em && solicitacao.data < hojeEmSaoPaulo(agora)) throw erroDaAgenda('PT403', 'o pedido aprovado de uma data que já passou não é cancelado', 'passada');
     if (!textoObrigatorio(por, 80)) throw erroDaAgenda('23514', 'informe quem cancelou');
     Object.assign(solicitacao, { cancelada_em: agora.toISOString(), cancelada_por: por.trim() });
     localStorage.setItem(CHAVE_AGENDA, JSON.stringify(lista));
+  },
+
+  // Aprovar uma lista (de 1 a 200; senão, 22023 ids), como o servidor: os ids aprovados agora, em ordem (o já aprovado, o
+  // cancelado, o de uma data que já passou e o id que não existe ficam fora). Quem aprovou: por (sem ele, "Operador")
+  async aprovarSolicitacoes(ids, { por = null, agora = new Date() } = {}) {
+    if (!Array.isArray(ids) || !ids.length || ids.length > 200) throw erroDaAgenda('22023', 'aprove de 1 a 200 pedidos de cada vez', 'ids');
+    const lista = agendaGuardada(agora);
+    const hoje = hojeEmSaoPaulo(agora);
+    const aprovadas = lista.filter(s => ids.includes(s.id) && !s.cancelada_em && !s.aprovada_em && s.data >= hoje);
+    for (const s of aprovadas) {
+      Object.assign(s, { aprovada_em: agora.toISOString(), aprovada_por: (por || '').trim() || 'Operador', aprovacao_retirada_em: null, aprovacao_retirada_por: null });
+    }
+    if (aprovadas.length) localStorage.setItem(CHAVE_AGENDA, JSON.stringify(lista));
+    return aprovadas.map(s => s.id).sort((a, b) => a - b);
+  },
+
+  // Retirar a aprovação, como o servidor: o pedido volta a aguardar, com o rastro (quem: por, sem ele "Operador"; e quando)
+  async retirarAprovacaoDaSolicitacao(id, { por = null, agora = new Date() } = {}) {
+    const lista = agendaGuardada(agora);
+    const solicitacao = lista.find(s => s.id === id && !s.cancelada_em && s.aprovada_em);
+    if (!solicitacao) throw erroDaAgenda('P0002', `pedido ${id} não encontrado, cancelado ou sem aprovação`);
+    if (solicitacao.data < hojeEmSaoPaulo(agora)) throw erroDaAgenda('PT403', 'a aprovação de uma data que já passou não é retirada', 'passada');
+    Object.assign(solicitacao, { aprovada_em: null, aprovada_por: null, aprovacao_retirada_em: agora.toISOString(), aprovacao_retirada_por: (por || '').trim() || 'Operador' });
+    localStorage.setItem(CHAVE_AGENDA, JSON.stringify(lista));
+  },
+
+  // Os pedidos por data, de de a ate, como o servidor (solicitacoes_por_dia): os que aguardam e os aprovados, sem os
+  // cancelados e sem as datas sem pedidos
+  async solicitacoesPorDia(de, ate) {
+    const contagem = {};
+    for (const s of agendaGuardada().filter(x => !x.cancelada_em && x.data >= de && x.data <= ate)) {
+      contagem[s.data] ??= { aguardando: 0, aprovadas: 0 };
+      contagem[s.data][s.aprovada_em ? 'aprovadas' : 'aguardando']++;
+    }
+    return contagem;
   },
 
   // As horas de voo de cada instrutor antes da data (limites da lei), com a mesma conta do servidor

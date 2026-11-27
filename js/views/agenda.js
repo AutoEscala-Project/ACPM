@@ -29,6 +29,9 @@ export function abrirAgenda() {
 // administradores e a secretaria. A exceção da coordenação é de quem opera a escala (o servidor confere de novo)
 export const podeEditarAgenda = () => (ApiClient.perfil ? registraNaAgenda(ApiClient.perfil) : !isGestor());
 const podeUsarExcecao = () => (ApiClient.perfil ? operaEscala(ApiClient.perfil) : !isGestor());
+// Quem aprova pedidos (o passo D1; os botões são do D2): quem opera a escala. Até lá, o pedido dele nasce aprovado, como
+// pelos atalhos do servidor; o da secretaria aguarda (o servidor confere de novo)
+export const aprovaPedidos = podeUsarExcecao;
 // Importar para a demanda também é de quem opera a escala
 const podeImportar = podeUsarExcecao;
 

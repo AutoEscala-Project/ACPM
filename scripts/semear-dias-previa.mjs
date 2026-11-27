@@ -2,6 +2,8 @@
 // prévia (https://thephfernandes.github.io/ACPM/) ver a escala pronta. Cada data nova começa como o app começa uma data
 // (diaParaCopiar do dia anterior: disponibilidade, horas até a revisão, filas do rodízio), recebe a demanda do dia de
 // exemplo dos testes (test/helpers/exemplo.js, com os alunos em outra ordem a cada data) e a escala do motor.
+// Com cada data, os pedidos fictícios da agenda (scripts/pedidos-da-previa.mjs, o passo D1): um aprovado para cada aluno
+// com voo, ligado ao registro dele e a "importadas", dois que aguardam a aprovação e um cancelado.
 // Só grava datas que ainda não têm escala: o que alguém já editou na prévia fica como está. Recusa a produção.
 //
 // Usa o Supabase CLI já autenticado (`supabase login`); não precisa da senha do banco.
@@ -14,10 +16,10 @@ import { PROJETOS } from '../js/config-supabase.js';
 import { comExemplo } from '../test/helpers/exemplo.js';
 import { somarDias } from '../js/format.js';
 import { ehDomingo } from '../js/agenda.js';
+import { refDaPrevia, pedidosDaPrevia, sqlDosPedidos, ligarPedidos } from './pedidos-da-previa.mjs';
 
-const PREVIA = new URL(PROJETOS.previa.url).hostname.split('.')[0];
-const PRODUCAO = new URL(PROJETOS.producao.url).hostname.split('.')[0];
-if (PREVIA === PRODUCAO) throw new Error('A prévia e a produção apontam para o mesmo projeto.');
+// Só a prévia: a produção é recusada antes de qualquer consulta
+const PREVIA = refDaPrevia(PROJETOS);
 
 const quantos = Number(process.argv[2] || 12);
 const hojeSP = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date());
@@ -65,6 +67,10 @@ for (const [k, data] of datas.entries()) {
   const estado = comExemplo({ ...base, stu: [...base.stu.slice(giro), ...base.stu.slice(0, giro)] });
   estado.stu.sort((a, b) => ordem.indexOf(a.id) - ordem.indexOf(b.id));
   nid = estado.nid;
+  // Os pedidos da agenda da data, gravados antes da escala (o registro de cada aprovado leva o id dele); SECO só conta
+  const pedidos = pedidosDaPrevia(estado, data);
+  if (!process.env.SECO) ligarPedidos(estado, sql(sqlDosPedidos(pedidos), { escrita: true }));
+  console.log(`${data}: pedidos ${pedidos.aprovados.length} aprovados, ${pedidos.aguardando.length} aguardando, ${pedidos.cancelados.length} cancelado`);
 
   const resultado = { ...runAllocationEngine(estado), data };
   const dia = { ...separar(estado).dia, esquema: ESQUEMA, resultado };

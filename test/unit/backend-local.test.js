@@ -190,19 +190,23 @@ describe('Backend local: agenda de solicitações', () => {
   // A conversão dos pedidos de antes, uma vez (a marca acpm4_agenda_aprovacoes): a regra (a) do banco, sobre os dias deste
   // navegador, e a (b) para todos os pedidos (não há contas: quem usa tem os direitos de operador)
   it('os pedidos de antes da aprovação: convertidos uma vez, pelas regras do banco', async () => {
+    // Sem pedidos guardados, nada é gravado (nem a marca)
+    assert.deepEqual(await backendLocal.listarSolicitacoes('2026-01-01', '2026-12-31'), []);
+    assert.equal(localStorage.getItem('acpm4_agenda_aprovacoes'), null);
     const hoje = new Date();
     const dia = n => new Date(hoje.getTime() + n * 864e5).toISOString().slice(0, 10);
     const linha = (id, data, extra = {}) => ({ id, data, aluno: 1000 + id, aluno_nome: 'Aluno', missao: 'Navegação', janela: 'horario', horario: '08:20', horas: 1,
       recurso: 'C152', observacao: null, registrado_por: 'Maria', registrado_em: hoje.toISOString(), conta: null, excecao: false, cancelada_em: null, cancelada_por: null, ...extra });
     localStorage.setItem('acpm4_agenda', JSON.stringify([
       linha(1, dia(-3)), linha(2, dia(-3)), linha(3, dia(3)), linha(4, dia(3)), linha(5, dia(3)), linha(6, dia(3), { cancelada_em: hoje.toISOString(), cancelada_por: 'Maria' }),
-      linha(7, dia(4))
+      linha(7, dia(4)), { ...linha(8, dia(4)), horario2: null, aprovada_em: null, aprovada_por: null, aprovacao_retirada_em: null, aprovacao_retirada_por: null }
     ]));
     localStorage.setItem(`acpm4_dia_${dia(-3)}`, JSON.stringify({ importadas: [1], pedidos: {} }));
     localStorage.setItem(`acpm4_dia_${dia(3)}`, JSON.stringify({ importadas: [3, 4, 5, 6], pedidos: { 1003: { fly: false, solicitacao: 3, extra: [] }, 1004: { extra: [{ solicitacao: 4 }] }, 1006: { solicitacao: 6, extra: [] } } }));
     const lista = await backendLocal.listarSolicitacoes(dia(-10), dia(10));
     const aprovadaPor = Object.fromEntries(lista.map(s => [s.id, s.aprovada_por]));
-    assert.deepEqual(aprovadaPor, { 1: 'importação anterior', 2: null, 3: 'importação anterior', 4: 'importação anterior', 5: null, 6: null, 7: 'Maria' });
+    // O 8, com as colunas da aprovação, foi registrado depois do passo D1: aguarda como estava
+    assert.deepEqual(aprovadaPor, { 1: 'importação anterior', 2: null, 3: 'importação anterior', 4: 'importação anterior', 5: null, 6: null, 7: 'Maria', 8: null });
     assert.ok(lista.every(s => ['aprovada_em', 'aprovada_por', 'aprovacao_retirada_em', 'aprovacao_retirada_por', 'horario2'].every(c => Object.hasOwn(s, c))), 'as colunas novas em todas as linhas');
     assert.equal(localStorage.getItem('acpm4_agenda_aprovacoes'), '1');
     // Uma vez só: o pedido que aguarda depois da conversão continua aguardando
