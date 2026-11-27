@@ -2,7 +2,7 @@
 // cursos desligados, o que continua e o que fica guardado (ligar de novo traz tudo de volta). Com elas ligadas, os testes
 // de cada tela (hangar.spec.js, cursos-no-dia.spec.js, agendamento.spec.js, cursos.spec.js e os outros com comHangar ou
 // comProgresso). A prioridade, desligada e ligada: prioridade.spec.js
-import { test, comTodasAsFuncionalidades, expect, irPara, abrirEscala, abrirHistorico, diaSeguinte, entrar, prepararContexto, appPronto, vigiarErros, tabelaDoDia, importarDaAgenda, alternarDisponivel, mudarData, botaoDaData, trilho, avisosDaData, contagemDosAvisos, contagemDoDia, AMANHA, confirmarAgendamento, refazer, campoDoAluno, textoDoProgresso } from './fixtures.js';
+import { test, comTodasAsFuncionalidades, expect, irPara, abrirEscala, abrirHistorico, diaSeguinte, entrar, prepararContexto, appPronto, vigiarErros, importarDaAgenda, alternarDisponivel, mudarData, botaoDaData, trilho, avisosDaData, contagemDosAvisos, contagemDoDia, AMANHA, confirmarAgendamento, refazer, campoDoAluno, textoDoProgresso, abrirRecursos, abrirHangar, ordemNoHangar, itemDoHangar, primeiraDaLista } from './fixtures.js';
 import { FRASES_DAS_FUNCIONALIDADES, FRASES_SEM_AS_FUNCIONALIDADES } from './manual-frases.js';
 import { instalarSupabaseFalso, documentosAtuais, CONTAS } from './supabase-falso.js';
 import { montarGlossario } from '../../js/glossario.js';
@@ -72,15 +72,16 @@ const textoDaPagina = page => page.evaluate(() => [...document.body.querySelecto
 
 test('o padrão do app: o hangar e o progresso desligados; no localhost, ?funcionalidades= liga', async ({ page }) => {
   await abrirCom(page);
-  await irPara(page, 'rec');
-  await expect(page.locator('#hangar')).toHaveCount(0);
+  await abrirRecursos(page);
+  await expect(itemDoHangar(page)).toHaveCount(0);
+  await expect(ordemNoHangar(page)).toHaveCount(0);
   await irPara(page, 'alu');
   await expect(page.locator('#alu .lista-meta')).toHaveCount(0);
 
   await page.goto('./?funcionalidades=hangar,progresso');
   await appPronto(page);
-  await irPara(page, 'rec');
-  await expect(page.locator('#hangar li').first()).toHaveAttribute('data-id', 'PR-VOB');
+  await abrirHangar(page);
+  await expect(ordemNoHangar(page).first()).toHaveAttribute('data-id', 'PR-VOB');
   await irPara(page, 'alu');
   await expect.poll(() => textoDoProgresso(page, 1001)).toBe('1/46 · Fase 1 · próxima IN-02');
 });
@@ -107,21 +108,22 @@ test('?funcionalidades= fica no endereço ao trocar de tela e de data, ao voltar
   await page.reload();
   await appPronto(page);
   await conferir('rec', DEPOIS);
-  await expect(page.locator('#hangar li').first()).toHaveAttribute('data-id', 'PR-VOB');
+  await abrirHangar(page);
+  await expect(ordemNoHangar(page).first()).toHaveAttribute('data-id', 'PR-VOB');
 });
 
 // Só com a prioridade ligada (a alteração que grava o dia é a prioridade: mudarAPrioridade)
 test.describe('O hangar desligado', () => {
   test.use({ funcionalidades: 'prioridade' });
 
-  test('em Recursos, sem o painel, e a tabela fica com a largura toda, também no celular', async ({ page }) => {
+  test('em Recursos, sem o item fixo "Ordem no hangar": a lista começa pela primeira categoria, também no celular', async ({ page }) => {
     await abrirCom(page);
-    await irPara(page, 'rec');
-    await expect(page.locator('#s-rec .rec-hangar, #hangar, [data-act^="hangar-"]')).toHaveCount(0);
+    await abrirRecursos(page);
+    await expect(itemDoHangar(page)).toHaveCount(0);
+    await expect(page.locator('#hangar, [data-act^="hangar-"]')).toHaveCount(0);
     for (const largura of [1440, 1100, 800, 390]) {
       await page.setViewportSize({ width: largura, height: 800 });
-      const [parte, tabela] = await Promise.all([page.locator('#s-rec .rec-dia').boundingBox(), tabelaDoDia(page).boundingBox()]);
-      expect(Math.round(tabela.width), `${largura} px`).toBe(Math.round(parte.width));
+      await expect(primeiraDaLista(page)).toHaveAttribute('data-chave', 'g:C152');
       expect(await page.evaluate(() => document.documentElement.scrollWidth), `${largura} px`).toBeLessThanOrEqual(largura);
     }
   });
@@ -202,8 +204,8 @@ comTodasAsFuncionalidades('ligados, a ordem guardada vale na escala, e o progres
   await abrirEscala(page);
   expect(await avioes(page)).toEqual(['PR-VOB', 'PR-VOB']);
   await expect(voo(page, 'Maria').locator('[data-resultado]')).toHaveValue('aprovado');
-  await irPara(page, 'rec');
-  await expect(page.locator('#hangar li').first()).toHaveAttribute('data-id', 'PR-VOB');
+  await abrirHangar(page);
+  await expect(ordemNoHangar(page).first()).toHaveAttribute('data-id', 'PR-VOB');
 });
 
 // Só com a prioridade ligada (a alteração que grava o dia é a prioridade: mudarAPrioridade)

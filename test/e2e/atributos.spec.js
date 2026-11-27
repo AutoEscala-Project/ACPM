@@ -1,6 +1,7 @@
-// Atributos dos recursos na aba Recursos (Só VFR, Habilitação própria, Só Parafuso), a habilitação própria nas
-// habilitações do instrutor e o simulador com 2 h na Demanda e na Agenda
-import { test, expect, abrir, irPara, irParaVista, abrirEscala, abrirHistorico, campoDaAgenda } from './fixtures.js';
+// Atributos dos recursos em Recursos (no detalhe do recurso, "Cadastro · todas as datas": Só VFR, Só Parafuso; a
+// habilitação própria em "Habilitações que o INVA precisa"), a habilitação própria nas habilitações do instrutor e o
+// simulador com 2 h na Demanda e na Agenda
+import { test, expect, abrir, irPara, abrirEscala, abrirHistorico, campoDaAgenda, abrirRecursos, linhaDoRecurso, marcarAtributo, campoDoRecurso } from './fixtures.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
 
 const linha = (page, nome) => page.locator('#out tbody tr:not(.win)', { hasText: nome });
@@ -10,22 +11,17 @@ test.describe('Atributos dos recursos', () => {
     // Um voo IFR no C172, com todos os C172 em manutenção menos o PR-HAR e o PR-CPL
     const estado = cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, { mis: 'IFR', eq: 'C172' })], semAeronaves: ['PP-ABP', 'PP-AJS', 'PR-BUL', 'PR-VOY'] });
     await abrir(page, { estado });
-    // Os atributos ficam na frota, em Recursos › Cadastro
-    await irParaVista(page, 'rec', 'cadastro');
-    await expect(page.locator('#frota li.frota-item[data-r="PR-CPL"]')).toContainText('Só VFR');
-    await expect(page.locator('#frota li.frota-item[data-r="PR-VOM"]')).toContainText('Habilitação própria');
+    // Os atributos aparecem na linha de cada recurso, em Recursos
+    await abrirRecursos(page);
+    await expect(linhaDoRecurso(page, 'PR-CPL').locator('.lista-l2')).toContainText('Só VFR');
+    await expect(linhaDoRecurso(page, 'PR-VOM').locator('.lista-l2')).toContainText('Exige Avião PR-VOM');
     await abrirEscala(page);
     await expect(linha(page, 'Aluno 1000').locator('.c-aviao')).toContainText('PR-HAR');
 
-    // O PR-HAR também passa a "Só VFR": o voo IFR fica sem avião (o Cadastro continua aberto ao voltar à aba)
-    await irPara(page, 'rec');
-    await expect(page.locator('#s-rec')).toHaveAttribute('data-vista', 'cadastro');
-    await page.locator('#frota li.frota-item[data-r="PR-HAR"] [data-act="atributos-recurso"]').click();
-    const caixas = page.locator('#frota li.frota-item[data-r="PR-HAR"] .atributos-recurso input');
-    await expect(caixas).toHaveCount(2);
-    await page.locator('#frota li.frota-item[data-r="PR-HAR"] [data-atributo="soVfr"]').check();
-    await expect(page.locator('#frota li.frota-item[data-r="PR-HAR"]')).toContainText('Só VFR');
-    await expect(page.locator('#frota li.frota-item[data-r="PR-HAR"] [data-atributo="soVfr"]')).toBeFocused();
+    // O PR-HAR também passa a "Só VFR" (no detalhe dele): o voo IFR fica sem avião; o foco fica na caixa
+    await marcarAtributo(page, 'PR-HAR', 'soVfr', true);
+    await expect(linhaDoRecurso(page, 'PR-HAR').locator('.lista-l2')).toContainText('Só VFR');
+    await expect(campoDoRecurso(page, 'atributos').locator('[data-atributo="soVfr"]')).toBeFocused();
     await abrirEscala(page);
     await expect(page.locator('#out details.erros')).toContainText('nenhum C172 homologado IFR disponível');
 

@@ -28,7 +28,10 @@ const ANTIGAS = {
   cursos: ['mostra um curso só ou todos'],
   // Recursos em duas vistas (não mais em duas partes), com as categorias marcadas na barra
   recursos: ['3 de 26 recursos', 'A aba tem duas partes', 'Escolha uma categoria para ver só a frota dela', 'na Frota, em “Vale para todas as datas”',
-    'Veja na aba Recursos se ele está ligado']
+    'Veja na aba Recursos se ele está ligado',
+    // B: Recursos é lista e detalhe; sem as duas vistas, sem o filtro das categorias e sem a tabela da Disponibilidade do dia
+    'Duas vistas, com a busca e as categorias valendo nas duas', 'os recursos de alguma das marcadas', 'Categoria: C152 ou PA-34',
+    'abre o Cadastro com o formulário', 'cujo botão mostra o mesmo número', 'Veja em Recursos, na Disponibilidade do dia', 'A tabela da Disponibilidade do dia']
 };
 
 // Os nomes dos botões e das vistas, e as regras em vigor
@@ -65,10 +68,12 @@ const NOVAS = {
     'desligue Ativo, na linha dele', 'Mostrar inativos'],
   // Recursos: as duas vistas, a busca pela matrícula, o filtro das categorias (a regra "alguma das marcadas") e o
   // cadastro da frota e os horários de decolagem
-  recursos: ['Disponibilidade do dia', 'Novo recurso', 'Retirar', 'Horários de decolagem', 'de 30 em 30 minutos', 'divide as horas do dia',
-    'em Disponibilidade do dia, desligue', 'abre o Cadastro com o formulário', 'Buscar matrícula', '3 de 27 recursos',
-    'os recursos de alguma das marcadas', 'Categoria: C152 ou PA-34', 'Filtro das categorias',
-    'cujo botão mostra o mesmo número', 'Veja em Recursos, na Disponibilidade do dia, se ele está ligado',
+  // B: a lista por categoria e o detalhe (Nesta data, depois todas as datas), o cabeçalho da categoria com os horários de
+  // decolagem, o "Disponível" e o "Ativo" na linha, "Agendar voo no", "+ Novo recurso" no detalhe, "Retirar da frota…"
+  recursos: ['Novo recurso', 'Retirar da frota…', 'Horários de decolagem', 'de 30 em 30 minutos', 'divide as horas do dia',
+    'A lista dos recursos fica à esquerda, por categoria', 'um clique no nome da categoria abre o detalhe dela', 'Buscar matrícula', '3 de 27 recursos',
+    'desligue Disponível, na linha do recurso', 'Agendar voo no PR-VOB', 'Mostrar inativos', 'o ponto da linha',
+    'Veja em Recursos se ele está disponível nesta data',
     // O "Disponível" da Sala Ground (J, S4; revisão do J)
     'A Sala Ground também tem Disponível em cada data', 'A Sala Ground está indisponível nesta data', 'a Sala Ground indisponível'],
   // Cursos: um de cada vez, o índice das fases, as fases recolhidas e os alunos por fase
@@ -77,7 +82,7 @@ const NOVAS = {
 
 // As do que pode ficar desligado (js/funcionalidades.js): o Manual só as diz com a funcionalidade ligada
 export const FRASES_DAS_FUNCIONALIDADES = {
-  hangar: ['nunca para a ordem no hangar', 'Ordem no hangar', 'a ordem no hangar.', 'depois o da frente do hangar', 'as saídas do hangar', 'menos saídas do hangar'],
+  hangar: ['a busca não vale na ordem no hangar', 'Ordem no hangar', 'a ordem no hangar.', 'depois o da frente do hangar', 'as saídas do hangar', 'menos saídas do hangar'],
   progresso: ['agrupados pela fase em que estão', 'Próxima: PP-07 · Usar', 'Outra missão…', 'próxima missão', 'progresso', 'Aprovado ou Reprovado',
     '12/40 · próxima PP-13', 'fora da ordem', 'com quantos alunos estão em cada uma',
     'o resultado do voo vai para o código do pedido'],

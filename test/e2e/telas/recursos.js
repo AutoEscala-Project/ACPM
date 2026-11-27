@@ -1,19 +1,83 @@
-// O driver de Recursos (dono: B): a disponibilidade do dia (a tabela dos recursos e os horários fechados), o filtro
-// das categorias e as telas que os testes do celular e da acessibilidade percorrem (ESTADOS)
+// O driver de Recursos (dono: B): a lista por categoria (os cabeçalhos com o detalhe da categoria, o item fixo "Ordem no
+// hangar", as linhas com o "Disponível" desta data e o "Ativo" do cadastro), o detalhe de um recurso, os horários fechados
+// da data (na Escala, details#fechamentos, que o B trouxe de Recursos) e as telas que os testes do celular e da
+// acessibilidade percorrem (ESTADOS)
 import { expect } from '@playwright/test';
-import { irPara, irParaVista, marcarNoFiltro, nenhumComOsFiltros } from './casca.js';
+import { irPara, confirmar } from './casca.js';
+import { abrirNaLista, linhaNaLista, detalheDa, nenhumNaLista } from './alunos.js';
 import { perguntaDoRefazer, refazer } from './escala.js';
 
-// Recursos numa vista ('dia': a Disponibilidade do dia; 'cadastro')
-export const abrirRecursos = (page, vista = 'dia') => irParaVista(page, 'rec', vista);
+export const abrirRecursos = page => irPara(page, 'rec');
 
-// A tabela da Disponibilidade do dia (os recursos por categoria) e o "Disponível" de um recurso, pela matrícula
-export const tabelaDoDia = page => page.locator('#eqs');
-export const caixaDisponivel = (page, id) => page.locator(`#eqs input[data-id="${id}"]`);
-export async function alternarDisponivel(page, id, disponivel) {
-  if (disponivel) await caixaDisponivel(page, id).check();
-  else await caixaDisponivel(page, id).uncheck();
+// A lista: as linhas dos recursos (pela matrícula; a Sala Ground é SALA-GROUND), os cabeçalhos das categorias (pelos ids:
+// 'C152', 'C172', 'sim', 'PA-34', 'ground'), a busca e a contagem
+export const listaDosRecursos = page => page.locator('#rec');
+export const linhaDoRecurso = (page, reg) => linhaNaLista(page, 'rec', reg);
+export const linhasDosRecursos = page => page.locator('#rec > li.lista-linha');
+export const gruposDosRecursos = page => page.locator('#rec > li.lista-grupo');
+export const cabecalhoDaCategoria = (page, cat) => page.locator(`#rec > li[data-chave="g:${cat}"]`);
+export const buscaDosRecursos = page => page.locator('[data-flt="rec"]');
+export const contagemDosRecursos = page => page.locator('#rec-contagem');
+export const detalheDoRecurso = page => detalheDa(page, 'rec');
+// O item fixo "Ordem no hangar" (só com o hangar ligado) e a primeira parte da lista
+export const itemDoHangar = page => page.locator('#rec > li[data-chave="f:hangar"]');
+export const primeiraDaLista = page => page.locator('#rec > li').first();
+
+// A lista de Recursos à vista: de outra tela, Recursos abre antes; numa vista só (o celular), com o detalhe aberto,
+// "‹ Recursos" volta à lista
+async function naTela(page) {
+  if (!await page.locator('#s-rec').isVisible()) await abrirRecursos(page);
+  const voltar = page.locator('#det-rec-voltar');
+  if (await listaDosRecursos(page).isHidden()) {
+    // O detalhe vazio (o formulário do recurso novo) não tem "‹ Recursos": Voltar
+    if (await voltar.isVisible()) await voltar.click();
+    else await page.goBack();
+  }
+  await expect(listaDosRecursos(page)).toBeVisible();
 }
+// Abre no detalhe um recurso, uma categoria (o cabeçalho dela) ou o item fixo do hangar
+export async function abrirRecurso(page, reg) {
+  await naTela(page);
+  await abrirNaLista(page, 'rec', reg);
+}
+export async function abrirCategoria(page, cat) {
+  await naTela(page);
+  await cabecalhoDaCategoria(page, cat).locator('.lista-botao').click();
+  await expect(detalheDoRecurso(page)).toHaveAttribute('data-id', `cat:${cat}`);
+}
+export async function abrirHangar(page) {
+  await naTela(page);
+  await itemDoHangar(page).locator('.lista-botao').click();
+  await expect(detalheDoRecurso(page)).toHaveAttribute('data-id', 'hangar');
+}
+
+// O "Disponível" desta data de um recurso, na linha dele (o mesmo campo está no detalhe)
+export const caixaDisponivel = (page, id) => page.locator(`#rec > li[data-chave="i:${id}"] input[data-a="av"]`);
+export async function alternarDisponivel(page, id, disponivel) {
+  const caixa = caixaDisponivel(page, id);
+  if (!await caixa.isVisible()) await abrirRecursos(page);
+  if (disponivel) await caixa.check();
+  else await caixa.uncheck();
+}
+// No detalhe do recurso aberto: um campo (o data-campo dele: 'av', 'horas', 'escala', 'atributos', 'exige'…), as horas
+// disponíveis até a revisão, um atributo ("Só Parafuso", "Só VFR", "Habilitação própria") e "Retirar da frota…"
+export const campoDoRecurso = (page, campo) => page.locator(`#det-rec .det [data-campo="${campo}"]`);
+export async function horasDoRecurso(page, reg) {
+  await abrirRecurso(page, reg);
+  return page.locator(`#det-rec input[data-a="horas"][data-horas="${reg}"]`);
+}
+export async function marcarAtributo(page, reg, atributo, marcar) {
+  await abrirRecurso(page, reg);
+  await page.locator(`#det-rec input[data-a="atributo"][data-r="${reg}"][data-atributo="${atributo}"]`).setChecked(marcar);
+}
+export async function retirarRecurso(page, reg) {
+  await abrirRecurso(page, reg);
+  await confirmar(page, '#det-rec-retirar');
+}
+// A ordem no hangar (o detalhe do item fixo; com o hangar ligado): as posições, da frente para o fundo
+export const ordemNoHangar = page => page.locator('#hangar li');
+// Os horários de decolagem da categoria aberta (o detalhe dela)
+export const horariosDaCategoria = page => page.locator('#horarios');
 
 // Os horários fechados da data (B: na Escala, o bloco details#fechamentos; o J os pôs em Recursos, no lugar das janelas de
 // operação), o resumo dele ("nenhum", "12:40–17:30 · todos os recursos") e a lista dos intervalos
@@ -57,45 +121,33 @@ export async function abrirDeNovo(page, i = 0) {
   await responderSeAberta(page);
 }
 
-// O filtro das categorias de Recursos: os valores são os ids das categorias ('C152', 'C172', 'sim', 'PA-34')
-export const filtrarCategorias = (page, valores, opcoes) => marcarNoFiltro(page, 'flt-rec-cat', valores, opcoes);
-
-// As telas de Recursos que não são a de abertura (test/e2e/telas/invariantes.js, percorrerTelas): o cadastro, o filtro
-// das categorias aberto com duas marcas e as duas tabelas sem nenhum com os filtros. No fim, as marcas e a busca voltam
-// a vazias e Recursos, à Disponibilidade do dia. nome null: só o passo, sem conferir a tela
+// As telas de Recursos que não são a de abertura (test/e2e/telas/invariantes.js, percorrerTelas): um recurso aberto, uma
+// categoria aberta (os horários de decolagem), o formulário do recurso novo e a lista sem nenhum com a busca. No fim, a
+// busca volta a vazia e a lista, à vista. nome null: só o passo, sem conferir a tela
 export const ESTADOS = [
-  { nome: 'recursos: cadastro', preparar: page => abrirRecursos(page, 'cadastro') },
+  { nome: 'recursos: um recurso aberto no detalhe', preparar: page => abrirRecurso(page, 'PR-VOM') },
+  { nome: 'recursos: uma categoria aberta, com os horários de decolagem', preparar: page => abrirCategoria(page, 'C152') },
   {
-    nome: 'recursos: cadastro, o filtro das categorias aberto, com duas marcas',
+    nome: 'recursos: o formulário do recurso novo',
     preparar: async page => {
-      await filtrarCategorias(page, ['sim', 'PA-34'], { fechar: false });
-      await expect(page.locator('#flt-rec-cat')).toHaveText('Categoria: Simulador ou PA-34');
-      await expect(page.locator('#rec-contagem')).toHaveText(/^\d+ de \d+ recursos$/);
+      await naTela(page);
+      await page.locator('#btn-novo-recurso').click();
+      await expect(page.locator('#form-recurso')).toBeVisible();
     }
   },
   {
-    nome: 'recursos: cadastro, nenhum com os filtros',
+    nome: 'recursos: nenhum com a busca',
     preparar: async page => {
-      await page.locator('#flt-rec-cat').click();
-      await page.locator('#flt-rec-mat').fill('nenhum assim');
-      await expect(page.locator('#frota li.sem-resultado')).toBeVisible();
-      await expect(page.locator('#rec-contagem')).toHaveText(/^0 de \d+ /);
-    }
-  },
-  {
-    nome: 'recursos: disponibilidade do dia, nenhum com os filtros',
-    preparar: async page => {
-      await abrirRecursos(page, 'dia');
-      await nenhumComOsFiltros(page, 'revisao', 'rec');
+      await naTela(page);
+      await buscaDosRecursos(page).fill('nenhum assim');
+      await nenhumNaLista(page, 'rec');
     }
   },
   {
     nome: null,
     preparar: async page => {
-      await page.locator('#limpar-filtros-revisao').click();
-      await expect(page.locator('#flt-rec-cat-painel input:checked')).toHaveCount(0);
-      await expect(page.locator('#flt-rec-cat')).toHaveText('Todas as categorias');
-      await expect(page.locator('#flt-rec-mat')).toHaveValue('');
+      await page.locator('#limpar-filtros-rec').click();
+      await expect(buscaDosRecursos(page)).toHaveValue('');
     }
   }
 ];
