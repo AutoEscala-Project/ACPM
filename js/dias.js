@@ -125,10 +125,11 @@ export function juntar(cadastro, dia = diaPadrao()) {
 // demanda do dia vem de "Importar da agenda"
 export function diaParaCopiar(anterior, instrutores = []) {
   if (!anterior || !anterior.ins || !anterior.pedidos) return diaPadrao();
-  const { win, fechamentos, av, ins, pedidos: anteriores, hangar = null, criterios } = structuredClone(anterior);
+  const { av, ins, pedidos: anteriores, hangar = null, criterios } = structuredClone(anterior);
   const pedidos = Object.fromEntries(Object.keys(anteriores).map(id => [id, { ...blank(), extra: [] }]));
-  // Os horários fechados passam para a data seguinte, como o win (o B decide se continua assim)
-  return { win, ...(Array.isArray(fechamentos) ? { fechamentos } : {}), av, ins, pedidos, fStatus: {}, fObs: {}, horas: horasDoDiaSeguinte(anterior), filas: filasDoDiaSeguinte(anterior, instrutores), hangar: hangar || normalizarHangar(null, FROTA_INICIAL), fixos: {}, aprovacao: null, criterios: normalizarCriterios(criterios), importadas: [] };
+  // Os horários fechados valem só para a data deles (B): a seguinte começa com o dia todo aberto, sem fechamentos e sem o
+  // win fechado de antes (que os leitores leriam no lugar deles)
+  return { win: INICIOS_DOS_TEMPOS.map(() => true), av, ins, pedidos, fStatus: {}, fObs: {}, horas: horasDoDiaSeguinte(anterior), filas: filasDoDiaSeguinte(anterior, instrutores), hangar: hangar || normalizarHangar(null, FROTA_INICIAL), fixos: {}, aprovacao: null, criterios: normalizarCriterios(criterios), importadas: [] };
 }
 
 // Horas desde a última revisão no início do dia seguinte: as do dia mais os voos dele que não foram cancelados
