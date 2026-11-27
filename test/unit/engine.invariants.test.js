@@ -343,7 +343,7 @@ describe('Invariantes da escala aprovada com atrasos e cancelamentos', () => {
 // ao mesmo instrutor e ao aluno (sem a troca de matrículas também: ela muda o avião de outros voos depois)
 describe('O horário mais perto da preferência, em 300 cenários', async () => {
   const { horariosDaMissao, minutoDaPreferencia } = await import('../../js/horarios.js');
-  const { cobre } = await import('../../js/viabilidade.js');
+  const { disponivelPara } = await import('../../js/disponibilidade.js');
   const { normalizarLimites, dentroDosLimites } = await import('../../js/limites.js');
   const { AIRCRAFT_EQ_TYPES } = await import('../../js/config.js');
   const { disponibilidadeDoAluno } = await import('../../js/rules.js');
@@ -371,7 +371,7 @@ describe('O horário mais perto da preferência, em 300 cenários', async () => 
           if (!maisPerto || m === p1 || m === p2 || m + dur > fim || m < depoisDoGround || !estado.win[periodoDoMinuto(m)] || (permitidas && !permitidas(m))) continue;
           const livre = v => !(v.a < m + dur && m < v.b);
           if (!outros.filter(v => v.r === o.r).every(livre) || !outros.filter(v => v.insId === o.insId).every(livre) || !outros.filter(v => v.stuId === o.stuId).every(livre)) continue;
-          if (!cobre(x.aw, m, m + dur)) continue;
+          if (!disponivelPara(x, m, m + dur)) continue;
           const compromissos = unicos(outros.filter(v => v.insId === o.insId)).map(v => ({ a: v.a, b: v.b, voo: AIRCRAFT_EQ_TYPES.includes(v.eqType) }));
           if (!dentroDosLimites({ compromissos, novo: { a: m, b: m + dur, voo: AIRCRAFT_EQ_TYPES.includes(o.eqType) }, historico: (estado.horasDosInstrutores || {})[o.insId] || null, limites: normalizarLimites(estado.limites) }).ok) continue;
           falhas.push(`seed ${seed}: ${o.fKey} às ${o.a}, mas ${m} servia (âncora ${ancora})`);

@@ -20,7 +20,7 @@ import { gerarCenario } from '../helpers/cenarios.js';
 import { situacaoPorMissao } from '../../js/resultados.js';
 
 import { hm } from '../../js/format.js';
-import { HORARIOS_PADRAO, DE_30_EM_30, HORARIO_DO_NOTURNO, HORARIO_DO_SOLO } from '../../js/horarios.js';
+import { HORARIOS_PADRAO, DE_30_EM_30, HORARIO_DO_NOTURNO, HORARIO_DO_SOLO, INICIOS_DOS_TEMPOS } from '../../js/horarios.js';
 import { aluno, cenario, instrutor, missaoExtra, apenas, GROUND_C152 } from '../helpers/montar.js';
 import { novoCurso, comExigenciasDasMissoes } from '../../js/programa.js';
 import { MODELOS } from '../../js/modelos-de-curso.js';
@@ -568,6 +568,20 @@ describe('Agendamento: o pedido e o voo fixo', () => {
     // Desfazer devolve a disponibilidade; o peso é da pessoa e fica
     assert.ok(desfazerAgendamento(estado, validarReversao(reversaoDoAgendamento(antes))));
     assert.deepEqual([estado.ins[1].on, estado.ins[1].aw.some(Boolean), estado.stu[1].kg], [false, false, 82.5]);
+  });
+
+  // C (formato 29): até a tela do C, "Marcar disponível" ainda marca os tempos do voo no aw; o instrutor com as faixas da
+  // data fica com as do aw novo (o motor lê as faixas), e desfazer devolve as dele
+  it('"Marcar disponível" num instrutor com faixas: as faixas do aw novo; desfazer devolve as de antes', () => {
+    const estado = doDia();
+    estado.ins[1].on = false;
+    estado.ins[1].aw = estado.ins[1].aw.map(() => false);
+    Object.assign(estado.ins[1], { faixas: [], pausas: [] });
+    const antes = aplicarAgendamento(estado, null, proposta({ disponibilizar: { insId: 2 } }));
+    const tempo = INICIOS_DOS_TEMPOS[2];
+    assert.deepEqual([estado.ins[1].faixas, estado.ins[1].pausas], [[{ de: tempo, ate: INICIOS_DOS_TEMPOS[3] }], []]);
+    assert.ok(desfazerAgendamento(estado, validarReversao(reversaoDoAgendamento(antes))));
+    assert.deepEqual([estado.ins[1].on, estado.ins[1].faixas, estado.ins[1].pausas], [false, [], []]);
   });
 
   it('a prévia é a escala que fica: aplicar no estado e refazer a escala dá a escala simulada', () => {

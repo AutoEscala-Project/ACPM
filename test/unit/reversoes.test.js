@@ -289,6 +289,15 @@ describe('Desfazer um voo agendado na Escala', () => {
     assert.deepEqual(estado.fStatus, { '1000_2_1': 'Cancelado' });
   });
 
+  // C (formato 29): a reversão gravada antes do C (e a de agora, até a tela do C) leva só o aw; num instrutor com as faixas
+  // da data, o aw volta e as faixas voltam com ele (as do aw)
+  it('a disponibilidade de antes do C (só o aw) volta num instrutor com faixas: o aw e as faixas dele', () => {
+    const estado = dia();
+    estado.ins[0] = { ...estado.ins[0], faixas: [{ de: 390, ate: 1440 }], pausas: [] };
+    assert.equal(desfazerAgendamento(estado, validarReversao(MOVIDO, FROTA_INICIAL)), true);
+    assert.deepEqual(estado.ins[0], { id: 5, nm: 'Instrutor 05', kg: 90, on: true, aw: DE_MANHA, faixas: [{ de: 390, ate: 760 }], pausas: [] });
+  });
+
   it('o voo movido volta para onde estava: o pedido, o instrutor escolhido e o voo fixo de antes; o status fica', () => {
     const estado = dia();
     assert.equal(desfazerAgendamento(estado, validarReversao(MOVIDO, FROTA_INICIAL)), true);
