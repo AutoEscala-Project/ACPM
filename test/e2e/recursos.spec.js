@@ -9,13 +9,37 @@ test.describe('Recursos', () => {
     await abrir(page);
     await expect(janelasDeOperacao(page).locator('input[data-a="win"]')).toHaveCount(9);
     await expect(janelasDeOperacao(page).locator('label').last()).toHaveText('17:30 noturno');
-    await expect(tabelaDoDia(page).locator('input[data-a="av"]')).toHaveCount(26);
-    await expect(tabelaDoDia(page).locator('tr.grupo')).toHaveText([/^C152/, /^C172/, /^PA-34/, /^Simuladores/]);
+    // Os 26 da frota e a Sala Ground (J, S4), no último grupo
+    await expect(tabelaDoDia(page).locator('input[data-a="av"]')).toHaveCount(27);
+    await expect(tabelaDoDia(page).locator('tr.grupo')).toHaveText([/^C152/, /^C172/, /^PA-34/, /^Simuladores/, /^Sala Ground/]);
     await expect(tabelaDoDia(page).locator('tr[data-r="PR-JPL"]')).toContainText('Só Parafuso');
     await expect(page.locator('#inst .cd')).toHaveCount(0);
     await expect(page.locator('#inst')).toContainText('Nenhum instrutor cadastrado');
     await irPara(page, 'alu');
     await expect(page.locator('#alu')).toContainText('Nenhum aluno cadastrado');
+  });
+
+  test('a Sala Ground tem "Disponível" nesta data (S4): ligada sem a chave; desligada, "Indisponível", no Histórico e revertida', async ({ page }) => {
+    await abrirSintetico(page);
+    await irPara(page, 'rec');
+    const sala = tabelaDoDia(page).locator('tr[data-r="SALA-GROUND"]');
+    await expect(sala.locator('input[data-a="av"]')).toBeChecked();
+    await expect(sala.locator('input[data-a="av"]')).toHaveAccessibleName('Sala Ground disponível');
+    await expect(sala).not.toContainText('Em manutenção');
+    await expect(sala.locator('input[data-a="horas"]')).toHaveCount(0);
+    await expect(sala.locator('[data-act="revisao"]')).toHaveCount(0);
+    await sala.locator('input[data-a="av"]').uncheck();
+    await expect(sala).toContainText('Indisponível');
+    await expect(sala).toHaveClass(/\bmanutencao\b/);
+    await expect(page.locator('#audit-log-list')).toContainText('Sala Ground: Indisponível');
+    await page.reload();
+    await expect(caixaDisponivel(page, 'SALA-GROUND')).not.toBeChecked();
+    await abrirHistorico(page);
+    await page.locator('#audit-log-list button[data-act="rev-log"]').first().click();
+    await expect(page.locator('#audit-log-list')).toContainText('Revertido: Sala Ground disponível');
+    await page.keyboard.press('Escape');
+    await irPara(page, 'rec');
+    await expect(caixaDisponivel(page, 'SALA-GROUND')).toBeChecked();
   });
 
   test('aeronave em manutenção fica registrada no histórico e persiste', async ({ page }) => {
@@ -249,9 +273,9 @@ test.describe('Recursos: horários de decolagem por categoria', () => {
     const pa34 = page.locator('#horarios [data-cat="PA-34"]');
     await expect(pa34.locator('.horarios-modelo')).toHaveText('De 30 em 30 min, 06:30–16:30');
     await expect(pa34.locator('.horarios-qtd')).toHaveText('21 horários');
-    // No resumo, só um botão por categoria (C152, C172, simuladores e PA-34)
-    await expect(page.locator('#horarios .horarios-cat')).toHaveCount(4);
-    await expect(page.locator('#horarios button')).toHaveCount(4);
+    // No resumo, só um botão por categoria (C152, C172, simuladores, PA-34 e, desde o J, a Sala Ground)
+    await expect(page.locator('#horarios .horarios-cat')).toHaveCount(5);
+    await expect(page.locator('#horarios button')).toHaveCount(5);
     await expect(page.locator('#horarios .horarios-editor')).toHaveCount(0);
 
     // A janela das 10:10 fechada nesta data (na Disponibilidade do dia): o horário dela fica apagado, e a dica diz por quê
@@ -514,12 +538,13 @@ test.describe('Recursos: a busca pela matrícula, as categorias e os grupos reco
     const frota = () => page.locator('#frota li.frota-item').evaluateAll(lis => lis.map(li => li.dataset.r));
     await expect(categorias).toHaveText('Todas as categorias');
     await categorias.click();
-    await expect(painel.locator('label.filtro-opcao')).toHaveText(['C152', 'C172', 'Simulador', 'PA-34']);
+    await expect(painel.locator('label.filtro-opcao')).toHaveText(['C152', 'C172', 'Simulador', 'PA-34', 'Sala Ground']);
     // Filtros, não alterações: flt-ctrl (o Gestor também usa) e nenhum data-f ou data-a
-    await expect(painel.locator('input.flt-ctrl:not([data-f]):not([data-a])')).toHaveCount(4);
+    await expect(painel.locator('input.flt-ctrl:not([data-f]):not([data-a])')).toHaveCount(5);
     await categorias.click();
     await expect(contagem).toHaveAttribute('role', 'status');
-    await expect(linhas).toHaveCount(26);
+    // Os 26 da frota e a Sala Ground (J, S4); o hangar continua só com os aviões
+    await expect(linhas).toHaveCount(27);
     await expect(hangar).toHaveCount(22);
     await expect(contagem).toHaveText('26 recursos');
 
@@ -578,7 +603,7 @@ test.describe('Recursos: a busca pela matrícula, as categorias e os grupos reco
     await expect(painel.locator('input:checked')).toHaveCount(0);
     await expect(categorias).toHaveText('Todas as categorias');
     await expect(page.locator('#frota li.frota-item')).toHaveCount(26);
-    await expect.poll(horarios).toEqual(['C152', 'C172', 'sim', 'PA-34']);
+    await expect.poll(horarios).toEqual(['C152', 'C172', 'sim', 'PA-34', 'ground']);
     await expect(contagem).toHaveText('26 recursos');
   });
 
@@ -642,10 +667,11 @@ test.describe('Recursos: a busca pela matrícula, as categorias e os grupos reco
     await expect(grupoC152()).toHaveAttribute('aria-expanded', 'true');
     await grupoC152().click();
     await expect(grupoC152()).toHaveAttribute('aria-expanded', 'false');
-    await expect(linhasVisiveis).toHaveCount(13);
+    // Os 13 que não são do C152 e a Sala Ground (J, S4)
+    await expect(linhasVisiveis).toHaveCount(14);
     await alternarDisponivel(page, 'PR-VOM', false);
     await expect(grupoC152()).toHaveAttribute('aria-expanded', 'false');
-    await expect(linhasVisiveis).toHaveCount(13);
+    await expect(linhasVisiveis).toHaveCount(14);
     // A busca não abre o grupo recolhido: só deixa nele os recursos achados
     await page.locator('#flt-rec-mat').fill('vob');
     await expect(grupoC152()).toHaveAttribute('aria-expanded', 'false');
@@ -653,7 +679,8 @@ test.describe('Recursos: a busca pela matrícula, as categorias e os grupos reco
     await grupoC152().click();
     await expect(linhasVisiveis).toHaveCount(1);
     await page.locator('#flt-rec-mat').fill('');
-    await expect(linhasVisiveis).toHaveCount(26);
+    // Os 26 da frota e a Sala Ground (J, S4)
+    await expect(linhasVisiveis).toHaveCount(27);
   });
 
   // Quem acabou de acrescentar um recurso o vê, mesmo fora dos filtros, até eles mudarem; o mesmo vale para a categoria

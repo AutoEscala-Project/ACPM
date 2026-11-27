@@ -492,6 +492,16 @@ describe('O que a sugestão muda nos outros voos', () => {
     assert.match(opcao.confirmar, /^Muda também 2 outros voos: Aluno 1000, das 06:30 para as 08:20, com Instrutor 02; Aluno 1002, das 06:30 para as 08:20, com Instrutor 02\.$/);
   });
 
+  it('com a Sala Ground indisponível na data (S4), nenhum horário de Ground; sem a chave da sala, os de sempre', () => {
+    const g = { ...GROUND_C152, p1: 390, p2: -1 };
+    const base = cenario({ ins: [instrutor(1, 9), instrutor(2, 9)], stu: [aluno(1000, g), aluno(1001, g), aluno(1002, g)] });
+    const v = runAllocationEngine(base).out, v1 = v.find(o => o.stuId === 1001);
+    const aprovado = av => ({ ...base, av, fixos: fixosAoAprovar({}, v), aprovacao: { em: '2026-11-10T21:05:00.000Z', por: 'Operador 01' }, fStatus: { [v1.fKey]: 'Cancelado' }, fObs: { [v1.fKey]: { motivo: 'Instrutor indisponível' } } });
+    const comHorario = estado => sugerirParaCancelado(estado, runAllocationEngine(estado), v1.fKey).opcoes.filter(o => o.mudancas && o.mudancas.a !== undefined);
+    assert.ok(comHorario(aprovado(base.av)).length > 0, 'sem a chave, a sala está disponível');
+    assert.deepEqual(comHorario(aprovado({ ...base.av, 'SALA-GROUND': false })).map(o => o.texto), []);
+  });
+
   it('na escala aprovada, os mesmos casos não mudam nenhum outro voo', () => {
     const g = { ...GROUND_C152, p1: 390, p2: -1 };
     const base = cenario({ ins: [instrutor(1, 9), instrutor(2, 9)], stu: [aluno(1000, g), aluno(1001, g), aluno(1002, g)] });

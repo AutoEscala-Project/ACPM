@@ -223,6 +223,29 @@ test.describe('Agendar pelo mapa', () => {
     await expect(linha(page, 'PR-VOC').locator('.tl-agendar')).toHaveCount(1);
   });
 
+  test('a Sala Ground sem a chave na data (S4): a coluna disponível, com o "+"', async ({ page }) => {
+    await abrir(page, { estado: dia() });
+    await abrirEscala(page);
+    await abrirMapa(page);
+    const sala = linha(page, 'SALA-GROUND');
+    await expect(sala).toHaveCount(1);
+    await expect(sala.locator('.tl-agendar')).toHaveCount(1);
+    await expect(sala).not.toContainText('indisponível');
+  });
+
+  test('a Sala Ground indisponível na data (S4): a coluna dela diz "indisponível", sem o "+", e "Ocultar indisponíveis" a tira', async ({ page }) => {
+    const estado = dia();
+    await abrir(page, { estado: { ...estado, av: { ...estado.av, 'SALA-GROUND': false } } });
+    await abrirEscala(page);
+    await abrirMapa(page);
+    const sala = linha(page, 'SALA-GROUND');
+    await expect(sala).toContainText('indisponível');
+    await expect(sala).toHaveClass(/\btl-manutencao\b/);
+    await expect(sala.locator('.tl-agendar')).toHaveCount(0);
+    await page.locator('#btn-indisponiveis').click();
+    await expect(sala).toHaveCount(0);
+  });
+
   test('Ocultar indisponíveis tira do mapa Por recurso as linhas dos recursos desligados, e outro clique as mostra', async ({ page }) => {
     await abrir(page, { estado: dia({ semAeronaves: ['PR-VOB'] }) });
     await abrirEscala(page);
