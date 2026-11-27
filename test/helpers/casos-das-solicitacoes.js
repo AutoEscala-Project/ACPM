@@ -52,8 +52,13 @@ export function linhaDoCaso({ data, aprovada = false, cancelada = false, missao 
   };
 }
 
-// A situação de um pedido (as três do D2, e a aprovação retirada, que volta a aguardar com o rastro)
-export const situacaoDoCaso = s => (s.cancelada_em ? 'cancelada' : s.aprovada_em ? 'aprovada' : s.aprovacao_retirada_em ? 'retirada' : 'aguardando');
+// A situação de um pedido (as três do D2, e a aprovação retirada, que volta a aguardar com o rastro). O aprovado que ainda
+// guarda o rastro de uma retirada é outra situação, que o banco recusa (solicitacoes_aprovacao: aprovado ou retirado,
+// nunca os dois): a nova aprovação apaga a retirada inteira (o modo local não guarda a conta, aprovacao_retirada_usuario)
+const temRetirada = s => Boolean(s.aprovacao_retirada_em || s.aprovacao_retirada_por || s.aprovacao_retirada_usuario);
+export const situacaoDoCaso = s => (s.cancelada_em ? 'cancelada'
+  : s.aprovada_em ? (temRetirada(s) ? 'aprovada com o rastro da retirada' : 'aprovada')
+  : temRetirada(s) ? 'retirada' : 'aguardando');
 
 // Os casos que o modo local faz: ele não tem contas, e quem usa tem os direitos de operador
 export const paraOModoLocal = caso => caso.passos.every(p => ['operador', 'administrador'].includes(p.como));
