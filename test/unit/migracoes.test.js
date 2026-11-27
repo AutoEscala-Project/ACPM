@@ -257,7 +257,7 @@ describe('Formato 26', () => {
 
   it('o dia não muda', () => {
     const dia = { esquema: 25, win: [true], av: { 'PR-VOM': true } };
-    assert.deepEqual(migrarDia(dia), { ...dia, esquema: ESQUEMA });
+    assert.deepEqual(migrarDia(dia), { ...dia, fechamentos: fechamentosDoWin(dia.win), esquema: ESQUEMA });
   });
 });
 
