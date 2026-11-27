@@ -24,7 +24,7 @@ const DONOS = [
   { seletor: '#btn-menu-conta', achar: /#btn-menu-conta(?![\w-])/, drivers: ['casca.js'] },
   // Recursos (B): a disponibilidade do dia e as janelas de operação
   { seletor: '#eqs', achar: /#eqs(?![\w-])/, drivers: ['recursos.js'], testes: ['recursos.spec.js'] },
-  { seletor: '#wins', achar: /#wins(?![\w-])/, drivers: ['recursos.js'], testes: ['recursos.spec.js'] },
+  { seletor: '#fechamentos', achar: /#fechamentos(?![\w-])/, drivers: ['recursos.js'], testes: ['recursos.spec.js', 'fechamentos.spec.js'] },
   // Instrutores (C): a grade do dia e o "Vem"
   { seletor: '#inst-dia', achar: /#inst-dia(?![\w-])/, drivers: ['instrutores.js'], testes: ['instrutores.spec.js'] },
   { seletor: '#inst-dia-cab', achar: /#inst-dia-cab(?![\w-])/, drivers: ['instrutores.js'], testes: ['instrutores.spec.js'] },

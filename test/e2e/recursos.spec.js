@@ -1,14 +1,13 @@
 // Recursos: a disponibilidade do dia (janelas, aviões e simuladores, hangar), o cadastro da frota, os horários de
 // decolagem por categoria e os filtros.
-import { test, comHangar, expect, abrir, abrirSintetico, abrirComExemplo, irPara, irParaVista, abrirEscala, lerEscala, filtrarCategorias, abrirHistorico, campoDaAgenda, alternarDisponivel, caixaDisponivel, janelasDeOperacao, tabelaDoDia } from './fixtures.js';
+import { test, comHangar, expect, abrir, abrirSintetico, abrirComExemplo, irPara, irParaVista, abrirEscala, lerEscala, filtrarCategorias, abrirHistorico, campoDaAgenda, alternarDisponivel, caixaDisponivel, horariosFechados, fecharHorarios, tabelaDoDia } from './fixtures.js';
 import { aluno, apenas, cenario, instrutor } from '../helpers/montar.js';
 import { GLOSSARIO } from '../../js/glossario.js';
 
 test.describe('Recursos', () => {
-  test('estado inicial: 9 janelas, 26 recursos, nenhum instrutor e nenhum aluno', async ({ page }) => {
+  test('estado inicial: nenhum horário fechado, 26 recursos e a Sala Ground, nenhum instrutor e nenhum aluno', async ({ page }) => {
     await abrir(page);
-    await expect(janelasDeOperacao(page).locator('input[data-a="win"]')).toHaveCount(9);
-    await expect(janelasDeOperacao(page).locator('label').last()).toHaveText('17:30 noturno');
+    await expect(horariosFechados(page)).toContainText('Nenhum horário fechado nesta data.');
     // Os 26 da frota e a Sala Ground (J, S4), no último grupo
     await expect(tabelaDoDia(page).locator('input[data-a="av"]')).toHaveCount(27);
     await expect(tabelaDoDia(page).locator('tr.grupo')).toHaveText([/^C152/, /^C172/, /^PA-34/, /^Simuladores/, /^Sala Ground/]);
@@ -67,13 +66,12 @@ test.describe('Recursos', () => {
     await expect(tabelaDoDia(page).locator('tr[data-r="SIM-MONO-A"] input[data-a="horas"]')).toHaveCount(0);
   });
 
-  test('desativa uma janela de operação', async ({ page }) => {
+  test('fecha um horário nesta data (J): a lista e o Histórico', async ({ page }) => {
     await abrirSintetico(page);
     await irPara(page, 'rec');
-    const janela = janelasDeOperacao(page).locator('label').nth(3);
-    await janela.locator('input').uncheck();
-    await expect(janela).toHaveClass(/\boff\b/);
-    await expect(page.locator('#audit-log-list')).toContainText('Janela 11:30 inativa');
+    await fecharHorarios(page, { de: '11:30', ate: '12:40' });
+    await expect(horariosFechados(page).locator('li')).toHaveText(['11:30–12:40 · todos os recursos']);
+    await expect(page.locator('#audit-log-list')).toContainText('Horários fechados nesta data: 11:30–12:40 (todos os recursos)');
   });
 });
 
@@ -234,7 +232,7 @@ test.describe('Recursos: acrescentar e retirar', () => {
     await page.reload();
     await irPara(page, 'rec');
     await expect(secao).toHaveAttribute('data-vista', 'dia');
-    await expect(janelasDeOperacao(page)).toBeVisible();
+    await expect(horariosFechados(page)).toBeVisible();
   });
 
   // A partir de 1.100 px, a ordem no hangar fica ao lado da tabela dos aviões; abaixo disso, embaixo dela. A página não
@@ -278,12 +276,13 @@ test.describe('Recursos: horários de decolagem por categoria', () => {
     await expect(page.locator('#horarios button')).toHaveCount(5);
     await expect(page.locator('#horarios .horarios-editor')).toHaveCount(0);
 
-    // A janela das 10:10 fechada nesta data (na Disponibilidade do dia): o horário dela fica apagado, e a dica diz por quê
+    // Das 10:10 às 11:30 fechado nesta data (na Disponibilidade do dia): o horário fica apagado, e a dica diz por quê
     await irParaVista(page, 'rec', 'dia');
-    await janelasDeOperacao(page).locator('input[data-a="win"][data-i="2"]').uncheck();
+    await fecharHorarios(page, { de: '10:10', ate: '11:30' });
     await irParaVista(page, 'rec', 'cadastro');
-    await expect(c152.locator('.hr.fechado')).toHaveText(['10:10 (janela fechada nesta data)']);
-    await expect(c152.locator('.hr.fechado')).toHaveAttribute('data-dica', 'horario-em-janela-fechada');
+    await expect(c152.locator('.hr.fechado')).toHaveText(['10:10 (fechado nesta data)']);
+    await expect(c152.locator('.hr.fechado')).toHaveAttribute('data-dica', 'horario-fechado-na-data');
+    await expect(c152.locator('.hr.fechado')).toHaveAttribute('data-dica-caso', 'Fechado nesta data (10:10–11:30).');
   });
 
   test('editar: tirar, pôr com Enter, o efeito antes de salvar; Salvar muda a escala, e o histórico desfaz a lista e os pedidos', async ({ page }) => {
@@ -488,11 +487,11 @@ test.describe('Recursos: o editor dos horários pelo teclado e no leitor de tela
     });
     expect(Math.abs(espaco.entre - espaco.normal)).toBeLessThan(1);
 
-    // Um horário digitado (sem pôr) continua no campo quando a aba é redesenhada por outra alteração (a janela fechada na
-    // Disponibilidade do dia: o editor continua aberto no Cadastro, escondido)
+    // Um horário digitado (sem pôr) continua no campo quando a aba é redesenhada por outra alteração (um horário fechado
+    // na Disponibilidade do dia: o editor continua aberto no Cadastro, escondido)
     await campo.fill('09:15');
     await irParaVista(page, 'rec', 'dia');
-    await janelasDeOperacao(page).locator('input[data-a="win"][data-i="1"]').uncheck();
+    await fecharHorarios(page, { de: '08:20', ate: '10:10' });
     await irParaVista(page, 'rec', 'cadastro');
     await expect(editor.locator('.hr-novo')).toHaveValue('09:15');
     // e não passa para o editor de outra categoria

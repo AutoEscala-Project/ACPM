@@ -590,3 +590,17 @@ describe('desfazerEdicao', async () => {
     assert.deepEqual(estado.fObs, {});
   });
 });
+
+// J: "Horários fechados nesta data" desfaz pelo ↶ (setFechamentos): antes é a lista de antes da mudança (normalizada), ou
+// null (o dia ainda não tinha fechamentos: volta a ler o win)
+describe('A reversão dos horários fechados', () => {
+  it('antes: uma lista (normalizada) ou null; outra coisa não vale', () => {
+    assert.deepEqual(validarReversao({ kind: 'setFechamentos', antes: [{ de: 760, ate: 1050 }] }, FROTA_INICIAL),
+      { kind: 'setFechamentos', antes: [{ de: 760, ate: 1050 }], label: '↶ Reverter' });
+    assert.deepEqual(validarReversao({ kind: 'setFechamentos', antes: null }, FROTA_INICIAL), { kind: 'setFechamentos', antes: null, label: '↶ Reverter' });
+    assert.deepEqual(validarReversao({ kind: 'setFechamentos', antes: [{ de: 9, ate: 3 }, { de: 390, ate: 500, categorias: ['C152'], x: 1 }] }, FROTA_INICIAL).antes,
+      [{ de: 390, ate: 500, categorias: ['C152'] }]);
+    assert.equal(validarReversao({ kind: 'setFechamentos', antes: 'tudo' }, FROTA_INICIAL), null);
+    assert.equal(validarReversao({ kind: 'setFechamentos' }, FROTA_INICIAL), null);
+  });
+});
