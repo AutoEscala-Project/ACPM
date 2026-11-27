@@ -72,6 +72,11 @@ select is(public.nome_curto('João'), 'João', 'um nome só fica inteiro');
 select is(public.nome_curto('  Ana   Paula  '), 'Ana P.', 'espaços a mais não contam');
 select is(public.nome_curto('Aluno 12'), 'Aluno 12', 'um número no fim fica inteiro');
 
+-- Um pedido na agenda (pelo dono da tabela), para que "não lê a agenda" e "não lê a contagem" não passem só com a tabela
+-- vazia (a revisão do D1)
+insert into public.solicitacoes (data, aluno, aluno_nome, missao, janela, horario, horas, recurso, registrado_por)
+values ((now() at time zone 'America/Sao_Paulo')::date + 1, 1000, 'Aluno 1000', 'Navegação', 'horario', '08:20', 1, 'C152', 'Maria');
+
 set local role authenticated;
 
 -- Painel: não lê nenhuma tabela
