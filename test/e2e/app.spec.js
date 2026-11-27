@@ -1,4 +1,4 @@
-import { test, expect, abrir, irPara, abrirMenuDaConta, botaoDaAba, dataAberta, diaAnterior, diaSeguinte, relativoDaData, rotuloDaData, rotulosDasAbas, mudarData, botaoDaData } from './fixtures.js';
+import { test, expect, abrir, irPara, abrirMenuDaConta, botaoDaAba, dataAberta, diaAnterior, diaSeguinte, relativoDaData, rotuloDaData, rotulosDasAbas, mudarData, botaoDaData, horariosFechados } from './fixtures.js';
 import { GLOSSARIO } from '../../js/glossario.js';
 import { FRASES_QUE_SAIRAM, FRASES_DO_MANUAL } from './manual-frases.js';
 
@@ -161,9 +161,9 @@ test.describe('Aplicação', () => {
 
   test('o manual tem a largura das outras páginas e fica centralizado', async ({ page }) => {
     await abrir(page);
-    await irPara(page, 'rec');
-    // O quadro das janelas de operação (Recursos › Disponibilidade do dia), da largura da página
-    const outra = await page.locator('#s-rec .vista-dia > .pn').first().boundingBox();
+    await irPara(page, 'esc');
+    // O bloco dos horários fechados nesta data (B: na Escala), da largura da página
+    const outra = await horariosFechados(page).boundingBox();
     await page.locator('#btn-manual').click();
     const cartao = await page.locator('#s-manual .pn').first().boundingBox();
     expect(Math.round(cartao.x)).toBe(Math.round(outra.x));

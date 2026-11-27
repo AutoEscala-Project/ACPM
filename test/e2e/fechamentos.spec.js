@@ -3,18 +3,21 @@
 // para todos os recursos ou para categorias, e o ✕ abre de novo. Na escala não aprovada, cada mudança pergunta antes
 // (#dlg-refazer, F1g); na aprovada, não. A Escala, o "+ Agendar voo" e os horários de decolagem os leem; o Histórico desfaz
 // (sem perguntar), e o trilho tem o aviso deles, que leva ao bloco aberto
-import { test, expect, abrir, irPara, abrirEscala, lerEscala, abrirHistorico, aprovar, fecharHorarios, abrirDeNovo, abrirFechamentos, horariosFechados, resumoDosFechamentos, intervalosFechados, perguntaDoRefazer, naoRefazer, refazer, avisosDaData, alvosPequenos, semNome, larguraDaPagina } from './fixtures.js';
+import { test, expect, abrir, irPara, abrirEscala, lerEscala, abrirHistorico, aprovar, fecharHorarios, abrirDeNovo, abrirFechamentos, horariosFechados, resumoDosFechamentos, intervalosFechados, perguntaDoRefazer, naoRefazer, refazer, avisosDaData, trilho, botaoDaData, alvosPequenos, semNome, larguraDaPagina } from './fixtures.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
 
 const estado = () => cenario({ ins: [instrutor(1, 9), instrutor(2, 9)], stu: [
   aluno(1000, { mis: 'Voo Local', eq: 'C152', p1: 820, p2: -1 }), aluno(1001, { mis: 'Voo Local', eq: 'C172', p1: 820, p2: -1 })] });
 const inicioDe = async (page, nome) => ((await lerEscala(page)).linhas.find(l => l.includes(nome)) || '').slice(0, 5);
+// Depois de uma mudança, a Lista é refeita com a escala: a leitura espera
+const esperarInicio = (page, nome) => expect.poll(() => inicioDe(page, nome));
+const esperarAntesDas = (page, nome, hora) => expect.poll(async () => { const i = await inicioDe(page, nome); return i !== '' && i < hora; }).toBe(true);
 
 test.describe('Horários fechados nesta data, na Escala', () => {
   test('De 12:40 e Até 17:30 fecham a tarde: a pergunta, a lista, o resumo, o Histórico, a Escala sem eles; o ✕ e o ↶ Reverter', async ({ page }) => {
     await abrir(page, { estado: estado() });
     await abrirEscala(page);
-    expect(await inicioDe(page, 'Aluno 1000')).toBe('13:40');
+    await esperarInicio(page, 'Aluno 1000').toBe('13:40');
     const bloco = horariosFechados(page);
     // O bloco fica entre a barra da Escala e a dos critérios, fechado quando nada está fechado
     expect(await page.evaluate(() => {
@@ -30,13 +33,13 @@ test.describe('Horários fechados nesta data, na Escala', () => {
     await expect(intervalosFechados(page)).toHaveText(['12:40–17:30 · todos os recursos']);
     await expect(resumoDosFechamentos(page)).toHaveText('12:40–17:30 · todos os recursos');
     await expect(page.locator('#audit-log-list')).toContainText('Horários fechados nesta data: 12:40–17:30 (todos os recursos)');
-    expect(await inicioDe(page, 'Aluno 1000') < '12:40').toBe(true);
-    expect(await inicioDe(page, 'Aluno 1001') < '12:40').toBe(true);
+    await esperarAntesDas(page, 'Aluno 1000', '12:40');
+    await esperarAntesDas(page, 'Aluno 1001', '12:40');
 
     await abrirDeNovo(page, 0);
     await expect(bloco).toContainText('Nenhum horário fechado nesta data.');
     await expect(resumoDosFechamentos(page)).toHaveText('nenhum');
-    expect(await inicioDe(page, 'Aluno 1000')).toBe('13:40');
+    await esperarInicio(page, 'Aluno 1000').toBe('13:40');
 
     // O ↶ do Histórico desfaz sem perguntar
     await abrirHistorico(page);
@@ -99,12 +102,12 @@ test.describe('Horários fechados nesta data, na Escala', () => {
     await abrir(page, { estado: estado() });
     await fecharHorarios(page, { de: '12:40', ate: '17:30', categorias: ['C152'] });
     await expect(intervalosFechados(page)).toHaveText(['12:40–17:30 · C152']);
-    expect(await inicioDe(page, 'Aluno 1000') < '12:40').toBe(true);
-    expect(await inicioDe(page, 'Aluno 1001')).toBe('13:40');
+    await esperarAntesDas(page, 'Aluno 1000', '12:40');
+    await esperarInicio(page, 'Aluno 1001').toBe('13:40');
     await fecharHorarios(page, { diaTodo: true, categorias: ['C172'] });
     await expect(intervalosFechados(page)).toHaveText(['06:00–24:00 · C172', '12:40–17:30 · C152']);
     await expect(resumoDosFechamentos(page)).toHaveText('06:00–24:00 · C172; 12:40–17:30 · C152');
-    expect(await inicioDe(page, 'Aluno 1001')).toBe('');
+    await esperarInicio(page, 'Aluno 1001').toBe('');
   });
 
   // Aberto ou fechado: a data que abre com um horário fechado abre o bloco; sem nenhum, ele começa fechado. Quem só consulta
@@ -146,11 +149,12 @@ test.describe('Horários fechados nesta data, na Escala', () => {
     await expect(page.locator('#log-cnt')).toHaveText('0');
   });
 
-  // Revisão do J: o Noturno sai às 17:30, que nenhuma lista tem; 17:30–24:00 o fecha, e a linha diz isso
-  test('17:30–24:00 fecha o Noturno: a linha diz "o Noturno, às 17:30", e a Escala fica sem ele', async ({ page }) => {
+  // Revisão do J: o Noturno sai às 17:30, que nenhuma lista tem; 17:30–24:00 o fecha, e a linha diz isso. Desde o #97 (o
+  // Noturno no mesmo avião), o Noturno gravado fica fixo onde está: o horário fechado o deixa em conflito, com o motivo
+  test('17:30–24:00 fecha o Noturno: a linha diz "o Noturno, às 17:30", e o Noturno gravado fica em conflito', async ({ page }) => {
     await abrir(page, { estado: cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, { mis: 'Noturno', eq: 'C172', p1: 1050, p2: -1 })] }) });
     await abrirEscala(page);
-    expect(await inicioDe(page, 'Aluno 1000')).toBe('17:30');
+    await esperarInicio(page, 'Aluno 1000').toBe('17:30');
     await abrirFechamentos(page);
     const secao = horariosFechados(page);
     await secao.locator('[data-act="fechar-horarios"]').click();
@@ -164,7 +168,8 @@ test.describe('Horários fechados nesta data, na Escala', () => {
     await form.locator('[data-act="fch-fechar"]').click();
     await refazer(page);
     await expect(intervalosFechados(page)).toHaveText(['17:30–24:00 · todos os recursos']);
-    expect(await inicioDe(page, 'Aluno 1000')).toBe('');
+    await expect(page.locator('#out')).toContainText('Conflito no Noturno: o horário está fechado nesta data.');
+    await expect.poll(async () => (await lerEscala(page)).linhas.find(l => l.includes('Aluno 1000'))).toMatch(/^17:30–21:30 4 h conflito/);
   });
 
   // A linha do efeito é uma região viva: o mesmo elemento recebe o texto novo (um elemento novo não seria anunciado), e o
@@ -245,7 +250,6 @@ test.describe('Horários fechados nesta data, na Escala', () => {
   // O trilho: os horários fechados da data são um aviso (informação, sem horário); o clique leva à Escala, com o bloco
   // aberto e o foco no resumo dele
   test('o aviso "Horários fechados nesta data" no trilho leva ao bloco aberto na Escala', async ({ page }) => {
-    await page.setViewportSize({ width: 1440, height: 900 });
     await abrir(page, { estado: estado() });
     await expect(avisosDaData(page, 'Horários fechados')).toHaveCount(0);
     await fecharHorarios(page, { de: '12:40', ate: '17:30' });
@@ -257,6 +261,7 @@ test.describe('Horários fechados nesta data, na Escala', () => {
     await horariosFechados(page).locator('summary').click();
     await expect(horariosFechados(page)).toHaveJSProperty('open', false);
     await irPara(page, 'rec');
+    if (!await trilho(page).isVisible()) await botaoDaData(page).click();
     await aviso.locator('a').click();
     await expect(page.locator('#s-esc')).toBeVisible();
     await expect(horariosFechados(page)).toHaveJSProperty('open', true);

@@ -37,6 +37,8 @@ const NOVAS = {
     'os aviões parados ou perto da revisão de 50 horas, os pedidos', 'leva à tela onde se resolve, quando você a vê'],
   perfis: ['na primeira data que ainda aceita pedidos'],
   escala: ['Atualizada às', 'Ver todos', 'Compartilhar', 'Por recurso',
+    // Os horários fechados nesta data, no alto da Escala (B): o bloco, o aviso do trilho e a pergunta
+    'no alto da Escala, entre a barra das vistas e a dos critérios', 'Na escala que não está aprovada, Fechar e o ✕ perguntam antes',
     // O agendamento na Escala (mover e encaixar, as turmas, as alternativas, a prévia, os avisos), o voo agendado na
     // Demanda, as alterações dos cursos fora do Histórico e o peso aceito
     'Encaixar o voo', 'Mover o voo', 'Entrar na turma das', 'Horários livres', 'O que muda na escala', 'Agendar mesmo assim',
@@ -85,7 +87,7 @@ export const FRASES_DAS_FUNCIONALIDADES = {
 };
 // E as que ele só diz com ela desligada
 export const FRASES_SEM_AS_FUNCIONALIDADES = {
-  hangar: ['sai o primeiro livre na ordem da frota', 'uma parada de 2 h ou mais pesa mais', 'os horários fechados nesta data e a tabela dos aviões'],
+  hangar: ['sai o primeiro livre na ordem da frota', 'uma parada de 2 h ou mais pesa mais'],
   progresso: ['o código da missão do curso que o pedido já tem', 'para o aluno de um curso, escolha a missão na lista', 'oferece esse voo', 'e um clique leva à fase'],
   prioridade: ['horários preferidos e duração.', 'Depois os voos e simuladores: quem', 'seguindo a ordem dos pedidos']
 };

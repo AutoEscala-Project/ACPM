@@ -1,5 +1,4 @@
-// Recursos: a frota (acrescentar e retirar), a disponibilidade e as horas até a revisão de 50 horas, as janelas de
-// operação, o hangar, os horários de decolagem e os filtros (a busca pela matrícula e as categorias)
+// Recursos: a frota (acrescentar e retirar), a disponibilidade e as horas até a revisão de 50 horas, o hangar, os horários de decolagem e os filtros (a busca pela matrícula e as categorias)
 import { gravarAlteracao, aindaNaoAbriu } from '../actions.js';
 import { categoriaDoTipo, nomeDoRecurso, doNomeDaCategoria } from '../categorias.js';
 import { REVISAO_H, GROUND_REG } from '../config.js';
@@ -13,8 +12,6 @@ import { S, isGestor, getMissionTarget, inativoNaDataAberta } from '../state.js'
 import { confirmado } from './confirmacao.js';
 import { aoAcionar, aoMudarCampo, aoReverter } from './registro.js';
 import { registrarDesenho, redesenharPorNome } from '../redesenho.js';
-// "Horários fechados nesta data" (J): os eventos dela
-import './fechamentos.js';
 import { filtrarRecursos, limparFiltrosDosRecursos, manterRecursoAVista, criarFiltroDasCategorias } from '../views/filtros-dos-recursos.js';
 import { abrirEditorDosHorarios, fecharEditorDosHorarios, tirarDoRascunho, porNoRascunho, escolherModelo, rascunhoDosHorarios, editorDosHorariosAberto } from '../views/horarios.js';
 import { rRec, rRevisao, rHangar, alternarAtributos, aplicarFiltrosDosRecursos, alternarGrupoDaFrota } from '../views/recursos.js';

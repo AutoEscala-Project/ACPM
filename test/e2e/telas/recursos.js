@@ -1,8 +1,8 @@
 // O driver de Recursos (dono: B): a disponibilidade do dia (a tabela dos recursos e os horários fechados), o filtro
 // das categorias e as telas que os testes do celular e da acessibilidade percorrem (ESTADOS)
 import { expect } from '@playwright/test';
-import { irParaVista, marcarNoFiltro, nenhumComOsFiltros } from './casca.js';
-import { abrirEscala, perguntaDoRefazer, refazer } from './escala.js';
+import { irPara, irParaVista, marcarNoFiltro, nenhumComOsFiltros } from './casca.js';
+import { perguntaDoRefazer, refazer } from './escala.js';
 
 // Recursos numa vista ('dia': a Disponibilidade do dia; 'cadastro')
 export const abrirRecursos = (page, vista = 'dia') => irParaVista(page, 'rec', vista);
@@ -20,10 +20,10 @@ export async function alternarDisponivel(page, id, disponivel) {
 export const horariosFechados = page => page.locator('#fechamentos');
 export const resumoDosFechamentos = page => page.locator('#fechamentos-resumo');
 export const intervalosFechados = page => page.locator('#fechamentos .fechamentos-lista li > span');
-// Abre o bloco na Escala (de outra tela, a Escala abre antes); aberto, ele fica
+// Abre o bloco na Escala (de outra tela, a Escala abre antes, também sem voos); aberto, ele fica
 export async function abrirFechamentos(page) {
   const bloco = horariosFechados(page);
-  if (!await bloco.isVisible()) await abrirEscala(page);
+  if (!await bloco.isVisible()) await irPara(page, 'esc');
   if (!await bloco.evaluate(d => d.open)) await bloco.locator('summary').click();
   await expect(bloco).toHaveJSProperty('open', true);
 }

@@ -251,10 +251,6 @@
     </div>
     <div class="rec-parte vista-dia" data-parte="data">
       <h3 class="rec-parte-titulo">Nesta data <small>valem para a data aberta no topo; a data seguinte começa com eles</small></h3>
-      <div class="pn">
-        <h4>Horários fechados nesta data <button type="button" class="dica-btn" data-dica="fechamentos" aria-label="O que é Horários fechados?" aria-expanded="false"></button></h4>
-        <div class="fechamentos" id="fechamentos"></div>
-      </div>
       <!-- A tabela e, ao lado dela a partir de 1.100 px (embaixo, nas telas menores), a ordem no hangar -->
       <div class="rec-dia">
         <div class="rec-aeronaves">
@@ -455,6 +451,15 @@
       <button class="btn sec" id="xlsx" title="Baixar a escala no modelo Excel do aeroclube, para o lançamento no CAVOK">Excel</button>
     </div>
 
+    <!-- Os horários fechados nesta data (J; B os trouxe de Recursos): o resumo diz o que está fechado; dentro, a lista dos
+         intervalos (✕ abre de novo) e "+ Fechar horários" (js/views/fechamentos.js). Fora da barra dos critérios, que some
+         na data sem voo: com o dia todo fechado, o bloco continua à vista -->
+    <details class="pn fechamentos-da-data" id="fechamentos">
+      <summary>Horários fechados nesta data: <span id="fechamentos-resumo">nenhum</span></summary>
+      <p class="h fechamentos-dica">Nenhum voo nem aula de Ground sai num horário fechado; a data seguinte começa com o dia todo aberto. <button type="button" class="dica-btn" data-dica="fechamentos" aria-label="O que é Horários fechados?" aria-expanded="false"></button></p>
+      <div class="fechamentos" id="fechamentos-corpo"></div>
+    </details>
+
     <!-- Como a escala é montada: os critérios da compactação (o que pesa mais nos buracos do dia e até onde os
          horários mudam) e a aprovação -->
     <div class="bar compactacao" id="compactacao" hidden>
@@ -547,12 +552,13 @@
         e com a demanda vazia:
         a agenda é o centro dos agendamentos, e <i>Importar da agenda</i> monta a demanda do dia.
         As horas dos aviões e as filas do rodízio já chegam atualizadas com os voos da data anterior.</li>
-        <li><b>Recursos:</b> em <i>Disponibilidade do dia</i>, desligue os aviões e simuladores indisponíveis (em manutenção) e a Sala Ground, quando ela não puder ser usada, e, em <i>Horários fechados nesta data</i>, feche os horários em que a escola não vai operar.
+        <li><b>Recursos:</b> em <i>Disponibilidade do dia</i>, desligue os aviões e simuladores indisponíveis (em manutenção) e a Sala Ground, quando ela não puder ser usada.
         Confira as horas de cada avião desde a última revisão de 50 horas.</li>
         <li><b>Instrutores:</b> em <i>Disponibilidade do dia</i>, desligue em <i>Vem</i> quem não vem na data e confira as janelas de cada um.</li>
         <li><b>Demanda:</b> clique em <i>Importar pedidos da agenda</i> (o botão diz quantos pedidos da secretaria ainda não estão na demanda) e ajuste o que precisar: missão, recurso, horários preferidos<span data-funcionalidade="prioridade">, duração e prioridade</span><span data-sem-funcionalidade="prioridade"> e duração</span>.
         Para um aluno que não está na lista, use <i>Pôr um aluno na demanda</i>.</li>
         <li><b>Escala:</b> ela já está pronta.
+        Em <i>Horários fechados nesta data</i>, no alto dela, feche os horários em que a escola não vai operar.
         Confira as missões que não entraram (caixa vermelha, com o motivo) e os avisos (caixa amarela), ajuste o que for preciso e baixe o <i>CSV</i> (para o lançamento no portal), o <i>PDF</i> e o <i>Excel</i> (a planilha do aeroclube, para o lançamento no CAVOK).</li>
         <li><b>Aprove a escala</b> quando ela estiver fechada (por exemplo, no fim do dia, para o dia seguinte): <i>Aprovar escala</i>, na barra da Escala, fixa os voos.
         Depois disso, uma alteração não tira ninguém do lugar: um pedido novo entra em volta dos voos fixos (com o cadeado), e o voo que ficar impossível aparece numa caixa vermelha de conflitos, no mesmo lugar, até ser resolvido.
@@ -768,9 +774,17 @@
       O conflito que a alteração cria avisa antes: <i>Salvar mesmo assim</i> grava, e o voo fica em conflito na Escala.
       <i>Soltar o voo</i>, nas <i>Sugestões</i>, fica desligado (reabra a escala para soltar o voo), e <i>Automático</i> só tira a escolha do pedido: o voo fica com o instrutor e no lugar.
       Um pedido novo, o cadastro, Recursos e Instrutores continuam refazendo a escala em volta dos voos fixos.
-      Na escala que não está aprovada, cada alteração feita na Escala (também o status, a cada vez, e os critérios) pergunta antes: <i>A escala de qui 26/11 não está aprovada. Com esta alteração (Maria: 08:20 → 09:10), a escala inteira será refeita, e outros voos podem mudar de horário, de recurso ou de INVA.</i>
+      Na escala que não está aprovada, cada alteração feita na Escala (também o status, a cada vez, os critérios e os horários fechados) pergunta antes: <i>A escala de qui 26/11 não está aprovada. Com esta alteração (Maria: 08:20 → 09:10), a escala inteira será refeita, e outros voos podem mudar de horário, de recurso ou de INVA.</i>
       <i>Cancelar</i> (ou Esc) não muda nada; <i>Salvar e refazer</i> grava e refaz a escala. Os avisos da alteração vêm na mesma pergunta.
       <i>Aprovar</i>, <i>Reabrir</i>, <i>Refazer a escala</i>, o resultado de uma missão do curso e o ↶ do Histórico não perguntam.</p>
+      <p id="manual-fechamentos"><b>Horários fechados nesta data:</b> o bloco no alto da Escala, entre a barra das vistas e a dos critérios, diz no título o que está fechado na data aberta (<i>nenhum</i>, ou por exemplo <i>12:40–17:30 · todos os recursos</i>); um clique no título abre ou recolhe.
+      Ele abre sozinho na data que tem algum horário fechado, e o trilho tem o aviso <i>Horários fechados nesta data</i>, que leva a ele.
+      <i>+ Fechar horários</i> fecha um intervalo da data (<i>De</i> e <i>Até</i>, de 10 em 10 minutos, ou <i>O dia todo</i>) para todos os recursos ou só para as categorias marcadas (a Sala Ground entre elas).
+      Nenhum voo nem aula de Ground sai num horário fechado; a linha embaixo dos campos diz quantos horários de decolagem cada categoria perde, e eles aparecem riscados em <i>Horários de decolagem</i>, em Recursos.
+      O <i>✕</i> de um intervalo abre de novo.
+      Na escala que não está aprovada, <i>Fechar</i> e o <i>✕</i> perguntam antes, porque a escala inteira é refeita; na aprovada, a escala é refeita em volta dos voos fixos, sem perguntar.
+      O ↶ do Histórico desfaz cada mudança.
+      Os horários fechados valem só para a data deles: a data seguinte começa com o dia todo aberto.</p>
 
       <h4>Alunos</h4>
       <p>A lista dos alunos fica à esquerda e o aluno escolhido à direita.
@@ -846,7 +860,7 @@
       <p>Duas vistas, com a busca e as categorias valendo nas duas.
       Recursos abre na <i>Disponibilidade do dia</i>, e a vista escolhida fica até a página ser recarregada:</p>
       <ul>
-        <li><b>Disponibilidade do dia</b> (nesta data: vale para a data aberta no topo, e a data seguinte começa com ela): os horários fechados nesta data<span data-funcionalidade="hangar">, a tabela dos aviões</span><span data-sem-funcionalidade="hangar"> e a tabela dos aviões</span> e simuladores (disponível ou em manutenção, as horas até a revisão de 50 horas e quanto cada um voa na escala do dia), com a Sala Ground por último (disponível ou indisponível)<span data-funcionalidade="hangar"> e, ao lado dela (embaixo, nas telas menores), a ordem no hangar</span>.</li>
+        <li><b>Disponibilidade do dia</b> (nesta data: vale para a data aberta no topo, e a data seguinte começa com ela): a tabela dos aviões e simuladores (disponível ou em manutenção, as horas até a revisão de 50 horas e quanto cada um voa na escala do dia), com a Sala Ground por último (disponível ou indisponível)<span data-funcionalidade="hangar"> e, ao lado dela (embaixo, nas telas menores), a ordem no hangar</span>.</li>
         <li><b>Cadastro</b> (vale para todas as datas: mudar ali muda também as datas já abertas): a frota, com os atributos e o <i>Retirar</i>, e os horários de decolagem.
         <i>+ Novo recurso</i>, na barra da tela, abre o Cadastro com o formulário.</li>
       </ul>
@@ -854,9 +868,6 @@
       Os dois valem para a tabela, a frota e os horários de decolagem (os das categorias marcadas e, com a busca, os das categorias dos recursos achados)<span data-funcionalidade="hangar">, nunca para a ordem no hangar, que mostra sempre todos os aviões</span>.
       Ao lado, o número diz quantos recursos aparecem (por exemplo, <i>3 de 27 recursos</i>: a frota e a Sala Ground); quando os filtros não deixam nenhum, <i>Limpar filtros</i> mostra todos de novo.
       O recurso acrescentado agora e os horários editados agora continuam à vista mesmo fora dos filtros, até eles mudarem.</p>
-      <p><b>Horários fechados nesta data:</b> <i>+ Fechar horários</i> fecha um intervalo da data (<i>De</i> e <i>Até</i>, de 10 em 10 minutos, ou <i>O dia todo</i>) para todos os recursos ou só para as categorias marcadas (a Sala Ground entre elas).
-      Nenhum voo nem aula de Ground sai num horário fechado; a linha embaixo dos campos diz quantos horários de decolagem cada categoria perde, e eles aparecem riscados em <i>Horários de decolagem</i>.
-      O <i>✕</i> de um intervalo abre de novo, e o <i>↶</i> do Histórico desfaz cada mudança.</p>
       <p><b>Horários de decolagem</b> (no Cadastro): cada categoria (C152, C172, Simulador, PA-34 e Sala Ground) tem os seus horários de saída.
       O padrão são os <i>Horários padrão</i> (06:30, 08:20, 10:10, 11:30, 12:40, 13:40, 14:30 e 16:20), e o PA-34 sai de 30 em 30 minutos.
       Cada categoria mostra um resumo: o modelo (<i>Horários padrão</i>, <i>De 30 em 30 min</i> ou a lista resumida), quantos horários e os horários da manhã e da tarde; o horário fechado nesta data aparece riscado.
