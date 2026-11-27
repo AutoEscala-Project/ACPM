@@ -391,6 +391,19 @@ describe('Importar as solicitações da agenda para a demanda', () => {
     assert.deepEqual([outra.stu[0].jan, r2.foraDaLista], ['h500', [{ missao: 'Voo Local', recurso: 'C152', horario: '08:20' }]]);
   });
 
+  // A diferença 4 do E (docs/PLAN.md:424 do desenho; a regra 2.4 "Closed course"): o curso encerrado não dá missão do
+  // curso na entrada (a do operador e a que o pedido escolheu na Agenda ficam: são escolhas, não inferência). Antes, o
+  // pedido do aluno de um curso encerrado entrava como a próxima missão dele
+  it('o curso encerrado não dá missão do curso ao pedido que não tem uma', () => {
+    const programa = doCadastro({ PP: ['PP-01', 'PP-02'].map(id => ({ id, nome: id, mis: 'Voo Local', eq: 'C152', nb: 1 })) }).map(c => ({ ...c, ativo: false }));
+    const e = { ...estado(), stu: [aluno(1000, { fly: false }, { curso: 'PP' }), aluno(1001, { mis: 'Voo Local', etapa: 'PP-02', cursoDaEtapa: 'PP' }, { curso: 'PP' })] };
+    const resumo = importarSolicitacoes(e, [pedido(92, 1000, { janela: 'horario', horario: '08:20' }), pedido(93, 1001, { janela: 'horario', horario: '08:20' })], { programa });
+    assert.deepEqual([e.stu[0].fly, e.stu[0].etapa, e.stu[0].solicitacao], [true, undefined, 92]);
+    assert.deepEqual([e.stu[1].etapa, e.stu[1].solicitacao], ['PP-02', 93], 'a do operador fica');
+    assert.deepEqual(resumo.semMissaoDoCurso, [], 'nada a inferir num curso encerrado');
+    assert.equal(missaoDaEntrada({ stu: [], fStatus: {} }, aluno(1000, { fly: false }, { curso: 'PP' }), pedido(94, 1000), { programa }).nota, 'curso-encerrado');
+  });
+
   // A Agenda importa com o programa da tela (programaParaInferir, em js/eventos/agenda.js): sem os resultados ou os
   // programas (ou com o progresso desligado), vazio. Nenhum pedido entra como missão do curso (antes, inferia de uma situação vazia: a primeira missão)
   it('sem os resultados ou os programas lidos, nenhum pedido entra como missão do curso', () => {
