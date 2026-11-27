@@ -180,6 +180,11 @@ const mesmoPedido = (p, q) => IDENTIDADE_DO_PEDIDO.every(c => p[c] === q[c]);
 // O motivo do voo com resultado registrado (js/eventos/agendamento.js diz o que fazer, sem o resultado na tela)
 export const VOO_COM_RESULTADO = 'O voo já tem resultado registrado.';
 
+// O pedido da agenda que o agendamento deixou no voo (solicitacao): o do pedido como ele o deixou (criadoComo); sem ele,
+// nenhum no voo criado, e o de antes no voo movido. Um pedido que tomou o voo depois (o agendamento solto que deu lugar
+// a um pedido da mesma missão: js/processamento.js) faz dele o voo daquele pedido (a diferença 6 do E)
+const pedidoQueOAgendamentoDeixou = ({ criado, pedido, criadoComo }) => (criadoComo ? criadoComo.solicitacao : criado ? undefined : (pedido || {}).solicitacao);
+
 // O voo agendado na Escala que já está em andamento (Em Voo, Atrasado ou Pousou) ou que já tem resultado registrado não
 // é desfeito: o texto do aviso, ou ''. Sem os resultados dos cursos (a leitura falhou: estado.indisponiveis), os
 // registros do dia vêm vazios e não dá para conferir; desfazer fica desligado até "Tentar de novo" (o aviso do topo)
@@ -188,13 +193,16 @@ export const VOO_COM_RESULTADO = 'O voo já tem resultado registrado.';
 // missão extra, que foi tirada e criada de novo) também não: desfazer tiraria ou trocaria um voo que o agendamento não
 // deixou assim. Sem o aluno no cadastro, ou sem o pedido do voo que mudou de lugar ou entrou na escala (tirado da
 // Demanda depois), não há o que desfazer; o voo criado numa missão extra que saiu da Demanda é desfeito (a chave dele
-// fica limpa)
-export function motivoParaNaoDesfazer(estado, { stuId, mid, criado, criadoComo = null }) {
+// fica limpa). O voo que um pedido da agenda tomou depois do agendamento é o voo do pedido: desfazer o tiraria da escala
+export function motivoParaNaoDesfazer(estado, { stuId, mid, criado, pedido = null, criadoComo = null }) {
   const fKey = chaveDoVoo(stuId, mid);
   const aluno = estado.stu.find(s => s.id === stuId);
   const atual = aluno ? pedidoDoAluno(aluno, mid) : null;
   if (!aluno) return 'O aluno deste voo saiu do cadastro: não há o que desfazer.';
   if (!criado && !atual) return 'O pedido deste voo saiu da Demanda: não há o que desfazer.';
+  if (atual && atual.solicitacao !== undefined && atual.solicitacao !== pedidoQueOAgendamentoDeixou({ criado, pedido, criadoComo })) {
+    return 'Este voo agora é de um pedido da agenda: desfazer o tiraria da escala.';
+  }
   if (atual && criadoComo && !mesmoPedido(atual, criadoComo)) return 'O pedido mudou depois do agendamento: desfazer agora mexeria em outro voo. Mude o pedido na Demanda.';
   if (STATUS_EM_ANDAMENTO.includes((estado.fStatus || {})[fKey])) return 'O voo já está em andamento: mude o status em vez de desfazer.';
   if ((estado.indisponiveis || []).includes('resultados')) {
