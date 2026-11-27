@@ -5,6 +5,13 @@ import { gravarDadosPessoais, semQuemSaiu } from '../../../js/dados-pessoais.js'
 
 const PERFIS_QUE_VEEM = ['operador', 'administrador', 'secretaria'];
 export const veDadosPessoais = conta => Boolean(conta && PERFIS_QUE_VEEM.includes(conta.perfil));
+const COLUNAS = ['tipo', 'id_cadastro', 'cpf', 'canac', 'nascimento', 'celular', 'email', 'atualizado_em', 'atualizado_por'];
+// As colunas do select (sem ele, ou com *, todas)
+export function soAsColunas(linhas, url) {
+  const pedidas = (url.searchParams.get('select') || '*').split(',').map(c => c.trim()).filter(Boolean);
+  if (pedidas.includes('*')) return linhas;
+  return linhas.map(l => Object.fromEntries(pedidas.filter(c => COLUNAS.includes(c)).map(c => [c, l[c] ?? null])));
+}
 
 // agora: o relógio do servidor; historico: as entradas do histórico (uma gravação que muda algo acrescenta uma);
 // cadastro(): o documento do cadastro guardado agora (ou undefined). ler devolve as linhas; salvar, [status, corpo]
