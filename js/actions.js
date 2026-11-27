@@ -406,6 +406,9 @@ export async function lerData(data) {
     setAuditLog(historico);
     dadosLidos = maisNova;
     voltasParaSeguir = maisNova && voltasDeAntes ? { data, deAntes: voltasDeAntes } : null;
+    // A volta que mudou é gravada logo depois: na abertura do app, depois do perfil do endereço (js/main.js, setRole) e do
+    // desenho; numa troca de data, depois do desenho (carregarData). Um temporizador, para js/main.js não precisar chamar
+    if (voltasParaSeguir) setTimeout(seguirAsVoltasDeOntem, 0);
     return true;
   } finally {
     terminou();
@@ -418,7 +421,7 @@ export async function lerData(data) {
 // entrada no histórico, para a escala gravada (o painel da TV, o BI, as horas da data seguinte) não ficar com a volta de
 // antes. Só de hoje em diante: a data passada fica como foi gravada até a próxima alteração nela. Responde se gravou
 let voltasParaSeguir = null;
-export function seguirAsVoltasDeOntem() {
+function seguirAsVoltasDeOntem() {
   const pendente = voltasParaSeguir;
   voltasParaSeguir = null;
   if (!pendente || pendente.data !== DATA || !dadosLidos || isGestor() || ApiClient.readOnly || DATA < hojeISO()) return false;
@@ -431,13 +434,12 @@ export function seguirAsVoltasDeOntem() {
 // Abre a escala de outra data. As abas são refeitas com os dados dela, também a do Rodízio: aberta, ela mostraria as
 // filas da data anterior, e o clique agiria sobre uma fila que a pessoa não está vendo. A data está aberta com os dados na
 // tela: os pedidos dela e o BI do período chegam depois, sem segurar quem a abriu. A volta do noturno que mudou é gravada
-// (seguirAsVoltasDeOntem)
+// logo depois (lerData agenda seguirAsVoltasDeOntem)
 export async function carregarData(data) {
   if (!await lerData(data)) return;
   fecharAviso('volta-do-noturno');
   $('#escala-atualizada').hidden = true;
   redesenhar('dados');
-  seguirAsVoltasDeOntem();
   lerPedidosDaData();
   carregarBI();
 }

@@ -37,7 +37,7 @@ import './eventos/editor-de-dados-pessoais.js';
 import './eventos/inativos.js';
 // O diálogo "Agendar voo" (js/eventos/agendamento.js) vem com a Escala, que o importa; Instrutores traz os limites da lei e
 // o painel dos dados pessoais, e a Demanda, o "Importar da agenda" (test/unit/eventos-ligados.test.js)
-import { setRole, abrirData, lerData, dadosPreparados, carregarBI, seguirAsVoltasDeOntem } from './actions.js';
+import { setRole, abrirData, lerData, dadosPreparados, carregarBI } from './actions.js';
 import { redesenhar } from './redesenho.js';
 import { ehDomingo, primeiraDataAberta } from './agenda.js';
 import { projetoSupabase, enderecoSemBanco } from './config-supabase.js';
@@ -163,8 +163,6 @@ window.addEventListener('beforeunload', e => {
 
   lerPedidosDaData();
   carregarBI();
-  // A volta do noturno que mudou com o noturno de ontem é gravada (js/actions.js)
-  seguirAsVoltasDeOntem();
   // Fim da abertura: daqui em diante, só a pessoa muda a aba. Os testes E2E esperam por esta marca (appPronto, em
   // test/e2e/telas/casca.js)
   document.body.dataset.pronto = '1';
