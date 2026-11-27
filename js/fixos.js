@@ -8,6 +8,8 @@ import { CHAVE_DO_VOO, chaveDoVoo, pedidoDoAluno } from './voo.js';
 import { MATRICULA } from './frota.js';
 import { MINUTOS_DO_DIA, GROUND_REG } from './config.js';
 import { periodoDoMinuto, INICIOS_DOS_TEMPOS } from './horarios.js';
+import { fechamentosDoEstado, horarioAberto } from './fechamentos.js';
+import { categoriaDoTipo } from './categorias.js';
 import { deixarEmBranco } from './rules.js';
 
 const minuto = v => Number.isInteger(v) && v >= 0 && v <= MINUTOS_DO_DIA;
@@ -226,21 +228,24 @@ export function motivoDoFixo(fKey, { fStatus, aprovacao, voo, fixos }) {
 // voo, a escolha do instrutor, as Sugestões, o agendamento) ou tira o pedido, e o dia seguinte acompanha
 // (js/actions.js, seguirAsVoltasDeOntem)
 
-// O pedido da chave voa um Noturno (o aluno e o pedido estão na Demanda, com "Voa" ligado e a missão Noturno)
-function voaNoturno(estado, fKey) {
+// O pedido da chave voa um Noturno (o aluno e o pedido estão na Demanda, com "Voa" ligado e a missão Noturno) num horário
+// aberto nesta data: o início do pino fechado para a categoria do pedido ("+ Fechar horários" na data) solta o Noturno, que o
+// motor deixa fora como deixa o Noturno sem pino (js/engine.js, horarioAberto). Sem o início, só o pedido
+function voaNoturno(estado, fKey, inicio) {
   const [stuId, mid] = fKey.split('_').map(Number);
   const aluno = (estado.stu || []).find(s => s.id === stuId);
   const pedido = aluno ? pedidoDoAluno(aluno, mid) : null;
-  return Boolean(pedido && pedido.fly && pedido.mis === 'Noturno');
+  if (!pedido || !pedido.fly || pedido.mis !== 'Noturno') return false;
+  return inicio === undefined || horarioAberto(fechamentosDoEstado(estado), inicio, categoriaDoTipo(pedido.eq));
 }
 
 // Os voos fixos com o pino do Noturno só enquanto o pedido dele voa um Noturno: o pedido que deixou de voar ou passou para
-// outra missão (tirado da escala, a missão mudada na Demanda, a demanda limpa) solta o Noturno. O pino sai, ou, fixo
+// outra missão (tirado da escala, a missão mudada na Demanda, a demanda limpa), ou o horário dele fechado nesta data, solta o Noturno. O pino sai, ou, fixo
 // também por outro motivo (a escala aprovada, o status, o operador na Escala), fica sem a marca. Sem nada a soltar,
 // devolve os próprios voos fixos do estado (o motor e a conferência leem estes: js/conferencia.js, contextoDaEscala)
 export function pinosDoNoturnoQueValem(estado) {
   const fixos = estado.fixos && typeof estado.fixos === 'object' ? estado.fixos : {};
-  const soltos = Object.keys(fixos).filter(fKey => fixos[fKey] && fixos[fKey].noturno && !voaNoturno(estado, fKey));
+  const soltos = Object.keys(fixos).filter(fKey => fixos[fKey] && fixos[fKey].noturno && !voaNoturno(estado, fKey, fixos[fKey].a));
   if (!soltos.length) return fixos;
   const novos = { ...fixos };
   for (const fKey of soltos) {
