@@ -341,6 +341,8 @@ function aplicarSugestao({ fKey, voo, opcao, cancelado, rejeitado }) {
       recusas: [recusaDaReversao(opcao.vaga, recusa)], label: '↶ Reverter'
     };
     S.fixos = { ...(S.fixos || {}), [opcao.vaga]: { ...opcao.pino, agendado: true } };
+    // O status que a vaga deixou (statusDepois): desfazer não troca o status mudado depois dela (F1g, #85)
+    rev.voos[0].statusDepois = (S.fStatus || {})[opcao.vaga] || null;
     if (!gravarNaEscala(foto, 'mod', `Vaga do voo cancelado de ${voo.s} (${hm(voo.a)}–${hm(voo.b)}): ${opcao.texto}`, rev)) return;
     redesenharPorNome('pedidos-do-dia');
     focarNoVoo(opcao.vaga);

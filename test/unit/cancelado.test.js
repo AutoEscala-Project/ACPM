@@ -8,7 +8,7 @@ import { runAllocationEngine } from '../../js/engine.js';
 import { pinoDoVoo, fixosAoAprovar } from '../../js/fixos.js';
 import { hm } from '../../js/format.js';
 import { cancelamentoAproveitavel, sugerirParaCancelado, vagasDaListaDeEspera, aproveitarCancelado, desfazerAproveitamento, sugestoesDoRejeitado, sugerirReparos, repararComOPedido, dataQueAindaVoa } from '../../js/reparo.js';
-import { validarReversao } from '../../js/reversoes.js';
+import { validarReversao, motivoParaNaoDesfazerEdicao } from '../../js/reversoes.js';
 import { rejeicoesDosPedidos } from '../../js/rejeicoes.js';
 import { pedidoDoAluno } from '../../js/voo.js';
 import { gerarCenario, comEscolhas } from '../helpers/cenarios.js';
@@ -805,10 +805,15 @@ describe('A vaga do voo cancelado para a lista de espera', () => {
 
   it('a reversão guarda a espera da recusa que volta; malformada, a reversão não vale', () => {
     const rev = {
-      kind: 'desfazerEdicao', voos: [{ fKey: '1001_0_1', fixo: null, status: null, detalhe: null }], pedidos: [{ stuId: 1001, mid: 0, pedido: { fly: true, mis: 'Voo Local', eq: 'C152', p1: 500, p2: -1, nb: 1, pr: 3, jan: 'h500' } }],
+      kind: 'desfazerEdicao', voos: [{ fKey: '1001_0_1', fixo: null, status: null, detalhe: null, statusDepois: null }], pedidos: [{ stuId: 1001, mid: 0, pedido: { fly: true, mis: 'Voo Local', eq: 'C152', p1: 500, p2: -1, nb: 1, pr: 3, jan: 'h500' } }],
       recusas: [{ fKey: '1001_0_1', s: 'Aluno 1001', m: 'Rejeitado: x; 1º na lista de espera das 08:20.', codigo: 'instrutores-ocupados', espera: { minuto: 500, lugar: 1 } }], label: '↶ Reverter'
     };
     assert.deepEqual(validarReversao(rev).recusas, rev.recusas);
+    assert.equal(validarReversao(rev).voos[0].statusDepois, null);
+    // O status do voo de quem recebeu a vaga mudou depois dela (Confirmado): a reversão não desfaz (F1g, #85)
+    const estado = { stu: [aluno(1001, { p1: 500, p2: -1 })], fStatus: { '1001_0_1': 'Confirmado' }, resultados: { doDia: [] } };
+    assert.match(motivoParaNaoDesfazerEdicao(estado, validarReversao(rev)), /^O status do voo mudou depois da alteração/);
+    assert.equal(motivoParaNaoDesfazerEdicao({ ...estado, fStatus: {} }, validarReversao(rev)), '');
     assert.equal(validarReversao({ ...rev, recusas: [{ ...rev.recusas[0], espera: { minuto: 500, lugar: 0 } }] }), null);
     assert.equal(validarReversao({ ...rev, recusas: [{ ...rev.recusas[0], espera: 'x' }] }), null);
   });
