@@ -60,13 +60,15 @@ async function importarDaAgenda() {
     (pelaMissao.length ? ` · ${quantos(pelaMissao.length)} com a missão do curso fora do programa: ${entrou(pelaMissao)} como ${emLista([...new Set(pelaMissao.map(f => f.entrouComo))])}` : '') +
     (resumo.esperamOsProgramas ? ` · ${quantos(resumo.esperamOsProgramas)} com a missão do curso ${resumo.esperamOsProgramas === 1 ? 'espera' : 'esperam'} os programas dos cursos, que não foram lidos: importe de novo depois de lê-los` : '') +
     (resumo.semMissaoDoCurso.length ? ` · ${quantos(resumo.semMissaoDoCurso.length)} sem missão do curso: ${[...new Set(resumo.semMissaoDoCurso.map(semMissao))].join('; ')}` : '') +
-    (resumo.foraDaLista.length ? ` · ${quantos(resumo.foraDaLista.length)} num horário fora da lista de decolagens do recurso (o horário fica): ${[...new Set(resumo.foraDaLista.map(foraDaLista))].join('; ')}` : '') + '.', 'ok');
+    (resumo.foraDaLista.length ? ` · ${quantos(resumo.foraDaLista.length)} num horário fora da lista de decolagens do recurso (o horário fica): ${[...new Set(resumo.foraDaLista.map(foraDaLista))].join('; ')}` : '') +
+    (resumo.semOHorario.length ? ` · ${quantos(resumo.semOHorario.length)} antes do primeiro horário do dia, sem o horário exato (qualquer horário): ${[...new Set(resumo.semOHorario.map(foraDaLista))].join('; ')}` : '') + '.', 'ok');
 }
 const quantos = n => `${n} ${n === 1 ? 'pedido' : 'pedidos'}`;
 const entrou = lista => (lista.length === 1 ? 'entrou' : 'entraram');
 // "nenhuma Navegação liberada é no PA-34": o pedido do aluno de um curso para o qual nenhuma missão liberada serve
 const semMissao = ({ missao, recurso }) => `nenhuma ${missao} liberada${recurso ? ` é no ${recurso}` : ''}`;
-// "Navegação às 08:20 no PA-34": o pedido de horário exato que a lista de decolagens do recurso não tem (o item 12 do plano)
+// "Navegação às 08:20 no PA-34": o pedido de horário exato que a lista de decolagens do recurso não tem (o item 12 do plano),
+// ou que entrou sem ele (antes do primeiro horário do dia)
 const foraDaLista = ({ missao, horario, recurso }) => `${missao} às ${horario} no ${recurso}`;
 // Os dois botões (o da Demanda e o da Agenda) são delegados: a importação não depende do lugar deles na página
 aoAcionar('importar-agenda', importarDaAgenda);

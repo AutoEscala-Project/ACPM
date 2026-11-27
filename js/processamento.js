@@ -256,7 +256,10 @@ function entrar(estado, s, { programa, situacao, cursos }) {
   const doCurso = !entrada.missao ? {} : entrada.de === 'pedido' ? { ...(recurso ? {} : { eq: entrada.missao.eq }), nb: entrada.missao.nb }
     : { eq: entrada.missao.eq, nb: entrada.missao.nb };
   const pedido = pedidoDaSolicitacao(s, estado.horarios, doCurso);
-  const foraDaLista = horarioForaDaLista(estado, s, pedido.eq);
+  // O horário exato da linha que o voo não guarda (antes do primeiro horário do dia, 06:30: js/rules.js, minutoExato, que
+  // a lista de decolagens, desde as 06:00, não segue): o pedido entra sem ele, e o resumo diz; não está "fora da lista"
+  const semOHorario = Number.isFinite(minutoDaLinha(s)) && !minutosDoPedido(pedido.jan).length;
+  const foraDaLista = !semOHorario && horarioForaDaLista(estado, s, pedido.eq);
   if (entrada.missao) Object.assign(pedido, { etapa: entrada.missao.codigo }, entrada.curso ? { cursoDaEtapa: entrada.curso } : {});
   pedido.solicitacao = s.id;
   let registro;
@@ -268,8 +271,10 @@ function entrar(estado, s, { programa, situacao, cursos }) {
     registro = Object.assign(copiada, pedido, pr === undefined ? {} : { pr });
   } else registro = Object.assign(alvoDaEntrada(estado, aluno), pedido);
   return {
-    id: s.id, stuId: aluno.id, mid: registro.mid || 0, novo: !copiada, etapa: registro.etapa || null, nota: entrada.nota || (foraDaLista ? 'horario-fora-da-lista' : null),
+    id: s.id, stuId: aluno.id, mid: registro.mid || 0, novo: !copiada, etapa: registro.etapa || null,
+    nota: entrada.nota || (foraDaLista ? 'horario-fora-da-lista' : semOHorario ? 'sem-o-horario' : null),
     ...(foraDaLista ? { foraDaLista: { missao: s.missao, recurso: registro.eq, horario: hm(minutoDaLinha(s)) } } : {}),
+    ...(semOHorario ? { semOHorario: { missao: s.missao, recurso: registro.eq, horario: hm(minutoDaLinha(s)) } } : {}),
     ...(entrada.foraDoPrograma ? { foraDoPrograma: { missao: s.missao, entrouComo: registro.etapa || null } } : {}),
     ...(entrada.nota === 'sem-missao-do-tipo' ? { semMissao: { missao: s.missao, ...(recurso ? { recurso } : {}) } } : {})
   };
@@ -385,7 +390,7 @@ export function aplicarConciliacao(estado, plano, { programa = [], situacao = []
 // saiu: o pedido espera, sem contar como visto, e entra na importação depois de lidos (esperamOsProgramas). O pedido sem
 // missão do curso para o qual o programa não tem nenhuma do tipo (e do recurso) é dito (semMissaoDoCurso, só quando havia
 // o que inferir); o pedido de horário exato que a lista do recurso dele não tem também (foraDaLista: a missão, o recurso
-// e o horário). situacao, programa e cursos: os de missaoDaEntrada. semInativos: o inativo do cadastro vale na data (de
+// e o horário), e o que entrou sem o horário exato, antes do primeiro do dia (semOHorario, os mesmos campos). situacao, programa e cursos: os de missaoDaEntrada. semInativos: o inativo do cadastro vale na data (de
 // hoje em diante): o pedido do aluno inativo não entra nem conta como visto (entra quando ele voltar a ativo)
 export function importarSolicitacoes(estado, solicitacoes, { situacao = [], programa = [], cursos = [], semInativos = false } = {}) {
   if (!Array.isArray(estado.importadas)) estado.importadas = [];
@@ -396,6 +401,7 @@ export function importarSolicitacoes(estado, solicitacoes, { situacao = [], prog
     semAluno: plano.semAluno.length, deInativo: plano.inativos.length,
     foraDoPrograma: feito.entraram.filter(x => x.foraDoPrograma).map(x => x.foraDoPrograma),
     semMissaoDoCurso: feito.entraram.filter(x => x.semMissao).map(x => x.semMissao), esperamOsProgramas: plano.esperamOsProgramas.length,
-    foraDaLista: feito.entraram.filter(x => x.foraDaLista).map(x => x.foraDaLista)
+    foraDaLista: feito.entraram.filter(x => x.foraDaLista).map(x => x.foraDaLista),
+    semOHorario: feito.entraram.filter(x => x.semOHorario).map(x => x.semOHorario)
   };
 }
