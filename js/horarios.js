@@ -88,8 +88,7 @@ export function preferenciasPadrao(lista) {
 }
 
 // Depois de trocar a missão ou o avião de um pedido: cada preferência vai para o horário mais próximo da lista nova,
-// a partir dela (ao sair das 17:30 do Noturno, para as preferências padrão), e um horário exato que a lista nova não
-// tem deixa de valer
+// a partir dela (ao sair das 17:30 do Noturno, para as preferências padrão); o horário exato do pedido fica (N14)
 export function ajustarPreferencias(pedido, lista) {
   const [padrao1, padrao2] = preferenciasPadrao(lista);
   const ajustar = (minuto, padrao) => {
@@ -99,7 +98,8 @@ export function ajustarPreferencias(pedido, lista) {
   };
   pedido.p1 = ajustar(pedido.p1, padrao1);
   pedido.p2 = ajustar(pedido.p2, padrao2);
-  if (typeof pedido.jan === 'string' && /^h\d+$/.test(pedido.jan) && !lista.includes(+pedido.jan.slice(1))) delete pedido.jan;
+  // O horário exato do pedido fica, mesmo fora da lista nova (J, N14): o motor o recusa no horário dele até a lista ter o
+  // minuto de novo ou o horário mudar (o efeito diz "fica fora da lista")
 }
 
 
@@ -154,24 +154,27 @@ export const porPeriodo = lista => {
 };
 
 // O que a lista nova de uma categoria faz com os pedidos dela (sem mudar os pedidos): quem muda de preferência e quem
-// perde o "Só às" (o horário exato que a lista nova não tem). pedidos: [{ nome, pedido }]
+// fica fora da lista (o horário exato do pedido, que a lista nova não tem: J, N14, o pedido fica com ele e o motor o
+// recusa nesse horário). pedidos: [{ nome, pedido }]
 export function impactoDosHorarios(pedidos, horarios, cat, lista) {
   const novos = { ...horarios, [cat]: emOrdem(lista) };
-  const mudam = [], perdemSo = [];
+  const mudam = [], foraDaLista = [];
   for (const { nome, pedido } of pedidos) {
     if (categoriaDoTipo(pedido.eq) !== cat) continue;
     const depois = { ...pedido };
-    ajustarPreferencias(depois, horariosDaMissao(novos, pedido.mis, pedido.eq));
-    if (depois.p1 !== pedido.p1 || depois.p2 !== pedido.p2 || depois.jan !== pedido.jan) mudam.push(nome);
-    if (pedido.jan !== undefined && depois.jan === undefined) perdemSo.push({ nome, minuto: +pedido.jan.slice(1) });
+    const listaNova = horariosDaMissao(novos, pedido.mis, pedido.eq);
+    ajustarPreferencias(depois, listaNova);
+    if (depois.p1 !== pedido.p1 || depois.p2 !== pedido.p2) mudam.push(nome);
+    const exato = typeof pedido.jan === 'string' && /^h\d+$/.test(pedido.jan) ? +pedido.jan.slice(1) : null;
+    if (exato !== null && !listaNova.includes(exato)) foraDaLista.push({ nome, minuto: exato });
   }
-  return { mudam, perdemSo };
+  return { mudam, foraDaLista };
 }
 
-export function resumoDoImpacto({ mudam, perdemSo }) {
-  if (!mudam.length) return 'Nenhum pedido muda.';
-  const partes = [`${mudam.length} ${mudam.length === 1 ? 'pedido muda' : 'pedidos mudam'} de preferência`];
-  if (perdemSo.length === 1) partes.push(`1 perde “Só às ${hm(perdemSo[0].minuto)}”`);
-  else if (perdemSo.length > 1) partes.push(`${perdemSo.length} perdem o “Só às”`);
-  return `${partes.join('; ')}.`;
+export function resumoDoImpacto({ mudam, foraDaLista }) {
+  const partes = [];
+  if (mudam.length) partes.push(`${mudam.length} ${mudam.length === 1 ? 'pedido muda' : 'pedidos mudam'} de preferência`);
+  if (foraDaLista.length === 1) partes.push(`1 fica fora da lista (às ${hm(foraDaLista[0].minuto)})`);
+  else if (foraDaLista.length > 1) partes.push(`${foraDaLista.length} ficam fora da lista`);
+  return partes.length ? `${partes.join('; ')}.` : 'Nenhum pedido muda.';
 }

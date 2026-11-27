@@ -9,7 +9,6 @@ import { hm, fmtH, somarDias } from './format.js';
 
 export const FUSO_DO_AEROCLUBE = 'America/Sao_Paulo';
 
-export const JANELAS_DA_AGENDA = [['manha', 'Manhã'], ['tarde', 'Tarde'], ['noite', 'Noite'], ['horario', 'Horário específico']];
 
 // Data (AAAA-MM-DD) e hora (HH:MM) de um instante no horário de São Paulo
 function emSaoPaulo(instante) {

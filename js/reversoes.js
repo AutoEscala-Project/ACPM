@@ -46,6 +46,8 @@ const disponibilidadeDeAntes = d => (objeto(d) && idValido(d.insId) && typeof d.
   && d.aw.length === INICIOS_DOS_TEMPOS.length && d.aw.every(v => typeof v === 'boolean') ? { insId: d.insId, on: d.on, aw: [...d.aw] } : null);
 
 // A reversão limpa (só os campos dela), ou null
+const PERIODOS_DE_ANTES = ['manha', 'tarde', 'noite'];
+
 export function validarReversao(rev, frota) {
   if (!rev || typeof rev !== 'object' || Array.isArray(rev)) return null;
   const label = rotulo(rev.label);
@@ -91,15 +93,16 @@ export function validarReversao(rev, frota) {
     if (!pedidos.every(Boolean) || !rev.soltar.every(k => typeof k === 'string' && CHAVE_DO_VOO.test(k)) || !naAprovada(rev)) return null;
     return { kind: 'restaurarEscolha', pedidos, fixos, soltar: [...rev.soltar], ...naAprovada(rev), label };
   }
-  // Os horários de uma categoria e os pedidos que mudaram com eles
+  // Os horários de uma categoria e os pedidos que mudaram com eles. O período do pedido gravado antes do J ("tarde") sai
+  // e a reversão continua valendo (N13: não há período do dia)
   if (rev.kind === 'restaurarHorarios') {
     if (!CATEGORIAS_COM_HORARIOS.includes(rev.cat) || !Array.isArray(rev.lista) || !Array.isArray(rev.pedidos) || rev.pedidos.length > 500) return null;
     const lista = normalizarHorarios({ [rev.cat]: rev.lista })[rev.cat];
     if (lista.length !== rev.lista.length) return null;
     const preferencia = v => Number.isInteger(v) && v >= -1 && v <= MINUTOS_DO_DIA;
     const pedidos = rev.pedidos.map(p => (p && typeof p === 'object' && idValido(p.stuId) && Number.isInteger(p.mid) && p.mid >= 0
-      && preferencia(p.p1) && preferencia(p.p2) && (p.jan === undefined || disponibilidadeValida(p.jan))
-      ? { stuId: p.stuId, mid: p.mid, p1: p.p1, p2: p.p2, ...(p.jan === undefined ? {} : { jan: p.jan }) } : null));
+      && preferencia(p.p1) && preferencia(p.p2) && (p.jan === undefined || disponibilidadeValida(p.jan) || PERIODOS_DE_ANTES.includes(p.jan))
+      ? { stuId: p.stuId, mid: p.mid, p1: p.p1, p2: p.p2, ...(disponibilidadeValida(p.jan) ? { jan: p.jan } : {}) } : null));
     return pedidos.every(Boolean) ? { kind: 'restaurarHorarios', cat: rev.cat, lista, pedidos, label } : null;
   }
   // O voo cancelado aproveitado pelas Sugestões: o pino, o status e o detalhe de antes de cada voo (null: não havia), o

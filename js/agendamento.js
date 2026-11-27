@@ -1060,9 +1060,6 @@ function linhasDaPrevia({ novo, movidos, saem, entram }, { antes, sim, estadoDaS
   ];
 }
 
-// A disponibilidade do aluno em palavras: "de manhã", "à tarde", "à noite" ou "às 07:30"
-const QUANDO_DISPONIVEL = { manha: 'de manhã', tarde: 'à tarde', noite: 'à noite' };
-const quandoDisponivel = jan => QUANDO_DISPONIVEL[jan] || rotuloDaDisponibilidade(jan);
 
 // A conferência do agendamento (formulario, a simulação sim e a chave fKey do voo novo; baseComPesos: a escala com os
 // pesos digitados, sem o agendamento):
@@ -1141,7 +1138,7 @@ export function avaliarAgendamento({ estado, baseComPesos, base = baseComPesos, 
     const { jan } = movido.pedido;
     const permitidas = disponibilidadeDoAluno(jan);
     if (permitidas && !permitidas(a)) {
-      avisos.push({ codigo: 'disponibilidade-do-aluno', texto: `${stu.nm} está disponível só ${quandoDisponivel(jan)}: agendado às ${hm(a)}, o pedido fica sem a disponibilidade.`, resumo: 'fora da disponibilidade do aluno', campo: 'agd-horario' });
+      avisos.push({ codigo: 'disponibilidade-do-aluno', texto: `${stu.nm} pediu o horário ${rotuloDaDisponibilidade(jan)}: agendado às ${hm(a)}, o pedido fica sem o horário.`, resumo: 'fora da disponibilidade do aluno', campo: 'agd-horario' });
     }
     const pino = (estado.fixos || {})[fKey];
     const muda = movido.voo && (movido.voo.a !== a || movido.voo.r !== r || movido.voo.insId !== x.id);

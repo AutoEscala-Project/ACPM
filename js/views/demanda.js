@@ -4,7 +4,7 @@
 import { MIS, GROUND_EQ_TYPE, DURACAO_MAXIMA_H, GROUND_DURATION_H } from '../config.js';
 import { matriculasDoTipo } from '../frota.js';
 import { esc, opts, hm, chaveDeBusca } from '../format.js';
-import { isGroundMission, opcoesDeDisponibilidade, duracaoFixaDaMissao, prioridadeNaTela } from '../rules.js';
+import { isGroundMission, duracaoFixaDaMissao, prioridadeNaTela } from '../rules.js';
 import { ligada } from '../funcionalidades.js';
 import { horariosDaMissao, HORARIO_DO_NOTURNO } from '../horarios.js';
 import { descreverExigencias } from '../habilitacoes.js';
@@ -83,7 +83,6 @@ export const singleDemandRowHTML = (stu, d, mid = 0) => {
     <td><select data-f="insId" class="${d.insId ? 'escolhido' : ''}" aria-label="Instrutor${de}">${opcoesDeInstrutor(stu, d)}</select></td>
     <td><select data-f="p1" aria-label="1ª preferência${de}">${opcoesDeHorario(horarios, d.p1)}</select></td>
     <td><select data-f="p2" aria-label="2ª preferência${de}">${opcoesDeHorario(horarios, d.p2)}</select></td>
-    <td><select data-f="jan" aria-label="Disponibilidade${de}">${opts(opcoesDeDisponibilidade(horarios), d.jan || '')}</select></td>
     <td>${nbOpts}</td>${comPrioridade ? `
     <td><select data-f="pr" aria-label="Prioridade${de}">${opts([1, 2, 3, 4, 5].map(n => [n, n]), prioridadeNaTela(d.pr))}</select></td>` : ''}
   </tr>`;
@@ -116,7 +115,7 @@ export const rDem = () => {
   // As opções do filtro dos cursos acompanham os programas e os cursos dos alunos
   if (filtroDosCursos) filtroDosCursos.desenhar();
   if (!S.stu.length) {
-    trocarConteudo($('#dem'), `<tr class="empty-dem"><td colspan="${ligada('prioridade') ? 10 : 9}" class="h" style="padding:16px">Nenhum aluno cadastrado. Cadastre os alunos em Alunos.</td></tr>`);
+    trocarConteudo($('#dem'), `<tr class="empty-dem"><td colspan="${ligada('prioridade') ? 9 : 8}" class="h" style="padding:16px">Nenhum aluno cadastrado. Cadastre os alunos em Alunos.</td></tr>`);
     cnt();
     renderAuditPanel();
     return;
