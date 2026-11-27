@@ -10,6 +10,7 @@ import { simularNavegador } from '../helpers/navegador.js';
 import { PROGRAMA, IDS } from '../helpers/casos-do-programa.js';
 import { CASOS_DA_AGENDA, CURSO_DOS_CASOS, pedidoDosCasos, localDosCasos } from '../helpers/casos-da-agenda.js';
 import { cursosIniciais } from '../../js/programa.js';
+import { CASOS_DOS_DADOS_PESSOAIS, CADASTRO_DOS_CASOS, ALUNO_DOS_CASOS, VERSAO_DOS_CASOS, tabelaDoCaso, versaoLidaDoCaso } from '../helpers/casos-dos-dados-pessoais.js';
 
 beforeEach(() => simularNavegador());
 
@@ -160,6 +161,39 @@ describe('Backend local: agenda de solicitações', () => {
     const [s] = await backendLocal.listarSolicitacoes('2026-11-11', '2026-11-11');
     assert.deepEqual([s.cancelada_por, s.cancelada_em], ['Maria', antesDas13.toISOString()]);
     await assert.rejects(backendLocal.cancelarSolicitacao(id, 'Maria'), e => e.code === 'P0002');
+  });
+});
+
+// Os dados pessoais neste navegador, com as regras do servidor: os casos do nome completo (test/helpers/
+// casos-dos-dados-pessoais.js) e a lista só com o CANAC e o nome completo (o resto, só na leitura da pessoa)
+describe('Backend local: os dados pessoais', () => {
+  const guardar = tabela => {
+    localStorage.setItem('acpm4_cadastro', JSON.stringify(CADASTRO_DOS_CASOS));
+    localStorage.setItem('acpm4_dados_pessoais', JSON.stringify(tabela));
+  };
+  const agora = new Date('2026-11-14T12:00:00.000Z');
+
+  for (const caso of CASOS_DOS_DADOS_PESSOAIS) {
+    it(`caso dos dados pessoais: ${caso.nome}`, async () => {
+      guardar(tabelaDoCaso(caso));
+      const gravar = backendLocal.salvarDadosPessoais('aluno', ALUNO_DOS_CASOS, caso.dados, { autor: 'Maria', agora, atualizadoEm: versaoLidaDoCaso(caso), data: '2026-11-14' });
+      if (caso.erro) {
+        await assert.rejects(gravar, e => e.code === caso.erro.code && e.campo === caso.erro.campo);
+        return;
+      }
+      const r = await gravar;
+      const linha = JSON.parse(localStorage.getItem('acpm4_dados_pessoais'))[`aluno:${ALUNO_DOS_CASOS}`];
+      assert.equal(Boolean(linha), caso.gravado.linha);
+      assert.equal((linha && linha.nome_completo) ?? null, caso.gravado.nome_completo);
+      if (caso.gravado.historico) assert.equal(r.historico.descricao, caso.gravado.historico);
+    });
+  }
+
+  it('a lista traz só o CANAC, o nome completo e a versão; a leitura da pessoa traz todos', async () => {
+    guardar({ 'aluno:1002': { nome_completo: 'Caio da Silva', cpf: '52998224725', canac: '222333', email: 'caio@exemplo.com', atualizado_em: VERSAO_DOS_CASOS, atualizado_por: 'Maria' }, 'instrutor:7': { cpf: '11144477735', atualizado_em: VERSAO_DOS_CASOS } });
+    assert.deepEqual(await backendLocal.listarDadosPessoais('aluno'), { 1002: { nome_completo: 'Caio da Silva', canac: '222333', atualizado_em: VERSAO_DOS_CASOS } });
+    assert.deepEqual(await backendLocal.listarDadosPessoais('instrutor'), { 7: { atualizado_em: VERSAO_DOS_CASOS } });
+    assert.equal((await backendLocal.lerDadosPessoais('aluno', 1002)).cpf, '52998224725');
   });
 });
 
@@ -322,5 +356,19 @@ describe('ApiClient com outro backend', () => {
     memoria.clear();
     assert.equal(await ApiClient.salvarDia('2026-11-11', estado, null), false);
     assert.equal(memoria.size, 0);
+  });
+
+  // Quem só consulta (a Secretaria e o Gestor no modo compartilhado, a tela travada depois de um conflito) lê os dados
+  // pessoais e não os grava: a recusa com o código do servidor, sem chamar o backend
+  it('os dados pessoais: somente leitura recusa a gravação (42501) e continua lendo', async () => {
+    const chamadas = [];
+    ApiClient.backend = {
+      lerDadosPessoais: async (...args) => { chamadas.push(['ler', ...args]); return { canac: '123456' }; },
+      salvarDadosPessoais: async (...args) => { chamadas.push(['salvar', ...args]); return { atualizado_em: null }; }
+    };
+    ApiClient.readOnly = true;
+    await assert.rejects(ApiClient.salvarDadosPessoais('aluno', 1000, { canac: '123456' }), e => e.code === '42501');
+    assert.deepEqual(await ApiClient.lerDadosPessoais('aluno', 1000), { canac: '123456' });
+    assert.deepEqual(chamadas.map(c => c[0]), ['ler']);
   });
 });

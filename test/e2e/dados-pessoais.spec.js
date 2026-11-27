@@ -1,7 +1,7 @@
-// Dados pessoais de alunos e instrutores: CPF, CANAC, nascimento, celular e e-mail. Em Alunos, uma seção do detalhe com
-// "Salvar" e "Desfazer" (F2); em Instrutores, o painel ao lado da tabela (até C). Ficam fora do cadastro; o histórico
-// registra só os campos que mudaram. No modo compartilhado, operadores, administradores e a secretaria veem e editam; o
-// gestor não vê.
+// Dados pessoais de alunos e instrutores: nome completo, CPF, CANAC, nascimento, celular e e-mail. Em Alunos, uma seção
+// do detalhe com "Salvar" e "Desfazer" (F2); em Instrutores, o painel ao lado da tabela (até C). Ficam fora do cadastro;
+// o histórico registra só os campos que mudaram. No modo compartilhado, operadores, administradores e a secretaria veem;
+// só operadores e administradores editam (A: a secretaria lê em texto); o gestor não vê.
 import { test, expect, abrir, irPara, irParaVista, prepararContexto, vigiarErros, filtrarHabilitacoes, filtrarCursos, AMANHA, entrar as entrarNoApp, abrirHistorico, rotulosDasAbas, gradeDoDia, linhaDoInstrutor, abrirAluno, campoDoAberto, linhaDoAluno, linhasDosAlunos, nenhumNaLista } from './fixtures.js';
 import { criarSupabaseFalso, instalarSupabaseFalso, documentosAtuais, CONTAS } from './supabase-falso.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
@@ -17,6 +17,8 @@ const campo = (page, rotulo) => secao(page).getByLabel(rotulo, { exact: true });
 const salvar = page => page.locator('#det-alu-dados-salvar').click();
 const rodape = page => secao(page).locator('.det-dados-rodape');
 const erroDe = (page, c) => page.locator(`#det-alu-${c}-erro`);
+// O valor que quem só lê vê (a secretaria): o texto do campo c
+const textoDoDado = (page, c) => page.locator(`#det-alu [aria-labelledby="det-alu-${c}-rotulo"]`);
 
 // Abre o aluno e espera a leitura dele (os campos ligados)
 async function abrirDadosDoAluno(page, id) {
@@ -72,7 +74,7 @@ test.describe('Dados pessoais (neste navegador)', () => {
     // "Desfazer" joga o rascunho fora: o campo volta ao que está guardado
     await page.locator('#det-alu-dados-desfazer').click();
     await expect(campo(page, 'CANAC')).toHaveValue('');
-    await expect(campo(page, 'CPF')).toBeFocused();
+    await expect(campo(page, 'Nome completo')).toBeFocused();
 
     await abrirDadosDoAluno(page, 1000);
     await campo(page, 'CANAC').fill('');
@@ -167,12 +169,23 @@ test.describe('Dados pessoais (modo compartilhado)', () => {
     return { context, servidor, page, erros };
   }
 
-  test('a Secretaria vê Alunos e Instrutores e edita só os dados pessoais', async ({ browser }) => {
-    const { context, servidor, page, erros } = await entrar(browser, CONTAS.secretaria);
+  // A (desde a migração do nome completo): a Secretaria lê os dados pessoais, em Alunos e em Instrutores, e não os altera:
+  // nenhum campo, nenhum "Salvar" (o servidor também recusa a gravação dela: test/unit/supabase-falso.test.js)
+  test('a Secretaria vê Alunos e Instrutores e só lê os dados pessoais, também o nome completo e a busca por ele', async ({ browser }) => {
+    const servidor = criarSupabaseFalso(documentosAtuais(estado(), AMANHA));
+    const operador = await entrar(browser, CONTAS.operador, servidor);
+    await abrirDadosDoAluno(operador.page, 1000);
+    await campo(operador.page, 'Nome completo').fill('Ana Maria Souza');
+    await campo(operador.page, 'CANAC').fill('123456');
+    await campo(operador.page, 'E-mail').fill('ana@exemplo.com');
+    await salvar(operador.page);
+    await expect(rodape(operador.page)).toHaveText(/^Atualizado em/);
+    await operador.context.close();
+
+    const { context, page, erros } = await entrar(browser, CONTAS.secretaria, servidor);
     await expect(rotulosDasAbas(page, { visiveis: true })).toHaveText(['Agenda', 'Escala', 'Aprovar', 'Alunos', 'Instrutores', 'Cursos']);
     await irPara(page, 'alu');
-    // Sem a Demanda, também sem o link para ela; o filtro dos cursos vale para ela (as caixas não ficam desligadas)
-    await expect(page.locator('#s-alu .ir-para-demanda')).toBeHidden();
+    // O filtro dos cursos vale para ela (as caixas não ficam desligadas)
     await page.locator('#flt-alu-cur').click();
     await expect(page.locator('#flt-alu-cur-painel input[data-filtro]:disabled')).toHaveCount(0);
     await filtrarCursos(page, 'alu', ['PP']);
@@ -180,21 +193,41 @@ test.describe('Dados pessoais (modo compartilhado)', () => {
     await filtrarCursos(page, 'alu', ['sem-curso']);
     await expect(linhasDosAlunos(page)).toHaveCount(2);
     await filtrarCursos(page, 'alu', []);
-    // O cadastro ela lê (o texto, sem campo); os dados pessoais, ela altera
-    await abrirDadosDoAluno(page, 1000);
+    // A busca acha o nome completo e o CANAC
+    await page.locator('[data-flt="alu"]').fill('maria souza');
+    await expect(linhasDosAlunos(page)).toHaveCount(1);
+    await page.locator('[data-flt="alu"]').fill('');
+    // O cadastro e os dados pessoais, ela lê (o texto, sem campo, sem "Salvar")
+    await irPara(page, 'alu');
+    await abrirAluno(page, 1000);
+    await expect(secao(page)).toHaveAttribute('data-pessoa', 'aluno:1000');
     await expect(campoDoAberto(page, 'kg')).toHaveCount(0);
     await expect(page.locator('#det-alu [data-campo="kg"] .det-valor')).toHaveText(/kg$/);
-    await campo(page, 'CANAC').fill('123456');
-    await salvar(page);
-    await expect(rodape(page)).toHaveText(/por Secretaria de Teste\.$/);
+    await expect(secao(page).locator('input, button[type="submit"], [data-desfazer-dados]')).toHaveCount(0);
+    await expect(page.locator('#det-alu-dados-salvar')).toHaveCount(0);
+    await expect(secao(page).locator('.h').first()).toContainText('A secretaria consulta; quem altera são os operadores e os administradores.');
+    await expect(textoDoDado(page, 'nome_completo')).toHaveText('Ana Maria Souza');
+    await expect(textoDoDado(page, 'email')).toHaveText('ana@exemplo.com');
+    await expect(textoDoDado(page, 'nascimento')).toHaveText('—');
     await expect(linhaDoAluno(page, 1000).locator('.lista-l2')).toContainText('CANAC 123456');
-    expect(servidor.dadosPessoais.get('aluno:1000')).toMatchObject({ canac: '123456', atualizado_por: 'Secretaria de Teste' });
+    // Nenhum formulário dos resultados nem "Apagar os dados pessoais"
+    await expect(page.locator('#det-alu [data-act]')).toHaveCount(0);
+    // Em Instrutores, o painel também só mostra: o texto e "Fechar"
+    await irPara(page, 'ins');
+    await page.locator('#inst tr[data-id="1"] [data-dados]').click();
+    await expect(painel(page).locator('h2')).toHaveText('Dados pessoais Instrutor 01');
+    await expect(painel(page).getByRole('button', { name: 'Fechar', exact: true })).toBeFocused();
+    await expect(painel(page).locator('input')).toHaveCount(0);
+    await expect(painel(page).getByRole('button', { name: 'Salvar' })).toHaveCount(0);
+    await expect(painel(page).locator('.valor-dado')).toHaveCount(6);
+    // Nada foi gravado por ela
+    expect(servidor.historico.filter(h => h.autor === 'Secretaria de Teste')).toEqual([]);
     expect(erros).toEqual([]);
     await context.close();
   });
 
-  // No celular (390 px), o trabalho da Secretaria: em Instrutores, o "Dados pessoais" no cartão (o painel, até C); em
-  // Alunos, a seção do detalhe, com "Salvar" de 44 px e tudo dentro da tela
+  // No celular (390 px), a consulta da Secretaria: em Instrutores, o "Dados pessoais" no cartão (o painel, até C); em
+  // Alunos, a seção do detalhe em texto, tudo dentro da tela
   test('no celular, a Secretaria chega aos dados pessoais: o cartão em Instrutores, o detalhe em Alunos', async ({ browser }) => {
     const { context, page, erros } = await entrar(browser, CONTAS.secretaria, null, { viewport: { width: 390, height: 844 } });
     await irPara(page, 'ins');
@@ -211,10 +244,13 @@ test.describe('Dados pessoais (modo compartilhado)', () => {
     await expect(painel(page)).toBeHidden();
     await expect(botoes.first()).toBeFocused();
 
-    await abrirDadosDoAluno(page, 1000);
-    const salvarBotao = await page.locator('#det-alu-dados-salvar').boundingBox();
-    expect(salvarBotao.height).toBeGreaterThanOrEqual(44);
-    expect(salvarBotao.x + salvarBotao.width).toBeLessThanOrEqual(390);
+    await irPara(page, 'alu');
+    await abrirAluno(page, 1000);
+    await expect(secao(page)).toHaveAttribute('data-pessoa', 'aluno:1000');
+    await expect(page.locator('#det-alu-dados-salvar')).toHaveCount(0);
+    await expect(textoDoDado(page, 'cpf')).toHaveText('—');
+    const nome = await textoDoDado(page, 'nome_completo').boundingBox();
+    expect(nome.x + nome.width).toBeLessThanOrEqual(390);
     // Sem ninguém, "Priorizar com" e "Não escalar com" dizem "—"
     await expect(page.locator('#det-alu [data-campo="voaCom"] .det-valor')).toHaveText('—');
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
@@ -353,13 +389,23 @@ test.describe('Dados pessoais (modo compartilhado)', () => {
     await context.close();
   });
 
-  test('a alteração da secretaria vai para o histórico (só os nomes dos campos)', async ({ browser }) => {
-    const { context, servidor, page, erros } = await entrar(browser, CONTAS.secretaria);
+  // A gravação do operador e a do administrador vão para o histórico (só os nomes dos campos, o nome completo primeiro)
+  test('o nome completo: gravado, limpo e registrado no histórico só pelo nome do campo', async ({ browser }) => {
+    const { context, servidor, page, erros } = await entrar(browser, CONTAS.administrador);
     await abrirDadosDoAluno(page, 1000);
-    await campo(page, 'CANAC').fill('123456');
+    await expect(campo(page, 'Nome completo')).toHaveAttribute('maxlength', '120');
+    await campo(page, 'Nome completo').fill('  Ana   Maria  Souza ');
     await salvar(page);
-    await expect(rodape(page)).toHaveText(/^Atualizado em/);
-    expect(servidor.historico.map(h => [h.data, h.descricao, h.autor])).toContainEqual([AMANHA, 'Dados pessoais de Aluno 1000 atualizados: CANAC', 'Secretaria de Teste']);
+    await expect(rodape(page)).toHaveText(/por Admin de Teste\.$/);
+    expect(servidor.dadosPessoais.get('aluno:1000')).toMatchObject({ nome_completo: 'Ana Maria Souza', atualizado_por: 'Admin de Teste' });
+    await expect(campo(page, 'Nome completo')).toHaveValue('Ana Maria Souza');
+    // Limpo, sai do servidor (sem nenhum outro dado, a linha sai)
+    await campo(page, 'Nome completo').fill('');
+    await salvar(page);
+    await expect(page.locator('#toast-box .toast.ok').last()).toHaveText('Dados pessoais de Aluno 1000 salvos.');
+    await expect.poll(() => servidor.dadosPessoais.has('aluno:1000')).toBe(false);
+    expect(servidor.historico.map(h => h.descricao)).toEqual(['Dados pessoais de Aluno 1000 atualizados: Nome completo', 'Dados pessoais de Aluno 1000 atualizados: Nome completo']);
+    expect(JSON.stringify(servidor.historico)).not.toContain('Maria');
     expect(erros).toEqual([]);
     await context.close();
   });

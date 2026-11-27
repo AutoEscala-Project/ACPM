@@ -8,6 +8,7 @@ import { criarSupabaseFalso, documentosAtuais, documentosFase3, CONTAS, URL_TEST
 import { CASOS_DO_PROGRAMA, PROGRAMA } from '../helpers/casos-do-programa.js';
 import { CASOS_DA_AGENDA, CURSO_DOS_CASOS, DATA_DOS_CASOS, pedidoDosCasos, localDosCasos, argumentosDoBanco, guardadoDoCaso } from '../helpers/casos-da-agenda.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
+import { CASOS_DOS_DADOS_PESSOAIS, QUEM_GRAVA_OS_DADOS_PESSOAIS, CADASTRO_DOS_CASOS, ALUNO_DOS_CASOS, VERSAO_DOS_CASOS, tabelaDoCaso, versaoLidaDoCaso } from '../helpers/casos-dos-dados-pessoais.js';
 import { normalizarCursos } from '../../js/cursos.js';
 import { FORMATO_DOS_CURSOS } from '../../js/migracoes.js';
 import { novoId, programaDoLegado, cursosIniciais } from '../../js/programa.js';
@@ -23,11 +24,11 @@ const comPrograma = () => ({ ...cenario({ ins: [instrutor(1, 9)], stu: [aluno(10
 async function conectar(servidor) {
   let atender;
   await servidor.instalar({ route: async (_padrao, fn) => { atender = fn; } });
-  const pedir = async (caminho, corpo, token = null) => {
+  const pedir = async (caminho, corpo, token = null, metodo = 'POST') => {
     let resposta = null;
     await atender({
       request: () => ({
-        url: () => `${URL_TESTE}${caminho}`, method: () => 'POST', postDataJSON: () => corpo,
+        url: () => `${URL_TESTE}${caminho}`, method: () => metodo, postDataJSON: () => corpo,
         headers: () => (token ? { authorization: `Bearer ${token}` } : {})
       }),
       fulfill: async ({ status = 200, body = '' }) => { resposta = { status, corpo: body ? JSON.parse(body) : null }; },
@@ -38,7 +39,9 @@ async function conectar(servidor) {
   return {
     pedir,
     entrar: async conta => (await pedir('/auth/v1/token?grant_type=password', { email: conta.email, password: conta.senha })).corpo.access_token,
-    rpc: (token, funcao, args = {}) => pedir(`/rest/v1/rpc/${funcao}`, args, token)
+    rpc: (token, funcao, args = {}) => pedir(`/rest/v1/rpc/${funcao}`, args, token),
+    // Uma leitura de tabela (GET), como o supabase-js: o caminho com a consulta
+    ler: (token, caminho) => pedir(caminho, null, token, 'GET')
   };
 }
 
@@ -231,5 +234,59 @@ describe('Servidor falso dos testes E2E: a agenda (a função de 13 argumentos)'
     const r = await rpc(token, 'registrar_solicitacao', argumentosDoBanco(pedidoDosCasos({ missao: 'Voo Local', confirmarLimite: true })));
     const s = servidor.solicitacoes.find(x => x.id === r.corpo);
     assert.deepEqual([s.limite_confirmado_por, s.limite_confirmado_em], ['Secretaria de Teste', '2026-11-10T15:00:00.000Z']);
+  });
+});
+
+// Os dados pessoais: os casos do nome completo e de quem grava (test/helpers/casos-dos-dados-pessoais.js), os mesmos do
+// banco, e a leitura da lista só com o CANAC e o nome completo
+describe('Servidor falso dos testes E2E: os dados pessoais (o nome completo e quem grava)', () => {
+  const salvarDoCaso = (dados, atualizadoEm, tipo = 'aluno', id = ALUNO_DOS_CASOS) => ({ p_tipo: tipo, p_id: id, p_dados: dados, p_atualizado_em: atualizadoEm, p_data: DATA });
+  async function servidorDoCaso(caso = { antes: null }) {
+    const servidor = criarSupabaseFalso({ documentos: { cadastro: CADASTRO_DOS_CASOS } });
+    for (const [chave, d] of Object.entries(tabelaDoCaso(caso))) servidor.dadosPessoais.set(chave, d);
+    return { servidor, ...await conectar(servidor) };
+  }
+
+  for (const caso of CASOS_DOS_DADOS_PESSOAIS) {
+    it(caso.nome, async () => {
+      const { servidor, entrar, rpc } = await servidorDoCaso(caso);
+      const r = await rpc(await entrar(CONTAS.operador), 'salvar_dados_pessoais', salvarDoCaso(caso.dados, versaoLidaDoCaso(caso)));
+      const linha = servidor.dadosPessoais.get(`aluno:${ALUNO_DOS_CASOS}`);
+      if (caso.erro) {
+        assert.deepEqual([r.status, r.corpo.code, r.corpo.hint], [STATUS[caso.erro.code], caso.erro.code, caso.erro.campo]);
+        assert.equal(linha, undefined);
+        return;
+      }
+      assert.equal(r.status, 200);
+      assert.equal(Boolean(linha), caso.gravado.linha);
+      assert.equal((linha && linha.nome_completo) ?? null, caso.gravado.nome_completo);
+      if (caso.gravado.historico) assert.equal(r.corpo.historico.descricao, caso.gravado.historico);
+    });
+  }
+
+  for (const caso of QUEM_GRAVA_OS_DADOS_PESSOAIS) {
+    it(caso.nome, async () => {
+      const { servidor, entrar, rpc } = await servidorDoCaso();
+      const r = await rpc(await entrar(CONTAS[caso.perfil]), 'salvar_dados_pessoais', salvarDoCaso({ canac: '222333' }, null, caso.tipo, caso.id));
+      if (caso.grava) {
+        assert.equal(r.status, 200);
+        assert.equal(servidor.dadosPessoais.get(`${caso.tipo}:${caso.id}`).canac, '222333');
+        return;
+      }
+      assert.deepEqual([r.status, r.corpo.code], [403, '42501']);
+      assert.equal(servidor.dadosPessoais.size, 0);
+      assert.equal(servidor.historico.length, 0, 'nada vai para o histórico');
+    });
+  }
+
+  it('a lista traz só as colunas pedidas (o CANAC e o nome completo); a pessoa, todas; o gestor, nenhuma', async () => {
+    const { servidor, entrar, ler } = await servidorDoCaso();
+    servidor.dadosPessoais.set('aluno:1002', { nome_completo: 'Caio da Silva', cpf: '52998224725', canac: '222333', email: 'caio@exemplo.com', atualizado_em: VERSAO_DOS_CASOS, atualizado_por: 'Operador' });
+    const secretaria = await entrar(CONTAS.secretaria);
+    const lista = await ler(secretaria, '/rest/v1/dados_pessoais?select=id_cadastro%2Ccanac%2Cnome_completo%2Catualizado_em&tipo=eq.aluno');
+    assert.deepEqual(lista.corpo, [{ id_cadastro: 1002, canac: '222333', nome_completo: 'Caio da Silva', atualizado_em: VERSAO_DOS_CASOS }]);
+    const pessoa = await ler(secretaria, '/rest/v1/dados_pessoais?select=nome_completo%2Ccpf%2Ccanac%2Cnascimento%2Ccelular%2Cemail%2Catualizado_em%2Catualizado_por&tipo=eq.aluno&id_cadastro=eq.1002');
+    assert.equal(pessoa.corpo[0].cpf, '52998224725');
+    assert.deepEqual((await ler(await entrar(CONTAS.gestor), '/rest/v1/dados_pessoais?select=id_cadastro%2Ccanac&tipo=eq.aluno')).corpo, []);
   });
 });
