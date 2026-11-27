@@ -93,7 +93,7 @@ export function contextoDaEscala(state) {
 }
 
 // Monta fila de pedidos de missão (suporta múltiplas missões por aluno no mesmo dia) e registra os Grounds de cada aluno
-export function filaDosPedidos(state, ctx) {
+export function filaDosPedidos(state, ctx, { antesDoF1h = false } = {}) {
   const act = [];
   state.stu.forEach((st, stuIdx) => {
     if (st.fly) {
@@ -125,16 +125,18 @@ export function filaDosPedidos(state, ctx) {
    * 2º: O pedido com o instrutor escolhido pelo operador para o dia antes dos outros: o que o operador definiu para o
    *     dia vale primeiro, e o pedido com um instrutor só é o que tem menos opções (os outros se encaixam em volta dele).
    * 3º: Maior prioridade (5 a 1).
-   * 4º: Com a mesma prioridade, o do aluno com “Priorizar com” (o par permanente do cadastro) antes: ele tem menos
-   *     instrutores possíveis. Antes desta ordem, o motor visita primeiro os pedidos com “Priorizar com”, só com os
-   *     instrutores deles (N9, js/engine.js); a ordem da fila, a das recusas e a dos fixos não mudam.
-   * 5º: A ordem dos agendamentos: o pedido da agenda que foi registrado antes (o id do
-   *     pedido cresce com o registro) vem antes; o pedido posto à mão, sem a agenda, vem depois dos agendados.
-   * 6º: Ordem de cadastro do aluno e ordem da missão.
+   * 4º: A ordem dos agendamentos: o pedido da agenda que foi registrado antes (o id do
+   *     pedido cresce com o registro) vem antes; o pedido posto à mão, sem a agenda, vem depois dos agendados. Num
+   *     horário cheio, quem registrou antes fica com ele (N14).
+   * 5º: Ordem de cadastro do aluno e ordem da missão.
+   * O “Priorizar com” não é chave da fila e não ganha horário de ninguém (Pedro, 2026-11-26: ele é para escolher o INVA,
+   * não o horário): ele escolhe o instrutor entre os que ficaram com o horário (js/engine.js, parearNoHorario).
+   * antesDoF1h: a fila do motor de antes do F1h (com a mesma prioridade, o aluno com “Priorizar com” antes da ordem dos
+   * agendamentos), a que gravou test/fixtures/conferencia-do-motor.json
    */
   const ordemDoAgendamento = item => (Number.isInteger(item.ref.solicitacao) ? item.ref.solicitacao : Infinity);
   const semEscolha = item => (item.ref.insId && ctx.noCadastro.has(item.ref.insId) ? 0 : 1);
-  const semVoaCom = item => ((item.stu.voaCom || []).length ? 0 : 1);
+  const semVoaCom = item => (antesDoF1h && (item.stu.voaCom || []).length ? 0 : 1);
   act.sort((a, b) => {
     const gA = isGroundMission(a.ref.mis) ? 1 : 0;
     const gB = isGroundMission(b.ref.mis) ? 1 : 0;
@@ -313,6 +315,21 @@ function linhaDoFixo(state, ctx, item, pino, fKey = chaveDoVoo(item.stuId, item.
   return { linha, alerta, avisos, comAviso };
 }
 
+// O contexto da escala já montada (out): o que ela gasta, com cada linha no lugar dela, conferida como um fixo (a volta do
+// noturno e os fixos com o pino deles; as outras com o lugar delas, e, como na fila do motor, sem o status: o status só
+// muda a ocupação de um voo fixo). O motor encaixa nele, depois da compactação, os pedidos da lista de espera
+// (js/engine.js). opcoes: as da fila (filaDosPedidos)
+export function contextoDaEscalaMontada(state, out, opcoes = {}) {
+  const fixos = state.fixos && typeof state.fixos === 'object' ? state.fixos : {};
+  const semPino = new Set(out.filter(o => !o.trecho && !Object.hasOwn(fixos, o.fKey)).map(o => o.fKey));
+  const estado = { ...state, fStatus: Object.fromEntries(Object.entries(state.fStatus || {}).filter(([fKey]) => !semPino.has(fKey))) };
+  const ctx = contextoDaEscala(estado);
+  const act = filaDosPedidos(estado, ctx, opcoes);
+  const pinos = Object.fromEntries(out.filter(o => !o.trecho).map(o => [o.fKey, semPino.has(o.fKey) ? pinoDoVoo(o) : fixos[o.fKey]]));
+  conferirFixos(estado, ctx, act, [], [], pinos);
+  return ctx;
+}
+
 // Os voos fixos do dia, na ordem do motor: a volta do noturno de ontem; depois os fixos (pelo status, pela escala
 // aprovada e pelo instrutor escolhido na Escala) e, por último, os agendados na Escala, cada grupo na ordem dos pedidos:
 // o que o agendado gasta é conferido contra os outros fixos, e o conflito fica nele, nunca no voo que já estava fixo.
@@ -366,14 +383,19 @@ function horarioPedido(d) {
   return p1 >= 0 ? p1 : null;
 }
 
-// Por que o outro pedido ficou com o horário: a chave da fila em que ele vem antes (a prioridade; com a mesma, a agenda e
-// o cadastro). Quando ele não vem antes na fila (o aluno não ficou com o horário por outro motivo: o avião, a aula), null
+// Por que o outro pedido ficou com o horário: a chave da fila em que ele vem antes (o Ground antes dos voos; a prioridade;
+// com a mesma, a ordem de registro na agenda e o cadastro: filaDosPedidos). Quando ele não vem antes na fila (o aluno não
+// ficou com o horário por outro motivo: o avião, a sala de Ground), null. Sem o número da prioridade (a tela a mostra ao
+// contrário, 1 a mais alta, e com ela desligada todos têm a mesma: js/state.js, estadoDaEscala) e, com a mesma, sem falar
+// dela
 function porQueFicou(outro, d, ordemDoOutro, ordem) {
+  const ground = p => isGroundMission(p.mis);
+  if (ground(outro) !== ground(d)) return ground(outro) ? 'o Ground vem antes dos voos' : null;
   const pr = outro.pr ?? 3;
   const agenda = p => (Number.isInteger(p.solicitacao) ? p.solicitacao : Infinity);
-  if (pr !== (d.pr ?? 3)) return pr > (d.pr ?? 3) ? `prioridade ${pr}` : null;
-  if (agenda(outro) !== agenda(d)) return agenda(outro) < agenda(d) ? `prioridade ${pr}, pedido registrado antes` : null;
-  return ordemDoOutro < ordem ? `prioridade ${pr}, antes no cadastro` : null;
+  if (pr !== (d.pr ?? 3)) return pr > (d.pr ?? 3) ? 'prioridade maior' : null;
+  if (agenda(outro) !== agenda(d)) return agenda(outro) < agenda(d) ? 'pedido registrado antes' : null;
+  return ordemDoOutro < ordem ? 'antes no cadastro' : null;
 }
 
 // Os instrutores do “Priorizar com” do aluno que estão no cadastro, cada um com o que o impede de dar o voo do pedido (mis,
@@ -415,8 +437,10 @@ const inicioDoSemPar = porque => `Sem o instrutor de “Priorizar com” (${porq
 // - o voo sem pino que ficou com um instrutor do “Priorizar com” fora do horário pedido: a disputa, quando há uma (por
 //   qualquer instrutor do “Priorizar com” que pudesse dar o voo).
 // A disputa: no horário pedido (horarioPedido), o instrutor do “Priorizar com” está com outro aluno que também o prioriza,
-// com um voo fixo ou com um pedido que tem o instrutor escolhido para o dia; sem ninguém assim, não há frase. O fixo pela
-// aprovação ou pelo status não avisa, nem o voo posto à mão cancelado (o voo sem pino cancelado avisa, como antes)
+// com um voo fixo, com um pedido que tem o instrutor escolhido para o dia, ou, quando o aluno voa nesse horário, com outro
+// voo do mesmo minuto que não o prioriza (“; a troca não serve a <aluno>”: a troca de INVAs não serviu); sem ninguém assim,
+// não há frase. O fixo pela aprovação ou pelo status não avisa, nem o voo posto à mão cancelado (o voo sem pino cancelado
+// avisa, como antes)
 export function avisosDoPriorizarCom(state, out, { semPar = new Map() } = {}) {
   const alunos = new Map(state.stu.map((s, i) => [s.id, { s, i }]));
   const instrutores = new Map(state.ins.map(x => [x.id, x]));
@@ -424,12 +448,14 @@ export function avisosDoPriorizarCom(state, out, { semPar = new Map() } = {}) {
   const pedido = o => { const a = alunos.get(o.stuId); return a && !o.trecho ? pedidoDoAluno(a.s, o.mid || 0) : null; };
   const ativo = o => statusDoVoo(o, state.fStatus) !== 'Cancelado';
   const fimDe = o => (o.trecho ? o.livreAs || o.b : o.b);
-  // Quem está com o instrutor x no horário pedido (a, b), além do aluno: o primeiro pelo horário e pela ordem do cadastro
+  // Quem está com o instrutor x no horário pedido (a, b), além do aluno: o primeiro pelo horário e pela ordem do cadastro.
+  // Um voo fixo, um com o instrutor escolhido, um de outro aluno que também prioriza x, ou um voo que sai no mesmo minuto
+  // que o do aluno, no horário pedido (a troca de INVAs do pareamento não serviu a ele: js/engine.js, parearNoHorario)
   const quemEsta = (o, x, a, b) => out.filter(v => v !== o && v.stuId !== o.stuId && v.insId === x && ativo(v) && v.a < b && a < fimDe(v) && !(o.isGround && v.classKey === o.classKey))
     .filter(v => {
       if (v.fixo || v.insEscolhido) return true;
       const outro = alunos.get(v.stuId);
-      return Boolean(outro && (outro.s.voaCom || []).includes(x));
+      return Boolean(outro && ((outro.s.voaCom || []).includes(x) || (!v.isGround && !v.trecho && !o.isGround && v.a === a && o.a === a)));
     })
     .sort((p, q) => p.a - q.a || p.o - q.o || (p.mid || 0) - (q.mid || 0))[0] || null;
   const disputa = (o, d, s, lista) => {
@@ -445,7 +471,9 @@ export function avisosDoPriorizarCom(state, out, { semPar = new Map() } = {}) {
       const quem = outro ? outro.s.nm : v.s;
       // Quando ele voa: o horário, e o instrutor quando é outro do “Priorizar com”
       const quando = o.a !== t ? `; ${s.nm} voa às ${hm(o.a)}${lista.includes(o.insId) && o.insId !== x ? ` com ${o.ins}` : ''}` : '';
-      return `${s.nm} ${ambos ? `e ${quem} priorizam` : 'prioriza'} ${instrutores.get(x).nm} às ${hm(t)}: ficou com ${quem}${porQue ? ` (${porQue})` : ''}${quando}.`;
+      // O outro, no mesmo minuto, não prioriza x e não tem pino nem escolha: a troca de INVAs não serve a ele
+      const troca = !ambos && !v.fixo && !v.insEscolhido ? `; a troca não serve a ${quem}` : '';
+      return `${s.nm} ${ambos ? `e ${quem} priorizam` : 'prioriza'} ${instrutores.get(x).nm} às ${hm(t)}: ficou com ${quem}${porQue ? ` (${porQue})` : ''}${quando}${troca}.`;
     }
     return null;
   };

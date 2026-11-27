@@ -134,7 +134,8 @@ describe('O motor com os requisitos e os atributos', () => {
     const ifr = { mis: 'IFR', eq: 'C172', jan: 'h500' };
     const { out, al } = escala(comFrota({ ins: [comHab(1, C172_IFR), comHab(2, C172_IFR)], stu: [aluno(1000, ifr), aluno(1001, ifr)] }));
     assert.deepEqual(out.map(o => o.r), ['PR-HAR']);
-    assert.deepEqual(al.map(a => [a.codigo, a.m]), [['avioes-ocupados', 'Rejeitado: nenhum C172 homologado IFR livre nos horários possíveis (o voo é IFR; os “Só VFR” não servem a ele).']]);
+    // Só às 08:20 e recusado por falta de avião nesse horário: espera por ele (F1h, N14)
+    assert.deepEqual(al.map(a => [a.codigo, a.m, a.espera]), [['avioes-ocupados', 'Rejeitado: nenhum C172 homologado IFR livre nos horários possíveis (o voo é IFR; os “Só VFR” não servem a ele); 1º na lista de espera das 08:20.', { minuto: 500, lugar: 1 }]]);
   });
 
   it('a divisão das horas, a compactação e a troca de matrículas não levam o voo para quem não voa no avião', () => {

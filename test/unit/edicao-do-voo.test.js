@@ -547,3 +547,242 @@ describe('O editor do voo: o que a revisão achou', async () => {
     assert.equal(mesmo.stu[0].limiteConfirmado, true);
   });
 });
+
+// A segunda revisão do F1g (o PR #85): desfazer a alteração com o voo em andamento, com resultado ou com o status mudado
+// depois; o voo que terminaria depois da meia-noite; o desfazer da troca do INVA (e do reparo e do aproveitamento) numa
+// data reaberta; o minuto exato da disponibilidade fora das 06:30 às 17:30; a reversão adulterada
+describe('O editor do voo: a segunda revisão', async () => {
+  const { vooParaEditar, aplicarEdicao, avisosDaEdicao } = await import('../../js/edicao-do-voo.js');
+  const { motivoParaNaoDesfazerEdicao, VOO_COM_RESULTADO } = await import('../../js/reversoes.js');
+  const { escolherInstrutor, reverterEscolha, reverterReparo } = await import('../../js/instrutor-escolhido.js');
+  const { aplicarReparo, repararComOPedido, desfazerAproveitamento } = await import('../../js/reparo.js');
+  const { fixosAoReabrir, normalizarFixos } = await import('../../js/fixos.js');
+  const { apenas } = await import('../helpers/montar.js');
+  const aprovacao = { em: '2026-11-26T10:00:00Z', por: 'Operador' };
+  const ida = rev => validarReversao(JSON.parse(JSON.stringify({ ...rev, label: '↶ Reverter' })), []);
+  // Um C152 só (PP-LJV): 1000 às 06:30, 1001 às 08:20, 1002 às 10:10; o 1004 não voa
+  const dia = () => cenario({
+    ins: [instrutor(1, 9), instrutor(2, 9), instrutor(3, 9)], semAeronaves: apenas('C152', 'PP-LJV'),
+    stu: [aluno(1000, { p1: 390, p2: -1 }), aluno(1001, { p1: 500, p2: -1 }), aluno(1002, { p1: 610, p2: -1 }), aluno(1004, { p1: 390, p2: -1, fly: false })]
+  });
+  const aprovado = () => {
+    const S = dia();
+    S.fixos = fixosAoAprovar({}, runAllocationEngine(S).out);
+    S.aprovacao = aprovacao;
+    return { S, RES: runAllocationEngine(S) };
+  };
+  const reabrir = S => { S.fixos = fixosAoReabrir(S.fixos, S.fStatus); S.aprovacao = null; };
+
+  describe('desfazer a alteração: as recusas do desfazer do agendamento, em cada chave tocada', () => {
+    // O aluno do voo muda (1001 → 1004) na escala aprovada: a chave 1001_0_1 sai, e a 1004_0_1 entra
+    const trocado = () => {
+      const { S, RES } = aprovado();
+      const voo = vooParaEditar(S, RES, '1001_0_1');
+      const feito = aplicarEdicao(S, RES, voo, { ...structuredClone(voo.valores), stuId: 1004 }, { aprovada: true });
+      assert.deepEqual(feito.chaves, ['1004_0_1']);
+      return { S, rev: ida(feito.rev) };
+    };
+
+    it('sem mudança depois da alteração, desfaz', () => {
+      const { S, rev } = trocado();
+      assert.equal(motivoParaNaoDesfazerEdicao(S, rev), '');
+    });
+
+    it('o voo em andamento na chave nova (Em Voo, Atrasado, Pousou) não é desfeito', () => {
+      for (const status of ['Em Voo', 'Atrasado', 'Pousou']) {
+        const { S, rev } = trocado();
+        S.fStatus['1004_0_1'] = status;
+        assert.equal(motivoParaNaoDesfazerEdicao(S, rev), 'O voo já está em andamento: mude o status em vez de desfazer.', status);
+      }
+    });
+
+    it('o resultado registrado na chave nova, ou na de antes, não deixa desfazer', () => {
+      for (const voo of ['1004_0_1', '1001_0_1']) {
+        const { S, rev } = trocado();
+        S.resultados = { doDia: [{ voo }] };
+        assert.equal(motivoParaNaoDesfazerEdicao(S, rev), VOO_COM_RESULTADO, voo);
+      }
+    });
+
+    it('sem os resultados lidos, o app não confere: desfazer espera "Tentar de novo"', () => {
+      const { S, rev } = trocado();
+      S.indisponiveis = ['resultados'];
+      assert.equal(motivoParaNaoDesfazerEdicao(S, rev), 'Sem os resultados dos cursos, o app não confere se o voo já tem resultado: clique em "Tentar de novo" no aviso e desfaça depois.');
+    });
+
+    it('o status mudado depois da alteração (Cancelado) não é trocado pelo de antes', () => {
+      const { S, rev } = trocado();
+      S.fStatus['1004_0_1'] = 'Cancelado';
+      assert.equal(motivoParaNaoDesfazerEdicao(S, rev), 'O status do voo mudou depois da alteração: desfazer agora trocaria o status. Mude o status em vez de desfazer.');
+    });
+
+    it('o status que a própria alteração mudou não impede: só o mudado depois dela', () => {
+      const { S, RES } = aprovado();
+      const voo = vooParaEditar(S, RES, '1002_0_1');
+      const valores = structuredClone(voo.valores);
+      valores.status['1002_0_1'] = 'Cancelado';
+      valores.detalhe['1002_0_1'] = { motivo: 'Meteorologia' };
+      const rev = ida(aplicarEdicao(S, RES, voo, valores, { aprovada: true }).rev);
+      assert.equal(motivoParaNaoDesfazerEdicao(S, rev), '');
+      S.fStatus['1002_0_1'] = 'Confirmado';
+      assert.match(motivoParaNaoDesfazerEdicao(S, rev), /^O status do voo mudou depois da alteração/);
+    });
+  });
+
+  describe('o voo que terminaria depois da meia-noite: a mesma recusa do "+ Agendar voo"', () => {
+    it('"Outro horário" 23:00 com 2 h: o aviso bloqueia, ligado ao horário, e nada é gravado', () => {
+      for (const aprovada of [true, false]) {
+        const { S, RES } = aprovado();
+        if (!aprovada) reabrir(S);
+        const voo = vooParaEditar(S, RES, '1002_0_1');
+        const valores = { ...structuredClone(voo.valores), a: 1380, minutos: 120 };
+        const avisos = avisosDaEdicao(S, RES, voo, valores, { aprovada });
+        assert.deepEqual(avisos.filter(a => a.bloqueia).map(a => [a.codigo, a.texto, a.campo]), [['depois-da-meia-noite', 'O voo terminaria depois da meia-noite.', 'voo-horario']], JSON.stringify(avisos));
+        const copia = structuredClone(S);
+        assert.equal(aplicarEdicao(copia, RES, voo, valores, { aprovada }), null);
+        assert.deepEqual(copia, S, 'o estado mudou');
+      }
+    });
+
+    it('até a meia-noite em ponto vale; um minuto depois, não', () => {
+      const { S, RES } = aprovado();
+      const voo = vooParaEditar(S, RES, '1002_0_1');
+      const ate = { ...structuredClone(voo.valores), a: 1380, minutos: 60 };
+      assert.ok(!avisosDaEdicao(S, RES, voo, ate).some(a => a.bloqueia));
+      assert.ok(aplicarEdicao(structuredClone(S), RES, voo, ate));
+      const depois = { ...structuredClone(voo.valores), a: 1385, minutos: 60 };
+      assert.ok(avisosDaEdicao(S, RES, voo, depois).some(a => a.codigo === 'depois-da-meia-noite'));
+    });
+
+    it('o Noturno (4 h, a duração não muda) levado para depois das 20:00', () => {
+      const S = cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, { mis: 'Noturno', eq: 'C172', nb: 4, p1: 1050, p2: -1 })] });
+      const RES = runAllocationEngine(S);
+      const noturno = RES.out.find(o => o.mis === 'Noturno' && !o.trecho);
+      assert.ok(noturno, 'o Noturno não entrou');
+      const voo = vooParaEditar(S, RES, noturno.fKey);
+      const valores = { ...structuredClone(voo.valores), a: 1230 };
+      assert.equal(valores.minutos, 240);
+      assert.ok(avisosDaEdicao(S, RES, voo, valores, { aprovada: false }).some(a => a.codigo === 'depois-da-meia-noite' && a.bloqueia));
+      assert.equal(aplicarEdicao(structuredClone(S), RES, voo, valores, { aprovada: false }), null);
+    });
+  });
+
+  describe('o desfazer numa data reaberta não deixa o pino da aprovação', () => {
+    // O voo sem pino na data aprovada: o 1004 entra depois da aprovação
+    const comSolto = () => {
+      const { S } = aprovado();
+      S.stu[1].fly = false;
+      S.stu[3].fly = true;
+      S.stu[3].p1 = 500;
+      const RES = runAllocationEngine(S);
+      const solto = RES.out.find(o => o.fKey === '1004_0_1');
+      assert.ok(solto && !S.fixos['1004_0_1'], 'o 1004 não entrou sem pino');
+      return { S, RES, solto };
+    };
+    // Como trocarInstrutor (js/eventos/escala.js): o voo fixo no lugar antes, e a escolha
+    const trocarInva = (S, RES, fKey) => {
+      S.fixos = fixarNoLugar(S.fixos, RES, [fKey]);
+      const outro = [1, 2, 3].find(i => i !== RES.out.find(o => o.fKey === fKey).insId);
+      return ida({ kind: 'restaurarEscolha', ...escolherInstrutor(S, RES, { stuId: +fKey.split('_')[0], mid: 0 }, outro, { noLugar: true }).antes });
+    };
+
+    it('a troca do INVA na Lista, desfeita depois de reabrir: sem pino, e o pedido sem a escolha', () => {
+      const { S, RES } = comSolto();
+      const rev = trocarInva(S, RES, '1004_0_1');
+      assert.equal(S.fixos['1004_0_1'].escolhido, true);
+      reabrir(S);
+      reverterEscolha(S, rev);
+      S.fixos = normalizarFixos(S.fixos);
+      assert.equal(S.fixos['1004_0_1'], undefined, JSON.stringify(S.fixos['1004_0_1']));
+      assert.equal(S.stu[3].insId, undefined);
+    });
+
+    it('a troca do INVA, desfeita na escala ainda aprovada: o voo fica fixo no lugar, com o INVA de antes, sem a marca', () => {
+      const { S, RES, solto } = comSolto();
+      const rev = trocarInva(S, RES, '1004_0_1');
+      reverterEscolha(S, rev);
+      assert.deepEqual(S.fixos['1004_0_1'], { a: solto.a, b: solto.b, r: solto.r, insId: solto.insId });
+    });
+
+    it('a troca do INVA de um voo com o pino da aprovação, desfeita depois de reabrir: sem pino; com o status que fixa, fica', () => {
+      for (const status of [null, 'Atrasado']) {
+        const { S, RES } = aprovado();
+        if (status) S.fStatus = { ...(S.fStatus || {}), '1002_0_1': status };
+        const rev = trocarInva(S, RES, '1002_0_1');
+        reabrir(S);
+        reverterEscolha(S, rev);
+        if (status) assert.deepEqual(Object.keys(S.fixos['1002_0_1'] || {}).sort(), ['a', 'b', 'insId', 'r'], status);
+        else assert.equal(S.fixos['1002_0_1'], undefined, JSON.stringify(S.fixos['1002_0_1']));
+      }
+    });
+
+    it('o reparo das Sugestões na escala aprovada, desfeito depois de reabrir: o pino da aprovação não volta', () => {
+      const { S, RES } = aprovado();
+      const antes = S.fixos;
+      S.fixos = aplicarReparo(antes, RES, '1002_0_1', { mudancas: { a: 690, b: 750 } });
+      const mudados = Object.keys(antes).filter(k => S.fixos[k] !== antes[k]);
+      const rev = ida({ kind: 'restaurarFixos', fixos: Object.fromEntries(mudados.map(k => [k, antes[k]])), aprovada: true });
+      reabrir(S);
+      reverterReparo(S, rev);
+      assert.equal(S.fixos['1002_0_1'], undefined, JSON.stringify(S.fixos['1002_0_1']));
+    });
+
+    it('o reparo que muda o pedido, desfeito depois de reabrir: o pino da aprovação não volta; o cancelado aproveitado volta fixo pelo status', () => {
+      const { S, RES } = aprovado();
+      const rev = ida(repararComOPedido(S, RES, '1002_0_1', { mudancas: { a: 690, b: 750 }, pedido: { jan: 'tarde' } }));
+      reabrir(S);
+      desfazerAproveitamento(S, rev);
+      assert.equal(S.fixos['1002_0_1'], undefined, JSON.stringify(S.fixos['1002_0_1']));
+      // O cancelado: o status de antes (Cancelado) fixa, e o pino volta
+      const c = aprovado();
+      c.S.fStatus = { ...(c.S.fStatus || {}), '1002_0_1': 'Cancelado' };
+      c.S.fObs = { '1002_0_1': { motivo: 'Meteorologia' } };
+      const revC = ida({ kind: 'aproveitarCancelado', voos: [{ fKey: '1002_0_1', fixo: c.S.fixos['1002_0_1'], status: 'Cancelado', detalhe: { motivo: 'Meteorologia' } }], pedidos: [], aprovada: true });
+      c.S.fixos['1002_0_1'] = { ...c.S.fixos['1002_0_1'], a: 690, b: 750, agendado: true };
+      c.S.fStatus['1002_0_1'] = 'Pendente';
+      reabrir(c.S);
+      desfazerAproveitamento(c.S, revC);
+      assert.deepEqual(c.S.fixos['1002_0_1'], { a: 610, b: 670, r: 'PP-LJV', insId: RES.out.find(o => o.fKey === '1002_0_1').insId });
+    });
+  });
+
+  it('a mudança feita fora da escala aprovada devolve o pino de antes como estava; a marca "aprovada" fora do formato invalida a reversão', () => {
+    const S = dia();
+    const RES = runAllocationEngine(S);
+    S.fixos = { '1002_0_1': { a: 610, b: 670, r: 'PP-LJV', insId: RES.out.find(o => o.fKey === '1002_0_1').insId } };
+    const rev = ida({ kind: 'restaurarEscolha', ...escolherInstrutor(S, RES, { stuId: 1002, mid: 0 }, 1, { noLugar: true }).antes });
+    assert.equal(rev.aprovada, undefined);
+    reverterEscolha(S, rev);
+    assert.deepEqual(Object.keys(S.fixos['1002_0_1']).sort(), ['a', 'b', 'insId', 'r']);
+    for (const kind of ['restaurarEscolha', 'restaurarFixos', 'aproveitarCancelado']) {
+      const base = { kind, pedidos: [], soltar: [], fixos: { '1002_0_1': { a: 610, b: 670, r: 'PP-LJV', insId: 1 } }, voos: [{ fKey: '1002_0_1', fixo: null, status: null, detalhe: null }] };
+      if (kind === 'restaurarEscolha') base.pedidos = [{ stuId: 1002, mid: 0, insId: 0 }];
+      assert.ok(ida(base), kind);
+      assert.equal(ida({ ...base, aprovada: true }).aprovada, true, kind);
+      assert.equal(ida({ ...base, aprovada: 'sim' }), null, kind);
+    }
+  });
+
+  it('o minuto exato da disponibilidade fora das 06:30 às 17:30 sai do pedido, com o aviso', () => {
+    const S = dia();
+    S.stu[2].jan = 'h610';
+    const RES = runAllocationEngine(S);
+    const voo = vooParaEditar(S, RES, '1002_0_1');
+    const valores = { ...structuredClone(voo.valores), a: 1080 };
+    const avisos = avisosDaEdicao(S, RES, voo, valores, { aprovada: false });
+    assert.ok(avisos.some(a => a.codigo === 'disponibilidade-do-aluno'), JSON.stringify(avisos));
+    const copia = structuredClone(S);
+    const feito = aplicarEdicao(copia, RES, voo, valores, { aprovada: false });
+    assert.equal(feito.janSaiu, true);
+    assert.equal(copia.stu[2].jan, undefined);
+  });
+
+  it('a reversão adulterada: cada pedido tem o voo dele na reversão', () => {
+    const { S, RES } = aprovado();
+    const voo = vooParaEditar(S, RES, '1001_0_1');
+    const { rev } = aplicarEdicao(S, RES, voo, { ...structuredClone(voo.valores), a: 690 }, { aprovada: true });
+    assert.ok(ida(rev));
+    assert.equal(ida({ ...rev, pedidos: [...rev.pedidos, { stuId: 1000, mid: 3, pedido: null }] }), null, 'a missão extra de outro voo');
+    assert.equal(ida({ ...rev, pedidos: rev.pedidos.map(p => ({ ...p, stuId: 1002 })) }), null, 'o pedido de outro aluno');
+  });
+});

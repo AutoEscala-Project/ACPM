@@ -6,23 +6,27 @@ import { runAllocationEngine } from '../../js/engine.js';
 import { EQ, GROUND_REG, ACROBAT_REG, T, NI, DEFAULT_LIM, AIRCRAFT_EQ_TYPES } from '../../js/config.js';
 import { isGroundMission, doesGroundGateFlight } from '../../js/rules.js';
 import { podeFazer } from '../../js/habilitacoes.js';
-import { gerarCenario, comEscolhas, comAtributos, comVolta, FORA_DO_CADASTRO, mulberry32 } from '../helpers/cenarios.js';
+import { categoriaDoRodizio } from '../../js/rodizio.js';
+import { gerarCenario, comEscolhas, comAtributos, comVolta, comAgenda, FORA_DO_CADASTRO, mulberry32 } from '../helpers/cenarios.js';
 import { FROTA_POR_TIPO } from '../helpers/estado.js';
 import { FROTA_INICIAL, recursoDaFrota, aviaoServe, instrutorVoaNoAviao } from '../../js/frota.js';
 import { CODIGOS_DE_REJEICAO, CODIGOS_DO_AGENDADO } from '../../js/conflitos.js';
 import { fixosAoAprovar } from '../../js/fixos.js';
 import { normalizarEscalaGravada } from '../../js/escala-gravada.js';
+import { rejeicoesDosPedidos } from '../../js/rejeicoes.js';
+import { hm } from '../../js/format.js';
 
 // Até quando o voo pode ir: o de dia no avião pousa até as 17:30; o Noturno, o simulador e o Ground, até o fim do dia
 const fimDoVoo = o => (o.mis !== 'Noturno' && AIRCRAFT_EQ_TYPES.includes(o.eqType) ? T[NI] : 1440);
 
 const SEEDS = Array.from({ length: 300 }, (_, i) => 1001 + i);
-// Cada seed três vezes: o cenário como foi gerado, com as escolhas do operador (o instrutor escolhido para o dia e o
-// “Priorizar com”) e com os atributos dos recursos e os cursos dos alunos (“Só VFR”, habilitação própria, o noturno do
-// PC): as regras da escala valem também com eles
+// Cada seed cinco vezes: o cenário como foi gerado, com as escolhas do operador (o instrutor escolhido para o dia e o
+// “Priorizar com”), com os atributos dos recursos e os cursos dos alunos (“Só VFR”, habilitação própria, o noturno do
+// PC), com a volta do noturno de ontem e com os pedidos da Agenda (o horário exato, a ordem de registro e a lista de
+// espera): as regras da escala valem também com eles
 const execucoes = SEEDS.flatMap(seed => [
   [seed, gerarCenario(seed)], [`${seed} com escolhas`, comEscolhas(gerarCenario(seed), seed)], [`${seed} com atributos`, comAtributos(gerarCenario(seed), seed)],
-  [`${seed} com a volta do noturno`, comVolta(gerarCenario(seed), seed)]
+  [`${seed} com a volta do noturno`, comVolta(gerarCenario(seed), seed)], [`${seed} com a agenda`, comAgenda(gerarCenario(seed), seed)]
 ].map(([rotulo, estado]) => {
   // out: os voos que o motor escala hoje; a volta do noturno de ontem (fixa, de outro dia) fica em voltas, e todos tem os dois
   const resultado = runAllocationEngine(estado);
@@ -76,6 +80,30 @@ describe('Invariantes do motor de alocação', () => {
   }));
 
   // O voo cancelado não ocupa nada: outro voo pode ficar no horário dele
+  // A lista de espera (F1h; N14, U3): o pedido com o horário exato recusado só por falta de lugar nele (os 6 locais, os
+  // aviões, os instrutores) espera, com o lugar dele na lista do horário, na ordem da fila; nenhum outro espera
+  it('a lista de espera: só o pedido com horário exato recusado por falta de lugar nele, numerado na ordem da fila', () => {
+    let esperas = 0;
+    emTodos(({ estado, out, al }) => {
+      // As recusas ligadas aos pedidos, na ordem da fila (js/rejeicoes.js)
+      const lugares = {};
+      for (const [fKey, a] of rejeicoesDosPedidos(estado, { out, al })) {
+        const stu = estado.stu.find(x => x.id === Number(fKey.split('_')[0]));
+        const mid = Number(fKey.split('_')[1]);
+        const d = mid ? stu.extra.find(ex => ex.mid === mid) : stu;
+        const exato = /^h\d+$/.test(d.jan || '') ? Number(d.jan.slice(1)) : null;
+        const espera = exato !== null && ['limite-de-locais', 'avioes-ocupados', 'instrutores-ocupados'].includes(a.codigo);
+        if (!espera) { assert.equal(a.espera, undefined, `${fKey}: espera sem horário exato ou por outro motivo (${a.codigo})`); continue; }
+        esperas++;
+        lugares[exato] = (lugares[exato] || 0) + 1;
+        assert.deepEqual(a.espera, { minuto: exato, lugar: lugares[exato] }, fKey);
+        assert.ok(a.m.endsWith(`; ${lugares[exato]}º na lista de espera das ${hm(exato)}.`), a.m);
+      }
+      assert.ok(al.every(a => a.espera === undefined || a.t === 'err'), 'espera fora de uma recusa');
+    });
+    assert.ok(esperas > 200, `${esperas} pedidos esperando (o teste não passa por falta deles)`);
+  });
+
   it('nenhuma aeronave ou simulador é escalado em horários sobrepostos', () => emTodos(({ out }) => {
     const voos = out.filter(o => !o.isGround && o.status !== 'Cancelado');
     for (const [i, x] of voos.entries()) {
@@ -437,8 +465,38 @@ describe('Invariantes das escolhas do operador, em 300 cenários', () => {
     }
   }));
 
-  it('a divisão das horas e a compactação não trocam o instrutor escolhido nem o do “Priorizar com”', () => emTodasAsEscolhas(({ estado, out }) => {
-    const antes = new Map(runAllocationEngine(estado, { compactar: false, dividirHoras: false }).out.map(o => [o.fKey, o]));
+  // F1h (Pedro, 2026-11-26): o “Priorizar com” escolhe o instrutor, não o horário. O pareamento no horário (js/engine.js)
+  // só troca o instrutor de voos de um mesmo horário: contra o motor sem ele, nenhum horário muda, ninguém sai de um
+  // instrutor do “Priorizar com”, e o voo fixo, o do instrutor escolhido, a turma de Ground e a volta do noturno ficam com o
+  // instrutor deles; nenhum avião muda, e cada instrutor fica com os mesmos voos de cada categoria do rodízio
+  it('o pareamento no horário só troca o instrutor: o horário, o avião, o rodízio, o “Priorizar com” de quem já tinha, os fixos e os escolhidos ficam', () => {
+    let trocados = 0, noRodizio = 0;
+    const doRodizio = out => JSON.stringify(out.filter(o => !o.trecho && categoriaDoRodizio(o.mis, o.eqType))
+      .map(o => `${categoriaDoRodizio(o.mis, o.eqType)} ${o.insId}`).sort());
+    emTodasAsEscolhas(({ estado, todos }) => {
+      const semOPareamento = runAllocationEngine(estado, { parearNoHorario: false }).out;
+      const sem = new Map(semOPareamento.map(o => [o.fKey, o]));
+      assert.equal(todos.length, sem.size, 'outros voos');
+      assert.equal(doRodizio(todos), doRodizio(semOPareamento), 'o rodízio mudou');
+      for (const o of todos) {
+        const v = sem.get(o.fKey);
+        assert.ok(v && v.a === o.a && v.b === o.b, `${o.fKey}: o horário mudou`);
+        assert.equal(o.r, v.r, `${o.fKey}: o avião mudou`);
+        if (v.insId !== o.insId && categoriaDoRodizio(o.mis, o.eqType)) noRodizio++;
+        if (v.insId === o.insId) continue;
+        trocados++;
+        const pares = (estado.stu.find(s => s.id === o.stuId) || {}).voaCom || [];
+        assert.ok(!pares.includes(v.insId) || pares.includes(o.insId), `${o.fKey}: saiu do “Priorizar com”`);
+        assert.ok(!v.fixo && !v.insEscolhido && !v.isGround && !v.trecho, `${o.fKey}: o instrutor de um voo preso mudou`);
+      }
+    });
+    assert.ok(trocados > 0 && noRodizio > 0, `${trocados} voos trocaram de instrutor, ${noRodizio} do rodízio (o teste não passa por falta deles)`);
+  });
+
+  // Sem o pareamento no horário, que vem depois delas (e tem o invariante dele, acima): a escala antes e depois delas
+  it('a divisão das horas e a compactação não trocam o instrutor escolhido nem o do “Priorizar com”', () => emTodasAsEscolhas(({ estado }) => {
+    const antes = new Map(runAllocationEngine(estado, { compactar: false, dividirHoras: false, parearNoHorario: false }).out.map(o => [o.fKey, o]));
+    const { out } = runAllocationEngine(estado, { parearNoHorario: false });
     for (const o of antes.values()) {
       if (!o.insEscolhido && !o.insPar) continue;
       const depois = out.find(v => v.fKey === o.fKey);

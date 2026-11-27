@@ -5,6 +5,8 @@ import { pedidoDoAluno } from './voo.js';
 import { hojeISO } from './format.js';
 import { ligada } from './funcionalidades.js';
 import { estadoParaEscalar, inativo, inativoValeEm } from './inativos.js';
+import { comAPrioridadePadrao } from './rules.js';
+import { runAllocationEngine, semAPrioridadeNosMotivos } from './engine.js';
 import { comExigenciasDasMissoes } from './programa.js';
 
 export let S = ApiClient.createFreshState();
@@ -12,8 +14,10 @@ export let RES = null;
 export let AUDIT_LOG = [];
 export let BI_HISTORY = {};
 export let TL_MODE = 'eq'; // visão da escala: 'eq' (por recurso, a que abre), 'ins' (por instrutor), 'lista' ou 'painel' (o quadro do dia)
-export let EIXO_INVERTIDO = false; // o mapa com os eixos trocados: os recursos (ou instrutores) nas colunas, as horas nas linhas
-export let OCULTAR_INDISPONIVEIS = false; // no mapa Por recurso, sem as linhas dos recursos indisponíveis na data que não têm voo
+// O mapa abre com os recursos (ou os instrutores) nas colunas e as horas descendo nas linhas; Inverter eixo X:Y liga isto:
+// as horas nas colunas e um recurso (ou instrutor) por linha. Vale até recarregar a página (não fica guardado)
+export let HORAS_NAS_COLUNAS = false;
+export let OCULTAR_INDISPONIVEIS = false; // no mapa Por recurso, sem os recursos indisponíveis na data que não têm voo (as colunas ou, com Inverter eixo X:Y, as linhas)
 // Data (AAAA-MM-DD) da escala aberta na tela. O campo de data pode já mostrar outra enquanto ela carrega
 // (ou ficar vazio): as alterações vão sempre para esta data
 export let DATA = '';
@@ -23,7 +27,7 @@ export const setRES = v => { RES = v; };
 export const setAuditLog = v => { AUDIT_LOG = v; };
 export const setBIHistory = v => { BI_HISTORY = v; };
 export const setTLMode = v => { TL_MODE = v; };
-export const setEixoInvertido = v => { EIXO_INVERTIDO = Boolean(v); };
+export const setHorasNasColunas = v => { HORAS_NAS_COLUNAS = Boolean(v); };
 export const setOcultarIndisponiveis = v => { OCULTAR_INDISPONIVEIS = Boolean(v); };
 export const setData = v => { DATA = v; };
 
@@ -52,11 +56,19 @@ export function getMissionTarget(stuId, mid = 0) {
 // passada: a ordem guardada passa de uma data para a outra mesmo desligada, e com ela a data feita na ordem da frota
 // mudaria de aviões ao ser alterada no dia seguinte. Cada pedido com a missão do curso leva o que ela exige do INVA
 // (exige, de S.programa, também com o progresso desligado; sem os programas lidos, nada: habilitacoesNaoConferidas).
-// Nunca é gravado: quem muda os dados muda S
+// Com a prioridade desligada, todos os pedidos na prioridade padrão (js/rules.js, comAPrioridadePadrao): valem a ordem dos
+// agendamentos e a do cadastro, e a guardada continua em S. Nunca é gravado: quem muda os dados muda S
 export function estadoDaEscala() {
   const estado = comExigenciasDasMissoes(estadoParaEscalar(S, { data: DATA, hoje: hojeISO() }), programaLido());
-  return ligada('hangar') ? estado : { ...estado, hangar: null };
+  const comHangar = ligada('hangar') ? estado : { ...estado, hangar: null };
+  return ligada('prioridade') ? comHangar : comAPrioridadePadrao(comHangar);
 }
+// O resultado do motor (a escala da data, a gravada e a da simulação do agendamento) como a tela o mostra: com a prioridade
+// desligada, o motivo do avião ocupado não fala dela (js/engine.js, semAPrioridadeNosMotivos)
+export const comOsMotivosDaTela = resultado => (ligada('prioridade') ? resultado : semAPrioridadeNosMotivos(resultado));
+// O motor das telas, com os motivos da tela: a escala calculada da data, a prévia do agendamento, as Sugestões e o motor
+// que a escala aprovada pede para o pedido que entra no dia sem lugar (R5, js/edicao-do-voo.js, escalaDaAlteracao)
+export const escalaDoMotor = estado => comOsMotivosDaTela(runAllocationEngine(estado));
 // Os programas dos cursos lidos (null quando a leitura falhou ou eles ainda esperam a conversão do cadastro)
 export const programaLido = () => (dadoIndisponivel('cursos') || dadoIndisponivel('cursos-pendentes') ? null : S.programa || null);
 // Sem os programas lidos, o que as missões do curso dos pedidos que voam exigem do INVA não foi conferido: quantos

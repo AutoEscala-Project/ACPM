@@ -84,13 +84,19 @@ export function normalizarLinhaGravada(o) {
 // Os códigos de cada tipo de alerta (o conflito tem os códigos na linha do voo)
 const CODIGOS_DO_ALERTA = { err: CODIGOS_DE_REJEICAO, warn: CODIGOS_DE_AVISO, conf: [] };
 
+// A espera da recusa do pedido na lista de espera (F1h, N14): o minuto do horário exato dele e o lugar na lista (1º, 2º…)
+export const esperaValida = e => objeto(e) && inteiro(e.minuto, 0, MINUTOS_DO_DIA) && inteiro(e.lugar, 1, 100000);
+
 function alerta(a) {
   if (!objeto(a) || !TIPOS_DE_ALERTA.includes(a.t) || !texto(a.s, 200) || !texto(a.m, 1000)) return null;
   if (a.fKey !== undefined && !CAMPOS.fKey(a.fKey)) return null;
   if (a.codigo !== undefined && !CODIGOS_DO_ALERTA[a.t].includes(a.codigo)) return null;
   if (['stuId', 'insId'].some(c => a[c] !== undefined && !CAMPOS[c](a[c]))) return null;
+  // A lista de espera (F1h, N14): só na recusa
+  if (a.espera !== undefined && !(a.t === 'err' && esperaValida(a.espera))) return null;
   const opcional = c => (a[c] !== undefined ? { [c]: a[c] } : {});
-  return { t: a.t, s: a.s, ...opcional('fKey'), m: a.m, ...opcional('codigo'), ...opcional('stuId'), ...opcional('insId') };
+  const espera = a.espera !== undefined ? { espera: { minuto: a.espera.minuto, lugar: a.espera.lugar } } : {};
+  return { t: a.t, s: a.s, ...opcional('fKey'), m: a.m, ...opcional('codigo'), ...opcional('stuId'), ...opcional('insId'), ...espera };
 }
 
 function revisaoDoAviao(r) {

@@ -473,3 +473,64 @@ test.describe('O editor do voo: o que a revisão achou', () => {
     expect(rotulos).toEqual(expect.arrayContaining(['Editar a turma de Ground C152 (Aluno 1000)', 'Editar a turma de Ground C152 (Aluno 1001)', 'Editar o voo de Aluno 1002']));
   });
 });
+
+// A segunda revisão do F1g (o PR #85), na tela: o voo que terminaria depois da meia-noite não é salvo (o aviso ligado ao
+// horário); o Histórico não desfaz a alteração do voo que já pousou
+test.describe('O editor do voo: a segunda revisão', () => {
+  for (const aprovada of [true, false]) {
+    test(`"Outro horário" 23:00 com 2 h ${aprovada ? 'na escala aprovada' : 'fora da escala aprovada'}: o aviso bloqueia, ligado ao horário, e nada é gravado`, async ({ page }) => {
+      const erros = vigiarErros(page);
+      await abrir(page, { estado: dia() });
+      await abrirEscala(page);
+      if (aprovada) await aprovar(page);
+      const guardado = await diaGuardado(page);
+      await editarPelaLista(page, '1002_0_1');
+      await page.locator('#voo-horario').selectOption('outro');
+      await page.locator('#voo-outro-horario').fill('23:00');
+      await page.locator('#voo-duracao').fill('2');
+      await page.locator('#voo-duracao').blur();
+      const aviso = page.locator('#voo-avisos li', { hasText: 'O voo terminaria depois da meia-noite.' });
+      await expect(aviso).toHaveCount(1);
+      const id = await aviso.getAttribute('id');
+      for (const campo of ['#voo-horario', '#voo-outro-horario']) {
+        await expect(page.locator(campo)).toHaveAttribute('aria-invalid', 'true');
+        expect((await page.locator(campo).getAttribute('aria-describedby')).split(' ')).toContain(id);
+      }
+      // "Salvar" (duas vezes: não arma o "Salvar mesmo assim") não grava nem pergunta
+      for (let i = 0; i < 2; i++) {
+        await page.locator('#voo-salvar').click();
+        await expect(page.locator('#voo-erro')).toHaveText('O voo terminaria depois da meia-noite.');
+        await expect(page.locator('#voo-salvar')).toHaveText('Salvar');
+      }
+      await expect(page.locator('#voo-outro-horario')).toBeFocused();
+      await expect(editorDoVoo(page)).toBeVisible();
+      await expect(perguntaDoRefazer(page)).toBeHidden();
+      expect(await diaGuardado(page)).toBe(guardado);
+      // Uma hora a menos cabe: salva
+      await page.locator('#voo-duracao').fill('1');
+      await page.locator('#voo-duracao').blur();
+      await expect(aviso).toHaveCount(0);
+      await expect(page.locator('#voo-erro')).toHaveText('');
+      expect(erros).toEqual([]);
+    });
+  }
+
+  test('o Histórico não desfaz a alteração do voo que pousou depois dela: o aviso, e nada muda', async ({ page }) => {
+    const estado = dia();
+    estado.stu.push(aluno(1004, { fly: false }));
+    await abrir(page, { estado });
+    await abrirEscala(page);
+    await aprovar(page);
+    await editarPelaLista(page, '1001_0_1');
+    await page.locator('#voo-aluno').selectOption('1004');
+    await salvarVoo(page);
+    await expect(editorDoVoo(page)).toBeHidden();
+    await page.locator('#out select[data-f="fstatus"][data-fkey="1004_0_1"]').selectOption('Pousou');
+    await expect(page.locator('#out select[data-f="fstatus"][data-fkey="1004_0_1"]')).toHaveValue('Pousou');
+    const guardado = await diaGuardado(page);
+    await abrirHistorico(page);
+    await entradasDoHistorico(page, 'Voo editado: Aluno 1001').getByRole('button', { name: '↶ Reverter' }).click();
+    await expect(page.locator('#toast-box')).toContainText('O voo já está em andamento: mude o status em vez de desfazer.');
+    expect(await diaGuardado(page)).toBe(guardado);
+  });
+});

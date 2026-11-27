@@ -31,6 +31,7 @@ const TERMOS = {
   'horario-livre': { aba: 'Escala', termo: 'Horário livre', texto: 'Sem vaga na 1ª nem na 2ª preferência, o voo foi para o horário livre mais perto da 1ª preferência (empatados, o mais cedo).' },
   'segunda-preferencia': { aba: 'Escala', termo: '2ª preferência', texto: 'O voo ficou na 2ª preferência do aluno: na 1ª não havia avião, instrutor ou horário livre.' },
   'horario-ajustado': { aba: 'Escala', termo: 'Horário ajustado', texto: 'A compactação mudou o horário para fechar um buraco do dia, dentro da regra de Horários escolhida nos critérios.' },
+  espera: { aba: 'Escala', termo: 'Lista de espera', texto: 'O pedido da Agenda com horário exato que não coube nele (os 6 voos locais, os aviões ou os instrutores) espera por ele, na ordem da fila: a recusa diz o lugar. A vaga que abrir vai para o 1º que cabe nela.' },
   conflito: { aba: 'Escala', termo: 'Conflito', texto: 'O voo fixo não vale mais: o instrutor, o avião, o horário ou o pedido mudou, ou outro voo fixo já ocupa o lugar (o agendado na Escala cede o lugar aos outros fixos). Ele fica onde está até ser resolvido em Sugestões.' },
   'voo-fixo': { aba: 'Escala', termo: 'Voo fixo (cadeado)', texto: 'O voo não muda quando a escala é refeita. Fica fixo pelo agendamento na Escala, pela escala aprovada, pelo instrutor escolhido na Escala ou pelo status Atrasado, Em Voo, Pousou ou Cancelado.' },
   'voo-agendado': { aba: 'Escala', termo: 'Voo agendado', texto: 'Marcado pelo operador em “+ Agendar voo”: fica fixo no horário, no recurso e com o instrutor confirmados, e a escala é refeita em volta dele. O Histórico desfaz o agendamento.' },
@@ -84,7 +85,7 @@ const TERMOS = {
   'instrutor-escolhido': { aba: 'Demanda', termo: 'Instrutor', texto: 'Automático: o app escolhe. Um instrutor escolhido pelo operador vale mais: a escala põe o aluno com ele (o horário e o avião em volta dele) e não o troca.' },
   disponibilidade: { aba: 'Demanda', termo: 'Disponibilidade', texto: 'Quando o aluno pode voar: manhã, tarde, noite ou um horário exato. O voo só começa dentro dela.' },
   duracao: { aba: 'Demanda', termo: 'Duração', texto: `As horas do voo, de uma vez. O Ground tem ${duracao(GROUND_DURATION_MIN)}. Para dois voos do aluno no mesmo dia, use “+ missão”.` },
-  prioridade: { aba: 'Demanda', termo: 'Prioridade', texto: 'De 1 a 5: o pedido de prioridade maior é escalado antes. Com a mesma prioridade, quem agendou primeiro vai antes; o pedido posto à mão, depois.' },
+  prioridade: { funcionalidade: 'prioridade', aba: 'Demanda', termo: 'Prioridade', texto: 'De 1 a 5, e 1 é a mais alta: o pedido de prioridade mais alta é escalado antes. Com a mesma prioridade, quem agendou primeiro vai antes; o pedido posto à mão, depois.' },
   'fora-da-ordem': { funcionalidade: 'progresso', aba: 'Demanda', termo: 'Fora da ordem', texto: 'A missão do curso que o programa ainda não libera (falta uma anterior ou a fase não abriu), a já aprovada, a dispensada ou a que o aluno já tem em outro voo do dia. Escolhê-la pede confirmação, e o histórico diz por quê.' },
   'curso-encerrado': { funcionalidade: 'progresso', aba: 'Demanda', termo: 'Curso encerrado', texto: 'O curso do aluno foi encerrado em Cursos. A próxima missão e as outras do curso continuam, mas cada uma pede confirmação, aqui e no agendamento, e o histórico diz que o curso estava encerrado.' },
 
@@ -128,7 +129,7 @@ const TERMOS = {
   },
 
   // Alunos
-  'voa-com': { aba: 'Alunos', termo: 'Priorizar com', texto: 'Os instrutores do aluno, a prioridade máxima: a escala o põe com um deles antes dos outros pedidos. Sem nenhum que possa, com outro, com aviso; na disputa pelo mesmo horário, o aviso diz quem ficou com ele.' },
+  'voa-com': { aba: 'Alunos', termo: 'Priorizar com', texto: 'Os instrutores do aluno: escolhe o instrutor, não o horário (que é da fila). A escala o põe com um deles sempre que algum pode. Sem nenhum que possa, com outro, com aviso; na disputa pelo mesmo horário, o aviso diz quem ficou com ele.' },
   'nao-escalar-com': { aba: 'Alunos', termo: 'Não escalar com', texto: 'Instrutores que nunca voam com este aluno: a escala não põe o aluno com eles por nenhum caminho; o voo posto à mão com um deles fica em conflito.' },
   progresso: { funcionalidade: 'progresso', aba: 'Alunos', termo: 'Progresso', texto: 'Missões do curso aprovadas sobre o total do programa, a fase em que o aluno está (no curso com mais de uma) e a próxima missão.' },
   inativo: { aba: 'Alunos', termo: 'Inativo', texto: 'Com “Ativo” desligado na linha (um clique; outro liga de novo): de hoje em diante não entra em pedido nem em voo novo. As datas passadas e os dados ficam; “Mostrar inativos” mostra a linha.' },

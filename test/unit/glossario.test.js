@@ -56,17 +56,25 @@ describe('Glossário', () => {
     assert.deepEqual(daAba, ['fase-do-curso', 'alunos-na-fase', 'quando-voar', 'dispensada', 'trecho-do-noturno', 'habilitacoes-da-missao']);
   });
 
-  it('com o hangar e o progresso desligados, os termos deles saem, e os outros não falam deles', () => {
+  it('com o hangar, o progresso e a prioridade desligados, os termos deles saem, e os outros não falam deles', () => {
     const saem = Object.keys(INTEIRO).filter(id => !Object.hasOwn(SEM_FUNCIONALIDADES, id));
-    assert.deepEqual(saem, ['resultado', 'fora-da-ordem', 'curso-encerrado', 'hangar', 'progresso', 'alunos-na-fase']);
+    assert.deepEqual(saem, ['resultado', 'prioridade', 'fora-da-ordem', 'curso-encerrado', 'hangar', 'progresso', 'alunos-na-fase']);
     for (const [id, { termo, texto }] of Object.entries(SEM_FUNCIONALIDADES)) {
-      assert.doesNotMatch(`${termo} ${texto}`, /hangar|progresso|próxima missão|ainda não aprovou|sugerida|o resultado/i, id);
+      assert.doesNotMatch(`${termo} ${texto}`, /hangar|progresso|próxima missão|ainda não aprovou|sugerida|o resultado|prioridade/i, id);
     }
     // Uma só: os termos dela saem, e os da outra ficam como estão
     const semHangar = montarGlossario(nome => nome !== 'hangar');
     assert.deepEqual(Object.keys(INTEIRO).filter(id => !Object.hasOwn(semHangar, id)), ['hangar']);
     assert.equal(semHangar['missao-do-curso'].texto, INTEIRO['missao-do-curso'].texto);
     assert.doesNotMatch(Object.values(semHangar).map(t => t.texto).join(' '), /hangar/i);
+  });
+
+  // A tela mostra a prioridade com 1 a mais alta (a guardada continua com 5 a mais alta: js/rules.js, prioridadeNaTela)
+  it('a prioridade, ligada: de 1 a 5, e 1 é a mais alta', () => {
+    assert.equal(INTEIRO.prioridade.funcionalidade, undefined);
+    assert.match(INTEIRO.prioridade.texto, /^De 1 a 5, e 1 é a mais alta/);
+    assert.doesNotMatch(INTEIRO.prioridade.texto, /maior/);
+    assert.deepEqual(Object.keys(INTEIRO).filter(id => !Object.hasOwn(montarGlossario(nome => nome !== 'prioridade'), id)), ['prioridade']);
   });
 
   it('o glossário das telas é o das funcionalidades ligadas no app', () => assert.deepEqual(GLOSSARIO, montarGlossario(ligada)));

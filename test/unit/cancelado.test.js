@@ -7,8 +7,8 @@ import assert from 'node:assert/strict';
 import { runAllocationEngine } from '../../js/engine.js';
 import { pinoDoVoo, fixosAoAprovar } from '../../js/fixos.js';
 import { hm } from '../../js/format.js';
-import { cancelamentoAproveitavel, sugerirParaCancelado, aproveitarCancelado, desfazerAproveitamento, sugestoesDoRejeitado, sugerirReparos, repararComOPedido, dataQueAindaVoa } from '../../js/reparo.js';
-import { validarReversao } from '../../js/reversoes.js';
+import { cancelamentoAproveitavel, sugerirParaCancelado, vagasDaListaDeEspera, aproveitarCancelado, desfazerAproveitamento, sugestoesDoRejeitado, sugerirReparos, repararComOPedido, dataQueAindaVoa } from '../../js/reparo.js';
+import { validarReversao, motivoParaNaoDesfazerEdicao } from '../../js/reversoes.js';
 import { rejeicoesDosPedidos } from '../../js/rejeicoes.js';
 import { pedidoDoAluno } from '../../js/voo.js';
 import { gerarCenario, comEscolhas } from '../helpers/cenarios.js';
@@ -752,5 +752,69 @@ describe('As Sugestões e o 7º voo local confirmado', () => {
     desfazerAproveitamento(estado, rev);
     assert.equal(pedido.jan, 'h500');
     assert.equal(pedido.limiteConfirmado, true);
+  });
+});
+
+// A vaga do voo cancelado na escala aprovada (F1h, N14): depois das sugestões do próprio aluno, “Dar a vaga a” o 1º da
+// lista de espera do horário que o motor põe nele, sem mudar nenhum outro voo; só com um clique (a tela grava o pino
+// agendado e a reversão devolve a recusa, com a espera)
+describe('A vaga do voo cancelado para a lista de espera', () => {
+  const as0820 = (id, solicitacao, extra = {}) => aluno(id, { p1: 500, p2: -1, jan: 'h500', solicitacao }, extra);
+  // A escala aprovada (todos os voos fixos) e, depois, o voo do aluno cancelado pelo status: a escala da tela não muda (sem
+  // o motor, F1g)
+  const aprovadaECancelada = (base, stuId) => {
+    const resultado = runAllocationEngine(base);
+    const voo = resultado.out.find(o => o.stuId === stuId);
+    const aprovada = { ...base, aprovacao: { em: '2026-11-10T10:00:00Z' }, fixos: fixosAoAprovar({}, resultado.out) };
+    const estado = { ...aprovada, fStatus: { [voo.fKey]: 'Cancelado' }, fObs: { [voo.fKey]: { motivo: 'Outro' } } };
+    return { estado, resultado, voo };
+  };
+
+  it('o 1º da lista de espera do horário entra no lugar que o motor acha, sem mudar nenhum outro voo', () => {
+    const { estado, resultado, voo } = aprovadaECancelada(cenario({ ins: [instrutor(1, 9)], stu: [as0820(1000, 1), as0820(1001, 2), as0820(1002, 3)] }), 1000);
+    assert.deepEqual([...rejeicoesDosPedidos(estado, resultado)].map(([k, a]) => [k, a.espera]), [['1001_0_1', { minuto: 500, lugar: 1 }], ['1002_0_1', { minuto: 500, lugar: 2 }]]);
+    const vagas = vagasDaListaDeEspera(estado, resultado, voo.fKey);
+    assert.deepEqual(vagas.map(o => [o.tipo, o.vaga, o.pino.a, o.pino.insId]), [['espera', '1001_0_1', 500, 1]]);
+    assert.match(vagas[0].texto, /^Dar a vaga a Aluno 1001 \(1º da lista de espera das 08:20\): Instrutor 01, /);
+    // Aplicada (o pino agendado), o pedido voa no lugar e só a recusa dele sai
+    const depois = runAllocationEngine({ ...estado, fixos: { ...estado.fixos, '1001_0_1': { ...vagas[0].pino, agendado: true } } });
+    assert.deepEqual(depois.out.filter(o => o.a === 500 && o.status !== 'Cancelado').map(o => o.stuId), [1001]);
+    assert.deepEqual(depois.al.filter(a => a.t === 'err').map(a => [a.s, a.espera]), [['Aluno 1002', { minuto: 500, lugar: 1 }]]);
+  });
+
+  it('o 1º que não cabe na vaga fica de fora, e ela vai para o 2º', () => {
+    // O 1002 (1º da lista) não voa com o INVA 1, que fica livre com o cancelamento do 1000; o 1003 (2º) voa
+    const base = cenario({ ins: [instrutor(1, 9), instrutor(2, 9)], stu: [as0820(1000, 1), as0820(1001, 2), as0820(1002, 3, { bl: [1] }), as0820(1003, 4)] });
+    const { estado, resultado, voo } = aprovadaECancelada(base, 1000);
+    assert.equal(voo.insId, 1);
+    assert.deepEqual(vagasDaListaDeEspera(estado, resultado, voo.fKey).map(o => [o.vaga, o.texto.split('): ')[0]]), [['1003_0_1', 'Dar a vaga a Aluno 1003 (2º da lista de espera das 08:20']]);
+  });
+
+  it('nada: o voo não cancelado, o cancelado de outro horário, o horário que já passou e a lista vazia', () => {
+    const { estado, resultado, voo } = aprovadaECancelada(cenario({ ins: [instrutor(1, 9)], stu: [as0820(1000, 1), as0820(1001, 2)] }), 1000);
+    assert.equal(vagasDaListaDeEspera(estado, resultado, voo.fKey).length, 1);
+    assert.deepEqual(vagasDaListaDeEspera({ ...estado, fStatus: {} }, resultado, voo.fKey), []);
+    assert.deepEqual(vagasDaListaDeEspera(estado, resultado, voo.fKey, { depoisDe: 510 }), []);
+    // O cancelado das 06:30 não dá vaga a quem espera pelas 08:20
+    const outro = aprovadaECancelada(cenario({ ins: [instrutor(1, 9)], stu: [aluno(1003, { p1: 390, p2: -1, jan: 'h390', solicitacao: 9 }), as0820(1000, 1), as0820(1001, 2)] }), 1003);
+    assert.deepEqual(vagasDaListaDeEspera(outro.estado, outro.resultado, outro.voo.fKey), []);
+    // Sem ninguém esperando
+    const so = aprovadaECancelada(cenario({ ins: [instrutor(1, 9)], stu: [as0820(1000, 1)] }), 1000);
+    assert.deepEqual(vagasDaListaDeEspera(so.estado, so.resultado, so.voo.fKey), []);
+  });
+
+  it('a reversão guarda a espera da recusa que volta; malformada, a reversão não vale', () => {
+    const rev = {
+      kind: 'desfazerEdicao', voos: [{ fKey: '1001_0_1', fixo: null, status: null, detalhe: null, statusDepois: null }], pedidos: [{ stuId: 1001, mid: 0, pedido: { fly: true, mis: 'Voo Local', eq: 'C152', p1: 500, p2: -1, nb: 1, pr: 3, jan: 'h500' } }],
+      recusas: [{ fKey: '1001_0_1', s: 'Aluno 1001', m: 'Rejeitado: x; 1º na lista de espera das 08:20.', codigo: 'instrutores-ocupados', espera: { minuto: 500, lugar: 1 } }], label: '↶ Reverter'
+    };
+    assert.deepEqual(validarReversao(rev).recusas, rev.recusas);
+    assert.equal(validarReversao(rev).voos[0].statusDepois, null);
+    // O status do voo de quem recebeu a vaga mudou depois dela (Confirmado): a reversão não desfaz (F1g, #85)
+    const estado = { stu: [aluno(1001, { p1: 500, p2: -1 })], fStatus: { '1001_0_1': 'Confirmado' }, resultados: { doDia: [] } };
+    assert.match(motivoParaNaoDesfazerEdicao(estado, validarReversao(rev)), /^O status do voo mudou depois da alteração/);
+    assert.equal(motivoParaNaoDesfazerEdicao({ ...estado, fStatus: {} }, validarReversao(rev)), '');
+    assert.equal(validarReversao({ ...rev, recusas: [{ ...rev.recusas[0], espera: { minuto: 500, lugar: 0 } }] }), null);
+    assert.equal(validarReversao({ ...rev, recusas: [{ ...rev.recusas[0], espera: 'x' }] }), null);
   });
 });
