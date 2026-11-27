@@ -18,9 +18,9 @@ import { fixosAoAprovar, fixosAoMudarStatus } from '../../js/fixos.js';
 import { normalizeMissionFields } from '../../js/rules.js';
 import { gerarCenario } from '../helpers/cenarios.js';
 import { situacaoPorMissao } from '../../js/resultados.js';
-import { T } from '../../js/config.js';
+
 import { hm } from '../../js/format.js';
-import { HORARIOS_PADRAO, DE_30_EM_30 } from '../../js/horarios.js';
+import { HORARIOS_PADRAO, DE_30_EM_30, HORARIO_DO_NOTURNO, HORARIO_DO_SOLO } from '../../js/horarios.js';
 import { aluno, cenario, instrutor, missaoExtra, apenas, GROUND_C152 } from '../helpers/montar.js';
 import { novoCurso, comExigenciasDasMissoes } from '../../js/programa.js';
 import { MODELOS } from '../../js/modelos-de-curso.js';
@@ -59,14 +59,14 @@ const doDia = ({ ins = [instrutor(1, 9), instrutor(2, 9)], s1000 = {}, s1001 = {
 });
 
 describe('Agendamento: os horários e o encaixe', () => {
-  it('os horários de cada missão, só nas janelas abertas; o Ground só nas janelas do dia', () => {
+  it('os horários de cada missão, só os abertos nesta data; o Ground só nos horários da Sala Ground', () => {
     const estado = cenario();
     assert.deepEqual(horariosDoAgendamento(estado, { mis: 'Voo Local', tipo: 'C152' }), HORARIOS_PADRAO);
     assert.deepEqual(horariosDoAgendamento(estado, { mis: 'Voo Local', tipo: 'PA-34' }), DE_30_EM_30);
-    assert.deepEqual(horariosDoAgendamento(estado, { mis: 'Noturno', tipo: 'C172' }), [T[8]]);
-    assert.deepEqual(horariosDoAgendamento(estado, { mis: 'Voo Solo', tipo: 'C152' }), [T[0]]);
+    assert.deepEqual(horariosDoAgendamento(estado, { mis: 'Noturno', tipo: 'C172' }), [HORARIO_DO_NOTURNO]);
+    assert.deepEqual(horariosDoAgendamento(estado, { mis: 'Voo Solo', tipo: 'C152' }), [HORARIO_DO_SOLO]);
     const comHorarios = { ...estado, horarios: { C152: [420, 480], C172: [420], sim: [420], 'PA-34': [420] } };
-    assert.deepEqual(horariosDoAgendamento(comHorarios, { mis: 'Ground C152', tipo: 'Sala Ground' }), T.slice(0, 8));
+    assert.deepEqual(horariosDoAgendamento(comHorarios, { mis: 'Ground C152', tipo: 'Sala Ground' }), HORARIOS_PADRAO);
     assert.deepEqual(horariosDoAgendamento(comHorarios, { mis: 'Voo Local', tipo: 'C152' }), [420, 480]);
     // A janela das 10:10 fechada: os horários que caem nela saem
     const fechada = { ...estado, win: estado.win.map((v, w) => w !== 2) };
@@ -86,9 +86,12 @@ describe('Agendamento: os horários e o encaixe', () => {
     const datas = { data: DATA, hoje: DATA, agora: 605 };
     assert.deepEqual(contextoInicial('dia', datas), { valor: 'dia', origem: 'dia', r: null, insId: null, classKey: null, w: null, minuto: 605, desde: 605, ate: null, perto: false });
     assert.deepEqual([contextoInicial('dia', { ...datas, hoje: HOJE })].map(c => [c.minuto, c.desde]), [[0, null]]);
-    assert.deepEqual(['r:PR-VOB', 'i:7', 'w:2', 'w:8', 't:GND_1'].map(v => contextoInicial(v, { data: DATA, hoje: HOJE })).map(c => [c.origem, c.r, c.insId, c.desde, c.ate, c.classKey]), [
-      ['recurso', 'PR-VOB', null, null, null, null], ['instrutor', null, 7, null, null, null], ['periodo', null, null, 610, 690, null],
-      ['periodo', null, null, 1050, 1440, null], ['turma', null, null, null, null, 'GND_1']
+    // J (S1): o "+" de um horário da Lista agenda a partir do minuto dele (h:<minuto>), sem limite até o seguinte; o "w:"
+    // dos tempos de antes não abre mais nada
+    assert.deepEqual(['r:PR-VOB', 'i:7', 'h:610', 'h:1050', 't:GND_1', 'w:2', 'h:1440', 'h:x'].map(v => contextoInicial(v, { data: DATA, hoje: HOJE })).map(c => [c.origem, c.r, c.insId, c.desde, c.ate, c.classKey]), [
+      ['recurso', 'PR-VOB', null, null, null, null], ['instrutor', null, 7, null, null, null], ['horario', null, null, 610, null, null],
+      ['horario', null, null, 1050, null, null], ['turma', null, null, null, null, 'GND_1'],
+      ['dia', null, null, null, null, null], ['dia', null, null, null, null, null], ['dia', null, null, null, null, null]
     ]);
     const clique = contextoInicial({ r: 'PR-VOB', minuto: 625 }, datas);
     assert.deepEqual([clique.origem, clique.r, clique.minuto, clique.perto, clique.desde], ['mapa', 'PR-VOB', 625, true, null]);
@@ -131,7 +134,7 @@ describe('Agendamento: os padrões do formulário', () => {
     // A linha da sala de Ground, com um aluno cuja missão é um voo: o voo vai para um avião, e a descrição diz por quê
     assert.deepEqual(descricoes('r:SALA-GROUND'), ['Sala Ground · o primeiro horário livre', 'R · C152 · o primeiro horário livre: 06:30. A sala de Ground não serve ao Voo Local: o voo vai no R.']);
     assert.deepEqual(descricoes('i:7'), ['Com Instrutor 07 · o primeiro horário livre', 'Com Instrutor 07 · o primeiro horário livre: 06:30']);
-    assert.deepEqual(descricoes('w:2'), ['O primeiro horário livre a partir das 10:10', 'R · C152 · o primeiro horário livre a partir das 10:10: 10:10']);
+    assert.deepEqual(descricoes('h:610'), ['O primeiro horário livre a partir das 10:10', 'R · C152 · o primeiro horário livre a partir das 10:10: 10:10']);
     assert.deepEqual(descricoes({ r: 'PR-VOB', minuto: 865 }), ['PR-VOB · C152 · clique perto das 14:25', 'R · C152 · clique perto das 14:25 → 14:30 (horários do C152)']);
     assert.deepEqual(descricoes({ insId: 7, minuto: 500 }), ['Com Instrutor 07 · clique perto das 08:20', 'Com Instrutor 07 · R · C152 · clique perto das 08:20 → 08:20 (horários do C152)']);
     assert.deepEqual(descricoes(`t:${turma.classKey}`), Array(2).fill(`Turma de Ground C152 das 08:20 com ${turma.ins}`));
@@ -382,7 +385,7 @@ describe('Agendamento: os padrões do formulário', () => {
     delete estado.stu[1].curso;
     const ground = agendar(estado, { amb, escolhas: { aluno: 1001, missao: 'tipo:Ground C152' }, tocados: ['missao'] });
     assert.deepEqual([ground.formulario.recurso, ground.formulario.horas, ground.formulario.peso.visivel], ['SALA-GROUND', { valor: '1.5', fixa: true }, false]);
-    assert.deepEqual(ground.formulario.horarios, { opcoes: T.slice(0, 8).map(m => ({ valor: m, texto: `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}` })), outro: false });
+    assert.deepEqual(ground.formulario.horarios, { opcoes: HORARIOS_PADRAO.map(m => ({ valor: m, texto: `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}` })), outro: false });
     assert.equal(ground.formulario.proposta.b - ground.formulario.proposta.a, 90);
     const linha = ground.sim.out.find(o => o.fKey === ground.fKey);
     assert.ok(normalizarLinhaGravada(linha), 'a turma nova é aceita pela escala gravada');
@@ -499,11 +502,11 @@ describe('Agendamento: o pedido e o voo fixo', () => {
   });
 
   it('o pedido principal que não voa, com a chave limpa, recebe o voo; a reversão devolve o de antes', () => {
-    const estado = doDia({ s1001: { jan: 'manha', etapa: 'IN-01', insId: 1, solicitacao: 7, p1: 500, p2: 610 } });
+    const estado = doDia({ s1001: { jan: 'h500', etapa: 'IN-01', insId: 1, solicitacao: 7, p1: 500, p2: 610 } });
     const antes = aplicarAgendamento(estado, null, proposta());
     const stu = estado.stu[1];
     assert.deepEqual([antes.mid, antes.criado], [0, true]);
-    assert.deepEqual(antes.pedido, { fly: false, mis: 'Voo Local', eq: 'C152', p1: 500, p2: 610, nb: 1, ss: 1, pr: 3, jan: 'manha', etapa: 'IN-01', solicitacao: 7, insId: 1 });
+    assert.deepEqual(antes.pedido, { fly: false, mis: 'Voo Local', eq: 'C152', p1: 500, p2: 610, nb: 1, ss: 1, pr: 3, jan: 'h500', etapa: 'IN-01', solicitacao: 7, insId: 1 });
     assert.deepEqual([stu.fly, stu.mis, stu.p1, stu.p2, stu.etapa, stu.cursoDaEtapa, stu.insId, stu.jan, stu.solicitacao], [true, 'Voo Local', 610, -1, 'IN-02', 'PP', 2, undefined, undefined]);
     assert.deepEqual(estado.fixos['1001_0_1'], { a: 610, b: 670, r: 'PR-VOB', insId: 2, agendado: true });
     const rev = validarReversao(reversaoDoAgendamento(antes));
@@ -511,7 +514,7 @@ describe('Agendamento: o pedido e o voo fixo', () => {
     assert.deepEqual(rev.criadoComo.etapa, 'IN-02');
     assert.equal(motivoParaNaoDesfazer(estado, rev), '');
     assert.ok(desfazerAgendamento(estado, rev));
-    assert.deepEqual([stu.fly, stu.jan, stu.etapa, stu.insId, stu.solicitacao, stu.cursoDaEtapa], [false, 'manha', 'IN-01', 1, 7, undefined]);
+    assert.deepEqual([stu.fly, stu.jan, stu.etapa, stu.insId, stu.solicitacao, stu.cursoDaEtapa], [false, 'h500', 'IN-01', 1, 7, undefined]);
     assert.ok(!Object.hasOwn(estado.fixos, '1001_0_1'));
   });
 
@@ -852,7 +855,7 @@ describe('Agendamento: os voos de hoje do aluno (mover e encaixar)', () => {
 
   it('mover: o mesmo pedido muda de lugar, com o instrutor escolhido dele; desfazer devolve o pedido e o voo fixo de antes', () => {
     // O IN-02 do Aluno 1001 às 06:30, fixo pelo instrutor escolhido na Escala (o Instrutor 02), com a disponibilidade de manhã
-    const estado = doDia({ s1001: { fly: true, p1: 390, p2: 500, etapa: 'IN-02', cursoDaEtapa: 'PP', insId: 2, jan: 'manha' } });
+    const estado = doDia({ s1001: { fly: true, p1: 390, p2: 500, etapa: 'IN-02', cursoDaEtapa: 'PP', insId: 2, jan: 'h390' } });
     estado.fixos = { '1001_0_1': { a: 390, b: 450, r: 'PR-VOC', insId: 2, escolhido: true } };
     const { formulario: f, sim, fKey } = agendar(estado, { amb, escolhas: { aluno: 1001, horario: 820 }, tocados: ['horario'] });
     assert.deepEqual([f.missao, f.acao, f.instrutor, f.recurso], ['pedido:0', 'mover', 2, 'PR-VOC']);
@@ -865,13 +868,13 @@ describe('Agendamento: os voos de hoje do aluno (mover e encaixar)', () => {
     assert.deepEqual([stu.extra, stu.mis, stu.etapa, stu.cursoDaEtapa, stu.p1, stu.p2, stu.insId, stu.jan], [[], 'Voo Local', 'IN-02', 'PP', 820, -1, 2, undefined]);
     assert.deepEqual(real.fixos['1001_0_1'], { a: 820, b: 880, r: 'PR-VOC', insId: 2, agendado: true });
     assert.deepEqual([antes.criado, antes.mid, antes.fixo], [false, 0, { a: 390, b: 450, r: 'PR-VOC', insId: 2, escolhido: true }]);
-    assert.deepEqual(antes.pedido, { fly: true, mis: 'Voo Local', eq: 'C152', p1: 390, p2: 500, nb: 1, ss: 1, pr: 3, jan: 'manha', etapa: 'IN-02', insId: 2, cursoDaEtapa: 'PP' });
+    assert.deepEqual(antes.pedido, { fly: true, mis: 'Voo Local', eq: 'C152', p1: 390, p2: 500, nb: 1, ss: 1, pr: 3, jan: 'h390', etapa: 'IN-02', insId: 2, cursoDaEtapa: 'PP' });
     // Desfazer: o pedido como estava e o voo fixo pelo instrutor escolhido de antes
     const rev = validarReversao(reversaoDoAgendamento(antes));
     assert.deepEqual([rev.criado, rev.label], [false, '↶ Desfazer']);
     assert.equal(motivoParaNaoDesfazer(real, rev), '');
     assert.ok(desfazerAgendamento(real, rev));
-    assert.deepEqual([stu.p1, stu.p2, stu.jan, stu.insId, stu.etapa], [390, 500, 'manha', 2, 'IN-02']);
+    assert.deepEqual([stu.p1, stu.p2, stu.jan, stu.insId, stu.etapa], [390, 500, 'h390', 2, 'IN-02']);
     assert.deepEqual(real.fixos['1001_0_1'], { a: 390, b: 450, r: 'PR-VOC', insId: 2, escolhido: true });
     // O pedido que mudou depois do agendamento (outra missão na Demanda) não é desfeito
     const depois = structuredClone(estado);
@@ -930,11 +933,11 @@ describe('Agendamento: os voos de hoje do aluno (mover e encaixar)', () => {
   });
 
   it('mover pede confirmação: a disponibilidade do aluno que não inclui o horário novo, o voo da escala aprovada e a ordem do curso no horário novo', () => {
-    // De manhã só: às 13:40 a disponibilidade sai do pedido (sem conflito na simulação)
-    const manha = doDia({ s1000: { jan: 'manha', etapa: 'IN-01', cursoDaEtapa: 'PP' } });
+    // O pedido da Agenda às 06:30: às 13:40 o horário sai do pedido (sem conflito na simulação)
+    const manha = doDia({ s1000: { jan: 'h390', etapa: 'IN-01', cursoDaEtapa: 'PP' } });
     const tarde = agendar(manha, { escolhas: { aluno: 1000, horario: 820 }, tocados: ['horario'] });
     assert.deepEqual(tarde.avaliacao.avisos.map(a => [a.codigo, a.texto, a.resumo]), [
-      ['disponibilidade-do-aluno', 'Aluno 1000 está disponível só de manhã: agendado às 13:40, o pedido fica sem a disponibilidade.', 'fora da disponibilidade do aluno']
+      ['disponibilidade-do-aluno', 'Aluno 1000 pediu o horário às 06:30: agendado às 13:40, o pedido fica sem o horário.', 'fora da disponibilidade do aluno']
     ]);
     assert.deepEqual(codigos(pararia(tarde.avaliacao)), []);
     // Na escala aprovada, o voo fixo muda de lugar
@@ -956,7 +959,7 @@ describe('Agendamento: os voos de hoje do aluno (mover e encaixar)', () => {
     assert.deepEqual([codigos(tardeOk.avisos), tardeOk.notas.find(n => n.codigo === 'condicional').texto], [[], 'IN-02 depende do resultado de IN-01 (amanhã 08:20).']);
   });
 
-  it('mover o Noturno: as 4 h fixas às 17:30, com a volta amanhã; o Ground, 1h30 nas janelas do dia', () => {
+  it('mover o Noturno: as 4 h fixas às 17:30, com a volta amanhã; o Ground, 1h30 nos horários da Sala Ground', () => {
     const estado = doDia({ s1000: { mis: 'Noturno', eq: 'C172', p1: 1050, p2: -1, nb: 4 } });
     const voo = runAllocationEngine(estado).out.find(o => o.stuId === 1000);
     assert.deepEqual([voo.a, voo.b], [1050, 1290]);
@@ -967,10 +970,10 @@ describe('Agendamento: os voos de hoje do aluno (mover e encaixar)', () => {
     const real = structuredClone(estado);
     aplicarAgendamento(real, null, f.proposta);
     assert.deepEqual([real.stu[0].mis, real.stu[0].nb, real.stu[0].p1, real.fixos['1000_0_1'].b], ['Noturno', 4, 1050, 1290]);
-    // O Ground muda de turma só nas janelas do dia, com 1h30
+    // O Ground muda de turma só nos horários da Sala Ground, com 1h30
     const ground = doDia({ s1000: { ...GROUND_C152, p1: 500, p2: -1 } });
     const g = agendar(ground, { escolhas: { aluno: 1000, missao: 'pedido:0', horario: 760 }, tocados: ['missao', 'horario'] }).formulario;
-    assert.deepEqual([g.acao, g.horas, g.horarios.opcoes.map(o => o.valor), g.proposta.b - g.proposta.a], ['mover', { valor: '1.5', fixa: true }, T.slice(0, 8), 90]);
+    assert.deepEqual([g.acao, g.horas, g.horarios.opcoes.map(o => o.valor), g.proposta.b - g.proposta.a], ['mover', { valor: '1.5', fixa: true }, HORARIOS_PADRAO, 90]);
   });
 
   it('a descrição do histórico do voo que mudou de lugar diz de onde ele saiu', () => {

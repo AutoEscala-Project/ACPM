@@ -223,6 +223,29 @@ test.describe('Agendar pelo mapa', () => {
     await expect(linha(page, 'PR-VOC').locator('.tl-agendar')).toHaveCount(1);
   });
 
+  test('a Sala Ground sem a chave na data (S4): a coluna disponível, com o "+"', async ({ page }) => {
+    await abrir(page, { estado: dia() });
+    await abrirEscala(page);
+    await abrirMapa(page);
+    const sala = linha(page, 'SALA-GROUND');
+    await expect(sala).toHaveCount(1);
+    await expect(sala.locator('.tl-agendar')).toHaveCount(1);
+    await expect(sala).not.toContainText('indisponível');
+  });
+
+  test('a Sala Ground indisponível na data (S4): a coluna dela diz "indisponível", sem o "+", e "Ocultar indisponíveis" a tira', async ({ page }) => {
+    const estado = dia();
+    await abrir(page, { estado: { ...estado, av: { ...estado.av, 'SALA-GROUND': false } } });
+    await abrirEscala(page);
+    await abrirMapa(page);
+    const sala = linha(page, 'SALA-GROUND');
+    await expect(sala).toContainText('indisponível');
+    await expect(sala).toHaveClass(/\btl-manutencao\b/);
+    await expect(sala.locator('.tl-agendar')).toHaveCount(0);
+    await page.locator('#btn-indisponiveis').click();
+    await expect(sala).toHaveCount(0);
+  });
+
   test('Ocultar indisponíveis tira do mapa Por recurso as linhas dos recursos desligados, e outro clique as mostra', async ({ page }) => {
     await abrir(page, { estado: dia({ semAeronaves: ['PR-VOB'] }) });
     await abrirEscala(page);
@@ -374,8 +397,9 @@ test.describe('Agendar pela lista e pela turma de Ground', () => {
   test('o "+" de cada horário da lista agenda a partir dele: às 10:10, o primeiro horário livre é 10:10', async ({ page }) => {
     await abrir(page, { estado: dia({ stu: [aluno(1002, { p1: 610, p2: -1 })] }) });
     await abrirEscala(page);
-    const periodo = page.locator('#out tr.win[data-w="2"]');
-    await expect(periodo).toHaveText('10:10 · 3º tempo 1 decolagem ou aula');
+    const periodo = page.locator('#out tr.win[data-inicio="610"]');
+    // J (S1): o grupo é o horário de início dos voos dele
+    await expect(periodo).toHaveText('10:10 · 1 decolagem ou aula');
     const mais = periodo.locator('.win-agendar');
     await expect(mais).toHaveAccessibleName('Agendar às 10:10');
     await mais.click();
@@ -387,7 +411,7 @@ test.describe('Agendar pela lista e pela turma de Ground', () => {
     const voo = page.locator('#out tbody tr:not(.win)', { hasText: 'Maria Silva' });
     await expect(voo.locator('.c-hr')).toContainText('10:10–11:10');
     await expect(voo.locator('select[data-f="fstatus"]')).toBeFocused();
-    await expect(page.locator('#out tr.win[data-w="2"]')).toHaveText('10:10 · 3º tempo 2 decolagens e aulas');
+    await expect(page.locator('#out tr.win[data-inicio="610"]')).toHaveText('10:10 · 2 decolagens e aulas');
   });
 
   test('"+ Aluno na turma", no editor da turma de Ground, fecha o editor e abre o diálogo; o Esc fecha o diálogo, e o foco volta à barra', async ({ page }) => {

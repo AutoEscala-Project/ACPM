@@ -1,5 +1,5 @@
 // Horários de decolagem na aba Recursos. Cada categoria mostra um resumo (o modelo, quantos horários e os horários da
-// manhã e da tarde, com o da janela fechada nesta data riscado) e um botão "Editar". O editor abre na própria linha,
+// manhã e da tarde, com o fechado nesta data riscado) e um botão "Editar". O editor abre na própria linha,
 // com uma cópia da lista (o rascunho): o modelo, os horários com ✕, um campo em que Enter põe o horário e o efeito nos
 // pedidos antes de salvar. Nada muda até "Salvar" (js/eventos/recursos.js); "Cancelar" e Esc descartam.
 //
@@ -10,18 +10,17 @@
 // Os filtros de Recursos valem aqui por categoria (js/views/filtros-dos-recursos.js): aparecem as categorias marcadas e,
 // com a busca, as dos recursos achados. A categoria do editor aberto, ou fechado agora (o foco volta ao "Editar" dela),
 // continua à vista até os filtros mudarem.
-import { WIN } from '../config.js';
+
 import { S } from '../state.js';
 import { $ } from '../dom.js';
+import { doNomeDaCategoria } from '../categorias.js';
 import { hm, esc } from '../format.js';
-import {
-  CATEGORIAS_COM_HORARIOS, HORARIOS_PADRAO, DE_30_EM_30, PRIMEIRO_HORARIO, ULTIMO_HORARIO, periodoDoMinuto, paraMinuto,
-  modeloDosHorarios, descreverHorarios, porPeriodo, impactoDosHorarios, resumoDoImpacto
-} from '../horarios.js';
+import { CATEGORIAS_COM_HORARIOS, HORARIOS_PADRAO, DE_30_EM_30, PRIMEIRO_HORARIO, ULTIMO_HORARIO, paraMinuto, modeloDosHorarios, descreverHorarios, porPeriodo, impactoDosHorarios, resumoDoImpacto } from '../horarios.js';
+import { fechamentosDoEstado, fechamentoDoMinuto } from '../fechamentos.js';
 import { horariosAVista, manterHorariosAVista } from './filtros-dos-recursos.js';
 
-export const NOMES_DAS_CATEGORIAS = { C152: 'C152', C172: 'C172', sim: 'Simulador', 'PA-34': 'PA-34' };
-const MODELOS = [['janelas', 'Janelas do dia'], ['de30', 'De 30 em 30 min'], ['personalizado', 'Personalizado']];
+const NOMES_DAS_CATEGORIAS = { C152: 'C152', C172: 'C172', sim: 'Simulador', 'PA-34': 'PA-34', ground: 'Sala Ground' };
+const MODELOS = [['padrao', 'Horários padrão'], ['de30', 'De 30 em 30 min'], ['personalizado', 'Personalizado']];
 const PERIODOS = [['manha', 'Manhã'], ['tarde', 'Tarde']];
 const ID_DO_ERRO = 'hr-erro', ID_DA_DICA = 'hr-dica';
 
@@ -36,15 +35,17 @@ export const rascunhoDosHorarios = () => (rascunho ? { cat: rascunho.cat, lista:
 
 const listaDe = cat => (S.horarios && S.horarios[cat]) || [];
 const quantos = n => `${n} ${n === 1 ? 'horário' : 'horários'}`;
-const janelaFechada = m => S.win && S.win[periodoDoMinuto(m)] === false;
+// O fechamento que fecha o horário nesta data para a categoria (js/fechamentos.js), ou null
+const fechadoNaData = (m, cat) => fechamentoDoMinuto(fechamentosDoEstado(S), m, cat);
 
 // Os pedidos da demanda (os principais e as missões extras), com o nome do aluno
 const pedidosDaDemanda = () => (S.stu || []).flatMap(s => [{ nome: s.nm, pedido: s }, ...(s.extra || []).map(ex => ({ nome: s.nm, pedido: ex }))]);
 const efeitoDoRascunho = () => resumoDoImpacto(impactoDosHorarios(pedidosDaDemanda(), S.horarios, rascunho.cat, rascunho.lista));
 
-function horarioNoResumo(m) {
-  if (!janelaFechada(m)) return `<span class="hr">${hm(m)}</span>`;
-  return `<span class="hr fechado" data-dica="horario-em-janela-fechada" data-dica-caso="A janela das ${WIN[periodoDoMinuto(m)]} está fechada nesta data.">${hm(m)}<span class="sr"> (janela fechada nesta data)</span></span>`;
+function horarioNoResumo(m, cat) {
+  const f = fechadoNaData(m, cat);
+  if (!f) return `<span class="hr">${hm(m)}</span>`;
+  return `<span class="hr fechado" data-dica="horario-fechado-na-data" data-dica-caso="Fechado nesta data (${hm(f.de)}–${hm(f.ate)}).">${hm(m)}<span class="sr"> (fechado nesta data)</span></span>`;
 }
 
 const horarioNoEditor = m => `<span class="hr-chip">${hm(m)}<button type="button" data-act="rascunho-tirar" data-min="${m}" aria-label="Tirar ${hm(m)}"><svg class="ico" aria-hidden="true"><use href="#i-fechar"/></svg></button></span>`;
@@ -57,7 +58,7 @@ function periodos(lista, celula) {
 }
 
 const botaoEditar = (cat, aberto) =>
-  `<button type="button" class="btn quiet edit-only" data-act="editar-horarios" data-cat="${cat}" aria-expanded="${aberto}" aria-label="Editar os horários do ${esc(NOMES_DAS_CATEGORIAS[cat])}"${aberto ? ' disabled' : ''}>Editar</button>`;
+  `<button type="button" class="btn quiet edit-only" data-act="editar-horarios" data-cat="${cat}" aria-expanded="${aberto}" aria-label="Editar os horários ${esc(doNomeDaCategoria(cat))}"${aberto ? ' disabled' : ''}>Editar</button>`;
 
 function resumo(cat) {
   const lista = listaDe(cat);
@@ -67,7 +68,7 @@ function resumo(cat) {
       <small class="horarios-qtd">${quantos(lista.length)}</small>
       ${botaoEditar(cat, false)}
     </div>
-    ${periodos(lista, horarioNoResumo)}`;
+    ${periodos(lista, m => horarioNoResumo(m, cat))}`;
 }
 
 function editor(cat) {
@@ -78,7 +79,7 @@ function editor(cat) {
       <b class="horarios-nome">${esc(nome)}</b>
       ${botaoEditar(cat, true)}
     </div>
-    <div class="horarios-editor" role="group" aria-label="Horários de decolagem do ${esc(nome)}">
+    <div class="horarios-editor" role="group" aria-label="Horários de decolagem ${esc(doNomeDaCategoria(cat))}">
       <fieldset class="horarios-modelos">
         <legend>Modelo</legend>
         ${MODELOS.map(([id, rotulo]) => `<label class="chk"><input type="radio" name="hr-modelo" value="${id}"${id === modelo ? ' checked' : ''}> ${rotulo}</label>`).join('')}
@@ -201,6 +202,6 @@ export function porNoRascunho() {
 
 export function escolherModelo(modelo) {
   if (!rascunho) return;
-  if (modelo === 'janelas') mudar([...HORARIOS_PADRAO]);
+  if (modelo === 'padrao') mudar([...HORARIOS_PADRAO]);
   else if (modelo === 'de30') mudar([...DE_30_EM_30]);
 }

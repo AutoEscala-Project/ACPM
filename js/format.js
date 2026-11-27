@@ -1,10 +1,13 @@
 // Formatação de horários, datas, durações e textos exibidos na interface, no CSV e no PDF.
-import { WIN, NI, GROUND_DURATION_H } from './config.js';
+import { GROUND_DURATION_H } from './config.js';
+// Os nove inícios congelados vêm de js/tempos.js, não de js/horarios.js, que importa este módulo
+import { INICIOS_DOS_TEMPOS } from './tempos.js';
 
 export const hm = m => String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0');
 // Uma duração em minutos: 570 → "9h30", 600 → "10h00"
 export const duracaoHm = min => `${Math.floor(min / 60)}h${String(min % 60).padStart(2, '0')}`;
-export const WLB = i => `${WIN[i]} · ${i + 1}º tempo` + (i == NI ? ' (noturno)' : '');
+// O rótulo de um grupo da Lista e do PDF (J, S1): o horário de início dos voos dele; o das 17:30 é o do noturno
+export const rotuloDoInicio = m => hm(m) + (m === INICIOS_DOS_TEMPOS[INICIOS_DOS_TEMPOS.length - 1] ? ' · noturno' : '');
 
 // Um número com a vírgula decimal (1,5)
 export const numeroBr = n => String(n).replace('.', ',');

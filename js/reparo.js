@@ -12,18 +12,20 @@
 // ou depois; outro tipo de recurso que a missão permite. A lista do conflito também ganha os dois últimos (o horário fora da
 // disponibilidade e outro tipo mudam também o pedido: repararComOPedido). Fora da disponibilidade e em outro tipo, a
 // sugestão pede a confirmação com o aluno; a que faz do voo local o 7º do horário, a do operador
-import { GROUND_EQ_TYPE, T, NI, MIS, MISSOES_LOCAIS, LIMITE_DE_VOOS_LOCAIS } from './config.js';
+import { GROUND_EQ_TYPE, MIS, MISSOES_LOCAIS, LIMITE_DE_VOOS_LOCAIS } from './config.js';
 import { CAMPOS_DO_PEDIDO } from './dias.js';
 import { normalizeMissionFields, minutoConfirmado } from './rules.js';
-import { HORARIOS_INICIAIS, horariosDaMissao, periodoDoMinuto, fimDasMissoesDoDia } from './horarios.js';
+import { HORARIOS_INICIAIS, horariosDaMissao, horariosDoTipo, fimDasMissoesDoDia } from './horarios.js';
 import { STATUS_EM_ANDAMENTO, intervaloEfetivo } from './status.js';
 import { disponibilidadeDoAluno, doesGroundGateFlight } from './rules.js';
 import { pedidoDoAluno } from './voo.js';
-import { nomeDoRecurso } from './categorias.js';
+import { nomeDoRecurso, categoriaDoTipo } from './categorias.js';
+import { fechamentosDoEstado, fechamentoDoMinuto, horarioAberto as abertoNaData } from './fechamentos.js';
 import { hm } from './format.js';
 import { gruposDoConflito } from './conflitos.js';
 import { statusDoVoo, pedidosDosVoos, exigeDosVoos } from './voo.js';
 import { pinoDoVoo, pinosQueVoltam } from './fixos.js';
+import { salaDisponivel } from './frota.js';
 import { runAllocationEngine } from './engine.js';
 import { instrutoresDoPedido } from './instrutor-escolhido.js';
 import { ocupacaoDaEscala, problemaDoAluno, avioesQueServem, instrutoresQueServem } from './candidatos.js';
@@ -88,7 +90,7 @@ export function sugerirReparos(estado, resultado, fKey, { maximo = 3, depoisDe =
   // do motor para cada aluno (fimDasMissoesDoDia): com um Noturno na demanda do dia, as outras missões até as 17:30
   if (!opcoes.length && !pedidoMudou) {
     const duracao = voo.b - voo.a;
-    const inicios = voo.isGround ? T.slice(0, NI) : horariosDaMissao(estado.horarios || HORARIOS_INICIAIS, voo.mis, tipo);
+    const inicios = voo.isGround ? horariosDoTipo(estado.horarios, GROUND_EQ_TYPE) : horariosDaMissao(estado.horarios || HORARIOS_INICIAIS, voo.mis, tipo);
     const fimDoAluno = fimDasMissoesDoDia(estado.stu);
     const fimDoDia = Math.min(...grupo.map(v => fimDoAluno(v.stuId, voo.mis, tipo)));
     const voosDoAluno = v => ocupacao.alunos.get(v.stuId) || [];
@@ -102,7 +104,7 @@ export function sugerirReparos(estado, resultado, fKey, { maximo = 3, depoisDe =
       return (!permitidas || permitidas(a)) && !problemaDoAluno(ocupacao, v.stuId, { a, b });
     });
     for (const m of inicios) {
-      if (m <= Math.max(voo.a, depoisDe ?? -1) || m + duracao > limite || !estado.win[periodoDoMinuto(m)] || !alunosPodem(m, m + duracao)) continue;
+      if (m <= Math.max(voo.a, depoisDe ?? -1) || m + duracao > limite || !abertoNaData(fechamentosDoEstado(estado), m, categoriaDoTipo(voo.isGround ? GROUND_EQ_TYPE : tipo)) || !alunosPodem(m, m + duracao)) continue;
       // O avião de antes, quando ele ainda serve ao voo e está livre; senão, um em que o instrutor de antes voa, ou outro
       const r = !voo.isGround && avioesPara(m, m + duracao).includes(voo.r) ? voo.r : avioesPara(m, m + duracao, atual)[0] || avioesPara(m, m + duracao)[0];
       const instrutores = r ? instrutoresPara(m, m + duracao, r) : [];
@@ -250,7 +252,10 @@ export function cancelamentoAproveitavel(estado, voo, { data, hoje }) {
 // A busca de um lugar para o voo (o cancelado, ou o do conflito, nos dois últimos grupos): os aviões e os instrutores que
 // servem em cada horário e tipo, contra os outros voos do dia (o atrasado na nova decolagem); sem o que saiu pelo motivo
 // (o instrutor, o avião, o horário); nunca passa por cima das habilitações, do peso, da lei, do "Não escalar com" nem dos
-// períodos fechados
+// horários fechados nesta data
+// O motivo com a Sala Ground desligada, o mesmo do motor e do agendamento
+const SALA_INDISPONIVEL = 'a Sala Ground está indisponível nesta data';
+
 function buscaDoVoo(estado, resultado, voo, grupo, { depoisDe = null, semInstrutor = null, semAviao = null, semHorario = false } = {}) {
   // O voo atrasado ocupa o horário novo (o aviso dos locais também conta assim)
   const ocupacao = ocupacaoDaEscala(resultado.out, { fStatus: estado.fStatus, fObs: estado.fObs, efetivo: true, exceto: grupo.map(o => o.fKey) });
@@ -280,9 +285,14 @@ function buscaDoVoo(estado, resultado, voo, grupo, { depoisDe = null, semInstrut
   // O voo começa depois do fim do Ground de que depende (o do aluno no dia, no tipo do voo)
   const inicioMinimo = tipo => (voo.isGround ? 0 : Math.max(0, ...grupo.flatMap(v => ocupacao.alunos.get(v.stuId) || [])
     .filter(o => o.isGround && doesGroundGateFlight(o.mis, { mis: voo.mis, eq: tipo })).map(o => o.b)));
-  const horarioAberto = (m, tipo = tipoDoVoo) => m + duracao <= limite && m >= inicioMinimo(tipo) && Boolean(estado.win[periodoDoMinuto(m)])
+  // Os horários fechados da data (js/fechamentos.js), pela categoria do recurso do voo (a Sala Ground no Ground)
+  const fechamentos = fechamentosDoEstado(estado);
+  // A Sala Ground desligada nesta data (S4): nenhum horário de Ground, e o porquê diz isso (não "a sala não está livre")
+  const salaIndisponivel = voo.isGround && !salaDisponivel(estado.av);
+  const categoriaDe = tipo => categoriaDoTipo(voo.isGround ? GROUND_EQ_TYPE : tipo);
+  const horarioAberto = (m, tipo = tipoDoVoo) => m + duracao <= limite && m >= inicioMinimo(tipo) && abertoNaData(fechamentos, m, categoriaDe(tipo))
     && !passou(m) && alunoLivre(m, m + duracao);
-  const inicios = tipo => (voo.isGround ? T.slice(0, NI) : horariosDaMissao(estado.horarios || HORARIOS_INICIAIS, voo.mis, tipo));
+  const inicios = tipo => (voo.isGround ? horariosDoTipo(estado.horarios, GROUND_EQ_TYPE) : horariosDaMissao(estado.horarios || HORARIOS_INICIAIS, voo.mis, tipo));
   const atual = estado.ins.find(x => x.id === voo.insId);
   const comCombustivel = (texto, { reducao }) => (reducao > 0 ? `${texto} · reduzir ${reducao} gal` : texto);
   const noOuNa = r => `${voo.isGround ? 'na' : 'no'} ${nomeDoRecurso(r)}`;
@@ -317,9 +327,10 @@ function buscaDoVoo(estado, resultado, voo, grupo, { depoisDe = null, semInstrut
   return {
     tipoDoVoo,
     naDisponibilidade,
-    // O mesmo horário, com as regras dos outros (o período aberto também)
+    // O mesmo horário, com as regras dos outros (aberto nesta data também)
     mesmoHorarioDisponivel: !semHorario && horarioAberto(voo.a),
-    periodoFechado: !estado.win[periodoDoMinuto(voo.a)],
+    fechamentoDoInicio: fechamentoDoMinuto(fechamentos, voo.a, categoriaDe(tipoDoVoo)),
+    salaIndisponivel,
     // 1. O mesmo horário e o mesmo avião, com outro instrutor (até dois; o de antes seria o próprio voo cancelado)
     mesmoAviao(maximo = 2) {
       if (semAviao === voo.r) return [];
@@ -352,7 +363,7 @@ function buscaDoVoo(estado, resultado, voo, grupo, { depoisDe = null, semInstrut
       }
       return null;
     },
-    // Por que nenhum horário do tipo serve: cada motivo com os seus horários ("o período está fechado (06:30, 08:20)"),
+    // Por que nenhum horário do tipo serve: cada motivo com os seus horários ("o horário está fechado nesta data (06:30, 08:20)"),
     // na ordem das regras; o mesmo horário do voo fica de fora no tipo dele (ele tem a linha própria) e quando saiu pelo
     // motivo. Vazio quando o tipo não tem outro horário
     porQueNao(tipo = tipoDoVoo) {
@@ -360,7 +371,8 @@ function buscaDoVoo(estado, resultado, voo, grupo, { depoisDe = null, semInstrut
       for (const m of inicios(tipo).filter(x => x !== voo.a || (tipo !== tipoDoVoo && !semHorario))) {
         const b = m + duracao;
         const motivo = passou(m) ? 'já passou'
-          : !estado.win[periodoDoMinuto(m)] ? 'o período está fechado'
+          : salaIndisponivel ? SALA_INDISPONIVEL
+          : !abertoNaData(fechamentos, m, categoriaDe(tipo)) ? 'o horário está fechado nesta data'
             : b > limite ? (b > fimDoDia ? 'passa do fim do dia do aluno' : 'passa do voo que depende do Ground')
               : m < inicioMinimo(tipo) ? 'antes do fim do Ground do aluno'
                 : !alunoLivre(m, b) ? 'o aluno não está livre'
@@ -423,8 +435,9 @@ export function sugerirParaCancelado(estado, resultado, fKey, { depoisDe = null,
     opcoes: [],
     impossivel: [
       motivo === 'Meteorologia' || motivo === 'Operacional' ? `No mesmo horário: o voo foi cancelado por ${motivo.toLowerCase()} nele.`
-        : !busca.mesmoHorarioDisponivel ? `No mesmo horário: ${depoisDe !== null && voo.a <= depoisDe ? 'ele já passou' : busca.periodoFechado ? 'o período está fechado' : 'o aluno não está livre nele'}.`
-          : 'No mesmo horário: nenhum avião com um instrutor que sirva.',
+        : !busca.mesmoHorarioDisponivel ? `No mesmo horário: ${depoisDe !== null && voo.a <= depoisDe ? 'ele já passou' : busca.fechamentoDoInicio ? `o horário está fechado nesta data (${hm(busca.fechamentoDoInicio.de)}–${hm(busca.fechamentoDoInicio.ate)})` : 'o aluno não está livre nele'}.`
+          : busca.salaIndisponivel ? `No mesmo horário: ${SALA_INDISPONIVEL}.`
+            : 'No mesmo horário: nenhum avião com um instrutor que sirva.',
       `Em outro horário: ${busca.porQueNao() || 'a missão não tem outro horário'}.`,
       tipos.length ? `Em outro tipo de recurso: ${tipos.map(t => `no ${t}, ${busca.porQueNao(t) || 'nenhum horário'}`).join('; ')}.`
         : `Em outro tipo de recurso: a missão só voa no ${busca.tipoDoVoo}.`

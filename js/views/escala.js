@@ -1,10 +1,11 @@
 // Aba Escala: resumo do dia, a lista dos voos (ou o mapa por recurso ou por instrutor) e o histórico da data.
-import { FLIGHT_STATUSES, GROUND_REG, GROUND_EQ_TYPE, NOTURNO, T } from '../config.js';
+import { FLIGHT_STATUSES, GROUND_REG, GROUND_EQ_TYPE, NOTURNO } from '../config.js';
 import { CODIGOS_DE_AVISO, CODIGOS_DO_AGENDADO } from '../conflitos.js';
 import { textoDoCombustivel } from '../combustivel.js';
-import { hm, WLB, fmtH, esc, rotuloDaData, hojeISO, duracaoHm, DURACAO_DO_GROUND, pesoBr, chaveDeBusca } from '../format.js';
+import { hm, rotuloDoInicio, fmtH, esc, rotuloDaData, hojeISO, duracaoHm, DURACAO_DO_GROUND, pesoBr, chaveDeBusca } from '../format.js';
 import { isGroundMission } from '../rules.js';
 import { categoriaDoTipo, nomeDoRecurso } from '../categorias.js';
+import { salaDisponivel } from '../frota.js';
 import { textoDoDetalhe, classeDoStatus, rotuloDoStatus, STATUS_COM_DETALHE } from '../status.js';
 import { validarReversao } from '../reversoes.js';
 import { linhasDoQuadro, quadroDoDia } from '../quadro.js';
@@ -71,12 +72,13 @@ function detalhesDaLinha(linha, porInstrutor, mapa) {
   }
   const r = linha.chave, ground = r === GROUND_REG;
   const recurso = ground ? null : (S.frota || []).find(f => f.reg === r) || null;
-  const manutencao = mapa && Boolean(recurso) && !S.av[r];
+  // A Sala Ground indisponível na data (S4, salaDisponivel), como o avião em manutenção: a coluna diz, e não agenda
+  const manutencao = mapa && (ground ? !salaDisponivel(S.av) : Boolean(recurso) && !S.av[r]);
   const inativoAqui = mapa && Boolean(recurso) && inativoNaDataAberta(recurso);
-  const agenda = mapa && (ground || (Boolean(recurso) && !manutencao && !inativoAqui));
+  const agenda = mapa && (ground ? !manutencao : Boolean(recurso) && !manutencao && !inativoAqui);
   const tipo = ground ? '' : (linha.voos.length ? linha.voos[0].eqType : recurso && recurso.tipo) || '';
   return {
-    sub: [tipo, horas, manutencao ? 'em manutenção' : '', inativoAqui ? 'inativo' : ''].filter(Boolean).join(' · '), dados: `data-r="${esc(r)}"`, manutencao, inerte: mapa && !agenda,
+    sub: [tipo, horas, manutencao ? (ground ? 'indisponível' : 'em manutenção') : '', inativoAqui ? 'inativo' : ''].filter(Boolean).join(' · '), dados: `data-r="${esc(r)}"`, manutencao, inerte: mapa && !agenda,
     agendar: agenda ? { valor: `r:${r}`, nome: `Agendar ${ground ? 'na Sala Ground' : `no ${r}`}` } : null
   };
 }
@@ -350,9 +352,9 @@ function tempoParado(out) {
 }
 
 // Avisos agrupados pelo código: alunos e instrutores sem peso, aviões que param para a revisão, atrasos, instrutores
-// perto do limite da lei, os do “Priorizar com” (um por voo: sem o instrutor, a disputa ou o voo posto à mão fora dele) e
-// os voos agendados fora das regras (um por voo). Os avisos sem código (de uma escala gravada
-// antes deles) entram em "outros"
+// perto do limite da lei, os do “Priorizar com” (um por voo: sem o instrutor, a disputa ou o voo posto à mão fora dele), as
+// voltas do noturno com o avião ou o INVA indisponível (uma por volta) e os voos agendados fora das regras (um por voo).
+// Os avisos sem código (de uma escala gravada antes deles) entram em "outros"
 function resumoDosAvisos(avisos) {
   const doCodigo = codigo => avisos.filter(a => a.codigo === codigo);
   const quantos = (lista, campo) => new Set(lista.map(a => a[campo]).filter(id => id !== undefined)).size;
@@ -364,6 +366,7 @@ function resumoDosAvisos(avisos) {
   const semPar = doCodigo('voa-com').length;
   const saiu = doCodigo('escolhido-saiu').length;
   const repouso = quantos(doCodigo('repouso-do-noturno'), 'insId');
+  const voltas = doCodigo('volta-do-noturno').length;
   const foraDaRegra = quantos(avisos.filter(a => CODIGOS_DO_AGENDADO.includes(a.codigo)), 'fKey');
   const outros = avisos.filter(a => !CODIGOS_DE_AVISO.includes(a.codigo)).length;
   const partes = [
@@ -375,6 +378,7 @@ function resumoDosAvisos(avisos) {
     semPar && `${semPar} ${semPar === 1 ? 'aviso' : 'avisos'} de Priorizar com`,
     saiu && `${saiu} ${saiu === 1 ? 'voo com o instrutor escolhido' : 'voos com o instrutor escolhido'} fora do cadastro`,
     repouso && `${repouso} ${repouso === 1 ? 'instrutor' : 'instrutores'} sem o repouso da lei antes da volta do noturno`,
+    voltas && `${voltas} ${voltas === 1 ? 'volta do noturno' : 'voltas do noturno'} com o avião ou o INVA indisponível`,
     foraDaRegra && `${foraDaRegra} ${foraDaRegra === 1 ? 'agendamento' : 'agendamentos'} fora da regra`,
     outros && `${outros} ${outros === 1 ? 'outro' : 'outros'}`
   ].filter(Boolean);
@@ -444,13 +448,14 @@ function caixaDosInativos(out) {
 }
 
 // Horários recolhidos na Lista (continuam assim quando a escala é refeita, até recarregar a página)
+// (pelo horário de início, em minutos: J, S1)
 const temposRecolhidos = new Set();
-export function alternarTempo(w) {
-  const recolher = !temposRecolhidos.has(w);
-  if (recolher) temposRecolhidos.add(w);
-  else temposRecolhidos.delete(w);
-  document.querySelectorAll(`#out .tabela-escala tbody tr[data-w="${w}"]:not(.win)`).forEach(tr => { tr.hidden = recolher; });
-  const botao = document.querySelector(`#out [data-recolher-tempo="${w}"]`);
+export function alternarTempo(inicio) {
+  const recolher = !temposRecolhidos.has(inicio);
+  if (recolher) temposRecolhidos.add(inicio);
+  else temposRecolhidos.delete(inicio);
+  document.querySelectorAll(`#out .tabela-escala tbody tr[data-inicio="${inicio}"]:not(.win)`).forEach(tr => { tr.hidden = recolher; });
+  const botao = document.querySelector(`#out [data-recolher-inicio="${inicio}"]`);
   if (botao) botao.setAttribute('aria-expanded', String(!recolher));
 }
 
@@ -477,19 +482,20 @@ function tabela(voos, al) {
     if (chave) turmas.set(chave, grupo);
     grupos.push(grupo);
   }
-  const porTempo = {};
-  grupos.forEach(g => { porTempo[g[0].w] = (porTempo[g[0].w] || 0) + 1; });
+  // Os grupos da Lista pelo horário de início de cada voo (J, S1; o w dos tempos de antes fica só nos dados)
+  const porInicio = {};
+  grupos.forEach(g => { porInicio[g[0].a] = (porInicio[g[0].a] || 0) + 1; });
 
   let h = `<div class="tw tabela-escala"><table><thead><tr><th>Horário</th><th>Aluno</th><th>Missão</th><th>Recurso</th><th>Instrutor</th><th>Peso</th><th>Status</th><th class="edit-only" aria-label="Ação"></th></tr></thead><tbody>`;
   let tempo = -1;
   for (const grupo of grupos) {
     const o = grupo[0];
-    const recolhido = temposRecolhidos.has(o.w);
-    if (o.w !== tempo) {
-      tempo = o.w;
-      const n = porTempo[o.w];
+    const recolhido = temposRecolhidos.has(o.a);
+    if (o.a !== tempo) {
+      tempo = o.a;
+      const n = porInicio[o.a];
       // O "+" do horário agenda a partir dele: só o ícone (o nome fica no aria-label), e o texto da linha continua o mesmo
-      h += `<tr class="win" data-w="${o.w}"><td colspan="8"><button type="button" class="win-btn" data-recolher-tempo="${o.w}" aria-expanded="${!recolhido}"><svg class="ico seta" aria-hidden="true"><use href="#i-baixo"/></svg>${WLB(o.w)} <small>${n} ${n === 1 ? 'decolagem ou aula' : 'decolagens e aulas'}</small></button><button type="button" class="win-agendar edit-only" data-act="agendar" data-agendar="w:${o.w}" aria-label="Agendar às ${hm(T[o.w])}" aria-haspopup="dialog"><svg class="ico" aria-hidden="true"><use href="#i-mais"/></svg></button></td></tr>`;
+      h += `<tr class="win" data-inicio="${o.a}"><td colspan="8"><button type="button" class="win-btn" data-recolher-inicio="${o.a}" aria-expanded="${!recolhido}"><svg class="ico seta" aria-hidden="true"><use href="#i-baixo"/></svg>${rotuloDoInicio(o.a)} · <small>${n} ${n === 1 ? 'decolagem ou aula' : 'decolagens e aulas'}</small></button><button type="button" class="win-agendar edit-only" data-act="agendar" data-agendar="h:${o.a}" aria-label="Agendar às ${hm(o.a)}" aria-haspopup="dialog"><svg class="ico" aria-hidden="true"><use href="#i-mais"/></svg></button></td></tr>`;
     }
     const rs = grupo.length > 1 ? ` rowspan="${grupo.length}"` : '';
     const cancelado = voo => {
@@ -500,7 +506,7 @@ function tabela(voos, al) {
     // instrutor escolhido na Escala (as marcas estão nos voos fixos do dia)
     const motivo = esc(motivoDoFixo(o.fKey, { fStatus: S.fStatus, aprovacao: S.aprovacao, voo: o, fixos: S.fixos }));
     const fixo = o.fixo ? ` <svg class="ico fixo" role="img" aria-label="${motivo}" data-dica="voo-fixo" data-dica-termo="${motivo}"><use href="#i-cadeado"/></svg>` : '';
-    const doTempo = ` data-w="${o.w}"${recolhido ? ' hidden' : ''}`;
+    const doTempo = ` data-inicio="${o.a}"${recolhido ? ' hidden' : ''}`;
     h += `<tr${cancelado(o)}${doTempo}>
       <td class="c-hr hr"${rs}>${hm(o.a)}–${hm(o.b)} <small>${duracao(o)}</small>${fixo}${preferencia(o)}${seloForaDaRegra(grupo, foraDaRegra)}${o.conflito ? ' <span class="tag er" data-dica="conflito">conflito</span>' : ''}</td>
       <td class="c-aluno"><b>${esc(o.s)}</b></td>
@@ -547,7 +553,8 @@ function filtrosDaEscala(out) {
 function linhasLivres({ categoria, daCategoria, recurso, texto }) {
   if (!vistaDoMapa() || recurso || texto) return [];
   if (TL_MODE === 'ins') return categoria ? [] : S.ins.filter(x => x.on && !inativoNaDataAberta(x)).map(x => [x.id, x.nm]);
-  return [...(S.frota || []).filter(f => !inativoNaDataAberta(f) && !(OCULTAR_INDISPONIVEIS && !S.av[f.reg])).map(f => f.reg), GROUND_REG].filter(daCategoria).map(r => [r, nomeDoRecurso(r)]);
+  const sala = OCULTAR_INDISPONIVEIS && !salaDisponivel(S.av) ? [] : [GROUND_REG];
+  return [...(S.frota || []).filter(f => !inativoNaDataAberta(f) && !(OCULTAR_INDISPONIVEIS && !S.av[f.reg])).map(f => f.reg), ...sala].filter(daCategoria).map(r => [r, nomeDoRecurso(r)]);
 }
 
 // A escala é refeita a cada alteração (save em actions.js): aqui ela só é desenhada, na visão escolhida na barra.

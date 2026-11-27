@@ -1,7 +1,8 @@
 // O BI: a data base, os filtros e, só no modo local, os dias simulados
 import { carregarBI } from '../actions.js';
 import { opcoesDeCategoria } from '../categorias.js';
-import { T, GROUND_EQ_TYPE, GROUND_REG, GROUND_DURATION_MIN, GROUND_DURATION_H, MIS } from '../config.js';
+import { GROUND_EQ_TYPE, GROUND_REG, GROUND_DURATION_MIN, GROUND_DURATION_H, MIS } from '../config.js';
+import { INICIOS_DOS_TEMPOS } from '../horarios.js';
 import { $, showToast } from '../dom.js';
 import { pad, somarDias } from '../format.js';
 import { matriculasDoTipo } from '../frota.js';
@@ -77,7 +78,7 @@ comConfirmacao('#btn-bi-sim', 'Confirmar simulação', async () => {
       flights.push({
         isGround: isGnd,
         classKey: isGnd ? `SIM_${iso}_${mis}_${w}_${ins.id}` : `SIM_${iso}_${f}`,
-        w, a: T[w], b: T[w] + durMin,
+        w, a: INICIOS_DOS_TEMPOS[w], b: INICIOS_DOS_TEMPOS[w] + durMin,
         s: stu.nm, mis, h, ss: '1/1',
         r: reg, eqType, ins: ins.nm, status: 'Confirmado'
       });

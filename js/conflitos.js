@@ -19,6 +19,7 @@ export const GRUPO_DO_CONFLITO = {
   'so-vfr': 'aviao',
   revisao: 'aviao',
   'sala-ocupada': 'aviao',
+  'sala-indisponivel': 'aviao',
   'aluno-ocupado': 'horario',
   'horario-fechado': 'horario',
   disponibilidade: 'horario',
@@ -70,13 +71,14 @@ export const CODIGOS_DO_AGENDADO = ['fora-dos-horarios', 'depois-das-17h30', 'li
 // Os códigos dos avisos, para o resumo da Escala agrupar sem ler o texto: o peso que falta (stuId e insId dizem de
 // quem), o instrutor perto do limite da lei (insId), o avião que para para a revisão, o atraso que invade outro voo, o
 // voo que ficou sem o instrutor do “Priorizar com” do aluno e o do pedido cujo instrutor escolhido saiu do cadastro (stuId;
-// insId: quem ficou com o voo), o repouso antes da volta do noturno (insId) e as regras que o voo agendado pulou
-export const CODIGOS_DE_AVISO = ['sem-peso', 'perto-do-limite', 'revisao', 'atraso', 'voa-com', 'escolhido-saiu', 'repouso-do-noturno', ...CODIGOS_DO_AGENDADO];
+// insId: quem ficou com o voo), o repouso antes da volta do noturno (insId), a volta do noturno num avião ou com um INVA
+// que não está bem hoje (stuId e insId) e as regras que o voo agendado pulou
+export const CODIGOS_DE_AVISO = ['sem-peso', 'perto-do-limite', 'revisao', 'atraso', 'voa-com', 'escolhido-saiu', 'repouso-do-noturno', 'volta-do-noturno', ...CODIGOS_DO_AGENDADO];
 
 // Os códigos das rejeições: por que o pedido ficou fora da escala, para dizer onde resolver
 export const CODIGOS_DE_REJEICAO = [
   'equipamento-da-missao', 'ground-pendente', 'ground-antes-do-voo-fixo', 'so-parafuso', 'sem-aviao', 'sem-instrutor-habilitado',
-  'disponibilidade-do-aluno', 'depois-do-ground', 'sem-horario', 'aluno-ocupado', 'avioes-ocupados', 'sala-ocupada', 'revisao',
+  'disponibilidade-do-aluno', 'depois-do-ground', 'sem-horario', 'aluno-ocupado', 'avioes-ocupados', 'sala-ocupada', 'sala-indisponivel', 'revisao',
   'instrutores-indisponiveis', 'instrutores-ocupados', 'bloqueio', 'limite-da-lei', 'peso', 'limite-de-locais', 'instrutor-escolhido',
   'habilitacao-do-aviao'
 ];

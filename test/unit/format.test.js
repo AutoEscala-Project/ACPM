@@ -1,6 +1,6 @@
 import { describe, it, mock } from 'node:test';
 import assert from 'node:assert/strict';
-import { hm, fmtH, fmtDurLabel, WLB, pad, esc, opts, amanhaISO, hojeISO, somarDias, fimDoMes, rotuloDaData, nomeLimpo, LIMITE_DO_NOME, dataIsoValida, minutoDoDia, lerHoras, numeroBr, duracaoHm, pesoBr, chaveDeBusca, iniciais } from '../../js/format.js';
+import { hm, fmtH, fmtDurLabel, rotuloDoInicio, pad, esc, opts, amanhaISO, hojeISO, somarDias, fimDoMes, rotuloDaData, nomeLimpo, LIMITE_DO_NOME, dataIsoValida, minutoDoDia, lerHoras, numeroBr, duracaoHm, pesoBr, chaveDeBusca, iniciais } from '../../js/format.js';
 
 // O relógio no fuso do aeroclube (São Paulo, UTC−3), qualquer que seja o da máquina (o CI roda em UTC): das 21:00 à
 // meia-noite, a data local já não é a do UTC. O fuso de antes volta no fim
@@ -40,9 +40,11 @@ describe('Formatação', () => {
     assert.equal(fmtDurLabel(2), '2 h');
   });
 
-  it('rótulo da janela de instrução', () => {
-    assert.equal(WLB(0), '06:30 · 1º tempo');
-    assert.equal(WLB(8), '17:30 · 9º tempo (noturno)');
+  // J (S1): a Lista e o PDF agrupam pelo horário de início de cada voo; o das 17:30 diz que é o noturno
+  it('rótulo do horário de início de um grupo da Lista', () => {
+    assert.equal(rotuloDoInicio(420), '07:00');
+    assert.equal(rotuloDoInicio(390), '06:30');
+    assert.equal(rotuloDoInicio(1050), '17:30 · noturno');
   });
 
   it('nome padrão do aluno', () => {

@@ -1,10 +1,11 @@
 // Camada de acesso a dados: estado inicial, migrações de schema e persistência por um backend (localStorage ou
 // Supabase).
-import { WIN } from './config.js';
+
+import { GROUND_REG } from './config.js';
 import { FROTA_INICIAL, normalizarFrota } from './frota.js';
-import { pad, LIMITE_DO_NOME, hojeISO } from './format.js';
+import { pad, LIMITE_DO_NOME, hojeISO, somarDias } from './format.js';
 import { normalizeMissionFields, proximoMid, pesoValido } from './rules.js';
-import { HORARIOS_INICIAIS, normalizarHorarios } from './horarios.js';
+import { HORARIOS_INICIAIS, normalizarHorarios, INICIOS_DOS_TEMPOS } from './horarios.js';
 import { backendLocal } from './backends/local.js';
 import { separar, juntar, diaPadrao, diaParaCopiar, converterLegado, biDosDias } from './dias.js';
 import { ESQUEMA, migrarCadastro, migrarDia, precisaMigrar, antesDosCursosProprios, renomearSimulador } from './migracoes.js';
@@ -15,7 +16,7 @@ import { normalizarEscalaGravada } from './escala-gravada.js';
 import { normalizarHangar } from './hangar.js';
 import { LIMITES_DA_LEI, normalizarLimites, comHorasExternas } from './limites.js';
 import { noturnosDaVespera, comRepousoDoNoturno, voltasConferem } from './noturno.js';
-import { normalizarFixos, normalizarAprovacao } from './fixos.js';
+import { normalizarFixos, normalizarAprovacao, pinosDoNoturno } from './fixos.js';
 import { normalizarCriterios } from './criterios.js';
 import { normalizarPainel } from './config-do-painel.js';
 import { normalizarCursos, normalizarCursoDoAluno } from './cursos.js';
@@ -47,7 +48,7 @@ export const ApiClient = {
   createFreshState() {
     const state = {
       schemaVer: 4,
-      win: WIN.map(() => true),
+      win: INICIOS_DOS_TEMPOS.map(() => true),
       av: {},
       nid: 1000,
       // Sem cadastro: no modo compartilhado os instrutores e alunos vêm do servidor
@@ -84,7 +85,7 @@ export const ApiClient = {
     if (!x.horas || typeof x.horas !== 'object' || Array.isArray(x.horas)) x.horas = {};
     x.horas = Object.fromEntries(Object.entries(x.horas).filter(([, h]) => typeof h === 'number' && Number.isFinite(h) && h >= 0 && h <= 60));
     x.importadas = Array.isArray(x.importadas) ? x.importadas.filter(id => Number.isInteger(id) && id > 0) : [];
-    x.win = Array.isArray(x.win) && x.win.length === WIN.length ? x.win.map(v => v !== false) : WIN.map(() => true);
+    x.win = Array.isArray(x.win) && x.win.length === INICIOS_DOS_TEMPOS.length ? x.win.map(v => v !== false) : INICIOS_DOS_TEMPOS.map(() => true);
     if (!x.nid || x.nid < 1000) x.nid = 1000;
     // A frota: disponibilidade e horas só dos recursos dela; um recurso que o dia não conhece começa disponível
     // (os simuladores com os nomes anteriores à versão 5 são renomeados antes)
@@ -114,6 +115,8 @@ export const ApiClient = {
     const naFrota = r => x.frota.some(f => f.reg === r);
     const av = Object.fromEntries(Object.entries(x.av && typeof x.av === 'object' ? x.av : {}).map(([r, v]) => [renomearSimulador(r), v]));
     x.av = Object.fromEntries(x.frota.map(f => [f.reg, typeof av[f.reg] === 'boolean' ? av[f.reg] : true]));
+    // A Sala Ground não é da frota: a chave dela fica só quando é booleana (S4; sem ela, a sala está disponível)
+    if (typeof av[GROUND_REG] === 'boolean') x.av[GROUND_REG] = av[GROUND_REG];
     x.horas = Object.fromEntries(Object.entries(x.horas).map(([r, h]) => [renomearSimulador(r), h]).filter(([r]) => naFrota(r)));
 
     if (!x.schemaVer || x.schemaVer < 3) {
@@ -124,7 +127,7 @@ export const ApiClient = {
         on: old.on !== false,
         lv: old.lv >= 1 && old.lv <= 9 ? old.lv : 1,
         kg: old.kg > 0 ? old.kg : 0,
-        aw: Array.isArray(old.aw) && old.aw.length === WIN.length ? old.aw : WIN.map(() => true),
+        aw: Array.isArray(old.aw) && old.aw.length === INICIOS_DOS_TEMPOS.length ? old.aw : INICIOS_DOS_TEMPOS.map(() => true),
         ...(Array.isArray(old.hab) ? { hab: old.hab } : {})
       }));
 
@@ -147,7 +150,7 @@ export const ApiClient = {
       Object.assign(i, { nm: nome(i.nm, `Instrutor ${i.id}`), on: i.on !== false, kg: pesoValido(i.kg) });
       // Inativo no cadastro (formato 26): só true fica
       if (i.inativo !== true) delete i.inativo;
-      i.aw = Array.isArray(i.aw) && i.aw.length === WIN.length ? i.aw.map(v => v === true) : WIN.map(() => true);
+      i.aw = Array.isArray(i.aw) && i.aw.length === INICIOS_DOS_TEMPOS.length ? i.aw.map(v => v === true) : INICIOS_DOS_TEMPOS.map(() => true);
     });
     x.stu = x.stu.filter(comId);
     x.stu.forEach(s => {
@@ -211,12 +214,29 @@ export const ApiClient = {
     // noturno dela não conferem com os noturnos de ontem (o noturno mudou depois): a calculada é gravada na próxima alteração
     const gravada = dia ? normalizarEscalaGravada(dia.resultado) : null;
     const escala = gravada && voltasConferem(gravada, noturnos) ? gravada : null;
+    // O dia gravado antes do pino do Noturno (os dias antigos e os da prévia): cada Noturno da escala gravada ganha o pino
+    // dele, no lugar da linha, antes de o motor rodar (js/fixos.js, pinosDoNoturno). Ele vai para o servidor na próxima
+    // gravação
+    if (gravada) estado.fixos = pinosDoNoturno(estado, gravada);
+    // As voltas da escala gravada que não conferem com os noturnos de ontem (o noturno de ontem mudou depois que esta data
+    // foi gravada): a tela grava a escala refeita, com as voltas de agora (js/actions.js, seguirAsVoltasDeOntem)
+    const voltasDeAntes = gravada && !escala ? gravada.out.filter(o => o.trecho === 'volta') : null;
     const resultados = lidos.resultados || { situacao: [], doDia: [] };
     // O programa dos cursos ainda no cadastro (programaNoCadastro): a tela diz por que a próxima missão e o progresso
     // ficam desligados
     const indisponiveis = [...(lidos.horasBase ? [] : ['horas']), ...(lidos.resultados ? [] : ['resultados']),
       ...(lidos.programa ? [] : ['cursos']), ...(programaNoCadastro(guardado) ? ['cursos-pendentes'] : [])];
-    return { estado, escala, novo: !dia, horasBase, horasDosInstrutores, resultados, programa: lidos.programa || [], indisponiveis };
+    return { estado, escala, novo: !dia, horasBase, horasDosInstrutores, resultados, programa: lidos.programa || [], indisponiveis, voltasDeAntes };
+  },
+
+  // A escala gravada da data (AAAA-MM-DD) tem as voltas do noturno de antes: o noturno gravado da véspera mudou depois dela
+  // (js/actions.js, avisarVoltaDoDiaSeguinte). Lê a véspera e a data sem guardar a versão: nada é gravado por esta leitura,
+  // e a gravação seguinte da data aberta continua com a versão que ela leu. Sem escala gravada na data, false
+  async voltasGravadasDeAntes(data) {
+    const vespera = somarDias(data, -1);
+    const [ontem, dia] = await Promise.all([vespera, data].map(d => this.backend.ler(`dia:${d}`, { guardarVersao: false })));
+    const gravada = dia ? normalizarEscalaGravada(migrarDia(dia).resultado) : null;
+    return Boolean(gravada) && !voltasConferem(gravada, noturnosDaVespera(ontem ? { data: vespera, conteudo: ontem } : null, data));
   },
 
   // O que vai à parte do dia (não é gravado nele): as horas de voo de cada instrutor antes da data (limites da lei), os
@@ -233,8 +253,11 @@ export const ApiClient = {
     return { horasBase, resultados, programa };
   },
 
+  // O dia gravado leva o pino de cada Noturno da escala (js/fixos.js, pinosDoNoturno): o estado também (a tela), para o
+  // motor não mudar o Noturno de lugar na alteração seguinte; a volta do dia seguinte sai desta escala gravada
   async salvarDia(data, estado, escala) {
     if (this.readOnly) return false;
+    estado.fixos = pinosDoNoturno(estado, escala);
     const partes = separar(estado);
     const cadastro = { ...partes.cadastro, esquema: ESQUEMA };
     const dia = { ...partes.dia, esquema: ESQUEMA };

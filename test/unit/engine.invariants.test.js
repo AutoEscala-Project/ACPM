@@ -1,9 +1,9 @@
 // Propriedades que toda escala gerada deve respeitar, verificadas em centenas de cenários aleatórios.
-import { horariosDaMissao, periodoDoMinuto } from '../../js/horarios.js';
+import { horariosDaMissao, periodoDoMinuto, INICIOS_DOS_TEMPOS, HORARIO_DO_NOTURNO } from '../../js/horarios.js';
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { runAllocationEngine } from '../../js/engine.js';
-import { EQ, GROUND_REG, ACROBAT_REG, T, NI, DEFAULT_LIM, AIRCRAFT_EQ_TYPES } from '../../js/config.js';
+import { EQ, GROUND_REG, ACROBAT_REG, DEFAULT_LIM, AIRCRAFT_EQ_TYPES } from '../../js/config.js';
 import { isGroundMission, doesGroundGateFlight } from '../../js/rules.js';
 import { podeFazer } from '../../js/habilitacoes.js';
 import { categoriaDoRodizio } from '../../js/rodizio.js';
@@ -16,8 +16,11 @@ import { normalizarEscalaGravada } from '../../js/escala-gravada.js';
 import { rejeicoesDosPedidos } from '../../js/rejeicoes.js';
 import { hm } from '../../js/format.js';
 
+// O w de uma linha é o tempo de antes em que ela começa (0 a 8); o do Noturno, o 8, o das 17:30
+const TEMPO_DO_NOTURNO = INICIOS_DOS_TEMPOS.length - 1;
+
 // Até quando o voo pode ir: o de dia no avião pousa até as 17:30; o Noturno, o simulador e o Ground, até o fim do dia
-const fimDoVoo = o => (o.mis !== 'Noturno' && AIRCRAFT_EQ_TYPES.includes(o.eqType) ? T[NI] : 1440);
+const fimDoVoo = o => (o.mis !== 'Noturno' && AIRCRAFT_EQ_TYPES.includes(o.eqType) ? HORARIO_DO_NOTURNO : 1440);
 
 const SEEDS = Array.from({ length: 300 }, (_, i) => 1001 + i);
 // Cada seed cinco vezes: o cenário como foi gerado, com as escolhas do operador (o instrutor escolhido para o dia e o
@@ -138,8 +141,8 @@ describe('Invariantes do motor de alocação', () => {
       assert.ok(x.on, `${o.fKey}: instrutor inativo`);
       assert.ok(podeFazer(x, o.mis, o.eqType, { curso: stu.curso, recurso: recursoDo(estado, o) }), `${o.fKey}: ${o.mis}/${o.eqType} no ${o.r} (${stu.curso}) sem habilitação (${x.hab})`);
       assert.ok(!stu.bl.includes(x.id), `${o.fKey}: instrutor bloqueado`);
-      T.forEach((ini, k) => {
-        const fim = k < NI ? T[k + 1] : 1440;
+      INICIOS_DOS_TEMPOS.forEach((ini, k) => {
+        const fim = k < TEMPO_DO_NOTURNO ? INICIOS_DOS_TEMPOS[k + 1] : 1440;
         if (o.a < fim && o.b > ini) assert.ok(x.aw[k], `${o.fKey}: instrutor indisponível na janela ${k}`);
       });
     }
@@ -173,8 +176,8 @@ describe('Invariantes do motor de alocação', () => {
       assert.ok(estado.win[o.w], `${o.fKey}: janela ${o.w} desativada`);
       assert.equal(o.w, periodoDoMinuto(o.a), `${o.fKey}: período errado`);
       assert.ok(horariosDaMissao(estado.horarios, o.mis, o.eqType).includes(o.a), `${o.fKey}: ${o.a} fora dos horários do ${o.eqType}`);
-      if (o.mis === 'Noturno') assert.equal(o.w, NI, `${o.fKey}: Noturno fora das 17:30`);
-      else assert.ok(o.w < NI && o.b <= fimDoVoo(o), `${o.fKey}: termina às ${o.b}`);
+      if (o.mis === 'Noturno') assert.equal(o.w, TEMPO_DO_NOTURNO, `${o.fKey}: Noturno fora das 17:30`);
+      else assert.ok(o.w < TEMPO_DO_NOTURNO && o.b <= fimDoVoo(o), `${o.fKey}: termina às ${o.b}`);
       if (o.isGround) assert.equal(o.b - o.a, 90);
     }
   }));
@@ -183,7 +186,7 @@ describe('Invariantes do motor de alocação', () => {
   // podem passar das 17:30, terminam antes, também depois da compactação
   it('o aluno com o Noturno na demanda do dia termina as outras missões até as 17:30', () => emTodos(({ estado, out }) => {
     const comNoturno = new Set(estado.stu.filter(s => [s, ...s.extra].some(p => p.fly && p.mis === 'Noturno')).map(s => s.id));
-    for (const o of out.filter(v => comNoturno.has(v.stuId) && v.mis !== 'Noturno')) assert.ok(o.b <= T[NI], `${o.fKey} (${o.mis}): termina às ${o.b}`);
+    for (const o of out.filter(v => comNoturno.has(v.stuId) && v.mis !== 'Noturno')) assert.ok(o.b <= HORARIO_DO_NOTURNO, `${o.fKey} (${o.mis}): termina às ${o.b}`);
   }));
 
   it('o voo começa depois do término do Ground da mesma temática', () => emTodos(({ out }) => {

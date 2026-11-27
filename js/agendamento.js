@@ -12,12 +12,12 @@
 // do aluno também é agendado: o que está na escala muda de lugar ("Mover"), e o que ficou fora entra ("Encaixar"), com o
 // mesmo pedido. No Ground, o aluno entra numa turma do dia ou abre uma turma nova. Tudo aqui é puro: a tela só desenha o
 // que sai daqui.
-import { MIS, T, NI, DAY, GROUND_EQ_TYPE, GROUND_REG, GROUND_DURATION_MIN, DEFAULT_LIM, MINUTOS_DO_DIA, NOTURNO, MISSOES_LOCAIS, LIMITE_DE_VOOS_LOCAIS } from './config.js';
+import { MIS, GROUND_EQ_TYPE, GROUND_REG, GROUND_DURATION_MIN, DEFAULT_LIM, MINUTOS_DO_DIA, NOTURNO, MISSOES_LOCAIS, LIMITE_DE_VOOS_LOCAIS } from './config.js';
 import {
   alvoDoNovoPedido, normalizeMissionFields, duracaoFixaDaMissao, duracaoPadraoDaMissao, duracaoValida, duracaoDigitada, isGroundMission,
   disponibilidadeDoAluno, rotuloDaDisponibilidade, pesoDigitado, ERRO_DA_DURACAO, ERRO_DO_PESO
 } from './rules.js';
-import { horariosDaMissao, periodoDoMinuto, paraMinuto } from './horarios.js';
+import { horariosDaMissao, horariosDoTipo, periodoDoMinuto, paraMinuto, INICIOS_DOS_TEMPOS } from './horarios.js';
 import { ocupacaoDaEscala, avioesQueServem, instrutoresQueServem, problemaDoRecurso, problemaDoAluno } from './candidatos.js';
 import { estadoDoAluno, proximasMissoes, progressoNoCurso, missoesDoDia } from './progresso.js';
 import { indiceDoPrograma, percursoDoCurso, rotuloDaFase, rotuloDaMissao, noturnosDoCurso } from './programa.js';
@@ -35,7 +35,8 @@ import { sobrepoe } from './viabilidade.js';
 import { hm, fmtH, numeroBr, rotuloDaData, somarDias, duracaoHm } from './format.js';
 import { normalizarLimites } from './limites.js';
 import { repousoAntesDaVolta } from './noturno.js';
-import { nomeDoRecurso } from './categorias.js';
+import { nomeDoRecurso, categoriaDoTipo } from './categorias.js';
+import { fechamentosDoEstado, horarioAberto } from './fechamentos.js';
 import { CATEGORIAS_DO_RODIZIO, categoriaDoRodizio, ajustarFilas } from './rodizio.js';
 import { FROTA_INICIAL, recursoDaFrota, motivoDoAviao } from './frota.js';
 import { podeFazer, nomeDaHabilitacao, PREFIXO_DA_HABILITACAO_DO_AVIAO } from './habilitacoes.js';
@@ -56,7 +57,7 @@ const rotuloDoVoo = o => (o.mid ? `${o.s} (${o.mis})` : o.s);
 // Onde o voo está: "no PR-VOB", ou "na sala de Ground"; os horários do tipo: "horários do C152", ou "horários das aulas de
 // Ground"
 const noRecurso = r => (r === GROUND_REG ? 'na sala de Ground' : `no ${nomeDoRecurso(r)}`);
-const horariosDoTipo = tipo => (tipo === GROUND_EQ_TYPE ? 'horários das aulas de Ground' : `horários do ${tipo}`);
+const nomeDosHorariosDoTipo = tipo => (tipo === GROUND_EQ_TYPE ? 'horários das aulas de Ground' : `horários do ${tipo}`);
 
 // A data aberta nos textos do diálogo, pelo nome certo: hoje, amanhã (a data que o operador costuma montar) ou a data
 // ("12/11"; em outro ano, com o ano). Três formas: depois de "de" ("Na demanda de amanhã"), depois de um verbo ("voa
@@ -75,7 +76,7 @@ const naDataAs = (dia, verbo, horarios) => [verbo, dia.quando, `às ${horarios}`
 // O contexto e os horários
 
 // O contexto de onde o diálogo abriu (data-agendar): a barra da Escala ('dia'), a linha de um recurso ('r:PR-VOB') ou de
-// um instrutor ('i:7') no mapa, um horário da lista ('w:2'), a turma de Ground ('t:<turma>'), ou o clique no mapa
+// um instrutor ('i:7') no mapa, um horário da lista ('h:610', o início do grupo), a turma de Ground ('t:<turma>'), ou o clique no mapa
 // ({ r ou insId, minuto }). minuto: de onde a busca do horário parte; desde e ate: os limites dela (null: sem limite);
 // perto: o horário mais perto do minuto (o clique), senão o primeiro livre a partir dele. Na data de hoje, a partir de agora
 export function contextoInicial(valor, { data, hoje, agora = 0 } = {}) {
@@ -94,20 +95,20 @@ export function contextoInicial(valor, { data, hoje, agora = 0 } = {}) {
   const arg = resto.join(':');
   if (tipo === 'r' && arg) return { ...contexto, origem: 'recurso', r: arg };
   if (tipo === 'i' && /^\d+$/.test(arg) && +arg > 0) return { ...contexto, origem: 'instrutor', insId: +arg };
-  if (tipo === 'w' && /^[0-8]$/.test(arg)) {
-    const w = +arg;
-    return { ...contexto, origem: 'periodo', w, minuto: T[w], desde: T[w], ate: w < NI ? T[w + 1] : MINUTOS_DO_DIA };
-  }
+  // O "+" de um grupo da Lista (J, S1): a busca parte do horário de início dele, sem limite até o grupo seguinte
+  if (tipo === 'h' && /^\d{1,4}$/.test(arg) && +arg < MINUTOS_DO_DIA) return { ...contexto, origem: 'horario', minuto: +arg, desde: +arg };
   if (tipo === 't' && arg) return { ...contexto, origem: 'turma', classKey: arg };
   return contexto;
 }
 
-// Os horários de decolagem do agendamento: o Ground, só nas janelas do dia (T[0] a T[7]); o resto, os da missão no tipo
-// (o Noturno às 17:30, o Voo Solo às 06:30, o PA-34 de 30 em 30 minutos, os outros, a lista da categoria). Só os que caem
-// numa janela de operação aberta nesta data
+// Os horários de decolagem do agendamento: o Ground, os da Sala Ground; o resto, os da missão no tipo
+// (o Noturno às 17:30, o Voo Solo às 06:30, o PA-34 de 30 em 30 minutos, os outros, a lista da categoria). Só os que estão
+// abertos nesta data para a categoria (js/fechamentos.js)
 export function horariosDoAgendamento(estado, { mis, tipo }) {
-  const lista = isGroundMission(mis) ? DAY.map(w => T[w]) : horariosDaMissao(estado.horarios, mis, tipo);
-  return lista.filter(m => !Array.isArray(estado.win) || estado.win[periodoDoMinuto(m)]);
+  const lista = isGroundMission(mis) ? horariosDoTipo(estado.horarios, GROUND_EQ_TYPE) : horariosDaMissao(estado.horarios, mis, tipo);
+  const fechamentos = fechamentosDoEstado(estado);
+  const categoria = categoriaDoTipo(isGroundMission(mis) ? GROUND_EQ_TYPE : tipo);
+  return lista.filter(m => horarioAberto(fechamentos, m, categoria));
 }
 
 // O horário da lista mais perto do minuto em que a linha (o recurso ou o instrutor) está livre (livre(horário)); no
@@ -199,7 +200,7 @@ const FORA_DA_ESCALA = {
   'ground-antes-do-voo-fixo': 'sem horário antes do voo fixo', 'so-parafuso': 'sem o avião do Parafuso', 'sem-aviao': 'sem avião disponível',
   'sem-instrutor-habilitado': 'sem instrutor habilitado', 'disponibilidade-do-aluno': 'fora da disponibilidade do aluno',
   'depois-do-ground': 'sem horário depois do Ground', 'sem-horario': 'sem horário aberto', 'aluno-ocupado': 'o aluno já voa nos horários',
-  'avioes-ocupados': 'sem avião livre', 'sala-ocupada': 'a sala de Ground ocupada', revisao: 'sem saldo até a revisão de 50 h',
+  'avioes-ocupados': 'sem avião livre', 'sala-ocupada': 'a sala de Ground ocupada', 'sala-indisponivel': 'a Sala Ground indisponível', revisao: 'sem saldo até a revisão de 50 h',
   'instrutores-indisponiveis': 'sem instrutor disponível', 'instrutores-ocupados': 'sem instrutor livre', bloqueio: 'em Não escalar com',
   'limite-da-lei': 'o limite da lei', peso: 'o peso acima do limite', 'limite-de-locais': 'o limite de voos locais no horário',
   'instrutor-escolhido': 'o instrutor escolhido não serve', 'habilitacao-do-aviao': 'sem a habilitação própria do avião'
@@ -477,6 +478,7 @@ function textoDoRecurso(problema, { mis, instrutor }) {
     'aviao-indisponivel': () => 'em manutenção',
     'aviao-ocupado': () => textoDoVooFixo(problema.voo),
     'sala-ocupada': () => textoDoVooFixo(problema.voo),
+    'sala-indisponivel': () => 'indisponível nesta data',
     revisao: () => 'sem saldo até a revisão de 50 h',
     'so-parafuso': () => (mis === 'Parafuso' ? 'não é Só Parafuso' : 'só Parafuso'),
     'so-vfr': () => 'só VFR (o voo é IFR)',
@@ -849,8 +851,8 @@ function textoDoContexto(contexto, ambiente, { r = null, tipo = null, a, recurso
   if (turma) partes = [`Turma de ${turma.mis} das ${hm(turma.a)} com ${turma.ins}`];
   else if (contexto.origem === 'mapa') {
     const clique = `clique perto das ${hm(contexto.minuto)}`;
-    partes = [com, onde, !comAluno ? clique : quando ? `${clique} → ${quando} (${horariosDoTipo(tipo)})` : horario(clique)];
-  } else if (contexto.origem === 'periodo') partes = [onde, horario(`o primeiro horário livre a partir das ${hm(contexto.desde)}`)];
+    partes = [com, onde, !comAluno ? clique : quando ? `${clique} → ${quando} (${nomeDosHorariosDoTipo(tipo)})` : horario(clique)];
+  } else if (contexto.origem === 'horario') partes = [onde, horario(`o primeiro horário livre a partir das ${hm(contexto.desde)}`)];
   else if (contexto.origem === 'recurso') partes = [onde, horario('o primeiro horário livre')];
   else if (contexto.origem === 'instrutor') partes = [com, horario('o primeiro horário livre')];
   else {
@@ -873,7 +875,7 @@ function textoDoContexto(contexto, ambiente, { r = null, tipo = null, a, recurso
 function chaveDaTurmaNova(fixos, fKey, { mis, a, insId }) {
   const usadas = new Set(Object.entries(fixos).filter(([chave]) => chave !== fKey).map(([, p]) => p.classKey).filter(Boolean));
   if (!usadas.has(fKey)) return null;
-  const base = `GND_${mis}_${T.includes(a) ? T.indexOf(a) : periodoDoMinuto(a)}_${insId}`;
+  const base = `GND_${mis}_${INICIOS_DOS_TEMPOS.includes(a) ? INICIOS_DOS_TEMPOS.indexOf(a) : periodoDoMinuto(a)}_${insId}`;
   let chave = base;
   for (let n = 2; usadas.has(chave); n++) chave = `${base}_${n}`;
   return chave;
@@ -931,7 +933,7 @@ export function aplicarAgendamento(estado, base, proposta) {
   if (proposta.disponibilizar && x) {
     disponibilidade = { insId: x.id, on: x.on, aw: [...x.aw] };
     x.on = true;
-    x.aw = x.aw.map((v, k) => v || sobrepoe(proposta.a, proposta.b, T[k], k < NI ? T[k + 1] : MINUTOS_DO_DIA));
+    x.aw = x.aw.map((v, k) => v || sobrepoe(proposta.a, proposta.b, INICIOS_DOS_TEMPOS[k], k < INICIOS_DOS_TEMPOS.length - 1 ? INICIOS_DOS_TEMPOS[k + 1] : MINUTOS_DO_DIA));
   }
   return {
     stuId: aluno.id, mid, criado: !movido, pedido: movido ? doMovido : mid === 0 ? principal : null, fixo, disponibilidade, pesos, criadoComo: camposDoPedido(alvo)
@@ -1058,9 +1060,6 @@ function linhasDaPrevia({ novo, movidos, saem, entram }, { antes, sim, estadoDaS
   ];
 }
 
-// A disponibilidade do aluno em palavras: "de manhã", "à tarde", "à noite" ou "às 07:30"
-const QUANDO_DISPONIVEL = { manha: 'de manhã', tarde: 'à tarde', noite: 'à noite' };
-const quandoDisponivel = jan => QUANDO_DISPONIVEL[jan] || rotuloDaDisponibilidade(jan);
 
 // A conferência do agendamento (formulario, a simulação sim e a chave fKey do voo novo; baseComPesos: a escala com os
 // pesos digitados, sem o agendamento):
@@ -1134,16 +1133,16 @@ export function avaliarAgendamento({ estado, baseComPesos, base = baseComPesos, 
     }
   }
   // O voo de hoje que muda de lugar: a disponibilidade do aluno que não inclui o horário novo sai do pedido; o voo fixo
-  // pela escala aprovada (ou pelo status) deixa o lugar em que estava fixo
+  // pela escala aprovada (ou pelo status, ou o Noturno) deixa o lugar em que estava fixo
   if (movido) {
     const { jan } = movido.pedido;
     const permitidas = disponibilidadeDoAluno(jan);
     if (permitidas && !permitidas(a)) {
-      avisos.push({ codigo: 'disponibilidade-do-aluno', texto: `${stu.nm} está disponível só ${quandoDisponivel(jan)}: agendado às ${hm(a)}, o pedido fica sem a disponibilidade.`, resumo: 'fora da disponibilidade do aluno', campo: 'agd-horario' });
+      avisos.push({ codigo: 'disponibilidade-do-aluno', texto: `${stu.nm} pediu o horário ${rotuloDaDisponibilidade(jan)}: agendado às ${hm(a)}, o pedido fica sem o horário.`, resumo: 'fora da disponibilidade do aluno', campo: 'agd-horario' });
     }
     const pino = (estado.fixos || {})[fKey];
     const muda = movido.voo && (movido.voo.a !== a || movido.voo.r !== r || movido.voo.insId !== x.id);
-    if (muda && pino && !pino.agendado && (estado.aprovacao || fixoPeloStatus(fKey, estado.fStatus))) {
+    if (muda && pino && !pino.agendado && (estado.aprovacao || fixoPeloStatus(fKey, estado.fStatus) || pino.noturno)) {
       const porque = motivoDoFixo(fKey, { fStatus: estado.fStatus, aprovacao: estado.aprovacao, voo: movido.voo, fixos: estado.fixos }).replace(/^Voo fixo: /, '');
       avisos.push({
         codigo: 'fixo-muda', texto: `O voo de ${stu.nm} está fixo (${porque}): ele sai das ${hm(movido.voo.a)} ${noRecurso(movido.voo.r)} e fica fixo no horário novo.`,

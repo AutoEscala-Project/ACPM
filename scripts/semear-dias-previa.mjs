@@ -1,7 +1,9 @@
 // Coloca escalas fictícias no projeto de PRÉVIA para as próximas datas de operação (sem domingos), para quem abre a
 // prévia (https://thephfernandes.github.io/ACPM/) ver a escala pronta. Cada data nova começa como o app começa uma data
 // (diaParaCopiar do dia anterior: disponibilidade, horas até a revisão, filas do rodízio), recebe a demanda do dia de
-// exemplo dos testes (test/helpers/exemplo.js, com os alunos em outra ordem a cada data) e a escala do motor.
+// exemplo dos testes (test/helpers/exemplo.js, com os alunos em outra ordem a cada data) e a escala do motor, com a volta
+// de BH dos noturnos de ontem (como o app abre a data: a volta no avião e com o INVA do Noturno, e o aviso do repouso antes
+// dela) e o pino de cada Noturno (como o app grava): scripts/dia-semeado.mjs.
 // Com cada data, os pedidos fictícios da agenda (scripts/pedidos-da-previa.mjs, o passo D1): um aprovado para cada aluno
 // com voo, ligado ao registro dele e a "importadas", dois que aguardam a aprovação e um cancelado.
 // Só grava datas que ainda não têm escala: o que alguém já editou na prévia fica como está. Cada data vai com os pedidos
@@ -12,12 +14,12 @@
 import { execFileSync } from 'node:child_process';
 import { juntar, separar, diaParaCopiar } from '../js/dias.js';
 import { ESQUEMA, migrarCadastro, migrarDia } from '../js/migracoes.js';
-import { runAllocationEngine } from '../js/engine.js';
 import { PROJETOS } from '../js/config-supabase.js';
 import { comExemplo } from '../test/helpers/exemplo.js';
 import { somarDias } from '../js/format.js';
 import { ehDomingo } from '../js/agenda.js';
 import { refDaPrevia, pedidosDaPrevia, sqlDosIds, numerarPedidos, sqlDaData, ligarPedidos } from './pedidos-da-previa.mjs';
+import { escalaSemeada } from './dia-semeado.mjs';
 
 // Só a prévia: a produção é recusada antes de qualquer consulta
 const PREVIA = refDaPrevia(PROJETOS);
@@ -50,8 +52,10 @@ for (let d = inicio; datas.length < quantos; d = somarDias(d, 1)) if (!ehDomingo
 const existentes = new Set(sql(`select data::text as d from public.dias where data between '${datas[0]}' and '${datas.at(-1)}'`).map(l => l.d));
 
 // O dia anterior à primeira data (o app copia dele a disponibilidade, as horas e as filas)
-const [linhaAnterior] = sql(`select conteudo::text as c from public.dias where data < '${datas[0]}' order by data desc limit 1`);
+const [linhaAnterior] = sql(`select data::text as d, conteudo::text as c from public.dias where data < '${datas[0]}' order by data desc limit 1`);
 let anterior = linhaAnterior ? migrarDia(JSON.parse(linhaAnterior.c)) : null;
+// A data do dia anterior: os noturnos dele voltam de BH na data seguinte (só quando ela é o dia seguinte dele)
+let dataAnterior = linhaAnterior ? linhaAnterior.d : null;
 let nid = cadastro.nid;
 const gravacoes = [];
 
@@ -59,6 +63,7 @@ for (const [k, data] of datas.entries()) {
   if (existentes.has(data)) {
     const [l] = sql(`select conteudo::text as c from public.dias where data = '${data}'`);
     anterior = migrarDia(JSON.parse(l.c));
+    dataAnterior = data;
     console.log(`${data}: já tem escala, fica como está`);
     continue;
   }
@@ -77,11 +82,13 @@ for (const [k, data] of datas.entries()) {
   ligarPedidos(estado, numerados);
   console.log(`${data}: pedidos ${pedidos.aprovados.length} aprovados, ${pedidos.aguardando.length} aguardando, ${pedidos.cancelados.length} cancelado`);
 
-  const resultado = { ...runAllocationEngine(estado), data };
+  // A volta de BH dos noturnos de ontem, o repouso antes dela e o pino de cada Noturno, como o app (scripts/dia-semeado.mjs)
+  const { resultado, noturnos } = escalaSemeada(estado, { anterior, dataAnterior, data });
   const dia = { ...separar(estado).dia, esquema: ESQUEMA, resultado };
   gravacoes.push({ data, dia, numerados });
   anterior = dia;
-  console.log(`${data}: ${resultado.out.length} lançamentos, ${resultado.al.length} alertas`, process.env.SECO ? resultado.out.slice(0, 4).map(o => `${o.s}/${o.mis}/${o.r}/${o.ins}`).join(" · ") : "");
+  dataAnterior = data;
+  console.log(`${data}: ${resultado.out.length} lançamentos, ${resultado.al.length} alertas, ${noturnos.length} voltas do noturno`, process.env.SECO ? resultado.out.slice(0, 4).map(o => `${o.s}/${o.mis}/${o.r}/${o.ins}`).join(" · ") : "");
 }
 
 if (!gravacoes.length || process.env.SECO) {

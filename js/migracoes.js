@@ -9,8 +9,10 @@ import { HORARIOS_INICIAIS, minutoDaPreferencia, ajustarPreferencias } from './h
 import { disponibilidadeAtual } from './rules.js';
 import { LIMITES_DA_LEI } from './limites.js';
 import { cursosVazios } from './cursos.js';
+import { fechamentosDoWin } from './fechamentos.js';
+import { INICIOS_DOS_TEMPOS } from './tempos.js';
 
-export const ESQUEMA = 27;
+export const ESQUEMA = 28;
 // O formato dos cursos: o formato do cadastro a partir do qual os programas vivem nas tabelas próprias (antes dele, vale
 // o programa guardado no cadastro, que a conversão única traz para as tabelas). O 22 é o do instrutor escolhido e o 23,
 // o dos atributos da frota; um aumento é esta linha mais public.formato_dos_cursos() (a migração dos cursos), com o
@@ -37,6 +39,31 @@ function pedidoEmMinutos(pedido) {
 // Versão 5: simuladores com os nomes usados no aeroclube
 const SIMULADORES_RENOMEADOS = { 'SIM-MONO-1': 'SIM-MONO-A', 'SIM-MONO-2': 'SIM-MONO-C', 'SIM-MULTI-1': 'SIM-MLTE-E', 'SIM-MULTI-2': 'SIM-MLTE-D' };
 export const renomearSimulador = r => (Object.hasOwn(SIMULADORES_RENOMEADOS, r) ? SIMULADORES_RENOMEADOS[r] : r);
+
+// O pedido no formato 28 (J): sem os períodos do dia; o hN e a preferência de 0 a 8 de antes no horário da janela
+// O win gravado como a data aberta o lia antes do 28 (js/storage.js, normalizeAndMigrateState, antes de o motor ver o
+// estado): com outro tamanho, o dia todo aberto; nas nove posições, só false fecha a janela (null, 0 e o resto abrem)
+const winComoOAppLia = win => (win.length === INICIOS_DOS_TEMPOS.length ? win.map(v => v !== false) : INICIOS_DOS_TEMPOS.map(() => true));
+
+const PERIODOS_ANTIGOS = ['manha', 'tarde', 'noite'];
+const ULTIMA_JANELA = INICIOS_DOS_TEMPOS.length - 1;
+const janelaAntiga = p => Number.isInteger(p) && p >= 0 && p <= ULTIMA_JANELA;
+
+function pedidoDoFormato28(pedido) {
+  if (!pedido || typeof pedido !== 'object') return pedido;
+  const novo = { ...pedido };
+  for (const campo of ['p1', 'p2']) if (janelaAntiga(pedido[campo])) novo[campo] = INICIOS_DOS_TEMPOS[pedido[campo]];
+  if (PERIODOS_ANTIGOS.includes(pedido.jan)) {
+    delete novo.jan;
+    // A confirmação do 7º local vale para um horário exato (minutoConfirmado): sem ele, não confirma nada
+    delete novo.limiteConfirmado;
+  } else if (typeof pedido.jan === 'string') {
+    const janela = /^h(\d)$/.exec(pedido.jan);
+    if (janela && janelaAntiga(+janela[1])) novo.jan = `h${INICIOS_DOS_TEMPOS[+janela[1]]}`;
+  }
+  if (Array.isArray(pedido.extra)) novo.extra = pedido.extra.map(pedidoDoFormato28);
+  return novo;
+}
 
 const PASSOS = {
   5: {
@@ -229,6 +256,24 @@ const PASSOS = {
   27: {
     cadastro: cadastro => cadastro,
     dia: dia => dia
+  },
+  // Versão 28: as nove janelas de operação deixam de ser o que fecha uma data. O dia ganha "fechamentos" (os horários
+  // fechados, js/fechamentos.js), convertidos de "win" (que fica, como a cópia de antes, e só é lido onde "fechamentos"
+  // não existe); os pedidos perdem os períodos ("manha", "tarde", "noite": N13, o pedido passa a qualquer horário da lista,
+  // com as preferências) e o horário antigo "hN" (a janela N) vira o horário dela; a preferência de 0 a 8 também. O
+  // cadastro não muda: sem "horarios.ground", a Sala Ground usa os oito horários de hoje, e sem a chave dela em "av", fica
+  // disponível. O número novo faz a aba da versão anterior (que tiraria "fechamentos" ao gravar o dia) recusar a gravação
+  28: {
+    cadastro: cadastro => cadastro,
+    dia: dia => {
+      let novo = dia;
+      if (Array.isArray(dia.win) && !Array.isArray(dia.fechamentos)) novo = { ...novo, fechamentos: fechamentosDoWin(winComoOAppLia(dia.win)) };
+      if (dia.pedidos && typeof dia.pedidos === 'object') {
+        novo = { ...novo, pedidos: Array.isArray(dia.pedidos) ? dia.pedidos.map(pedidoDoFormato28)
+          : Object.fromEntries(Object.entries(dia.pedidos).map(([id, p]) => [id, pedidoDoFormato28(p)])) };
+      }
+      return novo;
+    }
   }
 };
 

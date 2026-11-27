@@ -1,13 +1,26 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { WIN, T, NI, DAY, EQ, MIS, ACROBAT_REG, ALL_EQ_TYPES, PRE } from '../../js/config.js';
+import * as config from '../../js/config.js';
+import { INICIOS_DOS_TEMPOS, HORARIO_DO_NOTURNO, HORARIO_DO_SOLO, HORARIOS_PADRAO } from '../../js/horarios.js';
+import { hm } from '../../js/format.js';
+
+const { EQ, MIS, ACROBAT_REG, ALL_EQ_TYPES, PRE } = config;
 
 describe('Configuração operacional', () => {
-  it('nove janelas de instrução, a última noturna', () => {
-    assert.deepEqual(WIN, ['06:30', '08:20', '10:10', '11:30', '12:40', '13:40', '14:30', '16:20', '17:30']);
-    assert.deepEqual(T, [390, 500, 610, 690, 760, 820, 870, 980, 1050]);
-    assert.equal(NI, 8);
-    assert.deepEqual(DAY, [0, 1, 2, 3, 4, 5, 6, 7]);
+  // J (N11): as janelas de operação deixam de ser uma entidade. Os nove inícios ficam congelados só para o que ainda os
+  // lê (o w das linhas, as chaves das turmas de Ground, os dados antigos e, até o C, o aw dos instrutores); o resto lê a
+  // constante que diz o que ela é
+  it('as nove janelas saem de js/config.js', () => {
+    for (const nome of ['WIN', 'T', 'NI', 'DAY']) assert.equal(Object.hasOwn(config, nome), false, nome);
+  });
+
+  it('os nove inícios congelados e as constantes, com os mesmos minutos de antes', () => {
+    assert.deepEqual(INICIOS_DOS_TEMPOS.map(hm), ['06:30', '08:20', '10:10', '11:30', '12:40', '13:40', '14:30', '16:20', '17:30']);
+    assert.deepEqual(INICIOS_DOS_TEMPOS, [390, 500, 610, 690, 760, 820, 870, 980, 1050]);
+    assert.ok(Object.isFrozen(INICIOS_DOS_TEMPOS));
+    assert.equal(HORARIO_DO_NOTURNO, 1050);
+    assert.equal(HORARIO_DO_SOLO, 390);
+    assert.deepEqual(HORARIOS_PADRAO, INICIOS_DOS_TEMPOS.slice(0, 8));
   });
 
   it('frota com 26 recursos e o PR-JPL no C152', () => {

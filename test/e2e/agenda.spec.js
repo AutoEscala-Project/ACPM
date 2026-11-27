@@ -302,7 +302,8 @@ test.describe('Agenda de Solicitações', () => {
     await importarDaAgenda(page);
     const linha = page.locator('#dem tr[data-k="d"][data-id="1000"][data-mid="0"]');
     await expect(linha.locator('[data-f="eq"]')).toHaveValue('PA-34');
-    await expect(linha.locator('[data-f="jan"]')).toHaveValue('h450');
+    // O horário exato fica no dia guardado (J, N13: a Demanda não tem mais a coluna Disponibilidade)
+    await expect.poll(() => page.evaluate(data => JSON.parse(localStorage.getItem(`acpm4_dia_${data}`)).pedidos[1000].jan, AMANHA)).toBe('h450');
     await abrirEscala(page);
     expect((await lerEscala(page)).linhas.find(l => l.includes('Aluno 1000'))).toMatch(/^07:30/);
   });
@@ -577,10 +578,10 @@ test.describe('Agenda de Solicitações', () => {
     await importarDaAgenda(page);
     const linha = id => page.locator(`#dem tr[data-k="d"][data-id="${id}"][data-mid="0"]`);
     await expect(caixaVoa(linha(1000))).toBeChecked();
-    await expect(linha(1000).locator('[data-f="jan"]')).toHaveValue('h500');
+    await expect.poll(() => page.evaluate(data => JSON.parse(localStorage.getItem(`acpm4_dia_${data}`)).pedidos[1000].jan, AMANHA)).toBe('h500');
     await expect(linha(1000).locator('[data-f="nb"]')).toHaveValue('2.5');
     await expect(linha(1001).locator('[data-f="mis"]')).toHaveValue('IFR');
-    await expect(linha(1001).locator('[data-f="jan"]')).toHaveValue('h870');
+    await expect.poll(() => page.evaluate(data => JSON.parse(localStorage.getItem(`acpm4_dia_${data}`)).pedidos[1001].jan, AMANHA)).toBe('h870');
     await expect(page.locator('#audit-log-list')).toContainText('Agenda: Aluno 1000 incluído (Voo Local · às 08:20 · 2,5 h)');
 
     await importarDaAgenda(page);
