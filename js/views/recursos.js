@@ -11,8 +11,8 @@ import { AIRCRAFT_EQ_TYPES, REVISAO_H, GROUND_REG, GROUND_EQ_TYPE } from '../con
 import { CATEGORIAS, categoriaDoTipo, nomeDoRecurso } from '../categorias.js';
 import { ligada } from '../funcionalidades.js';
 import { normalizarHangar } from '../hangar.js';
-import { FROTA_INICIAL, ATRIBUTOS_DO_RECURSO, atributoVale, exigenciasDoAviao, habilitacaoDoAviao, salaDisponivel } from '../frota.js';
-import { nomeDaHabilitacao } from '../habilitacoes.js';
+import { FROTA_INICIAL, ATRIBUTOS_DO_RECURSO, atributoVale, exigenciasDoAviao, habilitacaoDoAviao, salaDisponivel, quemOpera } from '../frota.js';
+import { nomeDaHabilitacao, habilitacoesDoTipo, GRUPOS_DE_HABILITACAO } from '../habilitacoes.js';
 import { inativo } from '../inativos.js';
 import { S, RES, DATA, voosQueVoam, inativoNaDataAberta } from '../state.js';
 import { umPorUnidade } from '../voo.js';
@@ -182,7 +182,7 @@ function campoDoHangar(f) {
 
 // Os atributos que valem no tipo ("Só Parafuso" no C152, "Só VFR" no C172 e no PA-34): uma caixa para cada; a habilitação
 // própria fica com o que o recurso exige do instrutor
-const DICA_DO_ATRIBUTO = { soParafuso: 'so-parafuso', soVfr: 'so-vfr', habilitacaoPropria: 'habilitacao-propria' };
+const DICA_DO_ATRIBUTO = { soParafuso: 'so-parafuso', soVfr: 'so-vfr' };
 function campoDosAtributos(f, edita) {
   const atributos = Object.keys(ATRIBUTOS_DO_RECURSO).filter(a => a !== 'habilitacaoPropria' && atributoVale(a, f.tipo));
   if (!atributos.length) return [];
@@ -190,13 +190,38 @@ function campoDosAtributos(f, edita) {
   return [html('atributos', `<fieldset class="det-atributos"><legend>Atributos</legend>${atributos.map(a => `<label class="chk"><input type="checkbox" data-a="atributo" data-r="${esc(f.reg)}" data-atributo="${a}"${f[a] ? ' checked' : ''}> ${ATRIBUTOS_DO_RECURSO[a].nome}</label> <button type="button" class="dica-btn" data-dica="${DICA_DO_ATRIBUTO[a]}" aria-label="O que é ${ATRIBUTOS_DO_RECURSO[a].nome}?" aria-expanded="false"></button>`).join(' ')}</fieldset>`)];
 }
 
-// A habilitação própria do recurso (o recurso exige do instrutor uma habilitação só dele)
-function campoDaPropria(f, edita) {
-  if (!atributoVale('habilitacaoPropria', f.tipo)) return [];
-  const marcada = exigenciasDoAviao(f).includes(habilitacaoDoAviao(f.reg));
-  const nome = `Habilitação própria (${nomeDaHabilitacao(habilitacaoDoAviao(f.reg))})`;
-  if (!edita) return [leitura('propria', 'Habilitação própria', marcada ? 'sim' : 'não', { dica: ['habilitacao-propria', 'O que é Habilitação própria?'] })];
-  return [html('propria', `<label class="chk"><input type="checkbox" data-a="atributo" data-r="${esc(f.reg)}" data-atributo="habilitacaoPropria"${marcada ? ' checked' : ''}> ${esc(nome)}</label> <button type="button" class="dica-btn" data-dica="habilitacao-propria" aria-label="O que é Habilitação própria?" aria-expanded="false"></button>`)];
+// "Habilitações que o INVA precisa" (B; setExigencias): a do tipo (fixa: "Do tipo: C172"), a habilitação própria do recurso
+// (o atributo, uma habilitação só dele) e "Exigir também…", as caixas do registro por grupo, como as da missão do curso
+// (F1d; sem as do tipo e sem as próprias de outros recursos), e quem pode operar o recurso. A caixa de "Exigir também…"
+// fica aberta ou fechada como a pessoa a deixou, por recurso, enquanto a página está aberta
+const exigenciasAbertas = new Set();
+export function lembrarExigencias(reg, aberta) {
+  if (aberta) exigenciasAbertas.add(reg);
+  else exigenciasAbertas.delete(reg);
+}
+const ROTULO_DAS_EXIGENCIAS = 'Habilitações que o INVA precisa';
+function campoDasExigencias(f, edita) {
+  const r = f.reg, propria = habilitacaoDoAviao(r), exige = exigenciasDoAviao(f);
+  const doTipo = habilitacoesDoTipo(f.tipo);
+  const tambem = exige.filter(h => h !== propria);
+  const operam = quemOpera(S.ins, f).length;
+  const textoDoTipo = `Do tipo: ${doTipo.map(nomeDaHabilitacao).join(' + ') || 'nenhuma'}`;
+  const quem = `<p class="quem-opera">Quem pode operar: ${plural(operam, 'INVA', 'INVAs')}</p>`;
+  const dica = '<button type="button" class="dica-btn" data-dica="habilitacao-propria" aria-label="O que é Habilitação própria?" aria-expanded="false"></button>';
+  if (!edita) {
+    const lista = [textoDoTipo, ...exige.map(h => (h === propria ? `Habilitação própria (${nomeDaHabilitacao(h)})` : nomeDaHabilitacao(h)))];
+    return [leitura('exige', ROTULO_DAS_EXIGENCIAS, lista.join('; '))];
+  }
+  const marca = h => `<label class="chk"><input type="checkbox" id="det-rec-exige-${esc(h)}" data-a="exige" data-r="${esc(r)}" value="${esc(h)}" aria-label="${esc(r)} exige ${esc(nomeDaHabilitacao(h))}"${exige.includes(h) ? ' checked' : ''}> ${esc(nomeDaHabilitacao(h))}</label>`;
+  const grupos = GRUPOS_DE_HABILITACAO.map(g => ({ ...g, ids: g.ids.filter(h => !doTipo.includes(h)) })).filter(g => g.ids.length);
+  const resumo = tambem.length ? tambem.map(nomeDaHabilitacao).join(' + ') : 'nenhuma';
+  return [html('exige', `<span class="det-rotulo" id="det-rec-exige-rotulo">${ROTULO_DAS_EXIGENCIAS}</span>`
+    + `<div class="det-valor det-exige" role="group" aria-labelledby="det-rec-exige-rotulo">`
+    + `<p class="exige-do-tipo">${esc(textoDoTipo)}</p>`
+    + (atributoVale('habilitacaoPropria', f.tipo) ? `<p><label class="chk"><input type="checkbox" data-a="atributo" data-r="${esc(r)}" data-atributo="habilitacaoPropria"${exige.includes(propria) ? ' checked' : ''}> Habilitação própria deste recurso (${esc(nomeDaHabilitacao(propria))})</label> ${dica}</p>` : '')
+    + `<details class="exige" data-r="${esc(r)}"${exigenciasAbertas.has(r) ? ' open' : ''}><summary>Exigir também: ${esc(resumo)}</summary>`
+    + grupos.map(g => `<fieldset><legend>${esc(g.titulo)}</legend>${g.ids.map(marca).join('')}</fieldset>`).join('')
+    + `</details>${quem}</div>`)];
 }
 
 // O detalhe de um recurso da frota ou da Sala Ground
@@ -208,7 +233,7 @@ function detalheDoRecursoDaFrota(f, edita) {
     : [campoDisponivel(f, edita), ...camposDasHoras(f, edita), leitura('escala', 'Na escala desta data', naEscalaDoDia(r, voadas)), ...campoDoHangar(f)];
   const cadastro = sala
     ? [leitura('tipo', 'Tipo', 'Sala Ground: a sala das aulas de Ground. Ela não é da frota: não sai dela nem fica inativa; os horários dela ficam na categoria Sala Ground.')]
-    : [leitura('reg', 'Matrícula', r), leitura('tipo', 'Tipo', f.tipo), ...campoDosAtributos(f, edita), ...campoDaPropria(f, edita)];
+    : [leitura('reg', 'Matrícula', r), leitura('tipo', 'Tipo', f.tipo), ...campoDosAtributos(f, edita), ...campoDasExigencias(f, edita)];
   const nome = nomeDoRecurso(r);
   return {
     atributos: `data-r="${esc(r)}" data-id="${esc(r)}"`,
@@ -226,10 +251,6 @@ function detalheDoRecursoDaFrota(f, edita) {
   };
 }
 
-// A habilitação que o tipo exige do instrutor (a do avião; a do simulador), pelo nome
-const HABILITACAO_DO_TIPO = { C152: 'c152', C172: 'c172', 'PA-34': 'mlte', 'Sim. Mono': 'sim_mono', 'Sim. Multi': 'sim_multi' };
-const habilitacaoDoTipo = tipo => HABILITACAO_DO_TIPO[tipo] || null;
-
 // O detalhe de uma categoria: os horários de decolagem (o lugar que js/views/horarios.js preenche, sempre o mesmo HTML: o
 // resumo e o editor mudam nele, sem o componente refazer a seção) e o que vem do tipo
 function detalheDaCategoria(cat) {
@@ -237,7 +258,7 @@ function detalheDaCategoria(cat) {
   if (!c) return null;
   const todos = daCategoria(c), ativos = todos.filter(f => !inativoNaDataAberta(f));
   const ground = c.id === 'ground';
-  const habilitacoes = c.tipos.map(habilitacaoDoTipo).filter(Boolean).map(nomeDaHabilitacao);
+  const habilitacoes = c.tipos.flatMap(habilitacoesDoTipo).map(nomeDaHabilitacao);
   return {
     atributos: `data-cat="${esc(c.id)}" data-id="${ID_DA_CATEGORIA}${esc(c.id)}"`,
     id: `${ID_DA_CATEGORIA}${c.id}`,

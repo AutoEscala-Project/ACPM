@@ -5,6 +5,7 @@
 // Desfazer um voo agendado na Escala também fica aqui: quando ele não é desfeito e o que volta como estava; e o que a
 // reversão de uma mudança nos voos fixos não devolve depois de um agendamento.
 import { novoRecurso, MATRICULA, ATRIBUTOS_DO_RECURSO } from './frota.js';
+import { normalizarHabilitacoes } from './habilitacoes.js';
 import { normalizarFixos, fixoPeloStatus, fixosAoReabrir, pinoDeVoltaNaTurma } from './fixos.js';
 import { CATEGORIAS_COM_HORARIOS, normalizarHorarios, INICIOS_DOS_TEMPOS } from './horarios.js';
 import { normalizarFechamentos } from './fechamentos.js';
@@ -73,6 +74,13 @@ export function validarReversao(rev, frota) {
     return typeof rev.reg === 'string' && typeof rev.atributo === 'string' && typeof rev.val === 'boolean'
       && MATRICULA.test(rev.reg) && Object.hasOwn(ATRIBUTOS_DO_RECURSO, rev.atributo)
       ? { kind: 'setAtributo', reg: rev.reg, atributo: rev.atributo, val: rev.val, label } : null;
+  }
+  // O que o recurso exige do instrutor (B): a matrícula e a lista a restaurar, até 30 ids conhecidos (cada um um texto do
+  // registro ou uma habilitação própria)
+  if (rev.kind === 'setExigencias') {
+    const lista = Array.isArray(rev.lista) && rev.lista.length <= 30 && rev.lista.every(h => typeof h === 'string') ? rev.lista : null;
+    return typeof rev.reg === 'string' && MATRICULA.test(rev.reg) && lista && normalizarHabilitacoes(lista).length === new Set(lista).size
+      ? { kind: 'setExigencias', reg: rev.reg, lista: [...lista], label } : null;
   }
   // O "Ativo" do cadastro: o aluno ou o instrutor (pelo id) e o recurso (pela matrícula), e o inativo a restaurar
   if (rev.kind === 'setInativo') {

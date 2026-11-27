@@ -7,7 +7,7 @@
 // instrutor (exigenciasDoAviao). O motor, a compactação, a divisão das horas, a troca de matrículas e as sugestões usam
 // estas regras, assim como o instrutor tem as habilitações dele (js/habilitacoes.js).
 import { EQ, ACROBAT_REG, MIS, SO_VFR_INICIAL, HABILITACAO_PROPRIA_INICIAL, MATRICULA, GROUND_REG } from './config.js';
-import { habilitacaoDoAviao, exigenciasDoRecurso, normalizarHabilitacoes } from './habilitacoes.js';
+import { habilitacaoDoAviao, exigenciasDoRecurso, normalizarHabilitacoes, habilitacoesDoTipo } from './habilitacoes.js';
 
 // A matrícula e a habilitação própria moram em js/config.js e js/habilitacoes.js; quem as importa daqui continua
 export { MATRICULA, habilitacaoDoAviao };
@@ -83,6 +83,19 @@ export function comAtributo(f, atributo, val) {
   const exige = exigenciasDoRecurso(f).filter(h => h !== propria);
   return recurso({ ...f, exige: val ? [...exige, propria] : exige });
 }
+
+// O que o recurso exige do instrutor, todo de uma vez ("Habilitações que o INVA precisa", em Recursos, e a reversão dele,
+// setExigencias): só ids do registro (e habilitações próprias), sem repetir, na ordem dele, nunca a do próprio tipo (o tipo
+// já a exige); a habilitação própria acompanha (recurso()). O que não é lista não muda nada
+export function comExigencias(f, lista) {
+  if (!Array.isArray(lista)) return recurso(f);
+  const doTipo = habilitacoesDoTipo(f.tipo);
+  return recurso({ ...f, exige: normalizarHabilitacoes(lista).filter(h => !doTipo.includes(h)) });
+}
+
+// Quem pode operar o recurso: os instrutores ativos com a habilitação do tipo e tudo o que o recurso exige
+export const quemOpera = (instrutores, f) => (Array.isArray(instrutores) ? instrutores : [])
+  .filter(i => i && i.inativo !== true && [...habilitacoesDoTipo(f.tipo), ...exigenciasDoAviao(f)].every(h => (i.hab || []).includes(h)));
 
 // Só recursos válidos (matrícula em maiúsculas, sem repetir, e um tipo conhecido); sem lista, a frota inicial
 export function normalizarFrota(frota) {

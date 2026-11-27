@@ -45,6 +45,13 @@
 .det-revisao .barra { margin-left: 0; }
 .det-atributos { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin: 0; padding: 0; border: 0; }
 .det-atributos legend { padding: 0; margin-bottom: 2px; font-weight: 600; }
+/* "Habilitações que o INVA precisa": a do tipo, a própria, "Exigir também…" (as caixas por grupo) e quem pode operar */
+.det-exige { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+.det-exige p { margin: 0; }
+.exige-do-tipo, .quem-opera { color: var(--mu); }
+.det-exige details.exige summary { cursor: pointer; color: var(--ac); }
+.det-exige details.exige fieldset { display: flex; flex-wrap: wrap; gap: 2px 12px; margin: 6px 0 0; padding: 0; border: 0; }
+.det-exige details.exige legend { padding: 0; font-weight: 600; }
 /* O "?" ao lado de um rótulo longo ("Horas disponíveis até a revisão de 50 horas") não encolhe: 44 px no celular */
 #det-rec .dica-btn { flex-shrink: 0; }
 .barra { display: inline-block; width: 90px; height: 6px; border-radius: 3px; background: var(--neutro-bg); vertical-align: middle; margin-left: 8px; overflow: hidden; }
@@ -52,6 +59,7 @@
 .barra.wa i { background: #D9A400; }
 .barra.er i { background: var(--er); }
 @media (max-width: 640px) {
+  .det-exige details.exige summary { min-height: 44px; padding: 12px 0; box-sizing: border-box; }
   .hr-chip button { min-width: 44px; min-height: 44px; flex-shrink: 0; }
   /* Horários de decolagem: o nome da categoria em cima, as etiquetas na largura toda */
   .horarios-nome { flex-basis: 100%; }
