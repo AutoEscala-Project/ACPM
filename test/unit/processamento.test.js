@@ -260,13 +260,27 @@ describe('Importar as solicitações da agenda para a demanda', () => {
   });
 
   // O pedido principal que volta a voar com o pedido da agenda não traz nada do voo de antes (a disponibilidade, a missão
-  // do curso, o pedido da agenda, o instrutor escolhido)
+  // do curso, o instrutor escolhido)
   it('o pedido principal que recebe o pedido da agenda começa em branco', () => {
-    const e = { ...estado(), stu: [aluno(1000, { fly: false, mis: 'Navegação', eq: 'C172', nb: 2, pr: 1, jan: 'manha', etapa: 'PP-09', solicitacao: 99, insId: 1 }, { curso: 'PP' })] };
+    const e = { ...estado(), stu: [aluno(1000, { fly: false, mis: 'Navegação', eq: 'C172', nb: 2, pr: 1, jan: 'manha', etapa: 'PP-09', insId: 1 }, { curso: 'PP' })] };
     importarSolicitacoes(e, [pedido(61, 1000, { janela: 'horario', horario: null })]);
     const p = e.stu[0];
     assert.deepEqual([p.fly, p.mis, p.eq, p.nb, p.pr, p.solicitacao, p.extra], [true, 'Voo Local', 'C152', 1, 3, 61, []]);
     assert.deepEqual(['jan', 'etapa', 'insId'].filter(campo => Object.hasOwn(p, campo)), []);
+  });
+
+  // A identidade do pedido (decisão 2 do desenho): o registro que tem solicitacao é o voo daquele pedido, e nunca é dado
+  // a outro. O principal que não voa com o pedido de antes (cancelado ou tirado da escala pelo operador) fica com ele, e o
+  // pedido novo vira uma missão extra; antes, o principal era apagado e o pedido de antes perdia o voo
+  it('o pedido principal que não voa mas é de outro pedido da agenda não é reaproveitado: o novo vira uma missão extra', () => {
+    const antes = { fly: false, mis: 'Navegação', eq: 'C172', nb: 2, pr: 1, jan: 'h500', etapa: 'PP-09', cursoDaEtapa: 'PP', solicitacao: 99, insId: 1 };
+    const e = { ...estado(), importadas: [99], stu: [aluno(1000, antes, { curso: 'PP' })] };
+    const resumo = importarSolicitacoes(e, [pedido(61, 1000, { janela: 'horario', horario: '10:10' })]);
+    assert.deepEqual([resumo.novos, resumo.atualizados], [1, 0]);
+    const p = e.stu[0];
+    assert.deepEqual(Object.fromEntries(Object.keys(antes).map(c => [c, p[c]])), antes, 'o registro do pedido 99 fica como estava');
+    assert.deepEqual(p.extra.map(x => [x.mid, x.fly, x.mis, x.solicitacao, x.jan, x.pr]), [[1, true, 'Voo Local', 61, 'h610', 3]]);
+    assert.deepEqual(e.importadas, [99, 61]);
   });
 
   // O pedido posto à mão com a missão do curso (o Usar), da mesma missão do pedido da agenda, dá lugar a ele, e a missão do
