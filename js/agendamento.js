@@ -34,7 +34,8 @@ import { sobrepoe } from './viabilidade.js';
 import { hm, fmtH, numeroBr, rotuloDaData, somarDias, duracaoHm } from './format.js';
 import { normalizarLimites } from './limites.js';
 import { repousoAntesDaVolta } from './noturno.js';
-import { nomeDoRecurso } from './categorias.js';
+import { nomeDoRecurso, categoriaDoTipo } from './categorias.js';
+import { fechamentosDoEstado, horarioAberto } from './fechamentos.js';
 import { CATEGORIAS_DO_RODIZIO, categoriaDoRodizio, ajustarFilas } from './rodizio.js';
 import { FROTA_INICIAL, recursoDaFrota, motivoDoAviao } from './frota.js';
 import { podeFazer, nomeDaHabilitacao, PREFIXO_DA_HABILITACAO_DO_AVIAO } from './habilitacoes.js';
@@ -102,11 +103,13 @@ export function contextoInicial(valor, { data, hoje, agora = 0 } = {}) {
 }
 
 // Os horários de decolagem do agendamento: o Ground, os da Sala Ground; o resto, os da missão no tipo
-// (o Noturno às 17:30, o Voo Solo às 06:30, o PA-34 de 30 em 30 minutos, os outros, a lista da categoria). Só os que caem
-// numa janela de operação aberta nesta data
+// (o Noturno às 17:30, o Voo Solo às 06:30, o PA-34 de 30 em 30 minutos, os outros, a lista da categoria). Só os que estão
+// abertos nesta data para a categoria (js/fechamentos.js)
 export function horariosDoAgendamento(estado, { mis, tipo }) {
   const lista = isGroundMission(mis) ? horariosDoTipo(estado.horarios, GROUND_EQ_TYPE) : horariosDaMissao(estado.horarios, mis, tipo);
-  return lista.filter(m => !Array.isArray(estado.win) || estado.win[periodoDoMinuto(m)]);
+  const fechamentos = fechamentosDoEstado(estado);
+  const categoria = categoriaDoTipo(isGroundMission(mis) ? GROUND_EQ_TYPE : tipo);
+  return lista.filter(m => horarioAberto(fechamentos, m, categoria));
 }
 
 // O horário da lista mais perto do minuto em que a linha (o recurso ou o instrutor) está livre (livre(horário)); no

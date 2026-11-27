@@ -10,6 +10,8 @@ import { FROTA_INICIAL, matriculasDoTipo, motivoDoAviao, aviaoServe, instrutorVo
 import { hm, fmtH, numeroBr, duracaoHm } from './format.js';
 import { repousoAntesDaVolta, historicoDoDia } from './noturno.js';
 import { isGroundMission, doesGroundGateFlight, disponibilidadeDoAluno, duracaoValida, duracaoFixaDaMissao, minutoConfirmado } from './rules.js';
+import { categoriaDoTipo } from './categorias.js';
+import { fechamentosDoEstado, horarioAberto } from './fechamentos.js';
 import { HORARIOS_INICIAIS, horariosDaMissao, horariosDoTipo, periodoDoMinuto, minutoDaPreferencia, fimDasMissoesDoDia, INICIOS_DOS_TEMPOS, HORARIO_DO_SOLO } from './horarios.js';
 import { ajustarFilas, categoriaDoRodizio } from './rodizio.js';
 import { avisosDeAtraso, intervaloEfetivo, STATUS_EM_ANDAMENTO } from './status.js';
@@ -55,6 +57,8 @@ export function contextoDaEscala(state) {
     instrutorPorId, serveAoVoo,
     // Os horários de decolagem de cada categoria vêm do cadastro; sem eles, os iniciais
     horarios: state.horarios || HORARIOS_INICIAIS,
+    // Os horários fechados da data (js/fechamentos.js): os do dia; sem eles, os das nove janelas de antes
+    fechamentos: fechamentosDoEstado(state),
     posicao: r => posicaoNoHangar(hangar, r),
     // Limites da Lei do Aeronauta: as horas de voo de antes de hoje e o fim de ontem de cada instrutor, e os
     // compromissos de hoje (voo em avião conta como voo; simulador e Ground, só na jornada)
@@ -179,7 +183,7 @@ function voltasDoNoturno(state, ctx, out) {
 // sala), o instrutor e o aluno no contexto. Devolve a linha, o alerta do conflito (ou null) e os avisos das regras que o
 // agendado pulou (comAviso: o agendado que as confere)
 function linhaDoFixo(state, ctx, item, pino, fKey = chaveDoVoo(item.stuId, item.mid)) {
-  const { used, stuBusy, stuLastPick, load, eu, compromissos, insAircraft, openGroundClasses, stuGroundStatus, voosNaCategoria, locaisNoHorario, frota, nomesSoParafuso, historico, limites, horarios, fimDoAluno, saldo } = ctx;
+  const { used, stuBusy, stuLastPick, load, eu, compromissos, insAircraft, openGroundClasses, stuGroundStatus, voosNaCategoria, locaisNoHorario, frota, nomesSoParafuso, historico, limites, horarios, fechamentos, fimDoAluno, saldo } = ctx;
   const { stu, stuId, mid, ref: d, stuOrder } = item;
   const rotulo = mid ? `${stu.nm} (${d.mis})` : stu.nm;
   const ground = isGroundMission(d.mis);
@@ -223,7 +227,7 @@ function linhaDoFixo(state, ctx, item, pino, fKey = chaveDoVoo(item.stuId, item.
       if (!daMesmaTurma && !free(used, GROUND_REG, a, b)) marcar('sala-ocupada', 'a sala de Ground já está ocupada neste horário');
     }
     if (!free(stuBusy, stuId, a, b)) marcar('aluno-ocupado', 'o aluno já tem outro voo neste horário');
-    if (!state.win[periodoDoMinuto(a)]) marcar('horario-fechado', 'o horário está fechado nesta data');
+    if (!horarioAberto(fechamentos, a, categoriaDoTipo(tipo))) marcar('horario-fechado', 'o horário está fechado nesta data');
     const permitidas = disponibilidadeDoAluno(d.jan);
     if (permitidas && !permitidas(a)) marcar('disponibilidade', 'o horário está fora da disponibilidade do aluno');
     if (!mudouDeTipo && b - a !== duracaoDoPedido(d, ground)) marcar('duracao', 'a duração do pedido mudou');

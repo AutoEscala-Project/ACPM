@@ -15,11 +15,12 @@
 import { GROUND_EQ_TYPE, MIS, MISSOES_LOCAIS, LIMITE_DE_VOOS_LOCAIS } from './config.js';
 import { CAMPOS_DO_PEDIDO } from './dias.js';
 import { normalizeMissionFields, minutoConfirmado } from './rules.js';
-import { HORARIOS_INICIAIS, horariosDaMissao, horariosDoTipo, periodoDoMinuto, fimDasMissoesDoDia } from './horarios.js';
+import { HORARIOS_INICIAIS, horariosDaMissao, horariosDoTipo, fimDasMissoesDoDia } from './horarios.js';
 import { STATUS_EM_ANDAMENTO, intervaloEfetivo } from './status.js';
 import { disponibilidadeDoAluno, doesGroundGateFlight } from './rules.js';
 import { pedidoDoAluno } from './voo.js';
-import { nomeDoRecurso } from './categorias.js';
+import { nomeDoRecurso, categoriaDoTipo } from './categorias.js';
+import { fechamentosDoEstado, fechamentoDoMinuto, horarioAberto as abertoNaData } from './fechamentos.js';
 import { hm } from './format.js';
 import { gruposDoConflito } from './conflitos.js';
 import { statusDoVoo, pedidosDosVoos, exigeDosVoos } from './voo.js';
@@ -101,7 +102,7 @@ export function sugerirReparos(estado, resultado, fKey, { maximo = 3, depoisDe =
       return (!permitidas || permitidas(a)) && !problemaDoAluno(ocupacao, v.stuId, { a, b });
     });
     for (const m of inicios) {
-      if (m <= Math.max(voo.a, depoisDe ?? -1) || m + duracao > limite || !estado.win[periodoDoMinuto(m)] || !alunosPodem(m, m + duracao)) continue;
+      if (m <= Math.max(voo.a, depoisDe ?? -1) || m + duracao > limite || !abertoNaData(fechamentosDoEstado(estado), m, categoriaDoTipo(voo.isGround ? GROUND_EQ_TYPE : tipo)) || !alunosPodem(m, m + duracao)) continue;
       // O avião de antes, quando ele ainda serve ao voo e está livre; senão, um em que o instrutor de antes voa, ou outro
       const r = !voo.isGround && avioesPara(m, m + duracao).includes(voo.r) ? voo.r : avioesPara(m, m + duracao, atual)[0] || avioesPara(m, m + duracao)[0];
       const instrutores = r ? instrutoresPara(m, m + duracao, r) : [];
@@ -279,7 +280,10 @@ function buscaDoVoo(estado, resultado, voo, grupo, { depoisDe = null, semInstrut
   // O voo começa depois do fim do Ground de que depende (o do aluno no dia, no tipo do voo)
   const inicioMinimo = tipo => (voo.isGround ? 0 : Math.max(0, ...grupo.flatMap(v => ocupacao.alunos.get(v.stuId) || [])
     .filter(o => o.isGround && doesGroundGateFlight(o.mis, { mis: voo.mis, eq: tipo })).map(o => o.b)));
-  const horarioAberto = (m, tipo = tipoDoVoo) => m + duracao <= limite && m >= inicioMinimo(tipo) && Boolean(estado.win[periodoDoMinuto(m)])
+  // Os horários fechados da data (js/fechamentos.js), pela categoria do recurso do voo (a Sala Ground no Ground)
+  const fechamentos = fechamentosDoEstado(estado);
+  const categoriaDe = tipo => categoriaDoTipo(voo.isGround ? GROUND_EQ_TYPE : tipo);
+  const horarioAberto = (m, tipo = tipoDoVoo) => m + duracao <= limite && m >= inicioMinimo(tipo) && abertoNaData(fechamentos, m, categoriaDe(tipo))
     && !passou(m) && alunoLivre(m, m + duracao);
   const inicios = tipo => (voo.isGround ? horariosDoTipo(estado.horarios, GROUND_EQ_TYPE) : horariosDaMissao(estado.horarios || HORARIOS_INICIAIS, voo.mis, tipo));
   const atual = estado.ins.find(x => x.id === voo.insId);
@@ -318,7 +322,7 @@ function buscaDoVoo(estado, resultado, voo, grupo, { depoisDe = null, semInstrut
     naDisponibilidade,
     // O mesmo horário, com as regras dos outros (o período aberto também)
     mesmoHorarioDisponivel: !semHorario && horarioAberto(voo.a),
-    periodoFechado: !estado.win[periodoDoMinuto(voo.a)],
+    fechamentoDoInicio: fechamentoDoMinuto(fechamentos, voo.a, categoriaDe(tipoDoVoo)),
     // 1. O mesmo horário e o mesmo avião, com outro instrutor (até dois; o de antes seria o próprio voo cancelado)
     mesmoAviao(maximo = 2) {
       if (semAviao === voo.r) return [];
@@ -351,7 +355,7 @@ function buscaDoVoo(estado, resultado, voo, grupo, { depoisDe = null, semInstrut
       }
       return null;
     },
-    // Por que nenhum horário do tipo serve: cada motivo com os seus horários ("o período está fechado (06:30, 08:20)"),
+    // Por que nenhum horário do tipo serve: cada motivo com os seus horários ("o horário está fechado nesta data (06:30, 08:20)"),
     // na ordem das regras; o mesmo horário do voo fica de fora no tipo dele (ele tem a linha própria) e quando saiu pelo
     // motivo. Vazio quando o tipo não tem outro horário
     porQueNao(tipo = tipoDoVoo) {
@@ -359,7 +363,7 @@ function buscaDoVoo(estado, resultado, voo, grupo, { depoisDe = null, semInstrut
       for (const m of inicios(tipo).filter(x => x !== voo.a || (tipo !== tipoDoVoo && !semHorario))) {
         const b = m + duracao;
         const motivo = passou(m) ? 'já passou'
-          : !estado.win[periodoDoMinuto(m)] ? 'o período está fechado'
+          : !abertoNaData(fechamentos, m, categoriaDe(tipo)) ? 'o horário está fechado nesta data'
             : b > limite ? (b > fimDoDia ? 'passa do fim do dia do aluno' : 'passa do voo que depende do Ground')
               : m < inicioMinimo(tipo) ? 'antes do fim do Ground do aluno'
                 : !alunoLivre(m, b) ? 'o aluno não está livre'
@@ -422,7 +426,7 @@ export function sugerirParaCancelado(estado, resultado, fKey, { depoisDe = null,
     opcoes: [],
     impossivel: [
       motivo === 'Meteorologia' || motivo === 'Operacional' ? `No mesmo horário: o voo foi cancelado por ${motivo.toLowerCase()} nele.`
-        : !busca.mesmoHorarioDisponivel ? `No mesmo horário: ${depoisDe !== null && voo.a <= depoisDe ? 'ele já passou' : busca.periodoFechado ? 'o período está fechado' : 'o aluno não está livre nele'}.`
+        : !busca.mesmoHorarioDisponivel ? `No mesmo horário: ${depoisDe !== null && voo.a <= depoisDe ? 'ele já passou' : busca.fechamentoDoInicio ? `o horário está fechado nesta data (${hm(busca.fechamentoDoInicio.de)}–${hm(busca.fechamentoDoInicio.ate)})` : 'o aluno não está livre nele'}.`
           : 'No mesmo horário: nenhum avião com um instrutor que sirva.',
       `Em outro horário: ${busca.porQueNao() || 'a missão não tem outro horário'}.`,
       tipos.length ? `Em outro tipo de recurso: ${tipos.map(t => `no ${t}, ${busca.porQueNao(t) || 'nenhum horário'}`).join('; ')}.`

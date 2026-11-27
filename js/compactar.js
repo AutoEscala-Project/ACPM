@@ -15,6 +15,8 @@ import { livre, cabeNoSaldo, folgaAte, problemasDoInstrutor } from './viabilidad
 import { combustivelDoVoo } from './combustivel.js';
 import { normalizarLimites } from './limites.js';
 import { HORARIOS_INICIAIS, horariosDaMissao, periodoDoMinuto, minutoDaPreferencia, fimDasMissoesDoDia } from './horarios.js';
+import { categoriaDoTipo } from './categorias.js';
+import { fechamentosDoEstado, horarioAberto } from './fechamentos.js';
 import { disponibilidadeDoAluno, doesGroundGateFlight } from './rules.js';
 import { INTERVALO_DO_HANGAR } from './metricas.js';
 import { normalizarCriterios } from './criterios.js';
@@ -102,13 +104,15 @@ export function compactar(out, state, { saldo = () => Infinity, posicao = () => 
   // fimDasMissoesDoDia: com um Noturno na demanda do dia, as outras missões até as 17:30), na disponibilidade do aluno
   // (ou só a 1ª e a 2ª preferência) e depois do Ground que libera o voo
   const fimDoAluno = fimDasMissoesDoDia(state.stu);
+  // Os horários fechados da data (js/fechamentos.js), pela categoria do recurso de cada unidade
+  const fechamentos = fechamentosDoEstado(state);
   for (const u of unidades.filter(x => x.mudaHorario)) {
     const pedido = pedidoDe(u.voos[0]) || {};
     const permitidas = disponibilidadeDoAluno(pedido.jan);
     const preferidos = [minutoDaPreferencia(pedido.p1), minutoDaPreferencia(pedido.p2)];
     const depoisDoGround = Math.max(0, ...unidades.filter(g => g.isGround && g.alunos.includes(u.alunos[0]) && doesGroundGateFlight(g.mis, { mis: u.mis, eq: u.tipo })).map(g => g.b));
     const fim = Math.min(...u.alunos.map(s => fimDoAluno(s, u.mis, u.tipo)));
-    u.inicios = horariosDaMissao(horarios, u.mis, u.tipo).filter(m => state.win[periodoDoMinuto(m)] && m + u.dur <= fim && m >= depoisDoGround
+    u.inicios = horariosDaMissao(horarios, u.mis, u.tipo).filter(m => horarioAberto(fechamentos, m, categoriaDoTipo(u.tipo)) && m + u.dur <= fim && m >= depoisDoGround
       && (!permitidas || permitidas(m)) && (regra !== 'preferencias' || preferidos.includes(m)));
     if (!u.inicios.length) u.mudaHorario = false;
   }

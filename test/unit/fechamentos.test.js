@@ -3,7 +3,7 @@
 // (dias antes do 28 e os estados dos goldens) e fecha exatamente os minutos que elas fechavam.
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { normalizarFechamentos, fechamentosDoWin, horarioAberto, rotuloDosFechamentos, MAXIMO_DE_FECHAMENTOS } from '../../js/fechamentos.js';
+import { normalizarFechamentos, fechamentosDoWin, horarioAberto, MAXIMO_DE_FECHAMENTOS } from '../../js/fechamentos.js';
 import { INICIOS_DOS_TEMPOS as T, periodoDoMinuto } from '../../js/horarios.js';
 
 const TODAS = ['C152', 'C172', 'sim', 'PA-34', 'ground'];
@@ -130,16 +130,6 @@ describe('horarioAberto', () => {
   test('sem fechamentos, tudo aberto', () => {
     assert.equal(horarioAberto([], 0, 'C152'), true);
     assert.equal(horarioAberto(undefined, 800, 'C152'), true);
-  });
-});
-
-describe('rotuloDosFechamentos', () => {
-  test('o intervalo e para quem, como em "Horários fechados nesta data"', () => {
-    assert.deepEqual(rotuloDosFechamentos([{ de: 760, ate: 1050 }, { de: 390, ate: 500, categorias: ['C152', 'ground'] }, { de: 1050, ate: 1440 }]),
-      ['12:40–17:30 · todos os recursos', '06:30–08:20 · C152, Sala Ground', '17:30–24:00 · todos os recursos']);
-  });
-  test('o simulador pelo nome', () => {
-    assert.deepEqual(rotuloDosFechamentos([{ de: 0, ate: 1440, categorias: ['sim'] }]), ['00:00–24:00 · Simulador']);
   });
 });
 

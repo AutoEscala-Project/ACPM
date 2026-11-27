@@ -7,6 +7,7 @@ import { normalizarStatus } from './status.js';
 import { filasDoDiaSeguinte } from './rodizio.js';
 import { FROTA_INICIAL, normalizarFrota } from './frota.js';
 import { normalizarHorarios, INICIOS_DOS_TEMPOS } from './horarios.js';
+import { normalizarFechamentos } from './fechamentos.js';
 import { normalizarHangar } from './hangar.js';
 import { normalizarLimites } from './limites.js';
 import { normalizarFixos, normalizarAprovacao } from './fixos.js';
@@ -58,6 +59,8 @@ export function separar(estado) {
     },
     dia: {
       win: [...estado.win],
+      // Os horários fechados da data (J); o dia sem eles fica sem eles, e os leitores usam o win
+      ...(Array.isArray(estado.fechamentos) ? { fechamentos: normalizarFechamentos(estado.fechamentos) } : {}),
       av: { ...estado.av },
       ins: Object.fromEntries(estado.ins.map(x => [x.id, { on: x.on, aw: [...x.aw] }])),
       pedidos: Object.fromEntries(estado.stu.map(s => [s.id, {
@@ -91,6 +94,7 @@ export function juntar(cadastro, dia = diaPadrao()) {
     ...(cadastro.cursos ? { cursos: normalizarCursos(cadastro.cursos) } : {}),
     ...(cadastro.painel ? { painel: normalizarPainel(cadastro.painel) } : {}),
     win: Array.isArray(dia.win) ? [...dia.win] : INICIOS_DOS_TEMPOS.map(() => true),
+    ...(Array.isArray(dia.fechamentos) ? { fechamentos: normalizarFechamentos(dia.fechamentos) } : {}),
     av: { ...avDaFrota(frota), ...(dia.av || {}) },
     nid: cadastro.nid,
     ins: cadastro.ins.map(x => {
@@ -121,9 +125,10 @@ export function juntar(cadastro, dia = diaPadrao()) {
 // demanda do dia vem de "Importar da agenda"
 export function diaParaCopiar(anterior, instrutores = []) {
   if (!anterior || !anterior.ins || !anterior.pedidos) return diaPadrao();
-  const { win, av, ins, pedidos: anteriores, hangar = null, criterios } = structuredClone(anterior);
+  const { win, fechamentos, av, ins, pedidos: anteriores, hangar = null, criterios } = structuredClone(anterior);
   const pedidos = Object.fromEntries(Object.keys(anteriores).map(id => [id, { ...blank(), extra: [] }]));
-  return { win, av, ins, pedidos, fStatus: {}, fObs: {}, horas: horasDoDiaSeguinte(anterior), filas: filasDoDiaSeguinte(anterior, instrutores), hangar: hangar || normalizarHangar(null, FROTA_INICIAL), fixos: {}, aprovacao: null, criterios: normalizarCriterios(criterios), importadas: [] };
+  // Os horários fechados passam para a data seguinte, como o win (o B decide se continua assim)
+  return { win, ...(Array.isArray(fechamentos) ? { fechamentos } : {}), av, ins, pedidos, fStatus: {}, fObs: {}, horas: horasDoDiaSeguinte(anterior), filas: filasDoDiaSeguinte(anterior, instrutores), hangar: hangar || normalizarHangar(null, FROTA_INICIAL), fixos: {}, aprovacao: null, criterios: normalizarCriterios(criterios), importadas: [] };
 }
 
 // Horas desde a última revisão no início do dia seguinte: as do dia mais os voos dele que não foram cancelados
