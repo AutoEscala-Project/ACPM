@@ -5,9 +5,9 @@
 import {
   test, comProgresso, expect, abrir, abrirSintetico, abrirComExemplo, irPara, irParaVista, filtrarCursos, confirmar, AGORA, AMANHA, alvosPequenos,
   appPronto, dataAberta, diaSeguinte, larguraDaPagina, abrirAluno, campoDoAberto, linhaDoAluno, linhasDosAlunos, nomesNaLista,
-  etiquetasDoAberto, nenhumNaLista, abrirHistorico, campoDaAgenda
+  etiquetasDoAberto, nenhumNaLista, abrirHistorico, campoDaAgenda, prepararContexto, vigiarErros, entrar
 } from './fixtures.js';
-import { documentosAtuais } from './supabase-falso.js';
+import { documentosAtuais, criarSupabaseFalso, CONTAS } from './supabase-falso.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
 import { cursosIniciais, novoCurso, percursoDoCurso } from '../../js/programa.js';
 import { MODELOS } from '../../js/modelos-de-curso.js';
@@ -646,6 +646,64 @@ comProgresso.describe('Alunos: Nesta data e Curso e missões', () => {
     await expect(page.locator('#historico')).toContainText('Resultado de Maria em CT-01: reprovado (sem voo)');
   });
 
+  // A data depois de hoje é recusada e fica no campo, com a mensagem; a data corrigida registra
+  comProgresso('"Registrar resultado sem voo": a data depois de hoje fica no campo, recusada, até ser corrigida', async ({ page }) => {
+    await abrirComOPP(page);
+    await page.locator('#det-alu-sv-missao').selectOption('IN-02');
+    await page.locator('#det-alu-sv-data').fill('2026-12-01');
+    await page.locator('#det-alu-sv-registrar').click();
+    await expect(page.locator('#det-alu-sv-erro')).toHaveText('A data do resultado vai até hoje.');
+    await expect(page.locator('#det-alu-sv-data')).toHaveValue('2026-12-01');
+    await page.locator('#det-alu-sv-registrar').click();
+    await expect(page.locator('#det-alu-sv-erro')).toHaveText('A data do resultado vai até hoje.');
+    expect(await resultadosGuardados(page)).toEqual([]);
+    await page.locator('#det-alu-sv-data').fill('2026-11-09');
+    await page.locator('#det-alu-sv-registrar').click();
+    await expect(page.locator('#det-alu-sv-registrar')).toHaveText('Confirmar: IN-02 fora da ordem');
+    await page.locator('#det-alu-sv-registrar').click();
+    await expect(page.locator('#toast-box .toast.ok')).toHaveText('Resultado de Maria em IN-02 registrado: aprovado (sem voo).');
+    expect((await resultadosGuardados(page)).map(r => [r.missao, r.resultado, r.data])).toEqual([['IN-02', 'aprovado', '2026-11-09']]);
+  });
+
+  // A IN-01 tem voo na data aberta: o botão armado avisa; o ↶ não desfaz o resultado registrado no voo depois da
+  // colocação (desfazer trocaria o resultado do voo pelo de antes dela), e diz que a missão ficou
+  comProgresso('"Colocar no curso até…" avisa da missão com voo nesta data; o ↶ deixa a missão com resultado registrado depois', async ({ page }) => {
+    await abrirComOPP(page);
+    await page.locator('#det-alu-colocar').selectOption('CT-01');
+    const botao = page.locator('#det-alu-colocar-confirmar');
+    await botao.click();
+    await expect(botao).toHaveText('Confirmar: aprovar 2 missões sem voo (IN-01 e IN-02); IN-01 tem voo nesta data');
+    await botao.click();
+    await expect(page.locator('#toast-box .toast.ok')).toHaveText('Maria colocado no curso até CT-01: 2 missões aprovadas sem voo. O voo da IN-01 nesta data continua na escala.');
+    await page.locator('#det-alu .voos-do-aluno [data-resultado]').selectOption('reprovado');
+    await expect(valorDo(page, 'missao-anterior')).toHaveText('IN-01 · reprovado em 11/11/2026');
+    await abrirHistorico(page);
+    await page.locator('#audit-log-list .audit-item', { hasText: 'Maria colocado no curso PP até CT-01' }).locator('[data-act="rev-log"]').click();
+    await expect(page.locator('#toast-box .toast').last()).toHaveText('IN-01 ficou com o resultado de agora (reprovado): ele mudou depois da colocação.');
+    await expect(page.locator('#audit-log-list .audit-item', { hasText: 'Revertido: Maria colocado no curso PP até CT-01' })).toHaveCount(1);
+    // A IN-02 voltou (pendente); a IN-01 continua reprovada no voo, e a seção diz o mesmo que a linha do voo
+    const guardados = await resultadosGuardados(page);
+    expect(guardados.map(r => [r.missao, r.resultado, r.voo])).toEqual([['IN-01', 'aprovado', null], ['IN-02', 'aprovado', null], ['IN-01', 'reprovado', '1000_0_1'], ['IN-02', 'pendente', null]]);
+    await expect(valorDo(page, 'missao-anterior')).toHaveText('IN-01 · reprovado em 11/11/2026');
+    await expect(page.locator('#det-alu .voos-do-aluno [data-resultado]')).toHaveValue('reprovado');
+  });
+
+  // Todas as missões mudaram depois da colocação: nada a desfazer, e o ↶ fica (como "Dar a vaga" com o status mudado)
+  comProgresso('o ↶ da colocação com todas as missões mudadas depois não registra nada e fica no Histórico', async ({ page }) => {
+    await abrirComOPP(page);
+    await page.locator('#det-alu-colocar').selectOption('IN-02');
+    await confirmar(page, '#det-alu-colocar-confirmar');
+    await expect(page.locator('#toast-box .toast.ok')).toContainText('Maria colocado no curso até IN-02: 1 missão aprovada sem voo.');
+    await page.locator('#det-alu .voos-do-aluno [data-resultado]').selectOption('reprovado');
+    await abrirHistorico(page);
+    const entrada = page.locator('#audit-log-list .audit-item', { hasText: 'Maria colocado no curso PP até IN-02' });
+    await entrada.locator('[data-act="rev-log"]').click();
+    await expect(page.locator('#toast-box .toast').last()).toHaveText('Nada a desfazer: IN-01 ficou com o resultado de agora (reprovado): ele mudou depois da colocação.');
+    await expect(page.locator('#audit-log-list .audit-item', { hasText: 'Revertido:' })).toHaveCount(0);
+    await expect(entrada.locator('[data-act="rev-log"]')).toHaveCount(1);
+    expect((await resultadosGuardados(page)).map(r => [r.missao, r.resultado])).toEqual([['IN-01', 'aprovado'], ['IN-01', 'reprovado']]);
+  });
+
   comProgresso('"Colocar no curso até…": as missões antes da escolhida ficam aprovadas sem voo, e o ↶ do Histórico as devolve', async ({ page }) => {
     await abrirComOPP(page, { resultados: [{ id: 1, aluno: 1000, curso: 'PP', missao: 'IN-02', resultado: 'aprovado', data: '2026-11-09', voo: null, registrado_em: '2026-11-09T12:00:00.000Z', registrado_por: 'Operador 01' }] });
     await expect(page.locator('#det-alu-colocar optgroup')).toHaveCount(9);
@@ -653,10 +711,10 @@ comProgresso.describe('Alunos: Nesta data e Curso e missões', () => {
     await page.locator('#det-alu-colocar').selectOption('NAV-01');
     const botao = page.locator('#det-alu-colocar-confirmar');
     await botao.click();
-    // As 13 antes da NAV-01, menos a IN-02 já aprovada
-    await expect(botao).toHaveText('Confirmar: aprovar 12 missões sem voo (IN-01 … TMA-05)');
+    // As 13 antes da NAV-01, menos a IN-02 já aprovada (a IN-01 tem voo na data aberta: o botão avisa)
+    await expect(botao).toHaveText('Confirmar: aprovar 12 missões sem voo (IN-01 … TMA-05); IN-01 tem voo nesta data');
     await botao.click();
-    await expect(page.locator('#toast-box .toast.ok')).toHaveText('Maria colocado no curso até NAV-01: 12 missões aprovadas sem voo.');
+    await expect(page.locator('#toast-box .toast.ok')).toHaveText('Maria colocado no curso até NAV-01: 12 missões aprovadas sem voo. O voo da IN-01 nesta data continua na escala.');
     await expect(valorDo(page, 'missao-atual')).toHaveText('NAV-01 · NAV 01');
     const guardados = await resultadosGuardados(page);
     expect(guardados.slice(1).map(r => r.missao)).toEqual(ORDEM_DO_PP.slice(0, ORDEM_DO_PP.indexOf('NAV-01')).filter(c => c !== 'IN-02'));
@@ -693,7 +751,18 @@ comProgresso.describe('Alunos: Nesta data e Curso e missões', () => {
       expect(caixa.height, alvo).toBeGreaterThanOrEqual(44);
       expect(caixa.x + caixa.width, alvo).toBeLessThanOrEqual(390);
     }
-    expect(await larguraDaPagina(page)).toBeLessThanOrEqual(390);
+    // O botão armado (o texto mais longo) quebra a linha e fica inteiro na tela, também em 320 px
+    await page.locator('#det-alu-colocar').selectOption('NAV-01');
+    const armado = page.locator('#det-alu-colocar-confirmar');
+    await armado.click();
+    await expect(armado).toHaveText(/^Confirmar: aprovar 13 missões sem voo \(IN-01 … TMA-05\); IN-01 tem voo nesta data$/);
+    for (const largura of [390, 320]) {
+      await page.setViewportSize({ width: largura, height: 844 });
+      const caixa = await armado.boundingBox();
+      expect(caixa.x, `${largura}`).toBeGreaterThanOrEqual(0);
+      expect(caixa.x + caixa.width, `${largura}`).toBeLessThanOrEqual(largura);
+      expect(await larguraDaPagina(page)).toBeLessThanOrEqual(largura);
+    }
   });
 });
 
@@ -736,8 +805,47 @@ test.describe('Alunos: o nome completo e "Apagar os dados pessoais"', () => {
     await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('acpm4_dados_pessoais') || '{}'))).toEqual({});
     await expect(linhaDoAluno(page, 1001)).toHaveCount(1);
     await expect(page.locator('#det-alu-apagar-dados')).toHaveCount(0);
+    // O botão saiu com os dados: o foco fica no rodapé, em "Excluir aluno…"
+    await expect(page.locator('#det-alu-excluir')).toBeFocused();
     await abrirHistorico(page);
     await expect(page.locator('#historico')).toContainText('Dados pessoais de Aluno 1001 atualizados: Nome completo, CANAC');
     await expect(page.locator('#historico')).not.toContainText('Carvalho');
+  });
+});
+
+// O ↶ da colocação que falha no meio (modo compartilhado): o que voltou fica, a entrada não vira "Revertido" e o ↶ continua;
+// a nova tentativa devolve só o que faltou
+comProgresso.describe('Alunos: o ↶ da colocação que falha no meio', () => {
+  comProgresso('a entrada fica com o ↶, e a nova tentativa termina', async ({ browser }) => {
+    const estado = cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, { fly: false }, { nm: 'Maria', curso: 'PP' })] });
+    const servidor = criarSupabaseFalso({ ...documentosAtuais(estado, AMANHA), cursos: cursosIniciais().map(c => (c.sigla === 'PP' ? programaPP() : c)) });
+    const context = await browser.newContext({ baseURL: test.info().project.use.baseURL, locale: 'pt-BR', timezoneId: 'America/Sao_Paulo' });
+    await prepararContexto(context);
+    await servidor.instalar(context);
+    const page = await context.newPage();
+    const erros = vigiarErros(page);
+    await entrar(page, CONTAS.operador);
+    await irPara(page, 'alu');
+    await abrirAluno(page, 1000);
+    await page.locator('#det-alu-colocar').selectOption('CT-02');
+    await confirmar(page, '#det-alu-colocar-confirmar');
+    await expect(page.locator('#toast-box .toast.ok')).toHaveText('Maria colocado no curso até CT-02: 3 missões aprovadas sem voo.');
+    // O segundo registro da reversão falha
+    let chamadas = 0;
+    await page.route(/rpc\/registrar_resultado/, rota => (++chamadas === 2 ? rota.fulfill({ status: 400, contentType: 'application/json', body: '{"code":"XX000","message":"falha"}' }) : rota.fallback()));
+    await abrirHistorico(page);
+    const entrada = page.locator('#audit-log-list .audit-item', { hasText: 'Maria colocado no curso PP até CT-02' });
+    await entrada.locator('[data-act="rev-log"]').click();
+    await expect(page.locator('#toast-box .toast').last()).toHaveText('Não foi possível desfazer tudo: 1 de 3 missões voltaram. Verifique a conexão e tente de novo.');
+    await expect(page.locator('#audit-log-list .audit-item', { hasText: 'Revertido:' })).toHaveCount(0);
+    await expect(entrada.locator('[data-act="rev-log"]')).toHaveCount(1);
+    // A nova tentativa devolve as duas que faltaram (a que já voltou não é registrada de novo)
+    await entrada.locator('[data-act="rev-log"]').click();
+    await expect(page.locator('#audit-log-list .audit-item', { hasText: 'Revertido: Maria colocado no curso PP até CT-02' })).toHaveCount(1);
+    expect(servidor.resultados.map(r => [r.missao, r.resultado])).toEqual([
+      ['IN-01', 'aprovado'], ['IN-02', 'aprovado'], ['CT-01', 'aprovado'], ['IN-01', 'pendente'], ['IN-02', 'pendente'], ['CT-01', 'pendente']
+    ]);
+    expect(erros.filter(e => !e.includes('400'))).toEqual([]);
+    await context.close();
   });
 });

@@ -130,6 +130,9 @@ describe('Reversões do histórico', () => {
     ]) assert.equal(validarReversao({ ...base, ...ruim }, FROTA_INICIAL), null, JSON.stringify(ruim).slice(0, 80));
     assert.deepEqual(validarReversao({ ...base, extra: 1, missoes: [{ missao: 'IN-01', resultado: 'pendente', x: 1 }] }, FROTA_INICIAL), base);
     assert.equal(validarReversao({ ...base, missoes: Array.from({ length: 60 }, (_, i) => ({ missao: `M-${i}`, resultado: 'aprovado' })) }, FROTA_INICIAL).missoes.length, 60);
+    // A data da colocação (o ↶ só devolve a missão ainda aprovada sem voo nela): uma data AAAA-MM-DD; sem ela, vale
+    assert.deepEqual(validarReversao({ ...base, data: '2026-11-10' }, FROTA_INICIAL), { ...base, data: '2026-11-10' });
+    for (const data of ['10/11/2026', '2026-02-30', 20261110, null, ATAQUE]) assert.equal(validarReversao({ ...base, data }, FROTA_INICIAL), null, String(data).slice(0, 40));
   });
 
   it('o rótulo é um texto curto; fora disso, "↶ Reverter"', () => {

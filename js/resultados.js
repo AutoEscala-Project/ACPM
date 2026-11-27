@@ -68,3 +68,20 @@ export function vooDaMissao(out, aluno, codigo) {
   const voos = (Array.isArray(out) ? out : []).filter(o => o.stuId === aluno && o.etapa === codigo);
   return voos.length ? voos.reduce((p, o) => (o.a < p.a ? o : p)) : null;
 }
+
+// O ↶ de "Colocar no curso até…" (Alunos; mapa: situacaoPorMissao): cada missão volta ao resultado de antes (voltar) só
+// se o último registro dela ainda é o aprovado sem voo da colocação (na data dela, quando a reversão a guardou). A que
+// ganhou outro registro depois (o resultado do voo, outro sem voo) fica com o de agora (mudadas: desfazer apagaria esse
+// resultado, como o status mudado depois de "Dar a vaga"); a que já está no resultado de antes (a reversão anterior que
+// parou no meio) fica de fora
+export function paraDesfazerColocacao(mapa, { aluno, curso, missoes, data = null }) {
+  const voltar = [], mudadas = [];
+  for (const m of missoes) {
+    const r = registroDa(mapa, aluno, curso, m.missao);
+    const atual = r ? r.resultado : 'pendente';
+    if (atual === m.resultado) continue;
+    if (r && r.resultado === 'aprovado' && !r.voo && (!data || r.data === data)) voltar.push(m);
+    else mudadas.push({ missao: m.missao, resultado: atual });
+  }
+  return { voltar, mudadas };
+}

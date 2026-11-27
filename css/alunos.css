@@ -32,6 +32,8 @@
 .det-form > legend { padding: 0 4px; font-weight: 600; }
 .det-form > .h { margin: 2px 0 4px; }
 .det-form-acoes { display: flex; justify-content: flex-end; margin-top: 4px; }
+/* O botão armado ("Confirmar: aprovar 13 missões sem voo (…)") quebra a linha em vez de sair da tela */
+.det-form-acoes .btn { white-space: normal; max-width: 100%; text-align: center; overflow-wrap: anywhere; }
 .det-form .btn.arm { background: var(--er); color: var(--erT); }
 .det-form > .erro-campo { display: block; color: var(--er); font-size: 13px; }
 .det-form > .erro-campo:empty { display: none; }

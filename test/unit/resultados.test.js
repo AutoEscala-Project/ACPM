@@ -3,7 +3,7 @@
 // situação, estão em progresso.test.js.
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { situacaoPorMissao, situacaoDa, registroDa, resultadoDoVoo, validarRegistro, ultimoResultadoDoAluno, dataDoResultadoSemVoo, vooDaMissao } from '../../js/resultados.js';
+import { situacaoPorMissao, situacaoDa, registroDa, resultadoDoVoo, validarRegistro, ultimoResultadoDoAluno, dataDoResultadoSemVoo, vooDaMissao, paraDesfazerColocacao } from '../../js/resultados.js';
 
 const reg = (id, aluno, curso, missao, resultado, extra = {}) => ({ id, aluno, curso, missao, resultado, data: '2026-11-10', voo: null, ...extra });
 
@@ -95,5 +95,36 @@ describe('O resultado sem voo', () => {
     assert.equal(vooDaMissao(out, 1000, 'PE-03').fKey, '1000_0_1');
     assert.equal(vooDaMissao(out, 1000, 'PE-04'), null);
     assert.equal(vooDaMissao(null, 1000, 'PE-03'), null);
+  });
+});
+
+// O ↶ de "Colocar no curso até…" (Alunos): cada missão volta ao resultado de antes só se o último registro dela ainda é o
+// aprovado sem voo da colocação; a que mudou depois (o resultado do voo, outro sem voo) fica, e a que já voltou (a
+// reversão anterior que parou no meio) não é registrada de novo
+describe('O ↶ da colocação no curso', () => {
+  const reg = (id, missao, resultado, data, voo = null) => ({ id, aluno: 1000, curso: 'PP', missao, resultado, data, voo });
+  const rev = { aluno: 1000, curso: 'PP', data: '2026-11-10', missoes: [{ missao: 'IN-01', resultado: 'pendente' }, { missao: 'IN-02', resultado: 'reprovado' }, { missao: 'CT-01', resultado: 'pendente' }] };
+  it('volta a missão ainda aprovada sem voo pela colocação; a que mudou depois fica, com o resultado de agora', () => {
+    const mapa = situacaoPorMissao([reg(1, 'IN-02', 'reprovado', '2026-11-01'), reg(2, 'IN-01', 'aprovado', '2026-11-10'), reg(3, 'IN-02', 'aprovado', '2026-11-10'),
+      reg(4, 'CT-01', 'aprovado', '2026-11-10'), reg(5, 'IN-01', 'reprovado', '2026-11-11', '1000_0_1')]);
+    assert.deepEqual(paraDesfazerColocacao(mapa, rev), {
+      voltar: [{ missao: 'IN-02', resultado: 'reprovado' }, { missao: 'CT-01', resultado: 'pendente' }],
+      mudadas: [{ missao: 'IN-01', resultado: 'reprovado' }]
+    });
+  });
+  it('o aprovado de um voo, ou sem voo noutra data, também é mudança; a que já voltou fica de fora', () => {
+    const mapa = situacaoPorMissao([reg(1, 'IN-01', 'aprovado', '2026-11-10'), reg(2, 'IN-02', 'aprovado', '2026-11-10'), reg(3, 'CT-01', 'aprovado', '2026-11-10'),
+      reg(4, 'IN-01', 'aprovado', '2026-11-11', '1000_0_1'), reg(5, 'IN-02', 'aprovado', '2026-11-12'), reg(6, 'CT-01', 'pendente', '2026-11-10')]);
+    assert.deepEqual(paraDesfazerColocacao(mapa, rev), { voltar: [], mudadas: [{ missao: 'IN-01', resultado: 'aprovado' }, { missao: 'IN-02', resultado: 'aprovado' }] });
+    // Sem registro nenhum, a missão está pendente: a de antes pendente já voltou
+    assert.deepEqual(paraDesfazerColocacao(situacaoPorMissao([]), rev), { voltar: [], mudadas: [{ missao: 'IN-02', resultado: 'pendente' }] });
+  });
+  it('a reversão sem a data da colocação aceita o aprovado sem voo de qualquer data', () => {
+    const mapa = situacaoPorMissao([reg(1, 'IN-01', 'aprovado', '2026-11-09'), reg(2, 'IN-02', 'aprovado', '2026-11-09', '1000_0_1')]);
+    const { data, ...semData } = rev;
+    assert.equal(data, '2026-11-10');
+    assert.deepEqual(paraDesfazerColocacao(mapa, { ...semData, missoes: semData.missoes.slice(0, 2) }), {
+      voltar: [{ missao: 'IN-01', resultado: 'pendente' }], mudadas: [{ missao: 'IN-02', resultado: 'aprovado' }]
+    });
   });
 });

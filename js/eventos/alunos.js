@@ -10,7 +10,7 @@ import { anunciar, showToast } from '../dom.js';
 import { nomeLimpo, numeroBr, hojeISO, dataIsoValida, hm } from '../format.js';
 import { blank, pesoDoTexto, ERRO_DO_PESO } from '../rules.js';
 import { S, RES, DATA, insBy, stuBy, isGestor, dadoIndisponivel } from '../state.js';
-import { dataDoResultadoSemVoo, vooDaMissao } from '../resultados.js';
+import { dataDoResultadoSemVoo, vooDaMissao, situacaoPorMissao, paraDesfazerColocacao } from '../resultados.js';
 import { confirmado } from './confirmacao.js';
 import { aoAcionar, aoMudarCampo, aoReverter } from './registro.js';
 import { registrarResultadoNaTela } from '../resultado-na-tela.js';
@@ -219,7 +219,11 @@ aoAcionar('colocar-no-curso', async (b, { id }) => {
   if (!colocacao.alvo) { showToast('Escolha a missão em que o aluno para.'); return; }
   const codigos = colocacao.aprovar.map(m => m.codigo);
   if (!codigos.length) { showToast(`Nenhuma missão antes de ${colocacao.alvo} falta aprovar para ${s.nm}.`, 'ok'); return; }
-  const armado = `Confirmar: aprovar ${codigos.length} ${codigos.length === 1 ? 'missão' : 'missões'} sem voo (${listaDeCodigos(codigos)})`;
+  // As que têm voo na data aberta: o botão armado avisa (o voo continua na escala; o resultado dele, registrado depois,
+  // vale por cima da colocação)
+  const comVoo = codigos.filter(c => vooDaMissao(RES && RES.out, id, c));
+  const avisoDoVoo = comVoo.length ? `; ${listaDeCodigos(comVoo)} ${comVoo.length === 1 ? 'tem' : 'têm'} voo nesta data` : '';
+  const armado = `Confirmar: aprovar ${codigos.length} ${codigos.length === 1 ? 'missão' : 'missões'} sem voo (${listaDeCodigos(codigos)})${avisoDoVoo}`;
   if (b.dataset.arm && b.textContent !== armado) { showToast('A missão mudou depois do primeiro clique: confirme de novo.'); return; }
   if (!confirmado(b, armado)) return;
   b.disabled = true;
@@ -229,34 +233,46 @@ aoAcionar('colocar-no-curso', async (b, { id }) => {
   if (feitos) {
     const missoes = colocacao.aprovar.slice(0, feitos).map(m => ({ missao: m.codigo, resultado: m.antes }));
     logChange('mod', `${s.nm} colocado no curso ${colocacao.curso} até ${colocacao.alvo}: ${feitos} ${feitos === 1 ? 'missão aprovada' : 'missões aprovadas'} sem voo (${listaDeCodigos(codigos.slice(0, feitos))})`,
-      { kind: 'desfazerColocacao', aluno: id, curso: colocacao.curso, missoes, label: '↶ Reverter' });
+      { kind: 'desfazerColocacao', aluno: id, curso: colocacao.curso, missoes, data, label: '↶ Reverter' });
   }
   esquecerEscolhas(id);
   tela.desenhar({ forcar: true });
   redesenharPorNome('pedidos-do-dia', 'escala');
   focar('det-alu-colocar');
-  const texto = feitos === codigos.length ? `${s.nm} colocado no curso até ${colocacao.alvo}: ${feitos} ${feitos === 1 ? 'missão aprovada' : 'missões aprovadas'} sem voo.`
+  const doVoo = comVoo.length ? ` ${comVoo.length === 1 ? `O voo da ${comVoo[0]}` : `Os voos da ${listaDeCodigos(comVoo)}`} nesta data ${comVoo.length === 1 ? 'continua' : 'continuam'} na escala.` : '';
+  const texto = feitos === codigos.length ? `${s.nm} colocado no curso até ${colocacao.alvo}: ${feitos} ${feitos === 1 ? 'missão aprovada' : 'missões aprovadas'} sem voo.${doVoo}`
     : `Não foi possível registrar tudo: ${feitos} de ${codigos.length} missões aprovadas. Verifique a conexão e tente de novo.`;
   showToast(texto, feitos === codigos.length ? 'ok' : undefined);
   anunciar(texto);
 });
 
-// "↶ Reverter" da colocação: cada missão volta ao resultado de antes (pendente, reprovado), registrado sem voo
+// "↶ Reverter" da colocação: cada missão ainda aprovada sem voo por ela volta ao resultado de antes (pendente,
+// reprovado), registrado sem voo; a que ganhou outro resultado depois fica, e o aviso diz qual (paraDesfazerColocacao).
+// A entrada vira "Revertido" só com tudo feito: a reversão que parou no meio (a conexão) fica com o ↶, e a nova
+// tentativa devolve o que faltou. Com todas mudadas, nada a desfazer (o ↶ fica, como o de "Dar a vaga")
 aoReverter('desfazerColocacao', async (rev, entrada) => {
   if (dadoIndisponivel('resultados')) { showToast('Os resultados dos cursos não foram lidos: tente de novo depois de “Tentar de novo”.'); return; }
+  const { voltar, mudadas } = paraDesfazerColocacao(situacaoPorMissao((S.resultados || {}).situacao), rev);
+  const ficaram = !mudadas.length ? ''
+    : mudadas.length === 1 ? `${mudadas[0].missao} ficou com o resultado de agora (${mudadas[0].resultado}): ele mudou depois da colocação.`
+      : `${listaDeCodigos(mudadas.map(m => m.missao))} ficaram com o resultado de agora: ${mudadas.length === 2 ? 'os dois mudaram' : 'mudaram'} depois da colocação.`;
+  if (mudadas.length === rev.missoes.length) { showToast(`Nada a desfazer: ${ficaram}`); return; }
   const hoje = hojeISO();
   const data = dataDoResultadoSemVoo(DATA || hoje, hoje);
-  const registros = rev.missoes.map(m => ({ aluno: rev.aluno, curso: rev.curso, missao: m.missao, resultado: m.resultado, data, voo: null }));
+  const registros = voltar.map(m => ({ aluno: rev.aluno, curso: rev.curso, missao: m.missao, resultado: m.resultado, data, voo: null }));
   const feitos = await emSequencia(registros);
-  if (feitos) logChange('mod', `Revertido: ${entrada.desc}`, null, entrada.id);
+  if (feitos === registros.length) logChange('mod', `Revertido: ${entrada.desc}`, null, entrada.id);
   tela.desenhar({ forcar: true });
   redesenharPorNome('pedidos-do-dia', 'escala');
   if (feitos < registros.length) showToast(`Não foi possível desfazer tudo: ${feitos} de ${registros.length} missões voltaram. Verifique a conexão e tente de novo.`);
+  else if (ficaram) showToast(ficaram);
 });
 
 // "Apagar os dados pessoais" (o rodapé do aluno inativo): dois cliques; o servidor tira a linha
-aoAcionar('apagar-dados', (b, { id }) => {
+aoAcionar('apagar-dados', async (b, { id }) => {
   const s = stuBy(id);
   if (!s || !confirmado(b, 'Confirmar: apagar os dados pessoais')) return;
-  apagarDadosPessoais('aluno', id, s.nm);
+  await apagarDadosPessoais('aluno', id, s.nm);
+  // O botão sai com os dados: o foco perdido vai para o vizinho no rodapé, "Excluir aluno…"
+  if (!document.activeElement || document.activeElement === document.body) focar('det-alu-excluir');
 });

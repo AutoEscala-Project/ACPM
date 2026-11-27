@@ -127,7 +127,8 @@ function formularioSemVoo(s, missoes) {
     + grupo('Fora da ordem (pede confirmação)', missoes.foraDaOrdem.map(({ missao: m, motivo }) => [m.codigo, `${nome(m)}${motivo ? ` (${motivo})` : ''}`]))
     + grupo('Já com resultado', missoes.comResultado.map(m => [m.codigo, nome(m)]));
   const desligado = dadoIndisponivel('resultados') ? ' disabled' : '';
-  const data = e.data && e.data <= hoje ? e.data : dataDoResultadoSemVoo(DATA || hoje, hoje);
+  // A data escolhida fica no campo, também a recusada (depois de hoje: a mensagem diz, e o clique seguinte recusa de novo)
+  const data = e.data || dataDoResultadoSemVoo(DATA || hoje, hoje);
   return `<fieldset class="det-form sem-voo" data-sem-voo="${s.id}"><legend>Registrar resultado sem voo <button type="button" class="dica-btn" data-dica="resultado-sem-voo" aria-label="O que é o resultado sem voo?" aria-expanded="false"></button></legend>`
     + `<div class="det-campo"><span class="det-rotulo"><label for="det-alu-sv-missao">Missão</label></span><div class="det-valor"><select id="det-alu-sv-missao" data-sv="missao" aria-describedby="det-alu-sv-erro"${desligado}>${lista}</select></div></div>`
     + `<div class="det-campo"><span class="det-rotulo"><label for="det-alu-sv-resultado">Resultado</label></span><div class="det-valor"><select id="det-alu-sv-resultado" data-sv="resultado"${desligado}>${opts(RESULTADOS_SEM_VOO, e.resultado || 'aprovado')}</select></div></div>`
