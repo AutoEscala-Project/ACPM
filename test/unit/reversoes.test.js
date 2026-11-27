@@ -604,3 +604,13 @@ describe('A reversão dos horários fechados', () => {
     assert.equal(validarReversao({ kind: 'setFechamentos' }, FROTA_INICIAL), null);
   });
 });
+
+// J (N13): uma reversão dos horários gravada antes do J pode trazer o período do pedido ("tarde"): a reversão vale, sem ele
+describe('A reversão dos horários com um período de antes', () => {
+  it('o período sai do pedido, e a reversão continua valendo; o horário exato fica', () => {
+    const rev = validarReversao({ kind: 'restaurarHorarios', cat: 'C152', lista: [390, 500], pedidos: [
+      { stuId: 1000, mid: 0, p1: 500, p2: -1, jan: 'tarde' }, { stuId: 1001, mid: 0, p1: 500, p2: -1, jan: 'h500' }] }, FROTA_INICIAL);
+    assert.ok(rev);
+    assert.deepEqual(rev.pedidos, [{ stuId: 1000, mid: 0, p1: 500, p2: -1 }, { stuId: 1001, mid: 0, p1: 500, p2: -1, jan: 'h500' }]);
+  });
+});

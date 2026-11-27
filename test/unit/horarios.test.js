@@ -95,9 +95,10 @@ describe('Horários por categoria: o motor', async () => {
     assert.equal(hm(voo.a), '08:30');
   });
 
-  it('a disponibilidade do aluno vale por período ("Tarde") e por horário exato ("Só às 07:30")', () => {
+  it('a disponibilidade do aluno é um horário exato ("às 07:30"); um período guardado ("tarde") vale como nenhum (J, N13)', () => {
     const [tarde] = escala({ stu: [multimotor(1000, { p1: -1, p2: -1, jan: 'tarde' })] }).out;
-    assert.equal(hm(tarde.a), '13:00');
+    const [nenhuma] = escala({ stu: [multimotor(1000, { p1: -1, p2: -1 })] }).out;
+    assert.equal(hm(tarde.a), hm(nenhuma.a));
     const [exato] = escala({ stu: [multimotor(1000, { p1: -1, p2: -1, jan: 'h450' })] }).out;
     assert.equal(hm(exato.a), '07:30');
   });
@@ -131,7 +132,8 @@ describe('Horários por categoria: formato 12 dos dados', async () => {
       1000: { fly: true, mis: 'Voo Local', eq: 'C152', p1: 1, p2: -1, jan: 'h5', extra: [{ mid: 1, fly: true, p1: 8, p2: 2, jan: 'tarde' }] },
       1001: { fly: false, mis: 'Voo Local', eq: 'C152', p1: 610, p2: 690 }
     } });
-    assert.deepEqual(dia.pedidos[1000], { fly: true, mis: 'Voo Local', eq: 'C152', p1: 500, p2: -1, jan: 'h820', extra: [{ mid: 1, fly: true, p1: 1050, p2: 610, jan: 'tarde' }] });
+    // O "tarde" do pedido extra sai (J, N13: não há período do dia)
+    assert.deepEqual(dia.pedidos[1000], { fly: true, mis: 'Voo Local', eq: 'C152', p1: 500, p2: -1, jan: 'h820', extra: [{ mid: 1, fly: true, p1: 1050, p2: 610 }] });
     assert.deepEqual(dia.pedidos[1001], { fly: false, mis: 'Voo Local', eq: 'C152', p1: 610, p2: 690 });
   });
 
@@ -159,7 +161,9 @@ describe('Horários por categoria: trocar a missão ou o avião do pedido', asyn
   });
 
   it('um horário exato que a lista nova não tem deixa de valer; um período continua', () => {
-    assert.equal(ajustado({ p1: 450, p2: 450, jan: 'h450' }, 'Voo Local', 'C152').jan, undefined);
+    // O horário exato do pedido fica, mesmo fora da lista nova (J, N14): o motor o recusa no horário dele, até a lista ter o
+    // minuto de novo ou o horário mudar
+    assert.equal(ajustado({ p1: 450, p2: 450, jan: 'h450' }, 'Voo Local', 'C152').jan, 'h450');
     assert.equal(ajustado({ p1: 450, p2: 450, jan: 'tarde' }, 'Voo Local', 'C152').jan, 'tarde');
     assert.equal(ajustado({ p1: 500, p2: 500, jan: 'h500' }, 'Voo Local', 'C172').jan, 'h500');
   });
@@ -228,7 +232,7 @@ describe('O resumo dos horários e o efeito de uma lista nova', () => {
     assert.deepEqual(porPeriodo([720]), { manha: [], tarde: [720] });
   });
 
-  it('o efeito nos pedidos da categoria: quem muda de preferência e quem perde o "Só às"', () => {
+  it('o efeito nos pedidos da categoria: quem muda de preferência e quem fica fora da lista (o horário exato que ela não tem)', () => {
     const pedidos = [
       { nome: 'Ana', pedido: { mis: 'Voo Local', eq: 'C152', p1: 390, p2: 610 } },
       { nome: 'Bia', pedido: { mis: 'Voo Local', eq: 'C152', p1: 500, p2: -1, jan: 'h500' } },
@@ -236,12 +240,13 @@ describe('O resumo dos horários e o efeito de uma lista nova', () => {
       { nome: 'Davi', pedido: { mis: 'Noturno', eq: 'C152', p1: 1050, p2: -1 } }
     ];
     const efeito = impactoDosHorarios(pedidos, HORARIOS_INICIAIS, 'C152', [390, 610, 760]);
-    assert.deepEqual(efeito, { mudam: ['Bia'], perdemSo: [{ nome: 'Bia', minuto: 500 }] });
-    assert.equal(resumoDoImpacto(efeito), '1 pedido muda de preferência; 1 perde “Só às 08:20”.');
+    assert.deepEqual(efeito, { mudam: ['Bia'], foraDaLista: [{ nome: 'Bia', minuto: 500 }] });
+    assert.equal(resumoDoImpacto(efeito), '1 pedido muda de preferência; 1 fica fora da lista (às 08:20).');
     assert.equal(resumoDoImpacto(impactoDosHorarios(pedidos, HORARIOS_INICIAIS, 'C152', [...HORARIOS_PADRAO])), 'Nenhum pedido muda.');
     const dois = impactoDosHorarios(pedidos, HORARIOS_INICIAIS, 'C152', [400]);
     assert.deepEqual(dois.mudam, ['Ana', 'Bia']);
-    assert.equal(resumoDoImpacto(dois), '2 pedidos mudam de preferência; 1 perde “Só às 08:20”.');
+    assert.equal(resumoDoImpacto(dois), '2 pedidos mudam de preferência; 1 fica fora da lista (às 08:20).');
+    assert.equal(resumoDoImpacto({ mudam: [], foraDaLista: [{ nome: 'A', minuto: 500 }, { nome: 'B', minuto: 610 }] }), '2 ficam fora da lista.');
     // Os pedidos não mudam (o efeito só calcula)
     assert.equal(pedidos[1].pedido.jan, 'h500');
   });
