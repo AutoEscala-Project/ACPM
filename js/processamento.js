@@ -85,7 +85,7 @@ const minutoDaLinha = s => (s.janela === 'horario' && paraMinuto(s.horario) !== 
 // - aprovado, sem registro: entram (o aluno fora do cadastro: semAluno; inativo, com semInativos: inativos; guardado:
 //   dispensados, tirado desta data; numa data passada: naoEntrou; com a missão do curso e os programas não lidos, cursos
 //   null: esperamOsProgramas). Os que entram vão por aluno (a ordem do cadastro), pelo minuto pedido e pelo id: a missão
-//   do curso de cada um é ligada nessa ordem (missaoDaEntrada);
+//   do curso de cada um é ligada nessa ordem (missaoDaEntrada), os com a que escolheram na Agenda primeiro;
 // - aprovado, voando, não guardado: acertos.admitir (o id volta para importadas, sem linha no Histórico);
 // - aprovado, sem voar, não guardado: voltam (o registro volta a voar); guardado, o operador o tirou da escala: nada;
 // - cancelado ou com a aprovação retirada (aprovacao_retirada_em), voando: saem (motivo 'cancelado' ou 'sem-aprovacao'),
@@ -321,7 +321,8 @@ function textoDaSaida(estado, { nome, mis, motivo, linha, deixouDeSerFixo, entro
 // Aplica o plano de conciliarPedidos ao estado (o único que muda estado.importadas, além da importação feita sobre ele):
 // - acertos: o id admitido volta para importadas; o esquecido sai;
 // - voltam: o registro volta a voar (fly), e o id volta para importadas; nada mais dele muda;
-// - entram: cada pedido entra no dia (entrar), na ordem do plano;
+// - entram: cada pedido entra no dia (entrar), os com a missão do curso que escolheram na Agenda primeiro, cada grupo na
+//   ordem do plano; o que já tem registro (o plano aplicado de novo) não;
 // - saem: o registro deixa de voar e o id sai de importadas; o do pedido cancelado sai com a chave limpa (o voo fixo, o
 //   status e o detalhe), e o fixo do pedido sem a aprovação dorme (volta com ela).
 // Cada saída tem uma linha no Histórico (historico: [tipo, texto]). Com antes ({ estado, resultado }: a escala de antes,
