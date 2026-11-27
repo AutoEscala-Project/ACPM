@@ -7,11 +7,12 @@ import { runAllocationEngine } from '../../js/engine.js';
 import { noturnosDaVespera, comRepousoDoNoturno, repousoAntesDaVolta, historicoDoDia, voltasConferem, voltasQueMudaram } from '../../js/noturno.js';
 import { fixosAoMudarStatus, fixosAoAprovar, fixosAoReabrir, pinosDoNoturno } from '../../js/fixos.js';
 import { normalizarHangar, moverNoHangar } from '../../js/hangar.js';
+import { estadoParaEscalar } from '../../js/inativos.js';
 import { FROTA_INICIAL } from '../../js/frota.js';
 import { gerarCenario, comVolta, mulberry32 } from '../helpers/cenarios.js';
 import { filasDoDiaSeguinte } from '../../js/rodizio.js';
 import { normalizarLimites, LIMITES_DA_LEI } from '../../js/limites.js';
-import { normalizarLinhaGravada } from '../../js/escala-gravada.js';
+import { normalizarLinhaGravada, normalizarEscalaGravada } from '../../js/escala-gravada.js';
 import { ApiClient } from '../../js/storage.js';
 import { ESQUEMA } from '../../js/migracoes.js';
 import { separar } from '../../js/dias.js';
@@ -375,6 +376,40 @@ describe('Noturno: o mesmo avião na volta (ApiClient, com o backend na memória
     const seguinte = await abrir(D2);
     assert.deepEqual([seguinte.escala, seguinte.tela.out.filter(o => o.trecho)], [null, []]);
     assert.equal(voltasQueMudaram(seguinte.voltasDeAntes, seguinte.estado.noturnosDaVespera), 'Volta do Noturno (o Noturno de ontem mudou): Aluno 1000: a volta saiu da escala');
+  });
+});
+
+// A volta do noturno de ontem fica no avião e com o INVA do Noturno (o avião está em BH): o que não está bem com eles hoje
+// é um aviso, nunca outro avião. O motor de antes do F1h (o da gravação da conferência) não avisa
+describe('Noturno: a volta com o avião ou o INVA indisponível', () => {
+  const estado = (alterar = e => e) => alterar(diaSeguinte({ ins: [instrutor(1, 9), instrutor(2, 9)], stu: [aluno(1000, { fly: false })] }));
+  const avisos = e => runAllocationEngine(e).al.filter(a => a.codigo === 'volta-do-noturno');
+  const volta = e => runAllocationEngine(e).out.find(o => o.trecho === 'volta');
+  const casos = {
+    'o avião indisponível (em manutenção)': [e => ({ ...e, av: { ...e.av, 'PR-HAR': false } }), 'o avião está indisponível hoje'],
+    'o avião inativo': [e => estadoParaEscalar({ ...e, frota: FROTA_INICIAL.map(f => (f.reg === 'PR-HAR' ? { ...f, inativo: true } : f)) }, { data: '2026-12-02', hoje: '2026-12-01' }), 'o avião está inativo'],
+    'o avião sem saldo até a revisão de 50 horas': [e => ({ ...e, horas: { ...e.horas, 'PR-HAR': 49.5 } }), 'o avião passaria da revisão de 50 horas'],
+    'o INVA inativo': [e => estadoParaEscalar({ ...e, ins: e.ins.map(x => (x.id === 1 ? { ...x, inativo: true } : x)) }, { data: '2026-12-02', hoje: '2026-12-01' }), 'o INVA (Instrutor 01) está inativo'],
+    'o INVA que não vem nesta data': [e => ({ ...e, ins: e.ins.map(x => (x.id === 1 ? { ...x, on: false } : x)) }), 'o INVA (Instrutor 01) não está disponível nesta data']
+  };
+  for (const [rotulo, [alterar, motivo]] of Object.entries(casos)) {
+    it(`${rotulo}: a volta fica no PR-HAR, com o aviso`, () => {
+      const e = estado(alterar);
+      assert.deepEqual([volta(e).r, volta(e).insId], ['PR-HAR', 1]);
+      assert.deepEqual(avisos(e), [{ t: 'warn', s: 'Aluno 1000', codigo: 'volta-do-noturno', stuId: 1000, insId: 1, m: `A volta do Noturno de Aluno 1000 fica no PR-HAR (o avião está em BH): ${motivo}.` }]);
+      // O motor de antes do F1h não avisa; a escala gravada aceita o aviso
+      assert.deepEqual(runAllocationEngine(e, { antesDoF1h: true }).al.filter(a => a.codigo === 'volta-do-noturno'), []);
+      const r = runAllocationEngine(e);
+      assert.deepEqual(normalizarEscalaGravada(r), r);
+    });
+  }
+
+  it('tudo junto: um aviso só, com os motivos; a volta cancelada não avisa; com tudo bem, nada', () => {
+    const e = estado(casos['o avião indisponível (em manutenção)'][0]);
+    e.ins = e.ins.map(x => (x.id === 1 ? { ...x, on: false } : x));
+    assert.deepEqual(avisos(e).map(a => a.m), ['A volta do Noturno de Aluno 1000 fica no PR-HAR (o avião está em BH): o avião está indisponível hoje; o INVA (Instrutor 01) não está disponível nesta data.']);
+    assert.deepEqual(avisos({ ...e, fStatus: { '1000_0_2': 'Cancelado' } }), []);
+    assert.deepEqual(avisos(estado()), []);
   });
 });
 

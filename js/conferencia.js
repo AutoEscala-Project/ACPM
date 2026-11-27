@@ -22,6 +22,7 @@ import { normalizarLimites } from './limites.js';
 import { chaveDoVoo, statusDoVoo, umPorUnidade, pedidosDosVoos, pedidoDoAluno, ocupacaoDoVoo, compromissoDoVoo } from './voo.js';
 import { menorPrimeiro } from './util.js';
 import { pinoDoVoo, pinosDoNoturnoQueValem } from './fixos.js';
+import { inativo } from './inativos.js';
 import { rejeicoesDosPedidos } from './rejeicoes.js';
 
 // A duração (em minutos) do voo de um pedido: o Ground tem 01h30; o voo, as horas do pedido
@@ -539,10 +540,29 @@ function avisosDeLimite(out, state, limites, historico) {
   return avisos;
 }
 
+// A volta do noturno de ontem fica no avião e com o INVA do Noturno (o avião está em BH): o que não está bem com eles hoje
+// é um aviso, nunca outro avião. Os motivos: o avião saiu da frota, está inativo, indisponível (em manutenção) ou passaria
+// da revisão de 50 horas; o INVA saiu do cadastro, está inativo ou não está disponível nesta data
+function motivosDaVolta(state, ctx, o) {
+  const motivos = [];
+  const recurso = recursoDaFrota(ctx.frota, o.r);
+  if (!recurso) motivos.push('o avião saiu da frota');
+  else if (inativo(recurso)) motivos.push('o avião está inativo');
+  else if ((state.av || {})[o.r] === false) motivos.push('o avião está indisponível hoje');
+  if (recurso && !cabeNoSaldo(0, o.h, ctx.saldo(o.r))) motivos.push('o avião passaria da revisão de 50 horas');
+  const x = ctx.instrutorPorId.get(o.insId);
+  if (!x) motivos.push(`o INVA (${o.ins}) saiu do cadastro`);
+  else if (inativo(x)) motivos.push(`o INVA (${x.nm}) está inativo`);
+  else if (!x.on) motivos.push(`o INVA (${x.nm}) não está disponível nesta data`);
+  return motivos;
+}
+
 // O que o motor confere depois de montar a escala, sem mover nenhum voo: o instrutor escolhido que saiu do cadastro, o 7º
-// voo local confirmado, os limites da lei, o repouso antes da volta do noturno, a revisão de 50 horas, o tamanho e a
-// etiqueta das turmas, a ordem das linhas e os atrasos. Muda out e al; devolve a revisão de cada avião
-export function concluirEscala(state, ctx, out, al) {
+// voo local confirmado, os limites da lei, a volta do noturno num avião ou com um INVA que não está bem hoje, o repouso
+// antes da volta do noturno, a revisão de 50 horas, o tamanho e a etiqueta das turmas, a ordem das linhas e os atrasos.
+// Muda out e al; devolve a revisão de cada avião. opcoes.antesDoF1h: sem o aviso da volta do noturno (o motor que gravou
+// test/fixtures/conferencia-do-motor.json não o tinha)
+export function concluirEscala(state, ctx, out, al, { antesDoF1h = false } = {}) {
   const { limites, historico, horas } = ctx;
   // O voo do pedido cujo instrutor escolhido saiu do cadastro: o aviso diz quem ficou com ele (o voo fixo fica com o
   // conflito dele)
@@ -573,6 +593,15 @@ export function concluirEscala(state, ctx, out, al) {
     });
   }
   al.push(...avisosDeLimite(out, state, limites, historico));
+  // A volta do noturno de ontem num avião ou com um INVA que não está bem hoje (sem a volta cancelada): um aviso por volta
+  for (const o of antesDoF1h ? [] : out.filter(v => v.trecho === 'volta' && statusDoVoo(v, state.fStatus) !== 'Cancelado')) {
+    const motivos = motivosDaVolta(state, ctx, o);
+    if (!motivos.length) continue;
+    al.push({
+      t: 'warn', s: o.s, codigo: 'volta-do-noturno', stuId: o.stuId, insId: o.insId,
+      m: `A volta do Noturno de ${o.s} fica no ${o.r} (o avião está em BH): ${motivos.join('; ')}.`
+    });
+  }
   // O repouso antes da volta do noturno (a lei pede 12 h; o noturno termina às 21:30 e a volta decola às 07:30): um aviso
   // por instrutor, quando a volta não foi cancelada
   for (const o of out.filter(v => v.trecho === 'volta' && statusDoVoo(v, state.fStatus) !== 'Cancelado')) {
