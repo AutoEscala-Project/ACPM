@@ -70,7 +70,7 @@ test.describe('Recursos', () => {
     await abrirSintetico(page);
     await irPara(page, 'rec');
     await fecharHorarios(page, { de: '11:30', ate: '12:40' });
-    await expect(horariosFechados(page).locator('li')).toHaveText(['11:30–12:40 · todos os recursos']);
+    await expect(horariosFechados(page).locator('li > span')).toHaveText(['11:30–12:40 · todos os recursos']);
     await expect(page.locator('#audit-log-list')).toContainText('Horários fechados nesta data: 11:30–12:40 (todos os recursos)');
   });
 });
@@ -196,7 +196,7 @@ test.describe('Recursos: acrescentar e retirar', () => {
   // Duas vistas, pelo escopo: a Disponibilidade do dia (o que vale para a data aberta: as janelas, os aviões e
   // simuladores e, ao lado da tabela, o hangar) e o Cadastro (o que vale para todas as datas: a frota e os horários de
   // decolagem). Todos os ids continuam na página, e a vista escolhida fica ao voltar à aba, até a página recarregar
-  comHangar('Recursos em duas vistas: a Disponibilidade do dia (janelas, aviões e simuladores, hangar) e o Cadastro (frota e horários, para todas as datas)', async ({ page }) => {
+  comHangar('Recursos em duas vistas: a Disponibilidade do dia (horários fechados, aviões e simuladores, hangar) e o Cadastro (frota e horários, para todas as datas)', async ({ page }) => {
     await abrirSintetico(page);
     await irPara(page, 'rec');
     const secao = page.locator('#s-rec');
@@ -206,7 +206,7 @@ test.describe('Recursos: acrescentar e retirar', () => {
     await expect(secao.locator('[data-vista-rec="dia"]')).toHaveAttribute('aria-pressed', 'true');
     await expect(secao.locator('[data-vista-rec="cadastro"]')).toHaveAttribute('aria-pressed', 'false');
     await expect(dia.locator('h3')).toContainText('Nesta data');
-    for (const id of ['#wins', '#eqs', '#revisao', '#hangar']) await expect(dia.locator(id)).toBeVisible();
+    for (const id of ['#fechamentos', '#eqs', '#revisao', '#hangar']) await expect(dia.locator(id)).toBeVisible();
     for (const id of ['#frota', '#horarios', '#form-recurso']) await expect(cadastro.locator(id)).toHaveCount(1);
     await expect(cadastro).toBeHidden();
     // A barra da aba (as vistas, a busca, as categorias, a contagem e "+ Novo recurso") vale para as duas vistas

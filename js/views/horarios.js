@@ -1,5 +1,5 @@
 // Horários de decolagem na aba Recursos. Cada categoria mostra um resumo (o modelo, quantos horários e os horários da
-// manhã e da tarde, com o da janela fechada nesta data riscado) e um botão "Editar". O editor abre na própria linha,
+// manhã e da tarde, com o fechado nesta data riscado) e um botão "Editar". O editor abre na própria linha,
 // com uma cópia da lista (o rascunho): o modelo, os horários com ✕, um campo em que Enter põe o horário e o efeito nos
 // pedidos antes de salvar. Nada muda até "Salvar" (js/eventos/recursos.js); "Cancelar" e Esc descartam.
 //

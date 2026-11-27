@@ -25,8 +25,8 @@ export async function fecharHorarios(page, { de, ate, diaTodo = false, categoria
   await expect(form).toBeVisible();
   if (diaTodo) await form.locator('[data-act="fch-dia-todo"]').click();
   else {
-    await form.getByLabel('De', { exact: true }).selectOption({ label: de });
-    await form.getByLabel('Até', { exact: true }).selectOption({ label: ate });
+    await form.locator('#fch-de').selectOption({ label: de });
+    await form.locator('#fch-ate').selectOption({ label: ate });
   }
   for (const c of categorias) await form.locator(`input[data-cat="${c}"]`).check();
   await form.locator('[data-act="fch-fechar"]').click();

@@ -18,7 +18,7 @@ test.describe('Horários fechados nesta data', () => {
     await expect(secao).toContainText('Nenhum horário fechado nesta data.');
 
     await fecharHorarios(page, { de: '12:40', ate: '17:30' });
-    await expect(secao.locator('li')).toHaveText(['12:40–17:30 · todos os recursos']);
+    await expect(secao.locator('li > span')).toHaveText(['12:40–17:30 · todos os recursos']);
     await expect(page.locator('#audit-log-list')).toContainText('Horários fechados nesta data: 12:40–17:30 (todos os recursos)');
     await irParaVista(page, 'rec', 'cadastro');
     await expect(page.locator('#horarios [data-cat="C152"] .hr.fechado')).toHaveText(['12:40 (fechado nesta data)', '13:40 (fechado nesta data)', '14:30 (fechado nesta data)', '16:20 (fechado nesta data)']);
@@ -37,7 +37,7 @@ test.describe('Horários fechados nesta data', () => {
     await page.locator('#audit-log-list button[data-act="rev-log"]').first().click();
     await page.keyboard.press('Escape');
     await irPara(page, 'rec');
-    await expect(secao.locator('li')).toHaveText(['12:40–17:30 · todos os recursos']);
+    await expect(secao.locator('li > span')).toHaveText(['12:40–17:30 · todos os recursos']);
   });
 
   test('um fechamento só do C152 deixa o C172; "O dia todo" fecha o dia inteiro', async ({ page }) => {
@@ -45,13 +45,13 @@ test.describe('Horários fechados nesta data', () => {
     await irPara(page, 'rec');
     const secao = horariosFechados(page);
     await fecharHorarios(page, { de: '12:40', ate: '17:30', categorias: ['C152'] });
-    await expect(secao.locator('li')).toHaveText(['12:40–17:30 · C152']);
+    await expect(secao.locator('li > span')).toHaveText(['12:40–17:30 · C152']);
     await abrirEscala(page);
     expect(await inicioDe(page, 'Aluno 1000') < '12:40').toBe(true);
     expect(await inicioDe(page, 'Aluno 1001')).toBe('13:40');
     await irPara(page, 'rec');
     await fecharHorarios(page, { diaTodo: true, categorias: ['C172'] });
-    await expect(secao.locator('li')).toHaveText(['06:00–24:00 · C172', '12:40–17:30 · C152']);
+    await expect(secao.locator('li > span')).toHaveText(['06:00–24:00 · C172', '12:40–17:30 · C152']);
     await abrirEscala(page);
     expect(await inicioDe(page, 'Aluno 1001')).toBe('');
   });
@@ -65,12 +65,12 @@ test.describe('Horários fechados nesta data', () => {
     await page.keyboard.press('Enter');
     const form = secao.locator('.fechar-horarios');
     await expect(form).toBeVisible();
-    await form.getByLabel('De', { exact: true }).selectOption({ label: '12:40' });
-    await form.getByLabel('Até', { exact: true }).selectOption({ label: '17:30' });
+    await form.locator('#fch-de').selectOption({ label: '12:40' });
+    await form.locator('#fch-ate').selectOption({ label: '17:30' });
     await expect(form.locator('[role="status"]')).toContainText('Fecha 4 horários do C152');
     await form.locator('input[data-cat="ground"]').check();
     await expect(form.locator('[role="status"]')).toHaveText('Fecha 4 horários da Sala Ground.');
-    await form.getByLabel('Até', { exact: true }).selectOption({ label: '10:00' });
+    await form.locator('#fch-ate').selectOption({ label: '10:00' });
     await expect(form.locator('[role="status"]')).toHaveText('O Até vem depois do De.');
     await expect(form.locator('[data-act="fch-fechar"]')).toBeDisabled();
     await page.keyboard.press('Escape');
