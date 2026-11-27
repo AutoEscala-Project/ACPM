@@ -25,7 +25,7 @@ import { chaveDoVoo, statusDoVoo, pedidoDoAluno, ocupacaoDoVoo } from './voo.js'
 import { CAMPOS_DO_PEDIDO } from './dias.js';
 import { runAllocationEngine } from './engine.js';
 import { naOrdemDoMotor, rejeicoesDosPedidos } from './rejeicoes.js';
-import { CODIGOS_DO_AGENDADO, GRUPO_DO_CONFLITO } from './conflitos.js';
+import { CODIGOS_DO_AGENDADO, GRUPO_DO_CONFLITO, FORA_DA_ESCALA } from './conflitos.js';
 import { fixoPeloStatus, motivoDoFixo } from './fixos.js';
 import { STATUS_EM_ANDAMENTO, rotuloDoStatus, intervaloEfetivo } from './status.js';
 import { pesoECombustivel, textoDoCombustivel } from './combustivel.js';
@@ -192,17 +192,6 @@ function missoesNoDia(estado, base, curso, stu, a, mid = null) {
   };
 }
 
-// O motivo curto de o pedido ter ficado fora da escala, pelo código da rejeição do motor
-const FORA_DA_ESCALA = {
-  'equipamento-da-missao': 'a missão não voa nesse tipo de avião', 'ground-pendente': 'o Ground antes dele ficou fora',
-  'ground-antes-do-voo-fixo': 'sem horário antes do voo fixo', 'so-parafuso': 'sem o avião do Parafuso', 'sem-aviao': 'sem avião disponível',
-  'sem-instrutor-habilitado': 'sem instrutor habilitado', 'disponibilidade-do-aluno': 'fora da disponibilidade do aluno',
-  'depois-do-ground': 'sem horário depois do Ground', 'sem-horario': 'sem horário aberto', 'aluno-ocupado': 'o aluno já voa nos horários',
-  'avioes-ocupados': 'sem avião livre', 'sala-ocupada': 'a sala de Ground ocupada', revisao: 'sem saldo até a revisão de 50 h',
-  'instrutores-indisponiveis': 'sem instrutor disponível', 'instrutores-ocupados': 'sem instrutor livre', bloqueio: 'em Não escalar com',
-  'limite-da-lei': 'o limite da lei', peso: 'o peso acima do limite', 'limite-de-locais': 'o limite de voos locais no horário',
-  'instrutor-escolhido': 'o instrutor escolhido não serve', 'habilitacao-do-aviao': 'sem a habilitação própria do avião'
-};
 // As recusas da base ligadas aos pedidos (js/rejeicoes.js), uma vez por base
 const recusasDaBase = new WeakMap();
 const recusasDe = (estado, base) => {

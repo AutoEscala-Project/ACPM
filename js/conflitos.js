@@ -80,3 +80,15 @@ export const CODIGOS_DE_REJEICAO = [
   'instrutores-indisponiveis', 'instrutores-ocupados', 'bloqueio', 'limite-da-lei', 'peso', 'limite-de-locais', 'instrutor-escolhido',
   'habilitacao-do-aviao'
 ];
+// O motivo curto de o pedido ter ficado fora da escala, pelo código da rejeição do motor (um para cada código acima): o
+// agendamento o lê (js/agendamento.js) e, do G em diante, o Processamento
+export const FORA_DA_ESCALA = {
+  'equipamento-da-missao': 'a missão não voa nesse tipo de avião', 'ground-pendente': 'o Ground antes dele ficou fora',
+  'ground-antes-do-voo-fixo': 'sem horário antes do voo fixo', 'so-parafuso': 'sem o avião do Parafuso', 'sem-aviao': 'sem avião disponível',
+  'sem-instrutor-habilitado': 'sem instrutor habilitado', 'disponibilidade-do-aluno': 'fora da disponibilidade do aluno',
+  'depois-do-ground': 'sem horário depois do Ground', 'sem-horario': 'sem horário aberto', 'aluno-ocupado': 'o aluno já voa nos horários',
+  'avioes-ocupados': 'sem avião livre', 'sala-ocupada': 'a sala de Ground ocupada', revisao: 'sem saldo até a revisão de 50 h',
+  'instrutores-indisponiveis': 'sem instrutor disponível', 'instrutores-ocupados': 'sem instrutor livre', bloqueio: 'em Não escalar com',
+  'limite-da-lei': 'o limite da lei', peso: 'o peso acima do limite', 'limite-de-locais': 'o limite de voos locais no horário',
+  'instrutor-escolhido': 'o instrutor escolhido não serve', 'habilitacao-do-aviao': 'sem a habilitação própria do avião'
+};
