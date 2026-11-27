@@ -41,6 +41,10 @@ const SIMULADORES_RENOMEADOS = { 'SIM-MONO-1': 'SIM-MONO-A', 'SIM-MONO-2': 'SIM-
 export const renomearSimulador = r => (Object.hasOwn(SIMULADORES_RENOMEADOS, r) ? SIMULADORES_RENOMEADOS[r] : r);
 
 // O pedido no formato 28 (J): sem os períodos do dia; o hN e a preferência de 0 a 8 de antes no horário da janela
+// O win gravado como a data aberta o lia antes do 28 (js/storage.js, normalizeAndMigrateState, antes de o motor ver o
+// estado): com outro tamanho, o dia todo aberto; nas nove posições, só false fecha a janela (null, 0 e o resto abrem)
+const winComoOAppLia = win => (win.length === INICIOS_DOS_TEMPOS.length ? win.map(v => v !== false) : INICIOS_DOS_TEMPOS.map(() => true));
+
 const PERIODOS_ANTIGOS = ['manha', 'tarde', 'noite'];
 const ULTIMA_JANELA = INICIOS_DOS_TEMPOS.length - 1;
 const janelaAntiga = p => Number.isInteger(p) && p >= 0 && p <= ULTIMA_JANELA;
@@ -263,7 +267,7 @@ const PASSOS = {
     cadastro: cadastro => cadastro,
     dia: dia => {
       let novo = dia;
-      if (Array.isArray(dia.win) && !Array.isArray(dia.fechamentos)) novo = { ...novo, fechamentos: fechamentosDoWin(dia.win) };
+      if (Array.isArray(dia.win) && !Array.isArray(dia.fechamentos)) novo = { ...novo, fechamentos: fechamentosDoWin(winComoOAppLia(dia.win)) };
       if (dia.pedidos && typeof dia.pedidos === 'object') {
         novo = { ...novo, pedidos: Array.isArray(dia.pedidos) ? dia.pedidos.map(pedidoDoFormato28)
           : Object.fromEntries(Object.entries(dia.pedidos).map(([id, p]) => [id, pedidoDoFormato28(p)])) };

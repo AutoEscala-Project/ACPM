@@ -257,7 +257,7 @@ describe('Formato 26', () => {
 
   it('o dia não muda', () => {
     const dia = { esquema: 25, win: [true], av: { 'PR-VOM': true } };
-    assert.deepEqual(migrarDia(dia), { ...dia, fechamentos: fechamentosDoWin(dia.win), esquema: ESQUEMA });
+    assert.deepEqual(migrarDia(dia), { ...dia, fechamentos: [], esquema: ESQUEMA });
   });
 });
 
@@ -280,8 +280,8 @@ describe('Formato 27', () => {
 
   it('o dia não muda', () => {
     const dia = { esquema: 26, win: [true], pedidos: [{ id: 1000, fly: true, mis: 'Voo Local', limiteConfirmado: true }] };
-    // O 27 não muda o dia; o 28 (J) acrescenta os fechamentos do win
-    assert.deepEqual(migrarDia(structuredClone(dia)), { ...dia, fechamentos: fechamentosDoWin(dia.win), esquema: ESQUEMA });
+    // O 27 não muda o dia; o 28 (J) acrescenta os fechamentos do win (um win de uma posição era lido como tudo aberto)
+    assert.deepEqual(migrarDia(structuredClone(dia)), { ...dia, fechamentos: [], esquema: ESQUEMA });
   });
 });
 
@@ -307,8 +307,10 @@ describe('versão 28 (J): o dia', () => {
     }
   });
 
-  test('o win fora do padrão fecha como o motor lia (curto, null)', () => {
-    assert.deepEqual(dia28({ win: [true, true, true, true, null, true, true, true] }).fechamentos, [{ de: T[4], ate: T[5] }, { de: T[8], ate: 1440 }]);
+  // O win como a data aberta o lia (normalizeAndMigrateState, antes do motor): com outro tamanho, tudo aberto; só false fecha
+  test('o win fora do padrão fecha o que a data aberta fechava (curto: nada; null ou 0: aberto)', () => {
+    assert.deepEqual(dia28({ win: [true, true, true, true, null, true, true, true] }).fechamentos, []);
+    assert.deepEqual(dia28({ win: [true, true, 0, true, null, true, true, true, false] }).fechamentos, [{ de: T[8], ate: 1440 }]);
   });
 
   test('sem win (um dia que nunca o teve): nada de fechamentos, os leitores abrem tudo', () => {
