@@ -623,6 +623,19 @@ describe('O motivo sem a prioridade', () => {
     const noFim = { ...resultado, al: [{ t: 'err', s: 'Aluno 1', codigo: 'avioes-ocupados', m: 'Rejeitado: nenhum C152 livre nos horários possíveis (ocupados por pedidos de prioridade maior).' }] };
     assert.equal(semAPrioridadeNosMotivos(noFim).al[0].m, 'Rejeitado: nenhum C152 livre nos horários possíveis.');
   });
+
+  // A disputa do “Priorizar com” (F1h) não diz o número da prioridade (a tela a mostra ao contrário, 1 a mais alta: o
+  // motor não sabe): "prioridade maior"; com a mesma, só a chave que decidiu. A escala gravada com a prioridade ligada
+  // aparece sem ela
+  it('a disputa do “Priorizar com” gravada com a prioridade maior aparece sem ela', () => {
+    const m = 'Aluno 1000 e Aluno 1001 priorizam Instrutor 01 às 08:20: ficou com Aluno 1001 (prioridade maior); Aluno 1000 voa às 10:10.';
+    const outro = { t: 'warn', s: 'Aluno 2', codigo: 'voa-com', m: 'Aluno 2 e Aluno 3 priorizam Instrutor 01 às 08:20: ficou com Aluno 3 (pedido registrado antes); Aluno 2 voa às 10:10.' };
+    const resultado = { out: [], tot: 0, al: [{ t: 'warn', s: 'Aluno 1000', codigo: 'voa-com', m }, outro] };
+    const sem = semAPrioridadeNosMotivos(resultado);
+    assert.equal(sem.al[0].m, 'Aluno 1000 e Aluno 1001 priorizam Instrutor 01 às 08:20: ficou com Aluno 1001; Aluno 1000 voa às 10:10.');
+    assert.equal(sem.al[1], outro);
+    assert.equal(resultado.al[0].m, m);
+  });
 });
 
 // F1d, "missão do curso": o pedido com a missão do curso leva o que ela exige do INVA (exige, derivado no estado da escala
@@ -1123,17 +1136,17 @@ describe('As disputas do “Priorizar com”', () => {
 
   it('o outro fica com o INVA em outro horário: o aviso diz quem ficou com o horário e por quê', () => {
     assert.deepEqual(doPar(dupla({ pr: 3 }, { pr: 4 }).al), [
-      ['1000_0_1', 1000, 1, 'Aluno 1000 e Aluno 1001 priorizam Instrutor 01 às 08:20: ficou com Aluno 1001 (prioridade 4); Aluno 1000 voa às 10:10.']
+      ['1000_0_1', 1000, 1, 'Aluno 1000 e Aluno 1001 priorizam Instrutor 01 às 08:20: ficou com Aluno 1001 (prioridade maior); Aluno 1000 voa às 10:10.']
     ]);
     assert.deepEqual(doPar(dupla({ solicitacao: 9 }, { solicitacao: 5 }).al).map(a => a[3]),
-      ['Aluno 1000 e Aluno 1001 priorizam Instrutor 01 às 08:20: ficou com Aluno 1001 (prioridade 3, pedido registrado antes); Aluno 1000 voa às 10:10.']);
+      ['Aluno 1000 e Aluno 1001 priorizam Instrutor 01 às 08:20: ficou com Aluno 1001 (pedido registrado antes); Aluno 1000 voa às 10:10.']);
     assert.deepEqual(doPar(dupla().al).map(a => a[3]),
-      ['Aluno 1001 e Aluno 1000 priorizam Instrutor 01 às 08:20: ficou com Aluno 1000 (prioridade 3, antes no cadastro); Aluno 1001 voa às 10:10.']);
+      ['Aluno 1001 e Aluno 1000 priorizam Instrutor 01 às 08:20: ficou com Aluno 1000 (antes no cadastro); Aluno 1001 voa às 10:10.']);
   });
 
   it('sem outro horário possível, com outro INVA: a disputa vai dentro do aviso de sempre (um aviso só)', () => {
     assert.deepEqual(doPar(dupla({}, { jan: 'h500', p2: -1 }).al), [
-      ['1001_0_1', 1001, 2, 'Sem o instrutor de “Priorizar com” (Instrutor 01: ocupado nos horários possíveis): o voo ficou com Instrutor 02. Aluno 1001 e Aluno 1000 priorizam Instrutor 01 às 08:20: ficou com Aluno 1000 (prioridade 3, antes no cadastro).']
+      ['1001_0_1', 1001, 2, 'Sem o instrutor de “Priorizar com” (Instrutor 01: ocupado nos horários possíveis): o voo ficou com Instrutor 02. Aluno 1001 e Aluno 1000 priorizam Instrutor 01 às 08:20: ficou com Aluno 1000 (antes no cadastro).']
     ]);
   });
 
@@ -1155,7 +1168,7 @@ describe('As disputas do “Priorizar com”', () => {
   it('o horário pedido é o minuto exato do pedido antes da 1ª preferência', () => {
     // O 1000 pede só as 10:10 (1ª preferência às 06:30, quando o INVA está livre): a disputa é a das 10:10
     assert.deepEqual(doPar(dupla({ pr: 3, jan: 'h610', p1: 0, p2: -1 }, { pr: 4, p1: 2, p2: -1 }).al).map(a => a[3]),
-      ['Sem o instrutor de “Priorizar com” (Instrutor 01: ocupado nos horários possíveis): o voo ficou com Instrutor 02. Aluno 1000 e Aluno 1001 priorizam Instrutor 01 às 10:10: ficou com Aluno 1001 (prioridade 4).']);
+      ['Sem o instrutor de “Priorizar com” (Instrutor 01: ocupado nos horários possíveis): o voo ficou com Instrutor 02. Aluno 1000 e Aluno 1001 priorizam Instrutor 01 às 10:10: ficou com Aluno 1001 (prioridade maior).']);
   });
 
   it('Ground: dois Grounds (uma sala só) do mesmo INVA no mesmo horário', () => {
@@ -1163,7 +1176,7 @@ describe('As disputas do “Priorizar com”', () => {
       ins, stu: [aluno(1000, { ...GROUND_C152, p1: 500, p2: -1, pr: 4 }, { voaCom: [1] }), aluno(1001, { mis: 'Ground C172', eq: 'Sala Ground', nb: 1.5, p1: 500, p2: -1 }, { voaCom: [1] })]
     }));
     assert.deepEqual(out.map(o => [o.stuId, o.a, o.insId]), [[1001, 390, 1], [1000, 500, 1]]);
-    assert.deepEqual(doPar(al), [['1001_0_1', 1001, 1, 'Aluno 1001 e Aluno 1000 priorizam Instrutor 01 às 08:20: ficou com Aluno 1000 (prioridade 4); Aluno 1001 voa às 06:30.']]);
+    assert.deepEqual(doPar(al), [['1001_0_1', 1001, 1, 'Aluno 1001 e Aluno 1000 priorizam Instrutor 01 às 08:20: ficou com Aluno 1000 (prioridade maior); Aluno 1001 voa às 06:30.']]);
   });
 
   // Achado pela busca em cenários aleatórios: antes da compactação, o Aluno 05 está com o Instrutor 06 às 08:20, o horário
@@ -1226,10 +1239,10 @@ describe('As disputas do “Priorizar com”', () => {
     const doisPares = caso([1, 2]);
     assert.deepEqual(doisPares.out.map(o => [o.stuId, o.a, o.insId]), [[1001, 500, 1], [1000, 610, 2]]);
     assert.deepEqual(doPar(doisPares.al), [
-      ['1000_0_1', 1000, 2, 'Aluno 1000 e Aluno 1001 priorizam Instrutor 01 às 08:20: ficou com Aluno 1001 (prioridade 4); Aluno 1000 voa às 10:10 com Instrutor 02.']
+      ['1000_0_1', 1000, 2, 'Aluno 1000 e Aluno 1001 priorizam Instrutor 01 às 08:20: ficou com Aluno 1001 (prioridade maior); Aluno 1000 voa às 10:10 com Instrutor 02.']
     ]);
     // Com o mesmo INVA, a frase de antes
-    assert.deepEqual(doPar(caso([1]).al).map(a => a[3]), ['Aluno 1000 e Aluno 1001 priorizam Instrutor 01 às 08:20: ficou com Aluno 1001 (prioridade 4); Aluno 1000 voa às 10:10.']);
+    assert.deepEqual(doPar(caso([1]).al).map(a => a[3]), ['Aluno 1000 e Aluno 1001 priorizam Instrutor 01 às 08:20: ficou com Aluno 1001 (prioridade maior); Aluno 1000 voa às 10:10.']);
   });
 
   // Revisão do F1h (N9: o operador que escala contra o “Priorizar com”): o INVA escolhido para o dia na Demanda é uma escolha
