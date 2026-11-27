@@ -2,7 +2,7 @@
 // volta, quem sai e quem fica), a missão do curso com que cada pedido entra e a importação para a demanda da data (o botão
 // "Importar da agenda", na Demanda e na Agenda; js/eventos/importacao.js), feita sobre a conciliação. Puro: sem DOM, sem
 // relógio, sem rede e sem S; recebe o estado da data e os pedidos e muda só o estado
-import { migrateLegacyMissionName, alvoDoNovoPedido } from './rules.js';
+import { migrateLegacyMissionName, alvoDoNovoPedido, proximoMid, blank, PRIORIDADE_PADRAO } from './rules.js';
 import { pedidoDaSolicitacao, recursoValido, missaoDoCursoGuardada } from './agenda.js';
 import { indiceDoPrograma } from './programa.js';
 import { proximasMissoes, missoesDoDia } from './progresso.js';
@@ -184,8 +184,19 @@ export function missaoDaEntrada(estado, aluno, solicitacao, { programa = [], sit
   return { missao: { codigo: m.codigo, eq: m.eq, nb: m.nb }, curso: curso.sigla, de: 'programa', nota: null, foraDoPrograma };
 }
 
+// O registro que recebe o pedido que entra, como alvoDoNovoPedido (js/rules.js), com a guarda da identidade (decisão 2
+// do desenho): o principal que não voa mas é de outro pedido da agenda (solicitacao) não é dado a este, que vira uma
+// missão extra nova; o registro de um pedido é o voo dele, também fora da escala
+function alvoDaEntrada(estado, aluno) {
+  if (aluno.fly || aluno.solicitacao === undefined) return alvoDoNovoPedido(estado, aluno);
+  const extra = { mid: proximoMid(estado, aluno), ...blank(), pr: aluno.pr || PRIORIDADE_PADRAO };
+  aluno.extra = [...(aluno.extra || []), extra];
+  return extra;
+}
+
 // Um pedido entra no dia: o voo da mesma missão posto à mão dá lugar a ele (vooQueDaLugar); senão, ele vai para o pedido
-// principal do aluno, quando ele não voa e o dia não guarda nada dele, ou para uma missão extra nova (alvoDoNovoPedido).
+// principal do aluno, quando ele não voa, não é de outro pedido e o dia não guarda nada dele, ou para uma missão extra
+// nova (alvoDaEntrada).
 // A missão do curso de missaoDaEntrada: a do pedido com o recurso e as horas do pedido (sem eles, os dela); a do operador
 // e a do programa com o recurso dele (os horários e as preferências são os desse recurso) e as horas dele, as registradas
 // na agenda valendo mais. O id do pedido vai para importadas. Devolve o que entrou
@@ -206,7 +217,7 @@ function entrar(estado, s, { programa, situacao, cursos }) {
     // O voo continua com o instrutor escolhido; a disponibilidade e a missão do curso passam a ser as do pedido
     for (const campo of ['jan', 'etapa', 'cursoDaEtapa', 'limiteConfirmado']) delete copiada[campo];
     registro = Object.assign(copiada, pedido);
-  } else registro = Object.assign(alvoDoNovoPedido(estado, aluno), pedido);
+  } else registro = Object.assign(alvoDaEntrada(estado, aluno), pedido);
   return {
     id: s.id, stuId: aluno.id, mid: registro.mid || 0, novo: !copiada, etapa: registro.etapa || null, nota: entrada.nota,
     ...(entrada.foraDoPrograma ? { foraDoPrograma: { missao: s.missao, entrouComo: registro.etapa || null } } : {}),
