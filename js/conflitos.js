@@ -19,6 +19,7 @@ export const GRUPO_DO_CONFLITO = {
   'so-vfr': 'aviao',
   revisao: 'aviao',
   'sala-ocupada': 'aviao',
+  'sala-indisponivel': 'aviao',
   'aluno-ocupado': 'horario',
   'horario-fechado': 'horario',
   disponibilidade: 'horario',
@@ -76,7 +77,7 @@ export const CODIGOS_DE_AVISO = ['sem-peso', 'perto-do-limite', 'revisao', 'atra
 // Os códigos das rejeições: por que o pedido ficou fora da escala, para dizer onde resolver
 export const CODIGOS_DE_REJEICAO = [
   'equipamento-da-missao', 'ground-pendente', 'ground-antes-do-voo-fixo', 'so-parafuso', 'sem-aviao', 'sem-instrutor-habilitado',
-  'disponibilidade-do-aluno', 'depois-do-ground', 'sem-horario', 'aluno-ocupado', 'avioes-ocupados', 'sala-ocupada', 'revisao',
+  'disponibilidade-do-aluno', 'depois-do-ground', 'sem-horario', 'aluno-ocupado', 'avioes-ocupados', 'sala-ocupada', 'sala-indisponivel', 'revisao',
   'instrutores-indisponiveis', 'instrutores-ocupados', 'bloqueio', 'limite-da-lei', 'peso', 'limite-de-locais', 'instrutor-escolhido',
   'habilitacao-do-aviao'
 ];

@@ -122,7 +122,7 @@ describe('O que pode voar no lugar do cancelado', () => {
     assert.equal(r.opcoes.at(-1), tipo);
   });
 
-  it('os períodos fechados valem também no mesmo horário: fechado o período do voo, nada nele, e o porquê diz isso', () => {
+  it('os horários fechados valem também no mesmo horário: fechado o horário do voo, nada nele, e o porquê diz isso', () => {
     // Cancelado pelo instrutor às 10:10, com outro instrutor livre; depois, o período das 10:10 fechado no dia
     const { estado, voo } = cancelado(cenario({ ins: [instrutor(1, 9), instrutor(2, 9)], stu: [aluno(1000, { p1: 610, p2: -1 })] }), 1000, 'Instrutor indisponível');
     assert.equal(hm(voo.a), '10:10');
@@ -131,11 +131,12 @@ describe('O que pode voar no lugar do cancelado', () => {
     const r = sugerirParaCancelado(estado, resultado, voo.fKey);
     assert.ok(r.opcoes.length > 0, 'os outros horários continuam');
     assert.ok(r.opcoes.every(o => o.mudancas.a !== voo.a), r.opcoes.map(o => o.texto).join(' | '));
-    // Sem nenhum outro período aberto: impossível, com o período fechado no mesmo horário
+    // Sem nenhum outro horário aberto: impossível, com o horário fechado no mesmo horário
     estado.win = estado.win.map(() => false);
     const nada = sugerirParaCancelado(estado, runAllocationEngine(estado), voo.fKey);
     assert.deepEqual(nada.opcoes, []);
-    assert.equal(nada.impossivel[0], 'No mesmo horário: o período está fechado.');
+    // Todas as janelas de antes fechadas: o dia todo fechado (fechamentosDoWin), e o texto diz o intervalo
+    assert.equal(nada.impossivel[0], 'No mesmo horário: o horário está fechado nesta data (00:00–24:00).');
   });
 
   it('o voo atrasado ocupa o avião e o instrutor no horário novo: nada sobre a nova decolagem dele', () => {
@@ -170,18 +171,18 @@ describe('O que pode voar no lugar do cancelado', () => {
   });
 });
 
-// "Impossível nesta data": o porquê de cada grupo é o que de fato impediu cada horário (o período fechado, o horário que
-// já passou, o aluno ocupado, nenhum avião ou instrutor), com os horários
+// "Impossível nesta data": o porquê de cada grupo é o que de fato impediu cada horário (o horário fechado nesta data, o
+// horário que já passou, o aluno ocupado, nenhum avião ou instrutor), com os horários
 describe('O porquê do impossível', () => {
-  it('todos os períodos fechados, com o avião e os instrutores livres: os outros horários e o outro tipo dizem o período', () => {
+  it('o dia todo fechado, com o avião e os instrutores livres: os outros horários e o outro tipo dizem que estão fechados', () => {
     const { estado, voo } = cancelado(cenario({ ins: [instrutor(1, 9), instrutor(2, 9)], stu: [aluno(1000, { p1: 610, p2: -1 })] }), 1000, 'Meteorologia');
     estado.win = estado.win.map(() => false);
     const r = sugerirParaCancelado(estado, runAllocationEngine(estado), voo.fKey);
     assert.deepEqual(r.opcoes, []);
     assert.equal(r.impossivel[0], 'No mesmo horário: o voo foi cancelado por meteorologia nele.');
-    assert.match(r.impossivel[1], /^Em outro horário: o período está fechado \(06:30, 08:20, 11:30/);
+    assert.match(r.impossivel[1], /^Em outro horário: o horário está fechado nesta data \(06:30, 08:20, 11:30/);
     assert.doesNotMatch(r.impossivel[1], /livres/);
-    assert.match(r.impossivel[2], /^Em outro tipo de recurso: no C172, o período está fechado \(06:30/);
+    assert.match(r.impossivel[2], /^Em outro tipo de recurso: no C172, o horário está fechado nesta data \(06:30/);
   });
 
   it('hoje, depois do último horário: os outros horários já passaram', () => {
@@ -369,13 +370,17 @@ describe('O pedido recusado pelo instrutor escolhido', () => {
 });
 
 describe('A disponibilidade do pedido e a lista do conflito', () => {
-  it('o horário dentro da disponibilidade vem antes do mais perto fora dela', () => {
-    // O voo das 11:30, disponível só de manhã, cancelado pela meteorologia: as 10:10 (manhã) antes das 12:40 (tarde)
-    const { estado, resultado, voo } = cancelado(cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, { p1: 690, p2: -1, jan: 'manha' })] }), 1000, 'Meteorologia');
+  // J (N13): a disponibilidade é o horário exato do pedido; fora dele, a sugestão pede a confirmação com o aluno
+  it('o pedido com horário exato cancelado no horário dele: todo outro horário pede a confirmação com o aluno', () => {
+    // O voo das 11:30 (o pedido da Agenda às 11:30), cancelado pela meteorologia: o mesmo horário não serve
+    const { estado, resultado, voo } = cancelado(cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, { p1: 690, p2: -1, jan: 'h690' })] }), 1000, 'Meteorologia');
     assert.equal(hm(voo.a), '11:30');
-    const [primeira] = sugerirParaCancelado(estado, resultado, voo.fKey).opcoes;
-    assert.equal(hm(primeira.mudancas.a), '10:10');
-    assert.equal(primeira.confirmar, undefined);
+    const opcoes = sugerirParaCancelado(estado, resultado, voo.fKey).opcoes;
+    assert.ok(opcoes.length > 0);
+    for (const o of opcoes) {
+      assert.notEqual(o.mudancas.a, voo.a);
+      assert.match(o.confirmar, /^Confirme com o aluno: às \d\d:\d\d, fora da disponibilidade do pedido[.,]/, o.texto);
+    }
   });
 
   it('o conflito sem nada no mesmo horário nem depois ganha o horário mais perto antes, dentro da disponibilidade', () => {
@@ -401,9 +406,9 @@ describe('A disponibilidade do pedido e a lista do conflito', () => {
 // do pedido e outro tipo de recurso, os dois com a confirmação com o aluno. Aplicada, a sugestão muda o voo fixo e o
 // pedido (a disponibilidade, o tipo), e desfeita devolve os dois como estavam
 describe('O conflito: outro tipo e o horário fora da disponibilidade', () => {
-  // O voo das 08:20, de quem só pode de manhã, fixo com o único instrutor, que agora só vem à tarde: nada de manhã
+  // O voo das 08:20, do pedido da Agenda às 08:20, fixo com o único instrutor, que agora só vem à tarde: nada às 08:20
   function conflitoDeManha() {
-    const base = cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, { p1: 500, p2: -1, jan: 'manha' })] });
+    const base = cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, { p1: 500, p2: -1, jan: 'h500' })] });
     const v0 = runAllocationEngine(base).out[0];
     const aw = Array(9).fill(true); for (let w = 0; w < 4; w++) aw[w] = false;
     const estado = { ...base, fixos: { [v0.fKey]: pinoDoVoo(v0) }, fObs: {}, ins: [instrutor(1, 9, { aw })] };
@@ -490,6 +495,28 @@ describe('O que a sugestão muda nos outros voos', () => {
     assert.ok(opcao);
     assert.deepEqual(opcao.muda, ['1000_0_1', '1002_0_1']);
     assert.match(opcao.confirmar, /^Muda também 2 outros voos: Aluno 1000, das 06:30 para as 08:20, com Instrutor 02; Aluno 1002, das 06:30 para as 08:20, com Instrutor 02\.$/);
+  });
+
+  it('com a Sala Ground indisponível na data (S4), nenhum horário de Ground; sem a chave da sala, os de sempre', () => {
+    const g = { ...GROUND_C152, p1: 390, p2: -1 };
+    const base = cenario({ ins: [instrutor(1, 9), instrutor(2, 9)], stu: [aluno(1000, g), aluno(1001, g), aluno(1002, g)] });
+    const v = runAllocationEngine(base).out, v1 = v.find(o => o.stuId === 1001);
+    const aprovado = av => ({ ...base, av, fixos: fixosAoAprovar({}, v), aprovacao: { em: '2026-11-10T21:05:00.000Z', por: 'Operador 01' }, fStatus: { [v1.fKey]: 'Cancelado' }, fObs: { [v1.fKey]: { motivo: 'Instrutor indisponível' } } });
+    const comHorario = estado => sugerirParaCancelado(estado, runAllocationEngine(estado), v1.fKey).opcoes.filter(o => o.mudancas && o.mudancas.a !== undefined);
+    assert.ok(comHorario(aprovado(base.av)).length > 0, 'sem a chave, a sala está disponível');
+    assert.deepEqual(comHorario(aprovado({ ...base.av, 'SALA-GROUND': false })).map(o => o.texto), []);
+  });
+
+  it('com a Sala Ground indisponível, o porquê das Sugestões diz isso, no mesmo horário e nos outros (revisão do J)', () => {
+    const g = { ...GROUND_C152, p1: 500, p2: -1 };
+    const base = cenario({ ins: [instrutor(1, 9), instrutor(2, 9)], stu: [aluno(1000, g)] });
+    const v = runAllocationEngine(base).out, v1 = v[0];
+    const estado = { ...base, av: { ...base.av, 'SALA-GROUND': false }, fixos: fixosAoAprovar({}, v), aprovacao: { em: '2026-11-10T21:05:00.000Z', por: 'Operador 01' }, fStatus: { [v1.fKey]: 'Cancelado' }, fObs: { [v1.fKey]: { motivo: 'Instrutor indisponível' } } };
+    const { opcoes, impossivel } = sugerirParaCancelado(estado, runAllocationEngine(estado), v1.fKey);
+    assert.deepEqual(opcoes, []);
+    assert.equal(impossivel[0], 'No mesmo horário: a Sala Ground está indisponível nesta data.');
+    assert.match(impossivel[1], /^Em outro horário: a Sala Ground está indisponível nesta data \(06:30, 10:10, 11:30, 12:40, 13:40, 14:30, 16:20\)\.$/);
+    assert.doesNotMatch(impossivel.join(' '), /a sala não está livre|nenhum avião/);
   });
 
   it('na escala aprovada, os mesmos casos não mudam nenhum outro voo', () => {

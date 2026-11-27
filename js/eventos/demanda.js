@@ -1,13 +1,13 @@
 // A Demanda: pôr um aluno, a próxima missão do curso e as outras, as missões extras, tirar da escala, limpar a demanda,
 // os filtros e os campos de cada pedido
 import { gravarAlteracao, aindaNaoAbriu, fotoDaEscalaTravada, gravarNaEscala } from '../actions.js';
-import { T, GROUND_EQ_TYPE, GROUND_DURATION_H, MIS } from '../config.js';
+import { GROUND_EQ_TYPE, GROUND_DURATION_H, MIS } from '../config.js';
 import { $, showToast, ligarMenu, trocarElemento } from '../dom.js';
 import { semAgendados, limparDemanda, fixarNoLugar } from '../fixos.js';
 import { fmtDurLabel } from '../format.js';
 import { ligada } from '../funcionalidades.js';
-import { horariosDaMissao, ajustarPreferencias } from '../horarios.js';
-import { isGroundMission, rotuloDaDisponibilidade, normalizeMissionFields, proximoMid, duracaoDigitada, ERRO_DA_DURACAO, duracaoPadraoDaMissao, prioridadeGuardada, PRIORIDADE_PADRAO } from '../rules.js';
+import { horariosDaMissao, ajustarPreferencias, HORARIOS_PADRAO } from '../horarios.js';
+import { isGroundMission, normalizeMissionFields, proximoMid, duracaoDigitada, ERRO_DA_DURACAO, duracaoPadraoDaMissao, prioridadeGuardada, PRIORIDADE_PADRAO } from '../rules.js';
 import { S, RES, isGestor, stuBy, insBy, getMissionTarget } from '../state.js';
 import { chaveDoVoo } from '../voo.js';
 import { escolherInstrutor } from '../instrutor-escolhido.js';
@@ -169,8 +169,8 @@ aoAcionar('add-mis', (b, { id }) => {
     fly: true,
     mis: 'Voo Local',
     eq: 'C152',
-    p1: T[4],
-    p2: T[6],
+    p1: HORARIOS_PADRAO[4],
+    p2: HORARIOS_PADRAO[6],
     nb: 1,
     ss: 1,
     pr: s.pr || PRIORIDADE_PADRAO
@@ -242,14 +242,6 @@ aoMudarCampo('d', (t, { f, c, id, mid }) => {
       { kind: 'setFly', stuId: s.id, mid, val: !target.fly, ...(extras.length ? { extras: extras.map(ex => ex.mid) } : {}), label: target.fly ? '✕ Excluir' : '↶ Restaurar' }
     ];
     if (extras.length) rDem();
-  } else if (f === 'jan') {
-    // Disponibilidade do aluno: o voo só começa nessas janelas (vazio: qualquer horário)
-    const anterior = target.jan;
-    if (t.value) target.jan = t.value;
-    else delete target.jan;
-    // A confirmação do 7º voo local (Q8) foi dada na Agenda para o horário de antes: noutro, ela não vale
-    if (target.jan !== anterior) delete target.limiteConfirmado;
-    historico = ['mod', `Pedido ${s.nm}: disponibilidade ${rotuloDaDisponibilidade(target.jan)} (${target.mis})`];
   } else {
     // A duração digitada: de 0,1 h a 5 h, em décimos; fora disso, não vale
     if (f === 'nb') {

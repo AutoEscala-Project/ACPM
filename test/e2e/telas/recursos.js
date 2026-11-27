@@ -1,4 +1,4 @@
-// O driver de Recursos (dono: B): a disponibilidade do dia (a tabela dos recursos e as janelas de operação), o filtro
+// O driver de Recursos (dono: B): a disponibilidade do dia (a tabela dos recursos e os horários fechados), o filtro
 // das categorias e as telas que os testes do celular e da acessibilidade percorrem (ESTADOS)
 import { expect } from '@playwright/test';
 import { irParaVista, marcarNoFiltro, nenhumComOsFiltros } from './casca.js';
@@ -14,8 +14,24 @@ export async function alternarDisponivel(page, id, disponivel) {
   else await caixaDisponivel(page, id).uncheck();
 }
 
-// As janelas de operação da data (Recursos › Disponibilidade do dia)
-export const janelasDeOperacao = page => page.locator('#wins');
+// Os horários fechados da data (Recursos › Disponibilidade do dia; J, no lugar das janelas de operação)
+export const horariosFechados = page => page.locator('#fechamentos');
+// "+ Fechar horários": de e ate como na tela ('12:40', '17:30'), ou diaTodo; categorias pelos ids ('C152', 'ground'…);
+// nenhuma, todos os recursos. Confere que o formulário fecha
+export async function fecharHorarios(page, { de, ate, diaTodo = false, categorias = [] } = {}) {
+  const secao = horariosFechados(page);
+  await secao.locator('[data-act="fechar-horarios"]').click();
+  const form = secao.locator('.fechar-horarios');
+  await expect(form).toBeVisible();
+  if (diaTodo) await form.locator('[data-act="fch-dia-todo"]').click();
+  else {
+    await form.locator('#fch-de').selectOption({ label: de });
+    await form.locator('#fch-ate').selectOption({ label: ate });
+  }
+  for (const c of categorias) await form.locator(`input[data-cat="${c}"]`).check();
+  await form.locator('[data-act="fch-fechar"]').click();
+  await expect(form).toBeHidden();
+}
 
 // O filtro das categorias de Recursos: os valores são os ids das categorias ('C152', 'C172', 'sim', 'PA-34')
 export const filtrarCategorias = (page, valores, opcoes) => marcarNoFiltro(page, 'flt-rec-cat', valores, opcoes);

@@ -275,6 +275,14 @@ horário no pedido (`pedidos[].limiteConfirmado`, só `true`, vinda do pedido da
 assim"): com ela, o motor deixa esse voo passar do limite no minuto exato do pedido, sem tomar a vaga dos outros seis. Só
 o app muda: o primeiro acesso de um Operador ou Administrador regrava os dias e o cadastro no 27.
 
+No formato 28 (J), os horários fechados de uma data são `dia.fechamentos`, uma lista de `{ de, ate, categorias? }` em
+minutos (`[de, ate)`; sem `categorias`, todos os recursos), no lugar das nove janelas de operação: o passo converte cada
+sequência de janelas fechadas num intervalo (a janela 0 desde a meia-noite, a das 17:30 até 24:00) e mantém o `win`,
+que só é lido onde não há `fechamentos`. Os pedidos perdem os períodos do dia (`jan` `manha`, `tarde`, `noite`; a
+confirmação do 7º local sai junto) e o horário antigo `hN` e a preferência de 0 a 8 viram o horário da janela; o
+horário exato fica. O cadastro não muda: sem `horarios.ground`, a Sala Ground usa os oito horários padrão, e sem a chave
+dela em `av`, fica disponível. A aba do formato 27 tiraria `fechamentos` ao gravar o dia; o número novo a faz recusar.
+
 ## Estrutura
 
 | Caminho | Conteúdo |

@@ -1,7 +1,8 @@
 // Aba Instrutores, em duas vistas: a disponibilidade do dia (uma grade com as janelas e os voos de cada um na escala) e o
 // cadastro (nome, CANAC, peso e habilitações, editadas num painel lateral). Os dados pessoais abrem noutro painel
 // (js/views/painel-de-dados.js), só para quem pode vê-los (.so-dados); os limites da lei, em js/views/limites.js
-import { WIN, PRE, T, AIRCRAFT_EQ_TYPES, MINUTOS_DO_DIA } from '../config.js';
+import { PRE, AIRCRAFT_EQ_TYPES, MINUTOS_DO_DIA } from '../config.js';
+import { INICIOS_DOS_TEMPOS } from '../horarios.js';
 import { HABILITACOES, nomeDaHabilitacao, GRUPOS_DE_HABILITACAO, gruposDosRecursos } from '../habilitacoes.js';
 import { FROTA_INICIAL } from '../frota.js';
 import { esc, hm, LIMITE_DO_NOME, numeroBr, chaveDeBusca } from '../format.js';
@@ -35,8 +36,8 @@ function ocupacaoDosInstrutores() {
   voosQueVoam().forEach(o => {
     const atual = porInstrutor.get(o.insId) || { voos: new Set(), janelas: new Set() };
     atual.voos.add(unidadeDoVoo(o));
-    WIN.forEach((_, i) => {
-      const inicio = T[i], fim = i < WIN.length - 1 ? T[i + 1] : MINUTOS_DO_DIA;
+    INICIOS_DOS_TEMPOS.forEach((_, i) => {
+      const inicio = INICIOS_DOS_TEMPOS[i], fim = i < INICIOS_DOS_TEMPOS.length - 1 ? INICIOS_DOS_TEMPOS[i + 1] : MINUTOS_DO_DIA;
       if (o.a < fim && o.b > inicio) atual.janelas.add(i);
     });
     porInstrutor.set(o.insId, atual);
@@ -61,7 +62,8 @@ const SEM_INSTRUTORES = 'Nenhum instrutor cadastrado. Clique em “+ Novo instru
 
 function linhaDoDia(x, ocupacao) {
   const { voos, janelas } = ocupacao.get(x.id) || { voos: new Set(), janelas: new Set() };
-  const celulas = WIN.map((w, i) => {
+  const celulas = INICIOS_DOS_TEMPOS.map((inicio, i) => {
+    const w = hm(inicio);
     const cls = `cel${x.aw[i] ? ' on' : ''}${janelas.has(i) ? ' voo' : ''}`;
     return `<td class="jan"><label class="${cls}" title="${w}"><input type="checkbox" data-f="aw" data-w="${i}"${x.aw[i] ? ' checked' : ''} aria-label="${esc(x.nm)} às ${w}"></label></td>`;
   }).join('');
@@ -104,14 +106,14 @@ function linhaDoCadastro(x) {
 // amanhã: não é "hoje")
 export function rInsDia() {
   // Os termos da grade com o "?"
-  $('#inst-dia-cab').innerHTML = `<tr><th>Instrutor</th><th>Vem${botaoDeDica('vem-nesta-data', 'Vem')}</th>${WIN.map(w => `<th class="jan">${w}</th>`).join('')}<th>Voos${botaoDeDica('voos-do-instrutor', 'Voos')}</th><th>Mês${botaoDeDica('horas-do-mes', 'Mês')}</th><th>Turno${botaoDeDica('turno', 'Turno')}</th><th>Habilitações</th></tr>`;
+  $('#inst-dia-cab').innerHTML = `<tr><th>Instrutor</th><th>Vem${botaoDeDica('vem-nesta-data', 'Vem')}</th>${INICIOS_DOS_TEMPOS.map(m => `<th class="jan">${hm(m)}</th>`).join('')}<th>Voos${botaoDeDica('voos-do-instrutor', 'Voos')}</th><th>Mês${botaoDeDica('horas-do-mes', 'Mês')}</th><th>Turno${botaoDeDica('turno', 'Turno')}</th><th>Habilitações</th></tr>`;
   // Quem usa o teclado continua no mesmo campo (ou no "Limpar filtros") depois que a grade é refeita e filtrada
   const foco = $('#inst-dia').contains(document.activeElement) ? seletorDoCampo(document.activeElement) : null;
   if (S.ins.length) {
     const ocupacao = ocupacaoDosInstrutores();
     $('#inst-dia').innerHTML = S.ins.map(x => linhaDoDia(x, ocupacao)).join('');
   } else {
-    $('#inst-dia').innerHTML = `<tr><td colspan="${WIN.length + 6}" class="h">${SEM_INSTRUTORES}</td></tr>`;
+    $('#inst-dia').innerHTML = `<tr><td colspan="${INICIOS_DOS_TEMPOS.length + 6}" class="h">${SEM_INSTRUTORES}</td></tr>`;
   }
   applyInstructorFilters();
   const alvo = foco && $('#inst-dia').querySelector(foco);

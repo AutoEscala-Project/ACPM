@@ -6,7 +6,7 @@
 // Parafuso), cada recurso tem atributos, e uma regra só diz se o recurso serve ao voo (aviaoServe) e o que ele exige do
 // instrutor (exigenciasDoAviao). O motor, a compactação, a divisão das horas, a troca de matrículas e as sugestões usam
 // estas regras, assim como o instrutor tem as habilitações dele (js/habilitacoes.js).
-import { EQ, ACROBAT_REG, MIS, SO_VFR_INICIAL, HABILITACAO_PROPRIA_INICIAL, MATRICULA } from './config.js';
+import { EQ, ACROBAT_REG, MIS, SO_VFR_INICIAL, HABILITACAO_PROPRIA_INICIAL, MATRICULA, GROUND_REG } from './config.js';
 import { habilitacaoDoAviao, exigenciasDoRecurso, normalizarHabilitacoes } from './habilitacoes.js';
 
 // A matrícula e a habilitação própria moram em js/config.js e js/habilitacoes.js; quem as importa daqui continua
@@ -109,3 +109,8 @@ export function novoRecurso(frota, { reg, tipo, ...atributos }) {
   if (recursoDaFrota(frota, matricula)) return { erro: `Já existe um recurso com a matrícula ${matricula}.`, campo: 'reg' };
   return { recurso: recurso({ ...atributos, reg: matricula, tipo }) };
 }
+
+// A Sala Ground disponível nesta data (J, S4): o "Disponível" dela em Recursos, por data, como o dos outros recursos. A
+// chave dela em av só existe depois que alguém a muda; sem a chave, a sala está disponível. Todo leitor passa por aqui, e
+// nunca por um teste de verdade (av[r]), que a daria indisponível em toda data sem a chave
+export const salaDisponivel = av => !av || av[GROUND_REG] !== false;

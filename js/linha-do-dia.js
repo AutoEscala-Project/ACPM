@@ -5,6 +5,7 @@
 // contexto: { S, RES, pedidos: lista | null, leituraDosPedidos: 'lendo' | 'erro' | 'lidos', perfil, opera, horasLidas,
 // indisponiveis: [{ id, texto }], data, hoje } (js/views/linha.js, contextoDoDia)
 import { REVISAO_H } from './config.js';
+import { salaDisponivel } from './frota.js';
 import { inativo, inativoValeEm } from './inativos.js';
 import { ESTAGIOS, podeVer } from './telas.js';
 
@@ -178,9 +179,12 @@ function avisosDaEscala({ RES }) {
 }
 
 function avisosDosRecursos(ctx) {
+  const destino = podeVer('rec', ctx.perfil) ? { tela: 'rec' } : null;
   const n = avioesPertoDaRevisao(ctx);
-  if (!n) return [];
-  return [{ id: 'recursos', gravidade: 'aviso', minuto: null, titulo: textoDaRevisao(n), texto: '', destino: podeVer('rec', ctx.perfil) ? { tela: 'rec' } : null }];
+  // A Sala Ground desligada na data (S4): só com a chave false (salaDisponivel; sem a chave, disponível)
+  const sala = ctx.S && !salaDisponivel(ctx.S.av)
+    ? [{ id: 'sala-ground', gravidade: 'aviso', minuto: null, titulo: 'A Sala Ground está indisponível nesta data', texto: '', destino }] : [];
+  return [...(n ? [{ id: 'recursos', gravidade: 'aviso', minuto: null, titulo: textoDaRevisao(n), texto: '', destino }] : []), ...sala];
 }
 
 function avisosDosPedidos(ctx) {

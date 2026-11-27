@@ -2,7 +2,8 @@
 // foco do teclado ou um toque; js/dicas.js) e para a seção Glossário do Manual. Os números das regras vêm da
 // configuração, para o texto nunca contradizer o motor. Um termo de uma funcionalidade que pode ficar desligada
 // (js/funcionalidades.js) diz qual (funcionalidade) e, com ela desligada, some ou troca de texto (textoSem).
-import { REVISAO_H, MENOR_VOO_H, GROUND_DURATION_MIN, LIMITE_DE_VOOS_LOCAIS, T, NI } from './config.js';
+import { REVISAO_H, MENOR_VOO_H, GROUND_DURATION_MIN, LIMITE_DE_VOOS_LOCAIS } from './config.js';
+import { HORARIO_DO_NOTURNO } from './horarios.js';
 import { ligada } from './funcionalidades.js';
 import { LIMITES_DA_LEI } from './limites.js';
 import { INTERVALO_DO_HANGAR } from './metricas.js';
@@ -37,7 +38,7 @@ const TERMOS = {
   'voo-agendado': { aba: 'Escala', termo: 'Voo agendado', texto: 'Marcado pelo operador em “+ Agendar voo”: fica fixo no horário, no recurso e com o instrutor confirmados, e a escala é refeita em volta dele. O Histórico desfaz o agendamento.' },
   'fora-da-regra': {
     aba: 'Escala', termo: 'Fora da regra',
-    texto: `O voo agendado na Escala está fora de uma regra que a escala segue sozinha: os horários de decolagem, o pouso do voo de dia até as ${hm(T[NI])}, no máximo ${LIMITE_DE_VOOS_LOCAIS} voos locais por horário ou o Ground antes do voo. Ele fica onde foi agendado.`
+    texto: `O voo agendado na Escala está fora de uma regra que a escala segue sozinha: os horários de decolagem, o pouso do voo de dia até as ${hm(HORARIO_DO_NOTURNO)}, no máximo ${LIMITE_DE_VOOS_LOCAIS} voos locais por horário ou o Ground antes do voo. Ele fica onde foi agendado.`
   },
   'reduzir-combustivel': {
     aba: 'Escala', termo: 'Reduzir combustível',
@@ -73,8 +74,8 @@ const TERMOS = {
     funcionalidade: 'hangar', textoSem: `A compactação fecha primeiro o tempo parado dos aviões e evita as paradas de ${INTERVALO_DO_HANGAR / 60} h ou mais no meio do dia.`
   },
   'criterio-maior': { aba: 'Critérios', termo: 'Maior buraco', texto: 'A compactação fecha primeiro os maiores buracos do dia, de instrutor ou de avião.' },
-  horarios: { aba: 'Critérios', termo: 'Horários', texto: 'Até onde a compactação pode mudar o horário dos voos: dentro da disponibilidade do aluno, só entre a 1ª e a 2ª preferência, ou não mudar.' },
-  'criterio-disponibilidade': { aba: 'Critérios', termo: 'Na disponibilidade', texto: 'O voo pode mudar de horário dentro da disponibilidade do aluno.' },
+  horarios: { aba: 'Critérios', termo: 'Horários', texto: 'Até onde a compactação pode mudar o horário dos voos: no horário do pedido (o exato da Agenda; sem ele, qualquer horário da lista), só entre a 1ª e a 2ª preferência, ou não mudar.' },
+  'criterio-disponibilidade': { aba: 'Critérios', termo: 'Na disponibilidade', texto: 'O voo pode mudar para qualquer horário da lista; o pedido com o horário exato da Agenda fica nele.' },
   'criterio-preferencias': { aba: 'Critérios', termo: 'Só 1ª e 2ª', texto: 'O voo só muda entre a 1ª e a 2ª preferência do aluno.' },
   'criterio-fixos': { aba: 'Critérios', termo: 'Não mudar', texto: 'Os horários ficam onde a escala pôs; só os instrutores podem trocar.' },
   'criterios-travados': { aba: 'Critérios', termo: 'Critérios travados', texto: 'Com a escala aprovada, os voos fixos não mudam: reabra a escala para mudar os critérios.' },
@@ -83,7 +84,6 @@ const TERMOS = {
   voa: { aba: 'Demanda', termo: 'Voa', texto: 'Marcado, o pedido entra na escala desta data. Desmarcado, o aluno continua na lista sem voar.' },
   preferencias: { aba: 'Demanda', termo: 'Preferências', texto: 'Os horários que o aluno prefere, entre os da categoria do avião. Sem vaga neles, a escala usa o horário livre mais perto da 1ª.' },
   'instrutor-escolhido': { aba: 'Demanda', termo: 'Instrutor', texto: 'Automático: o app escolhe. Um instrutor escolhido pelo operador vale mais: a escala põe o aluno com ele (o horário e o avião em volta dele) e não o troca.' },
-  disponibilidade: { aba: 'Demanda', termo: 'Disponibilidade', texto: 'Quando o aluno pode voar: manhã, tarde, noite ou um horário exato. O voo só começa dentro dela.' },
   duracao: { aba: 'Demanda', termo: 'Duração', texto: `As horas do voo, de uma vez. O Ground tem ${duracao(GROUND_DURATION_MIN)}. Para dois voos do aluno no mesmo dia, use “+ missão”.` },
   prioridade: { funcionalidade: 'prioridade', aba: 'Demanda', termo: 'Prioridade', texto: 'De 1 a 5, e 1 é a mais alta: o pedido de prioridade mais alta é escalado antes. Com a mesma prioridade, quem agendou primeiro vai antes; o pedido posto à mão, depois.' },
   'fora-da-ordem': { funcionalidade: 'progresso', aba: 'Demanda', termo: 'Fora da ordem', texto: 'A missão do curso que o programa ainda não libera (falta uma anterior ou a fase não abriu), a já aprovada, a dispensada ou a que o aluno já tem em outro voo do dia. Escolhê-la pede confirmação, e o histórico diz por quê.' },
@@ -96,8 +96,8 @@ const TERMOS = {
   excecao: { aba: 'Agenda', termo: 'Exceção da Coordenação', texto: 'Registra o pedido depois do prazo (13:00 da véspera; a segunda, sábado às 10:00). O pedido fica marcado como exceção, para auditoria.' },
 
   // Recursos
-  'horario-em-janela-fechada': { aba: 'Recursos', termo: 'Horário apagado', texto: 'O horário cai numa janela de operação fechada nesta data: nesta data, nenhum voo sai nele. Ele continua na lista para as outras datas.' },
-  janelas: { aba: 'Recursos', termo: 'Janelas de operação', texto: 'Os períodos do dia em que a escola opera nesta data (Recursos › Disponibilidade do dia). Período fechado não recebe voo nem Ground.' },
+  'horario-fechado-na-data': { aba: 'Recursos', termo: 'Horário apagado', texto: 'O horário está fechado nesta data (Recursos › Horários fechados nesta data): nesta data, nenhum voo nem aula de Ground da categoria sai nele. Ele continua na lista para as outras datas.' },
+  fechamentos: { aba: 'Recursos', termo: 'Horários fechados', texto: 'Os intervalos desta data em que a escola não opera (Recursos › Disponibilidade do dia): para todos os recursos ou para as categorias marcadas. Nenhum voo nem aula de Ground sai num horário fechado; o ✕ abre de novo.' },
   'horarios-de-decolagem': { aba: 'Recursos', termo: 'Horários de decolagem', texto: 'Os horários em que cada categoria pode decolar (o PA-34 tem os seus). Valem para todas as datas e ficam em Recursos › Cadastro.' },
   'horas-disponiveis': {
     aba: 'Recursos', termo: 'Horas disponíveis',

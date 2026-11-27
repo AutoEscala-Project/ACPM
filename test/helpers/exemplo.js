@@ -1,6 +1,10 @@
 // Dia de exemplo para os testes.
 // Sequência pseudoaleatória fixa (semente 7): o mesmo estado sempre gera a mesma escala.
-import { WIN, NI, GROUND_EQ_TYPE, GROUND_DURATION_H, SIM_EQ_TYPES, MIS } from '../../js/config.js';
+import { GROUND_EQ_TYPE, GROUND_DURATION_H, SIM_EQ_TYPES, MIS } from '../../js/config.js';
+import { INICIOS_DOS_TEMPOS } from '../../js/horarios.js';
+
+// O exemplo guarda as preferências como o número da janela de antes (0 a 8): a do Noturno é a 8, a das 17:30
+const JANELA_DO_NOTURNO = INICIOS_DOS_TEMPOS.length - 1;
 import { pad } from '../../js/format.js';
 import { blank } from '../../js/rules.js';
 import { habilitacoesDoNivel } from '../../js/habilitacoes.js';
@@ -21,7 +25,7 @@ export function comExemplo(base) {
       on: true,
       hab: habilitacoesDoNivel((i % 9) + 1),
       kg: 55 + ((i * 17) % 45),
-      aw: WIN.map(() => true)
+      aw: INICIOS_DOS_TEMPOS.map(() => true)
     }));
   }
 
@@ -45,7 +49,7 @@ export function comExemplo(base) {
         fly: true, mis: 'Ground PA-34', eq: GROUND_EQ_TYPE, p1: 0, p2: 1, nb: GROUND_DURATION_H, ss: 1, pr: 5,
         extra: [
           { mid: estado.nid++, fly: true, mis: 'Multimotor', eq: 'PA-34', p1: 510, p2: 630, nb: 2, ss: 1, pr: 5 },
-          { mid: estado.nid++, fly: true, mis: 'Noturno', eq: 'C172', p1: NI, p2: NI, nb: 1, ss: 1, pr: 5 }
+          { mid: estado.nid++, fly: true, mis: 'Noturno', eq: 'C172', p1: JANELA_DO_NOTURNO, p2: JANELA_DO_NOTURNO, nb: 1, ss: 1, pr: 5 }
         ]
       });
       return;
@@ -78,8 +82,8 @@ export function comExemplo(base) {
 
     Object.assign(d, {
       fly: true, mis, eq,
-      p1: nt ? NI : pick(wt),
-      p2: nt ? NI : pick(wt),
+      p1: nt ? JANELA_DO_NOTURNO : pick(wt),
+      p2: nt ? JANELA_DO_NOTURNO : pick(wt),
       nb,
       ss: nb >= 3 && r() > .5 ? 2 : 1,
       pr: 1 + Math.floor(r() * 5)

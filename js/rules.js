@@ -1,19 +1,18 @@
 // Regras das missões: Ground School, precedência Ground → voo
 // e normalização de pedidos (inclusive nomes de missão de versões anteriores).
-import { MIS, NI, T, PRE, GROUND_EQ_TYPE, GROUND_DURATION_H, DURACAO_MAXIMA_H, MISSOES_LOCAIS } from './config.js';
+import { MIS, GROUND_EQ_TYPE, GROUND_DURATION_H, DURACAO_MAXIMA_H, MISSOES_LOCAIS } from './config.js';
 import { hm, lerHoras } from './format.js';
-import { periodoDoMinuto, minutoDaPreferencia, preferenciaValida, HORARIO_DO_SOLO } from './horarios.js';
+import { minutoDaPreferencia, preferenciaValida, HORARIO_DO_SOLO, HORARIO_DO_NOTURNO, HORARIOS_PADRAO } from './horarios.js';
 import { codigoValido, siglaValida } from './cursos.js';
 import { chaveDoVoo } from './voo.js';
 
-// Disponibilidade do aluno para o pedido (da agenda da secretaria ou escolhida na demanda): o voo só começa nesses
-// horários. "manha", "tarde" e "noite" valem por período (as janelas de operação de cada um); "h450" é um horário
-// exato (07:30, em minutos; "h5", dos dados antigos, é a janela 5). Sem disponibilidade, qualquer horário habilitado
-const PERIODOS = { manha: ['Manhã', PRE['Manhã']], tarde: ['Tarde', PRE['Tarde']], noite: ['Noite', PRE['Noturno']] };
+// Disponibilidade do aluno para o pedido (o horário da agenda da secretaria): o voo só começa nele. "h450" é um horário
+// exato (07:30, em minutos; "h5", dos dados antigos, é a janela 5). Sem disponibilidade, qualquer horário da lista. Desde o
+// J (N12, N13) não há período do dia: o "manha", o "tarde" e o "noite" de antes valem como nenhum (o formato 28 os tira)
 function minutoExato(jan) {
   const horario = /^h(\d{1,4})$/.exec(jan);
   const minuto = horario ? minutoDaPreferencia(+horario[1]) : -1;
-  return minuto >= T[0] && minuto <= T[NI] ? minuto : null;
+  return minuto >= HORARIO_DO_SOLO && minuto <= HORARIO_DO_NOTURNO ? minuto : null;
 }
 // O minuto em que o 7º voo local confirmado na Agenda (limiteConfirmado, Q8) passa do limite de 6: o horário exato do
 // pedido (jan); null no pedido não confirmado, sem horário exato ou que não é local. O motor e as Sugestões contam assim
@@ -21,22 +20,14 @@ export const minutoConfirmado = d => (Boolean(d) && MISSOES_LOCAIS.includes(d.mi
 // O que a disponibilidade permite: uma função do horário de início, ou null (sem disponibilidade: qualquer horário)
 export function disponibilidadeDoAluno(jan) {
   if (typeof jan !== 'string') return null;
-  if (Object.hasOwn(PERIODOS, jan)) {
-    const periodos = PERIODOS[jan][1];
-    return minuto => periodos.includes(periodoDoMinuto(minuto));
-  }
   const exato = minutoExato(jan);
   return exato === null ? null : minuto => minuto === exato;
 }
 export const disponibilidadeValida = jan => disponibilidadeDoAluno(jan) !== null;
 // A disponibilidade no formato atual ("h5" vira "h820"); inválida: undefined
 export const disponibilidadeAtual = jan =>
-  (typeof jan === 'string' && Object.hasOwn(PERIODOS, jan) ? jan : minutoExato(jan) !== null ? `h${minutoExato(jan)}` : undefined);
-export const rotuloDaDisponibilidade = jan =>
-  (Object.hasOwn(PERIODOS, jan) ? PERIODOS[jan][0] : minutoExato(jan) !== null ? `às ${hm(minutoExato(jan))}` : 'Qualquer horário');
-// Opções da Demanda: os períodos e os horários da lista do pedido
-export const opcoesDeDisponibilidade = horarios => [['', 'Qualquer horário'], ...Object.keys(PERIODOS).map(j => [j, PERIODOS[j][0]]),
-  ...horarios.map(m => [`h${m}`, `Só às ${hm(m)}`])];
+  (minutoExato(jan) !== null ? `h${minutoExato(jan)}` : undefined);
+export const rotuloDaDisponibilidade = jan => (minutoExato(jan) !== null ? `às ${hm(minutoExato(jan))}` : 'Qualquer horário');
 
 // Regra da missão pelo nome, somente entre as missões cadastradas (nomes como "constructor" não contam)
 const missionRule = mis => (Object.hasOwn(MIS, mis) ? MIS[mis] : null);
@@ -104,7 +95,7 @@ export function comAPrioridadePadrao(estado) {
   return mudou ? { ...estado, stu } : estado;
 }
 
-export const blank = () => ({ fly: false, mis: 'Voo Local', eq: 'C152', p1: T[1], p2: T[2], nb: 1, ss: 1, pr: PRIORIDADE_PADRAO });
+export const blank = () => ({ fly: false, mis: 'Voo Local', eq: 'C152', p1: HORARIOS_PADRAO[1], p2: HORARIOS_PADRAO[2], nb: 1, ss: 1, pr: PRIORIDADE_PADRAO });
 // O pedido em branco, sem nada do voo de antes: saem a disponibilidade, a missão do curso (o código e o curso), o pedido
 // da agenda e o instrutor escolhido. Assim ficam o pedido que a agenda reaproveita (alvoDoNovoPedido) e o pedido limpo
 // por "Limpar demanda" (js/fixos.js). Muda o pedido e o devolve
@@ -212,11 +203,11 @@ export function normalizeMissionFields(target) {
   if (mRule.isGround) {
     target.eq = GROUND_EQ_TYPE;
     target.nb = GROUND_DURATION_H;
-    if (target.p1 === T[NI]) target.p1 = T[0];
-    if (target.p2 === T[NI]) target.p2 = T[1];
+    if (target.p1 === HORARIO_DO_NOTURNO) target.p1 = HORARIO_DO_SOLO;
+    if (target.p2 === HORARIO_DO_NOTURNO) target.p2 = HORARIOS_PADRAO[1];
   } else {
     target.nb = duracaoFixaDaMissao(target.mis) || duracaoValida(target.nb);
   }
   // Missão de horário fixo (o Noturno às 17:30; o Voo Solo às 06:30): a preferência é ele
-  if (target.mis === 'Noturno' || target.mis === 'Voo Solo') { target.p1 = target.mis === 'Noturno' ? T[NI] : HORARIO_DO_SOLO; target.p2 = -1; }
+  if (target.mis === 'Noturno' || target.mis === 'Voo Solo') { target.p1 = target.mis === 'Noturno' ? HORARIO_DO_NOTURNO : HORARIO_DO_SOLO; target.p2 = -1; }
 }
