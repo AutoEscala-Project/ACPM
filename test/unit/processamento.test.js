@@ -241,6 +241,19 @@ describe('Importar as solicitações da agenda para a demanda', () => {
     }
   });
 
+  // A diferença 5 do E (decisão 11 do desenho; N14): o voo posto à mão que dá lugar ao pedido fica com a prioridade que o
+  // operador deu, como fica com o instrutor escolhido (a entrada do operador vale mais que o motor). Com a prioridade
+  // desligada, o motor da tela recebe a padrão (estadoDaEscala, comAPrioridadePadrao) e a guardada continua
+  it('o voo posto à mão que dá lugar ao pedido fica com a prioridade dele; desligada, o motor recebe a padrão', () => {
+    const e = { ...estado(), stu: [aluno(1000, { pr: 5, insId: 2 }), aluno(1001, { pr: 1 })] };
+    const resumo = importarSolicitacoes(e, [pedido(96, 1000, { janela: 'horario', horario: '08:20' }), pedido(97, 1001, { missao: 'Navegação', janela: 'horario', horario: '08:20' })]);
+    assert.deepEqual([resumo.atualizados, resumo.novos], [1, 1]);
+    assert.deepEqual([e.stu[0].solicitacao, e.stu[0].pr, e.stu[0].insId], [96, 5, 2]);
+    assert.deepEqual(e.stu[1].extra.map(x => [x.solicitacao, x.pr]), [[97, 3]], 'o pedido que não toma o lugar de ninguém: a padrão');
+    assert.deepEqual(comAPrioridadePadrao(e).stu.map(s => s.pr), [3, 3]);
+    assert.equal(e.stu[0].pr, 5);
+  });
+
   // O voo que já tem resultado na data aconteceu: o pedido da agenda que tomasse o lugar dele mostraria o resultado dele
   it('o voo que já tem resultado na data também não dá lugar ao pedido da agenda', () => {
     const e = { ...estado(), resultados: { situacao: [], doDia: [{ id: 1, aluno: 1002, curso: 'PP', missao: 'PP-01', resultado: 'aprovado', data: '2026-11-11', voo: '1002_0_1' }] } };
