@@ -327,7 +327,7 @@ describe('Importar as solicitações da agenda para a demanda', () => {
     const e = { ...estado(), stu: [aluno(1000, { etapa: 'PP-01', insId: 2 }, { curso: 'PP' })] };
     const resumo = importarSolicitacoes(e, [pedido(62, 1000, { janela: 'horario', horario: '13:40' }), pedido(63, 1000, { janela: 'horario', horario: '15:20' })],
       { programa: doCadastro(programa) });
-    // As 15:20 não estão na lista do C152 (as janelas de antes): o minuto fica, e o resumo diz
+    // As 15:20 não estão na lista do C152 (os horários padrão): o minuto fica, e o resumo diz
     assert.deepEqual(resumo, { novos: 1, atualizados: 1, semAluno: 0, deInativo: 0, foraDoPrograma: [], semMissaoDoCurso: [], esperamOsProgramas: 0,
       foraDaLista: [{ missao: 'Voo Local', recurso: 'C152', horario: '15:20' }], semOHorario: [] });
     // O instrutor escolhido continua no voo; o segundo pedido é outro voo, a missão seguinte
@@ -437,6 +437,21 @@ describe('Importar as solicitações da agenda para a demanda', () => {
       const r = importarSolicitacoes(e, [pedido(78, 1000, { janela: 'horario', horario: '06:00', recurso: 'C152' })]);
       assert.deepEqual([e.stu[0].jan, r.foraDaLista, r.semOHorario], [undefined, [], [{ missao: 'Voo Local', recurso: 'C152', horario: '06:00' }]], String(lista));
     }
+  });
+
+  // N12, N13 (o J): não há período do dia. A linha do servidor com "manha", "tarde" ou "noite" (a função de 9 argumentos
+  // ainda aceita um, até o D1) entra sem horário exato, como a sem horário: nenhum jan, as preferências padrão da lista, e
+  // o resumo não a conta nem fora da lista nem antes do primeiro horário (ela não tem horário a perder)
+  it('a linha com um período de antes do J entra sem horário exato, e o resumo não diz nada dela', () => {
+    const e = estado();
+    const linhas = ['manha', 'tarde', 'noite'].map((janela, i) => pedido(90 + i, 1000 + i, { janela, horario: null, recurso: 'C152' }));
+    const r = importarSolicitacoes(e, linhas);
+    const semHorario = estado();
+    importarSolicitacoes(semHorario, [pedido(93, 1000, { janela: 'horario', horario: null, recurso: 'C152' })]);
+    const padrao = [semHorario.stu[0].p1, semHorario.stu[0].p2];
+    const doPedido = id => e.stu.flatMap(a => [a, ...(a.extra || [])]).find(p => p.solicitacao === id);
+    assert.deepEqual([90, 91, 92].map(doPedido).map(p => [p.jan, p.p1, p.p2]), [[undefined, ...padrao], [undefined, ...padrao], [undefined, ...padrao]]);
+    assert.deepEqual([r.novos + r.atualizados, r.foraDaLista, r.semOHorario], [3, [], []]);
   });
 
   // A diferença 4 do E (docs/PLAN.md:424 do desenho; a regra 2.4 "Closed course"): o curso encerrado não dá missão do

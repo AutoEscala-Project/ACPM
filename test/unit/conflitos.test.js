@@ -15,4 +15,9 @@ describe('FORA_DA_ESCALA: o motivo curto de cada rejeição', () => {
     assert.equal(FORA_DA_ESCALA['limite-de-locais'], 'o limite de voos locais no horário');
     assert.equal(FORA_DA_ESCALA['habilitacao-do-aviao'], 'sem a habilitação própria do avião');
   });
+
+  // O J (S4) pôs a Sala Ground indisponível no mapa quando ele ainda estava em js/agendamento.js: o texto dele vem junto
+  it('a Sala Ground indisponível (o J), com o texto que o J deu', () => {
+    assert.equal(FORA_DA_ESCALA['sala-indisponivel'], 'a Sala Ground indisponível');
+  });
 });
