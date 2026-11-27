@@ -185,6 +185,9 @@ test.describe('Dados pessoais (modo compartilhado)', () => {
     await operador.context.close();
 
     const { context, page, erros } = await entrar(browser, CONTAS.secretaria, servidor);
+    // Nenhuma gravação dos dados pessoais sai da página dela (o servidor, que a recusaria, nem é chamado)
+    const gravacoes = [];
+    page.on('request', r => { if (r.url().includes('/rpc/salvar_dados_pessoais')) gravacoes.push(r.url()); });
     await expect(rotulosDasAbas(page, { visiveis: true })).toHaveText(['Agenda', 'Escala', 'Aprovar', 'Alunos', 'Instrutores', 'Cursos']);
     await irPara(page, 'alu');
     // O filtro dos cursos vale para ela (as caixas não ficam desligadas)
@@ -222,8 +225,10 @@ test.describe('Dados pessoais (modo compartilhado)', () => {
     await expect(painel(page).locator('input')).toHaveCount(0);
     await expect(painel(page).getByRole('button', { name: 'Salvar' })).toHaveCount(0);
     await expect(painel(page).locator('.valor-dado')).toHaveCount(6);
-    // Nada foi gravado por ela
-    expect(servidor.historico.filter(h => h.autor === 'Secretaria de Teste')).toEqual([]);
+    // Nada foi enviado por ela: os dados ficam como o operador gravou
+    await painel(page).getByRole('button', { name: 'Fechar', exact: true }).press('Enter');
+    expect(gravacoes).toEqual([]);
+    expect(servidor.dadosPessoais.get('aluno:1000')).toMatchObject({ nome_completo: 'Ana Maria Souza', canac: '123456', email: 'ana@exemplo.com' });
     expect(erros).toEqual([]);
     await context.close();
   });

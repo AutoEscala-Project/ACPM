@@ -126,7 +126,7 @@ select is(pg_temp.nome_gravado('aluno', 1002, '{"nome_completo":"Caio da Silva"}
 select throws_ok($$ insert into public.dados_pessoais (tipo, id_cadastro, canac) values ('aluno', 1003, '111111') $$, '42501', null, 'insert direto é bloqueado');
 select is_empty($$ update public.dados_pessoais set canac = '222222' returning 1 $$, 'update direto não altera nada');
 
--- O administrador grava; a secretaria lê e não grava (nem aluno, nem instrutor), e nada dela vai para o histórico
+-- O administrador grava; a secretaria lê e não grava (nem aluno, nem instrutor; nem pela função, nem direto na tabela)
 select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-a000-000000000022","role":"authenticated"}', true);
 select lives_ok($$ select pg_temp.salvar('instrutor', 8, '{"canac":"333333"}'), pg_temp.salvar('aluno', 1004, '{"email":"bia@exemplo.com"}') $$, 'administrador grava');
 select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-a000-000000000023","role":"authenticated"}', true);
@@ -134,7 +134,9 @@ select throws_ok($$ select pg_temp.salvar('aluno', 1004, '{"email":"duda@exemplo
   'somente operadores e administradores alteram dados pessoais', 'secretaria não grava os dados de um aluno');
 select throws_ok($$ select pg_temp.salvar('instrutor', 7, '{"canac":"444444"}') $$, '42501',
   'somente operadores e administradores alteram dados pessoais', 'secretaria não grava os dados de um instrutor');
-select is_empty($$ select 1 from public.historico where autor = 'Secretaria de teste' $$, 'nada da secretaria no histórico');
+-- (o que a função fizesse antes de recusar volta com o throws_ok; a escrita direta é o outro caminho: ela lê a tabela, e
+-- nenhuma política deixa alterar)
+select is_empty($$ update public.dados_pessoais set canac = '999999' returning 1 $$, 'secretaria não altera a tabela direto');
 select is((select count(*)::integer from public.dados_pessoais), 5, 'secretaria lê todos os dados pessoais');
 
 -- Quem sai do cadastro leva os dados pessoais junto (o cadastro gravado sem a Duda e sem o Instrutor 08)
