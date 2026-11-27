@@ -51,6 +51,12 @@ export function historicoDoDia(estado) {
   };
 }
 
+// Os noturnos da escala (sem os cancelados e sem as voltas), com o avião e o INVA, num texto para comparar: a escala
+// gravada mudou os noturnos que voltam de BH no dia seguinte? (js/actions.js, avisarVoltaDoDiaSeguinte)
+export const assinaturaDosNoturnos = (escala, fStatus = {}) => (escala && Array.isArray(escala.out) ? escala.out : [])
+  .filter(o => o.mis === 'Noturno' && !o.trecho && !o.isGround && ((fStatus || {})[o.fKey] || o.status) !== 'Cancelado')
+  .map(o => `${o.fKey}:${o.r}:${o.insId}`).sort().join('|');
+
 // A escala gravada da data confere com os noturnos de ontem: as mesmas voltas (aluno, missão, instrutor e avião). Sem
 // conferir (o noturno de ontem mudou depois que esta data foi gravada), a tela usa a escala calculada de novo
 export function voltasConferem(escala, noturnos) {

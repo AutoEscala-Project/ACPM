@@ -5,7 +5,7 @@ import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { runAllocationEngine } from '../../js/engine.js';
 import { noturnosDaVespera, comRepousoDoNoturno, repousoAntesDaVolta, historicoDoDia, voltasConferem, voltasQueMudaram } from '../../js/noturno.js';
-import { fixosAoMudarStatus, fixosAoAprovar, fixosAoReabrir, pinosDoNoturno } from '../../js/fixos.js';
+import { fixosAoMudarStatus, fixosAoAprovar, fixosAoReabrir, pinosDoNoturno, semAgendados, pinosDoNoturnoQueValem, pinoDoVoo } from '../../js/fixos.js';
 import { normalizarHangar, moverNoHangar } from '../../js/hangar.js';
 import { estadoParaEscalar } from '../../js/inativos.js';
 import { FROTA_INICIAL } from '../../js/frota.js';
@@ -18,6 +18,9 @@ import { ESQUEMA } from '../../js/migracoes.js';
 import { separar } from '../../js/dias.js';
 import { simularNavegador } from '../helpers/navegador.js';
 import { aluno, apenas, cenario, instrutor } from '../helpers/montar.js';
+import { escolherInstrutor, reverterEscolha } from '../../js/instrutor-escolhido.js';
+import { importarSolicitacoes } from '../../js/processamento.js';
+import { escalaSemeada } from '../../scripts/dia-semeado.mjs';
 
 const NOTURNO = { mis: 'Noturno', eq: 'C172', p1: 1050, p2: -1 };
 // Um só C172 (o PR-HAR), para ver o avião ocupado até as 10:10
@@ -31,6 +34,15 @@ const diaSeguinte = (opts, noturnos = [volta()], horas = comRepousoDoNoturno({ 1
   return estado;
 };
 const resumo = out => out.map(o => [o.s, o.mis, o.a, o.b, o.insId, o.r, o.trecho || null]);
+// A escala calculada como o app a faz (js/actions.js, calcularComOsNoturnosFixos): o Noturno que o motor pôs ganha o pino
+// dele, e a escala é refeita com ele. Muda os voos fixos do estado
+function comOsNoturnosFixos(estado) {
+  const escala = runAllocationEngine(estado);
+  const fixos = pinosDoNoturno(estado, escala);
+  if (fixos === estado.fixos) return escala;
+  estado.fixos = fixos;
+  return runAllocationEngine(estado);
+}
 
 describe('Noturno: o dia dele', () => {
   it('4 h a partir das 17:30 (1 h de translado e 3 h de noturno em BH), qualquer que seja a duração pedida', () => {
@@ -224,13 +236,14 @@ describe('Noturno: o mesmo avião na volta (ApiClient, com o backend na memória
   });
   afterEach(() => { ApiClient.backend = original; });
 
-  // Como o app: abrir (carregarDia: a escala gravada, ou a calculada) e gravar (o motor e salvarDia)
+  // Como o app: abrir (carregarDia: a escala gravada, ou a calculada com o pino de cada Noturno dela) e gravar (o motor com
+  // o pino de cada Noturno, e salvarDia): js/actions.js, calcularComOsNoturnosFixos
   async function abrir(data) {
     const lido = await ApiClient.carregarDia(data);
     const estado = { ...lido.estado, horasDosInstrutores: lido.horasDosInstrutores };
-    return { estado, escala: lido.escala, voltasDeAntes: lido.voltasDeAntes, tela: lido.escala || runAllocationEngine(estado) };
+    return { estado, escala: lido.escala, voltasDeAntes: lido.voltasDeAntes, tela: lido.escala || comOsNoturnosFixos(estado) };
   }
-  const gravar = (data, estado) => ApiClient.salvarDia(data, estado, runAllocationEngine(estado));
+  const gravar = (data, estado) => ApiClient.salvarDia(data, estado, comOsNoturnosFixos(estado));
   const gravada = async data => (await ApiClient.backend.ler(`dia:${data}`)).resultado.out;
   const lugar = o => o && [o.r, o.insId];
   const noturno = out => out.find(o => o.stuId === 1000 && o.mis === 'Noturno' && !o.trecho);
@@ -368,6 +381,98 @@ describe('Noturno: o mesmo avião na volta (ApiClient, com o backend na memória
     await conferir(antes, 'o dia antigo');
   });
 
+  // A revisão do pino do Noturno ---------------------------------------------------------------------------------------
+  // O ↶ da escolha do INVA do Noturno, na data que ainda não tinha escala gravada: o pino do Noturno já está na tela ao
+  // abrir (sem gravar), a reversão o devolve como estava, e o Noturno volta para o INVA de antes
+  const doisInvas = () => ApiClient.normalizeAndMigrateState(cenario({ ins: [instrutor(1, 9), instrutor(2, 9)], stu: [aluno(1000, NOTURNO)] }));
+  for (const noLugar of [false, true]) {
+    it(`o ↶ da escolha do INVA do Noturno (${noLugar ? 'na Escala' : 'na Demanda'}) na data sem escala gravada devolve o INVA de antes`, async () => {
+      const desfazer = async pinoAoAbrir => {
+        docs.clear();
+        const estado = doisInvas();
+        const tela = pinoAoAbrir ? comOsNoturnosFixos(estado) : runAllocationEngine(estado);
+        const antes = noturno(tela.out);
+        const outro = antes.insId === 1 ? 2 : 1;
+        const { antes: rev } = escolherInstrutor(estado, tela, { stuId: 1000, mid: 0 }, outro, { noLugar });
+        await gravar(D1, estado);
+        assert.equal(noturno(await gravada(D1)).insId, outro, 'com a escolha');
+        reverterEscolha(estado, rev);
+        await gravar(D1, estado);
+        return [lugar(antes), lugar(noturno(await gravada(D1))), estado.stu[0].insId];
+      };
+      const [antes, depois, escolhido] = await desfazer(true);
+      assert.deepEqual([depois, escolhido], [antes, undefined]);
+      // Sem o pino ao abrir (a versão de antes da revisão), a gravação da escolha punha o pino com o INVA escolhido, e o ↶
+      // o deixava: o teste não passa por falta disso
+      const [antesSem, depoisSem] = await desfazer(false);
+      assert.notDeepEqual(depoisSem, antesSem);
+    });
+  }
+
+  // "Usar" / "Outra missão do curso" na Demanda trocam só a missão do curso do Noturno posto à mão no editor (o pino agendado
+  // com a marca do Noturno; soltarAgendado, js/eventos/demanda.js): o Noturno fica no avião e com o INVA do editor, e o dia
+  // seguinte gravado continua valendo
+  it('a missão do curso trocada no Noturno levado pelo editor: o avião e o INVA dele ficam', async () => {
+    const estado = doisInvas();
+    estado.stu[0] = { ...estado.stu[0], etapa: 'TSL-01', cursoDaEtapa: 'PP' };
+    await gravar(D1, estado);
+    const o = noturno(await gravada(D1));
+    // O editor (aplicarEdicao): o outro C172, com o outro INVA
+    const r = FROTA_INICIAL.find(f => f.tipo === 'C172' && f.reg !== o.r).reg, insId = o.insId === 1 ? 2 : 1;
+    const dia = await abrir(D1);
+    dia.estado.fixos = { [o.fKey]: { ...pinoDoVoo(o), r, insId, agendado: true, noturno: true } };
+    dia.estado.stu[0].insId = insId;
+    await gravar(D1, dia.estado);
+    const editado = noturno(await gravada(D1));
+    assert.deepEqual(lugar(editado), [r, insId]);
+    await gravar(D2, (await abrir(D2)).estado);
+    // "Usar" a NOT (a missão continua Noturno)
+    const depois = await abrir(D1);
+    Object.assign(depois.estado.stu[0], { etapa: 'NOT', cursoDaEtapa: 'PP' });
+    depois.estado.fixos = pinosDoNoturnoQueValem({ ...depois.estado, fixos: semAgendados(depois.estado.fixos, [o.fKey], depois.estado.fStatus) });
+    assert.deepEqual(depois.estado.fixos, { [o.fKey]: { ...pinoDoVoo(o), r, insId, noturno: true } });
+    await gravar(D1, depois.estado);
+    await conferir(editado, 'a missão do curso trocada');
+  });
+
+  // "Importar da agenda" com o Noturno que o operador pôs na Demanda e que a gravação fixou (só o pino do Noturno): o pedido
+  // da agenda passa a ser esse voo (não um segundo Noturno, que o motor recusaria), no avião e com o INVA dele
+  it('o pedido da agenda do mesmo Noturno passa a ser o voo fixo só pelo pino do Noturno', async () => {
+    const estado = doisInvas();
+    await gravar(D1, estado);
+    const o = noturno(await gravada(D1));
+    const dia = await abrir(D1);
+    const pedido = [{ id: 501, aluno: 1000, aluno_nome: 'Aluno 1000', missao: 'Noturno', data: D1, horas: null, cancelada_em: null }];
+    const resumo = importarSolicitacoes(dia.estado, pedido, {});
+    assert.deepEqual([resumo.novos, resumo.atualizados, dia.estado.stu[0].solicitacao, dia.estado.stu[0].extra.length], [0, 1, 501, 0]);
+    const r = runAllocationEngine(dia.estado);
+    assert.deepEqual([lugar(noturno(r.out)), r.al.filter(a => a.t === 'err')], [lugar(o), []]);
+    // O Noturno agendado (o editor) continua como estava: o pedido da agenda entra como outro voo
+    const agendado = await abrir(D1);
+    agendado.estado.fixos = { [o.fKey]: { ...agendado.estado.fixos[o.fKey], agendado: true } };
+    assert.deepEqual(importarSolicitacoes(agendado.estado, pedido, {}).novos, 1);
+  });
+
+  // A gravação que muda o Noturno avisa quando a escala gravada do dia seguinte tem a volta de antes (js/actions.js,
+  // avisarVoltaDoDiaSeguinte): ApiClient.voltasGravadasDeAntes lê as duas datas sem guardar a versão
+  it('voltasGravadasDeAntes: o dia seguinte gravado com a volta de antes, sem guardar a versão', async () => {
+    const lidas = [];
+    const ler = ApiClient.backend.ler;
+    ApiClient.backend.ler = async (doc, opcoes) => { lidas.push([doc, opcoes]); return ler(doc); };
+    assert.equal(await ApiClient.voltasGravadasDeAntes(D2), false, 'sem nada gravado');
+    const antes = await comODiaSeguinte();
+    lidas.length = 0;
+    assert.equal(await ApiClient.voltasGravadasDeAntes(D2), false, 'as voltas conferem');
+    assert.deepEqual(lidas, [[`dia:${D1}`, { guardarVersao: false }], [`dia:${D2}`, { guardarVersao: false }]]);
+    const dia = await abrir(D1);
+    const r = FROTA_INICIAL.find(f => f.tipo === 'C172' && f.reg !== antes.r).reg;
+    dia.estado.fixos = { [antes.fKey]: { ...dia.estado.fixos[antes.fKey], r, agendado: true } };
+    await gravar(D1, dia.estado);
+    assert.equal(await ApiClient.voltasGravadasDeAntes(D2), true, 'o Noturno mudou de avião');
+    await gravar(D2, (await abrir(D2)).estado);
+    assert.equal(await ApiClient.voltasGravadasDeAntes(D2), false, 'o dia seguinte regravado');
+  });
+
   it('o Noturno cancelado não ganha pino e a volta sai: o dia seguinte é refeito, com o texto do histórico', async () => {
     const antes = await comODiaSeguinte();
     const dia = await abrir(D1);
@@ -410,6 +515,44 @@ describe('Noturno: a volta com o avião ou o INVA indisponível', () => {
     assert.deepEqual(avisos(e).map(a => a.m), ['A volta do Noturno de Aluno 1000 fica no PR-HAR (o avião está em BH): o avião está indisponível hoje; o INVA (Instrutor 01) não está disponível nesta data.']);
     assert.deepEqual(avisos({ ...e, fStatus: { '1000_0_2': 'Cancelado' } }), []);
     assert.deepEqual(avisos(estado()), []);
+  });
+});
+
+// O “Priorizar com” do Noturno fixo só pelo pino do Noturno (a revisão): o aviso continua depois da gravação, como antes
+// dela; o fixo pela aprovação não avisa, como sempre
+describe('Noturno: o “Priorizar com” com o pino do Noturno', () => {
+  const voaCom = e => runAllocationEngine(e).al.filter(a => a.codigo === 'voa-com').map(a => a.m);
+  const fixado = e => ({ ...e, fixos: pinosDoNoturno(e, runAllocationEngine(e)) });
+  it('sem o INVA do “Priorizar com” disponível: o aviso de sempre, também com o pino', () => {
+    const e = cenario({ ins: [instrutor(1, 9), instrutor(2, 9, { on: false })], stu: [aluno(1000, NOTURNO, { voaCom: [2] })] });
+    const aviso = ['Sem o instrutor de “Priorizar com” (Instrutor 02: fora nesta data): o voo ficou com Instrutor 01.'];
+    assert.deepEqual(voaCom(e), aviso);
+    assert.deepEqual(voaCom(fixado(e)), aviso);
+    assert.deepEqual(voaCom({ ...fixado(e), aprovacao: { em: '2026-12-02T10:00:00Z', por: 'Op' } }), []);
+  });
+  it('o INVA do “Priorizar com” disponível depois de gravado: o Noturno fica fixo com o de agora, e o aviso diz', () => {
+    const e = cenario({ ins: [instrutor(1, 9), instrutor(2, 9, { on: false })], stu: [aluno(1000, NOTURNO, { voaCom: [2] })] });
+    const gravado = fixado(e);
+    gravado.ins = gravado.ins.map(x => ({ ...x, on: true }));
+    assert.deepEqual(voaCom(gravado), ['Fora do “Priorizar com” de Aluno 1000 (Instrutor 02): o Noturno está fixo com Instrutor 01 (a volta vai com ele).']);
+  });
+});
+
+// A prévia (scripts/semear-dias-previa.mjs): a data semeada é calculada como o app a abre, com a volta, o aviso do repouso
+// antes dela e o pino de cada Noturno
+describe('Noturno: a data semeada na prévia', () => {
+  it('a mesma escala e os mesmos avisos que o app calcula ao abrir a data', () => {
+    const d1 = cenario({ ins: [instrutor(1, 9), instrutor(2, 9)], stu: [aluno(1000, NOTURNO), aluno(1001, { mis: 'Voo Local', eq: 'C172', p1: 500, p2: -1 })] });
+    const primeiro = escalaSemeada(d1, { anterior: null, dataAnterior: null, data: '2026-12-01' });
+    const o = primeiro.resultado.out.find(v => v.mis === 'Noturno');
+    assert.deepEqual(d1.fixos, { [o.fKey]: { ...pinoDoVoo(o), noturno: true } });
+    const anterior = { ...separar(d1).dia, esquema: ESQUEMA, resultado: primeiro.resultado };
+    const d2 = cenario({ ins: [instrutor(1, 9), instrutor(2, 9)], stu: [aluno(1000, { fly: false }), aluno(1001, { mis: 'Voo Local', eq: 'C172', p1: 500, p2: -1 })] });
+    const { resultado, noturnos } = escalaSemeada(d2, { anterior, dataAnterior: '2026-12-01', data: '2026-12-02' });
+    const app = runAllocationEngine({ ...d2, noturnosDaVespera: noturnos, horasDosInstrutores: comRepousoDoNoturno({}, noturnos) });
+    assert.deepEqual(resultado.al, app.al);
+    assert.ok(resultado.al.some(a => a.codigo === 'repouso-do-noturno'));
+    assert.ok(voltasConferem(resultado, noturnos));
   });
 });
 

@@ -3,7 +3,7 @@
 import { gravarAlteracao, aindaNaoAbriu, fotoDaEscalaTravada, gravarNaEscala } from '../actions.js';
 import { T, GROUND_EQ_TYPE, GROUND_DURATION_H, MIS } from '../config.js';
 import { $, showToast, ligarMenu, trocarElemento } from '../dom.js';
-import { semAgendados, limparDemanda, fixarNoLugar } from '../fixos.js';
+import { semAgendados, limparDemanda, fixarNoLugar, pinosDoNoturnoQueValem } from '../fixos.js';
 import { fmtDurLabel } from '../format.js';
 import { ligada } from '../funcionalidades.js';
 import { horariosDaMissao, ajustarPreferencias } from '../horarios.js';
@@ -27,11 +27,12 @@ const fecharMenuMais = ligarMenu($('#btn-mais-dem'), $('#menu-mais-dem'), { fech
 
 // O voo agendado na Escala é do pedido como ele estava: com outra missão, outro recurso ou outras horas (à mão ou pela
 // próxima missão do curso), ele deixa de ser fixo, e a escala encaixa o pedido de novo. O que está em andamento, pousou
-// ou foi cancelado continua fixo pelo status, só sem a marca do agendamento. Devolve o que o histórico diz
+// ou foi cancelado continua fixo pelo status, só sem a marca do agendamento; o Noturno que continua Noturno, pelo pino do
+// Noturno (js/fixos.js). Devolve o que o histórico diz
 function soltarAgendado(stuId, mid) {
   const fKey = chaveDoVoo(stuId, mid);
   if (!(S.fixos && S.fixos[fKey] && S.fixos[fKey].agendado)) return '';
-  S.fixos = semAgendados(S.fixos, [fKey], S.fStatus);
+  S.fixos = pinosDoNoturnoQueValem({ ...S, fixos: semAgendados(S.fixos, [fKey], S.fStatus) });
   return S.fixos[fKey] ? '' : ' (deixa de ser fixo)';
 }
 

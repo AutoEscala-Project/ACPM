@@ -75,7 +75,11 @@ test.describe('Noturno de dois dias', () => {
     const estado = cenario({ ins: [instrutor(1, 9), instrutor(2, 9)], stu: [aluno(1000, NOTURNO)] });
     await abrir(page, { estado });
     await abrirEscala(page);
-    // Uma alteração grava o dia do Noturno: o pino do Noturno vai junto, e o cadeado diz por quê
+    // A data nova abre com o Noturno já fixo (o cadeado diz por quê), sem gravar nada
+    await expect(linha(page, 'Aluno 1000').locator('.fixo')).toHaveAttribute('aria-label', 'Voo fixo: Noturno, no mesmo avião da volta');
+    const aberto = await guardado(AMANHA);
+    expect([aberto.fixos, aberto.resultado]).toEqual([{}, null]);
+    // Uma alteração grava o dia do Noturno: o pino do Noturno vai junto
     await linha(page, 'Aluno 1000').locator('select[data-f="fstatus"]').selectOption('Pendente');
     await refazer(page);
     const dia1 = await guardado(AMANHA);
@@ -103,6 +107,9 @@ test.describe('Noturno de dois dias', () => {
     await refazer(page);
     const depois = await guardado(AMANHA);
     expect(depois.fixos['1000_0_1']).toEqual({ ...pino, r: outro, agendado: true, noturno: true });
+    // A escala gravada do dia seguinte ainda tem a volta de antes: o aviso diz, até a data ser aberta
+    await expect(page.locator('#aviso-sync')).toBeVisible();
+    await expect(page.locator('#aviso-sync-texto')).toContainText('A escala gravada de 12/11 ainda tem a volta do Noturno de antes. Abra 12/11');
 
     // O dia seguinte abre com a volta no avião novo e é gravado com ela (a entrada no Histórico diz o que mudou)
     await diaSeguinte(page);
@@ -110,8 +117,33 @@ test.describe('Noturno de dois dias', () => {
     await expect(linha(page, 'Aluno 1000').locator('.c-hr')).toContainText('07:30–08:30');
     await expect(linha(page, 'Aluno 1000')).toContainText(outro);
     await expect.poll(async () => volta(await guardado('2026-11-12'))).toBe(outro);
+    await expect(page.locator('#aviso-sync')).toBeHidden();
     await abrirHistorico(page);
     await expect(entradasDoHistorico(page, `Volta do Noturno (o Noturno de ontem mudou): Aluno 1000: ${pino.r} → ${outro}`)).toHaveCount(1);
+    expect(erros).toEqual([]);
+  });
+
+  // A revisão: na data ainda sem escala gravada, o INVA escolhido para o Noturno e depois revertido no Histórico volta a ser
+  // o de antes (o pino do Noturno já estava na tela ao abrir, e a reversão o devolve), e a volta do dia seguinte vai com ele
+  test('o ↶ da escolha do INVA do Noturno na data nova devolve o INVA de antes', async ({ page }) => {
+    const erros = vigiarErros(page);
+    const estado = cenario({ ins: [instrutor(1, 9), instrutor(2, 9)], stu: [aluno(1000, NOTURNO)] });
+    await abrir(page, { estado });
+    await abrirEscala(page);
+    const antes = (await linha(page, 'Aluno 1000').innerText()).includes('Instrutor 01') ? 'Instrutor 01' : 'Instrutor 02';
+    const outro = antes === 'Instrutor 01' ? 'Instrutor 02' : 'Instrutor 01';
+    await irPara(page, 'dem');
+    await page.locator('#dem tr[data-k="d"][data-id="1000"][data-mid="0"] [data-f="insId"]').selectOption(outro === 'Instrutor 01' ? '1' : '2');
+    await abrirEscala(page);
+    await expect(linha(page, 'Aluno 1000')).toContainText(outro);
+    await abrirHistorico(page);
+    const lista = page.locator('#audit-log-list');
+    await lista.locator('.audit-item', { hasText: 'Pedido Aluno 1000: instrutor' }).getByRole('button', { name: '↶ Reverter' }).click();
+    await expect(lista).toContainText('Revertido: Pedido Aluno 1000: instrutor');
+    await page.locator('#btn-fechar-historico').click();
+    await expect(linha(page, 'Aluno 1000')).toContainText(antes);
+    const fixos = await page.evaluate(d => JSON.parse(localStorage.getItem(`acpm4_dia_${d}`)).fixos, AMANHA);
+    expect(fixos['1000_0_1'].insId).toBe(antes === 'Instrutor 01' ? 1 : 2);
     expect(erros).toEqual([]);
   });
 });

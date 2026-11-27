@@ -2,7 +2,7 @@
 // Supabase).
 import { WIN } from './config.js';
 import { FROTA_INICIAL, normalizarFrota } from './frota.js';
-import { pad, LIMITE_DO_NOME, hojeISO } from './format.js';
+import { pad, LIMITE_DO_NOME, hojeISO, somarDias } from './format.js';
 import { normalizeMissionFields, proximoMid, pesoValido } from './rules.js';
 import { HORARIOS_INICIAIS, normalizarHorarios } from './horarios.js';
 import { backendLocal } from './backends/local.js';
@@ -224,6 +224,16 @@ export const ApiClient = {
     const indisponiveis = [...(lidos.horasBase ? [] : ['horas']), ...(lidos.resultados ? [] : ['resultados']),
       ...(lidos.programa ? [] : ['cursos']), ...(programaNoCadastro(guardado) ? ['cursos-pendentes'] : [])];
     return { estado, escala, novo: !dia, horasBase, horasDosInstrutores, resultados, programa: lidos.programa || [], indisponiveis, voltasDeAntes };
+  },
+
+  // A escala gravada da data (AAAA-MM-DD) tem as voltas do noturno de antes: o noturno gravado da véspera mudou depois dela
+  // (js/actions.js, avisarVoltaDoDiaSeguinte). Lê a véspera e a data sem guardar a versão: nada é gravado por esta leitura,
+  // e a gravação seguinte da data aberta continua com a versão que ela leu. Sem escala gravada na data, false
+  async voltasGravadasDeAntes(data) {
+    const vespera = somarDias(data, -1);
+    const [ontem, dia] = await Promise.all([vespera, data].map(d => this.backend.ler(`dia:${d}`, { guardarVersao: false })));
+    const gravada = dia ? normalizarEscalaGravada(migrarDia(dia).resultado) : null;
+    return Boolean(gravada) && !voltasConferem(gravada, noturnosDaVespera(ontem ? { data: vespera, conteudo: ontem } : null, data));
   },
 
   // O que vai à parte do dia (não é gravado nele): as horas de voo de cada instrutor antes da data (limites da lei), os

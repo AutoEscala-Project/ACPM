@@ -21,7 +21,7 @@ import { normalizarHangar, posicaoNoHangar } from './hangar.js';
 import { normalizarLimites } from './limites.js';
 import { chaveDoVoo, statusDoVoo, umPorUnidade, pedidosDosVoos, pedidoDoAluno, ocupacaoDoVoo, compromissoDoVoo } from './voo.js';
 import { menorPrimeiro } from './util.js';
-import { pinoDoVoo, pinosDoNoturnoQueValem } from './fixos.js';
+import { pinoDoVoo, pinosDoNoturnoQueValem, fixoPeloStatus } from './fixos.js';
 import { inativo } from './inativos.js';
 import { rejeicoesDosPedidos } from './rejeicoes.js';
 
@@ -439,7 +439,10 @@ const inicioDoSemPar = porque => `Sem o instrutor de “Priorizar com” (${porq
 // - o voo sem pino que ficou sem o instrutor do “Priorizar com” (semPar: a chave do voo → os nomes e o motivo, da busca do
 //   motor, ou o começo do aviso, de conferirEscala): o aviso de sempre, com a disputa dentro dele quando há uma;
 // - o voo sem pino que ficou com um instrutor do “Priorizar com” fora do horário pedido: a disputa, quando há uma (por
-//   qualquer instrutor do “Priorizar com” que pudesse dar o voo).
+//   qualquer instrutor do “Priorizar com” que pudesse dar o voo);
+// - o Noturno fixo só pelo pino do Noturno (js/fixos.js: a gravação o põe onde o motor o deixou), fora do “Priorizar com”:
+//   como o voo posto à mão, com o aviso de sempre quando nenhum do “Priorizar com” pode dar o voo, e o de que está fora
+//   (o Noturno fica fixo com o INVA de agora) quando um pode.
 // A disputa: no horário pedido (horarioPedido), o instrutor do “Priorizar com” está com outro aluno que também o prioriza,
 // com um voo fixo, com um pedido que tem o instrutor escolhido para o dia, ou, quando o aluno voa nesse horário, com outro
 // voo do mesmo minuto que não o prioriza (“; a troca não serve a <aluno>”: a troca de INVAs não serviu); sem ninguém assim,
@@ -448,7 +451,8 @@ const inicioDoSemPar = porque => `Sem o instrutor de “Priorizar com” (${porq
 export function avisosDoPriorizarCom(state, out, { semPar = new Map() } = {}) {
   const alunos = new Map(state.stu.map((s, i) => [s.id, { s, i }]));
   const instrutores = new Map(state.ins.map(x => [x.id, x]));
-  const fixos = state.fixos && typeof state.fixos === 'object' ? state.fixos : {};
+  // O pino do Noturno só vale enquanto o pedido voa um Noturno (js/fixos.js)
+  const fixos = pinosDoNoturnoQueValem(state);
   const pedido = o => { const a = alunos.get(o.stuId); return a && !o.trecho ? pedidoDoAluno(a.s, o.mid || 0) : null; };
   const ativo = o => statusDoVoo(o, state.fStatus) !== 'Cancelado';
   const fimDe = o => (o.trecho ? o.livreAs || o.b : o.b);
@@ -496,12 +500,16 @@ export function avisosDoPriorizarCom(state, out, { semPar = new Map() } = {}) {
     const aviso = m => avisos.push({ t: 'warn', s: rotulo, fKey: o.fKey, m, codigo: 'voa-com', stuId: o.stuId, insId: o.insId });
     const pino = Object.hasOwn(fixos, o.fKey) ? fixos[o.fKey] : null;
     const escolhidoNaDemanda = !pino && Boolean(d.insId && instrutores.has(d.insId));
+    // O Noturno fixo só pelo pino do Noturno (não pela aprovação, pelo status ou pelo operador na Escala)
+    const soPeloNoturno = Boolean(pino && pino.noturno && !pino.agendado && !pino.escolhido && !state.aprovacao && !fixoPeloStatus(o.fKey, state.fStatus));
     if (pino || escolhidoNaDemanda) {
-      if (!(escolhidoNaDemanda || pino.agendado || pino.escolhido) || !ativo(o) || pares.includes(o.insId)) continue;
+      if (!(escolhidoNaDemanda || pino.agendado || pino.escolhido || soPeloNoturno) || !ativo(o) || pares.includes(o.insId)) continue;
       if (!capazes.length) aviso(`${inicioDoSemPar(`${lista.map(p => p.x.nm).join(', ')}: ${motivoSemNenhum(lista)}`)}: o voo ficou com ${o.ins}.`);
       else {
         const nomes = pares.map(id => instrutores.get(id).nm).join(', ');
-        aviso(`${INICIO_DO_FORA_DO_PRIORIZAR}${s.nm} (${nomes}): ${escolhidoNaDemanda ? `${o.ins} foi escolhido para o dia na Demanda` : `o voo foi posto à mão com ${o.ins}`}.`);
+        const porque = escolhidoNaDemanda ? `${o.ins} foi escolhido para o dia na Demanda`
+          : soPeloNoturno ? `o Noturno está fixo com ${o.ins} (a volta vai com ele)` : `o voo foi posto à mão com ${o.ins}`;
+        aviso(`${INICIO_DO_FORA_DO_PRIORIZAR}${s.nm} (${nomes}): ${porque}.`);
       }
       continue;
     }

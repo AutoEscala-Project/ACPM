@@ -8,9 +8,9 @@ import { pinosDoNoturno } from './fixos.js';
 import { ligada } from './funcionalidades.js';
 import { ApiClient } from './storage.js';
 import { S, RES, AUDIT_LOG, BI_HISTORY, DATA, setS, setRES, setAuditLog, setBIHistory, setData, isGestor, dadoIndisponivel, modoCompartilhado, estadoDaEscala, comOsMotivosDaTela, escalaDoMotor } from './state.js';
-import { $, mostrarAviso, avisoAberto, showToast } from './dom.js';
+import { $, mostrarAviso, fecharAviso, avisoAberto, showToast } from './dom.js';
 import { comHorasExternas } from './limites.js';
-import { comRepousoDoNoturno, voltasQueMudaram } from './noturno.js';
+import { comRepousoDoNoturno, voltasQueMudaram, assinaturaDosNoturnos } from './noturno.js';
 import { redesenhar, redesenharPorNome } from './redesenho.js';
 import { SEM_OS_PROGRAMAS } from './views/cursos.js';
 import { podeEditarAgenda } from './views/agenda.js';
@@ -195,18 +195,11 @@ export const ultimaGravacao = () => gravacaoAtual;
 // resultado: a escala que a alteração deixou sem o motor (a escala aprovada, gravarAlteracao); sem ela, a escala refeita
 function save(resultado = null) {
   if (isGestor() || !dadosLidos) return Promise.resolve(false);
-  setRES(resultado || escalaCalculada());
-  // O Noturno que o motor acabou de pôr ganha o pino dele (o que salvarDia grava: js/fixos.js, pinosDoNoturno), e a
-  // escala é refeita com ele: a tela mostra o cadeado, e a escala gravada é a que o motor refaz nas alterações seguintes
-  if (!resultado) {
-    const fixos = pinosDoNoturno(S, RES);
-    if (fixos !== S.fixos) {
-      S.fixos = fixos;
-      setRES(escalaCalculada());
-    }
-  }
+  if (resultado) setRES(resultado);
+  else calcularComOsNoturnosFixos();
   syncBIHistoryForCurrentDate();
   gravacaoAtual = ApiClient.salvarDia(DATA, S, RES);
+  avisarVoltaDoDiaSeguinte(gravacaoAtual);
   // Neste navegador (sem servidor), a gravação só falha quando o armazenamento recusa (o espaço pode ter acabado)
   if (!modoCompartilhado()) {
     gravacaoAtual.then(gravou => {
@@ -224,6 +217,28 @@ function save(resultado = null) {
     marca.hidden = false;
   }
   return gravacaoAtual;
+}
+
+// A volta do dia seguinte sai da escala gravada desta data (js/noturno.js, noturnosDaVespera). Quando a gravação muda os
+// Noturnos dela (o editor, a escolha do instrutor, o pedido tirado, o cancelamento, o primeiro Noturno gravado) e o dia
+// seguinte, de hoje em diante, já tem escala gravada com as voltas de antes, essa escala só é refeita quando alguém que pode
+// alterar abre a data (seguirAsVoltasDeOntem). Até lá, o painel da TV, o BI e as horas da data seguinte leem a volta de
+// antes: o aviso diz isso logo depois da gravação, sem gravar nada na outra data. noturnosGravados: os Noturnos da última
+// escala gravada da data aberta (null: não se sabe; a data abriu sem escala gravada que valha)
+let noturnosGravados = null;
+function avisarVoltaDoDiaSeguinte(gravacao) {
+  const assinatura = assinaturaDosNoturnos(RES, S.fStatus);
+  if (assinatura === noturnosGravados) return;
+  const data = DATA, seguinte = somarDias(DATA, 1);
+  gravacao.then(async gravou => {
+    if (!gravou || data !== DATA) return;
+    noturnosGravados = assinatura;
+    if (seguinte < hojeISO()) return;
+    const deAntes = await ApiClient.voltasGravadasDeAntes(seguinte).catch(() => false);
+    if (!deAntes || data !== DATA || avisoAberto()) return;
+    const dia = `${seguinte.slice(8, 10)}/${seguinte.slice(5, 7)}`;
+    mostrarAviso('volta-do-noturno', `A escala gravada de ${dia} ainda tem a volta do Noturno de antes. Abra ${dia} para ela ser refeita e gravada com a volta de agora (até lá, o painel da TV, o BI e as horas da data seguinte leem a volta de antes).`, { recarregar: false, fechar: true });
+  });
 }
 
 // Uma alteração do operador nos dados da data: grava (a escala é refeita) e registra no histórico, nesta ordem e no
@@ -384,8 +399,10 @@ export async function lerData(data) {
     avisarDadosIndisponiveis();
     // Data sem escala gravada (por exemplo, uma data nova, copiada da anterior): a escala calculada aparece na hora
     // e é gravada junto com a primeira alteração
-    setRES(escala ? comOsMotivosDaTela(escala) : escalaCalculada());
+    if (escala) setRES(comOsMotivosDaTela(escala));
+    else calcularComOsNoturnosFixos();
     escalaSoCalculada = !escala;
+    noturnosGravados = escala ? assinaturaDosNoturnos(escala, estado.fStatus) : null;
     setAuditLog(historico);
     dadosLidos = maisNova;
     voltasParaSeguir = maisNova && voltasDeAntes ? { data, deAntes: voltasDeAntes } : null;
@@ -417,6 +434,7 @@ export function seguirAsVoltasDeOntem() {
 // (seguirAsVoltasDeOntem)
 export async function carregarData(data) {
   if (!await lerData(data)) return;
+  fecharAviso('volta-do-noturno');
   $('#escala-atualizada').hidden = true;
   redesenhar('dados');
   seguirAsVoltasDeOntem();
@@ -463,4 +481,16 @@ function syncBIHistoryForCurrentDate() {
 // guarda a data para a qual foi feita (no modo compartilhado, todos veem essa data). Os motivos são os da tela
 // (escalaDoMotor, como os da escala gravada)
 const escalaCalculada = () => ({ ...escalaDoMotor(estadoDaEscala()), data: DATA });
+// A escala calculada, com o pino de cada Noturno dela (js/fixos.js, pinosDoNoturno): o Noturno que o motor acabou de pôr
+// ganha o pino dele, e a escala é refeita com ele. Na gravação (save: a escala gravada é a que o motor refaz nas alterações
+// seguintes) e já ao abrir a data sem escala gravada (lerData, sem gravar nada): o pino existe antes da primeira alteração,
+// e a reversão dela (a escolha do instrutor, as Sugestões) devolve o Noturno como estava, em vez de deixar o pino que a
+// gravação dela poria
+function calcularComOsNoturnosFixos() {
+  setRES(escalaCalculada());
+  const fixos = pinosDoNoturno(S, RES);
+  if (fixos === S.fixos) return;
+  S.fixos = fixos;
+  setRES(escalaCalculada());
+}
 

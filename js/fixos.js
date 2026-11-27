@@ -101,14 +101,16 @@ export function fixosAoAprovar(fixos, out) {
 // demanda limpa solta o voo inteiro, em limparDemanda). O agendado que também tinha o instrutor escolhido sai inteiro (o
 // pedido continua com o instrutor). O agendado com um status que fixa (fStatus: Em Voo, Atrasado, Pousou, Cancelado)
 // continua fixo onde está, só sem a marca do agendamento, como os outros voos fixos pelo status (o voo em andamento, o
-// que pousou e o cancelado não mudam de lugar). Os outros voos fixos (pela escala aprovada, pelo status ou só pelo
-// instrutor escolhido) ficam
+// que pousou e o cancelado não mudam de lugar). O agendado com o pino do Noturno (o editor, ou o agendamento gravado)
+// também fica, sem a marca do agendamento: a volta do dia seguinte vai no avião e com o INVA dele, e a missão do curso
+// trocada ("Usar", "Outra missão do curso") não muda o avião; com outra missão no pedido, o pino do Noturno deixa de valer
+// (pinosDoNoturnoQueValem). Os outros voos fixos (pela escala aprovada, pelo status ou só pelo instrutor escolhido) ficam
 export function semAgendados(fixos, chaves, fStatus = null) {
   return Object.fromEntries(Object.entries(fixos || {}).flatMap(([fKey, p]) => {
     if (!p.agendado || !chaves.includes(fKey)) return [[fKey, p]];
-    if (!fixoPeloStatus(fKey, fStatus)) return [];
-    const { agendado: _, ...doStatus } = p;
-    return [[fKey, doStatus]];
+    if (!fixoPeloStatus(fKey, fStatus) && !p.noturno) return [];
+    const { agendado: _, ...resto } = p;
+    return [[fKey, resto]];
   }));
 }
 
