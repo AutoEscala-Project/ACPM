@@ -125,8 +125,13 @@ test.describe('Modo compartilhado: gravação, conflitos e link da escala', () =
     expect(servidor.banco.get('cadastro').conteudo.stu.find(s => s.id === id).nm).toBe('Aluno da colega');
     expect(await page.evaluate(() => location.hash)).not.toContain(String(id));
     expect(enderecos.filter(u => u.includes(`#/alu/${id}`))).toEqual([]);
-    // Refeito, o aluno novo entra com o id seguinte
+    // O aluno da colega abre pelo endereço (o id da inclusão recusada não fica perdido para ele)
     await page.locator('#btn-fechar-aviso').click();
+    await page.evaluate(i => { location.hash = `#/alu/${i}`; }, id);
+    await expect(page.locator('#det-alu-titulo')).toHaveText('Aluno da colega');
+    await expect(linhaDoAluno(page, id).locator('.lista-botao')).toHaveAttribute('aria-current', 'true');
+    await expect(page).toHaveURL(new RegExp(`#/alu/${id}$`));
+    // Refeito, o aluno novo entra com o id seguinte
     await page.locator('[data-act="adds"]').click();
     await expect(page).toHaveURL(new RegExp(`#/alu/${id + 1}$`));
     await expect.poll(() => servidor.banco.get('cadastro').conteudo.stu.map(s => s.nm)).toContain('Novo aluno');

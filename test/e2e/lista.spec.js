@@ -48,11 +48,15 @@ async function montarBancada(page) {
     window.banco = criarMestreDetalhe({
       id: 'banco', rotulo: 'Bancada', nomes: ['item', 'itens'], semItens: 'Nenhum item.', vazio: { elemento: 'banco-novo' },
       modelo: () => window.modeloDoBanco,
-      detalhe: id => ({
-        atributos: `data-k="banco" data-id="${id}"`, id, titulo: id, subtitulo: 'da bancada',
-        secoes: [{ id: 'dados', titulo: 'Dados', escopo: 'todas as datas', campos: [{ id: 'nome', rotulo: 'Nome', tipo: 'texto', valor: id, atributos: 'data-f="banco-nome"' }] }],
-        rodape: []
-      })
+      // Cada desenho do detalhe é contado (window.desenhosDoDetalhe)
+      detalhe: id => {
+        window.desenhosDoDetalhe = (window.desenhosDoDetalhe || 0) + 1;
+        return {
+          atributos: `data-k="banco" data-id="${id}"`, id, titulo: id, subtitulo: 'da bancada',
+          secoes: [{ id: 'dados', titulo: 'Dados', escopo: 'todas as datas', campos: [{ id: 'nome', rotulo: 'Nome', tipo: 'texto', valor: id, atributos: 'data-f="banco-nome"' }] }],
+          rodape: []
+        };
+      }
     });
     // A chave desta data muda com um clique; a ação fica registrada
     document.addEventListener('change', e => {
@@ -256,6 +260,107 @@ test.describe('A bancada do componente de lista e detalhe', () => {
       expect(await larguraDaPagina(page)).toBeLessThanOrEqual(largura);
     });
   }
+
+  // "ambos" é da tela (Aprovar): o componente nunca o troca, nem ao aparecer, nem no clique, nem no Esc
+  test('no celular, data-vendo="ambos" fica: ao aparecer, no clique numa linha e no Esc; as duas regiões continuam à vista', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 800 });
+    await abrir(page);
+    await montarBancada(page);
+    const secao = page.locator('#s-banco');
+    await secao.evaluate(s => { s.dataset.vendo = 'ambos'; });
+    await page.evaluate(() => window.banco.aoMostrar(null, { historico: 'nenhum' }));
+    await expect(secao).toHaveAttribute('data-vendo', 'ambos');
+    await linhaDaBancada(page, 'PR-AAA').locator('.lista-botao').click();
+    await expect(detalheDa(page, 'banco')).toHaveAttribute('data-id', 'PR-AAA');
+    await expect(secao).toHaveAttribute('data-vendo', 'ambos');
+    await page.locator('#det-banco-titulo').focus();
+    await page.keyboard.press('Escape');
+    await expect(secao).toHaveAttribute('data-vendo', 'ambos');
+    await expect(page.locator('#lin-banco-PR-AAA')).toBeFocused();
+    await expect(page.locator('#banco')).toBeVisible();
+    await expect(page.locator('#det-banco')).toBeVisible();
+  });
+
+  // No celular, o vazio fixo (o formulário de um item novo) abre como a segunda vista, com nada escolhido
+  test('no celular, escolher(null, { abrir: true }) mostra o vazio fixo como a segunda vista; voltar devolve a lista', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 800 });
+    await abrir(page);
+    await montarBancada(page);
+    await expect(page.locator('#banco-novo')).toBeHidden();
+    await page.evaluate(() => window.banco.escolher(null, { abrir: true }));
+    await expect(page.locator('#s-banco')).toHaveAttribute('data-vendo', 'detalhe');
+    await expect(page.locator('#banco-novo')).toBeVisible();
+    await expect(page.locator('#det-banco')).toBeFocused();
+    await page.evaluate(() => window.banco.voltarParaALista());
+    await expect(page.locator('#s-banco')).toHaveAttribute('data-vendo', 'lista');
+    await expect(page.locator('#banco-novo')).toBeHidden();
+  });
+
+  // A ação que sai da linha depois do clique ("Aprovar" que aprova): o foco fica na linha, e as setas continuam dela
+  test('a ação some depois do clique: o foco fica na linha, e ↓ e ↑ andam a partir dela', async ({ page }) => {
+    await abrir(page);
+    await montarBancada(page);
+    await page.evaluate(() => {
+      document.addEventListener('click', e => {
+        if (!e.target.closest('[data-act="banco-acao"]')) return;
+        delete window.modeloDoBanco.itens.find(i => i.id === 'P-1').acao;
+        window.banco.desenhar();
+      });
+    });
+    const focado = () => page.evaluate(() => document.activeElement.id || document.activeElement.dataset.chave);
+    await page.locator('#lin-banco-P-1').focus();
+    await page.keyboard.press('Tab');
+    await expect(linhaDaBancada(page, 'P-1').locator('.lista-acao')).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(linhaDaBancada(page, 'P-1').locator('.lista-acao')).toHaveCount(0);
+    expect(await page.evaluate(() => Boolean(document.activeElement.closest('[data-chave="i:P-1"]')))).toBe(true);
+    await page.keyboard.press('ArrowDown');
+    expect(await focado()).toBe('lin-banco-P-2');
+    await page.keyboard.press('ArrowUp');
+    expect(await focado()).toBe('lin-banco-P-1');
+  });
+
+  // Uma parte retida (o campo de texto em foco) é desenhada de novo depois, uma vez: os desenhos seguidos não acumulam esperas
+  test('com o campo do detalhe em foco, cinco desenhos seguidos deixam uma espera só', async ({ page }) => {
+    await abrir(page);
+    await montarBancada(page);
+    await abrirNaLista(page, 'banco', 'PR-BBB');
+    await page.locator('#det-banco-nome').click();
+    await page.keyboard.type('x');
+    await page.evaluate(() => { window.desenhosDoDetalhe = 0; for (let i = 0; i < 5; i++) window.banco.desenhar(); });
+    await page.waitForTimeout(1500);
+    // Os cinco, e a espera de 600 ms duas vezes (sem acumular: 5 + 5 × 2)
+    expect(await page.evaluate(() => window.desenhosDoDetalhe)).toBeLessThanOrEqual(8);
+    await expect(page.locator('#det-banco-nome')).toHaveValue('PR-BBBx');
+  });
+
+  // Com as cores forçadas do sistema, o fundo some: a linha escolhida tem o contorno em Highlight, e a chave mostra o estado
+  test('com as cores forçadas: a linha escolhida tem contorno, e a chave ligada é diferente da desligada', async ({ page }) => {
+    await page.emulateMedia({ forcedColors: 'active' });
+    await abrir(page);
+    await montarBancada(page);
+    await abrirNaLista(page, 'banco', 'PR-AAA');
+    const contorno = li => li.evaluate(el => getComputedStyle(el).outlineStyle);
+    expect(await contorno(linhaDaBancada(page, 'PR-AAA'))).not.toBe('none');
+    expect(await contorno(linhaDaBancada(page, 'PR-BBB'))).toBe('none');
+    const chave = linhaDaBancada(page, 'PR-AAA').locator('.lista-chave');
+    const trilho = () => chave.evaluate(el => [getComputedStyle(el, '::before').backgroundColor, getComputedStyle(el, '::after').marginLeft]);
+    const ligada = await trilho();
+    await chave.evaluate(el => el.setAttribute('aria-checked', 'false'));
+    const desligada = await trilho();
+    expect(ligada[0]).not.toBe(desligada[0]);
+    expect(ligada[1]).not.toBe(desligada[1]);
+  });
+
+  // "Mostrar inativos" do vazio sai da lista com o redesenho: o foco vai para a primeira linha que apareceu
+  test('"Mostrar inativos" do vazio, pelo teclado: o foco vai para a primeira linha que apareceu', async ({ page }) => {
+    await abrir(page);
+    await montarBancada(page);
+    await page.locator('[data-flt="banco"]').fill('ccc');
+    await page.locator('#banco [data-lista-inativos="banco"]').focus();
+    await page.keyboard.press('Enter');
+    await expect(page.locator('#lin-banco-PR-CCC')).toBeFocused();
+  });
 });
 
 // Alunos, a primeira tela do componente
@@ -448,7 +553,62 @@ test.describe('Alunos no componente: o clique, as teclas e o endereço', () => {
       await page.goForward();
       await expect(page.locator('#s-alu')).toHaveAttribute('data-vendo', 'detalhe');
       await expect(page.locator('#det-alu-titulo')).toHaveText('Carla');
+      // O foco vai para o título do detalhe (a linha que o tinha saiu da vista)
+      await expect(page.locator('#det-alu-titulo')).toBeFocused();
     });
+
+    // A exclusão no detalhe aberto (a entrada empilhada) volta por ela: o Voltar seguinte sai de Alunos, sem uma entrada morta
+    test('"Excluir aluno…" no detalhe: a lista volta, e o Voltar seguinte sai de Alunos', async ({ page }) => {
+      await abrir(page, { estado: estadoDeTres() });
+      await irPara(page, 'alu');
+      await linhaDoAluno(page, 1002).locator('.lista-botao').click();
+      await expect(page.locator('#s-alu')).toHaveAttribute('data-vendo', 'detalhe');
+      await page.locator('#det-alu-excluir').click();
+      await page.locator('#det-alu-excluir').click();
+      await expect(page.locator('#s-alu')).toHaveAttribute('data-vendo', 'lista');
+      await expect(linhaDoAluno(page, 1002)).toHaveCount(0);
+      await expect(page).toHaveURL(/#\/alu$/);
+      await expect(linhaDoAluno(page, 1001).locator('.lista-botao')).toBeFocused();
+      await page.goBack();
+      await expect(page.locator('#s-alu')).not.toHaveClass(/\bon\b/);
+    });
+  });
+
+  // O aluno que sai do cadastro (outra pessoa o excluiu) com o foco no detalhe: o foco fica na região do detalhe, que diz por quê
+  test('o aluno aberto sai do cadastro com o foco num campo: o foco vai para a região do detalhe', async ({ page }) => {
+    await abrir(page, { estado: estadoDeTres() });
+    await irPara(page, 'alu');
+    await abrirAluno(page, 1001);
+    await campoDoAberto(page, 'kg').focus();
+    await page.evaluate(async () => {
+      const { S } = await import('./js/state.js');
+      S.stu = S.stu.filter(s => s.id !== 1001);
+      const { redesenhar } = await import('./js/redesenho.js');
+      redesenhar('releitura');
+    });
+    await expect(page.locator('#det-alu')).toContainText('Este aluno saiu do cadastro.');
+    await expect(page.locator('#det-alu')).toBeFocused();
+    await expect(page).toHaveURL(/#\/alu$/);
+  });
+
+  // A 320 px, as ações do detalhe vão para baixo do título: o nome longo fica com a largura, sem quebrar no meio da palavra
+  test('a 320 px, as ações do detalhe ficam embaixo do título, e o nome longo tem a largura do painel', async ({ page }) => {
+    await page.setViewportSize({ width: 320, height: 800 });
+    const longo = { ...estadoDeTres() };
+    longo.stu = [aluno(1000, {}, { nm: 'Carla Fernanda de Albuquerque Monteiro', kg: 60 }), ...longo.stu.slice(1)];
+    await abrir(page, { estado: longo });
+    await irPara(page, 'alu');
+    await abrirAluno(page, 1000);
+    const [titulo, acoes] = await Promise.all(['#det-alu-titulo', '#det-alu .det-acoes'].map(s => page.locator(s).boundingBox()));
+    expect(acoes.y).toBeGreaterThanOrEqual(titulo.y + titulo.height - 1);
+    expect(titulo.width).toBeGreaterThanOrEqual(180);
+    // Nenhuma palavra partida: cada palavra numa linha só
+    const partidas = await page.locator('#det-alu-titulo').evaluate(h => {
+      const texto = h.firstChild, r = document.createRange();
+      let i = 0;
+      return texto.data.split(' ').filter(p => { r.setStart(texto, i); r.setEnd(texto, i + p.length); i += p.length + 1; return r.getClientRects().length > 1; });
+    });
+    expect(partidas).toEqual([]);
   });
 
   test('o Gestor escolhe e lê o texto, sem o CANAC; o detalhe tem até 760 px de largura', async ({ page }) => {

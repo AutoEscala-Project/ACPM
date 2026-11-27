@@ -163,6 +163,7 @@ ul.lista > .lista-vazia:first-child { border-top: 0; }
 @container (max-width: 480px) {
   .det-campo { grid-template-columns: minmax(0, 1fr); row-gap: 2px; }
   .det-valor > input, .det-valor > select { max-width: none; }
+  .det-acoes { flex: 1 0 100%; }
 }
 
 /* Os dados pessoais no detalhe (js/views/editor-de-dados-pessoais.js): os campos, o aviso, "Desfazer" e "Salvar", e quando foram
@@ -174,6 +175,17 @@ ul.lista > .lista-vazia:first-child { border-top: 0; }
 .det-dados-acoes { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
 .det-dados-rodape { margin: 6px 0 0; text-align: right; }
 .det-dados-rodape:empty { display: none; }
+
+/* Com as cores forçadas do sistema, o fundo e a sombra somem: a linha escolhida ganha o contorno em Highlight, e a chave
+   "Ativo" desenha o trilho e o botão com as cores do sistema (ligada: o trilho em Highlight) */
+@media (forced-colors: active) {
+  .lista-linha:has(> .lista-botao[aria-current]), .lista-grupo:has(> .lista-botao[aria-current]) { outline: 2px solid Highlight; outline-offset: -2px; }
+  .lista-chave::before, .lista-chave::after { forced-color-adjust: none; }
+  .lista-chave::before { background: Canvas; border: 1px solid CanvasText; }
+  .lista-chave::after { background: CanvasText; box-shadow: none; }
+  .lista-chave[aria-checked="true"]::before { background: Highlight; border-color: Highlight; }
+  .lista-chave[aria-checked="true"]::after { background: HighlightText; }
+}
 
 /* Os alvos de toque: 44 px no celular e em telas de toque (o aparelho, não o painel) */
 @media (max-width: 640px), (pointer: coarse) {

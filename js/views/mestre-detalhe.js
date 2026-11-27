@@ -5,7 +5,7 @@
 // casca (js/views/telas.js): o registro escolhido fica nele (#/alu/1000), e o componente nunca mexe no histórico sozinho.
 // criarMestreDetalhe só registra: os ouvintes ficam no documento, para os elementos da lista dele (data-lista, #det-<id>),
 // e nenhum elemento é lido antes do primeiro desenho
-import { algumDialogoAberto, gavetaDoEsc, ponteiroApertado, depoisDoClique } from '../dom.js';
+import { algumDialogoAberto, gavetaDoEsc, ponteiroApertado, depoisDoClique, anunciar } from '../dom.js';
 import { vizinhoNaLista, teclaNaLista, primeiraDaBusca } from '../lista.js';
 import { criarLista } from './lista.js';
 import { criarDetalhe } from './detalhe.js';
@@ -30,6 +30,28 @@ export function criarMestreDetalhe(opcoes) {
   const detalhe = criarDetalhe({ id, nomes, rotulo, vazio: opcoes.vazio, detalhe: opcoes.detalhe, edita: opcoes.edita || (() => true) });
   const elSecao = () => document.getElementById(secao);
   const aberta = () => telaAberta() === id;
+  let esperaDaRetida = null;
+
+  // data-vendo="ambos" é da tela (as duas regiões em sequência, no celular): o componente nunca o troca, e com ele a tela
+  // se comporta como com duas vistas (o detalhe não abre por cima da lista, e o Esc volta à linha)
+  const ambos = () => { const s = elSecao(); return Boolean(s && s.dataset.vendo === 'ambos'); };
+  const vistaUnica = () => umaVista() && !ambos();
+  function mudarVista(vendo) {
+    const s = elSecao();
+    if (s && s.dataset.vendo !== 'ambos') s.dataset.vendo = vendo;
+  }
+  const vendoODetalhe = () => { const s = elSecao(); return Boolean(s && s.dataset.vendo === 'detalhe'); };
+  // O foco que se perdeu: no body, ou num elemento que saiu da vista (a região escondida, a tela de antes)
+  const focoPerdido = () => {
+    const ativo = document.activeElement;
+    return !ativo || ativo === document.body || !ativo.getClientRects().length;
+  };
+  // A entrada que abriu o detalhe numa vista só sai do histórico (Voltar; a casca refaz a lista), em vez de ficar uma
+  // entrada morta com o mesmo endereço; sem ela, a entrada atual fica só com a tela
+  function sairDaEntradaDoDetalhe() {
+    if (vistaUnica() && aberta() && window.history.state && window.history.state.detalhe === id) window.history.back();
+    else if (aberta()) enderecar(null);
+  }
 
   // O endereço do registro: o novo que o servidor ainda não confirmou é "novo" (o id dele pode ser o de outra pessoa)
   const noEndereco = sel => (sel === null || sel === undefined ? null : estado.naoConfirmados.has(sel) ? 'novo' : sel);
@@ -49,14 +71,16 @@ export function criarMestreDetalhe(opcoes) {
       }
       return;
     }
+    const regiao = detalhe.regiao();
+    const focoNoDetalhe = Boolean(regiao && regiao.contains(document.activeElement));
     const { desenhou, saiu } = lista.desenhar(opcoesDoDesenho);
     if (!desenhou) return;
     if (saiu) {
       detalhe.trocouDeRegistro();
       detalhe.avisarSemEscolha(`Este ${um} saiu do cadastro.`);
-      if (aberta()) enderecar(null);
-      const s = elSecao();
-      if (s && s.dataset.vendo === 'detalhe') s.dataset.vendo = 'lista';
+      anunciar(`Este ${um} saiu do cadastro.`);
+      const naVistaDoDetalhe = vistaUnica() && vendoODetalhe();
+      if (naVistaDoDetalhe) { mudarVista('lista'); sairDaEntradaDoDetalhe(); } else if (aberta()) enderecar(null);
     }
     const vista = lista.vista();
     const retidas = detalhe.desenhar(estado.selecionado, {
@@ -65,22 +89,36 @@ export function criarMestreDetalhe(opcoes) {
       anterior: vizinhoNaLista(vista, estado.selecionado, -1),
       proximo: vizinhoNaLista(vista, estado.selecionado, 1)
     });
-    if (retidas) setTimeout(() => desenhar(), 600);
+    // O registro saiu com o foco no detalhe: o foco vai para a região dele (que diz por quê); numa vista só, para a lista
+    if (saiu && focoNoDetalhe && focoPerdido()) focarDepoisDeSair();
+    // Uma espera só: o desenho seguinte refaz o que ficou retido (cada desenho não começa outra)
+    clearTimeout(esperaDaRetida);
+    esperaDaRetida = retidas ? setTimeout(() => { esperaDaRetida = null; desenhar(); }, 600) : null;
+  }
+
+  // O foco depois de o registro aberto sair (do cadastro, ou a inclusão recusada): a região do detalhe, à vista; senão a
+  // parada da lista
+  function focarDepoisDeSair() {
+    const r = detalhe.regiao();
+    if (r && r.getClientRects().length) { r.focus(); return; }
+    const vista = lista.vista();
+    const parada = vista && vista.paradas.length ? (estado.parada && vista.paradas.includes(estado.parada) ? estado.parada : vista.paradas[0]) : null;
+    const botao = parada && lista.botaoDaParada(parada);
+    if (botao) botao.focus();
   }
 
   // A vista do detalhe (numa vista só): a entrada nova no histórico (Voltar devolve a lista), o topo, o foco no título
   function abrirDetalhe({ empilhar = true } = {}) {
     if (empilhar) enderecar(estado.selecionado, { empilhar: true });
-    const s = elSecao();
-    if (s) s.dataset.vendo = 'detalhe';
+    mudarVista('detalhe');
     window.scrollTo(0, 0);
-    detalhe.focarNoTitulo();
+    // Com nada escolhido (o vazio fixo: o formulário de um item novo), o foco vai para a região
+    if (!detalhe.focarNoTitulo()) { const r = detalhe.regiao(); if (r) r.focus(); }
   }
 
   // A lista de volta (numa vista só), com o foco na linha escolhida
   function voltarParaALista({ focar = true } = {}) {
-    const s = elSecao();
-    if (s) s.dataset.vendo = 'lista';
+    mudarVista('lista');
     const botao = lista.botaoDe(estado.selecionado);
     if (focar && botao) {
       botao.focus({ preventScroll: true });
@@ -92,7 +130,9 @@ export function criarMestreDetalhe(opcoes) {
   // 'vizinho' ("Anterior", "Próximo"), 'endereco' (a casca: não mexe no endereço), 'novo'
   function escolher(sel, { abrir = false, origem = 'clique' } = {}) {
     const novo = sel === null || sel === undefined ? null : String(sel);
-    if (novo !== null && origem !== 'endereco') estado.perdidos.delete(novo);
+    // Escolhido de novo (também pelo endereço), o id de uma inclusão recusada vale outra vez: é o registro de quem o
+    // gravou (o endereço nunca levou o id recusado: até a confirmação ele é "novo")
+    if (novo !== null) estado.perdidos.delete(novo);
     if (estado.selecionado !== novo) detalhe.trocouDeRegistro();
     detalhe.avisarSemEscolha('');
     // Do endereço, o registro é pedido: vira a escolha no primeiro desenho cujo modelo o tem (os dados podem não ter
@@ -102,7 +142,13 @@ export function criarMestreDetalhe(opcoes) {
     // A parada do Tab vai para a escolhida (a que a lista ainda não tem, um registro novo: a da escolha, no desenho)
     estado.parada = novo !== null ? lista.chaveDe(novo) : estado.parada;
     desenhar();
-    if (abrir && umaVista() && novo !== null) { abrirDetalhe({ empilhar: origem !== 'endereco' }); return; }
+    // Numa vista só, o detalhe abre; com nada escolhido, o vazio dele (o bloco fixo: o formulário de um item novo), numa
+    // entrada nova do histórico (Voltar devolve a lista)
+    if (abrir && vistaUnica()) {
+      if (novo === null) { enderecar(null, { empilhar: true }); abrirDetalhe({ empilhar: false }); return; }
+      abrirDetalhe({ empilhar: origem !== 'endereco' });
+      return;
+    }
     if (origem === 'endereco') return;
     if (origem === 'teclas') {
       clearTimeout(esperaDoEndereco);
@@ -138,7 +184,18 @@ export function criarMestreDetalhe(opcoes) {
 
   document.addEventListener('click', e => {
     if (!(e.target instanceof Element)) return;
-    if (e.target.closest(`#${id}-inativos, [data-lista-inativos="${id}"]`)) { lista.alternarInativos(); return; }
+    if (e.target.closest(`#${id}-inativos`)) { lista.alternarInativos(); return; }
+    // "Mostrar inativos" do vazio sai da lista com o redesenho: o foco vai para a primeira linha que apareceu (sem
+    // nenhuma, para a busca)
+    if (e.target.closest(`[data-lista-inativos="${id}"]`)) {
+      lista.alternarInativos();
+      const vista = lista.vista();
+      const parada = vista && (primeiraDaBusca(vista, Boolean(estado.busca.trim())) || vista.paradas[0]);
+      if (parada) { estado.parada = parada; desenhar(); }
+      const destino = (parada && lista.botaoDaParada(parada)) || document.querySelector(`[data-flt="${id}"]`);
+      if (destino) destino.focus();
+      return;
+    }
     if (e.target.closest(`[data-lista-limpar="${id}"]`)) { lista.limpar(); return; }
     if (e.target.closest(`[data-lista-tentar="${id}"]`)) { const m = opcoes.modelo(); if (m && m.tentar) m.tentar(); return; }
     const abrirDoAviso = e.target.closest(`[data-lista-abrir="${id}"]`);
@@ -197,12 +254,14 @@ export function criarMestreDetalhe(opcoes) {
         if (!botao) return;
         e.preventDefault();
         escolher(botao.dataset.item, { abrir: true });
-        if (!umaVista()) detalhe.focarNoTitulo();
+        if (!vistaUnica()) detalhe.focarNoTitulo();
       }
       return;
     }
+    // A linha mesma também: o foco que o redesenho deixou nela (data-foco-neutro) quando a ação dela saiu ("Aprovar" que
+    // aprova); as teclas contam dali
     const li = naLista(e.target) && e.target.closest('[data-chave]');
-    if (!li || !e.target.matches('.lista-botao, .lista-seta')) return;
+    if (!li || !(e.target.matches('.lista-botao, .lista-seta') || (e.target === li && li.hasAttribute('data-foco-neutro')))) return;
     if (e.key === ' ') return;
     const r = teclaNaLista(lista.vista(), li.dataset.chave, e.key);
     if (!r) return;
@@ -215,7 +274,7 @@ export function criarMestreDetalhe(opcoes) {
       return;
     }
     if (r.detalhe) {
-      if (umaVista()) abrirDetalhe();
+      if (vistaUnica()) abrirDetalhe();
       else detalhe.focarNoTitulo();
       return;
     }
@@ -243,13 +302,17 @@ export function criarMestreDetalhe(opcoes) {
       e.preventDefault();
       if (nome && detalhe.temErro(nome)) { detalhe.limparErro(nome); desenhar({ forcar: true }); }
       const atual = nome ? document.getElementById(`det-${id}-${nome}`) : campo;
-      if (atual && atual.value !== atual.defaultValue) atual.value = atual.defaultValue;
+      if (atual && atual.value !== atual.defaultValue) {
+        atual.value = atual.defaultValue;
+        // Um campo dos dados pessoais: o rascunho acompanha o que a tela mostra (o input que a digitação daria)
+        if (atual.matches('[data-dado]')) atual.dispatchEvent(new Event('input', { bubbles: true }));
+      }
       if (atual) atual.focus();
       return;
     }
     if (e.target.matches('select')) return;
     e.preventDefault();
-    if (umaVista()) {
+    if (vistaUnica()) {
       if (window.history.state && window.history.state.detalhe === id) window.history.back();
       else { voltarParaALista(); enderecar(null); }
     } else voltarParaALista();
@@ -277,10 +340,18 @@ export function criarMestreDetalhe(opcoes) {
         if (sel === null) { voltarParaALista({ focar: false }); return { item: null }; }
         escolher(sel, { origem: 'endereco' });
         const escolhido = estado.selecionado === sel;
-        if (umaVista() && escolhido) { if (s) s.dataset.vendo = 'detalhe'; return { item: noEndereco(sel), lugar: detalhe.regiao(), focou: false }; }
-        return { item: escolhido ? noEndereco(sel) : estado.pedida ? sel : null };
+        if (vistaUnica() && escolhido) {
+          mudarVista('detalhe');
+          // Avançar (ou o endereço) até o detalhe: o foco, que estava na linha agora escondida, vai para o título
+          const focou = historico === 'nenhum' && focoPerdido() && detalhe.focarNoTitulo();
+          return { item: noEndereco(sel), lugar: detalhe.regiao(), focou };
+        }
+        // Voltar até a tela (duas vistas): o foco que ficou na tela de antes vai para a linha do registro
+        const botao = escolhido && historico === 'nenhum' && focoPerdido() && lista.botaoDe(sel);
+        if (botao) botao.focus({ preventScroll: true });
+        return { item: escolhido ? noEndereco(sel) : estado.pedida ? sel : null, ...(botao ? { focou: true } : {}) };
       }
-      if (umaVista()) {
+      if (vistaUnica()) {
         const voltando = Boolean(s && s.dataset.vendo === 'detalhe' && historico === 'nenhum');
         voltarParaALista({ focar: voltando });
         return { item: null, focou: voltando };
@@ -300,15 +371,14 @@ export function criarMestreDetalhe(opcoes) {
         estado.perdidos.add(sel);
         estado.mantidos.delete(sel);
         if (estado.selecionado !== sel) return;
-        const s = elSecao();
         const focoNoDetalhe = Boolean(detalhe.regiao() && detalhe.regiao().contains(document.activeElement));
+        const naVistaDoDetalhe = vistaUnica() && vendoODetalhe();
         estado.selecionado = null;
         detalhe.trocouDeRegistro();
         detalhe.avisarSemEscolha(`A inclusão do ${um} novo não foi confirmada pelo servidor.`);
         desenhar();
-        enderecar(null);
-        if (s && s.dataset.vendo === 'detalhe') s.dataset.vendo = 'lista';
-        if (focoNoDetalhe && detalhe.regiao()) detalhe.regiao().focus();
+        if (naVistaDoDetalhe) { mudarVista('lista'); sairDaEntradaDoDetalhe(); } else enderecar(null);
+        if (focoNoDetalhe) focarDepoisDeSair();
       });
     },
     // O registro excluído pela tela: nada escolhido, o foco na linha que ficou no lugar dele
@@ -316,11 +386,13 @@ export function criarMestreDetalhe(opcoes) {
       const vista = lista.vista();
       const antes = vista ? vista.registros.findIndex(r => r.id === String(idRemovido)) : -1;
       if (estado.selecionado === String(idRemovido)) estado.selecionado = null;
+      const naVistaDoDetalhe = vistaUnica() && vendoODetalhe();
       detalhe.trocouDeRegistro();
       desenhar();
-      enderecar(null);
-      const s = elSecao();
-      if (s) s.dataset.vendo = 'lista';
+      mudarVista('lista');
+      // Numa vista só, a entrada que abriu o detalhe sai do histórico (o Voltar seguinte sai da tela)
+      if (naVistaDoDetalhe) sairDaEntradaDoDetalhe();
+      else enderecar(null);
       const depois = lista.vista();
       const destino = depois && depois.registros[Math.min(Math.max(antes, 0), depois.registros.length - 1)];
       const botao = destino && lista.botaoDe(destino.id);
