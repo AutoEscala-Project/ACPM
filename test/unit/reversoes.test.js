@@ -32,6 +32,8 @@ const VALIDAS = [
   { kind: 'restaurarEscolha', pedidos: [{ stuId: 1000, mid: 0, insId: 0 }], fixos: { '1000_0_1': { a: 390, b: 450, r: 'PR-VOB', insId: 1 } }, soltar: ['1001_2_1'], label: '↶ Reverter' },
   { kind: 'restaurarHorarios', cat: 'PA-34', lista: [390, 450], pedidos: [{ stuId: 1000, mid: 2, p1: 450, p2: -1, jan: 'h450' }], label: '↶ Reverter' },
   { kind: 'readicionarRecurso', recurso: { reg: 'PR-NEW', tipo: 'C172', soVfr: true }, av: false, label: '↶ Reverter' },
+  // "Colocar no curso até…" (Alunos, passo A): o resultado de antes de cada missão que a colocação aprovou
+  { kind: 'desfazerColocacao', aluno: 1000, curso: 'PP', missoes: [{ missao: 'IN-01', resultado: 'pendente' }, { missao: 'CT-01', resultado: 'reprovado' }], label: '↶ Reverter' },
   { kind: 'desfazerAgendamento', stuId: 1000, mid: 2, criado: true, pedido: null, fixo: null, disponibilidade: null, label: '↶ Desfazer' },
   {
     kind: 'desfazerAgendamento', stuId: 1000, mid: 0, criado: false, pedido: PEDIDO_DE_ANTES,
@@ -114,6 +116,23 @@ describe('Reversões do histórico', () => {
       { de: 'recurso', id: 'pr vob' }, { de: 'instrutor', id: 'PR-VOB' }, { inativo: 'true' }, { inativo: null }, { id: ATAQUE }
     ]) assert.equal(validarReversao({ ...base, ...ruim }, FROTA_INICIAL), null, JSON.stringify(ruim));
     assert.deepEqual(validarReversao({ ...base, extra: 1 }, FROTA_INICIAL), base);
+  });
+
+  // desfazerColocacao: o aluno (um número), a sigla do curso e, de cada missão (o código do curso), o resultado de antes:
+  // pendente, reprovado ou aprovado; de 1 a 60 missões
+  it('desfazerColocacao: o aluno, o curso e o resultado de antes de cada missão; fora disso, não vale', () => {
+    const base = { kind: 'desfazerColocacao', aluno: 1000, curso: 'PP', missoes: [{ missao: 'IN-01', resultado: 'pendente' }], label: '↶ Reverter' };
+    for (const ruim of [
+      { aluno: '1000' }, { aluno: 0 }, { aluno: 1.5 }, { curso: 'pp' }, { curso: ATAQUE }, { curso: ['PP'] }, { missoes: [] }, { missoes: {} },
+      { missoes: [{ missao: 'in 01', resultado: 'pendente' }] }, { missoes: [{ missao: ATAQUE, resultado: 'pendente' }] },
+      { missoes: [{ missao: 'IN-01', resultado: 'ótimo' }] }, { missoes: [{ missao: 'IN-01' }] }, { missoes: [null] },
+      { missoes: Array.from({ length: 61 }, (_, i) => ({ missao: `M-${i}`, resultado: 'pendente' })) }
+    ]) assert.equal(validarReversao({ ...base, ...ruim }, FROTA_INICIAL), null, JSON.stringify(ruim).slice(0, 80));
+    assert.deepEqual(validarReversao({ ...base, extra: 1, missoes: [{ missao: 'IN-01', resultado: 'pendente', x: 1 }] }, FROTA_INICIAL), base);
+    assert.equal(validarReversao({ ...base, missoes: Array.from({ length: 60 }, (_, i) => ({ missao: `M-${i}`, resultado: 'aprovado' })) }, FROTA_INICIAL).missoes.length, 60);
+    // A data da colocação (o ↶ só devolve a missão ainda aprovada sem voo nela): uma data AAAA-MM-DD; sem ela, vale
+    assert.deepEqual(validarReversao({ ...base, data: '2026-11-10' }, FROTA_INICIAL), { ...base, data: '2026-11-10' });
+    for (const data of ['10/11/2026', '2026-02-30', 20261110, null, ATAQUE]) assert.equal(validarReversao({ ...base, data }, FROTA_INICIAL), null, String(data).slice(0, 40));
   });
 
   it('o rótulo é um texto curto; fora disso, "↶ Reverter"', () => {

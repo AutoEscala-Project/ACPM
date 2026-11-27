@@ -147,3 +147,32 @@ export function missoesDoDia(curso, aluno, { fStatus, mid = null } = {}) {
     .filter(p => p.fly && p.etapa && (mid === null || (p.mid || 0) !== mid) && (fStatus || {})[chaveDoVoo(aluno.id, p.mid || 0)] !== 'Cancelado')
     .map(p => porCodigo.get(p.etapa)).filter(Boolean));
 }
+
+// "Colocar no curso até…" (Alunos): o aluno que chega no meio do curso. As missões (ids, na ordem do curso) que a
+// colocação aprova sem voo: todas as de antes da escolhida (missaoId) que ainda não estão aprovadas nem dispensadas. O
+// translado do Noturno conta pela noite (a noite entra uma vez, nunca um translado; o translado dispensado vale por si), e
+// a noite da própria escolhida fica de fora. Não é o que falta para a escolhida (motivoDoBloqueio): uma fase livre ou
+// "depois de…" deixaria o aluno numa fase de trás
+export function paraColocarNoCurso(curso, mapa, aluno, missaoId) {
+  const { missoes, posicao } = percursoDoCurso(curso);
+  if (!posicao.has(missaoId)) return [];
+  const noturnos = noturnosDoCurso(curso);
+  const alvo = quemDecide(noturnos, missoes[posicao.get(missaoId)]);
+  const ids = [];
+  for (const m of missoes.slice(0, posicao.get(missaoId))) {
+    if (m.dispensada) continue;
+    const q = quemDecide(noturnos, m);
+    if (q === alvo || ids.includes(q.id) || q.dispensada || situacaoDa(mapa, aluno, curso.sigla, q.codigo) === 'aprovado') continue;
+    ids.push(q.id);
+  }
+  return ids;
+}
+
+// As missões em que a colocação pode parar, por fase, na ordem do curso: nem um translado do Noturno, nem dispensada.
+// [{ fase, missoes }], só as fases com alguma
+export function alvosDaColocacao(curso) {
+  const { fases, porFase } = percursoDoCurso(curso);
+  const noturnos = noturnosDoCurso(curso);
+  const translado = m => noturnos.has(m.id) && noturnos.get(m.id).noite.id !== m.id;
+  return fases.map(fase => ({ fase, missoes: porFase.get(fase.id).filter(m => !m.dispensada && !translado(m)) })).filter(g => g.missoes.length);
+}

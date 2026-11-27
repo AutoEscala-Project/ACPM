@@ -8,7 +8,8 @@ export const registraNaAgenda = perfil => operaEscala(perfil) || perfil === 'sec
 export const gerenciaContas = perfil => perfil === 'administrador';
 // A TV da recepção só vê o painel do dia (painel.html)
 export const soPainel = perfil => perfil === 'painel';
-// Dados pessoais de alunos e instrutores (CPF, CANAC, nascimento, celular e e-mail): operadores, administradores e a secretaria
+// Dados pessoais de alunos e instrutores (nome completo, CPF, CANAC, nascimento, celular e e-mail): operadores,
+// administradores e a secretaria veem
 export const veDadosPessoais = perfil => operaEscala(perfil) || perfil === 'secretaria';
-// Quem altera os dados pessoais: os mesmos, por enquanto (a secretaria deixa de alterar no passo A, com o servidor)
-export const editaDadosPessoais = perfil => veDadosPessoais(perfil);
+// Quem altera os dados pessoais: quem opera a escala; a secretaria só lê (o servidor confere: grava_dados_pessoais)
+export const editaDadosPessoais = perfil => operaEscala(perfil);

@@ -1,8 +1,12 @@
-// Dados pessoais de alunos e instrutores: CPF, CANAC (o código da ANAC), nascimento, celular e e-mail. Ficam fora do
-// cadastro, numa tabela que só operadores, administradores e a secretaria leem (o servidor valida tudo de novo), e
-// nunca vão para o CSV, o PDF ou o BI. O histórico registra só quais campos mudaram.
+// Dados pessoais de alunos e instrutores: o nome completo, CPF, CANAC (o código da ANAC), nascimento, celular e e-mail.
+// Ficam fora do cadastro, numa tabela que operadores, administradores e a secretaria leem e só operadores e
+// administradores gravam (o servidor valida tudo de novo), e nunca vão para a escala, o CSV, o PDF, o BI, o link ou o
+// Gestor. O histórico registra só quais campos mudaram. O nome completo é o nome civil inteiro; o nome da escala (o do
+// cadastro) continua sendo o que todos veem
 import { dataIsoValida } from './format.js';
+export const LIMITE_DO_NOME_COMPLETO = 120;
 export const CAMPOS_PESSOAIS = [
+  { id: 'nome_completo', rotulo: 'Nome completo' },
   { id: 'cpf', rotulo: 'CPF' },
   { id: 'canac', rotulo: 'CANAC' },
   { id: 'nascimento', rotulo: 'Nascimento' },
@@ -28,6 +32,11 @@ const dataValida = (iso, hoje) => dataIsoValida(iso) && iso >= '1900-01-01' && i
 const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
 const REGRAS = {
+  nome_completo: {
+    normalizar: v => String(v ?? '').replace(/\s+/g, ' ').trim(),
+    valido: v => v.length <= LIMITE_DO_NOME_COMPLETO,
+    erro: `O nome completo tem no máximo ${LIMITE_DO_NOME_COMPLETO} caracteres.`
+  },
   cpf: { normalizar: digitos, valido: cpfValido, erro: 'CPF inválido.' },
   canac: { normalizar: digitos, valido: v => /^\d{6}$/.test(v), erro: 'O CANAC tem 6 dígitos.' },
   nascimento: { normalizar: v => String(v ?? '').trim(), valido: (v, hoje) => dataValida(v, hoje), erro: 'Data de nascimento inválida.' },
@@ -50,6 +59,10 @@ export function validarDadosPessoais(entrada, hoje) {
   return { dados, erros };
 }
 
+// O que o app manda ao gravar: os campos preenchidos e sempre a chave do nome completo (vazia apaga; sem a chave, o
+// servidor fica com o gravado, para a aba do app de antes do nome completo não o apagar)
+export const paraGravar = dados => ({ ...dados, nome_completo: dados.nome_completo || '' });
+
 export const formatarCpf = cpf => {
   const d = digitos(cpf);
   return d.length === 11 ? `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}` : d;
@@ -59,9 +72,10 @@ export const formatarCelular = celular => {
   return d.length === 11 ? `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}` : d;
 };
 
-// Os nomes dos campos que mudaram (para o histórico, que não guarda os valores)
+// Os nomes dos campos que mudaram (para o histórico, que não guarda os valores). O nome completo sem a chave não mudou
+const valorDe = (dados, id) => (dados && dados[id]) || '';
 export const camposAlterados = (antes, depois) => CAMPOS_PESSOAIS
-  .filter(({ id }) => ((antes && antes[id]) || '') !== ((depois && depois[id]) || ''))
+  .filter(({ id }) => (id !== 'nome_completo' || (depois && Object.hasOwn(depois, id))) && valorDe(antes, id) !== valorDe(depois, id))
   .map(c => c.rotulo);
 
 // O nome de um aluno ou instrutor no cadastro, ou null (não está no cadastro)
@@ -80,7 +94,8 @@ export function semQuemSaiu(tabela, cadastro) {
 
 // O que o servidor faz ao gravar (salvar_dados_pessoais), para o modo local e o servidor dos testes seguirem a mesma
 // regra: só para quem está no cadastro; valida; confere que o CPF e o CANAC não se repetem entre pessoas do mesmo tipo;
-// recusa quando a versão lida (atualizadoEmLido) não é a guardada (outra pessoa gravou antes); sem nenhum dado, apaga.
+// recusa quando a versão lida (atualizadoEmLido) não é a guardada (outra pessoa gravou antes); sem a chave do nome
+// completo, fica o gravado; sem nenhum dado (os seis campos), apaga.
 // tabela: { 'aluno:1000': {...} }. Devolve a tabela nova, a versão nova e a descrição para o histórico (null sem
 // mudança); o erro traz o código do servidor e o campo
 const erroDosDados = (code, message, campo = null) => Object.assign(new Error(message), { code, campo });
@@ -100,14 +115,27 @@ export function gravarDadosPessoais(tabela, tipo, id, entrada, { hoje, autor = n
   if ((atual ? atual.atualizado_em : null) !== (atualizadoEmLido ?? null)) {
     throw erroDosDados('PT409', 'os dados pessoais foram alterados por outra pessoa; abra de novo para ver a versão atual');
   }
+  // O nome completo: sem a chave, o gravado; com ela vazia, nenhum
+  const comNome = Object.hasOwn(entrada || {}, 'nome_completo');
+  if (!comNome && atual && atual.nome_completo) dados.nome_completo = atual.nome_completo;
   const nova = { ...tabela };
   const preenchido = Object.keys(dados).length > 0;
   if (preenchido) nova[chave] = { ...dados, atualizado_em: agora, atualizado_por: autor };
   else delete nova[chave];
-  const alterados = camposAlterados(atual, dados);
+  const alterados = camposAlterados(atual, comNome ? { nome_completo: '', ...dados } : dados);
   return {
     tabela: nova,
     atualizado_em: preenchido ? agora : null,
     descricao: alterados.length ? `Dados pessoais de ${nome || tipo} atualizados: ${alterados.join(', ')}` : null
   };
+}
+
+// A lista lida (só o CANAC, o nome completo e a versão de cada um) junto com as pessoas já lidas inteiras (guardados): a
+// leitura de uma pessoa pode chegar antes da lista, e a lista não pode apagar dela o CPF, o nascimento, o celular e o
+// e-mail. Com a mesma versão, fica a lida; com outra, vale a lista (a seção vê a versão diferente da lida e lê a pessoa
+// de novo: pessoaEscolhida, js/views/editor-de-dados-pessoais.js); a lida que a lista não trouxe fica. Os dois pelo id
+export function juntarAListaLida(lista, guardados) {
+  const juntos = { ...guardados };
+  for (const [id, d] of Object.entries(lista)) juntos[id] = guardados[id] && guardados[id].atualizado_em === d.atualizado_em ? { ...d, ...guardados[id] } : d;
+  return juntos;
 }

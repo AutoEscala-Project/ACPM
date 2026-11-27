@@ -85,7 +85,7 @@ test.describe('O Esc e as gavetas do cadastro', () => {
   // cima na tela) ou a que tem o foco: o Esc fecha só ela, e o próximo, a de baixo. O Histórico abre pelo teclado, porque
   // a outra gaveta cobre o botão dele para o mouse
   const GAVETAS = [
-    ['os Dados pessoais', '#painel-dados', '#dado-cpf', async page => {
+    ['os Dados pessoais', '#painel-dados', '#dado-nome_completo', async page => {
       await irParaVista(page, 'ins', 'cadastro');
       await page.locator('#inst tr[data-id="1"] [data-dados]').click();
     }],
@@ -131,7 +131,7 @@ test.describe('O Esc e as gavetas do cadastro', () => {
     // A gaveta do Histórico pode cobrir o botão da linha: pelo teclado
     await page.locator('#inst tr[data-id="1"] [data-dados]').focus();
     await page.keyboard.press('Enter');
-    await expect(page.locator('#dado-cpf')).toBeFocused();
+    await expect(page.locator('#dado-nome_completo')).toBeFocused();
     expect(await gavetaNaTela(page)).toBe('painel-dados');
     await page.keyboard.press('Escape');
     await expect(page.locator('#painel-dados')).toBeHidden();
@@ -143,8 +143,8 @@ test.describe('O Esc e as gavetas do cadastro', () => {
   test('o Esc fecha a gaveta em que está o foco, mesmo a de baixo; o próximo, a outra', async ({ page }) => {
     const [, , focoNaGaveta, abrirGaveta] = GAVETAS[0];
     await abrirComDuasGavetas(page, { abrirGaveta, focoNaGaveta });
-    // O foco volta para o CPF, nos Dados pessoais (embaixo do Histórico)
-    await page.locator('#dado-cpf').focus();
+    // O foco volta para o nome completo, o primeiro campo dos Dados pessoais (embaixo do Histórico)
+    await page.locator('#dado-nome_completo').focus();
     await page.keyboard.press('Escape');
     await expect(page.locator('#painel-dados')).toBeHidden();
     await expect(page.locator('#historico')).toBeVisible();

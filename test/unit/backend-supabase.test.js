@@ -11,6 +11,8 @@ import { PROGRAMA } from '../helpers/casos-do-programa.js';
 import { CASOS_DA_AGENDA, CURSO_DOS_CASOS, DATA_DOS_CASOS, pedidoDosCasos, localDosCasos, guardadoDoCaso } from '../helpers/casos-da-agenda.js';
 import { recusaDoPedido } from '../../js/agenda.js';
 import { GROUND_DURATION_H, MISSOES_LOCAIS, LIMITE_DE_VOOS_LOCAIS } from '../../js/config.js';
+import { gravarDadosPessoais } from '../../js/dados-pessoais.js';
+import { CASOS_DOS_DADOS_PESSOAIS, CADASTRO_DOS_CASOS, ALUNO_DOS_CASOS, VERSAO_DOS_CASOS, tabelaDoCaso, versaoLidaDoCaso } from '../helpers/casos-dos-dados-pessoais.js';
 
 const espera = ms => new Promise(r => setTimeout(r, ms));
 
@@ -23,6 +25,8 @@ function clienteFalso(documentos = {}, { atraso = 0, dias = {} } = {}) {
   const historico = [];
   const solicitacoes = [];
   const resultados = [];
+  // Os dados pessoais ('aluno:1000' → campos, com a versão), gravados pela regra do servidor (js/dados-pessoais.js)
+  const dadosPessoais = new Map();
   const cursos = { lista: cursosIniciais(), alteracoes: [] };
   // Contas do servidor falso: a do usuário logado e as que o administrador gerencia
   const contas = [{ usuario: 'u-eu', email: 'eu@teste.acpm', senha: 'senha atual bem longa', nome: 'Eu', perfil: 'administrador' }];
@@ -38,6 +42,9 @@ function clienteFalso(documentos = {}, { atraso = 0, dias = {} } = {}) {
     if (tabela === 'historico') return historico.map(h => ({ ...h }));
     if (tabela === 'solicitacoes') return solicitacoes.map(s => ({ ...s }));
     if (tabela === 'resultados_de_missao') return resultados.map(r => ({ ...r }));
+    if (tabela === 'dados_pessoais') {
+      return [...dadosPessoais].map(([chave, d]) => ({ tipo: chave.split(':')[0], id_cadastro: +chave.split(':')[1], nome_completo: null, cpf: null, canac: null, nascimento: null, celular: null, email: null, atualizado_por: null, ...d }));
+    }
     throw new Error(`tabela inesperada: ${tabela}`);
   };
 
@@ -65,6 +72,7 @@ function clienteFalso(documentos = {}, { atraso = 0, dias = {} } = {}) {
     dias: tabelaDias,
     historico,
     cursos,
+    dadosPessoais,
     rpcs,
     chamadas,
     falharProximas(n) { falhasDeRede = n; },
@@ -166,6 +174,18 @@ function clienteFalso(documentos = {}, { atraso = 0, dias = {} } = {}) {
           return { data: resultados.length, error: null };
         } catch (e) {
           return { data: null, error: { code: e.code, message: e.message } };
+        }
+      }
+      if (nome === 'salvar_dados_pessoais') {
+        try {
+          const cadastro = banco.get('cadastro');
+          const r = gravarDadosPessoais(Object.fromEntries(dadosPessoais), args.p_tipo, args.p_id, args.p_dados,
+            { hoje: '2026-11-10', autor: contas[0].nome, agora: '2026-11-10T12:00:00.000Z', atualizadoEmLido: args.p_atualizado_em, cadastro: cadastro && cadastro.conteudo });
+          dadosPessoais.clear();
+          Object.entries(r.tabela).forEach(([chave, d]) => dadosPessoais.set(chave, d));
+          return { data: { atualizado_em: r.atualizado_em, atualizado_por: contas[0].nome, historico: r.descricao ? { id: 1, descricao: r.descricao } : null }, error: null };
+        } catch (e) {
+          return recusaDoBanco(e);
         }
       }
       if (nome === 'dias_em_formato_antigo') {
@@ -575,6 +595,35 @@ describe('Backend Supabase: escala por data e histórico', () => {
       assert.deepEqual(guardadoDoCaso(s), caso.registrado);
     });
   }
+
+  // Os casos do nome completo (test/helpers/casos-dos-dados-pessoais.js): o que o app manda chega pelos nomes, e a recusa
+  // volta com o código e o campo
+  for (const caso of CASOS_DOS_DADOS_PESSOAIS) {
+    it(`dados pessoais, caso: ${caso.nome}`, async () => {
+      const cliente = clienteFalso({ cadastro: { conteudo: CADASTRO_DOS_CASOS, versao: 1 } });
+      for (const [chave, d] of Object.entries(tabelaDoCaso(caso))) cliente.dadosPessoais.set(chave, d);
+      const gravar = criarBackendSupabase(cliente).salvarDadosPessoais('aluno', ALUNO_DOS_CASOS, caso.dados, { atualizadoEm: versaoLidaDoCaso(caso), data: '2026-11-11' });
+      assert.deepEqual(cliente.chamadas.at(-1), ['salvar_dados_pessoais', { p_tipo: 'aluno', p_id: ALUNO_DOS_CASOS, p_dados: caso.dados, p_atualizado_em: versaoLidaDoCaso(caso), p_data: '2026-11-11' }]);
+      if (caso.erro) {
+        await assert.rejects(gravar, e => e.code === caso.erro.code && e.campo === caso.erro.campo);
+        return;
+      }
+      const r = await gravar;
+      const linha = cliente.dadosPessoais.get(`aluno:${ALUNO_DOS_CASOS}`);
+      assert.equal(Boolean(linha), caso.gravado.linha);
+      assert.equal((linha && linha.nome_completo) ?? null, caso.gravado.nome_completo);
+      if (caso.gravado.historico) assert.equal(r.historico.descricao, caso.gravado.historico);
+    });
+  }
+
+  it('dados pessoais: a lista pede só o CANAC, o nome completo e a versão; a leitura da pessoa, todos os campos', async () => {
+    const cliente = clienteFalso();
+    cliente.dadosPessoais.set('aluno:1002', { nome_completo: 'Caio da Silva', cpf: '52998224725', canac: '222333', email: 'caio@exemplo.com', atualizado_em: VERSAO_DOS_CASOS, atualizado_por: 'Maria' });
+    const backend = criarBackendSupabase(cliente);
+    assert.deepEqual(await backend.listarDadosPessoais('aluno'), { 1002: { nome_completo: 'Caio da Silva', canac: '222333', atualizado_em: VERSAO_DOS_CASOS } });
+    assert.deepEqual(await backend.lerDadosPessoais('aluno', 1002),
+      { nome_completo: 'Caio da Silva', cpf: '52998224725', canac: '222333', email: 'caio@exemplo.com', atualizado_em: VERSAO_DOS_CASOS, atualizado_por: 'Maria' });
+  });
 
   it('resultados das missões: registra pela função, lê a situação e os registros do dia; repassa o código do erro', async () => {
     const cliente = clienteFalso();

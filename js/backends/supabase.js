@@ -242,19 +242,22 @@ export function criarBackendSupabase(cliente, { aoConflito = () => {}, aoErro = 
       return horas || {};
     },
 
-    // Dados pessoais: o servidor decide quem lê e grava (operadores e secretaria) e valida tudo; o campo do erro vem na
-    // dica (hint)
+    // Dados pessoais: o servidor decide quem lê (operadores, administradores e a secretaria) e quem grava (operadores e
+    // administradores) e valida tudo; o campo do erro vem na dica (hint). A lista traz só o que as linhas e a busca
+    // mostram (o CANAC e o nome completo) e a versão: o CPF, o nascimento, o celular e o e-mail de cada um só vêm na
+    // leitura da pessoa escolhida. Como toda consulta, no máximo 1000 linhas de um tipo (o risco anotado no passo A)
     async listarDadosPessoais(tipo) {
       const { data, error } = await cliente.from('dados_pessoais')
-        .select('id_cadastro, cpf, canac, nascimento, celular, email, atualizado_em, atualizado_por').eq('tipo', tipo);
+        .select('id_cadastro, canac, nome_completo, atualizado_em').eq('tipo', tipo);
       if (error) throw erroComCodigo(error);
       return Object.fromEntries(data.map(({ id_cadastro, ...dados }) => [id_cadastro, Object.fromEntries(Object.entries(dados).filter(([, v]) => v !== null))]));
     },
 
-    // Os dados de uma pessoa, lidos ao abrir o painel, com a versão (atualizado_em) que a gravação leva de volta
+    // Os dados de uma pessoa, lidos ao escolhê-la (ou ao abrir o painel), com a versão (atualizado_em) que a gravação leva
+    // de volta
     async lerDadosPessoais(tipo, id) {
       const { data, error } = await cliente.from('dados_pessoais')
-        .select('cpf, canac, nascimento, celular, email, atualizado_em, atualizado_por').eq('tipo', tipo).eq('id_cadastro', id).maybeSingle();
+        .select('nome_completo, cpf, canac, nascimento, celular, email, atualizado_em, atualizado_por').eq('tipo', tipo).eq('id_cadastro', id).maybeSingle();
       if (error) throw erroComCodigo(error);
       return data ? Object.fromEntries(Object.entries(data).filter(([, v]) => v !== null)) : {};
     },

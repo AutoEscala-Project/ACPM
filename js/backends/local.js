@@ -16,6 +16,8 @@ const PREFIXO_DIA = 'acpm4_dia_';
 const CHAVE_HISTORICO = 'acpm4_historico';
 const CHAVE_AGENDA = 'acpm4_agenda';
 const CHAVE_DADOS_PESSOAIS = 'acpm4_dados_pessoais';
+// As colunas da lista dos dados pessoais (as mesmas do modo compartilhado, js/backends/supabase.js)
+const COLUNAS_DA_LISTA = ['nome_completo', 'canac', 'atualizado_em'];
 const CHAVE_RESULTADOS = 'acpm4_resultados';
 // O programa dos cursos (as tabelas dos cursos do servidor): { cursos, alteracoes }, com as últimas 200 alterações
 const CHAVE_CURSOS = 'acpm4_cursos';
@@ -207,11 +209,12 @@ export const backendLocal = {
     return acumularHoras(dias, data);
   },
 
-  // Dados pessoais neste navegador (fora do cadastro), com a mesma regra do servidor
+  // Dados pessoais neste navegador (fora do cadastro), com a mesma regra do servidor. A lista traz só o que as linhas e a
+  // busca mostram (o CANAC e o nome completo) e a versão; os outros campos vêm na leitura da pessoa
   async listarDadosPessoais(tipo) {
     return Object.fromEntries(Object.entries(lerJson(CHAVE_DADOS_PESSOAIS) || {})
       .filter(([chave]) => chave.startsWith(`${tipo}:`))
-      .map(([chave, dados]) => [Number(chave.slice(tipo.length + 1)), dados]));
+      .map(([chave, dados]) => [Number(chave.slice(tipo.length + 1)), Object.fromEntries(COLUNAS_DA_LISTA.filter(c => dados[c]).map(c => [c, dados[c]]))]));
   },
 
   async lerDadosPessoais(tipo, id) {
