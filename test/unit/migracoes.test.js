@@ -87,7 +87,7 @@ describe('Migrações do formato dos dados', () => {
   });
 
   it('versão 9: os pedidos passam a guardar a disponibilidade do aluno (versões anteriores do app não conhecem o campo)', () => {
-    const dia = { pedidos: { 1000: { fly: true, jan: 'tarde' } }, esquema: 8 };
+    const dia = { pedidos: { 1000: { fly: true, jan: 'h760' } }, esquema: 8 };
     assert.deepEqual(migrarDia(dia), { ...dia, esquema: ESQUEMA });
     assert.ok(ESQUEMA >= 9);
   });

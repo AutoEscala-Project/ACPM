@@ -330,8 +330,9 @@ describe('O horário mais perto da preferência', () => {
 });
 
 describe('Disponibilidade do aluno', () => {
-  it('o voo só começa nas janelas da disponibilidade (a preferência fora dela não vale)', () => {
-    const { out } = alocar({ stu: [aluno(1000, { p1: 1, p2: 2, jan: 'tarde' })] });
+  // J (N13): a disponibilidade é o horário exato do pedido (não há mais período do dia)
+  it('o voo só começa no horário do pedido (a preferência fora dele não vale)', () => {
+    const { out } = alocar({ stu: [aluno(1000, { p1: 1, p2: 2, jan: 'h760' })] });
     assert.deepEqual([hm(out[0].a), out[0].tag], ['12:40', 'Próximo livre']);
   });
 
@@ -340,13 +341,13 @@ describe('Disponibilidade do aluno', () => {
     assert.equal(hm(out[0].a), '14:30');
   });
 
-  it('sem horário possível na disponibilidade, o pedido é rejeitado dizendo por quê', () => {
-    const { al } = alocar({ stu: [aluno(1000, { jan: 'tarde' })], janelasOff: [4, 5, 6, 7] });
-    assert.deepEqual(al.map(a => a.m), ['Rejeitado: nenhum horário aberto na disponibilidade do aluno (Tarde) comporta 1 h.']);
+  it('sem o horário do pedido aberto, o pedido é rejeitado dizendo por quê', () => {
+    const { al } = alocar({ stu: [aluno(1000, { jan: 'h760' })], janelasOff: [4, 5, 6, 7] });
+    assert.deepEqual(al.map(a => a.m), ['Rejeitado: nenhum horário aberto na disponibilidade do aluno (às 12:40) comporta 1 h.']);
   });
 
   it('Ground também respeita a disponibilidade', () => {
-    const { out } = alocar({ stu: [aluno(1000, { ...GROUND_C152, p1: 0, p2: 1, jan: 'tarde' })] });
+    const { out } = alocar({ stu: [aluno(1000, { ...GROUND_C152, p1: 0, p2: 1, jan: 'h760' })] });
     assert.equal(hm(out[0].a), '12:40');
   });
 });
@@ -457,7 +458,7 @@ describe('Noturno', () => {
 describe('Ground School', () => {
   it('o aluno só entra numa turma já aberta se ela começa na disponibilidade dele', () => {
     const manha = [1000, 1001].map(id => aluno(id, { ...GROUND_C152, p1: 390, p2: 500 }));
-    const { out } = alocar({ ins: [instrutor(1, 1), instrutor(2, 1)], stu: [...manha, aluno(1002, { ...GROUND_C152, p1: 760, p2: 820, jan: 'tarde' })] });
+    const { out } = alocar({ ins: [instrutor(1, 1), instrutor(2, 1)], stu: [...manha, aluno(1002, { ...GROUND_C152, p1: 760, p2: 820, jan: 'h760' })] });
     assert.equal(hm(out.find(o => o.stuId === 1002).a), '12:40');
   });
 

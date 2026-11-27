@@ -370,13 +370,17 @@ describe('O pedido recusado pelo instrutor escolhido', () => {
 });
 
 describe('A disponibilidade do pedido e a lista do conflito', () => {
-  it('o horário dentro da disponibilidade vem antes do mais perto fora dela', () => {
-    // O voo das 11:30, disponível só de manhã, cancelado pela meteorologia: as 10:10 (manhã) antes das 12:40 (tarde)
-    const { estado, resultado, voo } = cancelado(cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, { p1: 690, p2: -1, jan: 'manha' })] }), 1000, 'Meteorologia');
+  // J (N13): a disponibilidade é o horário exato do pedido; fora dele, a sugestão pede a confirmação com o aluno
+  it('o pedido com horário exato cancelado no horário dele: todo outro horário pede a confirmação com o aluno', () => {
+    // O voo das 11:30 (o pedido da Agenda às 11:30), cancelado pela meteorologia: o mesmo horário não serve
+    const { estado, resultado, voo } = cancelado(cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, { p1: 690, p2: -1, jan: 'h690' })] }), 1000, 'Meteorologia');
     assert.equal(hm(voo.a), '11:30');
-    const [primeira] = sugerirParaCancelado(estado, resultado, voo.fKey).opcoes;
-    assert.equal(hm(primeira.mudancas.a), '10:10');
-    assert.equal(primeira.confirmar, undefined);
+    const opcoes = sugerirParaCancelado(estado, resultado, voo.fKey).opcoes;
+    assert.ok(opcoes.length > 0);
+    for (const o of opcoes) {
+      assert.notEqual(o.mudancas.a, voo.a);
+      assert.match(o.confirmar, /^Confirme com o aluno: às \d\d:\d\d, fora da disponibilidade do pedido[.,]/, o.texto);
+    }
   });
 
   it('o conflito sem nada no mesmo horário nem depois ganha o horário mais perto antes, dentro da disponibilidade', () => {
@@ -402,9 +406,9 @@ describe('A disponibilidade do pedido e a lista do conflito', () => {
 // do pedido e outro tipo de recurso, os dois com a confirmação com o aluno. Aplicada, a sugestão muda o voo fixo e o
 // pedido (a disponibilidade, o tipo), e desfeita devolve os dois como estavam
 describe('O conflito: outro tipo e o horário fora da disponibilidade', () => {
-  // O voo das 08:20, de quem só pode de manhã, fixo com o único instrutor, que agora só vem à tarde: nada de manhã
+  // O voo das 08:20, do pedido da Agenda às 08:20, fixo com o único instrutor, que agora só vem à tarde: nada às 08:20
   function conflitoDeManha() {
-    const base = cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, { p1: 500, p2: -1, jan: 'manha' })] });
+    const base = cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, { p1: 500, p2: -1, jan: 'h500' })] });
     const v0 = runAllocationEngine(base).out[0];
     const aw = Array(9).fill(true); for (let w = 0; w < 4; w++) aw[w] = false;
     const estado = { ...base, fixos: { [v0.fKey]: pinoDoVoo(v0) }, fObs: {}, ins: [instrutor(1, 9, { aw })] };

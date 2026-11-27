@@ -298,11 +298,11 @@ describe('Filas do rodízio por data', () => {
 
 describe('Disponibilidade do aluno nos pedidos', () => {
   it('a disponibilidade do pedido (e das missões extras) faz parte do dia', () => {
-    const estado = ApiClient.normalizeAndMigrateState({ ...estadoSintetico(), stu: [aluno(1000, { jan: 'tarde' }, { extra: [missaoExtra(1001, { jan: 'h2' })] })] });
+    const estado = ApiClient.normalizeAndMigrateState({ ...estadoSintetico(), stu: [aluno(1000, { jan: 'h760' }, { extra: [missaoExtra(1001, { jan: 'h2' })] })] });
     const { cadastro, dia } = separar(estado);
-    assert.equal(dia.pedidos[1000].jan, 'tarde');
+    assert.equal(dia.pedidos[1000].jan, 'h760');
     const volta = juntar(cadastro, dia).stu[0];
-    assert.deepEqual([volta.jan, volta.extra[0].jan], ['tarde', 'h610']);
+    assert.deepEqual([volta.jan, volta.extra[0].jan], ['h760', 'h610']);
   });
 });
 

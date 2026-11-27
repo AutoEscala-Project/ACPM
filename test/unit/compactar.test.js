@@ -47,8 +47,8 @@ describe('Compactação: os horários', () => {
     assert.deepEqual([voo.baseTag, voo.tag], ['Horário ajustado', 'Horário ajustado']);
   });
 
-  it('a disponibilidade de cada aluno vale: quem só pode à tarde vem para as 12:40, e o das 06:30 continua às 06:30', () => {
-    const { out } = runAllocationEngine(buraco({ jan: 'tarde' }));
+  it('a disponibilidade de cada aluno vale: quem pediu as 12:40 vem para as 12:40, e o das 06:30 continua às 06:30', () => {
+    const { out } = runAllocationEngine(buraco({ jan: 'h760' }));
     assert.deepEqual(out.map(o => [o.stuId, o.a]), [[1000, 390], [1001, 760]]);
   });
 
