@@ -14,7 +14,8 @@
 import { S } from '../state.js';
 import { $ } from '../dom.js';
 import { hm, esc } from '../format.js';
-import { CATEGORIAS_COM_HORARIOS, HORARIOS_PADRAO, DE_30_EM_30, PRIMEIRO_HORARIO, ULTIMO_HORARIO, periodoDoMinuto, paraMinuto, modeloDosHorarios, descreverHorarios, porPeriodo, impactoDosHorarios, resumoDoImpacto, INICIOS_DOS_TEMPOS } from '../horarios.js';
+import { CATEGORIAS_COM_HORARIOS, HORARIOS_PADRAO, DE_30_EM_30, PRIMEIRO_HORARIO, ULTIMO_HORARIO, paraMinuto, modeloDosHorarios, descreverHorarios, porPeriodo, impactoDosHorarios, resumoDoImpacto } from '../horarios.js';
+import { fechamentosDoEstado, fechamentoDoMinuto } from '../fechamentos.js';
 import { horariosAVista, manterHorariosAVista } from './filtros-dos-recursos.js';
 
 export const NOMES_DAS_CATEGORIAS = { C152: 'C152', C172: 'C172', sim: 'Simulador', 'PA-34': 'PA-34', ground: 'Sala Ground' };
@@ -33,15 +34,17 @@ export const rascunhoDosHorarios = () => (rascunho ? { cat: rascunho.cat, lista:
 
 const listaDe = cat => (S.horarios && S.horarios[cat]) || [];
 const quantos = n => `${n} ${n === 1 ? 'horário' : 'horários'}`;
-const janelaFechada = m => S.win && S.win[periodoDoMinuto(m)] === false;
+// O fechamento que fecha o horário nesta data para a categoria (js/fechamentos.js), ou null
+const fechadoNaData = (m, cat) => fechamentoDoMinuto(fechamentosDoEstado(S), m, cat);
 
 // Os pedidos da demanda (os principais e as missões extras), com o nome do aluno
 const pedidosDaDemanda = () => (S.stu || []).flatMap(s => [{ nome: s.nm, pedido: s }, ...(s.extra || []).map(ex => ({ nome: s.nm, pedido: ex }))]);
 const efeitoDoRascunho = () => resumoDoImpacto(impactoDosHorarios(pedidosDaDemanda(), S.horarios, rascunho.cat, rascunho.lista));
 
-function horarioNoResumo(m) {
-  if (!janelaFechada(m)) return `<span class="hr">${hm(m)}</span>`;
-  return `<span class="hr fechado" data-dica="horario-em-janela-fechada" data-dica-caso="A janela das ${hm(INICIOS_DOS_TEMPOS[periodoDoMinuto(m)])} está fechada nesta data.">${hm(m)}<span class="sr"> (janela fechada nesta data)</span></span>`;
+function horarioNoResumo(m, cat) {
+  const f = fechadoNaData(m, cat);
+  if (!f) return `<span class="hr">${hm(m)}</span>`;
+  return `<span class="hr fechado" data-dica="horario-fechado-na-data" data-dica-caso="Fechado nesta data (${hm(f.de)}–${hm(f.ate)}).">${hm(m)}<span class="sr"> (fechado nesta data)</span></span>`;
 }
 
 const horarioNoEditor = m => `<span class="hr-chip">${hm(m)}<button type="button" data-act="rascunho-tirar" data-min="${m}" aria-label="Tirar ${hm(m)}"><svg class="ico" aria-hidden="true"><use href="#i-fechar"/></svg></button></span>`;
@@ -64,7 +67,7 @@ function resumo(cat) {
       <small class="horarios-qtd">${quantos(lista.length)}</small>
       ${botaoEditar(cat, false)}
     </div>
-    ${periodos(lista, horarioNoResumo)}`;
+    ${periodos(lista, m => horarioNoResumo(m, cat))}`;
 }
 
 function editor(cat) {

@@ -7,6 +7,7 @@
 import { novoRecurso, MATRICULA, ATRIBUTOS_DO_RECURSO } from './frota.js';
 import { normalizarFixos, fixoPeloStatus, fixosAoReabrir, pinoDeVoltaNaTurma } from './fixos.js';
 import { CATEGORIAS_COM_HORARIOS, normalizarHorarios, INICIOS_DOS_TEMPOS } from './horarios.js';
+import { normalizarFechamentos } from './fechamentos.js';
 import { disponibilidadeValida, normalizeMissionFields } from './rules.js';
 import { MINUTOS_DO_DIA, MIS, FLIGHT_STATUSES } from './config.js';
 import { CHAVE_DO_VOO, chaveDoVoo, pedidoDoAluno } from './voo.js';
@@ -54,6 +55,11 @@ export function validarReversao(rev, frota) {
     if (rev.extras !== undefined && !extras) return null;
     return idValido(rev.stuId) && Number.isInteger(mid) && mid >= 0 && typeof rev.val === 'boolean'
       ? { kind: 'setFly', stuId: rev.stuId, mid, val: rev.val, ...(extras ? { extras: [...extras] } : {}), label } : null;
+  }
+  // Os horários fechados de antes da mudança (J): a lista, normalizada, ou null (a data ainda não tinha fechamentos)
+  if (rev.kind === 'setFechamentos') {
+    if (rev.antes === null) return { kind: 'setFechamentos', antes: null, label };
+    return Array.isArray(rev.antes) && rev.antes.length <= 50 ? { kind: 'setFechamentos', antes: normalizarFechamentos(rev.antes), label } : null;
   }
   if (rev.kind === 'setAv') {
     return typeof rev.reg === 'string' && MATRICULA.test(rev.reg) && typeof rev.val === 'boolean' ? { kind: 'setAv', reg: rev.reg, val: rev.val, label } : null;

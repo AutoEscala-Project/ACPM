@@ -4,6 +4,8 @@
 
 // Nada das regras e dos nomes antigos
 const ANTIGAS = {
+  // J (N11): as janelas de operação deixam de ser uma entidade; os horários fechados nesta data no lugar delas
+  janelas: ['Janelas de operação:', 'Desligar uma janela tira da escala', 'dentro das janelas de operação abertas', 'Janelas do dia', 'valem por janela'],
   geral: ['A01', 'A09', 'Gerar escala', 'Preencher exemplo', 'Link Blindado', 'Importar Solicitações da Agenda',
     'Vai voar?', 'Início pref', 'Exportar CSV', 'Emitir PDF', 'Turno rápido', 'Cada cartão', 'campo Data', 'Equipamento', 'Bloquear',
     'Sessões', 'sessão', 'Desfazer', 'Escala de Voo', 'Por avião e sala', 'Avião / sala', 'Aviões e salas', 'o botão ao lado de Alunos', 'As abas seguem a ordem de uso', 'ao lado do nome das abas'],
@@ -73,7 +75,7 @@ export const FRASES_DAS_FUNCIONALIDADES = {
 };
 // E as que ele só diz com ela desligada
 export const FRASES_SEM_AS_FUNCIONALIDADES = {
-  hangar: ['sai o primeiro livre na ordem da frota', 'uma parada de 2 h ou mais pesa mais', 'as janelas de operação e a tabela dos aviões'],
+  hangar: ['sai o primeiro livre na ordem da frota', 'uma parada de 2 h ou mais pesa mais', 'os horários fechados nesta data e a tabela dos aviões'],
   progresso: ['o código da missão do curso que o pedido já tem', 'para o aluno de um curso, escolha a missão na lista', 'oferece esse voo', 'e um clique leva à fase']
 };
 

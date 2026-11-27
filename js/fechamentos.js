@@ -5,6 +5,7 @@
 // Os dias antes do 28 (e os estados dos goldens) guardam win, as nove janelas: fechamentosDoWin dá os mesmos minutos
 // fechados que win[periodoDoMinuto(m)] lia, com a leitura do motor (!win[i]: o que não é true fecha).
 import { CATEGORIAS } from './categorias.js';
+import { hm } from './format.js';
 import { MINUTOS_DO_DIA } from './config.js';
 import { INICIOS_DOS_TEMPOS } from './horarios.js';
 
@@ -70,6 +71,14 @@ export function fechamentosDoWin(win) {
 // os recursos fecha)
 export function horarioAberto(fechamentos, minuto, categoria) {
   return !(fechamentos || []).some(f => minuto >= f.de && minuto < f.ate && (!f.categorias || f.categorias.includes(categoria)));
+}
+
+const nomeDaCategoria = id => (CATEGORIAS.find(c => c.id === id) || { nome: id }).nome;
+const intervalo = f => `${hm(f.de)}–${hm(f.ate)}`;
+
+// "12:40–17:30 · todos os recursos", "06:30–08:20 · C152, Sala Ground": a lista de "Horários fechados nesta data"
+export function rotuloDosFechamentos(fechamentos) {
+  return (fechamentos || []).map(f => `${intervalo(f)} · ${f.categorias ? f.categorias.map(nomeDaCategoria).join(', ') : 'todos os recursos'}`);
 }
 
 // Os fechamentos de um estado (o dia, a escala): os dele; sem eles (os dias antes do formato 28 e os estados dos goldens),

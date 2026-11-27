@@ -4,15 +4,17 @@ import { gravarAlteracao, aindaNaoAbriu } from '../actions.js';
 import { categoriaDoTipo, nomeDoRecurso } from '../categorias.js';
 import { REVISAO_H, GROUND_REG } from '../config.js';
 import { $, showToast, fecharNoEsc } from '../dom.js';
-import { hm, fmtH, lerHoras } from '../format.js';
+import { fmtH, lerHoras } from '../format.js';
 import { ligada } from '../funcionalidades.js';
 import { novoRecurso, ATRIBUTOS_DO_RECURSO, atributoVale, comAtributo } from '../frota.js';
 import { normalizarHangar, moverNoHangar } from '../hangar.js';
-import { horariosDaMissao, ajustarPreferencias, descreverHorarios, INICIOS_DOS_TEMPOS } from '../horarios.js';
+import { horariosDaMissao, ajustarPreferencias, descreverHorarios } from '../horarios.js';
 import { S, isGestor, getMissionTarget, inativoNaDataAberta } from '../state.js';
 import { confirmado } from './confirmacao.js';
 import { aoAcionar, aoMudarCampo, aoReverter } from './registro.js';
 import { registrarDesenho, redesenharPorNome } from '../redesenho.js';
+// "Horários fechados nesta data" (J): os eventos dela
+import './fechamentos.js';
 import { filtrarRecursos, limparFiltrosDosRecursos, manterRecursoAVista, criarFiltroDasCategorias } from '../views/filtros-dos-recursos.js';
 import { NOMES_DAS_CATEGORIAS, abrirEditorDosHorarios, fecharEditorDosHorarios, tirarDoRascunho, porNoRascunho, escolherModelo, rascunhoDosHorarios, editorDosHorariosAberto } from '../views/horarios.js';
 import { rRec, rRevisao, rHangar, alternarAtributos, aplicarFiltrosDosRecursos, alternarGrupoDaFrota } from '../views/recursos.js';
@@ -126,12 +128,7 @@ document.addEventListener('click', e => {
   $('#flt-rec-mat').focus();
 });
 
-aoMudarCampo('win', t => {
-  const idx = +t.dataset.i;
-  S.win[idx] = t.checked;
-  gravarAlteracao(t.checked ? 'inc' : 'exc', `Janela ${hm(INICIOS_DOS_TEMPOS[idx])} ${t.checked ? 'ativa' : 'inativa'}`);
-  rRec();
-});
+
 
 aoMudarCampo('av', t => {
   const reg = t.dataset.id;

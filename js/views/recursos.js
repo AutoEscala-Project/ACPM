@@ -1,5 +1,5 @@
-// Aba Recursos, em duas vistas (js/views/vistas.js). A Disponibilidade do dia vale para a data aberta no topo: as janelas
-// de operação, a tabela dos aviões e simuladores (disponível ou em manutenção, as horas até a revisão de 50 horas e o que
+// Aba Recursos, em duas vistas (js/views/vistas.js). A Disponibilidade do dia vale para a data aberta no topo: os horários
+// fechados nesta data (js/views/fechamentos.js), a tabela dos aviões e simuladores (disponível ou em manutenção, as horas até a revisão de 50 horas e o que
 // o avião voa na escala do dia; cada categoria recolhe e abre) e, ao lado dela, a ordem no hangar. O Cadastro vale para
 // todas as datas: a frota, com os atributos e o Retirar, e os horários de decolagem (js/views/horarios.js). A busca pela
 // matrícula e as categorias (js/views/filtros-dos-recursos.js) valem para a tabela, a frota e os horários, nunca para o
@@ -14,7 +14,7 @@ import { S, RES, voosQueVoam, isGestor, inativoNaDataAberta } from '../state.js'
 import { $, trocarConteudo } from '../dom.js';
 import { hm, fmtH, esc } from '../format.js';
 import { rHorarios } from './horarios.js';
-import { INICIOS_DOS_TEMPOS, HORARIO_DO_NOTURNO } from '../horarios.js';
+import { rFechamentos } from './fechamentos.js';
 import { recursoAVista, filtrandoRecursos } from './filtros-dos-recursos.js';
 import { mostrarVista } from './vistas.js';
 
@@ -159,7 +159,7 @@ export function aplicarFiltrosDosRecursos({ esperar = 0 } = {}) {
 
 export function rRec() {
   mostrarVista('rec');
-  trocarConteudo($('#wins'), INICIOS_DOS_TEMPOS.map((m, i) => `<label class="janela${S.win[i] ? '' : ' off'}"><input type="checkbox" class="sw" data-a="win" data-i="${i}"${S.win[i] ? ' checked' : ''}><b>${hm(m)}</b> <small>${m === HORARIO_DO_NOTURNO ? 'noturno' : (i + 1) + 'º'}</small></label>`).join(''));
+  rFechamentos();
   rHangar();
   aplicarFiltrosDosRecursos();
 }

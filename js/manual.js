@@ -1,7 +1,7 @@
 // Partes do manual geradas das regras do código (missões, janelas, pesos, combustível, rodízio e glossário): quando
 // uma regra muda, o manual muda junto. O texto explicativo fica em index.html (seção Manual).
 import { MIS, DEFAULT_LIM, GROUND_DURATION_MIN, COMBUSTIVEL } from './config.js';
-import { INICIOS_DOS_TEMPOS, HORARIO_DO_NOTURNO } from './horarios.js';
+import { HORARIO_DO_NOTURNO } from './horarios.js';
 import { HABILITACOES, exigencias } from './habilitacoes.js';
 import { CATEGORIAS_DO_RODIZIO } from './rodizio.js';
 import { GLOSSARIO, ABAS_DO_GLOSSARIO } from './glossario.js';
@@ -41,7 +41,6 @@ export const missoesDoManual = () => Object.entries(MIS).map(([missao, regra]) =
   obs: observacao(missao, regra)
 }));
 
-export const janelasDoManual = () => INICIOS_DOS_TEMPOS.map(m => (m === HORARIO_DO_NOTURNO ? `${hm(m)} (noturno)` : hm(m)));
 export const pesosDoManual = () => Object.entries(DEFAULT_LIM).map(([tipo, kg]) => [tipo, `${kg} kg`]);
 // Tanque e autonomia de cada avião (o limite de peso vale com os tanques cheios)
 export const combustivelDoManual = () => Object.entries(COMBUSTIVEL).map(([tipo, { galoes, autonomiaMin }]) =>

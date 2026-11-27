@@ -248,8 +248,8 @@
     <div class="rec-parte vista-dia" data-parte="data">
       <h3 class="rec-parte-titulo">Nesta data <small>valem para a data aberta no topo; a data seguinte começa com eles</small></h3>
       <div class="pn">
-        <h4>Janelas de operação</h4>
-        <div class="janelas" id="wins"></div>
+        <h4>Horários fechados nesta data <button type="button" class="dica-btn" data-dica="fechamentos" aria-label="O que é Horários fechados?" aria-expanded="false"></button></h4>
+        <div class="fechamentos" id="fechamentos"></div>
       </div>
       <!-- A tabela e, ao lado dela a partir de 1.100 px (embaixo, nas telas menores), a ordem no hangar -->
       <div class="rec-dia">
@@ -288,7 +288,7 @@
       </div>
       <div class="pn">
         <h4>Horários de decolagem</h4>
-        <p class="h">Os horários em que um voo pode sair, por categoria, dentro das janelas de operação abertas. O voo noturno sai às 17:30.</p>
+        <p class="h">Os horários em que um voo pode sair, por categoria (a Sala Ground também), menos os fechados nesta data. O voo noturno sai às 17:30.</p>
         <div class="horarios" id="horarios"></div>
       </div>
     </div>
@@ -537,13 +537,13 @@
         O número em cada dia é o de pedidos dele, e as setas do calendário mudam só o mês à vista.
         Tudo o que você vê e altera, em qualquer tela, vale para essa data.
         Uma data nova começa com os aviões,
-        as janelas
+        os horários fechados
         e
         os horários dos instrutores da anterior,
         e com a demanda vazia:
         a agenda é o centro dos agendamentos, e <i>Importar da agenda</i> monta a demanda do dia.
         As horas dos aviões e as filas do rodízio já chegam atualizadas com os voos da data anterior.</li>
-        <li><b>Recursos:</b> em <i>Disponibilidade do dia</i>, desligue os aviões e simuladores indisponíveis (em manutenção) e as janelas de horário que não vão operar.
+        <li><b>Recursos:</b> em <i>Disponibilidade do dia</i>, desligue os aviões e simuladores indisponíveis (em manutenção) e, em <i>Horários fechados nesta data</i>, feche os horários em que a escola não vai operar.
         Confira as horas de cada avião desde a última revisão de 50 horas.</li>
         <li><b>Instrutores:</b> em <i>Disponibilidade do dia</i>, desligue em <i>Vem</i> quem não vem na data e confira as janelas de cada um.</li>
         <li><b>Demanda:</b> clique em <i>Importar pedidos da agenda</i> (o botão diz quantos pedidos da secretaria ainda não estão na demanda) e ajuste o que precisar: missão, recurso, horários preferidos, disponibilidade, duração e prioridade.
@@ -821,7 +821,7 @@
       <p>Duas vistas, com a busca e as categorias valendo nas duas.
       Recursos abre na <i>Disponibilidade do dia</i>, e a vista escolhida fica até a página ser recarregada:</p>
       <ul>
-        <li><b>Disponibilidade do dia</b> (nesta data: vale para a data aberta no topo, e a data seguinte começa com ela): as janelas de operação<span data-funcionalidade="hangar">, a tabela dos aviões</span><span data-sem-funcionalidade="hangar"> e a tabela dos aviões</span> e simuladores (disponível ou em manutenção, as horas até a revisão de 50 horas e quanto cada um voa na escala do dia)<span data-funcionalidade="hangar"> e, ao lado dela (embaixo, nas telas menores), a ordem no hangar</span>.</li>
+        <li><b>Disponibilidade do dia</b> (nesta data: vale para a data aberta no topo, e a data seguinte começa com ela): os horários fechados nesta data<span data-funcionalidade="hangar">, a tabela dos aviões</span><span data-sem-funcionalidade="hangar"> e a tabela dos aviões</span> e simuladores (disponível ou em manutenção, as horas até a revisão de 50 horas e quanto cada um voa na escala do dia)<span data-funcionalidade="hangar"> e, ao lado dela (embaixo, nas telas menores), a ordem no hangar</span>.</li>
         <li><b>Cadastro</b> (vale para todas as datas: mudar ali muda também as datas já abertas): a frota, com os atributos e o <i>Retirar</i>, e os horários de decolagem.
         <i>+ Novo recurso</i>, na barra da tela, abre o Cadastro com o formulário.</li>
       </ul>
@@ -829,10 +829,9 @@
       Os dois valem para a tabela, a frota e os horários de decolagem (os das categorias marcadas e, com a busca, os das categorias dos recursos achados)<span data-funcionalidade="hangar">, nunca para a ordem no hangar, que mostra sempre todos os aviões</span>.
       Ao lado, o número diz quantos recursos aparecem (por exemplo, <i>3 de 26 recursos</i>); quando os filtros não deixam nenhum, <i>Limpar filtros</i> mostra todos de novo.
       O recurso acrescentado agora e os horários editados agora continuam à vista mesmo fora dos filtros, até eles mudarem.</p>
-      <p><b>Janelas de operação:</b> os períodos do dia em que a escala opera.
-      Desligar uma janela tira da escala do dia os horários de decolagem que caem nela.
-      A disponibilidade dos instrutores e “manhã, tarde e noite” do aluno também valem por janela.</p>
-      <ul class="manual-lista-curta" id="manual-janelas"></ul>
+      <p><b>Horários fechados nesta data:</b> <i>+ Fechar horários</i> fecha um intervalo da data (<i>De</i> e <i>Até</i>, de 10 em 10 minutos, ou <i>O dia todo</i>) para todos os recursos ou só para as categorias marcadas (a Sala Ground entre elas).
+      Nenhum voo nem aula de Ground sai num horário fechado; a linha embaixo dos campos diz quantos horários de decolagem cada categoria perde, e eles aparecem riscados em <i>Horários de decolagem</i>.
+      O <i>✕</i> de um intervalo abre de novo, e o <i>↶</i> do Histórico desfaz cada mudança.</p>
       <p><b>Horários de decolagem</b> (no Cadastro): cada categoria (C152, C172, Simulador e PA-34) tem os seus horários de saída.
       O padrão são as janelas do dia, e o PA-34 sai de 30 em 30 minutos.
       Cada categoria mostra um resumo: o modelo (<i>Horários padrão</i>, <i>De 30 em 30 min</i> ou a lista resumida), quantos horários e os horários da manhã e da tarde; o horário que cai numa janela fechada nesta data aparece riscado.
