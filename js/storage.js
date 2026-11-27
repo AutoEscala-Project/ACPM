@@ -15,7 +15,7 @@ import { normalizarEscalaGravada } from './escala-gravada.js';
 import { normalizarHangar } from './hangar.js';
 import { LIMITES_DA_LEI, normalizarLimites, comHorasExternas } from './limites.js';
 import { noturnosDaVespera, comRepousoDoNoturno, voltasConferem } from './noturno.js';
-import { normalizarFixos, normalizarAprovacao } from './fixos.js';
+import { normalizarFixos, normalizarAprovacao, pinosDoNoturno } from './fixos.js';
 import { normalizarCriterios } from './criterios.js';
 import { normalizarPainel } from './config-do-painel.js';
 import { normalizarCursos, normalizarCursoDoAluno } from './cursos.js';
@@ -211,12 +211,19 @@ export const ApiClient = {
     // noturno dela não conferem com os noturnos de ontem (o noturno mudou depois): a calculada é gravada na próxima alteração
     const gravada = dia ? normalizarEscalaGravada(dia.resultado) : null;
     const escala = gravada && voltasConferem(gravada, noturnos) ? gravada : null;
+    // O dia gravado antes do pino do Noturno (os dias antigos e os da prévia): cada Noturno da escala gravada ganha o pino
+    // dele, no lugar da linha, antes de o motor rodar (js/fixos.js, pinosDoNoturno). Ele vai para o servidor na próxima
+    // gravação
+    if (gravada) estado.fixos = pinosDoNoturno(estado, gravada);
+    // As voltas da escala gravada que não conferem com os noturnos de ontem (o noturno de ontem mudou depois que esta data
+    // foi gravada): a tela grava a escala refeita, com as voltas de agora (js/actions.js, seguirAsVoltasDeOntem)
+    const voltasDeAntes = gravada && !escala ? gravada.out.filter(o => o.trecho === 'volta') : null;
     const resultados = lidos.resultados || { situacao: [], doDia: [] };
     // O programa dos cursos ainda no cadastro (programaNoCadastro): a tela diz por que a próxima missão e o progresso
     // ficam desligados
     const indisponiveis = [...(lidos.horasBase ? [] : ['horas']), ...(lidos.resultados ? [] : ['resultados']),
       ...(lidos.programa ? [] : ['cursos']), ...(programaNoCadastro(guardado) ? ['cursos-pendentes'] : [])];
-    return { estado, escala, novo: !dia, horasBase, horasDosInstrutores, resultados, programa: lidos.programa || [], indisponiveis };
+    return { estado, escala, novo: !dia, horasBase, horasDosInstrutores, resultados, programa: lidos.programa || [], indisponiveis, voltasDeAntes };
   },
 
   // O que vai à parte do dia (não é gravado nele): as horas de voo de cada instrutor antes da data (limites da lei), os
@@ -233,8 +240,11 @@ export const ApiClient = {
     return { horasBase, resultados, programa };
   },
 
+  // O dia gravado leva o pino de cada Noturno da escala (js/fixos.js, pinosDoNoturno): o estado também (a tela), para o
+  // motor não mudar o Noturno de lugar na alteração seguinte; a volta do dia seguinte sai desta escala gravada
   async salvarDia(data, estado, escala) {
     if (this.readOnly) return false;
+    estado.fixos = pinosDoNoturno(estado, escala);
     const partes = separar(estado);
     const cadastro = { ...partes.cadastro, esquema: ESQUEMA };
     const dia = { ...partes.dia, esquema: ESQUEMA };

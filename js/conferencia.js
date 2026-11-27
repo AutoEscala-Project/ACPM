@@ -21,7 +21,7 @@ import { normalizarHangar, posicaoNoHangar } from './hangar.js';
 import { normalizarLimites } from './limites.js';
 import { chaveDoVoo, statusDoVoo, umPorUnidade, pedidosDosVoos, pedidoDoAluno, ocupacaoDoVoo, compromissoDoVoo } from './voo.js';
 import { menorPrimeiro } from './util.js';
-import { pinoDoVoo } from './fixos.js';
+import { pinoDoVoo, pinosDoNoturnoQueValem } from './fixos.js';
 import { rejeicoesDosPedidos } from './rejeicoes.js';
 
 // A duração (em minutos) do voo de um pedido: o Ground tem 01h30; o voo, as horas do pedido
@@ -49,8 +49,9 @@ export function contextoDaEscala(state) {
   // Revisão de 50 horas: horas que o avião ainda pode voar hoje
   const horas = state.horas || {};
   // Escala aprovada: os voos fixos entram primeiro, no mesmo horário, avião e instrutor; o resto é encaixado
-  // em volta. O fixo que ficou impossível continua onde está, em conflito (com o motivo); o cancelado não ocupa nada
-  const fixos = state.fixos && typeof state.fixos === 'object' ? state.fixos : {};
+  // em volta. O fixo que ficou impossível continua onde está, em conflito (com o motivo); o cancelado não ocupa nada. O
+  // pino do Noturno só vale enquanto o pedido voa um Noturno (js/fixos.js)
+  const fixos = pinosDoNoturnoQueValem(state);
   return {
     frota, soParafuso, nomesSoParafuso: soParafuso.length ? soParafuso.join(' ou ') : 'marcada como “Só Parafuso”',
     instrutorPorId, serveAoVoo,
@@ -311,7 +312,9 @@ function linhaDoFixo(state, ctx, item, pino, fKey = chaveDoVoo(item.stuId, item.
     ...(pino.agendado ? { agendado: true } : {}),
     ...(conflito.length ? { conflito, conflitoCodigos } : {})
   };
-  const alerta = conflito.length ? { t: 'conf', s: rotulo, fKey, m: `${pino.agendado ? 'Conflito no voo agendado' : 'Conflito na escala aprovada'}: ${conflito.join('; ')}.` } : null;
+  // O conflito do Noturno fixo (o pino do Noturno: js/fixos.js) diz que é o Noturno: ele não muda de avião sozinho
+  const deQue = pino.noturno ? 'Conflito no Noturno' : pino.agendado ? 'Conflito no voo agendado' : 'Conflito na escala aprovada';
+  const alerta = conflito.length ? { t: 'conf', s: rotulo, fKey, m: `${deQue}: ${conflito.join('; ')}.` } : null;
   return { linha, alerta, avisos, comAviso };
 }
 
@@ -320,7 +323,7 @@ function linhaDoFixo(state, ctx, item, pino, fKey = chaveDoVoo(item.stuId, item.
 // muda a ocupação de um voo fixo). O motor encaixa nele, depois da compactação, os pedidos da lista de espera
 // (js/engine.js). opcoes: as da fila (filaDosPedidos)
 export function contextoDaEscalaMontada(state, out, opcoes = {}) {
-  const fixos = state.fixos && typeof state.fixos === 'object' ? state.fixos : {};
+  const fixos = pinosDoNoturnoQueValem(state);
   const semPino = new Set(out.filter(o => !o.trecho && !Object.hasOwn(fixos, o.fKey)).map(o => o.fKey));
   const estado = { ...state, fStatus: Object.fromEntries(Object.entries(state.fStatus || {}).filter(([fKey]) => !semPino.has(fKey))) };
   const ctx = contextoDaEscala(estado);

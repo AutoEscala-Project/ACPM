@@ -63,3 +63,20 @@ export function voltasConferem(escala, noturnos) {
 // O repouso (minutos) entre o fim do noturno, na véspera, e a apresentação para a volta
 export const repousoAntesDaVolta = (fimDoNoturno, limites) =>
   MINUTOS_DO_DIA - (fimDoNoturno + limites.encerramentoMin) + NOTURNO.voltaInicio - limites.apresentacaoMin;
+
+// O que mudou nas voltas da escala gravada (deAntes: as linhas da volta dela) com os noturnos de ontem de agora (o noturno de
+// ontem mudou de avião ou de INVA, saiu ou foi cancelado depois que esta data foi gravada): o texto do histórico da escala
+// regravada com as voltas de agora (js/actions.js, seguirAsVoltasDeOntem), ou '' (nada mudou)
+export function voltasQueMudaram(deAntes, noturnos) {
+  const chave = v => `${v.stuId}_${v.mid || 0}`;
+  const antes = new Map((deAntes || []).map(v => [chave(v), v]));
+  const agora = new Map((noturnos || []).map(n => [chave(n), n]));
+  const partes = [];
+  for (const [k, n] of agora) {
+    const v = antes.get(k);
+    if (!v) partes.push(`${n.s}: a volta entrou, no ${n.r}`);
+    else if (v.r !== n.r || v.insId !== n.insId) partes.push(`${n.s}: ${[v.r !== n.r ? `${v.r} → ${n.r}` : '', v.insId !== n.insId ? `${v.ins} → ${n.ins}` : ''].filter(Boolean).join(', ')}`);
+  }
+  for (const [k, v] of antes) if (!agora.has(k)) partes.push(`${v.s}: a volta saiu da escala`);
+  return partes.length ? `Volta do Noturno (o Noturno de ontem mudou): ${partes.join('; ')}` : '';
+}

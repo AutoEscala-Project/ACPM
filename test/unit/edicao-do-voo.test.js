@@ -786,3 +786,47 @@ describe('O editor do voo: a segunda revisão', async () => {
     assert.equal(ida({ ...rev, pedidos: rev.pedidos.map(p => ({ ...p, stuId: 1002 })) }), null, 'o pedido de outro aluno');
   });
 });
+
+// O Noturno no mesmo avião (2026-11-27): o editor é onde o operador leva o Noturno para outro avião ou outro INVA. O pino
+// novo continua o do Noturno, e a confirmação diz que a volta do dia seguinte vai com ele
+describe('O editor e o Noturno', async () => {
+  const { vooParaEditar, avisosDaEdicao, aplicarEdicao } = await import('../../js/edicao-do-voo.js');
+  const { pinosDoNoturno } = await import('../../js/fixos.js');
+  const NOTURNO = { mis: 'Noturno', eq: 'C172', p1: 1050, p2: -1 };
+  const dia = () => {
+    const estado = cenario({ ins: [instrutor(1, 9), instrutor(2, 9)], stu: [aluno(1000, NOTURNO), aluno(1001, { mis: 'Voo Local', eq: 'C172', p1: 500, p2: -1 })] });
+    const resultado = runAllocationEngine(estado);
+    estado.fixos = pinosDoNoturno(estado, resultado);
+    return { estado, resultado: runAllocationEngine(estado) };
+  };
+  const outroC172 = r => ['PP-ABP', 'PP-AJS'].find(x => x !== r);
+
+  it('outro avião: a confirmação diz para onde vai a volta do dia seguinte; o pino novo continua o do Noturno', () => {
+    const { estado, resultado } = dia();
+    const voo = vooParaEditar(estado, resultado, '1000_0_1');
+    const valores = { ...structuredClone(voo.valores), r: outroC172(voo.valores.r) };
+    const avisos = avisosDaEdicao(estado, resultado, voo, valores, { diaSeguinte: '2026-11-12' });
+    assert.deepEqual(avisos.filter(a => a.codigo === 'volta-do-noturno'), [{ codigo: 'volta-do-noturno', texto: `A volta de 12/11 passa para o ${valores.r}.`, campo: 'voo-recurso', conflito: false }]);
+    // Outro INVA também, e só outro INVA
+    const x = valores.insId === 1 ? 2 : 1;
+    assert.equal(avisosDaEdicao(estado, resultado, voo, { ...valores, insId: x }, { diaSeguinte: '2026-11-12' }).find(a => a.codigo === 'volta-do-noturno').texto, `A volta de 12/11 passa para o ${valores.r}, com Instrutor 0${x}.`);
+    assert.equal(avisosDaEdicao(estado, resultado, voo, { ...structuredClone(voo.valores), insId: x }, { diaSeguinte: '2026-11-12' }).find(a => a.codigo === 'volta-do-noturno').texto, `A volta de 12/11 passa para Instrutor 0${x}.`);
+    // Sem mudar o avião nem o INVA, ou com o Noturno cancelado, ou sem a data seguinte: nada
+    assert.equal(avisosDaEdicao(estado, resultado, voo, { ...structuredClone(voo.valores), status: { '1000_0_1': 'Pendente' } }, { diaSeguinte: '2026-11-12' }).some(a => a.codigo === 'volta-do-noturno'), false);
+    assert.equal(avisosDaEdicao(estado, resultado, voo, { ...valores, status: { '1000_0_1': 'Cancelado' }, detalhe: { '1000_0_1': { motivo: 'Meteorologia' } } }, { diaSeguinte: '2026-11-12' }).some(a => a.codigo === 'volta-do-noturno'), false);
+    assert.equal(avisosDaEdicao(estado, resultado, voo, valores).some(a => a.codigo === 'volta-do-noturno'), false);
+    aplicarEdicao(estado, resultado, voo, valores);
+    assert.deepEqual(estado.fixos['1000_0_1'], { a: 1050, b: 1290, r: valores.r, insId: voo.valores.insId, agendado: true, noturno: true });
+    const depois = runAllocationEngine(estado).out.find(o => o.fKey === '1000_0_1');
+    assert.deepEqual([depois.r, depois.fixo], [valores.r, true]);
+  });
+
+  it('outra missão no lugar do Noturno: o pino novo não é o do Noturno', () => {
+    const { estado, resultado } = dia();
+    const voo = vooParaEditar(estado, resultado, '1000_0_1');
+    const valores = { ...structuredClone(voo.valores), missao: { mis: 'Voo Local', eq: 'C172', nb: 1 }, a: 610, minutos: 60 };
+    assert.equal(avisosDaEdicao(estado, resultado, voo, valores, { diaSeguinte: '2026-11-12' }).some(a => a.codigo === 'volta-do-noturno'), false);
+    aplicarEdicao(estado, resultado, voo, valores);
+    assert.equal(estado.fixos['1000_0_1'].noturno, undefined);
+  });
+});

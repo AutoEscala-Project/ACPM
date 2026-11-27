@@ -2,7 +2,8 @@
 // seguinte, a volta de BH às 07:30 entra sozinha na escala, com o instrutor, o aluno e o avião livres só às 10:10, e o
 // repouso antes dela é um aviso. No programa do curso, o Noturno pode vir em trechos (a ida, a noite e a volta): é um voo
 // só, oferecido pela noite
-import { test, comProgresso, expect, abrir, irPara, abrirEscala, prepararContexto, vigiarErros, AMANHA, entrar, campoDaAgenda, diaSeguinte, rotuloDaData, refazer, textoDoProgresso } from './fixtures.js';
+import { test, comProgresso, expect, abrir, irPara, abrirEscala, prepararContexto, vigiarErros, AMANHA, entrar, campoDaAgenda, diaSeguinte, diaAnterior, rotuloDaData, refazer, textoDoProgresso,
+  editarPelaLista, salvarVoo, abrirHistorico, entradasDoHistorico } from './fixtures.js';
 import { criarSupabaseFalso, documentosAtuais, CONTAS } from './supabase-falso.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
 import { cursosIniciais, gravarCurso } from '../../js/programa.js';
@@ -63,6 +64,55 @@ test.describe('Noturno de dois dias', () => {
     await expect(linha(page, 'Aluno 1001').locator('.c-hr')).not.toContainText('08:20');
     const inicio = (await linha(page, 'Aluno 1001').locator('.c-hr').innerText()).slice(0, 5);
     expect(inicio >= '10:10', `começou às ${inicio}`).toBe(true);
+  });
+
+  // O Noturno no mesmo avião (2026-11-27): gravado, ele fica fixo no avião e com o INVA dele; o editor o leva para outro
+  // avião, a confirmação diz para onde vai a volta, e o dia seguinte, já gravado, é refeito e gravado com ela ao abrir
+  test('o editor leva o Noturno para outro avião: a confirmação diz a volta, e o dia seguinte gravado é refeito com ela', async ({ page }) => {
+    const erros = vigiarErros(page);
+    const guardado = data => page.evaluate(d => JSON.parse(localStorage.getItem(`acpm4_dia_${d}`)), data);
+    const volta = dia => (dia.resultado.out.find(o => o.trecho === 'volta') || {}).r;
+    const estado = cenario({ ins: [instrutor(1, 9), instrutor(2, 9)], stu: [aluno(1000, NOTURNO)] });
+    await abrir(page, { estado });
+    await abrirEscala(page);
+    // Uma alteração grava o dia do Noturno: o pino do Noturno vai junto, e o cadeado diz por quê
+    await linha(page, 'Aluno 1000').locator('select[data-f="fstatus"]').selectOption('Pendente');
+    await refazer(page);
+    const dia1 = await guardado(AMANHA);
+    const [fKey, pino] = Object.entries(dia1.fixos)[0];
+    expect([fKey, pino.noturno]).toEqual(['1000_0_1', true]);
+    await expect(linha(page, 'Aluno 1000').locator('.fixo')).toHaveAttribute('aria-label', 'Voo fixo: Noturno, no mesmo avião da volta');
+    const outro = pino.r === 'PP-ABP' ? 'PP-AJS' : 'PP-ABP';
+
+    // O dia seguinte, gravado (o status da volta), com a volta no avião do Noturno
+    await diaSeguinte(page);
+    await abrirEscala(page);
+    await expect(linha(page, 'Aluno 1000').locator('.c-hr')).toContainText('07:30–08:30');
+    await linha(page, 'Aluno 1000').locator('select[data-f="fstatus"]').selectOption('Pendente');
+    await refazer(page);
+    expect(volta(await guardado('2026-11-12'))).toBe(pino.r);
+
+    // De volta ao dia do Noturno: o editor leva o Noturno para o outro C172, e a confirmação diz para onde vai a volta
+    await diaAnterior(page);
+    await abrirEscala(page);
+    await editarPelaLista(page, '1000_0_1');
+    await page.locator('#voo-recurso').selectOption(outro);
+    await expect(page.locator('#voo-avisos')).toContainText(`A volta de 12/11 passa para o ${outro}.`);
+    await salvarVoo(page);
+    await expect(page.locator('#refazer-avisos')).toContainText(`A volta de 12/11 passa para o ${outro}.`);
+    await refazer(page);
+    const depois = await guardado(AMANHA);
+    expect(depois.fixos['1000_0_1']).toEqual({ ...pino, r: outro, agendado: true, noturno: true });
+
+    // O dia seguinte abre com a volta no avião novo e é gravado com ela (a entrada no Histórico diz o que mudou)
+    await diaSeguinte(page);
+    await abrirEscala(page);
+    await expect(linha(page, 'Aluno 1000').locator('.c-hr')).toContainText('07:30–08:30');
+    await expect(linha(page, 'Aluno 1000')).toContainText(outro);
+    await expect.poll(async () => volta(await guardado('2026-11-12'))).toBe(outro);
+    await abrirHistorico(page);
+    await expect(entradasDoHistorico(page, `Volta do Noturno (o Noturno de ontem mudou): Aluno 1000: ${pino.r} → ${outro}`)).toHaveCount(1);
+    expect(erros).toEqual([]);
   });
 });
 

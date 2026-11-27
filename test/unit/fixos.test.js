@@ -4,7 +4,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { runAllocationEngine } from '../../js/engine.js';
-import { normalizarFixos, pinoDoVoo, fixosAoMudarStatus, fixosAoReabrir, fixosAoAprovar, semAgendados, limparDemanda, motivoDoFixo, pinoDeVoltaNaTurma } from '../../js/fixos.js';
+import { normalizarFixos, pinoDoVoo, fixosAoMudarStatus, fixosAoReabrir, fixosAoAprovar, semAgendados, limparDemanda, motivoDoFixo, pinoDeVoltaNaTurma, pinosDoNoturno, pinosDoNoturnoQueValem } from '../../js/fixos.js';
 import { escolherInstrutor, reverterEscolha } from '../../js/instrutor-escolhido.js';
 import { comRepousoDoNoturno } from '../../js/noturno.js';
 import { normalizarEscalaGravada } from '../../js/escala-gravada.js';
@@ -1021,5 +1021,78 @@ describe('Limpar demanda', () => {
     assert.deepEqual([solto.a, solto.fixo, solto.agendado, solto.insEscolhido, solto.status], [500, undefined, undefined, undefined, 'Confirmado']);
     assert.deepEqual([pino(pousou), pousou.fixo, pousou.agendado, pousou.status], [pino(POUSOU), true, true, 'Pousou']);
     assert.equal(motivoDoFixo('1001_0_1', { fStatus: estado.fStatus, aprovacao: estado.aprovacao, voo: pousou, fixos: estado.fixos }), 'Voo fixo: Pousou');
+  });
+});
+
+// O Noturno no mesmo avião (2026-11-27): o pino do Noturno ({ a, b, r, insId, noturno: true }) prende a ida e a noite no
+// avião e com o INVA da escala gravada; a volta do dia seguinte sai dela (test/unit/noturno.test.js, o dia seguinte)
+describe('O pino do Noturno', () => {
+  const NOTURNO = { mis: 'Noturno', eq: 'C172', p1: 1050, p2: -1 };
+  const dia = (extra = {}) => cenario({ ins: [instrutor(1, 9), instrutor(2, 9)], stu: [aluno(1000, NOTURNO), aluno(1001, { mis: 'Voo Local', eq: 'C172', p1: 500, p2: -1 })], ...extra });
+  const noturnoDe = out => out.find(o => o.stuId === 1000 && !o.trecho);
+
+  it('normalizarFixos guarda só noturno: true', () => {
+    assert.deepEqual(normalizarFixos({ '1000_0_1': { a: 1050, b: 1290, r: 'PR-HAR', insId: 1, noturno: true }, '1001_0_1': { a: 500, b: 560, r: 'PR-HAR', insId: 1, noturno: 'sim' } }),
+      { '1000_0_1': { a: 1050, b: 1290, r: 'PR-HAR', insId: 1, noturno: true }, '1001_0_1': { a: 500, b: 560, r: 'PR-HAR', insId: 1 } });
+  });
+
+  it('cada Noturno da escala ganha o pino dele (o fixo por outro motivo ganha a marca); sem o cancelado, a volta e o pedido que não voa um Noturno', () => {
+    const estado = dia({ ins: [1, 2, 3, 4].map(id => instrutor(id, 9)) });
+    estado.stu.push(aluno(1002, NOTURNO), aluno(1003, NOTURNO));
+    const out = runAllocationEngine(estado).out;
+    const de = id => out.find(o => o.stuId === id && !o.trecho);
+    estado.fStatus = { [de(1003).fKey]: 'Cancelado' };
+    estado.fixos = { [de(1002).fKey]: { ...pinoDoVoo(de(1002)), escolhido: true } };
+    const volta = { ...de(1000), fKey: '1000_0_2', trecho: 'volta', a: 450, b: 510 };
+    const fixos = pinosDoNoturno(estado, { out: [...out, volta] });
+    assert.deepEqual(fixos, {
+      '1002_0_1': { ...pinoDoVoo(de(1002)), escolhido: true, noturno: true },
+      '1000_0_1': { ...pinoDoVoo(de(1000)), noturno: true }
+    });
+    // O pedido que deixou de voar (ou passou para outra missão) não ganha pino
+    estado.stu[0].fly = false;
+    assert.deepEqual(Object.keys(pinosDoNoturno(estado, { out })), ['1002_0_1']);
+    // Sem escala, só a limpeza
+    assert.deepEqual(pinosDoNoturno({ ...estado, fixos: {} }, null), {});
+  });
+
+  it('o pino do Noturno solto: o pedido que não voa mais um Noturno solta o Noturno (o fixo por outro motivo fica, sem a marca)', () => {
+    const estado = dia();
+    const o = noturnoDe(runAllocationEngine(estado).out);
+    estado.fixos = { [o.fKey]: { ...pinoDoVoo(o), noturno: true } };
+    assert.equal(pinosDoNoturnoQueValem(estado), estado.fixos, 'sem nada a soltar, os mesmos voos fixos');
+    estado.stu[0].mis = 'Voo Local';
+    assert.deepEqual(pinosDoNoturnoQueValem(estado), {});
+    assert.deepEqual(pinosDoNoturnoQueValem({ ...estado, fStatus: { [o.fKey]: 'Pousou' } }), { [o.fKey]: pinoDoVoo(o) });
+    assert.deepEqual(pinosDoNoturnoQueValem({ ...estado, aprovacao: { em: '2026-11-27T10:00:00Z', por: 'Op' } }), { [o.fKey]: pinoDoVoo(o) });
+    assert.deepEqual(pinosDoNoturnoQueValem({ ...estado, fixos: { [o.fKey]: { ...pinoDoVoo(o), escolhido: true, noturno: true } } }), { [o.fKey]: { ...pinoDoVoo(o), escolhido: true } });
+    // O motor não prende o pedido que não é mais um Noturno
+    const voo = runAllocationEngine(estado).out.find(v => v.stuId === 1000);
+    assert.deepEqual([voo.mis, voo.fixo], ['Voo Local', undefined]);
+  });
+
+  it('o status, a reabertura e a aprovação não soltam o Noturno; o "Automático" do instrutor tira só a escolha', () => {
+    const estado = dia();
+    const o = noturnoDe(runAllocationEngine(estado).out);
+    const p = { ...pinoDoVoo(o), noturno: true };
+    const fixos = { [o.fKey]: p };
+    for (const status of ['Pendente', 'Confirmado']) assert.deepEqual(fixosAoMudarStatus(fixos, o, status, { aprovada: false }), fixos, status);
+    assert.deepEqual(fixosAoReabrir(fixos, {}), fixos);
+    assert.deepEqual(fixosAoAprovar(fixos, [o])[o.fKey], p);
+    // O INVA escolhido na Escala e depois "Automático": o Noturno continua fixo, com o INVA de agora
+    const comEscolha = { ...estado, fixos };
+    escolherInstrutor(comEscolha, { out: [o] }, { stuId: 1000 }, 2, { noLugar: true });
+    assert.deepEqual(comEscolha.fixos[o.fKey], { ...p, insId: 2, escolhido: true });
+    escolherInstrutor(comEscolha, { out: [{ ...o, insId: 2 }] }, { stuId: 1000 }, null, { noLugar: true });
+    assert.deepEqual(comEscolha.fixos[o.fKey], { ...p, insId: 2 });
+    assert.equal(motivoDoFixo(o.fKey, { fStatus: {}, aprovacao: null, voo: o, fixos }), 'Voo fixo: Noturno, no mesmo avião da volta');
+  });
+
+  it('o Noturno fixo que ficou impossível continua no avião, em conflito: "Conflito no Noturno"', () => {
+    const estado = dia();
+    const o = noturnoDe(runAllocationEngine(estado).out);
+    const { out, al } = runAllocationEngine({ ...estado, fixos: { [o.fKey]: { ...pinoDoVoo(o), noturno: true } }, av: { ...estado.av, [o.r]: false } });
+    assert.deepEqual([noturnoDe(out).r, noturnoDe(out).insId, noturnoDe(out).conflito], [o.r, o.insId, ['o avião está indisponível']]);
+    assert.deepEqual(al.filter(a => a.t === 'conf').map(a => a.m), ['Conflito no Noturno: o avião está indisponível.']);
   });
 });

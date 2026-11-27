@@ -1,7 +1,8 @@
 // Escala aprovada: os voos fixos (horário, avião e instrutor de cada voo, pela chave aluno_missão_sessão) e quem
 // aprovou. Os dados vêm do dia guardado, que pode ter sido gravado fora do app (pela API): só valem nos formatos certos.
 // O operador também fixa um voo na Escala: pelo instrutor escolhido (a marca escolhido) e pelo agendamento (a marca
-// agendado). As marcas acompanham o voo fixo na aprovação, no status e na reabertura
+// agendado). As marcas acompanham o voo fixo na aprovação, no status e na reabertura. O Noturno (a ida e a noite em BH) fica
+// fixo pela marca noturno: a volta, no dia seguinte, vai no avião e com o INVA dele (pinosDoNoturno)
 import { rotuloDoStatus, STATUS_EM_ANDAMENTO } from './status.js';
 import { CHAVE_DO_VOO, chaveDoVoo, pedidoDoAluno } from './voo.js';
 import { MATRICULA } from './frota.js';
@@ -21,7 +22,9 @@ export function normalizarFixos(fixos) {
       // Fixo pelo instrutor escolhido na Escala
       ...(p.escolhido === true ? { escolhido: true } : {}),
       // Agendado na Escala: o operador marcou o voo no horário, no recurso e com o instrutor
-      ...(p.agendado === true ? { agendado: true } : {})
+      ...(p.agendado === true ? { agendado: true } : {}),
+      // O Noturno: o aluno faz a missão inteira (a ida, a noite e a volta do dia seguinte) no mesmo avião
+      ...(p.noturno === true ? { noturno: true } : {})
     }]];
   }));
 }
@@ -36,10 +39,11 @@ export const pinoDoVoo = o => ({ a: o.a, b: o.b, r: o.r, insId: o.insId, ...(o.i
 
 // O ciclo do cadeado. Em Voo, Atrasado, Pousou e Cancelado fixam o voo onde ele está (o pino que já havia
 // continua); fora da escala aprovada, Pendente ou Confirmado o soltam, menos o fixo pelo operador na Escala (pelo
-// instrutor escolhido ou pelo agendamento). Reabrir a escala mantém os fixados pelo status e pelo operador na Escala
+// instrutor escolhido ou pelo agendamento) e o Noturno. Reabrir a escala mantém os fixados pelo status, pelo operador na
+// Escala e o Noturno
 const STATUS_QUE_FIXAM = ['Em Voo', 'Atrasado', 'Pousou', 'Cancelado'];
 export const fixoPeloStatus = (fKey, fStatus) => STATUS_QUE_FIXAM.includes((fStatus || {})[fKey]);
-const fixoPeloOperador = p => Boolean(p && (p.escolhido || p.agendado));
+const fixoPeloOperador = p => Boolean(p && (p.escolhido || p.agendado || p.noturno));
 
 export function fixosAoMudarStatus(fixos, voo, status, { aprovada }) {
   const atuais = fixos || {};
@@ -75,7 +79,8 @@ export function pinosQueVoltam(fixos, { aprovacao, fStatus }, aprovada) {
 }
 
 // Aprovar a escala: cada voo dela fica fixo onde está (out: a escala da tela, calculada ou gravada). O fixo pelo
-// operador na Escala continua com a marca (o instrutor escolhido, do pino; o agendado, do pino ou da linha da escala), e
+// operador na Escala continua com a marca (o instrutor escolhido, do pino; o agendado, do pino ou da linha da escala; o
+// Noturno, do pino), e
 // o agendado que não está na escala (o pedido tirado da escala) continua fixo: o voo volta para o lugar dele quando o
 // pedido voltar
 export function fixosAoAprovar(fixos, out) {
@@ -83,7 +88,8 @@ export function fixosAoAprovar(fixos, out) {
   const daEscala = Object.fromEntries(out.map(o => {
     const atual = atuais[o.fKey];
     return [o.fKey, {
-      ...pinoDoVoo(o), ...(atual && atual.escolhido ? { escolhido: true } : {}), ...(o.agendado || (atual && atual.agendado) ? { agendado: true } : {})
+      ...pinoDoVoo(o), ...(atual && atual.escolhido ? { escolhido: true } : {}), ...(o.agendado || (atual && atual.agendado) ? { agendado: true } : {}),
+      ...(atual && atual.noturno ? { noturno: true } : {})
     }];
   }));
   const foraDaEscala = Object.entries(atuais).filter(([fKey, p]) => p.agendado && !Object.hasOwn(daEscala, fKey));
@@ -196,13 +202,68 @@ export function pinoDeVoltaNaTurma(fixos, fKey, pino, mis) {
   return { ...semChave, classKey: nova };
 }
 
-// Por que o voo está fixo (o texto do cadeado): o status de andamento (com o nome da tela), o agendamento na Escala, a
-// escala aprovada ou o instrutor escolhido na Escala, nesta ordem
+// Por que o voo está fixo (o texto do cadeado): o status de andamento (com o nome da tela), o agendamento na Escala, o
+// Noturno, a escala aprovada ou o instrutor escolhido na Escala, nesta ordem
 export function motivoDoFixo(fKey, { fStatus, aprovacao, voo, fixos }) {
   const status = (fStatus || {})[fKey];
   if (STATUS_QUE_FIXAM.includes(status)) return `Voo fixo: ${rotuloDoStatus(status, voo)}`;
   const pino = (fixos || {})[fKey];
   if (pino && pino.agendado) return 'Voo fixo: agendado na escala';
+  if (pino && pino.noturno) return 'Voo fixo: Noturno, no mesmo avião da volta';
   if (aprovacao) return 'Voo fixo: escala aprovada';
   return pino && pino.escolhido ? 'Voo fixo: instrutor escolhido na escala' : 'Voo fixo';
+}
+
+// O Noturno no mesmo avião (Pedro, 2026-11-27: “Students need to perform the entire noturno mission phase in the same
+// plane”). A volta, no dia seguinte, vai no avião e com o INVA do Noturno da escala gravada deste dia (js/noturno.js,
+// noturnosDaVespera); o Noturno que o motor refizesse em outro lugar (o Pousou dos voos da tarde, um voo cancelado, um
+// pedido novo, o hangar, a reabertura) deixaria a volta em outro avião. Então o Noturno fica fixo onde foi gravado, com o
+// pino do Noturno ({ a, b, r, insId, noturno: true }): ApiClient.salvarDia o põe em cada Noturno da escala que grava, e
+// ApiClient.carregarDia, no dia gravado antes dele (os dias antigos e os da prévia), pela linha gravada, antes do motor. A
+// marca fica na aprovação, no status e na reabertura (fixoPeloOperador); só o operador muda o avião ou o INVA (o editor do
+// voo, a escolha do instrutor, as Sugestões, o agendamento) ou tira o pedido, e o dia seguinte acompanha
+// (js/actions.js, seguirAsVoltasDeOntem)
+
+// O pedido da chave voa um Noturno (o aluno e o pedido estão na Demanda, com "Voa" ligado e a missão Noturno)
+function voaNoturno(estado, fKey) {
+  const [stuId, mid] = fKey.split('_').map(Number);
+  const aluno = (estado.stu || []).find(s => s.id === stuId);
+  const pedido = aluno ? pedidoDoAluno(aluno, mid) : null;
+  return Boolean(pedido && pedido.fly && pedido.mis === 'Noturno');
+}
+
+// Os voos fixos com o pino do Noturno só enquanto o pedido dele voa um Noturno: o pedido que deixou de voar ou passou para
+// outra missão (tirado da escala, a missão mudada na Demanda, a demanda limpa) solta o Noturno. O pino sai, ou, fixo
+// também por outro motivo (a escala aprovada, o status, o operador na Escala), fica sem a marca. Sem nada a soltar,
+// devolve os próprios voos fixos do estado (o motor e a conferência leem estes: js/conferencia.js, contextoDaEscala)
+export function pinosDoNoturnoQueValem(estado) {
+  const fixos = estado.fixos && typeof estado.fixos === 'object' ? estado.fixos : {};
+  const soltos = Object.keys(fixos).filter(fKey => fixos[fKey] && fixos[fKey].noturno && !voaNoturno(estado, fKey));
+  if (!soltos.length) return fixos;
+  const novos = { ...fixos };
+  for (const fKey of soltos) {
+    const { noturno: _, ...resto } = novos[fKey];
+    if (estado.aprovacao || fixoPeloOperador(resto) || fixoPeloStatus(fKey, estado.fStatus)) novos[fKey] = resto;
+    else delete novos[fKey];
+  }
+  return novos;
+}
+
+// O Noturno (a ida e a noite, sem a volta de ontem) da escala que não foi cancelado, com o lugar no formato do pino
+const noturnoDaEscala = (o, fStatus) => o && o.mis === 'Noturno' && !o.trecho && !o.isGround && typeof o.fKey === 'string' && CHAVE_DO_VOO.test(o.fKey)
+  && ((fStatus || {})[o.fKey] || o.status) !== 'Cancelado'
+  && minuto(o.a) && minuto(o.b) && o.b > o.a && typeof o.r === 'string' && MATRICULA.test(o.r) && Number.isInteger(o.insId);
+
+// Os voos fixos com o pino de cada Noturno da escala (a calculada que é gravada, ou a gravada de um dia antigo): o Noturno
+// sem pino ganha o dele, no lugar da linha; o fixo por outro motivo (a escala aprovada, o status, o operador) ganha a
+// marca. Antes, os que não valem mais saem (pinosDoNoturnoQueValem). O pedido que não voa um Noturno não ganha nada
+export function pinosDoNoturno(estado, escala) {
+  let fixos = pinosDoNoturnoQueValem(estado);
+  for (const o of escala && Array.isArray(escala.out) ? escala.out : []) {
+    if (!noturnoDaEscala(o, estado.fStatus) || !voaNoturno(estado, o.fKey)) continue;
+    const atual = fixos[o.fKey];
+    if (atual && atual.noturno) continue;
+    fixos = { ...fixos, [o.fKey]: atual ? { ...atual, noturno: true } : { a: o.a, b: o.b, r: o.r, insId: o.insId, noturno: true } };
+  }
+  return fixos;
 }

@@ -76,10 +76,10 @@ aoAcionar('deli', (b, { id }) => {
   S.stu.forEach(s => s.bl = s.bl.filter(v => v !== id));
   S.stu.forEach(s => { if (s.voaCom) s.voaCom = s.voaCom.filter(v => v !== id); if (s.voaCom && !s.voaCom.length) delete s.voaCom; });
   // Os pedidos do dia com o instrutor escolhido voltam para a escolha do app, e os voos fixos pela escolha na Escala
-  // são soltos (os da escala aprovada, os fixados pelo status e os agendados na Escala ficam, em conflito, com as
-  // sugestões)
+  // são soltos (os da escala aprovada, os fixados pelo status, os agendados na Escala e o Noturno ficam, em conflito, com
+  // as sugestões)
   S.stu.forEach(s => [s, ...(s.extra || [])].forEach(p => { if (p.insId === id) delete p.insId; }));
-  S.fixos = Object.fromEntries(Object.entries(S.fixos || {}).filter(([k, p]) => !(p.escolhido && !p.agendado && p.insId === id && !S.aprovacao && !fixoPeloStatus(k, S.fStatus))));
+  S.fixos = Object.fromEntries(Object.entries(S.fixos || {}).filter(([k, p]) => !(p.escolhido && !p.agendado && !p.noturno && p.insId === id && !S.aprovacao && !fixoPeloStatus(k, S.fStatus))));
   gravarAlteracao('exc', `Instrutor excluído: ${target ? target.nm : id}`);
   rIns(); redesenharPorNome('alunos', 'pedidos-do-dia');
 });

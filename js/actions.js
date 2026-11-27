@@ -1,15 +1,16 @@
 // Ações que alteram o estado: perfil de acesso, data da escala, histórico de alterações, geração da escala e BI.
 import { escreverDataNoEndereco } from './endereco.js';
-import { somarDias, fimDoMes, LIMITE_DO_NOME } from './format.js';
+import { somarDias, fimDoMes, LIMITE_DO_NOME, hojeISO } from './format.js';
 import { aplicarSomenteLeitura } from './somente-leitura.js';
 import { escalaDaAlteracao } from './edicao-do-voo.js';
 import { normalizarEscalaGravada } from './escala-gravada.js';
+import { pinosDoNoturno } from './fixos.js';
 import { ligada } from './funcionalidades.js';
 import { ApiClient } from './storage.js';
 import { S, RES, AUDIT_LOG, BI_HISTORY, DATA, setS, setRES, setAuditLog, setBIHistory, setData, isGestor, dadoIndisponivel, modoCompartilhado, estadoDaEscala, comOsMotivosDaTela, escalaDoMotor } from './state.js';
 import { $, mostrarAviso, avisoAberto, showToast } from './dom.js';
 import { comHorasExternas } from './limites.js';
-import { comRepousoDoNoturno } from './noturno.js';
+import { comRepousoDoNoturno, voltasQueMudaram } from './noturno.js';
 import { redesenhar, redesenharPorNome } from './redesenho.js';
 import { SEM_OS_PROGRAMAS } from './views/cursos.js';
 import { podeEditarAgenda } from './views/agenda.js';
@@ -195,6 +196,15 @@ export const ultimaGravacao = () => gravacaoAtual;
 function save(resultado = null) {
   if (isGestor() || !dadosLidos) return Promise.resolve(false);
   setRES(resultado || escalaCalculada());
+  // O Noturno que o motor acabou de pôr ganha o pino dele (o que salvarDia grava: js/fixos.js, pinosDoNoturno), e a
+  // escala é refeita com ele: a tela mostra o cadeado, e a escala gravada é a que o motor refaz nas alterações seguintes
+  if (!resultado) {
+    const fixos = pinosDoNoturno(S, RES);
+    if (fixos !== S.fixos) {
+      S.fixos = fixos;
+      setRES(escalaCalculada());
+    }
+  }
   syncBIHistoryForCurrentDate();
   gravacaoAtual = ApiClient.salvarDia(DATA, S, RES);
   // Neste navegador (sem servidor), a gravação só falha quando o armazenamento recusa (o espaço pode ter acabado)
@@ -363,7 +373,7 @@ export async function lerData(data) {
     await dadosProntos;
     await anterior;
     if (pedido !== pedidoDeData) return false;
-    const { estado, escala, horasBase, horasDosInstrutores, resultados, programa, indisponiveis } = await ApiClient.carregarDia(data);
+    const { estado, escala, horasBase, horasDosInstrutores, resultados, programa, indisponiveis, voltasDeAntes } = await ApiClient.carregarDia(data);
     const historico = await historicoParaPainel(data);
     const maisNova = pedido === pedidoDeData;
     if (!maisNova && data !== DATA) return false;
@@ -378,19 +388,38 @@ export async function lerData(data) {
     escalaSoCalculada = !escala;
     setAuditLog(historico);
     dadosLidos = maisNova;
+    voltasParaSeguir = maisNova && voltasDeAntes ? { data, deAntes: voltasDeAntes } : null;
     return true;
   } finally {
     terminou();
   }
 }
 
+// O noturno de ontem mudou depois que a data aberta foi gravada (o operador levou o Noturno para outro avião ou outro INVA,
+// tirou o pedido, ou ele foi cancelado): a escala gravada tem a volta de antes, e a tela mostra a refeita
+// (ApiClient.carregarDia: as voltas não conferem). Quem pode alterar grava a refeita logo depois de a data abrir, com a
+// entrada no histórico, para a escala gravada (o painel da TV, o BI, as horas da data seguinte) não ficar com a volta de
+// antes. Só de hoje em diante: a data passada fica como foi gravada até a próxima alteração nela. Responde se gravou
+let voltasParaSeguir = null;
+export function seguirAsVoltasDeOntem() {
+  const pendente = voltasParaSeguir;
+  voltasParaSeguir = null;
+  if (!pendente || pendente.data !== DATA || !dadosLidos || isGestor() || ApiClient.readOnly || DATA < hojeISO()) return false;
+  const texto = voltasQueMudaram(pendente.deAntes, S.noturnosDaVespera);
+  if (!texto || !gravarAlteracao('mod', texto)) return false;
+  showToast('A volta do Noturno mudou com o Noturno de ontem: a escala desta data foi refeita e gravada (veja o Histórico).');
+  return true;
+}
+
 // Abre a escala de outra data. As abas são refeitas com os dados dela, também a do Rodízio: aberta, ela mostraria as
 // filas da data anterior, e o clique agiria sobre uma fila que a pessoa não está vendo. A data está aberta com os dados na
-// tela: os pedidos dela e o BI do período chegam depois, sem segurar quem a abriu
+// tela: os pedidos dela e o BI do período chegam depois, sem segurar quem a abriu. A volta do noturno que mudou é gravada
+// (seguirAsVoltasDeOntem)
 export async function carregarData(data) {
   if (!await lerData(data)) return;
   $('#escala-atualizada').hidden = true;
   redesenhar('dados');
+  seguirAsVoltasDeOntem();
   lerPedidosDaData();
   carregarBI();
 }
