@@ -1,5 +1,5 @@
 // Tela da Escala: Lista, Por recurso ou Por instrutor; resumo com erros e avisos agrupados; uma linha por voo.
-import { test, expect, abrir, abrirComExemplo, abrirEscala, irPara, irParaVista, lerEscala, alternarDisponivel, alvosPequenos, larguraDaPagina, appPronto, AMANHA, prepararContexto, vigiarErros, entrar, importarDaAgenda, abrirCaixa, editorDoVoo, refazer, confirmarAgendamento, aprovar } from './fixtures.js';
+import { test, comPrioridade, expect, abrir, abrirComExemplo, abrirEscala, irPara, irParaVista, lerEscala, alternarDisponivel, alvosPequenos, larguraDaPagina, appPronto, AMANHA, prepararContexto, vigiarErros, entrar, importarDaAgenda, abrirCaixa, editorDoVoo, refazer, confirmarAgendamento, aprovar } from './fixtures.js';
 import { criarSupabaseFalso, documentosAtuais, CONTAS } from './supabase-falso.js';
 import { IDS } from '../helpers/casos-do-programa.js';
 import { cursosIniciais, gravarCurso } from '../../js/programa.js';
@@ -658,7 +658,8 @@ test.describe('Celular', () => {
     }
   });
 
-  test('a escala vira um cartão por voo, com horário, aluno, missão, avião, instrutor e status à vista', async ({ page }) => {
+  // O instrutor do Aluno 12 é o da escala do exemplo com as prioridades dele: com a prioridade ligada (js/funcionalidades.js)
+  comPrioridade('a escala vira um cartão por voo, com horário, aluno, missão, avião, instrutor e status à vista', async ({ page }) => {
     await abrirComExemplo(page);
     await abrirEscala(page);
     await expect(page.locator('#out thead')).toBeHidden();
@@ -918,8 +919,9 @@ test.describe('O que a missão do curso exige do INVA, na Escala', () => {
   });
 
   // A missão marcada (ou desmarcada) em Cursos muda o que o motor pede: a escala da data aberta é refeita e gravada na hora
-  // (sem entrada no histórico da data: a alteração fica nas versões do curso), também a que já estava gravada
-  test('marcar e desmarcar em Cursos o que a missão exige do INVA refaz a escala gravada da data aberta', async ({ page }) => {
+  // (sem entrada no histórico da data: a alteração fica nas versões do curso), também a que já estava gravada. Com a
+  // prioridade ligada (a alteração que grava a data é a prioridade)
+  comPrioridade('marcar e desmarcar em Cursos o que a missão exige do INVA refaz a escala gravada da data aberta', async ({ page }) => {
     const semExige = gravarCurso({ cursos: cursosIniciais() }, {
       sigla: 'PP', versaoLida: 1, descricao: 'PP: programa', conteudo: {
         nome: 'Piloto Privado', ativo: true, fases: [{ id: IDS.f1, nome: 'Fase 1' }],

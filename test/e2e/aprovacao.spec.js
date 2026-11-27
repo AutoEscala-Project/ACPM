@@ -1,14 +1,14 @@
 // O dia de operação: "Aprovar escala" fixa os voos. Depois disso, uma alteração não tira ninguém do lugar:
 // o pedido novo entra em volta, e o voo fixo que ficou impossível aparece em conflito. "Reabrir" volta ao normal.
 // Em Voo, Atrasado, Pousou e Cancelado também fixam o voo.
-import { test, expect, abrir, abrirComExemplo, irPara, abrirEscala, lerEscala, abrirHistorico, alternarVem, aprovar, botaoAprovar, botaoReabrir, caixaVoa, reabrir, refazer } from './fixtures.js';
+import { test, comPrioridade, expect, abrir, abrirComExemplo, irPara, abrirEscala, lerEscala, abrirHistorico, alternarVem, aprovar, botaoAprovar, botaoReabrir, caixaVoa, reabrir, refazer } from './fixtures.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
 
 const dia = () => cenario({ ins: [instrutor(1, 9), instrutor(2, 9)], stu: [aluno(1000, { p1: 390, p2: -1 }), aluno(1001, { p1: 500, p2: -1 }), aluno(1002, { fly: false, p1: 390, p2: -1 })] });
 const linhas = async page => (await lerEscala(page)).linhas.filter(l => l.includes('Aluno 100'));
 
 test.describe('Escala aprovada', () => {
-  test('aprovar fixa os voos: o selo diz quando e quem; um pedido novo de prioridade 5 não tira ninguém do lugar; reabrir volta ao normal', async ({ page }) => {
+  comPrioridade('aprovar fixa os voos: o selo diz quando e quem; um pedido novo de prioridade 1 (a mais alta) não tira ninguém do lugar; reabrir volta ao normal', async ({ page }) => {
     await abrir(page, { estado: dia() });
     await abrirEscala(page);
     const antes = await linhas(page);
@@ -16,12 +16,12 @@ test.describe('Escala aprovada', () => {
     await expect(page.locator('#selo-aprovada')).toHaveText('Aprovada às 12:00');
     await expect(page.locator('#out tbody tr:not(.win) .fixo')).toHaveCount(2);
 
-    // Pedido novo, prioridade 5, no mesmo horário do primeiro voo
+    // Pedido novo, prioridade 1 (a mais alta), no mesmo horário do primeiro voo
     await irPara(page, 'dem');
     await page.locator('#onlyfly').uncheck();
     const novo = page.locator('#dem tr[data-id="1002"]');
     await caixaVoa(novo).check();
-    await novo.locator('[data-f="pr"]').selectOption('5');
+    await novo.locator('[data-f="pr"]').selectOption('1');
     await abrirEscala(page);
     const depois = await linhas(page);
     for (const linha of antes) expect(depois).toContain(linha);

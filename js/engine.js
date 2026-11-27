@@ -229,6 +229,18 @@ function motivoSemPar(doPar, stu, d, tipo, fc) {
 // opcoes.compactar: false monta a escala sem a compactação; opcoes.dividirHoras: false, sem a divisão igual das horas;
 // opcoes.trocarMatriculas: false, sem a troca de matrículas para o instrutor ficar no mesmo avião (para comparar, medir
 // e testar)
+// O fim do motivo do avião ocupado ('avioes-ocupados') que fala da prioridade dos pedidos
+const PELA_PRIORIDADE = ' (ocupados por pedidos de prioridade maior)';
+// O resultado com o motivo do avião ocupado sem falar da prioridade: o que a tela mostra com a prioridade desligada
+// (js/funcionalidades.js; js/state.js, comOsMotivosDaTela), em que todos os pedidos têm a mesma. Não muda o resultado: os
+// outros alertas continuam os mesmos objetos, e, sem o motivo, devolve o próprio resultado
+export function semAPrioridadeNosMotivos(resultado) {
+  const fim = `${PELA_PRIORIDADE}.`;
+  const comAPrioridade = a => a.codigo === 'avioes-ocupados' && typeof a.m === 'string' && a.m.endsWith(fim);
+  if (!resultado.al.some(comAPrioridade)) return resultado;
+  return { ...resultado, al: resultado.al.map(a => (comAPrioridade(a) ? { ...a, m: `${a.m.slice(0, -fim.length)}.` } : a)) };
+}
+
 export function runAllocationEngine(state, opcoes = {}) {
   // O que a escala gasta enquanto é montada e o que o estado diz de fixo (js/conferencia.js)
   const ctx = contextoDaEscala(state);
@@ -646,7 +658,7 @@ export function runAllocationEngine(state, opcoes = {}) {
             ? `o ${nomesSoParafuso} (só para Parafuso) já está ocupado nos horários possíveis`
             : frota.some(f => f.tipo === d.eq && state.av[f.reg] && motivoDoAviao(f, vooDoPedido) === 'so-vfr')
               ? `nenhum ${d.eq} homologado IFR livre nos horários possíveis (o voo é IFR; os “Só VFR” não servem a ele)`
-              : `nenhum ${d.eq} livre nos horários possíveis (ocupados por pedidos de prioridade maior)`],
+              : `nenhum ${d.eq} livre nos horários possíveis${PELA_PRIORIDADE}`],
           revisao: ['revisao', `os ${d.eq} livres estão sem saldo até a revisão de 50 horas`],
           disp: ['instrutores-indisponiveis', escolhido ? `${quem} não está disponível durante o voo inteiro nos horários possíveis` : `nenhum instrutor habilitado (${exige}) está disponível durante o voo inteiro nos horários possíveis`],
           busy: ['instrutores-ocupados', escolhido ? `${quem} já tem outro compromisso nos horários possíveis` : `os instrutores habilitados (${exige}) já têm outro compromisso nos horários possíveis`],

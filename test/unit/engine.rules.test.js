@@ -1,7 +1,7 @@
 // Regras operacionais do motor de alocação, conforme o Manual (Como a escala é montada).
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { runAllocationEngine, sumUniqueOperationalHours, consolidateTimelineSlots } from '../../js/engine.js';
+import { runAllocationEngine, sumUniqueOperationalHours, consolidateTimelineSlots, semAPrioridadeNosMotivos } from '../../js/engine.js';
 import { hm } from '../../js/format.js';
 import { aluno, apenas, cenario, instrutor, missaoExtra, GROUND_C152 } from '../helpers/montar.js';
 
@@ -587,6 +587,36 @@ describe('Voo agendado na Escala', () => {
     const { agendado: _, ...semAMarca } = agendado;
     const semMarca = runAllocationEngine({ ...estado, fixos: { ...fixos, '1000_0_1': semAMarca } });
     assert.deepEqual(semMarca, { ...resultado, out: resultado.out.map(({ agendado: _, ...o }) => o) });
+  });
+});
+
+// Com a prioridade desligada (js/funcionalidades.js), todos os pedidos têm a mesma: o motivo do avião ocupado não fala de
+// "prioridade maior" (a tela tira o fim dele, js/state.js, comOsMotivosDaTela; o motor continua o mesmo)
+describe('O motivo sem a prioridade', () => {
+  it('o avião ocupado deixa de dizer "ocupados por pedidos de prioridade maior"; os outros motivos e o resultado continuam', () => {
+    // Dois instrutores e um avião: os dois alunos só podem às 06:30, e o segundo fica sem avião
+    const estado = cenario({
+      ins: [instrutor(1, 9), instrutor(2, 9)], semAeronaves: apenas('C152', 'PP-LJV'),
+      stu: [aluno(1000, { p1: 390, p2: -1, jan: 'h390' }), aluno(1001, { p1: 390, p2: -1, jan: 'h390' }), aluno(1002, { p1: 390, p2: -1, jan: 'h390', eq: 'C172' })]
+    });
+    const resultado = runAllocationEngine(estado);
+    const antes = structuredClone(resultado);
+    const erro = s => resultado.al.find(a => a.t === 'err' && a.s === s);
+    assert.equal(erro('Aluno 1001').m, 'Rejeitado: nenhum C152 livre nos horários possíveis (ocupados por pedidos de prioridade maior).');
+    const sem = semAPrioridadeNosMotivos(resultado);
+    assert.deepEqual(resultado, antes);
+    const erroSem = sem.al.find(a => a.s === 'Aluno 1001');
+    assert.deepEqual(erroSem, { ...erro('Aluno 1001'), m: 'Rejeitado: nenhum C152 livre nos horários possíveis.' });
+    // O resto: os mesmos objetos
+    assert.equal(sem.out, resultado.out);
+    sem.al.forEach((a, i) => { if (a !== erroSem) assert.equal(a, resultado.al[i]); });
+    assert.deepEqual({ ...sem, al: null }, { ...resultado, al: null });
+    // Sem o motivo: o próprio resultado
+    const semOMotivo = { ...resultado, al: resultado.al.filter(a => a.codigo !== 'avioes-ocupados') };
+    assert.equal(semAPrioridadeNosMotivos(semOMotivo), semOMotivo);
+    // O avião ocupado com outro texto (o IFR, o Parafuso) continua
+    const ifr = { ...resultado, al: [{ t: 'err', s: 'Aluno 1', codigo: 'avioes-ocupados', m: 'Rejeitado: nenhum C172 homologado IFR livre nos horários possíveis (o voo é IFR; os “Só VFR” não servem a ele).' }] };
+    assert.equal(semAPrioridadeNosMotivos(ifr), ifr);
   });
 });
 

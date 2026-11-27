@@ -7,14 +7,18 @@
 //              hangar no tempo parado
 //   progresso: a próxima missão e as outras missões do curso, o progresso, a fase de cada aluno e os resultados. A tela
 //              Cursos, o curso do aluno e o código da missão que o pedido já tem continuam
+//   prioridade: a prioridade do pedido, na Demanda (a coluna), nas dicas, no glossário e no Manual; o motor (e a
+//              compactação, os candidatos, as Sugestões e a simulação do agendamento) recebe todos os pedidos na prioridade
+//              padrão, e valem a ordem dos agendamentos e a do cadastro; o motivo do avião ocupado deixa de falar dela
+//              (js/state.js, comOsMotivosDaTela). A prioridade guardada (pr) continua em S
 import { LOCAIS } from './config-supabase.js';
 
 // true liga a funcionalidade em todos os endereços
-const LIGADAS = Object.freeze({ hangar: false, progresso: false });
+const LIGADAS = Object.freeze({ hangar: false, progresso: false, prioridade: false });
 
 // Só no localhost (o desenvolvimento e os testes): a lista das ligadas, separadas por vírgula, no lugar das de cima, em
-// ?funcionalidades=hangar,progresso ou em FUNCIONALIDADES_LIGADAS, na janela (os testes, test/e2e/fixtures.js); vazia,
-// nenhuma. Nos outros endereços, e sem endereço (o Node), null: valem as de cima
+// ?funcionalidades=hangar,progresso,prioridade ou em FUNCIONALIDADES_LIGADAS, na janela (os testes,
+// test/e2e/fixtures.js); vazia, nenhuma. Nos outros endereços, e sem endereço (o Node), null: valem as de cima
 export function escolhidasNoLocalhost(janela = globalThis) {
   try {
     if (!LOCAIS.includes(janela.location.hostname)) return null;

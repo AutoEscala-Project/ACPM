@@ -69,12 +69,16 @@ export const FRASES_DAS_FUNCIONALIDADES = {
   hangar: ['nunca para a ordem no hangar', 'Ordem no hangar', 'a ordem no hangar.', 'depois o da frente do hangar', 'as saídas do hangar', 'menos saídas do hangar'],
   progresso: ['agrupados pela fase em que estão', 'Próxima: PP-07 · Usar', 'Outra missão…', 'próxima missão', 'progresso', 'Aprovado ou Reprovado',
     '12/40 · próxima PP-13', 'fora da ordem', 'com quantos alunos estão em cada uma',
-    'o resultado do voo vai para o código do pedido']
+    'o resultado do voo vai para o código do pedido'],
+  prioridade: ['duração e prioridade', 'de 1 a 5, e 1 é a mais alta', 'a disponibilidade, a prioridade ou o instrutor', 'Com a mesma prioridade, o aluno com',
+    'por prioridade (1 primeiro)', 'a 1ª preferência pesa mais para quem tem mais prioridade', 'seguindo as prioridades', 'Como dar preferência a um aluno?',
+    'aumente a prioridade dele (1 é a mais alta)']
 };
 // E as que ele só diz com ela desligada
 export const FRASES_SEM_AS_FUNCIONALIDADES = {
   hangar: ['sai o primeiro livre na ordem da frota', 'uma parada de 2 h ou mais pesa mais', 'as janelas de operação e a tabela dos aviões'],
-  progresso: ['o código da missão do curso que o pedido já tem', 'para o aluno de um curso, escolha a missão na lista', 'oferece esse voo', 'e um clique leva à fase']
+  progresso: ['o código da missão do curso que o pedido já tem', 'para o aluno de um curso, escolha a missão na lista', 'oferece esse voo', 'e um clique leva à fase'],
+  prioridade: ['disponibilidade e duração.', 'Depois os voos e simuladores: quem', 'seguindo a ordem dos pedidos']
 };
 
 export const FRASES_QUE_SAIRAM = Object.values(ANTIGAS).flat();
