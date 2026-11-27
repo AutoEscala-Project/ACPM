@@ -20,6 +20,9 @@ const rotuloValido = v => typeof v === 'string' && v.length <= 40;
 const rotulo = v => (rotuloValido(v) ? v : '↶ Reverter');
 const objeto = v => Boolean(v) && typeof v === 'object' && !Array.isArray(v);
 const ausente = v => v === null || v === undefined;
+// A mudança feita na escala aprovada (aprovada: true; os pinos de antes dela são os da aprovação): o campo, ou nada. Fora
+// do formato (não sim ou não), undefined
+const naAprovada = rev => (rev.aprovada === true ? { aprovada: true } : rev.aprovada === undefined || rev.aprovada === false ? {} : undefined);
 // Um campo do pedido é um valor simples: texto, número, sim ou não (null fica de fora na normalização). Uma lista ou um
 // objeto gravado no histórico não é campo de pedido: a normalização o converteria em texto (['Noturno'] passaria por
 // 'Noturno', sem o horário do Noturno) ou lançaria uma exceção (um objeto com "toString": null, que o JSON permite), e aí
@@ -69,17 +72,18 @@ export function validarReversao(rev, frota) {
     // O reparo também muda o instrutor escolhido dos pedidos: como estavam
     const pedidos = rev.pedidos === undefined ? [] : rev.pedidos;
     if (!Array.isArray(pedidos) || pedidos.length > 100 || !pedidos.every(p => p && idValido(p.stuId) && Number.isInteger(p.mid) && p.mid >= 0 && idValido(p.insId))) return null;
-    return Object.keys(fixos).length ? { kind: 'restaurarFixos', fixos, ...(pedidos.length ? { pedidos: pedidos.map(p => ({ stuId: p.stuId, mid: p.mid, insId: p.insId })) } : {}), label } : null;
+    if (!naAprovada(rev)) return null;
+    return Object.keys(fixos).length ? { kind: 'restaurarFixos', fixos, ...(pedidos.length ? { pedidos: pedidos.map(p => ({ stuId: p.stuId, mid: p.mid, insId: p.insId })) } : {}), ...naAprovada(rev), label } : null;
   }
   // O instrutor escolhido de antes (insId 0: "Automático") nos pedidos, e os voos fixos como estavam (soltar: os que
-  // não eram fixos)
+  // não eram fixos); aprovada: a escolha foi feita na escala aprovada (também no reparo e no aproveitamento, abaixo)
   if (rev.kind === 'restaurarEscolha') {
     if (!Array.isArray(rev.pedidos) || !rev.pedidos.length || rev.pedidos.length > 100 || !Array.isArray(rev.soltar) || rev.soltar.length > 100) return null;
     const pedidos = rev.pedidos.map(p => (p && typeof p === 'object' && idValido(p.stuId) && Number.isInteger(p.mid) && p.mid >= 0
       && (p.insId === 0 || idValido(p.insId)) ? { stuId: p.stuId, mid: p.mid, insId: p.insId } : null));
     const fixos = rev.fixos && typeof rev.fixos === 'object' ? normalizarFixos(rev.fixos) : {};
-    if (!pedidos.every(Boolean) || !rev.soltar.every(k => typeof k === 'string' && CHAVE_DO_VOO.test(k))) return null;
-    return { kind: 'restaurarEscolha', pedidos, fixos, soltar: [...rev.soltar], label };
+    if (!pedidos.every(Boolean) || !rev.soltar.every(k => typeof k === 'string' && CHAVE_DO_VOO.test(k)) || !naAprovada(rev)) return null;
+    return { kind: 'restaurarEscolha', pedidos, fixos, soltar: [...rev.soltar], ...naAprovada(rev), label };
   }
   // Os horários de uma categoria e os pedidos que mudaram com eles
   if (rev.kind === 'restaurarHorarios') {
@@ -92,8 +96,8 @@ export function validarReversao(rev, frota) {
       ? { stuId: p.stuId, mid: p.mid, p1: p.p1, p2: p.p2, ...(p.jan === undefined ? {} : { jan: p.jan }) } : null));
     return pedidos.every(Boolean) ? { kind: 'restaurarHorarios', cat: rev.cat, lista, pedidos, label } : null;
   }
-  // O voo cancelado aproveitado pelas Sugestões: o pino, o status e o detalhe de antes de cada voo (null: não havia) e o
-  // pedido de antes de cada aluno (os campos do pedido, como no agendamento)
+  // O voo cancelado aproveitado pelas Sugestões: o pino, o status e o detalhe de antes de cada voo (null: não havia), o
+  // pedido de antes de cada aluno (os campos do pedido, como no agendamento) e se foi feito na escala aprovada
   if (rev.kind === 'aproveitarCancelado') {
     if (!Array.isArray(rev.voos) || !rev.voos.length || rev.voos.length > 100 || !Array.isArray(rev.pedidos) || rev.pedidos.length > 100) return null;
     const voos = rev.voos.map(v => {
@@ -106,21 +110,28 @@ export function validarReversao(rev, frota) {
     });
     const pedidos = rev.pedidos.map(p => (objeto(p) && idValido(p.stuId) && Number.isInteger(p.mid) && p.mid >= 0 && pedidoDeAntes(p.pedido)
       ? { stuId: p.stuId, mid: p.mid, pedido: pedidoDeAntes(p.pedido) } : null));
-    return voos.every(Boolean) && pedidos.every(Boolean) ? { kind: 'aproveitarCancelado', voos, pedidos, label } : null;
+    return voos.every(Boolean) && pedidos.every(Boolean) && naAprovada(rev) ? { kind: 'aproveitarCancelado', voos, pedidos, ...naAprovada(rev), label } : null;
   }
   // A alteração de um voo feita na Escala (o editor e a sugestão aplicada no pedido recusado, F1g): de cada voo tocado,
-  // o pino, o status e o detalhe de antes (null: não havia) e, do voo sem pino que estava na escala, o lugar dele (lugar:
-  // o horário, o recurso e o instrutor); de cada pedido tocado, o pedido de antes (null: a alteração criou a missão extra,
-  // que sai; o principal sempre tem o de antes; a volta do noturno de ontem não tem pedido no dia: nenhum); e as recusas
-  // que ela tirou (voltam no lugar delas)
+  // o pino, o status e o detalhe de antes (null: não havia), o status que ela deixou (statusDepois; null: nenhum; sem ele,
+  // a reversão gravada antes dele) e, do voo sem pino que estava na escala, o lugar dele (lugar: o horário, o recurso e o
+  // instrutor); de cada pedido tocado, o pedido de antes (null: a alteração criou a missão extra, que sai; o principal
+  // sempre tem o de antes; a volta do noturno de ontem não tem pedido no dia: nenhum), e o voo dele está entre os tocados;
+  // e as recusas que ela tirou (voltam no lugar delas)
   if (rev.kind === 'desfazerEdicao') {
     const voos = validarReversao({ ...rev, kind: 'aproveitarCancelado', pedidos: [] }, frota);
     if (!voos || !Array.isArray(rev.pedidos) || rev.pedidos.length > 100) return null;
     const lugares = rev.voos.map(v => (ausente(v.lugar) ? null : normalizarFixos({ [v.fKey]: v.lugar })[v.fKey] || undefined));
     if (lugares.includes(undefined)) return null;
-    const comLugar = voos.voos.map((v, i) => (lugares[i] ? { ...v, lugar: { a: lugares[i].a, b: lugares[i].b, r: lugares[i].r, insId: lugares[i].insId, ...(lugares[i].classKey ? { classKey: lugares[i].classKey } : {}) } } : v));
+    const depois = rev.voos.map(v => (v.statusDepois === undefined || v.statusDepois === null || FLIGHT_STATUSES.includes(v.statusDepois) ? v.statusDepois : false));
+    if (depois.includes(false)) return null;
+    const comLugar = voos.voos.map((v, i) => ({
+      ...v, ...(depois[i] === undefined ? {} : { statusDepois: depois[i] }),
+      ...(lugares[i] ? { lugar: { a: lugares[i].a, b: lugares[i].b, r: lugares[i].r, insId: lugares[i].insId, ...(lugares[i].classKey ? { classKey: lugares[i].classKey } : {}) } } : {})
+    }));
+    const tocados = new Set(comLugar.map(v => v.fKey));
     const pedidos = rev.pedidos.map(p => {
-      if (!objeto(p) || !idValido(p.stuId) || !Number.isInteger(p.mid) || p.mid < 0) return null;
+      if (!objeto(p) || !idValido(p.stuId) || !Number.isInteger(p.mid) || p.mid < 0 || !tocados.has(chaveDoVoo(p.stuId, p.mid))) return null;
       if (ausente(p.pedido)) return p.mid > 0 ? { stuId: p.stuId, mid: p.mid, pedido: null } : null;
       const pedido = pedidoDeAntes(p.pedido);
       return pedido ? { stuId: p.stuId, mid: p.mid, pedido } : null;
@@ -277,10 +288,25 @@ export function agendamentosEmVolta(estado, historico, entrada, frota) {
   return { mudados, soltos };
 }
 
-// A alteração de um voo feita na Escala não é desfeita sem o aluno no cadastro (o pedido de antes não tem onde voltar): o
-// texto do aviso, ou ''
-export function motivoParaNaoDesfazerEdicao(estado, { pedidos }) {
-  return pedidos.some(p => !estado.stu.some(s => s.id === p.stuId)) ? 'O aluno deste voo saiu do cadastro: não há o que desfazer.' : '';
+// A alteração de um voo feita na Escala não é desfeita (o texto do aviso, ou ''), como o voo agendado
+// (motivoParaNaoDesfazer), olhando cada voo que ela tocou (o de antes e o novo, quando o aluno mudou): sem o aluno no
+// cadastro (o pedido de antes não tem onde voltar); com o voo em andamento (Em Voo, Atrasado ou Pousou); sem os resultados
+// dos cursos lidos, ou com o resultado registrado (o resultado é do voo pelo aluno e pela missão: desfazer tiraria o voo
+// dele); e com o status mudado depois dela (desfazer trocaria o status de agora pelo de antes dela; statusDepois: o que
+// ela deixou)
+export function motivoParaNaoDesfazerEdicao(estado, { voos, pedidos }) {
+  if (pedidos.some(p => !estado.stu.some(s => s.id === p.stuId))) return 'O aluno deste voo saiu do cadastro: não há o que desfazer.';
+  const fStatus = estado.fStatus || {};
+  if (voos.some(v => STATUS_EM_ANDAMENTO.includes(fStatus[v.fKey]))) return 'O voo já está em andamento: mude o status em vez de desfazer.';
+  if ((estado.indisponiveis || []).includes('resultados')) {
+    return 'Sem os resultados dos cursos, o app não confere se o voo já tem resultado: clique em "Tentar de novo" no aviso e desfaça depois.';
+  }
+  const registros = (estado.resultados || {}).doDia || [];
+  if (voos.some(v => registros.some(r => r && r.voo === v.fKey))) return VOO_COM_RESULTADO;
+  if (voos.some(v => v.statusDepois !== undefined && (fStatus[v.fKey] || null) !== v.statusDepois)) {
+    return 'O status do voo mudou depois da alteração: desfazer agora trocaria o status. Mude o status em vez de desfazer.';
+  }
+  return '';
 }
 
 // Desfaz a alteração de um voo feita na Escala (a reversão validada acima): cada pedido volta como estava (a missão extra

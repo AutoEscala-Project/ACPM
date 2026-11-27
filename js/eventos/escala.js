@@ -12,7 +12,7 @@ import { aplicarReparo, aproveitarCancelado, desfazerAproveitamento, repararComO
 import { S, RES, DATA, AUDIT_LOG, isGestor, modoCompartilhado, insBy, estadoDaEscala } from '../state.js';
 import { rejeicoesDosPedidos } from '../rejeicoes.js';
 import { escolherInstrutor, escolhasDaUnidade, escolherNosPedidos, reverterEscolha, reverterReparo, foraDoPriorizarNoVoo } from '../instrutor-escolhido.js';
-import { agendamentosEmVolta, desfazerEdicao, motivoParaNaoDesfazerEdicao } from '../reversoes.js';
+import { agendamentosEmVolta, desfazerEdicao, motivoParaNaoDesfazerEdicao, VOO_COM_RESULTADO } from '../reversoes.js';
 import { CAMPOS_DO_PEDIDO } from '../dias.js';
 import { pedidoDoAluno } from '../voo.js';
 import { STATUS_COM_DETALHE, textoParaOHistorico, detalheAoMudarStatus, rotuloDoStatus } from '../status.js';
@@ -31,17 +31,18 @@ import { abrirPainelDeReparo, abrirPainelDoRejeitado, fecharPainelDeReparo, opca
 import { registrarDesenho, redesenharPorNome } from '../redesenho.js';
 import { voosComInativos } from '../inativos.js';
 import { registrarTela } from '../views/telas.js';
+import { ligada } from '../funcionalidades.js';
 
 // O desenho da Escala (js/redesenho.js): refeito em todos os momentos, quando há escala
 registrarDesenho('escala', () => { if (RES) rOut(); }, { em: ['dados', 'consulta', 'releitura', 'escala'], ordem: 80 });
 
 // O minuto de um clique na faixa de uma linha do mapa: a posição dele dentro da faixa (sem a borda), entre o início e o
-// fim do mapa (data-inicio e data-fim), de 5 em 5 minutos; na largura da faixa ou, com o eixo invertido, na altura
+// fim do mapa (data-inicio e data-fim), de 5 em 5 minutos; na altura da faixa (o mapa transposto, o padrão) ou, com as horas nas colunas, na largura
 function minutoDoClique(faixa, { clientX, clientY }) {
   const mapa = faixa.closest('.tl-wrap');
   const { inicio, fim } = mapa.dataset;
   const caixa = faixa.getBoundingClientRect();
-  // Com o eixo invertido, as horas descem: a posição é a do clique na altura da faixa
+  // No mapa transposto (o padrão), as horas descem: a posição é a do clique na altura da faixa
   const fracao = mapa.classList.contains('transposto')
     ? (clientY - caixa.top - faixa.clientTop) / faixa.clientHeight
     : (clientX - caixa.left - faixa.clientLeft) / faixa.clientWidth;
@@ -309,7 +310,7 @@ function aplicarSugestao({ fKey, voo, opcao, cancelado, rejeitado }) {
       const recusa = rejeicoesDosPedidos(estadoDaEscala(), RES).get(fKey);
       if (!pedido) return;
       const rev = {
-        kind: 'desfazerEdicao', voos: [{ fKey, fixo: (S.fixos || {})[fKey] || null, status: (S.fStatus || {})[fKey] || null, detalhe: (S.fObs || {})[fKey] || null }],
+        kind: 'desfazerEdicao', voos: [{ fKey, fixo: (S.fixos || {})[fKey] || null, status: (S.fStatus || {})[fKey] || null, detalhe: (S.fObs || {})[fKey] || null, statusDepois: (S.fStatus || {})[fKey] || null }],
         pedidos: [{ stuId, mid, pedido: Object.fromEntries(CAMPOS_DO_PEDIDO.filter(c => pedido[c] !== undefined).map(c => [c, pedido[c]])) }],
         recusas: recusa ? [recusaDaReversao(fKey, recusa)] : [], label: '↶ Reverter'
       };
@@ -378,7 +379,7 @@ function aplicarSugestao({ fKey, voo, opcao, cancelado, rejeitado }) {
   // Os voos que mudaram ou saíram dos fixos (soltar): o histórico guarda como estavam
   const mudados = Object.keys(antes).filter(k => S.fixos[k] !== antes[k]);
   if (!gravarNaEscala(foto, 'mod', `Reparo: ${voo.s} (${hm(voo.a)}–${hm(voo.b)}): ${opcao.soltar ? 'Soltar o voo' : opcao.texto}`, {
-    kind: 'restaurarFixos', fixos: Object.fromEntries(mudados.map(k => [k, antes[k]])), ...(escolhas.length ? { pedidos: escolhas } : {}), label: '↶ Reverter'
+    kind: 'restaurarFixos', fixos: Object.fromEntries(mudados.map(k => [k, antes[k]])), ...(escolhas.length ? { pedidos: escolhas } : {}), ...(S.aprovacao ? { aprovada: true } : {}), label: '↶ Reverter'
   })) return;
   if (escolhas.length) redesenharPorNome('pedidos-do-dia');
   focarNoVoo(fKey);
@@ -423,9 +424,14 @@ aoReverter('restaurarEscolha', (rev, entry) => {
 
 // A alteração de um voo feita na Escala, desfeita: os pedidos, os pinos, o status e o detalhe de antes, e as recusas que
 // ela tirou (na escala aprovada, no lugar delas)
+// O voo em andamento, com resultado ou com o status mudado depois dela fica, com o aviso (js/reversoes.js); com o progresso
+// desligado, o resultado não aparece na Escala: o aviso diz como mudar o voo
 aoReverter('desfazerEdicao', (rev, entry) => {
   const motivo = motivoParaNaoDesfazerEdicao(S, rev);
-  if (motivo) { showToast(motivo); return; }
+  if (motivo) {
+    showToast(motivo === VOO_COM_RESULTADO && !ligada('progresso') ? `${motivo} Para mudar o voo, use Editar na Escala.` : motivo);
+    return;
+  }
   const foto = fotoDaEscalaTravada();
   desfazerEdicao(S, rev);
   S.fixos = normalizarFixos(S.fixos);

@@ -561,13 +561,15 @@ describe('desfazerEdicao', async () => {
     // A volta do noturno de ontem não tem pedido no dia: só o voo (o status)
     assert.deepEqual(validarReversao({ ...valida, pedidos: [] }, []).pedidos, []);
     // O lugar do voo sem pino: só o horário, o recurso, o instrutor e a turma
-    const comLugar = validarReversao({ ...valida, voos: [{ ...valida.voos[1], lugar: { a: 390, b: 450, r: 'PR-AAA', insId: 1, agendado: true } }] }, []);
+    const comLugar = validarReversao({ ...valida, voos: [{ ...valida.voos[1], lugar: { a: 390, b: 450, r: 'PR-AAA', insId: 1, agendado: true } }], pedidos: [valida.pedidos[1]] }, []);
     assert.deepEqual(comLugar.voos[0].lugar, { a: 390, b: 450, r: 'PR-AAA', insId: 1 });
     for (const ruim of [
       { ...valida, voos: [] }, { ...valida, pedidos: [{ stuId: 1000, mid: 0, pedido: null }] },
       { ...valida, voos: [{ ...valida.voos[0], lugar: { a: 'x' } }] },
       { ...valida, pedidos: [{ stuId: 1000, mid: 0, pedido: { ...pedido, mis: 'Nada' } }] }, { ...valida, recusas: [{ fKey: 'x', s: 'a', m: 'b' }] },
-      { ...valida, recusas: [{ fKey: '1002_0_1', s: 'a', m: 'b', codigo: 'inventado' }] }, { ...valida, voos: [{ fKey: '1000_0_1', fixo: { a: 'x' } }] }
+      { ...valida, recusas: [{ fKey: '1002_0_1', s: 'a', m: 'b', codigo: 'inventado' }] }, { ...valida, voos: [{ fKey: '1000_0_1', fixo: { a: 'x' } }] },
+      // O pedido sem o voo dele entre os tocados; o status deixado fora dos status do app
+      { ...valida, voos: [valida.voos[0]] }, { ...valida, voos: [{ ...valida.voos[0], statusDepois: 'Voando' }, valida.voos[1]] }
     ]) assert.equal(validarReversao(ruim, []), null, JSON.stringify(ruim).slice(0, 80));
   });
 

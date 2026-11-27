@@ -64,6 +64,16 @@ export function fixarNoLugar(fixos, resultado, fKeys) {
 export const fixosAoReabrir = (fixos, fStatus) =>
   Object.fromEntries(Object.entries(fixos || {}).filter(([fKey, p]) => fixoPeloOperador(p) || fixoPeloStatus(fKey, fStatus)));
 
+// Os pinos de antes que uma reversão devolve, pela aprovação de agora (como a aprovação e a reabertura os teriam deixado
+// sem a mudança revertida). A mudança feita na escala aprovada (aprovada) e revertida depois de reabrir a escala: o pino da
+// aprovação (o do voo sem pino fixado no lugar antes da mudança, ou o que a aprovação deu) não volta, só o do operador e o
+// do status que fixa (fixosAoReabrir, com o status de agora). Na escala aprovada, ou com a mudança feita fora dela, todos
+// voltam. { voltam, saem: as chaves cujo pino de antes não volta }
+export function pinosQueVoltam(fixos, { aprovacao, fStatus }, aprovada) {
+  const voltam = aprovacao || !aprovada ? { ...(fixos || {}) } : fixosAoReabrir(fixos, fStatus);
+  return { voltam, saem: Object.keys(fixos || {}).filter(k => !Object.hasOwn(voltam, k)) };
+}
+
 // Aprovar a escala: cada voo dela fica fixo onde está (out: a escala da tela, calculada ou gravada). O fixo pelo
 // operador na Escala continua com a marca (o instrutor escolhido, do pino; o agendado, do pino ou da linha da escala), e
 // o agendado que não está na escala (o pedido tirado da escala) continua fixo: o voo volta para o lugar dele quando o

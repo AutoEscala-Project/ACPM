@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   isGroundMission, doesGroundGateFlight, migrateLegacyMissionName, normalizeMissionFields, blank, disponibilidadeDoAluno, disponibilidadeAtual,
   rotuloDaDisponibilidade, opcoesDeDisponibilidade, proximoMid, duracaoDigitada, ERRO_DA_DURACAO, chaveTemSobras, alvoDoNovoPedido,
-  pesoValido, pesoDigitado, pesoDoTexto, ERRO_DO_PESO, deixarEmBranco
+  pesoValido, pesoDigitado, pesoDoTexto, ERRO_DO_PESO, deixarEmBranco, PRIORIDADE_PADRAO, prioridadeNaTela, prioridadeGuardada, comAPrioridadePadrao
 } from '../../js/rules.js';
 import { podeFazer, descreverExigencias } from '../../js/habilitacoes.js';
 
@@ -235,6 +235,38 @@ describe('O pedido que recebe um voo novo', () => {
     const voando = quemSaiu({ fly: true, pr: undefined, extra: [] });
     assert.deepEqual(alvoDoNovoPedido(dia(), voando), { mid: 1, ...blank() }, 'sem a prioridade do aluno, 3');
     assert.deepEqual([voando.fly, voando.etapa, voando.insId, voando.extra.length], [true, 'PP-03', 3, 1]);
+  });
+});
+
+// A prioridade guardada vai de 1 a 5, com 5 a mais alta (o formato não muda); a tela mostra ao contrário, com 1 a mais alta
+describe('A prioridade do pedido', () => {
+  it('a tela mostra 1 para a guardada 5, e o 1 escolhido na tela guarda 5; o padrão, 3, é o mesmo nas duas', () => {
+    assert.deepEqual([1, 2, 3, 4, 5].map(prioridadeNaTela), [5, 4, 3, 2, 1]);
+    assert.deepEqual([1, 2, 3, 4, 5].map(prioridadeGuardada), [5, 4, 3, 2, 1]);
+    for (const pr of [1, 2, 3, 4, 5]) assert.equal(prioridadeGuardada(prioridadeNaTela(pr)), pr);
+    assert.equal(PRIORIDADE_PADRAO, 3);
+    assert.equal(blank().pr, PRIORIDADE_PADRAO);
+    assert.equal(prioridadeNaTela(PRIORIDADE_PADRAO), PRIORIDADE_PADRAO);
+  });
+
+  it('com a prioridade padrão, todos os pedidos ficam com 3, sem mudar o estado; os que já têm 3 continuam os mesmos', () => {
+    const neutro = { id: 1, pr: 3, extra: [{ mid: 1, pr: 3 }] };
+    const outro = { id: 2, pr: 5, extra: [{ mid: 1, pr: 1 }, { mid: 2, pr: 3 }] };
+    const semPr = { id: 3, extra: [] };
+    const estado = { stu: [neutro, outro, semPr], fixos: {} };
+    const antes = structuredClone(estado);
+    const padrao = comAPrioridadePadrao(estado);
+    assert.deepEqual(estado, antes);
+    assert.deepEqual(padrao.stu.map(s => [s.pr, ...s.extra.map(ex => ex.pr)]), [[3, 3], [3, 3, 3], [3]]);
+    assert.equal(padrao.stu[0], neutro);
+    assert.equal(padrao.stu[1].extra[1], outro.extra[1]);
+    assert.equal(padrao.fixos, estado.fixos);
+    // Todos já com 3: o próprio estado
+    const todosNeutros = { stu: [neutro] };
+    assert.equal(comAPrioridadePadrao(todosNeutros), todosNeutros);
+    // A marca de outro estado derivado (um símbolo) vai junto
+    const marca = Symbol('marca');
+    assert.equal(comAPrioridadePadrao({ [marca]: true, stu: [outro] })[marca], true);
   });
 });
 

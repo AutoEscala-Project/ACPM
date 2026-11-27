@@ -17,8 +17,8 @@ tr.on td:first-child { font-weight: 600; }
 @media (hover: none), (pointer: coarse) {
   #s-dem .btn-add-mis, #s-dem .stu-cell .x { opacity: 1; }
 }
-/* Prioridade 5 em destaque */
-#s-dem tr.p5 [data-f="pr"] { background: var(--wa-bg); color: var(--wa); font-weight: 700; }
+/* A prioridade mais alta (1 na tela) em destaque */
+#s-dem tr.prioridade-mais-alta [data-f="pr"] { background: var(--wa-bg); color: var(--wa); font-weight: 700; }
 #incluir-aluno { min-width: 240px; }
 #cnt { margin: -4px 0 8px; font-size: 13px; }
 .menu-mais { position: relative; }

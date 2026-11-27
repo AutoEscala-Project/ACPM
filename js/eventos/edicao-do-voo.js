@@ -11,7 +11,7 @@ import { paraMinuto } from '../horarios.js';
 import { duracaoDigitada, duracaoFixaDaMissao, isGroundMission } from '../rules.js';
 import { S, RES, isGestor, estadoDaEscala, programaLido } from '../state.js';
 import { STATUS_COM_DETALHE, detalheAoMudarStatus } from '../status.js';
-import { vooParaEditar, aplicarEdicao, mudancasDoVoo, resumoDaEdicao, missaoParaOAluno, missoesDoVoo, opcoesDoVoo } from '../edicao-do-voo.js';
+import { vooParaEditar, aplicarEdicao, bloqueioDaEdicao, mudancasDoVoo, resumoDaEdicao, missaoParaOAluno, missoesDoVoo, opcoesDoVoo } from '../edicao-do-voo.js';
 import { redesenharPorNome } from '../redesenho.js';
 import { abrirEditorDoVoo, fecharEditorDoVoo, desenharEditor, vooDoEditor, editorDoVooAberto, assinaturaDosAvisosDoVoo } from '../views/edicao-do-voo.js';
 import { perguntarAntesDeRefazer } from '../views/dialogo-refazer.js';
@@ -160,10 +160,11 @@ dlg.addEventListener('cancel', e => { e.preventDefault(); fecharEditorDoVoo(); }
 
 // Grava a alteração: na escala aprovada, sem o motor (o voo fica fixo onde está antes, e a reversão o devolve); fora dela,
 // com ele. Uma entrada do histórico, com a reversão
+// (o voo que terminaria depois da meia-noite não chega aqui: nada muda)
 function gravar(chave, valores) {
   const foto = fotoDaEscalaTravada();
   const antes = vooParaEditar(S, RES, chave, ambiente());
-  if (!antes) return;
+  if (!antes || bloqueioDaEdicao(antes, valores)) return;
   if (foto) S.fixos = fixarNoLugar(S.fixos, RES, antes.unidade.map(o => o.fKey));
   const voo = vooParaEditar(S, RES, chave, ambiente());
   const resumo = resumoDaEdicao(S, voo, valores);
@@ -185,6 +186,13 @@ $('#form-voo').addEventListener('submit', e => {
   if (!valores.missao) {
     $('#voo-erro').textContent = 'Escolha a missão do aluno.';
     $('#voo-missao').focus();
+    return;
+  }
+  // O voo que terminaria depois da meia-noite não é salvo (nem com "Salvar mesmo assim"): o foco vai para o horário
+  const bloqueio = bloqueioDaEdicao(voo, valores);
+  if (bloqueio) {
+    $('#voo-erro').textContent = bloqueio.texto;
+    $(aberto.outroHorario ? '#voo-outro-horario' : '#voo-horario').focus();
     return;
   }
   if (aindaNaoAbriu()) return;

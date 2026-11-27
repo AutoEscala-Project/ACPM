@@ -1,10 +1,11 @@
 // Aba Demanda: pedidos de missão por aluno (inclusive missões extras) e filtros (só quem voa, o nome, o curso do aluno e a
 // missão). Os campos são discretos (parecem texto até o mouse passar ou o foco chegar); o que a missão exige do instrutor
-// fica na dica do campo da missão.
+// fica na dica do campo da missão. A Prioridade só com ela ligada (js/funcionalidades.js), com 1 a mais alta na tela.
 import { MIS, GROUND_EQ_TYPE, T, NI, DURACAO_MAXIMA_H, GROUND_DURATION_H } from '../config.js';
 import { matriculasDoTipo } from '../frota.js';
 import { esc, opts, hm, chaveDeBusca } from '../format.js';
-import { isGroundMission, opcoesDeDisponibilidade, duracaoFixaDaMissao } from '../rules.js';
+import { isGroundMission, opcoesDeDisponibilidade, duracaoFixaDaMissao, prioridadeNaTela } from '../rules.js';
+import { ligada } from '../funcionalidades.js';
 import { horariosDaMissao } from '../horarios.js';
 import { descreverExigencias } from '../habilitacoes.js';
 import { S, estadoDaEscala, inativoNaDataAberta, programaLido } from '../state.js';
@@ -53,7 +54,9 @@ export const singleDemandRowHTML = (stu, d, mid = 0) => {
   const isExtra = mid !== 0;
   const horarios = horariosDaMissao(S.horarios, d.mis, isGroundMission(d.mis) ? GROUND_EQ_TYPE : d.eq);
   const isGnd = isGroundMission(d.mis);
-  const trCls = `${d.fly ? 'on p' + d.pr : 'off'}${isExtra ? ' extra-row' : ''}`;
+  const comPrioridade = ligada('prioridade');
+  // A prioridade mais alta (a guardada 5; na tela, 1) em destaque
+  const trCls = `${d.fly ? 'on' : 'off'}${d.fly && comPrioridade && d.pr === 5 ? ' prioridade-mais-alta' : ''}${isExtra ? ' extra-row' : ''}`;
   // A missão do curso: o código do pedido, ou a próxima do programa para usar; o voo agendado na Escala
   const etapa = etapaNaDemanda(stu, d, mid) + tagDoAgendado(stu, mid);
   const firstCell = isExtra
@@ -81,8 +84,8 @@ export const singleDemandRowHTML = (stu, d, mid = 0) => {
     <td><select data-f="p1" aria-label="1ª preferência${de}">${opcoesDeHorario(horarios, d.p1)}</select></td>
     <td><select data-f="p2" aria-label="2ª preferência${de}">${opcoesDeHorario(horarios, d.p2)}</select></td>
     <td><select data-f="jan" aria-label="Disponibilidade${de}">${opts(opcoesDeDisponibilidade(horarios), d.jan || '')}</select></td>
-    <td>${nbOpts}</td>
-    <td><select data-f="pr" aria-label="Prioridade${de}">${opts([1, 2, 3, 4, 5].map(n => [n, n]), d.pr)}</select></td>
+    <td>${nbOpts}</td>${comPrioridade ? `
+    <td><select data-f="pr" aria-label="Prioridade${de}">${opts([1, 2, 3, 4, 5].map(n => [n, n]), prioridadeNaTela(d.pr))}</select></td>` : ''}
   </tr>`;
 };
 
@@ -113,7 +116,7 @@ export const rDem = () => {
   // As opções do filtro dos cursos acompanham os programas e os cursos dos alunos
   if (filtroDosCursos) filtroDosCursos.desenhar();
   if (!S.stu.length) {
-    trocarConteudo($('#dem'), `<tr class="empty-dem"><td colspan="10" class="h" style="padding:16px">Nenhum aluno cadastrado. Cadastre os alunos em Alunos.</td></tr>`);
+    trocarConteudo($('#dem'), `<tr class="empty-dem"><td colspan="${ligada('prioridade') ? 10 : 9}" class="h" style="padding:16px">Nenhum aluno cadastrado. Cadastre os alunos em Alunos.</td></tr>`);
     cnt();
     renderAuditPanel();
     return;

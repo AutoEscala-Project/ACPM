@@ -2,7 +2,7 @@
 // cada sugestão com "Aplicar"; soltar o voo (o app escala de novo); por último, cancelar o voo (pede o motivo, como no
 // status). Também para o voo cancelado (aproveitar o voo: js/reparo.js, sugerirParaCancelado), com o motivo do
 // cancelamento e, sem nada, "Impossível nesta data" com o porquê. Na escala de hoje, só horários que ainda não passaram
-import { S, RES, DATA, estadoDaEscala } from '../state.js';
+import { S, RES, DATA, estadoDaEscala, escalaDoMotor } from '../state.js';
 import { sugerirReparos, sugerirParaCancelado, vagasDaListaDeEspera, cancelamentoAproveitavel, sugestoesDoRejeitado, dataQueAindaVoa } from '../reparo.js';
 import { escalaDaAlteracao } from '../edicao-do-voo.js';
 import { rejeicoesDosPedidos } from '../rejeicoes.js';
@@ -29,8 +29,11 @@ const confirmacao = o => (o.confirmar ? ` <small class="confirmar-aluno">${esc(o
 const painelDeReparoAberto = () => Boolean($('#painel-reparo') && !$('#painel-reparo').hidden);
 
 // Na escala aprovada a sugestão aplicada não roda o motor (F1g): ela é conferida na escala da tela com ela aplicada, como
-// será gravada (os outros voos ficam onde estão); fora dela, no motor
-const motorDaTela = estado => (S.aprovacao ? { motor: copia => escalaDaAlteracao(copia, RES, { aprovada: true, antes: estado }).resultado } : {});
+// será gravada (os outros voos ficam onde estão); fora dela, no motor. O motor, com os motivos da tela (js/state.js,
+// escalaDoMotor), também o que a escala aprovada pede para o pedido que entra no dia sem lugar (R5)
+const motorDaTela = estado => ({
+  motor: S.aprovacao ? copia => escalaDaAlteracao(copia, RES, { aprovada: true, antes: estado, motor: escalaDoMotor }).resultado : escalaDoMotor
+});
 
 // "Soltar" precisa do motor: na escala aprovada fica desligado
 const SOLTAR_TRAVADO = 'reabra a escala para soltar o voo';
@@ -115,9 +118,9 @@ export function abrirPainelDoRejeitado(fKey, { focar = true } = {}) {
   if (!recusa || !dataQueAindaVoa({ data: DATA, hoje: hojeISO() })) return;
   const painel = $('#painel-reparo');
   const hoje = DATA === hojeISO();
-  opcoesAbertas = sugestoesDoRejeitado(estado, RES, fKey, { depoisDe: hoje ? minutoDoDia() : null });
+  opcoesAbertas = sugestoesDoRejeitado(estado, RES, fKey, { depoisDe: hoje ? minutoDoDia() : null, motor: escalaDoMotor });
   // Hoje, sem nada: com outro instrutor o app poria o pedido num horário que já passou (o motor não sabe a hora)?
-  const soNoPassado = !opcoesAbertas.length && hoje && sugestoesDoRejeitado(estado, RES, fKey).length > 0;
+  const soNoPassado = !opcoesAbertas.length && hoje && sugestoesDoRejeitado(estado, RES, fKey, { motor: escalaDoMotor }).length > 0;
   doCancelado = false;
   doRejeitado = true;
   painel.dataset.fkey = fKey;

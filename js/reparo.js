@@ -23,7 +23,7 @@ import { nomeDoRecurso } from './categorias.js';
 import { hm } from './format.js';
 import { gruposDoConflito } from './conflitos.js';
 import { statusDoVoo, pedidosDosVoos, exigeDosVoos } from './voo.js';
-import { pinoDoVoo } from './fixos.js';
+import { pinoDoVoo, pinosQueVoltam } from './fixos.js';
 import { runAllocationEngine } from './engine.js';
 import { instrutoresDoPedido } from './instrutor-escolhido.js';
 import { ocupacaoDaEscala, problemaDoAluno, avioesQueServem, instrutoresQueServem } from './candidatos.js';
@@ -482,7 +482,8 @@ export function repararComOPedido(estado, resultado, fKey, opcao) {
 
 // O voo (o grupo) no lugar da sugestão e o pedido com o que ela muda, devolvendo a reversão. cancelado: o voo volta para
 // Pendente, sem o motivo, e o pino passa a ser do operador (agendado); sem ele, o pino de antes recebe as mudanças. O
-// instrutor da sugestão vira o escolhido só no pedido que já tinha um: no outro, ele fica no pino
+// instrutor da sugestão vira o escolhido só no pedido que já tinha um: no outro, ele fica no pino. A reversão diz se a
+// mudança foi feita na escala aprovada (aprovada)
 function mudarOVooEOPedido(estado, resultado, voo, grupo, opcao, { cancelado }) {
   const voos = [], pedidos = [];
   // A turma de Ground que muda de horário ou de instrutor é outra turma: uma chave nova para os alunos aproveitados, a não
@@ -523,18 +524,23 @@ function mudarOVooEOPedido(estado, resultado, voo, grupo, opcao, { cancelado }) 
     if (insId && ref.insId) ref.insId = insId;
     normalizeMissionFields(ref);
   }
-  return voos.length ? { kind: 'aproveitarCancelado', voos, pedidos } : null;
+  return voos.length ? { kind: 'aproveitarCancelado', voos, pedidos, ...(estado.aprovacao ? { aprovada: true } : {}) } : null;
 }
 
-// Desfaz o aproveitamento (a reversão validada): o pino, o status, o detalhe e os campos do pedido de antes
-export function desfazerAproveitamento(estado, { voos, pedidos }) {
+// Desfaz o aproveitamento (a reversão validada): o pino, o status, o detalhe e os campos do pedido de antes. Numa data
+// reaberta depois do aproveitamento feito na escala aprovada, o pino da aprovação de antes não volta (pinosQueVoltam, com
+// o status de antes: o do cancelado fixa)
+export function desfazerAproveitamento(estado, { voos, pedidos, aprovada = false }) {
   estado.fixos = { ...(estado.fixos || {}) };
   estado.fStatus = { ...(estado.fStatus || {}) };
   estado.fObs = { ...(estado.fObs || {}) };
-  for (const { fKey, fixo, status, detalhe } of voos) {
-    if (fixo) estado.fixos[fKey] = fixo; else delete estado.fixos[fKey];
+  for (const { fKey, status, detalhe } of voos) {
     if (status) estado.fStatus[fKey] = status; else delete estado.fStatus[fKey];
     if (detalhe) estado.fObs[fKey] = detalhe; else delete estado.fObs[fKey];
+  }
+  const { voltam } = pinosQueVoltam(Object.fromEntries(voos.filter(v => v.fixo).map(v => [v.fKey, v.fixo])), estado, aprovada);
+  for (const { fKey } of voos) {
+    if (voltam[fKey]) estado.fixos[fKey] = voltam[fKey]; else delete estado.fixos[fKey];
   }
   for (const { stuId, mid, pedido } of pedidos) {
     const aluno = estado.stu.find(s => s.id === stuId);
