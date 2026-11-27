@@ -77,7 +77,7 @@ export const FRASES_DAS_FUNCIONALIDADES = {
   progresso: ['agrupados pela fase em que estão', 'Próxima: PP-07 · Usar', 'Outra missão…', 'próxima missão', 'progresso', 'Aprovado ou Reprovado',
     '12/40 · próxima PP-13', 'fora da ordem', 'com quantos alunos estão em cada uma',
     'o resultado do voo vai para o código do pedido'],
-  prioridade: ['duração e prioridade', 'de 1 a 5, e 1 é a mais alta', 'a disponibilidade, a prioridade ou o instrutor', 'por prioridade (1 primeiro)',
+  prioridade: ['duração e prioridade', 'de 1 a 5, e 1 é a mais alta', 'as preferências, a prioridade ou o instrutor', 'por prioridade (1 primeiro)',
     'a 1ª preferência pesa mais para quem tem mais prioridade', 'seguindo as prioridades', 'Como dar preferência a um aluno?',
     'aumente a prioridade dele (1 é a mais alta)']
 };

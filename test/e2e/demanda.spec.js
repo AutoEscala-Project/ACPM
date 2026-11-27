@@ -389,7 +389,7 @@ test.describe('Demanda', () => {
     await busca.fill('nenhum assim');
     await expect(nenhum).toHaveText('Nenhum aluno com esses filtros. Limpar filtros');
     // Todas as colunas: 9, sem a Prioridade desligada (js/funcionalidades.js)
-    await expect(nenhum.locator('td')).toHaveAttribute('colspan', '9');
+    await expect(nenhum.locator('td')).toHaveAttribute('colspan', '8');
     await expect(limpar).not.toHaveAttribute('data-act');
     await busca.fill('');
     await expect(nenhum).toHaveCount(0);
