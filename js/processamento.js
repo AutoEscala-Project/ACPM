@@ -261,9 +261,11 @@ function entrar(estado, s, { programa, situacao, cursos }) {
   pedido.solicitacao = s.id;
   let registro;
   if (copiada) {
-    // O voo continua com o instrutor escolhido; a disponibilidade e a missão do curso passam a ser as do pedido
+    // O voo continua com o instrutor escolhido e a prioridade que o operador deu (com a prioridade desligada, o motor da
+    // tela recebe a padrão: estadoDaEscala); a disponibilidade e a missão do curso passam a ser as do pedido
+    const { pr } = copiada;
     for (const campo of ['jan', 'etapa', 'cursoDaEtapa', 'limiteConfirmado']) delete copiada[campo];
-    registro = Object.assign(copiada, pedido);
+    registro = Object.assign(copiada, pedido, pr === undefined ? {} : { pr });
   } else registro = Object.assign(alvoDaEntrada(estado, aluno), pedido);
   return {
     id: s.id, stuId: aluno.id, mid: registro.mid || 0, novo: !copiada, etapa: registro.etapa || null, nota: entrada.nota || (foraDaLista ? 'horario-fora-da-lista' : null),
