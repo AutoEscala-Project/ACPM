@@ -502,11 +502,11 @@ describe('Agendamento: o pedido e o voo fixo', () => {
   });
 
   it('o pedido principal que não voa, com a chave limpa, recebe o voo; a reversão devolve o de antes', () => {
-    const estado = doDia({ s1001: { jan: 'manha', etapa: 'IN-01', insId: 1, solicitacao: 7, p1: 500, p2: 610 } });
+    const estado = doDia({ s1001: { jan: 'h500', etapa: 'IN-01', insId: 1, solicitacao: 7, p1: 500, p2: 610 } });
     const antes = aplicarAgendamento(estado, null, proposta());
     const stu = estado.stu[1];
     assert.deepEqual([antes.mid, antes.criado], [0, true]);
-    assert.deepEqual(antes.pedido, { fly: false, mis: 'Voo Local', eq: 'C152', p1: 500, p2: 610, nb: 1, ss: 1, pr: 3, jan: 'manha', etapa: 'IN-01', solicitacao: 7, insId: 1 });
+    assert.deepEqual(antes.pedido, { fly: false, mis: 'Voo Local', eq: 'C152', p1: 500, p2: 610, nb: 1, ss: 1, pr: 3, jan: 'h500', etapa: 'IN-01', solicitacao: 7, insId: 1 });
     assert.deepEqual([stu.fly, stu.mis, stu.p1, stu.p2, stu.etapa, stu.cursoDaEtapa, stu.insId, stu.jan, stu.solicitacao], [true, 'Voo Local', 610, -1, 'IN-02', 'PP', 2, undefined, undefined]);
     assert.deepEqual(estado.fixos['1001_0_1'], { a: 610, b: 670, r: 'PR-VOB', insId: 2, agendado: true });
     const rev = validarReversao(reversaoDoAgendamento(antes));
@@ -514,7 +514,7 @@ describe('Agendamento: o pedido e o voo fixo', () => {
     assert.deepEqual(rev.criadoComo.etapa, 'IN-02');
     assert.equal(motivoParaNaoDesfazer(estado, rev), '');
     assert.ok(desfazerAgendamento(estado, rev));
-    assert.deepEqual([stu.fly, stu.jan, stu.etapa, stu.insId, stu.solicitacao, stu.cursoDaEtapa], [false, 'manha', 'IN-01', 1, 7, undefined]);
+    assert.deepEqual([stu.fly, stu.jan, stu.etapa, stu.insId, stu.solicitacao, stu.cursoDaEtapa], [false, 'h500', 'IN-01', 1, 7, undefined]);
     assert.ok(!Object.hasOwn(estado.fixos, '1001_0_1'));
   });
 
@@ -855,7 +855,7 @@ describe('Agendamento: os voos de hoje do aluno (mover e encaixar)', () => {
 
   it('mover: o mesmo pedido muda de lugar, com o instrutor escolhido dele; desfazer devolve o pedido e o voo fixo de antes', () => {
     // O IN-02 do Aluno 1001 às 06:30, fixo pelo instrutor escolhido na Escala (o Instrutor 02), com a disponibilidade de manhã
-    const estado = doDia({ s1001: { fly: true, p1: 390, p2: 500, etapa: 'IN-02', cursoDaEtapa: 'PP', insId: 2, jan: 'manha' } });
+    const estado = doDia({ s1001: { fly: true, p1: 390, p2: 500, etapa: 'IN-02', cursoDaEtapa: 'PP', insId: 2, jan: 'h390' } });
     estado.fixos = { '1001_0_1': { a: 390, b: 450, r: 'PR-VOC', insId: 2, escolhido: true } };
     const { formulario: f, sim, fKey } = agendar(estado, { amb, escolhas: { aluno: 1001, horario: 820 }, tocados: ['horario'] });
     assert.deepEqual([f.missao, f.acao, f.instrutor, f.recurso], ['pedido:0', 'mover', 2, 'PR-VOC']);
@@ -868,13 +868,13 @@ describe('Agendamento: os voos de hoje do aluno (mover e encaixar)', () => {
     assert.deepEqual([stu.extra, stu.mis, stu.etapa, stu.cursoDaEtapa, stu.p1, stu.p2, stu.insId, stu.jan], [[], 'Voo Local', 'IN-02', 'PP', 820, -1, 2, undefined]);
     assert.deepEqual(real.fixos['1001_0_1'], { a: 820, b: 880, r: 'PR-VOC', insId: 2, agendado: true });
     assert.deepEqual([antes.criado, antes.mid, antes.fixo], [false, 0, { a: 390, b: 450, r: 'PR-VOC', insId: 2, escolhido: true }]);
-    assert.deepEqual(antes.pedido, { fly: true, mis: 'Voo Local', eq: 'C152', p1: 390, p2: 500, nb: 1, ss: 1, pr: 3, jan: 'manha', etapa: 'IN-02', insId: 2, cursoDaEtapa: 'PP' });
+    assert.deepEqual(antes.pedido, { fly: true, mis: 'Voo Local', eq: 'C152', p1: 390, p2: 500, nb: 1, ss: 1, pr: 3, jan: 'h390', etapa: 'IN-02', insId: 2, cursoDaEtapa: 'PP' });
     // Desfazer: o pedido como estava e o voo fixo pelo instrutor escolhido de antes
     const rev = validarReversao(reversaoDoAgendamento(antes));
     assert.deepEqual([rev.criado, rev.label], [false, '↶ Desfazer']);
     assert.equal(motivoParaNaoDesfazer(real, rev), '');
     assert.ok(desfazerAgendamento(real, rev));
-    assert.deepEqual([stu.p1, stu.p2, stu.jan, stu.insId, stu.etapa], [390, 500, 'manha', 2, 'IN-02']);
+    assert.deepEqual([stu.p1, stu.p2, stu.jan, stu.insId, stu.etapa], [390, 500, 'h390', 2, 'IN-02']);
     assert.deepEqual(real.fixos['1001_0_1'], { a: 390, b: 450, r: 'PR-VOC', insId: 2, escolhido: true });
     // O pedido que mudou depois do agendamento (outra missão na Demanda) não é desfeito
     const depois = structuredClone(estado);
@@ -933,11 +933,11 @@ describe('Agendamento: os voos de hoje do aluno (mover e encaixar)', () => {
   });
 
   it('mover pede confirmação: a disponibilidade do aluno que não inclui o horário novo, o voo da escala aprovada e a ordem do curso no horário novo', () => {
-    // De manhã só: às 13:40 a disponibilidade sai do pedido (sem conflito na simulação)
-    const manha = doDia({ s1000: { jan: 'manha', etapa: 'IN-01', cursoDaEtapa: 'PP' } });
+    // O pedido da Agenda às 06:30: às 13:40 o horário sai do pedido (sem conflito na simulação)
+    const manha = doDia({ s1000: { jan: 'h390', etapa: 'IN-01', cursoDaEtapa: 'PP' } });
     const tarde = agendar(manha, { escolhas: { aluno: 1000, horario: 820 }, tocados: ['horario'] });
     assert.deepEqual(tarde.avaliacao.avisos.map(a => [a.codigo, a.texto, a.resumo]), [
-      ['disponibilidade-do-aluno', 'Aluno 1000 está disponível só de manhã: agendado às 13:40, o pedido fica sem a disponibilidade.', 'fora da disponibilidade do aluno']
+      ['disponibilidade-do-aluno', 'Aluno 1000 pediu o horário às 06:30: agendado às 13:40, o pedido fica sem o horário.', 'fora da disponibilidade do aluno']
     ]);
     assert.deepEqual(codigos(pararia(tarde.avaliacao)), []);
     // Na escala aprovada, o voo fixo muda de lugar
