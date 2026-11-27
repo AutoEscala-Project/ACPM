@@ -180,7 +180,8 @@ function missaoDoCursoDoPedido(cursos, solicitacao) {
 // - a do programa (programa: os cursos de onde inferir, vazio com o progresso desligado ou sem os resultados e os
 //   programas lidos: 'sem-dados'): a primeira liberada do tipo do pedido e, com recurso, desse recurso (nenhuma:
 //   'sem-missao-do-tipo'), pelo horário do dia: as missões dos outros voos do aluno no dia não são dadas de novo, e contam
-//   como feitas só as dos que terminam até o início do pedido (feitasAntes). Aluno sem curso:
+//   como feitas só as dos que terminam até o início do pedido (feitasAntes). O curso encerrado não dá nenhuma
+//   ('curso-encerrado'; a do operador e a do pedido, escolhas, ficam). Aluno sem curso:
 //   'sem-curso'; o curso fora do programa: 'sem-programa'. situacao: o último resultado de cada missão
 export function missaoDaEntrada(estado, aluno, solicitacao, { programa = [], situacao = [], cursos = [], copiada = null } = {}) {
   const vinculada = missaoDoCursoDoPedido(cursos || [], solicitacao);
@@ -194,6 +195,7 @@ export function missaoDaEntrada(estado, aluno, solicitacao, { programa = [], sit
   if (!programa.length) return nenhuma('sem-dados');
   const curso = indiceDoPrograma(programa).curso(aluno.curso);
   if (!curso) return nenhuma('sem-programa');
+  if (curso.ativo === false) return { ...nenhuma('curso-encerrado'), curso: curso.sigla };
   const mid = copiada ? copiada.mid || 0 : null;
   const exceto = missoesDoDia(curso, aluno, { fStatus: estado.fStatus, mid });
   const recurso = recursoValido(solicitacao);
