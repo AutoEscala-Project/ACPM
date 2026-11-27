@@ -22,7 +22,7 @@ import { S, RES, AUDIT_LOG, TL_MODE, HORAS_NAS_COLUNAS, OCULTAR_INDISPONIVEIS, D
 import { cancelamentoAproveitavel, dataQueAindaVoa } from '../reparo.js';
 import { rejeicoesDosPedidos } from '../rejeicoes.js';
 import { motivoDoFixo } from '../fixos.js';
-import { instrutoresDoVoo } from '../instrutor-escolhido.js';
+import { instrutoresDoVoo, foraDoPriorizarNoVoo } from '../instrutor-escolhido.js';
 import { $, trocarConteudo } from '../dom.js';
 import { atualizarEditorDoVoo } from './edicao-do-voo.js';
 import { statusDoVoo, unidadeDoVoo } from '../voo.js';
@@ -270,10 +270,13 @@ export function botaoDoInstrutor(o, rotulo) {
 }
 
 // A lista do instrutor do voo: sem escolha, a primeira opção é quem o app pôs; os instrutores que não servem no horário
-// aparecem com o motivo, e o operador pode escolher mesmo assim (o voo fica em conflito, com as sugestões)
+// aparecem com o motivo, e o operador pode escolher mesmo assim (o voo fica em conflito, com as sugestões). O que serve mas
+// está fora do “Priorizar com” do aluno, quando um dele poderia dar o voo, também diz (N9, F1h)
 export function seletorDeInstrutor(o, rotulo) {
-  const lista = instrutoresDoVoo(estadoDaEscala(), RES, o.fKey).filter(x => o.insEscolhido || x.id !== o.insId)
-    .map(x => `<option value="${x.id}"${o.insEscolhido && x.id === o.insId ? ' selected' : ''}>${esc(x.nota ? `${x.nm} (${x.nota})` : x.nm)}</option>`);
+  const estado = estadoDaEscala();
+  const nota = x => x.nota || (x.id !== o.insId && foraDoPriorizarNoVoo(estado, RES, o.fKey, x.id).length ? 'fora do Priorizar com' : '');
+  const lista = instrutoresDoVoo(estado, RES, o.fKey).filter(x => o.insEscolhido || x.id !== o.insId)
+    .map(x => `<option value="${x.id}"${o.insEscolhido && x.id === o.insId ? ' selected' : ''}>${esc(nota(x) ? `${x.nm} (${nota(x)})` : x.nm)}</option>`);
   const automatico = o.insEscolhido ? 'Automático (o app escolhe)' : `${o.ins} (${o.insPar ? 'Priorizar com do aluno' : 'escolhido pelo app'})`;
   return `<select class="ins-sel" data-a="insVoo" data-fkey="${esc(o.fKey)}" data-rotulo="${esc(rotulo)}" aria-label="${esc(rotulo)}"><option value=""${o.insEscolhido ? '' : ' selected'}>${esc(automatico)}</option>${lista.join('')}</select>`;
 }
@@ -349,7 +352,8 @@ function tempoParado(out) {
 }
 
 // Avisos agrupados pelo código: alunos e instrutores sem peso, aviões que param para a revisão, atrasos, instrutores
-// perto do limite da lei e os voos agendados fora das regras (um por voo). Os avisos sem código (de uma escala gravada
+// perto do limite da lei, os do “Priorizar com” (um por voo: sem o instrutor, a disputa ou o voo posto à mão fora dele) e
+// os voos agendados fora das regras (um por voo). Os avisos sem código (de uma escala gravada
 // antes deles) entram em "outros"
 function resumoDosAvisos(avisos) {
   const doCodigo = codigo => avisos.filter(a => a.codigo === codigo);
@@ -370,7 +374,7 @@ function resumoDosAvisos(avisos) {
     revisao && `${revisao} ${revisao === 1 ? 'avião para' : 'aviões param'} para a revisão de 50 horas`,
     atrasos && `${atrasos} ${atrasos === 1 ? 'atraso com conflito' : 'atrasos com conflito'}`,
     limites && `${limites} ${limites === 1 ? 'instrutor perto' : 'instrutores perto'} do limite da lei`,
-    semPar && `${semPar} ${semPar === 1 ? 'voo sem' : 'voos sem'} o instrutor de Priorizar com`,
+    semPar && `${semPar} ${semPar === 1 ? 'aviso' : 'avisos'} de Priorizar com`,
     saiu && `${saiu} ${saiu === 1 ? 'voo com o instrutor escolhido' : 'voos com o instrutor escolhido'} fora do cadastro`,
     repouso && `${repouso} ${repouso === 1 ? 'instrutor' : 'instrutores'} sem o repouso da lei antes da volta do noturno`,
     foraDaRegra && `${foraDaRegra} ${foraDaRegra === 1 ? 'agendamento' : 'agendamentos'} fora da regra`,

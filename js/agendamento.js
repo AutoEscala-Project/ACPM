@@ -24,6 +24,7 @@ import { indiceDoPrograma, percursoDoCurso, rotuloDaFase, rotuloDaMissao, noturn
 import { chaveDoVoo, statusDoVoo, pedidoDoAluno, ocupacaoDoVoo } from './voo.js';
 import { CAMPOS_DO_PEDIDO } from './dias.js';
 import { runAllocationEngine } from './engine.js';
+import { foraDoPriorizarCom } from './conferencia.js';
 import { naOrdemDoMotor, rejeicoesDosPedidos } from './rejeicoes.js';
 import { CODIGOS_DO_AGENDADO, GRUPO_DO_CONFLITO } from './conflitos.js';
 import { fixoPeloStatus, motivoDoFixo } from './fixos.js';
@@ -972,7 +973,7 @@ const CAMPO_DO_GRUPO = { instrutor: 'agd-instrutor', aviao: 'agd-recurso', horar
 // O resumo de cada aviso confirmado, para o histórico
 const RESUMO_DO_AVISO = {
   'fora-dos-horarios': 'fora dos horários de decolagem', 'depois-das-17h30': 'depois das 17:30', 'limite-de-locais': 'acima do limite de voos locais no horário',
-  'antes-do-ground': 'antes do Ground', 'sem-peso': 'sem peso'
+  'antes-do-ground': 'antes do Ground', 'sem-peso': 'sem peso', 'fora-do-priorizar': 'fora do Priorizar com'
 };
 
 // As alternativas de cada bloqueio (os botões com o que está livre), até ALTERNATIVAS de cada: os horários, os recursos e
@@ -1189,6 +1190,12 @@ export function avaliarAgendamento({ estado, baseComPesos, base = baseComPesos, 
       avisos.push({ codigo: 'peso-muda-outro-voo', texto: `Com o peso digitado, o voo de ${rotuloDoVoo(o)} fica em conflito: ${o.conflito.join('; ')}.`, resumo: `o peso muda o voo de ${rotuloDoVoo(o)}`, campo: 'agd-kg-aluno' });
     }
   }
+  // O instrutor fora do “Priorizar com” do aluno (N9, F1h): o operador agenda contra a limitação do aluno, confirma, e a
+  // Escala guarda a observação (voa-com, o voo posto à mão). Sem nenhum do “Priorizar com” que possa dar o voo (não vem, sem
+  // a habilitação, em “Não escalar com”), o outro não vai contra ela
+  if (foraDoPriorizarCom(estado, stu, { mis, tipo: ground ? GROUND_EQ_TYPE : tipo, exige: formulario.selecao.exige }, x.id)) {
+    avisos.push({ codigo: 'fora-do-priorizar', texto: `${x.nm} está fora do Priorizar com de ${stu.nm}.`, resumo: RESUMO_DO_AVISO['fora-do-priorizar'], campo: 'agd-instrutor' });
+  }
   // A data e o horário
   if (ambiente.data && ambiente.hoje && ambiente.data < ambiente.hoje) avisos.push({ codigo: 'data-passada', texto: 'A data já passou.', resumo: 'data passada' });
   else if (ambiente.data === ambiente.hoje && a < ambiente.agora) avisos.push({ codigo: 'horario-passado', texto: `O horário ${hm(a)} já passou.`, resumo: 'horário que já passou', campo: 'agd-horario' });
@@ -1203,7 +1210,6 @@ export function avaliarAgendamento({ estado, baseComPesos, base = baseComPesos, 
     notas.push({ codigo: 'duracao-do-programa', texto: `A duração (${fmtH(horas)}) é diferente da do programa para ${info.missao.codigo} (${fmtH(info.missao.nb)}).` });
   }
   if (novo && novo.comb) notas.push({ codigo: 'reduzir-combustivel', texto: `O avião sai com menos combustível: reduzir ${novo.comb.reduzirGal} gal.` });
-  if ((stu.voaCom || []).length && !stu.voaCom.includes(x.id)) notas.push({ codigo: 'fora-do-priorizar', texto: `${x.nm} está fora do Priorizar com de ${stu.nm}.` });
   if (formulario.proposta.disponibilizar) notas.push({ codigo: 'disponibilizar', texto: `${x.nm} fica disponível às ${hm(a)} com o agendamento.` });
   // A vez na fila do rodízio da categoria (o voo da categoria vai para quem tem menos voos dela no dia, depois para o
   // primeiro da fila), entre os instrutores que servem no horário

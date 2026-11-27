@@ -729,18 +729,27 @@ describe('Agendamento: a conferência', () => {
     assert.deepEqual(avisos({ semHoras: true }), ['lei-nao-conferida']);
   });
 
-  it('as notas: a condicional, a duração diferente da do programa, o instrutor fora do Priorizar com e o pedido que ficou fora', () => {
+  it('as notas: a condicional, a duração diferente da do programa e o pedido que ficou fora; o instrutor fora do Priorizar com é um aviso (F1h)', () => {
     // O IN-02 voa às 06:30; o voo das 08:20 recebe o CT-01 (escolhido: o padrão é mover o IN-02), que depende do resultado
     const estado = doDia({ s1000: { etapa: 'IN-01' } });
     estado.stu[1] = { ...estado.stu[1], fly: true, p1: 390, p2: -1, etapa: 'IN-02', voaCom: [1] };
-    const notas = conferir(estado, {
+    const { notas, avisos } = conferir(estado, {
       escolhas: { aluno: 1001, missao: 'missao:PP:CT-01', horario: 500, horas: '1,5', instrutor: 2 }, tocados: ['missao', 'horario', 'horas', 'instrutor']
-    }).notas;
+    });
     assert.deepEqual(notas.map(n => [n.codigo, n.texto]), [
       ['condicional', 'CT-01 depende do resultado de IN-02 (amanhã 06:30).'],
-      ['duracao-do-programa', 'A duração (1,5 h) é diferente da do programa para CT-01 (1 h).'],
-      ['fora-do-priorizar', 'Instrutor 02 está fora do Priorizar com de Aluno 1001.']
+      ['duracao-do-programa', 'A duração (1,5 h) é diferente da do programa para CT-01 (1 h).']
     ]);
+    // Um aviso para confirmar (N9: o operador agenda contra o “Priorizar com”), no campo do instrutor, com o resumo do histórico
+    assert.deepEqual(avisos.filter(a => a.codigo === 'fora-do-priorizar').map(a => [a.texto, a.campo, a.resumo]), [['Instrutor 02 está fora do Priorizar com de Aluno 1001.', 'agd-instrutor', 'fora do Priorizar com']]);
+    assert.deepEqual(conferir(estado, { escolhas: { aluno: 1001, missao: 'missao:PP:CT-01', horario: 500, horas: '1,5', instrutor: 1 }, tocados: ['missao', 'horario', 'horas', 'instrutor'] }).avisos
+      .filter(a => a.codigo === 'fora-do-priorizar'), []);
+    // Revisão do F1h: sem nenhum do “Priorizar com” que possa dar o voo (o INVA 01 não vem na data), o outro não vai contra
+    // ele: sem o aviso
+    const semPar = structuredClone(estado);
+    semPar.ins[0].on = false;
+    assert.deepEqual(conferir(semPar, { escolhas: { aluno: 1001, missao: 'missao:PP:CT-01', horario: 500, horas: '1,5', instrutor: 2 }, tocados: ['missao', 'horario', 'horas', 'instrutor'] }).avisos
+      .filter(a => a.codigo === 'fora-do-priorizar'), []);
     const fora = doDia({ ins: [instrutor(1, 9)], s1000: { jan: 'h390' } });
     fora.stu.push(aluno(1002, { p1: 390, p2: -1, jan: 'h390' }));
     // Um voo novo (o padrão seria encaixar o pedido que ficou fora): o outro pedido continua fora, com a nota

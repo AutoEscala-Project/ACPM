@@ -8,12 +8,16 @@ import { writeFile } from 'node:fs/promises';
 import { runAllocationEngine } from '../js/engine.js';
 import { TIPOS_DE_PINO, SEMENTES_DOS_PINOS, diaComPinos, impressaoDaSaida } from '../test/helpers/pinos.js';
 
+// A gravação é do motor de antes do F1h (opcoes.antesDoF1h: na fila, o “Priorizar com” antes da ordem dos agendamentos;
+// sem o pareamento no horário, sem a lista de espera e com os avisos do “Priorizar com” de antes):
+// test/unit/conferencia.test.js confere o motor de agora com ela nos dias sem “Priorizar com”
+const SEM_O_F1H = { antesDoF1h: true };
 const dias = {};
 const contagem = { voos: 0, fixos: 0, conflitos: 0, avisos: 0, recusas: 0 };
 for (const seed of SEMENTES_DOS_PINOS) {
   dias[seed] = {};
   for (const tipo of TIPOS_DE_PINO) {
-    const saida = runAllocationEngine(diaComPinos(seed, tipo));
+    const saida = runAllocationEngine(diaComPinos(seed, tipo, SEM_O_F1H), SEM_O_F1H);
     dias[seed][tipo] = impressaoDaSaida(saida);
     contagem.voos += saida.out.length;
     contagem.fixos += saida.out.filter(o => o.fixo).length;

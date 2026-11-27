@@ -419,7 +419,7 @@
             <th>2ª preferência</th>
             <th>Disponibilidade<button type="button" class="dica-btn" data-dica="disponibilidade" aria-label="O que é Disponibilidade?" aria-expanded="false"></button></th>
             <th>Duração<button type="button" class="dica-btn" data-dica="duracao" aria-label="O que é Duração?" aria-expanded="false"></button></th>
-            <th>Prioridade<button type="button" class="dica-btn" data-dica="prioridade" aria-label="O que é Prioridade?" aria-expanded="false"></button></th>
+            <th data-funcionalidade="prioridade">Prioridade<button type="button" class="dica-btn" data-dica="prioridade" aria-label="O que é Prioridade?" aria-expanded="false"></button></th>
           </tr>
         </thead>
         <tbody id="dem" class="only"></tbody>
@@ -546,7 +546,7 @@
         <li><b>Recursos:</b> em <i>Disponibilidade do dia</i>, desligue os aviões e simuladores indisponíveis (em manutenção) e, em <i>Horários fechados nesta data</i>, feche os horários em que a escola não vai operar.
         Confira as horas de cada avião desde a última revisão de 50 horas.</li>
         <li><b>Instrutores:</b> em <i>Disponibilidade do dia</i>, desligue em <i>Vem</i> quem não vem na data e confira as janelas de cada um.</li>
-        <li><b>Demanda:</b> clique em <i>Importar pedidos da agenda</i> (o botão diz quantos pedidos da secretaria ainda não estão na demanda) e ajuste o que precisar: missão, recurso, horários preferidos, disponibilidade, duração e prioridade.
+        <li><b>Demanda:</b> clique em <i>Importar pedidos da agenda</i> (o botão diz quantos pedidos da secretaria ainda não estão na demanda) e ajuste o que precisar: missão, recurso, horários preferidos, disponibilidade<span data-funcionalidade="prioridade">, duração e prioridade</span><span data-sem-funcionalidade="prioridade"> e duração</span>.
         Para um aluno que não está na lista, use <i>Pôr um aluno na demanda</i>.</li>
         <li><b>Escala:</b> ela já está pronta.
         Confira as missões que não entraram (caixa vermelha, com o motivo) e os avisos (caixa amarela), ajuste o que for preciso e baixe o <i>CSV</i> (para o lançamento no portal), o <i>PDF</i> e o <i>Excel</i> (a planilha do aeroclube, para o lançamento no CAVOK).</li>
@@ -656,8 +656,8 @@
         Trocar a missão ou o avião leva as preferências para o horário mais próximo da lista nova;</li>
         <li><b>Disponibilidade:</b> quando o aluno pode voar (qualquer horário, manhã, tarde, noite ou um horário só);</li>
         <li><b>Duração:</b> as horas da missão, digitadas e fracionadas (1,2 h; 2,6 h), até 5 h, num voo só (para dividir em dois voos no dia, use <i>+ missão</i>).
-        O simulador começa com 2 h, a duração padrão dele; o Noturno tem 4 h no dia (o translado e o noturno em BH) e a volta no dia seguinte;</li>
-        <li><b>Prioridade:</b> de 1 a 5; quem tem 5 é atendido primeiro.</li>
+        O simulador começa com 2 h, a duração padrão dele; o Noturno tem 4 h no dia (o translado e o noturno em BH) e a volta no dia seguinte<span data-funcionalidade="prioridade">;</span><span data-sem-funcionalidade="prioridade">.</span></li>
+        <li data-funcionalidade="prioridade"><b>Prioridade:</b> de 1 a 5, e 1 é a mais alta: quem tem 1 é atendido primeiro.</li>
       </ul>
       <p><i>Só quem voa</i> (ligado) esconde quem não voa na data.
       O filtro dos cursos, ao lado da busca, é o mesmo de Alunos (veja Alunos), com as mesmas marcas: aparecem os pedidos dos alunos de algum dos cursos marcados, junto com a busca, a missão e <i>Só quem voa</i>.
@@ -679,7 +679,7 @@
       Mudar à mão a missão, o recurso ou a duração tira o código.
       Na importação da agenda, o pedido com a missão do curso escolhida na Agenda entra como ela, com o recurso e as horas do pedido (a que saiu do programa depois não entra, e o aviso da importação diz; sem os programas dos cursos lidos, o pedido com ela espera a importação seguinte); o voo da mesma missão que já está na demanda com uma missão do curso fica com ela, e um pedido de outra missão do curso vira outro voo.</p>
       <p>O pedido com um voo agendado na Escala (veja Escala) mostra a marca <i>agendado 10:10 · PR-VOB</i>, com o cadeado.
-      Mudar as preferências, a disponibilidade, a prioridade ou o instrutor do pedido não tira o voo do lugar (fora da disponibilidade do aluno, ele fica em conflito; com outro instrutor, continua no mesmo horário e no mesmo avião), e desligar <i>Voa</i> só o tira da escala até ligar de novo; mudar a missão, o recurso ou as horas (à mão<span data-funcionalidade="progresso">, com <i>Usar</i> ou com <i>Outra missão…</i></span>) solta o voo, e a escala encaixa o pedido de novo.
+      Mudar as preferências, a disponibilidade<span data-funcionalidade="prioridade">, a prioridade</span> ou o instrutor do pedido não tira o voo do lugar (fora da disponibilidade do aluno, ele fica em conflito; com outro instrutor, continua no mesmo horário e no mesmo avião), e desligar <i>Voa</i> só o tira da escala até ligar de novo; mudar a missão, o recurso ou as horas (à mão<span data-funcionalidade="progresso">, com <i>Usar</i> ou com <i>Outra missão…</i></span>) solta o voo, e a escala encaixa o pedido de novo.
       <i>Limpar demanda</i> e tirar a missão extra também soltam o voo agendado; na limpeza, o voo Atrasado, Em Voo ou Pousou continua agendado, como está.</p>
 
       <h4>Escala</h4>
@@ -736,7 +736,7 @@
       <p><b>A conferência:</b> a cada mudança, o app confere o voo na escala inteira.
       O que deixaria um voo em conflito (o avião, a sala, o instrutor ou o aluno ocupado por um voo fixo, o instrutor indisponível, o instrutor em “Não escalar com” do aluno, o limite da lei, o peso acima do limite mesmo com o mínimo de combustível…) avisa e pede a confirmação, como as regras abaixo: o voo fica fixo onde você o pôs, e a Escala mostra o conflito, com as <i>Sugestões</i>. Embaixo do problema vêm as alternativas livres, até três de cada (<i>Horários livres</i>, <i>Recursos livres</i>, <i>Instrutores livres</i>; no peso, <i>Instrutores que cabem no peso</i>), e um clique escolhe.
       No instrutor indisponível, o botão ao lado do aviso o marca disponível ali mesmo (<i>Marcar Instrutor 03 disponível às 08:20</i>): com o agendamento, ele passa a vir na data, nos períodos do voo.
-      O conflito e o que foge de uma regra pedem uma confirmação em <i>Agendar mesmo assim</i>: <span data-funcionalidade="progresso">a missão fora da ordem do curso (ou já aprovada, dispensada, repetida no dia, de outro curso ou de um curso encerrado) ou num tipo de avião que não é o do programa; </span>um horário fora da lista, o pouso depois das 17:30, mais de 6 voos locais no mesmo horário, o voo antes do Ground dele; o peso que falta, ou o peso digitado que deixa outro voo em conflito; um voo que sai da escala; o horário que já passou, a data passada ou o domingo; <span data-funcionalidade="progresso">a ordem do curso ou os limites da lei que o app não pôde conferir (sem os resultados dos cursos ou as horas dos instrutores)</span><span data-sem-funcionalidade="progresso">os limites da lei que o app não pôde conferir (sem as horas dos instrutores)</span>.
+      O conflito e o que foge de uma regra pedem uma confirmação em <i>Agendar mesmo assim</i>: <span data-funcionalidade="progresso">a missão fora da ordem do curso (ou já aprovada, dispensada, repetida no dia, de outro curso ou de um curso encerrado) ou num tipo de avião que não é o do programa; </span>um horário fora da lista, o pouso depois das 17:30, mais de 6 voos locais no mesmo horário, o voo antes do Ground dele; o instrutor fora do <i>Priorizar com</i> do aluno (quando um dos instrutores dele poderia voar o pedido); o peso que falta, ou o peso digitado que deixa outro voo em conflito; um voo que sai da escala; o horário que já passou, a data passada ou o domingo; <span data-funcionalidade="progresso">a ordem do curso ou os limites da lei que o app não pôde conferir (sem os resultados dos cursos ou as horas dos instrutores)</span><span data-sem-funcionalidade="progresso">os limites da lei que o app não pôde conferir (sem as horas dos instrutores)</span>.
       Se os avisos mudam antes do segundo clique, a confirmação é pedida de novo.
       O resto é informação, como a vez na fila do rodízio e, no Noturno, a volta no dia seguinte.
       <i>O que muda na escala</i>, embaixo dos avisos, abre a prévia: o voo que entra (ou muda de lugar) e cada voo que muda de horário, de recurso ou de instrutor, sai da escala (com o motivo) ou entra nela.</p>
@@ -772,10 +772,16 @@
       A lista dos cursos é a dos cursos ativos de Cursos; o curso encerrado continua para quem já está nele, marcado “(encerrado)”.
       O peso entra no limite de peso de cada avião (sem o peso, a escala avisa que não conferiu); ele vai de 1 a 300 kg, com uma casa decimal (72,5), aqui e em Instrutores, e vazio é sem peso.
       O peso digitado no agendamento (veja Escala) também vai para o cadastro.
-      Em <i>Priorizar com</i>, escolha os instrutores do aluno (o par de sempre): a escala põe o aluno com um deles sempre que algum pode voar o pedido, mesmo fora das preferências de horário, e a divisão das horas e a compactação não o trocam.
-      Quando nenhum deles pode (não vem na data, está ocupado, sem a habilitação…), o voo fica com outro instrutor e a escala avisa, com o motivo.
-      Em <i>Não escalar com</i>, escolha os instrutores que não devem voar com o aluno (quem está nesta lista sai do <i>Priorizar com</i>).
-      O instrutor escolhido na Demanda para o dia vale mais que o <i>Priorizar com</i>.</p>
+      Em <i>Priorizar com</i>, escolha os instrutores do aluno (o par de sempre): ele escolhe o instrutor, não o horário.
+      Quem fica com cada horário é a ordem da fila (<span data-funcionalidade="prioridade">a prioridade, depois </span>quem registrou antes na agenda: veja Escala), com ou sem <i>Priorizar com</i>.
+      A escala põe o aluno com um dos instrutores dele sempre que algum pode voar o pedido nos horários do aluno, mesmo fora das preferências de horário, e a divisão das horas e a compactação não o trocam.
+      Depois, os voos que saem no mesmo horário trocam de instrutor entre si quando isso põe mais alunos com um instrutor do <i>Priorizar com</i>: nenhum horário nem avião muda, todas as regras continuam valendo, os voos fixos, os com o instrutor escolhido e as turmas de Ground ficam com o instrutor deles, e um voo do rodízio só troca com outro da mesma categoria (o rodízio não muda); quando a troca não serve ao aluno que ficou com o instrutor no mesmo horário, o aviso diz <i>a troca não serve a</i> ele.
+      Quando nenhum deles pode (não vem na data, está ocupado, sem a habilitação…), o voo fica com outro instrutor, e a escala avisa, com o motivo.
+      Quando dois alunos priorizam o mesmo instrutor e querem o mesmo horário, fica com ele o primeiro da fila (<span data-funcionalidade="prioridade">a prioridade maior; depois, </span>o pedido registrado antes na agenda e a ordem do cadastro); o outro voa com ele em outro horário da disponibilidade dele, senão com outro instrutor, e a escala avisa, com os dois nomes e os horários (também quando um voo fixo, o instrutor escolhido para o dia ou a aula de Ground, que vem antes dos voos, fica com ele no horário pedido).
+      O instrutor fora do <i>Priorizar com</i>, quando um dos instrutores dele poderia voar o pedido, vai contra o aluno: no agendamento e no editor do voo (ao trocar o instrutor) pede a confirmação; na lista do instrutor da Escala, a opção diz <i>fora do Priorizar com</i>, e na escala não aprovada a pergunta também avisa; em todos, e no instrutor escolhido na Demanda, a Escala fica com o aviso.
+      Quando nenhum deles pode (não vem na data, sem a habilitação, em <i>Não escalar com</i>), o voo com outro instrutor não pede nada e o aviso diz o motivo.
+      Em <i>Não escalar com</i>, escolha os instrutores que nunca voam com o aluno: a escala não os põe com ele por nenhum caminho (quem está nesta lista sai do <i>Priorizar com</i>); o voo que você puser com um deles fica em conflito.
+      O instrutor escolhido na Demanda para o dia vale mais que o <i>Priorizar com</i>, com o aviso quando está fora dele.</p>
       <p>A barra é a de Instrutores, no mesmo lugar: <i>Buscar aluno</i>, o filtro dos cursos, o número dos que aparecem e <i>+ Novo aluno</i>.
       A busca funciona como a de Instrutores: sem os acentos, com <i>Limpar filtros</i> quando os filtros não deixam nenhum.
       <b>Filtro dos cursos:</b> o botão ao lado da busca (<i>Todos os cursos</i>) abre os cursos ativos, na ordem de Cursos, os encerrados, marcados “(encerrado)”, o curso de um aluno que não está nos programas e <i>Sem curso</i>.
@@ -907,11 +913,11 @@
       <p>A cada alteração, o sistema refaz a escala inteira, nesta ordem:</p>
       <ol>
         <li>Primeiro os <b>Grounds</b>, que definem a partir de que horário o voo do aluno pode começar.</li>
-        <li>Em cada um, primeiro os pedidos com o <b>instrutor escolhido</b> pelo operador para o dia (na Demanda ou na Escala): o que o operador definiu vale mais que a escolha do app, e o resto se encaixa em volta.
-        Com a mesma prioridade, o aluno com <b>Priorizar com</b> (Alunos) vai antes.</li>
-        <li>Depois os voos e simuladores, por <b>prioridade</b> (5 primeiro); com a mesma prioridade, quem <b>agendou primeiro</b> na agenda sai primeiro, e o pedido posto à mão na Demanda vem depois dos agendados; empatados, na ordem do cadastro dos alunos.</li>
+        <li>Em cada um, primeiro os pedidos com o <b>instrutor escolhido</b> pelo operador para o dia (na Demanda ou na Escala): o que o operador definiu vale mais que a escolha do app, e o resto se encaixa em volta.</li>
+        <li>Depois os voos e simuladores<span data-funcionalidade="prioridade">, por <b>prioridade</b> (1 primeiro); com a mesma prioridade,</span><span data-sem-funcionalidade="prioridade">:</span> quem <b>agendou primeiro</b> na agenda sai primeiro (num horário cheio, quem registrou antes fica com ele), e o pedido posto à mão na Demanda vem depois dos agendados; empatados, na ordem do cadastro dos alunos. O <i>Priorizar com</i> (Alunos) não muda essa ordem: ele escolhe o instrutor, não o horário.</li>
         <li>Para cada pedido, tenta a 1ª preferência, depois a 2ª e depois o horário livre mais perto da 1ª, entre os horários de decolagem da categoria, sempre dentro da disponibilidade do aluno e das janelas abertas.
-        No máximo 6 voos locais (Voo Local, Voo Solo e TGL) saem no mesmo horário, e o Voo Solo sai sempre às 06:30; o 7º confirmado na Agenda voa no horário dele, a mais, com o aviso.</li>
+        No máximo 6 voos locais (Voo Local, Voo Solo e TGL) saem no mesmo horário, e o Voo Solo sai sempre às 06:30; o 7º confirmado na Agenda voa no horário dele, a mais, com o aviso.
+        O pedido com um horário exato que não coube nele só por falta de lugar (os 6 voos locais, sem a confirmação; os aviões; os instrutores) fica na <b>lista de espera</b> desse horário, na ordem da fila: a recusa diz o lugar (<i>1º na lista de espera das 08:20</i>). Depois da compactação, cada um tenta de novo o horário dele, e o lugar que ela liberou vai para o primeiro que cabe; na escala aprovada, as Sugestões do voo cancelado nesse horário oferecem <i>Dar a vaga</i> ao primeiro da lista que cabe nele, só com o seu clique (o motivo do cancelamento pode valer para o horário inteiro).</li>
         <li>O <b>avião</b>: o instrutor fica no mesmo avião durante o dia; fora isso, o voo vai para um avião que já saiu (o de menor folga até o voo, para não deixar buraco no meio do dia) e, quando precisa de outro, <span data-funcionalidade="hangar">sai o da frente do <i>hangar</i> (a ordem em Recursos)</span><span data-sem-funcionalidade="hangar">sai o primeiro livre na ordem da frota</span>.</li>
       </ol>
       <p>Um voo só entra na escala quando tudo isto vale ao mesmo tempo:</p>
@@ -919,7 +925,7 @@
         <li><b>Recurso certo para a missão</b> (tabela abaixo), disponível e livre no horário, com os atributos que o voo pede: o voo IFR (IFR, cheques IFR e o noturno do PC) só no avião homologado IFR (fora dos “Só VFR”), o Parafuso no C152 só no “Só Parafuso”.
         O instrutor e o avião vão em par: o recurso com habilitação própria só com quem a tem.</li>
         <li><b>Instrutor disponível no dia e durante o voo inteiro</b>, livre e com as habilitações da missão; o instrutor marcado em <i>Não escalar com</i> para o aluno não entra.
-        Com o <i>Priorizar com</i> do aluno, um dos instrutores dele, em qualquer horário possível; só quando nenhum deles pode, outro instrutor, com aviso.</li>
+        Com o <i>Priorizar com</i> do aluno, um dos instrutores dele, em qualquer horário possível do aluno; só quando nenhum deles pode, outro instrutor, com aviso. No fim, os voos que saem no mesmo horário trocam de instrutor entre si para mais alunos voarem com um do <i>Priorizar com</i>, sem mudar nenhum horário nem avião (no rodízio, só entre voos da mesma categoria). Quando outro aluno, um voo fixo ou o instrutor escolhido para o dia fica com um instrutor dele no horário que o aluno pediu, o aviso diz quem ficou com ele e quando (e com quem) o aluno voa, com os horários de agora, também depois de uma mudança na escala aprovada.</li>
         <li><b>Peso:</b> aluno mais instrutor dentro do limite do avião com os tanques cheios (<span id="manual-pesos"></span>).
         Sem o peso informado, a escala avisa que não conferiu e diz de quem é o peso que falta; para um aluno com o peso informado, os instrutores com o peso vêm antes dos sem ele.</li>
         <li><b>Limites da Lei do Aeronauta</b> (Lei 13.475/2017 e RBAC 117): o instrutor não passa de 9h30 de voo nem de 11 h de jornada no dia (de 30 minutos antes do primeiro compromisso a 30 minutos depois do último; depois das 18:00, a hora vale 52m30s), de 100 h de voo no mês e de 960 h no ano, e tem 12 h de repouso entre um dia e o outro.
@@ -947,7 +953,7 @@
         <li><b>Buracos</b>: <i>INVA</i> (o padrão) fecha primeiro os buracos dos instrutores; <i>Avião</i>, os dos aviões (<span data-funcionalidade="hangar">menos tempo parado e menos saídas do hangar; parado 2 h ou mais, o avião volta para o hangar</span><span data-sem-funcionalidade="hangar">menos tempo parado; uma parada de 2 h ou mais pesa mais</span>); <i>Maior buraco</i> ataca primeiro os maiores, de instrutor ou de avião (um buraco de 4 h pesa mais que quatro de 1 h).</li>
         <li><b>Horários</b>: <i>Na disponibilidade</i> (o padrão) deixa o voo mudar para qualquer horário da categoria dentro da disponibilidade do aluno (manhã, tarde, noite ou o horário exato da Agenda; sem disponibilidade, qualquer horário); <i>Só 1ª e 2ª</i> só troca entre as duas preferências; <i>Não mudar</i> deixa os horários como a escala pôs, e só os instrutores podem trocar.</li>
       </ul>
-      <p>Todas as regras continuam valendo (habilitação, disponibilidade, peso e combustível, limites da lei e o Ground antes do voo), a divisão das horas não piora, e a 1ª preferência pesa mais para quem tem mais prioridade.
+      <p>Todas as regras continuam valendo (habilitação, disponibilidade, peso e combustível, limites da lei e o Ground antes do voo), a divisão das horas não piora<span data-funcionalidade="prioridade">, e a 1ª preferência pesa mais para quem tem mais prioridade</span>.
       Ficam como estão os voos fixos e os que já têm status (Atrasado, Em Voo, Pousou, Cancelado), o instrutor dos voos do rodízio, o instrutor escolhido pelo operador e o do <i>Priorizar com</i>, o Noturno, o Parafuso no C152 e o horário das turmas de Ground.
       O voo que mudou de horário fora das preferências aparece com <i>horário ajustado</i>, e o quadro ao lado do resumo mostra o tempo parado que sobra (dos instrutores e dos aviões)<span data-funcionalidade="hangar"> e as saídas do hangar</span>.
       Os critérios ficam com a data, e a data seguinte começa com os mesmos; com a escala aprovada, eles só aparecem.</p>
@@ -1017,7 +1023,7 @@
         Os mais comuns são falta de instrutor habilitado no horário, avião em manutenção ou sem horas até a revisão e peso acima do limite.</dd>
         <dt>Mudei uma coisa e outros voos também mudaram.
         Por quê?</dt>
-        <dd>A escala é refeita inteira a cada alteração, seguindo as prioridades, e uma mudança pode abrir ou ocupar vagas de outros voos.
+        <dd>A escala é refeita inteira a cada alteração, seguindo <span data-funcionalidade="prioridade">as prioridades</span><span data-sem-funcionalidade="prioridade">a ordem dos pedidos</span>, e uma mudança pode abrir ou ocupar vagas de outros voos.
         Com o dia já em andamento, aprove a escala: os voos ficam fixos, e um cancelamento ou um atraso só mexe no próprio voo.</dd>
         <dt>Quero um voo num horário, num avião e com um instrutor que eu escolho.</dt>
         <dd>Use <i>+ Agendar voo</i>, na barra da Escala, ou o <i>+</i> de um recurso (ou instrutor) no mapa: o voo fica fixo onde você o pôs, e a escala é refeita em volta dele.
@@ -1026,8 +1032,8 @@
         Como volto?</dt>
         <dd>Altere de novo, no próprio campo: a escala é refeita na hora.
         Algumas alterações também podem ser revertidas pelo <i>Histórico</i>.</dd>
-        <dt>Como dar preferência a um aluno?</dt>
-        <dd>Na Demanda, aumente a prioridade dele (5 é a mais alta): ela passa à frente da ordem dos agendamentos.</dd>
+        <dt data-funcionalidade="prioridade">Como dar preferência a um aluno?</dt>
+        <dd data-funcionalidade="prioridade">Na Demanda, aumente a prioridade dele (1 é a mais alta): ela passa à frente da ordem dos agendamentos.</dd>
         <dt>O aluno tem Ground e voo no mesmo dia.
         O que acontece?</dt>
         <dd>O sistema marca o Ground primeiro, e o voo do mesmo tema só começa depois que o Ground termina.</dd>

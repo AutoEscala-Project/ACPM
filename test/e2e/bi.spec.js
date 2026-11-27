@@ -9,6 +9,10 @@ const lerBI = page => page.locator('#bi-content').evaluate(el => {
 });
 
 test.describe('Dashboard BI', () => {
+  // O snapshot é da escala do exemplo com as prioridades dele (5, 4 e as sorteadas): com a prioridade ligada
+  // (js/funcionalidades.js), como os goldens do motor
+  test.use({ funcionalidades: 'prioridade' });
+
   test('registra o dia gerado, simula 30 dias, filtra e limpa', async ({ page }) => {
     await abrirComExemplo(page);
     await abrirEscala(page);

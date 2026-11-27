@@ -1,5 +1,5 @@
 // Tela da Escala: Lista, Por recurso ou Por instrutor; resumo com erros e avisos agrupados; uma linha por voo.
-import { test, expect, abrir, abrirComExemplo, abrirEscala, irPara, irParaVista, lerEscala, alternarDisponivel, alvosPequenos, larguraDaPagina, appPronto, AMANHA, prepararContexto, vigiarErros, entrar, importarDaAgenda, abrirCaixa, editorDoVoo, refazer, confirmarAgendamento, aprovar } from './fixtures.js';
+import { test, comPrioridade, expect, abrir, abrirComExemplo, abrirEscala, irPara, irParaVista, lerEscala, alternarDisponivel, alvosPequenos, larguraDaPagina, appPronto, AMANHA, prepararContexto, vigiarErros, entrar, importarDaAgenda, abrirCaixa, editorDoVoo, refazer, confirmarAgendamento, aprovar } from './fixtures.js';
 import { criarSupabaseFalso, documentosAtuais, CONTAS } from './supabase-falso.js';
 import { IDS } from '../helpers/casos-do-programa.js';
 import { cursosIniciais, gravarCurso } from '../../js/programa.js';
@@ -179,6 +179,33 @@ test.describe('Tela da Escala', () => {
     await abrir(page, { estado: cenario({ ins: [instrutor(1, 1, { kg: 0 })], stu: [aluno(1000, { p1: 390, p2: -1 }), aluno(1001, { p1: 500, p2: -1 }, { kg: 0 })] }) });
     await abrirEscala(page);
     await expect(page.locator('#out details.caixa.avisos summary')).toHaveText('2 avisos: 1 aluno sem peso · 1 instrutor sem peso');
+  });
+
+  // F1h (N9): dois alunos priorizam o mesmo INVA no mesmo horário. Com a prioridade desligada (o padrão), todos têm a
+  // mesma: o primeiro no cadastro fica com ele às 08:20; o outro voa com ele às 10:10, e a escala diz (um aviso por voo, a
+  // disputa com os nomes, os horários e a chave que decidiu, sem falar da prioridade); o resumo conta os avisos de
+  // Priorizar com (o voo que ficou com o INVA não é "sem o instrutor")
+  const disputa = () => cenario({ ins: [instrutor(1, 1), instrutor(2, 1)], stu: [aluno(1000, { pr: 3 }, { voaCom: [1] }), aluno(1001, { pr: 4 }, { voaCom: [1] })] });
+  const linhaDaLista = (page, nome) => page.locator('#out tbody tr:not(.win)', { hasText: nome });
+  test('a disputa do “Priorizar com”: o aviso diz quem ficou com o INVA e quando o outro voa; o resumo conta os avisos de Priorizar com', async ({ page }) => {
+    await abrir(page, { estado: disputa() });
+    await abrirEscala(page, { vista: 'lista' });
+    await expect(page.locator('#out details.caixa.avisos summary')).toHaveText('1 aviso: 1 aviso de Priorizar com');
+    const avisos = await abrirCaixa(page, 'avisos');
+    await expect(avisos.locator('li')).toHaveText(['Aluno 1001 Aluno 1001 e Aluno 1000 priorizam Instrutor 01 às 08:20: ficou com Aluno 1000 (antes no cadastro); Aluno 1001 voa às 10:10.']);
+    await expect(linhaDaLista(page, 'Aluno 1000').locator('.c-hr')).toContainText('08:20');
+    await expect(linhaDaLista(page, 'Aluno 1001').locator('.c-hr')).toContainText('10:10');
+  });
+
+  // Com a prioridade ligada, a maior fica com ele, e o aviso diz "prioridade maior" (a tela mostra a prioridade ao
+  // contrário, 1 a mais alta: o aviso não dá o número)
+  comPrioridade('a disputa do “Priorizar com” com a prioridade ligada: fica com ele a prioridade maior, sem o número', async ({ page }) => {
+    await abrir(page, { estado: disputa() });
+    await abrirEscala(page, { vista: 'lista' });
+    const avisos = await abrirCaixa(page, 'avisos');
+    await expect(avisos.locator('li')).toHaveText(['Aluno 1000 Aluno 1000 e Aluno 1001 priorizam Instrutor 01 às 08:20: ficou com Aluno 1001 (prioridade maior); Aluno 1000 voa às 10:10.']);
+    await expect(linhaDaLista(page, 'Aluno 1001').locator('.c-hr')).toContainText('08:20');
+    await expect(linhaDaLista(page, 'Aluno 1000').locator('.c-hr')).toContainText('10:10');
   });
 
   // O voo agendado na Escala fora das regras que a escala segue sozinha (o operador confirmou ao agendar): a etiqueta
@@ -661,7 +688,8 @@ test.describe('Celular', () => {
     }
   });
 
-  test('a escala vira um cartão por voo, com horário, aluno, missão, avião, instrutor e status à vista', async ({ page }) => {
+  // O instrutor do Aluno 12 é o da escala do exemplo com as prioridades dele: com a prioridade ligada (js/funcionalidades.js)
+  comPrioridade('a escala vira um cartão por voo, com horário, aluno, missão, avião, instrutor e status à vista', async ({ page }) => {
     await abrirComExemplo(page);
     await abrirEscala(page);
     await expect(page.locator('#out thead')).toBeHidden();
@@ -921,8 +949,9 @@ test.describe('O que a missão do curso exige do INVA, na Escala', () => {
   });
 
   // A missão marcada (ou desmarcada) em Cursos muda o que o motor pede: a escala da data aberta é refeita e gravada na hora
-  // (sem entrada no histórico da data: a alteração fica nas versões do curso), também a que já estava gravada
-  test('marcar e desmarcar em Cursos o que a missão exige do INVA refaz a escala gravada da data aberta', async ({ page }) => {
+  // (sem entrada no histórico da data: a alteração fica nas versões do curso), também a que já estava gravada. Com a
+  // prioridade ligada (a alteração que grava a data é a prioridade)
+  comPrioridade('marcar e desmarcar em Cursos o que a missão exige do INVA refaz a escala gravada da data aberta', async ({ page }) => {
     const semExige = gravarCurso({ cursos: cursosIniciais() }, {
       sigla: 'PP', versaoLida: 1, descricao: 'PP: programa', conteudo: {
         nome: 'Piloto Privado', ativo: true, fases: [{ id: IDS.f1, nome: 'Fase 1' }],
