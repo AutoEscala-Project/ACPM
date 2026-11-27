@@ -2,7 +2,8 @@
 // coisa pela API; a tela só usa a escala gravada quando cada linha tem os campos que o motor produz, nos formatos dele.
 // Uma linha adulterada invalida a escala gravada inteira (a tela usa a escala calculada de novo, que é gravada na
 // próxima alteração). Os campos desconhecidos saem.
-import { ALL_EQ_TYPES, MIS, FLIGHT_STATUSES, NI, MINUTOS_DO_DIA } from './config.js';
+import { ALL_EQ_TYPES, MIS, FLIGHT_STATUSES, MINUTOS_DO_DIA } from './config.js';
+import { INICIOS_DOS_TEMPOS } from './horarios.js';
 import { codigoValido } from './cursos.js';
 import { CODIGOS_DE_CONFLITO, CODIGOS_DE_REJEICAO, CODIGOS_DE_AVISO } from './conflitos.js';
 import { CHAVE_DO_VOO } from './voo.js';
@@ -29,7 +30,7 @@ const CAMPOS = {
   fKey: v => typeof v === 'string' && CHAVE_DO_VOO.test(v),
   classKey: v => typeof v === 'string' && (CHAVE_DO_VOO.test(v) || CHAVE_DA_TURMA.test(v)),
   isGround: v => typeof v === 'boolean',
-  w: v => inteiro(v, 0, NI),
+  w: v => inteiro(v, 0, INICIOS_DOS_TEMPOS.length - 1),
   a: v => inteiro(v, 0, MINUTOS_DO_DIA),
   b: v => inteiro(v, 0, MINUTOS_DO_DIA),
   o: v => inteiro(v, 0, 100000),
@@ -84,13 +85,19 @@ export function normalizarLinhaGravada(o) {
 // Os códigos de cada tipo de alerta (o conflito tem os códigos na linha do voo)
 const CODIGOS_DO_ALERTA = { err: CODIGOS_DE_REJEICAO, warn: CODIGOS_DE_AVISO, conf: [] };
 
+// A espera da recusa do pedido na lista de espera (F1h, N14): o minuto do horário exato dele e o lugar na lista (1º, 2º…)
+export const esperaValida = e => objeto(e) && inteiro(e.minuto, 0, MINUTOS_DO_DIA) && inteiro(e.lugar, 1, 100000);
+
 function alerta(a) {
   if (!objeto(a) || !TIPOS_DE_ALERTA.includes(a.t) || !texto(a.s, 200) || !texto(a.m, 1000)) return null;
   if (a.fKey !== undefined && !CAMPOS.fKey(a.fKey)) return null;
   if (a.codigo !== undefined && !CODIGOS_DO_ALERTA[a.t].includes(a.codigo)) return null;
   if (['stuId', 'insId'].some(c => a[c] !== undefined && !CAMPOS[c](a[c]))) return null;
+  // A lista de espera (F1h, N14): só na recusa
+  if (a.espera !== undefined && !(a.t === 'err' && esperaValida(a.espera))) return null;
   const opcional = c => (a[c] !== undefined ? { [c]: a[c] } : {});
-  return { t: a.t, s: a.s, ...opcional('fKey'), m: a.m, ...opcional('codigo'), ...opcional('stuId'), ...opcional('insId') };
+  const espera = a.espera !== undefined ? { espera: { minuto: a.espera.minuto, lugar: a.espera.lugar } } : {};
+  return { t: a.t, s: a.s, ...opcional('fKey'), m: a.m, ...opcional('codigo'), ...opcional('stuId'), ...opcional('insId'), ...espera };
 }
 
 function revisaoDoAviao(r) {

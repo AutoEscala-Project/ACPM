@@ -2,7 +2,8 @@
 // seguinte, a volta de BH às 07:30 entra sozinha na escala, com o instrutor, o aluno e o avião livres só às 10:10, e o
 // repouso antes dela é um aviso. No programa do curso, o Noturno pode vir em trechos (a ida, a noite e a volta): é um voo
 // só, oferecido pela noite
-import { test, comProgresso, expect, abrir, irPara, abrirEscala, prepararContexto, vigiarErros, AMANHA, entrar, campoDaAgenda, diaSeguinte, rotuloDaData, refazer } from './fixtures.js';
+import { test, comProgresso, expect, abrir, irPara, abrirEscala, prepararContexto, vigiarErros, AMANHA, entrar, campoDaAgenda, diaSeguinte, diaAnterior, rotuloDaData, refazer, textoDoProgresso,
+  editarPelaLista, salvarVoo, abrirHistorico, entradasDoHistorico } from './fixtures.js';
 import { criarSupabaseFalso, documentosAtuais, CONTAS } from './supabase-falso.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
 import { cursosIniciais, gravarCurso } from '../../js/programa.js';
@@ -64,6 +65,87 @@ test.describe('Noturno de dois dias', () => {
     const inicio = (await linha(page, 'Aluno 1001').locator('.c-hr').innerText()).slice(0, 5);
     expect(inicio >= '10:10', `começou às ${inicio}`).toBe(true);
   });
+
+  // O Noturno no mesmo avião (2026-11-27): gravado, ele fica fixo no avião e com o INVA dele; o editor o leva para outro
+  // avião, a confirmação diz para onde vai a volta, e o dia seguinte, já gravado, é refeito e gravado com ela ao abrir
+  test('o editor leva o Noturno para outro avião: a confirmação diz a volta, e o dia seguinte gravado é refeito com ela', async ({ page }) => {
+    const erros = vigiarErros(page);
+    const guardado = data => page.evaluate(d => JSON.parse(localStorage.getItem(`acpm4_dia_${d}`)), data);
+    const volta = dia => (dia.resultado.out.find(o => o.trecho === 'volta') || {}).r;
+    const estado = cenario({ ins: [instrutor(1, 9), instrutor(2, 9)], stu: [aluno(1000, NOTURNO)] });
+    await abrir(page, { estado });
+    await abrirEscala(page);
+    // A data nova abre com o Noturno já fixo (o cadeado diz por quê), sem gravar nada
+    await expect(linha(page, 'Aluno 1000').locator('.fixo')).toHaveAttribute('aria-label', 'Voo fixo: Noturno, no mesmo avião da volta');
+    const aberto = await guardado(AMANHA);
+    expect([aberto.fixos, aberto.resultado]).toEqual([{}, null]);
+    // Uma alteração grava o dia do Noturno: o pino do Noturno vai junto
+    await linha(page, 'Aluno 1000').locator('select[data-f="fstatus"]').selectOption('Pendente');
+    await refazer(page);
+    const dia1 = await guardado(AMANHA);
+    const [fKey, pino] = Object.entries(dia1.fixos)[0];
+    expect([fKey, pino.noturno]).toEqual(['1000_0_1', true]);
+    await expect(linha(page, 'Aluno 1000').locator('.fixo')).toHaveAttribute('aria-label', 'Voo fixo: Noturno, no mesmo avião da volta');
+    const outro = pino.r === 'PP-ABP' ? 'PP-AJS' : 'PP-ABP';
+
+    // O dia seguinte, gravado (o status da volta), com a volta no avião do Noturno
+    await diaSeguinte(page);
+    await abrirEscala(page);
+    await expect(linha(page, 'Aluno 1000').locator('.c-hr')).toContainText('07:30–08:30');
+    await linha(page, 'Aluno 1000').locator('select[data-f="fstatus"]').selectOption('Pendente');
+    await refazer(page);
+    expect(volta(await guardado('2026-11-12'))).toBe(pino.r);
+
+    // De volta ao dia do Noturno: o editor leva o Noturno para o outro C172, e a confirmação diz para onde vai a volta
+    await diaAnterior(page);
+    await abrirEscala(page);
+    await editarPelaLista(page, '1000_0_1');
+    await page.locator('#voo-recurso').selectOption(outro);
+    await expect(page.locator('#voo-avisos')).toContainText(`A volta de 12/11 passa para o ${outro}.`);
+    await salvarVoo(page);
+    await expect(page.locator('#refazer-avisos')).toContainText(`A volta de 12/11 passa para o ${outro}.`);
+    await refazer(page);
+    const depois = await guardado(AMANHA);
+    expect(depois.fixos['1000_0_1']).toEqual({ ...pino, r: outro, agendado: true, noturno: true });
+    // A escala gravada do dia seguinte ainda tem a volta de antes: o aviso diz, até a data ser aberta
+    await expect(page.locator('#aviso-sync')).toBeVisible();
+    await expect(page.locator('#aviso-sync-texto')).toContainText('A escala gravada de 12/11 ainda tem a volta do Noturno de antes. Abra 12/11');
+
+    // O dia seguinte abre com a volta no avião novo e é gravado com ela (a entrada no Histórico diz o que mudou)
+    await diaSeguinte(page);
+    await abrirEscala(page);
+    await expect(linha(page, 'Aluno 1000').locator('.c-hr')).toContainText('07:30–08:30');
+    await expect(linha(page, 'Aluno 1000')).toContainText(outro);
+    await expect.poll(async () => volta(await guardado('2026-11-12'))).toBe(outro);
+    await expect(page.locator('#aviso-sync')).toBeHidden();
+    await abrirHistorico(page);
+    await expect(entradasDoHistorico(page, `Volta do Noturno (o Noturno de ontem mudou): Aluno 1000: ${pino.r} → ${outro}`)).toHaveCount(1);
+    expect(erros).toEqual([]);
+  });
+
+  // A revisão: na data ainda sem escala gravada, o INVA escolhido para o Noturno e depois revertido no Histórico volta a ser
+  // o de antes (o pino do Noturno já estava na tela ao abrir, e a reversão o devolve), e a volta do dia seguinte vai com ele
+  test('o ↶ da escolha do INVA do Noturno na data nova devolve o INVA de antes', async ({ page }) => {
+    const erros = vigiarErros(page);
+    const estado = cenario({ ins: [instrutor(1, 9), instrutor(2, 9)], stu: [aluno(1000, NOTURNO)] });
+    await abrir(page, { estado });
+    await abrirEscala(page);
+    const antes = (await linha(page, 'Aluno 1000').innerText()).includes('Instrutor 01') ? 'Instrutor 01' : 'Instrutor 02';
+    const outro = antes === 'Instrutor 01' ? 'Instrutor 02' : 'Instrutor 01';
+    await irPara(page, 'dem');
+    await page.locator('#dem tr[data-k="d"][data-id="1000"][data-mid="0"] [data-f="insId"]').selectOption(outro === 'Instrutor 01' ? '1' : '2');
+    await abrirEscala(page);
+    await expect(linha(page, 'Aluno 1000')).toContainText(outro);
+    await abrirHistorico(page);
+    const lista = page.locator('#audit-log-list');
+    await lista.locator('.audit-item', { hasText: 'Pedido Aluno 1000: instrutor' }).getByRole('button', { name: '↶ Reverter' }).click();
+    await expect(lista).toContainText('Revertido: Pedido Aluno 1000: instrutor');
+    await page.locator('#btn-fechar-historico').click();
+    await expect(linha(page, 'Aluno 1000')).toContainText(antes);
+    const fixos = await page.evaluate(d => JSON.parse(localStorage.getItem(`acpm4_dia_${d}`)).fixos, AMANHA);
+    expect(fixos['1000_0_1'].insId).toBe(antes === 'Instrutor 01' ? 1 : 2);
+    expect(erros).toEqual([]);
+  });
 });
 
 // O Noturno em trechos no programa do PP: a Fase 6 (a ida TSL-01, a noite NOT e a volta TSL-02) abre depois da Fase 4.
@@ -95,7 +177,7 @@ test.describe('O Noturno em trechos no programa do curso', () => {
     await entrar(page, CONTAS.operador);
 
     await irPara(page, 'alu');
-    await expect(page.locator('#alu tr[data-id="1000"] .progresso')).toHaveText('1/4 · Fase 6 · próxima NOT (com TSL-01 e TSL-02)');
+    await expect.poll(() => textoDoProgresso(page, 1000)).toBe('1/4 · Fase 6 · próxima NOT (com TSL-01 e TSL-02)');
     await irPara(page, 'dem');
     await page.locator('#onlyfly').uncheck();
     const pedido = page.locator('#dem tr[data-id="1000"][data-mid="0"]');
@@ -129,7 +211,7 @@ test.describe('O Noturno em trechos no programa do curso', () => {
     await voo.locator('[data-resultado]').selectOption('aprovado');
     await expect.poll(() => servidor.resultados.map(r => r.missao)).toEqual(['TMA-01', 'NOT']);
     await irPara(page, 'alu');
-    await expect(page.locator('#alu tr[data-id="1000"] .progresso')).toHaveText('4/4 · concluído');
+    await expect.poll(() => textoDoProgresso(page, 1000)).toBe('4/4 · concluído');
     expect(erros).toEqual([]);
     await contexto.close();
   });

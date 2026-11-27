@@ -1,6 +1,6 @@
 // Exportação da escala do dia em CSV, PDF (jsPDF + AutoTable carregados no index.html) e na planilha do modelo do
 // aeroclube (Excel, js/planilha.js).
-import { hm, WLB, fmtH, pesoBr } from './format.js';
+import { hm, rotuloDoInicio, fmtH, pesoBr } from './format.js';
 import { sumUniqueOperationalHours, consolidateTimelineSlots } from './engine.js';
 import { S, RES, DATA, inativoNaDataAberta, estadoDaEscala } from './state.js';
 import { showToast } from './dom.js';
@@ -54,11 +54,12 @@ export function pdf() {
   doc.text(`Missões na demanda: ${tot}     Atendidas: ${tot - rej}     Horas escaladas: ${hrs(out)}     Alertas: ${al.length}`, 14, 28);
 
   const body = [];
-  let cw = -1;
+  // Os grupos pelo horário de início de cada voo (J, S1), como na Lista
+  let inicio = -1;
   out.forEach(o => {
-    if (o.w !== cw) {
-      cw = o.w;
-      body.push([{ content: `${WLB(o.w)}  -  ${out.filter(x => x.w === o.w).length} lançamento(s) iniciando`, colSpan: 9, styles: { fillColor: [222, 230, 238], fontStyle: 'bold' } }]);
+    if (o.a !== inicio) {
+      inicio = o.a;
+      body.push([{ content: `${rotuloDoInicio(o.a)}  -  ${out.filter(x => x.a === o.a).length} lançamento(s) iniciando`, colSpan: 9, styles: { fillColor: [222, 230, 238], fontStyle: 'bold' } }]);
     }
     // Status com o detalhe (o novo horário do atraso ou o motivo do cancelamento)
     // Só a categoria do motivo: o PDF sai do app (o texto livre pode ter dados pessoais)

@@ -5,22 +5,26 @@
 // conferirEscala confere uma escala já montada sem o motor: a escala aprovada que o operador muda na Escala (F1g). Ela não
 // põe, não move e não tira nenhum voo: refaz as marcas de conflito, os alertas deles, os avisos e a revisão, e os pesos e o
 // combustível de cada linha pelo cadastro
-import { NOTURNO, T, DAY, DEFAULT_LIM, GROUND_EQ_TYPE, GROUND_REG, GROUND_DURATION_MIN, GROUND_DURATION_H, REVISAO_H, MENOR_VOO_H, AIRCRAFT_EQ_TYPES, MISSOES_LOCAIS, LIMITE_DE_VOOS_LOCAIS } from './config.js';
-import { FROTA_INICIAL, matriculasDoTipo, motivoDoAviao, aviaoServe, instrutorVoaNoAviao, recursoDaFrota } from './frota.js';
+import { NOTURNO, DEFAULT_LIM, GROUND_EQ_TYPE, GROUND_REG, GROUND_DURATION_MIN, GROUND_DURATION_H, REVISAO_H, MENOR_VOO_H, AIRCRAFT_EQ_TYPES, MISSOES_LOCAIS, LIMITE_DE_VOOS_LOCAIS } from './config.js';
+import { FROTA_INICIAL, matriculasDoTipo, motivoDoAviao, aviaoServe, instrutorVoaNoAviao, recursoDaFrota, salaDisponivel } from './frota.js';
 import { hm, fmtH, numeroBr, duracaoHm } from './format.js';
 import { repousoAntesDaVolta, historicoDoDia } from './noturno.js';
-import { isGroundMission, doesGroundGateFlight, disponibilidadeDoAluno, duracaoValida, duracaoFixaDaMissao, minutoConfirmado } from './rules.js';
-import { HORARIOS_INICIAIS, horariosDaMissao, periodoDoMinuto, minutoDaPreferencia, fimDasMissoesDoDia } from './horarios.js';
+import { isGroundMission, doesGroundGateFlight, disponibilidadeDoAluno, disponibilidadeAtual, duracaoValida, duracaoFixaDaMissao, minutoConfirmado } from './rules.js';
+import { categoriaDoTipo } from './categorias.js';
+import { fechamentosDoEstado, horarioAberto } from './fechamentos.js';
+import { HORARIOS_INICIAIS, horariosDaMissao, horariosDoTipo, periodoDoMinuto, minutoDaPreferencia, fimDasMissoesDoDia, INICIOS_DOS_TEMPOS, HORARIO_DO_SOLO } from './horarios.js';
 import { ajustarFilas, categoriaDoRodizio } from './rodizio.js';
 import { avisosDeAtraso, intervaloEfetivo, STATUS_EM_ANDAMENTO } from './status.js';
 import { livre, cabeNoSaldo, saldoAteARevisao, problemasDoInstrutor } from './viabilidade.js';
 import { combustivelDoVoo } from './combustivel.js';
 import { TEXTO_DO_PROBLEMA } from './conflitos.js';
+import { podeFazer } from './habilitacoes.js';
 import { normalizarHangar, posicaoNoHangar } from './hangar.js';
 import { normalizarLimites } from './limites.js';
-import { chaveDoVoo, statusDoVoo, umPorUnidade, pedidosDosVoos, ocupacaoDoVoo, compromissoDoVoo } from './voo.js';
+import { chaveDoVoo, statusDoVoo, umPorUnidade, pedidosDosVoos, pedidoDoAluno, ocupacaoDoVoo, compromissoDoVoo } from './voo.js';
 import { menorPrimeiro } from './util.js';
-import { pinoDoVoo } from './fixos.js';
+import { pinoDoVoo, pinosDoNoturnoQueValem, fixoPeloStatus } from './fixos.js';
+import { inativo } from './inativos.js';
 import { rejeicoesDosPedidos } from './rejeicoes.js';
 
 // A duração (em minutos) do voo de um pedido: o Ground tem 01h30; o voo, as horas do pedido
@@ -48,13 +52,16 @@ export function contextoDaEscala(state) {
   // Revisão de 50 horas: horas que o avião ainda pode voar hoje
   const horas = state.horas || {};
   // Escala aprovada: os voos fixos entram primeiro, no mesmo horário, avião e instrutor; o resto é encaixado
-  // em volta. O fixo que ficou impossível continua onde está, em conflito (com o motivo); o cancelado não ocupa nada
-  const fixos = state.fixos && typeof state.fixos === 'object' ? state.fixos : {};
+  // em volta. O fixo que ficou impossível continua onde está, em conflito (com o motivo); o cancelado não ocupa nada. O
+  // pino do Noturno só vale enquanto o pedido voa um Noturno (js/fixos.js)
+  const fixos = pinosDoNoturnoQueValem(state);
   return {
     frota, soParafuso, nomesSoParafuso: soParafuso.length ? soParafuso.join(' ou ') : 'marcada como “Só Parafuso”',
     instrutorPorId, serveAoVoo,
     // Os horários de decolagem de cada categoria vêm do cadastro; sem eles, os iniciais
     horarios: state.horarios || HORARIOS_INICIAIS,
+    // Os horários fechados da data (js/fechamentos.js): os do dia; sem eles, os das nove janelas de antes
+    fechamentos: fechamentosDoEstado(state),
     posicao: r => posicaoNoHangar(hangar, r),
     // Limites da Lei do Aeronauta: as horas de voo de antes de hoje e o fim de ontem de cada instrutor, e os
     // compromissos de hoje (voo em avião conta como voo; simulador e Ground, só na jornada)
@@ -92,7 +99,7 @@ export function contextoDaEscala(state) {
 }
 
 // Monta fila de pedidos de missão (suporta múltiplas missões por aluno no mesmo dia) e registra os Grounds de cada aluno
-export function filaDosPedidos(state, ctx) {
+export function filaDosPedidos(state, ctx, { antesDoF1h = false } = {}) {
   const act = [];
   state.stu.forEach((st, stuIdx) => {
     if (st.fly) {
@@ -124,15 +131,18 @@ export function filaDosPedidos(state, ctx) {
    * 2º: O pedido com o instrutor escolhido pelo operador para o dia antes dos outros: o que o operador definiu para o
    *     dia vale primeiro, e o pedido com um instrutor só é o que tem menos opções (os outros se encaixam em volta dele).
    * 3º: Maior prioridade (5 a 1).
-   * 4º: Com a mesma prioridade, o do aluno com “Priorizar com” (o par permanente do cadastro) antes: ele tem menos
-   *     instrutores possíveis. O “Priorizar com” vale todos os dias, então não passa na frente da prioridade.
-   * 5º: A ordem dos agendamentos: o pedido da agenda que foi registrado antes (o id do
-   *     pedido cresce com o registro) vem antes; o pedido posto à mão, sem a agenda, vem depois dos agendados.
-   * 6º: Ordem de cadastro do aluno e ordem da missão.
+   * 4º: A ordem dos agendamentos: o pedido da agenda que foi registrado antes (o id do
+   *     pedido cresce com o registro) vem antes; o pedido posto à mão, sem a agenda, vem depois dos agendados. Num
+   *     horário cheio, quem registrou antes fica com ele (N14).
+   * 5º: Ordem de cadastro do aluno e ordem da missão.
+   * O “Priorizar com” não é chave da fila e não ganha horário de ninguém (Pedro, 2026-11-26: ele é para escolher o INVA,
+   * não o horário): ele escolhe o instrutor entre os que ficaram com o horário (js/engine.js, parearNoHorario).
+   * antesDoF1h: a fila do motor de antes do F1h (com a mesma prioridade, o aluno com “Priorizar com” antes da ordem dos
+   * agendamentos), a que gravou test/fixtures/conferencia-do-motor.json
    */
   const ordemDoAgendamento = item => (Number.isInteger(item.ref.solicitacao) ? item.ref.solicitacao : Infinity);
   const semEscolha = item => (item.ref.insId && ctx.noCadastro.has(item.ref.insId) ? 0 : 1);
-  const semVoaCom = item => ((item.stu.voaCom || []).length ? 0 : 1);
+  const semVoaCom = item => (antesDoF1h && (item.stu.voaCom || []).length ? 0 : 1);
   act.sort((a, b) => {
     const gA = isGroundMission(a.ref.mis) ? 1 : 0;
     const gB = isGroundMission(b.ref.mis) ? 1 : 0;
@@ -179,7 +189,7 @@ function voltasDoNoturno(state, ctx, out) {
 // sala), o instrutor e o aluno no contexto. Devolve a linha, o alerta do conflito (ou null) e os avisos das regras que o
 // agendado pulou (comAviso: o agendado que as confere)
 function linhaDoFixo(state, ctx, item, pino, fKey = chaveDoVoo(item.stuId, item.mid)) {
-  const { used, stuBusy, stuLastPick, load, eu, compromissos, insAircraft, openGroundClasses, stuGroundStatus, voosNaCategoria, locaisNoHorario, frota, nomesSoParafuso, historico, limites, horarios, fimDoAluno, saldo } = ctx;
+  const { used, stuBusy, stuLastPick, load, eu, compromissos, insAircraft, openGroundClasses, stuGroundStatus, voosNaCategoria, locaisNoHorario, frota, nomesSoParafuso, historico, limites, horarios, fechamentos, fimDoAluno, saldo } = ctx;
   const { stu, stuId, mid, ref: d, stuOrder } = item;
   const rotulo = mid ? `${stu.nm} (${d.mis})` : stu.nm;
   const ground = isGroundMission(d.mis);
@@ -217,19 +227,23 @@ function linhaDoFixo(state, ctx, item, pino, fKey = chaveDoVoo(item.stuId, item.
       if (motivo === 'so-parafuso') marcar('so-parafuso', d.mis === 'Parafuso' ? `o Parafuso só voa no ${nomesSoParafuso}` : `o ${r} é só para o Parafuso`);
       if (motivo === 'so-vfr') marcar('so-vfr', `o ${r} não é homologado IFR, e o voo é IFR`);
       if (!cabeNoSaldo(eu[r] || 0, (b - a) / 60, saldo(r))) marcar('revisao', 'o avião passaria da revisão de 50 horas');
-    } else if (!daMesmaTurma && !free(used, GROUND_REG, a, b)) marcar('sala-ocupada', 'a sala de Ground já está ocupada neste horário');
+    } else {
+      // A Sala Ground indisponível na data (S4), como o avião indisponível
+      if (!salaDisponivel(state.av)) marcar('sala-indisponivel', 'a Sala Ground está indisponível nesta data');
+      if (!daMesmaTurma && !free(used, GROUND_REG, a, b)) marcar('sala-ocupada', 'a sala de Ground já está ocupada neste horário');
+    }
     if (!free(stuBusy, stuId, a, b)) marcar('aluno-ocupado', 'o aluno já tem outro voo neste horário');
-    if (!state.win[periodoDoMinuto(a)]) marcar('horario-fechado', 'o horário está fechado nesta data');
+    if (!horarioAberto(fechamentos, a, categoriaDoTipo(tipo))) marcar('horario-fechado', 'o horário está fechado nesta data');
     const permitidas = disponibilidadeDoAluno(d.jan);
     if (permitidas && !permitidas(a)) marcar('disponibilidade', 'o horário está fora da disponibilidade do aluno');
     if (!mudouDeTipo && b - a !== duracaoDoPedido(d, ground)) marcar('duracao', 'a duração do pedido mudou');
     if (pino.agendado && !STATUS_EM_ANDAMENTO.includes(status) && !mudouDeTipo) {
       comAviso = true;
       const avisar = (codigo, m) => avisos.push({ t: 'warn', s: rotulo, fKey, m, codigo, stuId });
-      // Os horários de decolagem da missão (o Ground, nas janelas do dia; o Noturno, às 17:30; o Voo Solo, às 06:30)
-      const lista = ground ? DAY.map(w => T[w]) : horariosDaMissao(horarios, d.mis, d.eq);
+      // Os horários de decolagem da missão (o Ground, os da Sala Ground; o Noturno, às 17:30; o Voo Solo, às 06:30)
+      const lista = ground ? horariosDoTipo(horarios, GROUND_EQ_TYPE) : horariosDaMissao(horarios, d.mis, d.eq);
       if (!lista.includes(a)) {
-        avisar('fora-dos-horarios', ground ? `Agendado às ${hm(a)}, fora dos horários das aulas de Ground.`
+        avisar('fora-dos-horarios', ground ? `Agendado às ${hm(a)}, fora dos horários de decolagem da Sala Ground.`
           : d.mis === 'Noturno' || d.mis === 'Voo Solo' ? `Agendado às ${hm(a)}: o ${d.mis} sai às ${hm(lista[0])}.`
             : `Agendado às ${hm(a)}, fora dos horários de decolagem do ${d.eq}.`);
       }
@@ -283,7 +297,7 @@ function linhaDoFixo(state, ctx, item, pino, fKey = chaveDoVoo(item.stuId, item.
       // A turma fixa fica aberta: um aluno novo do mesmo Ground pode entrar nela, se ela não está em conflito (sem o
       // instrutor, por exemplo)
       const turmas = (openGroundClasses[d.mis] = openGroundClasses[d.mis] || []);
-      if (x && !daMesmaTurma && !conflito.length && !turmas.some(c => c.classKey === classKey)) turmas.push({ classKey, mis: d.mis, w: T.indexOf(a), a, b, x, count: 0 });
+      if (x && !daMesmaTurma && !conflito.length && !turmas.some(c => c.classKey === classKey)) turmas.push({ classKey, mis: d.mis, w: INICIOS_DOS_TEMPOS.indexOf(a), a, b, x, count: 0 });
       const turma = turmas.find(c => c.classKey === classKey);
       if (turma) turma.count++;
       const gRec = (stuGroundStatus[stuId] || []).find(g => g.mis === d.mis && g.allocatedEnd === null);
@@ -294,7 +308,7 @@ function linhaDoFixo(state, ctx, item, pino, fKey = chaveDoVoo(item.stuId, item.
   const baseTag = a === pf[0] ? 'Pref. 1' : a === pf[1] ? 'Pref. 2' : 'Próximo livre';
   const linha = {
     fKey, classKey, isGround: ground,
-    w: ground && T.indexOf(a) >= 0 ? T.indexOf(a) : periodoDoMinuto(a), a, b,
+    w: ground && INICIOS_DOS_TEMPOS.indexOf(a) >= 0 ? INICIOS_DOS_TEMPOS.indexOf(a) : periodoDoMinuto(a), a, b,
     o: stuOrder, stuId, mid, insId, eqType: tipo,
     s: stu.nm, mis: d.mis, h: ground ? GROUND_DURATION_H : (b - a) / 60, ss: '1/1',
     ...(d.etapa ? { etapa: d.etapa } : {}),
@@ -307,8 +321,25 @@ function linhaDoFixo(state, ctx, item, pino, fKey = chaveDoVoo(item.stuId, item.
     ...(pino.agendado ? { agendado: true } : {}),
     ...(conflito.length ? { conflito, conflitoCodigos } : {})
   };
-  const alerta = conflito.length ? { t: 'conf', s: rotulo, fKey, m: `${pino.agendado ? 'Conflito no voo agendado' : 'Conflito na escala aprovada'}: ${conflito.join('; ')}.` } : null;
+  // O conflito do Noturno fixo (o pino do Noturno: js/fixos.js) diz que é o Noturno: ele não muda de avião sozinho
+  const deQue = pino.noturno ? 'Conflito no Noturno' : pino.agendado ? 'Conflito no voo agendado' : 'Conflito na escala aprovada';
+  const alerta = conflito.length ? { t: 'conf', s: rotulo, fKey, m: `${deQue}: ${conflito.join('; ')}.` } : null;
   return { linha, alerta, avisos, comAviso };
+}
+
+// O contexto da escala já montada (out): o que ela gasta, com cada linha no lugar dela, conferida como um fixo (a volta do
+// noturno e os fixos com o pino deles; as outras com o lugar delas, e, como na fila do motor, sem o status: o status só
+// muda a ocupação de um voo fixo). O motor encaixa nele, depois da compactação, os pedidos da lista de espera
+// (js/engine.js). opcoes: as da fila (filaDosPedidos)
+export function contextoDaEscalaMontada(state, out, opcoes = {}) {
+  const fixos = pinosDoNoturnoQueValem(state);
+  const semPino = new Set(out.filter(o => !o.trecho && !Object.hasOwn(fixos, o.fKey)).map(o => o.fKey));
+  const estado = { ...state, fStatus: Object.fromEntries(Object.entries(state.fStatus || {}).filter(([fKey]) => !semPino.has(fKey))) };
+  const ctx = contextoDaEscala(estado);
+  const act = filaDosPedidos(estado, ctx, opcoes);
+  const pinos = Object.fromEntries(out.filter(o => !o.trecho).map(o => [o.fKey, semPino.has(o.fKey) ? pinoDoVoo(o) : fixos[o.fKey]]));
+  conferirFixos(estado, ctx, act, [], [], pinos);
+  return ctx;
 }
 
 // Os voos fixos do dia, na ordem do motor: a volta do noturno de ontem; depois os fixos (pelo status, pela escala
@@ -356,6 +387,153 @@ export function conferirFixos(state, ctx, act, out, al, pinos = ctx.fixos) {
   al.push(...avisosDosAgendados);
 }
 
+// O horário que o pedido quer: o minuto exato da disponibilidade, senão a 1ª preferência; sem nenhum, null
+function horarioPedido(d) {
+  const exato = disponibilidadeAtual(d.jan);
+  if (typeof exato === 'string' && exato.startsWith('h')) return Number(exato.slice(1));
+  const p1 = minutoDaPreferencia(d.p1);
+  return p1 >= 0 ? p1 : null;
+}
+
+// Por que o outro pedido ficou com o horário: a chave da fila em que ele vem antes (o Ground antes dos voos; a prioridade;
+// com a mesma, a ordem de registro na agenda e o cadastro: filaDosPedidos). Quando ele não vem antes na fila (o aluno não
+// ficou com o horário por outro motivo: o avião, a sala de Ground), null. Sem o número da prioridade (a tela a mostra ao
+// contrário, 1 a mais alta, e com ela desligada todos têm a mesma: js/state.js, estadoDaEscala) e, com a mesma, sem falar
+// dela
+function porQueFicou(outro, d, ordemDoOutro, ordem) {
+  const ground = p => isGroundMission(p.mis);
+  if (ground(outro) !== ground(d)) return ground(outro) ? 'o Ground vem antes dos voos' : null;
+  const pr = outro.pr ?? 3;
+  const agenda = p => (Number.isInteger(p.solicitacao) ? p.solicitacao : Infinity);
+  if (pr !== (d.pr ?? 3)) return pr > (d.pr ?? 3) ? 'prioridade maior' : null;
+  if (agenda(outro) !== agenda(d)) return agenda(outro) < agenda(d) ? 'pedido registrado antes' : null;
+  return ordemDoOutro < ordem ? 'antes no cadastro' : null;
+}
+
+// Os instrutores do “Priorizar com” do aluno que estão no cadastro, cada um com o que o impede de dar o voo do pedido (mis,
+// tipo, exige) em qualquer horário, na ordem do motivo do motor (js/engine.js, motivoSemPar): 'fora nesta data', 'sem a
+// habilitação da missão', 'em “Não escalar com”'; '' quando pode
+function paresDoAluno(state, s, { mis, tipo, exige }) {
+  return (s.voaCom || []).map(id => state.ins.find(x => x.id === id)).filter(Boolean).map(x => ({
+    x, nota: !x.on ? 'fora nesta data' : !podeFazer(x, mis, tipo, { curso: s.curso, exige }) ? 'sem a habilitação da missão' : (s.bl || []).includes(x.id) ? 'em “Não escalar com”' : ''
+  }));
+}
+
+// Sem nenhum do “Priorizar com” que possa dar o voo: o motivo, como o do motor (todos fora; senão, sem a habilitação; senão,
+// em “Não escalar com”)
+const motivoSemNenhum = lista => (lista.every(p => p.nota === 'fora nesta data') ? 'fora nesta data'
+  : lista.every(p => p.nota !== 'em “Não escalar com”') ? 'sem a habilitação da missão' : 'em “Não escalar com”');
+
+// O INVA (insId) fora do “Priorizar com” do aluno quando um do “Priorizar com” poderia dar o voo: ir contra a limitação do
+// aluno (N9, F1h; o agendamento, o editor do voo e a lista do instrutor na Escala avisam). Sem nenhum que possa, o voo com
+// outro INVA não vai contra ela
+export function foraDoPriorizarCom(state, s, pedido, insId) {
+  const pares = paresDoAluno(state, s, pedido);
+  return pares.some(p => !p.nota) && !pares.some(p => p.x.id === insId);
+}
+
+// O começo do aviso do voo posto à mão (ou com o INVA escolhido na Demanda) fora do “Priorizar com” quando um dele poderia
+// (o editor do voo pede a confirmação dele: js/edicao-do-voo.js)
+export const INICIO_DO_FORA_DO_PRIORIZAR = 'Fora do “Priorizar com” de ';
+
+// O começo do aviso de sempre do voo que ficou sem o INVA do “Priorizar com”, com o porquê (o resto: “: o voo ficou com …”)
+const inicioDoSemPar = porque => `Sem o instrutor de “Priorizar com” (${porque})`;
+
+// Os avisos do “Priorizar com” da escala montada (N9, F1h; o código voa-com, um por voo, com a chave dele), depois da
+// divisão das horas e da compactação, com os horários do fim:
+// - o voo posto à mão (o pino agendado, ou o do INVA trocado na Escala) ou com o INVA escolhido para o dia na Demanda fora
+//   do “Priorizar com”, quando um do “Priorizar com” poderia dar o voo: o aviso de que está fora; sem nenhum que possa, o
+//   aviso de sempre, com o motivo como o do motor (o voo com outro INVA não vai contra a limitação);
+// - o voo sem pino que ficou sem o instrutor do “Priorizar com” (semPar: a chave do voo → os nomes e o motivo, da busca do
+//   motor, ou o começo do aviso, de conferirEscala): o aviso de sempre, com a disputa dentro dele quando há uma;
+// - o voo sem pino que ficou com um instrutor do “Priorizar com” fora do horário pedido: a disputa, quando há uma (por
+//   qualquer instrutor do “Priorizar com” que pudesse dar o voo);
+// - o Noturno fixo só pelo pino do Noturno (js/fixos.js: a gravação o põe onde o motor o deixou), fora do “Priorizar com”:
+//   como o voo posto à mão, com o aviso de sempre quando nenhum do “Priorizar com” pode dar o voo, e o de que está fora
+//   (o Noturno fica fixo com o INVA de agora) quando um pode.
+// A disputa: no horário pedido (horarioPedido), o instrutor do “Priorizar com” está com outro aluno que também o prioriza,
+// com um voo fixo, com um pedido que tem o instrutor escolhido para o dia, ou, quando o aluno voa nesse horário, com outro
+// voo do mesmo minuto que não o prioriza (“; a troca não serve a <aluno>”: a troca de INVAs não serviu); sem ninguém assim,
+// não há frase. O fixo pela aprovação ou pelo status não avisa, nem o voo posto à mão cancelado (o voo sem pino cancelado
+// avisa, como antes)
+export function avisosDoPriorizarCom(state, out, { semPar = new Map() } = {}) {
+  const alunos = new Map(state.stu.map((s, i) => [s.id, { s, i }]));
+  const instrutores = new Map(state.ins.map(x => [x.id, x]));
+  // O pino do Noturno só vale enquanto o pedido voa um Noturno (js/fixos.js)
+  const fixos = pinosDoNoturnoQueValem(state);
+  const pedido = o => { const a = alunos.get(o.stuId); return a && !o.trecho ? pedidoDoAluno(a.s, o.mid || 0) : null; };
+  const ativo = o => statusDoVoo(o, state.fStatus) !== 'Cancelado';
+  const fimDe = o => (o.trecho ? o.livreAs || o.b : o.b);
+  // Quem está com o instrutor x no horário pedido (a, b), além do aluno: o primeiro pelo horário e pela ordem do cadastro.
+  // Um voo fixo, um com o instrutor escolhido, um de outro aluno que também prioriza x, ou um voo que sai no mesmo minuto
+  // que o do aluno, no horário pedido (a troca de INVAs do pareamento não serviu a ele: js/engine.js, parearNoHorario)
+  const quemEsta = (o, x, a, b) => out.filter(v => v !== o && v.stuId !== o.stuId && v.insId === x && ativo(v) && v.a < b && a < fimDe(v) && !(o.isGround && v.classKey === o.classKey))
+    .filter(v => {
+      if (v.fixo || v.insEscolhido) return true;
+      const outro = alunos.get(v.stuId);
+      return Boolean(outro && ((outro.s.voaCom || []).includes(x) || (!v.isGround && !v.trecho && !o.isGround && v.a === a && o.a === a)));
+    })
+    .sort((p, q) => p.a - q.a || p.o - q.o || (p.mid || 0) - (q.mid || 0))[0] || null;
+  const disputa = (o, d, s, lista) => {
+    const t = horarioPedido(d);
+    if (t === null || (lista.includes(o.insId) && o.a === t)) return null;
+    for (const x of lista) {
+      const v = quemEsta(o, x, t, t + (o.b - o.a));
+      if (!v) continue;
+      const outro = alunos.get(v.stuId);
+      const ambos = Boolean(outro && (outro.s.voaCom || []).includes(x));
+      const dOutro = pedido(v);
+      const porQue = v.fixo || !dOutro ? 'voo fixo' : v.insEscolhido ? 'instrutor escolhido para o dia' : porQueFicou(dOutro, d, outro.i, alunos.get(o.stuId).i);
+      const quem = outro ? outro.s.nm : v.s;
+      // Quando ele voa: o horário, e o instrutor quando é outro do “Priorizar com”
+      const quando = o.a !== t ? `; ${s.nm} voa às ${hm(o.a)}${lista.includes(o.insId) && o.insId !== x ? ` com ${o.ins}` : ''}` : '';
+      // O outro, no mesmo minuto, não prioriza x e não tem pino nem escolha: a troca de INVAs não serve a ele
+      const troca = !ambos && !v.fixo && !v.insEscolhido ? `; a troca não serve a ${quem}` : '';
+      return `${s.nm} ${ambos ? `e ${quem} priorizam` : 'prioriza'} ${instrutores.get(x).nm} às ${hm(t)}: ficou com ${quem}${porQue ? ` (${porQue})` : ''}${quando}${troca}.`;
+    }
+    return null;
+  };
+  const avisos = [];
+  for (const o of out) {
+    const d = pedido(o);
+    if (!d) continue;
+    const { s } = alunos.get(o.stuId);
+    const lista = paresDoAluno(state, s, { mis: d.mis, tipo: o.isGround ? GROUND_EQ_TYPE : d.eq, exige: d.exige });
+    if (!lista.length) continue;
+    const pares = lista.map(p => p.x.id);
+    // Só os instrutores do “Priorizar com” que poderiam dar o voo (vêm, têm a habilitação e não estão em “Não escalar com”)
+    const capazes = lista.filter(p => !p.nota).map(p => p.x.id);
+    const rotulo = o.mid ? `${s.nm} (${d.mis})` : s.nm;
+    // Na ordem dos campos da escala gravada (js/escala-gravada.js)
+    const aviso = m => avisos.push({ t: 'warn', s: rotulo, fKey: o.fKey, m, codigo: 'voa-com', stuId: o.stuId, insId: o.insId });
+    const pino = Object.hasOwn(fixos, o.fKey) ? fixos[o.fKey] : null;
+    const escolhidoNaDemanda = !pino && Boolean(d.insId && instrutores.has(d.insId));
+    // O Noturno fixo só pelo pino do Noturno (não pela aprovação, pelo status ou pelo operador na Escala)
+    const soPeloNoturno = Boolean(pino && pino.noturno && !pino.agendado && !pino.escolhido && !state.aprovacao && !fixoPeloStatus(o.fKey, state.fStatus));
+    if (pino || escolhidoNaDemanda) {
+      if (!(escolhidoNaDemanda || pino.agendado || pino.escolhido || soPeloNoturno) || !ativo(o) || pares.includes(o.insId)) continue;
+      if (!capazes.length) aviso(`${inicioDoSemPar(`${lista.map(p => p.x.nm).join(', ')}: ${motivoSemNenhum(lista)}`)}: o voo ficou com ${o.ins}.`);
+      else {
+        const nomes = pares.map(id => instrutores.get(id).nm).join(', ');
+        const porque = escolhidoNaDemanda ? `${o.ins} foi escolhido para o dia na Demanda`
+          : soPeloNoturno ? `o Noturno está fixo com ${o.ins} (a volta vai com ele)` : `o voo foi posto à mão com ${o.ins}`;
+        aviso(`${INICIO_DO_FORA_DO_PRIORIZAR}${s.nm} (${nomes}): ${porque}.`);
+      }
+      continue;
+    }
+    if (pares.includes(o.insId)) {
+      const frase = disputa(o, d, s, [o.insId, ...capazes.filter(id => id !== o.insId)]);
+      if (frase) aviso(frase);
+      continue;
+    }
+    const sem = semPar.get(o.fKey);
+    if (!sem) continue;
+    const frase = disputa(o, d, s, capazes);
+    aviso(`${sem.inicio || inicioDoSemPar(`${sem.nomes}: ${sem.motivo}`)}: o voo ficou com ${o.ins}.${frase ? ` ${frase}` : ''}`);
+  }
+  return avisos;
+}
+
 // Avisos dos limites da lei: com a escala do dia, o instrutor chega a 90% das horas de voo do mês, do semestre ou do ano
 function avisosDeLimite(out, state, limites, historico) {
   const horasHoje = {};
@@ -378,10 +556,29 @@ function avisosDeLimite(out, state, limites, historico) {
   return avisos;
 }
 
+// A volta do noturno de ontem fica no avião e com o INVA do Noturno (o avião está em BH): o que não está bem com eles hoje
+// é um aviso, nunca outro avião. Os motivos: o avião saiu da frota, está inativo, indisponível (em manutenção) ou passaria
+// da revisão de 50 horas; o INVA saiu do cadastro, está inativo ou não está disponível nesta data
+function motivosDaVolta(state, ctx, o) {
+  const motivos = [];
+  const recurso = recursoDaFrota(ctx.frota, o.r);
+  if (!recurso) motivos.push('o avião saiu da frota');
+  else if (inativo(recurso)) motivos.push('o avião está inativo');
+  else if ((state.av || {})[o.r] === false) motivos.push('o avião está indisponível hoje');
+  if (recurso && !cabeNoSaldo(0, o.h, ctx.saldo(o.r))) motivos.push('o avião passaria da revisão de 50 horas');
+  const x = ctx.instrutorPorId.get(o.insId);
+  if (!x) motivos.push(`o INVA (${o.ins}) saiu do cadastro`);
+  else if (inativo(x)) motivos.push(`o INVA (${x.nm}) está inativo`);
+  else if (!x.on) motivos.push(`o INVA (${x.nm}) não está disponível nesta data`);
+  return motivos;
+}
+
 // O que o motor confere depois de montar a escala, sem mover nenhum voo: o instrutor escolhido que saiu do cadastro, o 7º
-// voo local confirmado, os limites da lei, o repouso antes da volta do noturno, a revisão de 50 horas, o tamanho e a
-// etiqueta das turmas, a ordem das linhas e os atrasos. Muda out e al; devolve a revisão de cada avião
-export function concluirEscala(state, ctx, out, al) {
+// voo local confirmado, os limites da lei, a volta do noturno num avião ou com um INVA que não está bem hoje, o repouso
+// antes da volta do noturno, a revisão de 50 horas, o tamanho e a etiqueta das turmas, a ordem das linhas e os atrasos.
+// Muda out e al; devolve a revisão de cada avião. opcoes.antesDoF1h: sem o aviso da volta do noturno (o motor que gravou
+// test/fixtures/conferencia-do-motor.json não o tinha)
+export function concluirEscala(state, ctx, out, al, { antesDoF1h = false } = {}) {
   const { limites, historico, horas } = ctx;
   // O voo do pedido cujo instrutor escolhido saiu do cadastro: o aviso diz quem ficou com ele (o voo fixo fica com o
   // conflito dele)
@@ -412,6 +609,15 @@ export function concluirEscala(state, ctx, out, al) {
     });
   }
   al.push(...avisosDeLimite(out, state, limites, historico));
+  // A volta do noturno de ontem num avião ou com um INVA que não está bem hoje (sem a volta cancelada): um aviso por volta
+  for (const o of antesDoF1h ? [] : out.filter(v => v.trecho === 'volta' && statusDoVoo(v, state.fStatus) !== 'Cancelado')) {
+    const motivos = motivosDaVolta(state, ctx, o);
+    if (!motivos.length) continue;
+    al.push({
+      t: 'warn', s: o.s, codigo: 'volta-do-noturno', stuId: o.stuId, insId: o.insId,
+      m: `A volta do Noturno de ${o.s} fica no ${o.r} (o avião está em BH): ${motivos.join('; ')}.`
+    });
+  }
   // O repouso antes da volta do noturno (a lei pede 12 h; o noturno termina às 21:30 e a volta decola às 07:30): um aviso
   // por instrutor, quando a volta não foi cancelada
   for (const o of out.filter(v => v.trecho === 'volta' && statusDoVoo(v, state.fStatus) !== 'Cancelado')) {
@@ -434,7 +640,7 @@ export function concluirEscala(state, ctx, out, al) {
     const voadas = Math.round(meus.reduce((total, o) => total + o.h, 0) * 10) / 10;
     const fim = Math.round((horas[r] + voadas) * 10) / 10;
     const para = state.av[r] !== false && REVISAO_H - fim < MENOR_VOO_H;
-    const paraAs = !para ? null : meus.length ? Math.max(...meus.map(o => o.b)) : T[0];
+    const paraAs = !para ? null : meus.length ? Math.max(...meus.map(o => o.b)) : HORARIO_DO_SOLO;
     revisao[r] = { inicio: horas[r], voadas, fim, paraAs };
     if (para) {
       al.push({
@@ -490,10 +696,10 @@ function comOsPesosDe(velha, nova) {
 // pesos e o combustível do cadastro), e o pedido sem lugar continua com a recusa de antes (js/rejeicoes.js: antes é o
 // estado que fez a escala, para ligar cada recusa ao pedido dela). O pedido que deixou de voar sai (com a linha e a
 // recusa); a recusa do pedido que ganhou um pino também. Refeitos: as marcas de conflito e os alertas deles, os avisos
-// (dos agendados, do peso, do 7º local confirmado, da lei, da revisão e dos atrasos; o do “Priorizar com” fica com a
-// linha que ficou), a revisão, o total de missões pedidas e o tamanho das turmas. Um pedido que voa sem pino, sem linha e
-// sem recusa (um pedido que entrou no dia) precisa do motor: devolve null. recusas: as recusas que voltam (a reversão de
-// uma alteração que tirou a recusa de um pedido: [chave do voo, alerta]), no lugar da linha dele
+// (dos agendados, do peso, do 7º local confirmado, da lei, da revisão, dos atrasos e do “Priorizar com”, este com o motivo
+// de antes do voo sem o instrutor dele), a revisão, o total de missões pedidas e o tamanho das turmas. Um pedido que voa
+// sem pino, sem linha e sem recusa (um pedido que entrou no dia) precisa do motor: devolve null. recusas: as recusas que
+// voltam (a reversão de uma alteração que tirou a recusa de um pedido: [chave do voo, alerta]), no lugar da linha dele
 export function conferirEscala(estado, resultado, { antes = estado, recusas: deVolta = [] } = {}) {
   const ctx = contextoDaEscala(estado);
   const act = filaDosPedidos(estado, ctx);
@@ -535,9 +741,17 @@ export function conferirEscala(estado, resultado, { antes = estado, recusas: deV
   }
   ctx.ocupacoesDeAtraso.slice(atrasos).forEach(ocupar => ocupar());
   const soltos = new Set(act.map(chave).filter(fKey => !Object.hasOwn(ctx.fixos, fKey) && linhas.has(fKey)));
-  // O voo sem o instrutor do “Priorizar com” continua sem ele enquanto a linha dele fica com o mesmo instrutor
-  const comOMesmo = new Set(out.filter(o => soltos.has(o.fKey)).map(o => `${o.stuId}:${o.insId}`));
-  al.push(...(resultado.al || []).filter(a => a.codigo === 'voa-com' && comOMesmo.has(`${a.stuId}:${a.insId}`)));
+  // Os avisos do “Priorizar com”, refeitos com os horários de agora (F1h): as disputas e os voos postos à mão. O motivo do
+  // voo sem pino que ficou sem o instrutor do “Priorizar com” vem da busca do motor: fica o do aviso de antes do voo (pela
+  // chave; o aviso gravado antes do F1h não a tem: pelo aluno e pelo instrutor), e a disputa dentro dele é refeita
+  const velhos = (resultado.al || []).filter(a => a.codigo === 'voa-com' && typeof a.m === 'string' && a.m.startsWith('Sem o instrutor de “Priorizar com” ('));
+  const semPar = new Map();
+  for (const o of out.filter(v => soltos.has(v.fKey))) {
+    const fim = `: o voo ficou com ${o.ins}.`;
+    const velho = velhos.find(a => (a.fKey ? a.fKey === o.fKey : a.stuId === o.stuId) && a.insId === o.insId && a.m.includes(fim));
+    if (velho) semPar.set(o.fKey, { inicio: velho.m.slice(0, velho.m.indexOf(fim)) });
+  }
+  al.push(...avisosDoPriorizarCom(estado, out, { semPar }));
   const revisao = concluirEscala(estado, ctx, out, al);
   return { out, al, tot: act.length, revisao, ...(resultado.data !== undefined ? { data: resultado.data } : {}) };
 }

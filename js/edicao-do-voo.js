@@ -3,7 +3,7 @@
 // ou tirar nenhum outro voo. Fora dela, o motor refaz a escala inteira (depois da pergunta, js/eventos/edicao-do-voo.js).
 // Funções puras: recebem o estado e a escala e não leem a tela
 import { runAllocationEngine } from './engine.js';
-import { conferirEscala } from './conferencia.js';
+import { conferirEscala, INICIO_DO_FORA_DO_PRIORIZAR } from './conferencia.js';
 import { GROUND_EQ_TYPE, GROUND_REG, MIS, MINUTOS_DO_DIA } from './config.js';
 import { CAMPOS_DO_PEDIDO } from './dias.js';
 import { GRUPO_DO_CONFLITO } from './conflitos.js';
@@ -255,7 +255,9 @@ export function aplicarEdicao(estado, resultado, voo, valores, { aprovada = Bool
       }
       normalizeMissionFields(p);
     };
-    const pino = { a: valores.a, b, r: voo.ground ? GROUND_REG : valores.r, insId, ...(voo.ground ? { classKey: principal.classKey } : {}), agendado: true };
+    // O Noturno continua com o pino do Noturno (js/fixos.js): no lugar novo, e a volta do dia seguinte vai com ele
+    const noturno = !voo.ground && valores.missao.mis === 'Noturno';
+    const pino = { a: valores.a, b, r: voo.ground ? GROUND_REG : valores.r, insId, ...(voo.ground ? { classKey: principal.classKey } : {}), agendado: true, ...(noturno ? { noturno: true } : {}) };
     if (m.aluno) {
       // O voo passa para outro aluno: a chave muda
       const novoAluno = estado.stu.find(s => s.id === valores.stuId);
@@ -306,13 +308,27 @@ export function aplicarEdicao(estado, resultado, voo, valores, { aprovada = Bool
 const CAMPO_DO_GRUPO = { instrutor: 'voo-instrutor', aviao: 'voo-recurso', horario: 'voo-horario', pedido: 'voo-missao' };
 const CAMPO_DO_AVISO = { 'fora-dos-horarios': 'voo-horario', 'depois-das-17h30': 'voo-duracao', 'limite-de-locais': 'voo-horario', 'antes-do-ground': 'voo-horario', 'sem-peso': 'voo-instrutor' };
 
+// A volta do dia seguinte (diaSeguinte: AAAA-MM-DD) que acompanha o Noturno levado para outro avião ou outro INVA no
+// editor: "A volta de 12/11 passa para o PR-AAA, com Instrutor 02." (o Noturno cancelado não tem volta). O aviso, ou null
+function voltaQueAcompanha(estado, voo, valores, diaSeguinte) {
+  if (!diaSeguinte || voo.volta || voo.ground || voo.principal.mis !== 'Noturno' || !valores.missao || valores.missao.mis !== 'Noturno') return null;
+  if (valores.status[voo.principal.fKey] === 'Cancelado') return null;
+  const insId = valores.insId || voo.principal.insId;
+  const aviao = valores.r !== voo.valores.r, inva = insId !== voo.valores.insId;
+  if (!aviao && !inva) return null;
+  const nome = (estado.ins.find(x => x.id === insId) || {}).nm || `Instrutor ${insId}`;
+  const para = aviao ? `o ${valores.r}${inva ? `, com ${nome}` : ''}` : nome;
+  return { codigo: 'volta-do-noturno', texto: `A volta de ${diaSeguinte.slice(8, 10)}/${diaSeguinte.slice(5, 7)} passa para ${para}.`, campo: aviao ? 'voo-recurso' : 'voo-instrutor', conflito: false };
+}
+
 // Os avisos da alteração (recalculados a cada campo), na escala da tela com ela aplicada, conferida sem o motor
 // (js/conferencia.js; fora da escala aprovada, sem simular o que o motor mudaria nos outros voos, d46): os conflitos do voo
 // (conflito: pedem "Salvar mesmo assim" e ficam na Escala), as regras que o voo posto à mão pula, o peso que falta; na
-// escala aprovada, os outros voos que ficam em conflito; a disponibilidade do aluno que sai do pedido; o voo em andamento.
+// escala aprovada, os outros voos que ficam em conflito; o INVA fora do “Priorizar com” do aluno; a disponibilidade do aluno
+// que sai do pedido; o voo em andamento; a volta do Noturno que vai para o avião ou o INVA novo (diaSeguinte: a data dela).
 // A missão para escolher e o voo que terminaria depois da meia-noite vêm sozinhos e não deixam salvar (bloqueia).
 // [{ codigo, texto, campo, conflito, bloqueia }]
-export function avisosDaEdicao(estado, resultado, voo, valores, { aprovada = Boolean(estado.aprovacao), programa = null } = {}) {
+export function avisosDaEdicao(estado, resultado, voo, valores, { aprovada = Boolean(estado.aprovacao), programa = null, diaSeguinte = null } = {}) {
   const avisos = [];
   if (!valores.missao) return [{ codigo: 'sem-missao', texto: 'Escolha a missão do aluno.', campo: 'voo-missao', conflito: false, bloqueia: true }];
   const bloqueio = bloqueioDaEdicao(voo, valores);
@@ -338,6 +354,14 @@ export function avisosDaEdicao(estado, resultado, voo, valores, { aprovada = Boo
     for (const a of sim.al.filter(v => v.t === 'warn' && meus.has(v.fKey) && Object.hasOwn(CAMPO_DO_AVISO, v.codigo))) {
       if (!avisos.some(v => v.texto === a.m)) avisos.push({ codigo: a.codigo, texto: a.m, campo: CAMPO_DO_AVISO[a.codigo], conflito: false });
     }
+    // O INVA fora do “Priorizar com” do aluno (N9, F1h): o voo posto à mão avisa na Escala (voa-com), e o editor pede a
+    // confirmação quando o operador troca o INVA por um fora dele e um do “Priorizar com” poderia dar o voo (mudar só o
+    // horário ou o recurso não escolhe o INVA; sem nenhum que possa, o aviso é o motivo de sempre, sem a confirmação)
+    if (valores.insId !== voo.valores.insId) {
+      for (const a of sim.al.filter(v => v.codigo === 'voa-com' && meus.has(v.fKey) && v.m.startsWith(INICIO_DO_FORA_DO_PRIORIZAR))) {
+        if (!avisos.some(v => v.texto === a.m)) avisos.push({ codigo: 'fora-do-priorizar', texto: a.m, campo: 'voo-instrutor', conflito: false });
+      }
+    }
     if (aprovada) {
       for (const o of sim.out.filter(v => !meus.has(v.fKey) && v.conflito && !(antes.get(v.fKey) || {}).conflito)) {
         avisos.push({ codigo: 'conflito-em-outro-voo', texto: `O voo de ${o.mid ? `${o.s} (${o.mis})` : o.s} fica em conflito: ${o.conflito.join('; ')}.`, campo: 'voo-horario', conflito: true });
@@ -349,5 +373,7 @@ export function avisosDaEdicao(estado, resultado, voo, valores, { aprovada = Boo
   if (emAndamento.length && mudancasDoVoo(voo, valores).lugar) {
     avisos.push({ codigo: 'em-andamento', texto: `O voo está ${valores.status[emAndamento[0].fKey]}: as horas, a revisão de 50 horas e o Rodízio acompanham a mudança.`, campo: 'voo-horario', conflito: false });
   }
+  const volta = voltaQueAcompanha(estado, voo, valores, diaSeguinte);
+  if (volta) avisos.push(volta);
   return avisos;
 }

@@ -15,7 +15,7 @@ import { aluno, cenario, instrutor } from '../helpers/montar.js';
 const ATAQUE = 'x"><img/src/onerror=window.__xss=1>';
 
 // O pedido de antes de um agendamento, com todos os campos do pedido (CAMPOS_DO_PEDIDO)
-const PEDIDO_DE_ANTES = { fly: true, mis: 'Navegação', eq: 'C172', p1: 500, p2: -1, nb: 2, ss: 1, pr: 3, jan: 'manha', etapa: 'PP-07', solicitacao: 7, insId: 2, cursoDaEtapa: 'PP', limiteConfirmado: true };
+const PEDIDO_DE_ANTES = { fly: true, mis: 'Navegação', eq: 'C172', p1: 500, p2: -1, nb: 2, ss: 1, pr: 3, jan: 'h390', etapa: 'PP-07', solicitacao: 7, insId: 2, cursoDaEtapa: 'PP', limiteConfirmado: true };
 // Uma reversão válida de cada tipo, com todos os campos que o app grava. Do voo agendado na Escala, duas: o criado numa
 // missão extra (sem o pedido de antes) e o que mudou de lugar (o pedido, o voo fixo e a disponibilidade do instrutor de
 // antes, e o pedido como o agendamento o deixou)
@@ -24,6 +24,10 @@ const VALIDAS = [
   { kind: 'setAv', reg: 'PR-VOB', val: true, label: '↶ Reverter' },
   { kind: 'setAtributo', reg: 'PR-CPL', atributo: 'soVfr', val: false, label: '↶ Reverter' },
   { kind: 'setInsOn', insId: 3, val: true, label: '↶ Reverter' },
+  // O "Ativo" do cadastro (F2): o aluno, o instrutor e o recurso, e o inativo a restaurar
+  { kind: 'setInativo', de: 'aluno', id: 1000, inativo: false, label: '↶ Reverter' },
+  { kind: 'setInativo', de: 'instrutor', id: 2, inativo: true, label: '↶ Reverter' },
+  { kind: 'setInativo', de: 'recurso', id: 'PR-VOB', inativo: true, label: '↶ Reverter' },
   { kind: 'restaurarFixos', fixos: { '1000_0_1': { a: 390, b: 450, r: 'PR-VOB', insId: 1, classKey: 'g', escolhido: true } }, pedidos: [{ stuId: 1000, mid: 0, insId: 2 }], label: '↶ Reverter' },
   { kind: 'restaurarEscolha', pedidos: [{ stuId: 1000, mid: 0, insId: 0 }], fixos: { '1000_0_1': { a: 390, b: 450, r: 'PR-VOB', insId: 1 } }, soltar: ['1001_2_1'], label: '↶ Reverter' },
   { kind: 'restaurarHorarios', cat: 'PA-34', lista: [390, 450], pedidos: [{ stuId: 1000, mid: 2, p1: 450, p2: -1, jan: 'h450' }], label: '↶ Reverter' },
@@ -99,6 +103,17 @@ describe('Reversões do histórico', () => {
     for (const atributo of [['soVfr'], JSON.parse('{"toString":null}'), 'toString', 'hasOwnProperty']) {
       assert.equal(validarReversao({ ...rev, atributo }, FROTA_INICIAL), null, JSON.stringify(atributo));
     }
+  });
+
+  // setInativo: de é um dos três cadastros; o id do aluno e do instrutor é um número, o do recurso, uma matrícula; o
+  // inativo, sim ou não
+  it('setInativo: o cadastro, o id do tipo dele e o inativo; fora disso, não vale', () => {
+    const base = { kind: 'setInativo', de: 'aluno', id: 1000, inativo: true, label: '↶ Reverter' };
+    for (const ruim of [
+      { de: 'cadastro' }, { de: 'constructor' }, { de: ['aluno'] }, { id: '1000' }, { id: 0 }, { id: 1.5 }, { de: 'recurso', id: 1000 },
+      { de: 'recurso', id: 'pr vob' }, { de: 'instrutor', id: 'PR-VOB' }, { inativo: 'true' }, { inativo: null }, { id: ATAQUE }
+    ]) assert.equal(validarReversao({ ...base, ...ruim }, FROTA_INICIAL), null, JSON.stringify(ruim));
+    assert.deepEqual(validarReversao({ ...base, extra: 1 }, FROTA_INICIAL), base);
   });
 
   it('o rótulo é um texto curto; fora disso, "↶ Reverter"', () => {
@@ -245,7 +260,7 @@ describe('Desfazer um voo agendado na Escala', () => {
 
   it('o pedido principal que o agendamento usou volta como estava, com o resto do aluno e as missões extras', () => {
     const estado = dia();
-    const antes = { fly: false, mis: 'Voo Local', eq: 'C152', p1: 500, p2: 610, nb: 1, ss: 1, pr: 2, jan: 'manha' };
+    const antes = { fly: false, mis: 'Voo Local', eq: 'C152', p1: 500, p2: 610, nb: 1, ss: 1, pr: 2, jan: 'h390' };
     assert.equal(desfazerAgendamento(estado, validarReversao({ ...NOVO, mid: 0, pedido: antes }, FROTA_INICIAL)), true);
     // A etapa e o instrutor escolhido pelo agendamento saem com ele
     assert.deepEqual(campos(estado.stu[0]), antes);
@@ -564,7 +579,7 @@ describe('Reverter depois de um agendamento na Escala', () => {
 // (null: a missão extra criada, que sai) e as recusas que ela tirou
 describe('desfazerEdicao', async () => {
   const { validarReversao, desfazerEdicao } = await import('../../js/reversoes.js');
-  const pedido = { fly: true, mis: 'Voo Local', eq: 'C152', p1: 390, p2: -1, nb: 1, ss: 1, pr: 3, jan: 'manha' };
+  const pedido = { fly: true, mis: 'Voo Local', eq: 'C152', p1: 390, p2: -1, nb: 1, ss: 1, pr: 3, jan: 'h390' };
   const valida = {
     kind: 'desfazerEdicao', voos: [{ fKey: '1000_0_1', fixo: { a: 390, b: 450, r: 'PR-AAA', insId: 1 }, status: 'Confirmado', detalhe: null }, { fKey: '1001_7_1', fixo: null, status: null, detalhe: null }],
     pedidos: [{ stuId: 1000, mid: 0, pedido }, { stuId: 1001, mid: 7, pedido: null }],
@@ -594,17 +609,41 @@ describe('desfazerEdicao', async () => {
   it('desfaz: o pedido de antes (a extra criada sai), o pino, o status e o detalhe de antes', () => {
     const estado = {
       aprovacao: { em: '2026-11-26T10:00:00Z', por: 'Operador' },
-      stu: [{ id: 1000, nm: 'A', ...pedido, p1: 610, jan: 'tarde', insId: 4, extra: [] }, { id: 1001, nm: 'B', ...pedido, extra: [{ mid: 7, ...pedido }] }],
+      stu: [{ id: 1000, nm: 'A', ...pedido, p1: 610, jan: 'h760', insId: 4, extra: [] }, { id: 1001, nm: 'B', ...pedido, extra: [{ mid: 7, ...pedido }] }],
       fixos: { '1000_0_1': { a: 610, b: 670, r: 'PR-BBB', insId: 4, agendado: true }, '1001_7_1': { a: 390, b: 450, r: 'PR-AAA', insId: 1, agendado: true } },
       fStatus: { '1000_0_1': 'Pendente', '1001_7_1': 'Atrasado' }, fObs: { '1001_7_1': { novoInicio: 400 } }
     };
     desfazerEdicao(estado, validarReversao(valida, []));
     assert.equal(estado.stu[0].p1, 390);
-    assert.equal(estado.stu[0].jan, 'manha');
+    assert.equal(estado.stu[0].jan, 'h390');
     assert.equal(estado.stu[0].insId, undefined);
     assert.deepEqual(estado.stu[1].extra, []);
     assert.deepEqual(estado.fixos, { '1000_0_1': { a: 390, b: 450, r: 'PR-AAA', insId: 1 } });
     assert.deepEqual(estado.fStatus, { '1000_0_1': 'Confirmado' });
     assert.deepEqual(estado.fObs, {});
+  });
+});
+
+// J: "Horários fechados nesta data" desfaz pelo ↶ (setFechamentos): antes é a lista de antes da mudança (normalizada), ou
+// null (o dia ainda não tinha fechamentos: volta a ler o win)
+describe('A reversão dos horários fechados', () => {
+  it('antes: uma lista (normalizada) ou null; outra coisa não vale', () => {
+    assert.deepEqual(validarReversao({ kind: 'setFechamentos', antes: [{ de: 760, ate: 1050 }] }, FROTA_INICIAL),
+      { kind: 'setFechamentos', antes: [{ de: 760, ate: 1050 }], label: '↶ Reverter' });
+    assert.deepEqual(validarReversao({ kind: 'setFechamentos', antes: null }, FROTA_INICIAL), { kind: 'setFechamentos', antes: null, label: '↶ Reverter' });
+    assert.deepEqual(validarReversao({ kind: 'setFechamentos', antes: [{ de: 9, ate: 3 }, { de: 390, ate: 500, categorias: ['C152'], x: 1 }] }, FROTA_INICIAL).antes,
+      [{ de: 390, ate: 500, categorias: ['C152'] }]);
+    assert.equal(validarReversao({ kind: 'setFechamentos', antes: 'tudo' }, FROTA_INICIAL), null);
+    assert.equal(validarReversao({ kind: 'setFechamentos' }, FROTA_INICIAL), null);
+  });
+});
+
+// J (N13): uma reversão dos horários gravada antes do J pode trazer o período do pedido ("tarde"): a reversão vale, sem ele
+describe('A reversão dos horários com um período de antes', () => {
+  it('o período sai do pedido, e a reversão continua valendo; o horário exato fica', () => {
+    const rev = validarReversao({ kind: 'restaurarHorarios', cat: 'C152', lista: [390, 500], pedidos: [
+      { stuId: 1000, mid: 0, p1: 500, p2: -1, jan: 'tarde' }, { stuId: 1001, mid: 0, p1: 500, p2: -1, jan: 'h500' }] }, FROTA_INICIAL);
+    assert.ok(rev);
+    assert.deepEqual(rev.pedidos, [{ stuId: 1000, mid: 0, p1: 500, p2: -1 }, { stuId: 1001, mid: 0, p1: 500, p2: -1, jan: 'h500' }]);
   });
 });

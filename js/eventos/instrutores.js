@@ -1,7 +1,8 @@
 // Instrutores: incluir, excluir, os campos de cada linha (a grade do dia e o cadastro), as habilitações e os filtros. Os
 // dados pessoais (js/eventos/painel-de-dados.js) e os limites da lei (js/eventos/limites.js) ligam os eventos deles daqui
 import { gravarAlteracao } from '../actions.js';
-import { WIN, PRE } from '../config.js';
+import { PRE } from '../config.js';
+import { INICIOS_DOS_TEMPOS } from '../horarios.js';
 import { $, showToast, focusLast, algumDialogoAberto, gavetaDoEsc } from '../dom.js';
 import { nomeLimpo, numeroBr } from '../format.js';
 import { habilitacoesDoNivel, normalizarHabilitacoes, nomeDaHabilitacao } from '../habilitacoes.js';
@@ -60,7 +61,7 @@ aoAcionar('editar-habs', b => abrirPainelDoInstrutor(+b.dataset.id));
 // O instrutor novo aparece no cadastro, com o nome selecionado para digitar: os filtros continuam, e ele fica à vista
 // mesmo fora deles (até eles mudarem)
 aoAcionar('addi', () => {
-  const newIns = { id: S.nid++, nm: 'Novo instrutor', on: true, hab: habilitacoesDoNivel(1), kg: 0, aw: WIN.map((_, i) => i < 8) };
+  const newIns = { id: S.nid++, nm: 'Novo instrutor', on: true, hab: habilitacoesDoNivel(1), kg: 0, aw: INICIOS_DOS_TEMPOS.map((_, i) => i < INICIOS_DOS_TEMPOS.length - 1) };
   S.ins.push(newIns);
   mostrarVista('ins', 'cadastro');
   manterInstrutorAVista(newIns.id);
@@ -76,10 +77,10 @@ aoAcionar('deli', (b, { id }) => {
   S.stu.forEach(s => s.bl = s.bl.filter(v => v !== id));
   S.stu.forEach(s => { if (s.voaCom) s.voaCom = s.voaCom.filter(v => v !== id); if (s.voaCom && !s.voaCom.length) delete s.voaCom; });
   // Os pedidos do dia com o instrutor escolhido voltam para a escolha do app, e os voos fixos pela escolha na Escala
-  // são soltos (os da escala aprovada, os fixados pelo status e os agendados na Escala ficam, em conflito, com as
-  // sugestões)
+  // são soltos (os da escala aprovada, os fixados pelo status, os agendados na Escala e o Noturno ficam, em conflito, com
+  // as sugestões)
   S.stu.forEach(s => [s, ...(s.extra || [])].forEach(p => { if (p.insId === id) delete p.insId; }));
-  S.fixos = Object.fromEntries(Object.entries(S.fixos || {}).filter(([k, p]) => !(p.escolhido && !p.agendado && p.insId === id && !S.aprovacao && !fixoPeloStatus(k, S.fStatus))));
+  S.fixos = Object.fromEntries(Object.entries(S.fixos || {}).filter(([k, p]) => !(p.escolhido && !p.agendado && !p.noturno && p.insId === id && !S.aprovacao && !fixoPeloStatus(k, S.fStatus))));
   gravarAlteracao('exc', `Instrutor excluído: ${target ? target.nm : id}`);
   rIns(); redesenharPorNome('alunos', 'pedidos-do-dia');
 });
@@ -122,7 +123,7 @@ aoMudarCampo('i', (t, { f, id }) => {
     x.aw[+t.dataset.w] = t.checked;
   } else if (f === 'pre') {
     if (!t.value) return;
-    x.aw = WIN.map((_, i) => PRE[t.value].includes(i));
+    x.aw = INICIOS_DOS_TEMPOS.map((_, i) => PRE[t.value].includes(i));
   }
   // A grade do dia é refeita com a escala; a linha do cadastro é atualizada no lugar. As janelas e a predefinição do
   // instrutor gravam sem entrar no histórico

@@ -11,17 +11,16 @@ import { chaveDoVoo, pedidoDoAluno } from './voo.js';
 import { fixoPeloStatus } from './fixos.js';
 import { inativo } from './inativos.js';
 import { intervaloEfetivo } from './status.js';
-import { minutoDaPreferencia, paraMinuto, horariosDaMissao } from './horarios.js';
+import { minutoDaPreferencia, paraMinuto, horariosDaMissao, HORARIO_DO_SOLO, HORARIO_DO_NOTURNO } from './horarios.js';
 import { rejeicoesDosPedidos } from './rejeicoes.js';
-import { T, NI } from './config.js';
 import { hm } from './format.js';
 
 // Os pedidos de um aluno no dia: o principal (o próprio aluno, mid 0) e as missões extras
 const pedidosDoAluno = aluno => [aluno, ...(Array.isArray(aluno.extra) ? aluno.extra : [])];
 
 // Os minutos exatos do pedido (jan): "h<minuto>" (o horário da Agenda; o "h5" dos dados antigos é a janela 5) ou, com a
-// 2ª preferência (U1), "h<minuto1>|h<minuto2>", dois minutos diferentes, o 1º primeiro. Sem horário exato (sem jan, um
-// período ou um valor fora do formato): nenhum
+// 2ª preferência (U1), "h<minuto1>|h<minuto2>", dois minutos diferentes, o 1º primeiro, entre as 06:30 e as 17:30 (os
+// limites de minutoExato, js/rules.js). Sem horário exato (sem jan, um período de antes do J ou um valor fora do formato): nenhum
 export function minutosDoPedido(jan) {
   if (typeof jan !== 'string') return [];
   const partes = jan.split('|');
@@ -29,7 +28,7 @@ export function minutosDoPedido(jan) {
   const minutos = partes.map(p => {
     const h = /^h(\d{1,4})$/.exec(p);
     const minuto = h ? minutoDaPreferencia(+h[1]) : -1;
-    return minuto >= T[0] && minuto <= T[NI] ? minuto : null;
+    return minuto >= HORARIO_DO_SOLO && minuto <= HORARIO_DO_NOTURNO ? minuto : null;
   });
   if (minutos.includes(null) || (minutos.length === 2 && minutos[0] === minutos[1])) return [];
   return minutos;
@@ -149,15 +148,19 @@ export function conciliarPedidos(estado, solicitacoes, { data = null, hoje = nul
 // O voo da mesma missão (mis) que está na demanda do aluno sem pedido da agenda (posto à mão: a demanda começa vazia a
 // cada data): ele dá lugar ao pedido, para não duplicar. O voo fixo (agendado, aprovado ou com o instrutor escolhido na
 // escala), o fixado pelo status (em andamento ou cancelado; também quando o cadeado saiu, como na aprovação com o Voa
-// desligado) e o que já tem resultado na data ficam como estão. Com a missão do curso do pedido (vinculada: { codigo,
-// sigla }), o voo com outra missão do curso também fica (o pedido entra como outro voo); o sem missão do curso dá lugar.
-// Nenhum: null
+// desligado) e o que já tem resultado na data ficam como estão. O Noturno fixo só pelo pino do Noturno (o que a gravação
+// põe: js/fixos.js) dá lugar, e o pino fica com ele: o pedido da agenda passa a ser esse voo, na mesma chave, no avião e com
+// o INVA dele. Com a missão do curso do pedido (vinculada: { codigo, sigla }), o voo com outra missão do curso também fica
+// (o pedido entra como outro voo); o sem missão do curso dá lugar. Nenhum: null
+const soPeloNoturno = (estado, pino) => Boolean(pino && pino.noturno && !pino.agendado && !pino.escolhido && !estado.aprovacao);
 function vooQueDaLugar(estado, aluno, mis, vinculada = null) {
   const doDia = estado.resultados ? estado.resultados.doDia : [];
+  const fixos = estado.fixos || {};
   const mesmaMissaoDoCurso = p => !vinculada || !p.etapa || (p.etapa === vinculada.codigo && (p.cursoDaEtapa || aluno.curso) === vinculada.sigla);
   return pedidosDoAluno(aluno).find(p => {
     const chave = chaveDoVoo(aluno.id, p.mid || 0);
-    return p.fly && p.mis === mis && p.solicitacao === undefined && mesmaMissaoDoCurso(p) && !Object.hasOwn(estado.fixos || {}, chave)
+    return p.fly && p.mis === mis && p.solicitacao === undefined && mesmaMissaoDoCurso(p)
+      && (!Object.hasOwn(fixos, chave) || soPeloNoturno(estado, fixos[chave]))
       && !fixoPeloStatus(chave, estado.fStatus) && resultadoDoVoo(doDia, chave) === null;
   }) || null;
 }

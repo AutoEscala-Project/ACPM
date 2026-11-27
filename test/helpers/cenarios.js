@@ -4,6 +4,7 @@
 import { createHash } from 'node:crypto';
 import { FROTA, FROTA_POR_TIPO, JANELAS, dois } from './estado.js';
 import { habilitacoesDoNivel } from '../../js/habilitacoes.js';
+import { HORARIOS_INICIAIS, horariosDaMissao } from '../../js/horarios.js';
 
 const EQUIP_MISSAO = {
   'Ground C152': ['Sala Ground'],
@@ -152,4 +153,26 @@ export function comVolta(estado, seed) {
   noturnos.forEach(n => { if (r() < 0.15) fStatus[`${n.stuId}_${n.mid}_2`] = 'Cancelado'; });
   const horasDosInstrutores = Object.fromEntries(noturnos.map(n => [n.insId, { mes: 0, semestre: 0, ano: 0, fimAnterior: null, fimDoNoturno: n.fim }]));
   return { ...estado, fStatus, noturnosDaVespera: noturnos, horasDosInstrutores };
+}
+
+// Os pedidos da Agenda sobre um cenário, com outro gerador (os cenários de base não mudam): ~60% dos pedidos de voo (o
+// principal e as extras) com um horário exato (jan h<minuto>, entre os quatro primeiros horários de decolagem da missão,
+// para haver horários cheios) e o id do registro (solicitacao, numa ordem embaralhada), e às vezes o 7º local confirmado
+// (limiteConfirmado). O pedido com horário exato recusado só por falta de lugar espera (N14, U3)
+export function comAgenda(estado, seed) {
+  const r = mulberry32(seed * 6151 + 29);
+  let id = 0;
+  const stu = estado.stu.map(s => {
+    const novo = structuredClone(s);
+    for (const p of [novo, ...novo.extra]) {
+      if (p.mis.startsWith('Ground') || r() >= 0.6) continue;
+      const lista = horariosDaMissao(estado.horarios || HORARIOS_INICIAIS, p.mis, p.eq).slice(0, 4);
+      if (!lista.length) continue;
+      p.jan = `h${lista[Math.floor(r() * lista.length)]}`;
+      p.solicitacao = 1000 + Math.floor(r() * 1000) * 10 + id++;
+      if (r() < 0.05) p.limiteConfirmado = true;
+    }
+    return novo;
+  });
+  return { ...estado, stu };
 }

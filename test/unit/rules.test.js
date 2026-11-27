@@ -2,9 +2,10 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   isGroundMission, doesGroundGateFlight, migrateLegacyMissionName, normalizeMissionFields, blank, disponibilidadeDoAluno, disponibilidadeAtual,
-  rotuloDaDisponibilidade, opcoesDeDisponibilidade, proximoMid, duracaoDigitada, ERRO_DA_DURACAO, chaveTemSobras, alvoDoNovoPedido,
+  rotuloDaDisponibilidade, proximoMid, duracaoDigitada, ERRO_DA_DURACAO, chaveTemSobras, alvoDoNovoPedido,
   pesoValido, pesoDigitado, pesoDoTexto, ERRO_DO_PESO, deixarEmBranco, PRIORIDADE_PADRAO, prioridadeNaTela, prioridadeGuardada, comAPrioridadePadrao
 } from '../../js/rules.js';
+import * as regras from '../../js/rules.js';
 import { podeFazer, descreverExigencias } from '../../js/habilitacoes.js';
 
 describe('Regras de missão', () => {
@@ -103,14 +104,13 @@ describe('Regras de missão', () => {
     assert.equal(disponibilidadeDoAluno('h9'), null);
     assert.equal(disponibilidadeDoAluno('constructor'), null);
     const comeca = (jan, ...horarios) => horarios.map(disponibilidadeDoAluno(jan));
-    assert.deepEqual(comeca('manha', 390, 420, 690, 760), [true, true, true, false]);
-    assert.deepEqual(comeca('tarde', 750, 760, 980, 1050), [false, true, true, false]);
-    assert.deepEqual(comeca('noite', 980, 1050), [false, true]);
+    // J (N12, N13): o pedido não tem mais período do dia; o "manha", o "tarde" e o "noite" guardados valem como nenhum
+    for (const periodo of ['manha', 'tarde', 'noite']) assert.equal(disponibilidadeDoAluno(periodo), null, periodo);
     assert.deepEqual(comeca('h450', 420, 450), [false, true]);
     assert.deepEqual(comeca('h5', 820, 830), [true, false], 'o "h5" dos dados antigos é a janela das 13:40');
-    assert.deepEqual(['manha', 'tarde', 'noite', 'h5', 'h450'].map(rotuloDaDisponibilidade), ['Manhã', 'Tarde', 'Noite', 'às 13:40', 'às 07:30']);
-    assert.deepEqual(['h5', 'h450', 'tarde', 'xyz'].map(disponibilidadeAtual), ['h820', 'h450', 'tarde', undefined]);
-    assert.deepEqual(opcoesDeDisponibilidade([450]), [['', 'Qualquer horário'], ['manha', 'Manhã'], ['tarde', 'Tarde'], ['noite', 'Noite'], ['h450', 'Só às 07:30']]);
+    assert.deepEqual(['manha', 'tarde', 'noite', 'h5', 'h450'].map(rotuloDaDisponibilidade), ['Qualquer horário', 'Qualquer horário', 'Qualquer horário', 'às 13:40', 'às 07:30']);
+    assert.deepEqual(['h5', 'h450', 'tarde', 'xyz'].map(disponibilidadeAtual), ['h820', 'h450', undefined, undefined]);
+    assert.equal(Object.hasOwn(regras, 'opcoesDeDisponibilidade'), false, 'a Demanda não tem mais a coluna Disponibilidade');
     const pedido = { mis: 'Voo Local', eq: 'C152', p1: 500, p2: 610, nb: 1, ss: 1, jan: 'xyz' };
     normalizeMissionFields(pedido);
     assert.equal(Object.hasOwn(pedido, 'jan'), false, 'disponibilidade inválida sai do pedido');

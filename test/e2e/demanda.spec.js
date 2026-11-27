@@ -1,4 +1,4 @@
-import { test, comProgresso, expect, abrir, abrirSintetico, abrirComExemplo, irPara, abrirEscala, lerEscala, confirmar, filtrarCursos, AMANHA, abrirHistorico, aprovar, botaoAprovar, caixaVoa, dataAberta, diaSeguinte, importarDaAgenda, reabrir, tabelaDoDia, voar, registrarPedido, refazer } from './fixtures.js';
+import { test, comProgresso, expect, abrir, abrirSintetico, abrirComExemplo, irPara, abrirEscala, lerEscala, confirmar, filtrarCursos, AMANHA, abrirHistorico, aprovar, botaoAprovar, caixaVoa, dataAberta, diaSeguinte, importarDaAgenda, reabrir, tabelaDoDia, voar, registrarPedido, refazer, linhasDosAlunos } from './fixtures.js';
 import { aluno, cenario, instrutor, missaoExtra } from '../helpers/montar.js';
 
 const linhaDoAluno = (page, nome) => page.locator(`#dem tr[data-k="d"][data-mid="0"][data-nm="${nome.toLowerCase()}"]`);
@@ -10,7 +10,8 @@ test.describe('Demanda', () => {
     const linha = page.locator('#dem tr[data-k="d"][data-id="1000"]');
     await expect(linha.locator('[data-f="p1"] option[value="420"]')).toHaveText('07:00');
     await expect(linha.locator('[data-f="p1"] option:checked')).toHaveText('07:30');
-    await expect(linha.locator('[data-f="jan"] option[value="h450"]')).toHaveText('Só às 07:30');
+    // J (N13): a Demanda não tem mais a coluna Disponibilidade
+    await expect(linha.locator('[data-f="jan"]')).toHaveCount(0);
     await linha.locator('[data-f="mis"]').selectOption('Voo Local');
     await linha.locator('[data-f="eq"]').selectOption('C152');
     const nova = page.locator('#dem tr[data-k="d"][data-id="1000"]');
@@ -36,10 +37,10 @@ test.describe('Demanda', () => {
   });
 
   // A Prioridade só com ela ligada (js/funcionalidades.js; prioridade.spec.js)
-  test('9 colunas que cabem na tela (sem Sessões nem Prioridade); "Limpar demanda" fica no menu Mais', async ({ page }) => {
+  test('8 colunas que cabem na tela (sem Sessões, Prioridade nem Disponibilidade); "Limpar demanda" fica no menu Mais', async ({ page }) => {
     await abrirComExemplo(page);
     await irPara(page, 'dem');
-    await expect(page.locator('#s-dem thead th')).toHaveText(['Aluno', 'Voa', 'Missão', 'Recurso', 'Instrutor', '1ª preferência', '2ª preferência', 'Disponibilidade', 'Duração']);
+    await expect(page.locator('#s-dem thead th')).toHaveText(['Aluno', 'Voa', 'Missão', 'Recurso', 'Instrutor', '1ª preferência', '2ª preferência', 'Duração']);
     await expect(page.locator('#dem [data-f="pr"]')).toHaveCount(0);
     await expect(page.locator('#dem [data-f="ss"]')).toHaveCount(0);
     expect(await page.evaluate(() => document.querySelector('#s-dem .tw').scrollWidth <= document.querySelector('#s-dem .tw').clientWidth)).toBe(true);
@@ -69,7 +70,7 @@ test.describe('Demanda', () => {
     await page.locator('#onlyfly').uncheck();
     const linha = page.locator('#dem tr[data-k="d"][data-id="1000"][data-mid="0"]');
     await caixaVoa(linha).check();
-    await expect(linha.locator('[data-f="jan"]')).toHaveValue('');
+    await expect.poll(async () => (await guardado()).jan).toBe(undefined);
     await expect(linha.locator('[data-f="insId"]')).toHaveValue('');
 
     // O pedido da agenda para a mesma missão (Voo Local) toma este voo, em vez de virar um segundo
@@ -79,12 +80,13 @@ test.describe('Demanda', () => {
     await irPara(page, 'dem');
     await importarDaAgenda(page);
     await expect(page.locator('#dem tr[data-k="d"][data-id="1000"]')).toHaveCount(1);
-    await expect(linha.locator('[data-f="jan"]')).toHaveValue('h610');
+    // O horário exato do pedido importado fica no dia guardado (a Demanda não mostra mais a coluna)
+    await expect.poll(async () => (await guardado()).jan).toBe('h610');
   });
 
   // Q8 (F1d): a confirmação do 7º voo local foi dada na Agenda para a missão e o horário do pedido: mudados na Demanda, ela
   // sai do pedido (noutro horário ele conta como os outros); a duração mudada não a tira
-  test('a disponibilidade ou a missão mudada tira do pedido a confirmação do 7º voo local; a duração, não', async ({ page }) => {
+  test('o avião ou a missão mudada tira do pedido a confirmação do 7º voo local; a duração, não', async ({ page }) => {
     const confirmado = { p1: 500, p2: -1, jan: 'h500', limiteConfirmado: true };
     await abrir(page, { estado: cenario({ ins: [instrutor(1, 9), instrutor(2, 9), instrutor(3, 9)], stu: [aluno(1000, confirmado), aluno(1001, confirmado), aluno(1002, confirmado)] }) });
     await irPara(page, 'dem');
@@ -93,7 +95,7 @@ test.describe('Demanda', () => {
       return Object.fromEntries(['1000', '1001', '1002'].map(id => [id, pedidos[id].limiteConfirmado === true]));
     }, AMANHA);
     await expect.poll(guardado).toEqual({ 1000: true, 1001: true, 1002: true });
-    await linhaDoAluno(page, 'Aluno 1000').locator('[data-f="jan"]').selectOption('h610');
+    await linhaDoAluno(page, 'Aluno 1000').locator('[data-f="eq"]').selectOption('C172');
     await linhaDoAluno(page, 'Aluno 1001').locator('[data-f="mis"]').selectOption('TGL (TMA)');
     await linhaDoAluno(page, 'Aluno 1002').locator('[data-f="nb"]').fill('1.5');
     await linhaDoAluno(page, 'Aluno 1002').locator('[data-f="nb"]').press('Enter');
@@ -260,15 +262,12 @@ test.describe('Demanda', () => {
     expect(voos[0]).toContain('| Instrutor 02 |');
   });
 
-  test('disponibilidade do aluno: o voo só começa nas janelas escolhidas', async ({ page }) => {
-    await abrir(page, { estado: cenario({ stu: [aluno(1000, { p1: 1, p2: 2 })] }) });
-    await irPara(page, 'dem');
-    const linha = page.locator('#dem tr[data-k="d"]').first();
-    await linha.locator('[data-f="jan"]').selectOption('tarde');
-    await expect(page.locator('#audit-log-list')).toContainText('Pedido Aluno 1000: disponibilidade Tarde (Voo Local)');
+  // J (N13): sem períodos do dia; um "tarde" guardado antes do formato 28 vale como nenhum: o voo sai na 1ª preferência
+  test('um período guardado no pedido ("tarde") não prende mais o voo: ele sai na 1ª preferência', async ({ page }) => {
+    await abrir(page, { estado: cenario({ stu: [aluno(1000, { p1: 1, p2: 2, jan: 'tarde' })] }) });
     await abrirEscala(page);
     const voos = (await lerEscala(page)).linhas.filter(l => l.includes('Aluno 1000'));
-    expect(voos[0]).toMatch(/^12:40–13:40 1 h[^|]* \| Aluno 1000 \|/);
+    expect(voos[0]).toMatch(/^08:20–09:20 1 h[^|]* \| Aluno 1000 \|/);
   });
 
   test('filtros "Só quem voa", nome e missão', async ({ page }) => {
@@ -336,8 +335,8 @@ test.describe('Demanda', () => {
     // As marcas são as de Alunos (um filtro só): lá, aparece o aluno do PC
     await irPara(page, 'alu');
     await expect(page.locator('#flt-alu-cur')).toHaveText('Curso: PC');
-    await expect(page.locator('#alu tr.cd:visible')).toHaveCount(1);
-    await expect(page.locator('#alu tr.cd:visible')).toHaveAttribute('data-id', '1001');
+    await expect(linhasDosAlunos(page)).toHaveCount(1);
+    await expect(linhasDosAlunos(page)).toHaveAttribute('data-id', '1001');
     // Outra data: as linhas são outras, e as marcas continuam
     await irPara(page, 'dem');
     await diaSeguinte(page);
@@ -390,7 +389,7 @@ test.describe('Demanda', () => {
     await busca.fill('nenhum assim');
     await expect(nenhum).toHaveText('Nenhum aluno com esses filtros. Limpar filtros');
     // Todas as colunas: 9, sem a Prioridade desligada (js/funcionalidades.js)
-    await expect(nenhum.locator('td')).toHaveAttribute('colspan', '9');
+    await expect(nenhum.locator('td')).toHaveAttribute('colspan', '8');
     await expect(limpar).not.toHaveAttribute('data-act');
     await busca.fill('');
     await expect(nenhum).toHaveCount(0);
@@ -461,7 +460,7 @@ test.describe('Demanda', () => {
     await irPara(page, 'alu');
     await expect(page.locator('#flt-alu-cur')).toHaveText('Todos os cursos');
     await expect(page.locator('#flt-alu-cur-painel input[data-filtro]:checked')).toHaveCount(0);
-    await expect(page.locator('#alu tr.cd:visible')).toHaveCount(2);
+    await expect(linhasDosAlunos(page)).toHaveCount(2);
     await expect(page.locator('#alu-contagem')).toHaveText('2 alunos');
   });
 

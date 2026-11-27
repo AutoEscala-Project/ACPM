@@ -155,8 +155,9 @@ describe('Com a prioridade desligada, o motor recebe a prioridade padrão', () =
     }));
     setData(somarDias(hojeISO(), 1));
     const motivo = r => r.al.find(a => a.t === 'err' && a.s === 'Aluno 1001').m;
-    const SEM = 'Rejeitado: nenhum C152 livre nos horários possíveis.';
-    const COM = 'Rejeitado: nenhum C152 livre nos horários possíveis (ocupados por pedidos de prioridade maior).';
+    // Com o horário exato, o Aluno 1001 espera (F1h, N14): o lugar na lista fica nos dois
+    const SEM = 'Rejeitado: nenhum C152 livre nos horários possíveis; 1º na lista de espera das 06:30.';
+    const COM = 'Rejeitado: nenhum C152 livre nos horários possíveis (ocupados por pedidos de prioridade maior); 1º na lista de espera das 06:30.';
     assert.equal(motivo(runAllocationEngine(estadoDaEscala())), COM);
     assert.equal(motivo(escalaDoMotor(estadoDaEscala())), SEM);
     // Na escala aprovada, o pedido que entra no dia sem lugar (sem linha nem recusa) pede o motor: o das telas

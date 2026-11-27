@@ -1,15 +1,16 @@
 // Ações que alteram o estado: perfil de acesso, data da escala, histórico de alterações, geração da escala e BI.
 import { escreverDataNoEndereco } from './endereco.js';
-import { somarDias, fimDoMes, LIMITE_DO_NOME } from './format.js';
+import { somarDias, fimDoMes, LIMITE_DO_NOME, hojeISO } from './format.js';
 import { aplicarSomenteLeitura } from './somente-leitura.js';
 import { escalaDaAlteracao } from './edicao-do-voo.js';
 import { normalizarEscalaGravada } from './escala-gravada.js';
+import { pinosDoNoturno } from './fixos.js';
 import { ligada } from './funcionalidades.js';
 import { ApiClient } from './storage.js';
 import { S, RES, AUDIT_LOG, BI_HISTORY, DATA, setS, setRES, setAuditLog, setBIHistory, setData, isGestor, dadoIndisponivel, modoCompartilhado, estadoDaEscala, comOsMotivosDaTela, escalaDoMotor } from './state.js';
-import { $, mostrarAviso, avisoAberto, showToast } from './dom.js';
+import { $, mostrarAviso, fecharAviso, avisoAberto, showToast } from './dom.js';
 import { comHorasExternas } from './limites.js';
-import { comRepousoDoNoturno } from './noturno.js';
+import { comRepousoDoNoturno, voltasQueMudaram, assinaturaDosNoturnos } from './noturno.js';
 import { redesenhar, redesenharPorNome } from './redesenho.js';
 import { SEM_OS_PROGRAMAS } from './views/cursos.js';
 import { podeEditarAgenda } from './views/agenda.js';
@@ -117,6 +118,46 @@ function avisarAlteracoesEsperando() {
   { recarregar: false });
 }
 
+// Um conflito na gravação (js/backends/supabase.js, aoConflito). No cadastro (outra pessoa mudou um aluno, um instrutor, a
+// frota), com a data já lida e sem ser pelo formato: a data é lida de novo, sem travar a tela, e o aviso diz o que não foi
+// gravado (responde 'releitura', e o backend continua gravando depois da leitura). Os outros (o dia, o formato, um conflito
+// enquanto a data abre) travam a tela, como sempre
+export function aposConflito(documento, { formato = false } = {}) {
+  if (documento !== 'cadastro' || formato || !dadosLidos) {
+    travarAposConflito({ formato });
+    return 'travar';
+  }
+  // As alterações cuja gravação não foi confirmada: as entradas "gravando…" do histórico sem a marca da gravação que deu
+  // certo (uma alteração já gravada cuja entrada ainda vai para o servidor não está perdida)
+  const perdidas = AUDIT_LOG.filter(e => e.estado === 'gravando' && !e.alteracaoGravada).map(e => e.desc);
+  setTimeout(() => relerAposConflito(perdidas));
+  return 'releitura';
+}
+
+// O texto do aviso depois do conflito no cadastro: até cinco alterações (os textos do histórico, sem dado pessoal), e o
+// número das outras
+function avisoDaReleitura(perdidas) {
+  const inicio = 'Outra pessoa alterou o cadastro enquanto você editava: a tela mostra a versão atual';
+  if (!perdidas.length) return `${inicio}, e a sua última alteração não foi gravada. Refaça o que ainda for preciso.`;
+  const lista = perdidas.slice(0, 5).join('; ') + (perdidas.length > 5 ? `; e mais ${perdidas.length - 5}` : '');
+  return `${inicio}, e ${perdidas.length > 1 ? 'estas alterações não foram gravadas' : 'esta alteração não foi gravada'}: ${lista}. Refaça o que ainda for preciso.`;
+}
+
+// Lê a data aberta de novo (o cadastro e o dia, com as versões de agora: nada é gravado até chegarem) e avisa. A leitura
+// que falha trava a tela, como o conflito de antes
+async function relerAposConflito(perdidas) {
+  try {
+    if (!await lerData(DATA)) return;
+  } catch {
+    travarAposConflito();
+    return;
+  }
+  $('#escala-atualizada').hidden = true;
+  redesenhar('dados');
+  lerPedidosDaData();
+  mostrarAviso('refazer', avisoDaReleitura(perdidas), { recarregar: false, fechar: true });
+}
+
 // Depois de um conflito nada mais é gravado: a tela fica só para consulta até recarregar, com o aviso
 export function travarAposConflito({ formato = false } = {}) {
   setRole('gestor', true);
@@ -143,6 +184,9 @@ export function aindaNaoAbriu() {
 // grava os dados e a escala juntos. Ao abrir a aba Escala, ela já está pronta
 // A gravação mais recente da escala: as entradas do histórico esperam por ela
 let gravacaoAtual = Promise.resolve(true);
+// A gravação mais recente, para quem espera a alteração que acabou de fazer (o aluno novo fica "novo" no endereço até ela;
+// os dados pessoais dele esperam por ela): responde se deu certo
+export const ultimaGravacao = () => gravacaoAtual;
 
 // Refaz e grava a escala; responde se a gravação deu certo. Os eventos da tela gravam por gravarAlteracao
 // A ordem: a escala é refeita com os dados da tela (sem desenhar), gravada, e só então redesenhada. salvarDia copia os dados
@@ -151,9 +195,11 @@ let gravacaoAtual = Promise.resolve(true);
 // resultado: a escala que a alteração deixou sem o motor (a escala aprovada, gravarAlteracao); sem ela, a escala refeita
 function save(resultado = null) {
   if (isGestor() || !dadosLidos) return Promise.resolve(false);
-  setRES(resultado || escalaCalculada());
+  if (resultado) setRES(resultado);
+  else calcularComOsNoturnosFixos();
   syncBIHistoryForCurrentDate();
   gravacaoAtual = ApiClient.salvarDia(DATA, S, RES);
+  avisarVoltaDoDiaSeguinte(gravacaoAtual);
   // Neste navegador (sem servidor), a gravação só falha quando o armazenamento recusa (o espaço pode ter acabado)
   if (!modoCompartilhado()) {
     gravacaoAtual.then(gravou => {
@@ -171,6 +217,28 @@ function save(resultado = null) {
     marca.hidden = false;
   }
   return gravacaoAtual;
+}
+
+// A volta do dia seguinte sai da escala gravada desta data (js/noturno.js, noturnosDaVespera). Quando a gravação muda os
+// Noturnos dela (o editor, a escolha do instrutor, o pedido tirado, o cancelamento, o primeiro Noturno gravado) e o dia
+// seguinte, de hoje em diante, já tem escala gravada com as voltas de antes, essa escala só é refeita quando alguém que pode
+// alterar abre a data (seguirAsVoltasDeOntem). Até lá, o painel da TV, o BI e as horas da data seguinte leem a volta de
+// antes: o aviso diz isso logo depois da gravação, sem gravar nada na outra data. noturnosGravados: os Noturnos da última
+// escala gravada da data aberta (null: não se sabe; a data abriu sem escala gravada que valha)
+let noturnosGravados = null;
+function avisarVoltaDoDiaSeguinte(gravacao) {
+  const assinatura = assinaturaDosNoturnos(RES, S.fStatus);
+  if (assinatura === noturnosGravados) return;
+  const data = DATA, seguinte = somarDias(DATA, 1);
+  gravacao.then(async gravou => {
+    if (!gravou || data !== DATA) return;
+    noturnosGravados = assinatura;
+    if (seguinte < hojeISO()) return;
+    const deAntes = await ApiClient.voltasGravadasDeAntes(seguinte).catch(() => false);
+    if (!deAntes || data !== DATA || avisoAberto()) return;
+    const dia = `${seguinte.slice(8, 10)}/${seguinte.slice(5, 7)}`;
+    mostrarAviso('volta-do-noturno', `A escala gravada de ${dia} ainda tem a volta do Noturno de antes. Abra ${dia} para ela ser refeita e gravada com a volta de agora (até lá, o painel da TV, o BI e as horas da data seguinte leem a volta de antes).`, { recarregar: false, fechar: true });
+  });
 }
 
 // Uma alteração do operador nos dados da data: grava (a escala é refeita) e registra no histórico, nesta ordem e no
@@ -251,6 +319,8 @@ export function logChange(type, texto, revertAction = null, reverte = null) {
   if (avisoAberto() === 'espera') avisarAlteracoesEsperando();
   const data = DATA;
   queueMicrotask(() => gravacaoAtual.then(async gravou => {
+    // A alteração foi gravada: a entrada não é mais uma alteração perdida, mesmo esperando o registro no servidor
+    if (gravou) entry.alteracaoGravada = true;
     const id = gravou ? await ApiClient.registrarHistorico(data, { tipo: type, descricao: desc, reverter: revertAction, reverte }) : null;
     if (id === null || id === undefined) entry.estado = 'nao-gravada';
     else {
@@ -318,7 +388,7 @@ export async function lerData(data) {
     await dadosProntos;
     await anterior;
     if (pedido !== pedidoDeData) return false;
-    const { estado, escala, horasBase, horasDosInstrutores, resultados, programa, indisponiveis } = await ApiClient.carregarDia(data);
+    const { estado, escala, horasBase, horasDosInstrutores, resultados, programa, indisponiveis, voltasDeAntes } = await ApiClient.carregarDia(data);
     const historico = await historicoParaPainel(data);
     const maisNova = pedido === pedidoDeData;
     if (!maisNova && data !== DATA) return false;
@@ -329,21 +399,45 @@ export async function lerData(data) {
     avisarDadosIndisponiveis();
     // Data sem escala gravada (por exemplo, uma data nova, copiada da anterior): a escala calculada aparece na hora
     // e é gravada junto com a primeira alteração
-    setRES(escala ? comOsMotivosDaTela(escala) : escalaCalculada());
+    if (escala) setRES(comOsMotivosDaTela(escala));
+    else calcularComOsNoturnosFixos();
     escalaSoCalculada = !escala;
+    noturnosGravados = escala ? assinaturaDosNoturnos(escala, estado.fStatus) : null;
     setAuditLog(historico);
     dadosLidos = maisNova;
+    voltasParaSeguir = maisNova && voltasDeAntes ? { data, deAntes: voltasDeAntes } : null;
+    // A volta que mudou é gravada logo depois: na abertura do app, depois do perfil do endereço (js/main.js, setRole) e do
+    // desenho; numa troca de data, depois do desenho (carregarData). Um temporizador, para js/main.js não precisar chamar
+    if (voltasParaSeguir) setTimeout(seguirAsVoltasDeOntem, 0);
     return true;
   } finally {
     terminou();
   }
 }
 
+// O noturno de ontem mudou depois que a data aberta foi gravada (o operador levou o Noturno para outro avião ou outro INVA,
+// tirou o pedido, ou ele foi cancelado): a escala gravada tem a volta de antes, e a tela mostra a refeita
+// (ApiClient.carregarDia: as voltas não conferem). Quem pode alterar grava a refeita logo depois de a data abrir, com a
+// entrada no histórico, para a escala gravada (o painel da TV, o BI, as horas da data seguinte) não ficar com a volta de
+// antes. Só de hoje em diante: a data passada fica como foi gravada até a próxima alteração nela. Responde se gravou
+let voltasParaSeguir = null;
+function seguirAsVoltasDeOntem() {
+  const pendente = voltasParaSeguir;
+  voltasParaSeguir = null;
+  if (!pendente || pendente.data !== DATA || !dadosLidos || isGestor() || ApiClient.readOnly || DATA < hojeISO()) return false;
+  const texto = voltasQueMudaram(pendente.deAntes, S.noturnosDaVespera);
+  if (!texto || !gravarAlteracao('mod', texto)) return false;
+  showToast('A volta do Noturno mudou com o Noturno de ontem: a escala desta data foi refeita e gravada (veja o Histórico).');
+  return true;
+}
+
 // Abre a escala de outra data. As abas são refeitas com os dados dela, também a do Rodízio: aberta, ela mostraria as
 // filas da data anterior, e o clique agiria sobre uma fila que a pessoa não está vendo. A data está aberta com os dados na
-// tela: os pedidos dela e o BI do período chegam depois, sem segurar quem a abriu
+// tela: os pedidos dela e o BI do período chegam depois, sem segurar quem a abriu. A volta do noturno que mudou é gravada
+// logo depois (lerData agenda seguirAsVoltasDeOntem)
 export async function carregarData(data) {
   if (!await lerData(data)) return;
+  fecharAviso('volta-do-noturno');
   $('#escala-atualizada').hidden = true;
   redesenhar('dados');
   lerPedidosDaData();
@@ -389,4 +483,16 @@ function syncBIHistoryForCurrentDate() {
 // guarda a data para a qual foi feita (no modo compartilhado, todos veem essa data). Os motivos são os da tela
 // (escalaDoMotor, como os da escala gravada)
 const escalaCalculada = () => ({ ...escalaDoMotor(estadoDaEscala()), data: DATA });
+// A escala calculada, com o pino de cada Noturno dela (js/fixos.js, pinosDoNoturno): o Noturno que o motor acabou de pôr
+// ganha o pino dele, e a escala é refeita com ele. Na gravação (save: a escala gravada é a que o motor refaz nas alterações
+// seguintes) e já ao abrir a data sem escala gravada (lerData, sem gravar nada): o pino existe antes da primeira alteração,
+// e a reversão dela (a escolha do instrutor, as Sugestões) devolve o Noturno como estava, em vez de deixar o pino que a
+// gravação dela poria
+function calcularComOsNoturnosFixos() {
+  setRES(escalaCalculada());
+  const fixos = pinosDoNoturno(S, RES);
+  if (fixos === S.fixos) return;
+  S.fixos = fixos;
+  setRES(escalaCalculada());
+}
 

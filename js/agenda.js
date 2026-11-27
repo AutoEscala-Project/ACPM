@@ -1,15 +1,14 @@
 // Agenda de solicitações da secretaria: a regra do prazo (a mesma do servidor, no horário de São Paulo), as datas em que um
 // pedido pode ser registrado, as missões que o pedido do aluno pode ter (as do curso dele), as regras do registro, o limite
 // de voos locais e o pedido da demanda que cada solicitação vira ao ser importada (a importação: js/processamento.js).
-import { MIS, MISSOES_LOCAIS, LIMITE_DE_VOOS_LOCAIS, T, NI, GROUND_DURATION_H, DURACAO_MAXIMA_H } from './config.js';
+import { MIS, MISSOES_LOCAIS, LIMITE_DE_VOOS_LOCAIS, GROUND_DURATION_H, DURACAO_MAXIMA_H } from './config.js';
 import { disponibilidadeAtual, disponibilidadeDoAluno, normalizeMissionFields, duracaoPadraoDaMissao, duracaoFixaDaMissao } from './rules.js';
-import { horariosDaMissao, preferenciasPadrao, paraMinuto, HORARIO_DO_SOLO } from './horarios.js';
+import { horariosDaMissao, preferenciasPadrao, paraMinuto, HORARIO_DO_SOLO, HORARIO_DO_NOTURNO } from './horarios.js';
 import { percursoDoCurso, noturnosDoCurso, rotuloDaMissao } from './programa.js';
 import { hm, fmtH, somarDias } from './format.js';
 
 export const FUSO_DO_AEROCLUBE = 'America/Sao_Paulo';
 
-export const JANELAS_DA_AGENDA = [['manha', 'Manhã'], ['tarde', 'Tarde'], ['noite', 'Noite'], ['horario', 'Horário específico']];
 
 // Data (AAAA-MM-DD) e hora (HH:MM) de um instante no horário de São Paulo
 function emSaoPaulo(instante) {
@@ -102,7 +101,7 @@ export function missoesDoAluno(aluno, programa) {
 // horário específico e da duração, e antes do limite de voos locais e do prazo. As três cópias delas (o modo local, o
 // servidor falso e o cliente falso dos testes) passam pelos casos de test/helpers/casos-da-agenda.js, que o banco também
 // tem. Os horários fixos: o Noturno sai às 17:30 e o Voo Solo, às 06:30 (os de horariosDaMissao)
-export const HORARIOS_FIXOS = Object.freeze({ Noturno: hm(T[NI]), 'Voo Solo': hm(HORARIO_DO_SOLO) });
+export const HORARIOS_FIXOS = Object.freeze({ Noturno: hm(HORARIO_DO_NOTURNO), 'Voo Solo': hm(HORARIO_DO_SOLO) });
 
 // A missão do curso pelo id, nos cursos guardados (o formato de programa_do_curso: as fases e as missões, também as
 // retiradas): { curso, missao, retirada } (retirada: ela ou a fase dela saiu do programa); null, quando não há

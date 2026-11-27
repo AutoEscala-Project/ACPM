@@ -2,7 +2,7 @@
 // peso; a conferência roda o motor numa cópia da escala (o conflito não deixa agendar; a regra do curso pede "Agendar
 // mesmo assim"). O voo agendado fica fixo (o cadeado), o pedido aparece na Demanda com a missão do curso, o peso
 // digitado vai para o cadastro e o Histórico desfaz
-import { test, expect, abrir, irPara, abrirEscala, entrar, AMANHA, abrirHistorico, aprovar, caixaVem, caixaVoa, linhaDoInstrutor, reabrir, relativoDaData, confirmarAgendamento, refazer } from './fixtures.js';
+import { test, expect, abrir, irPara, abrirEscala, entrar, AMANHA, abrirHistorico, aprovar, caixaVem, caixaVoa, linhaDoInstrutor, reabrir, relativoDaData, confirmarAgendamento, refazer, campoDoAluno } from './fixtures.js';
 import { instalarSupabaseFalso, documentosAtuais, CONTAS } from './supabase-falso.js';
 import { aluno, cenario, instrutor, GROUND_C152 } from '../helpers/montar.js';
 import { FROTA_INICIAL } from '../../js/frota.js';
@@ -128,6 +128,31 @@ test.describe('Agendar um voo na Escala', () => {
     await expect(voo(page, 'Maria Silva').locator('.fixo')).toHaveAttribute('aria-label', 'Voo fixo: agendado na escala');
     await expect((await historico(page)).locator('.audit-desc', { hasText: 'Agendado na escala' })).toContainText('PP-03 (Navegação) · 06:30–08:00 · ');
     await expect((await historico(page)).locator('.audit-desc', { hasText: 'Agendado na escala' })).toContainText('· confirmado: fora da ordem (falta PP-02)');
+  });
+
+  // F1h (N9): o instrutor fora do “Priorizar com” da aluna era uma nota; agora é um aviso, que pede a confirmação, e a Escala
+  // guarda a observação do voo posto à mão
+  test('o instrutor fora do “Priorizar com” pede "Agendar mesmo assim"; agendado, a Escala tem a observação', async ({ page }) => {
+    // O Aluno 1000 voa às 14:30: às 06:30 os dois instrutores estão livres, e o do “Priorizar com” vem antes
+    const estado = dia();
+    Object.assign(estado.stu[0], { p1: 870 });
+    estado.stu[1].voaCom = [1];
+    await abrirComCurso(page, estado);
+    await abrirDialogo(page);
+    await expect(page.locator('#agd-instrutor option:checked')).toHaveText('Instrutor 01 · Priorizar com');
+    await expect(page.locator('#agd-conferencia .agd-avisos li')).toHaveCount(0);
+    await page.locator('#agd-instrutor').selectOption('2');
+    await expect(page.locator('#agd-conferencia .agd-avisos li')).toHaveText(['Instrutor 02 está fora do Priorizar com de Maria Silva.']);
+    await expect(page.locator('#agd-conferencia .agd-notas li', { hasText: 'Priorizar com' })).toHaveCount(0);
+    await page.locator('#agd-confirmar').click();
+    await expect(page.locator('#agd-confirmar')).toHaveText('Agendar mesmo assim');
+    await agendar(page);
+    await expect((await historico(page)).locator('.audit-desc', { hasText: 'Agendado na escala' })).toContainText('· confirmado: fora do Priorizar com');
+    await page.locator('#btn-fechar-historico').click();
+    await abrirEscala(page);
+    const avisos = page.locator('#out details.caixa.avisos');
+    await avisos.locator('summary').click();
+    await expect(avisos.locator('li', { hasText: 'Priorizar com' })).toHaveText(['Maria Silva Fora do “Priorizar com” de Maria Silva (Instrutor 01): o voo foi posto à mão com Instrutor 02.']);
   });
 
   test('o 7º voo local do horário pede "Agendar mesmo assim", também quando a aluna vem antes no cadastro', async ({ page }) => {
@@ -264,7 +289,7 @@ test.describe('Agendar um voo na Escala', () => {
     await expect(lista.locator('.audit-desc', { hasText: '(agendamento)' })).toHaveText(['Peso Instrutor 02: 91 kg (agendamento)', 'Peso Maria Silva: 82,5 kg (agendamento)']);
     await page.locator('#btn-fechar-historico').click();
     await irPara(page, 'alu');
-    await expect(page.locator('#alu tr[data-id="1001"] [data-f="kg"]')).toHaveValue('82.5');
+    await expect((await campoDoAluno(page, 1001, 'kg'))).toHaveValue('82.5');
     await irPara(page, 'ins');
     await page.locator('#s-ins [data-vista-ins="cadastro"]').click();
     await expect(page.locator('#inst tr[data-id="2"] [data-f="kg"]')).toHaveValue('91');

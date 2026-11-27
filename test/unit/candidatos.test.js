@@ -3,7 +3,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { ocupacaoDaEscala, problemaDoRecurso, problemaDoAluno, avioesQueServem, instrutoresQueServem } from '../../js/candidatos.js';
-import { TEXTO_DO_PROBLEMA } from '../../js/conflitos.js';
+import { TEXTO_DO_PROBLEMA, CODIGOS_DE_REJEICAO, GRUPO_DO_CONFLITO } from '../../js/conflitos.js';
 import { runAllocationEngine } from '../../js/engine.js';
 import { aluno, cenario, instrutor, GROUND_C152 } from '../helpers/montar.js';
 
@@ -88,11 +88,16 @@ describe('Candidatos: os recursos', () => {
     assert.ok(parafuso.filter(c => c.problema).every(c => c.problema.codigo === 'so-parafuso' || c.r === 'PR-EEE'));
   });
 
-  it('a sala de Ground: ocupada por outra turma no horário (sala-ocupada); nunca em manutenção', () => {
+  it('a sala de Ground: ocupada por outra turma no horário (sala-ocupada); indisponível na data só com "Disponível" desligado (S4)', () => {
     const turma = ocupacaoDaEscala([linha('1003_0_1', { r: 'SALA-GROUND', isGround: true, classKey: '1003_0_1', eqType: 'Sala Ground', a: 500, b: 590, h: 1.5 })]);
-    const sala = (a, b) => avioesQueServem(estado, turma, { tipo: 'Sala Ground', mis: 'Ground C152', a, b, ground: true }).map(c => [c.r, c.problema && c.problema.codigo]);
-    assert.deepEqual(sala(500, 590), [['SALA-GROUND', 'sala-ocupada']]);
-    assert.deepEqual(sala(610, 700), [['SALA-GROUND', null]]);
+    const sala = (e, a, b) => avioesQueServem(e, turma, { tipo: 'Sala Ground', mis: 'Ground C152', a, b, ground: true }).map(c => [c.r, c.problema && c.problema.codigo]);
+    assert.equal(Object.hasOwn(estado.av, 'SALA-GROUND'), false, 'a data sem a chave da sala');
+    assert.deepEqual(sala(estado, 500, 590), [['SALA-GROUND', 'sala-ocupada']]);
+    assert.deepEqual(sala(estado, 610, 700), [['SALA-GROUND', null]]);
+    assert.deepEqual(sala({ ...estado, av: { ...estado.av, 'SALA-GROUND': true } }, 610, 700), [['SALA-GROUND', null]]);
+    const fechada = { ...estado, av: { ...estado.av, 'SALA-GROUND': false } };
+    assert.deepEqual(sala(fechada, 610, 700), [['SALA-GROUND', 'sala-indisponivel']]);
+    assert.ok(CODIGOS_DE_REJEICAO.includes('sala-indisponivel') && GRUPO_DO_CONFLITO['sala-indisponivel'] === 'aviao');
   });
 });
 

@@ -108,6 +108,21 @@ describe('Escala gravada', () => {
     assert.deepEqual(normalizarEscalaGravada(comExtras), base);
   });
 
+  // A lista de espera (F1h, N14): a recusa do pedido com horário exato que espera guarda o minuto e o lugar
+  it('a espera da recusa fica na escala gravada; malformada, ou fora de uma recusa, invalida a escala', () => {
+    const base = saidas[0];
+    const { al } = runAllocationEngine(cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, { p2: -1, jan: 'h500', solicitacao: 1 }), aluno(1001, { p2: -1, jan: 'h500', solicitacao: 2 })] }));
+    const recusa = al.find(a => a.espera);
+    assert.deepEqual(recusa.espera, { minuto: 500, lugar: 1 });
+    assert.deepEqual(normalizarEscalaGravada({ ...base, al: [recusa] }).al, [recusa]);
+    // Os campos a mais da espera saem
+    assert.deepEqual(normalizarEscalaGravada({ ...base, al: [{ ...recusa, espera: { ...recusa.espera, onclick: ATAQUE } }] }).al, [recusa]);
+    for (const espera of [ATAQUE, null, [], { minuto: 500 }, { lugar: 1 }, { minuto: -1, lugar: 1 }, { minuto: 1441, lugar: 1 }, { minuto: 500.5, lugar: 1 }, { minuto: 500, lugar: 0 }, { minuto: 500, lugar: ATAQUE }]) {
+      assert.equal(normalizarEscalaGravada({ ...base, al: [{ ...recusa, espera }] }), null, JSON.stringify(espera));
+    }
+    assert.equal(normalizarEscalaGravada({ ...base, al: [{ t: 'warn', s: 'x', m: 'y', codigo: 'sem-peso', espera: { minuto: 500, lugar: 1 } }] }), null, 'a espera num aviso');
+  });
+
   it('sem lista de voos, ou sem os campos de que a tela precisa, não há escala gravada', () => {
     assert.equal(normalizarEscalaGravada(null), null);
     assert.equal(normalizarEscalaGravada({ out: 'x', al: [], tot: 0 }), null);
