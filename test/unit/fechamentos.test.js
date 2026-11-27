@@ -142,3 +142,63 @@ describe('rotuloDosFechamentos', () => {
     assert.deepEqual(rotuloDosFechamentos([{ de: 0, ate: 1440, categorias: ['sim'] }]), ['00:00–24:00 · Simulador']);
   });
 });
+
+// Os leitores (J, commit "fechamentos"): o motor, a compactação, as Sugestões, o agendamento e o editor de horários leem
+// estado.fechamentos; sem ele (os dias antes do formato 28 e os estados dos goldens), fechamentosDoWin(estado.win)
+describe('fechamentosDoEstado e o motor', () => {
+  test('o dia com fechamentos usa os dele; sem eles, os do win', async () => {
+    const { fechamentosDoEstado } = await import('../../js/fechamentos.js');
+    const win = T.map(() => true);
+    win[4] = false;
+    assert.deepEqual(fechamentosDoEstado({ win }), [{ de: T[4], ate: T[5] }]);
+    assert.deepEqual(fechamentosDoEstado({ win, fechamentos: [{ de: 600, ate: 700 }] }), [{ de: 600, ate: 700 }]);
+    assert.deepEqual(fechamentosDoEstado({ win, fechamentos: [] }), [], 'a lista vazia: nada fechado, o win não vale mais');
+  });
+
+  test('os 40 cenários e o exemplo com o win trocado pelos fechamentos dele dão os goldens', async () => {
+    const { runAllocationEngine } = await import('../../js/engine.js');
+    const { gerarCenario } = await import('../helpers/cenarios.js');
+    const { lerGoldens } = await import('../helpers/goldens.js');
+    const semWin = estado => {
+      const { win, ...resto } = estado;
+      return { ...resto, win: T.map(() => true), fechamentos: fechamentosDoWin(win) };
+    };
+    const goldens = lerGoldens();
+    assert.deepEqual(JSON.parse(JSON.stringify(runAllocationEngine(semWin(goldens.exemplo.estado)))), goldens.exemplo.saida);
+    for (const { seed, saida } of goldens.cenarios) assert.deepEqual(JSON.parse(JSON.stringify(runAllocationEngine(semWin(gerarCenario(seed))))), saida, `cenário ${seed}`);
+  });
+
+  test('um fechamento só do C152 deixa o C172 e o Ground; o de todos fecha os três', async () => {
+    const { runAllocationEngine } = await import('../../js/engine.js');
+    const { aluno, cenario, instrutor, GROUND_C152 } = await import('../helpers/montar.js');
+    const estado = fechamentos => ({
+      ...cenario({ ins: [instrutor(1, 9), instrutor(2, 9), instrutor(3, 9)], stu: [
+        aluno(1000, { mis: 'Voo Local', eq: 'C152', p1: 500, p2: -1 }), aluno(1001, { mis: 'Voo Local', eq: 'C172', p1: 500, p2: -1 }),
+        aluno(1002, { ...GROUND_C152, p1: 500, p2: -1 })] }),
+      fechamentos
+    });
+    const inicio = (res, id) => (res.out.find(o => o.stuId === id) || {}).a;
+    const soC152 = runAllocationEngine(estado([{ de: 500, ate: 610, categorias: ['C152'] }]), { compactar: false });
+    assert.notEqual(inicio(soC152, 1000), 500, 'o C152 não sai às 08:20');
+    assert.equal(inicio(soC152, 1001), 500, 'o C172 sai às 08:20');
+    assert.equal(inicio(soC152, 1002), 500, 'o Ground às 08:20');
+    const todos = runAllocationEngine(estado([{ de: 500, ate: 610 }]), { compactar: false });
+    for (const id of [1000, 1001, 1002]) assert.notEqual(inicio(todos, id), 500, `aluno ${id}`);
+  });
+
+  test('o Noturno fechado por 17:30–24:00; o pino num horário fechado fica em conflito horario-fechado', async () => {
+    const { runAllocationEngine } = await import('../../js/engine.js');
+    const { aluno, cenario, instrutor } = await import('../helpers/montar.js');
+    const noturno = { mis: 'Noturno', eq: 'C172', p1: 1050, p2: -1 };
+    const base = cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, noturno)] });
+    assert.equal(runAllocationEngine({ ...base, fechamentos: [] }).out.length, 1);
+    const fechado = runAllocationEngine({ ...base, fechamentos: [{ de: 1050, ate: 1440 }] });
+    assert.equal(fechado.out.length, 0);
+    const voo = runAllocationEngine(base).out[0];
+    const pino = { [voo.fKey]: { a: voo.a, b: voo.b, r: voo.r, insId: voo.insId, agendado: true } };
+    const comPino = runAllocationEngine({ ...base, fixos: pino, fechamentos: [{ de: 1000, ate: 1100, categorias: ['C172'] }] });
+    assert.ok((comPino.out[0].conflitoCodigos || []).includes('horario-fechado'));
+    const deOutra = runAllocationEngine({ ...base, fixos: pino, fechamentos: [{ de: 1000, ate: 1100, categorias: ['C152'] }] });
+    assert.ok(!(deOutra.out[0].conflitoCodigos || []).includes('horario-fechado'), 'o fechamento de outra categoria não o pega');
+  });
+});
