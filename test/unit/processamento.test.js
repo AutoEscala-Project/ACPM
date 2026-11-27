@@ -402,6 +402,12 @@ describe('Importar as solicitações da agenda para a demanda', () => {
     assert.deepEqual([e.stu[1].etapa, e.stu[1].solicitacao], ['PP-02', 93], 'a do operador fica');
     assert.deepEqual(resumo.semMissaoDoCurso, [], 'nada a inferir num curso encerrado');
     assert.equal(missaoDaEntrada({ stu: [], fStatus: {} }, aluno(1000, { fly: false }, { curso: 'PP' }), pedido(94, 1000), { programa }).nota, 'curso-encerrado');
+    // A missão do curso que o pedido escolheu na Agenda, antes de o curso ser encerrado, fica (regra 8)
+    const [PP] = programa;
+    const escolhida = { ...pedido(95, 1000), missao_do_curso: '00000000-0000-4000-8000-000000000001' };
+    const comId = [{ ...PP, missoes: PP.missoes.map((m, i) => (i === 0 ? { ...m, id: escolhida.missao_do_curso } : m)) }];
+    const daAgenda = missaoDaEntrada({ stu: [], fStatus: {} }, aluno(1000, { fly: false }, { curso: 'PP' }), escolhida, { programa: comId, cursos: comId });
+    assert.deepEqual([daAgenda.missao && daAgenda.missao.codigo, daAgenda.de], ['PP-01', 'pedido']);
   });
 
   // A Agenda importa com o programa da tela (programaParaInferir, em js/eventos/agenda.js): sem os resultados ou os
