@@ -132,8 +132,8 @@ describe('Dados pessoais: os casos do nome completo, na regra pura', () => {
 });
 
 // A lista lida traz só o CANAC, o nome completo e a versão: a pessoa já lida inteira (a leitura dela pode chegar antes da
-// lista) fica inteira enquanto a versão é a mesma; com a versão nova, vale a lista (a pessoa é lida de novo ao ser
-// escolhida); a lida que a lista não trouxe fica (a lista tem no máximo 1000 linhas)
+// lista) fica inteira enquanto a versão é a mesma; com a versão nova, vale a lista (a seção lê a pessoa de novo: o e2e
+// "a lista que chega depois da leitura da pessoa"); a lida que a lista não trouxe fica (a lista tem no máximo 1000 linhas)
 describe('Dados pessoais: a lista lida junto com as pessoas já lidas', () => {
   it('a pessoa lida inteira fica com a mesma versão; com outra versão, vale a lista; as outras vêm da lista', () => {
     const v1 = '2026-11-10T12:00:00.000Z', v2 = '2026-11-10T13:00:00.000Z';

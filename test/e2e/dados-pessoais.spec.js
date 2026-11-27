@@ -158,13 +158,15 @@ test.describe('Dados pessoais (neste navegador)', () => {
 
 test.describe('Dados pessoais (modo compartilhado)', () => {
   // Cada conta no seu navegador; com servidor, os navegadores dividem o mesmo servidor. viewport: a tela (o celular)
-  async function entrar(browser, conta, servidorComum = null, { viewport } = {}) {
+  // antesDeEntrar: o que a página prepara antes do login (uma rota que segura uma resposta)
+  async function entrar(browser, conta, servidorComum = null, { viewport, antesDeEntrar } = {}) {
     const context = await browser.newContext({ baseURL: test.info().project.use.baseURL, locale: 'pt-BR', timezoneId: 'America/Sao_Paulo', ...(viewport ? { viewport } : {}) });
     await prepararContexto(context);
     const servidor = servidorComum || await instalarSupabaseFalso(context, documentosAtuais(estado(), AMANHA));
     if (servidorComum) await servidorComum.instalar(context);
     const page = await context.newPage();
     const erros = vigiarErros(page);
+    if (antesDeEntrar) await antesDeEntrar(page);
     await entrarNoApp(page, conta);
     return { context, servidor, page, erros };
   }
@@ -386,6 +388,32 @@ test.describe('Dados pessoais (modo compartilhado)', () => {
     await page.locator('#det-alu-dados-tentar').click();
     await expect(campo(page, 'CPF')).toBeEnabled({ timeout: 20000 });
     expect(erros.filter(e => !e.includes('503'))).toEqual([]);
+    await context.close();
+  });
+
+  // A leitura da pessoa chega antes da lista, e outra pessoa grava entre as duas: a lista traz a versão nova só com o CANAC
+  // e o nome completo; a seção lê a pessoa de novo (não fica com o CPF, o celular e o e-mail vazios e editáveis)
+  test('a lista que chega depois da leitura da pessoa, com outra versão: a seção lê a pessoa de novo', async ({ browser }) => {
+    let soltarLista;
+    const listaSolta = new Promise(r => { soltarLista = r; });
+    const segurarALista = page => page.route('**/rest/v1/dados_pessoais?*', async rota => {
+      const url = rota.request().url();
+      if (url.includes('tipo=eq.aluno') && !url.includes('id_cadastro=eq.')) await listaSolta;
+      await rota.fallback();
+    });
+    const servidor = criarSupabaseFalso(documentosAtuais(estado(), AMANHA));
+    servidor.dadosPessoais.set('aluno:1001', { cpf: '52998224725', canac: '111111', email: 'v1@exemplo.com', atualizado_em: '2026-11-10T12:00:00.000Z', atualizado_por: 'Operador 01' });
+    const { context, page, erros } = await entrar(browser, CONTAS.operador, servidor, { antesDeEntrar: segurarALista });
+    await abrirDadosDoAluno(page, 1001);
+    await expect(campo(page, 'CPF')).toHaveValue('529.982.247-25');
+    // Outra pessoa grava; depois a lista chega, com a versão nova
+    servidor.dadosPessoais.set('aluno:1001', { cpf: '11144477735', canac: '222222', email: 'v2@exemplo.com', atualizado_em: '2026-11-10T13:00:00.000Z', atualizado_por: 'Operador 02' });
+    soltarLista();
+    await expect(campo(page, 'CANAC')).toHaveValue('222222');
+    await expect(campo(page, 'CPF')).toHaveValue('111.444.777-35');
+    await expect(campo(page, 'E-mail')).toHaveValue('v2@exemplo.com');
+    await expect(campo(page, 'CPF')).toBeEnabled();
+    expect(erros).toEqual([]);
     await context.close();
   });
 

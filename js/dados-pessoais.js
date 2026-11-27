@@ -132,8 +132,8 @@ export function gravarDadosPessoais(tabela, tipo, id, entrada, { hoje, autor = n
 
 // A lista lida (só o CANAC, o nome completo e a versão de cada um) junto com as pessoas já lidas inteiras (guardados): a
 // leitura de uma pessoa pode chegar antes da lista, e a lista não pode apagar dela o CPF, o nascimento, o celular e o
-// e-mail. Com a mesma versão, fica a lida; com outra, vale a lista (a pessoa é lida de novo ao ser escolhida); a lida
-// que a lista não trouxe fica. Os dois pelo id
+// e-mail. Com a mesma versão, fica a lida; com outra, vale a lista (a seção vê a versão diferente da lida e lê a pessoa
+// de novo: pessoaEscolhida, js/views/editor-de-dados-pessoais.js); a lida que a lista não trouxe fica. Os dois pelo id
 export function juntarAListaLida(lista, guardados) {
   const juntos = { ...guardados };
   for (const [id, d] of Object.entries(lista)) juntos[id] = guardados[id] && guardados[id].atualizado_em === d.atualizado_em ? { ...d, ...guardados[id] } : d;

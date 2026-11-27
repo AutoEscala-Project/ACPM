@@ -137,6 +137,10 @@ export function pessoaEscolhida(tipo, id, aoMudar) {
   clearTimeout(esperas.get(tipo));
   if (id === null || id === undefined || !podeVerDadosPessoais()) return;
   const p = pessoa(tipo, id);
+  // A lista que chegou depois da leitura com outra versão (outra pessoa gravou entre as duas) trouxe só o CANAC e o nome
+  // completo: a pessoa é lida de novo (o rascunho fica: a gravação dele é recusada e lê de novo)
+  const guardada = (dadosDe(tipo, id) || {}).atualizado_em || null;
+  if (p.lida && !p.enviando && !p.rascunho && guardada !== p.versao) p.lida = false;
   if (p.lida || p.lendo || p.enviando || (p.falhou && !nova)) return;
   esperas.set(tipo, setTimeout(() => ler(tipo, id), ESPERA_DA_LEITURA));
 }
