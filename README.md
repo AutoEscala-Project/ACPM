@@ -105,7 +105,8 @@ npm run test:e2e       # aplicação no navegador (Playwright)
 - Escalas fictícias nas próximas datas da prévia (só nas datas sem escala; usa o Supabase CLI autenticado, sem a
   senha do banco): `node scripts/semear-dias-previa.mjs [dias de operação] [data inicial]` (`SECO=1` só mostra). Com cada
   data, os pedidos da agenda (`scripts/pedidos-da-previa.mjs`): um aprovado para cada aluno com voo, ligado ao registro dele
-  e a `importadas`, dois que aguardam a aprovação e um cancelado. O script recusa a produção antes de qualquer consulta.
+  e a `importadas`, dois que aguardam a aprovação e um cancelado, gravados com a data numa consulta só (a data que falhou
+  fica sem eles, e rodar de novo grava só as que faltam). O script recusa a produção antes de qualquer consulta.
 - Os testes do banco que tocam a agenda (`agenda*.test.sql`, `contas.test.sql`, `painel.test.sql`) contam os dias pelo
   horário de São Paulo: o `current_date` do servidor é o de UTC, e um pedido num domingo ou numa data que já passou é
   recusado mesmo pela exceção da coordenação.
@@ -207,8 +208,10 @@ As funções (todas `security definer` com o `search_path` vazio, menos a contag
 
 - `registrar_solicitacao` de 16 argumentos (a de 13 com `p_horario2`, `p_aprovar` e `p_esperar`, nenhum com valor padrão),
   a que o app chama. As de 13, 11 e 10 argumentos ficam como atalhos para as abas abertas do app de antes, e as quatro
-  passam por uma função interna (`registrar_solicitacao_interna`, que ninguém chama pela API) com as regras da de 13. A de 9
-  argumentos (o pedido por período) saiu. Além das regras de antes, ela recusa a 2ª preferência igual à 1ª, fora do
+  passam por uma função interna (`registrar_solicitacao_interna`, que ninguém chama pela API, nem com a chave
+  `service_role`): a de 16 e a de 13 com as regras da de 13 (o recurso, os horários fixos e a missão do curso); a de 11 e a
+  de 10 sem elas, como eram (o recurso pode faltar, e o que vem não é comparado com a missão). A de 9 argumentos (o pedido
+  por período) saiu. Além das regras de antes, ela recusa a 2ª preferência igual à 1ª, fora do
   formato ou no Noturno e no Voo Solo (`22023`, `horario2`), o domingo e a data que já passou, mesmo pela exceção da
   coordenação (`PT403`, `domingo` ou `passada`, pela data de São Paulo) e `p_aprovar` de quem não é operador (`42501`,
   `aprovar`); o prazo agora diz a dica `prazo`, e a exceção da secretaria, `excecao`. O 7º voo local no mesmo horário
@@ -238,9 +241,10 @@ de `test/helpers/casos-da-agenda.js` e `test/helpers/casos-das-solicitacoes.js`,
 (`test/unit/espelho-do-banco.test.js` confere os nomes, as recusas e as constantes).
 
 **A ordem:** a migração na prévia com `npm run test:db`, e só então o merge: o app novo chama a função de 16 argumentos e
-não tenta outra. O app no ar continua igual com ela (ele chama a de 13, agora um atalho), exceto que o pedido do operador
-nasce aprovado e que o domingo, a data que já passou e o cancelamento do aprovado de uma data que já passou são
-recusados. Na produção, ela vai antes do merge do D1, no dia da publicação.
+não tenta outra. O app no ar continua igual com ela (o da produção chama a de 11 e, sem ela, a de 10; o da prévia antes do
+D1, a de 13: as três agora são atalhos), exceto que o pedido do operador nasce aprovado e que o domingo, a data que já
+passou e o cancelamento do aprovado de uma data que já passou são recusados. Na produção, ela vai antes do merge do D1, no
+dia da publicação.
 
 ## O que a missão do curso exige do INVA
 
