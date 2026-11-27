@@ -4,7 +4,7 @@
 // ↶ dela), a busca pelo nome completo e o "Apagar os dados pessoais" do aluno inativo
 import {
   test, comProgresso, expect, abrir, abrirSintetico, abrirComExemplo, irPara, irParaVista, filtrarCursos, confirmar, AGORA, AMANHA, alvosPequenos,
-  appPronto, botaoDaAba, dataAberta, diaSeguinte, larguraDaPagina, abrirAluno, campoDoAberto, linhaDoAluno, linhasDosAlunos, nomesNaLista,
+  appPronto, dataAberta, diaSeguinte, larguraDaPagina, abrirAluno, campoDoAberto, linhaDoAluno, linhasDosAlunos, nomesNaLista,
   etiquetasDoAberto, nenhumNaLista, abrirHistorico, campoDaAgenda
 } from './fixtures.js';
 import { documentosAtuais } from './supabase-falso.js';
