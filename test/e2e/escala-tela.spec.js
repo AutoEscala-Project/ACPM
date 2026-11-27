@@ -216,7 +216,7 @@ test.describe('Tela da Escala', () => {
     ] }) });
     await abrirEscala(page);
     await expect(page.locator('#out thead th')).toHaveText(['Horário', 'Aluno', 'Missão', 'Recurso', 'Instrutor', 'Peso', 'Status', '']);
-    await expect(page.locator('#out tr.win').first()).toHaveText('06:30 · 1º tempo 1 decolagem ou aula');
+    await expect(page.locator('#out tr.win').first()).toHaveText('06:30 · 1 decolagem ou aula');
     const primeiro = page.locator('#out tbody tr:not(.win)', { hasText: 'Aluno 1000' });
     await expect(primeiro.locator('td').nth(0)).toHaveText('06:30–07:30 1 h');
     await expect(primeiro.locator('td').nth(5)).toHaveText('140 / 170 kg');
@@ -310,21 +310,24 @@ test.describe('Tela da Escala', () => {
     await abrirComExemplo(page);
     await abrirEscala(page);
     const botao = page.locator('#out tr.win').first().locator('button.win-btn');
-    const voos = w => page.locator(`#out tbody tr[data-w="${w}"]:not(.win)`);
+    // Os voos de um grupo, pelo horário de início (J, S1: data-inicio, em minutos)
+    const primeiro = await page.locator('#out tr.win').first().getAttribute('data-inicio');
+    const segundo = await page.locator('#out tr.win').nth(1).getAttribute('data-inicio');
+    const voos = inicio => page.locator(`#out tbody tr[data-inicio="${inicio}"]:not(.win)`);
     await expect(botao).toHaveAttribute('aria-expanded', 'true');
-    expect(await voos(0).count()).toBeGreaterThan(0);
+    expect(await voos(primeiro).count()).toBeGreaterThan(0);
     await botao.click();
     await expect(page.locator('#out tr.win').first().locator('button.win-btn')).toHaveAttribute('aria-expanded', 'false');
-    await expect(voos(0).first()).toBeHidden();
-    expect(await voos(0).evaluateAll(trs => trs.every(tr => tr.hidden))).toBe(true);
-    await expect(voos(1).first()).toBeVisible();
+    await expect(voos(primeiro).first()).toBeHidden();
+    expect(await voos(primeiro).evaluateAll(trs => trs.every(tr => tr.hidden))).toBe(true);
+    await expect(voos(segundo).first()).toBeVisible();
 
     await page.locator('#s-esc [data-tl="eq"]').click();
     await page.locator('#s-esc [data-tl="lista"]').click();
     await expect(page.locator('#out tr.win').first().locator('button.win-btn')).toHaveAttribute('aria-expanded', 'false');
-    await expect(voos(0).first()).toBeHidden();
+    await expect(voos(primeiro).first()).toBeHidden();
     await page.locator('#out tr.win').first().locator('button.win-btn').click();
-    await expect(voos(0).first()).toBeVisible();
+    await expect(voos(primeiro).first()).toBeVisible();
   });
 
   test('cada alteração mostra a hora em que a escala foi refeita', async ({ page }) => {

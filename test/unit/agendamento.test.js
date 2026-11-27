@@ -86,9 +86,12 @@ describe('Agendamento: os horários e o encaixe', () => {
     const datas = { data: DATA, hoje: DATA, agora: 605 };
     assert.deepEqual(contextoInicial('dia', datas), { valor: 'dia', origem: 'dia', r: null, insId: null, classKey: null, w: null, minuto: 605, desde: 605, ate: null, perto: false });
     assert.deepEqual([contextoInicial('dia', { ...datas, hoje: HOJE })].map(c => [c.minuto, c.desde]), [[0, null]]);
-    assert.deepEqual(['r:PR-VOB', 'i:7', 'w:2', 'w:8', 't:GND_1'].map(v => contextoInicial(v, { data: DATA, hoje: HOJE })).map(c => [c.origem, c.r, c.insId, c.desde, c.ate, c.classKey]), [
-      ['recurso', 'PR-VOB', null, null, null, null], ['instrutor', null, 7, null, null, null], ['periodo', null, null, 610, 690, null],
-      ['periodo', null, null, 1050, 1440, null], ['turma', null, null, null, null, 'GND_1']
+    // J (S1): o "+" de um horário da Lista agenda a partir do minuto dele (h:<minuto>), sem limite até o seguinte; o "w:"
+    // dos tempos de antes não abre mais nada
+    assert.deepEqual(['r:PR-VOB', 'i:7', 'h:610', 'h:1050', 't:GND_1', 'w:2', 'h:1440', 'h:x'].map(v => contextoInicial(v, { data: DATA, hoje: HOJE })).map(c => [c.origem, c.r, c.insId, c.desde, c.ate, c.classKey]), [
+      ['recurso', 'PR-VOB', null, null, null, null], ['instrutor', null, 7, null, null, null], ['horario', null, null, 610, null, null],
+      ['horario', null, null, 1050, null, null], ['turma', null, null, null, null, 'GND_1'],
+      ['dia', null, null, null, null, null], ['dia', null, null, null, null, null], ['dia', null, null, null, null, null]
     ]);
     const clique = contextoInicial({ r: 'PR-VOB', minuto: 625 }, datas);
     assert.deepEqual([clique.origem, clique.r, clique.minuto, clique.perto, clique.desde], ['mapa', 'PR-VOB', 625, true, null]);
@@ -131,7 +134,7 @@ describe('Agendamento: os padrões do formulário', () => {
     // A linha da sala de Ground, com um aluno cuja missão é um voo: o voo vai para um avião, e a descrição diz por quê
     assert.deepEqual(descricoes('r:SALA-GROUND'), ['Sala Ground · o primeiro horário livre', 'R · C152 · o primeiro horário livre: 06:30. A sala de Ground não serve ao Voo Local: o voo vai no R.']);
     assert.deepEqual(descricoes('i:7'), ['Com Instrutor 07 · o primeiro horário livre', 'Com Instrutor 07 · o primeiro horário livre: 06:30']);
-    assert.deepEqual(descricoes('w:2'), ['O primeiro horário livre a partir das 10:10', 'R · C152 · o primeiro horário livre a partir das 10:10: 10:10']);
+    assert.deepEqual(descricoes('h:610'), ['O primeiro horário livre a partir das 10:10', 'R · C152 · o primeiro horário livre a partir das 10:10: 10:10']);
     assert.deepEqual(descricoes({ r: 'PR-VOB', minuto: 865 }), ['PR-VOB · C152 · clique perto das 14:25', 'R · C152 · clique perto das 14:25 → 14:30 (horários do C152)']);
     assert.deepEqual(descricoes({ insId: 7, minuto: 500 }), ['Com Instrutor 07 · clique perto das 08:20', 'Com Instrutor 07 · R · C152 · clique perto das 08:20 → 08:20 (horários do C152)']);
     assert.deepEqual(descricoes(`t:${turma.classKey}`), Array(2).fill(`Turma de Ground C152 das 08:20 com ${turma.ins}`));

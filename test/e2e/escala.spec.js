@@ -77,6 +77,9 @@ test.describe('Escala', () => {
       expect(conteudo, trecho).toContain(trecho);
     }
     expect(conteudo.match(/\/Type \/Page\b(?!s)/g).length).toBeGreaterThanOrEqual(2);
+    // J (S1): os grupos pelo horário de início de cada voo (o PA-34 das 08:30 tem o seu, fora do das 08:20)
+    expect(conteudo).toMatch(/08:30  -  \d+ lan/);
+    expect(conteudo).not.toMatch(/º tempo/);
     // Uma notificação temporária, e não um texto fixo na barra
     await expect(page.locator('#msg')).toHaveCount(0);
     // Verde (deu certo), e não o amarelo dos avisos
