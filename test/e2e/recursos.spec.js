@@ -74,7 +74,7 @@ test.describe('Recursos: a lista por categoria', () => {
     await expect(linhaDoRecurso(page, 'PR-BTB').locator('.lista-l3')).toHaveText('11/11 · em manutenção');
     await expect(page.locator('#log-cnt')).toHaveText('1');
     await expect(page.locator('#audit-log-list')).toContainText('PR-BTB: Manutenção');
-    await expect(cabecalhoDaCategoria(page, 'C172')).toContainText('8 de 9 disponíveis');
+    await expect(cabecalhoDaCategoria(page, 'C152')).toContainText('12 de 13 disponíveis');
     await page.reload();
     await abrirRecursos(page);
     await expect(caixaDisponivel(page, 'PR-BTB')).not.toBeChecked();
@@ -327,17 +327,21 @@ test.describe('Recursos: acrescentar, retirar e o "Ativo"', () => {
     await abrirRecursos(page);
     await linhaDoRecurso(page, 'PT-KIW').locator('.lista-chave').click();
     await expect(page.locator('#toast-box')).toContainText('PT-KIW');
-    await expect(linhaDoRecurso(page, 'PT-KIW')).toHaveCount(0);
-    await expect(contagemDosRecursos(page)).toHaveText('26 recursos');
-    const inativos = page.locator('#rec-inativos');
-    await expect(inativos).toHaveText('Mostrar inativos (1)');
-    await inativos.click();
-    await expect(inativos).toHaveAttribute('aria-pressed', 'true');
+    // A linha não some debaixo do ponteiro (F2): fica, apagada, com "inativo", até a lista mudar
     const linha = linhaDoRecurso(page, 'PT-KIW');
     await expect(linha).toHaveClass(/\binativo\b/);
     await expect(linha.locator('.lista-inativo')).toHaveText('inativo');
     await expect(linha.locator('.lista-rapida')).toHaveCount(0);
     await expect(linha.locator('.lista-chave')).toHaveAttribute('aria-checked', 'false');
+    await expect(contagemDosRecursos(page)).toHaveText('26 recursos');
+    const inativos = page.locator('#rec-inativos');
+    await expect(inativos).toHaveText('Mostrar inativos (1)');
+    await inativos.click();
+    await expect(inativos).toHaveAttribute('aria-pressed', 'true');
+    await expect(linha).toHaveCount(1);
+    await inativos.click();
+    await expect(linha).toHaveCount(0);
+    await inativos.click();
     await abrirRecurso(page, 'PT-KIW');
     await expect(page.locator('#det-rec-aviso')).toContainText('Inativo no cadastro');
     await expect(detalheDoRecurso(page).locator('[data-act="agendar"]')).toHaveCount(0);

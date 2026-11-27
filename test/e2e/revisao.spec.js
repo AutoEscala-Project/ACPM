@@ -10,10 +10,11 @@ const tresVoosNoPPLJV = () => cenario({
   semAeronaves: apenas('C152', 'PP-LJV')
 });
 
+// As horas são gravadas ao sair do campo (o detalhe não redesenha o campo com o foco nele)
 async function informarHoras(page, matricula, horas) {
   const campo = await horasDoRecurso(page, matricula);
   await campo.fill(horas);
-  await campo.dispatchEvent('change');
+  await campo.press('Tab');
   return campo;
 }
 

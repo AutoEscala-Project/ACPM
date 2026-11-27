@@ -13,7 +13,8 @@ export const abrirRecursos = page => irPara(page, 'rec');
 // 'C152', 'C172', 'sim', 'PA-34', 'ground'), a busca e a contagem
 export const listaDosRecursos = page => page.locator('#rec');
 export const linhaDoRecurso = (page, reg) => linhaNaLista(page, 'rec', reg);
-export const linhasDosRecursos = page => page.locator('#rec > li.lista-linha');
+// (só os recursos: o item fixo do hangar também é uma linha da lista)
+export const linhasDosRecursos = page => page.locator('#rec > li.lista-linha[data-chave^="i:"]');
 export const gruposDosRecursos = page => page.locator('#rec > li.lista-grupo');
 export const cabecalhoDaCategoria = (page, cat) => page.locator(`#rec > li[data-chave="g:${cat}"]`);
 export const buscaDosRecursos = page => page.locator('[data-flt="rec"]');

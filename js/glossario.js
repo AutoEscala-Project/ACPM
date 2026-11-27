@@ -98,22 +98,16 @@ const TERMOS = {
   // Recursos
   'horario-fechado-na-data': { aba: 'Recursos', termo: 'Horário apagado', texto: 'O horário está fechado nesta data (Escala › Horários fechados nesta data): nesta data, nenhum voo nem aula de Ground da categoria sai nele. Ele continua na lista para as outras datas.' },
   fechamentos: { aba: 'Escala', termo: 'Horários fechados', texto: 'Os intervalos desta data em que a escola não opera, para todos os recursos ou para as categorias marcadas (na Escala). Nenhum voo nem aula de Ground sai neles; a data seguinte começa com o dia todo aberto.' },
-  'horarios-de-decolagem': { aba: 'Recursos', termo: 'Horários de decolagem', texto: 'Os horários em que cada categoria pode decolar (o PA-34 tem os seus). Valem para todas as datas e ficam em Recursos › Cadastro.' },
+  'horarios-de-decolagem': { aba: 'Recursos', termo: 'Horários de decolagem', texto: 'Os horários em que cada categoria pode decolar (o PA-34 tem os seus). Valem para todas as datas e ficam no detalhe da categoria, em Recursos (o cabeçalho dela na lista).' },
   'horas-disponiveis': {
     aba: 'Recursos', termo: 'Horas disponíveis',
     texto: `Quanto o avião ainda pode voar até a revisão de ${REVISAO_H} horas, no início desta data. Sem horas para um voo de ${MENOR_VOO_H} h, ele para e a escala avisa.`
   },
-  'filtro-das-categorias': {
-    aba: 'Recursos', termo: 'Filtro das categorias',
-    texto: 'Mostra só os recursos de alguma das categorias marcadas, nas duas vistas: C152 e PA-34 mostram os dois. Nunca vale para a ordem no hangar. Sem nenhuma marcada, mostra todos.',
-    funcionalidade: 'hangar',
-    textoSem: 'Mostra só os recursos de alguma das categorias marcadas, nas duas vistas: C152 e PA-34 mostram os dois. Sem nenhuma marcada, mostra todos.'
-  },
-  hangar: { funcionalidade: 'hangar', aba: 'Recursos', termo: 'Ordem no hangar', texto: 'Da frente para o fundo, sempre com todos os aviões (Recursos › Disponibilidade do dia): entre aviões livres, o da frente sai primeiro.' },
+  hangar: { funcionalidade: 'hangar', aba: 'Recursos', termo: 'Ordem no hangar', texto: 'Da frente para o fundo, sempre com todos os aviões ativos (o item do alto da lista de Recursos): entre aviões livres, o da frente sai primeiro.' },
   noturno: { aba: 'Escala', termo: 'Noturno', texto: 'Missão de dois dias, num avião só: sai às 17:30 para BH (1 h de translado) e voa 3 h de noturno em BH; no dia seguinte, a volta decola de BH às 07:30, e o instrutor, o aluno e o avião ficam livres às 10:10.' },
-  'so-vfr': { aba: 'Recursos', termo: 'Só VFR', texto: 'Avião não homologado IFR: voa as missões VFR, e nenhum voo IFR (IFR, cheques IFR, o noturno do PC) vai para ele. Marque na frota, em Recursos › Cadastro.' },
-  'habilitacao-propria': { aba: 'Recursos', termo: 'Habilitação própria', texto: 'O que o próprio recurso exige do instrutor, além da habilitação do tipo: uma habilitação só dele (por exemplo, a do PR-VOM), marcada na frota, em Recursos › Cadastro. Marque-a no instrutor em Instrutores › Cadastro › Editar habilitações.' },
-  'so-parafuso': { aba: 'Recursos', termo: 'Só Parafuso', texto: 'Avião reservado para a missão de Parafuso no C152: as outras missões não usam ele, e o Parafuso só voa nele. Marque na frota, em Recursos › Cadastro.' },
+  'so-vfr': { aba: 'Recursos', termo: 'Só VFR', texto: 'Avião não homologado IFR: voa as missões VFR, e nenhum voo IFR (IFR, cheques IFR, o noturno do PC) vai para ele. Marque no detalhe do avião, em Recursos.' },
+  'habilitacao-propria': { aba: 'Recursos', termo: 'Habilitação própria', texto: 'O que o próprio recurso exige do instrutor, além da habilitação do tipo: uma habilitação só dele (por exemplo, a do PR-VOM), marcada no detalhe do recurso, em Recursos. Marque-a no instrutor em Instrutores › Cadastro › Editar habilitações.' },
+  'so-parafuso': { aba: 'Recursos', termo: 'Só Parafuso', texto: 'Avião reservado para a missão de Parafuso no C152: as outras missões não usam ele, e o Parafuso só voa nele. Marque no detalhe do avião, em Recursos.' },
 
   // Instrutores
   'vem-nesta-data': { aba: 'Instrutores', termo: 'Vem', texto: 'Marcado, o instrutor vem nesta data (a aberta no topo, que nem sempre é hoje) e pode ser escalado nos períodos marcados ao lado.' },
