@@ -217,7 +217,7 @@ function equalizarHoras(out, state, limites, historico) {
 const MOTIVO_SEM_PAR = {
   disp: 'indisponível nos horários possíveis', busy: 'ocupado nos horários possíveis', bloq: 'em “Não escalar com”',
   limite: 'no limite da Lei do Aeronauta', peso: 'peso acima do limite do avião',
-  aviaoProprio: 'sem a habilitação própria dos aviões livres'
+  aviaoProprio: 'sem a habilitação que os aviões livres exigem'
 };
 function motivoSemPar(doPar, stu, d, tipo, fc) {
   if (doPar.every(x => !x.on)) return 'fora nesta data';
@@ -796,7 +796,7 @@ export function runAllocationEngine(state, opcoes = {}) {
           limite: ['limite-da-lei', escolhido ? `${quem} passaria dos limites da Lei do Aeronauta (horas de voo, jornada ou repouso) nos horários possíveis` : 'nenhum instrutor dentro dos limites da Lei do Aeronauta (horas de voo, jornada ou repouso) nos horários possíveis'],
           locais: ['limite-de-locais', `já há ${LIMITE_DE_VOOS_LOCAIS} voos locais (Voo Local, Voo Solo e TGL) em todos os horários possíveis, o máximo no mesmo horário`],
           peso: ['peso', `peso aluno + ${escolhido ? quem : 'instrutor'} acima do limite de ${lim} kg do ${d.eq}, mesmo com o mínimo de combustível`],
-          aviaoProprio: ['habilitacao-do-aviao', `os ${d.eq} livres exigem a habilitação própria deles, e ${escolhido ? `${quem} não a tem` : 'nenhum instrutor livre a tem'} (marque em Instrutores › Cadastro)`]
+          aviaoProprio: ['habilitacao-do-aviao', `os ${d.eq} livres exigem do instrutor uma habilitação que ${escolhido ? `${quem} não tem` : 'nenhum instrutor livre tem'} (marque no INVA, em Habilitações)`]
         }[key];
       }
       alertas.push({ t: 'err', s: labelStu, m: `Rejeitado: ${why}.`, codigo });

@@ -21,13 +21,13 @@
     {"a":1050,"b":1290,"r":"PP-ABP","s":"Aluno 09","ins":"Instrutor 02","mis":"Noturno","status":"Confirmado","fKey":"1011_0_1","classKey":"1011_0_1","isGround":false,"w":8,"o":8,"stuId":1011,"mid":0,"insId":2,"eqType":"C172","h":4,"ss":"1/1","stuKg":82,"insKg":79,"limKg":222,"kg":161,"baseTag":"Pref. 1","tag":"Pref. 1"}
   ],
   "al": [
-    {"t":"err","s":"Aluno 06","m":"Rejeitado: os PA-34 livres exigem a habilitação própria deles, e nenhum instrutor livre a tem (marque em Instrutores › Cadastro).","codigo":"habilitacao-do-aviao"},
-    {"t":"err","s":"Aluno 08 (Multimotor)","m":"Rejeitado: os PA-34 livres exigem a habilitação própria deles, e nenhum instrutor livre a tem (marque em Instrutores › Cadastro).","codigo":"habilitacao-do-aviao"},
-    {"t":"err","s":"Aluno 13","m":"Rejeitado: os PA-34 livres exigem a habilitação própria deles, e nenhum instrutor livre a tem (marque em Instrutores › Cadastro).","codigo":"habilitacao-do-aviao"},
-    {"t":"err","s":"Aluno 02","m":"Rejeitado: os PA-34 livres exigem a habilitação própria deles, e nenhum instrutor livre a tem (marque em Instrutores › Cadastro).","codigo":"habilitacao-do-aviao"},
-    {"t":"err","s":"Aluno 12","m":"Rejeitado: os PA-34 livres exigem a habilitação própria deles, e nenhum instrutor livre a tem (marque em Instrutores › Cadastro).","codigo":"habilitacao-do-aviao"},
-    {"t":"err","s":"Aluno 16","m":"Rejeitado: os PA-34 livres exigem a habilitação própria deles, e nenhum instrutor livre a tem (marque em Instrutores › Cadastro).","codigo":"habilitacao-do-aviao"},
-    {"t":"err","s":"Aluno 17","m":"Rejeitado: os PA-34 livres exigem a habilitação própria deles, e nenhum instrutor livre a tem (marque em Instrutores › Cadastro).","codigo":"habilitacao-do-aviao"},
+    {"t":"err","s":"Aluno 06","m":"Rejeitado: os PA-34 livres exigem do instrutor uma habilitação que nenhum instrutor livre tem (marque no INVA, em Habilitações).","codigo":"habilitacao-do-aviao"},
+    {"t":"err","s":"Aluno 08 (Multimotor)","m":"Rejeitado: os PA-34 livres exigem do instrutor uma habilitação que nenhum instrutor livre tem (marque no INVA, em Habilitações).","codigo":"habilitacao-do-aviao"},
+    {"t":"err","s":"Aluno 13","m":"Rejeitado: os PA-34 livres exigem do instrutor uma habilitação que nenhum instrutor livre tem (marque no INVA, em Habilitações).","codigo":"habilitacao-do-aviao"},
+    {"t":"err","s":"Aluno 02","m":"Rejeitado: os PA-34 livres exigem do instrutor uma habilitação que nenhum instrutor livre tem (marque no INVA, em Habilitações).","codigo":"habilitacao-do-aviao"},
+    {"t":"err","s":"Aluno 12","m":"Rejeitado: os PA-34 livres exigem do instrutor uma habilitação que nenhum instrutor livre tem (marque no INVA, em Habilitações).","codigo":"habilitacao-do-aviao"},
+    {"t":"err","s":"Aluno 16","m":"Rejeitado: os PA-34 livres exigem do instrutor uma habilitação que nenhum instrutor livre tem (marque no INVA, em Habilitações).","codigo":"habilitacao-do-aviao"},
+    {"t":"err","s":"Aluno 17","m":"Rejeitado: os PA-34 livres exigem do instrutor uma habilitação que nenhum instrutor livre tem (marque no INVA, em Habilitações).","codigo":"habilitacao-do-aviao"},
     {"t":"warn","s":"Aluno 18","m":"Peso do aluno não informado (0 kg): verificação de limite (222 kg) no C172 não realizada.","codigo":"sem-peso","stuId":1022}
   ],
   "tot": 24,

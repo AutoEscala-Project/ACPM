@@ -123,7 +123,7 @@ describe('O motor com os requisitos e os atributos', () => {
     assert.equal(ninguem.al[0].m, 'Rejeitado: os PA-34 livres exigem do instrutor uma habilitação que nenhum instrutor livre tem (marque no INVA, em Habilitações).');
     // Com o INVA escolhido, o nome dele
     const comEscolhido = escala(comFrota({ ins: [comHab(1, MLTE)], stu: [aluno(1000, { ...mlte, insId: 1 })] }, FROTA, { 'PT-JOB': false }));
-    assert.deepEqual(comEscolhido.al.map(a => [a.codigo, a.m]), [['habilitacao-do-aviao', 'Rejeitado: os PA-34 livres exigem do instrutor uma habilitação que Instrutor 01 não tem (marque no INVA, em Habilitações).']]);
+    assert.deepEqual(comEscolhido.al.map(a => [a.codigo, a.m]), [['habilitacao-do-aviao', 'Rejeitado: os PA-34 livres exigem do instrutor uma habilitação que o instrutor escolhido (Instrutor 01) não tem (marque no INVA, em Habilitações).']]);
   });
 
   // Achados da revisão: o aviso do "Priorizar com" e a rejeição do voo IFR dizem o motivo certo
