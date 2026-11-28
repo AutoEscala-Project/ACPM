@@ -68,11 +68,12 @@ export function gruposDoConflito(voo) {
 // O limite de locais também é um código de rejeição: a escala gravada confere cada código na lista do tipo do alerta
 export const CODIGOS_DO_AGENDADO = ['fora-dos-horarios', 'depois-das-17h30', 'limite-de-locais', 'antes-do-ground'];
 
-// Os códigos dos avisos, para o resumo da Escala agrupar sem ler o texto: o peso que falta (stuId e insId dizem de
-// quem), o instrutor perto do limite da lei (insId), o avião que para para a revisão, o atraso que invade outro voo, o
-// voo que ficou sem o instrutor do “Priorizar com” do aluno e o do pedido cujo instrutor escolhido saiu do cadastro (stuId;
-// insId: quem ficou com o voo), o repouso antes da volta do noturno (insId), a volta do noturno num avião ou com um INVA
-// que não está bem hoje (stuId e insId) e as regras que o voo agendado pulou
+// Os códigos dos avisos, para o resumo dos avisos da escala, no trilho, agrupar sem ler o texto (js/linha-do-dia.js) e
+// para a escala gravada conferir cada um (js/escala-gravada.js): o peso que falta (stuId e insId dizem de quem), o
+// instrutor perto do limite da lei (insId), o avião que para para a revisão, o atraso que invade outro voo, o voo que
+// ficou sem o instrutor do “Priorizar com” do aluno e o do pedido cujo instrutor escolhido saiu do cadastro (stuId; insId:
+// quem ficou com o voo), o repouso antes da volta do noturno (insId), a volta do noturno num avião ou com um INVA que não
+// está bem hoje (stuId e insId) e as regras que o voo agendado pulou
 export const CODIGOS_DE_AVISO = ['sem-peso', 'perto-do-limite', 'revisao', 'atraso', 'voa-com', 'escolhido-saiu', 'repouso-do-noturno', 'volta-do-noturno', ...CODIGOS_DO_AGENDADO];
 
 // Os códigos das rejeições: por que o pedido ficou fora da escala, para dizer onde resolver

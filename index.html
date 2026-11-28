@@ -202,6 +202,7 @@
       <h2 class="trilho-avisos-cab"><button type="button" id="btn-avisos" aria-expanded="true" aria-controls="avisos-corpo" title="Recolher os avisos da data"><svg class="ico" aria-hidden="true"><use href="#i-baixo"/></svg><span id="trilho-avisos-titulo">Avisos</span><span class="trilho-cnt" id="avisos-qtd" hidden></span></button></h2>
       <div class="avisos-corpo" id="avisos-corpo">
         <p class="trilho-data" id="trilho-data"></p>
+        <ul class="avisos-resumo" id="avisos-resumo" hidden></ul>
         <ol class="avisos-da-data" id="avisos-da-data" hidden></ol>
         <p class="h" id="avisos-vazio" hidden>Nada a resolver nesta data.</p>
       </div>
@@ -519,7 +520,7 @@
       <h3>Primeiros passos: a rotina do operador</h3>
       <ol>
         <li><b>Confira a data no alto do trilho.</b> O sistema abre na Escala, na data de amanhã.
-        O trilho fica ao lado da tela quando há largura (em cima dela no celular): no alto, a data aberta e quantos avisos ela tem; embaixo, o calendário e os avisos da data.
+        O trilho fica ao lado da tela quando há largura (em cima dela nas telas mais estreitas, como o celular e o tablet, onde ele começa recolhido numa linha só, com a data e o número de avisos): no alto, a data aberta e quantos avisos ela tem; embaixo, o calendário e os avisos da data.
         Para abrir outra data, escolha o dia no calendário.
         <i>Recolher o calendário</i>, o botão no alto do trilho, deixa só a data e o número de avisos (ao lado da tela, numa faixa estreita), e o mesmo botão abre de novo; <i>Avisos</i> recolhe e abre os avisos da data (<i>Recolher os avisos da data</i>); o que você escolher fica guardado neste navegador.
         O número em cada dia é o de pedidos dele, e as setas do calendário mudam só o mês à vista.
@@ -576,6 +577,7 @@
       Aberta (o botão no fim dela), ela mostra as tarefas de cada etapa, e cada tarefa leva à tela onde ela se resolve: na Agenda, os pedidos que ainda não estão na demanda; na Escala, as missões que não entraram e os conflitos e avisos.
       O link de Recursos mostra os aviões parados ou perto da revisão de 50 horas (em Recursos, o ponto da linha de cada um).</p>
       <p>Embaixo do calendário ficam os avisos da data, primeiro os erros: as missões que não entraram, os conflitos e os outros avisos da escala, os aviões parados ou perto da revisão de 50 horas, os pedidos que ainda não estão na demanda e o que não foi lido.
+      No alto deles, os grupos da escala com dois itens ou mais têm um resumo: quantas missões não entraram (com os nomes), quantos voos estão em conflito e os avisos contados pelo tipo (por exemplo, <i>2 avisos: 1 aluno sem peso · 1 instrutor sem peso</i>).
       O aviso leva à tela onde se resolve, quando você a vê; as horas, os resultados e os cursos que não foram lidos são lidos em <i>Tentar de novo</i>, no alto da página.
       O número no alto do trilho, também com o calendário recolhido, e no cabeçalho dos avisos diz quantos avisos são (vermelho quando um deles é erro).</p>
     </div>

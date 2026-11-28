@@ -118,16 +118,20 @@ main#conteudo { grid-area: tela; min-width: 0; }
   #trilho { position: sticky; top: 12px; max-height: calc(100dvh - 24px); overflow-y: auto; }
 }
 /* As telas de lista e detalhe (F2), a partir de 800 × 600 px: a página tem a altura da janela, e os painéis e o trilho rolam
-   cada um por conta própria */
+   cada um por conta própria. Abaixo de 1024 px, com o calendário aberto em cima da tela, a página rola, e a tela fica com
+   a altura da janela embaixo dele (com a página presa, o calendário tiraria metade da altura dos painéis); recolhido numa
+   linha, a página volta a ter a altura da janela */
 @media screen and (min-width: 800px) and (min-height: 600px) {
-  body[data-forma="lista-detalhe"] { height: 100dvh; overflow: hidden; display: flex; flex-direction: column; }
-  body[data-forma="lista-detalhe"] .casca { flex: 1; min-height: 0; width: 100%; padding-bottom: 16px; grid-template-rows: auto auto auto minmax(0, 1fr); }
+  body[data-forma="lista-detalhe"]:not([data-trilho="aberto"]) { height: 100dvh; overflow: hidden; display: flex; flex-direction: column; }
+  body[data-forma="lista-detalhe"]:not([data-trilho="aberto"]) .casca { flex: 1; min-height: 0; width: 100%; padding-bottom: 16px; grid-template-rows: auto auto auto minmax(0, 1fr); }
   body[data-forma="lista-detalhe"] #linha { max-height: 40dvh; overflow-y: auto; }
-  body[data-forma="lista-detalhe"] #trilho { max-height: 50dvh; overflow-y: auto; }
-  body[data-forma="lista-detalhe"] main#conteudo, body[data-forma="lista-detalhe"] main#conteudo > section.on { min-height: 0; height: 100%; }
+  body[data-forma="lista-detalhe"]:not([data-trilho="aberto"]) main#conteudo, body[data-forma="lista-detalhe"]:not([data-trilho="aberto"]) main#conteudo > section.on { min-height: 0; height: 100%; }
+  body[data-forma="lista-detalhe"][data-trilho="aberto"] main#conteudo > section.on { height: calc(100dvh - 32px); }
 }
 @media screen and (min-width: 1024px) and (min-height: 600px) {
-  body[data-forma="lista-detalhe"] .casca { grid-template-rows: auto auto minmax(0, 1fr); }
+  body[data-forma="lista-detalhe"][data-trilho] { height: 100dvh; overflow: hidden; display: flex; flex-direction: column; }
+  body[data-forma="lista-detalhe"][data-trilho] .casca { flex: 1; min-height: 0; width: 100%; padding-bottom: 16px; grid-template-rows: auto auto minmax(0, 1fr); }
+  body[data-forma="lista-detalhe"][data-trilho] main#conteudo, body[data-forma="lista-detalhe"][data-trilho] main#conteudo > section.on { min-height: 0; height: 100%; }
   body[data-forma="lista-detalhe"] #trilho { position: static; align-self: stretch; max-height: none; min-height: 0; overflow-y: auto; }
 }
 main#conteudo:focus { outline: none; }

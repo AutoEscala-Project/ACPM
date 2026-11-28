@@ -30,7 +30,9 @@ registrarDesenho('trilho', rTrilho, { em: ['data-aberta', 'dados', 'consulta', '
 registrarDesenho('contagem-do-trilho', contarComOsDados, { em: ['dados'], ordem: 98 });
 
 // O que está guardado: { calendario?: 'aberto' | 'recolhido', avisos?: 'abertos' | 'recolhidos' }. Sem o armazenamento do
-// navegador, os padrões (os dois abertos)
+// navegador, os padrões: os avisos abertos; o calendário aberto ao lado da tela (a partir de 1024 px) e recolhido numa linha
+// em cima dela (abaixo disso, no celular e no tablet: a tela fica logo embaixo da linha de produção), na largura de quando
+// a página abre (mudar a largura depois não o recolhe com o foco num dia). O que a pessoa escolhe vale em todas as larguras
 function preferencias() {
   try {
     return lerPreferencias(localStorage.getItem(CHAVE));
@@ -38,6 +40,7 @@ function preferencias() {
     return {};
   }
 }
+// Guarda só o que a pessoa escolheu (o padrão que ela não mudou continua o da largura) e devolve o estado em uso
 function guardar(mudanca) {
   const novas = { ...preferencias(), ...mudanca };
   try {
@@ -45,9 +48,10 @@ function guardar(mudanca) {
   } catch {
     // Sem o armazenamento do navegador, a escolha vale até recarregar
   }
-  return novas;
+  return { ...estado, ...novas };
 }
-let estado = preferencias();
+const calendarioDePartida = () => (matchMedia('(min-width: 1024px)').matches ? 'aberto' : 'recolhido');
+let estado = { calendario: calendarioDePartida(), ...preferencias() };
 mostrarTrilho(estado);
 
 // Abre a data escolhida no calendário. Até os dados dela chegarem, a data aberta, o anel e o alto do trilho continuam na de

@@ -102,7 +102,7 @@ function linhaDoCadastro(x) {
   </tr>`;
 }
 
-// A grade do dia depende da escala: é refeita junto com ela. A coluna "Vem" é a da data aberta no topo (o app abre em
+// A grade do dia depende da escala: é refeita junto com ela. A coluna "Vem" é a da data aberta no trilho (o app abre em
 // amanhã: não é "hoje")
 export function rInsDia() {
   // Os termos da grade com o "?"

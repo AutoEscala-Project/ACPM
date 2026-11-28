@@ -116,6 +116,10 @@
 #btn-avisos[aria-expanded="false"] .ico { transform: rotate(-90deg); }
 @media (max-width: 1023px) { #btn-avisos { min-height: 44px; } }
 #trilho .trilho-data { margin: 0 0 6px; font: 600 14.5px 'Barlow Semi Condensed', sans-serif; }
+/* O resumo dos grupos da escala com dois itens ou mais, no alto dos avisos: uma linha por grupo, com a cor da gravidade */
+.avisos-resumo { list-style: none; margin: 0 0 6px; padding: 6px 8px; border-radius: 6px; background: var(--pn2); font: 600 13px/1.35 'Barlow', sans-serif; overflow-wrap: anywhere; }
+.avisos-resumo li[data-gravidade="erro"] { color: var(--er); }
+.avisos-resumo li + li { margin-top: 3px; }
 .avisos-da-data { list-style: none; margin: 0; padding: 0; }
 .aviso + .aviso { border-top: 1px solid var(--ln); }
 .aviso-item { display: flex; gap: 8px; padding: 7px 0; border-radius: 6px; color: var(--ink); text-decoration: none; }

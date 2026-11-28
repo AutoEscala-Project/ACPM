@@ -5,7 +5,7 @@
 import { $, trocarConteudo } from '../dom.js';
 import { dadosLidos } from '../actions.js';
 import { esc, fmtH, hm, hojeISO, rotuloDaData } from '../format.js';
-import { avisosDaData } from '../linha-do-dia.js';
+import { avisosDaData, resumosDaEscala } from '../linha-do-dia.js';
 import { semanasDoMes, paradaDoTab, descricaoDoDia, linhaDaData, nomeDoMes } from '../calendario.js';
 import { ehDomingo } from '../agenda.js';
 import { DATA } from '../state.js';
@@ -57,7 +57,7 @@ export function contarComOsDados() {
 }
 
 // O trilho aberto ou recolhido (body[data-trilho]: a casca dá a ele a largura dele, css/casca.css) e os avisos abertos ou
-// recolhidos. estado: o guardado (js/telas.js, lerPreferencias); sem nada, os dois abertos
+// recolhidos. estado: o guardado (js/telas.js, lerPreferencias) sobre o padrão da largura (js/eventos/trilho.js)
 export function mostrarTrilho({ calendario = 'aberto', avisos = 'abertos' } = {}) {
   const recolhido = calendario === 'recolhido', semAvisos = avisos === 'recolhidos';
   document.body.dataset.trilho = recolhido ? 'recolhido' : 'aberto';
@@ -174,10 +174,16 @@ function avisoHTML(a) {
     ? `${li}<a class="aviso-item" href="${enderecoDoDestino(a.destino)}" ${item} data-focar>${conteudo}</a>${acaoHTML(a)}</li>`
     : `${li}<div class="aviso-item" ${item}>${conteudo}</div>${acaoHTML(a)}</li>`;
 }
+// No alto deles, o resumo de cada grupo da escala com dois itens ou mais (o título que as caixas tinham: "2 avisos: 1 aluno sem
+// peso · 1 instrutor sem peso")
+const resumoHTML = r => `<li data-grupo="${r.grupo}" data-gravidade="${r.gravidade}">${esc(r.texto)}</li>`;
 function rAvisos() {
   if (!dadosLidos) return;
   const contexto = contextoDoDia();
   const avisos = avisosDaData(contexto);
+  const resumos = resumosDaEscala(contexto);
+  trocarConteudo($('#avisos-resumo'), resumos.map(resumoHTML).join(''));
+  $('#avisos-resumo').hidden = !resumos.length;
   trocarConteudo($('#avisos-da-data'), avisos.map(avisoHTML).join(''));
   $('#avisos-da-data').hidden = !avisos.length;
   // Enquanto os pedidos da data não chegam, ainda não se sabe se não há nada

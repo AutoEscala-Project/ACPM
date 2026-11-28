@@ -6,6 +6,7 @@
 // indisponiveis: [{ id, texto }], recusas: Map (o alerta da recusa do instrutor escolhido → o fKey do pedido; só de hoje em
 // diante), habilitacoesNaoConferidas: n, data, hoje } (js/views/linha.js, contextoDoDia)
 import { REVISAO_H } from './config.js';
+import { CODIGOS_DE_AVISO, CODIGOS_DO_AGENDADO } from './conflitos.js';
 import { fechamentosDoEstado, rotuloDosFechamentos } from './fechamentos.js';
 import { salaDisponivel } from './frota.js';
 import { inativo, inativoValeEm, voosComInativos, textoDoVooComInativo } from './inativos.js';
@@ -248,6 +249,49 @@ function avisosDosPedidos(ctx) {
 // não são conferidos: é erro
 const avisosDosDados = ctx => (ctx.indisponiveis || []).map(({ id, texto }) =>
   ({ id: `dados:${id}`, gravidade: id === 'horas' ? 'erro' : 'aviso', minuto: null, titulo: texto, texto: '', destino: null }));
+
+// O resumo de cada grupo da escala com dois itens ou mais, no alto dos avisos do trilho (o título que cada caixa do resumo
+// da Escala tinha, antes de linha-fix-escala-sem-caixas); com um item só, o item diz tudo. Na ordem: as missões que não
+// entraram (com os nomes, sem repetir), os conflitos (da escala aprovada ou dos voos fixos) e os avisos, agrupados pelo
+// código: alunos e instrutores sem peso, aviões que param para a revisão, atrasos, instrutores perto do limite da lei, os
+// do “Priorizar com”, o instrutor escolhido que saiu do cadastro, o repouso e as voltas do noturno e os voos agendados
+// fora das regras (um por voo). Os avisos sem código (de uma escala gravada antes deles) entram em "outros".
+// [{ grupo: 'erros' | 'conflitos' | 'avisos', gravidade: 'erro' | 'aviso', texto }]
+function resumoDosAvisos(avisos) {
+  const doCodigo = codigo => avisos.filter(a => a.codigo === codigo);
+  const quantos = (lista, campo) => new Set(lista.map(a => a[campo]).filter(id => id !== undefined)).size;
+  const partes = [
+    [quantos(doCodigo('sem-peso'), 'stuId'), 'aluno sem peso', 'alunos sem peso'],
+    [quantos(doCodigo('sem-peso'), 'insId'), 'instrutor sem peso', 'instrutores sem peso'],
+    [doCodigo('revisao').length, 'avião para para a revisão de 50 horas', 'aviões param para a revisão de 50 horas'],
+    [doCodigo('atraso').length, 'atraso com conflito', 'atrasos com conflito'],
+    [quantos(doCodigo('perto-do-limite'), 'insId'), 'instrutor perto do limite da lei', 'instrutores perto do limite da lei'],
+    [doCodigo('voa-com').length, 'aviso de Priorizar com', 'avisos de Priorizar com'],
+    [doCodigo('escolhido-saiu').length, 'voo com o instrutor escolhido fora do cadastro', 'voos com o instrutor escolhido fora do cadastro'],
+    [quantos(doCodigo('repouso-do-noturno'), 'insId'), 'instrutor sem o repouso da lei antes da volta do noturno', 'instrutores sem o repouso da lei antes da volta do noturno'],
+    [doCodigo('volta-do-noturno').length, 'volta do noturno com o avião ou o INVA indisponível', 'voltas do noturno com o avião ou o INVA indisponível'],
+    [quantos(avisos.filter(a => CODIGOS_DO_AGENDADO.includes(a.codigo)), 'fKey'), 'agendamento fora da regra', 'agendamentos fora da regra'],
+    [avisos.filter(a => !CODIGOS_DE_AVISO.includes(a.codigo)).length, 'outro', 'outros']
+  ].filter(([n]) => n).map(([n, um, varios]) => plural(n, um, varios));
+  return `${plural(avisos.length, 'aviso', 'avisos')}: ${partes.join(' · ')}`;
+}
+export function resumosDaEscala(ctx) {
+  const al = (ctx.RES && ctx.RES.al) || [];
+  const erros = al.filter(a => a.t === 'err'), conflitos = al.filter(a => a.t === 'conf');
+  const avisos = al.filter(a => a.t !== 'err' && a.t !== 'conf');
+  const aprovada = Boolean(ctx.S && ctx.S.aprovacao);
+  const resumos = [];
+  if (erros.length > 1) {
+    const nomes = [...new Set(erros.map(a => a.s))].join(', ');
+    resumos.push({ grupo: 'erros', gravidade: 'erro', texto: `${erros.length} missões não entraram na escala: ${nomes}` });
+  }
+  if (conflitos.length > 1) {
+    const texto = aprovada ? `${conflitos.length} voos em conflito na escala aprovada` : `${conflitos.length} voos fixos em conflito`;
+    resumos.push({ grupo: 'conflitos', gravidade: 'erro', texto });
+  }
+  if (avisos.length > 1) resumos.push({ grupo: 'avisos', gravidade: 'aviso', texto: resumoDosAvisos(avisos) });
+  return resumos;
+}
 
 // Na ordem: erro, aviso, info; em cada um, os sem horário primeiro, depois pelo horário e pelo id
 const ORDEM_DOS_AVISOS = ['erro', 'aviso', 'info'];

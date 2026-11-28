@@ -74,6 +74,8 @@
    (linha-fix-escala-sem-caixas) */
 #linha .linha-mais a[aria-current="page"] { padding: 4px 8px; border: 2px solid var(--ac); border-radius: 8px; background: var(--pn); }
 #linha .linha-mais a:focus-visible { outline-offset: -2px; }
+/* No link aberto, o anel do foco fica fora da borda (da mesma cor: em cima dela, não se veria) */
+#linha .linha-mais a[aria-current="page"]:focus-visible { outline-offset: 2px; }
 #linha .linha-sep { width: 1px; height: 20px; background: var(--ln2); margin: 0 6px; flex: none; }
 #linha .linha-selo { min-width: 18px; height: 18px; border-radius: 9px; padding: 0 5px; font: 700 11px/18px 'Barlow', sans-serif; text-align: center; background: var(--neutro-bg); color: var(--ink); }
 #linha .linha-selo.atencao { background: var(--wa); color: var(--waT); }
@@ -105,5 +107,7 @@
   #linha .linha-mais, #linha .linha-cadastros { flex-wrap: nowrap; flex: none; }
   #linha .linha-mais a { min-height: 44px; min-width: 44px; justify-content: center; }
   #linha .linha-mais a[aria-current="page"] { border-radius: 22px; }
+  /* Na faixa que rola, o anel fica dentro do link (fora, seria cortado), sem tocar a borda */
+  #linha .linha-mais a[aria-current="page"]:focus-visible { outline-offset: -4px; }
   #linha .linha-sep { align-self: center; }
 }
