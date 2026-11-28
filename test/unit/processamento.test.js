@@ -1021,13 +1021,14 @@ describe('A lista de espera: o lugar do pedido cancelado', () => {
     const a = montar();
     const feito = aplicarConciliacao(a.e, conciliarPedidos(a.e, cancelar(a.linhas, 2), amb));
     assert.equal(feito.historico[0][1].includes('entrou'), false);
-    // O 3 sem horário exato não espera (voa em outro horário, as 06:30): quando ele vai para o lugar livre, não é como o 1º
-    // da lista de espera (a revisão do E: o Histórico diz de onde ele veio)
+    // O 3 sem horário exato não espera (voa em outro horário, as 06:30): ele nunca é dito da lista de espera; o lugar livre
+    // vai ao 4, que espera por ele (Pedro, 2026-11-28: a lista vem antes do pedido de outro horário)
     const b = montar();
     delete b.e.stu[2].jan;
     const antes = motor(b.e);
     const feitoB = aplicarConciliacao(b.e, conciliarPedidos(b.e, cancelar(b.linhas, 2), amb), { antes, escalar: motor });
-    assert.equal(feitoB.historico[0][1].includes('lista de espera'), false);
+    assert.doesNotMatch(feitoB.historico[0][1], /Aluno 1003 \(\d+º da lista de espera/);
+    assert.match(feitoB.historico[0][1], /; no lugar entrou Aluno 1004 \(1º da lista de espera das 08:20 · fica fixo às 08:20 no PR-BTB com Instrutor 02\)$/);
   });
 
   // O pedido que esperava (N14: na lista de espera, sem linha na escala) não "saiu da escala": a linha diz de onde ele saiu.
