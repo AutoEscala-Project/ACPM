@@ -69,7 +69,10 @@
   text-decoration: none; font: 600 14.5px 'Barlow Semi Condensed', sans-serif; white-space: nowrap;
 }
 #linha .linha-mais a:hover { background: var(--pn2); }
-#linha .linha-mais a[aria-current="page"] { background: var(--info-bg); box-shadow: inset 0 -3px 0 var(--ac); }
+/* O link da tela aberta: o destaque do cartão aberto (a borda de 2 px na cor de destaque, o fundo do cartão), no lugar do
+   padding, para nada mudar de tamanho. Uma borda de verdade (não uma sombra): ela continua nas cores forçadas
+   (linha-fix-escala-sem-caixas) */
+#linha .linha-mais a[aria-current="page"] { padding: 4px 8px; border: 2px solid var(--ac); border-radius: 8px; background: var(--pn); }
 #linha .linha-mais a:focus-visible { outline-offset: -2px; }
 #linha .linha-sep { width: 1px; height: 20px; background: var(--ln2); margin: 0 6px; flex: none; }
 #linha .linha-selo { min-width: 18px; height: 18px; border-radius: 9px; padding: 0 5px; font: 700 11px/18px 'Barlow', sans-serif; text-align: center; background: var(--neutro-bg); color: var(--ink); }
@@ -101,5 +104,6 @@
   #linha .estagio-titulo:focus-visible, #linha .linha-mais a:focus-visible { outline-offset: -4px; }
   #linha .linha-mais, #linha .linha-cadastros { flex-wrap: nowrap; flex: none; }
   #linha .linha-mais a { min-height: 44px; min-width: 44px; justify-content: center; }
+  #linha .linha-mais a[aria-current="page"] { border-radius: 22px; }
   #linha .linha-sep { align-self: center; }
 }
