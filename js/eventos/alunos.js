@@ -29,7 +29,8 @@ const tela = criarMestreDetalhe({
   rotulo: 'Alunos',
   nomes: ['aluno', 'alunos'],
   semItens: 'Nenhum aluno cadastrado. Clique em “+ Novo aluno” acima para cadastrar.',
-  vazio: 'Escolha um aluno na lista.',
+  // Nada escolhido: no meio do detalhe, a pessoa, o texto e, para quem cria, o caminho do aluno novo
+  vazio: { texto: 'Escolha um aluno na lista.', icone: 'i-aluno', dica: 'ou use + Novo aluno' },
   // O filtro dos cursos (o mesmo da Demanda: as marcas valem nas duas telas)
   filtros: [{ criar: aoMudar => criarFiltroDosCursos('flt-alu-cur', aoMudar), valores: item => item.valores.curso }],
   modelo: () => modeloDosAlunos(tela.selecionado()),

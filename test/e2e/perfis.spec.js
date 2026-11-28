@@ -1,4 +1,4 @@
-import { test, expect, abrir, abrirSintetico, abrirComExemplo, irPara, abrirEscala, filtrarHabilitacoes, filtrarCursos, AMANHA, caixaVem, dataAberta, botaoDaData, linhasDosAlunos, linhaDoInstrutor, abrirInstrutor, secaoDoInstrutor, nomesDosInstrutores, buscaDosInstrutores, nenhumNaLista, agendarComOInstrutor, botoesDosTurnos, abrirRecursos, abrirRecurso, abrirCategoria, buscaDosRecursos, linhasDosRecursos, contagemDosRecursos, cabecalhoDaCategoria, horariosDaCategoria } from './fixtures.js';
+import { test, expect, abrir, abrirSintetico, abrirComExemplo, irPara, abrirEscala, filtrarHabilitacoes, filtrarCursos, AMANHA, caixaVem, dataAberta, botaoDoTrilho, linhasDosAlunos, linhaDoInstrutor, abrirInstrutor, secaoDoInstrutor, nomesDosInstrutores, buscaDosInstrutores, nenhumNaLista, agendarComOInstrutor, botoesDosTurnos, abrirRecursos, abrirRecurso, abrirCategoria, buscaDosRecursos, linhasDosRecursos, contagemDosRecursos, cabecalhoDaCategoria, horariosDaCategoria } from './fixtures.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
 
 test.describe('Perfis de acesso', () => {
@@ -12,7 +12,7 @@ test.describe('Perfis de acesso', () => {
     // O Gestor não agenda voos na Escala
     await expect(page.locator('#btn-agendar')).toBeHidden();
     // A data o Gestor também muda: abrir uma data não grava nada
-    await expect(botaoDaData(page)).toBeEnabled();
+    await expect(botaoDoTrilho(page)).toBeEnabled();
     await expect(page.locator('#out .st-sel').first()).toBeDisabled();
     await irPara(page, 'ins');
     await expect(page.locator('[data-act="addi"]')).toBeHidden();
@@ -34,7 +34,7 @@ test.describe('Perfis de acesso', () => {
     await abrirInstrutor(page, 1);
     await expect(caixaVem(linhaDoInstrutor(page, 1))).toBeEnabled();
     await expect(botoesDosTurnos(page)).toHaveCount(3);
-    await expect(botaoDaData(page)).toBeEnabled();
+    await expect(botaoDoTrilho(page)).toBeEnabled();
   });
 
   test('?role=gestor abre no Gestor sem travar o seletor', async ({ page }) => {

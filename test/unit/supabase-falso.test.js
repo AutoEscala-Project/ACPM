@@ -7,6 +7,7 @@ import assert from 'node:assert/strict';
 import { criarSupabaseFalso, documentosAtuais, documentosFase3, CONTAS, URL_TESTE } from '../e2e/supabase-falso.js';
 import { CASOS_DO_PROGRAMA, PROGRAMA } from '../helpers/casos-do-programa.js';
 import { CASOS_DA_AGENDA, CURSO_DOS_CASOS, DATA_DOS_CASOS, pedidoDosCasos, localDosCasos, argumentosDoBanco, guardadoDoCaso } from '../helpers/casos-da-agenda.js';
+import { CASOS_DAS_SOLICITACOES, DATAS_DOS_CASOS, ID_QUE_NAO_EXISTE, linhaDoCaso, pedidoDoPasso, situacaoDoCaso } from '../helpers/casos-das-solicitacoes.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
 import { CASOS_DOS_DADOS_PESSOAIS, QUEM_GRAVA_OS_DADOS_PESSOAIS, CADASTRO_DOS_CASOS, ALUNO_DOS_CASOS, VERSAO_DOS_CASOS, tabelaDoCaso, versaoLidaDoCaso } from '../helpers/casos-dos-dados-pessoais.js';
 import { normalizarCursos } from '../../js/cursos.js';
@@ -234,6 +235,59 @@ describe('Servidor falso dos testes E2E: a agenda (a função de 13 argumentos)'
     const r = await rpc(token, 'registrar_solicitacao', argumentosDoBanco(pedidoDosCasos({ missao: 'Voo Local', confirmarLimite: true })));
     const s = servidor.solicitacoes.find(x => x.id === r.corpo);
     assert.deepEqual([s.limite_confirmado_por, s.limite_confirmado_em], ['Secretaria de Teste', '2026-11-10T15:00:00.000Z']);
+  });
+});
+
+// Os casos da aprovação dos pedidos (test/helpers/casos-das-solicitacoes.js), cada passo pela conta dele, com os pedidos
+// existentes gravados direto na tabela
+describe('Servidor falso dos testes E2E: a aprovação dos pedidos', () => {
+  const rotulos = Object.fromEntries(Object.entries(DATAS_DOS_CASOS).map(([r, d]) => [d, r]));
+  for (const caso of CASOS_DAS_SOLICITACOES) {
+    it(caso.nome, async () => {
+      const servidor = criarSupabaseFalso();
+      const { entrar, rpc } = await conectar(servidor);
+      const ids = {};
+      for (const [i, e] of (caso.existentes || []).entries()) {
+        ids[e.chave] = 100 + i;
+        servidor.solicitacoes.push(linhaDoCaso(e, 100 + i));
+      }
+      const tokens = {};
+      let registrados = 0;
+      for (const passo of caso.passos) {
+        const token = tokens[passo.como] ??= await entrar(CONTAS[passo.como]);
+        const id = chave => ids[chave] ?? ID_QUE_NAO_EXISTE;
+        const r = passo.registrar ? await rpc(token, 'registrar_solicitacao', argumentosDoBanco(pedidoDoPasso(passo.registrar, 1000)))
+          : passo.aprovar ? await rpc(token, 'aprovar_solicitacoes', { p_ids: passo.aprovar.map(id) })
+            : passo.retirar ? await rpc(token, 'retirar_aprovacao_da_solicitacao', { p_id: id(passo.retirar) })
+              : passo.cancelar ? await rpc(token, 'cancelar_solicitacao', { p_id: id(passo.cancelar), p_cancelada_por: 'Maria' })
+                : await rpc(token, 'solicitacoes_por_dia', { p_de: DATAS_DOS_CASOS[passo.contar[0]], p_ate: DATAS_DOS_CASOS[passo.contar[1]] });
+        if (passo.erro) {
+          assert.deepEqual([r.status, r.corpo.code, r.corpo.hint ?? null], [STATUS[passo.erro.code], passo.erro.code, passo.erro.campo], JSON.stringify(passo));
+          continue;
+        }
+        assert.ok(r.status === 200 || r.status === 204, `${r.status} ${JSON.stringify(r.corpo)}`);
+        if (passo.registrar) { ids[passo.chave] = r.corpo; registrados++; }
+        const chaveDe = Object.fromEntries(Object.entries(ids).map(([c, i]) => [i, c]));
+        if (passo.aprovar) assert.deepEqual(r.corpo.map(i => chaveDe[i]), passo.devolve);
+        if (passo.contar) assert.deepEqual(Object.fromEntries(Object.entries(r.corpo).map(([d, n]) => [rotulos[d], n])), passo.devolve);
+      }
+      assert.equal(servidor.solicitacoes.length, (caso.existentes || []).length + registrados);
+      const linha = chave => servidor.solicitacoes.find(s => s.id === ids[chave]);
+      for (const [chave, situacao] of Object.entries(caso.fica)) assert.equal(situacaoDoCaso(linha(chave)), situacao, chave);
+      for (const [chave, como] of Object.entries(caso.aprovadaPor || {})) assert.equal(linha(chave).aprovada_por, CONTAS[como].nome, chave);
+    });
+  }
+
+  // O atalho de 13 argumentos (as abas abertas antes do passo D1): o pedido do operador nasce aprovado, o da secretaria
+  // aguarda; sem a 2ª preferência e sem a lista de espera
+  it('pela função de 13 argumentos, o pedido do operador nasce aprovado e o da secretaria aguarda', async () => {
+    const servidor = criarSupabaseFalso();
+    const { entrar, rpc } = await conectar(servidor);
+    const { p_horario2, p_aprovar, p_esperar, ...treze } = argumentosDoBanco(pedidoDoPasso({ data: 'aberta' }, 1000));
+    for (const como of ['operador', 'secretaria']) assert.equal((await rpc(await entrar(CONTAS[como]), 'registrar_solicitacao', treze)).status, 200);
+    assert.deepEqual(servidor.solicitacoes.map(s => [s.aprovada_por, s.horario2]), [[CONTAS.operador.nome, null], [null, null]]);
+    const { p_esperar: _, ...quinze } = argumentosDoBanco(pedidoDoPasso({ data: 'aberta' }, 1000));
+    assert.equal((await rpc(await entrar(CONTAS.operador), 'registrar_solicitacao', quinze)).status, 404);
   });
 });
 

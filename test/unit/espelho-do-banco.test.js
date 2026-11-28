@@ -8,10 +8,11 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { MIS, GROUND_EQ_TYPE, GROUND_DURATION_H, DURACAO_MAXIMA_H, NOTURNO, MISSOES_LOCAIS, LIMITE_DE_VOOS_LOCAIS } from '../../js/config.js';
-import { RECURSO_DO_PEDIDO, HORARIOS_FIXOS } from '../../js/agenda.js';
+import { RECURSO_DO_PEDIDO, HORARIOS_FIXOS, FUSO_DO_AEROCLUBE } from '../../js/agenda.js';
 import { horariosDaMissao } from '../../js/horarios.js';
 import { hm } from '../../js/format.js';
 import { CASOS_DA_AGENDA } from '../helpers/casos-da-agenda.js';
+import { CASOS_DAS_SOLICITACOES } from '../helpers/casos-das-solicitacoes.js';
 import { ESQUEMA, FORMATO_DOS_CURSOS, migrarCadastro, antesDosCursosProprios } from '../../js/migracoes.js';
 import { CASOS_DO_PROGRAMA, PROGRAMA, NOTURNO_EM_TRECHOS } from '../helpers/casos-do-programa.js';
 import { LIMITE_DO_EXIGE, ID_DA_HABILITACAO } from '../../js/programa.js';
@@ -224,7 +225,7 @@ describe('O banco espelha o app: o recurso do pedido da agenda', () => {
 // verificação do banco
 describe('O banco espelha o app: a missão do curso e o limite do pedido da agenda', () => {
   const MIGRACAO_0B = ler('supabase/migrations/20261127100000_missao_do_curso_e_limite_do_pedido.sql');
-  const TESTES = ['agenda-missao-do-curso', 'agenda-locais'].map(nome => ler(`supabase/tests/database/${nome}.test.sql`)).join('\n');
+  const TESTES = ['agenda-missao-do-curso', 'agenda-locais', 'agenda-preferencias'].map(nome => ler(`supabase/tests/database/${nome}.test.sql`)).join('\n');
   const ASSINATURA = 'date, integer, text, text, text, text, numeric, text, text, boolean, text, uuid, boolean';
   const corpo = MIGRACAO_0B.slice(MIGRACAO_0B.indexOf('create function public.registrar_solicitacao('), MIGRACAO_0B.indexOf('$$;'));
 
@@ -264,8 +265,10 @@ describe('O banco espelha o app: a missão do curso e o limite do pedido da agen
     const daFuncao = new Set([...corpo.matchAll(/errcode = '(\w+)', hint = '(\w+)'/g)].map(([, code, campo]) => chave(code, campo)));
     const dosCasos = new Set(CASOS_DA_AGENDA.filter(c => c.erro).map(c => chave(c.erro.code, c.erro.campo)));
     const deAntes = ['22023 horas'];
+    // As da 2ª preferência e da lista de espera são da função de 16 argumentos (a migração do passo D1)
+    const doD1 = ['22023 horario2', '22023 esperar'];
     assert.deepEqual([...daFuncao].filter(k => !deAntes.includes(k) && !dosCasos.has(k)).sort(), [], 'recusas sem caso');
-    assert.deepEqual([...dosCasos].filter(k => !daFuncao.has(k)), [], 'casos com uma recusa que a função não dá');
+    assert.deepEqual([...dosCasos].filter(k => !daFuncao.has(k) && !doD1.includes(k)), [], 'casos com uma recusa que a função não dá');
   });
 });
 
@@ -297,5 +300,96 @@ describe('O banco espelha o app: o nome completo e quem grava os dados pessoais'
     const nomes = [...CASOS_DOS_DADOS_PESSOAIS, ...QUEM_GRAVA_OS_DADOS_PESSOAIS].map(c => c.nome);
     assert.equal(new Set(nomes).size, nomes.length, 'sem nomes repetidos');
     assert.deepEqual(nomes.filter(nome => !TESTE.includes(`'${nome}'`)), []);
+  });
+});
+
+// A aprovação dos pedidos (o passo D1, a migração #3): a função de 16 argumentos e os atalhos de 13, 11 e 10 sobre uma
+// função interna com as regras da de 13; os voos locais, o limite, os horários fixos e o fuso são os do app; quem chama
+// cada função; e cada caso de test/helpers/casos-das-solicitacoes.js é uma verificação do banco
+describe('O banco espelha o app: a aprovação dos pedidos', () => {
+  const D1 = ler('supabase/migrations/20261129100000_aprovacao_dos_pedidos.sql');
+  const MIGRACAO_0B = ler('supabase/migrations/20261127100000_missao_do_curso_e_limite_do_pedido.sql');
+  const TESTES = ['agenda-aprovacao', 'agenda-preferencias'].map(nome => ler(`supabase/tests/database/${nome}.test.sql`)).join('\n');
+  const ARGUMENTOS = 'date, integer, text, text, text, text, numeric, text, text, boolean';
+  const ASSINATURAS = { 16: `${ARGUMENTOS}, text, uuid, boolean, text, boolean, boolean`, 13: `${ARGUMENTOS}, text, uuid, boolean`, 11: `${ARGUMENTOS}, text`, 10: ARGUMENTOS };
+  // Cada criação de função da migração, do nome ao fim do corpo
+  const funcoes = [...D1.matchAll(/create (?:or replace )?function public\.(\w+)\(([\s\S]*?)\)\s+returns[\s\S]*?\$\$;/g)]
+    .map(([texto, nome, parametros]) => ({ texto, nome, n: parametros.split(',').length }));
+  const funcao = (nome, n) => funcoes.find(f => f.nome === nome && (n === undefined || f.n === n)).texto;
+  const interna = funcao('registrar_solicitacao_interna');
+  // As regras da de 13 (o recurso, os horários fixos e a missão do curso), da de 0b e do bloco p_regras_do_recurso da interna
+  const regrasDa13 = () => {
+    const corpo13 = MIGRACAO_0B.slice(MIGRACAO_0B.indexOf('  -- O recurso: obrigatório'), MIGRACAO_0B.indexOf('  -- No máximo 6 voos locais'));
+    return corpo13.trimEnd().split('\n').map(l => (l ? `  ${l}` : l)).join('\n');
+  };
+
+  it('a interna tem as regras da de 13 (o recurso, os horários fixos e a missão do curso), iguais, só com elas', () => {
+    const bloco = interna.slice(interna.indexOf('  if p_regras_do_recurso then\n') + '  if p_regras_do_recurso then\n'.length, interna.indexOf('\n  end if;\n  -- A 2ª preferência'));
+    assert.equal(bloco, regrasDa13());
+  });
+
+  it('os voos locais, o limite, os horários fixos e o dia de São Paulo são os do app', () => {
+    const listas = [...interna.matchAll(/missao in \(((?:'[^']*'(?:, )?)+)\)/g)].map(r => [...r[1].matchAll(/'([^']+)'/g)].map(x => x[1]));
+    assert.deepEqual(listas, [Object.keys(HORARIOS_FIXOS), MISSOES_LOCAIS, MISSOES_LOCAIS], 'os de um horário só (a 2ª preferência), o pedido e os que já estão na agenda');
+    assert.match(interna, new RegExp(`\\) >= ${LIMITE_DE_VOOS_LOCAIS} then`));
+    const fusos = [...D1.matchAll(/at time zone '([^']+)'/g)].map(r => r[1]);
+    assert.ok(fusos.length >= 5);
+    assert.deepEqual([...new Set(fusos)], [FUSO_DO_AEROCLUBE]);
+    assert.ok(interna.includes("p_horario2 !~ '^[0-2][0-9]:[0-5][0-9]$'"), 'o formato da 2ª preferência é o do 1º horário');
+    assert.ok(D1.includes("add column horario2 text check (horario2 ~ '^[0-2][0-9]:[0-5][0-9]$')"));
+  });
+
+  it('a de 16 chama a interna com as regras da de 13; os atalhos, sem 2ª preferência e sem a lista de espera, aprovando o do operador', () => {
+    const chamada = n => {
+      const r = /registrar_solicitacao_interna\(([^;]*)\);/.exec(funcao('registrar_solicitacao', n));
+      return r[1].split(/,\s*/).map(a => a.trim()).slice(10);
+    };
+    const operador = "coalesce(public.perfil_atual()::text = 'operador'";
+    assert.deepEqual(chamada(16), ['p_recurso', 'p_missao_do_curso', 'p_confirmar_limite', 'p_horario2', 'p_aprovar', 'p_esperar', 'true']);
+    assert.deepEqual(chamada(13), ['p_recurso', 'p_missao_do_curso', 'p_confirmar_limite', 'null', operador, 'false)', 'false', 'true']);
+    assert.deepEqual(chamada(11), ['p_recurso', 'null', 'false', 'null', operador, 'false)', 'false', 'false']);
+    assert.deepEqual(chamada(10), ['null', 'null', 'false', 'null', operador, 'false)', 'false', 'false']);
+    for (const n of [16, 13, 11, 10]) {
+      const texto = funcao('registrar_solicitacao', n);
+      assert.doesNotMatch(texto.slice(0, texto.indexOf(')')), /default|=/i, `${n} argumentos, sem valor padrão`);
+      assert.match(texto, /security definer\s+set search_path = ''/);
+    }
+  });
+
+  it('quem chama: a de 16, aprovar, retirar, cancelar, a contagem e os atalhos só quem está conectado; a interna e a conversão, ninguém (nem o service_role, a quem o Supabase dá toda função nova); a de 9 sai', () => {
+    const daApi = [...Object.values(ASSINATURAS).map(a => `registrar_solicitacao(${a})`), 'cancelar_solicitacao(bigint, text)', 'aprovar_solicitacoes(bigint[])',
+      'retirar_aprovacao_da_solicitacao(bigint)', 'solicitacoes_por_dia(date, date)'];
+    for (const f of daApi) {
+      assert.ok(D1.includes(`revoke execute on function public.${f} from public, anon;`), f);
+      assert.ok(D1.includes(`grant execute on function public.${f} to authenticated;`), f);
+    }
+    for (const f of [`registrar_solicitacao_interna(${ASSINATURAS[16]}, boolean)`, 'aprovar_solicitacoes_de_antes_da_aprovacao(boolean)']) {
+      assert.ok(D1.includes(`revoke execute on function public.${f} from public, anon, authenticated, service_role;`), f);
+      assert.ok(!D1.includes(`grant execute on function public.${f.slice(0, f.indexOf('('))}`), f);
+    }
+    assert.match(funcao('solicitacoes_por_dia'), /security invoker/);
+    assert.ok(D1.includes('drop function public.registrar_solicitacao(date, integer, text, text, text, text, text, text, boolean);'));
+    assert.deepEqual([...D1.matchAll(/drop (?:function|column|table|policy)[^;]*;/g)].map(r => r[0]), ['drop function public.registrar_solicitacao(date, integer, text, text, text, text, text, text, boolean);']);
+    assert.match(D1, /select public\.aprovar_solicitacoes_de_antes_da_aprovacao\(true\);\s*$/);
+  });
+
+  it('cada caso da aprovação é uma verificação do banco (o nome é a descrição)', () => {
+    const nomes = CASOS_DAS_SOLICITACOES.map(c => c.nome);
+    assert.equal(new Set(nomes).size, nomes.length, 'sem nomes repetidos');
+    for (const nome of nomes) assert.ok(!nome.includes("'"), `${nome}: sem aspas simples (o texto igual no SQL)`);
+    assert.deepEqual(nomes.filter(nome => !TESTES.includes(`'${nome}');`)), []);
+  });
+
+  // O papel sem dica (quem pode registrar e cancelar) e a duração são das funções de antes
+  it('cada recusa das funções da migração, com a dica, tem um caso, e nenhum caso espera uma recusa que elas não dão', () => {
+    const chave = (code, campo) => (campo ? `${code} ${campo}` : code);
+    const recusas = [...D1.matchAll(/errcode = '(\w+)'(?:, hint = '(\w+)')?/g)];
+    assert.equal(recusas.length, (D1.match(/\braise exception\b/g) || []).length, 'cada recusa com o código no formato conhecido');
+    const doBanco = new Set(recusas.map(([, code, campo]) => chave(code, campo)));
+    const casos = [...CASOS_DA_AGENDA.filter(c => c.erro), ...CASOS_DAS_SOLICITACOES.flatMap(c => c.passos.filter(p => p.erro))];
+    const dosCasos = new Set(casos.map(c => chave(c.erro.code, c.erro.campo)));
+    const deAntes = ['42501', '22023 horas'];
+    assert.deepEqual([...doBanco].filter(k => !deAntes.includes(k) && !dosCasos.has(k)).sort(), [], 'recusas sem caso');
+    assert.deepEqual([...dosCasos].filter(k => !doBanco.has(k)), [], 'casos com uma recusa que a migração não dá');
   });
 });

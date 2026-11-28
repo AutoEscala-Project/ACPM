@@ -140,6 +140,130 @@ export function recusaDoPedido({ missao, recurso, horario, horas, missaoDoCurso 
   return null;
 }
 
+// A 2ª preferência do pedido (U1, a migração aprovacao_dos_pedidos): outro horário exato, HH:MM e diferente do 1º; o
+// Noturno e o Voo Solo têm um horário só. A recusa (22023, horario2) ou null (sem 2ª preferência, ou válida)
+export function recusaDaSegundaPreferencia({ missao, horario, horario2 = null }) {
+  if (horario2 === null || horario2 === undefined) return null;
+  if (typeof horario2 === 'string' && /^[0-2][0-9]:[0-5][0-9]$/.test(horario2) && horario2 !== horario && !Object.hasOwn(HORARIOS_FIXOS, missao)) return null;
+  return { code: '22023', campo: 'horario2', mensagem: 'a 2ª preferência é outro horário específico (o Noturno e o Voo Solo têm um horário só)' };
+}
+
+// O domingo e a data que já passou (o dia de São Paulo) não recebem pedido, nem pela exceção da coordenação: a recusa
+// (PT403, com o campo domingo ou passada) ou null
+export function recusaDaData(data, agora = new Date()) {
+  if (ehDomingo(data)) return { code: 'PT403', campo: 'domingo', mensagem: 'o aeroclube não opera aos domingos' };
+  if (data < hojeEmSaoPaulo(agora)) return { code: 'PT403', campo: 'passada', mensagem: 'a data do pedido já passou' };
+  return null;
+}
+
+// A conversão dos pedidos de antes da aprovação (a do banco, aprovar_solicitacoes_de_antes_da_aprovacao, para o modo local):
+// cada pedido ganha as colunas da aprovação e da 2ª preferência (vazias), e fica aprovado o que não foi cancelado nem teve
+// a aprovação retirada e (a) foi importado ("importadas" do dia dele: numa data que já passou, sempre; de hoje em diante, só
+// quando um registro do aluno, o pedido principal ou uma missão extra, ainda o leva), por "importação anterior"; ou (b) de
+// hoje em diante, não foi importado, por quem anotou (o modo local não tem contas: quem usa tem os direitos de operador).
+// O pedido que já tem as colunas da aprovação foi registrado depois do passo D1 e fica como está.
+// diaDe(data): o dia guardado (null: nenhum); hoje: a data de São Paulo; agora: o instante (ISO)
+export function aprovarAsDeAntesDaAprovacao(lista, diaDe, { hoje, agora }) {
+  const vazias = { horario2: null, aprovada_em: null, aprovada_por: null, aprovacao_retirada_em: null, aprovacao_retirada_por: null };
+  return lista.map(s => {
+    if (Object.hasOwn(s, 'aprovada_em')) return s;
+    const linha = { ...vazias, ...s };
+    if (linha.cancelada_em || linha.aprovada_em || linha.aprovacao_retirada_em) return linha;
+    const dia = diaDe(linha.data);
+    const importada = Boolean(dia) && Array.isArray(dia.importadas) && dia.importadas.includes(linha.id);
+    const registro = importada && dia.pedidos && dia.pedidos[linha.aluno];
+    const levada = Boolean(registro) && (registro.solicitacao === linha.id || (Array.isArray(registro.extra) && registro.extra.some(e => e && e.solicitacao === linha.id)));
+    if (importada && (linha.data < hoje || levada)) return { ...linha, aprovada_em: agora, aprovada_por: 'importação anterior' };
+    if (!importada && linha.data >= hoje) return { ...linha, aprovada_em: agora, aprovada_por: linha.registrado_por };
+    return linha;
+  });
+}
+
+// O pedido na página Pedidos (D2). Três estados, das colunas: cancelado, aprovado ou aguardando aprovação (a aprovação
+// retirada volta a aguardar)
+export const situacaoDaSolicitacao = s => (s.cancelada_em ? 'cancelada' : s.aprovada_em ? 'aprovada' : 'aguardando');
+export const solicitacaoAprovada = s => situacaoDaSolicitacao(s) === 'aprovada';
+
+// O resumo da data (o cartão Pedidos): os registrados (sem os cancelados), os aprovados e os que aguardam e pedem atenção
+// (pedeAtencao: o pedido que alguém pode aprovar; o do aluno inativo ou fora do cadastro, que Pedidos não aprova, não)
+export function resumoDasSolicitacoes(lista, pedeAtencao = () => true) {
+  const resumo = { registradas: 0, aguardando: 0, aprovadas: 0 };
+  for (const s of lista || []) {
+    const situacao = situacaoDaSolicitacao(s);
+    if (situacao === 'cancelada') continue;
+    resumo.registradas++;
+    if (situacao === 'aprovada') resumo.aprovadas++;
+    else if (pedeAtencao(s)) resumo.aguardando++;
+  }
+  return resumo;
+}
+
+// O registro do dia que leva o pedido (o principal do aluno ou uma missão extra dele, com solicitacao = o id): null
+function registroDaSolicitacao(estado, s) {
+  const aluno = (estado.stu || []).find(x => x.id === s.aluno);
+  if (!aluno) return null;
+  return [aluno, ...(aluno.extra || [])].find(p => p && p.solicitacao === s.id) || null;
+}
+
+// Onde o pedido está na demanda da data (até o G, que a concilia): 'fora' (nunca importado), 'voa' (importado, e um registro
+// que voa o leva) ou 'tirada' (importado, sem registro que voe: o Voa desligado, ou o registro que "Limpar demanda" tirou)
+export function situacaoNaDemanda(s, estado) {
+  if (!(estado.importadas || []).includes(s.id)) return 'fora';
+  const registro = registroDaSolicitacao(estado, s);
+  return registro && registro.fly ? 'voa' : 'tirada';
+}
+
+// "Importar": os aprovados que nunca entraram na demanda da data
+export const solicitacoesParaImportar = (lista, estado) => (lista || []).filter(s => solicitacaoAprovada(s) && situacaoNaDemanda(s, estado) === 'fora');
+
+// A entrada dos aprovados na demanda (a aprovação feita aqui, D2): o registro que leva o pedido e estava desligado volta a
+// voar (a missão, o instrutor, a prioridade e o pino ficam); o que só ficou nas importadas (o registro saiu da demanda) é
+// esquecido e volta a entrar, uma vez; o que nunca entrou, entra. Muda estado (o Voa e as importadas) e devolve os
+// religados e os que a importação (js/processamento.js) ainda põe na demanda. O registro sem pedido da agenda não muda
+export function prepararEntradaNaDemanda(estado, solicitacoes) {
+  const religados = [], paraImportar = [];
+  for (const s of solicitacoes.filter(solicitacaoAprovada)) {
+    const registro = (estado.importadas || []).includes(s.id) ? registroDaSolicitacao(estado, s) : null;
+    if (registro) {
+      if (!registro.fly) { registro.fly = true; religados.push(s); }
+      continue;
+    }
+    if (Array.isArray(estado.importadas)) estado.importadas = estado.importadas.filter(id => id !== s.id);
+    paraImportar.push(s);
+  }
+  return { religados, paraImportar };
+}
+
+// Os pedidos de cada dia do trilho, da contagem do servidor (solicitacoes_por_dia: { data: { aguardando, aprovadas } }): os
+// que aguardam e os aprovados; o domingo não tem número
+export function contagemPorDia(resposta) {
+  const contagem = {};
+  for (const [data, n] of Object.entries(resposta || {})) {
+    const total = ((n && n.aguardando) || 0) + ((n && n.aprovadas) || 0);
+    if (total && !ehDomingo(data)) contagem[data] = total;
+  }
+  return contagem;
+}
+
+// O aprovado entra na demanda na hora só com as cinco condições: a data dele é a aberta; os dados dela foram lidos; ela já
+// tem escala gravada (a aprovação nunca cria a data: as horas até a revisão e as filas do rodízio ficariam congeladas cedo
+// demais); os resultados e os cursos foram lidos (sem eles a missão do curso não é ligada); a escala não mudou em outro
+// computador. Sem uma delas, o motivo ('outra-data', 'nao-lida', 'nao-gravada', 'dados', 'mudou'), e "Importar" o traz
+const SEM_ELES_NAO_ENTRA = ['resultados', 'cursos', 'cursos-pendentes'];
+export function motivoSemEntrada({ data, aberta, lida, gravada, indisponiveis = [], mudou = false }) {
+  if (data !== aberta) return 'outra-data';
+  if (!lida) return 'nao-lida';
+  if (!gravada) return 'nao-gravada';
+  if (indisponiveis.some(d => SEM_ELES_NAO_ENTRA.includes(d))) return 'dados';
+  if (mudou) return 'mudou';
+  return null;
+}
+
+// A 2ª preferência do formulário: os outros horários da lista do recurso (sem a 1ª); a missão de um horário só (o Noturno, o
+// Voo Solo) não tem
+export const opcoesDaSegundaPreferencia = (lista, primeira, missao) =>
+  (Object.hasOwn(HORARIOS_FIXOS, missao) ? [] : lista.filter(h => h !== primeira));
+
 // Pedido da demanda: a missão com o recurso do pedido (sem ele, o padrão da missão); como preferências, os dois primeiros horários dela que a
 // disponibilidade permite (sem disponibilidade, os primeiros a partir das 08:20 e das 10:10); prioridade 3. Os horários
 // são os da categoria do equipamento (o PA-34 tem os seus). As horas: as fixas da missão (o Ground, 01h30; o Noturno,

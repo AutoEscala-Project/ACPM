@@ -19,7 +19,7 @@ export const ABAS_DO_GLOSSARIO = [
   'Escala',
   'Critérios',
   'Demanda',
-  'Agenda',
+  'Pedidos',
   'Recursos',
   'INVAs',
   'Alunos',
@@ -32,7 +32,7 @@ const TERMOS = {
   'horario-livre': { aba: 'Escala', termo: 'Horário livre', texto: 'Sem vaga na 1ª nem na 2ª preferência, o voo foi para o horário livre mais perto da 1ª preferência (empatados, o mais cedo).' },
   'segunda-preferencia': { aba: 'Escala', termo: '2ª preferência', texto: 'O voo ficou na 2ª preferência do aluno: na 1ª não havia avião, instrutor ou horário livre.' },
   'horario-ajustado': { aba: 'Escala', termo: 'Horário ajustado', texto: 'A compactação mudou o horário para fechar um buraco do dia, dentro da regra de Horários escolhida nos critérios.' },
-  espera: { aba: 'Escala', termo: 'Lista de espera', texto: 'O pedido da Agenda com horário exato que não coube nele (os 6 voos locais, os aviões ou os instrutores) espera por ele, na ordem da fila: a recusa diz o lugar. A vaga que abrir vai para o 1º que cabe nela.' },
+  espera: { aba: 'Escala', termo: 'Lista de espera', texto: 'O pedido com horário exato que não coube nele (os 6 voos locais, os aviões ou os instrutores) espera por ele, na ordem da fila: a recusa diz o lugar. A vaga que abrir vai para o 1º que cabe nela.' },
   conflito: { aba: 'Escala', termo: 'Conflito', texto: 'O voo fixo não vale mais: o instrutor, o avião, o horário ou o pedido mudou, ou outro voo fixo já ocupa o lugar (o agendado na Escala cede o lugar aos outros fixos). Ele fica onde está até ser resolvido em Sugestões.' },
   'voo-fixo': { aba: 'Escala', termo: 'Voo fixo (cadeado)', texto: 'O voo não muda quando a escala é refeita. Fica fixo pelo agendamento na Escala, pela escala aprovada, pelo instrutor escolhido na Escala ou pelo status Atrasado, Em Voo, Pousou ou Cancelado.' },
   'voo-agendado': { aba: 'Escala', termo: 'Voo agendado', texto: 'Marcado pelo operador em “+ Agendar voo”: fica fixo no horário, no recurso e com o instrutor confirmados, e a escala é refeita em volta dele. O Histórico desfaz o agendamento.' },
@@ -75,8 +75,8 @@ const TERMOS = {
     funcionalidade: 'hangar', textoSem: `A compactação fecha primeiro o tempo parado dos aviões e evita as paradas de ${INTERVALO_DO_HANGAR / 60} h ou mais no meio do dia.`
   },
   'criterio-maior': { aba: 'Critérios', termo: 'Maior buraco', texto: 'A compactação fecha primeiro os maiores buracos do dia, de instrutor ou de avião.' },
-  horarios: { aba: 'Critérios', termo: 'Horários', texto: 'Até onde a compactação pode mudar o horário dos voos: no horário do pedido (o exato da Agenda; sem ele, qualquer horário da lista), só entre a 1ª e a 2ª preferência, ou não mudar.' },
-  'criterio-disponibilidade': { aba: 'Critérios', termo: 'Na disponibilidade', texto: 'O voo pode mudar para qualquer horário da lista; o pedido com o horário exato da Agenda fica nele.' },
+  horarios: { aba: 'Critérios', termo: 'Horários', texto: 'Até onde a compactação pode mudar o horário dos voos: no horário do pedido (o exato do pedido; sem ele, qualquer horário da lista), só entre a 1ª e a 2ª preferência, ou não mudar.' },
+  'criterio-disponibilidade': { aba: 'Critérios', termo: 'Na disponibilidade', texto: 'O voo pode mudar para qualquer horário da lista; o pedido com o horário exato fica nele.' },
   'criterio-preferencias': { aba: 'Critérios', termo: 'Só 1ª e 2ª', texto: 'O voo só muda entre a 1ª e a 2ª preferência do aluno.' },
   'criterio-fixos': { aba: 'Critérios', termo: 'Não mudar', texto: 'Os horários ficam onde a escala pôs; só os instrutores podem trocar.' },
   'criterios-travados': { aba: 'Critérios', termo: 'Critérios travados', texto: 'Com a escala aprovada, os voos fixos não mudam: reabra a escala para mudar os critérios.' },
@@ -90,11 +90,13 @@ const TERMOS = {
   'fora-da-ordem': { funcionalidade: 'progresso', aba: 'Demanda', termo: 'Fora da ordem', texto: 'A missão do curso que o programa ainda não libera (falta uma anterior ou a fase não abriu), a já aprovada, a dispensada ou a que o aluno já tem em outro voo do dia. Escolhê-la pede confirmação, e o histórico diz por quê.' },
   'curso-encerrado': { funcionalidade: 'progresso', aba: 'Demanda', termo: 'Curso encerrado', texto: 'O curso do aluno foi encerrado em Cursos. A próxima missão e as outras do curso continuam, mas cada uma pede confirmação, aqui e no agendamento, e o histórico diz que o curso estava encerrado.' },
 
-  // Agenda
-  'missao-do-pedido': { aba: 'Agenda', termo: 'Fase / missão do pedido', texto: 'Para o aluno de um curso, as missões do programa dele, por fase, sem as dispensadas; sem curso, os tipos de missão. A missão do curso traz o recurso e as horas dela e vai com o pedido para a demanda.' },
-  'recurso-do-pedido': { aba: 'Agenda', termo: 'Recurso do pedido', texto: 'O tipo de avião, o simulador ou a sala que a missão permite, escolhido no pedido. Ele decide os horários (os de decolagem dele, em Recursos) e vai com o pedido para a demanda.' },
-  'setimo-voo-local': { aba: 'Agenda', termo: `${LIMITE_DE_VOOS_LOCAIS + 1}º voo local`, texto: `No máximo ${LIMITE_DE_VOOS_LOCAIS} voos locais (Voo Local, Voo Solo e TGL) saem no mesmo horário. O ${LIMITE_DE_VOOS_LOCAIS + 1}º só é registrado com “Registrar mesmo assim”, guarda quem confirmou e voa no horário, a mais.` },
-  excecao: { aba: 'Agenda', termo: 'Exceção da Coordenação', texto: 'Registra o pedido depois do prazo (13:00 da véspera; a segunda, sábado às 10:00). O pedido fica marcado como exceção, para auditoria.' },
+  // Pedidos
+  'aprovar-pedido': { aba: 'Pedidos', termo: 'Aprovar pedido', texto: 'O pedido chega “Aguardando aprovação” (o da secretaria, ou o registrado sem aprovar) e só entra na demanda aprovado. Na data aberta já gravada, ele entra na hora; senão, “Importar” o põe lá. “Retirar aprovação” o devolve a aguardar.' },
+  'segunda-preferencia-do-pedido': { aba: 'Pedidos', termo: '2ª preferência do pedido', texto: 'Opcional: outro horário exato, da mesma lista do recurso, para quando o da 1ª não couber. O Noturno e o Voo Solo têm um horário só.' },
+  'missao-do-pedido': { aba: 'Pedidos', termo: 'Fase / missão do pedido', texto: 'Para o aluno de um curso, as missões do programa dele, por fase, sem as dispensadas; sem curso, os tipos de missão. A missão do curso traz o recurso e as horas dela e vai com o pedido para a demanda.' },
+  'recurso-do-pedido': { aba: 'Pedidos', termo: 'Recurso do pedido', texto: 'O tipo de avião, o simulador ou a sala que a missão permite, escolhido no pedido. Ele decide os horários (os de decolagem dele, em Recursos) e vai com o pedido para a demanda.' },
+  'setimo-voo-local': { aba: 'Pedidos', termo: `${LIMITE_DE_VOOS_LOCAIS + 1}º voo local`, texto: `No máximo ${LIMITE_DE_VOOS_LOCAIS} voos locais (Voo Local, Voo Solo e TGL) saem no mesmo horário. O ${LIMITE_DE_VOOS_LOCAIS + 1}º é registrado com “Registrar mesmo assim”, guarda quem confirmou e voa no horário, a mais; ou com “Registrar na lista de espera”, e espera a vaga do horário.` },
+  excecao: { aba: 'Pedidos', termo: 'Exceção da Coordenação', texto: 'Registra o pedido depois do prazo (13:00 da véspera; a segunda, sábado às 10:00). O pedido nasce aprovado e fica marcado como exceção, para auditoria.' },
 
   // Recursos
   'horario-fechado-na-data': { aba: 'Recursos', termo: 'Horário apagado', texto: 'O horário está fechado nesta data (Escala › Horários fechados nesta data): nesta data, nenhum voo nem aula de Ground da categoria sai nele. Ele continua na lista para as outras datas.' },
@@ -111,7 +113,7 @@ const TERMOS = {
   'so-parafuso': { aba: 'Recursos', termo: 'Só Parafuso', texto: 'Avião reservado para a missão de Parafuso no C152: as outras missões não usam ele, e o Parafuso só voa nele. Marque no detalhe do avião, em Recursos.' },
 
   // INVAs
-  'vem-nesta-data': { aba: 'INVAs', termo: 'Vem', texto: 'Marcado, o instrutor vem nesta data (a aberta no topo, que nem sempre é hoje) e pode começar missões dentro das faixas dele, sem tocar as pausas.' },
+  'vem-nesta-data': { aba: 'INVAs', termo: 'Vem', texto: 'Marcado, o instrutor vem nesta data (a aberta no trilho, que nem sempre é hoje) e pode começar missões dentro das faixas dele, sem tocar as pausas.' },
   faixas: { aba: 'INVAs', termo: 'Pode decolar', texto: 'As faixas do instrutor nesta data, de … até …: a missão começa dentro de uma faixa e pode terminar depois dela (o Até não entra: até 17:30 não inclui o Noturno). Um turno é uma faixa pronta; meio dia, uma faixa digitada.' },
   pausa: { aba: 'INVAs', termo: 'Pausa', texto: 'Um intervalo em que o instrutor não voa nesta data, nem dentro de uma faixa: o almoço, por exemplo. Nenhuma missão dele toca a pausa, nem a que começou antes dela. A que cobre 1 h entre 11:00 e 14:00 é o almoço dele.' },
   checador: { aba: 'INVAs', termo: 'Checador', texto: 'O voo de cheque exige três marcas do checador: o curso (PP ou PC), o motor (MNTE ou MLTE) e as regras (VFR ou IFR). O Cheque PC MLTE IFR, por exemplo, pede PC, MLTE e IFR.' },

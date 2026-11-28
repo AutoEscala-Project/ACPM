@@ -14,10 +14,10 @@ import { comRepousoDoNoturno, voltasQueMudaram, assinaturaDosNoturnos } from './
 import { redesenhar, redesenharPorNome } from './redesenho.js';
 import { SEM_OS_PROGRAMAS } from './views/cursos.js';
 import { podeEditarAgenda } from './views/agenda.js';
-import { lerPedidosDaData } from './views/selos.js';
+import { lerSolicitacoesDaData } from './solicitacoes-da-data.js';
 
 // Abre uma data: a única que escreve a data aberta e o ?data= do endereço (recarregar continua nela). Não lê nada e não
-// desenha: quem mostra a data (o nome no topo, o calendário, a data base do BI) se redesenha no momento 'data-aberta'
+// desenha: quem mostra a data (o nome no alto do trilho, o calendário, a data base do BI) se redesenha no momento 'data-aberta'
 // naoEscolhida: a data que aparece enquanto o app abre (o login, os dados chegando) ainda não é a da abertura e não vai para o
 // endereço (recarregar ali a tomaria pela do link)
 export function abrirData(data, { naoEscolhida = false } = {}) {
@@ -154,7 +154,7 @@ async function relerAposConflito(perdidas) {
   }
   $('#escala-atualizada').hidden = true;
   redesenhar('dados');
-  lerPedidosDaData();
+  lerSolicitacoesDaData({ dataLida: true });
   mostrarAviso('refazer', avisoDaReleitura(perdidas), { recarregar: false, fechar: true });
 }
 
@@ -199,6 +199,7 @@ function save(resultado = null) {
   else calcularComOsNoturnosFixos();
   syncBIHistoryForCurrentDate();
   gravacaoAtual = ApiClient.salvarDia(DATA, S, RES);
+  diaGravado = true;
   avisarVoltaDoDiaSeguinte(gravacaoAtual);
   // Neste navegador (sem servidor), a gravação só falha quando o armazenamento recusa (o espaço pode ter acabado)
   if (!modoCompartilhado()) {
@@ -284,6 +285,11 @@ export function gravarNaEscala(foto, tipo, descricao, reverter = null, reverte =
   const { resultado, motor } = escalaDaAlteracao(estadoDaEscala(), { ...RES, data: foto.data }, { aprovada: true, antes: foto.estado, recusas, motor: () => null });
   return gravarAlteracao(tipo, descricao, reverter, reverte, motor ? {} : { resultado, foto });
 }
+
+// A data aberta já tem dia gravado (D2: um pedido aprovado só entra na demanda na hora numa data já gravada; a aprovação
+// nunca cria a data): false para a data lida sem dia gravado, true desde a primeira gravação dela neste navegador
+let diaGravado = false;
+export const diaJaGravado = () => diaGravado;
 
 // Escala só calculada (data aberta ainda sem escala gravada): é gravada na primeira alteração ou quando é exportada
 // (CSV ou PDF), para entrar no BI e nas horas e no rodízio da data seguinte. Abrir uma data não grava nada
@@ -388,7 +394,7 @@ export async function lerData(data) {
     await dadosProntos;
     await anterior;
     if (pedido !== pedidoDeData) return false;
-    const { estado, escala, horasBase, horasDosInstrutores, resultados, programa, indisponiveis, voltasDeAntes } = await ApiClient.carregarDia(data);
+    const { estado, escala, novo, horasBase, horasDosInstrutores, resultados, programa, indisponiveis, voltasDeAntes } = await ApiClient.carregarDia(data);
     const historico = await historicoParaPainel(data);
     const maisNova = pedido === pedidoDeData;
     if (!maisNova && data !== DATA) return false;
@@ -402,6 +408,7 @@ export async function lerData(data) {
     if (escala) setRES(comOsMotivosDaTela(escala));
     else calcularComOsNoturnosFixos();
     escalaSoCalculada = !escala;
+    diaGravado = !novo;
     noturnosGravados = escala ? assinaturaDosNoturnos(escala, estado.fStatus) : null;
     setAuditLog(historico);
     dadosLidos = maisNova;
@@ -440,7 +447,7 @@ export async function carregarData(data) {
   fecharAviso('volta-do-noturno');
   $('#escala-atualizada').hidden = true;
   redesenhar('dados');
-  lerPedidosDaData();
+  lerSolicitacoesDaData({ dataLida: true });
   carregarBI();
 }
 

@@ -4,7 +4,10 @@
 // exemplo dos testes (test/helpers/exemplo.js, com os alunos em outra ordem a cada data) e a escala do motor, com a volta
 // de BH dos noturnos de ontem (como o app abre a data: a volta no avião e com o INVA do Noturno, e o aviso do repouso antes
 // dela) e o pino de cada Noturno (como o app grava): scripts/dia-semeado.mjs.
-// Só grava datas que ainda não têm escala: o que alguém já editou na prévia fica como está. Recusa a produção.
+// Com cada data, os pedidos fictícios da agenda (scripts/pedidos-da-previa.mjs, o passo D1): um aprovado para cada aluno
+// com voo, ligado ao registro dele e a "importadas", dois que aguardam a aprovação e um cancelado.
+// Só grava datas que ainda não têm escala: o que alguém já editou na prévia fica como está. Cada data vai com os pedidos
+// dela numa consulta só: a data que falhou fica sem eles, e rodar de novo grava só as que faltam. Recusa a produção.
 //
 // Usa o Supabase CLI já autenticado (`supabase login`); não precisa da senha do banco.
 // Uso: [SECO=1] node scripts/semear-dias-previa.mjs [dias de operação, padrão 12] [data inicial AAAA-MM-DD, padrão amanhã]
@@ -15,26 +18,33 @@ import { PROJETOS } from '../js/config-supabase.js';
 import { comExemplo } from '../test/helpers/exemplo.js';
 import { somarDias } from '../js/format.js';
 import { ehDomingo } from '../js/agenda.js';
+import { refDaPrevia, pedidosDaPrevia, sqlDosIds, numerarPedidos, sqlDaData, ligarPedidos } from './pedidos-da-previa.mjs';
 import { escalaSemeada } from './dia-semeado.mjs';
 
-const PREVIA = new URL(PROJETOS.previa.url).hostname.split('.')[0];
-const PRODUCAO = new URL(PROJETOS.producao.url).hostname.split('.')[0];
-if (PREVIA === PRODUCAO) throw new Error('A prévia e a produção apontam para o mesmo projeto.');
+// Só a prévia: a produção é recusada antes de qualquer consulta
+const PREVIA = refDaPrevia(PROJETOS);
 
 const quantos = Number(process.argv[2] || 12);
 const hojeSP = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date());
 const inicio = process.argv[3] || somarDias(hojeSP, 1);
 
+// O Supabase CLI: o `supabase` do PATH; com SUPABASE_CLI_JS, um script que o node roda no lugar dele (o teste
+// test/unit/pedidos-da-previa.test.js: assim ele nunca alcança o banco, também no Windows)
+const CLI = process.env.SUPABASE_CLI_JS ? [process.execPath, [process.env.SUPABASE_CLI_JS]] : ['supabase', []];
+// Espera sem outro programa (o `sleep` não existe no Windows)
+const esperar = ms => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+
 function sql(consulta, { escrita = false } = {}) {
   const args = ['db', 'query', `--remote=${PREVIA}`, '-o', 'json', ...(escrita ? ['--yes'] : ['--read-only']), consulta];
-  // A API do Supabase às vezes falha no transporte: tenta de novo (as gravações daqui podem se repetir sem efeito)
+  // A API do Supabase às vezes falha no transporte: tenta de novo (as gravações daqui podem se repetir sem efeito: a da
+  // data com os pedidos não grava a data que já existe, e os ids pedidos de novo só pulam números)
   for (let tentativa = 1; ; tentativa++) {
     try {
-      const saida = execFileSync('supabase', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 64 << 20 });
+      const saida = execFileSync(CLI[0], [...CLI[1], ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 64 << 20 });
       return JSON.parse(saida.slice(saida.indexOf('{'))).rows || [];
     } catch (e) {
       if (tentativa === 5 || !/Transport error/.test(e.stderr || '')) throw e;
-      execFileSync('sleep', [String(tentativa * 2)]);
+      esperar(tentativa * 2000);
     }
   }
 }
@@ -53,7 +63,7 @@ let anterior = linhaAnterior ? migrarDia(JSON.parse(linhaAnterior.c)) : null;
 // A data do dia anterior: os noturnos dele voltam de BH na data seguinte (só quando ela é o dia seguinte dele)
 let dataAnterior = linhaAnterior ? linhaAnterior.d : null;
 let nid = cadastro.nid;
-const inserts = [];
+const gravacoes = [];
 
 for (const [k, data] of datas.entries()) {
   if (existentes.has(data)) {
@@ -70,26 +80,36 @@ for (const [k, data] of datas.entries()) {
   const estado = comExemplo({ ...base, stu: [...base.stu.slice(giro), ...base.stu.slice(0, giro)] });
   estado.stu.sort((a, b) => ordem.indexOf(a.id) - ordem.indexOf(b.id));
   nid = estado.nid;
+  // Os pedidos da agenda da data, com os ids tirados antes da escala (o registro de cada aprovado leva o id dele); a data e
+  // os pedidos são gravados juntos no fim. SECO só conta
+  const pedidos = pedidosDaPrevia(estado, data);
+  const total = pedidos.aprovados.length + pedidos.aguardando.length + pedidos.cancelados.length;
+  const numerados = process.env.SECO ? [] : numerarPedidos(pedidos, sql(sqlDosIds(total), { escrita: true }).map(l => l.id));
+  ligarPedidos(estado, numerados);
+  console.log(`${data}: pedidos ${pedidos.aprovados.length} aprovados, ${pedidos.aguardando.length} aguardando, ${pedidos.cancelados.length} cancelado`);
+
   // A volta de BH dos noturnos de ontem, o repouso antes dela e o pino de cada Noturno, como o app (scripts/dia-semeado.mjs)
   const { resultado, noturnos } = escalaSemeada(estado, { anterior, dataAnterior, data });
   const dia = { ...separar(estado).dia, esquema: ESQUEMA, resultado };
-  inserts.push(`('${data}', $dia$${JSON.stringify(dia)}$dia$::jsonb)`);
+  gravacoes.push({ data, dia, numerados });
   anterior = dia;
   dataAnterior = data;
   console.log(`${data}: ${resultado.out.length} lançamentos, ${resultado.al.length} alertas, ${noturnos.length} voltas do noturno`, process.env.SECO ? resultado.out.slice(0, 4).map(o => `${o.s}/${o.mis}/${o.r}/${o.ins}`).join(" · ") : "");
 }
 
-if (!inserts.length || process.env.SECO) {
-  console.log(inserts.length ? 'SECO: nada foi gravado.' : 'Nada a gravar.');
+if (!gravacoes.length || process.env.SECO) {
+  console.log(gravacoes.length ? 'SECO: nada foi gravado.' : 'Nada a gravar.');
   process.exit(0);
 }
 
 // Os ids das missões extras saem do contador do cadastro: ele avança primeiro (sem regravar o resto do cadastro)
 sql(`update public.documentos set conteudo = jsonb_set(conteudo, '{nid}', to_jsonb(${nid})), versao = versao + 1, atualizado_em = now()
   where chave = 'cadastro' and (conteudo ->> 'nid')::int < ${nid}`, { escrita: true });
-// Uma data por consulta (a API do Supabase recusa uma consulta muito grande)
-let gravadas = 0;
-for (const insert of inserts) {
-  gravadas += sql(`insert into public.dias (data, conteudo) values ${insert} on conflict (data) do nothing returning data`, { escrita: true }).length;
+// Uma data por consulta, com os pedidos dela (a API do Supabase recusa uma consulta muito grande)
+let gravadas = 0, pedidosGravados = 0;
+for (const { data, dia, numerados } of gravacoes) {
+  const [linha] = sql(sqlDaData(data, dia, numerados), { escrita: true });
+  gravadas += Number(linha.dias);
+  pedidosGravados += Number(linha.pedidos);
 }
-console.log(`Gravado na prévia: ${gravadas} datas; contador do cadastro em ${nid}.`);
+console.log(`Gravado na prévia: ${gravadas} datas e ${pedidosGravados} pedidos; contador do cadastro em ${nid}.`);

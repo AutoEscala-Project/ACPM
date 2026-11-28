@@ -17,7 +17,7 @@ const umaVista = () => typeof matchMedia === 'function' && matchMedia('(max-widt
 const ESPERA_DO_ENDERECO = 300;
 
 // opcoes: { id ('alu': ul#alu, #det-alu, section#s-alu), rotulo ('Alunos'), nomes (['aluno', 'alunos']), semItens, vazio
-//   (o texto com nada escolhido, ou { elemento }), chaveDaBusca, filtros, modelo(), detalhe(id), edita(), secao (a seção
+//   (o texto com nada escolhido, { texto, icone, dica }, ou { elemento }), chaveDaBusca, filtros, modelo(), detalhe(id), edita(), secao (a seção
 //   da tela, quando não é s-<id>) }
 export function criarMestreDetalhe(opcoes) {
   const { id, rotulo, nomes, secao = `s-${id}` } = opcoes;

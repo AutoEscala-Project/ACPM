@@ -346,7 +346,9 @@ test.describe('Configurar painel', () => {
     await abrirPainel(page);
     await abrirHistorico(page);
     await expect(page.locator('#historico')).toBeVisible();
-    await configurar(page).click();
+    // A gaveta abre à esquerda do trilho e pode cobrir o botão: pelo teclado
+    await configurar(page).focus();
+    await page.keyboard.press('Enter');
     await expect(dialogo(page)).toBeVisible();
     await page.keyboard.press('Escape');
     await expect(dialogo(page)).toBeHidden();

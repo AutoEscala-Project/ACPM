@@ -1,6 +1,6 @@
-// Aba Escala: resumo do dia, a lista dos voos (ou o mapa por recurso ou por instrutor) e o histórico da data.
+// Aba Escala: o resumo do dia (os números; os alertas ficam no trilho), a lista dos voos (ou o mapa por recurso ou por instrutor) e o histórico da data.
 import { FLIGHT_STATUSES, GROUND_REG, GROUND_EQ_TYPE, NOTURNO } from '../config.js';
-import { CODIGOS_DE_AVISO, CODIGOS_DO_AGENDADO } from '../conflitos.js';
+import { CODIGOS_DO_AGENDADO } from '../conflitos.js';
 import { textoDoCombustivel } from '../combustivel.js';
 import { hm, rotuloDoInicio, fmtH, esc, rotuloDaData, hojeISO, duracaoHm, DURACAO_DO_GROUND, pesoBr, chaveDeBusca } from '../format.js';
 import { isGroundMission } from '../rules.js';
@@ -16,18 +16,15 @@ import { atualizarAgendamento } from './agendamento.js';
 import { resultadoNaEscala } from './etapas.js';
 import { OPCOES_DE_BURACOS, OPCOES_DE_HORARIOS, normalizarCriterios } from '../criterios.js';
 import { metricasDaEscala } from '../metricas.js';
-import { ehAvisoDoAlmoco, INICIO_DO_SEM_ALMOCO } from '../almoco.js';
 import { ligada } from '../funcionalidades.js';
 import { sumUniqueOperationalHours, consolidateTimelineSlots } from '../engine.js';
-import { S, RES, AUDIT_LOG, TL_MODE, HORAS_NAS_COLUNAS, OCULTAR_INDISPONIVEIS, DATA, isGestor, dadoIndisponivel, estadoDaEscala, inativoNaDataAberta, habilitacoesNaoConferidas } from '../state.js';
-import { cancelamentoAproveitavel, dataQueAindaVoa } from '../reparo.js';
-import { rejeicoesDosPedidos } from '../rejeicoes.js';
+import { S, RES, AUDIT_LOG, TL_MODE, HORAS_NAS_COLUNAS, OCULTAR_INDISPONIVEIS, DATA, isGestor, dadoIndisponivel, estadoDaEscala, inativoNaDataAberta } from '../state.js';
+import { cancelamentoAproveitavel } from '../reparo.js';
 import { motivoDoFixo } from '../fixos.js';
 import { instrutoresDoVoo, foraDoPriorizarNoVoo } from '../instrutor-escolhido.js';
 import { $, trocarConteudo } from '../dom.js';
 import { atualizarEditorDoVoo } from './edicao-do-voo.js';
 import { statusDoVoo, unidadeDoVoo } from '../voo.js';
-import { voosComInativos, textoDoVooComInativo } from '../inativos.js';
 
 export const HT = o => (o.isGround || isGroundMission(o.mis) ? DURACAO_DO_GROUND : fmtH(o.h) + (o.ss !== '1/1' ? ` (sessão ${o.ss})` : ''));
 
@@ -352,105 +349,18 @@ function tempoParado(out) {
     </div>`;
 }
 
-// Avisos agrupados pelo código: alunos e instrutores sem peso, aviões que param para a revisão, atrasos, instrutores
-// perto do limite da lei, os do “Priorizar com” (um por voo: sem o instrutor, a disputa ou o voo posto à mão fora dele), as
-// voltas do noturno com o avião ou o INVA indisponível (uma por volta), os voos agendados fora das regras (um por voo) e os
-// INVAs sem almoço (#104: o aviso não tem código, e é reconhecido pelo começo do texto). Os outros avisos sem código (de
-// uma escala gravada antes deles) entram em "outros"
-function resumoDosAvisos(avisos) {
-  const doCodigo = codigo => avisos.filter(a => a.codigo === codigo);
-  const quantos = (lista, campo) => new Set(lista.map(a => a[campo]).filter(id => id !== undefined)).size;
-  const semPeso = quantos(doCodigo('sem-peso'), 'stuId');
-  const instrutoresSemPeso = quantos(doCodigo('sem-peso'), 'insId');
-  const revisao = doCodigo('revisao').length;
-  const atrasos = doCodigo('atraso').length;
-  const limites = quantos(doCodigo('perto-do-limite'), 'insId');
-  const semPar = doCodigo('voa-com').length;
-  const saiu = doCodigo('escolhido-saiu').length;
-  const repouso = quantos(doCodigo('repouso-do-noturno'), 'insId');
-  const voltas = doCodigo('volta-do-noturno').length;
-  const foraDaRegra = quantos(avisos.filter(a => CODIGOS_DO_AGENDADO.includes(a.codigo)), 'fKey');
-  const semAlmoco = quantos(avisos.filter(ehAvisoDoAlmoco), 'insId');
-  const outros = avisos.filter(a => !CODIGOS_DE_AVISO.includes(a.codigo) && !ehAvisoDoAlmoco(a)).length;
-  const partes = [
-    semPeso && `${semPeso} ${semPeso === 1 ? 'aluno sem peso' : 'alunos sem peso'}`,
-    instrutoresSemPeso && `${instrutoresSemPeso} ${instrutoresSemPeso === 1 ? 'instrutor sem peso' : 'instrutores sem peso'}`,
-    revisao && `${revisao} ${revisao === 1 ? 'avião para' : 'aviões param'} para a revisão de 50 horas`,
-    atrasos && `${atrasos} ${atrasos === 1 ? 'atraso com conflito' : 'atrasos com conflito'}`,
-    limites && `${limites} ${limites === 1 ? 'instrutor perto' : 'instrutores perto'} do limite da lei`,
-    semPar && `${semPar} ${semPar === 1 ? 'aviso' : 'avisos'} de Priorizar com`,
-    saiu && `${saiu} ${saiu === 1 ? 'voo com o instrutor escolhido' : 'voos com o instrutor escolhido'} fora do cadastro`,
-    repouso && `${repouso} ${repouso === 1 ? 'instrutor' : 'instrutores'} sem o repouso da lei antes da volta do noturno`,
-    voltas && `${voltas} ${voltas === 1 ? 'volta do noturno' : 'voltas do noturno'} com o avião ou o INVA indisponível`,
-    foraDaRegra && `${foraDaRegra} ${foraDaRegra === 1 ? 'agendamento' : 'agendamentos'} fora da regra`,
-    semAlmoco && `${semAlmoco} ${semAlmoco === 1 ? 'INVA sem almoço' : 'INVAs sem almoço'}`,
-    outros && `${outros} ${outros === 1 ? 'outro' : 'outros'}`
-  ].filter(Boolean);
-  return `${avisos.length} ${avisos.length === 1 ? 'aviso' : 'avisos'}: ${partes.join(' · ')}`;
-}
-
-// As caixas do resumo (erros, conflitos, avisos, inativos) abrem recolhidas; a que a pessoa abriu continua aberta quando
-// a escala é redesenhada (a troca de vista, do eixo, de filtro ou uma alteração), até recarregar a página
-const caixasAbertas = new Set();
-export const lembrarCaixa = (nome, aberta) => { if (aberta) caixasAbertas.add(nome); else caixasAbertas.delete(nome); };
-const caixa = (nome, classes, conteudo) => `<details class="caixa ${classes}" data-caixa="${nome}"${caixasAbertas.has(nome) ? ' open' : ''}>${conteudo}</details>`;
-
+// O resumo do dia, no alto da Escala: os números (as missões pedidas, as escaladas, as horas) e o tempo parado. As missões que
+// não entraram, os conflitos, os avisos, os voos com inativos e as habilitações não conferidas ficam no trilho, com os outros
+// avisos da data (js/linha-do-dia.js, avisosDaData: as caixas do resumo saíram em linha-fix-escala-sem-caixas)
 function resumo(out, al, tot) {
-  const erros = al.filter(a => a.t === 'err');
-  const conflitos = al.filter(a => a.t === 'conf');
-  const avisos = al.filter(a => a.t !== 'err' && a.t !== 'conf');
+  const erros = al.filter(a => a.t === 'err').length;
   const horas = sumUniqueOperationalHours(out, statusDe);
-  // O aviso "Sem almoço" (#104) com a dica do glossário no começo
-  const texto = a => (ehAvisoDoAlmoco(a) ? `<span data-dica="almoco">${esc(INICIO_DO_SEM_ALMOCO.trim())}</span> ${esc(a.m.slice(INICIO_DO_SEM_ALMOCO.length))}` : esc(a.m));
-  const item = a => `<li class="al ${a.t}"><b>${esc(a.s)}</b> ${texto(a)}</li>`;
-  // A recusa do pedido cujo instrutor escolhido não serve: "Sugestões" (o pedido dela vem do pareamento, js/rejeicoes.js),
-  // da data aberta de hoje em diante
-  const pedidoDaRecusa = new Map(dataQueAindaVoa({ data: DATA, hoje: hojeISO() })
-    ? [...rejeicoesDosPedidos(estadoDaEscala(), RES)].map(([fKey, a]) => [a, fKey]) : []);
-  const erro = a => {
-    const fKey = a.codigo === 'instrutor-escolhido' ? pedidoDaRecusa.get(a) : null;
-    return `<li class="al ${a.t}"><b>${esc(a.s)}</b> ${esc(a.m)}${fKey ? ` <button type="button" class="btn quiet edit-only" data-rejeitado="${esc(fKey)}" title="Outro instrutor que encaixa este pedido">Sugestões</button>` : ''}</li>`;
-  };
-  const nomes = [...new Set(erros.map(a => a.s))].join(', ');
-  let h = `<div class="resumo">
+  return `<div class="resumo">
     <div class="st">
       <div><strong>${tot}</strong> missões pedidas</div>
-      <div><strong>${tot - erros.length}</strong> escaladas</div>
+      <div><strong>${tot - erros}</strong> escaladas</div>
       <div><strong>${fmtH(horas)}</strong> de voo e aula</div>
-    </div>${tempoParado(out)}`;
-  if (erros.length) {
-    h += caixa('erros', 'erros', `<summary>${erros.length === 1 ? '1 missão não entrou' : `${erros.length} missões não entraram`} na escala: ${esc(nomes)}</summary>
-      <ul>${erros.map(erro).join('')}</ul>`);
-  }
-  // Voos fixos que ficaram impossíveis (da escala aprovada, agendados ou com o instrutor escolhido na Escala): continuam no
-  // lugar até o operador resolver
-  const conflito = a => `<li class="al ${a.t}"><b>${esc(a.s)}</b> ${esc(a.m)}${a.fKey ? ` <button type="button" class="btn quiet edit-only" data-reparo="${esc(a.fKey)}" title="O que pode voar no lugar deste voo">Sugestões</button>` : ''}</li>`;
-  const n = conflitos.length;
-  const emConflito = S.aprovacao ? `${n} ${n === 1 ? 'voo em conflito' : 'voos em conflito'} na escala aprovada` : `${n} ${n === 1 ? 'voo fixo' : 'voos fixos'} em conflito`;
-  if (n) h += caixa('conflitos', 'conflitos', `<summary>${emConflito}</summary><ul>${conflitos.map(conflito).join('')}</ul>`);
-  if (avisos.length) h += caixa('avisos', 'avisos', `<summary>${resumoDosAvisos(avisos)}</summary><ul>${avisos.map(item).join('')}</ul>`);
-  return h + caixaDosInativos(out) + caixaDasHabilitacoesNaoConferidas() + '</div>';
-}
-
-// Sem os programas dos cursos lidos, o que a missão do curso de cada pedido exige do INVA não entra na escala (nada é
-// exigido): o aviso diz quantos pedidos com missão do curso ficaram sem a conferência (js/state.js)
-function caixaDasHabilitacoesNaoConferidas() {
-  const n = habilitacoesNaoConferidas();
-  if (!n) return '';
-  return caixa('habilitacoes', 'avisos habilitacoes', `<summary>As habilitações das missões do curso não foram conferidas</summary>
-    <ul><li class="al warn">Os programas dos cursos não foram lidos: o que a missão do curso exige do INVA não foi conferido em ${n === 1 ? '1 pedido' : `${n} pedidos`} desta data: a escala foi montada sem essa conferência.</li></ul>`);
-}
-
-// Os voos da escala com quem ficou inativo no cadastro (a escala gravada continua mostrando os voos dele até ser refeita):
-// um item por pessoa ou recurso. Com um instrutor ou um recurso, "Refazer a escala" a refaz sem ele; o voo do aluno inativo
-// não muda ao refazer (o pedido dele continua): ele se resolve na Demanda
-function caixaDosInativos(out) {
-  const itens = voosComInativos(S, { out }, { data: DATA, hoje: hojeISO() });
-  if (!itens.length) return '';
-  const n = itens.reduce((total, i) => total + i.voos, 0);
-  const linha = i => `<li class="al warn">${esc(textoDoVooComInativo(i))}${i.de === 'aluno' ? ' <a class="btn quiet" href="#/dem" data-focar>Abrir a Demanda</a>' : ''}</li>`;
-  const refazer = itens.some(i => i.de !== 'aluno') ? '<button type="button" class="btn quiet edit-only" data-act="refazer-escala">Refazer a escala</button>' : '';
-  return caixa('inativos', 'avisos inativos', `<summary>${n} ${n === 1 ? 'voo' : 'voos'} com quem está inativo no cadastro</summary><ul>${itens.map(linha).join('')}</ul>${refazer}`);
+    </div>${tempoParado(out)}</div>`;
 }
 
 // Horários recolhidos na Lista (continuam assim quando a escala é refeita, até recarregar a página)

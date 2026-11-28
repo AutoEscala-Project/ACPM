@@ -100,12 +100,14 @@ describe('Glossário', () => {
     assert.deepEqual(Object.keys(INTEIRO).filter(id => !Object.hasOwn(montarGlossario(nome => nome !== 'prioridade'), id)), ['prioridade']);
   });
 
-  // O almoço (#104): o aviso "Sem almoço" da Escala tem a dica, e a pausa que é o almoço é a que cobre 1 h da janela (de
-  // qualquer tamanho: a de 10:30 a 12:30 também; a de 1 h das 10:30 às 11:30, só 30 min nela, não). O almoço vem antes do
-  // “Priorizar com”, e a escala muda outras missões antes de desistir dele (Pedro, 28/11)
-  it('o almoço: a dica do aviso "Sem almoço" na Escala e a pausa que cobre 1 h entre 11:00 e 14:00', () => {
-    const escala = readFileSync(new URL('js/views/escala.js', raiz), 'utf8');
-    assert.match(escala, /data-dica="almoco"/);
+  // O almoço (#104): o resumo dos avisos no trilho tem a dica nos INVAs sem almoço (a caixa dos avisos da Escala saiu, em
+  // linha-fix-escala-sem-caixas; js/linha-do-dia.js diz o trecho, js/views/trilho.js põe a dica), e a pausa que é o almoço
+  // é a que cobre 1 h da janela (de qualquer tamanho: a de 10:30 a 12:30 também; a de 1 h das 10:30 às 11:30, só 30 min
+  // nela, não). O almoço vem antes do “Priorizar com”, e a escala muda outras missões antes de desistir dele (Pedro, 28/11)
+  it('o almoço: a dica dos INVAs sem almoço no resumo do trilho e a pausa que cobre 1 h entre 11:00 e 14:00', () => {
+    const linha = readFileSync(new URL('js/linha-do-dia.js', raiz), 'utf8');
+    assert.match(linha, /'INVAs sem almoço', 'almoco'\]/);
+    assert.match(readFileSync(new URL('js/views/trilho.js', raiz), 'utf8'), /data-dica="\$\{esc\(r\.dica\.id\)\}"/);
     assert.match(GLOSSARIO.pausa.texto, /A que cobre 1 h entre 11:00 e 14:00 é o almoço dele\.$/);
     assert.match(GLOSSARIO.almoco.texto, /antes do Priorizar com/);
     assert.match(GLOSSARIO.almoco.texto, /muda outras missões/);
@@ -114,11 +116,29 @@ describe('Glossário', () => {
   it('o glossário das telas é o das funcionalidades ligadas no app', () => assert.deepEqual(GLOSSARIO, montarGlossario(ligada)));
 });
 
-// A Agenda pelo curso do aluno (F1c): a missão do pedido e o 7º voo local, com o limite da configuração
-describe('Glossário: a Agenda', () => {
+// Pedidos: a missão do pedido pelo curso do aluno e o 7º voo local, com o limite da configuração (F1c); a aprovação, a 2ª
+// preferência e a lista de espera do 7º (D2), num grupo "Pedidos"
+describe('Glossário: Pedidos', () => {
+  it('os termos dos pedidos ficam no grupo "Pedidos": a aprovação, a 2ª preferência, o 7º voo local com os dois caminhos', () => {
+    assert.ok(ABAS_DO_GLOSSARIO.includes('Pedidos') && !ABAS_DO_GLOSSARIO.includes('Agenda'));
+    for (const id of ['missao-do-pedido', 'recurso-do-pedido', 'setimo-voo-local', 'excecao', 'aprovar-pedido', 'segunda-preferencia-do-pedido']) assert.equal(GLOSSARIO[id].aba, 'Pedidos', id);
+    assert.match(GLOSSARIO['aprovar-pedido'].texto, /Aguardando aprovação/);
+    assert.match(GLOSSARIO['segunda-preferencia-do-pedido'].texto, /outro horário exato/);
+    assert.match(GLOSSARIO['setimo-voo-local'].texto, /“Registrar na lista de espera”/);
+    assert.match(GLOSSARIO.excecao.texto, /nasce aprovado/);
+  });
+
   it('a missão do pedido vem do curso do aluno, e o 7º voo local pede a confirmação', () => {
     assert.match(GLOSSARIO['missao-do-pedido'].texto, /as missões do programa dele, por fase/);
     assert.equal(GLOSSARIO['setimo-voo-local'].termo, `${LIMITE_DE_VOOS_LOCAIS + 1}º voo local`);
     assert.match(GLOSSARIO['setimo-voo-local'].texto, new RegExp(`No máximo ${LIMITE_DE_VOOS_LOCAIS} voos locais .*“Registrar mesmo assim”`));
+  });
+
+  // D2: a tela dos pedidos é "Pedidos"; nem o glossário nem o Manual a chamam mais de Agenda
+  it('a tela dos pedidos se chama Pedidos, no glossário e no Manual', () => {
+    const daAgenda = /\b(na|da|pela|à) Agenda\b/;
+    for (const [id, { texto }] of Object.entries(INTEIRO)) assert.doesNotMatch(texto, daAgenda, id);
+    const manual = readFileSync(new URL('index.html', raiz), 'utf8').split('\n').filter(l => daAgenda.test(l) || /importação da agenda/.test(l));
+    assert.deepEqual(manual, []);
   });
 });

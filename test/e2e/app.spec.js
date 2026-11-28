@@ -1,4 +1,4 @@
-import { test, expect, abrir, irPara, abrirMenuDaConta, botaoDaAba, dataAberta, diaAnterior, diaSeguinte, relativoDaData, rotuloDaData, rotulosDasAbas, mudarData, botaoDaData, horariosFechados } from './fixtures.js';
+import { test, expect, abrir, irPara, abrirMenuDaConta, botaoDaAba, dataAberta, diaAnterior, diaSeguinte, relativoDaData, rotuloDaData, rotulosDasAbas, mudarData, botaoDoTrilho, abrirOTrilho, horariosFechados, trilho } from './fixtures.js';
 import { GLOSSARIO } from '../../js/glossario.js';
 import { FRASES_QUE_SAIRAM, FRASES_DO_MANUAL } from './manual-frases.js';
 
@@ -8,7 +8,7 @@ test.describe('Aplicação', () => {
     await expect(page).toHaveTitle('AutoEscala - ACPM');
     await expect(page.locator('meta[name="application-name"]')).toHaveAttribute('content', 'AutoEscala - ACPM');
     await expect(page.locator('meta[name="apple-mobile-web-app-title"]')).toHaveAttribute('content', 'AutoEscala');
-    await expect(rotulosDasAbas(page)).toHaveText(['Agenda', 'Demanda', 'Escala', 'Aprovar', 'Alunos', 'INVAs', 'Recursos', 'Cursos', 'Rodízio', 'BI']);
+    await expect(rotulosDasAbas(page)).toHaveText(['Pedidos', 'Demanda', 'Escala', 'Aprovar', 'Alunos', 'INVAs', 'Recursos', 'Cursos', 'Rodízio', 'BI']);
     await expect(page.locator('#s-esc')).toBeVisible();
     await expect(botaoDaAba(page, 'esc')).toHaveAttribute('aria-current', 'page');
     await expect(page.locator('#s-rec')).toBeHidden();
@@ -32,8 +32,9 @@ test.describe('Aplicação', () => {
     expect(Math.max(...centros) - Math.min(...centros)).toBeLessThanOrEqual(1);
   });
 
-  test('a data em uso fica no topo, em todas as abas; os botões ‹ e › trocam o dia', async ({ page }) => {
+  test('a data em uso fica no alto do trilho, em todas as telas; o calendário troca o dia', async ({ page }) => {
     await abrir(page);
+    await abrirOTrilho(page);
     await expect(rotuloDaData(page)).toHaveText('quarta-feira, 11/11', { useInnerText: true });
     await expect(relativoDaData(page)).toHaveText('amanhã');
     await irPara(page, 'dem');
@@ -49,10 +50,10 @@ test.describe('Aplicação', () => {
     await expect(relativoDaData(page)).toHaveText('hoje');
   });
 
-  for (const largura of [1280, 560, 360]) test(`o botão da data tem tamanho fixo: ele não sai do lugar quando a data muda (${largura} px)`, async ({ page }) => {
+  for (const largura of [1280, 560, 360]) test(`o botão que recolhe o calendário não sai do lugar quando a data muda (${largura} px)`, async ({ page }) => {
     await page.setViewportSize({ width: largura, height: 800 });
     await abrir(page);
-    const caixas = () => botaoDaData(page).evaluate(el => {
+    const caixas = () => botaoDoTrilho(page).evaluate(el => {
       const r = el.getBoundingClientRect();
       return [Math.round(r.x), Math.round(r.width)];
     });
@@ -147,7 +148,7 @@ test.describe('Aplicação', () => {
     await expect(page.locator('#manual-glossario-lista dt')).toHaveCount(Object.keys(GLOSSARIO).length);
     await expect(page.locator('#manual-glossario-lista')).toContainText(GLOSSARIO['horario-livre'].texto);
     // As telas na ordem da linha (as etapas, os cadastros, o Rodízio e o BI), com os nomes dos botões e das vistas
-    await expect(manual.locator('#manual-abas h4')).toHaveText(['Agenda', 'Demanda', 'Escala', 'Alunos', 'INVAs', 'Recursos', 'Cursos', 'Rodízio', 'BI']);
+    await expect(manual.locator('#manual-abas h4')).toHaveText(['Pedidos', 'Demanda', 'Escala', 'Alunos', 'INVAs', 'Recursos', 'Cursos', 'Rodízio', 'BI']);
     for (const novo of FRASES_DO_MANUAL) {
       expect(texto, novo).toContain(novo);
     }
@@ -159,7 +160,7 @@ test.describe('Aplicação', () => {
     await expect(manual).toBeHidden();
   });
 
-  test('o manual tem a largura das outras páginas e fica centralizado', async ({ page }) => {
+  test('o manual tem a largura das outras páginas, entre a margem e o trilho', async ({ page }) => {
     await abrir(page);
     await irPara(page, 'esc');
     // O bloco dos horários fechados nesta data (B: na Escala), da largura da página
@@ -168,7 +169,9 @@ test.describe('Aplicação', () => {
     const cartao = await page.locator('#s-manual .pn').first().boundingBox();
     expect(Math.round(cartao.x)).toBe(Math.round(outra.x));
     expect(Math.round(cartao.width)).toBe(Math.round(outra.width));
-    const largura = await page.evaluate(() => document.documentElement.clientWidth);
-    expect(Math.abs(cartao.x - (largura - cartao.x - cartao.width))).toBeLessThanOrEqual(1);
+    // À esquerda, a margem da página (16 px); à direita, o vão (12 px) até o trilho
+    const lado = await trilho(page).boundingBox();
+    expect(Math.round(cartao.x)).toBe(16);
+    expect(Math.abs(lado.x - (cartao.x + cartao.width) - 12)).toBeLessThanOrEqual(1);
   });
 });

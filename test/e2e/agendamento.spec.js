@@ -2,7 +2,7 @@
 // peso; a conferência roda o motor numa cópia da escala (o conflito não deixa agendar; a regra do curso pede "Agendar
 // mesmo assim"). O voo agendado fica fixo (o cadeado), o pedido aparece na Demanda com a missão do curso, o peso
 // digitado vai para o cadastro e o Histórico desfaz
-import { test, expect, abrir, irPara, abrirEscala, entrar, AMANHA, abrirHistorico, aprovar, caixaVem, caixaVoa, linhaDoInstrutor, reabrir, relativoDaData, confirmarAgendamento, refazer, campoDoAluno, abrirInstrutor, campoDoInstrutor } from './fixtures.js';
+import { test, expect, abrir, irPara, abrirEscala, entrar, AMANHA, abrirHistorico, aprovar, caixaVem, caixaVoa, linhaDoInstrutor, reabrir, relativoDaData, confirmarAgendamento, refazer, campoDoAluno, textosDaEscala, abrirInstrutor, campoDoInstrutor } from './fixtures.js';
 import { instalarSupabaseFalso, documentosAtuais, CONTAS } from './supabase-falso.js';
 import { aluno, cenario, instrutor, GROUND_C152 } from '../helpers/montar.js';
 import { FROTA_INICIAL } from '../../js/frota.js';
@@ -150,9 +150,7 @@ test.describe('Agendar um voo na Escala', () => {
     await expect((await historico(page)).locator('.audit-desc', { hasText: 'Agendado na escala' })).toContainText('· confirmado: fora do Priorizar com');
     await page.locator('#btn-fechar-historico').click();
     await abrirEscala(page);
-    const avisos = page.locator('#out details.caixa.avisos');
-    await avisos.locator('summary').click();
-    await expect(avisos.locator('li', { hasText: 'Priorizar com' })).toHaveText(['Maria Silva Fora do “Priorizar com” de Maria Silva (Instrutor 01): o voo foi posto à mão com Instrutor 02.']);
+    await expect(textosDaEscala(page, 'avisos').filter({ hasText: 'Priorizar com' })).toHaveText(['Maria Silva Fora do “Priorizar com” de Maria Silva (Instrutor 01): o voo foi posto à mão com Instrutor 02.']);
   });
 
   test('o 7º voo local do horário pede "Agendar mesmo assim", também quando a aluna vem antes no cadastro', async ({ page }) => {

@@ -1,21 +1,26 @@
-// Os casos do registro de um pedido da agenda pela função de 13 argumentos (o recurso, a missão do curso e a confirmação
-// do 7º voo local; a migração 20261127100000_missao_do_curso_e_limite_do_pedido), os mesmos no banco e nas três cópias
-// das regras dele em JavaScript:
-// - no banco, cada caso é uma verificação de supabase/tests/database/agenda-missao-do-curso.test.sql ou de
-//   agenda-locais.test.sql, com o nome do caso na descrição (test/unit/espelho-do-banco.test.js confere);
+// Os casos do registro de um pedido da agenda (o recurso, a missão do curso e a confirmação do 7º voo local, da migração
+// 20261127100000_missao_do_curso_e_limite_do_pedido; a 2ª preferência e a lista de espera, da 20261129100000_aprovacao_dos_pedidos,
+// pela função de 16 argumentos, a que o app chama), os mesmos no banco e nas três cópias das regras dele em JavaScript:
+// - no banco, cada caso é uma verificação de supabase/tests/database/agenda-missao-do-curso.test.sql, de
+//   agenda-locais.test.sql ou de agenda-preferencias.test.sql, com o nome do caso na descrição
+//   (test/unit/espelho-do-banco.test.js confere);
 // - no app, o modo local (js/backends/local.js), o servidor falso dos testes de ponta a ponta (test/e2e/falso/agenda.js)
 //   e o cliente falso de test/unit/backend-supabase.test.js recebem os mesmos dados.
 // Cada caso parte da agenda com `locais` voos locais (Voo Local no C152) às 08:20 da data e do programa do curso ZZ1 (logo
-// abaixo), e registra um pedido (o que o formulário manda: o recurso, a missão do curso e a confirmação). Recusado: o
-// código do erro e o campo (a dica do servidor). Aceito: o que fica guardado (as horas, o recurso, a missão do curso e se
-// a confirmação do limite foi registrada).
+// abaixo), e registra um pedido (o que o formulário manda: o recurso, a missão do curso, a confirmação, a 2ª preferência,
+// a aprovação e a lista de espera). Recusado: o código do erro e o campo (a dica do servidor). Aceito: o que fica guardado
+// (as horas, o recurso, a missão do curso, se a confirmação do limite foi registrada e a 2ª preferência).
 // As regras que os casos fixam, nesta ordem (depois de quem pode, do horário específico e da duração, como na função de 11):
 // - o recurso é obrigatório e é um dos que a missão permite, com as horas (o Ground, sempre 1,5 h): 22023, recurso;
 // - o Noturno sai às 17:30 e o Voo Solo, às 06:30: 22023, horario;
 // - a missão do curso existe, está no programa (nem ela nem a fase dela foram retiradas) e é do tipo do pedido: 22023,
 //   missao. O recurso dela não é comparado com o do pedido, nem o curso dela com o do aluno;
-// - o 7º voo local no mesmo horário só com a confirmação (sem ela, PT422, locais); com 6 ou mais, a confirmação fica
-//   registrada (quem e quando); com menos, ou noutra missão, ela não registra nada.
+// - a 2ª preferência é outro horário HH:MM, diferente do 1º, e nunca no Noturno ou no Voo Solo (22023, horario2); o limite
+//   de voos locais conta só o 1º horário;
+// - a confirmação do 7º voo local e a lista de espera juntas são recusadas (22023, esperar);
+// - o 7º voo local no mesmo horário só com a confirmação ou na lista de espera (sem nenhuma, PT422, locais); com 6 ou mais,
+//   a confirmação fica registrada (quem e quando), e a lista de espera registra o pedido sem nada a mais (quem espera é o
+//   motor); com menos, ou noutra missão, nenhuma das duas registra nada.
 
 const id = (grupo, n) => `00000000-0000-4000-${grupo}-${String(n).padStart(12, '0')}`;
 
@@ -47,12 +52,13 @@ export const CURSO_DOS_CASOS = Object.freeze({
 export const DATA_DOS_CASOS = '2026-11-16';
 export const pedidoDosCasos = (extra = {}) => ({
   data: DATA_DOS_CASOS, aluno: 1000, aluno_nome: 'Aluno 1000', missao: 'Navegação', janela: 'horario', horario: '08:20', horas: 1,
-  registrado_por: 'Maria', observacao: null, excecao: false, recurso: 'C152', missaoDoCurso: null, confirmarLimite: false, ...extra
+  registrado_por: 'Maria', observacao: null, excecao: false, recurso: 'C152', missaoDoCurso: null, confirmarLimite: false,
+  horario2: null, aprovar: false, esperar: false, ...extra
 });
 // Um dos voos locais que já estão na agenda antes do caso
 export const localDosCasos = n => pedidoDosCasos({ aluno: 2000 + n, missao: 'Voo Local' });
 
-const aceito = (registrado = {}) => ({ registrado: { horas: 1, recurso: 'C152', missao_do_curso: null, limite_confirmado: false, ...registrado } });
+const aceito = (registrado = {}) => ({ registrado: { horas: 1, recurso: 'C152', missao_do_curso: null, limite_confirmado: false, horario2: null, ...registrado } });
 const recusado = (code, campo) => ({ erro: { code, campo } });
 
 export const CASOS_DA_AGENDA = [
@@ -75,17 +81,28 @@ export const CASOS_DA_AGENDA = [
   { nome: 'o 7º voo local confirmado: registrado com quem confirmou', locais: 6, pedido: { missao: 'TGL (TMA)', confirmarLimite: true }, ...aceito({ limite_confirmado: true }) },
   { nome: 'a confirmação com vaga: nada registrado', locais: 5, pedido: { missao: 'Voo Local', confirmarLimite: true }, ...aceito() },
   { nome: 'a confirmação noutra missão: nada registrado', locais: 6, pedido: { missao: 'Navegação', confirmarLimite: true }, ...aceito() },
-  { nome: 'o 7º voo local noutro horário: aceito', locais: 6, pedido: { missao: 'Voo Local', horario: '10:10' }, ...aceito() }
+  { nome: 'o 7º voo local noutro horário: aceito', locais: 6, pedido: { missao: 'Voo Local', horario: '10:10' }, ...aceito() },
+  // A lista de espera (U3)
+  { nome: 'o 7º voo local na lista de espera: registrado sem nada a mais', locais: 6, pedido: { missao: 'Voo Local', esperar: true }, ...aceito() },
+  { nome: 'a confirmação e a lista de espera juntas: recusadas (esperar)', locais: 6, pedido: { missao: 'Voo Local', confirmarLimite: true, esperar: true }, ...recusado('22023', 'esperar') },
+  { nome: 'a lista de espera com vaga: nada registrado', locais: 5, pedido: { missao: 'Voo Local', esperar: true }, ...aceito() },
+  // A 2ª preferência (U1)
+  { nome: 'a 2ª preferência: guardada no pedido', pedido: { horario2: '10:10' }, ...aceito({ horario2: '10:10' }) },
+  { nome: 'a 2ª preferência igual à 1ª: recusada (horario2)', pedido: { horario2: '08:20' }, ...recusado('22023', 'horario2') },
+  { nome: 'a 2ª preferência fora do formato HH:MM: recusada (horario2)', pedido: { horario2: '8:20' }, ...recusado('22023', 'horario2') },
+  { nome: 'a 2ª preferência no Noturno: recusada (horario2)', pedido: { missao: 'Noturno', horario: '17:30', recurso: 'C172', horas: 4, horario2: '16:20' }, ...recusado('22023', 'horario2') },
+  { nome: 'a 2ª preferência num horário com 6 voos locais: aceita (o limite conta o 1º)', locais: 6, pedido: { missao: 'Voo Local', horario: '10:10', horario2: '08:20' }, ...aceito({ horario2: '08:20' }) }
 ];
 
-// O pedido como o backend do Supabase o manda (js/backends/supabase.js): os 13 argumentos da função, pelos nomes
+// O pedido como o backend do Supabase o manda (js/backends/supabase.js): os 16 argumentos da função, pelos nomes
 export const argumentosDoBanco = p => ({
   p_data: p.data, p_aluno: p.aluno, p_aluno_nome: p.aluno_nome, p_missao: p.missao, p_janela: p.janela, p_horario: p.horario, p_horas: p.horas,
   p_registrado_por: p.registrado_por, p_observacao: p.observacao ?? null, p_excecao: Boolean(p.excecao), p_recurso: p.recurso ?? null,
-  p_missao_do_curso: p.missaoDoCurso ?? null, p_confirmar_limite: Boolean(p.confirmarLimite)
+  p_missao_do_curso: p.missaoDoCurso ?? null, p_confirmar_limite: Boolean(p.confirmarLimite),
+  p_horario2: p.horario2 ?? null, p_aprovar: Boolean(p.aprovar), p_esperar: Boolean(p.esperar)
 });
 // O que fica guardado de um pedido aceito, como os casos o dizem
 export const guardadoDoCaso = s => ({
   horas: s.horas === null ? null : +s.horas, recurso: s.recurso, missao_do_curso: s.missao_do_curso ?? null,
-  limite_confirmado: Boolean(s.limite_confirmado_por) && Boolean(s.limite_confirmado_em)
+  limite_confirmado: Boolean(s.limite_confirmado_por) && Boolean(s.limite_confirmado_em), horario2: s.horario2 ?? null
 });
