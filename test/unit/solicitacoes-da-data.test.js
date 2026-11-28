@@ -1,7 +1,10 @@
 // O cache dos pedidos da data aberta (js/solicitacoes-da-data.js): uma leitura de cada vez vale (a mais nova), a resposta de
 // uma data que não está mais aberta não entra, a leitura que falha guarda o erro e a lista de antes, quem espera a leitura
-// em curso a recebe, e a marca da escala que mudou em outro computador é da data. As dependências (a data aberta, a
-// leitura, o relógio e o redesenho) são injetadas
+// em curso a recebe, e a marca da escala que mudou em outro computador é da data. D3: a vigia (a cada minuto com a página
+// à vista, na volta à página, na volta da conexão e quando outra aba deste navegador muda a agenda), cada leitura dela
+// perguntando se a escala da data mudou em outro computador, e as novidades entre duas leituras da mesma data. As
+// dependências (a data aberta, a leitura, os relógios, o redesenho, a pergunta da escala, a página e o temporizador) são
+// injetadas
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { criarSolicitacoesDaData } from '../../js/solicitacoes-da-data.js';
@@ -13,11 +16,12 @@ function leituraManual() {
   return { ler, pendentes };
 }
 
-function montar({ data = '2026-11-11' } = {}) {
-  const estado = { aberta: data, desenhos: 0, agora: new Date('2026-11-10T15:00:00Z') };
+function montar({ data = '2026-11-11', diaMudou } = {}) {
+  const estado = { aberta: data, desenhos: 0, agora: new Date('2026-11-10T15:00:00Z'), ms: 0, perguntas: [], novidades: [] };
   const leitura = leituraManual();
   const cache = criarSolicitacoesDaData({
-    dataAberta: () => estado.aberta, ler: leitura.ler, aoLer: () => { estado.desenhos++; }, agora: () => estado.agora
+    dataAberta: () => estado.aberta, ler: leitura.ler, aoLer: () => { estado.desenhos++; }, agora: () => estado.agora, relogio: () => estado.ms,
+    diaMudou: diaMudou || (async d => { estado.perguntas.push(d); return false; })
   });
   return { estado, leitura, cache };
 }
@@ -107,5 +111,167 @@ describe('Os pedidos da data aberta (o cache)', () => {
     leitura.pendentes[2].resolve([]);
     await relida;
     assert.equal(cache.solicitacoesDaData().diaMudou, false);
+  });
+});
+
+// A página e a janela de mentira (os eventos visibilitychange, online e storage) e o temporizador que o teste dispara
+function vigiado(opcoes = {}) {
+  const m = montar(opcoes);
+  const documento = Object.assign(new EventTarget(), { visibilityState: 'visible' });
+  const janela = new EventTarget();
+  const relogio = { fn: null, ms: null, parado: false };
+  const parar = m.cache.vigiar({
+    documento, janela, aoNovidades: (novidades, data) => m.estado.novidades.push({ data, novidades }),
+    agendar: (fn, ms) => { relogio.fn = fn; relogio.ms = ms; return 7; }, desagendar: id => { relogio.parado = id === 7; }
+  });
+  const responder = async (lista, i = m.leitura.pendentes.length - 1) => { m.leitura.pendentes[i].resolve(lista); await new Promise(r => setTimeout(r, 0)); };
+  const evento = (alvo, tipo, extra = {}) => alvo.dispatchEvent(Object.assign(new Event(tipo), extra));
+  return { ...m, documento, janela, relogio, parar, responder, evento };
+}
+const aprovado = (id, data) => ({ ...pedido(id, data), aprovada_em: '2026-11-10T14:00:00Z' });
+
+describe('Os pedidos em dia (D3: a vigia e as novidades)', () => {
+  it('a cada minuto, com a página à vista e a data já lida, uma leitura que pergunta também pela escala da data', async () => {
+    const { estado, leitura, cache, relogio, responder, documento } = vigiado();
+    assert.equal(relogio.ms, 60000);
+    // Antes da primeira leitura da data aberta (a abertura do app, o login), nada
+    relogio.fn();
+    assert.equal(leitura.pendentes.length, 0);
+    cache.lerSolicitacoesDaData();
+    relogio.fn();
+    assert.equal(leitura.pendentes.length, 1, 'com uma leitura em curso, nenhuma outra');
+    await responder([pedido(1)]);
+    assert.deepEqual(estado.perguntas, [], 'a leitura que não é da vigia não pergunta pela escala');
+    relogio.fn();
+    assert.equal(leitura.pendentes.length, 2);
+    assert.deepEqual(estado.perguntas, ['2026-11-11']);
+    await responder([pedido(1), pedido(2)]);
+    assert.deepEqual(cache.solicitacoesDaData().lista.map(p => p.id), [1, 2]);
+    // Escondida (outra aba, a tela apagada), nada
+    documento.visibilityState = 'hidden';
+    relogio.fn();
+    assert.equal(leitura.pendentes.length, 2);
+  });
+
+  it('na volta à página e na volta da conexão, uma leitura quando a última tem mais de 30 s; outra aba deste navegador que muda a agenda, sempre', async () => {
+    const { estado, leitura, cache, documento, janela, responder, evento } = vigiado();
+    cache.lerSolicitacoesDaData();
+    await responder([]);
+    estado.ms = 29999;
+    evento(documento, 'visibilitychange');
+    evento(janela, 'online');
+    assert.equal(leitura.pendentes.length, 1, 'a leitura de agora há pouco vale');
+    estado.ms = 30000;
+    documento.visibilityState = 'hidden';
+    evento(documento, 'visibilitychange');
+    assert.equal(leitura.pendentes.length, 1, 'ao esconder, nada');
+    documento.visibilityState = 'visible';
+    evento(documento, 'visibilitychange');
+    assert.equal(leitura.pendentes.length, 2);
+    await responder([]);
+    estado.ms = 61000;
+    evento(janela, 'online');
+    assert.equal(leitura.pendentes.length, 3);
+    await responder([]);
+    assert.deepEqual(estado.perguntas, ['2026-11-11', '2026-11-11'], 'cada leitura da vigia pergunta pela escala');
+    evento(janela, 'storage', { key: 'acpm_tema' });
+    assert.equal(leitura.pendentes.length, 3, 'outra chave, nada');
+    evento(janela, 'storage', { key: 'acpm4_agenda' });
+    assert.equal(leitura.pendentes.length, 4);
+  });
+
+  it('parar a vigia tira o temporizador e os eventos', async () => {
+    const { leitura, cache, documento, janela, relogio, parar, responder, evento } = vigiado();
+    cache.lerSolicitacoesDaData();
+    await responder([]);
+    parar();
+    assert.equal(relogio.parado, true);
+    evento(janela, 'storage', { key: 'acpm4_agenda' });
+    evento(documento, 'visibilitychange');
+    assert.equal(leitura.pendentes.length, 1);
+  });
+
+  it('a escala que mudou em outro computador, pela pergunta da vigia: marcada com um redesenho, sem perguntar de novo até a data ser lida; a resposta de antes da data lida de novo não vale', async () => {
+    const perguntas = [];
+    const { estado, cache, relogio, responder } = vigiado({ diaMudou: data => new Promise(resolve => perguntas.push(() => resolve(data === '2026-11-11'))) });
+    const esperar = () => new Promise(r => setTimeout(r, 0));
+    cache.lerSolicitacoesDaData();
+    await responder([]);
+    relogio.fn();
+    await responder([]);
+    assert.equal(cache.solicitacoesDaData().diaMudou, false, 'a lista não espera a pergunta');
+    const desenhos = estado.desenhos;
+    perguntas[0]();
+    await esperar();
+    assert.deepEqual([cache.solicitacoesDaData().diaMudou, estado.desenhos], [true, desenhos + 1]);
+    // Marcada, a vigia lê os pedidos sem perguntar de novo
+    relogio.fn();
+    await responder([]);
+    assert.equal(perguntas.length, 1);
+    // A data lida de novo ("Atualizar"): a marca sai, e a vigia volta a perguntar
+    cache.lerSolicitacoesDaData({ dataLida: true });
+    await responder([]);
+    assert.equal(cache.solicitacoesDaData().diaMudou, false);
+    relogio.fn();
+    await responder([]);
+    assert.equal(perguntas.length, 2);
+    // A data lida de novo enquanto a pergunta espera: a resposta dela é da escala de antes
+    cache.lerSolicitacoesDaData({ dataLida: true });
+    await responder([]);
+    perguntas[1]();
+    await esperar();
+    assert.equal(cache.solicitacoesDaData().diaMudou, false);
+    // A resposta de outra data aberta durante a pergunta também não vale
+    relogio.fn();
+    await responder([]);
+    estado.aberta = '2026-11-12';
+    perguntas[2]();
+    await esperar();
+    estado.aberta = '2026-11-11';
+    assert.equal(cache.solicitacoesDaData().diaMudou, false);
+  });
+
+  it('a pergunta que falha não marca nada nem atrapalha a lista', async () => {
+    const { cache, relogio, responder } = vigiado({ diaMudou: async () => { throw new Error('sem conexão'); } });
+    cache.lerSolicitacoesDaData();
+    await responder([]);
+    relogio.fn();
+    await responder([pedido(1)]);
+    assert.deepEqual([cache.solicitacoesDaData().leitura, cache.solicitacoesDaData().diaMudou, cache.solicitacoesDaData().lista.length], ['lidos', false, 1]);
+  });
+
+  it('as novidades entre duas leituras da mesma data, depois do redesenho; sem elas, na primeira leitura da data, numa leitura que falhou ou de outra data, nada', async () => {
+    const { estado, leitura, cache, relogio, responder } = vigiado();
+    cache.lerSolicitacoesDaData();
+    await responder([pedido(1), pedido(2)]);
+    assert.deepEqual(estado.novidades, [], 'a primeira leitura da data não tem com o que comparar');
+    relogio.fn();
+    await responder([pedido(1), pedido(2)]);
+    assert.deepEqual(estado.novidades, [], 'nada mudou');
+    relogio.fn();
+    await responder([aprovado(1), pedido(2), pedido(3)]);
+    assert.equal(estado.novidades.length, 1);
+    assert.deepEqual([estado.novidades[0].data, estado.novidades[0].novidades.novas.map(p => p.id), estado.novidades[0].novidades.aprovadas.map(p => p.id)], ['2026-11-11', [3], [1]]);
+    // A leitura que falha não é comparada; a seguinte compara com a última lida
+    relogio.fn();
+    leitura.pendentes.at(-1).reject(new Error('sem conexão'));
+    await new Promise(r => setTimeout(r, 0));
+    relogio.fn();
+    await responder([aprovado(1), pedido(2), pedido(3), pedido(4)]);
+    assert.deepEqual(estado.novidades.map(n => n.novidades.novas.map(p => p.id)), [[3], [4]]);
+    // Outra data: a primeira leitura dela não compara com a de antes
+    estado.aberta = '2026-11-12';
+    cache.lerSolicitacoesDaData({ dataLida: true });
+    await responder([pedido(9, '2026-11-12')]);
+    assert.equal(estado.novidades.length, 2);
+  });
+
+  it('o que este navegador acabou de mudar (registrar, aprovar, retirar, cancelar) não é novidade; o que outro mudou junto, é', async () => {
+    const { estado, cache, responder } = vigiado();
+    cache.lerSolicitacoesDaData();
+    await responder([pedido(1), pedido(2)]);
+    cache.lerSolicitacoesDaData({ deste: [1, 3] });
+    await responder([aprovado(1), aprovado(2), pedido(3)]);
+    assert.deepEqual(estado.novidades.map(n => [n.novidades.aprovadas.map(p => p.id), n.novidades.novas.map(p => p.id)]), [[[2], []]]);
   });
 });

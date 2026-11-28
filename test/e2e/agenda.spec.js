@@ -1326,3 +1326,21 @@ test.describe('A página dos pedidos', () => {
     await expect(linhaDaLista(page, id).locator('.lista-botao')).toBeFocused();
   });
 });
+
+// D3: no modo local, outra aba deste navegador que registra um pedido: esta aba o lê na hora (o evento storage), com o
+// aviso das novidades; o pedido que esta aba registra não é novidade para ela
+test.describe('Os pedidos em dia (modo local)', () => {
+  test('o pedido registrado em outra aba aparece nesta, com o aviso; o desta aba, sem aviso de novidade', async ({ page, context }) => {
+    await abrir(page, { estado: comAlunos() });
+    await irPara(page, 'age');
+    const outra = await context.newPage();
+    await abrir(outra, { estado: comAlunos() });
+    await irPara(outra, 'age');
+    await registrarPedido(outra, { horario: '08:20' });
+    await expect(outra.locator('#toast-box')).toContainText('Pedido registrado e aprovado: já está na demanda.');
+    await expect(linhasDosPedidos(page)).toHaveCount(1);
+    await expect(page.locator('#toast-box')).toContainText('Pedidos de qua 11/11: 1 novo.');
+    await expect(outra.locator('#toast-box')).not.toContainText('Pedidos de qua 11/11');
+    await outra.close();
+  });
+});

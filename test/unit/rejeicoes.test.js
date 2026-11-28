@@ -5,11 +5,11 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { runAllocationEngine } from '../../js/engine.js';
-import { naOrdemDoMotor, rejeicoesDosPedidos } from '../../js/rejeicoes.js';
+import { naOrdemDoMotor, rejeicoesDosPedidos, primeiroDaListaDeEspera } from '../../js/rejeicoes.js';
 import { chaveDoVoo, pedidoDoAluno } from '../../js/voo.js';
 import { gerarCenario, comEscolhas, comAtributos, comVolta } from '../helpers/cenarios.js';
 import { lerGoldens } from '../helpers/goldens.js';
-import { aluno, cenario, instrutor, missaoExtra } from '../helpers/montar.js';
+import { aluno, cenario, instrutor, missaoExtra, apenas } from '../helpers/montar.js';
 
 // O rótulo que o motor dá à recusa de um pedido: o nome, e a missão nas extras
 function rotuloDoPedido(estado, fKey) {
@@ -90,5 +90,47 @@ describe('As recusas do motor e os pedidos', () => {
     estado.fixos = { [chaveDoVoo(1002, 0)]: { a: 390, b: 450, r: 'PR-VOB', insId: 1 }, [chaveDoVoo(1001, 0)]: { a: 500, b: 560, r: 'PR-VOB', insId: 1, agendado: true } };
     const voos = [chaveDoVoo(1000, 0), chaveDoVoo(1001, 0), chaveDoVoo(1002, 0)].map(fKey => ({ fKey, stuId: +fKey.split('_')[0], mid: 0 }));
     assert.deepEqual(naOrdemDoMotor(estado, voos).map(o => o.stuId), [1002, 1001, 1000]);
+  });
+});
+
+// O 1º da lista de espera do horário que o voo de um pedido da agenda cancelado deixa (D3: o aviso das novidades dos
+// pedidos), como a escala diz (a espera da recusa, F1h)
+describe('O 1º da lista de espera da vaga do pedido cancelado', () => {
+  const pedido = (id, alunoId) => ({ id, data: '2026-11-11', aluno: alunoId, aluno_nome: `Aluno ${alunoId}`, cancelada_em: '2026-11-10T15:00:00Z', aprovada_em: '2026-11-10T14:00:00Z' });
+  // A escala da data com o motor: um C152 só, dois pedidos da agenda às 08:20 (jan h500); o 1º voa, o 2º espera
+  const nove = Array.from({ length: 9 }, (_, i) => instrutor(i + 1, 9));
+  const as0820 = (id, solicitacao, extra = {}) => aluno(id, { p1: 500, p2: -1, jan: 'h500', solicitacao, ...extra });
+  const montarDia = ({ stu, semAeronaves = apenas('C152', 'PP-LJV'), fStatus = {} }) => {
+    const estado = { ...cenario({ ins: nove, stu, semAeronaves, fStatus }), importadas: stu.map(s => s.solicitacao).filter(Boolean) };
+    return { estado, resultado: runAllocationEngine(estado) };
+  };
+
+  it('o 1º da lista de espera: o do horário que o voo do pedido cancelado deixa, pelo lugar na lista', () => {
+    const { estado, resultado } = montarDia({ stu: [as0820(1000, 1), as0820(1001, 3), as0820(1002, 2)] });
+    assert.deepEqual(resultado.al.filter(a => a.espera).map(a => [a.s, a.espera.lugar]), [['Aluno 1002', 1], ['Aluno 1001', 2]]);
+    assert.deepEqual(primeiroDaListaDeEspera(pedido(1, 1000), estado, resultado), { minuto: 500, aluno: 'Aluno 1002' });
+  });
+
+  it('sem a espera na escala, ninguém: o voo sem fila no horário, o pedido sem voo, o voo cancelado e a espera de outro horário', () => {
+    // Dois C152: os dois voam, ninguém espera
+    const livres = montarDia({ stu: [as0820(1000, 1), as0820(1001, 2)], semAeronaves: apenas('C152', 'PP-LJV', 'PR-BTB') });
+    assert.equal(primeiroDaListaDeEspera(pedido(1, 1000), livres.estado, livres.resultado), null);
+    const { estado, resultado } = montarDia({ stu: [as0820(1000, 1), as0820(1001, 2), aluno(1002, { p1: 610, p2: -1, jan: 'h610', solicitacao: 3 })] });
+    // O que espera (o 2) não tem voo a deixar; o pedido que nenhum registro leva, também não
+    assert.equal(primeiroDaListaDeEspera(pedido(2, 1001), estado, resultado), null);
+    assert.equal(primeiroDaListaDeEspera(pedido(9, 1000), estado, resultado), null);
+    // O voo das 10:10 (sem ninguém esperando às 10:10) não dá o 1º das 08:20
+    assert.equal(primeiroDaListaDeEspera(pedido(3, 1002), estado, resultado), null);
+    // O voo já com o status Cancelado não ocupa a vaga (a Escala oferece a vaga nas Sugestões dele)
+    const comStatus = { ...estado, fStatus: { '1000_0_1': 'Cancelado' } };
+    assert.equal(primeiroDaListaDeEspera(pedido(1, 1000), comStatus, resultado), null);
+    // Sem escala
+    assert.equal(primeiroDaListaDeEspera(pedido(1, 1000), estado, null), null);
+  });
+
+  it('o pedido de uma missão extra: a vaga é a do voo dela', () => {
+    const extra = { mid: 1, fly: true, mis: 'Voo Local', eq: 'C152', p1: 500, p2: -1, jan: 'h500', nb: 1, ss: 1, pr: 3, solicitacao: 1 };
+    const { estado, resultado } = montarDia({ stu: [aluno(1000, { fly: false }, { extra: [extra] }), as0820(1001, 2)] });
+    assert.deepEqual(primeiroDaListaDeEspera(pedido(1, 1000), estado, resultado), { minuto: 500, aluno: 'Aluno 1001' });
   });
 });

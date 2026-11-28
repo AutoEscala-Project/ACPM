@@ -6,7 +6,7 @@ import { MIS, ALL_EQ_TYPES } from '../../js/config.js';
 import { HORARIOS_INICIAIS } from '../../js/horarios.js';
 import { prazoDaAgendaPermite, primeiraDataAberta, datasParaRegistrar, disponibilidadeDaSolicitacao, pedidoDaSolicitacao, recursosDaMissao, recursoValido, RECURSO_DO_PEDIDO,
   situacaoDaSolicitacao, solicitacaoAprovada, resumoDasSolicitacoes, situacaoNaDemanda, solicitacoesParaImportar, prepararEntradaNaDemanda, contagemPorDia, motivoSemEntrada,
-  opcoesDaSegundaPreferencia } from '../../js/agenda.js';
+  opcoesDaSegundaPreferencia, novidadesDasSolicitacoes, temNovidades, textoDasNovidades } from '../../js/agenda.js';
 
 const em = iso => new Date(iso);
 
@@ -327,5 +327,44 @@ describe('Os pedidos e a aprovação (D2)', () => {
     assert.deepEqual(opcoesDaSegundaPreferencia(['17:30'], '17:30', 'Noturno'), []);
     assert.deepEqual(opcoesDaSegundaPreferencia(['06:30', '08:20'], '06:30', 'Voo Solo'), []);
     assert.deepEqual(opcoesDaSegundaPreferencia([], '', 'Voo Local'), []);
+  });
+});
+
+// D3: o que mudou nos pedidos da data entre duas leituras e o aviso das novidades (o 1º da lista de espera de cada vaga:
+// test/unit/rejeicoes.test.js)
+describe('Os pedidos em dia (D3)', () => {
+  const linha = (id, extra = {}) => ({ id, data: '2026-11-11', aluno: 1000 + id, aluno_nome: `Aluno ${1000 + id}`, missao: 'Voo Local', janela: 'horario', horario: '08:20', cancelada_em: null, aprovada_em: null, ...extra });
+  const aprovada = (id, extra = {}) => linha(id, { aprovada_em: '2026-11-10T14:00:00Z', aprovada_por: 'Operador', ...extra });
+  const cancelada = (pedido, extra = {}) => ({ ...pedido, cancelada_em: '2026-11-10T15:00:00Z', cancelada_por: 'Maria', ...extra });
+  const ids = novidades => Object.fromEntries(Object.entries(novidades).map(([k, v]) => [k, v.map(s => s.id)]));
+
+  it('as novidades: os novos, os aprovados, os que voltaram a aguardar e os cancelados, cada um uma vez', () => {
+    const antes = [linha(1), linha(2), aprovada(3), aprovada(4), linha(5)];
+    const depois = [aprovada(1), linha(2), linha(3, { aprovacao_retirada_em: 'x' }), cancelada(aprovada(4)), cancelada(linha(5)), linha(6), aprovada(7), cancelada(linha(8))];
+    assert.deepEqual(ids(novidadesDasSolicitacoes(antes, depois)), { novas: [6, 7], aprovadas: [1], semAprovacao: [3], canceladas: [4, 5] });
+    // O novo já cancelado não é novidade; o que sumiu da leitura (outra data) também não
+    assert.deepEqual(ids(novidadesDasSolicitacoes([linha(1)], [])), { novas: [], aprovadas: [], semAprovacao: [], canceladas: [] });
+    assert.equal(temNovidades(novidadesDasSolicitacoes(antes, antes)), false);
+    assert.equal(temNovidades(novidadesDasSolicitacoes(antes, depois)), true);
+  });
+
+  it('as novidades deixam de fora os pedidos que este navegador acabou de mudar', () => {
+    const antes = [linha(1), aprovada(2)];
+    const depois = [aprovada(1), cancelada(aprovada(2)), linha(3), linha(4)];
+    assert.deepEqual(ids(novidadesDasSolicitacoes(antes, depois, { deste: [1, 3] })), { novas: [4], aprovadas: [], semAprovacao: [], canceladas: [2] });
+  });
+
+  it('o texto: a data e os números, no plural certo; o 1º da lista de espera de cada vaga, sem dizer que ele fica com ela', () => {
+    const n = (novas = 0, aprovadas = 0, semAprovacao = 0, canceladas = 0) => ({
+      novas: Array(novas).fill(linha(1)), aprovadas: Array(aprovadas).fill(linha(1)), semAprovacao: Array(semAprovacao).fill(linha(1)), canceladas: Array(canceladas).fill(linha(1))
+    });
+    assert.equal(textoDasNovidades(n(2), { data: 'qua 11/11' }), 'Pedidos de qua 11/11: 2 novos.');
+    assert.equal(textoDasNovidades(n(1), { data: 'qua 11/11' }), 'Pedidos de qua 11/11: 1 novo.');
+    assert.equal(textoDasNovidades(n(0, 1, 0, 1), { data: 'sex 13/11' }), 'Pedidos de sex 13/11: 1 aprovado, 1 cancelado.');
+    assert.equal(textoDasNovidades(n(1, 2, 1, 2), { data: 'sex 13/11' }), 'Pedidos de sex 13/11: 1 novo, 2 aprovados, 1 voltou a aguardar aprovação, 2 cancelados.');
+    assert.equal(textoDasNovidades(n(0, 0, 2), { data: 'sex 13/11' }), 'Pedidos de sex 13/11: 2 voltaram a aguardar aprovação.');
+    assert.equal(textoDasNovidades(n(0, 0, 0, 1), { data: 'qua 11/11', vagas: [{ aluno: 'Aluno 1000', minuto: 500, primeiro: 'Aluno 1001' }] }),
+      'Pedidos de qua 11/11: 1 cancelado. A vaga de Aluno 1000 às 08:20 fica livre quando o voo sair da escala; 1º na lista de espera: Aluno 1001.');
+    assert.equal(textoDasNovidades(n(), { data: 'qua 11/11' }), '');
   });
 });
