@@ -57,6 +57,7 @@
 /* As restrições do voo (G1, js/views/restricoes-do-voo.js): o que o app lê para encaixar o pedido, um campo por linha; o
    aviso das limitações e a confirmação; rola por dentro quando não cabe na altura */
 #painel-restricoes .restricoes-corpo { flex: 1; min-height: 0; overflow-y: auto; }
+#painel-restricoes .restricoes-titulo { display: flex; align-items: center; gap: 4px; min-width: 0; }
 #painel-restricoes .restricoes-campos { display: flex; flex-direction: column; gap: 10px; margin-top: 8px; }
 #painel-restricoes .campo { display: flex; flex-direction: column; gap: 4px; font-weight: 600; min-width: 0; }
 #painel-restricoes .campo small { font-weight: 400; }

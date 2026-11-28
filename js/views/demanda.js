@@ -34,7 +34,7 @@ export const singleDemandRowHTML = (stu, d, mid = 0) => {
   const trCls = `${d.fly ? 'on' : 'off'}${isExtra ? ' extra-row' : ''}`;
   // A missão do curso do pedido e o voo agendado na Escala; as restrições (o que o app lê para encaixar o pedido) na gaveta
   const etapa = etapaNaDemanda(stu, d) + tagDoAgendado(stu, mid);
-  const restricoes = ` <button type="button" class="btn quiet restricoes-btn" data-act="restricoes" data-id="${stu.id}" data-mid="${mid}" aria-haspopup="true" aria-label="Restrições de ${esc(stu.nm)}${isExtra ? ` (${esc(d.mis)})` : ''}" title="O tipo de recurso, o instrutor, os horários e a duração do pedido">Restrições</button>`;
+  const restricoes = ` <button type="button" class="btn quiet restricoes-btn" data-act="restricoes" data-id="${stu.id}" data-mid="${mid}" aria-label="Restrições de ${esc(stu.nm)}${isExtra ? ` (${esc(d.mis)})` : ''}" title="O tipo de recurso, o instrutor, os horários e a duração do pedido">Restrições</button>`;
   const firstCell = isExtra
     ? `<div class="stu-cell"><span class="sm">↳ missão extra</span>${etapa}${restricoes}<button class="x edit-only" data-act="del-mis" data-id="${stu.id}" data-mid="${mid}" aria-label="Tirar a missão extra de ${esc(stu.nm)}" title="Tirar esta missão extra">✕</button></div>`
     : `<div class="stu-cell"><span>${esc(stu.nm)}</span>${inativoNaDataAberta(stu) ? ' <span class="tag">inativo</span>' : ''}${etapa}${restricoes}<button class="btn-add-mis edit-only" data-act="add-mis" data-id="${stu.id}" title="Outra missão para este aluno no mesmo dia" aria-label="Mais uma missão para ${esc(stu.nm)}">+ missão</button></div>`;

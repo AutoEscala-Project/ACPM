@@ -76,7 +76,7 @@ const trava = (id, texto) => (texto ? `<small class="h" id="${id}">${esc(texto)}
 
 // "Restrições" (G1): o que o app lê para encaixar o pedido do aluno do voo, na gaveta (js/views/restricoes-do-voo.js); o
 // editor fecha antes. A volta do noturno de ontem não tem: é o voo de ontem
-const botaoDasRestricoes = (o, nome = '') => `<button type="button" class="btn quiet" data-act="restricoes" data-id="${esc(o.stuId)}" data-mid="${esc(o.mid || 0)}" aria-haspopup="true"${nome ? ` aria-label="Restrições de ${esc(nome)}"` : ''} title="O tipo de recurso, o instrutor, os horários e a duração do pedido">Restrições</button>`;
+const botaoDasRestricoes = (o, nome = '') => `<button type="button" class="btn quiet" data-act="restricoes" data-id="${esc(o.stuId)}" data-mid="${esc(o.mid || 0)}"${nome ? ` aria-label="Restrições de ${esc(nome)}"` : ''} title="O tipo de recurso, o instrutor, os horários e a duração do pedido">Restrições</button>`;
 
 function campoDoStatus(o, valores, { id, rotulo, travado, descricao = '' }) {
   const st = valores.status[o.fKey];

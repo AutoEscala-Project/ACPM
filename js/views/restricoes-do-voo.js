@@ -125,7 +125,7 @@ export function desenharRestricoes() {
   const isGnd = isGroundMission(d.mis);
   const resumo = [d.mis, isGnd ? GROUND_EQ_TYPE : d.eq, fmtDurLabel(isGnd ? GROUND_DURATION_H : d.nb), d.etapa || ''].filter(Boolean).map(esc).join(' · ');
   const cabeca = `<div class="gaveta-cab">
-      <h2 id="painel-restricoes-titulo">Restrições <small>${esc(stu.nm)}</small>${dica('restricoes-do-voo', 'Restrições')}</h2>
+      <div class="restricoes-titulo"><h2 id="painel-restricoes-titulo">Restrições <small>${esc(stu.nm)}</small></h2>${dica('restricoes-do-voo', 'Restrições')}</div>
       <button class="x" type="button" id="btn-fechar-restricoes" aria-label="Fechar as restrições">✕</button>
     </div>
     <p class="h">${resumo}${aberta.mid ? ' (missão extra)' : ''}</p>
@@ -136,7 +136,8 @@ export function desenharRestricoes() {
   trocarConteudo(painel.querySelector('.restricoes-corpo'), corpo);
 }
 
-// Abre a gaveta do pedido (o aluno e a missão) por cima das outras, com o foco no primeiro campo. origem: o elemento de
+// Abre a gaveta do pedido (o aluno e a missão) por cima das outras, com o foco no primeiro controle (as dicas "?" não
+// contam). origem: o elemento de
 // onde ela abriu (o foco volta para ele). Sem o pedido, nada
 export function abrirRestricoes(stuId, mid, { origem = null } = {}) {
   if (!getMissionTarget(stuId, mid)) return false;
@@ -146,25 +147,37 @@ export function abrirRestricoes(stuId, mid, { origem = null } = {}) {
   painel.innerHTML = '';
   desenharRestricoes();
   abrirGaveta(painel);
-  const primeiro = [...painel.querySelectorAll('.restricoes-campos select:not(:disabled), .restricoes-campos input:not(:disabled), .restricoes-campos button')].find(visivel)
+  const primeiro = [...painel.querySelectorAll('.restricoes-campos select:not(:disabled), .restricoes-campos input:not(:disabled), .restricoes-campos button:not(.dica-btn)')].find(visivel)
     || $('#btn-fechar-restricoes');
   primeiro.focus();
   return true;
 }
 
-// Fecha a gaveta (o que espera a confirmação não é gravado). devolverFoco: para o elemento de onde ela abriu, quando ele
-// ainda está à vista; redesenhado (a linha da Demanda, o item do trilho), para o "Restrições" do mesmo pedido
+// Fecha a gaveta (o que espera a confirmação não é gravado; o Esc é desistir: o campo digitado e ainda não gravado volta
+// ao gravado antes de perder o foco, para não gravar ao sair). devolverFoco: para o elemento de onde ela abriu, quando ele
+// ainda está à vista; redesenhado, para o equivalente (o "Restrições" do mesmo pedido, o "Editar" ou a barra do mesmo
+// voo, na turma o do mesmo aluno); sem ele (o item do trilho que saiu porque o pedido entrou, o voo que saiu da escala),
+// para o voo do pedido na Escala, ou para o botão da data
 export function fecharRestricoes({ devolverFoco = true } = {}) {
   const painel = $('#painel-restricoes');
   if (!painel || painel.hidden) { aberta = null; pendente = null; return; }
   const { origem, stuId, mid } = aberta || {};
   aberta = null;
   pendente = null;
+  const digitado = document.activeElement;
+  if (digitado && painel.contains(digitado) && digitado.matches('input:not([type="checkbox"]):not([type="radio"])')) digitado.value = digitado.defaultValue;
   painel.hidden = true;
   if (!devolverFoco || !origem) return;
-  const alvo = origem.isConnected && visivel(origem) ? origem
-    : [...document.querySelectorAll(seletorDaOrigem(origem, stuId, mid) || ':not(*)')].find(b => visivel(b) && !b.closest('#painel-restricoes, dialog'));
+  const alvo = (origem.isConnected && visivel(origem) ? origem : null)
+    || equivalente(seletorDaOrigem(origem, stuId, mid), origem.getAttribute('aria-label'))
+    || vooDoPedidoNaEscala(stuId, mid)
+    || [$('#btn-data')].find(b => b && visivel(b));
   if (alvo) alvo.focus();
+}
+// O primeiro elemento à vista do seletor, fora da gaveta e dos diálogos; com o nome dado, o que tem o mesmo nome antes
+function equivalente(seletor, nome) {
+  const achados = seletor ? [...document.querySelectorAll(seletor)].filter(b => visivel(b) && !b.closest('#painel-restricoes, dialog')) : [];
+  return achados.find(b => nome && b.getAttribute('aria-label') === nome) || achados[0] || null;
 }
 // O equivalente da origem redesenhada: o "Restrições" do pedido, o "Editar" do voo na Lista ou a barra dele no mapa
 function seletorDaOrigem(origem, stuId, mid) {
@@ -172,6 +185,16 @@ function seletorDaOrigem(origem, stuId, mid) {
   if (origem.matches('[data-act="editar-voo"][data-fkey]')) return `#out [data-act="editar-voo"][data-fkey="${CSS.escape(origem.dataset.fkey)}"]`;
   if (origem.matches('.tl-bar[data-pop]')) return `#out .tl-bar[data-pop="${CSS.escape(origem.dataset.pop)}"]`;
   return null;
+}
+// O voo do pedido na Escala: o "Editar" dele na Lista ou a barra no mapa (a turma de Ground pela chave dela; o "Editar" do
+// aluno antes); fora da escala, nada
+function vooDoPedidoNaEscala(stuId, mid) {
+  const fKey = chaveDoVoo(stuId, mid);
+  const voo = RES && Array.isArray(RES.out) ? RES.out.find(o => o.fKey === fKey && !o.trecho) : null;
+  if (!voo) return null;
+  const chave = CSS.escape(voo.isGround && voo.classKey ? voo.classKey : voo.fKey);
+  const achados = [...document.querySelectorAll(`#out [data-act="editar-voo"][data-fkey="${chave}"], #out .tl-bar[data-pop="${chave}"]`)].filter(visivel);
+  return achados.find(b => (b.getAttribute('aria-label') || '').endsWith(`(${voo.s})`)) || achados[0] || null;
 }
 
 // As recusas da escala da tela com o pedido de cada uma (o item do trilho da missão que não entrou leva às restrições
