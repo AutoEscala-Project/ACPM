@@ -36,6 +36,9 @@ const VALIDAS = [
   { kind: 'readicionarRecurso', recurso: { reg: 'PR-NEW', tipo: 'C172', soVfr: true }, av: false, label: '↶ Reverter' },
   // "Colocar no curso até…" (Alunos, passo A): o resultado de antes de cada missão que a colocação aprovou
   { kind: 'desfazerColocacao', aluno: 1000, curso: 'PP', missoes: [{ missao: 'IN-01', resultado: 'pendente' }, { missao: 'CT-01', resultado: 'reprovado' }], label: '↶ Reverter' },
+  // As limitações do aluno (L): as de antes da mudança, normalizadas, ou null (o aluno não tinha nenhuma)
+  { kind: 'setLimitacoes', stuId: 1000, antes: { recursos: ['C172'], horarios: [{ de: 780, ate: 1080, dias: [1, 3] }] }, label: '↶ Reverter' },
+  { kind: 'setLimitacoes', stuId: 1001, antes: null, label: '↶ Reverter' },
   { kind: 'desfazerAgendamento', stuId: 1000, mid: 2, criado: true, pedido: null, fixo: null, disponibilidade: null, label: '↶ Desfazer' },
   {
     kind: 'desfazerAgendamento', stuId: 1000, mid: 0, criado: false, pedido: PEDIDO_DE_ANTES,
@@ -713,5 +716,24 @@ describe('A reversão dos horários com um período de antes', () => {
       { stuId: 1000, mid: 0, p1: 500, p2: -1, jan: 'tarde' }, { stuId: 1001, mid: 0, p1: 500, p2: -1, jan: 'h500' }] }, FROTA_INICIAL);
     assert.ok(rev);
     assert.deepEqual(rev.pedidos, [{ stuId: 1000, mid: 0, p1: 500, p2: -1 }, { stuId: 1001, mid: 0, p1: 500, p2: -1, jan: 'h500' }]);
+  });
+});
+
+// L: as limitações do aluno desfazem pelo ↶ (setLimitacoes): o aluno e as limitações de antes da mudança (normalizadas por
+// js/limitacoes.js), ou null (ele não tinha nenhuma); fora disso, não vale
+describe('setLimitacoes', () => {
+  it('o aluno e as limitações de antes, normalizadas; null, nenhuma', () => {
+    assert.deepEqual(validarReversao({ kind: 'setLimitacoes', stuId: 1000, antes: { recursos: ['C172', 'x'], horarios: [{ de: 780, ate: 1080 }, { de: 9, ate: 3 }] } }, FROTA_INICIAL),
+      { kind: 'setLimitacoes', stuId: 1000, antes: { recursos: ['C172'], horarios: [{ de: 780, ate: 1080 }] }, label: '↶ Reverter' });
+    assert.deepEqual(validarReversao({ kind: 'setLimitacoes', stuId: 1000, antes: null }, FROTA_INICIAL), { kind: 'setLimitacoes', stuId: 1000, antes: null, label: '↶ Reverter' });
+    // As de antes vazias (nada que valha) voltam como nenhuma
+    assert.deepEqual(validarReversao({ kind: 'setLimitacoes', stuId: 1000, antes: { recursos: [] } }, FROTA_INICIAL).antes, null);
+  });
+
+  it('fora do formato: sem o aluno, sem o antes, de outro tipo', () => {
+    for (const ruim of [{ kind: 'setLimitacoes', antes: null }, { kind: 'setLimitacoes', stuId: 'x', antes: null }, { kind: 'setLimitacoes', stuId: 1000 },
+      { kind: 'setLimitacoes', stuId: 1000, antes: 'C172' }, { kind: 'setLimitacoes', stuId: 1000, antes: [] }]) {
+      assert.equal(validarReversao(ruim, FROTA_INICIAL), null, JSON.stringify(ruim));
+    }
   });
 });

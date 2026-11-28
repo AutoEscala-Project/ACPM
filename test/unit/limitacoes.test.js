@@ -5,7 +5,8 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   MAXIMO_DE_HORARIOS, normalizarLimitacoes, tipoPermitido, inicioPermitido, limitadoNoHorario, limitacoesNaData, comLimitacoesDaData,
-  motivoDoTipo, textoDosHorarios, quandoOAlunoVoa
+  motivoDoTipo, textoDosHorarios, quandoOAlunoVoa, TIPOS_LIMITAVEIS, MINUTOS_DOS_HORARIOS, DIAS_DAS_LIMITACOES, nomeDoDia, textoDasLimitacoes,
+  tiposQueNaoCabem, linhaDoPeso
 } from '../../js/limitacoes.js';
 
 // 2026-11-30 é uma segunda-feira; 2026-12-01, terça; 2026-12-05, sábado; 2026-12-06, domingo
@@ -147,5 +148,53 @@ describe('Os textos', () => {
     assert.equal(quandoOAlunoVoa(null, { horarios: [{ de: 780, ate: 1080 }] }), 'Limitações: 13:00–18:00');
     assert.equal(quandoOAlunoVoa('às 08:20', { horarios: [{ de: 780, ate: 1080 }] }), 'às 08:20; Limitações: 13:00–18:00');
     assert.equal(quandoOAlunoVoa(null, { horarios: [] }), 'Limitações: nenhum horário nesta data');
+  });
+});
+
+// A tela das Limitações (Alunos): os tipos que ela oferece, os minutos dos campos De e Até, os dias e o texto do Histórico
+describe('A tela das Limitações', () => {
+  it('os tipos: os de avião e de simulador, na ordem da frota (a Sala Ground não é um deles); os dias, de segunda a sábado', () => {
+    assert.deepEqual(TIPOS_LIMITAVEIS, ['C152', 'C172', 'PA-34', 'Sim. Mono', 'Sim. Multi']);
+    assert.deepEqual(DIAS_DAS_LIMITACOES, [1, 2, 3, 4, 5, 6]);
+    assert.deepEqual(DIAS_DAS_LIMITACOES.map(nomeDoDia), ['seg', 'ter', 'qua', 'qui', 'sex', 'sáb']);
+  });
+
+  it('os minutos dos campos: das 06:00 à meia-noite, de 10 em 10', () => {
+    assert.equal(MINUTOS_DOS_HORARIOS[0], 360);
+    assert.equal(MINUTOS_DOS_HORARIOS.at(-1), 1440);
+    assert.ok(MINUTOS_DOS_HORARIOS.every((m, i) => i === 0 || m - MINUTOS_DOS_HORARIOS[i - 1] === 10));
+  });
+
+  it('o Histórico: "só no C172; 13:00–18:00 (seg)"; sem nada, "nenhuma"', () => {
+    assert.equal(textoDasLimitacoes({ recursos: ['C172', 'Sim. Multi'], horarios: [{ de: 780, ate: 1080, dias: [1] }] }), 'só no C172 e no Sim. Multi; 13:00–18:00 (seg)');
+    assert.equal(textoDasLimitacoes({ horarios: [{ de: 780, ate: 1080 }] }), '13:00–18:00');
+    assert.equal(textoDasLimitacoes(null), 'nenhuma');
+  });
+
+});
+
+describe('O peso do aluno nos aviões (a linha das Limitações, sem nenhum número)', () => {
+  // O C152 aceita 170 kg (aluno + INVA) com o tanque cheio, e até uns 210 kg com menos combustível num voo de 1 h; o C172,
+  // 222 kg; ninguém tem a habilitação do PA-34 (mlte)
+  const ins = [
+    { id: 1, nm: 'Leve', kg: 60, hab: ['c152', 'c172'] },
+    { id: 2, nm: 'Pesado', kg: 95, hab: ['c152', 'c172'] },
+    { id: 3, nm: 'Sem peso', kg: 0, hab: ['c152'] },
+    { id: 4, nm: 'Inativo leve', kg: 50, hab: ['c152'], inativo: true }
+  ];
+  it('o aluno que não cabe com nenhum INVA ativo, habilitado e com o peso informado, no tipo: o tipo', () => {
+    assert.deepEqual(tiposQueNaoCabem({ ins }, { kg: 160 }), ['C152']);
+    assert.deepEqual(tiposQueNaoCabem({ ins }, { kg: 80 }), []);
+  });
+
+  it('sem o peso do aluno, ou sem um INVA com peso no tipo, nada (o limite não é conferido)', () => {
+    assert.deepEqual(tiposQueNaoCabem({ ins }, { kg: 0 }), []);
+    assert.deepEqual(tiposQueNaoCabem({ ins: [ins[2], ins[3]] }, { kg: 160 }), []);
+  });
+
+  it('a linha: "Com o peso do aluno, nenhum INVA ativo habilitado cabe no C152."; com dois, "no C152 e no C172"', () => {
+    assert.equal(linhaDoPeso(['C152']), 'Com o peso do aluno, nenhum INVA ativo habilitado cabe no C152.');
+    assert.equal(linhaDoPeso(['C152', 'C172']), 'Com o peso do aluno, nenhum INVA ativo habilitado cabe no C152 e no C172.');
+    assert.equal(linhaDoPeso([]), '');
   });
 });
