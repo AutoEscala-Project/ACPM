@@ -1394,18 +1394,24 @@ test.describe('Os pedidos e as limitações do aluno', () => {
     await expect(opcoes(page, 'horario')).toHaveText(['Escolha o horário…', ...fora(['06:30', '08:20', '10:10', '11:30', '12:40'], tarde), '13:40', '14:30', '16:20']);
     await expect(desligadas(page, 'horario')).toHaveCount(5);
     await expect(campoDaAgenda(page, 'horario-motivo')).toHaveText(`3 de 8 horários do C172: ${tarde}.`);
-    await campoDaAgenda(page, 'horario').selectOption('13:40');
-    await expect(desligadas(page, 'horario2')).toHaveCount(5);
-    // Quinta: das 07:00 às 09:00, um horário só, escolhido sozinho; sexta: nenhum
-    await campoDaAgenda(page, 'data').selectOption('2026-11-12');
-    await expect(campoDaAgenda(page, 'horario')).toHaveValue('08:20');
-    await expect(campoDaAgenda(page, 'horario-motivo')).toContainText('1 de 8 horários do C172: o aluno só voa das 07:00 às 09:00.');
+    // Sexta: nenhum; quinta: das 07:00 às 09:00, um horário só, escolhido sozinho
     await campoDaAgenda(page, 'data').selectOption('2026-11-13');
     await expect(desligadas(page, 'horario')).toHaveCount(8);
     await expect(campoDaAgenda(page, 'horario')).toHaveValue('');
-    await expect(campoDaAgenda(page, 'horario-motivo')).toContainText('Nenhum dos 8 horários do C172: o aluno não voa nesta data.');
-    // Na quarta, registrado às 13:40 no C172
+    await expect(campoDaAgenda(page, 'horario-motivo')).toHaveText('Nenhum dos 8 horários do C172: o aluno não voa nesta data.');
+    await campoDaAgenda(page, 'data').selectOption('2026-11-12');
+    await expect(campoDaAgenda(page, 'horario')).toHaveValue('08:20');
+    await expect(campoDaAgenda(page, 'horario-motivo')).toHaveText('1 de 8 horários do C172: o aluno só voa das 07:00 às 09:00.');
+    // A escolha que o dia da semana não tem sai, e o campo diz por quê; ela volta no dia que a tem
     await campoDaAgenda(page, 'data').selectOption(AMANHA);
+    await campoDaAgenda(page, 'horario').selectOption('13:40');
+    await expect(desligadas(page, 'horario2')).toHaveCount(5);
+    await campoDaAgenda(page, 'data').selectOption('2026-11-12');
+    await expect(campoDaAgenda(page, 'horario-motivo')).toHaveText('O horário 13:40 está fora das limitações do aluno (o aluno só voa das 07:00 às 09:00). Agora é 08:20.');
+    await campoDaAgenda(page, 'data').selectOption(AMANHA);
+    await expect(campoDaAgenda(page, 'horario')).toHaveValue('13:40');
+    await expect(campoDaAgenda(page, 'horario-motivo')).toHaveText('O horário agora é 13:40.');
+    // Na quarta, registrado às 13:40 no C172
     await registrarPedido(page, { aluno: 'Aluno 1001', recurso: 'C172', horario: '13:40' });
     const [guardado] = await agendaGuardada(page);
     expect([guardado.recurso, guardado.horario]).toEqual(['C172', '13:40']);

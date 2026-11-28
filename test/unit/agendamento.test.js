@@ -1145,6 +1145,23 @@ describe('Agendamento: as alternativas de cada bloqueio', () => {
     assert.deepEqual(alternativas(pararia(avaliacao)[0]).map(([rotulo]) => rotulo), ['Horários livres']);
   });
 
+  // L (N9): as alternativas usam as limitações do aluno: nenhum horário fora dos dele; no tipo em que ele não voa, nenhuma
+  // alternativa (os recursos e os horários do mesmo tipo continuariam em conflito)
+  it('as limitações do aluno: os horários livres só os dele; no tipo em que ele não voa, nenhuma alternativa', () => {
+    const comHorarios = emVoo();
+    comHorarios.stu = comHorarios.stu.map(s => (s.id === 1001 ? { ...s, limitacoes: { horarios: [{ de: 600, ate: 700 }] } } : s));
+    const ocupado = pararia(agendar(comHorarios, { amb, escolhas: { aluno: 1001, recurso: 'PR-VOB', horario: 390 }, tocados: ['recurso', 'horario'] }).avaliacao);
+    assert.deepEqual(codigos(ocupado).filter(c => ['aviao-ocupado', 'limitacao-de-horario'].includes(c)).sort(), ['aviao-ocupado', 'limitacao-de-horario']);
+    assert.deepEqual(alternativas(ocupado.find(i => i.codigo === 'aviao-ocupado')).find(([rotulo]) => rotulo === 'Horários livres'), ['Horários livres', [['horario:610', '10:10'], ['horario:690', '11:30']]]);
+    const soC172 = emVoo();
+    soC172.stu = soC172.stu.map(s => (s.id === 1001 ? { ...s, limitacoes: { recursos: ['C172'] } } : s));
+    const outroTipo = pararia(agendar(soC172, { amb, escolhas: { aluno: 1001, recurso: 'PP-LJV', horario: 500 }, tocados: ['recurso', 'horario'] }).avaliacao);
+    const item = outroTipo.find(i => i.codigo === 'limitacao-de-recurso');
+    assert.ok(item, JSON.stringify(codigos(outroTipo)));
+    assert.equal(item.texto, 'O aluno só voa no C172.');
+    assert.deepEqual(alternativas(item), []);
+  });
+
   it('a alternativa escolhida muda só o campo dela: os outros ficam como o formulário os mostra, e o valor que ele trocou não volta', () => {
     // O operador escolheu antes uma turma de Ground (o Voo Local não tem turma: o formulário escolheu um instrutor) e o PR-VOB,
     // ocupado às 06:30
