@@ -1417,6 +1417,40 @@ test.describe('Os pedidos e as limitações do aluno', () => {
     expect([guardado.recurso, guardado.horario]).toEqual(['C172', '13:40']);
   });
 
+  // Revisão: a 2ª preferência que sai pelas limitações diz o porquê dela; na data em que nenhum horário serve ao aluno, o
+  // campo não pede uma escolha que não existe, e a 2ª preferência fica desligada
+  test('a 2ª preferência que sai pelas limitações diz por quê; sem nenhum horário que sirva, nada de "Escolha", e a 2ª desligada', async ({ page }) => {
+    await abrirComOsCursos(page, { limitacoes: { 1001: LIMITADO } });
+    await campoDaAgenda(page, 'aluno').selectOption({ label: 'Aluno 1001' });
+    // Quinta: das 07:00 às 09:00, o 08:20 escolhido pelo app; nenhuma 2ª que sirva: desligada, com o porquê
+    await campoDaAgenda(page, 'data').selectOption('2026-11-12');
+    await campoDaAgenda(page, 'missao').selectOption('Voo Local');
+    await expect(campoDaAgenda(page, 'horario')).toHaveValue('08:20');
+    await expect(campoDaAgenda(page, 'horario2')).toBeDisabled();
+    await expect(campoDaAgenda(page, 'horario2-motivo')).toHaveText('Sem 2ª preferência: o aluno só voa das 07:00 às 09:00.');
+    // Sexta: nenhum horário; o 08:20 que o app escolheu sai, e o campo diz por que não há outro
+    await campoDaAgenda(page, 'data').selectOption('2026-11-13');
+    await expect(campoDaAgenda(page, 'horario')).toHaveValue('');
+    await expect(campoDaAgenda(page, 'horario-motivo')).toHaveText('O horário 08:20 era o único da escolha anterior. Nenhum dos 8 horários do C172: o aluno não voa nesta data.');
+    await expect(campoDaAgenda(page, 'horario2')).toBeDisabled();
+    // Quarta, 13:40 e 14:30; quinta: a 1ª vai para 08:20, a 2ª sai pelas limitações, e nenhuma outra serve
+    await campoDaAgenda(page, 'data').selectOption(AMANHA);
+    await campoDaAgenda(page, 'horario').selectOption('13:40');
+    await expect(campoDaAgenda(page, 'horario2')).toBeEnabled();
+    await expect(campoDaAgenda(page, 'horario2-motivo')).toHaveText('Opcional: outro horário, se o da 1ª não couber.');
+    await campoDaAgenda(page, 'horario2').selectOption('14:30');
+    await campoDaAgenda(page, 'data').selectOption('2026-11-12');
+    await expect(campoDaAgenda(page, 'horario')).toHaveValue('08:20');
+    await expect(campoDaAgenda(page, 'horario2')).toHaveValue('');
+    await expect(campoDaAgenda(page, 'horario2-motivo')).toHaveText('A 2ª preferência 14:30 está fora das limitações do aluno (o aluno só voa das 07:00 às 09:00): sem 2ª preferência nesta data.');
+    await expect(campoDaAgenda(page, 'horario2')).toBeDisabled();
+    // Sexta: o 13:40 da pessoa, fora das limitações, e nenhum outro serve (nada de "Escolha outro")
+    await campoDaAgenda(page, 'data').selectOption('2026-11-13');
+    await expect(campoDaAgenda(page, 'horario')).toHaveValue('');
+    await expect(campoDaAgenda(page, 'horario-motivo')).toHaveText('O horário 13:40 está fora das limitações do aluno (o aluno não voa nesta data), e nenhum dos horários do C172 está nelas.');
+    await expect(campoDaAgenda(page, 'horario2')).toBeDisabled();
+  });
+
   test('a missão do curso no C152 de quem só voa no C172: os tipos da missão que ele voa, e ela continua ligada (R7)', async ({ page }) => {
     await abrirComOsCursos(page, { limitacoes: { 1000: { recursos: ['C172'] } } });
     await campoDaAgenda(page, 'aluno').selectOption({ label: 'Maria' });
