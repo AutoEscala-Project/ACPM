@@ -16,6 +16,8 @@ import { esc, chaveDeBusca, iniciais } from './format.js';
 
 const texto = id => String(id);
 const chaveDoItem = (prefixo, id) => `${prefixo}:${texto(id)}`;
+// O cabeçalho que se escolhe: o grupo com detalhe próprio
+const temDetalhe = grupo => grupo.idDoDetalhe !== undefined && grupo.idDoDetalhe !== null;
 
 // A cor do avatar: cinco, pelo id (o número; num texto, a soma dos códigos das letras)
 export function corDoAvatar(id) {
@@ -27,14 +29,16 @@ export function corDoAvatar(id) {
 // O que a lista mostra. Um item é desenhado quando está no alcance de "Mostrar inativos" (o apagado sempre está) e passa
 // na busca e nos filtros (passa), ou quando é mantido (o novo, o alterado agora) ou foi visto no último desenho (uma linha
 // não some debaixo do ponteiro: quem limpa os vistos é a mudança de um filtro). Os fixos vêm antes, nunca filtrados nem
-// contados; depois cada grupo com os itens dele (o grupo sem item à vista não aparece; o recolhido, só o cabeçalho, a não
-// ser com texto na busca) e os itens sem grupo
+// contados; depois cada grupo com os itens dele (o grupo sem item à vista não aparece, a não ser o cabeçalho que se
+// escolhe, sem texto na busca e sem filtro: ele é um registro, e fica sem linhas, semLinhas; o recolhido, só o cabeçalho,
+// a não ser com texto na busca) e os itens sem grupo
 export function listaAVista(modelo, estado, { chave = chaveDeBusca, passa = () => true, filtrando = false } = {}) {
   const situacao = modelo && modelo.estado ? modelo.estado : 'pronto';
   const fixos = situacao === 'pronto' ? [...(modelo.fixos || [])] : [];
   const itens = situacao === 'pronto' ? [...(modelo.itens || [])] : [];
   const busca = chave(estado.busca || '');
   const buscando = Boolean(busca);
+  const filtrou = buscando || filtrando;
   const casa = item => !busca || (item.busca || []).some(t => chave(t).includes(busca));
   const noAlcance = item => estado.comInativos || item.apagado || !item.inativo;
   const desenhado = item => (noAlcance(item) && casa(item) && passa(item))
@@ -42,9 +46,12 @@ export function listaAVista(modelo, estado, { chave = chaveDeBusca, passa = () =
   const passam = itens.filter(desenhado);
   const deGrupo = new Map((modelo.grupos || []).map(g => [g.id, g]));
   const blocos = [];
-  for (const grupo of modelo.grupos || []) {
+  for (const grupo of situacao === 'pronto' ? modelo.grupos || [] : []) {
     const doGrupo = passam.filter(i => i.grupo === grupo.id);
-    if (!doGrupo.length) continue;
+    if (!doGrupo.length) {
+      if (temDetalhe(grupo) && !filtrou) blocos.push({ grupo, itens: [], semLinhas: true });
+      continue;
+    }
     blocos.push({ grupo, itens: estado.recolhidos.has(grupo.id) && !buscando ? [] : doGrupo });
   }
   const semGrupo = passam.filter(i => !i.grupo || !deGrupo.has(i.grupo));
@@ -56,7 +63,7 @@ export function listaAVista(modelo, estado, { chave = chaveDeBusca, passa = () =
   for (const { grupo, itens: doBloco } of blocos) {
     if (grupo) {
       paradas.push(chaveDoItem('g', grupo.id));
-      if (grupo.idDoDetalhe !== undefined && grupo.idDoDetalhe !== null) registros.push({ chave: chaveDoItem('g', grupo.id), id: texto(grupo.idDoDetalhe) });
+      if (temDetalhe(grupo)) registros.push({ chave: chaveDoItem('g', grupo.id), id: texto(grupo.idDoDetalhe) });
     }
     for (const i of doBloco) { paradas.push(chaveDoItem('i', i.id)); registros.push({ chave: chaveDoItem('i', i.id), id: texto(i.id) }); }
   }
@@ -64,7 +71,6 @@ export function listaAVista(modelo, estado, { chave = chaveDeBusca, passa = () =
   const total = itens.filter(i => estado.comInativos || i.apagado || !i.inativo).length;
   const inativos = itens.filter(i => i.inativo && !i.apagado).length;
   const inativosQuePassam = estado.comInativos ? 0 : itens.filter(i => i.inativo && !i.apagado && casa(i) && passa(i)).length;
-  const filtrou = buscando || filtrando;
   let vazio = null;
   if (situacao === 'lendo' || situacao === 'falhou') vazio = situacao;
   else if (!itens.length) vazio = 'sem-itens';
@@ -118,15 +124,18 @@ export function linhaHtml(lista, item, { selecionado = false, parada = false, pr
 const setaHtml = '<svg class="ico seta" aria-hidden="true"><use href="#i-baixo"/></svg>';
 
 // O cabeçalho de um grupo. Sem detalhe próprio, um botão só (recolhe e abre); com detalhe, a seta recolhe (fora do Tab)
-// e o título escolhe o grupo, como um item
-export function grupoHtml(lista, grupo, { recolhido = false, parada = false, selecionado = false } = {}) {
+// e o título escolhe o grupo, como um item; com detalhe e sem linhas (semLinhas), nada a recolher: um espaço no lugar
+// da seta
+export function grupoHtml(lista, grupo, { recolhido = false, parada = false, selecionado = false, semLinhas = false } = {}) {
   const resumo = grupo.resumo ? ` <small>${esc(grupo.resumo)}</small>` : '';
   const aberto = recolhido ? 'false' : 'true';
-  const inicio = `<li class="lista-grupo${recolhido ? ' recolhido' : ''}" data-chave="g:${esc(grupo.id)}">`;
-  if (grupo.idDoDetalhe === undefined || grupo.idDoDetalhe === null) {
+  const vago = semLinhas && temDetalhe(grupo);
+  const inicio = `<li class="lista-grupo${vago ? ' sem-linhas' : recolhido ? ' recolhido' : ''}" data-chave="g:${esc(grupo.id)}">`;
+  if (!temDetalhe(grupo)) {
     return `${inicio}<button type="button" class="lista-botao lista-grupo-botao" id="grp-${lista}-${esc(grupo.id)}" data-lista-grupo="${esc(grupo.id)}" aria-expanded="${aberto}" tabindex="${tab(parada)}">${setaHtml}${esc(grupo.titulo)}${resumo}</button></li>`;
   }
-  return `${inicio}<button type="button" class="lista-seta" id="grp-${lista}-${esc(grupo.id)}" data-lista-grupo="${esc(grupo.id)}" aria-expanded="${aberto}" aria-label="${recolhido ? 'Abrir' : 'Recolher'} ${esc(grupo.titulo)}" tabindex="-1">${setaHtml}</button>`
+  return `${inicio}${vago ? '<span class="lista-seta-vaga" aria-hidden="true"></span>'
+    : `<button type="button" class="lista-seta" id="grp-${lista}-${esc(grupo.id)}" data-lista-grupo="${esc(grupo.id)}" aria-expanded="${aberto}" aria-label="${recolhido ? 'Abrir' : 'Recolher'} ${esc(grupo.titulo)}" tabindex="-1">${setaHtml}</button>`}`
     + `<button type="button" class="lista-botao" id="lin-${lista}-${esc(grupo.idDoDetalhe)}" data-item="${esc(grupo.idDoDetalhe)}"${selecionado ? ' aria-current="true"' : ''} tabindex="${tab(parada)}">${esc(grupo.titulo)}${resumo}</button></li>`;
 }
 
@@ -157,18 +166,18 @@ export function paradaDaLista(vista, estado) {
 
 // As partes da lista, na ordem: os fixos, cada grupo e os itens dele, os sem grupo; ou o estado vazio
 export function partesDaLista(lista, vista, estado, textos) {
-  if (vista.vazio && !vista.fixos.length) return [{ chave: vista.vazio === 'lendo' || vista.vazio === 'falhou' ? 'estado' : 'vazio', html: vazioHtml(lista, vista, textos) }];
+  if (vista.vazio && !vista.fixos.length && !vista.blocos.length) return [{ chave: vista.vazio === 'lendo' || vista.vazio === 'falhou' ? 'estado' : 'vazio', html: vazioHtml(lista, vista, textos) }];
   const parada = paradaDaLista(vista, estado);
   const escolhido = estado.selecionado === null || estado.selecionado === undefined ? null : texto(estado.selecionado);
   const partes = vista.fixos.map(f => ({
     chave: chaveDoItem('f', f.id),
     html: linhaHtml(lista, f, { prefixo: 'f', selecionado: escolhido === texto(f.id), parada: parada === chaveDoItem('f', f.id) })
   }));
-  for (const { grupo, itens } of vista.blocos) {
+  for (const { grupo, itens, semLinhas = false } of vista.blocos) {
     if (grupo) {
       partes.push({ chave: chaveDoItem('g', grupo.id), html: grupoHtml(lista, grupo, {
-        recolhido: estado.recolhidos.has(grupo.id) && !itens.length, parada: parada === chaveDoItem('g', grupo.id),
-        selecionado: grupo.idDoDetalhe !== undefined && escolhido === texto(grupo.idDoDetalhe)
+        recolhido: estado.recolhidos.has(grupo.id) && !itens.length && !semLinhas, parada: parada === chaveDoItem('g', grupo.id),
+        selecionado: grupo.idDoDetalhe !== undefined && escolhido === texto(grupo.idDoDetalhe), semLinhas
       }) });
     }
     for (const item of itens) {
@@ -188,23 +197,24 @@ const grupoDaParada = (vista, parada) => {
 };
 
 // O que uma tecla faz na lista, a partir da parada atual: { ir, escolher } (as setas, Home e End: o foco vai e a parada
-// alcançada é escolhida), { detalhe: true } (Enter e →), { grupo, recolher } (← e → num grupo), ou null
+// alcançada é escolhida), { detalhe: true } (Enter e →), { grupo, recolher } (← e → num grupo), ou null. O cabeçalho sem
+// linhas não recolhe nem abre: Enter e → vão ao detalhe dele
 export function teclaNaLista(vista, atual, tecla) {
   const i = vista.paradas.indexOf(atual);
   const grupo = grupoDaParada(vista, atual);
+  const bloco = grupo && vista.blocos.find(b => b.grupo === grupo);
   const ir = destino => (destino === undefined || destino === null || destino === atual ? null : { ir: destino, escolher: idDaParada(vista, destino) });
   switch (tecla) {
     case 'ArrowDown': return i < 0 ? ir(vista.paradas[0]) : ir(vista.paradas[i + 1]);
     case 'ArrowUp': return i <= 0 ? null : ir(vista.paradas[i - 1]);
     case 'Home': return ir(vista.paradas[0]);
     case 'End': return ir(vista.paradas[vista.paradas.length - 1]);
-    case 'ArrowLeft': return grupo && !vista.blocos.find(b => b.grupo === grupo && !b.itens.length) ? { grupo: grupo.id, recolher: true } : null;
+    case 'ArrowLeft': return bloco && bloco.itens.length ? { grupo: grupo.id, recolher: true } : null;
     case 'ArrowRight':
     case 'Enter': {
       if (!grupo) return i < 0 ? null : { detalhe: true };
-      const recolhido = vista.blocos.some(b => b.grupo === grupo && !b.itens.length);
-      if (recolhido) return { grupo: grupo.id, recolher: false };
-      if (grupo.idDoDetalhe !== undefined && grupo.idDoDetalhe !== null) return { detalhe: true };
+      if (bloco && !bloco.itens.length && !bloco.semLinhas) return { grupo: grupo.id, recolher: false };
+      if (temDetalhe(grupo)) return { detalhe: true };
       return tecla === 'Enter' ? { grupo: grupo.id, recolher: true } : null;
     }
     default: return null;

@@ -7,7 +7,7 @@
 import { novoRecurso, MATRICULA, ATRIBUTOS_DO_RECURSO } from './frota.js';
 import { normalizarHabilitacoes } from './habilitacoes.js';
 import { normalizarFixos, fixoPeloStatus, fixosAoReabrir, pinoDeVoltaNaTurma } from './fixos.js';
-import { CATEGORIAS_COM_HORARIOS, normalizarHorarios, INICIOS_DOS_TEMPOS } from './horarios.js';
+import { CATEGORIAS_COM_HORARIOS, normalizarHorarios, horarioGuardado, INICIOS_DOS_TEMPOS } from './horarios.js';
 import { refazerFaixasDoAw, normalizarFaixas, normalizarPausas } from './disponibilidade.js';
 import { normalizarFechamentos } from './fechamentos.js';
 import { disponibilidadeValida, normalizeMissionFields } from './rules.js';
@@ -137,8 +137,10 @@ export function validarReversao(rev, frota) {
   // e a reversão continua valendo (N13: não há período do dia)
   if (rev.kind === 'restaurarHorarios') {
     if (!CATEGORIAS_COM_HORARIOS.includes(rev.cat) || !Array.isArray(rev.lista) || !Array.isArray(rev.pedidos) || rev.pedidos.length > 500) return null;
+    // Cada horário da reversão é um da lista guardada, sem repetir; o das 06:00 às 06:29 (gravado antes de 2026-11-28)
+    // volta como 06:30, como na lista guardada
+    if (!rev.lista.length || new Set(rev.lista).size !== rev.lista.length || rev.lista.some(m => horarioGuardado(m) === null)) return null;
     const lista = normalizarHorarios({ [rev.cat]: rev.lista })[rev.cat];
-    if (lista.length !== rev.lista.length) return null;
     const preferencia = v => Number.isInteger(v) && v >= -1 && v <= MINUTOS_DO_DIA;
     const pedidos = rev.pedidos.map(p => (p && typeof p === 'object' && idValido(p.stuId) && Number.isInteger(p.mid) && p.mid >= 0
       && preferencia(p.p1) && preferencia(p.p2) && (p.jan === undefined || disponibilidadeValida(p.jan) || PERIODOS_DE_ANTES.includes(p.jan))
