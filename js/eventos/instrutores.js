@@ -35,7 +35,7 @@ const tela = criarMestreDetalhe({
   rotulo: 'INVAs',
   nomes: ['instrutor', 'instrutores'],
   semItens: 'Nenhum instrutor cadastrado. Clique em “+ Novo instrutor” acima para cadastrar.',
-  vazio: 'Escolha um instrutor na lista.',
+  vazio: { texto: 'Escolha um instrutor na lista.', icone: 'i-instrutor', dica: 'ou use + Novo instrutor' },
   // O filtro das habilitações (várias marcas): aparece quem tem todas as marcadas, porque uma missão pede várias juntas
   // (o Noturno no C172, Noturno e C172). As opções acompanham a frota (a habilitação própria de cada recurso)
   filtros: [{
