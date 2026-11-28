@@ -897,6 +897,8 @@ export function aplicarAgendamento(estado, base, proposta) {
     // O que a missão do curso exige do INVA é derivado no estado da escala (comExigenciasDasMissoes): o de antes vai com a
     // missão de antes (no estado do app ele nunca está; na cópia da simulação, simularAgendamento põe o da missão nova)
     delete alvo.exige;
+    // A missão escolhida pelo operador não é a que o programa deu na entrada do pedido (formato 30)
+    delete alvo.etapaDoPrograma;
     if (proposta.missao) Object.assign(alvo, { etapa: proposta.missao.codigo, cursoDaEtapa: proposta.missao.sigla });
     else { delete alvo.etapa; delete alvo.cursoDaEtapa; }
   }

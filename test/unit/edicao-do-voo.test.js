@@ -495,8 +495,9 @@ describe('O editor do voo: o que a revisão achou', async () => {
     assert.deepEqual([marcado.stu[0].etapa, marcado.stu[0].etapaDoPrograma], ['IN-02', undefined]);
     const soOHorario = structuredClone(S);
     soOHorario.stu[0].etapaDoPrograma = true;
+    const etapaDeAntes = soOHorario.stu[0].etapa;
     aplicarEdicao(soOHorario, RES, voo, { ...structuredClone(voo.valores), a: 820 }, { aprovada: true });
-    assert.deepEqual([soOHorario.stu[0].etapa, soOHorario.stu[0].etapaDoPrograma], ['IN-01', true]);
+    assert.deepEqual([soOHorario.stu[0].etapa, soOHorario.stu[0].etapaDoPrograma], [etapaDeAntes, true]);
   });
 
   it('o aluno mudado no editor: o que a missão do curso dele exige do INVA avisa', () => {

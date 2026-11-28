@@ -233,6 +233,8 @@ export function aplicarEdicao(estado, resultado, voo, valores, { aprovada = Bool
       if (m.missao || novo) {
         p.mis = valores.missao.mis;
         delete p.exige;
+        // A missão escolhida pelo operador não é a que o programa deu na entrada do pedido (formato 30)
+        delete p.etapaDoPrograma;
         if (valores.missao.etapa) Object.assign(p, { etapa: valores.missao.etapa, cursoDaEtapa: valores.missao.cursoDaEtapa });
         else { delete p.etapa; delete p.cursoDaEtapa; }
       }

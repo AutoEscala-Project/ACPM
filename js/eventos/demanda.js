@@ -102,6 +102,8 @@ function usarMissaoDoCurso(s, target, mid, { codigo, curso, mis, eq, nb }) {
   // A confirmação do 7º voo local (Q8) foi dada na Agenda para a missão e o recurso de antes: com outros, ela não vale
   if (target.etapa !== codigo || target.cursoDaEtapa !== curso || target.mis !== mis || target.eq !== eq) delete target.limiteConfirmado;
   Object.assign(target, { fly: true, mis, eq, nb, etapa: codigo, cursoDaEtapa: curso });
+  // A missão que o operador usou não é a que o programa deu na entrada do pedido (formato 30)
+  delete target.etapaDoPrograma;
   ajustarPreferencias(target, horariosDaMissao(S.horarios, target.mis, target.eq));
   normalizeMissionFields(target);
   return soltarAgendado(s.id, mid);
