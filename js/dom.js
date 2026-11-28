@@ -178,7 +178,7 @@ export function ligarMenu(botao, menu, { fecharAoEscolher = true } = {}) {
 // (data-estagio); no trilho, o dia (data-dia) e o aviso da data (data-aviso)
 const QUEM_E = ['id', 'data-f', 'data-a', 'data-act', 'data-w', 'data-i', 'data-h', 'data-b', 'data-cat', 'data-min',
   'data-dia', 'data-criterio', 'data-valor', 'data-logid', 'data-horas', 'data-fkey', 'data-resultado',
-  'data-reparo', 'data-dados', 'data-id', 'data-mid', 'data-recolher-inicio', 'data-recolher-grupo', 'data-agendar', 'data-cc',
+  'data-reparo', 'data-dados', 'data-id', 'data-mid', 'data-recolher-inicio', 'data-agendar', 'data-cc',
   'data-cfa', 'data-cf', 'data-fase', 'data-missao', 'data-filtro', 'data-recolher-fase', 'data-ir-fase', 'data-tarefa', 'data-estagio',
   'data-aviso'];
 const DA_LINHA = ['data-k', 'data-id', 'data-mid', 'data-fkey', 'data-cat', 'data-missao', 'data-fase', 'data-curso'];

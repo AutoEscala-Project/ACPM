@@ -6,12 +6,12 @@ import { linhaDoDia, selosDosCadastros, avisosDaData } from '../../js/linha-do-d
 
 const DATA = '2026-11-11', HOJE = '2026-11-10';
 
-function contexto({ pedidos = [], leitura = 'lidos', out = [], al = [], tot = 0, res = true, frota, av = {}, ins, importadas = [], aprovacao = null, revisao = {}, perfil = null, opera = true, horasLidas = true, stu = [], indisponiveis = [] } = {}) {
+function contexto({ pedidos = [], leitura = 'lidos', out = [], al = [], tot = 0, res = true, frota, av = {}, ins, importadas = [], aprovacao = null, revisao = {}, perfil = null, opera = true, horasLidas = true, stu = [], indisponiveis = [], fechamentos, win } = {}) {
   return {
     S: {
       frota: frota ?? [{ reg: 'PR-AAA', tipo: 'C152' }, { reg: 'PR-BBB', tipo: 'C152' }],
       av, ins: ins ?? [{ id: 1, nm: 'Instrutor 01', on: true }, { id: 2, nm: 'Instrutor 02', on: true }],
-      stu, importadas, aprovacao
+      stu, importadas, aprovacao, ...(fechamentos ? { fechamentos } : {}), ...(win ? { win } : {})
     },
     RES: res ? { out, al, tot, revisao } : null,
     pedidos: leitura === 'lidos' ? pedidos : null,
@@ -201,6 +201,24 @@ describe('Os avisos da data', () => {
     assert.deepEqual(aviso, { id: 'recursos', gravidade: 'aviso', minuto: null, titulo: '2 aviões parados ou perto da revisão de 50 horas', texto: '', destino: { tela: 'rec' } });
     assert.deepEqual(avisosDaData(contexto({ revisao, perfil: 'secretaria', opera: false })).map(a => a.destino), [null]);
     assert.deepEqual(avisosDaData(contexto({ revisao, perfil: 'gestor', opera: false })).map(a => a.destino), [{ tela: 'rec' }]);
+  });
+
+  // B: os horários fechados da data são um aviso de informação (sem horário, depois dos erros e dos avisos), que leva ao
+  // bloco deles na Escala; os de um dia de antes do formato 28 vêm do win. Nada fechado, nenhum aviso
+  it('os horários fechados nesta data: um aviso de informação, que leva ao bloco deles na Escala', () => {
+    assert.deepEqual(avisosDaData(contexto()), []);
+    assert.deepEqual(avisosDaData(contexto({ fechamentos: [] })), []);
+    const fechamentos = [{ de: 760, ate: 1050 }, { de: 360, ate: 1440, categorias: ['C172'] }];
+    assert.deepEqual(avisosDaData(contexto({ fechamentos })), [{
+      id: 'horarios-fechados', gravidade: 'info', minuto: null,
+      titulo: 'Horários fechados nesta data: 12:40–17:30 · todos os recursos; 06:00–24:00 · C172', texto: '', destino: { tela: 'esc', item: 'fechamentos' }
+    }]);
+    // Para todos os perfis (a Escala, todos veem), e depois dos avisos
+    const revisao = { 'PR-AAA': { fim: 47, paraAs: null } };
+    assert.deepEqual(avisosDaData(contexto({ fechamentos, revisao, perfil: 'secretaria', opera: false })).map(a => a.id), ['recursos', 'horarios-fechados']);
+    // O dia de antes do formato 28: as janelas fechadas do win
+    const win = [true, true, true, true, false, false, false, false, true];
+    assert.equal(avisosDaData(contexto({ win }))[0].titulo, 'Horários fechados nesta data: 12:40–17:30 · todos os recursos');
   });
 
   it('os pedidos que ainda não estão na demanda: só para quem opera, e só lidos', () => {

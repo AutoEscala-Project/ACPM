@@ -5,6 +5,7 @@
 // contexto: { S, RES, pedidos: lista | null, leituraDosPedidos: 'lendo' | 'erro' | 'lidos', perfil, opera, horasLidas,
 // indisponiveis: [{ id, texto }], data, hoje } (js/views/linha.js, contextoDoDia)
 import { REVISAO_H } from './config.js';
+import { fechamentosDoEstado, rotuloDosFechamentos } from './fechamentos.js';
 import { salaDisponivel } from './frota.js';
 import { inativo, inativoValeEm } from './inativos.js';
 import { ESTAGIOS, podeVer } from './telas.js';
@@ -187,6 +188,13 @@ function avisosDosRecursos(ctx) {
   return [...(n ? [{ id: 'recursos', gravidade: 'aviso', minuto: null, titulo: textoDaRevisao(n), texto: '', destino }] : []), ...sala];
 }
 
+// Os horários fechados nesta data (B): uma informação, sem horário, que leva ao bloco deles na Escala (#/esc/fechamentos;
+// o H a leva para as restrições da data). Os de um dia de antes do formato 28 vêm do win (fechamentosDoEstado)
+function avisosDosFechamentos({ S }) {
+  const rotulos = rotuloDosFechamentos(S ? fechamentosDoEstado(S) : []);
+  return rotulos.length ? [{ id: 'horarios-fechados', gravidade: 'info', minuto: null, titulo: `Horários fechados nesta data: ${rotulos.join('; ')}`, texto: '', destino: { tela: 'esc', item: 'fechamentos' } }] : [];
+}
+
 function avisosDosPedidos(ctx) {
   const aviso = (id, titulo) => [{ id, gravidade: 'aviso', minuto: null, titulo, texto: '', destino: { tela: 'age' } }];
   if (ctx.leituraDosPedidos === 'erro') return aviso('pedidos-nao-lidos', 'Não foi possível ler os pedidos desta data.');
@@ -203,7 +211,7 @@ const avisosDosDados = ctx => (ctx.indisponiveis || []).map(({ id, texto }) =>
 // Na ordem: erro, aviso, info; em cada um, os sem horário primeiro, depois pelo horário e pelo id
 const ORDEM_DOS_AVISOS = ['erro', 'aviso', 'info'];
 export function avisosDaData(ctx) {
-  return [avisosDaEscala, avisosDosRecursos, avisosDosPedidos, avisosDosDados].flatMap(grupo => grupo(ctx)).sort((p, q) =>
+  return [avisosDaEscala, avisosDosRecursos, avisosDosFechamentos, avisosDosPedidos, avisosDosDados].flatMap(grupo => grupo(ctx)).sort((p, q) =>
     ORDEM_DOS_AVISOS.indexOf(p.gravidade) - ORDEM_DOS_AVISOS.indexOf(q.gravidade)
     || (p.minuto ?? -1) - (q.minuto ?? -1)
     || (p.id < q.id ? -1 : p.id > q.id ? 1 : 0));
