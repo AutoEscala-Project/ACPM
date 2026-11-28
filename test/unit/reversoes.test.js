@@ -663,3 +663,16 @@ describe('A reversão dos horários com um período de antes', () => {
     assert.deepEqual(rev.pedidos, [{ stuId: 1000, mid: 0, p1: 500, p2: -1 }, { stuId: 1001, mid: 0, p1: 500, p2: -1, jan: 'h500' }]);
   });
 });
+
+// Pedro, 2026-11-28: os horários começam às 06:30. A reversão gravada com um horário das 06:00 às 06:29 (o editor
+// aceitava) continua valendo: o horário volta como 06:30, como a lista guardada (normalizarHorarios)
+describe('A reversão dos horários com um horário antes das 06:30', () => {
+  it('o horário das 06:00 às 06:29 volta como 06:30, também ao lado das 06:30; antes das 06:00 ou repetido, a reversão não vale', () => {
+    const rev = { kind: 'restaurarHorarios', cat: 'C152', lista: [360, 500], pedidos: [], label: '↶ Reverter' };
+    assert.deepEqual(validarReversao(rev, FROTA_INICIAL).lista, [390, 500]);
+    assert.deepEqual(validarReversao({ ...rev, lista: [360, 390, 500] }, FROTA_INICIAL).lista, [390, 500]);
+    for (const lista of [[300, 500], [359, 500], [500, 500], []]) {
+      assert.equal(validarReversao({ ...rev, lista }, FROTA_INICIAL), null, JSON.stringify(lista));
+    }
+  });
+});
