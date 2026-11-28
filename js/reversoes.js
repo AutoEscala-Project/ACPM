@@ -5,6 +5,7 @@
 // Desfazer um voo agendado na Escala também fica aqui: quando ele não é desfeito e o que volta como estava; e o que a
 // reversão de uma mudança nos voos fixos não devolve depois de um agendamento.
 import { novoRecurso, MATRICULA, ATRIBUTOS_DO_RECURSO } from './frota.js';
+import { normalizarHabilitacoes } from './habilitacoes.js';
 import { normalizarFixos, fixoPeloStatus, fixosAoReabrir, pinoDeVoltaNaTurma } from './fixos.js';
 import { CATEGORIAS_COM_HORARIOS, normalizarHorarios, INICIOS_DOS_TEMPOS } from './horarios.js';
 import { refazerFaixasDoAw, normalizarFaixas, normalizarPausas } from './disponibilidade.js';
@@ -85,6 +86,13 @@ export function validarReversao(rev, frota) {
     return typeof rev.reg === 'string' && typeof rev.atributo === 'string' && typeof rev.val === 'boolean'
       && MATRICULA.test(rev.reg) && Object.hasOwn(ATRIBUTOS_DO_RECURSO, rev.atributo)
       ? { kind: 'setAtributo', reg: rev.reg, atributo: rev.atributo, val: rev.val, label } : null;
+  }
+  // O que o recurso exige do instrutor (B): a matrícula, a habilitação que a caixa mudou (um id conhecido: do registro
+  // ou uma habilitação própria) e se o recurso a exigia antes. A reversão muda só ela
+  if (rev.kind === 'setExigencias') {
+    return typeof rev.reg === 'string' && MATRICULA.test(rev.reg) && typeof rev.h === 'string' && normalizarHabilitacoes([rev.h]).length === 1
+      && typeof rev.val === 'boolean'
+      ? { kind: 'setExigencias', reg: rev.reg, h: rev.h, val: rev.val, label } : null;
   }
   // O "Ativo" do cadastro: o aluno ou o instrutor (pelo id) e o recurso (pela matrícula), e o inativo a restaurar
   if (rev.kind === 'setInativo') {

@@ -137,6 +137,11 @@ export function exigencias(mis, eq, { curso, recurso, exige } = {}) {
   return grupos;
 }
 
+// O que o tipo do recurso exige do instrutor, sem a missão: a habilitação do avião, a do simulador; a Sala Ground, nenhuma
+// (a aula de Ground exige a do tipo de Ground da missão). Recursos mostra no detalhe ("Do tipo: C172"), e o que o recurso
+// exige além dela (exige) nunca a repete
+export const habilitacoesDoTipo = tipo => [...doMapa(DO_AVIAO, tipo, doMapa(DO_SIMULADOR, tipo, []))];
+
 // O instrutor tem o que o tipo de recurso exige (a fila do C172 no rodízio)
 export const habilitadoNoTipo = (instrutor, tipo) => doMapa(DO_AVIAO, tipo, []).every(h => Array.isArray(instrutor.hab) && instrutor.hab.includes(h));
 

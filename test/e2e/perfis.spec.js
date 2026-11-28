@@ -1,4 +1,4 @@
-import { test, expect, abrir, abrirSintetico, abrirComExemplo, irPara, irParaVista, abrirEscala, filtrarHabilitacoes, filtrarCursos, filtrarCategorias, AMANHA, caixaVem, dataAberta, botaoDaData, linhasDosAlunos, linhaDoInstrutor, abrirInstrutor, secaoDoInstrutor, nomesDosInstrutores, buscaDosInstrutores, nenhumNaLista, agendarComOInstrutor, botoesDosTurnos } from './fixtures.js';
+import { test, expect, abrir, abrirSintetico, abrirComExemplo, irPara, abrirEscala, filtrarHabilitacoes, filtrarCursos, AMANHA, caixaVem, dataAberta, botaoDaData, linhasDosAlunos, linhaDoInstrutor, abrirInstrutor, secaoDoInstrutor, nomesDosInstrutores, buscaDosInstrutores, nenhumNaLista, agendarComOInstrutor, botoesDosTurnos, abrirRecursos, abrirRecurso, abrirCategoria, buscaDosRecursos, linhasDosRecursos, contagemDosRecursos, cabecalhoDaCategoria, horariosDaCategoria } from './fixtures.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
 
 test.describe('Perfis de acesso', () => {
@@ -123,41 +123,33 @@ test.describe('Perfis de acesso', () => {
     await expect(page.locator('#dem tr.sem-resultado')).toHaveCount(0);
   });
 
-  // Em Recursos também: a busca pela matrícula e o filtro das categorias (o botão e as caixas com .flt-ctrl, sem data-f
-  // nem data-a), as duas vistas e o "Limpar filtros"; "+ Novo recurso" não aparece
-  test('o Gestor busca a matrícula, marca as categorias e troca de vista em Recursos; "Limpar filtros" mostra todos de novo', async ({ page }) => {
+  // Em Recursos também (B, lista e detalhe): a busca pela matrícula (com .flt-ctrl, sem data-f nem data-a), os grupos que
+  // recolhem, a escolha de um recurso e de uma categoria e o "Limpar filtros"; "+ Novo recurso" não aparece
+  test('o Gestor busca a matrícula, recolhe as categorias e abre um recurso em Recursos; "Limpar filtros" mostra todos de novo', async ({ page }) => {
     await abrir(page, { estado: cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000)] }), url: './?role=gestor' });
     await expect(page.locator('body')).toHaveAttribute('data-role', 'gestor');
-    await irPara(page, 'rec');
-    await expect(page.locator('#s-rec')).toHaveAttribute('data-vista', 'dia');
+    await abrirRecursos(page);
     await expect(page.locator('#btn-novo-recurso')).toBeHidden();
-    const busca = page.locator('#flt-rec-mat'), botao = page.locator('#flt-rec-cat'), painel = page.locator('#flt-rec-cat-painel');
-    const pa34 = painel.locator('input[data-valor="PA-34"]');
+    const busca = buscaDosRecursos(page);
     await expect(busca).toBeEnabled();
-    await expect(botao).toBeEnabled();
-    await botao.click();
-    await expect(painel).toBeVisible();
-    // As cinco categorias, a Sala Ground entre elas (J)
-    await expect(painel.locator('input[data-filtro]')).toHaveCount(5);
-    await expect(painel.locator('input[data-filtro]:disabled')).toHaveCount(0);
-    await expect(painel.locator('#flt-rec-cat-limpar')).toBeEnabled();
-    await botao.click();
+    await expect(busca).toHaveClass(/\bflt-ctrl\b/);
     await busca.fill('vob');
-    await expect(page.locator('#revisao tr[data-r]')).toHaveCount(1);
-    await expect(page.locator('#rec-contagem')).toHaveText('1 de 27 recursos');
+    await expect(linhasDosRecursos(page)).toHaveCount(1);
+    await expect(contagemDosRecursos(page)).toHaveText('1 de 27 recursos');
     await busca.fill('');
-    await filtrarCategorias(page, ['PA-34']);
-    await expect(botao).toHaveText('Categoria: PA-34');
-    await expect(page.locator('#revisao tr[data-r]')).toHaveCount(3);
-    await irParaVista(page, 'rec', 'cadastro');
-    await expect(page.locator('#frota li.frota-item')).toHaveCount(3);
+    const seta = cabecalhoDaCategoria(page, 'C152').locator('.lista-seta');
+    await seta.click();
+    await expect(seta).toHaveAttribute('aria-expanded', 'false');
+    await expect(linhasDosRecursos(page)).toHaveCount(14);
+    await abrirRecurso(page, 'PR-VOM');
+    await expect(page.locator('#det-rec-titulo')).toHaveText('PR-VOM');
+    await abrirCategoria(page, 'PA-34');
+    await expect(horariosDaCategoria(page).locator('[data-act="editar-horarios"]')).toBeHidden();
     await busca.fill('nenhum assim');
-    await page.locator('#limpar-filtros-frota').click();
+    await page.locator('#limpar-filtros-rec').click();
     await expect(busca).toBeFocused();
-    await expect(pa34).not.toBeChecked();
-    await expect(botao).toHaveText('Todas as categorias');
-    await expect(page.locator('#frota li.frota-item')).toHaveCount(26);
-    await expect(page.locator('#rec-contagem')).toHaveText('27 recursos');
+    await expect(busca).toHaveValue('');
+    await expect(contagemDosRecursos(page)).toHaveText('27 recursos');
   });
 
   // O link não leva a escala no endereço (nomes, pesos e horas). Sem o servidor, a escala fica só neste navegador;

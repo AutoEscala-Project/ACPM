@@ -3,11 +3,11 @@
 // e o ↶ dele, o "Vem", o cadastro, as habilitações, as horas de voo), "Agendar voo com <nome>", "Excluir instrutor…", o
 // item fixo dos limites da lei e o celular. A grade, as duas gavetas e as duas vistas saíram
 import {
-  test, expect, abrir, abrirSintetico, abrirComExemplo, irPara, irParaVista, abrirEscala, lerEscala, filtrarHabilitacoes, confirmar, abrirHistorico,
+  test, expect, abrir, abrirSintetico, abrirComExemplo, irPara, abrirEscala, lerEscala, filtrarHabilitacoes, confirmar, abrirHistorico,
   caixaVem, dataAberta, diaSeguinte, linhaDoInstrutor, linhasDosInstrutores, nomesDosInstrutores, buscaDosInstrutores, contagemDosInstrutores,
   faixasNaLinha, voosNaLinha, habilitacoesNaLinha, tiraDaLinha, abrirInstrutor, campoDoInstrutor, habilitacaoDoInstrutor, secaoDoInstrutor,
   faixasDoAberto, pausasDoAberto, botaoDoTurno, aplicarTurno, campoDaFaixa, editarFaixas, abrirLimitesDaLei, nenhumNaLista, alvosPequenos,
-  larguraDaPagina, entradasDoHistorico, botaoDaAba, diaAnterior, confirmarAgendamento
+  larguraDaPagina, entradasDoHistorico, botaoDaAba, diaAnterior, confirmarAgendamento, marcarAtributo, retirarRecurso, linhaDoRecurso
 } from './fixtures.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
 import { comOIntervalo } from '../../js/disponibilidade.js';
@@ -182,10 +182,9 @@ test.describe('INVAs: a lista', () => {
     await abrir(page, { estado: cenario({ ins }) });
     const botao = page.locator('#flt-ins-hab'), painel = page.locator('#flt-ins-hab-painel');
     const propria = painel.locator('fieldset', { has: page.locator('legend', { hasText: 'Habilitação própria do recurso' }) }).locator('label');
+    // A habilitação própria fica no detalhe do recurso, em Recursos (B)
     const atributo = async (reg, marcar) => {
-      await irParaVista(page, 'rec', 'cadastro');
-      await page.locator(`#frota li.frota-item[data-r="${reg}"] [data-act="atributos-recurso"]`).click();
-      await page.locator(`#frota li.frota-item[data-r="${reg}"] [data-atributo="habilitacaoPropria"]`).setChecked(marcar);
+      await marcarAtributo(page, reg, 'habilitacaoPropria', marcar);
       await expect(entradasDoHistorico(page, `${reg}: Habilitação própria ${marcar ? 'marcado' : 'desmarcado'}`)).toHaveCount(1);
       await irPara(page, 'ins');
     };
@@ -200,6 +199,21 @@ test.describe('INVAs: a lista', () => {
     await abrirInstrutor(page, 1);
     await expect(habilitacaoDoInstrutor(page, 'aviao:PR-VOM')).toHaveCount(0);
     await expect(habilitacaoDoInstrutor(page, 'aviao:PR-HAR')).toBeChecked();
+    // O PR-HAR sai da frota (no detalhe dele, em Recursos): o filtro fica sem marca, e o grupo da habilitação própria some
+    await retirarRecurso(page, 'PR-HAR');
+    await expect(linhaDoRecurso(page, 'PR-HAR')).toHaveCount(0);
+    await irPara(page, 'ins');
+    await expect(botao).toHaveText('Todas as habilitações');
+    await expect.poll(() => nomesDosInstrutores(page)).toEqual(['Ana', 'Bruno']);
+    await expect(contagemDosInstrutores(page)).toHaveText('2 instrutores');
+    await botao.click();
+    await expect(painel.locator('legend', { hasText: 'Habilitação própria do recurso' })).toHaveCount(0);
+    // O Histórico devolve o PR-HAR, com a habilitação própria: a opção volta, sem a marca
+    await reverter(page, 'Recurso retirado: PR-HAR');
+    await expect(page.locator('#audit-log-list')).toContainText('Revertido: PR-HAR de volta à frota');
+    await botao.click();
+    await expect(propria).toHaveText(['Avião PR-HAR']);
+    await expect(painel.locator('input[data-filtro]:checked')).toHaveCount(0);
   });
 
   // As marcas e o painel aberto duram aos redesenhos: a lista refeita com a escala (o turno aplicado), outra data e o

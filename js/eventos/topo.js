@@ -10,7 +10,7 @@ import { registrarDesenho, redesenharPorNome } from '../redesenho.js';
 import { registrarTela, escolherTela } from '../views/telas.js';
 import { gerenciaContas } from '../perfis.js';
 
-// Os selos que ficam fora da linha (js/views/selos.js): o de Recursos na Disponibilidade do dia e o botão de importar
+// Os selos que ficam fora da linha (js/views/selos.js): o botão de importar (o de Recursos saiu no B)
 registrarDesenho('selos', atualizarSelos, { em: ['dados', 'escala', 'perfil', 'pedidos'], ordem: 99 });
 
 // O perfil (neste navegador). A aba Cursos é refeita: aberta, ela mostra ou tira na hora os controles de quem muda o

@@ -6,7 +6,7 @@
 // lidas uma de cada vez (a versão que a gravação leva é a da leitura dos dados da tela), e nenhuma data é lida antes de a
 // abertura preparar os dados, nem depois de a preparação falhar. O que fica aberto na tela quando a data abre passa a
 // mostrar os dados dela
-import { test, comProgresso, expect, prepararContexto, vigiarErros, preencherLogin, entrar, irPara, irParaVista, abrirEscala, AMANHA, URL_APP, abrirHistorico, alternarDisponivel, botaoAprovar, caixaDisponivel, caixaVoa, dataAberta, diaAnterior, diaSeguinte, exportar, importarDaAgenda, rotuloDaData, escolherNoCalendario, confirmarAgendamento, linhasDosAlunos, abrirLimitesDaLei } from './fixtures.js';
+import { test, comProgresso, expect, prepararContexto, vigiarErros, preencherLogin, entrar, irPara, abrirEscala, AMANHA, URL_APP, abrirHistorico, alternarDisponivel, botaoAprovar, caixaDisponivel, caixaVoa, dataAberta, diaAnterior, diaSeguinte, exportar, importarDaAgenda, rotuloDaData, escolherNoCalendario, confirmarAgendamento, linhasDosAlunos, abrirLimitesDaLei, abrirCategoria, horariosDaCategoria } from './fixtures.js';
 import { criarSupabaseFalso, documentosAtuais, CONTAS } from './supabase-falso.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
 import { runAllocationEngine } from '../../js/engine.js';
@@ -684,9 +684,9 @@ test.describe('O que fica aberto quando a data abre passa a mostrar os dados del
     const page = await contexto.newPage();
     const erros = vigiarErros(page);
     await entrar(page, CONTAS.operador);
-    await irParaVista(page, 'rec', 'cadastro');
-    const c152 = page.locator('#horarios [data-cat="C152"]');
-    const editor = page.locator('#horarios .horarios-editor');
+    await abrirCategoria(page, 'C152');
+    const c152 = horariosDaCategoria(page).locator('[data-cat="C152"]');
+    const editor = horariosDaCategoria(page).locator('.horarios-editor');
     const doC152 = () => servidor.banco.get('cadastro').conteudo.horarios.C152;
     async function por(hora) {
       await editor.locator('.hr-novo').fill(hora);

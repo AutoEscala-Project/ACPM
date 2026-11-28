@@ -349,10 +349,14 @@ describe('Os horários fechados no dia', () => {
     assert.equal(Object.hasOwn(juntar(semEles.cadastro, semEles.dia), 'fechamentos'), false);
     assert.deepEqual(juntar(cadastro, { ...dia, fechamentos: [{ de: 9, ate: 3 }, 'x'] }).fechamentos, [], 'os inválidos saem');
   });
-  it('a data seguinte começa com os fechamentos da anterior, como com o win', () => {
-    const { dia } = separar({ ...estadoSintetico(), fechamentos });
-    assert.deepEqual(diaParaCopiar(dia).fechamentos, [{ de: 390, ate: 500, categorias: ['C152'] }, { de: 760, ate: 1050 }]);
-    assert.equal(Object.hasOwn(diaParaCopiar(separar(estadoSintetico()).dia), 'fechamentos'), false);
+  // B: os horários fechados valem para a data deles; a data seguinte começa sem eles (o plano: só copiar se a contagem da
+  // Onda 0 mostrar fechamentos que se repetem), e sem o win fechado de antes
+  it('a data seguinte começa sem os fechamentos da anterior, e com o dia todo aberto', () => {
+    const win = [true, true, true, true, false, false, false, false, true];
+    const { dia } = separar({ ...estadoSintetico(), win, fechamentos });
+    const seguinte = diaParaCopiar(dia);
+    assert.equal(Object.hasOwn(seguinte, 'fechamentos'), false);
+    assert.ok(seguinte.win.every(v => v === true));
   });
 });
 

@@ -302,7 +302,8 @@ test.describe('A moldura', () => {
       const t = document.querySelector('aside.trilho');
       return {
         pagina: document.documentElement.scrollHeight > innerHeight + 1,
-        // (as regiões da tela de mentira, em Alunos: INVAs, antes dela na página, também é de lista e detalhe desde o C)
+        // (as regiões da tela de mentira, em Alunos: Recursos e INVAs, antes dela na página, também são de lista e detalhe
+        // desde o B e o C)
         lista: rola(document.querySelector('#s-alu [data-regiao="lista"]')), detalhe: rola(document.querySelector('#s-alu [data-regiao="detalhe"]')),
         noFundo: Math.round(document.querySelector('#s-alu [data-regiao="lista"]').getBoundingClientRect().bottom),
         trilho: { posicao: getComputedStyle(t).position, rola: getComputedStyle(t).overflowY, fundo: Math.round(t.getBoundingClientRect().bottom) }
