@@ -1104,6 +1104,24 @@ describe('A lista de espera', () => {
     assert.deepEqual(espera(um.al).map(e => [e[0], e[1], e[2]]), [['Aluno 1001', 'instrutores-ocupados', { minuto: 500, lugar: 1 }]]);
   });
 
+  // U1 (Pedro, 2026-11-26: "Second exact time"): o pedido de dois horários exatos (jan h<m1>|h<m2>) é tentado no 1º e
+  // depois no 2º, no lugar dele na fila (a ordem de registro); sem lugar em nenhum, espera pelo 1º
+  it('dois horários exatos (U1): o 2º quando o 1º está cheio; sem lugar em nenhum, espera pelo 1º', () => {
+    const dois = (id, solicitacao, jan = 'h500|h610') => aluno(id, { p1: 500, p2: 610, jan, solicitacao });
+    const as1010 = (id, solicitacao) => aluno(id, { p1: 610, p2: -1, jan: 'h610', solicitacao });
+    // Um C152 só: o 1 voa às 08:20; o 2 (08:20 ou 10:10) vai às 10:10, antes do 3 (só às 10:10), registrado depois, que espera
+    const { out, al } = alocar({ ins: nove, semAeronaves: apenas('C152', 'PP-LJV'), stu: [as0820(1000, 1), dois(1001, 2), as1010(1002, 3)] });
+    assert.deepEqual(out.map(o => [o.stuId, o.a]).sort((p, q) => p[0] - q[0]), [[1000, 500], [1001, 610]]);
+    assert.deepEqual(espera(al).map(e => [e[0], e[1], e[2]]), [['Aluno 1002', 'avioes-ocupados', { minuto: 610, lugar: 1 }]]);
+    // A ordem é a do pedido: com o 10:10 primeiro e o 1º livre, ele voa às 10:10
+    const primeiro = alocar({ ins: nove, semAeronaves: apenas('C152', 'PP-LJV'), stu: [dois(1001, 2, 'h610|h500')] });
+    assert.deepEqual(primeiro.out.map(o => o.a), [610]);
+    // Sem lugar nos dois horários (os dois registrados antes): espera pelo 1º
+    const cheio = alocar({ ins: nove, semAeronaves: apenas('C152', 'PP-LJV'), stu: [as0820(1000, 1), as1010(1001, 2), dois(1002, 3)] });
+    assert.deepEqual(espera(cheio.al).map(e => [e[0], e[1], e[2]]), [['Aluno 1002', 'avioes-ocupados', { minuto: 500, lugar: 1 }]]);
+    assert.match(cheio.al.find(a => a.s === 'Aluno 1002').m, /; 1º na lista de espera das 08:20\.$/);
+  });
+
   it('não esperam: o pedido sem horário exato, o recusado por outro motivo, o Voo Solo sem horário exato, e o motor de antes do F1h', () => {
     // Sem horário exato (a 1ª e a 2ª preferência): procura outros horários e, sem nenhum, não espera
     const semExato = alocar({ ins: [instrutor(1, 9)], janelasOff: [0, 2, 3, 4, 5, 6, 7, 8], stu: [aluno(1000, { p1: 500, p2: -1 }), aluno(1001, { p1: 500, p2: -1 })] });

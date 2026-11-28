@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import {
   HORARIOS_PADRAO, HORARIOS_INICIAIS, normalizarHorarios, horariosDoTipo, periodoDoMinuto, minutoDaPreferencia, preferenciaValida, paraMinuto,
   preferenciasPadrao, DE_30_EM_30, modeloDosHorarios, descreverHorarios, porPeriodo, impactoDosHorarios, resumoDoImpacto,
-  PRIMEIRO_HORARIO, ULTIMO_HORARIO, fimDaMissao
+  PRIMEIRO_HORARIO, ULTIMO_HORARIO, fimDaMissao, ajustarPreferencias as ajustarAsPreferencias
 } from '../../js/horarios.js';
 import { hm } from '../../js/format.js';
 
@@ -249,6 +249,13 @@ describe('O resumo dos horários e o efeito de uma lista nova', () => {
     assert.equal(resumoDoImpacto({ mudam: [], foraDaLista: [{ nome: 'A', minuto: 500 }, { nome: 'B', minuto: 610 }] }), '2 ficam fora da lista.');
     // Os pedidos não mudam (o efeito só calcula)
     assert.equal(pedidos[1].pedido.jan, 'h500');
+    // U1: o pedido de dois horários exatos fica com os dois; cada um que a lista nova não tem é dito
+    const eva = [{ nome: 'Eva', pedido: { mis: 'Voo Local', eq: 'C152', p1: 500, p2: 610, jan: 'h500|h610' } }];
+    assert.deepEqual(impactoDosHorarios(eva, HORARIOS_INICIAIS, 'C152', [390, 610, 760]).foraDaLista, [{ nome: 'Eva', minuto: 500 }]);
+    assert.deepEqual(impactoDosHorarios(eva, HORARIOS_INICIAIS, 'C152', [400]).foraDaLista, [{ nome: 'Eva', minuto: 500 }, { nome: 'Eva', minuto: 610 }]);
+    const ajustado = { ...eva[0].pedido };
+    ajustarAsPreferencias(ajustado, [400]);
+    assert.equal(ajustado.jan, 'h500|h610');
   });
 
   it('no editor, os horários vão das 06:00 às 16:30 (o último que cabe um voo de 1 h antes do noturno)', () => {

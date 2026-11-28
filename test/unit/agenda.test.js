@@ -6,7 +6,7 @@ import { MIS, ALL_EQ_TYPES } from '../../js/config.js';
 import { HORARIOS_INICIAIS } from '../../js/horarios.js';
 import { prazoDaAgendaPermite, primeiraDataAberta, datasParaRegistrar, disponibilidadeDaSolicitacao, pedidoDaSolicitacao, recursosDaMissao, recursoValido, RECURSO_DO_PEDIDO,
   situacaoDaSolicitacao, solicitacaoAprovada, resumoDasSolicitacoes, situacaoNaDemanda, solicitacoesParaImportar, contagemPorDia, motivoSemEntrada,
-  opcoesDaSegundaPreferencia, novidadesDasSolicitacoes, temNovidades, textoDasNovidades, agoraEmSaoPaulo } from '../../js/agenda.js';
+  opcoesDaSegundaPreferencia, novidadesDasSolicitacoes, temNovidades, textoDasNovidades, agoraEmSaoPaulo, preferenciasDaSolicitacao } from '../../js/agenda.js';
 
 const em = iso => new Date(iso);
 
@@ -80,6 +80,22 @@ describe('Agenda de solicitações', () => {
       { fly: true, mis: 'Multimotor', eq: 'PA-34', p1: 450, p2: 450, nb: 1, ss: 1, pr: 3, jan: 'h450' });
     const manhaPa34 = pedidoDaSolicitacao({ missao: 'Multimotor', janela: 'manha' });
     assert.deepEqual([manhaPa34.p1, manhaPa34.p2, manhaPa34.jan], [510, 630, undefined]);
+  });
+
+  // U1 (Pedro, 2026-11-26: "Second exact time"): a 2ª preferência (horario2, D1) é outro horário exato: o pedido fica com
+  // os dois (jan h<m1>|h<m2>, o 1º primeiro) e as preferências são eles, na ordem do pedido
+  it('a 2ª preferência do pedido: jan com os dois horários e as preferências neles (U1)', () => {
+    const lista = [390, 450, 500, 610, 720, 820, 900];
+    assert.deepEqual(preferenciasDaSolicitacao({ missao: 'Voo Local', janela: 'horario', horario: '10:10', horario2: '08:20' }, lista), { p1: 610, p2: 500, jan: 'h610|h500' });
+    assert.deepEqual(preferenciasDaSolicitacao({ missao: 'Voo Local', janela: 'horario', horario: '08:20', horario2: null }, lista), { p1: 500, p2: 500, jan: 'h500' });
+    assert.deepEqual(preferenciasDaSolicitacao({ missao: 'Voo Local', janela: 'horario', horario: '08:20', horario2: '08:20' }, lista), { p1: 500, p2: 500, jan: 'h500' }, 'o mesmo horário duas vezes é um');
+    assert.deepEqual(preferenciasDaSolicitacao({ missao: 'Voo Local', janela: 'horario', horario: '08:20', horario2: '18:00' }, lista), { p1: 500, p2: 500, jan: 'h500' }, 'o 2º fora dos horários exatos do dia não vale');
+    assert.deepEqual(preferenciasDaSolicitacao({ missao: 'Voo Local', janela: 'horario', horario: '06:00', horario2: '10:10' }, lista), { p1: 500, p2: 610 }, 'sem o 1º, nenhum horário exato');
+    // O 2º que a lista do recurso não tem fica no jan (N14: o motor o recusa nele); a preferência fica no 1º
+    assert.deepEqual(preferenciasDaSolicitacao({ missao: 'Voo Local', janela: 'horario', horario: '08:20', horario2: '08:50' }, lista), { p1: 500, p2: 500, jan: 'h500|h530' });
+    assert.equal(disponibilidadeDaSolicitacao({ janela: 'horario', horario: '08:20', horario2: '10:10' }), 'h500|h610');
+    assert.deepEqual(pedidoDaSolicitacao({ missao: 'Voo Local', janela: 'horario', horario: '08:20', horario2: '10:10', recurso: 'C152' }),
+      { fly: true, mis: 'Voo Local', eq: 'C152', p1: 500, p2: 610, nb: 1, ss: 1, pr: 3, jan: 'h500|h610' });
   });
 
   // O Ground tem 01h30 e o Noturno, 4 h às 17:30 (o translado e o noturno em BH): nem a agenda nem o programa mudam isso

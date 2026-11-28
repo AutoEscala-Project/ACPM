@@ -383,6 +383,24 @@ describe('A disponibilidade do pedido e a lista do conflito', () => {
     }
   });
 
+  // U1: o pedido de dois horários exatos (h<m1>|h<m2>) cancelado num deles: o outro é um horário dele, oferecido antes dos
+  // de fora (sem a confirmação com o aluno, e o pedido fica como está); fora dos dois, a confirmação e o jan desse minuto
+  it('o pedido de dois horários exatos cancelado num deles: o outro é dele, antes de "Confirme com o aluno" (U1)', () => {
+    const { estado, resultado, voo } = cancelado(cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, { p1: 690, p2: 870, jan: 'h690|h870' })] }), 1000, 'Meteorologia');
+    assert.equal(hm(voo.a), '11:30');
+    const opcoes = sugerirParaCancelado(estado, resultado, voo.fKey).opcoes;
+    assert.equal(hm(opcoes[0].mudancas.a), '14:30', opcoes.map(o => o.texto).join(' | '));
+    assert.equal(opcoes[0].confirmar, undefined);
+    assert.equal((opcoes[0].pedido || {}).jan, undefined, 'o outro horário dele não muda o pedido');
+    const fora = opcoes.filter(o => ![690, 870].includes(o.mudancas.a));
+    assert.ok(fora.length > 0);
+    for (const o of fora) {
+      assert.match(o.confirmar, /^Confirme com o aluno: às \d\d:\d\d, fora da disponibilidade do pedido[.,]/, o.texto);
+      assert.equal(o.pedido.jan, `h${o.mudancas.a}`, 'fora dos dois, o pedido passa a ser esse horário');
+    }
+    assert.ok(opcoes.indexOf(fora[0]) > 0);
+  });
+
   it('o conflito sem nada no mesmo horário nem depois ganha o horário mais perto antes, dentro da disponibilidade', () => {
     // O instrutor só pode até as 12:00 (período da tarde fechado para ele): o voo das 14:30 não tem nada depois
     const base = cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, { p1: 870, p2: -1 })] });

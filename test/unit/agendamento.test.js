@@ -933,12 +933,29 @@ describe('Agendamento: os voos de hoje do aluno (mover e encaixar)', () => {
   });
 
   it('mover pede confirmação: a disponibilidade do aluno que não inclui o horário novo, o voo da escala aprovada e a ordem do curso no horário novo', () => {
-    // O pedido da Agenda às 06:30: às 13:40 o horário sai do pedido (sem conflito na simulação)
+    // O pedido da Agenda às 06:30: às 13:40 o pedido passa a ser às 13:40 (N14: a mudança do operador substitui o horário;
+    // sem conflito na simulação)
     const manha = doDia({ s1000: { jan: 'h390', etapa: 'IN-01', cursoDaEtapa: 'PP' } });
     const tarde = agendar(manha, { escolhas: { aluno: 1000, horario: 820 }, tocados: ['horario'] });
     assert.deepEqual(tarde.avaliacao.avisos.map(a => [a.codigo, a.texto, a.resumo]), [
-      ['disponibilidade-do-aluno', 'Aluno 1000 pediu o horário às 06:30: agendado às 13:40, o pedido fica sem o horário.', 'fora da disponibilidade do aluno']
+      ['disponibilidade-do-aluno', 'Aluno 1000 pediu o horário às 06:30: agendado às 13:40, o pedido passa a ser às 13:40.', 'fora da disponibilidade do aluno']
     ]);
+    const movido = structuredClone(manha);
+    aplicarAgendamento(movido, null, tarde.formulario.proposta);
+    assert.equal(movido.stu[0].jan, 'h820', 'o horário exato do pedido é o minuto novo');
+    // U1: com dois horários exatos, mover para o outro dos dois não muda o pedido nem avisa; para fora dos dois, ele passa a
+    // ser esse minuto
+    const dois = doDia({ s1000: { p1: 390, p2: 610, jan: 'h390|h610', etapa: 'IN-01', cursoDaEtapa: 'PP' } });
+    const noOutro = agendar(dois, { escolhas: { aluno: 1000, horario: 610 }, tocados: ['horario'] });
+    assert.deepEqual(codigos(noOutro.avaliacao.avisos), []);
+    const realOutro = structuredClone(dois);
+    aplicarAgendamento(realOutro, null, noOutro.formulario.proposta);
+    assert.equal(realOutro.stu[0].jan, 'h390|h610');
+    const foraDosDois = agendar(dois, { escolhas: { aluno: 1000, horario: 820 }, tocados: ['horario'] });
+    assert.deepEqual(foraDosDois.avaliacao.avisos.map(a => a.texto), ['Aluno 1000 pediu o horário às 06:30 ou às 10:10: agendado às 13:40, o pedido passa a ser às 13:40.']);
+    const realFora = structuredClone(dois);
+    aplicarAgendamento(realFora, null, foraDosDois.formulario.proposta);
+    assert.equal(realFora.stu[0].jan, 'h820');
     assert.deepEqual(codigos(pararia(tarde.avaliacao)), []);
     // Na escala aprovada, o voo fixo muda de lugar
     const aprovada = doDia({ s1000: { etapa: 'IN-01', cursoDaEtapa: 'PP' } });

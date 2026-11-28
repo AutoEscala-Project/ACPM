@@ -775,6 +775,23 @@ describe('O editor do voo: a segunda revisão', async () => {
     assert.equal(copia.stu[2].jan, undefined);
   });
 
+  // U1: o pedido de dois horários exatos (h<m1>|h<m2>): o voo movido para o outro dos dois deixa o pedido como está; para
+  // fora dos dois, o pedido passa a ser esse minuto (a mudança do operador substitui o horário, N14)
+  it('o pedido de dois horários exatos: para o outro dos dois, fica; para fora dos dois, passa a ser esse minuto (U1)', () => {
+    const S = dia();
+    Object.assign(S.stu[2], { p1: 610, p2: 820, jan: 'h610|h820' });
+    const RES = runAllocationEngine(S);
+    const voo = vooParaEditar(S, RES, '1002_0_1');
+    assert.equal(voo.valores.a, 610);
+    const para = a => {
+      const copia = structuredClone(S);
+      const feito = aplicarEdicao(copia, RES, voo, { ...structuredClone(voo.valores), a }, { aprovada: false });
+      return [copia.stu[2].jan, feito.janSaiu];
+    };
+    assert.deepEqual(para(820), ['h610|h820', false]);
+    assert.deepEqual(para(900), ['h900', false]);
+  });
+
   it('a reversão adulterada: cada pedido tem o voo dele na reversão', () => {
     const { S, RES } = aprovado();
     const voo = vooParaEditar(S, RES, '1001_0_1');

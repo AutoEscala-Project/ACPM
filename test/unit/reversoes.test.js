@@ -159,6 +159,9 @@ describe('Reversões do histórico', () => {
   it('os horários: a categoria da lista, horários do dia e os pedidos nos formatos do app', () => {
     const rev = { kind: 'restaurarHorarios', cat: 'PA-34', lista: [390, 450], pedidos: [{ stuId: 1000, mid: 0, p1: 450, p2: -1 }, { stuId: 1001, mid: 2, p1: 500, p2: 610, jan: 'h500' }], label: '↶ Reverter' };
     assert.deepEqual(validarReversao(rev, FROTA_INICIAL), rev);
+    // U1: o pedido de dois horários exatos (h<m1>|h<m2>) volta com os dois
+    const dois = { ...rev, pedidos: [{ stuId: 1001, mid: 2, p1: 500, p2: 610, jan: 'h500|h610' }] };
+    assert.deepEqual(validarReversao(dois, FROTA_INICIAL), dois);
     assert.deepEqual(validarReversao({ ...rev, pedidos: [] }, FROTA_INICIAL), { ...rev, pedidos: [] });
     for (const ruim of [{ cat: 'Sala' }, { lista: [390, 2000] }, { lista: 'x' }, { pedidos: [{ stuId: 0, mid: 0, p1: 1, p2: 1 }] },
       { pedidos: [{ stuId: 1, mid: 0, p1: 450, p2: -1, jan: '<img>' }] }, { pedidos: 'x' }]) {
@@ -209,6 +212,9 @@ describe('Desfazer um voo agendado na Escala', () => {
     const completo = { ...MOVIDO, pedido: { ...ANTES, jan: 'h500', solicitacao: 12, cursoDaEtapa: 'PP', limiteConfirmado: true } };
     assert.deepEqual(Object.keys(completo.pedido).sort(), [...CAMPOS_DO_PEDIDO].sort());
     assert.deepEqual(validarReversao(completo, FROTA_INICIAL), completo);
+    // U1: o pedido de antes com os dois horários exatos volta com os dois
+    const comDois = { ...MOVIDO, pedido: { ...ANTES, jan: 'h500|h610' } };
+    assert.deepEqual(validarReversao(comDois, FROTA_INICIAL).pedido.jan, 'h500|h610');
     assert.equal(validarReversao({ ...NOVO, label: 'x'.repeat(40) }, FROTA_INICIAL).label, 'x'.repeat(40));
   });
 
