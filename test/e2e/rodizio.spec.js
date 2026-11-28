@@ -1,5 +1,5 @@
 // Aba Rodízio: as filas de cada categoria, os botões para ajustar a ordem e o efeito na escala.
-import { test, comHangar, expect, abrir, irPara, abrirEscala, lerEscala, linhaDoInstrutor } from './fixtures.js';
+import { test, comHangar, expect, abrir, irPara, abrirEscala, lerEscala, voosNaLinha } from './fixtures.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
 
 const doC172 = id => instrutor(id, 1, { hab: ['local', 'noturno', 'c172'] });
@@ -63,5 +63,5 @@ comHangar('o voo cancelado não conta no Rodízio, nos Recursos nem nos Instruto
   await irPara(page, 'rec');
   await expect(page.locator('#hangar li[data-id="PP-ABP"]')).not.toContainText('voo nesta data');
   await irPara(page, 'ins');
-  await expect(linhaDoInstrutor(page, '1').locator('td.voos')).toHaveText('');
+  await expect(voosNaLinha(page, 1)).toHaveCount(0);
 });

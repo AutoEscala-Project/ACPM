@@ -72,6 +72,17 @@ describe('Glossário', () => {
 
   // A tela mostra a prioridade com 1 a mais alta (a guardada continua com 5 a mais alta: js/rules.js, prioridadeNaTela)
   // Alunos (passo A): o nome completo (dado pessoal, fora da escala) e as missões do aluno, com o progresso ligado
+  // C, "tela": os termos de INVAs; o "turno" saiu (os três turnos são faixas prontas, com os horários no botão), e as
+  // faixas ("Pode decolar") e a pausa entraram; as colunas da grade ("Voos", "Mês") saíram com ela
+  it('os termos da tela INVAs, na ordem do bloco dela, sem o turno', () => {
+    const daAba = Object.entries(INTEIRO).filter(([, t]) => t.aba === 'INVAs').map(([id]) => id);
+    assert.deepEqual(daAba, ['vem-nesta-data', 'faixas', 'pausa', 'checador', 'filtro-das-habilitacoes', 'fora-do-app', 'limites-da-lei']);
+    for (const id of ['turno', 'voos-do-instrutor', 'horas-do-mes']) assert.equal(Object.hasOwn(INTEIRO, id), false, id);
+    assert.ok(!ABAS_DO_GLOSSARIO.includes('Instrutores'));
+    assert.match(INTEIRO.faixas.texto, /o voo inteiro dele cabe numa faixa/);
+    assert.match(INTEIRO.pausa.texto, /não voa/);
+  });
+
   it('os termos da tela Alunos, na ordem do bloco dela', () => {
     const daAba = Object.entries(INTEIRO).filter(([, t]) => t.aba === 'Alunos').map(([id]) => id);
     assert.deepEqual(daAba, ['voa-com', 'nao-escalar-com', 'progresso', 'missao-anterior', 'missao-atual', 'resultado-sem-voo', 'colocar-no-curso', 'inativo', 'filtro-dos-cursos', 'nome-completo']);

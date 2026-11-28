@@ -356,8 +356,9 @@ describe('Os horários fechados no dia', () => {
   });
 });
 
-// C (commit "dados", formato 29): o dia leva as faixas e as pausas de cada instrutor por separar, juntar e diaParaCopiar,
-// com o aw (que a grade de Instrutores ainda muda até a tela do C); o instrutor sem elas continua sem elas (lido pelo aw)
+// C (commit "dados", formato 29): o dia leva as faixas e as pausas de cada instrutor por separar, juntar e diaParaCopiar;
+// o instrutor sem elas continua sem elas (lido pelo aw). Com a tela do C, o aw não é mais gravado para quem tem faixas
+// (nada o muda nem o lê), e a data nova não leva o aw: cada instrutor dela tem as faixas (as do aw, para quem não as tinha)
 describe('As faixas e as pausas dos instrutores no dia', () => {
   const comFaixas = () => {
     const estado = estadoSintetico();
@@ -367,7 +368,7 @@ describe('As faixas e as pausas dos instrutores no dia', () => {
 
   it('separar e juntar levam as faixas e as pausas, normalizadas; sem elas, nada', () => {
     const { cadastro, dia } = separar(comFaixas());
-    assert.deepEqual(dia.ins[1], { on: true, aw: Array(9).fill(true), faixas: [{ de: 390, ate: 760 }, { de: 820, ate: 1440 }], pausas: [{ de: 760, ate: 820 }] });
+    assert.deepEqual(dia.ins[1], { on: true, faixas: [{ de: 390, ate: 760 }, { de: 820, ate: 1440 }], pausas: [{ de: 760, ate: 820 }] });
     assert.deepEqual(dia.ins[2], { on: true, aw: Array(9).fill(true) });
     assert.equal(Object.hasOwn(cadastro.ins[0], 'faixas') || Object.hasOwn(cadastro.ins[0], 'pausas'), false, 'o cadastro não leva o que é da data');
     const junto = juntar(cadastro, dia);
@@ -383,11 +384,16 @@ describe('As faixas e as pausas dos instrutores no dia', () => {
     assert.deepEqual(junto.ins[0].pausas, []);
   });
 
-  it('a data seguinte começa com as faixas e as pausas da anterior', () => {
-    const { dia } = separar(comFaixas());
+  it('a data seguinte começa com as faixas e as pausas da anterior, sem o aw; quem não tinha faixas ganha as do aw', () => {
+    const estado = comFaixas();
+    estado.ins[1].aw[4] = false;
+    estado.ins[1].on = false;
+    const { dia } = separar(estado);
     const novo = diaParaCopiar(dia);
-    assert.deepEqual([novo.ins[1].faixas, novo.ins[1].pausas], [dia.ins[1].faixas, dia.ins[1].pausas]);
-    assert.equal(Object.hasOwn(novo.ins[2], 'faixas'), false);
+    assert.deepEqual(novo.ins[1], { on: true, faixas: dia.ins[1].faixas, pausas: dia.ins[1].pausas });
+    assert.deepEqual(novo.ins[2], { on: false, faixas: [{ de: 390, ate: 760 }, { de: 820, ate: 1440 }], pausas: [{ de: 760, ate: 820 }] });
+    // O que não é objeto fica como está (a data aberta o lia como o dia todo)
+    assert.equal(diaParaCopiar({ ...dia, ins: { 9: null } }).ins[9], null);
   });
 
   it('normalizeAndMigrateState mantém as faixas e as pausas válidas e tira o resto', () => {

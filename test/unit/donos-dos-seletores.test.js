@@ -25,9 +25,9 @@ const DONOS = [
   // Recursos (B): a disponibilidade do dia e as janelas de operação
   { seletor: '#eqs', achar: /#eqs(?![\w-])/, drivers: ['recursos.js'], testes: ['recursos.spec.js'] },
   { seletor: '#fechamentos', achar: /#fechamentos(?![\w-])/, drivers: ['recursos.js'], testes: ['recursos.spec.js', 'fechamentos.spec.js'] },
-  // Instrutores (C): a grade do dia e o "Vem"
-  { seletor: '#inst-dia', achar: /#inst-dia(?![\w-])/, drivers: ['instrutores.js'], testes: ['instrutores.spec.js'] },
-  { seletor: '#inst-dia-cab', achar: /#inst-dia-cab(?![\w-])/, drivers: ['instrutores.js'], testes: ['instrutores.spec.js'] },
+  // INVAs (C): a lista, o instrutor aberto no detalhe (com os turnos e "Editar faixas") e o "Vem"
+  { seletor: '#ins', achar: /#ins(?![\w-])/, drivers: ['instrutores.js'], testes: ['instrutores.spec.js'] },
+  { seletor: '#det-ins*', achar: /#det-ins(?:[\w-]|\$\{|(?![\w-]))/, drivers: ['instrutores.js'], testes: ['instrutores.spec.js'] },
   { seletor: 'data-f="on"', achar: /data-f="on"/, drivers: ['instrutores.js'], testes: ['instrutores.spec.js'] },
   // A Demanda (G1, G2): o "Voa" de cada pedido
   { seletor: 'data-f="fly"', achar: /data-f="fly"/, drivers: ['demanda.js'], testes: ['demanda.spec.js'] },
@@ -75,6 +75,9 @@ describe('Os donos dos seletores (os testes E2E passam pelos drivers)', () => {
     assert.ok(dt.test('document.getElementById("dt")'));
     assert.ok(!dt.test("document.activeElement.id === 'dt-rotulo'"));
     assert.equal(lidoPeloDom('#ag-*'), null);
+    const det = DONOS.find(d => d.seletor === '#det-ins*').achar, lista = DONOS.find(d => d.seletor === '#ins').achar;
+    assert.ok(det.test("page.locator('#det-ins-turno-dia')") && det.test("page.locator('#det-ins .det')"));
+    assert.ok(lista.test("page.locator('#ins > li')") && !lista.test("page.locator('#ins-contagem')") && !lista.test("irPara(page, '#/ins')"));
   });
 
   for (const { seletor, achar, drivers, testes = [] } of DONOS) {

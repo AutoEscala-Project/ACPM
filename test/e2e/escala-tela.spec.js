@@ -1,5 +1,5 @@
 // Tela da Escala: Lista, Por recurso ou Por instrutor; resumo com erros e avisos agrupados; uma linha por voo.
-import { test, comPrioridade, expect, abrir, abrirComExemplo, abrirEscala, irPara, irParaVista, lerEscala, alternarDisponivel, alvosPequenos, larguraDaPagina, appPronto, AMANHA, prepararContexto, vigiarErros, entrar, importarDaAgenda, abrirCaixa, editorDoVoo, refazer, confirmarAgendamento, aprovar } from './fixtures.js';
+import { test, comPrioridade, expect, abrir, abrirComExemplo, abrirEscala, irPara, lerEscala, alternarDisponivel, alvosPequenos, larguraDaPagina, appPronto, AMANHA, prepararContexto, vigiarErros, entrar, importarDaAgenda, abrirCaixa, editorDoVoo, refazer, confirmarAgendamento, aprovar, abrirInstrutor, habilitacaoDoInstrutor } from './fixtures.js';
 import { criarSupabaseFalso, documentosAtuais, CONTAS } from './supabase-falso.js';
 import { IDS } from '../helpers/casos-do-programa.js';
 import { cursosIniciais, gravarCurso } from '../../js/programa.js';
@@ -937,10 +937,8 @@ test.describe('O que a missão do curso exige do INVA, na Escala', () => {
     expect((await lerEscala(page)).linhas.filter(l => l.includes('Aluno 1000'))).toEqual([]);
     // Marcada no INVA 01 (nível 9): sem a exigência, o desempate pelas menos habilitações daria o voo ao 02 (nível 1), então
     // só ela leva o voo ao 01
-    await irParaVista(page, 'ins', 'cadastro');
-    await page.locator('#inst .cd[data-id="1"] [data-act="editar-habs"]').click();
-    await page.locator('#painel-instrutor [data-f="hab"][data-h="endosso_solo"]').check();
-    await page.locator('#btn-fechar-painel-instrutor').click();
+    await abrirInstrutor(page, 1);
+    await habilitacaoDoInstrutor(page, 'endosso_solo').check();
     await abrirEscala(page, { vista: 'lista' });
     const voos = (await lerEscala(page)).linhas.filter(l => l.includes('Aluno 1000'));
     expect(voos).toHaveLength(1);

@@ -1,6 +1,6 @@
 // Recursos: a disponibilidade do dia (janelas, aviões e simuladores, hangar), o cadastro da frota, os horários de
 // decolagem por categoria e os filtros.
-import { test, comHangar, expect, abrir, abrirSintetico, abrirComExemplo, irPara, irParaVista, abrirEscala, lerEscala, filtrarCategorias, abrirHistorico, campoDaAgenda, alternarDisponivel, caixaDisponivel, horariosFechados, fecharHorarios, tabelaDoDia } from './fixtures.js';
+import { test, comHangar, expect, abrir, abrirSintetico, abrirComExemplo, irPara, irParaVista, abrirEscala, lerEscala, filtrarCategorias, abrirHistorico, campoDaAgenda, alternarDisponivel, caixaDisponivel, horariosFechados, fecharHorarios, tabelaDoDia, linhasDosInstrutores } from './fixtures.js';
 import { aluno, apenas, cenario, instrutor } from '../helpers/montar.js';
 import { GLOSSARIO } from '../../js/glossario.js';
 
@@ -12,8 +12,9 @@ test.describe('Recursos', () => {
     await expect(tabelaDoDia(page).locator('input[data-a="av"]')).toHaveCount(27);
     await expect(tabelaDoDia(page).locator('tr.grupo')).toHaveText([/^C152/, /^C172/, /^PA-34/, /^Simuladores/, /^Sala Ground/]);
     await expect(tabelaDoDia(page).locator('tr[data-r="PR-JPL"]')).toContainText('Só Parafuso');
-    await expect(page.locator('#inst .cd')).toHaveCount(0);
-    await expect(page.locator('#inst')).toContainText('Nenhum instrutor cadastrado');
+    await expect(linhasDosInstrutores(page)).toHaveCount(0);
+    await irPara(page, 'ins');
+    await expect(page.locator('#s-ins')).toContainText('Nenhum instrutor cadastrado');
     await irPara(page, 'alu');
     await expect(page.locator('#alu')).toContainText('Nenhum aluno cadastrado');
   });

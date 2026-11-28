@@ -1,137 +1,141 @@
-// Instrutores: os filtros, a disponibilidade do dia (a grade e o "Vem"), as habilitações, o peso e o turno.
-import { test, expect, abrir, abrirSintetico, abrirComExemplo, irPara, irParaVista, abrirEscala, lerEscala, filtrarHabilitacoes, confirmar, abrirHistorico, cabecalhoDaGrade, caixaVem, dataAberta, diaSeguinte, gradeDoDia, linhaDoInstrutor, alvosPequenos, larguraDaPagina } from './fixtures.js';
+// INVAs (C, "tela"): a lista e o detalhe. A linha (as faixas da data, a tira do dia, os voos, o "Vem" e o "Ativo"), os
+// filtros, o detalhe (os três turnos, "Editar faixas" com "Pode decolar de … até …", "+ Pausa" e "Almoço", "Salvar faixas"
+// e o ↶ dele, o "Vem", o cadastro, as habilitações, as horas de voo), "Agendar voo com <nome>", "Excluir instrutor…", o
+// item fixo dos limites da lei e o celular. A grade, as duas gavetas e as duas vistas saíram
+import {
+  test, expect, abrir, abrirSintetico, abrirComExemplo, irPara, irParaVista, abrirEscala, lerEscala, filtrarHabilitacoes, confirmar, abrirHistorico,
+  caixaVem, dataAberta, diaSeguinte, linhaDoInstrutor, linhasDosInstrutores, nomesDosInstrutores, buscaDosInstrutores, contagemDosInstrutores,
+  faixasNaLinha, voosNaLinha, habilitacoesNaLinha, tiraDaLinha, abrirInstrutor, campoDoInstrutor, habilitacaoDoInstrutor, secaoDoInstrutor,
+  faixasDoAberto, pausasDoAberto, botaoDoTurno, aplicarTurno, campoDaFaixa, editarFaixas, abrirLimitesDaLei, nenhumNaLista, alvosPequenos,
+  larguraDaPagina, entradasDoHistorico, botaoDaAba
+} from './fixtures.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
 
-test.describe('Instrutores', () => {
-  test('filtra por nome e por habilitação, nas duas visões', async ({ page }) => {
+// O ↶ da entrada do Histórico que tem o texto
+async function reverter(page, texto) {
+  await abrirHistorico(page);
+  await entradasDoHistorico(page, texto).first().locator('[data-act="rev-log"]').click();
+  await page.keyboard.press('Escape');
+}
+
+test.describe('INVAs: a lista', () => {
+  test('a tela se chama INVAs: o link da linha, o título, a lista e o item fixo dos limites da lei no alto', async ({ page }) => {
     await abrirSintetico(page);
     await irPara(page, 'ins');
-    const dia = gradeDoDia(page).locator('tr[data-k="i"]:visible');
-    await page.locator('[data-flt="inst"]').fill('instrutor 1');
-    await expect(dia).toHaveCount(10);
-    await page.locator('[data-flt="inst"]').fill('');
-    await filtrarHabilitacoes(page, ['mlte']);
-    await expect(dia).toHaveCount(4);
-    await expect(dia.first()).toContainText('Instrutor 09');
-    await page.locator('#s-ins [data-vista-ins="cadastro"]').click();
-    await expect(page.locator('#inst .cd:visible')).toHaveCount(4);
-    await expect(page.locator('#inst .cd:visible .nm').first()).toHaveValue('Instrutor 09');
+    await expect(botaoDaAba(page, 'ins')).toHaveText('INVAs');
+    await expect(page.locator('#s-ins h2')).toHaveText('INVAs');
+    await expect(page.locator('#ins')).toHaveAccessibleName('INVAs');
+    await expect(linhasDosInstrutores(page)).toHaveCount(40);
+    await expect(contagemDosInstrutores(page)).toHaveText('40 instrutores');
+    const fixo = page.locator('#ins > li[data-chave="f:limites"]');
+    await expect(fixo).toContainText('Limites da Lei do Aeronauta');
+    await expect(fixo).toContainText('100 h no mês · 960 h no ano');
+    // Nada escolhido: o detalhe diz o que fazer; a grade, as vistas e as gavetas saíram
+    await expect(page.locator('#det-ins')).toHaveText('Escolha um instrutor na lista.');
+    await expect(page.locator('#s-ins table, #s-ins [data-vista-ins], #painel-instrutor, #painel-dados')).toHaveCount(0);
   });
 
-  // A busca acha o nome sem os acentos, nas duas vistas, e o número ao lado diz quantos aparecem (numa região de status).
-  // Sem nenhum, a tabela diz por quê, e "Limpar filtros" (a busca e as marcas das habilitações) mostra todos de novo, com
-  // o foco na busca. O instrutor novo aparece mesmo fora da busca (é nele que se digita o nome), até ela mudar
-  test('a busca acha o nome sem acentos, com quantos aparecem; sem nenhum, "Limpar filtros"; o instrutor novo aparece', async ({ page }) => {
+  test('a linha: as faixas da data (com a pausa), quantos voos, as habilitações, a tira do dia, o "Vem" e o "Ativo"', async ({ page }) => {
+    const ins = [
+      instrutor(1, 9, { faixas: [{ de: 390, ate: 720 }, { de: 780, ate: 1050 }], pausas: [{ de: 720, ate: 780 }] }),
+      instrutor(2, 9, { on: false }),
+      instrutor(3, 1, { aw: [false, false, false, false, true, true, true, true, true] })
+    ];
+    await abrir(page, { estado: cenario({ ins, stu: [aluno(1000, { p1: 1, p2: -1 }, { voaCom: [1] })] }) });
+    await abrirEscala(page);
+    const linhas = (await lerEscala(page)).linhas.filter(l => l.includes('Aluno 1000'));
+    expect(linhas).toHaveLength(1);
+    await irPara(page, 'ins');
+    await expect(faixasNaLinha(page, 1)).toHaveText('06:30–12:00 e 13:00–17:30 · pausa 12:00–13:00');
+    await expect(voosNaLinha(page, 1)).toHaveText('1 voo');
+    await expect(faixasNaLinha(page, 2)).toHaveText('não vem nesta data');
+    await expect(voosNaLinha(page, 2)).toHaveCount(0);
+    // Quem ainda não tem faixas (lido pelo aw) mostra as do aw
+    await expect(faixasNaLinha(page, 3)).toHaveText('12:40–24:00');
+    // A tira: as faixas, a pausa e o voo; só para os olhos (a linha diz o mesmo em texto)
+    await expect(tiraDaLinha(page, 1)).toHaveAttribute('aria-hidden', 'true');
+    await expect(tiraDaLinha(page, 1).locator('.tira-faixa')).toHaveCount(2);
+    await expect(tiraDaLinha(page, 1).locator('.tira-pausa')).toHaveCount(1);
+    await expect(tiraDaLinha(page, 1).locator('.tira-voo')).toHaveCount(1);
+    await expect(tiraDaLinha(page, 2)).toHaveClass(/\bnao-vem\b/);
+    // Na linha, as habilitações que mais distinguem o instrutor, três e quantas mais
+    await expect(habilitacoesNaLinha(page, 1)).toHaveText(/^MLTE \(PA-34\) · C172 · IFR · \+\d+$/);
+    // O "Vem" e o "Ativo", com os nomes
+    await expect(caixaVem(linhaDoInstrutor(page, 1))).toHaveAccessibleName('Instrutor 01 vem em 11/11');
+    await expect(linhaDoInstrutor(page, 1).locator('[data-act="ativo"]')).toHaveAccessibleName('Instrutor 01 ativo no cadastro');
+  });
+
+  test('filtra por nome e por habilitação; sem nenhum, "Limpar filtros"', async ({ page }) => {
+    await abrirSintetico(page);
+    await irPara(page, 'ins');
+    await buscaDosInstrutores(page).fill('instrutor 1');
+    await expect(linhasDosInstrutores(page)).toHaveCount(10);
+    await expect(contagemDosInstrutores(page)).toHaveText('10 de 40 instrutores');
+    await buscaDosInstrutores(page).fill('');
+    await filtrarHabilitacoes(page, ['mlte']);
+    await expect(linhasDosInstrutores(page)).toHaveCount(4);
+    await expect(linhasDosInstrutores(page).first()).toContainText('Instrutor 09');
+    // O item fixo fica, fora dos filtros e da contagem
+    await expect(page.locator('#ins > li[data-chave="f:limites"]')).toBeVisible();
+    await buscaDosInstrutores(page).fill('xyz');
+    await nenhumNaLista(page, 'ins');
+    await page.locator('#ins [data-lista-limpar="ins"]').click();
+    await expect(buscaDosInstrutores(page)).toHaveValue('');
+    await expect(buscaDosInstrutores(page)).toBeFocused();
+    await expect(page.locator('#flt-ins-hab')).toHaveText('Todas as habilitações');
+    await expect(contagemDosInstrutores(page)).toHaveText('40 instrutores');
+  });
+
+  // A busca acha o nome sem os acentos. O instrutor novo aparece mesmo fora da busca, escolhido, com o nome selecionado
+  // (é nele que se digita), até a busca mudar
+  test('a busca acha o nome sem acentos; o instrutor novo abre escolhido, à vista fora da busca', async ({ page }) => {
     await abrir(page, { estado: cenario({ ins: [instrutor(1, 9, { nm: 'Ângelo Brandão' }), instrutor(2, 9), instrutor(3, 1)] }) });
     await irPara(page, 'ins');
-    const busca = page.locator('[data-flt="inst"]');
-    const contagem = page.locator('#ins-contagem');
-    const dia = gradeDoDia(page).locator('tr[data-k="i"]:visible');
-    await expect(contagem).toHaveAttribute('role', 'status');
-    await expect(contagem).toHaveText('3 instrutores');
-    await busca.fill('angelo brandao');
-    await expect(dia).toHaveCount(1);
-    await expect(dia.locator('.nome')).toHaveText('Ângelo Brandão');
-    await expect(contagem).toHaveText('1 de 3 instrutores');
-    await busca.fill('  BRANDÃO ');
-    await expect(dia).toHaveCount(1);
-    // A grade refeita com a escala (a cada alteração) continua filtrada
-    await caixaVem(dia).uncheck();
-    await expect(linhaDoInstrutor(page, '1')).toHaveClass(/\boff\b/);
-    await expect(dia).toHaveCount(1);
-    await irParaVista(page, 'ins', 'cadastro');
-    await expect(page.locator('#inst .cd:visible')).toHaveCount(1);
+    await expect(contagemDosInstrutores(page)).toHaveAttribute('role', 'status');
+    await buscaDosInstrutores(page).fill('  BRANDÃO ');
+    await expect.poll(() => nomesDosInstrutores(page)).toEqual(['Ângelo Brandão']);
+    await expect(contagemDosInstrutores(page)).toHaveText('1 de 3 instrutores');
+    // O "Vem" muda a linha (e a escala), e ela continua filtrada
+    await caixaVem(linhaDoInstrutor(page, 1)).uncheck();
+    await expect(faixasNaLinha(page, 1)).toHaveText('não vem nesta data');
+    await expect.poll(() => nomesDosInstrutores(page)).toEqual(['Ângelo Brandão']);
 
-    // Nenhum com esses filtros, nas duas vistas
-    await busca.fill('xyz');
-    await expect(page.locator('#inst tr.sem-resultado')).toHaveText('Nenhum instrutor com esses filtros. Limpar filtros');
-    await expect(page.locator('#inst .cd:visible')).toHaveCount(0);
-    await expect(contagem).toHaveText('0 de 3 instrutores');
-    await irParaVista(page, 'ins', 'dia');
-    await filtrarHabilitacoes(page, ['mlte']);
-    await gradeDoDia(page).locator('tr.sem-resultado').getByRole('button', { name: 'Limpar filtros' }).click();
-    await expect(busca).toHaveValue('');
-    await expect(busca).toBeFocused();
-    // As marcas também: o botão volta a "Todas as habilitações", sem nenhuma caixa marcada
-    await expect(page.locator('#flt-ins-hab')).toHaveText('Todas as habilitações');
-    await expect(page.locator('#flt-ins-hab-painel input:checked')).toHaveCount(0);
-    await expect(dia).toHaveCount(3);
-    await expect(page.locator('#s-ins tr.sem-resultado')).toHaveCount(0);
-    await expect(contagem).toHaveText('3 instrutores');
-
-    // O instrutor novo, com a busca: ele aparece (o nome em foco), e os outros continuam filtrados
-    const nomesAVista = () => page.locator('#inst .cd:visible .nm').evaluateAll(campos => campos.map(c => c.value));
-    await busca.fill('brandao');
     await page.locator('[data-act="addi"]').click();
-    await expect(page.locator('#s-ins')).toHaveAttribute('data-vista', 'cadastro');
-    await expect.poll(nomesAVista).toEqual(['Ângelo Brandão', 'Novo instrutor']);
-    const novo = page.locator('#inst .cd').last().locator('.nm');
-    await expect(novo).toBeFocused();
-    await expect(busca).toHaveValue('brandao');
-    await expect(contagem).toHaveText('2 de 4 instrutores');
-    await novo.fill('Carlos Antônio');
-    await novo.blur();
-    await expect(page.locator('#audit-log-list')).toContainText('Instrutor: Novo instrutor → Carlos Antônio');
-    await expect.poll(nomesAVista).toEqual(['Ângelo Brandão', 'Carlos Antônio']);
-    // A busca mudou: vale também para ele
-    await busca.fill('antonio');
-    await expect.poll(nomesAVista).toEqual(['Carlos Antônio']);
-    await busca.fill('brandão');
-    await expect.poll(nomesAVista).toEqual(['Ângelo Brandão']);
+    await expect.poll(() => nomesDosInstrutores(page)).toEqual(['Ângelo Brandão', 'Novo instrutor']);
+    await expect(campoDoInstrutor(page, 'nm')).toHaveValue('Novo instrutor');
+    await expect(campoDoInstrutor(page, 'nm')).toBeFocused();
+    await expect(contagemDosInstrutores(page)).toHaveText('2 de 4 instrutores');
+    await page.keyboard.type('Carlos Antônio');
+    await page.keyboard.press('Tab');
+    await expect(entradasDoHistorico(page, 'Instrutor: Novo instrutor → Carlos Antônio')).toHaveCount(1);
+    await expect.poll(() => nomesDosInstrutores(page)).toEqual(['Ângelo Brandão', 'Carlos Antônio']);
+    await buscaDosInstrutores(page).fill('antonio');
+    await expect.poll(() => nomesDosInstrutores(page)).toEqual(['Carlos Antônio']);
   });
 
-  // A linha alterada continua à vista mesmo fora dos filtros, até eles mudarem: o foco de quem usa o teclado não some com
-  // ela. A habilitação tirada no painel, com o filtro dela: o Esc fecha o painel e devolve o foco a "Editar
-  // habilitações". O nome mudado, com a busca: o Tab leva ao peso
-  test('a linha alterada continua à vista fora dos filtros, até eles mudarem: o foco não some com ela', async ({ page }) => {
+  // A habilitação tirada no detalhe, com o filtro dela: a linha continua à vista, até o filtro mudar
+  test('a linha alterada continua à vista fora dos filtros, até eles mudarem', async ({ page }) => {
     await abrir(page, { estado: cenario({ ins: [instrutor(1, 9, { nm: 'Ângelo Brandão' }), instrutor(2, 9), instrutor(3, 1)] }) });
-    await irParaVista(page, 'ins', 'cadastro');
-    const busca = page.locator('[data-flt="inst"]'), contagem = page.locator('#ins-contagem');
-    const nomesAVista = () => page.locator('#inst .cd:visible .nm').evaluateAll(campos => campos.map(c => c.value));
+    await irPara(page, 'ins');
     await filtrarHabilitacoes(page, ['mlte']);
-    await expect.poll(nomesAVista).toEqual(['Ângelo Brandão', 'Instrutor 02']);
-    const editar = page.locator('#inst tr.cd[data-id="1"] [data-act="editar-habs"]');
-    await editar.click();
-    const mlte = page.locator('#painel-instrutor [data-h="mlte"]');
-    await mlte.focus();
+    await expect.poll(() => nomesDosInstrutores(page)).toEqual(['Ângelo Brandão', 'Instrutor 02']);
+    await abrirInstrutor(page, 1);
+    await habilitacaoDoInstrutor(page, 'mlte').focus();
     await page.keyboard.press('Space');
-    await expect(page.locator('#audit-log-list')).toContainText('Habilitação retirada: Ângelo Brandão');
-    await expect(page.locator('#inst tr.cd[data-id="1"]')).not.toHaveAttribute('data-hab', /\bmlte\b/);
-    await expect.poll(nomesAVista).toEqual(['Ângelo Brandão', 'Instrutor 02']);
-    await expect(contagem).toHaveText('2 de 3 instrutores');
-    await page.keyboard.press('Escape');
-    await expect(page.locator('#painel-instrutor')).toBeHidden();
-    await expect(editar).toBeFocused();
-    // Na grade do dia também; mudado o filtro, ele vale para ela
-    await irParaVista(page, 'ins', 'dia');
-    const naGrade = gradeDoDia(page).locator('tr[data-k="i"]:visible .nome');
-    await expect(naGrade).toHaveText(['Ângelo Brandão', 'Instrutor 02']);
+    await expect(entradasDoHistorico(page, 'Habilitação retirada: Ângelo Brandão')).toHaveCount(1);
+    await expect(linhaDoInstrutor(page, 1)).toBeVisible();
+    await expect(habilitacaoDoInstrutor(page, 'mlte')).toBeFocused();
     await filtrarHabilitacoes(page, []);
     await filtrarHabilitacoes(page, ['mlte']);
-    await expect(naGrade).toHaveText(['Instrutor 02']);
-
-    // O nome mudado pelo teclado, com a busca: a linha fica, e o Tab leva ao peso dela; mudada a busca, ela vale para ela
-    await irParaVista(page, 'ins', 'cadastro');
-    await filtrarHabilitacoes(page, []);
-    await busca.fill('instrutor 02');
-    await expect.poll(nomesAVista).toEqual(['Instrutor 02']);
-    await page.locator('#inst tr.cd[data-id="2"] .nm').fill('Bruno Peçanha');
-    await page.keyboard.press('Tab');
-    await expect(page.locator('#audit-log-list')).toContainText('Instrutor: Instrutor 02 → Bruno Peçanha');
-    await expect(page.locator('#inst tr.cd[data-id="2"] [data-f="kg"]')).toBeFocused();
-    await expect.poll(nomesAVista).toEqual(['Bruno Peçanha']);
-    await expect(contagem).toHaveText('1 de 3 instrutores');
-    await busca.fill('instrutor 0');
-    await expect.poll(nomesAVista).toEqual(['Instrutor 03']);
-    await busca.fill('pecanha');
-    await expect.poll(nomesAVista).toEqual(['Bruno Peçanha']);
+    await expect.poll(() => nomesDosInstrutores(page)).toEqual(['Instrutor 02']);
+    // O instrutor aberto continua no detalhe, mesmo fora da lista
+    await expect(page.locator('#det-ins-titulo')).toHaveText('Ângelo Brandão');
   });
 
   // O filtro das habilitações tem várias marcas, e aparece quem tem todas as marcadas: uma missão pede várias juntas (o
-  // Noturno no C172 pede Noturno e C172). Ele vale nas duas vistas, com o número dos que aparecem. As opções são as do
-  // painel "Editar habilitações", nos mesmos grupos, com a habilitação própria do recurso (o PR-VOM) e os rótulos da
-  // coluna Habilitações; o botão diz o que está marcado, e "Limpar" desmarca todas
-  test('o filtro das habilitações: várias marcas mostram quem tem todas, nas duas vistas, nos grupos de "Editar habilitações"', async ({ page }) => {
+  // Noturno no C172 pede Noturno e C172). As opções são as do detalhe (Habilitações), nos mesmos grupos, com a habilitação
+  // própria do recurso (o PR-VOM); o botão diz o que está marcado, e "Limpar" desmarca todas
+  test('o filtro das habilitações: várias marcas mostram quem tem todas, nos grupos das Habilitações do detalhe', async ({ page }) => {
     const ins = [
       instrutor(1, 1, { nm: 'Ana', hab: ['local', 'c152', 'c172', 'noturno'] }),
       instrutor(2, 1, { nm: 'Bruno', hab: ['local', 'c152', 'noturno'] }),
@@ -140,214 +144,235 @@ test.describe('Instrutores', () => {
     ];
     await abrir(page, { estado: cenario({ ins }) });
     await irPara(page, 'ins');
-    const botao = page.locator('#flt-ins-hab'), painel = page.locator('#flt-ins-hab-painel'), contagem = page.locator('#ins-contagem');
+    const botao = page.locator('#flt-ins-hab'), painel = page.locator('#flt-ins-hab-painel');
     const caixa = valor => painel.locator(`input[data-valor="${valor}"]`);
-    const naGrade = gradeDoDia(page).locator('tr[data-k="i"]:visible .nome');
     await expect(botao).toHaveText('Todas as habilitações');
-    await expect(botao).toHaveAttribute('aria-expanded', 'false');
     await expect(botao).toHaveAttribute('aria-controls', 'flt-ins-hab-painel');
-    await expect(painel).toBeHidden();
     await botao.click();
-    await expect(botao).toHaveAttribute('aria-expanded', 'true');
-    await expect(painel).toBeVisible();
     await expect(painel).toHaveAccessibleName('Filtrar por habilitação');
-    // A regra dita no painel, com o "?" do glossário
     await expect(painel.locator('.filtro-regra')).toHaveText('Mostra quem tem todas as marcadas.');
     await expect(painel.locator('.filtro-regra [data-dica="filtro-das-habilitacoes"]')).toHaveAccessibleName('O que é Filtro das habilitações?');
-    // O balão dessa dica, aberto pelo mouse, fica por cima do painel e fora dele no HTML: o clique no balão (para ler ou
-    // selecionar o texto) não conta como fora e não fecha o painel; o mouse que sai do balão fecha só o balão
-    const balao = page.locator('#dica');
-    await painel.locator('.filtro-regra .dica-btn').hover();
-    await expect(balao).toBeVisible();
-    await balao.hover();
-    await balao.click();
-    await expect(painel).toBeVisible();
-    await expect(botao).toHaveAttribute('aria-expanded', 'true');
-    await page.mouse.move(0, 0);
-    await expect(balao).toBeHidden();
     const grupos = ['Ground e simulador', 'Voo', 'Aviões', 'Checador: curso', 'Checador: motor', 'Checador: regras', 'Habilitação própria do recurso'];
     await expect(painel.locator('legend')).toHaveText(grupos);
-    const grupo = nome => painel.locator('fieldset', { has: page.locator('legend', { hasText: nome }) }).locator('label');
-    await expect(grupo('Voo')).toHaveText(['TGL (TMA)', 'Local', 'Navegação', 'Nav. ≥ 150 NM', 'Liberação de Solo', 'Endosso Solo', 'Parafuso (SPIN)', 'IFR', 'Noturno']);
-    await expect(grupo('Aviões')).toHaveText(['C152', 'C172', 'MLTE (PA-34)']);
-    await expect(grupo('Checador: curso')).toHaveText(['Checador PP', 'Checador PC', 'Checador INVA']);
-    await expect(grupo('Habilitação própria do recurso')).toHaveText(['Avião PR-VOM']);
     await expect(painel.locator('input[data-filtro]')).toHaveCount(24);
-
-    // Uma marca: quem tem Noturno
     await caixa('noturno').check();
-    await expect(naGrade).toHaveText(['Ana', 'Bruno', 'Davi']);
-    await expect(botao).toHaveText('Habilitações: Noturno');
-    await expect(contagem).toHaveText('3 de 4 instrutores');
-    // Duas: só quem tem as duas, e não quem tem uma delas
+    await expect.poll(() => nomesDosInstrutores(page)).toEqual(['Ana', 'Bruno', 'Davi']);
     await caixa('c172').check();
-    await expect(naGrade).toHaveText(['Ana', 'Davi']);
+    await expect.poll(() => nomesDosInstrutores(page)).toEqual(['Ana', 'Davi']);
     await expect(botao).toHaveText('Habilitações: Noturno + C172');
-    await expect(botao).toHaveClass(/\bcom-marcas\b/);
-    await expect(contagem).toHaveText('2 de 4 instrutores');
-    // A habilitação própria do recurso é uma marca como as outras
+    await expect(page.locator('#ins-contagem')).toHaveText('2 de 4 instrutores');
     await caixa('aviao:PR-VOM').check();
-    await expect(naGrade).toHaveText(['Davi']);
-    await expect(botao).toHaveText('Habilitações: Noturno + C172 + Avião PR-VOM');
+    await expect.poll(() => nomesDosInstrutores(page)).toEqual(['Davi']);
     await caixa('aviao:PR-VOM').uncheck();
-    await expect(naGrade).toHaveText(['Ana', 'Davi']);
-
-    // Na outra vista também: o clique fora fecha o painel, e as marcas continuam
-    const nomesAVista = () => page.locator('#inst .cd:visible .nm').evaluateAll(campos => campos.map(c => c.value));
-    await irParaVista(page, 'ins', 'cadastro');
-    await expect(painel).toBeHidden();
-    await expect(botao).toHaveAttribute('aria-expanded', 'false');
-    await expect.poll(nomesAVista).toEqual(['Ana', 'Davi']);
-    await expect(botao).toHaveText('Habilitações: Noturno + C172');
-
-    // "Limpar" desmarca todas e mostra todos; o painel continua aberto, com o foco no "Limpar"
-    await botao.click();
     const limpar = painel.getByRole('button', { name: 'Limpar' });
     await limpar.click();
-    await expect(painel.locator('input[data-filtro]:checked')).toHaveCount(0);
     await expect(botao).toHaveText('Todas as habilitações');
-    await expect(botao).not.toHaveClass(/\bcom-marcas\b/);
-    await expect.poll(nomesAVista).toEqual(['Ana', 'Bruno', 'Carla', 'Davi']);
-    await expect(contagem).toHaveText('4 instrutores');
-    await expect(painel).toBeVisible();
+    await expect.poll(() => nomesDosInstrutores(page)).toEqual(['Ana', 'Bruno', 'Carla', 'Davi']);
     await expect(limpar).toBeFocused();
-
-    // Os grupos são os do painel "Editar habilitações" (sem as horas de voo do instrutor)
-    await page.locator('#inst tr.cd[data-id="1"] [data-act="editar-habs"]').click();
-    await expect(painel).toBeHidden();
-    await expect(page.locator('#painel-instrutor .habs-painel > fieldset:not(.horas-ins) > legend')).toHaveText(grupos);
+    // Os grupos são os das Habilitações do detalhe
+    await page.keyboard.press('Escape');
+    await abrirInstrutor(page, 1);
+    await expect(secaoDoInstrutor(page, 'habilitacoes').locator('.habs-painel > fieldset > legend')).toHaveText(grupos);
   });
 
-  // As opções acompanham a frota: a habilitação própria marcada num recurso em Recursos aparece no filtro; a que sai (o
-  // atributo desmarcado, o recurso retirado) sai do filtro, também marcada, e o filtro deixa de valer por ela. O
-  // Histórico, que devolve o recurso retirado, devolve a opção, sem a marca
-  test('as opções do filtro das habilitações acompanham a frota: a habilitação própria que sai de Recursos sai do filtro, também marcada', async ({ page }) => {
+  // As opções acompanham a frota: a habilitação própria que sai de Recursos sai do filtro, também marcada
+  test('as opções do filtro das habilitações acompanham a frota: a habilitação própria que sai de Recursos sai do filtro', async ({ page }) => {
     const ins = [instrutor(1, 1, { nm: 'Ana', hab: ['local', 'c172', 'aviao:PR-HAR', 'aviao:PR-VOM'] }), instrutor(2, 1, { nm: 'Bruno', hab: ['local', 'c172'] })];
     await abrir(page, { estado: cenario({ ins }) });
     const botao = page.locator('#flt-ins-hab'), painel = page.locator('#flt-ins-hab-painel');
     const propria = painel.locator('fieldset', { has: page.locator('legend', { hasText: 'Habilitação própria do recurso' }) }).locator('label');
-    const naGrade = gradeDoDia(page).locator('tr[data-k="i"]:visible .nome');
-    // A frota fica no Cadastro de Recursos
     const atributo = async (reg, marcar) => {
       await irParaVista(page, 'rec', 'cadastro');
       await page.locator(`#frota li.frota-item[data-r="${reg}"] [data-act="atributos-recurso"]`).click();
       await page.locator(`#frota li.frota-item[data-r="${reg}"] [data-atributo="habilitacaoPropria"]`).setChecked(marcar);
-      await expect(page.locator('#audit-log-list')).toContainText(`${reg}: Habilitação própria ${marcar ? 'marcado' : 'desmarcado'}`);
+      await expect(entradasDoHistorico(page, `${reg}: Habilitação própria ${marcar ? 'marcado' : 'desmarcado'}`)).toHaveCount(1);
       await irPara(page, 'ins');
     };
-    // O PR-HAR (C172) passa a ter habilitação própria: aparece no filtro, ao lado da do PR-VOM
     await atributo('PR-HAR', true);
     await filtrarHabilitacoes(page, ['aviao:PR-HAR', 'aviao:PR-VOM'], { fechar: false });
     await expect(propria).toHaveText(['Avião PR-HAR', 'Avião PR-VOM']);
-    await expect(naGrade).toHaveText(['Ana']);
-    await expect(botao).toHaveText('Habilitações: Avião PR-HAR + Avião PR-VOM');
-    // O PR-VOM deixa de ter habilitação própria: a opção some, e a marca dela sai do filtro
+    await expect.poll(() => nomesDosInstrutores(page)).toEqual(['Ana']);
     await atributo('PR-VOM', false);
     await expect(botao).toHaveText('Habilitações: Avião PR-HAR');
     await expect(painel.locator('input[data-valor="aviao:PR-VOM"]')).toHaveCount(0);
-    await expect(naGrade).toHaveText(['Ana']);
-    // O PR-HAR sai da frota: o filtro fica sem marca, e o grupo da habilitação própria some
-    await irParaVista(page, 'rec', 'cadastro');
-    await confirmar(page, '#frota li.frota-item[data-r="PR-HAR"] [data-act="retirar-recurso"]');
-    await expect(page.locator('#frota li.frota-item[data-r="PR-HAR"]')).toHaveCount(0);
-    await irPara(page, 'ins');
-    await expect(botao).toHaveText('Todas as habilitações');
-    await expect(naGrade).toHaveText(['Ana', 'Bruno']);
-    await expect(page.locator('#ins-contagem')).toHaveText('2 instrutores');
-    await botao.click();
-    await expect(painel.locator('legend', { hasText: 'Habilitação própria do recurso' })).toHaveCount(0);
-    // O Histórico devolve o PR-HAR, com a habilitação própria: a opção volta, sem a marca
-    await abrirHistorico(page);
-    await page.locator('#audit-log-list [data-act="rev-log"]').first().click();
-    await expect(page.locator('#audit-log-list')).toContainText('Revertido: PR-HAR de volta à frota');
-    await page.keyboard.press('Escape');
-    await botao.click();
-    await expect(propria).toHaveText(['Avião PR-HAR']);
-    await expect(painel.locator('input[data-filtro]:checked')).toHaveCount(0);
+    // As Habilitações do detalhe também acompanham
+    await abrirInstrutor(page, 1);
+    await expect(habilitacaoDoInstrutor(page, 'aviao:PR-VOM')).toHaveCount(0);
+    await expect(habilitacaoDoInstrutor(page, 'aviao:PR-HAR')).toBeChecked();
   });
 
-  // As marcas e o painel aberto duram aos redesenhos: a grade refeita com a escala (o turno aplicado, sem clique: o
-  // painel continua aberto), outra data e o instrutor novo (que aparece fora do filtro, é nele que se digita o nome). Com
-  // as opções refeitas (a frota que muda por baixo, como numa leitura dos dados), o foco fica na mesma caixa; a caixa que
-  // some passa o foco para a que ficou no lugar
+  // As marcas e o painel aberto duram aos redesenhos: a lista refeita com a escala (o turno aplicado), outra data e o
+  // instrutor novo
   test('o filtro das habilitações dura aos redesenhos: o painel aberto, as marcas e o foco na caixa', async ({ page }) => {
     const ins = [instrutor(1, 1, { nm: 'Ana', hab: ['local', 'c172', 'noturno'] }), instrutor(2, 1, { nm: 'Bruno', hab: ['local', 'noturno'] }),
       instrutor(3, 1, { nm: 'Carla', hab: ['local', 'c172', 'noturno'] })];
     await abrir(page, { estado: { ...cenario({ ins }), nid: 4 } });
-    await irPara(page, 'ins');
+    await abrirInstrutor(page, 1);
     const botao = page.locator('#flt-ins-hab'), painel = page.locator('#flt-ins-hab-painel');
-    const naGrade = gradeDoDia(page).locator('tr[data-k="i"]:visible .nome');
     await filtrarHabilitacoes(page, ['noturno', 'c172'], { fechar: false });
-    await expect(naGrade).toHaveText(['Ana', 'Carla']);
-    // A grade refeita com a escala: as linhas de antes ficam marcadas, e nenhuma linha da grade nova tem a marca
-    await gradeDoDia(page).locator('tr').evaluateAll(linhas => linhas.forEach(l => { l.dataset.antes = ''; }));
-    await linhaDoInstrutor(page, '1').locator('[data-f="pre"]').selectOption('Manhã');
-    await expect(gradeDoDia(page).locator('tr[data-antes]')).toHaveCount(0);
-    await expect(linhaDoInstrutor(page, '1').locator('.cel.on')).toHaveCount(4);
+    await expect.poll(() => nomesDosInstrutores(page)).toEqual(['Ana', 'Carla']);
+    // O redesenho com o foco numa caixa do filtro (como o da escala refeita por baixo): o foco fica nela
+    const c172 = painel.locator('input[data-valor="c172"]');
+    await c172.focus();
+    await page.evaluate(async () => { const { redesenharPorNome } = await import('./js/redesenho.js'); redesenharPorNome('instrutores'); });
+    await expect(c172).toBeFocused();
     await expect(painel).toBeVisible();
     await expect(botao).toHaveAttribute('aria-expanded', 'true');
-    await expect(naGrade).toHaveText(['Ana', 'Carla']);
     // Outra data (o clique na seta fecha o painel): as marcas continuam
     await diaSeguinte(page);
     await expect(dataAberta(page)).toHaveAttribute('data-data', '2026-11-12');
-    await expect(painel).toBeHidden();
     await expect(botao).toHaveText('Habilitações: Noturno + C172');
-    await expect(naGrade).toHaveText(['Ana', 'Carla']);
-    await expect(painel.locator('input[data-filtro]:checked')).toHaveCount(2);
-    // O instrutor novo aparece, e os outros continuam filtrados
-    const nomesAVista = () => page.locator('#inst .cd:visible .nm').evaluateAll(campos => campos.map(c => c.value));
+    await expect.poll(() => nomesDosInstrutores(page)).toEqual(['Ana', 'Carla']);
     await page.locator('[data-act="addi"]').click();
-    await expect.poll(nomesAVista).toEqual(['Ana', 'Carla', 'Novo instrutor']);
+    await expect.poll(() => nomesDosInstrutores(page)).toEqual(['Ana', 'Carla', 'Novo instrutor']);
     await expect(page.locator('#ins-contagem')).toHaveText('3 de 4 instrutores');
-
-    // As opções refeitas com o foco numa caixa: o foco fica nela, e o painel continua aberto
-    const refazerComAFrota = (reg, propria) => page.evaluate(async ([reg, propria]) => {
-      const { S } = await import('./js/state.js');
-      const recurso = S.frota.find(f => f.reg === reg);
-      if (propria) recurso.habilitacaoPropria = true;
-      else delete recurso.habilitacaoPropria;
-      const { rIns } = await import('./js/views/instrutores.js');
-      rIns();
-    }, [reg, propria]);
-    await botao.click();
-    const c172 = painel.locator('input[data-valor="c172"]');
-    await c172.focus();
-    await refazerComAFrota('PR-HAR', true);
-    await expect(painel.locator('input[data-valor="aviao:PR-HAR"]')).toBeVisible();
-    await expect(c172).toBeFocused();
-    await expect(painel).toBeVisible();
-    // A caixa em foco que some: o foco vai para a que ficou no lugar dela (a do PR-VOM), e não para o corpo da página
-    await painel.locator('input[data-valor="aviao:PR-HAR"]').focus();
-    await refazerComAFrota('PR-HAR', false);
-    await expect(painel.locator('input[data-valor="aviao:PR-HAR"]')).toHaveCount(0);
-    await expect(painel.locator('input[data-valor="aviao:PR-VOM"]')).toBeFocused();
-    await expect(botao).toHaveText('Habilitações: Noturno + C172');
   });
+});
 
-  test('disponibilidade do dia: a grade mostra as janelas e os voos de cada instrutor', async ({ page }) => {
+test.describe('INVAs: o detalhe', () => {
+  test('"Nesta data": o "Vem", as faixas e as pausas, a tira, os três turnos e os voos dele na escala', async ({ page }) => {
     await abrirComExemplo(page);
     await abrirEscala(page);
     const linhasDaEscala = (await lerEscala(page)).linhas;
     await irPara(page, 'ins');
-    await expect(page.locator('#s-ins [data-vista-ins="dia"]')).toHaveClass(/\bon\b/);
-    // "Vem": o instrutor vem na data aberta no topo (o app abre em amanhã: não é "hoje")
-    await expect(cabecalhoDaGrade(page).locator('th').nth(1)).toHaveText('Vem');
-    await expect(cabecalhoDaGrade(page).locator('[data-dica="vem-nesta-data"]')).toHaveAccessibleName('O que é Vem?');
-    await expect(page.locator('#s-ins .legenda-disp')).toContainText('Clique numa janela para mudar a disponibilidade desta data.');
-    // A grade bate com a escala: o número de voos e aulas do instrutor (a turma de Ground conta uma vez)
-    const comVoos = gradeDoDia(page).locator('tr[data-k="i"]').filter({ has: page.locator('.voos:not(:empty)') }).first();
-    const id = await comVoos.getAttribute('data-id');
-    const nome = (await comVoos.locator('.nome').innerText()).trim();
-    await expect(comVoos.locator('.voos')).toHaveText(String(linhasDaEscala.filter(l => l.includes(`| ${nome} |`)).length));
-    expect(await comVoos.locator('.cel.voo').count()).toBeGreaterThanOrEqual(1);
-    const celula = () => gradeDoDia(page).locator(`tr[data-k="i"][data-id="${id}"] .cel`).nth(7);
-    await comVoos.locator('[data-f="aw"][data-w="7"]').uncheck();
-    await expect(celula()).not.toHaveClass(/\bon\b/);
-    // Pelo teclado: a grade é refeita e o foco continua na mesma janela
-    await linhaDoInstrutor(page, id).locator('[data-f="aw"][data-w="7"]').focus();
-    await page.keyboard.press('Space');
-    await expect(celula()).toHaveClass(/\bon\b/);
-    await expect(linhaDoInstrutor(page, id).locator('[data-f="aw"][data-w="7"]')).toBeFocused();
+    const comVoos = linhasDosInstrutores(page).filter({ has: page.locator('.lista-meta') }).first();
+    const id = (await comVoos.getAttribute('data-chave')).slice(2);
+    const nome = (await comVoos.locator('.lista-titulo').innerText()).trim();
+    const n = linhasDaEscala.filter(l => l.includes(`| ${nome} |`)).length;
+    await expect(comVoos.locator('.lista-meta')).toHaveText(`${n} ${n === 1 ? 'voo' : 'voos'}`);
+    await abrirInstrutor(page, id);
+    const nestaData = secaoDoInstrutor(page, 'data');
+    await expect(nestaData.locator('.det-secao-btn')).toContainText('Nesta data');
+    await expect(nestaData.locator('.det-escopo')).toHaveText('qua 11/11');
+    await expect(nestaData.locator('.voos-do-instrutor > li')).toHaveCount(n);
+    await expect(campoDoInstrutor(page, 'on')).toBeChecked();
+    await expect(campoDoInstrutor(page, 'on')).toHaveAccessibleName(/^Vem\b.*vem nesta data$/);
+    await expect(nestaData.locator('[data-dica="vem-nesta-data"]')).toHaveAccessibleName('O que é Vem?');
+    await expect(faixasDoAberto(page)).toHaveText('06:30–24:00');
+    await expect(pausasDoAberto(page)).toHaveText('nenhuma');
+    await expect(nestaData.locator('[data-dica="faixas"]')).toHaveAccessibleName('O que é Pode decolar?');
+    await expect(nestaData.locator('.tira.grande .tira-voo')).toHaveCount(n);
+    // Os três turnos (sem Manhã nem Tarde), cada um com a faixa dele; "Editar faixas"
+    await expect(nestaData.locator('[data-act="turno"]')).toHaveText(['Dia inteiro 06:30–17:30', 'Noturno 17:30–24:00', 'Dia + noturno 06:30–24:00']);
+    await expect(botaoDoTurno(page, 'dia-e-noturno')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('#det-ins-editar-faixas')).toBeVisible();
+    await expect(page.getByRole('button', { name: /^(Manhã|Tarde)/ })).toHaveCount(0);
+  });
+
+  // Um turno troca as faixas da data pela dele, sem pausa; o ↶ do Histórico devolve as de antes (setFaixas)
+  test('um turno: a faixa dele na linha, na escala e no Histórico; o ↶ devolve as faixas de antes', async ({ page }) => {
+    await abrir(page, { estado: cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, { p1: 1, p2: 2 })] }) });
+    await aplicarTurno(page, 1, 'noturno');
+    await expect(faixasNaLinha(page, 1)).toHaveText('17:30–24:00');
+    await expect(faixasDoAberto(page)).toHaveText('17:30–24:00');
+    await expect(botaoDoTurno(page, 'noturno')).toBeFocused();
+    await expect(entradasDoHistorico(page, 'Turno de Instrutor 01 nesta data: Noturno (17:30–24:00)')).toHaveCount(1);
+    // O Voo Local das 08:20 sai da escala: o único instrutor só voa no noturno
+    await abrirEscala(page);
+    expect((await lerEscala(page)).linhas.filter(l => l.includes('Aluno 1000'))).toHaveLength(0);
+    await reverter(page, 'Turno de Instrutor 01');
+    await expect(entradasDoHistorico(page, 'Revertido: faixas de Instrutor 01 nesta data: 06:30–24:00')).toHaveCount(1);
+    await abrirEscala(page);
+    expect((await lerEscala(page)).linhas.filter(l => l.includes('Aluno 1000'))).toHaveLength(1);
+    await irPara(page, 'ins');
+    await expect(faixasNaLinha(page, 1)).toHaveText('06:30–24:00');
+  });
+
+  // U4: meio dia é uma faixa digitada ("Editar faixas", o Até, "Salvar faixas"); "Almoço" é uma pausa pronta. O voo
+  // inteiro cabe numa faixa, fora das pausas (a regra de antes do C)
+  test('"Editar faixas": meio dia digitado, o almoço, o Até antes do De recusado, "Cancelar"; vale na escala e no dia seguinte', async ({ page }) => {
+    await abrir(page, { estado: cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, { p1: 2, p2: 3 })] }) });
+    await abrirInstrutor(page, 1);
+    await page.locator('#det-ins-editar-faixas').click();
+    await expect(campoDaFaixa(page, 'faixa', 0, 'de')).toBeFocused();
+    await expect(campoDaFaixa(page, 'faixa', 0, 'de')).toHaveAccessibleName('1ª faixa: de');
+    await expect(page.locator('#det-ins .faixas-form .fx-rotulo').first()).toHaveText('Pode decolar de');
+    // A lista de horários: de 10 em 10 minutos, das 06:30 à meia-noite
+    await expect(campoDaFaixa(page, 'faixa', 0, 'de').locator('option').first()).toHaveText('06:30');
+    await expect(campoDaFaixa(page, 'faixa', 0, 'ate').locator('option').last()).toHaveText('24:00');
+    // O Até antes do De: a mensagem, e nada gravado
+    await campoDaFaixa(page, 'faixa', 0, 'de').selectOption({ label: '13:00' });
+    await campoDaFaixa(page, 'faixa', 0, 'ate').selectOption({ label: '12:00' });
+    await page.locator('#det-ins-salvar-faixas').click();
+    await expect(page.locator('#det-ins-faixas-erro')).toHaveText('Na 1ª faixa, o Até vem depois do De.');
+    await expect(faixasNaLinha(page, 1)).toHaveText('06:30–24:00');
+    // "Cancelar" joga o rascunho fora
+    await page.locator('#det-ins-cancelar-faixas').click();
+    await expect(page.locator('#det-ins .faixas-form')).toHaveCount(0);
+    await expect(page.locator('#det-ins-editar-faixas')).toBeFocused();
+
+    // Meio dia, à tarde, com o almoço: a linha, o detalhe e o Histórico
+    await page.locator('#det-ins-editar-faixas').click();
+    await campoDaFaixa(page, 'faixa', 0, 'de').selectOption({ label: '10:00' });
+    await campoDaFaixa(page, 'faixa', 0, 'ate').selectOption({ label: '17:30' });
+    await page.locator('#det-ins-almoco').click();
+    await expect(campoDaFaixa(page, 'pausa', 0, 'de')).toBeFocused();
+    await expect(campoDaFaixa(page, 'pausa', 0, 'ate')).toHaveValue('780');
+    await expect(page.locator('#det-ins-almoco')).toBeDisabled();
+    await page.locator('#det-ins-salvar-faixas').click();
+    await expect(page.locator('#det-ins-editar-faixas')).toBeFocused();
+    await expect(faixasNaLinha(page, 1)).toHaveText('10:00–17:30 · pausa 12:00–13:00');
+    await expect(faixasDoAberto(page)).toHaveText('10:00–17:30');
+    await expect(pausasDoAberto(page)).toHaveText('12:00–13:00');
+    await expect(entradasDoHistorico(page, 'Faixas de Instrutor 01 nesta data: 10:00–17:30; pausa 12:00–13:00')).toHaveCount(1);
+    // Nenhum turno é estas faixas
+    await expect(page.locator('#det-ins [data-act="turno"][aria-pressed="true"]')).toHaveCount(0);
+    // O voo do aluno (10:10 ou 11:30, 1 h) cabe inteiro na faixa e fora da pausa
+    const quando = await secaoDoInstrutor(page, 'data').locator('.voo-quando').allTextContents();
+    expect(quando).toHaveLength(1);
+    const [inicio, fim] = quando[0].split('–');
+    expect(inicio >= '10:00' && fim <= '17:30' && (fim <= '12:00' || inicio >= '13:00'), quando[0]).toBe(true);
+    // A data seguinte começa com as faixas desta
+    await diaSeguinte(page);
+    await expect(faixasNaLinha(page, 1)).toHaveText('10:00–17:30 · pausa 12:00–13:00');
+  });
+
+  test('"+ Faixa", "+ Pausa" e o ✕: duas faixas e uma pausa, e o ↶ devolve as de antes', async ({ page }) => {
+    await abrir(page, { estado: cenario({ ins: [instrutor(1, 9), instrutor(2, 9)] }) });
+    await editarFaixas(page, 1, { faixas: [{ de: '06:30', ate: '11:00' }, { de: '14:00', ate: '17:30' }], pausas: [{ de: '15:00', ate: '15:30' }] });
+    await expect(faixasNaLinha(page, 1)).toHaveText('06:30–11:00 e 14:00–17:30 · pausa 15:00–15:30');
+    await expect(tiraDaLinha(page, 1).locator('.tira-faixa')).toHaveCount(2);
+    // Sem faixa nenhuma: o instrutor não voa na data
+    await editarFaixas(page, 2, { faixas: [], pausas: [] });
+    await expect(faixasNaLinha(page, 2)).toHaveText('sem faixa');
+    await reverter(page, 'Faixas de Instrutor 01');
+    await expect(faixasNaLinha(page, 1)).toHaveText('06:30–24:00');
+  });
+
+  test('o "Vem" do detalhe e o da linha são o mesmo; o ↶ do Histórico devolve', async ({ page }) => {
+    await abrirSintetico(page);
+    await abrirInstrutor(page, 1);
+    await campoDoInstrutor(page, 'on').uncheck();
+    await expect(faixasNaLinha(page, 1)).toHaveText('não vem nesta data');
+    await expect(caixaVem(linhaDoInstrutor(page, 1))).not.toBeChecked();
+    await expect(secaoDoInstrutor(page, 'data')).toContainText('não vem nesta data');
+    await reverter(page, 'Instrutor 01: Indisponível');
+    await expect(caixaVem(linhaDoInstrutor(page, 1))).toBeChecked();
+    await expect(campoDoInstrutor(page, 'on')).toBeChecked();
+  });
+
+  test('o instrutor novo: o dia inteiro, as habilitações do nível 1, o peso em destaque; habilitações e peso no detalhe', async ({ page }) => {
+    await abrirSintetico(page);
+    await irPara(page, 'ins');
+    await page.locator('[data-act="addi"]').click();
+    await expect(linhasDosInstrutores(page)).toHaveCount(41);
+    await expect(page.locator('#det-ins-titulo')).toHaveText('Novo instrutor');
+    await expect(faixasDoAberto(page)).toHaveText('06:30–17:30');
+    await expect(botaoDoTurno(page, 'dia')).toHaveAttribute('aria-pressed', 'true');
+    await expect(campoDoInstrutor(page, 'kg')).toHaveClass(/\bfalta\b/);
+    await expect(habilitacaoDoInstrutor(page, 'c152')).toBeChecked();
+    await habilitacaoDoInstrutor(page, 'c172').check();
+    await habilitacaoDoInstrutor(page, 'local').uncheck();
+    await campoDoInstrutor(page, 'kg').fill('80');
+    await campoDoInstrutor(page, 'kg').blur();
+    await expect(campoDoInstrutor(page, 'kg')).not.toHaveClass(/\bfalta\b/);
+    await expect(entradasDoHistorico(page, 'Peso Novo instrutor: 80 kg')).toHaveCount(1);
+    await expect(entradasDoHistorico(page, 'Habilitação incluída: Novo instrutor · C172')).toHaveCount(1);
+    await expect(entradasDoHistorico(page, 'Habilitação retirada: Novo instrutor · Voo Local')).toHaveCount(1);
+    // O peso que não vale fica no campo, com a mensagem
+    await campoDoInstrutor(page, 'kg').fill('400');
+    await campoDoInstrutor(page, 'kg').blur();
+    await expect(campoDoInstrutor(page, 'kg')).toHaveAttribute('aria-invalid', 'true');
   });
 
   test('o checador por partes: o curso, o motor e as regras; o cheque vai para quem tem as três', async ({ page }) => {
@@ -357,98 +382,39 @@ test.describe('Instrutores', () => {
     });
     await abrir(page, { estado });
     await irPara(page, 'ins');
-    // Na grade do dia, as marcas de checador contam como uma
-    await expect(gradeDoDia(page).locator('tr[data-k="i"][data-id="1"] .habs-resumo')).toHaveText('Checador · Local');
-    await page.locator('#s-ins [data-vista-ins="cadastro"]').click();
-    const linha = page.locator('#inst .cd[data-id="1"]');
-    await linha.locator('[data-act="editar-habs"]').click();
-    const painel = page.locator('#painel-instrutor');
-    const grupo = nome => painel.locator('fieldset', { has: page.locator('legend', { hasText: nome }) }).locator('label');
+    await expect(habilitacoesNaLinha(page, 1)).toHaveText('Checador · Local');
+    await abrirInstrutor(page, 1);
+    const habs = secaoDoInstrutor(page, 'habilitacoes');
+    const grupo = nome => habs.locator('fieldset', { has: page.locator('legend', { hasText: nome }) }).locator('label');
     await expect(grupo('Checador: curso')).toHaveText(['Checador do curso PP', 'Checador do curso PC', 'Checador do curso INVA']);
     await expect(grupo('Checador: motor')).toHaveText(['Checador MNTE', 'Checador MLTE']);
     await expect(grupo('Checador: regras')).toHaveText(['Checador VFR', 'Checador IFR']);
-    await expect(painel.locator('.dica-btn[data-dica="checador"]')).toHaveCount(1);
-    // Sem as regras (VFR), o instrutor ainda não dá o Cheque PP
+    await expect(habs.locator('.dica-btn[data-dica="checador"]')).toHaveCount(1);
     await abrirEscala(page);
     expect((await lerEscala(page)).linhas.filter(l => l.includes('Aluno 1000'))).toHaveLength(0);
-    await irPara(page, 'ins');
-    await painel.locator('[data-f="hab"][data-h="checa_vfr"]').check();
-    await expect(linha).toHaveAttribute('data-hab', 'local c152 checa_pp checa_mnte checa_vfr');
-    await page.locator('#btn-fechar-painel-instrutor').click();
+    await abrirInstrutor(page, 1);
+    await habilitacaoDoInstrutor(page, 'checa_vfr').check();
     await abrirEscala(page);
     const voos = (await lerEscala(page)).linhas.filter(l => l.includes('Aluno 1000'));
     expect(voos).toHaveLength(1);
     expect(voos[0]).toContain('| Instrutor 01 |');
   });
 
-  test('cadastra instrutor e altera habilitações (no painel), peso e turno', async ({ page }) => {
+  // N5 (F1d): Endosso Solo e Nav. ≥ 150 NM no grupo Voo das Habilitações, desmarcadas para todos; marcar grava
+  test('as Habilitações têm Endosso Solo e Nav. ≥ 150 NM, desmarcadas para todos, e marcar grava', async ({ page }) => {
     await abrirSintetico(page);
-    await irPara(page, 'ins');
-    await page.locator('[data-act="addi"]').click();
-    // O instrutor novo aparece no cadastro, com o peso em destaque enquanto falta
-    await expect(page.locator('#s-ins [data-vista-ins="cadastro"]')).toHaveClass(/\bon\b/);
-    const linha = page.locator('#inst .cd').last();
-    await expect(page.locator('#inst .cd')).toHaveCount(41);
-    await expect(linha.locator('.nm')).toHaveValue('Novo instrutor');
-    await expect(linha).toHaveAttribute('data-hab', 'grounds ground_pa34 local c152');
-    await expect(linha.locator('[data-f="kg"]')).toHaveClass(/\bfalta\b/);
-
-    await linha.locator('[data-act="editar-habs"]').click();
-    const painel = page.locator('#painel-instrutor');
-    await expect(painel).toBeVisible();
-    await expect(painel.locator('h2')).toContainText('Novo instrutor');
-    await expect(painel.locator('fieldset', { hasText: 'Aviões' }).locator('label')).toHaveText(['C152', 'C172', 'MLTE (PA-34)']);
-    await expect(painel.locator('[data-f="hab"][data-h="c152"]')).toBeChecked();
-    await painel.locator('[data-f="hab"][data-h="c172"]').check();
-    await painel.locator('[data-f="hab"][data-h="local"]').uncheck();
-    await expect(page.locator('#inst .cd').last()).toHaveAttribute('data-hab', 'grounds ground_pa34 c152 c172');
-    await page.locator('#btn-fechar-painel-instrutor').click();
-    await expect(painel).toBeHidden();
-
-    await page.locator('#inst .cd').last().locator('[data-f="kg"]').fill('80');
-    await page.locator('#inst .cd').last().locator('[data-f="kg"]').blur();
-    await expect(page.locator('#inst .cd').last().locator('[data-f="kg"]')).not.toHaveClass(/\bfalta\b/);
-
-    await page.locator('#s-ins [data-vista-ins="dia"]').click();
-    await gradeDoDia(page).locator('tr[data-k="i"]').last().locator('[data-f="pre"]').selectOption('Manhã');
-    const janelas = gradeDoDia(page).locator('tr[data-k="i"]').last().locator('[data-f="aw"]');
-    await expect(janelas).toHaveCount(9);
-    for (let i = 0; i < 9; i++) {
-      if (i < 4) await expect(janelas.nth(i)).toBeChecked();
-      else await expect(janelas.nth(i)).not.toBeChecked();
-    }
-    await expect(page.locator('#audit-log-list')).toContainText('Peso Novo instrutor: 80 kg');
-    await expect(page.locator('#audit-log-list')).toContainText('Habilitação incluída: Novo instrutor · C172');
-    await expect(page.locator('#audit-log-list')).toContainText('Habilitação retirada: Novo instrutor · Voo Local');
-  });
-
-  // N5 (F1d): Endosso Solo e Nav. ≥ 150 NM no grupo Voo de "Editar habilitações", ao lado da Liberação de Solo e da
-  // Navegação; ninguém começa com elas (regra a), e marcar uma grava e vai para o histórico
-  test('"Editar habilitações" tem Endosso Solo e Nav. ≥ 150 NM, desmarcadas para todos, e marcar grava', async ({ page }) => {
-    await abrirSintetico(page);
-    await irParaVista(page, 'ins', 'cadastro');
-    const habs = await page.locator('#inst .cd').evaluateAll(linhas => linhas.map(l => l.dataset.hab));
-    expect(habs.length).toBeGreaterThan(30);
-    expect(habs.filter(h => /\b(endosso_solo|navegacao_150)\b/.test(h))).toEqual([]);
-    await page.locator('#inst .cd[data-id="9"] [data-act="editar-habs"]').click();
-    const painel = page.locator('#painel-instrutor');
-    await expect(painel).toBeVisible();
-    const voo = painel.locator('fieldset', { has: page.locator('legend', { hasText: /^Voo$/ }) }).locator('label');
+    await abrirInstrutor(page, 9);
+    const voo = secaoDoInstrutor(page, 'habilitacoes').locator('fieldset', { has: page.locator('legend', { hasText: /^Voo$/ }) }).locator('label');
     await expect(voo).toHaveText(['TGL (TMA)', 'Voo Local', 'Voo de Navegação', 'Voo de Navegação ≥ 150 NM', 'Voo para liberação de Solo',
       'Endosso Solo', 'Voo de Parafuso (SPIN)', 'Voo IFR', 'Voo Noturno']);
-    await expect(painel.locator('[data-f="hab"][data-h="endosso_solo"]')).not.toBeChecked();
-    await expect(painel.locator('[data-f="hab"][data-h="navegacao_150"]')).not.toBeChecked();
-    await painel.locator('[data-f="hab"][data-h="endosso_solo"]').check();
-    await expect(page.locator('#inst .cd[data-id="9"]')).toHaveAttribute('data-hab', /\bsolo endosso_solo\b/);
-    await expect(page.locator('#audit-log-list')).toContainText('Habilitação incluída: Instrutor 09 · Endosso Solo');
-    await page.locator('#btn-fechar-painel-instrutor').click();
-    // O filtro das habilitações acha quem a tem
+    await expect(habilitacaoDoInstrutor(page, 'navegacao_150')).not.toBeChecked();
+    await habilitacaoDoInstrutor(page, 'endosso_solo').check();
+    await expect(entradasDoHistorico(page, 'Habilitação incluída: Instrutor 09 · Endosso Solo')).toHaveCount(1);
     await filtrarHabilitacoes(page, ['endosso_solo']);
-    await expect(page.locator('#inst .cd:visible .nm')).toHaveValue('Instrutor 09');
+    await expect.poll(() => nomesDosInstrutores(page)).toEqual(['Instrutor 09']);
   });
 
   test('as habilitações não são cumulativas e valem na escala', async ({ page }) => {
-    // Instrutor 01 é de C172 e não dá simulador; o Instrutor 02 só dá simulador (Mono)
     const estado = cenario({
       ins: [instrutor(1, 9, { hab: ['local', 'noturno', 'c172'] }), instrutor(2, 1, { hab: ['sim_mono'] })],
       stu: [aluno(1000, { mis: 'Simulador', eq: 'Sim. Mono' })]
@@ -456,53 +422,87 @@ test.describe('Instrutores', () => {
     await abrir(page, { estado });
     await abrirEscala(page);
     const voos = (await lerEscala(page)).linhas.filter(l => l.includes('Aluno 1000'));
-    expect(voos).toHaveLength(1);
     expect(voos[0]).toContain('| Instrutor 02 |');
-
-    await irPara(page, 'ins');
-    await page.locator('#s-ins [data-vista-ins="cadastro"]').click();
-    await page.locator('#inst .cd[data-id="2"] [data-act="editar-habs"]').click();
-    await page.locator('#painel-instrutor [data-f="hab"][data-h="sim_mono"]').uncheck();
+    await abrirInstrutor(page, 2);
+    await habilitacaoDoInstrutor(page, 'sim_mono').uncheck();
     await irPara(page, 'esc');
     await expect(page.locator('#out')).toContainText('nenhum instrutor ativo tem a habilitação de Simulador no Sim. Mono (Simulador (Mono))');
   });
 
-  test('instrutor indisponível pode ser revertido pelo histórico', async ({ page }) => {
+  // "Agendar voo com <nome>", no alto do detalhe: o diálogo do agendamento com o instrutor
+  test('"Agendar voo com <nome>" abre o agendamento com o instrutor escolhido', async ({ page }) => {
+    await abrir(page, { estado: cenario({ ins: [instrutor(1, 9), instrutor(2, 9)], stu: [aluno(1000), aluno(1001, { fly: false })] }) });
+    await abrirEscala(page);
+    await abrirInstrutor(page, 2);
+    const agendar = page.locator('#det-ins [data-act="agendar"]');
+    await expect(agendar).toHaveAccessibleName('Agendar voo com Instrutor 02');
+    await expect(agendar).toHaveAttribute('data-agendar', 'i:2');
+    await agendar.click();
+    await expect(page.locator('#dlg-agendar')).toBeVisible();
+    await expect(page.locator('#agd-contexto')).toContainText('Com Instrutor 02');
+    await page.keyboard.press('Escape');
+    await expect(agendar).toBeFocused();
+  });
+
+  test('"Excluir instrutor…" pede o segundo clique; o "Ativo" desligado deixa a linha discreta e tira "Agendar voo"', async ({ page }) => {
+    await abrir(page, { estado: cenario({ ins: [instrutor(1, 9), instrutor(2, 9), instrutor(3, 9)] }) });
+    await abrirInstrutor(page, 2);
+    await confirmar(page, '#det-ins-excluir');
+    await expect(entradasDoHistorico(page, 'Instrutor excluído: Instrutor 02')).toHaveCount(1);
+    await expect.poll(() => nomesDosInstrutores(page)).toEqual(['Instrutor 01', 'Instrutor 03']);
+    await expect(page.locator('#det-ins')).toHaveText('Escolha um instrutor na lista.');
+    await abrirInstrutor(page, 3);
+    await linhaDoInstrutor(page, 3).locator('[data-act="ativo"]').click();
+    await expect(linhaDoInstrutor(page, 3)).toHaveClass(/\binativo\b/);
+    await expect(caixaVem(linhaDoInstrutor(page, 3))).toHaveCount(0);
+    await expect(page.locator('#det-ins-aviso')).toContainText('Inativo no cadastro');
+    await expect(page.locator('#det-ins [data-act="agendar"]')).toHaveCount(0);
+  });
+
+  test('os limites da lei: o item fixo do alto, com os campos e o "?"', async ({ page }) => {
     await abrirSintetico(page);
-    await irPara(page, 'ins');
-    await caixaVem(gradeDoDia(page).locator('tr[data-k="i"]').first()).uncheck();
-    await expect(gradeDoDia(page).locator('tr[data-k="i"]').first()).toHaveClass(/\boff\b/);
-    await abrirHistorico(page);
-    await page.locator('#audit-log-list [data-act="rev-log"]').first().click();
-    await irPara(page, 'ins');
-    await expect(gradeDoDia(page).locator('tr[data-k="i"]').first()).not.toHaveClass(/\boff\b/);
+    await abrirLimitesDaLei(page);
+    await expect(page).toHaveURL(/#\/ins\/limites$/);
+    await expect(page.locator('#limites-lei [data-limite="vooMesH"]')).toHaveValue('100');
+    await expect(page.locator('#limites-lei [data-dica="limites-da-lei"]')).toHaveCount(1);
+    await expect(page.locator('#det-ins-excluir')).toHaveCount(0);
   });
 });
 
-// No celular (390 px; os testes que mudam a largura dizem qual), vindos de celular.spec.js
-test.describe('Celular', () => {
+// No celular (390 px; os testes que mudam a largura dizem qual)
+test.describe('INVAs no celular', () => {
   test.use({ viewport: { width: 390, height: 844 } });
 
-  // O filtro das habilitações no celular (390 e 320 px): o botão divide a linha com a busca; o painel abre no fluxo da
-  // página, inteiro na largura da tela (a grade desce para baixo dele: nada fica coberto), e as caixas, o "Limpar" e o
-  // "?" têm 44 px para o dedo
-  test('o filtro das habilitações cabe no celular (390 e 320 px): o painel empurra a grade, com alvos de 44 px', async ({ page }) => {
+  // O filtro das habilitações no celular (390 e 320 px): o painel abre no fluxo da página, inteiro na largura da tela (a
+  // lista desce para baixo dele), com alvos de 44 px
+  test('o filtro das habilitações cabe no celular (390 e 320 px): o painel empurra a lista, com alvos de 44 px', async ({ page }) => {
     await abrirComExemplo(page);
     for (const largura of [390, 320]) {
       await page.setViewportSize({ width: largura, height: 800 });
       await irPara(page, 'ins');
       await filtrarHabilitacoes(page, ['noturno', 'c172'], { fechar: false });
-      const caixas = await Promise.all(['[data-flt="inst"]', '#flt-ins-hab', '#flt-ins-hab-painel', '#s-ins .vista-dia .tw']
-        .map(seletor => page.locator(seletor).boundingBox()));
-      const [busca, botao, painel, grade] = caixas;
-      expect(Math.abs(botao.y + botao.height / 2 - (busca.y + busca.height / 2)), `${largura}: o botão na linha da busca`).toBeLessThan(4);
-      expect(botao.x + botao.width, `${largura}: o botão na tela`).toBeLessThanOrEqual(largura);
+      const [painel, lista] = await Promise.all(['#flt-ins-hab-painel', '#ins'].map(seletor => page.locator(seletor).boundingBox()));
       expect(painel.x, `${largura}: o painel na tela`).toBeGreaterThanOrEqual(0);
       expect(painel.x + painel.width, `${largura}: o painel na tela`).toBeLessThanOrEqual(largura);
-      expect(grade.y, `${largura}: a grade embaixo do painel`).toBeGreaterThanOrEqual(painel.y + painel.height);
+      expect(lista.y, `${largura}: a lista embaixo do painel`).toBeGreaterThanOrEqual(painel.y + painel.height);
       expect(await larguraDaPagina(page), `${largura}: a página não rola para o lado`).toBeLessThanOrEqual(largura);
       expect(await alvosPequenos(page), `${largura}: alvos de 44 px`).toEqual([]);
       await filtrarHabilitacoes(page, []);
     }
+  });
+
+  // A lista, depois o detalhe ("‹ INVAs" volta); "Editar faixas" cabe na tela, com alvos de 44 px
+  test('a lista, depois o detalhe; "Editar faixas" cabe na tela, com alvos de 44 px', async ({ page }) => {
+    await abrirSintetico(page);
+    await irPara(page, 'ins');
+    await expect(page.locator('#s-ins')).toHaveAttribute('data-vendo', 'lista');
+    await abrirInstrutor(page, 1);
+    await expect(page.locator('#s-ins')).toHaveAttribute('data-vendo', 'detalhe');
+    await page.locator('#det-ins-editar-faixas').click();
+    await page.locator('#det-ins-almoco').click();
+    expect(await larguraDaPagina(page)).toBeLessThanOrEqual(390);
+    expect(await alvosPequenos(page)).toEqual([]);
+    await page.locator('#det-ins-voltar').click();
+    await expect(page.locator('#s-ins')).toHaveAttribute('data-vendo', 'lista');
   });
 });

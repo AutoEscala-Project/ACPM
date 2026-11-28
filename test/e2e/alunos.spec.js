@@ -3,9 +3,7 @@
 // passo A: "Nesta data", "Curso e missões" (a missão anterior e a atual, o resultado sem voo, "Colocar no curso até…" e o
 // ↶ dela), a busca pelo nome completo e o "Apagar os dados pessoais" do aluno inativo
 import {
-  test, comProgresso, expect, abrir, abrirSintetico, abrirComExemplo, irPara, irParaVista, filtrarCursos, confirmar, AGORA, AMANHA, alvosPequenos,
-  appPronto, dataAberta, diaSeguinte, larguraDaPagina, abrirAluno, campoDoAberto, linhaDoAluno, linhasDosAlunos, nomesNaLista,
-  etiquetasDoAberto, nenhumNaLista, abrirHistorico, campoDaAgenda, prepararContexto, vigiarErros, entrar
+  test, comProgresso, expect, abrir, abrirSintetico, abrirComExemplo, irPara, filtrarCursos, confirmar, AGORA, AMANHA, alvosPequenos, appPronto, dataAberta, diaSeguinte, larguraDaPagina, abrirAluno, campoDoAberto, linhaDoAluno, linhasDosAlunos, nomesNaLista, etiquetasDoAberto, nenhumNaLista, abrirHistorico, abrirInstrutor, campoDoInstrutor, campoDaAgenda, prepararContexto, vigiarErros, entrar
 } from './fixtures.js';
 import { documentosAtuais, criarSupabaseFalso, CONTAS } from './supabase-falso.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
@@ -64,15 +62,14 @@ test.describe('Alunos', () => {
     await expect(page.locator('#det-alu-titulo')).toHaveText(longo.slice(0, 80).trim());
     await irPara(page, 'ins');
     await page.locator('[data-act="addi"]').click();
-    const nome = page.locator('#inst .cd').last().locator('.nm');
+    const nome = campoDoInstrutor(page, 'nm');
     await expect(nome).toHaveAttribute('maxlength', '80');
     await nome.fill(longo);
     await nome.blur();
-    await expect(page.locator('#inst .cd').last().locator('.nm')).toHaveValue(longo.slice(0, 80).trim());
+    await expect(campoDoInstrutor(page, 'nm')).toHaveValue(longo.slice(0, 80).trim());
   });
 
-  // Em Alunos, o peso recusado fica no campo, com a mensagem embaixo dele (o Esc devolve o gravado); em Instrutores (até C),
-  // o aviso e o campo de volta ao peso de antes
+  // Em Alunos e em INVAs, o peso recusado fica no campo, com a mensagem embaixo dele (o Esc devolve o gravado)
   test('o peso vai até 300 kg, nos alunos e nos instrutores: acima disso, não vale', async ({ page }) => {
     await abrirSintetico(page);
     const historico = page.locator('#audit-log-list');
@@ -111,17 +108,17 @@ test.describe('Alunos', () => {
     await expect(erro).toHaveText('');
     await expect(historico).not.toContainText('Peso Novo aluno: 350');
 
-    // Instrutores (a tabela, até C): o aviso e o peso de antes
+    // INVAs (lista e detalhe desde o C): o mesmo, o peso recusado no campo, com a mensagem
     await irPara(page, 'ins');
     await page.locator('[data-act="addi"]').click();
-    const pesoIns = page.locator('#inst .cd').last().locator('[data-f="kg"]');
+    const pesoIns = campoDoInstrutor(page, 'kg');
     await pesoIns.fill('250');
     await pesoIns.blur();
     await expect(historico).toContainText('Peso Novo instrutor: 250 kg');
     await pesoIns.fill('350');
     await pesoIns.blur();
-    await expect(page.locator('.toast')).toHaveText('O peso vai de 1 a 300 kg.');
-    await expect(pesoIns).toHaveValue('250');
+    await expect(pesoIns).toHaveAttribute('aria-invalid', 'true');
+    await expect(historico).not.toContainText('Peso Novo instrutor: 350');
 
     // O peso digitado fica gravado; vazio, a pessoa fica sem peso
     await page.reload();
@@ -166,9 +163,9 @@ test.describe('Alunos', () => {
     await expect(contagem).toHaveText('1 de 3 alunos');
 
     // Um instrutor renomeado
-    await irParaVista(page, 'ins', 'cadastro');
-    await page.locator('#inst .cd[data-id="1"] .nm').fill('Instrutor Um');
-    await page.locator('#inst .cd[data-id="1"] .nm').blur();
+    await abrirInstrutor(page, 1);
+    await campoDoInstrutor(page, 'nm').fill('Instrutor Um');
+    await campoDoInstrutor(page, 'nm').blur();
     await expect(page.locator('#audit-log-list')).toContainText('Instrutor: Instrutor 01 → Instrutor Um');
     await irPara(page, 'alu');
     await expect.poll(() => nomesNaLista(page)).toEqual(['João Silva']);

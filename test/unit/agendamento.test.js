@@ -20,7 +20,7 @@ import { gerarCenario } from '../helpers/cenarios.js';
 import { situacaoPorMissao } from '../../js/resultados.js';
 
 import { hm } from '../../js/format.js';
-import { HORARIOS_PADRAO, DE_30_EM_30, HORARIO_DO_NOTURNO, HORARIO_DO_SOLO, INICIOS_DOS_TEMPOS } from '../../js/horarios.js';
+import { HORARIOS_PADRAO, DE_30_EM_30, HORARIO_DO_NOTURNO, HORARIO_DO_SOLO } from '../../js/horarios.js';
 import { aluno, cenario, instrutor, missaoExtra, apenas, GROUND_C152 } from '../helpers/montar.js';
 import { novoCurso, comExigenciasDasMissoes } from '../../js/programa.js';
 import { MODELOS } from '../../js/modelos-de-curso.js';
@@ -555,7 +555,9 @@ describe('Agendamento: o pedido e o voo fixo', () => {
     assert.equal(validarReversao({ ...reversaoDoAgendamento(antes), criadoComo: { mis: ['Voo Local'], fly: true } }), null);
   });
 
-  it('os pesos digitados vão para o cadastro, um texto do histórico cada; "Marcar disponível" liga o instrutor nos períodos do voo', () => {
+  // C, "tela": "Marcar disponível" põe o voo numa faixa do instrutor (js/disponibilidade.js, comOIntervalo) e não muda
+  // mais o aw; quem ainda não tinha faixas (lido pelo aw) passa a ter as do aw, com o voo
+  it('os pesos digitados vão para o cadastro, um texto do histórico cada; "Marcar disponível" liga o instrutor no horário do voo', () => {
     const estado = doDia();
     estado.ins[1].on = false;
     estado.ins[1].aw = estado.ins[1].aw.map(() => false);
@@ -563,25 +565,22 @@ describe('Agendamento: o pedido e o voo fixo', () => {
     assert.deepEqual(antes.pesos, [{ tipo: 'aluno', id: 1001, nm: 'Aluno 1001', kg: 82.5 }]);
     assert.deepEqual(historicoDosPesos(antes), ['Peso Aluno 1001: 82,5 kg (agendamento)']);
     assert.equal(estado.stu[1].kg, 82.5);
-    assert.deepEqual([estado.ins[1].on, estado.ins[1].aw.map((v, w) => (v ? w : -1)).filter(w => w >= 0)], [true, [2]]);
-    assert.deepEqual(antes.disponibilidade, { insId: 2, on: false, aw: Array(9).fill(false) });
+    assert.deepEqual([estado.ins[1].on, estado.ins[1].faixas, estado.ins[1].pausas], [true, [{ de: 610, ate: 670 }], []]);
+    assert.ok(estado.ins[1].aw.every(v => v === false), 'o aw não muda');
+    assert.deepEqual(antes.disponibilidade, { insId: 2, on: false, faixas: [], pausas: [] });
     // Desfazer devolve a disponibilidade; o peso é da pessoa e fica
     assert.ok(desfazerAgendamento(estado, validarReversao(reversaoDoAgendamento(antes))));
-    assert.deepEqual([estado.ins[1].on, estado.ins[1].aw.some(Boolean), estado.stu[1].kg], [false, false, 82.5]);
+    assert.deepEqual([estado.ins[1].on, estado.ins[1].faixas, estado.ins[1].pausas, estado.stu[1].kg], [false, [], [], 82.5]);
   });
 
-  // C (formato 29): até a tela do C, "Marcar disponível" ainda marca os tempos do voo no aw; o instrutor com as faixas da
-  // data fica com as do aw novo (o motor lê as faixas), e desfazer devolve as dele
-  it('"Marcar disponível" num instrutor com faixas: as faixas do aw novo; desfazer devolve as de antes', () => {
+  it('"Marcar disponível" num instrutor com faixas e o almoço: o voo entra numa faixa, a pausa perde só o que ele toca; desfazer devolve as de antes', () => {
     const estado = doDia();
-    estado.ins[1].on = false;
-    estado.ins[1].aw = estado.ins[1].aw.map(() => false);
-    Object.assign(estado.ins[1], { faixas: [], pausas: [] });
+    Object.assign(estado.ins[1], { faixas: [{ de: 390, ate: 640 }, { de: 700, ate: 1050 }], pausas: [{ de: 640, ate: 700 }] });
     const antes = aplicarAgendamento(estado, null, proposta({ disponibilizar: { insId: 2 } }));
-    const tempo = INICIOS_DOS_TEMPOS[2];
-    assert.deepEqual([estado.ins[1].faixas, estado.ins[1].pausas], [[{ de: tempo, ate: INICIOS_DOS_TEMPOS[3] }], []]);
+    assert.deepEqual([estado.ins[1].faixas, estado.ins[1].pausas], [[{ de: 390, ate: 670 }, { de: 700, ate: 1050 }], [{ de: 670, ate: 700 }]]);
+    assert.deepEqual(antes.disponibilidade, { insId: 2, on: true, faixas: [{ de: 390, ate: 640 }, { de: 700, ate: 1050 }], pausas: [{ de: 640, ate: 700 }] });
     assert.ok(desfazerAgendamento(estado, validarReversao(reversaoDoAgendamento(antes))));
-    assert.deepEqual([estado.ins[1].on, estado.ins[1].faixas, estado.ins[1].pausas], [false, [], []]);
+    assert.deepEqual([estado.ins[1].on, estado.ins[1].faixas, estado.ins[1].pausas], [true, [{ de: 390, ate: 640 }, { de: 700, ate: 1050 }], [{ de: 640, ate: 700 }]]);
   });
 
   it('a prévia é a escala que fica: aplicar no estado e refazer a escala dá a escala simulada', () => {

@@ -1,6 +1,6 @@
 // Atributos dos recursos na aba Recursos (Só VFR, Habilitação própria, Só Parafuso), a habilitação própria nas
 // habilitações do instrutor e o simulador com 2 h na Demanda e na Agenda
-import { test, expect, abrir, irPara, irParaVista, abrirEscala, abrirHistorico, campoDaAgenda } from './fixtures.js';
+import { test, expect, abrir, irPara, irParaVista, abrirEscala, abrirHistorico, campoDaAgenda, abrirInstrutor, secaoDoInstrutor, habilitacaoDoInstrutor } from './fixtures.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
 
 const linha = (page, nome) => page.locator('#out tbody tr:not(.win)', { hasText: nome });
@@ -43,12 +43,9 @@ test.describe('Atributos dos recursos', () => {
     await abrirEscala(page);
     await expect(page.locator('#out details.erros')).toContainText('exigem a habilitação própria deles');
 
-    await irPara(page, 'ins');
-    await page.locator('[data-vista-ins="cadastro"]').click();
-    await page.locator('#inst tr.cd[data-id="1"] [data-act="editar-habs"]').click();
-    const painel = page.locator('#painel-instrutor');
-    await expect(painel.locator('fieldset', { hasText: 'Habilitação própria do recurso' })).toContainText('Avião PR-VOM');
-    await painel.locator('[data-h="aviao:PR-VOM"]').check();
+    await abrirInstrutor(page, 1);
+    await expect(secaoDoInstrutor(page, 'habilitacoes').locator('fieldset', { hasText: 'Habilitação própria do recurso' })).toContainText('Avião PR-VOM');
+    await habilitacaoDoInstrutor(page, 'aviao:PR-VOM').check();
     await abrirEscala(page);
     await expect(linha(page, 'Aluno 1000').locator('.c-aviao')).toContainText('PR-VOM');
   });

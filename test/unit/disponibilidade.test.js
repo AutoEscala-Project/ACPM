@@ -1,9 +1,14 @@
 // A disponibilidade de um INVA numa data (C, commit "dados", formato 29): as faixas e as pausas no lugar dos nove tempos
 // de antes (aw), com a regra de antes do C (o compromisso inteiro dentro de uma faixa). O aw continua sendo lido onde não
-// há faixas (os dias antes do 29, os goldens), e as faixas que o passo 29 tira do aw dão a mesma leitura dele.
+// há faixas (os dias antes do 29, os goldens), e as faixas que o passo 29 tira do aw dão a mesma leitura dele. O commit
+// "tela": os três turnos, o que a tela mostra (o texto e a tira da linha), a conferência de "Editar faixas" e o "Marcar
+// disponível" do agendamento sobre as faixas.
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { disponivelPara, faixasDoAw, awComoOAppLia, normalizarFaixas, normalizarPausas, refazerFaixasDoAw, INICIO_DAS_FAIXAS } from '../../js/disponibilidade.js';
+import {
+  disponivelPara, faixasDoAw, awComoOAppLia, normalizarFaixas, normalizarPausas, refazerFaixasDoAw, INICIO_DAS_FAIXAS, TURNOS, ALMOCO, PAUSA_NOVA,
+  MINUTOS_DAS_FAIXAS, faixasDe, faixasDoTurno, turnoDasFaixas, textoDasFaixas, textoDasPausas, conferirFaixas, comOIntervalo, trechosDaTira, mesmasFaixas
+} from '../../js/disponibilidade.js';
 import { INICIOS_DOS_TEMPOS as T } from '../../js/horarios.js';
 
 const fim = k => (k < T.length - 1 ? T[k + 1] : 1440);
@@ -146,7 +151,7 @@ describe('normalizarFaixas e normalizarPausas', () => {
   });
 });
 
-describe('refazerFaixasDoAw: até a tela do C, quem muda o aw', () => {
+describe('refazerFaixasDoAw: a reversão de um agendamento antigo, que guardou só o aw', () => {
   test('o instrutor com faixas fica com as do aw novo', () => {
     const aw = todos();
     aw[2] = false;
@@ -185,5 +190,151 @@ describe('O motor com as faixas no lugar do aw', () => {
       }
     }
     assert.deepEqual(diferentes, []);
+  });
+});
+
+describe('Os turnos: cada um uma faixa em minutos, sem os limites de um período do dia (N12)', () => {
+  test('Dia inteiro 06:30–17:30, Noturno 17:30–24:00, Dia + noturno 06:30–24:00: nem Manhã nem Tarde', () => {
+    assert.deepEqual(TURNOS.map(t => [t.id, t.nome, t.de, t.ate]), [
+      ['dia', 'Dia inteiro', 390, 1050], ['noturno', 'Noturno', 1050, 1440], ['dia-e-noturno', 'Dia + noturno', 390, 1440]
+    ]);
+    assert.ok(Object.isFrozen(TURNOS));
+  });
+
+  test('o turno dá a faixa dele e nenhuma pausa; o desconhecido, nada', () => {
+    assert.deepEqual(faixasDoTurno('dia'), { faixas: [{ de: 390, ate: 1050 }], pausas: [] });
+    assert.deepEqual(faixasDoTurno('dia-e-noturno'), { faixas: [{ de: 390, ate: 1440 }], pausas: [] });
+    assert.equal(faixasDoTurno('manha'), null);
+  });
+
+  test('os turnos dão a leitura de antes dos turnos de mesmo nome (os tempos 0–7, 8 e 0–8)', () => {
+    const tempos = { dia: [0, 1, 2, 3, 4, 5, 6, 7], noturno: [8], 'dia-e-noturno': [0, 1, 2, 3, 4, 5, 6, 7, 8] };
+    for (const t of TURNOS) {
+      const aw = T.map((_, i) => tempos[t.id].includes(i));
+      for (const [a, b] of INTERVALOS) {
+        assert.equal(disponivelPara({ on: true, ...faixasDoTurno(t.id) }, a, b), leituraDeAntes({ on: true, aw }, a, b), `${t.nome} ${a}–${b}`);
+      }
+    }
+  });
+
+  test('o turno das faixas: a faixa só de um deles, sem pausa; outra coisa, nenhum', () => {
+    assert.equal(turnoDasFaixas({ faixas: [{ de: 1050, ate: 1440 }], pausas: [] }).nome, 'Noturno');
+    assert.equal(turnoDasFaixas({ faixas: [{ de: 390, ate: 1050 }], pausas: [ALMOCO] }), null);
+    assert.equal(turnoDasFaixas({ faixas: [{ de: 390, ate: 720 }], pausas: [] }), null);
+    assert.equal(turnoDasFaixas({ faixas: [], pausas: [] }), null);
+  });
+});
+
+describe('faixasDe: o que a tela mostra e edita', () => {
+  test('com faixas, as dele (normalizadas); sem elas, as do aw como o app o lia', () => {
+    assert.deepEqual(faixasDe({ on: true, aw: todos(), faixas: [{ de: 500, ate: 610 }, { de: 390, ate: 500 }], pausas: [{ de: 900, ate: 930 }] }),
+      { faixas: [{ de: 390, ate: 610 }], pausas: [{ de: 900, ate: 930 }] });
+    const aw = todos();
+    aw[4] = false;
+    assert.deepEqual(faixasDe({ on: true, aw }), faixasDoAw(aw));
+    assert.deepEqual(faixasDe({ on: true }), { faixas: [{ de: 390, ate: 1440 }], pausas: [] });
+    assert.deepEqual(faixasDe({ on: true, faixas: [{ de: 390, ate: 1050 }] }), { faixas: [{ de: 390, ate: 1050 }], pausas: [] });
+  });
+
+  test('mesmasFaixas compara depois de normalizar', () => {
+    assert.ok(mesmasFaixas({ faixas: [{ de: 390, ate: 500 }, { de: 500, ate: 610 }], pausas: [] }, { faixas: [{ de: 390, ate: 610 }] }));
+    assert.ok(!mesmasFaixas({ faixas: [{ de: 390, ate: 610 }], pausas: [ALMOCO] }, { faixas: [{ de: 390, ate: 610 }], pausas: [] }));
+  });
+});
+
+describe('textoDasFaixas e textoDasPausas: o que a linha e o detalhe dizem', () => {
+  test('uma faixa, duas, nenhuma; as pausas à parte', () => {
+    assert.equal(textoDasFaixas({ faixas: [{ de: 390, ate: 1050 }], pausas: [] }), '06:30–17:30');
+    assert.equal(textoDasFaixas({ faixas: [{ de: 390, ate: 760 }, { de: 820, ate: 1440 }], pausas: [] }), '06:30–12:40 e 13:40–24:00');
+    assert.equal(textoDasFaixas({ faixas: [{ de: 390, ate: 500 }, { de: 610, ate: 690 }, { de: 760, ate: 820 }], pausas: [] }), '06:30–08:20, 10:10–11:30 e 12:40–13:40');
+    assert.equal(textoDasFaixas({ faixas: [], pausas: [] }), 'sem faixa');
+    assert.equal(textoDasPausas({ faixas: [{ de: 390, ate: 1050 }], pausas: [ALMOCO, PAUSA_NOVA] }), '12:00–13:00 e 15:00–15:30');
+    assert.equal(textoDasPausas({ faixas: [{ de: 390, ate: 1050 }], pausas: [] }), '');
+  });
+
+  test('o Almoço é 12:00–13:00; a pausa nova, 15:00–15:30', () => {
+    assert.deepEqual(ALMOCO, { de: 720, ate: 780 });
+    assert.deepEqual(PAUSA_NOVA, { de: 900, ate: 930 });
+  });
+});
+
+describe('conferirFaixas: "Salvar faixas" de "Editar faixas"', () => {
+  test('os horários de 10 em 10 minutos, das 06:30 à meia-noite', () => {
+    assert.equal(MINUTOS_DAS_FAIXAS[0], 390);
+    assert.equal(MINUTOS_DAS_FAIXAS.at(-1), 1440);
+    assert.equal(MINUTOS_DAS_FAIXAS.length, 106);
+    assert.ok(MINUTOS_DAS_FAIXAS.every((m, i) => i === 0 || m - MINUTOS_DAS_FAIXAS[i - 1] === 10));
+    // Os limites dos tempos de antes (as faixas do passo 29) e dos turnos estão todos nela
+    for (const m of [...T, 1440]) assert.ok(MINUTOS_DAS_FAIXAS.includes(m), String(m));
+  });
+
+  test('o que vale sai normalizado (em ordem, as que se tocam juntas)', () => {
+    assert.deepEqual(conferirFaixas({ faixas: [{ de: 780, ate: 1050 }, { de: 390, ate: 720 }], pausas: [{ de: 900, ate: 930 }] }),
+      { erro: null, faixas: [{ de: 390, ate: 720 }, { de: 780, ate: 1050 }], pausas: [{ de: 900, ate: 930 }] });
+    assert.deepEqual(conferirFaixas({ faixas: [{ de: 390, ate: 720 }, { de: 720, ate: 1050 }], pausas: [] }).faixas, [{ de: 390, ate: 1050 }]);
+  });
+
+  test('o Até antes do De (ou igual) é recusado, com o número da faixa ou da pausa', () => {
+    assert.equal(conferirFaixas({ faixas: [{ de: 390, ate: 1050 }, { de: 900, ate: 900 }], pausas: [] }).erro, 'Na 2ª faixa, o Até vem depois do De.');
+    assert.equal(conferirFaixas({ faixas: [{ de: 390, ate: 1050 }], pausas: [{ de: 780, ate: 720 }] }).erro, 'Na 1ª pausa, o Até vem depois do De.');
+  });
+
+  test('um horário fora da lista (antes das 06:30, fora dos 10 minutos) é recusado', () => {
+    assert.equal(conferirFaixas({ faixas: [{ de: 380, ate: 1050 }], pausas: [] }).erro, 'Na 1ª faixa, escolha o De e o Até da lista.');
+    assert.equal(conferirFaixas({ faixas: [{ de: 390, ate: 1055 }], pausas: [] }).erro, 'Na 1ª faixa, escolha o De e o Até da lista.');
+  });
+
+  test('no máximo 8 faixas e 8 pausas; nenhuma faixa vale (o INVA não voa na data)', () => {
+    const muitas = Array.from({ length: 9 }, (_, i) => ({ de: 400 + 60 * i, ate: 430 + 60 * i }));
+    assert.equal(conferirFaixas({ faixas: muitas, pausas: [] }).erro, 'No máximo 8 faixas por data.');
+    assert.equal(conferirFaixas({ faixas: [], pausas: muitas }).erro, 'No máximo 8 pausas por data.');
+    assert.deepEqual(conferirFaixas({ faixas: [], pausas: [] }), { erro: null, faixas: [], pausas: [] });
+  });
+});
+
+describe('comOIntervalo: "Marcar disponível" do agendamento, sobre as faixas', () => {
+  const dia = { faixas: [{ de: 390, ate: 720 }, { de: 780, ate: 1050 }], pausas: [{ de: 720, ate: 780 }] };
+
+  test('o voo passa a caber numa faixa, e a pausa perde só o pedaço que ele toca', () => {
+    const r = comOIntervalo(dia, 700, 760);
+    assert.deepEqual(r, { faixas: [{ de: 390, ate: 760 }, { de: 780, ate: 1050 }], pausas: [{ de: 760, ate: 780 }] });
+    assert.ok(disponivelPara({ on: true, ...r }, 700, 760));
+    assert.ok(!disponivelPara({ on: true, ...r }, 700, 770), 'o resto da pausa continua');
+  });
+
+  test('o voo depois da última faixa: uma faixa nova, junta à que ele toca', () => {
+    assert.deepEqual(comOIntervalo({ faixas: [{ de: 390, ate: 1050 }], pausas: [] }, 1050, 1290), { faixas: [{ de: 390, ate: 1290 }], pausas: [] });
+    assert.deepEqual(comOIntervalo({ faixas: [], pausas: [] }, 500, 560), { faixas: [{ de: 500, ate: 560 }], pausas: [] });
+  });
+
+  test('o que cai antes das 06:30 não pede faixa; a pausa de dentro do voo sai inteira', () => {
+    assert.deepEqual(comOIntervalo({ faixas: [], pausas: [] }, 300, 380), { faixas: [], pausas: [] });
+    assert.deepEqual(comOIntervalo({ faixas: [{ de: 390, ate: 1050 }], pausas: [{ de: 600, ate: 620 }] }, 500, 700), { faixas: [{ de: 390, ate: 1050 }], pausas: [] });
+  });
+
+  test('todo intervalo conferido fica disponível, e o que já estava continua', () => {
+    for (let p = 0; p < 512; p += 37) {
+      const d = faixasDoAw(padrao(p));
+      for (const [a, b] of INTERVALOS.filter((_, i) => i % 97 === 0)) {
+        const r = comOIntervalo(d, a, b);
+        assert.ok(disponivelPara({ on: true, ...r }, a, b), `padrão ${p}, ${a}–${b}`);
+        for (const [c, e] of INTERVALOS.filter((_, i) => i % 211 === 0)) {
+          if (disponivelPara({ on: true, ...d }, c, e)) assert.ok(disponivelPara({ on: true, ...r }, c, e), `padrão ${p}: ${c}–${e} continua`);
+        }
+      }
+    }
+  });
+});
+
+describe('trechosDaTira: a tira da linha, das 06:30 à meia-noite', () => {
+  test('as faixas, as pausas e os voos em porcentagem da tira', () => {
+    const trechos = trechosDaTira({ faixas: [{ de: 390, ate: 1050 }], pausas: [ALMOCO] }, [{ a: 600, b: 660 }]);
+    const em = (tipo, de, ate) => ({ tipo, inicio: Math.round((de - 390) / 1050 * 1e4) / 100, largura: Math.round((ate - de) / 1050 * 1e4) / 100 });
+    assert.deepEqual(trechos, [em('faixa', 390, 1050), em('pausa', 720, 780), em('voo', 600, 660)]);
+  });
+
+  test('o voo antes das 06:30 ou que passa da meia-noite é cortado na tira; o de fora dela não aparece', () => {
+    assert.deepEqual(trechosDaTira({ faixas: [], pausas: [] }, [{ a: 360, b: 450 }, { a: 300, b: 380 }]).map(t => [t.tipo, t.inicio]), [['voo', 0]]);
+    assert.equal(trechosDaTira({ faixas: [], pausas: [] }, [{ a: 1400, b: 1500 }])[0].largura, Math.round(40 / 1050 * 1e4) / 100);
   });
 });
