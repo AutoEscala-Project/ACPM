@@ -32,6 +32,7 @@ import { STATUS_EM_ANDAMENTO, rotuloDoStatus, intervaloEfetivo } from './status.
 import { pesoECombustivel, textoDoCombustivel } from './combustivel.js';
 import { NOTA_DO_PROBLEMA } from './instrutor-escolhido.js';
 import { sobrepoe } from './viabilidade.js';
+import { faixasDe, comOIntervalo } from './disponibilidade.js';
 import { hm, fmtH, numeroBr, rotuloDaData, somarDias, duracaoHm } from './format.js';
 import { normalizarLimites } from './limites.js';
 import { repousoAntesDaVolta } from './noturno.js';
@@ -927,9 +928,11 @@ export function aplicarAgendamento(estado, base, proposta) {
   }
   let disponibilidade = null;
   if (proposta.disponibilizar && x) {
-    disponibilidade = { insId: x.id, on: x.on, aw: [...x.aw] };
-    x.on = true;
-    x.aw = x.aw.map((v, k) => v || sobrepoe(proposta.a, proposta.b, INICIOS_DOS_TEMPOS[k], k < INICIOS_DOS_TEMPOS.length - 1 ? INICIOS_DOS_TEMPOS[k + 1] : MINUTOS_DO_DIA));
+    // As faixas da data (C, "tela"): o voo entra numa faixa e sai das pausas que toca; desfazer devolve as de antes. Quem
+    // ainda não tinha faixas (lido pelo aw) passa a ter as do aw, com o voo; o aw não muda
+    const deAntes = faixasDe(x);
+    disponibilidade = { insId: x.id, on: x.on, ...deAntes };
+    Object.assign(x, { on: true, ...comOIntervalo(deAntes, proposta.a, proposta.b) });
   }
   return {
     stuId: aluno.id, mid, criado: !movido, pedido: movido ? doMovido : mid === 0 ? principal : null, fixo, disponibilidade, pesos, criadoComo: camposDoPedido(alvo)

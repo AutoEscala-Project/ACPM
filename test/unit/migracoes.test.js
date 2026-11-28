@@ -9,6 +9,7 @@ import { EQ } from '../../js/config.js';
 import { fechamentosDoWin, horarioAberto } from '../../js/fechamentos.js';
 import { INICIOS_DOS_TEMPOS as T, periodoDoMinuto } from '../../js/horarios.js';
 import { habilitacoesDoNivel } from '../../js/habilitacoes.js';
+import { faixasDoAw, disponivelPara } from '../../js/disponibilidade.js';
 
 describe('Migrações do formato dos dados', () => {
   // O único lugar que fixa o número: cada passo que muda o formato muda este número, o PASSOS de js/migracoes.js e o
@@ -32,7 +33,9 @@ describe('Migrações do formato dos dados', () => {
     assert.deepEqual(novo.av, { 'SIM-MONO-A': false, 'SIM-MONO-C': true, 'SIM-MLTE-E': true, 'SIM-MLTE-D': false, 'PR-BTB': false });
     assert.deepEqual(novo.resultado.out.map(o => o.r), ['SIM-MONO-C', 'PR-BTB']);
     assert.deepEqual(novo.resultado.out[0], { ...antigo.resultado.out[0], r: 'SIM-MONO-C' });
-    for (const campo of ['win', 'ins', 'pedidos', 'fStatus', 'campoDeOutraVersao']) assert.deepEqual(novo[campo], antigo[campo], campo);
+    for (const campo of ['win', 'pedidos', 'fStatus', 'campoDeOutraVersao']) assert.deepEqual(novo[campo], antigo[campo], campo);
+    // O 29 (C) acrescenta as faixas do aw (um aw de duas posições era lido como o dia todo)
+    assert.deepEqual(novo.ins, { 1: { on: true, aw: [true, false], faixas: [{ de: 390, ate: 1440 }], pausas: [] } });
     assert.deepEqual({ ...novo.resultado, out: null }, { ...antigo.resultado, out: null });
   });
 
@@ -385,10 +388,117 @@ test('fechamentosDoWin é o que o passo usa', () => {
   assert.deepEqual(dia28({ win }).fechamentos, fechamentosDoWin(win));
 });
 
-// Versão 30 (E, depois da junção com o D3; a 29 é a do C, que entra antes do E no previa): nada é convertido. O número
-// protege o que uma aba de antes tiraria ao gravar: a marca etapaDoPrograma dos pedidos (só true), os dois horários
-// exatos do pedido (jan h<m1>|h<m2>, U1), as chaves do dia exportacoes ({}) e reabertura (null), que o H escreve, e os
-// ids que saem de importadas a partir do G2
+// C (decisão 1 do Pedro): o passo 29 por migrarDia, a partir de um dia do 28. Cada instrutor do dia ganha as faixas (cada
+// sequência de tempos marcados) e as pausas (cada intervalo entre duas sequências) do aw como a data aberta o lia; o aw
+// fica, como a cópia de antes
+const dia29 = dia => { const { esquema, ...resto } = migrarDia({ ...dia, esquema: 28 }); assert.equal(esquema, ESQUEMA); return resto; };
+const instrutor29 = d => dia29({ ins: { 7: d } }).ins['7'];
+
+describe('versão 29 (C): a disponibilidade dos instrutores em faixas e pausas', () => {
+  test('o dia todo: uma faixa, sem pausa; o aw e o "vem" ficam', () => {
+    assert.deepEqual(instrutor29({ on: false, aw: aberto() }), { on: false, aw: aberto(), faixas: [{ de: 390, ate: 1440 }], pausas: [] });
+  });
+
+  test('o almoço guardado fica uma pausa; só o fim da última faixa do dia é a meia-noite', () => {
+    const aw = aberto();
+    aw[4] = false;
+    assert.deepEqual(instrutor29({ on: true, aw }), { on: true, aw, faixas: [{ de: T[0], ate: T[4] }, { de: T[5], ate: 1440 }], pausas: [{ de: T[4], ate: T[5] }] });
+  });
+
+  test('cada padrão dos nove tempos: as faixas e as pausas de faixasDoAw, e a mesma leitura nos tempos e nas bordas', () => {
+    for (let p = 0; p < 512; p++) {
+      const aw = T.map((_, i) => Boolean(p & (1 << i)));
+      const novo = instrutor29({ on: true, aw: [...aw] });
+      assert.deepEqual(novo, { on: true, aw, ...faixasDoAw(aw) }, `padrão ${p}`);
+      T.forEach((inicio, k) => {
+        const fim = k < T.length - 1 ? T[k + 1] : 1440;
+        assert.equal(disponivelPara(novo, inicio, fim), aw[k], `padrão ${p}, tempo ${k}`);
+      });
+    }
+  });
+
+  // O aw como a data aberta o lia (normalizeAndMigrateState, antes do motor): nove posições, só true marca; outro tamanho, o dia todo
+  test('o aw fora do padrão vira o que a data aberta lia (null, 0 e "sim" desmarcam; curto ou sem aw: o dia todo)', () => {
+    assert.deepEqual(instrutor29({ on: true, aw: [true, null, true, true, true, true, true, true, true] }).faixas, [{ de: T[0], ate: T[1] }, { de: T[2], ate: 1440 }]);
+    assert.deepEqual(instrutor29({ on: true, aw: [true, true, 0, 'sim', true, true, true, true, true] }).pausas, [{ de: T[2], ate: T[4] }]);
+    assert.deepEqual(instrutor29({ on: true, aw: [true, false] }).faixas, [{ de: 390, ate: 1440 }]);
+    assert.deepEqual(instrutor29({ on: true }), { on: true, faixas: [{ de: 390, ate: 1440 }], pausas: [] });
+    // Revisão externa de C2 (28/11): o aw vazio, o que não é lista e o longo demais também são o dia todo; nove "true"
+    // (texto) não marcam nada
+    for (const aw of [[], 'x', null, {}, 5, Array(10).fill(false)]) {
+      assert.deepEqual(instrutor29({ on: true, aw }).faixas, [{ de: 390, ate: 1440 }], JSON.stringify(aw));
+      assert.deepEqual(instrutor29({ on: true, aw }).pausas, [], JSON.stringify(aw));
+    }
+    assert.deepEqual(instrutor29({ on: true, aw: Array(9).fill('true') }).faixas, []);
+  });
+
+  // A data de antes do 29 e a mesma depois dele: a regra dá o mesmo em cada forma do aw (a regra lê o aw sem faixas como
+  // o passo o converte)
+  test('antes e depois do passo, a regra dá o mesmo, em cada forma do aw', () => {
+    const formas = [aberto(), T.map((_, i) => i !== 4), T.map(() => false), Array(8).fill(true), [...Array(9).fill(false), true], [], null, undefined, 0, 'x',
+      [1, 1, 0, 1, 1, 1, 1, 1, 1], Array(9).fill('true'), [true, null, true, true, true, true, true, true, true]];
+    for (const aw of formas) {
+      const antes = { on: true, aw };
+      const depois = instrutor29(structuredClone(antes));
+      for (let a = 300; a < 1500; a += 10) {
+        for (const d of [10, 60, 90, 120, 240, 300]) assert.equal(disponivelPara(depois, a, a + d), disponivelPara(antes, a, a + d), `${JSON.stringify(aw)} [${a}, ${a + d})`);
+      }
+    }
+  });
+
+  test('nenhum tempo marcado: nenhuma faixa', () => {
+    assert.deepEqual(instrutor29({ on: true, aw: T.map(() => false) }), { on: true, aw: T.map(() => false), faixas: [], pausas: [] });
+  });
+
+  test('idempotente: o instrutor que já tem faixas fica com elas, e duas vezes dá o mesmo', () => {
+    const ja = { on: true, aw: aberto(), faixas: [{ de: 500, ate: 900 }], pausas: [{ de: 700, ate: 760 }] };
+    assert.deepEqual(instrutor29(structuredClone(ja)), ja);
+    // Revisão externa de C2 (28/11): a lista de faixas, mesmo vazia, nunca é refeita pelo aw; sem pausas, continua sem
+    assert.deepEqual(instrutor29({ on: true, aw: aberto(), faixas: [] }), { on: true, aw: aberto(), faixas: [] });
+    assert.deepEqual(instrutor29({ on: true, aw: T.map(() => false), faixas: [{ de: 500, ate: 900 }] }), { on: true, aw: T.map(() => false), faixas: [{ de: 500, ate: 900 }] });
+    assert.equal(disponivelPara(instrutor29({ on: true, aw: aberto(), faixas: [] }), 600, 660), false);
+    assert.equal(disponivelPara(instrutor29({ on: true, aw: T.map(() => false), faixas: [{ de: 500, ate: 900 }] }), 600, 660), true);
+    const aw = aberto();
+    aw[1] = false;
+    const uma = dia29({ ins: { 1: { on: true, aw }, 2: { on: false, aw: aberto() } }, pedidos: {} });
+    assert.deepEqual(dia29(structuredClone(uma)), uma);
+    assert.deepEqual(migrarDia(structuredClone({ ...uma, esquema: ESQUEMA })), { ...uma, esquema: ESQUEMA });
+  });
+
+  test('cada forma guardada: o que não é objeto fica como está; sem ins, ou ins que não é objeto, nada muda', () => {
+    assert.deepEqual(dia29({ ins: { 1: null, 2: 5, 3: 'x' } }), { ins: { 1: null, 2: 5, 3: 'x' } });
+    assert.deepEqual(dia29({ pedidos: {} }), { pedidos: {} });
+    assert.deepEqual(dia29({ ins: null }), { ins: null });
+    assert.deepEqual(dia29({ ins: 'x' }), { ins: 'x' });
+    assert.deepEqual(dia29({ ins: [{ on: true, aw: aberto() }] }).ins, [{ on: true, aw: aberto(), faixas: [{ de: 390, ate: 1440 }], pausas: [] }]);
+  });
+
+  test('as faixas que não são lista dão lugar às do aw (a data aberta lia o aw)', () => {
+    const aw = aberto();
+    aw[8] = false;
+    assert.deepEqual(instrutor29({ on: true, aw, faixas: 'x', pausas: 3 }), { on: true, aw, faixas: [{ de: 390, ate: T[8] }], pausas: [] });
+  });
+
+  test('campos que o passo não conhece ficam, no dia e no instrutor; a entrada não muda', () => {
+    const dia = { win: aberto(), fechamentos: [], av: { 'PP-AJS': true }, ins: { 1: { on: true, aw: aberto(), novidade: 1 } }, outro: { x: 1 } };
+    const copia = structuredClone(dia);
+    const novo = dia29(dia);
+    assert.deepEqual(dia, copia);
+    for (const k of ['win', 'fechamentos', 'av', 'outro']) assert.deepEqual(novo[k], dia[k], k);
+    assert.equal(novo.ins['1'].novidade, 1);
+  });
+
+  test('o cadastro não muda', () => {
+    const cadastro = { ins: [{ id: 1, nm: 'Instrutor 01', hab: [] }], stu: [], frota: [], horarios: { C152: [390] } };
+    const { esquema, ...resto } = migrarCadastro({ ...structuredClone(cadastro), esquema: 28 });
+    assert.equal(esquema, ESQUEMA);
+    assert.deepEqual(resto, cadastro);
+  });
+});
+
+// Versão 30 (E, depois da 29 do C): nada é convertido. O número protege o que uma aba de antes tiraria ao gravar: a marca
+// etapaDoPrograma dos pedidos (só true), os dois horários exatos do pedido (jan h<m1>|h<m2>, U1), as chaves do dia
+// exportacoes ({}) e reabertura (null), que o H escreve, e os ids que saem de importadas a partir do G2
 describe('versão 30 (E)', () => {
   test('o dia e o cadastro passam como estão, também o que o passo não conhece', () => {
     const dia = {
@@ -403,5 +513,25 @@ describe('versão 30 (E)', () => {
     }
     assert.equal(precisaMigrar({ esquema: 29 }), true);
     assert.equal(precisaMigrar({ esquema: 30 }), false);
+  });
+
+  // A junção do E com o D3 (o previa com o C): o dia do 28 passa pela conversão do C (29: aw → faixas e pausas) e depois
+  // pela 30, que não converte nada; o que o E grava no dia fica
+  test('um dia do 28 passa pelo 29 do C (as faixas e as pausas do aw) e pelo 30, com o que o E grava', () => {
+    const aw = aberto();
+    aw[4] = false;
+    const pedidos = { 1000: { fly: true, jan: 'h500|h610', p1: 500, p2: 610, etapa: 'PP-07', etapaDoPrograma: true } };
+    const dia = { ins: { 7: { on: true, aw } }, pedidos, importadas: [1000], exportacoes: {}, reabertura: null, esquema: 28 };
+    const novo = migrarDia(structuredClone(dia));
+    assert.equal(novo.esquema, 30);
+    assert.deepEqual(novo.ins['7'], { on: true, aw, faixas: [{ de: T[0], ate: T[4] }, { de: T[5], ate: 1440 }], pausas: [{ de: T[4], ate: T[5] }] });
+    assert.deepEqual(novo.ins['7'], { on: true, aw, ...faixasDoAw(aw) });
+    assert.deepEqual(novo.pedidos, pedidos);
+    assert.deepEqual([novo.importadas, novo.exportacoes, novo.reabertura], [[1000], {}, null]);
+    assert.equal(disponivelPara(novo.ins['7'], T[4], T[4] + 30), false);
+    // O dia do 29 (já com as faixas) só passa pelo 30: as faixas ficam como estão, mesmo diferentes do aw
+    const de29 = { ...dia, ins: { 7: { on: true, aw, faixas: [{ de: 500, ate: 900 }], pausas: [] } }, esquema: 29 };
+    assert.deepEqual(migrarDia(structuredClone(de29)), { ...de29, esquema: 30 });
+    assert.equal(precisaMigrar({ esquema: 28 }), true);
   });
 });

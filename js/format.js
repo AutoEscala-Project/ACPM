@@ -31,7 +31,7 @@ export const amanhaISO = () => isoLocal(new Date(Date.now() + 864e5));
 // A data AAAA-MM-DD alguns dias depois (ou antes, com dias negativos), pelo calendário
 export const somarDias = (iso, dias) => new Date(Date.parse(iso + 'T12:00:00Z') + dias * 864e5).toISOString().slice(0, 10);
 
-// Rótulo da data em uso no topo: "quarta-feira, 11/11" (com o ano quando não é o de hoje) e "hoje", "amanhã" ou "ontem"
+// Rótulo da data em uso, no alto do trilho: "quarta-feira, 11/11" (com o ano quando não é o de hoje) e "hoje", "amanhã" ou "ontem"
 const DIAS_DA_SEMANA = ['domingo', 'segunda-feira', 'terça-feira', 'quarta-feira', 'quinta-feira', 'sexta-feira', 'sábado'];
 // O minuto do dia (0 a 1439) no relógio do navegador
 export const minutoDoDia = (data = new Date()) => data.getHours() * 60 + data.getMinutes();

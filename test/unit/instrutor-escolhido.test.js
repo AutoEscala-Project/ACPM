@@ -63,7 +63,7 @@ describe('Instrutor escolhido na Demanda: o motor encaixa o voo com ele', () => 
     assert.deepEqual(motivo(caso(instrutor(1, 9, { hab: ['grounds'] }))), [0, [['instrutor-escolhido', 'Rejeitado: o instrutor escolhido (Instrutor 01) não tem a habilitação de Voo Local no C152 (Voo Local + C152).']]]);
     assert.deepEqual(motivo(caso(instrutor(1, 9), {}, { bl: [1] })), [0, [['instrutor-escolhido', 'Rejeitado: o instrutor escolhido (Instrutor 01) está em “Não escalar com” deste aluno.']]]);
     assert.deepEqual(motivo(caso(instrutor(1, 9, { aw: Array(9).fill(false) }))),
-      [0, [['instrutores-indisponiveis', 'Rejeitado: o instrutor escolhido (Instrutor 01) não está disponível durante o voo inteiro nos horários possíveis.']]]);
+      [0, [['instrutores-indisponiveis', 'Rejeitado: o instrutor escolhido (Instrutor 01) não está disponível para começar o voo nos horários possíveis.']]]);
   });
 
   it('o escolhido que saiu do cadastro (excluído com outra data aberta): o voo fica com outro instrutor, com aviso', () => {
@@ -392,9 +392,10 @@ describe('Priorizar com: os instrutores do aluno (o par permanente do cadastro)'
   // Achado pela busca em cenários aleatórios (as sementes 487 e 786): o voo que ficou sem o “Priorizar com” e que a divisão
   // das horas leva para um instrutor do “Priorizar com” fica marcado e sem aviso (o aviso diria o instrutor errado). Sem a
   // primeira visita que o F1h teve antes da resposta de Pedro de 2026-11-26, as duas sementes voltam a levar um voo assim; a
-  // propriedade também é conferida em todo voo que termina com um instrutor do “Priorizar com”, em 300 cenários
+  // propriedade também é conferida em todo voo que termina com um instrutor do “Priorizar com”, em 300 cenários. Com a regra
+  // do início (C, "regra"), a semente 434 deixou de levar um voo assim: a 274 leva, com as duas regras
   it('o voo que a divisão das horas leva para o instrutor do “Priorizar com” não tem aviso', () => {
-    for (const seed of [434, 786]) {
+    for (const seed of [274, 786]) {
       const estado = comEscolhas(gerarCenario(seed), seed);
       const antes = runAllocationEngine(estado, { compactar: false, dividirHoras: false });
       const depois = runAllocationEngine(estado);

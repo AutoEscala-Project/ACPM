@@ -2,7 +2,7 @@
 // acpm4_cursos). O Administrador inclui, muda, reordena e tira missões; os outros perfis só consultam. Cada alteração
 // grava o curso inteiro (não o cadastro nem o dia) e não entra no histórico da data. Cada aluno tem o curso dele, em
 // Alunos.
-import { test, comProgresso, expect, abrir, irPara, irParaVista, confirmar, abrirEscala, prepararContexto, vigiarErros, preencherLogin, AMANHA, URL_APP, entrar as entrarNoApp, abrirHistorico, appPronto, caixaVoa, diaSeguinte, rotuloDaData, alvosPequenos, larguraDaPagina, semNome, campoDoAluno, textoDoProgresso, progressoNaLinha } from './fixtures.js';
+import { test, comProgresso, expect, abrir, irPara, confirmar, abrirEscala, prepararContexto, vigiarErros, preencherLogin, AMANHA, URL_APP, entrar as entrarNoApp, abrirHistorico, appPronto, caixaVoa, diaSeguinte, rotuloDaData, alvosPequenos, larguraDaPagina, semNome, campoDoAluno, textoDoProgresso, progressoNaLinha, abrirInstrutor, habilitacaoDoInstrutor } from './fixtures.js';
 import { criarSupabaseFalso, documentosAtuais, documentosFase3, CONTAS } from './supabase-falso.js';
 import { aluno, cenario, instrutor, missaoExtra } from '../helpers/montar.js';
 import { IDS } from '../helpers/casos-do-programa.js';
@@ -94,7 +94,7 @@ test.describe('Cursos', () => {
     await expect(caixa().locator('legend')).toHaveText(['Ground e simulador', 'Voo', 'Aviões', 'Checador: curso', 'Checador: motor', 'Checador: regras']);
     await expect(caixa().locator('input[data-cf="exige"]:checked')).toHaveCount(0);
     await caixa().getByRole('checkbox', { name: 'PP-01 exige Endosso Solo' }).check();
-    await expect(page.locator('#toast-box')).toContainText('Nenhum INVA ativo tem Endosso Solo: os voos de PP-01 ficam fora da escala até um INVA ter (marque em Instrutores › Editar habilitações).');
+    await expect(page.locator('#toast-box')).toContainText('Nenhum INVA ativo tem Endosso Solo: os voos de PP-01 ficam fora da escala até um INVA ter (marque em INVAs › Habilitações).');
     await expect(pp01().locator('[data-aviso-exige]')).toHaveText('Nenhum INVA ativo tem Endosso Solo: os voos ficam fora da escala.');
     await expect(caixa().locator('summary')).toHaveText('Habilitações que o INVA precisa: Endosso Solo');
     await expect(caixa()).toHaveAttribute('open', '');
@@ -107,11 +107,9 @@ test.describe('Cursos', () => {
       'PP: PP-01 exige do INVA Endosso Solo', 'PP: PP-01 exige do INVA Voo de Navegação ≥ 150 NM e Endosso Solo'
     ]);
     // O INVA que passa a ter as duas tira o aviso da linha (inativo, ele não conta: os dois testes do INVA inativo e ativo)
-    await irParaVista(page, 'ins', 'cadastro');
-    await page.locator('#inst .cd[data-id="1"] [data-act="editar-habs"]').click();
-    await page.locator('#painel-instrutor [data-f="hab"][data-h="endosso_solo"]').check();
-    await page.locator('#painel-instrutor [data-f="hab"][data-h="navegacao_150"]').check();
-    await page.locator('#btn-fechar-painel-instrutor').click();
+    await abrirInstrutor(page, 1);
+    await habilitacaoDoInstrutor(page, 'endosso_solo').check();
+    await habilitacaoDoInstrutor(page, 'navegacao_150').check();
     await irPara(page, 'cur');
     await expect(pp01().locator('[data-aviso-exige]')).toHaveCount(0);
     // Desmarcar as duas volta ao de antes

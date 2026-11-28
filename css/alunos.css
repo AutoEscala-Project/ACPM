@@ -1,5 +1,7 @@
 /* Alunos: as etiquetas de "Não escalar com" e "Priorizar com", os voos de "Nesta data" e os formulários dos resultados de
-   "Curso e missões" (o resto é do componente: css/lista.css) */
+   "Curso e missões" (o resto é do componente: css/lista.css). O peso que falta, em Alunos e em INVAs: o texto de dentro
+   do campo ("sem peso") em amarelo (veio de css/cadastros.css, que saiu no C) */
+input.falta::placeholder { color: var(--wa); }
 .bl { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 .tg {
   display: inline-flex;

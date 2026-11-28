@@ -46,8 +46,8 @@ function valores(tipo, id) {
   return Object.fromEntries(CAMPOS_PESSOAIS.map(({ id: c }) => [c, VALOR[c] ? VALOR[c](guardados[c]) : guardados[c] || '']));
 }
 
-// A nota da seção (e do painel dos instrutores)
-export const NOTA_DOS_DADOS = 'Só operadores, administradores e a secretaria veem estes dados. Eles não vão para a escala, o CSV, o PDF nem o link compartilhado.';
+// A nota da seção
+const NOTA_DOS_DADOS = 'Só operadores, administradores e a secretaria veem estes dados. Eles não vão para a escala, o CSV, o PDF nem o link compartilhado.';
 
 // A seção "Dados pessoais" do detalhe (lista: o id da lista, que dá os ids dos campos), ou null para quem não vê
 export function secaoDosDadosPessoais(lista, tipo, id) {

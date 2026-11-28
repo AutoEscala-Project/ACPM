@@ -44,9 +44,9 @@ export function fecharAviso(tipo) {
   $('#aviso-sync').hidden = true;
 }
 
-// As gavetas (o Histórico, as habilitações, os dados pessoais e as sugestões) abrem no mesmo lugar, à direita, umas
-// sobre as outras. A de cima é a que abriu por último: ela fica por cima na tela (a camada, no z-index da .gaveta), e o
-// Esc fecha só ela, ou a gaveta em que está o foco; o próximo Esc fecha a de baixo
+// As gavetas (o Histórico e as sugestões) abrem no mesmo lugar, à direita, umas sobre as outras. A de cima é a que
+// abriu por último: ela fica por cima na tela (a camada, no z-index da .gaveta), e o Esc fecha só ela, ou a gaveta em
+// que está o foco; o próximo Esc fecha a de baixo
 let gavetasJaAbertas = 0;
 const gavetasAbertas = () => [...document.querySelectorAll('.gaveta:not([hidden])')]
   .sort((p, q) => (+p.dataset.ordem || 0) - (+q.dataset.ordem || 0));
@@ -92,11 +92,6 @@ export function avisarDoLink(texto, tipo) {
   $('#aviso-link').hidden = false;
   $('#btn-fechar-aviso-link').onclick = () => { $('#aviso-link').hidden = true; };
 }
-
-export const focusLast = sel => {
-  const e = [...document.querySelectorAll(sel)].pop();
-  if (e) { e.scrollIntoView({ block: 'center' }); e.focus(); e.select(); }
-};
 
 // Um balão junto de um elemento (o popup do mapa da escala, a dica): acima dele (ou abaixo, quando não cabe), sempre
 // inteiro na tela; a seta (--seta) aponta para o meio do elemento

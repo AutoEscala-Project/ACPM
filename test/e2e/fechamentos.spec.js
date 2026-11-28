@@ -3,7 +3,7 @@
 // para todos os recursos ou para categorias, e o ✕ abre de novo. Na escala não aprovada, cada mudança pergunta antes
 // (#dlg-refazer, F1g); na aprovada, não. A Escala, o "+ Agendar voo" e os horários de decolagem os leem; o Histórico desfaz
 // (sem perguntar), e o trilho tem o aviso deles, que leva ao bloco aberto
-import { test, expect, abrir, irPara, abrirEscala, lerEscala, abrirHistorico, aprovar, fecharHorarios, abrirDeNovo, abrirFechamentos, horariosFechados, resumoDosFechamentos, intervalosFechados, perguntaDoRefazer, naoRefazer, refazer, avisosDaData, trilho, botaoDaData, alvosPequenos, semNome, larguraDaPagina } from './fixtures.js';
+import { test, expect, abrir, irPara, abrirEscala, lerEscala, abrirHistorico, aprovar, fecharHorarios, abrirDeNovo, abrirFechamentos, horariosFechados, resumoDosFechamentos, intervalosFechados, perguntaDoRefazer, naoRefazer, refazer, avisosDaData, alvosPequenos, semNome, larguraDaPagina, mostrarAvisos } from './fixtures.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
 
 const estado = () => cenario({ ins: [instrutor(1, 9), instrutor(2, 9)], stu: [
@@ -260,7 +260,7 @@ test.describe('Horários fechados nesta data, na Escala', () => {
     await horariosFechados(page).locator('summary').click();
     await expect(horariosFechados(page)).toHaveJSProperty('open', false);
     await irPara(page, 'rec');
-    if (!await trilho(page).isVisible()) await botaoDaData(page).click();
+    await mostrarAvisos(page);
     await aviso.locator('a').click();
     await expect(page.locator('#s-esc')).toBeVisible();
     await expect(horariosFechados(page)).toHaveJSProperty('open', true);

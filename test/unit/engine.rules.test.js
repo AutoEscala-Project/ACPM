@@ -61,11 +61,45 @@ describe('Voos: janelas preferidas e encaixe', () => {
     assert.deepEqual([out.map(o => [o.eqType, hm(o.a), hm(o.b), o.tag]), al], [[['Sim. Mono', '16:20', '17:50', 'Pref. 1']], []]);
   });
 
-  it('o simulador que passa das 17:30 precisa do instrutor disponível na noite', () => {
+  // A regra do início (C, "regra"; decisão 1 do Pedro): a missão começa dentro de uma faixa do instrutor e pode terminar
+  // depois dela, sem tocar nenhuma pausa; o fim da faixa não entra
+  it('o simulador das 16:20 não precisa da noite: o instrutor do dia inteiro começa às 16:20 e passa das 17:30', () => {
     const sim = { mis: 'Simulador', eq: 'Sim. Mono', nb: 1.5, p1: 980, p2: -1 };
     const semNoite = Array(9).fill(true).map((v, k) => k !== 8);
     const { out } = alocar({ ins: [instrutor(1, 9, { aw: semNoite })], stu: [aluno(1000, sim)] });
-    assert.deepEqual(out.map(o => [hm(o.a), hm(o.b), o.tag]), [['14:30', '16:00', 'Próximo livre']]);
+    assert.deepEqual(out.map(o => [hm(o.a), hm(o.b), o.tag]), [['16:20', '17:50', 'Pref. 1']]);
+  });
+
+  it('o instrutor da manhã recebe o voo das 12:00 no PA-34 (começa antes das 12:40 e termina depois)', () => {
+    const manha = { aw: [], faixas: [{ de: 390, ate: 760 }], pausas: [] };
+    const pa34 = { mis: 'Multimotor', eq: 'PA-34', nb: 1, p1: 720, p2: -1 };
+    const { out, al } = alocar({ ins: [instrutor(1, 9, manha)], stu: [aluno(1000, pa34)] });
+    assert.deepEqual([out.map(o => [hm(o.a), hm(o.b), o.insId, o.tag]), al], [[['12:00', '13:00', 1, 'Pref. 1']], []]);
+  });
+
+  it('até as 17:30 não inclui o Noturno: o instrutor do dia inteiro não começa o Noturno', () => {
+    const noturno = { mis: 'Noturno', eq: 'C172', nb: 4 };
+    const caso = faixas => alocar({ ins: [instrutor(1, 9, { aw: [], faixas, pausas: [] })], stu: [aluno(1000, noturno)] });
+    assert.deepEqual(caso([{ de: 390, ate: 1050 }]).al.map(a => a.codigo), ['instrutores-indisponiveis']);
+    assert.deepEqual(caso([{ de: 390, ate: 1060 }]).out.map(o => [hm(o.a), hm(o.b)]), [['17:30', '21:30']]);
+  });
+
+  it('o voo que termina até as 06:30 continua aceito, sem faixa nenhuma até lá', () => {
+    const cedo = { mis: 'Voo Local', eq: 'C152', nb: 0.5, p1: 360, p2: -1 };
+    const estado = cenario({ ins: [instrutor(1, 9, { aw: [], faixas: [{ de: 600, ate: 700 }], pausas: [] })], stu: [aluno(1000, cedo)] });
+    estado.horarios = { C152: [360], C172: [360], sim: [360], 'PA-34': [360], ground: [360] };
+    const { out } = runAllocationEngine(estado, { compactar: false });
+    assert.deepEqual(out.map(o => [hm(o.a), hm(o.b)]), [['06:00', '06:30']]);
+  });
+
+  it('a pausa do almoço continua: o simulador das 10:10 não a atravessa e vai para o horário mais perto que não a toca', () => {
+    const sim = { mis: 'Simulador', eq: 'Sim. Mono', nb: 2, p1: 610, p2: -1 };
+    const almoco = { aw: [], faixas: [{ de: 390, ate: 690 }, { de: 760, ate: 1050 }], pausas: [{ de: 690, ate: 760 }] };
+    const comPausa = alocar({ ins: [instrutor(1, 9, almoco)], stu: [aluno(1000, sim)] });
+    assert.deepEqual(comPausa.out.map(o => [hm(o.a), hm(o.b)]), [['08:20', '10:20']]);
+    // Sem a pausa, só o intervalo entre as faixas: começa às 10:10, dentro da 1ª, e passa dele
+    const semPausa = alocar({ ins: [instrutor(1, 9, { ...almoco, pausas: [] })], stu: [aluno(1000, sim)] });
+    assert.deepEqual(semPausa.out.map(o => [hm(o.a), hm(o.b)]), [['10:10', '12:10']]);
   });
 
   it('com o Noturno do aluno no dia (só às 17:30), o simulador e a aula dele terminam antes', () => {
@@ -533,7 +567,7 @@ describe('Ground School', () => {
     });
     assert.equal(out.length, 0);
     assert.deepEqual(al, [
-      { t: 'err', s: 'Aluno 1000', m: 'Rejeitado: nenhum instrutor habilitado está disponível durante as 01h30 nos horários possíveis.', codigo: 'instrutores-indisponiveis' },
+      { t: 'err', s: 'Aluno 1000', m: 'Rejeitado: nenhum instrutor habilitado está disponível para começar a aula nos horários possíveis.', codigo: 'instrutores-indisponiveis' },
       { t: 'err', s: 'Aluno 1000 (Voo Local)', m: 'Rejeitado: o “Ground C152” de hoje, que vem antes deste voo, não entrou na escala.', codigo: 'ground-pendente' }
     ]);
   });

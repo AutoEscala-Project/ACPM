@@ -16,7 +16,7 @@
   "al": [
     {"t":"err","s":"Aluno 01","m":"Rejeitado: a missão “Multimotor” só voa em PA-34 (o pedido está no Sim. Multi).","codigo":"equipamento-da-missao"},
     {"t":"err","s":"Aluno 08 (Voo Solo)","m":"Rejeitado: nenhum horário aberto depois do Ground (08:00) comporta 1 h até as 17:30.","codigo":"depois-do-ground"},
-    {"t":"err","s":"Aluno 07","m":"Rejeitado: nenhum instrutor habilitado (MLTE (PA-34)) está disponível durante o voo inteiro nos horários possíveis.","codigo":"instrutores-indisponiveis"},
+    {"t":"err","s":"Aluno 07","m":"Rejeitado: nenhum instrutor habilitado (MLTE (PA-34)) está disponível para começar o voo nos horários possíveis.","codigo":"instrutores-indisponiveis"},
     {"t":"err","s":"Aluno 10 (Multimotor)","m":"Rejeitado: o aluno já tem outra missão nos horários possíveis.","codigo":"aluno-ocupado"},
     {"t":"err","s":"Aluno 08 (Parafuso)","m":"Rejeitado: os instrutores habilitados (Voo de Parafuso (SPIN) + MLTE (PA-34)) já têm outro compromisso nos horários possíveis.","codigo":"instrutores-ocupados"}
   ],

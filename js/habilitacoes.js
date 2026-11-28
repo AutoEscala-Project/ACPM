@@ -6,7 +6,7 @@
 // Este registro não importa a frota: a frota (js/frota.js) é que lê dele
 import { MATRICULA } from './config.js';
 
-// Ordem da grade na aba Instrutores (curto: rótulo da grade; nome: o nome completo, na dica e nas mensagens)
+// A ordem do registro, a das Habilitações de INVAs (curto: o rótulo da linha e do filtro; nome: o nome completo, na dica e nas mensagens)
 export const HABILITACOES = [
   { id: 'grounds', nome: 'Grounds (C152, C172 e Navegação)', curto: 'Grounds C152/C172/Nav.' },
   { id: 'ground_pa34', nome: 'Ground (PA-34)', curto: 'Ground PA-34' },
