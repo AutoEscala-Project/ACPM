@@ -6,14 +6,16 @@
 // não está mais aberta não entra. A leitura que falha guarda o erro e a lista da leitura de antes (a tela diz que ela não é
 // a de agora). A escala da data que mudou em outro computador (ApiClient.diaMudou: na vigia, na entrada de um pedido
 // aprovado e na importação) fica marcada até a data ser lida de novo. Entre duas leituras da mesma data, o que mudou (os
-// novos, os aprovados, os que voltaram a aguardar, os cancelados), menos o que este navegador acabou de mudar, vai para o
-// aviso das novidades. A vigia só lê: nada é gravado, e nenhum voo muda de lugar.
+// novos, os aprovados, os que voltaram a aguardar, os cancelados), menos o que este navegador acabou de mudar (até uma
+// leitura boa da data o mostrar: a leitura da ação trocada por outra mais nova, ou que falhou, não o perde), vai para o
+// aviso das novidades. Uma pergunta pela escala de cada vez por data. No modo local, a escala da data aberta gravada por
+// outra aba (a chave do dia) faz a pergunta. A vigia só lê: nada é gravado, e nenhum voo muda de lugar.
 // solicitacoesDaData(): { data, lista (null: ainda não lida), leitura ('lendo', 'lidos' ou 'erro'), lidaEm, erro, diaMudou }
 import { DATA } from './state.js';
 import { ApiClient } from './storage.js';
 import { redesenhar } from './redesenho.js';
 import { novidadesDasSolicitacoes, temNovidades } from './agenda.js';
-import { CHAVE_AGENDA } from './backends/local.js';
+import { CHAVE_AGENDA, chaveLocalDoDia } from './backends/local.js';
 
 // A vigia: a cada minuto; na volta à página e da conexão, quando a última leitura tem mais disso
 const INTERVALO_DA_VIGIA_MS = 60000;
@@ -35,6 +37,10 @@ export function criarSolicitacoesDaData({
   let releituras = 0;
   // O aviso das novidades (a vigia o põe)
   let aoNovidades = () => {};
+  // Os pedidos que este navegador mudou na data (deste de cada leitura pedida), fora das novidades até uma leitura boa
+  // dela as calcular; e as datas com uma pergunta pela escala à espera da resposta
+  let doNavegador = { data: null, ids: new Set() };
+  const perguntando = new Set();
 
   const solicitacoesDaData = () => (atual.data === dataAberta() ? atual : vazio(dataAberta()));
 
@@ -43,7 +49,9 @@ export function criarSolicitacoesDaData({
   // também pela escala da data
   function lerSolicitacoesDaData({ dataLida = false, deste = [], conferirDia = false } = {}) {
     if (dataLida) releituras++;
-    const leitura = { data: dataAberta(), vez: ++vezes, dataLida, deste };
+    const leitura = { data: dataAberta(), vez: ++vezes, dataLida };
+    if (doNavegador.data !== leitura.data) doNavegador = { data: leitura.data, ids: new Set() };
+    for (const id of deste) doNavegador.ids.add(id);
     emCurso = leitura;
     if (conferirDia && !solicitacoesDaData().diaMudou) perguntarPelaEscala(leitura.data);
     leitura.fim = executar(leitura);
@@ -51,19 +59,24 @@ export function criarSolicitacoesDaData({
   }
 
   // A pergunta não segura a lista: a resposta vem quando vier (o servidor espera as gravações deste navegador). A que falha
-  // não diz nada (a leitura seguinte pergunta de novo)
+  // não diz nada (a leitura seguinte pergunta de novo). Com uma pergunta da data à espera (uma gravação presa deste
+  // navegador, sem conexão), nenhuma outra: elas não se acumulam para sair juntas na volta da conexão
   async function perguntarPelaEscala(data) {
+    if (perguntando.has(data)) return;
+    perguntando.add(data);
     const vez = releituras;
     let mudou;
     try {
       mudou = await diaMudou(data);
     } catch {
       return;
+    } finally {
+      perguntando.delete(data);
     }
     if (mudou && vez === releituras) marcarDiaMudou(data);
   }
 
-  async function executar({ data, vez, dataLida, deste }) {
+  async function executar({ data, vez, dataLida }) {
     let lista = null, erro = null;
     try {
       lista = await ler(data);
@@ -79,8 +92,12 @@ export function criarSolicitacoesDaData({
     atual = erro ? { ...antes, leitura: 'erro', erro, diaMudou } : { data, lista, leitura: 'lidos', lidaEm: agora(), erro: null, diaMudou };
     if (!erro) lidaAs = relogio();
     aoLer();
-    // As novidades: só entre duas leituras boas da mesma data
-    if (erro || !antes.lista) return;
+    // As novidades: só entre duas leituras boas da mesma data. A leitura boa mostra o que este navegador mudou até ela (ela
+    // foi pedida depois): esses pedidos voltam a ser como os outros
+    if (erro) return;
+    const deste = doNavegador.data === data ? [...doNavegador.ids] : [];
+    if (doNavegador.data === data) doNavegador.ids.clear();
+    if (!antes.lista) return;
     const novidades = novidadesDasSolicitacoes(antes.lista, lista, { deste });
     if (temNovidades(novidades)) aoNovidades(novidades, data);
   }
@@ -102,8 +119,9 @@ export function criarSolicitacoesDaData({
 
   // A vigia (D3). Ela só lê depois da primeira leitura da data aberta (a abertura do app, o login: antes disso não há o que
   // vigiar) e nunca com outra leitura da data em curso. documento e janela: os eventos da página (visibilitychange; online
-  // e storage, a chave da agenda deste navegador); agendar e desagendar: o temporizador. Devolve como parar
-  function vigiar({ documento, janela, aoNovidades: avisar = () => {}, agendar = setInterval, desagendar = clearInterval, chave = CHAVE_AGENDA }) {
+  // e storage: a chave da agenda deste navegador lê os pedidos; a do dia da data aberta, gravado por outra aba, pergunta
+  // pela escala); agendar e desagendar: o temporizador. Devolve como parar
+  function vigiar({ documento, janela, aoNovidades: avisar = () => {}, agendar = setInterval, desagendar = clearInterval, chave = CHAVE_AGENDA, chaveDoDia = chaveLocalDoDia }) {
     aoNovidades = avisar;
     const podeLer = () => atual.data === dataAberta() && !(emCurso && emCurso.data === dataAberta());
     const ler = () => { if (podeLer()) lerSolicitacoesDaData({ conferirDia: true }); };
@@ -112,7 +130,10 @@ export function criarSolicitacoesDaData({
     const aCadaMinuto = () => { if (visivel()) ler(); };
     const naVolta = () => { if (visivel() && antiga()) ler(); };
     const naConexao = () => { if (antiga()) ler(); };
-    const deOutraAba = e => { if (e.key === chave) ler(); };
+    const deOutraAba = e => {
+      if (e.key === chave) ler();
+      else if (atual.data === dataAberta() && e.key === chaveDoDia(dataAberta()) && !atual.diaMudou) perguntarPelaEscala(dataAberta());
+    };
     const id = agendar(aCadaMinuto, INTERVALO_DA_VIGIA_MS);
     documento.addEventListener('visibilitychange', naVolta);
     janela.addEventListener('online', naConexao);

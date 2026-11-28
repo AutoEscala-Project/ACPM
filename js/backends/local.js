@@ -13,6 +13,11 @@ import { duracaoDigitada } from '../rules.js';
 const CHAVES_LOCAIS = { cadastro: 'acpm4_cadastro', estado: 'acpm3', escala: 'acpm3_res', historico: 'acpm3_audit', bi: 'acpm3_bi' };
 export const CHAVE_LEGADA = 'acpm2';
 const PREFIXO_DIA = 'acpm4_dia_';
+// A chave do dia de uma data (a vigia dos pedidos, D3: a escala gravada por outra aba deste navegador)
+export const chaveLocalDoDia = data => PREFIXO_DIA + data;
+// O dia de cada data como esta aba o leu ou gravou por último (o texto guardado; null: sem dia guardado). Outra aba deste
+// navegador que grava a data muda o que está guardado: diaMudou compara os dois
+const diasDestaAba = new Map();
 const CHAVE_HISTORICO = 'acpm4_historico';
 export const CHAVE_AGENDA = 'acpm4_agenda';
 // A marca da conversão dos pedidos de antes da aprovação (feita uma vez, na primeira leitura ou gravação da agenda)
@@ -99,9 +104,11 @@ function converterAcpm2(o) {
 }
 
 export const backendLocal = {
-  async ler(documento) {
+  // guardarVersao: false só consulta (a véspera): o dia desta aba continua o da leitura de antes, como no servidor
+  async ler(documento, { guardarVersao = true } = {}) {
     const chave = chaveLocal(documento);
     try {
+      if (guardarVersao && DOCUMENTO_DIA.test(documento)) diasDestaAba.set(chave, localStorage.getItem(chave));
       const x = JSON.parse(localStorage.getItem(chave));
       if (x || documento !== 'estado') return x;
       return converterAcpm2(JSON.parse(localStorage.getItem(CHAVE_LEGADA)));
@@ -112,6 +119,7 @@ export const backendLocal = {
     const chave = chaveLocal(documento);
     try {
       localStorage.setItem(chave, JSON.stringify(conteudo));
+      if (DOCUMENTO_DIA.test(documento)) diasDestaAba.set(chave, localStorage.getItem(chave));
       // Como o servidor: quem sai do cadastro leva os dados pessoais junto
       if (documento === 'cadastro') {
         const dados = lerJson(CHAVE_DADOS_PESSOAIS);
@@ -126,9 +134,11 @@ export const backendLocal = {
     return datasGuardadas().filter(d => formatoDe(lerJson(PREFIXO_DIA + d)) < esquema);
   },
 
-  // Sem servidor, só este navegador grava as datas dele: a escala nunca mudou em outro computador
-  async diaMudou() {
-    return false;
+  // Sem servidor, só as abas deste navegador gravam as datas dele: a escala mudou quando o dia guardado agora não é o que
+  // esta aba leu ou gravou por último (outra aba gravou a data). A data que esta aba nunca leu nem gravou: nada a comparar
+  async diaMudou(data) {
+    const chave = chaveLocalDoDia(data);
+    return diasDestaAba.has(chave) && localStorage.getItem(chave) !== diasDestaAba.get(chave);
   },
 
   async listarDias(de, ate) {
@@ -167,7 +177,9 @@ export const backendLocal = {
   async removerDiasSimulados() {
     for (const d of datasGuardadas()) {
       const dia = lerJson(PREFIXO_DIA + d);
-      if (dia && dia.simulado) localStorage.removeItem(PREFIXO_DIA + d);
+      if (!dia || !dia.simulado) continue;
+      localStorage.removeItem(PREFIXO_DIA + d);
+      if (diasDestaAba.has(PREFIXO_DIA + d)) diasDestaAba.set(PREFIXO_DIA + d, null);
     }
   },
 

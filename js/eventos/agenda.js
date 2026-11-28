@@ -39,11 +39,16 @@ const tela = criarMestreDetalhe({
 });
 
 // O desenho de Pedidos (js/redesenho.js), pelo papel: a barra, os avisos, o formulário e a lista. Ele não faz nada até
-// Pedidos ser aberta. Outra data aberta: o pedido escolhido era da de antes
+// Pedidos ser aberta. Outra data aberta: o pedido escolhido era da de antes. O foco que estava no detalhe e se perdeu (o
+// botão que saiu: o pedido que a vigia trouxe aprovado ou cancelado em outro computador) fica no detalhe, como depois de
+// uma ação daqui
 function desenharPedidos(momento) {
+  const a = document.activeElement;
+  const noDetalhe = a instanceof Element && Boolean(a.closest('#det-age'));
   rAgenda();
   if (mudouADataDaLista() && tela.selecionado() !== null) tela.escolher(null, { origem: 'endereco' });
   tela.desenhar(momento);
+  if (noDetalhe) focarDepoisDaAcao('detalhe');
 }
 registrarDesenho('pedidos', desenharPedidos, { em: ['dados', 'releitura', 'perfil', 'pedidos'], ordem: 95, comMomento: true });
 // Cada alteração refaz a escala: os horários do cadastro podem ter mudado com Pedidos aberta; onde cada pedido está na

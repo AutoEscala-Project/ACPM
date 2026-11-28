@@ -122,12 +122,16 @@ export function criarBackendSupabase(cliente, { aoConflito = () => {}, aoErro = 
     },
 
     // A escala gravada da data mudou em outro computador? A versão de agora (só ela, sem o conteúdo) contra a que a última
-    // leitura deste navegador guardou (0: a data não estava gravada), depois das gravações deste navegador em andamento
+    // leitura deste navegador guardou (0: a data não estava gravada), depois das gravações deste navegador em andamento. A
+    // versão deste navegador que mudou enquanto a resposta vinha (uma gravação ou uma leitura dele): a resposta é de antes
+    // dela, e não diz que mudou (a pergunta seguinte pergunta de novo)
     async diaMudou(data) {
       await gravacoesConcluidas();
+      const lida = versoes[`dia:${data}`] ?? 0;
       const { data: linha, error } = await cliente.from('dias').select('versao').eq('data', data).maybeSingle();
       if (error) throw new Error(error.message);
-      return (linha ? linha.versao : 0) !== (versoes[`dia:${data}`] ?? 0);
+      if ((versoes[`dia:${data}`] ?? 0) !== lida) return false;
+      return (linha ? linha.versao : 0) !== lida;
     },
 
     async listarDias(de, ate) {

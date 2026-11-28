@@ -18,7 +18,7 @@ import { esc, opts, hm, fmtH, somarDias, chaveDeBusca } from '../format.js';
 import { registraNaAgenda, operaEscala } from '../perfis.js';
 import {
   recursosDaMissao, recursoValido, missoesDoAluno, FUSO_DO_AEROCLUBE, prazoDaAgendaPermite, prazoDaData, datasParaRegistrar, hojeEmSaoPaulo, situacaoDaSolicitacao,
-  situacaoNaDemanda, solicitacoesParaImportar, opcoesDaSegundaPreferencia, textoDasNovidades
+  situacaoNaDemanda, solicitacoesParaImportar, opcoesDaSegundaPreferencia, textoDasNovidades, solicitacaoAprovada
 } from '../agenda.js';
 import { primeiroDaListaDeEspera } from '../rejeicoes.js';
 import { solicitacoesDaData, solicitacoesDaDataLidas, lerSolicitacoesDaData } from '../solicitacoes-da-data.js';
@@ -165,15 +165,20 @@ export async function lerPedidosDaAgenda(data, deste = []) {
 
 // O aviso das novidades da data aberta (a vigia, js/solicitacoes-da-data.js), para todos que veem os pedidos: o que mudou
 // em outro computador e, para cada pedido cancelado cujo voo ainda está na escala (ele vai deixar a vaga), o 1º da lista de
-// espera do horário dele, como a escala diz (F1h). Nada é posto na escala: quem dá a vaga é a escala refeita (N14)
+// espera do horário dele, como a escala diz (F1h), sem os que esperam com o pedido já cancelado ou sem aprovação na lista
+// lida agora (a escala ainda não foi refeita). Nada é posto na escala: quem dá a vaga é a escala refeita (N14). O aviso
+// vem sem ninguém pedir: fica o tempo de ler (60 ms por letra, de 2,8 s a 20 s)
+const duracaoDasNovidades = texto => Math.min(20000, Math.max(2800, texto.length * 60));
 export function avisarDasNovidades(novidades, data) {
   const daEscala = data === DATA && dadosLidos;
+  const lista = solicitacoesDaData().lista || [];
+  const naoEspera = id => { const s = lista.find(x => x.id === id); return Boolean(s) && !solicitacaoAprovada(s); };
   const vagas = daEscala ? novidades.canceladas.flatMap(s => {
-    const primeiro = primeiroDaListaDeEspera(s, estadoDaEscala(), RES);
+    const primeiro = primeiroDaListaDeEspera(s, estadoDaEscala(), RES, { naoEspera });
     return primeiro ? [{ aluno: s.aluno_nome, minuto: primeiro.minuto, primeiro: primeiro.aluno }] : [];
   }) : [];
   const texto = textoDasNovidades(novidades, { data: dataCurta(data), vagas });
-  if (texto) showToast(texto);
+  if (texto) showToast(texto, '', { duracao: duracaoDasNovidades(texto) });
 }
 
 // O nome lembrado neste computador ("Registrado por" do último pedido): também é quem aprova, retira a aprovação e
