@@ -339,8 +339,10 @@
       <ul class="lista" id="age" role="list" aria-label="Pedidos" data-lista="age"></ul>
     </div>
     <div class="md-detalhe" id="det-age" data-regiao="detalhe" role="region" aria-label="Pedido escolhido" tabindex="-1">
+      <!-- Nada escolhido: para quem registra, o formulário do pedido novo é o vazio; para quem só consulta, o vazio do
+           componente (js/detalhe.js, no meio do painel): o avião decolando e o texto, sem a dica (ele não registra) -->
       <div id="agenda-novo-pedido">
-        <p class="det-vazio h agenda-so-consulta">Escolha um pedido na lista.</p>
+        <div class="det-vazio agenda-so-consulta"><svg class="ico det-vazio-icone" aria-hidden="true"><use href="#i-decolagem"/></svg><p class="det-vazio-texto">Escolha um pedido na lista.</p></div>
         <h3 class="agenda-titulo" id="agenda-titulo">Novo pedido</h3>
         <form id="form-agenda" autocomplete="off" novalidate>
           <label>Data do pedido<select id="ag-data" class="agenda-campo" aria-describedby="agenda-prazo"></select></label>

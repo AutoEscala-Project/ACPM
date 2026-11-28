@@ -25,7 +25,8 @@ import { registrarDesenho } from '../redesenho.js';
 import { criarMestreDetalhe } from '../views/mestre-detalhe.js';
 import { registrarTela } from '../views/telas.js';
 
-// A lista e o detalhe. Com nada escolhido, o detalhe mostra o formulário do pedido novo (o bloco fixo #agenda-novo-pedido)
+// A lista e o detalhe. Com nada escolhido, o detalhe mostra o formulário do pedido novo (o bloco fixo #agenda-novo-pedido);
+// para quem só consulta, o vazio do componente que fica nele (index.html, o mesmo de js/detalhe.js)
 const tela = criarMestreDetalhe({
   id: 'age',
   rotulo: 'Pedidos',
