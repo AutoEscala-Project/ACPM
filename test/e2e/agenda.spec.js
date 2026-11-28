@@ -1256,11 +1256,12 @@ test.describe('A página dos pedidos', () => {
       const a = document.activeElement;
       return Boolean(a) && a !== document.body && a.getClientRects().length > 0 && Boolean(a.closest(sel));
     }, lugar);
-    // "Aprovar" na linha: o botão sai, e o foco fica na linha
+    // "Aprovar" na linha: o botão sai com a linha (ela vai para os aprovados), e o foco fica na linha que tomou o lugar dela
+    // (o componente de lista: a do pedido seguinte, que aguarda)
     await aprovarNaLinha(page, 1).focus();
     await page.keyboard.press('Enter');
     await expect(ultimoAviso(page)).toHaveText('Pedido aprovado: já está na demanda.');
-    await expect(linhaDaLista(page, 1)).toBeFocused();
+    await expect(linhaDaLista(page, 2)).toBeFocused();
     // "Aprovar todos": aprovados os dois que aguardavam, o botão sai, e o foco vai para a lista
     await botaoDosPedidos(page, 'aprovar-todos').focus();
     await page.keyboard.press('Enter');

@@ -3,7 +3,7 @@
 // no 7º voo local, "Registrar mesmo assim" e "Registrar na lista de espera"), aprovar (na linha, no detalhe, "Aprovar
 // todos"), retirar a aprovação, cancelar e "Registrar de novo…". O pedido aprovado da data aberta entra na demanda na
 // hora só com as cinco condições (motivoSemEntrada); senão, "Importar" (js/eventos/importacao.js) o traz
-import { vagaDeVooLocal, HORARIOS_FIXOS, motivoSemEntrada, situacaoNaDemanda } from '../agenda.js';
+import { vagaDeVooLocal, HORARIOS_FIXOS, motivoSemEntrada, situacaoNaDemanda, solicitacaoAprovada } from '../agenda.js';
 import { DURACAO_MAXIMA_H, LIMITE_DE_VOOS_LOCAIS } from '../config.js';
 import { dadosLidos, diaJaGravado, carregarData } from '../actions.js';
 import { $, showToast, anunciar } from '../dom.js';
@@ -56,7 +56,10 @@ registrarTela('age', {
     lerSolicitacoesDaData();
     lerContagemDosDias();
     rAgenda();
-    return tela.aoMostrar(item, opcoes);
+    const feito = tela.aoMostrar(item, opcoes);
+    // A lista de volta, com nada escolhido: o pedido registrado com ela escondida (o celular) fica à vista, com o foco
+    const linha = feito.item === null || feito.item === undefined ? aVistaNaVoltaDaLista() : null;
+    return linha ? { ...feito, lugar: linha, focou: true } : feito;
   }
 });
 // A busca também muda "Aprovar todos": ele aprova os que ela mostra
@@ -66,6 +69,7 @@ document.addEventListener('input', e => { if (e.target instanceof Element && e.t
 
 // O motivo, para o aviso, de o aprovado não ter entrado na demanda na hora
 const MOTIVOS = {
+  'outra-data': 'Outra data foi aberta enquanto isso: na data dele, “Importar” o põe na demanda.',
   'nao-lida': 'A escala desta data ainda não abriu: “Importar” o põe na demanda.',
   'nao-gravada': 'A escala desta data ainda não foi gravada: “Importar” o põe na demanda.',
   dados: 'Os resultados ou os programas dos cursos não foram lidos: “Importar” o põe na demanda depois de lê-los.',
@@ -75,8 +79,10 @@ const MOTIVOS = {
 };
 
 // Os aprovados (ids) entram na demanda da data na hora, com as cinco condições: a data deles é a aberta, lida e já gravada,
-// com os resultados e os cursos lidos, e a escala não mudou em outro computador (perguntado ao servidor agora). Responde
-// { entrou } ou { motivo }. Nada é dito aqui: quem chama diz
+// com os resultados e os cursos lidos, e a escala não mudou em outro computador (perguntado ao servidor agora); outra data
+// aberta durante as esperas, 'outra-data'. Responde { entrou } (o que entrou ou voltou, e o que já voava: o voo que ficou na
+// demanda depois de "Retirar aprovação") ou { motivo }: o aluno fora do cadastro ou inativo ('aluno'); a lista lida que
+// não os mostra aprovados (a releitura falhou: 'conexao'). Nada é dito aqui: quem chama diz
 async function entrarNaHora(ids, data) {
   const condicoes = () => motivoSemEntrada({ data, aberta: DATA, lida: dadosLidos, gravada: diaJaGravado(), indisponiveis: S.indisponiveis || [] });
   if (condicoes()) return { motivo: condicoes() };
@@ -89,10 +95,14 @@ async function entrarNaHora(ids, data) {
   if (condicoes()) return { motivo: condicoes() };
   if (mudou) { marcarDiaMudou(data); return { motivo: 'mudou' }; }
   const { lista } = await solicitacoesDaDataLidas();
-  if (DATA !== data || !lista) return { motivo: 'nao-lida' };
-  const aprovados = lista.filter(s => ids.includes(s.id));
+  if (DATA !== data) return { motivo: 'outra-data' };
+  if (!lista) return { motivo: 'nao-lida' };
+  const aprovados = lista.filter(s => ids.includes(s.id) && solicitacaoAprovada(s));
+  if (!aprovados.length) return { motivo: 'conexao' };
   const { entraram, resumo } = porNaDemanda(aprovados, { religar: true });
-  return entraram ? { entrou: true, notas: notasDaEntrada(resumo) } : { motivo: 'aluno' };
+  const voam = aprovados.filter(s => situacaoNaDemanda(s, S) === 'voa').length;
+  if (entraram || voam) return { entrou: true, notas: notasDaEntrada(resumo) };
+  return { motivo: resumo.semAluno || resumo.deInativo ? 'aluno' : 'conexao' };
 }
 
 // ——— Registrar ———
@@ -114,6 +124,8 @@ async function registrarPedido(botao, qual) {
     botao.textContent = nome;
     nomearRegistrar();
   }
+  // O botão que saiu com o registro ("Registrar na lista de espera", desarmado): o foco fica no formulário, no envio
+  if (botao.hidden && [botao, document.body, null].includes(document.activeElement)) $('#form-agenda [type="submit"]').focus();
   await depois?.();
 }
 
@@ -198,17 +210,36 @@ async function depoisDeRegistrar({ id, dia, aluno, descricao, aprovado, excecao,
   const base = excecao ? `Pedido registrado e aprovado${para} pela Exceção da Coordenação` : `Pedido registrado e aprovado${para}`;
   const aviso = espera ? `Pedido registrado${para} na lista de espera das ${horario}: já há ${locais} voos locais.`
     : !aprovado ? `Pedido registrado${para}: aguardando aprovação.`
-      : !entrada ? `${base}.` : entrada.entrou ? `${base}: já está na demanda${entrada.notas}.` : `${base}. ${MOTIVOS[entrada.motivo]}`;
+      : !entrada ? `${base}.` : entrada.entrou ? `${base}: já está na demanda${entrada.notas}.` : `${base}. ${MOTIVOS[entrada.motivo] || ''}`.trim();
   showToast(aviso, 'ok');
-  const situacao = espera ? 'na lista de espera' : !aprovado ? 'aguardando aprovação' : !entrada ? 'aprovado' : entrada.entrou ? 'aprovado, na demanda' : 'aprovado, fora da demanda';
-  $('#agenda-status').textContent = `Último pedido: ${aluno.nm} · ${descricao}${para} · ${situacao}.`;
+  // A lista de espera diz também a aprovação: o da secretaria (e o "sem aprovar") ainda espera um operador
+  const situacao = [espera ? 'na lista de espera' : '', !aprovado ? 'aguardando aprovação' : !entrada ? 'aprovado' : entrada.entrou ? 'aprovado, na demanda' : 'aprovado, fora da demanda'];
+  $('#agenda-status').textContent = `Último pedido: ${aluno.nm} · ${descricao}${para} · ${situacao.filter(Boolean).join(', ')}.`;
   if (dia === DATA) trazerAVista(id);
 }
 
-// A linha do pedido que acabou de entrar na lista, à vista (sem tirar o foco do formulário)
+// A linha do pedido que acabou de entrar na lista, à vista (sem tirar o foco do formulário). Numa vista só (o celular), o
+// formulário está no lugar da lista: a linha fica à vista, com o foco, quando a lista volta (aoMostrar)
+let aVistaNaVolta = null;
+const linhaDoPedido = id => document.getElementById(`lin-age-${id}`);
 function trazerAVista(id) {
-  const linha = document.getElementById(`lin-age-${id}`);
-  if (linha) linha.scrollIntoView({ block: 'nearest' });
+  const linha = linhaDoPedido(id);
+  aVistaNaVolta = null;
+  if (linha && linha.getClientRects().length) linha.scrollIntoView({ block: 'nearest' });
+  else aVistaNaVolta = id;
+}
+function aVistaNaVoltaDaLista() {
+  const id = aVistaNaVolta;
+  const linha = id !== null && linhaDoPedido(id);
+  if (!linha || !linha.getClientRects().length) return null;
+  aVistaNaVolta = null;
+  const li = linha.closest('li') || linha;
+  const botao = li.querySelector('.lista-botao');
+  if (botao) botao.focus({ preventScroll: true });
+  // Depois da rolagem que a volta restaura (a da entrada do histórico, js/views/telas.js) e do redesenho da lista, que pode
+  // trocar a linha por outra igual
+  requestAnimationFrame(() => { const agora = linhaDoPedido(id); if (agora) (agora.closest('li') || agora).scrollIntoView({ block: 'nearest' }); });
+  return li;
 }
 
 // O texto e o campo da recusa do servidor (o código e a dica dele)
@@ -310,20 +341,38 @@ document.addEventListener('click', e => {
 // Quem aprova, retira a aprovação ou cancela (no modo compartilhado, o servidor guarda a conta): o nome lembrado do
 // último pedido, senão o da conta
 const quemAge = () => $('#ag-por').value.trim() || lembradoRegistradoPor() || ApiClient.autorAtual || '';
-// Um botão de cada vez por pedido e ação: o clique seguinte, enquanto o servidor responde, não faz nada
+// Um botão de cada vez por pedido e ação: o clique seguinte, enquanto o servidor responde, não faz nada. O botão não é
+// desligado (disabled): desligado, ele perde o foco, e o redesenho não teria onde devolvê-lo (o componente de lista põe o
+// foco na linha quando a ação dela sai). O foco que ainda assim se perdeu (o botão que saiu sem lugar equivalente) fica
+// na tela: na linha do pedido, no detalhe ou na lista
 const ocupado = new Set();
+const focoPerdido = () => { const a = document.activeElement; return !a || a === document.body || !a.getClientRects().length; };
+const aVista = el => Boolean(el) && el.getClientRects().length > 0;
+function focarDepoisDaAcao(onde, id) {
+  if (!focoPerdido()) return;
+  const linha = onde === 'linha' && document.querySelector(`#age .lista-botao[data-item="${CSS.escape(String(id))}"]`);
+  // No detalhe: a primeira ação do rodapé que ficou (a que tomou o lugar da que saiu), senão o título
+  const doDetalhe = onde === 'detalhe' && ([...document.querySelectorAll('#det-age .det-rodape button')].find(aVista) || document.getElementById('det-age-titulo'));
+  const destino = [linha, doDetalhe, document.querySelector('#age .lista-botao')].find(aVista);
+  if (destino) destino.focus();
+}
+const chaveDoBotao = b => `${b.dataset.act}:${b.dataset.id || ''}`;
+// O botão ainda à espera do servidor: o clique seguinte nem arma a confirmação
+const emEspera = b => ocupado.has(chaveDoBotao(b));
 async function comBotaoOcupado(b, fazer) {
-  const chave = `${b.dataset.act}:${b.dataset.id || ''}`;
+  const chave = chaveDoBotao(b);
   if (ocupado.has(chave)) return;
   ocupado.add(chave);
-  b.disabled = true;
+  const onde = b.closest('#det-age') ? 'detalhe' : b.closest('#age') ? 'linha' : 'barra';
+  b.setAttribute('aria-disabled', 'true');
   b.setAttribute('aria-busy', 'true');
   try {
     await fazer();
   } finally {
     ocupado.delete(chave);
-    b.disabled = false;
+    b.removeAttribute('aria-disabled');
     b.removeAttribute('aria-busy');
+    focarDepoisDaAcao(onde, b.dataset.id);
   }
 }
 
@@ -348,7 +397,7 @@ async function aprovar(b, ids, { um }) {
     const entrada = await entrarNaHora(aprovados, data);
     const n = aprovados.length;
     const quem = um ? 'Pedido aprovado' : `${n} ${n === 1 ? 'pedido aprovado' : 'pedidos aprovados'}`;
-    const motivo = entrada.motivo ? MOTIVOS[entrada.motivo].replace('o põe', n === 1 ? 'o põe' : 'os põe') : '';
+    const motivo = entrada.motivo ? (MOTIVOS[entrada.motivo] || '').replace('o põe', n === 1 ? 'o põe' : 'os põe').replace('data dele', n === 1 ? 'data dele' : 'data deles') : '';
     showToast(entrada.entrou ? `${quem}${deFora}: ${n === 1 ? 'já está' : 'já estão'} na demanda${entrada.notas}.` : `${quem}${deFora}. ${motivo}`, 'ok');
   });
 }
@@ -360,7 +409,7 @@ const aindaVoa = pedido => Boolean(pedido) && situacaoNaDemanda(pedido, S) === '
 
 async function retirarAprovacao(b) {
   const pedido = pedidoDaLista(+b.dataset.id);
-  if (!aprovaPedidos() || !confirmado(b, 'Confirmar retirada')) return;
+  if (emEspera(b) || !aprovaPedidos() || !confirmado(b, 'Confirmar retirada')) return;
   await comBotaoOcupado(b, async () => {
     try {
       await ApiClient.retirarAprovacaoDaSolicitacao(+b.dataset.id, { por: quemAge() || null });
@@ -376,7 +425,7 @@ aoAcionar('retirar-aprovacao', retirarAprovacao);
 
 async function cancelarPedido(b) {
   const pedido = pedidoDaLista(+b.dataset.id);
-  if (!podeEditarAgenda() || !confirmado(b, 'Confirmar cancelamento')) return;
+  if (emEspera(b) || !podeEditarAgenda() || !confirmado(b, 'Confirmar cancelamento')) return;
   const por = quemAge() || (ApiClient.perfil ? '' : 'Operador');
   if (!por) {
     showToast('Informe seu nome em “Registrado por” (no formulário do pedido novo) para cancelar o pedido.');
@@ -388,7 +437,8 @@ async function cancelarPedido(b) {
       const voa = aindaVoa(pedido) ? (aprovaPedidos() ? ' O voo continua na demanda: tire-o lá (Voa), se for o caso.' : ' Avise o operador: o voo continua na escala até ele tirá-lo.') : '';
       showToast(`Pedido cancelado.${voa}`, 'ok');
     } catch (err) {
-      showToast(err.code === 'PT403' ? 'O pedido aprovado de uma data que já passou não é cancelado.' : 'Não foi possível cancelar o pedido. Verifique a conexão e tente de novo.');
+      showToast(err.code === 'PT403' ? 'O pedido aprovado de uma data que já passou não é cancelado.' : err.code === 'P0002'
+        ? 'O pedido já tinha sido cancelado em outro computador.' : 'Não foi possível cancelar o pedido. Verifique a conexão e tente de novo.');
     }
     await Promise.all([lerSolicitacoesDaData(), lerContagemDosDias()]);
   });
