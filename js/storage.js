@@ -315,7 +315,7 @@ export const ApiClient = {
   // Os pedidos não cancelados de cada dia, de de a ate: { 'AAAA-MM-DD': n } (o calendário do trilho), pela contagem do
   // servidor (D2: sem baixar os pedidos do mês, e sem o limite de 1.000 linhas da leitura); o domingo não tem número
   async contagemDaAgenda(de, ate) {
-    return contagemPorDia(await this.backend.solicitacoesPorDia(de, ate));
+    return contagemPorDia(await this.solicitacoesPorDia(de, ate));
   },
 
   // A escala gravada da data mudou em outro computador depois da leitura deste (D2: antes de um pedido aprovado entrar na
