@@ -15,7 +15,7 @@
 import { MIS, GROUND_EQ_TYPE, GROUND_REG, GROUND_DURATION_MIN, DEFAULT_LIM, MINUTOS_DO_DIA, NOTURNO, MISSOES_LOCAIS, LIMITE_DE_VOOS_LOCAIS } from './config.js';
 import {
   alvoDoNovoPedido, normalizeMissionFields, duracaoFixaDaMissao, duracaoPadraoDaMissao, duracaoValida, duracaoDigitada, isGroundMission,
-  disponibilidadeDoAluno, rotuloDaDisponibilidade, pesoDigitado, ERRO_DA_DURACAO, ERRO_DO_PESO
+  disponibilidadeDoAluno, disponibilidadeValida, rotuloDaDisponibilidade, pesoDigitado, ERRO_DA_DURACAO, ERRO_DO_PESO
 } from './rules.js';
 import { horariosDaMissao, horariosDoTipo, periodoDoMinuto, paraMinuto, INICIOS_DOS_TEMPOS } from './horarios.js';
 import { ocupacaoDaEscala, avioesQueServem, instrutoresQueServem, problemaDoRecurso, problemaDoAluno } from './candidatos.js';
@@ -26,7 +26,7 @@ import { CAMPOS_DO_PEDIDO } from './dias.js';
 import { runAllocationEngine } from './engine.js';
 import { foraDoPriorizarCom } from './conferencia.js';
 import { naOrdemDoMotor, rejeicoesDosPedidos } from './rejeicoes.js';
-import { CODIGOS_DO_AGENDADO, GRUPO_DO_CONFLITO } from './conflitos.js';
+import { CODIGOS_DO_AGENDADO, GRUPO_DO_CONFLITO, FORA_DA_ESCALA } from './conflitos.js';
 import { fixoPeloStatus, motivoDoFixo } from './fixos.js';
 import { STATUS_EM_ANDAMENTO, rotuloDoStatus, intervaloEfetivo } from './status.js';
 import { pesoECombustivel, textoDoCombustivel } from './combustivel.js';
@@ -195,17 +195,6 @@ function missoesNoDia(estado, base, curso, stu, a, mid = null) {
   };
 }
 
-// O motivo curto de o pedido ter ficado fora da escala, pelo código da rejeição do motor
-const FORA_DA_ESCALA = {
-  'equipamento-da-missao': 'a missão não voa nesse tipo de avião', 'ground-pendente': 'o Ground antes dele ficou fora',
-  'ground-antes-do-voo-fixo': 'sem horário antes do voo fixo', 'so-parafuso': 'sem o avião do Parafuso', 'sem-aviao': 'sem avião disponível',
-  'sem-instrutor-habilitado': 'sem instrutor habilitado', 'disponibilidade-do-aluno': 'fora da disponibilidade do aluno',
-  'depois-do-ground': 'sem horário depois do Ground', 'sem-horario': 'sem horário aberto', 'aluno-ocupado': 'o aluno já voa nos horários',
-  'avioes-ocupados': 'sem avião livre', 'sala-ocupada': 'a sala de Ground ocupada', 'sala-indisponivel': 'a Sala Ground indisponível', revisao: 'sem saldo até a revisão de 50 h',
-  'instrutores-indisponiveis': 'sem instrutor disponível', 'instrutores-ocupados': 'sem instrutor livre', bloqueio: 'em Não escalar com',
-  'limite-da-lei': 'o limite da lei', peso: 'o peso acima do limite', 'limite-de-locais': 'o limite de voos locais no horário',
-  'instrutor-escolhido': 'o instrutor escolhido não serve', 'habilitacao-do-aviao': 'sem a habilitação própria do avião'
-};
 // As recusas da base ligadas aos pedidos (js/rejeicoes.js), uma vez por base
 const recusasDaBase = new WeakMap();
 const recusasDe = (estado, base) => {
@@ -909,11 +898,18 @@ export function aplicarAgendamento(estado, base, proposta) {
     // O que a missão do curso exige do INVA é derivado no estado da escala (comExigenciasDasMissoes): o de antes vai com a
     // missão de antes (no estado do app ele nunca está; na cópia da simulação, simularAgendamento põe o da missão nova)
     delete alvo.exige;
+    // A missão escolhida pelo operador não é a que o programa deu na entrada do pedido (formato 30)
+    delete alvo.etapaDoPrograma;
     if (proposta.missao) Object.assign(alvo, { etapa: proposta.missao.codigo, cursoDaEtapa: proposta.missao.sigla });
     else { delete alvo.etapa; delete alvo.cursoDaEtapa; }
   }
+  // O horário exato do pedido que não inclui o horário novo passa a ser ele (N14: a mudança do operador substitui o
+  // horário; fora dos exatos do dia, das 06:30 às 17:30, ele sai); o outro dos dois horários do pedido (U1) o deixa como está
   const permitidas = disponibilidadeDoAluno(alvo.jan);
-  if (permitidas && !permitidas(proposta.a)) delete alvo.jan;
+  if (permitidas && !permitidas(proposta.a)) {
+    if (disponibilidadeValida(`h${proposta.a}`)) alvo.jan = `h${proposta.a}`;
+    else delete alvo.jan;
+  }
   normalizeMissionFields(alvo);
   const ground = isGroundMission(alvo.mis);
   const classKey = !ground ? null : proposta.turma ? proposta.turma.classKey : chaveDaTurmaNova(estado.fixos || {}, fKey, { mis: alvo.mis, a: proposta.a, insId: proposta.insId });
@@ -1135,13 +1131,14 @@ export function avaliarAgendamento({ estado, baseComPesos, base = baseComPesos, 
       avisos.push({ codigo: 'recurso-do-programa', texto: `O programa faz ${m.codigo} no ${m.eq}; o voo vai no ${tipo}, e a missão continua ${m.codigo}.`, resumo: `${m.codigo} no ${tipo}`, campo: 'agd-recurso' });
     }
   }
-  // O voo de hoje que muda de lugar: a disponibilidade do aluno que não inclui o horário novo sai do pedido; o voo fixo
+  // O voo de hoje que muda de lugar: o horário exato do pedido que não inclui o horário novo passa a ser ele (N14); o voo fixo
   // pela escala aprovada (ou pelo status, ou o Noturno) deixa o lugar em que estava fixo
   if (movido) {
     const { jan } = movido.pedido;
     const permitidas = disponibilidadeDoAluno(jan);
     if (permitidas && !permitidas(a)) {
-      avisos.push({ codigo: 'disponibilidade-do-aluno', texto: `${stu.nm} pediu o horário ${rotuloDaDisponibilidade(jan)}: agendado às ${hm(a)}, o pedido fica sem o horário.`, resumo: 'fora da disponibilidade do aluno', campo: 'agd-horario' });
+      const depois = disponibilidadeValida(`h${a}`) ? `o pedido passa a ser às ${hm(a)}` : 'o pedido fica sem o horário';
+      avisos.push({ codigo: 'disponibilidade-do-aluno', texto: `${stu.nm} pediu o horário ${rotuloDaDisponibilidade(jan)}: agendado às ${hm(a)}, ${depois}.`, resumo: 'fora da disponibilidade do aluno', campo: 'agd-horario' });
     }
     const pino = (estado.fixos || {})[fKey];
     const muda = movido.voo && (movido.voo.a !== a || movido.voo.r !== r || movido.voo.insId !== x.id);

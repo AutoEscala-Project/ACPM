@@ -5,12 +5,19 @@ import assert from 'node:assert/strict';
 import { MIS, ALL_EQ_TYPES } from '../../js/config.js';
 import { HORARIOS_INICIAIS } from '../../js/horarios.js';
 import { prazoDaAgendaPermite, primeiraDataAberta, datasParaRegistrar, disponibilidadeDaSolicitacao, pedidoDaSolicitacao, recursosDaMissao, recursoValido, RECURSO_DO_PEDIDO,
-  situacaoDaSolicitacao, solicitacaoAprovada, resumoDasSolicitacoes, situacaoNaDemanda, solicitacoesParaImportar, prepararEntradaNaDemanda, contagemPorDia, motivoSemEntrada,
-  opcoesDaSegundaPreferencia, novidadesDasSolicitacoes, temNovidades, textoDasNovidades } from '../../js/agenda.js';
+  situacaoDaSolicitacao, solicitacaoAprovada, resumoDasSolicitacoes, situacaoNaDemanda, solicitacoesParaImportar, contagemPorDia, motivoSemEntrada,
+  opcoesDaSegundaPreferencia, novidadesDasSolicitacoes, temNovidades, textoDasNovidades, agoraEmSaoPaulo, preferenciasDaSolicitacao } from '../../js/agenda.js';
 
 const em = iso => new Date(iso);
 
 describe('Agenda de solicitações', () => {
+  // A data e o minuto do dia em São Paulo (E: os de ficaNaEscala, na conciliação do app)
+  it('agora em São Paulo: a data e o minuto do dia, qualquer que seja o fuso do navegador', () => {
+    assert.deepEqual(agoraEmSaoPaulo(em('2026-11-10T15:30:00Z')), { data: '2026-11-10', minuto: 750 });
+    assert.deepEqual(agoraEmSaoPaulo(em('2026-11-11T02:10:00Z')), { data: '2026-11-10', minuto: 23 * 60 + 10 }, '02:10 UTC ainda é o dia anterior');
+    assert.deepEqual(agoraEmSaoPaulo(em('2026-11-11T03:00:00Z')), { data: '2026-11-11', minuto: 0 });
+  });
+
   it('pedido para o dia seguinte só até as 13:00 de São Paulo; depois, a partir de dois dias', () => {
     assert.equal(prazoDaAgendaPermite('2026-11-11', em('2026-11-10T12:59:00-03:00')), true);
     assert.equal(prazoDaAgendaPermite('2026-11-11', em('2026-11-10T13:00:00-03:00')), false);
@@ -73,6 +80,22 @@ describe('Agenda de solicitações', () => {
       { fly: true, mis: 'Multimotor', eq: 'PA-34', p1: 450, p2: 450, nb: 1, ss: 1, pr: 3, jan: 'h450' });
     const manhaPa34 = pedidoDaSolicitacao({ missao: 'Multimotor', janela: 'manha' });
     assert.deepEqual([manhaPa34.p1, manhaPa34.p2, manhaPa34.jan], [510, 630, undefined]);
+  });
+
+  // U1 (Pedro, 2026-11-26: "Second exact time"): a 2ª preferência (horario2, D1) é outro horário exato: o pedido fica com
+  // os dois (jan h<m1>|h<m2>, o 1º primeiro) e as preferências são eles, na ordem do pedido
+  it('a 2ª preferência do pedido: jan com os dois horários e as preferências neles (U1)', () => {
+    const lista = [390, 450, 500, 610, 720, 820, 900];
+    assert.deepEqual(preferenciasDaSolicitacao({ missao: 'Voo Local', janela: 'horario', horario: '10:10', horario2: '08:20' }, lista), { p1: 610, p2: 500, jan: 'h610|h500' });
+    assert.deepEqual(preferenciasDaSolicitacao({ missao: 'Voo Local', janela: 'horario', horario: '08:20', horario2: null }, lista), { p1: 500, p2: 500, jan: 'h500' });
+    assert.deepEqual(preferenciasDaSolicitacao({ missao: 'Voo Local', janela: 'horario', horario: '08:20', horario2: '08:20' }, lista), { p1: 500, p2: 500, jan: 'h500' }, 'o mesmo horário duas vezes é um');
+    assert.deepEqual(preferenciasDaSolicitacao({ missao: 'Voo Local', janela: 'horario', horario: '08:20', horario2: '18:00' }, lista), { p1: 500, p2: 500, jan: 'h500' }, 'o 2º fora dos horários exatos do dia não vale');
+    assert.deepEqual(preferenciasDaSolicitacao({ missao: 'Voo Local', janela: 'horario', horario: '06:00', horario2: '10:10' }, lista), { p1: 500, p2: 610 }, 'sem o 1º, nenhum horário exato');
+    // O 2º que a lista do recurso não tem fica no jan (N14: o motor o recusa nele); a preferência fica no 1º
+    assert.deepEqual(preferenciasDaSolicitacao({ missao: 'Voo Local', janela: 'horario', horario: '08:20', horario2: '08:50' }, lista), { p1: 500, p2: 500, jan: 'h500|h530' });
+    assert.equal(disponibilidadeDaSolicitacao({ janela: 'horario', horario: '08:20', horario2: '10:10' }), 'h500|h610');
+    assert.deepEqual(pedidoDaSolicitacao({ missao: 'Voo Local', janela: 'horario', horario: '08:20', horario2: '10:10', recurso: 'C152' }),
+      { fly: true, mis: 'Voo Local', eq: 'C152', p1: 500, p2: 610, nb: 1, ss: 1, pr: 3, jan: 'h500|h610' });
   });
 
   // O Ground tem 01h30 e o Noturno, 4 h às 17:30 (o translado e o noturno em BH): nem a agenda nem o programa mudam isso
@@ -291,16 +314,6 @@ describe('Os pedidos e a aprovação (D2)', () => {
     const lista = [linha(1), aprovada(2), aprovada(3), aprovada(4, { cancelada_em: 'x' }), aprovada(5)];
     assert.deepEqual(solicitacoesParaImportar(lista, estado({ importadas: [3] })).map(s => s.id), [2, 5]);
     assert.deepEqual(solicitacoesParaImportar([], estado()), []);
-  });
-
-  it('a entrada do aprovado na demanda: o registro desligado volta a voar; o que saiu da demanda é esquecido e entra de novo; o novo entra', () => {
-    const s = estado({ importadas: [1, 2], stu: [comRegistro(1001, { solicitacao: 1, fly: false, mid: 0, escolhido: 7 }), comRegistro(1002), comRegistro(1003, { fly: false })] });
-    const { religados, paraImportar } = prepararEntradaNaDemanda(s, [aprovada(1), aprovada(2), aprovada(3), linha(9)]);
-    assert.deepEqual(religados.map(x => x.id), [1]);
-    assert.deepEqual({ fly: s.stu[0].fly, mid: s.stu[0].mid, escolhido: s.stu[0].escolhido, solicitacao: s.stu[0].solicitacao }, { fly: true, mid: 0, escolhido: 7, solicitacao: 1 });
-    assert.deepEqual(paraImportar.map(x => x.id), [2, 3], 'o que só ficou nas importadas e o novo; o que aguarda, não');
-    assert.deepEqual(s.importadas, [1], 'o id esquecido entra de novo uma vez só');
-    assert.equal(s.stu[2].fly, false, 'o registro sem pedido da agenda não muda');
   });
 
   it('a contagem do trilho: os que aguardam e os aprovados de cada dia, sem domingo', () => {

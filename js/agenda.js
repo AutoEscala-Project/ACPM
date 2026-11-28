@@ -2,7 +2,7 @@
 // pedido pode ser registrado, as missões que o pedido do aluno pode ter (as do curso dele), as regras do registro, o limite
 // de voos locais e o pedido da demanda que cada solicitação vira ao ser importada (a importação: js/processamento.js).
 import { MIS, MISSOES_LOCAIS, LIMITE_DE_VOOS_LOCAIS, GROUND_DURATION_H, DURACAO_MAXIMA_H } from './config.js';
-import { disponibilidadeAtual, disponibilidadeDoAluno, normalizeMissionFields, duracaoPadraoDaMissao, duracaoFixaDaMissao } from './rules.js';
+import { disponibilidadeAtual, minutosExatos, normalizeMissionFields, duracaoPadraoDaMissao, duracaoFixaDaMissao } from './rules.js';
 import { horariosDaMissao, preferenciasPadrao, paraMinuto, HORARIO_DO_SOLO, HORARIO_DO_NOTURNO } from './horarios.js';
 import { percursoDoCurso, noturnosDoCurso, rotuloDaMissao } from './programa.js';
 import { hm, fmtH, somarDias } from './format.js';
@@ -19,6 +19,12 @@ function emSaoPaulo(instante) {
 }
 
 export const hojeEmSaoPaulo = (agora = new Date()) => emSaoPaulo(agora).data;
+// A data e o minuto do dia em São Paulo ({ data, minuto }): o hoje e o agora com que a conciliação (E) decide se o voo do
+// pedido que sai já decolou (js/processamento.js, ficaNaEscala)
+export function agoraEmSaoPaulo(agora = new Date()) {
+  const { data, hora } = emSaoPaulo(agora);
+  return { data, minuto: Number(hora.slice(0, 2)) * 60 + Number(hora.slice(3, 5)) };
+}
 
 // O aeroclube não opera aos domingos
 export const ehDomingo = iso => new Date(iso + 'T12:00:00Z').getUTCDay() === 0;
@@ -56,10 +62,14 @@ export function datasParaRegistrar(hoje, dataAberta, { excecao = false, agora = 
   return { opcoes, padrao: aberta && !aberta.fechada ? aberta.data : primeiraDataAberta(agora) };
 }
 
-export function disponibilidadeDaSolicitacao({ janela, horario }) {
+// O horário exato do pedido (jan): o da linha ("horario"), e com a 2ª preferência (horario2, D1; U1), os dois
+// ("h500|h610", o 1º primeiro). Sem o 1º (um período de antes, um horário fora dos exatos do dia), nenhum; o 2º que não
+// vale (o mesmo, fora dos exatos do dia) fica de fora
+export function disponibilidadeDaSolicitacao({ janela, horario, horario2 = null }) {
   if (janela !== 'horario') return disponibilidadeAtual(janela);
-  const minuto = paraMinuto(horario);
-  return minuto === null ? undefined : disponibilidadeAtual(`h${minuto}`);
+  const [m1, m2] = [paraMinuto(horario), paraMinuto(horario2)];
+  if (m1 === null) return undefined;
+  return (m2 !== null && disponibilidadeAtual(`h${m1}|h${m2}`)) || disponibilidadeAtual(`h${m1}`);
 }
 
 // O recurso do pedido (o tipo: C152, PA-34, Sim. Mono…): os que a missão permite, e o formato em que o servidor o guarda
@@ -250,24 +260,6 @@ export function textoDasNovidades({ novas, aprovadas, semAprovacao, canceladas }
 // "Importar": os aprovados que nunca entraram na demanda da data
 export const solicitacoesParaImportar = (lista, estado) => (lista || []).filter(s => solicitacaoAprovada(s) && situacaoNaDemanda(s, estado) === 'fora');
 
-// A entrada dos aprovados na demanda (a aprovação feita aqui, D2): o registro que leva o pedido e estava desligado volta a
-// voar (a missão, o instrutor, a prioridade e o pino ficam); o que só ficou nas importadas (o registro saiu da demanda) é
-// esquecido e volta a entrar, uma vez; o que nunca entrou, entra. Muda estado (o Voa e as importadas) e devolve os
-// religados e os que a importação (js/processamento.js) ainda põe na demanda. O registro sem pedido da agenda não muda
-export function prepararEntradaNaDemanda(estado, solicitacoes) {
-  const religados = [], paraImportar = [];
-  for (const s of solicitacoes.filter(solicitacaoAprovada)) {
-    const registro = (estado.importadas || []).includes(s.id) ? registroDaSolicitacao(estado, s) : null;
-    if (registro) {
-      if (!registro.fly) { registro.fly = true; religados.push(s); }
-      continue;
-    }
-    if (Array.isArray(estado.importadas)) estado.importadas = estado.importadas.filter(id => id !== s.id);
-    paraImportar.push(s);
-  }
-  return { religados, paraImportar };
-}
-
 // Os pedidos de cada dia do trilho, da contagem do servidor (solicitacoes_por_dia: { data: { aguardando, aprovadas } }): os
 // que aguardam e os aprovados; o domingo não tem número
 export function contagemPorDia(resposta) {
@@ -298,6 +290,16 @@ export function motivoSemEntrada({ data, aberta, lida, gravada, indisponiveis = 
 export const opcoesDaSegundaPreferencia = (lista, primeira, missao) =>
   (Object.hasOwn(HORARIOS_FIXOS, missao) ? [] : lista.filter(h => h !== primeira));
 
+// As preferências e o horário exato do pedido, na lista de decolagens do recurso dele (lista): o jan da linha
+// (disponibilidadeDaSolicitacao) e, como preferências, os horários exatos dele que a lista tem, na ordem do pedido (U1: a
+// 1ª e a 2ª; com um só, ele duas vezes); sem nenhum na lista, as padrão dela (o horário exato fica: N14, o motor o recusa)
+export function preferenciasDaSolicitacao(solicitacao, lista) {
+  const jan = disponibilidadeDaSolicitacao(solicitacao);
+  const naLista = minutosExatos(jan).filter(m => lista.includes(m));
+  const [p1, p2] = naLista.length ? [naLista[0], naLista[naLista.length - 1]] : preferenciasPadrao(lista);
+  return { p1, p2, ...(jan ? { jan } : {}) };
+}
+
 // Pedido da demanda: a missão com o recurso do pedido (sem ele, o padrão da missão); como preferências, os dois primeiros horários dela que a
 // disponibilidade permite (sem disponibilidade, os primeiros a partir das 08:20 e das 10:10); prioridade 3. Os horários
 // são os da categoria do equipamento (o PA-34 tem os seus). As horas: as fixas da missão (o Ground, 01h30; o Noturno,
@@ -307,10 +309,7 @@ export function pedidoDaSolicitacao(solicitacao, horarios, { eq, nb } = {}) {
   const jan = disponibilidadeDaSolicitacao(solicitacao);
   const regra = Object.hasOwn(MIS, solicitacao.missao) ? MIS[solicitacao.missao] : MIS['Voo Local'];
   const equipamento = eq && regra.eq.includes(eq) ? eq : recursoValido(solicitacao) || regra.defEq;
-  const lista = horariosDaMissao(horarios, solicitacao.missao, equipamento);
-  const permitida = disponibilidadeDoAluno(jan);
-  const naDisponibilidade = permitida ? lista.filter(permitida) : [];
-  const [p1, p2] = naDisponibilidade.length ? [naDisponibilidade[0], naDisponibilidade[Math.min(1, naDisponibilidade.length - 1)]] : preferenciasPadrao(lista);
+  const { p1, p2 } = preferenciasDaSolicitacao(solicitacao, horariosDaMissao(horarios, solicitacao.missao, equipamento));
   const registradas = solicitacao.horas === null || solicitacao.horas === undefined ? null : +solicitacao.horas;
   const pedido = {
     fly: true, mis: solicitacao.missao, eq: equipamento,

@@ -18,7 +18,7 @@ import {
   abrirAgenda, rAgenda, podeEditarAgenda, aprovaPedidos, lembrarRegistradoPor, lembradoRegistradoPor, descreverPedido, missaoDoPedido, pedidoDaLista, dataCurta, dataDoFormulario,
   escolherDataDoPedido, pedidosDoFormulario, lerPedidosDaAgenda, marcarInvalidos, focarNoPrimeiroInvalido, apagarErroDaAgenda, desarmarConfirmacaoDaAgenda,
   nomearRegistrar, botaoArmado, missaoEscolhida, rHorariosDoPedido, atualizarRecursoEHorario, esvaziarPedidoRegistrado, escolherNaAgenda, escolherMissaoNaAgenda, emLista,
-  modeloDosPedidos, detalheDoPedido, aprovaveisNaBusca, marcarRecente, mudouADataDaLista, preencherComOPedido, avisarDasNovidades
+  modeloDosPedidos, detalheDoPedido, aprovaveisNaBusca, marcarRecente, mudouADataDaLista, preencherComOPedido, avisarDasNovidades, porQueOVooDoPedidoFica, comoOVooFica
 } from '../views/agenda.js';
 import { solicitacoesDaDataLidas, lerSolicitacoesDaData, marcarDiaMudou, vigiarSolicitacoesDaData } from '../solicitacoes-da-data.js';
 import { lerContagemDosDias } from '../views/trilho.js';
@@ -416,8 +416,15 @@ async function aprovar(b, ids, { um }) {
 aoAcionar('aprovar-pedido', b => aprovar(b, [+b.dataset.id], { um: true }));
 aoAcionar('aprovar-todos', b => aprovar(b, aprovaveisNaBusca().ids, { um: false }));
 
-// O pedido que ainda voa na demanda depois de sair dela: D2 não o tira (a conciliação do G tira); o aviso diz
+// O pedido que ainda voa na demanda depois de sair dela: a ação não o tira ("Tirar da escala", a conciliação, tira); o aviso
+// diz. O voo que a conciliação deixa na escala (em voo, pousado, com o status Cancelado, com resultado; o atrasado ou que
+// já decolou, até o status ser conferido): o aviso diz que ele fica e por quê, sem mandar para o botão, que nada faria
 const aindaVoa = pedido => Boolean(pedido) && situacaoNaDemanda(pedido, S) === 'voa';
+const oVooContinua = (pedido, tira) => {
+  if (!aindaVoa(pedido)) return '';
+  const porque = porQueOVooDoPedidoFica(pedido);
+  return porque ? ` O voo ${comoOVooFica(porque)}.` : tira;
+};
 
 async function retirarAprovacao(b) {
   const pedido = pedidoDaLista(+b.dataset.id);
@@ -425,7 +432,7 @@ async function retirarAprovacao(b) {
   await comBotaoOcupado(b, async () => {
     try {
       await ApiClient.retirarAprovacaoDaSolicitacao(+b.dataset.id, { por: quemAge() || null });
-      showToast(`Aprovação retirada: o pedido volta a aguardar.${aindaVoa(pedido) ? ' O voo continua na demanda: tire-o lá (Voa), se for o caso.' : ''}`, 'ok');
+      showToast(`Aprovação retirada: o pedido volta a aguardar.${oVooContinua(pedido, ' O voo continua na demanda: “Tirar da escala”, no aviso, o tira.')}`, 'ok');
     } catch (err) {
       showToast(err.code === 'PT403' ? 'A aprovação de uma data que já passou não é retirada.' : err.code === 'P0002'
         ? 'O pedido já estava sem aprovação ou foi cancelado em outro computador.' : 'Não foi possível retirar a aprovação. Verifique a conexão e tente de novo.');
@@ -446,7 +453,7 @@ async function cancelarPedido(b) {
   await comBotaoOcupado(b, async () => {
     try {
       await ApiClient.cancelarSolicitacao(+b.dataset.id, por);
-      const voa = aindaVoa(pedido) ? (aprovaPedidos() ? ' O voo continua na demanda: tire-o lá (Voa), se for o caso.' : ' Avise o operador: o voo continua na escala até ele tirá-lo.') : '';
+      const voa = oVooContinua(pedido, aprovaPedidos() ? ' O voo continua na demanda: “Tirar da escala”, no aviso, o tira.' : ' Avise o operador: o voo continua na escala até ele tirá-lo.');
       showToast(`Pedido cancelado.${voa}`, 'ok');
     } catch (err) {
       showToast(err.code === 'PT403' ? 'O pedido aprovado de uma data que já passou não é cancelado.' : err.code === 'P0002'

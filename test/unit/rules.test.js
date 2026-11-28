@@ -2,8 +2,8 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   isGroundMission, doesGroundGateFlight, migrateLegacyMissionName, normalizeMissionFields, blank, disponibilidadeDoAluno, disponibilidadeAtual,
-  rotuloDaDisponibilidade, proximoMid, duracaoDigitada, ERRO_DA_DURACAO, chaveTemSobras, alvoDoNovoPedido,
-  pesoValido, pesoDigitado, pesoDoTexto, ERRO_DO_PESO, deixarEmBranco, PRIORIDADE_PADRAO, prioridadeNaTela, prioridadeGuardada, comAPrioridadePadrao
+  rotuloDaDisponibilidade, minutoConfirmado, proximoMid, duracaoDigitada, ERRO_DA_DURACAO, chaveTemSobras, alvoDoNovoPedido,
+  pesoValido, pesoDigitado, pesoDoTexto, ERRO_DO_PESO, deixarEmBranco, PRIORIDADE_PADRAO, prioridadeNaTela, prioridadeGuardada, comAPrioridadePadrao, minutosExatos
 } from '../../js/rules.js';
 import * as regras from '../../js/rules.js';
 import { podeFazer, descreverExigencias } from '../../js/habilitacoes.js';
@@ -98,6 +98,40 @@ describe('Regras de missão', () => {
     assert.deepEqual([pedido.mis, pedido.eq], ['Voo Local', 'C152']);
   });
 
+  // U1 (Pedro, 2026-11-26: "Second exact time"): a 2ª preferência do pedido é outro horário exato, h<m1>|h<m2> (dois
+  // minutos diferentes, cada um válido, o 1º primeiro); o voo começa em qualquer um dos dois. O de outro formato sai
+  it('a disponibilidade de dois horários exatos (U1): os dois valem, na ordem do pedido; o fora do formato sai', () => {
+    const comeca = (jan, ...horarios) => horarios.map(disponibilidadeDoAluno(jan));
+    assert.deepEqual(comeca('h500|h610', 500, 610, 450, 820), [true, true, false, false]);
+    assert.deepEqual(comeca('h610|h500', 500, 610), [true, true]);
+    assert.deepEqual(['h500|h610', 'h610|h500', 'h5|h610'].map(disponibilidadeAtual), ['h500|h610', 'h610|h500', 'h820|h610'], 'o 1º primeiro; o "h5" dos dados antigos vira o minuto');
+    for (const ruim of ['h500|h500', 'h500|h610|h700', 'h500|', '|h500', 'h500|h1200', 'h300|h500', 'h500|tarde', 'h500||h610', 'h500 |h610']) {
+      assert.equal(disponibilidadeAtual(ruim), undefined, ruim);
+      assert.equal(disponibilidadeDoAluno(ruim), null, ruim);
+    }
+    assert.equal(rotuloDaDisponibilidade('h500|h610'), 'às 08:20 ou às 10:10');
+    const pedido = { mis: 'Voo Local', eq: 'C152', p1: 500, p2: 610, nb: 1, ss: 1, jan: 'h500|h610' };
+    normalizeMissionFields(pedido);
+    assert.equal(pedido.jan, 'h500|h610', 'normalizeMissionFields guarda os dois');
+    const ruim = { mis: 'Voo Local', eq: 'C152', p1: 500, p2: 610, nb: 1, ss: 1, jan: 'h500|h500' };
+    normalizeMissionFields(ruim);
+    assert.equal(Object.hasOwn(ruim, 'jan'), false, 'o fora do formato sai do pedido');
+    // O 7º voo local confirmado na Agenda passa do limite no 1º horário (o que o servidor contou)
+    assert.equal(minutoConfirmado({ mis: 'Voo Local', jan: 'h500|h610', limiteConfirmado: true }), 500);
+  });
+
+  // Formato 30 (E): a marca de que a missão do curso do pedido veio do programa (a conciliação, missaoDaEntrada): só true,
+  // e só com a missão do curso
+  it('etapaDoPrograma: só true, e só com a missão do curso', () => {
+    const pedido = extra => { const p = { mis: 'Voo Local', eq: 'C152', p1: 500, p2: 610, nb: 1, ss: 1, ...extra }; normalizeMissionFields(p); return p.etapaDoPrograma; };
+    assert.equal(pedido({ etapa: 'PP-07', etapaDoPrograma: true }), true);
+    for (const valor of [false, 'true', 1, null, {}]) assert.equal(pedido({ etapa: 'PP-07', etapaDoPrograma: valor }), undefined, JSON.stringify(valor));
+    assert.equal(pedido({ etapaDoPrograma: true }), undefined, 'sem a missão do curso, a marca sai');
+    const branco = { etapa: 'PP-07', etapaDoPrograma: true };
+    deixarEmBranco(branco);
+    assert.equal(branco.etapaDoPrograma, undefined, 'o pedido em branco fica sem ela');
+  });
+
   it('disponibilidade do aluno: em que horários o voo pode começar (por período ou num horário exato)', () => {
     assert.equal(disponibilidadeDoAluno(''), null);
     assert.equal(disponibilidadeDoAluno(undefined), null);
@@ -120,6 +154,21 @@ describe('Regras de missão', () => {
     const a = blank();
     assert.deepEqual(a, { fly: false, mis: 'Voo Local', eq: 'C152', p1: 500, p2: 610, nb: 1, ss: 1, pr: 3 });
     assert.notEqual(blank(), a);
+  });
+});
+
+// Os minutos exatos do pedido (jan): o horário da Agenda e, com a 2ª preferência (U1), os dois (o teste que era do
+// minutosDoPedido de js/processamento.js, um outro nome dele que a revisão do E tirou)
+describe('minutosExatos: o horário exato do pedido, um ou dois minutos', () => {
+  it('h<minuto> e h<minuto1>|h<minuto2>; o h5 dos dados antigos é a janela 5; fora do formato, nenhum', () => {
+    assert.deepEqual(minutosExatos('h500'), [500]);
+    assert.deepEqual(minutosExatos('h500|h610'), [500, 610]);
+    assert.deepEqual(minutosExatos('h610|h500'), [610, 500], 'o 1º é o primeiro, qualquer que seja a hora');
+    assert.deepEqual(minutosExatos('h5'), [minutosExatos('h5')[0]]);
+    assert.equal(minutosExatos('h5').length, 1);
+    for (const jan of ['h500|h500', 'h500|h610|h700', 'h500|', '|h500', 'manha', 'tarde', 'h2000', 'h300', '', null, undefined, 500, ['h500']]) {
+      assert.deepEqual(minutosExatos(jan), [], String(jan));
+    }
   });
 });
 

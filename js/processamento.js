@@ -1,13 +1,150 @@
-// O processamento dos pedidos da agenda: a importação para a demanda da data (o botão "Importar da agenda", na Demanda e
-// na Agenda; js/eventos/importacao.js). Puro: recebe o estado da data e os pedidos e muda só o estado
-import { migrateLegacyMissionName, alvoDoNovoPedido } from './rules.js';
+// O processamento dos pedidos da agenda (o módulo do E): a conciliação dos pedidos da data com o dia (quem entra, quem
+// volta, quem sai e quem fica), a missão do curso com que cada pedido entra e o resumo do que ela fez. Quem a chama é
+// js/entrada-na-demanda.js (os botões de importar e a aprovação em Pedidos, até o G2). Puro: sem DOM, sem relógio, sem
+// rede e sem S; recebe o estado da data e os pedidos e muda só o estado
+import { migrateLegacyMissionName, alvoDoNovoPedido, proximoMid, blank, PRIORIDADE_PADRAO, minutosExatos } from './rules.js';
 import { pedidoDaSolicitacao, recursoValido, missaoDoCursoGuardada } from './agenda.js';
 import { indiceDoPrograma } from './programa.js';
 import { proximasMissoes, missoesDoDia } from './progresso.js';
 import { situacaoPorMissao, resultadoDoVoo } from './resultados.js';
-import { chaveDoVoo } from './voo.js';
-import { fixoPeloStatus } from './fixos.js';
+import { chaveDoVoo, pedidoDoAluno } from './voo.js';
+import { fixoPeloStatus, pinoDoVoo } from './fixos.js';
 import { inativo } from './inativos.js';
+import { intervaloEfetivo } from './status.js';
+import { minutoDaPreferencia, paraMinuto, horariosDaMissao } from './horarios.js';
+import { rejeicoesDosPedidos } from './rejeicoes.js';
+import { hm } from './format.js';
+
+// Os pedidos de um aluno no dia: o principal (o próprio aluno, mid 0) e as missões extras
+const pedidosDoAluno = aluno => [aluno, ...(Array.isArray(aluno.extra) ? aluno.extra : [])];
+
+// O horário do pedido no dia, em minutos: o do voo fixo; senão, o 1º minuto exato do pedido; senão, a 1ª preferência;
+// senão, null (desconhecido)
+function horarioPedido(estado, stuId, registro) {
+  const pino = (estado.fixos || {})[chaveDoVoo(stuId, registro.mid || 0)];
+  if (pino && Number.isInteger(pino.a)) return pino.a;
+  const [exato] = minutosExatos(registro.jan);
+  if (exato !== undefined) return exato;
+  const p1 = minutoDaPreferencia(registro.p1);
+  return p1 >= 0 ? p1 : null;
+}
+
+// Por que o voo de um pedido que sai (cancelado ou sem a aprovação) fica na escala, nesta ordem; null: ele sai.
+// 'data-passada' (a data já passou: nada sai de uma escala voada); 'sem-os-resultados' (sem eles, não se sabe se o voo tem
+// resultado); 'atrasado'; 'em-voo-ou-pousou'; 'cancelado-na-escala' (o status Cancelado, com o motivo); 'com-resultado';
+// 'ja-decolou' (hoje, o voo fixo cujo início já passou, agora em minutos do dia). 'atrasado' e 'ja-decolou' pedem que o
+// operador confira (o status Pousou ou Cancelado); os outros ficam
+export function ficaNaEscala(estado, { data = null, hoje = null, agora = null } = {}, stuId, mid) {
+  const fKey = chaveDoVoo(stuId, mid);
+  const status = (estado.fStatus || {})[fKey];
+  if (data && hoje && data < hoje) return 'data-passada';
+  if ((estado.indisponiveis || []).includes('resultados')) return 'sem-os-resultados';
+  if (status === 'Atrasado') return 'atrasado';
+  if (status === 'Em Voo' || status === 'Pousou') return 'em-voo-ou-pousou';
+  if (status === 'Cancelado') return 'cancelado-na-escala';
+  if (resultadoDoVoo((estado.resultados || {}).doDia, fKey) !== null) return 'com-resultado';
+  const pino = (estado.fixos || {})[fKey];
+  if (data && data === hoje && Number.isInteger(agora) && pino && intervaloEfetivo(pino, status, (estado.fObs || {})[fKey]).a <= agora) return 'ja-decolou';
+  return null;
+}
+
+// O porquê de ficaNaEscala em palavras, para os avisos (o de Pedidos, o do cancelamento, o da retirada e o da conciliação)
+export const POR_QUE_FICA = {
+  'data-passada': 'a data já passou', 'sem-os-resultados': 'sem os resultados dos cursos lidos', atrasado: 'atrasado',
+  'em-voo-ou-pousou': 'em voo ou pousado', 'cancelado-na-escala': 'com o status Cancelado', 'com-resultado': 'com o resultado registrado',
+  'ja-decolou': 'já decolou'
+};
+// Os porquês que pedem que o operador confira o status (o voo fica até lá)
+export const PEDEM_CONFERIR = ['atrasado', 'ja-decolou'];
+
+// O que a conciliação faria com o voo do pedido (id) que sai, cancelado ou com a aprovação retirada, sem mudar nada:
+// null, ele sai; senão, o porquê de ficaNaEscala (momento: { data, hoje, agora }). O pedido sem registro que voa: undefined
+export function porQueOVooFica(estado, id, momento = {}) {
+  const achado = registrosDosPedidos(estado).get(id);
+  if (!achado || !achado.registro.fly) return undefined;
+  return ficaNaEscala(estado, momento, achado.aluno.id, achado.mid);
+}
+
+// O registro de cada pedido no dia (o pedido do aluno com solicitacao: <id>): Map do id para { aluno, registro, mid }
+function registrosDosPedidos(estado) {
+  const mapa = new Map();
+  for (const aluno of estado.stu || []) {
+    for (const registro of pedidosDoAluno(aluno)) {
+      if (Number.isInteger(registro.solicitacao) && !mapa.has(registro.solicitacao)) mapa.set(registro.solicitacao, { aluno, registro, mid: registro.mid || 0 });
+    }
+  }
+  return mapa;
+}
+
+// O minuto pedido na Agenda (o horário exato da linha), para a ordem de entrada; sem ele, depois
+const minutoDaLinha = s => (s.janela === 'horario' && paraMinuto(s.horario) !== null ? paraMinuto(s.horario) : Infinity);
+
+// A conciliação dos pedidos da data com o dia: o plano, sem mudar nada. aprovada(linha) diz se o pedido está aprovado
+// (obrigatório: o app passa solicitacaoAprovada, js/agenda.js). Para cada linha, com o
+// registro do pedido no dia (o pedido do aluno com solicitacao: <id>), guardada (o id em estado.importadas):
+// - aprovado, sem registro: entram (o aluno fora do cadastro: semAluno; inativo, com semInativos: inativos; guardado:
+//   dispensados, tirado desta data; numa data passada: naoEntrou; com a missão do curso e os programas não lidos, cursos
+//   null: esperamOsProgramas). Os que entram vão por aluno (a ordem do cadastro), pelo minuto pedido e pelo id: a missão
+//   do curso de cada um é ligada nessa ordem (missaoDaEntrada), os com a que escolheram na Agenda primeiro;
+// - aprovado, voando, não guardado: acertos.admitir (o id volta para importadas, sem linha no Histórico);
+// - aprovado, sem voar, não guardado: voltam (o registro volta a voar); guardado, o operador o tirou da escala: nada;
+// - cancelado ou com a aprovação retirada (aprovacao_retirada_em), voando: saem (motivo 'cancelado' ou 'sem-aprovacao'),
+//   ou ficam / conferir com o porquê de ficaNaEscala; cancelado sem voar e guardado: acertos.esquecer;
+// - esperando aprovação, voando: semAprovacao (nada muda); sem voar: nada.
+// O registro de um pedido que não está nas linhas lidas nunca é tocado (faltar não é cancelar), nem o sem pedido.
+// so: só estes ids (a ação feita agora neste navegador); religar: o aprovado guardado volta (sem registro, entra; sem voar,
+// volta), como a aprovação do D. data, hoje (AAAA-MM-DD) e agora (minutos do dia): os de ficaNaEscala; sem data, nenhuma
+// regra de data passada. pendente: há o que aplicar (entram, voltam ou saem)
+export function conciliarPedidos(estado, solicitacoes, { data = null, hoje = null, agora = null, aprovada, so = null, religar = false, cursos = [], semInativos = false } = {}) {
+  if (typeof aprovada !== 'function') throw new Error('conciliarPedidos: falta aprovada, a regra do pedido aprovado');
+  const plano = {
+    entram: [], voltam: [], saem: [], ficam: [], conferir: [], semAprovacao: [], dispensados: [], semAluno: [], inativos: [], naoEntrou: [],
+    esperamOsProgramas: [], acertos: { admitir: [], esquecer: [] }, pendente: false
+  };
+  const passada = Boolean(data && hoje && data < hoje);
+  const guardadas = new Set(Array.isArray(estado.importadas) ? estado.importadas : []);
+  const registros = registrosDosPedidos(estado);
+  const vistos = new Set();
+  for (const s of solicitacoes) {
+    if (!s || !Number.isInteger(s.id) || vistos.has(s.id) || (so && !so.includes(s.id))) continue;
+    vistos.add(s.id);
+    const achado = registros.get(s.id) || null;
+    const guardada = guardadas.has(s.id);
+    const voa = Boolean(achado && achado.registro.fly);
+    const cancelada = Boolean(s.cancelada_em);
+    const doRegistro = achado ? { id: s.id, stuId: achado.aluno.id, mid: achado.mid } : null;
+    if (!cancelada && aprovada(s)) {
+      if (achado) {
+        if (voa) { if (!guardada) plano.acertos.admitir.push(s.id); } else if ((!guardada || religar) && !passada) plano.voltam.push(doRegistro);
+        continue;
+      }
+      const aluno = (estado.stu || []).find(x => x.id === s.aluno);
+      if (!aluno) plano.semAluno.push(s.id);
+      else if (semInativos && inativo(aluno)) plano.inativos.push(s.id);
+      else if (guardada && !religar) plano.dispensados.push(s.id);
+      else if (passada) plano.naoEntrou.push(s.id);
+      else if (cursos === null && s.missao_do_curso) plano.esperamOsProgramas.push(s.id);
+      else plano.entram.push(s);
+      continue;
+    }
+    const retirada = !cancelada && Boolean(s.aprovacao_retirada_em);
+    if (cancelada || retirada) {
+      if (voa) {
+        const item = { ...doRegistro, motivo: cancelada ? 'cancelado' : 'sem-aprovacao' };
+        const porque = ficaNaEscala(estado, { data, hoje, agora }, achado.aluno.id, achado.mid);
+        if (PEDEM_CONFERIR.includes(porque)) plano.conferir.push({ ...item, porque });
+        else if (porque) plano.ficam.push({ ...item, porque });
+        else plano.saem.push(item);
+      } else if (cancelada && guardada) plano.acertos.esquecer.push(s.id);
+      continue;
+    }
+    if (voa) plano.semAprovacao.push(doRegistro);
+  }
+  const ordem = new Map((estado.stu || []).map((x, i) => [x.id, i]));
+  plano.entram.sort((p, q) => (ordem.get(p.aluno) - ordem.get(q.aluno)) || (minutoDaLinha(p) - minutoDaLinha(q)) || (p.id - q.id));
+  plano.pendente = plano.entram.length + plano.voltam.length + plano.saem.length > 0;
+  return plano;
+}
 
 // O voo da mesma missão (mis) que está na demanda do aluno sem pedido da agenda (posto à mão: a demanda começa vazia a
 // cada data): ele dá lugar ao pedido, para não duplicar. O voo fixo (agendado, aprovado ou com o instrutor escolhido na
@@ -21,7 +158,7 @@ function vooQueDaLugar(estado, aluno, mis, vinculada = null) {
   const doDia = estado.resultados ? estado.resultados.doDia : [];
   const fixos = estado.fixos || {};
   const mesmaMissaoDoCurso = p => !vinculada || !p.etapa || (p.etapa === vinculada.codigo && (p.cursoDaEtapa || aluno.curso) === vinculada.sigla);
-  return [aluno, ...(aluno.extra || [])].find(p => {
+  return pedidosDoAluno(aluno).find(p => {
     const chave = chaveDoVoo(aluno.id, p.mid || 0);
     return p.fly && p.mis === mis && p.solicitacao === undefined && mesmaMissaoDoCurso(p)
       && (!Object.hasOwn(fixos, chave) || soPeloNoturno(estado, fixos[chave]))
@@ -39,68 +176,335 @@ function missaoDoCursoDoPedido(cursos, solicitacao) {
   return { codigo: achada.missao.codigo, sigla: achada.curso.sigla, missao: achada.missao };
 }
 
-// Importa para a demanda da data as solicitações ativas ainda não importadas. Só acrescenta: cada pedido da agenda vira
-// um voo, marcado com o id dele em solicitacao (dois pedidos da mesma missão são dois voos). O voo da mesma missão posto
-// na demanda sem pedido da agenda dá lugar ao pedido (vooQueDaLugar); senão, o pedido vai para o pedido principal do
-// aluno, quando ele não voa e o dia não guarda nada dele, ou para uma missão extra nova (alvoDoNovoPedido). As
-// solicitações vistas ficam anotadas no dia (estado.importadas) para não repetir.
-// O pedido com a missão do curso escolhida na Agenda (missao_do_curso) entra como ela, qualquer que seja o progresso: o
-// código e o curso dela, com o recurso e as horas do pedido. A que saiu do programa ou mudou de tipo depois do registro não
-// entra: o pedido entra como o que não tem nenhuma, e o resumo o conta (foraDoPrograma, com a missão do curso como a qual
-// ele entrou, entrouComo: a inferida ou a do operador; null, pelo tipo). Sem os programas lidos (cursos: null), não se
-// sabe se ela saiu: o pedido espera, sem contar como visto, e entra na importação depois de lidos (esperamOsProgramas).
-// O pedido sem missão do curso, do aluno de um curso: entra como a primeira missão liberada do programa que é do tipo
-// pedido (o código e o curso dela, o recurso e as horas do programa); nenhuma, ele entra como veio, e o resumo diz
-// (semMissaoDoCurso, só quando havia o que inferir). O pedido com recurso só entra como uma missão do
-// programa nesse recurso. As missões dos outros voos do aluno no dia
-// contam como feitas, como na Demanda; a do voo que dá lugar ao pedido, não (ela continua no dia, agora com o pedido). A
-// missão do curso que o operador pôs nesse voo (Usar, "Outra missão do curso") continua a dele, com o recurso e as horas
-// que ele tem (as registradas na agenda valem mais, como na missão do programa): a escolha do operador vale mais que a
-// próxima missão do programa. situacao: o último resultado de cada missão; programa: os cursos de onde a missão é
-// inferida (vazio quando os resultados ou os programas não foram lidos, ou com o progresso desligado: nenhum pedido entra
-// como missão inferida); cursos: os programas lidos, onde está a missão do curso do pedido (null: não lidos). semInativos: o inativo do
-// cadastro vale na data (de hoje em diante): o pedido do aluno inativo não entra nem conta como visto (entra quando ele
-// voltar a ativo)
-export function importarSolicitacoes(estado, solicitacoes, { situacao = [], programa = [], cursos = [], semInativos = false } = {}) {
-  const indice = indiceDoPrograma(programa), mapa = situacaoPorMissao(situacao);
-  const resumo = { novos: 0, atualizados: 0, semAluno: 0, deInativo: 0, foraDoPrograma: [], semMissaoDoCurso: [], esperamOsProgramas: 0 };
+// A missão do curso com que o pedido entra no dia: { missao, curso, de, nota }, missao { codigo, eq, nb } (null: nenhuma),
+// curso a sigla, de quem ela é ('pedido', 'operador', 'programa') e a nota de por que nenhuma:
+// - a do pedido (missao_do_curso, a regra 8 da Agenda), qualquer que seja o progresso, nos programas lidos (cursos); a que
+//   saiu do programa ou mudou de tipo não vale, e o pedido segue como o que não tem nenhuma (foraDoPrograma);
+// - a que o operador pôs no voo que dá lugar ao pedido (copiada), com o recurso e as horas dele;
+// - a do programa (programa: os cursos de onde inferir, vazio com o progresso desligado ou sem os resultados e os
+//   programas lidos: 'sem-dados'): a primeira liberada do tipo do pedido e, com recurso, desse recurso (nenhuma:
+//   'sem-missao-do-tipo'), pelo horário do dia: as missões dos outros voos do aluno no dia não são dadas de novo, e contam
+//   como feitas só as dos que terminam até o início do pedido (feitasAntes). O curso encerrado não dá nenhuma
+//   ('curso-encerrado'; a do operador e a do pedido, escolhas, ficam). Aluno sem curso:
+//   'sem-curso'; o curso fora do programa: 'sem-programa'. situacao: o último resultado de cada missão
+export function missaoDaEntrada(estado, aluno, solicitacao, { programa = [], situacao = [], cursos = [], copiada = null } = {}) {
+  const vinculada = missaoDoCursoDoPedido(cursos || [], solicitacao);
+  const foraDoPrograma = vinculada === false;
+  if (vinculada) return { missao: { codigo: vinculada.codigo, eq: vinculada.missao.eq, nb: vinculada.missao.nb }, curso: vinculada.sigla, de: 'pedido', nota: null, foraDoPrograma };
+  if (copiada && copiada.etapa) {
+    return { missao: { codigo: copiada.etapa, eq: copiada.eq, nb: copiada.nb }, curso: copiada.cursoDaEtapa || null, de: 'operador', nota: null, foraDoPrograma };
+  }
+  const nenhuma = nota => ({ missao: null, curso: null, de: null, nota, foraDoPrograma });
+  if (!aluno.curso) return nenhuma('sem-curso');
+  if (!programa.length) return nenhuma('sem-dados');
+  const curso = indiceDoPrograma(programa).curso(aluno.curso);
+  if (!curso) return nenhuma('sem-programa');
+  if (curso.ativo === false) return { ...nenhuma('curso-encerrado'), curso: curso.sigla };
+  const mid = copiada ? copiada.mid || 0 : null;
+  const exceto = missoesDoDia(curso, aluno, { fStatus: estado.fStatus, mid });
+  const recurso = recursoValido(solicitacao);
+  const m = proximasMissoes(curso, situacaoPorMissao(situacao), aluno.id, { planejadas: feitasAntes(estado, curso, aluno, mid, minutoDaLinha(solicitacao)), exceto })
+    .candidatas.find(x => x.mis === solicitacao.missao && (!recurso || x.eq === recurso));
+  if (!m) return { ...nenhuma('sem-missao-do-tipo'), curso: curso.sigla };
+  return { missao: { codigo: m.codigo, eq: m.eq, nb: m.nb }, curso: curso.sigla, de: 'programa', nota: null, foraDoPrograma };
+}
+
+// As missões do curso dos outros voos do aluno no dia que contam como feitas para o pedido que começa em inicio (a regra
+// 12 do desenho): as dos que voam, não cancelados, e terminam até esse minuto (o horário do voo: horarioPedido, mais a
+// duração). O voo de horário desconhecido conta, e, sem o início do pedido, todos contam (a regra de antes). mid: o voo
+// que dá lugar ao pedido (o dele não conta)
+function feitasAntes(estado, curso, aluno, mid, inicio) {
+  const todas = missoesDoDia(curso, aluno, { fStatus: estado.fStatus, mid });
+  if (!Number.isFinite(inicio)) return todas;
+  const porCodigo = new Map(curso.missoes.map(m => [m.codigo, m.id]));
+  const depois = new Set(pedidosDoAluno(aluno).filter(p => {
+    if (!p.fly || !p.etapa || (mid !== null && (p.mid || 0) === mid)) return false;
+    const pino = (estado.fixos || {})[chaveDoVoo(aluno.id, p.mid || 0)];
+    const a = horarioPedido(estado, aluno.id, p);
+    const fim = pino && Number.isInteger(pino.b) ? pino.b : a === null ? null : a + Math.round((+p.nb || 0) * 60);
+    return fim !== null && fim > inicio;
+  }).map(p => porCodigo.get(p.etapa)));
+  return new Set([...todas].filter(id => !depois.has(id)));
+}
+
+// O horário exato do pedido que a lista de decolagens do recurso com que ele entra não tem (o item 12 de "Left for
+// Pedro"): o pedido sem recurso, com o da missão do programa, ou a lista mudada depois do registro. O minuto fica
+function horarioForaDaLista(estado, solicitacao, eq) {
+  const minuto = minutoDaLinha(solicitacao);
+  return Number.isFinite(minuto) && !horariosDaMissao(estado.horarios, solicitacao.missao, eq).includes(minuto);
+}
+
+// O registro que recebe o pedido que entra, como alvoDoNovoPedido (js/rules.js), com a guarda da identidade (decisão 2
+// do desenho): o principal que não voa mas é de outro pedido da agenda (solicitacao) não é dado a este, que vira uma
+// missão extra nova; o registro de um pedido é o voo dele, também fora da escala
+function alvoDaEntrada(estado, aluno) {
+  if (aluno.fly || aluno.solicitacao === undefined) return alvoDoNovoPedido(estado, aluno);
+  const extra = { mid: proximoMid(estado, aluno), ...blank(), pr: aluno.pr || PRIORIDADE_PADRAO };
+  aluno.extra = [...(aluno.extra || []), extra];
+  return extra;
+}
+
+// Um pedido entra no dia: o voo da mesma missão posto à mão dá lugar a ele (vooQueDaLugar); senão, ele vai para o pedido
+// principal do aluno, quando ele não voa, não é de outro pedido e o dia não guarda nada dele, ou para uma missão extra
+// nova (alvoDaEntrada).
+// A missão do curso de missaoDaEntrada: a do pedido com o recurso e as horas do pedido (sem eles, os dela); a do operador
+// e a do programa com o recurso dele (os horários e as preferências são os desse recurso) e as horas dele, as registradas
+// na agenda valendo mais. O id do pedido vai para importadas. Devolve o que entrou
+function entrar(estado, s, { programa, situacao, cursos }) {
+  const aluno = estado.stu.find(x => x.id === s.aluno);
+  if (!estado.importadas.includes(s.id)) estado.importadas.push(s.id);
+  const vinculada = missaoDoCursoDoPedido(cursos || [], s) || null;
+  const copiada = vooQueDaLugar(estado, aluno, migrateLegacyMissionName(s.missao), vinculada);
+  const entrada = missaoDaEntrada(estado, aluno, s, { programa, situacao, cursos, copiada });
+  const recurso = recursoValido(s);
+  const doCurso = !entrada.missao ? {} : entrada.de === 'pedido' ? { ...(recurso ? {} : { eq: entrada.missao.eq }), nb: entrada.missao.nb }
+    : { eq: entrada.missao.eq, nb: entrada.missao.nb };
+  const pedido = pedidoDaSolicitacao(s, estado.horarios, doCurso);
+  // O horário exato da linha que o voo não guarda (fora dos horários exatos do dia, das 06:30 às 17:30: js/rules.js,
+  // minutoExato; antes, as 06:00 que a lista de decolagens aceita, ou depois, as 18:00 que o servidor aceita): o pedido
+  // entra sem ele, e o resumo diz; não está "fora da lista"
+  const semOHorario = Number.isFinite(minutoDaLinha(s)) && !minutosExatos(pedido.jan).length;
+  const foraDaLista = !semOHorario && horarioForaDaLista(estado, s, pedido.eq);
+  // A missão do curso dada pelo programa leva a marca (etapaDoPrograma, formato 30): a do pedido e a do operador, não
+  if (entrada.missao) Object.assign(pedido, { etapa: entrada.missao.codigo }, entrada.curso ? { cursoDaEtapa: entrada.curso } : {}, entrada.de === 'programa' ? { etapaDoPrograma: true } : {});
+  pedido.solicitacao = s.id;
+  let registro;
+  if (copiada) {
+    // O voo continua com o instrutor escolhido e a prioridade que o operador deu (com a prioridade desligada, o motor da
+    // tela recebe a padrão: estadoDaEscala); a disponibilidade e a missão do curso passam a ser as do pedido
+    const { pr } = copiada;
+    for (const campo of ['jan', 'etapa', 'cursoDaEtapa', 'etapaDoPrograma', 'limiteConfirmado']) delete copiada[campo];
+    registro = Object.assign(copiada, pedido, pr === undefined ? {} : { pr });
+  } else registro = Object.assign(alvoDaEntrada(estado, aluno), pedido);
+  return {
+    id: s.id, stuId: aluno.id, mid: registro.mid || 0, novo: !copiada, etapa: registro.etapa || null,
+    nota: entrada.nota || (foraDaLista ? 'horario-fora-da-lista' : semOHorario ? 'sem-o-horario' : null),
+    ...(foraDaLista ? { foraDaLista: { missao: s.missao, recurso: registro.eq, horario: hm(minutoDaLinha(s)) } } : {}),
+    ...(semOHorario ? { semOHorario: { missao: s.missao, recurso: registro.eq, horario: hm(minutoDaLinha(s)) } } : {}),
+    ...(entrada.foraDoPrograma ? { foraDoPrograma: { missao: s.missao, entrouComo: registro.etapa || null } } : {}),
+    ...(entrada.nota === 'sem-missao-do-tipo' ? { semMissao: { missao: s.missao, ...(recurso ? { recurso } : {}) } } : {})
+  };
+}
+
+// Os pedidos que esperam um horário cheio, na escala de antes (estado: o que o motor leu; resultado: o que ele devolveu):
+// os recusados só por lugar nesse horário (o limite de locais, os aviões ou os instrutores ocupados) que têm horário
+// exato, na ordem do motor; o minuto é o 1º do pedido e o lugar, a posição entre os que esperam o mesmo minuto. A espera
+// que o motor marca no alerta (espera: { minuto, lugar }, do F1h) vale mais
+const RECUSAS_POR_LUGAR = ['limite-de-locais', 'avioes-ocupados', 'instrutores-ocupados'];
+function listaDeEspera(estado, resultado) {
+  const lista = [], porMinuto = new Map();
+  for (const [fKey, alerta] of rejeicoesDosPedidos(estado, resultado)) {
+    const [stuId, mid] = fKey.split('_').map(Number);
+    const aluno = estado.stu.find(x => x.id === stuId);
+    const registro = aluno ? pedidoDoAluno(aluno, mid) : null;
+    if (!registro) continue;
+    const marcada = alerta.espera && Number.isInteger(alerta.espera.minuto) ? alerta.espera : null;
+    const minuto = marcada ? marcada.minuto : RECUSAS_POR_LUGAR.includes(alerta.codigo) ? minutosExatos(registro.jan)[0] : undefined;
+    if (minuto === undefined) continue;
+    const lugar = (porMinuto.get(minuto) || 0) + 1;
+    porMinuto.set(minuto, lugar);
+    lista.push({ fKey, nome: aluno.nm, minuto, lugar: marcada && Number.isInteger(marcada.lugar) ? marcada.lugar : lugar });
+  }
+  return lista;
+}
+
+// O nome do instrutor, para o Histórico
+const nomeDoInstrutor = (estado, id) => ((estado.ins || []).find(x => x.id === id) || {}).nm || null;
+
+// O pedido de uma linha da escala (aluno_missão, sem a sessão): as sessões de um pedido são dele
+const pedidoDaChave = fKey => fKey.split('_').slice(0, 2).join('_');
+
+// A vez da lista de espera (Pedro, 2026-11-28, a pergunta da revisão do E sobre N14: "sim"): quando a rodada do motor dá o
+// lugar livre do minuto a um pedido que estava em outro horário (a 2ª preferência, U1, ou o horário flexível) ou fora
+// da escala, e não a quem esperava por ele, o 1º da lista de espera desse minuto que cabe no lugar entra, depois o
+// seguinte; na escala aprovada e na não aprovada (o padrão do R5, a rodada em volta dos fixos, cede neste caso). Cabe
+// quem o motor põe nesse minuto com a escala de antes inteira fixa no lugar (menos quem saiu) e só ele entre os pedidos
+// sem linha nela: assim nenhum voo de antes muda, nenhum outro pedido passa na frente dele, e o motor escolhe o avião e o
+// instrutor com as regras dele. Quem entra fica fixo ali, com o pino de sempre ({ a, b, r, insId }, sem marca: nenhum
+// formato novo): a escala é refeita pelo motor a cada gravação (js/actions.js, save), e sem o pino a rodada seguinte
+// daria a vaga de volta ao pedido de antes na fila. O pino só fica se a rodada com ele, a da tela, mantém todos os que
+// tinham linha, sem conflito novo; senão sai, e o seguinte da lista é tentado. Os da lista que já entraram nesta
+// conciliação no lugar de outro que saiu (daLista: as chaves) ficam fixos com ele, onde estão: sem o pino, a rodada da tela
+// daria o lugar deles ao pedido que mudaria de horário (a revisão: dois lugares livres no mesmo horário). A escala do motor
+// continua a mesma (runAllocationEngine não muda). Responde quem entrou ({ ...espera, fixo }), os pinos dos da lista que
+// já tinham entrado (fixados: { fKey: pino }) e as linhas da rodada, ou null
+function vezDaListaDeEspera(estado, { minuto, espera, linhasDeAntes, entraram = [], daLista = [], saem, escalar }) {
+  // Os que ficam: as linhas de antes, menos quem saiu, e as de quem já entrou no lugar de outro que saiu nesta conciliação
+  const ficam = [...linhasDeAntes.values(), ...entraram].filter(o => !o.trecho && !saem.has(pedidoDaChave(o.fKey)));
+  const comConflitoAntes = new Set(ficam.filter(o => o.conflito).map(o => o.fKey));
+  const temLinha = new Set(ficam.map(o => pedidoDaChave(o.fKey)));
+  const original = estado.fixos;
+  const fixosDeAntes = { ...(original || {}) };
+  for (const e of espera.filter(x => x.minuto === minuto)) {
+    // A rodada de prova: a escala de antes fixa no lugar (o pino que já havia fica), e, dos pedidos sem linha nela, só ele
+    const voa = chave => temLinha.has(chave) || chave === pedidoDaChave(e.fKey);
+    const prova = {
+      ...estado,
+      fixos: { ...Object.fromEntries(ficam.map(o => [o.fKey, pinoDoVoo(o)])), ...fixosDeAntes },
+      stu: estado.stu.map(s => ({
+        ...s, fly: Boolean(s.fly) && voa(`${s.id}_0`),
+        extra: (Array.isArray(s.extra) ? s.extra : []).map(ex => ({ ...ex, fly: Boolean(ex.fly) && voa(`${s.id}_${ex.mid}`) }))
+      }))
+    };
+    const linha = (escalar(prova).resultado.out || []).find(o => o.fKey === e.fKey && !o.trecho);
+    if (!linha || linha.a !== minuto || linha.conflito) continue;
+    const fixo = pinoDoVoo(linha);
+    const fixados = Object.fromEntries(entraram.filter(o => daLista.includes(o.fKey) && !Object.hasOwn(fixosDeAntes, o.fKey)).map(o => [o.fKey, pinoDoVoo(o)]));
+    estado.fixos = { ...fixosDeAntes, ...fixados, [e.fKey]: fixo };
+    // A rodada da tela com o pino: todos os que tinham linha continuam com uma, sem conflito novo, e ele no lugar
+    const depois = escalar(estado).resultado.out || [];
+    const linhaDepois = new Map(depois.map(o => [o.fKey, o]));
+    const dele = linhaDepois.get(e.fKey);
+    const mantem = ficam.every(o => linhaDepois.has(o.fKey)) && depois.every(o => !o.conflito || comConflitoAntes.has(o.fKey));
+    if (dele && dele.a === minuto && !dele.conflito && mantem) return { entrou: { ...e, fixo }, fixados, linhaDepois };
+    estado.fixos = original;
+  }
+  return null;
+}
+
+// O texto do Histórico de um pedido que saiu (só nomes, nenhum dado pessoal): de onde, o motivo, a missão, onde o voo
+// estava e, quando a rodada do motor deu o lugar dele ao primeiro da lista de espera que cabia, quem entrou. Com a escala
+// de antes, o pedido sem linha nela saiu da lista de espera (esperava: { minuto, lugar }) ou dos pedidos da data (não
+// estava na escala); sem ela, não se sabe, e a linha diz "saiu da escala"
+function textoDaSaida(estado, { nome, mis, motivo, linha, deixouDeSerFixo, entrou, esperava, semLinha }) {
+  const onde = linha ? ` · estava às ${hm(linha.a)}–${hm(linha.b)} no ${linha.r}${nomeDoInstrutor(estado, linha.insId) ? ` com ${nomeDoInstrutor(estado, linha.insId)}` : ''}`
+    : esperava ? ` · era o ${esperava.lugar}º` : semLinha ? ' · não estava na escala' : '';
+  const deOnde = esperava ? `da lista de espera das ${hm(esperava.minuto)}` : semLinha ? 'dos pedidos da data' : 'da escala';
+  const porque = motivo === 'cancelado' ? 'pedido cancelado' : 'aprovação retirada';
+  // Quem entrou: o da lista de espera, com o lugar dele nela; o outro pedido que foi para o lugar livre (a rodada do motor,
+  // quando ninguém da lista cabe nele: o que estava em outro horário, ou fora da escala), com de onde veio. O da lista que
+  // entrou antes do pedido que mudaria de horário (vezDaListaDeEspera) fica fixo no lugar, e a linha diz onde
+  const fixo = entrou && entrou.fixo ? ` · fica fixo às ${hm(entrou.fixo.a)} no ${entrou.fixo.r}${nomeDoInstrutor(estado, entrou.fixo.insId) ? ` com ${nomeDoInstrutor(estado, entrou.fixo.insId)}` : ''}` : '';
+  const veio = !entrou ? '' : Number.isInteger(entrou.lugar) ? `${entrou.lugar}º da lista de espera das ${hm(entrou.minuto)}${fixo}`
+    : entrou.de ? `estava às ${hm(entrou.de.a)} no ${entrou.de.r}` : 'estava fora da escala';
+  const quem = entrou ? `; no lugar entrou ${entrou.nome} (${veio})` : '';
+  return `Pedidos: ${nome} saiu ${deOnde}, ${porque} (${mis}${onde}${deixouDeSerFixo ? ' · deixa de ser fixo' : ''})${quem}`;
+}
+
+// Aplica o plano de conciliarPedidos ao estado (o único que muda estado.importadas):
+// - acertos: o id admitido volta para importadas; o esquecido sai;
+// - voltam: o registro volta a voar (fly), e o id volta para importadas; nada mais dele muda;
+// - entram: cada pedido entra no dia (entrar), os com a missão do curso que escolheram na Agenda primeiro, cada grupo na
+//   ordem do plano; o que já tem registro (o plano aplicado de novo) não;
+// - saem: o registro deixa de voar e o id sai de importadas; o do pedido cancelado sai com a chave limpa (o voo fixo, o
+//   status e o detalhe), e o fixo do pedido sem a aprovação dorme (volta com ela).
+// Cada saída tem uma linha no Histórico (historico: [tipo, texto]). Com antes ({ estado, resultado }: a escala de antes,
+// como a tela a calculou) e escalar(estado) → { estado, resultado } (o motor como a tela o roda: estadoDaEscala, com a
+// prioridade desligada na padrão), a rodada do motor em volta dos fixos depois da saída dá o lugar livre ao primeiro da
+// lista de espera daquele horário que cabe nele (N14; o padrão do R5: também na escala aprovada, sem fixar quem entra), e
+// a linha da saída diz quem entrou. Quando a rodada o dá a um pedido de outro horário ou do horário flexível, a lista vem
+// antes (Pedro, 2026-11-28): o 1º dela que cabe entra, fixo no lugar (vezDaListaDeEspera; o padrão do R5 cede aqui).
+// programa, situacao, cursos: os de missaoDaEntrada
+export function aplicarConciliacao(estado, plano, { programa = [], situacao = [], cursos = [], antes = null, escalar = null } = {}) {
+  const feito = { entraram: [], voltaram: [], sairam: [], conferir: [], ficam: [], admitidas: [], esquecidas: [], historico: [] };
   if (!Array.isArray(estado.importadas)) estado.importadas = [];
-  for (const solicitacao of solicitacoes) {
-    if (solicitacao.cancelada_em || estado.importadas.includes(solicitacao.id)) continue;
-    // O pedido de quem não está no cadastro não conta como visto: entra quando o aluno for cadastrado
-    const aluno = estado.stu.find(x => x.id === solicitacao.aluno);
-    if (!aluno) { resumo.semAluno++; continue; }
-    if (semInativos && inativo(aluno)) { resumo.deInativo++; continue; }
-    if (cursos === null && solicitacao.missao_do_curso) { resumo.esperamOsProgramas++; continue; }
-    estado.importadas.push(solicitacao.id);
-    const vinculada = missaoDoCursoDoPedido(cursos || [], solicitacao) || null;
-    const copiada = vooQueDaLugar(estado, aluno, migrateLegacyMissionName(solicitacao.missao), vinculada);
-    const escolhida = !vinculada && copiada && copiada.etapa ? copiada : null;
-    const curso = !vinculada && !escolhida && aluno.curso ? indice.curso(aluno.curso) : null;
-    const jaNoDia = curso && missoesDoDia(curso, aluno, { fStatus: estado.fStatus, mid: copiada ? copiada.mid || 0 : null });
-    const recurso = recursoValido(solicitacao);
-    const missao = curso && proximasMissoes(curso, mapa, aluno.id, { planejadas: jaNoDia, exceto: jaNoDia }).candidatas
-      .find(m => m.mis === solicitacao.missao && (!recurso || m.eq === recurso));
-    if (curso && !missao) resumo.semMissaoDoCurso.push({ missao: solicitacao.missao, ...(recurso ? { recurso } : {}) });
-    // A missão do curso do pedido: o recurso e as horas do pedido (sem eles, os dela). A inferida ou a do operador: o recurso
-    // do programa, com os horários e as preferências dele, e as horas dele
-    const doCurso = escolhida || missao;
-    const pedido = pedidoDaSolicitacao(solicitacao, estado.horarios, vinculada ? { ...(recurso ? {} : { eq: vinculada.missao.eq }), nb: vinculada.missao.nb }
-      : doCurso ? { eq: doCurso.eq, nb: doCurso.nb } : {});
-    if (vinculada) Object.assign(pedido, { etapa: vinculada.codigo, cursoDaEtapa: vinculada.sigla });
-    else if (escolhida) Object.assign(pedido, { etapa: escolhida.etapa }, escolhida.cursoDaEtapa ? { cursoDaEtapa: escolhida.cursoDaEtapa } : {});
-    else if (missao) Object.assign(pedido, { etapa: missao.codigo, cursoDaEtapa: curso.sigla });
-    if (!vinculada && solicitacao.missao_do_curso) resumo.foraDoPrograma.push({ missao: solicitacao.missao, entrouComo: pedido.etapa || null });
-    pedido.solicitacao = solicitacao.id;
-    if (copiada) {
-      // O voo continua com o instrutor escolhido; a disponibilidade e a missão do curso passam a ser as do pedido
-      for (const campo of ['jan', 'etapa', 'cursoDaEtapa', 'limiteConfirmado']) delete copiada[campo];
-      Object.assign(copiada, pedido);
-      resumo.atualizados++;
-    } else {
-      Object.assign(alvoDoNovoPedido(estado, aluno), pedido);
-      resumo.novos++;
+  const guardar = id => { if (!estado.importadas.includes(id)) estado.importadas.push(id); };
+  const tirar = id => { estado.importadas = estado.importadas.filter(x => x !== id); };
+  // A espera e os voos de antes, lidos antes de mudar o estado (a escala de antes pode ser o próprio estado)
+  const espera = antes ? listaDeEspera(antes.estado, antes.resultado) : [];
+  const naEspera = new Map(espera.map(e => [e.fKey, e]));
+  const linhasDeAntes = new Map(antes ? (antes.resultado.out || []).map(o => [o.fKey, o]) : []);
+  const acertos = plano.acertos || { admitir: [], esquecer: [] };
+  for (const id of acertos.admitir) { guardar(id); feito.admitidas.push(id); }
+  for (const id of acertos.esquecer) { tirar(id); feito.esquecidas.push(id); }
+  const doFKey = fKey => { const [stuId, mid] = fKey.split('_').map(Number); return { stuId, mid }; };
+  const doRegistro = ({ stuId, mid }) => {
+    const aluno = estado.stu.find(x => x.id === stuId);
+    return aluno ? { aluno, registro: pedidoDoAluno(aluno, mid) } : {};
+  };
+  for (const v of plano.voltam || []) {
+    const { registro } = doRegistro(v);
+    if (!registro || registro.solicitacao !== v.id) continue;
+    registro.fly = true;
+    guardar(v.id);
+    feito.voltaram.push(v);
+  }
+  // Os pedidos com a missão do curso que escolheram na Agenda (a regra 8) entram antes dos sem uma, para que a missão de
+  // cada um já esteja no dia quando a dos outros é inferida (a regra 12: não é dada de novo), na mesma importação ou em
+  // duas; dentro de cada grupo, a ordem do plano. O pedido que já tem registro (um plano aplicado de novo) não entra
+  const jaTem = registrosDosPedidos(estado);
+  const entram = (plano.entram || []).filter(s => !jaTem.has(s.id));
+  const escolheu = s => Boolean(missaoDoCursoDoPedido(cursos || [], s));
+  for (const s of [...entram.filter(escolheu), ...entram.filter(s => !escolheu(s))]) feito.entraram.push(entrar(estado, s, { programa, situacao, cursos }));
+  for (const x of plano.saem || []) {
+    const { aluno, registro } = doRegistro(x);
+    if (!registro || registro.solicitacao !== x.id) continue;
+    const fKey = chaveDoVoo(x.stuId, x.mid);
+    registro.fly = false;
+    tirar(x.id);
+    const deixouDeSerFixo = x.motivo === 'cancelado' && Object.hasOwn(estado.fixos || {}, fKey);
+    if (x.motivo === 'cancelado') [estado.fixos, estado.fStatus, estado.fObs].forEach(mapa => { if (mapa) delete mapa[fKey]; });
+    const linha = linhasDeAntes.get(fKey) || null;
+    const esperava = !linha && naEspera.has(fKey) ? naEspera.get(fKey) : null;
+    feito.sairam.push({ ...x, fKey, nome: aluno.nm, mis: registro.mis, linha, deixouDeSerFixo, esperava, semLinha: Boolean(antes) && !linha && !esperava });
+  }
+  // O lugar de cada voo que saiu vai, na rodada do motor, ao primeiro da lista de espera do horário dele que cabe
+  const livres = feito.sairam.filter(x => x.linha);
+  if (livres.length && escalar) {
+    let linhaDepois = new Map((escalar(estado).resultado.out || []).map(o => [o.fKey, o]));
+    const usados = new Set();
+    const saem = new Set(feito.sairam.map(x => pedidoDaChave(x.fKey)));
+    // Os da lista que entraram até aqui, com o lugar livre de cada um (para dizer, no Histórico, que ficaram fixos)
+    const daLista = new Map();
+    for (const x of livres) {
+      // Entra pela lista só quem esperava esse horário: o da lista de outro horário que a rodada pôs aqui (a 2ª preferência)
+      // muda de horário, como o pedido que estava em outro horário, e a lista deste vem antes dele (a revisão)
+      const entrou = espera.filter(e => !usados.has(e.fKey) && e.minuto === x.linha.a && linhaDepois.has(e.fKey) && linhaDepois.get(e.fKey).a === x.linha.a)
+        .sort((p, q) => p.lugar - q.lugar)[0];
+      if (entrou) { usados.add(entrou.fKey); daLista.set(entrou.fKey, x); x.entrou = entrou; continue; }
+      // Nenhum da lista de espera na rodada: a lista vem antes do pedido que o motor poria no lugar vindo de outro horário,
+      // do horário flexível ou da lista de outro horário (Pedro, 2026-11-28): o 1º dela que cabe no lugar livre, depois o
+      // seguinte, entra, fixo; os da lista que já entraram nesta conciliação ficam fixos com ele
+      const entraram = [...usados].map(k => linhaDepois.get(k)).filter(Boolean);
+      const daVez = vezDaListaDeEspera(estado, { minuto: x.linha.a, espera: espera.filter(e => !usados.has(e.fKey)), linhasDeAntes, entraram, daLista: [...daLista.keys()], saem, escalar });
+      if (daVez) {
+        usados.add(daVez.entrou.fKey);
+        for (const [fKey, fixo] of Object.entries(daVez.fixados)) daLista.get(fKey).entrou = { ...daLista.get(fKey).entrou, fixo };
+        daLista.set(daVez.entrou.fKey, x);
+        x.entrou = daVez.entrou;
+        linhaDepois = daVez.linhaDepois;
+        continue;
+      }
+      // Nenhum da lista de espera cabe: o lugar pode ter ido a outro pedido, que a rodada pôs nesse horário: o de antes na
+      // fila que estava em outro horário (a 2ª preferência, U1, ou o horário flexível), na lista de espera de outro horário
+      // ou fora da escala; o do mesmo recurso primeiro. O Histórico diz quem é e de onde veio
+      const outro = [...linhaDepois.values()]
+        .filter(o => !usados.has(o.fKey) && o.a === x.linha.a && !(linhasDeAntes.has(o.fKey) && linhasDeAntes.get(o.fKey).a === o.a) && doRegistro(doFKey(o.fKey)).aluno)
+        .sort((p, q) => (p.r === x.linha.r ? 0 : 1) - (q.r === x.linha.r ? 0 : 1))[0];
+      if (outro) {
+        usados.add(outro.fKey);
+        const de = linhasDeAntes.get(outro.fKey) || null;
+        x.entrou = naEspera.has(outro.fKey) ? naEspera.get(outro.fKey)
+          : { fKey: outro.fKey, nome: doRegistro(doFKey(outro.fKey)).aluno.nm, de: de ? { a: de.a, r: de.r } : null };
+      }
     }
   }
-  return resumo;
+  for (const x of feito.sairam) feito.historico.push(['exc', textoDaSaida(estado, x)]);
+  // Os que ficam até o operador conferir o status e os que ficam (nada muda): o aluno, para o aviso
+  for (const x of plano.conferir || []) { const { aluno } = doRegistro(x); if (aluno) feito.conferir.push({ ...x, nome: aluno.nm }); }
+  for (const x of plano.ficam || []) { const { aluno } = doRegistro(x); if (aluno) feito.ficam.push({ ...x, nome: aluno.nm }); }
+  return feito;
+}
+
+// O resumo da conciliação aplicada (o aviso do app, js/entrada-na-demanda.js): quantos entraram novos e quantos foram
+// atualizados (o voo posto à mão que deu lugar ao pedido e o que voltou a voar); os que esperam (fora do cadastro, de
+// inativo, sem os programas lidos); a missão do curso de cada um que entrou (a que saiu do programa, foraDoPrograma, com a
+// missão como a qual ele entrou, entrouComo: a inferida ou a do operador; null, pelo tipo; nenhuma inferida,
+// semMissaoDoCurso); o horário exato que a lista do recurso não tem (foraDaLista: a missão, o recurso e o horário) e o que
+// entrou sem ele, fora dos horários exatos do dia, antes das 06:30 ou depois das 17:30 (semOHorario, os mesmos campos); os
+// que saíram (sairam: o aluno, quem entrou no lugar, null: ninguém, e de onde saiu, de: 'escala', 'espera', da lista de
+// espera, ou 'pedidos', dos pedidos da data, sem estar na escala), os que ficam até o operador conferir o status
+// (conferir: o aluno e o porquê, 'atrasado' ou 'ja-decolou') e os que ficam (ficam: o aluno e o porquê de ficaNaEscala)
+export function resumoDaConciliacao(plano, feito) {
+  return {
+    novos: feito.entraram.filter(x => x.novo).length, atualizados: feito.entraram.filter(x => !x.novo).length + feito.voltaram.length,
+    semAluno: plano.semAluno.length, deInativo: plano.inativos.length,
+    foraDoPrograma: feito.entraram.filter(x => x.foraDoPrograma).map(x => x.foraDoPrograma),
+    semMissaoDoCurso: feito.entraram.filter(x => x.semMissao).map(x => x.semMissao), esperamOsProgramas: plano.esperamOsProgramas.length,
+    foraDaLista: feito.entraram.filter(x => x.foraDaLista).map(x => x.foraDaLista),
+    semOHorario: feito.entraram.filter(x => x.semOHorario).map(x => x.semOHorario),
+    sairam: feito.sairam.map(x => ({ aluno: x.nome, entrou: x.entrou ? x.entrou.nome : null, de: x.esperava ? 'espera' : x.semLinha ? 'pedidos' : 'escala' })),
+    conferir: feito.conferir.map(x => ({ aluno: x.nome, porque: x.porque })),
+    ficam: (feito.ficam || []).map(x => ({ aluno: x.nome, porque: x.porque }))
+  };
 }

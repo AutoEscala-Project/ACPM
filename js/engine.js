@@ -3,7 +3,7 @@
 import { MIS, DEFAULT_LIM, GROUND_EQ_TYPE, GROUND_REG, GROUND_DURATION_MIN, GROUND_DURATION_H, AIRCRAFT_EQ_TYPES, MISSOES_LOCAIS, LIMITE_DE_VOOS_LOCAIS, MINUTOS_DO_DIA } from './config.js';
 import { FROTA_INICIAL, matriculasDoTipo, matriculasParaOVoo, motivoDoAviao, instrutorVoaNoAviao, recursoDaFrota, salaDisponivel } from './frota.js';
 import { hm, fmtH } from './format.js';
-import { isGroundMission, doesGroundGateFlight, disponibilidadeDoAluno, disponibilidadeAtual, rotuloDaDisponibilidade, duracaoValida, duracaoFixaDaMissao, minutoConfirmado } from './rules.js';
+import { isGroundMission, doesGroundGateFlight, disponibilidadeDoAluno, minutosExatos, rotuloDaDisponibilidade, duracaoValida, duracaoFixaDaMissao, minutoConfirmado } from './rules.js';
 import { horariosDaMissao, horariosDoTipo, periodoDoMinuto, minutoDaPreferencia, ordenarPelaPreferencia } from './horarios.js';
 import { categoriaDoTipo } from './categorias.js';
 import { horarioAberto } from './fechamentos.js';
@@ -231,11 +231,11 @@ function motivoSemPar(doPar, stu, d, tipo, fc) {
 // As recusas por falta de lugar no horário: os 6 voos locais (o 7º não confirmado), os aviões e os instrutores
 const RECUSAS_QUE_ESPERAM = ['limite-de-locais', 'avioes-ocupados', 'instrutores-ocupados'];
 
-// O minuto pelo qual o pedido (d) recusado espera: o horário exato dele (o jan h<minuto>), quando a recusa é só por falta de
-// lugar nele; senão (sem horário exato, ou recusado por outro motivo), null
+// O minuto pelo qual o pedido (d) recusado espera: o horário exato dele (o jan h<minuto>; com dois, h<m1>|h<m2>, o 1º: U1),
+// quando a recusa é só por falta de lugar; senão (sem horário exato, ou recusado por outro motivo), null
 function minutoDaEspera(d, recusa) {
-  const exato = disponibilidadeAtual(d.jan);
-  return typeof exato === 'string' && /^h\d+$/.test(exato) && RECUSAS_QUE_ESPERAM.includes(recusa.codigo) ? Number(exato.slice(1)) : null;
+  const [exato] = minutosExatos(d.jan);
+  return exato !== undefined && RECUSAS_QUE_ESPERAM.includes(recusa.codigo) ? exato : null;
 }
 
 // O “Priorizar com” escolhe o instrutor, não o horário (F1h, N9; Pedro, 2026-11-26: a ordem da fila fica com o horário).
@@ -388,8 +388,10 @@ export function runAllocationEngine(state, opcoes = {}) {
     // Disponibilidade do aluno: o voo (ou o Ground) só começa nesses horários (por período ou num horário exato)
     const permitidas = disponibilidadeDoAluno(d.jan);
     const naDisponibilidade = minuto => !permitidas || permitidas(minuto);
-    // Preferências em minutos (o número da janela dos dados antigos vale como o horário dela)
-    const preferidos = [minutoDaPreferencia(d.p1), minutoDaPreferencia(d.p2)];
+    // Preferências em minutos (o número da janela dos dados antigos vale como o horário dela). O pedido de dois horários
+    // exatos (U1) é tentado no 1º, depois no 2º: as preferências são eles, na ordem do pedido
+    const exatos = minutosExatos(d.jan);
+    const preferidos = exatos.length === 2 ? exatos : [minutoDaPreferencia(d.p1), minutoDaPreferencia(d.p2)];
 
     // O instrutor escolhido pelo operador para o pedido: o motor procura o horário e o avião só com ele. O que impede o
     // voo em qualquer horário (fora do dia, sem a habilitação, em "Não escalar com") recusa logo. O escolhido que saiu

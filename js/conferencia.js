@@ -9,7 +9,7 @@ import { NOTURNO, DEFAULT_LIM, GROUND_EQ_TYPE, GROUND_REG, GROUND_DURATION_MIN, 
 import { FROTA_INICIAL, matriculasDoTipo, motivoDoAviao, aviaoServe, instrutorVoaNoAviao, recursoDaFrota, salaDisponivel } from './frota.js';
 import { hm, fmtH, numeroBr, duracaoHm } from './format.js';
 import { repousoAntesDaVolta, historicoDoDia } from './noturno.js';
-import { isGroundMission, doesGroundGateFlight, disponibilidadeDoAluno, disponibilidadeAtual, duracaoValida, duracaoFixaDaMissao, minutoConfirmado } from './rules.js';
+import { isGroundMission, doesGroundGateFlight, disponibilidadeDoAluno, minutosExatos, duracaoValida, duracaoFixaDaMissao, minutoConfirmado } from './rules.js';
 import { categoriaDoTipo } from './categorias.js';
 import { fechamentosDoEstado, fechamentoDoMinuto } from './fechamentos.js';
 import { HORARIOS_INICIAIS, horariosDaMissao, horariosDoTipo, periodoDoMinuto, minutoDaPreferencia, fimDasMissoesDoDia, INICIOS_DOS_TEMPOS, HORARIO_DO_SOLO } from './horarios.js';
@@ -389,10 +389,11 @@ export function conferirFixos(state, ctx, act, out, al, pinos = ctx.fixos) {
   al.push(...avisosDosAgendados);
 }
 
-// O horário que o pedido quer: o minuto exato da disponibilidade, senão a 1ª preferência; sem nenhum, null
+// O horário que o pedido quer: o minuto exato da disponibilidade (com dois, o 1º: U1), senão a 1ª preferência; sem
+// nenhum, null
 function horarioPedido(d) {
-  const exato = disponibilidadeAtual(d.jan);
-  if (typeof exato === 'string' && exato.startsWith('h')) return Number(exato.slice(1));
+  const [exato] = minutosExatos(d.jan);
+  if (exato !== undefined) return exato;
   const p1 = minutoDaPreferencia(d.p1);
   return p1 >= 0 ? p1 : null;
 }

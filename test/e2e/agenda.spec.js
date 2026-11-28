@@ -575,14 +575,19 @@ test.describe('Agenda de Solicitações', () => {
     await cancelar.click();
     await expect(cancelar).toHaveText('Confirmar cancelamento');
     await cancelar.click();
-    await expect(page.locator('#toast-box')).toContainText('Pedido cancelado. O voo continua na demanda: tire-o lá (Voa), se for o caso.');
+    await expect(page.locator('#toast-box')).toContainText('Pedido cancelado. O voo continua na demanda: “Tirar da escala”, no aviso, o tira.');
     const linha = linhasDosPedidos(page).first();
     await expect(linha).toContainText('Cancelado por Maria em 10/11 12:00 · Ainda na demanda');
     await expect(grupoDosPedidos(page, 'cancelados')).toBeVisible();
     await expect(contagemDoDia(page, '2026-11-11')).toHaveCount(0);
     // Esmaecido
     await expect(linha).toHaveClass(/\bapagado\b/);
-    await expect(avisoDosPedidos(page)).toContainText('1 pedido cancelado ou sem aprovação ainda está na demanda: Aluno 1000 (Voo Local · C152 às 06:30). Tire-os na Demanda (Voa), se for o caso.');
+    await expect(avisoDosPedidos(page)).toContainText('1 pedido cancelado ou sem aprovação ainda está na demanda: Aluno 1000 (Voo Local · C152 às 06:30).');
+    // E: "Tirar da escala" é a conciliação: o voo do cancelado sai (ninguém espera a vaga), com a linha no Histórico
+    await botaoDosPedidos(page, 'conciliar').click();
+    await expect(page.locator('#toast-box')).toContainText('Demanda atualizada · 1 pedido cancelado ou sem aprovação saiu da escala: Aluno 1000.');
+    await expect(avisoDosPedidos(page)).not.toContainText('ainda está na demanda');
+    await expect(linha).not.toContainText('Ainda na demanda');
   });
 
   test('a linha diz se o aprovado está na demanda; na data sem escala gravada, "Importar", no aviso, o põe lá', async ({ page }) => {
@@ -1114,7 +1119,7 @@ test.describe('A página dos pedidos', () => {
     await acaoDoPedido(page, 'retirar').click();
     await expect(acaoDoPedido(page, 'retirar')).toHaveText('Confirmar retirada');
     await acaoDoPedido(page, 'retirar').click();
-    await expect(page.locator('#toast-box')).toContainText('Aprovação retirada: o pedido volta a aguardar. O voo continua na demanda: tire-o lá (Voa), se for o caso.');
+    await expect(page.locator('#toast-box')).toContainText('Aprovação retirada: o pedido volta a aguardar. O voo continua na demanda: “Tirar da escala”, no aviso, o tira.');
     await expect(campoDoDetalhe(page, 'Situação')).toHaveText('Aguardando aprovação');
     await expect(campoDoDetalhe(page, 'Aprovação retirada')).toHaveText('por Maria em 10/11 12:00');
     await expect(campoDoDetalhe(page, 'Demanda')).toHaveText('Ainda na demanda');

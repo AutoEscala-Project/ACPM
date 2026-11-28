@@ -57,9 +57,11 @@ export function getMissionTarget(stuId, mid = 0) {
 // mudaria de aviões ao ser alterada no dia seguinte. Cada pedido com a missão do curso leva o que ela exige do INVA
 // (exige, de S.programa, também com o progresso desligado; sem os programas lidos, nada: habilitacoesNaoConferidas).
 // Com a prioridade desligada, todos os pedidos na prioridade padrão (js/rules.js, comAPrioridadePadrao): valem a ordem dos
-// agendamentos e a do cadastro, e a guardada continua em S. Nunca é gravado: quem muda os dados muda S
-export function estadoDaEscala() {
-  const estado = comExigenciasDasMissoes(estadoParaEscalar(S, { data: DATA, hoje: hojeISO() }), programaLido());
+// agendamentos e a do cadastro, e a guardada continua em S. Nunca é gravado: quem muda os dados muda S. base: o dia de
+// onde ele sai (S; a conciliação passa uma cópia de S com a escala de antes fixa, para a vez da lista de espera:
+// js/processamento.js, vezDaListaDeEspera)
+export function estadoDaEscala(base = S) {
+  const estado = comExigenciasDasMissoes(estadoParaEscalar(base, { data: DATA, hoje: hojeISO() }), programaLido());
   const comHangar = ligada('hangar') ? estado : { ...estado, hangar: null };
   return ligada('prioridade') ? comHangar : comAPrioridadePadrao(comHangar);
 }

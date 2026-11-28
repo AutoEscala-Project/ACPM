@@ -28,7 +28,7 @@ describe('Separar e juntar', () => {
     assert.deepEqual(Object.keys(cadastro).sort(), ['cursos', 'frota', 'horarios', 'ins', 'limites', 'nid', 'stu']);
     assert.deepEqual(Object.keys(cadastro.ins[0]).sort(), ['hab', 'id', 'kg', 'lv', 'nm']);
     assert.deepEqual(Object.keys(cadastro.stu[0]).sort(), ['bl', 'id', 'kg', 'nm']);
-    assert.deepEqual(Object.keys(dia).sort(), ['aprovacao', 'av', 'criterios', 'fObs', 'fStatus', 'filas', 'fixos', 'hangar', 'horas', 'importadas', 'ins', 'pedidos', 'win']);
+    assert.deepEqual(Object.keys(dia).sort(), ['aprovacao', 'av', 'criterios', 'exportacoes', 'fObs', 'fStatus', 'filas', 'fixos', 'hangar', 'horas', 'importadas', 'ins', 'pedidos', 'reabertura', 'win']);
     assert.deepEqual(Object.keys(dia.ins[estado.ins[0].id]).sort(), ['aw', 'on']);
     const pedido = dia.pedidos[estado.stu[0].id];
     assert.equal('nm' in pedido || 'kg' in pedido, false);
@@ -88,6 +88,32 @@ describe('Separar e juntar', () => {
     const { cadastro, dia } = separar(estado);
     assert.deepEqual([dia.fixos, dia.aprovacao], [estado.fixos, estado.aprovacao]);
     assert.deepEqual([juntar(cadastro, dia).fixos, juntar(cadastro, dia).aprovacao], [estado.fixos, estado.aprovacao]);
+  });
+
+  // Formato 30 (E): as exportações da data e quem reabriu a escala (o H as escreve) vão e voltam com o dia, normalizadas;
+  // a data nova começa sem elas
+  it('as exportações e a reabertura vão e voltam com o dia (formato 30)', () => {
+    const estado = normalizado({ ...estadoSintetico(), stu: [aluno(1000)] });
+    const exportacoes = { csv: { em: '2026-11-10T21:10:00.000Z', por: 'Operador 01', impressao: '0a1b2c3d' } };
+    const reabertura = { em: '2026-11-10T21:20:00.000Z', por: 'Operador 01' };
+    Object.assign(estado, { exportacoes: { ...exportacoes, txt: {} }, reabertura: { ...reabertura, extra: 1 } });
+    const { cadastro, dia } = separar(estado);
+    assert.deepEqual([dia.exportacoes, dia.reabertura], [exportacoes, reabertura]);
+    const junto = juntar(cadastro, dia);
+    assert.deepEqual([junto.exportacoes, junto.reabertura], [exportacoes, reabertura]);
+    assert.deepEqual([juntar(cadastro, { ...dia, exportacoes: 'x', reabertura: { em: 'ontem' } }).exportacoes, juntar(cadastro, { ...dia, reabertura: 7 }).reabertura], [{}, null]);
+    const { exportacoes: _e, reabertura: _r, ...semElas } = dia;
+    assert.deepEqual([juntar(cadastro, semElas).exportacoes, juntar(cadastro, semElas).reabertura], [{}, null], 'o dia de antes do formato 30');
+    assert.deepEqual([diaPadrao().exportacoes, diaPadrao().reabertura], [{}, null]);
+  });
+
+  // Formato 30 (E): a missão do curso que a conciliação deu pelo programa (etapaDoPrograma, só true) vai e volta com o pedido
+  it('a marca da missão do curso dada pelo programa vai e volta com o pedido do dia (formato 30)', () => {
+    const estado = normalizado({ ...estadoSintetico(), stu: [aluno(1000, { etapa: 'PP-07', cursoDaEtapa: 'PP', etapaDoPrograma: true }, { extra: [missaoExtra(1001, { etapa: 'PP-08', etapaDoPrograma: true })] })] });
+    const { cadastro, dia } = separar(estado);
+    assert.deepEqual([dia.pedidos[1000].etapaDoPrograma, dia.pedidos[1000].extra[0].etapaDoPrograma], [true, true]);
+    const volta = juntar(cadastro, dia).stu[0];
+    assert.deepEqual([volta.etapaDoPrograma, volta.extra[0].etapaDoPrograma], [true, true]);
   });
 
   it('o código da missão do curso vai e volta com o pedido do dia', () => {
@@ -175,8 +201,9 @@ describe('Nova data', () => {
     estado.criterios = { buracos: 'maior', horarios: 'fixos' };
     const anterior = { ...separar(estado).dia, resultado: { out: [{ fKey: '1000_0_1' }], al: [], tot: 1 } };
     const novo = diaParaCopiar(anterior);
-    assert.deepEqual(Object.keys(novo).sort(), ['aprovacao', 'av', 'criterios', 'fObs', 'fStatus', 'filas', 'fixos', 'hangar', 'horas', 'importadas', 'ins', 'pedidos', 'win']);
+    assert.deepEqual(Object.keys(novo).sort(), ['aprovacao', 'av', 'criterios', 'exportacoes', 'fObs', 'fStatus', 'filas', 'fixos', 'hangar', 'horas', 'importadas', 'ins', 'pedidos', 'reabertura', 'win']);
     assert.deepEqual([novo.fStatus, novo.fObs, novo.fixos, novo.aprovacao], [{}, {}, {}, null], 'a data nova começa sem status, sem voos fixos e sem aprovação');
+    assert.deepEqual([novo.exportacoes, novo.reabertura], [{}, null], 'nem as exportações nem a reabertura da data anterior (formato 30)');
     assert.deepEqual(novo.hangar, anterior.hangar, 'a ordem do hangar continua a da data anterior');
     assert.deepEqual(novo.criterios, anterior.criterios, 'os critérios da compactação continuam os da data anterior');
     assert.equal(novo.av['PR-BTB'], false);
