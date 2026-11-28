@@ -351,6 +351,12 @@ aprovação; `null` sem), que o H escreve e que valem só para a própria data; 
 saída do pedido (a partir do G2). Só o app muda: o primeiro acesso de um Operador ou Administrador regrava os dias e o
 cadastro no 30.
 
+No formato 31 (L), nada é convertido: o número protege as limitações do aluno no cadastro (`stu[].limitacoes`: `recursos`,
+os tipos de avião ou de simulador em que ele voa, e `horarios`, `{ de, ate, dias? }` em minutos, `[de, ate)`, das 06:00 à
+meia-noite, no máximo 8, com `dias` de 0, domingo, a 6, sábado, ou sem eles, todas as datas; `js/limitacoes.js`;
+sem nenhuma, o campo não existe), que a aba do formato 30 tiraria ao gravar o cadastro. `bl`, `voaCom` e `kg` ficam onde
+estão. Só o app muda: o primeiro acesso de um Operador ou Administrador regrava os dias e o cadastro no 31.
+
 ## Estrutura
 
 | Caminho | Conteúdo |
