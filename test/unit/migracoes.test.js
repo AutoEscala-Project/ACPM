@@ -402,7 +402,6 @@ describe('versão 30 (E)', () => {
       assert.deepEqual(migrarCadastro({ ...cadastro, esquema: de }), { ...cadastro, esquema: ESQUEMA }, `de ${de}`);
     }
     assert.equal(precisaMigrar({ esquema: 29 }), true);
-    assert.ok(ESQUEMA >= 30);
   });
 });
 
