@@ -44,6 +44,7 @@ import { FROTA_INICIAL, recursoDaFrota, motivoDoAviao } from './frota.js';
 import { podeFazer, nomeDaHabilitacao, PREFIXO_DA_HABILITACAO_DO_AVIAO } from './habilitacoes.js';
 import { ehDomingo } from './agenda.js';
 import { inativoNoEstado } from './inativos.js';
+import { semAlmocoComAMudanca } from './almoco.js';
 
 const frotaDo = estado => (Array.isArray(estado.frota) ? estado.frota : FROTA_INICIAL);
 const ativo = (o, fStatus) => statusDoVoo(o, fStatus) !== 'Cancelado';
@@ -973,7 +974,7 @@ const CAMPO_DO_GRUPO = { instrutor: 'agd-instrutor', aviao: 'agd-recurso', horar
 // O resumo de cada aviso confirmado, para o histórico
 const RESUMO_DO_AVISO = {
   'fora-dos-horarios': 'fora dos horários de decolagem', 'depois-das-17h30': 'depois das 17:30', 'limite-de-locais': 'acima do limite de voos locais no horário',
-  'antes-do-ground': 'antes do Ground', 'sem-peso': 'sem peso', 'fora-do-priorizar': 'fora do Priorizar com'
+  'antes-do-ground': 'antes do Ground', 'sem-peso': 'sem peso', 'fora-do-priorizar': 'fora do Priorizar com', 'sem-almoco': 'sem almoço'
 };
 
 // As alternativas de cada bloqueio (os botões com o que está livre), até ALTERNATIVAS de cada: os horários, os recursos e
@@ -1162,6 +1163,9 @@ export function avaliarAgendamento({ estado, baseComPesos, base = baseComPesos, 
       : al.codigo === 'antes-do-ground' ? 'agd-horario' : al.codigo === 'depois-das-17h30' ? 'agd-horas' : 'agd-horario';
     avisos.push({ codigo: al.codigo, texto: al.m, resumo: RESUMO_DO_AVISO[al.codigo], campo });
   }
+  // O almoço (#104): o INVA do voo que fica sem a hora livre de 11:00 a 14:00 com o agendamento (quem já estava sem ela não
+  // avisa de novo)
+  for (const texto of semAlmocoComAMudanca(estado, baseComPesos.out, sim.al, new Set([x.id]))) avisos.push({ codigo: 'sem-almoco', texto, resumo: RESUMO_DO_AVISO['sem-almoco'], campo: 'agd-horario' });
   // O limite de voos locais no horário: o motor avisa o agendado que ele confere depois do 6º, e ele confere os agendados
   // na ordem dos pedidos (o aluno que vem antes no cadastro, ou com mais prioridade, é conferido antes dos agendados de
   // antes): o aviso dele pode ficar num voo agendado antes. O voo novo que deixa mais de 6 voos locais saindo no horário

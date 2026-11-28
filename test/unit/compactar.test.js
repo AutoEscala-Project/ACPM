@@ -236,9 +236,11 @@ describe('Compactação: em dias gerados', async () => {
     }
   });
 
+  // Sem o almoço do motor (#104): a hora livre de 11:00 a 14:00 que ele guarda é um buraco que nenhum critério fecha, e
+  // a comparação é a dos critérios
   it('em média, o critério escolhido é o que mais reduz o que ele mede', () => {
     const soma = (buracos, campo) => execucoes.filter(e => e.criterios.buracos === buracos && e.criterios.horarios === 'disponibilidade')
-      .reduce((total, e) => total + campo(metricasDaEscala(e.depois.out)), 0);
+      .reduce((total, e) => total + campo(metricasDaEscala(runAllocationEngine(e.estado, { almoco: false }).out)), 0);
     const parados = b => soma(b, m => m.instrutoresParadoMin), saidas = b => soma(b, m => m.saidasDoHangar);
     assert.ok(parados('inva') < parados('aviao'), `INVAs parados: ${parados('inva')} x ${parados('aviao')}`);
     assert.ok(saidas('aviao') < saidas('inva'), `saídas: ${saidas('aviao')} x ${saidas('inva')}`);

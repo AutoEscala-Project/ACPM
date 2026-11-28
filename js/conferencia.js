@@ -16,6 +16,7 @@ import { HORARIOS_INICIAIS, horariosDaMissao, horariosDoTipo, periodoDoMinuto, m
 import { ajustarFilas, categoriaDoRodizio } from './rodizio.js';
 import { avisosDeAtraso, intervaloEfetivo, STATUS_EM_ANDAMENTO } from './status.js';
 import { livre, cabeNoSaldo, saldoAteARevisao, problemasDoInstrutor } from './viabilidade.js';
+import { avisosDoAlmoco } from './almoco.js';
 import { combustivelDoVoo } from './combustivel.js';
 import { TEXTO_DO_PROBLEMA } from './conflitos.js';
 import { podeFazer } from './habilitacoes.js';
@@ -583,7 +584,8 @@ function motivosDaVolta(state, ctx, o) {
 
 // O que o motor confere depois de montar a escala, sem mover nenhum voo: o instrutor escolhido que saiu do cadastro, o 7º
 // voo local confirmado, os limites da lei, a volta do noturno num avião ou com um INVA que não está bem hoje, o repouso
-// antes da volta do noturno, a revisão de 50 horas, o tamanho e a etiqueta das turmas, a ordem das linhas e os atrasos.
+// antes da volta do noturno, o almoço dos INVAs (#104), a revisão de 50 horas, o tamanho e a etiqueta das turmas, a ordem
+// das linhas e os atrasos.
 // Muda out e al; devolve a revisão de cada avião. opcoes.antesDoF1h: sem o aviso da volta do noturno (o motor que gravou
 // test/fixtures/conferencia-do-motor.json não o tinha)
 export function concluirEscala(state, ctx, out, al, { antesDoF1h = false } = {}) {
@@ -638,6 +640,9 @@ export function concluirEscala(state, ctx, out, al, { antesDoF1h = false } = {})
       m: `Limite da lei: ${duracaoHm(repouso)} de repouso entre o noturno de ontem (até ${hm(h.fimDoNoturno)}) e o translado de volta (${hm(o.a)}), menos que as ${duracaoHm(limites.repousoMin)} da lei.`
     });
   }
+  // O almoço (#104): o INVA que vem e ficou sem uma hora livre seguida de 11:00 a 14:00 (o motor só desiste dela para um
+  // pedido não ficar fora; o voo fixo que a ocupa fica onde está): um aviso por INVA, na ordem do cadastro
+  al.push(...avisosDoAlmoco(state, out));
 
   // Revisão de 50 horas: horas de cada avião controlado e onde ele para (sem saldo para mais uma missão de 1 h)
   const revisao = {};

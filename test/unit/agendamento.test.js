@@ -647,6 +647,19 @@ describe('Agendamento: a conferência', () => {
     assert.deepEqual(codigos(pararia(pesado)), ['peso']);
   });
 
+  // O almoço (#104): agendar na última hora livre do INVA entre 11:00 e 14:00 pede a confirmação, como o peso que falta (a
+  // escolha do operador vale, e a Escala avisa depois); quem continua com a hora não avisa
+  it('agendar na última hora livre do INVA entre 11:00 e 14:00 avisa que ele fica sem almoço', () => {
+    const estado = cenario({
+      ins: [instrutor(1, 9)],
+      stu: [aluno(1000, { p1: 610, p2: -1, jan: 'h610' }, { curso: 'PP' }), aluno(1002, { p1: 690, p2: -1, jan: 'h690' }), aluno(1001, { fly: false }, { curso: 'PP' })]
+    });
+    const almoco = escolhas => conferir(estado, { escolhas: { aluno: 1001, instrutor: 1, ...escolhas }, tocados: ['instrutor', 'horario'] }).avisos.filter(a => a.codigo === 'sem-almoco')
+      .map(({ texto, resumo, campo }) => [texto, resumo, campo]);
+    assert.deepEqual(almoco({ horario: 760 }), [['Sem almoço: Instrutor 01 fica sem nenhuma hora livre seguida entre 11:00 e 14:00 (ocupado das 10:10 às 11:10, das 11:30 às 12:30 e das 12:40 às 13:40).', 'sem almoço', 'agd-horario']]);
+    assert.deepEqual(almoco({ horario: 'outro', outroHorario: '14:30' }), []);
+  });
+
   it('o voo de outro aluno que fica em conflito por causa do agendamento avisa (decisão 4)', () => {
     // O Aluno 1001 já está agendado no PR-VOB às 06:30; o Aluno 1000 agendado no mesmo avião e horário passa na frente
     // (o pedido com o instrutor escolhido) e deixa o outro em conflito

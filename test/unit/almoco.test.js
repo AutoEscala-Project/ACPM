@@ -1,0 +1,349 @@
+// O almoço (#104; Pedro, 28/11): branda, um passo próprio depois do C. Para cada INVA que vem na data e voa perto do
+// meio-dia, o motor tenta deixar uma hora livre seguida entre 11:00 e 14:00; só desiste dela quando mantê-la tiraria um
+// voo da escala, e então um aviso diz qual INVA ficou sem almoço. Uma pausa da data que já cobre 1 h dessa janela ("+
+// Pausa" ou "Almoço" em "Editar faixas", ou a dos dados antigos) substitui a do motor. A reserva do motor não é gravada.
+import { describe, it } from 'node:test';
+import assert from 'node:assert/strict';
+import {
+  JANELA_DO_ALMOCO, DURACAO_DO_ALMOCO, horaLivre, tiraOAlmoco, pausaDeAlmoco, comAlmocoDoMotor, avisosDoAlmoco, ehAvisoDoAlmoco, INICIO_DO_SEM_ALMOCO
+} from '../../js/almoco.js';
+import { runAllocationEngine } from '../../js/engine.js';
+import { conferirEscala } from '../../js/conferencia.js';
+import { compactar } from '../../js/compactar.js';
+import { hm } from '../../js/format.js';
+import { aluno, cenario, instrutor } from '../helpers/montar.js';
+import { gerarCenario, comEscolhas } from '../helpers/cenarios.js';
+
+const DIA_INTEIRO = { faixas: [{ de: 390, ate: 1050 }], pausas: [] };
+const comPausa = (...pausas) => ({ faixas: [{ de: 390, ate: 1050 }], pausas });
+// Os voos de um resultado (horário e INVA), na ordem do horário
+const voos = r => r.out.map(o => [o.s, hm(o.a), hm(o.b), o.insId]);
+const doAlmoco = r => r.al.filter(ehAvisoDoAlmoco);
+const semCompactar = { compactar: false };
+
+describe('O almoço: a hora livre entre 11:00 e 14:00', () => {
+  it('a janela e a duração', () => {
+    assert.deepEqual([JANELA_DO_ALMOCO.de, JANELA_DO_ALMOCO.ate, DURACAO_DO_ALMOCO], [660, 840, 60]);
+  });
+
+  it('uma hora seguida sem compromisso, de 11:00 a 14:00 (encostar não ocupa)', () => {
+    assert.equal(horaLivre([]), true);
+    assert.equal(horaLivre([[600, 700], [760, 900]]), true, '11:40–12:40');
+    assert.equal(horaLivre([[600, 700], [750, 900]]), false, '50 min só');
+    assert.equal(horaLivre([[390, 720], [780, 1050]]), true, '12:00–13:00, encostando nos dois');
+    assert.equal(horaLivre([[600, 790]]), false, 'das 13:10 às 14:00 são 50 min');
+    assert.equal(horaLivre([[600, 780]]), true, '13:00–14:00');
+    assert.equal(horaLivre([[600, 781]]), false, 'das 13:01 às 14:00 são 59 min');
+    assert.equal(horaLivre([[719, 721]]), true, 'antes e depois: 11:00–11:59 e 12:01–14:00');
+    assert.equal(horaLivre([[690, 750], [760, 820]]), false, 'das 11:00 às 11:30, 12:30–12:40 e 13:40–14:00: nenhuma hora');
+    assert.equal(horaLivre([[0, 610], [900, 1000]]), true, 'o que fica fora da janela não ocupa');
+  });
+
+  it('tirar o almoço: o compromisso que leva a última hora livre (quem já não tem a hora não perde nada)', () => {
+    assert.equal(tiraOAlmoco([[610, 730]], 760, 820), true, '12:10–12:40 e 13:40–14:00 sobram');
+    assert.equal(tiraOAlmoco([[610, 730]], 820, 880), false, '12:10–13:40 sobra');
+    assert.equal(tiraOAlmoco([[660, 840]], 900, 960), false);
+    assert.equal(tiraOAlmoco([[660, 840]], 600, 700), false, 'sem a hora antes: nada a guardar');
+  });
+
+  it('a pausa da data que cobre 1 h da janela é o almoço (juntas as que se tocam); a menor não', () => {
+    assert.equal(pausaDeAlmoco({ on: true, ...comPausa({ de: 720, ate: 780 }) }), true);
+    assert.equal(pausaDeAlmoco({ on: true, ...comPausa({ de: 720, ate: 750 }) }), false);
+    assert.equal(pausaDeAlmoco({ on: true, ...comPausa({ de: 720, ate: 750 }, { de: 750, ate: 780 }) }), true);
+    assert.equal(pausaDeAlmoco({ on: true, ...comPausa({ de: 600, ate: 690 }) }), false, 'só 30 min dela na janela');
+    assert.equal(pausaDeAlmoco({ on: true, ...comPausa({ de: 800, ate: 900 }) }), false, 'só 40 min dela na janela');
+    assert.equal(pausaDeAlmoco({ on: true, ...comPausa({ de: 600, ate: 900 }) }), true);
+    assert.equal(pausaDeAlmoco({ on: true, ...DIA_INTEIRO }), false);
+    // Sem faixas, pelo aw: o tempo das 11:30 (até 12:40) desmarcado entre dois marcados é a pausa de 70 min; o das 13:40
+    // (até 14:30), 20 min na janela
+    const aw = k => Array.from({ length: 9 }, (_, i) => i !== k);
+    assert.equal(pausaDeAlmoco({ on: true, aw: aw(3) }), true);
+    assert.equal(pausaDeAlmoco({ on: true, aw: aw(4) }), true);
+    assert.equal(pausaDeAlmoco({ on: true, aw: aw(5) }), false);
+  });
+
+  it('o almoço do motor: quem vem, sem a pausa que já é o almoço', () => {
+    assert.equal(comAlmocoDoMotor({ on: true, ...DIA_INTEIRO }), true);
+    assert.equal(comAlmocoDoMotor({ on: false, ...DIA_INTEIRO }), false);
+    assert.equal(comAlmocoDoMotor({ on: true, ...comPausa({ de: 720, ate: 780 }) }), false);
+    assert.equal(comAlmocoDoMotor({ on: true, ...comPausa({ de: 720, ate: 750 }) }), true);
+  });
+
+  it('o aviso: o INVA que vem, voa na janela e fica sem a hora (a turma de Ground uma vez, o cancelado não ocupa)', () => {
+    const estado = { ins: [{ id: 1, nm: 'Instrutor 01', on: true, ...DIA_INTEIRO }, { id: 2, nm: 'Instrutor 02', on: true, ...DIA_INTEIRO }], fStatus: { c: 'Cancelado' } };
+    const v = (fKey, insId, a, b, extra = {}) => ({ fKey, insId, a, b, eqType: 'C152', ...extra });
+    const out = [v('a', 1, 610, 730), v('b', 1, 760, 820), v('c', 2, 690, 840), v('d', 2, 400, 450)];
+    assert.deepEqual(avisosDoAlmoco(estado, out), [
+      { t: 'warn', s: 'Instrutor 01', m: 'Sem almoço: nenhuma hora livre seguida entre 11:00 e 14:00 (ocupado das 10:10 às 12:10 e das 12:40 às 13:40).', insId: 1 }
+    ]);
+    assert.ok(ehAvisoDoAlmoco(avisosDoAlmoco(estado, out)[0]));
+    assert.ok(INICIO_DO_SEM_ALMOCO === 'Sem almoço: ');
+    // A pausa que já é o almoço: o voo fixo que a ocupa também tira o almoço (o aviso)
+    const comAPausa = { ...estado, ins: [{ id: 1, nm: 'Instrutor 01', on: true, ...comPausa({ de: 720, ate: 780 }) }] };
+    assert.equal(avisosDoAlmoco(comAPausa, [v('a', 1, 660, 840)]).length, 1);
+    // A turma de Ground (duas linhas, uma classKey) ocupa uma vez; quem não vem não tem aviso
+    const turma = [v('g1', 1, 690, 780, { classKey: 'GND', isGround: true, eqType: 'Sala Ground' }), v('g2', 1, 690, 780, { classKey: 'GND', isGround: true, eqType: 'Sala Ground' })];
+    assert.deepEqual(avisosDoAlmoco(estado, turma), []);
+    assert.deepEqual(avisosDoAlmoco({ ...estado, ins: [{ ...estado.ins[0], on: false }] }, out.slice(0, 2)), []);
+  });
+});
+
+describe('O almoço no motor', () => {
+  // Um INVA, três voos de 1 h no C152: 10:10, 11:30 e 12:40, cada um com só a 1ª preferência
+  const tres = (insExtra = DIA_INTEIRO, ultimo = {}) => cenario({
+    ins: [instrutor(1, 1, insExtra)],
+    stu: [aluno(1000, { p1: 610, p2: -1 }), aluno(1001, { p1: 690, p2: -1 }), aluno(1002, { p1: 760, p2: -1, ...ultimo })]
+  });
+
+  it('o voo muda de horário para o INVA ficar com a hora livre', () => {
+    const sem = runAllocationEngine(tres(), { ...semCompactar, almoco: false });
+    assert.deepEqual(voos(sem), [['Aluno 1000', '10:10', '11:10', 1], ['Aluno 1001', '11:30', '12:30', 1], ['Aluno 1002', '12:40', '13:40', 1]]);
+    const com = runAllocationEngine(tres(), semCompactar);
+    assert.deepEqual(voos(com), [['Aluno 1000', '10:10', '11:10', 1], ['Aluno 1001', '11:30', '12:30', 1], ['Aluno 1002', '13:40', '14:40', 1]]);
+    assert.deepEqual(doAlmoco(com), []);
+    assert.deepEqual(com.al.filter(a => a.t === 'err'), []);
+  });
+
+  it('a compactação e o motor inteiro não comem o almoço', () => {
+    const com = runAllocationEngine(tres());
+    assert.equal(com.out.length, 3);
+    assert.ok(horaLivre(com.out.map(o => [o.a, o.b])), JSON.stringify(voos(com)));
+    assert.deepEqual(doAlmoco(com), []);
+    // A compactação sozinha, com o almoço do INVA: o voo das 13:40 não volta para as 12:40
+    const escala = runAllocationEngine(tres(), semCompactar).out.map(o => ({ ...o }));
+    compactar(escala, tres(), { almoco: { guarda: new Set([1]), recusou: () => {} } });
+    assert.ok(horaLivre(escala.map(o => [o.a, o.b])));
+  });
+
+  it('o pedido de horário exato que só cabe sem o almoço entra, com o aviso de quem ficou sem ele', () => {
+    // Os três com o horário exato: nenhum sai da janela (com só o último exato, os outros dois saem: veja a hora reservada)
+    const exatos = cenario({ ins: [instrutor(1, 1, DIA_INTEIRO)], stu: [610, 690, 760].map((m, i) => aluno(1000 + i, { p1: m, p2: -1, jan: `h${m}` })) });
+    const r = runAllocationEngine(exatos, semCompactar);
+    assert.deepEqual(voos(r), [['Aluno 1000', '10:10', '11:10', 1], ['Aluno 1001', '11:30', '12:30', 1], ['Aluno 1002', '12:40', '13:40', 1]]);
+    assert.deepEqual(doAlmoco(r), [{ t: 'warn', s: 'Instrutor 01', m: 'Sem almoço: nenhuma hora livre seguida entre 11:00 e 14:00 (ocupado das 10:10 às 11:10, das 11:30 às 12:30 e das 12:40 às 13:40).', insId: 1 }]);
+  });
+
+  // Os dois horários exatos (U1, o E): o pedido "h<m1>|h<m2>" pode mudar para o outro horário dele, e o almoço fica
+  it('o pedido com dois horários exatos muda para o outro para o INVA ficar com a hora livre', () => {
+    const jans = ['h610', 'h690', 'h760|h820'];
+    const exatos = cenario({ ins: [instrutor(1, 1, DIA_INTEIRO)], stu: [610, 690, 760].map((m, i) => aluno(1000 + i, { p1: m, p2: -1, jan: jans[i] })) });
+    assert.deepEqual(voos(runAllocationEngine(exatos, { ...semCompactar, almoco: false })),
+      [['Aluno 1000', '10:10', '11:10', 1], ['Aluno 1001', '11:30', '12:30', 1], ['Aluno 1002', '12:40', '13:40', 1]]);
+    const r = runAllocationEngine(exatos, semCompactar);
+    assert.deepEqual(voos(r), [['Aluno 1000', '10:10', '11:10', 1], ['Aluno 1001', '11:30', '12:30', 1], ['Aluno 1002', '13:40', '14:40', 1]]);
+    assert.deepEqual(doAlmoco(r), []);
+  });
+
+  it('com um segundo INVA, o voo vai para ele em vez de tirar o almoço', () => {
+    const e = tres(DIA_INTEIRO, { jan: 'h760' });
+    e.ins.push(instrutor(2, 1, DIA_INTEIRO));
+    const r = runAllocationEngine(e, semCompactar);
+    assert.equal(r.out.length, 3);
+    for (const id of [1, 2]) assert.ok(horaLivre(r.out.filter(o => o.insId === id).map(o => [o.a, o.b])), `${id}: ${JSON.stringify(voos(r))}`);
+    assert.deepEqual(doAlmoco(r), []);
+  });
+
+  it('a pausa de 1 h na janela substitui a do motor: a escala é a de sem o almoço, sem aviso', () => {
+    const e = tres(comPausa({ de: 720, ate: 780 }));
+    assert.deepEqual(runAllocationEngine(e), runAllocationEngine(e, { almoco: false }));
+    assert.deepEqual(doAlmoco(runAllocationEngine(e)), []);
+  });
+
+  it('a pausa de 30 min não é o almoço: o motor ainda guarda a hora (a pausa conta como livre)', () => {
+    // 10:10–12:10 (2 h), a pausa 12:10–12:40 e o voo das 12:40: só 30 + 20 min livres. Com o almoço, o das 12:40 vai para
+    // as 13:40 e sobra 12:10–13:40
+    const e = cenario({
+      ins: [instrutor(1, 1, comPausa({ de: 730, ate: 760 }))],
+      stu: [aluno(1000, { p1: 610, p2: -1, nb: 2 }), aluno(1001, { p1: 760, p2: -1 })]
+    });
+    assert.deepEqual(voos(runAllocationEngine(e, { ...semCompactar, almoco: false })), [['Aluno 1000', '10:10', '12:10', 1], ['Aluno 1001', '12:40', '13:40', 1]]);
+    assert.deepEqual(voos(runAllocationEngine(e, semCompactar)), [['Aluno 1000', '10:10', '12:10', 1], ['Aluno 1001', '13:40', '14:40', 1]]);
+  });
+
+  it('o voo fixo que ocupa a janela fica onde está, só com o aviso', () => {
+    const e = cenario({ ins: [instrutor(1, 1, DIA_INTEIRO)], stu: [aluno(1000, { p1: 690, p2: -1, nb: 2.5 }), aluno(1001, { p1: 500, p2: -1 })] });
+    e.fixos = { '1000_0_1': { a: 690, b: 840, r: 'PP-LJV', insId: 1 } };
+    const r = runAllocationEngine(e, semCompactar);
+    assert.deepEqual(voos(r), [['Aluno 1001', '08:20', '09:20', 1], ['Aluno 1000', '11:30', '14:00', 1]]);
+    assert.ok(r.out.find(o => o.stuId === 1000).fixo);
+    assert.deepEqual(doAlmoco(r).map(a => a.s), ['Instrutor 01']);
+    assert.deepEqual(r.al.filter(a => a.t !== 'warn'), []);
+  });
+
+  // O almoço vem antes do “Priorizar com” (Pedro, 28/11: "no, the engine should move another Mission before giving up an
+  // instructors lunch break"): antes de o voo sair do INVA do “Priorizar com”, o motor muda outra missão (aqui, o horário
+  // do voo do escolhido, que pode mudar) para os dois ficarem: o voo com o INVA dele e o INVA com a hora
+  it('o almoço vem antes do “Priorizar com”, mas o motor muda outra missão para manter os dois', () => {
+    // O escolhido do dia leva o Instrutor 01 das 10:10 às 12:10; o aluno que prioriza o 01 só pode às 12:40: o voo do
+    // escolhido sai da janela (o horário dele pode mudar), e os dois ficam com o 01
+    const e = cenario({
+      ins: [instrutor(1, 1, DIA_INTEIRO), instrutor(2, 1, DIA_INTEIRO)],
+      stu: [aluno(1000, { p1: 610, p2: -1, nb: 2, insId: 1 }), aluno(1001, { p1: 760, p2: -1, jan: 'h760' }, { voaCom: [1] })]
+    });
+    assert.deepEqual(voos(runAllocationEngine(e, { ...semCompactar, almoco: false })), [['Aluno 1000', '10:10', '12:10', 1], ['Aluno 1001', '12:40', '13:40', 1]]);
+    const r = runAllocationEngine(e, semCompactar);
+    assert.deepEqual(r.out.filter(o => o.stuId === 1001).map(o => [hm(o.a), o.insId]), [['12:40', 1]]);
+    assert.deepEqual(r.out.filter(o => o.stuId === 1000).map(o => o.insId), [1]);
+    assert.ok(horaLivre(r.out.filter(o => o.insId === 1).map(o => [o.a, o.b])), JSON.stringify(voos(r)));
+    assert.deepEqual(doAlmoco(r), []);
+    assert.deepEqual(r.al.filter(a => a.codigo === 'voa-com'), []);
+  });
+
+  // Sem arrumação que guarde os dois, o “Priorizar com” cede: o voo vai para outro INVA, com o aviso de sempre do
+  // “Priorizar com”, agora pelo almoço, e o INVA fica com a hora (nenhum aviso do almoço)
+  it('sem arrumação que guarde os dois, o “Priorizar com” cede ao almoço: o voo vai para outro INVA, com o aviso pelo almoço', () => {
+    // Os dois com o horário exato e o primeiro com o escolhido: nenhum horário guarda a hora do 01 com os dois voos nele
+    const e = cenario({
+      ins: [instrutor(1, 1, DIA_INTEIRO), instrutor(2, 1, DIA_INTEIRO)],
+      stu: [aluno(1000, { p1: 610, p2: -1, nb: 2, insId: 1, jan: 'h610' }), aluno(1001, { p1: 760, p2: -1, jan: 'h760' }, { voaCom: [1] })]
+    });
+    for (const opcoes of [semCompactar, {}]) {
+      const r = runAllocationEngine(e, opcoes);
+      assert.deepEqual(voos(r), [['Aluno 1000', '10:10', '12:10', 1], ['Aluno 1001', '12:40', '13:40', 2]]);
+      assert.deepEqual(doAlmoco(r), []);
+      assert.deepEqual(r.al.filter(a => a.codigo === 'voa-com').map(a => a.m), [
+        'Sem o instrutor de “Priorizar com” (Instrutor 01: sem a hora de almoço livre nos horários possíveis): o voo ficou com Instrutor 02.'
+      ]);
+    }
+  });
+
+  // Nenhum almoço cede a um “Priorizar com” de outro INVA (Pedro, 28/11; a revisão da decisão): o Instrutor 01 tem os voos
+  // das 11:30 (só ele faz) e das 12:40 (ele ou o 02); o 02 tem às 12:40 o voo de quem prioriza o 02 (ele ou o 03). O voo do
+  // “Priorizar com” vai para o 03, o das 12:40 do 01 para o 02, e o 01 fica com a hora. Antes, em qualquer posição na fila
+  // (a prioridade 4 ou 5), o motor guardava o “Priorizar com” e deixava o 01 sem almoço; o aviso do “Priorizar com” diz
+  // que foi pelo almoço do 01 (não "indisponível")
+  it('nenhum almoço cede ao “Priorizar com” de outro INVA: o voo do “Priorizar com” muda de INVA, com o aviso pelo almoço', () => {
+    const exato = m => ({ p1: m, p2: -1, jan: `h${m}` });
+    for (const pr of [1, 2, 4, 5]) {
+      const e = cenario({
+        ins: [instrutor(1, 9, DIA_INTEIRO), instrutor(2, 9, DIA_INTEIRO), instrutor(3, 9, DIA_INTEIRO)],
+        stu: [aluno(1000, exato(690), { bl: [2, 3] }), aluno(1001, exato(760), { bl: [3] }), aluno(1002, { ...exato(760), pr }, { voaCom: [2], bl: [1] })]
+      });
+      for (const opcoes of [semCompactar, {}]) {
+        const r = runAllocationEngine(e, opcoes);
+        assert.deepEqual(voos(r), [['Aluno 1000', '11:30', '12:30', 1], ['Aluno 1001', '12:40', '13:40', 2], ['Aluno 1002', '12:40', '13:40', 3]], `pr ${pr}`);
+        assert.deepEqual(doAlmoco(r), [], `pr ${pr}`);
+        const [aviso, ...outros] = r.al.filter(a => a.codigo === 'voa-com');
+        assert.deepEqual(outros, []);
+        assert.equal(aviso.fKey, r.out.find(o => o.stuId === 1002).fKey);
+        if (pr >= 4) assert.match(aviso.m, /^Sem o instrutor de “Priorizar com” \(Instrutor 02: trocado para guardar o almoço de Instrutor 01\): o voo ficou com Instrutor 03\./, `pr ${pr}`);
+      }
+    }
+  });
+
+  // O dia gerado da revisão (seed 1123 com as escolhas): o Instrutor 05 ficava sem almoço (09:30–12:30 e 12:40–14:40) para
+  // o Multimotor do Aluno 09 (13:30–16:30) ficar com o Instrutor 06 do “Priorizar com”. O motor muda o Multimotor de INVA:
+  // todos os voos continuam, ninguém fica sem almoço, e o aviso do “Priorizar com” diz que foi pelo almoço do 05
+  it('o dia gerado da revisão: o Multimotor do “Priorizar com” muda de INVA e o Instrutor 05 fica com o almoço', () => {
+    const e = comEscolhas(gerarCenario(1123), 1123);
+    const r = runAllocationEngine(e);
+    const sem = runAllocationEngine(e, { almoco: false });
+    const escalados = new Set(r.out.filter(o => !o.trecho).map(o => o.fKey));
+    assert.deepEqual(sem.out.filter(o => !o.trecho && !escalados.has(o.fKey)).map(o => o.fKey), []);
+    assert.deepEqual(doAlmoco(r).map(a => a.s), []);
+    const multimotor = r.out.find(o => o.fKey === '1015_0_1');
+    assert.equal(multimotor.s, 'Aluno 09');
+    assert.notEqual(multimotor.insId, 6);
+    assert.deepEqual(r.al.filter(a => a.codigo === 'voa-com' && a.fKey === '1015_0_1').map(a => a.m.replace(/\): .*/, ')')),
+      ['Sem o instrutor de “Priorizar com” (Instrutor 06: trocado para guardar o almoço de Instrutor 05)']);
+  });
+
+  // Antes de desistir do almoço para um voo não sair, o motor muda outra missão: um INVA com o voo que só ele faz (10:10 a
+  // 12:10) e o pedido das 12:40 que só ele e o Instrutor 02 fazem; o 02 já tem o voo de outro aluno às 12:40. Pôr o pedido
+  // antes na fila ou reservar a hora do 01 não basta (o voo das 10:10 só voa com ele): o voo do 02 vai para o Instrutor 03
+  // (outro INVA) ou, sem o 03, para outro horário (o aluno não pediu horário exato), e o pedido das 12:40 voa com o 02
+  it('antes de desistir do almoço, o motor muda outra missão: o INVA ou o horário do voo que ocupa quem poderia voar', () => {
+    const exato = m => ({ p1: m, p2: -1, jan: `h${m}` });
+    const estado = (comO3, doO2) => cenario({
+      ins: [instrutor(1, 9, DIA_INTEIRO), instrutor(2, 9, DIA_INTEIRO), ...(comO3 ? [instrutor(3, 9, DIA_INTEIRO)] : [])],
+      stu: [aluno(1000, { ...exato(610), nb: 2 }, { bl: [2, 3] }), aluno(1001, doO2, { bl: [1] }), aluno(1002, exato(760), { bl: [3] })]
+    });
+    for (const [comO3, doO2, esperado] of [[true, exato(760), ['12:40', 3]], [false, { p1: 760, p2: -1 }, null]]) {
+      const e = estado(comO3, doO2);
+      const sem = runAllocationEngine(e, { ...semCompactar, almoco: false });
+      assert.deepEqual(voos(sem), [['Aluno 1000', '10:10', '12:10', 1], ['Aluno 1001', '12:40', '13:40', 2], ['Aluno 1002', '12:40', '13:40', 1]]);
+      for (const opcoes of [semCompactar, {}]) {
+        const r = runAllocationEngine(e, opcoes);
+        assert.equal(r.out.length, 3, JSON.stringify(voos(r)));
+        assert.deepEqual(r.out.filter(o => o.stuId !== 1001).map(o => [o.s, hm(o.a), o.insId]), [['Aluno 1000', '10:10', 1], ['Aluno 1002', '12:40', 2]]);
+        const doO2Agora = r.out.find(o => o.stuId === 1001);
+        if (esperado) assert.deepEqual([hm(doO2Agora.a), doO2Agora.insId], esperado);
+        else assert.notEqual(hm(doO2Agora.a), '12:40');
+        assert.deepEqual(doAlmoco(r), [], JSON.stringify(voos(r)));
+      }
+    }
+  });
+
+  // A busca põe um pedido de cada vez: o pedido de horário livre que veio antes leva o voo para as 11:30 (ainda sobra a hora),
+  // e o de horário exato das 12:40 só cabe sem ela. Então o motor monta a data de novo com o pedido das 12:40 antes na fila
+  // (e, sem isso, com a hora do almoço reservada em cada hora que encosta num compromisso do INVA na janela, ou nas pontas):
+  // o das 11:30 vai para outro horário (a 2ª preferência, quando ele tem), e os dois voam com a hora livre
+  it('o voo que levou a hora antes de outro pedido sai dela quando o outro só cabe ali (a hora reservada, o pedido antes na fila)', () => {
+    const exato = m => ({ p1: m, p2: -1, jan: `h${m}` });
+    for (const [p2, esperado] of [[610, '10:10'], [-1, null]]) {
+      const e = cenario({ ins: [instrutor(1, 1, DIA_INTEIRO)], stu: [aluno(1000, { p1: 690, p2 }), aluno(1001, exato(760))] });
+      const sem = runAllocationEngine(e, { almoco: false });
+      assert.deepEqual(voos(sem), [['Aluno 1000', '11:30', '12:30', 1], ['Aluno 1001', '12:40', '13:40', 1]]);
+      // Com a compactação também (ela pode fechar o buraco de outro jeito, sem comer a hora)
+      for (const opcoes of [semCompactar, {}]) {
+        const r = runAllocationEngine(e, opcoes);
+        assert.equal(r.out.length, 2, JSON.stringify(voos(r)));
+        assert.deepEqual(r.out.filter(o => o.stuId === 1001).map(o => hm(o.a)), ['12:40']);
+        if (esperado && opcoes === semCompactar) assert.deepEqual(r.out.filter(o => o.stuId === 1000).map(o => [hm(o.a), o.tag]), [[esperado, 'Pref. 2']]);
+        assert.ok(horaLivre(r.out.map(o => [o.a, o.b])), JSON.stringify(voos(r)));
+        assert.deepEqual(doAlmoco(r), [], `p2 ${p2}`);
+      }
+    }
+  });
+
+  // O almoço com o L (as limitações do aluno, duras; a junção do previa): a busca do almoço só muda uma missão pelas regras
+  // do motor, e a limitação do horário do aluno é uma delas. O Instrutor 01 tem a manhã ocupada (06:30 a 10:00 e 10:10 a
+  // 12:10, os dois de horário exato) e o voo de 1 h das 12:40; sem a limitação, o das 12:40 vai para as 13:40 e o 01 fica
+  // com a hora. O aluno das 12:40 limitado às manhãs (06:30 a 13:00) nunca vai para as 13:40: o voo fica às 12:40 e o 01,
+  // sem almoço (com o aviso; nenhum voo fora). Limitado até as 14:00, ele vai para as 13:40 como sem a limitação
+  it('o aluno limitado às manhãs nunca muda para depois do horário dele para guardar o almoço', () => {
+    const estado = limitacoes => cenario({
+      ins: [instrutor(1, 1, DIA_INTEIRO)],
+      stu: [aluno(1000, { p1: 610, p2: -1, nb: 2, jan: 'h610' }), aluno(1002, { p1: 390, p2: -1, nb: 3.5, jan: 'h390' }),
+        aluno(1001, { p1: 760, p2: -1 }, limitacoes ? { limitacoes } : {})]
+    });
+    const doLimitado = r => r.out.filter(o => o.stuId === 1001).map(o => hm(o.a));
+    for (const opcoes of [semCompactar, {}]) {
+      assert.deepEqual(doLimitado(runAllocationEngine(estado(null), { ...opcoes, almoco: false })), ['12:40']);
+      const livre = runAllocationEngine(estado(null), opcoes);
+      assert.deepEqual(doLimitado(livre), ['13:40']);
+      assert.deepEqual(doAlmoco(livre), []);
+      for (const [ate, esperado, semAlmoco] of [[780, '12:40', 1], [840, '13:40', 0]]) {
+        const r = runAllocationEngine(estado({ horarios: [{ de: 390, ate }] }), opcoes);
+        assert.equal(r.out.length, 3, JSON.stringify(voos(r)));
+        assert.deepEqual(doLimitado(r), [esperado], `até ${hm(ate)}`);
+        assert.deepEqual(r.al.filter(a => a.t === 'err'), []);
+        assert.deepEqual(doAlmoco(r).map(a => a.s), semAlmoco ? ['Instrutor 01'] : [], `até ${hm(ate)}`);
+      }
+    }
+  });
+
+  it('o instrutor escolhido continua o único da busca: o almoço muda o horário dele, nunca o INVA', () => {
+    const e = cenario({
+      ins: [instrutor(1, 1, DIA_INTEIRO), instrutor(2, 1, DIA_INTEIRO)],
+      stu: [aluno(1000, { p1: 610, p2: -1, nb: 2, insId: 1 }), aluno(1001, { p1: 760, p2: -1, insId: 1 })]
+    });
+    assert.deepEqual(voos(runAllocationEngine(e, semCompactar)), [['Aluno 1000', '10:10', '12:10', 1], ['Aluno 1001', '13:40', '14:40', 1]]);
+  });
+
+  it('sem o almoço (opcoes.almoco: false), o motor de antes; com ele, determinístico e sem mudar o estado', () => {
+    const e = tres();
+    const copia = structuredClone(e);
+    assert.deepEqual(runAllocationEngine(e), runAllocationEngine(e));
+    assert.deepEqual(e, copia);
+  });
+
+  it('conferirEscala (a escala aprovada mudada sem o motor) refaz o aviso', () => {
+    // Os três com o horário exato: nenhum sai da janela
+    const e = cenario({ ins: [instrutor(1, 1, DIA_INTEIRO)], stu: [610, 690, 760].map((m, i) => aluno(1000 + i, { p1: m, p2: -1, jan: `h${m}` })) });
+    const r = runAllocationEngine(e);
+    assert.equal(doAlmoco(r).length, 1);
+    const conferida = conferirEscala(e, r);
+    assert.deepEqual(doAlmoco(conferida), doAlmoco(r));
+  });
+});

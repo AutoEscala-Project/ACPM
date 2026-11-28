@@ -168,6 +168,24 @@ describe('O editor do voo: cada campo e o que ele grava', async () => {
     assert.ok(!avisos.some(a => a.codigo === 'disponibilidade-do-aluno'), JSON.stringify(avisos));
   });
 
+  // O almoço (#104): o operador pode pôr o voo na última hora livre do INVA entre 11:00 e 14:00 (a escolha dele vale), e o
+  // editor diz antes de salvar que o INVA fica sem almoço (o aviso que a Escala mostra depois); o que já estava sem não avisa
+  // de novo
+  it('o horário que tira a hora do almoço do INVA avisa antes de salvar (sem almoço), e só quando ela sai', () => {
+    for (const aprovada of [true, false]) {
+      const inicial = cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, { p1: 610, p2: -1, jan: 'h610' }), aluno(1001, { p1: 690, p2: -1, jan: 'h690' }), aluno(1002, { p1: 500, p2: -1 })] });
+      const { estado: aprovado, resultado } = aprovar(inicial);
+      const estado = aprovada ? aprovado : inicial;
+      assert.deepEqual(resultado.al.filter(a => a.m.startsWith('Sem almoço: ')), []);
+      const voo = vooParaEditar(estado, resultado, '1002_0_1');
+      const avisos = avisosDaEdicao(estado, resultado, voo, { ...structuredClone(voo.valores), a: 760 }, { aprovada });
+      assert.deepEqual(avisos.filter(a => a.codigo === 'sem-almoco').map(a => [a.texto, a.campo, a.conflito]),
+        [['Sem almoço: Instrutor 01 fica sem nenhuma hora livre seguida entre 11:00 e 14:00 (ocupado das 10:10 às 11:10, das 11:30 às 12:30 e das 12:40 às 13:40).', 'voo-horario', false]], `aprovada: ${aprovada}`);
+      // Às 14:30 sobra 12:30–14:00: nada a dizer
+      assert.deepEqual(avisosDaEdicao(estado, resultado, voo, { ...structuredClone(voo.valores), a: 870 }, { aprovada }).filter(a => a.codigo === 'sem-almoco'), []);
+    }
+  });
+
   it('o recurso de outro tipo muda o tipo do pedido; a duração muda as horas e o fim do pino', () => {
     const { estado, resultado } = aprovar(base());
     const { copia } = editar(estado, resultado, '1001_0_1', () => ({ r: 'PP-ABP', minutos: 90 }));

@@ -17,6 +17,7 @@ import { hm, fmtH } from './format.js';
 import { nomeDoRecurso } from './categorias.js';
 import { FROTA_INICIAL } from './frota.js';
 import { comExigenciasDasMissoes, exigeDaMissaoDoPedido } from './programa.js';
+import { semAlmocoComAMudanca } from './almoco.js';
 
 // A escala que a alteração deixa (estado: o estado da escala depois dela). Na escala aprovada (aprovada), a da tela
 // (resultado) conferida de novo, sem o motor (antes: o estado que fez a escala da tela; recusas: as que a reversão devolve).
@@ -358,6 +359,10 @@ export function avisosDaEdicao(estado, resultado, voo, valores, { aprovada = Boo
     for (const a of sim.al.filter(v => v.t === 'warn' && meus.has(v.fKey) && Object.hasOwn(CAMPO_DO_AVISO, v.codigo))) {
       if (!avisos.some(v => v.texto === a.m)) avisos.push({ codigo: a.codigo, texto: a.m, campo: CAMPO_DO_AVISO[a.codigo], conflito: false });
     }
+    // O almoço (#104): o INVA do voo que fica sem a hora livre de 11:00 a 14:00 com a mudança (o aviso da Escala é do INVA,
+    // sem a chave do voo); quem já estava sem ela não avisa de novo
+    const insDoVoo = new Set(sim.out.filter(v => meus.has(v.fKey)).map(v => v.insId));
+    for (const texto of semAlmocoComAMudanca(estado, resultado.out, sim.al, insDoVoo)) avisos.push({ codigo: 'sem-almoco', texto, campo: 'voo-horario', conflito: false });
     // O INVA fora do “Priorizar com” do aluno (N9, F1h): o voo posto à mão avisa na Escala (voa-com), e o editor pede a
     // confirmação quando o operador troca o INVA por um fora dele e um do “Priorizar com” poderia dar o voo (mudar só o
     // horário ou o recurso não escolhe o INVA; sem nenhum que possa, o aviso é o motivo de sempre, sem a confirmação)

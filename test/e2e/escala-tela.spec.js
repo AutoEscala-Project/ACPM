@@ -183,6 +183,32 @@ test.describe('Tela da Escala', () => {
     await expect(resumoDaEscala(page, 'avisos')).toHaveText('2 avisos: 1 aluno sem peso · 1 instrutor sem peso');
   });
 
+  // O almoço (#104): três pedidos de horário exato (10:10, 11:30 e 12:40) com o único INVA só cabem tirando a hora livre
+  // dele de 11:00 a 14:00; os três entram, o aviso diz quem ficou sem almoço e o que o ocupa (um item do trilho, como os
+  // outros avisos da escala: a caixa dos avisos da Escala saiu, linha-fix-escala-sem-caixas), e o resumo do trilho conta
+  // os INVAs. O INVA sem peso dá mais avisos (um por voo, contado uma vez; o resumo só aparece com dois); a dica do glossário
+  // fica no trecho do resumo, não no item, que é um link (a dica dentro dele seria um controle dentro de outro)
+  test('o almoço: o voo que só cabe sem ele entra, o aviso diz quem ficou sem almoço, e o resumo do trilho conta', async ({ page }) => {
+    const exato = m => ({ p1: m, p2: -1, jan: `h${m}` });
+    await abrir(page, { estado: cenario({ ins: [instrutor(1, 1, { kg: 0 })], stu: [aluno(1000, exato(610)), aluno(1001, exato(690)), aluno(1002, exato(760))] }) });
+    await abrirEscala(page, { vista: 'lista' });
+    await expect(page.locator('#out tbody tr:not(.win)')).toHaveCount(3);
+    await expect(page.locator('#out details.caixa')).toHaveCount(0);
+    const itens = await abrirAvisosDaEscala(page, 'avisos');
+    const almoco = itens.filter({ hasText: 'Sem almoço' });
+    await expect(almoco.locator('.aviso-corpo')).toHaveText(['Instrutor 01 Sem almoço: nenhuma hora livre seguida entre 11:00 e 14:00 (ocupado das 10:10 às 11:10, das 11:30 às 12:30 e das 12:40 às 13:40).']);
+    await expect(almoco.locator('a.aviso-item')).toHaveAttribute('href', '#/esc');
+    await expect(almoco.locator('[data-dica]')).toHaveCount(0);
+    const resumo = resumoDaEscala(page, 'avisos');
+    await expect(resumo).toHaveText('4 avisos: 1 instrutor sem peso · 1 INVA sem almoço');
+    // "1 INVA sem almoço" tem a dica do glossário (no foco, no toque e no mouse)
+    const termo = resumo.locator('[data-dica="almoco"]');
+    await expect(termo).toHaveText('1 INVA sem almoço');
+    await expect(termo).toHaveAccessibleDescription(GLOSSARIO.almoco.texto);
+    await termo.click();
+    await expect(page.locator('#dica')).toHaveText(`Sem almoço ${GLOSSARIO.almoco.texto}`);
+  });
+
   // F1h (N9): dois alunos priorizam o mesmo INVA no mesmo horário. Com a prioridade desligada (o padrão), todos têm a
   // mesma: o primeiro no cadastro fica com ele às 08:20; o outro voa com ele às 10:10, e a escala diz (um aviso por voo, a
   // disputa com os nomes, os horários e a chave que decidiu, sem falar da prioridade); o resumo conta os avisos de

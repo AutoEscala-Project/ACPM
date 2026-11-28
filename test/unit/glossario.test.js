@@ -100,6 +100,19 @@ describe('Glossário', () => {
     assert.deepEqual(Object.keys(INTEIRO).filter(id => !Object.hasOwn(montarGlossario(nome => nome !== 'prioridade'), id)), ['prioridade']);
   });
 
+  // O almoço (#104): o resumo dos avisos no trilho tem a dica nos INVAs sem almoço (a caixa dos avisos da Escala saiu, em
+  // linha-fix-escala-sem-caixas; js/linha-do-dia.js diz o trecho, js/views/trilho.js põe a dica), e a pausa que é o almoço
+  // é a que cobre 1 h da janela (de qualquer tamanho: a de 10:30 a 12:30 também; a de 1 h das 10:30 às 11:30, só 30 min
+  // nela, não). O almoço vem antes do “Priorizar com”, e a escala muda outras missões antes de desistir dele (Pedro, 28/11)
+  it('o almoço: a dica dos INVAs sem almoço no resumo do trilho e a pausa que cobre 1 h entre 11:00 e 14:00', () => {
+    const linha = readFileSync(new URL('js/linha-do-dia.js', raiz), 'utf8');
+    assert.match(linha, /'INVAs sem almoço', 'almoco'\]/);
+    assert.match(readFileSync(new URL('js/views/trilho.js', raiz), 'utf8'), /data-dica="\$\{esc\(r\.dica\.id\)\}"/);
+    assert.match(GLOSSARIO.pausa.texto, /A que cobre 1 h entre 11:00 e 14:00 é o almoço dele\.$/);
+    assert.match(GLOSSARIO.almoco.texto, /antes do Priorizar com/);
+    assert.match(GLOSSARIO.almoco.texto, /muda outras missões/);
+  });
+
   it('o glossário das telas é o das funcionalidades ligadas no app', () => assert.deepEqual(GLOSSARIO, montarGlossario(ligada)));
 });
 

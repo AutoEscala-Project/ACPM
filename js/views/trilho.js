@@ -175,8 +175,15 @@ function avisoHTML(a) {
     : `${li}<div class="aviso-item" ${item}>${conteudo}</div>${acaoHTML(a)}</li>`;
 }
 // No alto deles, o resumo de cada grupo da escala com dois itens ou mais (o título que as caixas tinham: "2 avisos: 1 aluno sem
-// peso · 1 instrutor sem peso")
-const resumoHTML = r => `<li data-grupo="${r.grupo}" data-gravidade="${r.gravidade}">${esc(r.texto)}</li>`;
+// peso · 1 instrutor sem peso"). O trecho com a dica do glossário (os INVAs sem almoço, #104) é uma etiqueta com ela: o
+// resumo não é um controle, então a dica pode receber o foco ali (no item, que é um link, não)
+function resumoHTML(r) {
+  const [cabeca, ...resto] = r.texto.split(': ');
+  const corpo = r.dica && resto.length
+    ? `${esc(cabeca)}: ${resto.join(': ').split(' · ').map(p => (p === r.dica.trecho ? `<span data-dica="${esc(r.dica.id)}">${esc(p)}</span>` : esc(p))).join(' · ')}`
+    : esc(r.texto);
+  return `<li data-grupo="${r.grupo}" data-gravidade="${r.gravidade}">${corpo}</li>`;
+}
 function rAvisos() {
   if (!dadosLidos) return;
   const contexto = contextoDoDia();

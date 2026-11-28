@@ -7,6 +7,7 @@
 // diante), habilitacoesNaoConferidas: n, data, hoje } (js/views/linha.js, contextoDoDia)
 import { REVISAO_H } from './config.js';
 import { CODIGOS_DE_AVISO, CODIGOS_DO_AGENDADO } from './conflitos.js';
+import { ehAvisoDoAlmoco } from './almoco.js';
 import { fechamentosDoEstado, rotuloDosFechamentos } from './fechamentos.js';
 import { salaDisponivel } from './frota.js';
 import { inativo, inativoValeEm, voosComInativos, textoDoVooComInativo } from './inativos.js';
@@ -273,8 +274,10 @@ const avisosDosDados = ctx => (ctx.indisponiveis || []).map(({ id, texto }) =>
 // entraram (com os nomes, sem repetir), os conflitos (da escala aprovada ou dos voos fixos) e os avisos, agrupados pelo
 // código: alunos e instrutores sem peso, aviões que param para a revisão, atrasos, instrutores perto do limite da lei, os
 // do “Priorizar com”, o instrutor escolhido que saiu do cadastro, o repouso e as voltas do noturno e os voos agendados
-// fora das regras (um por voo). Os avisos sem código (de uma escala gravada antes deles) entram em "outros".
-// [{ grupo: 'erros' | 'conflitos' | 'avisos', gravidade: 'erro' | 'aviso', texto }]
+// fora das regras (um por voo) e os INVAs sem almoço (#104: o aviso não tem código e é reconhecido pelo começo do texto;
+// o trecho deles leva a dica do glossário, `dica`: o item do trilho é um link, e a dica dentro dele seria um controle
+// dentro de outro). Os outros avisos sem código (de uma escala gravada antes deles) entram em "outros".
+// [{ grupo: 'erros' | 'conflitos' | 'avisos', gravidade: 'erro' | 'aviso', texto, dica?: { id, trecho } }]
 function resumoDosAvisos(avisos) {
   const doCodigo = codigo => avisos.filter(a => a.codigo === codigo);
   const quantos = (lista, campo) => new Set(lista.map(a => a[campo]).filter(id => id !== undefined)).size;
@@ -289,9 +292,14 @@ function resumoDosAvisos(avisos) {
     [quantos(doCodigo('repouso-do-noturno'), 'insId'), 'instrutor sem o repouso da lei antes da volta do noturno', 'instrutores sem o repouso da lei antes da volta do noturno'],
     [doCodigo('volta-do-noturno').length, 'volta do noturno com o avião ou o INVA indisponível', 'voltas do noturno com o avião ou o INVA indisponível'],
     [quantos(avisos.filter(a => CODIGOS_DO_AGENDADO.includes(a.codigo)), 'fKey'), 'agendamento fora da regra', 'agendamentos fora da regra'],
-    [avisos.filter(a => !CODIGOS_DE_AVISO.includes(a.codigo)).length, 'outro', 'outros']
-  ].filter(([n]) => n).map(([n, um, varios]) => plural(n, um, varios));
-  return `${plural(avisos.length, 'aviso', 'avisos')}: ${partes.join(' · ')}`;
+    [quantos(avisos.filter(ehAvisoDoAlmoco), 'insId'), 'INVA sem almoço', 'INVAs sem almoço', 'almoco'],
+    [avisos.filter(a => !CODIGOS_DE_AVISO.includes(a.codigo) && !ehAvisoDoAlmoco(a)).length, 'outro', 'outros']
+  ].filter(([n]) => n).map(([n, um, varios, dica]) => ({ texto: plural(n, um, varios), dica }));
+  const comDica = partes.find(p => p.dica);
+  return {
+    texto: `${plural(avisos.length, 'aviso', 'avisos')}: ${partes.map(p => p.texto).join(' · ')}`,
+    ...(comDica ? { dica: { id: comDica.dica, trecho: comDica.texto } } : {})
+  };
 }
 export function resumosDaEscala(ctx) {
   const al = (ctx.RES && ctx.RES.al) || [];
@@ -307,7 +315,7 @@ export function resumosDaEscala(ctx) {
     const texto = aprovada ? `${conflitos.length} voos em conflito na escala aprovada` : `${conflitos.length} voos fixos em conflito`;
     resumos.push({ grupo: 'conflitos', gravidade: 'erro', texto });
   }
-  if (avisos.length > 1) resumos.push({ grupo: 'avisos', gravidade: 'aviso', texto: resumoDosAvisos(avisos) });
+  if (avisos.length > 1) resumos.push({ grupo: 'avisos', gravidade: 'aviso', ...resumoDosAvisos(avisos) });
   return resumos;
 }
 

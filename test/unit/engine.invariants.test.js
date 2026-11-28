@@ -193,6 +193,150 @@ describe('Invariantes do motor de alocação', () => {
     assert.ok(out.length === 0 || comFaixa > 0);
   }));
 
+  // O almoço (#104), branda: o motor só desiste dele quando mantê-lo tiraria um voo da escala. Lido aqui sem js/almoco.js:
+  // nenhum pedido escalado pelo motor sem o almoço (opcoes.almoco: false) fica fora com ele
+  it('o almoço não tira nenhum voo da escala: cada pedido escalado sem ele continua escalado', () => emTodos(({ estado, out }) => {
+    const com = new Set(out.map(o => o.fKey));
+    const faltam = runAllocationEngine(estado, { almoco: false }).out.filter(o => !o.trecho && !com.has(o.fKey)).map(o => o.fKey);
+    assert.deepEqual(faltam, []);
+  }));
+
+  // O almoço vem antes do “Priorizar com” (Pedro, 28/11): o voo só sai do INVA do “Priorizar com” que tinha sem o almoço
+  // quando o aviso dele diz que foi pelo almoço (o almoço do INVA do “Priorizar com”, ou outro motivo que o almoço causou
+  // ao empurrar outros voos, que a conferência abaixo cobre)
+  it('o voo que perde o “Priorizar com” por causa do almoço tem o aviso do “Priorizar com”', () => emTodos(({ estado, out, al }) => {
+    const sem = runAllocationEngine(estado, { almoco: false });
+    const perdem = sem.out.filter(o => o.insPar && !out.some(v => v.fKey === o.fKey && v.insPar)).map(o => o.fKey);
+    const avisados = new Set(al.filter(a => a.codigo === 'voa-com').map(a => a.fKey));
+    assert.deepEqual(perdem.filter(k => !avisados.has(k)), []);
+  }));
+
+  // Todo INVA que vem e tem um compromisso que toca 11:00–14:00 tem uma hora livre seguida nessa janela (sem compromisso:
+  // a turma de Ground uma vez, a volta do noturno até as 10:10; a pausa e o fora das faixas são livres), ou o aviso
+  // "Sem almoço" com o nome dele; quem tem a hora não tem o aviso
+  it('todo INVA que voa perto do meio-dia tem uma hora livre entre 11:00 e 14:00 ou o aviso com o nome dele', () => emTodos(({ estado, todos: linhas, al }) => {
+    for (const x of estado.ins.filter(i => i.on)) {
+      const ocupados = linhas.filter(o => o.insId === x.id && o.status !== 'Cancelado').map(o => (o.trecho === 'volta' ? [0, Math.max(o.b, o.livreAs)] : [o.a, o.b]));
+      const naJanela = ocupados.filter(([a, b]) => a < 840 && b > 660).sort((p, q) => p[0] - q[0]);
+      let inicio = 660, temHora = false;
+      for (const [a, b] of naJanela) { if (a - inicio >= 60) temHora = true; inicio = Math.max(inicio, b); }
+      if (840 - inicio >= 60) temHora = true;
+      const aviso = al.filter(a => a.t === 'warn' && a.m.startsWith('Sem almoço: ') && a.insId === x.id);
+      if (!naJanela.length || temHora) assert.deepEqual(aviso, [], `${x.nm} tem a hora livre e o aviso`);
+      else assert.equal(aviso.length, 1, `${x.nm} sem a hora livre (${naJanela.map(([a, b]) => `${hm(a)}–${hm(b)}`).join(', ')}) e sem o aviso`);
+      if (aviso.length) assert.equal(aviso[0].s, x.nm);
+    }
+  }));
+
+  // O motor só desiste do almoço (e o “Priorizar com” só cede ao almoço) quando nenhuma arrumação que ele testa guarda os
+  // dois (Pedro, 28/11: "the engine should move another Mission before giving up an instructors lunch break"). Na
+  // configuração em que o motor terminou (montarComOAlmoco: a guarda, as horas reservadas, os pedidos antes na fila e as
+  // missões mudadas), cada mudança da busca, lida aqui sem js/almoco.js nem a busca do motor, é montada de novo:
+  // - para cada INVA com o aviso "Sem almoço" (sem a pausa que já é o almoço, e com uma hora da janela que nenhum voo fixo
+  //   dele toca), com o almoço dele: de volta; a hora dele reservada em cada hora que encosta num compromisso dele na janela, ou nas pontas (11:00 e 13:00), sem tocar um voo fixo dele; cada
+  //   voo dele na janela (sem pino, fora o Ground) em outro horário ou, sem o instrutor escolhido, com outro INVA (também o
+  //   do “Priorizar com”: nenhum almoço cede a ele); cada voo de outro INVA que poderia voar um desses (habilitado, fora do “Não escalar com”) no horário dele
+  //   em outro horário ou com outro INVA; cada voo do mesmo tipo de avião entre 11:00 e 14:00 (com a duração do voo dele
+  //   antes e depois) em outro horário ou em outro avião. Nenhuma escala tudo, deixa sem almoço só os de antes menos ele;
+  // - para cada voo que tinha o INVA do “Priorizar com” sem o almoço e ficou sem ele: o pedido antes na fila; o voo em
+  //   outro horário; a hora de cada INVA do “Priorizar com” dele reservada (como acima); cada voo desses INVAs na janela ou
+  //   no horário dele em outro horário ou com outro INVA. Nenhuma escala tudo, sem mais INVAs sem almoço, e dá o
+  //   “Priorizar com” a mais voos (todos os de antes também);
+  // - o voo que a busca tirou do INVA do “Priorizar com” tem o aviso do “Priorizar com” pelo almoço.
+  // Nos 60 primeiros seeds (300 dias)
+  it('nenhuma arrumação testada guarda o almoço de quem ficou sem ele, nem o “Priorizar com” que cedeu ao almoço', async () => {
+    const { montarComOAlmoco, montarEscala, almocoDa } = await import('../../js/engine.js');
+    const avisadosEm = r => new Set(r.al.filter(a => a.t === 'warn' && a.m.startsWith('Sem almoço: ')).map(a => a.insId));
+    const escaladosEm = r => new Set(r.out.filter(o => !o.trecho).map(o => o.fKey));
+    const comOParEm = r => new Set(r.out.filter(o => o.insPar).map(o => o.fKey));
+    const contido = (menor, maior) => [...menor].every(k => maior.has(k));
+    const toca = (o, de, ate) => o.a < ate && de < o.b;
+    const falhas = [];
+    let testadas = 0;
+    for (const { seed, estado } of execucoes.slice(0, 300)) {
+      const { resultado, almoco } = montarComOAlmoco(estado);
+      if (!almoco) continue;
+      const avisados = avisadosEm(resultado), escalados = escaladosEm(resultado), comOPar = comOParEm(resultado);
+      const linhas = resultado.out;
+      const ativo = o => (estado.fStatus || {})[o.fKey] !== 'Cancelado';
+      const movel = o => !o.trecho && !o.fixo && !o.isGround && ativo(o);
+      const naJanela = o => toca(o, 660, 840);
+      const porId = new Map(estado.ins.map(x => [x.id, x]));
+      const montar = (m, x) => {
+        testadas++;
+        const horas = new Map(almoco.horas);
+        if (m.hora) horas.set(m.hora.insId, { de: m.hora.de, ate: m.hora.de + 60 });
+        const guarda = new Set(almoco.guarda);
+        if (x !== undefined) guarda.add(x);
+        return montarEscala(estado, {}, almocoDa(guarda, horas, new Set([...almoco.antes, ...(m.antes || [])]), [...almoco.evitar, ...(m.evitar ? [m.evitar] : [])]));
+      };
+      // As horas da janela que encostam num compromisso do INVA, ou nas pontas, sem tocar um voo fixo dele
+      const horasDe = id => {
+        const meus = linhas.filter(o => o.insId === id && ativo(o)).map(o => ({ a: o.a, b: o.trecho === 'volta' ? Math.max(o.b, o.livreAs) : o.b, fixo: Boolean(o.fixo) }));
+        const presos = meus.filter(o => o.fixo);
+        return [...new Set([660, 780, ...meus.flatMap(o => [o.b, o.a - 60])])].filter(h => h >= 660 && h <= 780 && !presos.some(o => o.a < h + 60 && h < o.b)).sort((p, q) => p - q);
+      };
+      const podeVoar = (id, w) => {
+        const x = porId.get(id), { stu, d } = pedidoDe(estado, w);
+        return Boolean(x && x.on) && !(stu.bl || []).includes(id) && podeFazer(x, w.mis, w.eqType, { curso: stu.curso, exige: d.exige });
+      };
+      // Para o almoço, o voo do “Priorizar com” também muda de INVA (nenhum almoço cede a um “Priorizar com”); para o
+      // “Priorizar com”, não (o voo que muda perderia o dele)
+      const moverInva = o => (o.insEscolhido || o.insPar ? [] : [{ evitar: [o.fKey, 'ins', o.insId] }]);
+      const moverInvaParaOAlmoco = o => (o.insEscolhido ? [] : [{ evitar: [o.fKey, 'ins', o.insId] }]);
+      for (const x of estado.ins.filter(i => avisados.has(i.id))) {
+        const { pausas } = faixasEPausas(x);
+        if (pausas.some(p => Math.min(p.ate, 840) - Math.max(p.de, 660) >= 60)) continue;
+        const horas = horasDe(x.id);
+        if (!horas.length) continue;
+        const meus = linhas.filter(o => o.insId === x.id && movel(o) && naJanela(o));
+        const mudancas = [
+          ...(almoco.guarda.has(x.id) ? [] : [{}]),
+          ...horas.map(de => ({ hora: { insId: x.id, de } })),
+          ...meus.flatMap(w => [{ evitar: [w.fKey, 'a', w.a] }, ...moverInvaParaOAlmoco(w)]),
+          ...meus.flatMap(w => linhas.filter(o => o.insId !== x.id && movel(o) && toca(o, w.a, w.b) && podeVoar(o.insId, w)).flatMap(o => [{ evitar: [o.fKey, 'a', o.a] }, ...moverInvaParaOAlmoco(o)])),
+          ...meus.flatMap(w => linhas.filter(o => o !== w && movel(o) && o.eqType === w.eqType && !toca(o, w.a, w.b) && toca(o, 660 - (w.b - w.a), 840 + (w.b - w.a))).flatMap(o => [{ evitar: [o.fKey, 'a', o.a] }, { evitar: [o.fKey, 'r', o.r] }]))
+        ];
+        for (const m of mudancas) {
+          const r = montar(m, x.id);
+          const depois = avisadosEm(r);
+          if (depois.size < avisados.size && contido(depois, avisados) && contido(escalados, escaladosEm(r))) {
+            falhas.push(`seed ${seed}: ${x.nm} com ${JSON.stringify(m)}`);
+            break;
+          }
+        }
+      }
+      // O voo que a busca tirou do INVA do “Priorizar com” (para o almoço de alguém) e ficou sem ele: o aviso diz que foi
+      // pelo almoço
+      for (const [fKey, campo, id] of almoco.evitar) {
+        const o = linhas.find(v => v.fKey === fKey);
+        if (campo !== 'ins' || !o || o.insPar || !(pedidoDe(estado, o).stu.voaCom || []).includes(id)) continue;
+        const aviso = resultado.al.find(a => a.codigo === 'voa-com' && a.fKey === fKey);
+        if (!aviso || !/almoço/.test(aviso.m)) falhas.push(`seed ${seed}: ${fKey} sem o “Priorizar com” e sem o almoço no aviso (${aviso && aviso.m})`);
+      }
+      const sem = runAllocationEngine(estado, { almoco: false });
+      for (const p of linhas.filter(o => !o.trecho && !comOPar.has(o.fKey) && sem.out.some(v => v.fKey === o.fKey && v.insPar))) {
+        const { stu } = pedidoDe(estado, p);
+        const pares = (stu.voaCom || []).filter(id => porId.has(id) && porId.get(id).on);
+        const mudancas = [
+          { antes: [p.fKey] }, { evitar: [p.fKey, 'a', p.a] },
+          ...pares.filter(z => almoco.guarda.has(z)).flatMap(z => horasDe(z).map(de => ({ hora: { insId: z, de } }))),
+          ...pares.flatMap(z => linhas.filter(o => o !== p && o.insId === z && movel(o) && (naJanela(o) || toca(o, p.a, p.b))).flatMap(o => [{ evitar: [o.fKey, 'a', o.a] }, ...moverInva(o)]))
+        ];
+        for (const m of mudancas) {
+          const r = montar(m);
+          const par = comOParEm(r);
+          if (contido(escalados, escaladosEm(r)) && contido(avisadosEm(r), avisados) && contido(comOPar, par) && par.size > comOPar.size) {
+            falhas.push(`seed ${seed}: ${p.fKey} com o “Priorizar com” e ${JSON.stringify(m)}`);
+            break;
+          }
+        }
+      }
+    }
+    assert.ok(testadas > 0);
+    assert.deepEqual(falhas.slice(0, 5), [], `${falhas.length} arrumação(ões) que o motor não achou`);
+  });
+
   it('equipamento compatível, disponível, PR-JPL somente para Parafuso e o voo IFR só no avião homologado IFR', () => emTodos(({ estado, out }) => {
     for (const o of out) {
       if (o.isGround) {
@@ -385,7 +529,9 @@ describe('Invariantes da escala aprovada com atrasos e cancelamentos', () => {
 
 // Fora das preferências, o voo vai para o horário mais perto da 1ª. Sem a compactação e sem a divisão das horas
 // (que trocam o instrutor depois), nenhum horário mais perto (ou à mesma distância e mais cedo) servia ao mesmo avião,
-// ao mesmo instrutor e ao aluno (sem a troca de matrículas também: ela muda o avião de outros voos depois)
+// ao mesmo instrutor e ao aluno (sem a troca de matrículas também: ela muda o avião de outros voos depois; e sem o almoço,
+// #104: o horário mais perto que levaria a última hora livre do INVA de 11:00 a 14:00 é pulado, e o almoço tem os testes
+// dele em almoco.test.js)
 describe('O horário mais perto da preferência, em 300 cenários', async () => {
   const { horariosDaMissao, minutoDaPreferencia } = await import('../../js/horarios.js');
   const { disponivelPara } = await import('../../js/disponibilidade.js');
@@ -397,7 +543,7 @@ describe('O horário mais perto da preferência, em 300 cenários', async () => 
     const falhas = [];
     for (const seed of SEEDS) {
       const estado = gerarCenario(seed);
-      const { out } = runAllocationEngine(estado, { compactar: false, dividirHoras: false, trocarMatriculas: false });
+      const { out } = runAllocationEngine(estado, { compactar: false, dividirHoras: false, trocarMatriculas: false, almoco: false });
       for (const o of out.filter(v => !v.isGround && v.baseTag === 'Próximo livre' && v.status !== 'Cancelado')) {
         const { d } = pedidoDe(estado, o);
         const p1 = minutoDaPreferencia(d.p1), p2 = minutoDaPreferencia(d.p2);

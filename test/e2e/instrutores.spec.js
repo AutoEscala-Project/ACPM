@@ -311,23 +311,24 @@ test.describe('INVAs: o detalhe', () => {
   });
 
   // A regra do início (C, "regra"; decisão 1 do Pedro): o voo começa dentro da faixa e pode terminar depois dela; a pausa,
-  // nenhum voo a toca. "Editar faixas" diz a regra
-  test('a regra do início: o voo das 11:30 de 2 h fica com o INVA da manhã, que não recebe nada na pausa', async ({ page }) => {
-    await abrir(page, { estado: cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, { p1: 690, p2: -1, nb: 2 })] }) });
+  // nenhum voo a toca. "Editar faixas" diz a regra. O voo tem 1h30 (até as 13:00): com 2 h, o almoço do motor (#104) o
+  // levaria para as 10:10, para o INVA ficar com uma hora livre entre 11:00 e 14:00
+  test('a regra do início: o voo das 11:30 de 1h30 fica com o INVA da manhã, que não recebe nada na pausa', async ({ page }) => {
+    await abrir(page, { estado: cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, { p1: 690, p2: -1, nb: 1.5 })] }) });
     await abrirInstrutor(page, 1);
     await page.locator('#det-ins-editar-faixas').click();
     await expect(page.locator('#det-ins-faixas-dica')).toHaveText('O voo começa dentro de uma faixa (o Até não entra: até 17:30 não inclui o Noturno) e pode terminar depois dela; nenhum voo toca uma pausa.');
     await page.locator('#det-ins-cancelar-faixas').click();
     await editarFaixas(page, 1, { faixas: [{ de: '06:30', ate: '12:40' }] });
     await expect(faixasDoAberto(page)).toHaveText('06:30–12:40');
-    await expect(secaoDoInstrutor(page, 'data').locator('.voo-quando')).toHaveText(['11:30–13:30']);
+    await expect(secaoDoInstrutor(page, 'data').locator('.voo-quando')).toHaveText(['11:30–13:00']);
     const cabe = secaoDoInstrutor(page, 'data').locator('details.faixas-cabe');
     await cabe.locator('summary').click();
     await expect(cabe.locator('li').first()).toHaveText('C152: 06:30 a 11:30 (4 horários); a das 11:30 termina até as 16:30');
     // Com a pausa das 12:00 às 13:00, o voo não começa às 11:30 (passaria por ela)
     await editarFaixas(page, 1, { faixas: [{ de: '06:30', ate: '12:40' }], pausas: [{ de: '12:00', ate: '13:00' }] });
     await expect(pausasDoAberto(page)).toHaveText('12:00–13:00');
-    await expect(secaoDoInstrutor(page, 'data').locator('.voo-quando')).not.toHaveText(['11:30–13:30']);
+    await expect(secaoDoInstrutor(page, 'data').locator('.voo-quando')).not.toHaveText(['11:30–13:00']);
     const [quando] = await secaoDoInstrutor(page, 'data').locator('.voo-quando').allTextContents();
     expect(quando.split('–')[1] <= '12:00', quando).toBe(true);
   });

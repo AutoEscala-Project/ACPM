@@ -380,6 +380,30 @@ describe('O resumo dos grupos da escala, no trilho', () => {
     assert.deepEqual(resumosDaEscala(contexto({ al: [aviso('sem-peso', { stuId: 1 }), aviso('sem-peso', { stuId: 2 })] })).map(r => r.texto), ['2 avisos: 2 alunos sem peso']);
   });
 
+  // O almoço (#104): o aviso "Sem almoço" não tem código (é reconhecido pelo começo do texto) e não entra em "outros"; o
+  // resumo conta os INVAs, sem repetir, e diz qual trecho tem a dica do glossário (o item do trilho é um link: a dica
+  // dentro dele seria um controle dentro de outro, então ela vai no resumo). Era a caixa dos avisos da Escala, que saiu
+  // (linha-fix-escala-sem-caixas)
+  it('o almoço: os INVAs sem almoço contados pelo INVA, fora de "outros", com a dica no trecho deles', () => {
+    const semAlmoco = (insId, s) => ({ t: 'warn', s, m: 'Sem almoço: nenhuma hora livre seguida entre 11:00 e 14:00 (ocupado das 11:00 às 14:00).', insId });
+    const al = [aviso('sem-peso', { stuId: 1 }), semAlmoco(1, 'Instrutor 01'), semAlmoco(2, 'Instrutor 02'), semAlmoco(2, 'Instrutor 02')];
+    assert.deepEqual(resumosDaEscala(contexto({ al })), [{
+      grupo: 'avisos', gravidade: 'aviso', texto: '4 avisos: 1 aluno sem peso · 2 INVAs sem almoço',
+      dica: { id: 'almoco', trecho: '2 INVAs sem almoço' }
+    }]);
+    const [um] = resumosDaEscala(contexto({ al: [semAlmoco(1, 'Instrutor 01'), { t: 'warn', s: 'Aluno', m: 'Gravado antes dos códigos.' }] }));
+    assert.deepEqual(um, { grupo: 'avisos', gravidade: 'aviso', texto: '2 avisos: 1 INVA sem almoço · 1 outro', dica: { id: 'almoco', trecho: '1 INVA sem almoço' } });
+    // Com código, o mesmo começo não é o do almoço
+    assert.deepEqual(resumosDaEscala(contexto({ al: [aviso('sem-peso', { stuId: 1 }), { ...semAlmoco(1, 'Instrutor 01'), codigo: 'atraso' }] })),
+      [{ grupo: 'avisos', gravidade: 'aviso', texto: '2 avisos: 1 aluno sem peso · 1 atraso com conflito' }]);
+    // Cada aviso "Sem almoço" é um item do trilho, no grupo dos avisos da escala, que leva à Escala
+    const itens = avisosDaData(contexto({ al: [semAlmoco(1, 'Instrutor 01')] })).filter(a => a.grupo === 'avisos');
+    assert.deepEqual(itens, [{
+      id: 'warn:1', gravidade: 'aviso', minuto: null, titulo: 'Instrutor 01',
+      texto: 'Sem almoço: nenhuma hora livre seguida entre 11:00 e 14:00 (ocupado das 11:00 às 14:00).', destino: { tela: 'esc' }, grupo: 'avisos'
+    }]);
+  });
+
   it('na ordem: as que não entraram, os conflitos e os avisos', () => {
     const al = [aviso('atraso'), aviso('atraso'), conflito(1), conflito(2), erro('Aluno 1'), erro('Aluno 2')];
     assert.deepEqual(resumosDaEscala(contexto({ al, tot: 2 })).map(r => r.grupo), ['erros', 'conflitos', 'avisos']);
