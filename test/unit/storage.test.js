@@ -118,6 +118,18 @@ describe('Migração de estado', () => {
     assert.deepEqual(x.ins.map(i => i.kg), esperados);
     assert.deepEqual(x.stu.map(s => s.kg), esperados);
   });
+
+  // Formato 30 (E): as exportações da data (js/exportacoes.js) e quem reabriu a escala (como a aprovação) ficam no estado,
+  // só no formato; sem elas, {} e null
+  it('as exportações e a reabertura: só no formato; sem elas, {} e null', () => {
+    const csv = { em: '2026-11-10T21:10:00.000Z', por: 'Operador 01', impressao: '0a1b2c3d' };
+    const x = ApiClient.normalizeAndMigrateState({ ...ApiClient.createFreshState(), exportacoes: { csv, txt: csv }, reabertura: { em: '2026-11-10T21:20:00.000Z', por: 'Operador 01', a: 1 } });
+    assert.deepEqual([x.exportacoes, x.reabertura], [{ csv }, { em: '2026-11-10T21:20:00.000Z', por: 'Operador 01' }]);
+    const sem = ApiClient.normalizeAndMigrateState({ ...ApiClient.createFreshState(), exportacoes: 'x', reabertura: { em: 'ontem' } });
+    assert.deepEqual([sem.exportacoes, sem.reabertura], [{}, null]);
+    const fresco = ApiClient.createFreshState();
+    assert.deepEqual([fresco.exportacoes, fresco.reabertura], [{}, null]);
+  });
 });
 
 describe('Persistência local (escala por data)', () => {

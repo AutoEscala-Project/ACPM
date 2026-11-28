@@ -17,6 +17,7 @@ import { normalizarHangar } from './hangar.js';
 import { LIMITES_DA_LEI, normalizarLimites, comHorasExternas } from './limites.js';
 import { noturnosDaVespera, comRepousoDoNoturno, voltasConferem } from './noturno.js';
 import { normalizarFixos, normalizarAprovacao, pinosDoNoturno } from './fixos.js';
+import { normalizarExportacoes } from './exportacoes.js';
 import { normalizarCriterios } from './criterios.js';
 import { normalizarPainel } from './config-do-painel.js';
 import { normalizarCursos, normalizarCursoDoAluno } from './cursos.js';
@@ -60,6 +61,8 @@ export const ApiClient = {
       fObs: {},
       horas: {},
       importadas: [],
+      exportacoes: {},
+      reabertura: null,
       frota: FROTA_INICIAL.map(f => ({ ...f })),
       horarios: normalizarHorarios(HORARIOS_INICIAIS),
       hangar: normalizarHangar(null, FROTA_INICIAL),
@@ -82,6 +85,9 @@ export const ApiClient = {
     // Escala aprovada: os voos fixos e quem aprovou
     x.fixos = normalizarFixos(x.fixos);
     x.aprovacao = normalizarAprovacao(x.aprovacao);
+    // As exportações da data e quem reabriu a escala (formato 30; o H as escreve): só no formato
+    x.exportacoes = normalizarExportacoes(x.exportacoes);
+    x.reabertura = normalizarAprovacao(x.reabertura);
     // Critérios da compactação
     x.criterios = normalizarCriterios(x.criterios);
     if (!x.horas || typeof x.horas !== 'object' || Array.isArray(x.horas)) x.horas = {};

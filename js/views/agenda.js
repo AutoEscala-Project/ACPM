@@ -3,22 +3,25 @@
 // cada pedido) e o registro de pedidos, cada um para a data dele ("Data do pedido"), com o prazo das 13:00 do dia anterior.
 // O formulário vai do aluno à missão (as do curso dele), da missão ao recurso, e dos dois às duas preferências, cada uma um
 // horário exato (docs/PLAN.md, as regras da Agenda; a 2ª, opcional, U1). Os avisos da lista: a leitura que falhou, a escala
-// que mudou em outro computador, os aprovados fora da demanda (com "Importar") e os que ainda voam sem aprovação.
+// que mudou em outro computador, os aprovados fora da demanda (com "Importar") e os que ainda voam sem aprovação. O aviso
+// das novidades que a vigia traz (D3): o que mudou em outro computador, e o 1º da lista de espera da vaga de um cancelado.
 import { MIS, GROUND_EQ_TYPE } from '../config.js';
 import { duracaoFixaDaMissao } from '../rules.js';
 import { horariosDaMissao } from '../horarios.js';
 import { indiceDoPrograma } from '../programa.js';
-import { S, DATA, isGestor, inativoNaDataAberta, stuBy, dadoIndisponivel } from '../state.js';
+import { S, RES, DATA, isGestor, inativoNaDataAberta, stuBy, dadoIndisponivel, estadoDaEscala } from '../state.js';
 import { inativo } from '../inativos.js';
 import { ApiClient } from '../storage.js';
 import { dadosLidos } from '../actions.js';
-import { $, trocarConteudo } from '../dom.js';
+import { $, trocarConteudo, showToast } from '../dom.js';
 import { esc, opts, hm, fmtH, somarDias, chaveDeBusca } from '../format.js';
 import { registraNaAgenda, operaEscala } from '../perfis.js';
 import {
   recursosDaMissao, recursoValido, missoesDoAluno, FUSO_DO_AEROCLUBE, prazoDaAgendaPermite, prazoDaData, datasParaRegistrar, hojeEmSaoPaulo, situacaoDaSolicitacao,
-  situacaoNaDemanda, solicitacoesParaImportar, opcoesDaSegundaPreferencia
+  situacaoNaDemanda, solicitacoesParaImportar, opcoesDaSegundaPreferencia, textoDasNovidades, solicitacaoAprovada, agoraEmSaoPaulo
 } from '../agenda.js';
+import { porQueOVooFica, POR_QUE_FICA, PEDEM_CONFERIR } from '../processamento.js';
+import { primeiroDaListaDeEspera } from '../rejeicoes.js';
 import { solicitacoesDaData, solicitacoesDaDataLidas, lerSolicitacoesDaData } from '../solicitacoes-da-data.js';
 
 const CHAVE_REGISTRADO_POR = 'acpm_agenda_registrado_por';
@@ -154,10 +157,29 @@ export async function pedidosDoFormulario(data) {
   if (deOutraData.data !== data) lerDeOutraData(data);
   return deOutraData.leitura;
 }
-// Depois de registrar: os pedidos da data em que ele entrou são lidos de novo
-export async function lerPedidosDaAgenda(data) {
+// Depois de registrar: os pedidos da data em que ele entrou são lidos de novo (deste: o pedido registrado, que não é
+// novidade)
+export async function lerPedidosDaAgenda(data, deste = []) {
   if (data !== DATA && data === dataDoPedido) lerDeOutraData(data);
-  else await lerSolicitacoesDaData();
+  else await lerSolicitacoesDaData({ deste });
+}
+
+// O aviso das novidades da data aberta (a vigia, js/solicitacoes-da-data.js), para todos que veem os pedidos: o que mudou
+// em outro computador e, para cada pedido cancelado cujo voo ainda está na escala (ele vai deixar a vaga), o 1º da lista de
+// espera do horário dele, como a escala diz (F1h), sem os que esperam com o pedido já cancelado ou sem aprovação na lista
+// lida agora (a escala ainda não foi refeita). Nada é posto na escala: quem dá a vaga é a escala refeita (N14). O aviso
+// vem sem ninguém pedir: fica o tempo de ler (60 ms por letra, de 2,8 s a 20 s)
+const duracaoDasNovidades = texto => Math.min(20000, Math.max(2800, texto.length * 60));
+export function avisarDasNovidades(novidades, data) {
+  const daEscala = data === DATA && dadosLidos;
+  const lista = solicitacoesDaData().lista || [];
+  const naoEspera = id => { const s = lista.find(x => x.id === id); return Boolean(s) && !solicitacaoAprovada(s); };
+  const vagas = daEscala ? novidades.canceladas.flatMap(s => {
+    const primeiro = primeiroDaListaDeEspera(s, estadoDaEscala(), RES, { naoEspera });
+    return primeiro ? [{ aluno: s.aluno_nome, minuto: primeiro.minuto, primeiro: primeiro.aluno }] : [];
+  }) : [];
+  const texto = textoDasNovidades(novidades, { data: dataCurta(data), vagas });
+  if (texto) showToast(texto, '', { duracao: duracaoDasNovidades(texto) });
 }
 
 // O nome lembrado neste computador ("Registrado por" do último pedido): também é quem aprova, retira a aprovação e
@@ -221,6 +243,14 @@ function naDemanda(p) {
 // aguardam ou foram cancelados e ainda voam na demanda
 const foraDaDemanda = lista => solicitacoesParaImportar(lista, S).filter(alunoAtivo);
 const aindaNaDemanda = lista => lista.filter(p => situacaoDaSolicitacao(p) !== 'aprovada' && situacaoNaDemanda(p, S) === 'voa');
+// O que a conciliação ("Tirar da escala", "Importar") faria agora com o voo do pedido cancelado ou sem a aprovação que ainda
+// voa (js/processamento.js, porQueOVooFica, com a data aberta e o agora de São Paulo): null, ele sai; senão, por que fica
+export function porQueOVooDoPedidoFica(p) {
+  const { data: hoje, minuto: agora } = agoraEmSaoPaulo();
+  return porQueOVooFica(S, p.id, { data: DATA, hoje, agora });
+}
+// "fica na escala: com o status Cancelado" ou "fica até o status ser conferido: atrasado"
+export const comoOVooFica = porque => (PEDEM_CONFERIR.includes(porque) ? `fica até o status ser conferido: ${POR_QUE_FICA[porque]}` : `fica na escala: ${POR_QUE_FICA[porque]}`);
 
 // O estado do pedido, com quem e quando (a lista: a hora; o detalhe: o dia e a hora)
 function textoDaSituacao(p, comDia = false) {
@@ -355,7 +385,7 @@ function desenharAprovarTodos() {
 
 // Os avisos da lista, nesta ordem: a leitura que falhou (com a lista da leitura de antes); a escala desta data que mudou em
 // outro computador ("Atualizar": nada mais é dito da demanda até lá); os aprovados fora da demanda ("Importar", para quem
-// importa); os que aguardam ou foram cancelados e ainda voam na demanda (o operador os tira na Demanda)
+// importa); os que aguardam ou foram cancelados e ainda voam na demanda ("Tirar da escala", para quem importa: a conciliação)
 const plural = (n, um, varios) => `${n} ${n === 1 ? um : varios}`;
 function desenharAvisos() {
   const { lista, leitura, lidaEm, diaMudou } = solicitacoesDaData();
@@ -373,7 +403,16 @@ function desenharAvisos() {
     }
     const ainda = aindaNaDemanda(lista);
     if (ainda.length) {
-      partes.push(`<p>${plural(ainda.length, 'pedido cancelado ou sem aprovação ainda está', 'pedidos cancelados ou sem aprovação ainda estão')} na demanda: ${esc(ainda.map(p => `${p.aluno_nome} (${descreverPedido(p)})`).join('; '))}. Tire-os na Demanda (Voa), se for o caso.</p>`);
+      // "Tirar da escala": a conciliação (E, a mesma de "Importar"), que tira o voo de quem saiu e dá a vaga ao 1º da lista de
+      // espera do horário que couber nela. Só o cancelado e o de aprovação retirada saem: o que nunca foi aprovado e voa (de
+      // antes da aprovação, D1) fica. O voo que a conciliação deixa (em voo, pousado, com o status Cancelado, com resultado;
+      // o atrasado ou que já decolou, até o status ser conferido) não conta para o botão, que nada faria: o aviso diz por
+      // que ele fica
+      const fica = new Map(ainda.filter(p => p.cancelada_em || p.aprovacao_retirada_em).map(p => [p.id, porQueOVooDoPedidoFica(p)]));
+      const saem = [...fica.values()].filter(porque => porque === null).length;
+      const doPedido = p => `${p.aluno_nome} (${descreverPedido(p)}${fica.get(p.id) ? ` · ${comoOVooFica(fica.get(p.id))}` : ''})`;
+      partes.push(`<p>${plural(ainda.length, 'pedido cancelado ou sem aprovação ainda está', 'pedidos cancelados ou sem aprovação ainda estão')} na demanda: ${esc(ainda.map(doPedido).join('; '))}.${podeImportar() && saem
+        ? ` <button type="button" class="btn" id="agenda-conciliar" data-act="importar-agenda" aria-label="Tirar da escala ${saem === 1 ? 'o pedido cancelado ou sem aprovação' : `os ${saem} pedidos cancelados ou sem aprovação`}">Tirar da escala</button>` : ''}</p>`);
     }
   }
   const html = partes.join('');

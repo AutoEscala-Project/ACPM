@@ -178,8 +178,9 @@ export function impactoDosHorarios(pedidos, horarios, cat, lista) {
     const listaNova = horariosDaMissao(novos, pedido.mis, pedido.eq);
     ajustarPreferencias(depois, listaNova);
     if (depois.p1 !== pedido.p1 || depois.p2 !== pedido.p2) mudam.push(nome);
-    const exato = typeof pedido.jan === 'string' && /^h\d+$/.test(pedido.jan) ? +pedido.jan.slice(1) : null;
-    if (exato !== null && !listaNova.includes(exato)) foraDaLista.push({ nome, minuto: exato });
+    // O horário exato do pedido (h<minuto>; com a 2ª preferência, U1, h<m1>|h<m2>): cada minuto que a lista nova não tem
+    const exatos = typeof pedido.jan === 'string' && /^h\d+(\|h\d+)?$/.test(pedido.jan) ? pedido.jan.split('|').map(h => +h.slice(1)) : [];
+    for (const exato of exatos) if (!listaNova.includes(exato)) foraDaLista.push({ nome, minuto: exato });
   }
   return { mudam, foraDaLista };
 }

@@ -2,7 +2,8 @@
 // pedido para a data dele, "Data do pedido"; "Registrar e aprovar", "Registrar sem aprovar", a Exceção da Coordenação e,
 // no 7º voo local, "Registrar mesmo assim" e "Registrar na lista de espera"), aprovar (na linha, no detalhe, "Aprovar
 // todos"), retirar a aprovação, cancelar e "Registrar de novo…". O pedido aprovado da data aberta entra na demanda na
-// hora só com as cinco condições (motivoSemEntrada); senão, "Importar" (js/eventos/importacao.js) o traz
+// hora só com as cinco condições (motivoSemEntrada); senão, "Importar" (js/eventos/importacao.js) o traz. A vigia dos
+// pedidos (D3, js/solicitacoes-da-data.js) fica ligada desde a abertura, com o aviso das novidades
 import { vagaDeVooLocal, HORARIOS_FIXOS, motivoSemEntrada, situacaoNaDemanda, solicitacaoAprovada } from '../agenda.js';
 import { DURACAO_MAXIMA_H, LIMITE_DE_VOOS_LOCAIS } from '../config.js';
 import { dadosLidos, diaJaGravado, carregarData } from '../actions.js';
@@ -17,9 +18,9 @@ import {
   abrirAgenda, rAgenda, podeEditarAgenda, aprovaPedidos, lembrarRegistradoPor, lembradoRegistradoPor, descreverPedido, missaoDoPedido, pedidoDaLista, dataCurta, dataDoFormulario,
   escolherDataDoPedido, pedidosDoFormulario, lerPedidosDaAgenda, marcarInvalidos, focarNoPrimeiroInvalido, apagarErroDaAgenda, desarmarConfirmacaoDaAgenda,
   nomearRegistrar, botaoArmado, missaoEscolhida, rHorariosDoPedido, atualizarRecursoEHorario, esvaziarPedidoRegistrado, escolherNaAgenda, escolherMissaoNaAgenda, emLista,
-  modeloDosPedidos, detalheDoPedido, aprovaveisNaBusca, marcarRecente, mudouADataDaLista, preencherComOPedido
+  modeloDosPedidos, detalheDoPedido, aprovaveisNaBusca, marcarRecente, mudouADataDaLista, preencherComOPedido, avisarDasNovidades, porQueOVooDoPedidoFica, comoOVooFica
 } from '../views/agenda.js';
-import { solicitacoesDaDataLidas, lerSolicitacoesDaData, marcarDiaMudou } from '../solicitacoes-da-data.js';
+import { solicitacoesDaDataLidas, lerSolicitacoesDaData, marcarDiaMudou, vigiarSolicitacoesDaData } from '../solicitacoes-da-data.js';
 import { lerContagemDosDias } from '../views/trilho.js';
 import { registrarDesenho } from '../redesenho.js';
 import { criarMestreDetalhe } from '../views/mestre-detalhe.js';
@@ -39,11 +40,16 @@ const tela = criarMestreDetalhe({
 });
 
 // O desenho de Pedidos (js/redesenho.js), pelo papel: a barra, os avisos, o formulário e a lista. Ele não faz nada até
-// Pedidos ser aberta. Outra data aberta: o pedido escolhido era da de antes
+// Pedidos ser aberta. Outra data aberta: o pedido escolhido era da de antes. O foco que estava no detalhe e se perdeu (o
+// botão que saiu: o pedido que a vigia trouxe aprovado ou cancelado em outro computador) fica no detalhe, como depois de
+// uma ação daqui
 function desenharPedidos(momento) {
+  const a = document.activeElement;
+  const noDetalhe = a instanceof Element && Boolean(a.closest('#det-age'));
   rAgenda();
   if (mudouADataDaLista() && tela.selecionado() !== null) tela.escolher(null, { origem: 'endereco' });
   tela.desenhar(momento);
+  if (noDetalhe) focarDepoisDaAcao('detalhe');
 }
 registrarDesenho('pedidos', desenharPedidos, { em: ['dados', 'releitura', 'perfil', 'pedidos'], ordem: 95, comMomento: true });
 // Cada alteração refaz a escala: os horários do cadastro podem ter mudado com Pedidos aberta; onde cada pedido está na
@@ -63,6 +69,9 @@ registrarTela('age', {
     return linha ? { ...feito, lugar: linha, focou: true } : feito;
   }
 });
+// A vigia: a cada minuto com a página à vista, na volta à página e da conexão, e quando outra aba deste navegador muda a
+// agenda, os pedidos da data aberta são lidos de novo (só depois da primeira leitura deles: a abertura do app, o login)
+vigiarSolicitacoesDaData(avisarDasNovidades);
 // A busca também muda "Aprovar todos": ele aprova os que ela mostra
 document.addEventListener('input', e => { if (e.target instanceof Element && e.target.matches('[data-flt="age"]')) rAgenda(); });
 
@@ -204,7 +213,7 @@ async function conferirERegistrar(qual) {
 // aberta entra na demanda (as cinco condições); e o aviso, a linha de estado do formulário e a linha do pedido à vista (N6)
 async function depoisDeRegistrar({ id, dia, aluno, descricao, aprovado, excecao, espera, locais, horario }) {
   if (dia === DATA) marcarRecente(id);
-  await Promise.all([lerPedidosDaAgenda(dia), lerContagemDosDias()]);
+  await Promise.all([lerPedidosDaAgenda(dia, [id]), lerContagemDosDias()]);
   const entrada = aprovado && dia === DATA ? await entrarNaHora([id], dia) : null;
   // A lista é a da data aberta: o pedido de outra data diz para qual ele foi
   const para = dia === DATA ? '' : ` para ${dataCurta(dia)}`;
@@ -387,10 +396,12 @@ async function aprovar(b, ids, { um }) {
       aprovados = await ApiClient.aprovarSolicitacoes(ids, { por: quemAge() || null });
     } catch (err) {
       showToast(err.code === '42501' ? 'Esta conta não aprova pedidos.' : 'Não foi possível aprovar. Verifique a conexão e tente de novo.');
-      await lerSolicitacoesDaData();
+      await lerSolicitacoesDaData({ deste: ids });
       return;
     }
-    await lerSolicitacoesDaData();
+    // Os aprovados aqui não são novidade (o aviso daqui diz); os que outro computador aprovou ou cancelou antes, também não:
+    // este aviso já os conta ("já estavam aprovados ou foram cancelados")
+    await lerSolicitacoesDaData({ deste: ids });
     if (data !== DATA) return;
     const fora = ids.length - aprovados.length;
     const deFora = fora ? ` (${fora === 1 ? '1 já estava aprovado ou foi cancelado' : `${fora} já estavam aprovados ou foram cancelados`} em outro computador)` : '';
@@ -405,8 +416,15 @@ async function aprovar(b, ids, { um }) {
 aoAcionar('aprovar-pedido', b => aprovar(b, [+b.dataset.id], { um: true }));
 aoAcionar('aprovar-todos', b => aprovar(b, aprovaveisNaBusca().ids, { um: false }));
 
-// O pedido que ainda voa na demanda depois de sair dela: D2 não o tira (a conciliação do G tira); o aviso diz
+// O pedido que ainda voa na demanda depois de sair dela: a ação não o tira ("Tirar da escala", a conciliação, tira); o aviso
+// diz. O voo que a conciliação deixa na escala (em voo, pousado, com o status Cancelado, com resultado; o atrasado ou que
+// já decolou, até o status ser conferido): o aviso diz que ele fica e por quê, sem mandar para o botão, que nada faria
 const aindaVoa = pedido => Boolean(pedido) && situacaoNaDemanda(pedido, S) === 'voa';
+const oVooContinua = (pedido, tira) => {
+  if (!aindaVoa(pedido)) return '';
+  const porque = porQueOVooDoPedidoFica(pedido);
+  return porque ? ` O voo ${comoOVooFica(porque)}.` : tira;
+};
 
 async function retirarAprovacao(b) {
   const pedido = pedidoDaLista(+b.dataset.id);
@@ -414,12 +432,12 @@ async function retirarAprovacao(b) {
   await comBotaoOcupado(b, async () => {
     try {
       await ApiClient.retirarAprovacaoDaSolicitacao(+b.dataset.id, { por: quemAge() || null });
-      showToast(`Aprovação retirada: o pedido volta a aguardar.${aindaVoa(pedido) ? ' O voo continua na demanda: tire-o lá (Voa), se for o caso.' : ''}`, 'ok');
+      showToast(`Aprovação retirada: o pedido volta a aguardar.${oVooContinua(pedido, ' O voo continua na demanda: “Tirar da escala”, no aviso, o tira.')}`, 'ok');
     } catch (err) {
       showToast(err.code === 'PT403' ? 'A aprovação de uma data que já passou não é retirada.' : err.code === 'P0002'
         ? 'O pedido já estava sem aprovação ou foi cancelado em outro computador.' : 'Não foi possível retirar a aprovação. Verifique a conexão e tente de novo.');
     }
-    await lerSolicitacoesDaData();
+    await lerSolicitacoesDaData({ deste: [+b.dataset.id] });
   });
 }
 aoAcionar('retirar-aprovacao', retirarAprovacao);
@@ -435,13 +453,13 @@ async function cancelarPedido(b) {
   await comBotaoOcupado(b, async () => {
     try {
       await ApiClient.cancelarSolicitacao(+b.dataset.id, por);
-      const voa = aindaVoa(pedido) ? (aprovaPedidos() ? ' O voo continua na demanda: tire-o lá (Voa), se for o caso.' : ' Avise o operador: o voo continua na escala até ele tirá-lo.') : '';
+      const voa = oVooContinua(pedido, aprovaPedidos() ? ' O voo continua na demanda: “Tirar da escala”, no aviso, o tira.' : ' Avise o operador: o voo continua na escala até ele tirá-lo.');
       showToast(`Pedido cancelado.${voa}`, 'ok');
     } catch (err) {
       showToast(err.code === 'PT403' ? 'O pedido aprovado de uma data que já passou não é cancelado.' : err.code === 'P0002'
         ? 'O pedido já tinha sido cancelado em outro computador.' : 'Não foi possível cancelar o pedido. Verifique a conexão e tente de novo.');
     }
-    await Promise.all([lerSolicitacoesDaData(), lerContagemDosDias()]);
+    await Promise.all([lerSolicitacoesDaData({ deste: [+b.dataset.id] }), lerContagemDosDias()]);
   });
 }
 aoAcionar('cancelar-pedido', cancelarPedido, { confereAPermissao: true });

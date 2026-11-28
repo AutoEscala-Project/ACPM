@@ -5,10 +5,10 @@ import assert from 'node:assert/strict';
 import {
   HORARIOS_PADRAO, HORARIOS_INICIAIS, normalizarHorarios, horariosDoTipo, periodoDoMinuto, minutoDaPreferencia, preferenciaValida, paraMinuto,
   preferenciasPadrao, DE_30_EM_30, modeloDosHorarios, descreverHorarios, porPeriodo, impactoDosHorarios, resumoDoImpacto,
-  PRIMEIRO_HORARIO, ULTIMO_HORARIO, fimDaMissao, HORARIO_DO_SOLO, horariosDaMissao, CATEGORIAS_COM_HORARIOS
+  PRIMEIRO_HORARIO, ULTIMO_HORARIO, fimDaMissao, HORARIO_DO_SOLO, horariosDaMissao, CATEGORIAS_COM_HORARIOS, ajustarPreferencias as ajustarAsPreferencias
 } from '../../js/horarios.js';
 import { disponibilidadeDaSolicitacao, pedidoDaSolicitacao } from '../../js/agenda.js';
-import { importarSolicitacoes } from '../../js/processamento.js';
+import { importar } from '../helpers/importar.js';
 import { MIS } from '../../js/config.js';
 import { hm } from '../../js/format.js';
 
@@ -252,6 +252,13 @@ describe('O resumo dos horários e o efeito de uma lista nova', () => {
     assert.equal(resumoDoImpacto({ mudam: [], foraDaLista: [{ nome: 'A', minuto: 500 }, { nome: 'B', minuto: 610 }] }), '2 ficam fora da lista.');
     // Os pedidos não mudam (o efeito só calcula)
     assert.equal(pedidos[1].pedido.jan, 'h500');
+    // U1: o pedido de dois horários exatos fica com os dois; cada um que a lista nova não tem é dito
+    const eva = [{ nome: 'Eva', pedido: { mis: 'Voo Local', eq: 'C152', p1: 500, p2: 610, jan: 'h500|h610' } }];
+    assert.deepEqual(impactoDosHorarios(eva, HORARIOS_INICIAIS, 'C152', [390, 610, 760]).foraDaLista, [{ nome: 'Eva', minuto: 500 }]);
+    assert.deepEqual(impactoDosHorarios(eva, HORARIOS_INICIAIS, 'C152', [400]).foraDaLista, [{ nome: 'Eva', minuto: 500 }, { nome: 'Eva', minuto: 610 }]);
+    const ajustado = { ...eva[0].pedido };
+    ajustarAsPreferencias(ajustado, [400]);
+    assert.equal(ajustado.jan, 'h500|h610');
   });
 
   it('no editor, os horários vão das 06:30 (o primeiro horário exato de um pedido) às 16:30 (o último que cabe um voo de 1 h antes do noturno)', () => {
@@ -304,11 +311,12 @@ describe('O primeiro horário do dia: 06:30', () => {
       }
     }
     assert.equal(CATEGORIAS_COM_HORARIOS.length, 5);
-    // O pedido da Agenda no primeiro horário da lista convertida chega à demanda com o horário exato (E, js/processamento.js)
+    // O pedido da Agenda no primeiro horário da lista convertida chega à demanda com o horário exato (E: a conciliação,
+    // js/processamento.js, pela importação dos testes)
     const solicitacao = { id: 9, data: '2026-11-28', aluno: 1000, aluno_nome: 'Aluno 1000', missao: 'Voo Local', recurso: 'C152', janela: 'horario', horario: '06:30', horas: 1, cancelada_em: null };
     assert.equal(pedidoDaSolicitacao(solicitacao, horarios).jan, 'h390');
     const estado = { nid: 2000, importadas: [], horarios, stu: [{ id: 1000, nm: 'Aluno 1000', fly: false, mis: 'Voo Local', eq: 'C152', p1: -1, p2: -1, nb: 1, ss: 1, pr: 3 }] };
-    importarSolicitacoes(estado, [solicitacao]);
+    importar(estado, [solicitacao]);
     assert.deepEqual([estado.stu[0].fly, estado.stu[0].jan, estado.stu[0].p1], [true, 'h390', 390]);
   });
 });

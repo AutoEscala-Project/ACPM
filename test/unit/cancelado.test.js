@@ -383,6 +383,21 @@ describe('A disponibilidade do pedido e a lista do conflito', () => {
     }
   });
 
+  // U1: o pedido de dois horários exatos (h<m1>|h<m2>) cancelado num deles: o outro é um horário dele, oferecido antes dos
+  // de fora (sem a confirmação com o aluno, e o pedido fica como está); fora dos dois, a confirmação e o jan desse minuto
+  it('o pedido de dois horários exatos cancelado num deles: o outro é dele, antes de "Confirme com o aluno" (U1)', () => {
+    const { estado, resultado, voo } = cancelado(cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, { p1: 690, p2: 870, jan: 'h690|h870' })] }), 1000, 'Meteorologia');
+    assert.equal(hm(voo.a), '11:30');
+    const [primeira] = sugerirParaCancelado(estado, resultado, voo.fKey).opcoes;
+    // O outro horário dele (14:30) vem antes do mais perto fora (12:40), sem a confirmação, e o pedido fica como está
+    assert.deepEqual([hm(primeira.mudancas.a), primeira.confirmar, (primeira.pedido || {}).jan], ['14:30', undefined, undefined]);
+    // O outro horário ocupado (o único INVA voa às 14:30 com outro aluno): fora dos dois, a confirmação, e o pedido passa a
+    // ser esse minuto
+    const ocupado = cancelado(cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, { p1: 690, p2: 870, jan: 'h690|h870' }), aluno(1001, { p1: 870, p2: -1, jan: 'h870' })] }), 1000, 'Meteorologia');
+    const [fora] = sugerirParaCancelado(ocupado.estado, ocupado.resultado, ocupado.voo.fKey).opcoes;
+    assert.deepEqual([hm(fora.mudancas.a), fora.confirmar, fora.pedido.jan], ['12:40', 'Confirme com o aluno: às 12:40, fora da disponibilidade do pedido.', 'h760']);
+  });
+
   it('o conflito sem nada no mesmo horário nem depois ganha o horário mais perto antes, dentro da disponibilidade', () => {
     // O instrutor só pode até as 12:00 (período da tarde fechado para ele): o voo das 14:30 não tem nada depois
     const base = cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, { p1: 870, p2: -1 })] });

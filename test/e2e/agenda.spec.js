@@ -575,14 +575,19 @@ test.describe('Agenda de Solicitações', () => {
     await cancelar.click();
     await expect(cancelar).toHaveText('Confirmar cancelamento');
     await cancelar.click();
-    await expect(page.locator('#toast-box')).toContainText('Pedido cancelado. O voo continua na demanda: tire-o lá (Voa), se for o caso.');
+    await expect(page.locator('#toast-box')).toContainText('Pedido cancelado. O voo continua na demanda: “Tirar da escala”, no aviso, o tira.');
     const linha = linhasDosPedidos(page).first();
     await expect(linha).toContainText('Cancelado por Maria em 10/11 12:00 · Ainda na demanda');
     await expect(grupoDosPedidos(page, 'cancelados')).toBeVisible();
     await expect(contagemDoDia(page, '2026-11-11')).toHaveCount(0);
     // Esmaecido
     await expect(linha).toHaveClass(/\bapagado\b/);
-    await expect(avisoDosPedidos(page)).toContainText('1 pedido cancelado ou sem aprovação ainda está na demanda: Aluno 1000 (Voo Local · C152 às 06:30). Tire-os na Demanda (Voa), se for o caso.');
+    await expect(avisoDosPedidos(page)).toContainText('1 pedido cancelado ou sem aprovação ainda está na demanda: Aluno 1000 (Voo Local · C152 às 06:30).');
+    // E: "Tirar da escala" é a conciliação: o voo do cancelado sai (ninguém espera a vaga), com a linha no Histórico
+    await botaoDosPedidos(page, 'conciliar').click();
+    await expect(page.locator('#toast-box')).toContainText('Demanda atualizada · 1 pedido cancelado ou sem aprovação saiu da escala: Aluno 1000.');
+    await expect(avisoDosPedidos(page)).not.toContainText('ainda está na demanda');
+    await expect(linha).not.toContainText('Ainda na demanda');
   });
 
   test('a linha diz se o aprovado está na demanda; na data sem escala gravada, "Importar", no aviso, o põe lá', async ({ page }) => {
@@ -1114,7 +1119,7 @@ test.describe('A página dos pedidos', () => {
     await acaoDoPedido(page, 'retirar').click();
     await expect(acaoDoPedido(page, 'retirar')).toHaveText('Confirmar retirada');
     await acaoDoPedido(page, 'retirar').click();
-    await expect(page.locator('#toast-box')).toContainText('Aprovação retirada: o pedido volta a aguardar. O voo continua na demanda: tire-o lá (Voa), se for o caso.');
+    await expect(page.locator('#toast-box')).toContainText('Aprovação retirada: o pedido volta a aguardar. O voo continua na demanda: “Tirar da escala”, no aviso, o tira.');
     await expect(campoDoDetalhe(page, 'Situação')).toHaveText('Aguardando aprovação');
     await expect(campoDoDetalhe(page, 'Aprovação retirada')).toHaveText('por Maria em 10/11 12:00');
     await expect(campoDoDetalhe(page, 'Demanda')).toHaveText('Ainda na demanda');
@@ -1359,5 +1364,43 @@ test.describe('A página dos pedidos', () => {
     await expect(linhaDaLista(page, id)).toHaveAttribute('data-recente', '');
     await expect(linhaDaLista(page, id)).toBeInViewport();
     await expect(linhaDaLista(page, id).locator('.lista-botao')).toBeFocused();
+  });
+});
+
+// D3: no modo local, outra aba deste navegador que registra um pedido: esta aba o lê na hora (o evento storage), com o
+// aviso das novidades; o pedido que esta aba registra não é novidade para ela
+test.describe('Os pedidos em dia (modo local)', () => {
+  test('o pedido registrado em outra aba aparece nesta, com o aviso; o desta aba, sem aviso de novidade', async ({ page, context }) => {
+    await abrir(page, { estado: comAlunos() });
+    await irPara(page, 'age');
+    const outra = await context.newPage();
+    await abrir(outra, { estado: comAlunos() });
+    await irPara(outra, 'age');
+    await registrarPedido(outra, { horario: '08:20' });
+    await expect(outra.locator('#toast-box')).toContainText('Pedido registrado e aprovado: já está na demanda.');
+    await expect(linhasDosPedidos(page)).toHaveCount(1);
+    await expect(page.locator('#toast-box')).toContainText('Pedidos de qua 11/11: 1 novo.');
+    // Os avisos de agora da outra aba (o "não contém" do expect esperaria o aviso sair sozinho)
+    expect((await outra.locator('#toast-box .toast').allTextContents()).join(' ')).not.toContain('Pedidos de qua 11/11');
+    await outra.close();
+  });
+
+  // A revisão do D3: a outra aba pôs o pedido na demanda e gravou a escala da data; a escala desta aba é a de antes. O aviso
+  // pede "Atualizar" (não "Importar", que gravaria a escala de antes por cima e importaria o pedido de novo)
+  test('o pedido que outra aba pôs na demanda: esta aba pede "Atualizar", e depois dele nada fica fora da demanda', async ({ page, context }) => {
+    await abrir(page, { estado: comAlunos() });
+    await irPara(page, 'age');
+    const outra = await context.newPage();
+    await abrir(outra, { estado: comAlunos() });
+    await irPara(outra, 'age');
+    await registrarPedido(outra, { horario: '08:20' });
+    await expect(outra.locator('#toast-box')).toContainText('Pedido registrado e aprovado: já está na demanda.');
+    await expect(linhasDosPedidos(page)).toHaveCount(1);
+    await expect(avisoDosPedidos(page)).toContainText('A escala desta data mudou em outro computador.');
+    await expect(avisoDosPedidos(page)).not.toContainText('fora da demanda');
+    await botaoDosPedidos(page, 'atualizar-data').click();
+    await expect(avisoDosPedidos(page)).not.toContainText('mudou em outro computador');
+    await expect(avisoDosPedidos(page)).not.toContainText('fora da demanda');
+    await outra.close();
   });
 });

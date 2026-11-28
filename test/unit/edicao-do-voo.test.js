@@ -505,6 +505,17 @@ describe('O editor do voo: o que a revisão achou', async () => {
     const servem2 = opcoesDoVoo(comExige, RES, voo2, valores2, { programa }).instrutores.filter(g => /^Servem/.test(g.rotulo)).flatMap(g => g.opcoes.map(o => o.valor));
     assert.deepEqual(servem2.sort(), [1, 3]);
     assert.ok(!avisosDaEdicao(comExige, RES, voo2, valores2, { aprovada: true, programa }).some(a => a.codigo === 'habilitacao'));
+    // Formato 30: a missão do curso que o programa deu na entrada (etapaDoPrograma) deixa de ser a do programa quando o
+    // operador muda a missão no editor; o horário mudado sem mudar a missão a deixa
+    const marcado = structuredClone(S);
+    marcado.stu[0].etapaDoPrograma = true;
+    aplicarEdicao(marcado, RES, voo, valores, { aprovada: true });
+    assert.deepEqual([marcado.stu[0].etapa, marcado.stu[0].etapaDoPrograma], ['IN-02', undefined]);
+    const soOHorario = structuredClone(S);
+    soOHorario.stu[0].etapaDoPrograma = true;
+    const etapaDeAntes = soOHorario.stu[0].etapa;
+    aplicarEdicao(soOHorario, RES, voo, { ...structuredClone(voo.valores), a: 820 }, { aprovada: true });
+    assert.deepEqual([soOHorario.stu[0].etapa, soOHorario.stu[0].etapaDoPrograma], [etapaDeAntes, true]);
   });
 
   it('o aluno mudado no editor: o que a missão do curso dele exige do INVA avisa', () => {
@@ -791,6 +802,23 @@ describe('O editor do voo: a segunda revisão', async () => {
     const feito = aplicarEdicao(copia, RES, voo, valores, { aprovada: false });
     assert.equal(feito.janSaiu, true);
     assert.equal(copia.stu[2].jan, undefined);
+  });
+
+  // U1: o pedido de dois horários exatos (h<m1>|h<m2>): o voo movido para o outro dos dois deixa o pedido como está; para
+  // fora dos dois, o pedido passa a ser esse minuto (a mudança do operador substitui o horário, N14)
+  it('o pedido de dois horários exatos: para o outro dos dois, fica; para fora dos dois, passa a ser esse minuto (U1)', () => {
+    const S = dia();
+    Object.assign(S.stu[2], { p1: 610, p2: 820, jan: 'h610|h820' });
+    const RES = runAllocationEngine(S);
+    const voo = vooParaEditar(S, RES, '1002_0_1');
+    assert.equal(voo.valores.a, 610);
+    const para = a => {
+      const copia = structuredClone(S);
+      const feito = aplicarEdicao(copia, RES, voo, { ...structuredClone(voo.valores), a }, { aprovada: false });
+      return [copia.stu[2].jan, feito.janSaiu];
+    };
+    assert.deepEqual(para(820), ['h610|h820', false]);
+    assert.deepEqual(para(900), ['h900', false]);
   });
 
   it('a reversão adulterada: cada pedido tem o voo dele na reversão', () => {

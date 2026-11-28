@@ -187,11 +187,28 @@ describe('Backend local: agenda de solicitações', () => {
     assert.deepEqual(await backendLocal.solicitacoesPorDia('2026-11-12', '2026-11-30'), {});
   });
 
-  // Sem servidor, ninguém mais grava as datas deste navegador: a escala nunca mudou em outro computador (D2)
-  it('a escala da data nunca mudou em outro computador', async () => {
-    await backendLocal.gravar('dia:2026-11-11', { esquema: 1 });
-    assert.equal(await backendLocal.diaMudou('2026-11-11'), false);
-    assert.equal(await backendLocal.diaMudou('2026-11-12'), false);
+  // Sem servidor, só as abas deste navegador gravam as datas dele (D2): a escala mudou quando o dia guardado agora não é o
+  // que esta aba leu ou gravou por último (a revisão do D3: outra aba que pôs um pedido na demanda)
+  it('a escala da data mudou em outra aba: o dia guardado agora contra o que esta aba leu ou gravou', async () => {
+    await backendLocal.gravar('dia:2026-11-21', { esquema: 1 });
+    assert.equal(await backendLocal.diaMudou('2026-11-21'), false);
+    // Outra aba grava a data
+    localStorage.setItem('acpm4_dia_2026-11-21', JSON.stringify({ esquema: 1, outra: true }));
+    assert.equal(await backendLocal.diaMudou('2026-11-21'), true);
+    // Esta aba lê de novo: a escala é a de agora
+    await backendLocal.ler('dia:2026-11-21');
+    assert.equal(await backendLocal.diaMudou('2026-11-21'), false);
+    // A consulta que não guarda a versão (a véspera) não conta como leitura
+    localStorage.setItem('acpm4_dia_2026-11-21', JSON.stringify({ esquema: 1, de: 'outra aba' }));
+    await backendLocal.ler('dia:2026-11-21', { guardarVersao: false });
+    assert.equal(await backendLocal.diaMudou('2026-11-21'), true);
+    // A data sem dia guardado quando foi lida: o dia gravado depois, em outra aba, é uma mudança
+    assert.equal(await backendLocal.ler('dia:2026-11-22'), null);
+    assert.equal(await backendLocal.diaMudou('2026-11-22'), false);
+    localStorage.setItem('acpm4_dia_2026-11-22', '{}');
+    assert.equal(await backendLocal.diaMudou('2026-11-22'), true);
+    // A data que esta aba nunca leu nem gravou: nada a comparar
+    assert.equal(await backendLocal.diaMudou('2026-11-23'), false);
   });
 
   // A conversão dos pedidos de antes, uma vez (a marca acpm4_agenda_aprovacoes): a regra (a) do banco, sobre os dias deste
