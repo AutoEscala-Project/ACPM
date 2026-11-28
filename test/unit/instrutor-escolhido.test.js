@@ -70,7 +70,7 @@ describe('Instrutor escolhido na Demanda: o motor encaixa o voo com ele', () => 
     const ins = [instrutor(1, 9), instrutor(2, 1)];
     const { out, al } = runAllocationEngine(cenario({ ins, stu: [aluno(1000, { insId: 99 })] }));
     assert.deepEqual(out.map(o => [o.insId, Boolean(o.insEscolhido), o.tag]), [[2, false, 'Pref. 1']]);
-    assert.deepEqual(al.map(a => [a.codigo, a.m, a.stuId, a.insId]), [['escolhido-saiu', 'O instrutor escolhido saiu do cadastro: o voo ficou com Instrutor 02. Escolha outro na Demanda ou deixe no Automático.', 1000, 2]]);
+    assert.deepEqual(al.map(a => [a.codigo, a.m, a.stuId, a.insId]), [['escolhido-saiu', 'O instrutor escolhido saiu do cadastro: o voo ficou com Instrutor 02. Escolha outro em Editar o voo (Escala) ou deixe no Automático.', 1000, 2]]);
     // O “Priorizar com” do aluno volta a valer; o pedido não passa mais na frente dos outros
     const comPar = runAllocationEngine(cenario({ ins, stu: [aluno(1000, { insId: 99 }, { voaCom: [1] })] }));
     assert.deepEqual([comPar.out.map(o => [o.insId, o.insPar]), comPar.al.map(a => a.codigo)], [[[1, true]], ['escolhido-saiu']]);
