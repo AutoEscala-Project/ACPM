@@ -52,6 +52,20 @@ const pedidoDe = (estado, o) => {
   return { stu, d: o.mid ? stu.extra.find(ex => ex.mid === o.mid) : stu };
 };
 
+// As faixas e as pausas do instrutor na data: as dele (formato 29) ou as dos nove tempos de antes (aw)
+function faixasEPausas(x) {
+  if (Array.isArray(x.faixas)) return { faixas: x.faixas, pausas: x.pausas || [] };
+  const fimDoTempo = k => (k < TEMPO_DO_NOTURNO ? INICIOS_DOS_TEMPOS[k + 1] : 1440);
+  const faixas = [];
+  (x.aw || []).forEach((marcado, k) => {
+    if (!marcado) return;
+    const ultima = faixas[faixas.length - 1];
+    if (ultima && ultima.ate === INICIOS_DOS_TEMPOS[k]) ultima.ate = fimDoTempo(k);
+    else faixas.push({ de: INICIOS_DOS_TEMPOS[k], ate: fimDoTempo(k) });
+  });
+  return { faixas, pausas: faixas.slice(1).map((f, i) => ({ de: faixas[i].ate, ate: f.de })) };
+}
+
 // Executa a verificação em todos os cenários e informa os seeds que violam a propriedade
 function emTodos(verificar) {
   const falhas = [];
@@ -134,18 +148,30 @@ describe('Invariantes do motor de alocação', () => {
     }
   }));
 
-  it('instrutor ativo, habilitado para a missão no equipamento (com o curso do aluno e a habilitação própria do avião), disponível em todo o período e não bloqueado', () => emTodos(({ estado, out }) => {
+  it('instrutor ativo, habilitado para a missão no equipamento (com o curso do aluno e a habilitação própria do avião) e não bloqueado', () => emTodos(({ estado, out }) => {
     for (const o of out) {
       const x = estado.ins.find(i => i.id === o.insId);
       const { stu } = pedidoDe(estado, o);
       assert.ok(x.on, `${o.fKey}: instrutor inativo`);
       assert.ok(podeFazer(x, o.mis, o.eqType, { curso: stu.curso, recurso: recursoDo(estado, o) }), `${o.fKey}: ${o.mis}/${o.eqType} no ${o.r} (${stu.curso}) sem habilitação (${x.hab})`);
       assert.ok(!stu.bl.includes(x.id), `${o.fKey}: instrutor bloqueado`);
-      INICIOS_DOS_TEMPOS.forEach((ini, k) => {
-        const fim = k < TEMPO_DO_NOTURNO ? INICIOS_DOS_TEMPOS[k + 1] : 1440;
-        if (o.a < fim && o.b > ini) assert.ok(x.aw[k], `${o.fKey}: instrutor indisponível na janela ${k}`);
-      });
     }
+  }));
+
+  // A regra do início (C, "regra"; decisão 1 do Pedro), lida aqui sem js/disponibilidade.js: com as faixas e as pausas da
+  // data, ou, sem elas, com as do aw (cada sequência de tempos marcados é uma faixa, e o intervalo entre duas, a pausa)
+  it('toda linha começa numa faixa do instrutor e não toca nenhuma pausa (o que termina até as 06:30 não pede faixa)', () => emTodos(({ estado, out }) => {
+    let comFaixa = 0;
+    for (const o of out) {
+      const { faixas, pausas } = faixasEPausas(estado.ins.find(i => i.id === o.insId));
+      const inicio = Math.max(o.a, INICIOS_DOS_TEMPOS[0]);
+      if (o.b <= inicio) continue;
+      comFaixa++;
+      assert.ok(faixas.some(f => f.de <= inicio && inicio < f.ate), `${o.fKey}: começa às ${hm(o.a)}, fora das faixas (${faixas.map(f => `${hm(f.de)}–${hm(f.ate)}`).join(', ')})`);
+      const pausa = pausas.find(p => o.a < p.ate && p.de < o.b);
+      assert.ok(!pausa, `${o.fKey}: ${hm(o.a)}–${hm(o.b)} toca a pausa ${pausa && `${hm(pausa.de)}–${hm(pausa.ate)}`}`);
+    }
+    assert.ok(out.length === 0 || comFaixa > 0);
   }));
 
   it('equipamento compatível, disponível, PR-JPL somente para Parafuso e o voo IFR só no avião homologado IFR', () => emTodos(({ estado, out }) => {

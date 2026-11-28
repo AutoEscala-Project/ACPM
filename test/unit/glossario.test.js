@@ -79,8 +79,12 @@ describe('Glossário', () => {
     assert.deepEqual(daAba, ['vem-nesta-data', 'faixas', 'pausa', 'checador', 'filtro-das-habilitacoes', 'fora-do-app', 'limites-da-lei']);
     for (const id of ['turno', 'voos-do-instrutor', 'horas-do-mes']) assert.equal(Object.hasOwn(INTEIRO, id), false, id);
     assert.ok(!ABAS_DO_GLOSSARIO.includes('Instrutores'));
-    assert.match(INTEIRO.faixas.texto, /o voo inteiro dele cabe numa faixa/);
+    // C, "regra": a missão começa dentro da faixa e pode terminar depois; a pausa, nenhuma missão a toca
+    assert.match(INTEIRO.faixas.texto, /a missão começa dentro de uma faixa e pode terminar depois dela/);
+    assert.match(INTEIRO.faixas.texto, /até 17:30 não inclui o Noturno/);
+    assert.doesNotMatch(INTEIRO.faixas.texto, /voo inteiro/);
     assert.match(INTEIRO.pausa.texto, /não voa/);
+    assert.match(INTEIRO.pausa.texto, /nem a que começou antes dela/);
   });
 
   it('os termos da tela Alunos, na ordem do bloco dela', () => {

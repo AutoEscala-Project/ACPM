@@ -67,13 +67,14 @@ describe('O instrutor para um compromisso', () => {
   it('fora do cadastro, inativo ou sem disponibilidade em todo o voo', () => {
     assert.deepEqual(codigos(undefined, voo()), ['instrutor-saiu']);
     assert.deepEqual(codigos(instrutor({ on: false }), voo()), ['instrutor-indisponivel']);
-    assert.deepEqual(codigos(instrutor({ aw: Array(9).fill(true).map((v, k) => k !== 2) }), voo()), ['instrutor-indisponivel'], 'das 10:00 às 11:00: termina no 3º período');
+    assert.deepEqual(codigos(instrutor({ aw: Array(9).fill(true).map((v, k) => k !== 2) }), voo()), ['instrutor-indisponivel'], 'das 10:00 às 11:00: o tempo das 10:10, entre dois marcados, é a pausa');
   });
 
-  it('com as faixas da data (C, formato 29): o voo inteiro dentro de uma, fora das pausas; o aw não é lido', () => {
+  it('com as faixas da data (C, formato 29): o voo começa dentro de uma e pode terminar depois, sem tocar uma pausa; o aw não é lido', () => {
     const nenhum = Array(9).fill(false);
     assert.deepEqual(codigos(instrutor({ aw: nenhum, faixas: [{ de: 390, ate: 1440 }], pausas: [] }), voo()), []);
-    assert.deepEqual(codigos(instrutor({ faixas: [{ de: 390, ate: 640 }], pausas: [] }), voo()), ['instrutor-indisponivel'], 'das 10:00 às 11:00: passa das 10:40');
+    assert.deepEqual(codigos(instrutor({ faixas: [{ de: 390, ate: 640 }], pausas: [] }), voo()), [], 'das 10:00 às 11:00: começa antes das 10:40 e passa delas');
+    assert.deepEqual(codigos(instrutor({ faixas: [{ de: 390, ate: 600 }], pausas: [] }), voo()), ['instrutor-indisponivel'], 'às 10:00, o fim da faixa: não entra');
     assert.deepEqual(codigos(instrutor({ faixas: [{ de: 390, ate: 1440 }], pausas: [{ de: 630, ate: 700 }] }), voo()), ['instrutor-indisponivel'], 'toca a pausa');
     assert.deepEqual(codigos(instrutor({ faixas: [], pausas: [] }), voo()), ['instrutor-indisponivel'], 'nenhuma faixa: não voa na data');
   });

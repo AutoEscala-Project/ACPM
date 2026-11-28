@@ -20,7 +20,9 @@ const ANTIGAS = {
   // grade, as janelas, as duas vistas, "Aplicar turno", "Manhã" e "Tarde", o painel das habilitações e o dos dados pessoais
   instrutores: ['o interruptor de quem vem', 'filtro por habilitação', 'Aplicar turno', 'Clique numa janela',
     'Editar habilitações', 'as janelas de cada um', 'feche o painel', 'o botão na linha', 'um cartão por pessoa', 'nos períodos do voo',
-    'Instrutores › Cadastro', 'em Instrutores'],
+    'Instrutores › Cadastro', 'em Instrutores',
+    // C, "regra": a missão começa numa faixa e pode terminar depois dela (decisão 1 do Pedro)
+    'o voo inteiro do instrutor cabe numa faixa', 'disponível durante o voo inteiro', 'durante todo o voo', 'precisa estar disponível na noite'],
   // O 7º voo local não fica mais indisponível: o app avisa e pede a confirmação (F1c)
   pedidos: ['o horário fica indisponível, e o app diz o próximo horário possível'],
   // O peso vem antes do curso em Alunos; Alunos é lista e detalhe (F2): sem as colunas de Instrutores, sem o cartão no
@@ -61,7 +63,7 @@ const NOVAS = {
   instrutores: ['sem os acentos', '12 de 40 instrutores', 'Limpar filtros', 'Filtro das habilitações', 'que têm todas as marcadas',
     'Habilitações: Noturno + C172', 'Pode decolar de … até …', '+ Pausa', 'Almoço', 'Salvar faixas', 'Dia inteiro (06:30–17:30)',
     'Noturno (17:30–24:00)', 'Dia + noturno (06:30–24:00)', 'Meio dia é uma faixa digitada', 'a tira do dia', 'Agendar voo com',
-    'o voo inteiro do instrutor cabe numa faixa', 'Limites da Lei do Aeronauta abre os limites', 'Excluir instrutor…'],
+    'a missão começa dentro de uma faixa do instrutor e pode terminar depois dela', 'O que cabe nestas faixas', 'Limites da Lei do Aeronauta abre os limites', 'Excluir instrutor…'],
   // Alunos como lista e detalhe (F2): a escolha no endereço, os campos no lugar, Anterior e Próximo, o filtro dos cursos (a
   // regra "algum dos marcados"; um só nas duas telas) e os dados pessoais na seção do aluno, com Salvar e Desfazer; o
   // cadastro relido depois de um conflito. A: as seções do detalhe (Nesta data, Curso e missões), o nome completo (também

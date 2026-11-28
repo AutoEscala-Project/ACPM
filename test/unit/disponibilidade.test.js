@@ -2,12 +2,14 @@
 // de antes (aw), com a regra de antes do C (o compromisso inteiro dentro de uma faixa). O aw continua sendo lido onde não
 // há faixas (os dias antes do 29, os goldens), e as faixas que o passo 29 tira do aw dão a mesma leitura dele. O commit
 // "tela": os três turnos, o que a tela mostra (o texto e a tira da linha), a conferência de "Editar faixas" e o "Marcar
-// disponível" do agendamento sobre as faixas.
+// disponível" do agendamento sobre as faixas. O commit "regra" (decisão 1 do Pedro): a missão começa dentro de uma faixa
+// e pode terminar depois dela, sem tocar nenhuma pausa; oQueCabe diz o que cabe e até quando a missão pode ir.
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   disponivelPara, faixasDoAw, awComoOAppLia, normalizarFaixas, normalizarPausas, refazerFaixasDoAw, INICIO_DAS_FAIXAS, TURNOS, ALMOCO, PAUSA_NOVA,
-  MINUTOS_DAS_FAIXAS, faixasDe, faixasDoTurno, turnoDasFaixas, textoDasFaixas, textoDasPausas, conferirFaixas, comOIntervalo, trechosDaTira, mesmasFaixas
+  MINUTOS_DAS_FAIXAS, faixasDe, faixasDoTurno, turnoDasFaixas, textoDasFaixas, textoDasPausas, conferirFaixas, comOIntervalo, trechosDaTira, mesmasFaixas,
+  oQueCabe, textoDoQueCabe
 } from '../../js/disponibilidade.js';
 import { INICIOS_DOS_TEMPOS as T } from '../../js/horarios.js';
 
@@ -18,6 +20,19 @@ const todos = () => T.map(() => true);
 // A leitura de antes do C, escrita aqui como era (o cobre de js/viabilidade.js, que sai): o instrutor vem e está marcado em
 // cada tempo que o compromisso toca
 const leituraDeAntes = (x, a, b) => Boolean(x.on) && T.every((inicio, k) => !(a < fim(k) && b > inicio) || x.aw[k]);
+
+// A regra do início (decisão 1), escrita aqui sobre o aw, sem as faixas: o que termina até as 06:30, ou começa na
+// meia-noite, não pede nada; senão, o tempo em que a missão começa (das 06:30 em diante) está marcado, e nenhum tempo
+// desmarcado que ela toca fica entre dois marcados (o intervalo entre duas sequências é a pausa)
+const tempoDe = m => T.findLastIndex(t => t <= m);
+const entreDoisMarcados = (aw, k) => aw.slice(0, k).some(Boolean) && aw.slice(k + 1).some(Boolean);
+function pelaRegraDoInicio(x, a, b) {
+  if (!x.on) return false;
+  const inicio = Math.max(a, T[0]);
+  if (b <= inicio || inicio >= 1440) return true;
+  if (!x.aw[tempoDe(inicio)]) return false;
+  return T.every((t, k) => !(a < fim(k) && b > t) || x.aw[k] || !entreDoisMarcados(x.aw, k));
+}
 
 // Os inícios e as durações conferidos: de 5 em 5 minutos das 06:00 à meia-noite, mais os minutos de cada borda (antes,
 // no início e depois de cada tempo, a meia-noite e além), com as durações das missões e as bordas entre si
@@ -67,9 +82,9 @@ describe('awComoOAppLia: o aw gravado como a data aberta o lia', () => {
   });
 });
 
-describe('disponivelPara: a regra de antes do C sobre as faixas', () => {
-  test('512 padrões: as faixas e as pausas do aw dão a leitura de antes em todo intervalo conferido (nenhuma diferença)', () => {
-    let diferencas = 0, conferidos = 0;
+describe('disponivelPara: a regra do início (decisão 1), com as pausas', () => {
+  test('512 padrões: nunca recusa o que os tempos de antes aceitavam; aceita o que começa numa faixa sem tocar uma pausa, pelo aw e pelas faixas dele', () => {
+    let diferencas = 0, recusasNovas = 0, conferidos = 0, aceitosAgora = 0;
     const exemplos = [];
     for (let p = 0; p < 512; p++) {
       const aw = padrao(p);
@@ -77,15 +92,19 @@ describe('disponivelPara: a regra de antes do C sobre as faixas', () => {
       const pelasFaixas = { on: true, aw: T.map(() => false), ...faixasDoAw(aw) };
       for (const [a, b] of INTERVALOS) {
         conferidos++;
-        const antes = leituraDeAntes(peloAw, a, b);
-        if (disponivelPara(peloAw, a, b) !== antes || disponivelPara(pelasFaixas, a, b) !== antes) {
+        const regra = pelaRegraDoInicio(peloAw, a, b);
+        if (disponivelPara(peloAw, a, b) !== regra || disponivelPara(pelasFaixas, a, b) !== regra) {
           diferencas++;
           if (exemplos.length < 5) exemplos.push(`padrão ${p}, ${a}–${b}`);
         }
+        if (leituraDeAntes(peloAw, a, b) && !regra) recusasNovas++;
+        if (!leituraDeAntes(peloAw, a, b) && regra) aceitosAgora++;
       }
     }
     assert.ok(conferidos > 1_000_000, `${conferidos} conferidos`);
     assert.equal(diferencas, 0, exemplos.join('; '));
+    assert.equal(recusasNovas, 0, 'o que os tempos de antes aceitavam continua aceito');
+    assert.ok(aceitosAgora > 0, 'a missão que termina depois da última faixa passa a caber');
   });
 
   test('quem não vem não está disponível, com faixas ou sem elas', () => {
@@ -101,12 +120,30 @@ describe('disponivelPara: a regra de antes do C sobre as faixas', () => {
     assert.equal(disponivelPara({ on: true, aw: nenhum }, 500, 560), false);
   });
 
-  test('o compromisso inteiro dentro de uma faixa: começar dentro e terminar depois não serve (a regra do início é o "regra")', () => {
+  test('a missão começa dentro de uma faixa e pode terminar depois dela; o fim da faixa não entra', () => {
+    const manha = { on: true, faixas: [{ de: 390, ate: 760 }], pausas: [] };
+    assert.equal(disponivelPara(manha, 720, 780), true, 'o voo das 12:00 no PA-34 com a faixa até as 12:40');
+    assert.equal(disponivelPara(manha, 690, 990), true, 'começa às 11:30 e vai até as 16:30');
+    assert.equal(disponivelPara(manha, 760, 820), false, 'às 12:40, o fim da faixa: não entra');
+    const dia = { on: true, faixas: [{ de: 390, ate: 1050 }], pausas: [] };
+    assert.equal(disponivelPara(dia, 980, 1100), true, 'o simulador das 16:20 não precisa da noite');
+    assert.equal(disponivelPara(dia, 1050, 1290), false, 'até as 17:30 não inclui o Noturno');
+    const duas = { on: true, faixas: [{ de: 390, ate: 760 }, { de: 820, ate: 1440 }], pausas: [] };
+    assert.equal(disponivelPara(duas, 700, 830), true, 'sem pausa, o intervalo entre duas faixas não impede quem começou antes dele');
+    assert.equal(disponivelPara(duas, 790, 830), false, 'começa no intervalo, fora de uma faixa');
+  });
+
+  test('a pausa: nenhuma missão a toca, nem a que começou antes dela numa faixa (o almoço continua sendo almoço)', () => {
     const x = { on: true, faixas: [{ de: 390, ate: 760 }, { de: 820, ate: 1440 }], pausas: [{ de: 760, ate: 820 }] };
-    assert.equal(disponivelPara(x, 610, 760), true, 'termina no fim da faixa');
-    assert.equal(disponivelPara(x, 700, 770), false, 'passa do fim da faixa');
+    assert.equal(disponivelPara(x, 610, 760), true, 'encosta na pausa');
+    assert.equal(disponivelPara(x, 700, 770), false, 'atravessa a pausa');
     assert.equal(disponivelPara(x, 820, 900), true);
-    assert.equal(disponivelPara(x, 815, 900), false, 'começa antes da faixa');
+    assert.equal(disponivelPara(x, 815, 900), false, 'começa na pausa');
+    // Pelo aw: o intervalo entre duas sequências de tempos marcados é a pausa; depois da última, nada
+    const almoco = T.map((_, k) => k !== 3);
+    assert.equal(disponivelPara({ on: true, aw: almoco }, 610, 730), false, 'das 10:10 às 12:10 atravessa o tempo das 11:30');
+    const soManha = T.map((_, k) => k <= 3);
+    assert.equal(disponivelPara({ on: true, aw: soManha }, 690, 930), true, 'a manhã toda: o voo das 11:30 vai até as 15:30');
   });
 
   test('uma pausa dentro de uma faixa também impede (o INVA não voa nela)', () => {
@@ -116,11 +153,14 @@ describe('disponivelPara: a regra de antes do C sobre as faixas', () => {
     assert.equal(disponivelPara(x, 780, 840), true, 'encosta no fim da pausa');
   });
 
-  test('antes das 06:30 nada pede faixa, como nenhum tempo de antes cobria; o que passa da meia-noite também não', () => {
+  test('o que termina até as 06:30 não pede faixa; o que passa delas começa às 06:30 para a regra; a meia-noite em diante, nada', () => {
     const x = { on: true, faixas: [{ de: 500, ate: 610 }], pausas: [] };
     assert.equal(disponivelPara(x, 300, 389), true);
-    assert.equal(disponivelPara(x, 300, 450), false, 'o que passa das 06:30 pede a faixa');
+    assert.equal(disponivelPara(x, 360, 390), true, 'o voo que termina às 06:30');
+    assert.equal(disponivelPara(x, 300, 450), false, 'o que passa das 06:30 pede a faixa das 06:30');
+    assert.equal(disponivelPara({ on: true, faixas: [{ de: 390, ate: 400 }], pausas: [] }, 360, 600), true, 'das 06:00: a faixa que começa às 06:30');
     assert.equal(disponivelPara({ on: true, faixas: [{ de: 1050, ate: 1440 }], pausas: [] }, 1400, 1500), true);
+    assert.equal(disponivelPara({ on: true, faixas: [], pausas: [] }, 1440, 1500), true, 'nada do dia');
     assert.equal(INICIO_DAS_FAIXAS, 390);
   });
 
@@ -207,12 +247,12 @@ describe('Os turnos: cada um uma faixa em minutos, sem os limites de um período
     assert.equal(faixasDoTurno('manha'), null);
   });
 
-  test('os turnos dão a leitura de antes dos turnos de mesmo nome (os tempos 0–7, 8 e 0–8)', () => {
+  test('os turnos dão a leitura dos turnos de mesmo nome pelo aw (os tempos 0–7, 8 e 0–8), com a regra do início', () => {
     const tempos = { dia: [0, 1, 2, 3, 4, 5, 6, 7], noturno: [8], 'dia-e-noturno': [0, 1, 2, 3, 4, 5, 6, 7, 8] };
     for (const t of TURNOS) {
       const aw = T.map((_, i) => tempos[t.id].includes(i));
       for (const [a, b] of INTERVALOS) {
-        assert.equal(disponivelPara({ on: true, ...faixasDoTurno(t.id) }, a, b), leituraDeAntes({ on: true, aw }, a, b), `${t.nome} ${a}–${b}`);
+        assert.equal(disponivelPara({ on: true, ...faixasDoTurno(t.id) }, a, b), pelaRegraDoInicio({ on: true, aw }, a, b), `${t.nome} ${a}–${b}`);
       }
     }
   });
@@ -336,5 +376,51 @@ describe('trechosDaTira: a tira da linha, das 06:30 à meia-noite', () => {
   test('o voo antes das 06:30 ou que passa da meia-noite é cortado na tira; o de fora dela não aparece', () => {
     assert.deepEqual(trechosDaTira({ faixas: [], pausas: [] }, [{ a: 360, b: 450 }, { a: 300, b: 380 }]).map(t => [t.tipo, t.inicio]), [['voo', 0]]);
     assert.equal(trechosDaTira({ faixas: [], pausas: [] }, [{ a: 1400, b: 1500 }])[0].largura, Math.round(40 / 1050 * 1e4) / 100);
+  });
+});
+
+// O que a linha e o detalhe mostram em "O que cabe nestas faixas": em cada lista de decolagem, os horários em que a
+// missão da duração padrão pode começar e até quando a missão que começa no último deles pode ir (5 h depois, sem
+// passar da pausa seguinte nem do fim da missão: 17:30 no avião de dia)
+describe('oQueCabe: os horários de cada lista que cabem nas faixas, e até quando a missão pode ir', () => {
+  const comFaixas = (faixas, pausas = []) => ({ on: true, faixas, pausas });
+  const resumo = itens => Object.fromEntries(itens.map(i => [i.id, [i.horarios.length, i.horarios[0] ?? null, i.horarios.at(-1) ?? null, i.ate]]));
+
+  test('as seis listas, na ordem, com o nome', () => {
+    assert.deepEqual(oQueCabe(comFaixas([{ de: 390, ate: 1440 }])).map(i => [i.id, i.nome]),
+      [['C152', 'C152'], ['C172', 'C172'], ['sim', 'Simulador'], ['PA-34', 'PA-34'], ['ground', 'Ground'], ['noturno', 'Noturno']]);
+  });
+
+  test('a manhã (06:30–12:40): os de até as 12:30 começam, e a missão das 11:30 vai até as 16:30', () => {
+    assert.deepEqual(resumo(oQueCabe(comFaixas([{ de: 390, ate: 760 }]))), {
+      C152: [4, 390, 690, 990], C172: [4, 390, 690, 990], sim: [4, 390, 690, 990], 'PA-34': [13, 390, 750, 1050], ground: [4, 390, 690, 990], noturno: [0, null, null, null]
+    });
+  });
+
+  test('o dia inteiro: o simulador e a aula das 16:20 vão até as 21:20; o Noturno não começa às 17:30 (o fim não entra)', () => {
+    assert.deepEqual(resumo(oQueCabe({ on: true, ...faixasDoTurno('dia') })), {
+      C152: [8, 390, 980, 1050], C172: [8, 390, 980, 1050], sim: [8, 390, 980, 1280], 'PA-34': [21, 390, 990, 1050], ground: [8, 390, 980, 1280], noturno: [0, null, null, null]
+    });
+    assert.deepEqual(resumo(oQueCabe({ on: true, ...faixasDoTurno('dia-e-noturno') })).noturno, [1, 1050, 1050, 1290], 'o Noturno, 4 h fixas');
+  });
+
+  test('a pausa do almoço: nenhuma missão a atravessa, e a pausa seguinte limita até quando a última pode ir', () => {
+    const almoco = resumo(oQueCabe(comFaixas([{ de: 390, ate: 690 }, { de: 760, ate: 1050 }], [{ de: 690, ate: 760 }])));
+    assert.deepEqual([almoco.C152, almoco.sim, almoco.ground], [[7, 390, 980, 1050], [6, 390, 980, 1280], [6, 390, 980, 1280]]);
+    assert.deepEqual(oQueCabe(comFaixas([{ de: 390, ate: 1050 }], [{ de: 720, ate: 780 }]))[0].horarios, [390, 500, 610, 820, 870, 980]);
+    assert.equal(oQueCabe(comFaixas([{ de: 390, ate: 760 }], [{ de: 900, ate: 960 }]))[0].ate, 900, 'para na pausa das 15:00');
+  });
+
+  test('as listas da data (os horários de decolagem editados) e quem não vem', () => {
+    const horarios = { C152: [360, 450], C172: [500], sim: [500], 'PA-34': [500], ground: [500] };
+    assert.deepEqual(oQueCabe(comFaixas([{ de: 390, ate: 500 }]), horarios)[0].horarios, [360, 450], 'a das 06:00 começa às 06:30 para a regra');
+    assert.ok(oQueCabe({ on: false, faixas: [{ de: 390, ate: 1440 }], pausas: [] }).every(i => i.horarios.length === 0 && i.ate === null));
+  });
+
+  test('o texto de cada lista', () => {
+    const [c152, , , , , noturno] = oQueCabe(comFaixas([{ de: 390, ate: 760 }]));
+    assert.equal(textoDoQueCabe(c152), 'C152: 06:30 a 11:30 (4 horários); termina até as 16:30');
+    assert.equal(textoDoQueCabe(noturno), 'Noturno: nenhum horário');
+    assert.equal(textoDoQueCabe(oQueCabe({ on: true, ...faixasDoTurno('noturno') })[5]), 'Noturno: 17:30 (1 horário); termina até as 21:30');
   });
 });
