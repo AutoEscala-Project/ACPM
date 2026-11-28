@@ -77,7 +77,7 @@ const NOVAS = {
   pedidos: ['Data do pedido', 'prazo encerrado', 'as missões do curso dele', 'NAV-150NM · Navegação · C152 · 3 h', '(nenhum ativo)',
     'Aguardando aprovação, Aprovados e Cancelados', 'Aprovar todos (N), que aprova só os que a busca mostra',
     'O pedido aprovado da data aberta entra na demanda na hora quando a escala dessa data já está gravada', 'Importar os põe lá',
-    'O pedido escolhido é só de leitura', 'Registrar de novo…', '2ª preferência é outro horário exato',
+    'O pedido escolhido é só de leitura', 'Registrar de novo…', '2ª preferência é outro horário exato', 'O 7º voo local confirmado vale só para a 1ª preferência',
     'Registrar e aprovar', 'Registrar sem aprovar', 'Com Registrar na lista de espera',
     'Com Registrar mesmo assim, o pedido guarda quem confirmou e quando',
     // E: o cancelado sai pela conciliação, e a vaga vai ao 1º da lista de espera; o voo que fica diz por quê, e reverter não
