@@ -164,6 +164,36 @@ describe('disponivelPara: a regra do início (decisão 1), com as pausas', () =>
     assert.equal(INICIO_DAS_FAIXAS, 390);
   });
 
+  // Revisão externa de C2 (28/11), 3: o início levado às 06:30 vale só para "começa numa faixa"; a pausa é conferida com o
+  // [a, b) de verdade
+  test('a missão das 06:29 às 06:31: a pausa das 06:30 a impede; a que só encosta nela, não', () => {
+    assert.equal(disponivelPara({ on: true, faixas: [], pausas: [{ de: 390, ate: 400 }] }, 389, 391), false);
+    assert.equal(disponivelPara({ on: true, faixas: [{ de: 390, ate: 1440 }], pausas: [{ de: 390, ate: 400 }] }, 389, 391), false);
+    assert.equal(disponivelPara({ on: true, faixas: [{ de: 390, ate: 1440 }], pausas: [{ de: 391, ate: 400 }] }, 389, 391), true, 'encosta');
+    assert.equal(disponivelPara({ on: true, faixas: [{ de: 400, ate: 1440 }], pausas: [] }, 389, 391), false, 'a faixa começa depois das 06:30');
+    assert.equal(disponivelPara({ on: true, faixas: [{ de: 390, ate: 1440 }], pausas: [{ de: 380, ate: 390 }] }, 389, 391), false, 'pausa crua antes das 06:30');
+  });
+
+  // Revisão externa de C2 (28/11), 4: juntar as que se tocam não muda a regra. "Começa numa faixa" só lê a união das
+  // faixas, e um [a, b) não vazio toca [x, y) ∪ [y, z) se e só se toca [x, z)
+  test('as pausas e as faixas que se tocam, separadas ou juntas (normalizadas), dão a mesma regra', () => {
+    const grade = [390, 480, 600, 720, 780, 900, 1050, 1200, 1440];
+    for (const [i, x] of grade.entries()) for (const [j, y] of grade.entries()) for (const z of grade.slice(j + 1)) {
+      if (j <= i) continue;
+      const pausasSeparadas = { on: true, faixas: [{ de: 390, ate: 1440 }], pausas: [{ de: x, ate: y }, { de: y, ate: z }] };
+      const pausasJuntas = { on: true, faixas: [{ de: 390, ate: 1440 }], pausas: normalizarPausas(pausasSeparadas.pausas) };
+      const faixasSeparadas = { on: true, faixas: [{ de: x, ate: y }, { de: y, ate: z }], pausas: [] };
+      const faixasJuntas = { on: true, faixas: normalizarFaixas(faixasSeparadas.faixas), pausas: [] };
+      assert.deepEqual(pausasJuntas.pausas, [{ de: x, ate: z }]);
+      for (let a = 300; a <= 1500; a += 10) for (const d of [10, 60, 120, 300]) {
+        assert.equal(disponivelPara(pausasSeparadas, a, a + d), disponivelPara(pausasJuntas, a, a + d), `pausas ${x}-${y}-${z} [${a}, ${a + d})`);
+        assert.equal(disponivelPara(faixasSeparadas, a, a + d), disponivelPara(faixasJuntas, a, a + d), `faixas ${x}-${y}-${z} [${a}, ${a + d})`);
+      }
+      assert.deepEqual(oQueCabe(pausasSeparadas), oQueCabe(pausasJuntas), `pausas ${x}-${y}-${z}`);
+      assert.deepEqual(oQueCabe(faixasSeparadas), oQueCabe(faixasJuntas), `faixas ${x}-${y}-${z}`);
+    }
+  });
+
   test('sem pausas (um estado que não as tem): só as faixas', () => {
     assert.equal(disponivelPara({ on: true, faixas: [{ de: 390, ate: 1440 }] }, 500, 560), true);
   });
