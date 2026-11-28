@@ -183,7 +183,8 @@ function secaoDoCurso(s, edita) {
 const ERROS_DAS_LIMITACOES = new Map();
 export const erroNasLimitacoes = (id, erro) => { if (erro) ERROS_DAS_LIMITACOES.set(+id, erro); else ERROS_DAS_LIMITACOES.delete(+id); };
 
-const opcoesDeMinutos = (lista, valor) => opts(lista.map(m => [String(m), hm(m)]), String(valor));
+// O minuto gravado fora dos 10 em 10 (pela API) entra na lista, no lugar dele: o campo mostra o horário que o motor confere
+const opcoesDeMinutos = (lista, valor) => opts((lista.includes(valor) ? lista : [...lista, valor].sort((a, b) => a - b)).map(m => [String(m), hm(m)]), String(valor));
 // Uma linha de "Pode voar": De, Até, os dias (todos marcados: todas as datas) e o ✕
 function linhaDoHorario(h, i, erro) {
   const base = `det-alu-lim-${i}`;
@@ -191,9 +192,11 @@ function linhaDoHorario(h, i, erro) {
   const de = `det-alu-lim-de-${i}`, ate = `det-alu-lim-ate-${i}`;
   const dias = h.dias || DIAS_DAS_LIMITACOES;
   const descricao = ' aria-describedby="det-alu-limHorarios-erro"';
+  // O De e o Até dizem, ao leitor de tela, de qual horário são (com vários, "De" sozinho não diz qual muda)
+  const qual = `<span class="sr"> (horário ${i + 1})</span>`;
   return `<li class="lim-horario" data-i="${i}" id="${base}">`
-    + `<span class="lim-de-ate"><label for="${de}">De</label><select id="${de}" data-f="limDe" data-i="${i}"${descricao}${invalido(de)}>${opcoesDeMinutos(MINUTOS_DOS_HORARIOS.slice(0, -1), h.de)}</select>`
-    + `<label for="${ate}">até</label><select id="${ate}" data-f="limAte" data-i="${i}"${descricao}${invalido(ate)}>${opcoesDeMinutos(MINUTOS_DOS_HORARIOS.slice(1), h.ate)}</select></span>`
+    + `<span class="lim-de-ate"><label for="${de}">De${qual}</label><select id="${de}" data-f="limDe" data-i="${i}"${descricao}${invalido(de)}>${opcoesDeMinutos(MINUTOS_DOS_HORARIOS.slice(0, -1), h.de)}</select>`
+    + `<label for="${ate}">até${qual}</label><select id="${ate}" data-f="limAte" data-i="${i}"${descricao}${invalido(ate)}>${opcoesDeMinutos(MINUTOS_DOS_HORARIOS.slice(1), h.ate)}</select></span>`
     + `<span class="lim-dias" role="group" aria-label="Dias do horário ${i + 1}">${DIAS_DAS_LIMITACOES.map(d => {
       const id = `det-alu-lim-dia-${i}-${d}`;
       return `<label class="lim-dia" for="${id}"><input type="checkbox" id="${id}" data-f="limDia" data-i="${i}" value="${d}"${dias.includes(d) ? ' checked' : ''}${descricao}${invalido(id)}>${nomeDoDia(d)}</label>`;

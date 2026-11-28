@@ -155,9 +155,10 @@ function mudarLimitacoes(s, t, f) {
   const h = horarios[i];
   if (!h) { tela.desenhar(); return true; }
   if (f === 'limDia') {
-    // Os dias: sem eles, todos (segunda a sábado: o domingo não opera); todos marcados, todas as datas
+    // Os dias: sem eles, todos (segunda a sábado: o domingo não opera); todos marcados, todas as datas. Os de agora são os
+    // que a tela mostra: o domingo gravado pela API sai nesta mudança, e não conta como o dia que fica marcado
     const d = +t.value;
-    const atuais = h.dias || DIAS_DAS_LIMITACOES;
+    const atuais = (h.dias || DIAS_DAS_LIMITACOES).filter(x => DIAS_DAS_LIMITACOES.includes(x));
     const dias = t.checked ? [...new Set([...atuais, d])] : atuais.filter(x => x !== d);
     if (!dias.length) { recusarNasLimitacoes(s, 'Marque ao menos um dia: com todos marcados, o horário vale em todas as datas.', t.id); return true; }
     if (DIAS_DAS_LIMITACOES.every(x => dias.includes(x))) delete h.dias;
