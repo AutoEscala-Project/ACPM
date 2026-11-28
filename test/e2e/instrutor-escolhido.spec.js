@@ -270,7 +270,7 @@ test.describe('Instrutor escolhido', () => {
     await abrirEscala(page, { vista: 'lista' });
     await expect(linha(page, 'Aluno 1000').locator('.c-instr')).toHaveText('Instrutor 02');
     await expect(textosDaEscala(page, 'avisos').filter({ hasText: 'Priorizar com' }))
-      .toHaveText(['Aluno 1000 Fora do “Priorizar com” de Aluno 1000 (Instrutor 01): Instrutor 02 foi escolhido para o dia na Demanda.']);
+      .toHaveText(['Aluno 1000 Fora do “Priorizar com” de Aluno 1000 (Instrutor 01): Instrutor 02 foi escolhido para o dia em Processamento.']);
   });
 
   // No mapa, a barra abre o editor do voo (F1g): o instrutor é um campo dele, com o motivo de cada um; mudar só o instrutor

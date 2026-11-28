@@ -350,7 +350,7 @@ describe('Priorizar com: os instrutores do aluno (o par permanente do cadastro)'
   it('o instrutor escolhido para o dia vale mais que o “Priorizar com”, com o aviso', () => {
     const { out, al } = runAllocationEngine(cenario({ ins: [instrutor(1, 9), instrutor(2, 1)], stu: [aluno(1000, { insId: 2 }, { voaCom: [1] })] }));
     assert.deepEqual([out.map(o => [o.insId, Boolean(o.insEscolhido), Boolean(o.insPar)]), avisos(al)],
-      [[[2, true, false]], ['Fora do “Priorizar com” de Aluno 1000 (Instrutor 01): Instrutor 02 foi escolhido para o dia na Demanda.']]);
+      [[[2, true, false]], ['Fora do “Priorizar com” de Aluno 1000 (Instrutor 01): Instrutor 02 foi escolhido para o dia em Processamento.']]);
   });
 
   it('quando nenhum instrutor do “Priorizar com” pode, o voo fica com outro e a escala avisa, com o motivo', () => {

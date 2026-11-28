@@ -1335,7 +1335,7 @@ describe('As disputas do “Priorizar com”', () => {
     }), { compactar: false });
     // (A aula de Ground com o INVA 2 escolhido na Demanda, fora do “Priorizar com”, também avisa: a revisão do F1h)
     assert.deepEqual(doPar(al), [
-      ['1000_1_1', 1000, 2, 'Fora do “Priorizar com” de Aluno 1000 (Instrutor 01): Instrutor 02 foi escolhido para o dia na Demanda.'],
+      ['1000_1_1', 1000, 2, 'Fora do “Priorizar com” de Aluno 1000 (Instrutor 01): Instrutor 02 foi escolhido para o dia em Processamento.'],
       ['1000_0_1', 1000, 1, 'Aluno 1000 e Aluno 1001 priorizam Instrutor 01 às 08:20: ficou com Aluno 1001; Aluno 1000 voa às 10:10.']
     ]);
   });
@@ -1377,7 +1377,7 @@ describe('As disputas do “Priorizar com”', () => {
   it('o INVA escolhido para o dia na Demanda fora do “Priorizar com”: o aviso, com a chave do voo', () => {
     const { out, al } = runAllocationEngine(cenario({ ins, stu: [aluno(1000, { insId: 2 }, { voaCom: [1] })] }));
     assert.deepEqual(out.map(o => [o.fKey, o.insId]), [['1000_0_1', 2]]);
-    assert.deepEqual(doPar(al), [['1000_0_1', 1000, 2, 'Fora do “Priorizar com” de Aluno 1000 (Instrutor 01): Instrutor 02 foi escolhido para o dia na Demanda.']]);
+    assert.deepEqual(doPar(al), [['1000_0_1', 1000, 2, 'Fora do “Priorizar com” de Aluno 1000 (Instrutor 01): Instrutor 02 foi escolhido para o dia em Processamento.']]);
     // Com o INVA do “Priorizar com”, nada
     assert.deepEqual(doPar(runAllocationEngine(cenario({ ins, stu: [aluno(1000, { insId: 1 }, { voaCom: [1] })] })).al), []);
   });
