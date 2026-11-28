@@ -6,8 +6,9 @@ import { trocarPorChave, trocarConteudo, anunciar } from '../dom.js';
 import { partesDoDetalhe, detalheHtml, vazioDoDetalheHtml } from '../detalhe.js';
 import { esc } from '../format.js';
 
-// vazio: o texto com nada escolhido, ou { elemento: '<id>' } (um bloco fixo da página, mostrado com nada escolhido e nunca
-// redesenhado: o formulário de um pedido novo). detalhe(id): o modelo do registro, ou null (saiu do cadastro); edita():
+// vazio: o texto com nada escolhido, { texto, icone, dica } (o ícone da tela e a dica de quem cria, js/detalhe.js), ou
+// { elemento: '<id>' } (um bloco fixo da página, mostrado com nada escolhido e nunca redesenhado: o formulário de um pedido
+// novo). detalhe(id): o modelo do registro, ou null (saiu do cadastro); edita():
 // quem edita vê os controles, quem só consulta, o texto
 export function criarDetalhe({ id, nomes, rotulo, vazio = '', detalhe, edita }) {
   const erros = new Map();
@@ -39,8 +40,8 @@ export function criarDetalhe({ id, nomes, rotulo, vazio = '', detalhe, edita }) 
     const fixo = estatico();
     if (!modelo) {
       if (fixo) fixo.hidden = false;
-      const texto = typeof vazio === 'string' ? vazio : '';
-      const html = (avisoSemEscolha ? `<p class="det-aviso" role="status">${esc(avisoSemEscolha)}</p>` : '') + (fixo || !texto ? '' : vazioDoDetalheHtml(texto));
+      const { texto = '', ...extras } = typeof vazio === 'string' ? { texto: vazio } : (vazio || {});
+      const html = (avisoSemEscolha ? `<p class="det-aviso" role="status">${esc(avisoSemEscolha)}</p>` : '') + (fixo || !texto ? '' : vazioDoDetalheHtml(texto, extras));
       if (desenhado !== null || l.innerHTML !== html) trocarConteudo(l, html);
       desenhado = null;
       erros.clear();

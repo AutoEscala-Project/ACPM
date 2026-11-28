@@ -5,7 +5,7 @@
 //     npx playwright test test/e2e/publicado.spec.js --workers=1
 // ACPM_INICIO é o endereço de entrada (o padrão, ./): com BASE_URL=http://localhost:<porta>/ (npm run serve) e
 // ACPM_INICIO='./?supabase=previa', roda contra a prévia a partir do app desta pasta (uma worktree, por exemplo)
-import { test, expect, abrirMenuDaConta, AMANHA, preencherLogin, appPronto, botaoDaAba, campoDaAgenda, dataAberta } from './fixtures.js';
+import { test, expect, abrirMenuDaConta, AMANHA, preencherLogin, appPronto, botaoDaAba, campoDaAgenda, dataAberta, linhasDosInstrutores } from './fixtures.js';
 
 const INICIO = process.env.ACPM_INICIO || './';
 
@@ -86,7 +86,7 @@ test.describe('Site publicado (login real)', () => {
     await preencherLogin(page, conta);
     await appPronto(page);
     await expect(dataAberta(page)).toHaveAttribute('data-data', AMANHA);
-    const instrutores = await page.locator('#inst .cd').count();
+    const instrutores = await linhasDosInstrutores(page).count();
     // A data pelo endereço (no calendário, ela ficaria a centenas de meses)
     const url = new URL(page.url());
     url.searchParams.set('data', '2099-01-01');
@@ -96,7 +96,7 @@ test.describe('Site publicado (login real)', () => {
     await botaoDaAba(page, 'esc').click();
     // A data nova começa com a demanda vazia: a disponibilidade vem do dia anterior
     await expect(page.locator('#out')).toContainText(/Nenhum voo nesta data|missões pedidas/);
-    await expect(page.locator('#inst .cd')).toHaveCount(instrutores);
+    await expect(linhasDosInstrutores(page)).toHaveCount(instrutores);
     await abrirMenuDaConta(page);
     await page.locator('#btn-sair').click();
   });

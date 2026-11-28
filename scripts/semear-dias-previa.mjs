@@ -28,17 +28,23 @@ const quantos = Number(process.argv[2] || 12);
 const hojeSP = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date());
 const inicio = process.argv[3] || somarDias(hojeSP, 1);
 
+// O Supabase CLI: o `supabase` do PATH; com SUPABASE_CLI_JS, um script que o node roda no lugar dele (o teste
+// test/unit/pedidos-da-previa.test.js: assim ele nunca alcança o banco, também no Windows)
+const CLI = process.env.SUPABASE_CLI_JS ? [process.execPath, [process.env.SUPABASE_CLI_JS]] : ['supabase', []];
+// Espera sem outro programa (o `sleep` não existe no Windows)
+const esperar = ms => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+
 function sql(consulta, { escrita = false } = {}) {
   const args = ['db', 'query', `--remote=${PREVIA}`, '-o', 'json', ...(escrita ? ['--yes'] : ['--read-only']), consulta];
   // A API do Supabase às vezes falha no transporte: tenta de novo (as gravações daqui podem se repetir sem efeito: a da
   // data com os pedidos não grava a data que já existe, e os ids pedidos de novo só pulam números)
   for (let tentativa = 1; ; tentativa++) {
     try {
-      const saida = execFileSync('supabase', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 64 << 20 });
+      const saida = execFileSync(CLI[0], [...CLI[1], ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 64 << 20 });
       return JSON.parse(saida.slice(saida.indexOf('{'))).rows || [];
     } catch (e) {
       if (tentativa === 5 || !/Transport error/.test(e.stderr || '')) throw e;
-      execFileSync('sleep', [String(tentativa * 2)]);
+      esperar(tentativa * 2000);
     }
   }
 }

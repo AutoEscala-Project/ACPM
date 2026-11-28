@@ -182,7 +182,7 @@ aoMudarCampo('atributo', t => {
     kind: 'setAtributo', reg, atributo, val: !t.checked, label: '↶ Reverter'
   });
   desenhar();
-  // ('instrutores' refaz também o painel das habilitações do INVA aberto: rIns → rPainelDoInstrutor)
+  // ('instrutores' refaz também as habilitações do INVA escolhido, no detalhe de INVAs)
   redesenharPorNome('instrutores', 'pedidos-do-dia');
   document.querySelector(`#det-rec [data-a="atributo"][data-r="${CSS.escape(reg)}"][data-atributo="${atributo}"]`)?.focus();
 });
@@ -216,8 +216,8 @@ document.addEventListener('toggle', e => {
   if (caixa) lembrarExigencias(caixa.dataset.r, caixa.open);
 }, true);
 
-// "Retirar da frota…", no rodapé do detalhe: dois cliques; o histórico desfaz. Instrutores é refeito: a habilitação
-// própria do recurso sai do painel "Editar habilitações" e do filtro das habilitações
+// "Retirar da frota…", no rodapé do detalhe: dois cliques; o histórico desfaz. INVAs é refeito: a habilitação própria
+// do recurso sai das Habilitações do detalhe e do filtro das habilitações
 aoAcionar('retirar-recurso', b => {
   if (!confirmado(b, 'Confirmar retirada')) return;
   const recurso = S.frota.find(f => f.reg === b.dataset.id);
@@ -328,7 +328,7 @@ aoReverter('restaurarHorarios', (rev, entry) => {
 });
 
 aoReverter('readicionarRecurso', (rev, entry) => {
-  // Um recurso retirado volta para a frota, como estava (com a habilitação própria, em Instrutores)
+  // Um recurso retirado volta para a frota, como estava (com a habilitação própria, em INVAs)
   S.frota.push({ ...rev.recurso });
   S.av[rev.recurso.reg] = rev.av !== false;
   gravarAlteracao('inc', `Revertido: ${rev.recurso.reg} de volta à frota`, null, entry.id);

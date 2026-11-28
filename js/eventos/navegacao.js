@@ -34,8 +34,8 @@ document.addEventListener('click', e => {
     else acaoDoPainel(fidsBtn.dataset.fids);
     return;
   }
-  // Recolher e abrir os horários da Lista (Escala); as categorias da frota e as vistas de Recursos e de Instrutores ficam
-  // nos módulos delas (js/eventos/recursos.js, js/eventos/instrutores.js)
+  // Recolher e abrir os horários da Lista (Escala); as categorias da frota e as vistas de Recursos ficam
+  // no módulo delas (js/eventos/recursos.js)
   const tempo = e.target.closest('[data-recolher-inicio]');
   if (tempo) { alternarTempo(+tempo.dataset.recolherInicio); return; }
   const todosDoBI = e.target.closest('[data-bi-todos]');

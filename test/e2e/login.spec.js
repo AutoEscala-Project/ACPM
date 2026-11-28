@@ -1,4 +1,4 @@
-import { test, expect, prepararContexto, vigiarErros, irPara, AMANHA, abrirMenuDaConta, preencherLogin, URL_APP } from './fixtures.js';
+import { test, expect, prepararContexto, vigiarErros, irPara, AMANHA, abrirMenuDaConta, preencherLogin, URL_APP, linhasDosInstrutores } from './fixtures.js';
 import { instalarSupabaseFalso, documentosAtuais, CONTAS } from './supabase-falso.js';
 import { estadoSintetico } from '../helpers/estado.js';
 
@@ -43,7 +43,7 @@ test.describe('Login e perfis (modo compartilhado)', () => {
     await preencherLogin(page, CONTAS.operador);
     await expect(page.locator('#s-esc')).toBeVisible();
     await expect(page.locator('#usuario')).toHaveText('Operador de Teste · Operador');
-    await expect(page.locator('#inst .cd')).toHaveCount(40);
+    await expect(linhasDosInstrutores(page)).toHaveCount(40);
     await expect(page.locator('#role-sel')).toBeHidden();
 
     await irPara(page, 'alu');
@@ -60,7 +60,7 @@ test.describe('Login e perfis (modo compartilhado)', () => {
     await preencherLogin(page, CONTAS.gestor);
     await expect(page.locator('#usuario')).toHaveText('Gestor de Teste · Gestor');
     await expect(page.locator('body')).toHaveAttribute('data-role', 'gestor');
-    await expect(page.locator('#inst .cd')).toHaveCount(40);
+    await expect(linhasDosInstrutores(page)).toHaveCount(40);
     await irPara(page, 'dem');
     // "Limpar demanda" fica no menu Mais, que o Gestor não tem (o item fica escondido até o menu abrir)
     await expect(page.locator('#btn-mais-dem')).toBeHidden();

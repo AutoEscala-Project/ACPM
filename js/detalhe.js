@@ -97,5 +97,10 @@ export function partesDoDetalhe(lista, modelo, { edita = true, erros = new Map()
 // O detalhe inteiro (outro registro: tudo de novo), com os atributos do registro, que js/eventos/registro.js lê
 export const detalheHtml = (lista, modelo, opcoes) => `<div class="det"${atributos(modelo.atributos)}>${partesDoDetalhe(lista, modelo, opcoes).map(p => p.html).join('')}</div>`;
 
-// Nada escolhido
-export const vazioDoDetalheHtml = texto => `<p class="det-vazio h">${esc(texto)}</p>`;
+// Nada escolhido (no meio do painel, css/lista.css): o ícone da tela (do sprite), o texto e a dica de quem cria (edit-only,
+// como o botão "+ Novo": quem só consulta não a vê)
+export const vazioDoDetalheHtml = (texto, { icone = '', dica = '' } = {}) => '<div class="det-vazio">'
+  + (icone ? `<svg class="ico det-vazio-icone" aria-hidden="true"><use href="#${esc(icone)}"/></svg>` : '')
+  + `<p class="det-vazio-texto">${esc(texto)}</p>`
+  + (dica ? `<p class="det-vazio-dica edit-only">${esc(dica)}</p>` : '')
+  + '</div>';

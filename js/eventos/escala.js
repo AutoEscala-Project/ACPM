@@ -22,7 +22,7 @@ import { confirmado } from './confirmacao.js';
 import { aoAcionar, aoMudarCampo, aoReverter } from './registro.js';
 import { vooDaChave } from './resultados.js';
 import { pedirDetalheDoStatus } from '../views/dialogo-status.js';
-import { rOut, lembrarCaixa, botaoDoInstrutor, seletorDeInstrutor } from '../views/escala.js';
+import { rOut, botaoDoInstrutor, seletorDeInstrutor } from '../views/escala.js';
 import { abrirEditorDoVoo } from '../views/edicao-do-voo.js';
 import { perguntarAntesDeRefazer } from '../views/dialogo-refazer.js';
 import { statusDoVoo } from '../voo.js';
@@ -50,13 +50,6 @@ function minutoDoClique(faixa, { clientX, clientY }) {
     : (clientX - caixa.left - faixa.clientLeft) / faixa.clientWidth;
   return Math.round((+inicio + Math.min(1, Math.max(0, fracao)) * (fim - inicio)) / 5) * 5;
 }
-
-// A caixa do resumo que a pessoa abre ou recolhe fica assim nos redesenhos (o toggle não sobe: ouvido na captura). O
-// redesenho cria a caixa já no estado lembrado, então o toggle dela só repete o que já está guardado
-document.addEventListener('toggle', e => {
-  const caixa = e.target instanceof Element && e.target.closest('#out details.caixa[data-caixa]');
-  if (caixa === e.target) lembrarCaixa(caixa.dataset.caixa, caixa.open);
-}, true);
 
 // A barra do voo no mapa abre o editor do voo (js/eventos/edicao-do-voo.js; na turma de Ground, a turma inteira). Um clique
 // (ou toque) no espaço livre de uma linha do mapa agenda nela: o diálogo abre com o recurso ou o instrutor da linha e o
@@ -444,7 +437,7 @@ aoReverter('desfazerEdicao', (rev, entry) => {
   redesenharPorNome('pedidos-do-dia');
 });
 
-// "Refazer a escala" (o aviso dos voos com quem ficou inativo): a escala é refeita sem o instrutor ou o recurso inativo e
+// "Refazer a escala" (o aviso dos voos com quem ficou inativo, no trilho): a escala é refeita sem o instrutor ou o recurso inativo e
 // gravada, com a entrada no histórico; nada mais muda
 aoAcionar('refazer-escala', () => {
   const nomes = voosComInativos(S, RES, { data: DATA, hoje: hojeISO() }).filter(i => i.de !== 'aluno').map(i => i.nome);

@@ -1,16 +1,12 @@
-// Dados pessoais de alunos e instrutores: nome completo, CPF, CANAC, nascimento, celular e e-mail. Em Alunos, uma seção
-// do detalhe com "Salvar" e "Desfazer" (F2); em Instrutores, o painel ao lado da tabela (até C). Ficam fora do cadastro;
+// Dados pessoais de alunos e instrutores: nome completo, CPF, CANAC, nascimento, celular e e-mail. Uma seção do detalhe
+// com "Salvar" e "Desfazer", em Alunos (F2) e em INVAs (C). Ficam fora do cadastro;
 // o histórico registra só os campos que mudaram. No modo compartilhado, operadores, administradores e a secretaria veem;
 // só operadores e administradores editam (A: a secretaria lê em texto); o gestor não vê.
-import { test, expect, abrir, irPara, irParaVista, prepararContexto, vigiarErros, filtrarHabilitacoes, filtrarCursos, AMANHA, entrar as entrarNoApp, abrirHistorico, rotulosDasAbas, gradeDoDia, linhaDoInstrutor, abrirAluno, campoDoAberto, linhaDoAluno, linhasDosAlunos, nenhumNaLista } from './fixtures.js';
+import { test, expect, abrir, irPara, prepararContexto, vigiarErros, filtrarHabilitacoes, filtrarCursos, AMANHA, entrar as entrarNoApp, abrirHistorico, rotulosDasAbas, abrirInstrutor, dadosDoInstrutor, campoDosDadosDoInstrutor, salvarDadosDoInstrutor, textoDoDadoDoInstrutor, nomesDosInstrutores, buscaDosInstrutores, habilitacoesNaLinha, faixasNaLinha, abrirAluno, campoDoAberto, linhaDoAluno, linhasDosAlunos, nenhumNaLista } from './fixtures.js';
 import { criarSupabaseFalso, instalarSupabaseFalso, documentosAtuais, CONTAS } from './supabase-falso.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
 
 const estado = () => cenario({ ins: [instrutor(1, 9), instrutor(2, 9)], stu: [aluno(1000), aluno(1001)] });
-// O painel dos instrutores (até C)
-const painel = page => page.locator('#painel-dados');
-const campoDoPainel = (page, rotulo) => painel(page).getByLabel(rotulo, { exact: true });
-const salvarNoPainel = page => painel(page).getByRole('button', { name: 'Salvar' }).click();
 // A seção do aluno aberto
 const secao = page => page.locator('#det-alu [data-pessoa]');
 const campo = (page, rotulo) => secao(page).getByLabel(rotulo, { exact: true });
@@ -82,17 +78,18 @@ test.describe('Dados pessoais (neste navegador)', () => {
     await expect(linhaDoAluno(page, 1000).locator('.lista-l2')).not.toContainText('CANAC');
   });
 
-  test('Instrutores: os mesmos dados pessoais, no cadastro dos instrutores (o painel, até virar lista e detalhe)', async ({ page }) => {
+  test('INVAs: os mesmos dados pessoais, na seção do detalhe do instrutor; a busca acha o CANAC', async ({ page }) => {
     await abrir(page, { estado: estado() });
-    await irPara(page, 'ins');
-    await page.locator('#s-ins [data-vista-ins="cadastro"]').click();
-    await expect(page.locator('#s-ins table:has(#inst) thead th')).toHaveText(['Nome', 'CANAC', 'Peso (kg)', 'Habilitações', '']);
-    await page.locator('#inst tr[data-id="2"] [data-dados]').click();
-    await expect(painel(page).locator('h2')).toHaveText('Dados pessoais Instrutor 02');
-    await campoDoPainel(page, 'CANAC').fill('654321');
-    await campoDoPainel(page, 'E-mail').fill('instrutor@exemplo.com');
-    await salvarNoPainel(page);
-    await expect(page.locator('#inst tr[data-id="2"] .c-canac')).toHaveText('654321');
+    await abrirInstrutor(page, 2);
+    await expect(dadosDoInstrutor(page)).toHaveAttribute('data-pessoa', 'instrutor:2');
+    await expect(campoDosDadosDoInstrutor(page, 'CPF')).toBeEnabled();
+    await campoDosDadosDoInstrutor(page, 'CANAC').fill('654321');
+    await campoDosDadosDoInstrutor(page, 'E-mail').fill('instrutor@exemplo.com');
+    await salvarDadosDoInstrutor(page);
+    await expect(dadosDoInstrutor(page).locator('.det-dados-rodape')).toHaveText(/^Atualizado em/);
+    await expect(page.locator('#s-ins .det-sub')).toContainText('CANAC 654321');
+    await buscaDosInstrutores(page).fill('654321');
+    await expect.poll(() => nomesDosInstrutores(page)).toEqual(['Instrutor 02']);
   });
 
   test('ficam fora do cadastro; no perfil Gestor não aparecem', async ({ page }) => {
@@ -171,7 +168,7 @@ test.describe('Dados pessoais (modo compartilhado)', () => {
     return { context, servidor, page, erros };
   }
 
-  // A (desde a migração do nome completo): a Secretaria lê os dados pessoais, em Alunos e em Instrutores, e não os altera:
+  // A (desde a migração do nome completo): a Secretaria lê os dados pessoais, em Alunos e em INVAs, e não os altera:
   // nenhum campo, nenhum "Salvar" (o servidor também recusa a gravação dela: test/unit/supabase-falso.test.js)
   test('a Secretaria vê Alunos e Instrutores e só lê os dados pessoais, também o nome completo e a busca por ele', async ({ browser }) => {
     const servidor = criarSupabaseFalso(documentosAtuais(estado(), AMANHA));
@@ -188,7 +185,7 @@ test.describe('Dados pessoais (modo compartilhado)', () => {
     // Nenhuma gravação dos dados pessoais sai da página dela (o servidor, que a recusaria, nem é chamado)
     const gravacoes = [];
     page.on('request', r => { if (r.url().includes('/rpc/salvar_dados_pessoais')) gravacoes.push(r.url()); });
-    await expect(rotulosDasAbas(page, { visiveis: true })).toHaveText(['Pedidos', 'Escala', 'Aprovar', 'Alunos', 'Instrutores', 'Cursos']);
+    await expect(rotulosDasAbas(page, { visiveis: true })).toHaveText(['Pedidos', 'Escala', 'Aprovar', 'Alunos', 'INVAs', 'Cursos']);
     await irPara(page, 'alu');
     // O filtro dos cursos vale para ela (as caixas não ficam desligadas)
     await page.locator('#flt-alu-cur').click();
@@ -217,39 +214,26 @@ test.describe('Dados pessoais (modo compartilhado)', () => {
     await expect(linhaDoAluno(page, 1000).locator('.lista-l2')).toContainText('CANAC 123456');
     // Nenhum formulário dos resultados nem "Apagar os dados pessoais"
     await expect(page.locator('#det-alu [data-act]')).toHaveCount(0);
-    // Em Instrutores, o painel também só mostra: o texto e "Fechar"
-    await irPara(page, 'ins');
-    await page.locator('#inst tr[data-id="1"] [data-dados]').click();
-    await expect(painel(page).locator('h2')).toHaveText('Dados pessoais Instrutor 01');
-    await expect(painel(page).getByRole('button', { name: 'Fechar', exact: true })).toBeFocused();
-    await expect(painel(page).locator('input')).toHaveCount(0);
-    await expect(painel(page).getByRole('button', { name: 'Salvar' })).toHaveCount(0);
-    await expect(painel(page).locator('.valor-dado')).toHaveCount(6);
+    // Em INVAs, a seção também só mostra: o texto, sem campo e sem "Salvar"
+    await abrirInstrutor(page, 1);
+    await expect(dadosDoInstrutor(page)).toHaveAttribute('data-pessoa', 'instrutor:1');
+    await expect(dadosDoInstrutor(page).locator('input, button[type="submit"]')).toHaveCount(0);
+    await expect(textoDoDadoDoInstrutor(page, 'cpf')).toHaveText('—');
     // Nada foi enviado por ela: os dados ficam como o operador gravou
-    await painel(page).getByRole('button', { name: 'Fechar', exact: true }).press('Enter');
     expect(gravacoes).toEqual([]);
     expect(servidor.dadosPessoais.get('aluno:1000')).toMatchObject({ nome_completo: 'Ana Maria Souza', canac: '123456', email: 'ana@exemplo.com' });
     expect(erros).toEqual([]);
     await context.close();
   });
 
-  // No celular (390 px), a consulta da Secretaria: em Instrutores, o "Dados pessoais" no cartão (o painel, até C); em
-  // Alunos, a seção do detalhe em texto, tudo dentro da tela
-  test('no celular, a Secretaria chega aos dados pessoais: o cartão em Instrutores, o detalhe em Alunos', async ({ browser }) => {
+  // No celular (390 px), a consulta da Secretaria: em INVAs e em Alunos, a seção do detalhe em texto, tudo dentro da tela
+  test('no celular, a Secretaria chega aos dados pessoais: o detalhe em INVAs e em Alunos', async ({ browser }) => {
     const { context, page, erros } = await entrar(browser, CONTAS.secretaria, null, { viewport: { width: 390, height: 844 } });
-    await irPara(page, 'ins');
-    await expect(page.locator('#s-ins')).toHaveAttribute('data-vista', 'cadastro');
-    const linha = page.locator('#inst tr.cd[data-id="1"]');
-    const botoes = linha.locator('td.acoes button:visible');
-    await expect(botoes).toHaveText(['Dados pessoais']);
-    const [cartao, botao] = await Promise.all([linha.boundingBox(), botoes.first().boundingBox()]);
-    expect(botao.height).toBeGreaterThanOrEqual(44);
-    expect(botao.x >= cartao.x && botao.x + botao.width <= cartao.x + cartao.width, 'o botão dentro do cartão').toBe(true);
-    await botoes.first().click();
-    await expect(painel(page).locator('h2')).toHaveText('Dados pessoais Instrutor 01');
-    await page.keyboard.press('Escape');
-    await expect(painel(page)).toBeHidden();
-    await expect(botoes.first()).toBeFocused();
+    await abrirInstrutor(page, 1);
+    await expect(page.locator('#s-ins')).toHaveAttribute('data-vendo', 'detalhe');
+    await expect(dadosDoInstrutor(page)).toHaveAttribute('data-pessoa', 'instrutor:1');
+    const nomeDoInstrutor = await textoDoDadoDoInstrutor(page, 'nome_completo').boundingBox();
+    expect(nomeDoInstrutor.x + nomeDoInstrutor.width).toBeLessThanOrEqual(390);
 
     await irPara(page, 'alu');
     await abrirAluno(page, 1000);
@@ -265,54 +249,32 @@ test.describe('Dados pessoais (modo compartilhado)', () => {
     await context.close();
   });
 
-  // A vista de cada aba fica na memória até a página recarregar; antes de a pessoa escolher, vale a do perfil: a Secretaria
-  // abre Instrutores no Cadastro (o trabalho dela ali são os dados pessoais), o Operador na Disponibilidade do dia
-  test('Instrutores abre no Cadastro para a Secretaria e na Disponibilidade do dia para o Operador; a vista escolhida fica até recarregar', async ({ browser }) => {
+  // INVAs é lista e detalhe para todos (sem as duas vistas): a Secretaria busca, filtra pelas habilitações (as caixas não
+  // ficam desligadas para quem só consulta), usa "Limpar filtros" e lê as faixas da data
+  test('INVAs para a Secretaria: a lista e o detalhe, a busca, o filtro das habilitações e "Limpar filtros"', async ({ browser }) => {
     const secretaria = await entrar(browser, CONTAS.secretaria);
     const page = secretaria.page;
     await irPara(page, 'ins');
-    await expect(page.locator('#s-ins')).toHaveAttribute('data-vista', 'cadastro');
-    await expect(page.locator('#s-ins [data-vista-ins="cadastro"]')).toHaveAttribute('aria-pressed', 'true');
-    await expect(page.locator('#s-ins [data-vista-ins="dia"]')).toHaveAttribute('aria-pressed', 'false');
-    await expect(page.locator('#inst tr[data-id="1"] [data-dados]')).toBeVisible();
-    await expect(gradeDoDia(page)).toBeHidden();
-    // Ela busca, filtra pelas habilitações (as caixas não ficam desligadas para quem só consulta) e usa o "Limpar
-    // filtros" (sem data-act: vale também para quem só consulta)
-    const busca = page.locator('[data-flt="inst"]');
+    await expect(page.locator('#s-ins')).toHaveAttribute('data-forma', 'lista-detalhe');
+    await expect(faixasNaLinha(page, 1)).toHaveText('06:30–24:00');
+    await expect(habilitacoesNaLinha(page, 1)).not.toHaveText('');
+    const busca = buscaDosInstrutores(page);
     await busca.fill('instrutor 02');
-    await expect(page.locator('#inst .cd:visible')).toHaveCount(1);
+    await expect.poll(() => nomesDosInstrutores(page)).toEqual(['Instrutor 02']);
     await busca.fill('');
     await page.locator('#flt-ins-hab').click();
     await expect(page.locator('#flt-ins-hab-painel input[data-filtro]:disabled')).toHaveCount(0);
     await filtrarHabilitacoes(page, ['noturno', 'c172']);
-    await expect(page.locator('#inst .cd:visible')).toHaveCount(2);
+    await expect.poll(() => nomesDosInstrutores(page)).toEqual(['Instrutor 01', 'Instrutor 02']);
     await expect(page.locator('#ins-contagem')).toHaveText('2 de 2 instrutores');
     await filtrarHabilitacoes(page, ['noturno', 'checa_pp']);
-    await expect(page.locator('#inst tr.sem-resultado')).toBeVisible();
-    await page.locator('#limpar-filtros-inst').click();
+    await expect.poll(() => nomesDosInstrutores(page)).toEqual([]);
+    await page.getByRole('button', { name: 'Limpar filtros' }).click();
     await expect(busca).toHaveValue('');
     await expect(page.locator('#flt-ins-hab')).toHaveText('Todas as habilitações');
-    await expect(page.locator('#inst .cd:visible')).toHaveCount(2);
-    // A vista escolhida fica ao voltar à aba
-    await irParaVista(page, 'ins', 'dia');
-    await irPara(page, 'alu');
-    await irPara(page, 'ins');
-    await expect(page.locator('#s-ins')).toHaveAttribute('data-vista', 'dia');
-    await expect(linhaDoInstrutor(page, '1')).toBeVisible();
-    // Recarregada a página, vale de novo a do perfil
-    await page.reload();
-    await expect(page.locator('body[data-pronto]')).toBeAttached();
-    await irPara(page, 'ins');
-    await expect(page.locator('#s-ins')).toHaveAttribute('data-vista', 'cadastro');
+    await expect.poll(() => nomesDosInstrutores(page)).toEqual(['Instrutor 01', 'Instrutor 02']);
     expect(secretaria.erros).toEqual([]);
     await secretaria.context.close();
-
-    const operador = await entrar(browser, CONTAS.operador);
-    await irPara(operador.page, 'ins');
-    await expect(operador.page.locator('#s-ins')).toHaveAttribute('data-vista', 'dia');
-    await expect(operador.page.locator('#s-ins [data-vista-ins="dia"]')).toHaveAttribute('aria-pressed', 'true');
-    expect(operador.erros).toEqual([]);
-    await operador.context.close();
   });
 
   // O mesmo servidor para os dois: o gestor entra com o CANAC e o e-mail gravados pelo operador, e não os vê
