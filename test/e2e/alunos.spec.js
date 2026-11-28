@@ -940,6 +940,31 @@ test.describe('As limitações do aluno', () => {
     await expect(peso).toContainText('nenhum INVA ativo habilitado cabe no C152');
   });
 
+  // Revisão: o que veio gravado pela API e a tela não oferece (o domingo, um minuto fora dos 10 em 10) é mostrado como está,
+  // e o domingo não fura a recusa do último dia; o De e o Até de cada horário dizem de qual horário são
+  test('"Pode voar" com o que veio pela API: o minuto como está, o domingo não conta como dia marcado; o De e o Até com o número do horário', async ({ page }) => {
+    await abrir(page, { estado: dia({ limitacoes: { horarios: [{ de: 785, ate: 1085 }, { de: 780, ate: 1080, dias: [0, 1] }] } }) });
+    await irPara(page, 'alu');
+    await abrirAluno(page, 1000);
+    // O minuto gravado fora dos 10 em 10: o campo mostra ele, não o primeiro da lista
+    await expect(page.locator('#det-alu-lim-de-1')).toHaveValue('785');
+    await expect(page.locator('#det-alu-lim-ate-1')).toHaveValue('1085');
+    await expect(page.locator('#det-alu-lim-de-1 option:checked')).toHaveText('13:05');
+    await expect(page.locator('#det-alu-lim-ate-1 option:checked')).toHaveText('18:05');
+    // Cada De e Até diz de qual horário é
+    await expect(page.getByRole('combobox', { name: 'De (horário 1)', exact: true })).toHaveId('det-alu-lim-de-0');
+    await expect(page.getByRole('combobox', { name: 'até (horário 2)', exact: true })).toHaveId('det-alu-lim-ate-1');
+    // O domingo gravado: só a segunda marcada; ela é o último dia, e não sai
+    for (const d of [2, 3, 4, 5, 6]) await expect(page.locator(`#det-alu-lim-dia-0-${d}`)).not.toBeChecked();
+    await page.locator('#det-alu-lim-dia-0-1').click();
+    await expect(erroDosHorarios(page)).toHaveText('Marque ao menos um dia: com todos marcados, o horário vale em todas as datas.');
+    await expect(page.locator('#det-alu-lim-dia-0-1')).toBeChecked();
+    await expect.poll(() => guardadas(page)).toEqual({ horarios: [{ de: 780, ate: 1080, dias: [0, 1] }, { de: 785, ate: 1085 }] });
+    // A próxima mudança dos dias desse horário tira o domingo, que a tela não oferece
+    await page.locator('#det-alu-lim-dia-0-3').check();
+    await expect.poll(() => guardadas(page)).toEqual({ horarios: [{ de: 780, ate: 1080, dias: [1, 3] }, { de: 785, ate: 1085 }] });
+  });
+
   for (const largura of [390, 320]) {
     test(`no celular (${largura} px): "Pode voar" cabe na tela, com 44 px para o dedo`, async ({ page }) => {
       await page.setViewportSize({ width: largura, height: 800 });
