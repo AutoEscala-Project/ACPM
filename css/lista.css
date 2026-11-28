@@ -105,6 +105,8 @@ ul.lista > li:first-child { border-top: 0; }
 .lista-grupo .lista-botao { display: flex; align-items: center; gap: 6px; padding: 8px 10px; font-weight: 600; }
 .lista-grupo .lista-botao small { color: var(--mu); font-weight: 500; }
 .lista-seta { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 32px; border: 0; background: transparent; color: var(--mu); cursor: pointer; }
+/* O cabeçalho sem linhas (nada a recolher): o espaço da seta, para o título ficar alinhado com os outros */
+.lista-seta-vaga { flex: none; width: 32px; }
 .lista-grupo .seta { transition: transform .15s; }
 .lista-grupo.recolhido .seta { transform: rotate(-90deg); }
 .lista-grupo:has(> .lista-botao[aria-current]) { background: var(--sel); box-shadow: inset 3px 0 var(--ac); }
@@ -192,7 +194,7 @@ ul.lista > .lista-vazia:first-child { border-top: 0; }
   .lista-botao { min-height: 56px; }
   .lista-chave { min-height: 44px; }
   .lista-rapida { min-height: 44px; }
-  .lista-seta { min-width: 44px; min-height: 44px; }
+  .lista-seta, .lista-seta-vaga { min-width: 44px; min-height: 44px; }
   .lista-grupo .lista-botao, .det-secao-btn { min-height: 44px; }
   .det-acao { width: 44px; height: 44px; }
   .det-cab .md-voltar, .lista-inativos, .lista-acao { min-height: 44px; }

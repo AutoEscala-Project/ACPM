@@ -33,7 +33,7 @@ describe('normalizarLimitacoes: só o que tem o formato fica; vazio, nada', () =
     }
     // Todos os sete dias: o mesmo que todas as datas
     assert.deepEqual(normalizarLimitacoes({ horarios: [{ de: 600, ate: 700, dias: [0, 1, 2, 3, 4, 5, 6] }] }), { horarios: [{ de: 600, ate: 700 }] });
-    // Das 06:00 (o primeiro horário que uma lista de decolagem aceita) à meia-noite
+    // Das 06:00 (o primeiro horário que uma lista de decolagem aceitava antes do #106, que a põe às 06:30) à meia-noite
     assert.deepEqual(normalizarLimitacoes({ horarios: [{ de: 360, ate: 1440 }, { de: 350, ate: 400 }] }), { horarios: [{ de: 360, ate: 1440 }] });
   });
 

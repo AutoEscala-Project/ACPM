@@ -23,8 +23,8 @@ export const DIAS_DAS_LIMITACOES = [1, 2, 3, 4, 5, 6];
 const NOMES_DOS_DIAS = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
 export const nomeDoDia = d => NOMES_DOS_DIAS[d];
 export const MAXIMO_DE_HORARIOS = 8;
-// Os horários vão das 06:00 (o primeiro horário que uma lista de decolagem aceita) à meia-noite; os campos De e Até, de 10
-// em 10 minutos
+// Os horários vão das 06:00 (o primeiro horário que uma lista de decolagem aceitava antes do #106; desde ele a lista começa
+// às 06:30, e um De antes disso só cobre o mesmo que 06:30) à meia-noite; os campos De e Até, de 10 em 10 minutos
 const INICIO_DOS_HORARIOS = 360;
 export const MINUTOS_DOS_HORARIOS = Array.from({ length: (MINUTOS_DO_DIA - INICIO_DOS_HORARIOS) / 10 + 1 }, (_, i) => INICIO_DOS_HORARIOS + i * 10);
 
