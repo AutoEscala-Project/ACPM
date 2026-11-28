@@ -1,8 +1,8 @@
 // O almoço do INVA (#104; Pedro, 28/11: "the operator uses common sense so that instructors have a 1 hour pause within
 // [11AM, 2PM]"), branda, um passo próprio depois do C: para cada INVA que vem na data e voa perto do meio-dia, o motor tenta
 // deixar uma hora livre seguida em algum lugar entre 11:00 e 14:00, e desiste dela quando não acha como mantê-la sem tirar
-// um voo da escala, ou quando o operador pôs o voo ali (o fixo, o instrutor escolhido, o “Priorizar com”); então um aviso
-// diz qual INVA ficou sem almoço. A pausa da data que já cobre 1 h dessa janela ("+ Pausa" ou
+// um voo da escala, ou quando o operador pôs o voo ali (o fixo, o instrutor escolhido); então um aviso diz qual INVA
+// ficou sem almoço. Nenhum almoço cede a um “Priorizar com” (Pedro, 28/11): o voo dele sai do INVA para guardá-lo. A pausa da data que já cobre 1 h dessa janela ("+ Pausa" ou
 // "Almoço" em "Editar faixas", ou a que veio dos dados antigos: os dados não distinguem) substitui a do motor: ela é dura
 // (js/disponibilidade.js), e o motor não reserva outra. A reserva do motor não é gravada (sem número de formato): só o
 // aviso vai na escala.
