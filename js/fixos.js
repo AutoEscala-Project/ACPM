@@ -97,9 +97,9 @@ export function fixosAoAprovar(fixos, out) {
   return { ...Object.fromEntries(foraDaEscala), ...daEscala };
 }
 
-// Os voos fixos sem os agendados das chaves. Na Demanda, o voo agendado sai com o pedido que ele fixava: com a missão
-// extra tirada, ou com outra missão, outro recurso ou outras horas no pedido (o agendamento era do pedido de antes; a
-// demanda limpa solta o voo inteiro, em limparDemanda). O agendado que também tinha o instrutor escolhido sai inteiro (o
+// Os voos fixos sem os agendados das chaves. O voo agendado sai com o pedido que ele fixava: com a missão extra tirada, ou
+// com outra missão, outro recurso ou outras horas no pedido (o agendamento era do pedido de antes; "Recomeçar pelos
+// pedidos" solta o voo inteiro, em recomecarPelosPedidos). O agendado que também tinha o instrutor escolhido sai inteiro (o
 // pedido continua com o instrutor). O agendado com um status que fixa (fStatus: Em Voo, Atrasado, Pousou, Cancelado)
 // continua fixo onde está, só sem a marca do agendamento, como os outros voos fixos pelo status (o voo em andamento, o
 // que pousou e o cancelado não mudam de lugar). O agendado com o pino do Noturno (o editor, ou o agendamento gravado)

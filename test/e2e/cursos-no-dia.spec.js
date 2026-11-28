@@ -279,7 +279,7 @@ test.describe('Cursos no dia: o curso da missão no pedido', () => {
     await expect(voo.locator('[data-resultado]')).toHaveValue('aprovado');
   });
 
-  test('o recurso mudado à mão tira o código e o curso da missão do pedido; "Limpar demanda" também', async ({ page }) => {
+  test('o recurso mudado à mão tira o código e o curso da missão do pedido; "Recomeçar pelos pedidos" também', async ({ page }) => {
     await abrirComOPP(page, { resultados: aprovadasAte('TMA-05') });
     const linha = await naDemanda(page);
     const r = await abrirRestricoes(page, 1000);

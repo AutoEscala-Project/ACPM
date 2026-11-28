@@ -362,8 +362,8 @@ describe('O cadeado do voo', () => {
 
 // O voo agendado na Escala: o pino com a marca agendado. Ele fica fixo no ciclo inteiro do cadeado (o status, a
 // reabertura e a aprovação, que guarda até o agendado que está fora da escala) e sai quando a Demanda solta o pedido
-// dele (semAgendados: a missão extra tirada, outra missão no pedido; limparDemanda: a demanda limpa, que deixa como está
-// o voo em andamento ou que já pousou)
+// dele (semAgendados: a missão extra tirada, outra missão no pedido; "Recomeçar pelos pedidos", em recomecarPelosPedidos,
+// que deixa como está o voo em andamento ou que já pousou)
 describe('O voo agendado na Escala', () => {
   const VOO = { fKey: '1000_0_1', a: 390, b: 450, r: 'PR-VOB', insId: 1 };
   const PINO = { a: 390, b: 450, r: 'PR-VOB', insId: 1 };
