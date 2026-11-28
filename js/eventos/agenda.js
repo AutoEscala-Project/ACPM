@@ -15,7 +15,7 @@ import { ApiClient } from '../storage.js';
 import { confirmado } from './confirmacao.js';
 import { aoAcionar } from './registro.js';
 import { depoisDeMudarPedidos } from '../conciliacao.js';
-import { situacaoEmPedidos } from '../views/processamento.js';
+import { situacaoEmPedidos, responderNoProcessamento, chaveDoPedidoNoProcessamento } from '../views/processamento.js';
 import {
   abrirAgenda, rAgenda, podeEditarAgenda, aprovaPedidos, lembrarRegistradoPor, lembradoRegistradoPor, descreverPedido, missaoDoPedido, pedidoDaLista, dataCurta, dataDoFormulario,
   escolherDataDoPedido, pedidosDoFormulario, lerPedidosDaAgenda, marcarInvalidos, focarNoPrimeiroInvalido, apagarErroDaAgenda, desarmarConfirmacaoDaAgenda,
@@ -382,6 +382,8 @@ async function comBotaoOcupado(b, fazer) {
 // Aprova os pedidos (ids) e, os da data aberta, põe na escala (as cinco condições). um: o "Aprovar" de um pedido
 async function aprovar(b, ids, { um }) {
   if (!aprovaPedidos() || !ids.length) return;
+  // De onde veio: o botão sai da página com o redesenho
+  const doProcessamento = Boolean(b.closest('#s-proc'));
   await comBotaoOcupado(b, async () => {
     const data = DATA;
     let aprovados;
@@ -405,7 +407,10 @@ async function aprovar(b, ids, { um }) {
     const nome = um ? (pedidoDaLista(aprovados[0]) || {}).aluno_nome || '' : '';
     const motivo = entrada.motivo ? (MOTIVOS[entrada.motivo] || '').replace('data dele', n === 1 ? 'data dele' : 'data deles') : '';
     const onde = um ? ondeFicou(aprovados[0]) || 'fora da escala' : ondeFicaram(aprovados);
-    showToast(!entrada.motivo ? `${quem}${deFora}: ${nome ? `${nome} ` : ''}${onde}${entrada.notas} · ${dataCurta(data)}.` : `${quem}${deFora}. ${motivo}`, 'ok');
+    const texto = !entrada.motivo ? `${quem}${deFora}: ${nome ? `${nome} ` : ''}${onde}${entrada.notas}` : `${quem}${deFora}. ${motivo}`;
+    // Do detalhe do Processamento (G2), a resposta do N6: a linha de estado e o toast, o foco na linha do pedido
+    if (um && doProcessamento) { responderNoProcessamento({ chave: chaveDoPedidoNoProcessamento(aprovados[0]), texto: texto.replace(/\.$/, '') }); return; }
+    showToast(!entrada.motivo ? `${texto} · ${dataCurta(data)}.` : texto, 'ok');
   });
 }
 aoAcionar('aprovar-pedido', b => aprovar(b, [+b.dataset.id], { um: true }));

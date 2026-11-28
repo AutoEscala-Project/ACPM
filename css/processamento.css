@@ -1,8 +1,10 @@
 /* O Processamento (G2): a lista e o detalhe são do componente (css/lista.css); aqui, o "Mais" (Recomeçar pelos pedidos),
    a contagem do alto, o aviso com "Atualizar a escala", a linha de estado das ações e a linha que acabou de mudar */
 .menu-mais { position: relative; }
-.menu-mais .menu-itens { right: 0; }
-#menu-mais-proc { min-width: 260px; }
+/* "Mais" quebra para o começo de uma linha da barra, na coluna estreita da lista: o menu abre para a direita dele, nunca
+   além da janela (a revisão do G2: aberto para a esquerda, ele saía da tela a 1280 e a 390 px) */
+.menu-mais .menu-itens { left: 0; right: auto; }
+#menu-mais-proc { min-width: min(260px, calc(100vw - 32px)); max-width: calc(100vw - 32px); }
 #proc-recomecar-frase { margin: 4px 10px 6px; max-width: 34ch; font-size: 12.5px; }
 #proc-recomecar-frase:empty { display: none; }
 #proc-cnt { margin-block: 0 6px; font-size: 13px; }

@@ -23,11 +23,11 @@ import { escolherInstrutor } from '../instrutor-escolhido.js';
 import { aplicarRestricao, avisoDaRestricao, fixosSemOAgendadoQueMudou, tipoDaMissaoDoCurso } from '../restricoes.js';
 import { confirmado } from './confirmacao.js';
 import { aoAcionar, aoMudarCampo, aoReverter } from './registro.js';
-import { responderNoProcessamento } from '../views/processamento.js';
+import { responderNoProcessamento, ondeOVooFicou } from '../views/processamento.js';
 import { dataCurta } from '../views/agenda.js';
 import { proximaDoPedido, outraMissaoDoPedido, botaoForaDaOrdem, confirmacaoDaMissao } from '../views/etapas.js';
 import {
-  abrirRestricoes, fecharRestricoes, desenharRestricoes, pendenteDasRestricoes, marcarPendente, perguntaAntesNaGaveta
+  abrirRestricoes, fecharRestricoes, desenharRestricoes, pendenteDasRestricoes, marcarPendente, perguntaAntesNaGaveta, abertaPeloProcessamento, focarNaSituacao
 } from '../views/restricoes-do-voo.js';
 import { registrarDesenho, redesenharPorNome } from '../redesenho.js';
 import { perguntarAntesDeRefazer } from '../views/dialogo-refazer.js';
@@ -200,22 +200,31 @@ aoAcionar('por-de-volta', (b, { id, mid }) => {
     else showToast(MOTIVO_PARA_NAO_VOLTAR[pode.motivo]);
     return;
   }
-  const fazer = () => porDeVolta(s, target, mid, noProcessamento);
+  const fazer = () => porDeVolta(s, target, mid, noProcessamento, Boolean(b.closest('#painel-restricoes')));
   if (!noProcessamento && b.closest('#painel-restricoes') && perguntaAntesNaGaveta()) {
     perguntarAntesDeRefazer({ resumo: `${s.nm}: volta à escala`, aoConfirmar: fazer, aoDesistir: desenharRestricoes });
   } else fazer();
 });
-function porDeVolta(s, target, mid, noProcessamento) {
+// A resposta diz onde a escala refeita pôs o voo: na escala ("De volta à escala"), na lista de espera ou fora dele (não
+// coube): "Posto de volta: …, em espera às 08:20 · 2º". Na gaveta, o foco vai para a situação nova do voo (o botão saiu
+// com o desenho); aberta pelo Processamento, a linha de estado dele também responde
+function porDeVolta(s, target, mid, noProcessamento, naGaveta) {
   const foto = fotoDaEscalaTravada();
   target.fly = true;
   if (!gravarNaEscala(foto, 'inc', `De volta à escala: ${s.nm} (${target.mis})`, { kind: 'setFly', stuId: s.id, mid, val: false, label: '✕ Excluir' })) {
     target.fly = false;
     return;
   }
-  const texto = `De volta à escala: ${s.nm} (${target.mis})`;
-  if (noProcessamento) { responderNoProcessamento({ chave: chaveDoVoo(s.id, mid), texto }); return; }
-  redesenharPorNome('pedidos-do-dia');
-  showToast(`${texto} · ${dataCurta(DATA)}.`, 'ok');
+  const chave = chaveDoVoo(s.id, mid);
+  const onde = ondeOVooFicou(chave);
+  const texto = onde ? `Posto de volta: ${s.nm} (${target.mis}), ${onde.texto}` : `De volta à escala: ${s.nm} (${target.mis})`;
+  if (noProcessamento) { responderNoProcessamento({ chave, texto, ok: !onde }); return; }
+  if (naGaveta && abertaPeloProcessamento()) responderNoProcessamento({ chave, texto, ok: !onde, focar: false });
+  else {
+    redesenharPorNome('pedidos-do-dia');
+    showToast(`${texto} · ${dataCurta(DATA)}.`, onde ? '' : 'ok');
+  }
+  if (naGaveta) { desenharRestricoes(); focarNaSituacao(); }
 }
 
 // Grava o campo no pedido (aplicarRestricao) com a entrada do histórico; o que não vale volta a ser mostrado como estava

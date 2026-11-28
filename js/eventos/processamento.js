@@ -27,7 +27,8 @@ import { registrarTela } from '../views/telas.js';
 import { criarFiltroDosCursos } from '../views/filtro-dos-cursos.js';
 import { criarFiltroMultiplo } from '../views/filtro-multiplo.js';
 import {
-  modeloDoProcessamento, detalheDoProcessamento, desenharAvisoDoProcessamento, responderNoProcessamento, SITUACOES_DO_FILTRO
+  modeloDoProcessamento, detalheDoProcessamento, desenharAvisoDoProcessamento, responderNoProcessamento, SITUACOES_DO_FILTRO,
+  pedidoDaChave, chaveQueSegueOPedido, ondeOVooFicou
 } from '../views/processamento.js';
 
 // A situação: sem marca, todas menos os cancelados (que só aparecem marcados)
@@ -62,10 +63,18 @@ const tela = criarMestreDetalhe({
 });
 
 // O desenho do Processamento (js/redesenho.js), pelo papel: os pedidos do dia (o aviso, a contagem, a lista e o detalhe),
-// com os dados, a escala refeita, os pedidos lidos de novo, quem só consulta e o perfil
+// com os dados, a escala refeita, os pedidos lidos de novo, quem só consulta e o perfil. A linha escolhida cujo pedido
+// mudou de chave (o pedido sem voo que ganhou um, por uma ação desta tela ou de Pedidos) continua escolhida na chave nova:
+// o detalhe segue o pedido, sem dizer que ele saiu
+let escolhida = { chave: null, pedido: null };
 function desenharProcessamento(momento) {
   desenharAvisoDoProcessamento();
+  const sel = tela.selecionado();
+  const nova = sel !== null && sel === escolhida.chave ? chaveQueSegueOPedido(sel, escolhida.pedido) : null;
+  if (nova) tela.escolher(nova);
   tela.desenhar(momento);
+  const agora = tela.selecionado();
+  escolhida = { chave: agora, pedido: agora === null ? null : pedidoDaChave(agora) ?? (agora === escolhida.chave ? escolhida.pedido : null) };
 }
 registrarDesenho('pedidos-do-dia', desenharProcessamento, { em: ['dados', 'consulta', 'releitura', 'perfil', 'pedidos', 'escala'], ordem: 60, comMomento: true });
 // Aberto, o Processamento lê de novo os pedidos da data. O endereço (#/proc/<chave>) escolhe a linha
@@ -83,10 +92,15 @@ const fecharMenuMais = ligarMenu($('#btn-mais-proc'), $('#menu-mais-proc'), { fe
 // Os nomes de quem entrou, voltou, saiu ou trocou de missão (o toast e a linha de estado dizem o aluno, N6)
 const nomeDo = stuId => ((S.stu || []).find(s => s.id === stuId) || {}).nm || '';
 const listaDeNomes = nomes => (nomes.length > 3 ? `${nomes.slice(0, 3).join(', ')} e mais ${nomes.length - 3}` : nomes.join(', '));
+// Os que voltaram ao dia, pelo lugar que a escala refeita deu a cada um: na escala, na lista de espera ou fora (não coube)
 function textoDoFeito({ feito, resumo }) {
-  const entraram = [...feito.entraram, ...feito.voltaram].map(x => nomeDo(x.stuId)).filter(Boolean);
+  const voltaram = [...feito.entraram, ...feito.voltaram].map(x => ({ nome: nomeDo(x.stuId), onde: ondeOVooFicou(`${x.stuId}_${x.mid}_1`) })).filter(x => x.nome);
+  const deOnde = onde => voltaram.filter(x => (x.onde ? x.onde.onde : 'escala') === onde).map(x => x.nome);
+  const [entraram, esperam, fora] = [deOnde('escala'), deOnde('espera'), deOnde('fora')];
   const partes = [
     entraram.length ? `${entraram.length === 1 ? 'entrou' : 'entraram'} ${listaDeNomes(entraram)}` : '',
+    esperam.length ? `${esperam.length === 1 ? 'ficou em espera' : 'ficaram em espera'} ${listaDeNomes(esperam)}` : '',
+    fora.length ? `${fora.length === 1 ? 'não coube' : 'não couberam'} ${listaDeNomes(fora)}` : '',
     feito.sairam.length ? `${feito.sairam.length === 1 ? 'saiu' : 'saíram'} ${listaDeNomes(feito.sairam.map(x => x.nome))}` : '',
     feito.missoes.length ? `${feito.missoes.length === 1 ? 'trocou a missão do curso de' : 'trocaram a missão do curso'} ${listaDeNomes(feito.missoes.map(x => x.nome))}` : ''
   ].filter(Boolean);
@@ -195,7 +209,14 @@ aoAcionar('recomecar', b => {
   const feito = recomecarPelosPedidos(S, lista, ambienteDaData());
   if (feito.recusa || !gravarAlteracao('exc', feito.texto)) return;
   fecharMenuMais();
-  responderNoProcessamento({ chave: null, texto: feito.texto.replace(/^Pedidos: /, '').replace(/^./, c => c.toUpperCase()) });
+  // Os alunos de cada grupo (N6: a resposta diz o aluno)
+  const { voltaram, sairam, entraram } = feito.nomes;
+  const quem = [
+    voltaram.length ? `${voltaram.length === 1 ? 'voltou ao pedido' : 'voltaram ao pedido'} ${listaDeNomes(voltaram)}` : '',
+    sairam.length ? `${sairam.length === 1 ? 'saiu' : 'saíram'} ${listaDeNomes(sairam)}` : '',
+    entraram.length ? `${entraram.length === 1 ? 'entrou' : 'entraram'} ${listaDeNomes(entraram)}` : ''
+  ].filter(Boolean).join('; ');
+  responderNoProcessamento({ chave: null, texto: `${feito.texto.replace(/^Pedidos: /, '').replace(/^./, c => c.toUpperCase())}${quem ? `: ${quem}` : ''}` });
 });
 
 // "Atualizar" (a escala desta data mudou em outro computador) e "Tentar de novo" (a leitura dos pedidos que falhou)

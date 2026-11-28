@@ -42,6 +42,28 @@ export function situacaoEmPedidos(id) {
   const l = dadosLidos ? linhaDoPedidoNoQuadro(id) : null;
   return l && EM_PEDIDOS[l.situacao] ? EM_PEDIDOS[l.situacao](l) : '';
 }
+// A chave da linha do pedido (id) no quadro, ou null (a resposta de "Aprovar pedido" no Processamento põe o foco nela)
+export const chaveDoPedidoNoProcessamento = id => (dadosLidos ? (linhaDoPedidoNoQuadro(id) || {}).chave ?? null : null);
+
+// O pedido da linha de uma chave (o id), ou null: a linha sem pedido, ou fora do quadro
+export const pedidoDaChave = chave => { const l = chave === null || chave === undefined ? null : linhaDoQuadro(chave); return l && l.pedido ? l.pedido.id : null; };
+// A linha escolhida que saiu do quadro porque o pedido dela mudou de chave (o pedido sem voo, "p:2", que ganhou um voo,
+// "1001_0_1", e o contrário): a chave nova do mesmo pedido, para o detalhe seguir o pedido (e não dizer que ele saiu);
+// null quando a chave continua no quadro ou o pedido não está mais nele
+export function chaveQueSegueOPedido(chave, pedido) {
+  if (!dadosLidos || chave === null || chave === undefined || pedido === null || pedido === undefined || linhaDoQuadro(chave)) return null;
+  const l = linhaDoPedidoNoQuadro(pedido);
+  return l ? l.chave : null;
+}
+
+// Onde o voo de uma chave ficou, quando não ficou na escala (a resposta de "Pôr de volta" e de "Atualizar a escala" diz,
+// N6): 'espera' ("em espera às 08:20 · 2º") ou 'fora' ("fora da escala (não coube)"); na escala (ou fora do quadro): null
+export function ondeOVooFicou(chave) {
+  const l = dadosLidos && chave !== null && chave !== undefined ? linhaDoQuadro(chave) : null;
+  if (!l || !['em-espera', 'nao-coube'].includes(l.situacao)) return null;
+  const texto = EM_PEDIDOS[l.situacao](l);
+  return { onde: l.situacao === 'em-espera' ? 'espera' : 'fora', texto: texto.charAt(0).toLowerCase() + texto.slice(1) };
+}
 
 // Os grupos da lista, nesta ordem, e as situações de cada um
 const GRUPOS = [
@@ -92,9 +114,13 @@ function acaoDaLinha(l) {
   return null;
 }
 
-// O que acabou de mudar por uma ação desta tela (a linha marcada e à vista, N6)
+// O que acabou de mudar por uma ação desta tela (a linha marcada e à vista, N6), na data da ação: a mesma chave em outra
+// data é outro voo
 let recente = null;
-function marcarRecenteNoProcessamento(chave) { recente = chave === null ? null : String(chave); }
+function marcarRecenteNoProcessamento(chave) { recente = chave === null ? null : { chave: String(chave), data: DATA }; }
+const eRecente = chave => Boolean(recente && recente.data === DATA && recente.chave === chave);
+// A data da resposta na linha de estado (#proc-status): em outra data, ela sai
+let dataDoStatus = null;
 
 function itemDaLinha(l) {
   const r = registroDa(l);
@@ -115,7 +141,7 @@ function itemDaLinha(l) {
     apagado: l.situacao === 'cancelado',
     grupo: grupoDa(l.situacao),
     ...(acao ? { acao } : {}),
-    atributos: `data-proc="${esc(l.chave)}"${recente === l.chave ? ' data-recente' : ''}`,
+    atributos: `data-proc="${esc(l.chave)}"${eRecente(l.chave) ? ' data-recente' : ''}`,
     busca: [l.nome, l.missao, r && r.etapa].filter(Boolean),
     valores: { situacao: [valorDaSituacao(l.situacao)], curso: [((S.stu || []).find(s => s.id === l.stuId) || {}).curso || 'sem-curso'], missao: [l.missao] }
   };
@@ -222,6 +248,10 @@ function avisoDoProcessamento() {
 export function desenharAvisoDoProcessamento() {
   const lugar = $('#proc-atualizacao');
   if (!lugar) return;
+  // Outra data aberta: a marca e a resposta da ação da data de antes saem (voltar a ela não as traz de volta)
+  if (recente && recente.data !== DATA) recente = null;
+  const status = $('#proc-status');
+  if (status && dataDoStatus !== DATA && status.textContent) { status.textContent = ''; dataDoStatus = null; }
   const html = avisoDoProcessamento();
   lugar.hidden = !html;
   if (lugar.innerHTML !== html) trocarConteudo(lugar, html);
@@ -233,17 +263,17 @@ export function desenharAvisoDoProcessamento() {
 // A resposta de uma ação do Processamento (N6): a linha de estado (#proc-status, role="status") e o toast, com o aluno e a
 // data; a linha do pedido marcada (não só pela cor: a barra à esquerda e "agora" para o leitor de tela) e à vista, com o
 // foco nela; sem a linha à vista (filtrada, ou o detalhe numa vista só), o foco vai para a linha de estado. ok: o toast de
-// feito; senão, o de aviso
-export function responderNoProcessamento({ chave, texto, ok = true }) {
+// feito; senão, o de aviso. focar: false deixa o foco onde está (a gaveta das restrições aberta por cima da tela)
+export function responderNoProcessamento({ chave, texto, ok = true, focar = true }) {
   const frase = `${texto} · ${dataCurta(DATA)}`;
   const status = $('#proc-status');
-  if (status) status.textContent = frase;
+  if (status) { status.textContent = frase; dataDoStatus = DATA; }
   showToast(`${frase}.`, ok ? 'ok' : '');
   if (chave !== null && chave !== undefined) marcarRecenteNoProcessamento(chave);
   redesenharPorNome('pedidos-do-dia');
   const botao = chave !== null && chave !== undefined && document.querySelector(`#proc .lista-botao[data-item="${CSS.escape(String(chave))}"]`);
   const naTela = $('#s-proc') && !$('#s-proc').hidden && $('#s-proc').classList.contains('on');
-  if (!naTela) return;
+  if (!naTela || !focar) return;
   if (botao && botao.getClientRects().length) {
     botao.focus({ preventScroll: true });
     botao.scrollIntoView({ block: 'nearest' });

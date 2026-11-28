@@ -34,6 +34,15 @@ export function marcarPendente(p) { pendente = p; }
 // A gaveta aberta pela Escala (o editor do voo, o item do trilho), não pelo Processamento: na escala não aprovada, cada
 // mudança dela pergunta antes de refazer (F1g, R6: #dlg-refazer)
 export const perguntaAntesNaGaveta = () => Boolean(aberta && aberta.daEscala && !S.aprovacao);
+// A gaveta aberta pelo Processamento (o "Restrições" do detalhe): a resposta de "Pôr de volta na escala" vai também para a
+// linha de estado dele (N6)
+export const abertaPeloProcessamento = () => Boolean(aberta && !aberta.daEscala);
+// O foco na situação do voo, na gaveta redesenhada (o botão que a ação usou saiu com o desenho): o leitor de tela lê onde
+// o voo ficou
+export function focarNaSituacao() {
+  const situacao = $('#painel-restricoes .restricoes-situacao');
+  if (situacao && visivel(situacao)) situacao.focus();
+}
 
 const op = ({ valor, texto, desligada }, atual) => `<option value="${esc(valor)}"${String(valor) === String(atual) ? ' selected' : ''}${desligada ? ' disabled' : ''}>${esc(texto)}</option>`;
 const dica = (nome, rotulo) => `<button type="button" class="dica-btn" data-dica="${nome}" aria-label="O que é ${esc(rotulo)}?" aria-expanded="false"></button>`;
@@ -45,11 +54,11 @@ function situacaoDoPedido(stu, d, mid) {
   if (!d.fly) return foraDaEscala(stu, mid);
   if (voo) {
     const editar = isGestor() ? '' : ` <button type="button" class="btn quiet" data-act="editar-voo" data-fkey="${esc(voo.isGround && voo.classKey ? voo.classKey : voo.fKey)}" aria-haspopup="dialog">Editar o voo</button>`;
-    return `<p class="restricoes-situacao"><b>Na escala: ${hm(voo.a)}–${hm(voo.b)}</b> · ${esc(nomeDoRecurso(voo.r))} · ${esc(voo.ins || '')}. `
+    return `<p class="restricoes-situacao" tabindex="-1"><b>Na escala: ${hm(voo.a)}–${hm(voo.b)}</b> · ${esc(nomeDoRecurso(voo.r))} · ${esc(voo.ins || '')}. `
       + `O que está aqui vale para o app encaixar o pedido; o lugar, o recurso e o INVA do voo mudam no editor do voo.${editar}</p>`;
   }
   const recusa = RES ? rejeicoesDosPedidos(estadoDaEscala(), RES).get(fKey) : null;
-  return recusa ? `<p class="restricoes-situacao fora"><b>Fora da escala:</b> ${esc(recusa.m)}</p>` : '';
+  return recusa ? `<p class="restricoes-situacao fora" tabindex="-1"><b>Fora da escala:</b> ${esc(recusa.m)}</p>` : '';
 }
 
 // O voo tirado da escala (G2): o app não lê as restrições; "Pôr de volta na escala" (quem edita), ou por que ele não volta
@@ -58,7 +67,7 @@ function foraDaEscala(stu, mid) {
   const volta = isGestor() ? '' : pode.ok
     ? ` <button type="button" class="btn quiet" data-act="por-de-volta" data-id="${esc(stu.id)}" data-mid="${esc(mid)}" aria-label="Pôr de volta na escala: ${esc(stu.nm)}">Pôr de volta na escala</button>`
     : ` ${esc(MOTIVO_PARA_NAO_VOLTAR[pode.motivo])}`;
-  return `<p class="restricoes-situacao">Fora da escala nesta data (tirado da escala): o app não lê estas restrições.${volta}</p>`;
+  return `<p class="restricoes-situacao" tabindex="-1">Fora da escala nesta data (tirado da escala): o app não lê estas restrições.${volta}</p>`;
 }
 
 // O horário: o exato do pedido da agenda, mostrado (muda em Pedidos ou no editor do voo, N14); senão, as preferências

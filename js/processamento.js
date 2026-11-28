@@ -16,6 +16,7 @@ import { minutoDaPreferencia, paraMinuto, horariosDaMissao } from './horarios.js
 import { rejeicoesDosPedidos } from './rejeicoes.js';
 import { hm } from './format.js';
 import { FORA_DA_ESCALA, ONDE_RESOLVER } from './conflitos.js';
+import { nomeDoRecurso } from './categorias.js';
 
 // Os pedidos de um aluno no dia: o principal (o próprio aluno, mid 0) e as missões extras
 const pedidosDoAluno = aluno => [aluno, ...(Array.isArray(aluno.extra) ? aluno.extra : [])];
@@ -154,13 +155,16 @@ export function conciliarPedidos(estado, solicitacoes, { data = null, hoje = nul
 // formato 30) e cuja missão já foi aprovada depois troca para a que o programa dá agora (missaoDaEntrada, no mesmo tipo e
 // recurso). Fica o voo que já começou ou tem dono: com resultado na data, com o status Atrasado, Em Voo, Pousou ou
 // Cancelado, agendado ou com o instrutor escolhido na Escala; e nada numa data passada ou sem os programas (programa
-// vazio). [{ stuId, mid, nome, de, para, curso }]
+// vazio). As trocas de um aluno são vistas uma depois da outra, numa cópia dele com as de antes já feitas: dois voos dele
+// nunca recebem a mesma missão (a regra 12). [{ stuId, mid, nome, de, para, curso }]
 function missoesUltrapassadas(estado, { programa = [], situacao = [], data = null, hoje = null } = {}) {
   if (!programa.length || (data && hoje && data < hoje)) return [];
   const mapa = situacaoPorMissao(situacao);
   const doDia = (estado.resultados || {}).doDia || [];
   const trocas = [];
-  for (const aluno of estado.stu || []) {
+  for (const original of estado.stu || []) {
+    if (!pedidosDoAluno(original).some(r => r.etapaDoPrograma === true)) continue;
+    const aluno = structuredClone(original);
     for (const r of pedidosDoAluno(aluno)) {
       const mid = r.mid || 0, fKey = chaveDoVoo(aluno.id, mid);
       const pino = (estado.fixos || {})[fKey];
@@ -171,7 +175,9 @@ function missoesUltrapassadas(estado, { programa = [], situacao = [], data = nul
       const minuto = horarioPedido(estado, aluno.id, r);
       const comoPedido = { missao: r.mis, recurso: r.eq, janela: 'horario', horario: minuto === null ? null : hm(minuto) };
       const agora = missaoDaEntrada(estado, aluno, comoPedido, { programa, situacao, copiada: { ...r, etapa: null } });
-      if (agora.missao && agora.missao.codigo !== r.etapa) trocas.push({ stuId: aluno.id, mid, nome: aluno.nm, de: r.etapa, para: agora.missao.codigo, curso: agora.curso });
+      if (!agora.missao || agora.missao.codigo === r.etapa) continue;
+      trocas.push({ stuId: aluno.id, mid, nome: aluno.nm, de: r.etapa, para: agora.missao.codigo, curso: agora.curso });
+      Object.assign(r, { etapa: agora.missao.codigo }, agora.curso ? { cursoDaEtapa: agora.curso } : {});
     }
   }
   return trocas;
@@ -452,6 +458,18 @@ export function aplicarConciliacao(estado, plano, { programa = [], situacao = []
     guardar(v.id);
     feito.voltaram.push(v);
   }
+  // As missões do curso que o programa passou: a de agora no voo, se ele ainda tem a de antes e nenhum outro voo do aluno
+  // a tem. Antes das entradas, para que o pedido novo do mesmo aluno não receba a mesma missão (a regra 12); a linha do
+  // Histórico vai depois das saídas, como antes
+  const historicoDasMissoes = [];
+  for (const m of plano.missoes || []) {
+    const { aluno, registro } = doRegistro(m);
+    if (!registro || registro.etapa !== m.de) continue;
+    if (pedidosDoAluno(aluno).some(p => p !== registro && p.fly && p.etapa === m.para && (p.cursoDaEtapa || aluno.curso) === (m.curso || aluno.curso))) continue;
+    Object.assign(registro, { etapa: m.para }, m.curso ? { cursoDaEtapa: m.curso } : {});
+    feito.missoes.push(m);
+    historicoDasMissoes.push(['mod', `Pedidos: missão do curso de ${m.nome}: ${m.de} → ${m.para} (o programa andou)`]);
+  }
   // Os pedidos com a missão do curso que escolheram na Agenda (a regra 8) entram antes dos sem uma, para que a missão de
   // cada um já esteja no dia quando a dos outros é inferida (a regra 12: não é dada de novo), na mesma importação ou em
   // duas; dentro de cada grupo, a ordem do plano. O pedido que já tem registro (um plano aplicado de novo) não entra
@@ -513,14 +531,7 @@ export function aplicarConciliacao(estado, plano, { programa = [], situacao = []
     }
   }
   for (const x of feito.sairam) feito.historico.push(['exc', textoDaSaida(estado, x)]);
-  // As missões do curso que o programa passou: a de agora no voo, se ele ainda tem a de antes
-  for (const m of plano.missoes || []) {
-    const { registro } = doRegistro(m);
-    if (!registro || registro.etapa !== m.de) continue;
-    Object.assign(registro, { etapa: m.para }, m.curso ? { cursoDaEtapa: m.curso } : {});
-    feito.missoes.push(m);
-    feito.historico.push(['mod', `Pedidos: missão do curso de ${m.nome}: ${m.de} → ${m.para} (o programa andou)`]);
-  }
+  feito.historico.push(...historicoDasMissoes);
   // Os que ficam até o operador conferir o status e os que ficam (nada muda): o aluno, para o aviso
   for (const x of plano.conferir || []) { const { aluno } = doRegistro(x); if (aluno) feito.conferir.push({ ...x, nome: aluno.nm }); }
   for (const x of plano.ficam || []) { const { aluno } = doRegistro(x); if (aluno) feito.ficam.push({ ...x, nome: aluno.nm }); }
@@ -664,7 +675,7 @@ export function quadroDoProcessamento(estado, solicitacoes, resultado, ambiente 
 
 // A terceira linha das situações que dependem da escala: o voo, a espera ou o motivo
 function textoDaLinha(l) {
-  if (l.situacao === 'na-escala') return `Na escala ${hm(l.voo.a)}–${hm(l.voo.b)} · ${l.voo.r}${l.voo.ins ? ` · ${l.voo.ins}` : ''}`;
+  if (l.situacao === 'na-escala') return `Na escala ${hm(l.voo.a)}–${hm(l.voo.b)} · ${nomeDoRecurso(l.voo.r)}${l.voo.ins ? ` · ${l.voo.ins}` : ''}`;
   if (l.situacao === 'em-espera') return `Em espera às ${hm(l.espera.minuto)} · ${l.espera.lugar}º`;
   if (l.situacao === 'nao-coube') return `Não coube na escala${l.motivo ? `: ${l.motivo.curto || l.motivo.m}` : ''}`;
   return TEXTO_DA_SITUACAO[l.situacao] || '';
@@ -719,6 +730,8 @@ export function recomecarPelosPedidos(estado, solicitacoes, ambiente = {}) {
   const guardadas = new Set(estado.importadas);
   const doDia = (estado.resultados || {}).doDia || [];
   const feito = { voltaramAoPedido: 0, sairamSemPedido: 0, sairam: 0, ficam: 0, continuamFora: 0, entraram: 0, reaberta: Boolean(estado.aprovacao) };
+  // Os nomes de quem voltou ao pedido, saiu e entrou (a resposta do N6 diz o aluno), cada um uma vez por grupo
+  const nomes = { voltaram: new Set(), sairam: new Set(), entraram: new Set() };
   const limpar = new Set(), piso = new Map(), voltam = [];
   const tirar = id => { estado.importadas = estado.importadas.filter(x => x !== id); };
   for (const aluno of estado.stu || []) {
@@ -736,7 +749,7 @@ export function recomecarPelosPedidos(estado, solicitacoes, ambiente = {}) {
       }
       limpar.add(fKey);
       if (!Number.isInteger(r.solicitacao)) {
-        if (r.fly || Object.hasOwn(estado.fixos || {}, fKey)) feito.sairamSemPedido++;
+        if (r.fly || Object.hasOwn(estado.fixos || {}, fKey)) { feito.sairamSemPedido++; nomes.sairam.add(aluno.nm); }
         // A missão extra sai do dia; o principal fica em branco, sem voar (nada do voo de antes: o instrutor escolhido, a
         // missão do curso)
         if (!mid) deixarEmBranco(r);
@@ -748,7 +761,7 @@ export function recomecarPelosPedidos(estado, solicitacoes, ambiente = {}) {
         voltam.push({ aluno, r, s });
         continue;
       }
-      if (r.fly) feito.sairam++;
+      if (r.fly) { feito.sairam++; nomes.sairam.add(aluno.nm); }
       r.fly = false;
       if (s.cancelada_em) tirar(s.id);
     }
@@ -765,7 +778,8 @@ export function recomecarPelosPedidos(estado, solicitacoes, ambiente = {}) {
   const naOrdem = (p, q) => (ordem.get(p.aluno) - ordem.get(q.aluno)) || (minutoDaLinha(p) - minutoDaLinha(q)) || (p.id - q.id);
   const escolheu = s => Boolean(missaoDoCursoDoPedido(cursos || [], s));
   voltam.sort((p, q) => naOrdem(p.s, q.s));
-  for (const { r, s } of [...voltam.filter(v => escolheu(v.s)), ...voltam.filter(v => !escolheu(v.s))]) {
+  for (const { aluno, r, s } of [...voltam.filter(v => escolheu(v.s)), ...voltam.filter(v => !escolheu(v.s))]) {
+    nomes.voltaram.add(aluno.nm);
     const mid = r.mid;
     deixarEmBranco(r);
     if (mid !== undefined) r.mid = mid;
@@ -782,6 +796,7 @@ export function recomecarPelosPedidos(estado, solicitacoes, ambiente = {}) {
     aluno.extra = [...(aluno.extra || []), extra];
     entrar(estado, s, { programa, situacao, cursos }, extra);
     feito.entraram++;
+    nomes.entraram.add(aluno.nm);
   }
   const partes = [
     feito.voltaramAoPedido && quantosDe(feito.voltaramAoPedido, 'voltou ao pedido', 'voltaram ao pedido'),
@@ -791,5 +806,8 @@ export function recomecarPelosPedidos(estado, solicitacoes, ambiente = {}) {
     feito.continuamFora && quantosDe(feito.continuamFora, 'continua fora', 'continuam fora'),
     feito.entraram && quantosDe(feito.entraram, 'entrou', 'entraram')
   ].filter(Boolean);
-  return { ...feito, texto: `Pedidos: escala recomeçada${partes.length ? ` (${partes.join(', ')})` : ''}${feito.reaberta ? ' e escala reaberta' : ''}` };
+  return {
+    ...feito, texto: `Pedidos: escala recomeçada${partes.length ? ` (${partes.join(', ')})` : ''}${feito.reaberta ? ' e escala reaberta' : ''}`,
+    nomes: { voltaram: [...nomes.voltaram], sairam: [...nomes.sairam], entraram: [...nomes.entraram] }
+  };
 }
