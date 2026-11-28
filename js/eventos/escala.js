@@ -1,12 +1,15 @@
 // A Escala: o mapa e o popup do voo (e o clique no mapa que agenda), os filtros, exportar e compartilhar, o status do voo,
 // aprovar e reabrir, os critérios da compactação e as sugestões para um conflito (o resultado da missão do curso:
 // js/eventos/resultados.js)
-import { gravarAlteracao, gravarEscalaCalculada, aindaNaoAbriu, fotoDaEscalaTravada, gravarNaEscala } from '../actions.js';
+import { gravarAlteracao, gravarEscalaCalculada, gravarSemOMotor, aindaNaoAbriu, fotoDaEscala, fotoDaEscalaTravada, gravarNaEscala } from '../actions.js';
+import { aprovar as aprovarEscala, reabrir as reabrirEscala, voosNovos, fixarVoosNovos } from '../aprovacao.js';
+import { impressaoDaEscala, registrarExportacao } from '../exportacoes.js';
+import { operaEscala } from '../perfis.js';
 import { opcoesDeCategoria } from '../categorias.js';
 import { OPCOES_DE_BURACOS, OPCOES_DE_HORARIOS, normalizarCriterios } from '../criterios.js';
 import { $, showToast, anunciar, algumDialogoAberto, gavetaDoEsc, focarNoTitulo, visivel } from '../dom.js';
 import { exp, pdf, planilha } from '../export.js';
-import { fixosAoMudarStatus, fixosAoReabrir, fixosAoAprovar, normalizarFixos, fixarNoLugar } from '../fixos.js';
+import { fixosAoMudarStatus, normalizarFixos, fixarNoLugar } from '../fixos.js';
 import { hm, hojeISO } from '../format.js';
 import { aplicarReparo, aproveitarCancelado, desfazerAproveitamento, repararComOPedido } from '../reparo.js';
 import { S, RES, DATA, AUDIT_LOG, isGestor, modoCompartilhado, insBy, estadoDaEscala } from '../state.js';
@@ -83,10 +86,27 @@ $('#flt-esc-eq').onchange = () => filtrar();
 $('#flt-esc-cat').innerHTML = opcoesDeCategoria();
 $('#flt-esc-cat').onchange = () => filtrar();
 
-// Exportar é usar a escala: a escala só calculada fica gravada (quem só consulta não grava)
-$('#exp').onclick = () => { gravarEscalaCalculada(); exp(); };
-$('#pdf').onclick = () => { gravarEscalaCalculada(); pdf(); };
-$('#xlsx').onclick = () => { gravarEscalaCalculada(); planilha(); };
+// Exportar é usar a escala: a escala só calculada fica gravada (quem só consulta não grava). A exportação do Operador e do
+// Administrador fica registrada na data (quando, quem e a impressão da escala exportada; d32), gravada sem o motor: a
+// escala da tela é a exportada. Antes da aprovação também. Só a que entregou o arquivo ao navegador fica registrada (o
+// PDF sem a biblioteca, o Excel sem o modelo: nada), com a impressão da escala do clique (a planilha lê a escala copiada
+// no clique, e o modelo chega depois)
+async function exportar(tipo, baixar) {
+  const registra = Boolean(!isGestor() && RES && !aindaNaoAbriu() && (ApiClient.perfil ? operaEscala(ApiClient.perfil) : true));
+  const impressao = registra ? impressaoDaEscala(RES, S) : null, por = ApiClient.autorAtual || '', data = DATA;
+  const entregou = await baixar();
+  // A data aberta mudou enquanto o Excel era montado: o registro seria de outra data. A mesma escala baixada de novo no
+  // mesmo tipo, pela mesma pessoa, não registra outra vez: o registro continua dizendo quando ela foi exportada primeiro
+  const antes = (S.exportacoes || {})[tipo];
+  const novo = registra && entregou && DATA === data && !(antes && antes.impressao === impressao && antes.por === por);
+  // Uma gravação só: a do registro leva também a escala só calculada
+  if (!novo) { gravarEscalaCalculada(); return; }
+  S.exportacoes = registrarExportacao(S.exportacoes, tipo, { em: new Date().toISOString(), por, impressao });
+  gravarSemOMotor();
+}
+$('#exp').onclick = () => exportar('csv', exp);
+$('#pdf').onclick = () => exportar('pdf', pdf);
+$('#xlsx').onclick = () => exportar('xlsx', planilha);
 
 // No modo compartilhado o link leva só a data: quem abre entra com a própria conta e lê do servidor
 function linkDaData(data) {
@@ -227,21 +247,43 @@ document.addEventListener('click', e => {
     if (!confirmado(aprovar, 'Confirmar aprovação')) return;
     // O voo fixo pelo operador na Escala (o instrutor escolhido e o voo agendado) continua com a marca: reabrir a escala
     // não o solta. O agendado fora da escala (o pedido foi tirado dela) continua fixo, para o voo voltar ao lugar dele
-    S.fixos = fixosAoAprovar(S.fixos, RES.out);
-    S.aprovacao = { em: new Date().toISOString(), por: ApiClient.autorAtual || '' };
-    gravarAlteracao('mod', `Escala aprovada: ${RES.out.length} ${RES.out.length === 1 ? 'voo fixado' : 'voos fixados'}`);
+    // A aprovação fixa o que a escala da tela deixa entrar, sem o motor (o caminho do F1g, gravarNaEscala): rodado de
+    // novo, ele poderia pôr um pedido que não estava na tela, e esse voo ficaria sem pino. A foto é a de antes
+    const foto = fotoDaEscala();
+    const aprovada = aprovarEscala(S, RES.out, { em: new Date().toISOString(), por: ApiClient.autorAtual || '' });
+    if (!aprovada) return;
+    [S.fixos, S.aprovacao] = [aprovada.fixos, aprovada.aprovacao];
+    gravarNaEscala(foto, 'mod', `Escala aprovada: ${RES.out.length} ${RES.out.length === 1 ? 'voo fixado' : 'voos fixados'}`);
     showToast('Escala aprovada: os voos ficam fixos.', 'ok');
     // O botão virou "Reabrir": o foco vai para ele
     $('#btn-reabrir')?.focus();
   } else {
     if (!confirmado(reabrir, 'Confirmar reabertura')) return;
     // Os voos em andamento (Em Voo, Atrasado, Pousou, Cancelado) e os fixados pelo operador na Escala continuam fixos
-    S.fixos = fixosAoReabrir(S.fixos, S.fStatus);
-    S.aprovacao = null;
+    // A reabertura fica registrada: quando e quem (d33)
+    const reaberta = reabrirEscala(S, { em: new Date().toISOString(), por: ApiClient.autorAtual || '' });
+    if (!reaberta) return;
+    [S.fixos, S.aprovacao, S.reabertura] = [reaberta.fixos, reaberta.aprovacao, reaberta.reabertura];
     gravarAlteracao('mod', 'Escala reaberta: volta a ser refeita a cada alteração');
     showToast('Escala reaberta.', 'ok');
     $('#btn-aprovar')?.focus();
   }
+});
+
+// "Fixar os N voos novos" (escala aprovada): o voo que entrou depois da aprovação, sem pino (o da lista de espera que a
+// conciliação pôs no lugar do cancelado, E), fica fixo onde está; os outros pinos não mudam
+document.addEventListener('click', e => {
+  const b = e.target.closest('#btn-fixar-novos');
+  if (!b || isGestor() || !RES || !S.aprovacao || aindaNaoAbriu()) return;
+  const novos = voosNovos(S.fixos, RES.out);
+  if (!novos.length) return;
+  // Sem o motor, como a aprovação: rodado de novo, ele poderia pôr um pedido que esperava, e o botão voltaria
+  const foto = fotoDaEscalaTravada();
+  S.fixos = fixarVoosNovos(S.fixos, RES.out);
+  const texto = novos.length === 1 ? `Voo novo fixado: ${novos[0].s}` : `${novos.length} voos novos fixados: ${novos.map(o => o.s).join(', ')}`;
+  gravarNaEscala(foto, 'mod', texto);
+  showToast(`${texto}.`, 'ok');
+  $('#btn-reabrir')?.focus();
 });
 
 // Critérios da compactação: a escala é refeita com o critério novo (com a escala aprovada, não mudam)

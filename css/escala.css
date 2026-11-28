@@ -117,6 +117,9 @@ button.st-detalhe:hover { color: var(--ink); }
 .aprovacao:empty { display: none; }
 .selo-aprovada { display: inline-flex; align-items: center; gap: 6px; margin-left: 10px; padding: 2px 10px; border-radius: 14px; background: var(--ok-bg); color: var(--ok); font: 600 13px 'Barlow', sans-serif; vertical-align: middle; }
 .selo-aprovada[hidden] { display: none; }
+/* As exportações registradas (H): "Exportada", ou qual ficou desatualizada (a escala mudou depois dela) */
+#exportacoes-situacao { margin-left: 8px; font: 500 13px 'Barlow', sans-serif; color: var(--ok); vertical-align: middle; }
+#exportacoes-situacao[data-exportada="false"] { color: var(--wa); }
 .ico.fixo { width: 14px; height: 14px; margin-left: 4px; vertical-align: -2px; color: var(--ok); }
 .tabela-escala tr.em-conflito td:first-child { box-shadow: inset 3px 0 0 var(--er); }
 /* Compactação: os critérios do dia, o tempo parado e a aprovação numa segunda linha da barra da Escala; no celular,

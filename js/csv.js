@@ -38,14 +38,16 @@ function observacoes(o, status, detalhe, revisao) {
   return notas.join(' · ');
 }
 
+// A missão como os arquivos a escrevem: a missão do curso antes do tipo de missão ("PP-07 · Navegação"), e a sessão
+// ("Voo Local (sessão 2/3)"). Também a impressão da escala (js/exportacoes.js) a lê
+export const missaoNoArquivo = o => (o.etapa ? `${o.etapa} · ` : '') + (o.ss && o.ss !== '1/1' ? `${o.mis} (sessão ${o.ss})` : o.mis);
+
 export function linhasDoCsv(res, fStatus = {}, fObs = {}) {
   return [...res.out]
     .sort((a, b) => ordemDoTipo(a) - ordemDoTipo(b) || a.r.localeCompare(b.r) || a.a - b.a || a.o - b.o)
     .map(o => {
       const status = statusDoVoo(o, fStatus);
-      // A missão do curso vem antes do tipo de missão: "PP-07 · Navegação"
-      const missao = (o.etapa ? `${o.etapa} · ` : '') + (o.ss && o.ss !== '1/1' ? `${o.mis} (sessão ${o.ss})` : o.mis);
-      return [o.r, `${hm(o.a)}–${hm(o.b)}`, o.s, missao, o.ins, observacoes(o, status, fObs[o.fKey], res.revisao)];
+      return [o.r, `${hm(o.a)}–${hm(o.b)}`, o.s, missaoNoArquivo(o), o.ins, observacoes(o, status, fObs[o.fKey], res.revisao)];
     });
 }
 

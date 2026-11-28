@@ -193,7 +193,8 @@ export const ultimaGravacao = () => gravacaoAtual;
 // antes de esperar o servidor (js/storage.js), e um desenho que falha (js/redesenho.js, semFalhar) não impede a gravação
 // nem a entrada do histórico que vem depois dela
 // resultado: a escala que a alteração deixou sem o motor (a escala aprovada, gravarAlteracao); sem ela, a escala refeita
-function save(resultado = null) {
+// marcar: a marca "Atualizada às" da barra (a escala refeita); o registro de uma exportação não a refaz (marcar: false)
+function save(resultado = null, { marcar = true } = {}) {
   if (isGestor() || !dadosLidos) return Promise.resolve(false);
   if (resultado) setRES(resultado);
   else calcularComOsNoturnosFixos();
@@ -213,7 +214,7 @@ function save(resultado = null) {
   redesenhar('escala');
   // A barra da escala mostra quando ela foi refeita (sem a barra na página, só não mostra)
   const agora = new Date(), texto = $('#escala-atualizada-texto'), marca = $('#escala-atualizada');
-  if (texto && marca) {
+  if (marcar && texto && marca) {
     texto.textContent = `Atualizada às ${String(agora.getHours()).padStart(2, '0')}:${String(agora.getMinutes()).padStart(2, '0')}`;
     marca.hidden = false;
   }
@@ -243,8 +244,8 @@ function avisarVoltaDoDiaSeguinte(gravacao) {
 }
 
 // Uma alteração do operador nos dados da data: grava (a escala é refeita) e registra no histórico, nesta ordem e no
-// mesmo evento (a entrada do histórico espera pela gravação que leva a alteração). É o único jeito de os eventos da
-// tela mudarem os dados. Sem descrição, só grava (as janelas de um instrutor, por exemplo, não entram no histórico); com
+// mesmo evento (a entrada do histórico espera pela gravação que leva a alteração). É o jeito de os eventos da tela
+// mudarem os dados (fora ele, só gravarSemOMotor, que grava um registro que não muda a escala, como o das exportações). Sem descrição, só grava (as janelas de um instrutor, por exemplo, não entram no histórico); com
 // uma lista, registra uma entrada por item (a importação da Agenda, um aluno por entrada). Quem só consulta não grava, e
 // nada é gravado antes de a escala abrir. Responde se gravou.
 // { resultado }: a alteração de um voo na escala aprovada, sem o motor (F1g): a escala que ela deixou é gravada como
@@ -273,7 +274,13 @@ export function gravarAlteracao(tipo, descricao, reverter = null, reverte = null
 // Sugestões, o agendamento e as reversões deles): antes de mudar S, a foto do dia (para voltar se a gravação for
 // recusada), o estado que fez a escala da tela (para ligar as recusas aos pedidos) e a data. Fora da escala aprovada, null
 export function fotoDaEscalaTravada() {
-  if (!S.aprovacao || !RES) return null;
+  return S.aprovacao ? fotoDaEscala() : null;
+}
+
+// A foto do dia antes de uma mudança que vai gravar a escala da tela sem o motor, também na data ainda não aprovada (H: a
+// aprovação, que passa a valer com a mudança). Sem a escala da tela, null
+export function fotoDaEscala() {
+  if (!RES) return null;
   return { S: structuredClone(S), estado: structuredClone(estadoDaEscala()), data: DATA };
 }
 
@@ -296,6 +303,14 @@ export const diaJaGravado = () => diaGravado;
 let escalaSoCalculada = false;
 export function gravarEscalaCalculada() {
   if (escalaSoCalculada) save();
+}
+
+// Grava o dia com a escala da tela como está, sem o motor (H: o registro das exportações, que não muda a escala): quem só
+// consulta não grava, e nada é gravado antes de a escala abrir. Sem a escala da tela, nada
+export function gravarSemOMotor() {
+  if (isGestor() || aindaNaoAbriu() || !RES) return false;
+  save(RES, { marcar: false });
+  return true;
 }
 
 // A descrição de uma entrada do histórico tem até 500 caracteres, ao gravar e ao abrir

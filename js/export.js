@@ -28,15 +28,18 @@ function baixar(nome, dados, oQue) {
   }
 }
 
-// CSV para o portal de agendamento: agrupado por avião, em ordem de horário (js/csv.js)
+// CSV para o portal de agendamento: agrupado por avião, em ordem de horário (js/csv.js). Cada exportação diz se o
+// arquivo foi entregue ao navegador (o H só registra a que foi)
 export function exp() {
-  if (!RES) { showToast('Não há escala para exportar nesta data.'); return; }
-  if (baixar(nomeDoCsv(DATA), montarCsv(RES, S.fStatus || {}, S.fObs || {}), 'o CSV')) showToast('CSV exportado.', 'ok');
+  if (!RES) { showToast('Não há escala para exportar nesta data.'); return false; }
+  const ok = baixar(nomeDoCsv(DATA), montarCsv(RES, S.fStatus || {}, S.fObs || {}), 'o CSV');
+  if (ok) showToast('CSV exportado.', 'ok');
+  return ok;
 }
 
 export function pdf() {
-  if (!RES) { showToast('Não há escala para o PDF nesta data.'); return; }
-  if (!window.jspdf) { showToast('A biblioteca de PDF não carregou. Verifique a conexão e recarregue a página.'); return; }
+  if (!RES) { showToast('Não há escala para o PDF nesta data.'); return false; }
+  if (!window.jspdf) { showToast('A biblioteca de PDF não carregou. Verifique a conexão e recarregue a página.'); return false; }
 
   const doc = new window.jspdf.jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
   const { out, al, tot } = RES;
@@ -98,7 +101,9 @@ export function pdf() {
     doc.text(`ACPM - Escala de ${dt} - Página ${i} de ${n}`, pw - 14, ph - 6, { align: 'right' });
   }
 
-  if (baixar(`escala-acpm-${dt.split('/').reverse().join('-')}.pdf`, doc.output('blob'), 'o PDF')) showToast('PDF emitido.', 'ok');
+  const ok = baixar(`escala-acpm-${dt.split('/').reverse().join('-')}.pdf`, doc.output('blob'), 'o PDF');
+  if (ok) showToast('PDF emitido.', 'ok');
+  return ok;
 }
 
 // O .xlsx é montado com a compressão do navegador ("deflate-raw": Safari 16.4, Chrome 103 e Firefox 113 em diante; o
@@ -118,13 +123,13 @@ function navegadorMontaPlanilha() {
 // enquanto a planilha é montada não baixa outra
 let montando = false;
 export async function planilha() {
-  if (!RES) { showToast('Não há escala para exportar nesta data.'); return; }
-  if (!navegadorMontaPlanilha()) { showToast('Este navegador não monta a planilha do Excel. Atualize o navegador ou use o CSV.'); return; }
-  if (montando) return;
+  if (!RES) { showToast('Não há escala para exportar nesta data.'); return false; }
+  if (!navegadorMontaPlanilha()) { showToast('Este navegador não monta a planilha do Excel. Atualize o navegador ou use o CSV.'); return false; }
+  if (montando) return false;
   montando = true;
   try {
     // O recurso inativo no cadastro solta a coluna dele (um com voo na escala continua com a sua)
-    await baixarPlanilha(RES, DATA, { frota: S.frota ? S.frota.filter(f => !inativoNaDataAberta(f)) : undefined, av: { ...estadoDaEscala().av }, fStatus: { ...S.fStatus }, fObs: { ...S.fObs } });
+    return await baixarPlanilha(RES, DATA, { frota: S.frota ? S.frota.filter(f => !inativoNaDataAberta(f)) : undefined, av: { ...estadoDaEscala().av }, fStatus: { ...S.fStatus }, fObs: { ...S.fObs } });
   } finally {
     montando = false;
   }
@@ -138,7 +143,7 @@ async function baixarPlanilha(res, data, estado) {
     modelo = new Uint8Array(await resposta.arrayBuffer());
   } catch {
     showToast('O modelo da planilha não carregou. Verifique a conexão e tente de novo.');
-    return;
+    return false;
   }
   let pronta;
   try {
@@ -147,11 +152,12 @@ async function baixarPlanilha(res, data, estado) {
     // O modelo que chegou não é o esperado (uma página no lugar dele, um arquivo estragado ou mudado)
     console.warn(e);
     showToast('Não foi possível montar a planilha: o modelo que chegou não é o esperado. Recarregue a página e tente de novo, ou use o CSV.');
-    return;
+    return false;
   }
   const arquivo = new Blob([pronta.bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-  if (!baixar(nomeDaPlanilha(data), arquivo, 'a planilha')) return;
+  if (!baixar(nomeDaPlanilha(data), arquivo, 'a planilha')) return false;
   const n = pronta.foraDoModelo.length;
   if (n) showToast(`Planilha exportada. ${n === 1 ? '1 voo não coube' : `${n} voos não couberam`} no modelo: estão na última linha da planilha.`);
   else showToast('Planilha exportada.', 'ok');
+  return true;
 }

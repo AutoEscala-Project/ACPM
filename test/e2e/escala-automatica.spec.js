@@ -50,16 +50,20 @@ test.describe('Escala automática', () => {
     expect(servidor.gravacoes.filter(g => g.chave === `dia:${AMANHA}`)).toHaveLength(1);
   });
 
-  test('exportar uma escala só calculada a grava (BI e dia seguinte); exportar de novo não grava outra vez', async ({ page, context }) => {
+  // H (d32): cada exportação do Operador fica registrada no dia, uma gravação por tipo; a mesma escala baixada de novo no
+  // mesmo tipo não grava outra vez
+  test('exportar uma escala só calculada a grava (BI e dia seguinte); cada tipo registra a sua; o mesmo tipo de novo não grava outra vez', async ({ page, context }) => {
     const servidor = await instalarSupabaseFalso(context, documentosAtuais(comExemplo(estadoSintetico()), AMANHA));
     await entrar(page, CONTAS.operador);
     await irPara(page, 'esc');
     await exportar(page, 'csv');
     await expect.poll(() => (servidor.dias.get(AMANHA).conteudo.resultado || { out: [] }).out.length).toBeGreaterThan(20);
     await exportar(page, 'pdf');
+    await expect.poll(() => Object.keys(servidor.dias.get(AMANHA).conteudo.exportacoes || {}).sort()).toEqual(['csv', 'pdf']);
     await exportar(page, 'csv');
     await exportar(page, 'xlsx');
-    expect(servidor.gravacoes.filter(g => g.chave === `dia:${AMANHA}`)).toHaveLength(1);
+    await expect.poll(() => Object.keys(servidor.dias.get(AMANHA).conteudo.exportacoes || {}).sort()).toEqual(['csv', 'pdf', 'xlsx']);
+    expect(servidor.gravacoes.filter(g => g.chave === `dia:${AMANHA}`)).toHaveLength(3);
   });
 
   test('exportar o Excel também grava a escala só calculada', async ({ page, context }) => {
