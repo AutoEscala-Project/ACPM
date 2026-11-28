@@ -24,7 +24,7 @@ export const HORARIOS_INICIAIS = { C152: [...HORARIOS_PADRAO], C172: [...HORARIO
 export const CATEGORIAS_COM_HORARIOS = Object.keys(HORARIOS_INICIAIS);
 
 // O primeiro horário de decolagem do dia (06:30, Pedro em 2026-11-28: "booked times should start at 6:30"): o do Voo Solo,
-// o mesmo limite do horário exato da Agenda (js/rules.js), para a lista nunca oferecer um horário que o pedido perde
+// o mesmo limite do horário exato do pedido (js/rules.js), para a lista nunca oferecer um horário que o pedido perde
 export const PRIMEIRO_HORARIO = HORARIO_DO_SOLO;
 // Até 2026-11-28 o editor e a lista guardada aceitavam desde as 06:00. Um horário guardado das 06:00 às 06:29 não se
 // perde: vira o primeiro do dia, na lista, na reversão dela e na preferência do pedido; antes das 06:00, sai como sempre

@@ -254,9 +254,9 @@ describe('O resumo dos horários e o efeito de uma lista nova', () => {
     assert.equal(pedidos[1].pedido.jan, 'h500');
   });
 
-  it('no editor, os horários vão das 06:30 (o primeiro horário da Agenda) às 16:30 (o último que cabe um voo de 1 h antes do noturno)', () => {
+  it('no editor, os horários vão das 06:30 (o primeiro horário exato de um pedido) às 16:30 (o último que cabe um voo de 1 h antes do noturno)', () => {
     assert.deepEqual([PRIMEIRO_HORARIO, ULTIMO_HORARIO].map(hm), ['06:30', '16:30']);
-    // Uma fonte só: o primeiro horário de decolagem é o do Voo Solo, o limite do horário exato da Agenda
+    // Uma fonte só: o primeiro horário de decolagem é o do Voo Solo, o limite do horário exato do pedido
     assert.equal(PRIMEIRO_HORARIO, HORARIO_DO_SOLO);
   });
 });
