@@ -80,7 +80,7 @@ const NOVAS = {
   // G2: o Processamento (a lista com a situação, a lista de espera, "Atualizar a escala", as ações e a resposta delas)
   processamento: ['Em espera às 08:20 · 1º', 'também o local registrado na lista de espera', 'Atualizar a escala, no aviso do alto',
     'troca a missão do curso que o programa passou', 'Trazer de volta', 'Pôr de volta na escala', 'Recomeçar pelos pedidos: dois cliques',
-    'marcada pela barra à esquerda e por “agora”', 'a secretaria não vê o Processamento',
+    'marcada pela barra à esquerda e por “agora”', 'quando ele espera na lista de espera ou não coube', 'a secretaria não vê o Processamento',
     // G1: as restrições do pedido, de onde abrem, o que mostram (o horário exato da agenda, o tipo e o horário contra as
     // limitações, o INVA de Não escalar com desligado) e a regra que solta o voo agendado
     'é a gaveta com o que o app lê para encaixar o pedido na escala',
