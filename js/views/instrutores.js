@@ -6,7 +6,8 @@
 // faixas e as pausas, os três turnos, "Editar faixas", "O que cabe nestas faixas" e os voos dele na escala da data), o cadastro (nome e peso), as
 // habilitações, as horas de voo (limites da lei, com as de fora do app), os dados pessoais (para quem os vê) e, no rodapé,
 // "Excluir instrutor…"; no alto, "Agendar voo com <nome>". Os campos têm os data-f de sempre: js/eventos/instrutores.js
-// grava. "Editar faixas" é um rascunho na memória (editarFaixas), gravado só por "Salvar faixas"
+// grava. "Editar faixas" é um rascunho na memória (editarFaixas), da data aberta e das faixas de quando abriu (outra data,
+// ou as faixas mudadas por fora, o tiram), gravado só por "Salvar faixas"
 import { AIRCRAFT_EQ_TYPES, GROUND_REG, MINUTOS_DO_DIA } from '../config.js';
 import { HABILITACOES, nomeDaHabilitacao, GRUPOS_DE_HABILITACAO, gruposDosRecursos } from '../habilitacoes.js';
 import { FROTA_INICIAL } from '../frota.js';
@@ -18,7 +19,7 @@ import { normalizarLimites } from '../limites.js';
 import { unidadeDoVoo, umPorUnidade, statusDoVoo } from '../voo.js';
 import {
   TURNOS, ALMOCO, INICIO_DAS_FAIXAS, MINUTOS_DAS_FAIXAS, MAXIMO_DE_FAIXAS, MAXIMO_DE_PAUSAS, faixasDe, turnoDasFaixas, textoDasFaixas, textoDasPausas, trechosDaTira,
-  oQueCabe, textoDoQueCabe
+  oQueCabe, textoDoQueCabe, mesmasFaixas, minutoDaFaixa
 } from '../disponibilidade.js';
 import { canacDe, nomeCompletoDe, podeVerDadosPessoais } from './dados-pessoais.js';
 import { secaoDosDadosPessoais, marcaDaPessoa, recusasDe } from './editor-de-dados-pessoais.js';
@@ -30,9 +31,10 @@ const ORDEM_NA_LINHA = ['mlte', 'c172', 'ifr', 'noturno', 'parafuso', 'endosso_s
   'sim_multi', 'sim_mono', 'ground_pa34', 'grounds'];
 const rotuloDa = h => ROTULO.get(h) || nomeDaHabilitacao(h);
 const resumoDasHabilitacoes = x => x.hab.map(rotuloDa).join(' · ');
-// Na linha, as marcas de checador (o curso, o motor e as regras) contam como uma, na frente
+// Na linha, as marcas de checador (o curso, o motor e as regras: os grupos do checador no registro) contam como uma, na frente
+const DO_CHECADOR = new Set(GRUPOS_DE_HABILITACAO.filter(g => g.id.startsWith('checador-')).flatMap(g => g.ids));
 function resumoNaLinha(x) {
-  const checador = x.hab.some(h => h.startsWith('checa_')) ? ['Checador'] : [];
+  const checador = x.hab.some(h => DO_CHECADOR.has(h)) ? ['Checador'] : [];
   const rotulos = [...checador, ...ORDEM_NA_LINHA.filter(h => x.hab.includes(h)).map(h => ROTULO.get(h))];
   return rotulos.length > 3 ? `${rotulos.slice(0, 3).join(' · ')} · +${rotulos.length - 3}` : rotulos.join(' · ');
 }
@@ -134,43 +136,61 @@ export function modeloDosInstrutores(escolhido = null) {
 }
 
 // ——— "Editar faixas": o rascunho de cada instrutor, na memória, até "Salvar faixas" ou "Cancelar" ———
+// O rascunho guarda a data e as faixas de quando abriu: noutra data, ou com as faixas do instrutor mudadas por fora (o
+// "Marcar disponível" do agendamento, a gravação de outra pessoa), ele sai, e "Salvar faixas" nunca grava por cima delas
 const EDICOES = new Map();
-export const edicaoDasFaixas = id => EDICOES.get(+id) || null;
+export function edicaoDasFaixas(id) {
+  const e = EDICOES.get(+id);
+  if (!e) return null;
+  const x = insBy(+id);
+  if (x && e.data === DATA && mesmasFaixas(faixasDe(x), e.base)) return e;
+  EDICOES.delete(+id);
+  return null;
+}
 export function editarFaixas(id) {
   const x = insBy(+id);
-  if (x) EDICOES.set(x.id, { ...structuredClone(faixasDe(x)), erro: '' });
+  if (x) EDICOES.set(x.id, { ...structuredClone(faixasDe(x)), data: DATA, base: faixasDe(x), erro: '', campo: null });
 }
 export const pararDeEditarFaixas = id => EDICOES.delete(+id);
 export function mudarEdicaoDasFaixas(id, mudar) {
   const e = edicaoDasFaixas(id);
-  if (e) EDICOES.set(+id, { ...mudar(structuredClone(e)), erro: '' });
+  if (e) EDICOES.set(+id, { ...mudar(structuredClone(e)), erro: '', campo: null });
 }
-export function erroNaEdicaoDasFaixas(id, erro) {
+// A recusa de "Salvar faixas": a mensagem e o campo dela ({ lista, i, ponta }, ou nenhum)
+export function erroNaEdicaoDasFaixas(id, erro, campo = null) {
   const e = edicaoDasFaixas(id);
-  if (e) EDICOES.set(+id, { ...e, erro });
+  if (e) EDICOES.set(+id, { ...e, erro, campo });
 }
+// O id do campo recusado no rascunho ("det-ins-faixa-0-ate"), ou null
+export const idDoCampoDaFaixa = ({ lista, i, ponta }) => `det-ins-${lista === 'faixas' ? 'faixa' : 'pausa'}-${i}-${ponta}`;
 
-const opcoesDeHorario = (lista, escolhido) => lista.map(m => `<option value="${m}"${m === escolhido ? ' selected' : ''}>${hm(m)}</option>`).join('');
-// Uma faixa ou uma pausa do rascunho: o De, o Até e o ✕. Os campos têm data-a="fx" (js/eventos/instrutores.js)
-function linhaDaEdicao(tipo, f, i) {
+// Os horários de um campo: os da lista e, fora dela, o gravado (o "Marcar disponível" grava o voo exato), no lugar dele
+const opcoesDeHorario = (lista, escolhido) => (minutoDaFaixa(escolhido) && !lista.includes(escolhido) ? [...lista, escolhido].sort((p, q) => p - q) : lista)
+  .map(m => `<option value="${m}"${m === escolhido ? ' selected' : ''}>${hm(m)}</option>`).join('');
+// Uma faixa ou uma pausa do rascunho: o De, o Até e o ✕. Os campos têm data-a="fx" (js/eventos/instrutores.js); o
+// recusado, aria-invalid, com a mensagem como descrição
+function linhaDaEdicao(tipo, f, i, recusado) {
   const nome = `${i + 1}ª ${tipo}`;
   const base = `det-ins-${tipo}-${i}`;
-  const campo = (ponta, lista) => `<select id="${base}-${ponta}" data-a="fx" data-fx="${tipo}" data-i="${i}" data-ponta="${ponta}" aria-label="${nome}: ${ponta === 'de' ? 'de' : 'até'}">${opcoesDeHorario(lista, f[ponta])}</select>`;
+  const invalido = ponta => (recusado === `${base}-${ponta}` ? ' aria-invalid="true" aria-describedby="det-ins-faixas-erro"' : '');
+  const campo = (ponta, lista) => `<select id="${base}-${ponta}" data-a="fx" data-fx="${tipo}" data-i="${i}" data-ponta="${ponta}" aria-label="${nome}: ${ponta === 'de' ? 'de' : 'até'}"${invalido(ponta)}>${opcoesDeHorario(lista, f[ponta])}</select>`;
   return `<li class="fx-linha"><span class="fx-rotulo">${tipo === 'faixa' ? 'Pode decolar de' : 'Pausa de'}</span>${campo('de', MINUTOS_DAS_FAIXAS.slice(0, -1))}`
     + `<span class="fx-ate">até</span>${campo('ate', MINUTOS_DAS_FAIXAS.slice(1))}`
     + `<button type="button" class="btn quiet fx-tirar" id="${base}-tirar" data-act="tirar-${tipo}" data-i="${i}" aria-label="Tirar a ${nome} (${hm(f.de)}–${hm(f.ate)})">✕</button></li>`;
 }
 function editorDasFaixas(x, e) {
+  const recusado = e.erro && e.campo ? idDoCampoDaFaixa(e.campo) : null;
   const temAlmoco = e.pausas.some(p => p.de <= ALMOCO.de && p.ate >= ALMOCO.ate);
   return `<fieldset class="det-form faixas-form" data-faixas-de="${x.id}"><legend>Editar faixas <small>nesta data</small></legend>`
     + '<p class="h fx-dica" id="det-ins-faixas-dica">O voo começa dentro de uma faixa (o Até não entra: até 17:30 não inclui o Noturno) e pode terminar depois dela; nenhum voo toca uma pausa.</p>'
-    + `<ul class="fx-lista" aria-label="Faixas de ${esc(x.nm)}">${e.faixas.map((f, i) => linhaDaEdicao('faixa', f, i)).join('')}</ul>`
+    + `<ul class="fx-lista" aria-label="Faixas de ${esc(x.nm)}">${e.faixas.map((f, i) => linhaDaEdicao('faixa', f, i, recusado)).join('')}</ul>`
     + (e.faixas.length ? '' : '<p class="h fx-vazio">Sem faixa: o instrutor não voa nesta data.</p>')
     + `<div class="fx-mais"><button type="button" class="btn sec" id="det-ins-mais-faixa" data-act="mais-faixa"${e.faixas.length >= MAXIMO_DE_FAIXAS ? ' disabled' : ''}>+ Faixa</button></div>`
-    + `<ul class="fx-lista" aria-label="Pausas de ${esc(x.nm)}">${e.pausas.map((p, i) => linhaDaEdicao('pausa', p, i)).join('')}</ul>`
+    + `<ul class="fx-lista" aria-label="Pausas de ${esc(x.nm)}">${e.pausas.map((p, i) => linhaDaEdicao('pausa', p, i, recusado)).join('')}</ul>`
     + `<div class="fx-mais"><button type="button" class="btn sec" id="det-ins-mais-pausa" data-act="mais-pausa"${e.pausas.length >= MAXIMO_DE_PAUSAS ? ' disabled' : ''}>+ Pausa</button>`
     + `<button type="button" class="btn sec" id="det-ins-almoco" data-act="almoco"${temAlmoco || e.pausas.length >= MAXIMO_DE_PAUSAS ? ' disabled' : ''}>Almoço <small>${hm(ALMOCO.de)}–${hm(ALMOCO.ate)}</small></button></div>`
-    + `<p class="erro-campo fx-erro" id="det-ins-faixas-erro" role="alert">${esc(e.erro || '')}</p>`
+    // A recusa: aqui, e dita uma vez pelo #anuncio (js/eventos/instrutores.js), sem um alerta a mais
+    + `<p class="erro-campo fx-erro" id="det-ins-faixas-erro">${esc(e.erro || '')}</p>`
     + '<div class="det-form-acoes"><button type="button" class="btn" id="det-ins-salvar-faixas" data-act="salvar-faixas">Salvar faixas</button>'
     + '<button type="button" class="btn quiet" id="det-ins-cancelar-faixas" data-act="cancelar-faixas">Cancelar</button></div></fieldset>';
 }

@@ -47,13 +47,15 @@ export function faixasDoAw(aw) {
   return { faixas, pausas };
 }
 
-const minutoValido = m => Number.isInteger(m) && m >= INICIO_DAS_FAIXAS && m <= MINUTOS_DO_DIA;
+// Um minuto de faixa ou de pausa: inteiro, das 06:30 à meia-noite (os de "Editar faixas" são de 10 em 10; o "Marcar
+// disponível" do agendamento grava o voo exato)
+export const minutoDaFaixa = m => Number.isInteger(m) && m >= INICIO_DAS_FAIXAS && m <= MINUTOS_DO_DIA;
 
 // Os intervalos válidos ({ de, ate } inteiros, 06:30 ≤ de < ate ≤ 24:00, nada além disso), em ordem, os que se tocam ou se
 // cruzam juntos num só, até o máximo
 function intervalos(lista, maximo) {
   if (!Array.isArray(lista)) return [];
-  const itens = lista.filter(f => f && typeof f === 'object' && minutoValido(f.de) && minutoValido(f.ate) && f.de < f.ate)
+  const itens = lista.filter(f => f && typeof f === 'object' && minutoDaFaixa(f.de) && minutoDaFaixa(f.ate) && f.de < f.ate)
     .map(f => ({ de: f.de, ate: f.ate })).sort((p, q) => p.de - q.de || p.ate - q.ate);
   const juntos = [];
   for (const f of itens) {
@@ -126,20 +128,21 @@ const intervalo = f => `${hm(f.de)}–${hm(f.ate)}`;
 export const textoDasFaixas = d => (d.faixas.length ? lista(d.faixas.map(intervalo)) : 'sem faixa');
 export const textoDasPausas = d => lista((d.pausas || []).map(intervalo));
 
-// "Salvar faixas": cada faixa e cada pausa com o De e o Até da lista e o Até depois do De, no máximo 8 de cada. Responde
-// o erro (o primeiro), ou as faixas e as pausas normalizadas
+// "Salvar faixas": cada faixa e cada pausa com o De e o Até em minutos de faixa (os da lista, ou o gravado fora dos 10
+// minutos, que o editor mostra) e o Até depois do De, no máximo 8 de cada. Responde o erro (o primeiro) e o campo dele
+// ({ lista, i, ponta }; o do máximo, nenhum), ou as faixas e as pausas normalizadas
 export function conferirFaixas({ faixas = [], pausas = [] }) {
-  const naLista = m => MINUTOS_DAS_FAIXAS.includes(m);
-  const conferir = (itens, nome, maximo) => {
-    if (itens.length > maximo) return `No máximo ${maximo} ${nome}s por data.`;
+  const conferir = (itens, lista, nome, maximo) => {
+    if (itens.length > maximo) return { erro: `No máximo ${maximo} ${nome}s por data.`, campo: null };
     for (const [i, f] of itens.entries()) {
-      if (!naLista(f.de) || !naLista(f.ate)) return `Na ${i + 1}ª ${nome}, escolha o De e o Até da lista.`;
-      if (f.ate <= f.de) return `Na ${i + 1}ª ${nome}, o Até vem depois do De.`;
+      const fora = !minutoDaFaixa(f.de) ? 'de' : !minutoDaFaixa(f.ate) ? 'ate' : null;
+      if (fora) return { erro: `Na ${i + 1}ª ${nome}, escolha o De e o Até da lista.`, campo: { lista, i, ponta: fora } };
+      if (f.ate <= f.de) return { erro: `Na ${i + 1}ª ${nome}, o Até vem depois do De.`, campo: { lista, i, ponta: 'ate' } };
     }
     return null;
   };
-  const erro = conferir(faixas, 'faixa', MAXIMO_DE_FAIXAS) || conferir(pausas, 'pausa', MAXIMO_DE_PAUSAS);
-  return erro ? { erro, faixas: [], pausas: [] } : { erro: null, faixas: normalizarFaixas(faixas), pausas: normalizarPausas(pausas) };
+  const recusa = conferir(faixas, 'faixas', 'faixa', MAXIMO_DE_FAIXAS) || conferir(pausas, 'pausas', 'pausa', MAXIMO_DE_PAUSAS);
+  return recusa ? { ...recusa, faixas: [], pausas: [] } : { erro: null, faixas: normalizarFaixas(faixas), pausas: normalizarPausas(pausas) };
 }
 
 // "Marcar disponível" (o agendamento com o instrutor indisponível): o compromisso [a, b) passa a caber numa faixa (a parte
@@ -162,15 +165,15 @@ export function comOIntervalo(d, a, b) {
 }
 
 // "O que cabe nestas faixas" (o detalhe do INVA): em cada lista de decolagem da data (a do tipo; a do Noturno, as 17:30), os
-// horários em que a missão da duração padrão começa (1 h; o Simulador 2 h, o Ground 01h30, o Noturno as 4 h fixas), sem
+// horários em que a missão da duração padrão começa (1 h; o Simulador 2 h; o Ground as 01h30 e o Noturno as 4 h, fixas), sem
 // passar do fim da missão (17:30 no avião de dia), e até quando pode ir a que começa no último deles: 5 h (a duração
-// máxima) depois, sem tocar a pausa seguinte nem passar do fim da missão (o Noturno, as 4 h dele)
+// máxima) depois, sem tocar a pausa seguinte nem passar do fim da missão (o Ground e o Noturno, a duração fixa deles)
 const LISTAS_DO_QUE_CABE = Object.freeze([
   { id: 'C152', nome: 'C152', mis: 'Voo Local', tipo: 'C152' },
   { id: 'C172', nome: 'C172', mis: 'Voo Local', tipo: 'C172' },
   { id: 'sim', nome: 'Simulador', mis: 'Simulador', tipo: MIS.Simulador.defEq, h: MIS.Simulador.duracaoPadrao },
   { id: 'PA-34', nome: 'PA-34', mis: 'Multimotor', tipo: 'PA-34' },
-  { id: 'ground', nome: 'Ground', mis: 'Ground', tipo: GROUND_EQ_TYPE, h: GROUND_DURATION_H },
+  { id: 'ground', nome: 'Ground', mis: 'Ground', tipo: GROUND_EQ_TYPE, h: GROUND_DURATION_H, fixa: true },
   { id: 'noturno', nome: 'Noturno', mis: 'Noturno', tipo: 'C172', h: MIS.Noturno.duracaoFixaH, fixa: true }
 ]);
 export function oQueCabe(x, horarios) {

@@ -5,7 +5,7 @@
 // o valor recusado fica no campo, com a mensagem. Os dados pessoais são a seção do detalhe
 // (js/views/editor-de-dados-pessoais.js) e os limites da lei, o item fixo do alto da lista (js/eventos/limites.js)
 import { gravarAlteracao, ultimaGravacao } from '../actions.js';
-import { conferirFaixas, faixasDe, faixasDoTurno, textoDasFaixas, textoDasPausas, TURNOS, ALMOCO, PAUSA_NOVA, MINUTOS_DAS_FAIXAS } from '../disponibilidade.js';
+import { conferirFaixas, faixasDe, faixasDoTurno, textoDasFaixas, textoDasPausas, TURNOS, ALMOCO, PAUSA_NOVA, mesmasFaixas, minutoDaFaixa } from '../disponibilidade.js';
 import { anunciar } from '../dom.js';
 import { nomeLimpo, numeroBr, hm } from '../format.js';
 import { habilitacoesDoNivel, normalizarHabilitacoes, nomeDaHabilitacao } from '../habilitacoes.js';
@@ -27,7 +27,7 @@ import { aoMudarDadosPessoais } from '../views/dados-pessoais.js';
 import { pessoaEscolhida } from '../views/editor-de-dados-pessoais.js';
 import {
   modeloDosInstrutores, detalheDoInstrutor, opcoesDasHabilitacoes, ID_DOS_LIMITES, edicaoDasFaixas, editarFaixas, pararDeEditarFaixas,
-  mudarEdicaoDasFaixas, erroNaEdicaoDasFaixas
+  mudarEdicaoDasFaixas, erroNaEdicaoDasFaixas, idDoCampoDaFaixa
 } from '../views/instrutores.js';
 
 const tela = criarMestreDetalhe({
@@ -104,7 +104,9 @@ aoAcionar('deli', (b, { id }) => {
   redesenharPorNome('alunos', 'pedidos-do-dia');
 });
 
-// As faixas novas de um instrutor (um turno, "Salvar faixas"), com a reversão: as de antes
+// As faixas novas de um instrutor (um turno, "Salvar faixas"), com a reversão: as de antes. As mesmas de agora
+// (jaSaoEstas) não são gravadas: nenhuma entrada no Histórico, e a data não muda
+const jaSaoEstas = (x, novas) => mesmasFaixas(faixasDe(x), novas);
 function gravarFaixas(x, novas, descricao) {
   const antes = faixasDe(x);
   Object.assign(x, { faixas: novas.faixas, pausas: novas.pausas });
@@ -114,15 +116,18 @@ const descricaoDasFaixas = (x, d) => `${textoDasFaixas(d)}${textoDasPausas(d) ? 
 // O foco num controle do detalhe redesenhado (o botão acionado foi trocado)
 const focar = idDoControle => { const el = document.getElementById(idDoControle); if (el) el.focus(); };
 
-// Um turno: a faixa dele, sem pausa (o rascunho de "Editar faixas", se aberto, sai)
+// Um turno: a faixa dele, sem pausa (o rascunho de "Editar faixas", se aberto, sai); o que já está só é dito
+const jaEstao = x => `As faixas de ${x.nm} já são estas.`;
 aoAcionar('turno', (b, { id }) => {
   const x = insBy(id), novas = faixasDoTurno(b.dataset.turno);
   if (!x || !novas) return;
   const turno = TURNOS.find(t => t.id === b.dataset.turno);
   pararDeEditarFaixas(id);
-  gravarFaixas(x, novas, `Turno de ${x.nm} nesta data: ${turno.nome} (${hm(turno.de)}–${hm(turno.ate)})`);
+  const mudou = !jaSaoEstas(x, novas);
+  if (mudou) gravarFaixas(x, novas, `Turno de ${x.nm} nesta data: ${turno.nome} (${hm(turno.de)}–${hm(turno.ate)})`);
   tela.desenhar({ forcar: true });
   focar(b.id);
+  if (!mudou) anunciar(jaEstao(x));
 });
 
 // "Editar faixas": o rascunho com as faixas e as pausas de agora; o foco no De da 1ª faixa (sem faixa, no "+ Faixa")
@@ -159,27 +164,31 @@ aoAcionar(['tirar-faixa', 'tirar-pausa'], (b, { id }) => {
 // Um De ou um Até do rascunho (data-a="fx"): nada é gravado antes de "Salvar faixas"
 aoMudarCampo('fx', t => {
   const det = t.closest('#det-ins .det[data-id]');
-  if (!det || !MINUTOS_DAS_FAIXAS.includes(+t.value)) return;
+  if (!det || !minutoDaFaixa(+t.value)) return;
   const lista = t.dataset.fx === 'faixa' ? 'faixas' : 'pausas', i = +t.dataset.i, ponta = t.dataset.ponta;
   mudarEdicaoDasFaixas(det.dataset.id, e => ({ ...e, [lista]: e[lista].map((f, k) => (k === i ? { ...f, [ponta]: +t.value } : f)) }));
   tela.desenhar({ forcar: true });
 });
-// "Salvar faixas": conferidas (a recusa fica no rascunho, com a mensagem), gravadas com a reversão; o foco em "Editar faixas"
+// "Salvar faixas": conferidas (a recusa fica no rascunho, com a mensagem, no campo dela, com o foco), gravadas com a
+// reversão (as mesmas de agora, não) e ditas; o foco em "Editar faixas". O rascunho que saiu (outra data, as faixas
+// mudadas por fora) não grava nada: o detalhe é refeito
 aoAcionar('salvar-faixas', (b, { id }) => {
   const x = insBy(id), e = edicaoDasFaixas(id);
-  if (!x || !e) return;
+  if (!x || !e) { tela.desenhar({ forcar: true }); return; }
   const conferidas = conferirFaixas(e);
   if (conferidas.erro) {
-    erroNaEdicaoDasFaixas(id, conferidas.erro);
+    erroNaEdicaoDasFaixas(id, conferidas.erro, conferidas.campo);
     tela.desenhar({ forcar: true });
-    focar('det-ins-salvar-faixas');
+    focar(conferidas.campo && document.getElementById(idDoCampoDaFaixa(conferidas.campo)) ? idDoCampoDaFaixa(conferidas.campo) : 'det-ins-salvar-faixas');
     anunciar(conferidas.erro);
     return;
   }
   pararDeEditarFaixas(id);
-  gravarFaixas(x, conferidas, `Faixas de ${x.nm} nesta data: ${descricaoDasFaixas(x, conferidas)}`);
+  const mudou = !jaSaoEstas(x, conferidas);
+  if (mudou) gravarFaixas(x, conferidas, `Faixas de ${x.nm} nesta data: ${descricaoDasFaixas(x, conferidas)}`);
   tela.desenhar({ forcar: true });
   focar('det-ins-editar-faixas');
+  anunciar(mudou ? `Faixas de ${x.nm} salvas: ${descricaoDasFaixas(x, conferidas)}.` : jaEstao(x));
 });
 
 // Os campos de um instrutor: o "Vem" (na linha e no detalhe), o cadastro, as habilitações e as horas de fora do app

@@ -43,9 +43,9 @@ export function fecharAviso(tipo) {
   $('#aviso-sync').hidden = true;
 }
 
-// As gavetas (o Histórico, as habilitações, os dados pessoais e as sugestões) abrem no mesmo lugar, à direita, umas
-// sobre as outras. A de cima é a que abriu por último: ela fica por cima na tela (a camada, no z-index da .gaveta), e o
-// Esc fecha só ela, ou a gaveta em que está o foco; o próximo Esc fecha a de baixo
+// As gavetas (o Histórico e as sugestões) abrem no mesmo lugar, à direita, umas sobre as outras. A de cima é a que
+// abriu por último: ela fica por cima na tela (a camada, no z-index da .gaveta), e o Esc fecha só ela, ou a gaveta em
+// que está o foco; o próximo Esc fecha a de baixo
 let gavetasJaAbertas = 0;
 const gavetasAbertas = () => [...document.querySelectorAll('.gaveta:not([hidden])')]
   .sort((p, q) => (+p.dataset.ordem || 0) - (+q.dataset.ordem || 0));

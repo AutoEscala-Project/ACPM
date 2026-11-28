@@ -287,8 +287,9 @@ const PASSOS = {
   // Versão 29 (C): a disponibilidade de cada instrutor na data deixa de ser os nove tempos de antes (aw) e passa a ser as
   // faixas, { de, ate } em minutos, e as pausas entre elas (js/disponibilidade.js): cada sequência de tempos marcados vira
   // uma faixa e cada intervalo entre duas sequências, uma pausa (o almoço guardado continua almoço). O aw fica, como a
-  // cópia de antes, e só é lido onde não há faixas; a regra continua a de antes (o compromisso inteiro dentro de uma
-  // faixa). O cadastro não muda. O número novo faz a aba da versão anterior (que tiraria as faixas ao gravar o dia) recusar
+  // cópia de antes, e só é lido onde não há faixas (a regra, a do início desde o commit "regra" do C: a missão começa
+  // dentro de uma faixa e não toca uma pausa, js/disponibilidade.js). O cadastro não muda. O número novo faz a aba da
+  // versão anterior (que tiraria as faixas ao gravar o dia) recusar
   29: {
     cadastro: cadastro => cadastro,
     dia: dia => {

@@ -474,7 +474,7 @@ test.describe('INVAs: o detalhe', () => {
     await expect(ate).toHaveAccessibleDescription('Na 1ª faixa, o Até vem depois do De.');
     await expect(campoDaFaixa(page, 'faixa', 0, 'de')).not.toHaveAttribute('aria-invalid', 'true');
     await expect(page.locator('#anuncio')).toHaveText('Na 1ª faixa, o Até vem depois do De.');
-    await expect(page.locator('#det-ins [role="alert"]')).toHaveCount(0);
+    await expect(page.locator('#det-ins .faixas-form [role="alert"]')).toHaveCount(0);
     // O Até corrigido: a marca sai; o salvo é dito
     await ate.selectOption({ label: '17:30' });
     await expect(ate).not.toHaveAttribute('aria-invalid', 'true');

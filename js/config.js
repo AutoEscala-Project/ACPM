@@ -115,14 +115,6 @@ export const PESOS_DA_COMPACTACAO = {
 // Até onde a busca vai (contagens, não tempo: a mesma escala dá sempre o mesmo resultado)
 export const LIMITES_DA_COMPACTACAO = { movimentos: 200, verificacoes: 20000, avaliacoes: 200000 };
 
-export const PRE = {
-  'Dia inteiro': [0,1,2,3,4,5,6,7],
-  'Manhã': [0,1,2,3],
-  'Tarde': [4,5,6,7],
-  'Noturno': [8],
-  'Dia + noturno': [0,1,2,3,4,5,6,7,8]
-};
-
 // Status do voo, na ordem do dia; Atrasado leva o novo horário e Cancelado, o motivo (js/status.js)
 // "Pousou": o fim do voo; no Ground e no simulador aparece como "Concluída" (js/status.js)
 export const FLIGHT_STATUSES = ['Pendente', 'Confirmado', 'Atrasado', 'Em Voo', 'Pousou', 'Cancelado'];

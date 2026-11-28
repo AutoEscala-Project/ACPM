@@ -50,7 +50,8 @@ export function problemasDoInstrutor(x, { mis, tipo, a, b, efetivo = { a, b }, a
     return lei.ok || { motivo: lei.motivo };
   };
   const regras = [
-    // Ele vem e está disponível em todo o compromisso: as faixas da data (C), ou o aw onde não há faixas
+    // Ele vem, e o compromisso começa dentro de uma faixa da data sem tocar uma pausa (a regra do início, C), ou nas do aw
+    // onde não há faixas
     ['instrutor-indisponivel', () => disponivelPara(x, a, b)],
     // A habilitação da missão e do tipo; com o contexto, a do curso do aluno, a própria do avião e a que a missão do curso
     // exige (o motivo diz qual faltou: a do avião, a do curso, a da missão do curso)
