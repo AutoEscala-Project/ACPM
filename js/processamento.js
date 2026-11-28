@@ -1,7 +1,7 @@
 // O processamento dos pedidos da agenda (o módulo do E): a conciliação dos pedidos da data com o dia (quem entra, quem
-// volta, quem sai e quem fica), a missão do curso com que cada pedido entra e a importação para a demanda da data (o botão
-// "Importar da agenda", na Demanda e na Agenda; js/eventos/importacao.js), feita sobre a conciliação. Puro: sem DOM, sem
-// relógio, sem rede e sem S; recebe o estado da data e os pedidos e muda só o estado
+// volta, quem sai e quem fica), a missão do curso com que cada pedido entra e o resumo do que ela fez. Quem a chama é
+// js/entrada-na-demanda.js (os botões de importar e a aprovação em Pedidos, até o G2). Puro: sem DOM, sem relógio, sem
+// rede e sem S; recebe o estado da data e os pedidos e muda só o estado
 import { migrateLegacyMissionName, alvoDoNovoPedido, proximoMid, blank, PRIORIDADE_PADRAO } from './rules.js';
 import { pedidoDaSolicitacao, recursoValido, missaoDoCursoGuardada } from './agenda.js';
 import { indiceDoPrograma } from './programa.js';
@@ -79,7 +79,7 @@ function registrosDosPedidos(estado) {
 const minutoDaLinha = s => (s.janela === 'horario' && paraMinuto(s.horario) !== null ? paraMinuto(s.horario) : Infinity);
 
 // A conciliação dos pedidos da data com o dia: o plano, sem mudar nada. aprovada(linha) diz se o pedido está aprovado
-// (obrigatório: o app passa o seu; a importação de hoje, todo pedido que não foi cancelado). Para cada linha, com o
+// (obrigatório: o app passa solicitacaoAprovada, js/agenda.js). Para cada linha, com o
 // registro do pedido no dia (o pedido do aluno com solicitacao: <id>), guardada (o id em estado.importadas):
 // - aprovado, sem registro: entram (o aluno fora do cadastro: semAluno; inativo, com semInativos: inativos; guardado:
 //   dispensados, tirado desta data; numa data passada: naoEntrou; com a missão do curso e os programas não lidos, cursos
@@ -322,7 +322,7 @@ function textoDaSaida(estado, { nome, mis, motivo, linha, deixouDeSerFixo, entro
   return `Pedidos: ${nome} saiu ${deOnde}, ${porque} (${mis}${onde}${deixouDeSerFixo ? ' · deixa de ser fixo' : ''})${quem}`;
 }
 
-// Aplica o plano de conciliarPedidos ao estado (o único que muda estado.importadas, além da importação feita sobre ele):
+// Aplica o plano de conciliarPedidos ao estado (o único que muda estado.importadas):
 // - acertos: o id admitido volta para importadas; o esquecido sai;
 // - voltam: o registro volta a voar (fly), e o id volta para importadas; nada mais dele muda;
 // - entram: cada pedido entra no dia (entrar), os com a missão do curso que escolheram na Agenda primeiro, cada grupo na
@@ -335,7 +335,7 @@ function textoDaSaida(estado, { nome, mis, motivo, linha, deixouDeSerFixo, entro
 // lista de espera daquele horário que cabe nele (N14; o padrão do R5: também na escala aprovada, sem fixar quem entra), e
 // a linha da saída diz quem entrou. programa, situacao, cursos: os de missaoDaEntrada
 export function aplicarConciliacao(estado, plano, { programa = [], situacao = [], cursos = [], antes = null, escalar = null } = {}) {
-  const feito = { entraram: [], voltaram: [], sairam: [], admitidas: [], esquecidas: [], historico: [] };
+  const feito = { entraram: [], voltaram: [], sairam: [], conferir: [], admitidas: [], esquecidas: [], historico: [] };
   if (!Array.isArray(estado.importadas)) estado.importadas = [];
   const guardar = id => { if (!estado.importadas.includes(id)) estado.importadas.push(id); };
   const tirar = id => { estado.importadas = estado.importadas.filter(x => x !== id); };
@@ -389,31 +389,28 @@ export function aplicarConciliacao(estado, plano, { programa = [], situacao = []
     }
   }
   for (const x of feito.sairam) feito.historico.push(['exc', textoDaSaida(estado, x)]);
+  // Os que ficam até o operador conferir o status (nada muda): o aluno, para o aviso
+  for (const x of plano.conferir || []) { const { aluno } = doRegistro(x); if (aluno) feito.conferir.push({ ...x, nome: aluno.nm }); }
   return feito;
 }
 
-// Importa para a demanda da data as solicitações ativas ainda não importadas, sobre a conciliação: o pedido que não foi
-// cancelado conta como aprovado (a regra de hoje, até a aprovação do D), e só entram pedidos (nada sai). Cada pedido da
-// agenda vira um voo, marcado com o id dele em solicitacao (dois pedidos da mesma missão são dois voos), no lugar do voo
-// da mesma missão posto à mão ou num pedido novo (entrar), com a missão do curso de missaoDaEntrada; as solicitações vistas
-// ficam anotadas no dia (estado.importadas) para não repetir. A que saiu do programa ou mudou de tipo depois do registro
-// não entra com a missão do curso dela: o resumo a conta (foraDoPrograma, com a missão do curso como a qual ele entrou,
-// entrouComo: a inferida ou a do operador; null, pelo tipo). Sem os programas lidos (cursos: null), não se sabe se ela
-// saiu: o pedido espera, sem contar como visto, e entra na importação depois de lidos (esperamOsProgramas). O pedido sem
-// missão do curso para o qual o programa não tem nenhuma do tipo (e do recurso) é dito (semMissaoDoCurso, só quando havia
-// o que inferir); o pedido de horário exato que a lista do recurso dele não tem também (foraDaLista: a missão, o recurso
-// e o horário), e o que entrou sem o horário exato, fora dos horários exatos do dia, antes das 06:30 ou depois das 17:30 (semOHorario, os mesmos campos). situacao, programa e cursos: os de missaoDaEntrada. semInativos: o inativo do cadastro vale na data (de
-// hoje em diante): o pedido do aluno inativo não entra nem conta como visto (entra quando ele voltar a ativo)
-export function importarSolicitacoes(estado, solicitacoes, { situacao = [], programa = [], cursos = [], semInativos = false } = {}) {
-  if (!Array.isArray(estado.importadas)) estado.importadas = [];
-  const plano = conciliarPedidos(estado, solicitacoes, { aprovada: s => !s.cancelada_em, cursos, semInativos });
-  const feito = aplicarConciliacao(estado, { ...plano, saem: [], acertos: { admitir: plano.acertos.admitir, esquecer: [] } }, { programa, situacao, cursos });
+// O resumo da conciliação aplicada (o aviso do app, js/entrada-na-demanda.js): quantos entraram novos e quantos foram
+// atualizados (o voo posto à mão que deu lugar ao pedido e o que voltou a voar); os que esperam (fora do cadastro, de
+// inativo, sem os programas lidos); a missão do curso de cada um que entrou (a que saiu do programa, foraDoPrograma, com a
+// missão como a qual ele entrou, entrouComo: a inferida ou a do operador; null, pelo tipo; nenhuma inferida,
+// semMissaoDoCurso); o horário exato que a lista do recurso não tem (foraDaLista: a missão, o recurso e o horário) e o que
+// entrou sem ele, fora dos horários exatos do dia, antes das 06:30 ou depois das 17:30 (semOHorario, os mesmos campos); os
+// que saíram (sairam: o aluno e quem entrou no lugar, null: ninguém) e os que ficam até o operador conferir o status
+// (conferir: o aluno e o porquê, 'atrasado' ou 'ja-decolou')
+export function resumoDaConciliacao(plano, feito) {
   return {
     novos: feito.entraram.filter(x => x.novo).length, atualizados: feito.entraram.filter(x => !x.novo).length + feito.voltaram.length,
     semAluno: plano.semAluno.length, deInativo: plano.inativos.length,
     foraDoPrograma: feito.entraram.filter(x => x.foraDoPrograma).map(x => x.foraDoPrograma),
     semMissaoDoCurso: feito.entraram.filter(x => x.semMissao).map(x => x.semMissao), esperamOsProgramas: plano.esperamOsProgramas.length,
     foraDaLista: feito.entraram.filter(x => x.foraDaLista).map(x => x.foraDaLista),
-    semOHorario: feito.entraram.filter(x => x.semOHorario).map(x => x.semOHorario)
+    semOHorario: feito.entraram.filter(x => x.semOHorario).map(x => x.semOHorario),
+    sairam: feito.sairam.map(x => ({ aluno: x.nome, entrou: x.entrou ? x.entrou.nome : null })),
+    conferir: feito.conferir.map(x => ({ aluno: x.nome, porque: x.porque }))
   };
 }

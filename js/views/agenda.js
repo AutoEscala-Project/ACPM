@@ -376,7 +376,7 @@ function desenharAprovarTodos() {
 
 // Os avisos da lista, nesta ordem: a leitura que falhou (com a lista da leitura de antes); a escala desta data que mudou em
 // outro computador ("Atualizar": nada mais é dito da demanda até lá); os aprovados fora da demanda ("Importar", para quem
-// importa); os que aguardam ou foram cancelados e ainda voam na demanda (o operador os tira na Demanda)
+// importa); os que aguardam ou foram cancelados e ainda voam na demanda ("Tirar da escala", para quem importa: a conciliação)
 const plural = (n, um, varios) => `${n} ${n === 1 ? um : varios}`;
 function desenharAvisos() {
   const { lista, leitura, lidaEm, diaMudou } = solicitacoesDaData();
@@ -394,7 +394,12 @@ function desenharAvisos() {
     }
     const ainda = aindaNaDemanda(lista);
     if (ainda.length) {
-      partes.push(`<p>${plural(ainda.length, 'pedido cancelado ou sem aprovação ainda está', 'pedidos cancelados ou sem aprovação ainda estão')} na demanda: ${esc(ainda.map(p => `${p.aluno_nome} (${descreverPedido(p)})`).join('; '))}. Tire-os na Demanda (Voa), se for o caso.</p>`);
+      // "Tirar da escala": a conciliação (E, a mesma de "Importar"), que tira o voo de quem saiu e dá a vaga ao 1º da lista de
+      // espera do horário que couber nela; o voo atrasado ou que já decolou fica até o status ser conferido. Só o cancelado e o
+      // de aprovação retirada saem: o que nunca foi aprovado e voa (de antes da aprovação, D1) fica
+      const saem = ainda.filter(p => p.cancelada_em || p.aprovacao_retirada_em).length;
+      partes.push(`<p>${plural(ainda.length, 'pedido cancelado ou sem aprovação ainda está', 'pedidos cancelados ou sem aprovação ainda estão')} na demanda: ${esc(ainda.map(p => `${p.aluno_nome} (${descreverPedido(p)})`).join('; '))}.${podeImportar() && saem
+        ? ` <button type="button" class="btn" id="agenda-conciliar" data-act="importar-agenda" aria-label="Tirar da escala ${saem === 1 ? 'o pedido cancelado ou sem aprovação' : `os ${saem} pedidos cancelados ou sem aprovação`}">Tirar da escala</button>` : ''}</p>`);
     }
   }
   const html = partes.join('');

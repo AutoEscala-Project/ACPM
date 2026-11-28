@@ -424,7 +424,7 @@ async function retirarAprovacao(b) {
   await comBotaoOcupado(b, async () => {
     try {
       await ApiClient.retirarAprovacaoDaSolicitacao(+b.dataset.id, { por: quemAge() || null });
-      showToast(`Aprovação retirada: o pedido volta a aguardar.${aindaVoa(pedido) ? ' O voo continua na demanda: tire-o lá (Voa), se for o caso.' : ''}`, 'ok');
+      showToast(`Aprovação retirada: o pedido volta a aguardar.${aindaVoa(pedido) ? ' O voo continua na demanda: “Tirar da escala”, no aviso, o tira.' : ''}`, 'ok');
     } catch (err) {
       showToast(err.code === 'PT403' ? 'A aprovação de uma data que já passou não é retirada.' : err.code === 'P0002'
         ? 'O pedido já estava sem aprovação ou foi cancelado em outro computador.' : 'Não foi possível retirar a aprovação. Verifique a conexão e tente de novo.');
@@ -445,7 +445,7 @@ async function cancelarPedido(b) {
   await comBotaoOcupado(b, async () => {
     try {
       await ApiClient.cancelarSolicitacao(+b.dataset.id, por);
-      const voa = aindaVoa(pedido) ? (aprovaPedidos() ? ' O voo continua na demanda: tire-o lá (Voa), se for o caso.' : ' Avise o operador: o voo continua na escala até ele tirá-lo.') : '';
+      const voa = aindaVoa(pedido) ? (aprovaPedidos() ? ' O voo continua na demanda: “Tirar da escala”, no aviso, o tira.' : ' Avise o operador: o voo continua na escala até ele tirá-lo.') : '';
       showToast(`Pedido cancelado.${voa}`, 'ok');
     } catch (err) {
       showToast(err.code === 'PT403' ? 'O pedido aprovado de uma data que já passou não é cancelado.' : err.code === 'P0002'
