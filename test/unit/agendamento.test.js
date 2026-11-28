@@ -864,8 +864,9 @@ describe('Agendamento: os voos de hoje do aluno (mover e encaixar)', () => {
     assert.deepEqual(runAllocationEngine(real), sim, 'a prévia é a escala que fica');
     assert.equal(fKey, '1001_0_1');
     const stu = real.stu[1];
-    // A missão do curso fica; o horário, o recurso e o instrutor são os novos; a disponibilidade que não inclui as 13:40 sai
-    assert.deepEqual([stu.extra, stu.mis, stu.etapa, stu.cursoDaEtapa, stu.p1, stu.p2, stu.insId, stu.jan], [[], 'Voo Local', 'IN-02', 'PP', 820, -1, 2, undefined]);
+    // A missão do curso fica; o horário, o recurso e o instrutor são os novos; o horário exato que não inclui as 13:40 passa
+    // a ser ele (N14: a mudança do operador substitui o horário do pedido)
+    assert.deepEqual([stu.extra, stu.mis, stu.etapa, stu.cursoDaEtapa, stu.p1, stu.p2, stu.insId, stu.jan], [[], 'Voo Local', 'IN-02', 'PP', 820, -1, 2, 'h820']);
     assert.deepEqual(real.fixos['1001_0_1'], { a: 820, b: 880, r: 'PR-VOC', insId: 2, agendado: true });
     assert.deepEqual([antes.criado, antes.mid, antes.fixo], [false, 0, { a: 390, b: 450, r: 'PR-VOC', insId: 2, escolhido: true }]);
     assert.deepEqual(antes.pedido, { fly: true, mis: 'Voo Local', eq: 'C152', p1: 390, p2: 500, nb: 1, ss: 1, pr: 3, jan: 'h390', etapa: 'IN-02', insId: 2, cursoDaEtapa: 'PP' });

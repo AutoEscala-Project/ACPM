@@ -388,17 +388,14 @@ describe('A disponibilidade do pedido e a lista do conflito', () => {
   it('o pedido de dois horários exatos cancelado num deles: o outro é dele, antes de "Confirme com o aluno" (U1)', () => {
     const { estado, resultado, voo } = cancelado(cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, { p1: 690, p2: 870, jan: 'h690|h870' })] }), 1000, 'Meteorologia');
     assert.equal(hm(voo.a), '11:30');
-    const opcoes = sugerirParaCancelado(estado, resultado, voo.fKey).opcoes;
-    assert.equal(hm(opcoes[0].mudancas.a), '14:30', opcoes.map(o => o.texto).join(' | '));
-    assert.equal(opcoes[0].confirmar, undefined);
-    assert.equal((opcoes[0].pedido || {}).jan, undefined, 'o outro horário dele não muda o pedido');
-    const fora = opcoes.filter(o => ![690, 870].includes(o.mudancas.a));
-    assert.ok(fora.length > 0);
-    for (const o of fora) {
-      assert.match(o.confirmar, /^Confirme com o aluno: às \d\d:\d\d, fora da disponibilidade do pedido[.,]/, o.texto);
-      assert.equal(o.pedido.jan, `h${o.mudancas.a}`, 'fora dos dois, o pedido passa a ser esse horário');
-    }
-    assert.ok(opcoes.indexOf(fora[0]) > 0);
+    const [primeira] = sugerirParaCancelado(estado, resultado, voo.fKey).opcoes;
+    // O outro horário dele (14:30) vem antes do mais perto fora (12:40), sem a confirmação, e o pedido fica como está
+    assert.deepEqual([hm(primeira.mudancas.a), primeira.confirmar, (primeira.pedido || {}).jan], ['14:30', undefined, undefined]);
+    // O outro horário ocupado (o único INVA voa às 14:30 com outro aluno): fora dos dois, a confirmação, e o pedido passa a
+    // ser esse minuto
+    const ocupado = cancelado(cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, { p1: 690, p2: 870, jan: 'h690|h870' }), aluno(1001, { p1: 870, p2: -1, jan: 'h870' })] }), 1000, 'Meteorologia');
+    const [fora] = sugerirParaCancelado(ocupado.estado, ocupado.resultado, ocupado.voo.fKey).opcoes;
+    assert.deepEqual([hm(fora.mudancas.a), fora.confirmar, fora.pedido.jan], ['12:40', 'Confirme com o aluno: às 12:40, fora da disponibilidade do pedido.', 'h760']);
   });
 
   it('o conflito sem nada no mesmo horário nem depois ganha o horário mais perto antes, dentro da disponibilidade', () => {
