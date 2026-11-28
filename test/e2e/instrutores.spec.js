@@ -7,9 +7,10 @@ import {
   caixaVem, dataAberta, diaSeguinte, linhaDoInstrutor, linhasDosInstrutores, nomesDosInstrutores, buscaDosInstrutores, contagemDosInstrutores,
   faixasNaLinha, voosNaLinha, habilitacoesNaLinha, tiraDaLinha, abrirInstrutor, campoDoInstrutor, habilitacaoDoInstrutor, secaoDoInstrutor,
   faixasDoAberto, pausasDoAberto, botaoDoTurno, aplicarTurno, campoDaFaixa, editarFaixas, abrirLimitesDaLei, nenhumNaLista, alvosPequenos,
-  larguraDaPagina, entradasDoHistorico, botaoDaAba
+  larguraDaPagina, entradasDoHistorico, botaoDaAba, diaAnterior, confirmarAgendamento
 } from './fixtures.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
+import { comOIntervalo } from '../../js/disponibilidade.js';
 
 // O ↶ da entrada do Histórico que tem o texto
 async function reverter(page, texto) {
@@ -264,7 +265,7 @@ test.describe('INVAs: o detalhe', () => {
     await expect(cabe.locator('li')).toHaveText([
       'C152: 06:30 a 16:20 (8 horários); termina até as 17:30', 'C172: 06:30 a 16:20 (8 horários); termina até as 17:30',
       'Simulador: 06:30 a 16:20 (8 horários); termina até as 21:20', 'PA-34: 06:30 a 16:30 (21 horários); termina até as 17:30',
-      'Ground: 06:30 a 16:20 (8 horários); termina até as 21:20', 'Noturno: 17:30 (1 horário); termina até as 21:30'
+      'Ground: 06:30 a 16:20 (8 horários); termina até as 17:50', 'Noturno: 17:30 (1 horário); termina até as 21:30'
     ]);
   });
 
@@ -368,6 +369,118 @@ test.describe('INVAs: o detalhe', () => {
     await expect(faixasNaLinha(page, 2)).toHaveText('sem faixa');
     await reverter(page, 'Faixas de Instrutor 01');
     await expect(faixasNaLinha(page, 1)).toHaveText('06:30–24:00');
+  });
+
+  // C, revisão: o rascunho de "Editar faixas" é da data aberta e das faixas de quando abriu. Outra data o tira (antes, o
+  // de 11/11 ficava aberto em 12/11, e "Salvar faixas" trocava o Noturno de 12/11 pelo rascunho de 11/11)
+  test('o rascunho de "Editar faixas" é da data: outra data o tira, e "Salvar faixas" não leva as faixas de uma data para outra', async ({ page }) => {
+    await abrir(page, { estado: cenario({ ins: [instrutor(1, 9)] }) });
+    await diaSeguinte(page);
+    await aplicarTurno(page, 1, 'noturno');
+    await expect(faixasDoAberto(page)).toHaveText('17:30–24:00');
+    await diaAnterior(page);
+    await abrirInstrutor(page, 1);
+    await expect(faixasDoAberto(page)).toHaveText('06:30–24:00');
+    await page.locator('#det-ins-editar-faixas').click();
+    await campoDaFaixa(page, 'faixa', 0, 'ate').selectOption({ label: '12:00' });
+    await diaSeguinte(page);
+    await expect(faixasDoAberto(page)).toHaveText('17:30–24:00');
+    await expect(page.locator('#det-ins .faixas-form')).toHaveCount(0);
+    await expect(page.locator('#det-ins-editar-faixas')).toBeVisible();
+    await expect(botaoDoTurno(page, 'noturno')).toHaveAttribute('aria-pressed', 'true');
+    // De volta à data do rascunho: ele não volta, e as faixas dela são as de antes
+    await diaAnterior(page);
+    await expect(page.locator('#det-ins .faixas-form')).toHaveCount(0);
+    await expect(faixasDoAberto(page)).toHaveText('06:30–24:00');
+    await expect(entradasDoHistorico(page, 'Faixas de Instrutor 01')).toHaveCount(0);
+  });
+
+  // C, revisão: as faixas mudadas por fora (o "Marcar disponível" do agendamento) tiram o rascunho aberto, que não grava
+  // por cima delas
+  test('o rascunho de "Editar faixas" sai quando as faixas do INVA mudam por fora ("Marcar disponível" no agendamento)', async ({ page }) => {
+    const ins = [instrutor(1, 9), instrutor(2, 9, { faixas: [{ de: 1050, ate: 1440 }], pausas: [] })];
+    await abrir(page, { estado: cenario({ ins, stu: [aluno(1000), aluno(1001, { fly: false })] }) });
+    await abrirEscala(page);
+    await abrirInstrutor(page, 2);
+    await page.locator('#det-ins-editar-faixas').click();
+    await campoDaFaixa(page, 'faixa', 0, 'de').selectOption({ label: '18:00' });
+    await page.locator('#det-ins [data-act="agendar"]').click();
+    await page.locator('#agd-aluno').selectOption('1001');
+    await page.locator('#agd-conferencia').getByRole('button', { name: /^Marcar Instrutor 02 disponível às / }).click();
+    await confirmarAgendamento(page);
+    await expect(faixasDoAberto(page)).toContainText('17:30–24:00');
+    await expect(faixasDoAberto(page)).not.toHaveText('17:30–24:00');
+    await expect(page.locator('#det-ins .faixas-form')).toHaveCount(0);
+    await expect(entradasDoHistorico(page, 'Faixas de Instrutor 02')).toHaveCount(0);
+  });
+
+  // C, revisão: o "Marcar disponível" grava o voo exato ([a, b), fora dos 10 minutos: às 07:15, com 1h03). "Editar faixas"
+  // mostra o horário gravado (antes, o 1º da lista, 06:30 ou 06:40) e salva o almoço sem pedir para escolher de novo
+  test('as faixas e as pausas fora dos 10 minutos: "Editar faixas" mostra o horário gravado e salva', async ({ page }) => {
+    const { faixas } = comOIntervalo({ faixas: [{ de: 760, ate: 1440 }], pausas: [] }, 435, 498);
+    await abrir(page, { estado: cenario({ ins: [instrutor(1, 9, { faixas, pausas: [{ de: 1000, ate: 1023 }] })] }) });
+    await abrirInstrutor(page, 1);
+    await expect(faixasDoAberto(page)).toHaveText('07:15–08:18 e 12:40–24:00');
+    await page.locator('#det-ins-editar-faixas').click();
+    const mostrado = (tipo, i, ponta) => campoDaFaixa(page, tipo, i, ponta).locator('option:checked');
+    await expect(campoDaFaixa(page, 'faixa', 0, 'de')).toHaveValue('435');
+    await expect(mostrado('faixa', 0, 'de')).toHaveText('07:15');
+    await expect(mostrado('faixa', 0, 'ate')).toHaveText('08:18');
+    await expect(mostrado('pausa', 0, 'ate')).toHaveText('17:03');
+    // Só o almoço: salvo, com as faixas como estavam
+    await page.locator('#det-ins-almoco').click();
+    await page.locator('#det-ins-salvar-faixas').click();
+    await expect(page.locator('#det-ins-editar-faixas')).toBeFocused();
+    await expect(faixasNaLinha(page, 1)).toHaveText('07:15–08:18 e 12:40–24:00 · pausa 12:00–13:00 e 16:40–17:03');
+    // O De mudado para um da lista: o Até continua o gravado
+    await page.locator('#det-ins-editar-faixas').click();
+    await campoDaFaixa(page, 'faixa', 0, 'de').selectOption({ label: '07:20' });
+    await expect(mostrado('faixa', 0, 'ate')).toHaveText('08:18');
+    await page.locator('#det-ins-salvar-faixas').click();
+    await expect(faixasDoAberto(page)).toHaveText('07:20–08:18 e 12:40–24:00');
+  });
+
+  // C, revisão: o turno que já está e "Salvar faixas" sem mudança não gravam (nem marcam a data como mudada): só dizem
+  test('o turno que já está e "Salvar faixas" sem mudança não gravam nada no Histórico', async ({ page }) => {
+    await abrir(page, { estado: cenario({ ins: [instrutor(1, 9, { faixas: [{ de: 390, ate: 1440 }], pausas: [] })] }) });
+    await abrirInstrutor(page, 1);
+    await expect(botaoDoTurno(page, 'dia-e-noturno')).toHaveAttribute('aria-pressed', 'true');
+    await botaoDoTurno(page, 'dia-e-noturno').click();
+    await expect(botaoDoTurno(page, 'dia-e-noturno')).toBeFocused();
+    await expect(page.locator('#anuncio')).toHaveText('As faixas de Instrutor 01 já são estas.');
+    await page.locator('#det-ins-editar-faixas').click();
+    await page.locator('#det-ins-salvar-faixas').click();
+    await expect(page.locator('#det-ins .faixas-form')).toHaveCount(0);
+    await expect(page.locator('#det-ins-editar-faixas')).toBeFocused();
+    await expect(entradasDoHistorico(page, 'Turno de Instrutor 01')).toHaveCount(0);
+    await expect(entradasDoHistorico(page, 'Faixas de Instrutor 01')).toHaveCount(0);
+    // Outro turno grava, uma entrada
+    await botaoDoTurno(page, 'dia').click();
+    await expect(entradasDoHistorico(page, 'Turno de Instrutor 01 nesta data: Dia inteiro (06:30–17:30)')).toHaveCount(1);
+  });
+
+  // C, revisão: a recusa de "Salvar faixas" fica no campo (aria-invalid, a mensagem como descrição dele, o foco nele) e é
+  // dita uma vez (no #anuncio, sem um alerta a mais); as faixas salvas são ditas
+  test('"Salvar faixas" recusado: o campo marcado, com a mensagem e o foco, dita uma vez; o salvo é dito', async ({ page }) => {
+    await abrir(page, { estado: cenario({ ins: [instrutor(1, 9)] }) });
+    await abrirInstrutor(page, 1);
+    await page.locator('#det-ins-editar-faixas').click();
+    await campoDaFaixa(page, 'faixa', 0, 'de').selectOption({ label: '13:00' });
+    await campoDaFaixa(page, 'faixa', 0, 'ate').selectOption({ label: '12:00' });
+    await page.locator('#det-ins-salvar-faixas').click();
+    const ate = campoDaFaixa(page, 'faixa', 0, 'ate');
+    await expect(ate).toBeFocused();
+    await expect(ate).toHaveAttribute('aria-invalid', 'true');
+    await expect(ate).toHaveAccessibleDescription('Na 1ª faixa, o Até vem depois do De.');
+    await expect(campoDaFaixa(page, 'faixa', 0, 'de')).not.toHaveAttribute('aria-invalid', 'true');
+    await expect(page.locator('#anuncio')).toHaveText('Na 1ª faixa, o Até vem depois do De.');
+    await expect(page.locator('#det-ins [role="alert"]')).toHaveCount(0);
+    // O Até corrigido: a marca sai; o salvo é dito
+    await ate.selectOption({ label: '17:30' });
+    await expect(ate).not.toHaveAttribute('aria-invalid', 'true');
+    await page.locator('#det-ins-salvar-faixas').click();
+    await expect(page.locator('#det-ins-editar-faixas')).toBeFocused();
+    await expect(page.locator('#anuncio')).toHaveText('Faixas de Instrutor 01 salvas: 13:00–17:30.');
   });
 
   test('o "Vem" do detalhe e o da linha são o mesmo; o ↶ do Histórico devolve', async ({ page }) => {

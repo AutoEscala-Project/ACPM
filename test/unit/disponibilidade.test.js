@@ -8,7 +8,7 @@ import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   disponivelPara, faixasDoAw, awComoOAppLia, normalizarFaixas, normalizarPausas, refazerFaixasDoAw, INICIO_DAS_FAIXAS, TURNOS, ALMOCO, PAUSA_NOVA,
-  MINUTOS_DAS_FAIXAS, faixasDe, faixasDoTurno, turnoDasFaixas, textoDasFaixas, textoDasPausas, conferirFaixas, comOIntervalo, trechosDaTira, mesmasFaixas,
+  MINUTOS_DAS_FAIXAS, minutoDaFaixa, faixasDe, faixasDoTurno, turnoDasFaixas, textoDasFaixas, textoDasPausas, conferirFaixas, comOIntervalo, trechosDaTira, mesmasFaixas,
   oQueCabe, textoDoQueCabe
 } from '../../js/disponibilidade.js';
 import { INICIOS_DOS_TEMPOS as T } from '../../js/horarios.js';
@@ -319,9 +319,25 @@ describe('conferirFaixas: "Salvar faixas" de "Editar faixas"', () => {
     assert.equal(conferirFaixas({ faixas: [{ de: 390, ate: 1050 }], pausas: [{ de: 780, ate: 720 }] }).erro, 'Na 1ª pausa, o Até vem depois do De.');
   });
 
-  test('um horário fora da lista (antes das 06:30, fora dos 10 minutos) é recusado', () => {
+  // A lista é de 10 em 10 minutos, mas o app grava faixas fora dela ("Marcar disponível" às 07:15, com 1,3 h): o editor
+  // mostra o horário gravado, e "Salvar faixas" aceita qualquer minuto inteiro das 06:30 à meia-noite (como o formato 29)
+  test('um horário antes das 06:30, depois da meia-noite ou fora do minuto inteiro é recusado; fora dos 10 minutos vale', () => {
     assert.equal(conferirFaixas({ faixas: [{ de: 380, ate: 1050 }], pausas: [] }).erro, 'Na 1ª faixa, escolha o De e o Até da lista.');
-    assert.equal(conferirFaixas({ faixas: [{ de: 390, ate: 1055 }], pausas: [] }).erro, 'Na 1ª faixa, escolha o De e o Até da lista.');
+    assert.equal(conferirFaixas({ faixas: [{ de: 390, ate: 1450 }], pausas: [] }).erro, 'Na 1ª faixa, escolha o De e o Até da lista.');
+    assert.equal(conferirFaixas({ faixas: [{ de: 390, ate: 1050.5 }], pausas: [] }).erro, 'Na 1ª faixa, escolha o De e o Até da lista.');
+    assert.deepEqual(conferirFaixas({ faixas: [{ de: 435, ate: 498 }, { de: 760, ate: 1440 }], pausas: [{ de: 600, ate: 663 }] }),
+      { erro: null, faixas: [{ de: 435, ate: 498 }, { de: 760, ate: 1440 }], pausas: [{ de: 600, ate: 663 }] });
+    assert.ok(minutoDaFaixa(435) && minutoDaFaixa(390) && minutoDaFaixa(1440));
+    assert.ok(!minutoDaFaixa(389) && !minutoDaFaixa(1441) && !minutoDaFaixa(400.5) && !minutoDaFaixa('400'));
+  });
+
+  // O campo recusado: a lista, o número e a ponta (o editor marca o campo com aria-invalid e põe o foco nele)
+  test('a recusa diz qual campo: a lista, o número e a ponta; a do máximo, nenhum', () => {
+    assert.deepEqual(conferirFaixas({ faixas: [{ de: 390, ate: 1050 }, { de: 900, ate: 900 }], pausas: [] }).campo, { lista: 'faixas', i: 1, ponta: 'ate' });
+    assert.deepEqual(conferirFaixas({ faixas: [], pausas: [{ de: 380, ate: 720 }] }).campo, { lista: 'pausas', i: 0, ponta: 'de' });
+    assert.deepEqual(conferirFaixas({ faixas: [{ de: 390, ate: 1450 }], pausas: [] }).campo, { lista: 'faixas', i: 0, ponta: 'ate' });
+    const muitas = Array.from({ length: 9 }, (_, i) => ({ de: 400 + 60 * i, ate: 430 + 60 * i }));
+    assert.equal(conferirFaixas({ faixas: muitas, pausas: [] }).campo, null);
   });
 
   test('no máximo 8 faixas e 8 pausas; nenhuma faixa vale (o INVA não voa na data)', () => {
@@ -393,20 +409,21 @@ describe('oQueCabe: os horários de cada lista que cabem nas faixas, e até quan
 
   test('a manhã (06:30–12:40): os de até as 12:30 começam, e a missão das 11:30 vai até as 16:30', () => {
     assert.deepEqual(resumo(oQueCabe(comFaixas([{ de: 390, ate: 760 }]))), {
-      C152: [4, 390, 690, 990], C172: [4, 390, 690, 990], sim: [4, 390, 690, 990], 'PA-34': [13, 390, 750, 1050], ground: [4, 390, 690, 990], noturno: [0, null, null, null]
+      C152: [4, 390, 690, 990], C172: [4, 390, 690, 990], sim: [4, 390, 690, 990], 'PA-34': [13, 390, 750, 1050], ground: [4, 390, 690, 780], noturno: [0, null, null, null]
     });
   });
 
-  test('o dia inteiro: o simulador e a aula das 16:20 vão até as 21:20; o Noturno não começa às 17:30 (o fim não entra)', () => {
+  // O Ground tem duração fixa (01h30, duracaoFixaDaMissao): a aula das 16:20 termina às 17:50, não 5 h depois
+  test('o dia inteiro: o simulador das 16:20 vai até as 21:20 e a aula, até as 17:50; o Noturno não começa às 17:30 (o fim não entra)', () => {
     assert.deepEqual(resumo(oQueCabe({ on: true, ...faixasDoTurno('dia') })), {
-      C152: [8, 390, 980, 1050], C172: [8, 390, 980, 1050], sim: [8, 390, 980, 1280], 'PA-34': [21, 390, 990, 1050], ground: [8, 390, 980, 1280], noturno: [0, null, null, null]
+      C152: [8, 390, 980, 1050], C172: [8, 390, 980, 1050], sim: [8, 390, 980, 1280], 'PA-34': [21, 390, 990, 1050], ground: [8, 390, 980, 1070], noturno: [0, null, null, null]
     });
     assert.deepEqual(resumo(oQueCabe({ on: true, ...faixasDoTurno('dia-e-noturno') })).noturno, [1, 1050, 1050, 1290], 'o Noturno, 4 h fixas');
   });
 
   test('a pausa do almoço: nenhuma missão a atravessa, e a pausa seguinte limita até quando a última pode ir', () => {
     const almoco = resumo(oQueCabe(comFaixas([{ de: 390, ate: 690 }, { de: 760, ate: 1050 }], [{ de: 690, ate: 760 }])));
-    assert.deepEqual([almoco.C152, almoco.sim, almoco.ground], [[7, 390, 980, 1050], [6, 390, 980, 1280], [6, 390, 980, 1280]]);
+    assert.deepEqual([almoco.C152, almoco.sim, almoco.ground], [[7, 390, 980, 1050], [6, 390, 980, 1280], [6, 390, 980, 1070]]);
     assert.deepEqual(oQueCabe(comFaixas([{ de: 390, ate: 1050 }], [{ de: 720, ate: 780 }]))[0].horarios, [390, 500, 610, 820, 870, 980]);
     assert.equal(oQueCabe(comFaixas([{ de: 390, ate: 760 }], [{ de: 900, ate: 960 }]))[0].ate, 900, 'para na pausa das 15:00');
   });
@@ -421,6 +438,7 @@ describe('oQueCabe: os horários de cada lista que cabem nas faixas, e até quan
     const [c152, , , , , noturno] = oQueCabe(comFaixas([{ de: 390, ate: 760 }]));
     assert.equal(textoDoQueCabe(c152), 'C152: 06:30 a 11:30 (4 horários); termina até as 16:30');
     assert.equal(textoDoQueCabe(noturno), 'Noturno: nenhum horário');
+    assert.equal(textoDoQueCabe(oQueCabe({ on: true, ...faixasDoTurno('dia') })[4]), 'Ground: 06:30 a 16:20 (8 horários); termina até as 17:50');
     assert.equal(textoDoQueCabe(oQueCabe({ on: true, ...faixasDoTurno('noturno') })[5]), 'Noturno: 17:30 (1 horário); termina até as 21:30');
   });
 });

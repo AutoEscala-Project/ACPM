@@ -209,8 +209,9 @@ describe('Um registro só das habilitações', () => {
   });
 
   it('nenhum módulo além de js/habilitacoes.js compara uma lista de habilitações com um id escrito no código', () => {
-    // As exceções, pelo nome: os passos de js/migracoes.js e a marca "Checador" da linha de INVAs (só exibição)
-    const PERMITIDOS = [{ arquivo: 'js/migracoes.js' }, { arquivo: 'js/views/instrutores.js', trecho: "startsWith('checa_')" }];
+    // A exceção, pelo nome: os passos de js/migracoes.js (a marca "Checador" da linha de INVAs lê os grupos do checador do
+    // registro: a exceção dela saiu com a grade, no C)
+    const PERMITIDOS = [{ arquivo: 'js/migracoes.js' }];
     assert.deepEqual(comparacoesComIdLiteral("const c = x.hab.includes('c172');"), ["x.hab.includes('c172')"]);
     assert.deepEqual(comparacoesComIdLiteral('ok = (i.hab || []).some(h => h === "ifr") && 1'), ['(i.hab || []).some(h => h === "ifr")']);
     assert.deepEqual(comparacoesComIdLiteral('x.hab.indexOf(`mlte`) >= 0'), ['x.hab.indexOf(`mlte`)']);

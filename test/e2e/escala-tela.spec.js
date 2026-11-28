@@ -285,6 +285,8 @@ test.describe('Tela da Escala', () => {
     await page.locator('#out .tl-bar', { hasText: 'Aluno 1000' }).click();
     await expect(editorDoVoo(page).locator('.voo-pesos')).toContainText('Peso do aluno: 40,1 kg');
     await expect(editorDoVoo(page).locator('.voo-pesos')).toContainText('Peso do INVA: 40,7 kg');
+    // O link do cadastro do INVA diz o nome da tela (C: INVAs)
+    await expect(editorDoVoo(page).locator('.voo-pesos a[href="#/ins"]')).toHaveText('no cadastro (INVAs)');
   });
 
   test('turma de Ground: horário, missão, sala e instrutor uma vez só; cada aluno com o seu status e a sua ação', async ({ page }) => {
