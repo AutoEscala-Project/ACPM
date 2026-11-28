@@ -8,6 +8,7 @@ import { aluno, cenario, instrutor, missaoExtra } from '../helpers/montar.js';
 import { IDS } from '../helpers/casos-do-programa.js';
 import { cursosIniciais, gravarCurso } from '../../js/programa.js';
 import { ApiClient } from '../../js/storage.js';
+import { abrirRestricoes, restricoesDoPedido, fecharRestricoes, proximaDoPrograma, usarADoPrograma } from './telas/restricoes.js';
 
 const dia = (extra = {}) => ({ ...cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, {}, { curso: 'PP' }), aluno(1001)] }), ...extra });
 const PROGRAMA = { PP: [{ id: 'PP-01', nome: 'Familiarização', mis: 'Voo Local', eq: 'C152', nb: 1 }, { id: 'PP-02', nome: 'Navegação', mis: 'Navegação', eq: 'C152', nb: 2 }], PC: [], INVA: [] };
@@ -288,12 +289,15 @@ test.describe('Cursos no dia', () => {
   comProgresso('Usar a próxima missão; registrar o resultado na escala; o progresso e a próxima avançam; o resultado fica gravado', async ({ page }) => {
     await abrir(page, { estado: dia() });
     const linha = await naDemanda(page);
-    await expect(linha.locator('[data-act="usar-proxima"]')).toHaveText('Próxima: PP-01 · Usar');
-    await expect(page.locator('#dem tr[data-id="1001"] [data-act="usar-proxima"]')).toHaveCount(0);
-    await linha.locator('[data-act="usar-proxima"]').click();
+    // A próxima missão e "Usar a do programa", nas restrições do pedido (G1)
+    await abrirRestricoes(page, 1001);
+    await expect(usarADoPrograma(page, 1001)).toHaveCount(0);
+    await expect(await proximaDoPrograma(page, 1000)).toHaveText('Próxima do programa: PP-01');
+    await usarADoPrograma(page, 1000).click();
     await expect(caixaVoa(linha)).toBeChecked();
     await expect(linha.locator('.etapa')).toHaveText('PP-01');
-    await expect(linha.locator('[data-act="usar-proxima"]')).toHaveCount(0);
+    await expect(usarADoPrograma(page, 1000)).toHaveCount(0);
+    await fecharRestricoes(page);
 
     await abrirEscala(page);
     await expect(vooNaEscala(page).locator('.c-status .etapa')).toHaveText('PP-01');
@@ -325,10 +329,11 @@ test.describe('Cursos no dia', () => {
   comProgresso('mudar a missão à mão tira o código do curso', async ({ page }) => {
     await abrir(page, { estado: dia() });
     const linha = await naDemanda(page);
-    await linha.locator('[data-act="usar-proxima"]').click();
+    await abrirRestricoes(page, 1000);
+    await usarADoPrograma(page, 1000).click();
     await linha.locator('[data-f="mis"]').selectOption('Navegação');
     await expect(linha.locator('.etapa')).toHaveCount(0);
-    await expect(linha.locator('[data-act="usar-proxima"]')).toHaveText('Próxima: PP-01 · Usar');
+    await expect(restricoesDoPedido(page, 1000).locator('.restricao-proxima')).toHaveText('Próxima do programa: PP-01');
   });
 
   comProgresso('no Gestor, o código e o resultado só aparecem', async ({ page }) => {
@@ -927,7 +932,8 @@ test.describe('Cursos: fases, módulos e quando voar', () => {
     await appPronto(page);
   }
   const descricoesGuardadas = async page => (await programaGuardado(page)).alteracoes.map(a => a.descricao);
-  const proxima = (page, id) => page.locator(`#dem tr[data-id="${id}"][data-mid="0"] [data-act="usar-proxima"]`);
+  // A próxima missão do programa, nas restrições do pedido (G1)
+  const proxima = (page, id) => proximaDoPrograma(page, id);
   async function naDemanda(page) {
     await irPara(page, 'dem');
     await page.locator('#onlyfly').uncheck();
@@ -939,8 +945,9 @@ test.describe('Cursos: fases, módulos e quando voar', () => {
     const resultados = [...aprovadas(1000, ['TMA-05', 'PE-03', 'PE-04'], 1), ...aprovadas(1001, ['TMA-05', 'PE-03', 'PE-04', 'END-SOLO', 'NAV-SOLO-01'], 10)];
     await abrirComPrograma(page, { conteudo: CRONOGRAMA, resultados });
     await naDemanda(page);
-    await expect(proxima(page, 1000)).toHaveText('Próxima: ADAPT-C152 · Usar');
-    await expect(proxima(page, 1001)).toHaveText('Próxima: ADAPT-C152 · Usar');
+    await expect(await proxima(page, 1000)).toHaveText('Próxima do programa: ADAPT-C152');
+    await expect(await proxima(page, 1001)).toHaveText('Próxima do programa: ADAPT-C152');
+    await fecharRestricoes(page);
 
     await irPara(page, 'cur');
     const pp = curso(page, 'PP');
@@ -982,8 +989,9 @@ test.describe('Cursos: fases, módulos e quando voar', () => {
 
     // A ADAPTAÇÃO dispensada não é mais a próxima; quem fez as Fases 7 e 8 vai para o noturno
     await naDemanda(page);
-    await expect(proxima(page, 1000)).toHaveText('Próxima: END-SOLO · Usar');
-    await expect(proxima(page, 1001)).toHaveText('Próxima: NOT · Usar');
+    await expect(await proxima(page, 1000)).toHaveText('Próxima do programa: END-SOLO');
+    await expect(await proxima(page, 1001)).toHaveText('Próxima do programa: NOT');
+    await fecharRestricoes(page);
 
     await page.reload();
     await irPara(page, 'cur');
@@ -1367,9 +1375,9 @@ test.describe('Cursos: cursos novos, encerrar, o cronograma do PP e o curso de c
     await expect(page.locator('#audit-log-list')).toContainText('Curso de Aluno 1001: MLTE');
     await irPara(page, 'dem');
     await page.locator('#onlyfly').uncheck();
-    const usar = page.locator('#dem tr[data-id="1001"][data-mid="0"] [data-act="usar-proxima"]');
-    await expect(usar).toHaveText('Próxima: MLTE-01 · Usar');
-    await usar.click();
+    await expect(await proximaDoPrograma(page, 1001)).toHaveText('Próxima do programa: MLTE-01');
+    await usarADoPrograma(page, 1001).click();
+    await fecharRestricoes(page);
     await abrirEscala(page);
     const voo = page.locator('#out tbody tr:not(.win)', { hasText: 'Aluno 1001' });
     await expect(voo.locator('.c-status .etapa')).toHaveText('MLTE-01');
@@ -1509,7 +1517,8 @@ test.describe('Cursos: cursos novos, encerrar, o cronograma do PP e o curso de c
     await expect.poll(() => descricoes(page)).toEqual(['PP: cronograma P.I PPA 001A aplicado (0 mantidas, 47 novas, 0 retiradas)']);
     await irPara(page, 'dem');
     await page.locator('#onlyfly').uncheck();
-    await expect(page.locator('#dem tr[data-id="1000"][data-mid="0"] [data-act="usar-proxima"]')).toHaveText('Próxima: IN-01 · Usar');
+    await expect(await proximaDoPrograma(page, 1000)).toHaveText('Próxima do programa: IN-01');
+    await fecharRestricoes(page);
   });
 
   // O PP trazido do cadastro (uma fase só, "Programa"), com resultados na IN-01 e na PP-02: a IN-01 (código do cronograma)
@@ -1586,7 +1595,8 @@ test.describe('Cursos: cursos novos, encerrar, o cronograma do PP e o curso de c
     // A próxima missão: o Noturno, pela noite, com os translados
     await irPara(page, 'dem');
     await page.locator('#onlyfly').uncheck();
-    await expect(page.locator('#dem tr[data-id="1000"][data-mid="0"] [data-act="usar-proxima"]')).toHaveText('Próxima: NOT (com TSL-01 e TSL-02) · Usar');
+    await expect(await proximaDoPrograma(page, 1000)).toHaveText('Próxima do programa: NOT (com TSL-01 e TSL-02)');
+    await fecharRestricoes(page);
     // Quem só consulta lê o trecho no tipo de missão
     await page.locator('#role-sel').selectOption('gestor');
     await irPara(page, 'cur');

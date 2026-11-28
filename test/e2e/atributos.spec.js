@@ -3,6 +3,7 @@
 // simulador com 2 h na Demanda e na Agenda
 import { test, expect, abrir, irPara, abrirEscala, abrirHistorico, campoDaAgenda, abrirRecursos, linhaDoRecurso, marcarAtributo, campoDoRecurso } from './fixtures.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
+import { abrirRestricoes, campoDasRestricoes, fecharRestricoes } from './telas/restricoes.js';
 
 const linha = (page, nome) => page.locator('#out tbody tr:not(.win)', { hasText: nome });
 
@@ -53,10 +54,13 @@ test.describe('Atributos dos recursos', () => {
     await abrir(page, { estado: cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000)] }) });
     await irPara(page, 'dem');
     const pedido = page.locator('#dem tr[data-k="d"][data-id="1000"][data-mid="0"]');
+    // A duração, nas restrições do pedido (G1), acompanha a missão mudada na linha
+    await abrirRestricoes(page, 1000);
     await pedido.locator('[data-f="mis"]').selectOption('Simulador');
-    await expect(page.locator('#dem tr[data-k="d"][data-id="1000"][data-mid="0"] [data-f="nb"]')).toHaveValue('2');
+    await expect(campoDasRestricoes(page, 'nb')).toHaveValue('2');
     await page.locator('#dem tr[data-k="d"][data-id="1000"][data-mid="0"] [data-f="mis"]').selectOption('Voo Local');
-    await expect(page.locator('#dem tr[data-k="d"][data-id="1000"][data-mid="0"] [data-f="nb"]')).toHaveValue('1');
+    await expect(campoDasRestricoes(page, 'nb')).toHaveValue('1');
+    await fecharRestricoes(page);
 
     await irPara(page, 'age');
     // A missão espera o aluno (F1c)

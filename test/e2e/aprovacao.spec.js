@@ -3,6 +3,7 @@
 // Em Voo, Atrasado, Pousou e Cancelado também fixam o voo.
 import { test, comPrioridade, expect, abrir, abrirComExemplo, irPara, abrirEscala, lerEscala, abrirHistorico, alternarVem, aprovar, botaoAprovar, botaoReabrir, caixaVoa, reabrir, refazer } from './fixtures.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
+import { abrirRestricoes, campoDasRestricoes, fecharRestricoes } from './telas/restricoes.js';
 
 const dia = () => cenario({ ins: [instrutor(1, 9), instrutor(2, 9)], stu: [aluno(1000, { p1: 390, p2: -1 }), aluno(1001, { p1: 500, p2: -1 }), aluno(1002, { fly: false, p1: 390, p2: -1 })] });
 const linhas = async page => (await lerEscala(page)).linhas.filter(l => l.includes('Aluno 100'));
@@ -21,7 +22,9 @@ test.describe('Escala aprovada', () => {
     await page.locator('#onlyfly').uncheck();
     const novo = page.locator('#dem tr[data-id="1002"]');
     await caixaVoa(novo).check();
-    await novo.locator('[data-f="pr"]').selectOption('1');
+    await abrirRestricoes(page, 1002);
+    await campoDasRestricoes(page, 'pr').selectOption('1');
+    await fecharRestricoes(page);
     await abrirEscala(page);
     const depois = await linhas(page);
     for (const linha of antes) expect(depois).toContain(linha);

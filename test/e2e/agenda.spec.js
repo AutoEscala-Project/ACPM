@@ -6,6 +6,7 @@ import { test, comProgresso, expect, abrir, irPara, abrirEscala, lerEscala, caix
 import { readFileSync } from 'node:fs';
 import { documentosAtuais } from './supabase-falso.js';
 import { aluno, cenario } from '../helpers/montar.js';
+import { abrirRestricoes, campoDasRestricoes, fecharRestricoes } from './telas/restricoes.js';
 import { cursosIniciais, novoCurso } from '../../js/programa.js';
 import { MODELOS } from '../../js/modelos-de-curso.js';
 import { FROTA_INICIAL } from '../../js/frota.js';
@@ -305,8 +306,12 @@ test.describe('Agenda de Solicitações', () => {
     // Registrado e aprovado na data já gravada, o pedido já está na demanda
     await irPara(page, 'dem');
     const linha = page.locator('#dem tr[data-k="d"][data-id="1000"][data-mid="0"]');
-    await expect(linha.locator('[data-f="eq"]')).toHaveValue('PA-34');
-    // O horário exato fica no dia guardado (J, N13: a Demanda não tem mais a coluna Disponibilidade)
+    await expect(linha).toHaveCount(1);
+    // O tipo, nas restrições do pedido (G1); o horário exato fica no dia guardado e aparece nelas, sem as preferências (N14)
+    await abrirRestricoes(page, 1000);
+    await expect(campoDasRestricoes(page, 'eq')).toHaveValue('PA-34');
+    await expect(page.locator('#painel-restricoes .restricao-horario')).toContainText('às 07:30');
+    await fecharRestricoes(page);
     await expect.poll(() => page.evaluate(data => JSON.parse(localStorage.getItem(`acpm4_dia_${data}`)).pedidos[1000].jan, AMANHA)).toBe('h450');
     await abrirEscala(page);
     expect((await lerEscala(page)).linhas.find(l => l.includes('Aluno 1000'))).toMatch(/^07:30/);
@@ -599,7 +604,9 @@ test.describe('Agenda de Solicitações', () => {
     const linha = id => page.locator(`#dem tr[data-k="d"][data-id="${id}"][data-mid="0"]`);
     await expect(caixaVoa(linha(1000))).toBeChecked();
     await expect.poll(() => page.evaluate(data => JSON.parse(localStorage.getItem(`acpm4_dia_${data}`)).pedidos[1000].jan, DATA)).toBe('h500');
-    await expect(linha(1000).locator('[data-f="nb"]')).toHaveValue('2.5');
+    await abrirRestricoes(page, 1000);
+    await expect(campoDasRestricoes(page, 'nb')).toHaveValue('2.5');
+    await fecharRestricoes(page);
     await expect(linha(1001).locator('[data-f="mis"]')).toHaveValue('IFR');
     await expect.poll(() => page.evaluate(data => JSON.parse(localStorage.getItem(`acpm4_dia_${data}`)).pedidos[1001].jan, DATA)).toBe('h870');
     await expect(page.locator('#audit-log-list')).toContainText('Pedidos: Aluno 1000 incluído (Voo Local · às 08:20 · 2,5 h)');

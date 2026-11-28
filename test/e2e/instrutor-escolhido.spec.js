@@ -2,11 +2,13 @@
 // lista; o voo fica onde está, fixo, com o escolhido, e o resto é refeito em volta). O histórico desfaz
 import { test, expect, abrir, irPara, abrirEscala, confirmar, abrirHistorico, alternarVem, aprovar, reabrir, editorDoVoo, refazer, abrirCaixa, campoDoAluno, abrirAluno } from './fixtures.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
+import { abrirRestricoes, fecharRestricoes } from './telas/restricoes.js';
 
 // Dois voos às 08:20: o app põe o Instrutor 02 (menos habilitações) com o Aluno 1000 e o Instrutor 01 com o 1001
 const dia = () => cenario({ ins: [instrutor(1, 9), instrutor(2, 1), instrutor(3, 9, { on: false })], stu: [aluno(1000), aluno(1001)] });
 const linha = (page, nome) => page.locator('#out tbody tr:not(.win)', { hasText: nome });
-const pedido = (page, id) => page.locator(`#dem tr[data-k="d"][data-id="${id}"][data-mid="0"]`);
+// O instrutor do pedido, nas restrições dele (G1): a gaveta abre pela linha da Demanda (e fecha antes de outra tela)
+const instrutorDoPedido = async (page, id) => (await abrirRestricoes(page, id)).locator('[data-f="insId"]');
 
 test.describe('Instrutor escolhido', () => {
   test('na Demanda: o voo sai com o escolhido; o histórico volta para o automático', async ({ page }) => {
@@ -15,10 +17,11 @@ test.describe('Instrutor escolhido', () => {
     await expect(linha(page, 'Aluno 1000').locator('.c-instr')).toHaveText('Instrutor 02');
 
     await irPara(page, 'dem');
-    const campo = pedido(page, 1000).locator('[data-f="insId"]');
+    const campo = await instrutorDoPedido(page, 1000);
     await expect(campo.locator('option')).toHaveText(['Automático', 'Instrutor 01', 'Instrutor 02', 'Instrutor 03 (fora nesta data)']);
     await campo.selectOption({ label: 'Instrutor 01' });
-    await expect(pedido(page, 1000).locator('[data-f="insId"]')).toHaveClass(/\bescolhido\b/);
+    await expect(campo).toHaveClass(/\bescolhido\b/);
+    await fecharRestricoes(page);
 
     await abrirEscala(page);
     await expect(linha(page, 'Aluno 1000').locator('.c-instr')).toHaveText('Instrutor 01');
@@ -31,13 +34,14 @@ test.describe('Instrutor escolhido', () => {
     await page.keyboard.press('Escape');
     await expect(linha(page, 'Aluno 1000').locator('.c-instr')).toHaveText('Instrutor 02');
     await irPara(page, 'dem');
-    await expect(pedido(page, 1000).locator('[data-f="insId"]')).toHaveValue('');
+    await expect(await instrutorDoPedido(page, 1000)).toHaveValue('');
   });
 
   test('o escolhido que não pode voar: o pedido fica fora da escala, com o motivo', async ({ page }) => {
     await abrir(page, { estado: dia() });
     await irPara(page, 'dem');
-    await pedido(page, 1000).locator('[data-f="insId"]').selectOption({ label: 'Instrutor 03 (fora nesta data)' });
+    await (await instrutorDoPedido(page, 1000)).selectOption({ label: 'Instrutor 03 (fora nesta data)' });
+    await fecharRestricoes(page);
     await abrirEscala(page);
     await expect(page.locator('#out details.erros')).toContainText('o instrutor escolhido (Instrutor 03) não está disponível nesta data');
   });
@@ -67,7 +71,8 @@ test.describe('Instrutor escolhido', () => {
     await expect(page.locator('#out details.conflitos')).toHaveCount(0);
 
     await irPara(page, 'dem');
-    await expect(pedido(page, 1001).locator('[data-f="insId"]')).toHaveValue('2');
+    await expect(await instrutorDoPedido(page, 1001)).toHaveValue('2');
+    await fecharRestricoes(page);
 
     await abrirEscala(page);
     await voo.locator('[data-act="trocar-instrutor"]').click();
@@ -107,7 +112,8 @@ test.describe('Instrutor escolhido', () => {
     await expect(aluno.locator('[data-f="voaCom"] option', { hasText: 'Instrutor 03' })).toHaveCount(0);
 
     await irPara(page, 'dem');
-    await expect(pedido(page, 1000).locator('[data-f="insId"] option').first()).toHaveText('Automático (prioriza Instrutor 01)');
+    await expect((await instrutorDoPedido(page, 1000)).locator('option').first()).toHaveText('Automático (prioriza Instrutor 01)');
+    await fecharRestricoes(page);
 
     await abrirEscala(page);
     await expect(linha(page, 'Aluno 1000').locator('.c-instr')).toHaveText('Instrutor 01');
@@ -156,7 +162,8 @@ test.describe('Instrutor escolhido', () => {
     await expect(voo.locator('.c-instr')).toHaveText('Instrutor 02');
 
     await irPara(page, 'dem');
-    await pedido(page, 1001).locator('[data-f="insId"]').selectOption('');
+    await (await instrutorDoPedido(page, 1001)).selectOption('');
+    await fecharRestricoes(page);
     await abrirEscala(page);
     await expect(voo.locator('.fixo')).toHaveCount(0);
     await expect(voo.locator('.ins-btn')).not.toHaveClass(/\bescolhido\b/);
@@ -186,15 +193,17 @@ test.describe('Instrutor escolhido', () => {
     await expect(page.locator('#out details.avisos summary')).toContainText('1 voo com o instrutor escolhido fora do cadastro');
     await expect(page.locator('#out details.avisos')).toContainText('O instrutor escolhido saiu do cadastro: o voo ficou com Instrutor 02.');
     await irPara(page, 'dem');
-    await expect(pedido(page, 1000).locator('[data-f="insId"] option:checked')).toHaveText('Instrutor fora do cadastro (o app escolhe)');
+    await expect((await instrutorDoPedido(page, 1000)).locator('option:checked')).toHaveText('Instrutor fora do cadastro (o app escolhe)');
 
     // A data aberta: escolher o Instrutor 01 e excluí-lo do cadastro devolve o pedido ao Automático, sem aviso
-    await pedido(page, 1000).locator('[data-f="insId"]').selectOption({ label: 'Instrutor 01' });
+    await (await instrutorDoPedido(page, 1000)).selectOption({ label: 'Instrutor 01' });
+    await fecharRestricoes(page);
     await irPara(page, 'ins');
     await page.locator('[data-vista-ins="cadastro"]').click();
     await confirmar(page, '#inst tr.cd[data-id="1"] [data-act="deli"]');
     await irPara(page, 'dem');
-    await expect(pedido(page, 1000).locator('[data-f="insId"]')).toHaveValue('');
+    await expect(await instrutorDoPedido(page, 1000)).toHaveValue('');
+    await fecharRestricoes(page);
     await abrirEscala(page);
     await expect(page.locator('#out details.avisos')).toHaveCount(0);
     await expect(linha(page, 'Aluno 1000')).toHaveCount(1);
@@ -260,7 +269,8 @@ test.describe('Instrutor escolhido', () => {
   test('o instrutor do dia na Demanda fora do “Priorizar com”: a observação na Escala', async ({ page }) => {
     await abrir(page, { estado: comPriorizar() });
     await irPara(page, 'dem');
-    await pedido(page, 1000).locator('[data-f="insId"]').selectOption({ label: 'Instrutor 02' });
+    await (await instrutorDoPedido(page, 1000)).selectOption({ label: 'Instrutor 02' });
+    await fecharRestricoes(page);
     await abrirEscala(page, { vista: 'lista' });
     await expect(linha(page, 'Aluno 1000').locator('.c-instr')).toHaveText('Instrutor 02');
     await expect((await abrirCaixa(page, 'avisos')).locator('li', { hasText: 'Priorizar com' }))

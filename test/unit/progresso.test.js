@@ -12,7 +12,7 @@ import { situacaoPorMissao, situacaoDa } from '../../js/resultados.js';
 import { normalizarCursos, codigoValido } from '../../js/cursos.js';
 import { MIS } from '../../js/config.js';
 import { setS } from '../../js/state.js';
-import { etapaNaDemanda, progressoDoAluno, outraMissaoDoPedido, cursoDoResultado, confirmacaoDaMissao, botaoForaDaOrdem } from '../../js/views/etapas.js';
+import { missaoDoCursoNasRestricoes, progressoDoAluno, outraMissaoDoPedido, cursoDoResultado, confirmacaoDaMissao, botaoForaDaOrdem } from '../../js/views/etapas.js';
 import { mulberry32 } from '../helpers/cenarios.js';
 import { importar } from '../helpers/importar.js';
 import { aluno as alunoDoCenario } from '../helpers/montar.js';
@@ -290,9 +290,11 @@ describe('Na Demanda e em Alunos', () => {
   const pedido = (extra = {}) => ({ fly: true, mis: 'Voo Local', eq: 'C152', nb: 1, p1: 500, p2: -1, pr: 3, ss: 1, ...extra });
   const aluno = (extra = {}) => ({ id: ALUNO, nm: 'Aluno 1000', curso: 'PP', ...pedido(), extra: [], ...extra });
   const abrir = (estado = {}) => setS({ stu: [], fStatus: {}, resultados: { situacao: [], doDia: [] }, programa: [cursoPP()], ...estado });
-  const naDemanda = (stu, mid) => etapaNaDemanda(stu, mid ? stu.extra.find(x => x.mid === mid) : stu, mid);
+  const naDemanda = (stu, mid) => missaoDoCursoNasRestricoes(stu, mid ? stu.extra.find(x => x.mid === mid) : stu, mid);
   // O texto do botão Usar do pedido ('' sem ele)
-  const usar = (stu, mid = 0) => texto((/<button[^>]*data-act="usar-proxima".*?<\/button>/.exec(naDemanda(stu, mid)) || [''])[0]);
+  // A próxima do programa nas restrições do pedido (G1), com o botão "Usar a do programa" (sem o botão, '')
+  const proximaComUsar = html => (/data-act="usar-proxima"/.test(html) ? texto((/<span class="restricao-proxima".*?<\/span>/.exec(html) || [''])[0]) : '');
+  const usar = (stu, mid = 0) => proximaComUsar(naDemanda(stu, mid));
   // A lista "Outra missão do curso" do pedido: cada grupo com o texto dos itens (sem a lista, null)
   const outras = (stu, mid = 0) => {
     const lista = /<select[^>]*data-f="outra-missao"[^>]*>(.*?)<\/select>/.exec(naDemanda(stu, mid));
@@ -304,7 +306,7 @@ describe('Na Demanda e em Alunos', () => {
   it('o progresso: as aprovadas sobre as que contam, a fase (quando o curso tem mais de uma) e a próxima', () => {
     abrir({ resultados: { situacao: dasFases(1, 2, 3, 4).map(c => reg(c)), doDia: [] } });
     assert.equal(texto(progressoDoAluno(aluno())), '13/46 · Fase 5 · próxima NAV-01');
-    assert.equal(usar(aluno()), 'Próxima: NAV-01 · Usar');
+    assert.equal(usar(aluno()), 'Próxima do programa: NAV-01');
     const plano = programaDoLegado(normalizarCursos({ PP: ['PP-01', 'PP-02'].map(c => ({ id: c, mis: 'Voo Local' })) }), (s, c) => `${s}:${c}`);
     abrir({ programa: plano, resultados: { situacao: [reg('PP-01')], doDia: [] } });
     assert.equal(texto(progressoDoAluno(aluno())), '1/2 · próxima PP-02', 'numa fase só, sem a fase');
@@ -318,15 +320,15 @@ describe('Na Demanda e em Alunos', () => {
       assert.equal(outraMissaoDoPedido(aluno(), aluno(), 0, 'IN-01'), null, parte);
     }
     abrir({ indisponiveis: ['horas'] });
-    assert.deepEqual([texto(progressoDoAluno(aluno())), usar(aluno())], ['0/46 · Fase 1 · próxima IN-01', 'Próxima: IN-01 · Usar']);
+    assert.deepEqual([texto(progressoDoAluno(aluno())), usar(aluno())], ['0/46 · Fase 1 · próxima IN-01', 'Próxima do programa: IN-01']);
   });
 
   it('na missão extra, a missão do pedido principal conta como feita; cancelado o voo, ela volta', () => {
     const comExtra = aluno({ etapa: 'IN-01', extra: [pedido({ mid: 1 })] });
     abrir();
-    assert.equal(usar(comExtra, 1), 'Próxima: IN-02 · Usar');
+    assert.equal(usar(comExtra, 1), 'Próxima do programa: IN-02');
     abrir({ fStatus: { '1000_0_1': 'Cancelado' } });
-    assert.equal(usar(comExtra, 1), 'Próxima: IN-01 · Usar');
+    assert.equal(usar(comExtra, 1), 'Próxima do programa: IN-01');
   });
 
   it('outra missão do curso: as liberadas, que valem na hora, e as fora da ordem, com o motivo; a do próprio pedido não volta', () => {
@@ -381,7 +383,7 @@ describe('Na Demanda e em Alunos', () => {
     abrir({ resultados: { situacao: ate('TMA-04').map(c => reg(c)), doDia: [] }, programa: [{ ...cursoPP(), ativo: false }] });
     const stu = aluno({ fly: false });
     const usarHtml = naDemanda(stu, 0);
-    assert.equal(usar(stu), 'Próxima: TMA-05 · Usar');
+    assert.equal(usar(stu), 'Próxima do programa: TMA-05');
     assert.match(usarHtml, /title="TMA-05: [^"]* \(curso PP encerrado: pede confirmação\)"/);
     assert.deepEqual(Object.keys(outras(stu)), ['Liberadas no PP (curso encerrado: pede confirmação)', FORA]);
     const liberada = outraMissaoDoPedido(stu, stu, 0, 'TMA-05');
@@ -517,13 +519,13 @@ describe('O Noturno em trechos: TSL-01, NOT e TSL-02 num voo só', () => {
   it('na Demanda e em Alunos: a próxima é o Noturno, com os translados no nome; o pedido vai como a noite', () => {
     const texto = html => html.replace(/<[^>]+>/g, '').trim();
     // Na célula da Demanda: o texto do botão Usar e os itens do Noturno na lista "Outra missão do curso"
-    const usar = html => texto((/<button[^>]*data-act="usar-proxima".*?<\/button>/.exec(html) || [''])[0]);
+    const usar = html => (/data-act="usar-proxima"/.test(html) ? texto((/<span class="restricao-proxima".*?<\/span>/.exec(html) || [''])[0]) : '');
     const doNoturno = html => [...html.matchAll(/<option value="[^"]+">([^<]*)<\/option>/g)].map(o => o[1]).filter(t => /^(TSL|NOT)\b/.test(t));
     const stu = (extra = {}) => ({ id: ALUNO, nm: 'Aluno 1000', curso: 'PP', fly: true, mis: 'Voo Local', eq: 'C152', nb: 1, p1: 500, p2: -1, pr: 3, ss: 1, extra: [], ...extra });
     const abrir = programa => setS({ stu: [], fStatus: {}, resultados: { situacao: ATE_A_8.map(c => reg(c)), doDia: [] }, programa: [programa] });
     abrir(curso());
-    const celula = etapaNaDemanda(stu(), stu(), 0);
-    assert.equal(usar(celula), 'Próxima: NOT (com TSL-01 e TSL-02) · Usar');
+    const celula = missaoDoCursoNasRestricoes(stu(), stu(), 0);
+    assert.equal(usar(celula), 'Próxima do programa: NOT (com TSL-01 e TSL-02)');
     assert.match(celula, /title="NOT: NOT · Noturno · 4 h · C172"/);
     assert.equal(texto(progressoDoAluno(stu())), '6/10 · Fase 6 · próxima NOT (com TSL-01 e TSL-02)');
     // A lista "Outra missão do curso" também oferece o Noturno uma vez, pela noite e com os translados no nome
@@ -531,13 +533,13 @@ describe('O Noturno em trechos: TSL-01, NOT e TSL-02 num voo só', () => {
     // Com o Noturno no pedido principal, a missão extra não recebe um translado: a próxima é a da Fase 9 (sob condição), e
     // a lista tem o Noturno só fora da ordem, pela noite
     const comNoturno = stu({ mis: 'Noturno', eq: 'C172', nb: 4, etapa: 'NOT', extra: [{ mid: 1, fly: true, mis: 'Voo Local', eq: 'C152', nb: 1, p1: 500, p2: -1, pr: 3, ss: 1 }] });
-    const extra = etapaNaDemanda(comNoturno, comNoturno.extra[0], 1);
-    assert.equal(usar(extra), 'Próxima: AVX-CQ · Usar');
+    const extra = missaoDoCursoNasRestricoes(comNoturno, comNoturno.extra[0], 1);
+    assert.equal(usar(extra), 'Próxima do programa: AVX-CQ');
     assert.deepEqual(doNoturno(extra), ['NOT (com TSL-01 e TSL-02) · Noturno · C172 · 4 h (já em outro voo do dia)']);
     // O translado dispensado não voa com a noite, e também não vai sozinho (antes, a lista o oferecia fora da ordem)
     abrir(curso({ mudar: { 'TSL-02': { dispensada: true } } }));
-    const semVolta = etapaNaDemanda(stu(), stu(), 0);
-    assert.equal(usar(semVolta), 'Próxima: NOT (com TSL-01) · Usar');
+    const semVolta = missaoDoCursoNasRestricoes(stu(), stu(), 0);
+    assert.equal(usar(semVolta), 'Próxima do programa: NOT (com TSL-01)');
     assert.deepEqual(doNoturno(semVolta), ['NOT (com TSL-01) · Noturno · C172 · 4 h']);
     assert.equal(outraMissaoDoPedido(stu(), stu(), 0, 'TSL-02'), null);
   });

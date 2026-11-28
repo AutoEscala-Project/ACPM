@@ -32,6 +32,10 @@ const ANTIGAS = {
     'também as alterações da secretaria', 'grava os cinco de uma vez'],
   // Cursos mostra um curso de cada vez (sem "todos")
   cursos: ['mostra um curso só ou todos'],
+  // G1: as colunas do tipo, do instrutor, das preferências, da duração e da prioridade saíram da Demanda para as restrições
+  // do pedido, com a missão do curso ("Usar a do programa", "Trocar…")
+  demanda: ['Próxima: PP-07 · Usar', 'Outra missão…', 'Missão e Recurso (só aparecem', 'sem os de Não escalar com do aluno',
+    'na Demanda para o dia vale mais'],
   // Recursos em duas vistas (não mais em duas partes), com as categorias marcadas na barra
   recursos: ['3 de 26 recursos', 'A aba tem duas partes', 'Escolha uma categoria para ver só a frota dela', 'na Frota, em “Vale para todas as datas”',
     'Veja na aba Recursos se ele está ligado',
@@ -56,7 +60,13 @@ const NOVAS = {
     'mais de 6 voos locais no mesmo horário',
     // O voo com resultado não é desfeito, também com o progresso desligado
     'o que já tem resultado nem o pedido que mudou depois na Demanda'],
-  demanda: ['Pôr um aluno na demanda'],
+  demanda: ['Pôr um aluno na demanda',
+    // G1: as restrições do pedido, de onde abrem, o que mostram (o horário exato da agenda, o tipo e o horário contra as
+    // limitações, o INVA de Não escalar com desligado) e a regra que solta o voo agendado
+    'O resto do pedido fica em Restrições, na linha', 'é a gaveta com o que o app lê para encaixar o pedido na escala',
+    'do aviso da missão que não entrou (no trilho)', 'Usar C152 mesmo assim', 'ficam na lista, desligados',
+    'sem as preferências: o app só o escala nele', 'A missão que não entrou tem Restrições, embaixo do aviso',
+    'a mesma missão, o mesmo tipo e as mesmas horas', 'Restrições, no editor, abre o que o app lê'],
   // A missão espera o aluno e vem do curso dele; o 7º voo local pede a confirmação (F1c)
   // D2: a lista por estado, "Aprovar" e "Aprovar todos", a entrada na hora (só na data já gravada) e "Importar", o detalhe
   // só de leitura com as ações, as duas preferências exatas, os dois botões e o 7º voo local, "Registrar na lista de espera"
@@ -102,7 +112,7 @@ const NOVAS = {
 // As do que pode ficar desligado (js/funcionalidades.js): o Manual só as diz com a funcionalidade ligada
 export const FRASES_DAS_FUNCIONALIDADES = {
   hangar: ['a busca não vale na ordem no hangar', 'Ordem no hangar', 'a ordem no hangar.', 'depois o da frente do hangar', 'as saídas do hangar', 'menos saídas do hangar'],
-  progresso: ['agrupados pela fase em que estão', 'Próxima: PP-07 · Usar', 'Outra missão…', 'próxima missão', 'progresso', 'Aprovado ou Reprovado',
+  progresso: ['agrupados pela fase em que estão', 'Próxima do programa: PP-07', 'Usar a do programa', 'Trocar…', 'próxima missão', 'progresso', 'Aprovado ou Reprovado',
     '12/40 · próxima PP-13', 'fora da ordem', 'com quantos alunos estão em cada uma',
     'o resultado do voo vai para o código do pedido',
     // Alunos (A): as missões do aluno, o resultado sem voo e a colocação no curso

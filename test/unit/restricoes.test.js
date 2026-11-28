@@ -11,6 +11,7 @@ import {
   instrutoresDasRestricoes, avisoDaRestricao, aplicarRestricao, pedidosDasRecusas
 } from '../../js/restricoes.js';
 import { runAllocationEngine } from '../../js/engine.js';
+import { avisosDaData } from '../../js/linha-do-dia.js';
 import { HORARIOS_INICIAIS } from '../../js/horarios.js';
 import { ERRO_DA_DURACAO } from '../../js/rules.js';
 import { aluno, cenario, instrutor, missaoExtra } from '../helpers/montar.js';
@@ -268,5 +269,15 @@ describe('pedidosDasRecusas: a recusa de cada missão que não entrou, com o ped
     const estado = cenario({ stu: [aluno(1000)] });
     assert.equal(pedidosDasRecusas(estado, runAllocationEngine(estado)).size, 0);
     assert.equal(pedidosDasRecusas(estado, null).size, 0);
+  });
+});
+
+describe('O item do trilho da missão que não entrou leva às restrições do pedido (avisosDaData, restricoes)', () => {
+  it('a recusa com o pedido ganha { stuId, mid }; os outros avisos e a recusa sem o pedido, não', () => {
+    const estado = cenario({ ins: [instrutor(1, 1)], stu: [aluno(1000, { mis: 'Multimotor', eq: 'PA-34' }), aluno(1001)] });
+    const RES = runAllocationEngine(estado);
+    const comPedido = avisosDaData({ S: estado, RES, pedidosDasRecusas: pedidosDasRecusas(estado, RES), indisponiveis: [] }).filter(a => a.restricoes);
+    assert.deepEqual(comPedido.map(a => [a.titulo, a.restricoes]), [['Aluno 1000', { stuId: 1000, mid: 0 }]]);
+    assert.equal(avisosDaData({ S: estado, RES, indisponiveis: [] }).some(a => a.restricoes), false);
   });
 });

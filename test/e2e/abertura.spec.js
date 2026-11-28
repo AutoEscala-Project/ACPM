@@ -475,6 +475,12 @@ test.describe('Os cursos, o agendamento e a missão do curso: nada muda antes de
   const cursoPP = page => page.locator('#cursos .curso[data-curso="PP"]');
   const trechoDoNoturno = page => cursoPP(page).locator('[data-cf="trecho"]');
   const pedidoDoAluno = page => page.locator('#dem tr[data-k="d"][data-id="1000"][data-mid="0"]');
+  // As restrições do pedido do aluno (G1: a missão do curso saiu da linha da Demanda para a gaveta), abertas pela linha
+  const restricoesDoAluno = async page => {
+    await pedidoDoAluno(page).locator('[data-act="restricoes"]').click();
+    return page.locator('#painel-restricoes');
+  };
+  const fecharAsRestricoes = page => page.locator('#btn-fechar-restricoes').click();
   const dialogo = page => page.locator('#dlg-agendar');
   // Uma linha do mapa sem voo nenhum (o clique nela agenda)
   const faixaLivre = page => page.locator('#out .tl-row[data-r]:not(:has(.tl-bar)) .tl-track:not(.inerte)').first();
@@ -519,8 +525,8 @@ test.describe('Os cursos, o agendamento e a missão do curso: nada muda antes de
     ['o + de um horário da lista', async page => { await vistaDaEscala(page, 'lista'); await page.locator('#out .win-agendar').first().click(); }],
     ['o + de uma linha do mapa', async page => { await vistaDaEscala(page, 'eq'); await page.locator('#out .tl-agendar').first().click(); }],
     ['um clique no mapa', async page => { await vistaDaEscala(page, 'eq'); await faixaLivre(page).click(); }],
-    ['Demanda › Usar', async page => { await irPara(page, 'dem'); await pedidoDoAluno(page).locator('[data-act="usar-proxima"]').click(); }],
-    ['Demanda › Outra missão do curso', async page => { await irPara(page, 'dem'); await pedidoDoAluno(page).locator('[data-f="outra-missao"]').selectOption('PP-02'); }],
+    ['Restrições › Usar a do programa', async page => { await irPara(page, 'dem'); await (await restricoesDoAluno(page)).locator('[data-act="usar-proxima"]').click(); await fecharAsRestricoes(page); }],
+    ['Restrições › Trocar a missão do curso', async page => { await irPara(page, 'dem'); await (await restricoesDoAluno(page)).locator('[data-f="outra-missao"]').selectOption('PP-02'); await fecharAsRestricoes(page); }],
     ['Histórico › Desfazer o agendamento', async page => {
       await abrirHistorico(page);
       await page.locator('#audit-log-list [data-act="rev-log"]').click();
@@ -556,9 +562,12 @@ test.describe('Os cursos, o agendamento e a missão do curso: nada muda antes de
     await expect(cursoPP(page).locator('tbody tr[data-missao]')).toHaveCount(3);
     await expect(cursoPP(page).locator('tbody tr[data-missao]').first()).toBeVisible();
     await irPara(page, 'dem');
-    await expect(pedidoDoAluno(page).locator('[data-act="usar-proxima"]')).toHaveText('Próxima: PP-01 · Usar');
-    await expect(pedidoDoAluno(page).locator('[data-f="outra-missao"]')).toHaveValue('');
-    await expect(page.locator('#dem [data-act="usar-fora-da-ordem"]')).toHaveCount(0);
+    const restricoes = await restricoesDoAluno(page);
+    await expect(restricoes.locator('.restricao-proxima')).toHaveText('Próxima do programa: PP-01');
+    await expect(restricoes.locator('[data-f="outra-missao"]')).toHaveValue('');
+    await expect(restricoes.locator('[data-act="usar-fora-da-ordem"]')).toHaveCount(0);
+    await expect(pedidoDoAluno(page).locator('.etapa')).toHaveCount(0);
+    await fecharAsRestricoes(page);
     await vistaDaEscala(page, 'lista');
     await expect(page.locator('#out tbody tr:not(.win)', { hasText: 'Maria Silva' })).toHaveCount(1);
     expect(cadastroDe(servidor)).toEqual(antes.cadastro);
@@ -572,8 +581,9 @@ test.describe('Os cursos, o agendamento e a missão do curso: nada muda antes de
     await expect(rotuloDaData(page)).toContainText('12/11');
     const daDataNova = () => servidor.historico.filter(h => h.data === DEPOIS).map(h => h.descricao);
     await irPara(page, 'dem');
-    await pedidoDoAluno(page).locator('[data-act="usar-proxima"]').click();
+    await (await restricoesDoAluno(page)).locator('[data-act="usar-proxima"]').click();
     await expect.poll(daDataNova).toEqual([expect.stringMatching(/^Aluno 1000: PP-01 na demanda/)]);
+    await fecharAsRestricoes(page);
     await irPara(page, 'cur');
     await trechoDoNoturno(page).selectOption('noite');
     await expect.poll(() => servidor.cursos.find(c => c.sigla === 'PP').missoes.find(m => m.codigo === 'NOT').trecho).toBe('noite');

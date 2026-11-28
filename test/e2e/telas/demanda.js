@@ -7,8 +7,11 @@ import { filtrarCursos } from './alunos.js';
 
 // A linha de um pedido: o aluno (data-id) e a missão (mid: 0 é a do pedido; as extras, 1, 2…)
 export const linhaDoPedido = (page, id, mid = 0) => page.locator(`#dem tr[data-k="d"][data-id="${id}"][data-mid="${mid}"]`);
-// Um campo da linha de um pedido (data-f: 'mis', 'eq', 'nb', 'pr'…)
-export const campoDoPedido = (page, id, campo, { mid = 0 } = {}) => linhaDoPedido(page, id, mid).locator(`[data-f="${campo}"]`);
+// Um campo do pedido (data-f): o Voa e a missão, na linha da Demanda; os outros ('eq', 'insId', 'pr', 'p1', 'p2', 'nb'), nas
+// restrições do pedido (G1), que precisam estar abertas (abrirRestricoes, telas/restricoes.js)
+export const campoDoPedido = (page, id, campo, { mid = 0 } = {}) => (['fly', 'mis'].includes(campo)
+  ? linhaDoPedido(page, id, mid).locator(`[data-f="${campo}"]`)
+  : page.locator(`#painel-restricoes .restricoes-campos[data-id="${id}"][data-mid="${mid}"] [data-f="${campo}"]`));
 // O "Voa" de uma linha da Demanda (ou de um trecho dela)
 export const caixaVoa = linha => linha.locator('[data-f="fly"]');
 // Marca (sim) ou desmarca o "Voa" do pedido do aluno; sem mid, o de todas as linhas dele (que precisam ser uma só)

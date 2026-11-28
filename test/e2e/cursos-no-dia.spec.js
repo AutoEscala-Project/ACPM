@@ -1,12 +1,13 @@
-// A missão do curso no dia, com o programa em fases (o cronograma do PP, o modelo do app, com o Noturno em trechos): na
-// Demanda, além da próxima missão (Usar), a
-// lista "Outra missão do curso" põe outra missão do programa no pedido. A liberada vale na hora; a fora da ordem (a que o
+// A missão do curso no dia, com o programa em fases (o cronograma do PP, o modelo do app, com o Noturno em trechos): nas
+// restrições do pedido (G1; antes, na Demanda), além da próxima missão ("Usar a do programa"), a
+// lista "Trocar…" põe outra missão do programa no pedido. A liberada vale na hora; a fora da ordem (a que o
 // programa ainda não libera, a já aprovada, a dispensada) pede confirmação num botão que aparece armado, e o histórico
 // diz por quê. O pedido guarda o curso da missão (cursoDaEtapa): o resultado vai para ele, mesmo que o aluno troque de
 // curso no mesmo dia.
 import { test, expect, irPara, abrirEscala, confirmar, AMANHA, appPronto, caixaVoa, campoDoAluno } from './fixtures.js';
 import { documentosAtuais } from './supabase-falso.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
+import { abrirRestricoes, fecharRestricoes } from './telas/restricoes.js';
 import { cursosIniciais, percursoDoCurso, novoCurso } from '../../js/programa.js';
 import { MODELOS } from '../../js/modelos-de-curso.js';
 
@@ -67,16 +68,22 @@ test.describe('Cursos no dia: outra missão do curso', () => {
     // As fases 1 a 4 aprovadas: a NAV-01, a SPIN (livre na Fase 5) e o noturno (depois da Fase 4) estão liberadas
     await abrirComOPP(page, { resultados: aprovadasAte('TMA-05') });
     const linha = await naDemanda(page);
-    await expect(linha.locator('[data-act="usar-proxima"]')).toHaveText('Próxima: NAV-01 · Usar');
-    const lista = linha.locator('[data-f="outra-missao"]');
-    await expect(lista).toHaveAccessibleName('Outra missão do curso para Maria');
+    const r = await abrirRestricoes(page, 1000);
+    await expect(r.locator('.restricao-proxima')).toHaveText('Próxima do programa: NAV-01');
+    await expect(r.locator('[data-act="usar-proxima"]')).toHaveText('Usar a do programa');
+    await expect(r.locator('[data-act="usar-proxima"]')).toHaveAccessibleName('Usar a do programa: NAV-01');
+    const lista = r.locator('[data-f="outra-missao"]');
+    await expect(lista).toHaveAccessibleName('Trocar a missão do curso de Maria');
+    await expect(lista.locator('option').first()).toHaveText('Trocar…');
     await expect(lista.locator('optgroup[label="Liberadas no PP"] option')).toHaveText([
       'NAV-01 · Navegação · C152 · 01h30 (1,5 h)', 'PE-04 · Parafuso · C152 · 1 h', 'NOT (com TSL-01 e TSL-02) · Noturno · C172 · 4 h'
     ]);
     await expect(lista.locator(`optgroup[label="${FORA}"] option[value="NAV-02"]`)).toHaveText('NAV-02 · Navegação · C152 · 01h30 (1,5 h) (falta NAV-01)');
     await expect(lista.locator(`optgroup[label="${FORA}"] option[value="IN-01"]`)).toHaveText('IN-01 · Voo Local · C152 · 1 h (já aprovada)');
     // O aluno sem curso não tem a lista
-    await expect(page.locator('#dem tr[data-id="1001"] [data-f="outra-missao"]')).toHaveCount(0);
+    await abrirRestricoes(page, 1001);
+    await expect(page.locator('#painel-restricoes [data-f="outra-missao"]')).toHaveCount(0);
+    await abrirRestricoes(page, 1000);
 
     // O Noturno vai pela noite (o NOT), com os translados: o pedido Noturno, com as 4 h do dia
     await lista.selectOption('NOT');
@@ -84,10 +91,10 @@ test.describe('Cursos no dia: outra missão do curso', () => {
     await expect(linha.locator('.etapa')).toHaveAttribute('title', 'Missão do curso PP');
     await expect(caixaVoa(linha)).toBeChecked();
     await expect(linha.locator('[data-f="mis"]')).toHaveValue('Noturno');
-    await expect(linha.locator('[data-f="eq"]')).toHaveValue('C172');
-    await expect(linha.locator('[data-act="usar-fora-da-ordem"]')).toHaveCount(0);
+    await expect(r.locator('[data-f="eq"]')).toHaveValue('C172');
+    await expect(r.locator('[data-act="usar-fora-da-ordem"]')).toHaveCount(0);
     // A missão do pedido sai da lista dele; as outras liberadas continuam
-    await expect(linha.locator('[data-f="outra-missao"] optgroup[label="Liberadas no PP"] option')).toHaveText([
+    await expect(r.locator('[data-f="outra-missao"] optgroup[label="Liberadas no PP"] option')).toHaveText([
       'NAV-01 · Navegação · C152 · 01h30 (1,5 h)', 'PE-04 · Parafuso · C152 · 1 h'
     ]);
     await expect(page.locator('#audit-log-list')).toContainText('Maria: NOT na demanda (Noturno · C172 · 4 h)');
@@ -98,13 +105,14 @@ test.describe('Cursos no dia: outra missão do curso', () => {
     // Falta a TMA-05: a Fase 5 ainda não abriu, e a SPIN (livre na fase) espera por ela
     await abrirComOPP(page, { resultados: aprovadasAte('TMA-04') });
     const linha = await naDemanda(page);
-    await expect(linha.locator('[data-act="usar-proxima"]')).toHaveText('Próxima: TMA-05 · Usar');
-    const lista = linha.locator('[data-f="outra-missao"]');
+    const r = await abrirRestricoes(page, 1000);
+    await expect(r.locator('.restricao-proxima')).toHaveText('Próxima do programa: TMA-05');
+    const lista = r.locator('[data-f="outra-missao"]');
     await expect(lista.locator('optgroup[label="Liberadas no PP"] option')).toHaveText(['TMA-05 · Voo Local · C152 · 1 h']);
     await expect(lista.locator(`optgroup[label="${FORA}"] option[value="PE-04"]`)).toHaveText('PE-04 · Parafuso · C152 · 1 h (falta TMA-05)');
 
     await lista.selectOption('PE-04');
-    const botao = linha.locator('[data-act="usar-fora-da-ordem"]');
+    const botao = r.locator('[data-act="usar-fora-da-ordem"]');
     await expect(botao).toHaveText('Confirmar: PE-04 fora da ordem');
     await expect(botao).toBeFocused();
     await expect(botao).toHaveAccessibleName('Confirmar: PE-04 fora da ordem: Usar PE-04 fora da ordem para Maria (falta TMA-05)');
@@ -117,7 +125,7 @@ test.describe('Cursos no dia: outra missão do curso', () => {
     await page.keyboard.press('Enter');
     await expect(linha.locator('.etapa')).toHaveText('PE-04');
     await expect(linha.locator('[data-f="mis"]')).toHaveValue('Parafuso');
-    await expect(linha.locator('[data-act="usar-fora-da-ordem"]')).toHaveCount(0);
+    await expect(r.locator('[data-act="usar-fora-da-ordem"]')).toHaveCount(0);
     await expect(page.locator('#audit-log-list')).toContainText('Maria: PE-04 na demanda, fora da ordem (falta TMA-05)');
     await expect.poll(() => pedidoGravado(page)).toEqual({ fly: true, mis: 'Parafuso', eq: 'C152', etapa: 'PE-04', cursoDaEtapa: 'PP' });
   });
@@ -125,14 +133,15 @@ test.describe('Cursos no dia: outra missão do curso', () => {
   test('escolher outra da lista troca a escolha que espera confirmação; a liberada não pede', async ({ page }) => {
     await abrirComOPP(page, { resultados: aprovadasAte('TMA-04') });
     const linha = await naDemanda(page);
-    await linha.locator('[data-f="outra-missao"]').selectOption('PE-04');
-    await expect(linha.locator('[data-act="usar-fora-da-ordem"]')).toHaveText('Confirmar: PE-04 fora da ordem');
-    await linha.locator('[data-f="outra-missao"]').selectOption('IN-01');
-    await expect(linha.locator('[data-act="usar-fora-da-ordem"]')).toHaveCount(1);
-    await expect(linha.locator('[data-act="usar-fora-da-ordem"]')).toHaveText('Confirmar: IN-01 fora da ordem');
-    await linha.locator('[data-f="outra-missao"]').selectOption('TMA-05');
+    const r = await abrirRestricoes(page, 1000);
+    await r.locator('[data-f="outra-missao"]').selectOption('PE-04');
+    await expect(r.locator('[data-act="usar-fora-da-ordem"]')).toHaveText('Confirmar: PE-04 fora da ordem');
+    await r.locator('[data-f="outra-missao"]').selectOption('IN-01');
+    await expect(r.locator('[data-act="usar-fora-da-ordem"]')).toHaveCount(1);
+    await expect(r.locator('[data-act="usar-fora-da-ordem"]')).toHaveText('Confirmar: IN-01 fora da ordem');
+    await r.locator('[data-f="outra-missao"]').selectOption('TMA-05');
     await expect(linha.locator('.etapa')).toHaveText('TMA-05');
-    await expect(linha.locator('[data-act="usar-fora-da-ordem"]')).toHaveCount(0);
+    await expect(r.locator('[data-act="usar-fora-da-ordem"]')).toHaveCount(0);
     await expect(page.locator('#audit-log-list')).toContainText('Maria: TMA-05 na demanda (Voo Local · C152 · 1 h)');
     await expect(page.locator('#audit-log-list')).not.toContainText('fora da ordem');
   });
@@ -143,33 +152,38 @@ test.describe('Cursos no dia: outra missão do curso', () => {
     await abrirEscala(page);
     const voo = page.locator('#out tbody tr:not(.win)', { hasText: 'Maria' });
     await expect(voo.locator('.fixo')).toHaveAttribute('aria-label', 'Voo fixo: agendado na escala');
-    const linha = await naDemanda(page);
-    await linha.locator('[data-f="outra-missao"]').selectOption('PE-04');
+    await naDemanda(page);
+    const r = await abrirRestricoes(page, 1000);
+    await r.locator('[data-f="outra-missao"]').selectOption('PE-04');
     await expect(page.locator('#audit-log-list')).toContainText('Maria: PE-04 na demanda (Parafuso · C152 · 1 h) (deixa de ser fixo)');
     await expect.poll(() => fixosGravados(page)).toEqual([]);
     await expect.poll(() => pedidoGravado(page)).toEqual({ fly: true, mis: 'Parafuso', eq: 'C152', etapa: 'PE-04', cursoDaEtapa: 'PP', insId: 1 });
+    await fecharRestricoes(page);
     await abrirEscala(page);
     await expect(voo.locator('.fixo')).toHaveCount(0);
   });
 
-  // O nome comprido quebra em palavras, e a célula do aluno ainda leva o código (ou a próxima missão), a lista e o
-  // "+ missão": eles descem para baixo do nome, e as 10 colunas continuam cabendo na tela (antes, a tabela passava dela)
+  // O nome comprido quebra em palavras, e a célula do aluno ainda leva o código, o "Restrições" e o "+ missão": a tabela
+  // continua cabendo na tela (a próxima missão e a lista estão nas restrições, G1)
   test('com o nome comprido, a tabela da Demanda continua cabendo na tela', async ({ page }) => {
     await abrirComOPP(page, { resultados: aprovadasAte('TMA-05'), nm: 'Maximiliano Bartholomeu Vasconcellos' });
     const linha = await naDemanda(page);
-    await expect(linha.locator('[data-f="outra-missao"]')).toBeVisible();
+    const r = await abrirRestricoes(page, 1000);
+    await expect(r.locator('[data-f="outra-missao"]')).toBeVisible();
     const cabe = () => page.evaluate(() => document.querySelector('#s-dem .tw').scrollWidth <= document.querySelector('#s-dem .tw').clientWidth);
     expect(await cabe()).toBe(true);
-    await linha.locator('[data-f="outra-missao"]').selectOption('NOT');
+    await r.locator('[data-f="outra-missao"]').selectOption('NOT');
     await expect(linha.locator('.etapa')).toHaveText('NOT');
     expect(await cabe()).toBe(true);
   });
 
-  test('no Gestor, nem a próxima missão nem a lista aparecem', async ({ page }) => {
+  test('no Gestor, nem "Usar a do programa" nem a lista aparecem: a próxima missão é texto', async ({ page }) => {
     await abrirComOPP(page, { resultados: aprovadasAte('TMA-05'), url: './?role=gestor' });
-    const linha = await naDemanda(page);
-    await expect(linha.locator('[data-f="outra-missao"]')).toBeHidden();
-    await expect(linha.locator('[data-act="usar-proxima"]')).toBeHidden();
+    await naDemanda(page);
+    const r = await abrirRestricoes(page, 1000);
+    await expect(r.locator('[data-f="outra-missao"]')).toHaveCount(0);
+    await expect(r.locator('[data-act="usar-proxima"]')).toHaveCount(0);
+    await expect(r.locator('.restricao-proxima')).toHaveText('Próxima do programa: NAV-01');
   });
 
   // O curso encerrado é uma das regras do curso que pedem confirmação (desenho §4.9), na Demanda como no agendamento:
@@ -177,8 +191,9 @@ test.describe('Cursos no dia: outra missão do curso', () => {
   test('no curso encerrado, Usar e as liberadas pedem confirmação, e o histórico diz que o curso estava encerrado', async ({ page }) => {
     await abrirComOPP(page, { resultados: aprovadasAte('TMA-05'), encerrado: true });
     const linha = await naDemanda(page);
-    const usar = linha.locator('[data-act="usar-proxima"]');
-    await expect(usar).toHaveText('Próxima: NAV-01 · Usar');
+    const r = await abrirRestricoes(page, 1000);
+    const usar = r.locator('[data-act="usar-proxima"]');
+    await expect(usar).toHaveText('Usar a do programa');
     await expect(usar).toHaveAttribute('title', /\(curso PP encerrado: pede confirmação\)$/);
     // O primeiro clique arma o botão; nada muda ainda
     await usar.click();
@@ -191,11 +206,11 @@ test.describe('Cursos no dia: outra missão do curso', () => {
     await expect(page.locator('#audit-log-list')).toContainText('Maria: NAV-01 na demanda (Navegação · C152 · 01h30 (1,5 h)), com o curso PP encerrado');
     await expect.poll(() => pedidoGravado(page)).toEqual({ fly: true, mis: 'Navegação', eq: 'C152', etapa: 'NAV-01', cursoDaEtapa: 'PP' });
 
-    // "Outra missão…": a liberada também pede confirmação, num botão que aparece armado
-    const lista = linha.locator('[data-f="outra-missao"]');
+    // "Trocar…": a liberada também pede confirmação, num botão que aparece armado
+    const lista = r.locator('[data-f="outra-missao"]');
     await expect(lista.locator('optgroup').first()).toHaveAttribute('label', 'Liberadas no PP (curso encerrado: pede confirmação)');
     await lista.selectOption('PE-04');
-    const botao = linha.locator('[data-act="usar-fora-da-ordem"]');
+    const botao = r.locator('[data-act="usar-fora-da-ordem"]');
     await expect(botao).toHaveText('Confirmar: PE-04 do curso encerrado');
     await expect(botao).toBeFocused();
     await expect(botao).toHaveAccessibleName('Confirmar: PE-04 do curso encerrado: Usar PE-04 do curso encerrado para Maria (curso PP encerrado)');
@@ -218,18 +233,22 @@ test.describe('Cursos no dia: o curso da missão no pedido', () => {
   test('Usar põe o curso da missão no pedido; o aluno troca de PP para PC, e o resultado vai para o PP', async ({ page }) => {
     await abrirComOPP(page, { resultados: aprovadasAte('TMA-05') });
     const linha = await naDemanda(page);
-    await linha.locator('[data-act="usar-proxima"]').click();
+    const r = await abrirRestricoes(page, 1000);
+    await r.locator('[data-act="usar-proxima"]').click();
     await expect(linha.locator('.etapa')).toHaveText('NAV-01');
     await expect.poll(() => pedidoGravado(page)).toEqual({ fly: true, mis: 'Navegação', eq: 'C152', etapa: 'NAV-01', cursoDaEtapa: 'PP' });
 
     // A Maria passa para o PC no mesmo dia: o pedido continua com a missão do PP
+    await fecharRestricoes(page);
     await irPara(page, 'alu');
     await (await campoDoAluno(page, 1000, 'curso')).selectOption('PC');
     await expect(page.locator('#audit-log-list')).toContainText('Curso de Maria: PC');
     await naDemanda(page);
+    await abrirRestricoes(page, 1000);
     await expect(linha.locator('.etapa')).toHaveAttribute('title', 'Missão do curso PP');
     // O PC não tem programa: nem a próxima missão nem a lista
-    await expect(linha.locator('[data-act="usar-proxima"], [data-f="outra-missao"]')).toHaveCount(0);
+    await expect(r.locator('[data-act="usar-proxima"], [data-f="outra-missao"]')).toHaveCount(0);
+    await fecharRestricoes(page);
 
     await abrirEscala(page);
     const voo = page.locator('#out tbody tr:not(.win)', { hasText: 'Maria' });
@@ -247,14 +266,16 @@ test.describe('Cursos no dia: o curso da missão no pedido', () => {
   test('o recurso mudado à mão tira o código e o curso da missão do pedido; "Limpar demanda" também', async ({ page }) => {
     await abrirComOPP(page, { resultados: aprovadasAte('TMA-05') });
     const linha = await naDemanda(page);
-    await linha.locator('[data-act="usar-proxima"]').click();
+    const r = await abrirRestricoes(page, 1000);
+    await r.locator('[data-act="usar-proxima"]').click();
     await expect.poll(() => pedidoGravado(page)).toEqual({ fly: true, mis: 'Navegação', eq: 'C152', etapa: 'NAV-01', cursoDaEtapa: 'PP' });
-    await linha.locator('[data-f="eq"]').selectOption('C172');
+    await r.locator('[data-f="eq"]').selectOption('C172');
     await expect(linha.locator('.etapa')).toHaveCount(0);
     await expect.poll(() => pedidoGravado(page)).toEqual({ fly: true, mis: 'Navegação', eq: 'C172' });
 
-    await linha.locator('[data-f="outra-missao"]').selectOption('NOT');
+    await r.locator('[data-f="outra-missao"]').selectOption('NOT');
     await expect.poll(() => pedidoGravado(page)).toEqual({ fly: true, mis: 'Noturno', eq: 'C172', etapa: 'NOT', cursoDaEtapa: 'PP' });
+    await fecharRestricoes(page);
     await page.locator('#btn-mais-dem').click();
     await confirmar(page, '#clr');
     await expect(linha.locator('.etapa')).toHaveCount(0);

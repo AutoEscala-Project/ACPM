@@ -1,10 +1,11 @@
-// A prioridade do pedido (js/funcionalidades.js, prioridade). Desligada (o padrão): a Demanda fica sem a coluna, nenhum
+// A prioridade do pedido (js/funcionalidades.js, prioridade), nas restrições do pedido (G1). Desligada (o padrão): sem o campo, nenhum
 // texto fala dela (as dicas, o glossário e o Manual), e a escala segue a ordem dos agendamentos e do cadastro; a prioridade
 // guardada continua no dia, depois de gravar e recarregar, e ligar de novo a traz de volta. Ligada: a tela mostra 1 como a
 // mais alta (a guardada continua com 5 a mais alta: o formato não muda)
 import { test, comPrioridade, expect, abrir, irPara, abrirEscala, lerEscala, appPronto, campoDoPedido, linhaDoPedido, voar, botaoDaData, avisosDaData, AMANHA } from './fixtures.js';
 import { aluno, apenas, cenario, instrutor } from '../helpers/montar.js';
 import { montarGlossario } from '../../js/glossario.js';
+import { abrirRestricoes, fecharRestricoes } from './telas/restricoes.js';
 
 // Um instrutor e um avião, os dois alunos na mesma 1ª preferência (06:30): quem a escala confere antes fica com ela. O
 // Aluno 1000, primeiro no cadastro, tem a prioridade guardada mais baixa (1); o Aluno 1001, a mais alta (5). O Aluno 1002
@@ -27,13 +28,16 @@ const guardadas = page => page.evaluate(d => {
 const textoDaPagina = page => page.evaluate(() => [...document.body.querySelectorAll(':scope > :not(script)')].map(el => el.textContent).join(' '));
 
 test.describe('A prioridade desligada (o padrão)', () => {
-  test('a Demanda fica sem a coluna, e nenhum texto fala dela: as dicas, o glossário e o Manual', async ({ page }) => {
+  test('as restrições do pedido ficam sem o campo, e nenhum texto fala dela: as dicas, o glossário e o Manual', async ({ page }) => {
     await abrir(page, { estado: dia() });
     await irPara(page, 'dem');
-    await expect(page.locator('#s-dem thead th')).toHaveText(['Aluno', 'Voa', 'Missão', 'Recurso', 'Instrutor', '1ª preferência', '2ª preferência', 'Duração']);
-    await expect(page.locator('#dem [data-f="pr"]')).toHaveCount(0);
-    await expect(linhaDoPedido(page, 1000).locator('td')).toHaveCount(8);
+    await expect(page.locator('#s-dem thead th')).toHaveText(['Aluno', 'Voa', 'Missão']);
+    await expect(linhaDoPedido(page, 1000).locator('td')).toHaveCount(3);
+    await abrirRestricoes(page, 1000);
+    await expect(page.locator('#painel-restricoes [data-f="pr"]')).toHaveCount(0);
     await expect(page.locator('[data-dica="prioridade"]')).toHaveCount(0);
+    expect(await page.locator('#painel-restricoes').textContent()).not.toMatch(/prioridade/i);
+    await fecharRestricoes(page);
     for (const aba of ['esc', 'dem', 'age', 'rec', 'ins', 'alu', 'cur', 'rod', 'bi']) await irPara(page, aba);
     await page.locator('#btn-manual').click();
     await expect(page.locator('#s-manual')).toBeVisible();
@@ -63,8 +67,11 @@ test.describe('A prioridade desligada (o padrão)', () => {
     await appPronto(page);
     expect(await naPreferencia(page)).toBe('Aluno 1000');
     await irPara(page, 'dem');
+    await abrirRestricoes(page, 1000);
     await expect(campoDoPedido(page, 1000, 'pr')).toHaveValue('5');
+    await abrirRestricoes(page, 1001);
     await expect(campoDoPedido(page, 1001, 'pr')).toHaveValue('1');
+    await fecharRestricoes(page);
     await page.locator('#onlyfly').uncheck();
     await voar(page, 1002, true);
     await voar(page, 1002, false);
@@ -125,28 +132,36 @@ comPrioridade.describe('A prioridade ligada: 1 é a mais alta', () => {
   comPrioridade('a tela mostra 1 para a guardada 5; escolher 1 guarda 5, e a escala segue a guardada', async ({ page }) => {
     await abrir(page, { estado: dia() });
     await irPara(page, 'dem');
-    await expect(page.locator('#s-dem thead th').last()).toHaveText('Prioridade');
+    // Nas restrições do pedido (G1), não numa coluna da Demanda
+    await expect(page.locator('#s-dem thead th')).toHaveText(['Aluno', 'Voa', 'Missão']);
+    await abrirRestricoes(page, 1000);
     await expect(campoDoPedido(page, 1000, 'pr').locator('option')).toHaveText(['1', '2', '3', '4', '5']);
     await expect(campoDoPedido(page, 1000, 'pr')).toHaveValue('5');
+    await expect(campoDoPedido(page, 1000, 'pr')).not.toHaveClass(/\bprioridade-mais-alta\b/);
+    await abrirRestricoes(page, 1001);
     await expect(campoDoPedido(page, 1001, 'pr')).toHaveValue('1');
     // A mais alta em destaque
-    await expect(linhaDoPedido(page, 1001)).toHaveClass(/\bprioridade-mais-alta\b/);
-    await expect(linhaDoPedido(page, 1000)).not.toHaveClass(/\bprioridade-mais-alta\b/);
+    await expect(campoDoPedido(page, 1001, 'pr')).toHaveClass(/\bprioridade-mais-alta\b/);
+    await fecharRestricoes(page);
     expect(await naPreferencia(page)).toBe('Aluno 1001');
 
     // O Aluno 1000 passa a 1 na tela: guarda 5, como o 1001; empatados, vale o cadastro
     await irPara(page, 'dem');
+    await abrirRestricoes(page, 1000);
     await campoDoPedido(page, 1000, 'pr').selectOption('1');
     await expect.poll(() => guardadas(page)).toEqual([5, 5]);
     await expect(campoDoPedido(page, 1000, 'pr')).toHaveValue('1');
+    await fecharRestricoes(page);
     expect(await naPreferencia(page)).toBe('Aluno 1000');
     // O 1001 passa a 4 na tela: guarda 2
     await irPara(page, 'dem');
+    await abrirRestricoes(page, 1001);
     await campoDoPedido(page, 1001, 'pr').selectOption('4');
     await expect.poll(() => guardadas(page)).toEqual([5, 2]);
     await page.reload();
     await appPronto(page);
     await irPara(page, 'dem');
+    await abrirRestricoes(page, 1001);
     await expect(campoDoPedido(page, 1001, 'pr')).toHaveValue('4');
   });
 
@@ -159,7 +174,9 @@ comPrioridade.describe('A prioridade ligada: 1 é a mais alta', () => {
   comPrioridade('a dica e o Manual dizem que 1 é a mais alta', async ({ page }) => {
     await abrir(page, { estado: dia() });
     await irPara(page, 'dem');
-    await expect(page.locator('#s-dem [data-dica="prioridade"]')).toHaveCount(1);
+    await abrirRestricoes(page, 1000);
+    await expect(page.locator('#painel-restricoes [data-dica="prioridade"]')).toHaveCount(1);
+    await fecharRestricoes(page);
     await page.locator('#btn-manual').click();
     await expect(page.locator('#glossario-prioridade')).toHaveText(montarGlossario(() => true).prioridade.texto);
     await expect(page.locator('#glossario-prioridade')).toContainText('1 é a mais alta');

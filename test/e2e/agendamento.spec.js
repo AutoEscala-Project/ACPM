@@ -8,6 +8,7 @@ import { aluno, cenario, instrutor, GROUND_C152 } from '../helpers/montar.js';
 import { FROTA_INICIAL } from '../../js/frota.js';
 import { normalizarHorarios } from '../../js/horarios.js';
 import { normalizarLimites } from '../../js/limites.js';
+import { abrirRestricoes, campoDasRestricoes, fecharRestricoes } from './telas/restricoes.js';
 
 // Com o progresso nos cursos ligado (desligado: funcionalidades.spec.js)
 test.use({ funcionalidades: 'progresso' });
@@ -91,7 +92,9 @@ test.describe('Agendar um voo na Escala', () => {
     await irPara(page, 'dem');
     await expect(caixaVoa(pedido(page, 1001))).toBeChecked();
     await expect(pedido(page, 1001).locator('.etapa')).toHaveText('PP-02');
-    await expect(pedido(page, 1001).locator('[data-f="insId"]')).toHaveValue('2');
+    await abrirRestricoes(page, 1001);
+    await expect(campoDasRestricoes(page, 'insId')).toHaveValue('2');
+    await fecharRestricoes(page);
 
     // O Histórico desfaz: o pedido volta a não voar, e o cadeado sai com o voo
     const lista = await historico(page);

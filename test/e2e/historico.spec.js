@@ -2,6 +2,7 @@
 import { test, expect, abrir, abrirSintetico, irPara, abrirEscala, abrirCaixa, AMANHA, prepararContexto, vigiarErros, entrar, abrirHistorico, alternarDisponivel, alternarVem, appPronto, caixaVem, caixaVoa, dataAberta, diaSeguinte, linhaDoInstrutor, confirmarAgendamento, refazer } from './fixtures.js';
 import { documentosAtuais, instalarSupabaseFalso, CONTAS } from './supabase-falso.js';
 import { aluno, cenario, instrutor, missaoExtra } from '../helpers/montar.js';
+import { abrirRestricoes, campoDasRestricoes, fecharRestricoes } from './telas/restricoes.js';
 
 // Abre o app com os documentos deste navegador já gravados: o cadastro, o dia de amanhã e o histórico dele
 async function abrirComHistorico(page, estado, historico) {
@@ -204,7 +205,8 @@ test.describe('Histórico', () => {
     await expect(voo.locator('.c-instr')).toHaveText('Instrutor 02');
     await expect(voo.locator('.fixo')).toHaveAttribute('aria-label', 'Voo fixo: instrutor escolhido na escala');
     await irPara(page, 'dem');
-    await expect(page.locator('#dem tr[data-k="d"][data-id="1000"][data-mid="0"] [data-f="insId"]')).toHaveValue('2');
+    await abrirRestricoes(page, 1000);
+    await expect(campoDasRestricoes(page, 'insId')).toHaveValue('2');
   });
 
   // O voo movido cujo pedido saiu da Demanda (a missão extra tirada depois): não há o que desfazer. O clique não fazia
@@ -277,7 +279,9 @@ test.describe('Histórico', () => {
     // Na Demanda, o instrutor da Maria muda para o outro; no Histórico, o agendamento é desfeito e a troca, revertida
     await irPara(page, 'dem');
     const pedido = page.locator('#dem tr[data-k="d"][data-id="1001"][data-mid="0"]');
-    await pedido.locator('[data-f="insId"]').selectOption(ins === '1' ? '2' : '1');
+    await abrirRestricoes(page, 1001);
+    await campoDasRestricoes(page, 'insId').selectOption(ins === '1' ? '2' : '1');
+    await fecharRestricoes(page);
     await abrirHistorico(page);
     const lista = page.locator('#audit-log-list');
     await lista.locator('.audit-item', { hasText: 'Agendado na escala' }).getByRole('button', { name: '↶ Desfazer' }).click();
@@ -287,7 +291,11 @@ test.describe('Histórico', () => {
     await page.locator('#btn-fechar-historico').click();
     // O pedido é o de antes do agendamento: sem voar e sem o instrutor escolhido; o dia não guarda o voo fixo
     await expect(caixaVoa(pedido)).not.toBeChecked();
-    await expect(pedido.locator('[data-f="insId"]')).toHaveValue('');
+    // Sem voar, a linha só aparece sem "Só quem voa"
+    if (await page.locator('#onlyfly').isChecked()) await page.locator('#onlyfly').uncheck();
+    await abrirRestricoes(page, 1001);
+    await expect(campoDasRestricoes(page, 'insId')).toHaveValue('');
+    await fecharRestricoes(page);
     expect(await page.evaluate(data => JSON.parse(localStorage.getItem(`acpm4_dia_${data}`)).fixos, AMANHA)).toEqual({});
 
     // A Maria volta a voar: o voo vai para a preferência dela (14:30), sem o cadeado
@@ -337,7 +345,10 @@ test.describe('Histórico', () => {
     await irPara(page, 'dem');
     const pedido = page.locator('#dem tr[data-k="d"][data-id="1001"][data-mid="0"]');
     await expect(caixaVoa(pedido)).not.toBeChecked();
-    await expect(pedido.locator('[data-f="insId"]')).toHaveValue('');
+    // Sem voar, a linha só aparece sem "Só quem voa"
+    if (await page.locator('#onlyfly').isChecked()) await page.locator('#onlyfly').uncheck();
+    await abrirRestricoes(page, 1001);
+    await expect(campoDasRestricoes(page, 'insId')).toHaveValue('');
   });
 
   // O voo movido pelo agendamento continua na Demanda depois de desfeito (com o pedido de antes): é o histórico que diz
@@ -359,8 +370,9 @@ test.describe('Histórico', () => {
     await expect(voo.locator('.c-hr')).toContainText('12:40–13:40');
 
     await irPara(page, 'dem');
-    const pedido = page.locator('#dem tr[data-k="d"][data-id="1000"][data-mid="0"]');
-    await pedido.locator('[data-f="insId"]').selectOption(ins === '1' ? '2' : '1');
+    await abrirRestricoes(page, 1000);
+    await campoDasRestricoes(page, 'insId').selectOption(ins === '1' ? '2' : '1');
+    await fecharRestricoes(page);
     await abrirHistorico(page);
     const lista = page.locator('#audit-log-list');
     await lista.locator('.audit-item', { hasText: 'Agendado na escala' }).getByRole('button', { name: '↶ Desfazer' }).click();
@@ -369,7 +381,9 @@ test.describe('Histórico', () => {
     await expect(lista).toContainText('Revertido: Pedido Maria Silva: instrutor');
     await page.locator('#btn-fechar-historico').click();
     // O pedido de antes do agendamento, sem o instrutor escolhido; o voo de volta às 06:30, solto
-    await expect(pedido.locator('[data-f="insId"]')).toHaveValue('');
+    await abrirRestricoes(page, 1000);
+    await expect(campoDasRestricoes(page, 'insId')).toHaveValue('');
+    await fecharRestricoes(page);
     await abrirEscala(page);
     await expect(voo.locator('.c-hr')).toContainText('06:30–07:30');
     await expect(voo.locator('.fixo')).toHaveCount(0);
