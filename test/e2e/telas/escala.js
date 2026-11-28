@@ -21,6 +21,8 @@ export async function abrirEscala(page, { vista = 'lista' } = {}) {
 // o trilho e os avisos à vista, para o clique
 export const itensDaEscala = (page, grupo) => page.locator(`#avisos-da-data > li[data-grupo="${grupo}"]`);
 export const textosDaEscala = (page, grupo) => itensDaEscala(page, grupo).locator('.aviso-corpo');
+// O resumo de um grupo com dois itens ou mais, no alto dos avisos ("2 avisos: 1 aluno sem peso · 1 instrutor sem peso")
+export const resumoDaEscala = (page, grupo) => page.locator(`#avisos-resumo > li[data-grupo="${grupo}"]`);
 export async function abrirAvisosDaEscala(page, grupo) {
   await mostrarAvisos(page);
   return itensDaEscala(page, grupo);

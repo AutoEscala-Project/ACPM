@@ -2,7 +2,7 @@
 // estado (o pior das tarefas) e as tarefas, o selo de Recursos e os avisos da data. Dados fictícios, sem o motor
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { linhaDoDia, selosDosCadastros, avisosDaData } from '../../js/linha-do-dia.js';
+import { linhaDoDia, selosDosCadastros, avisosDaData, resumosDaEscala } from '../../js/linha-do-dia.js';
 
 const DATA = '2026-11-11', HOJE = '2026-11-10';
 
@@ -301,6 +301,53 @@ describe('O que era das caixas da Escala, no trilho', () => {
       }]);
     }
     assert.match(avisosDaData({ ...contexto(), habilitacoesNaoConferidas: 1 })[0].texto, / em 1 pedido desta data:/);
+  });
+});
+
+// O resumo de cada grupo da escala, no alto dos avisos do trilho (o que era o título de cada caixa da Escala): com dois
+// itens ou mais no grupo; com um só, o item diz tudo
+describe('O resumo dos grupos da escala, no trilho', () => {
+  const erro = (s, m = 'Rejeitado: sem avião.') => ({ t: 'err', s, m, codigo: 'sem-aviao' });
+  const aviso = (codigo, extra = {}) => ({ t: 'warn', s: 'Aluno', m: 'Aviso.', codigo, ...extra });
+  const conflito = n => ({ t: 'conf', s: `Aluno ${n}`, m: 'Conflito.', fKey: `${n}_0_1` });
+
+  it('com um item só no grupo, nada; sem a escala, nada', () => {
+    assert.deepEqual(resumosDaEscala(contexto({ al: [erro('Aluno 1'), conflito(1), aviso('sem-peso', { stuId: 1 })], tot: 2 })), []);
+    assert.deepEqual(resumosDaEscala(contexto({ res: false })), []);
+  });
+
+  it('as missões que não entraram, com os nomes sem repetir', () => {
+    const al = [erro('Aluno 1'), erro('Aluno 2'), erro('Aluno 1', 'Rejeitado: sem instrutor.')];
+    assert.deepEqual(resumosDaEscala(contexto({ al, tot: 3 })), [{ grupo: 'erros', gravidade: 'erro', texto: '3 missões não entraram na escala: Aluno 1, Aluno 2' }]);
+  });
+
+  it('os conflitos: na escala aprovada ou dos voos fixos', () => {
+    const al = [conflito(1), conflito(2)];
+    assert.deepEqual(resumosDaEscala(contexto({ al })), [{ grupo: 'conflitos', gravidade: 'erro', texto: '2 voos fixos em conflito' }]);
+    assert.deepEqual(resumosDaEscala(contexto({ al, aprovacao: { em: '2026-11-10T20:00:00Z' } })).map(r => r.texto), ['2 voos em conflito na escala aprovada']);
+  });
+
+  it('os avisos agrupados pelo código, as pessoas e os voos sem repetir; os sem código em "outros"', () => {
+    const al = [
+      aviso('sem-peso', { stuId: 1 }), aviso('sem-peso', { insId: 7 }), aviso('sem-peso', { stuId: 1, fKey: 'b' }),
+      aviso('perto-do-limite', { insId: 7 }), aviso('perto-do-limite', { insId: 7 }), aviso('revisao'), aviso('atraso'), aviso('atraso'),
+      aviso('voa-com'), aviso('escolhido-saiu'), aviso('repouso-do-noturno', { insId: 8 }), aviso('volta-do-noturno'),
+      aviso('fora-dos-horarios', { fKey: 'x' }), aviso('depois-das-17h30', { fKey: 'x' }), aviso('antes-do-ground', { fKey: 'y' }),
+      { t: 'warn', s: 'Aluno', m: 'Gravado antes dos códigos.' }
+    ];
+    assert.deepEqual(resumosDaEscala(contexto({ al })), [{
+      grupo: 'avisos', gravidade: 'aviso',
+      texto: '16 avisos: 1 aluno sem peso · 1 instrutor sem peso · 1 avião para para a revisão de 50 horas · 2 atrasos com conflito'
+        + ' · 1 instrutor perto do limite da lei · 1 aviso de Priorizar com · 1 voo com o instrutor escolhido fora do cadastro'
+        + ' · 1 instrutor sem o repouso da lei antes da volta do noturno · 1 volta do noturno com o avião ou o INVA indisponível'
+        + ' · 2 agendamentos fora da regra · 1 outro'
+    }]);
+    assert.deepEqual(resumosDaEscala(contexto({ al: [aviso('sem-peso', { stuId: 1 }), aviso('sem-peso', { stuId: 2 })] })).map(r => r.texto), ['2 avisos: 2 alunos sem peso']);
+  });
+
+  it('na ordem: as que não entraram, os conflitos e os avisos', () => {
+    const al = [aviso('atraso'), aviso('atraso'), conflito(1), conflito(2), erro('Aluno 1'), erro('Aluno 2')];
+    assert.deepEqual(resumosDaEscala(contexto({ al, tot: 2 })).map(r => r.grupo), ['erros', 'conflitos', 'avisos']);
   });
 });
 

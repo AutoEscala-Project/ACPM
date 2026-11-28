@@ -1,5 +1,5 @@
 // Tela da Escala: Lista, Por recurso ou Por instrutor; resumo com erros e avisos agrupados; uma linha por voo.
-import { test, comPrioridade, expect, abrir, abrirComExemplo, abrirEscala, irPara, irParaVista, lerEscala, alternarDisponivel, alvosPequenos, larguraDaPagina, appPronto, AMANHA, prepararContexto, vigiarErros, entrar, importarDaAgenda, abrirAvisosDaEscala, textosDaEscala, itensDaEscala, editorDoVoo, refazer, confirmarAgendamento, aprovar } from './fixtures.js';
+import { test, comPrioridade, expect, abrir, abrirComExemplo, abrirEscala, irPara, irParaVista, lerEscala, alternarDisponivel, alvosPequenos, larguraDaPagina, appPronto, AMANHA, prepararContexto, vigiarErros, entrar, importarDaAgenda, abrirAvisosDaEscala, textosDaEscala, itensDaEscala, resumoDaEscala, editorDoVoo, refazer, confirmarAgendamento, aprovar } from './fixtures.js';
 import { criarSupabaseFalso, documentosAtuais, CONTAS } from './supabase-falso.js';
 import { IDS } from '../helpers/casos-do-programa.js';
 import { cursosIniciais, gravarCurso } from '../../js/programa.js';
@@ -60,6 +60,9 @@ test.describe('Tela da Escala', () => {
     await expect(textosDaEscala(page, 'erros')).toHaveText([/^Aluno 1000 Rejeitado: .*nenhum instrutor ativo tem a habilitação/]);
     await expect(textosDaEscala(page, 'avisos')).toHaveText([/^Aluno 1001 /, /^Aluno 1002 /]);
     await expect(itensDaEscala(page, 'avisos').first()).toHaveAttribute('data-gravidade', 'aviso');
+    // O resumo do grupo com dois itens ou mais, no alto dos avisos (com um só, o item diz tudo)
+    await expect(resumoDaEscala(page, 'avisos')).toHaveText('2 avisos: 2 alunos sem peso');
+    await expect(resumoDaEscala(page, 'erros')).toHaveCount(0);
     // Trocar de vista ou inverter o eixo redesenha a escala: o trilho continua igual
     for (const troca of ['#s-esc [data-tl="ins"]', '#btn-eixo', '#s-esc [data-tl="lista"]']) {
       await page.locator(troca).click();
@@ -170,12 +173,14 @@ test.describe('Tela da Escala', () => {
     expect(erros).toEqual([]);
   });
 
-  // O aviso de peso diz de quem é o peso que falta: um item no trilho para o aluno, outro para o instrutor
-  test('os avisos de peso: o do aluno e o do instrutor, cada um no trilho', async ({ page }) => {
+  // O aviso de peso diz de quem é o peso que falta: um item no trilho para o aluno, outro para o instrutor; o resumo conta os dois
+  test('os avisos de peso: o do aluno e o do instrutor, cada um no trilho, e o resumo conta alunos e instrutores', async ({ page }) => {
     await abrir(page, { estado: cenario({ ins: [instrutor(1, 1, { kg: 0 })], stu: [aluno(1000, { p1: 390, p2: -1 }), aluno(1001, { p1: 500, p2: -1 }, { kg: 0 })] }) });
     await abrirEscala(page);
     await expect(textosDaEscala(page, 'avisos')).toHaveCount(2);
     await expect(textosDaEscala(page, 'avisos').filter({ hasText: 'Aluno 1001' })).toHaveCount(1);
+    // O resumo conta alunos e instrutores
+    await expect(resumoDaEscala(page, 'avisos')).toHaveText('2 avisos: 1 aluno sem peso · 1 instrutor sem peso');
   });
 
   // F1h (N9): dois alunos priorizam o mesmo INVA no mesmo horário. Com a prioridade desligada (o padrão), todos têm a
@@ -211,6 +216,7 @@ test.describe('Tela da Escala', () => {
     await abrir(page, { estado });
     await abrirEscala(page);
     await expect(textosDaEscala(page, 'avisos')).toHaveText([/^Aluno 1000 /, /^Aluno 1001 /]);
+    await expect(resumoDaEscala(page, 'avisos')).toHaveText('2 avisos: 2 agendamentos fora da regra');
     const etiqueta = nome => page.locator('#out tbody tr:not(.win)', { hasText: nome }).locator('.c-hr .tag[data-dica="fora-da-regra"]');
     await expect(etiqueta('Aluno 1000')).toHaveText('fora da regra');
     await expect(etiqueta('Aluno 1002')).toHaveCount(0);
@@ -220,13 +226,25 @@ test.describe('Tela da Escala', () => {
   });
 
   // Fora da escala aprovada, o voo fixo em conflito é de um agendamento, do instrutor escolhido na Escala ou de um status
-  test('o voo fixo em conflito sem a escala aprovada: "voo fixo em conflito", com o conflito do agendado', async ({ page }) => {
+  test('o voo fixo em conflito sem a escala aprovada: o conflito do agendado, sem o resumo do grupo', async ({ page }) => {
     const estado = cenario({ ins: [instrutor(1, 9, { on: false }), instrutor(2, 9)], stu: [aluno(1000, { p1: 390, p2: -1 }), aluno(1001, { p1: 500, p2: -1 })] });
     estado.fixos = { '1000_0_1': { a: 610, b: 670, r: 'PR-VOB', insId: 1, agendado: true } };
     await abrir(page, { estado });
     await abrirEscala(page);
     await expect(textosDaEscala(page, 'conflitos')).toHaveText(['Aluno 1000 Conflito no voo agendado: o instrutor não está disponível.']);
     await expect(itensDaEscala(page, 'conflitos').locator('[data-reparo]')).toHaveText('Sugestões');
+    // Com um conflito só, o item diz tudo (sem o resumo do grupo)
+    await expect(resumoDaEscala(page, 'conflitos')).toHaveCount(0);
+  });
+
+  test('dois voos fixos em conflito sem a escala aprovada: o resumo "2 voos fixos em conflito" no alto dos avisos', async ({ page }) => {
+    const estado = cenario({ ins: [instrutor(1, 9, { on: false }), instrutor(2, 9)], stu: [aluno(1000, { p1: 390, p2: -1 }), aluno(1001, { p1: 500, p2: -1 })] });
+    estado.fixos = { '1000_0_1': { a: 610, b: 670, r: 'PR-VOB', insId: 1, agendado: true }, '1001_0_1': { a: 730, b: 790, r: 'PR-VOC', insId: 1, agendado: true } };
+    await abrir(page, { estado });
+    await abrirEscala(page);
+    await expect(textosDaEscala(page, 'conflitos')).toHaveCount(2);
+    await expect(resumoDaEscala(page, 'conflitos')).toHaveText('2 voos fixos em conflito');
+    await expect(resumoDaEscala(page, 'conflitos')).toHaveAttribute('data-gravidade', 'erro');
   });
 
   test('uma linha por voo: duração junto do horário, preferência só quando não é a 1ª, peso com o limite e status discreto', async ({ page }) => {

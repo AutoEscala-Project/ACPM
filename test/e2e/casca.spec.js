@@ -79,6 +79,23 @@ test.describe('A linha e as telas', () => {
       expect(razaoDeContraste(aberto.corDaBorda, aberto.pagina), tema).toBeGreaterThanOrEqual(3);
       expect((await estilo('ins')).borda, tema).toMatch(/^0px|none$/);
     }
+    // O anel do foco do teclado não cai em cima da borda (da mesma cor): ele fica fora dela, a 1440 px e na faixa do celular
+    for (const largura of [1440, 390]) {
+      await page.setViewportSize({ width: largura, height: 900 });
+      const link = botaoDaAba(page, 'alu');
+      await link.focus();
+      await page.keyboard.press('Shift+Tab');
+      await page.keyboard.press('Tab');
+      await expect(link).toBeFocused();
+      const anel = await link.evaluate(a => {
+        const e = getComputedStyle(a);
+        return { visivel: a.matches(':focus-visible'), estilo: e.outlineStyle, largura: parseFloat(e.outlineWidth), distancia: parseFloat(e.outlineOffset), borda: parseFloat(e.borderTopWidth) };
+      });
+      expect([anel.visivel, anel.estilo], `${largura} px`).toEqual([true, 'solid']);
+      // Fora da borda (distância ≥ 0) ou dentro dela, sem tocá-la (o anel inteiro mais para dentro que a borda)
+      expect(anel.distancia >= 0 || anel.distancia + anel.largura <= -anel.borda, `${largura} px: ${JSON.stringify(anel)}`).toBe(true);
+    }
+    await page.setViewportSize({ width: 1280, height: 720 });
     // Nas cores forçadas (o Alto contraste do Windows), a borda continua: o link aberto se distingue sem a cor
     await page.emulateMedia({ forcedColors: 'active' });
     expect((await estilo('alu')).borda).toBe('2px solid');
@@ -373,11 +390,19 @@ test.describe('A moldura', () => {
     await expect(page.locator('body')).toHaveAttribute('data-trilho', 'recolhido');
     const recolhido = await medidas();
     expect([recolhido.pagina, recolhido.lista, recolhido.noFundo]).toEqual([false, true, 703]);
-    // Em cima da tela (abaixo de 1024 px), aberto, ele rola por conta própria, e a página continua sem rolar
+    // Em cima da tela (abaixo de 1024 px), aberto: a página rola, e a tela fica com a altura da janela embaixo dele (os painéis
+    // continuam rolando cada um; com a trava, o calendário tiraria metade da altura deles); recolhido numa linha, a página
+    // volta a ter a altura da janela
     await botaoDoTrilho(page).click();
     await page.setViewportSize({ width: 1000, height: 720 });
     const emCima = await medidas();
-    expect([emCima.pagina, emCima.lista, emCima.trilho.rola]).toEqual([false, true, 'auto']);
+    expect([emCima.pagina, emCima.lista]).toEqual([true, true]);
+    expect(Math.abs((await page.locator('#s-alu').boundingBox()).height - (720 - 32))).toBeLessThanOrEqual(1);
+    await botaoDoTrilho(page).click();
+    await expect(page.locator('body')).toHaveAttribute('data-trilho', 'recolhido');
+    const linhaEmCima = await medidas();
+    expect([linhaEmCima.pagina, linhaEmCima.lista]).toEqual([false, true]);
+    await botaoDoTrilho(page).click();
     await page.setViewportSize({ width: 1280, height: 720 });
     await page.setViewportSize({ width: 1280, height: 560 });
     expect((await medidas()).pagina).toBe(true);

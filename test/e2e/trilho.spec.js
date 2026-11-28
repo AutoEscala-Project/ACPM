@@ -3,7 +3,7 @@
 // avisos da data recolhem, cada um, e fica guardado. Os dias (hoje, a data aberta, domingo, os pedidos de cada um), as
 // teclas, o celular e a gaveta do Histórico à esquerda dele. Os padrões do produto, de propósito
 import {
-  test, expect, abrir, abrirComExemplo, entrar, preencherLogin, irPara, abrirHistorico, AMANHA, URL_APP, REGIOES, dataAberta, botaoDoTrilho,
+  test, expect, abrir, abrirComExemplo, abrirOTrilho, mostrarAvisos, entrar, preencherLogin, irPara, abrirHistorico, AMANHA, URL_APP, REGIOES, dataAberta, botaoDoTrilho,
   corpoDoTrilho, botaoDosAvisos, corpoDosAvisos, contagemNosAvisos, relativoDaData, rotuloDaData, trilho, diaDoCalendario, diasDoCalendario, contagemDoDia, paradasDoCalendario, escolherNoCalendario, mudarData, alvosPequenos,
   larguraDaPagina, semNome, prepararContexto, vigiarErros, avisosDaData, contagemDosAvisos, abrirEscala, aprovar, alternarDisponivel, botaoDaAba, abrirMenuDaConta
 } from './fixtures.js';
@@ -221,6 +221,21 @@ test.describe('O trilho ao lado', () => {
       await expect(trilho(page), `${largura} px`).toBeVisible();
       expect(await lado(), `${largura} px`).toBe(onde);
       await expect(diaDoCalendario(page, '2026-11-12')).toBeFocused();
+    }
+  });
+
+  // Entre 1024 e 1279 px, a gaveta à esquerda do trilho cobriria a maior parte da tela: ela fica na borda da janela, por
+  // cima do trilho (como antes de linha-fix-escala-sem-caixas, quando o trilho não ficava ao lado nessa largura)
+  test('entre 1024 e 1279 px, a gaveta do Histórico abre na borda da janela, por cima do trilho', async ({ page }) => {
+    for (const largura of [1024, 1180, 1279]) {
+      await page.setViewportSize({ width: largura, height: 800 });
+      await abrirComExemplo(page);
+      await expect(page.locator('body')).toHaveAttribute('data-trilho', 'aberto');
+      await abrirHistorico(page);
+      const [gaveta, tela] = await Promise.all([page.locator('#historico').boundingBox(), page.locator('main#conteudo').boundingBox()]);
+      expect(Math.abs(gaveta.x + gaveta.width - largura), `${largura} px`).toBeLessThanOrEqual(1);
+      // A tela fica à vista à esquerda da gaveta em pelo menos metade da largura dela
+      expect(gaveta.x - tela.x, `${largura} px`).toBeGreaterThanOrEqual(tela.width / 2);
     }
   });
 
@@ -515,11 +530,50 @@ test.describe('Recolher o calendário e os avisos', () => {
   });
 });
 
+// Sem nada guardado, abaixo de 1024 px (o celular e o tablet), o calendário começa recolhido numa linha com a data e o
+// número de avisos: a tela fica logo embaixo da linha de produção. A partir de 1024 px, aberto ao lado. Vale a largura de
+// quando a página abre; o que a pessoa escolhe fica guardado e vale em todas as larguras
+test.describe('O calendário recolhido de partida, abaixo de 1024 px', () => {
+  for (const [largura, altura] of [[1000, 650], [820, 1180], [390, 844], [320, 568]]) {
+    test(`a ${largura} × ${altura}, ele começa numa linha, e a tela vem logo depois; aberto, fica guardado`, async ({ page }) => {
+      await page.setViewportSize({ width: largura, height: altura });
+      await abrirComExemplo(page);
+      await expect(page.locator('body')).toHaveAttribute('data-trilho', 'recolhido');
+      await expect(corpoDoTrilho(page)).toBeHidden();
+      await expect(botaoDoTrilho(page)).toHaveAttribute('aria-expanded', 'false');
+      await expect(rotuloDaData(page)).toBeVisible();
+      const [linha, tela] = await Promise.all([trilho(page).boundingBox(), page.locator('main#conteudo').boundingBox()]);
+      expect(linha.height).toBeLessThanOrEqual(72);
+      expect(tela.y).toBeLessThan(altura / 2);
+      expect(await page.evaluate(() => localStorage.getItem('acpm_trilho'))).toBeNull();
+      await botaoDoTrilho(page).click();
+      await expect(corpoDoTrilho(page)).toBeVisible();
+      expect(await page.evaluate(() => localStorage.getItem('acpm_trilho'))).toBe('{"calendario":"aberto"}');
+      await page.reload();
+      await expect(page.locator('body')).toHaveAttribute('data-pronto', '1');
+      await expect(corpoDoTrilho(page)).toBeVisible();
+    });
+  }
+
+  test('a 1024 px, aberto ao lado; o guardado vale abaixo de 1024 px também', async ({ page }) => {
+    await page.setViewportSize({ width: 1024, height: 768 });
+    await abrirComExemplo(page);
+    await expect(page.locator('body')).toHaveAttribute('data-trilho', 'aberto');
+    await botaoDoTrilho(page).click();
+    await botaoDoTrilho(page).click();
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.reload();
+    await expect(page.locator('body')).toHaveAttribute('data-pronto', '1');
+    await expect(corpoDoTrilho(page)).toBeVisible();
+  });
+});
+
 test.describe('O trilho em cima da tela', () => {
   test.use({ viewport: { width: 1000, height: 800 } });
 
   test('o calendário tem no máximo 320 px, à esquerda, com a linha da data ao lado; no celular, embaixo', async ({ page }) => {
     await abrirComExemplo(page);
+    await abrirOTrilho(page);
     const medidas = () => page.evaluate(() => {
       const r = seletor => document.querySelector(seletor).getBoundingClientRect().toJSON();
       return { cal: r('#cal'), lista: r('.trilho-avisos') };
@@ -562,6 +616,7 @@ test.describe('O trilho em cima da tela', () => {
 
   test('o Gestor deste navegador também muda a data, e nada é gravado', async ({ page }) => {
     await abrirComExemplo(page, { url: './?role=gestor' });
+    await abrirOTrilho(page);
     const antes = await page.evaluate(() => JSON.stringify(Object.keys(localStorage).sort().map(k => [k, localStorage.getItem(k)])));
     await mudarData(page, '2026-11-12');
     await expect(page.locator('#s-esc h2')).toBeVisible();
@@ -576,6 +631,10 @@ test.describe('O trilho no celular', () => {
       await page.setViewportSize({ width: largura, height: 800 });
       await abrirComExemplo(page);
       await expect(trilho(page)).toBeVisible();
+      // Sem nada guardado, ele começa recolhido numa linha (a tela logo embaixo); o botão o abre
+      await expect(corpoDoTrilho(page)).toBeHidden();
+      await botaoDoTrilho(page).click();
+      await expect(corpoDoTrilho(page)).toBeVisible();
       const painel = await trilho(page).boundingBox();
       expect([painel.x, painel.width]).toEqual([0, largura]);
       const dias = await diasDoCalendario(page).evaluateAll(bs => bs.map(b => b.getBoundingClientRect().toJSON()));
@@ -848,7 +907,10 @@ test.describe('Os avisos da data', () => {
     // Um instrutor só, sem habilitação para o Multimotor: a missão não entra
     await abrir(page, { estado: cenario({ ins: [instrutor(1, 1)], stu: [aluno(1000, { mis: 'Multimotor', eq: 'PA-34' })] }) });
     await irPara(page, 'bi');
+    // Recolhido (o padrão no celular), a linha da data tem o número; aberto, os avisos
     await expect(contagemDosAvisos(page)).toBeVisible();
+    await expect(corpoDoTrilho(page)).toBeHidden();
+    await mostrarAvisos(page);
     const item = avisosDaData(page, 'Rejeitado').locator('a');
     await expect(item).toBeVisible();
     expect(await alvosPequenos(page)).toEqual([]);
