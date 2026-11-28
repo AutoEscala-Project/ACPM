@@ -1,50 +1,65 @@
-/* Instrutores: os limites da lei, a grade do dia e o painel das habilitações */
-body[data-role="gestor"] #s-ins .cel { cursor: default !important; }
-/* Limites da lei */
-td.mes { white-space: nowrap; font-variant-numeric: tabular-nums; }
-td.mes.perto { color: var(--wa); font-weight: 700; }
-.limites-lei { margin-top: 12px; }
-.limites-grade { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px 14px; margin: 8px 0 10px; }
-.limites-grade label { display: flex; flex-direction: column; gap: 4px; font-weight: 600; }
-.horas-ins { display: grid; gap: 8px; }
-/* O texto discreto (p.h) fica com a margem dele, como em css/app.css, onde p.h vinha depois */
-.horas-ins p:not(.h) { margin: 0; }
-.horas-ins label { display: flex; flex-direction: column; gap: 4px; font-weight: 600; }
-.legenda-disp { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; margin: 0 0 8px; font-size: 13.5px; color: var(--mu); }
-.legenda-disp span { display: inline-flex; align-items: center; gap: 6px; }
-.legenda-disp .cel { width: 22px; height: 14px; cursor: default; }
-table.disp { min-width: 960px; font-size: 14.5px; }
-table.disp td { padding: 4px 8px; }
-table.disp th.jan, table.disp td.jan { width: 54px; padding: 4px 2px; text-align: center; }
-/* O nome fica à vista quando a grade rola para o lado */
-table.disp th:first-child, table.disp td.nome { position: sticky; left: 0; z-index: 1; background: var(--pn); white-space: nowrap; }
-table.disp th:first-child { z-index: 2; background: var(--pn2); }
-table.disp tr.off td:nth-child(2) { opacity: 1; }
-table.disp td.voos { text-align: center; font-weight: 700; }
-table.disp select[data-f="pre"] { border-color: transparent; background: transparent; color: var(--mu); }
-table.disp tr:hover select[data-f="pre"], table.disp select[data-f="pre"]:focus { border-color: var(--ln2); background: var(--pn); color: var(--ink); }
-table.disp td.habs-resumo { max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.habs-resumo { color: var(--mu); font-size: 13.5px; }
-/* Cada janela é uma caixa de seleção do tamanho da célula: listrada quando o instrutor não vem, azul-clara quando vem
-   e azul quando já tem voo ou aula na escala */
-.cel {
-  display: block; position: relative; height: 26px; border-radius: 4px; cursor: pointer; border: 1px solid var(--ln);
+/* INVAs: a tira do dia (na linha e no detalhe), os turnos, "Editar faixas", "O que cabe", os voos de "Nesta data", as habilitações e
+   as horas de voo do detalhe e os limites da lei (o item fixo). O resto é do componente: css/lista.css */
+/* A tira: das 06:30 à meia-noite, as faixas em azul-claro, as pausas listradas e os voos em azul; quem não vem, apagada */
+.tira {
+  position: relative; display: block; height: 8px; overflow: hidden; border-radius: 4px; border: 1px solid var(--ln);
   background: repeating-linear-gradient(135deg, var(--neutro-bg) 0 4px, transparent 4px 8px);
 }
-.cel.on { background: var(--info-bg); border-color: color-mix(in srgb, var(--ac) 35%, transparent); }
-.cel.voo { background: var(--ac); border-color: var(--ac); }
-.cel input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
-.cel:hover { border-color: var(--ac); }
-.cel:focus-within { outline: 2px solid var(--ac); outline-offset: 1px; }
-i.cel { display: inline-block; }
-.habs-painel { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
+.tira.grande { height: 16px; }
+.tira > span { position: absolute; top: 0; bottom: 0; }
+.tira-faixa { background: var(--info-bg); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ac) 35%, transparent); }
+.tira-pausa { background: repeating-linear-gradient(135deg, var(--wa-bg) 0 3px, color-mix(in srgb, var(--wa) 45%, transparent) 3px 6px); }
+.tira-voo { background: var(--ac); }
+.tira.nao-vem > span { opacity: .35; }
+.det-tira { margin: 4px 0 8px; }
+.tira-escala { position: relative; height: 16px; margin-top: 2px; font-size: 11.5px; color: var(--mu); font-variant-numeric: tabular-nums; }
+.tira-escala > span { position: absolute; top: 0; transform: translateX(-50%); }
+.tira-escala > span:first-child { transform: none; }
+.tira-escala > span:last-child { transform: translateX(-100%); }
+/* O "Vem" do detalhe: a caixa com o que ela diz */
+.det-vem { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; }
+/* Os turnos e "Editar faixas": uma fileira que quebra */
+.turnos { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 8px; }
+.turno small { color: var(--mu); font-weight: 500; font-variant-numeric: tabular-nums; }
+.turno[aria-pressed="true"] { border-color: var(--ac); background: var(--info-bg); }
+/* "Editar faixas": uma faixa ou uma pausa por linha ("Pode decolar de … até … ✕"), "+ Faixa", "+ Pausa" e "Almoço" */
+.faixas-form { margin: 4px 0 10px; }
+.fx-lista { list-style: none; margin: 4px 0; padding: 0; display: grid; gap: 4px; }
+.fx-linha { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.fx-rotulo { font-weight: 600; }
+.fx-linha select { font-variant-numeric: tabular-nums; }
+.fx-mais { display: flex; flex-wrap: wrap; gap: 6px; margin: 2px 0 6px; }
+.fx-mais small { color: var(--mu); font-weight: 500; }
+.fx-vazio { margin: 2px 0; }
+.faixas-form > .fx-erro { display: block; color: var(--er); font-size: 13px; }
+.faixas-form > .fx-erro:empty { display: none; }
+/* "O que cabe nestas faixas": fechado até um clique, uma lista por linha; o resumo com 44 px de alvo */
+.faixas-cabe { margin: 0 0 8px; }
+.faixas-cabe > summary { min-height: 44px; box-sizing: border-box; padding: 12px 0; line-height: 20px; cursor: pointer; font-weight: 600; color: var(--ac); }
+.faixas-cabe > summary:focus-visible { outline: 2px solid var(--ac); outline-offset: 2px; border-radius: 3px; }
+.faixas-cabe > p.h { margin: 0 0 4px; }
+.faixas-cabe > ul { margin: 0; padding-left: 18px; font-variant-numeric: tabular-nums; }
+.faixas-cabe > ul > li { padding: 2px 0; }
+/* Os voos da data, um por linha */
+.voos-do-instrutor { list-style: none; margin: 4px 0; padding: 0; }
+.voos-do-instrutor > li { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; padding: 6px 0; border-bottom: 1px solid var(--ln); }
+.voos-do-instrutor > li:last-child { border-bottom: 0; }
+/* As habilitações, em grupos */
+.habs-painel { display: flex; flex-direction: column; gap: 10px; margin-top: 6px; }
 .habs-painel fieldset { margin: 0; padding: 4px 12px 8px; border: 1px solid var(--ln); border-radius: 8px; }
 .habs-painel legend { padding: 0 4px; font: 600 14px 'Barlow Semi Condensed', sans-serif; }
 .habs-painel label.hab { display: flex; align-items: center; gap: 10px; padding: 6px 0; cursor: pointer; }
+/* As horas de voo perto de um limite */
+.det-aviso-limite { margin: 4px 0; color: var(--wa); font-weight: 600; }
+/* Limites da lei (o item fixo) */
+.limites-grade { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px 14px; margin: 8px 0 10px; }
+.limites-grade label { display: flex; flex-direction: column; gap: 4px; font-weight: 600; }
 @media (max-width: 640px) {
-  [data-flt="inst"], #flt-ins-hab { flex: 1 1 140px; min-width: 0; }
+  .fx-rotulo { flex-basis: 100%; }
 }
-@media (max-width: 640px) {
-  .habs-painel label.hab { min-width: 44px; min-height: 44px; }
-  .cel { height: 44px; min-width: 44px; }
+@media (max-width: 640px), (pointer: coarse) {
+  .habs-painel label.hab { min-height: 44px; }
+  .turnos .btn, .fx-mais .btn, .fx-tirar, .det-vem { min-height: 44px; }
+  .fx-tirar { min-width: 44px; }
+  .fx-linha select { min-height: 44px; }
 }

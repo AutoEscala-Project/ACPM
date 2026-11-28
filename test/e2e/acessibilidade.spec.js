@@ -1,6 +1,6 @@
 // Acessibilidade: cada botão e cada campo tem um nome para o leitor de tela, e nenhum se chama só "✕" (que o leitor
 // lê como "multiplicação"). Vale para todas as abas, o Histórico e o painel de habilitações.
-import { test, expect, abrir, abrirComExemplo, irPara, entrar, abrirEscala, abrirCaixa, prepararContexto, vigiarErros, REGIOES, abasVisiveis, abrirHistorico, aprovar, botaoAprovar, botaoDoHistorico, botaoDoMenuDaConta, percorrerTelas, relativoDaData, rotuloDaData, semNome, alternarVem, botoesDasAbas, botaoDaData, mudarData, contagemDoDia, diaDoCalendario, trilho, AMANHA, avisosDaData, contagemDosAvisos, editorDoVoo, refazer, abrirAluno } from './fixtures.js';
+import { test, expect, abrir, abrirComExemplo, irPara, entrar, abrirEscala, abrirAvisosDaEscala, prepararContexto, vigiarErros, REGIOES, abasVisiveis, abrirHistorico, aprovar, botaoAprovar, botaoDoHistorico, botaoDoMenuDaConta, percorrerTelas, relativoDaData, rotuloDaData, semNome, alternarVem, botoesDasAbas, botaoDoTrilho, botaoDosAvisos, abrirOTrilho, mostrarAvisos, mudarData, contagemDoDia, diaDoCalendario, trilho, AMANHA, avisosDaData, contagemDosAvisos, editorDoVoo, refazer, abrirAluno, abrirInstrutor, DETALHE_DOS_INSTRUTORES } from './fixtures.js';
 import { instalarSupabaseFalso, documentosAtuais, CONTAS } from './supabase-falso.js';
 import { comExemplo } from '../helpers/exemplo.js';
 import { estadoSintetico } from '../helpers/estado.js';
@@ -19,12 +19,11 @@ test.describe('Acessibilidade', () => {
       await page.locator(`#s-esc [data-tl="${vista}"]`).click();
       expect(await semNome(page, 'main section.on'), `mapa ${vista}`).toEqual([]);
     }
-    await irPara(page, 'ins');
-    await page.locator('#s-ins [data-vista-ins="cadastro"]').click();
-    expect(await semNome(page, 'main section.on'), 'cadastro de instrutores').toEqual([]);
-    await page.locator('#inst [data-act="editar-habs"]').first().click();
-    expect(await semNome(page, '#painel-instrutor'), 'painel de habilitações').toEqual([]);
-    await page.keyboard.press('Escape');
+    await abrirInstrutor(page, 1);
+    await page.locator('[data-act="editar-faixas"]').click();
+    await page.locator('[data-act="almoco"]').click();
+    expect(await semNome(page, 'main section.on'), 'um instrutor, com Editar faixas').toEqual([]);
+    expect(await semNome(page, DETALHE_DOS_INSTRUTORES), 'o detalhe do instrutor').toEqual([]);
     await abrirHistorico(page);
     expect(await semNome(page, '#historico'), 'histórico').toEqual([]);
   });
@@ -38,10 +37,10 @@ test.describe('O foco do teclado na barra do topo', () => {
       await abrirComExemplo(page);
       await page.evaluate(t => { document.documentElement.dataset.theme = t; }, tema);
       const fundo = await page.locator('header.topo').evaluate(el => getComputedStyle(el).backgroundColor);
-      // O botão da data, o perfil, o Histórico, o Manual (um link) e o menu da conta
+      // O perfil, o Histórico, o Manual (um link) e o menu da conta (a data fica no trilho: linha-fix-escala-sem-caixas)
       const controles = page.locator('header.topo :is(button, select, a[href]):visible:not(:disabled)');
       const total = await controles.count();
-      expect(total).toBeGreaterThanOrEqual(5);
+      expect(total).toBeGreaterThanOrEqual(4);
       const fracos = [];
       for (let i = 0; i < total; i++) {
         const controle = controles.nth(i);
@@ -102,14 +101,13 @@ test.describe('O foco do teclado na barra do topo', () => {
     });
   }
 
-  test('o botão da data mostra o foco do teclado, com o anel branco da barra', async ({ page }) => {
+  test('o botão que recolhe o calendário mostra o foco do teclado, com o anel de destaque', async ({ page }) => {
     await abrirComExemplo(page);
-    await page.locator('.topo-marca').click();
-    await botaoDaData(page).focus();
+    await botaoDoTrilho(page).focus();
     await page.keyboard.press('Shift+Tab');
     await page.keyboard.press('Tab');
-    await expect(botaoDaData(page)).toBeFocused();
-    expect(await botaoDaData(page).evaluate(el => [getComputedStyle(el).outlineStyle, getComputedStyle(el).outlineColor])).toEqual(['solid', 'rgb(255, 255, 255)']);
+    await expect(botaoDoTrilho(page)).toBeFocused();
+    expect(await botaoDoTrilho(page).evaluate(el => getComputedStyle(el).outlineStyle)).toBe('solid');
   });
 });
 
@@ -148,18 +146,22 @@ test.describe('Telas de 320 px', () => {
   });
 });
 
-// O botão da data tem a largura fixa: com o ano, o "amanhã" e o número de avisos, o dia da semana vai abreviado
-test('na tela grande, na virada do ano, a data aparece inteira com o número de avisos', async ({ page }) => {
+// O alto do trilho: com o ano, o "amanhã" e o número de avisos, o dia da semana vai abreviado; na faixa do calendário
+// recolhido, a data também aparece inteira
+test('na tela grande, na virada do ano, a data aparece inteira com o número de avisos, aberta e na faixa', async ({ page }) => {
   await page.clock.setFixedTime(new Date('2026-12-31T12:00:00-03:00'));
   await abrir(page, { estado: cenario({ ins: [instrutor(1, 1)], stu: [aluno(1000, { mis: 'Multimotor', eq: 'PA-34' })] }) });
   await expect(contagemDosAvisos(page)).toBeVisible();
   const rotulo = rotuloDaData(page);
+  expect(await rotulo.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
+  await abrirOTrilho(page);
   await expect(rotulo).toHaveText('sex., 01/01/2027', { useInnerText: true });
   expect(await rotulo.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
 });
 
 test('na tela grande, o dia da semana aparece por extenso', async ({ page }) => {
   await abrirComExemplo(page);
+  await abrirOTrilho(page);
   await expect(rotuloDaData(page).locator('.dt-semana')).toBeVisible();
   await expect(rotuloDaData(page).locator('.dt-semana')).toHaveText('quarta-feira');
   await expect(rotuloDaData(page).locator('.dt-semana-curta')).toBeHidden();
@@ -170,15 +172,15 @@ test('na tela grande, o dia da semana aparece por extenso', async ({ page }) => 
 test.describe('A barra do topo nas larguras intermediárias', () => {
   for (const [largura, modo] of [[641, 'local'], [700, 'local'], [820, 'local'], [900, 'local'], [1024, 'local'], [1029, 'compartilhado'],
     [1030, 'compartilhado'], [1110, 'local'], [1280, 'local'], [1289, 'compartilhado'], [1290, 'compartilhado']]) {
-    test(`a ${largura} px (modo ${modo}), nada na barra cobre a marca, o botão da data ou as ferramentas`, async ({ page, context }) => {
+    test(`a ${largura} px (modo ${modo}), nada na barra cobre a marca ou as ferramentas`, async ({ page, context }) => {
       await page.setViewportSize({ width: largura, height: 800 });
       if (modo === 'local') await abrirComExemplo(page);
       else {
         await instalarSupabaseFalso(context, documentosAtuais(comExemplo(estadoSintetico()), '2026-11-11'));
         await entrar(page, CONTAS.operador);
       }
-      // O que está no meio de cada um é ele mesmo (nada por cima): a marca, o botão da data e as ferramentas
-      for (const [seletor, alvo] of [['.topo-titulo', page.locator('.topo-titulo')], ['o botão da data', botaoDaData(page)],
+      // O que está no meio de cada um é ele mesmo (nada por cima): a marca e as ferramentas
+      for (const [seletor, alvo] of [['.topo-titulo', page.locator('.topo-titulo')],
         ['o Histórico', botaoDoHistorico(page)], ['#btn-manual', page.locator('#btn-manual')],
         ['o menu da conta', botaoDoMenuDaConta(page)]]) {
         const noMeio = await alvo.evaluate(el => {
@@ -302,9 +304,6 @@ test.describe('O leitor de tela e o teclado', () => {
     await page.locator('#s-esc [data-tl="lista"]').click();
     await expect(page.locator('#s-esc [data-tl][aria-pressed="true"]')).toHaveAttribute('data-tl', 'lista');
     await expect(page.locator('#s-esc [data-tl][aria-pressed="false"]')).toHaveCount(3);
-    await irPara(page, 'ins');
-    await page.locator('[data-vista-ins="cadastro"]').click();
-    await expect(page.locator('[data-vista-ins][aria-pressed="true"]')).toHaveAttribute('data-vista-ins', 'cadastro');
     // Cursos é uma aba, não uma vista de Alunos: a aba aberta é a atual
     await irPara(page, 'cur');
     await expect(atual).toHaveCount(1);
@@ -450,8 +449,7 @@ test.describe('O leitor de tela e o teclado', () => {
     await irPara(page, 'ins');
     await alternarVem(page, doVoo.endsWith('01') ? 1 : 2, false);
     await abrirEscala(page);
-    await abrirCaixa(page, 'conflitos');
-    const botao = page.locator('#out details.conflitos [data-reparo]');
+    const botao = (await abrirAvisosDaEscala(page, 'conflitos')).locator('[data-reparo]');
     await botao.click();
     await expect(page.locator('#painel-reparo')).toBeVisible();
     return botao;
@@ -625,14 +623,15 @@ test.describe('O leitor de tela e o teclado', () => {
       }
       await entrar(page, CONTAS.operador);
       await page.evaluate(t => { document.documentElement.dataset.theme = t; }, tema);
-      await botaoDaData(page).click();
+      await mostrarAvisos(page);
       await expect(contagemDoDia(page, '2026-11-13')).toBeVisible();
       expect(await contrastesFracos([
         ['o mês', page.locator('#cal-mes')], ['o dia da semana', page.locator('#cal th').first()], ['um dia', diaDoCalendario(page, '2026-11-12')],
         ['a data aberta', diaDoCalendario(page, AMANHA)], ['hoje', diaDoCalendario(page, '2026-11-10')], ['um domingo', diaDoCalendario(page, '2026-11-15')],
         ['um dia de outro mês', diaDoCalendario(page, '2026-12-01')], ['os pedidos de um dia', contagemDoDia(page, '2026-11-13')],
         ['os pedidos de hoje', contagemDoDia(page, '2026-11-10')], ['a linha da data', page.locator('#trilho-data')],
-        ['o título de um aviso', avisosDaData(page).first().locator('.aviso-titulo')], ['o número de avisos', contagemDosAvisos(page)]
+        ['o título de um aviso', avisosDaData(page).first().locator('.aviso-titulo')], ['o número de avisos', contagemDosAvisos(page)],
+        ['a data aberta no alto', rotuloDaData(page)], ['o "amanhã"', relativoDaData(page)], ['o botão dos avisos', botaoDosAvisos(page)]
       ])).toEqual([]);
       const fundo = await trilho(page).evaluate(el => getComputedStyle(el).backgroundColor);
       const fracos = [];
@@ -662,9 +661,9 @@ test.describe('O leitor de tela e o teclado', () => {
   test('os anúncios: a data do topo ao mudar, quantos voos ficaram com os filtros e o diálogo do status descrito pelo voo', async ({ page }) => {
     await abrirComExemplo(page);
     await abrirEscala(page);
-    // A data nova é anunciada (o nome dela, dentro do botão, não é uma região viva: seria lido duas vezes com o foco nele)
+    // A data nova é anunciada (o nome dela, no alto do trilho, não é uma região viva: seria lido duas vezes)
     await expect(rotuloDaData(page)).not.toHaveAttribute('aria-live');
-    await expect(botaoDaData(page).locator('svg.ico').first()).toHaveAttribute('aria-hidden', 'true');
+    await expect(botaoDoTrilho(page).locator('svg.ico').first()).toHaveAttribute('aria-hidden', 'true');
     await mudarData(page, '2026-11-12');
     await expect(page.locator('#anuncio')).toHaveText('Data aberta: quinta-feira, 12/11');
     await mudarData(page, '2026-11-11');
@@ -683,5 +682,63 @@ test.describe('O leitor de tela e o teclado', () => {
     await expect(page.locator('#dlg-status')).toHaveAccessibleDescription(await page.locator('#dlg-status-voo').textContent());
     await expect(page.locator('#dlg-status-voo')).not.toBeEmpty();
     await page.locator('#dlg-status').getByRole('button', { name: 'Voltar' }).click();
+  });
+});
+
+// O Esc fecha só a camada de cima (vieram de gavetas-de-cadastro.spec.js, que saiu com as duas gavetas de Instrutores no
+// C): o diálogo do agendamento sobre o Histórico, e o filtro das habilitações de INVAs sobre o Histórico
+test.describe('O Esc e as camadas', () => {
+  // O diálogo do agendamento: o nome, a descrição (o contexto), o foco no aluno, os nomes dos campos e o alerta vazio, que
+  // fica na árvore de acessibilidade (escondido sem display: none) para ser anunciado. Ele é a camada de cima: com o
+  // Histórico aberto embaixo, o Esc fecha só ele, e o seguinte, o Histórico. Nada é gravado
+  test('o diálogo do agendamento: nome, descrição, foco e campos com nome; o Esc fecha só ele, com o Histórico aberto embaixo', async ({ page }) => {
+    await abrirComExemplo(page);
+    await abrirEscala(page);
+    await abrirHistorico(page);
+    // O Histórico pode cobrir o botão: pelo teclado
+    await page.locator('#btn-agendar').focus();
+    await page.keyboard.press('Enter');
+    const dialogo = page.locator('#dlg-agendar');
+    await expect(dialogo).toBeVisible();
+    await expect(dialogo).toHaveAccessibleName('Agendar voo');
+    await expect(page.locator('#agd-contexto')).not.toBeEmpty();
+    await expect(dialogo).toHaveAccessibleDescription(await page.locator('#agd-contexto').textContent());
+    await expect(page.locator('#agd-aluno')).toBeFocused();
+    await expect(page.locator('#agd-aluno')).toHaveAccessibleName('Aluno');
+    await expect(page.locator('#agd-erro')).toHaveAttribute('role', 'alert');
+    expect(await page.locator('#agd-erro').evaluate(el => getComputedStyle(el).display)).not.toBe('none');
+    await page.locator('#agd-aluno').selectOption({ index: 1 });
+    await expect(page.locator('#agd-previa ul')).toContainText('Entra:');
+    expect(await semNome(page, '#dlg-agendar')).toEqual([]);
+    await page.keyboard.press('Escape');
+    await expect(dialogo).toBeHidden();
+    await expect(page.locator('#historico')).toBeVisible();
+    await expect(page.locator('#btn-agendar')).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#historico')).toBeHidden();
+    await expect(page.locator('#log-cnt')).toHaveText('0');
+  });
+
+  // O filtro das habilitações (INVAs) é um painel da própria página: o Esc com o foco nele fecha só ele (ouvido na
+  // captura, ele para ali), e o Histórico continua aberto; o próximo fecha o Histórico. As marcas ficam
+  test('o Esc com o filtro das habilitações aberto sobre o Histórico fecha só o filtro; o seguinte, o Histórico', async ({ page }) => {
+    await abrir(page, { estado: cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000)] }) });
+    await irPara(page, 'ins');
+    await abrirHistorico(page);
+    const botao = page.locator('#flt-ins-hab'), painel = page.locator('#flt-ins-hab-painel');
+    await botao.focus();
+    await page.keyboard.press('Enter');
+    await expect(painel).toBeVisible();
+    const noturno = painel.locator('input[data-valor="noturno"]');
+    await noturno.focus();
+    await page.keyboard.press('Space');
+    await expect(noturno).toBeChecked();
+    await page.keyboard.press('Escape');
+    await expect(painel).toBeHidden();
+    await expect(botao).toBeFocused();
+    await expect(page.locator('#historico')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#historico')).toBeHidden();
+    await expect(botao).toHaveText('Habilitações: Noturno');
   });
 });

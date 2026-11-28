@@ -3,8 +3,7 @@
 // secretaria veem (no modo local, fora do perfil Gestor); só operadores e administradores alteram. A lista lida traz só
 // o CANAC e o nome completo de cada um (as linhas e a busca); os outros campos chegam com a leitura da pessoa escolhida.
 // Cada tela mostra a parte dela (o CANAC) e a refaz quando eles mudam (aoMudarDadosPessoais); quem os edita é a seção do
-// detalhe (js/views/editor-de-dados-pessoais.js: Alunos) e o painel (js/views/painel-de-dados.js: Instrutores, até virar
-// lista e detalhe)
+// detalhe (js/views/editor-de-dados-pessoais.js: Alunos e INVAs)
 import { ApiClient } from '../storage.js';
 import { veDadosPessoais, editaDadosPessoais } from '../perfis.js';
 import { juntarAListaLida } from '../dados-pessoais.js';
@@ -22,7 +21,7 @@ export const nomeCompletoDe = (tipo, id) => (DADOS[tipo][id] && DADOS[tipo][id].
 // Os dados guardados de uma pessoa (undefined: nenhum)
 export const dadosDe = (tipo, id) => DADOS[tipo][id];
 
-// Quem mostra os dados (as colunas CANAC de Instrutores e de Alunos) e os refaz quando eles mudam
+// Quem mostra os dados (o CANAC das linhas de INVAs e de Alunos) e os refaz quando eles mudam
 const aoMudar = [];
 export function aoMudarDadosPessoais(fazer) {
   aoMudar.push(fazer);

@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
   TELAS, ESTAGIOS, podeVer, telaDeAbertura, dataDeAbertura, destinoDoEndereco, enderecoDoDestino, linhaAbertaPorPadrao,
-  classeDaLargura, trilhoFixo, lerPreferencias
+  lerPreferencias
 } from '../../js/telas.js';
 
 const PERFIS = ['operador', 'administrador', 'gestor', 'secretaria'];
@@ -17,7 +17,7 @@ describe('Quem vê cada tela', () => {
 
   it('o rótulo de cada tela é o nome dela hoje', () => {
     assert.deepEqual(Object.fromEntries(Object.entries(TELAS).map(([id, t]) => [id, t.rotulo])), {
-      age: 'Pedidos', dem: 'Demanda', esc: 'Escala', apr: 'Aprovar', alu: 'Alunos', ins: 'Instrutores', rec: 'Recursos',
+      age: 'Pedidos', dem: 'Demanda', esc: 'Escala', apr: 'Aprovar', alu: 'Alunos', ins: 'INVAs', rec: 'Recursos',
       cur: 'Cursos', rod: 'Rodízio', bi: 'BI', manual: 'Manual', conta: 'Minha conta'
     });
   });
@@ -94,37 +94,35 @@ describe('A data da abertura', () => {
   });
 });
 
-describe('O trilho ao lado', () => {
-  it('a classe da largura da janela', () => {
-    assert.equal(classeDaLargura(1023), 'estreita');
-    assert.equal(classeDaLargura(1024), 'media');
-    assert.equal(classeDaLargura(1279), 'media');
-    assert.equal(classeDaLargura(1280), 'larga');
+// linha-fix-escala-sem-caixas (Pedro, 28/11): o trilho está sempre à vista; o calendário e os avisos da data recolhem, cada
+// um, e o que a pessoa escolheu fica guardado (acpm_trilho). Sem "Fixar ao lado" e sem as classes da largura
+describe('O que o trilho guarda', () => {
+  it('lerPreferencias: o calendário e os avisos, abertos ou recolhidos', () => {
+    assert.deepEqual(lerPreferencias('{"calendario":"recolhido","avisos":"recolhidos"}'), { calendario: 'recolhido', avisos: 'recolhidos' });
+    assert.deepEqual(lerPreferencias('{"calendario":"aberto"}'), { calendario: 'aberto' });
+    assert.deepEqual(lerPreferencias('{"avisos":"abertos"}'), { avisos: 'abertos' });
   });
-  it('por padrão na larga; o guardado vale por classe; nunca na estreita', () => {
-    assert.equal(trilhoFixo('larga', {}), true);
-    assert.equal(trilhoFixo('media', {}), false);
-    assert.equal(trilhoFixo('estreita', { estreita: 'fixo' }), false);
-    assert.equal(trilhoFixo('larga', { larga: 'solto' }), false);
-    assert.equal(trilhoFixo('media', { media: 'fixo' }), true);
-  });
-  it('lerPreferencias: o JSON guardado, ou nada', () => {
-    assert.deepEqual(lerPreferencias('{"media":"fixo","larga":"solto"}'), { media: 'fixo', larga: 'solto' });
-    for (const texto of [null, '', 'xyz', '[1,2]', '"fixo"', '{"media":"meio"}']) assert.deepEqual(lerPreferencias(texto), {}, String(texto));
+  it('lerPreferencias: o guardado de antes ("Fixar ao lado", por largura) e o que não se entende valem nada', () => {
+    for (const texto of [null, '', 'xyz', '[1,2]', '"recolhido"', '{"media":"fixo","larga":"solto"}', '{"calendario":"fixo"}', '{"avisos":"recolhido"}', '{"calendario":"recolhido","avisos":1}']) {
+      assert.deepEqual(lerPreferencias(texto), {}, String(texto));
+    }
   });
 });
 
 describe('O trilho em index.html', () => {
   const html = readFileSync(new URL('../../index.html', import.meta.url), 'utf8');
 
-  it('a região do trilho, entre a linha e a tela, com o botão da data que a abre', () => {
-    assert.match(html, /<aside class="trilho" id="trilho" aria-label="Data e avisos" data-regiao="trilho" hidden>/);
+  it('a região do trilho, entre a linha e a tela, sempre à vista; o topo sem a data', () => {
+    assert.match(html, /<aside class="trilho" id="trilho" aria-label="Data e avisos" data-regiao="trilho">/);
     assert.ok(html.indexOf('id="linha"') < html.indexOf('id="trilho"') && html.indexOf('id="trilho"') < html.indexOf('<main id="conteudo"'));
-    assert.match(html, /id="btn-data" aria-controls="trilho"/);
+    const topo = html.slice(html.indexOf('<header class="topo"'), html.indexOf('</header>'));
+    assert.doesNotMatch(topo, /btn-data|topo-data|dt-rotulo|i-calendario/);
+    assert.doesNotMatch(html, /id="btn-data"|id="btn-fixar-trilho"|id="btn-fechar-trilho"/);
   });
 
-  it('o ícone do trilho (i-trilho) está no sprite e no botão "Fixar ao lado"', () => {
-    assert.match(html, /<symbol id="i-trilho"/);
-    assert.match(html, /id="btn-fixar-trilho"[^>]*>.*?#i-trilho/);
+  it('os dois botões que recolhem: o do calendário (no alto do trilho, com a data) e o dos avisos da data', () => {
+    assert.match(html, /id="btn-recolher-trilho" aria-expanded="true" aria-controls="trilho-corpo"/);
+    assert.match(html, /id="btn-avisos" aria-expanded="true" aria-controls="avisos-corpo"/);
+    assert.ok(html.indexOf('id="trilho-rotulo"') < html.indexOf('id="btn-recolher-trilho"') && html.indexOf('id="btn-recolher-trilho"') < html.indexOf('id="trilho-corpo"'));
   });
 });

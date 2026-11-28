@@ -117,7 +117,22 @@ ul.lista > .lista-vazia:first-child { border-top: 0; }
 
 /* O detalhe: largura de leitura limitada, à esquerda do painel */
 .det { max-width: 760px; container-type: inline-size; }
-.det-vazio { margin: 24px 0; }
+/* Nada escolhido (linha-fix-escala-sem-caixas): no meio do painel, o ícone da tela num círculo, o texto maior e a dica de quem
+   cria. O bloco que o tem ocupa a altura do painel (o detalhe tem a altura da moldura a partir de 800 px) */
+.md-detalhe > :has(> .det-vazio:not([hidden])) { display: flex; flex-direction: column; min-height: 100%; }
+.det-vazio {
+  flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
+  margin: 0; padding: 32px 16px; text-align: center;
+}
+.det-vazio-icone {
+  width: 32px; height: 32px; padding: 18px; box-sizing: content-box; border-radius: 50%; margin-bottom: 6px;
+  background: var(--neutro-bg); color: var(--mu); stroke-width: 1.6; animation: det-vazio-entrar .25s ease-out;
+}
+.det-vazio[hidden] { display: none; }
+@keyframes det-vazio-entrar { from { opacity: 0; transform: translateY(4px); } }
+@media (prefers-reduced-motion: reduce) { .det-vazio-icone { animation: none; } }
+.det-vazio-texto { margin: 0; max-width: 32ch; font: 600 20px/1.25 'Barlow Semi Condensed', sans-serif; color: var(--ink); }
+.det-vazio-dica { margin: 0; font-size: 14.5px; color: var(--mu); }
 .det-cab { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: 12px; }
 .det-cab .md-voltar { flex: 1 0 100%; justify-content: flex-start; padding-left: 0; }
 .det-nome { flex: 1; min-width: 0; }
