@@ -4,7 +4,7 @@
 // da agenda é mostrado, não editado (N14); o tipo e o horário contra as limitações do aluno avisam e pedem a confirmação; o
 // INVA de "Não escalar com" fica na lista, desligado
 import { test, comPrioridade, expect, abrir, abrirEscala, aprovar, lerEscala, irPara, abrirHistorico, entradasDoHistorico, larguraDaPagina, AMANHA,
-  editarPelaLista, editarPeloMapa, editorDoVoo, botaoEditar, avisosDaData, vigiarErros } from './fixtures.js';
+  editarPelaLista, editarPeloMapa, editorDoVoo, botaoEditar, avisosDaData, vigiarErros, perguntaDoRefazer, refazer, naoRefazer } from './fixtures.js';
 import {
   gavetaDasRestricoes, restricoesDoPedido, campoDasRestricoes, avisoDasRestricoes, confirmarRestricao, desistirDaRestricao, abrirRestricoes,
   restricoesPeloEditor, restricoesPeloTrilho, botaoDasRestricoesNoTrilho, fecharRestricoes
@@ -39,6 +39,9 @@ test.describe('A gaveta das restrições', () => {
     await expect(campoDasRestricoes(page, 'p2')).toHaveCount(0);
     await expect(campoDasRestricoes(page, 'eq')).toBeFocused();
     await campoDasRestricoes(page, 'eq').selectOption('C172');
+    // Pela Escala, na escala não aprovada: a pergunta antes (F1g, R6), com o que muda
+    await expect(page.locator('#refazer-texto')).toContainText('(Aluno 1003: tipo de recurso C152 → C172)');
+    await refazer(page);
     // O motor encaixa o pedido às 06:30, no C172: o item do trilho sai, a gaveta continua, agora com o voo
     await expect(avisosDaData(page, 'Aluno 1003')).toHaveCount(0);
     expect(linhaDe(await lerEscala(page), 'Aluno 1003')).toContain('06:30–07:30');
@@ -62,6 +65,8 @@ test.describe('A gaveta das restrições', () => {
     await expect(campoDasRestricoes(page, 'p1')).toHaveValue('500');
     await campoDasRestricoes(page, 'p1').focus();
     await campoDasRestricoes(page, 'p1').selectOption('760');
+    await expect(page.locator('#refazer-texto')).toContainText('(Aluno 1001: 1ª preferência 08:20 → 12:40)');
+    await refazer(page);
     await expect.poll(async () => (await pedidoGuardado(page, 1001)).p1).toBe(760);
     // O pedido sem horário exato muda pelas preferências: o motor o põe às 12:40
     expect(linhaDe(await lerEscala(page), 'Aluno 1001')).toContain('12:40–13:40');
@@ -78,7 +83,9 @@ test.describe('A gaveta das restrições', () => {
     const antes = await lerEscala(page);
     await restricoesPeloTrilho(page, 'Aluno 1003', 1003);
     await campoDasRestricoes(page, 'eq').selectOption('C172');
+    // Na escala aprovada, sem pergunta: o motor roda em volta dos voos aprovados (R5)
     await expect(avisosDaData(page, 'Aluno 1003')).toHaveCount(0);
+    await expect(perguntaDoRefazer(page)).toBeHidden();
     const depois = await lerEscala(page);
     expect(linhaDe(depois, 'Aluno 1000')).toBe(linhaDe(antes, 'Aluno 1000'));
     expect(linhaDe(depois, 'Aluno 1001')).toBe(linhaDe(antes, 'Aluno 1001'));
@@ -90,9 +97,9 @@ test.describe('A gaveta das restrições', () => {
     estado.stu[1].eq = 'C172';
     estado.stu[1].limitacoes = { recursos: ['C172'], horarios: [{ de: 480, ate: 1080 }] };
     await abrir(page, { estado });
-    await abrirEscala(page);
-    await editarPelaLista(page, '1001_0_1');
-    await restricoesPeloEditor(page, 1001);
+    // Pela linha da Demanda (até o G2), sem a pergunta da Escala: o aviso e a confirmação na gaveta
+    await irPara(page, 'dem');
+    await abrirRestricoes(page, 1001);
     await expect(campoDasRestricoes(page, 'eq').locator('option')).toHaveText(['C152 (o aluno só voa no C172)', 'C172', 'PA-34 (o aluno só voa no C172)']);
     await expect(campoDasRestricoes(page, 'p1').locator('option[value="390"]')).toHaveText('06:30 (o aluno só voa das 08:00 às 18:00)');
     const guardado = await diaGuardado(page);
@@ -113,7 +120,45 @@ test.describe('A gaveta das restrições', () => {
     await expect(confirmarRestricao(page)).toHaveText('Usar C152 mesmo assim');
     await confirmarRestricao(page).click();
     await expect.poll(async () => (await pedidoGuardado(page, 1001)).eq).toBe('C152');
+    await expect(perguntaDoRefazer(page)).toBeHidden();
+    await expect(gavetaDasRestricoes(page)).toContainText('Fora da escala: Rejeitado: o aluno só voa no C172 (o pedido está no C152).');
+    await abrirEscala(page);
     await expect(avisosDaData(page, 'o aluno só voa no C172 (o pedido está no C152)')).toHaveCount(1);
+  });
+
+  test('pela Escala, na escala não aprovada: uma pergunta antes de refazer, com o aviso das limitações nela; "Cancelar" não muda nada', async ({ page }) => {
+    const estado = dia();
+    estado.stu[1].eq = 'C172';
+    estado.stu[1].limitacoes = { recursos: ['C172'], horarios: [{ de: 480, ate: 1080 }] };
+    await abrir(page, { estado });
+    await abrirEscala(page);
+    const antes = await lerEscala(page);
+    const guardado = await diaGuardado(page);
+    await editarPelaLista(page, '1001_0_1');
+    await restricoesPeloEditor(page, 1001);
+    // O horário fora das limitações: o aviso vai na pergunta (uma pergunta, não duas); "Cancelar" volta o valor
+    await campoDasRestricoes(page, 'p1').selectOption('390');
+    await expect(perguntaDoRefazer(page)).toBeVisible();
+    await expect(page.locator('#refazer-texto')).toContainText('(Aluno 1001: 1ª preferência 08:20 → 06:30)');
+    await expect(page.locator('#refazer-avisos')).toHaveText('06:30: o aluno só voa das 08:00 às 18:00. Assim, o app não escala o pedido nesse horário; só um voo posto à mão, no editor do voo, voa assim.');
+    await expect(confirmarRestricao(page)).toHaveCount(0);
+    await naoRefazer(page);
+    await expect(campoDasRestricoes(page, 'p1')).toHaveValue('500');
+    expect(await diaGuardado(page)).toBe(guardado);
+    expect(await lerEscala(page)).toEqual(antes);
+    // Um campo sem aviso também pergunta; o Esc da pergunta desiste
+    await campoDasRestricoes(page, 'nb').fill('1.5');
+    await campoDasRestricoes(page, 'nb').press('Enter');
+    await expect(page.locator('#refazer-texto')).toContainText('(Aluno 1001: duração 1 h → 01h30 (1,5 h))');
+    await page.keyboard.press('Escape');
+    await expect(perguntaDoRefazer(page)).toBeHidden();
+    await expect(campoDasRestricoes(page, 'nb')).toHaveValue('1');
+    expect(await diaGuardado(page)).toBe(guardado);
+    // O tipo que ele não voa: "Salvar e refazer" grava, e o motor recusa o pedido, com o motivo
+    await campoDasRestricoes(page, 'eq').selectOption('C152');
+    await expect(page.locator('#refazer-avisos')).toContainText('C152: o aluno só voa no C172.');
+    await refazer(page);
+    await expect.poll(async () => (await pedidoGuardado(page, 1001)).eq).toBe('C152');
     await expect(gavetaDasRestricoes(page)).toContainText('Fora da escala: Rejeitado: o aluno só voa no C172 (o pedido está no C152).');
   });
 
@@ -129,6 +174,8 @@ test.describe('A gaveta das restrições', () => {
     await expect(opcoes).toHaveText(['Automático', 'Instrutor 01', 'Instrutor 02 (em Não escalar com)', 'Instrutor 03 (fora nesta data)']);
     await expect(opcoes.nth(2)).toBeDisabled();
     await campoDasRestricoes(page, 'insId').selectOption('1');
+    await expect(page.locator('#refazer-texto')).toContainText('(Aluno 1001: instrutor Automático → Instrutor 01)');
+    await refazer(page);
     await expect.poll(async () => (await pedidoGuardado(page, 1001)).insId).toBe(1);
     await expect(campoDasRestricoes(page, 'insId')).toHaveClass(/\bescolhido\b/);
   });
@@ -177,6 +224,8 @@ test.describe('A Demanda sem as colunas das restrições', () => {
     await expect(page.locator('#painel-restricoes label .dica-btn')).toHaveCount(0);
     await campoDasRestricoes(page, 'pr').selectOption('1');
     await expect.poll(async () => (await pedidoGuardado(page, 1000)).pr).toBe(5);
+    // Pela Demanda (até o G2), como antes: grava sem a pergunta da Escala
+    await expect(perguntaDoRefazer(page)).toBeHidden();
     await campoDasRestricoes(page, 'nb').fill('1.5');
     await campoDasRestricoes(page, 'nb').press('Enter');
     await expect.poll(async () => (await pedidoGuardado(page, 1000)).nb).toBe(1.5);
