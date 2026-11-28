@@ -1,9 +1,10 @@
-// O trilho (F1b): o calendário da data aberta no lugar das setas e do campo da data. Ao lado da tela a partir de 1280 px
-// (por padrão), ou um painel aberto pelo botão da data; os dias (hoje, a data aberta, domingo, os pedidos de cada um), as
-// teclas, "Fixar ao lado", o celular e a gaveta do Histórico à esquerda dele. Os padrões do produto, de propósito
+// O trilho (F1b): o calendário da data aberta no lugar das setas e do campo da data, sempre à vista (linha-fix-escala-sem-
+// caixas: o topo não tem mais a data): ao lado da tela a partir de 1024 px, em cima dela abaixo disso; o calendário e os
+// avisos da data recolhem, cada um, e fica guardado. Os dias (hoje, a data aberta, domingo, os pedidos de cada um), as
+// teclas, o celular e a gaveta do Histórico à esquerda dele. Os padrões do produto, de propósito
 import {
-  test, expect, abrir, abrirComExemplo, entrar, preencherLogin, irPara, abrirHistorico, AMANHA, URL_APP, REGIOES, dataAberta, botaoDaData,
-  rotuloDaData, trilho, diaDoCalendario, diasDoCalendario, contagemDoDia, paradasDoCalendario, escolherNoCalendario, mudarData, alvosPequenos,
+  test, expect, abrir, abrirComExemplo, entrar, preencherLogin, irPara, abrirHistorico, AMANHA, URL_APP, REGIOES, dataAberta, botaoDoTrilho,
+  corpoDoTrilho, botaoDosAvisos, corpoDosAvisos, contagemNosAvisos, relativoDaData, rotuloDaData, trilho, diaDoCalendario, diasDoCalendario, contagemDoDia, paradasDoCalendario, escolherNoCalendario, mudarData, alvosPequenos,
   larguraDaPagina, semNome, prepararContexto, vigiarErros, avisosDaData, contagemDosAvisos, abrirEscala, aprovar, alternarDisponivel, botaoDaAba, abrirMenuDaConta
 } from './fixtures.js';
 import { instalarSupabaseFalso, documentosAtuais, CONTAS } from './supabase-falso.js';
@@ -44,9 +45,10 @@ const leituraDoDia = dia => url => url.pathname.endsWith('/rest/v1/dias') && url
 test.describe('O trilho ao lado', () => {
   test('a 1280 px, o calendário fica ao lado da tela: hoje, a data aberta e o domingo', async ({ page }) => {
     await abrirComExemplo(page);
-    await expect(page.locator('body')).toHaveAttribute('data-trilho', 'fixo');
+    await expect(page.locator('body')).toHaveAttribute('data-trilho', 'aberto');
     await expect(trilho(page)).toBeVisible();
-    await expect(botaoDaData(page)).not.toHaveAttribute('aria-expanded');
+    await expect(botaoDoTrilho(page)).toHaveAttribute('aria-expanded', 'true');
+    await expect(botaoDoTrilho(page)).toHaveAccessibleName('Recolher o calendário');
     const [tela, lado] = await Promise.all([page.locator('main#conteudo').boundingBox(), trilho(page).boundingBox()]);
     expect(lado.x).toBeGreaterThan(tela.x + tela.width);
     await expect(page.locator('#cal-mes')).toHaveText('Novembro de 2026');
@@ -97,7 +99,7 @@ test.describe('O trilho ao lado', () => {
 
   test('as teclas andam pela grade, e a página do mês segue o dia', async ({ page }) => {
     await abrirComExemplo(page);
-    await botaoDaData(page).click();
+    await paradasDoCalendario(page).focus();
     await expect(diaDoCalendario(page, AMANHA)).toBeFocused();
     await expect(paradasDoCalendario(page)).toHaveCount(1);
     await page.keyboard.press('ArrowRight');
@@ -114,14 +116,13 @@ test.describe('O trilho ao lado', () => {
     // O domingo não abre, também pelo teclado
     await page.keyboard.press('Enter');
     await expect(page.locator('#toast-box')).toContainText('não opera aos domingos');
-    await page.keyboard.press('Escape');
-    await expect(botaoDaData(page)).toBeFocused();
+    await expect(diaDoCalendario(page, '2026-12-13')).toBeFocused();
     await expect(trilho(page)).toBeVisible();
   });
 
   test('a seta para um dia de outro mês já à vista não troca o mês; PageDown e PageUp vão sempre ao mês do dia', async ({ page }) => {
     await abrir(page, { url: './?data=2026-11-30' });
-    await botaoDaData(page).click();
+    await paradasDoCalendario(page).focus();
     await page.keyboard.press('ArrowRight');
     await expect(diaDoCalendario(page, '2026-12-01')).toBeFocused();
     await expect(page.locator('#cal-mes')).toHaveText('Novembro de 2026');
@@ -165,7 +166,7 @@ test.describe('O trilho ao lado', () => {
   // Alt e ← (ou Cmd e ←) é o Voltar do navegador, e Ctrl e Home o alto da página: a grade só fica com as teclas sozinhas
   test('as teclas com Alt, Ctrl ou Cmd são do navegador', async ({ page }) => {
     await abrirComExemplo(page);
-    await botaoDaData(page).click();
+    await paradasDoCalendario(page).focus();
     await expect(diaDoCalendario(page, AMANHA)).toBeFocused();
     const tecla = (key, com) => diaDoCalendario(page, AMANHA).evaluate((dia, [k, c]) => !dia.dispatchEvent(new KeyboardEvent('keydown', { key: k, [c]: true, bubbles: true, cancelable: true })), [key, com]);
     for (const [key, com] of [['ArrowLeft', 'altKey'], ['ArrowLeft', 'metaKey'], ['Home', 'ctrlKey']]) {
@@ -198,28 +199,29 @@ test.describe('O trilho ao lado', () => {
   });
 
   // A página aberta passa da meia-noite: as duas partes que dizem a data são refeitas juntas
-  test('depois da meia-noite, o topo e o trilho dizem o mesmo dia', async ({ page, context }) => {
+  test('depois da meia-noite, o alto do trilho e a linha da data dizem o mesmo dia', async ({ page, context }) => {
     await abrirComExemplo(page);
     await expect(page.locator('#trilho-data')).toHaveText('Amanhã · quarta-feira · 11 de novembro');
     await context.clock.setFixedTime(new Date('2026-11-11T08:00:00-03:00'));
     await page.locator('#cal-mes-prox').click();
     await expect(page.locator('#trilho-data')).toHaveText('Hoje · quarta-feira · 11 de novembro');
-    await expect(botaoDaData(page)).toContainText('hoje');
+    await expect(relativoDaData(page)).toHaveText('hoje');
   });
 
-  test('a largura muda de classe com o foco no trilho: o foco vai para o botão da data', async ({ page }) => {
+  test('a largura muda com o foco no trilho: o trilho continua (ao lado a partir de 1024 px, em cima abaixo), e o foco fica no dia', async ({ page }) => {
     await page.setViewportSize({ width: 1400, height: 800 });
     await abrirComExemplo(page);
     await diaDoCalendario(page, '2026-11-12').focus();
-    await page.setViewportSize({ width: 1200, height: 800 });
-    await expect(trilho(page)).toBeHidden();
-    await expect(botaoDaData(page)).toBeFocused();
-    // Com o foco na tela, ele fica
-    await page.setViewportSize({ width: 1400, height: 800 });
-    await page.locator('#flt-esc-q').focus();
-    await page.setViewportSize({ width: 1200, height: 800 });
-    await expect(trilho(page)).toBeHidden();
-    await expect(page.locator('#flt-esc-q')).toBeFocused();
+    const lado = async () => {
+      const [tela, t] = await Promise.all([page.locator('main#conteudo').boundingBox(), trilho(page).boundingBox()]);
+      return t.x >= tela.x + tela.width ? 'ao lado' : t.y + t.height <= tela.y ? 'em cima' : 'outro';
+    };
+    for (const [largura, onde] of [[1400, 'ao lado'], [1024, 'ao lado'], [1023, 'em cima'], [700, 'em cima'], [1100, 'ao lado']]) {
+      await page.setViewportSize({ width: largura, height: 800 });
+      await expect(trilho(page), `${largura} px`).toBeVisible();
+      expect(await lado(), `${largura} px`).toBe(onde);
+      await expect(diaDoCalendario(page, '2026-11-12')).toBeFocused();
+    }
   });
 
   test('a gaveta do Histórico abre à esquerda do trilho, e a data muda com ela aberta', async ({ page }) => {
@@ -286,7 +288,7 @@ test.describe('A data abrindo', () => {
     await busca.focus();
     liberar();
     await expect(dataAberta(page)).toHaveAttribute('data-data', '2026-11-12');
-    await expect(trilho(page)).toBeHidden();
+    await expect(trilho(page)).toBeVisible();
     await expect(busca).toBeFocused();
   });
 
@@ -332,10 +334,7 @@ test.describe('A data abrindo', () => {
       await expect(dataAberta(page)).toHaveAttribute('data-data', '2026-11-12');
       await expect(page.locator('#anuncio')).toHaveText('Data aberta: quinta-feira, 12/11');
       await expect(dia).not.toHaveClass(/\babrindo\b/);
-      if (largura === 1100) {
-        await expect(trilho(page)).toBeHidden();
-        await expect(botaoDaData(page)).toBeFocused();
-      }
+      await expect(dia).toBeFocused();
     });
   }
 
@@ -424,58 +423,103 @@ test.describe('A data abrindo', () => {
   });
 });
 
-test.describe('O trilho solto', () => {
-  test.use({ viewport: { width: 1100, height: 800 } });
+test.describe('Recolher o calendário e os avisos', () => {
+  test.use({ viewport: { width: 1440, height: 900 } });
 
-  test('o botão da data abre o painel com o foco no calendário; a data aberta fecha o painel e o foco volta ao botão', async ({ page }) => {
-    await abrirComExemplo(page);
-    await expect(page.locator('body')).toHaveAttribute('data-trilho', 'fechado');
-    await expect(trilho(page)).toBeHidden();
-    await expect(botaoDaData(page)).toHaveAttribute('aria-expanded', 'false');
-    await botaoDaData(page).click();
-    await expect(trilho(page)).toBeVisible();
-    await expect(botaoDaData(page)).toHaveAttribute('aria-expanded', 'true');
-    await expect(diaDoCalendario(page, AMANHA)).toBeFocused();
-    await diaDoCalendario(page, '2026-11-13').click();
-    await expect(dataAberta(page)).toHaveAttribute('data-data', '2026-11-13');
-    await expect(trilho(page)).toBeHidden();
-    await expect(botaoDaData(page)).toBeFocused();
-    // Nada fica guardado: abrir para olhar não fixa
-    expect(await page.evaluate(() => localStorage.getItem('acpm_trilho'))).toBe(null);
+  // linha-fix-escala-sem-caixas (Pedro, 28/11): ao lado da tela, o calendário recolhe numa faixa estreita, com a data
+  // aberta e o número de avisos; abre de novo no mesmo botão. Fica guardado neste navegador
+  test('ao lado, o calendário recolhe numa faixa com a data e o número de avisos, e abre de novo; fica guardado', async ({ page }) => {
+    await abrir(page, { estado: cenario({ ins: [instrutor(1, 1)], stu: [aluno(1000, { mis: 'Multimotor', eq: 'PA-34' })] }) });
+    const aberta = await page.locator('main#conteudo').boundingBox();
+    await botaoDoTrilho(page).click();
+    await expect(page.locator('body')).toHaveAttribute('data-trilho', 'recolhido');
+    await expect(botaoDoTrilho(page)).toHaveAttribute('aria-expanded', 'false');
+    await expect(botaoDoTrilho(page)).toHaveAccessibleName('Abrir o calendário');
+    await expect(botaoDoTrilho(page)).toBeFocused();
+    await expect(corpoDoTrilho(page)).toBeHidden();
+    const faixa = await trilho(page).boundingBox();
+    const tela = await page.locator('main#conteudo').boundingBox();
+    expect(faixa.width).toBeLessThanOrEqual(80);
+    expect(faixa.x).toBeGreaterThan(tela.x + tela.width);
+    expect(tela.width).toBeGreaterThan(aberta.width + 200);
+    // A data (o dia da semana abreviado, dd/mm), o "amanhã" e o número de avisos, sem cortar
+    await expect(rotuloDaData(page)).toHaveText(/^qua\.\s*11\/11$/, { useInnerText: true });
+    await expect(relativoDaData(page)).toHaveText('amanhã');
+    await expect(contagemDosAvisos(page)).toBeVisible();
+    await expect(contagemDosAvisos(page)).toHaveText('1, 1 aviso nesta data');
+    for (const alvo of [rotuloDaData(page), relativoDaData(page), contagemDosAvisos(page), botaoDoTrilho(page)]) {
+      const caixa = await alvo.boundingBox();
+      expect(caixa.x).toBeGreaterThanOrEqual(faixa.x);
+      expect(caixa.x + caixa.width).toBeLessThanOrEqual(faixa.x + faixa.width + 0.5);
+    }
+    expect(await semNome(page, REGIOES.casca)).toEqual([]);
+    expect(await page.evaluate(() => localStorage.getItem('acpm_trilho'))).toBe('{"calendario":"recolhido"}');
+    await page.reload();
+    await expect(page.locator('body')).toHaveAttribute('data-pronto', '1');
+    await expect(page.locator('body')).toHaveAttribute('data-trilho', 'recolhido');
+    await expect(corpoDoTrilho(page)).toBeHidden();
+    await botaoDoTrilho(page).click();
+    await expect(page.locator('body')).toHaveAttribute('data-trilho', 'aberto');
+    await expect(corpoDoTrilho(page)).toBeVisible();
+    await expect(diaDoCalendario(page, AMANHA)).toBeVisible();
+    expect(await page.evaluate(() => localStorage.getItem('acpm_trilho'))).toBe('{"calendario":"aberto"}');
   });
 
-  test('o painel fecha no Esc (com o foco nele ou no botão da data), no ✕ e no próprio botão; ele abre no mês da data', async ({ page }) => {
-    await abrirComExemplo(page);
-    await botaoDaData(page).click();
-    await page.keyboard.press('Escape');
-    await expect(trilho(page)).toBeHidden();
-    await expect(botaoDaData(page)).toBeFocused();
-    await botaoDaData(page).click();
-    await botaoDaData(page).focus();
-    await page.keyboard.press('Escape');
-    await expect(trilho(page)).toBeHidden();
-    await botaoDaData(page).click();
-    await page.locator('#cal-mes-prox').click();
-    await page.locator('#cal-mes-prox').click();
-    await expect(page.locator('#cal-mes')).toHaveText('Janeiro de 2027');
-    await botaoDaData(page).click();
-    await expect(trilho(page)).toBeHidden();
-    await expect(botaoDaData(page)).toHaveAttribute('aria-expanded', 'false');
-    await botaoDaData(page).click();
-    await expect(page.locator('#cal-mes')).toHaveText('Novembro de 2026');
-    await page.locator('#btn-fechar-trilho').click();
-    await expect(trilho(page)).toBeHidden();
-    await expect(botaoDaData(page)).toBeFocused();
-    // Com o foco na tela, o Esc é da tela
-    await botaoDaData(page).click();
-    await page.locator('#flt-esc-q').focus();
-    await page.keyboard.press('Escape');
-    await expect(trilho(page)).toBeVisible();
+  test('os avisos da data recolhem sozinhos: o número fica no cabeçalho deles; fica guardado', async ({ page }) => {
+    await abrir(page, { estado: cenario({ ins: [instrutor(1, 1)], stu: [aluno(1000, { mis: 'Multimotor', eq: 'PA-34' })] }) });
+    await expect(botaoDosAvisos(page)).toHaveAttribute('aria-expanded', 'true');
+    await expect(botaoDosAvisos(page)).toHaveAccessibleName(/^Avisos ?, 1 aviso nesta data$/);
+    await expect(corpoDosAvisos(page)).toBeVisible();
+    await botaoDosAvisos(page).click();
+    await expect(botaoDosAvisos(page)).toHaveAttribute('aria-expanded', 'false');
+    await expect(corpoDosAvisos(page)).toBeHidden();
+    await expect(contagemNosAvisos(page)).toBeVisible();
+    await expect(diaDoCalendario(page, AMANHA)).toBeVisible();
+    expect(await page.evaluate(() => localStorage.getItem('acpm_trilho'))).toBe('{"avisos":"recolhidos"}');
+    // O calendário recolhido e aberto de novo: os avisos continuam recolhidos
+    await botaoDoTrilho(page).click();
+    await botaoDoTrilho(page).click();
+    await expect(corpoDosAvisos(page)).toBeHidden();
+    await page.reload();
+    await expect(page.locator('body')).toHaveAttribute('data-pronto', '1');
+    await expect(corpoDosAvisos(page)).toBeHidden();
+    await botaoDosAvisos(page).click();
+    await expect(avisosDaData(page, 'Rejeitado')).toBeVisible();
+    expect(await page.evaluate(() => JSON.parse(localStorage.getItem('acpm_trilho')))).toEqual({ avisos: 'abertos', calendario: 'aberto' });
   });
+
+  test('o guardado que não se lê e o armazenamento que recusa: o trilho abre aberto e recolhe até recarregar', async ({ page }) => {
+    await page.addInitScript(() => {
+      const ler = Storage.prototype.getItem, gravar = Storage.prototype.setItem;
+      Storage.prototype.getItem = function (k) { return k === 'acpm_trilho' ? '{"media":"fixo"' : ler.call(this, k); };
+      Storage.prototype.setItem = function (k, v) { if (k === 'acpm_trilho') throw new Error('bloqueado'); return gravar.call(this, k, v); };
+    });
+    const erros = [];
+    page.on('pageerror', e => erros.push(e.message));
+    await abrirComExemplo(page);
+    await expect(trilho(page)).toBeVisible();
+    await expect(corpoDoTrilho(page)).toBeVisible();
+    await botaoDoTrilho(page).click();
+    await expect(corpoDoTrilho(page)).toBeHidden();
+    await botaoDosAvisos(page).evaluate(b => b.click());
+    await expect(botaoDosAvisos(page)).toHaveAttribute('aria-expanded', 'false');
+    expect(erros).toEqual([]);
+  });
+
+  test('com o movimento reduzido, a seta do botão não anima', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await abrirComExemplo(page);
+    for (const botao of [botaoDoTrilho(page), botaoDosAvisos(page)]) {
+      expect(await botao.locator('svg').evaluate(s => getComputedStyle(s).transitionDuration)).toMatch(/^0s/);
+    }
+  });
+});
+
+test.describe('O trilho em cima da tela', () => {
+  test.use({ viewport: { width: 1000, height: 800 } });
 
   test('o calendário tem no máximo 320 px, à esquerda, com a linha da data ao lado; no celular, embaixo', async ({ page }) => {
     await abrirComExemplo(page);
-    await botaoDaData(page).click();
     const medidas = () => page.evaluate(() => {
       const r = seletor => document.querySelector(seletor).getBoundingClientRect().toJSON();
       return { cal: r('#cal'), lista: r('.trilho-avisos') };
@@ -485,7 +529,6 @@ test.describe('O trilho solto', () => {
     expect(largo.lista.left).toBeGreaterThanOrEqual(largo.cal.right);
     expect(largo.lista.top).toBeLessThan(largo.cal.top);
     await page.setViewportSize({ width: 720, height: 800 });
-    await botaoDaData(page).click();
     expect((await medidas()).lista.left).toBeGreaterThanOrEqual((await medidas()).cal.right);
     await page.setViewportSize({ width: 640, height: 800 });
     const estreito = await medidas();
@@ -493,63 +536,9 @@ test.describe('O trilho solto', () => {
     expect(estreito.lista.top).toBeGreaterThanOrEqual(estreito.cal.bottom);
   });
 
-  test('"Fixar ao lado" põe o calendário ao lado e fica guardado para a largura', async ({ page }) => {
-    await abrirComExemplo(page);
-    await botaoDaData(page).click();
-    await page.locator('#btn-fixar-trilho').click();
-    await expect(page.locator('body')).toHaveAttribute('data-trilho', 'fixo');
-    await expect(page.locator('#btn-fixar-trilho')).toHaveAttribute('aria-pressed', 'true');
-    await expect(page.locator('#btn-fechar-trilho')).toBeHidden();
-    await page.reload();
-    await expect(page.locator('body')).toHaveAttribute('data-pronto', '1');
-    await expect(page.locator('body')).toHaveAttribute('data-trilho', 'fixo');
-    // Na largura larga, o guardado da média não vale: o padrão (ao lado)
-    await page.setViewportSize({ width: 1400, height: 800 });
-    await expect(page.locator('body')).toHaveAttribute('data-trilho', 'fixo');
-    await page.locator('#btn-fixar-trilho').click();
-    await expect(page.locator('body')).toHaveAttribute('data-trilho', 'fechado');
-    await expect(botaoDaData(page)).toBeFocused();
-    await page.setViewportSize({ width: 1100, height: 800 });
-    await expect(page.locator('body')).toHaveAttribute('data-trilho', 'fixo');
-  });
-
-  test('as larguras: ao lado a partir de 1280 px; "Fixar ao lado" a partir de 1024 px; o painel aberto fecha quando a classe muda', async ({ page }) => {
-    const estado = async largura => {
-      await page.setViewportSize({ width: largura, height: 800 });
-      return page.locator('body').getAttribute('data-trilho');
-    };
-    await abrirComExemplo(page);
-    await estado(1279);
-    await expect(page.locator('body')).toHaveAttribute('data-trilho', 'fechado');
-    await estado(1280);
-    await expect(page.locator('body')).toHaveAttribute('data-trilho', 'fixo');
-    await estado(1279);
-    await expect(page.locator('body')).toHaveAttribute('data-trilho', 'fechado');
-    // Fixado na média: ao lado a 1024 px, nunca a 1023 px
-    await botaoDaData(page).click();
-    await page.locator('#btn-fixar-trilho').click();
-    await estado(1024);
-    await expect(page.locator('body')).toHaveAttribute('data-trilho', 'fixo');
-    await estado(1023);
-    await expect(page.locator('body')).toHaveAttribute('data-trilho', 'fechado');
-    await botaoDaData(page).click();
-    await expect(page.locator('#btn-fixar-trilho')).toBeHidden();
-    await expect(page.locator('body')).toHaveAttribute('data-trilho', 'aberto');
-    // Dentro da classe o painel continua; mudando de classe, fecha (aqui, para o fixo da média)
-    await estado(800);
-    await expect(page.locator('body')).toHaveAttribute('data-trilho', 'aberto');
-    await estado(1024);
-    await expect(page.locator('body')).toHaveAttribute('data-trilho', 'fixo');
-    await page.locator('#btn-fixar-trilho').click();
-    await botaoDaData(page).click();
-    await expect(page.locator('body')).toHaveAttribute('data-trilho', 'aberto');
-    await estado(1023);
-    await expect(page.locator('body')).toHaveAttribute('data-trilho', 'fechado');
-    await expect(botaoDaData(page)).toHaveAttribute('aria-expanded', 'false');
-  });
-
   // Os números chegam com o botão do mouse apertado: o dia é o mesmo elemento, e o clique vale
   test('a contagem que chega entre apertar e soltar o botão do mouse não perde o clique no dia', async ({ page, context }) => {
+    await page.setViewportSize({ width: 1100, height: 800 });
     const servidor = await instalarSupabaseFalso(context, comAluno());
     servidor.solicitacoes.push(pedido(1, '2026-11-12'));
     await entrar(page, CONTAS.operador);
@@ -586,9 +575,7 @@ test.describe('O trilho no celular', () => {
     test(`a ${largura} px, o painel de ponta a ponta, com dias de 44 px, sem rolar a página de lado`, async ({ page }) => {
       await page.setViewportSize({ width: largura, height: 800 });
       await abrirComExemplo(page);
-      await botaoDaData(page).click();
       await expect(trilho(page)).toBeVisible();
-      await expect(page.locator('#btn-fixar-trilho')).toBeHidden();
       const painel = await trilho(page).boundingBox();
       expect([painel.x, painel.width]).toEqual([0, largura]);
       const dias = await diasDoCalendario(page).evaluateAll(bs => bs.map(b => b.getBoundingClientRect().toJSON()));
@@ -602,8 +589,23 @@ test.describe('O trilho no celular', () => {
       for (let i = 1; i < 7; i++) expect(dias[i].left).toBeGreaterThanOrEqual(dias[i - 1].right - 0.5);
       expect(await alvosPequenos(page)).toEqual([]);
       expect(await larguraDaPagina(page)).toBeLessThanOrEqual(largura);
-      await page.locator('#btn-fechar-trilho').click();
-      await expect(trilho(page)).toBeHidden();
+      // Recolhido: uma linha só, com a data, o "amanhã" e o botão, em cima da tela
+      await botaoDoTrilho(page).click();
+      await expect(corpoDoTrilho(page)).toBeHidden();
+      const linha = await trilho(page).boundingBox();
+      expect([linha.x, linha.width]).toEqual([0, largura]);
+      expect(linha.height).toBeLessThanOrEqual(72);
+      expect(linha.y + linha.height).toBeLessThanOrEqual((await page.locator('main#conteudo').boundingBox()).y);
+      await expect(rotuloDaData(page)).toHaveText('qua., 11/11', { useInnerText: true });
+      for (const alvo of [rotuloDaData(page), relativoDaData(page), botaoDoTrilho(page)]) {
+        const caixa = await alvo.boundingBox();
+        expect(caixa.y, 'na mesma linha').toBeLessThan(linha.y + linha.height);
+        expect(caixa.x + caixa.width).toBeLessThanOrEqual(largura);
+      }
+      expect(await alvosPequenos(page)).toEqual([]);
+      expect(await larguraDaPagina(page)).toBeLessThanOrEqual(largura);
+      await botaoDoTrilho(page).click();
+      await expect(corpoDoTrilho(page)).toBeVisible();
     });
   }
 });
@@ -672,15 +674,17 @@ test.describe('Os pedidos de cada dia', () => {
     await expect(contagemDoDia(page, '2026-11-13')).toHaveText('1');
   });
 
-  test('a contagem é lida de novo ao abrir o painel e quando uma tecla muda o mês', async ({ page, context }) => {
+  test('a contagem é lida de novo ao abrir o calendário recolhido e quando uma tecla muda o mês', async ({ page, context }) => {
     await page.setViewportSize({ width: 1100, height: 800 });
     await instalarSupabaseFalso(context, comAluno());
     const lidas = leiturasDePedidos(page);
     await entrar(page, CONTAS.operador);
     await expect.poll(() => [...lidas].sort()).toEqual(['01/11 a 05/12', '11/11']);
     lidas.length = 0;
-    await botaoDaData(page).click();
+    await botaoDoTrilho(page).click();
+    await botaoDoTrilho(page).click();
     await expect.poll(() => lidas).toEqual(['01/11 a 05/12']);
+    await paradasDoCalendario(page).focus();
     await expect(diaDoCalendario(page, AMANHA)).toBeFocused();
     await page.keyboard.press('PageDown');
     await expect.poll(() => lidas).toEqual(['01/11 a 05/12', '29/11 a 02/01']);
@@ -722,15 +726,17 @@ test.describe('Os pedidos de cada dia', () => {
 });
 
 test.describe('Os avisos da data', () => {
-  test('sem nada a resolver: a frase, e o botão da data sem número', async ({ page }) => {
+  test('sem nada a resolver: a frase, e o alto do trilho e os avisos sem número', async ({ page }) => {
     await abrir(page);
     await expect(page.locator('#avisos-vazio')).toHaveText('Nada a resolver nesta data.');
     await expect(avisosDaData(page)).toHaveCount(0);
     await expect(page.locator('#avisos-da-data')).toBeHidden();
     await expect(contagemDosAvisos(page)).toBeHidden();
+    await expect(contagemNosAvisos(page)).toBeHidden();
+    await expect(botaoDosAvisos(page)).toHaveAccessibleName('Avisos');
   });
 
-  test('cada item com o horário do voo, o que é e o porquê; o clique leva à tela, com o foco no título; o número está no botão da data', async ({ page }) => {
+  test('cada item com o horário do voo, o que é e o porquê; o clique leva à tela, com o foco no título; o número está no alto do trilho e nos avisos', async ({ page }) => {
     await abrirComExemplo(page);
     await abrirEscala(page);
     await aprovar(page);
@@ -749,7 +755,8 @@ test.describe('Os avisos da data', () => {
     await expect(avisos.first().locator('a')).toHaveAttribute('data-aviso', /^conf:\d+_\d+_1$/);
     await expect(page.locator('#avisos-vazio')).toBeHidden();
     await expect(contagemDosAvisos(page)).toHaveText(new RegExp(`^${await avisosDaData(page).count()}, \\d+ avisos nesta data$`));
-    await expect(botaoDaData(page)).toHaveAccessibleName(/amanhã ?, \d+ avisos nesta data$/);
+    await expect(botaoDosAvisos(page)).toHaveAccessibleName(/^Avisos ?, \d+ avisos nesta data$/);
+    await expect(contagemDosAvisos(page)).toHaveAttribute('data-gravidade', 'erro');
     await avisos.first().locator('a').click();
     await expect(page.locator('#s-esc h2')).toBeFocused();
     await expect(botaoDaAba(page, 'esc')).toHaveAttribute('aria-current', 'page');
@@ -836,19 +843,18 @@ test.describe('Os avisos da data', () => {
     await context.close();
   });
 
-  test('no celular, o aviso fecha o painel e leva à tela; os itens têm 44 px', async ({ page }) => {
+  test('no celular, o aviso leva à tela, e o trilho continua em cima dela; os itens têm 44 px', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     // Um instrutor só, sem habilitação para o Multimotor: a missão não entra
     await abrir(page, { estado: cenario({ ins: [instrutor(1, 1)], stu: [aluno(1000, { mis: 'Multimotor', eq: 'PA-34' })] }) });
     await irPara(page, 'bi');
     await expect(contagemDosAvisos(page)).toBeVisible();
-    await botaoDaData(page).click();
     const item = avisosDaData(page, 'Rejeitado').locator('a');
     await expect(item).toBeVisible();
     expect(await alvosPequenos(page)).toEqual([]);
     expect(await larguraDaPagina(page)).toBeLessThanOrEqual(390);
     await item.click();
-    await expect(trilho(page)).toBeHidden();
+    await expect(trilho(page)).toBeVisible();
     await expect(page.locator('#s-esc h2')).toBeFocused();
   });
 });
@@ -869,7 +875,7 @@ test.describe('No login', () => {
     const cartao = page.locator('#s-login');
     await expect(cartao).toBeVisible();
     await expect(trilho(page)).toBeHidden();
-    await expect(botaoDaData(page)).toBeHidden();
+    await expect(page.locator('header.topo')).not.toContainText(/\d\d\/\d\d/);
     const { x, width } = await cartao.boundingBox();
     expect(Math.abs(x + width / 2 - 700)).toBeLessThanOrEqual(1);
   });

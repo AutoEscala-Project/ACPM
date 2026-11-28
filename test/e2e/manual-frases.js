@@ -10,7 +10,9 @@ const ANTIGAS = {
     'Vai voar?', 'Início pref', 'Exportar CSV', 'Emitir PDF', 'Turno rápido', 'Cada cartão', 'campo Data', 'Equipamento', 'Bloquear',
     'Sessões', 'sessão', 'Desfazer da Demanda', 'Escala de Voo', 'Por avião e sala', 'Avião / sala', 'Aviões e salas', 'o botão ao lado de Alunos', 'As abas seguem a ordem de uso', 'ao lado do nome das abas'],
   // A data aberta é escolhida no calendário do trilho (sem as setas e sem o calendário da Agenda), e um domingo não abre
-  casca: ['setas ‹ ›', 'use as setas', 'com um calendário', 'o app pula o domingo'],
+  casca: ['setas ‹ ›', 'use as setas', 'com um calendário', 'o app pula o domingo',
+    // linha-fix-escala-sem-caixas: sem a data no topo e sem "Fixar ao lado"
+    'Fixar o calendário ao lado da tela', 'botão da data', 'Confira a data no topo'],
   // O "+" do mapa fica ao lado do nome do recurso; o mapa abre com os recursos nas colunas, e o Manual não fala dele
   // como linhas
   escala: ['no fim de cada linha', 'ao lado do nome de cada linha', 'as linhas livres', 'de uma linha do mapa', 'a linha dele não agenda',
@@ -40,7 +42,7 @@ const ANTIGAS = {
 
 // Os nomes dos botões e das vistas, e as regras em vigor
 const NOVAS = {
-  casca: ['menu da conta', 'Fixar o calendário ao lado da tela', 'ou no botão da data, no topo', 'os avisos da data',
+  casca: ['menu da conta', 'Confira a data no alto do trilho', 'Recolher o calendário', 'Recolher os avisos da data', 'fica guardado neste navegador', 'os avisos da data',
     'os aviões parados ou perto da revisão de 50 horas, os pedidos', 'leva à tela onde se resolve, quando você a vê'],
   perfis: ['na primeira data que ainda aceita pedidos'],
   escala: ['Atualizada às', 'Ver todos', 'Compartilhar', 'Por recurso',

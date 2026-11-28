@@ -1,6 +1,6 @@
 // Acessibilidade: cada botão e cada campo tem um nome para o leitor de tela, e nenhum se chama só "✕" (que o leitor
 // lê como "multiplicação"). Vale para todas as abas, o Histórico e o painel de habilitações.
-import { test, expect, abrir, abrirComExemplo, irPara, entrar, abrirEscala, abrirAvisosDaEscala, prepararContexto, vigiarErros, REGIOES, abasVisiveis, abrirHistorico, aprovar, botaoAprovar, botaoDoHistorico, botaoDoMenuDaConta, percorrerTelas, relativoDaData, rotuloDaData, semNome, alternarVem, botoesDasAbas, botaoDaData, mudarData, contagemDoDia, diaDoCalendario, trilho, AMANHA, avisosDaData, contagemDosAvisos, editorDoVoo, refazer, abrirAluno } from './fixtures.js';
+import { test, expect, abrir, abrirComExemplo, irPara, entrar, abrirEscala, abrirAvisosDaEscala, prepararContexto, vigiarErros, REGIOES, abasVisiveis, abrirHistorico, aprovar, botaoAprovar, botaoDoHistorico, botaoDoMenuDaConta, percorrerTelas, relativoDaData, rotuloDaData, semNome, alternarVem, botoesDasAbas, botaoDoTrilho, botaoDosAvisos, abrirOTrilho, mostrarAvisos, mudarData, contagemDoDia, diaDoCalendario, trilho, AMANHA, avisosDaData, contagemDosAvisos, editorDoVoo, refazer, abrirAluno } from './fixtures.js';
 import { instalarSupabaseFalso, documentosAtuais, CONTAS } from './supabase-falso.js';
 import { comExemplo } from '../helpers/exemplo.js';
 import { estadoSintetico } from '../helpers/estado.js';
@@ -38,10 +38,10 @@ test.describe('O foco do teclado na barra do topo', () => {
       await abrirComExemplo(page);
       await page.evaluate(t => { document.documentElement.dataset.theme = t; }, tema);
       const fundo = await page.locator('header.topo').evaluate(el => getComputedStyle(el).backgroundColor);
-      // O botão da data, o perfil, o Histórico, o Manual (um link) e o menu da conta
+      // O perfil, o Histórico, o Manual (um link) e o menu da conta (a data fica no trilho: linha-fix-escala-sem-caixas)
       const controles = page.locator('header.topo :is(button, select, a[href]):visible:not(:disabled)');
       const total = await controles.count();
-      expect(total).toBeGreaterThanOrEqual(5);
+      expect(total).toBeGreaterThanOrEqual(4);
       const fracos = [];
       for (let i = 0; i < total; i++) {
         const controle = controles.nth(i);
@@ -102,14 +102,13 @@ test.describe('O foco do teclado na barra do topo', () => {
     });
   }
 
-  test('o botão da data mostra o foco do teclado, com o anel branco da barra', async ({ page }) => {
+  test('o botão que recolhe o calendário mostra o foco do teclado, com o anel de destaque', async ({ page }) => {
     await abrirComExemplo(page);
-    await page.locator('.topo-marca').click();
-    await botaoDaData(page).focus();
+    await botaoDoTrilho(page).focus();
     await page.keyboard.press('Shift+Tab');
     await page.keyboard.press('Tab');
-    await expect(botaoDaData(page)).toBeFocused();
-    expect(await botaoDaData(page).evaluate(el => [getComputedStyle(el).outlineStyle, getComputedStyle(el).outlineColor])).toEqual(['solid', 'rgb(255, 255, 255)']);
+    await expect(botaoDoTrilho(page)).toBeFocused();
+    expect(await botaoDoTrilho(page).evaluate(el => getComputedStyle(el).outlineStyle)).toBe('solid');
   });
 });
 
@@ -148,18 +147,22 @@ test.describe('Telas de 320 px', () => {
   });
 });
 
-// O botão da data tem a largura fixa: com o ano, o "amanhã" e o número de avisos, o dia da semana vai abreviado
-test('na tela grande, na virada do ano, a data aparece inteira com o número de avisos', async ({ page }) => {
+// O alto do trilho: com o ano, o "amanhã" e o número de avisos, o dia da semana vai abreviado; na faixa do calendário
+// recolhido, a data também aparece inteira
+test('na tela grande, na virada do ano, a data aparece inteira com o número de avisos, aberta e na faixa', async ({ page }) => {
   await page.clock.setFixedTime(new Date('2026-12-31T12:00:00-03:00'));
   await abrir(page, { estado: cenario({ ins: [instrutor(1, 1)], stu: [aluno(1000, { mis: 'Multimotor', eq: 'PA-34' })] }) });
   await expect(contagemDosAvisos(page)).toBeVisible();
   const rotulo = rotuloDaData(page);
+  expect(await rotulo.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
+  await abrirOTrilho(page);
   await expect(rotulo).toHaveText('sex., 01/01/2027', { useInnerText: true });
   expect(await rotulo.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
 });
 
 test('na tela grande, o dia da semana aparece por extenso', async ({ page }) => {
   await abrirComExemplo(page);
+  await abrirOTrilho(page);
   await expect(rotuloDaData(page).locator('.dt-semana')).toBeVisible();
   await expect(rotuloDaData(page).locator('.dt-semana')).toHaveText('quarta-feira');
   await expect(rotuloDaData(page).locator('.dt-semana-curta')).toBeHidden();
@@ -170,15 +173,15 @@ test('na tela grande, o dia da semana aparece por extenso', async ({ page }) => 
 test.describe('A barra do topo nas larguras intermediárias', () => {
   for (const [largura, modo] of [[641, 'local'], [700, 'local'], [820, 'local'], [900, 'local'], [1024, 'local'], [1029, 'compartilhado'],
     [1030, 'compartilhado'], [1110, 'local'], [1280, 'local'], [1289, 'compartilhado'], [1290, 'compartilhado']]) {
-    test(`a ${largura} px (modo ${modo}), nada na barra cobre a marca, o botão da data ou as ferramentas`, async ({ page, context }) => {
+    test(`a ${largura} px (modo ${modo}), nada na barra cobre a marca ou as ferramentas`, async ({ page, context }) => {
       await page.setViewportSize({ width: largura, height: 800 });
       if (modo === 'local') await abrirComExemplo(page);
       else {
         await instalarSupabaseFalso(context, documentosAtuais(comExemplo(estadoSintetico()), '2026-11-11'));
         await entrar(page, CONTAS.operador);
       }
-      // O que está no meio de cada um é ele mesmo (nada por cima): a marca, o botão da data e as ferramentas
-      for (const [seletor, alvo] of [['.topo-titulo', page.locator('.topo-titulo')], ['o botão da data', botaoDaData(page)],
+      // O que está no meio de cada um é ele mesmo (nada por cima): a marca e as ferramentas
+      for (const [seletor, alvo] of [['.topo-titulo', page.locator('.topo-titulo')],
         ['o Histórico', botaoDoHistorico(page)], ['#btn-manual', page.locator('#btn-manual')],
         ['o menu da conta', botaoDoMenuDaConta(page)]]) {
         const noMeio = await alvo.evaluate(el => {
@@ -624,14 +627,15 @@ test.describe('O leitor de tela e o teclado', () => {
       }
       await entrar(page, CONTAS.operador);
       await page.evaluate(t => { document.documentElement.dataset.theme = t; }, tema);
-      await botaoDaData(page).click();
+      await mostrarAvisos(page);
       await expect(contagemDoDia(page, '2026-11-13')).toBeVisible();
       expect(await contrastesFracos([
         ['o mês', page.locator('#cal-mes')], ['o dia da semana', page.locator('#cal th').first()], ['um dia', diaDoCalendario(page, '2026-11-12')],
         ['a data aberta', diaDoCalendario(page, AMANHA)], ['hoje', diaDoCalendario(page, '2026-11-10')], ['um domingo', diaDoCalendario(page, '2026-11-15')],
         ['um dia de outro mês', diaDoCalendario(page, '2026-12-01')], ['os pedidos de um dia', contagemDoDia(page, '2026-11-13')],
         ['os pedidos de hoje', contagemDoDia(page, '2026-11-10')], ['a linha da data', page.locator('#trilho-data')],
-        ['o título de um aviso', avisosDaData(page).first().locator('.aviso-titulo')], ['o número de avisos', contagemDosAvisos(page)]
+        ['o título de um aviso', avisosDaData(page).first().locator('.aviso-titulo')], ['o número de avisos', contagemDosAvisos(page)],
+        ['a data aberta no alto', rotuloDaData(page)], ['o "amanhã"', relativoDaData(page)], ['o botão dos avisos', botaoDosAvisos(page)]
       ])).toEqual([]);
       const fundo = await trilho(page).evaluate(el => getComputedStyle(el).backgroundColor);
       const fracos = [];
@@ -661,9 +665,9 @@ test.describe('O leitor de tela e o teclado', () => {
   test('os anúncios: a data do topo ao mudar, quantos voos ficaram com os filtros e o diálogo do status descrito pelo voo', async ({ page }) => {
     await abrirComExemplo(page);
     await abrirEscala(page);
-    // A data nova é anunciada (o nome dela, dentro do botão, não é uma região viva: seria lido duas vezes com o foco nele)
+    // A data nova é anunciada (o nome dela, no alto do trilho, não é uma região viva: seria lido duas vezes)
     await expect(rotuloDaData(page)).not.toHaveAttribute('aria-live');
-    await expect(botaoDaData(page).locator('svg.ico').first()).toHaveAttribute('aria-hidden', 'true');
+    await expect(botaoDoTrilho(page).locator('svg.ico').first()).toHaveAttribute('aria-hidden', 'true');
     await mudarData(page, '2026-11-12');
     await expect(page.locator('#anuncio')).toHaveText('Data aberta: quinta-feira, 12/11');
     await mudarData(page, '2026-11-11');

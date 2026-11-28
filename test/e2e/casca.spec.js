@@ -1,7 +1,7 @@
 // A casca (F1a): a linha das etapas no lugar das abas, as telas com nome e endereço (#/<tela>[/<item>]), quem vê cada uma,
 // Aprovar, Voltar e Avançar, a rolagem de cada entrada e o estado da linha (aberta, recolhida ou a faixa do celular). Os
 // padrões do produto, de propósito: nenhum teste guarda uma preferência antes
-import { test, expect, abrir, abrirComExemplo, entrar, irPara, abrirEscala, aprovar, botaoAprovar, botaoReabrir, botaoDaAba, rotulosDasAbas, mudarData, AMANHA, REGIOES, botaoDaData, larguraDaPagina, percorrerTelas, semNome, trilho } from './fixtures.js';
+import { test, expect, abrir, abrirComExemplo, entrar, irPara, abrirEscala, aprovar, botaoAprovar, botaoReabrir, botaoDaAba, rotulosDasAbas, mudarData, AMANHA, REGIOES, botaoDoTrilho, rotuloDaData, botaoDoMenuDaConta, larguraDaPagina, percorrerTelas, semNome } from './fixtures.js';
 import { instalarSupabaseFalso, documentosAtuais, CONTAS } from './supabase-falso.js';
 import { estadoSintetico } from '../helpers/estado.js';
 import { comExemplo } from '../helpers/exemplo.js';
@@ -250,37 +250,53 @@ test.describe('O desenho da linha', () => {
 });
 
 test.describe('A moldura', () => {
-  // A distância da linha até a tela é a mesma com o trilho ao lado e sem ele: um trilho alto não abre um vão
-  test('com o trilho ao lado ou não, a tela fica à mesma distância da linha', async ({ page }) => {
+  // A distância da linha até a tela é a mesma com o calendário aberto e recolhido: um trilho alto não abre um vão
+  test('com o calendário aberto ou recolhido, a tela fica à mesma distância da linha', async ({ page }) => {
     await abrir(page);
     const vao = () => page.evaluate(() => document.querySelector('main#conteudo').getBoundingClientRect().top - document.querySelector('#linha').getBoundingClientRect().bottom);
-    await expect(page.locator('body')).toHaveAttribute('data-trilho', 'fixo');
+    await expect(page.locator('body')).toHaveAttribute('data-trilho', 'aberto');
     const aoLado = await vao();
-    const topos = await page.evaluate(() => [document.querySelector('main#conteudo'), document.querySelector('aside.trilho')].map(el => el.getBoundingClientRect().top));
-    expect(topos[0]).toBe(topos[1]);
-    await page.locator('#btn-fixar-trilho').click();
-    await expect(page.locator('body')).toHaveAttribute('data-trilho', 'fechado');
+    const topos = () => page.evaluate(() => [document.querySelector('main#conteudo'), document.querySelector('aside.trilho')].map(el => el.getBoundingClientRect().top));
+    const [tela, lado] = await topos();
+    expect(tela).toBe(lado);
+    await botaoDoTrilho(page).click();
+    await expect(page.locator('body')).toHaveAttribute('data-trilho', 'recolhido');
     expect(await vao()).toBe(aoLado);
+    const [tela2, lado2] = await topos();
+    expect(tela2).toBe(lado2);
+  });
+
+  // linha-fix-escala-sem-caixas (Pedro, 28/11): a data sai do topo; o trilho é o único lugar dela
+  test('o topo não tem a data: a marca e as ferramentas, numa linha', async ({ page }) => {
+    for (const largura of [1440, 1024, 390]) {
+      await page.setViewportSize({ width: largura, height: 800 });
+      await abrir(page);
+      await expect(page.locator('header.topo')).not.toContainText('11/11');
+      await expect(page.locator('header.topo svg use[href="#i-calendario"]')).toHaveCount(0);
+      const [marca, menu] = await Promise.all([page.locator('.topo-marca').boundingBox(), botaoDoMenuDaConta(page).boundingBox()]);
+      expect(Math.abs((marca.y + marca.height / 2) - (menu.y + menu.height / 2)), `${largura} px`).toBeLessThanOrEqual(2);
+      await expect(rotuloDaData(page)).toContainText('11/11');
+    }
   });
 
   test('a 1280 px com o trilho ao lado, nenhuma tela rola a página de lado, e todo controle tem nome', async ({ page }) => {
     test.slow();
     await abrirComExemplo(page);
-    await expect(page.locator('body')).toHaveAttribute('data-trilho', 'fixo');
+    await expect(page.locator('body')).toHaveAttribute('data-trilho', 'aberto');
     await percorrerTelas(page, async tela => {
       expect(await larguraDaPagina(page), tela).toBeLessThanOrEqual(1280);
       expect(await semNome(page, `${REGIOES.casca}, ${REGIOES.tela}`), tela).toEqual([]);
     });
   });
 
-  test('a 1920 px, o Painel mostra uma lista, com o trilho ao lado e sem ele', async ({ page }) => {
+  test('a 1920 px, o Painel mostra uma lista, com o calendário aberto e recolhido', async ({ page }) => {
     await page.setViewportSize({ width: 1920, height: 1080 });
     await abrirComExemplo(page);
     await abrirEscala(page, { vista: 'painel' });
     const listas = page.locator('#out .fids .fids-tabela');
     await expect(listas).toHaveCount(1);
-    await page.locator('#btn-fixar-trilho').click();
-    await expect(page.locator('body')).toHaveAttribute('data-trilho', 'fechado');
+    await botaoDoTrilho(page).click();
+    await expect(page.locator('body')).toHaveAttribute('data-trilho', 'recolhido');
     await page.waitForTimeout(200);
     await expect(listas).toHaveCount(1);
   });
@@ -310,12 +326,17 @@ test.describe('A moldura', () => {
     });
     expect(await medidas()).toEqual({ pagina: false, lista: true, detalhe: true, noFundo: 703, trilho: { posicao: 'static', rola: 'auto', fundo: expect.any(Number) } });
     expect((await medidas()).trilho.fundo).toBeLessThanOrEqual(704);
-    // Solto, o painel do trilho entra entre a linha e a tela, com rolagem própria, e a página continua sem rolar
-    await page.locator('#btn-fixar-trilho').click();
-    await botaoDaData(page).click();
-    await expect(trilho(page)).toBeVisible();
-    const aberto = await medidas();
-    expect([aberto.pagina, aberto.lista, aberto.noFundo]).toEqual([false, true, 703]);
+    // Recolhido, o trilho é uma faixa ao lado, e a página continua sem rolar
+    await botaoDoTrilho(page).click();
+    await expect(page.locator('body')).toHaveAttribute('data-trilho', 'recolhido');
+    const recolhido = await medidas();
+    expect([recolhido.pagina, recolhido.lista, recolhido.noFundo]).toEqual([false, true, 703]);
+    // Em cima da tela (abaixo de 1024 px), aberto, ele rola por conta própria, e a página continua sem rolar
+    await botaoDoTrilho(page).click();
+    await page.setViewportSize({ width: 1000, height: 720 });
+    const emCima = await medidas();
+    expect([emCima.pagina, emCima.lista, emCima.trilho.rola]).toEqual([false, true, 'auto']);
+    await page.setViewportSize({ width: 1280, height: 720 });
     await page.setViewportSize({ width: 1280, height: 560 });
     expect((await medidas()).pagina).toBe(true);
     // Fora dela, a página rola como sempre

@@ -2,7 +2,7 @@
 // texto fala dela (as dicas, o glossário e o Manual), e a escala segue a ordem dos agendamentos e do cadastro; a prioridade
 // guardada continua no dia, depois de gravar e recarregar, e ligar de novo a traz de volta. Ligada: a tela mostra 1 como a
 // mais alta (a guardada continua com 5 a mais alta: o formato não muda)
-import { test, comPrioridade, expect, abrir, irPara, abrirEscala, lerEscala, appPronto, campoDoPedido, linhaDoPedido, voar, botaoDaData, avisosDaData, textosDaEscala, AMANHA } from './fixtures.js';
+import { test, comPrioridade, expect, abrir, irPara, abrirEscala, lerEscala, appPronto, campoDoPedido, linhaDoPedido, voar, mostrarAvisos, recolherOTrilho, avisosDaData, textosDaEscala, AMANHA } from './fixtures.js';
 import { aluno, apenas, cenario, instrutor } from '../helpers/montar.js';
 import { montarGlossario } from '../../js/glossario.js';
 
@@ -77,10 +77,10 @@ test.describe('A prioridade desligada (o padrão)', () => {
     await abrirEscala(page);
     await expect(motivoDaEscala(page)).toHaveText('Aluno 1001 Rejeitado: nenhum C152 livre nos horários possíveis; 1º na lista de espera das 06:30.');
     // Os avisos da data, no trilho: o mesmo motivo
-    await botaoDaData(page).click();
+    await mostrarAvisos(page);
     await expect(avisosDaData(page, 'Aluno 1001')).toContainText('Rejeitado: nenhum C152 livre nos horários possíveis; 1º na lista de espera das 06:30.');
     await expect(avisosDaData(page, 'Aluno 1001')).not.toContainText(/prioridade/i);
-    await botaoDaData(page).click();
+    await recolherOTrilho(page);
     // Agendar o Aluno 1002 às 06:30 tira o Aluno 1000, pelo mesmo motivo
     await page.locator('#btn-agendar').click();
     await page.locator('#agd-aluno').selectOption('1002');

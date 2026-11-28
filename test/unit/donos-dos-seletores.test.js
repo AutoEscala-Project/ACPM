@@ -13,12 +13,13 @@ const E2E = fileURLToPath(new URL('../e2e/', import.meta.url));
 // #dt, e que pega o seletor montado, como `#ag-${campo}`), os drivers onde ele pode aparecer e os testes da tela dona
 // dele. Um id também é achado quando o teste o lê pelo DOM (getElementById('dt'), activeElement.id === 'dt')
 const DONOS = [
-  // A casca (F1): a data (o botão e o trilho), a linha, o Histórico e o menu da conta
-  { seletor: '#btn-data', achar: /#btn-data(?![\w-])/, drivers: ['casca.js'] },
+  // A casca (F1): a data (o trilho: o nome dela, o calendário e os botões que recolhem), a linha, o Histórico e o menu da conta
   { seletor: '#trilho', achar: /#trilho(?![\w-])/, drivers: ['casca.js', 'invariantes.js'] },
   { seletor: '.cal-dia', achar: /\.cal-dia(?![\w-])/, drivers: ['casca.js'] },
-  { seletor: '#dt-rotulo', achar: /#dt-rotulo(?![\w-])/, drivers: ['casca.js'] },
-  { seletor: '#dt-rel', achar: /#dt-rel(?![\w-])/, drivers: ['casca.js'] },
+  { seletor: '#trilho-rotulo', achar: /#trilho-rotulo(?![\w-])/, drivers: ['casca.js'] },
+  { seletor: '#trilho-rel', achar: /#trilho-rel(?![\w-])/, drivers: ['casca.js'] },
+  { seletor: '#btn-recolher-trilho', achar: /#btn-recolher-trilho(?![\w-])/, drivers: ['casca.js'] },
+  { seletor: '#btn-avisos', achar: /#btn-avisos(?![\w-])/, drivers: ['casca.js'] },
   { seletor: '#linha a[data-nav]', achar: /#linha a\[data-nav\]/, drivers: ['casca.js'] },
   { seletor: '#btn-open-log', achar: /#btn-open-log(?![\w-])/, drivers: ['casca.js'] },
   { seletor: '#btn-menu-conta', achar: /#btn-menu-conta(?![\w-])/, drivers: ['casca.js'] },
