@@ -55,11 +55,13 @@ export function normalizarLimitacoes(valor) {
     const de = deGuardado(h.de);
     if (!minutoValido(de) || !minutoValido(h.ate) || de >= h.ate) return [];
     const dias = diasDoHorario(h.dias);
-    return dias === null ? [] : [{ de, ate: h.ate, ...(dias ? { dias } : {}), mudou: de !== h.de }];
+    // A ordem do guardado: o que a mudança não tocou vem antes; entre os tocados, o De guardado mais cedo
+    return dias === null ? [] : [{ de, ate: h.ate, ...(dias ? { dias } : {}), ordem: de === h.de ? -1 : h.de }];
   });
-  // O que a mudança deixou igual a outro fica um só (os iguais gravados assim, que a tela deixa pôr, ficam como estão)
-  const horarios = lidos.filter((h, i) => !h.mudou || !lidos.some((o, j) => j !== i && mesmoHorario(o, h) && (!o.mudou || j < i)))
-    .map(({ mudou, ...h }) => h)
+  // Só junta o que a mudança fez igual: entre os iguais depois dela fica o guardado que vem antes (e os gravados iguais a
+  // ele, que a tela deixa pôr, como estão)
+  const horarios = lidos.filter(h => !lidos.some(o => mesmoHorario(o, h) && o.ordem < h.ordem))
+    .map(({ ordem, ...h }) => h)
     .sort((p, q) => p.de - q.de || p.ate - q.ate || String(p.dias || '').localeCompare(String(q.dias || ''))).slice(0, MAXIMO_DE_HORARIOS);
   if (!recursos.length && !horarios.length) return null;
   return { ...(recursos.length ? { recursos } : {}), ...(horarios.length ? { horarios } : {}) };
