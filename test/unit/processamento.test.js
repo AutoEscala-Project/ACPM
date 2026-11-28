@@ -1507,6 +1507,33 @@ describe('recomecarPelosPedidos: "Recomeçar pelos pedidos"', () => {
     assert.deepEqual(r.nomes, { voltaram: ['Aluno 1000'], sairam: ['Aluno 1002', 'Aluno 1004', 'Aluno 1006'], entraram: ['Aluno 1004'] });
   });
 
+  // A reabertura fica registrada (formato 30, d33), como o "Reabrir" da Escala a registra: quando e quem (o mesmo { em, por }
+  // de normalizarAprovacao). A revisão cruzada do H (#113): "Limpar demanda" reabria sem registrar, e o "Recomeçar" também
+  it('a escala aprovada reaberta fica registrada: quando e quem (reabertura)', () => {
+    const { e, linhas } = montar();
+    const quem = { em: '2026-11-10T15:00:00.000Z', por: 'Operador de Teste' };
+    const r = recomecarPelosPedidos(e, linhas, { ...amb, reabertura: quem });
+    assert.equal(r.reaberta, true);
+    assert.deepEqual([e.aprovacao, e.reabertura], [null, quem]);
+    // O nome longo é cortado como o da aprovação (80); sem quem, "" (o modo local)
+    const longo = montar().e;
+    recomecarPelosPedidos(longo, linhas, { ...amb, reabertura: { em: quem.em, por: 'x'.repeat(100) } });
+    assert.equal(longo.reabertura.por, 'x'.repeat(80));
+    const semQuem = montar().e;
+    recomecarPelosPedidos(semQuem, linhas, { ...amb, reabertura: { em: quem.em } });
+    assert.deepEqual(semQuem.reabertura, { em: quem.em, por: '' });
+  });
+
+  it('a data não aprovada não é reaberta: a reabertura de antes fica como estava', () => {
+    const { e, linhas } = montar();
+    const antes = { em: '2026-11-09T10:00:00.000Z', por: 'Outro' };
+    Object.assign(e, { aprovacao: null, reabertura: antes });
+    const r = recomecarPelosPedidos(e, linhas, { ...amb, reabertura: { em: '2026-11-10T15:00:00.000Z', por: 'Operador' } });
+    assert.equal(r.reaberta, false);
+    assert.deepEqual(e.reabertura, antes);
+    assert.doesNotMatch(r.texto, /reaberta/);
+  });
+
   it('recusa na data passada e com os pedidos não lidos, sem mudar nada', () => {
     const { e, linhas } = montar();
     const antes = structuredClone(e);
