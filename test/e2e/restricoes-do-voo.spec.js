@@ -3,7 +3,7 @@
 // recurso, o instrutor, a prioridade, o horário e a duração (as colunas que saíram da Demanda, aberta pelo Processamento no G2). O horário exato do pedido
 // da agenda é mostrado, não editado (N14); o tipo e o horário contra as limitações do aluno avisam e pedem a confirmação; o
 // INVA de "Não escalar com" fica na lista, desligado
-import { test, comPrioridade, expect, abrir, abrirEscala, aprovar, lerEscala, irPara, abrirHistorico, entradasDoHistorico, larguraDaPagina, AMANHA,
+import { test, comPrioridade, expect, abrir, abrirComExemplo, abrirEscala, aprovar, lerEscala, irPara, abrirHistorico, entradasDoHistorico, larguraDaPagina, AMANHA,
   editarPelaLista, editarPeloMapa, editorDoVoo, botaoEditar, avisosDaData, vigiarErros, perguntaDoRefazer, refazer, naoRefazer,
   botaoDosAvisos, botaoDoTrilho, mostrarAvisos, recolherOTrilho } from './fixtures.js';
 import {
@@ -320,5 +320,34 @@ test.describe('O Processamento sem campos: as restrições na gaveta', () => {
     await expect.poll(async () => (await pedidoGuardado(page, 1000)).nb).toBe(1.5);
     await fecharRestricoes(page);
     await expect(page.locator('#det-proc [data-act="restricoes"][data-id="1000"]')).toBeFocused();
+  });
+});
+
+// O Tab que sai de um campo digitado (G1, o desvio e: devolverFoco, js/dom.js): o change chega com o foco já fora do campo,
+// e a gaveta é redesenhada com a escala refeita; o foco vai para o mesmo vizinho que sem digitar. Era testado pela gaveta
+// aberta pela Demanda; aqui, pelo detalhe do Processamento
+test.describe('O Tab que sai da duração digitada na gaveta', () => {
+  const vizinho = page => page.evaluate(() => {
+    const el = document.activeElement;
+    if (el === document.body) return 'body';
+    return `${el.tagName.toLowerCase()}[${el.dataset.f || el.dataset.act || el.id || ''}]`;
+  });
+  test('digitar a duração nas restrições do pedido e sair com Tab ou Shift+Tab leva ao mesmo vizinho que sem digitar, com a gaveta redesenhada', async ({ page }) => {
+    await abrirComExemplo(page);
+    await irPara(page, 'proc');
+    // Um voo de duração digitada (nem o Ground nem o Noturno, que têm a deles)
+    const linha = page.locator('#proc > li.lista-linha[data-proc$="_1"]').filter({ hasText: 'Voo Local' }).first();
+    const chave = await linha.getAttribute('data-proc');
+    const [id, mid] = chave.split('_').map(Number);
+    await abrirRestricoes(page, id, mid);
+    const campo = campoDasRestricoes(page, 'nb');
+    for (const [i, tecla] of ['Tab', 'Shift+Tab'].entries()) {
+      await campo.focus();
+      await page.keyboard.press(tecla);
+      const semDigitar = await vizinho(page);
+      await campo.fill(['1.5', '2'][i]);
+      await page.keyboard.press(tecla);
+      expect(await vizinho(page), tecla).toBe(semDigitar);
+    }
   });
 });

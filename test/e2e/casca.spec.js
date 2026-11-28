@@ -151,13 +151,13 @@ test.describe('A linha e as telas', () => {
     await expect(page).toHaveURL(/#\/manual$/);
   });
 
-  test('uma tela que o perfil não vê volta para a dele: #/conta sem o servidor, #/dem para a Secretaria', async ({ page, context }) => {
+  test('uma tela que o perfil não vê volta para a dele: #/conta sem o servidor, #/proc para a Secretaria', async ({ page, context }) => {
     await abrir(page, { url: './#/conta' });
     await expect(page.locator('#s-esc')).toBeVisible();
     await expect(page).toHaveURL(/#\/esc$/);
 
     await instalarSupabaseFalso(context, documentosAtuais(comExemplo(estadoSintetico()), AMANHA));
-    await entrar(page, CONTAS.secretaria, { url: './?supabase=teste#/dem' });
+    await entrar(page, CONTAS.secretaria, { url: './?supabase=teste#/proc' });
     await expect(page.locator('#s-age')).toBeVisible();
     await expect(page.locator('#s-proc')).toBeHidden();
     await expect(page).toHaveURL(/#\/age$/);

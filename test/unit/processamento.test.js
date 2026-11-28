@@ -1268,6 +1268,14 @@ describe('quadroDoProcessamento: a situação de cada pedido da data', () => {
     assert.equal(q.plano.pendente, true);
   });
 
+  // A revisão do G2 (achado 9): o voo de Ground diz a sala pelo nome ("Sala Ground"), não pelo id interno (SALA-GROUND)
+  it('o voo de Ground na escala diz "Sala Ground"', () => {
+    const e = cenario({ ins: [instrutor(1, 9)], stu: [aluno(1001, { mis: 'Ground C152', eq: 'Sala Ground', nb: 1.5 })] });
+    Object.assign(e, { fixos: {}, fObs: {}, importadas: [], resultados: { situacao: [], doDia: [] } });
+    const [l] = quadro(e, []).linhas;
+    assert.deepEqual([l.situacao, l.texto], ['na-escala', 'Na escala 08:20–09:50 · Sala Ground · Instrutor 01']);
+  });
+
   it('não coube (o motivo e onde resolver); o local da lista de espera (U3) espera às 08:20, não "não coube"', () => {
     const { e, linhas } = montar();
     // 1004 no C172, sem nenhum disponível: não coube, sem espera (não é falta de lugar no horário)
@@ -1397,6 +1405,42 @@ describe('As missões do curso que o programa passou (Atualizar a escala)', () =
     assert.equal(conciliarPedidos(e, linhas, opcoes).pendente, false);
   });
 
+  // A revisão do G2 (achado 1): a troca e a entrada de um pedido novo do mesmo aluno e tipo, na mesma atualização, davam a
+  // mesma missão a dois voos (a regra 12: as missões dos outros voos do aluno no dia não são dadas de novo)
+  it(`a troca vem antes das entradas: o pedido novo do mesmo aluno e tipo não recebe ${m2}, que o voo trocado levou`, () => {
+    const e = dia();
+    const eq = PP.missoes.find(m => m.codigo === m1).eq;
+    const opcoes = { ...amb, programa: [PP], situacao: situacao([...antesDe(m1), m1]) };
+    const doisPedidos = [{ ...linhas[0], recurso: eq, horas: 1 }, { ...linhas[0], id: 2, horario: '14:30', recurso: eq, horas: 1 }];
+    const plano = conciliarPedidos(e, doisPedidos, opcoes);
+    assert.deepEqual([plano.missoes.map(m => [m.de, m.para]), plano.entram.map(s => s.id)], [[[m1, m2]], [2]]);
+    const feito = aplicarConciliacao(e, plano, { programa: [PP], situacao: opcoes.situacao });
+    const etapas = [e.stu[0], ...(e.stu[0].extra || [])].map(r => [r.solicitacao, r.etapa]);
+    assert.equal(etapas[0][1], m2);
+    assert.equal(etapas.length, 2);
+    assert.notEqual(etapas[1][1], m2, 'o pedido novo não leva a missão que o voo trocado levou');
+    assert.ok(etapas[1][1], 'o pedido novo entra com uma missão do programa');
+    assert.deepEqual(feito.missoes.map(m => [m.de, m.para]), [[m1, m2]]);
+    assert.equal(conciliarPedidos(e, doisPedidos, opcoes).pendente, false);
+  });
+
+  it('dois voos do aluno com missões do programa já aprovadas trocam para missões diferentes', () => {
+    const eq = PP.missoes.find(m => m.codigo === m1).eq;
+    const e = dia();
+    e.importadas = [1, 2];
+    e.stu[0].extra = [{ mid: 1, fly: true, mis: 'Voo Local', eq, nb: 1, jan: 'h870', p1: 870, p2: -1, solicitacao: 2, etapa: m2, cursoDaEtapa: 'PP', etapaDoPrograma: true }];
+    const opcoes = { ...amb, programa: [PP], situacao: situacao([...antesDe(m2), m2]) };
+    const doisPedidos = [linhas[0], { ...linhas[0], id: 2, horario: '14:30' }];
+    const plano = conciliarPedidos(e, doisPedidos, opcoes);
+    const paras = plano.missoes.map(m => m.para);
+    assert.equal(plano.missoes.length, 2);
+    assert.notEqual(paras[0], paras[1], 'cada voo com a sua missão');
+    aplicarConciliacao(e, plano, { programa: [PP], situacao: opcoes.situacao });
+    const etapas = [e.stu[0], ...e.stu[0].extra].map(r => r.etapa);
+    assert.deepEqual(etapas, paras);
+    assert.ok(!etapas.includes(m1) && !etapas.includes(m2));
+  });
+
   it('fica: sem a marca, agendado, em voo, com resultado, numa data passada, com o so, sem os programas', () => {
     const opcoes = { ...amb, programa: [PP], situacao: situacao([...antesDe(m1), m1]) };
     const nenhuma = (e, extra = {}) => assert.deepEqual(conciliarPedidos(e, linhas, { ...opcoes, ...extra }).missoes, []);
@@ -1453,6 +1497,14 @@ describe('recomecarPelosPedidos: "Recomeçar pelos pedidos"', () => {
     assert.deepEqual([e.importadas.includes(6), e.stu[5].fly], [true, false], 'o dispensado continua dispensado');
     assert.deepEqual([e.aprovacao, Object.keys(e.fixos)], [null, ['1003_0_1']]);
     assert.equal(r.texto, 'Pedidos: escala recomeçada (1 voltou ao pedido, 2 sem pedido saíram, 2 sem aprovação ou cancelados saíram, 1 fica, 2 continuam fora, 1 entrou) e escala reaberta');
+  });
+
+  // A resposta do N6 diz o aluno (a revisão do G2, achado 7): os nomes de quem voltou ao pedido, saiu e entrou, cada um
+  // uma vez por grupo (o 1002 perdeu dois voos; o 1004 perdeu o posto à mão e o pedido dele entrou)
+  it('os nomes de quem voltou ao pedido, saiu e entrou, para a resposta', () => {
+    const { e, linhas } = montar();
+    const r = recomecarPelosPedidos(e, linhas, amb);
+    assert.deepEqual(r.nomes, { voltaram: ['Aluno 1000'], sairam: ['Aluno 1002', 'Aluno 1004', 'Aluno 1006'], entraram: ['Aluno 1004'] });
   });
 
   it('recusa na data passada e com os pedidos não lidos, sem mudar nada', () => {

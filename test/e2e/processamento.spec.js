@@ -5,8 +5,8 @@
 // px no toque. E as ações de Pedidos que mudam a escala na hora (o cancelado sai sozinho), o Gestor que só lê. O relógio dos
 // testes está em 10/11/2026, 12:00 em São Paulo; a data aberta é amanhã, qua 11/11
 import {
-  test, expect, irPara, appPronto, AMANHA, abrirEscala, abrirHistorico, editarPelaLista, refazer, linhaDaLista, escolherPedido, confirmar,
-  linhaDoProcessamento, situacaoNoProcessamento, escolherNoProcessamento, campoDoProcessamento, acaoDoProcessamento, acaoNaLinha, avisoDoProcessamento,
+  test, expect, irPara, appPronto, AMANHA, abrirEscala, abrirHistorico, editarPelaLista, refazer, linhaDaLista, escolherPedido, confirmar, abrir, lerEscala, mudarData,
+  linhaDoProcessamento, linhasDoProcessamento, situacaoNoProcessamento, escolherNoProcessamento, campoDoProcessamento, acaoDoProcessamento, acaoNaLinha, avisoDoProcessamento,
   botaoAtualizarAEscala, estadoDoProcessamento, contagemDoProcessamento
 } from './fixtures.js';
 import { documentosAtuais } from './supabase-falso.js';
@@ -25,12 +25,14 @@ const aguardando = { aprovada_em: null, aprovada_por: null };
 const comPedido = (id, sol, extra = {}) => aluno(id, { p1: 500, p2: -1, jan: 'h500', solicitacao: sol, ...extra });
 
 // Abre o app com o dia (os alunos, os instrutores e o que já está no dia: importadas) e os pedidos da agenda deste navegador
-async function abrirComPedidos(page, { stu, ins = [instrutor(1, 9), instrutor(2, 9)], importadas = [], agenda = [], aprovacao = null, url = './' }) {
+async function abrirComPedidos(page, { stu, ins = [instrutor(1, 9), instrutor(2, 9)], importadas = [], agenda = [], aprovacao = null, url = './', outrosDias = {} }) {
   const estado = cenario({ ins, stu });
   estado.importadas = importadas;
   if (aprovacao) estado.aprovacao = aprovacao;
   const { documentos: { cadastro }, dias } = documentosAtuais(estado, AMANHA);
   const docs = { acpm4_cadastro: cadastro, [`acpm4_dia_${AMANHA}`]: dias[AMANHA], acpm4_agenda: agenda, acpm4_agenda_aprovacoes: '1', acpm4_agenda_aprovacoes_g: '1' };
+  // Outra data com o dia dela (os mesmos instrutores): { '2026-11-12': [alunos] }
+  for (const [data, alunos] of Object.entries(outrosDias)) docs[`acpm4_dia_${data}`] = documentosAtuais(cenario({ ins, stu: alunos }), data).dias[data];
   await page.addInitScript(json => {
     if (localStorage.getItem('acpm4_cadastro')) return;
     for (const [chave, valor] of Object.entries(JSON.parse(json))) localStorage.setItem(chave, typeof valor === 'string' ? valor : JSON.stringify(valor));
@@ -152,7 +154,7 @@ test.describe('O Processamento', () => {
     await page.locator('#proc-recomecar').click();
     await expect(page.locator('#proc-recomecar-frase')).toHaveText('Recomeçar a data (1 sem pedido saiu, 1 entrou)');
     await page.locator('#proc-recomecar').click();
-    await respondeu(page, 'Escala recomeçada (1 sem pedido saiu, 1 entrou)');
+    await respondeu(page, 'Escala recomeçada (1 sem pedido saiu, 1 entrou): saiu Aluno 1000; entrou Aluno 1001');
     await expect(linhaDoProcessamento(page, '1000_0_1')).toHaveCount(0);
     await expect(situacaoNoProcessamento(page, '1001_1_1')).toHaveText(/^Na escala 08:20/);
   });
@@ -197,6 +199,9 @@ test.describe('O Processamento', () => {
     await refazer(page);
     await expect(page.locator('#toast-box')).toContainText(`De volta à escala: Aluno 1000 (Voo Local) · ${DATA}.`);
     await expect.poll(async () => (await diaGuardado(page)).pedidos[1000].fly).toBe(true);
+    // O botão sai com a gaveta redesenhada: o foco vai para a situação nova do voo na gaveta, não para o body (a revisão)
+    await expect(gavetaDasRestricoes(page).locator('.restricoes-situacao')).toBeFocused();
+    await expect(gavetaDasRestricoes(page).locator('.restricoes-situacao')).toContainText('Na escala:');
   });
 
   test('na escala aprovada, "Pôr de volta" devolve o voo ao pino dele, sem o motor e sem pergunta', async ({ page }) => {
@@ -215,5 +220,148 @@ test.describe('O Processamento', () => {
     await acaoNaLinha(page, '1000_0_1').click();
     await respondeu(page, 'De volta à escala: Aluno 1000 (Voo Local)');
     await expect(situacaoNoProcessamento(page, '1000_0_1')).toHaveText('Na escala 10:10–11:10 · PP-LJV · Instrutor 02');
+  });
+});
+
+// A revisão do G2: o detalhe aberto segue o pedido que mudou de chave; o "Mais" à vista; a marca e a linha de estado de uma
+// data não passam para outra; a resposta diz onde o voo ficou (em espera); a gaveta não perde o foco; as buscas sem acentos
+test.describe('O Processamento: a revisão', () => {
+  for (const largura of [1280, 390]) {
+    test(`${largura} px: "Trazer de volta" no detalhe: o detalhe segue o pedido, que ganhou um voo (nada de "saiu do cadastro")`, async ({ page }) => {
+      await page.setViewportSize({ width: largura, height: 844 });
+      await abrirComPedidos(page, { stu: [aluno(1001, { fly: false })], importadas: [2], agenda: [pedido(2, 1001, { horario: '10:10' })] });
+      await irPara(page, 'proc');
+      await escolherNoProcessamento(page, 'p:2');
+      await acaoDoProcessamento(page, 'trazer').click();
+      await expect(page.locator('#toast-box')).toContainText(`Trazido de volta: Aluno 1001 (Voo Local) · ${DATA}.`);
+      await expect(campoDoProcessamento(page, 'Situação')).toHaveText(/^Na escala 10:10/);
+      await expect(page.locator('#det-proc')).not.toContainText('saiu do cadastro');
+      await expect(page.locator('#anuncio')).not.toContainText('saiu do cadastro');
+      await expect(page).toHaveURL(/#\/proc\/1001_0_1$/);
+      if (largura === 1280) await focoNaLinha(page, '1001_0_1');
+      else {
+        await expect(page.locator('#s-proc')).toHaveAttribute('data-vendo', 'detalhe');
+        await expect(page.locator('#det-proc')).toBeFocused();
+      }
+    });
+  }
+
+  test('"Atualizar a escala" com o detalhe do pedido aberto: o detalhe segue o pedido', async ({ page }) => {
+    await abrirComPedidos(page, { stu: [aluno(1000, { fly: false })], agenda: [pedido(1, 1000)] });
+    await irPara(page, 'proc');
+    await escolherNoProcessamento(page, 'p:1');
+    await botaoAtualizarAEscala(page).click();
+    await respondeu(page, 'Escala atualizada: entrou Aluno 1000');
+    await expect(campoDoProcessamento(page, 'Situação')).toHaveText(/^Na escala 08:20/);
+    await expect(page.locator('#det-proc')).not.toContainText('saiu do cadastro');
+    await expect(page.locator('#anuncio')).not.toContainText('saiu do cadastro');
+  });
+
+  test('"Aprovar pedido" no detalhe: a resposta do N6 (a linha de estado, o foco na linha) e o detalhe segue o pedido', async ({ page }) => {
+    await abrirComPedidos(page, { stu: [aluno(1000, { fly: false })], agenda: [pedido(1, 1000, aguardando)] });
+    await irPara(page, 'proc');
+    await escolherNoProcessamento(page, 'p:1');
+    await acaoDoProcessamento(page, 'aprovar').click();
+    await respondeu(page, 'Pedido aprovado: Aluno 1000 na escala 08:20');
+    await focoNaLinha(page, '1000_0_1');
+    await expect(campoDoProcessamento(page, 'Situação')).toHaveText(/^Na escala 08:20/);
+    await expect(page.locator('#det-proc')).not.toContainText('saiu do cadastro');
+  });
+
+  for (const [largura, altura] of [[1280, 800], [390, 844], [375, 812]]) {
+    test(`${largura} px: o "Mais" abre à vista, com a frase de "Recomeçar pelos pedidos"`, async ({ page }) => {
+      await page.setViewportSize({ width: largura, height: altura });
+      await abrirComPedidos(page, { stu: [aluno(1000, { fly: false })], agenda: [pedido(1, 1000)] });
+      await irPara(page, 'proc');
+      await page.locator('#btn-mais-proc').click();
+      await page.locator('#proc-recomecar').click();
+      await expect(page.locator('#proc-recomecar-frase')).not.toBeEmpty();
+      for (const el of ['#menu-mais-proc', '#proc-recomecar', '#proc-recomecar-frase']) {
+        const caixa = await page.locator(el).boundingBox();
+        expect(caixa.x, el).toBeGreaterThanOrEqual(0);
+        expect(caixa.x + caixa.width, el).toBeLessThanOrEqual(largura);
+      }
+    });
+  }
+
+  test('a marca "agora" e a linha de estado ficam na data da ação: em outra data, a linha da mesma chave não é marcada', async ({ page }) => {
+    await abrirComPedidos(page, {
+      stu: [comPedido(1000, 1, { fly: false })], importadas: [1], agenda: [pedido(1, 1000)], outrosDias: { '2026-11-12': [aluno(1000)] }
+    });
+    await irPara(page, 'proc');
+    await acaoNaLinha(page, '1000_0_1').click();
+    await respondeu(page, 'De volta à escala: Aluno 1000 (Voo Local)');
+    await expect(linhaDoProcessamento(page, '1000_0_1')).toHaveAttribute('data-recente', '');
+    await mudarData(page, '2026-11-12');
+    await expect(situacaoNoProcessamento(page, '1000_0_1')).toHaveText(/^Na escala/);
+    await expect(linhaDoProcessamento(page, '1000_0_1')).not.toHaveAttribute('data-recente', '');
+    await expect(estadoDoProcessamento(page)).toBeEmpty();
+    await mudarData(page, AMANHA);
+    await expect(linhaDoProcessamento(page, '1000_0_1')).not.toHaveAttribute('data-recente', '');
+  });
+
+  // Seis locais às 08:20 (o limite) e um 7º que espera
+  const sete = [1, 2, 3, 4, 5, 6, 7];
+  test('"Pôr de volta" de um voo que o motor deixa na lista de espera: a resposta diz "em espera às 08:20 · 2º"', async ({ page }) => {
+    await abrirComPedidos(page, {
+      stu: [...sete.map(n => comPedido(1000 + n, n)), comPedido(1010, 10, { fly: false })], ins: sete.map(id => instrutor(id, 9)),
+      importadas: [...sete, 10], agenda: [...sete.map(n => pedido(n, 1000 + n)), pedido(10, 1010)]
+    });
+    await irPara(page, 'proc');
+    await acaoNaLinha(page, '1010_0_1').click();
+    await respondeu(page, 'Posto de volta: Aluno 1010 (Voo Local), em espera às 08:20 · 2º');
+    await expect(situacaoNoProcessamento(page, '1010_0_1')).toHaveText('Em espera às 08:20 · 2º');
+  });
+
+  test('"Atualizar a escala" com sete locais aprovados às 08:20: a resposta separa os que entraram do que ficou em espera', async ({ page }) => {
+    await abrirComPedidos(page, { stu: sete.map(n => aluno(1000 + n, { fly: false })), ins: sete.map(id => instrutor(id, 9)), agenda: sete.map(n => pedido(n, 1000 + n)) });
+    await irPara(page, 'proc');
+    await botaoAtualizarAEscala(page).click();
+    await respondeu(page, 'Escala atualizada: entraram Aluno 1001, Aluno 1002, Aluno 1003 e mais 3; ficou em espera Aluno 1007');
+    await expect(situacaoNoProcessamento(page, '1007_0_1')).toHaveText('Em espera às 08:20 · 1º');
+  });
+
+  test('"Pôr de volta na escala" na gaveta aberta pelo Processamento: a linha de estado responde e o foco fica na gaveta', async ({ page }) => {
+    await abrirComPedidos(page, { stu: [comPedido(1000, 1, { fly: false })], importadas: [1], agenda: [pedido(1, 1000)] });
+    await irPara(page, 'proc');
+    await escolherNoProcessamento(page, '1000_0_1');
+    await acaoDoProcessamento(page, 'restricoes').click();
+    await gavetaDasRestricoes(page).locator('[data-act="por-de-volta"]').focus();
+    await page.keyboard.press('Enter');
+    await respondeu(page, 'De volta à escala: Aluno 1000 (Voo Local)');
+    await expect(gavetaDasRestricoes(page).locator('.restricoes-situacao')).toBeFocused();
+    await expect(gavetaDasRestricoes(page).locator('.restricoes-situacao')).toContainText('Na escala:');
+  });
+
+  // As buscas do Processamento, da Escala (o aluno, o instrutor ou a missão) e do BI acham o nome sem os acentos e sem
+  // diferença de maiúsculas (eram testadas pela Demanda)
+  test('as buscas do Processamento, da Escala e do BI acham o nome sem acentos', async ({ page }) => {
+    const estado = cenario({ ins: [instrutor(1, 9, { nm: 'Ângelo Brandão' }), instrutor(2, 9)], stu: [aluno(1000, {}, { nm: 'João Conceição' }), aluno(1001)] });
+    await abrir(page, { estado });
+    await irPara(page, 'proc');
+    await expect(linhasDoProcessamento(page)).toHaveCount(2);
+    await page.locator('#flt-proc').fill('joao conceicao');
+    await expect(linhasDoProcessamento(page)).toHaveCount(1);
+    await expect(linhasDoProcessamento(page)).toHaveAttribute('data-proc', '1000_0_1');
+    await page.locator('#flt-proc').fill('JOÃO');
+    await expect(linhasDoProcessamento(page)).toHaveCount(1);
+    await page.locator('#flt-proc').fill('');
+
+    // As linhas dos voos (sem a do horário)
+    await abrirEscala(page);
+    const voos = async () => (await lerEscala(page)).linhas.filter(l => l.includes(' | '));
+    expect(await voos()).toHaveLength(2);
+    await page.locator('#flt-esc-q').fill('conceicao');
+    await expect.poll(async () => (await voos()).map(l => l.includes('| João Conceição |'))).toEqual([true]);
+    await page.locator('#flt-esc-q').fill('angelo brandao');
+    await expect.poll(async () => (await voos()).map(l => l.includes('| Ângelo Brandão |'))).toEqual([true]);
+    await page.locator('#flt-esc-q').fill('');
+
+    await irPara(page, 'bi');
+    const noBI = page.locator('#bi-content [data-bi="ins"] tbody tr');
+    await expect(noBI).toHaveCount(2);
+    await page.locator('#bi-flt-ins').fill('angelo');
+    await expect(noBI).toHaveCount(1);
+    await expect(noBI).toContainText('Ângelo Brandão');
   });
 });

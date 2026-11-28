@@ -42,7 +42,7 @@ test.describe('Celular', () => {
     // A faixa rolada até o fim, como depois de tocar num dos últimos links: o Processamento fica fora, à esquerda
     await page.locator('#linha .linha-corpo').evaluate(faixa => { faixa.scrollLeft = faixa.scrollWidth; });
     expect(await naFaixa('proc')).toBe(false);
-    // O link como os de dentro das telas (href="#/dem", data-focar), na tela aberta
+    // O link como os de dentro das telas (href="#/proc", data-focar), na tela aberta
     await page.locator('#s-alu').evaluate(tela => tela.insertAdjacentHTML('afterbegin', '<a class="btn quiet" href="#/proc" data-focar>Abrir o Processamento</a>'));
     await page.getByRole('link', { name: 'Abrir o Processamento' }).click();
     await expect(page.locator('#s-proc h2')).toBeFocused();
