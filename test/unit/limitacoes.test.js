@@ -3,7 +3,13 @@
 // gravado, as regras (o tipo, o início: a regra das faixas dos INVAs, R4) e os textos da tela e do motor
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { MAXIMO_DE_HORARIOS, normalizarLimitacoes } from '../../js/limitacoes.js';
+import {
+  MAXIMO_DE_HORARIOS, normalizarLimitacoes, tipoPermitido, inicioPermitido, limitadoNoHorario, limitacoesNaData, comLimitacoesDaData,
+  motivoDoTipo, motivoDoHorario, textoDosHorarios, quandoOAlunoVoa
+} from '../../js/limitacoes.js';
+
+// 2026-11-30 é uma segunda-feira; 2026-12-01, terça; 2026-12-05, sábado; 2026-12-06, domingo
+const SEGUNDA = '2026-11-30', TERCA = '2026-12-01', SABADO = '2026-12-05', DOMINGO = '2026-12-06';
 
 describe('normalizarLimitacoes: só o que tem o formato fica; vazio, nada', () => {
   it('sem limitação (ausente, vazia, de outro tipo): null', () => {
@@ -41,5 +47,112 @@ describe('normalizarLimitacoes: só o que tem o formato fica; vazio, nada', () =
     const copia = structuredClone(v);
     normalizarLimitacoes(v);
     assert.deepEqual(v, copia);
+  });
+});
+
+describe('tipoPermitido: o tipo do pedido entre os que o aluno voa', () => {
+  it('sem limitação, todos', () => {
+    for (const t of ['C152', 'C172', 'PA-34', 'Sim. Mono', 'Sim. Multi', 'Sala Ground']) assert.equal(tipoPermitido(undefined, t), true);
+  });
+
+  it('a limitação vale para a espécie que ela nomeia: os aviões, ou os simuladores; a Sala Ground nunca', () => {
+    const soC172 = { recursos: ['C172'] };
+    assert.deepEqual(['C152', 'C172', 'PA-34', 'Sim. Mono', 'Sim. Multi', 'Sala Ground'].map(t => tipoPermitido(soC172, t)), [false, true, false, true, true, true]);
+    const soMulti = { recursos: ['Sim. Multi'] };
+    assert.deepEqual(['C152', 'Sim. Mono', 'Sim. Multi'].map(t => tipoPermitido(soMulti, t)), [true, false, true]);
+    const dois = { recursos: ['C152', 'C172', 'Sim. Mono'] };
+    assert.deepEqual(['C152', 'C172', 'PA-34', 'Sim. Mono', 'Sim. Multi'].map(t => tipoPermitido(dois, t)), [true, true, false, true, false]);
+  });
+
+  it('o motivo: "o aluno só voa no C172"; com dois, "no C152 ou no C172"; o tipo que ele voa, null', () => {
+    assert.equal(motivoDoTipo({ recursos: ['C172'] }, 'C152'), 'o aluno só voa no C172');
+    assert.equal(motivoDoTipo({ recursos: ['C152', 'C172'] }, 'PA-34'), 'o aluno só voa no C152 ou no C172');
+    assert.equal(motivoDoTipo({ recursos: ['Sim. Multi'] }, 'Sim. Mono'), 'o aluno só voa no Sim. Multi');
+    assert.equal(motivoDoTipo({ recursos: ['C172'] }, 'C172'), null);
+    assert.equal(motivoDoTipo({ recursos: ['C172'] }, 'Sim. Mono'), null);
+    assert.equal(motivoDoTipo(null, 'C152'), null);
+  });
+});
+
+describe('inicioPermitido: a regra do início, como nas faixas dos INVAs (R4)', () => {
+  const tarde = { horarios: [{ de: 780, ate: 1080 }] };
+  it('a missão começa dentro de um horário, [de, ate), e pode terminar depois dele', () => {
+    assert.deepEqual([770, 780, 1000, 1079, 1080].map(m => inicioPermitido(tarde, m)), [false, true, true, true, false]);
+  });
+
+  it('sem horários, qualquer início; com vários, qualquer um deles', () => {
+    assert.equal(inicioPermitido(undefined, 400), true);
+    assert.equal(inicioPermitido({ recursos: ['C172'] }, 400), true);
+    const dois = { horarios: [{ de: 420, ate: 540 }, { de: 780, ate: 1080 }] };
+    assert.deepEqual([420, 600, 800].map(m => inicioPermitido(dois, m)), [true, false, true]);
+  });
+
+  it('um horário com dias só vale lido para a data (limitacoesNaData): sem a data, não é início (a limitação é dura)', () => {
+    assert.equal(inicioPermitido({ horarios: [{ de: 780, ate: 1080, dias: [1] }] }, 800), false);
+    assert.equal(limitadoNoHorario({ horarios: [] }), true);
+    assert.equal(inicioPermitido({ horarios: [] }, 800), false);
+    assert.equal(limitadoNoHorario({ recursos: ['C172'] }), false);
+  });
+});
+
+describe('limitacoesNaData: os horários do dia da semana da data', () => {
+  const l = { recursos: ['C172'], horarios: [{ de: 420, ate: 720, dias: [1, 3, 5] }, { de: 780, ate: 1080 }] };
+  it('fica o que vale na data, sem os dias', () => {
+    assert.deepEqual(limitacoesNaData(l, SEGUNDA), { recursos: ['C172'], horarios: [{ de: 420, ate: 720 }, { de: 780, ate: 1080 }] });
+    assert.deepEqual(limitacoesNaData(l, TERCA), { recursos: ['C172'], horarios: [{ de: 780, ate: 1080 }] });
+  });
+
+  it('nenhum horário na data: a lista vazia (o aluno não voa nela); sem limitação, null', () => {
+    assert.deepEqual(limitacoesNaData({ horarios: [{ de: 420, ate: 720, dias: [1] }] }, TERCA), { horarios: [] });
+    assert.deepEqual(limitacoesNaData({ horarios: [{ de: 420, ate: 720, dias: [6] }] }, SABADO), { horarios: [{ de: 420, ate: 720 }] });
+    assert.deepEqual(limitacoesNaData({ horarios: [{ de: 420, ate: 720, dias: [1, 2, 3, 4, 5, 6] }] }, DOMINGO), { horarios: [] });
+    assert.equal(limitacoesNaData(null, SEGUNDA), null);
+    assert.equal(limitacoesNaData({ x: 1 }, SEGUNDA), null);
+  });
+
+  it('a data que não é uma data: os horários com dias não valem', () => {
+    assert.deepEqual(limitacoesNaData({ horarios: [{ de: 420, ate: 720, dias: [1] }, { de: 780, ate: 1080 }] }, ''), { horarios: [{ de: 780, ate: 1080 }] });
+  });
+});
+
+describe('comLimitacoesDaData: o estado que o motor lê na data', () => {
+  it('sem limitação com dias, o próprio estado (nada é copiado)', () => {
+    const estado = { stu: [{ id: 1, nm: 'A' }, { id: 2, nm: 'B', limitacoes: { recursos: ['C172'], horarios: [{ de: 780, ate: 1080 }] } }] };
+    assert.equal(comLimitacoesDaData(estado, SEGUNDA), estado);
+  });
+
+  it('com dias, cada aluno com os horários da data; os outros alunos, os mesmos objetos', () => {
+    const a = { id: 1, nm: 'A' };
+    const b = { id: 2, nm: 'B', limitacoes: { horarios: [{ de: 420, ate: 720, dias: [2] }] } };
+    const estado = { stu: [a, b], outro: 1 };
+    const novo = comLimitacoesDaData(estado, SEGUNDA);
+    assert.notEqual(novo, estado);
+    assert.equal(novo.stu[0], a);
+    assert.deepEqual(novo.stu[1], { id: 2, nm: 'B', limitacoes: { horarios: [] } });
+    assert.equal(novo.outro, 1);
+    assert.deepEqual(b.limitacoes.horarios[0].dias, [2], 'o estado de antes não muda');
+    assert.deepEqual(comLimitacoesDaData(estado, TERCA).stu[1].limitacoes, { horarios: [{ de: 420, ate: 720 }] });
+  });
+});
+
+describe('Os textos', () => {
+  it('os horários: "13:00–18:00 (seg, qua, sex)"; nenhum, "nenhum horário nesta data"', () => {
+    assert.equal(textoDosHorarios([{ de: 780, ate: 1080, dias: [1, 3, 5] }, { de: 420, ate: 540 }]), '13:00–18:00 (seg, qua, sex); 07:00–09:00');
+    assert.equal(textoDosHorarios([{ de: 780, ate: 1440 }]), '13:00–24:00');
+    assert.equal(textoDosHorarios([]), 'nenhum horário nesta data');
+  });
+
+  it('o motivo do horário de fora, com os horários da data: "o aluno só voa das 13:00 às 18:00"', () => {
+    assert.equal(motivoDoHorario({ horarios: [{ de: 780, ate: 1080 }] }), 'o aluno só voa das 13:00 às 18:00');
+    assert.equal(motivoDoHorario({ horarios: [{ de: 420, ate: 540 }, { de: 780, ate: 1080 }] }), 'o aluno só voa das 07:00 às 09:00 ou das 13:00 às 18:00');
+    assert.equal(motivoDoHorario({ horarios: [] }), 'o aluno não voa nesta data');
+    assert.equal(motivoDoHorario({ recursos: ['C172'] }), null);
+  });
+
+  it('o que o motor diz do quando: o horário do pedido e as limitações, juntos ("às 08:20; Limitações: 13:00–18:00")', () => {
+    assert.equal(quandoOAlunoVoa('às 08:20', null), 'às 08:20');
+    assert.equal(quandoOAlunoVoa(null, { horarios: [{ de: 780, ate: 1080 }] }), 'Limitações: 13:00–18:00');
+    assert.equal(quandoOAlunoVoa('às 08:20', { horarios: [{ de: 780, ate: 1080 }] }), 'às 08:20; Limitações: 13:00–18:00');
+    assert.equal(quandoOAlunoVoa(null, { horarios: [] }), 'Limitações: nenhum horário nesta data');
   });
 });

@@ -219,3 +219,19 @@ describe('conferirEscala: a escala conferida sem o motor', async () => {
     assert.deepEqual(doPar(conferirEscala(movido2, motor2, { antes: soAs820 }).al), [['1000_0_1', inicio]]);
   });
 });
+
+// L (N9): a limitação do aluno que a escala montada quebra (o tipo, o início) é um conflito do voo, também conferida sem o
+// motor (F1g: a escala aprovada que o operador muda na Escala): o voo fica onde está
+describe('conferirEscala e as limitações do aluno', () => {
+  it('a limitação nova deixa o voo em conflito, sem mover nenhum voo', async () => {
+    const { conferirEscala } = await import('../../js/conferencia.js');
+    const { cenario, aluno, instrutor } = await import('../helpers/montar.js');
+    const base = cenario({ ins: [instrutor(1, 9), instrutor(2, 9)], stu: [aluno(1000, { p1: 500, p2: -1 }), aluno(1001, { p1: 610, p2: -1 })] });
+    const motor = runAllocationEngine(base);
+    const estado = { ...base, stu: [{ ...base.stu[0], limitacoes: { recursos: ['C172'], horarios: [{ de: 780, ate: 1080 }] } }, base.stu[1]] };
+    const c = conferirEscala(estado, motor, { antes: base });
+    assert.deepEqual(c.out.map(o => [o.stuId, o.a, o.r, o.conflitoCodigos || null]),
+      motor.out.map(o => [o.stuId, o.a, o.r, o.stuId === 1000 ? ['limitacao-de-recurso', 'limitacao-de-horario'] : null]));
+    assert.deepEqual(c.out.find(o => o.stuId === 1000).conflito, ['o aluno só voa no C172', 'o horário está fora das limitações do aluno (13:00–18:00)']);
+  });
+});

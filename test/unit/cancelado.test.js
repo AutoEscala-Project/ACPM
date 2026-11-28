@@ -860,3 +860,37 @@ describe('A vaga do voo cancelado para a lista de espera', () => {
     assert.equal(validarReversao({ ...rev, recusas: [{ ...rev.recusas[0], espera: 'x' }] }), null);
   });
 });
+
+// L (N9): as Sugestões usam as limitações do aluno como o motor: nenhum horário fora dos horários dele, nenhum tipo em que
+// ele não voa (do voo cancelado e do conflito); sem nenhum, o porquê diz
+describe('As Sugestões e as limitações do aluno', () => {
+  it('o cancelado: só os horários do aluno e os tipos em que ele voa; sem nenhum, o porquê', async () => {
+    const { inicioPermitido } = await import('../../js/limitacoes.js');
+    const limitacoes = { recursos: ['C152'], horarios: [{ de: 780, ate: 900 }] };
+    const base = cenario({ ins: [instrutor(1, 9), instrutor(2, 9)], stu: [aluno(1000, { p1: 820, p2: -1 }, { limitacoes })] });
+    const { estado, resultado, voo } = cancelado(base, 1000, 'Meteorologia');
+    const r = sugerirParaCancelado(estado, resultado, voo.fKey);
+    assert.ok(r.opcoes.length >= 1, JSON.stringify(r));
+    assert.ok(r.opcoes.every(o => inicioPermitido(limitacoes, o.mudancas.a) && (o.pedido || {}).eq === undefined), JSON.stringify(r.opcoes));
+    // Um horário só, o do voo (cancelado pela meteorologia nele): nenhum lugar, e o porquê de cada grupo
+    const so = cancelado(cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, { p1: 820, p2: -1 }, { limitacoes: { recursos: ['C152'], horarios: [{ de: 820, ate: 830 }] } })] }), 1000, 'Meteorologia');
+    const nenhum = sugerirParaCancelado(so.estado, so.resultado, so.voo.fKey);
+    assert.deepEqual(nenhum.opcoes, []);
+    assert.match(nenhum.impossivel[1], /^Em outro horário: fora dos horários do aluno \(/);
+    assert.equal(nenhum.impossivel[2], 'Em outro tipo de recurso: no C172, o aluno só voa no C152; no PA-34, o aluno só voa no C152.');
+  });
+
+  it('o conflito: no horário, só os horários do aluno; no tipo, só outro tipo em que ele voa (nunca outro avião do mesmo tipo)', () => {
+    const base = cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, { p1: 500, p2: -1 })] });
+    const o = runAllocationEngine(base).out[0];
+    const fixos = { [o.fKey]: pinoDoVoo(o) };
+    const comHorario = { ...base, fixos, stu: [{ ...base.stu[0], limitacoes: { horarios: [{ de: 780, ate: 900 }] } }] };
+    const s1 = sugerirReparos(comHorario, runAllocationEngine(comHorario), o.fKey, { maximo: 5 }).filter(x => x.mudancas);
+    assert.ok(s1.length >= 1, 'há horário do aluno livre');
+    assert.ok(s1.every(x => x.mudancas.a >= 780 && x.mudancas.a < 900), JSON.stringify(s1));
+    const comTipo = { ...base, fixos, stu: [{ ...base.stu[0], limitacoes: { recursos: ['C172'] } }] };
+    const s2 = sugerirReparos(comTipo, runAllocationEngine(comTipo), o.fKey, { maximo: 5 }).filter(x => x.mudancas);
+    assert.ok(s2.length >= 1, 'há um C172 livre');
+    assert.ok(s2.every(x => x.pedido && x.pedido.eq === 'C172'), JSON.stringify(s2));
+  });
+});

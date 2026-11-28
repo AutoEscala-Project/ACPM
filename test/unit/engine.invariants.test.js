@@ -7,7 +7,8 @@ import { EQ, GROUND_REG, ACROBAT_REG, DEFAULT_LIM, AIRCRAFT_EQ_TYPES } from '../
 import { isGroundMission, doesGroundGateFlight } from '../../js/rules.js';
 import { podeFazer } from '../../js/habilitacoes.js';
 import { categoriaDoRodizio } from '../../js/rodizio.js';
-import { gerarCenario, comEscolhas, comAtributos, comVolta, comAgenda, FORA_DO_CADASTRO, mulberry32 } from '../helpers/cenarios.js';
+import { gerarCenario, comEscolhas, comAtributos, comVolta, comAgenda, comLimitacoes, FORA_DO_CADASTRO, mulberry32 } from '../helpers/cenarios.js';
+import { tipoPermitido, inicioPermitido } from '../../js/limitacoes.js';
 import { FROTA_POR_TIPO } from '../helpers/estado.js';
 import { FROTA_INICIAL, recursoDaFrota, aviaoServe, instrutorVoaNoAviao } from '../../js/frota.js';
 import { CODIGOS_DE_REJEICAO, CODIGOS_DO_AGENDADO } from '../../js/conflitos.js';
@@ -23,13 +24,15 @@ const TEMPO_DO_NOTURNO = INICIOS_DOS_TEMPOS.length - 1;
 const fimDoVoo = o => (o.mis !== 'Noturno' && AIRCRAFT_EQ_TYPES.includes(o.eqType) ? HORARIO_DO_NOTURNO : 1440);
 
 const SEEDS = Array.from({ length: 300 }, (_, i) => 1001 + i);
-// Cada seed cinco vezes: o cenário como foi gerado, com as escolhas do operador (o instrutor escolhido para o dia e o
+// Cada seed seis vezes: o cenário como foi gerado, com as escolhas do operador (o instrutor escolhido para o dia e o
 // “Priorizar com”), com os atributos dos recursos e os cursos dos alunos (“Só VFR”, habilitação própria, o noturno do
-// PC), com a volta do noturno de ontem e com os pedidos da Agenda (o horário exato, a ordem de registro e a lista de
-// espera): as regras da escala valem também com eles
+// PC), com a volta do noturno de ontem, com os pedidos da Agenda (o horário exato, a ordem de registro e a lista de
+// espera) e com as limitações dos alunos com os pedidos da Agenda (L: os tipos e os horários): as regras da escala valem
+// também com eles
 const execucoes = SEEDS.flatMap(seed => [
   [seed, gerarCenario(seed)], [`${seed} com escolhas`, comEscolhas(gerarCenario(seed), seed)], [`${seed} com atributos`, comAtributos(gerarCenario(seed), seed)],
-  [`${seed} com a volta do noturno`, comVolta(gerarCenario(seed), seed)], [`${seed} com a agenda`, comAgenda(gerarCenario(seed), seed)]
+  [`${seed} com a volta do noturno`, comVolta(gerarCenario(seed), seed)], [`${seed} com a agenda`, comAgenda(gerarCenario(seed), seed)],
+  [`${seed} com limitações`, comLimitacoes(comAgenda(gerarCenario(seed), seed), seed)]
 ].map(([rotulo, estado]) => {
   // out: os voos que o motor escala hoje; a volta do noturno de ontem (fixa, de outro dia) fica em voltas, e todos tem os dois
   const resultado = runAllocationEngine(estado);
@@ -69,6 +72,22 @@ describe('Invariantes do motor de alocação', () => {
       .forEach(o => porHorario.set(o.a, (porHorario.get(o.a) || 0) + 1));
     for (const [a, n] of porHorario) assert.ok(n <= 6, `${n} voos locais às ${a}`);
   }));
+
+  // L (N9): as limitações do aluno são duras para o motor. Nenhum voo sem pino num tipo em que o aluno não voa ou começando
+  // fora dos horários dele (a regra do início: [de, ate), terminar depois vale)
+  it('nenhum voo sem pino vai contra as limitações do aluno (o tipo e o início)', () => {
+    let limitados = 0;
+    emTodos(({ estado, out }) => {
+      for (const o of out.filter(v => !v.fixo)) {
+        const { stu } = pedidoDe(estado, o);
+        if (!stu.limitacoes) continue;
+        limitados++;
+        if (!o.isGround) assert.ok(tipoPermitido(stu.limitacoes, o.eqType), `${o.fKey} no ${o.eqType}: ${JSON.stringify(stu.limitacoes)}`);
+        assert.ok(inicioPermitido(stu.limitacoes, o.a), `${o.fKey} às ${hm(o.a)}: ${JSON.stringify(stu.limitacoes)}`);
+      }
+    });
+    assert.ok(limitados > 1000, `${limitados} voos de alunos com limitações (o teste não passa por falta deles)`);
+  });
 
   // A rejeição diz onde resolver
   it('toda rejeição tem um código da lista', () => emTodos(({ al }) => {
