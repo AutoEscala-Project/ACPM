@@ -517,7 +517,7 @@ test.describe('Recursos: a categoria e os horários de decolagem', () => {
     await expect(editor(page).locator('.horarios-efeito')).toHaveText('1 pedido muda de preferência.');
     await editor(page).locator('.hr-novo').fill('17:00');
     await editor(page).locator('.hr-novo').press('Enter');
-    await expect(editor(page).locator('[role="alert"]')).toHaveText('Escolha um horário entre 06:00 e 16:30.');
+    await expect(editor(page).locator('[role="alert"]')).toHaveText('Escolha um horário entre 06:30 e 16:30.');
     await editor(page).locator('.hr-novo').fill('07:45');
     await editor(page).locator('.hr-novo').press('Enter');
     await expect(editor(page).locator('.hr-chip', { hasText: '07:45' })).toHaveCount(1);
@@ -611,6 +611,36 @@ test.describe('Recursos: a categoria e os horários de decolagem', () => {
     await expect(horario).toHaveValue('');
     await expect(motivo).toHaveText('O horário 07:45 não é um dos de Navegação (PA-34). Escolha outro.');
     await expect(campoDaAgenda(page, 'obs')).toHaveValue('Prefere o PT-JOB');
+  });
+
+  // Pedro, 2026-11-28: "booked times should start at 6:30". O editor recusa antes das 06:30, o limite do horário exato da
+  // Agenda; a lista guardada com 06:00 (o editor aceitava) mostra e oferece 06:30, que a importação aceita
+  test('o primeiro horário é 06:30: o editor recusa 06:00 e põe 06:30; a lista guardada com 06:00 fica com 06:30, também na Agenda', async ({ page }) => {
+    await abrir(page, { estado: { ...cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000)] }), horarios: { C152: [360, 500], C172: [390], sim: [390], 'PA-34': [390], ground: [390] } } });
+    await abrirCategoria(page, 'C152');
+    const c152 = horariosDaCategoria(page).locator('[data-cat="C152"]');
+    await expect(c152.locator('.horarios-lista .hr')).toHaveText(['06:30', '08:20']);
+    await c152.locator('[data-act="editar-horarios"]').click();
+    const campo = editor(page).locator('.hr-novo');
+    await expect(campo).toHaveAttribute('min', '06:30');
+    await expect(editor(page).locator('.horarios-novo .h')).toHaveText('Enter também adiciona. Das 06:30 às 16:30.');
+    await editor(page).locator('[data-act="rascunho-tirar"][data-min="390"]').click();
+    for (const hora of ['06:00', '06:25']) {
+      await campo.fill(hora);
+      await campo.press('Enter');
+      await expect(editor(page).locator('[role="alert"]')).toHaveText('Escolha um horário entre 06:30 e 16:30.');
+      await expect(editor(page).locator('.hr-chip')).toHaveText(['08:20']);
+    }
+    await campo.fill('06:30');
+    await campo.press('Enter');
+    await expect(editor(page).locator('[role="alert"]')).toHaveText('');
+    await expect(editor(page).locator('.hr-chip')).toHaveText(['06:30', '08:20']);
+    await editor(page).locator('[data-act="cancelar-horarios"]').click();
+    await irPara(page, 'age');
+    await campoDaAgenda(page, 'aluno').selectOption({ label: 'Aluno 1000' });
+    await campoDaAgenda(page, 'missao').selectOption('Voo Local');
+    await campoDaAgenda(page, 'recurso').selectOption('C152');
+    await expect(campoDaAgenda(page, 'horario').locator('option:not([value=""])')).toHaveText(['06:30', '08:20']);
   });
 
   test('os modelos; Cancelar descarta; não tira o último horário; o Gestor não edita', async ({ page }) => {
@@ -708,7 +738,7 @@ test.describe('Recursos: a categoria e os horários de decolagem', () => {
     await erro.evaluate(el => { el.dataset.marca = '1'; });
     await campo.fill('17:00');
     await campo.press('Enter');
-    await expect(ed.locator('[role="alert"][data-marca="1"]')).toHaveText('Escolha um horário entre 06:00 e 16:30.');
+    await expect(ed.locator('[role="alert"][data-marca="1"]')).toHaveText('Escolha um horário entre 06:30 e 16:30.');
     await expect(campo).toBeFocused();
     await expect(campo).toHaveAttribute('aria-invalid', 'true');
     await expect(campo).toHaveAttribute('aria-describedby', new RegExp(`\\b${await erro.getAttribute('id')}\\b`));
