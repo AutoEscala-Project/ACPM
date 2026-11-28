@@ -73,6 +73,8 @@ const NOVAS = {
     'continua na demanda até Tirar da escala', 'dá a vaga ao 1º da lista de espera daquele horário', 'fica na escala, e o aviso diz por quê',
     // A decisão do Pedro (2026-11-28): a lista de espera vem antes do pedido de outro horário, e quem entra fica fixo
     'A lista de espera vem antes de um pedido que estava em outro horário', 'o 1º dela que couber entra e fica fixo no lugar',
+    // A revisão da decisão: o da lista de outro horário também muda de horário, e os da lista que entraram ficam fixos juntos
+    'ou na lista de espera de outro horário', 'os dela que entraram nas outras vagas do mesmo cancelamento ficam fixos também',
     'não põe de volta o voo de um pedido que saiu da demanda'],
   // A busca sem acentos, quantos aparecem e o "Limpar filtros"; a coluna Vem (a data aberta não é sempre hoje); o filtro
   // das habilitações, com várias marcas e a regra ("todas as marcadas")
