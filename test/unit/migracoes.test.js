@@ -423,6 +423,27 @@ describe('versão 29 (C): a disponibilidade dos instrutores em faixas e pausas',
     assert.deepEqual(instrutor29({ on: true, aw: [true, true, 0, 'sim', true, true, true, true, true] }).pausas, [{ de: T[2], ate: T[4] }]);
     assert.deepEqual(instrutor29({ on: true, aw: [true, false] }).faixas, [{ de: 390, ate: 1440 }]);
     assert.deepEqual(instrutor29({ on: true }), { on: true, faixas: [{ de: 390, ate: 1440 }], pausas: [] });
+    // Revisão externa de C2 (28/11): o aw vazio, o que não é lista e o longo demais também são o dia todo; nove "true"
+    // (texto) não marcam nada
+    for (const aw of [[], 'x', null, {}, 5, Array(10).fill(false)]) {
+      assert.deepEqual(instrutor29({ on: true, aw }).faixas, [{ de: 390, ate: 1440 }], JSON.stringify(aw));
+      assert.deepEqual(instrutor29({ on: true, aw }).pausas, [], JSON.stringify(aw));
+    }
+    assert.deepEqual(instrutor29({ on: true, aw: Array(9).fill('true') }).faixas, []);
+  });
+
+  // A data de antes do 29 e a mesma depois dele: a regra dá o mesmo em cada forma do aw (a regra lê o aw sem faixas como
+  // o passo o converte)
+  test('antes e depois do passo, a regra dá o mesmo, em cada forma do aw', () => {
+    const formas = [aberto(), T.map((_, i) => i !== 4), T.map(() => false), Array(8).fill(true), [...Array(9).fill(false), true], [], null, undefined, 0, 'x',
+      [1, 1, 0, 1, 1, 1, 1, 1, 1], Array(9).fill('true'), [true, null, true, true, true, true, true, true, true]];
+    for (const aw of formas) {
+      const antes = { on: true, aw };
+      const depois = instrutor29(structuredClone(antes));
+      for (let a = 300; a < 1500; a += 10) {
+        for (const d of [10, 60, 90, 120, 240, 300]) assert.equal(disponivelPara(depois, a, a + d), disponivelPara(antes, a, a + d), `${JSON.stringify(aw)} [${a}, ${a + d})`);
+      }
+    }
   });
 
   test('nenhum tempo marcado: nenhuma faixa', () => {
@@ -432,6 +453,11 @@ describe('versão 29 (C): a disponibilidade dos instrutores em faixas e pausas',
   test('idempotente: o instrutor que já tem faixas fica com elas, e duas vezes dá o mesmo', () => {
     const ja = { on: true, aw: aberto(), faixas: [{ de: 500, ate: 900 }], pausas: [{ de: 700, ate: 760 }] };
     assert.deepEqual(instrutor29(structuredClone(ja)), ja);
+    // Revisão externa de C2 (28/11): a lista de faixas, mesmo vazia, nunca é refeita pelo aw; sem pausas, continua sem
+    assert.deepEqual(instrutor29({ on: true, aw: aberto(), faixas: [] }), { on: true, aw: aberto(), faixas: [] });
+    assert.deepEqual(instrutor29({ on: true, aw: T.map(() => false), faixas: [{ de: 500, ate: 900 }] }), { on: true, aw: T.map(() => false), faixas: [{ de: 500, ate: 900 }] });
+    assert.equal(disponivelPara(instrutor29({ on: true, aw: aberto(), faixas: [] }), 600, 660), false);
+    assert.equal(disponivelPara(instrutor29({ on: true, aw: T.map(() => false), faixas: [{ de: 500, ate: 900 }] }), 600, 660), true);
     const aw = aberto();
     aw[1] = false;
     const uma = dia29({ ins: { 1: { on: true, aw }, 2: { on: false, aw: aberto() } }, pedidos: {} });

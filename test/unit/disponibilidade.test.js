@@ -167,6 +167,20 @@ describe('disponivelPara: a regra do início (decisão 1), com as pausas', () =>
   test('sem pausas (um estado que não as tem): só as faixas', () => {
     assert.equal(disponivelPara({ on: true, faixas: [{ de: 390, ate: 1440 }] }, 500, 560), true);
   });
+
+  // Revisão externa de C2 (28/11): o aw sem faixas é lido como a data aberta o lia (awComoOAppLia), na regra, no "O que
+  // cabe" e na tela; o app nunca entrega outra forma (normalizeAndMigrateState e o passo 29), mas a leitura é uma só
+  test('o aw fora do padrão: a regra e o "O que cabe" o leem como a tela (faixasDe), só true nas nove posições, senão o dia todo', () => {
+    const formas = [Array(8).fill(true), [...Array(9).fill(false), true], [], null, undefined, 0, [1, 1, 0, 1, 1, 1, 1, 1, 1], Array(9).fill('true')];
+    for (const aw of formas) {
+      const x = { on: true, aw };
+      const comoATela = { on: true, ...faixasDe(x) };
+      for (const [a, b] of INTERVALOS) assert.equal(disponivelPara(x, a, b), disponivelPara(comoATela, a, b), `${JSON.stringify(aw)} [${a}, ${b})`);
+      assert.deepEqual(oQueCabe(x), oQueCabe(comoATela), JSON.stringify(aw));
+    }
+    assert.equal(disponivelPara({ on: true }, 500, 560), true, 'sem aw: o dia todo');
+    assert.equal(disponivelPara({ on: true, aw: Array(9).fill(1) }, 500, 560), false, '1 não é true');
+  });
 });
 
 describe('normalizarFaixas e normalizarPausas', () => {
@@ -197,6 +211,18 @@ describe('refazerFaixasDoAw: a reversão de um agendamento antigo, que guardou s
     aw[2] = false;
     const x = refazerFaixasDoAw({ id: 1, on: true, aw, faixas: [{ de: 390, ate: 1440 }], pausas: [] });
     assert.deepEqual([x.faixas, x.pausas], [[{ de: 390, ate: T[2] }, { de: T[3], ate: 1440 }], [{ de: T[2], ate: T[3] }]]);
+  });
+
+  // faixasDoAw dá sempre as duas listas: as pausas de antes saem. O aw vem de validarReversao (nove booleanos); lido como
+  // a data aberta o lia, como o passo 29 e a tela
+  test('as pausas de antes saem; o aw é lido como a data aberta o lia', () => {
+    const aw = todos();
+    aw[3] = false;
+    assert.deepEqual(refazerFaixasDoAw({ on: true, aw, faixas: [{ de: 390, ate: 1440 }], pausas: [{ de: 900, ate: 930 }] }).pausas, [{ de: T[3], ate: T[4] }]);
+    assert.deepEqual(refazerFaixasDoAw({ on: true, aw: todos(), faixas: [{ de: 390, ate: 720 }, { de: 780, ate: 1440 }], pausas: [{ de: 720, ate: 780 }] }),
+      { on: true, aw: todos(), faixas: [{ de: 390, ate: 1440 }], pausas: [] });
+    assert.deepEqual(refazerFaixasDoAw({ on: true, aw: [true, true], faixas: [] }).faixas, [{ de: 390, ate: 1440 }], 'outro tamanho: o dia todo');
+    assert.deepEqual(refazerFaixasDoAw({ on: true, aw: [1, 1, 1, 0, 1, 1, 1, 1, 1], faixas: [] }).faixas, [], 'só true marca');
   });
 
   test('o que não tem faixas continua sem elas (lido pelo aw)', () => {
