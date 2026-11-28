@@ -9,10 +9,10 @@ import { gravarAlteracao, fotoDaEscalaTravada, gravarNaEscala } from '../actions
 import { $, showToast, trocarElemento, gavetaDoEsc, algumDialogoAberto } from '../dom.js';
 import { motivoParaNaoVoltarAVoar } from '../reversoes.js';
 import { fixarNoLugar } from '../fixos.js';
-import { fmtDurLabel } from '../format.js';
+import { fmtDurLabel, hm } from '../format.js';
 import { ligada } from '../funcionalidades.js';
 import { horariosDaMissao, ajustarPreferencias } from '../horarios.js';
-import { normalizeMissionFields } from '../rules.js';
+import { normalizeMissionFields, prioridadeNaTela } from '../rules.js';
 import { S, RES, DATA, stuBy, insBy, getMissionTarget } from '../state.js';
 import { chaveDoVoo } from '../voo.js';
 import { escolherInstrutor } from '../instrutor-escolhido.js';
@@ -22,7 +22,7 @@ import { aoAcionar, aoMudarCampo, aoReverter } from './registro.js';
 import { singleDemandRowHTML, cnt, conferirNenhumNaDemanda } from '../views/demanda.js';
 import { proximaDoPedido, outraMissaoDoPedido, botaoForaDaOrdem, confirmacaoDaMissao } from '../views/etapas.js';
 import {
-  abrirRestricoes, fecharRestricoes, desenharRestricoes, pendenteDasRestricoes, marcarPendente
+  abrirRestricoes, fecharRestricoes, desenharRestricoes, pendenteDasRestricoes, marcarPendente, perguntaAntesNaGaveta
 } from '../views/restricoes-do-voo.js';
 import { registrarDesenho, redesenharPorNome } from '../redesenho.js';
 import { perguntarAntesDeRefazer } from '../views/dialogo-refazer.js';
@@ -76,8 +76,7 @@ const doVoo = d => ({ mis: d.mis, eq: d.eq, nb: d.nb });
 // mudam)
 function usarMissaoDoCurso(s, target, mid, { codigo, curso, mis, eq: doPrograma, nb }) {
   const antes = doVoo(target);
-  const { eq, aviso } = tipoDaMissaoDoCurso(s, { codigo, mis, eq: doPrograma }, target, DATA);
-  if (aviso) showToast(aviso);
+  const { eq } = tipoDaMissaoDoCurso(s, { codigo, mis, eq: doPrograma }, target, DATA);
   // A confirmação do 7º voo local (Q8) foi dada na Agenda para a missão e o recurso de antes: com outros, ela não vale
   if (target.etapa !== codigo || target.cursoDaEtapa !== curso || target.mis !== mis || target.eq !== eq) delete target.limiteConfirmado;
   Object.assign(target, { fly: true, mis, eq, nb, etapa: codigo, cursoDaEtapa: curso });
@@ -87,6 +86,22 @@ function usarMissaoDoCurso(s, target, mid, { codigo, curso, mis, eq: doPrograma,
   normalizeMissionFields(target);
   return soltarSeMudou(s, mid, antes, target);
 }
+// O aviso da missão do curso no pedido: o tipo que o aluno voa no lugar do do programa (R7), ou nenhum
+const avisoDaMissao = (s, target, { codigo, mis, eq }) => tipoDaMissaoDoCurso(s, { codigo, mis, eq }, target, DATA).aviso;
+
+// Na escala não aprovada, a mudança feita na gaveta aberta pela Escala (o editor do voo, o item do trilho) pergunta antes
+// de refazer (F1g, R6: #dlg-refazer), com o aviso dela na pergunta (uma pergunta, não duas); "Cancelar" (e o Esc) redesenha
+// a gaveta com o valor de antes, sem gravar. Pela linha da Demanda (até o G2) e na escala aprovada, grava na hora (o aviso
+// num toast). el: o campo ou o botão da mudança
+function gravarOuPerguntar(el, { resumo, aviso = null }, gravar) {
+  if (el.closest('#painel-restricoes') && perguntaAntesNaGaveta()) {
+    perguntarAntesDeRefazer({ resumo, avisos: aviso ? [{ texto: aviso }] : [], aoConfirmar: gravar, aoDesistir: desenharRestricoes });
+    return;
+  }
+  if (aviso) showToast(aviso);
+  gravar();
+}
+
 // O pedido como ficou, para o histórico
 const missaoDoPedido = d => `${d.mis} · ${d.eq} · ${fmtDurLabel(d.nb)}`;
 // O curso encerrado no histórico (a missão foi confirmada assim)
@@ -101,9 +116,11 @@ aoAcionar('usar-proxima', (b, { id, mid }) => {
   const m = s && target ? proximaDoPedido(s, mid) : null;
   if (!m) return;
   if (m.encerrado && !confirmado(b, `Confirmar: ${m.id} do curso encerrado`)) return;
-  const solto = usarMissaoDoCurso(s, target, mid, { ...m, codigo: m.id });
-  gravarAlteracao('inc', `${s.nm}: ${m.id} na demanda (${missaoDoPedido(target)})${comOCursoEncerrado(m.encerrado, m.curso)}${solto}`);
-  depoisDeMudar(s, target, mid);
+  gravarOuPerguntar(b, { resumo: `${s.nm}: missão do curso ${m.id}`, aviso: avisoDaMissao(s, target, { ...m, codigo: m.id }) }, () => {
+    const solto = usarMissaoDoCurso(s, target, mid, { ...m, codigo: m.id });
+    gravarAlteracao('inc', `${s.nm}: ${m.id} na demanda (${missaoDoPedido(target)})${comOCursoEncerrado(m.encerrado, m.curso)}${solto}`);
+    depoisDeMudar(s, target, mid);
+  });
 });
 
 // "Trocar…" (as outras missões do curso): a liberada vale na hora, como "Usar a do programa". A fora da ordem (a missão
@@ -115,9 +132,11 @@ function escolherOutraMissao(t, c, s, target, mid) {
   if (!escolha) { atualizarLinhaDaDemanda(s, target, mid); desenharRestricoes(); return; }
   const { missao: m } = escolha;
   if (escolha.liberada && !escolha.encerrado) {
-    const solto = usarMissaoDoCurso(s, target, mid, { ...m, curso: escolha.curso });
-    gravarAlteracao('inc', `${s.nm}: ${m.codigo} na demanda (${missaoDoPedido(target)})${solto}`);
-    depoisDeMudar(s, target, mid);
+    gravarOuPerguntar(t, { resumo: `${s.nm}: missão do curso ${m.codigo}`, aviso: avisoDaMissao(s, target, m) }, () => {
+      const solto = usarMissaoDoCurso(s, target, mid, { ...m, curso: escolha.curso });
+      gravarAlteracao('inc', `${s.nm}: ${m.codigo} na demanda (${missaoDoPedido(target)})${solto}`);
+      depoisDeMudar(s, target, mid);
+    });
     return;
   }
   c.querySelector('[data-act="usar-fora-da-ordem"]')?.remove();
@@ -135,10 +154,12 @@ aoAcionar('usar-fora-da-ordem', (b, { id, mid }) => {
   if (!escolha) { redesenharPorNome('pedidos-do-dia'); desenharRestricoes(); return; }
   const { missao: m } = escolha;
   if ((!escolha.liberada || escolha.encerrado) && !confirmado(b, confirmacaoDaMissao(escolha).armado)) return;
-  const solto = usarMissaoDoCurso(s, target, mid, { ...m, curso: escolha.curso });
-  const como = escolha.liberada ? ` (${missaoDoPedido(target)})` : `, fora da ordem (${escolha.motivo})`;
-  gravarAlteracao('inc', `${s.nm}: ${m.codigo} na demanda${como}${comOCursoEncerrado(escolha.encerrado, escolha.curso)}${solto}`);
-  depoisDeMudar(s, target, mid);
+  gravarOuPerguntar(b, { resumo: `${s.nm}: missão do curso ${m.codigo}`, aviso: avisoDaMissao(s, target, m) }, () => {
+    const solto = usarMissaoDoCurso(s, target, mid, { ...m, curso: escolha.curso });
+    const como = escolha.liberada ? ` (${missaoDoPedido(target)})` : `, fora da ordem (${escolha.motivo})`;
+    gravarAlteracao('inc', `${s.nm}: ${m.codigo} na demanda${como}${comOCursoEncerrado(escolha.encerrado, escolha.curso)}${solto}`);
+    depoisDeMudar(s, target, mid);
+  });
 });
 
 // O "✕" da Escala (a linha e o editor do voo) tira o voo da escala. Na escala aprovada, sem o motor (F1g): o voo fica fixo
@@ -177,6 +198,26 @@ function gravarCampo(s, target, mid, f, valor) {
   depoisDeMudar(s, target, mid);
 }
 
+// O que a pergunta diz da mudança de um campo ("Aluno 1003: tipo de recurso C152 → C172"); o pedido como ficaria vem do
+// ensaio de aplicarRestricao numa cópia
+const ROTULO_DO_CAMPO = { eq: 'tipo de recurso', p1: '1ª preferência', p2: '2ª preferência', nb: 'duração', pr: 'prioridade', mis: 'missão' };
+function valorNoResumo(f, d) {
+  if (f === 'p1' || f === 'p2') return d[f] >= 0 ? hm(d[f]) : '—';
+  if (f === 'nb') return fmtDurLabel(d.nb);
+  if (f === 'pr') return String(prioridadeNaTela(d.pr));
+  return String(d[f]);
+}
+// A mudança do campo, com a pergunta quando ela vale (gravarOuPerguntar): o valor que não vale ou não muda nada grava (ou
+// recusa, com o motivo) sem perguntar
+function mudarCampo(t, s, target, mid, f, valor, aviso) {
+  const ensaio = structuredClone(target);
+  const feito = aplicarRestricao(ensaio, f, valor, { horarios: S.horarios });
+  const igual = feito.aplicada && JSON.stringify(ensaio) === JSON.stringify(target);
+  if (!feito.aplicada || igual) { gravarCampo(s, target, mid, f, valor); return; }
+  const resumo = `${s.nm}: ${ROTULO_DO_CAMPO[f]} ${valorNoResumo(f, target)} → ${valorNoResumo(f, ensaio)}`;
+  gravarOuPerguntar(t, { resumo, aviso }, () => gravarCampo(s, target, mid, f, valor));
+}
+
 // Os campos de um pedido: os das restrições (a gaveta) e os da linha da Demanda (o Voa e a missão, até o G2)
 aoMudarCampo('d', (t, { f, c, id, mid }) => {
   const s = stuBy(id);
@@ -191,10 +232,13 @@ aoMudarCampo('d', (t, { f, c, id, mid }) => {
     // O instrutor escolhido: o app procura o horário e o avião com ele. O voo que já está fixo fica onde está, com o
     // instrutor novo (na turma de Ground, a turma inteira). O de "Não escalar com" está desligado na lista
     const x = t.value ? insBy(+t.value) : null;
-    const { antes, alunos } = escolherInstrutor(S, RES, { stuId: s.id, mid }, x ? x.id : null);
-    gravarAlteracao('mod', `Pedido ${s.nm}: instrutor ${x ? x.nm : 'automático'} (${target.mis})`, { kind: 'restaurarEscolha', ...antes, label: '↶ Reverter' });
-    if (alunos > 1) showToast(`A turma de ${target.mis} passa inteira para ${x ? x.nm : 'a escolha do app'}.`, 'ok');
-    depoisDeMudar(s, target, mid);
+    const nomeDe = id => (id ? (insBy(id) || {}).nm || 'Instrutor fora do cadastro' : 'Automático');
+    gravarOuPerguntar(t, { resumo: `${s.nm}: instrutor ${nomeDe(target.insId)} → ${nomeDe(x && x.id)}` }, () => {
+      const { antes, alunos } = escolherInstrutor(S, RES, { stuId: s.id, mid }, x ? x.id : null);
+      gravarAlteracao('mod', `Pedido ${s.nm}: instrutor ${x ? x.nm : 'automático'} (${target.mis})`, { kind: 'restaurarEscolha', ...antes, label: '↶ Reverter' });
+      if (alunos > 1) showToast(`A turma de ${target.mis} passa inteira para ${x ? x.nm : 'a escolha do app'}.`, 'ok');
+      depoisDeMudar(s, target, mid);
+    });
     return;
   }
   if (f === 'fly') {
@@ -213,15 +257,16 @@ aoMudarCampo('d', (t, { f, c, id, mid }) => {
     redesenharPorNome('historico');
     return;
   }
-  // O tipo e o horário contra as limitações do aluno na data (L): o aviso e a confirmação, sem gravar nada antes
+  // O tipo e o horário contra as limitações do aluno na data (L): o aviso e a confirmação, sem gravar nada antes. Com a
+  // pergunta antes de refazer (a gaveta aberta pela Escala, na escala não aprovada), o aviso vai nela: uma pergunta só
   const aviso = avisoDaRestricao(s, f, f === 'eq' ? t.value : +t.value, DATA);
-  if (aviso) {
+  if (aviso && !(t.closest('#painel-restricoes') && perguntaAntesNaGaveta())) {
     marcarPendente({ stuId: s.id, mid, campo: f, valor: t.value, aviso });
     desenharRestricoes();
     return;
   }
   marcarPendente(null);
-  gravarCampo(s, target, mid, f, t.value);
+  mudarCampo(t, s, target, mid, f, t.value, aviso);
 });
 
 // "Usar … mesmo assim": o tipo ou o horário que esperava grava (o motor recusa o pedido assim, com o motivo); "Manter"

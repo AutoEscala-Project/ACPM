@@ -27,6 +27,9 @@ let pendente = null;
 
 export const pendenteDasRestricoes = () => pendente;
 export function marcarPendente(p) { pendente = p; }
+// A gaveta aberta pela Escala (o editor do voo, o item do trilho), não pela linha da Demanda (até o G2): na escala não
+// aprovada, cada mudança dela pergunta antes de refazer (F1g, R6: #dlg-refazer)
+export const perguntaAntesNaGaveta = () => Boolean(aberta && aberta.daEscala && !S.aprovacao);
 
 const op = ({ valor, texto, desligada }, atual) => `<option value="${esc(valor)}"${String(valor) === String(atual) ? ' selected' : ''}${desligada ? ' disabled' : ''}>${esc(texto)}</option>`;
 const dica = (nome, rotulo) => `<button type="button" class="dica-btn" data-dica="${nome}" aria-label="O que é ${esc(rotulo)}?" aria-expanded="false"></button>`;
@@ -126,7 +129,7 @@ export function desenharRestricoes() {
       <button class="x" type="button" id="btn-fechar-restricoes" aria-label="Fechar as restrições">✕</button>
     </div>
     <p class="h">${resumo}${aberta.mid ? ' (missão extra)' : ''}</p>
-    <p class="h">O que o app lê para encaixar o pedido na escala${isGestor() ? '' : ': cada mudança refaz a escala em volta dos voos fixos'}.</p>`;
+    <p class="h">O que o app lê para encaixar o pedido na escala${isGestor() ? '' : `: cada mudança refaz a escala em volta dos voos fixos${perguntaAntesNaGaveta() ? ', depois da pergunta' : ''}`}.</p>`;
   const corpo = `${situacaoDoPedido(stu, d, aberta.mid)}<div class="restricoes-campos" data-k="d" data-id="${esc(stu.id)}" data-mid="${esc(aberta.mid)}">${corpoDasRestricoes(stu, d, aberta.mid)}</div>`;
   if (!painel.querySelector('.restricoes-corpo')) painel.innerHTML = `<div class="restricoes-cab"></div><div class="restricoes-corpo"></div>`;
   trocarConteudo(painel.querySelector('.restricoes-cab'), cabeca);
@@ -138,7 +141,7 @@ export function desenharRestricoes() {
 export function abrirRestricoes(stuId, mid, { origem = null } = {}) {
   if (!getMissionTarget(stuId, mid)) return false;
   if (!aberta || aberta.stuId !== stuId || aberta.mid !== mid) pendente = null;
-  aberta = { stuId, mid, data: DATA, origem };
+  aberta = { stuId, mid, data: DATA, origem, daEscala: !(origem && origem.closest && origem.closest('#s-dem')) };
   const painel = $('#painel-restricoes');
   painel.innerHTML = '';
   desenharRestricoes();
