@@ -40,8 +40,9 @@ test.describe('Alunos', () => {
     await expect(etiquetasDoAberto(page, 'bl')).toHaveCount(0);
     await expect(campoDoAberto(page, 'bl')).toBeFocused();
 
-    await irPara(page, 'dem');
-    await expect(page.locator('#dem tr[data-k="d"]')).toHaveCount(1);
+    // O aluno novo não tem pedido nem voo: o Processamento não o lista (a Demanda listava todo aluno; G2)
+    await irPara(page, 'proc');
+    await expect(page.locator('#proc > li.lista-linha')).toHaveCount(0);
 
     // De volta, o aluno continua aberto; "Excluir aluno…", no rodapé, pede o segundo clique
     await irPara(page, 'alu');
@@ -309,7 +310,7 @@ test.describe('Alunos: Ativo e Mostrar inativos', () => {
 });
 
 // O filtro dos cursos de Alunos (o filtro de vários valores, com a regra "alguma": um curso só por aluno), a barra e o link
-// para a Demanda
+// para o Processamento
 test.describe('Alunos: o filtro dos cursos e a barra', () => {
   // O cadastro e o dia, com os cursos como as tabelas dos cursos os guardam, neste navegador
   async function abrirComCursos(page, { estado, cursos = cursosIniciais() }) {
@@ -458,29 +459,21 @@ test.describe('Alunos: o filtro dos cursos e a barra', () => {
     await expect(contagem).toHaveText('4 alunos');
   });
 
-  test('o filtro dos cursos é o mesmo em Alunos e na Demanda: a Demanda mostra os pedidos dos alunos marcados', async ({ page }) => {
+  // G2: o filtro dos cursos do Processamento tem as marcas dele (a Demanda dividia as de Alunos)
+  test('o filtro dos cursos do Processamento é dele: mostra os voos dos alunos marcados, sem mudar as marcas de Alunos', async ({ page }) => {
     await abrir(page, { estado: cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, {}, { nm: 'Ana', curso: 'PP' }), aluno(1001, {}, { nm: 'Bruno', curso: 'PC' }), aluno(1002, {}, { nm: 'Carla' })] }) });
-    const pedidos = () => page.locator('#dem tr[data-k="d"]:visible').evaluateAll(linhas => linhas.map(l => l.dataset.id));
+    const pedidos = () => page.locator('#proc > li.lista-linha:visible').evaluateAll(linhas => linhas.map(l => l.dataset.proc));
     await irPara(page, 'alu');
     await filtrarCursos(page, 'alu', ['PP']);
     await expect.poll(() => nomesNaLista(page)).toEqual(['Ana']);
-    await irPara(page, 'dem');
-    await expect(page.locator('#flt-dem-cur')).toHaveText('Curso: PP');
-    await expect.poll(pedidos).toEqual(['1000']);
-    await filtrarCursos(page, 'dem', ['PP', 'sem-curso']);
-    await expect.poll(pedidos).toEqual(['1000', '1002']);
+    await irPara(page, 'proc');
+    await expect(page.locator('#flt-proc-cur')).toHaveText('Todos os cursos');
+    await expect.poll(pedidos).toEqual(['1000_0_1', '1001_0_1', '1002_0_1']);
+    await filtrarCursos(page, 'proc', ['PP', 'sem-curso']);
+    await expect.poll(pedidos).toEqual(['1000_0_1', '1002_0_1']);
     await irPara(page, 'alu');
-    await expect(page.locator('#flt-alu-cur')).toHaveText('Curso: PP ou sem curso');
-    await expect(page.locator('#flt-alu-cur-painel input[data-filtro]:checked')).toHaveCount(2);
-    await expect.poll(() => nomesNaLista(page)).toEqual(['Ana', 'Carla']);
-    await expect(page.locator('#alu-contagem')).toHaveText('2 de 3 alunos');
-    await page.locator('[data-flt="alu"]').fill('bruno');
-    await page.locator('#limpar-filtros-alu').click();
-    await expect(page.locator('#flt-alu-cur')).toHaveText('Todos os cursos');
-    await irPara(page, 'dem');
-    await expect(page.locator('#flt-dem-cur')).toHaveText('Todos os cursos');
-    await expect(page.locator('#flt-dem-cur-painel input[data-filtro]:checked')).toHaveCount(0);
-    await expect.poll(pedidos).toEqual(['1000', '1001', '1002']);
+    await expect(page.locator('#flt-alu-cur')).toHaveText('Curso: PP');
+    await expect.poll(() => nomesNaLista(page)).toEqual(['Ana']);
   });
 });
 
@@ -528,11 +521,11 @@ test.describe('Confirmação', () => {
 test.describe('Celular', () => {
   test.use({ viewport: { width: 390, height: 844 } });
 
-  test('o filtro dos cursos cabe no celular (390 e 320 px), em Alunos e na Demanda: o painel empurra a lista, com alvos de 44 px', async ({ page }) => {
+  test('o filtro dos cursos cabe no celular (390 e 320 px), em Alunos e no Processamento: o painel empurra a lista, com alvos de 44 px', async ({ page }) => {
     await abrirComExemplo(page);
     for (const largura of [390, 320]) {
       await page.setViewportSize({ width: largura, height: 800 });
-      for (const [aba, abaixoDele] of [['alu', '#alu'], ['dem', '#s-dem .tw']]) {
+      for (const [aba, abaixoDele] of [['alu', '#alu'], ['proc', '#proc']]) {
         await irPara(page, aba);
         await filtrarCursos(page, aba, ['PP', 'sem-curso'], { fechar: false });
         const [botao, painel, abaixo] = await Promise.all([`#flt-${aba}-cur`, `#flt-${aba}-cur-painel`, abaixoDele].map(seletor => page.locator(seletor).boundingBox()));

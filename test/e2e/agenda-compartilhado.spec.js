@@ -1,6 +1,6 @@
 // Pedidos no modo compartilhado: a Secretaria registra pedidos (a escala ela só consulta), o
 // Operador usa a exceção da coordenação e o Gestor só consulta. O servidor falso aplica o mesmo prazo do banco.
-import { test, expect, entrar, preencherLogin, irPara, abrirMenuDaConta, AMANHA, URL_APP, botaoDaAba, campoDaAgenda, dataAberta, diaSeguinte, escolherNoCalendario, registrarPedido, contagemDoDia, prepararContexto, vigiarErros, importarDaAgenda, rotuloDaData, rotulosDasAbas,
+import { test, expect, entrar, preencherLogin, irPara, abrirMenuDaConta, AMANHA, URL_APP, botaoDaAba, campoDaAgenda, dataAberta, diaSeguinte, escolherNoCalendario, registrarPedido, contagemDoDia, prepararContexto, vigiarErros, atualizarAEscala, botaoAtualizarAEscala, avisoDoProcessamento, situacaoNoProcessamento, rotuloDaData, rotulosDasAbas,
   missaoDoCursoNaAgenda, enviarDaAgenda, estadoDoFormulario, linhasDosPedidos, linhaDaLista, grupoDosPedidos, aprovarNaLinha, botaoDosPedidos, escolherPedido, campoDoDetalhe,
   acaoDoPedido, detalheDoPedido, avisoDosPedidos, abrirHistorico } from './fixtures.js';
 import { instalarSupabaseFalso, criarSupabaseFalso, documentosAtuais, CONTAS } from './supabase-falso.js';
@@ -16,7 +16,7 @@ const pedidoDe = (id, data, extra = {}) => ({
   id, data, aluno: 1000, aluno_nome: 'Aluno 1000', missao: 'Voo Local', janela: 'horario', horario: '08:20', horas: 1, observacao: null,
   registrado_por: 'Maria', registrado_em: '2026-11-10T14:00:00.000Z', conta: 'Secretaria de Teste', excecao: false, cancelada_em: null, cancelada_por: null, ...extra
 });
-// O pedido aprovado (as colunas da aprovação: só o aprovado entra na demanda)
+// O pedido aprovado (as colunas da aprovação: só o aprovado entra na escala)
 const APROVADO = { aprovada_em: '2026-11-10T14:30:00.000Z', aprovada_por: 'Operador de Teste', aprovacao_retirada_em: null };
 // Segura as leituras dos pedidos de uma data até soltar()
 async function segurarPedidos(context, dia) {
@@ -103,7 +103,7 @@ test.describe('Agenda de Solicitações (modo compartilhado)', () => {
     await expect(acaoDoPedido(page, 'repetir')).toBeVisible();
     await expect(acaoDoPedido(page, 'aprovar')).toHaveCount(0);
     await botaoDosPedidos(page, 'novo').click();
-    await expect(botaoDosPedidos(page, 'importar')).toHaveCount(0);
+    await expect(botaoDaAba(page, 'proc')).toBeHidden();
     expect(servidor.solicitacoes.map(s => [s.data, s.aluno, s.janela, s.horario, s.horas, s.recurso, s.registrado_por, s.usuario])).toEqual([[AMANHA, 1001, 'horario', '12:40', 2.5, 'C152', 'Maria', CONTAS.secretaria.id]]);
 
     // Só as datas que aceitam pedidos: hoje não está na lista dela
@@ -222,7 +222,7 @@ test.describe('Agenda de Solicitações (modo compartilhado)', () => {
   // O horário exato que o voo não guarda (antes das 06:30 ou depois das 17:30, os do dia: minutoExato): o servidor aceita
   // os dois (a coluna só confere o formato), o pedido entra sem ele, e o aviso não chama o das 18:00 de "antes do primeiro
   // horário do dia"
-  test('importar os pedidos das 06:00 e das 18:00: o aviso diz que estão fora dos horários exatos do dia, antes ou depois', async ({ browser }) => {
+  test('"Atualizar a escala" com os pedidos das 06:00 e das 18:00: o aviso diz que estão fora dos horários exatos do dia, antes ou depois', async ({ browser }) => {
     const context = await browser.newContext();
     await prepararContexto(context);
     const page = await context.newPage();
@@ -232,10 +232,10 @@ test.describe('Agenda de Solicitações (modo compartilhado)', () => {
       pedidoDe(2, AMANHA, { aluno: 1001, aluno_nome: 'Aluno 1001', horario: '18:00', recurso: 'C152', ...APROVADO }));
     const erros = vigiarErros(page);
     await entrar(page, CONTAS.operador);
-    await botaoDaAba(page, 'dem').click();
-    await importarDaAgenda(page);
-    await expect(page.locator('#toast-box')).toContainText('2 pedido(s) na demanda · 2 pedidos fora dos horários exatos do dia (das 06:30 às 17:30), ' +
-      'sem o horário exato (qualquer horário): Voo Local às 06:00 no C152; Voo Local às 18:00 no C152.');
+    await botaoDaAba(page, 'proc').click();
+    await atualizarAEscala(page);
+    await expect(page.locator('#toast-box')).toContainText('Escala atualizada: entraram Aluno 1000, Aluno 1001 · 2 pedidos fora dos horários exatos do dia (das 06:30 às 17:30), ' +
+      'sem o horário exato (qualquer horário): Voo Local às 06:00 no C152; Voo Local às 18:00 no C152 · qua 11/11.');
     await expect(page.locator('#toast-box')).not.toContainText('antes do primeiro horário do dia');
     await expect.poll(() => servidor.dias.get(AMANHA).conteudo.importadas.toSorted()).toEqual([1, 2]);
     expect(erros).toEqual([]);
@@ -244,7 +244,7 @@ test.describe('Agenda de Solicitações (modo compartilhado)', () => {
 
   // Sem os programas lidos, a importação não sabe se a missão do curso do pedido saiu do programa: o pedido espera (não
   // conta como importado), o app diz, e ele entra com ela depois de "Tentar de novo"
-  test('importar sem os programas dos cursos lidos: o pedido com a missão do curso espera e entra com ela depois', async ({ browser }) => {
+  test('"Atualizar a escala" sem os programas dos cursos lidos: o pedido com a missão do curso espera e entra com ela depois', async ({ browser }) => {
     const context = await browser.newContext();
     await prepararContexto(context);
     const page = await context.newPage();
@@ -259,15 +259,15 @@ test.describe('Agenda de Solicitações (modo compartilhado)', () => {
     const erros = vigiarErros(page, { statusEsperados: [503] });
     await entrar(page, CONTAS.operador);
     await expect(page.locator('#aviso-dados')).toBeVisible();
-    await botaoDaAba(page, 'dem').click();
-    await importarDaAgenda(page);
-    await expect(page.locator('#toast-box')).toContainText('1 pedido(s) na demanda · 1 pedido com a missão do curso espera os programas dos cursos, que não foram lidos: importe de novo depois de lê-los.');
+    await botaoDaAba(page, 'proc').click();
+    await atualizarAEscala(page);
+    await expect(page.locator('#toast-box')).toContainText('Escala atualizada: entrou Aluno 1001 · 1 pedido com a missão do curso espera os programas dos cursos, que não foram lidos: atualize de novo depois de lê-los · qua 11/11.');
     await expect.poll(() => servidor.dias.get(AMANHA).conteudo.importadas).toEqual([2]);
     expect(servidor.dias.get(AMANHA).conteudo.pedidos[1000].fly).toBe(false);
     await page.locator('#btn-tentar-dados').click();
     await expect(page.locator('#aviso-dados')).toBeHidden();
-    await importarDaAgenda(page);
-    await expect(page.locator('#toast-box')).toContainText('1 pedido(s) na demanda.');
+    await atualizarAEscala(page);
+    await expect(page.locator('#toast-box')).toContainText('Escala atualizada: entrou Maria · qua 11/11.');
     await expect.poll(() => { const p = servidor.dias.get(AMANHA).conteudo.pedidos[1000]; return [p.fly, p.etapa, p.cursoDaEtapa]; }).toEqual([true, 'NAV-150NM', 'PP']);
     expect(erros).toEqual([]);
     await context.close();
@@ -276,7 +276,7 @@ test.describe('Agenda de Solicitações (modo compartilhado)', () => {
   // A aprovação no servidor (D1) pelos botões do D2: o do operador nasce aprovado (por ele) com "Registrar e aprovar" e
   // aguarda com "Registrar sem aprovar"; o da secretaria ("Registrar pedido") aguarda. A 2ª preferência vai com ele
   for (const [quem, conta, botao, aprovadoPor, aviso] of [
-    ['do operador com "Registrar e aprovar" nasce aprovado', CONTAS.operador, 'aprovar', 'Operador de Teste', 'Pedido registrado e aprovado: já está na demanda.'],
+    ['do operador com "Registrar e aprovar" nasce aprovado', CONTAS.operador, 'aprovar', 'Operador de Teste', /Pedido registrado e aprovado: .+ na escala \d\d:\d\d\./],
     ['do operador com "Registrar sem aprovar" aguarda a aprovação', CONTAS.operador, 'sem-aprovar', null, 'Pedido registrado: aguardando aprovação.'],
     ['da secretaria aguarda a aprovação', CONTAS.secretaria, 'aprovar', null, 'Pedido registrado: aguardando aprovação.']
   ]) {
@@ -407,7 +407,7 @@ test.describe('Agenda de Solicitações (modo compartilhado)', () => {
     await expect(acaoDoPedido(page, 'aprovar')).toHaveCount(0);
   });
 
-  // Um clique a mais enquanto o servidor não respondeu não é outro pedido (nem outro voo na demanda)
+  // Um clique a mais enquanto o servidor não respondeu não é outro pedido (nem outro voo na escala)
   test('o segundo clique em "Registrar pedido" antes da resposta não registra de novo', async ({ page, context }) => {
     const servidor = await instalarSupabaseFalso(context, comAlunos());
     await entrar(page, CONTAS.secretaria);
@@ -448,22 +448,22 @@ test.describe('Agenda de Solicitações (modo compartilhado)', () => {
     await contexto.close();
   });
 
-  // A importação que termina depois de trocar de data não grava nada na data nova
-  test('trocar de data durante a importação da agenda cancela a importação', async ({ page, context }) => {
+  // "Atualizar a escala" que termina depois de trocar de data não grava nada na data nova
+  test('trocar de data durante "Atualizar a escala" não grava nada', async ({ page, context }) => {
     const servidor = await instalarSupabaseFalso(context, documentosAtuais({ ...estadoSintetico(), stu: [aluno(1000, { fly: false })] }, AMANHA));
     servidor.solicitacoes.push({
       id: 1, data: AMANHA, aluno: 1000, aluno_nome: 'Aluno 1000', missao: 'Voo Local', janela: 'tarde', horario: null, observacao: null,
       registrado_por: 'Secretaria', registrado_em: '2026-11-10T12:00:00.000Z', excecao: false, cancelada_em: null, cancelada_por: null, ...APROVADO
     });
     await entrar(page, CONTAS.operador);
-    await botaoDaAba(page, 'dem').click();
+    await botaoDaAba(page, 'proc').click();
     const liberar = servidor.segurar('/rest/v1/solicitacoes');
-    await importarDaAgenda(page);
+    await botaoAtualizarAEscala(page).click();
     await diaSeguinte(page);
     // A data nova já aberta (o rótulo muda depois de carregar)
     await expect(rotuloDaData(page)).toContainText('12/11');
     liberar();
-    await expect(page.locator('#toast-box')).toContainText('A data mudou durante a importação dos pedidos: nada foi importado.');
+    await expect(page.locator('#toast-box')).toContainText('A data mudou durante a atualização da escala: nada foi gravado. Atualize de novo na data certa.');
     const dia = servidor.dias.get('2026-11-12');
     expect(dia && dia.conteudo.pedidos[1000] && dia.conteudo.pedidos[1000].fly).toBeFalsy();
     expect(servidor.dias.get(AMANHA).conteudo.pedidos[1000].fly).toBe(false);
@@ -510,15 +510,15 @@ test.describe('A página dos pedidos (modo compartilhado)', () => {
     await expect(enviarDaAgenda(page)).toBeFocused();
     await expect(enviarDaAgenda(page)).toHaveText('Registrar e aprovar');
     await page.keyboard.press('Enter');
-    await expect(page.locator('#toast-box')).toContainText('Pedido registrado e aprovado: já está na demanda.');
-    await expect(estadoDoFormulario(page)).toHaveText('Último pedido: Maria Silva · Voo Local · C152 às 16:20 · aprovado, na demanda.');
+    await expect(page.locator('#toast-box')).toContainText(/Pedido registrado e aprovado: .+ na escala \d\d:\d\d\./);
+    await expect(estadoDoFormulario(page)).toHaveText('Último pedido: Maria Silva · Voo Local · C152 às 16:20 · aprovado, na escala 16:20.');
     const novo = servidor.solicitacoes.at(-1);
     expect([novo.aluno, novo.horario, novo.aprovada_por]).toEqual([1000, '16:20', 'Operador de Teste']);
     await expect(linhaDaLista(page, novo.id)).toHaveAttribute('data-recente', '');
     await expect(linhaDaLista(page, novo.id)).toBeInViewport();
     await expect(page.locator('#age > li[data-recente]')).toHaveCount(1);
     await expect(linhaDaLista(page, novo.id)).toContainText('16:20');
-    // Entrou na demanda da data (gravada), com o aluno certo
+    // Entrou na escala da data (gravada), com o aluno certo
     await expect.poll(() => servidor.dias.get(AMANHA).conteudo.importadas).toEqual([novo.id]);
     expect(servidor.dias.get(AMANHA).conteudo.pedidos[1000].solicitacao).toBe(novo.id);
     // O formulário fica para o próximo, com o foco no Aluno
@@ -561,14 +561,14 @@ test.describe('A página dos pedidos (modo compartilhado)', () => {
     await expect(campoDaAgenda(page, 'erro')).toContainText('já há 7 voos locais');
     await expect(enviarDaAgenda(page)).toBeFocused();
     await page.keyboard.press('Enter');
-    await expect(page.locator('#toast-box')).toContainText('Pedido registrado e aprovado: já está na demanda.');
+    await expect(page.locator('#toast-box')).toContainText(/Pedido registrado e aprovado: .+ na escala \d\d:\d\d\./);
     const confirmado = servidor.solicitacoes.at(-1);
     expect([confirmado.aluno, confirmado.limite_confirmado_por]).toEqual([1001, 'Operador de Teste']);
     expect(erros).toEqual([]);
     await context.close();
   });
 
-  test('a Secretaria registra sem aprovar, sem "Aprovar" na lista; o Operador aprova o pedido dela na linha, e ele entra na demanda', async ({ browser }) => {
+  test('a Secretaria registra sem aprovar, sem "Aprovar" na lista; o Operador aprova o pedido dela na linha, e ele entra na escala', async ({ browser }) => {
     const servidor = criarSupabaseFalso(comAlunos());
     const abrirComo = async conta => {
       const context = await browser.newContext();
@@ -594,14 +594,14 @@ test.describe('A página dos pedidos (modo compartilhado)', () => {
 
     const operador = await abrirComo(CONTAS.operador);
     await aprovarNaLinha(operador.page, id).click();
-    await expect(operador.page.locator('#toast-box')).toContainText('Pedido aprovado: já está na demanda.');
+    await expect(operador.page.locator('#toast-box')).toContainText(/Pedido aprovado: .+ na escala \d\d:\d\d · /);
     expect([servidor.solicitacoes.at(-1).aprovada_por]).toEqual(['Operador de Teste']);
     await expect.poll(() => servidor.dias.get(AMANHA).conteudo.importadas).toEqual([id]);
-    await expect(linhaDaLista(operador.page, id)).toContainText('Aprovado por Operador de Teste às 12:00 · Na demanda');
+    await expect(linhaDaLista(operador.page, id)).toContainText('Aprovado por Operador de Teste às 12:00 · Na escala 08:20');
     await operador.context.close();
   });
 
-  test('dois alunos com o mesmo nome: o pedido do segundo é dele, na agenda e na demanda (o nome não vira o primeiro)', async ({ page, context }) => {
+  test('dois alunos com o mesmo nome: o pedido do segundo é dele, na agenda e na escala (o nome não vira o primeiro)', async ({ page, context }) => {
     const docs = documentosAtuais({ ...estadoSintetico(), stu: [aluno(1000, { fly: false }, { nm: 'Maria Silva' }), aluno(1001, { fly: false }, { nm: 'Maria Silva' })] }, AMANHA);
     const servidor = await instalarSupabaseFalso(context, docs);
     await entrar(page, CONTAS.operador);
@@ -612,7 +612,7 @@ test.describe('A página dos pedidos (modo compartilhado)', () => {
     await campoDaAgenda(page, 'horario').selectOption('08:20');
     await campoDaAgenda(page, 'por').fill('Maria');
     await enviarDaAgenda(page).click();
-    await expect(page.locator('#toast-box')).toContainText('Pedido registrado e aprovado: já está na demanda.');
+    await expect(page.locator('#toast-box')).toContainText(/Pedido registrado e aprovado: .+ na escala \d\d:\d\d\./);
     const novo = servidor.solicitacoes.at(-1);
     expect([novo.aluno, novo.aluno_nome]).toEqual([1001, 'Maria Silva']);
     await expect.poll(() => servidor.dias.get(AMANHA).conteudo.importadas).toEqual([novo.id]);
@@ -620,7 +620,7 @@ test.describe('A página dos pedidos (modo compartilhado)', () => {
     expect([pedidos[1001].solicitacao, pedidos[1000]?.solicitacao ?? null]).toEqual([novo.id, null]);
   });
 
-  test('a escala mudou em outro computador: o aprovado não entra na hora, o aviso pede "Atualizar"; "Importar" na Demanda lê a data de novo e o põe lá', async ({ browser }) => {
+  test('a escala mudou em outro computador: o aprovado não entra na hora, o aviso pede "Atualizar"; depois dele, "Atualizar a escala" o põe lá', async ({ browser }) => {
     const docs = documentosAtuais({ ...estadoSintetico(), stu: [aluno(1000, { fly: false }), aluno(1001, { fly: false }), aluno(1002, { fly: false })] }, AMANHA);
     const servidor = criarSupabaseFalso(docs);
     servidor.solicitacoes.push(noServidor(1, {}, { aprovado: false }), noServidor(2, { aluno: 1001, aluno_nome: 'Aluno 1001', horario: '10:10' }, { aprovado: false }),
@@ -638,25 +638,28 @@ test.describe('A página dos pedidos (modo compartilhado)', () => {
     const b = await abrirComo(CONTAS.operador);
     // B aprova o 1: ele entra, e a escala desta data é gravada
     await aprovarNaLinha(b.page, 1).click();
-    await expect(b.page.locator('#toast-box')).toContainText('Pedido aprovado: já está na demanda.');
+    await expect(b.page.locator('#toast-box')).toContainText(/Pedido aprovado: .+ na escala \d\d:\d\d · /);
     await expect.poll(() => servidor.dias.get(AMANHA).conteudo.importadas).toEqual([1]);
     // A, que leu a escala antes, aprova o 2: ele não entra por cima da escala de B
     await aprovarNaLinha(a.page, 2).click();
-    await expect(a.page.locator('#toast-box')).toContainText('Pedido aprovado. A escala desta data mudou em outro computador: “Atualizar” e depois “Importar”.');
+    await expect(a.page.locator('#toast-box')).toContainText('Pedido aprovado. A escala desta data mudou em outro computador: “Atualizar” e depois “Atualizar a escala”, no Processamento.');
     await expect(avisoDosPedidos(a.page)).toContainText('A escala desta data mudou em outro computador.');
     await expect(botaoDosPedidos(a.page, 'atualizar-data')).toBeVisible();
     expect(servidor.solicitacoes.find(s => s.id === 2).aprovada_por).toBe('Operador de Teste');
     expect(servidor.dias.get(AMANHA).conteudo.importadas).toEqual([1]);
-    // "Importar" na Demanda: lê a data de novo antes e põe os aprovados fora da demanda (o 2 e o 3), sem apagar o 1
-    await irPara(a.page, 'dem');
-    await importarDaAgenda(a.page);
-    await expect(a.page.locator('#toast-box')).toContainText('2 pedido(s) na demanda.');
+    // No Processamento, o aviso pede "Atualizar" (a escala desta data é a de antes); lida de novo, "Atualizar a escala" põe os
+    // aprovados fora da escala (o 2 e o 3), sem apagar o 1
+    await irPara(a.page, 'proc');
+    await expect(botaoAtualizarAEscala(a.page)).toHaveCount(0);
+    await a.page.locator('#proc-atualizar-data').click();
+    await atualizarAEscala(a.page);
+    await expect(a.page.locator('#toast-box')).toContainText('Escala atualizada: entraram Aluno 1001, Aluno 1002 · qua 11/11.');
     await expect.poll(() => [...servidor.dias.get(AMANHA).conteudo.importadas].sort()).toEqual([1, 2, 3]);
     await a.context.close();
     await b.context.close();
   });
 
-  test('outra data aberta enquanto o servidor diz se a escala mudou: o pedido fica aprovado, fora da demanda, e o aviso diz', async ({ page, context }) => {
+  test('outra data aberta enquanto o servidor diz se a escala mudou: o pedido fica aprovado, fora da escala, e o aviso diz', async ({ page, context }) => {
     const servidor = await instalarSupabaseFalso(context, comAlunos());
     servidor.solicitacoes.push(noServidor(1, {}, { aprovado: false }));
     await entrar(page, CONTAS.operador);
@@ -669,7 +672,7 @@ test.describe('A página dos pedidos (modo compartilhado)', () => {
     await expect.poll(() => perguntas).toBe(1);
     await diaSeguinte(page);
     soltar();
-    await expect(page.locator('#toast-box')).toContainText('Pedido aprovado. Outra data foi aberta enquanto isso: na data dele, “Importar” o põe na demanda.');
+    await expect(page.locator('#toast-box')).toContainText('Pedido aprovado. Outra data foi aberta enquanto isso: na data dele, “Atualizar a escala”, no Processamento, atualiza a escala.');
     expect(servidor.solicitacoes[0].aprovada_por).toBe('Operador de Teste');
     expect(servidor.dias.get(AMANHA).conteudo.importadas || []).toEqual([]);
   });
@@ -724,7 +727,7 @@ test.describe('A página dos pedidos (modo compartilhado)', () => {
     expect(leituras).toBe(1);
   });
 
-  // Um C152 só e dois pedidos da agenda às 08:20, na demanda: o 1º voa, o 2º espera a vaga (a espera da recusa, F1h)
+  // Um C152 só e dois pedidos da agenda às 08:20, na escala: o 1º voa, o 2º espera a vaga (a espera da recusa, F1h)
   // Aprovada (E): a escala aprovada com o voo do 1º fixo
   // extra(estado): o que o teste muda no dia antes de gravá-lo (o status de um voo, um aluno a mais)
   const comListaDeEspera = ({ espera, aprovada = false, extra = () => {} }) => {
@@ -755,14 +758,16 @@ test.describe('A página dos pedidos (modo compartilhado)', () => {
         await page.clock.runFor(20_000);
         await expect(page.locator('#toast-box')).not.toContainText('1º na lista de espera');
       }
-      // Ninguém foi posto na escala: o voo do cancelado continua lá até a escala ser refeita, e nada foi gravado
-      await expect(avisoDosPedidos(page)).toContainText('pedido cancelado ou sem aprovação ainda está na demanda: Aluno 1000');
+      // Ninguém foi posto na escala: o voo do cancelado continua lá até "Atualizar a escala" (o cancelamento de outro
+      // computador não se aplica sozinho aqui), e nada foi gravado
+      await irPara(page, 'proc');
+      await expect(avisoDoProcessamento(page)).toContainText('1 cancelado ou sem aprovação ainda na escala.');
+      await expect(situacaoNoProcessamento(page, '1000_0_1')).toHaveText('Pedido cancelado por Maria: sai com Atualizar a escala');
       expect(servidor.gravacoes).toEqual([]);
     });
   }
 
-  // E (N14): o voo do pedido cancelado sai pela conciliação ("Tirar da escala", no aviso de Pedidos; até o G2, também
-  // "Importar pedidos aprovados", na Demanda), e a escala refeita em volta dos fixos (o padrão do R5, também na aprovada) dá
+  // E (N14): o voo do pedido cancelado sai pela conciliação ("Atualizar a escala", no Processamento, G2), e a escala refeita em volta dos fixos (o padrão do R5, também na aprovada) dá
   // a vaga ao 1º da lista de espera do horário; o Histórico diz quem saiu e quem entrou. Na aprovada, quem entrou não fica fixo
   for (const aprovada of [false, true]) {
     test(`E: o pedido cancelado sai pela conciliação e a vaga vai ao 1º da lista de espera${aprovada ? ', na escala aprovada, sem fixar quem entrou' : ''}`, async ({ page, context }) => {
@@ -770,10 +775,8 @@ test.describe('A página dos pedidos (modo compartilhado)', () => {
       servidor.solicitacoes.push(noServidor(1, { cancelada_em: '2026-11-10T15:00:00.000Z', cancelada_por: 'Maria' }), noServidor(2, { aluno: 1001, aluno_nome: 'Aluno 1001' }));
       const erros = vigiarErros(page);
       await entrar(page, CONTAS.operador);
-      await irPara(page, 'age');
-      await expect(avisoDosPedidos(page)).toContainText('pedido cancelado ou sem aprovação ainda está na demanda: Aluno 1000');
-      await botaoDosPedidos(page, 'conciliar').click();
-      await expect(page.locator('#toast-box')).toContainText('1 pedido cancelado ou sem aprovação saiu da escala: Aluno 1000 (no lugar entrou Aluno 1001).');
+      await atualizarAEscala(page);
+      await expect(page.locator('#toast-box')).toContainText('1 pedido cancelado ou sem aprovação saiu da escala: Aluno 1000 (no lugar entrou Aluno 1001)');
       await expect.poll(() => servidor.historico.map(h => h.descricao)).toContainEqual(
         expect.stringMatching(/^Pedidos: Aluno 1000 saiu da escala, pedido cancelado \(Voo Local · estava às 08:20–09:20 no PP-LJV com .+\); no lugar entrou Aluno 1001 \(1º da lista de espera das 08:20\)$/));
       const dia = servidor.dias.get(AMANHA).conteudo;
@@ -782,7 +785,7 @@ test.describe('A página dos pedidos (modo compartilhado)', () => {
       // O fixo do cancelado sai com ele ("deixa de ser fixo"); quem entrou não fica fixo por esta rodada
       expect(dia.fixos).toEqual({});
       expect(Boolean(dia.aprovacao)).toBe(aprovada);
-      await expect(avisoDosPedidos(page)).not.toContainText('ainda está na demanda');
+      await expect(avisoDoProcessamento(page)).toBeHidden();
       expect(erros).toEqual([]);
     });
   }
@@ -804,9 +807,8 @@ test.describe('A página dos pedidos (modo compartilhado)', () => {
       noServidor(3, { aluno: 1002, aluno_nome: 'Aluno 1002' }));
     const erros = vigiarErros(page);
     await entrar(page, CONTAS.operador);
-    await irPara(page, 'age');
-    await botaoDosPedidos(page, 'conciliar').click();
-    await expect(page.locator('#toast-box')).toContainText('1 pedido cancelado ou sem aprovação saiu da escala: Aluno 1000 (no lugar entrou Aluno 1002).');
+    await atualizarAEscala(page);
+    await expect(page.locator('#toast-box')).toContainText('1 pedido cancelado ou sem aprovação saiu da escala: Aluno 1000 (no lugar entrou Aluno 1002)');
     await expect.poll(() => servidor.historico.map(h => h.descricao)).toContainEqual(
       expect.stringMatching(/^Pedidos: Aluno 1000 saiu da escala, pedido cancelado \(Voo Local · estava às 08:20–09:20 no PP-LJV com (.+)\); no lugar entrou Aluno 1002 \(1º da lista de espera das 08:20 · fica fixo às 08:20 no PP-LJV com \1\)$/));
     const dia = servidor.dias.get(AMANHA).conteudo;
@@ -818,9 +820,9 @@ test.describe('A página dos pedidos (modo compartilhado)', () => {
   });
 
   // A revisão do E (os achados 2, 6 e 7): o voo do pedido cancelado que a conciliação deixa na escala (aqui, com o status
-  // Cancelado: a meteorologia) não ganha "Tirar da escala", que nada faria; o aviso de Pedidos, o do cancelamento e o de
-  // "Importar pedidos aprovados" dizem que ele fica e por quê
-  test('E: o voo que fica na escala (o status Cancelado): sem “Tirar da escala”; os avisos dizem por que ele fica', async ({ page, context }) => {
+  // Cancelado: a meteorologia) não ganha "Atualizar a escala", que nada faria; o aviso do cancelamento e a linha do
+  // Processamento dizem que ele fica e por quê
+  test('E: o voo que fica na escala (o status Cancelado): sem “Atualizar a escala”; o aviso e a linha dizem por que ele fica', async ({ page, context }) => {
     const servidor = await instalarSupabaseFalso(context, comListaDeEspera({ espera: true, extra: e => { e.fStatus = { '1000_0_1': 'Cancelado' }; } }));
     servidor.solicitacoes.push(noServidor(1), noServidor(2, { aluno: 1001, aluno_nome: 'Aluno 1001' }));
     const erros = vigiarErros(page);
@@ -832,11 +834,9 @@ test.describe('A página dos pedidos (modo compartilhado)', () => {
     await cancelar.click();
     await cancelar.click();
     await expect(page.locator('#toast-box')).toContainText('Pedido cancelado. O voo fica na escala: com o status Cancelado.');
-    await expect(avisoDosPedidos(page)).toContainText('1 pedido cancelado ou sem aprovação ainda está na demanda: Aluno 1000 (Voo Local · C152 às 08:20 · fica na escala: com o status Cancelado).');
-    await expect(botaoDosPedidos(page, 'conciliar')).toHaveCount(0);
-    await botaoDaAba(page, 'dem').click();
-    await importarDaAgenda(page);
-    await expect(page.locator('#toast-box')).toContainText('Nenhum pedido entrou na demanda em 11/11 · 1 pedido cancelado ou sem aprovação fica na escala: Aluno 1000 (com o status Cancelado).');
+    await botaoDaAba(page, 'proc').click();
+    await expect(situacaoNoProcessamento(page, '1000_0_1')).toHaveText('Pedido cancelado por Maria; o voo fica na escala: com o status Cancelado');
+    await expect(botaoAtualizarAEscala(page)).toHaveCount(0);
     expect(servidor.gravacoes).toEqual([]);
     expect(erros).toEqual([]);
   });
@@ -847,21 +847,20 @@ test.describe('A página dos pedidos (modo compartilhado)', () => {
     const servidor = await instalarSupabaseFalso(context, comListaDeEspera({ espera: true }));
     servidor.solicitacoes.push(noServidor(1), noServidor(2, { aluno: 1001, aluno_nome: 'Aluno 1001', cancelada_em: '2026-11-10T15:00:00.000Z', cancelada_por: 'Maria' }));
     await entrar(page, CONTAS.operador);
-    await irPara(page, 'age');
-    await botaoDosPedidos(page, 'conciliar').click();
-    await expect(page.locator('#toast-box')).toContainText('Demanda atualizada · 1 pedido cancelado ou sem aprovação saiu da lista de espera: Aluno 1001.');
+    await atualizarAEscala(page);
+    await expect(page.locator('#toast-box')).toContainText('Escala atualizada: saiu Aluno 1001 · 1 pedido cancelado ou sem aprovação saiu da lista de espera: Aluno 1001 · qua 11/11.');
     await expect.poll(() => servidor.historico.map(h => h.descricao)).toEqual(['Pedidos: Aluno 1001 saiu da lista de espera das 08:20, pedido cancelado (Voo Local · era o 1º)']);
   });
 
-  // A revisão do E (o achado 9): nada a importar, mas um aprovado de aluno fora do cadastro espera: o aviso não diz
-  // "Nenhum pedido aprovado fora da demanda" (há um), diz que nenhum entrou e por quê
-  test('E: "Importar" sem nada a pôr na demanda e um aprovado de aluno fora do cadastro: o aviso diz que nenhum entrou e por quê', async ({ page, context }) => {
+  // A revisão do E (o achado 9): nada a pôr na escala, mas um aprovado de aluno fora do cadastro espera: o Processamento
+  // não oferece "Atualizar a escala" (nada a fazer) e a linha dele diz por que ele não entra (G2)
+  test('E: sem nada a pôr na escala e um aprovado de aluno fora do cadastro: a linha diz por que ele não entra', async ({ page, context }) => {
     const servidor = await instalarSupabaseFalso(context, documentosAtuais({ ...estadoSintetico(), stu: [aluno(1000, { fly: false })] }, AMANHA));
     servidor.solicitacoes.push(noServidor(7, { aluno: 4242, aluno_nome: 'Fora do Cadastro' }));
     await entrar(page, CONTAS.operador);
-    await botaoDaAba(page, 'dem').click();
-    await importarDaAgenda(page);
-    await expect(page.locator('#toast-box')).toContainText('Nenhum pedido entrou na demanda em 11/11 · 1 de aluno que não está no cadastro (entra depois de cadastrado).');
+    await botaoDaAba(page, 'proc').click();
+    await expect(situacaoNoProcessamento(page, 'p:7')).toHaveText('O aluno não está no cadastro: entra depois de cadastrado');
+    await expect(botaoAtualizarAEscala(page)).toHaveCount(0);
     expect(servidor.gravacoes).toEqual([]);
   });
 
@@ -878,13 +877,12 @@ test.describe('A página dos pedidos (modo compartilhado)', () => {
     servidor.solicitacoes.push(noServidor(1, { cancelada_em: '2026-11-10T15:00:00.000Z', cancelada_por: 'Maria' }), noServidor(2, { aluno: 1001, aluno_nome: 'Aluno 1001' }));
     const erros = vigiarErros(page);
     await entrar(page, CONTAS.operador);
-    await irPara(page, 'age');
-    await botaoDosPedidos(page, 'conciliar').click();
+    await atualizarAEscala(page);
     await expect.poll(() => servidor.historico.length).toBe(2);
     const gravacoes = servidor.gravacoes.length;
     await abrirHistorico(page);
     await page.locator('#audit-log-list .audit-item', { hasText: 'Voo editado' }).locator('[data-act="rev-log"]').click();
-    await expect(page.locator('#toast-box')).toContainText('O pedido da agenda deste voo saiu da demanda (cancelado ou sem a aprovação): desfazer o poria de volta na escala.');
+    await expect(page.locator('#toast-box')).toContainText('O pedido da agenda deste voo saiu da escala (cancelado ou sem a aprovação): desfazer o poria de volta nela.');
     const dia = servidor.dias.get(AMANHA).conteudo;
     expect([dia.pedidos[1000].fly, dia.importadas, dia.resultado.out.map(o => o.fKey)]).toEqual([false, [2], ['1001_0_1']]);
     expect([servidor.gravacoes.length, servidor.historico.length]).toEqual([gravacoes, 2]);
@@ -909,7 +907,8 @@ test.describe('A página dos pedidos (modo compartilhado)', () => {
     soltar();
     await expect(page.locator('#toast-box .toast', { hasText: 'Pedido aprovado' })).toHaveCount(2);
     // Os avisos de agora (o "não contém" do expect esperaria o aviso sair sozinho)
-    expect(await page.locator('#toast-box .toast').allTextContents()).toEqual(['Pedido aprovado: já está na demanda.', 'Pedido aprovado: já está na demanda.']);
+    const aprovado = expect.stringMatching(/^Pedido aprovado: .+ na escala \d\d:\d\d · qua 11\/11\.$/);
+    expect(await page.locator('#toast-box .toast').allTextContents()).toEqual([aprovado, aprovado]);
   });
 
   test('D3: a resposta da vigia "a escala mudou?" que chega depois de uma gravação deste navegador não diz que ela mudou em outro computador', async ({ page, context }) => {
@@ -930,9 +929,9 @@ test.describe('A página dos pedidos (modo compartilhado)', () => {
     });
     await umMinuto(page);
     await expect.poll(() => foto).not.toBeNull();
-    // Este navegador aprova: o pedido entra na demanda e a escala da data é gravada (a versão sobe)
+    // Este navegador aprova: o pedido entra na escala e a escala da data é gravada (a versão sobe)
     await aprovarNaLinha(page, 1).click();
-    await expect(page.locator('#toast-box')).toContainText('já está na demanda');
+    await expect(page.locator('#toast-box')).toContainText(/Pedido aprovado: .+ na escala/);
     await expect.poll(() => servidor.dias.get(AMANHA).versao).toBe(foto + 1);
     soltar();
     await expect.poll(() => entregue).toBe(true);

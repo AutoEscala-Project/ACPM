@@ -6,7 +6,7 @@
 // lidas uma de cada vez (a versão que a gravação leva é a da leitura dos dados da tela), e nenhuma data é lida antes de a
 // abertura preparar os dados, nem depois de a preparação falhar. O que fica aberto na tela quando a data abre passa a
 // mostrar os dados dela
-import { test, comProgresso, expect, prepararContexto, vigiarErros, preencherLogin, entrar, irPara, abrirEscala, AMANHA, URL_APP, abrirHistorico, alternarDisponivel, botaoAprovar, caixaDisponivel, caixaVoa, dataAberta, diaAnterior, diaSeguinte, exportar, importarDaAgenda, rotuloDaData, escolherNoCalendario, confirmarAgendamento, linhasDosAlunos, abrirLimitesDaLei, abrirCategoria, horariosDaCategoria } from './fixtures.js';
+import { test, comProgresso, expect, prepararContexto, vigiarErros, preencherLogin, entrar, irPara, abrirEscala, AMANHA, URL_APP, abrirHistorico, alternarDisponivel, botaoAprovar, caixaDisponivel, dataAberta, diaAnterior, diaSeguinte, exportar, rotuloDaData, escolherNoCalendario, confirmarAgendamento, linhasDosAlunos, abrirLimitesDaLei, abrirCategoria, horariosDaCategoria } from './fixtures.js';
 import { criarSupabaseFalso, documentosAtuais, CONTAS } from './supabase-falso.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
 import { runAllocationEngine } from '../../js/engine.js';
@@ -23,7 +23,7 @@ const estado = () => ({
 const PEDIDO = {
   id: 1, data: AMANHA, aluno: 1001, aluno_nome: 'Aluno 1001', missao: 'Voo Local', janela: 'horario', horario: '07:00', horas: 1, observacao: null,
   registrado_por: 'Maria', registrado_em: '2026-11-10T14:00:00.000Z', conta: 'Secretaria de Teste', excecao: false, cancelada_em: null, cancelada_por: null,
-  // Aprovado: só o aprovado entra na demanda (D2)
+  // Aprovado: só o aprovado entra na escala (D2)
   aprovada_em: '2026-11-10T14:30:00.000Z', aprovada_por: 'Operador de Teste'
 };
 
@@ -72,12 +72,11 @@ const BOTOES_DA_ABERTURA = [
     await page.locator('#rec-tipo').selectOption('C152');
     await page.locator('#form-recurso [type="submit"]').click();
   }],
-  ['Limpar demanda', async page => {
-    await irPara(page, 'dem');
-    await page.locator('#btn-mais-dem').click();
-    await page.locator('#clr').click();
+  ['Recomeçar pelos pedidos', async page => {
+    await irPara(page, 'proc');
+    await page.locator('#btn-mais-proc').click();
+    await page.locator('#proc-recomecar').click();
   }],
-  ['Importar da agenda', async page => { await irPara(page, 'dem'); await importarDaAgenda(page); }],
   ['+ Agendar voo', async page => { await irPara(page, 'esc'); await page.locator('#btn-agendar').click(); }]
 ];
 
@@ -94,13 +93,13 @@ test.describe('A escala abrindo: nada é gravado antes de os dados da data chega
     await expect(page.locator('#usuario')).toBeVisible();
 
     for (const [nome, usar] of BOTOES_DA_ABERTURA) await recusada(page, nome, () => usar(page));
-    // A tela também ficou como estava: sem o aluno novo, o formulário do curso novo, o diálogo de agendar ou "Limpar
-    // demanda" armado
+    // A tela também ficou como estava: sem o aluno novo, o formulário do curso novo, o diálogo de agendar ou "Recomeçar
+    // pelos pedidos" armado
     await expect(linhasDosAlunos(page)).toHaveCount(0);
     await expect(page.locator('#cursos .curso')).toHaveCount(0);
     await expect(page.locator('#form-curso')).toBeHidden();
     await expect(page.locator('#dlg-agendar')).toBeHidden();
-    await expect(page.locator('#clr')).toHaveText('Limpar demanda');
+    await expect(page.locator('#proc-recomecar')).toHaveText('Recomeçar pelos pedidos');
     expect(servidor.gravacoes).toEqual([]);
     expect(servidor.historico).toEqual([]);
     expect(cadastroDe(servidor)).toEqual(antes);
@@ -157,7 +156,7 @@ test.describe('A escala abrindo: nada é gravado antes de os dados da data chega
     await contexto.close();
   });
 
-  // Fora dos botões fixos, as mudanças da tela da data anterior: o resultado da missão, aprovar, a compactação, a Demanda,
+  // Fora dos botões fixos, as mudanças da tela da data anterior: o resultado da missão, aprovar, a compactação, o Processamento,
   // os limites da lei e o programa do curso
   comProgresso('enquanto outra data abre, nenhuma mudança grava e a tela fica como estava; na data nova, vale de novo', async ({ browser }) => {
     const servidor = criarServidor();
@@ -179,14 +178,14 @@ test.describe('A escala abrindo: nada é gravado antes de os dados da data chega
     await recusada(page, 'a compactação', () => criterio.click());
     await expect(criterio).toHaveAttribute('aria-pressed', 'false');
 
-    await irPara(page, 'dem');
-    await recusada(page, 'Pôr um aluno na demanda', async () => {
-      await page.locator('#incluir-aluno').fill('Aluno 1001');
-      await page.locator('#incluir-aluno').press('Enter');
+    await irPara(page, 'proc');
+    // (G2: a Demanda saiu; "Recomeçar pelos pedidos", no "Mais" do Processamento, é a escrita dele que não espera a resposta)
+    await recusada(page, 'Recomeçar pelos pedidos', async () => {
+      await page.locator('#btn-mais-proc').click();
+      await page.locator('#proc-recomecar').click();
     });
-    const voa = caixaVoa(page.locator('#dem tr[data-k="d"][data-id="1000"]'));
-    await recusada(page, 'o Voa da demanda', () => voa.click());
-    await expect(voa).toBeChecked();
+    await expect(page.locator('#proc-recomecar')).toHaveText('Recomeçar pelos pedidos');
+    await page.keyboard.press('Escape');
 
     await abrirLimitesDaLei(page);
     const limite = page.locator('#limites-lei [data-limite="vooMesH"]');
@@ -445,7 +444,7 @@ test.describe('A escala abrindo: nada é gravado antes de os dados da data chega
 });
 
 // O programa dos cursos (a aba Cursos grava nas tabelas dos cursos), o agendamento na Escala (pela barra, pelo "+" de um
-// horário da lista ou de uma linha do mapa, e pelo clique no mapa) e a missão do curso na Demanda também não mudam nada
+// horário da lista ou de uma linha do mapa, e pelo clique no mapa) e a missão do curso nas restrições também não mudam nada
 // com a tela da data anterior: enquanto outra data abre e depois de ela falhar, cada um recusa com o aviso, e a tela fica
 // como estava. Com a data aberta, valem de novo
 test.describe('Os cursos, o agendamento e a missão do curso: nada muda antes de a data abrir', () => {
@@ -473,10 +472,11 @@ test.describe('Os cursos, o agendamento e a missão do curso: nada muda antes de
 
   const cursoPP = page => page.locator('#cursos .curso[data-curso="PP"]');
   const trechoDoNoturno = page => cursoPP(page).locator('[data-cf="trecho"]');
-  const pedidoDoAluno = page => page.locator('#dem tr[data-k="d"][data-id="1000"][data-mid="0"]');
-  // As restrições do pedido do aluno (G1: a missão do curso saiu da linha da Demanda para a gaveta), abertas pela linha
+  // As restrições do pedido do aluno (G1: a missão do curso saiu da linha da Demanda para a gaveta), abertas pelo detalhe
+  // dele no Processamento (G2)
   const restricoesDoAluno = async page => {
-    await pedidoDoAluno(page).locator('[data-act="restricoes"]').click();
+    await page.locator('#proc > li.lista-linha[data-proc="1000_0_1"] .lista-botao').click();
+    await page.locator('#det-proc [data-act="restricoes"][data-id="1000"]').click();
     return page.locator('#painel-restricoes');
   };
   const fecharAsRestricoes = page => page.locator('#btn-fechar-restricoes').click();
@@ -524,8 +524,8 @@ test.describe('Os cursos, o agendamento e a missão do curso: nada muda antes de
     ['o + de um horário da lista', async page => { await vistaDaEscala(page, 'lista'); await page.locator('#out .win-agendar').first().click(); }],
     ['o + de uma linha do mapa', async page => { await vistaDaEscala(page, 'eq'); await page.locator('#out .tl-agendar').first().click(); }],
     ['um clique no mapa', async page => { await vistaDaEscala(page, 'eq'); await faixaLivre(page).click(); }],
-    ['Restrições › Usar a do programa', async page => { await irPara(page, 'dem'); await (await restricoesDoAluno(page)).locator('[data-act="usar-proxima"]').click(); await fecharAsRestricoes(page); }],
-    ['Restrições › Trocar a missão do curso', async page => { await irPara(page, 'dem'); await (await restricoesDoAluno(page)).locator('[data-f="outra-missao"]').selectOption('PP-02'); await fecharAsRestricoes(page); }],
+    ['Restrições › Usar a do programa', async page => { await irPara(page, 'proc'); await (await restricoesDoAluno(page)).locator('[data-act="usar-proxima"]').click(); await fecharAsRestricoes(page); }],
+    ['Restrições › Trocar a missão do curso', async page => { await irPara(page, 'proc'); await (await restricoesDoAluno(page)).locator('[data-f="outra-missao"]').selectOption('PP-02'); await fecharAsRestricoes(page); }],
     ['Histórico › Desfazer o agendamento', async page => {
       await abrirHistorico(page);
       await page.locator('#audit-log-list [data-act="rev-log"]').click();
@@ -560,12 +560,12 @@ test.describe('Os cursos, o agendamento e a missão do curso: nada muda antes de
     await fase.click();
     await expect(cursoPP(page).locator('tbody tr[data-missao]')).toHaveCount(3);
     await expect(cursoPP(page).locator('tbody tr[data-missao]').first()).toBeVisible();
-    await irPara(page, 'dem');
+    await irPara(page, 'proc');
     const restricoes = await restricoesDoAluno(page);
     await expect(restricoes.locator('.restricao-proxima')).toHaveText('Próxima do programa: PP-01');
     await expect(restricoes.locator('[data-f="outra-missao"]')).toHaveValue('');
     await expect(restricoes.locator('[data-act="usar-fora-da-ordem"]')).toHaveCount(0);
-    await expect(pedidoDoAluno(page).locator('.etapa')).toHaveCount(0);
+    await expect(restricoes.locator('.etapa')).toHaveCount(0);
     await fecharAsRestricoes(page);
     await vistaDaEscala(page, 'lista');
     await expect(page.locator('#out tbody tr:not(.win)', { hasText: 'Maria Silva' })).toHaveCount(1);
@@ -574,14 +574,14 @@ test.describe('Os cursos, o agendamento e a missão do curso: nada muda antes de
     expect(servidor.historico.length).toBe(antes.historico);
   }
 
-  // Na data nova, as mesmas entradas valem: a missão do curso na Demanda, o programa e o curso novo (nas tabelas dos
+  // Na data nova, as mesmas entradas valem: a missão do curso nas restrições, o programa e o curso novo (nas tabelas dos
   // cursos) e o agendamento, pela barra e pelo clique no mapa
   async function valemNaDataNova(page, servidor) {
     await expect(rotuloDaData(page)).toContainText('12/11');
     const daDataNova = () => servidor.historico.filter(h => h.data === DEPOIS).map(h => h.descricao);
-    await irPara(page, 'dem');
+    await irPara(page, 'proc');
     await (await restricoesDoAluno(page)).locator('[data-act="usar-proxima"]').click();
-    await expect.poll(daDataNova).toEqual([expect.stringMatching(/^Aluno 1000: PP-01 na demanda/)]);
+    await expect.poll(daDataNova).toEqual([expect.stringMatching(/^Aluno 1000: PP-01 no voo/)]);
     await fecharAsRestricoes(page);
     await irPara(page, 'cur');
     await trechoDoNoturno(page).selectOption('noite');
@@ -597,7 +597,7 @@ test.describe('Os cursos, o agendamento e a missão do curso: nada muda antes de
     await vistaDaEscala(page, 'eq');
     await faixaLivre(page).click();
     await agendarAMaria(page);
-    await expect.poll(daDataNova).toEqual([expect.stringMatching(/^Aluno 1000: PP-01 na demanda/), expect.stringMatching(/Maria Silva/)]);
+    await expect.poll(daDataNova).toEqual([expect.stringMatching(/^Aluno 1000: PP-01 no voo/), expect.stringMatching(/Maria Silva/)]);
     expect(servidor.gravacoes.map(g => g.chave)).toContain(`dia:${DEPOIS}`);
   }
 

@@ -162,7 +162,7 @@ describe('Agendamento: os padrões do formulário', () => {
     const grupos = opcoesDeAluno(estado, base, amb, contextoInicial('i:1', amb));
     assert.deepEqual(grupos.map(g => [g.rotulo, g.opcoes.map(o => o.texto)]), [
       ['Ficaram fora da escala', ['Aluno 1002 · não voa com Instrutor 01']],
-      ['Na demanda de amanhã', ['Aluno 1000 — PP · próxima IN-01 · voa amanhã às 06:30']],
+      ['Na escala de amanhã', ['Aluno 1000 — PP · próxima IN-01 · voa amanhã às 06:30']],
       ['Outros alunos', ['Aluno 1001 — PP · próxima IN-02']]
     ]);
   });
@@ -191,15 +191,15 @@ describe('Agendamento: os padrões do formulário', () => {
       ];
     };
     assert.deepEqual(textos(HOJE), [
-      'Na demanda de amanhã', 'voa amanhã às 06:30', 'já voa amanhã às 06:30 (IN-01, R)', 'Voos de amanhã do aluno', 'Mover IN-01 · Voo Local (amanhã 06:30, R)',
+      'Na escala de amanhã', 'voa amanhã às 06:30', 'já voa amanhã às 06:30 (IN-01, R)', 'Voos de amanhã do aluno', 'Mover IN-01 · Voo Local (amanhã 06:30, R)',
       'IN-01 · Voo Local · C152 · 1 h (já no voo de amanhã às 06:30)', 'O Noturno volta em 12/11 às 07:30'
     ]);
     assert.deepEqual(textos(DATA), [
-      'Na demanda de hoje', 'voa hoje às 06:30', 'já voa hoje às 06:30 (IN-01, R)', 'Voos de hoje do aluno', 'Mover IN-01 · Voo Local (hoje 06:30, R)',
+      'Na escala de hoje', 'voa hoje às 06:30', 'já voa hoje às 06:30 (IN-01, R)', 'Voos de hoje do aluno', 'Mover IN-01 · Voo Local (hoje 06:30, R)',
       'IN-01 · Voo Local · C152 · 1 h (já no voo de hoje às 06:30)', 'O Noturno volta amanhã às 07:30'
     ]);
     assert.deepEqual(textos('2026-11-09'), [
-      'Na demanda de 11/11', 'voa em 11/11 às 06:30', 'já voa em 11/11 às 06:30 (IN-01, R)', 'Voos de 11/11 do aluno', 'Mover IN-01 · Voo Local (11/11 06:30, R)',
+      'Na escala de 11/11', 'voa em 11/11 às 06:30', 'já voa em 11/11 às 06:30 (IN-01, R)', 'Voos de 11/11 do aluno', 'Mover IN-01 · Voo Local (11/11 06:30, R)',
       'IN-01 · Voo Local · C152 · 1 h (já no voo de 11/11 às 06:30)', 'O Noturno volta em 12/11 às 07:30'
     ]);
     // A data de ontem: o Noturno dela volta hoje
@@ -544,7 +544,7 @@ describe('Agendamento: o pedido e o voo fixo', () => {
     // A missão extra saiu na Demanda (o pino com ela) e outra foi criada no mesmo número
     estado.stu[0].extra = [missaoExtra(1, { p1: 760, p2: 870 })];
     delete estado.fixos['1000_1_1'];
-    assert.equal(motivoParaNaoDesfazer(estado, rev), 'O pedido mudou depois do agendamento: desfazer agora mexeria em outro voo. Mude o pedido na Demanda.');
+    assert.equal(motivoParaNaoDesfazer(estado, rev), 'O pedido mudou depois do agendamento: desfazer agora mexeria em outro voo. Mude o pedido nas restrições do voo.');
     // Sem a missão (tirada e não criada de novo), desfazer só limpa a chave
     estado.stu[0].extra = [];
     assert.equal(motivoParaNaoDesfazer(estado, rev), '');
@@ -908,7 +908,7 @@ describe('Agendamento: os voos de hoje do aluno (mover e encaixar)', () => {
     const depois = structuredClone(estado);
     const outro = aplicarAgendamento(depois, null, f.proposta);
     depois.stu[1].mis = 'Navegação';
-    assert.equal(motivoParaNaoDesfazer(depois, validarReversao(reversaoDoAgendamento(outro))), 'O pedido mudou depois do agendamento: desfazer agora mexeria em outro voo. Mude o pedido na Demanda.');
+    assert.equal(motivoParaNaoDesfazer(depois, validarReversao(reversaoDoAgendamento(outro))), 'O pedido mudou depois do agendamento: desfazer agora mexeria em outro voo. Mude o pedido nas restrições do voo.');
   });
 
   it('desfazer o voo movido sem voo fixo antes: cancelado depois, ele fica fixo onde foi cancelado; na escala aprovada depois, volta para o app', () => {

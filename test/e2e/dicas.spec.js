@@ -1,7 +1,7 @@
 // As dicas: o balão que explica um termo da tela. Abre com o mouse parado no termo (depois de um
 // instante), na hora com o foco do teclado, e num toque no "?" ou na etiqueta; Esc, um toque fora e sair do termo
 // fecham. O texto vem do glossário.
-import { test, expect, abrir, abrirComExemplo, abrirEscala, irPara, AGORA, aprovar } from './fixtures.js';
+import { test, expect, abrir, abrirComExemplo, abrirEscala, AGORA, aprovar } from './fixtures.js';
 import { aluno, cenario, instrutor, apenas } from '../helpers/montar.js';
 import { GLOSSARIO } from '../../js/glossario.js';
 
@@ -158,18 +158,6 @@ test.describe('Dicas com a tela travada', () => {
   });
 });
 
-// Os controles que aparecem com o mouse também aparecem com o foco na linha e no toque
-const opacidade = loc => loc.evaluate(el => getComputedStyle(el).opacity);
-test('o "+ missão" da Demanda aparece com o foco do teclado em qualquer campo da linha', async ({ page }) => {
-  await abrir(page, { estado: diaComHorarioLivre() });
-  await irPara(page, 'dem');
-  const linha = page.locator('#dem tr[data-id="1000"]');
-  await page.mouse.move(0, 0);
-  expect(await opacidade(linha.locator('.btn-add-mis'))).toBe('0');
-  await linha.locator('[data-f="mis"]').focus();
-  await expect.poll(() => opacidade(linha.locator('.btn-add-mis'))).toBe('1');
-});
-
 test.describe('Dicas no celular', () => {
   test.use({ viewport: { width: 360, height: 780 }, hasTouch: true });
 
@@ -184,11 +172,5 @@ test.describe('Dicas no celular', () => {
     expect(caixa.x + caixa.width).toBeLessThanOrEqual(360);
     await page.locator('#out .st').tap();
     await expect(dica(page)).toBeHidden();
-  });
-
-  test('na tela de toque, os controles que aparecem com o mouse ficam à vista', async ({ page }) => {
-    await abrir(page, { estado: diaComHorarioLivre() });
-    await irPara(page, 'dem');
-    expect(await opacidade(page.locator('#dem tr[data-id="1000"] .btn-add-mis'))).toBe('1');
   });
 });

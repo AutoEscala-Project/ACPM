@@ -1,4 +1,4 @@
-// A linha do dia (js/linha-do-dia.js): os quatro cartões (Pedidos, Demanda, Escala, Aprovar), cada um com o valor dele, o
+// A linha do dia (js/linha-do-dia.js): os quatro cartões (Pedidos, Processamento, Escala, Aprovar), cada um com o valor dele, o
 // estado (o pior das tarefas) e as tarefas, o selo de Recursos e os avisos da data. Dados fictícios, sem o motor
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
@@ -29,44 +29,44 @@ const voo = n => Array.from({ length: n }, (_, i) => ({ fKey: `${1000 + i}_0_1` 
 
 describe('A linha do dia', () => {
   it('quatro cartões, na ordem das etapas, cada um com a tela dele', () => {
-    assert.deepEqual(linhaDoDia(contexto()).map(c => [c.id, c.tela]), [['pedidos', 'age'], ['processamento', 'dem'], ['escala', 'esc'], ['aprovar', 'apr']]);
+    assert.deepEqual(linhaDoDia(contexto()).map(c => [c.id, c.tela]), [['pedidos', 'age'], ['processamento', 'proc'], ['escala', 'esc'], ['aprovar', 'apr']]);
   });
 
   // Pedidos (D2): os registrados (não cancelados), os que aguardam aprovação (pedem atenção de hoje em diante), os aprovados
-  // e, para quem opera, os aprovados que ainda não estão na demanda (até o G)
-  it('Pedidos: os registrados, os que aguardam aprovação, os aprovados e os aprovados fora da demanda', () => {
+  // e, para quem opera, os aprovados que ainda não estão na escala (G2: a tarefa leva ao Processamento)
+  it('Pedidos: os registrados, os que aguardam aprovação, os aprovados e os aprovados fora da escala', () => {
     const ctx = contexto({ pedidos: [pedido(1), aprovado(2), aprovado(3), aprovado(4, { cancelada_em: '2026-11-10T10:00:00Z' })], importadas: [2] });
     const c = cartao(ctx, 'pedidos');
     assert.equal(c.valor, '3');
     assert.equal(c.estado, 'atencao');
     assert.deepEqual(c.tarefas.map(t => [t.id, t.rotulo, t.valor, t.estado]), [
       ['registrados', 'pedidos da data', '3', 'feito'], ['aguardando', 'aguardando aprovação', '1', 'atencao'], ['aprovados', 'aprovados', '2 de 3', 'andamento'],
-      ['fora-da-demanda', 'aprovado fora da demanda', '1', 'atencao']
+      ['fora-da-escala', 'aprovado fora da escala', '1', 'atencao']
     ]);
-    assert.deepEqual(c.tarefas[0].destino, { tela: 'age' });
+    assert.deepEqual([c.tarefas[0].destino, c.tarefas[3].destino], [{ tela: 'age' }, { tela: 'proc' }]);
   });
 
-  // O rótulo vai depois do número na frase do leitor de tela ("1 aprovado fora da demanda"): concorda com ele
+  // O rótulo vai depois do número na frase do leitor de tela ("1 aprovado fora da escala"): concorda com ele
   it('Pedidos: o rótulo de cada tarefa concorda com o número dela', () => {
     const rotulos = ctx => cartao(ctx, 'pedidos').tarefas.map(t => `${t.valor} ${t.rotulo}`);
-    assert.deepEqual(rotulos(contexto({ pedidos: [aprovado(1)] })), ['1 pedido da data', '0 aguardando aprovação', '1 de 1 aprovados', '1 aprovado fora da demanda']);
-    assert.deepEqual(rotulos(contexto({ pedidos: [aprovado(1), aprovado(2)] })), ['2 pedidos da data', '0 aguardando aprovação', '2 de 2 aprovados', '2 aprovados fora da demanda']);
+    assert.deepEqual(rotulos(contexto({ pedidos: [aprovado(1)] })), ['1 pedido da data', '0 aguardando aprovação', '1 de 1 aprovados', '1 aprovado fora da escala']);
+    assert.deepEqual(rotulos(contexto({ pedidos: [aprovado(1), aprovado(2)] })), ['2 pedidos da data', '0 aguardando aprovação', '2 de 2 aprovados', '2 aprovados fora da escala']);
   });
 
   // F3: o pedido do aluno inativo fica fora dos pendentes. Em D2, o que ninguém pode aprovar (o aluno inativo ou fora do
   // cadastro: Pedidos não oferece "Aprovar") nem importar (fora do cadastro, ele espera) não pede atenção, no cartão e no trilho
-  it('o pedido que aguarda de um aluno inativo ou fora do cadastro não pede atenção; o aprovado de um aluno fora do cadastro não conta como fora da demanda', () => {
+  it('o pedido que aguarda de um aluno inativo ou fora do cadastro não pede atenção; o aprovado de um aluno fora do cadastro não conta como fora da escala', () => {
     const inativo = contexto({ pedidos: [pedido(1)], stu: [{ id: 1001, nm: 'Aluno Fictício', inativo: true }] });
     assert.deepEqual([tarefa(inativo, 'pedidos', 'aguardando').valor, tarefa(inativo, 'pedidos', 'aguardando').estado], ['0', 'feito']);
     assert.notEqual(cartao(inativo, 'pedidos').estado, 'atencao');
     assert.deepEqual(avisosDaData(inativo), []);
     const foraDoCadastro = contexto({ pedidos: [pedido(1), aprovado(2)], stu: [] });
-    assert.deepEqual(['aguardando', 'fora-da-demanda'].map(t => tarefa(foraDoCadastro, 'pedidos', t).valor), ['0', '0']);
+    assert.deepEqual(['aguardando', 'fora-da-escala'].map(t => tarefa(foraDoCadastro, 'pedidos', t).valor), ['0', '0']);
     assert.notEqual(cartao(foraDoCadastro, 'pedidos').estado, 'atencao');
     assert.deepEqual(avisosDaData(foraDoCadastro), []);
   });
 
-  it('Pedidos: todos aprovados e na demanda, feito; sem pedidos, pendente; a leitura que falhou, falhou', () => {
+  it('Pedidos: todos aprovados e na escala, feito; sem pedidos, pendente; a leitura que falhou, falhou', () => {
     const feito = cartao(contexto({ pedidos: [aprovado(1)], importadas: [1] }), 'pedidos');
     assert.deepEqual([feito.estado, ...feito.tarefas.map(t => t.estado)], ['feito', 'feito', 'feito', 'feito', 'feito']);
     const vazio = cartao(contexto(), 'pedidos');
@@ -78,24 +78,24 @@ describe('A linha do dia', () => {
     assert.equal(erro.valor, '—');
   });
 
-  it('numa data que já passou, o que aguarda e o aprovado fora da demanda não pedem atenção', () => {
+  it('numa data que já passou, o que aguarda e o aprovado fora da escala não pedem atenção', () => {
     const ctx = { ...contexto({ pedidos: [pedido(1), aprovado(2)] }), data: '2026-11-09' };
-    assert.deepEqual(cartao(ctx, 'pedidos').tarefas.map(t => [t.id, t.estado]), [['registrados', 'feito'], ['aguardando', 'nenhum'], ['aprovados', 'andamento'], ['fora-da-demanda', 'nenhum']]);
+    assert.deepEqual(cartao(ctx, 'pedidos').tarefas.map(t => [t.id, t.estado]), [['registrados', 'feito'], ['aguardando', 'nenhum'], ['aprovados', 'andamento'], ['fora-da-escala', 'nenhum']]);
     assert.deepEqual(avisosDaData(ctx), []);
   });
 
-  it('o pedido aprovado de um aluno inativo não conta como fora da demanda', () => {
+  it('o pedido aprovado de um aluno inativo não conta como fora da escala', () => {
     const ctx = contexto({ pedidos: [aprovado(1)], stu: [{ id: 1001, nm: 'Aluno Fictício', inativo: true }] });
-    assert.equal(tarefa(ctx, 'pedidos', 'fora-da-demanda').valor, '0');
+    assert.equal(tarefa(ctx, 'pedidos', 'fora-da-escala').valor, '0');
   });
 
-  it('quem não opera a escala (Gestor, Secretaria) não vê "aprovados fora da demanda"', () => {
+  it('quem não opera a escala (Gestor, Secretaria) não vê "aprovados fora da escala"', () => {
     const ctx = contexto({ pedidos: [aprovado(1)], opera: false });
     assert.deepEqual(cartao(ctx, 'pedidos').tarefas.map(t => t.id), ['registrados', 'aguardando', 'aprovados']);
     assert.equal(cartao(ctx, 'pedidos').estado, 'feito');
   });
 
-  it('Demanda: as missões pedidas; os recursos e os instrutores que vêm', () => {
+  it('Processamento: as missões pedidas; os recursos e os instrutores que vêm', () => {
     const ctx = contexto({ tot: 7, out: voo(7), av: { 'PR-BBB': false }, ins: [{ id: 1, on: true }, { id: 2, on: false }, { id: 3, on: true }] });
     const c = cartao(ctx, 'processamento');
     assert.equal(c.valor, '7');
@@ -103,7 +103,7 @@ describe('A linha do dia', () => {
     assert.equal(c.estado, 'feito');
   });
 
-  it('Demanda: nenhum recurso disponível falha; um avião parado ou perto da revisão pede atenção; a frota vazia fica pendente', () => {
+  it('Processamento: nenhum recurso disponível falha; um avião parado ou perto da revisão pede atenção; a frota vazia fica pendente', () => {
     assert.equal(tarefa(contexto({ av: { 'PR-AAA': false, 'PR-BBB': false } }), 'processamento', 'recursos').estado, 'falhou');
     assert.equal(tarefa(contexto({ revisao: { 'PR-AAA': { paraAs: null, fim: 47 } } }), 'processamento', 'recursos').estado, 'atencao');
     assert.equal(tarefa(contexto({ revisao: { 'PR-AAA': { paraAs: 600, fim: 50 } } }), 'processamento', 'recursos').estado, 'atencao');
@@ -111,7 +111,7 @@ describe('A linha do dia', () => {
     assert.equal(tarefa(contexto({ frota: [] }), 'processamento', 'recursos').estado, 'pendente');
   });
 
-  it('Demanda: ninguém vem falha com missões pedidas e não conta sem elas; sem as horas dos instrutores, atenção', () => {
+  it('Processamento: ninguém vem falha com missões pedidas e não conta sem elas; sem as horas dos instrutores, atenção', () => {
     const ninguem = [{ id: 1, on: false }];
     assert.equal(tarefa(contexto({ tot: 2, ins: ninguem }), 'processamento', 'invas').estado, 'falhou');
     assert.equal(tarefa(contexto({ tot: 0, ins: ninguem }), 'processamento', 'invas').estado, 'nenhum');
@@ -119,7 +119,7 @@ describe('A linha do dia', () => {
     assert.equal(tarefa(contexto({ ins: [] }), 'processamento', 'invas').estado, 'pendente');
   });
 
-  it('Demanda: o instrutor e o recurso inativos não contam, de hoje em diante', () => {
+  it('Processamento: o instrutor e o recurso inativos não contam, de hoje em diante', () => {
     const ctx = contexto({ frota: [{ reg: 'PR-AAA', tipo: 'C152' }, { reg: 'PR-BBB', tipo: 'C152', inativo: true }], ins: [{ id: 1, on: true }, { id: 2, on: true, inativo: true }] });
     assert.equal(tarefa(ctx, 'processamento', 'recursos').valor, '1 de 1');
     assert.equal(tarefa(ctx, 'processamento', 'invas').valor, '1 de 1');
@@ -163,9 +163,9 @@ describe('A linha do dia', () => {
 
   it('cada valor tem o mesmo sentido em todos os estados: a dica diz qual', () => {
     for (const ctx of [contexto(), contexto({ tot: 5, out: voo(4), al: [{ t: 'err' }], pedidos: [pedido(1)] }), contexto({ leitura: 'erro' })]) {
-      const [pedidos, demanda, escala] = linhaDoDia(ctx);
+      const [pedidos, processamento, escala] = linhaDoDia(ctx);
       assert.match(pedidos.dica, /^(\d+ pedidos? nesta data|Os pedidos desta data não foram lidos)/);
-      assert.match(demanda.dica, /^\d+ miss(ão pedida|ões pedidas)$/);
+      assert.match(processamento.dica, /^\d+ miss(ão pedida|ões pedidas)$/);
       assert.match(escala.dica, /^\d+ de \d+ miss(ão|ões) na escala$/);
     }
   });
@@ -257,12 +257,23 @@ describe('Os avisos da data', () => {
     assert.equal(avisosDaData(contexto({ win }))[0].titulo, 'Horários fechados nesta data: 12:40–17:30 · todos os recursos');
   });
 
-  it('os pedidos que aguardam aprovação (para todos) e os aprovados fora da demanda (só para quem opera), só lidos', () => {
+  // A sugestão do Gabriel no #109 (WCAG 2.2.1): o aviso das novidades dos pedidos some; as últimas ficam no trilho, para
+  // serem lidas de novo, antes dos outros avisos dos pedidos, também sem os pedidos lidos ou numa data passada
+  it('as últimas novidades dos pedidos ficam nos avisos, uma informação que leva a Pedidos', () => {
+    const novidades = { texto: 'Pedidos de qua 11/11: 1 novo, 1 cancelado.', hora: '14:05' };
+    const item = { id: 'novidades-dos-pedidos', gravidade: 'info', minuto: null, titulo: 'Novidades dos pedidos às 14:05: Pedidos de qua 11/11: 1 novo, 1 cancelado.', texto: '', destino: { tela: 'age' } };
+    assert.deepEqual(avisosDaData({ ...contexto({ pedidos: [pedido(1)] }), novidades }).map(a => a.id), ['pedidos-aguardando', 'novidades-dos-pedidos']);
+    assert.deepEqual(avisosDaData({ ...contexto({ pedidos: [aprovado(1)], importadas: [1] }), novidades }), [item]);
+    assert.deepEqual(avisosDaData({ ...contexto({ leitura: 'lendo' }), novidades }), [item]);
+    assert.deepEqual(avisosDaData(contexto({ pedidos: [aprovado(1)], importadas: [1] })), []);
+  });
+
+  it('os pedidos que aguardam aprovação (para todos) e os aprovados fora da escala (só para quem opera), só lidos', () => {
     const pedidos = [pedido(1), aprovado(2), aprovado(3), pedido(4, { cancelada_em: 'x' })];
     assert.deepEqual(avisosDaData(contexto({ pedidos })).map(a => [a.id, a.titulo, a.gravidade, a.destino]), [
-      ['fora-da-demanda', '2 pedidos aprovados fora da demanda', 'aviso', { tela: 'age' }], ['pedidos-aguardando', '1 pedido aguardando aprovação', 'aviso', { tela: 'age' }]
+      ['fora-da-escala', '2 pedidos aprovados fora da escala', 'aviso', { tela: 'proc' }], ['pedidos-aguardando', '1 pedido aguardando aprovação', 'aviso', { tela: 'age' }]
     ]);
-    assert.deepEqual(avisosDaData(contexto({ pedidos, importadas: [2] })).map(a => a.titulo), ['1 pedido aprovado fora da demanda', '1 pedido aguardando aprovação']);
+    assert.deepEqual(avisosDaData(contexto({ pedidos, importadas: [2] })).map(a => a.titulo), ['1 pedido aprovado fora da escala', '1 pedido aguardando aprovação']);
     assert.deepEqual(avisosDaData(contexto({ pedidos: [aprovado(2)], importadas: [2] })), []);
     assert.deepEqual(avisosDaData(contexto({ pedidos, opera: false })).map(a => a.id), ['pedidos-aguardando']);
     assert.deepEqual(avisosDaData(contexto({ pedidos, leitura: 'lendo' })), []);
@@ -285,7 +296,7 @@ describe('Os avisos da data', () => {
 
 // linha-fix-escala-sem-caixas (Pedro, 28/11): as caixas do resumo da Escala saíram. O trilho tem tudo o que elas tinham: as
 // missões que não entraram (com "Sugestões" na recusa do instrutor escolhido), os conflitos (com "Sugestões"), os avisos, os
-// voos com quem está inativo no cadastro ("Refazer a escala", ou a Demanda para o aluno) e as habilitações não conferidas
+// voos com quem está inativo no cadastro ("Refazer a escala", ou o Processamento para o aluno) e as habilitações não conferidas
 describe('O que era das caixas da Escala, no trilho', () => {
   it('o grupo de cada alerta da escala; "Sugestões" no conflito e na recusa do instrutor escolhido, só para quem opera', () => {
     const recusa = { t: 'err', s: 'Aluno 02', m: 'Rejeitado: o instrutor escolhido não serve.', codigo: 'instrutor-escolhido', stuId: 1002 };
@@ -306,7 +317,7 @@ describe('O que era das caixas da Escala, no trilho', () => {
     assert.deepEqual(avisosDaData({ ...contexto({ al, tot: 4, opera: false }), recusas }).map(a => a.acao || null), [null, null, null, null]);
   });
 
-  it('os voos com quem está inativo: um por pessoa ou recurso; "Refazer a escala" no do instrutor e no do recurso; o do aluno leva à Demanda', () => {
+  it('os voos com quem está inativo: um por pessoa ou recurso; "Refazer a escala" no do instrutor e no do recurso; o do aluno leva ao Processamento', () => {
     const out = [
       { fKey: '1000_0_1', stuId: 1000, insId: 1, r: 'PR-AAA', a: 480, b: 540 },
       { fKey: '1001_0_1', stuId: 1001, insId: 1, r: 'PR-BBB', a: 600, b: 660 }
@@ -317,7 +328,7 @@ describe('O que era das caixas da Escala, no trilho', () => {
     const avisos = avisosDaData(contexto({ out, ins, frota, stu, tot: 2 })).filter(a => a.grupo === 'inativos');
     const refazer = { tipo: 'refazer-escala', rotulo: 'Refazer a escala', dica: 'Refaz a escala sem o instrutor e o recurso inativos' };
     assert.deepEqual(avisos.map(a => [a.id, a.gravidade, a.titulo, a.destino, a.acao || null]), [
-      ['inativo:aluno:1000', 'aviso', '1 voo com o aluno Aluno 1000 (inativo) na escala desta data', { tela: 'dem' }, null],
+      ['inativo:aluno:1000', 'aviso', '1 voo com o aluno Aluno 1000 (inativo) na escala desta data', { tela: 'proc' }, null],
       ['inativo:instrutor:1', 'aviso', '2 voos com Instrutor 01 (inativo) na escala desta data', { tela: 'esc' }, refazer],
       ['inativo:recurso:PR-BBB', 'aviso', '1 voo com PR-BBB (inativo) na escala desta data', { tela: 'esc' }, refazer]
     ]);

@@ -8,7 +8,8 @@ import { CAMPOS_DO_PEDIDO } from '../../js/dias.js';
 import { aplicarAgendamento, reversaoDoAgendamento } from '../../js/agendamento.js';
 import { escolherInstrutor, escolhasDaUnidade, escolherNosPedidos, reverterEscolha, reverterReparo } from '../../js/instrutor-escolhido.js';
 import { aplicarReparo } from '../../js/reparo.js';
-import { normalizarFixos, semAgendados, fixosAoAprovar, limparDemanda } from '../../js/fixos.js';
+import { normalizarFixos, semAgendados, fixosAoAprovar } from '../../js/fixos.js';
+import { recomecarPelosPedidos } from '../../js/processamento.js';
 import { runAllocationEngine } from '../../js/engine.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
 
@@ -407,7 +408,7 @@ describe('Desfazer um voo agendado na Escala', () => {
     const estado = dia();
     const semAluno = { ...validarReversao(MOVIDO, FROTA_INICIAL), stuId: 1001 }, semPedido = validarReversao({ ...MOVIDO, mid: 7 }, FROTA_INICIAL);
     assert.equal(motivoParaNaoDesfazer(estado, semAluno), 'O aluno deste voo saiu do cadastro: não há o que desfazer.');
-    assert.equal(motivoParaNaoDesfazer(estado, semPedido), 'O pedido deste voo saiu da Demanda: não há o que desfazer.');
+    assert.equal(motivoParaNaoDesfazer(estado, semPedido), 'O pedido deste voo saiu da escala: não há o que desfazer.');
     assert.equal(motivoParaNaoDesfazer(estado, { ...validarReversao(NOVO, FROTA_INICIAL), stuId: 1001 }), 'O aluno deste voo saiu do cadastro: não há o que desfazer.');
     assert.equal(desfazerAgendamento(estado, semAluno), false);
     assert.equal(desfazerAgendamento(estado, semPedido), false);
@@ -601,11 +602,11 @@ describe('Reverter depois de um agendamento na Escala', () => {
     assert.deepEqual([movido.fixos[K], movido.stu[1].insId], [{ ...AGENDADO, a: 870, b: 930, insId: 2 }, 2]);
   });
 
-  it('o voo agendado que a Demanda soltou não volta: a demanda limpa, outra missão no pedido', () => {
+  it('o voo agendado que os pedidos soltaram não volta: "Recomeçar pelos pedidos" (G2), outra missão no pedido', () => {
     const limpa = dia(), h = historico();
     h.agendar(limpa, NOVO);
     const troca = h.trocar(limpa, 1001, 0, 2);
-    limparDemanda(limpa);
+    recomecarPelosPedidos(limpa, [], { aprovada: () => true });
     h.reverter(limpa, troca);
     assert.deepEqual([limpa.fixos[K], limpa.stu[1].insId], [undefined, undefined]);
     // Outra missão no pedido depois do reparo: o voo agendado não volta; o instrutor escolhido de antes do reparo, sim
@@ -694,7 +695,7 @@ describe('desfazerEdicao', async () => {
   // retirada: o registro sem voar, o id fora de importadas) não volta a voar pelo desfazer dela, nem pelo "↶ Restaurar" do
   // Voa; o voo que um pedido da agenda tomou depois dela também não é desfeito (como o do agendamento, d6)
   it('o pedido da agenda que saiu da demanda, ou que tomou o voo, depois da alteração: o desfazer recusa, com o motivo', async () => {
-    const { motivoParaNaoDesfazerEdicao, motivoParaNaoVoltarAVoar, SAIU_DA_DEMANDA, DE_UM_PEDIDO } = await import('../../js/reversoes.js');
+    const { motivoParaNaoDesfazerEdicao, motivoParaNaoVoltarAVoar, SAIU_DA_ESCALA, DE_UM_PEDIDO } = await import('../../js/reversoes.js');
     const rev = validarReversao({
       kind: 'desfazerEdicao', voos: [{ fKey: '1000_0_1', fixo: null, status: null, detalhe: null }],
       pedidos: [{ stuId: 1000, mid: 0, pedido: { ...pedido, solicitacao: 1 } }], recusas: [], label: '↶ Reverter'
@@ -702,8 +703,8 @@ describe('desfazerEdicao', async () => {
     const estado = (extra = {}, importadas = [1]) => ({ stu: [{ id: 1000, nm: 'A', ...pedido, solicitacao: 1, extra: [], ...extra }], importadas, fixos: {}, fStatus: {}, fObs: {}, resultados: { doDia: [] } });
     assert.equal(motivoParaNaoDesfazerEdicao(estado(), rev), '');
     const saiu = estado({ fly: false }, []);
-    assert.equal(motivoParaNaoDesfazerEdicao(saiu, rev), SAIU_DA_DEMANDA);
-    assert.match(SAIU_DA_DEMANDA, /^O pedido da agenda deste voo saiu da demanda/);
+    assert.equal(motivoParaNaoDesfazerEdicao(saiu, rev), SAIU_DA_ESCALA);
+    assert.match(SAIU_DA_ESCALA, /^O pedido da agenda deste voo saiu da escala/);
     // Tirado da escala pelo operador (o id guardado) ou voando sem estar guardado (o acerto que a conciliação admite): desfaz
     assert.equal(motivoParaNaoDesfazerEdicao(estado({ fly: false }), rev), '');
     assert.equal(motivoParaNaoDesfazerEdicao(estado({}, []), rev), '');
@@ -713,7 +714,7 @@ describe('desfazerEdicao', async () => {
     assert.equal(motivoParaNaoDesfazerEdicao(estado({ solicitacao: 2 }, [2]), semPedido), DE_UM_PEDIDO);
     assert.equal(motivoParaNaoDesfazerEdicao(estado({ solicitacao: undefined }, []), semPedido), '');
     // O "↶ Restaurar" do Voa (setFly com val true): o registro do pedido que saiu da demanda não volta; o outro, sim
-    assert.equal(motivoParaNaoVoltarAVoar(saiu, [saiu.stu[0]]), SAIU_DA_DEMANDA);
+    assert.equal(motivoParaNaoVoltarAVoar(saiu, [saiu.stu[0]]), SAIU_DA_ESCALA);
     assert.equal(motivoParaNaoVoltarAVoar(estado({ fly: false }), [estado({ fly: false }).stu[0]]), '');
     assert.equal(motivoParaNaoVoltarAVoar(saiu, [{ ...pedido, fly: false }, null]), '');
   });

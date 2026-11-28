@@ -67,14 +67,14 @@ test.describe('O inativo no cadastro', () => {
     await expect(page.locator('#agd-recurso option', { hasText: reg })).toHaveCount(0);
   });
 
-  test('o aluno inativo: o pedido dele fica "Aluno inativo", fora dos pendentes; ele não é oferecido para pôr na demanda', async ({ page }) => {
+  test('o aluno inativo: o pedido dele fica "Aluno inativo", fora dos pendentes; no Processamento, ele espera o aluno voltar', async ({ page }) => {
     await abrirComInativos(page);
     await irPara(page, 'age');
     await expect(linhasDosPedidos(page)).toContainText(['Aluno inativo']);
     await expect(aprovarNaLinha(page, 'Aluno inativo')).toHaveCount(0);
     await expect(botaoDosPedidos(page, 'importar')).toHaveCount(0);
     await expect(campoDaAgenda(page, 'aluno').locator('option', { hasText: 'Aluno Fictício Inativo' })).toHaveCount(0);
-    await irPara(page, 'dem');
-    await expect(page.locator('#alunos-fora option[value="Aluno Fictício Inativo"]')).toHaveCount(0);
+    await irPara(page, 'proc');
+    await expect(page.locator('#proc > li.lista-linha', { hasText: 'Aluno Fictício Inativo' }).locator('.lista-l3')).toHaveText(/^(Aluno inativo: o pedido entra quando ele voltar a ativo|Aguardando aprovação)$/);
   });
 });

@@ -61,9 +61,9 @@ test.describe('Login e perfis (modo compartilhado)', () => {
     await expect(page.locator('#usuario')).toHaveText('Gestor de Teste · Gestor');
     await expect(page.locator('body')).toHaveAttribute('data-role', 'gestor');
     await expect(linhasDosInstrutores(page)).toHaveCount(40);
-    await irPara(page, 'dem');
-    // "Limpar demanda" fica no menu Mais, que o Gestor não tem (o item fica escondido até o menu abrir)
-    await expect(page.locator('#btn-mais-dem')).toBeHidden();
+    await irPara(page, 'proc');
+    // "Recomeçar pelos pedidos" fica no menu Mais, que o Gestor não tem (o item fica escondido até o menu abrir)
+    await expect(page.locator('#btn-mais-proc')).toBeHidden();
     await irPara(page, 'ins');
     await expect(page.locator('[data-act="addi"]')).toBeHidden();
     expect(servidor.gravacoes).toEqual([]);

@@ -1,6 +1,6 @@
 // As restrições de um voo (G1): a gaveta "Restrições" (aside.gaveta#painel-restricoes), aberta pelo editor do voo
 // (#dlg-voo) e pelo item do trilho da missão que não entrou, com o que o motor lê para encaixar o pedido: o tipo de
-// recurso, o instrutor, a prioridade, o horário e a duração (as colunas que saíram da Demanda). O horário exato do pedido
+// recurso, o instrutor, a prioridade, o horário e a duração (as colunas que saíram da Demanda, aberta pelo Processamento no G2). O horário exato do pedido
 // da agenda é mostrado, não editado (N14); o tipo e o horário contra as limitações do aluno avisam e pedem a confirmação; o
 // INVA de "Não escalar com" fica na lista, desligado
 import { test, comPrioridade, expect, abrir, abrirEscala, aprovar, lerEscala, irPara, abrirHistorico, entradasDoHistorico, larguraDaPagina, AMANHA,
@@ -109,8 +109,8 @@ test.describe('A gaveta das restrições', () => {
     estado.stu[1].eq = 'C172';
     estado.stu[1].limitacoes = { recursos: ['C172'], horarios: [{ de: 480, ate: 1080 }] };
     await abrir(page, { estado });
-    // Pela linha da Demanda (até o G2), sem a pergunta da Escala: o aviso e a confirmação na gaveta
-    await irPara(page, 'dem');
+    // Pelo Processamento (G2), sem a pergunta da Escala: o aviso e a confirmação na gaveta
+    await irPara(page, 'proc');
     await abrirRestricoes(page, 1001);
     await expect(campoDasRestricoes(page, 'eq').locator('option')).toHaveText(['C152 (o aluno só voa no C172)', 'C172', 'PA-34 (o aluno só voa no C172)']);
     await expect(campoDasRestricoes(page, 'p1').locator('option[value="390"]')).toHaveText('06:30 (o aluno só voa das 08:00 às 18:00)');
@@ -204,13 +204,13 @@ test.describe('A gaveta das restrições', () => {
     await expect(perguntaDoRefazer(page)).toBeHidden();
     await expect(botaoEditar(page, '1001_0_1')).toBeFocused();
     expect(await diaGuardado(page)).toBe(guardado);
-    // Pela Demanda (que grava sem perguntar), o mesmo: nada gravado, o foco no "Restrições" da linha
-    await irPara(page, 'dem');
+    // Pelo Processamento (que grava sem perguntar), o mesmo: nada gravado, o foco no "Restrições" do detalhe
+    await irPara(page, 'proc');
     await abrirRestricoes(page, 1000);
     await campoDasRestricoes(page, 'nb').fill('2.5');
     await page.keyboard.press('Escape');
     await expect(gavetaDasRestricoes(page)).toBeHidden();
-    await expect(page.locator('#dem tr[data-k="d"][data-id="1000"] [data-act="restricoes"]')).toBeFocused();
+    await expect(page.locator('#det-proc [data-act="restricoes"][data-id="1000"]')).toBeFocused();
     expect((await pedidoGuardado(page, 1000)).nb).toBe(1);
   });
 
@@ -264,8 +264,9 @@ test.describe('A gaveta das restrições', () => {
     await editarPelaLista(page, '1001_0_1');
     await expect(page.locator('#dlg-voo [data-act="restricoes"]')).not.toHaveAttribute('aria-haspopup');
     await page.keyboard.press('Escape');
-    await irPara(page, 'dem');
-    await expect(page.locator('#dem [data-act="restricoes"]').first()).not.toHaveAttribute('aria-haspopup');
+    await irPara(page, 'proc');
+    await page.locator('#proc > li.lista-linha[data-proc="1000_0_1"] .lista-botao').click();
+    await expect(page.locator('#det-proc [data-act="restricoes"]')).not.toHaveAttribute('aria-haspopup');
   });
 
   test('o Gestor lê as restrições como texto, pelo editor do voo', async ({ page }) => {
@@ -299,12 +300,12 @@ test.describe('A gaveta das restrições', () => {
   }
 });
 
-test.describe('A Demanda sem as colunas das restrições', () => {
-  comPrioridade('a tabela tem Aluno, Voa e Missão; "Restrições" na linha abre a gaveta, com a Prioridade', async ({ page }) => {
+test.describe('O Processamento sem campos: as restrições na gaveta', () => {
+  comPrioridade('o detalhe é só de leitura; "Restrições" abre a gaveta, com a Prioridade', async ({ page }) => {
     await abrir(page, { estado: dia() });
-    await irPara(page, 'dem');
-    await expect(page.locator('#s-dem thead th')).toHaveText(['Aluno', 'Voa', 'Missão']);
-    await expect(page.locator('#dem [data-f="eq"], #dem [data-f="insId"], #dem [data-f="p1"], #dem [data-f="p2"], #dem [data-f="nb"], #dem [data-f="pr"]')).toHaveCount(0);
+    await irPara(page, 'proc');
+    await page.locator('#proc > li.lista-linha[data-proc="1000_0_1"] .lista-botao').click();
+    await expect(page.locator('#det-proc select, #det-proc input, #proc select, #proc input')).toHaveCount(0);
     await abrirRestricoes(page, 1000);
     await expect(campoDasRestricoes(page, 'pr')).toHaveValue('3');
     // A dica de cada campo fica fora do <label> (dentro dele, o botão seria o controle do rótulo, não a lista)
@@ -312,12 +313,12 @@ test.describe('A Demanda sem as colunas das restrições', () => {
     await expect(page.locator('#painel-restricoes label .dica-btn')).toHaveCount(0);
     await campoDasRestricoes(page, 'pr').selectOption('1');
     await expect.poll(async () => (await pedidoGuardado(page, 1000)).pr).toBe(5);
-    // Pela Demanda (até o G2), como antes: grava sem a pergunta da Escala
+    // Pelo Processamento, como pela Demanda antes: grava sem a pergunta da Escala
     await expect(perguntaDoRefazer(page)).toBeHidden();
     await campoDasRestricoes(page, 'nb').fill('1.5');
     await campoDasRestricoes(page, 'nb').press('Enter');
     await expect.poll(async () => (await pedidoGuardado(page, 1000)).nb).toBe(1.5);
     await fecharRestricoes(page);
-    await expect(page.locator('#dem tr[data-k="d"][data-id="1000"] [data-act="restricoes"]')).toBeFocused();
+    await expect(page.locator('#det-proc [data-act="restricoes"][data-id="1000"]')).toBeFocused();
   });
 });

@@ -2,7 +2,7 @@
 // seguinte, a volta de BH às 07:30 entra sozinha na escala, com o instrutor, o aluno e o avião livres só às 10:10, e o
 // repouso antes dela é um aviso. No programa do curso, o Noturno pode vir em trechos (a ida, a noite e a volta): é um voo
 // só, oferecido pela noite
-import { test, comProgresso, expect, abrir, irPara, abrirEscala, prepararContexto, vigiarErros, AMANHA, entrar, campoDaAgenda, diaSeguinte, diaAnterior, rotuloDaData, refazer, textoDoProgresso,
+import { test, comProgresso, expect, abrir, irPara, abrirEscala, prepararContexto, vigiarErros, AMANHA, entrar, campoDaAgenda, diaSeguinte, diaAnterior, rotuloDaData, refazer, voarPeloPedido, textoDoProgresso,
   editarPelaLista, salvarVoo, abrirHistorico, entradasDoHistorico, textosDaEscala } from './fixtures.js';
 import { criarSupabaseFalso, documentosAtuais, CONTAS } from './supabase-falso.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
@@ -13,18 +13,13 @@ const linha = (page, texto) => page.locator('#out tbody tr:not(.win)', { hasText
 const NOTURNO = { mis: 'Noturno', eq: 'C172', p1: 1050, p2: -1 };
 
 test.describe('Noturno de dois dias', () => {
-  test('a Demanda e a Agenda travam a duração do Noturno (4 h no dia e a volta no dia seguinte)', async ({ page }) => {
-    await abrir(page, { estado: cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000)] }) });
-    await irPara(page, 'dem');
-    // A duração, nas restrições do pedido (G1), acompanha a missão mudada na linha
+  test('as restrições do voo e a Agenda travam a duração do Noturno (4 h no dia e a volta no dia seguinte)', async ({ page }) => {
+    await abrir(page, { estado: cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, NOTURNO)] }) });
+    await irPara(page, 'proc');
+    // A duração, nas restrições do voo (G1; a missão é a do pedido, G2)
     const duracao = (await abrirRestricoes(page, 1000)).locator('[data-f="nb"]');
-    await page.locator('#dem tr[data-k="d"][data-id="1000"] [data-f="mis"]').selectOption('Noturno');
     await expect(duracao).toBeDisabled();
     await expect(duracao.locator('option:checked')).toHaveText('4 h');
-    // Saindo do Noturno, a missão nova começa com a duração dela (não fica com as 4 h)
-    await page.locator('#dem tr[data-k="d"][data-id="1000"] [data-f="mis"]').selectOption('Voo Local');
-    await expect(duracao).toHaveValue('1');
-    await page.locator('#dem tr[data-k="d"][data-id="1000"] [data-f="mis"]').selectOption('Noturno');
     await fecharRestricoes(page);
     await irPara(page, 'age');
     // A missão espera o aluno (F1c)
@@ -58,16 +53,12 @@ test.describe('Noturno de dois dias', () => {
     await expect(volta.locator('[data-act="rm-fly"], [data-act="trocar-instrutor"]')).toHaveCount(0);
     await expect(textosDaEscala(page, 'avisos').filter({ hasText: '9h00 de repouso entre o noturno de ontem (até 21:30) e o translado de volta (07:30)' })).toHaveCount(1);
 
-    // Um voo pedido às 08:20 com o mesmo instrutor vai para depois das 10:10
-    await irPara(page, 'dem');
-    await page.locator('#incluir-aluno').fill('Aluno 1001');
-    await page.locator('#incluir-aluno').press('Enter');
-    await (await abrirRestricoes(page, 1001)).locator('[data-f="p1"]').selectOption({ label: '08:20' });
-    await fecharRestricoes(page);
+    // Um voo pedido às 08:20 com o mesmo instrutor (o único) não voa às 08:20: o instrutor descansa até as 10:10 (G2: o
+    // pedido da Agenda é um horário exato, N14; o app não o move para depois)
+    await voarPeloPedido(page, { aluno: 'Aluno 1001', horario: '08:20' });
     await abrirEscala(page);
-    await expect(linha(page, 'Aluno 1001').locator('.c-hr')).not.toContainText('08:20');
-    const inicio = (await linha(page, 'Aluno 1001').locator('.c-hr').innerText()).slice(0, 5);
-    expect(inicio >= '10:10', `começou às ${inicio}`).toBe(true);
+    await expect(linha(page, 'Aluno 1001')).toHaveCount(0);
+    await expect(textosDaEscala(page, 'erros').filter({ hasText: 'Aluno 1001' })).toHaveCount(1);
   });
 
   // O Noturno no mesmo avião (2026-11-27): gravado, ele fica fixo no avião e com o INVA dele; o editor o leva para outro
@@ -136,7 +127,7 @@ test.describe('Noturno de dois dias', () => {
     await abrirEscala(page);
     const antes = (await linha(page, 'Aluno 1000').innerText()).includes('Instrutor 01') ? 'Instrutor 01' : 'Instrutor 02';
     const outro = antes === 'Instrutor 01' ? 'Instrutor 02' : 'Instrutor 01';
-    await irPara(page, 'dem');
+    await irPara(page, 'proc');
     await (await abrirRestricoes(page, 1000)).locator('[data-f="insId"]').selectOption(outro === 'Instrutor 01' ? '1' : '2');
     await fecharRestricoes(page);
     await abrirEscala(page);
@@ -160,7 +151,7 @@ test.describe('O Noturno em trechos no programa do curso', () => {
   const u = n => `00000000-0000-4000-8e00-${String(n).padStart(12, '0')}`;
   const trecho = (n, codigo, nb, nome) => ({ id: u(n), fase: u(2), codigo, nome: codigo, mis: 'Noturno', eq: 'C172', nb, trecho: nome });
 
-  comProgresso('a Demanda oferece o Noturno uma vez; Usar põe o pedido Noturno com a NOT, e o resultado dela faz os três', async ({ browser }) => {
+  comProgresso('as restrições oferecem o Noturno uma vez; Usar põe o pedido Noturno com a NOT, e o resultado dela faz os três', async ({ browser }) => {
     const { cursos } = gravarCurso({ cursos: cursosIniciais() }, {
       sigla: 'PP', versaoLida: 1, descricao: 'PP: o Noturno em trechos', conteudo: {
         nome: 'Piloto Privado', ativo: true,
@@ -171,7 +162,7 @@ test.describe('O Noturno em trechos no programa do curso', () => {
         ]
       }
     });
-    const estado = cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, { fly: false, p1: 500, p2: -1 }, { curso: 'PP' })] });
+    const estado = cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, { p1: 500, p2: -1 }, { curso: 'PP' })] });
     const servidor = criarSupabaseFalso({ ...documentosAtuais(estado, AMANHA), cursos });
     servidor.resultados.push({ id: 1, aluno: 1000, curso: 'PP', missao: 'TMA-01', resultado: 'aprovado', data: '2026-11-09', voo: null, registrado_em: '2026-11-09T12:00:00.000Z', registrado_por: 'Operador de Teste' });
     const contexto = await browser.newContext({ baseURL: test.info().project.use.baseURL, locale: 'pt-BR', timezoneId: 'America/Sao_Paulo' });
@@ -183,9 +174,8 @@ test.describe('O Noturno em trechos no programa do curso', () => {
 
     await irPara(page, 'alu');
     await expect.poll(() => textoDoProgresso(page, 1000)).toBe('1/4 · Fase 6 · próxima NOT (com TSL-01 e TSL-02)');
-    await irPara(page, 'dem');
-    await page.locator('#onlyfly').uncheck();
-    const pedido = page.locator('#dem tr[data-id="1000"][data-mid="0"]');
+    await irPara(page, 'proc');
+    const pedido = page.locator('#proc > li.lista-linha[data-proc="1000_0_1"]');
     // A próxima missão, "Usar a do programa" e "Trocar…", nas restrições do pedido (G1)
     const restricoes = await abrirRestricoes(page, 1000);
     await expect(restricoes.locator('.restricao-proxima')).toHaveText('Próxima do programa: NOT (com TSL-01 e TSL-02)');
@@ -195,23 +185,10 @@ test.describe('O Noturno em trechos no programa do curso', () => {
     await expect(restricoes.locator('[data-f="outra-missao"] option'))
       .toHaveText(['Trocar…', 'NOT (com TSL-01 e TSL-02) · Noturno · C172 · 4 h', 'TMA-01 · Voo Local · C152 · 1 h (já aprovada)']);
     await restricoes.locator('[data-act="usar-proxima"]').click();
-    await expect(pedido.locator('[data-f="mis"]')).toHaveValue('Noturno');
+    await expect(pedido.locator('.lista-l2')).toContainText('Noturno');
     await expect(pedido.locator('.etapa')).toHaveText('NOT');
     await expect(restricoes.locator('[data-act="usar-proxima"]')).toHaveCount(0);
     await fecharRestricoes(page);
-    // Uma vez só: com o Noturno no pedido, a missão extra do aluno não recebe um translado (TSL-01 ou TSL-02) nem a
-    // NOT de novo; sem mais nada no programa, ela fica sem a próxima missão (e sai, para a escala ter só o Noturno)
-    await pedido.locator('[data-act="add-mis"]').click();
-    const extra = page.locator('#dem tr.extra-row[data-id="1000"]');
-    await expect(extra).toHaveCount(1);
-    await extra.locator('[data-act="restricoes"]').click();
-    await expect(page.locator('#painel-restricoes [data-act="usar-proxima"]')).toHaveCount(0);
-    await expect(page.locator('#painel-restricoes [data-f="outra-missao"] option'))
-      .toHaveText(['Trocar…', 'TMA-01 · Voo Local · C152 · 1 h (já aprovada)', 'NOT (com TSL-01 e TSL-02) · Noturno · C172 · 4 h (já em outro voo do dia)']);
-    await fecharRestricoes(page);
-    await extra.locator('[data-act="del-mis"]').click();
-    await extra.locator('[data-act="del-mis"]').click();
-    await expect(extra).toHaveCount(0);
 
     // Na escala: o Noturno das 17:30, com a missão NOT; o resultado vai para ela
     await abrirEscala(page);

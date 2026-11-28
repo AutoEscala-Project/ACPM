@@ -5,7 +5,7 @@
 // px no toque. E as ações de Pedidos que mudam a escala na hora (o cancelado sai sozinho), o Gestor que só lê. O relógio dos
 // testes está em 10/11/2026, 12:00 em São Paulo; a data aberta é amanhã, qua 11/11
 import {
-  test, expect, irPara, appPronto, AMANHA, abrirEscala, editarPelaLista, refazer, linhaDaLista, escolherPedido, confirmar,
+  test, expect, irPara, appPronto, AMANHA, abrirEscala, abrirHistorico, editarPelaLista, refazer, linhaDaLista, escolherPedido, confirmar,
   linhaDoProcessamento, situacaoNoProcessamento, escolherNoProcessamento, campoDoProcessamento, acaoDoProcessamento, acaoNaLinha, avisoDoProcessamento,
   botaoAtualizarAEscala, estadoDoProcessamento, contagemDoProcessamento
 } from './fixtures.js';
@@ -78,7 +78,7 @@ test.describe('O Processamento', () => {
     await expect(avisoDoProcessamento(page)).toBeHidden();
     await expect.poll(async () => (await diaGuardado(page)).importadas).toEqual([1, 2]);
     // O Histórico diz quem entrou
-    await page.locator('#btn-open-log').click();
+    await abrirHistorico(page);
     await expect(page.locator('#audit-log-list .audit-item', { hasText: 'Pedidos: Aluno 1000 entrou na escala' })).toHaveCount(1);
   });
 
@@ -93,7 +93,7 @@ test.describe('O Processamento', () => {
     await expect(situacaoNoProcessamento(page, '1007_0_1')).toHaveText('Em espera às 08:20 · 1º');
     await expect(situacaoNoProcessamento(page, '1007_0_1')).not.toContainText('Não coube');
     await escolherNoProcessamento(page, '1007_0_1');
-    await expect(campoDoProcessamento(page, 'Lista de espera das 08:20')).toHaveText('1º Aluno 1007');
+    await expect(campoDoProcessamento(page, 'Lista de espera')).toHaveText('08:20: 1º Aluno 1007');
     await expect(contagemDoProcessamento(page)).toHaveText('6 na escala · 1 fora · 1 em espera · 0 aguardando aprovação');
     await irPara(page, 'age');
     await expect(linhaDaLista(page, 7)).toContainText('Em espera às 08:20 · 1º');
@@ -134,8 +134,10 @@ test.describe('O Processamento', () => {
     await alvoDeToque(acaoDoProcessamento(page, 'tirar'));
     await acaoDoProcessamento(page, 'tirar').click();
     await respondeu(page, 'Tirado da escala: Aluno 1000 (Voo Local)');
-    // Numa vista só (390 px), o detalhe está por cima da lista: o foco vai para a linha de estado
-    await expect(estadoDoProcessamento(page)).toBeFocused();
+    // Numa vista só (390 px), o detalhe está por cima da lista (a linha e a de estado escondidas): o foco fica no detalhe,
+    // que já diz a situação nova (o pedido aguarda a aprovação, fora da escala)
+    await expect(page.locator('#det-proc')).toBeFocused();
+    await expect(campoDoProcessamento(page, 'Situação')).toHaveText('Aguardando aprovação');
     await expect.poll(async () => (await diaGuardado(page)).pedidos[1000].fly).toBe(false);
   });
 

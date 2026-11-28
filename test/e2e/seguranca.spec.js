@@ -326,7 +326,7 @@ test.describe('Link antigo com os dados na URL', () => {
     const erros = vigiarErros(page);
     await page.goto(`./?role=gestor&share=${codificar(payloadMalicioso())}`);
     await expect(page.locator('#aviso-link-texto')).toContainText('não vale mais');
-    for (const aba of ['rec', 'ins', 'alu', 'dem', 'bi', 'esc']) await botaoDaAba(page, aba).click();
+    for (const aba of ['rec', 'ins', 'alu', 'proc', 'bi', 'esc']) await botaoDaAba(page, aba).click();
 
     expect(await page.evaluate(() => window.__xss)).toBeUndefined();
     await expect(page.locator('img[src="x"]')).toHaveCount(0);

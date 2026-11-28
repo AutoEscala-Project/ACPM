@@ -19,7 +19,7 @@ export async function escolherNoProcessamento(page, chave) {
   await linhaDoProcessamento(page, chave).locator('.lista-botao').click();
   await expect(page.locator('#det-proc .det-titulo')).toBeVisible();
 }
-// O detalhe: uma linha dele ("Situação", "Lista de espera das 08:20"…) e as ações ('restricoes', 'por-de-volta',
+// O detalhe: uma linha dele ("Situação", "Lista de espera"…) e as ações ('restricoes', 'por-de-volta',
 // 'trazer', 'aprovar', 'tirar')
 export const campoDoProcessamento = (page, rotulo) => page.locator('#det-proc .det-campo').filter({ has: page.locator('.det-rotulo', { hasText: new RegExp(`^${rotulo}$`) }) }).locator('.det-valor');
 export const acaoDoProcessamento = (page, acao) => page.locator(`#det-proc-${acao}`);

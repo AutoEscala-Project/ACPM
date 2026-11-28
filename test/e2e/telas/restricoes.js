@@ -6,6 +6,9 @@ import { mostrarAvisos } from './casca.js';
 export const gavetaDasRestricoes = page => page.locator('#painel-restricoes');
 // Os campos da gaveta aberta para o pedido do aluno (id) e da missão (mid)
 export const restricoesDoPedido = (page, id, mid = 0) => page.locator(`#painel-restricoes .restricoes-campos[data-id="${id}"][data-mid="${mid}"]`);
+// Um campo do pedido do aluno (id) e da missão (mid), na gaveta aberta para ele ('eq', 'insId', 'pr', 'p1', 'p2', 'nb'; o
+// Voa e a missão da linha da Demanda saíram no G2)
+export const campoDoPedido = (page, id, campo, { mid = 0 } = {}) => page.locator(`#painel-restricoes .restricoes-campos[data-id="${id}"][data-mid="${mid}"] [data-f="${campo}"]`);
 // Um campo da gaveta (data-f: 'eq', 'insId', 'pr', 'p1', 'p2', 'nb', 'outra-missao')
 export const campoDasRestricoes = (page, campo) => page.locator(`#painel-restricoes [data-f="${campo}"]`);
 // O aviso das limitações (o tipo, o horário) e o botão que confirma
@@ -15,9 +18,15 @@ export const desistirDaRestricao = page => page.locator('#painel-restricoes [dat
 
 // Abre as restrições do pedido pelo detalhe dele no Processamento (a tela precisa estar aberta: a linha do voo, o detalhe
 // e o "Restrições" dele) e espera a gaveta dele
+// (com a gaveta de outro pedido aberta por cima do detalhe, o "Restrições" é alcançado pelo teclado, como faz quem está com
+// a gaveta aberta)
 export async function abrirRestricoes(page, id, mid = 0) {
   await page.locator(`#proc > li.lista-linha[data-proc="${id}_${mid}_1"] .lista-botao`).click();
-  await page.locator(`#det-proc [data-act="restricoes"][data-id="${id}"][data-mid="${mid}"]`).click();
+  const botao = page.locator(`#det-proc [data-act="restricoes"][data-id="${id}"][data-mid="${mid}"]`);
+  if (await gavetaDasRestricoes(page).isVisible()) {
+    await botao.focus();
+    await page.keyboard.press('Enter');
+  } else await botao.click();
   await expect(restricoesDoPedido(page, id, mid)).toBeVisible();
   return restricoesDoPedido(page, id, mid);
 }

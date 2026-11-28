@@ -1,4 +1,4 @@
-import { test, comProgresso, expect, abrirInstrutor, campoDoInstrutor, abrirLimitesDaLei, linhaDoAluno, prepararContexto, vigiarErros, irPara, abrirEscala, lerEscala, AMANHA, entrar, URL_APP, abrirHistorico, alternarDisponivel, botaoAprovar, caixaDisponivel, exportar, dataAberta, linhasDosAlunos } from './fixtures.js';
+import { test, comProgresso, expect, abrirInstrutor, campoDoInstrutor, abrirLimitesDaLei, linhaDoAluno, prepararContexto, vigiarErros, irPara, abrirEscala, lerEscala, AMANHA, entrar, URL_APP, abrirHistorico, alternarDisponivel, recomecarPelosPedidos, botaoAprovar, caixaDisponivel, exportar, dataAberta, linhasDosAlunos } from './fixtures.js';
 import { criarSupabaseFalso, instalarSupabaseFalso, documentosAtuais, CONTAS } from './supabase-falso.js';
 import { estadoSintetico } from '../helpers/estado.js';
 import { comExemplo } from '../helpers/exemplo.js';
@@ -198,8 +198,8 @@ test.describe('Modo compartilhado: gravação, conflitos e link da escala', () =
     const erros = vigiarErros(page);
     await entrar(page, CONTAS.operador);
     const versaoDoCadastro = servidor.banco.get('cadastro').versao;
-    await irPara(page, 'dem');
-    await page.locator('#dem [data-act="add-mis"]').first().click();
+    await irPara(page, 'proc');
+    await recomecarPelosPedidos(page);
     await expect.poll(() => servidor.gravacoes.filter(g => g.chave === `dia:${AMANHA}`).length).toBe(1);
     expect(servidor.banco.get('cadastro').versao).toBe(versaoDoCadastro);
     expect(servidor.dias.get(AMANHA).conteudo.pedidos).toBeTruthy();

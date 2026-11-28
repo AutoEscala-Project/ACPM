@@ -2,7 +2,7 @@
 // acpm4_cursos). O Administrador inclui, muda, reordena e tira missões; os outros perfis só consultam. Cada alteração
 // grava o curso inteiro (não o cadastro nem o dia) e não entra no histórico da data. Cada aluno tem o curso dele, em
 // Alunos.
-import { test, comProgresso, expect, abrir, irPara, confirmar, abrirEscala, prepararContexto, vigiarErros, preencherLogin, AMANHA, URL_APP, entrar as entrarNoApp, abrirHistorico, appPronto, caixaVoa, diaSeguinte, rotuloDaData, alvosPequenos, larguraDaPagina, semNome, campoDoAluno, textoDoProgresso, progressoNaLinha, abrirInstrutor, habilitacaoDoInstrutor } from './fixtures.js';
+import { test, comProgresso, expect, abrir, irPara, confirmar, abrirEscala, prepararContexto, vigiarErros, preencherLogin, AMANHA, URL_APP, entrar as entrarNoApp, abrirHistorico, appPronto, diaSeguinte, rotuloDaData, alvosPequenos, larguraDaPagina, semNome, campoDoAluno, textoDoProgresso, progressoNaLinha, abrirInstrutor, habilitacaoDoInstrutor } from './fixtures.js';
 import { criarSupabaseFalso, documentosAtuais, documentosFase3, CONTAS } from './supabase-falso.js';
 import { aluno, cenario, instrutor, missaoExtra } from '../helpers/montar.js';
 import { IDS } from '../helpers/casos-do-programa.js';
@@ -272,15 +272,15 @@ test.describe('Cursos', () => {
   });
 });
 
-// A missão do curso no dia: a Demanda sugere a próxima missão do programa ("Usar" põe a missão, o recurso e
-// as horas); na escala, o código fica com o aluno e o operador registra o resultado; aprovada, ela conta no progresso
+// A missão do curso no dia: as restrições do voo (no Processamento) sugerem a próxima missão do programa ("Usar" põe a
+// missão, o recurso e as horas); na escala, o código fica com o aluno e o operador registra o resultado; aprovada, ela conta no progresso
 // e a próxima passa a ser a seguinte
 test.describe('Cursos no dia', () => {
-  const dia = () => ({ ...cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, { fly: false, p1: 500, p2: -1 }, { curso: 'PP' }), aluno(1001, { fly: false })] }), cursos: PROGRAMA });
+  // Os dois voam, sem a missão do curso (G2: só o voo do dia tem as restrições, no Processamento)
+  const dia = () => ({ ...cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, { p1: 500, p2: -1 }, { curso: 'PP' }), aluno(1001, { p1: 610, p2: -1 })] }), cursos: PROGRAMA });
   const naDemanda = async page => {
-    await irPara(page, 'dem');
-    await page.locator('#onlyfly').uncheck();
-    return page.locator('#dem tr[data-id="1000"][data-mid="0"]');
+    await irPara(page, 'proc');
+    return page.locator('#proc > li.lista-linha[data-proc="1000_0_1"]');
   };
   const vooNaEscala = page => page.locator('#out tbody tr:not(.win)', { hasText: 'Aluno 1000' });
 
@@ -292,7 +292,7 @@ test.describe('Cursos no dia', () => {
     await expect(usarADoPrograma(page, 1001)).toHaveCount(0);
     await expect(await proximaDoPrograma(page, 1000)).toHaveText('Próxima do programa: PP-01');
     await usarADoPrograma(page, 1000).click();
-    await expect(caixaVoa(linha)).toBeChecked();
+    await expect(linha).toHaveCount(1);
     await expect(linha.locator('.etapa')).toHaveText('PP-01');
     await expect(usarADoPrograma(page, 1000)).toHaveCount(0);
     await fecharRestricoes(page);
@@ -324,12 +324,14 @@ test.describe('Cursos no dia', () => {
     await travado();
   });
 
-  comProgresso('mudar a missão à mão tira o código do curso', async ({ page }) => {
+  // (A missão da linha da Demanda saiu no G2: o tipo de recurso mudado nas restrições é a mudança à mão)
+  comProgresso('mudar o tipo de recurso à mão tira o código do curso', async ({ page }) => {
     await abrir(page, { estado: dia() });
     const linha = await naDemanda(page);
     await abrirRestricoes(page, 1000);
     await usarADoPrograma(page, 1000).click();
-    await linha.locator('[data-f="mis"]').selectOption('Navegação');
+    await expect(linha.locator('.etapa')).toHaveText('PP-01');
+    await restricoesDoPedido(page, 1000).locator('[data-f="eq"]').selectOption('C172');
     await expect(linha.locator('.etapa')).toHaveCount(0);
     await expect(restricoesDoPedido(page, 1000).locator('.restricao-proxima')).toHaveText('Próxima do programa: PP-01');
   });
@@ -917,7 +919,8 @@ test.describe('Cursos: fases, módulos e quando voar', () => {
   const aprovadas = (aluno, codigos, primeiro) => codigos.map((missao, i) => ({
     id: primeiro + i, aluno, curso: 'PP', missao, resultado: 'aprovado', data: '2026-11-05', voo: null, registrado_em: '2026-11-05T12:00:00.000Z', registrado_por: 'Operador'
   }));
-  const alunos = () => cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, { fly: false }, { curso: 'PP' }), aluno(1001, { fly: false }, { curso: 'PP' })] });
+  // Os dois voam (G2: só o voo do dia tem as restrições, no Processamento)
+  const alunos = () => cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, { p1: 500, p2: -1 }, { curso: 'PP' }), aluno(1001, { p1: 610, p2: -1 }, { curso: 'PP' })] });
 
   async function abrirComPrograma(page, { conteudo, resultados = [], url = './', estado = alunos() }) {
     const { documentos: { cadastro }, dias } = documentosAtuais(estado, AMANHA);
@@ -933,9 +936,8 @@ test.describe('Cursos: fases, módulos e quando voar', () => {
   // A próxima missão do programa, nas restrições do pedido (G1)
   const proxima = (page, id) => proximaDoPrograma(page, id);
   async function naDemanda(page) {
-    await irPara(page, 'dem');
-    await page.locator('#onlyfly').uncheck();
-  }
+    await irPara(page, 'proc');
+      }
 
   // As exceções do PP são dados do programa: o SPIN livre na Fase 5, a Fase 6 (impressa depois da 8) depois da Fase 4 e
   // a ADAPTAÇÃO dispensada. A próxima missão da Demanda (a primeira liberada, na ordem do programa) as segue
@@ -1142,7 +1144,7 @@ test.describe('Cursos: fases, módulos e quando voar', () => {
     await irPara(page, 'cur');
     const pp = curso(page, 'PP'), toast = page.locator('#toast-box');
     const codigo = id => pp.locator(`tr[data-missao="${id}"] [data-cf="codigo"]`);
-    const naDemanda = nomes => `Este código está na Demanda de amanhã (${nomes}): ele não muda enquanto um pedido o leva (o nome muda)`;
+    const naDemanda = nomes => `Este código está nos voos de amanhã (${nomes}): ele não muda enquanto um pedido o leva (o nome muda)`;
     // Travados, com o cadeado e o motivo: a PE-03 (o pedido da Maria, que está na escala) e a END-SOLO (o extra do João)
     for (const [id, nomes] of [[M.pe03, 'Maria'], [M.endSolo, 'João']]) {
       await expect(codigo(id)).toHaveAttribute('readonly', '');
@@ -1158,7 +1160,7 @@ test.describe('Cursos: fases, módulos e quando voar', () => {
     await codigo(M.pe03).evaluate(el => el.removeAttribute('readonly'));
     await codigo(M.pe03).fill('PE-3A');
     await codigo(M.pe03).press('Tab');
-    await expect(toast).toContainText('O código PE-03 está na Demanda de amanhã (Maria): ele não muda enquanto um pedido o leva (o nome muda).');
+    await expect(toast).toContainText('O código PE-03 está nos voos de amanhã (Maria): ele não muda enquanto um pedido o leva (o nome muda).');
     await expect(codigo(M.pe03)).toHaveValue('PE-03');
     await expect(codigo(M.pe03)).toHaveAttribute('readonly', '');
 
@@ -1176,7 +1178,7 @@ test.describe('Cursos: fases, módulos e quando voar', () => {
     await expect(nova).toHaveValue('PP-02');
     await nova.fill('TMA-06');
     await nova.press('Tab');
-    await expect(toast).toContainText('O código TMA-06 está na Demanda de amanhã (João): ele não vai para outra missão (o voo passaria para ela).');
+    await expect(toast).toContainText('O código TMA-06 está nos voos de amanhã (João): ele não vai para outra missão (o voo passaria para ela).');
     await expect(nova).toHaveValue('PP-02');
 
     // O código livre muda; a alteração diz o de antes
@@ -1318,7 +1320,7 @@ test.describe('Cursos: cursos novos, encerrar, o cronograma do PP e o curso de c
   const aprovada = (aluno, missao, id) => ({ id, aluno, curso: 'PP', missao, resultado: 'aprovado', data: '2026-11-05', voo: null, registrado_em: '2026-11-05T12:00:00.000Z', registrado_por: 'Operador' });
 
   comProgresso('um curso novo: a sigla e o nome conferidos no formulário; criado, ele vale em Alunos, e o resultado de um voo vai para ele', async ({ page }) => {
-    const estado = cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, {}, { curso: 'PP' }), aluno(1001, { fly: false, p1: 500, p2: -1 })] });
+    const estado = cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, {}, { curso: 'PP' }), aluno(1001, { p1: 610, p2: -1 })] });
     await abrirComCursos(page, { estado });
     await irPara(page, 'cur');
     const novo = page.locator('#cur-novo'), form = page.locator('#form-curso');
@@ -1371,9 +1373,8 @@ test.describe('Cursos: cursos novos, encerrar, o cronograma do PP e o curso de c
     await expect(await opcoesDoCurso(page, 1001)).toHaveText(['—', 'PP · Piloto Privado', 'PC · Piloto Comercial', 'INVA · Instrutor de Voo', 'MLTE · Multimotor']);
     await (await campoDoAluno(page, 1001, 'curso')).selectOption('MLTE');
     await expect(page.locator('#audit-log-list')).toContainText('Curso de Aluno 1001: MLTE');
-    await irPara(page, 'dem');
-    await page.locator('#onlyfly').uncheck();
-    await expect(await proximaDoPrograma(page, 1001)).toHaveText('Próxima do programa: MLTE-01');
+    await irPara(page, 'proc');
+        await expect(await proximaDoPrograma(page, 1001)).toHaveText('Próxima do programa: MLTE-01');
     await usarADoPrograma(page, 1001).click();
     await fecharRestricoes(page);
     await abrirEscala(page);
@@ -1487,7 +1488,7 @@ test.describe('Cursos: cursos novos, encerrar, o cronograma do PP e o curso de c
   });
 
   comProgresso('no PP vazio, "Usar o cronograma do PP": dois cliques, com o resumo; as 9 fases, com a Fase 6 depois da Fase 4 e o Noturno em trechos', async ({ page }) => {
-    const estado = cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, { fly: false }, { curso: 'PP' })] });
+    const estado = cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, {}, { curso: 'PP' })] });
     await abrirComCursos(page, { estado });
     await irPara(page, 'cur');
     const pp = curso(page, 'PP');
@@ -1513,9 +1514,8 @@ test.describe('Cursos: cursos novos, encerrar, o cronograma do PP e o curso de c
     await expect(f6.locator('details.requisitos summary')).toHaveText('Depois de: Fase 4');
     await expect.poll(() => valores(f6.locator('[data-cf="trecho"]'))).toEqual(['ida', 'noite', 'volta']);
     await expect.poll(() => descricoes(page)).toEqual(['PP: cronograma P.I PPA 001A aplicado (0 mantidas, 47 novas, 0 retiradas)']);
-    await irPara(page, 'dem');
-    await page.locator('#onlyfly').uncheck();
-    await expect(await proximaDoPrograma(page, 1000)).toHaveText('Próxima do programa: IN-01');
+    await irPara(page, 'proc');
+        await expect(await proximaDoPrograma(page, 1000)).toHaveText('Próxima do programa: IN-01');
     await fecharRestricoes(page);
   });
 
@@ -1566,7 +1566,7 @@ test.describe('Cursos: cursos novos, encerrar, o cronograma do PP e o curso de c
       fases: [{ id: F4, nome: 'Fase 4 – Manobras' }, { id: F6, nome: 'Fase 6 – Voo Noturno' }],
       missoes: [{ id: TMA05, fase: F4, codigo: 'TMA-05', nome: 'TMA-05', mis: 'Voo Local', eq: 'C152', nb: 1 }, noturno(TSL01, 'TSL-01'), noturno(NOT, 'NOT', 3), noturno(TSL02, 'TSL-02')]
     };
-    const estado = cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, { fly: false }, { curso: 'PP' })] });
+    const estado = cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, {}, { curso: 'PP' })] });
     await abrirComCursos(page, { estado, cursos: comPP(plano), resultados: [aprovada(1000, 'TMA-05', 1)] });
     await irPara(page, 'cur');
     const pp = curso(page, 'PP'), trecho = id => pp.locator(`tr[data-missao="${id}"] [data-cf="trecho"]`);
@@ -1591,9 +1591,8 @@ test.describe('Cursos: cursos novos, encerrar, o cronograma do PP e o curso de c
     await expect(trecho(NOT)).toHaveValue('noite');
     await expect.poll(() => descricoes(page)).toEqual(['PP: NOT é a noite do Noturno', 'PP: TSL-01 é a ida do Noturno', 'PP: TSL-02 é a volta do Noturno']);
     // A próxima missão: o Noturno, pela noite, com os translados
-    await irPara(page, 'dem');
-    await page.locator('#onlyfly').uncheck();
-    await expect(await proximaDoPrograma(page, 1000)).toHaveText('Próxima do programa: NOT (com TSL-01 e TSL-02)');
+    await irPara(page, 'proc');
+        await expect(await proximaDoPrograma(page, 1000)).toHaveText('Próxima do programa: NOT (com TSL-01 e TSL-02)');
     await fecharRestricoes(page);
     // Quem só consulta lê o trecho no tipo de missão
     await page.locator('#role-sel').selectOption('gestor');

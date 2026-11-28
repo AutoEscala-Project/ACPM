@@ -1,5 +1,5 @@
 // Histórico da data numa gaveta lateral, que abre sobre a aba aberta (sem trocar de aba).
-import { test, expect, abrir, abrirSintetico, irPara, abrirEscala, abrirAvisosDaEscala, AMANHA, prepararContexto, vigiarErros, entrar, abrirHistorico, alternarDisponivel, alternarVem, appPronto, caixaVem, caixaVoa, dataAberta, diaSeguinte, linhaDoInstrutor, confirmarAgendamento, refazer } from './fixtures.js';
+import { test, expect, abrir, abrirSintetico, irPara, abrirEscala, abrirAvisosDaEscala, AMANHA, prepararContexto, vigiarErros, entrar, abrirHistorico, alternarDisponivel, alternarVem, appPronto, caixaVem, linhaDoProcessamento, voarPeloPedido, dataAberta, diaSeguinte, linhaDoInstrutor, confirmarAgendamento, refazer } from './fixtures.js';
 import { documentosAtuais, instalarSupabaseFalso, CONTAS } from './supabase-falso.js';
 import { aluno, cenario, instrutor, missaoExtra } from '../helpers/montar.js';
 import { abrirRestricoes, campoDasRestricoes, fecharRestricoes } from './telas/restricoes.js';
@@ -84,8 +84,8 @@ test.describe('Histórico', () => {
     await expect(voos).toHaveCount(1);
     await expect(voos.locator('.c-hr')).toContainText('08:20–09:20');
     await expect(page.locator('#out .fixo')).toHaveCount(0);
-    await irPara(page, 'dem');
-    await expect(page.locator('#dem tr[data-k="d"][data-id="1000"]')).toHaveCount(1);
+    await irPara(page, 'proc');
+    await expect(linhaDoProcessamento(page, '1000_0_1')).toHaveCount(1);
     await irPara(page, 'ins');
     await expect(caixaVem(linhaDoInstrutor(page, '2'))).not.toBeChecked();
 
@@ -204,7 +204,7 @@ test.describe('Histórico', () => {
     await expect(voo.locator('.c-aviao')).toContainText('PR-VOC');
     await expect(voo.locator('.c-instr')).toHaveText('Instrutor 02');
     await expect(voo.locator('.fixo')).toHaveAttribute('aria-label', 'Voo fixo: instrutor escolhido na escala');
-    await irPara(page, 'dem');
+    await irPara(page, 'proc');
     await abrirRestricoes(page, 1000);
     await expect(campoDasRestricoes(page, 'insId')).toHaveValue('2');
   });
@@ -221,7 +221,7 @@ test.describe('Histórico', () => {
     await abrirHistorico(page);
     const desfazer = page.locator('#audit-log-list [data-act="rev-log"]');
     await desfazer.click();
-    await expect(page.locator('#toast-box')).toContainText('O pedido deste voo saiu da Demanda: não há o que desfazer.');
+    await expect(page.locator('#toast-box')).toContainText('O pedido deste voo saiu da escala: não há o que desfazer.');
     await expect(desfazer).toHaveText('↶ Desfazer');
     await expect(page.locator('#audit-log-list .audit-item')).toHaveCount(1);
     await page.keyboard.press('Escape');
@@ -244,14 +244,11 @@ test.describe('Histórico', () => {
     await page.locator('#audit-log-list [data-act="rev-log"]').click();
     await expect(page.locator('#audit-log-list .audit-item', { hasText: 'Revertido: Agendado na escala: Aluno 1000' })).toHaveCount(1);
     await page.keyboard.press('Escape');
-    // Continua fora da escala, e a Demanda continua com "Voa" desligado
+    // Continua fora da escala: o voo dele no dia não voa
     await expect(voo).toHaveCount(0);
-    await irPara(page, 'dem');
-    const voa = caixaVoa(page.locator('#dem tr[data-k="d"][data-id="1000"][data-mid="0"]'));
-    await expect(voa).not.toBeChecked();
-    // Voando de novo, o voo vai para o horário de antes do agendamento (08:20), sem o cadeado
-    await page.locator('#onlyfly').uncheck();
-    await voa.check();
+    expect(await page.evaluate(data => JSON.parse(localStorage.getItem(`acpm4_dia_${data}`)).pedidos[1000].fly, AMANHA)).toBe(false);
+    // Voando de novo (G2: pelo pedido, registrado e aprovado), o voo vai para as 08:20, sem o cadeado do agendamento desfeito
+    await voarPeloPedido(page, { aluno: 'Aluno 1000', horario: '08:20' });
     await abrirEscala(page);
     await expect(voo.locator('.c-hr')).toContainText('08:20–09:20');
     await expect(voo.locator('.fixo')).toHaveCount(0);
@@ -276,9 +273,8 @@ test.describe('Histórico', () => {
     const voo = page.locator('#out tbody tr:not(.win)', { hasText: 'Maria Silva' });
     await expect(voo.locator('.c-hr')).toContainText('10:10–11:10');
 
-    // Na Demanda, o instrutor da Maria muda para o outro; no Histórico, o agendamento é desfeito e a troca, revertida
-    await irPara(page, 'dem');
-    const pedido = page.locator('#dem tr[data-k="d"][data-id="1001"][data-mid="0"]');
+    // Nas restrições do voo, o instrutor da Maria muda para o outro; no Histórico, o agendamento é desfeito e a troca, revertida
+    await irPara(page, 'proc');
     await abrirRestricoes(page, 1001);
     await campoDasRestricoes(page, 'insId').selectOption(ins === '1' ? '2' : '1');
     await fecharRestricoes(page);
@@ -289,19 +285,14 @@ test.describe('Histórico', () => {
     await lista.locator('.audit-item', { hasText: 'Pedido Maria Silva: instrutor' }).getByRole('button', { name: '↶ Reverter' }).click();
     await expect(lista).toContainText('Revertido: Pedido Maria Silva: instrutor');
     await page.locator('#btn-fechar-historico').click();
-    // O pedido é o de antes do agendamento: sem voar e sem o instrutor escolhido; o dia não guarda o voo fixo
-    await expect(caixaVoa(pedido)).not.toBeChecked();
-    // Sem voar, a linha só aparece sem "Só quem voa"
-    if (await page.locator('#onlyfly').isChecked()) await page.locator('#onlyfly').uncheck();
-    await abrirRestricoes(page, 1001);
-    await expect(campoDasRestricoes(page, 'insId')).toHaveValue('');
-    await fecharRestricoes(page);
-    expect(await page.evaluate(data => JSON.parse(localStorage.getItem(`acpm4_dia_${data}`)).fixos, AMANHA)).toEqual({});
+    // O pedido é o de antes do agendamento: sem voar (fora do Processamento) e sem o instrutor escolhido; o dia não guarda o
+    // voo fixo
+    await expect(linhaDoProcessamento(page, '1001_0_1')).toHaveCount(0);
+    const doDia = await page.evaluate(data => JSON.parse(localStorage.getItem(`acpm4_dia_${data}`)), AMANHA);
+    expect([doDia.pedidos[1001].fly, doDia.pedidos[1001].insId ?? null, doDia.fixos]).toEqual([false, null, {}]);
 
-    // A Maria volta a voar: o voo vai para a preferência dela (14:30), sem o cadeado
-    await page.locator('#incluir-aluno').fill('Maria Silva');
-    await page.locator('#incluir-aluno').press('Enter');
-    await expect(caixaVoa(pedido)).toBeChecked();
+    // A Maria volta a voar (G2: pelo pedido, às 14:30): sem o cadeado
+    await voarPeloPedido(page, { aluno: 'Maria Silva', horario: '14:30' });
     await abrirEscala(page);
     await expect(voo.locator('.c-hr')).toContainText('14:30–15:30');
     await expect(voo.locator('.fixo')).toHaveCount(0);
@@ -341,16 +332,13 @@ test.describe('Histórico', () => {
     await expect(lista).toContainText('Revertido: Reparo: Maria Silva');
     await page.locator('#btn-fechar-historico').click();
     expect(await page.evaluate(data => JSON.parse(localStorage.getItem(`acpm4_dia_${data}`)).fixos, AMANHA)).toEqual({});
-    await irPara(page, 'dem');
-    const pedido = page.locator('#dem tr[data-k="d"][data-id="1001"][data-mid="0"]');
-    await expect(caixaVoa(pedido)).not.toBeChecked();
-    // Sem voar, a linha só aparece sem "Só quem voa"
-    if (await page.locator('#onlyfly').isChecked()) await page.locator('#onlyfly').uncheck();
-    await abrirRestricoes(page, 1001);
-    await expect(campoDasRestricoes(page, 'insId')).toHaveValue('');
+    // Sem voar (fora do Processamento) e sem o instrutor escolhido
+    await irPara(page, 'proc');
+    await expect(linhaDoProcessamento(page, '1001_0_1')).toHaveCount(0);
+    expect(await page.evaluate(data => JSON.parse(localStorage.getItem(`acpm4_dia_${data}`)).pedidos[1001].insId ?? null, AMANHA)).toBe(null);
   });
 
-  // O voo movido pelo agendamento continua na Demanda depois de desfeito (com o pedido de antes): é o histórico que diz
+  // O voo movido pelo agendamento continua na escala depois de desfeito (com o pedido de antes): é o histórico que diz
   // que o agendamento foi desfeito depois da troca de instrutor
   test('desfazer um voo movido e depois reverter a troca de instrutor: o voo volta para onde estava, sem o cadeado', async ({ page }) => {
     const estado = cenario({ ins: [instrutor(1, 9), instrutor(2, 9)], stu: [aluno(1000, { p1: 390, p2: -1 }, { nm: 'Maria Silva' })] });
@@ -368,7 +356,7 @@ test.describe('Histórico', () => {
     await confirmarAgendamento(page);
     await expect(voo.locator('.c-hr')).toContainText('12:40–13:40');
 
-    await irPara(page, 'dem');
+    await irPara(page, 'proc');
     await abrirRestricoes(page, 1000);
     await campoDasRestricoes(page, 'insId').selectOption(ins === '1' ? '2' : '1');
     await fecharRestricoes(page);

@@ -48,7 +48,7 @@ test.describe('Perfis de acesso', () => {
   // Quem só consulta usa os filtros como o Operador: a busca e as caixas das habilitações e dos cursos (.flt-ctrl, que
   // js/somente-leitura.js não desliga), as vistas, o botão e o "Limpar" do filtro e o "Limpar filtros" (sem data-act, que
   // js/eventos/registro.js não deixa passar para ele)
-  test('o Gestor busca, filtra pelas habilitações e pelos cursos e troca de vista em INVAs, Alunos e na Demanda; "Limpar filtros" mostra todos de novo', async ({ page }) => {
+  test('o Gestor busca, filtra pelas habilitações e pelos cursos e troca de vista em INVAs, Alunos e no Processamento; "Limpar filtros" mostra todos de novo', async ({ page }) => {
     const estado = cenario({
       ins: [instrutor(1, 9, { nm: 'Ângelo Brandão' }), instrutor(2, 9), instrutor(3, 1), instrutor(4, 1, { hab: ['local', 'c172'] })],
       stu: [aluno(1000, {}, { nm: 'João Silva', curso: 'PP' }), aluno(1001)]
@@ -97,30 +97,31 @@ test.describe('Perfis de acesso', () => {
     await expect(buscaAlu).toHaveValue('');
     await expect(linhasDosAlunos(page)).toHaveCount(2);
     await expect(page.locator('#alu-contagem')).toHaveText('2 alunos');
-    // O filtro dos cursos, em Alunos e na Demanda (pela linha, com as mesmas marcas)
+    // O filtro dos cursos, em Alunos e no Processamento (cada um com as marcas dele, G2)
     await page.locator('#flt-alu-cur').click();
     await expect(page.locator('#flt-alu-cur-painel input[data-filtro]:disabled')).toHaveCount(0);
     await filtrarCursos(page, 'alu', ['PP']);
     await expect(linhasDosAlunos(page)).toHaveCount(1);
     await expect(page.locator('#alu-contagem')).toHaveText('1 de 2 alunos');
-    await irPara(page, 'dem');
-    await expect(page.locator('#s-dem')).toBeVisible();
-    await expect(page.locator('#flt-dem-cur')).toHaveText('Curso: PP');
-    await expect(page.locator('#dem tr[data-k="d"]:visible')).toHaveCount(1);
-    await expect(page.locator('#dem tr[data-k="d"]:visible')).toHaveAttribute('data-id', '1000');
-    await page.locator('#flt-dem-cur').click();
-    await expect(page.locator('#flt-dem-cur-painel input[data-filtro]:disabled')).toHaveCount(0);
-    await filtrarCursos(page, 'dem', ['sem-curso']);
-    await expect(page.locator('#dem tr[data-k="d"]:visible')).toHaveCount(1);
-    await expect(page.locator('#dem tr[data-k="d"]:visible')).toHaveAttribute('data-id', '1001');
-    // O "Limpar filtros" da Demanda: a busca e as marcas
-    await page.locator('#flt-dem').fill('nenhum assim');
-    await page.locator('#limpar-filtros-dem').click();
-    await expect(page.locator('#flt-dem')).toBeFocused();
-    await expect(page.locator('#flt-dem')).toHaveValue('');
-    await expect(page.locator('#flt-dem-cur')).toHaveText('Todos os cursos');
-    await expect(page.locator('#dem tr[data-k="d"]:visible')).toHaveCount(2);
-    await expect(page.locator('#dem tr.sem-resultado')).toHaveCount(0);
+    await irPara(page, 'proc');
+    await expect(page.locator('#s-proc')).toBeVisible();
+    const visiveis = page.locator('#proc > li.lista-linha:visible');
+    await expect(page.locator('#flt-proc-cur')).toHaveText('Todos os cursos');
+    await expect(visiveis).toHaveCount(2);
+    await page.locator('#flt-proc-cur').click();
+    await expect(page.locator('#flt-proc-cur-painel input[data-filtro]:disabled')).toHaveCount(0);
+    await filtrarCursos(page, 'proc', ['PP']);
+    await expect(visiveis).toHaveCount(1);
+    await expect(visiveis).toHaveAttribute('data-proc', '1000_0_1');
+    await filtrarCursos(page, 'proc', ['sem-curso']);
+    await expect(visiveis).toHaveAttribute('data-proc', '1001_0_1');
+    // O "Limpar filtros" do Processamento: a busca e as marcas
+    await page.locator('#flt-proc').fill('nenhum assim');
+    await page.locator('#limpar-filtros-proc').click();
+    await expect(page.locator('#flt-proc')).toBeFocused();
+    await expect(page.locator('#flt-proc')).toHaveValue('');
+    await expect(page.locator('#flt-proc-cur')).toHaveText('Todos os cursos');
+    await expect(visiveis).toHaveCount(2);
   });
 
   // Em Recursos também (B, lista e detalhe): a busca pela matrícula (com .flt-ctrl, sem data-f nem data-a), os grupos que

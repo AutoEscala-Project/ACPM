@@ -13,7 +13,7 @@ import { hojeISO, somarDias } from '../../js/format.js';
 import { novoCurso } from '../../js/programa.js';
 import { MODELOS } from '../../js/modelos-de-curso.js';
 import { S, setS, setData, estadoDaEscala, escalaDoMotor } from '../../js/state.js';
-import { etapaNaDemanda, missaoDoCursoNasRestricoes, progressoDoAluno, faseDoAluno, proximaDoPedido, outraMissaoDoPedido, resultadoNaEscala } from '../../js/views/etapas.js';
+import { missaoDoCursoNasRestricoes, progressoDoAluno, faseDoAluno, proximaDoPedido, outraMissaoDoPedido, resultadoNaEscala } from '../../js/views/etapas.js';
 import { aluno, apenas, cenario, instrutor, missaoExtra } from '../helpers/montar.js';
 import { escalaDaAlteracao } from '../../js/edicao-do-voo.js';
 import { ligarFuncionalidades } from '../helpers/funcionalidades.js';
@@ -179,8 +179,6 @@ describe('Com o progresso desligado, na Demanda, em Alunos, em Cursos e na escal
 
   it('nem a próxima missão, nem as outras, nem o progresso, nem a fase; o código que o pedido já tem continua', () => {
     abrir();
-    assert.equal(etapaNaDemanda(stu(), stu(), 0), '');
-    assert.equal(etapaNaDemanda(stu(), stu({ etapa: 'IN-01', cursoDaEtapa: 'PP' }), 0), ' <span class="etapa" title="Missão do curso PP">IN-01</span>');
     assert.equal(proximaDoPedido(stu(), 0), null);
     assert.equal(outraMissaoDoPedido(stu(), stu(), 0, 'IN-01'), null);
     assert.equal(progressoDoAluno(stu()), '');

@@ -1270,13 +1270,14 @@ describe('quadroDoProcessamento: a situação de cada pedido da data', () => {
 
   it('não coube (o motivo e onde resolver); o local da lista de espera (U3) espera às 08:20, não "não coube"', () => {
     const { e, linhas } = montar();
-    // 1004 sem INVA possível (Não escalar com os dois): não coube, sem espera
-    e.stu[3].bl = [1, 2];
+    // 1004 no C172, sem nenhum disponível: não coube, sem espera (não é falta de lugar no horário)
+    e.stu[3].eq = 'C172';
+    for (const r of apenas('C172')) e.av[r] = false;
     const q = porChave(quadro(e, linhas));
     assert.equal(q['1004_0_1'].situacao, 'nao-coube');
-    assert.equal(q['1004_0_1'].motivo.codigo, 'bloqueio');
-    assert.equal(q['1004_0_1'].texto, 'Não coube na escala: em Não escalar com');
-    assert.deepEqual(q['1004_0_1'].motivo.onde, ONDE_RESOLVER.bloqueio);
+    assert.equal(q['1004_0_1'].motivo.codigo, 'sem-aviao');
+    assert.equal(q['1004_0_1'].texto, 'Não coube na escala: sem avião disponível');
+    assert.deepEqual(q['1004_0_1'].motivo.onde, ONDE_RESOLVER['sem-aviao']);
     // Seis locais às 08:20 e o 7º sem a confirmação (registrado na lista de espera): em espera às 08:20 · 1º
     const seis = cenario({ ins: [1, 2, 3, 4, 5, 6, 7].map(id => instrutor(id, 9)),
       stu: [1, 2, 3, 4, 5, 6, 7].map(n => aluno(1000 + n, { p1: 500, p2: -1, jan: 'h500', solicitacao: n })) });
@@ -1315,6 +1316,16 @@ describe('quadroDoProcessamento: a situação de cada pedido da data', () => {
     const q = porChave(quadro(e, linhas.filter(x => ![5, 6, 7].includes(x.id))));
     assert.deepEqual([q['1005_0_1'].origem, q['1005_0_1'].situacao, q['1006_0_1'].origem, q['1006_0_1'].situacao], ['agendado', 'na-escala', 'sem-pedido', 'na-escala']);
     assert.deepEqual([q['1007_2_1'].situacao, q['1007_1_1']], ['fora-pelo-operador', undefined]);
+  });
+
+  // O registro sem voar de um pedido que aguarda (tirado da escala pela linha sem aprovação) ou foi cancelado continua na
+  // lista, pela linha do pedido, com a chave do voo
+  it('o registro sem voar do pedido que aguarda ou foi cancelado: a linha do pedido, aguardando ou cancelado', () => {
+    const { e, linhas } = montar();
+    e.stu[4] = aluno(1005, { fly: false, solicitacao: 5 });
+    e.stu[5] = aluno(1006, { fly: false, solicitacao: 6 });
+    const q = porChave(quadro(e, linhas));
+    assert.deepEqual([q['1005_0_1'].situacao, q['1006_0_1'].situacao, q['1006_0_1'].texto, q['p:5'], q['p:6']], ['aguardando', 'cancelado', 'Cancelado por Maria', undefined, undefined]);
   });
 
   it('pedidos não lidos: só os voos do dia, sem plano; data passada: o aprovado que não entrou não entra mais', () => {
@@ -1437,7 +1448,7 @@ describe('recomecarPelosPedidos: "Recomeçar pelos pedidos"', () => {
     assert.deepEqual([p1.fly, p1.solicitacao], [false, 2], 'o tirado pelo operador continua fora');
     assert.deepEqual([p2.fly, p2.extra.map(x => [x.mid, x.fly, x.solicitacao])], [false, [[1, false, 3]]], 'o sem pedido sai; o que aguarda sai e fica com o pedido');
     assert.deepEqual([p3.fly, e.fStatus['1003_0_1']], [true, 'Em Voo'], 'o voo em voo fica');
-    assert.deepEqual([p4.fly, p4.mis, p4.extra.map(x => [x.mid, x.solicitacao, x.fly])], [false, 'IFR', [[1, 5, true]]], 'o que nunca entrou entra acima de todo número, nunca no 0');
+    assert.deepEqual([p4.fly, p4.mis, p4.extra.map(x => [x.mid, x.solicitacao, x.fly])], [false, 'Voo Local', [[1, 5, true]]], 'o sem pedido fica em branco; o que nunca entrou entra acima de todo número, nunca no 0');
     assert.deepEqual([p6.fly, e.importadas.includes(7)], [false, false], 'o cancelado sai');
     assert.deepEqual([e.importadas.includes(6), e.stu[5].fly], [true, false], 'o dispensado continua dispensado');
     assert.deepEqual([e.aprovacao, Object.keys(e.fixos)], [null, ['1003_0_1']]);

@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { MIS, ALL_EQ_TYPES } from '../../js/config.js';
 import { HORARIOS_INICIAIS } from '../../js/horarios.js';
 import { prazoDaAgendaPermite, primeiraDataAberta, datasParaRegistrar, disponibilidadeDaSolicitacao, pedidoDaSolicitacao, recursosDaMissao, recursoValido, RECURSO_DO_PEDIDO,
-  situacaoDaSolicitacao, solicitacaoAprovada, resumoDasSolicitacoes, situacaoNaDemanda, solicitacoesParaImportar, contagemPorDia, motivoSemEntrada,
+  situacaoDaSolicitacao, solicitacaoAprovada, resumoDasSolicitacoes, pedidoVoaNoDia, contagemPorDia, motivoSemEntrada,
   opcoesDaSegundaPreferencia, novidadesDasSolicitacoes, temNovidades, textoDasNovidades, agoraEmSaoPaulo, preferenciasDaSolicitacao } from '../../js/agenda.js';
 
 const em = iso => new Date(iso);
@@ -298,22 +298,13 @@ describe('Os pedidos e a aprovação (D2)', () => {
     assert.deepEqual(resumoDasSolicitacoes(lista, s => s.aluno !== 1002), { registradas: 3, aguardando: 1, aprovadas: 1 });
   });
 
-  // O estado da data: os alunos com o registro do dia (o pedido principal e as missões extras) e as importadas
-  const estado = ({ importadas = [], stu = [] } = {}) => ({ importadas, stu });
-  const comRegistro = (id, extra = {}) => ({ id, nm: `Aluno ${id}`, fly: true, mis: 'Voo Local', extra: [], ...extra });
-
-  it('na demanda: "fora" (nunca importado), "voa" (um registro que voa o leva) e "tirada" (importado, sem registro que voe)', () => {
-    assert.equal(situacaoNaDemanda(aprovada(1), estado()), 'fora');
-    assert.equal(situacaoNaDemanda(aprovada(1), estado({ importadas: [1], stu: [comRegistro(1001, { solicitacao: 1 })] })), 'voa');
-    assert.equal(situacaoNaDemanda(aprovada(1), estado({ importadas: [1], stu: [comRegistro(1001, { extra: [{ mid: 1, fly: true, solicitacao: 1 }] })] })), 'voa', 'numa missão extra');
-    assert.equal(situacaoNaDemanda(aprovada(1), estado({ importadas: [1], stu: [comRegistro(1001, { solicitacao: 1, fly: false })] })), 'tirada', 'o Voa desligado');
-    assert.equal(situacaoNaDemanda(aprovada(1), estado({ importadas: [1], stu: [comRegistro(1001)] })), 'tirada', 'depois de Limpar demanda (o id fica nas importadas)');
-  });
-
-  it('"Importar" traz só os aprovados que nunca entraram na demanda', () => {
-    const lista = [linha(1), aprovada(2), aprovada(3), aprovada(4, { cancelada_em: 'x' }), aprovada(5)];
-    assert.deepEqual(solicitacoesParaImportar(lista, estado({ importadas: [3] })).map(s => s.id), [2, 5]);
-    assert.deepEqual(solicitacoesParaImportar([], estado()), []);
+  // O pedido voa no dia (G2): o registro que o leva (o principal ou uma missão extra) voa
+  it('pedidoVoaNoDia: o registro do pedido que voa, no principal ou numa missão extra; desligado, ou sem registro, não', () => {
+    const comRegistro = (id, extra = {}) => ({ id, nm: `Aluno ${id}`, fly: true, mis: 'Voo Local', extra: [], ...extra });
+    assert.equal(pedidoVoaNoDia({ stu: [comRegistro(1001, { solicitacao: 1 })] }, 1), true);
+    assert.equal(pedidoVoaNoDia({ stu: [comRegistro(1001, { fly: false, extra: [{ mid: 1, fly: true, solicitacao: 1 }] })] }, 1), true, 'numa missão extra');
+    assert.equal(pedidoVoaNoDia({ stu: [comRegistro(1001, { solicitacao: 1, fly: false })] }, 1), false, 'tirado da escala');
+    assert.equal(pedidoVoaNoDia({ stu: [comRegistro(1001)] }, 1), false);
   });
 
   it('a contagem do trilho: os que aguardam e os aprovados de cada dia, sem domingo', () => {

@@ -31,9 +31,10 @@ const DONOS = [
   { seletor: '#ins', achar: /#ins(?![\w-])/, drivers: ['instrutores.js'], testes: ['instrutores.spec.js'] },
   { seletor: '#det-ins*', achar: /#det-ins(?:[\w-]|\$\{|(?![\w-]))/, drivers: ['instrutores.js'], testes: ['instrutores.spec.js'] },
   { seletor: 'data-f="on"', achar: /data-f="on"/, drivers: ['instrutores.js'], testes: ['instrutores.spec.js'] },
-  // A Demanda (G1, G2): o "Voa" de cada pedido
-  { seletor: 'data-f="fly"', achar: /data-f="fly"/, drivers: ['demanda.js'], testes: ['demanda.spec.js'] },
-  { seletor: '#importar-agenda', achar: /#importar-agenda(?![\w-])/, drivers: ['demanda.js'], testes: ['demanda.spec.js'] },
+  // O Processamento (G2): "Atualizar a escala", a linha de estado das ações e "Recomeçar pelos pedidos"
+  { seletor: '#proc-atualizar', achar: /#proc-atualizar(?![\w-])/, drivers: ['processamento.js'], testes: ['processamento.spec.js', 'agenda-compartilhado.spec.js'] },
+  { seletor: '#proc-status', achar: /#proc-status(?![\w-])/, drivers: ['processamento.js'] },
+  { seletor: '#proc-recomecar', achar: /#proc-recomecar(?![\w-])/, drivers: ['processamento.js'], testes: ['processamento.spec.js', 'abertura.spec.js', 'cursos-no-dia.spec.js'] },
   // Os pedidos (D2): o formulário da Agenda
   { seletor: '#ag-*', achar: /#ag-(?:[\w-]|\$\{)/, drivers: ['pedidos.js'], testes: ['agenda.spec.js', 'agenda-compartilhado.spec.js'] },
   // A Escala e a aprovação (H)
@@ -62,7 +63,7 @@ const doE2E = arquivos(E2E).map(caminho => ({ nome: relative(E2E, caminho).split
 describe('Os donos dos seletores (os testes E2E passam pelos drivers)', () => {
   it('os nove drivers existem e test/e2e/fixtures.js reexporta todos', () => {
     const fixtures = doE2E.find(a => a.nome === 'fixtures.js').texto;
-    for (const tela of ['casca', 'invariantes', 'recursos', 'instrutores', 'alunos', 'demanda', 'pedidos', 'escala', 'cursos']) {
+    for (const tela of ['casca', 'invariantes', 'recursos', 'instrutores', 'alunos', 'processamento', 'pedidos', 'escala', 'cursos']) {
       assert.ok(doE2E.some(a => a.nome === `telas/${tela}.js`), `test/e2e/telas/${tela}.js`);
       assert.match(fixtures, new RegExp(`export \\* from '\\./telas/${tela}\\.js';`), `fixtures.js reexporta telas/${tela}.js`);
     }

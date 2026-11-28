@@ -8,7 +8,7 @@ test.describe('Aplicação', () => {
     await expect(page).toHaveTitle('AutoEscala - ACPM');
     await expect(page.locator('meta[name="application-name"]')).toHaveAttribute('content', 'AutoEscala - ACPM');
     await expect(page.locator('meta[name="apple-mobile-web-app-title"]')).toHaveAttribute('content', 'AutoEscala');
-    await expect(rotulosDasAbas(page)).toHaveText(['Pedidos', 'Demanda', 'Escala', 'Aprovar', 'Alunos', 'INVAs', 'Recursos', 'Cursos', 'Rodízio', 'BI']);
+    await expect(rotulosDasAbas(page)).toHaveText(['Pedidos', 'Processamento', 'Escala', 'Aprovar', 'Alunos', 'INVAs', 'Recursos', 'Cursos', 'Rodízio', 'BI']);
     await expect(page.locator('#s-esc')).toBeVisible();
     await expect(botaoDaAba(page, 'esc')).toHaveAttribute('aria-current', 'page');
     await expect(page.locator('#s-rec')).toBeHidden();
@@ -37,7 +37,7 @@ test.describe('Aplicação', () => {
     await abrirOTrilho(page);
     await expect(rotuloDaData(page)).toHaveText('quarta-feira, 11/11', { useInnerText: true });
     await expect(relativoDaData(page)).toHaveText('amanhã');
-    await irPara(page, 'dem');
+    await irPara(page, 'proc');
     await expect(rotuloDaData(page)).toBeVisible();
     await diaSeguinte(page);
     await expect(dataAberta(page)).toHaveAttribute('data-data', '2026-11-12');
@@ -68,7 +68,7 @@ test.describe('Aplicação', () => {
   // ficam no detalhe dele, "Nesta data"); a navegação é a da linha
   test('navega pelas abas; sem os botões "Próximo" de um passo a passo', async ({ page }) => {
     await abrir(page);
-    for (const aba of ['ins', 'alu', 'cur', 'dem', 'esc', 'bi', 'rec']) {
+    for (const aba of ['ins', 'alu', 'cur', 'proc', 'esc', 'bi', 'rec']) {
       await irPara(page, aba);
       await expect(botaoDaAba(page, aba)).toHaveAttribute('aria-current', 'page');
       await expect(page.locator('main#conteudo > section.on')).toHaveCount(1);
@@ -123,11 +123,11 @@ test.describe('Aplicação', () => {
 
   test('o botão Manual abre, de qualquer tela, o manual com as regras em vigor', async ({ page }) => {
     await abrir(page);
-    await irPara(page, 'dem');
+    await irPara(page, 'proc');
     await page.locator('#btn-manual').click();
     const manual = page.locator('#s-manual');
     await expect(manual).toBeVisible();
-    await expect(page.locator('#s-dem')).toBeHidden();
+    await expect(page.locator('#s-proc')).toBeHidden();
 
     // As tabelas de regras saem do código (missões, pesos e rodízio; as janelas de operação saíram no J)
     await expect(page.locator('#manual-missoes tbody tr')).toHaveCount(18);
@@ -148,7 +148,7 @@ test.describe('Aplicação', () => {
     await expect(page.locator('#manual-glossario-lista dt')).toHaveCount(Object.keys(GLOSSARIO).length);
     await expect(page.locator('#manual-glossario-lista')).toContainText(GLOSSARIO['horario-livre'].texto);
     // As telas na ordem da linha (as etapas, os cadastros, o Rodízio e o BI), com os nomes dos botões e das vistas
-    await expect(manual.locator('#manual-abas h4')).toHaveText(['Pedidos', 'Demanda', 'Escala', 'Alunos', 'INVAs', 'Recursos', 'Cursos', 'Rodízio', 'BI']);
+    await expect(manual.locator('#manual-abas h4')).toHaveText(['Pedidos', 'Processamento', 'Escala', 'Alunos', 'INVAs', 'Recursos', 'Cursos', 'Rodízio', 'BI']);
     for (const novo of FRASES_DO_MANUAL) {
       expect(texto, novo).toContain(novo);
     }

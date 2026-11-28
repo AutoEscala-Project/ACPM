@@ -2,7 +2,7 @@
 // cursos desligados, o que continua e o que fica guardado (ligar de novo traz tudo de volta). Com elas ligadas, os testes
 // de cada tela (hangar.spec.js, cursos-no-dia.spec.js, agendamento.spec.js, cursos.spec.js e os outros com comHangar ou
 // comProgresso). A prioridade, desligada e ligada: prioridade.spec.js
-import { test, comTodasAsFuncionalidades, expect, irPara, abrirEscala, abrirHistorico, diaSeguinte, entrar, prepararContexto, appPronto, vigiarErros, importarDaAgenda, alternarDisponivel, mudarData, trilho, avisosDaData, contagemDosAvisos, contagemDoDia, AMANHA, confirmarAgendamento, refazer, campoDoAluno, textoDoProgresso, abrirRecursos, abrirHangar, ordemNoHangar, itemDoHangar, primeiraDaLista, mostrarAvisos, linhasDosPedidos } from './fixtures.js';
+import { test, comTodasAsFuncionalidades, expect, irPara, abrirEscala, abrirHistorico, diaSeguinte, entrar, prepararContexto, appPronto, vigiarErros, atualizarAEscala, linhaDoProcessamento, alternarDisponivel, mudarData, trilho, avisosDaData, contagemDosAvisos, contagemDoDia, AMANHA, confirmarAgendamento, refazer, campoDoAluno, textoDoProgresso, abrirRecursos, abrirHangar, ordemNoHangar, itemDoHangar, primeiraDaLista, mostrarAvisos, linhasDosPedidos } from './fixtures.js';
 import { FRASES_DAS_FUNCIONALIDADES, FRASES_SEM_AS_FUNCIONALIDADES } from './manual-frases.js';
 import { instalarSupabaseFalso, documentosAtuais, CONTAS } from './supabase-falso.js';
 import { montarGlossario } from '../../js/glossario.js';
@@ -58,13 +58,13 @@ const solicitacao = (id, stu, nome) => ({
 });
 const gravado = (page, data = AMANHA) => page.evaluate(d => JSON.parse(localStorage.getItem(`acpm4_dia_${d}`) || 'null'), data);
 const doBanco = (page, chave) => page.evaluate(c => JSON.parse(localStorage.getItem(c)), chave);
-const pedido = (page, id, mid = 0) => page.locator(`#dem tr[data-k="d"][data-id="${id}"][data-mid="${mid}"]`);
+const pedido = (page, id, mid = 0) => linhaDoProcessamento(page, `${id}_${mid}_1`);
 const voo = (page, nome) => page.locator('#out tbody tr:not(.win)', { hasText: nome });
 const avioes = page => page.locator('#out tbody tr:not(.win) .c-aviao').evaluateAll(tds => tds.map(td => td.textContent.trim().split(/\s+/)[0]));
 // Uma alteração qualquer (grava o dia): a prioridade do João, guardada com o valor (5 a mais alta), que a tela mostra ao
 // contrário (6 - valor: 1 a mais alta). Com a prioridade ligada, que estes testes ligam
 async function mudarAPrioridade(page, valor) {
-  await irPara(page, 'dem');
+  await irPara(page, 'proc');
   await abrirRestricoes(page, 1001);
   await campoDasRestricoes(page, 'pr').selectOption(String(6 - valor));
   await expect.poll(async () => (await gravado(page)).pedidos[1001].pr).toBe(valor);
@@ -136,7 +136,7 @@ test.describe('O hangar desligado', () => {
     await abrirEscala(page);
     await expect(page.locator('#tempo-parado > div')).toHaveCount(2);
     await expect(page.locator('#tempo-parado')).not.toContainText('hangar');
-    for (const tela of ['age', 'dem', 'esc', 'apr', 'alu', 'ins', 'rec', 'cur', 'rod', 'bi']) await irPara(page, tela);
+    for (const tela of ['age', 'proc', 'esc', 'apr', 'alu', 'ins', 'rec', 'cur', 'rod', 'bi']) await irPara(page, tela);
     expect(await textoDaPagina(page)).not.toMatch(/hangar/i);
     expect(await page.locator('[aria-label*="hangar" i], [title*="hangar" i]').count()).toBe(0);
     await expect(page.locator('#glossario-hangar')).toHaveCount(0);
@@ -216,15 +216,13 @@ comTodasAsFuncionalidades('ligados, a ordem guardada vale na escala, e o progres
 test.describe('O progresso nos cursos desligado', () => {
   test.use({ funcionalidades: 'prioridade' });
 
-  test('na Demanda, só o código que o pedido já tem; ele fica guardado com uma alteração e depois de recarregar', async ({ page }) => {
+  test('no Processamento, só o código que o pedido já tem; ele fica guardado com uma alteração e depois de recarregar', async ({ page }) => {
     await abrirCom(page);
-    await irPara(page, 'dem');
-    if (await page.locator('#onlyfly').isChecked()) await page.locator('#onlyfly').uncheck();
+    await irPara(page, 'proc');
     await expect(pedido(page, 1000).locator('.etapa')).toHaveText('IN-01');
-    await expect(pedido(page, 1000).locator('.etapa')).toHaveAttribute('title', 'Missão do curso PP');
-    await expect(page.locator('#dem .etapa')).toHaveCount(1);
-    await expect(page.locator('#dem [data-act="usar-proxima"], #dem [data-f="outra-missao"], #dem [data-act="usar-fora-da-ordem"]')).toHaveCount(0);
-    await expect(page.locator('#s-dem')).not.toContainText('Próxima');
+    await expect(pedido(page, 1001).locator('.etapa')).toHaveCount(0);
+    await expect(page.locator('#proc [data-act="usar-proxima"], #proc [data-f="outra-missao"], #proc [data-act="usar-fora-da-ordem"]')).toHaveCount(0);
+    await expect(page.locator('#s-proc')).not.toContainText('Próxima');
     // Nas restrições do pedido (G1), nem a missão do curso
     await abrirRestricoes(page, 1000);
     await expect(page.locator('#painel-restricoes .restricao-missao, #painel-restricoes [data-act="usar-proxima"], #painel-restricoes [data-f="outra-missao"]')).toHaveCount(0);
@@ -238,25 +236,23 @@ test.describe('O progresso nos cursos desligado', () => {
     await appPronto(page);
     const { etapa, cursoDaEtapa } = (await gravado(page)).pedidos[1000];
     expect([etapa, cursoDaEtapa]).toEqual(['IN-01', 'PP']);
-    await irPara(page, 'dem');
+    await irPara(page, 'proc');
     await expect(pedido(page, 1000).locator('.etapa')).toHaveText('IN-01');
   });
 
   // Um botão ou uma lista que sobrou na tela (uma aba aberta antes) não muda nada
   test('os eventos da próxima missão, das outras e do resultado não fazem nada', async ({ page }) => {
     await abrirCom(page);
-    await irPara(page, 'dem');
+    await irPara(page, 'proc');
     const antes = [await gravado(page), await doBanco(page, 'acpm4_resultados')];
-    await pedido(page, 1001).evaluate(tr => {
-      const celula = tr.querySelector('td');
+    await pedido(page, 1001).evaluate(li => {
       for (const act of ['usar-proxima', 'usar-fora-da-ordem']) {
-        celula.insertAdjacentHTML('beforeend', `<button type="button" data-act="${act}" data-id="1001" data-mid="0" data-codigo="IN-02">x</button>`);
-        celula.lastElementChild.click();
+        li.insertAdjacentHTML('beforeend', `<button type="button" data-act="${act}" data-id="1001" data-mid="0" data-codigo="IN-02">x</button>`);
+        li.lastElementChild.click();
       }
-      celula.insertAdjacentHTML('beforeend', '<select data-f="outra-missao"><option value="IN-02" selected>IN-02</option></select>');
-      celula.lastElementChild.dispatchEvent(new Event('change', { bubbles: true }));
+      li.insertAdjacentHTML('beforeend', '<div data-k="d" data-id="1001" data-mid="0"><select data-f="outra-missao"><option value="IN-02" selected>IN-02</option></select></div>');
+      li.lastElementChild.firstElementChild.dispatchEvent(new Event('change', { bubbles: true }));
     });
-    await expect(page.locator('#dem [data-f="outra-missao"]')).toHaveCount(0);
     await abrirEscala(page);
     await voo(page, 'Maria').locator('.c-status').evaluate(td => {
       td.insertAdjacentHTML('beforeend', '<select data-resultado="1000_0_1"><option value="reprovado" selected>Reprovado</option></select>');
@@ -426,8 +422,8 @@ test.describe('O progresso nos cursos desligado', () => {
     Object.assign(dia.pedidos[1001], { fly: false });
     documentos.acpm4_agenda = [solicitacao(1, 1000, 'Maria'), solicitacao(2, 1001, 'João')];
     await abrirCom(page, documentos);
-    await irPara(page, 'dem');
-    await importarDaAgenda(page);
+    await irPara(page, 'proc');
+    await atualizarAEscala(page);
     await expect.poll(async () => (await gravado(page)).pedidos[1001].fly).toBe(true);
     const { pedidos } = await gravado(page);
     expect([pedidos[1000].etapa, pedidos[1000].cursoDaEtapa, pedidos[1001].etapa]).toEqual(['IN-01', 'PP', undefined]);
@@ -449,7 +445,7 @@ test.describe('Os dois desligados, na linha, no trilho e no endereço', () => {
     await expect(trilho(page)).toBeVisible();
     await expect(contagemDoDia(page, AMANHA)).toHaveText('2');
     // Os pedidos de antes da aprovação, convertidos neste navegador: aprovados por quem anotou (D1, regra b)
-    await expect(avisosDaData(page, '2 pedidos aprovados fora da demanda')).toHaveCount(1);
+    await expect(avisosDaData(page, '2 pedidos aprovados fora da escala')).toHaveCount(1);
     await expect(contagemDosAvisos(page)).toBeVisible();
     for (const [nome, alvo] of [['trilho', trilho(page)]]) {
       expect(await dito(alvo), nome).not.toMatch(/hangar|progresso|próxima|aprovado\b|reprovado/i);
