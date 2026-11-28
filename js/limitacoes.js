@@ -7,11 +7,15 @@
 // no C172 limita os aviões, e os simuladores ficam livres (só no Sim. Multi, o contrário); a Sala Ground nunca é limitada.
 // O motor lê as limitações da data (limitacoesNaData, pelo estado da escala: comLimitacoesDaData, js/state.js), já sem os
 // dias: um horário com dias que chega a ele sem ser lido para a data não é início.
-// Puro (só config): a leitura do cadastro (js/dias.js, js/storage.js) normaliza o que vem gravado
+// Puro (config e format): a leitura do cadastro (js/dias.js, js/storage.js) normaliza o que vem gravado; o motor, a
+// conferência dos voos fixos, a compactação e as Sugestões usam as mesmas regras
 import { AIRCRAFT_EQ_TYPES, SIM_EQ_TYPES, MINUTOS_DO_DIA } from './config.js';
+import { hm } from './format.js';
 
 // Os tipos que a limitação nomeia: os aviões e os simuladores, na ordem da frota
 const TIPOS_LIMITAVEIS = [...AIRCRAFT_EQ_TYPES, ...SIM_EQ_TYPES];
+const ESPECIES = [AIRCRAFT_EQ_TYPES, SIM_EQ_TYPES];
+const NOMES_DOS_DIAS = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
 export const MAXIMO_DE_HORARIOS = 8;
 // Os horários vão das 06:00 (o primeiro horário que uma lista de decolagem aceita) à meia-noite
 const INICIO_DOS_HORARIOS = 360;
@@ -40,3 +44,54 @@ export function normalizarLimitacoes(valor) {
   if (!recursos.length && !horarios.length) return null;
   return { ...(recursos.length ? { recursos } : {}), ...(horarios.length ? { horarios } : {}) };
 }
+
+// Os tipos que a limitação nomeia na espécie do tipo (os aviões, ou os simuladores); nenhum: a espécie não é limitada
+function nomeadosNaEspecie(limitacoes, tipo) {
+  const especie = ESPECIES.find(e => e.includes(tipo));
+  const recursos = objeto(limitacoes) && Array.isArray(limitacoes.recursos) ? limitacoes.recursos : [];
+  return especie ? recursos.filter(t => especie.includes(t)) : [];
+}
+
+// O aluno voa no tipo: sem limitação na espécie dele, sim; senão, só nos nomeados. A Sala Ground, sempre
+export const tipoPermitido = (limitacoes, tipo) => { const nomeados = nomeadosNaEspecie(limitacoes, tipo); return !nomeados.length || nomeados.includes(tipo); };
+
+const noTipo = tipos => tipos.map(t => `no ${t}`).join(' ou ');
+// Por que o aluno não voa no tipo: "o aluno só voa no C172" ("no C152 ou no C172"); no tipo que ele voa, null
+export const motivoDoTipo = (limitacoes, tipo) => (tipoPermitido(limitacoes, tipo) ? null : `o aluno só voa ${noTipo(nomeadosNaEspecie(limitacoes, tipo))}`);
+
+// A limitação tem horários (também a lista vazia da data em que ele não voa)
+export const limitadoNoHorario = limitacoes => objeto(limitacoes) && Array.isArray(limitacoes.horarios);
+
+// O início é dos horários do aluno: a regra do início (R4), [de, ate). Sem horários, qualquer início; um horário com dias
+// (não lido para a data) não vale
+export const inicioPermitido = (limitacoes, minuto) => !limitadoNoHorario(limitacoes)
+  || limitacoes.horarios.some(h => h && h.dias === undefined && h.de <= minuto && minuto < h.ate);
+
+const diaDaSemana = data => (typeof data === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(data) ? new Date(`${data}T12:00:00Z`).getUTCDay() : null);
+
+// As limitações na data: os horários que valem no dia da semana dela, sem os dias ([]: nenhum, o aluno não voa nela). Sem
+// limitação, null. Sem uma data, os horários com dias não valem
+export function limitacoesNaData(limitacoes, data) {
+  const l = normalizarLimitacoes(limitacoes);
+  if (!l) return null;
+  if (!l.horarios) return l;
+  const dia = diaDaSemana(data);
+  return { ...l, horarios: l.horarios.filter(h => !h.dias || (dia !== null && h.dias.includes(dia))).map(({ de, ate }) => ({ de, ate })) };
+}
+
+// O estado que o motor lê na data (js/state.js, estadoDaEscala): cada aluno com horários de dias, com os da data. Sem
+// nenhum, o próprio estado; os outros alunos ficam os mesmos objetos
+export function comLimitacoesDaData(estado, data) {
+  const comDias = s => limitadoNoHorario(s.limitacoes) && s.limitacoes.horarios.some(h => h && h.dias !== undefined);
+  if (!estado || !Array.isArray(estado.stu) || !estado.stu.some(comDias)) return estado;
+  return { ...estado, stu: estado.stu.map(s => (comDias(s) ? { ...s, limitacoes: limitacoesNaData(s.limitacoes, data) } : s)) };
+}
+
+// "13:00–18:00 (seg, qua, sex); 07:00–09:00"; nenhum, "nenhum horário nesta data"
+export const textoDosHorarios = horarios => (horarios.length
+  ? horarios.map(h => `${hm(h.de)}–${hm(h.ate)}${h.dias ? ` (${h.dias.map(d => NOMES_DOS_DIAS[d]).join(', ')})` : ''}`).join('; ')
+  : 'nenhum horário nesta data');
+
+// O que o motor diz do quando, na recusa disponibilidade-do-aluno: o horário do pedido (o rótulo dele) e as limitações
+export const quandoOAlunoVoa = (doPedido, limitacoes) => [doPedido, limitadoNoHorario(limitacoes) ? `Limitações: ${textoDosHorarios(limitacoes.horarios)}` : null]
+  .filter(Boolean).join('; ');

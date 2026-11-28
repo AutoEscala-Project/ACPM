@@ -26,6 +26,7 @@ import { menorPrimeiro } from './util.js';
 import { pinoDoVoo, pinosDoNoturnoQueValem, fixoPeloStatus } from './fixos.js';
 import { inativo } from './inativos.js';
 import { rejeicoesDosPedidos } from './rejeicoes.js';
+import { tipoPermitido, motivoDoTipo, inicioPermitido, textoDosHorarios } from './limitacoes.js';
 
 // A duração (em minutos) do voo de um pedido: o Ground tem 01h30; o voo, as horas do pedido
 const duracaoDoPedido = (d, ground) => (ground ? GROUND_DURATION_MIN : Math.round((duracaoFixaDaMissao(d.mis) || duracaoValida(d.nb)) * 60));
@@ -238,6 +239,10 @@ function linhaDoFixo(state, ctx, item, pino, fKey = chaveDoVoo(item.stuId, item.
     if (fechado) marcar('horario-fechado', `o horário está fechado nesta data (${hm(fechado.de)}–${hm(fechado.ate)})`);
     const permitidas = disponibilidadeDoAluno(d.jan);
     if (permitidas && !permitidas(a)) marcar('disponibilidade', 'o horário está fora da disponibilidade do aluno');
+    // As limitações do aluno (L, N9): o voo num tipo em que ele não voa (o do avião do pino) e o início fora dos horários dele
+    const tipoDoPino = ground ? GROUND_EQ_TYPE : (frota.find(f => f.reg === r) || { tipo: d.eq }).tipo;
+    if (!ground && !mudouDeTipo && !tipoPermitido(stu.limitacoes, tipoDoPino)) marcar('limitacao-de-recurso', motivoDoTipo(stu.limitacoes, tipoDoPino));
+    if (!inicioPermitido(stu.limitacoes, a)) marcar('limitacao-de-horario', `o horário está fora das limitações do aluno (${textoDosHorarios(stu.limitacoes.horarios)})`);
     if (!mudouDeTipo && b - a !== duracaoDoPedido(d, ground)) marcar('duracao', 'a duração do pedido mudou');
     if (pino.agendado && !STATUS_EM_ANDAMENTO.includes(status) && !mudouDeTipo) {
       comAviso = true;

@@ -18,6 +18,7 @@ import { HORARIOS_INICIAIS, horariosDaMissao, periodoDoMinuto, minutoDaPreferenc
 import { categoriaDoTipo } from './categorias.js';
 import { fechamentosDoEstado, horarioAberto } from './fechamentos.js';
 import { disponibilidadeDoAluno, doesGroundGateFlight } from './rules.js';
+import { inicioPermitido } from './limitacoes.js';
 import { INTERVALO_DO_HANGAR } from './metricas.js';
 import { normalizarCriterios } from './criterios.js';
 import { intervaloEfetivo } from './status.js';
@@ -112,8 +113,10 @@ export function compactar(out, state, { saldo = () => Infinity, posicao = () => 
     const preferidos = [minutoDaPreferencia(pedido.p1), minutoDaPreferencia(pedido.p2)];
     const depoisDoGround = Math.max(0, ...unidades.filter(g => g.isGround && g.alunos.includes(u.alunos[0]) && doesGroundGateFlight(g.mis, { mis: u.mis, eq: u.tipo })).map(g => g.b));
     const fim = Math.min(...u.alunos.map(s => fimDoAluno(s, u.mis, u.tipo)));
+    // As limitações do aluno (L): só os inícios dos horários dele (a regra do motor, js/limitacoes.js)
+    const limitacoes = u.alunos.map(s => (alunos.get(s) || {}).limitacoes);
     u.inicios = horariosDaMissao(horarios, u.mis, u.tipo).filter(m => horarioAberto(fechamentos, m, categoriaDoTipo(u.tipo)) && m + u.dur <= fim && m >= depoisDoGround
-      && (!permitidas || permitidas(m)) && (regra !== 'preferencias' || preferidos.includes(m)));
+      && (!permitidas || permitidas(m)) && limitacoes.every(l => inicioPermitido(l, m)) && (regra !== 'preferencias' || preferidos.includes(m)));
     if (!u.inicios.length) u.mudaHorario = false;
   }
 

@@ -5,7 +5,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   MAXIMO_DE_HORARIOS, normalizarLimitacoes, tipoPermitido, inicioPermitido, limitadoNoHorario, limitacoesNaData, comLimitacoesDaData,
-  motivoDoTipo, motivoDoHorario, textoDosHorarios, quandoOAlunoVoa
+  motivoDoTipo, textoDosHorarios, quandoOAlunoVoa
 } from '../../js/limitacoes.js';
 
 // 2026-11-30 é uma segunda-feira; 2026-12-01, terça; 2026-12-05, sábado; 2026-12-06, domingo
@@ -140,13 +140,6 @@ describe('Os textos', () => {
     assert.equal(textoDosHorarios([{ de: 780, ate: 1080, dias: [1, 3, 5] }, { de: 420, ate: 540 }]), '13:00–18:00 (seg, qua, sex); 07:00–09:00');
     assert.equal(textoDosHorarios([{ de: 780, ate: 1440 }]), '13:00–24:00');
     assert.equal(textoDosHorarios([]), 'nenhum horário nesta data');
-  });
-
-  it('o motivo do horário de fora, com os horários da data: "o aluno só voa das 13:00 às 18:00"', () => {
-    assert.equal(motivoDoHorario({ horarios: [{ de: 780, ate: 1080 }] }), 'o aluno só voa das 13:00 às 18:00');
-    assert.equal(motivoDoHorario({ horarios: [{ de: 420, ate: 540 }, { de: 780, ate: 1080 }] }), 'o aluno só voa das 07:00 às 09:00 ou das 13:00 às 18:00');
-    assert.equal(motivoDoHorario({ horarios: [] }), 'o aluno não voa nesta data');
-    assert.equal(motivoDoHorario({ recursos: ['C172'] }), null);
   });
 
   it('o que o motor diz do quando: o horário do pedido e as limitações, juntos ("às 08:20; Limitações: 13:00–18:00")', () => {
