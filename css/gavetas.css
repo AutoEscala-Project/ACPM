@@ -61,7 +61,7 @@
 #painel-restricoes .campo { display: flex; flex-direction: column; gap: 4px; font-weight: 600; min-width: 0; }
 #painel-restricoes .campo small { font-weight: 400; }
 #painel-restricoes .campo b { font-weight: 500; }
-#painel-restricoes .rotulo-campo { font-weight: 600; }
+#painel-restricoes .rotulo-campo { display: flex; align-items: center; gap: 4px; font-weight: 600; }
 #painel-restricoes select, #painel-restricoes input[type="number"] { max-width: 100%; font-weight: 400; }
 #painel-restricoes select.escolhido { border-color: var(--ac); color: var(--ac); font-weight: 600; }
 #painel-restricoes select.prioridade-mais-alta { background: var(--wa-bg); color: var(--wa); font-weight: 700; }

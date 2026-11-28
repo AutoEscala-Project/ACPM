@@ -55,8 +55,8 @@ function campoDoHorario(stu, d, { leitura, horarios, valorDe, ligado }) {
   const preferencia = (f, rotulo, comDica) => {
     if (leitura) return `<div class="campo"><span class="rotulo-campo">${rotulo}</span><b>${d[f] >= 0 ? hm(d[f]) : '—'}</b></div>`;
     const valor = valorDe(f);
-    return `<label class="campo">${rotulo}${comDica ? dica('preferencias', rotulo) : ''}<select data-f="${f}" aria-label="${rotulo} de ${esc(stu.nm)}"${ligado(f)}>`
-      + `${opcoesDeHorarioDoPedido(stu, d, valor, horarios, DATA).map(o => op(o, valor)).join('')}</select></label>`;
+    return `<div class="campo"><span class="rotulo-campo">${rotulo}${comDica ? dica('preferencias', rotulo) : ''}</span><select data-f="${f}" aria-label="${rotulo} de ${esc(stu.nm)}"${ligado(f)}>`
+      + `${opcoesDeHorarioDoPedido(stu, d, valor, horarios, DATA).map(o => op(o, valor)).join('')}</select></div>`;
   };
   return `<div class="campo-duplo">${preferencia('p1', '1ª preferência', true)}${preferencia('p2', '2ª preferência', false)}</div>`;
 }
@@ -66,9 +66,9 @@ function campoDaDuracao(stu, d, { leitura, isGnd }) {
   if (leitura) return `<div class="campo"><span class="rotulo-campo">Duração</span><b>${esc(fmtDurLabel(isGnd ? GROUND_DURATION_H : d.nb))}</b></div>`;
   if (fixa) {
     const horas = isGnd ? GROUND_DURATION_H : duracaoFixaDaMissao('Noturno');
-    return `<label class="campo">Duração${dica('duracao', 'Duração')}<select data-f="nb" disabled title="${esc(fixa)}" aria-label="Duração de ${esc(stu.nm)}"><option value="${horas}" selected>${isGnd ? '1h30' : '4 h'}</option></select><small class="h">${esc(fixa)}.</small></label>`;
+    return `<div class="campo"><span class="rotulo-campo">Duração${dica('duracao', 'Duração')}</span><select data-f="nb" disabled title="${esc(fixa)}" aria-label="Duração de ${esc(stu.nm)}"><option value="${horas}" selected>${isGnd ? '1h30' : '4 h'}</option></select><small class="h">${esc(fixa)}.</small></div>`;
   }
-  return `<label class="campo">Duração (h)${dica('duracao', 'Duração')}<input type="number" class="duracao" data-f="nb" min="0.1" max="${DURACAO_MAXIMA_H}" step="0.1" inputmode="decimal" value="${esc(d.nb)}" aria-label="Duração de ${esc(stu.nm)}, em horas"></label>`;
+  return `<div class="campo"><span class="rotulo-campo">Duração (h)${dica('duracao', 'Duração')}</span><input type="number" class="duracao" data-f="nb" min="0.1" max="${DURACAO_MAXIMA_H}" step="0.1" inputmode="decimal" value="${esc(d.nb)}" aria-label="Duração de ${esc(stu.nm)}, em horas"></div>`;
 }
 
 function corpoDasRestricoes(stu, d, mid) {
@@ -94,11 +94,11 @@ function corpoDasRestricoes(stu, d, mid) {
     const valorDoTipo = valorDe('eq');
     partes.push(`<label class="campo">Tipo de recurso<select data-f="eq"${isGnd ? ' disabled' : ''} aria-label="Tipo de recurso de ${esc(stu.nm)}"${ligado('eq')}>`
       + `${opcoesDeTipoDoPedido(stu, d, DATA).map(o => op(o, valorDoTipo)).join('')}</select></label>`);
-    partes.push(`<label class="campo">Instrutor${dica('instrutor-escolhido', 'Instrutor')}<select data-f="insId" class="${d.insId ? 'escolhido' : ''}" aria-label="Instrutor de ${esc(stu.nm)}">`
-      + `${instrutores.map(o => op(o, d.insId || '')).join('')}</select></label>`);
+    partes.push(`<div class="campo"><span class="rotulo-campo">Instrutor${dica('instrutor-escolhido', 'Instrutor')}</span><select data-f="insId" class="${d.insId ? 'escolhido' : ''}" aria-label="Instrutor de ${esc(stu.nm)}">`
+      + `${instrutores.map(o => op(o, d.insId || '')).join('')}</select></div>`);
     if (ligada('prioridade')) {
-      partes.push(`<label class="campo">Prioridade${dica('prioridade', 'Prioridade')}<select data-f="pr" class="${d.pr === 5 ? 'prioridade-mais-alta' : ''}" aria-label="Prioridade de ${esc(stu.nm)}">`
-        + `${[1, 2, 3, 4, 5].map(n => op({ valor: n, texto: String(n) }, prioridadeNaTela(d.pr))).join('')}</select></label>`);
+      partes.push(`<div class="campo"><span class="rotulo-campo">Prioridade${dica('prioridade', 'Prioridade')}</span><select data-f="pr" class="${d.pr === 5 ? 'prioridade-mais-alta' : ''}" aria-label="Prioridade de ${esc(stu.nm)}">`
+        + `${[1, 2, 3, 4, 5].map(n => op({ valor: n, texto: String(n) }, prioridadeNaTela(d.pr))).join('')}</select></div>`);
     }
   }
   partes.push(campoDoHorario(stu, d, { leitura, horarios, valorDe, ligado }), campoDaDuracao(stu, d, { leitura, isGnd }));
