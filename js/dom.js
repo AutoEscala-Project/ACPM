@@ -8,7 +8,8 @@ export const $ = s => document.querySelector(s);
 export const algumDialogoAberto = () => Boolean(document.querySelector('dialog[open]'));
 
 // Notificação temporária. tipo 'ok': deu certo (verde, com o sinal de certo); sem tipo: aviso (amarelo)
-export function showToast(text, tipo = '') {
+// duracao: quanto o aviso fica (ms); o de sempre, 2,8 s
+export function showToast(text, tipo = '', { duracao = 2800 } = {}) {
   const box = $('#toast-box');
   if (!box) return;
   const el = document.createElement('div');
@@ -16,7 +17,7 @@ export function showToast(text, tipo = '') {
   if (tipo === 'ok') el.innerHTML = '<svg class="ico" aria-hidden="true"><use href="#i-ok"/></svg>';
   el.append(text);
   box.appendChild(el);
-  setTimeout(() => { el.remove(); }, 2800);
+  setTimeout(() => { el.remove(); }, duracao);
 }
 
 // Aviso fixo no topo, com o botão "Recarregar". O conflito e a falha ao preparar os dados só saem recarregando;
