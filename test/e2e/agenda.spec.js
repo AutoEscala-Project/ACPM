@@ -1185,7 +1185,10 @@ test.describe('A página dos pedidos', () => {
     await expect(esperar).toBeVisible();
     await esperar.click();
     await expect(page.locator('#toast-box')).toContainText('Pedido registrado na lista de espera das 08:20: já há 6 voos locais.');
+    await expect(estadoDoFormulario(page)).toHaveText('Último pedido: Aluno 1001 · Voo Local · C152 às 08:20 · na lista de espera, aprovado, na demanda.');
     await expect(esperar).toBeHidden();
+    // O botão saiu: o foco fica no formulário, no envio
+    await expect(registrar).toBeFocused();
     await expect(registrar).toHaveText('Registrar e aprovar');
     const espera = (await agendaGuardada(page)).at(-1);
     expect([espera.aluno, espera.limite_confirmado_por, espera.limite_confirmado_em, Boolean(espera.aprovada_em)]).toEqual([1001, null, null, true]);
@@ -1209,5 +1212,116 @@ test.describe('A página dos pedidos', () => {
     await expect(aprovarNaLinha(page, 1)).toHaveCount(0);
     await expect(botaoDosPedidos(page, 'aprovar-todos')).toBeHidden();
     await expect(page.locator('#linha a.tarefa[data-tarefa="aguardando"]')).toHaveAttribute('data-estado', 'nenhum');
+  });
+
+  // O último aviso (os de antes ainda podem estar na caixa)
+  const ultimoAviso = page => page.locator('#toast-box .toast').last();
+
+  test('aprovar de novo depois de "Retirar aprovação": o voo continuou na demanda, e o aviso diz que ele já está lá', async ({ page }) => {
+    await abrirComOsCursos(page, { agenda: [comAprovacao(1, doAluno1001)] });
+    await aprovarNaLinha(page, 1).click();
+    await expect(ultimoAviso(page)).toHaveText('Pedido aprovado: já está na demanda.');
+    await escolherPedido(page, 1);
+    await acaoDoPedido(page, 'retirar').click();
+    await acaoDoPedido(page, 'retirar').click();
+    await expect(ultimoAviso(page)).toContainText('Aprovação retirada');
+    await expect(campoDoDetalhe(page, 'Demanda')).toHaveText('Ainda na demanda');
+    await acaoDoPedido(page, 'aprovar').click();
+    await expect(campoDoDetalhe(page, 'Demanda')).toHaveText('Na demanda');
+    await expect(ultimoAviso(page)).toHaveText('Pedido aprovado: já está na demanda.');
+    await expect(page.locator('#toast-box')).not.toContainText('não está ativo');
+    // Nada entrou de novo: o Histórico tem a entrada da primeira aprovação só
+    await expect(entradasDoHistorico(page, 'Pedidos: Aluno 1001 incluído (Voo Local · às 08:20 · 1 h)')).toHaveCount(1);
+  });
+
+  test('cancelar o pedido que já foi cancelado em outro computador: o aviso diz, e a lista mostra o cancelamento', async ({ page }) => {
+    await abrirComOsCursos(page, { agenda: [comAprovacao(1, doAluno1001)] });
+    await escolherPedido(page, 1);
+    // Em outra janela, alguém já o cancelou: esta ainda não leu de novo
+    await page.evaluate(() => {
+      const lista = JSON.parse(localStorage.getItem('acpm4_agenda'));
+      Object.assign(lista[0], { cancelada_em: '2026-11-10T14:50:00.000Z', cancelada_por: 'Ana' });
+      localStorage.setItem('acpm4_agenda', JSON.stringify(lista));
+    });
+    await acaoDoPedido(page, 'cancelar').click();
+    await acaoDoPedido(page, 'cancelar').click();
+    await expect(ultimoAviso(page)).toHaveText('O pedido já tinha sido cancelado em outro computador.');
+    await expect(campoDoDetalhe(page, 'Situação')).toHaveText('Cancelado por Ana em 10/11 11:50');
+  });
+
+  test('pelo teclado, o foco fica na tela depois de cada ação: "Aprovar" na linha, "Aprovar todos" e, no detalhe, "Retirar aprovação", "Aprovar pedido" e "Cancelar pedido"', async ({ page }) => {
+    await abrirComOsCursos(page, { agenda: [comAprovacao(1, daMaria), comAprovacao(2, { ...daAna, horario: '10:10' }), comAprovacao(3, { ...doAluno1001, horario: '12:40' })] });
+    // O foco num elemento à vista, dentro de um lugar da tela (nunca no body)
+    const focoEm = lugar => page.evaluate(sel => {
+      const a = document.activeElement;
+      return Boolean(a) && a !== document.body && a.getClientRects().length > 0 && Boolean(a.closest(sel));
+    }, lugar);
+    // "Aprovar" na linha: o botão sai, e o foco fica na linha
+    await aprovarNaLinha(page, 1).focus();
+    await page.keyboard.press('Enter');
+    await expect(ultimoAviso(page)).toHaveText('Pedido aprovado: já está na demanda.');
+    await expect(linhaDaLista(page, 1)).toBeFocused();
+    // "Aprovar todos": aprovados os dois que aguardavam, o botão sai, e o foco vai para a lista
+    await botaoDosPedidos(page, 'aprovar-todos').focus();
+    await page.keyboard.press('Enter');
+    await expect(ultimoAviso(page)).toHaveText('2 pedidos aprovados: já estão na demanda.');
+    await expect(botaoDosPedidos(page, 'aprovar-todos')).toBeHidden();
+    await expect.poll(() => focoEm('#age')).toBe(true);
+    // No detalhe: cada ação troca o rodapé, e o foco fica no detalhe
+    await escolherPedido(page, 1);
+    await acaoDoPedido(page, 'retirar').focus();
+    await page.keyboard.press('Enter');
+    await page.keyboard.press('Enter');
+    await expect(ultimoAviso(page)).toContainText('Aprovação retirada');
+    await expect(acaoDoPedido(page, 'retirar')).toHaveCount(0);
+    await expect.poll(() => focoEm('#det-age')).toBe(true);
+    await acaoDoPedido(page, 'aprovar').focus();
+    await page.keyboard.press('Enter');
+    await expect(ultimoAviso(page)).toHaveText('Pedido aprovado: já está na demanda.');
+    await expect(acaoDoPedido(page, 'aprovar')).toHaveCount(0);
+    await expect.poll(() => focoEm('#det-age')).toBe(true);
+    await acaoDoPedido(page, 'cancelar').focus();
+    await page.keyboard.press('Enter');
+    await page.keyboard.press('Enter');
+    await expect(ultimoAviso(page)).toContainText('Pedido cancelado.');
+    await expect(acaoDoPedido(page, 'cancelar')).toHaveCount(0);
+    await expect.poll(() => focoEm('#det-age')).toBe(true);
+  });
+
+  test('"Registrar de novo…" com horários que a lista de agora não tem: os dois saem, e o app diz', async ({ page }) => {
+    // 07:30 e 07:45 não são horários do C152 (a lista mudou depois do registro)
+    await abrirComOsCursos(page, { agenda: [aprovadoGuardado(1, { ...doAluno1001, horario: '07:30', horario2: '07:45' })] });
+    await escolherPedido(page, 1);
+    await acaoDoPedido(page, 'repetir').click();
+    await expect(campoDaAgenda(page, 'recurso')).toHaveValue('C152');
+    await expect(campoDaAgenda(page, 'horario')).toHaveValue('');
+    await expect(campoDaAgenda(page, 'horario-motivo')).toHaveText('O horário 07:30 não é um dos de Voo Local (C152). Escolha outro.');
+    await expect(campoDaAgenda(page, 'horario2')).toHaveValue('');
+    await expect(campoDaAgenda(page, 'horario2-motivo')).toHaveText('A 2ª preferência 07:45 não é um dos horários de Voo Local (C152): escolha outra, se houver.');
+  });
+
+  test('a lista de espera diz também se o pedido aguarda aprovação, na linha de estado', async ({ page }) => {
+    await abrirComOsCursos(page, { agenda: seisLocais() });
+    await registrarPedido(page, { aluno: 'Aluno 1001', horario: '08:20', botao: 'sem-aprovar' });
+    await expect(botaoDoFormulario(page, 'esperar')).toBeVisible();
+    await botaoDoFormulario(page, 'esperar').click();
+    await expect(ultimoAviso(page)).toHaveText('Pedido registrado na lista de espera das 08:20: já há 6 voos locais.');
+    await expect(estadoDoFormulario(page)).toHaveText('Último pedido: Aluno 1001 · Voo Local · C152 às 08:20 · na lista de espera, aguardando aprovação.');
+    expect(Boolean((await agendaGuardada(page)).at(-1).aprovada_em)).toBe(false);
+  });
+
+  test('no celular, a linha do pedido registrado fica à vista na volta para a lista, com o foco nela', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await abrirComOsCursos(page, { agenda: Array.from({ length: 12 }, (_, i) => aprovadoGuardado(i + 1, { horario: '06:30' })) });
+    await botaoDosPedidos(page, 'novo').click();
+    await expect(page.locator('#s-age')).toHaveAttribute('data-vendo', 'detalhe');
+    await registrarPedido(page, { aluno: 'Aluno 1001', horario: '16:20' });
+    await expect(ultimoAviso(page)).toContainText('Pedido registrado e aprovado');
+    const { id } = (await agendaGuardada(page)).at(-1);
+    await page.goBack();
+    await expect(page.locator('#s-age')).toHaveAttribute('data-vendo', 'lista');
+    await expect(linhaDaLista(page, id)).toHaveAttribute('data-recente', '');
+    await expect(linhaDaLista(page, id)).toBeInViewport();
+    await expect(linhaDaLista(page, id).locator('.lista-botao')).toBeFocused();
   });
 });

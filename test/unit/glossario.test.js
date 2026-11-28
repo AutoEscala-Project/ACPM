@@ -105,4 +105,12 @@ describe('Glossário: Pedidos', () => {
     assert.equal(GLOSSARIO['setimo-voo-local'].termo, `${LIMITE_DE_VOOS_LOCAIS + 1}º voo local`);
     assert.match(GLOSSARIO['setimo-voo-local'].texto, new RegExp(`No máximo ${LIMITE_DE_VOOS_LOCAIS} voos locais .*“Registrar mesmo assim”`));
   });
+
+  // D2: a tela dos pedidos é "Pedidos"; nem o glossário nem o Manual a chamam mais de Agenda
+  it('a tela dos pedidos se chama Pedidos, no glossário e no Manual', () => {
+    const daAgenda = /\b(na|da|pela|à) Agenda\b/;
+    for (const [id, { texto }] of Object.entries(INTEIRO)) assert.doesNotMatch(texto, daAgenda, id);
+    const manual = readFileSync(new URL('index.html', raiz), 'utf8').split('\n').filter(l => daAgenda.test(l) || /importação da agenda/.test(l));
+    assert.deepEqual(manual, []);
+  });
 });

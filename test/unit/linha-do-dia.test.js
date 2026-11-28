@@ -6,7 +6,9 @@ import { linhaDoDia, selosDosCadastros, avisosDaData } from '../../js/linha-do-d
 
 const DATA = '2026-11-11', HOJE = '2026-11-10';
 
-function contexto({ pedidos = [], leitura = 'lidos', out = [], al = [], tot = 0, res = true, frota, av = {}, ins, importadas = [], aprovacao = null, revisao = {}, perfil = null, opera = true, horasLidas = true, stu = [], indisponiveis = [], fechamentos, win } = {}) {
+// Os alunos dos pedidos (1001 a 1010), ativos no cadastro
+const ALUNOS = Array.from({ length: 10 }, (_, i) => ({ id: 1001 + i, nm: `Aluno ${1001 + i}` }));
+function contexto({ pedidos = [], leitura = 'lidos', out = [], al = [], tot = 0, res = true, frota, av = {}, ins, importadas = [], aprovacao = null, revisao = {}, perfil = null, opera = true, horasLidas = true, stu = ALUNOS, indisponiveis = [], fechamentos, win } = {}) {
   return {
     S: {
       frota: frota ?? [{ reg: 'PR-AAA', tipo: 'C152' }, { reg: 'PR-BBB', tipo: 'C152' }],
@@ -39,9 +41,29 @@ describe('A linha do dia', () => {
     assert.equal(c.estado, 'atencao');
     assert.deepEqual(c.tarefas.map(t => [t.id, t.rotulo, t.valor, t.estado]), [
       ['registrados', 'pedidos da data', '3', 'feito'], ['aguardando', 'aguardando aprovação', '1', 'atencao'], ['aprovados', 'aprovados', '2 de 3', 'andamento'],
-      ['fora-da-demanda', 'aprovados fora da demanda', '1', 'atencao']
+      ['fora-da-demanda', 'aprovado fora da demanda', '1', 'atencao']
     ]);
     assert.deepEqual(c.tarefas[0].destino, { tela: 'age' });
+  });
+
+  // O rótulo vai depois do número na frase do leitor de tela ("1 aprovado fora da demanda"): concorda com ele
+  it('Pedidos: o rótulo de cada tarefa concorda com o número dela', () => {
+    const rotulos = ctx => cartao(ctx, 'pedidos').tarefas.map(t => `${t.valor} ${t.rotulo}`);
+    assert.deepEqual(rotulos(contexto({ pedidos: [aprovado(1)] })), ['1 pedido da data', '0 aguardando aprovação', '1 de 1 aprovados', '1 aprovado fora da demanda']);
+    assert.deepEqual(rotulos(contexto({ pedidos: [aprovado(1), aprovado(2)] })), ['2 pedidos da data', '0 aguardando aprovação', '2 de 2 aprovados', '2 aprovados fora da demanda']);
+  });
+
+  // F3: o pedido do aluno inativo fica fora dos pendentes. Em D2, o que ninguém pode aprovar (o aluno inativo ou fora do
+  // cadastro: Pedidos não oferece "Aprovar") nem importar (fora do cadastro, ele espera) não pede atenção, no cartão e no trilho
+  it('o pedido que aguarda de um aluno inativo ou fora do cadastro não pede atenção; o aprovado de um aluno fora do cadastro não conta como fora da demanda', () => {
+    const inativo = contexto({ pedidos: [pedido(1)], stu: [{ id: 1001, nm: 'Aluno Fictício', inativo: true }] });
+    assert.deepEqual([tarefa(inativo, 'pedidos', 'aguardando').valor, tarefa(inativo, 'pedidos', 'aguardando').estado], ['0', 'feito']);
+    assert.notEqual(cartao(inativo, 'pedidos').estado, 'atencao');
+    assert.deepEqual(avisosDaData(inativo), []);
+    const foraDoCadastro = contexto({ pedidos: [pedido(1), aprovado(2)], stu: [] });
+    assert.deepEqual(['aguardando', 'fora-da-demanda'].map(t => tarefa(foraDoCadastro, 'pedidos', t).valor), ['0', '0']);
+    assert.notEqual(cartao(foraDoCadastro, 'pedidos').estado, 'atencao');
+    assert.deepEqual(avisosDaData(foraDoCadastro), []);
   });
 
   it('Pedidos: todos aprovados e na demanda, feito; sem pedidos, pendente; a leitura que falhou, falhou', () => {

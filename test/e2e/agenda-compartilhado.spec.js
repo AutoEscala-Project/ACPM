@@ -2,7 +2,7 @@
 // Operador usa a exceção da coordenação e o Gestor só consulta. O servidor falso aplica o mesmo prazo do banco.
 import { test, expect, entrar, preencherLogin, irPara, abrirMenuDaConta, AMANHA, URL_APP, botaoDaAba, campoDaAgenda, dataAberta, diaSeguinte, escolherNoCalendario, registrarPedido, contagemDoDia, prepararContexto, vigiarErros, importarDaAgenda, rotuloDaData, rotulosDasAbas,
   missaoDoCursoNaAgenda, enviarDaAgenda, estadoDoFormulario, linhasDosPedidos, linhaDaLista, grupoDosPedidos, aprovarNaLinha, botaoDosPedidos, escolherPedido, campoDoDetalhe,
-  acaoDoPedido, detalheDoPedido } from './fixtures.js';
+  acaoDoPedido, detalheDoPedido, avisoDosPedidos } from './fixtures.js';
 import { instalarSupabaseFalso, criarSupabaseFalso, documentosAtuais, CONTAS } from './supabase-falso.js';
 import { estadoSintetico } from '../helpers/estado.js';
 import { aluno } from '../helpers/montar.js';
@@ -573,5 +573,78 @@ test.describe('A página dos pedidos (modo compartilhado)', () => {
     await expect.poll(() => servidor.dias.get(AMANHA).conteudo.importadas).toEqual([id]);
     await expect(linhaDaLista(operador.page, id)).toContainText('Aprovado por Operador de Teste às 12:00 · Na demanda');
     await operador.context.close();
+  });
+
+  test('dois alunos com o mesmo nome: o pedido do segundo é dele, na agenda e na demanda (o nome não vira o primeiro)', async ({ page, context }) => {
+    const docs = documentosAtuais({ ...estadoSintetico(), stu: [aluno(1000, { fly: false }, { nm: 'Maria Silva' }), aluno(1001, { fly: false }, { nm: 'Maria Silva' })] }, AMANHA);
+    const servidor = await instalarSupabaseFalso(context, docs);
+    await entrar(page, CONTAS.operador);
+    await irPara(page, 'age');
+    await campoDaAgenda(page, 'aluno').selectOption('1001');
+    await campoDaAgenda(page, 'missao').selectOption('Voo Local');
+    await campoDaAgenda(page, 'recurso').selectOption('C152');
+    await campoDaAgenda(page, 'horario').selectOption('08:20');
+    await campoDaAgenda(page, 'por').fill('Maria');
+    await enviarDaAgenda(page).click();
+    await expect(page.locator('#toast-box')).toContainText('Pedido registrado e aprovado: já está na demanda.');
+    const novo = servidor.solicitacoes.at(-1);
+    expect([novo.aluno, novo.aluno_nome]).toEqual([1001, 'Maria Silva']);
+    await expect.poll(() => servidor.dias.get(AMANHA).conteudo.importadas).toEqual([novo.id]);
+    const { pedidos } = servidor.dias.get(AMANHA).conteudo;
+    expect([pedidos[1001].solicitacao, pedidos[1000]?.solicitacao ?? null]).toEqual([novo.id, null]);
+  });
+
+  test('a escala mudou em outro computador: o aprovado não entra na hora, o aviso pede "Atualizar"; "Importar" na Demanda lê a data de novo e o põe lá', async ({ browser }) => {
+    const docs = documentosAtuais({ ...estadoSintetico(), stu: [aluno(1000, { fly: false }), aluno(1001, { fly: false }), aluno(1002, { fly: false })] }, AMANHA);
+    const servidor = criarSupabaseFalso(docs);
+    servidor.solicitacoes.push(noServidor(1, {}, { aprovado: false }), noServidor(2, { aluno: 1001, aluno_nome: 'Aluno 1001', horario: '10:10' }, { aprovado: false }),
+      noServidor(3, { aluno: 1002, aluno_nome: 'Aluno 1002', horario: '12:40' }));
+    const abrirComo = async conta => {
+      const context = await browser.newContext();
+      await prepararContexto(context);
+      await servidor.instalar(context);
+      const page = await context.newPage();
+      await entrar(page, conta);
+      await irPara(page, 'age');
+      return { context, page };
+    };
+    const a = await abrirComo(CONTAS.operador);
+    const b = await abrirComo(CONTAS.operador);
+    // B aprova o 1: ele entra, e a escala desta data é gravada
+    await aprovarNaLinha(b.page, 1).click();
+    await expect(b.page.locator('#toast-box')).toContainText('Pedido aprovado: já está na demanda.');
+    await expect.poll(() => servidor.dias.get(AMANHA).conteudo.importadas).toEqual([1]);
+    // A, que leu a escala antes, aprova o 2: ele não entra por cima da escala de B
+    await aprovarNaLinha(a.page, 2).click();
+    await expect(a.page.locator('#toast-box')).toContainText('Pedido aprovado. A escala desta data mudou em outro computador: “Atualizar” e depois “Importar”.');
+    await expect(avisoDosPedidos(a.page)).toContainText('A escala desta data mudou em outro computador.');
+    await expect(botaoDosPedidos(a.page, 'atualizar-data')).toBeVisible();
+    expect(servidor.solicitacoes.find(s => s.id === 2).aprovada_por).toBe('Operador de Teste');
+    expect(servidor.dias.get(AMANHA).conteudo.importadas).toEqual([1]);
+    // "Importar" na Demanda: lê a data de novo antes e põe os aprovados fora da demanda (o 2 e o 3), sem apagar o 1
+    await irPara(a.page, 'dem');
+    await importarDaAgenda(a.page);
+    await expect(a.page.locator('#toast-box')).toContainText('2 pedido(s) na demanda.');
+    await expect.poll(() => [...servidor.dias.get(AMANHA).conteudo.importadas].sort()).toEqual([1, 2, 3]);
+    await a.context.close();
+    await b.context.close();
+  });
+
+  test('outra data aberta enquanto o servidor diz se a escala mudou: o pedido fica aprovado, fora da demanda, e o aviso diz', async ({ page, context }) => {
+    const servidor = await instalarSupabaseFalso(context, comAlunos());
+    servidor.solicitacoes.push(noServidor(1, {}, { aprovado: false }));
+    await entrar(page, CONTAS.operador);
+    await irPara(page, 'age');
+    // Segura a pergunta "a escala mudou?" (a versão gravada da data) até a outra data abrir
+    let soltar, perguntas = 0;
+    const espera = new Promise(resolve => { soltar = resolve; });
+    await context.route(url => url.pathname.endsWith('/rest/v1/dias') && url.searchParams.get('select') === 'versao', async route => { perguntas++; await espera; await route.fallback(); });
+    await aprovarNaLinha(page, 1).click();
+    await expect.poll(() => perguntas).toBe(1);
+    await diaSeguinte(page);
+    soltar();
+    await expect(page.locator('#toast-box')).toContainText('Pedido aprovado. Outra data foi aberta enquanto isso: na data dele, “Importar” o põe na demanda.');
+    expect(servidor.solicitacoes[0].aprovada_por).toBe('Operador de Teste');
+    expect(servidor.dias.get(AMANHA).conteudo.importadas || []).toEqual([]);
   });
 });

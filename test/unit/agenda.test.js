@@ -264,10 +264,15 @@ describe('Os pedidos e a aprovação (D2)', () => {
     assert.deepEqual([linha(1), aprovada(2), aprovada(3, { cancelada_em: 'x' })].map(solicitacaoAprovada), [false, true, false]);
   });
 
-  it('o resumo da data: os registrados (sem os cancelados), os que aguardam, os aprovados, os cancelados e os fora do prazo', () => {
+  it('o resumo da data: os registrados (sem os cancelados), os que aguardam e os aprovados', () => {
     const lista = [linha(1), linha(2, { excecao: true, aprovada_em: 'x' }), aprovada(3), linha(4, { cancelada_em: 'x' }), aprovada(5, { cancelada_em: 'x', excecao: true })];
-    assert.deepEqual(resumoDasSolicitacoes(lista), { registradas: 3, aguardando: 1, aprovadas: 2, canceladas: 2, foraDoPrazo: 1 });
-    assert.deepEqual(resumoDasSolicitacoes([]), { registradas: 0, aguardando: 0, aprovadas: 0, canceladas: 0, foraDoPrazo: 0 });
+    assert.deepEqual(resumoDasSolicitacoes(lista), { registradas: 3, aguardando: 1, aprovadas: 2 });
+    assert.deepEqual(resumoDasSolicitacoes([]), { registradas: 0, aguardando: 0, aprovadas: 0 });
+  });
+
+  it('o resumo conta como aguardando só os que pedem atenção (o pedido que ninguém pode aprovar, do aluno inativo ou fora do cadastro, não)', () => {
+    const lista = [linha(1), linha(2), aprovada(3)];
+    assert.deepEqual(resumoDasSolicitacoes(lista, s => s.aluno !== 1002), { registradas: 3, aguardando: 1, aprovadas: 1 });
   });
 
   // O estado da data: os alunos com o registro do dia (o pedido principal e as missões extras) e as importadas
