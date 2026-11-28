@@ -1522,6 +1522,11 @@ describe('recomecarPelosPedidos: "Recomeçar pelos pedidos"', () => {
     const semQuem = montar().e;
     recomecarPelosPedidos(semQuem, linhas, { ...amb, reabertura: { em: quem.em } });
     assert.deepEqual(semQuem.reabertura, { em: quem.em, por: '' });
+    // Sem quando (o ensaio da frase, que não grava), a reabertura de antes fica
+    const semQuando = montar().e;
+    semQuando.reabertura = { em: '2026-11-09T10:00:00.000Z', por: 'Outro' };
+    recomecarPelosPedidos(semQuando, linhas, amb);
+    assert.deepEqual([semQuando.aprovacao, semQuando.reabertura], [null, { em: '2026-11-09T10:00:00.000Z', por: 'Outro' }]);
   });
 
   it('a data não aprovada não é reaberta: a reabertura de antes fica como estava', () => {

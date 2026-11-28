@@ -9,7 +9,7 @@ import { indiceDoPrograma } from './programa.js';
 import { proximasMissoes, missoesDoDia } from './progresso.js';
 import { situacaoPorMissao, situacaoDa, resultadoDoVoo } from './resultados.js';
 import { chaveDoVoo, pedidoDoAluno } from './voo.js';
-import { fixoPeloStatus, pinoDoVoo, fixosAoReabrir } from './fixos.js';
+import { fixoPeloStatus, pinoDoVoo, fixosAoReabrir, normalizarAprovacao } from './fixos.js';
 import { inativo } from './inativos.js';
 import { intervaloEfetivo, STATUS_EM_ANDAMENTO } from './status.js';
 import { minutoDaPreferencia, paraMinuto, horariosDaMissao } from './horarios.js';
@@ -718,9 +718,11 @@ const quantosDe = (n, um, varios) => `${n} ${n === 1 ? um : varios}`;
 // importadas); fica o voo em andamento (Atrasado, Em Voo, Pousou) ou com resultado, e o registro de um pedido que não está
 // nas linhas lidas; o tirado da escala pelo operador e o tirado desta data antes (dispensado) continuam fora; o pedido
 // aprovado que não tinha registro entra numa missão extra acima de todo número que o aluno tinha (nunca no 0); a escala
-// aprovada é reaberta. Muda o estado. Recusa, sem mudar nada, numa data passada e com os pedidos não lidos ({ recusa }).
-// ambiente: os de conciliarPedidos (data, hoje, agora, aprovada, cursos, semInativos) e os de missaoDaEntrada
-// (programa, situacao). { voltaramAoPedido, sairamSemPedido, sairam, ficam, continuamFora, entraram, reaberta, texto }
+// aprovada é reaberta, e a reabertura fica registrada como a do "Reabrir" da Escala (formato 30, d33: { em, por }, o de
+// normalizarAprovacao; a data não aprovada, ou sem quando, guarda a de antes). Muda o estado. Recusa, sem mudar nada, numa data passada e com
+// os pedidos não lidos ({ recusa }). ambiente: os de conciliarPedidos (data, hoje, agora, aprovada, cursos, semInativos), os
+// de missaoDaEntrada (programa, situacao) e reabertura ({ em, por }: quando e quem recomeça). { voltaramAoPedido,
+// sairamSemPedido, sairam, ficam, continuamFora, entraram, reaberta, texto }
 export function recomecarPelosPedidos(estado, solicitacoes, ambiente = {}) {
   const { data = null, hoje = null, aprovada, programa = [], situacao = [], cursos = [] } = ambiente;
   if (data && hoje && data < hoje) return { recusa: 'data-passada' };
@@ -772,6 +774,8 @@ export function recomecarPelosPedidos(estado, solicitacoes, ambiente = {}) {
   estado.fObs = semOsLimpos(estado.fObs);
   estado.fixos = feito.reaberta ? fixosAoReabrir(semOsLimpos(estado.fixos), estado.fStatus) : semOsLimpos(estado.fixos);
   estado.aprovacao = null;
+  const reabertura = normalizarAprovacao(ambiente.reabertura);
+  if (feito.reaberta && reabertura) estado.reabertura = reabertura;
   // Os registros dos pedidos aprovados voltam ao pedido, no mesmo número, na ordem da entrada (os com a missão do curso
   // escolhida na Agenda primeiro)
   const ordem = new Map((estado.stu || []).map((x, i) => [x.id, i]));

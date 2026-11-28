@@ -206,7 +206,8 @@ aoAcionar('recomecar', b => {
     return;
   }
   frase.textContent = '';
-  const feito = recomecarPelosPedidos(S, lista, ambienteDaData());
+  // A escala aprovada reaberta fica registrada, como no "Reabrir" da Escala: quando e quem (formato 30, d33)
+  const feito = recomecarPelosPedidos(S, lista, { ...ambienteDaData(), reabertura: { em: new Date().toISOString(), por: ApiClient.autorAtual || '' } });
   if (feito.recusa || !gravarAlteracao('exc', feito.texto)) return;
   fecharMenuMais();
   // Os alunos de cada grupo (N6: a resposta diz o aluno)
