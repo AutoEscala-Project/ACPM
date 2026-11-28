@@ -1,6 +1,6 @@
 // O instrutor escolhido pelo operador: na Demanda (o app encaixa o voo com ele) e na Escala (o nome do instrutor abre a
 // lista; o voo fica onde está, fixo, com o escolhido, e o resto é refeito em volta). O histórico desfaz
-import { test, expect, abrir, irPara, abrirEscala, confirmar, abrirHistorico, alternarVem, aprovar, reabrir, editorDoVoo, refazer, abrirCaixa, campoDoAluno, abrirAluno } from './fixtures.js';
+import { test, expect, abrir, irPara, abrirEscala, abrirHistorico, alternarVem, aprovar, reabrir, editorDoVoo, refazer, abrirCaixa, campoDoAluno, abrirAluno, excluirInstrutor } from './fixtures.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
 
 // Dois voos às 08:20: o app põe o Instrutor 02 (menos habilitações) com o Aluno 1000 e o Instrutor 01 com o 1001
@@ -190,9 +190,7 @@ test.describe('Instrutor escolhido', () => {
 
     // A data aberta: escolher o Instrutor 01 e excluí-lo do cadastro devolve o pedido ao Automático, sem aviso
     await pedido(page, 1000).locator('[data-f="insId"]').selectOption({ label: 'Instrutor 01' });
-    await irPara(page, 'ins');
-    await page.locator('[data-vista-ins="cadastro"]').click();
-    await confirmar(page, '#inst tr.cd[data-id="1"] [data-act="deli"]');
+    await excluirInstrutor(page, 1);
     await irPara(page, 'dem');
     await expect(pedido(page, 1000).locator('[data-f="insId"]')).toHaveValue('');
     await abrirEscala(page);
@@ -213,9 +211,7 @@ test.describe('Instrutor escolhido', () => {
     await abrir(page, { estado });
     await abrirEscala(page);
     await expect(linha(page, 'Aluno 1001').locator('.fixo')).toHaveAttribute('aria-label', 'Voo fixo: agendado na escala');
-    await irPara(page, 'ins');
-    await page.locator('[data-vista-ins="cadastro"]').click();
-    await confirmar(page, '#inst tr.cd[data-id="1"] [data-act="deli"]');
+    await excluirInstrutor(page, 1);
     await abrirEscala(page);
     const voo = linha(page, 'Aluno 1001');
     await expect(voo.locator('.c-hr')).toContainText('10:10–11:10');

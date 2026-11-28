@@ -16,8 +16,13 @@ const ANTIGAS = {
   escala: ['no fim de cada linha', 'ao lado do nome de cada linha', 'as linhas livres', 'de uma linha do mapa', 'a linha dele não agenda'],
   // O Operador não muda os Cursos nem os limites da lei
   perfis: ['altera tudo e opera a escala'],
-  // A coluna de quem vem é "Vem" (a data aberta não é sempre hoje); o filtro das habilitações tem várias marcas
-  instrutores: ['o interruptor de quem vem', 'filtro por habilitação'],
+  // A coluna de quem vem é "Vem" (a data aberta não é sempre hoje); o filtro das habilitações tem várias marcas. C: sem a
+  // grade, as janelas, as duas vistas, "Aplicar turno", "Manhã" e "Tarde", o painel das habilitações e o dos dados pessoais
+  instrutores: ['o interruptor de quem vem', 'filtro por habilitação', 'Aplicar turno', 'Clique numa janela',
+    'Editar habilitações', 'as janelas de cada um', 'feche o painel', 'o botão na linha', 'um cartão por pessoa', 'nos períodos do voo',
+    'Instrutores › Cadastro', 'em Instrutores',
+    // C, "regra": a missão começa numa faixa e pode terminar depois dela (decisão 1 do Pedro)
+    'o voo inteiro do instrutor cabe numa faixa', 'disponível durante o voo inteiro', 'durante todo o voo', 'precisa estar disponível na noite'],
   // O 7º voo local não fica mais indisponível: o app avisa e pede a confirmação (F1c)
   pedidos: ['o horário fica indisponível, e o app diz o próximo horário possível'],
   // O peso vem antes do curso em Alunos; Alunos é lista e detalhe (F2): sem as colunas de Instrutores, sem o cartão no
@@ -56,18 +61,22 @@ const NOVAS = {
   // A missão espera o aluno e vem do curso dele; o 7º voo local pede a confirmação (F1c)
   pedidos: ['Ainda não importado', 'Data do pedido', 'prazo encerrado', 'as missões do curso dele', 'NAV-150NM · Navegação · C152 · 3 h', '(nenhum ativo)',
     'só registra com “Registrar mesmo assim”; o pedido guarda quem confirmou e quando'],
-  // A busca sem acentos, quantos aparecem e o "Limpar filtros"; a coluna Vem (a data aberta não é sempre hoje); o filtro
-  // das habilitações, com várias marcas e a regra ("todas as marcadas")
-  instrutores: ['Editar habilitações', 'sem os acentos', '12 de 40 instrutores', 'Limpar filtros', 'o interruptor Vem', 'Filtro das habilitações',
-    'que têm todas as marcadas', 'Habilitações: Noturno + C172'],
+  // A busca sem acentos, quantos aparecem e o "Limpar filtros"; o "Vem" (a data aberta não é sempre hoje); o filtro das
+  // habilitações, com várias marcas e a regra ("todas as marcadas"). C: INVAs como lista e detalhe, as faixas ("Pode
+  // decolar de … até …"), as pausas ("+ Pausa", "Almoço"), os três turnos, meio dia digitado, a tira, a regra de antes do C
+  // e o item fixo dos limites da lei
+  instrutores: ['sem os acentos', '12 de 40 instrutores', 'Limpar filtros', 'Filtro das habilitações', 'que têm todas as marcadas',
+    'Habilitações: Noturno + C172', 'Pode decolar de … até …', '+ Pausa', 'Almoço', 'Salvar faixas', 'Dia inteiro (06:30–17:30)',
+    'Noturno (17:30–24:00)', 'Dia + noturno (06:30–24:00)', 'Meio dia é uma faixa digitada', 'a tira do dia', 'Agendar voo com',
+    'a missão começa dentro de uma faixa do instrutor e pode terminar depois dela', 'O que cabe nestas faixas', 'Limites da Lei do Aeronauta abre os limites', 'Excluir instrutor…'],
   // Alunos como lista e detalhe (F2): a escolha no endereço, os campos no lugar, Anterior e Próximo, o filtro dos cursos (a
   // regra "algum dos marcados"; um só nas duas telas) e os dados pessoais na seção do aluno, com Salvar e Desfazer; o
   // cadastro relido depois de um conflito. A: as seções do detalhe (Nesta data, Curso e missões), o nome completo (também
-  // na busca), a secretaria que consulta e "Apagar os dados pessoais"
+  // na busca), a secretaria que consulta e "Apagar os dados pessoais". C: sem o cartão de Instrutores no celular
   alunos: ['Não escalar com', 'A lista dos alunos fica à esquerda e o aluno escolhido à direita', '#/alu/1000', '‹ Alunos',
     'gravado ao sair dele', 'Ctrl+, e Ctrl+.', 'Filtro dos cursos', 'aparecem os alunos de algum dos marcados', 'Curso: PP ou PC',
     'aparecem os pedidos dos alunos de algum dos cursos marcados', 'O filtro dos cursos é um só nas duas telas',
-    'um cartão por pessoa', 'e Desfazer volta ao que está gravado', 'Outra pessoa alterou o cadastro enquanto você editava',
+    'e Desfazer volta ao que está gravado', 'Outra pessoa alterou o cadastro enquanto você editava',
     'desligue Ativo, na linha dele', 'Mostrar inativos', 'Nesta data', 'Sem voo nesta data.', 'Curso e missões', 'Curso matriculado',
     'Nome (na escala)', 'Nome completo', 'o nome completo e o CANAC', 'a secretaria consulta, em texto', 'Apagar os dados pessoais'],
   // Recursos: as duas vistas, a busca pela matrícula, o filtro das categorias (a regra "alguma das marcadas") e o

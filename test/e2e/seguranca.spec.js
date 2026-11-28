@@ -1,7 +1,7 @@
 // Conteúdo gravado malicioso: quem tem uma conta de operador consegue gravar qualquer coisa no
 // cadastro, no dia, na escala salva e no histórico pela API. Nada disso pode virar HTML ou script em nenhuma tela: o
 // app escapa tudo o que mostra (texto e atributos) e, ao abrir, só aceita os valores que ele mesmo produz.
-import { test, comTodasAsFuncionalidades, expect, irPara, prepararContexto, vigiarErros, AMANHA, preencherLogin, URL_APP, ABAS, abrirHistorico, appPronto, botaoDaAba, caixaDisponivel, linhasDosAlunos, abrirAluno, campoDoAberto } from './fixtures.js';
+import { test, comTodasAsFuncionalidades, expect, irPara, prepararContexto, vigiarErros, AMANHA, preencherLogin, URL_APP, ABAS, abrirHistorico, appPronto, botaoDaAba, caixaDisponivel, linhasDosAlunos, abrirAluno, campoDoAberto, abrirInstrutor, abrirLimitesDaLei, linhasDosInstrutores } from './fixtures.js';
 import { documentosAtuais, instalarSupabaseFalso, CONTAS } from './supabase-falso.js';
 import { runAllocationEngine } from '../../js/engine.js';
 import { aluno, cenario, instrutor, missaoExtra, GROUND_C152 } from '../helpers/montar.js';
@@ -110,8 +110,9 @@ async function percorrer(page) {
   await expect(page.locator('#historico')).toBeVisible();
   await nada(page);
   await page.keyboard.press('Escape');
-  await irPara(page, 'ins');
-  await page.locator('#s-ins [data-vista-ins="cadastro"]').click();
+  await abrirInstrutor(page, 1);
+  await nada(page);
+  await abrirLimitesDaLei(page);
   await nada(page);
   await irPara(page, 'cur');
   await nada(page);
@@ -330,7 +331,7 @@ test.describe('Link antigo com os dados na URL', () => {
     expect(await page.evaluate(() => window.__xss)).toBeUndefined();
     await expect(page.locator('img[src="x"]')).toHaveCount(0);
     await expect(linhasDosAlunos(page)).toHaveCount(0);
-    await expect(page.locator('#inst .cd')).toHaveCount(0);
+    await expect(linhasDosInstrutores(page)).toHaveCount(0);
     expect(erros).toEqual([]);
     await contexto.close();
   });
