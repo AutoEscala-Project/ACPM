@@ -3,6 +3,7 @@
 // Em Voo, Atrasado, Pousou e Cancelado também fixam o voo.
 import { test, comPrioridade, expect, abrir, abrirComExemplo, irPara, abrirEscala, lerEscala, abrirHistorico, alternarVem, aprovar, botaoAprovar, botaoReabrir, caixaVoa, reabrir, refazer, textosDaEscala, exportar } from './fixtures.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
+import { gerarCenario } from '../helpers/cenarios.js';
 import { abrirRestricoes, campoDasRestricoes, fecharRestricoes } from './telas/restricoes.js';
 
 const dia = () => cenario({ ins: [instrutor(1, 9), instrutor(2, 9)], stu: [aluno(1000, { p1: 390, p2: -1 }), aluno(1001, { p1: 500, p2: -1 }), aluno(1002, { fly: false, p1: 390, p2: -1 })] });
@@ -176,5 +177,47 @@ test.describe('As exportações e a reabertura registradas', () => {
     expect(await linhas(page)).toEqual(antes);
     await abrirHistorico(page);
     await expect(page.locator('#historico')).toContainText('Voo novo fixado: Aluno 1002');
+  });
+});
+
+// A revisão do H (#113): a aprovação e "Fixar os N voos novos" sem o motor; a exportação registrada só com o arquivo
+// entregue; o aviso à vista sem voos; o registro não mostra "Atualizada às"
+test.describe('A aprovação e o registro das exportações, sem o motor', () => {
+  test('aprovar fixa exatamente as linhas da tela: nenhuma a mais gravada, todas com o cadeado, sem "Fixar o voo novo"', async ({ page }) => {
+    await abrir(page, { estado: gerarCenario(204) });
+    await abrirEscala(page);
+    const antes = (await lerEscala(page)).linhas;
+    await aprovar(page);
+    expect((await lerEscala(page)).linhas).toEqual(antes);
+    await expect(page.locator('#btn-fixar-novos')).toHaveCount(0);
+    const { fixos, resultado } = await diaGravado(page);
+    expect(resultado.out.filter(o => !o.trecho).every(o => Object.hasOwn(fixos, o.fKey))).toBe(true);
+  });
+
+  test('o PDF sem a biblioteca não fica registrado: nenhuma exportação, nada de "Exportada"', async ({ page }) => {
+    await abrir(page, { estado: dia() });
+    await abrirEscala(page);
+    await page.evaluate(() => { window.jspdf = undefined; });
+    await page.locator('#pdf').click();
+    await expect(page.locator('#toast-box .toast', { hasText: 'A biblioteca de PDF não carregou' })).toBeVisible();
+    await expect(situacao(page)).toHaveCount(0);
+    expect(((await diaGravado(page)) || {}).exportacoes || {}).toEqual({});
+  });
+
+  test('sem nenhum voo, o aviso da exportação desatualizada continua à vista; o registro não mostra "Atualizada às"', async ({ page }) => {
+    await abrir(page, { estado: dia() });
+    await abrirEscala(page);
+    await aprovar(page);
+    await page.reload();
+    await abrirEscala(page);
+    await expect(page.locator('#escala-atualizada')).toBeHidden();
+    await exportar(page, 'csv');
+    await expect(situacao(page)).toHaveText('Exportada');
+    await expect(page.locator('#escala-atualizada')).toBeHidden();
+    await expect(page.locator('#exp')).toHaveAttribute('aria-describedby', 'exportacoes-situacao');
+    for (const nome of ['Aluno 1000', 'Aluno 1001']) await page.locator('#out tbody tr:not(.win)', { hasText: nome }).locator('[data-act="rm-fly"]').click();
+    await expect(page.locator('#out tbody tr:not(.win)')).toHaveCount(0);
+    await expect(situacao(page)).toBeVisible();
+    await expect(situacao(page)).toHaveText('A escala mudou depois da exportação: CSV');
   });
 });

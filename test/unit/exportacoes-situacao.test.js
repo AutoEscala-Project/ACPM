@@ -6,57 +6,76 @@ import assert from 'node:assert/strict';
 import { impressaoDaEscala, situacaoDasExportacoes, registrarExportacao, normalizarExportacoes } from '../../js/exportacoes.js';
 
 const voo = (stuId, mid, extra = {}) => ({ fKey: `${stuId}_${mid}_1`, stuId, mid, mis: 'Voo Local', eqType: 'C152', a: 500, b: 560, r: 'PP-LJV', insId: 1, ...extra });
-const escala = () => [voo(1000, 1), voo(1001, 1, { a: 520, b: 580, r: 'PR-BTB', insId: 2 })];
+const escala = () => [voo(1000, 1, { s: 'Aluno 1000', ins: 'Instrutor 01' }), voo(1001, 1, { a: 520, b: 580, r: 'PR-BTB', insId: 2, s: 'Aluno 1001', ins: 'Instrutor 02' })];
 const dia = (extra = {}) => ({ fStatus: {}, fObs: {}, av: { 'PP-LJV': true, 'PR-BTB': true }, ...extra });
+
+const imp = (out, d, revisao) => impressaoDaEscala({ out, revisao }, d);
 
 describe('impressaoDaEscala', () => {
   it('8 hexadecimais, a mesma para a mesma escala, qualquer que seja a ordem das linhas', () => {
-    const i = impressaoDaEscala(escala(), dia());
+    const i = imp(escala(), dia());
     assert.match(i, /^[0-9a-f]{8}$/);
-    assert.equal(impressaoDaEscala(escala(), dia()), i);
-    assert.equal(impressaoDaEscala(escala().reverse(), dia()), i);
+    assert.equal(imp(escala(), dia()), i);
+    assert.equal(imp(escala().reverse(), dia()), i);
   });
 
   it('a impressão é aceita pelo registro (normalizarExportacoes)', () => {
-    const impressao = impressaoDaEscala(escala(), dia());
+    const impressao = imp(escala(), dia());
     assert.deepEqual(normalizarExportacoes({ csv: { em: '2026-11-28T12:00:00.000Z', por: 'Op', impressao } }).csv.impressao, impressao);
-    assert.match(impressaoDaEscala([], dia()), /^[0-9a-f]{8}$/, 'a escala vazia também tem impressão');
+    assert.match(imp([], dia()), /^[0-9a-f]{8}$/, 'a escala vazia também tem impressão');
   });
 
   it('muda com quem voa, a missão, o horário, o avião e o instrutor', () => {
-    const i = impressaoDaEscala(escala(), dia());
-    const mudar = (k, v) => { const e = escala(); e[0] = { ...e[0], [k]: v }; return impressaoDaEscala(e, dia()); };
+    const i = imp(escala(), dia());
+    const mudar = (k, v) => { const e = escala(); e[0] = { ...e[0], [k]: v }; return imp(e, dia()); };
     for (const [k, v] of [['stuId', 1002], ['mis', 'Navegação'], ['a', 510], ['b', 570], ['r', 'PT-ABC'], ['insId', 3]]) assert.notEqual(mudar(k, v), i, k);
-    assert.notEqual(impressaoDaEscala(escala().slice(0, 1), dia()), i, 'um voo a menos');
-    assert.notEqual(impressaoDaEscala([...escala(), voo(1002, 1)], dia()), i, 'um voo a mais');
+    assert.notEqual(imp(escala().slice(0, 1), dia()), i, 'um voo a menos');
+    assert.notEqual(imp([...escala(), voo(1002, 1)], dia()), i, 'um voo a mais');
   });
 
-  it('muda com o cancelamento, o atraso (o horário novo), o conflito e o avião parado', () => {
-    const i = impressaoDaEscala(escala(), dia());
-    assert.notEqual(impressaoDaEscala(escala(), dia({ fStatus: { '1000_1_1': 'Cancelado' } })), i, 'cancelado');
+  it('muda com o cancelamento (e a categoria do motivo, nunca o texto livre), o atraso (o horário novo), o conflito e o avião parado', () => {
+    const i = imp(escala(), dia());
+    const cancelado = dia({ fStatus: { '1000_1_1': 'Cancelado' }, fObs: { '1000_1_1': { motivo: 'Manutenção da aeronave' } } });
+    assert.notEqual(imp(escala(), cancelado), i, 'cancelado');
+    assert.notEqual(imp(escala(), cancelado), imp(escala(), dia({ fStatus: { '1000_1_1': 'Cancelado' }, fObs: { '1000_1_1': { motivo: 'Meteorologia' } } })), 'outra categoria');
+    assert.equal(imp(escala(), cancelado), imp(escala(), dia({ fStatus: { '1000_1_1': 'Cancelado' }, fObs: { '1000_1_1': { motivo: 'Manutenção da aeronave', texto: 'o pneu' } } })), 'o texto livre não conta');
     const atrasado = dia({ fStatus: { '1000_1_1': 'Atrasado' }, fObs: { '1000_1_1': { novoInicio: 530 } } });
-    assert.notEqual(impressaoDaEscala(escala(), atrasado), i, 'atrasado para as 08:50');
-    assert.notEqual(impressaoDaEscala(escala(), atrasado), impressaoDaEscala(escala(), dia({ fStatus: { '1000_1_1': 'Atrasado' } })), 'o horário novo conta');
+    assert.notEqual(imp(escala(), atrasado), i, 'atrasado para as 08:50');
+    assert.equal(imp(escala(), atrasado), imp(escala(), dia({ fStatus: { '1000_1_1': 'Em Voo' }, fObs: { '1000_1_1': { novoInicio: 530 } } })), 'Atrasado → Em Voo no mesmo horário não muda');
     const comConflito = escala(); comConflito[0] = { ...comConflito[0], conflito: ['o instrutor não está disponível'], conflitoCodigos: ['instrutor-indisponivel'] };
-    assert.notEqual(impressaoDaEscala(comConflito, dia()), i, 'conflito');
-    assert.notEqual(impressaoDaEscala(escala(), dia({ av: { 'PP-LJV': false, 'PR-BTB': true } })), i, 'avião parado');
+    assert.notEqual(imp(comConflito, dia()), i, 'conflito');
+    assert.notEqual(imp(escala(), dia({ av: { 'PP-LJV': false, 'PR-BTB': true } })), i, 'avião parado');
+    assert.notEqual(imp(escala(), dia(), { 'PP-LJV': { paraAs: 600 } }), i, 'para para a revisão de 50 horas');
+    assert.notEqual(imp(escala(), dia(), { 'PP-LJV': { paraAs: 600 } }), imp(escala(), dia(), { 'PP-LJV': { paraAs: 660 } }), 'em outra hora');
   });
 
-  it('não muda com o que o arquivo exportado não diz: Pendente e Confirmado, a ordem dos códigos, outro avião parado', () => {
-    const i = impressaoDaEscala(escala(), dia());
-    assert.equal(impressaoDaEscala(escala(), dia({ fStatus: { '1000_1_1': 'Confirmado' } })), i, 'Confirmado é o padrão');
-    assert.equal(impressaoDaEscala(escala(), dia({ av: { 'PP-LJV': true, 'PR-BTB': true, 'PT-XYZ': false } })), i, 'avião parado sem voo');
+  it('muda com a missão do curso e a sessão (como o CSV as escreve) e com o nome do aluno ou do instrutor', () => {
+    const i = imp(escala(), dia());
+    const mudar = extra => { const e = escala(); e[0] = { ...e[0], ...extra }; return imp(e, dia()); };
+    assert.notEqual(mudar({ etapa: 'PP-07' }), i, 'a missão do curso');
+    assert.notEqual(mudar({ etapa: 'PP-07' }), mudar({ etapa: 'PP-08' }), 'PP-07 → PP-08 com a mesma missão');
+    assert.notEqual(mudar({ ss: '2/3' }), i, 'a sessão');
+    assert.notEqual(mudar({ s: 'Maria' }), mudar({ s: 'Mariana' }), 'o nome do aluno');
+    assert.notEqual(mudar({ ins: 'Instrutor 01' }), mudar({ ins: 'Instrutor 1' }), 'o nome do instrutor');
+  });
+
+  it('não muda com o dia andando: Pendente, Confirmado, Em Voo, Pousou, o atraso sem horário novo; nem com a ordem dos códigos ou outro avião parado', () => {
+    const i = imp(escala(), dia());
+    for (const status of ['Pendente', 'Confirmado', 'Em Voo', 'Pousou', 'Atrasado']) assert.equal(imp(escala(), dia({ fStatus: { '1000_1_1': status } })), i, status);
+    assert.equal(imp(escala(), dia({ av: { 'PP-LJV': true, 'PR-BTB': true, 'PT-XYZ': false } })), i, 'avião parado sem voo');
+    assert.equal(imp(escala(), dia(), { 'PT-XYZ': { paraAs: 600 } }), i, 'revisão de um avião sem voo');
     const a = escala(), b = escala();
     a[0] = { ...a[0], conflitoCodigos: ['peso', 'bloqueio'] };
     b[0] = { ...b[0], conflitoCodigos: ['bloqueio', 'peso'] };
-    assert.equal(impressaoDaEscala(a, dia()), impressaoDaEscala(b, dia()));
-    assert.equal(impressaoDaEscala(escala(), {}), impressaoDaEscala(escala(), dia()), 'sem fStatus, fObs nem av');
+    assert.equal(imp(a, dia()), imp(b, dia()));
+    assert.equal(imp(escala(), {}), imp(escala(), dia()), 'sem fStatus, fObs nem av');
+    assert.equal(impressaoDaEscala(null), imp([], {}), 'sem escala');
   });
 
   it('a volta do noturno (o trecho) é uma linha dela', () => {
     const ida = voo(1000, 2, { mis: 'Noturno' });
     const volta = { ...ida, trecho: 'volta', a: 420, b: 480 };
-    assert.notEqual(impressaoDaEscala([ida, volta], dia()), impressaoDaEscala([ida], dia()));
+    assert.notEqual(imp([ida, volta], dia()), imp([ida], dia()));
   });
 });
 
