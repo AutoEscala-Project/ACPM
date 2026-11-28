@@ -213,6 +213,40 @@ export function situacaoNaDemanda(s, estado) {
   return registro && registro.fly ? 'voa' : 'tirada';
 }
 
+// O que mudou nos pedidos da data entre duas leituras (D3): os novos (não cancelados), os aprovados, os que voltaram a
+// aguardar (a aprovação retirada) e os cancelados, cada pedido uma vez, pelo estado dele agora. O que saiu da leitura (não
+// acontece: um pedido não muda de data) não é novidade. deste: os ids que este navegador acabou de mudar (o aviso dele já
+// disse), fora das novidades
+export function novidadesDasSolicitacoes(antes, depois, { deste = [] } = {}) {
+  const deAntes = new Map((antes || []).map(s => [s.id, situacaoDaSolicitacao(s)]));
+  const novidades = { novas: [], aprovadas: [], semAprovacao: [], canceladas: [] };
+  for (const s of depois || []) {
+    if (deste.includes(s.id)) continue;
+    const era = deAntes.get(s.id), e = situacaoDaSolicitacao(s);
+    if (era === e) continue;
+    if (era === undefined) { if (e !== 'cancelada') novidades.novas.push(s); }
+    else if (e === 'cancelada') novidades.canceladas.push(s);
+    else if (e === 'aprovada') novidades.aprovadas.push(s);
+    else novidades.semAprovacao.push(s);
+  }
+  return novidades;
+}
+export const temNovidades = novidades => Object.values(novidades).some(l => l.length > 0);
+
+// O aviso das novidades: "Pedidos de qua 11/11: 1 novo, 1 cancelado." (data: o rótulo curto da data) e, para cada voo de
+// pedido cancelado que deixa a vaga com uma lista de espera (vagas: { aluno, minuto, primeiro }), o 1º dela, sem dizer que
+// ele fica com a vaga: quem dá a vaga é a escala refeita (N14). Sem novidades, ''
+export function textoDasNovidades({ novas, aprovadas, semAprovacao, canceladas }, { data, vagas = [] }) {
+  const n = (lista, um, varios) => (lista.length ? [`${lista.length} ${lista.length === 1 ? um : varios}`] : []);
+  const partes = [
+    ...n(novas, 'novo', 'novos'), ...n(aprovadas, 'aprovado', 'aprovados'),
+    ...n(semAprovacao, 'voltou a aguardar aprovação', 'voltaram a aguardar aprovação'), ...n(canceladas, 'cancelado', 'cancelados')
+  ];
+  if (!partes.length) return '';
+  const espera = vagas.map(v => ` A vaga de ${v.aluno} às ${hm(v.minuto)} fica livre quando o voo sair da escala; 1º na lista de espera: ${v.primeiro}.`);
+  return `Pedidos de ${data}: ${partes.join(', ')}.${espera.join('')}`;
+}
+
 // "Importar": os aprovados que nunca entraram na demanda da data
 export const solicitacoesParaImportar = (lista, estado) => (lista || []).filter(s => solicitacaoAprovada(s) && situacaoNaDemanda(s, estado) === 'fora');
 

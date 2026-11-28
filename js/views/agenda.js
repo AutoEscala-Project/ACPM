@@ -3,22 +3,24 @@
 // cada pedido) e o registro de pedidos, cada um para a data dele ("Data do pedido"), com o prazo das 13:00 do dia anterior.
 // O formulário vai do aluno à missão (as do curso dele), da missão ao recurso, e dos dois às duas preferências, cada uma um
 // horário exato (docs/PLAN.md, as regras da Agenda; a 2ª, opcional, U1). Os avisos da lista: a leitura que falhou, a escala
-// que mudou em outro computador, os aprovados fora da demanda (com "Importar") e os que ainda voam sem aprovação.
+// que mudou em outro computador, os aprovados fora da demanda (com "Importar") e os que ainda voam sem aprovação. O aviso
+// das novidades que a vigia traz (D3): o que mudou em outro computador, e o 1º da lista de espera da vaga de um cancelado.
 import { MIS, GROUND_EQ_TYPE } from '../config.js';
 import { duracaoFixaDaMissao } from '../rules.js';
 import { horariosDaMissao } from '../horarios.js';
 import { indiceDoPrograma } from '../programa.js';
-import { S, DATA, isGestor, inativoNaDataAberta, stuBy, dadoIndisponivel } from '../state.js';
+import { S, RES, DATA, isGestor, inativoNaDataAberta, stuBy, dadoIndisponivel, estadoDaEscala } from '../state.js';
 import { inativo } from '../inativos.js';
 import { ApiClient } from '../storage.js';
 import { dadosLidos } from '../actions.js';
-import { $, trocarConteudo } from '../dom.js';
+import { $, trocarConteudo, showToast } from '../dom.js';
 import { esc, opts, hm, fmtH, somarDias, chaveDeBusca } from '../format.js';
 import { registraNaAgenda, operaEscala } from '../perfis.js';
 import {
   recursosDaMissao, recursoValido, missoesDoAluno, FUSO_DO_AEROCLUBE, prazoDaAgendaPermite, prazoDaData, datasParaRegistrar, hojeEmSaoPaulo, situacaoDaSolicitacao,
-  situacaoNaDemanda, solicitacoesParaImportar, opcoesDaSegundaPreferencia
+  situacaoNaDemanda, solicitacoesParaImportar, opcoesDaSegundaPreferencia, textoDasNovidades
 } from '../agenda.js';
+import { primeiroDaListaDeEspera } from '../rejeicoes.js';
 import { solicitacoesDaData, solicitacoesDaDataLidas, lerSolicitacoesDaData } from '../solicitacoes-da-data.js';
 
 const CHAVE_REGISTRADO_POR = 'acpm_agenda_registrado_por';
@@ -154,10 +156,24 @@ export async function pedidosDoFormulario(data) {
   if (deOutraData.data !== data) lerDeOutraData(data);
   return deOutraData.leitura;
 }
-// Depois de registrar: os pedidos da data em que ele entrou são lidos de novo
-export async function lerPedidosDaAgenda(data) {
+// Depois de registrar: os pedidos da data em que ele entrou são lidos de novo (deste: o pedido registrado, que não é
+// novidade)
+export async function lerPedidosDaAgenda(data, deste = []) {
   if (data !== DATA && data === dataDoPedido) lerDeOutraData(data);
-  else await lerSolicitacoesDaData();
+  else await lerSolicitacoesDaData({ deste });
+}
+
+// O aviso das novidades da data aberta (a vigia, js/solicitacoes-da-data.js), para todos que veem os pedidos: o que mudou
+// em outro computador e, para cada pedido cancelado cujo voo ainda está na escala (ele vai deixar a vaga), o 1º da lista de
+// espera do horário dele, como a escala diz (F1h). Nada é posto na escala: quem dá a vaga é a escala refeita (N14)
+export function avisarDasNovidades(novidades, data) {
+  const daEscala = data === DATA && dadosLidos;
+  const vagas = daEscala ? novidades.canceladas.flatMap(s => {
+    const primeiro = primeiroDaListaDeEspera(s, estadoDaEscala(), RES);
+    return primeiro ? [{ aluno: s.aluno_nome, minuto: primeiro.minuto, primeiro: primeiro.aluno }] : [];
+  }) : [];
+  const texto = textoDasNovidades(novidades, { data: dataCurta(data), vagas });
+  if (texto) showToast(texto);
 }
 
 // O nome lembrado neste computador ("Registrado por" do último pedido): também é quem aprova, retira a aprovação e

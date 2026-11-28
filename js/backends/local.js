@@ -14,7 +14,7 @@ const CHAVES_LOCAIS = { cadastro: 'acpm4_cadastro', estado: 'acpm3', escala: 'ac
 export const CHAVE_LEGADA = 'acpm2';
 const PREFIXO_DIA = 'acpm4_dia_';
 const CHAVE_HISTORICO = 'acpm4_historico';
-const CHAVE_AGENDA = 'acpm4_agenda';
+export const CHAVE_AGENDA = 'acpm4_agenda';
 // A marca da conversão dos pedidos de antes da aprovação (feita uma vez, na primeira leitura ou gravação da agenda)
 const CHAVE_DA_CONVERSAO = 'acpm4_agenda_aprovacoes';
 const CHAVE_DADOS_PESSOAIS = 'acpm4_dados_pessoais';
