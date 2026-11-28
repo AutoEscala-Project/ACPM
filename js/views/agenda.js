@@ -18,8 +18,9 @@ import { esc, opts, hm, fmtH, somarDias, chaveDeBusca } from '../format.js';
 import { registraNaAgenda, operaEscala } from '../perfis.js';
 import {
   recursosDaMissao, recursoValido, missoesDoAluno, FUSO_DO_AEROCLUBE, prazoDaAgendaPermite, prazoDaData, datasParaRegistrar, hojeEmSaoPaulo, situacaoDaSolicitacao,
-  situacaoNaDemanda, solicitacoesParaImportar, opcoesDaSegundaPreferencia, textoDasNovidades, solicitacaoAprovada
+  situacaoNaDemanda, solicitacoesParaImportar, opcoesDaSegundaPreferencia, textoDasNovidades, solicitacaoAprovada, agoraEmSaoPaulo
 } from '../agenda.js';
+import { porQueOVooFica, POR_QUE_FICA, PEDEM_CONFERIR } from '../processamento.js';
 import { primeiroDaListaDeEspera } from '../rejeicoes.js';
 import { solicitacoesDaData, solicitacoesDaDataLidas, lerSolicitacoesDaData } from '../solicitacoes-da-data.js';
 
@@ -242,6 +243,14 @@ function naDemanda(p) {
 // aguardam ou foram cancelados e ainda voam na demanda
 const foraDaDemanda = lista => solicitacoesParaImportar(lista, S).filter(alunoAtivo);
 const aindaNaDemanda = lista => lista.filter(p => situacaoDaSolicitacao(p) !== 'aprovada' && situacaoNaDemanda(p, S) === 'voa');
+// O que a conciliação ("Tirar da escala", "Importar") faria agora com o voo do pedido cancelado ou sem a aprovação que ainda
+// voa (js/processamento.js, porQueOVooFica, com a data aberta e o agora de São Paulo): null, ele sai; senão, por que fica
+export function porQueOVooDoPedidoFica(p) {
+  const { data: hoje, minuto: agora } = agoraEmSaoPaulo();
+  return porQueOVooFica(S, p.id, { data: DATA, hoje, agora });
+}
+// "fica na escala: com o status Cancelado" ou "fica até o status ser conferido: atrasado"
+export const comoOVooFica = porque => (PEDEM_CONFERIR.includes(porque) ? `fica até o status ser conferido: ${POR_QUE_FICA[porque]}` : `fica na escala: ${POR_QUE_FICA[porque]}`);
 
 // O estado do pedido, com quem e quando (a lista: a hora; o detalhe: o dia e a hora)
 function textoDaSituacao(p, comDia = false) {
@@ -395,10 +404,14 @@ function desenharAvisos() {
     const ainda = aindaNaDemanda(lista);
     if (ainda.length) {
       // "Tirar da escala": a conciliação (E, a mesma de "Importar"), que tira o voo de quem saiu e dá a vaga ao 1º da lista de
-      // espera do horário que couber nela; o voo atrasado ou que já decolou fica até o status ser conferido. Só o cancelado e o
-      // de aprovação retirada saem: o que nunca foi aprovado e voa (de antes da aprovação, D1) fica
-      const saem = ainda.filter(p => p.cancelada_em || p.aprovacao_retirada_em).length;
-      partes.push(`<p>${plural(ainda.length, 'pedido cancelado ou sem aprovação ainda está', 'pedidos cancelados ou sem aprovação ainda estão')} na demanda: ${esc(ainda.map(p => `${p.aluno_nome} (${descreverPedido(p)})`).join('; '))}.${podeImportar() && saem
+      // espera do horário que couber nela. Só o cancelado e o de aprovação retirada saem: o que nunca foi aprovado e voa (de
+      // antes da aprovação, D1) fica. O voo que a conciliação deixa (em voo, pousado, com o status Cancelado, com resultado;
+      // o atrasado ou que já decolou, até o status ser conferido) não conta para o botão, que nada faria: o aviso diz por
+      // que ele fica
+      const fica = new Map(ainda.filter(p => p.cancelada_em || p.aprovacao_retirada_em).map(p => [p.id, porQueOVooDoPedidoFica(p)]));
+      const saem = [...fica.values()].filter(porque => porque === null).length;
+      const doPedido = p => `${p.aluno_nome} (${descreverPedido(p)}${fica.get(p.id) ? ` · ${comoOVooFica(fica.get(p.id))}` : ''})`;
+      partes.push(`<p>${plural(ainda.length, 'pedido cancelado ou sem aprovação ainda está', 'pedidos cancelados ou sem aprovação ainda estão')} na demanda: ${esc(ainda.map(doPedido).join('; '))}.${podeImportar() && saem
         ? ` <button type="button" class="btn" id="agenda-conciliar" data-act="importar-agenda" aria-label="Tirar da escala ${saem === 1 ? 'o pedido cancelado ou sem aprovação' : `os ${saem} pedidos cancelados ou sem aprovação`}">Tirar da escala</button>` : ''}</p>`);
     }
   }

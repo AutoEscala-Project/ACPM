@@ -7,7 +7,7 @@ import { gravarAlteracao, logChange } from './actions.js';
 import { disponibilidadeDaSolicitacao, solicitacaoAprovada, agoraEmSaoPaulo } from './agenda.js';
 import { fmtH, hm, hojeISO } from './format.js';
 import { HORARIO_DO_SOLO, HORARIO_DO_NOTURNO } from './horarios.js';
-import { conciliarPedidos, aplicarConciliacao, resumoDaConciliacao } from './processamento.js';
+import { conciliarPedidos, aplicarConciliacao, resumoDaConciliacao, POR_QUE_FICA } from './processamento.js';
 import { redesenharPorNome } from './redesenho.js';
 import { rotuloDaDisponibilidade } from './rules.js';
 import { S, DATA, RES, dadoIndisponivel, estadoDaEscala, escalaDoMotor } from './state.js';
@@ -22,10 +22,10 @@ const textoDaEntrada = s => `Pedidos: ${s.aluno_nome} incluído (${doPedido(s)})
 // Concilia os pedidos dados (as linhas lidas da data) com o dia e grava, numa gravação só: uma entrada do Histórico por
 // pedido que entrou ou voltou ('inc') e uma por pedido que saiu ('exc', com quem entrou no lugar dele: a escala refeita em
 // volta dos fixos dá a vaga ao 1º da lista de espera que cabe, N14, também na escala aprovada, sem fixar quem entra: o
-// padrão do R5). so: só estes ids (a aprovação feita agora); religar: o aprovado guardado volta (a entrada na hora, D2).
+// padrão do R5). religar: o aprovado guardado volta (a entrada na hora, D2: quem chama passa só as linhas aprovadas agora).
 // Responde o resumo da conciliação, quantos entraram ou voltaram, quantos saíram (0 e 0: nada foi gravado) e se a gravação
 // saiu
-export function porNaDemanda(solicitacoes, { so = null, religar = false } = {}) {
+export function porNaDemanda(solicitacoes, { religar = false } = {}) {
   const importadasAntes = [...(S.importadas || [])];
   // A missão do curso escolhida no pedido vem dos programas lidos (S.programa), também com o progresso desligado; sem eles
   // lidos (null, como no formulário), o pedido que tem uma espera. A que o pedido não escolheu é inferida pelo programa da
@@ -33,7 +33,7 @@ export function porNaDemanda(solicitacoes, { so = null, religar = false } = {}) 
   const cursos = ['cursos', 'cursos-pendentes'].some(dadoIndisponivel) ? null : S.programa || [];
   const { data: hoje, minuto: agora } = agoraEmSaoPaulo();
   const plano = conciliarPedidos(S, solicitacoes, {
-    data: DATA, hoje, agora, aprovada: solicitacaoAprovada, so, religar, cursos, semInativos: inativoValeEm(DATA, hojeISO())
+    data: DATA, hoje, agora, aprovada: solicitacaoAprovada, religar, cursos, semInativos: inativoValeEm(DATA, hojeISO())
   });
   // A escala de antes (a da tela: quem espera em cada horário) e o motor da tela, para a vaga de quem sai
   const antes = RES && Array.isArray(RES.out) ? { estado: estadoDaEscala(), resultado: RES } : null;
@@ -59,7 +59,8 @@ export function porNaDemanda(solicitacoes, { so = null, religar = false } = {}) 
 
 // O que a entrada diz além de quantos entraram (" · 1 pedido de aluno inativo…"): os que esperam (fora do cadastro, de
 // inativo, sem os programas lidos), a missão do curso de cada um (fora do programa, inferida ou nenhuma), o horário de
-// cada um, os que saíram (com quem entrou no lugar) e os que ficam até o operador conferir o status
+// cada um, os que saíram (de onde, e quem entrou no lugar), os que ficam até o operador conferir o status e os que ficam
+// (em voo, pousados, com o status Cancelado, com resultado), com o porquê
 const quantos = n => `${n} ${n === 1 ? 'pedido' : 'pedidos'}`;
 const entrou = lista => (lista.length === 1 ? 'entrou' : 'entraram');
 // "nenhuma Navegação liberada é no PA-34": o pedido do aluno de um curso para o qual nenhuma missão liberada serve
@@ -69,7 +70,13 @@ const semMissao = ({ missao, recurso }) => `nenhuma ${missao} liberada${recurso 
 const foraDaLista = ({ missao, horario, recurso }) => `${missao} às ${horario} no ${recurso}`;
 // "Aluno 1000 (no lugar entrou Aluno 1001)": quem saiu e quem entrou na vaga (N14)
 const saiu = ({ aluno, entrou: outro }) => `${aluno}${outro ? ` (no lugar entrou ${outro})` : ''}`;
-const PORQUE_CONFERIR = { atrasado: 'atrasado', 'ja-decolou': 'já decolou' };
+// De onde saíram, como o Histórico diz: da escala, da lista de espera (o pedido que esperava, N14) ou dos pedidos da data
+// (o que não estava na escala)
+const DE_ONDE = { escala: 'da escala', espera: 'da lista de espera', pedidos: 'dos pedidos da data' };
+const sairamDe = sairam => Object.entries(DE_ONDE).map(([de, texto]) => {
+  const daqui = sairam.filter(x => (x.de || 'escala') === de);
+  return daqui.length ? ` · ${quantos(daqui.length)} ${daqui.length === 1 ? 'cancelado ou sem aprovação saiu' : 'cancelados ou sem aprovação saíram'} ${texto}: ${daqui.map(saiu).join('; ')}` : '';
+}).join('');
 export function notasDaEntrada(resumo) {
   const [pelaMissao, peloTipo] = [resumo.foraDoPrograma.filter(f => f.entrouComo), resumo.foraDoPrograma.filter(f => !f.entrouComo)];
   return (resumo.semAluno ? ` · ${resumo.semAluno} de aluno que não está no cadastro (entra depois de cadastrado)` : '') +
@@ -80,6 +87,7 @@ export function notasDaEntrada(resumo) {
     (resumo.semMissaoDoCurso.length ? ` · ${quantos(resumo.semMissaoDoCurso.length)} sem missão do curso: ${[...new Set(resumo.semMissaoDoCurso.map(semMissao))].join('; ')}` : '') +
     (resumo.foraDaLista.length ? ` · ${quantos(resumo.foraDaLista.length)} num horário fora da lista de decolagens do recurso (o horário fica): ${[...new Set(resumo.foraDaLista.map(foraDaLista))].join('; ')}` : '') +
     (resumo.semOHorario.length ? ` · ${quantos(resumo.semOHorario.length)} fora dos horários exatos do dia (das ${hm(HORARIO_DO_SOLO)} às ${hm(HORARIO_DO_NOTURNO)}), sem o horário exato (qualquer horário): ${[...new Set(resumo.semOHorario.map(foraDaLista))].join('; ')}` : '') +
-    (resumo.sairam.length ? ` · ${quantos(resumo.sairam.length)} ${resumo.sairam.length === 1 ? 'cancelado ou sem aprovação saiu' : 'cancelados ou sem aprovação saíram'} da escala: ${resumo.sairam.map(saiu).join('; ')}` : '') +
-    (resumo.conferir.length ? ` · ${quantos(resumo.conferir.length)} ${resumo.conferir.length === 1 ? 'cancelado ou sem aprovação fica' : 'cancelados ou sem aprovação ficam'} na escala até o status ser conferido (Pousou ou Cancelado): ${resumo.conferir.map(c => `${c.aluno} (${PORQUE_CONFERIR[c.porque]})`).join('; ')}` : '');
+    sairamDe(resumo.sairam) +
+    (resumo.conferir.length ? ` · ${quantos(resumo.conferir.length)} ${resumo.conferir.length === 1 ? 'cancelado ou sem aprovação fica' : 'cancelados ou sem aprovação ficam'} na escala até o status ser conferido (Pousou ou Cancelado): ${resumo.conferir.map(c => `${c.aluno} (${POR_QUE_FICA[c.porque]})`).join('; ')}` : '') +
+    ((resumo.ficam || []).length ? ` · ${quantos(resumo.ficam.length)} ${resumo.ficam.length === 1 ? 'cancelado ou sem aprovação fica' : 'cancelados ou sem aprovação ficam'} na escala: ${resumo.ficam.map(c => `${c.aluno} (${POR_QUE_FICA[c.porque]})`).join('; ')}` : '');
 }

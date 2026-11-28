@@ -66,8 +66,10 @@ const NOVAS = {
     'O pedido escolhido é só de leitura', 'Registrar de novo…', '2ª preferência é outro horário exato',
     'Registrar e aprovar', 'Registrar sem aprovar', 'Com Registrar na lista de espera',
     'Com Registrar mesmo assim, o pedido guarda quem confirmou e quando',
-    // E: o cancelado sai pela conciliação, e a vaga vai ao 1º da lista de espera
-    'continua na demanda até Tirar da escala', 'dá a vaga ao 1º da lista de espera daquele horário'],
+    // E: o cancelado sai pela conciliação, e a vaga vai ao 1º da lista de espera; o voo que fica diz por quê, e reverter não
+    // põe de volta o que saiu (a revisão do E)
+    'continua na demanda até Tirar da escala', 'dá a vaga ao 1º da lista de espera daquele horário', 'fica na escala, e o aviso diz por quê',
+    'não põe de volta o voo de um pedido que saiu da demanda'],
   // A busca sem acentos, quantos aparecem e o "Limpar filtros"; a coluna Vem (a data aberta não é sempre hoje); o filtro
   // das habilitações, com várias marcas e a regra ("todas as marcadas")
   instrutores: ['Editar habilitações', 'sem os acentos', '12 de 40 instrutores', 'Limpar filtros', 'o interruptor Vem', 'Filtro das habilitações',

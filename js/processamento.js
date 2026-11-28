@@ -18,18 +18,12 @@ import { hm } from './format.js';
 // Os pedidos de um aluno no dia: o principal (o próprio aluno, mid 0) e as missões extras
 const pedidosDoAluno = aluno => [aluno, ...(Array.isArray(aluno.extra) ? aluno.extra : [])];
 
-// Os minutos exatos do pedido (jan): "h<minuto>" (o horário da Agenda; o "h5" dos dados antigos é a janela 5) ou, com a
-// 2ª preferência (U1), "h<minuto1>|h<minuto2>", dois minutos diferentes, o 1º primeiro, entre as 06:30 e as 17:30
-// (minutosExatos, js/rules.js, o que o motor e as outras telas leem). Sem horário exato (sem jan, um período de antes do J
-// ou um valor fora do formato): nenhum
-export const minutosDoPedido = jan => minutosExatos(jan);
-
 // O horário do pedido no dia, em minutos: o do voo fixo; senão, o 1º minuto exato do pedido; senão, a 1ª preferência;
 // senão, null (desconhecido)
 function horarioPedido(estado, stuId, registro) {
   const pino = (estado.fixos || {})[chaveDoVoo(stuId, registro.mid || 0)];
   if (pino && Number.isInteger(pino.a)) return pino.a;
-  const [exato] = minutosDoPedido(registro.jan);
+  const [exato] = minutosExatos(registro.jan);
   if (exato !== undefined) return exato;
   const p1 = minutoDaPreferencia(registro.p1);
   return p1 >= 0 ? p1 : null;
@@ -52,6 +46,23 @@ export function ficaNaEscala(estado, { data = null, hoje = null, agora = null } 
   const pino = (estado.fixos || {})[fKey];
   if (data && data === hoje && Number.isInteger(agora) && pino && intervaloEfetivo(pino, status, (estado.fObs || {})[fKey]).a <= agora) return 'ja-decolou';
   return null;
+}
+
+// O porquê de ficaNaEscala em palavras, para os avisos (o de Pedidos, o do cancelamento, o da retirada e o da conciliação)
+export const POR_QUE_FICA = {
+  'data-passada': 'a data já passou', 'sem-os-resultados': 'sem os resultados dos cursos lidos', atrasado: 'atrasado',
+  'em-voo-ou-pousou': 'em voo ou pousado', 'cancelado-na-escala': 'com o status Cancelado', 'com-resultado': 'com o resultado registrado',
+  'ja-decolou': 'já decolou'
+};
+// Os porquês que pedem que o operador confira o status (o voo fica até lá)
+export const PEDEM_CONFERIR = ['atrasado', 'ja-decolou'];
+
+// O que a conciliação faria com o voo do pedido (id) que sai, cancelado ou com a aprovação retirada, sem mudar nada:
+// null, ele sai; senão, o porquê de ficaNaEscala (momento: { data, hoje, agora }). O pedido sem registro que voa: undefined
+export function porQueOVooFica(estado, id, momento = {}) {
+  const achado = registrosDosPedidos(estado).get(id);
+  if (!achado || !achado.registro.fly) return undefined;
+  return ficaNaEscala(estado, momento, achado.aluno.id, achado.mid);
 }
 
 // O registro de cada pedido no dia (o pedido do aluno com solicitacao: <id>): Map do id para { aluno, registro, mid }
@@ -121,7 +132,7 @@ export function conciliarPedidos(estado, solicitacoes, { data = null, hoje = nul
       if (voa) {
         const item = { ...doRegistro, motivo: cancelada ? 'cancelado' : 'sem-aprovacao' };
         const porque = ficaNaEscala(estado, { data, hoje, agora }, achado.aluno.id, achado.mid);
-        if (porque === 'atrasado' || porque === 'ja-decolou') plano.conferir.push({ ...item, porque });
+        if (PEDEM_CONFERIR.includes(porque)) plano.conferir.push({ ...item, porque });
         else if (porque) plano.ficam.push({ ...item, porque });
         else plano.saem.push(item);
       } else if (cancelada && guardada) plano.acertos.esquecer.push(s.id);
@@ -252,7 +263,7 @@ function entrar(estado, s, { programa, situacao, cursos }) {
   // O horário exato da linha que o voo não guarda (fora dos horários exatos do dia, das 06:30 às 17:30: js/rules.js,
   // minutoExato; antes, as 06:00 que a lista de decolagens aceita, ou depois, as 18:00 que o servidor aceita): o pedido
   // entra sem ele, e o resumo diz; não está "fora da lista"
-  const semOHorario = Number.isFinite(minutoDaLinha(s)) && !minutosDoPedido(pedido.jan).length;
+  const semOHorario = Number.isFinite(minutoDaLinha(s)) && !minutosExatos(pedido.jan).length;
   const foraDaLista = !semOHorario && horarioForaDaLista(estado, s, pedido.eq);
   // A missão do curso dada pelo programa leva a marca (etapaDoPrograma, formato 30): a do pedido e a do operador, não
   if (entrada.missao) Object.assign(pedido, { etapa: entrada.missao.codigo }, entrada.curso ? { cursoDaEtapa: entrada.curso } : {}, entrada.de === 'programa' ? { etapaDoPrograma: true } : {});
@@ -288,7 +299,7 @@ function listaDeEspera(estado, resultado) {
     const registro = aluno ? pedidoDoAluno(aluno, mid) : null;
     if (!registro) continue;
     const marcada = alerta.espera && Number.isInteger(alerta.espera.minuto) ? alerta.espera : null;
-    const minuto = marcada ? marcada.minuto : RECUSAS_POR_LUGAR.includes(alerta.codigo) ? minutosDoPedido(registro.jan)[0] : undefined;
+    const minuto = marcada ? marcada.minuto : RECUSAS_POR_LUGAR.includes(alerta.codigo) ? minutosExatos(registro.jan)[0] : undefined;
     if (minuto === undefined) continue;
     const lugar = (porMinuto.get(minuto) || 0) + 1;
     porMinuto.set(minuto, lugar);
@@ -309,7 +320,11 @@ function textoDaSaida(estado, { nome, mis, motivo, linha, deixouDeSerFixo, entro
     : esperava ? ` · era o ${esperava.lugar}º` : semLinha ? ' · não estava na escala' : '';
   const deOnde = esperava ? `da lista de espera das ${hm(esperava.minuto)}` : semLinha ? 'dos pedidos da data' : 'da escala';
   const porque = motivo === 'cancelado' ? 'pedido cancelado' : 'aprovação retirada';
-  const quem = entrou ? `; no lugar entrou ${entrou.nome} (${entrou.lugar}º da lista de espera das ${hm(entrou.minuto)})` : '';
+  // Quem entrou: o da lista de espera, com o lugar dele nela; o outro pedido que foi para o lugar livre (a rodada do motor
+  // na escala não aprovada: o que estava em outro horário, ou fora da escala), com de onde veio
+  const veio = !entrou ? '' : Number.isInteger(entrou.lugar) ? `${entrou.lugar}º da lista de espera das ${hm(entrou.minuto)}`
+    : entrou.de ? `estava às ${hm(entrou.de.a)} no ${entrou.de.r}` : 'estava fora da escala';
+  const quem = entrou ? `; no lugar entrou ${entrou.nome} (${veio})` : '';
   return `Pedidos: ${nome} saiu ${deOnde}, ${porque} (${mis}${onde}${deixouDeSerFixo ? ' · deixa de ser fixo' : ''})${quem}`;
 }
 
@@ -326,7 +341,7 @@ function textoDaSaida(estado, { nome, mis, motivo, linha, deixouDeSerFixo, entro
 // lista de espera daquele horário que cabe nele (N14; o padrão do R5: também na escala aprovada, sem fixar quem entra), e
 // a linha da saída diz quem entrou. programa, situacao, cursos: os de missaoDaEntrada
 export function aplicarConciliacao(estado, plano, { programa = [], situacao = [], cursos = [], antes = null, escalar = null } = {}) {
-  const feito = { entraram: [], voltaram: [], sairam: [], conferir: [], admitidas: [], esquecidas: [], historico: [] };
+  const feito = { entraram: [], voltaram: [], sairam: [], conferir: [], ficam: [], admitidas: [], esquecidas: [], historico: [] };
   if (!Array.isArray(estado.importadas)) estado.importadas = [];
   const guardar = id => { if (!estado.importadas.includes(id)) estado.importadas.push(id); };
   const tirar = id => { estado.importadas = estado.importadas.filter(x => x !== id); };
@@ -337,6 +352,7 @@ export function aplicarConciliacao(estado, plano, { programa = [], situacao = []
   const acertos = plano.acertos || { admitir: [], esquecer: [] };
   for (const id of acertos.admitir) { guardar(id); feito.admitidas.push(id); }
   for (const id of acertos.esquecer) { tirar(id); feito.esquecidas.push(id); }
+  const doFKey = fKey => { const [stuId, mid] = fKey.split('_').map(Number); return { stuId, mid }; };
   const doRegistro = ({ stuId, mid }) => {
     const aluno = estado.stu.find(x => x.id === stuId);
     return aluno ? { aluno, registro: pedidoDoAluno(aluno, mid) } : {};
@@ -369,19 +385,31 @@ export function aplicarConciliacao(estado, plano, { programa = [], situacao = []
   }
   // O lugar de cada voo que saiu vai, na rodada do motor, ao primeiro da lista de espera do horário dele que cabe
   const livres = feito.sairam.filter(x => x.linha);
-  if (livres.length && espera.length && escalar) {
+  if (livres.length && escalar) {
     const depois = escalar(estado);
     const linhaDepois = new Map((depois.resultado.out || []).map(o => [o.fKey, o]));
     const usados = new Set();
     for (const x of livres) {
       const entrou = espera.filter(e => !usados.has(e.fKey) && linhaDepois.has(e.fKey) && linhaDepois.get(e.fKey).a === x.linha.a)
         .sort((p, q) => (p.minuto === x.linha.a ? 0 : 1) - (q.minuto === x.linha.a ? 0 : 1) || p.lugar - q.lugar)[0];
-      if (entrou) { usados.add(entrou.fKey); x.entrou = entrou; }
+      if (entrou) { usados.add(entrou.fKey); x.entrou = entrou; continue; }
+      // Nenhum da lista de espera: o lugar pode ter ido a outro pedido, que a rodada (na escala não aprovada, sem fixos)
+      // pôs nesse horário: o de antes na fila que estava em outro horário (a 2ª preferência, U1, ou o horário flexível) ou
+      // fora da escala; o do mesmo recurso primeiro. O Histórico diz quem é e de onde veio
+      const outro = [...linhaDepois.values()]
+        .filter(o => !usados.has(o.fKey) && o.a === x.linha.a && !(linhasDeAntes.has(o.fKey) && linhasDeAntes.get(o.fKey).a === o.a) && doRegistro(doFKey(o.fKey)).aluno)
+        .sort((p, q) => (p.r === x.linha.r ? 0 : 1) - (q.r === x.linha.r ? 0 : 1))[0];
+      if (outro) {
+        usados.add(outro.fKey);
+        const de = linhasDeAntes.get(outro.fKey) || null;
+        x.entrou = { fKey: outro.fKey, nome: doRegistro(doFKey(outro.fKey)).aluno.nm, de: de ? { a: de.a, r: de.r } : null };
+      }
     }
   }
   for (const x of feito.sairam) feito.historico.push(['exc', textoDaSaida(estado, x)]);
-  // Os que ficam até o operador conferir o status (nada muda): o aluno, para o aviso
+  // Os que ficam até o operador conferir o status e os que ficam (nada muda): o aluno, para o aviso
   for (const x of plano.conferir || []) { const { aluno } = doRegistro(x); if (aluno) feito.conferir.push({ ...x, nome: aluno.nm }); }
+  for (const x of plano.ficam || []) { const { aluno } = doRegistro(x); if (aluno) feito.ficam.push({ ...x, nome: aluno.nm }); }
   return feito;
 }
 
@@ -391,8 +419,9 @@ export function aplicarConciliacao(estado, plano, { programa = [], situacao = []
 // missão como a qual ele entrou, entrouComo: a inferida ou a do operador; null, pelo tipo; nenhuma inferida,
 // semMissaoDoCurso); o horário exato que a lista do recurso não tem (foraDaLista: a missão, o recurso e o horário) e o que
 // entrou sem ele, fora dos horários exatos do dia, antes das 06:30 ou depois das 17:30 (semOHorario, os mesmos campos); os
-// que saíram (sairam: o aluno e quem entrou no lugar, null: ninguém) e os que ficam até o operador conferir o status
-// (conferir: o aluno e o porquê, 'atrasado' ou 'ja-decolou')
+// que saíram (sairam: o aluno, quem entrou no lugar, null: ninguém, e de onde saiu, de: 'escala', 'espera', da lista de
+// espera, ou 'pedidos', dos pedidos da data, sem estar na escala), os que ficam até o operador conferir o status
+// (conferir: o aluno e o porquê, 'atrasado' ou 'ja-decolou') e os que ficam (ficam: o aluno e o porquê de ficaNaEscala)
 export function resumoDaConciliacao(plano, feito) {
   return {
     novos: feito.entraram.filter(x => x.novo).length, atualizados: feito.entraram.filter(x => !x.novo).length + feito.voltaram.length,
@@ -401,7 +430,8 @@ export function resumoDaConciliacao(plano, feito) {
     semMissaoDoCurso: feito.entraram.filter(x => x.semMissao).map(x => x.semMissao), esperamOsProgramas: plano.esperamOsProgramas.length,
     foraDaLista: feito.entraram.filter(x => x.foraDaLista).map(x => x.foraDaLista),
     semOHorario: feito.entraram.filter(x => x.semOHorario).map(x => x.semOHorario),
-    sairam: feito.sairam.map(x => ({ aluno: x.nome, entrou: x.entrou ? x.entrou.nome : null })),
-    conferir: feito.conferir.map(x => ({ aluno: x.nome, porque: x.porque }))
+    sairam: feito.sairam.map(x => ({ aluno: x.nome, entrou: x.entrou ? x.entrou.nome : null, de: x.esperava ? 'espera' : x.semLinha ? 'pedidos' : 'escala' })),
+    conferir: feito.conferir.map(x => ({ aluno: x.nome, porque: x.porque })),
+    ficam: (feito.ficam || []).map(x => ({ aluno: x.nome, porque: x.porque }))
   };
 }

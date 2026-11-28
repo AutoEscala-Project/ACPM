@@ -3,6 +3,7 @@
 import { gravarAlteracao, aindaNaoAbriu, fotoDaEscalaTravada, gravarNaEscala } from '../actions.js';
 import { GROUND_EQ_TYPE, GROUND_DURATION_H, MIS } from '../config.js';
 import { $, showToast, ligarMenu, trocarElemento } from '../dom.js';
+import { motivoParaNaoVoltarAVoar } from '../reversoes.js';
 import { semAgendados, limparDemanda, fixarNoLugar, pinosDoNoturnoQueValem } from '../fixos.js';
 import { fmtDurLabel } from '../format.js';
 import { ligada } from '../funcionalidades.js';
@@ -262,10 +263,11 @@ aoMudarCampo('d', (t, { f, c, id, mid }) => {
     const anterior = target[f];
     // A prioridade: a tela mostra 1 como a mais alta, e o pedido guarda 5 (js/rules.js, prioridadeGuardada)
     target[f] = (f === 'mis' || f === 'eq') ? t.value : f === 'pr' ? prioridadeGuardada(+t.value) : +t.value;
-    // Missão, recurso ou horas mudados à mão: o pedido deixa de ser a missão do curso (o código e o curso dela), e o voo
-    // agendado dele na Escala deixa de ser fixo. A mesma duração digitada de outro jeito (1.0 no lugar de 1) não muda o voo
+    // Missão, recurso ou horas mudados à mão: o pedido deixa de ser a missão do curso (o código, o curso e a marca do
+    // programa, etapaDoPrograma, formato 30), e o voo agendado dele na Escala deixa de ser fixo. A mesma duração digitada
+    // de outro jeito (1.0 no lugar de 1) não muda o voo
     const mudouOVoo = ['mis', 'eq', 'nb'].includes(f) && target[f] !== anterior;
-    if (mudouOVoo) for (const campo of ['etapa', 'cursoDaEtapa']) delete target[campo];
+    if (mudouOVoo) for (const campo of ['etapa', 'cursoDaEtapa', 'etapaDoPrograma']) delete target[campo];
     // A confirmação do 7º voo local (Q8) foi dada na Agenda para a missão e o recurso de antes: com outros, ela não vale
     if (mudouOVoo && f !== 'nb') delete target.limiteConfirmado;
     const solto = mudouOVoo ? soltarAgendado(s.id, mid) : '';
@@ -297,9 +299,12 @@ aoMudarCampo('d', (t, { f, c, id, mid }) => {
 // "↶ Reverter" no histórico (js/eventos/historico.js): os tipos desta tela. A reversão chega validada (js/reversoes.js)
 // Na escala aprovada, sem o motor (F1g): o voo com pino volta para o pino; o pedido sem pino (tirado antes da
 // aprovação) entra no dia, e o motor o encaixa em volta dos fixos (R5)
+// O pedido da agenda que a conciliação tirou da demanda depois (cancelado ou sem a aprovação) não volta a voar (o E)
 aoReverter('setFly', (rev, entry) => {
   const st = stuBy(rev.stuId);
   const target = getMissionTarget(rev.stuId, rev.mid || 0);
+  const naoVolta = st && target && rev.val ? motivoParaNaoVoltarAVoar(S, [target, ...(rev.extras || []).map(m => getMissionTarget(rev.stuId, m))]) : '';
+  if (naoVolta) { showToast(naoVolta); return; }
   if (st && target) {
     const foto = fotoDaEscalaTravada();
     target.fly = rev.val;

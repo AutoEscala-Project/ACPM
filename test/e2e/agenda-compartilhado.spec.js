@@ -806,7 +806,7 @@ test.describe('A página dos pedidos (modo compartilhado)', () => {
     await expect(botaoDosPedidos(page, 'conciliar')).toHaveCount(0);
     await botaoDaAba(page, 'dem').click();
     await importarDaAgenda(page);
-    await expect(page.locator('#toast-box')).toContainText('Nenhum pedido entrou na demanda em 11/11 · 1 cancelado ou sem aprovação fica na escala: Aluno 1000 (com o status Cancelado).');
+    await expect(page.locator('#toast-box')).toContainText('Nenhum pedido entrou na demanda em 11/11 · 1 pedido cancelado ou sem aprovação fica na escala: Aluno 1000 (com o status Cancelado).');
     expect(servidor.gravacoes).toEqual([]);
     expect(erros).toEqual([]);
   });

@@ -36,9 +36,14 @@ async function importarDaAgenda() {
   if (aindaNaoAbriu()) return;
   // O pedido do aluno inativo no cadastro fica de fora (entra quando ele voltar a ativo): não conta como novo
   const { resumo, entraram, sairam } = porNaDemanda(solicitacoes);
+  // Nada entrou nem saiu: sem outra nota, nenhum aprovado está fora da demanda (o de aluno inativo espera, como D dizia);
+  // com uma (o aprovado de aluno fora do cadastro, o que espera os programas, o voo do cancelado que fica), nenhum entrou,
+  // e a nota diz por quê
   if (!entraram && !sairam) {
     const inativos = resumo.deInativo;
-    showToast(`Nenhum pedido aprovado fora da demanda em ${DATA.slice(8, 10)}/${DATA.slice(5, 7)}${inativos ? ` (${inativos} de aluno inativo, que entram quando ele voltar a ativo)` : ''}${notasDaEntrada({ ...resumo, deInativo: 0 })}.`);
+    const notas = notasDaEntrada({ ...resumo, deInativo: 0 });
+    const data = `${DATA.slice(8, 10)}/${DATA.slice(5, 7)}`;
+    showToast(`${notas ? `Nenhum pedido entrou na demanda em ${data}` : `Nenhum pedido aprovado fora da demanda em ${data}`}${inativos ? ` (${inativos} de aluno inativo, que entram quando ele voltar a ativo)` : ''}${notas}.`);
     lerSolicitacoesDaData();
     return;
   }
