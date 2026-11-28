@@ -78,6 +78,8 @@ const NOVAS = {
     'A lista dos recursos fica à esquerda, por categoria', 'um clique no nome da categoria abre o detalhe dela', 'Buscar matrícula', '3 de 27 recursos',
     'desligue Disponível, na linha do recurso', 'Agendar voo no PR-VOB', 'Mostrar inativos', 'o ponto da linha',
     'Veja em Recursos se ele está disponível nesta data', 'Exigir também…', 'Quem pode operar',
+    // A categoria sem recurso à vista continua na lista (linha-fix-categorias-vazias)
+    'A categoria sem recurso à vista (todos inativos, ou nenhum na frota) continua na lista',
     // O "Disponível" da Sala Ground (J, S4; revisão do J)
     'A Sala Ground também tem Disponível em cada data', 'A Sala Ground está indisponível nesta data', 'a Sala Ground indisponível'],
   // Cursos: um de cada vez, o índice das fases, as fases recolhidas e os alunos por fase
