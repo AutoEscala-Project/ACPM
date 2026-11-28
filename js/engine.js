@@ -16,7 +16,7 @@ import { compactar, custoDaEscala } from './compactar.js';
 import { contextoDaEscala, contextoDaEscalaMontada, filaDosPedidos, conferirFixos, concluirEscala, avisosDoPriorizarCom } from './conferencia.js';
 import { chaveDoVoo, statusDoVoo, unidadeDoVoo, ocupacaoDoVoo, compromissoDoVoo, exigeDosVoos, pedidosDosVoos } from './voo.js';
 import { menorPrimeiro, soma, paradasEntre } from './util.js';
-import { comAlmocoDoMotor } from './almoco.js';
+import { comAlmocoDoMotor, avisosDoAlmoco, horasParaOAlmoco } from './almoco.js';
 
 // Entre os instrutores possíveis, primeiro os que têm menos habilitações: os mais versáteis ficam livres
 const qtdHabilitacoes = x => (Array.isArray(x.hab) ? x.hab.length : 0);
@@ -221,9 +221,7 @@ function equalizarHoras(out, state, limites, historico, almoco) {
 const MOTIVO_SEM_PAR = {
   disp: 'indisponível nos horários possíveis', busy: 'ocupado nos horários possíveis', bloq: 'em “Não escalar com”',
   limite: 'no limite da Lei do Aeronauta', peso: 'peso acima do limite do avião',
-  aviaoProprio: 'sem a habilitação que os aviões livres exigem',
-  // O almoço do INVA (#104) vem antes do “Priorizar com”: o voo vai para outro INVA para ele ficar com a hora livre
-  almoco: 'sem a hora de almoço livre nos horários possíveis'
+  aviaoProprio: 'sem a habilitação que os aviões livres exigem'
 };
 function motivoSemPar(doPar, stu, d, tipo, fc) {
   if (doPar.every(x => !x.on)) return 'fora nesta data';
@@ -258,9 +256,10 @@ function minutoDaEspera(d, recusa) {
 // O rodízio (C172, PA-34, cheques, Noturno) não muda: o voo de uma categoria do rodízio troca de instrutor com um voo da
 // mesma categoria (cada instrutor continua com os mesmos voos da categoria), e só passa para um instrutor sem voo no
 // horário quando ele é do “Priorizar com” do aluno (como na fila, onde o “Priorizar com” vem antes da vez no rodízio);
-// nenhum voo tira o instrutor de um voo do rodízio sem pôr nele outro da mesma categoria. Quem recebe um voo não perde o
-// almoço (almoco, #104). Devolve se algum voo mudou
-function parearNoHorario(out, state, { limites, historico, frota, act, almoco }) {
+// nenhum voo tira o instrutor de um voo do rodízio sem pôr nele outro da mesma categoria. O almoço do motor (#104) não
+// barra o pareamento: o “Priorizar com” é do operador e vem antes dele (o INVA que fica sem a hora tem o aviso). Devolve se
+// algum voo mudou
+function parearNoHorario(out, state, { limites, historico, frota, act }) {
   const alunos = new Map(state.stu.map(s => [s.id, s]));
   const porId = new Map(state.ins.map(x => [x.id, x]));
   const pedidoDe = pedidosDosVoos(state.stu);
@@ -290,7 +289,7 @@ function parearNoHorario(out, state, { limites, historico, frota, act, almoco })
     const s = alunos.get(o.stuId);
     if (o.limKg && !x.kg) return false;
     return !problemasDoInstrutor(x, { mis: o.mis, tipo: o.eqType, a: o.a, b: o.b, alunos: [s], stuKg: s.kg, curso: s.curso, recurso: recursoDaFrota(frota, o.r), exige: pedidoDe(o).exige },
-      { compromissos: compromissosDe(x.id, sai), historico: historico(x.id), limites, peso: { reducaoMaxima: o.comb ? o.comb.reduzirGal : 0, exigirPesoDoInstrutor: true }, almoco }).length;
+      { compromissos: compromissosDe(x.id, sai), historico: historico(x.id), limites, peso: { reducaoMaxima: o.comb ? o.comb.reduzirGal : 0, exigirPesoDoInstrutor: true } }).length;
   };
   // Para quem o voo pode passar: o aluno sem o instrutor dele e quem está com um, só para os do “Priorizar com”; os outros,
   // para qualquer um do cadastro
@@ -370,10 +369,12 @@ export function semAPrioridadeNosMotivos(resultado) {
 }
 
 // O que a regra do almoço (#104, js/viabilidade.js) recusou numa montagem: quantas vezes, de cada INVA e em cada pedido
-// (pedido: o que encaixar está pondo; a divisão das horas, a compactação e o pareamento não são de um pedido)
-function almocoDa(guarda) {
+// (pedido: o que encaixar está pondo; a divisão das horas, a compactação e o pareamento não são de um pedido). horas: a
+// hora reservada de alguns INVAs da guarda ({ de, ate }); antes: os pedidos que vêm antes dos outros voos na fila (os
+// dois, devolverAlmocos)
+export function almocoDa(guarda, horas = new Map(), antes = new Set()) {
   const almoco = {
-    guarda, recusas: 0, porInstrutor: new Map(), porPedido: new Map(), pedido: null,
+    guarda, horas, antes, recusas: 0, porInstrutor: new Map(), porPedido: new Map(), pedido: null,
     recusou(id) {
       almoco.recusas++;
       almoco.porInstrutor.set(id, (almoco.porInstrutor.get(id) || 0) + 1);
@@ -383,43 +384,115 @@ function almocoDa(guarda) {
   return almoco;
 }
 
+// O que a guarda e devolverAlmocos leem de uma montagem: a escala de antes do pareamento no horário do “Priorizar com”
+// (montarEscala guarda, fora do resultado: as linhas, os INVAs sem almoço e os voos com um INVA do “Priorizar com”). O
+// pareamento só troca o INVA depois, sem mudar horário nem avião, e não lê o almoço: as decisões do almoço não dependem
+// dele (sem ele, os mesmos horários e aviões)
+const ANTES_DO_PAREAMENTO = new WeakMap();
+const linhasDe = resultado => ANTES_DO_PAREAMENTO.get(resultado).out;
+const escaladosDe = resultado => new Set(resultado.out.filter(o => !o.trecho).map(o => o.fKey));
+const semAlmocoEm = resultado => ANTES_DO_PAREAMENTO.get(resultado).semAlmoco;
+const comOParEm = resultado => ANTES_DO_PAREAMENTO.get(resultado).comOPar;
+const contido = (menor, maior) => [...menor].every(k => maior.has(k));
+
 // O almoço do motor (#104; Pedro, 28/11), branda: para cada INVA que vem na data, sem uma pausa que já cubra 1 h de 11:00 a
-// 14:00 (js/almoco.js), o motor tenta deixar uma hora livre seguida nessa janela, e só desiste dela quando mantê-la
-// tiraria um voo da escala. Duas peças: em cada pedido, a busca com o almoço e, se ela não encaixou por causa dele, a de
-// sempre (encaixar); e esta guarda, para o caso indireto (guardar o almoço de um INVA empurrou um voo para o lugar de outro
-// pedido, que caiu). A guarda: a escala com o almoço de todos; se a regra não recusou nada, ela é a de sempre (as mesmas
-// decisões). Senão, monta também sem o almoço; enquanto algum pedido escalado ali fica fora, um INVA perde o almoço
-// (quemPerdeOAlmoco) e a escala é montada de novo; sem ninguém com o almoço, ela é a de sempre. Termina (cada volta tira
-// um INVA), é determinística (o cadastro e a fila) e nenhum pedido que o motor escala sem o almoço fica fora com ele. A
-// reserva não é gravada; o aviso de quem ficou sem a hora livre sai da escala pronta (js/conferencia.js, concluirEscala)
+// 14:00 (js/almoco.js), o motor tenta deixar uma hora livre seguida nessa janela, e só desiste dela quando não acha como
+// mantê-la sem tirar um voo da escala (ou quando o operador pôs o voo ali: o fixo, o instrutor escolhido, o “Priorizar com”).
+// Três peças: em cada pedido e em cada passada (o “Priorizar com” antes), a busca com o almoço e, se ela não encaixou por
+// causa dele, a de sempre (encaixar); a guarda, para o caso indireto (guardar o almoço de um INVA empurrou um voo para o
+// lugar de outro pedido, que caiu, ou para fora do INVA do “Priorizar com” dele); e, no fim, devolverAlmocos. A guarda: a
+// escala com o almoço de todos; se a regra não recusou nada, ela é a de sempre (as mesmas decisões). Senão, monta também
+// sem o almoço; enquanto algum pedido escalado ali fica fora, ou perde o INVA do “Priorizar com” que tinha ali, um INVA
+// perde o almoço (quemPerdeOAlmoco) e a escala é montada de novo; sem ninguém com o almoço, ela é a de sempre. Termina (cada
+// volta tira um INVA), é determinística (o cadastro e a fila) e nenhum pedido que o motor escala sem o almoço fica fora com
+// ele, nem sem o “Priorizar com” que tinha. A reserva não é gravada; o aviso de quem ficou sem a hora livre sai da escala
+// pronta (js/conferencia.js, concluirEscala). Medido nos 1.500 dias gerados das invariantes: 518 INVAs sem a hora livre
+// (2.065 sem o almoço do motor; 636 sem devolverAlmocos); 5 ms por dia (1,2 ms sem o almoço), até 30 montagens num dia
 export function runAllocationEngine(state, opcoes = {}) {
+  return montarComOAlmoco(state, opcoes).resultado;
+}
+
+// O motor com o almoço e a configuração em que ele terminou (a guarda, as horas reservadas e os pedidos postos antes na
+// fila, devolverAlmocos): runAllocationEngine e os testes que conferem que nenhuma mudança de um INVA nela daria a escala
+// com menos INVAs sem almoço
+export function montarComOAlmoco(state, opcoes = {}) {
   let guarda = new Set(opcoes.almoco === false ? [] : state.ins.filter(comAlmocoDoMotor).map(x => x.id));
-  if (!guarda.size) return montarEscala(state, opcoes, null);
+  if (!guarda.size) return { resultado: montarEscala(state, opcoes, null), almoco: null };
   let almoco = almocoDa(guarda);
   let resultado = montarEscala(state, opcoes, almoco);
-  if (!almoco.recusas) return resultado;
+  if (!almoco.recusas) return { resultado, almoco };
   const sem = montarEscala(state, opcoes, null);
-  const deSem = sem.out.filter(o => !o.trecho);
+  const deSem = linhasDe(sem).filter(o => !o.trecho), parSem = comOParEm(sem);
   const ordem = new Map(state.ins.map((x, i) => [x.id, i]));
   for (;;) {
-    const com = new Set(resultado.out.filter(o => !o.trecho).map(o => o.fKey));
-    const faltam = deSem.filter(o => !com.has(o.fKey));
-    if (!faltam.length) return resultado;
+    const com = escaladosDe(resultado), comPar = comOParEm(resultado);
+    const faltam = deSem.filter(o => !com.has(o.fKey) || (parSem.has(o.fKey) && !comPar.has(o.fKey)));
+    if (!faltam.length) break;
     guarda = new Set(guarda);
-    guarda.delete(quemPerdeOAlmoco(faltam, resultado.out, almoco, ordem));
-    if (!guarda.size) return sem;
+    guarda.delete(quemPerdeOAlmoco(faltam, linhasDe(resultado), almoco, ordem));
     almoco = almocoDa(guarda);
+    if (!guarda.size) { resultado = sem; break; }
     resultado = montarEscala(state, opcoes, almoco);
-    if (!almoco.recusas) return resultado;
+    if (!almoco.recusas) break;
   }
+  return devolverAlmocos(state, opcoes, almoco, resultado);
+}
+
+// Uma montagem é melhor que outra para o almoço quando escala todos os pedidos dela, deixa sem almoço só os INVAs que ela
+// deixava (menos ao menos um) e não tira de ninguém o INVA do “Priorizar com” que ela dava
+const melhorParaOAlmoco = (nova, atual) => {
+  const depois = semAlmocoEm(nova), antes = semAlmocoEm(atual);
+  return depois.size < antes.size && contido(depois, antes) && contido(escaladosDe(atual), escaladosDe(nova)) && contido(comOParEm(atual), comOParEm(nova));
+};
+
+// O que se pode mudar para um INVA sem almoço ter a hora livre (devolverAlmocos), na ordem: o almoço que a guarda tirou
+// volta; os pedidos que a regra recusou a ele e que ficaram com ele sem a hora vêm antes na fila (a busca põe um pedido de
+// cada vez: o de antes pode ter levado a hora que este só deixava ali); a hora dele reservada em cada uma das horas de
+// horasParaOAlmoco (js/almoco.js). Nenhuma, quando os voos fixos dele já tiram a hora
+function mudancasParaOAlmoco(state, x, almoco, resultado) {
+  const reservas = horasParaOAlmoco(state, linhasDe(resultado), x.id);
+  if (!reservas.length) return [];
+  const recusados = new Set(linhasDe(resultado).filter(o => o.insId === x.id && !o.fixo && (almoco.porPedido.get(o.fKey) || new Set()).has(x.id)).map(o => o.fKey));
+  const novos = [...recusados].filter(k => !almoco.antes.has(k));
+  return [
+    ...(almoco.guarda.has(x.id) ? [] : [{}]),
+    ...(novos.length ? [{ antes: novos }] : []),
+    ...reservas.map(hora => ({ hora }))
+  ];
+}
+
+// O almoço que a guarda tirou sem precisar, ou que a busca de um pedido por vez perdeu: para cada INVA sem almoço (com o
+// almoço do motor), na ordem do cadastro, a escala é montada de novo com cada mudança de mudancasParaOAlmoco, na ordem, e
+// fica a primeira melhor para o almoço (melhorParaOAlmoco); então a busca recomeça, com o que já mudou. Termina (cada troca
+// deixa menos INVAs sem almoço) e é determinística; nenhum pedido sai, e ninguém perde o “Priorizar com”
+function devolverAlmocos(state, opcoes, almocoInicial, inicial) {
+  let almoco = almocoInicial, resultado = inicial;
+  for (let melhorou = true; melhorou;) {
+    melhorou = false;
+    const antes = semAlmocoEm(resultado);
+    for (const x of state.ins) {
+      if (!antes.has(x.id) || !comAlmocoDoMotor(x)) continue;
+      for (const mudanca of mudancasParaOAlmoco(state, x, almoco, resultado)) {
+        const horas = new Map(almoco.horas);
+        if (mudanca.hora) horas.set(x.id, mudanca.hora);
+        const tentativa = almocoDa(new Set(almoco.guarda).add(x.id), horas, new Set([...almoco.antes, ...(mudanca.antes || [])]));
+        const nova = montarEscala(state, opcoes, tentativa);
+        if (melhorParaOAlmoco(nova, resultado)) {
+          [almoco, resultado, melhorou] = [tentativa, nova, true];
+          break;
+        }
+      }
+      if (melhorou) break;
+    }
+  }
+  return { resultado, almoco };
 }
 
 // Quem perde o almoço nesta volta da guarda: um INVA só, entre os que a regra recusou na montagem (tirar o de quem ela não
-// recusou nada não muda nenhuma decisão). Primeiro quem voava, sem o almoço, um pedido que ficou fora; depois quem a regra
-// recusou ao pôr um voo que ocupa o lugar de um deles (o INVA, o avião, a sala ou o aluno no horário que ele tinha sem o
-// almoço); depois quem ela recusou mais vezes; por último a ordem do cadastro. Medido nos 1.500 dias gerados das
-// invariantes: 636 INVAs sem a hora livre (2.065 sem o almoço do motor), contra 684 tirando todos os que voavam os pedidos
-// que ficaram fora (e, sem nenhum deles, todos)
+// recusou nada não muda nenhuma decisão). Primeiro quem voava, sem o almoço, um pedido que ficou fora (ou sem o “Priorizar
+// com”); depois quem a regra recusou ao pôr um voo que ocupa o lugar de um deles (o INVA, o avião, a sala ou o aluno no
+// horário que ele tinha sem o almoço); depois quem ela recusou mais vezes; por último a ordem do cadastro (o almoço que ela
+// tira sem precisar, devolverAlmocos devolve)
 function quemPerdeOAlmoco(faltam, out, almoco, ordem) {
   const recusados = [...almoco.porInstrutor.keys()].filter(id => almoco.guarda.has(id));
   const voavam = new Set(faltam.map(o => o.insId));
@@ -434,8 +507,15 @@ function quemPerdeOAlmoco(faltam, out, almoco, ordem) {
   return recusados.map(id => ({ id, chave: chave(id) })).reduce((p, q) => (vemAntes(q.chave, p.chave) ? q : p)).id;
 }
 
+// A fila com os pedidos de almoco.antes (devolverAlmocos) antes dos outros voos, na ordem deles; o Ground continua antes
+const comOsDeAntes = (act, almoco) => {
+  if (!almoco || !almoco.antes.size) return act;
+  const deAntes = item => !isGroundMission(item.ref.mis) && almoco.antes.has(chaveDoVoo(item.stuId, item.mid));
+  return [...act.filter(item => isGroundMission(item.ref.mis)), ...act.filter(deAntes), ...act.filter(item => !isGroundMission(item.ref.mis) && !deAntes(item))];
+};
+
 // O motor, com o almoço dos INVAs da guarda (almoco: almocoDa) ou sem ele (null)
-function montarEscala(state, opcoes, almoco) {
+export function montarEscala(state, opcoes, almoco) {
   const antesDoF1h = opcoes.antesDoF1h === true;
   // O que a escala gasta enquanto é montada e o que o estado diz de fixo (js/conferencia.js)
   const ctx = contextoDaEscala(state);
@@ -526,14 +606,14 @@ function montarEscala(state, opcoes, almoco) {
 
       const existingClasses = salaLivre ? openGroundClasses[d.mis] || [] : [];
       let chosenClass = null, fcGnd, fcDoPar = null, passadaUsada = null;
-      // O almoço (#104): primeiro com o almoço dos INVAs; se não encaixou e o almoço recusou alguém, de novo sem ele (o motor
-      // só desiste do almoço para o pedido não ficar fora). Sem recusa do almoço, a segunda seria a mesma: não roda
-      const recusasAntes = almoco ? almoco.recusas : 0;
-      for (const tentativa of almoco ? [almoco, null] : [null]) {
-        if (!tentativa && almoco && almoco.recusas === recusasAntes) break;
-        fcDoPar = null;
-        for (const passada of passadas) {
-          const naPassada = x => passada.pool.includes(x);
+      // O almoço (#104): em cada passada, primeiro com o almoço dos INVAs; se não encaixou e o almoço recusou alguém, de novo
+      // sem ele (o motor só desiste do almoço para o pedido não ficar fora, e o “Priorizar com” vem antes dele). Sem recusa do
+      // almoço, a segunda seria a mesma: não roda
+      for (const passada of passadas) {
+        const naPassada = x => passada.pool.includes(x);
+        const recusasAntes = almoco ? almoco.recusas : 0;
+        for (const tentativa of almoco ? [almoco, null] : [null]) {
+          if (!tentativa && almoco && almoco.recusas === recusasAntes) break;
 
           // 1ª Tentativa: Unir-se a uma turma já aberta da mesma temática de Ground (mesmo horário e mesmo instrutor)
           // A turma da 1ª preferência, depois a da 2ª, depois as outras (pelo horário: a turma fixa fora dos horários da
@@ -612,10 +692,10 @@ function montarEscala(state, opcoes, almoco) {
               break;
             }
           }
-          if (chosenClass) { passadaUsada = passada; break; }
-          if (!passada.semPar) fcDoPar = fcGnd;
+          if (chosenClass) break;
         }
-        if (chosenClass) break;
+        if (chosenClass) { passadaUsada = passada; break; }
+        if (!passada.semPar) fcDoPar = fcGnd;
       }
 
       if (chosenClass) {
@@ -750,12 +830,12 @@ function montarEscala(state, opcoes, almoco) {
     let fc, ch = null, fcDoPar = null, passadaUsada = null;
     const reducao = x => reducaoNecessaria({ stuKg: stu.kg, insKg: x.kg, tipo: d.eq, minutos: dur, mis: d.mis });
     const prev = stuLastPick[stuId] || null;
-    // O almoço (#104), como no Ground: primeiro com o almoço dos INVAs; sem encaixe e com uma recusa do almoço, de novo sem ele
-    const recusasAntes = almoco ? almoco.recusas : 0;
-    for (const tentativa of almoco ? [almoco, null] : [null]) {
-      if (!tentativa && almoco && almoco.recusas === recusasAntes) break;
-      fcDoPar = null;
-      for (const passada of passadas) {
+    // O almoço (#104), como no Ground: em cada passada, primeiro com o almoço dos INVAs; sem encaixe e com uma recusa do
+    // almoço, de novo sem ele (o “Priorizar com” vem antes do almoço)
+    for (const passada of passadas) {
+      const recusasAntes = almoco ? almoco.recusas : 0;
+      for (const tentativa of almoco ? [almoco, null] : [null]) {
+        if (!tentativa && almoco && almoco.recusas === recusasAntes) break;
         for (const comMenosCombustivel of [false, true]) {
           fc = { locais: 0, stu_busy: 0, eq: 0, revisao: 0, disp: 0, busy: 0, bloq: 0, limite: 0, peso: 0, aviaoProprio: 0, almoco: 0 };
           if (comMenosCombustivel && !lim) break;
@@ -798,10 +878,10 @@ function montarEscala(state, opcoes, almoco) {
           }
           if (ch || !fc.peso) break;
         }
-        if (ch) { passadaUsada = passada; break; }
-        if (!passada.semPar) fcDoPar = fc;
+        if (ch) break;
       }
-      if (ch) break;
+      if (ch) { passadaUsada = passada; break; }
+      if (!passada.semPar) fcDoPar = fc;
     }
 
     if (ch) {
@@ -896,12 +976,24 @@ function montarEscala(state, opcoes, almoco) {
   // confirmed we form a waiting list”): o pedido com um horário exato recusado só por falta de lugar nele (os 6 voos
   // locais, os aviões, os instrutores) espera por esse horário, na ordem da fila
   const naEspera = [];
-  for (const item of act) {
+  const doPedido = new Map(), antesDaFila = out.length;
+  for (const item of comOsDeAntes(act, almoco)) {
     if (chaveFixa(item)) continue;
-    const antes = al.length;
+    const alertas = [];
     if (almoco) almoco.pedido = chaveDoVoo(item.stuId, item.mid);
-    encaixar(item, ctx, al);
-    const recusa = al.slice(antes).find(a => a.t === 'err');
+    encaixar(item, ctx, alertas);
+    doPedido.set(item, alertas);
+  }
+  // As linhas, os avisos, as recusas e a lista de espera na ordem da fila (os pedidos que devolverAlmocos põe antes também)
+  if (almoco && almoco.antes.size) {
+    const naFila = new Map(act.map((item, i) => [chaveDoVoo(item.stuId, item.mid), i]));
+    out.push(...out.splice(antesDaFila).sort((p, q) => naFila.get(p.fKey) - naFila.get(q.fKey)));
+  }
+  for (const item of act) {
+    const alertas = doPedido.get(item);
+    if (!alertas) continue;
+    al.push(...alertas);
+    const recusa = alertas.find(a => a.t === 'err');
     const minuto = recusa && !antesDoF1h ? minutoDaEspera(item.ref, recusa) : null;
     if (minuto !== null) naEspera.push({ item, recusa, minuto });
   }
@@ -941,9 +1033,13 @@ function montarEscala(state, opcoes, almoco) {
   }
   // O “Priorizar com” escolhe o instrutor entre os voos de cada horário, sem mudar nenhum horário nem avião (F1h): a troca
   // de matrículas não roda de novo (o avião de cada voo já serve ao instrutor novo: parearNoHorario confere a habilitação
-  // própria do avião)
-  if (almoco) almoco.pedido = null;
-  if (!antesDoF1h && opcoes.parearNoHorario !== false) parearNoHorario(out, state, { limites, historico, frota, act, almoco });
+  // própria do avião). O que o almoço lê da montagem é de antes dele (ANTES_DO_PAREAMENTO)
+  const linhasAntes = out.map(o => ({ ...o }));
+  const antesDoPareamento = {
+    out: linhasAntes, semAlmoco: new Set(avisosDoAlmoco(state, linhasAntes).map(a => a.insId)),
+    comOPar: new Set(linhasAntes.filter(o => o.insPar || (semPar.has(o.fKey) && semPar.get(o.fKey).pares.includes(o.insId))).map(o => o.fKey))
+  };
+  if (!antesDoF1h && opcoes.parearNoHorario !== false) parearNoHorario(out, state, { limites, historico, frota, act });
   // O voo sem o instrutor do “Priorizar com”: o aviso diz quem ficou com ele (se a divisão das horas, a compactação ou o
   // pareamento no horário o passaram para um instrutor do “Priorizar com”, não há aviso). Com o F1h, os avisos do
   // “Priorizar com” saem de js/conferencia.js (avisosDoPriorizarCom): também as disputas e os voos postos à mão fora dele,
@@ -957,7 +1053,9 @@ function montarEscala(state, opcoes, almoco) {
   if (!antesDoF1h) al.push(...avisosDoPriorizarCom(state, out, { semPar }));
   // O que o motor confere depois de montar a escala, sem mover nenhum voo (js/conferencia.js)
   const revisao = concluirEscala(state, ctx, out, al, { antesDoF1h });
-  return { out, al, tot: act.length, revisao };
+  const resultado = { out, al, tot: act.length, revisao };
+  ANTES_DO_PAREAMENTO.set(resultado, antesDoPareamento);
+  return resultado;
 }
 
 // Calcula horas operacionais deduplicando turmas coletivas de Ground School

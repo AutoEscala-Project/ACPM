@@ -35,9 +35,10 @@ export const folgaAte = (ocupados, a, b) => ocupados.reduce((menor, [x, y]) => M
 // volta do noturno: a lei conta o voo, e o instrutor está ocupado no intervalo maior). jaOcupa: ele já está neste compromisso (o aluno que
 // entra na turma dele), então a ocupação e a lei não mudam. peso: null não confere; reducaoMaxima é o combustível a
 // menos aceito (0: só o tanque cheio) e exigirPesoDoInstrutor recusa o instrutor sem peso quando o peso importa.
-// almoco (#104, só o motor: js/engine.js e a compactação): { guarda, recusou }, os ids dos INVAs com o almoço do motor
-// (js/almoco.js) e o que anota cada recusa (o motor conta para saber se ela mudou alguma coisa, e de quem); a última regra,
-// depois das duras: o compromisso não leva a última hora livre de 11:00 a 14:00 de um INVA da guarda. Sem almoco, não
+// almoco (#104, só o motor: js/engine.js e a compactação): { guarda, horas, recusou }, os ids dos INVAs com o almoço do motor
+// (js/almoco.js), a hora reservada de alguns deles ({ de, ate }) e o que anota cada recusa (o motor conta para saber se ela
+// mudou alguma coisa, e de quem); a última regra, depois das duras: o compromisso não leva a última hora livre de 11:00 a
+// 14:00 de um INVA da guarda (com a hora reservada, não toca nela). Sem almoco, não
 // confere (a conferência dos fixos, os candidatos, as sugestões e o instrutor escolhido não o leem: a escolha do operador
 // vale, e a Escala mostra o aviso)
 export function problemasDoInstrutor(x, { mis, tipo, a, b, efetivo = { a, b }, alunos = [], stuKg = 0, curso, recurso, exige },
@@ -56,8 +57,13 @@ export function problemasDoInstrutor(x, { mis, tipo, a, b, efetivo = { a, b }, a
     return lei.ok || { motivo: lei.motivo };
   };
   const ocupados = () => compromissos.map(c => [c.ocupaDe ?? c.a, c.ocupaAte ?? c.b]);
+  // Com a hora reservada (almoco.horas, a que o motor tenta quando a busca de um pedido por vez deixou o INVA sem ela), o
+  // compromisso não a toca enquanto ela estiver livre; sem ela, não leva a última hora livre
   const guardaOAlmoco = () => {
-    if (!almoco || jaOcupa || !almoco.guarda.has(x.id) || !tiraOAlmoco(ocupados(), a, b)) return true;
+    if (!almoco || jaOcupa || !almoco.guarda.has(x.id)) return true;
+    const hora = almoco.horas ? almoco.horas.get(x.id) : null;
+    const tira = hora && livre(ocupados(), hora.de, hora.ate) ? sobrepoe(a, b, hora.de, hora.ate) : tiraOAlmoco(ocupados(), a, b);
+    if (!tira) return true;
     almoco.recusou(x.id);
     return false;
   };

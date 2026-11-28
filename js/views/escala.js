@@ -16,7 +16,7 @@ import { atualizarAgendamento } from './agendamento.js';
 import { resultadoNaEscala } from './etapas.js';
 import { OPCOES_DE_BURACOS, OPCOES_DE_HORARIOS, normalizarCriterios } from '../criterios.js';
 import { metricasDaEscala } from '../metricas.js';
-import { ehAvisoDoAlmoco } from '../almoco.js';
+import { ehAvisoDoAlmoco, INICIO_DO_SEM_ALMOCO } from '../almoco.js';
 import { ligada } from '../funcionalidades.js';
 import { sumUniqueOperationalHours, consolidateTimelineSlots } from '../engine.js';
 import { S, RES, AUDIT_LOG, TL_MODE, HORAS_NAS_COLUNAS, OCULTAR_INDISPONIVEIS, DATA, isGestor, dadoIndisponivel, estadoDaEscala, inativoNaDataAberta, habilitacoesNaoConferidas } from '../state.js';
@@ -400,7 +400,9 @@ function resumo(out, al, tot) {
   const conflitos = al.filter(a => a.t === 'conf');
   const avisos = al.filter(a => a.t !== 'err' && a.t !== 'conf');
   const horas = sumUniqueOperationalHours(out, statusDe);
-  const item = a => `<li class="al ${a.t}"><b>${esc(a.s)}</b> ${esc(a.m)}</li>`;
+  // O aviso "Sem almoço" (#104) com a dica do glossário no começo
+  const texto = a => (ehAvisoDoAlmoco(a) ? `<span data-dica="almoco">${esc(INICIO_DO_SEM_ALMOCO.trim())}</span> ${esc(a.m.slice(INICIO_DO_SEM_ALMOCO.length))}` : esc(a.m));
+  const item = a => `<li class="al ${a.t}"><b>${esc(a.s)}</b> ${texto(a)}</li>`;
   // A recusa do pedido cujo instrutor escolhido não serve: "Sugestões" (o pedido dela vem do pareamento, js/rejeicoes.js),
   // da data aberta de hoje em diante
   const pedidoDaRecusa = new Map(dataQueAindaVoa({ data: DATA, hoje: hojeISO() })

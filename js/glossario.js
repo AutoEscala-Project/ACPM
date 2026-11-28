@@ -44,7 +44,7 @@ const TERMOS = {
     aba: 'Escala', termo: 'Reduzir combustível',
     texto: `Aluno e instrutor passam do limite de peso do avião com o tanque cheio: o avião sai com menos combustível, o bastante para o voo, o táxi e a reserva (${reservaDaMissao('Voo Local')} min; ${reservaDaMissao('Noturno')} à noite e em IFR).`
   },
-  almoco: { aba: 'Escala', termo: 'Sem almoço', texto: 'A escala deixa a cada INVA uma hora livre seguida entre 11:00 e 14:00 e só desiste dela quando ela tiraria um voo da escala (ou um voo fixo a ocupa): o aviso diz quem ficou sem. Uma pausa de 1 h nessa janela é o almoço.' },
+  almoco: { aba: 'Escala', termo: 'Sem almoço', texto: 'A escala tenta deixar a cada INVA uma hora livre seguida entre 11:00 e 14:00; desiste dela quando não acha como sem tirar um voo, ou quando o operador pôs o voo ali (fixo, escolhido, Priorizar com).' },
   'sem-peso': { aba: 'Escala', termo: 'Sem peso', texto: 'Falta o peso do aluno ou do instrutor: a escala não conferiu o limite de peso do avião. Informe o peso em Alunos ou INVAs.' },
   turma: { aba: 'Escala', termo: 'Turma', texto: `Alunos do mesmo Ground, no mesmo horário e com o mesmo instrutor: uma aula só, de ${duracao(GROUND_DURATION_MIN)}, na sala de Ground.` },
   'missao-do-curso': {
@@ -113,7 +113,7 @@ const TERMOS = {
   // INVAs
   'vem-nesta-data': { aba: 'INVAs', termo: 'Vem', texto: 'Marcado, o instrutor vem nesta data (a aberta no topo, que nem sempre é hoje) e pode começar missões dentro das faixas dele, sem tocar as pausas.' },
   faixas: { aba: 'INVAs', termo: 'Pode decolar', texto: 'As faixas do instrutor nesta data, de … até …: a missão começa dentro de uma faixa e pode terminar depois dela (o Até não entra: até 17:30 não inclui o Noturno). Um turno é uma faixa pronta; meio dia, uma faixa digitada.' },
-  pausa: { aba: 'INVAs', termo: 'Pausa', texto: 'Um intervalo em que o instrutor não voa nesta data, nem dentro de uma faixa: o almoço, por exemplo. Nenhuma missão dele toca a pausa, nem a que começou antes dela. A de 1 h entre 11:00 e 14:00 é o almoço dele.' },
+  pausa: { aba: 'INVAs', termo: 'Pausa', texto: 'Um intervalo em que o instrutor não voa nesta data, nem dentro de uma faixa: o almoço, por exemplo. Nenhuma missão dele toca a pausa, nem a que começou antes dela. A que cobre 1 h entre 11:00 e 14:00 é o almoço dele.' },
   checador: { aba: 'INVAs', termo: 'Checador', texto: 'O voo de cheque exige três marcas do checador: o curso (PP ou PC), o motor (MNTE ou MLTE) e as regras (VFR ou IFR). O Cheque PC MLTE IFR, por exemplo, pede PC, MLTE e IFR.' },
   'filtro-das-habilitacoes': { aba: 'INVAs', termo: 'Filtro das habilitações', texto: 'Mostra só os instrutores que têm todas as habilitações marcadas: Noturno e C172 mostram quem tem as duas. Sem nenhuma marcada, mostra todos.' },
   'fora-do-app': { aba: 'INVAs', termo: 'Fora do app', texto: 'Horas de voo do instrutor em outro lugar (outra escola, por exemplo). Entram nos limites da lei do mês e do ano.' },

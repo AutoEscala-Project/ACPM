@@ -1,16 +1,18 @@
 // O almoço do INVA (#104; Pedro, 28/11: "the operator uses common sense so that instructors have a 1 hour pause within
 // [11AM, 2PM]"), branda, um passo próprio depois do C: para cada INVA que vem na data e voa perto do meio-dia, o motor tenta
-// deixar uma hora livre seguida em algum lugar entre 11:00 e 14:00, e só desiste dela quando mantê-la tiraria um voo da
-// escala; então um aviso diz qual INVA ficou sem almoço. A pausa da data que já cobre 1 h dessa janela ("+ Pausa" ou
+// deixar uma hora livre seguida em algum lugar entre 11:00 e 14:00, e desiste dela quando não acha como mantê-la sem tirar
+// um voo da escala, ou quando o operador pôs o voo ali (o fixo, o instrutor escolhido, o “Priorizar com”); então um aviso
+// diz qual INVA ficou sem almoço. A pausa da data que já cobre 1 h dessa janela ("+ Pausa" ou
 // "Almoço" em "Editar faixas", ou a que veio dos dados antigos: os dados não distinguem) substitui a do motor: ela é dura
 // (js/disponibilidade.js), e o motor não reserva outra. A reserva do motor não é gravada (sem número de formato): só o
 // aviso vai na escala.
 // Livre quer dizer sem compromisso (voo, simulador ou aula de Ground; a turma conta uma vez, o cancelado não ocupa, o
 // atrasado ocupa o horário novo, a volta do noturno até a hora em que ele fica livre): a pausa e o tempo fora das faixas
 // são livres. "Voa perto do meio-dia": tem um compromisso que toca a janela; quem voa só de manhã ou só à tarde sempre
-// tem a hora, então a regra só age quando um compromisso levaria a última hora livre.
-// Módulo puro: o motor (js/engine.js, a guarda e as duas tentativas), js/viabilidade.js (a regra), a compactação e a
-// conferência da escala (o aviso, js/conferencia.js) o usam.
+// tem a hora, então a regra só age quando um compromisso levaria a última hora livre (ou tocaria a hora reservada).
+// Módulo puro: o motor (js/engine.js: as duas tentativas, a guarda e as horas para tentar), js/viabilidade.js (a regra), a
+// compactação, a conferência da escala (o aviso, js/conferencia.js), o editor do voo e "+ Agendar voo" (o aviso antes de
+// salvar) o usam.
 import { faixasDe } from './disponibilidade.js';
 import { statusDoVoo, unidadeDoVoo, ocupacaoDoVoo } from './voo.js';
 import { intervaloEfetivo } from './status.js';
@@ -67,8 +69,8 @@ const trechos = lista => {
 };
 
 // O que cada INVA ocupa na escala (out): cada unidade uma vez (a turma de Ground), sem as canceladas, o atrasado no horário
-// novo, a volta do noturno até a hora em que ele fica livre
-function ocupadosNaEscala(state, out) {
+// novo, a volta do noturno até a hora em que ele fica livre; preso, o voo fixo (o motor não o move)
+function compromissosNaEscala(state, out) {
   const unidades = new Map();
   for (const o of out) {
     const chave = unidadeDoVoo(o);
@@ -79,9 +81,24 @@ function ocupadosNaEscala(state, out) {
     const v = voos.find(o => statusDoVoo(o, state.fStatus) !== 'Cancelado');
     if (!v) continue;
     const e = intervaloEfetivo(v, statusDoVoo(v, state.fStatus), (state.fObs || {})[v.fKey]);
-    (porInstrutor.get(v.insId) || porInstrutor.set(v.insId, []).get(v.insId)).push(ocupacaoDoVoo(v, e.a, e.b));
+    (porInstrutor.get(v.insId) || porInstrutor.set(v.insId, []).get(v.insId)).push({ intervalo: ocupacaoDoVoo(v, e.a, e.b), preso: voos.some(o => o.fixo) });
   }
   return porInstrutor;
+}
+const ocupadosNaEscala = (state, out) => new Map([...compromissosNaEscala(state, out)].map(([id, lista]) => [id, lista.map(c => c.intervalo)]));
+
+// As horas que o motor tenta reservar para o INVA que ficou sem almoço (js/engine.js): a busca põe um pedido de cada vez, e
+// o voo que veio antes pode ter levado a hora que outro pedido só deixava ali. Cada hora da janela que começa às 11:00,
+// termina às 14:00, começa no fim de um compromisso dele ou termina no começo de um, sem tocar um voo fixo dele (o fixo
+// fica onde está), em ordem; nenhuma quando os fixos sozinhos já tiram a hora
+export function horasParaOAlmoco(state, out, insId) {
+  const meus = compromissosNaEscala(state, out).get(insId) || [];
+  const presos = meus.filter(c => c.preso).map(c => c.intervalo);
+  if (!horaLivre(presos)) return [];
+  const { de } = JANELA_DO_ALMOCO, ultimo = JANELA_DO_ALMOCO.ate - DURACAO_DO_ALMOCO;
+  const inicios = [de, ultimo, ...meus.flatMap(({ intervalo: [a, b] }) => [b, a - DURACAO_DO_ALMOCO])].filter(m => m >= de && m <= ultimo);
+  return [...new Set(inicios)].sort((p, q) => p - q).map(m => ({ de: m, ate: m + DURACAO_DO_ALMOCO }))
+    .filter(h => !presos.some(([a, b]) => a < h.ate && h.de < b));
 }
 
 // Os avisos da escala pronta (o motor, a conferência sem o motor): cada INVA que vem e ficou sem a hora livre, na ordem
@@ -97,4 +114,12 @@ export function avisosDoAlmoco(state, out) {
     avisos.push({ t: 'warn', s: x.nm, m: `${INICIO_DO_SEM_ALMOCO}nenhuma hora livre seguida entre ${hm(JANELA_DO_ALMOCO.de)} e ${hm(JANELA_DO_ALMOCO.ate)} (ocupado ${trechos(tocam)}).`, insId: x.id });
   }
   return avisos;
+}
+
+// O aviso da mudança feita à mão (o editor do voo, "+ Agendar voo"): o INVA do voo que fica sem a hora livre com ela (o
+// operador decide; a Escala avisa depois): "Sem almoço: Instrutor 01 fica sem nenhuma hora livre seguida entre …"
+export function semAlmocoComAMudanca(state, antes, depois, insIds) {
+  const tinham = new Set(avisosDoAlmoco(state, antes).map(a => a.insId));
+  return depois.filter(a => ehAvisoDoAlmoco(a) && insIds.has(a.insId) && !tinham.has(a.insId))
+    .map(a => `${INICIO_DO_SEM_ALMOCO}${a.s} fica sem ${a.m.slice(INICIO_DO_SEM_ALMOCO.length)}`);
 }
