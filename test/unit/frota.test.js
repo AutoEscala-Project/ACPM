@@ -2,7 +2,7 @@
 // config.js); o formato 11 dos dados a leva para o cadastro, e o motor e as telas a leem de lá.
 import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { FROTA_INICIAL, TIPOS_DA_FROTA, normalizarFrota, matriculasDoTipo, novoRecurso, comAtributo, comExigencias, quemOpera, salaDisponivel } from '../../js/frota.js';
+import { FROTA_INICIAL, TIPOS_DA_FROTA, normalizarFrota, matriculasDoTipo, novoRecurso, comAtributo, comExigencias, comExigencia, quemOpera, salaDisponivel } from '../../js/frota.js';
 import { habilitacoesDoTipo } from '../../js/habilitacoes.js';
 import { ESQUEMA, migrarCadastro } from '../../js/migracoes.js';
 import { separar, juntar } from '../../js/dias.js';
@@ -168,6 +168,19 @@ describe('Frota: as habilitações que o INVA precisa (B)', () => {
       { reg: 'PR-X', tipo: 'C172', inativo: true });
     // Não é uma lista: nada muda no que o recurso exige
     assert.deepEqual(comExigencias({ reg: 'PR-X', tipo: 'C152', exige: ['ifr'] }, 'ifr'), { reg: 'PR-X', tipo: 'C152', exige: ['ifr'] });
+  });
+
+  // Uma caixa de "Exigir também…" e a reversão dela (setExigencias): só aquela habilitação entra ou sai; o resto de exige
+  // (a habilitação própria, as caixas marcadas depois) fica como está
+  it('comExigencia: põe ou tira só uma habilitação; a própria e as outras ficam', () => {
+    const f = { reg: 'PR-X', tipo: 'C152', exige: ['ifr', 'noturno', 'aviao:PR-X'] };
+    assert.deepEqual(comExigencia(f, 'ifr', false), { reg: 'PR-X', tipo: 'C152', habilitacaoPropria: true, exige: ['noturno', 'aviao:PR-X'] });
+    assert.deepEqual(comExigencia({ reg: 'PR-X', tipo: 'C152', exige: ['aviao:PR-X'] }, 'noturno', true),
+      { reg: 'PR-X', tipo: 'C152', habilitacaoPropria: true, exige: ['noturno', 'aviao:PR-X'] });
+    // Já como pedido: nada muda; a do tipo nunca entra; um id que não é do registro não entra
+    assert.deepEqual(comExigencia(f, 'ifr', true), { reg: 'PR-X', tipo: 'C152', habilitacaoPropria: true, exige: ['ifr', 'noturno', 'aviao:PR-X'] });
+    assert.deepEqual(comExigencia({ reg: 'PR-X', tipo: 'C152' }, 'c152', true), { reg: 'PR-X', tipo: 'C152' });
+    assert.deepEqual(comExigencia({ reg: 'PR-X', tipo: 'C152' }, 'nada', true), { reg: 'PR-X', tipo: 'C152' });
   });
 
   it('quemOpera: os instrutores ativos com a habilitação do tipo e tudo o que o recurso exige', () => {

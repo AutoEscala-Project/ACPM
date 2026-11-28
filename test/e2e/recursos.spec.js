@@ -8,7 +8,7 @@ import {
   alternarDisponivel, caixaDisponivel, fecharHorarios, abrirRecursos, abrirRecurso, abrirCategoria, abrirHangar, linhaDoRecurso,
   linhasDosRecursos, gruposDosRecursos, cabecalhoDaCategoria, buscaDosRecursos, contagemDosRecursos, detalheDoRecurso, campoDoRecurso,
   horasDoRecurso, marcarAtributo, retirarRecurso, ordemNoHangar, horariosDaCategoria, confirmar, nenhumNaLista, larguraDaPagina, alvosPequenos,
-  semNome, paineisQueRolamParaOLado
+  semNome, paineisQueRolamParaOLado, diaSeguinte
 } from './fixtures.js';
 import { aluno, apenas, cenario, instrutor } from '../helpers/montar.js';
 
@@ -244,6 +244,34 @@ test.describe('Recursos: o detalhe de um recurso', () => {
     await expect(exige.locator('.quem-opera')).toHaveText('Quem pode operar: 0 INVAs');
   });
 
+  // A reversão de uma caixa mais antiga desfaz só ela: a habilitação própria e as caixas marcadas depois ficam (a própria
+  // de um recurso que sumisse sem pedido deixaria o motor dar o avião a quem não a tem)
+  test('reverter uma caixa mais antiga de "Exigir também…" desfaz só ela: a habilitação própria e a caixa marcada depois ficam', async ({ page }) => {
+    await abrir(page, { estado: cenario({ ins: [instrutor(1, 9, { hab: ['local', 'c152', 'ifr', 'noturno'] })], stu: [aluno(1000)] }) });
+    await abrirRecurso(page, 'PR-VOB');
+    const exige = campoDoRecurso(page, 'exige');
+    await exige.locator('summary').click();
+    await exige.locator('input[data-a="exige"][value="ifr"]').check();
+    await expect(page.locator('#audit-log-list')).toContainText('PR-VOB: exige Voo IFR');
+    await exige.locator('input[data-a="exige"][value="noturno"]').check();
+    await expect(page.locator('#audit-log-list')).toContainText('PR-VOB: exige Voo Noturno');
+    await marcarAtributo(page, 'PR-VOB', 'habilitacaoPropria', true);
+    const texto = linhaDoRecurso(page, 'PR-VOB').locator('.lista-l2-texto');
+    await expect(texto).toHaveText('C152 · Exige Voo IFR · Exige Voo Noturno · Exige Avião PR-VOB');
+    await abrirHistorico(page);
+    await page.locator('#audit-log-list .audit-item', { hasText: 'PR-VOB: exige Voo IFR' }).locator('[data-act="rev-log"]').click();
+    await page.keyboard.press('Escape');
+    await expect(texto).toHaveText('C152 · Exige Voo Noturno · Exige Avião PR-VOB');
+    await expect(exige.locator('input[data-a="exige"][value="ifr"]')).not.toBeChecked();
+    await expect(exige.locator('input[data-a="exige"][value="noturno"]')).toBeChecked();
+    await expect(exige.locator('[data-atributo="habilitacaoPropria"]')).toBeChecked();
+    // A do Voo Noturno, revertida depois, tira só ela; a própria continua
+    await abrirHistorico(page);
+    await page.locator('#audit-log-list .audit-item', { hasText: 'PR-VOB: exige Voo Noturno' }).locator('[data-act="rev-log"]').click();
+    await page.keyboard.press('Escape');
+    await expect(texto).toHaveText('C152 · Exige Avião PR-VOB');
+  });
+
   test('"Agendar voo no <reg>" abre o agendamento com o recurso; "Próximo" anda na lista', async ({ page }) => {
     await abrir(page, { estado: cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000)] }) });
     await abrirRecurso(page, 'PR-VOB');
@@ -403,6 +431,9 @@ test.describe('Recursos: acrescentar, retirar e o "Ativo"', () => {
     await expect(det.locator('input, select')).toHaveCount(0);
     await expect(det.locator('[data-act="retirar-recurso"]:visible, [data-act="agendar"]:visible')).toHaveCount(0);
     await expect(campoDoRecurso(page, 'av')).toContainText('Disponível');
+    // "Quem pode operar" também para quem só consulta (o Manual não o limita a quem edita)
+    await expect(campoDoRecurso(page, 'exige')).toContainText('Do tipo: MLTE (PA-34)');
+    await expect(campoDoRecurso(page, 'quem-opera')).toContainText(/Quem pode operar\s*\d+ INVAs?$/);
   });
 });
 
@@ -511,6 +542,30 @@ test.describe('Recursos: a categoria e os horários de decolagem', () => {
     await expect(pa34.locator('.horarios-modelo')).toHaveText('De 30 em 30 min, 06:30–16:30');
     await abrirEscala(page);
     await expect.poll(async () => (await lerEscala(page)).linhas.find(l => l.includes('Aluno 1000'))).toMatch(/^07:30/);
+  });
+
+  // O efeito do rascunho é o dos pedidos da data aberta: com o editor aberto, outra data refaz a conta
+  test('com o editor aberto, outra data refaz "pedidos mudam" com os pedidos dela', async ({ page }) => {
+    await abrirComExemplo(page);
+    const tirar = async () => {
+      await abrirCategoria(page, 'C152');
+      await horariosDaCategoria(page).locator('[data-act="editar-horarios"]').click();
+      for (const m of [390, 500, 610, 690]) await editor(page).locator(`[data-act="rascunho-tirar"][data-min="${m}"]`).click();
+    };
+    const efeito = editor(page).locator('.horarios-efeito');
+    await tirar();
+    await expect(efeito).toHaveText(/pedidos? mudam? de preferência/);
+    const naPrimeira = await efeito.textContent();
+    await diaSeguinte(page);
+    await expect(editor(page)).toBeVisible();
+    const naSeguinte = await efeito.textContent();
+    // A mesma edição feita do começo nesta data diz o mesmo
+    await editor(page).locator('[data-act="cancelar-horarios"]').click();
+    await tirar();
+    await expect(efeito).toHaveText(/pedidos? mudam? de preferência|Nenhum pedido muda/);
+    const deNovo = await efeito.textContent();
+    expect(deNovo).not.toBe(naPrimeira);
+    expect(naSeguinte).toBe(deNovo);
   });
 
   // D22: o rascunho não se perde ao escolher outro recurso; de volta à categoria, o editor continua, com o digitado
@@ -692,6 +747,37 @@ test.describe('Recursos no celular', () => {
       const caixa = await horariosDaCategoria(page).locator('.horarios-editor').boundingBox();
       expect(caixa.x + caixa.width).toBeLessThanOrEqual(largura);
       expect(await larguraDaPagina(page)).toBeLessThanOrEqual(largura);
+    });
+  }
+});
+
+// No celular (uma vista só), "+ Novo recurso" abre o detalhe vazio com o formulário: Cancelar e o Esc devolvem a lista, com
+// o foco no botão (o detalhe vazio não tem "‹ Recursos")
+test.describe('Recursos no celular: "+ Novo recurso" e a volta', () => {
+  for (const sair of ['Cancelar', 'Esc']) {
+    test(`390 px: ${sair} no formulário do recurso novo volta à lista, com o foco em "+ Novo recurso"`, async ({ page }) => {
+      await page.setViewportSize({ width: 390, height: 780 });
+      await abrirSintetico(page);
+      await abrirRecursos(page);
+      const botao = page.locator('#btn-novo-recurso');
+      await botao.focus();
+      await page.keyboard.press('Enter');
+      await expect(page.locator('#s-rec')).toHaveAttribute('data-vendo', 'detalhe');
+      await expect(page.locator('#rec-reg')).toBeFocused();
+      if (sair === 'Cancelar') {
+        await page.locator('#rec-cancelar').focus();
+        await page.keyboard.press('Enter');
+      } else await page.keyboard.press('Escape');
+      await expect(page.locator('#s-rec')).toHaveAttribute('data-vendo', 'lista');
+      await expect(page.locator('#rec')).toBeVisible();
+      await expect(page.locator('#form-recurso')).toBeHidden();
+      await expect(botao).toHaveAttribute('aria-expanded', 'false');
+      await expect(botao).toBeFocused();
+      await expect(page).toHaveURL(/#\/rec$/);
+      // De novo: o formulário abre outra vez
+      await page.keyboard.press('Enter');
+      await expect(page.locator('#s-rec')).toHaveAttribute('data-vendo', 'detalhe');
+      await expect(page.locator('#rec-reg')).toBeFocused();
     });
   }
 });

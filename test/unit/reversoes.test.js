@@ -23,8 +23,8 @@ const VALIDAS = [
   { kind: 'setFly', stuId: 1000, mid: 0, val: true, extras: [1001, 1002], label: '↶ Restaurar' },
   { kind: 'setAv', reg: 'PR-VOB', val: true, label: '↶ Reverter' },
   { kind: 'setAtributo', reg: 'PR-CPL', atributo: 'soVfr', val: false, label: '↶ Reverter' },
-  // O que o recurso exige do instrutor (B): a lista a restaurar
-  { kind: 'setExigencias', reg: 'PR-VOB', lista: ['ifr', 'aviao:PR-VOB'], label: '↶ Reverter' },
+  // O que o recurso exige do instrutor (B): a habilitação que a caixa mudou e se o recurso a exigia antes
+  { kind: 'setExigencias', reg: 'PR-VOB', h: 'ifr', val: false, label: '↶ Reverter' },
   { kind: 'setInsOn', insId: 3, val: true, label: '↶ Reverter' },
   // O "Ativo" do cadastro (F2): o aluno, o instrutor e o recurso, e o inativo a restaurar
   { kind: 'setInativo', de: 'aluno', id: 1000, inativo: false, label: '↶ Reverter' },
@@ -107,15 +107,17 @@ describe('Reversões do histórico', () => {
     }
   });
 
-  // setExigencias (B): a matrícula e a lista, de até 30 ids conhecidos (os do registro e as habilitações próprias)
-  it('setExigencias: a matrícula e a lista de ids conhecidos; fora disso, não vale', () => {
-    const base = { kind: 'setExigencias', reg: 'PR-VOB', lista: ['ifr'], label: '↶ Reverter' };
+  // setExigencias (B): a matrícula, a habilitação que a caixa mudou (um id conhecido: do registro ou uma habilitação
+  // própria) e se o recurso a exigia antes. A lista inteira de antes não vale: a reversão de uma caixa mais antiga a
+  // gravaria por cima da habilitação própria e das caixas marcadas depois
+  it('setExigencias: a matrícula, um id conhecido e o valor de antes; fora disso, não vale', () => {
+    const base = { kind: 'setExigencias', reg: 'PR-VOB', h: 'ifr', val: true, label: '↶ Reverter' };
     for (const ruim of [
-      { reg: 'pr vob' }, { reg: ['PR-VOB'] }, { lista: 'ifr' }, { lista: ['nada'] }, { lista: [7] }, { lista: [ATAQUE] },
-      { lista: Array.from({ length: 31 }, () => 'ifr') }, { lista: null }
+      { reg: 'pr vob' }, { reg: ['PR-VOB'] }, { h: ['ifr'] }, { h: 'nada' }, { h: 7 }, { h: ATAQUE }, { h: null },
+      { val: 'true' }, { val: undefined }, { h: undefined, lista: ['ifr'] }
     ]) assert.equal(validarReversao({ ...base, ...ruim }, FROTA_INICIAL), null, JSON.stringify(ruim));
-    assert.deepEqual(validarReversao({ ...base, lista: [] }, FROTA_INICIAL), { ...base, lista: [] });
-    assert.deepEqual(validarReversao({ ...base, extra: 1 }, FROTA_INICIAL), base);
+    assert.deepEqual(validarReversao({ ...base, h: 'aviao:PR-VOB', val: false }, FROTA_INICIAL), { ...base, h: 'aviao:PR-VOB', val: false });
+    assert.deepEqual(validarReversao({ ...base, extra: 1, lista: ['ifr'] }, FROTA_INICIAL), base);
   });
 
   // setInativo: de é um dos três cadastros; o id do aluno e do instrutor é um número, o do recurso, uma matrícula; o

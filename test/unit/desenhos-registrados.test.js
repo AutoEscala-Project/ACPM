@@ -87,6 +87,15 @@ describe('Os desenhos registrados', () => {
     }
   });
 
+  // B e C em paralelo (docs/PLAN.md, "Parallel worktrees"): Recursos não pede pelo nome um desenho que o C apaga. O
+  // painel das habilitações do INVA (habilitacoes-do-instrutor) sai com o C; até lá, o desenho 'instrutores' o refaz
+  // (rIns → rPainelDoInstrutor)
+  it('Recursos (js/eventos/recursos.js) não pede pelo nome o desenho habilitacoes-do-instrutor, que o C apaga', () => {
+    const deRecursos = porNome.filter(p => p.onde.startsWith('js/eventos/recursos.js:'));
+    assert.ok(deRecursos.length > 0);
+    assert.deepEqual(deRecursos.filter(p => p.nome === 'habilitacoes-do-instrutor').map(p => p.onde), []);
+  });
+
   it('quem redesenha por momento pede um momento que existe e que algum desenho usa', () => {
     const usados = new Set(registros.flatMap(r => r.em));
     for (const p of porMomento) {
