@@ -556,6 +556,7 @@ function atualizarRecurso() {
 const doRecurso = recurso => (recurso === GROUND_EQ_TYPE ? `da ${recurso}` : `do ${recurso}`);
 function contagemDosHorarios(lista, recurso, livres, motivo) {
   if (livres.length === lista.length) return lista.length === 1 ? `Um horário só: ${lista[0]}.` : `${lista.length} horários ${doRecurso(recurso)}.`;
+  if (lista.length === 1) return `Um horário só, ${lista[0]}: ${motivo}.`;
   return `${livres.length ? `${livres.length} de` : 'Nenhum dos'} ${lista.length} horários ${doRecurso(recurso)}: ${motivo}.`;
 }
 // Os horários da lista (HH:MM) fora das limitações do aluno (L), com o porquê: { fora(h), motivo }
@@ -574,11 +575,15 @@ function atualizarHorario() {
   const escolhido = escolhaDaPessoa(campo) || horarioEscolhido;
   const valor = valorNaLista(livres, escolhido);
   horarioEscolhido = livres.length > 1 || valor === escolhido ? '' : escolhido;
-  // O horário do app que continua no campo não é dito de novo
+  // O horário do app que continua no campo não é dito de novo. Sem nenhum horário que sirva ao aluno (as limitações, L), o
+  // campo não pede uma escolha que não existe: diz por quê
   if (lista.length && !(doApp && valor === doApp)) {
+    const nenhum = !livres.length ? contagemDosHorarios(lista, recurso, livres, motivo) : '';
     if (escolhido && valor !== escolhido) {
-      avisoDoHorario = `${lista.includes(escolhido) && fora(escolhido) ? `O horário ${escolhido} está fora das limitações do aluno (${motivo}).` : `O horário ${escolhido} não é um dos de ${doCurso ? doCurso.codigo : missao} (${recurso}).`} ${valor ? `Agora é ${valor}.` : 'Escolha outro.'}`;
-    } else if (doApp) avisoDoHorario = valor ? `O horário agora é ${valor}.` : `O horário ${doApp} era o único da escolha anterior. Escolha o horário.`;
+      avisoDoHorario = lista.includes(escolhido) && fora(escolhido)
+        ? `O horário ${escolhido} está fora das limitações do aluno (${motivo})${nenhum ? `, e nenhum dos horários ${doRecurso(recurso)} está nelas.` : `. ${valor ? `Agora é ${valor}.` : 'Escolha outro.'}`}`
+        : `O horário ${escolhido} não é um dos de ${doCurso ? doCurso.codigo : missao} (${recurso}). ${valor ? `Agora é ${valor}.` : nenhum || 'Escolha outro.'}`;
+    } else if (doApp) avisoDoHorario = valor ? `O horário agora é ${valor}.` : `O horário ${doApp} era o único da escolha anterior. ${nenhum || 'Escolha o horário.'}`;
   }
   preencher(campo, lista.map(h => [h, fora(h) ? `${h} (${motivo})` : h, fora(h)]), livres.length === 1 ? null : 'Escolha o horário…', valor, escolhido);
   campo.disabled = !(aluno && missao && recurso);
@@ -603,19 +608,24 @@ function atualizarSegundaPreferencia() {
   const { fora, motivo } = horariosForaDoAluno();
   const escolhida = campo.value || segundaQueEspera;
   const fica = opcoes.includes(escolhida) && !fora(escolhida) ? escolhida : '';
+  // Nenhuma opção que sirva ao aluno (as limitações): o campo fica desligado, e diz por quê
+  const algumaServe = opcoes.some(h => !fora(h));
   if (!lista.length) segundaQueEspera = escolhida;
   else {
     segundaQueEspera = '';
     if (escolhida && !fica && opcoes.length) {
-      avisoDaSegunda = escolhida === primeira ? `A 2ª preferência era ${escolhida}, agora a 1ª: escolha outra, se houver.`
-        : `A 2ª preferência ${escolhida} não é um dos horários de ${doCurso ? doCurso.codigo : missao} (${recurso}): escolha outra, se houver.`;
+      const depois = algumaServe ? 'escolha outra, se houver' : 'sem 2ª preferência nesta data';
+      avisoDaSegunda = escolhida === primeira ? `A 2ª preferência era ${escolhida}, agora a 1ª: ${depois}.`
+        : opcoes.includes(escolhida) && fora(escolhida) ? `A 2ª preferência ${escolhida} está fora das limitações do aluno (${motivo}): ${depois}.`
+          : `A 2ª preferência ${escolhida} não é um dos horários de ${doCurso ? doCurso.codigo : missao} (${recurso}): ${depois}.`;
     }
   }
   const itens = [['', '—', false], ...opcoes.map(h => [h, fora(h) ? `${h} (${motivo})` : h, fora(h)])];
   if (JSON.stringify(itens) !== JSON.stringify(opcoesDoCampo(campo))) campo.innerHTML = opcoesComDesligadas(itens, fica);
   campo.value = fica;
-  campo.disabled = !(aluno && missao && recurso) || !opcoes.length;
-  const texto = !(aluno && missao && recurso) ? '' : !opcoes.length ? 'Um horário só: sem 2ª preferência.' : avisoDaSegunda || 'Opcional: outro horário, se o da 1ª não couber.';
+  campo.disabled = !(aluno && missao && recurso) || !algumaServe;
+  const texto = !(aluno && missao && recurso) ? '' : !opcoes.length ? 'Um horário só: sem 2ª preferência.'
+    : avisoDaSegunda || (algumaServe ? 'Opcional: outro horário, se o da 1ª não couber.' : `Sem 2ª preferência: ${motivo}.`);
   mudarTexto($('#ag-horario2-motivo'), texto);
 }
 
