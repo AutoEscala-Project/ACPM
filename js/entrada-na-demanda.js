@@ -22,7 +22,9 @@ const textoDaEntrada = s => `Pedidos: ${s.aluno_nome} incluído (${doPedido(s)})
 // Concilia os pedidos dados (as linhas lidas da data) com o dia e grava, numa gravação só: uma entrada do Histórico por
 // pedido que entrou ou voltou ('inc') e uma por pedido que saiu ('exc', com quem entrou no lugar dele: a escala refeita em
 // volta dos fixos dá a vaga ao 1º da lista de espera que cabe, N14, também na escala aprovada, sem fixar quem entra: o
-// padrão do R5). religar: o aprovado guardado volta (a entrada na hora, D2: quem chama passa só as linhas aprovadas agora).
+// padrão do R5; quando a escala refeita a daria a um pedido de outro horário, o 1º da lista que cabe entra, fixo no lugar:
+// Pedro, 2026-11-28). A gravação é a de sempre (gravarAlteracao), com o pino dele em S. religar: o aprovado guardado volta
+// (a entrada na hora, D2: quem chama passa só as linhas aprovadas agora).
 // Responde o resumo da conciliação, quantos entraram ou voltaram, quantos saíram (0 e 0: nada foi gravado) e se a gravação
 // saiu
 export function porNaDemanda(solicitacoes, { religar = false } = {}) {
@@ -35,9 +37,10 @@ export function porNaDemanda(solicitacoes, { religar = false } = {}) {
   const plano = conciliarPedidos(S, solicitacoes, {
     data: DATA, hoje, agora, aprovada: solicitacaoAprovada, religar, cursos, semInativos: inativoValeEm(DATA, hojeISO())
   });
-  // A escala de antes (a da tela: quem espera em cada horário) e o motor da tela, para a vaga de quem sai
+  // A escala de antes (a da tela: quem espera em cada horário) e o motor da tela, para a vaga de quem sai: do dia que a
+  // conciliação lhe passa (S, ou a cópia dele com a escala de antes fixa, para a vez da lista de espera)
   const antes = RES && Array.isArray(RES.out) ? { estado: estadoDaEscala(), resultado: RES } : null;
-  const escalar = () => { const estado = estadoDaEscala(); return { estado, resultado: escalaDoMotor(estado) }; };
+  const escalar = (base = S) => { const estado = estadoDaEscala(base); return { estado, resultado: escalaDoMotor(estado) }; };
   const feito = aplicarConciliacao(S, plano, {
     programa: programaParaInferir(), situacao: (S.resultados && S.resultados.situacao) || [], cursos, antes, escalar
   });

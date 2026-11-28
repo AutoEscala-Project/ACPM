@@ -23,7 +23,9 @@ const ANTIGAS = {
   pedidos: ['o horário fica indisponível, e o app diz o próximo horário possível', 'Ainda não importado', 'a coluna Situação', 'Importar pedidos da agenda',
     'Importar da agenda',
     // E: a importação também tira os cancelados (a conciliação), e o voo do cancelado não se tira mais no Voa
-    'só acrescenta, nunca apaga nem repete', 'o aviso diz para tirá-lo no Voa'],
+    'só acrescenta, nunca apaga nem repete', 'o aviso diz para tirá-lo no Voa',
+    // A decisão do Pedro (2026-11-28): a lista de espera vem antes do pedido de outro horário, também na não aprovada
+    'na escala não aprovada, a vaga pode ir a um pedido que estava em outro horário'],
   // O peso vem antes do curso em Alunos; Alunos é lista e detalhe (F2): sem as colunas de Instrutores, sem o cartão no
   // celular, os dados pessoais na seção do aluno (o painel fica para os instrutores)
   // A: sem o link para a Demanda (os voos da data ficam em "Nesta data"), e a secretaria não altera os dados pessoais
@@ -69,6 +71,8 @@ const NOVAS = {
     // E: o cancelado sai pela conciliação, e a vaga vai ao 1º da lista de espera; o voo que fica diz por quê, e reverter não
     // põe de volta o que saiu (a revisão do E)
     'continua na demanda até Tirar da escala', 'dá a vaga ao 1º da lista de espera daquele horário', 'fica na escala, e o aviso diz por quê',
+    // A decisão do Pedro (2026-11-28): a lista de espera vem antes do pedido de outro horário, e quem entra fica fixo
+    'A lista de espera vem antes de um pedido que estava em outro horário', 'o 1º dela que couber entra e fica fixo no lugar',
     'não põe de volta o voo de um pedido que saiu da demanda'],
   // A busca sem acentos, quantos aparecem e o "Limpar filtros"; a coluna Vem (a data aberta não é sempre hoje); o filtro
   // das habilitações, com várias marcas e a regra ("todas as marcadas")
