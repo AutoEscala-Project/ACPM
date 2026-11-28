@@ -1,5 +1,5 @@
-/* Alunos: as etiquetas de "Não escalar com" e "Priorizar com", os voos de "Nesta data" e os formulários dos resultados de
-   "Curso e missões" (o resto é do componente: css/lista.css) */
+/* Alunos: as etiquetas de "Não escalar com" e "Priorizar com", os voos de "Nesta data", os formulários dos resultados de
+   "Curso e missões" e "Pode voar" das Limitações (o resto é do componente: css/lista.css) */
 .bl { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 .tg {
   display: inline-flex;
@@ -39,4 +39,25 @@
 .det-form > .erro-campo:empty { display: none; }
 @media (max-width: 640px), (pointer: coarse) {
   .det-form-acoes .btn { min-height: 44px; }
+}
+
+/* As Limitações (L): as etiquetas de "Só voa no" e "Pode voar", um horário por linha (De, Até, os dias e o ✕), que quebra
+   no celular */
+.tg.lim { border-color: var(--ln); }
+.tg.lim button { color: var(--ink); }
+.lim-valor { display: grid; gap: 6px; min-width: 0; }
+.lim-horarios { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.lim-horario { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; padding: 4px 0; border-bottom: 1px solid var(--ln); min-width: 0; }
+.lim-horario:last-child { border-bottom: 0; }
+.lim-de-ate { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; }
+.lim-dias { display: inline-flex; flex-wrap: wrap; gap: 2px 8px; }
+.lim-dia { display: inline-flex; align-items: center; gap: 3px; font-size: 13px; cursor: pointer; }
+.lim-tirar { border: 0; background: transparent; color: var(--er); cursor: pointer; padding: 2px 6px; }
+.lim-mais { justify-self: start; }
+.lim-vazio { margin: 2px 0; }
+.lim-valor > .erro-campo { display: block; color: var(--er); font-size: 13px; }
+.lim-valor > .erro-campo:empty { display: none; }
+@media (max-width: 640px), (pointer: coarse) {
+  .lim-dia { min-width: 44px; min-height: 44px; justify-content: center; }
+  .lim-tirar, .lim-mais { min-width: 44px; min-height: 44px; }
 }

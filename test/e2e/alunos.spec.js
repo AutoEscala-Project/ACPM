@@ -898,7 +898,8 @@ test.describe('As limitações do aluno', () => {
     // Os dias: o último não sai
     for (const d of [1, 2, 3, 4]) await page.locator(`#det-alu-lim-dia-0-${d}`).uncheck();
     await expect(erroDosHorarios(page)).toHaveText('');
-    await page.locator('#det-alu-lim-dia-0-5').uncheck();
+    // (um clique: o uncheck do Playwright espera a caixa desmarcada, e ela volta marcada)
+    await page.locator('#det-alu-lim-dia-0-5').click();
     await expect(erroDosHorarios(page)).toHaveText('Marque ao menos um dia: com todos marcados, o horário vale em todas as datas.');
     await expect(page.locator('#det-alu-lim-dia-0-5')).toBeChecked();
     await expect.poll(() => guardadas(page)).toEqual({ recursos: ['C172'], horarios: [{ de: 780, ate: 1080, dias: [5] }] });

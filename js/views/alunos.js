@@ -3,8 +3,9 @@
 // quem está sem peso; a busca acha o nome, e para quem vê os dados pessoais também o nome completo e o CANAC. O detalhe,
 // nesta ordem: "Nesta data" (os voos do aluno na escala da data aberta, com o resultado da missão do curso), "Curso e
 // missões" (o curso; com o progresso ligado, o progresso, a missão anterior e a atual, "Registrar resultado sem voo" e
-// "Colocar no curso até…"), o cadastro (nome, peso, "Priorizar com", "Não escalar com"), os dados pessoais (para quem os
-// vê: js/views/editor-de-dados-pessoais.js) e, no rodapé, "Excluir aluno…" e, do aluno inativo com dados pessoais,
+// "Colocar no curso até…"), o cadastro (nome e peso), as limitações (L: "Só voa no", "Pode voar", "Priorizar com", "Não
+// escalar com" e a linha do peso), os dados pessoais (para quem os vê: js/views/editor-de-dados-pessoais.js) e, no
+// rodapé, "Excluir aluno…" e, do aluno inativo com dados pessoais,
 // "Apagar os dados pessoais". Os campos têm os data-f de sempre: js/eventos/alunos.js grava; os dois formulários dos
 // resultados guardam o que foi escolhido aqui (lembrarEscolha), para os redesenhos não o perderem
 import { LIMITE_DO_NOME, numeroBr, esc, hm, hojeISO, rotuloDaData, opts } from '../format.js';
@@ -18,6 +19,7 @@ import { canacDe, nomeCompletoDe, dadosDe, podeVerDadosPessoais, podeEditarDados
 import { progressoEmTexto, resultadoNaEscala, missoesDoAluno, missoesParaRegistrar, colocacaoDoAluno } from './etapas.js';
 import { secaoDosDadosPessoais, marcaDaPessoa, recusasDe } from './editor-de-dados-pessoais.js';
 import { cursosConhecidos } from './filtro-dos-cursos.js';
+import { TIPOS_LIMITAVEIS, DIAS_DAS_LIMITACOES, MAXIMO_DE_HORARIOS, MINUTOS_DOS_HORARIOS, nomeDoDia, normalizarLimitacoes, textoDosHorarios, textoDasLimitacoes, tiposQueNaoCabem, linhaDoPeso } from '../limitacoes.js';
 
 // O instrutor já escolhido que ficou inativo continua na etiqueta, com "(inativo)"; a lista oferece só os ativos
 const nomeComInativo = x => (inativoNaDataAberta(x) ? `${x.nm} (inativo)` : x.nm);
@@ -175,17 +177,58 @@ function secaoDoCurso(s, edita) {
   return { id: 'curso', titulo: 'Curso e missões', icone: 'i-manual', escopo: 'todas as datas', campos, html };
 }
 
-// O detalhe de um aluno (null: ele saiu do cadastro)
-export function detalheDoAluno(id) {
-  const s = stuBy(+id);
-  if (!s) return null;
-  const veDados = podeVerDadosPessoais();
-  const canac = veDados ? canacDe('aluno', s.id) : '';
+// ——— As limitações (L, N9): duras para o motor; cada campo é gravado ao mudar (js/eventos/alunos.js) ———
+// A recusa de um campo de "Pode voar" (o Até antes do De, o último dia), por aluno: { texto, campo (o id do controle) }, até a
+// próxima mudança que vale
+const ERROS_DAS_LIMITACOES = new Map();
+export const erroNasLimitacoes = (id, erro) => { if (erro) ERROS_DAS_LIMITACOES.set(+id, erro); else ERROS_DAS_LIMITACOES.delete(+id); };
+
+const opcoesDeMinutos = (lista, valor) => opts(lista.map(m => [String(m), hm(m)]), String(valor));
+// Uma linha de "Pode voar": De, Até, os dias (todos marcados: todas as datas) e o ✕
+function linhaDoHorario(h, i, erro) {
+  const base = `det-alu-lim-${i}`;
+  const invalido = id => (erro && erro.campo === id ? ' aria-invalid="true"' : '');
+  const de = `det-alu-lim-de-${i}`, ate = `det-alu-lim-ate-${i}`;
+  const dias = h.dias || DIAS_DAS_LIMITACOES;
+  const descricao = ' aria-describedby="det-alu-limHorarios-erro"';
+  return `<li class="lim-horario" data-i="${i}" id="${base}">`
+    + `<span class="lim-de-ate"><label for="${de}">De</label><select id="${de}" data-f="limDe" data-i="${i}"${descricao}${invalido(de)}>${opcoesDeMinutos(MINUTOS_DOS_HORARIOS.slice(0, -1), h.de)}</select>`
+    + `<label for="${ate}">até</label><select id="${ate}" data-f="limAte" data-i="${i}"${descricao}${invalido(ate)}>${opcoesDeMinutos(MINUTOS_DOS_HORARIOS.slice(1), h.ate)}</select></span>`
+    + `<span class="lim-dias" role="group" aria-label="Dias do horário ${i + 1}">${DIAS_DAS_LIMITACOES.map(d => {
+      const id = `det-alu-lim-dia-${i}-${d}`;
+      return `<label class="lim-dia" for="${id}"><input type="checkbox" id="${id}" data-f="limDia" data-i="${i}" value="${d}"${dias.includes(d) ? ' checked' : ''}${descricao}${invalido(id)}>${nomeDoDia(d)}</label>`;
+    }).join('')}</span>`
+    + `<button type="button" class="lim-tirar edit-only" id="det-alu-lim-tirar-${i}" data-act="lim-tirar" data-i="${i}" aria-label="Tirar o horário ${esc(textoDosHorarios([h]))}">✕</button></li>`;
+}
+
+// "Pode voar": quem edita, as linhas, "+ Horário" e a recusa; quem só consulta, o texto
+function campoDosHorarios(s, l, edita) {
+  const horarios = (l && l.horarios) || [];
+  const rotulo = '<span class="det-rotulo" id="det-alu-limHorarios-rotulo">Pode voar</span>';
+  if (!edita) return `${rotulo}<div class="det-valor" aria-labelledby="det-alu-limHorarios-rotulo">${esc(horarios.length ? textoDosHorarios(horarios) : 'Em qualquer horário.')}</div>`;
+  const erro = ERROS_DAS_LIMITACOES.get(s.id) || null;
+  return `${rotulo}<div class="det-valor lim-valor" role="group" aria-labelledby="det-alu-limHorarios-rotulo">`
+    + (horarios.length ? `<ul class="lim-horarios">${horarios.map((h, i) => linhaDoHorario(h, i, erro)).join('')}</ul>` : '<p class="h lim-vazio">Em qualquer horário.</p>')
+    + `<button type="button" class="btn sec edit-only lim-mais" id="det-alu-lim-mais" data-act="lim-mais"${horarios.length >= MAXIMO_DE_HORARIOS ? ' disabled' : ''}>+ Horário</button>`
+    + `<small class="erro-campo" id="det-alu-limHorarios-erro" role="alert">${esc(erro ? erro.texto : '')}</small></div>`;
+}
+
+// A seção "Limitações": "Só voa no" (as etiquetas dos tipos), "Pode voar", "Priorizar com" e "Não escalar com" (como o F1h os
+// deixou) e, quando há, a linha do peso (os aviões em que nenhum INVA ativo habilitado cabe com o aluno; sem o número)
+function secaoDasLimitacoes(s, edita) {
+  const l = normalizarLimitacoes(s.limitacoes);
+  const recursos = (l && l.recursos) || [];
   const voaCom = s.voaCom || [];
-  const edita = !isGestor();
+  const peso = linhaDoPeso(tiposQueNaoCabem(S, s));
   const campos = [
-    { id: 'nm', rotulo: 'Nome (na escala)', tipo: 'texto', valor: s.nm, atributos: `data-f="nm" maxlength="${LIMITE_DO_NOME}"` },
-    { id: 'kg', rotulo: 'Peso (kg)', tipo: 'numero', valor: s.kg || '', texto: s.kg ? `${numeroBr(s.kg)} kg` : 'sem peso', falta: !s.kg, atributos: 'data-f="kg" min="1" max="300" step="0.1" placeholder="sem peso"' },
+    edita
+      ? {
+        id: 'limRecursos', rotulo: 'Só voa no', tipo: 'etiquetas', classe: 'lim', dica: ['limitacoes', 'O que são as Limitações?'],
+        itens: recursos.map(t => ({ texto: t, rotulo: `Tirar ${t} de Só voa no`, atributos: `data-act="unlr" data-t="${esc(t)}"`, classe: 'lim' })),
+        acrescentar: { atributos: 'data-f="limRecurso"', vazio: recursos.length ? 'Também no…' : 'Qualquer recurso: só no…', rotulo: 'Só voa no', opcoes: TIPOS_LIMITAVEIS.filter(t => !recursos.includes(t)).map(t => [t, t]) }
+      }
+      : { id: 'limRecursos', rotulo: 'Só voa no', tipo: 'leitura', texto: recursos.length ? recursos.join(', ') : 'Qualquer recurso', dica: ['limitacoes', 'O que são as Limitações?'] },
+    { id: 'limHorarios', tipo: 'html', html: campoDosHorarios(s, l, edita) },
     {
       id: 'voaCom', rotulo: 'Priorizar com', tipo: 'etiquetas', classe: 'voa-com', dica: ['voa-com', 'O que é Priorizar com?'],
       ...instrutoresDoAluno(s, { ids: voaCom, campo: 'voaCom', classe: 'par', vazio: 'Priorizar com…', fora: [...voaCom, ...s.bl], rotuloDoX: x => `Tirar ${x.nm} de Priorizar com` })
@@ -193,10 +236,26 @@ export function detalheDoAluno(id) {
     {
       id: 'bl', rotulo: 'Não escalar com', tipo: 'etiquetas', classe: 'nao-escalar', dica: ['nao-escalar-com', 'O que é Não escalar com?'],
       ...instrutoresDoAluno(s, { ids: s.bl, campo: 'bl', classe: '', vazio: 'Não escalar com…', fora: s.bl, rotuloDoX: x => `Voltar a escalar com ${x.nm}` })
-    }
+    },
+    ...(peso ? [{ id: 'limPeso', rotulo: 'Peso nos aviões', tipo: 'leitura', texto: peso }] : [])
+  ];
+  return { id: 'limitacoes', titulo: 'Limitações', icone: 'i-cadeado', escopo: 'todas as datas', resumo: l ? textoDasLimitacoes(l) : '', campos };
+}
+
+// O detalhe de um aluno (null: ele saiu do cadastro)
+export function detalheDoAluno(id) {
+  const s = stuBy(+id);
+  if (!s) return null;
+  const veDados = podeVerDadosPessoais();
+  const canac = veDados ? canacDe('aluno', s.id) : '';
+  const edita = !isGestor();
+  const campos = [
+    { id: 'nm', rotulo: 'Nome (na escala)', tipo: 'texto', valor: s.nm, atributos: `data-f="nm" maxlength="${LIMITE_DO_NOME}"` },
+    { id: 'kg', rotulo: 'Peso (kg)', tipo: 'numero', valor: s.kg || '', texto: s.kg ? `${numeroBr(s.kg)} kg` : 'sem peso', falta: !s.kg, atributos: 'data-f="kg" min="1" max="300" step="0.1" placeholder="sem peso"' }
   ];
   const dados = secaoDosDadosPessoais('alu', 'aluno', s.id);
-  const secoes = [secaoNestaData(s), secaoDoCurso(s, edita), { id: 'cadastro', titulo: 'Cadastro', icone: 'i-conta', escopo: 'todas as datas', campos }, ...(dados ? [dados] : [])];
+  const secoes = [secaoNestaData(s), secaoDoCurso(s, edita), { id: 'cadastro', titulo: 'Cadastro', icone: 'i-conta', escopo: 'todas as datas', campos },
+    secaoDasLimitacoes(s, edita), ...(dados ? [dados] : [])];
   // "Apagar os dados pessoais": do aluno inativo que tem dados, para quem os altera
   const apagar = inativo(s) && podeEditarDadosPessoais() && dadosDe('aluno', s.id)
     ? [{ id: 'apagar-dados', texto: 'Apagar os dados pessoais', rotulo: `Apagar os dados pessoais de ${s.nm}`, atributos: 'data-act="apagar-dados"', soEdicao: true }] : [];

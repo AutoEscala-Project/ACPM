@@ -7,18 +7,26 @@
 // no C172 limita os aviões, e os simuladores ficam livres (só no Sim. Multi, o contrário); a Sala Ground nunca é limitada.
 // O motor lê as limitações da data (limitacoesNaData, pelo estado da escala: comLimitacoesDaData, js/state.js), já sem os
 // dias: um horário com dias que chega a ele sem ser lido para a data não é início.
-// Puro (config e format): a leitura do cadastro (js/dias.js, js/storage.js) normaliza o que vem gravado; o motor, a
-// conferência dos voos fixos, a compactação e as Sugestões usam as mesmas regras
-import { AIRCRAFT_EQ_TYPES, SIM_EQ_TYPES, MINUTOS_DO_DIA } from './config.js';
+// Puro (config, format, habilitacoes e combustivel): a leitura do cadastro (js/dias.js, js/storage.js) normaliza o que vem
+// gravado; o motor, a conferência dos voos fixos, a compactação, as Sugestões e a seção "Limitações" de Alunos usam as
+// mesmas regras
+import { AIRCRAFT_EQ_TYPES, SIM_EQ_TYPES, DEFAULT_LIM, MINUTOS_DO_DIA } from './config.js';
 import { hm } from './format.js';
+import { habilitadoNoTipo } from './habilitacoes.js';
+import { reducaoNecessaria } from './combustivel.js';
 
-// Os tipos que a limitação nomeia: os aviões e os simuladores, na ordem da frota
-const TIPOS_LIMITAVEIS = [...AIRCRAFT_EQ_TYPES, ...SIM_EQ_TYPES];
+// Os tipos que a limitação nomeia: os aviões e os simuladores, na ordem da frota (os que a tela oferece)
+export const TIPOS_LIMITAVEIS = [...AIRCRAFT_EQ_TYPES, ...SIM_EQ_TYPES];
 const ESPECIES = [AIRCRAFT_EQ_TYPES, SIM_EQ_TYPES];
+// Os dias que a tela oferece: segunda a sábado (o aeroclube não opera aos domingos); todos eles, todas as datas
+export const DIAS_DAS_LIMITACOES = [1, 2, 3, 4, 5, 6];
 const NOMES_DOS_DIAS = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
+export const nomeDoDia = d => NOMES_DOS_DIAS[d];
 export const MAXIMO_DE_HORARIOS = 8;
-// Os horários vão das 06:00 (o primeiro horário que uma lista de decolagem aceita) à meia-noite
+// Os horários vão das 06:00 (o primeiro horário que uma lista de decolagem aceita) à meia-noite; os campos De e Até, de 10
+// em 10 minutos
 const INICIO_DOS_HORARIOS = 360;
+export const MINUTOS_DOS_HORARIOS = Array.from({ length: (MINUTOS_DO_DIA - INICIO_DOS_HORARIOS) / 10 + 1 }, (_, i) => INICIO_DOS_HORARIOS + i * 10);
 
 const objeto = v => Boolean(v) && typeof v === 'object' && !Array.isArray(v);
 const minutoValido = m => Number.isInteger(m) && m >= INICIO_DOS_HORARIOS && m <= MINUTOS_DO_DIA;
@@ -89,9 +97,31 @@ export function comLimitacoesDaData(estado, data) {
 
 // "13:00–18:00 (seg, qua, sex); 07:00–09:00"; nenhum, "nenhum horário nesta data"
 export const textoDosHorarios = horarios => (horarios.length
-  ? horarios.map(h => `${hm(h.de)}–${hm(h.ate)}${h.dias ? ` (${h.dias.map(d => NOMES_DOS_DIAS[d]).join(', ')})` : ''}`).join('; ')
+  ? horarios.map(h => `${hm(h.de)}–${hm(h.ate)}${h.dias ? ` (${h.dias.map(nomeDoDia).join(', ')})` : ''}`).join('; ')
   : 'nenhum horário nesta data');
 
 // O que o motor diz do quando, na recusa disponibilidade-do-aluno: o horário do pedido (o rótulo dele) e as limitações
 export const quandoOAlunoVoa = (doPedido, limitacoes) => [doPedido, limitadoNoHorario(limitacoes) ? `Limitações: ${textoDosHorarios(limitacoes.horarios)}` : null]
   .filter(Boolean).join('; ');
+
+// O Histórico: "só no C172 e no Sim. Multi; 13:00–18:00 (seg)"; sem nada, "nenhuma"
+export function textoDasLimitacoes(limitacoes) {
+  const l = normalizarLimitacoes(limitacoes);
+  if (!l) return 'nenhuma';
+  return [l.recursos ? `só ${l.recursos.map(t => `no ${t}`).join(' e ')}` : null, l.horarios ? textoDosHorarios(l.horarios) : null].filter(Boolean).join('; ');
+}
+
+// O peso do aluno nos aviões (a linha das Limitações): os tipos de avião com limite de peso em que, num voo local de 1 h,
+// nenhum INVA ativo, habilitado no tipo e com o peso informado cabe com ele, nem com o mínimo de combustível. Sem o peso do
+// aluno, ou sem nenhum INVA assim no tipo, o tipo fica de fora (o limite não é conferido)
+export function tiposQueNaoCabem(estado, aluno) {
+  if (!aluno || !aluno.kg) return [];
+  const ativos = (Array.isArray(estado.ins) ? estado.ins : []).filter(x => x && x.inativo !== true && x.kg > 0);
+  return AIRCRAFT_EQ_TYPES.filter(tipo => {
+    if (!DEFAULT_LIM[tipo]) return false;
+    const habilitados = ativos.filter(x => habilitadoNoTipo(x, tipo));
+    return habilitados.length > 0 && habilitados.every(x => reducaoNecessaria({ stuKg: aluno.kg, insKg: x.kg, tipo, minutos: 60, mis: 'Voo Local' }) === Infinity);
+  });
+}
+// "Com o peso do aluno, nenhum INVA ativo habilitado cabe no C152." (sem nenhum número); sem tipo, ''
+export const linhaDoPeso = tipos => (tipos.length ? `Com o peso do aluno, nenhum INVA ativo habilitado cabe ${tipos.map(t => `no ${t}`).join(' e ')}.` : '');
