@@ -52,6 +52,7 @@
   <symbol id="i-tema" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor"/></symbol>
   <symbol id="i-calendario" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></symbol>
   <symbol id="i-aviao" viewBox="0 0 24 24"><path d="M12 2.5c.8 0 1.5.7 1.5 1.5v5.5l7 4v2l-7-2v4.2l2 1.6V21L12 20l-3.5 1v-1.7l2-1.6v-4.2l-7 2v-2l7-4V4c0-.8.7-1.5 1.5-1.5z"/></symbol>
+  <symbol id="i-aluno" viewBox="0 0 24 24"><circle cx="12" cy="10.5" r="3.5"/><path d="M5.5 21a6.5 6.5 0 0 1 13 0"/><path d="M6.5 5.5L12 3l5.5 2.5L12 8z"/></symbol>
   <symbol id="i-instrutor" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></symbol>
   <symbol id="i-lista" viewBox="0 0 24 24"><path d="M9 6h12M9 12h12M9 18h12"/><path d="M4 6h.01M4 12h.01M4 18h.01"/></symbol>
   <symbol id="i-decolagem" viewBox="0 0 24 24"><path d="M2 22h20"/><path d="M6.36 17.4 4 17l-2-4 1.1-.55a2 2 0 0 1 1.8 0l.17.1a2 2 0 0 0 1.8 0L8 12 5 6l.9-.45a2 2 0 0 1 2.09.2l4.02 3a2 2 0 0 0 2.1.2l4.19-2.06a2.41 2.41 0 0 1 1.73-.17L21 7a1.4 1.4 0 0 1 .87 1.99l-.38.76c-.23.46-.6.84-1.07 1.08L7.58 17.2a2 2 0 0 1-1.22.18Z"/></symbol>
@@ -250,10 +251,10 @@
       <ul class="lista" id="rec" role="list" aria-label="Recursos" data-lista="rec"></ul>
     </div>
     <div class="md-detalhe" id="det-rec" data-regiao="detalhe" role="region" aria-label="Recurso escolhido" tabindex="-1">
-      <!-- Nada escolhido: o texto e o formulário do recurso novo ("+ Novo recurso"), um bloco fixo que o componente não
-           redesenha -->
+      <!-- Nada escolhido: o avião, o texto e a dica de quem cria, no meio do painel (como o vazio do componente,
+           js/detalhe.js), e o formulário do recurso novo ("+ Novo recurso"), um bloco fixo que o componente não redesenha -->
       <div class="rec-vazio" id="rec-vazio">
-        <p class="det-vazio h">Escolha um recurso ou uma categoria na lista.</p>
+        <div class="det-vazio"><svg class="ico det-vazio-icone" aria-hidden="true"><use href="#i-aviao"/></svg><p class="det-vazio-texto">Escolha um recurso ou uma categoria na lista.</p><p class="det-vazio-dica edit-only">ou use + Novo recurso</p></div>
         <form class="form-recurso edit-only" id="form-recurso" autocomplete="off" novalidate hidden aria-labelledby="rec-novo-titulo">
           <h3 id="rec-novo-titulo">Novo recurso</h3>
           <label>Matrícula <input id="rec-reg" maxlength="15" placeholder="PR-ABC" required aria-describedby="rec-erro"></label>
@@ -765,7 +766,7 @@
       Os horários fechados valem só para a data deles: a data seguinte começa com o dia todo aberto.</p>
 
       <h4>Alunos</h4>
-      <p>A lista dos alunos fica à esquerda e o aluno escolhido à direita.
+      <p>A lista dos alunos fica à esquerda e o aluno escolhido à direita; sem nenhum escolhido, o detalhe diz <i>Escolha um aluno na lista.</i> (e, para quem cadastra, <i>ou use + Novo aluno</i>).
       Cada linha tem o nome, o CANAC (para quem vê os dados pessoais) e o curso<span data-funcionalidade="progresso">, as missões aprovadas do programa à direita e a próxima embaixo (no detalhe, numa linha: <i>12/40 · próxima PP-13</i>)</span>; o ponto amarelo marca quem está sem peso.
       Um clique escolhe o aluno, e as setas ↑ ↓ andam pela lista escolhendo; Enter vai ao detalhe, e o Esc volta à linha.
       O aluno escolhido fica no endereço da página (por exemplo, <i>#/alu/1000</i>): recarregar, trocar de data ou de tela e voltar mantém ele aberto.
@@ -842,7 +843,7 @@
       Marque primeiro os INVAs que têm a habilitação (aqui) e depois as missões que a exigem (em Cursos): a missão marcada antes de algum INVA ativo ter fica com o voo fora da escala, com o motivo.</p>
 
       <h4>Recursos</h4>
-      <p>A lista dos recursos fica à esquerda, por categoria (C152, C172, Simulador, PA-34 e Sala Ground), e o recurso escolhido à direita; no celular, a lista primeiro, depois o detalhe, e <i>‹ Recursos</i> volta à lista.
+      <p>A lista dos recursos fica à esquerda, por categoria (C152, C172, Simulador, PA-34 e Sala Ground), e o recurso escolhido à direita (sem nenhum escolhido, o detalhe diz o que fazer, e quem cadastra vê <i>ou use + Novo recurso</i>); no celular, a lista primeiro, depois o detalhe, e <i>‹ Recursos</i> volta à lista.
       O recurso escolhido fica no endereço (por exemplo <i>#/rec/PR-VOB</i>), e <i>Anterior</i> e <i>Próximo</i> (também Ctrl+, e Ctrl+.) andam pela lista.
       Cada linha mostra a matrícula, o tipo e os atributos, as horas até a revisão de 50 horas e, na terceira linha, a data aberta com o que o recurso faz nela (<i>disponível · 2 h na escala</i>, <i>em manutenção</i>, <i>parou para a revisão de 50 horas às 14:30</i>); o ponto da linha marca o avião parado para a revisão (vermelho) ou com menos de 5 h até ela (âmbar).
       Ao lado, duas chaves: <i>Disponível</i>, nesta data, e <i>Ativo</i>, no cadastro.
