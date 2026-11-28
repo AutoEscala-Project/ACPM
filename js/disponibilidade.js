@@ -53,7 +53,9 @@ export function faixasDoAw(aw) {
 export const minutoDaFaixa = m => Number.isInteger(m) && m >= INICIO_DAS_FAIXAS && m <= MINUTOS_DO_DIA;
 
 // Os intervalos válidos ({ de, ate } inteiros, 06:30 ≤ de < ate ≤ 24:00, nada além disso), em ordem, os que se tocam ou se
-// cruzam juntos num só, até o máximo
+// cruzam juntos num só, até o máximo. Com [de, ate), juntar os que se tocam não muda a regra: "começa numa faixa" só lê a
+// união das faixas, e um [a, b) não vazio toca [x, y) ∪ [y, z) se e só se toca [x, z); o que se vê é uma pausa só na
+// tela (12:00–13:00 e 13:00–13:30 voltam 12:00–13:30), e os turnos reconhecidos nas faixas que se tocam
 function intervalos(lista, maximo) {
   if (!Array.isArray(lista)) return [];
   const itens = lista.filter(f => f && typeof f === 'object' && minutoDaFaixa(f.de) && minutoDaFaixa(f.ate) && f.de < f.ate)
@@ -77,7 +79,10 @@ const lidas = x => (Array.isArray(x.faixas) ? { faixas: x.faixas, pausas: Array.
 
 // O instrutor pode assumir o compromisso [a, b) (voo, simulador ou aula de Ground): ele vem na data (on), o compromisso
 // começa dentro de uma faixa (o que começa antes das 06:30 começa às 06:30 para a regra) e não toca nenhuma pausa. O que
-// termina até as 06:30, ou começa na meia-noite, não pede faixa (nenhum tempo de antes o cobria)
+// termina até as 06:30, ou começa na meia-noite, não pede faixa (nenhum tempo de antes o cobria). O início levado às
+// 06:30 vale só para "começa numa faixa": a pausa é conferida com o [a, b) de verdade. Faixas e pausas são sempre das
+// 06:30 em diante (faixasDoAw, os turnos, conferirFaixas, comOIntervalo, normalizarFaixas/normalizarPausas ao abrir, ler,
+// gravar e copiar a data, a reversão)
 export function disponivelPara(x, a, b) {
   if (!x || !x.on) return false;
   const inicio = Math.max(a, INICIO_DAS_FAIXAS);
