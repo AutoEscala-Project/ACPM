@@ -2,7 +2,7 @@
 // "Registrado por", a exceção da coordenação e o cancelamento. O relógio dos testes está em 10/11/2026, 12:00 em São Paulo.
 import { test, comProgresso, expect, abrir, irPara, abrirEscala, lerEscala, caixaVoa, campoDaAgenda, contagemDoDia, dataAberta, diaAnterior, diaSeguinte, importarDaAgenda, mudarData, registrarPedido,
   escolherMissaoDoCurso, missaoDoCursoNaAgenda, appPronto, exportar, AMANHA, linhaDoPedido, entradasDoHistorico, linhasDosPedidos, linhaDaLista, grupoDosPedidos, buscaDosPedidos, aprovarNaLinha,
-  escolherPedido, campoDoDetalhe, acaoDoPedido, botaoDosPedidos, avisoDosPedidos, estadoDoFormulario, botaoDoFormulario, botaoImportarDaAgenda, medirVazioDoDetalhe } from './fixtures.js';
+  escolherPedido, campoDoDetalhe, acaoDoPedido, botaoDosPedidos, avisoDosPedidos, estadoDoFormulario, botaoDoFormulario, botaoImportarDaAgenda, medirVazioDoDetalhe, textosDaEscala } from './fixtures.js';
 import { razaoDeContraste } from '../helpers/contraste.js';
 import { readFileSync } from 'node:fs';
 import { documentosAtuais } from './supabase-falso.js';
@@ -731,10 +731,12 @@ const CURSO_PC = {
 };
 // A Maria e a Ana no PP, o Bruno no PC e o Aluno 1001 sem curso, nenhum voando; o cadastro e o dia no formato atual, os cursos e a agenda
 // (pedidos já registrados) neste navegador
-async function abrirComOsCursos(page, { frota = null, agenda = [], url = './' } = {}) {
+// limitacoes: as do aluno, pelo id (L)
+async function abrirComOsCursos(page, { frota = null, agenda = [], url = './', limitacoes = {} } = {}) {
   const estado = cenario({ stu: [aluno(1000, { fly: false }, { nm: 'Maria', curso: 'PP' }), aluno(1001, { fly: false }), aluno(1002, { fly: false }, { nm: 'Ana', curso: 'PP' }),
     aluno(1003, { fly: false }, { nm: 'Bruno', curso: 'PC' })] });
   if (frota) estado.frota = frota;
+  for (const s of estado.stu) if (limitacoes[s.id]) s.limitacoes = limitacoes[s.id];
   const { documentos: { cadastro }, dias } = documentosAtuais(estado, AMANHA);
   const docs = {
     acpm4_cadastro: cadastro, [`acpm4_dia_${AMANHA}`]: dias[AMANHA], acpm4_agenda: agenda,
@@ -1402,5 +1404,118 @@ test.describe('Os pedidos em dia (modo local)', () => {
     await expect(avisoDosPedidos(page)).not.toContainText('mudou em outro computador');
     await expect(avisoDosPedidos(page)).not.toContainText('fora da demanda');
     await outra.close();
+  });
+});
+
+// L (N9): o formulário dos pedidos diz o que o motor recusaria. Os tipos e os horários fora das limitações do aluno vêm na
+// lista, desligados, com o porquê ("(o aluno só voa no C172)"), para todo perfil; os horários são os da data do pedido (os
+// dias da semana). A missão do curso no C152 de quem só voa no C172 oferece os tipos que o tipo da missão permite e o aluno
+// voa, e continua ligada (R7). O pedido registrado antes da limitação fica, e a Escala o recusa com o motivo
+test.describe('Os pedidos e as limitações do aluno', () => {
+  const opcoes = (page, campo) => campoDaAgenda(page, campo).locator('option');
+  const desligadas = (page, campo) => campoDaAgenda(page, campo).locator('option:disabled');
+  // 11/11/2026 é uma quarta-feira; 12/11, quinta; 13/11, sexta
+  const LIMITADO = { recursos: ['C172'], horarios: [{ de: 780, ate: 1080, dias: [3] }, { de: 420, ate: 540, dias: [4] }] };
+  const fora = (lista, motivo) => lista.map(h => `${h} (${motivo})`);
+
+  test('os tipos e os horários de fora vêm desligados, com o porquê; os horários são os do dia da semana do pedido', async ({ page }) => {
+    await abrirComOsCursos(page, { limitacoes: { 1001: LIMITADO } });
+    await campoDaAgenda(page, 'aluno').selectOption({ label: 'Aluno 1001' });
+    await campoDaAgenda(page, 'missao').selectOption('Voo Local');
+    await expect(opcoes(page, 'recurso')).toHaveText(['C152 (o aluno só voa no C172)', 'C172', 'PA-34 (o aluno só voa no C172)']);
+    await expect(desligadas(page, 'recurso')).toHaveText(['C152 (o aluno só voa no C172)', 'PA-34 (o aluno só voa no C172)']);
+    await expect(campoDaAgenda(page, 'recurso')).toHaveValue('C172');
+    const tarde = 'o aluno só voa das 13:00 às 18:00';
+    await expect(opcoes(page, 'horario')).toHaveText(['Escolha o horário…', ...fora(['06:30', '08:20', '10:10', '11:30', '12:40'], tarde), '13:40', '14:30', '16:20']);
+    await expect(desligadas(page, 'horario')).toHaveCount(5);
+    await expect(campoDaAgenda(page, 'horario-motivo')).toHaveText(`3 de 8 horários do C172: ${tarde}.`);
+    // Sexta: nenhum; quinta: das 07:00 às 09:00, um horário só, escolhido sozinho
+    await campoDaAgenda(page, 'data').selectOption('2026-11-13');
+    await expect(desligadas(page, 'horario')).toHaveCount(8);
+    await expect(campoDaAgenda(page, 'horario')).toHaveValue('');
+    await expect(campoDaAgenda(page, 'horario-motivo')).toHaveText('Nenhum dos 8 horários do C172: o aluno não voa nesta data.');
+    await campoDaAgenda(page, 'data').selectOption('2026-11-12');
+    await expect(campoDaAgenda(page, 'horario')).toHaveValue('08:20');
+    await expect(campoDaAgenda(page, 'horario-motivo')).toHaveText('1 de 8 horários do C172: o aluno só voa das 07:00 às 09:00.');
+    // A escolha que o dia da semana não tem sai, e o campo diz por quê; ela volta no dia que a tem
+    await campoDaAgenda(page, 'data').selectOption(AMANHA);
+    await campoDaAgenda(page, 'horario').selectOption('13:40');
+    await expect(desligadas(page, 'horario2')).toHaveCount(5);
+    await campoDaAgenda(page, 'data').selectOption('2026-11-12');
+    await expect(campoDaAgenda(page, 'horario-motivo')).toHaveText('O horário 13:40 está fora das limitações do aluno (o aluno só voa das 07:00 às 09:00). Agora é 08:20.');
+    await campoDaAgenda(page, 'data').selectOption(AMANHA);
+    await expect(campoDaAgenda(page, 'horario')).toHaveValue('13:40');
+    await expect(campoDaAgenda(page, 'horario-motivo')).toHaveText('O horário agora é 13:40.');
+    // Na quarta, registrado às 13:40 no C172
+    await registrarPedido(page, { aluno: 'Aluno 1001', recurso: 'C172', horario: '13:40' });
+    const [guardado] = await agendaGuardada(page);
+    expect([guardado.recurso, guardado.horario]).toEqual(['C172', '13:40']);
+  });
+
+  // Revisão: a 2ª preferência que sai pelas limitações diz o porquê dela; na data em que nenhum horário serve ao aluno, o
+  // campo não pede uma escolha que não existe, e a 2ª preferência fica desligada
+  test('a 2ª preferência que sai pelas limitações diz por quê; sem nenhum horário que sirva, nada de "Escolha", e a 2ª desligada', async ({ page }) => {
+    await abrirComOsCursos(page, { limitacoes: { 1001: LIMITADO } });
+    await campoDaAgenda(page, 'aluno').selectOption({ label: 'Aluno 1001' });
+    // Quinta: das 07:00 às 09:00, o 08:20 escolhido pelo app; nenhuma 2ª que sirva: desligada, com o porquê
+    await campoDaAgenda(page, 'data').selectOption('2026-11-12');
+    await campoDaAgenda(page, 'missao').selectOption('Voo Local');
+    await expect(campoDaAgenda(page, 'horario')).toHaveValue('08:20');
+    await expect(campoDaAgenda(page, 'horario2')).toBeDisabled();
+    await expect(campoDaAgenda(page, 'horario2-motivo')).toHaveText('Sem 2ª preferência: o aluno só voa das 07:00 às 09:00.');
+    // Sexta: nenhum horário; o 08:20 que o app escolheu sai, e o campo diz por que não há outro
+    await campoDaAgenda(page, 'data').selectOption('2026-11-13');
+    await expect(campoDaAgenda(page, 'horario')).toHaveValue('');
+    await expect(campoDaAgenda(page, 'horario-motivo')).toHaveText('O horário 08:20 era o único da escolha anterior. Nenhum dos 8 horários do C172: o aluno não voa nesta data.');
+    await expect(campoDaAgenda(page, 'horario2')).toBeDisabled();
+    // Quarta, 13:40 e 14:30; quinta: a 1ª vai para 08:20, a 2ª sai pelas limitações, e nenhuma outra serve
+    await campoDaAgenda(page, 'data').selectOption(AMANHA);
+    await campoDaAgenda(page, 'horario').selectOption('13:40');
+    await expect(campoDaAgenda(page, 'horario2')).toBeEnabled();
+    await expect(campoDaAgenda(page, 'horario2-motivo')).toHaveText('Opcional: outro horário, se o da 1ª não couber.');
+    await campoDaAgenda(page, 'horario2').selectOption('14:30');
+    await campoDaAgenda(page, 'data').selectOption('2026-11-12');
+    await expect(campoDaAgenda(page, 'horario')).toHaveValue('08:20');
+    await expect(campoDaAgenda(page, 'horario2')).toHaveValue('');
+    await expect(campoDaAgenda(page, 'horario2-motivo')).toHaveText('A 2ª preferência 14:30 está fora das limitações do aluno (o aluno só voa das 07:00 às 09:00): sem 2ª preferência nesta data.');
+    await expect(campoDaAgenda(page, 'horario2')).toBeDisabled();
+    // Sexta: o 13:40 da pessoa, fora das limitações, e nenhum outro serve (nada de "Escolha outro")
+    await campoDaAgenda(page, 'data').selectOption('2026-11-13');
+    await expect(campoDaAgenda(page, 'horario')).toHaveValue('');
+    await expect(campoDaAgenda(page, 'horario-motivo')).toHaveText('O horário 13:40 está fora das limitações do aluno (o aluno não voa nesta data), e nenhum dos horários do C172 está nelas.');
+    await expect(campoDaAgenda(page, 'horario2')).toBeDisabled();
+  });
+
+  test('a missão do curso no C152 de quem só voa no C172: os tipos da missão que ele voa, e ela continua ligada (R7)', async ({ page }) => {
+    await abrirComOsCursos(page, { limitacoes: { 1000: { recursos: ['C172'] } } });
+    await campoDaAgenda(page, 'aluno').selectOption({ label: 'Maria' });
+    await escolherMissaoDoCurso(page, 'NAV-150NM');
+    await expect(opcoes(page, 'recurso')).toHaveText(['C152 (o aluno só voa no C172)', 'C172', 'PA-34 (o aluno só voa no C172)']);
+    await expect(campoDaAgenda(page, 'recurso')).toHaveValue('C172');
+    await expect(campoDaAgenda(page, 'recurso-motivo')).toHaveText('O programa faz NAV-150NM no C152, e o aluno só voa no C172: o pedido vai no C172, e a missão continua NAV-150NM.');
+    await registrarPedido(page, { aluno: 'Maria', codigo: 'NAV-150NM', recurso: 'C172', horario: '08:20' });
+    await expect(linhasDosPedidos(page).first()).toContainText('NAV-150NM · C172');
+    const [guardado] = await agendaGuardada(page);
+    expect([guardado.missao, guardado.recurso, guardado.missao_do_curso]).toEqual(['Navegação', 'C172', cursoPP().missoes.find(m => m.codigo === 'NAV-150NM').id]);
+    // Na demanda, o voo é a missão do curso, no C172
+    await expect.poll(() => page.evaluate(d => { const p = JSON.parse(localStorage.getItem(`acpm4_dia_${d}`)).pedidos[1000]; return p && [p.fly, p.eq, p.etapa]; }, AMANHA))
+      .toEqual([true, 'C172', 'NAV-150NM']);
+  });
+
+  test('o pedido registrado antes da limitação fica registrado, e a Escala o recusa com o motivo', async ({ page }) => {
+    await abrirComOsCursos(page);
+    await registrarPedido(page, { aluno: 'Aluno 1001', horario: '08:20' });
+    await expect(linhasDosPedidos(page)).toHaveCount(1);
+    await irPara(page, 'alu');
+    await page.locator('#alu > li[data-chave="i:1001"] .lista-botao').click();
+    await page.locator('#det-alu [data-f="limRecurso"]').selectOption('C172');
+    await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('acpm4_cadastro')).stu.find(s => s.id === 1001).limitacoes)).toEqual({ recursos: ['C172'] });
+    await abrirEscala(page);
+    await expect(textosDaEscala(page, 'erros').filter({ hasText: 'Aluno 1001' })).toHaveText(['Aluno 1001 Rejeitado: o aluno só voa no C172 (o pedido está no C152).']);
+    const [guardado] = await agendaGuardada(page);
+    expect(guardado.cancelada_em).toBe(null);
+    await irPara(page, 'age');
+    await expect(linhasDosPedidos(page).first()).toContainText('Aluno 1001');
+    await expect(grupoDosPedidos(page, 'cancelados')).toHaveCount(0);
   });
 });

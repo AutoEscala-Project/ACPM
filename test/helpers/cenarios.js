@@ -176,3 +176,20 @@ export function comAgenda(estado, seed) {
   });
   return { ...estado, stu };
 }
+
+// As limitações dos alunos sobre um cenário, com outro gerador (os cenários de base, e os goldens, não mudam; L): ~35% dos
+// alunos com os tipos em que voam (só um avião, dois aviões, só um simulador) e ~35% com os horários em que podem voar
+// (um ou dois horários de 1 a 7 h, entre as 06:30 e as 18:00, já da data: sem dias), às vezes os dois juntos
+export function comLimitacoes(estado, seed) {
+  const r = mulberry32(seed * 3571 + 41);
+  const pick = a => a[Math.floor(r() * a.length)];
+  const TIPOS = [['C172'], ['C152'], ['C152', 'C172'], ['PA-34'], ['Sim. Multi'], ['Sim. Mono'], ['C172', 'Sim. Mono']];
+  const horario = () => { const de = 390 + 10 * Math.floor(r() * 60); return { de, ate: Math.min(1440, de + 60 * (1 + Math.floor(r() * 7))) }; };
+  const stu = estado.stu.map(s => {
+    const recursos = r() < 0.35 ? pick(TIPOS) : null;
+    const horarios = r() < 0.35 ? [horario(), ...(r() < 0.3 ? [horario()] : [])] : null;
+    if (!recursos && !horarios) return structuredClone(s);
+    return { ...structuredClone(s), limitacoes: { ...(recursos ? { recursos } : {}), ...(horarios ? { horarios } : {}) } };
+  });
+  return { ...estado, stu };
+}

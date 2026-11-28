@@ -3,7 +3,8 @@
 // mesmo caminho de sempre (registro.js, gravarAlteracao); o valor recusado fica no campo, com a mensagem. Os resultados
 // da missão do curso sem voo ("Registrar resultado sem voo", "Colocar no curso até…" e a reversão dela, no Histórico) vão
 // para o servidor como o resultado da linha do voo (registrarResultadoNaTela), sem gravar o dia. "Apagar os dados
-// pessoais" grava os campos vazios (js/views/editor-de-dados-pessoais.js)
+// pessoais" grava os campos vazios (js/views/editor-de-dados-pessoais.js). As limitações (L): "Só voa no" e "Pode voar"
+// gravados ao mudar, cada mudança com a reversão (setLimitacoes)
 import { gravarAlteracao, ultimaGravacao, logChange } from '../actions.js';
 import { normalizarCursoDoAluno } from '../cursos.js';
 import { anunciar, showToast } from '../dom.js';
@@ -17,7 +18,8 @@ import { registrarResultadoNaTela } from '../resultado-na-tela.js';
 import { registrarDesenho, redesenharPorNome } from '../redesenho.js';
 import { semFalhar } from '../sem-falhar.js';
 import { criarMestreDetalhe } from '../views/mestre-detalhe.js';
-import { modeloDosAlunos, detalheDoAluno, escolhasDe, lembrarEscolha, esquecerEscolhas } from '../views/alunos.js';
+import { modeloDosAlunos, detalheDoAluno, escolhasDe, lembrarEscolha, esquecerEscolhas, erroNasLimitacoes } from '../views/alunos.js';
+import { normalizarLimitacoes, textoDasLimitacoes, DIAS_DAS_LIMITACOES, MINUTOS_DOS_HORARIOS } from '../limitacoes.js';
 import { missoesParaRegistrar, colocacaoDoAluno } from '../views/etapas.js';
 import { aoMudarDadosPessoais } from '../views/dados-pessoais.js';
 import { pessoaEscolhida, apagarDadosPessoais } from '../views/editor-de-dados-pessoais.js';
@@ -89,6 +91,106 @@ aoAcionar('unvc', (b, { id }) => {
   redesenharPorNome('pedidos-do-dia');
 });
 
+// ——— As limitações do aluno (L, N9) ———
+// Grava as limitações novas do aluno (normalizadas; sem nenhuma, o campo sai), com a entrada do Histórico e a reversão, e
+// redesenha com o foco no controle (focar: o id dele, sem o "det-alu-"). As iguais às de agora não gravam nada
+function gravarLimitacoes(s, novas, focar) {
+  const antes = normalizarLimitacoes(s.limitacoes);
+  const limitacoes = normalizarLimitacoes(novas);
+  erroNasLimitacoes(s.id, null);
+  if (JSON.stringify(antes) !== JSON.stringify(limitacoes)) {
+    if (limitacoes) s.limitacoes = limitacoes;
+    else delete s.limitacoes;
+    gravarAlteracao('mod', `Limitações de ${s.nm}: ${textoDasLimitacoes(limitacoes)}`, { kind: 'setLimitacoes', stuId: s.id, antes, label: '↶ Reverter' });
+  }
+  tela.desenhar();
+  if (focar) tela.focarNoCampo(focar);
+  redesenharPorNome('pedidos-do-dia');
+}
+const horariosDe = s => structuredClone((normalizarLimitacoes(s.limitacoes) || {}).horarios || []);
+const comHorarios = (s, horarios) => ({ ...(normalizarLimitacoes(s.limitacoes) || {}), horarios });
+// A recusa de um campo de "Pode voar": a mensagem, o campo marcado, o valor de antes de volta
+function recusarNasLimitacoes(s, texto, campo) {
+  erroNasLimitacoes(s.id, { texto, campo });
+  // O redesenho inteiro: com a mesma recusa de antes, a seção não mudaria, e o campo ficaria com o valor recusado
+  tela.desenhar({ forcar: true });
+  tela.focarNoCampo(campo.replace(/^det-alu-/, ''));
+}
+
+// "+ Horário": das 06:30 (o primeiro dos campos, o primeiro horário de decolagem) à meia-noite, em todas as datas (nada fica
+// de fora até o De e o Até mudarem); o foco no De dele
+aoAcionar('lim-mais', (b, { id }) => {
+  const s = stuBy(id);
+  if (!s) return;
+  const novo = { de: MINUTOS_DOS_HORARIOS[0], ate: MINUTOS_DOS_HORARIOS.at(-1) };
+  const horarios = [...horariosDe(s), novo];
+  const lista = normalizarLimitacoes(comHorarios(s, horarios));
+  const i = lista ? lista.horarios.findIndex(h => h.de === novo.de && h.ate === novo.ate && !h.dias) : -1;
+  gravarLimitacoes(s, comHorarios(s, horarios), i >= 0 ? `lim-de-${i}` : 'lim-mais');
+});
+// O ✕ de um horário: o foco vai para "+ Horário"
+aoAcionar('lim-tirar', (b, { id }) => {
+  const s = stuBy(id);
+  if (!s) return;
+  const horarios = horariosDe(s).filter((_, i) => i !== +b.dataset.i);
+  gravarLimitacoes(s, comHorarios(s, horarios), 'lim-mais');
+});
+// O ✕ de um tipo de "Só voa no": o foco vai para a lista dos tipos
+aoAcionar('unlr', (b, { id }) => {
+  const s = stuBy(id);
+  if (!s) return;
+  const l = normalizarLimitacoes(s.limitacoes) || {};
+  gravarLimitacoes(s, { ...l, recursos: (l.recursos || []).filter(t => t !== b.dataset.t) }, 'limRecursos');
+});
+
+// Os campos das limitações (data-f limRecurso, limDe, limAte, limDia). Devolve se o campo era deles
+function mudarLimitacoes(s, t, f) {
+  if (f === 'limRecurso') {
+    if (!t.value) return true;
+    const l = normalizarLimitacoes(s.limitacoes) || {};
+    gravarLimitacoes(s, { ...l, recursos: [...(l.recursos || []), t.value] }, 'limRecursos');
+    return true;
+  }
+  if (!['limDe', 'limAte', 'limDia'].includes(f)) return false;
+  const horarios = horariosDe(s);
+  const i = +t.dataset.i;
+  const h = horarios[i];
+  if (!h) { tela.desenhar(); return true; }
+  if (f === 'limDia') {
+    // Os dias: sem eles, todos (segunda a sábado: o domingo não opera); todos marcados, todas as datas. Os de agora são os
+    // que a tela mostra: o domingo gravado pela API sai nesta mudança, e não conta como o dia que fica marcado
+    const d = +t.value;
+    const atuais = (h.dias || DIAS_DAS_LIMITACOES).filter(x => DIAS_DAS_LIMITACOES.includes(x));
+    const dias = t.checked ? [...new Set([...atuais, d])] : atuais.filter(x => x !== d);
+    if (!dias.length) { recusarNasLimitacoes(s, 'Marque ao menos um dia: com todos marcados, o horário vale em todas as datas.', t.id); return true; }
+    if (DIAS_DAS_LIMITACOES.every(x => dias.includes(x))) delete h.dias;
+    else h.dias = dias.sort((a, b) => a - b);
+  } else {
+    const valor = +t.value;
+    const de = f === 'limDe' ? valor : h.de, ate = f === 'limAte' ? valor : h.ate;
+    if (!(de < ate)) { recusarNasLimitacoes(s, 'O horário precisa terminar depois de começar (o Até depois do De).', t.id); return true; }
+    Object.assign(h, { de, ate });
+  }
+  // O controle que mudou, na posição do horário depois de ordenados (pelo começo)
+  const lista = normalizarLimitacoes(comHorarios(s, horarios));
+  const novo = lista ? lista.horarios.findIndex(x => x.de === h.de && x.ate === h.ate && JSON.stringify(x.dias) === JSON.stringify(h.dias)) : -1;
+  const pos = novo >= 0 ? novo : i;
+  gravarLimitacoes(s, comHorarios(s, horarios), f === 'limDia' ? `lim-dia-${pos}-${t.value}` : `lim-${f === 'limDe' ? 'de' : 'ate'}-${pos}`);
+  return true;
+}
+
+// "↶ Reverter" no Histórico: as limitações de antes da mudança
+aoReverter('setLimitacoes', (rev, entrada) => {
+  const s = stuBy(rev.stuId);
+  if (!s) return;
+  if (rev.antes) s.limitacoes = rev.antes;
+  else delete s.limitacoes;
+  erroNasLimitacoes(s.id, null);
+  gravarAlteracao('inc', `Revertido: limitações de ${s.nm}: ${textoDasLimitacoes(rev.antes)}`, null, entrada.id);
+  tela.desenhar();
+  redesenharPorNome('pedidos-do-dia');
+});
+
 // "Excluir aluno…", no rodapé do detalhe: dois cliques
 aoAcionar('dels', (b, { id }) => {
   if (!confirmado(b, 'Confirmar exclusão')) return;
@@ -103,6 +205,7 @@ aoAcionar('dels', (b, { id }) => {
 aoMudarCampo('s', (t, { f, id }) => {
   const s = stuBy(id);
   if (!s) return;
+  if (mudarLimitacoes(s, t, f)) return;
   let historico;
   if (f === 'nm') {
     const old = s.nm;

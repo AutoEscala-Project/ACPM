@@ -8,6 +8,7 @@ import { horariosDaMissao, horariosDoTipo, periodoDoMinuto, minutoDaPreferencia,
 import { categoriaDoTipo } from './categorias.js';
 import { horarioAberto } from './fechamentos.js';
 import { podeFazer, descreverExigencias } from './habilitacoes.js';
+import { tipoPermitido, motivoDoTipo, inicioPermitido, limitadoNoHorario, quandoOAlunoVoa } from './limitacoes.js';
 import { categoriaDoRodizio } from './rodizio.js';
 import { intervaloEfetivo, STATUS_EM_ANDAMENTO } from './status.js';
 import { sobrepoe, livre, cabeNoSaldo, folgaAte, problemasDoInstrutor } from './viabilidade.js';
@@ -385,9 +386,24 @@ export function runAllocationEngine(state, opcoes = {}) {
     const nm = stu.nm;
     const labelStu = mid ? `${nm} (${d.mis})` : nm;
     const isGnd = Boolean(m.isGround);
-    // Disponibilidade do aluno: o voo (ou o Ground) só começa nesses horários (por período ou num horário exato)
+    // As limitações do aluno (L, N9: duras): o pedido num tipo em que ele não voa é recusado, e o motor não muda o tipo dele
+    // (a Sala Ground não é limitada; o simulador, só pela limitação dos simuladores)
+    if (!isGnd && !tipoPermitido(stu.limitacoes, d.eq)) {
+      alertas.push({ t: 'err', s: labelStu, m: `Rejeitado: ${motivoDoTipo(stu.limitacoes, d.eq)} (o pedido está no ${d.eq}).`, codigo: 'limitacao-de-recurso' });
+      return;
+    }
+    // Disponibilidade do aluno: o voo (ou o Ground) só começa nesses horários (num horário exato do pedido) e nos horários
+    // das limitações dele (a regra do início, R4: começa dentro de um e pode terminar depois dele), os dois juntos
     const permitidas = disponibilidadeDoAluno(d.jan);
-    const naDisponibilidade = minuto => !permitidas || permitidas(minuto);
+    const noHorarioDoPedido = minuto => !permitidas || permitidas(minuto);
+    const naDisponibilidade = minuto => noHorarioDoPedido(minuto) && inicioPermitido(stu.limitacoes, minuto);
+    // O que a recusa por falta de horário diz da disponibilidade: o horário do pedido, e as limitações só quando elas tiraram
+    // um início que valeria sem elas (tirouInicio; a de 06:00 a 24:00 não tira nenhum, e a recusa é a de sempre: o
+    // fechamento, o fim do Ground). Sem nenhum dos dois, null (a recusa é outra)
+    const quandoDaRecusa = tirouInicio => {
+      const limitou = tirouInicio && limitadoNoHorario(stu.limitacoes);
+      return permitidas || limitou ? quandoOAlunoVoa(permitidas ? rotuloDaDisponibilidade(d.jan) : null, limitou ? stu.limitacoes : null) : null;
+    };
     // Preferências em minutos (o número da janela dos dados antigos vale como o horário dela). O pedido de dois horários
     // exatos (U1) é tentado no 1º, depois no 2º: as preferências são eles, na ordem do pedido
     const exatos = minutosExatos(d.jan);
@@ -430,7 +446,8 @@ export function runAllocationEngine(state, opcoes = {}) {
       // Os horários de decolagem da Sala Ground (Recursos; sem a lista dela, os oito horários padrão), em minutos. Com a
       // sala indisponível na data (S4), nenhum: nenhuma aula entra, e o voo que depende dela espera (ground-pendente)
       const salaLivre = salaDisponivel(state.av);
-      const starts = !salaLivre ? [] : horariosDoTipo(horarios, GROUND_EQ_TYPE).filter(m => horarioAberto(fechamentos, m, 'ground') && m + durMin <= endMax && naDisponibilidade(m));
+      const iniciosDoGround = !salaLivre ? [] : horariosDoTipo(horarios, GROUND_EQ_TYPE).filter(m => horarioAberto(fechamentos, m, 'ground') && m + durMin <= endMax && noHorarioDoPedido(m));
+      const starts = iniciosDoGround.filter(m => inicioPermitido(stu.limitacoes, m));
 
       // Se o aluno também tem um voo dependente hoje com horário preferido, prioriza janelas que terminem antes do voo
       const dependentFlights = act.filter(other => other.stuId === stuId && doesGroundGateFlight(d.mis, other.ref));
@@ -585,8 +602,9 @@ export function runAllocationEngine(state, opcoes = {}) {
         } else if (semPrazo.length && !candidatos.length) {
           [codigo, why] = ['ground-antes-do-voo-fixo', `o Ground precisa terminar antes do voo fixo das ${hm(prazoFixo)}, e não há horário para ele antes disso`];
         } else if (!starts.length) {
-          [codigo, why] = permitidas
-            ? ['disponibilidade-do-aluno', `nenhum horário aberto na disponibilidade do aluno (${rotuloDaDisponibilidade(d.jan)}) comporta 01h30 de Ground`]
+          const quando = quandoDaRecusa(iniciosDoGround.length > 0);
+          [codigo, why] = quando
+            ? ['disponibilidade-do-aluno', `nenhum horário aberto na disponibilidade do aluno (${quando}) comporta 01h30 de Ground`]
             : ['sem-horario', `nenhum horário aberto comporta 01h30 de Ground${endMax < MINUTOS_DO_DIA ? ` até as ${hm(endMax)}` : ''}`];
         } else {
           const key = Object.keys(fcGnd).sort((a, b) => fcGnd[b] - fcGnd[a])[0];
@@ -651,6 +669,9 @@ export function runAllocationEngine(state, opcoes = {}) {
     const starts = horariosDaMissao(horarios, d.mis, d.eq).filter(m => horarioAberto(fechamentos, m, categoriaDoPedido) && naDisponibilidade(m));
     const endMax = fimDoAluno(stuId, d.mis, d.eq);
     const dur = Math.round(H * 60);
+    // Algum início valeria sem as limitações do aluno (só na recusa, para dizer se foram elas que o tiraram)
+    const valeriaSemAsLimitacoes = () => horariosDaMissao(horarios, d.mis, d.eq)
+      .some(m => horarioAberto(fechamentos, m, categoriaDoPedido) && noHorarioDoPedido(m) && m >= minStartAfterGround && m + dur <= endMax);
     // Os horários possíveis: a 1ª e a 2ª preferência, depois os outros pela distância da 1ª; w é o período (a janela de
     // operação em que o voo começa), para agrupar a escala
     const pf = preferidos;
@@ -776,8 +797,8 @@ export function runAllocationEngine(state, opcoes = {}) {
         [codigo, why] = ['sem-aviao', `nenhum ${d.eq} disponível (todos em manutenção)`];
       } else if (!state.ins.some(x => x.on && podeFazer(x, d.mis, d.eq, { curso: stu.curso, exige: d.exige }))) {
         [codigo, why] = ['sem-instrutor-habilitado', `nenhum instrutor ativo tem a habilitação de ${d.mis} no ${d.eq} (${exige})`];
-      } else if (!inicios.length && permitidas) {
-        [codigo, why] = ['disponibilidade-do-aluno', `nenhum horário aberto na disponibilidade do aluno (${rotuloDaDisponibilidade(d.jan)}) comporta ${fmtH(H)}`];
+      } else if (!inicios.length && quandoDaRecusa(valeriaSemAsLimitacoes())) {
+        [codigo, why] = ['disponibilidade-do-aluno', `nenhum horário aberto na disponibilidade do aluno (${quandoDaRecusa(valeriaSemAsLimitacoes())}) comporta ${fmtH(H)}`];
       } else if (!inicios.length) {
         [codigo, why] = minStartAfterGround > 0
           ? ['depois-do-ground', `nenhum horário aberto depois do Ground (${hm(minStartAfterGround)}) comporta ${fmtH(H)} até as ${hm(endMax)}`]

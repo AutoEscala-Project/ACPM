@@ -18,6 +18,7 @@ import { LIMITES_DA_LEI, normalizarLimites, comHorasExternas } from './limites.j
 import { noturnosDaVespera, comRepousoDoNoturno, voltasConferem } from './noturno.js';
 import { normalizarFixos, normalizarAprovacao, pinosDoNoturno } from './fixos.js';
 import { normalizarExportacoes } from './exportacoes.js';
+import { normalizarLimitacoes } from './limitacoes.js';
 import { normalizarCriterios } from './criterios.js';
 import { normalizarPainel } from './config-do-painel.js';
 import { normalizarCursos, normalizarCursoDoAluno } from './cursos.js';
@@ -171,6 +172,10 @@ export const ApiClient = {
       const pares = Array.isArray(s.voaCom) ? [...new Set(s.voaCom.filter(id => Number.isInteger(id) && id > 0 && !s.bl.includes(id)))] : [];
       if (pares.length) s.voaCom = pares;
       else delete s.voaCom;
+      // As limitações (formato 31): só o que tem o formato; sem nenhuma, o campo sai (js/limitacoes.js)
+      const limitacoes = normalizarLimitacoes(s.limitacoes);
+      if (limitacoes) s.limitacoes = limitacoes;
+      else delete s.limitacoes;
       s.extra = Array.isArray(s.extra) ? s.extra.filter(ex => ex && typeof ex === 'object') : [];
     });
 

@@ -124,6 +124,7 @@ const TERMOS = {
   },
 
   // Alunos
+  limitacoes: { aba: 'Alunos', termo: 'Limitações', texto: 'Duras para a escala: em Só voa no, os tipos de avião ou de simulador do aluno; em Pode voar, quando a missão pode começar (pode terminar depois), em todas as datas ou nos dias marcados. Fora delas, o pedido é recusado.' },
   'voa-com': { aba: 'Alunos', termo: 'Priorizar com', texto: 'Os instrutores do aluno: escolhe o instrutor, não o horário (que é da fila). A escala o põe com um deles sempre que algum pode. Sem nenhum que possa, com outro, com aviso; na disputa pelo mesmo horário, o aviso diz quem ficou com ele.' },
   'nao-escalar-com': { aba: 'Alunos', termo: 'Não escalar com', texto: 'Instrutores que nunca voam com este aluno: a escala não põe o aluno com eles por nenhum caminho; o voo posto à mão com um deles fica em conflito.' },
   progresso: { funcionalidade: 'progresso', aba: 'Alunos', termo: 'Progresso', texto: 'Missões do curso aprovadas sobre o total do programa, a fase em que o aluno está (no curso com mais de uma) e a próxima missão.' },

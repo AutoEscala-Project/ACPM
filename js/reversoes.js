@@ -19,6 +19,7 @@ import { CODIGOS_DE_REJEICAO } from './conflitos.js';
 import { esperaValida } from './escala-gravada.js';
 import { siglaValida, codigoValido } from './cursos.js';
 import { dataIsoValida } from './format.js';
+import { normalizarLimitacoes } from './limitacoes.js';
 
 const idValido = v => Number.isInteger(v) && v > 0;
 const rotuloValido = v => typeof v === 'string' && v.length <= 40;
@@ -93,6 +94,11 @@ export function validarReversao(rev, frota) {
     return typeof rev.reg === 'string' && MATRICULA.test(rev.reg) && typeof rev.h === 'string' && normalizarHabilitacoes([rev.h]).length === 1
       && typeof rev.val === 'boolean'
       ? { kind: 'setExigencias', reg: rev.reg, h: rev.h, val: rev.val, label } : null;
+  }
+  // As limitações do aluno (L): o aluno e as de antes da mudança, normalizadas (js/limitacoes.js), ou null (nenhuma)
+  if (rev.kind === 'setLimitacoes') {
+    if (!idValido(rev.stuId) || !(rev.antes === null || objeto(rev.antes))) return null;
+    return { kind: 'setLimitacoes', stuId: rev.stuId, antes: rev.antes === null ? null : normalizarLimitacoes(rev.antes), label };
   }
   // O "Ativo" do cadastro: o aluno ou o instrutor (pelo id) e o recurso (pela matrícula), e o inativo a restaurar
   if (rev.kind === 'setInativo') {

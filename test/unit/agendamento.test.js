@@ -16,6 +16,7 @@ import { normalizarLinhaGravada } from '../../js/escala-gravada.js';
 import { noturnosDaVespera, comRepousoDoNoturno } from '../../js/noturno.js';
 import { fixosAoAprovar, fixosAoMudarStatus } from '../../js/fixos.js';
 import { normalizeMissionFields } from '../../js/rules.js';
+import { normalizarLimitacoes } from '../../js/limitacoes.js';
 import { gerarCenario } from '../helpers/cenarios.js';
 import { situacaoPorMissao } from '../../js/resultados.js';
 
@@ -1156,6 +1157,40 @@ describe('Agendamento: as alternativas de cada bloqueio', () => {
     const { formulario: f, avaliacao } = agendar(estado, { amb, escolhas: { aluno: 1001, recurso: 'PR-VOB', horario: 390 }, tocados: ['recurso', 'horario'] });
     assert.ok(f.recursos.some(o => o.tipo !== 'C152' && !o.desligada), 'há outro tipo livre no horário');
     assert.deepEqual(alternativas(pararia(avaliacao)[0]).map(([rotulo]) => rotulo), ['Horários livres']);
+  });
+
+  // L (N9): as alternativas usam as limitações do aluno: nenhum horário fora dos dele; no tipo em que ele não voa, nenhuma
+  // alternativa (os recursos e os horários do mesmo tipo continuariam em conflito)
+  it('as limitações do aluno: os horários livres só os dele; no tipo em que ele não voa, nenhuma alternativa', () => {
+    const comHorarios = emVoo();
+    comHorarios.stu = comHorarios.stu.map(s => (s.id === 1001 ? { ...s, limitacoes: { horarios: [{ de: 600, ate: 700 }] } } : s));
+    const ocupado = pararia(agendar(comHorarios, { amb, escolhas: { aluno: 1001, recurso: 'PR-VOB', horario: 390 }, tocados: ['recurso', 'horario'] }).avaliacao);
+    assert.deepEqual(codigos(ocupado).filter(c => ['aviao-ocupado', 'limitacao-de-horario'].includes(c)).sort(), ['aviao-ocupado', 'limitacao-de-horario']);
+    assert.deepEqual(alternativas(ocupado.find(i => i.codigo === 'aviao-ocupado')).find(([rotulo]) => rotulo === 'Horários livres'), ['Horários livres', [['horario:610', '10:10'], ['horario:690', '11:30']]]);
+    const soC172 = emVoo();
+    soC172.stu = soC172.stu.map(s => (s.id === 1001 ? { ...s, limitacoes: { recursos: ['C172'] } } : s));
+    const outroTipo = pararia(agendar(soC172, { amb, escolhas: { aluno: 1001, recurso: 'PP-LJV', horario: 500 }, tocados: ['recurso', 'horario'] }).avaliacao);
+    const item = outroTipo.find(i => i.codigo === 'limitacao-de-recurso');
+    assert.ok(item, JSON.stringify(codigos(outroTipo)));
+    assert.equal(item.texto, 'O aluno só voa no C172.');
+    assert.deepEqual(alternativas(item), []);
+  });
+
+  // Decisão do Pedro, 28/11: os horários do aluno começam às 06:30, e o guardado das 06:00 é lido às 06:30. "Outro horário…"
+  // ainda aceita um horário antes das 06:30: contra o horário lido, ele fica fora dos horários do aluno e pede "Agendar mesmo
+  // assim" (à vista, nunca em silêncio); das 06:30 em diante, nada muda
+  it('o "Outro horário…" antes das 06:30 com um horário do aluno guardado das 06:00: o conflito, à vista', () => {
+    const guardado = { horarios: [{ de: 360, ate: 600 }] };
+    const com = limitacoes => {
+      const estado = doDia();
+      estado.stu = estado.stu.map(s => (s.id === 1001 ? { ...s, limitacoes } : s));
+      return outroHorario => codigos(pararia(agendar(estado, { amb, escolhas: { aluno: 1001, horario: 'outro', outroHorario } }).avaliacao));
+    };
+    const lido = com(normalizarLimitacoes(guardado));
+    assert.ok(lido('06:10').includes('limitacao-de-horario'), JSON.stringify(lido('06:10')));
+    for (const h of ['06:30', '09:50']) assert.ok(!lido(h).includes('limitacao-de-horario'), h);
+    // A regra do início (R4) não muda: sem a leitura, o das 06:00 continua valendo às 06:10
+    assert.ok(!com(guardado)('06:10').includes('limitacao-de-horario'));
   });
 
   it('a alternativa escolhida muda só o campo dela: os outros ficam como o formulário os mostra, e o valor que ele trocou não volta', () => {
