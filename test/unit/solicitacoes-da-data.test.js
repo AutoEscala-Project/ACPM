@@ -275,3 +275,97 @@ describe('Os pedidos em dia (D3: a vigia e as novidades)', () => {
     assert.deepEqual(estado.novidades.map(n => [n.novidades.aprovadas.map(p => p.id), n.novidades.novas.map(p => p.id)]), [[[2], []]]);
   });
 });
+
+// A revisão do D3: o que este navegador mudou continua fora das novidades até uma leitura boa da data o mostrar (a leitura
+// dele trocada por outra mais nova, ou que falhou, não o perde); uma pergunta pela escala de cada vez; e, no modo local, a
+// escala da data aberta gravada por outra aba deste navegador (a chave do dia) faz a pergunta
+describe('Os pedidos em dia (D3, a revisão)', () => {
+  it('duas ações deste navegador seguidas: a leitura da 1ª trocada pela da 2ª não faz da 1ª uma novidade', async () => {
+    const { estado, cache, responder } = vigiado();
+    cache.lerSolicitacoesDaData();
+    await responder([pedido(1), pedido(2)]);
+    cache.lerSolicitacoesDaData({ deste: [1] });
+    cache.lerSolicitacoesDaData({ deste: [2] });
+    await responder([aprovado(1), pedido(2)], 0 + 1);
+    await responder([aprovado(1), aprovado(2)]);
+    assert.deepEqual(estado.novidades, []);
+  });
+
+  it('a leitura da ação deste navegador que falha: a leitura boa seguinte (a da vigia) não a conta como novidade', async () => {
+    const { estado, leitura, cache, relogio, responder } = vigiado();
+    cache.lerSolicitacoesDaData();
+    await responder([pedido(1), pedido(2)]);
+    cache.lerSolicitacoesDaData({ deste: [1] });
+    leitura.pendentes.at(-1).reject(new Error('sem conexão'));
+    await new Promise(r => setTimeout(r, 0));
+    relogio.fn();
+    await responder([aprovado(1), aprovado(2)]);
+    assert.deepEqual(estado.novidades.map(n => n.novidades.aprovadas.map(p => p.id)), [[2]], 'só o que outro computador aprovou');
+    // Depois de uma leitura boa que o mostrou, o pedido volta a ser de todos: outra mudança dele é novidade
+    relogio.fn();
+    await responder([{ ...aprovado(1), cancelada_em: '2026-11-10T16:00:00Z' }, aprovado(2)]);
+    assert.deepEqual(estado.novidades.at(-1).novidades.canceladas.map(p => p.id), [1]);
+  });
+
+  it('a leitura sem "deste" (abrir Pedidos, "Tentar de novo", "Importar") pedida depois da de uma ação: a ação continua fora', async () => {
+    const { estado, cache, responder } = vigiado();
+    cache.lerSolicitacoesDaData();
+    await responder([pedido(1)]);
+    cache.lerSolicitacoesDaData({ deste: [1] });
+    cache.lerSolicitacoesDaData();
+    await responder([aprovado(1)], 1);
+    await responder([aprovado(1)]);
+    assert.deepEqual(estado.novidades, []);
+  });
+
+  it('os pedidos deste navegador de uma data não valem para outra', async () => {
+    const { estado, cache, responder } = vigiado();
+    cache.lerSolicitacoesDaData();
+    await responder([pedido(1)]);
+    cache.lerSolicitacoesDaData({ deste: [1] });
+    estado.aberta = '2026-11-12';
+    cache.lerSolicitacoesDaData({ dataLida: true });
+    await responder([aprovado(1)], 1);
+    await responder([pedido(1, '2026-11-12')]);
+    cache.lerSolicitacoesDaData();
+    await responder([aprovado(1, '2026-11-12')]);
+    assert.deepEqual(estado.novidades.map(n => n.novidades.aprovadas.map(p => p.id)), [[1]]);
+  });
+
+  it('uma pergunta pela escala de cada vez: com uma que não volta (a gravação presa deste navegador), a vigia não abre outra', async () => {
+    let perguntas = 0;
+    const { cache, relogio, responder } = vigiado({ diaMudou: () => { perguntas++; return new Promise(() => {}); } });
+    cache.lerSolicitacoesDaData();
+    await responder([]);
+    for (let i = 0; i < 10; i++) {
+      relogio.fn();
+      await responder([]);
+    }
+    assert.equal(perguntas, 1);
+  });
+
+  it('a pergunta que volta libera a seguinte', async () => {
+    const respostas = [];
+    const { cache, relogio, responder } = vigiado({ diaMudou: () => new Promise(resolve => respostas.push(resolve)) });
+    cache.lerSolicitacoesDaData();
+    await responder([]);
+    relogio.fn();
+    await responder([]);
+    respostas[0](false);
+    await new Promise(r => setTimeout(r, 0));
+    relogio.fn();
+    await responder([]);
+    assert.equal(respostas.length, 2);
+  });
+
+  it('no modo local, a escala da data aberta gravada por outra aba (a chave do dia): a pergunta pela escala, sem ler os pedidos', async () => {
+    const { estado, leitura, cache, janela, responder, evento } = vigiado();
+    cache.lerSolicitacoesDaData();
+    await responder([]);
+    evento(janela, 'storage', { key: 'acpm4_dia_2026-11-12' });
+    assert.deepEqual(estado.perguntas, [], 'outra data, nada');
+    evento(janela, 'storage', { key: 'acpm4_dia_2026-11-11' });
+    assert.deepEqual(estado.perguntas, ['2026-11-11']);
+    assert.equal(leitura.pendentes.length, 1);
+  });
+});

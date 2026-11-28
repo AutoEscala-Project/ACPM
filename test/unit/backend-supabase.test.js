@@ -584,6 +584,39 @@ describe('Backend Supabase: escala por data e histórico', () => {
     assert.equal(await backend.diaMudou('2026-11-12'), true);
   });
 
+  // A revisão do D3: a vigia pergunta a cada minuto. A resposta que chega depois de uma gravação deste navegador (a versão
+  // dela é a de antes da gravação) não diz que a escala mudou em outro computador
+  it('a escala da data mudou: a resposta que chega depois de uma gravação deste navegador é de antes dela, e não vale', async () => {
+    const cliente = clienteFalso({}, { dias: { '2026-11-11': { conteudo: { v: 1 }, versao: 3 } } });
+    const from = cliente.from.bind(cliente);
+    let soltar, perguntou = false;
+    const portao = new Promise(r => { soltar = r; });
+    // A resposta do servidor no instante da pergunta (a versão de então), entregue só quando o teste manda
+    cliente.from = tabela => {
+      const consulta = from(tabela);
+      const select = consulta.select;
+      consulta.select = colunas => {
+        select(colunas);
+        if (tabela === 'dias' && colunas === 'versao') {
+          const maybeSingle = consulta.maybeSingle;
+          consulta.maybeSingle = async () => { const r = await maybeSingle(); perguntou = true; await portao; return r; };
+        }
+        return consulta;
+      };
+      return consulta;
+    };
+    const backend = criarBackendSupabase(cliente);
+    await backend.ler('dia:2026-11-11');
+    const pergunta = backend.diaMudou('2026-11-11');
+    while (!perguntou) await espera(1);
+    assert.equal(await backend.gravar('dia:2026-11-11', { v: 2 }), true);
+    assert.equal(cliente.dias.get('2026-11-11').versao, 4);
+    soltar();
+    assert.equal(await pergunta, false);
+    // A pergunta seguinte, com a versão gravada, também não
+    assert.equal(await backend.diaMudou('2026-11-11'), false);
+  });
+
   it('agenda: registra e cancela pelas funções do banco, lista por período e repassa o código do erro e o campo', async () => {
     const cliente = clienteFalso();
     const backend = criarBackendSupabase(cliente);

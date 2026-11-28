@@ -128,6 +128,16 @@ describe('O 1º da lista de espera da vaga do pedido cancelado', () => {
     assert.equal(primeiroDaListaDeEspera(pedido(1, 1000), estado, null), null);
   });
 
+  // A revisão do D3: o que espera e cujo pedido já foi cancelado ou ficou sem aprovação (a escala ainda não foi refeita)
+  // não é o 1º: o seguinte da lista é. naoEspera: o pedido (o id) que não espera mais, pela lista dos pedidos lida agora
+  it('o que espera com o pedido cancelado ou sem aprovação não é o 1º: o seguinte é; o voo posto à mão, sem pedido, espera', () => {
+    const { estado, resultado } = montarDia({ stu: [as0820(1000, 1), as0820(1001, 3), as0820(1002, 2), as0820(1003, null)] });
+    assert.deepEqual(resultado.al.filter(a => a.espera).map(a => [a.s, a.espera.lugar]), [['Aluno 1002', 1], ['Aluno 1001', 2], ['Aluno 1003', 3]]);
+    assert.deepEqual(primeiroDaListaDeEspera(pedido(1, 1000), estado, resultado, { naoEspera: id => id === 2 }), { minuto: 500, aluno: 'Aluno 1001' });
+    assert.deepEqual(primeiroDaListaDeEspera(pedido(1, 1000), estado, resultado, { naoEspera: id => id === 2 || id === 3 }), { minuto: 500, aluno: 'Aluno 1003' });
+    assert.equal(primeiroDaListaDeEspera(pedido(1, 1000), estado, resultado, { naoEspera: () => true }).aluno, 'Aluno 1003');
+  });
+
   it('o pedido de uma missão extra: a vaga é a do voo dela', () => {
     const extra = { mid: 1, fly: true, mis: 'Voo Local', eq: 'C152', p1: 500, p2: -1, jan: 'h500', nb: 1, ss: 1, pr: 3, solicitacao: 1 };
     const { estado, resultado } = montarDia({ stu: [aluno(1000, { fly: false }, { extra: [extra] }), as0820(1001, 2)] });
