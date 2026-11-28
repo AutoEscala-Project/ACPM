@@ -75,7 +75,9 @@ const NOVAS = {
   instrutores: ['sem os acentos', '12 de 40 instrutores', 'Limpar filtros', 'Filtro das habilitações', 'que têm todas as marcadas',
     'Habilitações: Noturno + C172', 'Pode decolar de … até …', '+ Pausa', 'Almoço', 'Salvar faixas', 'Dia inteiro (06:30–17:30)',
     'Noturno (17:30–24:00)', 'Dia + noturno (06:30–24:00)', 'Meio dia é uma faixa digitada', 'a tira do dia', 'Agendar voo com',
-    'a missão começa dentro de uma faixa do instrutor e pode terminar depois dela', 'O que cabe nestas faixas', 'Limites da Lei do Aeronauta abre os limites', 'Excluir instrutor…'],
+    'a missão começa dentro de uma faixa do instrutor e pode terminar depois dela', 'O que cabe nestas faixas', 'Limites da Lei do Aeronauta abre os limites', 'Excluir instrutor…',
+    // O detalhe sem nada escolhido (linha-fix-escala-sem-caixas, depois do C)
+    'ou use + Novo instrutor'],
   // Alunos como lista e detalhe (F2): a escolha no endereço, os campos no lugar, Anterior e Próximo, o filtro dos cursos (a
   // regra "algum dos marcados"; um só nas duas telas) e os dados pessoais na seção do aluno, com Salvar e Desfazer; o
   // cadastro relido depois de um conflito. A: as seções do detalhe (Nesta data, Curso e missões), o nome completo (também
