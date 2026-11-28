@@ -16,7 +16,7 @@ import { normalizeMissionFields } from '../rules.js';
 import { S, RES, DATA, stuBy, insBy, getMissionTarget } from '../state.js';
 import { chaveDoVoo } from '../voo.js';
 import { escolherInstrutor } from '../instrutor-escolhido.js';
-import { aplicarRestricao, avisoDaRestricao, fixosSemOAgendadoQueMudou } from '../restricoes.js';
+import { aplicarRestricao, avisoDaRestricao, fixosSemOAgendadoQueMudou, tipoDaMissaoDoCurso } from '../restricoes.js';
 import { confirmado } from './confirmacao.js';
 import { aoAcionar, aoMudarCampo, aoReverter } from './registro.js';
 import { singleDemandRowHTML, cnt, conferirNenhumNaDemanda } from '../views/demanda.js';
@@ -70,10 +70,14 @@ function soltarSeMudou(s, mid, antes, target) {
 const doVoo = d => ({ mis: d.mis, eq: d.eq, nb: d.nb });
 
 // A missão do curso no pedido: ele vira a missão do programa (tipo, recurso e horas; a duração fixa da missão vale mais),
-// com o código e o curso dela, e o aluno voa; o instrutor escolhido continua. Devolve o que o histórico diz do voo
-// agendado do pedido (que deixa de ser fixo quando a missão, o tipo ou as horas mudam)
-function usarMissaoDoCurso(s, target, mid, { codigo, curso, mis, eq, nb }) {
+// com o código e o curso dela, e o aluno voa; o instrutor escolhido continua. O aluno que não voa no tipo do programa (as
+// limitações, L) vai num que a missão permite e ele voa, e a missão continua a do curso (R7, como em Pedidos): o aviso
+// diz. Devolve o que o histórico diz do voo agendado do pedido (que deixa de ser fixo quando a missão, o tipo ou as horas
+// mudam)
+function usarMissaoDoCurso(s, target, mid, { codigo, curso, mis, eq: doPrograma, nb }) {
   const antes = doVoo(target);
+  const { eq, aviso } = tipoDaMissaoDoCurso(s, { codigo, mis, eq: doPrograma }, target, DATA);
+  if (aviso) showToast(aviso);
   // A confirmação do 7º voo local (Q8) foi dada na Agenda para a missão e o recurso de antes: com outros, ela não vale
   if (target.etapa !== codigo || target.cursoDaEtapa !== curso || target.mis !== mis || target.eq !== eq) delete target.limiteConfirmado;
   Object.assign(target, { fly: true, mis, eq, nb, etapa: codigo, cursoDaEtapa: curso });

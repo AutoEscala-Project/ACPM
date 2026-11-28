@@ -92,6 +92,21 @@ export function avisoDaRestricao(aluno, campo, valor, data) {
   return null;
 }
 
+// O tipo de recurso da missão do curso posta no pedido ("Usar a do programa", "Trocar…"), como no formulário de Pedidos
+// (L, R7): o do programa; o aluno que não voa nele (as limitações na data) vai num dos tipos que a missão permite e ele
+// voa (o do pedido, quando é um deles), e a missão continua a do curso, com o aviso. Sem nenhum desses, o do programa,
+// com o aviso das limitações (o motor recusa o pedido: só um voo posto à mão voa assim). { eq, aviso }
+export function tipoDaMissaoDoCurso(aluno, missao, pedido, data) {
+  const regra = MIS[missao.mis] || MIS['Voo Local'];
+  const limitacoes = limitacoesNaData(aluno.limitacoes, data);
+  const motivo = regra.isGround ? null : motivoDoTipo(limitacoes, missao.eq);
+  if (!motivo) return { eq: missao.eq, aviso: null };
+  const livres = regra.eq.filter(tipo => !motivoDoTipo(limitacoes, tipo));
+  const eq = livres.includes(pedido.eq) ? pedido.eq : livres[0];
+  if (!eq) return { eq: missao.eq, aviso: avisoDaRestricao(aluno, 'eq', missao.eq, data) };
+  return { eq, aviso: `O programa faz ${missao.codigo} no ${missao.eq}, e ${motivo}: o pedido vai no ${eq}, e a missão continua ${missao.codigo}.` };
+}
+
 // Mudar à mão a missão, o tipo ou as horas tira do pedido a missão do curso (o código, o curso e a marca do programa,
 // formato 30); a confirmação do 7º voo local (Q8) foi dada na Agenda para a missão e o recurso de antes: com outros, ela não vale
 function semAMissaoDoCurso(pedido, campo) {

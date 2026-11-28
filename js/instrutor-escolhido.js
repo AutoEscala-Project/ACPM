@@ -23,10 +23,12 @@ const instrutorValido = v => Number.isInteger(v) && v > 0;
 function impedimentoDoPedido(estado, x, aluno, pedido) {
   // O inativo no cadastro primeiro: no estado da escala ele também não vem
   if (inativoNoEstado(estado, x)) return 'inativo';
+  // O "Não escalar com" do aluno antes da data: o bloqueado que também não vem hoje continua bloqueado (as restrições do
+  // voo, G1, o listam desligado)
+  if ((aluno.bl || []).includes(x.id)) return 'em Não escalar com';
   if (!x.on) return 'fora nesta data';
   // Com o que a missão do curso do pedido exige do INVA (exige: o estado da escala o deriva; a Demanda o passa)
   if (!podeFazer(x, pedido.mis, isGroundMission(pedido.mis) ? GROUND_EQ_TYPE : pedido.eq, { curso: aluno.curso, exige: pedido.exige })) return 'sem a habilitação';
-  if ((aluno.bl || []).includes(x.id)) return 'em Não escalar com';
   return '';
 }
 
