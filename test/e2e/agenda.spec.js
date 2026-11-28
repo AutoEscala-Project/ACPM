@@ -2,7 +2,8 @@
 // "Registrado por", a exceção da coordenação e o cancelamento. O relógio dos testes está em 10/11/2026, 12:00 em São Paulo.
 import { test, comProgresso, expect, abrir, irPara, abrirEscala, lerEscala, caixaVoa, campoDaAgenda, contagemDoDia, dataAberta, diaAnterior, diaSeguinte, importarDaAgenda, mudarData, registrarPedido,
   escolherMissaoDoCurso, missaoDoCursoNaAgenda, appPronto, exportar, AMANHA, linhaDoPedido, entradasDoHistorico, linhasDosPedidos, linhaDaLista, grupoDosPedidos, buscaDosPedidos, aprovarNaLinha,
-  escolherPedido, campoDoDetalhe, acaoDoPedido, botaoDosPedidos, avisoDosPedidos, estadoDoFormulario, botaoDoFormulario, botaoImportarDaAgenda } from './fixtures.js';
+  escolherPedido, campoDoDetalhe, acaoDoPedido, botaoDosPedidos, avisoDosPedidos, estadoDoFormulario, botaoDoFormulario, botaoImportarDaAgenda, medirVazioDoDetalhe } from './fixtures.js';
+import { razaoDeContraste } from '../helpers/contraste.js';
 import { readFileSync } from 'node:fs';
 import { documentosAtuais } from './supabase-falso.js';
 import { aluno, cenario } from '../helpers/montar.js';
@@ -522,6 +523,40 @@ test.describe('Agenda de Solicitações', () => {
     await registrarPedido(page, { horario: '10:10' });
     await expect(campoDaAgenda(page, 'erro')).toContainText('Aluno 1000 já tem voo marcado em 12/11: Voo Local · C152 às 08:20.');
     await expect(contagemDoDia(page, '2026-11-12')).toHaveText('1');
+  });
+
+  // O detalhe sem nada escolhido (#108, linha-fix-escala-sem-caixas): para quem registra, o formulário do pedido novo é o
+  // vazio (no alto do painel, sem o texto do meio); para quem só consulta, o vazio do componente, no meio do painel, com o
+  // avião decolando e o texto maior, sem a dica (ele não registra); nos dois temas, e parado com o movimento reduzido
+  test('nada escolhido: o formulário para quem registra; o vazio do componente, no meio do painel, para o Gestor', async ({ page }) => {
+    await abrir(page, { estado: comAlunos() });
+    await irPara(page, 'age');
+    await expect(page.locator('#form-agenda')).toBeVisible();
+    expect(await medirVazioDoDetalhe(page, 'age')).toBeNull();
+    const noAlto = await page.evaluate(() => {
+      const painel = document.getElementById('det-age');
+      return document.getElementById('agenda-titulo').getBoundingClientRect().top - painel.getBoundingClientRect().top
+        - parseFloat(getComputedStyle(painel).paddingTop);
+    });
+    expect(noAlto).toBeLessThanOrEqual(4);
+
+    await abrir(page, { estado: comAlunos(), url: './?role=gestor' });
+    await irPara(page, 'age');
+    await expect(page.locator('#form-agenda')).toBeHidden();
+    const vazio = await medirVazioDoDetalhe(page, 'age');
+    expect([vazio.icone, vazio.texto, vazio.dica]).toEqual(['#i-decolagem', 'Escolha um pedido na lista.', null]);
+    expect(vazio.tamanho).toBeGreaterThanOrEqual(18);
+    expect(vazio.iconeLargura).toBeGreaterThanOrEqual(40);
+    expect(vazio.foraDoMeio.x).toBeLessThanOrEqual(3);
+    expect(vazio.foraDoMeio.y).toBeLessThanOrEqual(3);
+    expect(vazio.animacao).not.toBe('none');
+    for (const tema of ['light', 'dark']) {
+      await page.evaluate(t => { document.documentElement.dataset.theme = t; }, tema);
+      const { cores } = await medirVazioDoDetalhe(page, 'age');
+      expect(razaoDeContraste(cores.texto, cores.fundo), tema).toBeGreaterThanOrEqual(4.5);
+    }
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    expect((await medirVazioDoDetalhe(page, 'age')).animacao).toBe('none');
   });
 
   test('a data aberta além de duas semanas também está na data do pedido', async ({ page }) => {
