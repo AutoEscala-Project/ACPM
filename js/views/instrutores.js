@@ -1,282 +1,275 @@
-// Aba Instrutores, em duas vistas: a disponibilidade do dia (uma grade com as janelas e os voos de cada um na escala) e o
-// cadastro (nome, CANAC, peso e habilitações, editadas num painel lateral). Os dados pessoais abrem noutro painel
-// (js/views/painel-de-dados.js), só para quem pode vê-los (.so-dados); os limites da lei, em js/views/limites.js
-import { PRE, AIRCRAFT_EQ_TYPES, MINUTOS_DO_DIA } from '../config.js';
-import { INICIOS_DOS_TEMPOS } from '../horarios.js';
+// INVAs como lista e detalhe (o componente: js/views/mestre-detalhe.js): os modelos que a tela dá a ele, lidos do estado.
+// A linha: o nome, as faixas da data aberta (com as pausas), quantos voos ele tem nela, as habilitações que mais o
+// distinguem e a tira do dia (as faixas, as pausas e os voos, das 06:30 à meia-noite), com o "Vem" desta data e o "Ativo"
+// do cadastro; o ponto marca os dados pessoais não salvos, quem está sem peso e quem chega perto de um limite da lei. O
+// item fixo do alto, "Limites da Lei do Aeronauta", abre os limites. O detalhe, nesta ordem: "Nesta data" (o "Vem", as
+// faixas e as pausas, os três turnos, "Editar faixas" e os voos dele na escala da data), o cadastro (nome e peso), as
+// habilitações, as horas de voo (limites da lei, com as de fora do app), os dados pessoais (para quem os vê) e, no rodapé,
+// "Excluir instrutor…"; no alto, "Agendar voo com <nome>". Os campos têm os data-f de sempre: js/eventos/instrutores.js
+// grava. "Editar faixas" é um rascunho na memória (editarFaixas), gravado só por "Salvar faixas"
+import { AIRCRAFT_EQ_TYPES, GROUND_REG, MINUTOS_DO_DIA } from '../config.js';
 import { HABILITACOES, nomeDaHabilitacao, GRUPOS_DE_HABILITACAO, gruposDosRecursos } from '../habilitacoes.js';
 import { FROTA_INICIAL } from '../frota.js';
-import { esc, hm, LIMITE_DO_NOME, numeroBr, chaveDeBusca } from '../format.js';
-import { S, DATA, insBy, voosQueVoam } from '../state.js';
-import { $, abrirGaveta } from '../dom.js';
+import { esc, hm, LIMITE_DO_NOME, numeroBr, hojeISO, rotuloDaData } from '../format.js';
+import { S, DATA, insBy, stuBy, voosQueVoam, isGestor } from '../state.js';
+import { inativo } from '../inativos.js';
 import { botaoDeDica } from '../dicas.js';
-import { canacDe } from './dados-pessoais.js';
 import { normalizarLimites } from '../limites.js';
-import { unidadeDoVoo, umPorUnidade } from '../voo.js';
-import { mostrarVista } from './vistas.js';
-import { criarFiltroMultiplo } from './filtro-multiplo.js';
-import { rLimites } from './limites.js';
-import { filtrarLinhas } from './linhas-filtradas.js';
+import { unidadeDoVoo, umPorUnidade, statusDoVoo } from '../voo.js';
+import {
+  TURNOS, ALMOCO, INICIO_DAS_FAIXAS, MINUTOS_DAS_FAIXAS, MAXIMO_DE_FAIXAS, MAXIMO_DE_PAUSAS, faixasDe, turnoDasFaixas, textoDasFaixas, textoDasPausas, trechosDaTira
+} from '../disponibilidade.js';
+import { canacDe, nomeCompletoDe, podeVerDadosPessoais } from './dados-pessoais.js';
+import { secaoDosDadosPessoais, marcaDaPessoa, recusasDe } from './editor-de-dados-pessoais.js';
+import { limitesHtml } from './limites.js';
 
 const ROTULO = new Map(HABILITACOES.map(h => [h.id, h.curto]));
-// No cadastro, todas na ordem do painel; na grade do dia, só as que mais distinguem o instrutor
-const ORDEM_DA_GRADE = ['mlte', 'c172', 'ifr', 'noturno', 'parafuso', 'endosso_solo', 'solo', 'navegacao_150', 'navegacao', 'local', 'tgl',
+// No detalhe, todas na ordem do registro; na linha, só as que mais distinguem o instrutor
+const ORDEM_NA_LINHA = ['mlte', 'c172', 'ifr', 'noturno', 'parafuso', 'endosso_solo', 'solo', 'navegacao_150', 'navegacao', 'local', 'tgl',
   'sim_multi', 'sim_mono', 'ground_pa34', 'grounds'];
 const rotuloDa = h => ROTULO.get(h) || nomeDaHabilitacao(h);
 const resumoDasHabilitacoes = x => x.hab.map(rotuloDa).join(' · ');
-// Na grade do dia, as marcas de checador (o curso, o motor e as regras) contam como uma, na frente
-function resumoNaGrade(x) {
+// Na linha, as marcas de checador (o curso, o motor e as regras) contam como uma, na frente
+function resumoNaLinha(x) {
   const checador = x.hab.some(h => h.startsWith('checa_')) ? ['Checador'] : [];
-  const rotulos = [...checador, ...ORDEM_DA_GRADE.filter(h => x.hab.includes(h)).map(h => ROTULO.get(h))];
+  const rotulos = [...checador, ...ORDEM_NA_LINHA.filter(h => x.hab.includes(h)).map(h => ROTULO.get(h))];
   return rotulos.length > 3 ? `${rotulos.slice(0, 3).join(' · ')} · +${rotulos.length - 3}` : rotulos.join(' · ');
 }
 
-// Voos e aulas de cada instrutor na escala da data, sem os cancelados (a turma de Ground conta uma vez) e as janelas em que ele está ocupado
-function ocupacaoDosInstrutores() {
-  const porInstrutor = new Map();
-  voosQueVoam().forEach(o => {
-    const atual = porInstrutor.get(o.insId) || { voos: new Set(), janelas: new Set() };
-    atual.voos.add(unidadeDoVoo(o));
-    INICIOS_DOS_TEMPOS.forEach((_, i) => {
-      const inicio = INICIOS_DOS_TEMPOS[i], fim = i < INICIOS_DOS_TEMPOS.length - 1 ? INICIOS_DOS_TEMPOS[i + 1] : MINUTOS_DO_DIA;
-      if (o.a < fim && o.b > inicio) atual.janelas.add(i);
-    });
-    porInstrutor.set(o.insId, atual);
-  });
-  return porInstrutor;
-}
+// O item fixo dos limites da lei (o id não é o de nenhum instrutor: os deles são números)
+export const ID_DOS_LIMITES = 'limites';
 
-// data-nm: a chave da busca pelo nome (sem acentos), que os filtros comparam
-const atributos = x => `data-k="i" data-id="${x.id}" data-hab="${x.hab.join(' ')}" data-nm="${esc(chaveDeBusca(x.nm))}"`;
+// Os grupos das habilitações (no detalhe e no filtro): os do registro (js/habilitacoes.js) e as habilitações próprias que
+// a frota exige
+const gruposDasHabilitacoes = () => [...GRUPOS_DE_HABILITACAO, ...gruposDosRecursos(Array.isArray(S.frota) ? S.frota : FROTA_INICIAL)];
+// As opções do filtro das habilitações: os grupos do detalhe, com os rótulos da linha
+export const opcoesDasHabilitacoes = () => gruposDasHabilitacoes().map(({ titulo, ids }) => ({ titulo, opcoes: ids.map(h => [h, rotuloDa(h)]) }));
+
+// Os voos e as aulas do instrutor na escala da data, sem os cancelados (a turma de Ground conta uma vez), pelo horário
+const voosDoInstrutor = x => umPorUnidade(voosQueVoam().filter(o => o.insId === x.id)).sort((p, q) => p.a - q.a);
+const quantosVoos = n => (n ? `${n} ${n === 1 ? 'voo' : 'voos'}` : '');
 
 // Limites da lei: as horas de voo do instrutor com a escala desta data (as de antes, as de fora do app e as de hoje, só
 // voo em avião) no mês, no semestre e no ano
 function horasComAEscala(x) {
   const passadas = (S.horasDosInstrutores || {})[x.id] || { mes: 0, semestre: 0, ano: 0, fimAnterior: null };
-  const hoje = umPorUnidade(voosQueVoam().filter(o => o.insId === x.id && AIRCRAFT_EQ_TYPES.includes(o.eqType)))
-    .reduce((total, o) => total + o.h, 0);
+  const hoje = umPorUnidade(voosQueVoam().filter(o => o.insId === x.id && AIRCRAFT_EQ_TYPES.includes(o.eqType))).reduce((total, o) => total + o.h, 0);
   const somar = h => Math.round((h + hoje) * 10) / 10;
   return { mes: somar(passadas.mes), semestre: somar(passadas.semestre), ano: somar(passadas.ano), fimAnterior: passadas.fimAnterior };
 }
 const perto = (h, limite) => limite !== null && h >= 0.9 * limite;
-const SEM_INSTRUTORES = 'Nenhum instrutor cadastrado. Clique em “+ Novo instrutor” acima para cadastrar.';
-
-function linhaDoDia(x, ocupacao) {
-  const { voos, janelas } = ocupacao.get(x.id) || { voos: new Set(), janelas: new Set() };
-  const celulas = INICIOS_DOS_TEMPOS.map((inicio, i) => {
-    const w = hm(inicio);
-    const cls = `cel${x.aw[i] ? ' on' : ''}${janelas.has(i) ? ' voo' : ''}`;
-    return `<td class="jan"><label class="${cls}" title="${w}"><input type="checkbox" data-f="aw" data-w="${i}"${x.aw[i] ? ' checked' : ''} aria-label="${esc(x.nm)} às ${w}"></label></td>`;
-  }).join('');
-  return `<tr ${atributos(x)}${x.on ? '' : ' class="off"'}>
-    <td class="nome"><b>${esc(x.nm)}</b></td>
-    <td><label class="alvo"><input type="checkbox" class="sw" data-f="on"${x.on ? ' checked' : ''} aria-label="${esc(x.nm)} vem no dia"></label></td>
-    ${celulas}
-    <td class="voos">${voos.size || ''}</td>
-    ${colunaDoMes(x)}
-    <td><select data-f="pre" class="edit-only" aria-label="Aplicar um turno a ${esc(x.nm)}"><option value="">Aplicar turno…</option>${Object.keys(PRE).map(k => `<option>${k}</option>`).join('')}</select></td>
-    <td class="habs-resumo" title="${esc(resumoDasHabilitacoes(x))}">${esc(resumoNaGrade(x))}</td>
-  </tr>`;
-}
-
-function colunaDoMes(x) {
+// "92 h de voo no mês (limite 100 h)": o limite de que o instrutor chega perto (a partir de 90%), ou nada
+function limitePerto(x) {
   const limites = normalizarLimites(S.limites);
   const h = horasComAEscala(x);
-  const titulo = [`${numeroBr(h.mes)} h de voo no mês${limites.vooMesH === null ? '' : ` (limite ${limites.vooMesH} h)`}`,
-    `${numeroBr(h.ano)} h no ano${limites.vooAnoH === null ? '' : ` (limite ${limites.vooAnoH} h)`}`,
-    h.fimAnterior === null || h.fimAnterior === undefined ? '' : `ontem até as ${hm(h.fimAnterior)}`].filter(Boolean).join('; ');
-  const atencao = perto(h.mes, limites.vooMesH) || perto(h.ano, limites.vooAnoH) || perto(h.semestre, limites.vooSemestreH);
-  return `<td class="mes${atencao ? ' perto' : ''}" title="${esc(titulo)}">${numeroBr(h.mes)} h</td>`;
+  const qual = [['mes', 'vooMesH', 'no mês'], ['semestre', 'vooSemestreH', 'no semestre'], ['ano', 'vooAnoH', 'no ano']].find(([p, l]) => perto(h[p], limites[l]));
+  return qual ? `${numeroBr(h[qual[0]])} h de voo ${qual[2]} (limite ${limites[qual[1]]} h)` : '';
 }
 
-// As células do cadastro (Instrutores e Alunos) têm a classe da coluna: no celular, cada pessoa vira um cartão, com as
-// partes postas pela classe (css/cadastros.css), e o nome da coluna (data-rotulo) aparece pequeno em cima de cada uma. Os
-// botões: "Editar habilitações" (o das habilitações; no celular, na linha de baixo delas) e depois "Dados pessoais" e o
-// ✕, como em Alunos: o Tab segue a ordem da tela, também no cartão do celular
-function linhaDoCadastro(x) {
-  return `<tr class="cd" ${atributos(x)}>
-    <td class="c-nome"><input class="nm" data-f="nm" value="${esc(x.nm)}" maxlength="${LIMITE_DO_NOME}" aria-label="Nome do instrutor"></td>
-    <td class="c-canac so-dados" data-rotulo="CANAC">${esc(canacDe('instrutor', x.id))}</td>
-    <td class="c-peso" data-rotulo="Peso (kg)"><input type="number" min="1" max="300" data-f="kg" value="${x.kg || ''}" placeholder="sem peso" aria-label="Peso de ${esc(x.nm)} em kg"${x.kg ? '' : ' class="falta"'}></td>
-    <td class="c-habs" data-rotulo="Habilitações"><span class="habs-resumo">${esc(resumoDasHabilitacoes(x)) || 'Nenhuma'}</span></td>
-    <td class="acoes"><button class="btn quiet edit-only" data-act="editar-habs" data-id="${x.id}">Editar habilitações</button><button type="button" class="btn quiet so-dados" data-dados="instrutor:${x.id}" aria-label="Dados pessoais de ${esc(x.nm)}">Dados pessoais</button><button class="x edit-only" data-act="deli" aria-label="Excluir ${esc(x.nm)}">✕</button></td>
-  </tr>`;
+// A data aberta, curta, ao lado de "Nesta data": "sex 20/11"
+function escopoDaData() {
+  if (!DATA) return '';
+  const { semana, data } = rotuloDaData(DATA, hojeISO());
+  return `${semana.slice(0, 3)} ${data}`;
+}
+const diaEMes = () => (DATA ? `${DATA.slice(8, 10)}/${DATA.slice(5, 7)}` : 'esta data');
+
+// O que a linha diz das faixas: as da data e as pausas; quem não vem, que não vem
+function faixasEmTexto(x, d = faixasDe(x)) {
+  if (!x.on) return 'não vem nesta data';
+  const pausas = textoDasPausas(d);
+  return `${textoDasFaixas(d)}${pausas ? ` · pausa ${pausas}` : ''}`;
 }
 
-// A grade do dia depende da escala: é refeita junto com ela. A coluna "Vem" é a da data aberta no topo (o app abre em
-// amanhã: não é "hoje")
-export function rInsDia() {
-  // Os termos da grade com o "?"
-  $('#inst-dia-cab').innerHTML = `<tr><th>Instrutor</th><th>Vem${botaoDeDica('vem-nesta-data', 'Vem')}</th>${INICIOS_DOS_TEMPOS.map(m => `<th class="jan">${hm(m)}</th>`).join('')}<th>Voos${botaoDeDica('voos-do-instrutor', 'Voos')}</th><th>Mês${botaoDeDica('horas-do-mes', 'Mês')}</th><th>Turno${botaoDeDica('turno', 'Turno')}</th><th>Habilitações</th></tr>`;
-  // Quem usa o teclado continua no mesmo campo (ou no "Limpar filtros") depois que a grade é refeita e filtrada
-  const foco = $('#inst-dia').contains(document.activeElement) ? seletorDoCampo(document.activeElement) : null;
-  if (S.ins.length) {
-    const ocupacao = ocupacaoDosInstrutores();
-    $('#inst-dia').innerHTML = S.ins.map(x => linhaDoDia(x, ocupacao)).join('');
-  } else {
-    $('#inst-dia').innerHTML = `<tr><td colspan="${INICIOS_DOS_TEMPOS.length + 6}" class="h">${SEM_INSTRUTORES}</td></tr>`;
-  }
-  applyInstructorFilters();
-  const alvo = foco && $('#inst-dia').querySelector(foco);
-  if (alvo) alvo.focus();
+// A tira: as faixas, as pausas e os voos, das 06:30 à meia-noite (o texto da linha diz o mesmo: ela é só para os olhos)
+function tiraHtml(x, { grande = false } = {}) {
+  const trechos = trechosDaTira(faixasDe(x), voosDoInstrutor(x));
+  return `<span class="tira${grande ? ' grande' : ''}${x.on ? '' : ' nao-vem'}" aria-hidden="true">${trechos
+    .map(t => `<span class="tira-${t.tipo}" style="left:${t.inicio}%;width:${t.largura}%"></span>`).join('')}</span>`;
 }
 
-function seletorDoCampo(el) {
-  if (el.id) return `#${CSS.escape(el.id)}`;
-  const linha = el.closest('tr[data-id]');
-  const campo = ['data-f', 'data-w'].filter(a => el.hasAttribute(a)).map(a => `[${a}="${el.getAttribute(a)}"]`).join('');
-  return linha && campo ? `tr[data-id="${linha.dataset.id}"] ${campo}` : null;
+// O ponto da linha: os dados pessoais não salvos, o peso que falta e o limite da lei perto
+function pontoDoInstrutor(x) {
+  const marca = marcaDaPessoa('instrutor', x.id);
+  const rotulos = [marca ? marca.rotulo : '', x.kg ? '' : 'sem peso', limitePerto(x)].filter(Boolean);
+  return { ponto: marca ? marca.ponto : rotulos.length ? 'aviso' : '', pontoRotulo: rotulos.join('; ') };
 }
 
-// Atualiza a linha do cadastro no lugar, sem trocar os campos (o foco de quem usa o teclado continua onde estava). Ela é
-// a do instrutor alterado agora: continua à vista mesmo fora dos filtros, até eles mudarem
-export function atualizarLinhaDoCadastro(x) {
-  const linha = document.querySelector(`#inst tr.cd[data-id="${x.id}"]`);
-  if (!linha) return;
-  linha.dataset.hab = x.hab.join(' ');
-  linha.dataset.nm = chaveDeBusca(x.nm);
-  linha.querySelector('[data-f="nm"]').value = x.nm;
-  const kg = linha.querySelector('[data-f="kg"]');
-  kg.value = x.kg || '';
-  kg.classList.toggle('falta', !x.kg);
-  kg.setAttribute('aria-label', `Peso de ${x.nm} em kg`);
-  linha.querySelector('[data-act="deli"]').setAttribute('aria-label', `Excluir ${x.nm}`);
-  linha.querySelector('[data-dados]').setAttribute('aria-label', `Dados pessoais de ${x.nm}`);
-  linha.querySelector('.habs-resumo').textContent = resumoDasHabilitacoes(x) || 'Nenhuma';
-  const titulo = $('#painel-instrutor-titulo');
-  if (titulo && !$('#painel-instrutor').hidden && +$('#painel-instrutor').dataset.id === x.id) titulo.querySelector('small').textContent = x.nm;
-  manterInstrutorAVista(x.id);
-  applyInstructorFilters();
+function itemDoInstrutor(x) {
+  const veDados = podeVerDadosPessoais();
+  const canac = veDados ? canacDe('instrutor', x.id) : '';
+  const nomeCompleto = veDados ? nomeCompletoDe('instrutor', x.id) : '';
+  return {
+    id: x.id,
+    titulo: x.nm,
+    linha2: faixasEmTexto(x),
+    meta: quantosVoos(voosDoInstrutor(x).length),
+    linha3: resumoNaLinha(x),
+    bloco: tiraHtml(x),
+    ...pontoDoInstrutor(x),
+    inativo: inativo(x),
+    // O "Vem" desta data e o "Ativo" do cadastro (js/eventos/inativos.js): um clique em cada sentido
+    rapida: { marcado: x.on, texto: 'Vem', rotulo: `${x.nm} vem em ${diaEMes()}`, atributos: 'data-f="on"' },
+    chave: { marcado: !inativo(x), texto: 'Ativo', rotulo: `${x.nm} ativo no cadastro`, atributos: 'data-act="ativo" data-de="instrutor"' },
+    atributos: `data-k="i" data-id="${x.id}"`,
+    busca: [x.nm, nomeCompleto, canac].filter(Boolean),
+    valores: { hab: x.hab }
+  };
 }
 
-export function rIns() {
-  mostrarVista('ins');
-  // As opções do filtro das habilitações acompanham a frota (a habilitação própria de cada recurso)
-  if (filtroDasHabilitacoes) filtroDasHabilitacoes.desenhar();
-  rLimites();
-  $('#inst').innerHTML = S.ins.length ? S.ins.map(linhaDoCadastro).join('') : `<tr><td colspan="5" class="h">${SEM_INSTRUTORES}</td></tr>`;
-  rInsDia();
-  rPainelDoInstrutor();
+// O item fixo: os limites da lei, com o do mês e o do ano
+function itemDosLimites() {
+  const l = normalizarLimites(S.limites);
+  const h = v => (v === null ? 'sem limite' : `${numeroBr(v)} h`);
+  return { id: ID_DOS_LIMITES, titulo: 'Limites da Lei do Aeronauta', icone: 'i-relogio', linha2: `${h(l.vooMesH)} no mês · ${h(l.vooAnoH)} no ano` };
 }
 
-// Os grupos do painel e do filtro: os do registro (js/habilitacoes.js) e as habilitações próprias que a frota exige
-const gruposDoPainel = () => [...GRUPOS_DE_HABILITACAO, ...gruposDosRecursos(Array.isArray(S.frota) ? S.frota : FROTA_INICIAL)];
+// O modelo da lista. O aviso: os dados pessoais de um instrutor que o servidor recusou (o primeiro que não está aberto),
+// com "Abrir"
+export function modeloDosInstrutores(escolhido = null) {
+  const recusa = recusasDe('instrutor').find(r => String(r.id) !== String(escolhido) && insBy(+r.id));
+  const aviso = recusa ? { texto: `Os dados pessoais de ${insBy(+recusa.id).nm} não foram salvos: ${recusa.texto.replace(/\.$/, '')}.`, abrir: recusa.id } : null;
+  return { fixos: [itemDosLimites()], grupos: [], itens: S.ins.map(itemDoInstrutor), estado: 'pronto', aviso };
+}
 
-// Painel lateral com as habilitações de um instrutor, em grupos
-export function rPainelDoInstrutor() {
-  const painel = $('#painel-instrutor');
-  if (!painel || painel.hidden) return;
-  const x = insBy(+painel.dataset.id);
-  if (!x) { painel.hidden = true; return; }
-  painel.innerHTML = `<div class="gaveta-cab">
-      <h2 id="painel-instrutor-titulo">Habilitações <small>${esc(x.nm)}</small></h2>
-      <button class="x" type="button" id="btn-fechar-painel-instrutor" aria-label="Fechar o painel">✕</button>
-    </div>
-    <p class="h">Marque o que o instrutor pode fazer. Nos aviões (C152, C172 e PA-34), a missão exige também a habilitação do avião; o voo de cheque exige uma marca de cada grupo do checador.</p>
-    <div class="habs-painel" data-k="i" data-id="${x.id}">
-      ${gruposDoPainel().map(({ titulo, ids, dica }) => `<fieldset><legend>${titulo}${dica ? botaoDeDica(dica, dica === 'checador' ? 'checador' : 'habilitação própria') : ''}</legend>${ids.map(h =>
-        `<label class="hab"><input type="checkbox" class="sw" data-f="hab" data-h="${h}"${x.hab.includes(h) ? ' checked' : ''}>${esc(nomeDaHabilitacao(h))}</label>`).join('')}</fieldset>`).join('')}
-      ${horasDoInstrutor(x)}
-    </div>`;
+// ——— "Editar faixas": o rascunho de cada instrutor, na memória, até "Salvar faixas" ou "Cancelar" ———
+const EDICOES = new Map();
+export const edicaoDasFaixas = id => EDICOES.get(+id) || null;
+export function editarFaixas(id) {
+  const x = insBy(+id);
+  if (x) EDICOES.set(x.id, { ...structuredClone(faixasDe(x)), erro: '' });
+}
+export const pararDeEditarFaixas = id => EDICOES.delete(+id);
+export function mudarEdicaoDasFaixas(id, mudar) {
+  const e = edicaoDasFaixas(id);
+  if (e) EDICOES.set(+id, { ...mudar(structuredClone(e)), erro: '' });
+}
+export function erroNaEdicaoDasFaixas(id, erro) {
+  const e = edicaoDasFaixas(id);
+  if (e) EDICOES.set(+id, { ...e, erro });
+}
+
+const opcoesDeHorario = (lista, escolhido) => lista.map(m => `<option value="${m}"${m === escolhido ? ' selected' : ''}>${hm(m)}</option>`).join('');
+// Uma faixa ou uma pausa do rascunho: o De, o Até e o ✕. Os campos têm data-a="fx" (js/eventos/instrutores.js)
+function linhaDaEdicao(tipo, f, i) {
+  const nome = `${i + 1}ª ${tipo}`;
+  const base = `det-ins-${tipo}-${i}`;
+  const campo = (ponta, lista) => `<select id="${base}-${ponta}" data-a="fx" data-fx="${tipo}" data-i="${i}" data-ponta="${ponta}" aria-label="${nome}: ${ponta === 'de' ? 'de' : 'até'}">${opcoesDeHorario(lista, f[ponta])}</select>`;
+  return `<li class="fx-linha"><span class="fx-rotulo">${tipo === 'faixa' ? 'Pode decolar de' : 'Pausa de'}</span>${campo('de', MINUTOS_DAS_FAIXAS.slice(0, -1))}`
+    + `<span class="fx-ate">até</span>${campo('ate', MINUTOS_DAS_FAIXAS.slice(1))}`
+    + `<button type="button" class="btn quiet fx-tirar" id="${base}-tirar" data-act="tirar-${tipo}" data-i="${i}" aria-label="Tirar a ${nome} (${hm(f.de)}–${hm(f.ate)})">✕</button></li>`;
+}
+function editorDasFaixas(x, e) {
+  const temAlmoco = e.pausas.some(p => p.de <= ALMOCO.de && p.ate >= ALMOCO.ate);
+  return `<fieldset class="det-form faixas-form" data-faixas-de="${x.id}"><legend>Editar faixas <small>nesta data</small></legend>`
+    + `<ul class="fx-lista" aria-label="Faixas de ${esc(x.nm)}">${e.faixas.map((f, i) => linhaDaEdicao('faixa', f, i)).join('')}</ul>`
+    + (e.faixas.length ? '' : '<p class="h fx-vazio">Sem faixa: o instrutor não voa nesta data.</p>')
+    + `<div class="fx-mais"><button type="button" class="btn sec" id="det-ins-mais-faixa" data-act="mais-faixa"${e.faixas.length >= MAXIMO_DE_FAIXAS ? ' disabled' : ''}>+ Faixa</button></div>`
+    + `<ul class="fx-lista" aria-label="Pausas de ${esc(x.nm)}">${e.pausas.map((p, i) => linhaDaEdicao('pausa', p, i)).join('')}</ul>`
+    + `<div class="fx-mais"><button type="button" class="btn sec" id="det-ins-mais-pausa" data-act="mais-pausa"${e.pausas.length >= MAXIMO_DE_PAUSAS ? ' disabled' : ''}>+ Pausa</button>`
+    + `<button type="button" class="btn sec" id="det-ins-almoco" data-act="almoco"${temAlmoco || e.pausas.length >= MAXIMO_DE_PAUSAS ? ' disabled' : ''}>Almoço <small>${hm(ALMOCO.de)}–${hm(ALMOCO.ate)}</small></button></div>`
+    + `<p class="erro-campo fx-erro" id="det-ins-faixas-erro" role="alert">${esc(e.erro || '')}</p>`
+    + '<div class="det-form-acoes"><button type="button" class="btn" id="det-ins-salvar-faixas" data-act="salvar-faixas">Salvar faixas</button>'
+    + '<button type="button" class="btn quiet" id="det-ins-cancelar-faixas" data-act="cancelar-faixas">Cancelar</button></div></fieldset>';
+}
+
+// As horas marcadas embaixo da tira grande do detalhe
+const MARCAS_DA_TIRA = [390, 720, 1050, 1440];
+
+const recursoDoVoo = r => (r === GROUND_REG ? 'Sala Ground' : r);
+// O voo da lista de "Nesta data": o horário, a missão, o aluno (a turma de Ground: quantos), o recurso e o status
+function vooEmTexto(o) {
+  const turma = o.classKey ? voosQueVoam().filter(v => unidadeDoVoo(v) === o.classKey).length : 0;
+  const aluno = turma > 1 ? `${turma} alunos` : ((stuBy(o.stuId) || {}).nm || '');
+  return [o.mis, aluno, recursoDoVoo(o.r), statusDoVoo(o, S.fStatus)].filter(Boolean).join(' · ');
+}
+
+// "Nesta data": o "Vem", as faixas e as pausas (o texto e a tira), os três turnos, "Editar faixas" (ou o rascunho aberto)
+// e os voos do instrutor na escala da data
+function secaoNestaData(x, edita) {
+  const d = faixasDe(x);
+  const voos = voosDoInstrutor(x);
+  const vem = `<div class="det-campo">${edita
+    ? `<span class="det-rotulo"><label for="det-ins-on">Vem</label>${botaoDeDica('vem-nesta-data', 'Vem')}</span><div class="det-valor"><label class="alvo det-vem"><input type="checkbox" class="sw" id="det-ins-on" data-f="on"${x.on ? ' checked' : ''}> ${x.on ? 'vem nesta data' : 'não vem nesta data'}</label></div>`
+    : `<span class="det-rotulo" id="det-ins-on-rotulo">Vem${botaoDeDica('vem-nesta-data', 'Vem')}</span><div class="det-valor" aria-labelledby="det-ins-on-rotulo">${x.on ? 'vem nesta data' : 'não vem nesta data'}</div>`}</div>`;
+  const campos = [
+    { id: 'on', tipo: 'html', html: vem },
+    { id: 'faixas', rotulo: 'Pode decolar', tipo: 'leitura', texto: textoDasFaixas(d), dica: ['faixas', 'O que é Pode decolar?'] },
+    { id: 'pausas', rotulo: 'Pausas', tipo: 'leitura', texto: textoDasPausas(d) || 'nenhuma', dica: ['pausa', 'O que é a pausa?'] }
+  ];
+  const escala = `<div class="tira-escala" aria-hidden="true">${MARCAS_DA_TIRA.map(m => `<span style="left:${Math.round((m - INICIO_DAS_FAIXAS) / (MINUTOS_DO_DIA - INICIO_DAS_FAIXAS) * 1e4) / 100}%">${hm(m)}</span>`).join('')}</div>`;
+  const atual = turnoDasFaixas(d);
+  const edicao = edita ? edicaoDasFaixas(x.id) : null;
+  const turnos = edita ? `<div class="turnos" role="group" aria-label="Turno de ${esc(x.nm)} nesta data">${TURNOS.map(t => `<button type="button" class="btn sec turno" id="det-ins-turno-${t.id}" data-act="turno" data-turno="${t.id}" aria-pressed="${atual === t}">${t.nome} <small>${hm(t.de)}–${hm(t.ate)}</small></button>`).join('')}`
+    + (edicao ? '' : '<button type="button" class="btn quiet" id="det-ins-editar-faixas" data-act="editar-faixas">Editar faixas</button>') + '</div>' : '';
+  const lista = voos.length
+    ? `<ul class="voos-do-instrutor" aria-label="Voos de ${esc(x.nm)} nesta data">${voos.map(o => `<li data-voo="${esc(o.fKey)}"><span class="voo-quando">${hm(o.a)}–${hm(o.b)}</span> <span class="voo-oque">${esc(vooEmTexto(o))}</span></li>`).join('')}</ul>`
+    : '<p class="h det-sem-voo">Sem voo nesta data.</p>';
+  const html = `<div class="det-tira">${tiraHtml(x, { grande: true })}${escala}</div>${turnos}${edicao ? editorDasFaixas(x, edicao) : ''}${lista}`;
+  return { id: 'data', titulo: 'Nesta data', icone: 'i-calendario', escopo: escopoDaData(), resumo: quantosVoos(voos.length), campos, html };
+}
+
+// As habilitações, em grupos (quem edita marca e desmarca; quem só consulta lê o resumo)
+function secaoDasHabilitacoes(x, edita) {
+  if (!edita) return { id: 'habilitacoes', titulo: 'Habilitações', icone: 'i-certo', escopo: 'todas as datas', campos: [{ id: 'habs', rotulo: 'Habilitações', tipo: 'leitura', texto: resumoDasHabilitacoes(x) || 'nenhuma' }] };
+  const html = `<p class="h">Marque o que o instrutor pode fazer. Nos aviões (C152, C172 e PA-34), a missão exige também a habilitação do avião; o voo de cheque exige uma marca de cada grupo do checador.</p>`
+    + `<div class="habs-painel">${gruposDasHabilitacoes().map(({ titulo, ids, dica }) => `<fieldset><legend>${titulo}${dica ? botaoDeDica(dica, dica === 'checador' ? 'checador' : 'habilitação própria') : ''}</legend>${ids.map(h =>
+      `<label class="hab"><input type="checkbox" class="sw" data-f="hab" data-h="${esc(h)}" id="det-ins-hab-${esc(h.replace(':', '-'))}"${x.hab.includes(h) ? ' checked' : ''}>${esc(nomeDaHabilitacao(h))}</label>`).join('')}</fieldset>`).join('')}</div>`;
+  return { id: 'habilitacoes', titulo: 'Habilitações', icone: 'i-certo', escopo: 'todas as datas', resumo: `${x.hab.length}`, campos: [], html };
 }
 
 // As horas de voo do instrutor (limites da lei) e as de fora do app: neste mês e, no ano, antes deste mês
 const MESES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
-function horasDoInstrutor(x) {
+function secoesDasHoras(x) {
   const limites = normalizarLimites(S.limites);
   const h = horasComAEscala(x);
   const de = (valor, limite) => `${numeroBr(valor)} h${limite === null ? '' : ` de ${limite} h`}`;
   const externas = x.horasExternas || {};
-  const mes = MESES[+DATA.slice(5, 7) - 1];
-  return `<fieldset class="horas-ins"><legend>Horas de voo (limites da lei)${botaoDeDica('limites-da-lei', 'limites da lei')}</legend>
-      <p>No mês: ${de(h.mes, limites.vooMesH)} · No semestre: ${de(h.semestre, limites.vooSemestreH)} · No ano: ${de(h.ano, limites.vooAnoH)} <small>(com a escala desta data)</small></p>
-      <p class="h">As horas de voo de fora do app (outra escola, por exemplo) entram nos limites do mês e do ano.</p>
-      <label>Fora do app, neste mês (${mes}) <input type="number" min="0" max="999" step="0.1" data-f="ext-mes" value="${externas[DATA.slice(0, 7)] ?? ''}"></label>
-      <label>Fora do app, neste ano, antes de ${mes} <input type="number" min="0" max="2000" step="0.1" data-f="ext-ano" value="${externas[`${DATA.slice(0, 4)}-00`] ?? ''}"></label>
-    </fieldset>`;
+  const mes = DATA ? MESES[+DATA.slice(5, 7) - 1] : '';
+  const doMes = DATA ? externas[DATA.slice(0, 7)] : undefined, doAno = DATA ? externas[`${DATA.slice(0, 4)}-00`] : undefined;
+  const aviso = limitePerto(x);
+  const horas = { id: 'horas', titulo: 'Horas de voo', icone: 'i-relogio', escopo: mes, campos: [{ id: 'horas', rotulo: 'Com esta escala', tipo: 'leitura', texto: `No mês: ${de(h.mes, limites.vooMesH)} · No semestre: ${de(h.semestre, limites.vooSemestreH)} · No ano: ${de(h.ano, limites.vooAnoH)}`, dica: ['limites-da-lei', 'O que são os limites da lei?'] }],
+    html: aviso ? `<p class="det-aviso-limite">Perto do limite: ${esc(aviso)}.</p>` : '' };
+  // As horas de fora do app numa seção só delas: o campo em foco fica, e as horas de cima são refeitas
+  const fora = { id: 'fora-do-app', titulo: 'Fora do app', icone: 'i-relogio', escopo: mes, campos: [
+    { id: 'ext-mes', rotulo: `Neste mês (${mes})`, tipo: 'numero', valor: doMes ?? '', texto: doMes === undefined ? '—' : `${numeroBr(doMes)} h`, dica: ['fora-do-app', 'O que é Fora do app?'], atributos: 'data-f="ext-mes" min="0" max="999" step="0.1"' },
+    { id: 'ext-ano', rotulo: `No ano, antes de ${mes}`, tipo: 'numero', valor: doAno ?? '', texto: doAno === undefined ? '—' : `${numeroBr(doAno)} h`, atributos: 'data-f="ext-ano" min="0" max="2000" step="0.1"' }
+  ] };
+  return [horas, fora];
 }
 
-// O painel abre por cima das outras gavetas abertas (também quando já estava aberto, com outro instrutor)
-export function abrirPainelDoInstrutor(id) {
-  const painel = $('#painel-instrutor');
-  painel.dataset.id = id;
-  abrirGaveta(painel);
-  rPainelDoInstrutor();
-  $('#btn-fechar-painel-instrutor').focus();
+// O detalhe dos limites da lei (o item fixo): os campos de js/views/limites.js
+function detalheDosLimites() {
+  return {
+    id: ID_DOS_LIMITES, titulo: 'Limites da Lei do Aeronauta', icone: 'i-relogio', subtitulo: 'Lei 13.475/2017 e RBAC 117 · todas as datas',
+    secoes: [{ id: 'limites', titulo: 'Limites', icone: 'i-relogio', escopo: 'todas as datas', campos: [], html: `<div class="limites-lei" id="limites-lei">${limitesHtml()}</div>` }],
+    rodape: []
+  };
 }
 
-export function fecharPainelDoInstrutor(devolverFoco = false) {
-  const painel = $('#painel-instrutor');
-  painel.hidden = true;
-  const botao = document.querySelector(`#inst tr.cd[data-id="${painel.dataset.id}"] [data-act="editar-habs"]`);
-  if (devolverFoco && botao) botao.focus();
-}
-
-// A coluna CANAC do cadastro, quando os dados pessoais chegam ou mudam (js/views/dados-pessoais.js)
-export function atualizarCanacDosInstrutores() {
-  document.querySelectorAll('#inst tr[data-id] .c-canac').forEach(td => { td.textContent = canacDe('instrutor', +td.closest('tr').dataset.id); });
-}
-
-// Os filtros de Instrutores: o nome e as habilitações, nas duas vistas. Eles ficam aqui (a busca) e no filtro de vários
-// valores (as marcas), e não só nos campos, e valem de novo a cada redesenho das linhas: o cadastro novo, outra data, um
-// nome mudado. O nome é comparado pela chave da busca (sem acentos). Quem acabou de ser cadastrado (+ Novo) ou alterado
-// na linha dele (o nome, a habilitação tirada no painel) continua à vista mesmo fora dos filtros, até eles mudarem: é na
-// linha do novo que se digita o nome, e a linha alterada não some com o foco de quem usa o teclado (o Tab depois do
-// nome, o botão a que o painel devolve o foco)
-let filtroDoNome = '';
-const mantidos = new Set();
-const BUSCA = '[data-flt="inst"]';
-// O filtro das habilitações (js/views/filtro-multiplo.js)
-let filtroDasHabilitacoes = null;
-// Na digitação, a contagem espera a pessoa parar (o leitor de tela não a dita a cada letra)
-const ESPERA_DA_DIGITACAO = 500;
-
-// As opções do filtro das habilitações: os grupos do painel "Editar habilitações", com a habilitação própria de cada
-// recurso da frota, e os rótulos da coluna Habilitações
-const opcoesDasHabilitacoes = () => gruposDoPainel()
-  .map(({ titulo, ids }) => ({ titulo, opcoes: ids.map(h => [h, rotuloDa(h)]) }));
-
-// Ao abrir: o filtro das habilitações, e a busca como o filtro, vazia (o navegador que devolve o texto de antes de
-// recarregar a página não deixa o campo diferente do filtro). O instrutor aparece se tem todas as marcadas: uma missão
-// pede várias juntas (o Noturno no C172, Noturno e C172)
-export function prepararFiltrosDosInstrutores() {
-  filtroDasHabilitacoes = criarFiltroMultiplo({
-    id: 'flt-ins-hab', nome: 'Habilitações', todas: 'Todas as habilitações', regra: 'todas',
-    dica: ['filtro-das-habilitacoes', 'Filtro das habilitações'], grupos: opcoesDasHabilitacoes, aoMudar: () => filtrarInstrutores()
-  });
-  $(BUSCA).value = filtroDoNome;
-}
-
-// Um filtro mudou (a busca, { nome }, ou as marcas das habilitações): vale para todas as linhas, também as do cadastrado
-// e do alterado agora
-export function filtrarInstrutores(mudanca = {}) {
-  if ('nome' in mudanca) filtroDoNome = mudanca.nome;
-  mantidos.clear();
-  applyInstructorFilters({ esperar: 'nome' in mudanca ? ESPERA_DA_DIGITACAO : 0 });
-}
-
-// O cadastrado (+ Novo) ou alterado agora continua à vista mesmo fora dos filtros, até eles mudarem
-export function manterInstrutorAVista(id) {
-  mantidos.add(id);
-}
-
-// "Limpar filtros": a busca e as marcas voltam a vazio, todas as linhas aparecem, e o foco vai para a busca
-export function limparFiltrosDosInstrutores() {
-  filtroDoNome = '';
-  if (filtroDasHabilitacoes) filtroDasHabilitacoes.limpar();
-  mantidos.clear();
-  $(BUSCA).value = '';
-  applyInstructorFilters();
-  $(BUSCA).focus();
-}
-
-const filtrando = () => Boolean(filtroDoNome) || Boolean(filtroDasHabilitacoes && filtroDasHabilitacoes.valores().length > 0);
-
-// Os filtros valem para as duas vistas: o instrutor tem todas as habilitações marcadas (data-hab, com a habilitação
-// própria do recurso: aviao:PR-VOM)
-function applyInstructorFilters({ esperar = 0 } = {}) {
-  const q = chaveDeBusca(filtroDoNome);
-  const temAsMarcadas = filtroDasHabilitacoes ? filtroDasHabilitacoes.quemPassa() : () => true;
-  filtrarLinhas(['#inst-dia', '#inst'],
-    l => mantidos.has(+l.dataset.id) || ((!q || l.dataset.nm.includes(q)) && temAsMarcadas(l.dataset.hab.split(' '))),
-    { aba: 'ins', nomes: ['instrutor', 'instrutores'], filtrando: filtrando(), esperar });
+// O detalhe de um instrutor (null: ele saiu do cadastro), ou o dos limites da lei
+export function detalheDoInstrutor(id) {
+  if (String(id) === ID_DOS_LIMITES) return detalheDosLimites();
+  const x = insBy(+id);
+  if (!x) return null;
+  const edita = !isGestor();
+  const veDados = podeVerDadosPessoais();
+  const canac = veDados ? canacDe('instrutor', x.id) : '';
+  const cadastro = [
+    { id: 'nm', rotulo: 'Nome (na escala)', tipo: 'texto', valor: x.nm, atributos: `data-f="nm" maxlength="${LIMITE_DO_NOME}"` },
+    { id: 'kg', rotulo: 'Peso (kg)', tipo: 'numero', valor: x.kg || '', texto: x.kg ? `${numeroBr(x.kg)} kg` : 'sem peso', falta: !x.kg, atributos: 'data-f="kg" min="1" max="300" step="0.1" placeholder="sem peso"' }
+  ];
+  const dados = secaoDosDadosPessoais('ins', 'instrutor', x.id);
+  const ativo = !inativo(x);
+  return {
+    atributos: `data-k="i" data-id="${x.id}"`,
+    id: x.id,
+    titulo: x.nm,
+    subtitulo: [canac ? `CANAC ${canac}` : '', resumoNaLinha(x) || 'sem habilitações'].filter(Boolean).join(' · '),
+    aviso: ativo ? '' : 'Inativo no cadastro: não é escalado de hoje em diante (os voos que ele já tem nesta data continuam). As datas passadas ficam como estão. Para ativar de novo, ligue “Ativo” na linha dele.',
+    acoes: ativo ? [{ id: 'agendar', rotulo: `Agendar voo com ${x.nm}`, icone: 'i-calendario', atributos: `data-act="agendar" data-agendar="i:${x.id}" aria-haspopup="dialog"` }] : [],
+    secoes: [secaoNestaData(x, edita), { id: 'cadastro', titulo: 'Cadastro', icone: 'i-conta', escopo: 'todas as datas', campos: cadastro },
+      secaoDasHabilitacoes(x, edita), ...secoesDasHoras(x), ...(dados ? [dados] : [])],
+    rodape: [{ id: 'excluir', texto: 'Excluir instrutor…', rotulo: `Excluir ${x.nm}`, atributos: 'data-act="deli"', soEdicao: true }]
+  };
 }

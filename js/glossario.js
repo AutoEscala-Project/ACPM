@@ -21,7 +21,7 @@ export const ABAS_DO_GLOSSARIO = [
   'Demanda',
   'Agenda',
   'Recursos',
-  'Instrutores',
+  'INVAs',
   'Alunos',
   'Cursos',
   'Rodízio'
@@ -44,7 +44,7 @@ const TERMOS = {
     aba: 'Escala', termo: 'Reduzir combustível',
     texto: `Aluno e instrutor passam do limite de peso do avião com o tanque cheio: o avião sai com menos combustível, o bastante para o voo, o táxi e a reserva (${reservaDaMissao('Voo Local')} min; ${reservaDaMissao('Noturno')} à noite e em IFR).`
   },
-  'sem-peso': { aba: 'Escala', termo: 'Sem peso', texto: 'Falta o peso do aluno ou do instrutor: a escala não conferiu o limite de peso do avião. Informe o peso em Alunos ou Instrutores.' },
+  'sem-peso': { aba: 'Escala', termo: 'Sem peso', texto: 'Falta o peso do aluno ou do instrutor: a escala não conferiu o limite de peso do avião. Informe o peso em Alunos ou INVAs.' },
   turma: { aba: 'Escala', termo: 'Turma', texto: `Alunos do mesmo Ground, no mesmo horário e com o mesmo instrutor: uma aula só, de ${duracao(GROUND_DURATION_MIN)}, na sala de Ground.` },
   'missao-do-curso': {
     aba: 'Escala', termo: 'Missão do curso', texto: 'O código da missão no programa do curso (por exemplo, PP-07): a próxima que o aluno ainda não aprovou.',
@@ -112,19 +112,18 @@ const TERMOS = {
   hangar: { funcionalidade: 'hangar', aba: 'Recursos', termo: 'Ordem no hangar', texto: 'Da frente para o fundo, sempre com todos os aviões (Recursos › Disponibilidade do dia): entre aviões livres, o da frente sai primeiro.' },
   noturno: { aba: 'Escala', termo: 'Noturno', texto: 'Missão de dois dias, num avião só: sai às 17:30 para BH (1 h de translado) e voa 3 h de noturno em BH; no dia seguinte, a volta decola de BH às 07:30, e o instrutor, o aluno e o avião ficam livres às 10:10.' },
   'so-vfr': { aba: 'Recursos', termo: 'Só VFR', texto: 'Avião não homologado IFR: voa as missões VFR, e nenhum voo IFR (IFR, cheques IFR, o noturno do PC) vai para ele. Marque na frota, em Recursos › Cadastro.' },
-  'habilitacao-propria': { aba: 'Recursos', termo: 'Habilitação própria', texto: 'O que o próprio recurso exige do instrutor, além da habilitação do tipo: uma habilitação só dele (por exemplo, a do PR-VOM), marcada na frota, em Recursos › Cadastro. Marque-a no instrutor em Instrutores › Cadastro › Editar habilitações.' },
+  'habilitacao-propria': { aba: 'Recursos', termo: 'Habilitação própria', texto: 'O que o próprio recurso exige do instrutor, além da habilitação do tipo: uma habilitação só dele (por exemplo, a do PR-VOM), marcada na frota, em Recursos › Cadastro. Marque-a no instrutor em INVAs › Habilitações.' },
   'so-parafuso': { aba: 'Recursos', termo: 'Só Parafuso', texto: 'Avião reservado para a missão de Parafuso no C152: as outras missões não usam ele, e o Parafuso só voa nele. Marque na frota, em Recursos › Cadastro.' },
 
-  // Instrutores
-  'vem-nesta-data': { aba: 'Instrutores', termo: 'Vem', texto: 'Marcado, o instrutor vem nesta data (a aberta no topo, que nem sempre é hoje) e pode ser escalado nos períodos marcados ao lado.' },
-  'voos-do-instrutor': { aba: 'Instrutores', termo: 'Voos', texto: 'Voos e aulas do instrutor na escala desta data, sem os cancelados (a turma de Ground conta uma vez).' },
-  'horas-do-mes': { aba: 'Instrutores', termo: 'Mês', texto: 'As horas de voo do instrutor no mês, com a escala desta data. A partir de 90% do limite da lei, a escala avisa.' },
-  checador: { aba: 'Instrutores', termo: 'Checador', texto: 'O voo de cheque exige três marcas do checador: o curso (PP ou PC), o motor (MNTE ou MLTE) e as regras (VFR ou IFR). O Cheque PC MLTE IFR, por exemplo, pede PC, MLTE e IFR.' },
-  'filtro-das-habilitacoes': { aba: 'Instrutores', termo: 'Filtro das habilitações', texto: 'Mostra só os instrutores que têm todas as habilitações marcadas, nas duas vistas: Noturno e C172 mostram quem tem as duas. Sem nenhuma marcada, mostra todos.' },
-  turno: { aba: 'Instrutores', termo: 'Turno', texto: 'Marca de uma vez os períodos do instrutor nesta data: manhã, tarde, noturno, o dia inteiro ou o dia mais o noturno.' },
-  'fora-do-app': { aba: 'Instrutores', termo: 'Fora do app', texto: 'Horas de voo do instrutor em outro lugar (outra escola, por exemplo). Entram nos limites da lei do mês e do ano.' },
+  // INVAs
+  'vem-nesta-data': { aba: 'INVAs', termo: 'Vem', texto: 'Marcado, o instrutor vem nesta data (a aberta no topo, que nem sempre é hoje) e pode ser escalado dentro das faixas dele, fora das pausas.' },
+  faixas: { aba: 'INVAs', termo: 'Pode decolar', texto: 'As faixas do instrutor nesta data, de … até …: o voo inteiro dele cabe numa faixa (decola e pousa dentro dela). Um turno é uma faixa pronta; meio dia, uma faixa digitada.' },
+  pausa: { aba: 'INVAs', termo: 'Pausa', texto: 'Um intervalo em que o instrutor não voa nesta data, nem dentro de uma faixa: o almoço, por exemplo. Nenhum voo dele toca a pausa.' },
+  checador: { aba: 'INVAs', termo: 'Checador', texto: 'O voo de cheque exige três marcas do checador: o curso (PP ou PC), o motor (MNTE ou MLTE) e as regras (VFR ou IFR). O Cheque PC MLTE IFR, por exemplo, pede PC, MLTE e IFR.' },
+  'filtro-das-habilitacoes': { aba: 'INVAs', termo: 'Filtro das habilitações', texto: 'Mostra só os instrutores que têm todas as habilitações marcadas: Noturno e C172 mostram quem tem as duas. Sem nenhuma marcada, mostra todos.' },
+  'fora-do-app': { aba: 'INVAs', termo: 'Fora do app', texto: 'Horas de voo do instrutor em outro lugar (outra escola, por exemplo). Entram nos limites da lei do mês e do ano.' },
   'limites-da-lei': {
-    aba: 'Instrutores', termo: 'Limites da lei',
+    aba: 'INVAs', termo: 'Limites da lei',
     texto: `Por dia, ${duracao(lei.vooPorJornadaMin)} de voo e ${duracao(lei.jornadaMin)} de jornada; ${lei.vooMesH} h no mês e ${lei.vooAnoH} h no ano; ${duracao(lei.repousoMin)} de repouso entre um dia e outro (Lei 13.475/2017).`
   },
 

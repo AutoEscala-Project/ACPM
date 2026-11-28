@@ -8,7 +8,7 @@ import { filasDoDiaSeguinte } from './rodizio.js';
 import { FROTA_INICIAL, normalizarFrota } from './frota.js';
 import { normalizarHorarios, INICIOS_DOS_TEMPOS } from './horarios.js';
 import { normalizarFechamentos } from './fechamentos.js';
-import { normalizarFaixas, normalizarPausas } from './disponibilidade.js';
+import { normalizarFaixas, normalizarPausas, faixasDoAw, awComoOAppLia } from './disponibilidade.js';
 import { normalizarHangar } from './hangar.js';
 import { normalizarLimites } from './limites.js';
 import { normalizarFixos, normalizarAprovacao } from './fixos.js';
@@ -66,9 +66,9 @@ export function separar(estado) {
       // Os horários fechados da data (J); o dia sem eles fica sem eles, e os leitores usam o win
       ...(Array.isArray(estado.fechamentos) ? { fechamentos: normalizarFechamentos(estado.fechamentos) } : {}),
       av: { ...estado.av },
-      // As faixas e as pausas da data (C, formato 29), só de quem as tem: quem não as tem é lido pelo aw. O aw continua
-      // gravado até a tela do C (a grade de Instrutores ainda o muda)
-      ins: Object.fromEntries(estado.ins.map(x => [x.id, { on: x.on, aw: [...x.aw], ...faixasEPausas(x) }])),
+      // As faixas e as pausas da data (C, formato 29), de quem as tem; o aw, só de quem não as tem (é lido por ele): com
+      // as faixas, nada o muda nem o lê (a tela do C)
+      ins: Object.fromEntries(estado.ins.map(x => [x.id, Array.isArray(x.faixas) ? { on: x.on, ...faixasEPausas(x) } : { on: x.on, aw: [...x.aw] }])),
       pedidos: Object.fromEntries(estado.stu.map(s => [s.id, {
         ...Object.fromEntries(CAMPOS_DO_PEDIDO.filter(c => s[c] !== undefined).map(c => [c, s[c]])),
         extra: structuredClone(s.extra || [])
@@ -131,8 +131,12 @@ export function juntar(cadastro, dia = diaPadrao()) {
 // demanda do dia vem de "Importar da agenda"
 export function diaParaCopiar(anterior, instrutores = []) {
   if (!anterior || !anterior.ins || !anterior.pedidos) return diaPadrao();
-  const { win, fechamentos, av, ins, pedidos: anteriores, hangar = null, criterios } = structuredClone(anterior);
+  const { win, fechamentos, av, ins: daAnterior, pedidos: anteriores, hangar = null, criterios } = structuredClone(anterior);
   const pedidos = Object.fromEntries(Object.keys(anteriores).map(id => [id, { ...blank(), extra: [] }]));
+  // Os instrutores (C, formato 29): quem vem e as faixas, sem o aw (as do aw para quem ainda não tinha faixas); o que não é
+  // objeto fica como está
+  const ins = Object.fromEntries(Object.entries(daAnterior).map(([id, d]) => [id, !d || typeof d !== 'object' || Array.isArray(d) ? d
+    : { on: d.on !== false, ...(Array.isArray(d.faixas) ? faixasEPausas(d) : faixasDoAw(awComoOAppLia(d.aw))) }]));
   // Os horários fechados passam para a data seguinte, como o win (o B decide se continua assim)
   return { win, ...(Array.isArray(fechamentos) ? { fechamentos } : {}), av, ins, pedidos, fStatus: {}, fObs: {}, horas: horasDoDiaSeguinte(anterior), filas: filasDoDiaSeguinte(anterior, instrutores), hangar: hangar || normalizarHangar(null, FROTA_INICIAL), fixos: {}, aprovacao: null, criterios: normalizarCriterios(criterios), importadas: [] };
 }

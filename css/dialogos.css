@@ -11,7 +11,7 @@ dialog.dlg .motivos legend { padding: 0 4px; font-weight: 600; }
 dialog.dlg .campo { display: flex; flex-direction: column; gap: 4px; margin: 10px 0; font-weight: 600; }
 dialog.dlg .campo[hidden] { display: none; }
 dialog.dlg .campo small { font-weight: 400; }
-dialog.dlg .dlg-acoes, .form-dados .dlg-acoes { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+dialog.dlg .dlg-acoes { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
 /* Configurar painel (js/views/config-do-painel.js): o quadro com que o painel abre e as colunas, numeradas na ordem do
    painel, cada uma com ↑ e ↓; rola por dentro quando não cabe na altura */
 dialog.dlg-painel { width: min(460px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); overflow-y: auto; }

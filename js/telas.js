@@ -14,7 +14,7 @@ export const TELAS = {
   esc: { rotulo: 'Escala', estagio: 'escala', perfis: TODOS },
   apr: { rotulo: 'Aprovar', estagio: 'aprovar', perfis: TODOS, secao: 's-esc', item: 'aprovacao' },
   alu: { rotulo: 'Alunos', grupo: 'cadastros', perfis: TODOS },
-  ins: { rotulo: 'Instrutores', grupo: 'cadastros', perfis: TODOS },
+  ins: { rotulo: 'INVAs', grupo: 'cadastros', perfis: TODOS },
   rec: { rotulo: 'Recursos', grupo: 'cadastros', perfis: SEM_SECRETARIA },
   cur: { rotulo: 'Cursos', grupo: 'cadastros', perfis: TODOS },
   rod: { rotulo: 'Rodízio', grupo: 'mais', perfis: SEM_SECRETARIA },

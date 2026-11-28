@@ -92,11 +92,6 @@ export function avisarDoLink(texto, tipo) {
   $('#btn-fechar-aviso-link').onclick = () => { $('#aviso-link').hidden = true; };
 }
 
-export const focusLast = sel => {
-  const e = [...document.querySelectorAll(sel)].pop();
-  if (e) { e.scrollIntoView({ block: 'center' }); e.focus(); e.select(); }
-};
-
 // Um balão junto de um elemento (o popup do mapa da escala, a dica): acima dele (ou abaixo, quando não cabe), sempre
 // inteiro na tela; a seta (--seta) aponta para o meio do elemento
 const MARGEM = 8, DISTANCIA = 10;

@@ -1,4 +1,24 @@
 /* Cursos: o programa em fases, o formulário, os alunos, o índice, a tabela das missões e os cartões no celular */
+/* A tabela das missões (table.cadastro.programa): as regras que ela tinha de css/cadastros.css, que saiu com a tabela do
+   cadastro de Instrutores (C), na mesma ordem e com a mesma força (table.programa no lugar de table.cadastro), antes das
+   outras de Cursos, como quando a folha vinha antes desta: os campos discretos, que parecem texto até o mouse passar ou o
+   foco chegar, e o cartão de cada missão no celular */
+table.programa { min-width: 600px; font-size: 14.5px; }
+table.programa td { padding: 4px 8px; }
+table.programa td.acoes { text-align: right; white-space: nowrap; }
+table.programa tr[hidden] { display: none; }
+table.programa input { border-color: transparent; background: transparent; }
+table.programa tr:hover input, table.programa input:focus { border-color: var(--ln2); background: var(--pn); }
+@media (max-width: 640px) {
+  table.programa { min-width: 0; }
+  table.programa thead { display: none; }
+  table.programa, table.programa tbody, table.programa td { display: block; }
+  table.programa td { padding: 0; border: 0; }
+  table.programa td.c-nome { grid-area: nome; }
+  table.programa td.acoes { grid-area: acoes; display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 8px; white-space: normal; }
+  table.programa input { border-color: var(--ln); }
+  body[data-role="gestor"]:not([data-perfil="secretaria"]) table.programa td.acoes { display: none; }
+}
 /* Cursos: o programa de cada curso, em fases (sob o título do módulo), cada fase com o cabeçalho (nome, módulo, quando
    abre, "Depois de…" e os botões) e a tabela das missões; no fim, "+ Fase", as retiradas e as alterações */
 #cursos { display: flex; flex-direction: column; gap: 12px; }

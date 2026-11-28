@@ -7,14 +7,18 @@
 // A regra é a de antes do C (os commits "dados" e "tela"): o compromisso inteiro dentro de uma faixa, sem tocar numa pausa;
 // o que cai antes das 06:30 (o início do 1º tempo de antes) não pede faixa, como nenhum tempo o cobria. A regra do início
 // (decisão 1 do Pedro: a missão começa dentro da faixa e pode terminar depois dela) é o commit "regra".
-// Módulo puro (config e horarios, que já são da TV): o passo 29 de js/migracoes.js o leva para o grafo da TV.
+// A tela (o commit "tela"): os três turnos, cada um uma faixa em minutos (N12: nenhum precisa de um limite do dia), o que a
+// linha e o detalhe do INVA dizem (o texto e a tira), a conferência de "Editar faixas" e o "Marcar disponível" do
+// agendamento, que põem as faixas no lugar do aw: a tela não muda mais o aw.
+// Módulo puro (config, horarios e format, que já são da TV): o passo 29 de js/migracoes.js o leva para o grafo da TV.
 import { MINUTOS_DO_DIA } from './config.js';
 import { INICIOS_DOS_TEMPOS } from './horarios.js';
+import { hm } from './format.js';
 
 // As faixas e as pausas ficam entre as 06:30 e a meia-noite, no máximo 8 de cada por data
 export const INICIO_DAS_FAIXAS = INICIOS_DOS_TEMPOS[0];
-const MAXIMO_DE_FAIXAS = 8;
-const MAXIMO_DE_PAUSAS = 8;
+export const MAXIMO_DE_FAIXAS = 8;
+export const MAXIMO_DE_PAUSAS = 8;
 
 const TEMPOS = INICIOS_DOS_TEMPOS.length;
 const fimDoTempo = k => (k < TEMPOS - 1 ? INICIOS_DOS_TEMPOS[k + 1] : MINUTOS_DO_DIA);
@@ -75,9 +79,93 @@ export function disponivelPara(x, a, b) {
   return x.faixas.some(f => f.de <= de && ate <= f.ate) && !(x.pausas || []).some(p => sobrepoe(a, b, p.de, p.ate));
 }
 
-// Até a tela do C, a grade de Instrutores ("Aplicar turno…" e as nove marcas), o "Marcar disponível" do agendamento e a
-// reversão dele mudam o aw: o instrutor que tem faixas fica com as do aw novo (o que não tem continua lido pelo aw)
+// A reversão de um agendamento feito antes da tela do C, que guardou só o aw de antes: o instrutor que tem faixas fica com
+// as desse aw (o que não tem continua lido pelo aw)
 export function refazerFaixasDoAw(x) {
   if (x && Array.isArray(x.faixas)) Object.assign(x, faixasDoAw(x.aw));
   return x;
+}
+
+// ———————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+// A tela (C, commit "tela")
+
+// Os três turnos: cada um uma faixa, sem pausa. "Manhã" e "Tarde" saíram (N12, U4): o meio dia é uma faixa digitada
+export const TURNOS = Object.freeze([
+  Object.freeze({ id: 'dia', nome: 'Dia inteiro', de: 390, ate: 1050 }),
+  Object.freeze({ id: 'noturno', nome: 'Noturno', de: 1050, ate: MINUTOS_DO_DIA }),
+  Object.freeze({ id: 'dia-e-noturno', nome: 'Dia + noturno', de: 390, ate: MINUTOS_DO_DIA })
+]);
+// "Almoço", a pausa pronta de "Editar faixas"; "+ Pausa" começa com a meia hora das 15:00
+export const ALMOCO = Object.freeze({ de: 12 * 60, ate: 13 * 60 });
+export const PAUSA_NOVA = Object.freeze({ de: 15 * 60, ate: 15 * 60 + 30 });
+// Os horários de "Editar faixas" (os campos de horário do J): de 10 em 10 minutos, das 06:30 à meia-noite
+const PASSO = 10;
+export const MINUTOS_DAS_FAIXAS = Object.freeze(Array.from({ length: (MINUTOS_DO_DIA - INICIO_DAS_FAIXAS) / PASSO + 1 }, (_, i) => INICIO_DAS_FAIXAS + PASSO * i));
+
+export function faixasDoTurno(id) {
+  const t = TURNOS.find(x => x.id === id);
+  return t ? { faixas: [{ de: t.de, ate: t.ate }], pausas: [] } : null;
+}
+
+// As faixas e as pausas do instrutor na data, para a tela: as dele, ou as do aw (quem ainda não tem faixas)
+export const faixasDe = x => (x && Array.isArray(x.faixas)
+  ? { faixas: normalizarFaixas(x.faixas), pausas: normalizarPausas(x.pausas) }
+  : faixasDoAw(awComoOAppLia(x && x.aw)));
+
+const igual = (p, q) => p.length === q.length && p.every((f, i) => f.de === q[i].de && f.ate === q[i].ate);
+export const mesmasFaixas = (p, q) => igual(normalizarFaixas(p.faixas), normalizarFaixas(q.faixas)) && igual(normalizarPausas(p.pausas), normalizarPausas(q.pausas));
+
+// O turno que as faixas são (uma faixa só, a dele, sem pausa); senão nenhum
+export const turnoDasFaixas = d => TURNOS.find(t => mesmasFaixas(d, faixasDoTurno(t.id))) || null;
+
+// "06:30–12:40 e 13:40–24:00"
+const lista = itens => (itens.length > 1 ? `${itens.slice(0, -1).join(', ')} e ${itens.at(-1)}` : itens.join(''));
+const intervalo = f => `${hm(f.de)}–${hm(f.ate)}`;
+export const textoDasFaixas = d => (d.faixas.length ? lista(d.faixas.map(intervalo)) : 'sem faixa');
+export const textoDasPausas = d => lista((d.pausas || []).map(intervalo));
+
+// "Salvar faixas": cada faixa e cada pausa com o De e o Até da lista e o Até depois do De, no máximo 8 de cada. Responde
+// o erro (o primeiro), ou as faixas e as pausas normalizadas
+export function conferirFaixas({ faixas = [], pausas = [] }) {
+  const naLista = m => MINUTOS_DAS_FAIXAS.includes(m);
+  const conferir = (itens, nome, maximo) => {
+    if (itens.length > maximo) return `No máximo ${maximo} ${nome}s por data.`;
+    for (const [i, f] of itens.entries()) {
+      if (!naLista(f.de) || !naLista(f.ate)) return `Na ${i + 1}ª ${nome}, escolha o De e o Até da lista.`;
+      if (f.ate <= f.de) return `Na ${i + 1}ª ${nome}, o Até vem depois do De.`;
+    }
+    return null;
+  };
+  const erro = conferir(faixas, 'faixa', MAXIMO_DE_FAIXAS) || conferir(pausas, 'pausa', MAXIMO_DE_PAUSAS);
+  return erro ? { erro, faixas: [], pausas: [] } : { erro: null, faixas: normalizarFaixas(faixas), pausas: normalizarPausas(pausas) };
+}
+
+// "Marcar disponível" (o agendamento com o instrutor indisponível): o compromisso [a, b) passa a caber numa faixa (a parte
+// dele entre as 06:30 e a meia-noite junta-se às faixas que toca) e as pausas perdem o pedaço que ele toca. Só aumenta a
+// disponibilidade: com faixas demais, o menor intervalo entre duas é preenchido; com pausas demais, a menor sai
+export function comOIntervalo(d, a, b) {
+  const de = Math.max(a, INICIO_DAS_FAIXAS), ate = Math.min(b, MINUTOS_DO_DIA);
+  let faixas = intervalos([...d.faixas, ...(de < ate ? [{ de, ate }] : [])], Infinity);
+  while (faixas.length > MAXIMO_DE_FAIXAS) {
+    const k = faixas.slice(1).reduce((menor, f, i) => (f.de - faixas[i].ate < faixas[menor + 1].de - faixas[menor].ate ? i : menor), 0);
+    faixas = [...faixas.slice(0, k), { de: faixas[k].de, ate: faixas[k + 1].ate }, ...faixas.slice(k + 2)];
+  }
+  let pausas = intervalos((d.pausas || []).flatMap(p => (!sobrepoe(a, b, p.de, p.ate) ? [p]
+    : [...(p.de < a ? [{ de: p.de, ate: a }] : []), ...(p.ate > b ? [{ de: b, ate: p.ate }] : [])])), Infinity);
+  while (pausas.length > MAXIMO_DE_PAUSAS) {
+    const menor = pausas.reduce((m, p, i) => (p.ate - p.de < pausas[m].ate - pausas[m].de ? i : m), 0);
+    pausas = pausas.filter((_, i) => i !== menor);
+  }
+  return { faixas, pausas };
+}
+
+// A tira da linha: as faixas, as pausas e os voos, em porcentagem dela (das 06:30 à meia-noite); o que fica fora dela sai
+const LARGURA_DA_TIRA = MINUTOS_DO_DIA - INICIO_DAS_FAIXAS;
+const porCento = m => Math.round(m / LARGURA_DA_TIRA * 1e4) / 100;
+export function trechosDaTira(d, voos = []) {
+  const trecho = tipo => ({ de, ate }) => {
+    const i = Math.max(de, INICIO_DAS_FAIXAS), f = Math.min(ate, MINUTOS_DO_DIA);
+    return f > i ? [{ tipo, inicio: porCento(i - INICIO_DAS_FAIXAS), largura: porCento(f - i) }] : [];
+  };
+  return [...d.faixas.flatMap(trecho('faixa')), ...(d.pausas || []).flatMap(trecho('pausa')), ...voos.map(v => ({ de: v.a, ate: v.b })).flatMap(trecho('voo'))];
 }
