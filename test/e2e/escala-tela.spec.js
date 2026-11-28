@@ -191,6 +191,12 @@ test.describe('Tela da Escala', () => {
     await expect(page.locator('#out details.caixa.avisos summary')).toHaveText('1 aviso: 1 INVA sem almoço');
     const avisos = await abrirCaixa(page, 'avisos');
     await expect(avisos.locator('li')).toHaveText(['Instrutor 01 Sem almoço: nenhuma hora livre seguida entre 11:00 e 14:00 (ocupado das 10:10 às 11:10, das 11:30 às 12:30 e das 12:40 às 13:40).']);
+    // "Sem almoço" tem a dica do glossário (no foco, no toque e no mouse)
+    const termo = avisos.locator('li [data-dica="almoco"]');
+    await expect(termo).toHaveText('Sem almoço:');
+    await expect(termo).toHaveAccessibleDescription(GLOSSARIO.almoco.texto);
+    await termo.click();
+    await expect(page.locator('#dica')).toHaveText(`Sem almoço ${GLOSSARIO.almoco.texto}`);
   });
 
   // F1h (N9): dois alunos priorizam o mesmo INVA no mesmo horário. Com a prioridade desligada (o padrão), todos têm a

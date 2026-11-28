@@ -100,6 +100,15 @@ describe('Glossário', () => {
     assert.deepEqual(Object.keys(INTEIRO).filter(id => !Object.hasOwn(montarGlossario(nome => nome !== 'prioridade'), id)), ['prioridade']);
   });
 
+  // O almoço (#104): o aviso "Sem almoço" da Escala tem a dica, e a pausa que é o almoço é a que cobre 1 h da janela (de
+  // qualquer tamanho: a de 10:30 a 12:30 também; a de 1 h das 10:30 às 11:30, só 30 min nela, não)
+  it('o almoço: a dica do aviso "Sem almoço" na Escala e a pausa que cobre 1 h entre 11:00 e 14:00', () => {
+    const escala = readFileSync(new URL('js/views/escala.js', raiz), 'utf8');
+    assert.match(escala, /data-dica="almoco"/);
+    assert.match(GLOSSARIO.pausa.texto, /A que cobre 1 h entre 11:00 e 14:00 é o almoço dele\.$/);
+    assert.match(GLOSSARIO.almoco.texto, /Priorizar com/);
+  });
+
   it('o glossário das telas é o das funcionalidades ligadas no app', () => assert.deepEqual(GLOSSARIO, montarGlossario(ligada)));
 });
 
