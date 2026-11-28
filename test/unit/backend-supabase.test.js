@@ -9,7 +9,7 @@ import { normalizarCursos } from '../../js/cursos.js';
 import { FORMATO_DOS_CURSOS } from '../../js/migracoes.js';
 import { PROGRAMA } from '../helpers/casos-do-programa.js';
 import { CASOS_DA_AGENDA, CURSO_DOS_CASOS, DATA_DOS_CASOS, pedidoDosCasos, localDosCasos, guardadoDoCaso } from '../helpers/casos-da-agenda.js';
-import { recusaDoPedido } from '../../js/agenda.js';
+import { recusaDoPedido, recusaDaSegundaPreferencia } from '../../js/agenda.js';
 import { GROUND_DURATION_H, MISSOES_LOCAIS, LIMITE_DE_VOOS_LOCAIS } from '../../js/config.js';
 import { gravarDadosPessoais } from '../../js/dados-pessoais.js';
 import { CASOS_DOS_DADOS_PESSOAIS, CADASTRO_DOS_CASOS, ALUNO_DOS_CASOS, VERSAO_DOS_CASOS, tabelaDoCaso, versaoLidaDoCaso } from '../helpers/casos-dos-dados-pessoais.js';
@@ -73,6 +73,7 @@ function clienteFalso(documentos = {}, { atraso = 0, dias = {} } = {}) {
     historico,
     cursos,
     dadosPessoais,
+    solicitacoes,
     rpcs,
     chamadas,
     falharProximas(n) { falhasDeRede = n; },
@@ -205,27 +206,55 @@ function clienteFalso(documentos = {}, { atraso = 0, dias = {} } = {}) {
         return { data: null, error: null };
       }
       if (nome === 'registrar_solicitacao') {
-        // A função de 13 argumentos (a migração missao_do_curso_e_limite_do_pedido), com as regras dela
-        // (test/helpers/casos-da-agenda.js) e o prazo simplificado: antes de 11/11, encerrado
+        // A função de 16 argumentos (a migração aprovacao_dos_pedidos), com as regras dela (test/helpers/casos-da-agenda.js)
+        // e o prazo simplificado: antes de 11/11, encerrado; a conta é a de um operador
+        if (Object.keys(args).length !== 16) return { data: null, error: { code: 'PGRST202', message: 'Could not find the function' } };
         const horas = String(args.p_missao).startsWith('Ground') ? GROUND_DURATION_H : Math.round(+args.p_horas * 10) / 10;
-        const recusa = recusaDoPedido({ missao: args.p_missao, recurso: args.p_recurso, horario: args.p_horario, horas, missaoDoCurso: args.p_missao_do_curso }, cursos.lista);
+        const recusa = recusaDoPedido({ missao: args.p_missao, recurso: args.p_recurso, horario: args.p_horario, horas, missaoDoCurso: args.p_missao_do_curso }, cursos.lista)
+          || recusaDaSegundaPreferencia({ missao: args.p_missao, horario: args.p_horario, horario2: args.p_horario2 });
         if (recusa) return { data: null, error: { code: recusa.code, message: recusa.mensagem, hint: recusa.campo } };
+        if (args.p_confirmar_limite && args.p_esperar) return { data: null, error: { code: '22023', message: 'confirmação ou lista de espera', hint: 'esperar' } };
         const locais = MISSOES_LOCAIS.includes(args.p_missao)
           && solicitacoes.filter(x => x.data === args.p_data && !x.cancelada_em && x.horario === args.p_horario && MISSOES_LOCAIS.includes(x.missao)).length >= LIMITE_DE_VOOS_LOCAIS;
-        if (locais && !args.p_confirmar_limite) return { data: null, error: { code: 'PT422', message: 'já há 6 voos locais no horário', hint: 'locais' } };
-        if (args.p_data < '2026-11-11') return { data: null, error: { code: 'PT403', message: 'prazo encerrado' } };
+        if (locais && !args.p_confirmar_limite && !args.p_esperar) return { data: null, error: { code: 'PT422', message: 'já há 6 voos locais no horário', hint: 'locais' } };
+        if (args.p_data < '2026-11-11') return { data: null, error: { code: 'PT403', message: 'prazo encerrado', hint: 'prazo' } };
         const id = solicitacoes.length + 1;
         const registrado_em = new Date(Date.UTC(2026, 10, 10, 12, 0, id)).toISOString();
+        const confirmado = locais && args.p_confirmar_limite;
         solicitacoes.push({ id, data: args.p_data, aluno: args.p_aluno, aluno_nome: args.p_aluno_nome, missao: args.p_missao, janela: args.p_janela,
-          horario: args.p_horario, horas, recurso: args.p_recurso.trim(), missao_do_curso: args.p_missao_do_curso, observacao: args.p_observacao, registrado_por: args.p_registrado_por, registrado_em,
-          excecao: Boolean(args.p_excecao), limite_confirmado_por: locais ? 'Eu' : null, limite_confirmado_em: locais ? registrado_em : null, cancelada_em: null, cancelada_por: null });
+          horario: args.p_horario, horario2: args.p_horario2, horas, recurso: args.p_recurso.trim(), missao_do_curso: args.p_missao_do_curso, observacao: args.p_observacao, registrado_por: args.p_registrado_por, registrado_em,
+          excecao: Boolean(args.p_excecao), limite_confirmado_por: confirmado ? 'Eu' : null, limite_confirmado_em: confirmado ? registrado_em : null,
+          aprovada_em: args.p_aprovar ? registrado_em : null, aprovada_por: args.p_aprovar ? 'Eu' : null, aprovacao_retirada_em: null, aprovacao_retirada_por: null,
+          cancelada_em: null, cancelada_por: null });
         return { data: id, error: null };
       }
       if (nome === 'cancelar_solicitacao') {
         const s = solicitacoes.find(x => x.id === args.p_id && !x.cancelada_em);
         if (!s) return { data: null, error: { code: 'P0002', message: 'não encontrado' } };
+        if (s.aprovada_em && s.data < '2026-11-10') return { data: null, error: { code: 'PT403', message: 'data que já passou', hint: 'passada' } };
         Object.assign(s, { cancelada_em: '2026-11-10T13:00:00.000Z', cancelada_por: args.p_cancelada_por });
         return { data: null, error: null };
+      }
+      // Aprovar e retirar a aprovação (a conta é a de um operador; hoje é 10/11), e a contagem por dia
+      if (nome === 'aprovar_solicitacoes') {
+        if (!Array.isArray(args.p_ids) || !args.p_ids.length || args.p_ids.length > 200) return { data: null, error: { code: '22023', message: 'de 1 a 200', hint: 'ids' } };
+        const aprovadas = solicitacoes.filter(s => args.p_ids.includes(s.id) && !s.cancelada_em && !s.aprovada_em && s.data >= '2026-11-10').map(s => s.id).sort((x, y) => x - y);
+        for (const s of solicitacoes) if (aprovadas.includes(s.id)) Object.assign(s, { aprovada_em: '2026-11-10T13:00:00.000Z', aprovada_por: 'Eu', aprovacao_retirada_em: null, aprovacao_retirada_por: null });
+        return { data: aprovadas, error: null };
+      }
+      if (nome === 'retirar_aprovacao_da_solicitacao') {
+        const s = solicitacoes.find(x => x.id === args.p_id && !x.cancelada_em && x.aprovada_em);
+        if (!s) return { data: null, error: { code: 'P0002', message: 'sem aprovação' } };
+        Object.assign(s, { aprovada_em: null, aprovada_por: null, aprovacao_retirada_em: '2026-11-10T13:00:00.000Z', aprovacao_retirada_por: 'Eu' });
+        return { data: null, error: null };
+      }
+      if (nome === 'solicitacoes_por_dia') {
+        const contagem = {};
+        for (const s of solicitacoes.filter(x => !x.cancelada_em && x.data >= args.p_de && x.data <= args.p_ate)) {
+          contagem[s.data] ??= { aguardando: 0, aprovadas: 0 };
+          contagem[s.data][s.aprovada_em ? 'aprovadas' : 'aguardando']++;
+        }
+        return { data: contagem, error: null };
       }
       throw new Error(`função inesperada: ${nome}`);
     }
@@ -534,13 +563,68 @@ describe('Backend Supabase: escala por data e histórico', () => {
     assert.equal(await backend.gravar('cadastro', { v: 4 }), true, 'a versão lida continua a mais recente');
   });
 
+  // A escala desta data mudou em outro computador (D2: a entrada do pedido aprovado na hora, "Importar")? A versão de
+  // agora contra a que esta leitura guardou; um dia que não estava gravado tem a versão 0. Sem baixar o conteúdo
+  it('a escala da data mudou em outro computador: a versão de agora contra a lida (0 sem dia gravado), depois das gravações deste navegador', async () => {
+    const cliente = clienteFalso({}, { atraso: 10, dias: { '2026-11-11': { conteudo: { v: 1 }, versao: 3 } } });
+    const backend = criarBackendSupabase(cliente);
+    await backend.ler('dia:2026-11-11');
+    assert.equal(await backend.diaMudou('2026-11-11'), false);
+    // A gravação deste navegador em andamento: a pergunta espera por ela (a versão nova é a deste navegador)
+    const gravando = backend.gravar('dia:2026-11-11', { v: 2 });
+    assert.equal(await backend.diaMudou('2026-11-11'), false);
+    assert.equal(await gravando, true);
+    // Outra pessoa grava a data
+    cliente.dias.set('2026-11-11', { conteudo: { v: 9 }, versao: 9 });
+    assert.equal(await backend.diaMudou('2026-11-11'), true);
+    // A data sem dia gravado quando foi lida: um dia gravado depois, em outro computador, é uma mudança
+    assert.equal(await backend.ler('dia:2026-11-12'), null);
+    assert.equal(await backend.diaMudou('2026-11-12'), false);
+    cliente.dias.set('2026-11-12', { conteudo: {}, versao: 1 });
+    assert.equal(await backend.diaMudou('2026-11-12'), true);
+  });
+
+  // A revisão do D3: a vigia pergunta a cada minuto. A resposta que chega depois de uma gravação deste navegador (a versão
+  // dela é a de antes da gravação) não diz que a escala mudou em outro computador
+  it('a escala da data mudou: a resposta que chega depois de uma gravação deste navegador é de antes dela, e não vale', async () => {
+    const cliente = clienteFalso({}, { dias: { '2026-11-11': { conteudo: { v: 1 }, versao: 3 } } });
+    const from = cliente.from.bind(cliente);
+    let soltar, perguntou = false;
+    const portao = new Promise(r => { soltar = r; });
+    // A resposta do servidor no instante da pergunta (a versão de então), entregue só quando o teste manda
+    cliente.from = tabela => {
+      const consulta = from(tabela);
+      const select = consulta.select;
+      consulta.select = colunas => {
+        select(colunas);
+        if (tabela === 'dias' && colunas === 'versao') {
+          const maybeSingle = consulta.maybeSingle;
+          consulta.maybeSingle = async () => { const r = await maybeSingle(); perguntou = true; await portao; return r; };
+        }
+        return consulta;
+      };
+      return consulta;
+    };
+    const backend = criarBackendSupabase(cliente);
+    await backend.ler('dia:2026-11-11');
+    const pergunta = backend.diaMudou('2026-11-11');
+    while (!perguntou) await espera(1);
+    assert.equal(await backend.gravar('dia:2026-11-11', { v: 2 }), true);
+    assert.equal(cliente.dias.get('2026-11-11').versao, 4);
+    soltar();
+    assert.equal(await pergunta, false);
+    // A pergunta seguinte, com a versão gravada, também não
+    assert.equal(await backend.diaMudou('2026-11-11'), false);
+  });
+
   it('agenda: registra e cancela pelas funções do banco, lista por período e repassa o código do erro e o campo', async () => {
     const cliente = clienteFalso();
     const backend = criarBackendSupabase(cliente);
     const id = await backend.registrarSolicitacao({ data: '2026-11-12', aluno: 1000, aluno_nome: 'Aluno 1000', missao: 'IFR', janela: 'horario', horario: '14:30', horas: 2.6, registrado_por: 'Maria', recurso: 'C172' });
     assert.deepEqual(cliente.chamadas.at(-1), ['registrar_solicitacao', {
       p_data: '2026-11-12', p_aluno: 1000, p_aluno_nome: 'Aluno 1000', p_missao: 'IFR', p_janela: 'horario', p_horario: '14:30', p_horas: 2.6,
-      p_registrado_por: 'Maria', p_observacao: null, p_excecao: false, p_recurso: 'C172', p_missao_do_curso: null, p_confirmar_limite: false
+      p_registrado_por: 'Maria', p_observacao: null, p_excecao: false, p_recurso: 'C172', p_missao_do_curso: null, p_confirmar_limite: false,
+      p_horario2: null, p_aprovar: false, p_esperar: false
     }]);
     await backend.registrarSolicitacao({ data: '2026-11-11', aluno: 1001, aluno_nome: 'Aluno 1001', missao: 'Voo Local', janela: 'horario', horario: '08:20', horas: 1, registrado_por: 'Maria', recurso: 'C152' });
     assert.deepEqual((await backend.listarSolicitacoes('2026-11-01', '2026-11-30')).map(s => [s.data, s.aluno]), [['2026-11-11', 1001], ['2026-11-12', 1000]]);
@@ -552,16 +636,19 @@ describe('Backend Supabase: escala por data e histórico', () => {
     await assert.rejects(backend.cancelarSolicitacao(id, 'Maria'), e => e.code === 'P0002');
   });
 
-  // Sempre a função de 13 argumentos (a migração precede o app): nenhum erro chama outra, e a missão do curso e a
-  // confirmação do 7º voo local vão com o pedido
-  it('agenda: a missão do curso e a confirmação vão na função de 13 argumentos; nenhum erro chama outra função', async () => {
+  // Sempre a função de 16 argumentos (a migração precede o app): nenhum erro chama outra, e a missão do curso, a
+  // confirmação do 7º voo local, a 2ª preferência, a aprovação e a lista de espera vão com o pedido
+  it('agenda: a missão do curso, a confirmação, a 2ª preferência, a aprovação e a lista de espera vão na função de 16 argumentos; nenhum erro chama outra função', async () => {
     const pedido = (extra = {}) => ({ data: '2026-11-12', aluno: 1000, aluno_nome: 'Aluno 1000', missao: 'Navegação', janela: 'horario', horario: '07:30', horas: 3, registrado_por: 'Maria', recurso: 'PA-34', ...extra });
     const cliente = clienteFalso();
     cliente.guardarCursos([...cursosIniciais(), CURSO_DOS_CASOS]);
     const backend = criarBackendSupabase(cliente);
-    await backend.registrarSolicitacao(pedido({ missaoDoCurso: CURSO_DOS_CASOS.missoes[0].id, confirmarLimite: true }));
-    assert.deepEqual(Object.keys(cliente.chamadas.at(-1)[1]).length, 13);
-    assert.deepEqual([cliente.chamadas.at(-1)[1].p_missao_do_curso, cliente.chamadas.at(-1)[1].p_confirmar_limite], [CURSO_DOS_CASOS.missoes[0].id, true]);
+    await backend.registrarSolicitacao(pedido({ missaoDoCurso: CURSO_DOS_CASOS.missoes[0].id, confirmarLimite: true, horario2: '10:10', aprovar: true }));
+    assert.deepEqual(Object.keys(cliente.chamadas.at(-1)[1]).length, 16);
+    const { p_missao_do_curso, p_confirmar_limite, p_horario2, p_aprovar, p_esperar } = cliente.chamadas.at(-1)[1];
+    assert.deepEqual([p_missao_do_curso, p_confirmar_limite, p_horario2, p_aprovar, p_esperar], [CURSO_DOS_CASOS.missoes[0].id, true, '10:10', true, false]);
+    await backend.registrarSolicitacao(pedido({ data: '2026-11-13', aluno: 1001, esperar: true }));
+    assert.deepEqual([cliente.chamadas.at(-1)[1].p_esperar, cliente.chamadas.at(-1)[1].p_aprovar, cliente.chamadas.at(-1)[1].p_horario2], [true, false, null]);
     assert.deepEqual((await backend.listarSolicitacoes('2026-11-12', '2026-11-12')).map(s => [s.recurso, s.missao_do_curso]), [['PA-34', CURSO_DOS_CASOS.missoes[0].id]]);
     for (const erro of [{ code: 'PGRST202', message: 'Could not find the function' }, { code: '42883', message: 'does not exist' }, { code: '', message: 'TypeError: Failed to fetch' }]) {
       const outro = clienteFalso();
@@ -573,8 +660,28 @@ describe('Backend Supabase: escala por data e histórico', () => {
         return { data: null, error: erro };
       };
       await assert.rejects(criarBackendSupabase(outro).registrarSolicitacao(pedido()), e => e.code === erro.code && e.message === erro.message);
-      assert.deepEqual(tamanhos, [13], erro.message);
+      assert.deepEqual(tamanhos, [16], erro.message);
     }
+  });
+
+  // A aprovação (o passo D1): aprovar uma lista, retirar a aprovação e a contagem por dia, pelas funções do banco; a recusa
+  // volta com o código e o campo (a dica)
+  it('agenda: aprova, retira a aprovação e conta pelas funções do banco, e repassa o código e o campo da recusa', async () => {
+    const cliente = clienteFalso();
+    const backend = criarBackendSupabase(cliente);
+    const pedido = aluno => ({ data: '2026-11-12', aluno, aluno_nome: `Aluno ${aluno}`, missao: 'Voo Local', janela: 'horario', horario: '08:20', horas: 1, registrado_por: 'Maria', recurso: 'C152' });
+    const a = await backend.registrarSolicitacao(pedido(1000));
+    const b = await backend.registrarSolicitacao(pedido(1001));
+    assert.deepEqual(await backend.aprovarSolicitacoes([b, a, 99]), [a, b]);
+    assert.deepEqual(cliente.chamadas.at(-1), ['aprovar_solicitacoes', { p_ids: [b, a, 99] }]);
+    await backend.retirarAprovacaoDaSolicitacao(b);
+    assert.deepEqual(cliente.chamadas.at(-1), ['retirar_aprovacao_da_solicitacao', { p_id: b }]);
+    assert.deepEqual(await backend.solicitacoesPorDia('2026-11-01', '2026-11-30'), { '2026-11-12': { aguardando: 1, aprovadas: 1 } });
+    assert.deepEqual(cliente.chamadas.at(-1), ['solicitacoes_por_dia', { p_de: '2026-11-01', p_ate: '2026-11-30' }]);
+    await assert.rejects(backend.aprovarSolicitacoes([]), e => e.code === '22023' && e.campo === 'ids');
+    await assert.rejects(backend.retirarAprovacaoDaSolicitacao(b), e => e.code === 'P0002' && e.campo === null);
+    cliente.solicitacoes.find(s => s.id === a).data = '2026-11-09';
+    await assert.rejects(backend.cancelarSolicitacao(a, 'Maria'), e => e.code === 'PT403' && e.campo === 'passada');
   });
 
   // Os casos da função de 13 argumentos (test/helpers/casos-da-agenda.js): o pedido do app chega ao cliente pelos nomes, e

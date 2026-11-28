@@ -34,7 +34,11 @@ insert into public.missoes_do_curso (id, curso, fase, codigo, nome, tipo_de_miss
 -- A data dos pedidos: daqui a cinco dias (a segunda, quando cai num domingo), no prazo
 create function pg_temp.d()
   returns date language sql as $$ select current_date + 5 + case when extract(isodow from current_date + 5) = 7 then 1 else 0 end $$;
--- Um pedido pela função de 13 argumentos, como o app manda
+-- Hoje em São Paulo (a segunda, quando hoje é domingo): fora do prazo, sem ter passado. Desde o passo D1 a exceção da
+-- coordenação não registra num domingo nem numa data que já passou, e o current_date do servidor (UTC) pode ser um domingo
+create function pg_temp.fechada() returns date language sql as $$
+  select (now() at time zone 'America/Sao_Paulo')::date + case when extract(isodow from (now() at time zone 'America/Sao_Paulo')::date) = 7 then 1 else 0 end $$;
+-- Um pedido pela função de 13 argumentos, como o app mandava antes do passo D1 (desde ele, um atalho da de 16)
 create function pg_temp.registrar(p_missao text, p_recurso text, p_horario text default '08:20', p_horas numeric default 1,
   p_missao_do_curso uuid default null, p_confirmar boolean default false, p_aluno integer default 1000)
   returns bigint language sql as $$
@@ -146,7 +150,7 @@ select results_eq($$ select * from pg_temp.guardado(3009) $$, $$ values (1::nume
 
 -- O prazo e quem pode continuam: a exceção é do operador; o gestor não registra
 select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-d400-000000000002","role":"authenticated"}', true);
-select lives_ok($$ select public.registrar_solicitacao(current_date, 5000, 'Aluno', 'Navegação', 'horario', '07:30', 3, 'Coordenação', null, true,
+select lives_ok($$ select public.registrar_solicitacao(pg_temp.fechada(), 5000, 'Aluno', 'Navegação', 'horario', '07:30', 3, 'Coordenação', null, true,
   'PA-34', '00000000-0000-4000-9102-000000000001', false) $$, 'o operador registra pela exceção da coordenação, com a missão do curso');
 select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-d400-000000000003","role":"authenticated"}', true);
 select is(pg_temp.erro($$ select pg_temp.registrar('Navegação', 'C152', '08:20', 1, null, false, 5001) $$), '42501', 'o gestor não registra pela função nova');

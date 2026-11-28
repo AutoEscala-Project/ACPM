@@ -4,7 +4,7 @@
 import {
   test, expect, abrir, abrirComExemplo, entrar, preencherLogin, irPara, abrirHistorico, AMANHA, URL_APP, REGIOES, dataAberta, botaoDaData,
   rotuloDaData, trilho, diaDoCalendario, diasDoCalendario, contagemDoDia, paradasDoCalendario, escolherNoCalendario, mudarData, alvosPequenos,
-  larguraDaPagina, semNome, prepararContexto, vigiarErros, avisosDaData, contagemDosAvisos, abrirEscala, aprovar, alternarDisponivel, botaoDaAba, abrirMenuDaConta
+  larguraDaPagina, semNome, prepararContexto, vigiarErros, avisosDaData, contagemDosAvisos, abrirEscala, aprovar, alternarDisponivel, botaoDaAba, abrirMenuDaConta, linhasDosPedidos
 } from './fixtures.js';
 import { instalarSupabaseFalso, documentosAtuais, CONTAS } from './supabase-falso.js';
 import { estadoSintetico } from '../helpers/estado.js';
@@ -24,6 +24,12 @@ function leiturasDePedidos(page) {
   const ddmm = iso => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`;
   page.on('request', r => {
     const url = new URL(r.url());
+    // A contagem das semanas à vista: a função do servidor (D2), com o período no corpo
+    if (r.method() === 'POST' && url.pathname.endsWith('/rpc/solicitacoes_por_dia')) {
+      const { p_de: de, p_ate: ate } = r.postDataJSON();
+      lidas.push(`${ddmm(de)} a ${ddmm(ate)}`);
+      return;
+    }
     if (r.method() !== 'GET' || !url.pathname.endsWith('/rest/v1/solicitacoes')) return;
     const [de, ate] = url.searchParams.getAll('data').map(v => v.replace(/^(gte|lte)\./, ''));
     lidas.push(de === ate ? ddmm(de) : `${ddmm(de)} a ${ddmm(ate)}`);
@@ -38,7 +44,8 @@ async function segurar(context, quais) {
   return soltar;
 }
 const pedidosDoDia = dia => url => url.pathname.endsWith('/rest/v1/solicitacoes') && url.searchParams.getAll('data').join() === `gte.${dia},lte.${dia}`;
-const contagemDoMes = url => url.pathname.endsWith('/rest/v1/solicitacoes') && new Set(url.searchParams.getAll('data').map(v => v.slice(4))).size > 1;
+// A contagem das semanas à vista: a função do servidor (D2: solicitacoes_por_dia, sem baixar os pedidos do mês)
+const contagemDoMes = url => url.pathname.endsWith('/rpc/solicitacoes_por_dia');
 const leituraDoDia = dia => url => url.pathname.endsWith('/rest/v1/dias') && url.searchParams.get('data') === `eq.${dia}`;
 
 test.describe('O trilho ao lado', () => {
@@ -691,7 +698,8 @@ test.describe('Os pedidos de cada dia', () => {
     const servidor = await instalarSupabaseFalso(context, comAluno());
     await entrar(page, CONTAS.operador);
     await irPara(page, 'age');
-    await expect(page.locator('#agenda-lista')).toHaveText('Nenhum pedido para esta data.');
+    await expect(linhasDosPedidos(page)).toHaveCount(0);
+    await expect(page.locator('#s-age ul.lista')).toHaveText('Nenhum pedido para esta data.');
     let n = 0, soltar;
     const espera = new Promise(resolve => { soltar = resolve; });
     await context.route(pedidosDoDia(AMANHA), async route => {
@@ -703,18 +711,18 @@ test.describe('Os pedidos de cada dia', () => {
     await expect.poll(() => n).toBe(1);
     servidor.solicitacoes.push(pedido(1, AMANHA));
     await irPara(page, 'age');
-    await expect(page.locator('#agenda-lista tbody tr')).toHaveCount(1);
+    await expect(linhasDosPedidos(page)).toHaveCount(1);
     const atrasada = page.waitForResponse(r => pedidosDoDia(AMANHA)(new URL(r.url())));
     soltar();
     await atrasada;
     await page.waitForTimeout(100);
-    await expect(page.locator('#agenda-lista tbody tr')).toHaveCount(1);
+    await expect(linhasDosPedidos(page)).toHaveCount(1);
   });
 
   test('a contagem que não veio deixa os dias sem número', async ({ page, context }) => {
     const servidor = await instalarSupabaseFalso(context, comAluno());
     servidor.solicitacoes.push(pedido(1, '2026-11-13'));
-    await context.route(url => url.pathname.endsWith('/rest/v1/solicitacoes') && url.searchParams.getAll('data').includes('gte.2026-11-01'), route => route.fulfill({ status: 200, contentType: 'application/json', body: '{' }));
+    await context.route(contagemDoMes, route => route.fulfill({ status: 200, contentType: 'application/json', body: '{' }));
     await entrar(page, CONTAS.operador);
     await expect(diaDoCalendario(page, '2026-11-13')).toBeVisible();
     await expect(contagemDoDia(page, '2026-11-13')).toHaveCount(0);
@@ -765,7 +773,7 @@ test.describe('Os avisos da data', () => {
     await expect(page.locator('#trilho-data')).toHaveText('Quinta-feira · 12 de novembro');
     await expect(page.locator('#avisos-vazio')).toBeHidden();
     soltar();
-    await expect(avisosDaData(page)).toHaveText([/1 pedido da agenda ainda não está na demanda/]);
+    await expect(avisosDaData(page)).toHaveText([/1 pedido aguardando aprovação/]);
     await expect(page.locator('#avisos-vazio')).toBeHidden();
   });
 
@@ -773,7 +781,7 @@ test.describe('Os avisos da data', () => {
     const servidor = await instalarSupabaseFalso(context, comAluno());
     servidor.solicitacoes.push(pedido(1, AMANHA));
     await entrar(page, CONTAS.operador);
-    const item = avisosDaData(page, 'ainda não está na demanda').locator('a');
+    const item = avisosDaData(page, 'aguardando aprovação').locator('a');
     await item.focus();
     await page.evaluate(async () => {
       const { redesenhar } = await import('./js/redesenho.js');
@@ -782,18 +790,19 @@ test.describe('Os avisos da data', () => {
     await expect(item).toBeFocused();
   });
 
-  test('os pedidos da agenda: quantos ainda não estão na demanda (só para quem opera), e a leitura que falhou', async ({ page, context }) => {
+  test('os pedidos da data: quantos aguardam aprovação e quantos aprovados estão fora da demanda (só para quem opera), e a leitura que falhou', async ({ page, context }) => {
     const servidor = await instalarSupabaseFalso(context, comAluno());
-    servidor.solicitacoes.push(pedido(1, AMANHA), pedido(2, AMANHA));
+    servidor.solicitacoes.push(pedido(1, AMANHA), pedido(2, AMANHA), pedido(3, AMANHA, { aprovada_em: '2026-11-10T14:30:00.000Z', aprovada_por: 'Operador de Teste' }));
     await entrar(page, CONTAS.operador);
-    await expect(avisosDaData(page)).toHaveText([/—sem horário2 pedidos da agenda ainda não estão na demanda, aviso/]);
-    await avisosDaData(page).locator('a').click();
+    await expect(avisosDaData(page)).toHaveText([/—sem horário1 pedido aprovado fora da demanda, aviso/, /—sem horário2 pedidos aguardando aprovação, aviso/]);
+    await avisosDaData(page, 'aprovado fora da demanda').locator('a').click();
     await expect(page.locator('#s-age h2')).toBeFocused();
+    await expect(avisosDaData(page, 'aguardando aprovação')).toHaveCount(1);
     // Enquanto outra data abre, a lista continua a da data aberta; aberta, é a dela
     const liberar = servidor.segurarLeiturasDeDias();
     await diaDoCalendario(page, '2026-11-12').click();
     await expect(page.locator('#trilho-data')).toHaveText('Abrindo quinta-feira, 12/11…');
-    await expect(avisosDaData(page)).toHaveCount(1);
+    await expect(avisosDaData(page)).toHaveCount(2);
     liberar();
     await expect(page.locator('#avisos-vazio')).toBeVisible();
     // A leitura dos pedidos da data que falha
@@ -803,17 +812,18 @@ test.describe('Os avisos da data', () => {
   });
 
   for (const [perfil, href] of [['gestor', '#/rec'], ['secretaria', null]]) {
-    test(`o perfil ${perfil} não importa, sem o aviso dos pedidos; o dos aviões ${href ? 'leva a Recursos' : 'fica sem o link, que ele não abre'}`, async ({ page, context }) => {
+    test(`o perfil ${perfil} não importa, sem o aviso dos aprovados fora da demanda (o dos que aguardam, sim); o dos aviões ${href ? 'leva a Recursos' : 'fica sem o link, que ele não abre'}`, async ({ page, context }) => {
       const estado = comExemplo(estadoSintetico());
       estado.horas = { ...estado.horas, 'PR-MLB': 49.5 };
       const servidor = await instalarSupabaseFalso(context, documentosAtuais(estado, AMANHA));
-      servidor.solicitacoes.push(pedido(1, AMANHA));
+      servidor.solicitacoes.push(pedido(1, AMANHA), pedido(2, AMANHA, { aprovada_em: '2026-11-10T14:30:00.000Z', aprovada_por: 'Operador de Teste' }));
       await entrar(page, CONTAS[perfil]);
       const dosAvioes = avisosDaData(page, /avião parado ou perto|aviões parados ou perto/);
       await expect(dosAvioes).toHaveCount(1);
       if (href) await expect(dosAvioes.locator('a')).toHaveAttribute('href', href);
       else await expect(dosAvioes.locator('a')).toHaveCount(0);
-      await expect(avisosDaData(page, 'pedido da agenda')).toHaveCount(0);
+      await expect(avisosDaData(page, 'fora da demanda')).toHaveCount(0);
+      await expect(avisosDaData(page, '1 pedido aguardando aprovação')).toHaveCount(1);
     });
   }
 

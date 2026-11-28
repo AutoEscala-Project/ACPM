@@ -1,4 +1,4 @@
-// A linha do dia, sem DOM: os quatro cartões das etapas (Agenda, Demanda, Escala, Aprovar), cada um com o valor dele (um
+// A linha do dia, sem DOM: os quatro cartões das etapas (Pedidos, Demanda, Escala, Aprovar), cada um com o valor dele (um
 // sentido fixo por cartão, dito na dica), o estado (o pior das tarefas) e as tarefas, que levam à tela onde cada coisa se
 // resolve; o selo de Recursos; e os avisos da data, no trilho. Uma função por cartão e uma por grupo de avisos: cada passo
 // seguinte muda só a dele.
@@ -9,6 +9,7 @@ import { fechamentosDoEstado, rotuloDosFechamentos } from './fechamentos.js';
 import { salaDisponivel } from './frota.js';
 import { inativo, inativoValeEm } from './inativos.js';
 import { ESTAGIOS, podeVer } from './telas.js';
+import { solicitacaoAprovada, resumoDasSolicitacoes } from './agenda.js';
 
 // Os estados, do pior ao melhor; "nenhum" não entra na conta do cartão
 const GRAVIDADE = ['falhou', 'atencao', 'andamento', 'pendente', 'feito'];
@@ -26,27 +27,40 @@ function estadoDoCartao(tarefas) {
 // O que vale na data: o inativo só de hoje em diante
 const inativoNaData = (item, { data, hoje }) => inativo(item) && inativoValeEm(data, hoje);
 
-// Os pedidos não cancelados da data e os que ainda não estão na demanda (sem os do aluno inativo, que ficam "Aluno inativo")
+// Os pedidos da data (D2): os não cancelados, os que aguardam aprovação, os aprovados e os aprovados fora da demanda
+// (nunca importados). Só pede atenção o pedido de um aluno do cadastro, ativo na data: o do inativo entra quando ele voltar
+// a ativo (F3: fora dos pendentes) e o de quem não está no cadastro, depois de cadastrado; Pedidos não aprova nenhum dos dois.
+// Numa data que já passou, o que aguarda e o que ficou fora não pedem mais nada
 function contagemDosPedidos(ctx) {
-  const lista = (ctx.pedidos || []).filter(p => !p.cancelada_em);
   const importadas = (ctx.S && ctx.S.importadas) || [];
   const alunos = new Map(((ctx.S && ctx.S.stu) || []).map(s => [s.id, s]));
-  const naoImportados = lista.filter(p => !importadas.includes(p.id) && !inativoNaData(alunos.get(p.aluno), ctx));
-  return { p: lista.length, n: naoImportados.length };
+  const pedeAtencao = p => { const aluno = alunos.get(p.aluno); return Boolean(aluno) && !inativoNaData(aluno, ctx); };
+  const { registradas, aguardando, aprovadas } = resumoDasSolicitacoes(ctx.pedidos, pedeAtencao);
+  const fora = (ctx.pedidos || []).filter(p => solicitacaoAprovada(p) && !importadas.includes(p.id) && pedeAtencao(p));
+  return { p: registradas, aguardando, aprovados: aprovadas, fora: fora.length, passada: Boolean(ctx.hoje) && ctx.data < ctx.hoje };
 }
 
+// O rótulo de cada tarefa vai depois do número (a frase do leitor de tela, "1 aprovado fora da demanda"): concorda com ele
+const ROTULOS_DOS_PEDIDOS = {
+  registrados: n => (n === 1 ? 'pedido da data' : 'pedidos da data'),
+  aguardando: () => 'aguardando aprovação',
+  aprovados: () => 'aprovados',
+  'fora-da-demanda': n => (n === 1 ? 'aprovado fora da demanda' : 'aprovados fora da demanda')
+};
 function tarefasDosPedidos(ctx) {
   const leitura = ctx.leituraDosPedidos;
-  if (leitura === 'erro') {
-    const tarefas = [tarefa('registrados', 'pedidos da data', '—', 'falhou', 'age')];
-    if (ctx.opera) tarefas.push(tarefa('nao-importados', 'ainda não importados', '—', 'falhou', 'age'));
-    return tarefas;
-  }
-  const { p, n } = contagemDosPedidos(ctx);
-  const lidos = leitura === 'lidos';
-  const tarefas = [tarefa('registrados', 'pedidos da data', lidos ? p : '—', !lidos ? 'nenhum' : p ? 'feito' : 'pendente', 'age')];
-  if (ctx.opera) tarefas.push(tarefa('nao-importados', 'ainda não importados', lidos ? n : '—', !lidos || !p ? 'nenhum' : n ? 'atencao' : 'feito', 'age'));
-  return tarefas;
+  const ids = ['registrados', 'aguardando', 'aprovados', ...(ctx.opera ? ['fora-da-demanda'] : [])];
+  if (leitura === 'erro') return ids.map(id => tarefa(id, ROTULOS_DOS_PEDIDOS[id](null), '—', 'falhou', 'age'));
+  const { p, aguardando, aprovados, fora, passada } = contagemDosPedidos(ctx);
+  if (leitura !== 'lidos') return ids.map(id => tarefa(id, ROTULOS_DOS_PEDIDOS[id](null), '—', 'nenhum', 'age'));
+  const valores = {
+    registrados: [p, p ? 'feito' : 'pendente'],
+    aguardando: [aguardando, !p || (aguardando && passada) ? 'nenhum' : aguardando ? 'atencao' : 'feito'],
+    aprovados: [`${aprovados} de ${p}`, !p ? 'nenhum' : aprovados === p ? 'feito' : 'andamento'],
+    'fora-da-demanda': [fora, !p || (fora && passada) ? 'nenhum' : fora ? 'atencao' : 'feito']
+  };
+  const numero = { registrados: p, 'fora-da-demanda': fora };
+  return ids.map(id => tarefa(id, ROTULOS_DOS_PEDIDOS[id](numero[id] ?? null), ...valores[id], 'age'));
 }
 
 function cartaoDosPedidos(ctx) {
@@ -196,11 +210,15 @@ function avisosDosFechamentos({ S }) {
 }
 
 function avisosDosPedidos(ctx) {
-  const aviso = (id, titulo) => [{ id, gravidade: 'aviso', minuto: null, titulo, texto: '', destino: { tela: 'age' } }];
-  if (ctx.leituraDosPedidos === 'erro') return aviso('pedidos-nao-lidos', 'Não foi possível ler os pedidos desta data.');
-  const { n } = contagemDosPedidos(ctx);
-  if (!ctx.opera || ctx.leituraDosPedidos !== 'lidos' || !n) return [];
-  return aviso('nao-importados', `${plural(n, 'pedido da agenda ainda não está', 'pedidos da agenda ainda não estão')} na demanda`);
+  const aviso = (id, titulo) => ({ id, gravidade: 'aviso', minuto: null, titulo, texto: '', destino: { tela: 'age' } });
+  if (ctx.leituraDosPedidos === 'erro') return [aviso('pedidos-nao-lidos', 'Não foi possível ler os pedidos desta data.')];
+  if (ctx.leituraDosPedidos !== 'lidos') return [];
+  const { aguardando, fora, passada } = contagemDosPedidos(ctx);
+  if (passada) return [];
+  return [
+    ...(aguardando ? [aviso('pedidos-aguardando', `${plural(aguardando, 'pedido', 'pedidos')} aguardando aprovação`)] : []),
+    ...(ctx.opera && fora ? [aviso('fora-da-demanda', `${plural(fora, 'pedido aprovado', 'pedidos aprovados')} fora da demanda`)] : [])
+  ];
 }
 
 // O que a data não leu: sem destino (a faixa do alto tem "Tentar de novo"). Sem as horas dos instrutores, os limites da lei

@@ -17,6 +17,11 @@ insert into public.perfis (usuario, perfil, nome) values
   ('00000000-0000-4000-d300-000000000002', 'operador', 'Operador de teste'),
   ('00000000-0000-4000-d300-000000000003', 'gestor', 'Gestor de teste');
 
+-- Hoje em São Paulo (a segunda, quando hoje é domingo): fora do prazo, sem ter passado. Desde o passo D1 a exceção da
+-- coordenação não registra num domingo nem numa data que já passou, e o current_date do servidor (UTC) pode ser um domingo
+create function pg_temp.fechada() returns date language sql as $$
+  select (now() at time zone 'America/Sao_Paulo')::date + case when extract(isodow from (now() at time zone 'America/Sao_Paulo')::date) = 7 then 1 else 0 end $$;
+
 select has_column('public', 'solicitacoes', 'recurso', 'a agenda guarda o recurso');
 select col_is_null('public', 'solicitacoes', 'recurso', 'o recurso pode faltar (os pedidos de antes)');
 select has_function('public', 'registrar_solicitacao', array['date', 'integer', 'text', 'text', 'text', 'text', 'numeric', 'text', 'text', 'boolean', 'text'],
@@ -58,7 +63,7 @@ select throws_ok($$ select public.registrar_solicitacao((current_date + 5 + case
   '22023', null, 'a duração continua até 5 h');
 select throws_ok($$ select public.registrar_solicitacao(current_date, 1000, 'Aluno', 'Navegação', 'horario', '10:10', 1, 'Maria', null, false, 'C152') $$,
   'PT403', null, 'o prazo continua valendo');
-select throws_ok($$ select public.registrar_solicitacao(current_date, 1000, 'Aluno', 'Navegação', 'horario', '10:10', 1, 'Maria', null, true, 'C152') $$,
+select throws_ok($$ select public.registrar_solicitacao(pg_temp.fechada(), 1000, 'Aluno', 'Navegação', 'horario', '10:10', 1, 'Maria', null, true, 'C152') $$,
   '42501', null, 'a exceção continua só dos operadores');
 -- O limite de 6 voos locais conta os pedidos das duas funções e de todos os recursos
 select public.registrar_solicitacao((current_date + 5 + case when extract(isodow from current_date + 5) = 7 then 1 else 0 end), 2000 + n, 'Aluno', 'Voo Local', 'horario', '08:20', 1, 'Maria', null, false)
@@ -69,7 +74,7 @@ select throws_ok($$ select public.registrar_solicitacao((current_date + 5 + case
   'PT422', null, 'o sétimo voo local no mesmo horário é recusado, em qualquer recurso');
 
 select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-d300-000000000002","role":"authenticated"}', true);
-select lives_ok($$ select public.registrar_solicitacao(current_date, 3000, 'Aluno', 'Navegação', 'horario', '07:30', 1, 'Coordenação', null, true, 'PA-34') $$,
+select lives_ok($$ select public.registrar_solicitacao(pg_temp.fechada(), 3000, 'Aluno', 'Navegação', 'horario', '07:30', 1, 'Coordenação', null, true, 'PA-34') $$,
   'o operador registra pela exceção da coordenação');
 select results_eq($$ select recurso, excecao from public.solicitacoes where aluno = 3000 $$, $$ values ('PA-34'::text, true) $$, 'marcado como exceção, com o recurso');
 

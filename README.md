@@ -11,8 +11,8 @@ a escala juntos. O manual de uso está no botão "Manual", no topo do app.
 
 - **Compartilhado (site publicado):** login com e-mail e senha; os dados ficam no Supabase e todos veem as mesmas escalas
   (uma por data).
-  O perfil da conta define o acesso: **Operador** edita, **Gestor** só consulta, **Secretaria** registra pedidos na
-  agenda de solicitações (a escala, o cadastro e os dados pessoais de alunos e instrutores ela só consulta: quem altera
+  O perfil da conta define o acesso: **Operador** edita e aprova os pedidos, **Gestor** só consulta, **Secretaria**
+  registra pedidos em Pedidos, que aguardam a aprovação (a escala, o cadastro e os dados pessoais de alunos e instrutores ela só consulta: quem altera
   os dados pessoais são o Operador e o Administrador, e o servidor confere) e **Administrador** faz tudo o que o Operador faz e, além disso,
   cria e exclui contas (em "Minha conta" › Usuários) e muda os cursos e o programa de cada um (aba Cursos). O cadastro
   aberto é desligado. Em "Minha conta", cada pessoa troca a própria senha e o e-mail (o e-mail novo vale depois dos
@@ -64,7 +64,7 @@ npm run test:e2e       # aplicação no navegador (Playwright)
   used"), nunca os arquivos de outra pasta.
 - Os testes E2E chegam às telas pelos drivers de `test/e2e/telas/` (reexportados por `test/e2e/fixtures.js`): `casca.js`
   (abrir e entrar, `appPronto`, as abas, a data, o Histórico, o menu da conta), `recursos.js`, `instrutores.js`,
-  `alunos.js`, `demanda.js`, `pedidos.js` (o formulário da Agenda), `escala.js` (ler, aprovar, reabrir, exportar) e
+  `alunos.js`, `demanda.js`, `pedidos.js` (a lista, o detalhe e o formulário de Pedidos), `escala.js` (ler, aprovar, reabrir, exportar) e
   `cursos.js`; `invariantes.js` tem as conferências de todas as telas (o nome para o leitor de tela, os 44 px, a página
   que não rola de lado) e `percorrerTelas`, que passa por todas as abas e pelos `ESTADOS` de cada driver. Um seletor
   reservado (`#btn-data`, `#rec`, `#inst-dia`, `data-f="fly"`, `#ag-*`…) aparece só no driver dele e nos testes da tela dona
@@ -103,7 +103,13 @@ npm run test:e2e       # aplicação no navegador (Playwright)
   (prévia) ou com `--remote=<ref de produção>`. Confira antes com `supabase config diff`.
 - Dados fictícios na prévia (só num banco sem dados): `node scripts/semear-previa.mjs`.
 - Escalas fictícias nas próximas datas da prévia (só nas datas sem escala; usa o Supabase CLI autenticado, sem a
-  senha do banco): `node scripts/semear-dias-previa.mjs [dias de operação] [data inicial]` (`SECO=1` só mostra).
+  senha do banco): `node scripts/semear-dias-previa.mjs [dias de operação] [data inicial]` (`SECO=1` só mostra). Com cada
+  data, os pedidos da agenda (`scripts/pedidos-da-previa.mjs`): um aprovado para cada aluno com voo, ligado ao registro dele
+  e a `importadas`, dois que aguardam a aprovação e um cancelado, gravados com a data numa consulta só (a data que falhou
+  fica sem eles, e rodar de novo grava só as que faltam). O script recusa a produção antes de qualquer consulta.
+- Os testes do banco que tocam a agenda (`agenda*.test.sql`, `contas.test.sql`, `painel.test.sql`) contam os dias pelo
+  horário de São Paulo: o `current_date` do servidor é o de UTC, e um pedido num domingo ou numa data que já passou é
+  recusado mesmo pela exceção da coordenação.
 
 ## Meteorologia no painel (função `meteorologia`)
 
@@ -176,7 +182,7 @@ coluna `recurso` (vazia nos pedidos de antes, que entram no recurso padrão da m
 A migração `20261127100000_missao_do_curso_e_limite_do_pedido.sql` acrescenta as colunas `missao_do_curso` (o id da missão
 do programa do curso que o aluno vai voar; vazia sem curso e nos pedidos de antes), `limite_confirmado_por` e
 `limite_confirmado_em` (quem confirmou o 7º voo local no mesmo horário, e quando) e a função `registrar_solicitacao` de 13
-argumentos (`p_missao_do_curso`, `p_confirmar_limite`, nenhum com valor padrão), a única que o app chama. Ela recusa
+argumentos (`p_missao_do_curso`, `p_confirmar_limite`, nenhum com valor padrão), a que o app chamava até o passo D1. Ela recusa
 (`22023`, com a dica do campo) o pedido sem recurso ou num recurso que a missão não permite (`recurso`), o Noturno fora das
 17:30 e o Voo Solo fora das 06:30 (`horario`) e a missão do curso que não existe, saiu do programa ou é de outro tipo
 (`missao`); o 7º voo local passa com a confirmação, que fica registrada (sem ela, `PT422`, como antes). As funções de 11 e
@@ -189,6 +195,56 @@ de 10 argumentos ficam como estavam, para as abas abertas do app de antes. As re
 chama a função de 13 argumentos, e não tenta outra quando o servidor não a tem (o pedido não é registrado, e o app diz que
 não foi possível registrar). Ela só acrescenta: o app no ar continua igual com ela. Depois, com nenhuma aba de antes aberta,
 outra migração pode tirar as funções de 10 e de 11 argumentos.
+
+## A aprovação dos pedidos da agenda (o passo D1)
+
+A migração `20261129100000_aprovacao_dos_pedidos.sql` dá ao pedido uma situação: aguardando a aprovação, aprovado ou
+cancelado, tirada das colunas (sem coluna de situação). Ela acrescenta sete colunas, todas vazias nos pedidos de antes:
+`aprovada_em`, `aprovada_por` e `aprovada_usuario` (quem aprovou e quando), `aprovacao_retirada_em`, `_por` e `_usuario` (a
+última retirada da aprovação; aprovado ou retirado, nunca os dois) e `horario2`, a 2ª preferência: outro horário exato, só
+no pedido num horário específico e diferente do 1º (o pedido é um horário exato: não há disponibilidade).
+
+As funções (todas `security definer` com o `search_path` vazio, menos a contagem; só quem está conectado as chama):
+
+- `registrar_solicitacao` de 16 argumentos (a de 13 com `p_horario2`, `p_aprovar` e `p_esperar`, nenhum com valor padrão),
+  a que o app chama. As de 13, 11 e 10 argumentos ficam como atalhos para as abas abertas do app de antes, e as quatro
+  passam por uma função interna (`registrar_solicitacao_interna`, que ninguém chama pela API, nem com a chave
+  `service_role`): a de 16 e a de 13 com as regras da de 13 (o recurso, os horários fixos e a missão do curso); a de 11 e a
+  de 10 sem elas, como eram (o recurso pode faltar, e o que vem não é comparado com a missão). A de 9 argumentos (o pedido
+  por período) saiu. Além das regras de antes, ela recusa a 2ª preferência igual à 1ª, fora do
+  formato ou no Noturno e no Voo Solo (`22023`, `horario2`), o domingo e a data que já passou, mesmo pela exceção da
+  coordenação (`PT403`, `domingo` ou `passada`, pela data de São Paulo) e `p_aprovar` de quem não é operador (`42501`,
+  `aprovar`); o prazo agora diz a dica `prazo`, e a exceção da secretaria, `excecao`. O 7º voo local no mesmo horário
+  passa com a confirmação (registrada) ou na lista de espera (`p_esperar`, sem nada registrado: quem espera é o motor);
+  as duas juntas são recusadas (`22023`, `esperar`), e sem nenhuma, `PT422`, como antes. O pedido nasce aprovado com
+  `p_aprovar` ou pela exceção; pelos atalhos, o do operador (e do administrador) nasce aprovado e o da secretaria aguarda.
+  Desde o passo D2, o formulário manda `p_aprovar` com "Registrar e aprovar" (de quem opera a escala) e desligado com
+  "Registrar sem aprovar" e "Registrar pedido" (a secretaria), e `p_esperar` com "Registrar na lista de espera".
+- `cancelar_solicitacao`: como antes, mas o pedido aprovado de uma data que já passou não é cancelado (`PT403`, `passada`).
+- `aprovar_solicitacoes(ids)`: os operadores aprovam de 1 a 200 pedidos (`22023`, `ids`) e recebem os ids aprovados agora;
+  o já aprovado, o cancelado, o de uma data que já passou e o id que não existe ficam fora, e quem aprovou primeiro fica.
+- `retirar_aprovacao_da_solicitacao(id)`: o pedido aprovado volta a aguardar, com o rastro (`P0002` para o que não está
+  aprovado ou foi cancelado; `PT403`, `passada`, numa data que já passou).
+- `solicitacoes_por_dia(de, até)` (`security invoker`): `{ "AAAA-MM-DD": { "aguardando": n, "aprovadas": n } }`, sem os
+  cancelados; quem não lê a agenda (a TV, a conta sem perfil) recebe `{}`.
+- `aprovar_solicitacoes_de_antes_da_aprovacao(dos_operadores)`, interna: a conversão dos pedidos de antes, que a migração
+  roda uma vez (com `true`) e a do passo G2 de novo (com `false`). Aprova o que a importação levou para a demanda (numa
+  data que já passou, todo id em `importadas`; de hoje em diante, só o que um registro da data ainda leva, voando ou não:
+  "importação anterior") e, só com `true`, o que um operador ou administrador registrou de hoje em diante sem ter sido
+  importado. Nunca o cancelado nem o de aprovação retirada; rodar de novo não muda nada.
+
+As regras estão também no modo local (`js/backends/local.js`, sem contas: quem usa tem os direitos de operador, e os
+pedidos de antes, sem as colunas da aprovação, são convertidos uma vez, com a marca `acpm4_agenda_aprovacoes`, gravada só quando há pedidos), no servidor falso dos testes
+(`test/e2e/falso/agenda.js`, com o atalho de 13) e no cliente falso de `test/unit/backend-supabase.test.js`, com os casos
+de `test/helpers/casos-da-agenda.js` e `test/helpers/casos-das-solicitacoes.js`, que são verificações de
+`agenda-aprovacao.test.sql`, `agenda-preferencias.test.sql`, `agenda-locais.test.sql` e `agenda-missao-do-curso.test.sql`
+(`test/unit/espelho-do-banco.test.js` confere os nomes, as recusas e as constantes).
+
+**A ordem:** a migração na prévia com `npm run test:db`, e só então o merge: o app novo chama a função de 16 argumentos e
+não tenta outra. O app no ar continua igual com ela (o da produção chama a de 11 e, sem ela, a de 10; o da prévia antes do
+D1, a de 13: as três agora são atalhos), exceto que o pedido do operador nasce aprovado e que o domingo, a data que já
+passou e o cancelamento do aprovado de uma data que já passou são recusados. Na produção, ela vai antes do merge do D1, no
+dia da publicação.
 
 ## O que a missão do curso exige do INVA
 
@@ -302,8 +358,10 @@ dela em `av`, fica disponível. A aba do formato 27 tiraria `fechamentos` ao gra
 | `js/progresso.js` | A próxima missão de cada aluno pelas regras do programa (a liberada; as fora da ordem, com o motivo), o progresso no curso e "Colocar no curso até…" (as missões que a colocação aprova e as que se escolhem) |
 | `js/resultados.js` | Os resultados das missões (aprovado ou reprovado; pendente desfaz um engano): a situação de cada missão do aluno, as regras do registro, as do servidor, a missão anterior do aluno e a data e o voo do resultado sem voo |
 | `js/resultado-na-tela.js` | O resultado registrado pela tela (a linha do voo, o resultado sem voo e a colocação no curso): o servidor, a situação do aluno e o histórico |
-| `js/agenda.js` | Prazo da agenda de solicitações (13:00 do dia anterior), as datas em que um pedido pode ser registrado (`datasParaRegistrar`, a "Data do pedido"), os recursos da missão do pedido, o limite de voos locais e o pedido que cada solicitação vira |
-| `js/processamento.js` | O processamento dos pedidos da agenda (funções puras): a conciliação dos pedidos da data com o dia (`conciliarPedidos`, o plano: quem entra, volta, sai ou fica; `aplicarConciliacao`, a única que muda `importadas`, com a vaga do pedido cancelado dada pela rodada do motor ao 1º da lista de espera do horário), por que um voo que sai fica (`ficaNaEscala`), a missão do curso com que o pedido entra, pelo horário do dia (`missaoDaEntrada`), e a importação feita sobre a conciliação (`importarSolicitacoes`; o botão "Importar da agenda" é `js/eventos/importacao.js`) |
+| `js/agenda.js` | Prazo da agenda de solicitações (13:00 do dia anterior), as datas em que um pedido pode ser registrado (`datasParaRegistrar`, a "Data do pedido"), os recursos da missão do pedido, o limite de voos locais e o pedido que cada solicitação vira; e, da página Pedidos (D2), o estado de cada pedido (`situacaoDaSolicitacao`, `solicitacaoAprovada`), o resumo da data, onde ele está na demanda (`situacaoNaDemanda`, até o G), o que "Importar" traz, a entrada do aprovado (`prepararEntradaNaDemanda`), as cinco condições da entrada na hora (`motivoSemEntrada`), a contagem do trilho e a 2ª preferência; e o que mudou entre duas leituras, com o texto do aviso (`novidadesDasSolicitacoes`, `textoDasNovidades`, D3) |
+| `js/solicitacoes-da-data.js` | Os pedidos da data aberta, um cache só (a lista de Pedidos, o cartão, o trilho, a Demanda): a leitura mais nova vale, a de outra data não entra, a que falha guarda o erro e a lista de antes, e a escala que mudou em outro computador fica marcada até a data ser lida de novo (`lerPedidosDaData`, em `js/views/selos.js`, é o nome de antes, que `js/main.js` chama). A vigia (`vigiarSolicitacoesDaData`, ligada por `js/eventos/agenda.js`) lê de novo a cada minuto com a página à vista, na volta à página e da conexão (com a última leitura de mais de 30 s) e quando outra aba muda a agenda (modo local), perguntando também se a escala da data mudou (uma pergunta de cada vez; no modo local, também quando outra aba grava o dia da data aberta: `diaMudou` compara o dia guardado com o que esta aba leu ou gravou); o que mudou entre duas leituras, menos o que este navegador mudou (até uma leitura boa o mostrar), vira o aviso das novidades, que fica o tempo de ler (com o 1º da lista de espera da vaga de um cancelado que ainda espera, `primeiroDaListaDeEspera` em `js/rejeicoes.js`). Ela só lê |
+| `js/views/agenda.js`, `js/eventos/agenda.js`, `js/entrada-na-demanda.js` | Pedidos como lista e detalhe (D2): a lista por estado (aguardando aprovação, aprovados, cancelados), "Aprovar" na linha, "Aprovar todos", o detalhe só de leitura (aprovar, retirar a aprovação, cancelar, "Registrar de novo…"), os avisos (os aprovados fora da demanda com "Importar", a escala que mudou em outro computador) e o formulário do pedido novo com nada escolhido; a entrada do aprovado na demanda na hora, só na data aberta já gravada (`diaJaGravado`, em `js/actions.js`), com os resultados e os cursos lidos e sem mudança em outro computador (`ApiClient.diaMudou`) |
+| `js/processamento.js` | O processamento dos pedidos da agenda (funções puras): a conciliação dos pedidos da data com o dia (`conciliarPedidos`, o plano: quem entra, volta, sai ou fica; `aplicarConciliacao`, a única que muda `importadas`, com a vaga do pedido cancelado dada pela rodada do motor ao 1º da lista de espera do horário), por que um voo que sai fica (`ficaNaEscala`), a missão do curso com que o pedido entra, pelo horário do dia (`missaoDaEntrada`), e a importação feita sobre a conciliação (`importarSolicitacoes`; os botões "Importar pedidos aprovados", na Demanda, e "Importar", em Pedidos, são `js/eventos/importacao.js`, e a entrada, `js/entrada-na-demanda.js`) |
 | `js/csv.js` | CSV da escala agrupado por avião, para o lançamento no portal do aeroclube |
 | `js/planilha.js`, `modelos/escala-cavok.xlsx` | A escala na planilha do modelo do aeroclube (o Excel do lançamento no CAVOK): onde cada voo cai e o arquivo preenchido. O modelo é o arquivo da operação sem os dados do dia; as células que o app preenche estão em `BLOCOS` e `GROUND` (um modelo novo precisa delas nos mesmos lugares, e `test/unit/planilha.test.js` confere) |
 | `js/zip.js` | Leitura e montagem do ZIP do .xlsx, com a compressão do navegador |
@@ -323,7 +381,7 @@ dela em `av`, fica disponível. A aba do formato 27 tiraria `fechamentos` ao gra
 | `js/fixos.js` | Os voos fixos (pela escala aprovada, pelo status, pelo instrutor escolhido e pelo agendamento na Escala): o que acontece com eles ao mudar o status, aprovar, reabrir e mudar a demanda, e o motivo do cadeado |
 | `js/candidatos.js` | Os recursos e os instrutores que servem a um voo num horário, contra os outros voos do dia, cada um com o que o impede (as Sugestões e o agendamento) |
 | `js/reparo.js` | As Sugestões: para um conflito na escala aprovada (outro avião, outro instrutor, outro horário, soltar o voo ou cancelar; depois, o horário mais perto, também fora da disponibilidade do pedido, e outro tipo, que mudam o pedido junto, `repararComOPedido`), para o voo cancelado da data aberta (o motivo fora da busca; o mesmo horário, outro avião, o horário mais perto, outro tipo; aplicar e desfazer, `aproveitarCancelado`) e para o pedido recusado pelo instrutor escolhido (`sugestoesDoRejeitado`: o motor numa cópia com cada outro instrutor), de hoje em diante (`dataQueAindaVoa`); cada sugestão é conferida no motor numa cópia (`conferirNoMotor`: o voo fica onde ela diz; a que muda ou tira outros voos diz quais); a sugestão fora da disponibilidade ou em outro tipo pede a confirmação com o aluno, e a que faz do voo local o 7º do horário ou muda outros voos, "Aplicar mesmo assim" |
-| `js/rejeicoes.js` | As recusas do motor ligadas aos pedidos (`rejeicoesDosPedidos`): a i-ésima recusa é a do i-ésimo pedido que voa sem pino e sem linha, na ordem do motor (`naOrdemDoMotor`); dois alunos de mesmo nome não se confundem |
+| `js/rejeicoes.js` | As recusas do motor ligadas aos pedidos (`rejeicoesDosPedidos`): a i-ésima recusa é a do i-ésimo pedido que voa sem pino e sem linha, na ordem do motor (`naOrdemDoMotor`); dois alunos de mesmo nome não se confundem; o 1º da lista de espera do horário que o voo de um pedido cancelado deixa (`primeiroDaListaDeEspera`) |
 | `js/instrutor-escolhido.js` | O instrutor escolhido pelo operador: na Demanda (o motor encaixa o voo com ele) e na Escala (o voo fica fixo onde está, com ele), as opções de cada lista e a reversão |
 | `js/agendamento.js` | O voo agendado na Escala, em funções puras: o formulário do diálogo (a missão pelo progresso, o recurso e o instrutor que servem, o horário pelo clique, a duração e o peso; o voo de hoje do aluno que muda de lugar ou entra na escala; a turma de Ground), a conferência pelo motor numa cópia do estado (os bloqueios, com as alternativas, e os avisos que pedem confirmação), o pedido com o voo fixo (a marca `agendado`) e a reversão |
 | `js/views/edicao-do-voo.js`, `js/eventos/edicao-do-voo.js` | O editor do voo (`#dlg-voo`), aberto pela barra do mapa e pelo "Editar" da Lista: os campos, os avisos a cada campo, "Salvar mesmo assim" na escala aprovada e a pergunta fora dela; quem só consulta vê os campos como texto |
@@ -341,7 +399,7 @@ dela em `av`, fica disponível. A aba do formato 27 tiraria `fechamentos` ao gra
 | `js/telas.js` | As telas, sem DOM (`TELAS`: o nome de cada uma, a etapa ou o grupo e quem a vê; `ESTAGIOS`, as quatro etapas da linha), a tela e a data da abertura de cada perfil (`telaDeAbertura`, `dataDeAbertura`), o endereço `#/<tela>[/<item>]` (`destinoDoEndereco`, `enderecoDoDestino`) e o trilho ao lado ou não, pela classe da largura da janela e pelo que a pessoa guardou (`classeDaLargura`, `trilhoFixo`, `lerPreferencias`) |
 | `js/calendario.js` | O calendário do trilho, sem DOM: as semanas de um mês, o dia de cada tecla, a única parada do Tab, o que cada dia diz ao leitor de tela e a linha da data aberta |
 | `js/endereco.js` | O endereço da página: a tela no histórico do navegador (`empilharTela`, `substituirTela`, com a rolagem de cada entrada), a data em `?data=` (fora do histórico: Voltar troca a tela, não a data) e o endereço sem a tela ao sair |
-| `js/linha-do-dia.js` | A linha do dia, sem DOM: os quatro cartões das etapas (Agenda, Demanda, Escala, Aprovar), cada um com o valor, o estado (o pior das tarefas: feito, falhou, atenção, em andamento, pendente) e as tarefas, que levam à tela onde se resolvem; o selo de Recursos; e os avisos da data, no trilho (`avisosDaData`, cada um com a gravidade, o horário do voo e a tela onde se resolve; os horários fechados da data, `horarios-fechados`, uma informação que leva ao bloco deles na Escala, `#/esc/fechamentos`). Uma função por cartão e uma por grupo de avisos |
+| `js/linha-do-dia.js` | A linha do dia, sem DOM: os quatro cartões das etapas (Pedidos, Demanda, Escala, Aprovar; o de Pedidos com os registrados, os que aguardam aprovação, os aprovados e os aprovados fora da demanda), cada um com o valor, o estado (o pior das tarefas: feito, falhou, atenção, em andamento, pendente) e as tarefas, que levam à tela onde se resolvem; o selo de Recursos; e os avisos da data, no trilho (`avisosDaData`, cada um com a gravidade, o horário do voo e a tela onde se resolve; os horários fechados da data, `horarios-fechados`, uma informação que leva ao bloco deles na Escala, `#/esc/fechamentos`). Uma função por cartão e uma por grupo de avisos |
 | `js/lista.js`, `js/detalhe.js` | O componente de lista e detalhe (F2), sem DOM: o que a lista mostra (a busca, os filtros, "Mostrar inativos", os fixos, os grupos, as linhas que ficam até um filtro mudar), a contagem, o HTML de cada linha (o botão que escolhe e, ao lado dele, a chave "Ativo", a chave desta data ou a ação; o bloco embaixo das três linhas; o apagado e o inativo), as teclas, a escolha conciliada com o modelo; e o detalhe: os campos "Rótulo: valor" editados no lugar, as seções, o cabeçalho com "Anterior" e "Próximo" e o rodapé. Cada parte tem `data-chave`: o desenho troca só a que mudou (`trocarPorChave`, `js/dom.js`, que também espera o clique acabar: `ponteiroApertado`, `depoisDoClique`) |
 | `js/views/mestre-detalhe.js`, `js/views/lista.js`, `js/views/detalhe.js` | O componente na página: `criarMestreDetalhe` (uma chamada por tela, no módulo de eventos dela) registra os ouvintes no documento e devolve o desenho, a escolha e o que a tela faz ao aparecer. O registro escolhido fica no endereço (`#/alu/1000`, `itemNoEndereco` em `js/views/telas.js`); abaixo de 800 px, uma vista de cada vez (`data-vendo` na seção: `lista`, `detalhe` ou `ambos`), e Voltar devolve a lista. Os estilos em `css/lista.css` |
 | `js/views/recursos.js`, `js/eventos/recursos.js`, `js/views/horarios.js` | Recursos como lista e detalhe (B): a lista por categoria (os cabeçalhos com o detalhe da categoria: os horários de decolagem, uma categoria de cada vez, e o que vem do tipo), a Sala Ground no grupo dela, "Ordem no hangar" o item fixo do alto (com o hangar ligado), o "Disponível" desta data e o "Ativo" do cadastro na linha; o detalhe do recurso ("Nesta data": Disponível, as horas até a revisão de 50 horas, Revisão feita, o que voa; "Cadastro · todas as datas": os atributos e "Habilitações que o INVA precisa"), "Agendar voo no <reg>", "Retirar da frota…" e "+ Novo recurso" no detalhe vazio |

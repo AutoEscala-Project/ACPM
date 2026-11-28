@@ -4,7 +4,7 @@
 // no máximo uma vez; os que entram ficam com uma linha, e os fixos são conferidos à parte (ficam em conflito, não são
 // recusados). Então a i-ésima recusa é a do i-ésimo pedido que voa sem pino e sem linha, na ordem do motor
 import { isGroundMission } from './rules.js';
-import { chaveDoVoo, pedidoDoAluno } from './voo.js';
+import { chaveDoVoo, pedidoDoAluno, statusDoVoo } from './voo.js';
 
 // Os voos da escala na ordem em que o motor confere os fixos (js/engine.js): a volta do noturno de ontem, os fixos pelo
 // status, pela escala aprovada e pelo instrutor escolhido, os agendados e os outros; em cada grupo, a ordem dos pedidos do
@@ -59,4 +59,39 @@ export function rejeicoesDosPedidos(estado, resultado) {
   const semLugar = pedidosQueVoam(estado).filter(p => !Object.hasOwn(fixos, p.fKey) && !comLinha.has(p.fKey));
   naOrdemDoMotor(estado, semLugar).forEach((p, i) => { if (recusas[i]) mapa.set(p.fKey, recusas[i]); });
   return mapa;
+}
+
+// O 1º da lista de espera do horário que o voo do pedido da agenda cancelado deixa (F1h, N14; o aviso das novidades dos
+// pedidos, D3), como a escala diz (a espera das recusas dela, também depois de recarregar ou noutro computador): o voo do
+// registro que leva o pedido (o principal do aluno ou uma missão extra, com solicitacao = o id, voando), na escala e sem o
+// status Cancelado (cancelado, ele já não ocupa nada), e a recusa que espera no minuto dele com o menor lugar. estado: o
+// que o motor leu (js/state.js, estadoDaEscala); resultado: a escala. naoEspera: o pedido (o id) que não espera mais (o
+// cancelado ou sem aprovação na lista lida agora, com a escala ainda não refeita): quem espera por ele não é o 1º, o
+// seguinte da lista é; o que espera sem pedido (posto à mão na Demanda) espera. { minuto, aluno } (o nome) ou null: sem
+// voo, sem ninguém esperando nesse minuto, ou a escala sem a espera (a de antes do F1h)
+export function primeiroDaListaDeEspera(solicitacao, estado, resultado, { naoEspera = () => false } = {}) {
+  if (!estado || !resultado || !Array.isArray(resultado.out)) return null;
+  const doAluno = (estado.stu || []).find(x => x.id === solicitacao.aluno);
+  const registro = doAluno && [doAluno, ...(doAluno.extra || [])].find(p => p && p.solicitacao === solicitacao.id);
+  if (!registro || !registro.fly) return null;
+  const fKey = chaveDoVoo(doAluno.id, registro === doAluno ? 0 : registro.mid);
+  const voo = resultado.out.find(o => o.fKey === fKey && !o.trecho);
+  if (!voo || statusDoVoo(voo, estado.fStatus) === 'Cancelado') return null;
+  // O aluno e o registro da chave do voo de quem espera (aluno_missão_1)
+  const deQuemEspera = chave => {
+    const [id, mid] = chave.split('_').map(Number);
+    const aluno = (estado.stu || []).find(x => x.id === id);
+    return { aluno, registro: aluno && pedidoDoAluno(aluno, mid) };
+  };
+  const espera = ([chave, a]) => {
+    if (!a.espera || a.espera.minuto !== voo.a) return false;
+    const { registro } = deQuemEspera(chave);
+    return !(registro && registro.solicitacao != null && naoEspera(registro.solicitacao));
+  };
+  const primeiro = [...rejeicoesDosPedidos(estado, resultado)].filter(espera).sort((p, q) => p[1].espera.lugar - q[1].espera.lugar)[0];
+  if (!primeiro) return null;
+  // O nome do aluno; sem ele no estado, o rótulo da recusa
+  const [chave, recusa] = primeiro;
+  const { aluno } = deQuemEspera(chave);
+  return { minuto: voo.a, aluno: aluno ? aluno.nm : recusa.s };
 }

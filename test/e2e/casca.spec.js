@@ -107,7 +107,7 @@ test.describe('A linha e as telas', () => {
   test('o que cada perfil vê na linha: a Secretaria sem a Demanda, os Recursos, o Rodízio e o BI', async ({ page, context }) => {
     await instalarSupabaseFalso(context, documentosAtuais(comExemplo(estadoSintetico()), AMANHA));
     await entrar(page, CONTAS.secretaria);
-    await expect(rotulosDasAbas(page, { visiveis: true })).toHaveText(['Agenda', 'Escala', 'Aprovar', 'Alunos', 'Instrutores', 'Cursos']);
+    await expect(rotulosDasAbas(page, { visiveis: true })).toHaveText(['Pedidos', 'Escala', 'Aprovar', 'Alunos', 'Instrutores', 'Cursos']);
     await expect(page.locator('#linha .linha-sep')).toBeHidden();
     await expect(atual(page)).toHaveAttribute('href', '#/age');
   });

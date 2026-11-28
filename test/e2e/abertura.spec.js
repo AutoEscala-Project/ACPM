@@ -22,7 +22,9 @@ const estado = () => ({
 });
 const PEDIDO = {
   id: 1, data: AMANHA, aluno: 1001, aluno_nome: 'Aluno 1001', missao: 'Voo Local', janela: 'horario', horario: '07:00', horas: 1, observacao: null,
-  registrado_por: 'Maria', registrado_em: '2026-11-10T14:00:00.000Z', conta: 'Secretaria de Teste', excecao: false, cancelada_em: null, cancelada_por: null
+  registrado_por: 'Maria', registrado_em: '2026-11-10T14:00:00.000Z', conta: 'Secretaria de Teste', excecao: false, cancelada_em: null, cancelada_por: null,
+  // Aprovado: só o aprovado entra na demanda (D2)
+  aprovada_em: '2026-11-10T14:30:00.000Z', aprovada_por: 'Operador de Teste'
 };
 
 function criarServidor(dias = {}) {
