@@ -8,6 +8,7 @@ import {
   motivoDoTipo, motivoDoHorario, textoDosHorarios, quandoOAlunoVoa, TIPOS_LIMITAVEIS, MINUTOS_DOS_HORARIOS, DIAS_DAS_LIMITACOES, nomeDoDia, textoDasLimitacoes,
   tiposQueNaoCabem, linhaDoPeso
 } from '../../js/limitacoes.js';
+import { PRIMEIRO_HORARIO } from '../../js/horarios.js';
 
 // 2026-11-30 é uma segunda-feira; 2026-12-01, terça; 2026-12-05, sábado; 2026-12-06, domingo
 const SEGUNDA = '2026-11-30', TERCA = '2026-12-01', SABADO = '2026-12-05', DOMINGO = '2026-12-06';
@@ -23,7 +24,7 @@ describe('normalizarLimitacoes: só o que tem o formato fica; vazio, nada', () =
     assert.deepEqual(normalizarLimitacoes({ recursos: ['Sim. Multi', 'C172', 'C172', 'Sala Ground', 'x', 7, null] }), { recursos: ['C172', 'Sim. Multi'] });
   });
 
-  it('os horários: { de, ate } em minutos, [de, ate), de 06:00 à meia-noite, os dias da semana (0 a 6) ou nenhum', () => {
+  it('os horários: { de, ate } em minutos, [de, ate), das 06:30 à meia-noite, os dias da semana (0 a 6) ou nenhum', () => {
     assert.deepEqual(normalizarLimitacoes({ horarios: [{ de: 780, ate: 1080, dias: [5, 1, 3, 3], x: 1 }, { de: 420, ate: 720 }] }),
       { horarios: [{ de: 420, ate: 720 }, { de: 780, ate: 1080, dias: [1, 3, 5] }] });
     // Fora do formato: o fim antes do começo, fora do dia, não inteiro, os dias vazios ou fora de 0 a 6, de outro tipo
@@ -33,8 +34,8 @@ describe('normalizarLimitacoes: só o que tem o formato fica; vazio, nada', () =
     }
     // Todos os sete dias: o mesmo que todas as datas
     assert.deepEqual(normalizarLimitacoes({ horarios: [{ de: 600, ate: 700, dias: [0, 1, 2, 3, 4, 5, 6] }] }), { horarios: [{ de: 600, ate: 700 }] });
-    // Das 06:00 (o primeiro horário que uma lista de decolagem aceitava antes do #106, que a põe às 06:30) à meia-noite
-    assert.deepEqual(normalizarLimitacoes({ horarios: [{ de: 360, ate: 1440 }, { de: 350, ate: 400 }] }), { horarios: [{ de: 360, ate: 1440 }] });
+    // Das 06:30 (o primeiro horário de decolagem, PRIMEIRO_HORARIO) à meia-noite
+    assert.deepEqual(normalizarLimitacoes({ horarios: [{ de: 390, ate: 1440 }, { de: 350, ate: 400 }] }), { horarios: [{ de: 390, ate: 1440 }] });
   });
 
   it(`no máximo ${MAXIMO_DE_HORARIOS} horários, na ordem do começo; os dois juntos`, () => {
@@ -48,6 +49,65 @@ describe('normalizarLimitacoes: só o que tem o formato fica; vazio, nada', () =
     const copia = structuredClone(v);
     normalizarLimitacoes(v);
     assert.deepEqual(v, copia);
+  });
+});
+
+// Decisão do Pedro, 28/11: "yes, 06:30 for the limits too". Os horários do aluno começam às 06:30, como os de decolagem
+// (#106). Até então o De começava às 06:00: o horário guardado que começa das 06:00 às 06:29 começa às 06:30 (o mesmo que
+// faz o #106 com a lista de decolagem), o que termina até as 06:30 sai, o que a mudança deixa igual a outro fica um só, e
+// antes das 06:00 sai como sempre. Nenhum início que a escala oferece (todos das 06:30 em diante) muda de lado
+describe('Decisão do Pedro, 28/11: os horários guardados antes das 06:30', () => {
+  it('o que começa das 06:00 às 06:29 começa às 06:30, com o mesmo Até e os mesmos dias', () => {
+    assert.deepEqual(normalizarLimitacoes({ horarios: [{ de: 360, ate: 1440 }] }), { horarios: [{ de: 390, ate: 1440 }] });
+    assert.deepEqual(normalizarLimitacoes({ horarios: [{ de: 375, ate: 600, dias: [3, 1] }, { de: 389, ate: 391 }] }),
+      { horarios: [{ de: 390, ate: 391 }, { de: 390, ate: 600, dias: [1, 3] }] });
+    assert.equal(textoDasLimitacoes({ horarios: [{ de: 360, ate: 1440 }] }), '06:30–24:00');
+  });
+
+  it('o que termina até as 06:30 sai (sozinho, a limitação de horários sai); antes das 06:00, como sempre', () => {
+    for (const h of [{ de: 360, ate: 390 }, { de: 360, ate: 370 }, { de: 380, ate: 390, dias: [1] }, { de: 350, ate: 600 }, { de: 0, ate: 1440 }]) {
+      assert.equal(normalizarLimitacoes({ horarios: [h] }), null, JSON.stringify(h));
+    }
+    assert.deepEqual(normalizarLimitacoes({ recursos: ['C172'], horarios: [{ de: 360, ate: 390 }] }), { recursos: ['C172'] });
+    assert.deepEqual(normalizarLimitacoes({ horarios: [{ de: 360, ate: 380 }, { de: 780, ate: 1080 }] }), { horarios: [{ de: 780, ate: 1080 }] });
+  });
+
+  it('o que fica igual a outro com a mudança fica um só; os dias diferentes, os dois; os iguais gravados assim, como estão', () => {
+    assert.deepEqual(normalizarLimitacoes({ horarios: [{ de: 360, ate: 600 }, { de: 390, ate: 600 }] }), { horarios: [{ de: 390, ate: 600 }] });
+    assert.deepEqual(normalizarLimitacoes({ horarios: [{ de: 370, ate: 600 }, { de: 360, ate: 600 }] }), { horarios: [{ de: 390, ate: 600 }] });
+    assert.deepEqual(normalizarLimitacoes({ horarios: [{ de: 360, ate: 600, dias: [1] }, { de: 390, ate: 600 }] }),
+      { horarios: [{ de: 390, ate: 600 }, { de: 390, ate: 600, dias: [1] }] });
+    // Os iguais que a tela deixa pôr (dois "+ Horário"), como sempre
+    assert.deepEqual(normalizarLimitacoes({ horarios: [{ de: 390, ate: 1440 }, { de: 390, ate: 1440 }] }), { horarios: [{ de: 390, ate: 1440 }, { de: 390, ate: 1440 }] });
+    // O que sai não ocupa lugar no máximo
+    const oito = Array.from({ length: MAXIMO_DE_HORARIOS }, (_, i) => ({ de: 420 + i * 60, ate: 450 + i * 60 }));
+    assert.equal(normalizarLimitacoes({ horarios: [{ de: 360, ate: 600 }, { de: 390, ate: 600 }, ...oito] }).horarios.length, MAXIMO_DE_HORARIOS);
+    assert.deepEqual(normalizarLimitacoes({ horarios: [{ de: 360, ate: 380 }, ...oito] }).horarios, oito);
+  });
+
+  it('a mudança é feita uma vez só: o normalizado não muda de novo', () => {
+    const v = { horarios: [{ de: 360, ate: 600 }, { de: 390, ate: 600 }, { de: 375, ate: 1440, dias: [2] }, { de: 360, ate: 380 }] };
+    const uma = normalizarLimitacoes(v);
+    assert.deepEqual(normalizarLimitacoes(uma), uma);
+  });
+
+  // A regra do início (R4) não muda: um horário das 06:00 que chega ao motor sem passar pela leitura continua valendo das
+  // 06:00. Lido, nenhum início das 06:30 em diante (os únicos que a escala oferece) muda de lado; o que sai sozinho não
+  // valia para nenhum deles, e sem ele nada é recusado
+  it('nenhum início das 06:30 em diante muda de lado; o que sai só deixa de recusar', () => {
+    assert.equal(inicioPermitido({ horarios: [{ de: 360, ate: 1440 }] }, 370), true);
+    let comparados = 0;
+    for (let de = 360; de < 390; de++) {
+      for (let ate = de + 1; ate <= 1440; ate += 7) {
+        const guardado = { horarios: [{ de, ate }] }, lido = normalizarLimitacoes(guardado);
+        for (let m = PRIMEIRO_HORARIO; m <= 1440; m += 10) {
+          const antes = inicioPermitido(guardado, m), depois = inicioPermitido(lido, m);
+          assert.ok(depois === antes || (antes === false && lido === null), `${de}–${ate} às ${m}`);
+          comparados++;
+        }
+      }
+    }
+    assert.ok(comparados > 100000);
   });
 });
 
@@ -167,8 +227,9 @@ describe('A tela das Limitações', () => {
     assert.deepEqual(DIAS_DAS_LIMITACOES.map(nomeDoDia), ['seg', 'ter', 'qua', 'qui', 'sex', 'sáb']);
   });
 
-  it('os minutos dos campos: das 06:00 à meia-noite, de 10 em 10', () => {
-    assert.equal(MINUTOS_DOS_HORARIOS[0], 360);
+  it('os minutos dos campos: das 06:30 (o primeiro horário de decolagem, a mesma constante) à meia-noite, de 10 em 10', () => {
+    assert.equal(MINUTOS_DOS_HORARIOS[0], 390);
+    assert.equal(MINUTOS_DOS_HORARIOS[0], PRIMEIRO_HORARIO);
     assert.equal(MINUTOS_DOS_HORARIOS.at(-1), 1440);
     assert.ok(MINUTOS_DOS_HORARIOS.every((m, i) => i === 0 || m - MINUTOS_DOS_HORARIOS[i - 1] === 10));
   });

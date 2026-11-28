@@ -730,6 +730,14 @@ describe('setLimitacoes', () => {
     assert.deepEqual(validarReversao({ kind: 'setLimitacoes', stuId: 1000, antes: { recursos: [] } }, FROTA_INICIAL).antes, null);
   });
 
+  // Decisão do Pedro, 28/11: os horários do aluno começam às 06:30. A reversão gravada antes, com um horário das 06:00,
+  // continua valendo e o põe às 06:30; com um só, que termina até as 06:30, volta como nenhuma (o que ele quer dizer lido hoje)
+  it('as de antes com um horário das 06:00 às 06:29: o horário volta às 06:30; o que termina até as 06:30 não volta', () => {
+    assert.deepEqual(validarReversao({ kind: 'setLimitacoes', stuId: 1000, antes: { horarios: [{ de: 360, ate: 1440 }, { de: 390, ate: 1440 }] } }, FROTA_INICIAL).antes,
+      { horarios: [{ de: 390, ate: 1440 }] });
+    assert.equal(validarReversao({ kind: 'setLimitacoes', stuId: 1000, antes: { horarios: [{ de: 360, ate: 380 }] } }, FROTA_INICIAL).antes, null);
+  });
+
   it('fora do formato: sem o aluno, sem o antes, de outro tipo', () => {
     for (const ruim of [{ kind: 'setLimitacoes', antes: null }, { kind: 'setLimitacoes', stuId: 'x', antes: null }, { kind: 'setLimitacoes', stuId: 1000 },
       { kind: 'setLimitacoes', stuId: 1000, antes: 'C172' }, { kind: 'setLimitacoes', stuId: 1000, antes: [] }]) {

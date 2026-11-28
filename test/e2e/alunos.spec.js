@@ -876,11 +876,14 @@ test.describe('As limitações do aluno', () => {
     // A Escala: o pedido no C152 é recusado, com o motivo
     await abrirEscala(page);
     await expect(page.locator('#s-esc [data-caixa="erros"] li', { hasText: 'Ana' })).toHaveText('Ana Rejeitado: o aluno só voa no C172 (o pedido está no C152).');
-    // "Pode voar": "+ Horário" põe um das 06:00 à meia-noite, em todas as datas, e o foco no De dele
+    // "Pode voar": "+ Horário" põe um das 06:30 à meia-noite, em todas as datas, e o foco no De dele (Decisão do Pedro, 28/11:
+    // os horários começam às 06:30, como os de decolagem)
     await irPara(page, 'alu');
     await page.locator('#det-alu-lim-mais').click();
     await expect(page.locator('#det-alu-lim-de-0')).toBeFocused();
-    await expect(page.locator('#det-alu-lim-de-0')).toHaveValue('360');
+    await expect(page.locator('#det-alu-lim-de-0')).toHaveValue('390');
+    await expect(page.locator('#det-alu-lim-de-0 option').first()).toHaveText('06:30');
+    await expect(page.locator('#det-alu-lim-ate-0 option').first()).toHaveText('06:40');
     await expect(page.locator('#det-alu-lim-ate-0')).toHaveValue('1440');
     for (const d of [1, 2, 3, 4, 5, 6]) await expect(page.locator(`#det-alu-lim-dia-0-${d}`)).toBeChecked();
     await page.locator('#det-alu-lim-de-0').selectOption('780');
@@ -963,6 +966,21 @@ test.describe('As limitações do aluno', () => {
     // A próxima mudança dos dias desse horário tira o domingo, que a tela não oferece
     await page.locator('#det-alu-lim-dia-0-3').check();
     await expect.poll(() => guardadas(page)).toEqual({ horarios: [{ de: 780, ate: 1080, dias: [1, 3] }, { de: 785, ate: 1085 }] });
+  });
+
+  // Decisão do Pedro, 28/11: os horários começam às 06:30. O que veio gravado começando das 06:00 às 06:29 aparece às 06:30
+  // (o que ficou igual a outro, uma linha só), o que terminava até as 06:30 não aparece, e a primeira mudança grava assim
+  test('"Pode voar" guardado antes das 06:30: o De às 06:30, um só quando fica igual; o que terminava até as 06:30 sai', async ({ page }) => {
+    await abrir(page, { estado: dia({ limitacoes: { horarios: [{ de: 360, ate: 600 }, { de: 390, ate: 600 }, { de: 360, ate: 380 }, { de: 780, ate: 1080, dias: [1] }] } }) });
+    await irPara(page, 'alu');
+    await abrirAluno(page, 1000);
+    await expect(page.locator('#sec-alu-limitacoes-corpo .lim-horario')).toHaveCount(2);
+    await expect(page.locator('#det-alu-lim-de-0')).toHaveValue('390');
+    await expect(page.locator('#det-alu-lim-de-0 option:checked')).toHaveText('06:30');
+    await expect(page.locator('#det-alu-lim-de-0 option', { hasText: '06:00' })).toHaveCount(0);
+    await expect(page.locator('#sec-alu-limitacoes')).toContainText('06:30–10:00; 13:00–18:00 (seg)');
+    await page.locator('#det-alu-lim-ate-0').selectOption('660');
+    await expect.poll(() => guardadas(page)).toEqual({ horarios: [{ de: 390, ate: 660 }, { de: 780, ate: 1080, dias: [1] }] });
   });
 
   for (const largura of [390, 320]) {
