@@ -1429,10 +1429,10 @@ describe('As limitações do aluno: duras para o motor', () => {
     assert.deepEqual(erros(fora.al), [['disponibilidade-do-aluno', 'Rejeitado: nenhum horário aberto na disponibilidade do aluno (Limitações: 06:40–07:30) comporta 01h30 de Ground.']]);
   });
 
-  // Revisão: a recusa é da limitação só quando ela tirou um início que valeria sem ela. O horário das 06:00 às 24:00 (o que
+  // Revisão: a recusa é da limitação só quando ela tirou um início que valeria sem ela. O horário das 06:30 às 24:00 (o que
   // "+ Horário" cria) não tira nenhum: o motivo é o de sempre (o fechamento, o fim do Ground), não a disponibilidade do aluno
   it('a limitação que não tira nenhum início não muda a recusa: sem-horario, depois-do-ground e o horário do pedido sozinho', () => {
-    const todoODia = { limitacoes: { horarios: [{ de: 360, ate: 1440 }] } };
+    const todoODia = { limitacoes: { horarios: [{ de: 390, ate: 1440 }] } };
     const fechado = [0, 1, 2, 3, 4, 5, 6, 7];
     assert.deepEqual(erros(alocar({ stu: [aluno(1000, {}, todoODia)], janelasOff: fechado }).al),
       [['sem-horario', 'Rejeitado: nenhum horário aberto comporta 1 h até as 17:30.']]);

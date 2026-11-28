@@ -7,11 +7,12 @@
 // no C172 limita os aviões, e os simuladores ficam livres (só no Sim. Multi, o contrário); a Sala Ground nunca é limitada.
 // O motor lê as limitações da data (limitacoesNaData, pelo estado da escala: comLimitacoesDaData, js/state.js), já sem os
 // dias: um horário com dias que chega a ele sem ser lido para a data não é início.
-// Puro (config, format, habilitacoes e combustivel): a leitura do cadastro (js/dias.js, js/storage.js) normaliza o que vem
+// Puro (config, format, horarios, habilitacoes e combustivel): a leitura do cadastro (js/dias.js, js/storage.js) normaliza o que vem
 // gravado; o motor, a conferência dos voos fixos, a compactação, as Sugestões e a seção "Limitações" de Alunos usam as
 // mesmas regras
 import { AIRCRAFT_EQ_TYPES, SIM_EQ_TYPES, DEFAULT_LIM, MINUTOS_DO_DIA } from './config.js';
 import { hm } from './format.js';
+import { PRIMEIRO_HORARIO, noInicioDoDia } from './horarios.js';
 import { habilitadoNoTipo } from './habilitacoes.js';
 import { reducaoNecessaria } from './combustivel.js';
 
@@ -23,13 +24,18 @@ export const DIAS_DAS_LIMITACOES = [1, 2, 3, 4, 5, 6];
 const NOMES_DOS_DIAS = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
 export const nomeDoDia = d => NOMES_DOS_DIAS[d];
 export const MAXIMO_DE_HORARIOS = 8;
-// Os horários vão das 06:00 (o primeiro horário que uma lista de decolagem aceitava antes do #106; desde ele a lista começa
-// às 06:30, e um De antes disso só cobre o mesmo que 06:30) à meia-noite; os campos De e Até, de 10 em 10 minutos
-const INICIO_DOS_HORARIOS = 360;
+// Os horários vão das 06:30 (o primeiro horário de decolagem, PRIMEIRO_HORARIO: Decisão do Pedro, 28/11, "yes, 06:30 for the
+// limits too") à meia-noite; os campos De e Até, de 10 em 10 minutos
+const INICIO_DOS_HORARIOS = PRIMEIRO_HORARIO;
 export const MINUTOS_DOS_HORARIOS = Array.from({ length: (MINUTOS_DO_DIA - INICIO_DOS_HORARIOS) / 10 + 1 }, (_, i) => INICIO_DOS_HORARIOS + i * 10);
 
 const objeto = v => Boolean(v) && typeof v === 'object' && !Array.isArray(v);
 const minutoValido = m => Number.isInteger(m) && m >= INICIO_DOS_HORARIOS && m <= MINUTOS_DO_DIA;
+// Até 28/11 o De começava às 06:00. O guardado das 06:00 às 06:29 começa às 06:30 (noInicioDoDia, a mesma conversão da lista
+// de decolagem): nenhum início que a escala oferece é antes das 06:30, então ele cobre os mesmos. O que então termina até as
+// 06:30 não cobre nenhum e sai; antes das 06:00, sai como sempre
+const deGuardado = m => (Number.isInteger(m) ? noInicioDoDia(m) : m);
+const mesmoHorario = (p, q) => p.de === q.de && p.ate === q.ate && String(p.dias || '') === String(q.dias || '');
 
 // Os dias de um horário: inteiros de 0 a 6, sem repetir, em ordem; os sete, todas as datas (undefined); fora disso, null
 function diasDoHorario(dias) {
@@ -44,11 +50,17 @@ function diasDoHorario(dias) {
 export function normalizarLimitacoes(valor) {
   if (!objeto(valor)) return null;
   const recursos = Array.isArray(valor.recursos) ? TIPOS_LIMITAVEIS.filter(t => valor.recursos.includes(t)) : [];
-  const horarios = (Array.isArray(valor.horarios) ? valor.horarios : []).flatMap(h => {
-    if (!objeto(h) || !minutoValido(h.de) || !minutoValido(h.ate) || h.de >= h.ate) return [];
+  const lidos = (Array.isArray(valor.horarios) ? valor.horarios : []).flatMap(h => {
+    if (!objeto(h)) return [];
+    const de = deGuardado(h.de);
+    if (!minutoValido(de) || !minutoValido(h.ate) || de >= h.ate) return [];
     const dias = diasDoHorario(h.dias);
-    return dias === null ? [] : [{ de: h.de, ate: h.ate, ...(dias ? { dias } : {}) }];
-  }).sort((p, q) => p.de - q.de || p.ate - q.ate || String(p.dias || '').localeCompare(String(q.dias || ''))).slice(0, MAXIMO_DE_HORARIOS);
+    return dias === null ? [] : [{ de, ate: h.ate, ...(dias ? { dias } : {}), mudou: de !== h.de }];
+  });
+  // O que a mudança deixou igual a outro fica um só (os iguais gravados assim, que a tela deixa pôr, ficam como estão)
+  const horarios = lidos.filter((h, i) => !h.mudou || !lidos.some((o, j) => j !== i && mesmoHorario(o, h) && (!o.mudou || j < i)))
+    .map(({ mudou, ...h }) => h)
+    .sort((p, q) => p.de - q.de || p.ate - q.ate || String(p.dias || '').localeCompare(String(q.dias || ''))).slice(0, MAXIMO_DE_HORARIOS);
   if (!recursos.length && !horarios.length) return null;
   return { ...(recursos.length ? { recursos } : {}), ...(horarios.length ? { horarios } : {}) };
 }

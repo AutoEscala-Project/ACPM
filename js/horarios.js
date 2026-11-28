@@ -27,9 +27,10 @@ export const CATEGORIAS_COM_HORARIOS = Object.keys(HORARIOS_INICIAIS);
 // o mesmo limite do horário exato do pedido (js/rules.js), para a lista nunca oferecer um horário que o pedido perde
 export const PRIMEIRO_HORARIO = HORARIO_DO_SOLO;
 // Até 2026-11-28 o editor e a lista guardada aceitavam desde as 06:00. Um horário guardado das 06:00 às 06:29 não se
-// perde: vira o primeiro do dia, na lista, na reversão dela e na preferência do pedido; antes das 06:00, sai como sempre
+// perde: vira o primeiro do dia, na lista, na reversão dela e na preferência do pedido; antes das 06:00, sai como sempre.
+// O De das limitações do aluno (js/limitacoes.js) também (Decisão do Pedro, 28/11)
 const INICIO_ACEITO_ANTES = 6 * 60;
-const noInicioDoDia = m => (m >= INICIO_ACEITO_ANTES && m < PRIMEIRO_HORARIO ? PRIMEIRO_HORARIO : m);
+export const noInicioDoDia = m => (m >= INICIO_ACEITO_ANTES && m < PRIMEIRO_HORARIO ? PRIMEIRO_HORARIO : m);
 
 // Um horário guardado na lista (06:30 às 17:00; o das 06:00 às 06:29, 06:30), ou null
 const ULTIMO = 17 * 60;
