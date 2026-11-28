@@ -157,7 +157,8 @@ export function abrirRestricoes(stuId, mid, { origem = null } = {}) {
 // ao gravado antes de perder o foco, para não gravar ao sair). devolverFoco: para o elemento de onde ela abriu, quando ele
 // ainda está à vista; redesenhado, para o equivalente (o "Restrições" do mesmo pedido, o "Editar" ou a barra do mesmo
 // voo, na turma o do mesmo aluno); sem ele (o item do trilho que saiu porque o pedido entrou, o voo que saiu da escala),
-// para o voo do pedido na Escala, ou para o botão da data
+// para o voo do pedido na Escala, ou para o trilho, sempre à vista (linha-fix-escala-sem-caixas: o topo não tem mais o
+// botão da data): o "Restrições" do item do pedido que não entrou, o botão dos avisos ou o do alto do trilho
 export function fecharRestricoes({ devolverFoco = true } = {}) {
   const painel = $('#painel-restricoes');
   if (!painel || painel.hidden) { aberta = null; pendente = null; return; }
@@ -171,8 +172,14 @@ export function fecharRestricoes({ devolverFoco = true } = {}) {
   const alvo = (origem.isConnected && visivel(origem) ? origem : null)
     || equivalente(seletorDaOrigem(origem, stuId, mid), origem.getAttribute('aria-label'))
     || vooDoPedidoNaEscala(stuId, mid)
-    || [$('#btn-data')].find(b => b && visivel(b));
+    || noTrilho(stuId, mid);
   if (alvo) alvo.focus();
+}
+// O lugar do pedido no trilho: o "Restrições" do item da missão que não entrou; com os avisos recolhidos, o botão deles
+// (o título dos avisos); com o calendário recolhido, o botão do alto do trilho
+function noTrilho(stuId, mid) {
+  return [`#avisos-da-data [data-act="restricoes"][data-id="${stuId}"][data-mid="${mid}"]`, '#btn-avisos', '#btn-recolher-trilho']
+    .map(s => $(s)).find(b => b && visivel(b)) || null;
 }
 // O primeiro elemento à vista do seletor, fora da gaveta e dos diálogos; com o nome dado, o que tem o mesmo nome antes
 function equivalente(seletor, nome) {
