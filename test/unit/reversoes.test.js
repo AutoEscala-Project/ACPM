@@ -662,6 +662,34 @@ describe('desfazerEdicao', async () => {
     assert.deepEqual(estado.fStatus, { '1000_0_1': 'Confirmado' });
     assert.deepEqual(estado.fObs, {});
   });
+
+  // A revisão do E: o pedido da agenda que a conciliação tirou da demanda depois da alteração (cancelado ou com a aprovação
+  // retirada: o registro sem voar, o id fora de importadas) não volta a voar pelo desfazer dela, nem pelo "↶ Restaurar" do
+  // Voa; o voo que um pedido da agenda tomou depois dela também não é desfeito (como o do agendamento, d6)
+  it('o pedido da agenda que saiu da demanda, ou que tomou o voo, depois da alteração: o desfazer recusa, com o motivo', async () => {
+    const { motivoParaNaoDesfazerEdicao, motivoParaNaoVoltarAVoar, SAIU_DA_DEMANDA, DE_UM_PEDIDO } = await import('../../js/reversoes.js');
+    const rev = validarReversao({
+      kind: 'desfazerEdicao', voos: [{ fKey: '1000_0_1', fixo: null, status: null, detalhe: null }],
+      pedidos: [{ stuId: 1000, mid: 0, pedido: { ...pedido, solicitacao: 1 } }], recusas: [], label: '↶ Reverter'
+    }, []);
+    const estado = (extra = {}, importadas = [1]) => ({ stu: [{ id: 1000, nm: 'A', ...pedido, solicitacao: 1, extra: [], ...extra }], importadas, fixos: {}, fStatus: {}, fObs: {}, resultados: { doDia: [] } });
+    assert.equal(motivoParaNaoDesfazerEdicao(estado(), rev), '');
+    const saiu = estado({ fly: false }, []);
+    assert.equal(motivoParaNaoDesfazerEdicao(saiu, rev), SAIU_DA_DEMANDA);
+    assert.match(SAIU_DA_DEMANDA, /^O pedido da agenda deste voo saiu da demanda/);
+    // Tirado da escala pelo operador (o id guardado) ou voando sem estar guardado (o acerto que a conciliação admite): desfaz
+    assert.equal(motivoParaNaoDesfazerEdicao(estado({ fly: false }), rev), '');
+    assert.equal(motivoParaNaoDesfazerEdicao(estado({}, []), rev), '');
+    // Outro pedido da agenda tomou o registro depois da alteração (o voo posto à mão que deu lugar a ele)
+    assert.equal(motivoParaNaoDesfazerEdicao(estado({ solicitacao: 2 }, [2]), rev), DE_UM_PEDIDO);
+    const semPedido = validarReversao({ ...rev, pedidos: [{ stuId: 1000, mid: 0, pedido }] }, []);
+    assert.equal(motivoParaNaoDesfazerEdicao(estado({ solicitacao: 2 }, [2]), semPedido), DE_UM_PEDIDO);
+    assert.equal(motivoParaNaoDesfazerEdicao(estado({ solicitacao: undefined }, []), semPedido), '');
+    // O "↶ Restaurar" do Voa (setFly com val true): o registro do pedido que saiu da demanda não volta; o outro, sim
+    assert.equal(motivoParaNaoVoltarAVoar(saiu, [saiu.stu[0]]), SAIU_DA_DEMANDA);
+    assert.equal(motivoParaNaoVoltarAVoar(estado({ fly: false }), [estado({ fly: false }).stu[0]]), '');
+    assert.equal(motivoParaNaoVoltarAVoar(saiu, [{ ...pedido, fly: false }, null]), '');
+  });
 });
 
 // J: "Horários fechados nesta data" desfaz pelo ↶ (setFechamentos): antes é a lista de antes da mudança (normalizada), ou

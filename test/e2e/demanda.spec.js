@@ -103,6 +103,26 @@ test.describe('Demanda', () => {
     await expect.poll(guardado).toEqual({ 1000: false, 1001: false, 1002: true });
   });
 
+  // A revisão do E (o achado 5, formato 30): a missão do curso dada pelo programa na entrada do pedido (etapaDoPrograma) sai
+  // com a missão do curso quando o avião, a missão ou a duração mudam à mão na Demanda: o dia gravado não fica com a marca
+  // sem a missão do curso (o formato a recusa)
+  test('o avião, a missão ou a duração mudada tira do pedido a missão do curso e a marca do programa (etapaDoPrograma)', async ({ page }) => {
+    const doPrograma = { p1: 500, p2: -1, jan: 'h500', etapa: 'PP-07', cursoDaEtapa: 'PP', etapaDoPrograma: true };
+    await abrir(page, { estado: cenario({ ins: [instrutor(1, 9), instrutor(2, 9), instrutor(3, 9)], stu: [aluno(1000, doPrograma), aluno(1001, doPrograma), aluno(1002, doPrograma)] }) });
+    await irPara(page, 'dem');
+    const guardado = () => page.evaluate(data => {
+      const pedidos = JSON.parse(localStorage.getItem(`acpm4_dia_${data}`)).pedidos;
+      return Object.fromEntries(['1000', '1001', '1002'].map(id => [id, [pedidos[id].etapa || null, pedidos[id].cursoDaEtapa || null, pedidos[id].etapaDoPrograma === true]]));
+    }, AMANHA);
+    await expect.poll(guardado).toEqual({ 1000: ['PP-07', 'PP', true], 1001: ['PP-07', 'PP', true], 1002: ['PP-07', 'PP', true] });
+    await linhaDoAluno(page, 'Aluno 1000').locator('[data-f="eq"]').selectOption('C172');
+    await linhaDoAluno(page, 'Aluno 1001').locator('[data-f="mis"]').selectOption('TGL (TMA)');
+    await linhaDoAluno(page, 'Aluno 1002').locator('[data-f="nb"]').fill('1.5');
+    await linhaDoAluno(page, 'Aluno 1002').locator('[data-f="nb"]').press('Enter');
+    await expect(page.locator('#audit-log-list')).toContainText('Pedido Aluno 1002: Voo Local');
+    await expect.poll(guardado).toEqual({ 1000: [null, null, false], 1001: [null, null, false], 1002: [null, null, false] });
+  });
+
   // A limpeza também solta os voos que limpa, seja qual for o motivo do cadeado (a escala aprovada, o instrutor escolhido
   // na Escala, o status), e reabre a escala aprovada. O voo que já pousou fica como está: o pedido, o cadeado e o status
   test('"Limpar demanda" solta os voos que limpa (o cadeado e o status de antes) e reabre a escala; o voo que pousou fica', async ({ page }) => {

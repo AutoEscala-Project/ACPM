@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   isGroundMission, doesGroundGateFlight, migrateLegacyMissionName, normalizeMissionFields, blank, disponibilidadeDoAluno, disponibilidadeAtual,
   rotuloDaDisponibilidade, minutoConfirmado, proximoMid, duracaoDigitada, ERRO_DA_DURACAO, chaveTemSobras, alvoDoNovoPedido,
-  pesoValido, pesoDigitado, pesoDoTexto, ERRO_DO_PESO, deixarEmBranco, PRIORIDADE_PADRAO, prioridadeNaTela, prioridadeGuardada, comAPrioridadePadrao
+  pesoValido, pesoDigitado, pesoDoTexto, ERRO_DO_PESO, deixarEmBranco, PRIORIDADE_PADRAO, prioridadeNaTela, prioridadeGuardada, comAPrioridadePadrao, minutosExatos
 } from '../../js/rules.js';
 import * as regras from '../../js/rules.js';
 import { podeFazer, descreverExigencias } from '../../js/habilitacoes.js';
@@ -154,6 +154,21 @@ describe('Regras de missão', () => {
     const a = blank();
     assert.deepEqual(a, { fly: false, mis: 'Voo Local', eq: 'C152', p1: 500, p2: 610, nb: 1, ss: 1, pr: 3 });
     assert.notEqual(blank(), a);
+  });
+});
+
+// Os minutos exatos do pedido (jan): o horário da Agenda e, com a 2ª preferência (U1), os dois (o teste que era do
+// minutosDoPedido de js/processamento.js, um outro nome dele que a revisão do E tirou)
+describe('minutosExatos: o horário exato do pedido, um ou dois minutos', () => {
+  it('h<minuto> e h<minuto1>|h<minuto2>; o h5 dos dados antigos é a janela 5; fora do formato, nenhum', () => {
+    assert.deepEqual(minutosExatos('h500'), [500]);
+    assert.deepEqual(minutosExatos('h500|h610'), [500, 610]);
+    assert.deepEqual(minutosExatos('h610|h500'), [610, 500], 'o 1º é o primeiro, qualquer que seja a hora');
+    assert.deepEqual(minutosExatos('h5'), [minutosExatos('h5')[0]]);
+    assert.equal(minutosExatos('h5').length, 1);
+    for (const jan of ['h500|h500', 'h500|h610|h700', 'h500|', '|h500', 'manha', 'tarde', 'h2000', 'h300', '', null, undefined, 500, ['h500']]) {
+      assert.deepEqual(minutosExatos(jan), [], String(jan));
+    }
   });
 });
 
