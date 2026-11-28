@@ -24,7 +24,7 @@ import { motivoDoFixo } from '../fixos.js';
 import { voosNovos } from '../aprovacao.js';
 import { impressaoDaEscala, situacaoDasExportacoes } from '../exportacoes.js';
 import { instrutoresDoVoo, foraDoPriorizarNoVoo } from '../instrutor-escolhido.js';
-import { $, trocarConteudo } from '../dom.js';
+import { $, trocarConteudo, anunciar } from '../dom.js';
 import { atualizarEditorDoVoo } from './edicao-do-voo.js';
 import { statusDoVoo, unidadeDoVoo } from '../voo.js';
 
@@ -326,22 +326,33 @@ function rAprovacao(temVoos) {
 }
 
 // As exportações registradas da data (H; d31): "Exportada" enquanto nenhuma está desatualizada; a desatualizada diz qual
-// (a escala mudou depois dela). Sem nenhuma, nada
+// (a escala mudou depois dela). Sem nenhuma, nada. O texto não é uma região viva (é redesenhado a cada vez): quando uma
+// exportação da data aberta fica desatualizada, ele é anunciado uma vez; e os botões de exportar apontam para ele
+// (aria-describedby)
 const NOME_DA_EXPORTACAO = { csv: 'CSV', pdf: 'PDF', xlsx: 'Excel' };
+let desatualizadasDe = { data: null, tipos: '' };
+const temExportacao = () => Object.keys(S.exportacoes || {}).length > 0;
 function textoDasExportacoes() {
-  if (!RES) return '';
-  const { porTipo, desatualizadas, exportada } = situacaoDasExportacoes(S.exportacoes, impressaoDaEscala(RES.out, S));
-  if (!porTipo.some(t => t.estado !== 'nenhuma')) return '';
+  const botoes = ['#exp', '#pdf', '#xlsx'].map(id => $(id)).filter(Boolean);
+  const sem = () => { for (const b of botoes) b.removeAttribute('aria-describedby'); return ''; };
+  if (!RES) return sem();
+  const { porTipo, desatualizadas, exportada } = situacaoDasExportacoes(S.exportacoes, impressaoDaEscala(RES, S));
+  if (!porTipo.some(t => t.estado !== 'nenhuma')) { desatualizadasDe = { data: DATA, tipos: '' }; return sem(); }
   const texto = exportada ? 'Exportada' : `A escala mudou depois da exportação: ${desatualizadas.map(t => NOME_DA_EXPORTACAO[t]).join(', ')}`;
+  const tipos = desatualizadas.join(',');
+  if (desatualizadasDe.data === DATA && tipos && tipos !== desatualizadasDe.tipos) anunciar(texto);
+  desatualizadasDe = { data: DATA, tipos };
+  for (const b of botoes) b.setAttribute('aria-describedby', 'exportacoes-situacao');
   return ` <span id="exportacoes-situacao" data-exportada="${exportada}">${esc(texto)}</span>`;
 }
 
 // Compactação: os critérios do dia. Com a escala aprovada (os voos fixos não mudam) e no Gestor, só aparecem. A linha
-// some sem voos e sem aprovação
+// some sem voos, sem aprovação e sem exportação registrada
 function rCompactacao(out) {
   const lugar = $('#compactacao');
   if (!lugar) return;
-  lugar.hidden = !out.length && !S.aprovacao;
+  // Com uma exportação registrada, a linha fica: o aviso de que a escala mudou depois dela está nela
+  lugar.hidden = !out.length && !S.aprovacao && !temExportacao();
   const criterios = normalizarCriterios(S.criterios);
   const travado = isGestor() || Boolean(S.aprovacao);
   // Cada critério e cada opção com a dica do glossário

@@ -4,6 +4,7 @@
 // Puro
 import { statusDoVoo } from './voo.js';
 import { intervaloEfetivo } from './status.js';
+import { missaoNoArquivo } from './csv.js';
 const TIPOS_DE_EXPORTACAO = ['csv', 'pdf', 'xlsx'];
 const IMPRESSAO = /^[0-9a-f]{8}$/;
 const LIMITE_DE_QUEM = 80;
@@ -25,18 +26,24 @@ export function normalizarExportacoes(valor) {
 }
 
 // A impressão da escala da data (H): 8 hexadecimais (FNV-1a de 32 bits) do que os arquivos exportados dizem e que, mudado,
-// deixa a exportação desatualizada (d31): de cada linha (o voo e a volta do noturno), quem voa (o aluno), o quê (a
-// missão), quando (o horário, o novo do atraso: intervaloEfetivo), onde (o avião ou a sala) e com quem (o instrutor), o
-// status (Pendente e Confirmado contam como o padrão), os códigos dos conflitos e o avião parado na data (av[r] false).
-// A ordem das linhas não conta. out: a escala da tela; dia: o fStatus, o fObs e o av da data
-const STATUS_DO_PADRAO = ['Pendente', 'Confirmado'];
-export function impressaoDaEscala(out, { fStatus = {}, fObs = {}, av = {} } = {}) {
-  const linhas = (out || []).map(o => {
-    const status = statusDoVoo(o, fStatus);
-    const { a, b } = intervaloEfetivo(o, status, (fObs || {})[o.fKey]);
+// deixa a exportação desatualizada (d31). De cada linha (o voo e a volta do noturno): quem voa (o id e o nome do aluno),
+// o quê (a missão como os arquivos a escrevem, com a missão do curso e a sessão: missaoNoArquivo), quando (o horário, o
+// novo do atraso: intervaloEfetivo), onde (o avião ou a sala), com quem (o id e o nome do instrutor: o nome é o que a
+// operadora digita no portal e no CAVOK, e o id pega a troca de dois de mesmo nome), o cancelamento (com a categoria do
+// motivo, nunca o texto livre), os códigos dos conflitos, o avião parado na data (av[r] false) e a hora em que ele para
+// para a revisão de 50 horas (revisao[r].paraAs). Do status, só o cancelamento e o atraso contam: Pendente, Confirmado,
+// Em Voo e Pousou são o dia andando, e a primeira decolagem não desatualiza nada. A ordem das linhas não conta.
+// resultado: a escala da tela (out, revisao); dia: o fStatus, o fObs e o av da data
+export function impressaoDaEscala(resultado, { fStatus = {}, fObs = {}, av = {} } = {}) {
+  const revisao = (resultado && resultado.revisao) || {};
+  const linhas = ((resultado && resultado.out) || []).map(o => {
+    const status = statusDoVoo(o, fStatus), detalhe = (fObs || {})[o.fKey];
+    const { a, b } = intervaloEfetivo(o, status, detalhe);
+    const cancelado = status === 'Cancelado' ? `Cancelado:${(detalhe && detalhe.motivo) || ''}` : '';
     const conflitos = Array.isArray(o.conflitoCodigos) && o.conflitoCodigos.length ? [...o.conflitoCodigos].sort() : [...(o.conflito || [])].sort();
-    return JSON.stringify([o.fKey, o.trecho || '', o.stuId, o.mis || '', a, b, o.r || '', o.insId ?? '', STATUS_DO_PADRAO.includes(status) ? '' : status,
-      conflitos, (av || {})[o.r] === false]);
+    const parada = Object.hasOwn(revisao, o.r) && revisao[o.r] ? revisao[o.r].paraAs ?? null : null;
+    return JSON.stringify([o.fKey, o.trecho || '', o.stuId, o.s || '', missaoNoArquivo(o) || '', a, b, o.r || '', o.insId ?? '', o.ins || '', cancelado,
+      conflitos, (av || {})[o.r] === false, parada]);
   }).sort();
   let h = 0x811c9dc5;
   for (const byte of new TextEncoder().encode(linhas.join('\n'))) h = Math.imul(h ^ byte, 0x01000193) >>> 0;
