@@ -158,10 +158,10 @@ describe('O almoço no motor', () => {
     assert.deepEqual(r.al.filter(a => a.t !== 'warn'), []);
   });
 
-  // O “Priorizar com” é do operador, e o que o operador diz vem antes do motor: o almoço muda o horário do voo com o INVA
-  // do “Priorizar com”, nunca o INVA (como o do instrutor escolhido); sem horário que guarde a hora, o voo fica com ele, e o
-  // aviso é o do almoço
-  it('o “Priorizar com” vem antes do almoço: o voo fica com o INVA dele, e os horários mudam para guardar a hora', () => {
+  // O almoço vem antes do “Priorizar com” (Pedro, 28/11: "no, the engine should move another Mission before giving up an
+  // instructors lunch break"): antes de o voo sair do INVA do “Priorizar com”, o motor muda outra missão (aqui, o horário
+  // do voo do escolhido, que pode mudar) para os dois ficarem: o voo com o INVA dele e o INVA com a hora
+  it('o almoço vem antes do “Priorizar com”, mas o motor muda outra missão para manter os dois', () => {
     // O escolhido do dia leva o Instrutor 01 das 10:10 às 12:10; o aluno que prioriza o 01 só pode às 12:40: o voo do
     // escolhido sai da janela (o horário dele pode mudar), e os dois ficam com o 01
     const e = cenario({
@@ -177,16 +177,48 @@ describe('O almoço no motor', () => {
     assert.deepEqual(r.al.filter(a => a.codigo === 'voa-com'), []);
   });
 
-  it('sem horário que guarde a hora, o voo fica com o INVA do “Priorizar com”, com o aviso do almoço (nenhum do Priorizar com)', () => {
-    // Os dois com o horário exato: nenhum horário guarda a hora do 01
+  // Sem arrumação que guarde os dois, o “Priorizar com” cede: o voo vai para outro INVA, com o aviso de sempre do
+  // “Priorizar com”, agora pelo almoço, e o INVA fica com a hora (nenhum aviso do almoço)
+  it('sem arrumação que guarde os dois, o “Priorizar com” cede ao almoço: o voo vai para outro INVA, com o aviso pelo almoço', () => {
+    // Os dois com o horário exato e o primeiro com o escolhido: nenhum horário guarda a hora do 01 com os dois voos nele
     const e = cenario({
       ins: [instrutor(1, 1, DIA_INTEIRO), instrutor(2, 1, DIA_INTEIRO)],
       stu: [aluno(1000, { p1: 610, p2: -1, nb: 2, insId: 1, jan: 'h610' }), aluno(1001, { p1: 760, p2: -1, jan: 'h760' }, { voaCom: [1] })]
     });
-    const r = runAllocationEngine(e, semCompactar);
-    assert.deepEqual(voos(r), [['Aluno 1000', '10:10', '12:10', 1], ['Aluno 1001', '12:40', '13:40', 1]]);
-    assert.deepEqual(doAlmoco(r).map(a => a.s), ['Instrutor 01']);
-    assert.deepEqual(r.al.filter(a => a.codigo === 'voa-com'), []);
+    for (const opcoes of [semCompactar, {}]) {
+      const r = runAllocationEngine(e, opcoes);
+      assert.deepEqual(voos(r), [['Aluno 1000', '10:10', '12:10', 1], ['Aluno 1001', '12:40', '13:40', 2]]);
+      assert.deepEqual(doAlmoco(r), []);
+      assert.deepEqual(r.al.filter(a => a.codigo === 'voa-com').map(a => a.m), [
+        'Sem o instrutor de “Priorizar com” (Instrutor 01: sem a hora de almoço livre nos horários possíveis): o voo ficou com Instrutor 02.'
+      ]);
+    }
+  });
+
+  // Antes de desistir do almoço para um voo não sair, o motor muda outra missão: um INVA com o voo que só ele faz (10:10 a
+  // 12:10) e o pedido das 12:40 que só ele e o Instrutor 02 fazem; o 02 já tem o voo de outro aluno às 12:40. Pôr o pedido
+  // antes na fila ou reservar a hora do 01 não basta (o voo das 10:10 só voa com ele): o voo do 02 vai para o Instrutor 03
+  // (outro INVA) ou, sem o 03, para outro horário (o aluno não pediu horário exato), e o pedido das 12:40 voa com o 02
+  it('antes de desistir do almoço, o motor muda outra missão: o INVA ou o horário do voo que ocupa quem poderia voar', () => {
+    const exato = m => ({ p1: m, p2: -1, jan: `h${m}` });
+    const estado = (comO3, doO2) => cenario({
+      ins: [instrutor(1, 9, DIA_INTEIRO), instrutor(2, 9, DIA_INTEIRO), ...(comO3 ? [instrutor(3, 9, DIA_INTEIRO)] : [])],
+      stu: [aluno(1000, { ...exato(610), nb: 2 }, { bl: [2, 3] }), aluno(1001, doO2, { bl: [1] }), aluno(1002, exato(760), { bl: [3] })]
+    });
+    for (const [comO3, doO2, esperado] of [[true, exato(760), ['12:40', 3]], [false, { p1: 760, p2: -1 }, null]]) {
+      const e = estado(comO3, doO2);
+      const sem = runAllocationEngine(e, { ...semCompactar, almoco: false });
+      assert.deepEqual(voos(sem), [['Aluno 1000', '10:10', '12:10', 1], ['Aluno 1001', '12:40', '13:40', 2], ['Aluno 1002', '12:40', '13:40', 1]]);
+      for (const opcoes of [semCompactar, {}]) {
+        const r = runAllocationEngine(e, opcoes);
+        assert.equal(r.out.length, 3, JSON.stringify(voos(r)));
+        assert.deepEqual(r.out.filter(o => o.stuId !== 1001).map(o => [o.s, hm(o.a), o.insId]), [['Aluno 1000', '10:10', 1], ['Aluno 1002', '12:40', 2]]);
+        const doO2Agora = r.out.find(o => o.stuId === 1001);
+        if (esperado) assert.deepEqual([hm(doO2Agora.a), doO2Agora.insId], esperado);
+        else assert.notEqual(hm(doO2Agora.a), '12:40');
+        assert.deepEqual(doAlmoco(r), [], JSON.stringify(voos(r)));
+      }
+    }
   });
 
   // A busca põe um pedido de cada vez: o pedido de horário livre que veio antes leva o voo para as 11:30 (ainda sobra a hora),

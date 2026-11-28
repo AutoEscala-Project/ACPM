@@ -182,14 +182,14 @@ describe('Invariantes do motor de alocação', () => {
     assert.deepEqual(faltam, []);
   }));
 
-  // O “Priorizar com” é do operador e vem antes do almoço (revisão do #104): todo voo que o motor sem o almoço dá a um INVA
-  // do “Priorizar com” do aluno continua com um deles com o almoço (o almoço de outro INVA não empurra o voo para fora dele).
-  // Sem o pareamento no horário nos dois (ele só troca o INVA depois, sem mudar horário nem avião, e não lê o almoço)
-  it('o almoço não tira o “Priorizar com” de nenhum voo: o voo com o INVA dele sem o almoço continua com um deles', () => emTodos(({ estado }) => {
-    const semParear = { parearNoHorario: false };
-    const comPar = new Set(runAllocationEngine(estado, semParear).out.filter(o => o.insPar).map(o => o.fKey));
-    const perdem = runAllocationEngine(estado, { ...semParear, almoco: false }).out.filter(o => o.insPar && !comPar.has(o.fKey)).map(o => o.fKey);
-    assert.deepEqual(perdem, []);
+  // O almoço vem antes do “Priorizar com” (Pedro, 28/11): o voo só sai do INVA do “Priorizar com” que tinha sem o almoço
+  // quando o aviso dele diz que foi pelo almoço (o almoço do INVA do “Priorizar com”, ou outro motivo que o almoço causou
+  // ao empurrar outros voos, que a conferência abaixo cobre)
+  it('o voo que perde o “Priorizar com” por causa do almoço tem o aviso do “Priorizar com”', () => emTodos(({ estado, out, al }) => {
+    const sem = runAllocationEngine(estado, { almoco: false });
+    const perdem = sem.out.filter(o => o.insPar && !out.some(v => v.fKey === o.fKey && v.insPar)).map(o => o.fKey);
+    const avisados = new Set(al.filter(a => a.codigo === 'voa-com').map(a => a.fKey));
+    assert.deepEqual(perdem.filter(k => !avisados.has(k)), []);
   }));
 
   // Todo INVA que vem e tem um compromisso que toca 11:00–14:00 tem uma hora livre seguida nessa janela (sem compromisso:
@@ -209,46 +209,101 @@ describe('Invariantes do motor de alocação', () => {
     }
   }));
 
-  // O motor só desiste do almoço quando não acha como mantê-lo (o achado da revisão: a guarda tirava o almoço de um INVA sem
-  // precisar, e a busca de um pedido por vez perdia o de outro). Na configuração em que o motor terminou (a guarda, as horas
-  // reservadas e os pedidos antes na fila: montarComOAlmoco), para cada INVA com o aviso "Sem almoço" (sem a pausa que já é
-  // o almoço, e com uma hora da janela que nenhum voo fixo dele toca), nem devolver o almoço dele nem reservar a hora dele em
-  // cada hora que encosta num compromisso dele na janela, ou nas pontas (11:00 e 13:00), sem tocar um voo fixo dele, monta
-  // uma escala que escala todos os pedidos, deixa sem almoço só os de antes menos ele (ao menos) e mantém o “Priorizar com”
-  // de todos. Nos 100 primeiros seeds, sem o pareamento no horário (as horas lidas aqui, sem js/almoco.js)
-  it('quem ficou sem almoço não o teria de volta, nem com a hora reservada, sem tirar um voo ou um “Priorizar com”', async () => {
+  // O motor só desiste do almoço (e o “Priorizar com” só cede ao almoço) quando nenhuma arrumação que ele testa guarda os
+  // dois (Pedro, 28/11: "the engine should move another Mission before giving up an instructors lunch break"). Na
+  // configuração em que o motor terminou (montarComOAlmoco: a guarda, as horas reservadas, os pedidos antes na fila e as
+  // missões mudadas), cada mudança da busca, lida aqui sem js/almoco.js nem a busca do motor, é montada de novo:
+  // - para cada INVA com o aviso "Sem almoço" (sem a pausa que já é o almoço, e com uma hora da janela que nenhum voo fixo
+  //   dele toca), com o almoço dele: de volta; a hora dele reservada em cada hora que encosta num compromisso dele na janela, ou nas pontas (11:00 e 13:00), sem tocar um voo fixo dele; cada
+  //   voo dele na janela (sem pino, fora o Ground) em outro horário ou, sem o instrutor escolhido nem o “Priorizar com”, com
+  //   outro INVA; cada voo de outro INVA que poderia voar um desses (habilitado, fora do “Não escalar com”) no horário dele
+  //   em outro horário ou com outro INVA; cada voo do mesmo tipo de avião entre 11:00 e 14:00 (com a duração do voo dele
+  //   antes e depois) em outro horário ou em outro avião. Nenhuma escala tudo, deixa sem almoço só os de antes menos ele;
+  // - para cada voo que tinha o INVA do “Priorizar com” sem o almoço e ficou sem ele: o pedido antes na fila; o voo em
+  //   outro horário; a hora de cada INVA do “Priorizar com” dele reservada (como acima); cada voo desses INVAs na janela ou
+  //   no horário dele em outro horário ou com outro INVA. Nenhuma escala tudo, sem mais INVAs sem almoço, e dá o
+  //   “Priorizar com” a mais voos (todos os de antes também).
+  // Nos 60 primeiros seeds (300 dias)
+  it('nenhuma arrumação testada guarda o almoço de quem ficou sem ele, nem o “Priorizar com” que cedeu ao almoço', async () => {
     const { montarComOAlmoco, montarEscala, almocoDa } = await import('../../js/engine.js');
     const avisadosEm = r => new Set(r.al.filter(a => a.t === 'warn' && a.m.startsWith('Sem almoço: ')).map(a => a.insId));
-    // Sem o pareamento no horário (ele só troca o INVA no fim, e o motor guarda o “Priorizar com” de antes dele)
-    const semParear = { parearNoHorario: false };
+    const escaladosEm = r => new Set(r.out.filter(o => !o.trecho).map(o => o.fKey));
+    const comOParEm = r => new Set(r.out.filter(o => o.insPar).map(o => o.fKey));
+    const contido = (menor, maior) => [...menor].every(k => maior.has(k));
+    const toca = (o, de, ate) => o.a < ate && de < o.b;
     const falhas = [];
-    for (const { seed, estado } of execucoes.slice(0, 500)) {
-      const { resultado, almoco } = montarComOAlmoco(estado, semParear);
-      const avisados = avisadosEm(resultado);
-      if (!almoco || !avisados.size) continue;
-      const escalados = resultado.out.filter(o => !o.trecho).map(o => o.fKey);
-      const comOPar = resultado.out.filter(o => o.insPar).map(o => o.fKey);
+    let testadas = 0;
+    for (const { seed, estado } of execucoes.slice(0, 300)) {
+      const { resultado, almoco } = montarComOAlmoco(estado);
+      if (!almoco) continue;
+      const avisados = avisadosEm(resultado), escalados = escaladosEm(resultado), comOPar = comOParEm(resultado);
+      const linhas = resultado.out;
+      const ativo = o => (estado.fStatus || {})[o.fKey] !== 'Cancelado';
+      const movel = o => !o.trecho && !o.fixo && !o.isGround && ativo(o);
+      const naJanela = o => toca(o, 660, 840);
+      const porId = new Map(estado.ins.map(x => [x.id, x]));
+      const montar = (m, x) => {
+        testadas++;
+        const horas = new Map(almoco.horas);
+        if (m.hora) horas.set(m.hora.insId, { de: m.hora.de, ate: m.hora.de + 60 });
+        const guarda = new Set(almoco.guarda);
+        if (x !== undefined) guarda.add(x);
+        return montarEscala(estado, {}, almocoDa(guarda, horas, new Set([...almoco.antes, ...(m.antes || [])]), [...almoco.evitar, ...(m.evitar ? [m.evitar] : [])]));
+      };
+      // As horas da janela que encostam num compromisso do INVA, ou nas pontas, sem tocar um voo fixo dele
+      const horasDe = id => {
+        const meus = linhas.filter(o => o.insId === id && ativo(o)).map(o => ({ a: o.a, b: o.trecho === 'volta' ? Math.max(o.b, o.livreAs) : o.b, fixo: Boolean(o.fixo) }));
+        const presos = meus.filter(o => o.fixo);
+        return [...new Set([660, 780, ...meus.flatMap(o => [o.b, o.a - 60])])].filter(h => h >= 660 && h <= 780 && !presos.some(o => o.a < h + 60 && h < o.b)).sort((p, q) => p - q);
+      };
+      const podeVoar = (id, w) => {
+        const x = porId.get(id), { stu, d } = pedidoDe(estado, w);
+        return Boolean(x && x.on) && !(stu.bl || []).includes(id) && podeFazer(x, w.mis, w.eqType, { curso: stu.curso, exige: d.exige });
+      };
+      const moverInva = o => (o.insEscolhido || o.insPar ? [] : [{ evitar: [o.fKey, 'ins', o.insId] }]);
       for (const x of estado.ins.filter(i => avisados.has(i.id))) {
         const { pausas } = faixasEPausas(x);
         if (pausas.some(p => Math.min(p.ate, 840) - Math.max(p.de, 660) >= 60)) continue;
-        const meus = resultado.out.filter(o => o.insId === x.id && o.status !== 'Cancelado').map(o => ({ a: o.a, b: o.trecho === 'volta' ? Math.max(o.b, o.livreAs) : o.b, fixo: Boolean(o.fixo) }));
-        const presos = meus.filter(o => o.fixo);
-        const livres = [660, 780, ...meus.flatMap(o => [o.b, o.a - 60])].filter(h => h >= 660 && h <= 780 && !presos.some(o => o.a < h + 60 && h < o.b));
-        if (!livres.length) continue;
-        const mudancas = [...(almoco.guarda.has(x.id) ? [] : [null]), ...[...new Set(livres)].sort((p, q) => p - q)];
-        for (const h of mudancas) {
-          const horas = new Map(almoco.horas);
-          if (h !== null) horas.set(x.id, { de: h, ate: h + 60 });
-          const r = montarEscala(estado, semParear, almocoDa(new Set(almoco.guarda).add(x.id), horas, almoco.antes));
+        const horas = horasDe(x.id);
+        if (!horas.length) continue;
+        const meus = linhas.filter(o => o.insId === x.id && movel(o) && naJanela(o));
+        const mudancas = [
+          ...(almoco.guarda.has(x.id) ? [] : [{}]),
+          ...horas.map(de => ({ hora: { insId: x.id, de } })),
+          ...meus.flatMap(w => [{ evitar: [w.fKey, 'a', w.a] }, ...moverInva(w)]),
+          ...meus.flatMap(w => linhas.filter(o => o.insId !== x.id && movel(o) && toca(o, w.a, w.b) && podeVoar(o.insId, w)).flatMap(o => [{ evitar: [o.fKey, 'a', o.a] }, ...moverInva(o)])),
+          ...meus.flatMap(w => linhas.filter(o => o !== w && movel(o) && o.eqType === w.eqType && !toca(o, w.a, w.b) && toca(o, 660 - (w.b - w.a), 840 + (w.b - w.a))).flatMap(o => [{ evitar: [o.fKey, 'a', o.a] }, { evitar: [o.fKey, 'r', o.r] }]))
+        ];
+        for (const m of mudancas) {
+          const r = montar(m, x.id);
           const depois = avisadosEm(r);
-          const ficam = new Set(r.out.filter(o => !o.trecho).map(o => o.fKey)), comPar = new Set(r.out.filter(o => o.insPar).map(o => o.fKey));
-          if (depois.size < avisados.size && [...depois].every(id => avisados.has(id)) && escalados.every(k => ficam.has(k)) && comOPar.every(k => comPar.has(k))) {
-            falhas.push(`seed ${seed}: ${x.nm} ${h === null ? 'com o almoço de volta' : `com a hora das ${hm(h)}`}`);
+          if (depois.size < avisados.size && contido(depois, avisados) && contido(escalados, escaladosEm(r))) {
+            falhas.push(`seed ${seed}: ${x.nm} com ${JSON.stringify(m)}`);
+            break;
+          }
+        }
+      }
+      const sem = runAllocationEngine(estado, { almoco: false });
+      for (const p of linhas.filter(o => !o.trecho && !comOPar.has(o.fKey) && sem.out.some(v => v.fKey === o.fKey && v.insPar))) {
+        const { stu } = pedidoDe(estado, p);
+        const pares = (stu.voaCom || []).filter(id => porId.has(id) && porId.get(id).on);
+        const mudancas = [
+          { antes: [p.fKey] }, { evitar: [p.fKey, 'a', p.a] },
+          ...pares.filter(z => almoco.guarda.has(z)).flatMap(z => horasDe(z).map(de => ({ hora: { insId: z, de } }))),
+          ...pares.flatMap(z => linhas.filter(o => o !== p && o.insId === z && movel(o) && (naJanela(o) || toca(o, p.a, p.b))).flatMap(o => [{ evitar: [o.fKey, 'a', o.a] }, ...moverInva(o)]))
+        ];
+        for (const m of mudancas) {
+          const r = montar(m);
+          const par = comOParEm(r);
+          if (contido(escalados, escaladosEm(r)) && contido(avisadosEm(r), avisados) && contido(comOPar, par) && par.size > comOPar.size) {
+            falhas.push(`seed ${seed}: ${p.fKey} com o “Priorizar com” e ${JSON.stringify(m)}`);
+            break;
           }
         }
       }
     }
-    assert.deepEqual(falhas.slice(0, 5), [], `${falhas.length} INVA(s) sem almoço que o teriam`);
+    assert.ok(testadas > 0);
+    assert.deepEqual(falhas.slice(0, 5), [], `${falhas.length} arrumação(ões) que o motor não achou`);
   });
 
   it('equipamento compatível, disponível, PR-JPL somente para Parafuso e o voo IFR só no avião homologado IFR', () => emTodos(({ estado, out }) => {

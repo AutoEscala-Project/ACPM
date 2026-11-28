@@ -101,12 +101,14 @@ describe('Glossário', () => {
   });
 
   // O almoço (#104): o aviso "Sem almoço" da Escala tem a dica, e a pausa que é o almoço é a que cobre 1 h da janela (de
-  // qualquer tamanho: a de 10:30 a 12:30 também; a de 1 h das 10:30 às 11:30, só 30 min nela, não)
+  // qualquer tamanho: a de 10:30 a 12:30 também; a de 1 h das 10:30 às 11:30, só 30 min nela, não). O almoço vem antes do
+  // “Priorizar com”, e a escala muda outras missões antes de desistir dele (Pedro, 28/11)
   it('o almoço: a dica do aviso "Sem almoço" na Escala e a pausa que cobre 1 h entre 11:00 e 14:00', () => {
     const escala = readFileSync(new URL('js/views/escala.js', raiz), 'utf8');
     assert.match(escala, /data-dica="almoco"/);
     assert.match(GLOSSARIO.pausa.texto, /A que cobre 1 h entre 11:00 e 14:00 é o almoço dele\.$/);
-    assert.match(GLOSSARIO.almoco.texto, /Priorizar com/);
+    assert.match(GLOSSARIO.almoco.texto, /antes do Priorizar com/);
+    assert.match(GLOSSARIO.almoco.texto, /muda outras missões/);
   });
 
   it('o glossário das telas é o das funcionalidades ligadas no app', () => assert.deepEqual(GLOSSARIO, montarGlossario(ligada)));
