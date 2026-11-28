@@ -9,7 +9,7 @@ import {
   gavetaDasRestricoes, restricoesDoPedido, campoDasRestricoes, avisoDasRestricoes, confirmarRestricao, desistirDaRestricao, abrirRestricoes,
   restricoesPeloEditor, restricoesPeloTrilho, botaoDasRestricoesNoTrilho, fecharRestricoes
 } from './telas/restricoes.js';
-import { aluno, cenario, instrutor, apenas } from '../helpers/montar.js';
+import { aluno, cenario, instrutor, apenas, GROUND_C152 } from '../helpers/montar.js';
 
 // Um C152 só (PP-LJV) e os C172: o Aluno 1000 às 06:30 e o 1001 às 08:20 no C152; o 1003, do pedido da agenda às 06:30
 // (o minuto exato), fica fora: o C152 já está com o 1000
@@ -21,6 +21,11 @@ const dia = () => cenario({
 const diaGuardado = page => page.evaluate(d => localStorage.getItem(`acpm4_dia_${d}`), AMANHA);
 const pedidoGuardado = (page, id) => page.evaluate(([d, id]) => JSON.parse(localStorage.getItem(`acpm4_dia_${d}`)).pedidos[id], [AMANHA, id]);
 const linhaDe = (escala, nome) => escala.linhas.find(l => l.includes(`| ${nome} |`));
+// O elemento com o foco: o nome dele e, quando é o "Editar" ou a barra de um voo da Escala, a chave do voo
+const focado = page => page.evaluate(() => {
+  const a = document.activeElement;
+  return { tag: a.tagName, nome: a.getAttribute('aria-label') || a.textContent.trim(), voo: a.closest('#out') ? a.dataset.fkey || a.dataset.pop || null : null };
+});
 
 test.describe('A gaveta das restrições', () => {
   test('pelo item do trilho da missão que não entrou: o horário exato da agenda é mostrado, não editado; outro tipo encaixa o pedido', async ({ page }) => {
@@ -31,6 +36,9 @@ test.describe('A gaveta das restrições', () => {
     await expect(botaoDasRestricoesNoTrilho(page, 'Aluno 1003')).toHaveAttribute('aria-label', 'Restrições: Aluno 1003');
     const campos = await restricoesPeloTrilho(page, 'Aluno 1003', 1003);
     await expect(page.locator('#painel-restricoes-titulo')).toHaveText('Restrições Aluno 1003');
+    // O nome da gaveta e do título é o do pedido (a dica "?" fica fora do título)
+    await expect(gavetaDasRestricoes(page)).toHaveAccessibleName('Restrições Aluno 1003');
+    await expect(page.getByRole('heading', { name: 'Restrições Aluno 1003', exact: true })).toBeVisible();
     await expect(gavetaDasRestricoes(page)).toContainText('Fora da escala:');
     // O horário do pedido da agenda: o minuto, e onde ele muda; nenhuma preferência para escolher
     await expect(campos.locator('.restricao-horario')).toContainText('às 06:30');
@@ -47,7 +55,10 @@ test.describe('A gaveta das restrições', () => {
     expect(linhaDe(await lerEscala(page), 'Aluno 1003')).toContain('06:30–07:30');
     await expect(gavetaDasRestricoes(page)).toContainText('Na escala: 06:30–07:30');
     expect((await pedidoGuardado(page, 1003)).jan).toBe('h390');
-    await fecharRestricoes(page);
+    // O item do trilho (de onde ela abriu) saiu: o Esc leva o foco ao voo que entrou, não à página
+    await page.keyboard.press('Escape');
+    await expect(gavetaDasRestricoes(page)).toBeHidden();
+    expect((await focado(page)).voo).toBe('1003_0_1');
     await abrirHistorico(page);
     await expect(entradasDoHistorico(page, 'Pedido Aluno 1003: Voo Local · C172 · 1 h')).toHaveCount(1);
     expect(erros).toEqual([]);
@@ -178,6 +189,55 @@ test.describe('A gaveta das restrições', () => {
     await refazer(page);
     await expect.poll(async () => (await pedidoGuardado(page, 1001)).insId).toBe(1);
     await expect(campoDasRestricoes(page, 'insId')).toHaveClass(/\bescolhido\b/);
+  });
+
+  test('o Esc é desistir: a duração digitada e não gravada não grava, nem pergunta; o foco volta para de onde a gaveta abriu', async ({ page }) => {
+    await abrir(page, { estado: dia() });
+    await abrirEscala(page);
+    const guardado = await diaGuardado(page);
+    await editarPelaLista(page, '1001_0_1');
+    await restricoesPeloEditor(page, 1001);
+    await campoDasRestricoes(page, 'nb').fill('2.5');
+    await page.keyboard.press('Escape');
+    await expect(gavetaDasRestricoes(page)).toBeHidden();
+    await expect(perguntaDoRefazer(page)).toBeHidden();
+    await expect(botaoEditar(page, '1001_0_1')).toBeFocused();
+    expect(await diaGuardado(page)).toBe(guardado);
+    // Pela Demanda (que grava sem perguntar), o mesmo: nada gravado, o foco no "Restrições" da linha
+    await irPara(page, 'dem');
+    await abrirRestricoes(page, 1000);
+    await campoDasRestricoes(page, 'nb').fill('2.5');
+    await page.keyboard.press('Escape');
+    await expect(gavetaDasRestricoes(page)).toBeHidden();
+    await expect(page.locator('#dem tr[data-k="d"][data-id="1000"] [data-act="restricoes"]')).toBeFocused();
+    expect((await pedidoGuardado(page, 1000)).nb).toBe(1);
+  });
+
+  test('a turma de Ground: a gaveta abre no primeiro controle (não numa dica) e o foco volta para o "Editar" do mesmo aluno', async ({ page }) => {
+    await abrir(page, { estado: cenario({ ins: [instrutor(1, 9), instrutor(2, 9)], stu: [aluno(1000, GROUND_C152), aluno(1001, GROUND_C152)] }) });
+    await abrirEscala(page);
+    const editar1001 = page.getByRole('button', { name: 'Editar a turma de Ground C152 (Aluno 1001)', exact: true });
+    await editar1001.click();
+    await expect(editorDoVoo(page)).toBeVisible();
+    await restricoesPeloEditor(page, 1001);
+    await expect(campoDasRestricoes(page, 'insId')).toBeFocused();
+    await campoDasRestricoes(page, 'insId').selectOption('1');
+    await refazer(page);
+    await expect.poll(async () => (await pedidoGuardado(page, 1001)).insId).toBe(1);
+    await page.keyboard.press('Escape');
+    await expect(gavetaDasRestricoes(page)).toBeHidden();
+    await expect(editar1001).toBeFocused();
+  });
+
+  test('os "Restrições" abrem uma gaveta, não um menu: sem aria-haspopup', async ({ page }) => {
+    await abrir(page, { estado: dia() });
+    await abrirEscala(page);
+    await expect(botaoDasRestricoesNoTrilho(page, 'Aluno 1003')).not.toHaveAttribute('aria-haspopup');
+    await editarPelaLista(page, '1001_0_1');
+    await expect(page.locator('#dlg-voo [data-act="restricoes"]')).not.toHaveAttribute('aria-haspopup');
+    await page.keyboard.press('Escape');
+    await irPara(page, 'dem');
+    await expect(page.locator('#dem [data-act="restricoes"]').first()).not.toHaveAttribute('aria-haspopup');
   });
 
   test('o Gestor lê as restrições como texto, pelo editor do voo', async ({ page }) => {
