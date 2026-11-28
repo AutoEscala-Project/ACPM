@@ -8,7 +8,7 @@ import {
   alternarDisponivel, caixaDisponivel, fecharHorarios, abrirRecursos, abrirRecurso, abrirCategoria, abrirHangar, linhaDoRecurso,
   linhasDosRecursos, gruposDosRecursos, cabecalhoDaCategoria, buscaDosRecursos, contagemDosRecursos, detalheDoRecurso, campoDoRecurso,
   horasDoRecurso, marcarAtributo, retirarRecurso, ordemNoHangar, horariosDaCategoria, confirmar, nenhumNaLista, larguraDaPagina, alvosPequenos,
-  semNome, paineisQueRolamParaOLado, diaSeguinte
+  semNome, paineisQueRolamParaOLado, diaSeguinte, medirVazioDoDetalhe
 } from './fixtures.js';
 import { aluno, apenas, cenario, instrutor } from '../helpers/montar.js';
 
@@ -31,8 +31,12 @@ test.describe('Recursos: a lista por categoria', () => {
     expect(await page.locator('#rec > li').evaluateAll(lis => lis.slice(-2).map(li => li.dataset.chave))).toEqual(['g:ground', 'i:SALA-GROUND']);
     await expect(caixaDisponivel(page, 'SALA-GROUND')).toBeChecked();
     await expect(linhaDoRecurso(page, 'SALA-GROUND').locator('.lista-chave')).toHaveCount(0);
-    // Nada escolhido: o detalhe diz o que fazer
-    await expect(page.locator('#det-rec')).toContainText('Escolha um recurso ou uma categoria na lista.');
+    // Nada escolhido: o detalhe diz o que fazer, no meio do painel, com o avião e o caminho do recurso novo
+    const vazio = await medirVazioDoDetalhe(page, 'rec');
+    expect([vazio.icone, vazio.texto, vazio.dica]).toEqual(['#i-aviao', 'Escolha um recurso ou uma categoria na lista.', 'ou use + Novo recurso']);
+    expect(vazio.tamanho).toBeGreaterThanOrEqual(18);
+    expect(vazio.foraDoMeio.x).toBeLessThanOrEqual(3);
+    expect(vazio.foraDoMeio.y).toBeLessThanOrEqual(3);
     await expect(page.locator('#inst .cd')).toHaveCount(0);
     await expect(page.locator('#inst')).toContainText('Nenhum instrutor cadastrado');
     await irPara(page, 'alu');
@@ -424,6 +428,8 @@ test.describe('Recursos: acrescentar, retirar e o "Ativo"', () => {
     await page.locator('#role-sel').selectOption('gestor');
     await abrirRecursos(page);
     await expect(page.locator('#btn-novo-recurso')).toBeHidden();
+    // Nada escolhido: o texto, sem o caminho do recurso novo
+    expect((await medirVazioDoDetalhe(page, 'rec')).dica).toBe(null);
     await expect(linhaDoRecurso(page, 'PT-KIW').locator('.lista-chave')).toBeHidden();
     await expect(linhaDoRecurso(page, 'PT-KIW').locator('.lista-rapida')).toBeHidden();
     await abrirRecurso(page, 'PT-KIW');

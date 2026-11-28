@@ -70,7 +70,7 @@ const NOVAS = {
   // regra "algum dos marcados"; um só nas duas telas) e os dados pessoais na seção do aluno, com Salvar e Desfazer; o
   // cadastro relido depois de um conflito. A: as seções do detalhe (Nesta data, Curso e missões), o nome completo (também
   // na busca), a secretaria que consulta e "Apagar os dados pessoais"
-  alunos: ['Não escalar com', 'A lista dos alunos fica à esquerda e o aluno escolhido à direita', '#/alu/1000', '‹ Alunos',
+  alunos: ['Não escalar com', 'A lista dos alunos fica à esquerda e o aluno escolhido à direita', 'ou use + Novo aluno', '#/alu/1000', '‹ Alunos',
     'gravado ao sair dele', 'Ctrl+, e Ctrl+.', 'Filtro dos cursos', 'aparecem os alunos de algum dos marcados', 'Curso: PP ou PC',
     'aparecem os pedidos dos alunos de algum dos cursos marcados', 'O filtro dos cursos é um só nas duas telas',
     'um cartão por pessoa', 'e Desfazer volta ao que está gravado', 'Outra pessoa alterou o cadastro enquanto você editava',
