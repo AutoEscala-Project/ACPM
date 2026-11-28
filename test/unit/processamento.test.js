@@ -957,21 +957,63 @@ describe('A lista de espera: o lugar do pedido cancelado', () => {
     assert.deepEqual([resumoC.sairam, resumoC.ficam], [[], [{ aluno: 'Aluno 1001', porque: 'cancelado-na-escala' }, { aluno: 'Aluno 1002', porque: 'em-voo-ou-pousou' }]]);
   });
 
-  // A revisão do E (N14 na escala não aprovada): o pedido de antes na fila que vai para o lugar livre (o 3, às 06:30 pela
-  // 2ª preferência, U1, ou pelo horário flexível, vai para a 1ª, as 08:20 do 2) não é o 1º da lista de espera (o 4
-  // continua esperando: a regra é a ordem do motor, a pergunta fica para o Pedro), e o Histórico e o resumo dizem quem
-  // entrou e de onde veio, em vez de ninguém
-  for (const [caso, mudar] of [['dois horários exatos (U1)', x => Object.assign(x, { jan: 'h500|h390', p2: 390 })], ['horário flexível', x => { delete x.jan; }]]) {
-    it(`na escala não aprovada, o pedido que muda de horário para o lugar livre é quem entrou (${caso}), e o Histórico diz de onde ele veio`, () => {
-      const a = montar();
-      mudar(a.e.stu[2]);
-      const antes = motor(a.e);
-      assert.deepEqual(linhasDe(antes.resultado).map(l => [l[0], l[1], l[2]]), [['1003_0_1', 390, 'PR-BTB'], ['1001_0_1', 500, 'PP-LJV'], ['1002_0_1', 500, 'PR-BTB']]);
-      const plano = conciliarPedidos(a.e, cancelar(a.linhas, 2), amb);
-      const feito = aplicarConciliacao(a.e, plano, { antes, escalar: motor });
-      assert.deepEqual(linhasDe(runAllocationEngine(a.e)).map(l => [l[0], l[1], l[2]]), [['1001_0_1', 500, 'PP-LJV'], ['1003_0_1', 500, 'PR-BTB']]);
-      assert.equal(feito.historico[0][1], 'Pedidos: Aluno 1002 saiu da escala, pedido cancelado (Voo Local · estava às 08:20–09:20 no PR-BTB com Instrutor 02); no lugar entrou Aluno 1003 (estava às 06:30 no PR-BTB)');
-      assert.deepEqual(resumoDaConciliacao(plano, feito).sairam, [{ aluno: 'Aluno 1002', entrou: 'Aluno 1003', de: 'escala' }]);
+  // Decisão do Pedro (2026-11-28), a pergunta da revisão do E (N14): a lista de espera vem antes. O pedido de antes na fila
+  // que o motor poria no lugar livre vindo de outro horário (o 3, às 06:30 pela 2ª preferência, U1, ou pelo horário
+  // flexível, iria para as 08:20 do 2) fica onde estava, e o lugar vai ao 1º da lista de espera das 08:20 que cabe nele
+  // (o 4), depois ao seguinte; na escala aprovada e na não aprovada (lá, o 3 entrou depois da aprovação, sem pino). Quem
+  // entra fica fixo no lugar (o pino guardado: a rodada seguinte do motor, que refaz a escala a cada gravação, lhe daria a
+  // vaga de volta ao 3); nenhum outro voo fixo muda. Sem ninguém da lista que caiba, o motor decide, como antes, e o
+  // Histórico diz quem entrou e de onde veio
+  const comQuemMuda = ({ aprovada, mudar, bl4 = [], com5 = false }) => {
+    const a = montar({ aprovada });
+    mudar(a.e.stu[2]);
+    a.e.stu[3].bl = bl4;
+    if (com5) {
+      a.e.stu.push(aluno(1005, { p1: 500, p2: -1, jan: 'h500', solicitacao: 5, pr: 3 }));
+      a.e.importadas.push(5);
+      a.linhas.push(linha(5, 1005));
+    }
+    // Na aprovada, a escala foi aprovada com o 3 esperando: ele mudou de horário depois, e voa sem pino
+    a.antes = motor(a.e);
+    return a;
+  };
+  const MUDAM = [['dois horários exatos (U1)', x => Object.assign(x, { jan: 'h500|h390', p2: 390 })], ['horário flexível', x => { delete x.jan; }]];
+  for (const aprovada of [false, true]) {
+    for (const [caso, mudar] of MUDAM) {
+      const nome = aprovada ? 'na escala aprovada' : 'na escala não aprovada';
+      it(`${nome}: a lista de espera vem antes do pedido que mudaria de horário para o lugar livre (${caso}); quem entra fica fixo e a rodada seguinte o mantém`, () => {
+        const a = comQuemMuda({ aprovada, mudar });
+        assert.deepEqual(linhasDe(a.antes.resultado).map(l => [l[0], l[1], l[2]]).sort(), [['1001_0_1', 500, 'PP-LJV'], ['1002_0_1', 500, 'PR-BTB'], ['1003_0_1', 390, 'PR-BTB']]);
+        const fixosAntes = structuredClone(a.e.fixos);
+        const plano = conciliarPedidos(a.e, cancelar(a.linhas, 2), amb);
+        const feito = aplicarConciliacao(a.e, plano, { antes: a.antes, escalar: motor });
+        // A rodada seguinte, do zero, com o que ficou guardado (a de cada gravação): o 4 às 08:20, o 3 às 06:30
+        const depois = runAllocationEngine(a.e);
+        assert.deepEqual(linhasDe(depois).map(l => [l[0], l[1], l[2], l[3]]).sort(), [['1001_0_1', 500, 'PP-LJV', 1], ['1003_0_1', 390, 'PR-BTB', 2], ['1004_0_1', 500, 'PR-BTB', 2]]);
+        assert.equal(feito.historico[0][1], 'Pedidos: Aluno 1002 saiu da escala, pedido cancelado (Voo Local · estava às 08:20–09:20 no PR-BTB com Instrutor 02' +
+          `${aprovada ? ' · deixa de ser fixo' : ''}); no lugar entrou Aluno 1004 (1º da lista de espera das 08:20 · fica fixo às 08:20 no PR-BTB com Instrutor 02)`);
+        assert.deepEqual(resumoDaConciliacao(plano, feito).sairam, [{ aluno: 'Aluno 1002', entrou: 'Aluno 1004', de: 'escala' }]);
+        // Nenhum voo fixo muda: os de antes ficam (menos o do cancelado), e o 4 ganha o dele, sem marca
+        const { '1002_0_1': _, ...ficam } = fixosAntes;
+        assert.deepEqual(a.e.fixos, { ...ficam, '1004_0_1': { a: 500, b: 560, r: 'PR-BTB', insId: 2 } });
+        assert.equal(depois.al.some(x => x.t === 'err' && /1004/.test(x.s)), false);
+      });
+    }
+    it(`${aprovada ? 'na escala aprovada' : 'na escala não aprovada'}: o 1º da lista que não cabe dá a vez ao 2º, antes do pedido que mudaria de horário; sem nenhum que caiba, o motor decide`, () => {
+      // O 4 não voa com o Instrutor 02, o do lugar livre: o 5, o 2º da lista, entra
+      const a = comQuemMuda({ aprovada, mudar: MUDAM[0][1], bl4: [2], com5: true });
+      const feito = aplicarConciliacao(a.e, conciliarPedidos(a.e, cancelar(a.linhas, 2), amb), { antes: a.antes, escalar: motor });
+      assert.deepEqual(linhasDe(runAllocationEngine(a.e)).map(l => [l[0], l[1]]).sort(), [['1001_0_1', 500], ['1003_0_1', 390], ['1005_0_1', 500]]);
+      assert.match(feito.historico[0][1], /; no lugar entrou Aluno 1005 \(2º da lista de espera das 08:20 · fica fixo às 08:20 no PR-BTB com Instrutor 02\)$/);
+      // Só o 4, que não cabe: o lugar vai ao 3, como o motor o dá, sem fixar ninguém, e o Histórico diz de onde ele veio
+      const b = comQuemMuda({ aprovada, mudar: MUDAM[0][1], bl4: [2] });
+      const fixosAntes = structuredClone(b.e.fixos);
+      const feitoB = aplicarConciliacao(b.e, conciliarPedidos(b.e, cancelar(b.linhas, 2), amb), { antes: b.antes, escalar: motor });
+      assert.deepEqual(linhasDe(runAllocationEngine(b.e)).map(l => [l[0], l[1], l[2]]).sort(), [['1001_0_1', 500, 'PP-LJV'], ['1003_0_1', 500, 'PR-BTB']]);
+      assert.equal(feitoB.historico[0][1], 'Pedidos: Aluno 1002 saiu da escala, pedido cancelado (Voo Local · estava às 08:20–09:20 no PR-BTB com Instrutor 02' +
+        `${aprovada ? ' · deixa de ser fixo' : ''}); no lugar entrou Aluno 1003 (estava às 06:30 no PR-BTB)`);
+      const { '1002_0_1': _, ...ficam } = fixosAntes;
+      assert.deepEqual(b.e.fixos, ficam);
     });
   }
 
