@@ -44,7 +44,7 @@ const TERMOS = {
     aba: 'Escala', termo: 'Reduzir combustível',
     texto: `Aluno e instrutor passam do limite de peso do avião com o tanque cheio: o avião sai com menos combustível, o bastante para o voo, o táxi e a reserva (${reservaDaMissao('Voo Local')} min; ${reservaDaMissao('Noturno')} à noite e em IFR).`
   },
-  almoco: { aba: 'Escala', termo: 'Sem almoço', texto: 'A escala tenta deixar a cada INVA uma hora livre seguida entre 11:00 e 14:00; desiste dela quando não acha como sem tirar um voo, ou quando o operador pôs o voo ali (fixo, escolhido, Priorizar com).' },
+  almoco: { aba: 'Escala', termo: 'Sem almoço', texto: 'A escala tenta deixar a cada INVA uma hora livre seguida entre 11:00 e 14:00, antes do Priorizar com, e muda outras missões para isso; desiste dela quando não acha como sem tirar um voo, ou quando o voo é fixo ou do escolhido.' },
   'sem-peso': { aba: 'Escala', termo: 'Sem peso', texto: 'Falta o peso do aluno ou do instrutor: a escala não conferiu o limite de peso do avião. Informe o peso em Alunos ou INVAs.' },
   turma: { aba: 'Escala', termo: 'Turma', texto: `Alunos do mesmo Ground, no mesmo horário e com o mesmo instrutor: uma aula só, de ${duracao(GROUND_DURATION_MIN)}, na sala de Ground.` },
   'missao-do-curso': {

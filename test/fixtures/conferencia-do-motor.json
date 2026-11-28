@@ -1,10 +1,10 @@
 {
  "contagem": {
-  "voos": 31285,
-  "fixos": 15945,
-  "conflitos": 4334,
-  "avisos": 4832,
-  "recusas": 7558
+  "voos": 31303,
+  "fixos": 15949,
+  "conflitos": 4341,
+  "avisos": 4777,
+  "recusas": 7541
  },
  "dias": {
   "1": {
@@ -120,11 +120,11 @@
    "misto": "c437fa6026c7943ba83eb79e"
   },
   "17": {
-   "aprovada": "ec09a0935d57c0041b7939bf",
-   "status": "4976cfb041e3d30d0cca1e52",
-   "escolhido": "fb006ccdfc79ce4b75bc7e6b",
+   "aprovada": "a375ee491de729d88b4f4248",
+   "status": "b523df985177b9f996945564",
+   "escolhido": "4d391beedd44e3ae1efe04ea",
    "agendado": "cc078ffeaff9f05696947e50",
-   "misto": "275b2d618bef2ba8af3ef1fb"
+   "misto": "2578c7a06fe516bcbf7beecd"
   },
   "18": {
    "aprovada": "a097d7732482881ca6c95c6c",
@@ -218,11 +218,11 @@
    "misto": "a14979a82371a47ebe8164d4"
   },
   "31": {
-   "aprovada": "98b5e5018fbdd4d8499ba34f",
-   "status": "c9ecbc2fd40f4cb4dfa6465a",
+   "aprovada": "bda4bb1bd5023b9cf5bae522",
+   "status": "c9f5933b332e2731fb2b0384",
    "escolhido": "8b12bf7bc06d22981c3cdd24",
    "agendado": "d853d69b32d85907c721a94f",
-   "misto": "e1da842bf7c341f220b4c9be"
+   "misto": "06e5f514048d38fd817f9bc0"
   },
   "32": {
    "aprovada": "df378f1c5f0fe4bd8e85162b",
@@ -262,7 +262,7 @@
   "37": {
    "aprovada": "30839d3ea9355ce984b39b54",
    "status": "38e3644f43a5ee351e540488",
-   "escolhido": "c177e8bbed148097026272ca",
+   "escolhido": "2d0e072676b8df386db9130d",
    "agendado": "6f8d745fdf26c77d760adf26",
    "misto": "f035558cb53d2c77f29d3ad6"
   },
@@ -422,7 +422,7 @@
   },
   "60": {
    "aprovada": "1331d7b9f0fe943ff60f5354",
-   "status": "762b9ec7fa18914fe0af2ff8",
+   "status": "96d2e2c12e462d5a476ef24d",
    "escolhido": "a0e9fb182dc2d01be9df88c0",
    "agendado": "57e7399161003f035951b492",
    "misto": "44e838cd7d851a64b7b5d3ce"
@@ -547,11 +547,11 @@
    "misto": "a1e52d239b992f26822c4f70"
   },
   "78": {
-   "aprovada": "c5f4b85b1d3efccde7b5f50d",
-   "status": "666332e55fc473908a1ba78a",
-   "escolhido": "90facece023d946245a66333",
-   "agendado": "613ed6354add138f8d70e2e0",
-   "misto": "2e5c4a521085bc6bc5a2a7ba"
+   "aprovada": "7fd471bd81a06beb10cfaf43",
+   "status": "c4eaa8a608c62bce30908705",
+   "escolhido": "7c7195aadb7d931c12fc0877",
+   "agendado": "961fa33f69831c36b688f4c0",
+   "misto": "68a7dbfafe765c15dd379058"
   },
   "79": {
    "aprovada": "7e816ff801ba4b732075730d",
@@ -606,7 +606,7 @@
    "aprovada": "5280a8a388ee09fc0b2fada9",
    "status": "3cfd9f4579d8d016e5210c62",
    "escolhido": "68032bbffb4f46238df75bfa",
-   "agendado": "fea26b576a14a2891637c0ef",
+   "agendado": "30b0d3674aca947330eb26fc",
    "misto": "df78bc08284b045d42678f2b"
   },
   "87": {
@@ -752,7 +752,7 @@
   "107": {
    "aprovada": "7ce5b6db7480525000948625",
    "status": "4e14681ffbf44b64af4c9556",
-   "escolhido": "5210c65f7c9f27f4a3bc4bfe",
+   "escolhido": "91b270a972276ee5de9636b8",
    "agendado": "a8ac1981edba105bbfbca95c",
    "misto": "d59c0050b4c4d2b722608b9d"
   },
@@ -771,11 +771,11 @@
    "misto": "ee8b810e8fbf601fb746e637"
   },
   "110": {
-   "aprovada": "2e9daf003755391d7ec78b2c",
-   "status": "6f16f81e1fdb4a2b8e8d80a9",
-   "escolhido": "bcf6f6bc1962a7698e5bc7c5",
+   "aprovada": "50210a8b920700710c6ba658",
+   "status": "29a9878a2c91eb9e102b54d9",
+   "escolhido": "c06ef63fcb421b2b6eac10a9",
    "agendado": "33c6bf737c4bc86e8c2dee0a",
-   "misto": "65d640674ee680e165b3fce8"
+   "misto": "d2b821a8b7a58377cb6fbac9"
   },
   "111": {
    "aprovada": "fea7e5b60f38a469ecb7c0cd",
@@ -890,11 +890,11 @@
    "misto": "85dffa6a445674919f066b51"
   },
   "127": {
-   "aprovada": "9915b3e5e266aec92d159e7c",
-   "status": "4f29e09a4b285d3710fdb3e8",
-   "escolhido": "19dd0f6b768f13f255181253",
+   "aprovada": "1da0874e4f1033520fe13430",
+   "status": "143b4f1812e9117048ab4078",
+   "escolhido": "91d8b1829d916690f10e9f6e",
    "agendado": "c19271383c8026855f393e4b",
-   "misto": "6c9036f79a7771544e8b652d"
+   "misto": "29ed4ea3a3cf6016e52c9417"
   },
   "128": {
    "aprovada": "cd79b97b29c54a4d48a6dbf6",
@@ -946,11 +946,11 @@
    "misto": "5d0d34b08bc4542b7c0c34b2"
   },
   "135": {
-   "aprovada": "6678ad7db8cc93c2bf54bde9",
-   "status": "2ca91ff222df869e9e04f82b",
-   "escolhido": "d7d219852d3b6efe1b344b4c",
+   "aprovada": "848c0bcc0d81e7e42028b6f7",
+   "status": "01e00838cb598d7de59a6f23",
+   "escolhido": "0ce4e76ebf43fe4e3c827f10",
    "agendado": "0494b9babb8142228365daf4",
-   "misto": "26eb108414c78bc8a29003a5"
+   "misto": "df48b8b1911c0e8141473a60"
   },
   "136": {
    "aprovada": "7d65ca3e4878d07669f29457",
@@ -1051,11 +1051,11 @@
    "misto": "b02a9dd985a135d0eb5eea51"
   },
   "150": {
-   "aprovada": "71f050150cfdb93b7dd2d5c8",
-   "status": "d4dc99e7db8fd4d4c9b99328",
-   "escolhido": "415d9bec8449c512b2facd52",
+   "aprovada": "f1ddf6838b10dd5210579987",
+   "status": "be53d3275ce392678c6aeb90",
+   "escolhido": "d72b1f7faf321fe5b3827bed",
    "agendado": "a257adc43b82eebedd74a140",
-   "misto": "3125e927c172553813e1497a"
+   "misto": "c16212c6da97b51007cf8c29"
   },
   "151": {
    "aprovada": "09c9e6dbad79abe08ecff4e7",
@@ -1079,11 +1079,11 @@
    "misto": "b17aab33ee7206d24b0dda43"
   },
   "154": {
-   "aprovada": "4bc1cc4c4b7a3893d5840e13",
-   "status": "f4177e7bd0c4746a18d5b63d",
-   "escolhido": "ef0139b555a911ef399a010a",
-   "agendado": "7302c596f62945cf0009e911",
-   "misto": "0d2bfa1d0546659ed8a07d75"
+   "aprovada": "9b9101af46a1947ee5482e7d",
+   "status": "62fc5e08e6cdb9fb3cdde3b3",
+   "escolhido": "ba08bd454c3e5d74d278d800",
+   "agendado": "9942c3374a2d46d4ea13582e",
+   "misto": "5d9be21dd39264750d8fd630"
   },
   "155": {
    "aprovada": "57960812b0a74a6198aed74c",
@@ -1130,7 +1130,7 @@
   "161": {
    "aprovada": "f77743a9067100646ae8fc5b",
    "status": "3ba0c0e1eb9ac831f402d45e",
-   "escolhido": "c38fc6bc092167816a9f636d",
+   "escolhido": "f05c430c751c2072b94cc4aa",
    "agendado": "8c88b0c01c07b863d4a9a5b3",
    "misto": "8f0102632a9b086d8abe26f7"
   },
@@ -1138,7 +1138,7 @@
    "aprovada": "1301344079a34a97f45f2d3e",
    "status": "4fcb26c39b783e32f408248f",
    "escolhido": "ad09d5e3c6f103b4b334c58c",
-   "agendado": "1b56f875ea25ee39b8086273",
+   "agendado": "116032a582897d0406b9d551",
    "misto": "406750bc1f6e8dc31df10058"
   },
   "163": {
@@ -1214,8 +1214,8 @@
   "173": {
    "aprovada": "c549fc6f55f9188c83c10589",
    "status": "fe3ad77f4c176f1f31b87d85",
-   "escolhido": "e0c52c5fb1ac29e716aab35b",
-   "agendado": "2c8164c65b49a4502ca7fef8",
+   "escolhido": "3cc7e9ce0a1b0534ff109c34",
+   "agendado": "9bb66a085af1b3fbafb2bfd8",
    "misto": "23785b6222b5159dc2331cc5"
   },
   "174": {
@@ -1256,7 +1256,7 @@
   "179": {
    "aprovada": "50850e0e785e361372654294",
    "status": "3445eb11e09b0bd4d4d7b927",
-   "escolhido": "82aad9ff3ef8f89a6d5b3ccd",
+   "escolhido": "cae2c7b19be271fb5dfc0e21",
    "agendado": "6ce9e5a4f27340f4d7e19e19",
    "misto": "cc170a8cf28f32e6d95fe2a4"
   },
@@ -1290,7 +1290,7 @@
   },
   "184": {
    "aprovada": "f7c1ced67ddae5f0192bf747",
-   "status": "d57c374a49bbdf81daa55397",
+   "status": "71237c735ceacf62519bfe73",
    "escolhido": "a1b97f42481877a028a3a88d",
    "agendado": "e21051a01d0b009bacf6f1f9",
    "misto": "b0d883042c3cd40cbf6a0cc3"
@@ -1352,11 +1352,11 @@
    "misto": "c7faed0ba1a0d2e5a06e5c56"
   },
   "193": {
-   "aprovada": "f72f623a832bbb56e874dcad",
-   "status": "0d44d1717bddb45d1d418d93",
-   "escolhido": "7ae2e941aa5fab31c1f92b1c",
-   "agendado": "72796c1414b0d7e26f0c5b16",
-   "misto": "3f555e9a2fc92fc6d702c3ee"
+   "aprovada": "78700e821dff4531ab55485a",
+   "status": "72ed5ccb0cfd23bda59d594c",
+   "escolhido": "d03412e8f228b5e3c7c3b414",
+   "agendado": "42955efff62b30ac3be77ecf",
+   "misto": "972dda1630991939e9ee5109"
   },
   "194": {
    "aprovada": "255ba343ab931f122aae7d7b",
@@ -1375,7 +1375,7 @@
   "196": {
    "aprovada": "b5c416b1dac372983d7e3be2",
    "status": "0b182a573ce5a27459b7e150",
-   "escolhido": "5b41f3a196dcd0bdda54a842",
+   "escolhido": "05edf0b3ce868f30496af7d6",
    "agendado": "95f56a028e50be4254acaa0f",
    "misto": "492b4b8e300aaa7f1b9037eb"
   },
@@ -1415,11 +1415,11 @@
    "misto": "a8c6aa90b4775e746cae020f"
   },
   "202": {
-   "aprovada": "cd9f8feedcfe7f5478974a1f",
-   "status": "94e8a7ed6d34c904821683f9",
-   "escolhido": "8e52caa24bad70a6f1f5c014",
-   "agendado": "f43bd939a0482ca458a8c4b8",
-   "misto": "646324d41b44d0f85489136b"
+   "aprovada": "e602daca03bb74282ee61508",
+   "status": "94fdd91e2cdb074827389329",
+   "escolhido": "61a81709d0138a901d0bb900",
+   "agendado": "a2c9229c5278e6b4a5a33f17",
+   "misto": "a44b7152cf9d317180b5632b"
   },
   "203": {
    "aprovada": "f9f5b6005cc75d6f7b7eb5d3",
@@ -1444,9 +1444,9 @@
   },
   "206": {
    "aprovada": "dd27ed5f2348d3e9314d7b15",
-   "status": "12ada0390121a3e8d72650b3",
-   "escolhido": "3b81f543436dbe8a2bc2f677",
-   "agendado": "d1acf63faafb3876d3ea66e7",
+   "status": "f0877c51e599eb4d8fdd5112",
+   "escolhido": "8b4b97c7c455a14bb04cd224",
+   "agendado": "53e7819c6352c18ddcfe2dad",
    "misto": "1d9d5c821a3c63e44a3a947a"
   },
   "207": {
@@ -1481,7 +1481,7 @@
    "aprovada": "4dde18185fedd7046d3136ef",
    "status": "d089e8a91fdd1e9ca57538e2",
    "escolhido": "74a49273c8f892dbf9f69747",
-   "agendado": "94d6d59a8e5065eb042a2bb0",
+   "agendado": "d9b7563ef5a2451b48cfabd7",
    "misto": "2b8eb144e7f0f4f2cd6ae2e1"
   },
   "212": {
@@ -1611,11 +1611,11 @@
    "misto": "a7bd328beefcb2906eb5c258"
   },
   "230": {
-   "aprovada": "5538e28a7943d5a2e729ccdc",
-   "status": "61bdc5b794250a57e00f7e2c",
-   "escolhido": "f627fd0f4a41993d202ac9a6",
+   "aprovada": "144012f2728cc0c4e955c711",
+   "status": "61b78d96e91160237c37a699",
+   "escolhido": "8b69fd109afde5c2e6991080",
    "agendado": "48495b763908618cb2a4df72",
-   "misto": "c1ef106aba61fc0c073feefc"
+   "misto": "5036182cc56390647d83de6c"
   },
   "231": {
    "aprovada": "029d777db9524aeb50fc9c3d",
@@ -1627,7 +1627,7 @@
   "232": {
    "aprovada": "1033fa94e43c48c15de55a70",
    "status": "7d8c800fde3d830f118fc337",
-   "escolhido": "82bbbb4afd48057c57bd10bf",
+   "escolhido": "0fa30cb99581a8cf14aaaa97",
    "agendado": "ee502391e1bcc736d645ab95",
    "misto": "8e68d6cb08deb4e72c9e8931"
   },
@@ -1642,7 +1642,7 @@
    "aprovada": "5db4c11fbd833c0b09d6c114",
    "status": "7984ee8b7c54db4ab6ba7d55",
    "escolhido": "c563e071e882dd8f36b5f70e",
-   "agendado": "3257f9b8f2de6948e6b4991d",
+   "agendado": "2dbe3fccd799ace787bad361",
    "misto": "2d52a91bd576ba98a00b01cd"
   },
   "235": {
@@ -1732,7 +1732,7 @@
   "247": {
    "aprovada": "d348dfb971086f70a3fbc180",
    "status": "4c1ef7ef9add2118df02c73c",
-   "escolhido": "d45e337ea74fae6ba888ebe9",
+   "escolhido": "db7af5ed23e4ed99440d7581",
    "agendado": "3c1e878b4c3f6b7ad2830057",
    "misto": "540dcf58c41cd4785dc6461d"
   },
@@ -1786,11 +1786,11 @@
    "misto": "17a5900f0170a2b3a482e9c1"
   },
   "255": {
-   "aprovada": "ef0229a40f1c1232c7a282d4",
-   "status": "7d54d3946dd68fc52c68f31b",
-   "escolhido": "e8c035e1b6cc9447b90f8d4e",
+   "aprovada": "c00f7a776bf946b3cfe8c484",
+   "status": "4c8a41120922944565a7b026",
+   "escolhido": "1ba2ab9b32f2f2e94d186e06",
    "agendado": "ca9958886c91db1d25606591",
-   "misto": "523dbcfbfc3f7c4aaf460a82"
+   "misto": "f24f9168baee57c11e07904a"
   },
   "256": {
    "aprovada": "48a32cef98c120007e04a32f",
@@ -1891,11 +1891,11 @@
    "misto": "2eff23e9f1444cb9d642221e"
   },
   "270": {
-   "aprovada": "87138d5c465c4f0e7c596fd8",
-   "status": "4c4c54c301599b766c8df9a4",
-   "escolhido": "173315af0a10bdadab57bfa0",
+   "aprovada": "a5500e7a2ac3ae499de4ebee",
+   "status": "12c715cb8c164ca9183364c6",
+   "escolhido": "6c6054d59e512f90b5e85738",
    "agendado": "d57a3e557a4678786451133d",
-   "misto": "e374021702890a6eac9b3f79"
+   "misto": "4e19749a6f5473fb66c99127"
   },
   "271": {
    "aprovada": "fad39947df36a64f175276df",
@@ -1961,11 +1961,11 @@
    "misto": "1a87c1e62d3f2292997d6fd0"
   },
   "280": {
-   "aprovada": "9f33775b26d86ab3ebc42557",
-   "status": "be4ea4b5477f32b33bf02686",
-   "escolhido": "d247ef58051fab65c669be6d",
+   "aprovada": "c96b715a3e321d0174851221",
+   "status": "eabae4c6623b931c3a2d589e",
+   "escolhido": "5ef62868eb8811af11a55177",
    "agendado": "b369f20c8667f231c507544a",
-   "misto": "f18f9d252395a24dc0d0d024"
+   "misto": "a151f148c530c64f3739e88c"
   },
   "281": {
    "aprovada": "3eb7e8cfa8061d86b5c12ab5",
@@ -1975,16 +1975,16 @@
    "misto": "32127de7916380703a0455b7"
   },
   "282": {
-   "aprovada": "d84fe576e15ea0d8ada83c49",
-   "status": "e2ce0ebdc83bb0a727ebd565",
-   "escolhido": "874ac40b1a4d541bf30891d6",
-   "agendado": "593ef23dce439855d303b5cc",
-   "misto": "8b5b07dd2a8daa1ccd09c387"
+   "aprovada": "e20cf8d13a21061708444689",
+   "status": "7fc5753e2cbf400e29c8049b",
+   "escolhido": "0ebfa015b920f57a6af43197",
+   "agendado": "c2dda52dcddbafe2c481144c",
+   "misto": "642f640d12be60dbe46e13e2"
   },
   "283": {
    "aprovada": "70df3f627502a5c20b2086b8",
    "status": "7b59495cf03f126abfef0069",
-   "escolhido": "7701f91c230cfacd3fdc07a0",
+   "escolhido": "cae2d0b93dca608dea3089f0",
    "agendado": "da3b2fd0e8b0d4fda92dafba",
    "misto": "2f1c2c0d1a5c374bfcb977ee"
   },
@@ -2031,11 +2031,11 @@
    "misto": "13586c2dee789676f9905092"
   },
   "290": {
-   "aprovada": "33930b4f8de7f9e3b0548144",
-   "status": "4c86a32f6e289ca2bd6452ed",
-   "escolhido": "1a45a2c14ef19276a7b86e1a",
+   "aprovada": "c36f9f569b68f0db3b523cd0",
+   "status": "1432a7b925356cf36a8bebce",
+   "escolhido": "9d0d1e8fdb4adaeb1728dc46",
    "agendado": "d6a0506c7df1ee68521912dc",
-   "misto": "d310e19a0f400644f2cfdb4d"
+   "misto": "3800d199764518b40447ac34"
   },
   "291": {
    "aprovada": "525b045d382a249d022a8676",
@@ -2066,11 +2066,11 @@
    "misto": "ccf2bd3c67f045d90408dd8e"
   },
   "295": {
-   "aprovada": "6ec4549b8e7d4721c2610117",
-   "status": "08f3d4ad7c886b380788deec",
-   "escolhido": "af4a71b9703aa11ecbb43b91",
+   "aprovada": "b0078535e8ac59831592e6ce",
+   "status": "78c6018b06c27dcd07c80a54",
+   "escolhido": "582314e7d44998dc1a2c78d8",
    "agendado": "ec67a15d8aa8f5679620f927",
-   "misto": "f65b733b00fe4e1e7d2f3ce9"
+   "misto": "616fbc2c7a81074c765ae05c"
   },
   "296": {
    "aprovada": "349f9b271dc5d10189104b5c",
@@ -2101,11 +2101,11 @@
    "misto": "bf1759f1bca9583850244879"
   },
   "300": {
-   "aprovada": "0be418eacaed2a2c39efd25b",
-   "status": "eb548e4629fa287fcaa19735",
-   "escolhido": "75be0acad3475b87178e3c8b",
+   "aprovada": "2a533644be94c8c2f61454db",
+   "status": "cab78b3f9916fbee605a8667",
+   "escolhido": "561ae835eb58a4010a16162b",
    "agendado": "8c323f005b52d1a7695e0268",
-   "misto": "b46722733263590c01034014"
+   "misto": "c20e1cc42d0b554b6d0ea6b1"
   }
  }
 }
