@@ -75,4 +75,7 @@ a.aviso-item:focus-visible { outline-offset: -2px; }
 .aviso-corpo { flex: 1; min-width: 0; overflow-wrap: anywhere; font-size: 13.5px; line-height: 1.35; }
 .aviso-titulo { display: block; font-weight: 600; }
 .aviso-texto { display: block; color: var(--mu); font-size: 12.5px; }
+/* A ação do alerta da escala ("Sugestões", "Refazer a escala"), embaixo do texto dele */
+.aviso-acoes { padding: 0 0 7px 62px; }
+.aviso-acoes .btn { padding: 2px 10px; font-size: 13.5px; }
 @media (max-width: 1023px) { .aviso-item { min-height: 44px; } }

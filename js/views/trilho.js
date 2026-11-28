@@ -148,19 +148,30 @@ export function rTrilho() {
 }
 
 // Os avisos da data aberta, na ordem de js/linha-do-dia.js: o horário e a duração do voo, o que é e o porquê; o que tem destino
-// leva à tela onde se resolve. No botão da data, quantos são (erros e avisos). Enquanto outra data abre, e antes dos dados da
-// primeira, a lista fica como estava
+// leva à tela onde se resolve. Os da escala (o grupo: o que eram as caixas do resumo da Escala) trazem a ação deles, embaixo:
+// "Sugestões" (o conflito e a recusa do instrutor escolhido, js/eventos/escala.js) e "Refazer a escala" (os inativos, pelo
+// data-act). No botão da data, quantos são (erros e avisos). Enquanto outra data abre, e antes dos dados da primeira, a
+// lista fica como estava
 const DITO = { erro: 'erro', aviso: 'aviso', info: 'informação' };
+const ATRIBUTO_DA_ACAO = { reparo: 'data-reparo', rejeitado: 'data-rejeitado' };
+function acaoHTML(a) {
+  if (!a.acao) return '';
+  const { tipo, fKey, rotulo, dica } = a.acao;
+  const alvo = tipo === 'refazer-escala' ? 'data-act="refazer-escala"' : `${ATRIBUTO_DA_ACAO[tipo]}="${esc(fKey)}"`;
+  return `<div class="aviso-acoes"><button type="button" class="btn quiet edit-only" ${alvo} title="${esc(dica)}" aria-label="${esc(`${rotulo}: ${a.titulo}`)}">${esc(rotulo)}</button></div>`;
+}
 function avisoHTML(a) {
   const hora = a.minuto === null ? '<span aria-hidden="true">—</span><span class="sr">sem horário</span>'
     : `<time>${hm(a.minuto)}</time><small>${fmtH(a.duracaoMin / 60)}</small>`;
+  // O espaço entre o nome e o porquê: o texto do item é "Aluno 1000 Rejeitado: …", como era nas caixas
   const conteudo = `<span class="aviso-hora">${hora}</span><span class="aviso-barra" aria-hidden="true"></span>`
-    + `<span class="aviso-corpo"><b class="aviso-titulo">${esc(a.titulo)}</b>${a.texto ? `<small class="aviso-texto">${esc(a.texto)}</small>` : ''}</span>`
+    + `<span class="aviso-corpo"><b class="aviso-titulo">${esc(a.titulo)}</b>${a.texto ? ` <small class="aviso-texto">${esc(a.texto)}</small>` : ''}</span>`
     + `<span class="sr">, ${DITO[a.gravidade]}</span>`;
   const item = `data-aviso="${esc(a.id)}"`;
+  const li = `<li class="aviso" data-gravidade="${a.gravidade}"${a.grupo ? ` data-grupo="${a.grupo}"` : ''}>`;
   return a.destino
-    ? `<li class="aviso" data-gravidade="${a.gravidade}"><a class="aviso-item" href="${enderecoDoDestino(a.destino)}" ${item} data-focar>${conteudo}</a></li>`
-    : `<li class="aviso" data-gravidade="${a.gravidade}"><div class="aviso-item" ${item}>${conteudo}</div></li>`;
+    ? `${li}<a class="aviso-item" href="${enderecoDoDestino(a.destino)}" ${item} data-focar>${conteudo}</a>${acaoHTML(a)}</li>`
+    : `${li}<div class="aviso-item" ${item}>${conteudo}</div>${acaoHTML(a)}</li>`;
 }
 function rAvisos() {
   if (!dadosLidos) return;

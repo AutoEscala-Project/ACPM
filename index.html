@@ -533,9 +533,9 @@
         Para um aluno que não está na lista, use <i>Pôr um aluno na demanda</i>.</li>
         <li><b>Escala:</b> ela já está pronta.
         Em <i>Horários fechados nesta data</i>, no alto dela, feche os horários em que a escola não vai operar.
-        Confira as missões que não entraram (caixa vermelha, com o motivo) e os avisos (caixa amarela), ajuste o que for preciso e baixe o <i>CSV</i> (para o lançamento no portal), o <i>PDF</i> e o <i>Excel</i> (a planilha do aeroclube, para o lançamento no CAVOK).</li>
+        Confira, nos avisos da data (no trilho, embaixo do calendário), as missões que não entraram (em vermelho, com o motivo) e os avisos (em amarelo), ajuste o que for preciso e baixe o <i>CSV</i> (para o lançamento no portal), o <i>PDF</i> e o <i>Excel</i> (a planilha do aeroclube, para o lançamento no CAVOK).</li>
         <li><b>Aprove a escala</b> quando ela estiver fechada (por exemplo, no fim do dia, para o dia seguinte): <i>Aprovar escala</i>, na barra da Escala, fixa os voos.
-        Depois disso, uma alteração não tira ninguém do lugar: um pedido novo entra em volta dos voos fixos (com o cadeado), e o voo que ficar impossível aparece numa caixa vermelha de conflitos, no mesmo lugar, até ser resolvido.
+        Depois disso, uma alteração não tira ninguém do lugar: um pedido novo entra em volta dos voos fixos (com o cadeado), e o voo que ficar impossível continua no mesmo lugar, com o conflito nos avisos da data, até ser resolvido.
         A cada alteração, o voo fixo é conferido com as mesmas regras de quando foi escalado: o instrutor (que não vem, sem a habilitação, bloqueado pelo aluno, fora dos limites da lei ou acima do peso com o aluno), o avião (em manutenção, sem saldo até a revisão de 50 horas, ou o Parafuso fora do avião “Só Parafuso”), o horário (fechado nesta data ou fora da disponibilidade do aluno) e o pedido (outra duração, ou de voo para Ground).
         <i>Sugestões</i>, em cada conflito, mostra o que pode voar no lugar: outro avião do mesmo tipo (primeiro um que já saiu<span data-funcionalidade="hangar">, depois o da frente do hangar</span>), outro instrutor (habilitado, livre, dentro do peso e dos limites da lei; quem voa com o tanque cheio vem antes, e a sugestão diz quando é preciso reduzir o combustível), os dois, ou um horário mais tarde no mesmo dia (na escala de hoje, só os que ainda não passaram).
         <i>Aplicar</i> muda o voo, que continua fixo, e o histórico desfaz; na turma de Ground, a mudança vale para a turma inteira.
@@ -667,8 +667,9 @@
       <i>Limpar demanda</i> e tirar a missão extra também soltam o voo agendado; na limpeza, o voo Atrasado, Em Voo ou Pousou continua agendado, como está.</p>
 
       <h4>Escala</h4>
-      <p>No alto, o resumo do dia (missões pedidas, escaladas e as horas de voo e aula), as missões que não entraram, cada uma com o motivo (caixa vermelha), e os avisos agrupados (caixa amarela).
-      As caixas abrem recolhidas, só com o título: um clique no título abre ou recolhe, e a caixa fica como você deixou ao trocar de vista.
+      <p>No alto, o resumo do dia: as missões pedidas, as escaladas, as horas de voo e aula e o tempo parado dos INVAs e dos aviões.
+      As missões que não entraram, os conflitos e os avisos da escala ficam nos avisos da data, no trilho, ao lado do calendário: um item por alerta, com o horário do voo, o nome e o motivo.
+      Ali ficam também as <i>Sugestões</i> de cada conflito e da recusa do instrutor escolhido, os voos com quem está inativo no cadastro (com <i>Refazer a escala</i>; o do aluno leva à Demanda) e o aviso das habilitações das missões do curso que não foram conferidas.
       Depois, a escala em quatro vistas (a Escala abre em Por recurso):</p>
       <ul>
         <li><b>Por recurso</b> e <b>Por instrutor:</b> o mapa do dia, com a ocupação de cada um, e também os livres: todos os recursos (o avião em manutenção fica riscado) e os instrutores disponíveis no dia.
@@ -728,8 +729,8 @@
       O pedido aparece na Demanda com <span data-funcionalidade="progresso">a missão do curso e </span>a marca do agendamento (veja Demanda).
       O peso digitado vai para o cadastro da pessoa, com uma linha no Histórico.
       O ↶ do Histórico desfaz o agendamento: o voo novo sai, o que mudou de lugar ou entrou na escala volta a ser como era (o aluno tirado da escala depois continua fora dela), e o instrutor marcado disponível também (o peso digitado fica no cadastro; não se desfaz o voo em andamento, o que já tem resultado nem o pedido que mudou depois na Demanda ou saiu dela).
-      O voo agendado que depois ficar impossível (o instrutor que não vem mais, o avião em manutenção, outro voo fixo no mesmo lugar: o agendado cede o lugar aos outros fixos) vai para a caixa vermelha de conflitos, também sem a escala aprovada, com as <i>Sugestões</i>.
-      O voo agendado fora dos horários de decolagem, do pouso até as 17:30, do limite de voos locais ou do Ground antes do voo mostra <i>fora da regra</i> ao lado do horário (a dica diz qual), e a caixa amarela conta esses agendamentos.</p>
+      O voo agendado que depois ficar impossível (o instrutor que não vem mais, o avião em manutenção, outro voo fixo no mesmo lugar: o agendado cede o lugar aos outros fixos) fica em conflito, também sem a escala aprovada, com as <i>Sugestões</i> no conflito dele, nos avisos da data.
+      O voo agendado fora dos horários de decolagem, do pouso até as 17:30, do limite de voos locais ou do Ground antes do voo mostra <i>fora da regra</i> ao lado do horário (a dica diz qual), e cada um tem o aviso dele nos avisos da data.</p>
       <p><b>Pelo mapa e pela lista:</b> no mapa, o <i>+</i> ao lado do nome de cada recurso (ou instrutor) agenda no recurso (ou com o instrutor), no primeiro horário livre; um clique (ou toque) no espaço livre da coluna dele (da linha, com as horas nas colunas) agenda nele, no horário de decolagem livre mais perto do clique (o Noturno, às 17:30; o Voo Solo, às 06:30).
       <span data-funcionalidade="progresso">Pelo mapa de um recurso ou de um instrutor, a missão sugerida é a primeira liberada do curso que serve nele (no tipo do recurso, ou que o instrutor pode dar).</span>
       O avião em manutenção não tem o <i>+</i>, e o clique nele não agenda.
@@ -1040,7 +1041,7 @@
         <dd>Não.
         Cada alteração refaz a escala e grava tudo na hora.</dd>
         <dt>Por que um aluno ficou fora da escala?</dt>
-        <dd>Veja a caixa vermelha no alto da Escala: cada missão que não entrou tem o motivo.
+        <dd>Veja os avisos da data, no trilho, embaixo do calendário: cada missão que não entrou tem o motivo, em vermelho.
         Os mais comuns são falta de instrutor habilitado no horário, avião em manutenção ou sem horas até a revisão e peso acima do limite.</dd>
         <dt>Mudei uma coisa e outros voos também mudaram.
         Por quê?</dt>

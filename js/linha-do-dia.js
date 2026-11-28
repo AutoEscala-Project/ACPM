@@ -3,11 +3,12 @@
 // resolve; o selo de Recursos; e os avisos da data, no trilho. Uma função por cartão e uma por grupo de avisos: cada passo
 // seguinte muda só a dele.
 // contexto: { S, RES, pedidos: lista | null, leituraDosPedidos: 'lendo' | 'erro' | 'lidos', perfil, opera, horasLidas,
-// indisponiveis: [{ id, texto }], data, hoje } (js/views/linha.js, contextoDoDia)
+// indisponiveis: [{ id, texto }], recusas: Map (o alerta da recusa do instrutor escolhido → o fKey do pedido; só de hoje em
+// diante), habilitacoesNaoConferidas: n, data, hoje } (js/views/linha.js, contextoDoDia)
 import { REVISAO_H } from './config.js';
 import { fechamentosDoEstado, rotuloDosFechamentos } from './fechamentos.js';
 import { salaDisponivel } from './frota.js';
-import { inativo, inativoValeEm } from './inativos.js';
+import { inativo, inativoValeEm, voosComInativos, textoDoVooComInativo } from './inativos.js';
 import { ESTAGIOS, podeVer } from './telas.js';
 
 // Os estados, do pior ao melhor; "nenhum" não entra na conta do cartão
@@ -159,10 +160,27 @@ export function selosDosCadastros(ctx) {
 }
 
 // Os avisos da data, um por item a resolver: { id, gravidade: 'erro' | 'aviso' | 'info', minuto (do voo; null: sem horário),
-// duracaoMin?, titulo, texto, destino: { tela, item? } | null (o perfil não abre a tela, ou o aviso se resolve no alto) }
+// duracaoMin?, titulo, texto, destino: { tela, item? } | null (o perfil não abre a tela, ou o aviso se resolve no alto) }.
+// Os da escala têm o grupo ('erros', 'conflitos', 'avisos', 'inativos', 'habilitacoes': o que eram as caixas do resumo da
+// Escala, que saíram em linha-fix-escala-sem-caixas) e, para quem opera, a ação: { tipo: 'reparo' | 'rejeitado' |
+// 'refazer-escala', fKey?, rotulo, dica }
+
+const GRUPO_DO_ALERTA = { err: 'erros', conf: 'conflitos' };
+const SUGESTOES_DO_CONFLITO = fKey => ({ tipo: 'reparo', fKey, rotulo: 'Sugestões', dica: 'O que pode voar no lugar deste voo' });
+const SUGESTOES_DA_RECUSA = fKey => ({ tipo: 'rejeitado', fKey, rotulo: 'Sugestões', dica: 'Outro instrutor que encaixa este pedido' });
+const REFAZER_A_ESCALA = { tipo: 'refazer-escala', rotulo: 'Refazer a escala', dica: 'Refaz a escala sem o instrutor e o recurso inativos' };
+
+// A ação do alerta (só para quem opera): "Sugestões" no conflito com voo e na recusa do instrutor escolhido que ainda voa
+function acaoDoAlerta(a, ctx) {
+  if (!ctx.opera) return null;
+  if (a.t === 'conf' && a.fKey) return SUGESTOES_DO_CONFLITO(a.fKey);
+  const fKey = a.t === 'err' && a.codigo === 'instrutor-escolhido' && ctx.recusas ? ctx.recusas.get(a) : null;
+  return fKey ? SUGESTOES_DA_RECUSA(fKey) : null;
+}
 
 // As missões que não entraram, os conflitos e os avisos da escala. Os de um voo da escala têm o horário dele
-function avisosDaEscala({ RES }) {
+function avisosDaEscala(ctx) {
+  const { RES } = ctx;
   const voos = new Map(((RES && RES.out) || []).map(o => [o.fKey, o]));
   const vistos = new Map();
   return ((RES && RES.al) || []).map(a => {
@@ -174,9 +192,32 @@ function avisosDaEscala({ RES }) {
       id: vez === 1 ? base : `${base}:${vez}`,
       gravidade: a.t === 'err' || a.t === 'conf' ? 'erro' : 'aviso',
       minuto: voo ? voo.a : null, ...(voo ? { duracaoMin: voo.b - voo.a } : {}),
-      titulo: a.s, texto: a.m, destino: { tela: 'esc' }
+      titulo: a.s, texto: a.m, destino: { tela: 'esc' }, grupo: GRUPO_DO_ALERTA[a.t] || 'avisos',
+      ...(acaoDoAlerta(a, ctx) ? { acao: acaoDoAlerta(a, ctx) } : {})
     };
   });
+}
+
+// Os voos da escala com quem ficou inativo no cadastro, um por pessoa ou recurso: o do instrutor e o do recurso se resolvem
+// com "Refazer a escala" (para quem opera); o do aluno, na Demanda (o pedido dele continua)
+function avisosDosInativos(ctx) {
+  const demanda = podeVer('dem', ctx.perfil) ? { tela: 'dem' } : null;
+  return voosComInativos(ctx.S, ctx.RES, { data: ctx.data, hoje: ctx.hoje }).map(i => ({
+    id: `inativo:${i.de}:${i.id}`, gravidade: 'aviso', minuto: null, titulo: textoDoVooComInativo(i), texto: '',
+    destino: i.de === 'aluno' ? demanda : { tela: 'esc' }, grupo: 'inativos',
+    ...(i.de !== 'aluno' && ctx.opera ? { acao: REFAZER_A_ESCALA } : {})
+  }));
+}
+
+// Sem os programas dos cursos lidos, o que as missões do curso dos pedidos exigem do INVA não foi conferido (quantos
+// pedidos: js/state.js, habilitacoesNaoConferidas)
+function avisosDasHabilitacoes({ habilitacoesNaoConferidas: n }) {
+  if (!n) return [];
+  return [{
+    id: 'habilitacoes', gravidade: 'aviso', minuto: null, titulo: 'As habilitações das missões do curso não foram conferidas',
+    texto: `Os programas dos cursos não foram lidos: o que a missão do curso exige do INVA não foi conferido em ${plural(n, 'pedido', 'pedidos')} desta data: a escala foi montada sem essa conferência.`,
+    destino: { tela: 'esc' }, grupo: 'habilitacoes'
+  }];
 }
 
 function avisosDosRecursos(ctx) {
@@ -211,7 +252,7 @@ const avisosDosDados = ctx => (ctx.indisponiveis || []).map(({ id, texto }) =>
 // Na ordem: erro, aviso, info; em cada um, os sem horário primeiro, depois pelo horário e pelo id
 const ORDEM_DOS_AVISOS = ['erro', 'aviso', 'info'];
 export function avisosDaData(ctx) {
-  return [avisosDaEscala, avisosDosRecursos, avisosDosFechamentos, avisosDosPedidos, avisosDosDados].flatMap(grupo => grupo(ctx)).sort((p, q) =>
+  return [avisosDaEscala, avisosDosInativos, avisosDasHabilitacoes, avisosDosRecursos, avisosDosFechamentos, avisosDosPedidos, avisosDosDados].flatMap(grupo => grupo(ctx)).sort((p, q) =>
     ORDEM_DOS_AVISOS.indexOf(p.gravidade) - ORDEM_DOS_AVISOS.indexOf(q.gravidade)
     || (p.minuto ?? -1) - (q.minuto ?? -1)
     || (p.id < q.id ? -1 : p.id > q.id ? 1 : 0));
