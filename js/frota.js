@@ -93,6 +93,13 @@ export function comExigencias(f, lista) {
   return recurso({ ...f, exige: normalizarHabilitacoes(lista).filter(h => !doTipo.includes(h)) });
 }
 
+// Uma habilitação posta ou tirada do que o recurso exige (uma caixa de "Exigir também…" e a reversão dela, setExigencias):
+// só ela muda; o resto de exige (a habilitação própria, as outras caixas) fica como está
+export function comExigencia(f, h, exigir) {
+  const exige = exigenciasDoRecurso(f).filter(x => x !== h);
+  return comExigencias(f, exigir ? [...exige, h] : exige);
+}
+
 // Quem pode operar o recurso: os instrutores ativos com a habilitação do tipo e tudo o que o recurso exige
 export const quemOpera = (instrutores, f) => (Array.isArray(instrutores) ? instrutores : [])
   .filter(i => i && i.inativo !== true && [...habilitacoesDoTipo(f.tipo), ...exigenciasDoAviao(f)].every(h => (i.hab || []).includes(h)));

@@ -110,7 +110,7 @@ function seletorDoFoco() {
   return null;
 }
 
-// O que o lugar mostra agora: um desenho igual ao que está nele não é refeito
+// O que o lugar mostra agora: um desenho igual ao que está nele não é refeito (no editor, só o efeito acompanha a data)
 const chaveDoDesenho = cat => (rascunho && rascunho.cat === cat ? `${cat}|editor`
   : `${cat}|${listaDe(cat).join(',')}|${listaDe(cat).filter(m => fechadoNaData(m, cat)).join(',')}`);
 
@@ -121,7 +121,12 @@ export function rHorarios({ forcar = false } = {}) {
   if (!caixa || !CATEGORIAS_COM_HORARIOS.includes(caixa.dataset.cat)) return;
   const cat = caixa.dataset.cat;
   const chave = chaveDoDesenho(cat);
-  if (!forcar && caixa.dataset.desenho === chave) return;
+  if (!forcar && caixa.dataset.desenho === chave) {
+    // O editor continua como está; o efeito é o dos pedidos da data aberta (outra data, a releitura): só ele é refeito
+    const efeito = rascunho && rascunho.cat === cat && caixa.querySelector('.horarios-efeito');
+    if (efeito) { const texto = efeitoDoRascunho(); if (efeito.textContent !== texto) efeito.textContent = texto; }
+    return;
+  }
   const foco = seletorDoFoco();
   const editando = Boolean(rascunho) && rascunho.cat === cat;
   caixa.innerHTML = `<div class="horarios-cat${editando ? ' editando' : ''}" data-cat="${cat}">${editando ? editor(cat) : resumo(cat)}</div>`;

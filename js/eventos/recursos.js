@@ -9,7 +9,7 @@ import { REVISAO_H, GROUND_REG } from '../config.js';
 import { $, showToast, fecharNoEsc } from '../dom.js';
 import { fmtH, lerHoras, chaveDeBusca } from '../format.js';
 import { ligada } from '../funcionalidades.js';
-import { novoRecurso, ATRIBUTOS_DO_RECURSO, atributoVale, comAtributo, comExigencias, exigenciasDoAviao } from '../frota.js';
+import { novoRecurso, ATRIBUTOS_DO_RECURSO, atributoVale, comAtributo, comExigencia, exigenciasDoAviao } from '../frota.js';
 import { nomeDaHabilitacao } from '../habilitacoes.js';
 import { normalizarHangar, moverNoHangar } from '../hangar.js';
 import { horariosDaMissao, ajustarPreferencias, descreverHorarios } from '../horarios.js';
@@ -44,8 +44,21 @@ const desenhar = momento => { tela.desenhar(momento); rHorarios(); };
 // O desenho de Recursos (js/redesenho.js): os dados de uma data, quem só consulta, a releitura, o perfil e a escala (as
 // horas e o que cada recurso voa nela)
 registrarDesenho('recursos', desenhar, { em: ['dados', 'consulta', 'releitura', 'perfil', 'escala'], ordem: 10, comMomento: true });
-// O endereço: #/rec/<matrícula> escolhe o recurso (numa vista só, abre o detalhe); #/rec/cat:C152, a categoria
-registrarTela('rec', { aoMostrar: (item, opcoes) => tela.aoMostrar(item, opcoes) });
+// O endereço: #/rec/<matrícula> escolhe o recurso (numa vista só, abre o detalhe); #/rec/cat:C152, a categoria. Numa
+// vista só, a volta do detalhe vazio com o formulário do recurso novo (Voltar, o Esc, Cancelar) fecha o formulário, com
+// o foco em "+ Novo recurso" (o detalhe vazio não tem "‹ Recursos", e nada escolhido não tem linha para o foco)
+const noFormularioDoCelular = () => $('#s-rec').dataset.vendo === 'detalhe' && !$('#form-recurso').hidden;
+registrarTela('rec', {
+  aoMostrar: (item, opcoes) => {
+    const doFormulario = (item === null || item === undefined) && noFormularioDoCelular();
+    const feito = tela.aoMostrar(item, opcoes);
+    if (!doFormulario || $('#s-rec').dataset.vendo !== 'lista') return feito;
+    mostrarFormDoRecurso(false);
+    if (!opcoes || opcoes.historico !== 'nenhum') return feito;
+    $('#btn-novo-recurso').focus();
+    return { ...feito, focou: true };
+  }
+});
 
 // ——— O recurso novo: "+ Novo recurso" abre o formulário no detalhe (nada escolhido) ———
 
@@ -73,7 +86,12 @@ $('#btn-novo-recurso').addEventListener('click', () => {
   mostrarFormDoRecurso(true);
   $('#rec-reg').focus();
 });
+// Cancelar: numa vista só, a lista de volta (a entrada do histórico que o formulário abriu sai, como em "‹ Recursos")
 $('#rec-cancelar').onclick = () => {
+  if (noFormularioDoCelular()) {
+    if (window.history.state && window.history.state.detalhe === 'rec') { window.history.back(); return; }
+    tela.voltarParaALista({ focar: false });
+  }
   mostrarFormDoRecurso(false);
   $('#btn-novo-recurso').focus();
 };
@@ -164,31 +182,32 @@ aoMudarCampo('atributo', t => {
     kind: 'setAtributo', reg, atributo, val: !t.checked, label: '↶ Reverter'
   });
   desenhar();
-  redesenharPorNome('instrutores', 'habilitacoes-do-instrutor', 'pedidos-do-dia');
+  // ('instrutores' refaz também o painel das habilitações do INVA aberto: rIns → rPainelDoInstrutor)
+  redesenharPorNome('instrutores', 'pedidos-do-dia');
   document.querySelector(`#det-rec [data-a="atributo"][data-r="${CSS.escape(reg)}"][data-atributo="${atributo}"]`)?.focus();
 });
 
 // "Habilitações que o INVA precisa" › "Exigir também…": cada caixa põe ou tira uma habilitação da lista exige do recurso
-// (todas as datas: a escala é refeita), com uma entrada no histórico que devolve a lista de antes (setExigencias). O foco
-// fica na caixa, e a caixa de "Exigir também…" fica como estava (aberta)
-function mudarExigencias(reg, lista) {
+// (todas as datas: a escala é refeita), com uma entrada no histórico que desfaz só aquela caixa (setExigencias: a
+// habilitação própria e as caixas mudadas depois ficam). O foco fica na caixa, e a caixa de "Exigir também…" fica como
+// estava (aberta)
+function mudarExigencia(reg, h, exigir) {
   const i = (S.frota || []).findIndex(f => f.reg === reg);
-  if (i < 0) return null;
-  const antes = [...exigenciasDoAviao(S.frota[i])];
-  S.frota[i] = comExigencias(S.frota[i], lista);
-  return antes;
+  if (i < 0) return false;
+  S.frota[i] = comExigencia(S.frota[i], h, exigir);
+  return true;
 }
 aoMudarCampo('exige', t => {
   const reg = t.dataset.r, h = t.value;
   const f = (S.frota || []).find(x => x.reg === reg);
   if (!f) return;
-  const atual = exigenciasDoAviao(f);
-  const antes = mudarExigencias(reg, t.checked ? [...atual, h] : atual.filter(x => x !== h));
+  const antes = exigenciasDoAviao(f).includes(h);
+  if (!mudarExigencia(reg, h, t.checked)) return;
   gravarAlteracao('mod', `${reg}: ${t.checked ? 'exige' : 'deixa de exigir'} ${nomeDaHabilitacao(h)}`, {
-    kind: 'setExigencias', reg, lista: antes, label: '↶ Reverter'
+    kind: 'setExigencias', reg, h, val: antes, label: '↶ Reverter'
   });
   desenhar();
-  redesenharPorNome('instrutores', 'habilitacoes-do-instrutor', 'pedidos-do-dia');
+  redesenharPorNome('instrutores', 'pedidos-do-dia');
   document.getElementById(`det-rec-exige-${h}`)?.focus();
 });
 // A caixa de "Exigir também…" aberta ou fechada (o toggle não sobe: ouvido na captura)
@@ -290,7 +309,7 @@ aoReverter('setAtributo', (rev, entry) => {
 });
 
 aoReverter('setExigencias', (rev, entry) => {
-  if (!mudarExigencias(rev.reg, rev.lista)) return;
+  if (!mudarExigencia(rev.reg, rev.h, rev.val)) return;
   gravarAlteracao('mod', `Revertido: ${entry.desc}`, null, entry.id);
   desenhar(); redesenharPorNome('instrutores', 'pedidos-do-dia');
 });

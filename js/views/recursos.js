@@ -210,7 +210,8 @@ function campoDasExigencias(f, edita) {
   const dica = '<button type="button" class="dica-btn" data-dica="habilitacao-propria" aria-label="O que é Habilitação própria?" aria-expanded="false"></button>';
   if (!edita) {
     const lista = [textoDoTipo, ...exige.map(h => (h === propria ? `Habilitação própria (${nomeDaHabilitacao(h)})` : nomeDaHabilitacao(h)))];
-    return [leitura('exige', ROTULO_DAS_EXIGENCIAS, lista.join('; '))];
+    // Quem só consulta lê também quem pode operar
+    return [leitura('exige', ROTULO_DAS_EXIGENCIAS, lista.join('; ')), leitura('quem-opera', 'Quem pode operar', plural(operam, 'INVA', 'INVAs'))];
   }
   const marca = h => `<label class="chk"><input type="checkbox" id="det-rec-exige-${esc(h)}" data-a="exige" data-r="${esc(r)}" value="${esc(h)}" aria-label="${esc(r)} exige ${esc(nomeDaHabilitacao(h))}"${exige.includes(h) ? ' checked' : ''}> ${esc(nomeDaHabilitacao(h))}</label>`;
   const grupos = GRUPOS_DE_HABILITACAO.map(g => ({ ...g, ids: g.ids.filter(h => !doTipo.includes(h)) })).filter(g => g.ids.length);

@@ -75,12 +75,12 @@ export function validarReversao(rev, frota) {
       && MATRICULA.test(rev.reg) && Object.hasOwn(ATRIBUTOS_DO_RECURSO, rev.atributo)
       ? { kind: 'setAtributo', reg: rev.reg, atributo: rev.atributo, val: rev.val, label } : null;
   }
-  // O que o recurso exige do instrutor (B): a matrícula e a lista a restaurar, até 30 ids conhecidos (cada um um texto do
-  // registro ou uma habilitação própria)
+  // O que o recurso exige do instrutor (B): a matrícula, a habilitação que a caixa mudou (um id conhecido: do registro
+  // ou uma habilitação própria) e se o recurso a exigia antes. A reversão muda só ela
   if (rev.kind === 'setExigencias') {
-    const lista = Array.isArray(rev.lista) && rev.lista.length <= 30 && rev.lista.every(h => typeof h === 'string') ? rev.lista : null;
-    return typeof rev.reg === 'string' && MATRICULA.test(rev.reg) && lista && normalizarHabilitacoes(lista).length === new Set(lista).size
-      ? { kind: 'setExigencias', reg: rev.reg, lista: [...lista], label } : null;
+    return typeof rev.reg === 'string' && MATRICULA.test(rev.reg) && typeof rev.h === 'string' && normalizarHabilitacoes([rev.h]).length === 1
+      && typeof rev.val === 'boolean'
+      ? { kind: 'setExigencias', reg: rev.reg, h: rev.h, val: rev.val, label } : null;
   }
   // O "Ativo" do cadastro: o aluno ou o instrutor (pelo id) e o recurso (pela matrícula), e o inativo a restaurar
   if (rev.kind === 'setInativo') {
