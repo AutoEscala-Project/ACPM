@@ -91,8 +91,12 @@ $('#flt-esc-cat').onchange = () => filtrar();
 // escala da tela é a exportada. Antes da aprovação também
 function exportar(tipo, baixar) {
   const registra = !isGestor() && RES && !aindaNaoAbriu() && (ApiClient.perfil ? operaEscala(ApiClient.perfil) : true);
-  if (registra) {
-    S.exportacoes = registrarExportacao(S.exportacoes, tipo, { em: new Date().toISOString(), por: ApiClient.autorAtual || '', impressao: impressaoDaEscala(RES.out, S) });
+  // A mesma escala baixada de novo no mesmo tipo, pela mesma pessoa, não grava outra vez: o registro continua dizendo
+  // quando ela foi exportada primeiro
+  const impressao = registra ? impressaoDaEscala(RES.out, S) : null, por = ApiClient.autorAtual || '';
+  const antes = registra ? (S.exportacoes || {})[tipo] : null;
+  if (registra && !(antes && antes.impressao === impressao && antes.por === por)) {
+    S.exportacoes = registrarExportacao(S.exportacoes, tipo, { em: new Date().toISOString(), por, impressao });
     gravarSemOMotor();
   } else gravarEscalaCalculada();
   baixar();
