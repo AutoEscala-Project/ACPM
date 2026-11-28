@@ -8,12 +8,28 @@ import {
   alternarDisponivel, caixaDisponivel, fecharHorarios, abrirRecursos, abrirRecurso, abrirCategoria, abrirHangar, linhaDoRecurso,
   linhasDosRecursos, gruposDosRecursos, cabecalhoDaCategoria, buscaDosRecursos, contagemDosRecursos, detalheDoRecurso, campoDoRecurso,
   horasDoRecurso, marcarAtributo, retirarRecurso, ordemNoHangar, horariosDaCategoria, confirmar, nenhumNaLista, larguraDaPagina, alvosPequenos,
-  semNome, paineisQueRolamParaOLado, diaSeguinte
+  semNome, paineisQueRolamParaOLado, diaSeguinte, listaDosRecursos, appPronto, AMANHA
 } from './fixtures.js';
+import { documentosAtuais } from './supabase-falso.js';
 import { aluno, apenas, cenario, instrutor } from '../helpers/montar.js';
+import { FROTA_INICIAL } from '../../js/frota.js';
 
 const CATEGORIAS = [/^C152/, /^C172/, /^Simulador/, /^PA-34/, /^Sala Ground/];
 const regsDaLista = page => linhasDosRecursos(page).evaluateAll(lis => lis.map(li => li.dataset.id));
+
+// O app com esta frota no cadastro (no formato atual, neste navegador)
+async function abrirComFrota(page, frota) {
+  const estado = cenario();
+  estado.frota = frota;
+  const { documentos: { cadastro }, dias } = documentosAtuais(estado, AMANHA);
+  const docs = { acpm4_cadastro: cadastro, [`acpm4_dia_${AMANHA}`]: dias[AMANHA] };
+  await page.addInitScript(json => {
+    if (localStorage.getItem('acpm4_cadastro')) return;
+    for (const [chave, valor] of Object.entries(JSON.parse(json))) localStorage.setItem(chave, JSON.stringify(valor));
+  }, JSON.stringify(docs));
+  await page.goto('./');
+  await appPronto(page);
+}
 
 test.describe('Recursos: a lista por categoria', () => {
   test('estado inicial: a lista por categoria, a Sala Ground no grupo dela, 27 recursos; nenhum instrutor e nenhum aluno', async ({ page }) => {
@@ -159,6 +175,69 @@ test.describe('Recursos: a lista por categoria', () => {
     await expect(linhasDosRecursos(page)).toHaveCount(14);
     await seta.click();
     await expect(linhasDosRecursos(page)).toHaveCount(27);
+  });
+
+  // A categoria sem linha à vista (Pedro, 2026-11-28: "yes the operator should be opened in recursos"): o PA-34 com os três
+  // inativos e nenhum simulador na frota. Os cabeçalhos ficam, sem a seta (nada a recolher), e o detalhe de cada um abre como o
+  // dos outros, pelo clique, pelas setas e no celular; "Mostrar inativos" vale só para as linhas; a busca, que acha linhas,
+  // tira o cabeçalho sem achado (volta com a busca vazia)
+  test('a categoria com todos inativos, ou sem nenhum recurso, tem o cabeçalho e o detalhe dela, com os horários de decolagem', async ({ page }) => {
+    await abrirComFrota(page, FROTA_INICIAL.filter(f => !f.tipo.startsWith('Sim')).map(f => (f.tipo === 'PA-34' ? { ...f, inativo: true } : f)));
+    await abrirRecursos(page);
+    await expect(gruposDosRecursos(page)).toHaveText(CATEGORIAS);
+    await expect(cabecalhoDaCategoria(page, 'PA-34')).toHaveText('PA-34 0 de 0 disponíveis · 21 horários de decolagem');
+    await expect(cabecalhoDaCategoria(page, 'sim')).toHaveText('Simulador 0 de 0 disponíveis · 8 horários de decolagem');
+    expect(await regsDaLista(page)).not.toContain('PR-VOM');
+    await expect(contagemDosRecursos(page)).toHaveText('20 recursos');
+    for (const cat of ['PA-34', 'sim']) {
+      await expect(cabecalhoDaCategoria(page, cat).locator('.lista-seta, [aria-expanded]')).toHaveCount(0);
+      await expect(cabecalhoDaCategoria(page, cat).locator('.lista-botao')).toHaveAccessibleName(new RegExp(`^${cat === 'sim' ? 'Simulador' : cat} 0 de 0 disponíveis`));
+    }
+    // O clique abre o detalhe da categoria, com os horários e o Editar
+    await abrirCategoria(page, 'PA-34');
+    await expect(horariosDaCategoria(page).locator('[data-act="editar-horarios"]')).toBeVisible();
+    await expect(cabecalhoDaCategoria(page, 'PA-34').locator('.lista-botao')).toHaveAttribute('aria-current', 'true');
+    // As setas: do fim (a Sala Ground), ↑ três vezes chega no Simulador, ↓ no PA-34 (escolhidos); ← não recolhe nada; Enter
+    // vai ao título do detalhe
+    await linhaDoRecurso(page, 'PR-CPL').locator('.lista-botao').focus();
+    await page.keyboard.press('End');
+    await page.keyboard.press('ArrowUp');
+    await page.keyboard.press('ArrowUp');
+    await page.keyboard.press('ArrowUp');
+    await expect(cabecalhoDaCategoria(page, 'sim').locator('.lista-botao')).toBeFocused();
+    await expect(detalheDoRecurso(page)).toHaveAttribute('data-id', 'cat:sim');
+    await page.keyboard.press('ArrowDown');
+    await expect(cabecalhoDaCategoria(page, 'PA-34').locator('.lista-botao')).toBeFocused();
+    await expect(detalheDoRecurso(page)).toHaveAttribute('data-id', 'cat:PA-34');
+    await page.keyboard.press('ArrowLeft');
+    await expect(cabecalhoDaCategoria(page, 'PA-34').locator('.lista-botao')).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(page.locator('#det-rec-titulo')).toBeFocused();
+    // "Mostrar inativos": as linhas do PA-34 voltam debaixo do cabeçalho, com a seta; sem ele, saem, e o cabeçalho fica
+    await page.locator('#rec-inativos').click();
+    await expect.poll(() => regsDaLista(page)).toEqual(expect.arrayContaining(['PR-VOM', 'PT-JOB', 'PT-KIW']));
+    await expect(cabecalhoDaCategoria(page, 'PA-34').locator('.lista-seta')).toHaveAttribute('aria-expanded', 'true');
+    await page.locator('#rec-inativos').click();
+    await expect.poll(() => regsDaLista(page)).not.toContain('PR-VOM');
+    await expect(gruposDosRecursos(page)).toHaveText(CATEGORIAS);
+    // A busca acha linhas: os cabeçalhos sem achado saem, e voltam com ela vazia
+    await buscaDosRecursos(page).fill('vob');
+    await expect(gruposDosRecursos(page)).toHaveText([/^C152/]);
+    await buscaDosRecursos(page).fill('');
+    await expect(gruposDosRecursos(page)).toHaveText(CATEGORIAS);
+  });
+
+  test('no celular, a categoria sem linha abre o detalhe dela, e "‹ Recursos" volta ao cabeçalho', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 780 });
+    await abrirComFrota(page, FROTA_INICIAL.map(f => (f.tipo === 'PA-34' ? { ...f, inativo: true } : f)));
+    await abrirRecursos(page);
+    await cabecalhoDaCategoria(page, 'PA-34').locator('.lista-botao').click();
+    await expect(detalheDoRecurso(page)).toHaveAttribute('data-id', 'cat:PA-34');
+    await expect(listaDosRecursos(page)).toBeHidden();
+    await expect(horariosDaCategoria(page)).toBeVisible();
+    await page.locator('#det-rec-voltar').click();
+    await expect(listaDosRecursos(page)).toBeVisible();
+    await expect(cabecalhoDaCategoria(page, 'PA-34').locator('.lista-botao')).toBeFocused();
   });
 });
 
@@ -517,7 +596,7 @@ test.describe('Recursos: a categoria e os horários de decolagem', () => {
     await expect(editor(page).locator('.horarios-efeito')).toHaveText('1 pedido muda de preferência.');
     await editor(page).locator('.hr-novo').fill('17:00');
     await editor(page).locator('.hr-novo').press('Enter');
-    await expect(editor(page).locator('[role="alert"]')).toHaveText('Escolha um horário entre 06:00 e 16:30.');
+    await expect(editor(page).locator('[role="alert"]')).toHaveText('Escolha um horário entre 06:30 e 16:30.');
     await editor(page).locator('.hr-novo').fill('07:45');
     await editor(page).locator('.hr-novo').press('Enter');
     await expect(editor(page).locator('.hr-chip', { hasText: '07:45' })).toHaveCount(1);
@@ -611,6 +690,36 @@ test.describe('Recursos: a categoria e os horários de decolagem', () => {
     await expect(horario).toHaveValue('');
     await expect(motivo).toHaveText('O horário 07:45 não é um dos de Navegação (PA-34). Escolha outro.');
     await expect(campoDaAgenda(page, 'obs')).toHaveValue('Prefere o PT-JOB');
+  });
+
+  // Pedro, 2026-11-28: "booked times should start at 6:30". O editor recusa antes das 06:30, o limite do horário exato da
+  // Agenda; a lista guardada com 06:00 (o editor aceitava) mostra e oferece 06:30, que a importação aceita
+  test('o primeiro horário é 06:30: o editor recusa 06:00 e põe 06:30; a lista guardada com 06:00 fica com 06:30, também na Agenda', async ({ page }) => {
+    await abrir(page, { estado: { ...cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000)] }), horarios: { C152: [360, 500], C172: [390], sim: [390], 'PA-34': [390], ground: [390] } } });
+    await abrirCategoria(page, 'C152');
+    const c152 = horariosDaCategoria(page).locator('[data-cat="C152"]');
+    await expect(c152.locator('.horarios-lista .hr')).toHaveText(['06:30', '08:20']);
+    await c152.locator('[data-act="editar-horarios"]').click();
+    const campo = editor(page).locator('.hr-novo');
+    await expect(campo).toHaveAttribute('min', '06:30');
+    await expect(editor(page).locator('.horarios-novo .h')).toHaveText('Enter também adiciona. Das 06:30 às 16:30.');
+    await editor(page).locator('[data-act="rascunho-tirar"][data-min="390"]').click();
+    for (const hora of ['06:00', '06:25']) {
+      await campo.fill(hora);
+      await campo.press('Enter');
+      await expect(editor(page).locator('[role="alert"]')).toHaveText('Escolha um horário entre 06:30 e 16:30.');
+      await expect(editor(page).locator('.hr-chip')).toHaveText(['08:20']);
+    }
+    await campo.fill('06:30');
+    await campo.press('Enter');
+    await expect(editor(page).locator('[role="alert"]')).toHaveText('');
+    await expect(editor(page).locator('.hr-chip')).toHaveText(['06:30', '08:20']);
+    await editor(page).locator('[data-act="cancelar-horarios"]').click();
+    await irPara(page, 'age');
+    await campoDaAgenda(page, 'aluno').selectOption({ label: 'Aluno 1000' });
+    await campoDaAgenda(page, 'missao').selectOption('Voo Local');
+    await campoDaAgenda(page, 'recurso').selectOption('C152');
+    await expect(campoDaAgenda(page, 'horario').locator('option:not([value=""])')).toHaveText(['06:30', '08:20']);
   });
 
   test('os modelos; Cancelar descarta; não tira o último horário; o Gestor não edita', async ({ page }) => {
@@ -708,7 +817,7 @@ test.describe('Recursos: a categoria e os horários de decolagem', () => {
     await erro.evaluate(el => { el.dataset.marca = '1'; });
     await campo.fill('17:00');
     await campo.press('Enter');
-    await expect(ed.locator('[role="alert"][data-marca="1"]')).toHaveText('Escolha um horário entre 06:00 e 16:30.');
+    await expect(ed.locator('[role="alert"][data-marca="1"]')).toHaveText('Escolha um horário entre 06:30 e 16:30.');
     await expect(campo).toBeFocused();
     await expect(campo).toHaveAttribute('aria-invalid', 'true');
     await expect(campo).toHaveAttribute('aria-describedby', new RegExp(`\\b${await erro.getAttribute('id')}\\b`));
