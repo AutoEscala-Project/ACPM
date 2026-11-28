@@ -1046,11 +1046,11 @@ describe('A lista de espera: o lugar do pedido cancelado', () => {
       // A rodada seguinte, do zero, com o que ficou guardado: o 4 e o 5 às 08:20, o 3 às 06:30
       assert.deepEqual(linhasDoDia(runAllocationEngine(a.e)), [['1003_0_1', 390], ['1004_0_1', 500], ['1005_0_1', 500]]);
       // Na não aprovada, o motor daria o 2º lugar ao 3: os dois da lista entram fixos (o 4 também, senão a rodada seguinte
-      // daria o lugar dele ao 3); na aprovada, o 3 fixo às 06:30 fica lá, e a rodada os põe sem pino (o padrão do R5)
+      // daria o lugar dele ao 3), no avião e com o instrutor que o motor escolhe para cada um; na aprovada, o 3 fixo às 06:30 fica lá, e a rodada os põe sem pino (o padrão do R5)
       const ficaFixo = (r, ins) => (aprovada ? '' : ` · fica fixo às 08:20 no ${r} com Instrutor ${ins}`);
       assert.deepEqual(feito.historico.map(h => h[1]), [
-        `Pedidos: Aluno 1001 saiu da escala, pedido cancelado (Voo Local · estava às 08:20–09:20 no PP-LJV com Instrutor 01${fixoDe}); no lugar entrou Aluno 1004 (1º da lista de espera das 08:20${ficaFixo('PP-LJV', '01')})`,
-        `Pedidos: Aluno 1002 saiu da escala, pedido cancelado (Voo Local · estava às 08:20–09:20 no PR-BTB com Instrutor 02${fixoDe}); no lugar entrou Aluno 1005 (2º da lista de espera das 08:20${ficaFixo('PR-BTB', '02')})`
+        `Pedidos: Aluno 1001 saiu da escala, pedido cancelado (Voo Local · estava às 08:20–09:20 no PP-LJV com Instrutor 01${fixoDe}); no lugar entrou Aluno 1004 (1º da lista de espera das 08:20${ficaFixo('PR-BTB', '02')})`,
+        `Pedidos: Aluno 1002 saiu da escala, pedido cancelado (Voo Local · estava às 08:20–09:20 no PR-BTB com Instrutor 02${fixoDe}); no lugar entrou Aluno 1005 (2º da lista de espera das 08:20${ficaFixo('PP-LJV', '01')})`
       ]);
       assert.deepEqual(Object.keys(a.e.fixos).sort(), aprovada ? ['1003_0_1'] : ['1004_0_1', '1005_0_1']);
     });
