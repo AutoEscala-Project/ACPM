@@ -839,7 +839,8 @@
       Cada linha mostra a matrícula, o tipo e os atributos, as horas até a revisão de 50 horas e, na terceira linha, a data aberta com o que o recurso faz nela (<i>disponível · 2 h na escala</i>, <i>em manutenção</i>, <i>parou para a revisão de 50 horas às 14:30</i>); o ponto da linha marca o avião parado para a revisão (vermelho) ou com menos de 5 h até ela (âmbar).
       Ao lado, duas chaves: <i>Disponível</i>, nesta data, e <i>Ativo</i>, no cadastro.
       Para tirar um avião da escala da data, desligue Disponível, na linha do recurso (desligado quer dizer em manutenção); a data seguinte começa com ele como está.</p>
-      <p>O cabeçalho de cada categoria diz quantos estão disponíveis nesta data e quantos horários de decolagem ela tem; a seta recolhe ou abre a categoria, e um clique no nome da categoria abre o detalhe dela, com os horários de decolagem.<span data-funcionalidade="hangar">
+      <p>O cabeçalho de cada categoria diz quantos estão disponíveis nesta data e quantos horários de decolagem ela tem; a seta recolhe ou abre a categoria, e um clique no nome da categoria abre o detalhe dela, com os horários de decolagem.
+      A categoria sem recurso à vista (todos inativos, ou nenhum na frota) continua na lista, sem a seta, e o detalhe dela abre do mesmo jeito; com texto na busca, ficam só as categorias com algum recurso achado.<span data-funcionalidade="hangar">
       No alto da lista fica <i>Ordem no hangar</i>: o detalhe dela é a ordem dos aviões, sempre com todos; a busca não vale na ordem no hangar.</span></p>
       <p><i>Buscar matrícula</i> acha o recurso sem o hífen e sem diferença de maiúsculas (“vob” acha o PR-VOB; “sala” acha a Sala Ground).
       Ao lado, o número diz quantos recursos aparecem (por exemplo, <i>3 de 27 recursos</i>: a frota e a Sala Ground); quando a busca não deixa nenhum, <i>Limpar filtros</i> mostra todos de novo.
@@ -859,7 +860,8 @@
       <p><b>Horários de decolagem</b> (o detalhe da categoria): cada categoria (C152, C172, Simulador, PA-34 e Sala Ground) tem os seus horários de saída, que valem para todas as datas.
       O padrão são os <i>Horários padrão</i> (06:30, 08:20, 10:10, 11:30, 12:40, 13:40, 14:30 e 16:20), e o PA-34 sai de 30 em 30 minutos.
       O resumo mostra o modelo (<i>Horários padrão</i>, <i>De 30 em 30 min</i> ou a lista resumida), quantos horários e os horários da manhã e da tarde; o horário fechado nesta data (na Escala, em <i>Horários fechados nesta data</i>) aparece riscado.
-      <i>Editar</i> abre a lista no lugar do resumo: escolha um modelo, tire um horário pelo ✕ ou digite outro (das 06:00 às 16:30) e tecle Enter.
+      <i>Editar</i> abre a lista no lugar do resumo: escolha um modelo, tire um horário pelo ✕ ou digite outro (das 06:30, o primeiro horário da Agenda, às 16:30) e tecle Enter.
+      Um horário antes das 06:30 guardado antes (o editor aceitava desde as 06:00) passa a ser o das 06:30.
       Antes de salvar, o editor diz quantos pedidos mudam de preferência e quantos ficam fora da lista (o horário exato do pedido, que a lista nova não tem: o pedido fica com ele, e a escala o recusa até a lista ter o horário de novo ou o horário do pedido mudar).
       <i>Salvar</i> muda a lista, e os pedidos da categoria vão para o horário mais próximo da lista nova; <i>Cancelar</i> ou Esc descartam.
       Com o editor aberto, escolher outro recurso não descarta o que foi feito: o cabeçalho da categoria diz <i>edição aberta</i>, e o editor volta como estava quando a categoria é escolhida de novo.
