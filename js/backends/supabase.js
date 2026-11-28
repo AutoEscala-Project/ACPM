@@ -217,22 +217,43 @@ export function criarBackendSupabase(cliente, { aoConflito = () => {}, aoErro = 
       return data;
     },
 
-    // A função de 13 argumentos (a migração missao_do_curso_e_limite_do_pedido, aplicada antes deste app): o recurso, a
-    // missão do curso (o id dela, ou null) e a confirmação do 7º voo local no horário. O servidor confere tudo (o código
-    // do erro e o campo, a dica dele, são repassados), e nenhum erro chama outra função: o pedido pode ter sido registrado
-    async registrarSolicitacao({ data, aluno, aluno_nome, missao, janela, horario = null, horas, observacao = null, registrado_por, excecao = false, recurso = null, missaoDoCurso = null, confirmarLimite = false }) {
+    // A função de 16 argumentos (a migração aprovacao_dos_pedidos, aplicada antes deste app): o recurso, a missão do curso
+    // (o id dela, ou null), a confirmação do 7º voo local no horário, a 2ª preferência (outro horário exato, ou null), a
+    // aprovação (só dos operadores) e a lista de espera do 7º voo local. O servidor confere tudo (o código do erro e o campo,
+    // a dica dele, são repassados), e nenhum erro chama outra função: o pedido pode ter sido registrado
+    async registrarSolicitacao({ data, aluno, aluno_nome, missao, janela, horario = null, horas, observacao = null, registrado_por, excecao = false, recurso = null, missaoDoCurso = null, confirmarLimite = false, horario2 = null, aprovar = false, esperar = false }) {
       const { data: id, error } = await cliente.rpc('registrar_solicitacao', {
         p_data: data, p_aluno: aluno, p_aluno_nome: aluno_nome, p_missao: missao, p_janela: janela, p_horario: horario, p_horas: horas,
         p_registrado_por: registrado_por, p_observacao: observacao, p_excecao: excecao, p_recurso: recurso,
-        p_missao_do_curso: missaoDoCurso || null, p_confirmar_limite: Boolean(confirmarLimite)
+        p_missao_do_curso: missaoDoCurso || null, p_confirmar_limite: Boolean(confirmarLimite),
+        p_horario2: horario2 ?? null, p_aprovar: Boolean(aprovar), p_esperar: Boolean(esperar)
       });
-      if (error) throw Object.assign(new Error(error.message), { code: error.code, campo: error.hint || null });
+      if (error) throw erroComCampo(error);
       return id;
     },
 
     async cancelarSolicitacao(id, por) {
       const { error } = await cliente.rpc('cancelar_solicitacao', { p_id: id, p_cancelada_por: por });
-      if (error) throw Object.assign(new Error(error.message), { code: error.code });
+      if (error) throw erroComCampo(error);
+    },
+
+    // A aprovação (só os operadores; o servidor guarda a conta): os ids aprovados agora, em ordem
+    async aprovarSolicitacoes(ids) {
+      const { data, error } = await cliente.rpc('aprovar_solicitacoes', { p_ids: ids });
+      if (error) throw erroComCampo(error);
+      return data || [];
+    },
+
+    async retirarAprovacaoDaSolicitacao(id) {
+      const { error } = await cliente.rpc('retirar_aprovacao_da_solicitacao', { p_id: id });
+      if (error) throw erroComCampo(error);
+    },
+
+    // Os pedidos por data: { 'AAAA-MM-DD': { aguardando, aprovadas } }, sem os cancelados (quem não lê a agenda recebe {})
+    async solicitacoesPorDia(de, ate) {
+      const { data, error } = await cliente.rpc('solicitacoes_por_dia', { p_de: de, p_ate: ate });
+      if (error) throw erroComCampo(error);
+      return data || {};
     },
 
     // As horas de voo de cada instrutor antes da data (limites da lei): o servidor soma as escalas guardadas

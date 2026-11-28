@@ -239,6 +239,19 @@ test.describe('Agenda de Solicitações (modo compartilhado)', () => {
     await context.close();
   });
 
+  // O passo D1 (a aprovação no servidor; a tela é do D2): o pedido do operador nasce aprovado (por ele), como pelos atalhos
+  // do servidor; o da secretaria aguarda a aprovação. O formulário e o aviso não mudam
+  for (const [quem, conta, aprovadoPor] of [['do operador nasce aprovado', CONTAS.operador, 'Operador de Teste'], ['da secretaria aguarda a aprovação', CONTAS.secretaria, null]]) {
+    test(`o pedido ${quem}`, async ({ page, context }) => {
+      const servidor = await instalarSupabaseFalso(context, comAlunos());
+      await entrar(page, conta);
+      await irPara(page, 'age');
+      await registrarPedido(page, { horario: '08:20' });
+      await expect(page.locator('#toast-box')).toContainText('Pedido registrado.');
+      expect(servidor.solicitacoes.map(s => [s.aluno, s.aprovada_por, s.horario2])).toEqual([[1000, aprovadoPor, null]]);
+    });
+  }
+
   // Outra pessoa registra para a data do campo, que não é a aberta: abrir a Agenda de novo lê os pedidos dela
   test('a Agenda aberta de novo lê também os pedidos da data do pedido', async ({ page, context }) => {
     await context.clock.setFixedTime(new Date('2026-11-10T13:30:00-03:00'));

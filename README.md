@@ -103,7 +103,13 @@ npm run test:e2e       # aplicação no navegador (Playwright)
   (prévia) ou com `--remote=<ref de produção>`. Confira antes com `supabase config diff`.
 - Dados fictícios na prévia (só num banco sem dados): `node scripts/semear-previa.mjs`.
 - Escalas fictícias nas próximas datas da prévia (só nas datas sem escala; usa o Supabase CLI autenticado, sem a
-  senha do banco): `node scripts/semear-dias-previa.mjs [dias de operação] [data inicial]` (`SECO=1` só mostra).
+  senha do banco): `node scripts/semear-dias-previa.mjs [dias de operação] [data inicial]` (`SECO=1` só mostra). Com cada
+  data, os pedidos da agenda (`scripts/pedidos-da-previa.mjs`): um aprovado para cada aluno com voo, ligado ao registro dele
+  e a `importadas`, dois que aguardam a aprovação e um cancelado, gravados com a data numa consulta só (a data que falhou
+  fica sem eles, e rodar de novo grava só as que faltam). O script recusa a produção antes de qualquer consulta.
+- Os testes do banco que tocam a agenda (`agenda*.test.sql`, `contas.test.sql`, `painel.test.sql`) contam os dias pelo
+  horário de São Paulo: o `current_date` do servidor é o de UTC, e um pedido num domingo ou numa data que já passou é
+  recusado mesmo pela exceção da coordenação.
 
 ## Meteorologia no painel (função `meteorologia`)
 
@@ -176,7 +182,7 @@ coluna `recurso` (vazia nos pedidos de antes, que entram no recurso padrão da m
 A migração `20261127100000_missao_do_curso_e_limite_do_pedido.sql` acrescenta as colunas `missao_do_curso` (o id da missão
 do programa do curso que o aluno vai voar; vazia sem curso e nos pedidos de antes), `limite_confirmado_por` e
 `limite_confirmado_em` (quem confirmou o 7º voo local no mesmo horário, e quando) e a função `registrar_solicitacao` de 13
-argumentos (`p_missao_do_curso`, `p_confirmar_limite`, nenhum com valor padrão), a única que o app chama. Ela recusa
+argumentos (`p_missao_do_curso`, `p_confirmar_limite`, nenhum com valor padrão), a que o app chamava até o passo D1. Ela recusa
 (`22023`, com a dica do campo) o pedido sem recurso ou num recurso que a missão não permite (`recurso`), o Noturno fora das
 17:30 e o Voo Solo fora das 06:30 (`horario`) e a missão do curso que não existe, saiu do programa ou é de outro tipo
 (`missao`); o 7º voo local passa com a confirmação, que fica registrada (sem ela, `PT422`, como antes). As funções de 11 e
@@ -189,6 +195,56 @@ de 10 argumentos ficam como estavam, para as abas abertas do app de antes. As re
 chama a função de 13 argumentos, e não tenta outra quando o servidor não a tem (o pedido não é registrado, e o app diz que
 não foi possível registrar). Ela só acrescenta: o app no ar continua igual com ela. Depois, com nenhuma aba de antes aberta,
 outra migração pode tirar as funções de 10 e de 11 argumentos.
+
+## A aprovação dos pedidos da agenda (o passo D1)
+
+A migração `20261129100000_aprovacao_dos_pedidos.sql` dá ao pedido uma situação: aguardando a aprovação, aprovado ou
+cancelado, tirada das colunas (sem coluna de situação). Ela acrescenta sete colunas, todas vazias nos pedidos de antes:
+`aprovada_em`, `aprovada_por` e `aprovada_usuario` (quem aprovou e quando), `aprovacao_retirada_em`, `_por` e `_usuario` (a
+última retirada da aprovação; aprovado ou retirado, nunca os dois) e `horario2`, a 2ª preferência: outro horário exato, só
+no pedido num horário específico e diferente do 1º (o pedido é um horário exato: não há disponibilidade).
+
+As funções (todas `security definer` com o `search_path` vazio, menos a contagem; só quem está conectado as chama):
+
+- `registrar_solicitacao` de 16 argumentos (a de 13 com `p_horario2`, `p_aprovar` e `p_esperar`, nenhum com valor padrão),
+  a que o app chama. As de 13, 11 e 10 argumentos ficam como atalhos para as abas abertas do app de antes, e as quatro
+  passam por uma função interna (`registrar_solicitacao_interna`, que ninguém chama pela API, nem com a chave
+  `service_role`): a de 16 e a de 13 com as regras da de 13 (o recurso, os horários fixos e a missão do curso); a de 11 e a
+  de 10 sem elas, como eram (o recurso pode faltar, e o que vem não é comparado com a missão). A de 9 argumentos (o pedido
+  por período) saiu. Além das regras de antes, ela recusa a 2ª preferência igual à 1ª, fora do
+  formato ou no Noturno e no Voo Solo (`22023`, `horario2`), o domingo e a data que já passou, mesmo pela exceção da
+  coordenação (`PT403`, `domingo` ou `passada`, pela data de São Paulo) e `p_aprovar` de quem não é operador (`42501`,
+  `aprovar`); o prazo agora diz a dica `prazo`, e a exceção da secretaria, `excecao`. O 7º voo local no mesmo horário
+  passa com a confirmação (registrada) ou na lista de espera (`p_esperar`, sem nada registrado: quem espera é o motor);
+  as duas juntas são recusadas (`22023`, `esperar`), e sem nenhuma, `PT422`, como antes. O pedido nasce aprovado com
+  `p_aprovar` ou pela exceção; pelos atalhos, o do operador (e do administrador) nasce aprovado e o da secretaria aguarda.
+  Até o passo D2, o formulário manda `p_aprovar` ligado para quem opera a escala (como os atalhos) e a lista de espera
+  desligada.
+- `cancelar_solicitacao`: como antes, mas o pedido aprovado de uma data que já passou não é cancelado (`PT403`, `passada`).
+- `aprovar_solicitacoes(ids)`: os operadores aprovam de 1 a 200 pedidos (`22023`, `ids`) e recebem os ids aprovados agora;
+  o já aprovado, o cancelado, o de uma data que já passou e o id que não existe ficam fora, e quem aprovou primeiro fica.
+- `retirar_aprovacao_da_solicitacao(id)`: o pedido aprovado volta a aguardar, com o rastro (`P0002` para o que não está
+  aprovado ou foi cancelado; `PT403`, `passada`, numa data que já passou).
+- `solicitacoes_por_dia(de, até)` (`security invoker`): `{ "AAAA-MM-DD": { "aguardando": n, "aprovadas": n } }`, sem os
+  cancelados; quem não lê a agenda (a TV, a conta sem perfil) recebe `{}`.
+- `aprovar_solicitacoes_de_antes_da_aprovacao(dos_operadores)`, interna: a conversão dos pedidos de antes, que a migração
+  roda uma vez (com `true`) e a do passo G2 de novo (com `false`). Aprova o que a importação levou para a demanda (numa
+  data que já passou, todo id em `importadas`; de hoje em diante, só o que um registro da data ainda leva, voando ou não:
+  "importação anterior") e, só com `true`, o que um operador ou administrador registrou de hoje em diante sem ter sido
+  importado. Nunca o cancelado nem o de aprovação retirada; rodar de novo não muda nada.
+
+As regras estão também no modo local (`js/backends/local.js`, sem contas: quem usa tem os direitos de operador, e os
+pedidos de antes, sem as colunas da aprovação, são convertidos uma vez, com a marca `acpm4_agenda_aprovacoes`, gravada só quando há pedidos), no servidor falso dos testes
+(`test/e2e/falso/agenda.js`, com o atalho de 13) e no cliente falso de `test/unit/backend-supabase.test.js`, com os casos
+de `test/helpers/casos-da-agenda.js` e `test/helpers/casos-das-solicitacoes.js`, que são verificações de
+`agenda-aprovacao.test.sql`, `agenda-preferencias.test.sql`, `agenda-locais.test.sql` e `agenda-missao-do-curso.test.sql`
+(`test/unit/espelho-do-banco.test.js` confere os nomes, as recusas e as constantes).
+
+**A ordem:** a migração na prévia com `npm run test:db`, e só então o merge: o app novo chama a função de 16 argumentos e
+não tenta outra. O app no ar continua igual com ela (o da produção chama a de 11 e, sem ela, a de 10; o da prévia antes do
+D1, a de 13: as três agora são atalhos), exceto que o pedido do operador nasce aprovado e que o domingo, a data que já
+passou e o cancelamento do aprovado de uma data que já passou são recusados. Na produção, ela vai antes do merge do D1, no
+dia da publicação.
 
 ## O que a missão do curso exige do INVA
 

@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions;
 
-select plan(28);
+select plan(30);
 
 insert into auth.users (id, email, created_at, updated_at) values
   ('00000000-0000-4000-e000-000000000001', 'admin@teste-contas.acpm.invalid', now(), now()),
@@ -14,6 +14,11 @@ insert into public.perfis (usuario, perfil, nome) values
   ('00000000-0000-4000-e000-000000000002', 'operador', 'Operador de teste'),
   ('00000000-0000-4000-e000-000000000003', 'gestor', 'Gestor de teste');
 delete from public.solicitacoes;
+-- Um pedido que aguarda a aprovação, gravado direto (como a secretaria o registraria), daqui a cinco dias
+create function pg_temp.aguardando() returns void language sql as $$
+  insert into public.solicitacoes (data, aluno, aluno_nome, missao, janela, horario, horas, recurso, registrado_por)
+  values ((now() at time zone 'America/Sao_Paulo')::date + 5 + case when extract(isodow from (now() at time zone 'America/Sao_Paulo')::date + 5) = 7 then 1 else 0 end,
+    1001, 'Aluno 1001', 'Navegação', 'horario', '08:20', 1, 'C152', 'Maria') $$;
 
 set local role authenticated;
 
@@ -24,8 +29,14 @@ select is(public.administrador_atual(), true, 'e é reconhecido como administrad
 select lives_ok($$ select public.salvar_dia('2099-01-01', '{"esquema":99}', (select coalesce(max(versao), 0) from public.dias where data = '2099-01-01')) $$,
   'administrador grava a escala');
 select isnt(public.registrar_historico('2099-01-01', 'mod', 'Alteração do administrador'), null, 'administrador registra no histórico');
-select isnt(public.registrar_solicitacao(current_date, 1000, 'Aluno 1000', 'Voo Local', 'manha', null, 'Coordenação', null, true), null,
+select isnt(public.registrar_solicitacao((now() at time zone 'America/Sao_Paulo')::date + case when extract(isodow from (now() at time zone 'America/Sao_Paulo')::date) = 7 then 1 else 0 end,
+  1000, 'Aluno 1000', 'Voo Local', 'horario', '08:20', 1, 'Coordenação', null, true, 'C152', null, false, null, false, false), null,
   'administrador usa a exceção da coordenação');
+select is(public.aprovar_solicitacoes(array[(select max(id) from public.solicitacoes)]), '{}'::bigint[], 'o pedido pela exceção do administrador já nasce aprovado');
+reset role;
+select pg_temp.aguardando();
+set local role authenticated;
+select is(public.aprovar_solicitacoes(array[(select max(id) from public.solicitacoes)]), array[(select max(id) from public.solicitacoes)], 'administrador aprova pedidos');
 select is((select perfil from public.perfis where usuario = '00000000-0000-4000-e000-000000000001'), 'administrador'::perfil_acesso,
   'o perfil de verdade continua administrador');
 

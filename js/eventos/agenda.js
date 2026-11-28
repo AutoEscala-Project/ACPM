@@ -9,7 +9,7 @@ import { ApiClient } from '../storage.js';
 import { confirmado } from './confirmacao.js';
 import { aoAcionar } from './registro.js';
 import {
-  abrirAgenda, rAgenda, podeEditarAgenda, lembrarRegistradoPor, descreverPedido, missaoDoPedido, pedidoDaLista, dataCurta, dataDoFormulario,
+  abrirAgenda, rAgenda, podeEditarAgenda, aprovaPedidos, lembrarRegistradoPor, descreverPedido, missaoDoPedido, pedidoDaLista, dataCurta, dataDoFormulario,
   escolherDataDoPedido, pedidosDoFormulario, lerPedidosDaAgenda, marcarInvalidos, focarNoPrimeiroInvalido, apagarErroDaAgenda, desarmarConfirmacaoDaAgenda,
   nomearRegistrar, botaoArmado, missaoEscolhida, rHorariosDoPedido, atualizarRecursoEHorario, esvaziarPedidoRegistrado, escolherNaAgenda, escolherMissaoNaAgenda, emLista
 } from '../views/agenda.js';
@@ -93,7 +93,7 @@ async function conferirERegistrar(excecao) {
   try {
     await ApiClient.registrarSolicitacao({
       ...pedido, aluno: aluno.id, aluno_nome: aluno.nm, janela: 'horario', horas, observacao, registrado_por: por, excecao,
-      missaoDoCurso: doCurso ? doCurso.id : null, confirmarLimite: confirmadas.includes('locais')
+      missaoDoCurso: doCurso ? doCurso.id : null, confirmarLimite: confirmadas.includes('locais'), aprovar: aprovaPedidos()
     });
   } catch (err) {
     // Outra pessoa registrou o 6º local no mesmo horário enquanto isso (ou os pedidos da data não foram lidos): o servidor
