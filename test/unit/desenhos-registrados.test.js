@@ -87,13 +87,14 @@ describe('Os desenhos registrados', () => {
     }
   });
 
-  // B e C em paralelo (docs/PLAN.md, "Parallel worktrees"): Recursos não pede pelo nome um desenho que o C apaga. O
-  // painel das habilitações do INVA (habilitacoes-do-instrutor) sai com o C; até lá, o desenho 'instrutores' o refaz
-  // (rIns → rPainelDoInstrutor)
-  it('Recursos (js/eventos/recursos.js) não pede pelo nome o desenho habilitacoes-do-instrutor, que o C apaga', () => {
+  // B e C em paralelo (docs/PLAN.md, "Parallel worktrees"): Recursos não pede pelo nome um desenho que o C apaga. Com o C
+  // sobre o B, o painel das habilitações do INVA saiu, e o desenho habilitacoes-do-instrutor com ele: Recursos pede
+  // 'instrutores', que refaz as habilitações do INVA escolhido (e as opções do filtro)
+  it('o desenho habilitacoes-do-instrutor saiu com o C: ninguém o registra nem o pede; Recursos pede "instrutores"', () => {
+    assert.deepEqual(registros.filter(r => r.nome === 'habilitacoes-do-instrutor').map(r => r.onde), []);
+    assert.deepEqual(porNome.filter(p => p.nome === 'habilitacoes-do-instrutor').map(p => p.onde), []);
     const deRecursos = porNome.filter(p => p.onde.startsWith('js/eventos/recursos.js:'));
-    assert.ok(deRecursos.length > 0);
-    assert.deepEqual(deRecursos.filter(p => p.nome === 'habilitacoes-do-instrutor').map(p => p.onde), []);
+    assert.ok(deRecursos.some(p => p.nome === 'instrutores'));
   });
 
   it('quem redesenha por momento pede um momento que existe e que algum desenho usa', () => {

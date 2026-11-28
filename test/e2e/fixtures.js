@@ -33,7 +33,7 @@ const LIBS = {
 // parte (browser.newContext)
 let funcionalidadesDoTeste;
 
-// preferencias: o trilho solto e a linha recolhida guardados neste navegador, para os testes de cada tela verem a largura de
+// preferencias: o calendário do trilho e a linha recolhidos, guardados neste navegador, para os testes de cada tela verem a largura de
 // sempre; os testes da casca e do trilho (casca.spec.js, trilho.spec.js) usam os padrões do produto (false)
 export async function prepararContexto(context, { preferencias = true } = {}) {
   if (funcionalidadesDoTeste !== undefined) {
@@ -42,7 +42,7 @@ export async function prepararContexto(context, { preferencias = true } = {}) {
   if (preferencias) {
     await context.addInitScript(() => {
       try {
-        if (!localStorage.getItem('acpm_trilho')) localStorage.setItem('acpm_trilho', '{"media":"solto","larga":"solto"}');
+        if (!localStorage.getItem('acpm_trilho')) localStorage.setItem('acpm_trilho', '{"calendario":"recolhido"}');
         if (!localStorage.getItem('acpm_linha')) localStorage.setItem('acpm_linha', 'recolhida');
       } catch {
         // Sem o armazenamento do navegador, valem os padrões

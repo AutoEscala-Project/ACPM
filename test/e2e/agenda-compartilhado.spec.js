@@ -112,7 +112,7 @@ test.describe('Agenda de Solicitações (modo compartilhado)', () => {
     await expect(campoDaAgenda(page, 'excecao')).toBeHidden();
 
     // Ela vê a Agenda, a Escala e os Cursos (que só consulta) e, pelos dados pessoais, Instrutores e Alunos
-    await expect(rotulosDasAbas(page, { visiveis: true })).toHaveText(['Pedidos', 'Escala', 'Aprovar', 'Alunos', 'Instrutores', 'Cursos']);
+    await expect(rotulosDasAbas(page, { visiveis: true })).toHaveText(['Pedidos', 'Escala', 'Aprovar', 'Alunos', 'INVAs', 'Cursos']);
     await botaoDaAba(page, 'esc').click();
     await expect(page.locator('body')).toHaveAttribute('data-role', 'gestor');
     expect(servidor.gravacoes).toEqual([]);
@@ -786,6 +786,36 @@ test.describe('A página dos pedidos (modo compartilhado)', () => {
       expect(erros).toEqual([]);
     });
   }
+
+  // Decisão do Pedro (2026-11-28; N14): a lista de espera vem antes do pedido que o motor poria no lugar livre vindo de outro
+  // horário. Escala não aprovada, um C152: o Aluno 1001 (registrado antes, "às 08:20 ou às 06:30", U1) voa às 06:30 e o
+  // Aluno 1002 espera as 08:20. Cancelado o 1000, antes o motor dava as 08:20 ao 1001 e o 1002 continuava esperando; agora o
+  // 1002 entra, fixo no lugar (a escala gravada já é a do motor refeito com esse pino), e o 1001 fica às 06:30
+  test('E: na escala não aprovada, a vaga do cancelado vai ao 1º da lista de espera, não ao pedido que estava em outro horário', async ({ page, context }) => {
+    const servidor = await instalarSupabaseFalso(context, comListaDeEspera({
+      espera: true,
+      extra: e => {
+        Object.assign(e.stu[1], { jan: 'h500|h390', p2: 390 });
+        e.stu.push(aluno(1002, { p1: 500, p2: -1, jan: 'h500', solicitacao: 3 }));
+        e.importadas.push(3);
+      }
+    }));
+    servidor.solicitacoes.push(noServidor(1, { cancelada_em: '2026-11-10T15:00:00.000Z', cancelada_por: 'Maria' }), noServidor(2, { aluno: 1001, aluno_nome: 'Aluno 1001', horario2: '06:30' }),
+      noServidor(3, { aluno: 1002, aluno_nome: 'Aluno 1002' }));
+    const erros = vigiarErros(page);
+    await entrar(page, CONTAS.operador);
+    await irPara(page, 'age');
+    await botaoDosPedidos(page, 'conciliar').click();
+    await expect(page.locator('#toast-box')).toContainText('1 pedido cancelado ou sem aprovação saiu da escala: Aluno 1000 (no lugar entrou Aluno 1002).');
+    await expect.poll(() => servidor.historico.map(h => h.descricao)).toContainEqual(
+      expect.stringMatching(/^Pedidos: Aluno 1000 saiu da escala, pedido cancelado \(Voo Local · estava às 08:20–09:20 no PP-LJV com (.+)\); no lugar entrou Aluno 1002 \(1º da lista de espera das 08:20 · fica fixo às 08:20 no PP-LJV com \1\)$/));
+    const dia = servidor.dias.get(AMANHA).conteudo;
+    expect([dia.pedidos[1000].fly, dia.importadas]).toEqual([false, [2, 3]]);
+    expect(dia.resultado.out.map(o => [o.fKey, o.a, o.r]).sort()).toEqual([['1001_0_1', 390, 'PP-LJV'], ['1002_0_1', 500, 'PP-LJV']]);
+    expect(Object.keys(dia.fixos)).toEqual(['1002_0_1']);
+    expect([dia.fixos['1002_0_1'].a, dia.fixos['1002_0_1'].r, Boolean(dia.aprovacao)]).toEqual([500, 'PP-LJV', false]);
+    expect(erros).toEqual([]);
+  });
 
   // A revisão do E (os achados 2, 6 e 7): o voo do pedido cancelado que a conciliação deixa na escala (aqui, com o status
   // Cancelado: a meteorologia) não ganha "Tirar da escala", que nada faria; o aviso de Pedidos, o do cancelamento e o de

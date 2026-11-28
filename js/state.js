@@ -60,9 +60,10 @@ export function getMissionTarget(stuId, mid = 0) {
 // Com a prioridade desligada, todos os pedidos na prioridade padrão (js/rules.js, comAPrioridadePadrao): valem a ordem dos
 // agendamentos e a do cadastro, e a guardada continua em S. As limitações do aluno com horários de alguns dias da semana
 // (L) chegam com os horários da data aberta (js/limitacoes.js, comLimitacoesDaData). Nunca é gravado: quem muda os dados
-// muda S
-export function estadoDaEscala() {
-  const estado = comLimitacoesDaData(comExigenciasDasMissoes(estadoParaEscalar(S, { data: DATA, hoje: hojeISO() }), programaLido()), DATA);
+// muda S. base: o dia de onde ele sai (S; a conciliação passa uma cópia de S com a escala de antes fixa, para a vez da
+// lista de espera: js/processamento.js, vezDaListaDeEspera)
+export function estadoDaEscala(base = S) {
+  const estado = comLimitacoesDaData(comExigenciasDasMissoes(estadoParaEscalar(base, { data: DATA, hoje: hojeISO() }), programaLido()), DATA);
   const comHangar = ligada('hangar') ? estado : { ...estado, hangar: null };
   return ligada('prioridade') ? comHangar : comAPrioridadePadrao(comHangar);
 }

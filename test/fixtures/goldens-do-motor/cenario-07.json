@@ -11,8 +11,8 @@
     {"a":810,"b":870,"r":"PT-JOB","s":"Aluno 06","ins":"Instrutor 05","mis":"Multimotor","status":"Confirmado","fKey":"1008_0_1","classKey":"1008_0_1","isGround":false,"w":4,"o":5,"stuId":1008,"mid":0,"insId":5,"eqType":"PA-34","h":1,"ss":"1/1","stuKg":83,"insKg":61,"limKg":250,"kg":144,"baseTag":"Horário ajustado","tag":"Horário ajustado"}
   ],
   "al": [
-    {"t":"err","s":"Aluno 07","m":"Rejeitado: nenhum instrutor habilitado (Voo de Navegação + MLTE (PA-34)) está disponível durante o voo inteiro nos horários possíveis.","codigo":"instrutores-indisponiveis"},
-    {"t":"err","s":"Aluno 09","m":"Rejeitado: nenhum instrutor habilitado (Voo de Parafuso (SPIN) + C152) está disponível durante o voo inteiro nos horários possíveis.","codigo":"instrutores-indisponiveis"},
+    {"t":"err","s":"Aluno 07","m":"Rejeitado: nenhum instrutor habilitado (Voo de Navegação + MLTE (PA-34)) está disponível para começar o voo nos horários possíveis.","codigo":"instrutores-indisponiveis"},
+    {"t":"err","s":"Aluno 09","m":"Rejeitado: nenhum instrutor habilitado (Voo de Parafuso (SPIN) + C152) está disponível para começar o voo nos horários possíveis.","codigo":"instrutores-indisponiveis"},
     {"t":"err","s":"Aluno 03 (Voo Local)","m":"Rejeitado: os instrutores habilitados (Voo Local + C172) já têm outro compromisso nos horários possíveis.","codigo":"instrutores-ocupados"},
     {"t":"err","s":"Aluno 06 (Voo Solo)","m":"Rejeitado: os instrutores habilitados (Voo para liberação de Solo + C172) já têm outro compromisso nos horários possíveis.","codigo":"instrutores-ocupados"},
     {"t":"err","s":"Aluno 10 (Multimotor)","m":"Rejeitado: os instrutores habilitados (MLTE (PA-34)) já têm outro compromisso nos horários possíveis.","codigo":"instrutores-ocupados"},

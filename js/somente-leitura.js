@@ -5,8 +5,7 @@
 // quem) continuam.
 const CAMPOS = [
   'main input:not(.flt-ctrl):not(.agenda-campo):not(.conta-campo):not(.dado-campo):not(#onlyfly):not(#bi-dt)',
-  'main select:not(.flt-ctrl):not(.agenda-campo):not(.conta-campo)',
-  '#painel-instrutor input'
+  'main select:not(.flt-ctrl):not(.agenda-campo):not(.conta-campo)'
 ].join(', ');
 
 const consulta = () => document.body.dataset.role === 'gestor';

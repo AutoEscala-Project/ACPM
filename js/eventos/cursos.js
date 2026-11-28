@@ -61,7 +61,7 @@ const porNaTela = curso => {
 
 // O que as missões do curso exigem do INVA nos pedidos da data aberta (o estado da escala o deriva de S.programa, F1d).
 // Uma alteração do programa que muda isso refaz e grava a escala da data (gravarAlteracao sem descrição: a alteração fica
-// nas versões do curso, não no histórico da data), como uma habilitação marcada em Instrutores; também a escala já
+// nas versões do curso, não no histórico da data), como uma habilitação marcada em INVAs; também a escala já
 // gravada, que a data mostraria como estava ao abrir de novo
 const exigenciasDaData = () => JSON.stringify(estadoDaEscala().stu.map(s => [s.exige || null, (s.extra || []).map(ex => ex.exige || null)]));
 function refazerEscalaSeMudou(antes) {
@@ -472,7 +472,7 @@ function mudarCampoDaMissao(campo) {
   if (cf === 'regra' && salva.regra === 'depois') abrirRequisitos(m.id);
   // Marcada antes de algum INVA ativo ter (regra a): nada a impede, e o aviso diz o que acontece com os voos dela
   const semInstrutor = cf === 'exige' ? exigeSemInstrutor(salva).filter(h => !(m.exige || []).includes(h)) : [];
-  if (semInstrutor.length) showToast(`${textoDoExigeSemInstrutor(semInstrutor)}: os voos de ${salva.codigo} ficam fora da escala até um INVA ter (marque em Instrutores › Editar habilitações).`);
+  if (semInstrutor.length) showToast(`${textoDoExigeSemInstrutor(semInstrutor)}: os voos de ${salva.codigo} ficam fora da escala até um INVA ter (marque em INVAs › Habilitações).`);
   // A missão foi para outra fase: o foco a acompanha
   if (cf === 'fase') focar([`#cursos tr[data-missao="${m.id}"] [data-cf="fase"]`]);
 }

@@ -313,6 +313,30 @@ describe('Desfazer um voo agendado na Escala', () => {
     assert.deepEqual(estado.fStatus, { '1000_2_1': 'Cancelado' });
   });
 
+  // C (formato 29): a reversão gravada antes da tela do C leva só o aw; num instrutor com as faixas da data, o aw volta e
+  // as faixas voltam com ele (as do aw)
+  it('a disponibilidade de antes da tela do C (só o aw) volta num instrutor com faixas: o aw e as faixas dele', () => {
+    const estado = dia();
+    estado.ins[0] = { ...estado.ins[0], faixas: [{ de: 390, ate: 1440 }], pausas: [] };
+    assert.equal(desfazerAgendamento(estado, validarReversao(MOVIDO, FROTA_INICIAL)), true);
+    assert.deepEqual(estado.ins[0], { id: 5, nm: 'Instrutor 05', kg: 90, on: true, aw: DE_MANHA, faixas: [{ de: 390, ate: 760 }], pausas: [] });
+  });
+
+  // C, "tela": a disponibilidade de antes leva as faixas e as pausas (normalizadas); desfazer as devolve, e o aw fica
+  it('a disponibilidade de antes com as faixas: validada, normalizada, e desfazer devolve as faixas e as pausas', () => {
+    const disponibilidade = { insId: 5, on: false, faixas: [{ de: 500, ate: 610 }, { de: 390, ate: 500 }, { de: 9, ate: 3 }], pausas: [{ de: 720, ate: 780, x: 1 }] };
+    const rev = validarReversao({ ...MOVIDO, disponibilidade }, FROTA_INICIAL);
+    assert.deepEqual(rev.disponibilidade, { insId: 5, on: false, faixas: [{ de: 390, ate: 610 }], pausas: [{ de: 720, ate: 780 }] });
+    const estado = dia();
+    assert.equal(desfazerAgendamento(estado, rev), true);
+    assert.deepEqual(estado.ins[0], { ...dia().ins[0], on: false, faixas: [{ de: 390, ate: 610 }], pausas: [{ de: 720, ate: 780 }] });
+    for (const ruim of [{ ...disponibilidade, faixas: 'x' }, { ...disponibilidade, pausas: 'x' }, { ...disponibilidade, faixas: Array(51).fill({ de: 390, ate: 400 }) }]) {
+      assert.equal(validarReversao({ ...MOVIDO, disponibilidade: ruim }, FROTA_INICIAL), null, JSON.stringify(ruim).slice(0, 80));
+    }
+    // Sem pausas: nenhuma
+    assert.deepEqual(validarReversao({ ...MOVIDO, disponibilidade: { insId: 5, on: true, faixas: [] } }, FROTA_INICIAL).disponibilidade, { insId: 5, on: true, faixas: [], pausas: [] });
+  });
+
   it('o voo movido volta para onde estava: o pedido, o instrutor escolhido e o voo fixo de antes; o status fica', () => {
     const estado = dia();
     assert.equal(desfazerAgendamento(estado, validarReversao(MOVIDO, FROTA_INICIAL)), true);
@@ -716,6 +740,21 @@ describe('A reversão dos horários com um período de antes', () => {
       { stuId: 1000, mid: 0, p1: 500, p2: -1, jan: 'tarde' }, { stuId: 1001, mid: 0, p1: 500, p2: -1, jan: 'h500' }] }, FROTA_INICIAL);
     assert.ok(rev);
     assert.deepEqual(rev.pedidos, [{ stuId: 1000, mid: 0, p1: 500, p2: -1 }, { stuId: 1001, mid: 0, p1: 500, p2: -1, jan: 'h500' }]);
+  });
+});
+
+// C, "tela": "Salvar faixas" e os turnos desfazem pelo ↶ (setFaixas): as faixas e as pausas de antes, normalizadas
+describe('Reversão: as faixas de um INVA (setFaixas)', () => {
+  it('o instrutor e as faixas e as pausas de antes, normalizadas; fora do formato, nada', () => {
+    assert.deepEqual(validarReversao({ kind: 'setFaixas', insId: 3, faixas: [{ de: 780, ate: 1050 }, { de: 390, ate: 720 }], pausas: [{ de: 900, ate: 930 }] }, FROTA_INICIAL),
+      { kind: 'setFaixas', insId: 3, faixas: [{ de: 390, ate: 720 }, { de: 780, ate: 1050 }], pausas: [{ de: 900, ate: 930 }], label: '↶ Reverter' });
+    assert.deepEqual(validarReversao({ kind: 'setFaixas', insId: 3, faixas: [], pausas: [], label: '↶ Reverter' }, FROTA_INICIAL),
+      { kind: 'setFaixas', insId: 3, faixas: [], pausas: [], label: '↶ Reverter' });
+    assert.deepEqual(validarReversao({ kind: 'setFaixas', insId: 3, faixas: [{ de: 390, ate: 1440, x: 1 }, { de: 9, ate: 3 }] }, FROTA_INICIAL).faixas, [{ de: 390, ate: 1440 }]);
+    for (const ruim of [{ kind: 'setFaixas', insId: 0, faixas: [] }, { kind: 'setFaixas', insId: 3 }, { kind: 'setFaixas', insId: 3, faixas: 'dia' },
+      { kind: 'setFaixas', insId: 3, faixas: [], pausas: {} }, { kind: 'setFaixas', insId: 3, faixas: Array(51).fill({ de: 390, ate: 400 }) }]) {
+      assert.equal(validarReversao(ruim, FROTA_INICIAL), null, JSON.stringify(ruim).slice(0, 80));
+    }
   });
 });
 

@@ -4,7 +4,7 @@ import * as config from '../../js/config.js';
 import { INICIOS_DOS_TEMPOS, HORARIO_DO_NOTURNO, HORARIO_DO_SOLO, HORARIOS_PADRAO } from '../../js/horarios.js';
 import { hm } from '../../js/format.js';
 
-const { EQ, MIS, ACROBAT_REG, ALL_EQ_TYPES, PRE } = config;
+const { EQ, MIS, ACROBAT_REG, ALL_EQ_TYPES } = config;
 
 describe('Configuração operacional', () => {
   // J (N11): as janelas de operação deixam de ser uma entidade. Os nove inícios ficam congelados só para o que ainda os
@@ -35,7 +35,9 @@ describe('Configuração operacional', () => {
     for (const [nome, m] of Object.entries(MIS)) assert.ok(m.eq.includes(m.defEq), nome);
   });
 
-  it('turnos rápidos', () => {
-    assert.deepEqual(PRE['Manhã'], [0, 1, 2, 3]);
+  // Os turnos rápidos da grade (PRE, com "Manhã" e "Tarde") saíram com ela (C, N12, U4): os três turnos são faixas
+  // (TURNOS, js/disponibilidade.js)
+  it('os turnos rápidos da grade (PRE) saíram com ela', () => {
+    assert.equal('PRE' in config, false);
   });
 });

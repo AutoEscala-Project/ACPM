@@ -8,7 +8,7 @@ import { indiceDoPrograma } from './programa.js';
 import { proximasMissoes, missoesDoDia } from './progresso.js';
 import { situacaoPorMissao, resultadoDoVoo } from './resultados.js';
 import { chaveDoVoo, pedidoDoAluno } from './voo.js';
-import { fixoPeloStatus } from './fixos.js';
+import { fixoPeloStatus, pinoDoVoo } from './fixos.js';
 import { inativo } from './inativos.js';
 import { intervaloEfetivo } from './status.js';
 import { minutoDaPreferencia, paraMinuto, horariosDaMissao } from './horarios.js';
@@ -311,6 +311,57 @@ function listaDeEspera(estado, resultado) {
 // O nome do instrutor, para o Histórico
 const nomeDoInstrutor = (estado, id) => ((estado.ins || []).find(x => x.id === id) || {}).nm || null;
 
+// O pedido de uma linha da escala (aluno_missão, sem a sessão): as sessões de um pedido são dele
+const pedidoDaChave = fKey => fKey.split('_').slice(0, 2).join('_');
+
+// A vez da lista de espera (Pedro, 2026-11-28, a pergunta da revisão do E sobre N14: "sim"): quando a rodada do motor dá o
+// lugar livre do minuto a um pedido que estava em outro horário (a 2ª preferência, U1, ou o horário flexível) ou fora
+// da escala, e não a quem esperava por ele, o 1º da lista de espera desse minuto que cabe no lugar entra, depois o
+// seguinte; na escala aprovada e na não aprovada (o padrão do R5, a rodada em volta dos fixos, cede neste caso). Cabe
+// quem o motor põe nesse minuto com a escala de antes inteira fixa no lugar (menos quem saiu) e só ele entre os pedidos
+// sem linha nela: assim nenhum voo de antes muda, nenhum outro pedido passa na frente dele, e o motor escolhe o avião e o
+// instrutor com as regras dele. Quem entra fica fixo ali, com o pino de sempre ({ a, b, r, insId }, sem marca: nenhum
+// formato novo): a escala é refeita pelo motor a cada gravação (js/actions.js, save), e sem o pino a rodada seguinte
+// daria a vaga de volta ao pedido de antes na fila. O pino só fica se a rodada com ele, a da tela, mantém todos os que
+// tinham linha, sem conflito novo; senão sai, e o seguinte da lista é tentado. Os da lista que já entraram nesta
+// conciliação no lugar de outro que saiu (daLista: as chaves) ficam fixos com ele, onde estão: sem o pino, a rodada da tela
+// daria o lugar deles ao pedido que mudaria de horário (a revisão: dois lugares livres no mesmo horário). A escala do motor
+// continua a mesma (runAllocationEngine não muda). Responde quem entrou ({ ...espera, fixo }), os pinos dos da lista que
+// já tinham entrado (fixados: { fKey: pino }) e as linhas da rodada, ou null
+function vezDaListaDeEspera(estado, { minuto, espera, linhasDeAntes, entraram = [], daLista = [], saem, escalar }) {
+  // Os que ficam: as linhas de antes, menos quem saiu, e as de quem já entrou no lugar de outro que saiu nesta conciliação
+  const ficam = [...linhasDeAntes.values(), ...entraram].filter(o => !o.trecho && !saem.has(pedidoDaChave(o.fKey)));
+  const comConflitoAntes = new Set(ficam.filter(o => o.conflito).map(o => o.fKey));
+  const temLinha = new Set(ficam.map(o => pedidoDaChave(o.fKey)));
+  const original = estado.fixos;
+  const fixosDeAntes = { ...(original || {}) };
+  for (const e of espera.filter(x => x.minuto === minuto)) {
+    // A rodada de prova: a escala de antes fixa no lugar (o pino que já havia fica), e, dos pedidos sem linha nela, só ele
+    const voa = chave => temLinha.has(chave) || chave === pedidoDaChave(e.fKey);
+    const prova = {
+      ...estado,
+      fixos: { ...Object.fromEntries(ficam.map(o => [o.fKey, pinoDoVoo(o)])), ...fixosDeAntes },
+      stu: estado.stu.map(s => ({
+        ...s, fly: Boolean(s.fly) && voa(`${s.id}_0`),
+        extra: (Array.isArray(s.extra) ? s.extra : []).map(ex => ({ ...ex, fly: Boolean(ex.fly) && voa(`${s.id}_${ex.mid}`) }))
+      }))
+    };
+    const linha = (escalar(prova).resultado.out || []).find(o => o.fKey === e.fKey && !o.trecho);
+    if (!linha || linha.a !== minuto || linha.conflito) continue;
+    const fixo = pinoDoVoo(linha);
+    const fixados = Object.fromEntries(entraram.filter(o => daLista.includes(o.fKey) && !Object.hasOwn(fixosDeAntes, o.fKey)).map(o => [o.fKey, pinoDoVoo(o)]));
+    estado.fixos = { ...fixosDeAntes, ...fixados, [e.fKey]: fixo };
+    // A rodada da tela com o pino: todos os que tinham linha continuam com uma, sem conflito novo, e ele no lugar
+    const depois = escalar(estado).resultado.out || [];
+    const linhaDepois = new Map(depois.map(o => [o.fKey, o]));
+    const dele = linhaDepois.get(e.fKey);
+    const mantem = ficam.every(o => linhaDepois.has(o.fKey)) && depois.every(o => !o.conflito || comConflitoAntes.has(o.fKey));
+    if (dele && dele.a === minuto && !dele.conflito && mantem) return { entrou: { ...e, fixo }, fixados, linhaDepois };
+    estado.fixos = original;
+  }
+  return null;
+}
+
 // O texto do Histórico de um pedido que saiu (só nomes, nenhum dado pessoal): de onde, o motivo, a missão, onde o voo
 // estava e, quando a rodada do motor deu o lugar dele ao primeiro da lista de espera que cabia, quem entrou. Com a escala
 // de antes, o pedido sem linha nela saiu da lista de espera (esperava: { minuto, lugar }) ou dos pedidos da data (não
@@ -320,9 +371,11 @@ function textoDaSaida(estado, { nome, mis, motivo, linha, deixouDeSerFixo, entro
     : esperava ? ` · era o ${esperava.lugar}º` : semLinha ? ' · não estava na escala' : '';
   const deOnde = esperava ? `da lista de espera das ${hm(esperava.minuto)}` : semLinha ? 'dos pedidos da data' : 'da escala';
   const porque = motivo === 'cancelado' ? 'pedido cancelado' : 'aprovação retirada';
-  // Quem entrou: o da lista de espera, com o lugar dele nela; o outro pedido que foi para o lugar livre (a rodada do motor
-  // na escala não aprovada: o que estava em outro horário, ou fora da escala), com de onde veio
-  const veio = !entrou ? '' : Number.isInteger(entrou.lugar) ? `${entrou.lugar}º da lista de espera das ${hm(entrou.minuto)}`
+  // Quem entrou: o da lista de espera, com o lugar dele nela; o outro pedido que foi para o lugar livre (a rodada do motor,
+  // quando ninguém da lista cabe nele: o que estava em outro horário, ou fora da escala), com de onde veio. O da lista que
+  // entrou antes do pedido que mudaria de horário (vezDaListaDeEspera) fica fixo no lugar, e a linha diz onde
+  const fixo = entrou && entrou.fixo ? ` · fica fixo às ${hm(entrou.fixo.a)} no ${entrou.fixo.r}${nomeDoInstrutor(estado, entrou.fixo.insId) ? ` com ${nomeDoInstrutor(estado, entrou.fixo.insId)}` : ''}` : '';
+  const veio = !entrou ? '' : Number.isInteger(entrou.lugar) ? `${entrou.lugar}º da lista de espera das ${hm(entrou.minuto)}${fixo}`
     : entrou.de ? `estava às ${hm(entrou.de.a)} no ${entrou.de.r}` : 'estava fora da escala';
   const quem = entrou ? `; no lugar entrou ${entrou.nome} (${veio})` : '';
   return `Pedidos: ${nome} saiu ${deOnde}, ${porque} (${mis}${onde}${deixouDeSerFixo ? ' · deixa de ser fixo' : ''})${quem}`;
@@ -339,7 +392,9 @@ function textoDaSaida(estado, { nome, mis, motivo, linha, deixouDeSerFixo, entro
 // como a tela a calculou) e escalar(estado) → { estado, resultado } (o motor como a tela o roda: estadoDaEscala, com a
 // prioridade desligada na padrão), a rodada do motor em volta dos fixos depois da saída dá o lugar livre ao primeiro da
 // lista de espera daquele horário que cabe nele (N14; o padrão do R5: também na escala aprovada, sem fixar quem entra), e
-// a linha da saída diz quem entrou. programa, situacao, cursos: os de missaoDaEntrada
+// a linha da saída diz quem entrou. Quando a rodada o dá a um pedido de outro horário ou do horário flexível, a lista vem
+// antes (Pedro, 2026-11-28): o 1º dela que cabe entra, fixo no lugar (vezDaListaDeEspera; o padrão do R5 cede aqui).
+// programa, situacao, cursos: os de missaoDaEntrada
 export function aplicarConciliacao(estado, plano, { programa = [], situacao = [], cursos = [], antes = null, escalar = null } = {}) {
   const feito = { entraram: [], voltaram: [], sairam: [], conferir: [], ficam: [], admitidas: [], esquecidas: [], historico: [] };
   if (!Array.isArray(estado.importadas)) estado.importadas = [];
@@ -386,23 +441,41 @@ export function aplicarConciliacao(estado, plano, { programa = [], situacao = []
   // O lugar de cada voo que saiu vai, na rodada do motor, ao primeiro da lista de espera do horário dele que cabe
   const livres = feito.sairam.filter(x => x.linha);
   if (livres.length && escalar) {
-    const depois = escalar(estado);
-    const linhaDepois = new Map((depois.resultado.out || []).map(o => [o.fKey, o]));
+    let linhaDepois = new Map((escalar(estado).resultado.out || []).map(o => [o.fKey, o]));
     const usados = new Set();
+    const saem = new Set(feito.sairam.map(x => pedidoDaChave(x.fKey)));
+    // Os da lista que entraram até aqui, com o lugar livre de cada um (para dizer, no Histórico, que ficaram fixos)
+    const daLista = new Map();
     for (const x of livres) {
-      const entrou = espera.filter(e => !usados.has(e.fKey) && linhaDepois.has(e.fKey) && linhaDepois.get(e.fKey).a === x.linha.a)
-        .sort((p, q) => (p.minuto === x.linha.a ? 0 : 1) - (q.minuto === x.linha.a ? 0 : 1) || p.lugar - q.lugar)[0];
-      if (entrou) { usados.add(entrou.fKey); x.entrou = entrou; continue; }
-      // Nenhum da lista de espera: o lugar pode ter ido a outro pedido, que a rodada (na escala não aprovada, sem fixos)
-      // pôs nesse horário: o de antes na fila que estava em outro horário (a 2ª preferência, U1, ou o horário flexível) ou
-      // fora da escala; o do mesmo recurso primeiro. O Histórico diz quem é e de onde veio
+      // Entra pela lista só quem esperava esse horário: o da lista de outro horário que a rodada pôs aqui (a 2ª preferência)
+      // muda de horário, como o pedido que estava em outro horário, e a lista deste vem antes dele (a revisão)
+      const entrou = espera.filter(e => !usados.has(e.fKey) && e.minuto === x.linha.a && linhaDepois.has(e.fKey) && linhaDepois.get(e.fKey).a === x.linha.a)
+        .sort((p, q) => p.lugar - q.lugar)[0];
+      if (entrou) { usados.add(entrou.fKey); daLista.set(entrou.fKey, x); x.entrou = entrou; continue; }
+      // Nenhum da lista de espera na rodada: a lista vem antes do pedido que o motor poria no lugar vindo de outro horário,
+      // do horário flexível ou da lista de outro horário (Pedro, 2026-11-28): o 1º dela que cabe no lugar livre, depois o
+      // seguinte, entra, fixo; os da lista que já entraram nesta conciliação ficam fixos com ele
+      const entraram = [...usados].map(k => linhaDepois.get(k)).filter(Boolean);
+      const daVez = vezDaListaDeEspera(estado, { minuto: x.linha.a, espera: espera.filter(e => !usados.has(e.fKey)), linhasDeAntes, entraram, daLista: [...daLista.keys()], saem, escalar });
+      if (daVez) {
+        usados.add(daVez.entrou.fKey);
+        for (const [fKey, fixo] of Object.entries(daVez.fixados)) daLista.get(fKey).entrou = { ...daLista.get(fKey).entrou, fixo };
+        daLista.set(daVez.entrou.fKey, x);
+        x.entrou = daVez.entrou;
+        linhaDepois = daVez.linhaDepois;
+        continue;
+      }
+      // Nenhum da lista de espera cabe: o lugar pode ter ido a outro pedido, que a rodada pôs nesse horário: o de antes na
+      // fila que estava em outro horário (a 2ª preferência, U1, ou o horário flexível), na lista de espera de outro horário
+      // ou fora da escala; o do mesmo recurso primeiro. O Histórico diz quem é e de onde veio
       const outro = [...linhaDepois.values()]
         .filter(o => !usados.has(o.fKey) && o.a === x.linha.a && !(linhasDeAntes.has(o.fKey) && linhasDeAntes.get(o.fKey).a === o.a) && doRegistro(doFKey(o.fKey)).aluno)
         .sort((p, q) => (p.r === x.linha.r ? 0 : 1) - (q.r === x.linha.r ? 0 : 1))[0];
       if (outro) {
         usados.add(outro.fKey);
         const de = linhasDeAntes.get(outro.fKey) || null;
-        x.entrou = { fKey: outro.fKey, nome: doRegistro(doFKey(outro.fKey)).aluno.nm, de: de ? { a: de.a, r: de.r } : null };
+        x.entrou = naEspera.has(outro.fKey) ? naEspera.get(outro.fKey)
+          : { fKey: outro.fKey, nome: doRegistro(doFKey(outro.fKey)).aluno.nm, de: de ? { a: de.a, r: de.r } : null };
       }
     }
   }

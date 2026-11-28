@@ -158,7 +158,7 @@ function applyDemandFilters() {
 }
 
 // Com os filtros da barra escondendo todos os pedidos, a linha "Nenhum aluno com esses filtros", com "Limpar filtros"
-// (como em Instrutores e Alunos). Ela conta só os pedidos que "Só quem voa" deixa: sem ninguém voando, nenhum filtro da
+// (como na lista de INVAs e de Alunos). Ela conta só os pedidos que "Só quem voa" deixa: sem ninguém voando, nenhum filtro da
 // barra esconde nada, e a contagem de cima já diz "0 missão(ões) marcada(s)". Vale de novo quando "Só quem voa" muda e
 // quando o Voa de um pedido muda (a linha dele é refeita)
 export function conferirNenhumNaDemanda() {

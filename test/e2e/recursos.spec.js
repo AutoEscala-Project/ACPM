@@ -8,7 +8,7 @@ import {
   alternarDisponivel, caixaDisponivel, fecharHorarios, abrirRecursos, abrirRecurso, abrirCategoria, abrirHangar, linhaDoRecurso,
   linhasDosRecursos, gruposDosRecursos, cabecalhoDaCategoria, buscaDosRecursos, contagemDosRecursos, detalheDoRecurso, campoDoRecurso,
   horasDoRecurso, marcarAtributo, retirarRecurso, ordemNoHangar, horariosDaCategoria, confirmar, nenhumNaLista, larguraDaPagina, alvosPequenos,
-  semNome, paineisQueRolamParaOLado, diaSeguinte, listaDosRecursos, appPronto, AMANHA
+  semNome, paineisQueRolamParaOLado, diaSeguinte, medirVazioDoDetalhe, linhasDosInstrutores, abrirOTrilho, recolherOTrilho, listaDosRecursos, appPronto, AMANHA
 } from './fixtures.js';
 import { documentosAtuais } from './supabase-falso.js';
 import { aluno, apenas, cenario, instrutor } from '../helpers/montar.js';
@@ -47,13 +47,42 @@ test.describe('Recursos: a lista por categoria', () => {
     expect(await page.locator('#rec > li').evaluateAll(lis => lis.slice(-2).map(li => li.dataset.chave))).toEqual(['g:ground', 'i:SALA-GROUND']);
     await expect(caixaDisponivel(page, 'SALA-GROUND')).toBeChecked();
     await expect(linhaDoRecurso(page, 'SALA-GROUND').locator('.lista-chave')).toHaveCount(0);
-    // Nada escolhido: o detalhe diz o que fazer
-    await expect(page.locator('#det-rec')).toContainText('Escolha um recurso ou uma categoria na lista.');
-    await expect(page.locator('#inst .cd')).toHaveCount(0);
-    await expect(page.locator('#inst')).toContainText('Nenhum instrutor cadastrado');
+    // Nada escolhido: o detalhe diz o que fazer, no meio do painel, com o avião e o caminho do recurso novo
+    const vazio = await medirVazioDoDetalhe(page, 'rec');
+    expect([vazio.icone, vazio.texto, vazio.dica]).toEqual(['#i-aviao', 'Escolha um recurso ou uma categoria na lista.', 'ou use + Novo recurso']);
+    expect(vazio.tamanho).toBeGreaterThanOrEqual(18);
+    expect(vazio.foraDoMeio.x).toBeLessThanOrEqual(3);
+    expect(vazio.foraDoMeio.y).toBeLessThanOrEqual(3);
+    await expect(linhasDosInstrutores(page)).toHaveCount(0);
+    await irPara(page, 'ins');
+    await expect(page.locator('#s-ins')).toContainText('Nenhum instrutor cadastrado');
     await irPara(page, 'alu');
     await expect(page.locator('#alu')).toContainText('Nenhum aluno cadastrado');
   });
+
+  // No tablet (800 a 1023 px), o calendário aberto fica em cima da tela: a página rola, e a lista e o detalhe ficam com a
+  // altura da janela embaixo dele (antes, ele tirava metade da altura e a lista ficava com 0 ou 1 linha); recolhido, a página
+  // volta a ter a altura da janela
+  for (const [largura, altura] of [[1000, 650], [1023, 768]]) {
+    test(`a ${largura} × ${altura} com o calendário aberto em cima, a lista mostra várias linhas e o detalhe vazio cabe inteiro`, async ({ page }) => {
+      await page.setViewportSize({ width: largura, height: altura });
+      await abrir(page);
+      await abrirRecursos(page);
+      await abrirOTrilho(page);
+      const linhas = async () => {
+        const [lista, linha] = await Promise.all([page.locator('#rec').boundingBox(), linhasDosRecursos(page).first().boundingBox()]);
+        return Math.floor(lista.height / linha.height);
+      };
+      expect(await linhas()).toBeGreaterThanOrEqual(4);
+      const vazio = await medirVazioDoDetalhe(page, 'rec');
+      expect(vazio.foraDoMeio.y).toBeLessThanOrEqual(3);
+      expect((await page.locator('#det-rec').boundingBox()).height).toBeGreaterThanOrEqual(altura - 80);
+      // Recolhido numa linha, a página tem a altura da janela, e a lista continua com linhas inteiras à vista
+      await recolherOTrilho(page);
+      expect(await page.evaluate(() => document.documentElement.scrollHeight <= innerHeight + 1)).toBe(true);
+      expect(await linhas()).toBeGreaterThanOrEqual(2);
+    });
+  }
 
   test('a linha: o tipo e os atributos, as horas até a revisão, a data com o que voa; o "Disponível" desta data e o "Ativo" do cadastro', async ({ page }) => {
     await abrir(page, { estado: cenario({ stu: [aluno(1000, { p1: 1, p2: 1 })], semAeronaves: apenas('C152', 'PP-LJV'), horas: { 'PP-LJV': 42 } }) });
@@ -503,6 +532,8 @@ test.describe('Recursos: acrescentar, retirar e o "Ativo"', () => {
     await page.locator('#role-sel').selectOption('gestor');
     await abrirRecursos(page);
     await expect(page.locator('#btn-novo-recurso')).toBeHidden();
+    // Nada escolhido: o texto, sem o caminho do recurso novo
+    expect((await medirVazioDoDetalhe(page, 'rec')).dica).toBe(null);
     await expect(linhaDoRecurso(page, 'PT-KIW').locator('.lista-chave')).toBeHidden();
     await expect(linhaDoRecurso(page, 'PT-KIW').locator('.lista-rapida')).toBeHidden();
     await abrirRecurso(page, 'PT-KIW');

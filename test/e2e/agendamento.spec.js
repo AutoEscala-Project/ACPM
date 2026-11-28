@@ -2,7 +2,7 @@
 // peso; a conferência roda o motor numa cópia da escala (o conflito não deixa agendar; a regra do curso pede "Agendar
 // mesmo assim"). O voo agendado fica fixo (o cadeado), o pedido aparece na Demanda com a missão do curso, o peso
 // digitado vai para o cadastro e o Histórico desfaz
-import { test, expect, abrir, irPara, abrirEscala, entrar, AMANHA, abrirHistorico, aprovar, caixaVem, caixaVoa, linhaDoInstrutor, reabrir, relativoDaData, confirmarAgendamento, refazer, campoDoAluno } from './fixtures.js';
+import { test, expect, abrir, irPara, abrirEscala, entrar, AMANHA, abrirHistorico, aprovar, caixaVem, caixaVoa, linhaDoInstrutor, reabrir, relativoDaData, confirmarAgendamento, refazer, campoDoAluno, textosDaEscala, abrirInstrutor, campoDoInstrutor } from './fixtures.js';
 import { instalarSupabaseFalso, documentosAtuais, CONTAS } from './supabase-falso.js';
 import { aluno, cenario, instrutor, GROUND_C152 } from '../helpers/montar.js';
 import { FROTA_INICIAL } from '../../js/frota.js';
@@ -150,9 +150,7 @@ test.describe('Agendar um voo na Escala', () => {
     await expect((await historico(page)).locator('.audit-desc', { hasText: 'Agendado na escala' })).toContainText('· confirmado: fora do Priorizar com');
     await page.locator('#btn-fechar-historico').click();
     await abrirEscala(page);
-    const avisos = page.locator('#out details.caixa.avisos');
-    await avisos.locator('summary').click();
-    await expect(avisos.locator('li', { hasText: 'Priorizar com' })).toHaveText(['Maria Silva Fora do “Priorizar com” de Maria Silva (Instrutor 01): o voo foi posto à mão com Instrutor 02.']);
+    await expect(textosDaEscala(page, 'avisos').filter({ hasText: 'Priorizar com' })).toHaveText(['Maria Silva Fora do “Priorizar com” de Maria Silva (Instrutor 01): o voo foi posto à mão com Instrutor 02.']);
   });
 
   // L (N9): o voo posto à mão num tipo em que o aluno não voa avisa e pede "Agendar mesmo assim"; agendado, fica em conflito
@@ -166,9 +164,7 @@ test.describe('Agendar um voo na Escala', () => {
     await page.locator('#agd-confirmar').click();
     await expect(page.locator('#agd-confirmar')).toHaveText('Agendar mesmo assim');
     await agendar(page);
-    const conflitos = page.locator('#out details.caixa.conflitos');
-    await conflitos.locator('summary').click();
-    await expect(conflitos).toContainText('Maria Silva Conflito no voo agendado: o aluno só voa no C172.');
+    await expect(textosDaEscala(page, 'conflitos').filter({ hasText: 'Maria Silva' })).toHaveText(['Maria Silva Conflito no voo agendado: o aluno só voa no C172.']);
   });
 
   test('o 7º voo local do horário pede "Agendar mesmo assim", também quando a aluna vem antes no cadastro', async ({ page }) => {
@@ -280,7 +276,7 @@ test.describe('Agendar um voo na Escala', () => {
     await expect(caixaVem(linhaDoInstrutor(page, '2'))).not.toBeChecked();
   });
 
-  test('o peso digitado vai para o cadastro (Alunos e Instrutores), com uma entrada no histórico cada; sem peso, o envio para no campo', async ({ page }) => {
+  test('o peso digitado vai para o cadastro (Alunos e INVAs), com uma entrada no histórico cada; sem peso, o envio para no campo', async ({ page }) => {
     await abrirComCurso(page);
     await abrirDialogo(page);
     // Os campos dizem ao leitor de tela que o peso digitado fica no cadastro, e o peso no avião
@@ -306,9 +302,8 @@ test.describe('Agendar um voo na Escala', () => {
     await page.locator('#btn-fechar-historico').click();
     await irPara(page, 'alu');
     await expect((await campoDoAluno(page, 1001, 'kg'))).toHaveValue('82.5');
-    await irPara(page, 'ins');
-    await page.locator('#s-ins [data-vista-ins="cadastro"]').click();
-    await expect(page.locator('#inst tr[data-id="2"] [data-f="kg"]')).toHaveValue('91');
+    await abrirInstrutor(page, 2);
+    await expect(campoDoInstrutor(page, 'kg')).toHaveValue('91');
   });
 
   test('Confirmado, Aprovar e Reabrir mantêm o voo agendado no lugar', async ({ page }) => {

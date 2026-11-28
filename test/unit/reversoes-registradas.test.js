@@ -52,9 +52,9 @@ describe('As reversões registradas', () => {
   it('cada tipo aceito por validarReversao tem quem o desfaça, e só um', () => {
     const aceitos = tiposAceitos(), registros = tiposRegistrados();
     // 12 desde F2 (setInativo, o "Ativo" dos três cadastros); 13 desde A (desfazerColocacao, "Colocar no curso até…"); 14 com o J
-    // (setFechamentos, os horários fechados); 15 com o B (setExigencias, o que o recurso exige do instrutor); 16 com o L
-    // (setLimitacoes, as limitações do aluno)
-    assert.equal(aceitos.length, 16, `os tipos aceitos: ${aceitos.join(', ')}`);
+    // (setFechamentos, os horários fechados); 15 com o B (setExigencias, o que o recurso exige do instrutor); 16 com a tela do C
+    // (setFaixas, as faixas de um INVA); 17 com o L (setLimitacoes, as limitações do aluno)
+    assert.equal(aceitos.length, 17, `os tipos aceitos: ${aceitos.join(', ')}`);
     for (const r of registros) assert.ok(r.tipo, `${r.onde}: o tipo precisa ser um texto escrito na chamada`);
     const registrados = registros.map(r => r.tipo);
     assert.deepEqual([...registrados].sort(), [...new Set(registrados)].sort(), 'um tipo registrado mais de uma vez');

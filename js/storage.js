@@ -25,6 +25,7 @@ import { normalizarCursos, normalizarCursoDoAluno } from './cursos.js';
 import { normalizarProgramas, programaDoLegado } from './programa.js';
 import { inativo, inativoValeEm, ativosNaData } from './inativos.js';
 import { contagemPorDia } from './agenda.js';
+import { normalizarFaixas, normalizarPausas } from './disponibilidade.js';
 
 // A recusa de quem só consulta (o Gestor e a Secretaria no modo compartilhado, ou a tela travada depois de um
 // conflito), com o código do servidor
@@ -159,6 +160,9 @@ export const ApiClient = {
       // Inativo no cadastro (formato 26): só true fica
       if (i.inativo !== true) delete i.inativo;
       i.aw = Array.isArray(i.aw) && i.aw.length === INICIOS_DOS_TEMPOS.length ? i.aw.map(v => v === true) : INICIOS_DOS_TEMPOS.map(() => true);
+      // As faixas e as pausas da data (C, formato 29): só com a lista das faixas; sem ela, as duas saem (o aw vale)
+      if (Array.isArray(i.faixas)) Object.assign(i, { faixas: normalizarFaixas(i.faixas), pausas: normalizarPausas(i.pausas) });
+      else { delete i.faixas; delete i.pausas; }
     });
     x.stu = x.stu.filter(comId);
     x.stu.forEach(s => {
