@@ -12,7 +12,7 @@ import { cursosVazios } from './cursos.js';
 import { fechamentosDoWin } from './fechamentos.js';
 import { INICIOS_DOS_TEMPOS } from './tempos.js';
 
-export const ESQUEMA = 28;
+export const ESQUEMA = 30;
 // O formato dos cursos: o formato do cadastro a partir do qual os programas vivem nas tabelas próprias (antes dele, vale
 // o programa guardado no cadastro, que a conversão única traz para as tabelas). O 22 é o do instrutor escolhido e o 23,
 // o dos atributos da frota; um aumento é esta linha mais public.formato_dos_cursos() (a migração dos cursos), com o
@@ -274,6 +274,21 @@ const PASSOS = {
       }
       return novo;
     }
+  },
+  // Versão 29: reservada para o C ("dados": as faixas dos INVAs, ins[<id>].faixas, de aw). O C entra no previa antes do E
+  // (a ordem da junção: A, A2, J, B, C, D1, D2, D3, E), e a junção dele troca este passo pelo dele; até lá, nada muda
+  29: {
+    cadastro: cadastro => cadastro,
+    dia: dia => dia
+  },
+  // Versão 30 (E, depois da junção com o D3): nada é convertido. O número faz a aba da versão anterior, que tiraria ao
+  // gravar o que ela não conhece, recusar a gravação: a marca da missão do curso dada pelo programa nos pedidos
+  // (etapaDoPrograma, só true), os dois horários exatos do pedido (jan h<m1>|h<m2>, a 2ª preferência, U1: a aba de antes
+  // guarda um minuto só), as chaves do dia exportacoes ({}) e reabertura (null), que o H escreve, e os ids que saem de
+  // importadas a partir do G2
+  30: {
+    cadastro: cadastro => cadastro,
+    dia: dia => dia
   }
 };
 

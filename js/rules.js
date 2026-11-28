@@ -118,7 +118,7 @@ export const blank = () => ({ fly: false, mis: 'Voo Local', eq: 'C152', p1: HORA
 // por "Limpar demanda" (js/fixos.js). Muda o pedido e o devolve
 export function deixarEmBranco(pedido) {
   Object.assign(pedido, blank());
-  for (const campo of ['jan', 'etapa', 'cursoDaEtapa', 'solicitacao', 'insId', 'limiteConfirmado']) delete pedido[campo];
+  for (const campo of ['jan', 'etapa', 'cursoDaEtapa', 'etapaDoPrograma', 'solicitacao', 'insId', 'limiteConfirmado']) delete pedido[campo];
   return pedido;
 }
 
@@ -215,6 +215,8 @@ export function normalizeMissionFields(target) {
   if (Object.hasOwn(target, 'insId') && !(Number.isInteger(target.insId) && target.insId > 0)) delete target.insId;
   // O 7º voo local no horário confirmado na Agenda (formato 27): só true fica
   if (Object.hasOwn(target, 'limiteConfirmado') && target.limiteConfirmado !== true) delete target.limiteConfirmado;
+  // A missão do curso dada pelo programa na entrada do pedido (formato 30): só true, e só com a missão do curso
+  if (Object.hasOwn(target, 'etapaDoPrograma') && !(target.etapaDoPrograma === true && Object.hasOwn(target, 'etapa'))) delete target.etapaDoPrograma;
   const mRule = missionRule(target.mis) || MIS['Voo Local'];
   if (!mRule.eq.includes(target.eq)) target.eq = mRule.defEq;
   if (mRule.isGround) {

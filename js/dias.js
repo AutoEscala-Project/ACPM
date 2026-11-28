@@ -15,13 +15,15 @@ import { CRITERIOS_PADRAO, normalizarCriterios } from './criterios.js';
 import { normalizarCursos } from './cursos.js';
 import { normalizarPainel } from './config-do-painel.js';
 import { dataIsoValida } from './format.js';
+import { normalizarExportacoes } from './exportacoes.js';
 
 // Os campos do pedido do dia (o pedido principal é o próprio aluno: o resto dele é do cadastro). jan: disponibilidade do
 // aluno (só quando o pedido tem uma); etapa: o código da missão do curso; solicitacao: o id do pedido da agenda que virou
 // este voo; insId: o instrutor escolhido pelo operador (só quando há um); limiteConfirmado: o 7º voo local do horário
-// confirmado na Agenda (só true, formato 27). Desfazer um voo agendado na Escala devolve
+// confirmado na Agenda (só true, formato 27); etapaDoPrograma: a missão do curso dada pelo programa na entrada do pedido
+// (js/processamento.js, missaoDaEntrada; só true, formato 30). Desfazer um voo agendado na Escala devolve
 // estes campos do pedido como estavam (js/reversoes.js)
-export const CAMPOS_DO_PEDIDO = ['fly', 'mis', 'eq', 'p1', 'p2', 'nb', 'ss', 'pr', 'jan', 'etapa', 'solicitacao', 'insId', 'cursoDaEtapa', 'limiteConfirmado'];
+export const CAMPOS_DO_PEDIDO = ['fly', 'mis', 'eq', 'p1', 'p2', 'nb', 'ss', 'pr', 'jan', 'etapa', 'solicitacao', 'insId', 'cursoDaEtapa', 'limiteConfirmado', 'etapaDoPrograma'];
 
 // Cada recurso da frota começa disponível; o dia guarda só o que muda
 const avDaFrota = frota => Object.fromEntries(frota.map(f => [f.reg, true]));
@@ -33,7 +35,9 @@ const avDaFrota = frota => Object.fromEntries(frota.map(f => [f.reg, true]));
 // hangar: a ordem dos aviões no hangar, da frente para o fundo (sem ela, a ordem da frota)
 // fixos e aprovacao: a escala aprovada (os voos fixos e quem aprovou), que vale só para a própria data
 // criterios: os critérios da compactação (os buracos e os horários), que continuam na data seguinte
-export const diaPadrao = () => ({ win: INICIOS_DOS_TEMPOS.map(() => true), av: avDaFrota(FROTA_INICIAL), ins: {}, pedidos: {}, fStatus: {}, fObs: {}, horas: {}, filas: {}, hangar: normalizarHangar(null, FROTA_INICIAL), fixos: {}, aprovacao: null, criterios: { ...CRITERIOS_PADRAO }, importadas: [] });
+// exportacoes e reabertura (formato 30; o H as escreve): os arquivos exportados da escala da data (js/exportacoes.js) e
+// quem reabriu a escala e quando, que valem só para a própria data
+export const diaPadrao = () => ({ win: INICIOS_DOS_TEMPOS.map(() => true), av: avDaFrota(FROTA_INICIAL), ins: {}, pedidos: {}, fStatus: {}, fObs: {}, horas: {}, filas: {}, hangar: normalizarHangar(null, FROTA_INICIAL), fixos: {}, aprovacao: null, criterios: { ...CRITERIOS_PADRAO }, importadas: [], exportacoes: {}, reabertura: null });
 
 export function separar(estado) {
   return {
@@ -75,7 +79,9 @@ export function separar(estado) {
       fixos: structuredClone(estado.fixos || {}),
       aprovacao: estado.aprovacao ? { ...estado.aprovacao } : null,
       criterios: normalizarCriterios(estado.criterios),
-      importadas: [...(estado.importadas || [])]
+      importadas: [...(estado.importadas || [])],
+      exportacoes: normalizarExportacoes(estado.exportacoes),
+      reabertura: normalizarAprovacao(estado.reabertura)
     }
   };
 }
@@ -115,7 +121,9 @@ export function juntar(cadastro, dia = diaPadrao()) {
     fixos: normalizarFixos(dia.fixos),
     aprovacao: normalizarAprovacao(dia.aprovacao),
     criterios: normalizarCriterios(dia.criterios),
-    importadas: [...(dia.importadas || [])]
+    importadas: [...(dia.importadas || [])],
+    exportacoes: normalizarExportacoes(dia.exportacoes),
+    reabertura: normalizarAprovacao(dia.reabertura)
   };
 }
 
@@ -129,7 +137,7 @@ export function diaParaCopiar(anterior, instrutores = []) {
   const pedidos = Object.fromEntries(Object.keys(anteriores).map(id => [id, { ...blank(), extra: [] }]));
   // Os horários fechados valem só para a data deles (B): a seguinte começa com o dia todo aberto, sem fechamentos e sem o
   // win fechado de antes (que os leitores leriam no lugar deles)
-  return { win: INICIOS_DOS_TEMPOS.map(() => true), av, ins, pedidos, fStatus: {}, fObs: {}, horas: horasDoDiaSeguinte(anterior), filas: filasDoDiaSeguinte(anterior, instrutores), hangar: hangar || normalizarHangar(null, FROTA_INICIAL), fixos: {}, aprovacao: null, criterios: normalizarCriterios(criterios), importadas: [] };
+  return { win: INICIOS_DOS_TEMPOS.map(() => true), av, ins, pedidos, fStatus: {}, fObs: {}, horas: horasDoDiaSeguinte(anterior), filas: filasDoDiaSeguinte(anterior, instrutores), hangar: hangar || normalizarHangar(null, FROTA_INICIAL), fixos: {}, aprovacao: null, criterios: normalizarCriterios(criterios), importadas: [], exportacoes: {}, reabertura: null };
 }
 
 // Horas desde a última revisão no início do dia seguinte: as do dia mais os voos dele que não foram cancelados

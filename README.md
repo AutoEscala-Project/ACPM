@@ -339,6 +339,18 @@ confirmação do 7º local sai junto) e o horário antigo `hN` e a preferência 
 horário exato fica. O cadastro não muda: sem `horarios.ground`, a Sala Ground usa os oito horários padrão, e sem a chave
 dela em `av`, fica disponível. A aba do formato 27 tiraria `fechamentos` ao gravar o dia; o número novo a faz recusar.
 
+O formato 29 é o do C (as faixas dos INVAs); até a junção dele, o passo 29 não muda nada.
+
+No formato 30 (E), nada é convertido: o número protege o que a aba do formato 29 tiraria ao gravar o dia. Nos pedidos, a
+marca de que a missão do curso veio do programa na entrada do pedido da agenda (`pedidos[].etapaDoPrograma`, só `true`,
+só com a missão do curso) e os dois horários exatos do pedido com a 2ª preferência (`jan` `h<minuto1>|h<minuto2>`, dois
+minutos diferentes, o 1º primeiro: o voo começa num dos dois, o motor tenta o 1º e depois o 2º); no dia, as exportações
+da data (`exportacoes`: `csv`, `pdf` e `xlsx`, cada um com `em`, `por` e a `impressao` do que foi exportado, 8
+hexadecimais; `{}` sem nenhuma, `js/exportacoes.js`) e quem reabriu a escala (`reabertura`: `{ em, por }`, como a
+aprovação; `null` sem), que o H escreve e que valem só para a própria data; e os ids que saem de `importadas` com a
+saída do pedido (a partir do G2). Só o app muda: o primeiro acesso de um Operador ou Administrador regrava os dias e o
+cadastro no 30.
+
 ## Estrutura
 
 | Caminho | Conteúdo |
@@ -378,6 +390,7 @@ dela em `av`, fica disponível. A aba do formato 27 tiraria `fechamentos` ao gra
 | `js/conferencia.js` | A conferência dos voos fixos, fora do motor, que a usa: a fila dos pedidos na ordem do motor, a volta do noturno de ontem, a linha de cada voo fixo conferida com as regras do motor (`linhaDoFixo`: os conflitos e os avisos do agendado) e o que o motor confere depois de montar a escala (`concluirEscala`); `conferirEscala` confere uma escala montada sem o motor (a escala aprovada que o operador muda na Escala): não põe, não move nem tira voo, e refaz os conflitos, os avisos, a revisão, o total, as turmas e os pesos pelo cadastro |
 | `js/edicao-do-voo.js` | A alteração de um voo feita na Escala (F1g): a escala que ela deixa (`escalaDaAlteracao`: na escala aprovada, sem o motor) e o editor do voo, puro: o voo a editar e as travas, as opções de cada campo (nada desligado: o que não serve avisa), o que muda, o resumo da pergunta, o que "Salvar" grava (`aplicarEdicao`, com a reversão `desfazerEdicao`) e os avisos de cada campo |
 | `js/viabilidade.js` | O que torna possível um voo num horário, num recurso e com um instrutor (disponível, habilitado, livre, fora do "Não escalar com", dentro da lei e do peso; o saldo até a revisão): as mesmas regras no motor, na compactação, nas Sugestões e no agendamento |
+| `js/exportacoes.js` | O registro das exportações da data (formato 30: o CSV, o PDF e o Excel, com quando, por quem e a impressão do que foi exportado), que o H escreve; por enquanto, só a normalização do que vem gravado (`normalizarExportacoes`) |
 | `js/fixos.js` | Os voos fixos (pela escala aprovada, pelo status, pelo instrutor escolhido e pelo agendamento na Escala): o que acontece com eles ao mudar o status, aprovar, reabrir e mudar a demanda, e o motivo do cadeado |
 | `js/candidatos.js` | Os recursos e os instrutores que servem a um voo num horário, contra os outros voos do dia, cada um com o que o impede (as Sugestões e o agendamento) |
 | `js/reparo.js` | As Sugestões: para um conflito na escala aprovada (outro avião, outro instrutor, outro horário, soltar o voo ou cancelar; depois, o horário mais perto, também fora da disponibilidade do pedido, e outro tipo, que mudam o pedido junto, `repararComOPedido`), para o voo cancelado da data aberta (o motivo fora da busca; o mesmo horário, outro avião, o horário mais perto, outro tipo; aplicar e desfazer, `aproveitarCancelado`) e para o pedido recusado pelo instrutor escolhido (`sugestoesDoRejeitado`: o motor numa cópia com cada outro instrutor), de hoje em diante (`dataQueAindaVoa`); cada sugestão é conferida no motor numa cópia (`conferirNoMotor`: o voo fica onde ela diz; a que muda ou tira outros voos diz quais); a sugestão fora da disponibilidade ou em outro tipo pede a confirmação com o aluno, e a que faz do voo local o 7º do horário ou muda outros voos, "Aplicar mesmo assim" |

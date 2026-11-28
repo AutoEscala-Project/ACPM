@@ -254,14 +254,15 @@ function entrar(estado, s, { programa, situacao, cursos }) {
   // entra sem ele, e o resumo diz; não está "fora da lista"
   const semOHorario = Number.isFinite(minutoDaLinha(s)) && !minutosDoPedido(pedido.jan).length;
   const foraDaLista = !semOHorario && horarioForaDaLista(estado, s, pedido.eq);
-  if (entrada.missao) Object.assign(pedido, { etapa: entrada.missao.codigo }, entrada.curso ? { cursoDaEtapa: entrada.curso } : {});
+  // A missão do curso dada pelo programa leva a marca (etapaDoPrograma, formato 30): a do pedido e a do operador, não
+  if (entrada.missao) Object.assign(pedido, { etapa: entrada.missao.codigo }, entrada.curso ? { cursoDaEtapa: entrada.curso } : {}, entrada.de === 'programa' ? { etapaDoPrograma: true } : {});
   pedido.solicitacao = s.id;
   let registro;
   if (copiada) {
     // O voo continua com o instrutor escolhido e a prioridade que o operador deu (com a prioridade desligada, o motor da
     // tela recebe a padrão: estadoDaEscala); a disponibilidade e a missão do curso passam a ser as do pedido
     const { pr } = copiada;
-    for (const campo of ['jan', 'etapa', 'cursoDaEtapa', 'limiteConfirmado']) delete copiada[campo];
+    for (const campo of ['jan', 'etapa', 'cursoDaEtapa', 'etapaDoPrograma', 'limiteConfirmado']) delete copiada[campo];
     registro = Object.assign(copiada, pedido, pr === undefined ? {} : { pr });
   } else registro = Object.assign(alvoDaEntrada(estado, aluno), pedido);
   return {

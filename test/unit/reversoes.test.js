@@ -15,7 +15,7 @@ import { aluno, cenario, instrutor } from '../helpers/montar.js';
 const ATAQUE = 'x"><img/src/onerror=window.__xss=1>';
 
 // O pedido de antes de um agendamento, com todos os campos do pedido (CAMPOS_DO_PEDIDO)
-const PEDIDO_DE_ANTES = { fly: true, mis: 'Navegação', eq: 'C172', p1: 500, p2: -1, nb: 2, ss: 1, pr: 3, jan: 'h390', etapa: 'PP-07', solicitacao: 7, insId: 2, cursoDaEtapa: 'PP', limiteConfirmado: true };
+const PEDIDO_DE_ANTES = { fly: true, mis: 'Navegação', eq: 'C172', p1: 500, p2: -1, nb: 2, ss: 1, pr: 3, jan: 'h390', etapa: 'PP-07', solicitacao: 7, insId: 2, cursoDaEtapa: 'PP', limiteConfirmado: true, etapaDoPrograma: true };
 // Uma reversão válida de cada tipo, com todos os campos que o app grava. Do voo agendado na Escala, duas: o criado numa
 // missão extra (sem o pedido de antes) e o que mudou de lugar (o pedido, o voo fixo e a disponibilidade do instrutor de
 // antes, e o pedido como o agendamento o deixou)
