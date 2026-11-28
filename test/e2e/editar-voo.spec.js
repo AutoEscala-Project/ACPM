@@ -161,6 +161,25 @@ test.describe('O editor do voo', () => {
     await expect(conflitos).toContainText('Aluno 1001 Conflito no voo agendado: o avião já está ocupado neste horário.');
   });
 
+  // L (N9): mudar o horário para fora das limitações do aluno avisa e pede "Salvar mesmo assim"; salvo, o voo fica em conflito
+  test('o horário fora das limitações do aluno avisa e pede "Salvar mesmo assim"; salvo, o voo fica em conflito na Escala (na aprovada)', async ({ page }) => {
+    const estado = dia();
+    estado.stu[1].limitacoes = { horarios: [{ de: 480, ate: 560 }] };
+    await abrir(page, { estado });
+    await abrirEscala(page);
+    await aprovar(page);
+    await editarPelaLista(page, '1001_0_1');
+    await page.locator('#voo-horario').selectOption('760');
+    await expect(page.locator('#voo-avisos li.conflito')).toContainText(['O horário está fora das limitações do aluno (08:00–09:20).']);
+    await expect(page.locator('#voo-horario')).toHaveAttribute('aria-invalid', 'true');
+    await salvarVoo(page);
+    await expect(page.locator('#voo-salvar')).toHaveText('Salvar mesmo assim');
+    await salvarVoo(page);
+    await expect(editorDoVoo(page)).toBeHidden();
+    const conflitos = await abrirCaixa(page, 'conflitos');
+    await expect(conflitos).toContainText('Aluno 1001 Conflito no voo agendado: o horário está fora das limitações do aluno (08:00–09:20).');
+  });
+
   test('na escala aprovada, a alteração fica depois de reabrir (o voo posto à mão), e o Histórico a desfaz sem o motor', async ({ page }) => {
     await abrir(page, { estado: dia() });
     await abrirEscala(page);
