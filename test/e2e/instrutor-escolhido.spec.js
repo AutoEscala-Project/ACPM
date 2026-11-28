@@ -1,6 +1,6 @@
 // O instrutor escolhido pelo operador: na Demanda (o app encaixa o voo com ele) e na Escala (o nome do instrutor abre a
 // lista; o voo fica onde está, fixo, com o escolhido, e o resto é refeito em volta). O histórico desfaz
-import { test, expect, abrir, irPara, abrirEscala, confirmar, abrirHistorico, alternarVem, aprovar, reabrir, editorDoVoo, refazer, abrirCaixa, campoDoAluno, abrirAluno } from './fixtures.js';
+import { test, expect, abrir, irPara, abrirEscala, confirmar, abrirHistorico, alternarVem, aprovar, reabrir, editorDoVoo, refazer, textosDaEscala, itensDaEscala, campoDoAluno, abrirAluno } from './fixtures.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
 
 // Dois voos às 08:20: o app põe o Instrutor 02 (menos habilitações) com o Aluno 1000 e o Instrutor 01 com o 1001
@@ -39,7 +39,7 @@ test.describe('Instrutor escolhido', () => {
     await irPara(page, 'dem');
     await pedido(page, 1000).locator('[data-f="insId"]').selectOption({ label: 'Instrutor 03 (fora nesta data)' });
     await abrirEscala(page);
-    await expect(page.locator('#out details.erros')).toContainText('o instrutor escolhido (Instrutor 03) não está disponível nesta data');
+    await expect(textosDaEscala(page, 'erros').filter({ hasText: 'o instrutor escolhido (Instrutor 03) não está disponível nesta data' })).toHaveCount(1);
   });
 
   test('na Escala: o voo fica no horário e no avião dele, fixo, com o escolhido; "Automático" solta', async ({ page }) => {
@@ -64,7 +64,7 @@ test.describe('Instrutor escolhido', () => {
     await expect(voo.locator('.c-aviao')).toHaveText(aviao);
     await expect(voo.locator('.fixo')).toHaveAttribute('aria-label', 'Voo fixo: instrutor escolhido na escala');
     await expect(linha(page, 'Aluno 1000').locator('.c-instr')).toHaveText('Instrutor 01');
-    await expect(page.locator('#out details.conflitos')).toHaveCount(0);
+    await expect(itensDaEscala(page, 'conflitos')).toHaveCount(0);
 
     await irPara(page, 'dem');
     await expect(pedido(page, 1001).locator('[data-f="insId"]')).toHaveValue('2');
@@ -111,7 +111,7 @@ test.describe('Instrutor escolhido', () => {
 
     await abrirEscala(page);
     await expect(linha(page, 'Aluno 1000').locator('.c-instr')).toHaveText('Instrutor 01');
-    await expect(page.locator('#out details.avisos')).toHaveCount(0);
+    await expect(itensDaEscala(page, 'avisos')).toHaveCount(0);
 
     // O Instrutor 01 não vem: o voo fica com outro, com o aviso
     await irPara(page, 'ins');
@@ -119,15 +119,15 @@ test.describe('Instrutor escolhido', () => {
     await abrirEscala(page);
     await expect(linha(page, 'Aluno 1000')).toHaveCount(1);
     await expect(linha(page, 'Aluno 1000').locator('.c-instr')).toHaveText('Instrutor 02');
-    await expect(page.locator('#out details.avisos summary')).toContainText('1 aviso de Priorizar com');
-    await expect(page.locator('#out details.avisos')).toContainText('Sem o instrutor de “Priorizar com” (Instrutor 01: fora nesta data)');
+    await expect(textosDaEscala(page, 'avisos')).toHaveCount(1);
+    await expect(textosDaEscala(page, 'avisos')).toContainText('Sem o instrutor de “Priorizar com” (Instrutor 01: fora nesta data)');
 
     // Tirar do “Priorizar com”: o aviso some
     await irPara(page, 'alu');
     await page.locator('#det-alu .det[data-id="1000"] [data-act="unvc"]').click();
     await expect(page.locator('#det-alu .det[data-id="1000"] .tg.par')).toHaveCount(0);
     await abrirEscala(page);
-    await expect(page.locator('#out details.avisos')).toHaveCount(0);
+    await expect(itensDaEscala(page, 'avisos')).toHaveCount(0);
   });
 
   test('o “Priorizar com” fica no cadastro: vale também na data seguinte', async ({ page }) => {
@@ -183,8 +183,8 @@ test.describe('Instrutor escolhido', () => {
     await abrir(page, { estado });
     await abrirEscala(page);
     await expect(linha(page, 'Aluno 1000').locator('.c-instr')).toHaveText('Instrutor 02');
-    await expect(page.locator('#out details.avisos summary')).toContainText('1 voo com o instrutor escolhido fora do cadastro');
-    await expect(page.locator('#out details.avisos')).toContainText('O instrutor escolhido saiu do cadastro: o voo ficou com Instrutor 02.');
+    await expect(textosDaEscala(page, 'avisos')).toHaveCount(1);
+    await expect(textosDaEscala(page, 'avisos')).toContainText('O instrutor escolhido saiu do cadastro: o voo ficou com Instrutor 02.');
     await irPara(page, 'dem');
     await expect(pedido(page, 1000).locator('[data-f="insId"] option:checked')).toHaveText('Instrutor fora do cadastro (o app escolhe)');
 
@@ -196,7 +196,7 @@ test.describe('Instrutor escolhido', () => {
     await irPara(page, 'dem');
     await expect(pedido(page, 1000).locator('[data-f="insId"]')).toHaveValue('');
     await abrirEscala(page);
-    await expect(page.locator('#out details.avisos')).toHaveCount(0);
+    await expect(itensDaEscala(page, 'avisos')).toHaveCount(0);
     await expect(linha(page, 'Aluno 1000')).toHaveCount(1);
   });
 
@@ -221,8 +221,8 @@ test.describe('Instrutor escolhido', () => {
     await expect(voo.locator('.c-hr')).toContainText('10:10–11:10');
     await expect(voo.locator('.fixo')).toHaveAttribute('aria-label', 'Voo fixo: agendado na escala');
     await expect(voo).toHaveClass(/\bem-conflito\b/);
-    await expect(page.locator('#out details.conflitos')).toContainText('o instrutor saiu do cadastro');
-    await expect(page.locator('#out details.conflitos [data-reparo="1001_0_1"]')).toHaveCount(1);
+    await expect(textosDaEscala(page, 'conflitos')).toContainText('o instrutor saiu do cadastro');
+    await expect(itensDaEscala(page, 'conflitos').locator('[data-reparo="1001_0_1"]')).toHaveCount(1);
     await expect(linha(page, 'Aluno 1000').locator('.fixo')).toHaveCount(0);
   });
 
@@ -242,7 +242,7 @@ test.describe('Instrutor escolhido', () => {
     await expect(page.locator('#refazer-avisos li')).toHaveText(['Instrutor 02 está fora do Priorizar com de Aluno 1000.']);
     await refazer(page);
     await expect(voo.locator('.c-instr')).toHaveText('Instrutor 02');
-    await expect((await abrirCaixa(page, 'avisos')).locator('li', { hasText: 'Priorizar com' })).toHaveText([posto]);
+    await expect(textosDaEscala(page, 'avisos').filter({ hasText: 'Priorizar com' })).toHaveText([posto]);
   });
 
   test('o INVA fora do “Priorizar com” na Lista da escala aprovada: a opção diz, a troca vale sem o motor, com a observação', async ({ page }) => {
@@ -254,7 +254,7 @@ test.describe('Instrutor escolhido', () => {
     await expect(voo.locator('select[data-a="insVoo"] option', { hasText: 'Instrutor 02' })).toHaveText('Instrutor 02 (fora do Priorizar com)');
     await voo.locator('select[data-a="insVoo"]').selectOption('2');
     await expect(voo.locator('.c-instr')).toHaveText('Instrutor 02');
-    await expect((await abrirCaixa(page, 'avisos')).locator('li', { hasText: 'Priorizar com' })).toHaveText([posto]);
+    await expect(textosDaEscala(page, 'avisos').filter({ hasText: 'Priorizar com' })).toHaveText([posto]);
   });
 
   test('o instrutor do dia na Demanda fora do “Priorizar com”: a observação na Escala', async ({ page }) => {
@@ -263,7 +263,7 @@ test.describe('Instrutor escolhido', () => {
     await pedido(page, 1000).locator('[data-f="insId"]').selectOption({ label: 'Instrutor 02' });
     await abrirEscala(page, { vista: 'lista' });
     await expect(linha(page, 'Aluno 1000').locator('.c-instr')).toHaveText('Instrutor 02');
-    await expect((await abrirCaixa(page, 'avisos')).locator('li', { hasText: 'Priorizar com' }))
+    await expect(textosDaEscala(page, 'avisos').filter({ hasText: 'Priorizar com' }))
       .toHaveText(['Aluno 1000 Fora do “Priorizar com” de Aluno 1000 (Instrutor 01): Instrutor 02 foi escolhido para o dia na Demanda.']);
   });
 

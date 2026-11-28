@@ -1,7 +1,7 @@
 // Atributos dos recursos em Recursos (no detalhe do recurso, "Cadastro · todas as datas": Só VFR, Só Parafuso; a
 // habilitação própria em "Habilitações que o INVA precisa"), a habilitação própria nas habilitações do instrutor e o
 // simulador com 2 h na Demanda e na Agenda
-import { test, expect, abrir, irPara, abrirEscala, abrirHistorico, campoDaAgenda, abrirRecursos, linhaDoRecurso, marcarAtributo, campoDoRecurso } from './fixtures.js';
+import { test, expect, abrir, irPara, abrirEscala, abrirHistorico, campoDaAgenda, abrirRecursos, linhaDoRecurso, marcarAtributo, campoDoRecurso, textosDaEscala } from './fixtures.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
 
 const linha = (page, nome) => page.locator('#out tbody tr:not(.win)', { hasText: nome });
@@ -23,7 +23,7 @@ test.describe('Atributos dos recursos', () => {
     await expect(linhaDoRecurso(page, 'PR-HAR').locator('.lista-l2')).toContainText('Só VFR');
     await expect(campoDoRecurso(page, 'atributos').locator('[data-atributo="soVfr"]')).toBeFocused();
     await abrirEscala(page);
-    await expect(page.locator('#out details.erros')).toContainText('nenhum C172 homologado IFR disponível');
+    await expect(textosDaEscala(page, 'erros').filter({ hasText: 'nenhum C172 homologado IFR disponível' })).toHaveCount(1);
 
     await abrirHistorico(page);
     await expect(page.locator('#audit-log-list')).toContainText('PR-HAR: Só VFR marcado');
@@ -37,7 +37,7 @@ test.describe('Atributos dos recursos', () => {
     const estado = cenario({ ins: [instrutor(1, 1, { hab: mlte })], stu: [aluno(1000, { mis: 'Multimotor', eq: 'PA-34' })], semAeronaves: ['PT-JOB', 'PT-KIW'] });
     await abrir(page, { estado });
     await abrirEscala(page);
-    await expect(page.locator('#out details.erros')).toContainText('exigem a habilitação própria deles');
+    await expect(textosDaEscala(page, 'erros').filter({ hasText: 'exigem a habilitação própria deles' })).toHaveCount(1);
 
     await irPara(page, 'ins');
     await page.locator('[data-vista-ins="cadastro"]').click();

@@ -102,6 +102,12 @@ export const paradasDoCalendario = page => page.locator('#cal .cal-dia[tabindex=
 export const avisosDaData = (page, texto) => page.locator('#avisos-da-data > li', texto === undefined ? {} : { hasText: texto });
 export const contagemDosAvisos = page => page.locator('#avisos-cnt');
 
+// Os avisos da data à vista (para o clique num deles): solto, o trilho abre pelo botão da data
+export async function mostrarAvisos(page) {
+  if (!await trilho(page).isVisible()) await botaoDaData(page).click();
+  await expect(trilho(page)).toBeVisible();
+}
+
 const ehDomingo = iso => new Date(iso + 'T12:00:00Z').getUTCDay() === 0;
 const somarDias = (iso, dias) => new Date(Date.parse(iso + 'T12:00:00Z') + dias * 864e5).toISOString().slice(0, 10);
 

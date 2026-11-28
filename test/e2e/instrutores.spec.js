@@ -1,5 +1,5 @@
 // Instrutores: os filtros, a disponibilidade do dia (a grade e o "Vem"), as habilitações, o peso e o turno.
-import { test, expect, abrir, abrirSintetico, abrirComExemplo, irPara, irParaVista, abrirEscala, lerEscala, filtrarHabilitacoes, abrirHistorico, cabecalhoDaGrade, caixaVem, dataAberta, diaSeguinte, gradeDoDia, linhaDoInstrutor, alvosPequenos, larguraDaPagina, marcarAtributo, retirarRecurso, linhaDoRecurso } from './fixtures.js';
+import { test, expect, abrir, abrirSintetico, abrirComExemplo, irPara, irParaVista, abrirEscala, lerEscala, filtrarHabilitacoes, abrirHistorico, cabecalhoDaGrade, caixaVem, dataAberta, diaSeguinte, gradeDoDia, linhaDoInstrutor, alvosPequenos, larguraDaPagina, marcarAtributo, retirarRecurso, linhaDoRecurso, textosDaEscala } from './fixtures.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
 
 test.describe('Instrutores', () => {
@@ -461,7 +461,7 @@ test.describe('Instrutores', () => {
     await page.locator('#inst .cd[data-id="2"] [data-act="editar-habs"]').click();
     await page.locator('#painel-instrutor [data-f="hab"][data-h="sim_mono"]').uncheck();
     await irPara(page, 'esc');
-    await expect(page.locator('#out')).toContainText('nenhum instrutor ativo tem a habilitação de Simulador no Sim. Mono (Simulador (Mono))');
+    await expect(textosDaEscala(page, 'erros').filter({ hasText: 'nenhum instrutor ativo tem a habilitação de Simulador no Sim. Mono (Simulador (Mono))' })).toHaveCount(1);
   });
 
   test('instrutor indisponível pode ser revertido pelo histórico', async ({ page }) => {

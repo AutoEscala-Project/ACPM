@@ -13,7 +13,9 @@ const ANTIGAS = {
   casca: ['setas ‹ ›', 'use as setas', 'com um calendário', 'o app pula o domingo'],
   // O "+" do mapa fica ao lado do nome do recurso; o mapa abre com os recursos nas colunas, e o Manual não fala dele
   // como linhas
-  escala: ['no fim de cada linha', 'ao lado do nome de cada linha', 'as linhas livres', 'de uma linha do mapa', 'a linha dele não agenda'],
+  escala: ['no fim de cada linha', 'ao lado do nome de cada linha', 'as linhas livres', 'de uma linha do mapa', 'a linha dele não agenda',
+    // linha-fix-escala-sem-caixas: sem as caixas do resumo (o que não entrou, os conflitos e os avisos ficam no trilho)
+    'caixa vermelha', 'caixa amarela', 'As caixas abrem recolhidas'],
   // O Operador não muda os Cursos nem os limites da lei
   perfis: ['altera tudo e opera a escala'],
   // A coluna de quem vem é "Vem" (a data aberta não é sempre hoje); o filtro das habilitações tem várias marcas
@@ -42,6 +44,8 @@ const NOVAS = {
     'os aviões parados ou perto da revisão de 50 horas, os pedidos', 'leva à tela onde se resolve, quando você a vê'],
   perfis: ['na primeira data que ainda aceita pedidos'],
   escala: ['Atualizada às', 'Ver todos', 'Compartilhar', 'Por recurso',
+    // linha-fix-escala-sem-caixas: os alertas da escala nos avisos da data, no trilho
+    'ficam nos avisos da data, no trilho, ao lado do calendário', 'os voos com quem está inativo no cadastro (com Refazer a escala',
     // Os horários fechados nesta data, no alto da Escala (B): o bloco, o aviso do trilho e a pergunta
     'no alto da Escala, entre a barra das vistas e a dos critérios', 'Na escala que não está aprovada, Fechar e o ✕ perguntam antes',
     // O agendamento na Escala (mover e encaixar, as turmas, as alternativas, a prévia, os avisos), o voo agendado na

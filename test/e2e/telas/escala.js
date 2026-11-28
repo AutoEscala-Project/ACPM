@@ -1,7 +1,7 @@
 // O driver da Escala (donos: G1, que abre as restrições do voo, e H, que traz Aprovar e as exportações): abrir a aba, ler
 // a escala desenhada, aprovar e reabrir, e baixar os arquivos
 import { expect } from '@playwright/test';
-import { irPara, confirmar } from './casca.js';
+import { irPara, confirmar, mostrarAvisos } from './casca.js';
 
 // A escala é refeita a cada alteração: basta abrir a aba. A Escala abre em Por recurso; os testes da Lista (a tabela, o
 // status, o ✕, o "+" de cada horário) pedem a Lista, o padrão daqui; { vista: null } deixa a vista como está
@@ -15,23 +15,26 @@ export async function abrirEscala(page, { vista = 'lista' } = {}) {
   }
 }
 
-// Uma caixa do resumo (erros, conflitos, avisos, inativos), aberta: elas abrem recolhidas, e a aberta continua aberta
-// nos redesenhos
-export async function abrirCaixa(page, nome) {
-  const caixa = page.locator(`#out details.caixa[data-caixa="${nome}"]`);
-  if (await caixa.getAttribute('open') === null) await caixa.locator('summary').click();
-  await expect(caixa).toHaveAttribute('open', '');
-  return caixa;
+// Os alertas da escala ficam no trilho, com os outros avisos da data (as caixas do resumo saíram:
+// linha-fix-escala-sem-caixas): os itens de um grupo ('erros', 'conflitos', 'avisos', 'inativos', 'habilitacoes'), com as
+// ações deles ("Sugestões", "Refazer a escala"); o texto de cada um, o nome e o porquê ("Aluno 1000 Rejeitado: …"). Abrir:
+// o trilho e os avisos à vista, para o clique
+export const itensDaEscala = (page, grupo) => page.locator(`#avisos-da-data > li[data-grupo="${grupo}"]`);
+export const textosDaEscala = (page, grupo) => itensDaEscala(page, grupo).locator('.aviso-corpo');
+export async function abrirAvisosDaEscala(page, grupo) {
+  await mostrarAvisos(page);
+  return itensDaEscala(page, grupo);
 }
 
-// Leitura estruturada da escala renderizada (resumo, alertas, tabela oficial e mapa de ocupação)
+// Leitura estruturada da escala renderizada (resumo, alertas, tabela oficial e mapa de ocupação). Os alertas ficam no
+// trilho (os itens dos grupos da escala: o nome e o porquê), também com ele recolhido
 export function lerEscala(page) {
   return page.locator('#out').evaluate(out => {
     const txt = el => (el ? el.innerText.replace(/\s+/g, ' ').trim() : '');
     const tabela = out.querySelector('table');
     return {
       resumo: [...out.querySelectorAll('.st > div')].map(txt),
-      alertas: [...out.querySelectorAll('.al')].map(txt),
+      alertas: [...document.querySelectorAll('#avisos-da-data > li[data-grupo] .aviso-corpo')].map(el => el.textContent.replace(/\s+/g, ' ').trim()),
       linhas: tabela
         ? [...tabela.querySelectorAll('tbody tr')].map(tr => [...tr.cells].map(td => {
             const sel = td.querySelector('select');

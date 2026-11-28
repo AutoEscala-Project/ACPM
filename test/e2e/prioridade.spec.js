@@ -2,7 +2,7 @@
 // texto fala dela (as dicas, o glossário e o Manual), e a escala segue a ordem dos agendamentos e do cadastro; a prioridade
 // guardada continua no dia, depois de gravar e recarregar, e ligar de novo a traz de volta. Ligada: a tela mostra 1 como a
 // mais alta (a guardada continua com 5 a mais alta: o formato não muda)
-import { test, comPrioridade, expect, abrir, irPara, abrirEscala, lerEscala, appPronto, campoDoPedido, linhaDoPedido, voar, botaoDaData, avisosDaData, AMANHA } from './fixtures.js';
+import { test, comPrioridade, expect, abrir, irPara, abrirEscala, lerEscala, appPronto, campoDoPedido, linhaDoPedido, voar, botaoDaData, avisosDaData, textosDaEscala, AMANHA } from './fixtures.js';
 import { aluno, apenas, cenario, instrutor } from '../helpers/montar.js';
 import { montarGlossario } from '../../js/glossario.js';
 
@@ -119,7 +119,7 @@ const semAviao = () => cenario({
   ins: [instrutor(1, 9), instrutor(2, 9)], semAeronaves: apenas('C152', 'PP-LJV'),
   stu: [aluno(1000, { p1: 390, p2: -1, jan: 'h390' }), aluno(1001, { p1: 390, p2: -1, jan: 'h390' }), aluno(1002, { fly: false })]
 });
-const motivoDaEscala = page => page.locator('#s-esc [data-caixa="erros"] li', { hasText: 'Aluno 1001' });
+const motivoDaEscala = page => textosDaEscala(page, 'erros').filter({ hasText: 'Aluno 1001' });
 
 comPrioridade.describe('A prioridade ligada: 1 é a mais alta', () => {
   comPrioridade('a tela mostra 1 para a guardada 5; escolher 1 guarda 5, e a escala segue a guardada', async ({ page }) => {
