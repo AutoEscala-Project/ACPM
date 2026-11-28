@@ -373,3 +373,22 @@ dialog.dlg-voo [aria-invalid="true"] { border-color: var(--er); box-shadow: 0 0 
   dialog.dlg-voo .campo-duplo { grid-template-columns: 1fr; }
   .c-acao .editar-voo { min-height: 44px; }
 }
+/* Os horários fechados nesta data (J; o B os trouxe de Recursos): o bloco entre a barra da Escala e a dos critérios, o
+   resumo à vista; dentro, a lista dos intervalos e o formulário de "+ Fechar horários" */
+.fechamentos-da-data { margin: 0 0 10px; padding: 8px 12px; }
+.fechamentos-da-data > summary { cursor: pointer; font: 600 14.5px 'Barlow Semi Condensed', sans-serif; }
+.fechamentos-da-data[open] > summary { margin-bottom: 6px; }
+.fechamentos-dica { margin: 0 0 8px; }
+.fechamentos { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+.fechamentos-lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.fechamentos-lista li { display: flex; align-items: center; gap: 6px; font: 600 14.5px 'Barlow Semi Condensed', sans-serif; }
+.fechar-horarios { display: flex; flex-direction: column; gap: 10px; width: 100%; max-width: 560px; padding: 10px 12px; border: 1px solid var(--ln2); border-radius: 8px; background: var(--pn); }
+.fch-campos, .fch-acoes { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; }
+.fch-categorias { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 0; padding: 0; border: 0; }
+.fch-categorias legend { padding: 0; margin-bottom: 4px; font-weight: 600; }
+.fch-efeito { margin: 0; color: var(--mu); }
+@media (max-width: 640px) {
+  .fechamentos-da-data > summary { min-height: 44px; padding: 12px 0; box-sizing: border-box; }
+  .fechamentos-lista button, .fechar-horarios select, .fechar-horarios button, .fechamentos > .btn { min-height: 44px; }
+  .fch-categorias .chk { min-height: 44px; }
+}

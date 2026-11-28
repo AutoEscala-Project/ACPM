@@ -27,6 +27,8 @@ import { abrirEditorDoVoo } from '../views/edicao-do-voo.js';
 import { perguntarAntesDeRefazer } from '../views/dialogo-refazer.js';
 import { statusDoVoo } from '../voo.js';
 import './edicao-do-voo.js';
+// Os horários fechados nesta data (J; o B os trouxe de Recursos): o bloco details#fechamentos, entre as duas barras
+import './fechamentos.js';
 import { abrirPainelDeReparo, abrirPainelDoRejeitado, fecharPainelDeReparo, opcaoDoPainel, focarNoVoo } from '../views/reparo.js';
 import { registrarDesenho, redesenharPorNome } from '../redesenho.js';
 import { voosComInativos } from '../inativos.js';

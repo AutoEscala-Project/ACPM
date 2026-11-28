@@ -1,7 +1,9 @@
-// "Horários fechados nesta data" (J, N11; Recursos › Disponibilidade do dia, no lugar das nove "Janelas de operação"): a
-// lista dos intervalos fechados da data aberta ("12:40–17:30 · todos os recursos", com o ✕ que abre de novo) e "+ Fechar
-// horários", que abre o formulário: De e Até (de 10 em 10 minutos, das 06:00 às 24:00), "O dia todo", as categorias
-// (nenhuma marcada: todos os recursos) e a linha do que ele fecha. Nada é gravado antes de "Fechar" (js/eventos/fechamentos.js)
+// "Horários fechados nesta data" (J, N11; B os trouxe de Recursos para a Escala): o bloco details#fechamentos, entre a barra
+// da Escala e a dos critérios. O resumo dele diz o que está fechado ("nenhum", "12:40–17:30 · todos os recursos"); dentro,
+// a lista dos intervalos fechados da data aberta (com o ✕ que abre de novo) e "+ Fechar horários", que abre o formulário:
+// De e Até (de 10 em 10 minutos, das 06:00 às 24:00), "O dia todo", as categorias (nenhuma marcada: todos os recursos) e
+// a linha do que ele fecha. Nada é gravado antes de "Fechar" (js/eventos/fechamentos.js). A data que abre com algum
+// horário fechado abre o bloco; sem nenhum, ele começa fechado; depois, fica como a pessoa deixou
 import { S, isGestor } from '../state.js';
 import { $, trocarConteudo } from '../dom.js';
 import { esc, hm } from '../format.js';
@@ -73,15 +75,40 @@ export function atualizarFormularioDosFechamentos() {
   caixa.querySelectorAll('input[data-cat]').forEach(c => { c.checked = form.categorias.includes(c.dataset.cat); });
 }
 
+// Os fechamentos da data aberta, como a tela os mostra
+const fechamentosDaData = () => (Array.isArray(S.fechamentos) ? S.fechamentos : fechamentosDoEstado(S));
+
 export function rFechamentos() {
-  const caixa = $('#fechamentos');
+  const caixa = $('#fechamentos-corpo');
   if (!caixa) return;
-  const lista = Array.isArray(S.fechamentos) ? S.fechamentos : fechamentosDoEstado(S);
-  const rotulos = rotuloDosFechamentos(lista);
+  const rotulos = rotuloDosFechamentos(fechamentosDaData());
+  const resumo = rotulos.length ? rotulos.join('; ') : 'nenhum';
+  if ($('#fechamentos-resumo').textContent !== resumo) $('#fechamentos-resumo').textContent = resumo;
   const leitura = isGestor();
   trocarConteudo(caixa, `${rotulos.length
     ? `<ul class="fechamentos-lista">${rotulos.map((r, i) => `<li><span>${esc(r)}</span>${leitura ? '' : ` <button type="button" class="btn quiet edit-only" data-act="tirar-fechamento" data-i="${i}" aria-label="Abrir de novo ${esc(r)}">✕</button>`}</li>`).join('')}</ul>`
     : '<p class="h">Nenhum horário fechado nesta data.</p>'}
     ${leitura ? '' : `<button type="button" class="btn sec edit-only" data-act="fechar-horarios" aria-expanded="${formularioAberto()}">+ Fechar horários</button>`}
     ${form && !leitura ? formulario() : ''}`);
+}
+
+// A data que abriu (os dados dela chegaram): o bloco aberto quando ela tem algum horário fechado, e o formulário que estava
+// aberto (de outra data) fecha. Nos outros momentos, ele fica como a pessoa deixou
+export function desenharFechamentos(momento) {
+  if (momento === 'dados') {
+    fecharFormulario();
+    const bloco = $('#fechamentos');
+    if (bloco) bloco.open = fechamentosDaData().length > 0;
+  }
+  rFechamentos();
+}
+
+// O bloco aberto (o aviso do trilho, #/esc/fechamentos): o foco no resumo dele
+export function mostrarFechamentos() {
+  const bloco = $('#fechamentos');
+  if (!bloco) return null;
+  bloco.open = true;
+  rFechamentos();
+  bloco.querySelector('summary').focus({ preventScroll: true });
+  return { lugar: bloco, focou: true };
 }

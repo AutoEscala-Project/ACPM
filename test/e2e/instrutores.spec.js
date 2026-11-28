@@ -1,5 +1,5 @@
 // Instrutores: os filtros, a disponibilidade do dia (a grade e o "Vem"), as habilitações, o peso e o turno.
-import { test, expect, abrir, abrirSintetico, abrirComExemplo, irPara, irParaVista, abrirEscala, lerEscala, filtrarHabilitacoes, confirmar, abrirHistorico, cabecalhoDaGrade, caixaVem, dataAberta, diaSeguinte, gradeDoDia, linhaDoInstrutor, alvosPequenos, larguraDaPagina } from './fixtures.js';
+import { test, expect, abrir, abrirSintetico, abrirComExemplo, irPara, irParaVista, abrirEscala, lerEscala, filtrarHabilitacoes, abrirHistorico, cabecalhoDaGrade, caixaVem, dataAberta, diaSeguinte, gradeDoDia, linhaDoInstrutor, alvosPequenos, larguraDaPagina, marcarAtributo, retirarRecurso, linhaDoRecurso } from './fixtures.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
 
 test.describe('Instrutores', () => {
@@ -227,11 +227,9 @@ test.describe('Instrutores', () => {
     const botao = page.locator('#flt-ins-hab'), painel = page.locator('#flt-ins-hab-painel');
     const propria = painel.locator('fieldset', { has: page.locator('legend', { hasText: 'Habilitação própria do recurso' }) }).locator('label');
     const naGrade = gradeDoDia(page).locator('tr[data-k="i"]:visible .nome');
-    // A frota fica no Cadastro de Recursos
+    // A habilitação própria fica no detalhe do recurso, em Recursos
     const atributo = async (reg, marcar) => {
-      await irParaVista(page, 'rec', 'cadastro');
-      await page.locator(`#frota li.frota-item[data-r="${reg}"] [data-act="atributos-recurso"]`).click();
-      await page.locator(`#frota li.frota-item[data-r="${reg}"] [data-atributo="habilitacaoPropria"]`).setChecked(marcar);
+      await marcarAtributo(page, reg, 'habilitacaoPropria', marcar);
       await expect(page.locator('#audit-log-list')).toContainText(`${reg}: Habilitação própria ${marcar ? 'marcado' : 'desmarcado'}`);
       await irPara(page, 'ins');
     };
@@ -247,9 +245,8 @@ test.describe('Instrutores', () => {
     await expect(painel.locator('input[data-valor="aviao:PR-VOM"]')).toHaveCount(0);
     await expect(naGrade).toHaveText(['Ana']);
     // O PR-HAR sai da frota: o filtro fica sem marca, e o grupo da habilitação própria some
-    await irParaVista(page, 'rec', 'cadastro');
-    await confirmar(page, '#frota li.frota-item[data-r="PR-HAR"] [data-act="retirar-recurso"]');
-    await expect(page.locator('#frota li.frota-item[data-r="PR-HAR"]')).toHaveCount(0);
+    await retirarRecurso(page, 'PR-HAR');
+    await expect(linhaDoRecurso(page, 'PR-HAR')).toHaveCount(0);
     await irPara(page, 'ins');
     await expect(botao).toHaveText('Todas as habilitações');
     await expect(naGrade).toHaveText(['Ana', 'Bruno']);

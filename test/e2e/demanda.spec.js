@@ -1,4 +1,4 @@
-import { test, comProgresso, expect, abrir, abrirSintetico, abrirComExemplo, irPara, abrirEscala, lerEscala, confirmar, filtrarCursos, AMANHA, abrirHistorico, aprovar, botaoAprovar, caixaVoa, dataAberta, diaSeguinte, importarDaAgenda, reabrir, tabelaDoDia, voar, registrarPedido, refazer, linhasDosAlunos } from './fixtures.js';
+import { test, comProgresso, expect, abrir, abrirSintetico, abrirComExemplo, irPara, abrirEscala, lerEscala, confirmar, filtrarCursos, AMANHA, abrirHistorico, aprovar, botaoAprovar, caixaVoa, dataAberta, diaSeguinte, importarDaAgenda, reabrir, voar, registrarPedido, refazer, linhasDosAlunos, caixaDisponivel } from './fixtures.js';
 import { aluno, cenario, instrutor, missaoExtra } from '../helpers/montar.js';
 
 const linhaDoAluno = (page, nome) => page.locator(`#dem tr[data-k="d"][data-mid="0"][data-nm="${nome.toLowerCase()}"]`);
@@ -702,7 +702,7 @@ test.describe('O foco depois de uma ação', () => {
     await expect(page.locator(`#dem tr[data-k="d"][data-id="${primeira}"][data-mid="0"]`)).toBeHidden();
     await expect(caixaVoa(page.locator(`#dem tr[data-k="d"][data-id="${segunda}"]`)).first()).toBeFocused();
     await irPara(page, 'rec');
-    await tabelaDoDia(page).locator('input[data-a="av"][data-id="PR-BTB"]').focus();
+    await caixaDisponivel(page, 'PR-BTB').focus();
     await page.keyboard.press('Space');
     expect(await emFoco(page)).toBe('input[data-a="av"][data-id="PR-BTB"]');
   });

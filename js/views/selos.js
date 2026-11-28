@@ -1,13 +1,9 @@
-// Os pedidos da data aberta (a linha, o trilho, a Agenda e a Demanda leem daqui) e os dois selos que ainda não são da linha: o de Recursos no
-// botão da Disponibilidade do dia (aviões parados ou com menos de 5 h até a revisão de 50 horas) e o número de pedidos no
-// botão de importar, na Demanda
+// Os pedidos da data aberta (a linha, o trilho, a Agenda e a Demanda leem daqui) e o selo que ainda não é da linha: o
+// número de pedidos no botão de importar, na Demanda
 import { $ } from '../dom.js';
-import { RES, S, DATA, isGestor, inativoNaDataAberta, stuBy } from '../state.js';
-import { REVISAO_H } from '../config.js';
+import { S, DATA, isGestor, inativoNaDataAberta, stuBy } from '../state.js';
 import { ApiClient } from '../storage.js';
 import { redesenhar } from '../redesenho.js';
-
-const PERTO_DA_REVISAO_H = 5;
 
 // Pedidos da agenda para a data aberta: lidos ao abrir a data e depois de mudanças na agenda. leitura: 'lendo', 'lidos' ou
 // 'erro' (sem conexão: a linha diz que falhou)
@@ -50,17 +46,9 @@ export async function pedidosDaDataAbertaLidos() {
 const pedidosPendentes = () => (pedidosDaDataAberta().lista || [])
   .filter(s => !s.cancelada_em && !(S.importadas || []).includes(s.id) && !inativoNaDataAberta(stuBy(s.aluno)));
 
+// (O número dos aviões parados ou perto da revisão, que a Disponibilidade do dia de Recursos tinha, foi para os pontos das
+// linhas de Recursos e para o trilho no B)
 export function atualizarSelos() {
-  const revisao = (RES && RES.revisao) || {};
-  const atencao = Object.entries(revisao)
-    .filter(([r, v]) => S.av[r] !== false && !inativoNaDataAberta((S.frota || []).find(f => f.reg === r)) && (v.paraAs !== null || REVISAO_H - v.fim < PERTO_DA_REVISAO_H)).length;
-  const selo = $('#selo-rec-dia');
-  if (selo) {
-    selo.hidden = !atencao;
-    selo.textContent = atencao ? String(atencao) : '';
-    selo.className = 'aba-selo aviso';
-    selo.title = atencao ? `${atencao} ${atencao === 1 ? 'avião parado ou perto' : 'aviões parados ou perto'} da revisão de 50 horas` : '';
-  }
   // Na Demanda, o botão diz quantos pedidos há para importar (e só se destaca quando há). Quem consulta não importa
   const n = isGestor() ? 0 : pedidosPendentes().length;
   const botao = $('#importar-agenda');
