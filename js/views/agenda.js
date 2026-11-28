@@ -652,7 +652,8 @@ export function rAgenda() {
 
 // "Registrar de novo…": o formulário com os campos do pedido (o aluno, a missão do curso ou o tipo, o recurso, as
 // preferências, a duração e a observação) e com a data dele, quando ela ainda aceita pedidos; o pedido novo é outro pedido
-// (outro id, sem o que o operador pôs no de antes). O que a lista de agora não tem fica de fora, como numa escolha da pessoa
+// (outro id, sem o que o operador pôs no de antes). O que a lista de agora não tem fica de fora, como numa escolha da pessoa;
+// as duas preferências que ela não tem saem com o aviso de cada campo, como quando a missão ou o recurso mudam
 export function preencherComOPedido(p) {
   const { opcoes } = datasParaRegistrar(hojeEmSaoPaulo(), DATA, { excecao: podeUsarExcecao() });
   if (opcoes.some(o => o.data === p.data && !o.fechada) && p.data !== dataDoPedido) escolherDataDoPedido(p.data);
@@ -662,8 +663,11 @@ export function preencherComOPedido(p) {
   $('#ag-missao').value = doCurso ? p.missao_do_curso : p.missao;
   escolherMissaoNaAgenda();
   escolher('#ag-recurso', p.recurso);
-  escolher('#ag-horario', p.horario);
-  escolher('#ag-horario2', p.horario2);
+  // As preferências esperam como a escolha da pessoa: a lista que as tem as recebe; a que não tem diz que saíram
+  for (const id of ['#ag-horario', '#ag-horario2']) { $(id).value = ''; delete $(id).dataset.sozinho; }
+  horarioEscolhido = p.horario || '';
+  segundaQueEspera = p.horario2 || '';
+  escolherNaAgenda();
   if (!$('#ag-horas').disabled && p.horas !== null && p.horas !== undefined) $('#ag-horas').value = String(+p.horas);
   $('#ag-obs').value = p.observacao || '';
   apagarErroDaAgenda();
