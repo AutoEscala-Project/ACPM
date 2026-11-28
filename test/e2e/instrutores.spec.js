@@ -7,8 +7,10 @@ import {
   caixaVem, dataAberta, diaSeguinte, linhaDoInstrutor, linhasDosInstrutores, nomesDosInstrutores, buscaDosInstrutores, contagemDosInstrutores,
   faixasNaLinha, voosNaLinha, habilitacoesNaLinha, tiraDaLinha, abrirInstrutor, campoDoInstrutor, habilitacaoDoInstrutor, secaoDoInstrutor,
   faixasDoAberto, pausasDoAberto, botaoDoTurno, aplicarTurno, campoDaFaixa, editarFaixas, abrirLimitesDaLei, nenhumNaLista, alvosPequenos,
-  larguraDaPagina, entradasDoHistorico, botaoDaAba, diaAnterior, confirmarAgendamento, marcarAtributo, retirarRecurso, linhaDoRecurso
+  larguraDaPagina, entradasDoHistorico, botaoDaAba, diaAnterior, confirmarAgendamento, marcarAtributo, retirarRecurso, linhaDoRecurso, textosDaEscala,
+  medirVazioDoDetalhe
 } from './fixtures.js';
+import { razaoDeContraste } from '../helpers/contraste.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
 import { comOIntervalo } from '../../js/disponibilidade.js';
 
@@ -32,9 +34,34 @@ test.describe('INVAs: a lista', () => {
     await expect(fixo).toContainText('Limites da Lei do Aeronauta');
     await expect(fixo).toContainText('100 h no mês · 960 h no ano');
     // Nada escolhido: o detalhe diz o que fazer; a grade, as vistas e as gavetas saíram
-    await expect(page.locator('#det-ins')).toHaveText('Escolha um instrutor na lista.');
+    await expect(page.locator('#det-ins .det-vazio-texto')).toHaveText('Escolha um instrutor na lista.');
     await expect(page.locator('#s-ins table, #s-ins [data-vista-ins], #painel-instrutor, #painel-dados')).toHaveCount(0);
   });
+
+  // linha-fix-escala-sem-caixas, depois do C: o detalhe de INVAs sem nada escolhido é o de Alunos e de Recursos: no meio
+  // do painel, o ícone do instrutor, o texto maior e, para quem cria, o caminho do instrutor novo; nos dois temas, e
+  // parado com o movimento reduzido
+  for (const [perfil, url, dica] of [['Operador', './', 'ou use + Novo instrutor'], ['Gestor', './?role=gestor', null]]) {
+    test(`nada escolhido, no ${perfil}: o ícone, o texto grande no meio do painel${dica ? ' e a dica do "+ Novo instrutor"' : ', sem a dica'}`, async ({ page }) => {
+      await abrirComExemplo(page, { url });
+      await irPara(page, 'ins');
+      const vazio = await medirVazioDoDetalhe(page, 'ins');
+      expect([vazio.icone, vazio.texto, vazio.dica]).toEqual(['#i-instrutor', 'Escolha um instrutor na lista.', dica]);
+      expect(vazio.tamanho).toBeGreaterThanOrEqual(18);
+      expect(vazio.iconeLargura).toBeGreaterThanOrEqual(40);
+      expect(vazio.foraDoMeio.x).toBeLessThanOrEqual(3);
+      expect(vazio.foraDoMeio.y).toBeLessThanOrEqual(3);
+      expect(vazio.animacao).not.toBe('none');
+      for (const tema of ['light', 'dark']) {
+        await page.evaluate(t => { document.documentElement.dataset.theme = t; }, tema);
+        const { cores } = await medirVazioDoDetalhe(page, 'ins');
+        expect(razaoDeContraste(cores.texto, cores.fundo), tema).toBeGreaterThanOrEqual(4.5);
+        if (dica) expect(razaoDeContraste(cores.dica, cores.fundo), tema).toBeGreaterThanOrEqual(4.5);
+      }
+      await page.emulateMedia({ reducedMotion: 'reduce' });
+      expect((await medirVazioDoDetalhe(page, 'ins')).animacao).toBe('none');
+    });
+  }
 
   test('a linha: as faixas da data (com a pausa), quantos voos, as habilitações, a tira do dia, o "Vem" e o "Ativo"', async ({ page }) => {
     const ins = [
@@ -584,7 +611,7 @@ test.describe('INVAs: o detalhe', () => {
     await abrirInstrutor(page, 2);
     await habilitacaoDoInstrutor(page, 'sim_mono').uncheck();
     await irPara(page, 'esc');
-    await expect(page.locator('#out')).toContainText('nenhum instrutor ativo tem a habilitação de Simulador no Sim. Mono (Simulador (Mono))');
+    await expect(textosDaEscala(page, 'erros').filter({ hasText: 'nenhum instrutor ativo tem a habilitação de Simulador no Sim. Mono (Simulador (Mono))' })).toHaveCount(1);
   });
 
   // "Agendar voo com <nome>", no alto do detalhe: o diálogo do agendamento com o instrutor
@@ -608,7 +635,7 @@ test.describe('INVAs: o detalhe', () => {
     await confirmar(page, '#det-ins-excluir');
     await expect(entradasDoHistorico(page, 'Instrutor excluído: Instrutor 02')).toHaveCount(1);
     await expect.poll(() => nomesDosInstrutores(page)).toEqual(['Instrutor 01', 'Instrutor 03']);
-    await expect(page.locator('#det-ins')).toHaveText('Escolha um instrutor na lista.');
+    await expect(page.locator('#det-ins .det-vazio-texto')).toHaveText('Escolha um instrutor na lista.');
     await abrirInstrutor(page, 3);
     await linhaDoInstrutor(page, 3).locator('[data-act="ativo"]').click();
     await expect(linhaDoInstrutor(page, 3)).toHaveClass(/\binativo\b/);

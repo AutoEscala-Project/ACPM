@@ -11,6 +11,34 @@ import { ESTADOS as DE_CURSOS } from './cursos.js';
 // As regiões da página que as conferências olham: a casca (o topo, a linha e o trilho à vista) e a tela aberta
 export const REGIOES = { casca: 'header.topo, #linha, #trilho:not([hidden])', tela: 'main#conteudo > section.on' };
 
+// O detalhe sem nada escolhido (#det-<id> .det-vazio): o ícone (o href), o texto, a dica (à vista ou não), o tamanho do texto,
+// a distância do meio do conteúdo ao meio do painel (sem o padding) e o contraste do texto e da dica com o fundo
+export const medirVazioDoDetalhe = (page, id) => page.locator(`#det-${id}`).evaluate(painel => {
+  const vazio = [...painel.querySelectorAll('.det-vazio')].find(v => v.checkVisibility());
+  if (!vazio) return null;
+  const partes = [...vazio.children].filter(p => p.checkVisibility()).map(p => p.getBoundingClientRect());
+  const r = painel.getBoundingClientRect(), estilo = getComputedStyle(painel);
+  const dentro = {
+    x: r.left + parseFloat(estilo.paddingLeft) + painel.clientLeft, y: r.top + parseFloat(estilo.paddingTop) + painel.clientTop,
+    w: painel.clientWidth - parseFloat(estilo.paddingLeft) - parseFloat(estilo.paddingRight),
+    h: painel.clientHeight - parseFloat(estilo.paddingTop) - parseFloat(estilo.paddingBottom)
+  };
+  const topo = Math.min(...partes.map(p => p.top)), fundo = Math.max(...partes.map(p => p.bottom));
+  const esquerda = Math.min(...partes.map(p => p.left)), direita = Math.max(...partes.map(p => p.right));
+  let el = painel;
+  while (el && ['rgba(0, 0, 0, 0)', 'transparent'].includes(getComputedStyle(el).backgroundColor)) el = el.parentElement;
+  const dica = vazio.querySelector('.det-vazio-dica');
+  const icone = vazio.querySelector('.det-vazio-icone');
+  return {
+    icone: icone ? icone.querySelector('use').getAttribute('href') : null, iconeLargura: icone ? icone.getBoundingClientRect().width : 0,
+    animacao: icone ? getComputedStyle(icone).animationName : null,
+    texto: vazio.querySelector('.det-vazio-texto').textContent, tamanho: parseFloat(getComputedStyle(vazio.querySelector('.det-vazio-texto')).fontSize),
+    dica: dica && dica.checkVisibility() ? dica.textContent : null,
+    foraDoMeio: { x: Math.abs((esquerda + direita) / 2 - (dentro.x + dentro.w / 2)), y: Math.abs((topo + fundo) / 2 - (dentro.y + dentro.h / 2)) },
+    cores: { fundo: getComputedStyle(el || document.body).backgroundColor, texto: getComputedStyle(vazio.querySelector('.det-vazio-texto')).color, dica: dica ? getComputedStyle(dica).color : null }
+  };
+});
+
 // A largura do documento: maior que a da janela, a página rola para o lado
 export const larguraDaPagina = page => page.evaluate(() => document.documentElement.scrollWidth);
 

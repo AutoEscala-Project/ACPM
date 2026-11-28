@@ -3,6 +3,7 @@
 // escopo), o cabeçalho com "Anterior" e "Próximo", o rodapé e as partes que js/dom.js troca por chave
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { campoHtml, secaoHtml, cabecalhoHtml, partesDoDetalhe, detalheHtml, vazioDoDetalheHtml } from '../../js/detalhe.js';
 
 const PESO = { id: 'kg', rotulo: 'Peso (kg)', tipo: 'numero', valor: 82, texto: '82 kg', atributos: 'data-f="kg" min="1" max="300"' };
@@ -110,6 +111,21 @@ describe('o cabeçalho, as partes e o detalhe', () => {
 
   it('o detalhe inteiro tem os atributos da tela (registro.js acha o aluno); sem nada escolhido, o texto', () => {
     assert.match(detalheHtml('alu', MODELO, OPCOES), /^<div class="det" data-k="s" data-id="1000">/);
-    assert.equal(vazioDoDetalheHtml('Escolha um aluno na lista.'), '<p class="det-vazio h">Escolha um aluno na lista.</p>');
+    assert.equal(vazioDoDetalheHtml('Escolha um aluno na lista.'), '<div class="det-vazio"><p class="det-vazio-texto">Escolha um aluno na lista.</p></div>');
+  });
+
+  // linha-fix-escala-sem-caixas (Pedro, 28/11): nada escolhido, o detalhe tem o ícone da tela, o texto e, para quem cria (a
+  // dica é edit-only, como o botão "+ Novo"), o caminho do item novo
+  it('nada escolhido: o ícone da tela, o texto e a dica de quem cria', () => {
+    assert.equal(vazioDoDetalheHtml('Escolha um aluno na lista.', { icone: 'i-aluno', dica: 'ou use + Novo aluno' }),
+      '<div class="det-vazio"><svg class="ico det-vazio-icone" aria-hidden="true"><use href="#i-aluno"/></svg>'
+      + '<p class="det-vazio-texto">Escolha um aluno na lista.</p><p class="det-vazio-dica edit-only">ou use + Novo aluno</p></div>');
+    assert.equal(vazioDoDetalheHtml('<b>', { icone: 'i-"x' }), '<div class="det-vazio"><svg class="ico det-vazio-icone" aria-hidden="true"><use href="#i-&quot;x"/></svg><p class="det-vazio-texto">&lt;b&gt;</p></div>');
+  });
+
+  it('o vazio de Recursos (o bloco fixo de index.html) é igual, com o avião; o sprite tem o ícone de Alunos', () => {
+    const html = readFileSync(new URL('../../index.html', import.meta.url), 'utf8');
+    assert.match(html, /<symbol id="i-aluno" viewBox="0 0 24 24">/);
+    assert.match(html, /<div class="rec-vazio" id="rec-vazio">\s*<div class="det-vazio"><svg class="ico det-vazio-icone" aria-hidden="true"><use href="#i-aviao"\/><\/svg><p class="det-vazio-texto">Escolha um recurso ou uma categoria na lista.<\/p><p class="det-vazio-dica edit-only">ou use \+ Novo recurso<\/p><\/div>/);
   });
 });

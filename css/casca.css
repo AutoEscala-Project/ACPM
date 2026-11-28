@@ -1,13 +1,13 @@
-/* A casca do app: a barra do topo, a data, o menu da conta, o que cada perfil vê, as telas, o link que pula a barra, o
+/* A casca do app: a barra do topo, o menu da conta, o que cada perfil vê, as telas, o link que pula a barra, o
    login, o modo compartilhado, os avisos do alto e a impressão (a linha de produção fica em css/linha.css) */
-/* Topo, numa fileira: marca, a data em uso no meio e as ferramentas à direita */
+/* Topo, numa fileira: a marca e as ferramentas à direita (a data em uso fica no trilho: linha-fix-escala-sem-caixas) */
 header.topo {
   background: var(--hd);
   color: var(--hdT);
   padding: 8px 20px;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-  grid-template-areas: "marca data ferramentas";
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: "marca ferramentas";
   align-items: center;
   column-gap: 12px;
   row-gap: 4px;
@@ -16,26 +16,6 @@ header.topo {
 .topo-marca { grid-area: marca; margin: 0; min-width: 0; display: flex; align-items: center; gap: 8px; font: 700 21px/1.2 'Barlow Semi Condensed', sans-serif; letter-spacing: .2px; }
 .topo-logo { flex: none; width: auto; height: 24px; }
 .topo-titulo { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-/* O botão da data: largura fixa (cabe a data mais longa, com o ano e "amanhã"), para nada se mexer quando a data muda;
-   ele abre o calendário do trilho (com o trilho ao lado, leva o foco até ele) */
-.topo-data-botao {
-  grid-area: data; display: inline-flex; align-items: center; justify-content: center; gap: 6px; width: 310px; min-height: 36px;
-  padding: 4px 10px; border-radius: 8px; background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.16);
-  color: var(--hdT); font: 600 15.5px 'Barlow Semi Condensed', sans-serif; white-space: nowrap; cursor: pointer;
-}
-.topo-data-botao:hover { background: rgba(255,255,255,.12); }
-.topo-data-botao[aria-expanded="true"] { background: rgba(255,255,255,.16); }
-#dt-rotulo { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.dt-semana-curta, .abreviada .dt-semana { display: none; }
-.abreviada .dt-semana-curta { display: inline; }
-@media (max-width: 400px) {
-  .dt-semana { display: none; }
-  .dt-semana-curta { display: inline; }
-  /* Com o ano e o "amanhã" (na virada do ano), a data quebra a linha em vez de ser cortada */
-  .topo-data-botao { white-space: normal; }
-  #dt-rotulo { overflow: visible; text-overflow: clip; text-align: center; }
-}
-.topo-data-rel { font: 700 12px 'Barlow', sans-serif; background: var(--ye); color: #12263A; border-radius: 10px; padding: 1px 8px; }
 .hd-tools { grid-area: ferramentas; display: flex; gap: 4px; align-items: center; justify-content: flex-end; }
 .hd-btn, .hd-sel {
   background: transparent;
@@ -72,7 +52,7 @@ a.hd-btn { text-decoration: none; }
 .hd-conta:hover { background: rgba(255,255,255,.14); }
 .hd-avatar { width: 26px; height: 26px; border-radius: 50%; background: var(--ye); color: #12263A; display: grid; place-items: center; font: 700 12px 'Barlow', sans-serif; }
 .hd-usuario { display: flex; flex-direction: column; line-height: 1.1; text-align: left; max-width: 140px; }
-/* Um nome longo termina em reticências: sem o limite, as ferramentas cresceriam por cima da data ou da marca */
+/* Um nome longo termina em reticências: sem o limite, as ferramentas cresceriam por cima da marca */
 .hd-usuario > * { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .hd-usuario small { font: 500 11.5px 'Barlow', sans-serif; opacity: .75; }
 .hd-usuario .hd-sep { display: none; }
@@ -101,24 +81,12 @@ a.hd-btn { text-decoration: none; }
 /* A Secretaria trabalha na agenda: as telas que ela vê são as da linha (js/telas.js); sem o Histórico e o Compartilhar */
 body[data-perfil="secretaria"] #btn-open-log,
 body[data-perfil="secretaria"] #btn-share-link { display: none !important; }
-/* Com a data no meio, as ferramentas precisam de cerca de 1290 px; sem caber, elas cobririam a data. Abaixo disso, a data
-   vem logo depois da marca; abaixo de 1030 px, a marca e a data ficam na primeira linha e as ferramentas na segunda, na
-   ordem do Tab (marca, data, ferramentas) */
-@media (max-width: 1289px) {
-  header.topo { grid-template-columns: minmax(0, 1fr) auto auto; }
-}
-@media (max-width: 1029px) {
-  header.topo { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "marca data" "ferramentas ferramentas"; }
-}
-/* No celular não cabem a marca e a data na mesma linha: a data ocupa a segunda linha inteira, e as ferramentas, só com os
-   ícones, ficam ao lado da marca. Aqui o Tab passa pela data antes das ferramentas, que estão acima dela */
+/* No celular, as ferramentas ficam só com os ícones, ao lado da marca */
 @media (max-width: 640px) {
-  header.topo { grid-template-areas: "marca ferramentas" "data data"; padding: 8px 12px; }
+  header.topo { padding: 8px 12px; }
   .hd-sel { max-width: 110px; }
   .topo-marca { font-size: 18px; }
   .topo-logo { height: 20px; }
-  /* A data ocupa a linha dela: a largura fixa da tela grande faria a página rolar de lado a 320 px */
-  .topo-data-botao { width: auto; min-width: 0; }
   .hd-usuario, .hd-seta { display: none; }
   /* Só o ícone aparece; a palavra continua no nome do botão, para o leitor de tela */
   .hd-txt { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
@@ -129,10 +97,12 @@ body[data-perfil="secretaria"] #btn-share-link { display: none !important; }
    conta, claro, fica dentro da barra e mantém o azul */
 header.topo :focus-visible { outline-color: #fff; }
 header.topo .menu-itens :focus-visible { outline-color: var(--ac); }
-/* A moldura: os avisos do app e a linha em toda a largura; embaixo, a tela e, ao lado dela, o trilho fixo. O teto (1612 px)
-   deixa a tela com 1248 px ao lado de um trilho de 320 px. Solto, o trilho é um painel entre a linha e a tela (abaixo de
-   1024 px, de ponta a ponta). Só a tela aberta aparece (js/views/telas.js) */
-:root { --teto: 1612px; --trilho: clamp(280px, 22vw, 320px); --vao: 12px; }
+/* A moldura: os avisos do app e a linha em toda a largura; embaixo, a tela e, ao lado dela (a partir de 1024 px), o trilho.
+   O teto (1612 px) deixa a tela com 1248 px ao lado de um trilho de 320 px; recolhido, o trilho é uma faixa de 76 px (--lado:
+   a largura dele ao lado). Abaixo de 1024 px, o trilho fica entre a linha e a tela, de ponta a ponta. Só a tela aberta
+   aparece (js/views/telas.js) */
+:root { --teto: 1612px; --trilho: clamp(280px, 22vw, 320px); --trilho-recolhido: 76px; --vao: 12px; --lado: var(--trilho); }
+body[data-trilho="recolhido"] { --lado: var(--trilho-recolhido); }
 .casca {
   max-width: var(--teto); margin: 0 auto; padding: 16px 16px 60px;
   display: grid; grid-template-columns: minmax(0, 1fr); grid-template-areas: "avisos" "linha" "trilho" "tela";
@@ -144,21 +114,25 @@ header.topo .menu-itens :focus-visible { outline-color: var(--ac); }
 main#conteudo { grid-area: tela; min-width: 0; }
 @media (max-width: 1023px) { #trilho { margin-inline: -16px; } }
 @media (min-width: 1024px) {
-  body[data-trilho="fixo"]:not([data-login]) .casca { grid-template-columns: minmax(0, 1fr) var(--trilho); grid-template-areas: "avisos avisos" "linha linha" "tela trilho"; }
-  body[data-trilho="fixo"] #trilho { position: sticky; top: 12px; max-height: calc(100dvh - 24px); overflow-y: auto; }
+  body:not([data-login]) .casca { grid-template-columns: minmax(0, 1fr) var(--lado); grid-template-areas: "avisos avisos" "linha linha" "tela trilho"; }
+  #trilho { position: sticky; top: 12px; max-height: calc(100dvh - 24px); overflow-y: auto; }
 }
 /* As telas de lista e detalhe (F2), a partir de 800 × 600 px: a página tem a altura da janela, e os painéis e o trilho rolam
-   cada um por conta própria */
+   cada um por conta própria. Abaixo de 1024 px, com o calendário aberto em cima da tela, a página rola, e a tela fica com
+   a altura da janela embaixo dele (com a página presa, o calendário tiraria metade da altura dos painéis); recolhido numa
+   linha, a página volta a ter a altura da janela */
 @media screen and (min-width: 800px) and (min-height: 600px) {
-  body[data-forma="lista-detalhe"] { height: 100dvh; overflow: hidden; display: flex; flex-direction: column; }
-  body[data-forma="lista-detalhe"] .casca { flex: 1; min-height: 0; width: 100%; padding-bottom: 16px; grid-template-rows: auto auto auto minmax(0, 1fr); }
+  body[data-forma="lista-detalhe"]:not([data-trilho="aberto"]) { height: 100dvh; overflow: hidden; display: flex; flex-direction: column; }
+  body[data-forma="lista-detalhe"]:not([data-trilho="aberto"]) .casca { flex: 1; min-height: 0; width: 100%; padding-bottom: 16px; grid-template-rows: auto auto auto minmax(0, 1fr); }
   body[data-forma="lista-detalhe"] #linha { max-height: 40dvh; overflow-y: auto; }
-  body[data-forma="lista-detalhe"] #trilho { max-height: 50dvh; overflow-y: auto; }
-  body[data-forma="lista-detalhe"] main#conteudo, body[data-forma="lista-detalhe"] main#conteudo > section.on { min-height: 0; height: 100%; }
+  body[data-forma="lista-detalhe"]:not([data-trilho="aberto"]) main#conteudo, body[data-forma="lista-detalhe"]:not([data-trilho="aberto"]) main#conteudo > section.on { min-height: 0; height: 100%; }
+  body[data-forma="lista-detalhe"][data-trilho="aberto"] main#conteudo > section.on { height: calc(100dvh - 32px); }
 }
 @media screen and (min-width: 1024px) and (min-height: 600px) {
-  body[data-forma="lista-detalhe"][data-trilho="fixo"] .casca { grid-template-rows: auto auto minmax(0, 1fr); }
-  body[data-forma="lista-detalhe"][data-trilho="fixo"] #trilho { position: static; align-self: stretch; max-height: none; min-height: 0; overflow-y: auto; }
+  body[data-forma="lista-detalhe"][data-trilho] { height: 100dvh; overflow: hidden; display: flex; flex-direction: column; }
+  body[data-forma="lista-detalhe"][data-trilho] .casca { flex: 1; min-height: 0; width: 100%; padding-bottom: 16px; grid-template-rows: auto auto minmax(0, 1fr); }
+  body[data-forma="lista-detalhe"][data-trilho] main#conteudo, body[data-forma="lista-detalhe"][data-trilho] main#conteudo > section.on { min-height: 0; height: 100%; }
+  body[data-forma="lista-detalhe"] #trilho { position: static; align-self: stretch; max-height: none; min-height: 0; overflow-y: auto; }
 }
 main#conteudo:focus { outline: none; }
 main#conteudo > section { display: none; }
@@ -182,7 +156,6 @@ body[data-role="gestor"] main select:not(.flt-ctrl):not(.agenda-campo):not(.cont
 body[data-login] #s-login { display: block; }
 body[data-login] main#conteudo > section:not(#s-login),
 body[data-login] #linha,
-body[data-login] #btn-data,
 body[data-login] #trilho,
 body[data-login] .hd-tools > :not(.menu-conta) { display: none !important; }
 body[data-backend="supabase"] #role-sel { display: none; }
@@ -211,5 +184,5 @@ body[data-backend="supabase"] #btn-bi-clr { display: none !important; }
 @media (max-width: 640px) {
   /* Com largura mínima, o item não encolhe mais que o próprio texto (flex-shrink: 0) */
   .hd-btn, .hd-conta { min-width: 44px; min-height: 44px; justify-content: center; flex-shrink: 0; }
-  .hd-sel, .topo-data-botao { min-height: 44px; }
+  .hd-sel { min-height: 44px; }
 }

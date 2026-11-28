@@ -5,10 +5,20 @@ import { $, trocarConteudo } from '../dom.js';
 import { esc, hojeISO } from '../format.js';
 import { linhaDoDia, selosDosCadastros } from '../linha-do-dia.js';
 import { dadosLidos, SEM_OS_DADOS } from '../actions.js';
-import { S, RES, DATA, isGestor, dadoIndisponivel } from '../state.js';
+import { S, RES, DATA, isGestor, dadoIndisponivel, estadoDaEscala, habilitacoesNaoConferidas } from '../state.js';
+import { dataQueAindaVoa } from '../reparo.js';
+import { rejeicoesDosPedidos } from '../rejeicoes.js';
 import { ApiClient } from '../storage.js';
 import { podeVer, destinoDoEndereco } from '../telas.js';
 import { pedidosDaDataAberta } from './selos.js';
+
+// As recusas do instrutor escolhido que têm "Sugestões" (o pedido dela vem do pareamento, js/rejeicoes.js), da data aberta
+// de hoje em diante: o alerta → o fKey do pedido. Sem a recusa na escala, nada é calculado
+function recusasComSugestoes() {
+  if (!RES || !(RES.al || []).some(a => a.t === 'err' && a.codigo === 'instrutor-escolhido')) return new Map();
+  if (!dataQueAindaVoa({ data: DATA, hoje: hojeISO() })) return new Map();
+  return new Map([...rejeicoesDosPedidos(estadoDaEscala(), RES)].map(([fKey, a]) => [a, fKey]));
+}
 
 // O único leitor dos dados para a linha (e para os avisos da data, no trilho)
 export function contextoDoDia() {
@@ -18,6 +28,7 @@ export function contextoDoDia() {
     // Quem opera a escala: o Operador e o Administrador (no modo local, o perfil Operador)
     opera: !isGestor(), horasLidas: !dadoIndisponivel('horas'),
     indisponiveis: (S.indisponiveis || []).filter(p => Object.hasOwn(SEM_OS_DADOS, p)).map(id => ({ id, texto: SEM_OS_DADOS[id] })),
+    recusas: recusasComSugestoes(), habilitacoesNaoConferidas: habilitacoesNaoConferidas(),
     data: DATA, hoje: hojeISO()
   };
 }

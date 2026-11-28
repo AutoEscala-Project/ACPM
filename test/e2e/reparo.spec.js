@@ -1,7 +1,7 @@
-// Sugestões para um conflito: o botão "Sugestões" da caixa de conflitos abre uma gaveta com o que pode voar
+// Sugestões para um conflito: o botão "Sugestões" do conflito, no trilho, abre uma gaveta com o que pode voar
 // no lugar do voo fixo; "Aplicar" muda o voo (que continua fixo) e o histórico desfaz. Cancelar pede o motivo, como no
 // status, já com o motivo do conflito marcado
-import { test, expect, abrir, irPara, abrirEscala, abrirCaixa, abrirHistorico, alternarVem, aprovar, rotuloDaData, AMANHA, refazer } from './fixtures.js';
+import { test, expect, abrir, irPara, abrirEscala, abrirAvisosDaEscala, itensDaEscala, textosDaEscala, abrirHistorico, alternarVem, aprovar, rotuloDaData, AMANHA, refazer } from './fixtures.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
 import { documentosAtuais } from './supabase-falso.js';
 
@@ -19,14 +19,14 @@ async function aprovarETirarOInstrutor(page, url) {
   await irPara(page, 'ins');
   await alternarVem(page, id, false);
   await abrirEscala(page);
-  await abrirCaixa(page, 'conflitos');
+  await abrirAvisosDaEscala(page, 'conflitos');
   return { instrutor, outro: id === 1 ? 'Instrutor 02' : 'Instrutor 01' };
 }
 
 test.describe('Sugestões para um conflito', () => {
   test('troca o instrutor que não vem mais; o voo continua fixo e o histórico desfaz', async ({ page }) => {
     const { instrutor, outro } = await aprovarETirarOInstrutor(page);
-    await page.locator('#out details.conflitos [data-reparo]').click();
+    await itensDaEscala(page, 'conflitos').locator('[data-reparo]').click();
     await expect(gaveta(page)).toBeVisible();
     await expect(gaveta(page).locator('h2')).toContainText('Aluno 1000');
     await expect(gaveta(page)).toContainText('o instrutor não está disponível');
@@ -34,7 +34,7 @@ test.describe('Sugestões para um conflito', () => {
     await expect(primeira).toContainText(`Trocar o instrutor: ${outro}`);
     await primeira.getByRole('button', { name: 'Aplicar' }).click();
     await expect(gaveta(page)).toBeHidden();
-    await expect(page.locator('#out details.conflitos')).toHaveCount(0);
+    await expect(itensDaEscala(page, 'conflitos')).toHaveCount(0);
     await expect(linha(page, 'Aluno 1000').locator('.c-instr')).toHaveText(outro);
     await expect(linha(page, 'Aluno 1000').locator('.fixo')).toHaveCount(1);
 
@@ -43,12 +43,12 @@ test.describe('Sugestões para um conflito', () => {
     await page.locator('#audit-log-list [data-act="rev-log"]').first().click();
     await page.keyboard.press('Escape');
     await expect(linha(page, 'Aluno 1000').locator('.c-instr')).toHaveText(instrutor);
-    await expect(page.locator('#out details.conflitos')).toHaveCount(1);
+    await expect(itensDaEscala(page, 'conflitos')).toHaveCount(1);
   });
 
   test('cancelar pede o motivo, já marcado; o conflito some', async ({ page }) => {
     await aprovarETirarOInstrutor(page);
-    await page.locator('#out details.conflitos [data-reparo]').click();
+    await itensDaEscala(page, 'conflitos').locator('[data-reparo]').click();
     const cancelar = gaveta(page).locator('.opcoes-reparo li').last();
     await expect(cancelar).toContainText('Motivo: Instrutor indisponível');
     await cancelar.getByRole('button', { name: 'Cancelar o voo' }).click();
@@ -58,12 +58,26 @@ test.describe('Sugestões para um conflito', () => {
     await expect(dialogo.getByLabel('Instrutor indisponível')).toBeChecked();
     await dialogo.getByRole('button', { name: 'Confirmar' }).click();
     await expect(linha(page, 'Aluno 1000')).toHaveClass(/\bst-Cancelado\b/);
-    await expect(page.locator('#out details.conflitos')).toHaveCount(0);
+    await expect(itensDaEscala(page, 'conflitos')).toHaveCount(0);
   });
 
   test('Esc fecha a gaveta e devolve o foco ao botão', async ({ page }) => {
     await aprovarETirarOInstrutor(page);
-    const botao = page.locator('#out details.conflitos [data-reparo]');
+    const botao = itensDaEscala(page, 'conflitos').locator('[data-reparo]');
+    await botao.click();
+    await expect(gaveta(page)).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(gaveta(page)).toBeHidden();
+    await expect(botao).toBeFocused();
+  });
+
+  // linha-fix-escala-sem-caixas: o conflito fica no trilho, à vista em todas as telas; as Sugestões abrem de lá também fora
+  // da Escala, e o Esc devolve o foco ao botão do trilho
+  test('fora da Escala, as Sugestões do conflito abrem do trilho, e o Esc devolve o foco ao botão dele', async ({ page }) => {
+    await aprovarETirarOInstrutor(page);
+    await irPara(page, 'bi');
+    const botao = (await abrirAvisosDaEscala(page, 'conflitos')).locator('[data-reparo]');
+    await expect(botao).toHaveAccessibleName(/^Sugestões/);
     await botao.click();
     await expect(gaveta(page)).toBeVisible();
     await page.keyboard.press('Escape');
@@ -77,7 +91,7 @@ test.describe('Sugestões para um conflito', () => {
     await abrirHistorico(page);
     await expect(page.locator('#historico')).toBeVisible();
     // A gaveta do Histórico pode cobrir o botão: pelo teclado
-    await page.locator('#out details.conflitos [data-reparo]').focus();
+    await itensDaEscala(page, 'conflitos').locator('[data-reparo]').focus();
     await page.keyboard.press('Enter');
     await expect(gaveta(page)).toBeVisible();
     await page.keyboard.press('Escape');
@@ -93,16 +107,16 @@ test.describe('Sugestões para um conflito', () => {
     const estado = { ...dia(), stu: [aluno(1000, { p1: 390, p2: -1, nb: 2 })], fixos: { '1000_0_1': { a: 390, b: 450, r: 'PP-LJV', insId: 1, agendado: true } } };
     await abrir(page, { estado });
     await abrirEscala(page);
-    await expect(page.locator('#out details.conflitos')).toContainText('a duração do pedido mudou');
-    await abrirCaixa(page, 'conflitos');
-    await page.locator('#out details.conflitos [data-reparo]').click();
+    await expect(textosDaEscala(page, 'conflitos')).toContainText('a duração do pedido mudou');
+    await abrirAvisosDaEscala(page, 'conflitos');
+    await itensDaEscala(page, 'conflitos').locator('[data-reparo]').click();
     const opcoes = gaveta(page).locator('.opcoes-reparo li');
     await expect(opcoes).toHaveCount(2);
     await expect(opcoes.first()).toContainText('Soltar o voo: o app escolhe de novo o horário, o avião e o instrutor');
     await opcoes.first().getByRole('button', { name: 'Soltar' }).click();
     await expect(gaveta(page)).toBeHidden();
     await refazer(page);
-    await expect(page.locator('#out details.conflitos')).toHaveCount(0);
+    await expect(itensDaEscala(page, 'conflitos')).toHaveCount(0);
     await expect(linha(page, 'Aluno 1000').locator('.fixo')).toHaveCount(0);
     await expect(linha(page, 'Aluno 1000').locator('.c-hr')).toContainText('06:30–08:30');
 
@@ -110,7 +124,7 @@ test.describe('Sugestões para um conflito', () => {
     await expect(page.locator('#audit-log-list')).toContainText('Reparo: Aluno 1000 (06:30–07:30): Soltar o voo');
     await page.locator('#audit-log-list [data-act="rev-log"]').first().click();
     await page.keyboard.press('Escape');
-    await expect(page.locator('#out details.conflitos')).toHaveCount(1);
+    await expect(itensDaEscala(page, 'conflitos')).toHaveCount(1);
   });
 
   test('fora da disponibilidade do pedido: dois cliques ("Confirmei com o aluno"); o voo e o pedido mudam; o histórico desfaz os dois', async ({ page }) => {
@@ -122,8 +136,8 @@ test.describe('Sugestões para um conflito', () => {
     };
     await abrir(page, { estado });
     await abrirEscala(page);
-    await abrirCaixa(page, 'conflitos');
-    await page.locator('#out details.conflitos [data-reparo]').click();
+    await abrirAvisosDaEscala(page, 'conflitos');
+    await itensDaEscala(page, 'conflitos').locator('[data-reparo]').click();
     const primeira = gaveta(page).locator('.opcoes-reparo li').first();
     await expect(primeira).toContainText('Passar para as 12:40');
     await expect(primeira).toContainText('Confirme com o aluno: às 12:40, fora da disponibilidade do pedido.');
@@ -134,7 +148,7 @@ test.describe('Sugestões para um conflito', () => {
     await primeira.locator('[data-reparo-aplicar]').click();
     await expect(gaveta(page)).toBeHidden();
     await refazer(page);
-    await expect(page.locator('#out details.conflitos')).toHaveCount(0);
+    await expect(itensDaEscala(page, 'conflitos')).toHaveCount(0);
     await expect(linha(page, 'Aluno 1000').locator('.c-hr')).toContainText('12:40');
     await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('acpm4_dia_2026-11-11')).pedidos[1000].jan)).toBe('h760');
 
@@ -142,17 +156,16 @@ test.describe('Sugestões para um conflito', () => {
     await expect(page.locator('#audit-log-list')).toContainText('Reparo: Aluno 1000 (08:20–09:20): Passar para as 12:40');
     await page.locator('#audit-log-list [data-act="rev-log"]').first().click();
     await page.keyboard.press('Escape');
-    await expect(page.locator('#out details.conflitos')).toHaveCount(1);
+    await expect(itensDaEscala(page, 'conflitos')).toHaveCount(1);
     await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('acpm4_dia_2026-11-11')).pedidos[1000].jan)).toBe('h500');
   });
 
-  test('no Gestor, a caixa de conflitos aparece sem o botão Sugestões', async ({ page }) => {
+  test('no Gestor, o conflito aparece no trilho sem o botão Sugestões', async ({ page }) => {
     const estado = { ...dia(), ins: [instrutor(1, 9, { on: false }), instrutor(2, 9)], fixos: { '1000_0_1': { a: 390, b: 450, r: 'PP-LJV', insId: 1 } }, aprovacao: { em: '2026-11-10T21:05:00.000Z', por: 'Operador 01' } };
     await abrir(page, { estado, url: './?role=gestor' });
     await abrirEscala(page);
-    await expect(page.locator('#out details.conflitos')).toContainText('o instrutor não está disponível');
-    await expect(page.locator('#out details.conflitos [data-reparo]')).toHaveCount(1);
-    await expect(page.locator('#out details.conflitos [data-reparo]')).toBeHidden();
+    await expect(textosDaEscala(page, 'conflitos')).toContainText('o instrutor não está disponível');
+    await expect(itensDaEscala(page, 'conflitos').locator('[data-reparo]')).toHaveCount(0);
   });
 });
 
@@ -281,8 +294,8 @@ test.describe('Sugestões para um voo cancelado', () => {
 test('o pedido recusado pelo instrutor escolhido: "Sugestões" na linha da recusa encaixa com outro instrutor', async ({ page }) => {
   await abrir(page, { estado: cenario({ ins: [instrutor(1, 9, { on: false }), instrutor(2, 9)], stu: [aluno(1000, { p1: 610, p2: -1, insId: 1 })] }) });
   await abrirEscala(page);
-  await abrirCaixa(page, 'erros');
-  await page.locator('#out details.caixa.erros').getByRole('button', { name: 'Sugestões' }).click();
+  await abrirAvisosDaEscala(page, 'erros');
+  await itensDaEscala(page, 'erros').getByRole('button', { name: 'Sugestões' }).click();
   await expect(gaveta(page).locator('h2')).toContainText('Encaixar o pedido');
   const primeira = gaveta(page).locator('.opcoes-reparo li').first();
   await expect(primeira).toContainText('Com Instrutor 02');
@@ -293,7 +306,7 @@ test('o pedido recusado pelo instrutor escolhido: "Sugestões" na linha da recus
   await abrirHistorico(page);
   await page.locator('#audit-log-list [data-act="rev-log"]').first().click();
   await page.keyboard.press('Escape');
-  await expect(page.locator('#out details.caixa.erros')).toContainText('Aluno 1000');
+  await expect(textosDaEscala(page, 'erros')).toContainText('Aluno 1000');
 });
 
 // Uma data que já passou (hoje, nos testes, é 10/11, ao meio-dia), ou hoje: o cadastro e o dia gravados como o app grava,
@@ -316,8 +329,8 @@ test.describe('Sugestões só de hoje em diante', () => {
   test('hoje, a recusa que outro instrutor só encaixaria num horário que já passou diz isso, e aponta "+ Agendar voo"', async ({ page }) => {
     // Às 12:00, o pedido das 06:30 (2ª preferência 14:30) cujo escolhido não vem: o app o poria às 06:30
     await abrirNaData(page, cenario({ ins: [instrutor(1, 9, { on: false }), instrutor(2, 9)], stu: [aluno(1001, { p1: 390, p2: 870, insId: 1 })] }), HOJE);
-    await abrirCaixa(page, 'erros');
-    await page.locator('#out details.caixa.erros [data-rejeitado]').click();
+    await abrirAvisosDaEscala(page, 'erros');
+    await itensDaEscala(page, 'erros').locator('[data-rejeitado]').click();
     await expect(gaveta(page).locator('.opcoes-reparo li')).toHaveCount(0);
     await expect(gaveta(page)).not.toContainText('sem mudar outro voo');
     await expect(gaveta(page)).toContainText('Com outro instrutor, o app escala este pedido num horário que já passou.');
@@ -327,9 +340,9 @@ test.describe('Sugestões só de hoje em diante', () => {
 
   test('na data passada, a recusa do instrutor escolhido não tem "Sugestões"', async ({ page }) => {
     await abrirNaDataPassada(page, cenario({ ins: [instrutor(1, 9, { on: false }), instrutor(2, 9)], stu: [aluno(1000, { p1: 610, p2: -1, insId: 1 })] }));
-    await abrirCaixa(page, 'erros');
-    await expect(page.locator('#out details.caixa.erros')).toContainText('Aluno 1000');
-    await expect(page.locator('#out details.caixa.erros [data-rejeitado]')).toHaveCount(0);
+    await abrirAvisosDaEscala(page, 'erros');
+    await expect(textosDaEscala(page, 'erros')).toContainText('Aluno 1000');
+    await expect(itensDaEscala(page, 'erros').locator('[data-rejeitado]')).toHaveCount(0);
   });
 
   test('na data passada, o voo cancelado não tem "Sugestões"', async ({ page }) => {
@@ -465,12 +478,11 @@ test.describe('Sugestões do voo cancelado: o mapa, a confirmação, o resultado
     const doCancelado = linha(page, 'Aluno 1000').locator('[data-reparo]');
     await expect(doCancelado).toHaveCount(1);
     await expect(doCancelado).toBeHidden();
-    await abrirCaixa(page, 'erros');
-    const daRecusa = page.locator('#out details.caixa.erros [data-rejeitado]');
-    await expect(daRecusa).toHaveCount(1);
-    await expect(daRecusa).toBeHidden();
+    await abrirAvisosDaEscala(page, 'erros');
+    // No trilho, quem só consulta não tem as Sugestões da recusa
+    await expect(itensDaEscala(page, 'erros')).toHaveCount(1);
+    await expect(itensDaEscala(page, 'erros').locator('[data-rejeitado]')).toHaveCount(0);
     await doCancelado.dispatchEvent('click');
-    await daRecusa.dispatchEvent('click');
     await expect(gaveta(page)).toBeHidden();
   });
 });
@@ -493,8 +505,8 @@ async function abrirComAListaDeEspera(page) {
 
 test('na escala aprovada, "Dar a vaga" do voo cancelado ao 1º da lista de espera do horário; o histórico desfaz', async ({ page }) => {
   await abrirComAListaDeEspera(page);
-  await abrirCaixa(page, 'erros');
-  const recusas = page.locator('#out details.caixa.erros');
+  await abrirAvisosDaEscala(page, 'erros');
+  const recusas = page.locator('#avisos-da-data');
   await expect(recusas).toContainText('1º na lista de espera das 08:20');
   await expect(recusas).toContainText('2º na lista de espera das 08:20');
   // Cancelado pela meteorologia na escala aprovada: sem o motor (F1g), a lista de espera fica como estava
@@ -513,7 +525,7 @@ test('na escala aprovada, "Dar a vaga" do voo cancelado ao 1º da lista de esper
   await expect(novo.locator('.c-hr')).toContainText('08:20');
   await expect(novo.locator('.fixo')).toHaveCount(1);
   await expect(linha(page, 'Aluno 1000').locator('.st-sel')).toHaveValue('Cancelado');
-  await abrirCaixa(page, 'erros');
+  await abrirAvisosDaEscala(page, 'erros');
   await expect(recusas).toContainText('Aluno 1002');
   await expect(recusas).not.toContainText('Aluno 1001');
 
@@ -522,7 +534,7 @@ test('na escala aprovada, "Dar a vaga" do voo cancelado ao 1º da lista de esper
   await page.locator('#audit-log-list [data-act="rev-log"]').first().click();
   await page.keyboard.press('Escape');
   await expect(linha(page, 'Aluno 1001')).toHaveCount(0);
-  await abrirCaixa(page, 'erros');
+  await abrirAvisosDaEscala(page, 'erros');
   await expect(recusas).toContainText('Aluno 1001');
   await expect(recusas).toContainText('1º na lista de espera das 08:20');
 });

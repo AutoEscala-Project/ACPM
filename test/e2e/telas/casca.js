@@ -85,43 +85,72 @@ export async function irParaVista(page, aba, vista) {
   await expect(page.locator(`#s-${aba}`)).toHaveAttribute('data-vista', vista);
 }
 
-// A data em uso: a aberta (body[data-data], a ISO), o botão da data no topo, com o nome ("quarta-feira, 11/11") e o
-// "amanhã"/"hoje" ao lado, e o calendário do trilho (os dias, as setas do mês)
+// A data em uso: a aberta (body[data-data], a ISO) e o trilho, sempre à vista (linha-fix-escala-sem-caixas: o topo não tem
+// mais a data): no alto dele, o nome ("quarta-feira, 11/11"), o "amanhã"/"hoje" e o botão que recolhe o calendário (ao
+// lado da tela, uma faixa estreita; em cima dela, uma linha); embaixo, o calendário (os dias, as setas do mês) e os avisos
+// da data, que recolhem no botão deles
 export const dataAberta = page => page.locator('body');
-export const botaoDaData = page => page.locator('#btn-data');
-export const rotuloDaData = page => page.locator('#dt-rotulo');
-export const relativoDaData = page => page.locator('#dt-rel');
 export const trilho = page => page.locator('#trilho');
+export const rotuloDaData = page => page.locator('#trilho-rotulo');
+export const relativoDaData = page => page.locator('#trilho-rel');
+export const botaoDoTrilho = page => page.locator('#btn-recolher-trilho');
+export const corpoDoTrilho = page => page.locator('#trilho-corpo');
+export const botaoDosAvisos = page => page.locator('#btn-avisos');
+export const corpoDosAvisos = page => page.locator('#avisos-corpo');
 export const diaDoCalendario = (page, dia) => page.locator(`#cal .cal-dia[data-dia="${dia}"]`);
 export const diasDoCalendario = page => page.locator('#cal .cal-dia');
 // O número de pedidos de um dia, e os dias em que o Tab para (um só)
 export const contagemDoDia = (page, dia) => diaDoCalendario(page, dia).locator('.cal-qtd');
 export const paradasDoCalendario = page => page.locator('#cal .cal-dia[tabindex="0"]');
 
-// Os avisos da data no trilho (com texto, só os que o têm) e quantos são, no botão da data
+// Os avisos da data no trilho (com texto, só os que o têm) e quantos são, no alto do trilho e no botão dos avisos
 export const avisosDaData = (page, texto) => page.locator('#avisos-da-data > li', texto === undefined ? {} : { hasText: texto });
 export const contagemDosAvisos = page => page.locator('#avisos-cnt');
+export const contagemNosAvisos = page => page.locator('#avisos-qtd');
+
+// Abre o calendário recolhido (responde se abriu) e o recolhe (responde se recolheu)
+export async function abrirOTrilho(page) {
+  const abriu = await botaoDoTrilho(page).getAttribute('aria-expanded') === 'false';
+  if (abriu) await botaoDoTrilho(page).click();
+  await expect(corpoDoTrilho(page)).toBeVisible();
+  return abriu;
+}
+export async function recolherOTrilho(page) {
+  const recolheu = await botaoDoTrilho(page).getAttribute('aria-expanded') === 'true';
+  if (recolheu) await botaoDoTrilho(page).click();
+  await expect(corpoDoTrilho(page)).toBeHidden();
+  return recolheu;
+}
+
+// Os avisos da data à vista (para o clique num deles): o calendário e os avisos abertos
+export async function mostrarAvisos(page) {
+  await abrirOTrilho(page);
+  if (await botaoDosAvisos(page).getAttribute('aria-expanded') === 'false') await botaoDosAvisos(page).click();
+  await expect(corpoDosAvisos(page)).toBeVisible();
+}
 
 const ehDomingo = iso => new Date(iso + 'T12:00:00Z').getUTCDay() === 0;
 const somarDias = (iso, dias) => new Date(Date.parse(iso + 'T12:00:00Z') + dias * 864e5).toISOString().slice(0, 10);
 
-// Escolhe o dia no calendário do trilho, como quem clica nele (sem esperar a data abrir): solto, o trilho abre pelo botão
-// da data; o mês à vista anda pelas setas até o do dia
+// Escolhe o dia no calendário do trilho, como quem clica nele (sem esperar a data abrir): recolhido, o calendário abre; o
+// mês à vista anda pelas setas até o do dia. Responde se abriu o calendário
 export async function escolherNoCalendario(page, dia) {
-  if (!await trilho(page).isVisible()) await botaoDaData(page).click();
-  await expect(trilho(page)).toBeVisible();
+  const abriu = await abrirOTrilho(page);
   for (let i = 0; i < 24 && !await diaDoCalendario(page, dia).count(); i++) {
     const mes = await trilho(page).getAttribute('data-mes');
     await page.locator(dia.slice(0, 7) < mes ? '#cal-mes-ant' : '#cal-mes-prox').click();
     await expect(trilho(page)).not.toHaveAttribute('data-mes', mes);
   }
   await diaDoCalendario(page, dia).click();
+  return abriu;
 }
 
-// Troca a data aberta pelo trilho e espera ela abrir. Solto, o trilho fecha sozinho quando a data abre
+// Troca a data aberta pelo trilho e espera ela abrir. O calendário que estava recolhido volta a ser recolhido (os testes
+// das telas ficam com a largura de sempre)
 export async function mudarData(page, data) {
-  await escolherNoCalendario(page, data);
+  const abriu = await escolherNoCalendario(page, data);
   await expect(dataAberta(page)).toHaveAttribute('data-data', data);
+  if (abriu) await recolherOTrilho(page);
 }
 
 // O dia de operação seguinte e o anterior (o domingo fica de fora), pelo trilho, até ele abrir. esperar: false, sem esperar

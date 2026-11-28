@@ -1,6 +1,6 @@
 // Status do voo com detalhes: Cancelado pede o motivo e Atrasado, a nova decolagem. O detalhe aparece junto do status,
 // vai para o CSV e fica guardado no dia; o histórico registra só a categoria do motivo.
-import { test, expect, abrir, abrirEscala, botaoDoHistorico, editorDoVoo, refazer } from './fixtures.js';
+import { test, expect, abrir, abrirEscala, botaoDoHistorico, editorDoVoo, refazer, textosDaEscala, itensDaEscala } from './fixtures.js';
 import { aluno, cenario, instrutor, GROUND_C152 } from '../helpers/montar.js';
 
 // Dois voos seguidos do mesmo instrutor (e no mesmo avião): 10:10 e 11:30
@@ -79,7 +79,7 @@ test.describe('Status do voo com detalhes', () => {
 
     // Fora da escala aprovada, o voo seguinte (do mesmo instrutor) sai do horário novo do atrasado
     await expect(linha(page, 'Aluno 1001').locator('.c-hr')).not.toContainText('11:30');
-    await expect(page.locator('#out details.caixa.avisos')).toHaveCount(0);
+    await expect(itensDaEscala(page, 'avisos')).toHaveCount(0);
     await expect(await abrirHistorico(page)).toContainText('Status de Aluno 1000 (10:10–11:10): Atrasado (nova decolagem 10:40)');
   });
 
@@ -93,9 +93,8 @@ test.describe('Status do voo com detalhes', () => {
     await linha(page, 'Aluno 1000').locator('.st-sel').selectOption('Atrasado');
     await dialogo(page).getByLabel('Nova decolagem').fill('10:40');
     await confirmar(page);
-    const avisos = page.locator('#out details.caixa.avisos');
-    await expect(avisos.locator('summary')).toHaveText('1 aviso: 1 atraso com conflito');
-    await expect(avisos.locator('.al.warn')).toContainText('Atraso: a nova decolagem às 10:40 (pouso às 11:40) se sobrepõe ao voo das 11:30 de Aluno 1001');
+    await expect(textosDaEscala(page, 'avisos')).toHaveCount(1);
+    await expect(textosDaEscala(page, 'avisos')).toContainText('Atraso: a nova decolagem às 10:40 (pouso às 11:40) se sobrepõe ao voo das 11:30 de Aluno 1001');
   });
 
   test('Voltar ou Esc desiste: o status continua o anterior e nada vai para o histórico', async ({ page }) => {
