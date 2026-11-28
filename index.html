@@ -812,7 +812,8 @@
         O rascunho é da data: outra data, ou as faixas do instrutor mudadas por fora (o <i>Marcar disponível</i>, outra pessoa), o tiram. O turno que já está, ou <i>Salvar faixas</i> sem mudança, não grava nada no Histórico.
         Meio dia é uma faixa digitada: <i>Editar faixas</i>, o <i>Até</i> (ou o <i>De</i>) e <i>Salvar faixas</i>. Sem nenhuma faixa, o instrutor não voa na data.</li>
         <li><b>A regra:</b> a missão começa dentro de uma faixa do instrutor e pode terminar depois dela, mas não toca nenhuma pausa (nem a que começou antes dela); o <i>Até</i> não entra: até 17:30 não inclui o Noturno.
-        A missão que termina até as 06:30 não pede faixa, e a que começa antes delas começa às 06:30 para a regra.</li>
+        A missão que termina até as 06:30 não pede faixa, e a que começa antes delas começa às 06:30 para a regra.
+        Uma pausa que cobre 1 h entre 11:00 e 14:00 (o <i>Almoço</i>, por exemplo) é o almoço do instrutor: a escala não reserva outro para ele (veja o <b>almoço</b> em <a href="#manual-regras">Como a escala é montada</a>).</li>
         <li><b>O que cabe nestas faixas</b> (abre com um clique): em cada lista de decolagem da data (C152, C172, Simulador, PA-34, Ground e o Noturno), os horários em que a missão começa, com a duração padrão (1 h; o Simulador 2 h, o Ground 01h30, o Noturno 4 h), e até quando pode ir a que começa no último deles (no máximo 5 h, sem tocar a pausa seguinte; no avião de dia, até as 17:30; o Ground e o Noturno, a duração fixa deles).</li>
       </ul>
       <p>O turno e <i>Salvar faixas</i> vão para o Histórico, que reverte; a data seguinte começa com as faixas desta. O instrutor novo vem no dia inteiro.
@@ -963,6 +964,11 @@
       <p>Depois de montada, a escala <b>divide as horas do dia</b> entre os instrutores: voos e aulas passam de quem tem mais horas para quem tem menos, sempre que todas as regras continuam valendo (habilitação, disponibilidade para começar o voo, horário livre, bloqueios do aluno e peso), e o aluno não repete o instrutor no dia.
       Os voos do rodízio ficam com quem a fila escolheu, o voo com o instrutor escolhido pelo operador (ou o do <i>Priorizar com</i>) fica com ele, e a turma de Ground muda de instrutor inteira.
       Nenhuma missão sai da escala por causa disso.</p>
+      <p>O <b>almoço</b>: a escala deixa a cada instrutor que vem na data uma hora livre seguida entre 11:00 e 14:00 (sem voo, simulador nem aula; a pausa e o fora das faixas contam como livres), como a operadora fazia no bom senso.
+      Para isso, ela põe um voo em outro horário, com outro instrutor ou em outro avião, também antes da preferência do aluno e do <i>Priorizar com</i> (o voo com o instrutor escolhido pelo operador continua com ele, e só o horário muda); a divisão das horas, a compactação e o pareamento do <i>Priorizar com</i> não tiram o almoço de ninguém.
+      Ela só desiste do almoço de um instrutor quando mantê-lo tiraria um voo da escala (um pedido com o horário exato na hora do almoço, por exemplo): o voo entra, e o aviso <i>Sem almoço</i> diz qual instrutor ficou sem a hora livre e o que o ocupa; nenhum pedido que entraria sem o almoço fica fora por causa dele.
+      O voo fixo (a escala aprovada, o agendado, o com status) fica onde está, e quem ficou sem a hora por causa dele também tem o aviso.
+      A pausa de 1 h nessa janela, digitada em <i>Editar faixas</i> (o <i>Almoço</i>, das 12:00 às 13:00) ou vinda dos dados antigos, substitui o almoço da escala: o horário dele fica o da pausa, que nenhuma missão toca. O almoço da escala não é gravado: só o aviso vai com ela.</p>
       <p>Por fim, a escala <b>fecha os buracos do dia</b> (a compactação): voos mudam de horário ou de instrutor, ou dois voos de mesma duração trocam de instrutor, sempre que isso diminui o tempo parado mais do que custa ao aluno sair da preferência dele.
       Dois controles embaixo da barra da Escala dizem como:</p>
       <ul>
