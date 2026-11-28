@@ -70,8 +70,10 @@ function intervalos(lista, maximo) {
 export const normalizarFaixas = lista => intervalos(lista, MAXIMO_DE_FAIXAS);
 export const normalizarPausas = lista => intervalos(lista, MAXIMO_DE_PAUSAS);
 
-// As faixas e as pausas que a regra lê: as da data, ou, sem elas, as do aw (o tempo marcado é o truthy, como o app lia)
-const lidas = x => (Array.isArray(x.faixas) ? { faixas: x.faixas, pausas: Array.isArray(x.pausas) ? x.pausas : [] } : faixasDoAw(x.aw || []));
+// As faixas e as pausas que a regra lê: as da data, ou, sem elas, as do aw lido como a data aberta o lia (awComoOAppLia:
+// nas nove posições, só true marca; outra forma, o dia todo), a mesma leitura da tela (faixasDe) e do passo 29. O app só
+// entrega nove booleanos (normalizeAndMigrateState, js/storage.js), então nada que ele mostra ou escala muda
+const lidas = x => (Array.isArray(x.faixas) ? { faixas: x.faixas, pausas: Array.isArray(x.pausas) ? x.pausas : [] } : faixasDoAw(awComoOAppLia(x.aw)));
 
 // O instrutor pode assumir o compromisso [a, b) (voo, simulador ou aula de Ground): ele vem na data (on), o compromisso
 // começa dentro de uma faixa (o que começa antes das 06:30 começa às 06:30 para a regra) e não toca nenhuma pausa. O que
@@ -85,9 +87,10 @@ export function disponivelPara(x, a, b) {
 }
 
 // A reversão de um agendamento feito antes da tela do C, que guardou só o aw de antes: o instrutor que tem faixas fica com
-// as desse aw (o que não tem continua lido pelo aw)
+// as desse aw, as faixas e as pausas (faixasDoAw dá sempre as duas listas: as pausas de antes saem); o que não tem continua
+// lido pelo aw. O aw vem de validarReversao (js/reversoes.js), nove booleanos: lido como o passo 29 o lê, o mesmo resultado
 export function refazerFaixasDoAw(x) {
-  if (x && Array.isArray(x.faixas)) Object.assign(x, faixasDoAw(x.aw));
+  if (x && Array.isArray(x.faixas)) Object.assign(x, faixasDoAw(awComoOAppLia(x.aw)));
   return x;
 }
 
