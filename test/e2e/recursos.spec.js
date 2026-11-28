@@ -8,7 +8,7 @@ import {
   alternarDisponivel, caixaDisponivel, fecharHorarios, abrirRecursos, abrirRecurso, abrirCategoria, abrirHangar, linhaDoRecurso,
   linhasDosRecursos, gruposDosRecursos, cabecalhoDaCategoria, buscaDosRecursos, contagemDosRecursos, detalheDoRecurso, campoDoRecurso,
   horasDoRecurso, marcarAtributo, retirarRecurso, ordemNoHangar, horariosDaCategoria, confirmar, nenhumNaLista, larguraDaPagina, alvosPequenos,
-  semNome, paineisQueRolamParaOLado, diaSeguinte, medirVazioDoDetalhe, abrirOTrilho, recolherOTrilho, listaDosRecursos, appPronto, AMANHA
+  semNome, paineisQueRolamParaOLado, diaSeguinte, medirVazioDoDetalhe, linhasDosInstrutores, abrirOTrilho, recolherOTrilho, listaDosRecursos, appPronto, AMANHA
 } from './fixtures.js';
 import { documentosAtuais } from './supabase-falso.js';
 import { aluno, apenas, cenario, instrutor } from '../helpers/montar.js';
@@ -53,8 +53,9 @@ test.describe('Recursos: a lista por categoria', () => {
     expect(vazio.tamanho).toBeGreaterThanOrEqual(18);
     expect(vazio.foraDoMeio.x).toBeLessThanOrEqual(3);
     expect(vazio.foraDoMeio.y).toBeLessThanOrEqual(3);
-    await expect(page.locator('#inst .cd')).toHaveCount(0);
-    await expect(page.locator('#inst')).toContainText('Nenhum instrutor cadastrado');
+    await expect(linhasDosInstrutores(page)).toHaveCount(0);
+    await irPara(page, 'ins');
+    await expect(page.locator('#s-ins')).toContainText('Nenhum instrutor cadastrado');
     await irPara(page, 'alu');
     await expect(page.locator('#alu')).toContainText('Nenhum aluno cadastrado');
   });

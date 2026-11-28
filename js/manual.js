@@ -7,7 +7,7 @@ import { CATEGORIAS_DO_RODIZIO } from './rodizio.js';
 import { GLOSSARIO, ABAS_DO_GLOSSARIO } from './glossario.js';
 import { hm, duracaoHm } from './format.js';
 
-// Os rótulos curtos são os da grade de habilitações da aba Instrutores
+// Os rótulos curtos são os da linha e do filtro das habilitações de INVAs
 const ROTULO = new Map(HABILITACOES.map(h => [h.id, h.curto]));
 const ou = itens => (itens.length > 1 ? `${itens.slice(0, -1).join(', ')} ou ${itens.at(-1)}` : itens[0]);
 

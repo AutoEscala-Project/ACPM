@@ -2,9 +2,10 @@
 // e as sugestões de reparo.
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { sobrepoe, livre, cobre, cabeNoSaldo, folgaAte, saldoAteARevisao, problemasDoInstrutor } from '../../js/viabilidade.js';
+import { sobrepoe, livre, cabeNoSaldo, folgaAte, saldoAteARevisao, problemasDoInstrutor } from '../../js/viabilidade.js';
 import { normalizarLimites } from '../../js/limites.js';
 import { GROUND_EQ_TYPE } from '../../js/config.js';
+import { disponivelPara } from '../../js/disponibilidade.js';
 
 describe('Viabilidade', () => {
   it('dois intervalos se sobrepõem quando um começa antes de o outro terminar (encostar não conta)', () => {
@@ -19,14 +20,16 @@ describe('Viabilidade', () => {
     assert.equal(livre(undefined, 390, 450), true);
   });
 
-  it('o instrutor cobre o voo quando está disponível em todos os períodos que o voo toca', () => {
+  // O cobre (o aw) saiu para js/disponibilidade.js (disponivelPara, C): os mesmos casos, pelo instrutor
+  it('o instrutor disponível no voo quando está marcado em todos os tempos que o voo toca', () => {
     const todas = Array(9).fill(true);
-    assert.equal(cobre(todas, 390, 450), true);
+    const x = aw => ({ on: true, aw });
+    assert.equal(disponivelPara(x(todas), 390, 450), true);
     const semManha = todas.map((v, k) => k > 0);
-    assert.equal(cobre(semManha, 390, 450), false, '06:30 cai no 1º período');
-    assert.equal(cobre(semManha, 500, 560), true, '08:20 em diante');
+    assert.equal(disponivelPara(x(semManha), 390, 450), false, '06:30 cai no 1º tempo');
+    assert.equal(disponivelPara(x(semManha), 500, 560), true, '08:20 em diante');
     const semTerceiro = todas.map((v, k) => k !== 2);
-    assert.equal(cobre(semTerceiro, 560, 620), false, 'do 2º para o 3º período: precisa dos dois');
+    assert.equal(disponivelPara(x(semTerceiro), 560, 620), false, 'do 2º para o 3º tempo: precisa dos dois');
   });
 
   it('o voo cabe no saldo até a revisão de 50 horas', () => {
@@ -64,7 +67,16 @@ describe('O instrutor para um compromisso', () => {
   it('fora do cadastro, inativo ou sem disponibilidade em todo o voo', () => {
     assert.deepEqual(codigos(undefined, voo()), ['instrutor-saiu']);
     assert.deepEqual(codigos(instrutor({ on: false }), voo()), ['instrutor-indisponivel']);
-    assert.deepEqual(codigos(instrutor({ aw: Array(9).fill(true).map((v, k) => k !== 2) }), voo()), ['instrutor-indisponivel'], 'das 10:00 às 11:00: termina no 3º período');
+    assert.deepEqual(codigos(instrutor({ aw: Array(9).fill(true).map((v, k) => k !== 2) }), voo()), ['instrutor-indisponivel'], 'das 10:00 às 11:00: o tempo das 10:10, entre dois marcados, é a pausa');
+  });
+
+  it('com as faixas da data (C, formato 29): o voo começa dentro de uma e pode terminar depois, sem tocar uma pausa; o aw não é lido', () => {
+    const nenhum = Array(9).fill(false);
+    assert.deepEqual(codigos(instrutor({ aw: nenhum, faixas: [{ de: 390, ate: 1440 }], pausas: [] }), voo()), []);
+    assert.deepEqual(codigos(instrutor({ faixas: [{ de: 390, ate: 640 }], pausas: [] }), voo()), [], 'das 10:00 às 11:00: começa antes das 10:40 e passa delas');
+    assert.deepEqual(codigos(instrutor({ faixas: [{ de: 390, ate: 600 }], pausas: [] }), voo()), ['instrutor-indisponivel'], 'às 10:00, o fim da faixa: não entra');
+    assert.deepEqual(codigos(instrutor({ faixas: [{ de: 390, ate: 1440 }], pausas: [{ de: 630, ate: 700 }] }), voo()), ['instrutor-indisponivel'], 'toca a pausa');
+    assert.deepEqual(codigos(instrutor({ faixas: [], pausas: [] }), voo()), ['instrutor-indisponivel'], 'nenhuma faixa: não voa na data');
   });
 
   it('sem a habilitação da missão ou do avião', () => {

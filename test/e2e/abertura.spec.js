@@ -6,7 +6,7 @@
 // lidas uma de cada vez (a versão que a gravação leva é a da leitura dos dados da tela), e nenhuma data é lida antes de a
 // abertura preparar os dados, nem depois de a preparação falhar. O que fica aberto na tela quando a data abre passa a
 // mostrar os dados dela
-import { test, comProgresso, expect, prepararContexto, vigiarErros, preencherLogin, entrar, irPara, abrirEscala, AMANHA, URL_APP, abrirHistorico, alternarDisponivel, botaoAprovar, caixaDisponivel, caixaVoa, dataAberta, diaAnterior, diaSeguinte, exportar, importarDaAgenda, rotuloDaData, escolherNoCalendario, confirmarAgendamento, linhasDosAlunos, abrirCategoria, horariosDaCategoria } from './fixtures.js';
+import { test, comProgresso, expect, prepararContexto, vigiarErros, preencherLogin, entrar, irPara, abrirEscala, AMANHA, URL_APP, abrirHistorico, alternarDisponivel, botaoAprovar, caixaDisponivel, caixaVoa, dataAberta, diaAnterior, diaSeguinte, exportar, importarDaAgenda, rotuloDaData, escolherNoCalendario, confirmarAgendamento, linhasDosAlunos, abrirLimitesDaLei, abrirCategoria, horariosDaCategoria } from './fixtures.js';
 import { criarSupabaseFalso, documentosAtuais, CONTAS } from './supabase-falso.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
 import { runAllocationEngine } from '../../js/engine.js';
@@ -186,8 +186,7 @@ test.describe('A escala abrindo: nada é gravado antes de os dados da data chega
     await recusada(page, 'o Voa da demanda', () => voa.click());
     await expect(voa).toBeChecked();
 
-    await irPara(page, 'ins');
-    await page.locator('#s-ins [data-vista-ins="cadastro"]').click();
+    await abrirLimitesDaLei(page);
     const limite = page.locator('#limites-lei [data-limite="vooMesH"]');
     await recusada(page, 'os limites da lei', async () => { await limite.fill('90'); await limite.press('Tab'); });
     await expect(limite).toHaveValue('100');

@@ -1,4 +1,4 @@
-import { test, expect, abrir, abrirSintetico, abrirComExemplo, irPara, irParaVista, abrirEscala, filtrarHabilitacoes, filtrarCursos, AMANHA, abrirRecursos, abrirRecurso, abrirCategoria, buscaDosRecursos, linhasDosRecursos, contagemDosRecursos, cabecalhoDaCategoria, horariosDaCategoria, caixaVem, dataAberta, gradeDoDia, botaoDoTrilho, linhasDosAlunos } from './fixtures.js';
+import { test, expect, abrir, abrirSintetico, abrirComExemplo, irPara, abrirEscala, filtrarHabilitacoes, filtrarCursos, AMANHA, caixaVem, dataAberta, botaoDoTrilho, linhasDosAlunos, linhaDoInstrutor, abrirInstrutor, secaoDoInstrutor, nomesDosInstrutores, buscaDosInstrutores, nenhumNaLista, agendarComOInstrutor, botoesDosTurnos, abrirRecursos, abrirRecurso, abrirCategoria, buscaDosRecursos, linhasDosRecursos, contagemDosRecursos, cabecalhoDaCategoria, horariosDaCategoria } from './fixtures.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
 
 test.describe('Perfis de acesso', () => {
@@ -16,20 +16,24 @@ test.describe('Perfis de acesso', () => {
     await expect(page.locator('#out .st-sel').first()).toBeDisabled();
     await irPara(page, 'ins');
     await expect(page.locator('[data-act="addi"]')).toBeHidden();
-    // A grade do dia fica travada (os campos desligados) e as habilitações não abrem (o Gestor vê o resumo)
-    await expect(gradeDoDia(page).locator('.cel input').first()).toBeDisabled();
-    await expect(caixaVem(gradeDoDia(page)).first()).toBeDisabled();
-    await page.locator('#s-ins [data-vista-ins="cadastro"]').click();
-    await expect(page.locator('#inst [data-act="editar-habs"]').first()).toBeHidden();
-    await expect(page.locator('#inst .habs-resumo').first()).toBeVisible();
+    // INVAs só para ler: sem o "Vem" e o "Ativo" da linha; o detalhe em texto (sem os turnos, "Editar faixas", as caixas das
+    // habilitações e "Agendar voo com…"), com o resumo das habilitações
+    await expect(caixaVem(linhaDoInstrutor(page, 1))).toBeHidden();
+    await expect(linhaDoInstrutor(page, 1).locator('[data-act="ativo"]')).toBeHidden();
+    await abrirInstrutor(page, 1);
+    await expect(secaoDoInstrutor(page, 'data')).toContainText('vem nesta data');
+    await expect(secaoDoInstrutor(page, 'data').locator('[data-act="turno"], [data-act="editar-faixas"], input')).toHaveCount(0);
+    await expect(secaoDoInstrutor(page, 'habilitacoes').locator('input')).toHaveCount(0);
+    await expect(secaoDoInstrutor(page, 'habilitacoes')).toContainText('Local');
+    await expect(agendarComOInstrutor(page)).toBeHidden();
 
     await page.locator('#role-sel').selectOption('operador');
     await expect(page.locator('[data-act="addi"]')).toBeVisible();
     await irPara(page, 'esc');
     await expect(page.locator('#btn-agendar')).toBeVisible();
-    await irPara(page, 'ins');
-    await page.locator('#s-ins [data-vista-ins="dia"]').click();
-    await expect(gradeDoDia(page).locator('.cel input').first()).toBeEnabled();
+    await abrirInstrutor(page, 1);
+    await expect(caixaVem(linhaDoInstrutor(page, 1))).toBeEnabled();
+    await expect(botoesDosTurnos(page)).toHaveCount(3);
     await expect(botaoDoTrilho(page)).toBeEnabled();
   });
 
@@ -44,7 +48,7 @@ test.describe('Perfis de acesso', () => {
   // Quem só consulta usa os filtros como o Operador: a busca e as caixas das habilitações e dos cursos (.flt-ctrl, que
   // js/somente-leitura.js não desliga), as vistas, o botão e o "Limpar" do filtro e o "Limpar filtros" (sem data-act, que
   // js/eventos/registro.js não deixa passar para ele)
-  test('o Gestor busca, filtra pelas habilitações e pelos cursos e troca de vista em Instrutores, Alunos e na Demanda; "Limpar filtros" mostra todos de novo', async ({ page }) => {
+  test('o Gestor busca, filtra pelas habilitações e pelos cursos e troca de vista em INVAs, Alunos e na Demanda; "Limpar filtros" mostra todos de novo', async ({ page }) => {
     const estado = cenario({
       ins: [instrutor(1, 9, { nm: 'Ângelo Brandão' }), instrutor(2, 9), instrutor(3, 1), instrutor(4, 1, { hab: ['local', 'c172'] })],
       stu: [aluno(1000, {}, { nm: 'João Silva', curso: 'PP' }), aluno(1001)]
@@ -52,10 +56,10 @@ test.describe('Perfis de acesso', () => {
     await abrir(page, { estado, url: './?role=gestor' });
     await expect(page.locator('body')).toHaveAttribute('data-role', 'gestor');
     await irPara(page, 'ins');
-    const busca = page.locator('[data-flt="inst"]'), botao = page.locator('#flt-ins-hab'), painel = page.locator('#flt-ins-hab-painel');
-    const dia = gradeDoDia(page).locator('tr[data-k="i"]:visible');
+    const busca = buscaDosInstrutores(page), botao = page.locator('#flt-ins-hab'), painel = page.locator('#flt-ins-hab-painel');
+    const quantos = async () => (await nomesDosInstrutores(page)).length;
     await busca.fill('angelo');
-    await expect(dia).toHaveCount(1);
+    await expect.poll(quantos).toBe(1);
     await expect(page.locator('#ins-contagem')).toHaveText('1 de 4 instrutores');
     await busca.fill('');
     // As habilitações, com duas marcas: quem tem as duas (o Instrutor 04 tem só o C172)
@@ -64,25 +68,24 @@ test.describe('Perfis de acesso', () => {
     await expect(painel.locator('input[data-filtro]:disabled')).toHaveCount(0);
     await painel.locator('input[data-valor="noturno"]').check();
     await painel.locator('input[data-valor="c172"]').check();
-    await expect(dia).toHaveCount(2);
+    await expect.poll(quantos).toBe(2);
     await expect(botao).toHaveText('Habilitações: Noturno + C172');
     await expect(page.locator('#ins-contagem')).toHaveText('2 de 4 instrutores');
     // O "Limpar" do filtro, e o Esc fecha o painel (o foco volta ao botão)
     await painel.getByRole('button', { name: 'Limpar' }).click();
-    await expect(dia).toHaveCount(4);
+    await expect.poll(quantos).toBe(4);
     await page.keyboard.press('Escape');
     await expect(painel).toBeHidden();
     await expect(botao).toBeFocused();
     await filtrarHabilitacoes(page, ['mlte']);
-    await expect(dia).toHaveCount(2);
-    await irParaVista(page, 'ins', 'cadastro');
-    await expect(page.locator('#inst .cd:visible')).toHaveCount(2);
+    await expect.poll(quantos).toBe(2);
     await busca.fill('nenhum assim');
-    await page.locator('#limpar-filtros-inst').click();
+    await nenhumNaLista(page, 'ins');
+    await page.getByRole('button', { name: 'Limpar filtros' }).click();
     await expect(busca).toBeFocused();
     await expect(botao).toHaveText('Todas as habilitações');
     await expect(painel.locator('input[data-filtro]:checked')).toHaveCount(0);
-    await expect(page.locator('#inst .cd:visible')).toHaveCount(4);
+    await expect.poll(quantos).toBe(4);
     await expect(page.locator('#ins-contagem')).toHaveText('4 instrutores');
 
     await irPara(page, 'alu');

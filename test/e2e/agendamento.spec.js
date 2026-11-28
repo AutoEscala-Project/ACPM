@@ -2,7 +2,7 @@
 // peso; a conferência roda o motor numa cópia da escala (o conflito não deixa agendar; a regra do curso pede "Agendar
 // mesmo assim"). O voo agendado fica fixo (o cadeado), o pedido aparece na Demanda com a missão do curso, o peso
 // digitado vai para o cadastro e o Histórico desfaz
-import { test, expect, abrir, irPara, abrirEscala, entrar, AMANHA, abrirHistorico, aprovar, caixaVem, caixaVoa, linhaDoInstrutor, reabrir, relativoDaData, confirmarAgendamento, refazer, campoDoAluno, textosDaEscala } from './fixtures.js';
+import { test, expect, abrir, irPara, abrirEscala, entrar, AMANHA, abrirHistorico, aprovar, caixaVem, caixaVoa, linhaDoInstrutor, reabrir, relativoDaData, confirmarAgendamento, refazer, campoDoAluno, textosDaEscala, abrirInstrutor, campoDoInstrutor } from './fixtures.js';
 import { instalarSupabaseFalso, documentosAtuais, CONTAS } from './supabase-falso.js';
 import { aluno, cenario, instrutor, GROUND_C152 } from '../helpers/montar.js';
 import { FROTA_INICIAL } from '../../js/frota.js';
@@ -262,7 +262,7 @@ test.describe('Agendar um voo na Escala', () => {
     await expect(caixaVem(linhaDoInstrutor(page, '2'))).not.toBeChecked();
   });
 
-  test('o peso digitado vai para o cadastro (Alunos e Instrutores), com uma entrada no histórico cada; sem peso, o envio para no campo', async ({ page }) => {
+  test('o peso digitado vai para o cadastro (Alunos e INVAs), com uma entrada no histórico cada; sem peso, o envio para no campo', async ({ page }) => {
     await abrirComCurso(page);
     await abrirDialogo(page);
     // Os campos dizem ao leitor de tela que o peso digitado fica no cadastro, e o peso no avião
@@ -288,9 +288,8 @@ test.describe('Agendar um voo na Escala', () => {
     await page.locator('#btn-fechar-historico').click();
     await irPara(page, 'alu');
     await expect((await campoDoAluno(page, 1001, 'kg'))).toHaveValue('82.5');
-    await irPara(page, 'ins');
-    await page.locator('#s-ins [data-vista-ins="cadastro"]').click();
-    await expect(page.locator('#inst tr[data-id="2"] [data-f="kg"]')).toHaveValue('91');
+    await abrirInstrutor(page, 2);
+    await expect(campoDoInstrutor(page, 'kg')).toHaveValue('91');
   });
 
   test('Confirmado, Aprovar e Reabrir mantêm o voo agendado no lugar', async ({ page }) => {

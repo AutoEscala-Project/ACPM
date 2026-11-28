@@ -166,7 +166,7 @@ test.describe('A linha e as telas', () => {
   test('o que cada perfil vê na linha: a Secretaria sem a Demanda, os Recursos, o Rodízio e o BI', async ({ page, context }) => {
     await instalarSupabaseFalso(context, documentosAtuais(comExemplo(estadoSintetico()), AMANHA));
     await entrar(page, CONTAS.secretaria);
-    await expect(rotulosDasAbas(page, { visiveis: true })).toHaveText(['Agenda', 'Escala', 'Aprovar', 'Alunos', 'Instrutores', 'Cursos']);
+    await expect(rotulosDasAbas(page, { visiveis: true })).toHaveText(['Agenda', 'Escala', 'Aprovar', 'Alunos', 'INVAs', 'Cursos']);
     await expect(page.locator('#linha .linha-sep')).toBeHidden();
     await expect(atual(page)).toHaveAttribute('href', '#/age');
   });
@@ -377,7 +377,8 @@ test.describe('A moldura', () => {
       const t = document.querySelector('aside.trilho');
       return {
         pagina: document.documentElement.scrollHeight > innerHeight + 1,
-        // (as regiões da tela de mentira, em Alunos: Recursos, antes dela na página, também é de lista e detalhe desde o B)
+        // (as regiões da tela de mentira, em Alunos: Recursos e INVAs, antes dela na página, também são de lista e detalhe
+        // desde o B e o C)
         lista: rola(document.querySelector('#s-alu [data-regiao="lista"]')), detalhe: rola(document.querySelector('#s-alu [data-regiao="detalhe"]')),
         noFundo: Math.round(document.querySelector('#s-alu [data-regiao="lista"]').getBoundingClientRect().bottom),
         trilho: { posicao: getComputedStyle(t).position, rola: getComputedStyle(t).overflowY, fundo: Math.round(t.getBoundingClientRect().bottom) }
