@@ -179,13 +179,31 @@ export function aprovarAsDeAntesDaAprovacao(lista, diaDe, { hoje, agora }) {
     if (Object.hasOwn(s, 'aprovada_em')) return s;
     const linha = { ...vazias, ...s };
     if (linha.cancelada_em || linha.aprovada_em || linha.aprovacao_retirada_em) return linha;
-    const dia = diaDe(linha.data);
-    const importada = Boolean(dia) && Array.isArray(dia.importadas) && dia.importadas.includes(linha.id);
-    const registro = importada && dia.pedidos && dia.pedidos[linha.aluno];
-    const levada = Boolean(registro) && (registro.solicitacao === linha.id || (Array.isArray(registro.extra) && registro.extra.some(e => e && e.solicitacao === linha.id)));
-    if (importada && (linha.data < hoje || levada)) return { ...linha, aprovada_em: agora, aprovada_por: 'importação anterior' };
+    const { importada, regraA } = pelaImportacao(linha, diaDe, hoje);
+    if (regraA) return { ...linha, aprovada_em: agora, aprovada_por: 'importação anterior' };
     if (!importada && linha.data >= hoje) return { ...linha, aprovada_em: agora, aprovada_por: linha.registrado_por };
     return linha;
+  });
+}
+
+// A regra (a) da conversão: o pedido está em "importadas" do dia dele (importada) e conta como aprovado pela importação
+// (regraA): numa data que já passou, sempre; de hoje em diante, só quando um registro do aluno (o pedido principal ou uma
+// missão extra) ainda o leva
+function pelaImportacao(linha, diaDe, hoje) {
+  const dia = diaDe(linha.data);
+  const importada = Boolean(dia) && Array.isArray(dia.importadas) && dia.importadas.includes(linha.id);
+  const registro = importada && dia.pedidos && dia.pedidos[linha.aluno];
+  const levada = Boolean(registro) && (registro.solicitacao === linha.id || (Array.isArray(registro.extra) && registro.extra.some(e => e && e.solicitacao === linha.id)));
+  return { importada, regraA: importada && (linha.data < hoje || levada) };
+}
+
+// A regra (a) de novo (G2: a migração 20261129100100_importados_ja_aprovados, aprovar_solicitacoes_de_antes_da_aprovacao
+// (false), para o modo local): o que uma aba de antes do D2 importou depois da conversão do D1 e ainda aguarda fica aprovado
+// por "importação anterior", também com as colunas da aprovação; o cancelado, o aprovado e o de aprovação retirada ficam
+export function aprovarOsImportadosDeNovo(lista, diaDe, { hoje, agora }) {
+  return lista.map(s => {
+    if (s.cancelada_em || s.aprovada_em || s.aprovacao_retirada_em) return s;
+    return pelaImportacao(s, diaDe, hoje).regraA ? { ...s, aprovada_em: agora, aprovada_por: 'importação anterior' } : s;
   });
 }
 

@@ -1,7 +1,7 @@
 // Backend local: os documentos da escala ficam no localStorage deste navegador (modo sem login).
 // cadastro e dia:AAAA-MM-DD são o formato por data; estado, escala, historico e bi são os documentos antigos, que
 // migrarDocumentosAntigos (storage.js) converte para o formato por data.
-import { prazoDaAgendaPermite, RECURSO_DO_PEDIDO, recusaDoPedido, recusaDaSegundaPreferencia, recusaDaData, aprovarAsDeAntesDaAprovacao, hojeEmSaoPaulo } from '../agenda.js';
+import { prazoDaAgendaPermite, RECURSO_DO_PEDIDO, recusaDoPedido, recusaDaSegundaPreferencia, recusaDaData, aprovarAsDeAntesDaAprovacao, aprovarOsImportadosDeNovo, hojeEmSaoPaulo } from '../agenda.js';
 import { gravarDadosPessoais, semQuemSaiu } from '../dados-pessoais.js';
 import { acumularHoras } from '../limites.js';
 import { hojeISO } from '../format.js';
@@ -22,6 +22,8 @@ const CHAVE_HISTORICO = 'acpm4_historico';
 export const CHAVE_AGENDA = 'acpm4_agenda';
 // A marca da conversão dos pedidos de antes da aprovação (feita uma vez, na primeira leitura ou gravação da agenda)
 const CHAVE_DA_CONVERSAO = 'acpm4_agenda_aprovacoes';
+// A da regra (a) de novo, do G2 (a migração 20261129100100_importados_ja_aprovados), feita uma vez, depois da do D1
+const CHAVE_DA_CONVERSAO_G = 'acpm4_agenda_aprovacoes_g';
 const CHAVE_DADOS_PESSOAIS = 'acpm4_dados_pessoais';
 // As colunas da lista dos dados pessoais (as mesmas do modo compartilhado, js/backends/supabase.js)
 const COLUNAS_DA_LISTA = ['nome_completo', 'canac', 'atualizado_em'];
@@ -79,14 +81,19 @@ const textoObrigatorio = (valor, max) => typeof valor === 'string' && valor.trim
 
 // A agenda guardada. Na primeira vez depois do passo D1 com pedidos guardados, os de antes da aprovação (sem as colunas
 // dela) são convertidos pela regra do banco (aprovarAsDeAntesDaAprovacao, sobre os dias deste navegador), e a marca fica:
-// a conversão não volta. Sem pedidos, nada é gravado (nem a marca)
+// a conversão não volta. Na primeira vez depois do G2, a regra (a) de novo (aprovarOsImportadosDeNovo, a migração
+// 20261129100100_importados_ja_aprovados), com a marca dela. Sem pedidos, nada é gravado (nem as marcas)
 function agendaGuardada(agora = new Date()) {
-  const lista = lerJson(CHAVE_AGENDA) || [];
-  if (!lista.length || localStorage.getItem(CHAVE_DA_CONVERSAO)) return lista;
-  const convertida = aprovarAsDeAntesDaAprovacao(lista, data => lerJson(PREFIXO_DIA + data), { hoje: hojeEmSaoPaulo(agora), agora: agora.toISOString() });
-  localStorage.setItem(CHAVE_AGENDA, JSON.stringify(convertida));
-  localStorage.setItem(CHAVE_DA_CONVERSAO, '1');
-  return convertida;
+  let lista = lerJson(CHAVE_AGENDA) || [];
+  if (!lista.length) return lista;
+  const diaDe = data => lerJson(PREFIXO_DIA + data), quando = { hoje: hojeEmSaoPaulo(agora), agora: agora.toISOString() };
+  const conversoes = [[CHAVE_DA_CONVERSAO, aprovarAsDeAntesDaAprovacao], [CHAVE_DA_CONVERSAO_G, aprovarOsImportadosDeNovo]]
+    .filter(([marca]) => !localStorage.getItem(marca));
+  if (!conversoes.length) return lista;
+  for (const [, converter] of conversoes) lista = converter(lista, diaDe, quando);
+  localStorage.setItem(CHAVE_AGENDA, JSON.stringify(lista));
+  for (const [marca] of conversoes) localStorage.setItem(marca, '1');
+  return lista;
 }
 
 // Formato acpm2 (7 janelas) convertido para as 9 janelas atuais
