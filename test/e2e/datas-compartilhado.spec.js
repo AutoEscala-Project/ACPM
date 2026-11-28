@@ -1,6 +1,6 @@
 // Escala por data no modo compartilhado: migração dos documentos antigos no servidor, gestor navegando
 // entre as datas sem gravar e autor das alterações no histórico.
-import { test, comProgresso, expect, prepararContexto, vigiarErros, irPara, AMANHA, entrar, preencherLogin, URL_APP, alternarDisponivel, appPronto, caixaDisponivel, dataAberta, escolherNoCalendario, mudarData, rotuloDaData, botaoDaData, textoDoProgresso, progressoNaLinha } from './fixtures.js';
+import { test, comProgresso, expect, prepararContexto, vigiarErros, irPara, AMANHA, entrar, preencherLogin, URL_APP, alternarDisponivel, appPronto, caixaDisponivel, dataAberta, escolherNoCalendario, mudarData, rotuloDaData, botaoDaData, textoDoProgresso, progressoNaLinha, linhasDosInstrutores } from './fixtures.js';
 import { instalarSupabaseFalso, documentosAtuais, documentosFase3, CONTAS } from './supabase-falso.js';
 import { comNomesAntigos } from '../helpers/formato.js';
 import { ESQUEMA } from '../../js/migracoes.js';
@@ -62,11 +62,11 @@ test.describe('Escala por data (modo compartilhado)', () => {
     await page.goto(URL_APP);
     await preencherLogin(page, CONTAS.operador);
     await expect(page.locator('#aviso-sync-texto')).toContainText('Não foi possível preparar os dados');
-    await expect(page.locator('#inst .cd')).toHaveCount(0);
+    await expect(linhasDosInstrutores(page)).toHaveCount(0);
     expect(servidor.banco.has('cadastro')).toBe(false);
 
     await page.locator('#btn-recarregar').click();
-    await expect(page.locator('#inst .cd').first()).toBeAttached();
+    await expect(linhasDosInstrutores(page).first()).toBeAttached();
     await expect(page.locator('#aviso-sync')).toBeHidden();
     expect(servidor.banco.get('cadastro').conteudo).toEqual({ ...separar(estado).cadastro, esquema: ESQUEMA });
     expect(erros).toEqual([]);
@@ -84,7 +84,7 @@ test.describe('Escala por data (modo compartilhado)', () => {
     await page.goto(URL_APP);
     await preencherLogin(page, CONTAS.operador);
     await expect(page.locator('#aviso-sync-texto')).toHaveText('Sem conexão com o servidor: gravando de novo assim que a conexão voltar; não feche esta página.');
-    await expect(page.locator('#inst .cd').first()).toBeAttached({ timeout: 10000 });
+    await expect(linhasDosInstrutores(page).first()).toBeAttached({ timeout: 10000 });
     await expect(page.locator('#aviso-sync')).toBeHidden();
     expect(servidor.banco.get('cadastro').conteudo).toEqual({ ...separar(estado).cadastro, esquema: ESQUEMA });
     expect(erros).toEqual([]);

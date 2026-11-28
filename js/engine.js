@@ -137,8 +137,8 @@ function paradoDasUnidades(unidades) {
 }
 
 // Divisão igual das horas do dia: depois de montada a escala, voos e aulas passam do instrutor com mais
-// horas para o com menos, enquanto todas as regras continuam valendo: a habilitação, a disponibilidade durante todo o
-// voo, o horário livre, o bloqueio do aluno, o peso e o aluno não repetir o instrutor no dia. Os voos do rodízio
+// horas para o com menos, enquanto todas as regras continuam valendo: a habilitação, a disponibilidade (começar numa
+// faixa do instrutor, sem tocar uma pausa), o horário livre, o bloqueio do aluno, o peso e o aluno não repetir o instrutor no dia. Os voos do rodízio
 // (cheque, MLTE, noturno e C172) ficam com quem a fila escolheu, e o voo com o instrutor escolhido pelo operador (ou o
 // do “Priorizar com” do aluno), com ele; a turma de Ground se move inteira e conta 1h30 uma vez. Cada troca diminui a soma dos quadrados das horas, então a repetição termina. O voo cancelado não conta nem
 // ocupa o instrutor, o atrasado ocupa o horário novo, e o voo com status de andamento não muda de instrutor
@@ -217,7 +217,7 @@ function equalizarHoras(out, state, limites, historico) {
 const MOTIVO_SEM_PAR = {
   disp: 'indisponível nos horários possíveis', busy: 'ocupado nos horários possíveis', bloq: 'em “Não escalar com”',
   limite: 'no limite da Lei do Aeronauta', peso: 'peso acima do limite do avião',
-  aviaoProprio: 'sem a habilitação própria dos aviões livres'
+  aviaoProprio: 'sem a habilitação que os aviões livres exigem'
 };
 function motivoSemPar(doPar, stu, d, tipo, fc) {
   if (doPar.every(x => !x.on)) return 'fora nesta data';
@@ -245,7 +245,7 @@ function minutoDaEspera(d, recusa) {
 // (ele vai para um instrutor do “Priorizar com” dele; quem estava com esse vai para outro que sirva ao voo dele; e assim por
 // diante, até um instrutor sem voo no horário ou o que o aluno deixou), na ordem dos instrutores do aluno e do cadastro.
 // Nenhum horário nem avião muda, e todas as regras continuam valendo: a habilitação (com o que a missão do curso exige e a
-// habilitação própria do avião), a disponibilidade durante o voo inteiro, o horário livre, a lei, o “Não escalar com” e o
+// habilitação própria do avião), a disponibilidade (começar numa faixa, sem tocar uma pausa), o horário livre, a lei, o “Não escalar com” e o
 // peso (com o peso do instrutor informado, sem menos combustível que antes). Não trocam de instrutor: os voos fixos e os com
 // status, o do instrutor escolhido para o dia, as turmas de Ground, a volta do noturno e o voo cujo aviso do peso nomeia o
 // instrutor (sem o peso dele); quem já está com um instrutor do “Priorizar com” só passa para outro do “Priorizar com” dele.
@@ -591,7 +591,7 @@ export function runAllocationEngine(state, opcoes = {}) {
           [codigo, why] = {
             stu_busy: ['aluno-ocupado', 'o aluno já tem outra missão nos horários possíveis'],
             sala: ['sala-ocupada', 'a sala de Ground já está ocupada por outra turma nos horários possíveis'],
-            disp: ['instrutores-indisponiveis', escolhido ? `${quem} não está disponível durante as 01h30 nos horários possíveis` : 'nenhum instrutor habilitado está disponível durante as 01h30 nos horários possíveis'],
+            disp: ['instrutores-indisponiveis', escolhido ? `${quem} não está disponível para começar a aula nos horários possíveis` : 'nenhum instrutor habilitado está disponível para começar a aula nos horários possíveis'],
             busy: ['instrutores-ocupados', escolhido ? `${quem} já tem outro compromisso nos horários possíveis` : 'os instrutores habilitados já têm outro compromisso nos horários possíveis'],
             bloq: ['bloqueio', 'os instrutores habilitados e livres estão em “Não escalar com” deste aluno'],
             limite: ['limite-da-lei', escolhido ? `${quem} passaria dos limites da Lei do Aeronauta (horas de voo, jornada ou repouso) nos horários possíveis` : 'nenhum instrutor dentro dos limites da Lei do Aeronauta (horas de voo, jornada ou repouso) nos horários possíveis']
@@ -790,13 +790,13 @@ export function runAllocationEngine(state, opcoes = {}) {
               ? `nenhum ${d.eq} homologado IFR livre nos horários possíveis (o voo é IFR; os “Só VFR” não servem a ele)`
               : `nenhum ${d.eq} livre nos horários possíveis${PELA_PRIORIDADE}`],
           revisao: ['revisao', `os ${d.eq} livres estão sem saldo até a revisão de 50 horas`],
-          disp: ['instrutores-indisponiveis', escolhido ? `${quem} não está disponível durante o voo inteiro nos horários possíveis` : `nenhum instrutor habilitado (${exige}) está disponível durante o voo inteiro nos horários possíveis`],
+          disp: ['instrutores-indisponiveis', escolhido ? `${quem} não está disponível para começar o voo nos horários possíveis` : `nenhum instrutor habilitado (${exige}) está disponível para começar o voo nos horários possíveis`],
           busy: ['instrutores-ocupados', escolhido ? `${quem} já tem outro compromisso nos horários possíveis` : `os instrutores habilitados (${exige}) já têm outro compromisso nos horários possíveis`],
           bloq: ['bloqueio', `os instrutores habilitados (${exige}) e livres estão em “Não escalar com” deste aluno`],
           limite: ['limite-da-lei', escolhido ? `${quem} passaria dos limites da Lei do Aeronauta (horas de voo, jornada ou repouso) nos horários possíveis` : 'nenhum instrutor dentro dos limites da Lei do Aeronauta (horas de voo, jornada ou repouso) nos horários possíveis'],
           locais: ['limite-de-locais', `já há ${LIMITE_DE_VOOS_LOCAIS} voos locais (Voo Local, Voo Solo e TGL) em todos os horários possíveis, o máximo no mesmo horário`],
           peso: ['peso', `peso aluno + ${escolhido ? quem : 'instrutor'} acima do limite de ${lim} kg do ${d.eq}, mesmo com o mínimo de combustível`],
-          aviaoProprio: ['habilitacao-do-aviao', `os ${d.eq} livres exigem a habilitação própria deles, e ${escolhido ? `${quem} não a tem` : 'nenhum instrutor livre a tem'} (marque em Instrutores › Cadastro)`]
+          aviaoProprio: ['habilitacao-do-aviao', `os ${d.eq} livres exigem do instrutor uma habilitação que ${escolhido ? `${quem} não tem` : 'nenhum instrutor livre tem'} (marque no INVA, em Habilitações)`]
         }[key];
       }
       alertas.push({ t: 'err', s: labelStu, m: `Rejeitado: ${why}.`, codigo });

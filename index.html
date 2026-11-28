@@ -27,7 +27,6 @@
 <link rel="stylesheet" href="css/recursos.css">
 <link rel="stylesheet" href="css/instrutores.css">
 <link rel="stylesheet" href="css/alunos.css">
-<link rel="stylesheet" href="css/cadastros.css">
 <link rel="stylesheet" href="css/cursos.css">
 <link rel="stylesheet" href="css/rodizio.css">
 <link rel="stylesheet" href="css/bi.css">
@@ -177,7 +176,7 @@
     <div class="linha-cadastros" role="group" aria-labelledby="linha-cadastros-titulo">
       <span class="linha-grupo" id="linha-cadastros-titulo">Cadastros</span>
       <a href="#/alu" data-nav><span class="linha-rotulo">Alunos</span></a>
-      <a href="#/ins" data-nav><span class="linha-rotulo">Instrutores</span></a>
+      <a href="#/ins" data-nav><span class="linha-rotulo">INVAs</span></a>
       <a href="#/rec" data-nav><span class="linha-rotulo">Recursos</span><span class="linha-selo" aria-hidden="true" hidden></span><span class="sr"></span></a>
       <a href="#/cur" data-nav><span class="linha-rotulo">Cursos</span></a>
     </div>
@@ -270,38 +269,25 @@
     </div>
   </section>
 
-  <!-- INSTRUTORES: disponibilidade do dia e cadastro (as vistas: js/views/vistas.js) -->
-  <section id="s-ins" class="tela" data-vista="dia">
-    <h2>Instrutores</h2>
-    <div class="bar">
-      <div class="seg" role="group" aria-label="O que ver">
-        <button type="button" aria-pressed="true" data-vista-ins="dia" class="on"><svg class="ico"><use href="#i-calendario"/></svg>Disponibilidade do dia</button>
-        <button type="button" aria-pressed="false" data-vista-ins="cadastro"><svg class="ico"><use href="#i-instrutor"/></svg>Cadastro</button>
+  <!-- INVAs: a lista e o detalhe (js/views/mestre-detalhe.js); a barra é fixa, nunca redesenhada (a busca, o filtro das
+       habilitações, "Mostrar inativos", "+ Novo instrutor" e quantos aparecem). O item fixo do alto da lista abre os limites
+       da Lei do Aeronauta; as faixas da data aberta, os turnos e os voos de cada instrutor ficam no detalhe ("Nesta data") -->
+  <section id="s-ins" class="tela" data-forma="lista-detalhe" data-vendo="lista">
+    <div class="md-lista" data-regiao="lista">
+      <h2>INVAs</h2>
+      <div class="bar lista-barra">
+        <span class="lista-busca"><svg class="ico" aria-hidden="true"><use href="#i-busca"/></svg><input type="search" class="flt-ctrl" data-flt="ins" placeholder="Buscar instrutor…" aria-label="Buscar instrutor"></span>
+        <!-- O filtro das habilitações (várias marcas; js/views/filtro-multiplo.js): o painel abre na linha de baixo da barra -->
+        <button type="button" class="btn sec filtro-botao flt-ctrl" id="flt-ins-hab" aria-expanded="false" aria-controls="flt-ins-hab-painel"><svg class="ico" aria-hidden="true"><use href="#i-filtro"/></svg><span class="filtro-resumo">Todas as habilitações</span><svg class="ico seta" aria-hidden="true"><use href="#i-baixo"/></svg></button>
+        <div class="filtro-painel" id="flt-ins-hab-painel" role="group" aria-label="Filtrar por habilitação" hidden></div>
+        <button type="button" class="btn quiet lista-inativos" id="ins-inativos" aria-pressed="false" hidden>Mostrar inativos</button>
+        <button type="button" class="btn edit-only lista-novo" data-act="addi">+ Novo instrutor</button>
+        <span class="contagem" id="ins-contagem" role="status"></span>
       </div>
-      <span class="cresce"></span>
-      <input type="search" class="flt-ctrl" data-flt="inst" placeholder="Buscar instrutor…" aria-label="Buscar instrutor">
-      <!-- O filtro das habilitações (várias marcas; js/views/filtro-multiplo.js): o painel abre na linha de baixo da barra -->
-      <button type="button" class="btn sec filtro-botao flt-ctrl" id="flt-ins-hab" aria-expanded="false" aria-controls="flt-ins-hab-painel"><span class="filtro-resumo">Todas as habilitações</span><svg class="ico seta" aria-hidden="true"><use href="#i-baixo"/></svg></button>
-      <div class="filtro-painel" id="flt-ins-hab-painel" role="group" aria-label="Filtrar por habilitação" hidden></div>
-      <span class="contagem" id="ins-contagem" role="status"></span>
-      <button class="btn edit-only" data-act="addi">+ Novo instrutor</button>
+      <p class="lista-aviso" id="ins-aviso" role="status" hidden></p>
+      <ul class="lista" id="ins" role="list" aria-label="INVAs" data-lista="ins"></ul>
     </div>
-    <div class="vista-dia">
-      <p class="legenda-disp">
-        <span><i class="cel on"></i>disponível</span>
-        <span><i class="cel on voo"></i>com voo ou aula na escala</span>
-        <span><i class="cel"></i>não vem</span>
-        <span class="h">Clique numa janela para mudar a disponibilidade desta data.</span>
-      </p>
-      <div class="tw"><table class="disp"><thead id="inst-dia-cab"></thead><tbody id="inst-dia"></tbody></table></div>
-    </div>
-    <div class="vista-cadastro">
-      <div class="tw"><table class="cadastro instrutores">
-        <thead><tr><th>Nome</th><th class="so-dados">CANAC</th><th>Peso (kg)</th><th>Habilitações</th><th aria-label="Ações"></th></tr></thead>
-        <tbody id="inst"></tbody>
-      </table></div>
-      <div class="pn limites-lei" id="limites-lei"></div>
-    </div>
+    <div class="md-detalhe" id="det-ins" data-regiao="detalhe" role="region" aria-label="Instrutor escolhido" tabindex="-1"></div>
   </section>
 
   <!-- ALUNOS: a lista e o detalhe (js/views/mestre-detalhe.js); a barra é fixa, nunca redesenhada (a busca, o filtro dos
@@ -528,7 +514,7 @@
         As horas dos aviões e as filas do rodízio já chegam atualizadas com os voos da data anterior.</li>
         <li><b>Recursos:</b> desligue <i>Disponível</i>, na linha de cada um, nos aviões e simuladores indisponíveis (em manutenção) e na Sala Ground, quando ela não puder ser usada.
         Confira as horas de cada avião desde a última revisão de 50 horas.</li>
-        <li><b>Instrutores:</b> em <i>Disponibilidade do dia</i>, desligue em <i>Vem</i> quem não vem na data e confira as janelas de cada um.</li>
+        <li><b>INVAs:</b> desligue <i>Vem</i>, na linha, de quem não vem na data e confira as faixas de cada um (a linha diz <i>Pode decolar</i> e as pausas; um turno ou <i>Editar faixas</i>, no detalhe, mudam).</li>
         <li><b>Demanda:</b> clique em <i>Importar pedidos da agenda</i> (o botão diz quantos pedidos da secretaria ainda não estão na demanda) e ajuste o que precisar: missão, recurso, horários preferidos<span data-funcionalidade="prioridade">, duração e prioridade</span><span data-sem-funcionalidade="prioridade"> e duração</span>.
         Para um aluno que não está na lista, use <i>Pôr um aluno na demanda</i>.</li>
         <li><b>Escala:</b> ela já está pronta.
@@ -585,9 +571,8 @@
         <li><b>Secretaria:</b>
         registra os pedidos de voo na Agenda (o app abre para ela nessa tela, na primeira data que ainda aceita pedidos),
         consulta a Escala e os Cursos e,
-        em Instrutores (que abre para ela no <i>Cadastro</i>)
-        e Alunos,
-        edita os dados pessoais (o resto ela só consulta);
+        em INVAs e Alunos,
+        consulta os dados pessoais (o resto ela também só consulta);
         as outras telas ela não vê.</li>
         <li><b>Painel (TV da recepção):</b> só vê o painel de hoje (veja <a href="#manual-tv">TV da recepção</a>).</li>
       </ul>
@@ -601,7 +586,7 @@
     <div class="pn" id="manual-abas">
       <h3>As telas</h3>
       <p>A linha, no alto, segue as etapas do dia, cada uma num cartão: Agenda, Demanda, Escala e Aprovar.
-      Ao lado dela (ou embaixo, quando não cabe) ficam os cadastros (Alunos, Instrutores, Recursos e Cursos), o Rodízio e o BI.</p>
+      Ao lado dela (ou embaixo, quando não cabe) ficam os cadastros (Alunos, INVAs, Recursos e Cursos), o Rodízio e o BI.</p>
       <h4>Agenda</h4>
       <p>A agenda de pedidos da secretaria: a lista dos pedidos da data aberta e o formulário que registra um pedido.
       Cada pedido é registrado para a <i>Data do pedido</i>, um campo do formulário: ela começa na data aberta, ou na primeira que ainda aceita pedidos, e não muda a data aberta no app.
@@ -719,7 +704,7 @@
       No Ground, a lista <i>Instrutor</i> traz antes as turmas do mesmo Ground no dia (<i>Entrar na turma das 08:20 com Instrutor 03</i>): o aluno entra na turma, no horário e com o instrutor dela, e outro horário abre uma turma nova.</p>
       <p><b>A conferência:</b> a cada mudança, o app confere o voo na escala inteira.
       O que deixaria um voo em conflito (o avião, a sala, o instrutor ou o aluno ocupado por um voo fixo, o instrutor indisponível, o instrutor em “Não escalar com” do aluno, o limite da lei, o peso acima do limite mesmo com o mínimo de combustível…) avisa e pede a confirmação, como as regras abaixo: o voo fica fixo onde você o pôs, e a Escala mostra o conflito, com as <i>Sugestões</i>. Embaixo do problema vêm as alternativas livres, até três de cada (<i>Horários livres</i>, <i>Recursos livres</i>, <i>Instrutores livres</i>; no peso, <i>Instrutores que cabem no peso</i>), e um clique escolhe.
-      No instrutor indisponível, o botão ao lado do aviso o marca disponível ali mesmo (<i>Marcar Instrutor 03 disponível às 08:20</i>): com o agendamento, ele passa a vir na data, nos períodos do voo.
+      No instrutor indisponível, o botão ao lado do aviso o marca disponível ali mesmo (<i>Marcar Instrutor 03 disponível às 08:20</i>): com o agendamento, ele passa a vir na data, e o voo entra numa faixa dele (a pausa que o voo toca perde esse pedaço).
       O conflito e o que foge de uma regra pedem uma confirmação em <i>Agendar mesmo assim</i>: <span data-funcionalidade="progresso">a missão fora da ordem do curso (ou já aprovada, dispensada, repetida no dia, de outro curso ou de um curso encerrado) ou num tipo de avião que não é o do programa; </span>um horário fora da lista, o pouso depois das 17:30, mais de 6 voos locais no mesmo horário, o voo antes do Ground dele; o instrutor fora do <i>Priorizar com</i> do aluno (quando um dos instrutores dele poderia voar o pedido); o peso que falta, ou o peso digitado que deixa outro voo em conflito; um voo que sai da escala; o horário que já passou, a data passada ou o domingo; <span data-funcionalidade="progresso">a ordem do curso ou os limites da lei que o app não pôde conferir (sem os resultados dos cursos ou as horas dos instrutores)</span><span data-sem-funcionalidade="progresso">os limites da lei que o app não pôde conferir (sem as horas dos instrutores)</span>.
       Se os avisos mudam antes do segundo clique, a confirmação é pedida de novo.
       O resto é informação, como a vez na fila do rodízio e, no Noturno, a volta no dia seguinte.
@@ -738,7 +723,7 @@
       Sem voos na data, o mapa mostra os recursos (ou os instrutores) livres embaixo do aviso.</p>
       <p id="manual-editar-voo"><b>Editar um voo:</b> um clique num voo do mapa, ou <i>Editar</i> na linha da Lista, abre todos os campos dele: o aluno (o voo passa para outro aluno; o pedido de antes deixa de voar), a missão (as do curso do aluno; sem curso, os tipos de missão; o tipo do recurso e as horas acompanham a missão e continuam editáveis), o recurso (de outro tipo, o pedido muda de tipo), o horário (os de decolagem do tipo, ou <i>Outro horário…</i>; o voo que terminaria depois da meia-noite não é salvo, como no <i>+ Agendar voo</i>), a duração (a do Ground e a do Noturno não mudam), o instrutor (<i>Automático</i> devolve a escolha ao app) e o status.
       Na turma de Ground, a turma inteira muda junto, e <i>Turma</i> mostra cada aluno, com o status dele, <i>Tirar</i> e <i>+ Aluno na turma</i>.
-      O peso do aluno e o do instrutor aparecem com o link para o cadastro: o peso é da pessoa, em todas as datas, e muda em Alunos ou Instrutores.
+      O peso do aluno e o do instrutor aparecem com o link para o cadastro: o peso é da pessoa, em todas as datas, e muda em Alunos ou INVAs.
       Nada muda antes de <i>Salvar</i>: a cada campo, o app confere o voo e mostra os avisos embaixo (o conflito em vermelho, ligado ao campo); nada fica desligado, e o que não serve avisa.
       O voo salvo fica fixo onde você o pôs (o cadeado diz “agendado na escala”; mudar só o instrutor o deixa “instrutor escolhido”, como na lista), e a reabertura da escala não o solta; o ↶ do Histórico desfaz (na escala aprovada, o voo volta fixo para onde estava antes da alteração; reaberta depois dela, ele volta sem o cadeado da aprovação, como no ↶ da troca do instrutor e das <i>Sugestões</i>), menos o voo em andamento, o que já tem resultado e o que mudou de status depois da alteração (como no agendamento: mude o status em vez de desfazer).
       A volta do noturno de ontem só muda o status, e o voo com resultado registrado não muda de aluno nem de missão (tire o resultado antes); o voo <i>Em Voo</i> ou que já pousou muda, com o aviso de que as horas, a revisão de 50 horas e o Rodízio acompanham.
@@ -747,7 +732,7 @@
       <p id="manual-escala-aprovada"><b>A escala aprovada e a que não está:</b> na escala aprovada, uma alteração de voo feita na Escala (o editor, o instrutor, o status, o ✕, as <i>Sugestões</i>, o <i>+ Agendar voo</i> e o ↶ deles no Histórico) muda só aquele voo: o app não refaz a escala, nenhum outro voo muda de lugar e nenhum pedido de fora entra no lugar que ficou livre; ele só confere de novo os conflitos, os avisos e os pesos.
       O conflito que a alteração cria avisa antes: <i>Salvar mesmo assim</i> grava, e o voo fica em conflito na Escala.
       <i>Soltar o voo</i>, nas <i>Sugestões</i>, fica desligado (reabra a escala para soltar o voo), e <i>Automático</i> só tira a escolha do pedido: o voo fica com o instrutor e no lugar.
-      Um pedido novo, o cadastro, Recursos e Instrutores continuam refazendo a escala em volta dos voos fixos.
+      Um pedido novo, o cadastro, Recursos e INVAs continuam refazendo a escala em volta dos voos fixos.
       Na escala que não está aprovada, cada alteração feita na Escala (também o status, a cada vez, os critérios e os horários fechados) pergunta antes: <i>A escala de qui 26/11 não está aprovada. Com esta alteração (Maria: 08:20 → 09:10), a escala inteira será refeita, e outros voos podem mudar de horário, de recurso ou de INVA.</i>
       <i>Cancelar</i> (ou Esc) não muda nada; <i>Salvar e refazer</i> grava e refaz a escala. Os avisos da alteração vêm na mesma pergunta.
       <i>Aprovar</i>, <i>Reabrir</i>, <i>Refazer a escala</i>, o resultado de uma missão do curso e o ↶ do Histórico não perguntam.</p>
@@ -781,7 +766,7 @@
       O aluno inativo não entra em pedido novo de hoje em diante (os voos que ele já tem nesta data continuam, e os pedidos ficam registrados, “Aluno inativo”); as datas passadas não mudam.
       A linha dele fica discreta, com a etiqueta <i>inativo</i>, até um filtro mudar; depois, ela só aparece com <i>Mostrar inativos</i>, na barra, que diz quantos são.
       A lista dos cursos é a dos cursos ativos de Cursos; o curso encerrado continua para quem já está nele, marcado “(encerrado)”.
-      O peso entra no limite de peso de cada avião (sem o peso, a escala avisa que não conferiu); ele vai de 1 a 300 kg, com uma casa decimal (72,5), aqui e em Instrutores, e vazio é sem peso.
+      O peso entra no limite de peso de cada avião (sem o peso, a escala avisa que não conferiu); ele vai de 1 a 300 kg, com uma casa decimal (72,5), aqui e em INVAs, e vazio é sem peso.
       O peso digitado no agendamento (veja Escala) também vai para o cadastro.
       Em <i>Priorizar com</i>, escolha os instrutores do aluno (o par de sempre): ele escolhe o instrutor, não o horário.
       Quem fica com cada horário é a ordem da fila (<span data-funcionalidade="prioridade">a prioridade, depois </span>quem registrou antes na agenda: veja Escala), com ou sem <i>Priorizar com</i>.
@@ -802,39 +787,49 @@
       O aluno que está à vista continua na lista quando muda (o nome, o curso), mesmo fora dos filtros, até eles mudarem; o aluno escolhido continua aberto mesmo quando a busca tira a linha dele.
       O Gestor e a Secretaria também buscam, filtram e escolhem, e leem o cadastro<span data-funcionalidade="progresso"> e as missões</span> em texto.</p>
       <p>O filtro dos cursos é um só nas duas telas, Alunos e Demanda: os cursos marcados aqui valem na Demanda, onde aparecem os pedidos dos alunos de algum dos cursos marcados, e os marcados lá valem aqui.
-      No celular, o cadastro de Instrutores mostra um cartão por pessoa, com o nome de cada campo em cima dele.</p>
-      <p><b>Dados pessoais</b> (a seção do aluno escolhido; em Instrutores, o botão na linha): <i>Nome completo</i> (o nome civil inteiro, até 120 caracteres; o <i>Nome (na escala)</i> do cadastro continua sendo o da escala, do PDF e da TV), CPF, CANAC (o código da ANAC, 6 dígitos), nascimento, celular (com DDD) e e-mail.
+</p>
+      <p><b>Dados pessoais</b> (a seção do aluno escolhido, e a do instrutor escolhido em INVAs): <i>Nome completo</i> (o nome civil inteiro, até 120 caracteres; o <i>Nome (na escala)</i> do cadastro continua sendo o da escala, do PDF e da TV), CPF, CANAC (o código da ANAC, 6 dígitos), nascimento, celular (com DDD) e e-mail.
       Em Alunos, os campos aparecem com o que está guardado e ficam liberados quando o app termina de ler o aluno; <i>Salvar</i> (ou Enter) confere e grava os seis de uma vez, e <i>Desfazer</i> volta ao que está gravado.
       O que foi digitado e não salvo fica com o aluno ao escolher outro (a linha dele ganha o ponto amarelo), e fechar a página com ele pede confirmação; uma gravação recusada depois de você ir para outro aluno fica marcada na linha, com o aviso em cima da lista e <i>Abrir</i>.
       O app confere o CPF pelos dígitos verificadores e não aceita o mesmo CPF ou CANAC em dois alunos; deixar tudo vazio apaga os dados da pessoa.
       Só operadores, administradores e a secretaria veem esses dados, e só operadores e administradores os alteram: a secretaria consulta, em texto.
       Eles ficam fora da escala e não vão para o CSV, o PDF, o Excel, o BI nem o Gestor, e o Histórico registra só quais campos mudaram, nunca os valores.
       Excluir um aluno ou instrutor apaga os dados pessoais dele; do aluno inativo, <i>Apagar os dados pessoais</i>, no rodapé (dois cliques), apaga só os dados pessoais e deixa o aluno no cadastro.
-      Se outra pessoa alterou os dados enquanto você editava, o app avisa em vez de gravar por cima e mostra a versão atual: refaça a alteração (em Instrutores, feche o painel e abra de novo).</p>
+      Se outra pessoa alterou os dados enquanto você editava, o app avisa em vez de gravar por cima e mostra a versão atual: refaça a alteração.</p>
 
-      <h4>Instrutores</h4>
-      <p>Duas vistas, com a busca e o filtro das habilitações valendo nas duas.
-      Instrutores abre na <i>Disponibilidade do dia</i> (para a Secretaria, no <i>Cadastro</i>), e a vista escolhida fica até a página ser recarregada:</p>
+      <h4>INVAs</h4>
+      <p>A lista dos instrutores fica à esquerda e o instrutor escolhido à direita, como em Alunos (as setas, Enter, o Esc, <i>Anterior</i> e <i>Próximo</i>, o endereço da página, como <i>#/ins/7</i>, e, no celular, a lista e o instrutor um de cada vez, com <i>‹ INVAs</i>).
+      Cada linha tem o nome; as faixas da data aberta no topo (que nem sempre é hoje), com as pausas (<i>06:30–12:00 e 13:00–17:30 · pausa 12:00–13:00</i>; quem não vem, <i>não vem nesta data</i>); quantos voos ele tem na escala da data (a turma de Ground conta uma vez); as habilitações que mais o distinguem; e a tira do dia, das 06:30 à meia-noite: as faixas em azul-claro, as pausas listradas em amarelo e os voos em azul.
+      Ao lado ficam <i>Vem</i> (ele vem na data aberta) e <i>Ativo</i> (o cadastro); o ponto amarelo marca quem está sem peso, quem chega a 90% de um limite da lei (o mês, o semestre ou o ano) e os dados pessoais não salvos.</p>
+      <p>No alto da lista, o item <b>Limites da Lei do Aeronauta</b> abre os limites (veja <a href="#manual-regras">Como a escala é montada</a>), que só o Administrador muda.</p>
+      <p>O detalhe tem, de cima para baixo: <b>Nesta data</b>, <b>Cadastro</b> (o nome e o peso), <b>Habilitações</b>, <b>Horas de voo</b>, <b>Fora do app</b> e <b>Dados pessoais</b> (veja Alunos); no alto, <i>Agendar voo com</i> o instrutor (o agendamento da Escala, com ele) e, no rodapé, <i>Excluir instrutor…</i> (dois cliques).
+      Em <b>Nesta data</b>: <i>Vem</i>; <i>Pode decolar</i>, as faixas da data; as <i>Pausas</i>; a tira, maior; os três turnos; <i>Editar faixas</i>; <i>O que cabe nestas faixas</i>; e os voos dele na escala, com o horário, a missão, o aluno, o recurso e o status.</p>
       <ul>
-        <li><b>Disponibilidade do dia:</b> uma linha por instrutor, com o interruptor <i>Vem</i> (quem vem na data aberta no topo, que nem sempre é hoje) e as janelas do dia: azul-claro quando o instrutor está disponível, azul quando ele já tem voo ou aula na escala e listrado quando não vem.
-        Clique numa janela para mudar; <i>Aplicar turno</i> marca várias de uma vez.
-        A coluna <i>Mês</i> mostra as horas de voo do instrutor no mês com a escala desta data (em destaque a partir de 90% do limite).</li>
-        <li><b>Cadastro:</b> nome, CANAC, peso (em destaque quando falta) e as habilitações.
-        <i>Editar habilitações</i> abre um painel ao lado com as 23 habilitações em grupos: Ground e simulador, Voo (com <i>Endosso Solo</i> e <i>Voo de Navegação ≥ 150 NM</i>, que ninguém começa tendo), Aviões e os três do checador (o curso PP, PC ou INVA; o motor MNTE ou MLTE; as regras VFR ou IFR: o voo de cheque exige uma marca de cada), e as horas de voo do instrutor no mês, no semestre e no ano; ali também se informam as horas de voo feitas fora do app (neste mês e, no ano, antes deste mês).
-        <i>Dados pessoais</i> abre os dados do instrutor (veja Alunos).
-        Embaixo ficam os <b>limites da Lei do Aeronauta</b> (veja <a href="#manual-regras">Como a escala é montada</a>), que só o Administrador muda.</li>
+        <li><b>Turnos:</b> <i>Dia inteiro</i> (06:30–17:30), <i>Noturno</i> (17:30–24:00) e <i>Dia + noturno</i> (06:30–24:00); um clique troca as faixas da data pela do turno, sem pausa, e o turno das faixas de agora fica marcado.</li>
+        <li><b>Editar faixas:</b> cada faixa é uma linha <i>Pode decolar de … até …</i>, com os horários de 10 em 10 minutos, das 06:30 à meia-noite (o horário fora deles que o <i>Marcar disponível</i> do agendamento gravou aparece no lugar dele), e o ✕; <i>+ Faixa</i> põe outra.
+        <i>+ Pausa</i> põe uma pausa (<i>Pausa de … até …</i>), e <i>Almoço</i>, a das 12:00 às 13:00.
+        Nada muda antes de <i>Salvar faixas</i>, que confere (o <i>Até</i> depois do <i>De</i>, no máximo 8 faixas e 8 pausas; o campo recusado fica marcado, com o foco) e junta as que se tocam; <i>Cancelar</i> deixa tudo como estava.
+        O rascunho é da data: outra data, ou as faixas do instrutor mudadas por fora (o <i>Marcar disponível</i>, outra pessoa), o tiram. O turno que já está, ou <i>Salvar faixas</i> sem mudança, não grava nada no Histórico.
+        Meio dia é uma faixa digitada: <i>Editar faixas</i>, o <i>Até</i> (ou o <i>De</i>) e <i>Salvar faixas</i>. Sem nenhuma faixa, o instrutor não voa na data.</li>
+        <li><b>A regra:</b> a missão começa dentro de uma faixa do instrutor e pode terminar depois dela, mas não toca nenhuma pausa (nem a que começou antes dela); o <i>Até</i> não entra: até 17:30 não inclui o Noturno.
+        A missão que termina até as 06:30 não pede faixa, e a que começa antes delas começa às 06:30 para a regra.</li>
+        <li><b>O que cabe nestas faixas</b> (abre com um clique): em cada lista de decolagem da data (C152, C172, Simulador, PA-34, Ground e o Noturno), os horários em que a missão começa, com a duração padrão (1 h; o Simulador 2 h, o Ground 01h30, o Noturno 4 h), e até quando pode ir a que começa no último deles (no máximo 5 h, sem tocar a pausa seguinte; no avião de dia, até as 17:30; o Ground e o Noturno, a duração fixa deles).</li>
       </ul>
-      <p>A busca acha o nome sem os acentos (“joao” acha “João”; também na Demanda, na Escala e no BI) e continua valendo depois de cada alteração.
-      Ao lado, o número diz quantos aparecem (por exemplo, <i>12 de 40 instrutores</i>); quando os filtros não deixam nenhum, <i>Limpar filtros</i> mostra todos de novo.
-      O instrutor cadastrado ou alterado agora (<i>+ Novo instrutor</i>, o nome, uma habilitação) continua à vista mesmo fora dos filtros, até eles mudarem.</p>
-      <p><b>Filtro das habilitações:</b> o botão ao lado da busca (<i>Todas as habilitações</i>) abre as habilitações nos grupos de <i>Editar habilitações</i>, com a habilitação própria de cada recurso (por exemplo, <i>Avião PR-VOM</i>).
+      <p>O turno e <i>Salvar faixas</i> vão para o Histórico, que reverte; a data seguinte começa com as faixas desta. O instrutor novo vem no dia inteiro.
+      <i>Fora do app</i> são as horas de voo feitas em outro lugar (neste mês e, no ano, antes deste mês), que entram nos limites da lei; <i>Horas de voo</i> mostra o mês, o semestre e o ano com a escala desta data.
+      As <b>Habilitações</b> são 23, em grupos: Ground e simulador, Voo (com <i>Endosso Solo</i> e <i>Voo de Navegação ≥ 150 NM</i>, que ninguém começa tendo), Aviões e os três do checador (o curso PP, PC ou INVA; o motor MNTE ou MLTE; as regras VFR ou IFR: o voo de cheque exige uma marca de cada), mais a habilitação própria de cada recurso que a tem.
+      Para quem saiu do aeroclube, desligue <i>Ativo</i>, na linha: ele não é escalado de hoje em diante (os voos que ele já tem nesta data continuam), e a linha só aparece com <i>Mostrar inativos</i>.</p>
+      <p>A barra fica em cima da lista: <i>Buscar instrutor</i>, o filtro das habilitações, <i>+ Novo instrutor</i> (abre escolhido, com o nome pronto para digitar) e o número dos que aparecem (<i>12 de 40 instrutores</i>).
+      A busca acha o nome sem os acentos (“joao” acha “João”; também na Demanda, na Escala e no BI) e, para quem vê os dados pessoais, o nome completo e o CANAC; quando os filtros não deixam nenhum, <i>Limpar filtros</i> mostra todos de novo.
+      O instrutor cadastrado ou alterado agora continua à vista mesmo fora dos filtros, até eles mudarem.</p>
+      <p><b>Filtro das habilitações:</b> o botão ao lado da busca (<i>Todas as habilitações</i>) abre as habilitações nos grupos das <i>Habilitações</i> do detalhe, com a habilitação própria de cada recurso (por exemplo, <i>Avião PR-VOM</i>).
       Marque uma ou mais: aparecem só os instrutores que têm todas as marcadas.
       Para o Noturno no C172, por exemplo, marque Noturno e C172: aparece quem tem as duas.
       O botão diz o que está marcado (<i>Habilitações: Noturno + C172</i>), e <i>Limpar</i> desmarca todas.
       O Esc ou um clique fora fecha o filtro, que continua valendo; a habilitação própria que sai da frota, em Recursos, sai também do filtro.
-      O Gestor e a Secretaria também filtram.</p>
-      <p>O instrutor só recebe uma missão se tiver as habilitações que ela exige (veja a tabela em <a href="#manual-regras">Como a escala é montada</a>) e se estiver disponível durante o voo inteiro.
-      O voo pode exigir mais: o noturno do aluno do PC é IFR (o instrutor precisa da habilitação IFR), o recurso com <i>Habilitação própria</i> (Recursos) exige a dele, que aparece num grupo próprio em <i>Editar habilitações</i>, e a missão do curso do pedido exige as que estão marcadas nela, em Cursos (<i>Habilitações que o INVA precisa</i>).
+      O Gestor e a Secretaria também buscam, filtram e escolhem, e leem o detalhe em texto.</p>
+      <p>O instrutor só recebe uma missão se tiver as habilitações que ela exige (veja a tabela em <a href="#manual-regras">Como a escala é montada</a>) e se puder começar a missão numa faixa dele, sem tocar uma pausa.
+      O voo pode exigir mais: o noturno do aluno do PC é IFR (o instrutor precisa da habilitação IFR), o recurso com <i>Habilitação própria</i> (Recursos) exige a dele, que aparece num grupo próprio das <i>Habilitações</i>, e a missão do curso do pedido exige as que estão marcadas nela, em Cursos (<i>Habilitações que o INVA precisa</i>).
       Marque primeiro os INVAs que têm a habilitação (aqui) e depois as missões que a exigem (em Cursos): a missão marcada antes de algum INVA ativo ter fica com o voo fora da escala, com o motivo.</p>
 
       <h4>Recursos</h4>
@@ -889,8 +884,8 @@
       Cada fase tem um nome, o módulo e quando abre: <i>Depois das fases anteriores</i> (o padrão), <i>Desde o início do curso</i> ou <i>Depois de…</i> as fases escolhidas, sempre anteriores (no PP, a Fase 6, do voo noturno, abre depois da Fase 4, embora venha depois da Fase 8).
       Cada missão tem um código (por exemplo, PP-07, até 15 letras, números, pontos e hífens, sem repetir no curso), um nome, o tipo de missão da escala, o recurso, as horas (o Ground é sempre na sala, com 1h30) e quando voar: <i>Depois das anteriores</i> (o padrão), <i>Livre na fase</i> (a qualquer hora com a fase aberta, como o SPIN do PP; a fase só fica completa com ela) ou <i>Depois de…</i> as missões escolhidas, sempre anteriores, de qualquer fase.
       <i>Dispensada</i> vale como feita para todos os alunos<span data-funcionalidade="progresso"> (não é sugerida e não entra no progresso)</span>; <i>Avaliação</i> marca as missões de avaliação.
-      <i>Habilitações que o INVA precisa</i> marca o que a missão exige do INVA além do tipo de missão e do recurso (por exemplo, <i>Endosso Solo</i> ou <i>Voo de Navegação ≥ 150 NM</i>), nos grupos de <i>Editar habilitações</i>: o voo do pedido que escolheu essa missão do curso só vai para quem tem todas.
-      Nenhuma missão começa com alguma marcada; marque os INVAs antes, em Instrutores: enquanto nenhum INVA ativo tem a habilitação, a linha da missão diz <i>Nenhum INVA ativo tem…</i>, e os voos dela ficam fora da escala. Cada missão exige até 10; marcar ou desmarcar uma refaz a escala da data aberta.
+      <i>Habilitações que o INVA precisa</i> marca o que a missão exige do INVA além do tipo de missão e do recurso (por exemplo, <i>Endosso Solo</i> ou <i>Voo de Navegação ≥ 150 NM</i>), nos grupos das <i>Habilitações</i> de INVAs: o voo do pedido que escolheu essa missão do curso só vai para quem tem todas.
+      Nenhuma missão começa com alguma marcada; marque os INVAs antes, em INVAs › Habilitações: enquanto nenhum INVA ativo tem a habilitação, a linha da missão diz <i>Nenhum INVA ativo tem…</i>, e os voos dela ficam fora da escala. Cada missão exige até 10; marcar ou desmarcar uma refaz a escala da data aberta.
       Sem os programas dos cursos lidos, a escala não confere essas habilitações, e a Escala avisa.
       Numa missão Noturno, <i>Trecho</i> diz se ela é a ida (o translado para BH), a noite (o noturno em BH) ou a volta (o translado do dia seguinte): as missões de um Noturno vêm juntas na fase, nesta ordem, e são um voo só<span data-funcionalidade="progresso">; a próxima missão oferece a noite com os translados (<i>NOT (com TSL-01 e TSL-02)</i>), e o resultado dela vale para os três</span>.<span data-funcionalidade="progresso">
       A próxima missão na Demanda e o progresso em Alunos seguem essas regras.</span></p>
@@ -944,14 +939,14 @@
       <ul>
         <li><b>Recurso certo para a missão</b> (tabela abaixo), disponível e livre no horário, com os atributos que o voo pede: o voo IFR (IFR, cheques IFR e o noturno do PC) só no avião homologado IFR (fora dos “Só VFR”), o Parafuso no C152 só no “Só Parafuso”.
         O instrutor e o avião vão em par: o recurso com habilitação própria só com quem a tem.</li>
-        <li><b>Instrutor disponível no dia e durante o voo inteiro</b>, livre e com as habilitações da missão; o instrutor marcado em <i>Não escalar com</i> para o aluno não entra.
+        <li><b>Instrutor disponível no dia para começar o voo</b> (numa faixa dele, sem tocar uma pausa), livre e com as habilitações da missão; o instrutor marcado em <i>Não escalar com</i> para o aluno não entra.
         Com o <i>Priorizar com</i> do aluno, um dos instrutores dele, em qualquer horário possível do aluno; só quando nenhum deles pode, outro instrutor, com aviso. No fim, os voos que saem no mesmo horário trocam de instrutor entre si para mais alunos voarem com um do <i>Priorizar com</i>, sem mudar nenhum horário nem avião (no rodízio, só entre voos da mesma categoria). Quando outro aluno, um voo fixo ou o instrutor escolhido para o dia fica com um instrutor dele no horário que o aluno pediu, o aviso diz quem ficou com ele e quando (e com quem) o aluno voa, com os horários de agora, também depois de uma mudança na escala aprovada.</li>
         <li><b>Peso:</b> aluno mais instrutor dentro do limite do avião com os tanques cheios (<span id="manual-pesos"></span>).
         Sem o peso informado, a escala avisa que não conferiu e diz de quem é o peso que falta; para um aluno com o peso informado, os instrutores com o peso vêm antes dos sem ele.</li>
         <li><b>Limites da Lei do Aeronauta</b> (Lei 13.475/2017 e RBAC 117): o instrutor não passa de 9h30 de voo nem de 11 h de jornada no dia (de 30 minutos antes do primeiro compromisso a 30 minutos depois do último; depois das 18:00, a hora vale 52m30s), de 100 h de voo no mês e de 960 h no ano, e tem 12 h de repouso entre um dia e o outro.
         As horas de voo contam só avião, das escalas gravadas sem os cancelados, mais as de fora do app; simulador e Ground contam na jornada.
         A partir de 90% do mês, do semestre ou do ano, a escala avisa.
-        O Administrador pode mudar os valores (por exemplo, pelo acordo coletivo dos instrutores) em Instrutores › Cadastro.</li>
+        O Administrador pode mudar os valores (por exemplo, pelo acordo coletivo dos instrutores) em INVAs, no item <i>Limites da Lei do Aeronauta</i>, no alto da lista.</li>
         <li><b>Combustível:</b> o tanque cheio é o padrão (<span id="manual-combustivel"></span>; 1 galão = 6 lb).
         Quando nenhum instrutor cabe no limite com os tanques cheios, a escala pode pôr o voo com menos combustível, desde que o que fica dê o voo, 10 minutos de táxi e a reserva (30 minutos de dia; 45 à noite e em IFR).
         A coluna Peso mostra <i>reduzir N gal</i>, e a dica, o CSV e o PDF dizem quanto abastecer.</li>
@@ -962,12 +957,12 @@
         Só o operador muda o avião ou o INVA do Noturno (no editor do voo, por exemplo) ou tira o pedido; aí a escala do dia seguinte, já gravada, é refeita e gravada com a volta nova quando ela abre, com a entrada no Histórico. Até lá, um aviso no topo diz que a escala gravada dessa data ainda tem a volta de antes (o painel da TV e as horas da data seguinte leem a escala gravada): abra a data para ela acompanhar.
         Se o avião ou o INVA da volta não puder voar no dia seguinte (indisponível, inativo, sem saldo até a revisão de 50 horas), a volta fica no avião, que está em BH, com um aviso na escala.
         O repouso da lei entre o noturno e a volta (9 h, menos que as 12 h) aparece como aviso, e a regra do repouso não barra os outros voos do instrutor nesse dia; a jornada de 11 h conta da volta.
-        O simulador e a aula de Ground não dependem da luz do dia e podem passar das 17:30 (o instrutor precisa estar disponível na noite), menos para o aluno que tem um Noturno no dia: as outras missões dele terminam antes das 17:30.</li>
+        O simulador e a aula de Ground não dependem da luz do dia e podem passar das 17:30 (basta que o instrutor possa começar a missão numa faixa dele e não tenha pausa depois), menos para o aluno que tem um Noturno no dia: as outras missões dele terminam antes das 17:30.</li>
         <li><b>Ground antes do voo:</b> se o aluno tem Ground e voo do mesmo tema no dia, o voo só começa depois do Ground.</li>
       </ul>
       <p>Entre os instrutores possíveis, a escolha segue esta ordem: um instrutor diferente daquele do voo anterior do aluno no dia (o aluno roda entre instrutores); o rodízio da categoria; quem tem menos habilitações (os mais versáteis ficam livres para as missões que só eles fazem); e quem tem menos horas no dia.
       Sempre que possível, cada instrutor fica no mesmo avião o dia todo, e o aluno troca de avião entre um voo e outro.</p>
-      <p>Depois de montada, a escala <b>divide as horas do dia</b> entre os instrutores: voos e aulas passam de quem tem mais horas para quem tem menos, sempre que todas as regras continuam valendo (habilitação, disponibilidade durante todo o voo, horário livre, bloqueios do aluno e peso), e o aluno não repete o instrutor no dia.
+      <p>Depois de montada, a escala <b>divide as horas do dia</b> entre os instrutores: voos e aulas passam de quem tem mais horas para quem tem menos, sempre que todas as regras continuam valendo (habilitação, disponibilidade para começar o voo, horário livre, bloqueios do aluno e peso), e o aluno não repete o instrutor no dia.
       Os voos do rodízio ficam com quem a fila escolheu, o voo com o instrutor escolhido pelo operador (ou o do <i>Priorizar com</i>) fica com ele, e a turma de Ground muda de instrutor inteira.
       Nenhuma missão sai da escala por causa disso.</p>
       <p>Por fim, a escala <b>fecha os buracos do dia</b> (a compactação): voos mudam de horário ou de instrutor, ou dois voos de mesma duração trocam de instrutor, sempre que isso diminui o tempo parado mais do que custa ao aluno sair da preferência dele.
@@ -987,7 +982,7 @@
           <tbody></tbody>
         </table>
       </div>
-      <p class="h">Os nomes das habilitações são os mesmos de Instrutores.
+      <p class="h">Os nomes das habilitações são os mesmos de INVAs.
       Quando aparecem várias separadas por “ou”, basta uma delas.</p>
     </div>
 
@@ -1104,10 +1099,6 @@
   <button class="btn quiet edit-only" type="button" id="btn-clear-log">Limpar o histórico desta data</button>
 </aside>
 
-<!-- HABILITAÇÕES DE UM INSTRUTOR: painel lateral aberto pelo cadastro -->
-<aside class="gaveta" id="painel-instrutor" aria-labelledby="painel-instrutor-titulo" hidden></aside>
-<!-- Dados pessoais de um aluno ou instrutor (js/views/dados-pessoais.js) -->
-<aside class="gaveta" id="painel-dados" aria-labelledby="painel-dados-titulo" hidden></aside>
 <!-- Sugestões para um conflito na escala aprovada (js/views/reparo.js) -->
 <aside class="gaveta" id="painel-reparo" aria-labelledby="painel-reparo-titulo" hidden></aside>
 <!-- Detalhe do status do voo: o motivo do cancelamento ou a nova decolagem do atraso (js/views/dialogo-status.js) -->
