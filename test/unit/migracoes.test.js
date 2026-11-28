@@ -13,8 +13,8 @@ import { habilitacoesDoNivel } from '../../js/habilitacoes.js';
 describe('Migrações do formato dos dados', () => {
   // O único lugar que fixa o número: cada passo que muda o formato muda este número, o PASSOS de js/migracoes.js e o
   // README ("Formato dos dados"); os outros testes usam ESQUEMA
-  it('o formato dos dados gravados é o 27', () => {
-    assert.equal(ESQUEMA, 28);
+  it('o formato dos dados gravados é o 30', () => {
+    assert.equal(ESQUEMA, 30);
   });
 
   it('dia: renomeia os simuladores na disponibilidade e na escala, sem perder nada', () => {
@@ -383,4 +383,25 @@ test('fechamentosDoWin é o que o passo usa', () => {
   const win = aberto();
   win[2] = false;
   assert.deepEqual(dia28({ win }).fechamentos, fechamentosDoWin(win));
+});
+
+// Versão 30 (E, depois da junção com o D3; a 29 é a do C, que entra antes do E no previa): nada é convertido. O número
+// protege o que uma aba de antes tiraria ao gravar: a marca etapaDoPrograma dos pedidos (só true), os dois horários
+// exatos do pedido (jan h<m1>|h<m2>, U1), as chaves do dia exportacoes ({}) e reabertura (null), que o H escreve, e os
+// ids que saem de importadas a partir do G2
+describe('versão 30 (E)', () => {
+  test('o dia e o cadastro passam como estão, também o que o passo não conhece', () => {
+    const dia = {
+      pedidos: { 1000: { fly: true, jan: 'h500|h610', p1: 500, p2: 610, etapa: 'PP-07', etapaDoPrograma: true, extra: [{ mid: 1, jan: 'h820', etapaDoPrograma: true }] } },
+      importadas: [7], exportacoes: { csv: { em: '2026-11-10T21:10:00.000Z', por: 'Operador 01', impressao: '0a1b2c3d' } },
+      reabertura: { em: '2026-11-10T21:20:00.000Z', por: 'Operador 01' }, outro: { qualquer: 1 }
+    };
+    for (const de of [28, 29]) {
+      assert.deepEqual(migrarDia(structuredClone({ ...dia, esquema: de })), { ...dia, esquema: 30 }, `de ${de}`);
+      const cadastro = { nid: 1000, stu: [], ins: [], horarios: { C152: [390, 500] }, outro: 1 };
+      assert.deepEqual(migrarCadastro({ ...cadastro, esquema: de }), { ...cadastro, esquema: 30 }, `de ${de}`);
+    }
+    assert.equal(precisaMigrar({ esquema: 29 }), true);
+    assert.equal(precisaMigrar({ esquema: 30 }), false);
+  });
 });

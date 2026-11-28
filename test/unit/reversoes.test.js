@@ -209,7 +209,7 @@ describe('Desfazer um voo agendado na Escala', () => {
     assert.deepEqual(validarReversao(MOVIDO, FROTA_INICIAL), MOVIDO);
     // Todos os campos do pedido: a disponibilidade do aluno, a missão do curso (e o curso dela), o pedido da agenda, o
     // instrutor escolhido e a confirmação do 7º voo local (F1d)
-    const completo = { ...MOVIDO, pedido: { ...ANTES, jan: 'h500', solicitacao: 12, cursoDaEtapa: 'PP', limiteConfirmado: true } };
+    const completo = { ...MOVIDO, pedido: { ...ANTES, jan: 'h500', solicitacao: 12, cursoDaEtapa: 'PP', limiteConfirmado: true, etapaDoPrograma: true } };
     assert.deepEqual(Object.keys(completo.pedido).sort(), [...CAMPOS_DO_PEDIDO].sort());
     assert.deepEqual(validarReversao(completo, FROTA_INICIAL), completo);
     // U1: o pedido de antes com os dois horários exatos volta com os dois

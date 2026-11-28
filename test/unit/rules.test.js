@@ -120,6 +120,18 @@ describe('Regras de missão', () => {
     assert.equal(minutoConfirmado({ mis: 'Voo Local', jan: 'h500|h610', limiteConfirmado: true }), 500);
   });
 
+  // Formato 30 (E): a marca de que a missão do curso do pedido veio do programa (a conciliação, missaoDaEntrada): só true,
+  // e só com a missão do curso
+  it('etapaDoPrograma: só true, e só com a missão do curso', () => {
+    const pedido = extra => { const p = { mis: 'Voo Local', eq: 'C152', p1: 500, p2: 610, nb: 1, ss: 1, ...extra }; normalizeMissionFields(p); return p.etapaDoPrograma; };
+    assert.equal(pedido({ etapa: 'PP-07', etapaDoPrograma: true }), true);
+    for (const valor of [false, 'true', 1, null, {}]) assert.equal(pedido({ etapa: 'PP-07', etapaDoPrograma: valor }), undefined, JSON.stringify(valor));
+    assert.equal(pedido({ etapaDoPrograma: true }), undefined, 'sem a missão do curso, a marca sai');
+    const branco = { etapa: 'PP-07', etapaDoPrograma: true };
+    deixarEmBranco(branco);
+    assert.equal(branco.etapaDoPrograma, undefined, 'o pedido em branco fica sem ela');
+  });
+
   it('disponibilidade do aluno: em que horários o voo pode começar (por período ou num horário exato)', () => {
     assert.equal(disponibilidadeDoAluno(''), null);
     assert.equal(disponibilidadeDoAluno(undefined), null);
