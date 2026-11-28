@@ -174,6 +174,31 @@ describe('Invariantes do motor de alocação', () => {
     assert.ok(out.length === 0 || comFaixa > 0);
   }));
 
+  // O almoço (#104), branda: o motor só desiste dele quando mantê-lo tiraria um voo da escala. Lido aqui sem js/almoco.js:
+  // nenhum pedido escalado pelo motor sem o almoço (opcoes.almoco: false) fica fora com ele
+  it('o almoço não tira nenhum voo da escala: cada pedido escalado sem ele continua escalado', () => emTodos(({ estado, out }) => {
+    const com = new Set(out.map(o => o.fKey));
+    const faltam = runAllocationEngine(estado, { almoco: false }).out.filter(o => !o.trecho && !com.has(o.fKey)).map(o => o.fKey);
+    assert.deepEqual(faltam, []);
+  }));
+
+  // Todo INVA que vem e tem um compromisso que toca 11:00–14:00 tem uma hora livre seguida nessa janela (sem compromisso:
+  // a turma de Ground uma vez, a volta do noturno até as 10:10; a pausa e o fora das faixas são livres), ou o aviso
+  // "Sem almoço" com o nome dele; quem tem a hora não tem o aviso
+  it('todo INVA que voa perto do meio-dia tem uma hora livre entre 11:00 e 14:00 ou o aviso com o nome dele', () => emTodos(({ estado, todos: linhas, al }) => {
+    for (const x of estado.ins.filter(i => i.on)) {
+      const ocupados = linhas.filter(o => o.insId === x.id && o.status !== 'Cancelado').map(o => (o.trecho === 'volta' ? [0, Math.max(o.b, o.livreAs)] : [o.a, o.b]));
+      const naJanela = ocupados.filter(([a, b]) => a < 840 && b > 660).sort((p, q) => p[0] - q[0]);
+      let inicio = 660, temHora = false;
+      for (const [a, b] of naJanela) { if (a - inicio >= 60) temHora = true; inicio = Math.max(inicio, b); }
+      if (840 - inicio >= 60) temHora = true;
+      const aviso = al.filter(a => a.t === 'warn' && a.m.startsWith('Sem almoço: ') && a.insId === x.id);
+      if (!naJanela.length || temHora) assert.deepEqual(aviso, [], `${x.nm} tem a hora livre e o aviso`);
+      else assert.equal(aviso.length, 1, `${x.nm} sem a hora livre (${naJanela.map(([a, b]) => `${hm(a)}–${hm(b)}`).join(', ')}) e sem o aviso`);
+      if (aviso.length) assert.equal(aviso[0].s, x.nm);
+    }
+  }));
+
   it('equipamento compatível, disponível, PR-JPL somente para Parafuso e o voo IFR só no avião homologado IFR', () => emTodos(({ estado, out }) => {
     for (const o of out) {
       if (o.isGround) {
