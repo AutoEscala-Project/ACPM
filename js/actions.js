@@ -298,6 +298,14 @@ export function gravarEscalaCalculada() {
   if (escalaSoCalculada) save();
 }
 
+// Grava o dia com a escala da tela como está, sem o motor (H: o registro das exportações, que não muda a escala): quem só
+// consulta não grava, e nada é gravado antes de a escala abrir. Sem a escala da tela, nada
+export function gravarSemOMotor() {
+  if (isGestor() || aindaNaoAbriu() || !RES) return false;
+  save(RES);
+  return true;
+}
+
 // A descrição de uma entrada do histórico tem até 500 caracteres, ao gravar e ao abrir
 const LIMITE_DA_DESCRICAO = 500;
 const textoAte = (texto, limite) => (texto === null || texto === undefined ? texto : String(texto).slice(0, limite));

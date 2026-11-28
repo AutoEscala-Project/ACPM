@@ -21,6 +21,8 @@ import { sumUniqueOperationalHours, consolidateTimelineSlots } from '../engine.j
 import { S, RES, AUDIT_LOG, TL_MODE, HORAS_NAS_COLUNAS, OCULTAR_INDISPONIVEIS, DATA, isGestor, dadoIndisponivel, estadoDaEscala, inativoNaDataAberta } from '../state.js';
 import { cancelamentoAproveitavel } from '../reparo.js';
 import { motivoDoFixo } from '../fixos.js';
+import { voosNovos } from '../aprovacao.js';
+import { impressaoDaEscala, situacaoDasExportacoes } from '../exportacoes.js';
 import { instrutoresDoVoo, foraDoPriorizarNoVoo } from '../instrutor-escolhido.js';
 import { $, trocarConteudo } from '../dom.js';
 import { atualizarEditorDoVoo } from './edicao-do-voo.js';
@@ -310,14 +312,28 @@ function rAprovacao(temVoos) {
     const hora = `${String(em.getHours()).padStart(2, '0')}:${String(em.getMinutes()).padStart(2, '0')}`;
     selo.dataset.dica = 'aprovar-escala';
     selo.innerHTML = `<svg class="ico" aria-hidden="true"><use href="#i-cadeado"/></svg>Aprovada às ${hora}${S.aprovacao.por ? ` por ${esc(S.aprovacao.por)}` : ''}`;
-    trocarConteudo(lugar, '<button type="button" class="btn sec edit-only" id="btn-reabrir" data-dica="reabrir">Reabrir</button>');
+    // O voo que entrou depois da aprovação (sem pino: o da lista de espera, E) fica onde está com "Fixar os N voos novos"
+    const novos = voosNovos(S.fixos, RES ? RES.out : []).length;
+    const fixar = novos ? `<button type="button" class="btn sec edit-only" id="btn-fixar-novos">Fixar ${novos === 1 ? 'o voo novo' : `os ${novos} voos novos`}</button>` : '';
+    trocarConteudo(lugar, `${fixar}<button type="button" class="btn sec edit-only" id="btn-reabrir" data-dica="reabrir">Reabrir</button>${textoDasExportacoes()}`);
   } else {
     // Sem as horas dos instrutores, os limites do mês e do ano não foram conferidos: não aprova
     const semHoras = dadoIndisponivel('horas');
     // Desligado (sem as horas), o title do navegador explica; ligado, a dica do glossário
     const explicacao = semHoras ? ' title="As horas de voo dos instrutores não foram lidas: os limites do mês e do ano não foram conferidos" disabled' : ' data-dica="aprovar-escala"';
-    trocarConteudo(lugar, temVoos ? `<button type="button" class="btn edit-only" id="btn-aprovar"${explicacao}>Aprovar escala</button>` : '');
+    trocarConteudo(lugar, `${temVoos ? `<button type="button" class="btn edit-only" id="btn-aprovar"${explicacao}>Aprovar escala</button>` : ''}${textoDasExportacoes()}`);
   }
+}
+
+// As exportações registradas da data (H; d31): "Exportada" enquanto nenhuma está desatualizada; a desatualizada diz qual
+// (a escala mudou depois dela). Sem nenhuma, nada
+const NOME_DA_EXPORTACAO = { csv: 'CSV', pdf: 'PDF', xlsx: 'Excel' };
+function textoDasExportacoes() {
+  if (!RES) return '';
+  const { porTipo, desatualizadas, exportada } = situacaoDasExportacoes(S.exportacoes, impressaoDaEscala(RES.out, S));
+  if (!porTipo.some(t => t.estado !== 'nenhuma')) return '';
+  const texto = exportada ? 'Exportada' : `A escala mudou depois da exportação: ${desatualizadas.map(t => NOME_DA_EXPORTACAO[t]).join(', ')}`;
+  return ` <span id="exportacoes-situacao" data-exportada="${exportada}">${esc(texto)}</span>`;
 }
 
 // Compactação: os critérios do dia. Com a escala aprovada (os voos fixos não mudam) e no Gestor, só aparecem. A linha
