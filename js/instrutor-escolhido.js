@@ -31,10 +31,12 @@ function impedimentoDoPedido(estado, x, aluno, pedido) {
 }
 
 // Demanda: os instrutores que podem ser escolhidos para o pedido (os habilitados para a missão, fora do "Não escalar
-// com"; o que não vem na data aparece com a nota). O escolhido aparece sempre, com o motivo quando não serve mais
-export function instrutoresDoPedido(estado, aluno, pedido) {
+// com"; o que não vem na data aparece com a nota). O escolhido aparece sempre, com o motivo quando não serve mais.
+// comBloqueados: os de "Não escalar com" também, com a nota (as restrições do voo, G1, os listam desligados)
+export function instrutoresDoPedido(estado, aluno, pedido, { comBloqueados = false } = {}) {
+  const valem = ['', 'fora nesta data', ...(comBloqueados ? ['em Não escalar com'] : [])];
   const lista = estado.ins.map(x => ({ id: x.id, nm: x.nm, nota: impedimentoDoPedido(estado, x, aluno, pedido) }))
-    .filter(o => o.id === pedido.insId || ['', 'fora nesta data'].includes(o.nota));
+    .filter(o => o.id === pedido.insId || valem.includes(o.nota));
   if (instrutorValido(pedido.insId) && !lista.some(o => o.id === pedido.insId)) lista.unshift({ id: pedido.insId, nm: 'Instrutor fora do cadastro', nota: 'o app escolhe' });
   return lista;
 }

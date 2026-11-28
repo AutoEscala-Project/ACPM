@@ -12,6 +12,7 @@ import { ApiClient } from '../storage.js';
 import { enderecoDoDestino } from '../telas.js';
 import { contextoDoDia } from './linha.js';
 import { solicitacoesDaData } from '../solicitacoes-da-data.js';
+import { acrescentarRestricoesNosAvisos } from './restricoes-do-voo.js';
 
 const ABREVIADOS = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
 const CABECA = [['D', 'domingo'], ['S', 'segunda-feira'], ['T', 'terça-feira'], ['Q', 'quarta-feira'], ['Q', 'quinta-feira'], ['S', 'sexta-feira'], ['S', 'sábado']];
@@ -167,6 +168,8 @@ function rAvisos() {
   const contexto = contextoDoDia();
   const avisos = avisosDaData(contexto);
   trocarConteudo($('#avisos-da-data'), avisos.map(avisoHTML).join(''));
+  // O "Restrições" da missão que não entrou (G1), ao lado das ações do item
+  acrescentarRestricoesNosAvisos($('#avisos-da-data'), avisos);
   $('#avisos-da-data').hidden = !avisos.length;
   // Enquanto os pedidos da data não chegam, ainda não se sabe se não há nada
   $('#avisos-vazio').hidden = avisos.length > 0 || contexto.leituraDosPedidos === 'lendo';

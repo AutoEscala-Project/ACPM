@@ -176,7 +176,8 @@ export function selosDosCadastros(ctx) {
 // duracaoMin?, titulo, texto, destino: { tela, item? } | null (o perfil não abre a tela, ou o aviso se resolve no alto) }
 
 // As missões que não entraram, os conflitos e os avisos da escala. Os de um voo da escala têm o horário dele
-function avisosDaEscala({ RES }) {
+function avisosDaEscala(ctx) {
+  const { RES } = ctx;
   const voos = new Map(((RES && RES.out) || []).map(o => [o.fKey, o]));
   const vistos = new Map();
   return ((RES && RES.al) || []).map(a => {
@@ -184,9 +185,12 @@ function avisosDaEscala({ RES }) {
     const vez = (vistos.get(base) || 0) + 1;
     vistos.set(base, vez);
     const voo = a.fKey === undefined ? null : voos.get(a.fKey);
+    // A missão que não entrou leva às restrições do pedido dela (G1: ctx.pedidosDasRecusas, o alerta → { stuId, mid })
+    const pedido = a.t === 'err' && ctx.pedidosDasRecusas ? ctx.pedidosDasRecusas.get(a) : null;
     return {
       id: vez === 1 ? base : `${base}:${vez}`,
       gravidade: a.t === 'err' || a.t === 'conf' ? 'erro' : 'aviso',
+      ...(pedido ? { restricoes: { stuId: pedido.stuId, mid: pedido.mid } } : {}),
       minuto: voo ? voo.a : null, ...(voo ? { duracaoMin: voo.b - voo.a } : {}),
       titulo: a.s, texto: a.m, destino: { tela: 'esc' }
     };

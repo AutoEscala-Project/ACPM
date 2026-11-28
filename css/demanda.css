@@ -1,11 +1,11 @@
-/* A Demanda: os campos discretos, o aluno e as missões extras, "Mais", a missão do curso e a duração */
-#dem select.escolhido { border-color: var(--ac); color: var(--ac); font-weight: 600; }
+/* A Demanda: os campos discretos, o aluno e as missões extras, "Mais", a missão do curso e o "Restrições" de cada pedido
+   (as colunas do tipo, do instrutor, das preferências, da duração e da prioridade estão na gaveta, css/gavetas.css) */
 tr.off td { opacity: .5; }
 tr.on td:first-child { font-weight: 600; }
 /* Demanda: campos discretos (parecem texto até o mouse passar ou o foco chegar), sem rolar para o lado */
 #s-dem table { min-width: 0; font-size: 14.5px; }
 #s-dem td { padding: 4px 6px; }
-#dem select, #dem input[type="number"] {
+#dem select {
   border: 1px solid transparent; background: transparent; -webkit-appearance: none; appearance: none;
   padding: 4px 6px; border-radius: 6px; color: var(--ink); max-width: 100%;
 }
@@ -17,8 +17,6 @@ tr.on td:first-child { font-weight: 600; }
 @media (hover: none), (pointer: coarse) {
   #s-dem .btn-add-mis, #s-dem .stu-cell .x { opacity: 1; }
 }
-/* A prioridade mais alta (1 na tela) em destaque */
-#s-dem tr.prioridade-mais-alta [data-f="pr"] { background: var(--wa-bg); color: var(--wa); font-weight: 700; }
 #incluir-aluno { min-width: 240px; }
 #cnt { margin: -4px 0 8px; font-size: 13px; }
 .menu-mais { position: relative; }
@@ -40,18 +38,10 @@ tr.on td:first-child { font-weight: 600; }
   white-space: nowrap;
 }
 .btn-add-mis:hover { background: var(--info-bg); }
-.stu-cell .etapa, .stu-cell .usar-proxima { margin-left: 6px; }
-.usar-proxima { padding: 1px 6px; font-size: 13px; }
-/* "Outra missão do curso" (Demanda): estreita como o botão da próxima missão (sem a largura da missão mais longa, a
-   coluna do aluno não caberia na tela); as missões aparecem ao abrir a lista */
-#dem select.outra-missao { width: 7.5em; flex-shrink: 0; padding: 1px 6px; font-size: 13px; color: var(--ac); }
-#dem select.outra-missao optgroup, #dem select.outra-missao option { color: var(--ink); font-weight: 400; }
-/* Com o nome comprido, o código (ou a próxima missão) e a lista descem para a linha de baixo do nome, em vez de alargar
-   a coluna do aluno até a tabela passar da tela */
-#s-dem .stu-cell:has(.outra-missao) { flex-wrap: wrap; }
+.stu-cell .etapa { margin-left: 6px; }
+/* "Restrições" (G1): o botão da gaveta do pedido, discreto ao lado do nome */
+#s-dem .restricoes-btn { margin-left: auto; padding: 1px 8px; font-size: 13px; white-space: nowrap; }
 .only tr.off { display: none; }
 @media (max-width: 640px) {
-  .btn-add-mis { min-width: 44px; min-height: 44px; flex-shrink: 0; }
+  .btn-add-mis, #s-dem .restricoes-btn { min-width: 44px; min-height: 44px; flex-shrink: 0; }
 }
-/* A duração digitada na Demanda (horas, fracionadas) */
-#s-dem input.duracao { width: 5.5em; }

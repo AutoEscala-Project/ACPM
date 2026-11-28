@@ -8,6 +8,7 @@ import { dadosLidos, SEM_OS_DADOS } from '../actions.js';
 import { S, RES, DATA, isGestor, dadoIndisponivel } from '../state.js';
 import { ApiClient } from '../storage.js';
 import { podeVer, destinoDoEndereco } from '../telas.js';
+import { pedidosDasRecusasDaTela } from './restricoes-do-voo.js';
 import { solicitacoesDaData } from '../solicitacoes-da-data.js';
 
 // O único leitor dos dados para a linha (e para os avisos da data, no trilho)
@@ -15,6 +16,8 @@ export function contextoDoDia() {
   const { lista, leitura } = solicitacoesDaData();
   return {
     S, RES, pedidos: lista, leituraDosPedidos: leitura, perfil: ApiClient.perfil || null,
+    // As recusas com o pedido de cada uma (G1: o item da missão que não entrou leva às restrições dela)
+    pedidosDasRecusas: pedidosDasRecusasDaTela(),
     // Quem opera a escala: o Operador e o Administrador (no modo local, o perfil Operador)
     opera: !isGestor(), horasLidas: !dadoIndisponivel('horas'),
     indisponiveis: (S.indisponiveis || []).filter(p => Object.hasOwn(SEM_OS_DADOS, p)).map(id => ({ id, texto: SEM_OS_DADOS[id] })),
