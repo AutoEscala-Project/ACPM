@@ -94,7 +94,7 @@ a.hd-btn { text-decoration: none; }
 #btn-theme[aria-checked="true"] .tema-trilho { background: var(--ac); }
 #btn-theme[aria-checked="true"] .tema-botao { left: 16px; }
 #btn-theme[aria-checked="false"] .ico:first-child, #btn-theme[aria-checked="true"] .ico:last-child { color: var(--ink); }
-/* O selo do botão da Disponibilidade do dia, em Recursos (os aviões parados ou perto da revisão) */
+/* O selo das abas: o da Disponibilidade do dia, em Recursos, saiu no B (os pontos das linhas e o trilho); a regra sai no I */
 .aba-selo { min-width: 18px; height: 18px; border-radius: 9px; padding: 0 5px; font: 700 11px/18px 'Barlow', sans-serif; background: rgba(255,255,255,.18); color: #fff; text-align: center; }
 .aba-selo.aviso { background: var(--ye); color: #12263A; }
 .aba-selo.erro { background: #C62828; color: #fff; }
