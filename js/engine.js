@@ -489,8 +489,10 @@ const naJanela = o => toca(o, JANELA_DO_ALMOCO.de, JANELA_DO_ALMOCO.ate);
 // os dois (devolverAlmocos). A mudança diz de quem é o almoço (o aviso do “Priorizar com” o nomeia)
 const comOutroInva = o => (o.insEscolhido || o.insPar ? [] : [{ evitar: [o.fKey, 'ins', o.insId] }]);
 const comOutroInvaPara = x => o => (o.insEscolhido ? [] : [{ evitar: [o.fKey, 'ins', o.insId, x.id] }]);
-// O voo em outro horário: não o do pedido que só pode começar nesse minuto (o horário exato: ele sairia da escala)
-const emOutroHorario = (o, d) => (d && disponibilidadeAtual(d.jan) === `h${o.a}` ? [] : [{ evitar: [o.fKey, 'a', o.a] }]);
+// O voo em outro horário: não o do pedido que só pode começar nesse minuto (o horário exato: ele sairia da escala). O de
+// dois horários exatos (U1) pode ir para o outro
+const soNesseMinuto = (d, minuto) => { const exatos = minutosExatos(d.jan); return exatos.length === 1 && exatos[0] === minuto; };
+const emOutroHorario = (o, d) => (d && soNesseMinuto(d, o.a) ? [] : [{ evitar: [o.fKey, 'a', o.a] }]);
 const semRepetir = mudancas => [...new Map(mudancas.map(m => [JSON.stringify(m), m])).values()];
 
 // O que se pode mudar para um INVA sem almoço (x) ter a hora livre (devolverAlmocos), sempre com o almoço dele, na ordem: o

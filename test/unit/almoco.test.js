@@ -123,6 +123,17 @@ describe('O almoço no motor', () => {
     assert.deepEqual(doAlmoco(r), [{ t: 'warn', s: 'Instrutor 01', m: 'Sem almoço: nenhuma hora livre seguida entre 11:00 e 14:00 (ocupado das 10:10 às 11:10, das 11:30 às 12:30 e das 12:40 às 13:40).', insId: 1 }]);
   });
 
+  // Os dois horários exatos (U1, o E): o pedido "h<m1>|h<m2>" pode mudar para o outro horário dele, e o almoço fica
+  it('o pedido com dois horários exatos muda para o outro para o INVA ficar com a hora livre', () => {
+    const jans = ['h610', 'h690', 'h760|h820'];
+    const exatos = cenario({ ins: [instrutor(1, 1, DIA_INTEIRO)], stu: [610, 690, 760].map((m, i) => aluno(1000 + i, { p1: m, p2: -1, jan: jans[i] })) });
+    assert.deepEqual(voos(runAllocationEngine(exatos, { ...semCompactar, almoco: false })),
+      [['Aluno 1000', '10:10', '11:10', 1], ['Aluno 1001', '11:30', '12:30', 1], ['Aluno 1002', '12:40', '13:40', 1]]);
+    const r = runAllocationEngine(exatos, semCompactar);
+    assert.deepEqual(voos(r), [['Aluno 1000', '10:10', '11:10', 1], ['Aluno 1001', '11:30', '12:30', 1], ['Aluno 1002', '13:40', '14:40', 1]]);
+    assert.deepEqual(doAlmoco(r), []);
+  });
+
   it('com um segundo INVA, o voo vai para ele em vez de tirar o almoço', () => {
     const e = tres(DIA_INTEIRO, { jan: 'h760' });
     e.ins.push(instrutor(2, 1, DIA_INTEIRO));
