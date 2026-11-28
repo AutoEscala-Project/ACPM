@@ -451,7 +451,7 @@ test.describe('A escala abrindo: nada é gravado antes de os dados da data chega
 // como estava. Com a data aberta, valem de novo
 test.describe('Os cursos, o agendamento e a missão do curso: nada muda antes de a data abrir', () => {
   // O PP com duas missões e um Noturno (a lista do trecho). O Aluno 1000, do PP, voa às 06:30 sem a missão do curso (a
-  // próxima é a PP-01, e as outras ficam em "Outra missão…"); a Maria Silva, sem curso, não voa
+  // próxima é a PP-01, e as outras ficam em "Trocar…", nas restrições); a Maria Silva, sem curso, não voa
   const PROGRAMA_DO_DIA = {
     PP: [
       { id: 'PP-01', nome: 'Familiarização', mis: 'Voo Local', eq: 'C152', nb: 1 },

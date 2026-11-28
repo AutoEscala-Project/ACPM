@@ -212,7 +212,7 @@ describe('O progresso no curso', () => {
 });
 
 // O motivo de uma missão estar fora da ordem (a escolha dela pede confirmação; o histórico registra): a Demanda o mostra
-// em "Outra missão do curso"
+// em "Trocar…" (as restrições do pedido)
 describe('Por que a missão está fora da ordem', () => {
   const motivo = (mapa, codigo, opcoes, curso = PP) => {
     const m = curso.missoes.find(x => x.codigo === codigo);
@@ -295,7 +295,7 @@ describe('Na Demanda e em Alunos', () => {
   // A próxima do programa nas restrições do pedido (G1), com o botão "Usar a do programa" (sem o botão, '')
   const proximaComUsar = html => (/data-act="usar-proxima"/.test(html) ? texto((/<span class="restricao-proxima".*?<\/span>/.exec(html) || [''])[0]) : '');
   const usar = (stu, mid = 0) => proximaComUsar(naDemanda(stu, mid));
-  // A lista "Outra missão do curso" do pedido: cada grupo com o texto dos itens (sem a lista, null)
+  // A lista "Trocar…" do pedido (as restrições): cada grupo com o texto dos itens (sem a lista, null)
   const outras = (stu, mid = 0) => {
     const lista = /<select[^>]*data-f="outra-missao"[^>]*>(.*?)<\/select>/.exec(naDemanda(stu, mid));
     return lista && Object.fromEntries([...lista[1].matchAll(/<optgroup label="([^"]*)">(.*?)<\/optgroup>/g)]
@@ -518,7 +518,7 @@ describe('O Noturno em trechos: TSL-01, NOT e TSL-02 num voo só', () => {
 
   it('na Demanda e em Alunos: a próxima é o Noturno, com os translados no nome; o pedido vai como a noite', () => {
     const texto = html => html.replace(/<[^>]+>/g, '').trim();
-    // Na célula da Demanda: o texto do botão Usar e os itens do Noturno na lista "Outra missão do curso"
+    // Nas restrições do pedido: a próxima do programa (com "Usar a do programa") e os itens do Noturno na lista "Trocar…"
     const usar = html => (/data-act="usar-proxima"/.test(html) ? texto((/<span class="restricao-proxima".*?<\/span>/.exec(html) || [''])[0]) : '');
     const doNoturno = html => [...html.matchAll(/<option value="[^"]+">([^<]*)<\/option>/g)].map(o => o[1]).filter(t => /^(TSL|NOT)\b/.test(t));
     const stu = (extra = {}) => ({ id: ALUNO, nm: 'Aluno 1000', curso: 'PP', fly: true, mis: 'Voo Local', eq: 'C152', nb: 1, p1: 500, p2: -1, pr: 3, ss: 1, extra: [], ...extra });
@@ -528,7 +528,7 @@ describe('O Noturno em trechos: TSL-01, NOT e TSL-02 num voo só', () => {
     assert.equal(usar(celula), 'Próxima do programa: NOT (com TSL-01 e TSL-02)');
     assert.match(celula, /title="NOT: NOT · Noturno · 4 h · C172"/);
     assert.equal(texto(progressoDoAluno(stu())), '6/10 · Fase 6 · próxima NOT (com TSL-01 e TSL-02)');
-    // A lista "Outra missão do curso" também oferece o Noturno uma vez, pela noite e com os translados no nome
+    // A lista "Trocar…" também oferece o Noturno uma vez, pela noite e com os translados no nome
     assert.deepEqual(doNoturno(celula), ['NOT (com TSL-01 e TSL-02) · Noturno · C172 · 4 h']);
     // Com o Noturno no pedido principal, a missão extra não recebe um translado: a próxima é a da Fase 9 (sob condição), e
     // a lista tem o Noturno só fora da ordem, pela noite

@@ -82,7 +82,7 @@ function outrasMissoes(stu, d, mid) {
   return { curso, liberadas, foraDaOrdem };
 }
 
-// A missão do curso escolhida em "Outra missão do curso" para o pedido: { missao, curso (a sigla), liberada, motivo,
+// A missão do curso escolhida em "Trocar…" (as restrições do pedido) para o pedido: { missao, curso (a sigla), liberada, motivo,
 // encerrado }. A liberada vale na hora; a fora da ordem pede confirmação, e no curso encerrado, todas pedem (desenho
 // §4.9, como no agendamento). null: ela não é uma das outras missões do pedido (o programa ou os resultados mudaram)
 export function outraMissaoDoPedido(stu, d, mid, codigo) {

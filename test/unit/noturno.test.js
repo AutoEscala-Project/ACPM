@@ -409,8 +409,8 @@ describe('Noturno: o mesmo avião na volta (ApiClient, com o backend na memória
     });
   }
 
-  // "Usar" / "Outra missão do curso" na Demanda trocam só a missão do curso do Noturno posto à mão no editor (o pino agendado
-  // com a marca do Noturno; soltarAgendado, js/eventos/demanda.js): o Noturno fica no avião e com o INVA do editor, e o dia
+  // "Usar a do programa" / "Trocar…" nas restrições trocam só a missão do curso do Noturno posto à mão no editor (o pino agendado
+  // com a marca do Noturno; fixosSemOAgendadoQueMudou, js/restricoes.js): o Noturno fica no avião e com o INVA do editor, e o dia
   // seguinte gravado continua valendo
   it('a missão do curso trocada no Noturno levado pelo editor: o avião e o INVA dele ficam', async () => {
     const estado = doisInvas();

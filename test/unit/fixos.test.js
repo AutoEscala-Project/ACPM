@@ -1106,7 +1106,7 @@ describe('O pino do Noturno', () => {
     assert.equal(motivoDoFixo(o.fKey, { fStatus: {}, aprovacao: null, voo: o, fixos }), 'Voo fixo: Noturno, no mesmo avião da volta');
   });
 
-  // A revisão: "Usar" / "Outra missão do curso" na Demanda (soltarAgendado, js/eventos/demanda.js) trocam a missão do curso
+  // A revisão: "Usar a do programa" / "Trocar…" nas restrições (fixosSemOAgendadoQueMudou, js/restricoes.js) trocam a missão do curso
   // de um Noturno posto à mão no editor (o pino agendado com a marca do Noturno): o avião e o INVA não mudam
   it('semAgendados tira só a marca do agendamento do Noturno; o pedido que deixa de ser Noturno solta o voo', () => {
     const estado = dia();
@@ -1119,7 +1119,7 @@ describe('O pino do Noturno', () => {
     // O Noturno continua Noturno (só a missão do curso mudou): o motor o deixa no avião e com o INVA do editor
     const usar = { ...estado, fixos: pinosDoNoturnoQueValem({ ...estado, fixos: semAgendados({ [o.fKey]: p }, [o.fKey]) }) };
     assert.deepEqual([noturnoDe(runAllocationEngine(usar).out).r, noturnoDe(runAllocationEngine(usar).out).insId], [agendado.r, 2]);
-    // Com outra missão no pedido, o pino do Noturno sai junto (soltarAgendado: "deixa de ser fixo")
+    // Com outra missão no pedido, o pino do Noturno sai junto (fixosSemOAgendadoQueMudou: "deixa de ser fixo")
     const outra = { ...estado, stu: estado.stu.map(s => (s.id === 1000 ? { ...s, mis: 'Voo Local' } : s)) };
     assert.deepEqual(pinosDoNoturnoQueValem({ ...outra, fixos: semAgendados({ [o.fKey]: p }, [o.fKey]) }), {});
   });
