@@ -185,7 +185,7 @@ export function criarBackendSupabase(cliente, { aoConflito = () => {}, aoErro = 
     async listarHistorico(data) {
       const { data: entradas, error } = await cliente.from('historico')
         .select('id, data, registrado_em, autor, tipo, descricao, reverter, reverte, importado')
-        .eq('data', data).order('registrado_em', { ascending: false }).limit(200);
+        .eq('data', data).order('registrado_em', { ascending: false }).limit(500);
       if (error) throw new Error(error.message);
       return entradas;
     },
