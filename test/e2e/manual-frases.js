@@ -10,10 +10,14 @@ const ANTIGAS = {
     'Vai voar?', 'Início pref', 'Exportar CSV', 'Emitir PDF', 'Turno rápido', 'Cada cartão', 'campo Data', 'Equipamento', 'Bloquear',
     'Sessões', 'sessão', 'Desfazer da Demanda', 'Escala de Voo', 'Por avião e sala', 'Avião / sala', 'Aviões e salas', 'o botão ao lado de Alunos', 'As abas seguem a ordem de uso', 'ao lado do nome das abas'],
   // A data aberta é escolhida no calendário do trilho (sem as setas e sem o calendário da Agenda), e um domingo não abre
-  casca: ['setas ‹ ›', 'use as setas', 'com um calendário', 'o app pula o domingo'],
+  casca: ['setas ‹ ›', 'use as setas', 'com um calendário', 'o app pula o domingo',
+    // linha-fix-escala-sem-caixas: sem a data no topo e sem "Fixar ao lado"
+    'Fixar o calendário ao lado da tela', 'botão da data', 'Confira a data no topo', '(em cima dela no celular)'],
   // O "+" do mapa fica ao lado do nome do recurso; o mapa abre com os recursos nas colunas, e o Manual não fala dele
   // como linhas
-  escala: ['no fim de cada linha', 'ao lado do nome de cada linha', 'as linhas livres', 'de uma linha do mapa', 'a linha dele não agenda'],
+  escala: ['no fim de cada linha', 'ao lado do nome de cada linha', 'as linhas livres', 'de uma linha do mapa', 'a linha dele não agenda',
+    // linha-fix-escala-sem-caixas: sem as caixas do resumo (o que não entrou, os conflitos e os avisos ficam no trilho)
+    'caixa vermelha', 'caixa amarela', 'As caixas abrem recolhidas'],
   // O Operador não muda os Cursos nem os limites da lei
   perfis: ['altera tudo e opera a escala'],
   // A coluna de quem vem é "Vem" (a data aberta não é sempre hoje); o filtro das habilitações tem várias marcas. C: sem a
@@ -43,10 +47,13 @@ const ANTIGAS = {
 
 // Os nomes dos botões e das vistas, e as regras em vigor
 const NOVAS = {
-  casca: ['menu da conta', 'Fixar o calendário ao lado da tela', 'ou no botão da data, no topo', 'os avisos da data',
+  casca: ['menu da conta', 'Confira a data no alto do trilho', 'em cima dela nas telas mais estreitas, como o celular e o tablet',
+    'começa recolhido numa linha só, com a data e o número de avisos', 'os grupos da escala com dois itens ou mais têm um resumo', 'Recolher o calendário', 'Recolher os avisos da data', 'fica guardado neste navegador', 'os avisos da data',
     'os aviões parados ou perto da revisão de 50 horas, os pedidos', 'leva à tela onde se resolve, quando você a vê'],
   perfis: ['na primeira data que ainda aceita pedidos'],
   escala: ['Atualizada às', 'Ver todos', 'Compartilhar', 'Por recurso',
+    // linha-fix-escala-sem-caixas: os alertas da escala nos avisos da data, no trilho
+    'ficam nos avisos da data, no trilho, ao lado do calendário', 'os voos com quem está inativo no cadastro (com Refazer a escala',
     // Os horários fechados nesta data, no alto da Escala (B): o bloco, o aviso do trilho e a pergunta
     'no alto da Escala, entre a barra das vistas e a dos critérios', 'Na escala que não está aprovada, Fechar e o ✕ perguntam antes',
     // O agendamento na Escala (mover e encaixar, as turmas, as alternativas, a prévia, os avisos), o voo agendado na
@@ -68,12 +75,14 @@ const NOVAS = {
   instrutores: ['sem os acentos', '12 de 40 instrutores', 'Limpar filtros', 'Filtro das habilitações', 'que têm todas as marcadas',
     'Habilitações: Noturno + C172', 'Pode decolar de … até …', '+ Pausa', 'Almoço', 'Salvar faixas', 'Dia inteiro (06:30–17:30)',
     'Noturno (17:30–24:00)', 'Dia + noturno (06:30–24:00)', 'Meio dia é uma faixa digitada', 'a tira do dia', 'Agendar voo com',
-    'a missão começa dentro de uma faixa do instrutor e pode terminar depois dela', 'O que cabe nestas faixas', 'Limites da Lei do Aeronauta abre os limites', 'Excluir instrutor…'],
+    'a missão começa dentro de uma faixa do instrutor e pode terminar depois dela', 'O que cabe nestas faixas', 'Limites da Lei do Aeronauta abre os limites', 'Excluir instrutor…',
+    // O detalhe sem nada escolhido (linha-fix-escala-sem-caixas, depois do C)
+    'ou use + Novo instrutor'],
   // Alunos como lista e detalhe (F2): a escolha no endereço, os campos no lugar, Anterior e Próximo, o filtro dos cursos (a
   // regra "algum dos marcados"; um só nas duas telas) e os dados pessoais na seção do aluno, com Salvar e Desfazer; o
   // cadastro relido depois de um conflito. A: as seções do detalhe (Nesta data, Curso e missões), o nome completo (também
   // na busca), a secretaria que consulta e "Apagar os dados pessoais". C: sem o cartão de Instrutores no celular
-  alunos: ['Não escalar com', 'A lista dos alunos fica à esquerda e o aluno escolhido à direita', '#/alu/1000', '‹ Alunos',
+  alunos: ['Não escalar com', 'A lista dos alunos fica à esquerda e o aluno escolhido à direita', 'ou use + Novo aluno', '#/alu/1000', '‹ Alunos',
     'gravado ao sair dele', 'Ctrl+, e Ctrl+.', 'Filtro dos cursos', 'aparecem os alunos de algum dos marcados', 'Curso: PP ou PC',
     'aparecem os pedidos dos alunos de algum dos cursos marcados', 'O filtro dos cursos é um só nas duas telas',
     'e Desfazer volta ao que está gravado', 'Outra pessoa alterou o cadastro enquanto você editava',

@@ -17,7 +17,7 @@ import { podeEditarAgenda } from './views/agenda.js';
 import { lerPedidosDaData } from './views/selos.js';
 
 // Abre uma data: a única que escreve a data aberta e o ?data= do endereço (recarregar continua nela). Não lê nada e não
-// desenha: quem mostra a data (o nome no topo, o calendário, a data base do BI) se redesenha no momento 'data-aberta'
+// desenha: quem mostra a data (o nome no alto do trilho, o calendário, a data base do BI) se redesenha no momento 'data-aberta'
 // naoEscolhida: a data que aparece enquanto o app abre (o login, os dados chegando) ainda não é a da abertura e não vai para o
 // endereço (recarregar ali a tomaria pela do link)
 export function abrirData(data, { naoEscolhida = false } = {}) {

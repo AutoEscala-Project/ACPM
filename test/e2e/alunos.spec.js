@@ -3,8 +3,12 @@
 // passo A: "Nesta data", "Curso e missões" (a missão anterior e a atual, o resultado sem voo, "Colocar no curso até…" e o
 // ↶ dela), a busca pelo nome completo e o "Apagar os dados pessoais" do aluno inativo
 import {
-  test, comProgresso, expect, abrir, abrirSintetico, abrirComExemplo, irPara, filtrarCursos, confirmar, AGORA, AMANHA, alvosPequenos, appPronto, dataAberta, diaSeguinte, larguraDaPagina, abrirAluno, campoDoAberto, linhaDoAluno, linhasDosAlunos, nomesNaLista, etiquetasDoAberto, nenhumNaLista, abrirHistorico, abrirInstrutor, campoDoInstrutor, campoDaAgenda, prepararContexto, vigiarErros, entrar
+  test, comProgresso, expect, abrir, abrirSintetico, abrirComExemplo, irPara, filtrarCursos, confirmar, AGORA, AMANHA, alvosPequenos,
+  appPronto, dataAberta, diaSeguinte, larguraDaPagina, abrirAluno, campoDoAberto, linhaDoAluno, linhasDosAlunos, nomesNaLista,
+  etiquetasDoAberto, nenhumNaLista, abrirHistorico, campoDaAgenda, prepararContexto, vigiarErros, entrar, medirVazioDoDetalhe,
+  abrirInstrutor, campoDoInstrutor
 } from './fixtures.js';
+import { razaoDeContraste } from '../helpers/contraste.js';
 import { documentosAtuais, criarSupabaseFalso, CONTAS } from './supabase-falso.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
 import { cursosIniciais, novoCurso, percursoDoCurso } from '../../js/programa.js';
@@ -16,7 +20,7 @@ test.describe('Alunos', () => {
     await abrirSintetico(page);
     await irPara(page, 'alu');
     await expect(page.locator('#alu')).toHaveText('Nenhum aluno cadastrado. Clique em “+ Novo aluno” acima para cadastrar.');
-    await expect(page.locator('#det-alu')).toHaveText('Escolha um aluno na lista.');
+    await expect(page.locator('#det-alu .det-vazio-texto')).toHaveText('Escolha um aluno na lista.');
     await page.locator('[data-act="adds"]').click();
     await expect(linhasDosAlunos(page)).toHaveCount(1);
     // O aluno novo abre escolhido, com o nome em foco (selecionado, para digitar por cima)
@@ -46,9 +50,33 @@ test.describe('Alunos', () => {
     await expect(excluir).toHaveText('Confirmar exclusão');
     await excluir.click();
     await expect(page.locator('#alu')).toContainText('Nenhum aluno cadastrado');
-    await expect(page.locator('#det-alu')).toHaveText('Escolha um aluno na lista.');
+    await expect(page.locator('#det-alu .det-vazio-texto')).toHaveText('Escolha um aluno na lista.');
     await expect(page).toHaveURL(/#\/alu$/);
   });
+
+  // linha-fix-escala-sem-caixas (Pedro, 28/11): nada escolhido, o detalhe não fica vazio: no meio do painel, o ícone de
+  // Alunos, o texto maior e, para quem cria, o caminho do aluno novo; nos dois temas, e parado com o movimento reduzido
+  for (const [perfil, url, dica] of [['Operador', './', 'ou use + Novo aluno'], ['Gestor', './?role=gestor', null]]) {
+    test(`nada escolhido, no ${perfil}: o ícone, o texto grande no meio do painel${dica ? ' e a dica do "+ Novo aluno"' : ', sem a dica'}`, async ({ page }) => {
+      await abrirComExemplo(page, { url });
+      await irPara(page, 'alu');
+      const vazio = await medirVazioDoDetalhe(page, 'alu');
+      expect([vazio.icone, vazio.texto, vazio.dica]).toEqual(['#i-aluno', 'Escolha um aluno na lista.', dica]);
+      expect(vazio.tamanho).toBeGreaterThanOrEqual(18);
+      expect(vazio.iconeLargura).toBeGreaterThanOrEqual(40);
+      expect(vazio.foraDoMeio.x).toBeLessThanOrEqual(3);
+      expect(vazio.foraDoMeio.y).toBeLessThanOrEqual(3);
+      expect(vazio.animacao).not.toBe('none');
+      for (const tema of ['light', 'dark']) {
+        await page.evaluate(t => { document.documentElement.dataset.theme = t; }, tema);
+        const { cores } = await medirVazioDoDetalhe(page, 'alu');
+        expect(razaoDeContraste(cores.texto, cores.fundo), tema).toBeGreaterThanOrEqual(4.5);
+        if (dica) expect(razaoDeContraste(cores.dica, cores.fundo), tema).toBeGreaterThanOrEqual(4.5);
+      }
+      await page.emulateMedia({ reducedMotion: 'reduce' });
+      expect((await medirVazioDoDetalhe(page, 'alu')).animacao).toBe('none');
+    });
+  }
 
   test('o nome tem até 80 caracteres, nos alunos e nos instrutores', async ({ page }) => {
     await abrirSintetico(page);

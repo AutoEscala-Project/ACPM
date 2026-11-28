@@ -1,7 +1,7 @@
 // O inativo no cadastro (formato 26; a chave que inativa chega no F2): na data aberta de hoje em diante, o instrutor e o
 // recurso inativos não são escolhidos nem oferecidos; a escala gravada antes, com voos dele, avisa e se refaz com "Refazer a
 // escala"; o pedido do aluno inativo fica registrado, "Aluno inativo", fora dos pendentes
-import { test, expect, appPronto, irPara, abrirEscala, abrirCaixa, abrirHistorico, entradasDoHistorico, campoDaAgenda, AMANHA } from './fixtures.js';
+import { test, expect, appPronto, irPara, abrirEscala, abrirAvisosDaEscala, abrirHistorico, entradasDoHistorico, campoDaAgenda, AMANHA } from './fixtures.js';
 import { documentosAtuais } from './supabase-falso.js';
 import { estadoSintetico } from '../helpers/estado.js';
 import { comExemplo } from '../helpers/exemplo.js';
@@ -41,10 +41,10 @@ test.describe('O inativo no cadastro', () => {
   test('a escala gravada com os voos do instrutor que ficou inativo avisa; "Refazer a escala" a refaz sem ele, com a entrada no histórico', async ({ page }) => {
     const { nome, voos } = await abrirComInativos(page);
     await abrirEscala(page);
-    const caixa = await abrirCaixa(page, 'inativos');
-    await expect(caixa).toContainText(`${voos} ${voos === 1 ? 'voo' : 'voos'} com ${nome} (inativo) na escala desta data`);
-    await caixa.locator('[data-act="refazer-escala"]').click();
-    await expect(caixa).toHaveCount(0);
+    const dele = (await abrirAvisosDaEscala(page, 'inativos')).filter({ hasText: nome });
+    await expect(dele.locator('.aviso-corpo')).toHaveText(`${voos} ${voos === 1 ? 'voo' : 'voos'} com ${nome} (inativo) na escala desta data`);
+    await dele.locator('[data-act="refazer-escala"]').click();
+    await expect(dele).toHaveCount(0);
     await abrirHistorico(page);
     await expect(entradasDoHistorico(page, `Escala refeita: ${nome}`)).toHaveCount(1);
   });
@@ -53,8 +53,7 @@ test.describe('O inativo no cadastro', () => {
     const { nome, reg } = await abrirComInativos(page);
     // Refeita, a escala não tem mais os voos dele
     await abrirEscala(page);
-    await abrirCaixa(page, 'inativos');
-    await page.locator('#out [data-act="refazer-escala"]').click();
+    await (await abrirAvisosDaEscala(page, 'inativos')).filter({ hasText: nome }).locator('[data-act="refazer-escala"]').click();
     await irPara(page, 'rod');
     await expect(page.locator('#rodizio')).not.toContainText(nome);
     await irPara(page, 'esc');

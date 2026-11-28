@@ -1,7 +1,7 @@
 // Limites dos instrutores pela Lei do Aeronauta: as horas de voo do instrutor (a seção "Horas de voo" do detalhe dele, com
 // as de fora do app, e o ponto da linha perto do limite) e os limites, no item fixo do alto de INVAs (só o Administrador
 // muda; neste navegador, o Operador).
-import { test, expect, abrir, abrirEscala, abrirHistorico, abrirInstrutor, campoDoInstrutor, secaoDoInstrutor, linhaDoInstrutor, abrirLimitesDaLei, campoDoLimite } from './fixtures.js';
+import { test, expect, abrir, abrirEscala, abrirHistorico, abrirInstrutor, campoDoInstrutor, secaoDoInstrutor, linhaDoInstrutor, abrirLimitesDaLei, campoDoLimite, textosDaEscala } from './fixtures.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
 
 const umInstrutorDoisVoos = () => cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, { p1: 390, p2: -1 }), aluno(1001, { p1: 610, p2: -1 })] });
@@ -21,7 +21,7 @@ test.describe('Limites da lei', () => {
     await expect(linhaDoInstrutor(page, 1).locator('.lista-ponto.aviso')).toHaveAttribute('title', '90 h de voo no mês (limite 100 h)');
 
     await abrirEscala(page);
-    await expect(page.locator('#out details.caixa.avisos summary')).toContainText('1 instrutor perto do limite da lei');
+    await expect(textosDaEscala(page, 'avisos').filter({ hasText: 'limite' })).toHaveCount(1);
   });
 
   test('o limite do mês mudado vale na hora: a segunda missão do instrutor fica de fora', async ({ page }) => {
@@ -32,7 +32,7 @@ test.describe('Limites da lei', () => {
     await campoDoLimite(page, 'Voo no mês (h)').fill('1');
     await campoDoLimite(page, 'Voo no mês (h)').dispatchEvent('change');
     await abrirEscala(page);
-    await expect(page.locator('#out details.caixa.erros')).toContainText('nenhum instrutor dentro dos limites da Lei do Aeronauta');
+    await expect(textosDaEscala(page, 'erros')).toHaveText([/nenhum instrutor dentro dos limites da Lei do Aeronauta/]);
     await abrirHistorico(page);
     await expect(page.locator('#historico')).toContainText('Limites da lei: voo no mês 100 h → 1 h');
     await page.keyboard.press('Escape');
