@@ -1429,6 +1429,25 @@ describe('As limitações do aluno: duras para o motor', () => {
     assert.deepEqual(erros(fora.al), [['disponibilidade-do-aluno', 'Rejeitado: nenhum horário aberto na disponibilidade do aluno (Limitações: 06:40–07:30) comporta 01h30 de Ground.']]);
   });
 
+  // Revisão: a recusa é da limitação só quando ela tirou um início que valeria sem ela. O horário das 06:00 às 24:00 (o que
+  // "+ Horário" cria) não tira nenhum: o motivo é o de sempre (o fechamento, o fim do Ground), não a disponibilidade do aluno
+  it('a limitação que não tira nenhum início não muda a recusa: sem-horario, depois-do-ground e o horário do pedido sozinho', () => {
+    const todoODia = { limitacoes: { horarios: [{ de: 360, ate: 1440 }] } };
+    const fechado = [0, 1, 2, 3, 4, 5, 6, 7];
+    assert.deepEqual(erros(alocar({ stu: [aluno(1000, {}, todoODia)], janelasOff: fechado }).al),
+      [['sem-horario', 'Rejeitado: nenhum horário aberto comporta 1 h até as 17:30.']]);
+    assert.deepEqual(erros(alocar({ ins: [instrutor(1, 1)], stu: [aluno(1000, GROUND_C152, todoODia)], janelasOff: fechado }).al),
+      [['sem-horario', 'Rejeitado: nenhum horário aberto comporta 01h30 de Ground.']]);
+    const voo = missaoExtra(1, { mis: 'Voo Local', eq: 'C152', nb: 1 });
+    assert.deepEqual(erros(alocar({ ins: [instrutor(1, 9), instrutor(2, 9)], stu: [aluno(1000, GROUND_C152, { extra: [voo], ...todoODia })], janelasOff: [0, 1, 2, 3, 4, 5, 6] }).al),
+      [['depois-do-ground', 'Rejeitado: nenhum horário aberto depois do Ground (17:50) comporta 1 h até as 17:30.']]);
+    assert.deepEqual(erros(alocar({ stu: [aluno(1000, { jan: 'h760' }, todoODia)], janelasOff: [4, 5, 6, 7] }).al),
+      [['disponibilidade-do-aluno', 'Rejeitado: nenhum horário aberto na disponibilidade do aluno (às 12:40) comporta 1 h.']]);
+    // A que tira o início que valeria continua a recusa da disponibilidade (só o 12:40 aberto, e o aluno à tarde)
+    assert.deepEqual(erros(alocar({ stu: [aluno(1000, {}, tarde)], janelasOff: [0, 1, 2, 3, 5, 6, 7] }).al),
+      [['disponibilidade-do-aluno', 'Rejeitado: nenhum horário aberto na disponibilidade do aluno (Limitações: 13:00–18:00) comporta 1 h.']]);
+  });
+
   it('sem limitação, os textos de sempre (o horário do pedido sozinho)', () => {
     const { al } = alocar({ stu: [aluno(1000, { jan: 'h760' })], janelasOff: [4, 5, 6, 7] });
     assert.deepEqual(al.map(a => a.m), ['Rejeitado: nenhum horário aberto na disponibilidade do aluno (às 12:40) comporta 1 h.']);
