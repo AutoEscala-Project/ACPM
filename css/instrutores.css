@@ -1,4 +1,4 @@
-/* INVAs: a tira do dia (na linha e no detalhe), os turnos, "Editar faixas", os voos de "Nesta data", as habilitações e
+/* INVAs: a tira do dia (na linha e no detalhe), os turnos, "Editar faixas", "O que cabe", os voos de "Nesta data", as habilitações e
    as horas de voo do detalhe e os limites da lei (o item fixo). O resto é do componente: css/lista.css */
 /* A tira: das 06:30 à meia-noite, as faixas em azul-claro, as pausas listradas e os voos em azul; quem não vem, apagada */
 .tira {
@@ -33,6 +33,13 @@
 .fx-vazio { margin: 2px 0; }
 .faixas-form > .fx-erro { display: block; color: var(--er); font-size: 13px; }
 .faixas-form > .fx-erro:empty { display: none; }
+/* "O que cabe nestas faixas": fechado até um clique, uma lista por linha; o resumo com 44 px de alvo */
+.faixas-cabe { margin: 0 0 8px; }
+.faixas-cabe > summary { min-height: 44px; box-sizing: border-box; padding: 12px 0; line-height: 20px; cursor: pointer; font-weight: 600; color: var(--ac); }
+.faixas-cabe > summary:focus-visible { outline: 2px solid var(--ac); outline-offset: 2px; border-radius: 3px; }
+.faixas-cabe > p.h { margin: 0 0 4px; }
+.faixas-cabe > ul { margin: 0; padding-left: 18px; font-variant-numeric: tabular-nums; }
+.faixas-cabe > ul > li { padding: 2px 0; }
 /* Os voos da data, um por linha */
 .voos-do-instrutor { list-style: none; margin: 4px 0; padding: 0; }
 .voos-do-instrutor > li { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; padding: 6px 0; border-bottom: 1px solid var(--ln); }

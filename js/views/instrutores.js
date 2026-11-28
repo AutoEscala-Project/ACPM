@@ -3,7 +3,7 @@
 // distinguem e a tira do dia (as faixas, as pausas e os voos, das 06:30 à meia-noite), com o "Vem" desta data e o "Ativo"
 // do cadastro; o ponto marca os dados pessoais não salvos, quem está sem peso e quem chega perto de um limite da lei. O
 // item fixo do alto, "Limites da Lei do Aeronauta", abre os limites. O detalhe, nesta ordem: "Nesta data" (o "Vem", as
-// faixas e as pausas, os três turnos, "Editar faixas" e os voos dele na escala da data), o cadastro (nome e peso), as
+// faixas e as pausas, os três turnos, "Editar faixas", "O que cabe nestas faixas" e os voos dele na escala da data), o cadastro (nome e peso), as
 // habilitações, as horas de voo (limites da lei, com as de fora do app), os dados pessoais (para quem os vê) e, no rodapé,
 // "Excluir instrutor…"; no alto, "Agendar voo com <nome>". Os campos têm os data-f de sempre: js/eventos/instrutores.js
 // grava. "Editar faixas" é um rascunho na memória (editarFaixas), gravado só por "Salvar faixas"
@@ -17,7 +17,8 @@ import { botaoDeDica } from '../dicas.js';
 import { normalizarLimites } from '../limites.js';
 import { unidadeDoVoo, umPorUnidade, statusDoVoo } from '../voo.js';
 import {
-  TURNOS, ALMOCO, INICIO_DAS_FAIXAS, MINUTOS_DAS_FAIXAS, MAXIMO_DE_FAIXAS, MAXIMO_DE_PAUSAS, faixasDe, turnoDasFaixas, textoDasFaixas, textoDasPausas, trechosDaTira
+  TURNOS, ALMOCO, INICIO_DAS_FAIXAS, MINUTOS_DAS_FAIXAS, MAXIMO_DE_FAIXAS, MAXIMO_DE_PAUSAS, faixasDe, turnoDasFaixas, textoDasFaixas, textoDasPausas, trechosDaTira,
+  oQueCabe, textoDoQueCabe
 } from '../disponibilidade.js';
 import { canacDe, nomeCompletoDe, podeVerDadosPessoais } from './dados-pessoais.js';
 import { secaoDosDadosPessoais, marcaDaPessoa, recusasDe } from './editor-de-dados-pessoais.js';
@@ -162,6 +163,7 @@ function linhaDaEdicao(tipo, f, i) {
 function editorDasFaixas(x, e) {
   const temAlmoco = e.pausas.some(p => p.de <= ALMOCO.de && p.ate >= ALMOCO.ate);
   return `<fieldset class="det-form faixas-form" data-faixas-de="${x.id}"><legend>Editar faixas <small>nesta data</small></legend>`
+    + '<p class="h fx-dica" id="det-ins-faixas-dica">O voo começa dentro de uma faixa (o Até não entra: até 17:30 não inclui o Noturno) e pode terminar depois dela; nenhum voo toca uma pausa.</p>'
     + `<ul class="fx-lista" aria-label="Faixas de ${esc(x.nm)}">${e.faixas.map((f, i) => linhaDaEdicao('faixa', f, i)).join('')}</ul>`
     + (e.faixas.length ? '' : '<p class="h fx-vazio">Sem faixa: o instrutor não voa nesta data.</p>')
     + `<div class="fx-mais"><button type="button" class="btn sec" id="det-ins-mais-faixa" data-act="mais-faixa"${e.faixas.length >= MAXIMO_DE_FAIXAS ? ' disabled' : ''}>+ Faixa</button></div>`
@@ -176,6 +178,15 @@ function editorDasFaixas(x, e) {
 // As horas marcadas embaixo da tira grande do detalhe
 const MARCAS_DA_TIRA = [390, 720, 1050, 1440];
 
+// "O que cabe nestas faixas" (C, "regra"): em cada lista de decolagem da data, os horários em que a missão começa e até
+// quando ela pode ir (js/disponibilidade.js, oQueCabe). Fechado até um clique; quem não vem não tem
+function oQueCabeHtml(x) {
+  if (!x.on) return '';
+  return '<details class="faixas-cabe" id="det-ins-cabe"><summary>O que cabe nestas faixas</summary>'
+    + '<p class="h">Com a duração padrão de cada missão (1 h; o Simulador 2 h, o Ground 01h30, o Noturno 4 h), nos horários de decolagem da data:</p>'
+    + `<ul>${oQueCabe(x, S.horarios).map(item => `<li>${esc(textoDoQueCabe(item))}</li>`).join('')}</ul></details>`;
+}
+
 const recursoDoVoo = r => (r === GROUND_REG ? 'Sala Ground' : r);
 // O voo da lista de "Nesta data": o horário, a missão, o aluno (a turma de Ground: quantos), o recurso e o status
 function vooEmTexto(o) {
@@ -184,8 +195,8 @@ function vooEmTexto(o) {
   return [o.mis, aluno, recursoDoVoo(o.r), statusDoVoo(o, S.fStatus)].filter(Boolean).join(' · ');
 }
 
-// "Nesta data": o "Vem", as faixas e as pausas (o texto e a tira), os três turnos, "Editar faixas" (ou o rascunho aberto)
-// e os voos do instrutor na escala da data
+// "Nesta data": o "Vem", as faixas e as pausas (o texto e a tira), os três turnos, "Editar faixas" (ou o rascunho aberto),
+// "O que cabe nestas faixas" e os voos do instrutor na escala da data
 function secaoNestaData(x, edita) {
   const d = faixasDe(x);
   const voos = voosDoInstrutor(x);
@@ -205,7 +216,7 @@ function secaoNestaData(x, edita) {
   const lista = voos.length
     ? `<ul class="voos-do-instrutor" aria-label="Voos de ${esc(x.nm)} nesta data">${voos.map(o => `<li data-voo="${esc(o.fKey)}"><span class="voo-quando">${hm(o.a)}–${hm(o.b)}</span> <span class="voo-oque">${esc(vooEmTexto(o))}</span></li>`).join('')}</ul>`
     : '<p class="h det-sem-voo">Sem voo nesta data.</p>';
-  const html = `<div class="det-tira">${tiraHtml(x, { grande: true })}${escala}</div>${turnos}${edicao ? editorDasFaixas(x, edicao) : ''}${lista}`;
+  const html = `<div class="det-tira">${tiraHtml(x, { grande: true })}${escala}</div>${turnos}${edicao ? editorDasFaixas(x, edicao) : ''}${oQueCabeHtml(x)}${lista}`;
   return { id: 'data', titulo: 'Nesta data', icone: 'i-calendario', escopo: escopoDaData(), resumo: quantosVoos(voos.length), campos, html };
 }
 

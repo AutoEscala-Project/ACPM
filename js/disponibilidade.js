@@ -4,15 +4,18 @@
 // último até a meia-noite): o passo 29 converte cada sequência de tempos marcados numa faixa e cada intervalo entre duas
 // sequências numa pausa, e o aw fica como a cópia de antes. Os estados sem faixas (os dias antes do 29, os goldens e os
 // estados dos testes) são lidos pelo aw, como antes.
-// A regra é a de antes do C (os commits "dados" e "tela"): o compromisso inteiro dentro de uma faixa, sem tocar numa pausa;
-// o que cai antes das 06:30 (o início do 1º tempo de antes) não pede faixa, como nenhum tempo o cobria. A regra do início
-// (decisão 1 do Pedro: a missão começa dentro da faixa e pode terminar depois dela) é o commit "regra".
+// A regra é a do início (o commit "regra", decisão 1 do Pedro): a missão começa dentro de uma faixa, [de, ate) (o fim não
+// entra: até 17:30 não inclui o Noturno), e pode terminar depois dela, mas não toca nenhuma pausa; o que termina até as
+// 06:30 (o início do 1º tempo de antes) não pede faixa, e o que começa antes delas começa às 06:30 para a regra. Até o
+// "regra" (os commits "dados" e "tela"), o compromisso inteiro cabia numa faixa, como o aw pedia. O aw sem faixas é lido
+// pelas faixas e pelas pausas dele, com a mesma regra: só o fim da última faixa do dia muda de sentido.
 // A tela (o commit "tela"): os três turnos, cada um uma faixa em minutos (N12: nenhum precisa de um limite do dia), o que a
 // linha e o detalhe do INVA dizem (o texto e a tira), a conferência de "Editar faixas" e o "Marcar disponível" do
 // agendamento, que põem as faixas no lugar do aw: a tela não muda mais o aw.
+// "O que cabe nestas faixas" (oQueCabe): em cada lista de decolagem, os horários em que a missão começa e até quando ela pode ir.
 // Módulo puro (config, horarios e format, que já são da TV): o passo 29 de js/migracoes.js o leva para o grafo da TV.
-import { MINUTOS_DO_DIA } from './config.js';
-import { INICIOS_DOS_TEMPOS } from './horarios.js';
+import { MINUTOS_DO_DIA, MIS, GROUND_DURATION_H, GROUND_EQ_TYPE, DURACAO_MAXIMA_H } from './config.js';
+import { INICIOS_DOS_TEMPOS, HORARIO_DO_NOTURNO, horariosDoTipo, fimDaMissao } from './horarios.js';
 import { hm } from './format.js';
 
 // As faixas e as pausas ficam entre as 06:30 e a meia-noite, no máximo 8 de cada por data
@@ -64,19 +67,18 @@ function intervalos(lista, maximo) {
 export const normalizarFaixas = lista => intervalos(lista, MAXIMO_DE_FAIXAS);
 export const normalizarPausas = lista => intervalos(lista, MAXIMO_DE_PAUSAS);
 
-// A leitura de antes do C: o instrutor marcado em cada tempo que o compromisso toca
-const cobreNoAw = (aw, a, b) => INICIOS_DOS_TEMPOS.every((inicio, k) => !sobrepoe(a, b, inicio, fimDoTempo(k)) || aw[k]);
+// As faixas e as pausas que a regra lê: as da data, ou, sem elas, as do aw (o tempo marcado é o truthy, como o app lia)
+const lidas = x => (Array.isArray(x.faixas) ? { faixas: x.faixas, pausas: Array.isArray(x.pausas) ? x.pausas : [] } : faixasDoAw(x.aw || []));
 
-// O instrutor disponível durante todo o compromisso [a, b) (voo, simulador ou aula de Ground): ele vem na data (on) e,
-// com as faixas, a parte do compromisso entre as 06:30 e a meia-noite fica dentro de uma faixa e não toca nenhuma pausa;
-// sem elas, ele está marcado em cada tempo de antes que o compromisso toca (o aw)
+// O instrutor pode assumir o compromisso [a, b) (voo, simulador ou aula de Ground): ele vem na data (on), o compromisso
+// começa dentro de uma faixa (o que começa antes das 06:30 começa às 06:30 para a regra) e não toca nenhuma pausa. O que
+// termina até as 06:30, ou começa na meia-noite, não pede faixa (nenhum tempo de antes o cobria)
 export function disponivelPara(x, a, b) {
   if (!x || !x.on) return false;
-  if (!Array.isArray(x.faixas)) return cobreNoAw(x.aw || [], a, b);
-  const de = Math.max(a, INICIO_DAS_FAIXAS);
-  const ate = Math.min(b, MINUTOS_DO_DIA);
-  if (de >= ate) return true;
-  return x.faixas.some(f => f.de <= de && ate <= f.ate) && !(x.pausas || []).some(p => sobrepoe(a, b, p.de, p.ate));
+  const inicio = Math.max(a, INICIO_DAS_FAIXAS);
+  if (b <= inicio || inicio >= MINUTOS_DO_DIA) return true;
+  const { faixas, pausas } = lidas(x);
+  return faixas.some(f => f.de <= inicio && inicio < f.ate) && !pausas.some(p => sobrepoe(a, b, p.de, p.ate));
 }
 
 // A reversão de um agendamento feito antes da tela do C, que guardou só o aw de antes: o instrutor que tem faixas fica com
@@ -157,6 +159,39 @@ export function comOIntervalo(d, a, b) {
     pausas = pausas.filter((_, i) => i !== menor);
   }
   return { faixas, pausas };
+}
+
+// "O que cabe nestas faixas" (o detalhe do INVA): em cada lista de decolagem da data (a do tipo; a do Noturno, as 17:30), os
+// horários em que a missão da duração padrão começa (1 h; o Simulador 2 h, o Ground 01h30, o Noturno as 4 h fixas), sem
+// passar do fim da missão (17:30 no avião de dia), e até quando pode ir a que começa no último deles: 5 h (a duração
+// máxima) depois, sem tocar a pausa seguinte nem passar do fim da missão (o Noturno, as 4 h dele)
+const LISTAS_DO_QUE_CABE = Object.freeze([
+  { id: 'C152', nome: 'C152', mis: 'Voo Local', tipo: 'C152' },
+  { id: 'C172', nome: 'C172', mis: 'Voo Local', tipo: 'C172' },
+  { id: 'sim', nome: 'Simulador', mis: 'Simulador', tipo: MIS.Simulador.defEq, h: MIS.Simulador.duracaoPadrao },
+  { id: 'PA-34', nome: 'PA-34', mis: 'Multimotor', tipo: 'PA-34' },
+  { id: 'ground', nome: 'Ground', mis: 'Ground', tipo: GROUND_EQ_TYPE, h: GROUND_DURATION_H },
+  { id: 'noturno', nome: 'Noturno', mis: 'Noturno', tipo: 'C172', h: MIS.Noturno.duracaoFixaH, fixa: true }
+]);
+export function oQueCabe(x, horarios) {
+  const { pausas } = x ? lidas(x) : { pausas: [] };
+  return LISTAS_DO_QUE_CABE.map(({ id, nome, mis, tipo, h = 1, fixa = false }) => {
+    const minutos = Math.round(h * 60);
+    const fim = fimDaMissao(mis, tipo);
+    const lista = mis === 'Noturno' ? [HORARIO_DO_NOTURNO] : horariosDoTipo(horarios, tipo);
+    const cabem = lista.filter(m => m + minutos <= fim && disponivelPara(x, m, m + minutos));
+    if (!cabem.length) return { id, nome, horarios: [], ate: null };
+    const ultimo = cabem.at(-1);
+    const ate = fixa ? ultimo + minutos
+      : Math.min(ultimo + DURACAO_MAXIMA_H * 60, fim, ...pausas.filter(p => p.de >= ultimo).map(p => p.de));
+    return { id, nome, horarios: cabem, ate };
+  });
+}
+// "C152: 06:30 a 11:30 (4 horários); termina até as 16:30"; sem nenhum, "Noturno: nenhum horário"
+export function textoDoQueCabe({ nome, horarios, ate }) {
+  if (!horarios.length) return `${nome}: nenhum horário`;
+  const quando = horarios.length > 1 ? `${hm(horarios[0])} a ${hm(horarios.at(-1))}` : hm(horarios[0]);
+  return `${nome}: ${quando} (${horarios.length} ${horarios.length === 1 ? 'horário' : 'horários'}); termina até as ${hm(ate)}`;
 }
 
 // A tira da linha: as faixas, as pausas e os voos, em porcentagem dela (das 06:30 à meia-noite); o que fica fora dela sai

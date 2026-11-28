@@ -116,9 +116,9 @@ const TERMOS = {
   'so-parafuso': { aba: 'Recursos', termo: 'Só Parafuso', texto: 'Avião reservado para a missão de Parafuso no C152: as outras missões não usam ele, e o Parafuso só voa nele. Marque na frota, em Recursos › Cadastro.' },
 
   // INVAs
-  'vem-nesta-data': { aba: 'INVAs', termo: 'Vem', texto: 'Marcado, o instrutor vem nesta data (a aberta no topo, que nem sempre é hoje) e pode ser escalado dentro das faixas dele, fora das pausas.' },
-  faixas: { aba: 'INVAs', termo: 'Pode decolar', texto: 'As faixas do instrutor nesta data, de … até …: o voo inteiro dele cabe numa faixa (decola e pousa dentro dela). Um turno é uma faixa pronta; meio dia, uma faixa digitada.' },
-  pausa: { aba: 'INVAs', termo: 'Pausa', texto: 'Um intervalo em que o instrutor não voa nesta data, nem dentro de uma faixa: o almoço, por exemplo. Nenhum voo dele toca a pausa.' },
+  'vem-nesta-data': { aba: 'INVAs', termo: 'Vem', texto: 'Marcado, o instrutor vem nesta data (a aberta no topo, que nem sempre é hoje) e pode começar missões dentro das faixas dele, sem tocar as pausas.' },
+  faixas: { aba: 'INVAs', termo: 'Pode decolar', texto: 'As faixas do instrutor nesta data, de … até …: a missão começa dentro de uma faixa e pode terminar depois dela (o Até não entra: até 17:30 não inclui o Noturno). Um turno é uma faixa pronta; meio dia, uma faixa digitada.' },
+  pausa: { aba: 'INVAs', termo: 'Pausa', texto: 'Um intervalo em que o instrutor não voa nesta data, nem dentro de uma faixa: o almoço, por exemplo. Nenhuma missão dele toca a pausa, nem a que começou antes dela.' },
   checador: { aba: 'INVAs', termo: 'Checador', texto: 'O voo de cheque exige três marcas do checador: o curso (PP ou PC), o motor (MNTE ou MLTE) e as regras (VFR ou IFR). O Cheque PC MLTE IFR, por exemplo, pede PC, MLTE e IFR.' },
   'filtro-das-habilitacoes': { aba: 'INVAs', termo: 'Filtro das habilitações', texto: 'Mostra só os instrutores que têm todas as habilitações marcadas: Noturno e C172 mostram quem tem as duas. Sem nenhuma marcada, mostra todos.' },
   'fora-do-app': { aba: 'INVAs', termo: 'Fora do app', texto: 'Horas de voo do instrutor em outro lugar (outra escola, por exemplo). Entram nos limites da lei do mês e do ano.' },

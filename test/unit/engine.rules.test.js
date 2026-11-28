@@ -92,11 +92,11 @@ describe('Voos: janelas preferidas e encaixe', () => {
     assert.deepEqual(out.map(o => [hm(o.a), hm(o.b)]), [['06:00', '06:30']]);
   });
 
-  it('a pausa do almoço continua: o simulador das 10:10 não a atravessa e vai para depois dela', () => {
+  it('a pausa do almoço continua: o simulador das 10:10 não a atravessa e vai para o horário mais perto que não a toca', () => {
     const sim = { mis: 'Simulador', eq: 'Sim. Mono', nb: 2, p1: 610, p2: -1 };
     const almoco = { aw: [], faixas: [{ de: 390, ate: 690 }, { de: 760, ate: 1050 }], pausas: [{ de: 690, ate: 760 }] };
     const comPausa = alocar({ ins: [instrutor(1, 9, almoco)], stu: [aluno(1000, sim)] });
-    assert.deepEqual(comPausa.out.map(o => [hm(o.a), hm(o.b)]), [['12:40', '14:40']]);
+    assert.deepEqual(comPausa.out.map(o => [hm(o.a), hm(o.b)]), [['08:20', '10:20']]);
     // Sem a pausa, só o intervalo entre as faixas: começa às 10:10, dentro da 1ª, e passa dele
     const semPausa = alocar({ ins: [instrutor(1, 9, { ...almoco, pausas: [] })], stu: [aluno(1000, sim)] });
     assert.deepEqual(semPausa.out.map(o => [hm(o.a), hm(o.b)]), [['10:10', '12:10']]);
