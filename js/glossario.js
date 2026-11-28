@@ -18,7 +18,7 @@ const lei = LIMITES_DA_LEI;
 export const ABAS_DO_GLOSSARIO = [
   'Escala',
   'Critérios',
-  'Demanda',
+  'Processamento',
   'Pedidos',
   'Recursos',
   'INVAs',
@@ -85,20 +85,23 @@ const TERMOS = {
   'criterio-fixos': { aba: 'Critérios', termo: 'Não mudar', texto: 'Os horários ficam onde a escala pôs; só os instrutores podem trocar.' },
   'criterios-travados': { aba: 'Critérios', termo: 'Critérios travados', texto: 'Com a escala aprovada, os voos fixos não mudam: reabra a escala para mudar os critérios.' },
 
-  // Demanda
-  voa: { aba: 'Demanda', termo: 'Voa', texto: 'Marcado, o pedido entra na escala desta data. Desmarcado, o aluno continua na lista sem voar.' },
-  preferencias: { aba: 'Demanda', termo: 'Preferências', texto: 'Os horários que o aluno prefere, entre os da categoria do avião. Sem vaga neles, a escala usa o horário livre mais perto da 1ª.' },
-  'instrutor-escolhido': { aba: 'Demanda', termo: 'Instrutor', texto: 'Automático: o app escolhe. Um instrutor escolhido pelo operador vale mais: a escala põe o aluno com ele (o horário e o avião em volta dele) e não o troca.' },
-  duracao: { aba: 'Demanda', termo: 'Duração', texto: `As horas do voo, de uma vez. O Ground tem ${duracao(GROUND_DURATION_MIN)}. Para dois voos do aluno no mesmo dia, use “+ missão”.` },
-  prioridade: { funcionalidade: 'prioridade', aba: 'Demanda', termo: 'Prioridade', texto: 'De 1 a 5, e 1 é a mais alta: o pedido de prioridade mais alta é escalado antes. Com a mesma prioridade, quem agendou primeiro vai antes; o pedido posto à mão, depois.' },
-  'fora-da-ordem': { funcionalidade: 'progresso', aba: 'Demanda', termo: 'Fora da ordem', texto: 'A missão do curso que o programa ainda não libera (falta uma anterior ou a fase não abriu), a já aprovada, a dispensada ou a que o aluno já tem em outro voo do dia. Escolhê-la pede confirmação, e o histórico diz por quê.' },
-  'curso-encerrado': { funcionalidade: 'progresso', aba: 'Demanda', termo: 'Curso encerrado', texto: 'O curso do aluno foi encerrado em Cursos. A próxima missão e as outras do curso continuam, mas cada uma pede confirmação, aqui e no agendamento, e o histórico diz que o curso estava encerrado.' },
+  // Processamento (G2: a Demanda saiu; os termos das restrições do voo ficam aqui)
+  'atualizar-a-escala': { aba: 'Processamento', termo: 'Atualizar a escala', texto: 'Põe na escala os pedidos aprovados que ainda não estão nela, tira os cancelados e os sem aprovação (a vaga vai ao 1º da lista de espera) e troca a missão do curso que o programa passou. Antes, confere se a escala mudou em outro computador.' },
+  'fora-da-escala': { aba: 'Processamento', termo: 'Tirar da escala', texto: 'O voo sai da escala desta data, e o pedido continua aprovado. Pôr de volta na escala o devolve; na escala aprovada, para o lugar fixo dele, sem refazer a escala.' },
+  'pedido-dispensado': { aba: 'Processamento', termo: 'Tirado desta data', texto: 'O pedido aprovado que saiu desta data antes (o voo dele não existe mais) não entra sozinho: Trazer de volta o põe na escala de novo.' },
+  recomecar: { aba: 'Processamento', termo: 'Recomeçar pelos pedidos', texto: 'Cada pedido aprovado volta ao que pede, sem as restrições nem o lugar fixo; saem os voos sem pedido e os dos pedidos que aguardam ou foram cancelados; ficam o voo em andamento, o com resultado e o tirado da escala. Reabre a escala aprovada.' },
+  preferencias: { aba: 'Processamento', termo: 'Preferências', texto: 'Os horários que o aluno prefere, entre os da categoria do avião. Sem vaga neles, a escala usa o horário livre mais perto da 1ª.' },
+  'instrutor-escolhido': { aba: 'Processamento', termo: 'Instrutor', texto: 'Automático: o app escolhe. Um instrutor escolhido pelo operador vale mais: a escala põe o aluno com ele (o horário e o avião em volta dele) e não o troca.' },
+  duracao: { aba: 'Processamento', termo: 'Duração', texto: `As horas do voo, de uma vez. O Ground tem ${duracao(GROUND_DURATION_MIN)}. Para dois voos do aluno no mesmo dia, registre dois pedidos.` },
+  prioridade: { funcionalidade: 'prioridade', aba: 'Processamento', termo: 'Prioridade', texto: 'De 1 a 5, e 1 é a mais alta: o pedido de prioridade mais alta é escalado antes. Com a mesma prioridade, quem agendou primeiro vai antes; o pedido posto à mão, depois.' },
+  'fora-da-ordem': { funcionalidade: 'progresso', aba: 'Processamento', termo: 'Fora da ordem', texto: 'A missão do curso que o programa ainda não libera (falta uma anterior ou a fase não abriu), a já aprovada, a dispensada ou a que o aluno já tem em outro voo do dia. Escolhê-la pede confirmação, e o histórico diz por quê.' },
+  'curso-encerrado': { funcionalidade: 'progresso', aba: 'Processamento', termo: 'Curso encerrado', texto: 'O curso do aluno foi encerrado em Cursos. A próxima missão e as outras do curso continuam, mas cada uma pede confirmação, aqui e no agendamento, e o histórico diz que o curso estava encerrado.' },
 
   // Pedidos
-  'aprovar-pedido': { aba: 'Pedidos', termo: 'Aprovar pedido', texto: 'O pedido chega “Aguardando aprovação” (o da secretaria, ou o registrado sem aprovar) e só entra na demanda aprovado. Na data aberta já gravada, ele entra na hora; senão, “Importar” o põe lá. “Retirar aprovação” o devolve a aguardar.' },
+  'aprovar-pedido': { aba: 'Pedidos', termo: 'Aprovar pedido', texto: 'O pedido chega “Aguardando aprovação” (o da secretaria ou o registrado sem aprovar) e só entra na escala aprovado: na data aberta já gravada, na hora; senão, com “Atualizar a escala”. “Retirar aprovação” o devolve a aguardar e tira o voo.' },
   'segunda-preferencia-do-pedido': { aba: 'Pedidos', termo: '2ª preferência do pedido', texto: 'Opcional: outro horário exato, da mesma lista do recurso, para quando o da 1ª não couber. O Noturno e o Voo Solo têm um horário só.' },
-  'missao-do-pedido': { aba: 'Pedidos', termo: 'Fase / missão do pedido', texto: 'Para o aluno de um curso, as missões do programa dele, por fase, sem as dispensadas; sem curso, os tipos de missão. A missão do curso traz o recurso e as horas dela e vai com o pedido para a demanda.' },
-  'recurso-do-pedido': { aba: 'Pedidos', termo: 'Recurso do pedido', texto: 'O tipo de avião, o simulador ou a sala que a missão permite, escolhido no pedido. Ele decide os horários (os de decolagem dele, em Recursos) e vai com o pedido para a demanda.' },
+  'missao-do-pedido': { aba: 'Pedidos', termo: 'Fase / missão do pedido', texto: 'Para o aluno de um curso, as missões do programa dele, por fase, sem as dispensadas; sem curso, os tipos de missão. A missão do curso traz o recurso e as horas dela e vai com o pedido para a escala.' },
+  'recurso-do-pedido': { aba: 'Pedidos', termo: 'Recurso do pedido', texto: 'O tipo de avião, o simulador ou a sala que a missão permite, escolhido no pedido. Ele decide os horários (os de decolagem dele, em Recursos) e vai com o pedido para a escala.' },
   'setimo-voo-local': { aba: 'Pedidos', termo: `${LIMITE_DE_VOOS_LOCAIS + 1}º voo local`, texto: `No máximo ${LIMITE_DE_VOOS_LOCAIS} voos locais (Voo Local, Voo Solo e TGL) saem no mesmo horário. O ${LIMITE_DE_VOOS_LOCAIS + 1}º é registrado com “Registrar mesmo assim”, guarda quem confirmou e voa no horário, a mais; ou com “Registrar na lista de espera”, e espera a vaga do horário.` },
   excecao: { aba: 'Pedidos', termo: 'Exceção da Coordenação', texto: 'Registra o pedido depois do prazo (13:00 da véspera; a segunda, sábado às 10:00). O pedido nasce aprovado e fica marcado como exceção, para auditoria.' },
 
@@ -138,7 +141,7 @@ const TERMOS = {
   'resultado-sem-voo': { funcionalidade: 'progresso', aba: 'Alunos', termo: 'Resultado sem voo', texto: 'O resultado de uma missão do curso feita fora da escala do app, com a data (até hoje). A missão que tem voo na data aberta é registrada no voo; a fora da ordem pede confirmação.' },
   'colocar-no-curso': { funcionalidade: 'progresso', aba: 'Alunos', termo: 'Colocar no curso', texto: 'Para o aluno que chega no meio do curso: aprova sem voo as missões antes da escolhida, na ordem do curso, menos as já aprovadas e as dispensadas. O Histórico desfaz.' },
   inativo: { aba: 'Alunos', termo: 'Inativo', texto: 'Com “Ativo” desligado na linha (um clique; outro liga de novo): de hoje em diante não entra em pedido nem em voo novo. As datas passadas e os dados ficam; “Mostrar inativos” mostra a linha.' },
-  'filtro-dos-cursos': { aba: 'Alunos', termo: 'Filtro dos cursos', texto: 'Mostra só os alunos de algum dos cursos marcados, em Alunos e na Demanda (as marcas valem nas duas): PP e PC mostram os alunos dos dois. “Sem curso” mostra quem não tem curso; sem nenhum marcado, mostra todos.' },
+  'filtro-dos-cursos': { aba: 'Alunos', termo: 'Filtro dos cursos', texto: 'Mostra só os alunos de algum dos cursos marcados, em Alunos e no Processamento (cada tela com as marcas dela): PP e PC mostram os alunos dos dois. “Sem curso” mostra quem não tem curso; sem nenhum marcado, mostra todos.' },
   'nome-completo': { aba: 'Alunos', termo: 'Nome completo', texto: 'O nome civil inteiro, nos dados pessoais: não vai para a escala, o CSV, o PDF, a TV nem o Gestor, e a busca o acha. O nome da escala é o do cadastro.' },
 
   // Cursos

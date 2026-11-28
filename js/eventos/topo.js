@@ -5,13 +5,9 @@ import { $, ligarMenu } from '../dom.js';
 import { ApiClient } from '../storage.js';
 import { abrirConta } from '../views/conta.js';
 import { rManual } from '../views/manual.js';
-import { atualizarSelos } from '../views/selos.js';
-import { registrarDesenho, redesenharPorNome } from '../redesenho.js';
+import { redesenharPorNome } from '../redesenho.js';
 import { registrarTela, escolherTela } from '../views/telas.js';
 import { gerenciaContas } from '../perfis.js';
-
-// Os selos que ficam fora da linha (js/views/selos.js): o botão de importar (o de Recursos saiu no B)
-registrarDesenho('selos', atualizarSelos, { em: ['dados', 'escala', 'perfil', 'pedidos'], ordem: 99 });
 
 // O perfil (neste navegador). A aba Cursos é refeita: aberta, ela mostra ou tira na hora os controles de quem muda o
 // programa

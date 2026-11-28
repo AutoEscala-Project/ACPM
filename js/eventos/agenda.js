@@ -1,26 +1,28 @@
 // Pedidos: a lista e o detalhe (o componente de lista e detalhe, com os modelos de js/views/agenda.js), registrar (cada
 // pedido para a data dele, "Data do pedido"; "Registrar e aprovar", "Registrar sem aprovar", a Exceção da Coordenação e,
 // no 7º voo local, "Registrar mesmo assim" e "Registrar na lista de espera"), aprovar (na linha, no detalhe, "Aprovar
-// todos"), retirar a aprovação, cancelar e "Registrar de novo…". O pedido aprovado da data aberta entra na demanda na
-// hora só com as cinco condições (motivoSemEntrada); senão, "Importar" (js/eventos/importacao.js) o traz. A vigia dos
-// pedidos (D3, js/solicitacoes-da-data.js) fica ligada desde a abertura, com o aviso das novidades
-import { vagaDeVooLocal, HORARIOS_FIXOS, motivoSemEntrada, situacaoNaDemanda, solicitacaoAprovada } from '../agenda.js';
+// todos"), retirar a aprovação, cancelar e "Registrar de novo…". Depois de cada ação, a conciliação dos pedidos dela com a
+// escala da data aberta (G2, depoisDeMudarPedidos: o aprovado entra, o cancelado e o sem aprovação saem), na hora, só com as
+// cinco condições (motivoSemEntrada); senão, "Atualizar a escala", no Processamento, a faz. A vigia dos pedidos (D3,
+// js/solicitacoes-da-data.js) fica ligada desde a abertura, com o aviso das novidades
+import { vagaDeVooLocal, HORARIOS_FIXOS, pedidoVoaNoDia } from '../agenda.js';
 import { DURACAO_MAXIMA_H, LIMITE_DE_VOOS_LOCAIS } from '../config.js';
-import { dadosLidos, diaJaGravado, carregarData } from '../actions.js';
+import { carregarData } from '../actions.js';
 import { $, showToast, anunciar } from '../dom.js';
 import { duracaoDigitada, ERRO_DA_DURACAO } from '../rules.js';
 import { S, DATA, isGestor } from '../state.js';
 import { ApiClient } from '../storage.js';
 import { confirmado } from './confirmacao.js';
 import { aoAcionar } from './registro.js';
-import { porNaDemanda, notasDaEntrada } from '../entrada-na-demanda.js';
+import { depoisDeMudarPedidos } from '../conciliacao.js';
+import { situacaoEmPedidos } from '../views/processamento.js';
 import {
   abrirAgenda, rAgenda, podeEditarAgenda, aprovaPedidos, lembrarRegistradoPor, lembradoRegistradoPor, descreverPedido, missaoDoPedido, pedidoDaLista, dataCurta, dataDoFormulario,
   escolherDataDoPedido, pedidosDoFormulario, lerPedidosDaAgenda, marcarInvalidos, focarNoPrimeiroInvalido, apagarErroDaAgenda, desarmarConfirmacaoDaAgenda,
   nomearRegistrar, botaoArmado, missaoEscolhida, rHorariosDoPedido, atualizarRecursoEHorario, esvaziarPedidoRegistrado, escolherNaAgenda, escolherMissaoNaAgenda, emLista,
   modeloDosPedidos, detalheDoPedido, aprovaveisNaBusca, marcarRecente, mudouADataDaLista, preencherComOPedido, avisarDasNovidades, porQueOVooDoPedidoFica, comoOVooFica
 } from '../views/agenda.js';
-import { solicitacoesDaDataLidas, lerSolicitacoesDaData, marcarDiaMudou, vigiarSolicitacoesDaData } from '../solicitacoes-da-data.js';
+import { lerSolicitacoesDaData, vigiarSolicitacoesDaData } from '../solicitacoes-da-data.js';
 import { lerContagemDosDias } from '../views/trilho.js';
 import { registrarDesenho } from '../redesenho.js';
 import { criarMestreDetalhe } from '../views/mestre-detalhe.js';
@@ -53,7 +55,7 @@ function desenharPedidos(momento) {
 }
 registrarDesenho('pedidos', desenharPedidos, { em: ['dados', 'releitura', 'perfil', 'pedidos'], ordem: 95, comMomento: true });
 // Cada alteração refaz a escala: os horários do cadastro podem ter mudado com Pedidos aberta; onde cada pedido está na
-// demanda também
+// escala também
 registrarDesenho('horarios-do-pedido', () => { rHorariosDoPedido(); rAgenda(); tela.desenhar(); }, { em: ['escala'], ordem: 96 });
 // Aberta, Pedidos lê de novo os pedidos da data aberta, os da data do pedido e os de cada dia do calendário. O endereço
 // (#/age/<id>) escolhe o pedido
@@ -75,44 +77,35 @@ vigiarSolicitacoesDaData(avisarDasNovidades);
 // A busca também muda "Aprovar todos": ele aprova os que ela mostra
 document.addEventListener('input', e => { if (e.target instanceof Element && e.target.matches('[data-flt="age"]')) rAgenda(); });
 
-// ——— A entrada do pedido aprovado na demanda ———
+// ——— A escala depois das ações ———
 
-// O motivo, para o aviso, de o aprovado não ter entrado na demanda na hora
+// O motivo, para o aviso, de a escala não ter mudado na hora (G2: "Atualizar a escala", no Processamento, faz a conciliação)
 const MOTIVOS = {
-  'outra-data': 'Outra data foi aberta enquanto isso: na data dele, “Importar” o põe na demanda.',
-  'nao-lida': 'A escala desta data ainda não abriu: “Importar” o põe na demanda.',
-  'nao-gravada': 'A escala desta data ainda não foi gravada: “Importar” o põe na demanda.',
-  dados: 'Os resultados ou os programas dos cursos não foram lidos: “Importar” o põe na demanda depois de lê-los.',
-  mudou: 'A escala desta data mudou em outro computador: “Atualizar” e depois “Importar”.',
-  conexao: 'Não foi possível conferir a escala desta data: “Importar” o põe na demanda.',
-  aluno: 'O aluno não está ativo no cadastro: ele entra quando voltar.'
+  'outra-data': 'Outra data foi aberta enquanto isso: na data dele, “Atualizar a escala”, no Processamento, atualiza a escala.',
+  'nao-lida': 'A escala desta data ainda não abriu: “Atualizar a escala”, no Processamento, atualiza a escala.',
+  'nao-gravada': 'A escala desta data ainda não foi gravada: “Atualizar a escala”, no Processamento, a começa.',
+  dados: 'Os resultados ou os programas dos cursos não foram lidos: “Atualizar a escala”, no Processamento, atualiza a escala depois de lidos.',
+  mudou: 'A escala desta data mudou em outro computador: “Atualizar” e depois “Atualizar a escala”, no Processamento.',
+  conexao: 'Não foi possível conferir a escala desta data: “Atualizar a escala”, no Processamento, atualiza a escala.',
+  perfil: 'Um Operador atualiza a escala (no Processamento).'
 };
 
-// Os aprovados (ids) entram na demanda da data na hora, com as cinco condições: a data deles é a aberta, lida e já gravada,
-// com os resultados e os cursos lidos, e a escala não mudou em outro computador (perguntado ao servidor agora); outra data
-// aberta durante as esperas, 'outra-data'. Responde { entrou } (o que entrou ou voltou, e o que já voava: o voo que ficou na
-// demanda depois de "Retirar aprovação") ou { motivo }: o aluno fora do cadastro ou inativo ('aluno'); a lista lida que
-// não os mostra aprovados (a releitura falhou: 'conexao'). Nada é dito aqui: quem chama diz
-async function entrarNaHora(ids, data) {
-  const condicoes = () => motivoSemEntrada({ data, aberta: DATA, lida: dadosLidos, gravada: diaJaGravado(), indisponiveis: S.indisponiveis || [] });
-  if (condicoes()) return { motivo: condicoes() };
-  let mudou;
-  try {
-    mudou = await ApiClient.diaMudou(data);
-  } catch {
-    return { motivo: 'conexao' };
-  }
-  if (condicoes()) return { motivo: condicoes() };
-  if (mudou) { marcarDiaMudou(data); return { motivo: 'mudou' }; }
-  const { lista } = await solicitacoesDaDataLidas();
-  if (DATA !== data) return { motivo: 'outra-data' };
-  if (!lista) return { motivo: 'nao-lida' };
-  const aprovados = lista.filter(s => ids.includes(s.id) && solicitacaoAprovada(s));
-  if (!aprovados.length) return { motivo: 'conexao' };
-  const { entraram, resumo } = porNaDemanda(aprovados, { religar: true });
-  const voam = aprovados.filter(s => situacaoNaDemanda(s, S) === 'voa').length;
-  if (entraram || voam) return { entrou: true, notas: notasDaEntrada(resumo) };
-  return { motivo: resumo.semAluno || resumo.deInativo ? 'aluno' : 'conexao' };
+const voaNoDia = id => pedidoVoaNoDia(S, id);
+// Onde o pedido ficou, para o aviso ("na escala 10:10", "em espera às 08:20 · 1º"): a situação de Pedidos, em minúscula
+const ondeFicou = id => situacaoEmPedidos(id).replace(/^./, c => c.toLowerCase());
+// Os pedidos (ids) aprovados, por onde ficaram ("2 na escala, 1 em espera às 08:20 · 1º")
+function ondeFicaram(ids) {
+  const contas = new Map();
+  for (const id of ids) { const onde = ondeFicou(id) || 'fora da escala'; contas.set(onde.replace(/ \d\d:\d\d$/, ''), (contas.get(onde.replace(/ \d\d:\d\d$/, '')) || 0) + 1); }
+  return [...contas].map(([onde, n]) => `${n} ${onde}`).join(', ');
+}
+
+// A escala depois de aprovar (ids, na data aberta): a conciliação deles (depoisDeMudarPedidos). Responde { entrou, notas }
+// (entrou: algum deles voa no dia) ou { motivo }
+async function aEscalaDepois(ids, data) {
+  const r = await depoisDeMudarPedidos({ ids, data });
+  if (r.motivo) return { motivo: r.motivo };
+  return ids.some(voaNoDia) ? { entrou: true, notas: r.notas } : { entrou: false, notas: r.notas };
 }
 
 // ——— Registrar ———
@@ -140,7 +133,7 @@ async function registrarPedido(botao, qual) {
 }
 
 // Confere o pedido do formulário e o registra. Registrado, devolve o que falta fazer: ler os pedidos de novo, a entrada na
-// demanda (o aprovado da data aberta) e o aviso
+// escala (o aprovado da data aberta) e o aviso
 async function conferirERegistrar(qual) {
   const espera = qual === 'esperar';
   // A lista de espera é do pedido armado: ela registra com o botão que a confirmação armou
@@ -210,20 +203,20 @@ async function conferirERegistrar(qual) {
 }
 
 // Depois do registro: os pedidos são lidos de novo (os da data dele e os de cada dia do calendário); o aprovado da data
-// aberta entra na demanda (as cinco condições); e o aviso, a linha de estado do formulário e a linha do pedido à vista (N6)
+// aberta entra na escala (as cinco condições); e o aviso, a linha de estado do formulário e a linha do pedido à vista (N6)
 async function depoisDeRegistrar({ id, dia, aluno, descricao, aprovado, excecao, espera, locais, horario }) {
   if (dia === DATA) marcarRecente(id);
   await Promise.all([lerPedidosDaAgenda(dia, [id]), lerContagemDosDias()]);
-  const entrada = aprovado && dia === DATA ? await entrarNaHora([id], dia) : null;
+  const entrada = aprovado && dia === DATA ? await aEscalaDepois([id], dia) : null;
   // A lista é a da data aberta: o pedido de outra data diz para qual ele foi
   const para = dia === DATA ? '' : ` para ${dataCurta(dia)}`;
   const base = excecao ? `Pedido registrado e aprovado${para} pela Exceção da Coordenação` : `Pedido registrado e aprovado${para}`;
   const aviso = espera ? `Pedido registrado${para} na lista de espera das ${horario}: já há ${locais} voos locais.`
     : !aprovado ? `Pedido registrado${para}: aguardando aprovação.`
-      : !entrada ? `${base}.` : entrada.entrou ? `${base}: já está na demanda${entrada.notas}.` : `${base}. ${MOTIVOS[entrada.motivo] || ''}`.trim();
+      : !entrada ? `${base}.` : !entrada.motivo ? `${base}: ${aluno.nm} ${ondeFicou(id) || 'fora da escala'}${entrada.notas}.` : `${base}. ${MOTIVOS[entrada.motivo] || ''}`.trim();
   showToast(aviso, 'ok');
   // A lista de espera diz também a aprovação: o da secretaria (e o "sem aprovar") ainda espera um operador
-  const situacao = [espera ? 'na lista de espera' : '', !aprovado ? 'aguardando aprovação' : !entrada ? 'aprovado' : entrada.entrou ? 'aprovado, na demanda' : 'aprovado, fora da demanda'];
+  const situacao = [espera ? 'na lista de espera' : '', !aprovado ? 'aguardando aprovação' : !entrada || entrada.motivo ? 'aprovado' : `aprovado, ${ondeFicou(id) || 'fora da escala'}`];
   $('#agenda-status').textContent = `Último pedido: ${aluno.nm} · ${descricao}${para} · ${situacao.filter(Boolean).join(', ')}.`;
   if (dia === DATA) trazerAVista(id);
 }
@@ -386,7 +379,7 @@ async function comBotaoOcupado(b, fazer) {
   }
 }
 
-// Aprova os pedidos (ids) e, os da data aberta, põe na demanda (as cinco condições). um: o "Aprovar" de um pedido
+// Aprova os pedidos (ids) e, os da data aberta, põe na escala (as cinco condições). um: o "Aprovar" de um pedido
 async function aprovar(b, ids, { um }) {
   if (!aprovaPedidos() || !ids.length) return;
   await comBotaoOcupado(b, async () => {
@@ -406,38 +399,46 @@ async function aprovar(b, ids, { um }) {
     const fora = ids.length - aprovados.length;
     const deFora = fora ? ` (${fora === 1 ? '1 já estava aprovado ou foi cancelado' : `${fora} já estavam aprovados ou foram cancelados`} em outro computador)` : '';
     if (!aprovados.length) { showToast(`Nenhum pedido aprovado${deFora}.`); return; }
-    const entrada = await entrarNaHora(aprovados, data);
+    const entrada = await aEscalaDepois(aprovados, data);
     const n = aprovados.length;
     const quem = um ? 'Pedido aprovado' : `${n} ${n === 1 ? 'pedido aprovado' : 'pedidos aprovados'}`;
-    const motivo = entrada.motivo ? (MOTIVOS[entrada.motivo] || '').replace('o põe', n === 1 ? 'o põe' : 'os põe').replace('data dele', n === 1 ? 'data dele' : 'data deles') : '';
-    showToast(entrada.entrou ? `${quem}${deFora}: ${n === 1 ? 'já está' : 'já estão'} na demanda${entrada.notas}.` : `${quem}${deFora}. ${motivo}`, 'ok');
+    const nome = um ? (pedidoDaLista(aprovados[0]) || {}).aluno_nome || '' : '';
+    const motivo = entrada.motivo ? (MOTIVOS[entrada.motivo] || '').replace('data dele', n === 1 ? 'data dele' : 'data deles') : '';
+    const onde = um ? ondeFicou(aprovados[0]) || 'fora da escala' : ondeFicaram(aprovados);
+    showToast(!entrada.motivo ? `${quem}${deFora}: ${nome ? `${nome} ` : ''}${onde}${entrada.notas} · ${dataCurta(data)}.` : `${quem}${deFora}. ${motivo}`, 'ok');
   });
 }
 aoAcionar('aprovar-pedido', b => aprovar(b, [+b.dataset.id], { um: true }));
 aoAcionar('aprovar-todos', b => aprovar(b, aprovaveisNaBusca().ids, { um: false }));
 
-// O pedido que ainda voa na demanda depois de sair dela: a ação não o tira ("Tirar da escala", a conciliação, tira); o aviso
-// diz. O voo que a conciliação deixa na escala (em voo, pousado, com o status Cancelado, com resultado; o atrasado ou que
-// já decolou, até o status ser conferido): o aviso diz que ele fica e por quê, sem mandar para o botão, que nada faria
-const aindaVoa = pedido => Boolean(pedido) && situacaoNaDemanda(pedido, S) === 'voa';
-const oVooContinua = (pedido, tira) => {
-  if (!aindaVoa(pedido)) return '';
+// O que a ação fez com o voo do pedido que saiu (cancelado ou com a aprovação retirada), depois da conciliação dele
+// (depoisDeMudarPedidos): saiu; ficou (em voo, pousado, com o status Cancelado, com resultado; o atrasado ou que já decolou,
+// até o status ser conferido), com o porquê; ou sai com "Atualizar a escala" (as condições não deixaram), com o motivo
+async function oVooDepois(pedido, data) {
+  if (!pedido || !voaNoDia(pedido.id)) return '';
   const porque = porQueOVooDoPedidoFica(pedido);
-  return porque ? ` O voo ${comoOVooFica(porque)}.` : tira;
-};
+  if (porque) return ` O voo ${comoOVooFica(porque)}.`;
+  const r = await depoisDeMudarPedidos({ ids: [pedido.id], data });
+  if (r.motivo) return ` O voo continua na escala até “Atualizar a escala”, no Processamento. ${MOTIVOS[r.motivo] || ''}`.trimEnd();
+  return voaNoDia(pedido.id) ? '' : ` ${pedido.aluno_nome} saiu da escala.`;
+}
 
 async function retirarAprovacao(b) {
   const pedido = pedidoDaLista(+b.dataset.id);
   if (emEspera(b) || !aprovaPedidos() || !confirmado(b, 'Confirmar retirada')) return;
   await comBotaoOcupado(b, async () => {
+    const data = DATA;
     try {
       await ApiClient.retirarAprovacaoDaSolicitacao(+b.dataset.id, { por: quemAge() || null });
-      showToast(`Aprovação retirada: o pedido volta a aguardar.${oVooContinua(pedido, ' O voo continua na demanda: “Tirar da escala”, no aviso, o tira.')}`, 'ok');
     } catch (err) {
       showToast(err.code === 'PT403' ? 'A aprovação de uma data que já passou não é retirada.' : err.code === 'P0002'
         ? 'O pedido já estava sem aprovação ou foi cancelado em outro computador.' : 'Não foi possível retirar a aprovação. Verifique a conexão e tente de novo.');
+      await lerSolicitacoesDaData({ deste: [+b.dataset.id] });
+      return;
     }
     await lerSolicitacoesDaData({ deste: [+b.dataset.id] });
+    const voo = data === DATA ? await oVooDepois(pedido, data) : '';
+    showToast(`Aprovação retirada: o pedido volta a aguardar.${voo}`, 'ok');
   });
 }
 aoAcionar('retirar-aprovacao', retirarAprovacao);
@@ -451,15 +452,18 @@ async function cancelarPedido(b) {
     return;
   }
   await comBotaoOcupado(b, async () => {
+    const data = DATA;
     try {
       await ApiClient.cancelarSolicitacao(+b.dataset.id, por);
-      const voa = oVooContinua(pedido, aprovaPedidos() ? ' O voo continua na demanda: “Tirar da escala”, no aviso, o tira.' : ' Avise o operador: o voo continua na escala até ele tirá-lo.');
-      showToast(`Pedido cancelado.${voa}`, 'ok');
     } catch (err) {
       showToast(err.code === 'PT403' ? 'O pedido aprovado de uma data que já passou não é cancelado.' : err.code === 'P0002'
         ? 'O pedido já tinha sido cancelado em outro computador.' : 'Não foi possível cancelar o pedido. Verifique a conexão e tente de novo.');
+      await Promise.all([lerSolicitacoesDaData({ deste: [+b.dataset.id] }), lerContagemDosDias()]);
+      return;
     }
     await Promise.all([lerSolicitacoesDaData({ deste: [+b.dataset.id] }), lerContagemDosDias()]);
+    const voo = data === DATA ? await oVooDepois(pedido, data) : '';
+    showToast(`Pedido cancelado.${voo}`, 'ok');
   });
 }
 aoAcionar('cancelar-pedido', cancelarPedido, { confereAPermissao: true });

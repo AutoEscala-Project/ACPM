@@ -134,12 +134,6 @@ export const botaoForaDaOrdem = (stu, escolha) => {
   return ` <button type="button" class="btn quiet edit-only usar-proxima" data-act="usar-fora-da-ordem" data-codigo="${esc(codigo)}" ${dica} data-dica-caso="${esc(`${codigo}: ${motivos}`)}" aria-label="${esc(`${botao} para ${stu.nm} (${motivos})`)}">${esc(botao)}</button>`;
 };
 
-// Na Demanda (até o G2): o código da missão do curso do pedido (com o curso dele). A próxima do programa e as outras
-// estão nas restrições do pedido (G1)
-export function etapaNaDemanda(stu, d) {
-  return d.etapa ? ` <span class="etapa" title="Missão do curso ${esc(d.cursoDaEtapa || stu.curso || '')}">${esc(d.etapa)}</span>` : '';
-}
-
 // Nas restrições do pedido (G1, js/views/restricoes-do-voo.js): a missão do curso do pedido, ou a próxima do programa com
 // "Usar a do programa" (no curso encerrado, ele pede confirmação), e "Trocar…", com as outras missões do curso. Quem só
 // consulta lê o código ou a próxima. Sem o programa do curso, nada

@@ -1,0 +1,24 @@
+/* O Processamento (G2): a lista e o detalhe são do componente (css/lista.css); aqui, o "Mais" (Recomeçar pelos pedidos),
+   a contagem do alto, o aviso com "Atualizar a escala", a linha de estado das ações e a linha que acabou de mudar */
+.menu-mais { position: relative; }
+.menu-mais .menu-itens { right: 0; }
+#menu-mais-proc { min-width: 260px; }
+#proc-recomecar-frase { margin: 4px 10px 6px; max-width: 34ch; font-size: 12.5px; }
+#proc-recomecar-frase:empty { display: none; }
+#proc-cnt { margin-block: 0 6px; font-size: 13px; }
+.proc-atualizacao p { margin: 0 0 6px; }
+.proc-atualizacao p:last-child { margin-bottom: 0; }
+/* O que a última ação fez (N6): uma linha, com o ícone; vazia, não ocupa lugar */
+.proc-status { margin: 0 0 8px; padding: 6px 10px; border-radius: 8px; background: var(--info-bg); font-size: 13.5px; }
+.proc-status:empty { display: none; }
+.proc-status:focus-visible { outline: 2px solid var(--ac); outline-offset: 2px; }
+/* A linha que acabou de mudar: a barra à esquerda e "agora" depois do nome (não só a cor) */
+#proc > li[data-recente] { box-shadow: inset 4px 0 0 var(--ac); }
+#proc > li[data-recente] .lista-titulo::after { content: " · agora"; font-weight: 400; color: var(--mu); }
+@media (forced-colors: active) { #proc > li[data-recente] { box-shadow: none; border-left: 4px solid Highlight; } }
+/* Os links do detalhe (Abrir em Pedidos, na Escala, onde resolver) */
+.proc-links { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 0; }
+/* As ações da linha e do detalhe têm 44 px no toque (N6) */
+@media (max-width: 640px), (pointer: coarse) {
+  #s-proc .lista-acao, #det-proc .det-rodape .btn, #proc-atualizacao .btn, .proc-links .btn, #btn-mais-proc, #proc-recomecar { min-height: 44px; min-width: 44px; }
+}

@@ -3,14 +3,13 @@
 // O operador também fixa um voo na Escala: pelo instrutor escolhido (a marca escolhido) e pelo agendamento (a marca
 // agendado). As marcas acompanham o voo fixo na aprovação, no status e na reabertura. O Noturno (a ida e a noite em BH) fica
 // fixo pela marca noturno: a volta, no dia seguinte, vai no avião e com o INVA dele (pinosDoNoturno)
-import { rotuloDoStatus, STATUS_EM_ANDAMENTO } from './status.js';
-import { CHAVE_DO_VOO, chaveDoVoo, pedidoDoAluno } from './voo.js';
+import { rotuloDoStatus } from './status.js';
+import { CHAVE_DO_VOO, pedidoDoAluno } from './voo.js';
 import { MATRICULA } from './frota.js';
 import { MINUTOS_DO_DIA, GROUND_REG } from './config.js';
 import { periodoDoMinuto, INICIOS_DOS_TEMPOS } from './horarios.js';
 import { fechamentosDoEstado, horarioAberto } from './fechamentos.js';
 import { categoriaDoTipo } from './categorias.js';
-import { deixarEmBranco } from './rules.js';
 
 const minuto = v => Number.isInteger(v) && v >= 0 && v <= MINUTOS_DO_DIA;
 
@@ -114,38 +113,6 @@ export function semAgendados(fixos, chaves, fStatus = null) {
     const { agendado: _, ...resto } = p;
     return [[fKey, resto]];
   }));
-}
-
-// "Limpar demanda" (a Demanda): cada pedido fica em branco, sem nada do voo de antes, e o voo dele fica solto. Do pedido
-// saem a disponibilidade, a missão do curso, o pedido da agenda e o instrutor escolhido (como no pedido que a agenda
-// reaproveita: deixarEmBranco, js/rules.js), e as missões extras; do dia, o voo fixo (pela escala aprovada, pelo
-// instrutor escolhido, pelo agendamento na Escala ou pelo status), o status e o detalhe, que prenderiam o voo de novo ou
-// voltariam com o Voa religado (o agendamento não passa para o pedido que vier depois). O voo em andamento ou que já
-// pousou (Atrasado, Em Voo, Pousou) fica como está, com o pedido, o voo fixo (com as marcas: o agendado continua
-// agendado), o status e o detalhe: a limpeza não apaga o registro de um voo que aconteceu. A escala aprovada é reaberta,
-// como em Reabrir. Muda o estado; devolve quantos voos ficaram e se a escala foi reaberta
-export function limparDemanda(estado) {
-  const status = estado.fStatus || {};
-  const limpos = new Set();
-  let ficam = 0;
-  // O voo do pedido fica (em andamento ou pousado) ou é limpo
-  const fica = (stuId, mid) => {
-    const fKey = chaveDoVoo(stuId, mid);
-    if (STATUS_EM_ANDAMENTO.includes(status[fKey])) { ficam++; return true; }
-    limpos.add(fKey);
-    return false;
-  };
-  for (const s of estado.stu) {
-    if (!fica(s.id, 0)) deixarEmBranco(s);
-    s.extra = (Array.isArray(s.extra) ? s.extra : []).filter(ex => fica(s.id, ex.mid));
-  }
-  const semOsLimpos = dados => Object.fromEntries(Object.entries(dados || {}).filter(([fKey]) => !limpos.has(fKey)));
-  const reaberta = Boolean(estado.aprovacao);
-  estado.fStatus = semOsLimpos(estado.fStatus);
-  estado.fObs = semOsLimpos(estado.fObs);
-  estado.fixos = reaberta ? fixosAoReabrir(semOsLimpos(estado.fixos), estado.fStatus) : semOsLimpos(estado.fixos);
-  estado.aprovacao = null;
-  return { ficam, reaberta };
 }
 
 // O pedido do voo da chave voa: o aluno e o pedido estão na Demanda, com "Voa" ligado

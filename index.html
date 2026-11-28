@@ -22,7 +22,7 @@
 <link rel="stylesheet" href="css/linha.css">
 <link rel="stylesheet" href="css/trilho.css">
 <link rel="stylesheet" href="css/escala.css">
-<link rel="stylesheet" href="css/demanda.css">
+<link rel="stylesheet" href="css/processamento.css">
 <link rel="stylesheet" href="css/agenda.css">
 <link rel="stylesheet" href="css/recursos.css">
 <link rel="stylesheet" href="css/instrutores.css">
@@ -146,8 +146,8 @@
       <ul class="estagio-tarefas" hidden></ul>
     </li>
     <li class="estagio" data-estagio="processamento" data-estado="nenhum">
-      <a class="estagio-titulo" href="#/dem" data-nav>
-        <span class="estado" data-estado="nenhum" aria-hidden="true"></span><span class="estagio-nome">Demanda</span><span class="estagio-valor" aria-hidden="true"></span><span class="sr"></span>
+      <a class="estagio-titulo" href="#/proc" data-nav>
+        <span class="estado" data-estado="nenhum" aria-hidden="true"></span><span class="estagio-nome">Processamento</span><span class="estagio-valor" aria-hidden="true"></span><span class="sr"></span>
       </a>
       <ul class="estagio-tarefas" hidden></ul>
     </li>
@@ -333,8 +333,8 @@
         <button type="button" class="btn sec lista-novo agenda-acao" id="agenda-novo">+ Novo pedido</button>
         <span class="contagem" id="age-contagem" role="status"></span>
       </div>
-      <!-- Os avisos da lista: a leitura que falhou, a escala que mudou em outro computador, os aprovados fora da demanda (com
-           "Importar") e os cancelados ou sem aprovação que ainda voam na demanda -->
+      <!-- Os avisos da lista: a leitura que falhou e a escala que mudou em outro computador ("Atualizar a escala" é do
+           Processamento) -->
       <div class="lista-aviso agenda-aviso" id="agenda-aviso" role="status" hidden></div>
       <ul class="lista" id="age" role="list" aria-label="Pedidos" data-lista="age"></ul>
     </div>
@@ -372,42 +372,40 @@
     </div>
   </section>
 
-  <!-- DEMANDA -->
-  <section id="s-dem" class="tela">
-    <h2>Demanda</h2>
-    <div class="bar">
-      <button class="btn sec edit-only" id="importar-agenda" data-act="importar-agenda" title="Traz para esta data os pedidos aprovados que ainda não estão na demanda (não repete) e tira dela os cancelados e os sem aprovação (a vaga vai ao 1º da lista de espera)">Importar pedidos aprovados</button>
-      <input class="edit-only" id="incluir-aluno" list="alunos-fora" placeholder="+ Pôr um aluno na demanda…" aria-label="Pôr um aluno na demanda" autocomplete="off">
-      <datalist id="alunos-fora"></datalist>
-      <span class="cresce"></span>
-      <label class="chk"><input type="checkbox" id="onlyfly" checked> Só quem voa</label>
-      <input type="search" id="flt-dem" class="flt-ctrl" placeholder="Buscar na demanda…" aria-label="Filtrar aluno na demanda">
-      <!-- O filtro dos cursos, o mesmo de Alunos (as marcas valem nas duas abas): o painel abre na linha de baixo da barra -->
-      <button type="button" class="btn sec filtro-botao flt-ctrl" id="flt-dem-cur" aria-expanded="false" aria-controls="flt-dem-cur-painel"><span class="filtro-resumo">Todos os cursos</span><svg class="ico seta" aria-hidden="true"><use href="#i-baixo"/></svg></button>
-      <div class="filtro-painel" id="flt-dem-cur-painel" role="group" aria-label="Filtrar por curso" hidden></div>
-      <select id="flt-dem-mis" class="flt-ctrl" aria-label="Filtrar por missão">
-        <option value="">Todas as missões</option>
-      </select>
-      <div class="menu-mais edit-only">
-        <button class="btn quiet" type="button" id="btn-mais-dem" aria-haspopup="menu" aria-expanded="false" aria-controls="menu-mais-dem">Mais<svg class="ico" aria-hidden="true"><use href="#i-baixo"/></svg></button>
-        <div class="menu-itens" id="menu-mais-dem" role="menu" hidden>
-          <button type="button" role="menuitem" id="clr">Limpar demanda</button>
+  <!-- PROCESSAMENTO (G2): os pedidos da data e os voos sem pedido como lista e detalhe (js/views/mestre-detalhe.js), um por
+       linha, com a situação de cada um (na escala, em espera, fora dela e por quê, para entrar ou sair com "Atualizar a
+       escala", aguardando aprovação); o detalhe só de leitura, com as ações. O aviso do alto tem "Atualizar a escala"; a
+       linha de estado diz o que cada ação fez -->
+  <section id="s-proc" class="tela" data-forma="lista-detalhe" data-vendo="lista">
+    <div class="md-lista" data-regiao="lista">
+      <h2>Processamento</h2>
+      <div class="bar lista-barra">
+        <span class="lista-busca"><svg class="ico" aria-hidden="true"><use href="#i-busca"/></svg><input type="search" class="flt-ctrl" id="flt-proc" data-flt="proc" placeholder="Buscar aluno…" aria-label="Buscar pedido pelo aluno ou pela missão"></span>
+        <!-- Os filtros de vários valores (js/views/filtro-multiplo.js): o painel de cada um abre na linha de baixo da barra -->
+        <button type="button" class="btn sec filtro-botao flt-ctrl" id="flt-proc-sit" aria-expanded="false" aria-controls="flt-proc-sit-painel"><svg class="ico" aria-hidden="true"><use href="#i-filtro"/></svg><span class="filtro-resumo">Situação: todas menos canceladas</span><svg class="ico seta" aria-hidden="true"><use href="#i-baixo"/></svg></button>
+        <div class="filtro-painel" id="flt-proc-sit-painel" role="group" aria-label="Filtrar pela situação" hidden></div>
+        <button type="button" class="btn sec filtro-botao flt-ctrl" id="flt-proc-cur" aria-expanded="false" aria-controls="flt-proc-cur-painel"><span class="filtro-resumo">Todos os cursos</span><svg class="ico seta" aria-hidden="true"><use href="#i-baixo"/></svg></button>
+        <div class="filtro-painel" id="flt-proc-cur-painel" role="group" aria-label="Filtrar por curso" hidden></div>
+        <button type="button" class="btn sec filtro-botao flt-ctrl" id="flt-proc-mis" aria-expanded="false" aria-controls="flt-proc-mis-painel"><span class="filtro-resumo">Todas as missões</span><svg class="ico seta" aria-hidden="true"><use href="#i-baixo"/></svg></button>
+        <div class="filtro-painel" id="flt-proc-mis-painel" role="group" aria-label="Filtrar por missão" hidden></div>
+        <div class="menu-mais edit-only">
+          <button class="btn quiet" type="button" id="btn-mais-proc" aria-haspopup="menu" aria-expanded="false" aria-controls="menu-mais-proc">Mais<svg class="ico" aria-hidden="true"><use href="#i-baixo"/></svg></button>
+          <div class="menu-itens" id="menu-mais-proc" role="menu" hidden>
+            <button type="button" role="menuitem" id="proc-recomecar" data-act="recomecar" aria-describedby="proc-recomecar-frase">Recomeçar pelos pedidos</button>
+            <p class="h" id="proc-recomecar-frase" aria-live="polite"></p>
+          </div>
         </div>
+        <span class="contagem" id="proc-contagem" role="status"></span>
       </div>
+      <p class="h" id="proc-cnt"></p>
+      <!-- O aviso do alto: o que "Atualizar a escala" faria (com o botão, para quem opera), a escala que mudou em outro
+           computador, a leitura dos pedidos que falhou e os voos para conferir -->
+      <div class="lista-aviso proc-atualizacao" id="proc-atualizacao" hidden></div>
+      <!-- O que a última ação desta tela fez, com o aluno e a data (o foco vem para cá quando a linha não está à vista) -->
+      <p class="proc-status" id="proc-status" role="status" tabindex="-1"></p>
+      <ul class="lista" id="proc" role="list" aria-label="Processamento" data-lista="proc"></ul>
     </div>
-    <p class="h" id="cnt"></p>
-    <div class="tw">
-      <table>
-        <thead>
-          <tr>
-            <th>Aluno</th>
-            <th>Voa<button type="button" class="dica-btn" data-dica="voa" aria-label="O que é Voa?" aria-expanded="false"></button></th>
-            <th>Missão</th>
-          </tr>
-        </thead>
-        <tbody id="dem" class="only"></tbody>
-      </table>
-    </div>
+    <div class="md-detalhe" id="det-proc" data-regiao="detalhe" role="region" aria-label="Pedido escolhido" tabindex="-1"></div>
   </section>
 
   <!-- ESCALA DO DIA -->
@@ -451,7 +449,7 @@
     </div>
 
     <div id="out">
-      <p class="h">Nenhum voo nesta data. Marque quem vai voar na Demanda: a escala é montada automaticamente.</p>
+      <p class="h">Nenhum voo nesta data. Os pedidos aprovados entram com Atualizar a escala, no Processamento: a escala é montada automaticamente.</p>
     </div>
   </section>
 
@@ -1172,7 +1170,7 @@
 <!-- Sugestões para um conflito na escala aprovada (js/views/reparo.js) -->
 <aside class="gaveta" id="painel-reparo" aria-labelledby="painel-reparo-titulo" hidden></aside>
 <!-- As restrições do voo (G1, js/views/restricoes-do-voo.js): o que o app lê para encaixar um pedido, aberta pelo
-     "Restrições" do editor do voo, do item do trilho da missão que não entrou e da linha do pedido na Demanda -->
+     "Restrições" do editor do voo, do item do trilho da missão que não entrou e do detalhe do pedido no Processamento -->
 <aside class="gaveta" id="painel-restricoes" aria-labelledby="painel-restricoes-titulo" hidden></aside>
 <!-- Detalhe do status do voo: o motivo do cancelamento ou a nova decolagem do atraso (js/views/dialogo-status.js) -->
 <dialog class="dlg" id="dlg-status" aria-labelledby="dlg-status-titulo" aria-describedby="dlg-status-voo">

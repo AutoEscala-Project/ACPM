@@ -74,10 +74,10 @@ function codigosDaDemanda(sigla) {
   for (const o of (RES && RES.out) || []) if (o.etapa) anotar(cursoDoResultado(o), o.etapa, o.s);
   return porCodigo;
 }
-// Onde a Demanda leva o código, para os avisos: "na Demanda de amanhã (Maria e João)"; '' quando ela não o leva
+// Onde os voos da data levam o código, para os avisos: "nos voos de amanhã (Maria e João)"; '' quando nenhum o leva
 export function codigoNaDemanda(sigla, codigo) {
   const nomes = codigosDaDemanda(sigla).get(codigo);
-  return nomes ? `na Demanda ${nomeDaData({ data: DATA, hoje: hojeISO() }).de} (${resumoDaLista(nomes)})` : '';
+  return nomes ? `nos voos ${nomeDaData({ data: DATA, hoje: hojeISO() }).de} (${resumoDaLista(nomes)})` : '';
 }
 // Os códigos que os resultados do curso ou a Demanda da data aberta levam (com missão ou sem). O que não tem missão fica
 // reservado: na missão que o recebesse, os resultados (e o resultado do voo do pedido) passariam a ser dela, de quem

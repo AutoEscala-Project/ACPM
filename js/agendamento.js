@@ -318,7 +318,7 @@ export function opcoesDeAluno(estado, base, ambiente, contexto = {}) {
   const naEscala = new Set(base.out.map(o => o.fKey));
   const instrutor = contexto.insId ? estado.ins.find(x => x.id === contexto.insId) : null;
   const dia = nomeDaData(ambiente);
-  const grupos = [['Ficaram fora da escala', []], [`Na demanda ${dia.de}`, []], ['Outros alunos', []]];
+  const grupos = [['Ficaram fora da escala', []], [`Na escala ${dia.de}`, []], ['Outros alunos', []]];
   for (const stu of [...estado.stu].sort(porNome)) {
     const pedidos = pedidosQueVoam(stu);
     const curso = ambiente.inferir ? cursoDoAluno(ambiente, stu) : null;

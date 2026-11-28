@@ -1,8 +1,8 @@
-// A linha do dia, sem DOM: os quatro cartões das etapas (Pedidos, Demanda, Escala, Aprovar), cada um com o valor dele (um
+// A linha do dia, sem DOM: os quatro cartões das etapas (Pedidos, Processamento, Escala, Aprovar), cada um com o valor dele (um
 // sentido fixo por cartão, dito na dica), o estado (o pior das tarefas) e as tarefas, que levam à tela onde cada coisa se
 // resolve; o selo de Recursos; e os avisos da data, no trilho. Uma função por cartão e uma por grupo de avisos: cada passo
 // seguinte muda só a dele.
-// contexto: { S, RES, pedidos: lista | null, leituraDosPedidos: 'lendo' | 'erro' | 'lidos', perfil, opera, horasLidas,
+// contexto: { S, RES, pedidos: lista | null, leituraDosPedidos: 'lendo' | 'erro' | 'lidos', novidades: { texto, hora } | null, perfil, opera, horasLidas,
 // indisponiveis: [{ id, texto }], recusas: Map (o alerta da recusa do instrutor escolhido → o fKey do pedido; só de hoje em
 // diante), habilitacoesNaoConferidas: n, data, hoje } (js/views/linha.js, contextoDoDia)
 import { REVISAO_H } from './config.js';
@@ -30,8 +30,8 @@ function estadoDoCartao(tarefas) {
 // O que vale na data: o inativo só de hoje em diante
 const inativoNaData = (item, { data, hoje }) => inativo(item) && inativoValeEm(data, hoje);
 
-// Os pedidos da data (D2): os não cancelados, os que aguardam aprovação, os aprovados e os aprovados fora da demanda
-// (nunca importados). Só pede atenção o pedido de um aluno do cadastro, ativo na data: o do inativo entra quando ele voltar
+// Os pedidos da data (D2): os não cancelados, os que aguardam aprovação, os aprovados e os aprovados fora da escala
+// (nunca entraram: "Atualizar a escala", no Processamento, os põe). Só pede atenção o pedido de um aluno do cadastro, ativo na data: o do inativo entra quando ele voltar
 // a ativo (F3: fora dos pendentes) e o de quem não está no cadastro, depois de cadastrado; Pedidos não aprova nenhum dos dois.
 // Numa data que já passou, o que aguarda e o que ficou fora não pedem mais nada
 function contagemDosPedidos(ctx) {
@@ -43,16 +43,16 @@ function contagemDosPedidos(ctx) {
   return { p: registradas, aguardando, aprovados: aprovadas, fora: fora.length, passada: Boolean(ctx.hoje) && ctx.data < ctx.hoje };
 }
 
-// O rótulo de cada tarefa vai depois do número (a frase do leitor de tela, "1 aprovado fora da demanda"): concorda com ele
+// O rótulo de cada tarefa vai depois do número (a frase do leitor de tela, "1 aprovado fora da escala"): concorda com ele
 const ROTULOS_DOS_PEDIDOS = {
   registrados: n => (n === 1 ? 'pedido da data' : 'pedidos da data'),
   aguardando: () => 'aguardando aprovação',
   aprovados: () => 'aprovados',
-  'fora-da-demanda': n => (n === 1 ? 'aprovado fora da demanda' : 'aprovados fora da demanda')
+  'fora-da-escala': n => (n === 1 ? 'aprovado fora da escala' : 'aprovados fora da escala')
 };
 function tarefasDosPedidos(ctx) {
   const leitura = ctx.leituraDosPedidos;
-  const ids = ['registrados', 'aguardando', 'aprovados', ...(ctx.opera ? ['fora-da-demanda'] : [])];
+  const ids = ['registrados', 'aguardando', 'aprovados', ...(ctx.opera ? ['fora-da-escala'] : [])];
   if (leitura === 'erro') return ids.map(id => tarefa(id, ROTULOS_DOS_PEDIDOS[id](null), '—', 'falhou', 'age'));
   const { p, aguardando, aprovados, fora, passada } = contagemDosPedidos(ctx);
   if (leitura !== 'lidos') return ids.map(id => tarefa(id, ROTULOS_DOS_PEDIDOS[id](null), '—', 'nenhum', 'age'));
@@ -60,10 +60,11 @@ function tarefasDosPedidos(ctx) {
     registrados: [p, p ? 'feito' : 'pendente'],
     aguardando: [aguardando, !p || (aguardando && passada) ? 'nenhum' : aguardando ? 'atencao' : 'feito'],
     aprovados: [`${aprovados} de ${p}`, !p ? 'nenhum' : aprovados === p ? 'feito' : 'andamento'],
-    'fora-da-demanda': [fora, !p || (fora && passada) ? 'nenhum' : fora ? 'atencao' : 'feito']
+    'fora-da-escala': [fora, !p || (fora && passada) ? 'nenhum' : fora ? 'atencao' : 'feito']
   };
-  const numero = { registrados: p, 'fora-da-demanda': fora };
-  return ids.map(id => tarefa(id, ROTULOS_DOS_PEDIDOS[id](numero[id] ?? null), ...valores[id], 'age'));
+  const numero = { registrados: p, 'fora-da-escala': fora };
+  // Os aprovados fora da escala se resolvem no Processamento ("Atualizar a escala")
+  return ids.map(id => tarefa(id, ROTULOS_DOS_PEDIDOS[id](numero[id] ?? null), ...valores[id], id === 'fora-da-escala' ? 'proc' : 'age'));
 }
 
 function cartaoDosPedidos(ctx) {
@@ -79,7 +80,7 @@ function cartaoDosPedidos(ctx) {
 }
 
 // Os aviões disponíveis na data que param ou chegam a menos de 5 h da revisão de 50 horas (o selo de Recursos e a atenção
-// dos recursos da Demanda)
+// dos recursos do Processamento)
 function avioesPertoDaRevisao(ctx) {
   const revisao = (ctx.RES && ctx.RES.revisao) || {};
   const frota = (ctx.S && ctx.S.frota) || [];
@@ -90,7 +91,7 @@ function avioesPertoDaRevisao(ctx) {
 
 const textoDaRevisao = n => `${plural(n, 'avião parado', 'aviões parados')} ou perto da revisão de 50 horas`;
 
-function tarefasDaDemanda(ctx) {
+function tarefasDoProcessamento(ctx) {
   const S = ctx.S || {};
   const pedidas = (ctx.RES && ctx.RES.tot) || 0;
   const frota = (S.frota || []).filter(f => !inativoNaData(f, ctx));
@@ -107,9 +108,9 @@ function tarefasDaDemanda(ctx) {
   ];
 }
 
-function cartaoDaDemanda(ctx) {
+function cartaoDoProcessamento(ctx) {
   const pedidas = (ctx.RES && ctx.RES.tot) || 0;
-  return { valor: String(pedidas), dica: plural(pedidas, 'missão pedida', 'missões pedidas'), tarefas: tarefasDaDemanda(ctx) };
+  return { valor: String(pedidas), dica: plural(pedidas, 'missão pedida', 'missões pedidas'), tarefas: tarefasDoProcessamento(ctx) };
 }
 
 // As missões na escala: as pedidas menos as que não entraram (como o resumo da Escala conta)
@@ -156,7 +157,7 @@ function cartaoDeAprovar(ctx) {
 
 const CARTOES = {
   pedidos: { tela: 'age', montar: cartaoDosPedidos },
-  processamento: { tela: 'dem', montar: cartaoDaDemanda },
+  processamento: { tela: 'proc', montar: cartaoDoProcessamento },
   escala: { tela: 'esc', montar: cartaoDaEscala },
   aprovar: { tela: 'apr', montar: cartaoDeAprovar }
 };
@@ -218,12 +219,12 @@ function avisosDaEscala(ctx) {
 }
 
 // Os voos da escala com quem ficou inativo no cadastro, um por pessoa ou recurso: o do instrutor e o do recurso se resolvem
-// com "Refazer a escala" (para quem opera); o do aluno, na Demanda (o pedido dele continua)
+// com "Refazer a escala" (para quem opera); o do aluno, no Processamento (o pedido dele continua)
 function avisosDosInativos(ctx) {
-  const demanda = podeVer('dem', ctx.perfil) ? { tela: 'dem' } : null;
+  const processamento = podeVer('proc', ctx.perfil) ? { tela: 'proc' } : null;
   return voosComInativos(ctx.S, ctx.RES, { data: ctx.data, hoje: ctx.hoje }).map(i => ({
     id: `inativo:${i.de}:${i.id}`, gravidade: 'aviso', minuto: null, titulo: textoDoVooComInativo(i), texto: '',
-    destino: i.de === 'aluno' ? demanda : { tela: 'esc' }, grupo: 'inativos',
+    destino: i.de === 'aluno' ? processamento : { tela: 'esc' }, grupo: 'inativos',
     ...(i.de !== 'aluno' && ctx.opera ? { acao: REFAZER_A_ESCALA } : {})
   }));
 }
@@ -255,15 +256,19 @@ function avisosDosFechamentos({ S }) {
   return rotulos.length ? [{ id: 'horarios-fechados', gravidade: 'info', minuto: null, titulo: `Horários fechados nesta data: ${rotulos.join('; ')}`, texto: '', destino: { tela: 'esc', item: 'fechamentos' } }] : [];
 }
 
+// Os pedidos da data: a leitura que falhou, os que aguardam aprovação, os aprovados fora da escala (no Processamento) e as
+// últimas novidades dos pedidos (ctx.novidades: { texto, hora }, o aviso que some, para ser lido de novo: a sugestão do
+// Gabriel no #109, WCAG 2.2.1)
 function avisosDosPedidos(ctx) {
   const aviso = (id, titulo) => ({ id, gravidade: 'aviso', minuto: null, titulo, texto: '', destino: { tela: 'age' } });
-  if (ctx.leituraDosPedidos === 'erro') return [aviso('pedidos-nao-lidos', 'Não foi possível ler os pedidos desta data.')];
-  if (ctx.leituraDosPedidos !== 'lidos') return [];
+  const novidades = ctx.novidades ? [{ id: 'novidades-dos-pedidos', gravidade: 'info', minuto: null, titulo: `Novidades dos pedidos às ${ctx.novidades.hora}: ${ctx.novidades.texto}`, texto: '', destino: { tela: 'age' } }] : [];
+  if (ctx.leituraDosPedidos === 'erro') return [aviso('pedidos-nao-lidos', 'Não foi possível ler os pedidos desta data.'), ...novidades];
+  if (ctx.leituraDosPedidos !== 'lidos') return novidades;
   const { aguardando, fora, passada } = contagemDosPedidos(ctx);
-  if (passada) return [];
-  return [
+  if (passada) return novidades;
+  return [...novidades,
     ...(aguardando ? [aviso('pedidos-aguardando', `${plural(aguardando, 'pedido', 'pedidos')} aguardando aprovação`)] : []),
-    ...(ctx.opera && fora ? [aviso('fora-da-demanda', `${plural(fora, 'pedido aprovado', 'pedidos aprovados')} fora da demanda`)] : [])
+    ...(ctx.opera && fora ? [{ ...aviso('fora-da-escala', `${plural(fora, 'pedido aprovado', 'pedidos aprovados')} fora da escala`), destino: { tela: 'proc' } }] : [])
   ];
 }
 

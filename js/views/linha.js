@@ -12,6 +12,7 @@ import { ApiClient } from '../storage.js';
 import { podeVer, destinoDoEndereco } from '../telas.js';
 import { pedidosDasRecusasDaTela } from './restricoes-do-voo.js';
 import { solicitacoesDaData } from '../solicitacoes-da-data.js';
+import { novidadesDosPedidos } from './agenda.js';
 
 // As recusas do instrutor escolhido que têm "Sugestões" (o pedido dela vem do pareamento, js/rejeicoes.js), da data aberta
 // de hoje em diante: o alerta → o fKey do pedido. Sem a recusa na escala, nada é calculado
@@ -32,6 +33,8 @@ export function contextoDoDia() {
     opera: !isGestor(), horasLidas: !dadoIndisponivel('horas'),
     indisponiveis: (S.indisponiveis || []).filter(p => Object.hasOwn(SEM_OS_DADOS, p)).map(id => ({ id, texto: SEM_OS_DADOS[id] })),
     recusas: recusasComSugestoes(), habilitacoesNaoConferidas: habilitacoesNaoConferidas(),
+    // As últimas novidades dos pedidos (o aviso que some), para serem lidas de novo no trilho
+    novidades: novidadesDosPedidos(),
     data: DATA, hoje: hojeISO()
   };
 }
