@@ -272,14 +272,14 @@ test.describe('INVAs: o detalhe', () => {
     await expect(botaoDoTurno(page, 'dia-e-noturno')).toHaveAttribute('aria-pressed', 'true');
     await expect(page.locator('#det-ins-editar-faixas')).toBeVisible();
     await expect(page.getByRole('button', { name: /^(Manhã|Tarde)/ })).toHaveCount(0);
-    // "O que cabe nestas faixas" (C, "regra"): em cada lista, os horários em que a missão começa e até quando pode ir
+    // "O que cabe nestas faixas" (C, "regra"): em cada lista, os horários em que a missão começa e até quando pode ir a do último
     const cabe = nestaData.locator('details.faixas-cabe');
     await expect(cabe.locator('summary')).toHaveText('O que cabe nestas faixas');
     await cabe.locator('summary').click();
     await expect(cabe.locator('li')).toHaveText([
-      'C152: 06:30 a 16:20 (8 horários); termina até as 17:30', 'C172: 06:30 a 16:20 (8 horários); termina até as 17:30',
-      'Simulador: 06:30 a 16:20 (8 horários); termina até as 21:20', 'PA-34: 06:30 a 16:30 (21 horários); termina até as 17:30',
-      'Ground: 06:30 a 16:20 (8 horários); termina até as 17:50', 'Noturno: 17:30 (1 horário); termina até as 21:30'
+      'C152: 06:30 a 16:20 (8 horários); a das 16:20 termina até as 17:30', 'C172: 06:30 a 16:20 (8 horários); a das 16:20 termina até as 17:30',
+      'Simulador: 06:30 a 16:20 (8 horários); a das 16:20 termina até as 21:20', 'PA-34: 06:30 a 16:30 (21 horários); a das 16:30 termina até as 17:30',
+      'Ground: 06:30 a 16:20 (8 horários); a das 16:20 termina até as 17:50', 'Noturno: 17:30 (1 horário); termina até as 21:30'
     ]);
   });
 
@@ -296,7 +296,7 @@ test.describe('INVAs: o detalhe', () => {
     await expect(secaoDoInstrutor(page, 'data').locator('.voo-quando')).toHaveText(['11:30–13:30']);
     const cabe = secaoDoInstrutor(page, 'data').locator('details.faixas-cabe');
     await cabe.locator('summary').click();
-    await expect(cabe.locator('li').first()).toHaveText('C152: 06:30 a 11:30 (4 horários); termina até as 16:30');
+    await expect(cabe.locator('li').first()).toHaveText('C152: 06:30 a 11:30 (4 horários); a das 11:30 termina até as 16:30');
     // Com a pausa das 12:00 às 13:00, o voo não começa às 11:30 (passaria por ela)
     await editarFaixas(page, 1, { faixas: [{ de: '06:30', ate: '12:40' }], pausas: [{ de: '12:00', ate: '13:00' }] });
     await expect(pausasDoAberto(page)).toHaveText('12:00–13:00');

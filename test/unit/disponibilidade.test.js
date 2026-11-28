@@ -434,11 +434,22 @@ describe('oQueCabe: os horários de cada lista que cabem nas faixas, e até quan
     assert.ok(oQueCabe({ on: false, faixas: [{ de: 390, ate: 1440 }], pausas: [] }).every(i => i.horarios.length === 0 && i.ate === null));
   });
 
-  test('o texto de cada lista', () => {
+  // O fim é o da missão que começa no último horário (revisão externa de C2, 28/11): com mais de um, o texto diz qual
+  test('o texto de cada lista: com mais de um horário, o fim é o do último', () => {
     const [c152, , , , , noturno] = oQueCabe(comFaixas([{ de: 390, ate: 760 }]));
-    assert.equal(textoDoQueCabe(c152), 'C152: 06:30 a 11:30 (4 horários); termina até as 16:30');
+    assert.equal(textoDoQueCabe(c152), 'C152: 06:30 a 11:30 (4 horários); a das 11:30 termina até as 16:30');
     assert.equal(textoDoQueCabe(noturno), 'Noturno: nenhum horário');
-    assert.equal(textoDoQueCabe(oQueCabe({ on: true, ...faixasDoTurno('dia') })[4]), 'Ground: 06:30 a 16:20 (8 horários); termina até as 17:50');
+    assert.equal(textoDoQueCabe(oQueCabe({ on: true, ...faixasDoTurno('dia') })[4]), 'Ground: 06:30 a 16:20 (8 horários); a das 16:20 termina até as 17:50');
     assert.equal(textoDoQueCabe(oQueCabe({ on: true, ...faixasDoTurno('noturno') })[5]), 'Noturno: 17:30 (1 horário); termina até as 21:30');
+  });
+
+  // O caso da revisão: o dia com o almoço. A das 10:10 só vai até as 12:00 (a pausa); a das 16:20, até as 17:30, e é dela o fim
+  test('o fim é o do último horário, não o de cada um (o dia com o almoço)', () => {
+    const x = comFaixas([{ de: 390, ate: 1050 }], [{ de: 720, ate: 780 }]);
+    const [c152] = oQueCabe(x);
+    assert.equal(textoDoQueCabe(c152), 'C152: 06:30 a 16:20 (6 horários); a das 16:20 termina até as 17:30');
+    assert.equal(disponivelPara(x, c152.horarios.at(-1), c152.ate), true, 'o fim mostrado é o do último horário');
+    assert.equal(disponivelPara(x, 610, c152.ate), false, 'a das 10:10 não vai até lá');
+    assert.equal(disponivelPara(x, 610, 720), true, 'a das 10:10 vai até a pausa');
   });
 });
