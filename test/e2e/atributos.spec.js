@@ -41,7 +41,7 @@ test.describe('Atributos dos recursos', () => {
     const estado = cenario({ ins: [instrutor(1, 1, { hab: mlte })], stu: [aluno(1000, { mis: 'Multimotor', eq: 'PA-34' })], semAeronaves: ['PT-JOB', 'PT-KIW'] });
     await abrir(page, { estado });
     await abrirEscala(page);
-    await expect(page.locator('#out details.erros')).toContainText('exigem a habilitação própria deles');
+    await expect(page.locator('#out details.erros')).toContainText('exigem do instrutor uma habilitação que nenhum instrutor livre tem (marque no INVA, em Habilitações)');
 
     await abrirInstrutor(page, 1);
     await expect(secaoDoInstrutor(page, 'habilitacoes').locator('fieldset', { hasText: 'Habilitação própria do recurso' })).toContainText('Avião PR-VOM');
