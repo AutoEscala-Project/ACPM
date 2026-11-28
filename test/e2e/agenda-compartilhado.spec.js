@@ -8,6 +8,8 @@ import { estadoSintetico } from '../helpers/estado.js';
 import { aluno, apenas } from '../helpers/montar.js';
 import { cursosIniciais, novoCurso } from '../../js/programa.js';
 import { MODELOS } from '../../js/modelos-de-curso.js';
+import { fixosAoAprovar } from '../../js/fixos.js';
+import { runAllocationEngine } from '../../js/engine.js';
 
 const comAlunos = () => documentosAtuais({ ...estadoSintetico(), stu: [aluno(1000), aluno(1001)] }, AMANHA);
 const pedidoDe = (id, data, extra = {}) => ({
@@ -723,10 +725,12 @@ test.describe('A página dos pedidos (modo compartilhado)', () => {
   });
 
   // Um C152 só e dois pedidos da agenda às 08:20, na demanda: o 1º voa, o 2º espera a vaga (a espera da recusa, F1h)
-  const comListaDeEspera = ({ espera }) => {
+  // Aprovada (E): a escala aprovada com o voo do 1º fixo
+  const comListaDeEspera = ({ espera, aprovada = false }) => {
     const estado = { ...estadoSintetico(), stu: [1000, 1001].map((id, i) => aluno(id, { p1: 500, p2: -1, jan: 'h500', solicitacao: i + 1 })) };
     for (const r of espera ? apenas('C152', 'PP-LJV') : apenas('C152', 'PP-LJV', 'PR-BTB')) estado.av[r] = false;
     estado.importadas = [1, 2];
+    if (aprovada) Object.assign(estado, { fixos: fixosAoAprovar({}, runAllocationEngine(estado).out), aprovacao: { em: '2026-11-10T18:00:00.000Z', por: 'Operador de Teste' } });
     return documentosAtuais(estado, AMANHA);
   };
   for (const espera of [true, false]) {
@@ -752,6 +756,32 @@ test.describe('A página dos pedidos (modo compartilhado)', () => {
       // Ninguém foi posto na escala: o voo do cancelado continua lá até a escala ser refeita, e nada foi gravado
       await expect(avisoDosPedidos(page)).toContainText('pedido cancelado ou sem aprovação ainda está na demanda: Aluno 1000');
       expect(servidor.gravacoes).toEqual([]);
+    });
+  }
+
+  // E (N14): o voo do pedido cancelado sai pela conciliação ("Tirar da escala", no aviso de Pedidos; até o G2, também
+  // "Importar pedidos aprovados", na Demanda), e a escala refeita em volta dos fixos (o padrão do R5, também na aprovada) dá
+  // a vaga ao 1º da lista de espera do horário; o Histórico diz quem saiu e quem entrou. Na aprovada, quem entrou não fica fixo
+  for (const aprovada of [false, true]) {
+    test(`E: o pedido cancelado sai pela conciliação e a vaga vai ao 1º da lista de espera${aprovada ? ', na escala aprovada, sem fixar quem entrou' : ''}`, async ({ page, context }) => {
+      const servidor = await instalarSupabaseFalso(context, comListaDeEspera({ espera: true, aprovada }));
+      servidor.solicitacoes.push(noServidor(1, { cancelada_em: '2026-11-10T15:00:00.000Z', cancelada_por: 'Maria' }), noServidor(2, { aluno: 1001, aluno_nome: 'Aluno 1001' }));
+      const erros = vigiarErros(page);
+      await entrar(page, CONTAS.operador);
+      await irPara(page, 'age');
+      await expect(avisoDosPedidos(page)).toContainText('pedido cancelado ou sem aprovação ainda está na demanda: Aluno 1000');
+      await botaoDosPedidos(page, 'conciliar').click();
+      await expect(page.locator('#toast-box')).toContainText('1 pedido cancelado ou sem aprovação saiu da escala: Aluno 1000 (no lugar entrou Aluno 1001).');
+      await expect.poll(() => servidor.historico.map(h => h.descricao)).toContainEqual(
+        expect.stringMatching(/^Pedidos: Aluno 1000 saiu da escala, pedido cancelado \(Voo Local · estava às 08:20–09:20 no PP-LJV com .+\); no lugar entrou Aluno 1001 \(1º da lista de espera das 08:20\)$/));
+      const dia = servidor.dias.get(AMANHA).conteudo;
+      expect([dia.pedidos[1000].fly, dia.importadas]).toEqual([false, [2]]);
+      expect(dia.resultado.out.map(o => [o.fKey, o.a, o.r])).toEqual([['1001_0_1', 500, 'PP-LJV']]);
+      // O fixo do cancelado sai com ele ("deixa de ser fixo"); quem entrou não fica fixo por esta rodada
+      expect(dia.fixos).toEqual({});
+      expect(Boolean(dia.aprovacao)).toBe(aprovada);
+      await expect(avisoDosPedidos(page)).not.toContainText('ainda está na demanda');
+      expect(erros).toEqual([]);
     });
   }
 

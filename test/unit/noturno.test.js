@@ -19,7 +19,7 @@ import { separar } from '../../js/dias.js';
 import { simularNavegador } from '../helpers/navegador.js';
 import { aluno, apenas, cenario, instrutor } from '../helpers/montar.js';
 import { escolherInstrutor, reverterEscolha } from '../../js/instrutor-escolhido.js';
-import { importarSolicitacoes } from '../../js/processamento.js';
+import { importar } from '../helpers/importar.js';
 import { escalaSemeada } from '../../scripts/dia-semeado.mjs';
 
 const NOTURNO = { mis: 'Noturno', eq: 'C172', p1: 1050, p2: -1 };
@@ -443,14 +443,14 @@ describe('Noturno: o mesmo avião na volta (ApiClient, com o backend na memória
     const o = noturno(await gravada(D1));
     const dia = await abrir(D1);
     const pedido = [{ id: 501, aluno: 1000, aluno_nome: 'Aluno 1000', missao: 'Noturno', data: D1, horas: null, cancelada_em: null }];
-    const resumo = importarSolicitacoes(dia.estado, pedido, {});
+    const resumo = importar(dia.estado, pedido, {});
     assert.deepEqual([resumo.novos, resumo.atualizados, dia.estado.stu[0].solicitacao, dia.estado.stu[0].extra.length], [0, 1, 501, 0]);
     const r = runAllocationEngine(dia.estado);
     assert.deepEqual([lugar(noturno(r.out)), r.al.filter(a => a.t === 'err')], [lugar(o), []]);
     // O Noturno agendado (o editor) continua como estava: o pedido da agenda entra como outro voo
     const agendado = await abrir(D1);
     agendado.estado.fixos = { [o.fKey]: { ...agendado.estado.fixos[o.fKey], agendado: true } };
-    assert.deepEqual(importarSolicitacoes(agendado.estado, pedido, {}).novos, 1);
+    assert.deepEqual(importar(agendado.estado, pedido, {}).novos, 1);
   });
 
   // A gravação que muda o Noturno avisa quando a escala gravada do dia seguinte tem a volta de antes (js/actions.js,

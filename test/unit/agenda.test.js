@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { MIS, ALL_EQ_TYPES } from '../../js/config.js';
 import { HORARIOS_INICIAIS } from '../../js/horarios.js';
 import { prazoDaAgendaPermite, primeiraDataAberta, datasParaRegistrar, disponibilidadeDaSolicitacao, pedidoDaSolicitacao, recursosDaMissao, recursoValido, RECURSO_DO_PEDIDO,
-  situacaoDaSolicitacao, solicitacaoAprovada, resumoDasSolicitacoes, situacaoNaDemanda, solicitacoesParaImportar, prepararEntradaNaDemanda, contagemPorDia, motivoSemEntrada,
+  situacaoDaSolicitacao, solicitacaoAprovada, resumoDasSolicitacoes, situacaoNaDemanda, solicitacoesParaImportar, contagemPorDia, motivoSemEntrada,
   opcoesDaSegundaPreferencia, novidadesDasSolicitacoes, temNovidades, textoDasNovidades } from '../../js/agenda.js';
 
 const em = iso => new Date(iso);
@@ -291,16 +291,6 @@ describe('Os pedidos e a aprovação (D2)', () => {
     const lista = [linha(1), aprovada(2), aprovada(3), aprovada(4, { cancelada_em: 'x' }), aprovada(5)];
     assert.deepEqual(solicitacoesParaImportar(lista, estado({ importadas: [3] })).map(s => s.id), [2, 5]);
     assert.deepEqual(solicitacoesParaImportar([], estado()), []);
-  });
-
-  it('a entrada do aprovado na demanda: o registro desligado volta a voar; o que saiu da demanda é esquecido e entra de novo; o novo entra', () => {
-    const s = estado({ importadas: [1, 2], stu: [comRegistro(1001, { solicitacao: 1, fly: false, mid: 0, escolhido: 7 }), comRegistro(1002), comRegistro(1003, { fly: false })] });
-    const { religados, paraImportar } = prepararEntradaNaDemanda(s, [aprovada(1), aprovada(2), aprovada(3), linha(9)]);
-    assert.deepEqual(religados.map(x => x.id), [1]);
-    assert.deepEqual({ fly: s.stu[0].fly, mid: s.stu[0].mid, escolhido: s.stu[0].escolhido, solicitacao: s.stu[0].solicitacao }, { fly: true, mid: 0, escolhido: 7, solicitacao: 1 });
-    assert.deepEqual(paraImportar.map(x => x.id), [2, 3], 'o que só ficou nas importadas e o novo; o que aguarda, não');
-    assert.deepEqual(s.importadas, [1], 'o id esquecido entra de novo uma vez só');
-    assert.equal(s.stu[2].fly, false, 'o registro sem pedido da agenda não muda');
   });
 
   it('a contagem do trilho: os que aguardam e os aprovados de cada dia, sem domingo', () => {

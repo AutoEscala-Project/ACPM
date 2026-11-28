@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { runAllocationEngine } from '../../js/engine.js';
 import { escolherInstrutor, instrutoresDoPedido, instrutoresDoVoo, reverterEscolha, escolhasDaUnidade, escolherNosPedidos, foraDoPriorizarNoVoo } from '../../js/instrutor-escolhido.js';
 import { motivoDoFixo, fixosAoMudarStatus, fixosAoReabrir, normalizarFixos } from '../../js/fixos.js';
-import { importarSolicitacoes } from '../../js/processamento.js';
+import { importar } from '../helpers/importar.js';
 import { validarReversao } from '../../js/reversoes.js';
 import { normalizeMissionFields } from '../../js/rules.js';
 import { separar, juntar } from '../../js/dias.js';
@@ -278,7 +278,7 @@ describe('Instrutor escolhido na Escala: o ciclo do voo fixo pela escolha', () =
 
   it('o pedido novo da agenda não herda o instrutor escolhido de um pedido que tinha saído da escala', () => {
     const e = { nid: 2000, importadas: [], stu: [aluno(1000, { fly: false, insId: 1 })] };
-    importarSolicitacoes(e, [{ id: 1, data: '2026-11-11', aluno: 1000, aluno_nome: 'Aluno 1000', missao: 'Simulador', janela: 'tarde', horario: null, cancelada_em: null }]);
+    importar(e, [{ id: 1, data: '2026-11-11', aluno: 1000, aluno_nome: 'Aluno 1000', missao: 'Simulador', janela: 'tarde', horario: null, cancelada_em: null }]);
     assert.deepEqual([e.stu[0].fly, e.stu[0].mis, e.stu[0].insId], [true, 'Simulador', undefined]);
   });
 });

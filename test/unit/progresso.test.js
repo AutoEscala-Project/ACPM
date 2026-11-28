@@ -14,7 +14,7 @@ import { MIS } from '../../js/config.js';
 import { setS } from '../../js/state.js';
 import { etapaNaDemanda, progressoDoAluno, outraMissaoDoPedido, cursoDoResultado, confirmacaoDaMissao, botaoForaDaOrdem } from '../../js/views/etapas.js';
 import { mulberry32 } from '../helpers/cenarios.js';
-import { importarSolicitacoes } from '../../js/processamento.js';
+import { importar } from '../helpers/importar.js';
 import { aluno as alunoDoCenario } from '../helpers/montar.js';
 import { ligarFuncionalidades } from '../helpers/funcionalidades.js';
 
@@ -546,7 +546,7 @@ describe('O Noturno em trechos: TSL-01, NOT e TSL-02 num voo só', () => {
     const solicitacao = (id, missao) => ({ id, data: '2026-11-11', aluno: ALUNO, aluno_nome: 'Aluno 1000', missao, janela: 'noite', horario: null, cancelada_em: null });
     const importar = (situacao, missoes) => {
       const estado = { nid: 2000, importadas: [], stu: [alunoDoCenario(ALUNO, { fly: false }, { curso: 'PP' })] };
-      importarSolicitacoes(estado, missoes.map((m, i) => solicitacao(70 + i, m)), { situacao, programa: [curso()] });
+      importar(estado, missoes.map((m, i) => solicitacao(70 + i, m)), { situacao, programa: [curso()] });
       return [estado.stu[0], ...estado.stu[0].extra].map(p => [p.mis, p.etapa, p.eq, p.nb, p.p1]);
     };
     const ate4 = ['TMA-01', 'TMA-02'].map(c => reg(c));
