@@ -215,14 +215,15 @@ describe('Invariantes do motor de alocação', () => {
   // missões mudadas), cada mudança da busca, lida aqui sem js/almoco.js nem a busca do motor, é montada de novo:
   // - para cada INVA com o aviso "Sem almoço" (sem a pausa que já é o almoço, e com uma hora da janela que nenhum voo fixo
   //   dele toca), com o almoço dele: de volta; a hora dele reservada em cada hora que encosta num compromisso dele na janela, ou nas pontas (11:00 e 13:00), sem tocar um voo fixo dele; cada
-  //   voo dele na janela (sem pino, fora o Ground) em outro horário ou, sem o instrutor escolhido nem o “Priorizar com”, com
-  //   outro INVA; cada voo de outro INVA que poderia voar um desses (habilitado, fora do “Não escalar com”) no horário dele
+  //   voo dele na janela (sem pino, fora o Ground) em outro horário ou, sem o instrutor escolhido, com outro INVA (também o
+  //   do “Priorizar com”: nenhum almoço cede a ele); cada voo de outro INVA que poderia voar um desses (habilitado, fora do “Não escalar com”) no horário dele
   //   em outro horário ou com outro INVA; cada voo do mesmo tipo de avião entre 11:00 e 14:00 (com a duração do voo dele
   //   antes e depois) em outro horário ou em outro avião. Nenhuma escala tudo, deixa sem almoço só os de antes menos ele;
   // - para cada voo que tinha o INVA do “Priorizar com” sem o almoço e ficou sem ele: o pedido antes na fila; o voo em
   //   outro horário; a hora de cada INVA do “Priorizar com” dele reservada (como acima); cada voo desses INVAs na janela ou
   //   no horário dele em outro horário ou com outro INVA. Nenhuma escala tudo, sem mais INVAs sem almoço, e dá o
-  //   “Priorizar com” a mais voos (todos os de antes também).
+  //   “Priorizar com” a mais voos (todos os de antes também);
+  // - o voo que a busca tirou do INVA do “Priorizar com” tem o aviso do “Priorizar com” pelo almoço.
   // Nos 60 primeiros seeds (300 dias)
   it('nenhuma arrumação testada guarda o almoço de quem ficou sem ele, nem o “Priorizar com” que cedeu ao almoço', async () => {
     const { montarComOAlmoco, montarEscala, almocoDa } = await import('../../js/engine.js');
@@ -260,7 +261,10 @@ describe('Invariantes do motor de alocação', () => {
         const x = porId.get(id), { stu, d } = pedidoDe(estado, w);
         return Boolean(x && x.on) && !(stu.bl || []).includes(id) && podeFazer(x, w.mis, w.eqType, { curso: stu.curso, exige: d.exige });
       };
+      // Para o almoço, o voo do “Priorizar com” também muda de INVA (nenhum almoço cede a um “Priorizar com”); para o
+      // “Priorizar com”, não (o voo que muda perderia o dele)
       const moverInva = o => (o.insEscolhido || o.insPar ? [] : [{ evitar: [o.fKey, 'ins', o.insId] }]);
+      const moverInvaParaOAlmoco = o => (o.insEscolhido ? [] : [{ evitar: [o.fKey, 'ins', o.insId] }]);
       for (const x of estado.ins.filter(i => avisados.has(i.id))) {
         const { pausas } = faixasEPausas(x);
         if (pausas.some(p => Math.min(p.ate, 840) - Math.max(p.de, 660) >= 60)) continue;
@@ -270,8 +274,8 @@ describe('Invariantes do motor de alocação', () => {
         const mudancas = [
           ...(almoco.guarda.has(x.id) ? [] : [{}]),
           ...horas.map(de => ({ hora: { insId: x.id, de } })),
-          ...meus.flatMap(w => [{ evitar: [w.fKey, 'a', w.a] }, ...moverInva(w)]),
-          ...meus.flatMap(w => linhas.filter(o => o.insId !== x.id && movel(o) && toca(o, w.a, w.b) && podeVoar(o.insId, w)).flatMap(o => [{ evitar: [o.fKey, 'a', o.a] }, ...moverInva(o)])),
+          ...meus.flatMap(w => [{ evitar: [w.fKey, 'a', w.a] }, ...moverInvaParaOAlmoco(w)]),
+          ...meus.flatMap(w => linhas.filter(o => o.insId !== x.id && movel(o) && toca(o, w.a, w.b) && podeVoar(o.insId, w)).flatMap(o => [{ evitar: [o.fKey, 'a', o.a] }, ...moverInvaParaOAlmoco(o)])),
           ...meus.flatMap(w => linhas.filter(o => o !== w && movel(o) && o.eqType === w.eqType && !toca(o, w.a, w.b) && toca(o, 660 - (w.b - w.a), 840 + (w.b - w.a))).flatMap(o => [{ evitar: [o.fKey, 'a', o.a] }, { evitar: [o.fKey, 'r', o.r] }]))
         ];
         for (const m of mudancas) {
@@ -282,6 +286,14 @@ describe('Invariantes do motor de alocação', () => {
             break;
           }
         }
+      }
+      // O voo que a busca tirou do INVA do “Priorizar com” (para o almoço de alguém) e ficou sem ele: o aviso diz que foi
+      // pelo almoço
+      for (const [fKey, campo, id] of almoco.evitar) {
+        const o = linhas.find(v => v.fKey === fKey);
+        if (campo !== 'ins' || !o || o.insPar || !(pedidoDe(estado, o).stu.voaCom || []).includes(id)) continue;
+        const aviso = resultado.al.find(a => a.codigo === 'voa-com' && a.fKey === fKey);
+        if (!aviso || !/almoço/.test(aviso.m)) falhas.push(`seed ${seed}: ${fKey} sem o “Priorizar com” e sem o almoço no aviso (${aviso && aviso.m})`);
       }
       const sem = runAllocationEngine(estado, { almoco: false });
       for (const p of linhas.filter(o => !o.trecho && !comOPar.has(o.fKey) && sem.out.some(v => v.fKey === o.fKey && v.insPar))) {

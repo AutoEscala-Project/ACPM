@@ -12,6 +12,7 @@ import { conferirEscala } from '../../js/conferencia.js';
 import { compactar } from '../../js/compactar.js';
 import { hm } from '../../js/format.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
+import { gerarCenario, comEscolhas } from '../helpers/cenarios.js';
 
 const DIA_INTEIRO = { faixas: [{ de: 390, ate: 1050 }], pausas: [] };
 const comPausa = (...pausas) => ({ faixas: [{ de: 390, ate: 1050 }], pausas });
@@ -193,6 +194,47 @@ describe('O almoço no motor', () => {
         'Sem o instrutor de “Priorizar com” (Instrutor 01: sem a hora de almoço livre nos horários possíveis): o voo ficou com Instrutor 02.'
       ]);
     }
+  });
+
+  // Nenhum almoço cede a um “Priorizar com” de outro INVA (Pedro, 28/11; a revisão da decisão): o Instrutor 01 tem os voos
+  // das 11:30 (só ele faz) e das 12:40 (ele ou o 02); o 02 tem às 12:40 o voo de quem prioriza o 02 (ele ou o 03). O voo do
+  // “Priorizar com” vai para o 03, o das 12:40 do 01 para o 02, e o 01 fica com a hora. Antes, em qualquer posição na fila
+  // (a prioridade 4 ou 5), o motor guardava o “Priorizar com” e deixava o 01 sem almoço; o aviso do “Priorizar com” diz
+  // que foi pelo almoço do 01 (não "indisponível")
+  it('nenhum almoço cede ao “Priorizar com” de outro INVA: o voo do “Priorizar com” muda de INVA, com o aviso pelo almoço', () => {
+    const exato = m => ({ p1: m, p2: -1, jan: `h${m}` });
+    for (const pr of [1, 2, 4, 5]) {
+      const e = cenario({
+        ins: [instrutor(1, 9, DIA_INTEIRO), instrutor(2, 9, DIA_INTEIRO), instrutor(3, 9, DIA_INTEIRO)],
+        stu: [aluno(1000, exato(690), { bl: [2, 3] }), aluno(1001, exato(760), { bl: [3] }), aluno(1002, { ...exato(760), pr }, { voaCom: [2], bl: [1] })]
+      });
+      for (const opcoes of [semCompactar, {}]) {
+        const r = runAllocationEngine(e, opcoes);
+        assert.deepEqual(voos(r), [['Aluno 1000', '11:30', '12:30', 1], ['Aluno 1001', '12:40', '13:40', 2], ['Aluno 1002', '12:40', '13:40', 3]], `pr ${pr}`);
+        assert.deepEqual(doAlmoco(r), [], `pr ${pr}`);
+        const [aviso, ...outros] = r.al.filter(a => a.codigo === 'voa-com');
+        assert.deepEqual(outros, []);
+        assert.equal(aviso.fKey, r.out.find(o => o.stuId === 1002).fKey);
+        if (pr >= 4) assert.match(aviso.m, /^Sem o instrutor de “Priorizar com” \(Instrutor 02: trocado para guardar o almoço de Instrutor 01\): o voo ficou com Instrutor 03\./, `pr ${pr}`);
+      }
+    }
+  });
+
+  // O dia gerado da revisão (seed 1123 com as escolhas): o Instrutor 05 ficava sem almoço (09:30–12:30 e 12:40–14:40) para
+  // o Multimotor do Aluno 09 (13:30–16:30) ficar com o Instrutor 06 do “Priorizar com”. O motor muda o Multimotor de INVA:
+  // todos os voos continuam, ninguém fica sem almoço, e o aviso do “Priorizar com” diz que foi pelo almoço do 05
+  it('o dia gerado da revisão: o Multimotor do “Priorizar com” muda de INVA e o Instrutor 05 fica com o almoço', () => {
+    const e = comEscolhas(gerarCenario(1123), 1123);
+    const r = runAllocationEngine(e);
+    const sem = runAllocationEngine(e, { almoco: false });
+    const escalados = new Set(r.out.filter(o => !o.trecho).map(o => o.fKey));
+    assert.deepEqual(sem.out.filter(o => !o.trecho && !escalados.has(o.fKey)).map(o => o.fKey), []);
+    assert.deepEqual(doAlmoco(r).map(a => a.s), []);
+    const multimotor = r.out.find(o => o.fKey === '1015_0_1');
+    assert.equal(multimotor.s, 'Aluno 09');
+    assert.notEqual(multimotor.insId, 6);
+    assert.deepEqual(r.al.filter(a => a.codigo === 'voa-com' && a.fKey === '1015_0_1').map(a => a.m.replace(/\): .*/, ')')),
+      ['Sem o instrutor de “Priorizar com” (Instrutor 06: trocado para guardar o almoço de Instrutor 05)']);
   });
 
   // Antes de desistir do almoço para um voo não sair, o motor muda outra missão: um INVA com o voo que só ele faz (10:10 a
