@@ -89,6 +89,46 @@ describe('listaAVista: o que a lista mostra', () => {
     assert.deepEqual(buscando.blocos.map(b => [b.grupo && b.grupo.id, b.itens.map(i => i.id)]), [['C152', ['A']]]);
   });
 
+  // O cabeçalho que se escolhe é um registro (os horários de decolagem da categoria): sem texto na busca e sem filtro, ele
+  // aparece mesmo sem linha à vista (todas inativas, ou nenhuma); "Mostrar inativos" vale só para as linhas
+  it('o cabeçalho com detalhe aparece sem linha à vista (todas inativas, ou nenhuma); o sem detalhe não; com busca ou filtro, sai', () => {
+    const m = modelo({
+      grupos: [{ id: 'C152', titulo: 'C152', idDoDetalhe: 'cat:C152' }, { id: 'sim', titulo: 'Simulador', idDoDetalhe: 'cat:sim' },
+        { id: 'PA-34', titulo: 'PA-34', idDoDetalhe: 'cat:PA-34' }, { id: 'X', titulo: 'Sem detalhe' }],
+      itens: [item('A', { grupo: 'C152', busca: ['A'] }), item('P', { grupo: 'PA-34', busca: ['P'], inativo: true }), item('Q', { grupo: 'X', inativo: true })]
+    });
+    const vista = listaAVista(m, estadoNovo());
+    assert.deepEqual(vista.blocos.map(b => [b.grupo.id, b.itens.map(i => i.id), Boolean(b.semLinhas)]),
+      [['C152', ['A'], false], ['sim', [], true], ['PA-34', [], true]]);
+    assert.deepEqual(vista.paradas, ['g:C152', 'i:A', 'g:sim', 'g:PA-34']);
+    assert.deepEqual(vista.registros.map(r => r.id), ['cat:C152', 'A', 'cat:sim', 'cat:PA-34']);
+    assert.equal(vista.aVista, 1, 'o cabeçalho não é contado');
+    assert.equal(vizinhoNaLista(vista, 'A', 1), 'cat:sim', '"Próximo" chega nele');
+    // Com "Mostrar inativos", a linha volta para debaixo dele
+    const comInativos = listaAVista(m, estadoNovo({ comInativos: true }));
+    assert.deepEqual(comInativos.blocos.map(b => [b.grupo.id, b.itens.map(i => i.id), Boolean(b.semLinhas)]),
+      [['C152', ['A'], false], ['sim', [], true], ['PA-34', ['P'], false], ['X', ['Q'], false]]);
+    // Recolhido e sem linha: não é o recolhido (nada a abrir), é o sem linha
+    const recolhido = listaAVista(m, estadoNovo({ recolhidos: new Set(['PA-34']) }));
+    assert.deepEqual(recolhido.blocos.find(b => b.grupo.id === 'PA-34').semLinhas, true);
+    // A busca e os filtros acham linhas: o cabeçalho sem achado sai, como antes
+    assert.deepEqual(listaAVista(m, estadoNovo({ busca: 'a' })).blocos.map(b => b.grupo.id), ['C152']);
+    assert.deepEqual(listaAVista(m, estadoNovo(), { passa: i => i.id === 'A', filtrando: true }).blocos.map(b => b.grupo.id), ['C152']);
+    // Lendo, nenhum cabeçalho
+    assert.deepEqual(listaAVista({ ...m, estado: 'lendo' }, estadoNovo()).blocos, []);
+  });
+
+  it('só inativos: os cabeçalhos com detalhe ficam, e o vazio diz quantos inativos, embaixo deles', () => {
+    const m = modelo({ grupos: [{ id: 'PA-34', titulo: 'PA-34', idDoDetalhe: 'cat:PA-34' }], itens: [item('P', { grupo: 'PA-34', inativo: true })] });
+    const estado = estadoNovo();
+    const vista = listaAVista(m, estado);
+    assert.equal(vista.vazio, 'inativos');
+    const partes = partesDaLista('rec', vista, estado, { nomes: ['recurso', 'recursos'], semItens: '' });
+    assert.deepEqual(partes.map(p => p.chave), ['g:PA-34', 'vazio']);
+    assert.match(partes[0].html, /id="lin-rec-cat:PA-34" data-item="cat:PA-34" tabindex="0"/);
+    assert.match(partes[1].html, /Nenhum recurso ativo; 1 inativo\./);
+  });
+
   it('os estados vazios: sem itens, os filtros escondem todos, só inativos passariam, lendo, falhou', () => {
     assert.equal(listaAVista(modelo({ itens: [] }), estadoNovo()).vazio, 'sem-itens');
     assert.equal(listaAVista(modelo(), estadoNovo({ busca: 'ninguém' }), { filtrando: true }).vazio, 'filtros');
@@ -174,6 +214,13 @@ describe('grupoHtml: o cabeçalho de um grupo', () => {
     assert.match(html, /<button type="button" class="lista-seta" id="grp-rec-C172" data-lista-grupo="C172" aria-expanded="true" aria-label="Recolher C172" tabindex="-1">/);
     assert.match(html, /<button type="button" class="lista-botao" id="lin-rec-cat:C172" data-item="cat:C172" aria-current="true" tabindex="-1">/);
   });
+
+  it('com detalhe e sem linha: o título escolhe como o outro; no lugar da seta, um espaço (nada a recolher, sem aria-expanded)', () => {
+    const html = grupoHtml('rec', { id: 'sim', titulo: 'Simulador', resumo: '0 de 0 disponíveis', idDoDetalhe: 'cat:sim' }, { semLinhas: true, parada: true });
+    assert.match(html, /^<li class="lista-grupo sem-linhas" data-chave="g:sim"><span class="lista-seta-vaga" aria-hidden="true"><\/span>/);
+    assert.match(html, /<button type="button" class="lista-botao" id="lin-rec-cat:sim" data-item="cat:sim" tabindex="0">Simulador <small>0 de 0 disponíveis<\/small><\/button><\/li>$/);
+    assert.doesNotMatch(html, /aria-expanded|lista-seta"|data-lista-grupo/);
+  });
 });
 
 describe('vazioHtml e partesDaLista', () => {
@@ -238,6 +285,17 @@ describe('teclaNaLista e primeiraDaBusca', () => {
     assert.equal(teclaNaLista(vista, 'g:G', 'ArrowLeft'), null, 'o recolhido não recolhe de novo');
     assert.deepEqual(teclaNaLista(vista, 'g:G', 'Enter'), { grupo: 'G', recolher: false });
     assert.equal(teclaNaLista(vista, 'i:3', 'a'), null);
+  });
+
+  it('o cabeçalho com detalhe e sem linha: Enter e → vão ao detalhe (não abrem um grupo vazio); ← não recolhe', () => {
+    const semLinha = listaAVista(modelo({
+      grupos: [{ id: 'H', titulo: 'H', idDoDetalhe: 'cat:H' }], itens: [item(2, { grupo: 'H', inativo: true }), item(3)]
+    }), estadoNovo({ recolhidos: new Set(['H']) }));
+    assert.deepEqual(semLinha.paradas, ['g:H', 'i:3']);
+    assert.deepEqual(teclaNaLista(semLinha, 'g:H', 'Enter'), { detalhe: true });
+    assert.deepEqual(teclaNaLista(semLinha, 'g:H', 'ArrowRight'), { detalhe: true });
+    assert.equal(teclaNaLista(semLinha, 'g:H', 'ArrowLeft'), null);
+    assert.deepEqual(teclaNaLista(semLinha, 'i:3', 'ArrowUp'), { ir: 'g:H', escolher: 'cat:H' });
   });
 
   it('da busca: ↓ vai à primeira parada; com texto, ao primeiro item (sem os fixos e os cabeçalhos)', () => {
