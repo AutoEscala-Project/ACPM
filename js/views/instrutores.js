@@ -199,7 +199,7 @@ function editorDasFaixas(x, e) {
 const MARCAS_DA_TIRA = [390, 720, 1050, 1440];
 
 // "O que cabe nestas faixas" (C, "regra"): em cada lista de decolagem da data, os horários em que a missão começa e até
-// quando ela pode ir (js/disponibilidade.js, oQueCabe). Fechado até um clique; quem não vem não tem
+// quando pode ir a que começa no último deles (js/disponibilidade.js, oQueCabe). Fechado até um clique; quem não vem não tem
 function oQueCabeHtml(x) {
   if (!x.on) return '';
   return '<details class="faixas-cabe" id="det-ins-cabe"><summary>O que cabe nestas faixas</summary>'

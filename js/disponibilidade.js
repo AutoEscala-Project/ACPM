@@ -12,7 +12,8 @@
 // A tela (o commit "tela"): os três turnos, cada um uma faixa em minutos (N12: nenhum precisa de um limite do dia), o que a
 // linha e o detalhe do INVA dizem (o texto e a tira), a conferência de "Editar faixas" e o "Marcar disponível" do
 // agendamento, que põem as faixas no lugar do aw: a tela não muda mais o aw.
-// "O que cabe nestas faixas" (oQueCabe): em cada lista de decolagem, os horários em que a missão começa e até quando ela pode ir.
+// "O que cabe nestas faixas" (oQueCabe): em cada lista de decolagem, os horários em que a missão começa e até quando pode ir
+// a que começa no último deles.
 // Módulo puro (config, horarios e format, que já são da TV): o passo 29 de js/migracoes.js o leva para o grafo da TV.
 import { MINUTOS_DO_DIA, MIS, GROUND_DURATION_H, GROUND_EQ_TYPE, DURACAO_MAXIMA_H } from './config.js';
 import { INICIOS_DOS_TEMPOS, HORARIO_DO_NOTURNO, horariosDoTipo, fimDaMissao } from './horarios.js';
@@ -190,11 +191,14 @@ export function oQueCabe(x, horarios) {
     return { id, nome, horarios: cabem, ate };
   });
 }
-// "C152: 06:30 a 11:30 (4 horários); termina até as 16:30"; sem nenhum, "Noturno: nenhum horário"
+// "C152: 06:30 a 11:30 (4 horários); a das 11:30 termina até as 16:30" (o fim é o da que começa no último horário: uma
+// anterior pode ter de parar antes, numa pausa); com um só, "Noturno: 17:30 (1 horário); termina até as 21:30"; sem
+// nenhum, "Noturno: nenhum horário"
 export function textoDoQueCabe({ nome, horarios, ate }) {
   if (!horarios.length) return `${nome}: nenhum horário`;
-  const quando = horarios.length > 1 ? `${hm(horarios[0])} a ${hm(horarios.at(-1))}` : hm(horarios[0]);
-  return `${nome}: ${quando} (${horarios.length} ${horarios.length === 1 ? 'horário' : 'horários'}); termina até as ${hm(ate)}`;
+  if (horarios.length === 1) return `${nome}: ${hm(horarios[0])} (1 horário); termina até as ${hm(ate)}`;
+  const ultimo = hm(horarios.at(-1));
+  return `${nome}: ${hm(horarios[0])} a ${ultimo} (${horarios.length} horários); a das ${ultimo} termina até as ${hm(ate)}`;
 }
 
 // A tira da linha: as faixas, as pausas e os voos, em porcentagem dela (das 06:30 à meia-noite); o que fica fora dela sai
