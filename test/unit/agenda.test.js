@@ -6,11 +6,18 @@ import { MIS, ALL_EQ_TYPES } from '../../js/config.js';
 import { HORARIOS_INICIAIS } from '../../js/horarios.js';
 import { prazoDaAgendaPermite, primeiraDataAberta, datasParaRegistrar, disponibilidadeDaSolicitacao, pedidoDaSolicitacao, recursosDaMissao, recursoValido, RECURSO_DO_PEDIDO,
   situacaoDaSolicitacao, solicitacaoAprovada, resumoDasSolicitacoes, situacaoNaDemanda, solicitacoesParaImportar, contagemPorDia, motivoSemEntrada,
-  opcoesDaSegundaPreferencia, novidadesDasSolicitacoes, temNovidades, textoDasNovidades } from '../../js/agenda.js';
+  opcoesDaSegundaPreferencia, novidadesDasSolicitacoes, temNovidades, textoDasNovidades, agoraEmSaoPaulo } from '../../js/agenda.js';
 
 const em = iso => new Date(iso);
 
 describe('Agenda de solicitações', () => {
+  // A data e o minuto do dia em São Paulo (E: os de ficaNaEscala, na conciliação do app)
+  it('agora em São Paulo: a data e o minuto do dia, qualquer que seja o fuso do navegador', () => {
+    assert.deepEqual(agoraEmSaoPaulo(em('2026-11-10T15:30:00Z')), { data: '2026-11-10', minuto: 750 });
+    assert.deepEqual(agoraEmSaoPaulo(em('2026-11-11T02:10:00Z')), { data: '2026-11-10', minuto: 23 * 60 + 10 }, '02:10 UTC ainda é o dia anterior');
+    assert.deepEqual(agoraEmSaoPaulo(em('2026-11-11T03:00:00Z')), { data: '2026-11-11', minuto: 0 });
+  });
+
   it('pedido para o dia seguinte só até as 13:00 de São Paulo; depois, a partir de dois dias', () => {
     assert.equal(prazoDaAgendaPermite('2026-11-11', em('2026-11-10T12:59:00-03:00')), true);
     assert.equal(prazoDaAgendaPermite('2026-11-11', em('2026-11-10T13:00:00-03:00')), false);
