@@ -1,7 +1,7 @@
 // O dia de operação: "Aprovar escala" fixa os voos. Depois disso, uma alteração não tira ninguém do lugar:
 // o pedido novo entra em volta, e o voo fixo que ficou impossível aparece em conflito. "Reabrir" volta ao normal.
 // Em Voo, Atrasado, Pousou e Cancelado também fixam o voo.
-import { test, comPrioridade, expect, abrir, abrirComExemplo, irPara, abrirEscala, lerEscala, abrirHistorico, alternarVem, aprovar, botaoAprovar, botaoReabrir, caixaVoa, reabrir, refazer, textosDaEscala, exportar } from './fixtures.js';
+import { test, comPrioridade, expect, abrir, abrirComExemplo, irPara, abrirEscala, lerEscala, abrirHistorico, alternarVem, aprovar, botaoAprovar, botaoReabrir, caixaVoa, reabrir, refazer, textosDaEscala, exportar, botaoExportar } from './fixtures.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
 import { gerarCenario } from '../helpers/cenarios.js';
 import { abrirRestricoes, campoDasRestricoes, fecharRestricoes } from './telas/restricoes.js';
@@ -198,7 +198,7 @@ test.describe('A aprovação e o registro das exportações, sem o motor', () =>
     await abrir(page, { estado: dia() });
     await abrirEscala(page);
     await page.evaluate(() => { window.jspdf = undefined; });
-    await page.locator('#pdf').click();
+    await botaoExportar(page, 'pdf').click();
     await expect(page.locator('#toast-box .toast', { hasText: 'A biblioteca de PDF não carregou' })).toBeVisible();
     await expect(situacao(page)).toHaveCount(0);
     expect(((await diaGravado(page)) || {}).exportacoes || {}).toEqual({});
@@ -214,7 +214,7 @@ test.describe('A aprovação e o registro das exportações, sem o motor', () =>
     await exportar(page, 'csv');
     await expect(situacao(page)).toHaveText('Exportada');
     await expect(page.locator('#escala-atualizada')).toBeHidden();
-    await expect(page.locator('#exp')).toHaveAttribute('aria-describedby', 'exportacoes-situacao');
+    await expect(botaoExportar(page, 'csv')).toHaveAttribute('aria-describedby', 'exportacoes-situacao');
     for (const nome of ['Aluno 1000', 'Aluno 1001']) await page.locator('#out tbody tr:not(.win)', { hasText: nome }).locator('[data-act="rm-fly"]').click();
     await expect(page.locator('#out tbody tr:not(.win)')).toHaveCount(0);
     await expect(situacao(page)).toBeVisible();
