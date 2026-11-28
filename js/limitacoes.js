@@ -100,6 +100,14 @@ export const textoDosHorarios = horarios => (horarios.length
   ? horarios.map(h => `${hm(h.de)}–${hm(h.ate)}${h.dias ? ` (${h.dias.map(nomeDoDia).join(', ')})` : ''}`).join('; ')
   : 'nenhum horário nesta data');
 
+// Por que o horário está fora (com as limitações da data): "o aluno só voa das 13:00 às 18:00" ("… ou das …"); sem nenhum
+// horário na data, "o aluno não voa nesta data". Sem horários, null
+export function motivoDoHorario(limitacoes) {
+  if (!limitadoNoHorario(limitacoes)) return null;
+  const horarios = limitacoes.horarios.filter(h => h && h.dias === undefined);
+  return horarios.length ? `o aluno só voa ${horarios.map(h => `das ${hm(h.de)} às ${hm(h.ate)}`).join(' ou ')}` : 'o aluno não voa nesta data';
+}
+
 // O que o motor diz do quando, na recusa disponibilidade-do-aluno: o horário do pedido (o rótulo dele) e as limitações
 export const quandoOAlunoVoa = (doPedido, limitacoes) => [doPedido, limitadoNoHorario(limitacoes) ? `Limitações: ${textoDosHorarios(limitacoes.horarios)}` : null]
   .filter(Boolean).join('; ');

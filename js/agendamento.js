@@ -27,6 +27,7 @@ import { runAllocationEngine } from './engine.js';
 import { foraDoPriorizarCom } from './conferencia.js';
 import { naOrdemDoMotor, rejeicoesDosPedidos } from './rejeicoes.js';
 import { CODIGOS_DO_AGENDADO, GRUPO_DO_CONFLITO, FORA_DA_ESCALA } from './conflitos.js';
+import { tipoPermitido, inicioPermitido } from './limitacoes.js';
 import { fixoPeloStatus, motivoDoFixo } from './fixos.js';
 import { STATUS_EM_ANDAMENTO, rotuloDoStatus, intervaloEfetivo } from './status.js';
 import { pesoECombustivel, textoDoCombustivel } from './combustivel.js';
@@ -989,15 +990,18 @@ function alternativasDoVoo(estado, base, selecao) {
   const minutos = b - a;
   const servem = () => ((opcoesDeInstrutor(estado, base, { mis, tipo, a, b, stu, stuKg, curso, r, exige, exceto })
     .find(g => g.rotulo === 'Servem neste horário') || { opcoes: [] }).opcoes.filter(o => o.valor !== x.id));
+  // As limitações do aluno (L): nenhuma alternativa fora dos horários dele; no tipo em que ele não voa, nenhum recurso do
+  // mesmo tipo (o conflito continuaria)
+  const doAluno = stu.limitacoes;
   return {
     horarios: () => {
       if (turma) return [];
       const livre = livreNosFixos(estado, base, { stu, r, x, mis, tipo, minutos, ground, stuKg, curso, exige, exceto });
-      return lista.filter(s => s !== a && s + minutos <= MINUTOS_DO_DIA && livre(s))
+      return lista.filter(s => s !== a && s + minutos <= MINUTOS_DO_DIA && inicioPermitido(doAluno, s) && livre(s))
         .sort((p, q) => Math.abs(p - a) - Math.abs(q - a) || p - q).slice(0, ALTERNATIVAS).sort((p, q) => p - q)
         .map(s => ({ opcao: `horario:${s}`, texto: hm(s) }));
     },
-    recursos: () => (ground ? [] : opcoesDeRecurso(estado, base, { mis, eq: tipo, curso, a, b, instrutor: x, exceto })
+    recursos: () => (ground || !tipoPermitido(doAluno, tipo) ? [] : opcoesDeRecurso(estado, base, { mis, eq: tipo, curso, a, b, instrutor: x, exceto })
       .filter(o => !o.desligada && o.valor !== r && o.tipo === tipo).slice(0, ALTERNATIVAS).map(o => ({ opcao: `recurso:${o.valor}`, texto: nomeDoRecurso(o.valor) }))),
     instrutores: () => (turma ? [] : servem().slice(0, ALTERNATIVAS).map(o => ({ opcao: `instrutor:${o.valor}`, texto: o.x.nm }))),
     maisLeves: () => servem().filter(o => o.x.kg > 0).slice(0, ALTERNATIVAS).map(o => ({ opcao: `instrutor:${o.valor}`, texto: `${o.x.nm} (${numeroBr(o.x.kg)} kg)` }))
@@ -1094,7 +1098,8 @@ export function avaliarAgendamento({ estado, baseComPesos, base = baseComPesos, 
       const grupo = GRUPO_DO_CONFLITO[codigo];
       const item = { codigo, texto: `${maiuscula(novo.conflito[i])}.`, resumo: novo.conflito[i], campo: CAMPO_DO_GRUPO[grupo] || 'agd-horario', conflito: true };
       if (codigo === 'instrutor-indisponivel') item.opcoes = [{ opcao: 'disponibilizar', texto: `Marcar ${x.nm} disponível às ${hm(a)}` }];
-      else comAlternativas(item, codigo === 'peso' ? ['maisLeves'] : ALTERNATIVAS_DO_GRUPO[grupo] || []);
+      // (o tipo em que o aluno não voa, L: nenhuma alternativa do mesmo tipo resolve; o tipo é do operador)
+      else comAlternativas(item, codigo === 'peso' ? ['maisLeves'] : codigo === 'limitacao-de-recurso' ? [] : ALTERNATIVAS_DO_GRUPO[grupo] || []);
       avisos.push(item);
     });
   }
