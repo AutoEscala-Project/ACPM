@@ -31,8 +31,8 @@ const aprovadasAte = codigo => ORDEM.slice(0, ORDEM.indexOf(codigo) + 1).map((mi
 
 // A Maria (PP; nm: outro nome para ela) não voa ainda; o Aluno 1001 não tem curso. O cadastro e o dia já no formato
 // atual, os cursos com o PP (encerrado: o PP encerrado na aba Cursos) e os resultados da Maria, neste navegador
-async function abrirComOPP(page, { resultados, pedido = {}, fixos = {}, url = './', nm = 'Maria', encerrado = false }) {
-  const estado = cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, { fly: false, p1: 500, p2: -1, ...pedido }, { nm, curso: 'PP' }), aluno(1001, { fly: false })] });
+async function abrirComOPP(page, { resultados, pedido = {}, fixos = {}, url = './', nm = 'Maria', encerrado = false, limitacoes = null }) {
+  const estado = cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, { fly: false, p1: 500, p2: -1, ...pedido }, { nm, curso: 'PP', ...(limitacoes ? { limitacoes } : {}) }), aluno(1001, { fly: false })] });
   estado.fixos = fixos;
   const { documentos: { cadastro }, dias } = documentosAtuais(estado, AMANHA);
   const docs = {
@@ -184,6 +184,20 @@ test.describe('Cursos no dia: outra missão do curso', () => {
     await expect(r.locator('[data-f="outra-missao"]')).toHaveCount(0);
     await expect(r.locator('[data-act="usar-proxima"]')).toHaveCount(0);
     await expect(r.locator('.restricao-proxima')).toHaveText('Próxima do programa: NAV-01');
+  });
+
+  // R7, como no formulário de Pedidos (L): a missão do curso no C152 para a aluna que só voa no C172 vai num tipo que a
+  // missão permite e ela voa, e continua a do curso; o pedido não vira uma recusa sem aviso
+  test('"Usar a do programa" para a aluna que só voa no C172: o pedido fica no C172, com a missão do curso, e a gaveta diz', async ({ page }) => {
+    await abrirComOPP(page, { resultados: [], pedido: { fly: true, eq: 'C172' }, limitacoes: { recursos: ['C172'] } });
+    await naDemanda(page);
+    const r = await abrirRestricoes(page, 1000);
+    await expect(r.locator('.restricao-proxima')).toHaveText('Próxima do programa: IN-01');
+    await r.locator('[data-act="usar-proxima"]').click();
+    await expect.poll(() => pedidoGravado(page)).toMatchObject({ fly: true, mis: 'Voo Local', eq: 'C172', etapa: 'IN-01' });
+    await expect(page.locator('#toast-box')).toContainText('O programa faz IN-01 no C152, e o aluno só voa no C172: o pedido vai no C172, e a missão continua IN-01.');
+    await expect(page.locator('#painel-restricoes')).toContainText('Na escala:');
+    await expect(page.locator('#painel-restricoes')).not.toContainText('Fora da escala');
   });
 
   // O curso encerrado é uma das regras do curso que pedem confirmação (desenho §4.9), na Demanda como no agendamento:

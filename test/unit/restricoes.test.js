@@ -8,7 +8,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   mudouOVoo, fixosSemOAgendadoQueMudou, horarioExatoDoPedido, opcoesDeTipoDoPedido, opcoesDeHorarioDoPedido,
-  instrutoresDasRestricoes, avisoDaRestricao, aplicarRestricao, pedidosDasRecusas
+  instrutoresDasRestricoes, avisoDaRestricao, aplicarRestricao, pedidosDasRecusas, tipoDaMissaoDoCurso
 } from '../../js/restricoes.js';
 import { runAllocationEngine } from '../../js/engine.js';
 import { avisosDaData } from '../../js/linha-do-dia.js';
@@ -145,6 +145,12 @@ describe('instrutoresDasRestricoes: "Automático" e os INVAs do pedido; o de "N�
     ]);
   });
 
+  it('o bloqueado que também não vem na data continua desligado, "em Não escalar com" (o bloqueio vale mais que a nota da data)', () => {
+    const estado = cenario({ ins: [instrutor(1, 9), instrutor(2, 9, { on: false })], stu: [aluno(1000, {}, { bl: [2] })] });
+    const opcoes = instrutoresDasRestricoes(estado, estado.stu[0], estado.stu[0]);
+    assert.deepEqual(opcoes.find(o => o.valor === 2), { valor: 2, texto: 'Instrutor 02 (em Não escalar com)', desligada: true });
+  });
+
   it('"Automático" diz quem o "Priorizar com" prioriza; o sem a habilitação fica de fora, como na Demanda', () => {
     const estado = cenario({ ins: [instrutor(1, 9), instrutor(2, 1)], stu: [aluno(1000, { mis: 'Multimotor', eq: 'PA-34' }, { voaCom: [1] })] });
     const opcoes = instrutoresDasRestricoes(estado, estado.stu[0], estado.stu[0]);
@@ -156,6 +162,35 @@ describe('instrutoresDasRestricoes: "Automático" e os INVAs do pedido; o de "N�
     const estado = cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, { insId: 9 })] });
     const opcoes = instrutoresDasRestricoes(estado, estado.stu[0], estado.stu[0]);
     assert.deepEqual(opcoes[1], { valor: 9, texto: 'Instrutor fora do cadastro (o app escolhe)', desligada: false });
+  });
+});
+
+describe('tipoDaMissaoDoCurso: o tipo da missão do curso no pedido, para o aluno que não voa no do programa (R7, como em Pedidos)', () => {
+  const PP01 = { codigo: 'PP-01', mis: 'Voo Local', eq: 'C152' };
+  it('sem limitação, ou com o tipo do programa permitido: o do programa, sem aviso', () => {
+    assert.deepEqual(tipoDaMissaoDoCurso(aluno(1000), PP01, { eq: 'C172' }, SEGUNDA), { eq: 'C152', aviso: null });
+    assert.deepEqual(tipoDaMissaoDoCurso(aluno(1000, {}, { limitacoes: { recursos: ['C152'] } }), PP01, { eq: 'C172' }, SEGUNDA), { eq: 'C152', aviso: null });
+  });
+
+  it('o aluno que só voa no C172: o pedido vai num tipo que a missão permite e ele voa, e a missão continua a do curso', () => {
+    const r = tipoDaMissaoDoCurso(aluno(1000, {}, { limitacoes: C172_SO }), PP01, { eq: 'C152' }, SEGUNDA);
+    assert.deepEqual(r, { eq: 'C172', aviso: 'O programa faz PP-01 no C152, e o aluno só voa no C172: o pedido vai no C172, e a missão continua PP-01.' });
+  });
+
+  it('com mais de um tipo que serve, o do pedido, quando é um deles', () => {
+    const lim = aluno(1000, {}, { limitacoes: { recursos: ['C172', 'PA-34'] } });
+    assert.equal(tipoDaMissaoDoCurso(lim, PP01, { eq: 'PA-34' }, SEGUNDA).eq, 'PA-34');
+    assert.equal(tipoDaMissaoDoCurso(lim, PP01, { eq: 'C152' }, SEGUNDA).eq, 'C172');
+  });
+
+  it('nenhum tipo da missão que o aluno voa: o do programa, com o aviso das limitações (o motor recusa o pedido)', () => {
+    const r = tipoDaMissaoDoCurso(aluno(1000, {}, { limitacoes: C172_SO }), { codigo: 'MLT-01', mis: 'Multimotor', eq: 'PA-34' }, { eq: 'C172' }, SEGUNDA);
+    assert.equal(r.eq, 'PA-34');
+    assert.equal(r.aviso, avisoDaRestricao(aluno(1000, {}, { limitacoes: C172_SO }), 'eq', 'PA-34', SEGUNDA));
+  });
+
+  it('o Ground não tem tipo a trocar', () => {
+    assert.deepEqual(tipoDaMissaoDoCurso(aluno(1000, {}, { limitacoes: C172_SO }), { codigo: 'GND-01', mis: 'Ground C152', eq: 'Sala Ground' }, { eq: 'Sala Ground' }, SEGUNDA), { eq: 'Sala Ground', aviso: null });
   });
 });
 
