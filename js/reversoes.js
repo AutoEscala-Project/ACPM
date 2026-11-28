@@ -227,8 +227,8 @@ export function validarReversao(rev, frota) {
   return null;
 }
 
-// A missão do pedido: o tipo de missão, o recurso, as horas e a missão do curso. O pedido que muda de missão na Demanda
-// solta o voo agendado nele (js/eventos/demanda.js)
+// A missão do pedido: o tipo de missão, o recurso, as horas e a missão do curso. O pedido que muda de missão, de tipo ou
+// de horas nas restrições do voo (G1) solta o voo agendado nele (fixosSemOAgendadoQueMudou, js/eventos/restricoes-do-voo.js)
 const MISSAO_DO_PEDIDO = ['mis', 'eq', 'nb', 'etapa'];
 // O que identifica o pedido criado pelo agendamento: a missão e a preferência (o horário agendado). Voar ou não, a
 // prioridade, o instrutor e a disponibilidade mudam sem ele deixar de ser o mesmo

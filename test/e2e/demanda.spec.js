@@ -1,5 +1,6 @@
 import { test, comProgresso, expect, abrir, abrirSintetico, abrirComExemplo, irPara, abrirEscala, lerEscala, confirmar, filtrarCursos, AMANHA, abrirHistorico, aprovar, botaoAprovar, caixaVoa, dataAberta, diaSeguinte, reabrir, voar, registrarPedido, refazer, linhasDosAlunos, caixaDisponivel, linhasDosPedidos } from './fixtures.js';
 import { aluno, cenario, instrutor, missaoExtra } from '../helpers/montar.js';
+import { abrirRestricoes, campoDasRestricoes, fecharRestricoes } from './telas/restricoes.js';
 
 const linhaDoAluno = (page, nome) => page.locator(`#dem tr[data-k="d"][data-mid="0"][data-nm="${nome.toLowerCase()}"]`);
 
@@ -8,15 +9,15 @@ test.describe('Demanda', () => {
     await abrir(page, { estado: cenario({ stu: [aluno(1000, { mis: 'Multimotor', eq: 'PA-34', p1: 450, p2: 510 })] }) });
     await irPara(page, 'dem');
     const linha = page.locator('#dem tr[data-k="d"][data-id="1000"]');
-    await expect(linha.locator('[data-f="p1"] option[value="420"]')).toHaveText('07:00');
-    await expect(linha.locator('[data-f="p1"] option:checked')).toHaveText('07:30');
-    // J (N13): a Demanda não tem mais a coluna Disponibilidade
+    // J (N13): a Demanda não tem mais a coluna Disponibilidade; G1: as preferências e o tipo estão nas restrições
     await expect(linha.locator('[data-f="jan"]')).toHaveCount(0);
+    const restricoes = await abrirRestricoes(page, 1000);
+    await expect(restricoes.locator('[data-f="p1"] option[value="420"]')).toHaveText('07:00');
+    await expect(restricoes.locator('[data-f="p1"] option:checked')).toHaveText('07:30');
     await linha.locator('[data-f="mis"]').selectOption('Voo Local');
-    await linha.locator('[data-f="eq"]').selectOption('C152');
-    const nova = page.locator('#dem tr[data-k="d"][data-id="1000"]');
-    await expect(nova.locator('[data-f="p1"] option:checked')).toHaveText('08:20');
-    await expect(nova.locator('[data-f="p1"] option[value="450"]')).toHaveCount(0);
+    await restricoes.locator('[data-f="eq"]').selectOption('C152');
+    await expect(restricoes.locator('[data-f="p1"] option:checked')).toHaveText('08:20');
+    await expect(restricoes.locator('[data-f="p1"] option[value="450"]')).toHaveCount(0);
   });
 
   test('"Pôr um aluno na demanda" inclui quem ainda não voa (com "Só quem voa" ligado)', async ({ page }) => {
@@ -36,11 +37,11 @@ test.describe('Demanda', () => {
     await expect(page.locator('#audit-log-list')).toContainText(`${nome.replace(/^a/, 'A')} incluído na demanda`);
   });
 
-  // A Prioridade só com ela ligada (js/funcionalidades.js; prioridade.spec.js)
-  test('8 colunas que cabem na tela (sem Sessões, Prioridade nem Disponibilidade); "Limpar demanda" fica no menu Mais', async ({ page }) => {
+  // O tipo, o instrutor, as preferências, a duração e a Prioridade estão nas restrições do pedido (G1, restricoes-do-voo.spec.js)
+  test('3 colunas que cabem na tela (sem as restrições, Sessões nem Disponibilidade); "Limpar demanda" fica no menu Mais', async ({ page }) => {
     await abrirComExemplo(page);
     await irPara(page, 'dem');
-    await expect(page.locator('#s-dem thead th')).toHaveText(['Aluno', 'Voa', 'Missão', 'Recurso', 'Instrutor', '1ª preferência', '2ª preferência', 'Duração']);
+    await expect(page.locator('#s-dem thead th')).toHaveText(['Aluno', 'Voa', 'Missão']);
     await expect(page.locator('#dem [data-f="pr"]')).toHaveCount(0);
     await expect(page.locator('#dem [data-f="ss"]')).toHaveCount(0);
     expect(await page.evaluate(() => document.querySelector('#s-dem .tw').scrollWidth <= document.querySelector('#s-dem .tw').clientWidth)).toBe(true);
@@ -71,7 +72,9 @@ test.describe('Demanda', () => {
     const linha = page.locator('#dem tr[data-k="d"][data-id="1000"][data-mid="0"]');
     await caixaVoa(linha).check();
     await expect.poll(async () => (await guardado()).jan).toBe(undefined);
-    await expect(linha.locator('[data-f="insId"]')).toHaveValue('');
+    await abrirRestricoes(page, 1000);
+    await expect(campoDasRestricoes(page, 'insId')).toHaveValue('');
+    await fecharRestricoes(page);
 
     // O pedido da agenda para a mesma missão (Voo Local) toma este voo, em vez de virar um segundo
     await irPara(page, 'age');
@@ -95,10 +98,11 @@ test.describe('Demanda', () => {
       return Object.fromEntries(['1000', '1001', '1002'].map(id => [id, pedidos[id].limiteConfirmado === true]));
     }, AMANHA);
     await expect.poll(guardado).toEqual({ 1000: true, 1001: true, 1002: true });
-    await linhaDoAluno(page, 'Aluno 1000').locator('[data-f="eq"]').selectOption('C172');
+    await (await abrirRestricoes(page, 1000)).locator('[data-f="eq"]').selectOption('C172');
     await linhaDoAluno(page, 'Aluno 1001').locator('[data-f="mis"]').selectOption('TGL (TMA)');
-    await linhaDoAluno(page, 'Aluno 1002').locator('[data-f="nb"]').fill('1.5');
-    await linhaDoAluno(page, 'Aluno 1002').locator('[data-f="nb"]').press('Enter');
+    const duracao = (await abrirRestricoes(page, 1002)).locator('[data-f="nb"]');
+    await duracao.fill('1.5');
+    await duracao.press('Enter');
     await expect(page.locator('#audit-log-list')).toContainText('Pedido Aluno 1002: Voo Local');
     await expect.poll(guardado).toEqual({ 1000: false, 1001: false, 1002: true });
   });
@@ -115,10 +119,11 @@ test.describe('Demanda', () => {
       return Object.fromEntries(['1000', '1001', '1002'].map(id => [id, [pedidos[id].etapa || null, pedidos[id].cursoDaEtapa || null, pedidos[id].etapaDoPrograma === true]]));
     }, AMANHA);
     await expect.poll(guardado).toEqual({ 1000: ['PP-07', 'PP', true], 1001: ['PP-07', 'PP', true], 1002: ['PP-07', 'PP', true] });
-    await linhaDoAluno(page, 'Aluno 1000').locator('[data-f="eq"]').selectOption('C172');
+    await (await abrirRestricoes(page, 1000)).locator('[data-f="eq"]').selectOption('C172');
     await linhaDoAluno(page, 'Aluno 1001').locator('[data-f="mis"]').selectOption('TGL (TMA)');
-    await linhaDoAluno(page, 'Aluno 1002').locator('[data-f="nb"]').fill('1.5');
-    await linhaDoAluno(page, 'Aluno 1002').locator('[data-f="nb"]').press('Enter');
+    const duracao = (await abrirRestricoes(page, 1002)).locator('[data-f="nb"]');
+    await duracao.fill('1.5');
+    await duracao.press('Enter');
     await expect(page.locator('#audit-log-list')).toContainText('Pedido Aluno 1002: Voo Local');
     await expect.poll(guardado).toEqual({ 1000: [null, null, false], 1001: [null, null, false], 1002: [null, null, false] });
   });
@@ -188,7 +193,9 @@ test.describe('Demanda', () => {
     await expect(extra).toHaveCount(1);
     await expect(extra.locator('td').first()).toContainText('↳ missão extra');
     await expect(extra.locator('[data-f="mis"]')).toHaveValue('Voo Local');
-    await expect(extra.locator('[data-f="p1"]')).toHaveValue('760');
+    await extra.locator('[data-act="restricoes"]').click();
+    await expect(campoDasRestricoes(page, 'p1')).toHaveValue('760');
+    await fecharRestricoes(page);
     // Tirar a missão extra pede confirmação, como os outros ✕
     const tirar = extra.locator('[data-act="del-mis"]');
     await tirar.click();
@@ -222,14 +229,16 @@ test.describe('Demanda', () => {
   test('a duração é um número de horas, fracionado, até 5 h; acima disso, não vale', async ({ page }) => {
     await abrirComExemplo(page);
     await irPara(page, 'dem');
-    const duracao = page.locator('#dem tr[data-k="d"][data-id="1011"] [data-f="nb"]');
+    const duracao = (await abrirRestricoes(page, 1011)).locator('[data-f="nb"]');
     await expect(duracao).toHaveAttribute('type', 'number');
     await duracao.fill('2.6');
     await duracao.press('Enter');
     await expect(page.locator('#audit-log-list')).toContainText('2,6 h');
+    await fecharRestricoes(page);
     await abrirEscala(page);
     await expect(page.locator('#out tbody tr:not(.win)', { hasText: 'Aluno 12' }).locator('.c-hr')).toContainText('2,6 h');
     await irPara(page, 'dem');
+    await abrirRestricoes(page, 1011);
     await duracao.fill('6');
     await duracao.press('Enter');
     await expect(page.locator('.toast').last()).toHaveText('A duração vai de 0,1 h a 5 h.');
@@ -243,8 +252,10 @@ test.describe('Demanda', () => {
     await irPara(page, 'dem');
     await page.locator('#onlyfly').uncheck();
     const linha = page.locator('#dem tr[data-k="d"]');
+    // O tipo, as preferências e a duração, nas restrições do pedido (G1), que acompanham a missão mudada na linha
+    await linha.locator('[data-act="restricoes"]').click();
     const valores = async () => Object.fromEntries(await Promise.all(
-      ['eq', 'p1', 'p2', 'nb'].map(async f => [f, await linha.locator(`[data-f="${f}"]`).inputValue()])
+      ['eq', 'p1', 'p2', 'nb'].map(async f => [f, await campoDasRestricoes(page, f).inputValue()])
     ));
 
     await linha.locator('[data-f="mis"]').selectOption('Noturno');
@@ -253,7 +264,7 @@ test.describe('Demanda', () => {
 
     await linha.locator('[data-f="mis"]').selectOption('Ground C152');
     expect(await valores()).toEqual({ eq: 'Sala Ground', p1: '500', p2: '610', nb: '1.5' });
-    await expect(linha.locator('[data-f="eq"]')).toBeDisabled();
+    await expect(campoDasRestricoes(page, 'eq')).toBeDisabled();
     // O que a missão exige do instrutor aparece na dica do campo
     await expect(linha.locator('[data-f="mis"]')).toHaveAttribute('title', 'Exige Grounds (C152, C172 e Navegação)');
 
@@ -273,7 +284,9 @@ test.describe('Demanda', () => {
     expect(opcoes).toEqual(expect.arrayContaining(['TGL (TMA)', 'Cheque PP', 'Cheque PC MNTE VFR', 'Cheque PC MNTE IFR', 'Cheque PC MLTE VFR', 'Cheque PC MLTE IFR']));
 
     await linha.locator('[data-f="mis"]').selectOption('Cheque PC MNTE IFR');
-    expect(await linha.locator('[data-f="eq"] option').allTextContents()).toEqual(['C172']);
+    await abrirRestricoes(page, 1000);
+    expect(await campoDasRestricoes(page, 'eq').locator('option').allTextContents()).toEqual(['C172']);
+    await fecharRestricoes(page);
     await expect(linha.locator('[data-f="mis"]')).toHaveAttribute('title', 'Exige Checador do curso PC + Checador MNTE + Checador IFR');
     await abrirEscala(page);
     const voos = (await lerEscala(page)).linhas.filter(l => l.includes('Aluno 1000'));
@@ -408,8 +421,8 @@ test.describe('Demanda', () => {
     // A busca, a missão e os cursos, cada um sozinho
     await busca.fill('nenhum assim');
     await expect(nenhum).toHaveText('Nenhum aluno com esses filtros. Limpar filtros');
-    // Todas as colunas: 9, sem a Prioridade desligada (js/funcionalidades.js)
-    await expect(nenhum.locator('td')).toHaveAttribute('colspan', '8');
+    // Todas as colunas: as três da Demanda (G1: as restrições, com a Prioridade, estão na gaveta)
+    await expect(nenhum.locator('td')).toHaveAttribute('colspan', '3');
     await expect(limpar).not.toHaveAttribute('data-act');
     await busca.fill('');
     await expect(nenhum).toHaveCount(0);
@@ -576,9 +589,10 @@ test.describe('Voo agendado na Escala', () => {
     await abrirEscala(page);
     await expect(voo(page, 'Aluno 1000').locator('.fixo')).toHaveAttribute('aria-label', 'Voo fixo: agendado na escala');
     await naDemanda(page);
-    await pedido(page, 1000).locator('[data-act="usar-proxima"]').click();
+    await (await abrirRestricoes(page, 1000)).locator('[data-act="usar-proxima"]').click();
     await expect(pedido(page, 1000).locator('.etapa')).toHaveText('PP-01');
     await expect(page.locator('#audit-log-list')).toContainText('Aluno 1000: PP-01 na demanda (Voo Local · C152 · 1 h) (deixa de ser fixo)');
+    await fecharRestricoes(page);
     await abrirEscala(page);
     await expect(voo(page, 'Aluno 1000').locator('.fixo')).toHaveCount(0);
   });
@@ -590,7 +604,7 @@ test.describe('Voo agendado na Escala', () => {
     const confirmado = () => page.evaluate(d => JSON.parse(localStorage.getItem(`acpm4_dia_${d}`)).pedidos[1000].limiteConfirmado === true, AMANHA);
     await naDemanda(page);
     await expect.poll(confirmado).toBe(true);
-    await pedido(page, 1000).locator('[data-act="usar-proxima"]').click();
+    await (await abrirRestricoes(page, 1000)).locator('[data-act="usar-proxima"]').click();
     await expect(pedido(page, 1000).locator('.etapa')).toHaveText('PP-01');
     await expect.poll(confirmado).toBe(false);
   });
@@ -598,12 +612,13 @@ test.describe('Voo agendado na Escala', () => {
   test('a mesma duração digitada de outro jeito (1.0 no lugar de 1) não muda o pedido: o voo continua agendado', async ({ page }) => {
     await abrir(page, { estado: dia() });
     await naDemanda(page);
-    const duracao = pedido(page, 1000).locator('[data-f="nb"]');
+    const duracao = (await abrirRestricoes(page, 1000)).locator('[data-f="nb"]');
     await expect(duracao).toHaveValue('1');
     await duracao.fill('1.0');
     await duracao.press('Tab');
     await expect(page.locator('#audit-log-list')).toContainText('Pedido Aluno 1000: Voo Local · C152 · 1 h');
     await expect(page.locator('#audit-log-list')).not.toContainText('deixa de ser fixo');
+    await fecharRestricoes(page);
     await abrirEscala(page);
     await expect(voo(page, 'Aluno 1000').locator('.c-hr')).toContainText('10:10–11:10');
     await expect(voo(page, 'Aluno 1000').locator('.fixo')).toHaveAttribute('aria-label', 'Voo fixo: agendado na escala');
@@ -734,11 +749,14 @@ test.describe('O foco depois de uma ação', () => {
     const tr = el.closest('tr');
     return `${el.tagName.toLowerCase()}[${el.dataset.f || el.dataset.a || el.dataset.act || ''}] linha=${tr ? `${tr.dataset.id || tr.dataset.r || ''}/${tr.dataset.mid || ''}` : '-'}`;
   });
-  for (const [nome, aba, seletor, valores] of [['a duração na Demanda', 'dem', '#dem tr[data-k="d"]:not(.off) input[data-f="nb"]', ['1.5', '2']]]) {
-    test(`digitar ${nome} e sair com Tab ou Shift+Tab leva ao mesmo vizinho que sem digitar, com a linha redesenhada`, async ({ page }) => {
+  // A duração, nas restrições do pedido (G1): a gaveta é redesenhada com a escala refeita
+  for (const [nome, aba, seletor, valores] of [['a duração nas restrições do pedido', 'dem', '#painel-restricoes input[data-f="nb"]', ['1.5', '2']]]) {
+    test(`digitar ${nome} e sair com Tab ou Shift+Tab leva ao mesmo vizinho que sem digitar, com a gaveta redesenhada`, async ({ page }) => {
       await abrirComExemplo(page);
       await irPara(page, aba);
-      const campo = page.locator(seletor).nth(2);
+      // Um pedido que voa, de duração digitada (nem o Ground nem o Noturno, que têm a deles)
+      await page.locator('#dem tr[data-k="d"]:not(.off):not([data-mis^="Ground"]):not([data-mis="Noturno"])').nth(2).locator('[data-act="restricoes"]').click();
+      const campo = page.locator(seletor);
       for (const [i, tecla] of ['Tab', 'Shift+Tab'].entries()) {
         await campo.focus();
         await page.keyboard.press(tecla);

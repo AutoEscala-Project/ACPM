@@ -48,3 +48,32 @@
 .audit-estado.nao-gravada { color: var(--er); font-style: normal; font-weight: 600; }
 .audit-item:has(.nao-gravada) .audit-desc { text-decoration: line-through; }
 .audit-badge.mod { background: var(--info-bg); color: var(--ac); }
+/* As restrições do voo (G1, js/views/restricoes-do-voo.js): o que o app lê para encaixar o pedido, um campo por linha; o
+   aviso das limitações e a confirmação; rola por dentro quando não cabe na altura */
+#painel-restricoes .restricoes-corpo { flex: 1; min-height: 0; overflow-y: auto; }
+#painel-restricoes .restricoes-titulo { display: flex; align-items: center; gap: 4px; min-width: 0; }
+#painel-restricoes .restricoes-campos { display: flex; flex-direction: column; gap: 10px; margin-top: 8px; }
+#painel-restricoes .campo { display: flex; flex-direction: column; gap: 4px; font-weight: 600; min-width: 0; }
+#painel-restricoes .campo small { font-weight: 400; }
+#painel-restricoes .campo b { font-weight: 500; }
+#painel-restricoes .rotulo-campo { display: flex; align-items: center; gap: 4px; font-weight: 600; }
+#painel-restricoes select, #painel-restricoes input[type="number"] { max-width: 100%; font-weight: 400; }
+#painel-restricoes select.escolhido { border-color: var(--ac); color: var(--ac); font-weight: 600; }
+#painel-restricoes select.prioridade-mais-alta { background: var(--wa-bg); color: var(--wa); font-weight: 700; }
+#painel-restricoes .campo-duplo { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
+#painel-restricoes .restricao-missao-linha { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-weight: 400; }
+#painel-restricoes .restricao-missao-linha select { max-width: 100%; }
+#painel-restricoes .restricoes-situacao { margin: 4px 0 0; padding: 8px 10px; border: 1px solid var(--ln); border-radius: 8px; background: var(--pn2); font-size: 14px; }
+#painel-restricoes .restricoes-situacao.fora { border-color: var(--er); background: var(--er-bg); }
+#painel-restricoes .restricoes-aviso { margin: 0; padding: 6px 10px; border-radius: 6px; background: var(--wa-bg); color: var(--ink); font-size: 14px; }
+#painel-restricoes .restricoes-aviso:empty { display: none; }
+#painel-restricoes .restricoes-confirmar { display: flex; flex-wrap: wrap; gap: 8px; }
+/* O "Restrições" do item do trilho da missão que não entrou (embaixo do item, alinhado com o texto dele) */
+.aviso-restricoes { padding: 0 0 7px 62px; }
+.aviso-restricoes .btn { padding: 2px 10px; font-size: 13.5px; }
+@media (max-width: 640px) {
+  #painel-restricoes { width: 100vw; }
+  #painel-restricoes .campo-duplo { grid-template-columns: 1fr; }
+  #painel-restricoes :is(select, input, button) { min-height: 44px; }
+  .aviso-restricoes .btn { min-height: 44px; }
+}

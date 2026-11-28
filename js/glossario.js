@@ -61,6 +61,10 @@ const TERMOS = {
   },
   'aprovar-escala': { aba: 'Escala', termo: 'Aprovar escala', texto: 'Fixa todos os voos: depois disso, uma alteração não tira ninguém do lugar, e a de um voo na Escala muda só ele, sem refazer a escala. O pedido novo entra em volta, e o voo impossível vira conflito.' },
   'editar-voo': { aba: 'Escala', termo: 'Editar o voo', texto: 'Todos os campos do voo: aluno, missão, recurso, horário, duração, instrutor e status. Na escala aprovada só ele muda; fora dela, a pergunta vem antes, e a escala inteira é refeita.' },
+  'restricoes-do-voo': {
+    aba: 'Escala', termo: 'Restrições', texto: 'O que o app lê para encaixar o pedido: o tipo de recurso, o instrutor, a prioridade, as preferências e a duração. O horário do pedido da agenda aparece aqui e muda em Pedidos ou no editor do voo.',
+    funcionalidade: 'prioridade', textoSem: 'O que o app lê para encaixar o pedido: o tipo de recurso, o instrutor, as preferências e a duração. O horário do pedido da agenda aparece aqui e muda em Pedidos ou no editor do voo.'
+  },
   reabrir: { aba: 'Escala', termo: 'Reabrir', texto: 'Solta os voos (menos os em andamento) e a escala volta a ser refeita inteira a cada alteração.' },
   'listas-do-painel': { aba: 'Escala', termo: 'Listas (painel)', texto: 'Na tela grande, duas listas lado a lado, com as mesmas colunas: a página começa na da esquerda e continua na da direita. Automático: duas a partir de 1.600 px de largura, quando cabem.' },
   'painel-missoes': { aba: 'Escala', termo: 'Missões (painel)', texto: 'O quadro do painel com os voos e aulas do dia, pelo horário, sem separar partidas e chegadas; o voo sai 30 minutos depois do fim, e a aula de Ground no fim. É o padrão do painel e da TV; Configurar painel muda o quadro e as colunas.' },

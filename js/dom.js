@@ -257,6 +257,8 @@ function devolverFoco(lugar, foco) {
     // Saindo do campo pelo Tab: o seguinte, que pode estar fora da tela (o foco rola até ele, como no Tab)
     const seguinte = foco.passo && vizinhoNoTab(alvo, foco.passo);
     if (seguinte) seguinte.focus();
+    // O Tab que sai do último controle da página (o último campo de uma gaveta): o foco fica onde o navegador o pôs
+    else if (foco.passo) return;
     else if (foco.neutro) focarSemAcao(alvo);
     else alvo.focus({ preventScroll: true });
     return;

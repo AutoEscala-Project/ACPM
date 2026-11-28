@@ -204,9 +204,12 @@ function avisosDaEscala(ctx) {
     const vez = (vistos.get(base) || 0) + 1;
     vistos.set(base, vez);
     const voo = a.fKey === undefined ? null : voos.get(a.fKey);
+    // A missão que não entrou leva às restrições do pedido dela (G1: ctx.pedidosDasRecusas, o alerta → { stuId, mid })
+    const pedido = a.t === 'err' && ctx.pedidosDasRecusas ? ctx.pedidosDasRecusas.get(a) : null;
     return {
       id: vez === 1 ? base : `${base}:${vez}`,
       gravidade: a.t === 'err' || a.t === 'conf' ? 'erro' : 'aviso',
+      ...(pedido ? { restricoes: { stuId: pedido.stuId, mid: pedido.mid } } : {}),
       minuto: voo ? voo.a : null, ...(voo ? { duracaoMin: voo.b - voo.a } : {}),
       titulo: a.s, texto: a.m, destino: { tela: 'esc' }, grupo: GRUPO_DO_ALERTA[a.t] || 'avisos',
       ...(acaoDoAlerta(a, ctx) ? { acao: acaoDoAlerta(a, ctx) } : {})

@@ -6,6 +6,7 @@ import { cursosIniciais, gravarCurso } from '../../js/programa.js';
 import { aluno, cenario, instrutor, GROUND_C152 } from '../helpers/montar.js';
 import { GLOSSARIO } from '../../js/glossario.js';
 import { COLUNAS_DO_PAINEL } from '../../js/config-do-painel.js';
+import { abrirRestricoes, fecharRestricoes } from './telas/restricoes.js';
 
 // O painel como era antes do quadro Missões: Partidas e Chegadas alternando, com todas as colunas (Previsto e Observação
 // também), na ordem do padrão
@@ -1006,10 +1007,13 @@ test.describe('O que a missão do curso exige do INVA, na Escala', () => {
     await appPronto(page);
     // A escala gravada (uma alteração da Demanda grava a data), com o voo
     await irPara(page, 'dem');
+    // A prioridade, nas restrições do pedido (G1)
+    await abrirRestricoes(page, 1000);
     await page.locator('select[aria-label="Prioridade de Aluno 1000"]').selectOption('4');
     const voosGravados = () => page.evaluate(d => (JSON.parse(localStorage.getItem(`acpm4_dia_${d}`)).resultado || { out: [] }).out.filter(o => o.stuId === 1000).length, AMANHA);
     await expect.poll(voosGravados).toBe(1);
     const historico = await page.locator('#audit-log-list li').count();
+    await fecharRestricoes(page);
     const marca = () => page.locator('#cursos .curso[data-curso="PP"] tr[data-missao]').first().getByRole('checkbox', { name: 'NAV-150NM exige Endosso Solo' });
     const naEscala = async () => (await lerEscala(page)).linhas.filter(l => l.includes('Aluno 1000'));
     await irPara(page, 'cur');

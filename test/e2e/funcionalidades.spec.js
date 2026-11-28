@@ -10,6 +10,7 @@ import { cursosIniciais, novoCurso } from '../../js/programa.js';
 import { MODELOS } from '../../js/modelos-de-curso.js';
 import { FROTA_INICIAL } from '../../js/frota.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
+import { abrirRestricoes, campoDasRestricoes, fecharRestricoes, proximaDoPrograma } from './telas/restricoes.js';
 
 const DEPOIS = '2026-11-12';
 // O PR-VOB na frente do hangar (a frota começa pelo PP-LJV)
@@ -64,8 +65,10 @@ const avioes = page => page.locator('#out tbody tr:not(.win) .c-aviao').evaluate
 // contrário (6 - valor: 1 a mais alta). Com a prioridade ligada, que estes testes ligam
 async function mudarAPrioridade(page, valor) {
   await irPara(page, 'dem');
-  await pedido(page, 1001).locator('[data-f="pr"]').selectOption(String(6 - valor));
+  await abrirRestricoes(page, 1001);
+  await campoDasRestricoes(page, 'pr').selectOption(String(6 - valor));
   await expect.poll(async () => (await gravado(page)).pedidos[1001].pr).toBe(valor);
+  await fecharRestricoes(page);
 }
 const rotulosDosGrupos = page => page.locator('#agd-missao optgroup').evaluateAll(gs => gs.map(g => g.label));
 const textoDaPagina = page => page.evaluate(() => [...document.body.querySelectorAll(':scope > :not(script)')].map(el => el.textContent).join(' '));
@@ -200,7 +203,8 @@ test('no agendamento, o recurso sugerido também segue a ordem da frota', async 
 comTodasAsFuncionalidades('ligados, a ordem guardada vale na escala, e o progresso, a próxima missão e o resultado aparecem', async ({ page }) => {
   await abrirCom(page);
   await mudarAPrioridade(page, 5);
-  await expect(pedido(page, 1001).locator('[data-act="usar-proxima"]')).toHaveText('Próxima: IN-02 · Usar');
+  await expect(await proximaDoPrograma(page, 1001)).toHaveText('Próxima do programa: IN-02');
+  await fecharRestricoes(page);
   await abrirEscala(page);
   expect(await avioes(page)).toEqual(['PR-VOB', 'PR-VOB']);
   await expect(voo(page, 'Maria').locator('[data-resultado]')).toHaveValue('aprovado');
@@ -221,9 +225,15 @@ test.describe('O progresso nos cursos desligado', () => {
     await expect(page.locator('#dem .etapa')).toHaveCount(1);
     await expect(page.locator('#dem [data-act="usar-proxima"], #dem [data-f="outra-missao"], #dem [data-act="usar-fora-da-ordem"]')).toHaveCount(0);
     await expect(page.locator('#s-dem')).not.toContainText('Próxima');
+    // Nas restrições do pedido (G1), nem a missão do curso
+    await abrirRestricoes(page, 1000);
+    await expect(page.locator('#painel-restricoes .restricao-missao, #painel-restricoes [data-act="usar-proxima"], #painel-restricoes [data-f="outra-missao"]')).toHaveCount(0);
+    await fecharRestricoes(page);
     await mudarAPrioridade(page, 4);
-    await pedido(page, 1000).locator('[data-f="pr"]').selectOption('1');
+    await abrirRestricoes(page, 1000);
+    await campoDasRestricoes(page, 'pr').selectOption('1');
     await expect.poll(async () => (await gravado(page)).pedidos[1000].pr).toBe(5);
+    await fecharRestricoes(page);
     await page.reload();
     await appPronto(page);
     const { etapa, cursoDaEtapa } = (await gravado(page)).pedidos[1000];

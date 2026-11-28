@@ -10,6 +10,7 @@ import { dataQueAindaVoa } from '../reparo.js';
 import { rejeicoesDosPedidos } from '../rejeicoes.js';
 import { ApiClient } from '../storage.js';
 import { podeVer, destinoDoEndereco } from '../telas.js';
+import { pedidosDasRecusasDaTela } from './restricoes-do-voo.js';
 import { solicitacoesDaData } from '../solicitacoes-da-data.js';
 
 // As recusas do instrutor escolhido que têm "Sugestões" (o pedido dela vem do pareamento, js/rejeicoes.js), da data aberta
@@ -25,6 +26,8 @@ export function contextoDoDia() {
   const { lista, leitura } = solicitacoesDaData();
   return {
     S, RES, pedidos: lista, leituraDosPedidos: leitura, perfil: ApiClient.perfil || null,
+    // As recusas com o pedido de cada uma (G1: o item da missão que não entrou leva às restrições dela)
+    pedidosDasRecusas: pedidosDasRecusasDaTela(),
     // Quem opera a escala: o Operador e o Administrador (no modo local, o perfil Operador)
     opera: !isGestor(), horasLidas: !dadoIndisponivel('horas'),
     indisponiveis: (S.indisponiveis || []).filter(p => Object.hasOwn(SEM_OS_DADOS, p)).map(id => ({ id, texto: SEM_OS_DADOS[id] })),

@@ -74,6 +74,10 @@ export const assinaturaDosAvisosDoVoo = avisos => avisos.map(a => `${a.codigo}:$
 // O motivo da trava ao lado do campo
 const trava = (id, texto) => (texto ? `<small class="h" id="${id}">${esc(texto)}</small>` : '');
 
+// "Restrições" (G1): o que o app lê para encaixar o pedido do aluno do voo, na gaveta (js/views/restricoes-do-voo.js); o
+// editor fecha antes. A volta do noturno de ontem não tem: é o voo de ontem
+const botaoDasRestricoes = (o, nome = '') => `<button type="button" class="btn quiet" data-act="restricoes" data-id="${esc(o.stuId)}" data-mid="${esc(o.mid || 0)}"${nome ? ` aria-label="Restrições de ${esc(nome)}"` : ''} title="O tipo de recurso, o instrutor, os horários e a duração do pedido">Restrições</button>`;
+
 function campoDoStatus(o, valores, { id, rotulo, travado, descricao = '' }) {
   const st = valores.status[o.fKey];
   const detalhe = valores.detalhe[o.fKey];
@@ -161,7 +165,8 @@ export function desenharEditor({ manter = [] } = {}) {
       linha('Missão', principal.etapa ? `${principal.etapa} · ${principal.mis}` : principal.mis),
       linha('Recurso', nomeDoRecurso(principal.r)), linha('Horário', `${hm(principal.a)}–${hm(principal.b)}`), linha('Duração', fmtH((principal.b - principal.a) / 60)),
       linha('Instrutor', principal.ins), ...voo.unidade.map(o => linha(turma ? `Status de ${o.s}` : 'Status', [rotuloDoStatus(valores.status[o.fKey], o), textoDoDetalhe(valores.status[o.fKey], valores.detalhe[o.fKey])].filter(Boolean).join(' · '))),
-      linha('Peso do aluno', principal.stuKg ? `${pesoBr(principal.stuKg)} kg` : 'sem peso'), linha('Peso do INVA', principal.insKg ? `${pesoBr(principal.insKg)} kg` : 'sem peso')
+      linha('Peso do aluno', principal.stuKg ? `${pesoBr(principal.stuKg)} kg` : 'sem peso'), linha('Peso do INVA', principal.insKg ? `${pesoBr(principal.insKg)} kg` : 'sem peso'),
+      voo.volta ? '' : `<div class="voo-restricoes">${voo.unidade.filter(o => !o.trecho).map(o => botaoDasRestricoes(o, turma ? o.s : '')).join(' ')}</div>`
     ].join('');
     $('#voo-avisos').innerHTML = '';
     $('#voo-cancelar').textContent = 'Fechar';
@@ -175,7 +180,7 @@ export function desenharEditor({ manter = [] } = {}) {
   if (turma || ground) {
     partes.push(`<fieldset class="voo-turma"><legend>Turma</legend><ul>${voo.unidade.map((o, i) => `<li><b>${esc(o.s)}</b>
       ${campoDoStatus(o, valores, { id: `voo-status-${i}`, rotulo: `Status de ${o.s}`, travado: false })}
-      ${o.trecho ? '' : `<button type="button" class="btn quiet" data-act="rm-fly" data-id="${esc(o.stuId)}" data-mid="${esc(o.mid || 0)}" aria-label="Tirar ${esc(o.s)} da escala">Tirar</button>`}</li>`).join('')}</ul>
+      ${o.trecho ? '' : `${botaoDasRestricoes(o, o.s)} <button type="button" class="btn quiet" data-act="rm-fly" data-id="${esc(o.stuId)}" data-mid="${esc(o.mid || 0)}" aria-label="Tirar ${esc(o.s)} da escala">Tirar</button>`}</li>`).join('')}</ul>
       ${voo.unidade.some(o => valores.status[o.fKey] !== 'Cancelado') ? `<button type="button" class="btn quiet" data-act="agendar" data-agendar="t:${esc(voo.chave)}" aria-haspopup="dialog">+ Aluno na turma</button>` : ''}</fieldset>`);
   } else {
     partes.push(`<label class="campo">Aluno <select id="voo-aluno"${tudo || travas.aluno ? ' disabled' : ''}${ligado('voo-aluno', [travas.aluno && 'voo-trava-aluno', tudo && porQue])}>
@@ -214,6 +219,7 @@ export function desenharEditor({ manter = [] } = {}) {
   // Sugestões: o voo em conflito e o cancelado que ainda pode voar (a gaveta abre no lugar do editor)
   const sugestoes = principal.conflito || cancelamentoAproveitavel(S, principal, { data: DATA, hoje: hojeISO() });
   if (sugestoes && !voo.volta) partes.push(`<button type="button" class="btn quiet" data-reparo="${esc(principal.fKey)}">Sugestões</button>`);
+  if (!ground && !voo.volta && !principal.trecho) partes.push(botaoDasRestricoes(principal));
   trocarMantendo($('#voo-campos'), partes.join(''), manter);
   $('#voo-avisos').innerHTML = avisos.map((a, i) => `<li id="voo-aviso-${i}" class="${a.conflito ? 'conflito' : 'aviso'}">${esc(a.texto)}</li>`).join('');
   const assinatura = assinaturaDosAvisosDoVoo(avisos);
