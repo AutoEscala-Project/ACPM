@@ -98,9 +98,7 @@ a.hd-btn { text-decoration: none; }
 .aba-selo { min-width: 18px; height: 18px; border-radius: 9px; padding: 0 5px; font: 700 11px/18px 'Barlow', sans-serif; background: rgba(255,255,255,.18); color: #fff; text-align: center; }
 .aba-selo.aviso { background: var(--ye); color: #12263A; }
 .aba-selo.erro { background: #C62828; color: #fff; }
-/* A Secretaria trabalha na agenda: as telas que ela vê são as da linha (js/telas.js); sem a Demanda, também sem o link
-   para ela, em Alunos, nem o Histórico e o Compartilhar */
-body[data-perfil="secretaria"] .ir-para-demanda,
+/* A Secretaria trabalha na agenda: as telas que ela vê são as da linha (js/telas.js); sem o Histórico e o Compartilhar */
 body[data-perfil="secretaria"] #btn-open-log,
 body[data-perfil="secretaria"] #btn-share-link { display: none !important; }
 /* Com a data no meio, as ferramentas precisam de cerca de 1290 px; sem caber, elas cobririam a data. Abaixo disso, a data

@@ -42,8 +42,8 @@ test.describe('Perfis de acesso', () => {
   });
 
   // Quem só consulta usa os filtros como o Operador: a busca e as caixas das habilitações e dos cursos (.flt-ctrl, que
-  // js/somente-leitura.js não desliga), as vistas, o botão e o "Limpar" do filtro, o "Limpar filtros" e o "Abrir a Demanda"
-  // (sem data-act, que js/eventos/registro.js não deixa passar para ele)
+  // js/somente-leitura.js não desliga), as vistas, o botão e o "Limpar" do filtro e o "Limpar filtros" (sem data-act, que
+  // js/eventos/registro.js não deixa passar para ele)
   test('o Gestor busca, filtra pelas habilitações e pelos cursos e troca de vista em Instrutores, Alunos e na Demanda; "Limpar filtros" mostra todos de novo', async ({ page }) => {
     const estado = cenario({
       ins: [instrutor(1, 9, { nm: 'Ângelo Brandão' }), instrutor(2, 9), instrutor(3, 1), instrutor(4, 1, { hab: ['local', 'c172'] })],
@@ -94,13 +94,13 @@ test.describe('Perfis de acesso', () => {
     await expect(buscaAlu).toHaveValue('');
     await expect(linhasDosAlunos(page)).toHaveCount(2);
     await expect(page.locator('#alu-contagem')).toHaveText('2 alunos');
-    // O filtro dos cursos, em Alunos e na Demanda (pelo "Abrir a Demanda", com as mesmas marcas)
+    // O filtro dos cursos, em Alunos e na Demanda (pela linha, com as mesmas marcas)
     await page.locator('#flt-alu-cur').click();
     await expect(page.locator('#flt-alu-cur-painel input[data-filtro]:disabled')).toHaveCount(0);
     await filtrarCursos(page, 'alu', ['PP']);
     await expect(linhasDosAlunos(page)).toHaveCount(1);
     await expect(page.locator('#alu-contagem')).toHaveText('1 de 2 alunos');
-    await page.getByRole('link', { name: 'Abrir a Demanda' }).click();
+    await irPara(page, 'dem');
     await expect(page.locator('#s-dem')).toBeVisible();
     await expect(page.locator('#flt-dem-cur')).toHaveText('Curso: PP');
     await expect(page.locator('#dem tr[data-k="d"]:visible')).toHaveCount(1);

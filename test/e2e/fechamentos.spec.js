@@ -149,9 +149,9 @@ test.describe('Horários fechados nesta data, na Escala', () => {
     await expect(page.locator('#log-cnt')).toHaveText('0');
   });
 
-  // Revisão do J: o Noturno sai às 17:30, que nenhuma lista tem; 17:30–24:00 o fecha, e a linha diz isso. Desde o #97 (o
-  // Noturno no mesmo avião), o Noturno gravado fica fixo onde está: o horário fechado o deixa em conflito, com o motivo
-  test('17:30–24:00 fecha o Noturno: a linha diz "o Noturno, às 17:30", e o Noturno gravado fica em conflito', async ({ page }) => {
+  // Revisão do J: o Noturno sai às 17:30, que nenhuma lista tem; 17:30–24:00 o fecha, e a linha diz isso. O pino do Noturno
+  // (#97) sai quando o início dele fecha nesta data (#100, js/fixos.js): a Escala refeita fica sem ele
+  test('17:30–24:00 fecha o Noturno: a linha diz "o Noturno, às 17:30", e a Escala fica sem ele', async ({ page }) => {
     await abrir(page, { estado: cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, { mis: 'Noturno', eq: 'C172', p1: 1050, p2: -1 })] }) });
     await abrirEscala(page);
     await esperarInicio(page, 'Aluno 1000').toBe('17:30');
@@ -168,8 +168,7 @@ test.describe('Horários fechados nesta data, na Escala', () => {
     await form.locator('[data-act="fch-fechar"]').click();
     await refazer(page);
     await expect(intervalosFechados(page)).toHaveText(['17:30–24:00 · todos os recursos']);
-    await expect(page.locator('#out')).toContainText('Conflito no Noturno: o horário está fechado nesta data.');
-    await expect.poll(async () => (await lerEscala(page)).linhas.find(l => l.includes('Aluno 1000'))).toMatch(/^17:30–21:30 4 h conflito/);
+    await esperarInicio(page, 'Aluno 1000').toBe('');
   });
 
   // A linha do efeito é uma região viva: o mesmo elemento recebe o texto novo (um elemento novo não seria anunciado), e o

@@ -132,7 +132,10 @@ describe('Voos fixos conferidos de novo', () => {
   it('o horário fechado nesta data e fora da disponibilidade do aluno', () => {
     const fechado = fixado();
     fechado.win = fechado.win.map((v, w) => (w === 0 ? false : v));
-    assert.deepEqual(conflitoDe(fechado), { conflito: ['o horário está fechado nesta data'], codigos: ['horario-fechado'] });
+    // O intervalo fechado que pega o início vem junto (Pedro, 27/11: diz qual ponta do horário conflita)
+    assert.deepEqual(conflitoDe(fechado), { conflito: ['o horário está fechado nesta data (00:00–08:20)'], codigos: ['horario-fechado'] });
+    const fechadoNaData = { ...fixado(), fechamentos: [{ de: 360, ate: 420, categorias: ['C152'] }] };
+    assert.deepEqual(conflitoDe(fechadoNaData), { conflito: ['o horário está fechado nesta data (06:00–07:00)'], codigos: ['horario-fechado'] });
     assert.deepEqual(conflitoDe(fixado({ jan: 'h760' })),
       { conflito: ['o horário está fora da disponibilidade do aluno'], codigos: ['disponibilidade'] });
   });
@@ -1069,6 +1072,21 @@ describe('O pino do Noturno', () => {
     // O motor não prende o pedido que não é mais um Noturno
     const voo = runAllocationEngine(estado).out.find(v => v.stuId === 1000);
     assert.deepEqual([voo.mis, voo.fixo], ['Voo Local', undefined]);
+  });
+
+  it('o horário do Noturno fechado nesta data solta o Noturno: o motor o deixa fora, como o Noturno sem pino (o fixo por outro motivo fica, sem a marca)', () => {
+    const estado = dia();
+    const o = noturnoDe(runAllocationEngine(estado).out);
+    estado.fixos = { [o.fKey]: { ...pinoDoVoo(o), noturno: true } };
+    // Fechado só para outra categoria, ou antes das 17:30: o pino vale
+    for (const fechamentos of [[{ de: 1050, ate: 1440, categorias: ['C152'] }], [{ de: 720, ate: 1050 }]]) {
+      assert.equal(pinosDoNoturnoQueValem({ ...estado, fechamentos }), estado.fixos);
+    }
+    const fechado = { ...estado, fechamentos: [{ de: 1050, ate: 1440 }] };
+    assert.deepEqual(pinosDoNoturnoQueValem(fechado), {});
+    assert.deepEqual(pinosDoNoturnoQueValem({ ...fechado, fStatus: { [o.fKey]: 'Pousou' } }), { [o.fKey]: pinoDoVoo(o) });
+    assert.deepEqual(pinosDoNoturnoQueValem({ ...fechado, fixos: { [o.fKey]: { ...pinoDoVoo(o), escolhido: true, noturno: true } } }), { [o.fKey]: { ...pinoDoVoo(o), escolhido: true } });
+    assert.equal(runAllocationEngine({ ...fechado, fixos: pinosDoNoturnoQueValem(fechado) }).out.find(v => v.stuId === 1000), undefined);
   });
 
   it('o status, a reabertura e a aprovação não soltam o Noturno; o "Automático" do instrutor tira só a escolha', () => {

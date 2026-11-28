@@ -5,7 +5,7 @@
 // missões depois das anteriores).
 import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { estadoDoAluno, proximasMissoes, progressoNoCurso, missoesDoDia, motivoDoBloqueio } from '../../js/progresso.js';
+import { estadoDoAluno, proximasMissoes, progressoNoCurso, missoesDoDia, motivoDoBloqueio, paraColocarNoCurso, alvosDaColocacao } from '../../js/progresso.js';
 import { programaDoLegado, percursoDoCurso, indiceDoPrograma, novoCurso } from '../../js/programa.js';
 import { MODELOS } from '../../js/modelos-de-curso.js';
 import { situacaoPorMissao, situacaoDa } from '../../js/resultados.js';
@@ -623,5 +623,47 @@ describe('A paridade com a próxima missão de antes', () => {
       }
     }
     assert.deepEqual(falhas, []);
+  });
+});
+
+// "Colocar no curso até…" (Alunos, passo A): o aluno que chega no meio do curso. Todas as missões antes da escolhida, na
+// ordem do curso, que não estão aprovadas nem dispensadas, são aprovadas sem voo; o Noturno pela noite (nunca um
+// translado), e a noite da própria escolhida fica de fora
+describe('Colocar no curso até uma missão', () => {
+  const codigos = ids => ids.map(i => PP.missoes.find(m => m.id === i).codigo);
+
+  it('na ordem do curso: PE-04 aprova 19, NAV-01 13, SOLO-03 26 (a dispensada fica de fora), AVX-CQ 43', () => {
+    const contar = alvo => paraColocarNoCurso(PP, new Map(), ALUNO, id(alvo)).length;
+    assert.deepEqual(['PE-04', 'NAV-01', 'SOLO-03', 'AVX-CQ'].map(contar), [19, 13, 26, 43]);
+    assert.deepEqual(codigos(paraColocarNoCurso(PP, new Map(), ALUNO, id('NAV-01'))), ate('TMA-05'));
+    assert.ok(!codigos(paraColocarNoCurso(PP, new Map(), ALUNO, id('SOLO-03'))).includes('ADAPT-C152'), 'a dispensada não ganha resultado');
+  });
+
+  it('o Noturno pela noite: até o NOT, 42 missões sem a noite dele; depois dele, a noite uma vez e nenhum translado', () => {
+    const ateNot = codigos(paraColocarNoCurso(PP, new Map(), ALUNO, id('NOT')));
+    assert.equal(ateNot.length, 42);
+    assert.ok(!ateNot.some(c => ['TSL-01', 'NOT', 'TSL-02'].includes(c)), 'nem a noite escolhida, nem os translados');
+    const ateCheque = codigos(paraColocarNoCurso(PP, new Map(), ALUNO, id('AVX-CQ')));
+    assert.deepEqual(ateCheque.filter(c => ['TSL-01', 'NOT', 'TSL-02'].includes(c)), ['NOT']);
+  });
+
+  it('as já aprovadas ficam de fora (a reprovada entra); cada uma deixa a escolhida liberada e a próxima', () => {
+    const mapa = situacaoPorMissao([reg('IN-01'), reg('IN-02'), reg('CT-01', 'reprovado')]);
+    const ids = paraColocarNoCurso(PP, mapa, ALUNO, id('NAV-01'));
+    assert.deepEqual(codigos(ids), ate('TMA-05').filter(c => !['IN-01', 'IN-02'].includes(c)));
+    for (const alvo of ['PE-04', 'NAV-01', 'SOLO-03', 'NOT', 'AVX-CQ']) {
+      const depois = situacaoPorMissao(codigos(paraColocarNoCurso(PP, new Map(), ALUNO, id(alvo))).map(c => reg(c)));
+      assert.equal(estadoDoAluno(PP, depois, ALUNO).porMissao.get(id(alvo)).estado, 'liberada', alvo);
+      assert.equal(proximasMissoes(PP, depois, ALUNO).padrao.codigo, alvo === 'PE-04' ? 'PE-04' : alvo, alvo);
+    }
+  });
+
+  it('as missões que se escolhem: sem translados e sem dispensadas, agrupadas pela fase, na ordem do curso', () => {
+    const alvos = alvosDaColocacao(PP);
+    assert.deepEqual(alvos.map(g => g.fase.nome.split(' – ')[0]), ['Fase 1', 'Fase 2', 'Fase 3', 'Fase 4', 'Fase 5', 'Fase 7', 'Fase 8', 'Fase 6', 'Fase 9']);
+    const todas = alvos.flatMap(g => g.missoes.map(m => m.codigo));
+    assert.ok(!todas.some(c => ['TSL-01', 'TSL-02', 'ADAPT-C152'].includes(c)));
+    assert.deepEqual(alvos.find(g => g.fase.id === faseId(6)).missoes.map(m => m.codigo), ['NOT']);
+    assert.equal(todas.length, percursoDoCurso(PP).missoes.length - 3);
   });
 });

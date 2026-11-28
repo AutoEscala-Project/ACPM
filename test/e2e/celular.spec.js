@@ -28,9 +28,10 @@ test.describe('Celular', () => {
     await percorrerTelas(page, async tela => expect(await alvosPequenos(page), tela).toEqual([]));
   });
 
-  // A linha vira uma faixa que rola para o lado no celular: a tela aberta pelo "Abrir a Demanda" (Alunos) aparece nela, com
-  // a marca da tela aberta à vista (sem isso, a faixa continuava onde estava, e nenhum link à vista parecia aberto)
-  test('"Abrir a Demanda" traz a Demanda para a parte à vista da faixa da linha', async ({ page }) => {
+  // A linha vira uma faixa que rola para o lado no celular: a tela aberta por um link de dentro de uma tela (o "Abrir a
+  // Demanda" do aviso da Escala; Alunos não tem mais o dele desde o passo A) aparece nela, com a marca da tela aberta à
+  // vista (sem isso, a faixa continuava onde estava, e nenhum link à vista parecia aberto)
+  test('um link de dentro de uma tela traz a Demanda para a parte à vista da faixa da linha', async ({ page }) => {
     await abrirComExemplo(page);
     await irPara(page, 'alu');
     const naFaixa = aba => botaoDaAba(page, aba).evaluate(b => {
@@ -41,6 +42,8 @@ test.describe('Celular', () => {
     // A faixa rolada até o fim, como depois de tocar num dos últimos links: a Demanda fica fora, à esquerda
     await page.locator('#linha .linha-corpo').evaluate(faixa => { faixa.scrollLeft = faixa.scrollWidth; });
     expect(await naFaixa('dem')).toBe(false);
+    // O link como os de dentro das telas (href="#/dem", data-focar), na tela aberta
+    await page.locator('#s-alu').evaluate(tela => tela.insertAdjacentHTML('afterbegin', '<a class="btn quiet" href="#/dem" data-focar>Abrir a Demanda</a>'));
     await page.getByRole('link', { name: 'Abrir a Demanda' }).click();
     await expect(page.locator('#s-dem h2')).toBeFocused();
     await expect(botaoDaAba(page, 'dem')).toHaveAttribute('aria-current', 'page');

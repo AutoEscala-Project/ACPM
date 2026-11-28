@@ -304,9 +304,8 @@
     </div>
   </section>
 
-  <!-- ALUNOS: a barra no lugar da de Instrutores (a busca, o filtro dos cursos, quantos aparecem e "+ Novo aluno"); os
-       pedidos de cada data ficam na Demanda (o link não aparece para a Secretaria, que não vê a Demanda) -->
-  <!-- ALUNOS: a lista e o detalhe (js/views/mestre-detalhe.js); a barra é fixa, nunca redesenhada -->
+  <!-- ALUNOS: a lista e o detalhe (js/views/mestre-detalhe.js); a barra é fixa, nunca redesenhada (a busca, o filtro dos
+       cursos, quantos aparecem e "+ Novo aluno"). Os voos do aluno na data aberta ficam no detalhe ("Nesta data") -->
   <section id="s-alu" class="tela" data-forma="lista-detalhe" data-vendo="lista">
     <div class="md-lista" data-regiao="lista">
       <h2>Alunos</h2>
@@ -320,7 +319,6 @@
         <span class="contagem" id="alu-contagem" role="status"></span>
       </div>
       <p class="lista-aviso" id="alu-aviso" role="status" hidden></p>
-      <p class="h ir-para-demanda">Os pedidos de cada data ficam na Demanda. <a class="btn quiet" href="#/dem" data-focar>Abrir a Demanda</a></p>
       <ul class="lista" id="alu" role="list" aria-label="Alunos" data-lista="alu"></ul>
     </div>
     <div class="md-detalhe" id="det-alu" data-regiao="detalhe" role="region" aria-label="Aluno escolhido" tabindex="-1"></div>
@@ -768,7 +766,14 @@
       Um clique escolhe o aluno, e as setas ↑ ↓ andam pela lista escolhendo; Enter vai ao detalhe, e o Esc volta à linha.
       O aluno escolhido fica no endereço da página (por exemplo, <i>#/alu/1000</i>): recarregar, trocar de data ou de tela e voltar mantém ele aberto.
       No celular, a lista e o aluno aparecem um de cada vez: <i>‹ Alunos</i> (ou o Voltar do aparelho) volta à lista.</p>
-      <p>No detalhe, cada campo é alterado no lugar e gravado ao sair dele (Tab, Enter ou um clique fora): <i>Nome</i>, <i>Peso (kg)</i>, <i>Curso</i>, <i>Priorizar com</i> e <i>Não escalar com</i>.
+      <p>O detalhe tem, de cima para baixo: <b>Nesta data</b> (os voos do aluno na escala da data aberta, com o horário, a missão, o recurso, o instrutor e o status<span data-funcionalidade="progresso">, e o resultado da missão do curso, como na Escala</span>; sem voo, <i>Sem voo nesta data.</i>), <b>Curso e missões</b>, <b>Cadastro</b> e <b>Dados pessoais</b>.
+      Em <b>Curso e missões</b> fica o <i>Curso matriculado</i><span data-funcionalidade="progresso">, o progresso, a <i>Missão anterior</i> (o último resultado do aluno no curso, aprovado ou reprovado, com a data, quem registrou e <i>sem voo</i> quando não veio de um voo) e a <i>Missão atual</i> (a primeira liberada pelas regras do programa; as outras liberadas ao mesmo tempo vêm em <i>Também liberadas</i>)</span>.</p>
+      <p data-funcionalidade="progresso"><b>Registrar resultado sem voo</b> (Operador e Administrador): escolha a missão (as liberadas, as fora da ordem, que pedem o segundo clique, e as já aprovadas), o resultado (<i>Pendente (desfaz)</i> desfaz um engano) e a data, que começa na data aberta, ou em hoje quando ela é depois de hoje, e vai até hoje.
+      A missão que tem voo nesta data é registrada no voo, em <i>Nesta data</i>: o app diz o horário e o avião.
+      O Histórico da data aberta registra o resultado, com <i>(sem voo)</i>.
+      <b>Colocar no curso até…</b> é para o aluno que chega no meio do curso: escolha a missão em que ele para, e as missões antes dela, na ordem do curso, ficam aprovadas sem voo (as já aprovadas e as dispensadas ficam como estão; o Noturno conta pela noite, com os translados); o botão armado diz quantas e quais (e a que tem voo nesta data: o voo continua na escala), e o segundo clique registra.
+      Uma entrada só vai para o Histórico, e o ↶ dela volta cada missão ao resultado que tinha, menos a que ganhou outro resultado depois da colocação (o do voo, por exemplo): essa fica, e o app diz qual.</p>
+      <p>No Cadastro, cada campo é alterado no lugar e gravado ao sair dele (Tab, Enter ou um clique fora): <i>Nome (na escala)</i>, <i>Peso (kg)</i>, <i>Priorizar com</i> e <i>Não escalar com</i>; o <i>Curso matriculado</i>, em Curso e missões, do mesmo jeito.
       Um valor que não vale fica no campo, com a mensagem embaixo dele, e nada é gravado; o Esc no campo devolve o que está gravado.
       <i>Anterior</i> e <i>Próximo</i>, no alto do detalhe (ou Ctrl+, e Ctrl+.), passam ao aluno de cima ou de baixo na lista; de um campo, eles gravam o campo e vão ao mesmo campo do outro aluno (um peso atrás do outro).
       <i>Excluir aluno…</i>, no rodapé, pede o segundo clique: excluir apaga os dados pessoais do aluno e não se desfaz.
@@ -790,21 +795,21 @@
       O instrutor escolhido na Demanda para o dia vale mais que o <i>Priorizar com</i>, com o aviso quando está fora dele.
       O Noturno fica fixo com o INVA que a escala lhe deu (a volta do dia seguinte vai com ele): fora do <i>Priorizar com</i>, o aviso continua na Escala; para trocar o INVA, use <i>Editar</i> na Escala.</p>
       <p>A barra fica em cima da lista: <i>Buscar aluno</i>, o filtro dos cursos, <i>+ Novo aluno</i> (o aluno novo abre escolhido, com o nome pronto para digitar) e o número dos que aparecem (<i>12 de 40 alunos</i>).
-      A busca acha o nome sem os acentos e, para quem vê os dados pessoais, o CANAC; quando os filtros não deixam nenhum, a lista diz por quê, com <i>Limpar filtros</i>.
+      A busca acha o nome sem os acentos e, para quem vê os dados pessoais, o nome completo e o CANAC; quando os filtros não deixam nenhum, a lista diz por quê, com <i>Limpar filtros</i>.
       <b>Filtro dos cursos:</b> o botão ao lado da busca (<i>Todos os cursos</i>) abre os cursos ativos, na ordem de Cursos, os encerrados, marcados “(encerrado)”, o curso de um aluno que não está nos programas e <i>Sem curso</i>.
       Marque um ou mais: aparecem os alunos de algum dos marcados, e o botão diz quais (<i>Curso: PP ou PC</i>); <i>Limpar</i> desmarca todos.
       O curso criado ou encerrado em Cursos entra no filtro na hora.
       O aluno que está à vista continua na lista quando muda (o nome, o curso), mesmo fora dos filtros, até eles mudarem; o aluno escolhido continua aberto mesmo quando a busca tira a linha dele.
-      O Gestor e a Secretaria também buscam, filtram e escolhem, e leem o cadastro em texto.</p>
-      <p>Os pedidos de cada data (quem voa, a missão e os horários) ficam na Demanda: <i>Abrir a Demanda</i>, embaixo da barra, leva a ela (para a Secretaria, que não vê a Demanda, o link não aparece).
-      O filtro dos cursos é um só nas duas telas: os cursos marcados aqui valem na Demanda, onde aparecem os pedidos desses alunos, e os marcados lá valem aqui.
+      O Gestor e a Secretaria também buscam, filtram e escolhem, e leem o cadastro<span data-funcionalidade="progresso"> e as missões</span> em texto.</p>
+      <p>O filtro dos cursos é um só nas duas telas, Alunos e Demanda: os cursos marcados aqui valem na Demanda, onde aparecem os pedidos dos alunos de algum dos cursos marcados, e os marcados lá valem aqui.
       No celular, o cadastro de Instrutores mostra um cartão por pessoa, com o nome de cada campo em cima dele.</p>
-      <p><b>Dados pessoais</b> (a seção do aluno escolhido; em Instrutores, o botão na linha): CPF, CANAC (o código da ANAC, 6 dígitos), nascimento, celular (com DDD) e e-mail.
-      Em Alunos, os campos aparecem com o que está guardado e ficam liberados quando o app termina de ler o aluno; <i>Salvar</i> (ou Enter) confere e grava os cinco de uma vez, e <i>Desfazer</i> volta ao que está gravado.
+      <p><b>Dados pessoais</b> (a seção do aluno escolhido; em Instrutores, o botão na linha): <i>Nome completo</i> (o nome civil inteiro, até 120 caracteres; o <i>Nome (na escala)</i> do cadastro continua sendo o da escala, do PDF e da TV), CPF, CANAC (o código da ANAC, 6 dígitos), nascimento, celular (com DDD) e e-mail.
+      Em Alunos, os campos aparecem com o que está guardado e ficam liberados quando o app termina de ler o aluno; <i>Salvar</i> (ou Enter) confere e grava os seis de uma vez, e <i>Desfazer</i> volta ao que está gravado.
       O que foi digitado e não salvo fica com o aluno ao escolher outro (a linha dele ganha o ponto amarelo), e fechar a página com ele pede confirmação; uma gravação recusada depois de você ir para outro aluno fica marcada na linha, com o aviso em cima da lista e <i>Abrir</i>.
       O app confere o CPF pelos dígitos verificadores e não aceita o mesmo CPF ou CANAC em dois alunos; deixar tudo vazio apaga os dados da pessoa.
-      Só operadores, administradores e a secretaria veem esses dados: eles ficam fora da escala e não vão para o CSV, o PDF nem o Excel, e o Histórico registra só quais campos mudaram, nunca os valores (também as alterações da secretaria).
-      Excluir um aluno ou instrutor apaga os dados pessoais dele.
+      Só operadores, administradores e a secretaria veem esses dados, e só operadores e administradores os alteram: a secretaria consulta, em texto.
+      Eles ficam fora da escala e não vão para o CSV, o PDF, o Excel, o BI nem o Gestor, e o Histórico registra só quais campos mudaram, nunca os valores.
+      Excluir um aluno ou instrutor apaga os dados pessoais dele; do aluno inativo, <i>Apagar os dados pessoais</i>, no rodapé (dois cliques), apaga só os dados pessoais e deixa o aluno no cadastro.
       Se outra pessoa alterou os dados enquanto você editava, o app avisa em vez de gravar por cima e mostra a versão atual: refaça a alteração (em Instrutores, feche o painel e abra de novo).</p>
 
       <h4>Instrutores</h4>

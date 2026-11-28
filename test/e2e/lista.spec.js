@@ -344,13 +344,15 @@ test.describe('A bancada do componente de lista e detalhe', () => {
     expect(await contorno(linhaDaBancada(page, 'PR-AAA'))).not.toBe('none');
     expect(await contorno(linhaDaBancada(page, 'PR-BBB'))).toBe('none');
     const chave = linhaDaBancada(page, 'PR-AAA').locator('.lista-chave');
-    const trilho = () => chave.evaluate(el => [getComputedStyle(el, '::before').backgroundColor, getComputedStyle(el, '::after').marginLeft]);
-    // A chave anda em 0,15 s (a transição de css/lista.css): cada leitura espera ela terminar (com a máquina carregada, uma
-    // leitura no meio dela via a cor de passagem, a mesma nos dois estados)
-    await page.waitForTimeout(300);
+    // O trilho e o botão mudam com uma transição (o fundo do ::before, a margem do ::after): lidos logo depois da troca,
+    // antes de um quadro, ainda têm o valor de antes. A leitura espera as transições da chave e dos pseudoelementos acabarem
+    // (getAnimations lê o estilo e cria a transição pendente; subtree inclui o ::before e o ::after)
+    const trilho = () => chave.evaluate(async el => {
+      await Promise.all(el.getAnimations({ subtree: true }).map(a => a.finished));
+      return [getComputedStyle(el, '::before').backgroundColor, getComputedStyle(el, '::after').marginLeft];
+    });
     const ligada = await trilho();
     await chave.evaluate(el => el.setAttribute('aria-checked', 'false'));
-    await page.waitForTimeout(300);
     const desligada = await trilho();
     expect(ligada[0]).not.toBe(desligada[0]);
     expect(ligada[1]).not.toBe(desligada[1]);

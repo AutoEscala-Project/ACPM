@@ -63,7 +63,8 @@ test.describe('Aplicação', () => {
     }
   });
 
-  // O único link de dentro de uma tela para outra é o "Abrir a Demanda", em Alunos: os pedidos de cada data ficam lá
+  // Nenhum link de dentro de uma tela para outra (o "Abrir a Demanda" de Alunos saiu no passo A: os voos do aluno na data
+  // ficam no detalhe dele, "Nesta data"); a navegação é a da linha
   test('navega pelas abas; sem os botões "Próximo" de um passo a passo', async ({ page }) => {
     await abrir(page);
     for (const aba of ['ins', 'alu', 'cur', 'dem', 'esc', 'bi', 'rec']) {
@@ -73,8 +74,7 @@ test.describe('Aplicação', () => {
       await expect(page).toHaveURL(new RegExp(`#/${aba}$`));
     }
     await expect(page.getByRole('button', { name: /^Próximo:/ })).toHaveCount(0);
-    await expect(page.locator('main#conteudo a[href^="#/"]:not([href^="#/manual"])')).toHaveCount(1);
-    await expect(page.locator('#s-alu a[href="#/dem"]')).toHaveText('Abrir a Demanda');
+    await expect(page.locator('main#conteudo a[href^="#/"]:not([href^="#/manual"])')).toHaveCount(0);
   });
 
   test('aplica a folha de estilos (tokens de cor, layout e fontes)', async ({ page }) => {
