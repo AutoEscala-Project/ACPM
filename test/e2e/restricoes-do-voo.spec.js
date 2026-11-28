@@ -172,6 +172,9 @@ test.describe('A Demanda sem as colunas das restrições', () => {
     await expect(page.locator('#dem [data-f="eq"], #dem [data-f="insId"], #dem [data-f="p1"], #dem [data-f="p2"], #dem [data-f="nb"], #dem [data-f="pr"]')).toHaveCount(0);
     await abrirRestricoes(page, 1000);
     await expect(campoDasRestricoes(page, 'pr')).toHaveValue('3');
+    // A dica de cada campo fica fora do <label> (dentro dele, o botão seria o controle do rótulo, não a lista)
+    await expect(page.locator('#painel-restricoes .dica-btn')).toHaveCount(5);
+    await expect(page.locator('#painel-restricoes label .dica-btn')).toHaveCount(0);
     await campoDasRestricoes(page, 'pr').selectOption('1');
     await expect.poll(async () => (await pedidoGuardado(page, 1000)).pr).toBe(5);
     await campoDasRestricoes(page, 'nb').fill('1.5');
