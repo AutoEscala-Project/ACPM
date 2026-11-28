@@ -224,7 +224,7 @@ test.describe('Modo compartilhado: gravação, conflitos e link da escala', () =
     await recomecarPelosPedidos(page);
     await expect.poll(() => servidor.dias.get(AMANHA).conteudo.aprovacao).toBeNull();
     expect(servidor.dias.get(AMANHA).conteudo.reabertura).toEqual({ em: '2026-11-10T15:00:00.000Z', por: 'Operador de Teste' });
-    expect(servidor.historico.at(-1).descricao).toMatch(/^Pedidos: escala recomeçada.* e escala reaberta$/);
+    await expect.poll(() => servidor.historico.at(-1)?.descricao).toMatch(/^Pedidos: escala recomeçada.* e escala reaberta$/);
     await abrirHistorico(page);
     await expect(page.locator('#audit-log-list .audit-item').first()).toContainText('e escala reaberta');
     expect(erros).toEqual([]);
