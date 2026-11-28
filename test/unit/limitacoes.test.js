@@ -79,6 +79,11 @@ describe('Decisão do Pedro, 28/11: os horários guardados antes das 06:30', () 
       { horarios: [{ de: 390, ate: 600 }, { de: 390, ate: 600, dias: [1] }] });
     // Os iguais que a tela deixa pôr (dois "+ Horário"), como sempre
     assert.deepEqual(normalizarLimitacoes({ horarios: [{ de: 390, ate: 1440 }, { de: 390, ate: 1440 }] }), { horarios: [{ de: 390, ate: 1440 }, { de: 390, ate: 1440 }] });
+    // Também os de antes das 06:30 gravados iguais (dois "+ Horário" das 06:00): a mudança não os fez iguais, os dois ficam.
+    // Só junta o que ela fez igual: com um das 06:30 já gravado, fica ele; das 06:00 e das 06:10, o das 06:00 (e os iguais a ele)
+    assert.deepEqual(normalizarLimitacoes({ horarios: [{ de: 360, ate: 600 }, { de: 360, ate: 600 }] }), { horarios: [{ de: 390, ate: 600 }, { de: 390, ate: 600 }] });
+    assert.deepEqual(normalizarLimitacoes({ horarios: [{ de: 360, ate: 600 }, { de: 390, ate: 600 }, { de: 360, ate: 600 }] }), { horarios: [{ de: 390, ate: 600 }] });
+    assert.deepEqual(normalizarLimitacoes({ horarios: [{ de: 370, ate: 600 }, { de: 360, ate: 600 }, { de: 360, ate: 600 }] }), { horarios: [{ de: 390, ate: 600 }, { de: 390, ate: 600 }] });
     // O que sai não ocupa lugar no máximo
     const oito = Array.from({ length: MAXIMO_DE_HORARIOS }, (_, i) => ({ de: 420 + i * 60, ate: 450 + i * 60 }));
     assert.equal(normalizarLimitacoes({ horarios: [{ de: 360, ate: 600 }, { de: 390, ate: 600 }, ...oito] }).horarios.length, MAXIMO_DE_HORARIOS);
@@ -86,9 +91,11 @@ describe('Decisão do Pedro, 28/11: os horários guardados antes das 06:30', () 
   });
 
   it('a mudança é feita uma vez só: o normalizado não muda de novo', () => {
-    const v = { horarios: [{ de: 360, ate: 600 }, { de: 390, ate: 600 }, { de: 375, ate: 1440, dias: [2] }, { de: 360, ate: 380 }] };
-    const uma = normalizarLimitacoes(v);
-    assert.deepEqual(normalizarLimitacoes(uma), uma);
+    for (const v of [{ horarios: [{ de: 360, ate: 600 }, { de: 390, ate: 600 }, { de: 375, ate: 1440, dias: [2] }, { de: 360, ate: 380 }] },
+      { horarios: [{ de: 370, ate: 600 }, { de: 360, ate: 600 }, { de: 360, ate: 600 }, { de: 380, ate: 600, dias: [1] }] }]) {
+      const uma = normalizarLimitacoes(v);
+      assert.deepEqual(normalizarLimitacoes(uma), uma);
+    }
   });
 
   // A regra do início (R4) não muda: um horário das 06:00 que chega ao motor sem passar pela leitura continua valendo das

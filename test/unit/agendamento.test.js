@@ -16,6 +16,7 @@ import { normalizarLinhaGravada } from '../../js/escala-gravada.js';
 import { noturnosDaVespera, comRepousoDoNoturno } from '../../js/noturno.js';
 import { fixosAoAprovar, fixosAoMudarStatus } from '../../js/fixos.js';
 import { normalizeMissionFields } from '../../js/rules.js';
+import { normalizarLimitacoes } from '../../js/limitacoes.js';
 import { gerarCenario } from '../helpers/cenarios.js';
 import { situacaoPorMissao } from '../../js/resultados.js';
 
@@ -1160,6 +1161,23 @@ describe('Agendamento: as alternativas de cada bloqueio', () => {
     assert.ok(item, JSON.stringify(codigos(outroTipo)));
     assert.equal(item.texto, 'O aluno só voa no C172.');
     assert.deepEqual(alternativas(item), []);
+  });
+
+  // Decisão do Pedro, 28/11: os horários do aluno começam às 06:30, e o guardado das 06:00 é lido às 06:30. "Outro horário…"
+  // ainda aceita um horário antes das 06:30: contra o horário lido, ele fica fora dos horários do aluno e pede "Agendar mesmo
+  // assim" (à vista, nunca em silêncio); das 06:30 em diante, nada muda
+  it('o "Outro horário…" antes das 06:30 com um horário do aluno guardado das 06:00: o conflito, à vista', () => {
+    const guardado = { horarios: [{ de: 360, ate: 600 }] };
+    const com = limitacoes => {
+      const estado = doDia();
+      estado.stu = estado.stu.map(s => (s.id === 1001 ? { ...s, limitacoes } : s));
+      return outroHorario => codigos(pararia(agendar(estado, { amb, escolhas: { aluno: 1001, horario: 'outro', outroHorario } }).avaliacao));
+    };
+    const lido = com(normalizarLimitacoes(guardado));
+    assert.ok(lido('06:10').includes('limitacao-de-horario'), JSON.stringify(lido('06:10')));
+    for (const h of ['06:30', '09:50']) assert.ok(!lido(h).includes('limitacao-de-horario'), h);
+    // A regra do início (R4) não muda: sem a leitura, o das 06:00 continua valendo às 06:10
+    assert.ok(!com(guardado)('06:10').includes('limitacao-de-horario'));
   });
 
   it('a alternativa escolhida muda só o campo dela: os outros ficam como o formulário os mostra, e o valor que ele trocou não volta', () => {
