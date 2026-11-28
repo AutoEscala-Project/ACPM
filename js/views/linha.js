@@ -10,7 +10,7 @@ import { dataQueAindaVoa } from '../reparo.js';
 import { rejeicoesDosPedidos } from '../rejeicoes.js';
 import { ApiClient } from '../storage.js';
 import { podeVer, destinoDoEndereco } from '../telas.js';
-import { pedidosDaDataAberta } from './selos.js';
+import { solicitacoesDaData } from '../solicitacoes-da-data.js';
 
 // As recusas do instrutor escolhido que têm "Sugestões" (o pedido dela vem do pareamento, js/rejeicoes.js), da data aberta
 // de hoje em diante: o alerta → o fKey do pedido. Sem a recusa na escala, nada é calculado
@@ -22,7 +22,7 @@ function recusasComSugestoes() {
 
 // O único leitor dos dados para a linha (e para os avisos da data, no trilho)
 export function contextoDoDia() {
-  const { lista, leitura } = pedidosDaDataAberta();
+  const { lista, leitura } = solicitacoesDaData();
   return {
     S, RES, pedidos: lista, leituraDosPedidos: leitura, perfil: ApiClient.perfil || null,
     // Quem opera a escala: o Operador e o Administrador (no modo local, o perfil Operador)

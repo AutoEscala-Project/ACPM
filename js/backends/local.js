@@ -126,6 +126,11 @@ export const backendLocal = {
     return datasGuardadas().filter(d => formatoDe(lerJson(PREFIXO_DIA + d)) < esquema);
   },
 
+  // Sem servidor, só este navegador grava as datas dele: a escala nunca mudou em outro computador
+  async diaMudou() {
+    return false;
+  },
+
   async listarDias(de, ate) {
     return datasGuardadas()
       .filter(d => d >= de && d <= ate)

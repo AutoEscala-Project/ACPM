@@ -27,8 +27,10 @@ const ANTIGAS = {
     'Instrutores › Cadastro', 'em Instrutores',
     // C, "regra": a missão começa numa faixa e pode terminar depois dela (decisão 1 do Pedro)
     'o voo inteiro do instrutor cabe numa faixa', 'disponível durante o voo inteiro', 'durante todo o voo', 'precisa estar disponível na noite'],
-  // O 7º voo local não fica mais indisponível: o app avisa e pede a confirmação (F1c)
-  pedidos: ['o horário fica indisponível, e o app diz o próximo horário possível'],
+  // O 7º voo local não fica mais indisponível: o app avisa e pede a confirmação (F1c). D2: a tela é Pedidos (lista e
+  // detalhe, por estado), sem a coluna Situação; importa-se só o aprovado
+  pedidos: ['o horário fica indisponível, e o app diz o próximo horário possível', 'Ainda não importado', 'a coluna Situação', 'Importar pedidos da agenda',
+    'Importar da agenda'],
   // O peso vem antes do curso em Alunos; Alunos é lista e detalhe (F2): sem as colunas de Instrutores, sem o cartão no
   // celular, os dados pessoais na seção do aluno (o painel fica para os instrutores)
   // A: sem o link para a Demanda (os voos da data ficam em "Nesta data"), e a secretaria não altera os dados pessoais
@@ -66,8 +68,14 @@ const NOVAS = {
     'o que já tem resultado nem o pedido que mudou depois na Demanda'],
   demanda: ['Pôr um aluno na demanda'],
   // A missão espera o aluno e vem do curso dele; o 7º voo local pede a confirmação (F1c)
-  pedidos: ['Ainda não importado', 'Data do pedido', 'prazo encerrado', 'as missões do curso dele', 'NAV-150NM · Navegação · C152 · 3 h', '(nenhum ativo)',
-    'só registra com “Registrar mesmo assim”; o pedido guarda quem confirmou e quando'],
+  // D2: a lista por estado, "Aprovar" e "Aprovar todos", a entrada na hora (só na data já gravada) e "Importar", o detalhe
+  // só de leitura com as ações, as duas preferências exatas, os dois botões e o 7º voo local, "Registrar na lista de espera"
+  pedidos: ['Data do pedido', 'prazo encerrado', 'as missões do curso dele', 'NAV-150NM · Navegação · C152 · 3 h', '(nenhum ativo)',
+    'Aguardando aprovação, Aprovados e Cancelados', 'Aprovar todos (N), que aprova só os que a busca mostra',
+    'O pedido aprovado da data aberta entra na demanda na hora quando a escala dessa data já está gravada', 'Importar os põe lá',
+    'O pedido escolhido é só de leitura', 'Registrar de novo…', '2ª preferência é outro horário exato',
+    'Registrar e aprovar', 'Registrar sem aprovar', 'Com Registrar na lista de espera',
+    'Com Registrar mesmo assim, o pedido guarda quem confirmou e quando'],
   // A busca sem acentos, quantos aparecem e o "Limpar filtros"; o "Vem" (a data aberta não é sempre hoje); o filtro das
   // habilitações, com várias marcas e a regra ("todas as marcadas"). C: INVAs como lista e detalhe, as faixas ("Pode
   // decolar de … até …"), as pausas ("+ Pausa", "Almoço"), os três turnos, meio dia digitado, a tira, a regra de antes do C

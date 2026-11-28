@@ -125,6 +125,23 @@ describe('Carregar e salvar uma data', () => {
     assert.deepEqual(backend.gravacoes, []);
   });
 });
+// Os pedidos de cada dia do trilho (D2): pela contagem do servidor (solicitacoes_por_dia), sem baixar os pedidos do mês: os
+// que aguardam e os aprovados; o domingo não tem número. E a escala que mudou em outro computador, perguntada ao backend
+describe('Os pedidos por dia e a escala que mudou (ApiClient)', () => {
+  it('a contagem do trilho vem da contagem do servidor, sem os domingos e sem ler a lista', async () => {
+    const pedidos = [];
+    backend.solicitacoesPorDia = async (de, ate) => { pedidos.push([de, ate]); return { '2026-11-11': { aguardando: 1, aprovadas: 2 }, '2026-11-15': { aguardando: 1, aprovadas: 0 } }; };
+    backend.listarSolicitacoes = async () => { throw new Error('a lista não é lida'); };
+    assert.deepEqual(await ApiClient.contagemDaAgenda('2026-11-01', '2026-11-30'), { '2026-11-11': 3 });
+    assert.deepEqual(pedidos, [['2026-11-01', '2026-11-30']]);
+  });
+
+  it('a escala mudou em outro computador: a resposta do backend', async () => {
+    backend.diaMudou = async data => data === '2026-11-12';
+    assert.deepEqual([await ApiClient.diaMudou('2026-11-11'), await ApiClient.diaMudou('2026-11-12')], [false, true]);
+  });
+});
+
 describe('Dados lidos à parte', () => {
   it('sem as horas dos instrutores, os resultados ou os programas dos cursos, a data abre e diz o que ficou indisponível', async () => {
     const aberta = await ApiClient.carregarDia('2026-11-11');

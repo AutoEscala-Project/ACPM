@@ -12,7 +12,7 @@ import { DATA } from '../state.js';
 import { ApiClient } from '../storage.js';
 import { enderecoDoDestino } from '../telas.js';
 import { contextoDoDia } from './linha.js';
-import { pedidosDaDataAberta } from './selos.js';
+import { solicitacoesDaData } from '../solicitacoes-da-data.js';
 
 const ABREVIADOS = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
 const CABECA = [['D', 'domingo'], ['S', 'segunda-feira'], ['T', 'terça-feira'], ['Q', 'quarta-feira'], ['Q', 'quinta-feira'], ['S', 'sexta-feira'], ['S', 'sábado']];
@@ -136,7 +136,7 @@ export function rTrilho() {
   const emFoco = document.activeElement && document.activeElement.closest('#cal .cal-dia');
   const parada = emFoco && semanas.flat().includes(emFoco.dataset.dia) ? emFoco.dataset.dia : paradaDoTab(semanas, { aberta: DATA, hoje });
   // O número da data aberta segue os pedidos dela já lidos
-  const { lista, leitura } = pedidosDaDataAberta();
+  const { lista, leitura } = solicitacoesDaData();
   if (leitura === 'lidos') contagem[DATA] = lista.filter(p => !p.cancelada_em).length;
   trilho.dataset.mes = mes;
   // O mês é dito quando muda (aria-live): o mesmo texto escrito de novo seria lido a cada redesenho

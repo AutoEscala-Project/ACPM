@@ -9,7 +9,7 @@ const SEM_SECRETARIA = ['operador', 'administrador', 'gestor'];
 // rotulo: a palavra da navegação, igual ao título da tela. secao: a <section> da tela, quando não é 's-<id>'; item: o lugar
 // que a tela abre sem item no endereço (Aprovar mostra a aprovação na Escala até ter a tela dela)
 export const TELAS = {
-  age: { rotulo: 'Agenda', estagio: 'pedidos', perfis: TODOS },
+  age: { rotulo: 'Pedidos', estagio: 'pedidos', perfis: TODOS },
   dem: { rotulo: 'Demanda', estagio: 'processamento', perfis: SEM_SECRETARIA },
   esc: { rotulo: 'Escala', estagio: 'escala', perfis: TODOS },
   apr: { rotulo: 'Aprovar', estagio: 'aprovar', perfis: TODOS, secao: 's-esc', item: 'aprovacao' },

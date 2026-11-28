@@ -1,4 +1,4 @@
-import { test, comProgresso, expect, abrir, abrirSintetico, abrirComExemplo, irPara, abrirEscala, lerEscala, confirmar, filtrarCursos, AMANHA, abrirHistorico, aprovar, botaoAprovar, caixaVoa, dataAberta, diaSeguinte, importarDaAgenda, reabrir, voar, registrarPedido, refazer, linhasDosAlunos, caixaDisponivel } from './fixtures.js';
+import { test, comProgresso, expect, abrir, abrirSintetico, abrirComExemplo, irPara, abrirEscala, lerEscala, confirmar, filtrarCursos, AMANHA, abrirHistorico, aprovar, botaoAprovar, caixaVoa, dataAberta, diaSeguinte, reabrir, voar, registrarPedido, refazer, linhasDosAlunos, caixaDisponivel, linhasDosPedidos } from './fixtures.js';
 import { aluno, cenario, instrutor, missaoExtra } from '../helpers/montar.js';
 
 const linhaDoAluno = (page, nome) => page.locator(`#dem tr[data-k="d"][data-mid="0"][data-nm="${nome.toLowerCase()}"]`);
@@ -76,9 +76,9 @@ test.describe('Demanda', () => {
     // O pedido da agenda para a mesma missão (Voo Local) toma este voo, em vez de virar um segundo
     await irPara(page, 'age');
     await registrarPedido(page, { aluno: 'Aluno 1000', missao: 'Voo Local', horario: '10:10', por: 'Maria' });
-    await expect(page.locator('#agenda-lista tbody tr')).toHaveCount(1);
+    await expect(linhasDosPedidos(page)).toHaveCount(1);
+    // Registrado e aprovado na data já gravada, ele entra na demanda na hora (D2)
     await irPara(page, 'dem');
-    await importarDaAgenda(page);
     await expect(page.locator('#dem tr[data-k="d"][data-id="1000"]')).toHaveCount(1);
     // O horário exato do pedido importado fica no dia guardado (a Demanda não mostra mais a coluna)
     await expect.poll(async () => (await guardado()).jan).toBe('h610');
