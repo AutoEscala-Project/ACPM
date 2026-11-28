@@ -5,8 +5,8 @@
 import {
   test, comProgresso, expect, abrir, abrirSintetico, abrirComExemplo, irPara, filtrarCursos, confirmar, AGORA, AMANHA, alvosPequenos,
   appPronto, dataAberta, diaSeguinte, larguraDaPagina, abrirAluno, campoDoAberto, linhaDoAluno, linhasDosAlunos, nomesNaLista,
-  etiquetasDoAberto, nenhumNaLista, abrirHistorico, campoDaAgenda, prepararContexto, vigiarErros, entrar, medirVazioDoDetalhe,
-  abrirInstrutor, campoDoInstrutor
+  etiquetasDoAberto, nenhumNaLista, abrirHistorico, campoDaAgenda, prepararContexto, vigiarErros, entrar, abrirEscala, entradasDoHistorico, textosDaEscala,
+  medirVazioDoDetalhe, abrirInstrutor, campoDoInstrutor
 } from './fixtures.js';
 import { razaoDeContraste } from '../helpers/contraste.js';
 import { documentosAtuais, criarSupabaseFalso, CONTAS } from './supabase-falso.js';
@@ -795,8 +795,8 @@ test.describe('Alunos: Curso e missões com o progresso desligado', () => {
   test('só o curso matriculado; "Nesta data" mostra o código da missão do curso, sem o resultado', async ({ page }) => {
     await abrirComOPP(page);
     await expect(page.locator('#sec-alu-curso')).toContainText('Curso e missões');
-    await expect(page.locator('#det-alu [data-campo]')).toHaveText([/^Curso matriculado/, /^Nome \(na escala\)/, /^Peso/, /^Priorizar com/, /^Não escalar com/]);
-    await expect(page.locator('#det-alu .det-secao')).toHaveText([/^Nesta data/, /^Curso e missões/, /^Cadastro/, /^Dados pessoais/]);
+    await expect(page.locator('#det-alu [data-campo]')).toHaveText([/^Curso matriculado/, /^Nome \(na escala\)/, /^Peso/, /^Só voa no/, /^Pode voar/, /^Priorizar com/, /^Não escalar com/]);
+    await expect(page.locator('#det-alu .det-secao')).toHaveText([/^Nesta data/, /^Curso e missões/, /^Cadastro/, /^Limitações/, /^Dados pessoais/]);
     await expect(page.locator('#det-alu [data-pessoa] .det-campo label')).toHaveText(['Nome completo', 'CPF', 'CANAC', 'Nascimento', 'Celular', 'E-mail']);
     await expect(page.locator('#det-alu .det-forms')).toHaveCount(0);
     await expect(page.locator('#det-alu .voos-do-aluno .etapa')).toHaveText('IN-01');
@@ -873,4 +873,154 @@ comProgresso.describe('Alunos: o ↶ da colocação que falha no meio', () => {
     expect(erros.filter(e => !e.includes('400'))).toEqual([]);
     await context.close();
   });
+});
+
+// L (N9): as limitações do aluno, duras para o motor, na seção "Limitações" do detalhe: "Só voa no" (os tipos de avião ou de
+// simulador), "Pode voar" (os horários, [de, ate), em todas as datas ou nos dias marcados), "Priorizar com" e "Não escalar
+// com" (como o F1h os deixou) e a linha do peso (sem nenhum número). Cada mudança é gravada ao mudar o campo, com uma entrada
+// do Histórico que reverte (setLimitacoes)
+test.describe('As limitações do aluno', () => {
+  const dia = (extra = {}) => ({ ...cenario({ ins: [instrutor(1, 9), instrutor(2, 9)], stu: [aluno(1000, { p1: 500, p2: -1 }, { nm: 'Ana', ...extra })] }), nid: 1001 });
+  const guardadas = page => page.evaluate(() => JSON.parse(localStorage.getItem('acpm4_cadastro')).stu.find(s => s.id === 1000).limitacoes ?? null);
+  const erroDosHorarios = page => page.locator('#det-alu-limHorarios-erro');
+
+  test('"Só voa no" e "Pode voar": gravados ao mudar; o Até antes do De e o último dia não valem; o Histórico reverte; a Escala recusa o pedido no outro tipo', async ({ page }) => {
+    await abrir(page, { estado: dia() });
+    await irPara(page, 'alu');
+    await abrirAluno(page, 1000);
+    await expect(page.locator('#det-alu .det-secao')).toHaveText([/^Nesta data/, /^Curso e missões/, /^Cadastro/, /^Limitações/, /^Dados pessoais/]);
+    await expect(page.locator('#sec-alu-limitacoes-corpo [data-campo]')).toHaveText([/^Só voa no/, /^Pode voar/, /^Priorizar com/, /^Não escalar com/]);
+    await expect(page.locator('#sec-alu-cadastro-corpo [data-campo]')).toHaveText([/^Nome \(na escala\)/, /^Peso/]);
+    await expect(page.locator('#det-alu [data-campo="limHorarios"]')).toContainText('Em qualquer horário.');
+    // "Só voa no": o C172
+    await campoDoAberto(page, 'limRecurso').selectOption('C172');
+    await expect(etiquetasDoAberto(page, 'limRecursos')).toHaveText([/^C172/]);
+    await expect(campoDoAberto(page, 'limRecurso')).toBeFocused();
+    await expect.poll(() => guardadas(page)).toEqual({ recursos: ['C172'] });
+    await expect(page.locator('#sec-alu-limitacoes')).toContainText('só no C172');
+    // A Escala: o pedido no C152 é recusado, com o motivo
+    await abrirEscala(page);
+    await expect(textosDaEscala(page, 'erros').filter({ hasText: 'Ana' })).toHaveText(['Ana Rejeitado: o aluno só voa no C172 (o pedido está no C152).']);
+    // "Pode voar": "+ Horário" põe um das 06:30 à meia-noite, em todas as datas, e o foco no De dele (Decisão do Pedro, 28/11:
+    // os horários começam às 06:30, como os de decolagem)
+    await irPara(page, 'alu');
+    await page.locator('#det-alu-lim-mais').click();
+    await expect(page.locator('#det-alu-lim-de-0')).toBeFocused();
+    await expect(page.locator('#det-alu-lim-de-0')).toHaveValue('390');
+    await expect(page.locator('#det-alu-lim-de-0 option').first()).toHaveText('06:30');
+    await expect(page.locator('#det-alu-lim-ate-0 option').first()).toHaveText('06:40');
+    await expect(page.locator('#det-alu-lim-ate-0')).toHaveValue('1440');
+    for (const d of [1, 2, 3, 4, 5, 6]) await expect(page.locator(`#det-alu-lim-dia-0-${d}`)).toBeChecked();
+    await page.locator('#det-alu-lim-de-0').selectOption('780');
+    await expect(page.locator('#det-alu-lim-de-0')).toBeFocused();
+    await page.locator('#det-alu-lim-ate-0').selectOption('1080');
+    await page.locator('#det-alu-lim-dia-0-6').uncheck();
+    await expect(page.locator('#det-alu-lim-dia-0-6')).toBeFocused();
+    await expect.poll(() => guardadas(page)).toEqual({ recursos: ['C172'], horarios: [{ de: 780, ate: 1080, dias: [1, 2, 3, 4, 5] }] });
+    await expect(page.locator('#sec-alu-limitacoes')).toContainText('só no C172; 13:00–18:00 (seg, ter, qua, qui, sex)');
+    // O Até antes do De não vale: a mensagem, ligada ao campo, e nada muda
+    await page.locator('#det-alu-lim-de-0').selectOption('1100');
+    await expect(erroDosHorarios(page)).toHaveText('O horário precisa terminar depois de começar (o Até depois do De).');
+    await expect(page.locator('#det-alu-lim-de-0')).toHaveValue('780');
+    await expect(page.locator('#det-alu-lim-de-0')).toHaveAttribute('aria-invalid', 'true');
+    // Os dias: o último não sai
+    for (const d of [1, 2, 3, 4]) await page.locator(`#det-alu-lim-dia-0-${d}`).uncheck();
+    await expect(erroDosHorarios(page)).toHaveText('');
+    // (um clique: o uncheck do Playwright espera a caixa desmarcada, e ela volta marcada)
+    await page.locator('#det-alu-lim-dia-0-5').click();
+    await expect(erroDosHorarios(page)).toHaveText('Marque ao menos um dia: com todos marcados, o horário vale em todas as datas.');
+    await expect(page.locator('#det-alu-lim-dia-0-5')).toBeChecked();
+    await expect.poll(() => guardadas(page)).toEqual({ recursos: ['C172'], horarios: [{ de: 780, ate: 1080, dias: [5] }] });
+    // O Histórico: uma entrada por mudança; o ↶ da última devolve a de antes
+    await abrirHistorico(page);
+    await expect(entradasDoHistorico(page, 'Limitações de Ana:')).toHaveCount(9);
+    await expect(entradasDoHistorico(page, 'Limitações de Ana:').first()).toContainText('Limitações de Ana: só no C172; 13:00–18:00 (sex)');
+    await entradasDoHistorico(page, 'Limitações de Ana:').first().locator('[data-act="rev-log"]').click();
+    await expect(entradasDoHistorico(page, 'Revertido: limitações de Ana: só no C172; 13:00–18:00 (qui, sex)')).toHaveCount(1);
+    await expect.poll(() => guardadas(page)).toEqual({ recursos: ['C172'], horarios: [{ de: 780, ate: 1080, dias: [4, 5] }] });
+    await page.locator('#btn-fechar-historico').click();
+    // O ✕ do horário e o da etiqueta: sem nenhuma, o campo sai do cadastro
+    await page.locator('#det-alu-lim-tirar-0').click();
+    await expect(page.locator('#det-alu-lim-mais')).toBeFocused();
+    await page.locator('#det-alu [data-act="unlr"][data-t="C172"]').click();
+    await expect(campoDoAberto(page, 'limRecurso')).toBeFocused();
+    await expect.poll(() => guardadas(page)).toBe(null);
+    await expect(page.locator('#det-alu [data-campo="limHorarios"]')).toContainText('Em qualquer horário.');
+  });
+
+  test('a linha do peso diz em que avião nenhum INVA cabe, sem nenhum número; quem só consulta lê as limitações como texto', async ({ page }) => {
+    const estado = dia({ kg: 130, limitacoes: { recursos: ['C172', 'Sim. Multi'], horarios: [{ de: 780, ate: 1080, dias: [1, 3] }, { de: 420, ate: 540 }] } });
+    estado.ins = [instrutor(1, 9, { kg: 95 }), instrutor(2, 9, { kg: 90 })];
+    await abrir(page, { estado });
+    await irPara(page, 'alu');
+    await abrirAluno(page, 1000);
+    const peso = page.locator('#det-alu [data-campo="limPeso"]');
+    await expect(peso).toHaveText(/^Peso nos aviões\s*Com o peso do aluno, nenhum INVA ativo habilitado cabe no C152\.$/);
+    await expect(etiquetasDoAberto(page, 'limRecursos')).toHaveText([/^C172/, /^Sim\. Multi/]);
+    // Os horários na ordem do começo
+    await expect(page.locator('#det-alu-lim-de-0')).toHaveValue('420');
+    await expect(page.locator('#det-alu-lim-de-1')).toHaveValue('780');
+    await expect(page.locator('#det-alu-lim-dia-1-2')).not.toBeChecked();
+    await page.locator('#role-sel').selectOption('gestor');
+    await expect(page.locator('#det-alu [data-campo="limRecursos"] .det-valor')).toHaveText('C172, Sim. Multi');
+    await expect(page.locator('#det-alu [data-campo="limHorarios"] .det-valor')).toHaveText('07:00–09:00; 13:00–18:00 (seg, qua)');
+    await expect(page.locator('#sec-alu-limitacoes-corpo select, #sec-alu-limitacoes-corpo input, #sec-alu-limitacoes-corpo [data-act]')).toHaveCount(0);
+    await expect(peso).toContainText('nenhum INVA ativo habilitado cabe no C152');
+  });
+
+  // Revisão: o que veio gravado pela API e a tela não oferece (o domingo, um minuto fora dos 10 em 10) é mostrado como está,
+  // e o domingo não fura a recusa do último dia; o De e o Até de cada horário dizem de qual horário são
+  test('"Pode voar" com o que veio pela API: o minuto como está, o domingo não conta como dia marcado; o De e o Até com o número do horário', async ({ page }) => {
+    await abrir(page, { estado: dia({ limitacoes: { horarios: [{ de: 785, ate: 1085 }, { de: 780, ate: 1080, dias: [0, 1] }] } }) });
+    await irPara(page, 'alu');
+    await abrirAluno(page, 1000);
+    // O minuto gravado fora dos 10 em 10: o campo mostra ele, não o primeiro da lista
+    await expect(page.locator('#det-alu-lim-de-1')).toHaveValue('785');
+    await expect(page.locator('#det-alu-lim-ate-1')).toHaveValue('1085');
+    await expect(page.locator('#det-alu-lim-de-1 option:checked')).toHaveText('13:05');
+    await expect(page.locator('#det-alu-lim-ate-1 option:checked')).toHaveText('18:05');
+    // Cada De e Até diz de qual horário é
+    await expect(page.getByRole('combobox', { name: 'De (horário 1)', exact: true })).toHaveId('det-alu-lim-de-0');
+    await expect(page.getByRole('combobox', { name: 'até (horário 2)', exact: true })).toHaveId('det-alu-lim-ate-1');
+    // O domingo gravado: só a segunda marcada; ela é o último dia, e não sai
+    for (const d of [2, 3, 4, 5, 6]) await expect(page.locator(`#det-alu-lim-dia-0-${d}`)).not.toBeChecked();
+    await page.locator('#det-alu-lim-dia-0-1').click();
+    await expect(erroDosHorarios(page)).toHaveText('Marque ao menos um dia: com todos marcados, o horário vale em todas as datas.');
+    await expect(page.locator('#det-alu-lim-dia-0-1')).toBeChecked();
+    await expect.poll(() => guardadas(page)).toEqual({ horarios: [{ de: 780, ate: 1080, dias: [0, 1] }, { de: 785, ate: 1085 }] });
+    // A próxima mudança dos dias desse horário tira o domingo, que a tela não oferece
+    await page.locator('#det-alu-lim-dia-0-3').check();
+    await expect.poll(() => guardadas(page)).toEqual({ horarios: [{ de: 780, ate: 1080, dias: [1, 3] }, { de: 785, ate: 1085 }] });
+  });
+
+  // Decisão do Pedro, 28/11: os horários começam às 06:30. O que veio gravado começando das 06:00 às 06:29 aparece às 06:30
+  // (o que ficou igual a outro, uma linha só), o que terminava até as 06:30 não aparece, e a primeira mudança grava assim
+  test('"Pode voar" guardado antes das 06:30: o De às 06:30, um só quando fica igual; o que terminava até as 06:30 sai', async ({ page }) => {
+    await abrir(page, { estado: dia({ limitacoes: { horarios: [{ de: 360, ate: 600 }, { de: 390, ate: 600 }, { de: 360, ate: 380 }, { de: 780, ate: 1080, dias: [1] }] } }) });
+    await irPara(page, 'alu');
+    await abrirAluno(page, 1000);
+    await expect(page.locator('#sec-alu-limitacoes-corpo .lim-horario')).toHaveCount(2);
+    await expect(page.locator('#det-alu-lim-de-0')).toHaveValue('390');
+    await expect(page.locator('#det-alu-lim-de-0 option:checked')).toHaveText('06:30');
+    await expect(page.locator('#det-alu-lim-de-0 option', { hasText: '06:00' })).toHaveCount(0);
+    await expect(page.locator('#sec-alu-limitacoes')).toContainText('06:30–10:00; 13:00–18:00 (seg)');
+    await page.locator('#det-alu-lim-ate-0').selectOption('660');
+    await expect.poll(() => guardadas(page)).toEqual({ horarios: [{ de: 390, ate: 660 }, { de: 780, ate: 1080, dias: [1] }] });
+  });
+
+  for (const largura of [390, 320]) {
+    test(`no celular (${largura} px): "Pode voar" cabe na tela, com 44 px para o dedo`, async ({ page }) => {
+      await page.setViewportSize({ width: largura, height: 800 });
+      await abrir(page, { estado: dia({ limitacoes: { recursos: ['C172'], horarios: [{ de: 780, ate: 1080, dias: [1, 3] }] } }) });
+      await irPara(page, 'alu');
+      await abrirAluno(page, 1000);
+      await page.locator('#sec-alu-limitacoes').scrollIntoViewIfNeeded();
+      const fora = await page.locator('#det-alu .det').evaluate((det, l) => [...det.querySelectorAll('button, input, select, label, .tg')]
+        .filter(el => el.checkVisibility()).filter(el => { const r = el.getBoundingClientRect(); return r.left < 0 || r.right > l + 0.5; })
+        .map(el => el.id || el.className), largura);
+      expect(fora).toEqual([]);
+      expect(await larguraDaPagina(page)).toBeLessThanOrEqual(largura);
+      expect(await alvosPequenos(page)).toEqual([]);
+    });
+  }
 });

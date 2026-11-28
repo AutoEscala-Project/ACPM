@@ -153,6 +153,20 @@ test.describe('Agendar um voo na Escala', () => {
     await expect(textosDaEscala(page, 'avisos').filter({ hasText: 'Priorizar com' })).toHaveText(['Maria Silva Fora do “Priorizar com” de Maria Silva (Instrutor 01): o voo foi posto à mão com Instrutor 02.']);
   });
 
+  // L (N9): o voo posto à mão num tipo em que o aluno não voa avisa e pede "Agendar mesmo assim"; agendado, fica em conflito
+  test('o tipo em que o aluno não voa pede "Agendar mesmo assim"; agendado, o voo fica em conflito na Escala', async ({ page }) => {
+    const estado = dia();
+    estado.stu[1].limitacoes = { recursos: ['C172'] };
+    await abrirComCurso(page, estado);
+    await abrirDialogo(page);
+    await expect(page.locator('#agd-recurso option:checked')).toContainText('C152');
+    await expect(page.locator('#agd-conferencia .agd-avisos li', { hasText: 'só voa' })).toHaveText([/^O aluno só voa no C172\./]);
+    await page.locator('#agd-confirmar').click();
+    await expect(page.locator('#agd-confirmar')).toHaveText('Agendar mesmo assim');
+    await agendar(page);
+    await expect(textosDaEscala(page, 'conflitos').filter({ hasText: 'Maria Silva' })).toHaveText(['Maria Silva Conflito no voo agendado: o aluno só voa no C172.']);
+  });
+
   test('o 7º voo local do horário pede "Agendar mesmo assim", também quando a aluna vem antes no cadastro', async ({ page }) => {
     // Seis voos locais agendados às 08:20; a Maria é a primeira do cadastro: o motor confere o agendado dela antes dos
     // outros, e o aviso dele fica no último dos seis

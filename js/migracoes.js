@@ -13,7 +13,7 @@ import { fechamentosDoWin } from './fechamentos.js';
 import { INICIOS_DOS_TEMPOS } from './tempos.js';
 import { faixasDoAw, awComoOAppLia } from './disponibilidade.js';
 
-export const ESQUEMA = 30;
+export const ESQUEMA = 31;
 // O formato dos cursos: o formato do cadastro a partir do qual os programas vivem nas tabelas próprias (antes dele, vale
 // o programa guardado no cadastro, que a conversão única traz para as tabelas). O 22 é o do instrutor escolhido e o 23,
 // o dos atributos da frota; um aumento é esta linha mais public.formato_dos_cursos() (a migração dos cursos), com o
@@ -304,6 +304,13 @@ const PASSOS = {
   // guarda um minuto só), as chaves do dia exportacoes ({}) e reabertura (null), que o H escreve, e os ids que saem de
   // importadas a partir do G2
   30: {
+    cadastro: cadastro => cadastro,
+    dia: dia => dia
+  },
+  // Versão 31 (L): nada é convertido. O número faz a aba da versão anterior recusar a gravação do cadastro, que tiraria as
+  // limitações do aluno (stu[].limitacoes: os tipos de recurso e os horários, js/limitacoes.js): o separar dela só conhece
+  // bl, voaCom e kg, que ficam onde estão
+  31: {
     cadastro: cadastro => cadastro,
     dia: dia => dia
   }

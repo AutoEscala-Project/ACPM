@@ -2,7 +2,8 @@
 // aprovação, aprovados, cancelados; o componente de lista e detalhe: o modelo de cada linha e o detalhe só de leitura de
 // cada pedido) e o registro de pedidos, cada um para a data dele ("Data do pedido"), com o prazo das 13:00 do dia anterior.
 // O formulário vai do aluno à missão (as do curso dele), da missão ao recurso, e dos dois às duas preferências, cada uma um
-// horário exato (docs/PLAN.md, as regras da Agenda; a 2ª, opcional, U1). Os avisos da lista: a leitura que falhou, a escala
+// horário exato (docs/PLAN.md, as regras da Agenda; a 2ª, opcional, U1). O que o motor recusaria pelas limitações do aluno
+// (L: os tipos em que ele não voa, os horários fora dos dele na data do pedido) vem na lista, desligado, com o porquê. Os avisos da lista: a leitura que falhou, a escala
 // que mudou em outro computador, os aprovados fora da demanda (com "Importar") e os que ainda voam sem aprovação. O aviso
 // das novidades que a vigia traz (D3): o que mudou em outro computador, e o 1º da lista de espera da vaga de um cancelado.
 import { MIS, GROUND_EQ_TYPE } from '../config.js';
@@ -23,6 +24,7 @@ import {
 import { porQueOVooFica, POR_QUE_FICA, PEDEM_CONFERIR } from '../processamento.js';
 import { primeiroDaListaDeEspera } from '../rejeicoes.js';
 import { solicitacoesDaData, solicitacoesDaDataLidas, lerSolicitacoesDaData } from '../solicitacoes-da-data.js';
+import { limitacoesNaData, motivoDoTipo, motivoDoHorario, inicioPermitido } from '../limitacoes.js';
 
 const CHAVE_REGISTRADO_POR = 'acpm_agenda_registrado_por';
 
@@ -81,6 +83,9 @@ export function escolherDataDoPedido(data) {
   dataDoPedido = data;
   mudouADataDoPedido();
   desenharFormulario();
+  // Os horários do aluno são os do dia da semana da data do pedido (as limitações, L): como uma escolha nova, os avisos da
+  // data de antes saem
+  escolherNaAgenda();
 }
 // Outra data: o que o formulário dizia da anterior (o erro, a confirmação armada) sai
 function mudouADataDoPedido() {
@@ -452,10 +457,12 @@ export function missaoEscolhida() {
 const nomeDaEscolha = (lista, valor) => (missoesDaLista(lista).find(m => m.id === valor) || { codigo: valor }).codigo;
 
 // As opções só mudam quando são outras: o redesenho não mexe no campo que a pessoa está usando. valores: os valores, ou
-// [valor, texto]
+// [valor, texto] ou [valor, texto, desligada] (o que as limitações do aluno não deixam: na lista, sem poder escolher)
+const opcoesComDesligadas = (opcoes, valor) => opcoes.map(([v, t, desligada]) => `<option value="${esc(v)}"${String(v) === String(valor) ? ' selected' : ''}${desligada ? ' disabled' : ''}>${esc(t)}</option>`).join('');
+const opcoesDoCampo = campo => [...campo.options].map(o => [o.value, o.text, o.disabled]);
 function preencher(campo, valores, vazio, valor, escolhido) {
-  const opcoes = [...(vazio ? [['', vazio]] : []), ...valores.map(v => (Array.isArray(v) ? v : [v, v]))];
-  if (JSON.stringify(opcoes) !== JSON.stringify([...campo.options].map(o => [o.value, o.text]))) campo.innerHTML = opts(opcoes, valor);
+  const opcoes = [...(vazio ? [['', vazio]] : []), ...valores.map(v => (Array.isArray(v) ? v : [v, v]))].map(([v, t, d]) => [v, t, Boolean(d)]);
+  if (JSON.stringify(opcoes) !== JSON.stringify(opcoesDoCampo(campo))) campo.innerHTML = opcoesComDesligadas(opcoes, valor);
   campo.value = valor;
   if (valor && valor !== escolhido) campo.dataset.sozinho = '1';
   else delete campo.dataset.sozinho;
@@ -519,39 +526,69 @@ function atualizarMissao() {
   if (campo.value !== missaoDaDuracao) aplicarDuracaoDaMissao();
 }
 
-// Os recursos ativos de um tipo (a sala de Ground sempre está); o tipo sem nenhum é oferecido, com o aviso
+// As limitações do aluno escolhido na data do pedido (L: os horários do dia da semana dela), ou null
+const limitacoesDoAluno = () => { const aluno = stuBy(+$('#ag-aluno').value); return aluno ? limitacoesNaData(aluno.limitacoes, dataDoPedido) : null; };
+
+// Os recursos ativos de um tipo (a sala de Ground sempre está); o tipo sem nenhum é oferecido, com o aviso. O tipo em que o
+// aluno não voa (L) vem desligado, com o porquê; a missão do curso num deles oferece os tipos que o tipo dela permite e o
+// aluno voa, e continua a mesma (R7)
 const temAtivo = tipo => tipo === GROUND_EQ_TYPE || (S.frota || []).some(f => f.tipo === tipo && !inativo(f));
 function atualizarRecurso() {
   const campo = $('#ag-recurso'), { valor, tipo, doCurso } = missaoEscolhida();
-  const tipos = doCurso ? [doCurso.eq] : recursosDaMissao(tipo), escolhido = escolhaDaPessoa(campo) || recursoQueEspera;
+  const limitacoes = limitacoesDoAluno();
+  const fora = t => motivoDoTipo(limitacoes, t);
+  const tipos = doCurso ? (fora(doCurso.eq) ? recursosDaMissao(doCurso.mis) : [doCurso.eq]) : recursosDaMissao(tipo), escolhido = escolhaDaPessoa(campo) || recursoQueEspera;
+  const livres = tipos.filter(t => !fora(t));
   recursoQueEspera = '';
-  preencher(campo, tipos.map(t => [t, temAtivo(t) ? t : `${t} (nenhum ativo)`]), tipos.length === 1 ? null : valor ? 'Escolha o recurso…' : 'Escolha antes a missão…',
-    valorNaLista(tipos, escolhido), escolhido);
+  preencher(campo, tipos.map(t => [t, `${temAtivo(t) ? t : `${t} (nenhum ativo)`}${fora(t) ? ` (${fora(t)})` : ''}`, Boolean(fora(t))]),
+    livres.length === 1 ? null : !valor ? 'Escolha antes a missão…' : livres.length ? 'Escolha o recurso…' : 'Nenhum recurso em que o aluno voa',
+    valorNaLista(livres, escolhido), escolhido);
   campo.disabled = !valor;
-  mudarTexto($('#ag-recurso-motivo'), campo.value && !temAtivo(campo.value)
-    ? `Nenhum ${campo.value} está ativo em Recursos: o pedido é registrado, e a escala só o põe num ${campo.value} ativo.` : '');
+  const semAtivo = campo.value && !temAtivo(campo.value)
+    ? `Nenhum ${campo.value} está ativo em Recursos: o pedido é registrado, e a escala só o põe num ${campo.value} ativo.` : '';
+  const doPrograma = doCurso && campo.value && campo.value !== doCurso.eq && fora(doCurso.eq)
+    ? `O programa faz ${doCurso.codigo} no ${doCurso.eq}, e ${fora(doCurso.eq)}: o pedido vai no ${campo.value}, e a missão continua ${doCurso.codigo}.` : '';
+  mudarTexto($('#ag-recurso-motivo'), [doPrograma, semAtivo].filter(Boolean).join(' '));
 }
 
-// "8 horários do C152."; "Um horário só: 06:30."
+// "8 horários do C152."; "Um horário só: 06:30."; com horários fora das limitações do aluno (L), "3 de 8 horários do C172: o
+// aluno só voa das 13:00 às 18:00."
 const doRecurso = recurso => (recurso === GROUND_EQ_TYPE ? `da ${recurso}` : `do ${recurso}`);
-const contagemDosHorarios = (lista, recurso) => (lista.length === 1 ? `Um horário só: ${lista[0]}.` : `${lista.length} horários ${doRecurso(recurso)}.`);
+function contagemDosHorarios(lista, recurso, livres, motivo) {
+  if (livres.length === lista.length) return lista.length === 1 ? `Um horário só: ${lista[0]}.` : `${lista.length} horários ${doRecurso(recurso)}.`;
+  if (lista.length === 1) return `Um horário só, ${lista[0]}: ${motivo}.`;
+  return `${livres.length ? `${livres.length} de` : 'Nenhum dos'} ${lista.length} horários ${doRecurso(recurso)}: ${motivo}.`;
+}
+// Os horários da lista (HH:MM) fora das limitações do aluno (L), com o porquê: { fora(h), motivo }
+function horariosForaDoAluno() {
+  const limitacoes = limitacoesDoAluno();
+  const minutos = h => +h.slice(0, 2) * 60 + +h.slice(3, 5);
+  return { fora: h => !inicioPermitido(limitacoes, minutos(h)), motivo: motivoDoHorario(limitacoes) };
+}
 
 function atualizarHorario() {
   const campo = $('#ag-horario'), aluno = $('#ag-aluno').value, { tipo: missao, doCurso } = missaoEscolhida(), recurso = $('#ag-recurso').value;
   const lista = missao && recurso ? horariosDaMissao(S.horarios, missao, recurso).map(hm) : [];
+  const { fora, motivo } = horariosForaDoAluno();
+  const livres = lista.filter(h => !fora(h));
   const doApp = campo.dataset.sozinho ? campo.value : '';
   const escolhido = escolhaDaPessoa(campo) || horarioEscolhido;
-  const valor = valorNaLista(lista, escolhido);
-  horarioEscolhido = lista.length > 1 || valor === escolhido ? '' : escolhido;
-  // O horário do app que continua no campo não é dito de novo
+  const valor = valorNaLista(livres, escolhido);
+  horarioEscolhido = livres.length > 1 || valor === escolhido ? '' : escolhido;
+  // O horário do app que continua no campo não é dito de novo. Sem nenhum horário que sirva ao aluno (as limitações, L), o
+  // campo não pede uma escolha que não existe: diz por quê
   if (lista.length && !(doApp && valor === doApp)) {
-    if (escolhido && valor !== escolhido) avisoDoHorario = `O horário ${escolhido} não é um dos de ${doCurso ? doCurso.codigo : missao} (${recurso}). ${valor ? `Agora é ${valor}.` : 'Escolha outro.'}`;
-    else if (doApp) avisoDoHorario = valor ? `O horário agora é ${valor}.` : `O horário ${doApp} era o único da escolha anterior. Escolha o horário.`;
+    const nenhum = !livres.length ? contagemDosHorarios(lista, recurso, livres, motivo) : '';
+    if (escolhido && valor !== escolhido) {
+      avisoDoHorario = lista.includes(escolhido) && fora(escolhido)
+        ? `O horário ${escolhido} está fora das limitações do aluno (${motivo})${nenhum ? `, e nenhum dos horários ${doRecurso(recurso)} está nelas.` : `. ${valor ? `Agora é ${valor}.` : 'Escolha outro.'}`}`
+        : `O horário ${escolhido} não é um dos de ${doCurso ? doCurso.codigo : missao} (${recurso}). ${valor ? `Agora é ${valor}.` : nenhum || 'Escolha outro.'}`;
+    } else if (doApp) avisoDoHorario = valor ? `O horário agora é ${valor}.` : `O horário ${doApp} era o único da escolha anterior. ${nenhum || 'Escolha o horário.'}`;
   }
-  preencher(campo, lista, lista.length === 1 ? null : 'Escolha o horário…', valor, escolhido);
+  preencher(campo, lista.map(h => [h, fora(h) ? `${h} (${motivo})` : h, fora(h)]), livres.length === 1 ? null : 'Escolha o horário…', valor, escolhido);
   campo.disabled = !(aluno && missao && recurso);
   const faltam = [!aluno && 'o aluno', !missao && 'a missão', !recurso && 'o recurso'].filter(Boolean);
-  const texto = avisoDoHorario || (faltam.length ? `Antes, escolha ${emLista(faltam)}.` : contagemDosHorarios(lista, recurso));
+  const texto = avisoDoHorario || (faltam.length ? `Antes, escolha ${emLista(faltam)}.` : contagemDosHorarios(lista, recurso, livres, motivo));
   mudarTexto($('#ag-horario-motivo'), texto);
 }
 export const emLista = itens => (itens.length > 1 ? `${itens.slice(0, -1).join(', ')} e ${itens.at(-1)}` : itens.join(''));
@@ -567,21 +604,28 @@ function atualizarSegundaPreferencia() {
   const lista = missao && recurso ? horariosDaMissao(S.horarios, missao, recurso).map(hm) : [];
   const primeira = $('#ag-horario').value;
   const opcoes = opcoesDaSegundaPreferencia(lista, primeira, missao);
+  // Os horários fora das limitações do aluno (L): na lista, desligados, com o porquê
+  const { fora, motivo } = horariosForaDoAluno();
   const escolhida = campo.value || segundaQueEspera;
-  const fica = opcoes.includes(escolhida) ? escolhida : '';
+  const fica = opcoes.includes(escolhida) && !fora(escolhida) ? escolhida : '';
+  // Nenhuma opção que sirva ao aluno (as limitações): o campo fica desligado, e diz por quê
+  const algumaServe = opcoes.some(h => !fora(h));
   if (!lista.length) segundaQueEspera = escolhida;
   else {
     segundaQueEspera = '';
     if (escolhida && !fica && opcoes.length) {
-      avisoDaSegunda = escolhida === primeira ? `A 2ª preferência era ${escolhida}, agora a 1ª: escolha outra, se houver.`
-        : `A 2ª preferência ${escolhida} não é um dos horários de ${doCurso ? doCurso.codigo : missao} (${recurso}): escolha outra, se houver.`;
+      const depois = algumaServe ? 'escolha outra, se houver' : 'sem 2ª preferência nesta data';
+      avisoDaSegunda = escolhida === primeira ? `A 2ª preferência era ${escolhida}, agora a 1ª: ${depois}.`
+        : opcoes.includes(escolhida) && fora(escolhida) ? `A 2ª preferência ${escolhida} está fora das limitações do aluno (${motivo}): ${depois}.`
+          : `A 2ª preferência ${escolhida} não é um dos horários de ${doCurso ? doCurso.codigo : missao} (${recurso}): ${depois}.`;
     }
   }
-  const html = opts([['', '—'], ...opcoes.map(h => [h, h])], fica);
-  if (JSON.stringify([['', '—'], ...opcoes.map(h => [h, h])]) !== JSON.stringify([...campo.options].map(o => [o.value, o.text]))) campo.innerHTML = html;
+  const itens = [['', '—', false], ...opcoes.map(h => [h, fora(h) ? `${h} (${motivo})` : h, fora(h)])];
+  if (JSON.stringify(itens) !== JSON.stringify(opcoesDoCampo(campo))) campo.innerHTML = opcoesComDesligadas(itens, fica);
   campo.value = fica;
-  campo.disabled = !(aluno && missao && recurso) || !opcoes.length;
-  const texto = !(aluno && missao && recurso) ? '' : !opcoes.length ? 'Um horário só: sem 2ª preferência.' : avisoDaSegunda || 'Opcional: outro horário, se o da 1ª não couber.';
+  campo.disabled = !(aluno && missao && recurso) || !algumaServe;
+  const texto = !(aluno && missao && recurso) ? '' : !opcoes.length ? 'Um horário só: sem 2ª preferência.'
+    : avisoDaSegunda || (algumaServe ? 'Opcional: outro horário, se o da 1ª não couber.' : `Sem 2ª preferência: ${motivo}.`);
   mudarTexto($('#ag-horario2-motivo'), texto);
 }
 

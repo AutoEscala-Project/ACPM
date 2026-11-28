@@ -17,6 +17,7 @@ import { normalizarCursos } from './cursos.js';
 import { normalizarPainel } from './config-do-painel.js';
 import { dataIsoValida } from './format.js';
 import { normalizarExportacoes } from './exportacoes.js';
+import { normalizarLimitacoes } from './limitacoes.js';
 
 // Os campos do pedido do dia (o pedido principal é o próprio aluno: o resto dele é do cadastro). jan: disponibilidade do
 // aluno (só quando o pedido tem uma); etapa: o código da missão do curso; solicitacao: o id do pedido da agenda que virou
@@ -26,6 +27,8 @@ import { normalizarExportacoes } from './exportacoes.js';
 // estes campos do pedido como estavam (js/reversoes.js)
 export const CAMPOS_DO_PEDIDO = ['fly', 'mis', 'eq', 'p1', 'p2', 'nb', 'ss', 'pr', 'jan', 'etapa', 'solicitacao', 'insId', 'cursoDaEtapa', 'limiteConfirmado', 'etapaDoPrograma'];
 
+// As limitações do aluno (formato 31), normalizadas, como campo: { limitacoes } ou nada
+const comAsLimitacoes = valor => { const limitacoes = normalizarLimitacoes(valor); return limitacoes ? { limitacoes } : {}; };
 // As faixas e as pausas de um instrutor na data, normalizadas, quando ele tem a lista das faixas (C, formato 29); sem ela, nada
 const faixasEPausas = d => (d && Array.isArray(d.faixas) ? { faixas: normalizarFaixas(d.faixas), pausas: normalizarPausas(d.pausas) } : {});
 
@@ -57,7 +60,8 @@ export function separar(estado) {
       })),
       // voaCom: os instrutores do aluno (o par permanente), só quando há
       // O aluno inativo (formato 26): só true fica
-      stu: estado.stu.map(({ id, nm, kg, bl, voaCom, curso, inativo }) => ({ id, nm, kg, bl: [...(bl || [])], ...(voaCom && voaCom.length ? { voaCom: [...voaCom] } : {}), ...(curso ? { curso } : {}), ...(inativo === true ? { inativo: true } : {}) })),
+      // limitacoes (formato 31): os tipos de recurso e os horários do aluno (js/limitacoes.js), normalizadas; sem nenhuma, sai
+      stu: estado.stu.map(({ id, nm, kg, bl, voaCom, curso, inativo, limitacoes }) => ({ id, nm, kg, bl: [...(bl || [])], ...(voaCom && voaCom.length ? { voaCom: [...voaCom] } : {}), ...(curso ? { curso } : {}), ...(inativo === true ? { inativo: true } : {}), ...comAsLimitacoes(limitacoes) })),
       ...(Array.isArray(estado.frota) ? { frota: estado.frota.map(f => ({ ...f, ...(Array.isArray(f.exige) ? { exige: [...f.exige] } : {}) })) } : {}),
       ...(estado.horarios ? { horarios: structuredClone(estado.horarios) } : {}),
       ...(estado.limites ? { limites: { ...estado.limites } } : {}),
@@ -113,10 +117,11 @@ export function juntar(cadastro, dia = diaPadrao()) {
       const d = disponibilidade[x.id];
       return { ...x, on: d ? d.on !== false : true, aw: d && Array.isArray(d.aw) ? [...d.aw] : INICIOS_DOS_TEMPOS.map(() => true), ...faixasEPausas(d) };
     }),
-    stu: cadastro.stu.map(s => ({
+    stu: cadastro.stu.map(({ limitacoes, ...s }) => ({
       ...s,
       bl: [...(s.bl || [])],
       ...(s.voaCom ? { voaCom: [...s.voaCom] } : {}),
+      ...comAsLimitacoes(limitacoes),
       ...(pedidos[s.id] ? structuredClone(pedidos[s.id]) : { ...blank(), extra: [] })
     })),
     fStatus: normalizarStatus(dia.fStatus),

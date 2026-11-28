@@ -89,7 +89,7 @@ describe('Glossário', () => {
 
   it('os termos da tela Alunos, na ordem do bloco dela', () => {
     const daAba = Object.entries(INTEIRO).filter(([, t]) => t.aba === 'Alunos').map(([id]) => id);
-    assert.deepEqual(daAba, ['voa-com', 'nao-escalar-com', 'progresso', 'missao-anterior', 'missao-atual', 'resultado-sem-voo', 'colocar-no-curso', 'inativo', 'filtro-dos-cursos', 'nome-completo']);
+    assert.deepEqual(daAba, ['limitacoes', 'voa-com', 'nao-escalar-com', 'progresso', 'missao-anterior', 'missao-atual', 'resultado-sem-voo', 'colocar-no-curso', 'inativo', 'filtro-dos-cursos', 'nome-completo']);
     assert.match(INTEIRO['nome-completo'].texto, /não vai para a escala/);
   });
 

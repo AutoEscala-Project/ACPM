@@ -1407,3 +1407,120 @@ describe('As disputas do “Priorizar com”', () => {
     assert.deepEqual(doPar(dupla({ pr: 3 }, { pr: 4 }, { antesDoF1h: true }).al), []);
   });
 });
+
+// L (N9; Pedro, 2026-11-25: "Student limitations are hard stops"): as limitações do aluno (stu[].limitacoes, js/limitacoes.js)
+// são duras para o motor. O pedido em outro tipo é recusado (limitacao-de-recurso), e o motor nunca muda o tipo dele; um
+// início fora dos horários do aluno não é início, junto com o horário do pedido (a regra do início, R4), e sem nenhum o
+// pedido é recusado (disponibilidade-do-aluno, o texto com os dois); para o Ground, o simulador e o voo. O voo fixo que vai
+// contra uma delas fica, em conflito. O motor lê as limitações da data (os dias já lidos: comLimitacoesDaData)
+describe('As limitações do aluno: duras para o motor', () => {
+  const soC172 = { limitacoes: { recursos: ['C172'] } };
+  const tarde = { limitacoes: { horarios: [{ de: 780, ate: 1080 }] } };
+  const erros = al => al.filter(a => a.t === 'err').map(a => [a.codigo, a.m]);
+
+  it('o pedido em outro tipo é recusado, com o motivo; o motor não muda o tipo dele', () => {
+    const { out, al } = runAllocationEngine(cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, {}, soC172)] }));
+    assert.deepEqual(out, []);
+    assert.deepEqual(erros(al), [['limitacao-de-recurso', 'Rejeitado: o aluno só voa no C172 (o pedido está no C152).']]);
+    assert.equal(al[0].espera, undefined, 'não espera nenhum horário');
+  });
+
+  it('no tipo que ele voa, entra; o simulador e o Ground não são limitados pelos aviões; o Sim. Mono, pelo só no Sim. Multi', () => {
+    const { out, al } = runAllocationEngine(cenario({
+      ins: [instrutor(1, 9), instrutor(2, 9), instrutor(3, 9)],
+      stu: [aluno(1000, { eq: 'C172' }, soC172), aluno(1001, { mis: 'Simulador', eq: 'Sim. Mono', nb: 1, p1: 610, p2: -1 }, soC172),
+        aluno(1002, { ...GROUND_C152, p1: 870, p2: -1 }, soC172), aluno(1003, { mis: 'Simulador', eq: 'Sim. Mono', nb: 1, p1: 610, p2: -1 }, { limitacoes: { recursos: ['Sim. Multi'] } })]
+    }));
+    assert.deepEqual(out.map(o => [o.stuId, o.eqType]).sort(), [[1000, 'C172'], [1001, 'Sim. Mono'], [1002, 'Sala Ground']]);
+    assert.deepEqual(erros(al), [['limitacao-de-recurso', 'Rejeitado: o aluno só voa no Sim. Multi (o pedido está no Sim. Mono).']]);
+  });
+
+  it('o voo só começa nos horários do aluno: as preferências fora deles não valem', () => {
+    const { out } = alocar({ stu: [aluno(1000, {}, tarde)] });
+    assert.deepEqual([hm(out[0].a), out[0].tag], ['13:40', 'Próximo livre']);
+  });
+
+  it('a regra do início (R4): começa dentro do horário e pode terminar depois dele', () => {
+    const { out } = alocar({ stu: [aluno(1000, { nb: 2 }, { limitacoes: { horarios: [{ de: 500, ate: 510 }] } })] });
+    assert.deepEqual([hm(out[0].a), hm(out[0].b)], ['08:20', '10:20']);
+    const fim = alocar({ stu: [aluno(1000, { p1: 820, p2: -1 }, { limitacoes: { horarios: [{ de: 600, ate: 820 }] } })] });
+    assert.deepEqual(fim.out.map(o => hm(o.a)), ['12:40'], 'o fim do horário não entra: [de, ate)');
+  });
+
+  it('o horário do pedido fora dos horários do aluno: recusado, o texto com os dois; nenhum horário na data, também', () => {
+    const { al } = alocar({ stu: [aluno(1000, { jan: 'h500' }, tarde)] });
+    assert.deepEqual(erros(al), [['disponibilidade-do-aluno', 'Rejeitado: nenhum horário aberto na disponibilidade do aluno (às 08:20; Limitações: 13:00–18:00) comporta 1 h.']]);
+    assert.equal(al[0].espera, undefined, 'não espera: a recusa não é por falta de lugar');
+    const nenhum = alocar({ stu: [aluno(1000, {}, { limitacoes: { horarios: [] } })] });
+    assert.deepEqual(erros(nenhum.al), [['disponibilidade-do-aluno', 'Rejeitado: nenhum horário aberto na disponibilidade do aluno (Limitações: nenhum horário nesta data) comporta 1 h.']]);
+    // O horário com dias que chega ao motor sem ser lido para a data não vale (a limitação é dura)
+    const semData = alocar({ stu: [aluno(1000, {}, { limitacoes: { horarios: [{ de: 390, ate: 1440, dias: [1] }] } })] });
+    assert.deepEqual(semData.al.map(a => a.codigo), ['disponibilidade-do-aluno']);
+  });
+
+  it('o Ground também: começa nos horários do aluno, a turma aberta só quando começa neles; sem nenhum, recusado', () => {
+    const { out } = alocar({ ins: [instrutor(1, 9), instrutor(2, 9)], stu: [aluno(1000, { ...GROUND_C152, p1: 500, p2: -1 }), aluno(1001, { ...GROUND_C152, p1: 500, p2: -1 }, tarde)] });
+    assert.deepEqual(out.map(o => [o.stuId, hm(o.a)]).sort(), [[1000, '08:20'], [1001, '13:40']]);
+    const fora = alocar({ stu: [aluno(1000, { ...GROUND_C152, p1: 500, p2: -1 }, { limitacoes: { horarios: [{ de: 400, ate: 450 }] } })] });
+    assert.deepEqual(erros(fora.al), [['disponibilidade-do-aluno', 'Rejeitado: nenhum horário aberto na disponibilidade do aluno (Limitações: 06:40–07:30) comporta 01h30 de Ground.']]);
+  });
+
+  // Revisão: a recusa é da limitação só quando ela tirou um início que valeria sem ela. O horário das 06:30 às 24:00 (o que
+  // "+ Horário" cria) não tira nenhum: o motivo é o de sempre (o fechamento, o fim do Ground), não a disponibilidade do aluno
+  it('a limitação que não tira nenhum início não muda a recusa: sem-horario, depois-do-ground e o horário do pedido sozinho', () => {
+    const todoODia = { limitacoes: { horarios: [{ de: 390, ate: 1440 }] } };
+    const fechado = [0, 1, 2, 3, 4, 5, 6, 7];
+    assert.deepEqual(erros(alocar({ stu: [aluno(1000, {}, todoODia)], janelasOff: fechado }).al),
+      [['sem-horario', 'Rejeitado: nenhum horário aberto comporta 1 h até as 17:30.']]);
+    assert.deepEqual(erros(alocar({ ins: [instrutor(1, 1)], stu: [aluno(1000, GROUND_C152, todoODia)], janelasOff: fechado }).al),
+      [['sem-horario', 'Rejeitado: nenhum horário aberto comporta 01h30 de Ground.']]);
+    const voo = missaoExtra(1, { mis: 'Voo Local', eq: 'C152', nb: 1 });
+    assert.deepEqual(erros(alocar({ ins: [instrutor(1, 9), instrutor(2, 9)], stu: [aluno(1000, GROUND_C152, { extra: [voo], ...todoODia })], janelasOff: [0, 1, 2, 3, 4, 5, 6] }).al),
+      [['depois-do-ground', 'Rejeitado: nenhum horário aberto depois do Ground (17:50) comporta 1 h até as 17:30.']]);
+    assert.deepEqual(erros(alocar({ stu: [aluno(1000, { jan: 'h760' }, todoODia)], janelasOff: [4, 5, 6, 7] }).al),
+      [['disponibilidade-do-aluno', 'Rejeitado: nenhum horário aberto na disponibilidade do aluno (às 12:40) comporta 1 h.']]);
+    // A que tira o início que valeria continua a recusa da disponibilidade (só o 12:40 aberto, e o aluno à tarde)
+    assert.deepEqual(erros(alocar({ stu: [aluno(1000, {}, tarde)], janelasOff: [0, 1, 2, 3, 5, 6, 7] }).al),
+      [['disponibilidade-do-aluno', 'Rejeitado: nenhum horário aberto na disponibilidade do aluno (Limitações: 13:00–18:00) comporta 1 h.']]);
+  });
+
+  it('sem limitação, os textos de sempre (o horário do pedido sozinho)', () => {
+    const { al } = alocar({ stu: [aluno(1000, { jan: 'h760' })], janelasOff: [4, 5, 6, 7] });
+    assert.deepEqual(al.map(a => a.m), ['Rejeitado: nenhum horário aberto na disponibilidade do aluno (às 12:40) comporta 1 h.']);
+  });
+
+  it('o voo fixo que vai contra a limitação fica onde está, em conflito (o tipo e o horário); a volta do Noturno não é conferida', () => {
+    const base = cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, { p1: 500, p2: -1 })] });
+    const o = runAllocationEngine(base).out[0];
+    const limitado = { ...base, fixos: { [o.fKey]: { a: o.a, b: o.b, r: o.r, insId: o.insId } }, stu: [{ ...base.stu[0], limitacoes: { recursos: ['C172'], horarios: [{ de: 780, ate: 1080 }] } }] };
+    const { out, al } = runAllocationEngine(limitado);
+    assert.deepEqual(out.map(v => [v.fKey, v.a, v.r, v.conflitoCodigos]), [[o.fKey, o.a, o.r, ['limitacao-de-recurso', 'limitacao-de-horario']]]);
+    assert.deepEqual(out[0].conflito, ['o aluno só voa no C172', 'o horário está fora das limitações do aluno (13:00–18:00)']);
+    assert.deepEqual(al.filter(a => a.t === 'conf').map(a => a.m), ['Conflito na escala aprovada: o aluno só voa no C172; o horário está fora das limitações do aluno (13:00–18:00).']);
+    // A volta do Noturno de ontem (de outro dia, fixa) não é conferida com as limitações
+    const volta = { ...cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, { fly: false }, { limitacoes: { recursos: ['C172'], horarios: [{ de: 900, ate: 1000 }] } })] }),
+      noturnosDaVespera: [{ stuId: 1000, mid: 0, insId: 1, r: 'PP-LJV', eqType: 'C152', s: 'Aluno 1000', ins: 'Instrutor 01' }] };
+    const comVolta = runAllocationEngine(volta);
+    assert.deepEqual(comVolta.out.map(v => [v.trecho, Boolean(v.conflito)]), [['volta', false]]);
+  });
+
+  it('a compactação, a divisão das horas e a lista de espera: nenhum voo sem pino fora das limitações, em 300 cenários', async () => {
+    const { gerarCenario, comLimitacoes } = await import('../helpers/cenarios.js');
+    const { tipoPermitido, inicioPermitido } = await import('../../js/limitacoes.js');
+    const falhas = [];
+    let limitados = 0;
+    for (let seed = 1; seed <= 300; seed++) {
+      const estado = comLimitacoes(gerarCenario(seed), seed);
+      for (const [rotulo, opcoes] of [['compactada', {}], ['sem a divisão', { dividirHoras: false }]]) {
+        for (const o of runAllocationEngine(estado, opcoes).out.filter(v => !v.trecho && !v.fixo)) {
+          const s = estado.stu.find(x => x.id === o.stuId);
+          if (!s.limitacoes) continue;
+          limitados++;
+          if (!tipoPermitido(s.limitacoes, o.eqType) || !inicioPermitido(s.limitacoes, o.a)) falhas.push(`${seed} ${rotulo} ${o.fKey} ${o.eqType} ${hm(o.a)}`);
+        }
+      }
+    }
+    assert.deepEqual(falhas, []);
+    assert.ok(limitados > 300, `${limitados} voos de alunos com limitações (o teste não passa por falta deles)`);
+  });
+});

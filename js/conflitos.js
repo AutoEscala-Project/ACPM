@@ -20,7 +20,10 @@ export const GRUPO_DO_CONFLITO = {
   revisao: 'aviao',
   'sala-ocupada': 'aviao',
   'sala-indisponivel': 'aviao',
+  // As limitações do aluno (L): o tipo em que ele não voa (o recurso do voo), o início fora dos horários dele
+  'limitacao-de-recurso': 'aviao',
   'aluno-ocupado': 'horario',
+  'limitacao-de-horario': 'horario',
   'horario-fechado': 'horario',
   disponibilidade: 'horario',
   duracao: 'pedido',
@@ -81,7 +84,7 @@ export const CODIGOS_DE_REJEICAO = [
   'equipamento-da-missao', 'ground-pendente', 'ground-antes-do-voo-fixo', 'so-parafuso', 'sem-aviao', 'sem-instrutor-habilitado',
   'disponibilidade-do-aluno', 'depois-do-ground', 'sem-horario', 'aluno-ocupado', 'avioes-ocupados', 'sala-ocupada', 'sala-indisponivel', 'revisao',
   'instrutores-indisponiveis', 'instrutores-ocupados', 'bloqueio', 'limite-da-lei', 'peso', 'limite-de-locais', 'instrutor-escolhido',
-  'habilitacao-do-aviao'
+  'habilitacao-do-aviao', 'limitacao-de-recurso'
 ];
 // O motivo curto de o pedido ter ficado fora da escala, pelo código da rejeição do motor (um para cada código acima): o
 // agendamento o lê (js/agendamento.js) e, do G em diante, o Processamento
@@ -93,5 +96,6 @@ export const FORA_DA_ESCALA = {
   'avioes-ocupados': 'sem avião livre', 'sala-ocupada': 'a sala de Ground ocupada', 'sala-indisponivel': 'a Sala Ground indisponível', revisao: 'sem saldo até a revisão de 50 h',
   'instrutores-indisponiveis': 'sem instrutor disponível', 'instrutores-ocupados': 'sem instrutor livre', bloqueio: 'em Não escalar com',
   'limite-da-lei': 'o limite da lei', peso: 'o peso acima do limite', 'limite-de-locais': 'o limite de voos locais no horário',
-  'instrutor-escolhido': 'o instrutor escolhido não serve', 'habilitacao-do-aviao': 'sem a habilitação própria do avião'
+  'instrutor-escolhido': 'o instrutor escolhido não serve', 'habilitacao-do-aviao': 'sem a habilitação própria do avião',
+  'limitacao-de-recurso': 'o aluno não voa nesse tipo de recurso'
 };
