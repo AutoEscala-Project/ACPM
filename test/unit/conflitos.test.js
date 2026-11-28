@@ -21,3 +21,18 @@ describe('FORA_DA_ESCALA: o motivo curto de cada rejeição', () => {
     assert.equal(FORA_DA_ESCALA['sala-indisponivel'], 'a Sala Ground indisponível');
   });
 });
+
+// ONDE_RESOLVER (G2): onde se resolve cada rejeição do motor (a tela e as palavras do detalhe do Processamento)
+describe('ONDE_RESOLVER: onde resolver cada rejeição', () => {
+  it('cada código de rejeição tem o seu lugar: uma tela do app e o texto; nenhum sobra', async () => {
+    const { ONDE_RESOLVER } = await import('../../js/conflitos.js');
+    const { TELAS } = await import('../../js/telas.js');
+    assert.deepEqual(Object.keys(ONDE_RESOLVER).sort(), [...CODIGOS_DE_REJEICAO].sort());
+    for (const [codigo, onde] of Object.entries(ONDE_RESOLVER)) {
+      assert.ok(Object.hasOwn(TELAS, onde.tela), `${codigo}: ${onde.tela}`);
+      assert.match(onde.rotulo, /^[A-ZÀ-Ú]/, codigo);
+    }
+    assert.deepEqual(ONDE_RESOLVER.bloqueio, { tela: 'alu', rotulo: 'Alunos: Não escalar com' });
+    assert.equal(ONDE_RESOLVER['instrutor-escolhido'].restricoes, true);
+  });
+});
