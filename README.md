@@ -356,8 +356,8 @@ os tipos de avião ou de simulador em que ele voa, e `horarios`, `{ de, ate, dia
 meia-noite, no máximo 8, com `dias` de 0, domingo, a 6, sábado, ou sem eles, todas as datas; `js/limitacoes.js`;
 sem nenhuma, o campo não existe), que a aba do formato 30 tiraria ao gravar o cadastro. Decisão do Pedro, 28/11: o De
 começa às 06:30, o `PRIMEIRO_HORARIO` dos horários de decolagem (`js/horarios.js`); o guardado das 06:00 às 06:29 é lido
-como 06:30 (`noInicioDoDia`, a conversão do #106), o que então termina até as 06:30 sai e o que fica igual a outro fica um
-só, sem número de formato (a leitura é idempotente, e nenhum início que a escala oferece muda de lado). `bl`, `voaCom` e `kg` ficam onde
+como 06:30 (`noInicioDoDia`, a conversão do #106), o que então termina até as 06:30 sai e o que a mudança fez igual a
+outro fica um só, sem número de formato (a leitura é idempotente, e nenhum início que a escala oferece muda de lado). `bl`, `voaCom` e `kg` ficam onde
 estão. Só o app muda: o primeiro acesso de um Operador ou Administrador regrava os dias e o cadastro no 31.
 
 ## Estrutura
