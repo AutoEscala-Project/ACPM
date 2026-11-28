@@ -1,15 +1,17 @@
 // O que pede atenção, na linha (os antigos selos das abas): o estado e o valor de cada cartão e das tarefas dele (os avisos
-// e as missões que não entraram na Escala, os pedidos que ainda não estão na demanda, na Agenda) e o selo do link Recursos
+// e as missões que não entraram na Escala; os pedidos que aguardam aprovação e os aprovados fora da demanda, em Pedidos) e o selo do link Recursos
 // (aviões parados ou perto da revisão de 50 horas), que aparece também no botão da Disponibilidade do dia
 import { test, expect, abrir, irPara, AMANHA, entrar, botaoDaAba, botaoImportarDaAgenda, caixaVoa, importarDaAgenda, abrirRecursos, abrirRecurso, linhaDoRecurso } from './fixtures.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
 import { instalarSupabaseFalso, documentosAtuais, CONTAS } from './supabase-falso.js';
 import { estadoSintetico } from '../helpers/estado.js';
 
-const pedido = (id, data = AMANHA) => ({
+const pedido = (id, data = AMANHA, extra = {}) => ({
   id, data, aluno: 1000, aluno_nome: 'Aluno 1000', missao: 'Voo Local', janela: 'manha', horario: null, observacao: null,
-  registrado_por: 'Maria', registrado_em: '2026-11-10T14:00:00.000Z', conta: 'Secretaria de Teste', excecao: false, cancelada_em: null, cancelada_por: null
+  registrado_por: 'Maria', registrado_em: '2026-11-10T14:00:00.000Z', conta: 'Secretaria de Teste', excecao: false, cancelada_em: null, cancelada_por: null, ...extra
 });
+// O pedido aprovado (D2: só o aprovado entra na demanda)
+const APROVADO = { aprovada_em: '2026-11-10T14:30:00.000Z', aprovada_por: 'Operador de Teste' };
 const cartao = (page, id) => page.locator(`#linha li.estagio[data-estagio="${id}"]`);
 const tarefa = (page, id) => page.locator(`#linha a.tarefa[data-tarefa="${id}"]`);
 const seloDeRecursos = page => page.locator('#linha .linha-mais a[href="#/rec"] .linha-selo');
@@ -57,31 +59,34 @@ test.describe('O que pede atenção, na linha', () => {
     await expect(tarefa(page, 'recursos')).toHaveAttribute('data-estado', 'feito');
   });
 
-  test('Agenda: os pedidos da data que ainda não estão na demanda pedem atenção; importados, a tarefa fica feita', async ({ page, context }) => {
+  // Pedidos (D2): os que aguardam aprovação pedem atenção a todos; os aprovados fora da demanda, a quem importa
+  test('Pedidos: os aprovados que ainda não estão na demanda pedem atenção; importados, a tarefa fica feita', async ({ page, context }) => {
     const servidor = await instalarSupabaseFalso(context, documentosAtuais({ ...estadoSintetico(), stu: [aluno(1000), aluno(1001)] }, AMANHA));
-    servidor.solicitacoes.push(pedido(1), pedido(2, '2026-11-12'));
+    servidor.solicitacoes.push(pedido(1, AMANHA, APROVADO), pedido(2, '2026-11-12', APROVADO));
     await entrar(page, CONTAS.operador);
     await expect(cartao(page, 'pedidos').locator('.estagio-valor')).toHaveText('1');
-    await expect(tarefa(page, 'nao-importados')).toHaveAttribute('data-estado', 'atencao');
-    await expect(tarefa(page, 'nao-importados').locator('.tarefa-valor')).toHaveText('1');
+    await expect(tarefa(page, 'fora-da-demanda')).toHaveAttribute('data-estado', 'atencao');
+    await expect(tarefa(page, 'fora-da-demanda').locator('.tarefa-valor')).toHaveText('1');
+    await expect(tarefa(page, 'aguardando')).toHaveAttribute('data-estado', 'feito');
 
     await irPara(page, 'dem');
-    await expect(botaoImportarDaAgenda(page)).toHaveText('Importar 1 pedido da agenda');
+    await expect(botaoImportarDaAgenda(page)).toHaveText('Importar 1 pedido aprovado');
     await expect(botaoImportarDaAgenda(page)).not.toHaveClass(/\bsec\b/);
     await importarDaAgenda(page);
-    await expect(tarefa(page, 'nao-importados')).toHaveAttribute('data-estado', 'feito');
-    await expect(tarefa(page, 'nao-importados').locator('.tarefa-valor')).toHaveText('0');
-    await expect(botaoImportarDaAgenda(page)).toHaveText('Importar da agenda');
+    await expect(tarefa(page, 'fora-da-demanda')).toHaveAttribute('data-estado', 'feito');
+    await expect(tarefa(page, 'fora-da-demanda').locator('.tarefa-valor')).toHaveText('0');
+    await expect(botaoImportarDaAgenda(page)).toHaveText('Importar pedidos aprovados');
     await expect(botaoImportarDaAgenda(page)).toHaveClass(/\bsec\b/);
   });
 
-  test('o Gestor não vê "ainda não importados" (ele não importa pedidos)', async ({ page, context }) => {
+  test('o Gestor não vê "aprovados fora da demanda" (ele não importa pedidos); o que aguarda aprovação pede atenção a ele também', async ({ page, context }) => {
     const servidor = await instalarSupabaseFalso(context, documentosAtuais({ ...estadoSintetico(), stu: [aluno(1000)] }, AMANHA));
     servidor.solicitacoes.push(pedido(1));
     await entrar(page, CONTAS.gestor);
     await expect(botaoDaAba(page, 'esc')).toHaveAttribute('aria-current', 'page');
     await expect(tarefa(page, 'registrados')).toHaveCount(1);
-    await expect(tarefa(page, 'nao-importados')).toHaveCount(0);
-    await expect(cartao(page, 'pedidos')).toHaveAttribute('data-estado', 'feito');
+    await expect(tarefa(page, 'fora-da-demanda')).toHaveCount(0);
+    await expect(tarefa(page, 'aguardando')).toHaveAttribute('data-estado', 'atencao');
+    await expect(cartao(page, 'pedidos')).toHaveAttribute('data-estado', 'atencao');
   });
 });

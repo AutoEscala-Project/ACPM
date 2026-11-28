@@ -1,7 +1,9 @@
-// Agenda de Solicitações: a agenda de papel da secretaria, digitalizada. Os pedidos da data aberta (com a situação de cada um
-// na demanda) e o registro de pedidos, cada um para a data dele ("Data do pedido"), com o prazo das 13:00 do dia anterior.
-// O formulário vai do aluno à missão (as do curso dele), da missão ao recurso, e dos dois aos horários (docs/PLAN.md, as
-// regras da Agenda).
+// Pedidos: a agenda de papel da secretaria, digitalizada. A lista dos pedidos da data aberta por estado (aguardando
+// aprovação, aprovados, cancelados; o componente de lista e detalhe: o modelo de cada linha e o detalhe só de leitura de
+// cada pedido) e o registro de pedidos, cada um para a data dele ("Data do pedido"), com o prazo das 13:00 do dia anterior.
+// O formulário vai do aluno à missão (as do curso dele), da missão ao recurso, e dos dois às duas preferências, cada uma um
+// horário exato (docs/PLAN.md, as regras da Agenda; a 2ª, opcional, U1). Os avisos da lista: a leitura que falhou, a escala
+// que mudou em outro computador, os aprovados fora da demanda (com "Importar") e os que ainda voam sem aprovação.
 import { MIS, GROUND_EQ_TYPE } from '../config.js';
 import { duracaoFixaDaMissao } from '../rules.js';
 import { horariosDaMissao } from '../horarios.js';
@@ -9,11 +11,15 @@ import { indiceDoPrograma } from '../programa.js';
 import { S, DATA, isGestor, inativoNaDataAberta, stuBy, dadoIndisponivel } from '../state.js';
 import { inativo } from '../inativos.js';
 import { ApiClient } from '../storage.js';
+import { dadosLidos } from '../actions.js';
 import { $, trocarConteudo } from '../dom.js';
-import { esc, opts, hm, fmtH, somarDias } from '../format.js';
+import { esc, opts, hm, fmtH, somarDias, chaveDeBusca } from '../format.js';
 import { registraNaAgenda, operaEscala } from '../perfis.js';
-import { recursosDaMissao, recursoValido, missoesDoAluno, FUSO_DO_AEROCLUBE, prazoDaAgendaPermite, prazoDaData, datasParaRegistrar, hojeEmSaoPaulo } from '../agenda.js';
-import { pedidosDaDataAberta, pedidosDaDataAbertaLidos, lerPedidosDaData } from './selos.js';
+import {
+  recursosDaMissao, recursoValido, missoesDoAluno, FUSO_DO_AEROCLUBE, prazoDaAgendaPermite, prazoDaData, datasParaRegistrar, hojeEmSaoPaulo, situacaoDaSolicitacao,
+  situacaoNaDemanda, solicitacoesParaImportar, opcoesDaSegundaPreferencia
+} from '../agenda.js';
+import { solicitacoesDaData, solicitacoesDaDataLidas, lerSolicitacoesDaData } from '../solicitacoes-da-data.js';
 
 const CHAVE_REGISTRADO_POR = 'acpm_agenda_registrado_por';
 
@@ -29,8 +35,8 @@ export function abrirAgenda() {
 // administradores e a secretaria. A exceção da coordenação é de quem opera a escala (o servidor confere de novo)
 export const podeEditarAgenda = () => (ApiClient.perfil ? registraNaAgenda(ApiClient.perfil) : !isGestor());
 const podeUsarExcecao = () => (ApiClient.perfil ? operaEscala(ApiClient.perfil) : !isGestor());
-// Quem aprova pedidos (o passo D1; os botões são do D2): quem opera a escala. Até lá, o pedido dele nasce aprovado, como
-// pelos atalhos do servidor; o da secretaria aguarda (o servidor confere de novo)
+// Quem aprova pedidos ("Aprovar", "Aprovar todos", "Retirar aprovação" e "Registrar e aprovar"): quem opera a escala. O da
+// secretaria aguarda (o servidor confere de novo)
 export const aprovaPedidos = podeUsarExcecao;
 // Importar para a demanda também é de quem opera a escala
 const podeImportar = podeUsarExcecao;
@@ -58,8 +64,8 @@ export const missaoDoPedido = p => {
   return codigo ? `${codigo}${recurso ? ` · ${recurso}` : ''}` : recurso ? `${p.missao} · ${recurso}` : p.missao;
 };
 export const descreverPedido = p => `${missaoDoPedido(p)} às ${p.horario || disponibilidade(p)}`;
-// Um pedido da lista (a da data aberta), para a confirmação do cancelamento
-export const pedidoDaLista = id => (pedidosDaDataAberta().lista || []).find(p => p.id === id);
+// Um pedido da lista (a da data aberta)
+export const pedidoDaLista = id => (solicitacoesDaData().lista || []).find(p => String(p.id) === String(id));
 
 // "Data do pedido": a data em que o pedido vai ser registrado, um campo dele (a tela continua na data aberta). Começa na data
 // aberta, se ela aceita pedidos, ou na primeira que aceita; volta a isso quando a data aberta muda e fica entre um registro
@@ -79,24 +85,32 @@ function mudouADataDoPedido() {
   apagarErroDaAgenda();
 }
 // A confirmação armada (o aluno que já tem voo marcado, o 7º voo local no horário: js/eventos/agenda.js) fica em
-// data-confirmado, com o botão que ela arma no fim ("…|registrar" ou "…|excecao"): o botão em uso diz "Registrar mesmo
-// assim". Desarmada, o envio volta a ser "Registrar pedido", e a exceção, "Exceção da Coordenação"
+// data-confirmado, com o botão que ela arma no fim ("…|registrar", "…|sem-aprovar" ou "…|excecao"): o botão em uso diz
+// "Registrar mesmo assim". Com o 7º voo local entre as causas (data-espera), aparece também "Registrar na lista de
+// espera". Desarmada, cada botão volta ao nome dele
 export const botaoArmado = () => ($('#form-agenda').dataset.confirmado || '').split('|').at(-1);
 export function desarmarConfirmacaoDaAgenda() {
   delete $('#form-agenda').dataset.confirmado;
+  delete $('#form-agenda').dataset.espera;
   nomearRegistrar();
 }
+// O botão principal: "Registrar e aprovar" para quem aprova, "Registrar pedido" para a secretaria
+const NOMES_DOS_BOTOES = { registrar: () => (aprovaPedidos() ? 'Registrar e aprovar' : 'Registrar pedido'), 'sem-aprovar': () => 'Registrar sem aprovar', excecao: () => 'Exceção da Coordenação' };
+const BOTOES = { registrar: '#form-agenda [type="submit"]', 'sem-aprovar': '#ag-registrar', excecao: '#ag-excecao' };
 // Enquanto um pedido é registrado (a leitura dos pedidos da data dele, a gravação), o botão clicado diz "Registrando…"
 export function nomearRegistrar() {
   const form = $('#form-agenda');
   if (form.hasAttribute('aria-busy')) return;
   const armado = botaoArmado();
-  form.querySelector('[type="submit"]').textContent = armado === 'registrar' ? 'Registrar mesmo assim' : 'Registrar pedido';
-  $('#ag-excecao').textContent = armado === 'excecao' ? 'Registrar mesmo assim' : 'Exceção da Coordenação';
+  for (const [botao, seletor] of Object.entries(BOTOES)) {
+    const texto = armado === botao ? 'Registrar mesmo assim' : NOMES_DOS_BOTOES[botao]();
+    if ($(seletor).textContent !== texto) $(seletor).textContent = texto;
+  }
+  $('#ag-esperar').hidden = !form.dataset.confirmado || !form.dataset.espera;
 }
 // Os campos do pedido com erro (aria-invalid): o leitor de tela diz qual campo e lê o motivo (#ag-erro é a descrição deles).
 // O foco vai para o primeiro (focar: o campo do primeiro erro; sem ele, o foco fica onde está)
-const CAMPOS_DO_PEDIDO = ['#ag-aluno', '#ag-missao', '#ag-recurso', '#ag-horario', '#ag-horas', '#ag-por'];
+const CAMPOS_DO_PEDIDO = ['#ag-aluno', '#ag-missao', '#ag-recurso', '#ag-horario', '#ag-horario2', '#ag-horas', '#ag-por'];
 export const marcarInvalidos = (...ids) => CAMPOS_DO_PEDIDO.forEach(id => $(id).setAttribute('aria-invalid', String(ids.includes(id))));
 export function focarNoPrimeiroInvalido() {
   const primeiro = CAMPOS_DO_PEDIDO.find(id => $(id).getAttribute('aria-invalid') === 'true');
@@ -116,7 +130,7 @@ function rotuloDaOpcao({ data, fechada }, hoje) {
 }
 
 // Os pedidos da data do formulário, para o aviso de voo já marcado e o limite de voos locais: os da data aberta são os de
-// js/views/selos.js; os de outra data são lidos uma vez para cada par de data aberta e data do campo (o que foi lido antes
+// js/solicitacoes-da-data.js; os de outra data são lidos uma vez para cada par de data aberta e data do campo (o que foi lido antes
 // de a data aberta mudar pode ser de antes de um pedido), quando o perfil passa a registrar e ao abrir a Agenda. Quem
 // registra espera pela leitura; se ela falhou (null), as duas conferências não são feitas (o servidor ainda recusa o 7º
 // voo local)
@@ -133,7 +147,7 @@ function lerPedidosDoFormulario() {
 }
 export async function pedidosDoFormulario(data) {
   if (data === DATA) {
-    const daData = await pedidosDaDataAbertaLidos();
+    const daData = await solicitacoesDaDataLidas();
     // Outra data pode ter aberto durante a espera
     if (daData.data === data) return daData.lista;
   }
@@ -143,9 +157,18 @@ export async function pedidosDoFormulario(data) {
 // Depois de registrar: os pedidos da data em que ele entrou são lidos de novo
 export async function lerPedidosDaAgenda(data) {
   if (data !== DATA && data === dataDoPedido) lerDeOutraData(data);
-  else await lerPedidosDaData();
+  else await lerSolicitacoesDaData();
 }
 
+// O nome lembrado neste computador ("Registrado por" do último pedido): também é quem aprova, retira a aprovação e
+// cancela no modo local (sem contas)
+export function lembradoRegistradoPor() {
+  try {
+    return localStorage.getItem(CHAVE_REGISTRADO_POR) || '';
+  } catch {
+    return '';
+  }
+}
 export function lembrarRegistradoPor(nome) {
   try {
     localStorage.setItem(CHAVE_REGISTRADO_POR, nome);
@@ -170,38 +193,193 @@ function textoDoPrazo() {
   return `Pedidos para ${dia} até ${quando} às ${prazo.hora}.`;
 }
 
-// A situação de cada pedido da data aberta: já importado para a demanda ou ainda não
-const importado = p => (S.importadas || []).includes(p.id);
-// O pedido do aluno inativo no cadastro fica registrado, fora dos pendentes: ele entra quando o aluno voltar a ativo
-const deAlunoInativo = p => inativoNaDataAberta(stuBy(p.aluno));
-const pendentesDaDataAberta = () => (pedidosDaDataAberta().lista || []).filter(p => !p.cancelada_em && !importado(p) && !deAlunoInativo(p));
-function situacao(p) {
-  // Cancelado: a etiqueta numa linha; quem cancelou e quando ficam na dica (e para o leitor de tela)
-  if (p.cancelada_em) {
-    const detalhe = `por ${esc(p.cancelada_por)} em ${quando(p.cancelada_em)}`;
-    return `<span class="tag" title="Cancelado ${detalhe}">Cancelado</span><span class="sr"> ${detalhe}</span>`;
-  }
-  if (importado(p)) return '<span class="tag grp">Na demanda</span>';
-  return deAlunoInativo(p) ? '<span class="tag">Aluno inativo</span>' : '<span class="tag fb">Ainda não importado</span>';
+// ——— A lista e o detalhe (o componente: js/views/mestre-detalhe.js, criado em js/eventos/agenda.js) ———
+
+// A data aberta já passou: nenhum pedido dela é aprovado, retirado nem pede atenção
+const dataPassada = () => DATA < hojeEmSaoPaulo();
+// "às 11:00" (hoje, em São Paulo); "em 09/11 11:00" (outro dia)
+const aHora = instante => {
+  const texto = quando(instante);
+  return texto.slice(0, 5) === ddmm(hojeEmSaoPaulo()) ? `às ${texto.slice(6)}` : `em ${texto}`;
+};
+// O aluno do pedido no cadastro: null (fora do cadastro), ou inativo de hoje em diante
+const alunoDoPedido = p => stuBy(p.aluno) || null;
+const alunoAtivo = p => { const s = alunoDoPedido(p); return Boolean(s) && !inativoNaDataAberta(s); };
+// O pedido que quem aprova pode aprovar agora: aguardando, numa data de hoje em diante, de um aluno ativo no cadastro
+const aprovavel = p => situacaoDaSolicitacao(p) === 'aguardando' && aprovaPedidos() && !dataPassada() && alunoAtivo(p);
+
+// Onde o pedido está na demanda da data aberta (até o G): só de hoje em diante, com os dados lidos. O aprovado: "Na demanda",
+// "Tirado da demanda" (o Voa desligado ou "Limpar demanda") ou "Fora da demanda"; o que aguarda ou foi cancelado e ainda voa:
+// "Ainda na demanda"
+function naDemanda(p) {
+  if (dataPassada() || !dadosLidos) return '';
+  const onde = situacaoNaDemanda(p, S), situacao = situacaoDaSolicitacao(p);
+  if (situacao !== 'aprovada') return onde === 'voa' ? 'Ainda na demanda' : '';
+  return { voa: 'Na demanda', tirada: 'Tirado da demanda', fora: 'Fora da demanda' }[onde];
+}
+// Os aprovados fora da demanda que "Importar" traz (sem os de aluno fora do cadastro ou inativo, que esperam) e os que
+// aguardam ou foram cancelados e ainda voam na demanda
+const foraDaDemanda = lista => solicitacoesParaImportar(lista, S).filter(alunoAtivo);
+const aindaNaDemanda = lista => lista.filter(p => situacaoDaSolicitacao(p) !== 'aprovada' && situacaoNaDemanda(p, S) === 'voa');
+
+// O estado do pedido, com quem e quando (a lista: a hora; o detalhe: o dia e a hora)
+function textoDaSituacao(p, comDia = false) {
+  const em = instante => (comDia ? `em ${quando(instante)}` : aHora(instante));
+  const situacao = situacaoDaSolicitacao(p);
+  if (situacao === 'cancelada') return `Cancelado por ${p.cancelada_por} em ${quando(p.cancelada_em)}`;
+  if (situacao === 'aprovada') return `Aprovado por ${p.aprovada_por || 'Operador'} ${em(p.aprovada_em)}`;
+  if (dataPassada()) return 'Sem aprovação';
+  return comDia ? 'Aguardando aprovação' : p.aprovacao_retirada_em
+    ? `Aprovação retirada por ${p.aprovacao_retirada_por || 'Operador'} ${aHora(p.aprovacao_retirada_em)}` : `Registrado por ${p.registrado_por} ${aHora(p.registrado_em)}`;
 }
 
-function listaHTML() {
-  const { lista: doDia, leitura } = pedidosDaDataAberta();
-  if (leitura === 'lendo') return '<p class="h">Lendo os pedidos desta data…</p>';
-  if (leitura === 'erro') return '<p class="h">Não foi possível ler os pedidos desta data. Verifique a conexão.</p>';
-  if (!doDia.length) return '<p class="h">Nenhum pedido para esta data.</p>';
-  // Uma linha por pedido: a observação fica sob o nome do aluno e a conta que registrou, na dica de "Registrado por"
-  // (quase sempre é a mesma em todas as linhas)
-  return `<table><thead><tr><th>Registrado em</th><th>Aluno</th><th>Fase / missão</th><th>Horário</th><th>Registrado por</th><th>Situação</th><th aria-label="Ações"></th></tr></thead>
-    <tbody>${doDia.map(p => `<tr${p.cancelada_em ? ' class="cancel"' : ''}>
-      <td>${quando(p.registrado_em)}</td>
-      <td><b>${esc(p.aluno_nome)}</b>${p.observacao ? `<small class="obs">${esc(p.observacao)}</small>` : ''}</td>
-      <td>${esc(missaoDoPedido(p))}</td>
-      <td>${esc(disponibilidade(p))}</td>
-      <td class="por"${p.conta && p.conta !== p.registrado_por ? ` title="Conta: ${esc(p.conta)}"` : ''}>${esc(p.registrado_por)}${p.excecao ? ' <span class="tag fb">Exceção da coordenação</span>' : ''}</td>
-      <td class="situacao">${situacao(p)}</td>
-      <td>${p.cancelada_em ? '' : `<button class="x agenda-acao" data-act="cancelar-pedido" data-id="${p.id}">Cancelar</button>`}</td>
-    </tr>`).join('')}</tbody></table>`;
+const duracaoDoPedido = p => fmtH(p.horas === null || p.horas === undefined ? 1 : +p.horas);
+const GRUPOS = [
+  { id: 'aguardando', titulo: 'Aguardando aprovação', de: 'aguardando' },
+  { id: 'aprovados', titulo: 'Aprovados', de: 'aprovada' },
+  { id: 'cancelados', titulo: 'Cancelados', de: 'cancelada' }
+];
+// O pedido que acabou de ser registrado (a linha fica marcada e à vista)
+let recente = null;
+export function marcarRecente(id) { recente = id; }
+
+// A linha de um pedido: o aluno; a missão (o código da missão do curso), o recurso, a duração e a 2ª preferência; a 1ª, à
+// direita; quem registrou, aprovou ou cancelou, e onde ele está na demanda. O que aguarda tem o ponto e, para quem aprova,
+// "Aprovar"; o cancelado fica esmaecido
+function itemDoPedido(p) {
+  const situacao = situacaoDaSolicitacao(p), aluno = alunoDoPedido(p);
+  const extras = [p.excecao ? 'Exceção da Coordenação' : '', naDemanda(p), !aluno ? 'Aluno fora do cadastro' : inativoNaDataAberta(aluno) ? 'Aluno inativo' : ''];
+  const espera = situacao === 'aguardando' && !dataPassada();
+  return {
+    id: p.id,
+    titulo: p.aluno_nome,
+    linha2: [missaoDoPedido(p), duracaoDoPedido(p), p.horario2 ? `2ª ${p.horario2}` : ''].filter(Boolean).join(' · '),
+    meta: p.horario || '—',
+    linha3: [textoDaSituacao(p), ...extras].filter(Boolean).join(' · '),
+    ponto: espera ? 'aviso' : '', pontoRotulo: espera ? 'aguardando aprovação' : '',
+    apagado: situacao === 'cancelada',
+    grupo: GRUPOS.find(g => g.de === situacao).id,
+    ...(aprovavel(p) ? { acao: { texto: 'Aprovar', rotulo: `Aprovar o pedido de ${p.aluno_nome} (${descreverPedido(p)})`, atributos: `data-act="aprovar-pedido" data-id="${p.id}"` } } : {}),
+    atributos: `data-pedido="${p.id}"${recente === p.id ? ' data-recente' : ''}`,
+    busca: [p.aluno_nome, p.missao, codigoDaMissaoDoCurso(p)].filter(Boolean)
+  };
+}
+// Na ordem do dia: a 1ª preferência, depois a ordem do registro
+const naOrdem = (a, b) => (a.horario || '').localeCompare(b.horario || '') || (a.registrado_em || '').localeCompare(b.registrado_em || '') || a.id - b.id;
+
+// O modelo da lista (js/lista.js): os grupos por estado, com quantos tem cada um
+export function modeloDosPedidos() {
+  const { lista, leitura } = solicitacoesDaData();
+  if (!lista) {
+    const falhou = leitura === 'erro';
+    return {
+      fixos: [], grupos: [], itens: [], estado: falhou ? 'falhou' : 'lendo', tentar: () => lerSolicitacoesDaData(),
+      textoDoEstado: falhou ? 'Não foi possível ler os pedidos desta data. Verifique a conexão.' : 'Lendo os pedidos desta data…'
+    };
+  }
+  const itens = [...lista].sort(naOrdem).map(itemDoPedido);
+  const grupos = GRUPOS.map(g => ({ id: g.id, titulo: g.titulo, resumo: String(itens.filter(i => i.grupo === g.id).length) }));
+  return { fixos: [], grupos, itens, estado: 'pronto' };
+}
+
+// O detalhe de um pedido (null: não está na lista da data aberta), só de leitura: o pedido (a missão e a missão do curso, o
+// recurso, as preferências, a duração e a observação), a situação (quem registrou, aprovou, retirou a aprovação ou
+// cancelou, e quando) e, nesta data, onde ele está na demanda e os outros pedidos do aluno. As ações, embaixo
+export function detalheDoPedido(id) {
+  const p = pedidoDaLista(id);
+  if (!p) return null;
+  const situacao = situacaoDaSolicitacao(p);
+  const leitura = (campo, rotulo, texto) => ({ id: campo, rotulo, tipo: 'leitura', texto: texto || '—' });
+  const pedido = [
+    leitura('data', 'Data', dataPorExtenso(p.data)),
+    leitura('missao', 'Missão', p.missao),
+    leitura('missao-do-curso', 'Missão do curso', codigoDaMissaoDoCurso(p)),
+    leitura('recurso', 'Recurso', recursoValido(p) || p.recurso),
+    leitura('horario', '1ª preferência', p.horario || disponibilidade(p)),
+    leitura('horario2', '2ª preferência', p.horario2),
+    leitura('horas', 'Duração', duracaoDoPedido(p)),
+    leitura('observacao', 'Observação', p.observacao)
+  ];
+  const conta = p.conta && p.conta !== p.registrado_por ? ` (conta: ${p.conta})` : '';
+  const quem = [
+    leitura('situacao', 'Situação', textoDaSituacao(p, true)),
+    leitura('registrado', 'Registrado por', `${p.registrado_por} em ${quando(p.registrado_em)}${conta}`),
+    ...(p.excecao ? [leitura('excecao', 'Fora do prazo', 'Exceção da Coordenação')] : []),
+    ...(p.limite_confirmado_por ? [leitura('limite', '7º voo local', `confirmado por ${p.limite_confirmado_por} em ${quando(p.limite_confirmado_em)}`)] : []),
+    ...(p.aprovacao_retirada_em ? [leitura('retirada', 'Aprovação retirada', `por ${p.aprovacao_retirada_por || 'Operador'} em ${quando(p.aprovacao_retirada_em)}`)] : [])
+  ];
+  const outros = (solicitacoesDaData().lista || []).filter(o => o.id !== p.id && o.aluno === p.aluno && !o.cancelada_em);
+  const demanda = naDemanda(p) || (dataPassada() || !dadosLidos ? '' : 'Fora da demanda');
+  const nestaData = [
+    ...(demanda ? [leitura('demanda', 'Demanda', demanda)] : []),
+    leitura('outros', 'Outros pedidos', outros.map(descreverPedido).join('; ') || 'nenhum')
+  ];
+  const id_ = `data-id="${p.id}"`;
+  const rodape = [
+    ...(aprovavel(p) ? [{ id: 'aprovar', texto: 'Aprovar pedido', rotulo: `Aprovar o pedido de ${p.aluno_nome}`, atributos: `data-act="aprovar-pedido" ${id_}`, soEdicao: true }] : []),
+    ...(situacao === 'aprovada' && aprovaPedidos() && !dataPassada()
+      ? [{ id: 'retirar', texto: 'Retirar aprovação', rotulo: `Retirar a aprovação do pedido de ${p.aluno_nome}`, atributos: `data-act="retirar-aprovacao" ${id_}`, soEdicao: true }] : []),
+    ...(situacao !== 'cancelada' && podeEditarAgenda() && !(situacao === 'aprovada' && dataPassada())
+      ? [{ id: 'cancelar', texto: 'Cancelar pedido', rotulo: `Cancelar o pedido de ${p.aluno_nome}`, atributos: `data-act="cancelar-pedido" ${id_} data-agenda-acao` }] : []),
+    ...(podeEditarAgenda() ? [{ id: 'repetir', texto: 'Registrar de novo…', rotulo: `Registrar de novo o pedido de ${p.aluno_nome}`, atributos: `${id_} data-agenda-acao` }] : [])
+  ];
+  // O voo do pedido já na escala de hoje, ou na escala aprovada: cancelar o pedido não é o caminho para o aluno que desistiu
+  const comVoo = situacao !== 'cancelada' && situacaoNaDemanda(p, S) === 'voa' && (S.aprovacao || DATA === hojeEmSaoPaulo());
+  return {
+    id: p.id,
+    titulo: p.aluno_nome,
+    subtitulo: `${descreverPedido(p)} · ${{ aguardando: dataPassada() ? 'Sem aprovação' : 'Aguardando aprovação', aprovada: 'Aprovado', cancelada: 'Cancelado' }[situacao]}`,
+    aviso: comVoo ? 'Este pedido tem voo na escala. Se o aluno desistiu ou o voo não vai sair, marque o voo como Cancelado na Escala: ele fica na escala, com o motivo. Cancelar o pedido é para um pedido registrado por engano.' : '',
+    secoes: [
+      { id: 'pedido', titulo: 'Pedido', icone: 'i-calendario', campos: pedido },
+      { id: 'situacao', titulo: 'Situação', icone: 'i-certo', campos: quem },
+      ...(dataPassada() ? [] : [{ id: 'nesta-data', titulo: 'Nesta data', icone: 'i-andamento', campos: nestaData }])
+    ],
+    rodape
+  };
+}
+
+// "Aprovar todos (N)": os que aguardam e quem aprova pode aprovar, entre os que a busca mostra
+export function aprovaveisNaBusca() {
+  const busca = chaveDeBusca(($('[data-flt="age"]') || {}).value || '');
+  const lista = (solicitacoesDaData().lista || []).filter(aprovavel);
+  return { ids: lista.filter(p => !busca || itemDoPedido(p).busca.some(t => chaveDeBusca(t).includes(busca))).map(p => p.id), filtrando: Boolean(busca) };
+}
+function desenharAprovarTodos() {
+  const botao = $('#agenda-aprovar-todos');
+  const { ids, filtrando } = aprovaveisNaBusca();
+  botao.hidden = !ids.length || !aprovaPedidos() || dataPassada();
+  const texto = filtrando ? `Aprovar os filtrados (${ids.length})` : `Aprovar todos (${ids.length})`;
+  if (botao.textContent !== texto) botao.textContent = texto;
+}
+
+// Os avisos da lista, nesta ordem: a leitura que falhou (com a lista da leitura de antes); a escala desta data que mudou em
+// outro computador ("Atualizar": nada mais é dito da demanda até lá); os aprovados fora da demanda ("Importar", para quem
+// importa); os que aguardam ou foram cancelados e ainda voam na demanda (o operador os tira na Demanda)
+const plural = (n, um, varios) => `${n} ${n === 1 ? um : varios}`;
+function desenharAvisos() {
+  const { lista, leitura, lidaEm, diaMudou } = solicitacoesDaData();
+  const partes = [];
+  if (leitura === 'erro' && lista) {
+    partes.push(`<p>Não foi possível ler os pedidos de novo: a lista é a lida ${esc(aHora(lidaEm))}. <button type="button" class="btn quiet" id="agenda-tentar">Tentar de novo</button></p>`);
+  }
+  if (diaMudou) {
+    partes.push('<p>A escala desta data mudou em outro computador. <button type="button" class="btn quiet" id="agenda-atualizar-data">Atualizar</button></p>');
+  } else if (lista && !dataPassada() && dadosLidos) {
+    const fora = foraDaDemanda(lista).length;
+    if (fora) {
+      partes.push(`<p>${plural(fora, 'pedido aprovado', 'pedidos aprovados')} fora da demanda.${podeImportar()
+        ? ` <button type="button" class="btn" id="agenda-importar" data-act="importar-agenda" aria-label="Importar ${plural(fora, 'pedido aprovado', 'pedidos aprovados')} para a demanda">Importar</button>` : ''}</p>`);
+    }
+    const ainda = aindaNaDemanda(lista);
+    if (ainda.length) {
+      partes.push(`<p>${plural(ainda.length, 'pedido cancelado ou sem aprovação ainda está', 'pedidos cancelados ou sem aprovação ainda estão')} na demanda: ${esc(ainda.map(p => `${p.aluno_nome} (${descreverPedido(p)})`).join('; '))}. Tire-os na Demanda (Voa), se for o caso.</p>`);
+    }
+  }
+  const html = partes.join('');
+  const lugar = $('#agenda-aviso');
+  lugar.hidden = !html;
+  if (lugar.innerHTML !== html) trocarConteudo(lugar, html);
 }
 
 // O formulário: o aluno decide as missões (as do curso dele; sem curso, os tipos de missão), a missão decide os recursos, e
@@ -266,7 +444,7 @@ function atualizarMissao() {
   if (!aluno) {
     if (missoesDoCampo) {
       guardada = { missao: campo.value, nome: nomeDaEscolha(missoesDoCampo, campo.value), recurso: escolhaDaPessoa($('#ag-recurso')),
-        horario: escolhaDaPessoa($('#ag-horario')) || horarioEscolhido };
+        horario: escolhaDaPessoa($('#ag-horario')) || horarioEscolhido, horario2: $('#ag-horario2').value || segundaQueEspera };
       horarioEscolhido = '';
       missoesDoCampo = null;
     }
@@ -287,11 +465,14 @@ function atualizarMissao() {
     $('#ag-recurso').value = '';
     delete $('#ag-recurso').dataset.sozinho;
     $('#ag-horario').value = '';
+    $('#ag-horario2').value = '';
     horarioEscolhido = '';
     recursoQueEspera = '';
+    segundaQueEspera = '';
   } else if (guardada && fica) {
     recursoQueEspera = guardada.recurso;
     horarioEscolhido = guardada.horario;
+    segundaQueEspera = guardada.horario2;
   }
   guardada = null;
   missoesDoCampo = lista;
@@ -336,17 +517,49 @@ function atualizarHorario() {
 }
 export const emLista = itens => (itens.length > 1 ? `${itens.slice(0, -1).join(', ')} e ${itens.at(-1)}` : itens.join(''));
 
+// A 2ª preferência (U1): outro horário exato, da mesma lista do recurso, sem a 1ª; opcional. Ela espera o aluno, a missão e o
+// recurso, como a 1ª; a missão de um horário só (o Noturno, o Voo Solo) não tem. A escolhida que a lista nova não tem (outro
+// recurso, a 1ª que passou a ser ela) sai, e o campo diz; a que espera a lista (sem o aluno, entre um pedido e outro) volta
+// quando ela a tem
+let segundaQueEspera = '';
+let avisoDaSegunda = '';
+function atualizarSegundaPreferencia() {
+  const campo = $('#ag-horario2'), aluno = $('#ag-aluno').value, { tipo: missao, doCurso } = missaoEscolhida(), recurso = $('#ag-recurso').value;
+  const lista = missao && recurso ? horariosDaMissao(S.horarios, missao, recurso).map(hm) : [];
+  const primeira = $('#ag-horario').value;
+  const opcoes = opcoesDaSegundaPreferencia(lista, primeira, missao);
+  const escolhida = campo.value || segundaQueEspera;
+  const fica = opcoes.includes(escolhida) ? escolhida : '';
+  if (!lista.length) segundaQueEspera = escolhida;
+  else {
+    segundaQueEspera = '';
+    if (escolhida && !fica && opcoes.length) {
+      avisoDaSegunda = escolhida === primeira ? `A 2ª preferência era ${escolhida}, agora a 1ª: escolha outra, se houver.`
+        : `A 2ª preferência ${escolhida} não é um dos horários de ${doCurso ? doCurso.codigo : missao} (${recurso}): escolha outra, se houver.`;
+    }
+  }
+  const html = opts([['', '—'], ...opcoes.map(h => [h, h])], fica);
+  if (JSON.stringify([['', '—'], ...opcoes.map(h => [h, h])]) !== JSON.stringify([...campo.options].map(o => [o.value, o.text]))) campo.innerHTML = html;
+  campo.value = fica;
+  campo.disabled = !(aluno && missao && recurso) || !opcoes.length;
+  const texto = !(aluno && missao && recurso) ? '' : !opcoes.length ? 'Um horário só: sem 2ª preferência.' : avisoDaSegunda || 'Opcional: outro horário, se o da 1ª não couber.';
+  mudarTexto($('#ag-horario2-motivo'), texto);
+}
+
 // As missões do aluno, os recursos e os horários do recurso escolhido, como estão agora no cadastro (o que ainda vale fica)
 export function atualizarRecursoEHorario() {
   atualizarMissao();
   atualizarRecurso();
   atualizarHorario();
+  atualizarSegundaPreferencia();
 }
 
-// Uma escolha nova (o aluno, a missão, o recurso ou o horário): os avisos da missão e do horário que saíram eram da anterior
+// Uma escolha nova (o aluno, a missão, o recurso ou um dos horários): os avisos da missão e dos horários que saíram eram da
+// anterior
 export function escolherNaAgenda() {
   avisoDoHorario = '';
   avisoDaMissao = '';
+  avisoDaSegunda = '';
   atualizarRecursoEHorario();
 }
 
@@ -399,33 +612,59 @@ function desenharFormulario() {
   if (opcoesDesenhadas !== html) { campo.innerHTML = html; opcoesDesenhadas = html; }
   campo.value = dataDoPedido;
   $('#agenda-prazo').textContent = textoDoPrazo();
+  mudarTexto($('#agenda-titulo'), `Novo pedido para ${dataCurta(dataDoPedido)}`);
+  // Até o prazo: "Registrar e aprovar" e "Registrar sem aprovar" (quem aprova) ou "Registrar pedido" (a secretaria); depois
+  // dele, só a Exceção da Coordenação, de quem opera a escala (o pedido nasce aprovado)
   const aberto = prazoDaAgendaPermite(dataDoPedido);
   $('#form-agenda [type="submit"]').disabled = !aberto;
+  $('#ag-registrar').hidden = !aprovaPedidos();
+  $('#ag-registrar').disabled = !aberto;
   $('#ag-excecao').hidden = aberto || !podeUsarExcecao();
+  nomearRegistrar();
 }
 
+// A data aberta da lista: outra data aberta, nada fica escolhido (o pedido escolhido é da data de antes)
+let dataDaLista = null;
+export function mudouADataDaLista() {
+  const mudou = dataDaLista !== null && dataDaLista !== DATA;
+  dataDaLista = DATA;
+  return mudou;
+}
+
+// O desenho da tela fora do componente: a data, a barra, os avisos e o formulário
 export function rAgenda() {
   if (!agendaAberta || !DATA) return;
-  $('#agenda-data').textContent = dataPorExtenso(DATA);
-  trocarConteudo($('#agenda-lista'), listaHTML());
-  const pendentes = pendentesDaDataAberta().length;
-  $('#agenda-importar').hidden = !pendentes || !podeImportar();
-  $('#agenda-importar').textContent = `Importar ${pendentes} ${pendentes === 1 ? 'pedido' : 'pedidos'} para a demanda`;
+  mudarTexto($('#agenda-data'), dataPorExtenso(DATA));
+  desenharAprovarTodos();
+  desenharAvisos();
 
-  // Formulário: a data, os alunos do cadastro, as missões, a disponibilidade e quem anotou (lembrado neste computador)
+  // Formulário: a data, os alunos do cadastro, as missões, as preferências e quem anotou (lembrado neste computador)
   desenharFormulario();
   const aluno = $('#ag-aluno').value;
   $('#ag-aluno').innerHTML = `<option value="">Escolha o aluno…</option>` +
     [...S.stu].filter(s => !inativo(s)).sort((a, b) => a.nm.localeCompare(b.nm)).map(s => `<option value="${s.id}">${esc(s.nm)}</option>`).join('');
   $('#ag-aluno').value = aluno;
-  if (!$('#ag-missao').options.length) {
-    try {
-      $('#ag-por').value = localStorage.getItem(CHAVE_REGISTRADO_POR) || '';
-    } catch {
-      // Sem o armazenamento do navegador, o campo começa vazio
-    }
-  }
+  if (!$('#ag-missao').options.length) $('#ag-por').value = lembradoRegistradoPor();
   // O aluno que saiu do cadastro (ou ficou inativo) sai do campo; os horários acompanham o cadastro
   if ($('#ag-aluno').selectedIndex < 0) $('#ag-aluno').value = '';
   atualizarRecursoEHorario();
+}
+
+// "Registrar de novo…": o formulário com os campos do pedido (o aluno, a missão do curso ou o tipo, o recurso, as
+// preferências, a duração e a observação) e com a data dele, quando ela ainda aceita pedidos; o pedido novo é outro pedido
+// (outro id, sem o que o operador pôs no de antes). O que a lista de agora não tem fica de fora, como numa escolha da pessoa
+export function preencherComOPedido(p) {
+  const { opcoes } = datasParaRegistrar(hojeEmSaoPaulo(), DATA, { excecao: podeUsarExcecao() });
+  if (opcoes.some(o => o.data === p.data && !o.fechada) && p.data !== dataDoPedido) escolherDataDoPedido(p.data);
+  const escolher = (id, valor) => { const campo = $(id); campo.value = valor ?? ''; delete campo.dataset.sozinho; escolherNaAgenda(); };
+  escolher('#ag-aluno', String(p.aluno));
+  const doCurso = p.missao_do_curso && [...$('#ag-missao').options].some(o => o.value === p.missao_do_curso);
+  $('#ag-missao').value = doCurso ? p.missao_do_curso : p.missao;
+  escolherMissaoNaAgenda();
+  escolher('#ag-recurso', p.recurso);
+  escolher('#ag-horario', p.horario);
+  escolher('#ag-horario2', p.horario2);
+  if (!$('#ag-horas').disabled && p.horas !== null && p.horas !== undefined) $('#ag-horas').value = String(+p.horas);
+  $('#ag-obs').value = p.observacao || '';
+  apagarErroDaAgenda();
 }

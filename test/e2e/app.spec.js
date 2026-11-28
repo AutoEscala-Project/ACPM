@@ -8,7 +8,7 @@ test.describe('Aplicação', () => {
     await expect(page).toHaveTitle('AutoEscala - ACPM');
     await expect(page.locator('meta[name="application-name"]')).toHaveAttribute('content', 'AutoEscala - ACPM');
     await expect(page.locator('meta[name="apple-mobile-web-app-title"]')).toHaveAttribute('content', 'AutoEscala');
-    await expect(rotulosDasAbas(page)).toHaveText(['Agenda', 'Demanda', 'Escala', 'Aprovar', 'Alunos', 'Instrutores', 'Recursos', 'Cursos', 'Rodízio', 'BI']);
+    await expect(rotulosDasAbas(page)).toHaveText(['Pedidos', 'Demanda', 'Escala', 'Aprovar', 'Alunos', 'Instrutores', 'Recursos', 'Cursos', 'Rodízio', 'BI']);
     await expect(page.locator('#s-esc')).toBeVisible();
     await expect(botaoDaAba(page, 'esc')).toHaveAttribute('aria-current', 'page');
     await expect(page.locator('#s-rec')).toBeHidden();
@@ -147,7 +147,7 @@ test.describe('Aplicação', () => {
     await expect(page.locator('#manual-glossario-lista dt')).toHaveCount(Object.keys(GLOSSARIO).length);
     await expect(page.locator('#manual-glossario-lista')).toContainText(GLOSSARIO['horario-livre'].texto);
     // As telas na ordem da linha (as etapas, os cadastros, o Rodízio e o BI), com os nomes dos botões e das vistas
-    await expect(manual.locator('#manual-abas h4')).toHaveText(['Agenda', 'Demanda', 'Escala', 'Alunos', 'Instrutores', 'Recursos', 'Cursos', 'Rodízio', 'BI']);
+    await expect(manual.locator('#manual-abas h4')).toHaveText(['Pedidos', 'Demanda', 'Escala', 'Alunos', 'Instrutores', 'Recursos', 'Cursos', 'Rodízio', 'BI']);
     for (const novo of FRASES_DO_MANUAL) {
       expect(texto, novo).toContain(novo);
     }

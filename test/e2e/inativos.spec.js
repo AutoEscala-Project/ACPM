@@ -1,7 +1,7 @@
 // O inativo no cadastro (formato 26; a chave que inativa chega no F2): na data aberta de hoje em diante, o instrutor e o
 // recurso inativos não são escolhidos nem oferecidos; a escala gravada antes, com voos dele, avisa e se refaz com "Refazer a
 // escala"; o pedido do aluno inativo fica registrado, "Aluno inativo", fora dos pendentes
-import { test, expect, appPronto, irPara, abrirEscala, abrirCaixa, abrirHistorico, entradasDoHistorico, campoDaAgenda, AMANHA } from './fixtures.js';
+import { test, expect, appPronto, irPara, abrirEscala, abrirCaixa, abrirHistorico, entradasDoHistorico, campoDaAgenda, AMANHA, linhasDosPedidos, aprovarNaLinha, botaoDosPedidos } from './fixtures.js';
 import { documentosAtuais } from './supabase-falso.js';
 import { estadoSintetico } from '../helpers/estado.js';
 import { comExemplo } from '../helpers/exemplo.js';
@@ -71,8 +71,9 @@ test.describe('O inativo no cadastro', () => {
   test('o aluno inativo: o pedido dele fica "Aluno inativo", fora dos pendentes; ele não é oferecido para pôr na demanda', async ({ page }) => {
     await abrirComInativos(page);
     await irPara(page, 'age');
-    await expect(page.locator('#agenda-lista')).toContainText('Aluno inativo');
-    await expect(page.locator('#agenda-importar')).toBeHidden();
+    await expect(linhasDosPedidos(page)).toContainText(['Aluno inativo']);
+    await expect(aprovarNaLinha(page, 'Aluno inativo')).toHaveCount(0);
+    await expect(botaoDosPedidos(page, 'importar')).toHaveCount(0);
     await expect(campoDaAgenda(page, 'aluno').locator('option', { hasText: 'Aluno Fictício Inativo' })).toHaveCount(0);
     await irPara(page, 'dem');
     await expect(page.locator('#alunos-fora option[value="Aluno Fictício Inativo"]')).toHaveCount(0);

@@ -88,8 +88,18 @@ describe('Glossário', () => {
   it('o glossário das telas é o das funcionalidades ligadas no app', () => assert.deepEqual(GLOSSARIO, montarGlossario(ligada)));
 });
 
-// A Agenda pelo curso do aluno (F1c): a missão do pedido e o 7º voo local, com o limite da configuração
-describe('Glossário: a Agenda', () => {
+// Pedidos: a missão do pedido pelo curso do aluno e o 7º voo local, com o limite da configuração (F1c); a aprovação, a 2ª
+// preferência e a lista de espera do 7º (D2), num grupo "Pedidos"
+describe('Glossário: Pedidos', () => {
+  it('os termos dos pedidos ficam no grupo "Pedidos": a aprovação, a 2ª preferência, o 7º voo local com os dois caminhos', () => {
+    assert.ok(ABAS_DO_GLOSSARIO.includes('Pedidos') && !ABAS_DO_GLOSSARIO.includes('Agenda'));
+    for (const id of ['missao-do-pedido', 'recurso-do-pedido', 'setimo-voo-local', 'excecao', 'aprovar-pedido', 'segunda-preferencia-do-pedido']) assert.equal(GLOSSARIO[id].aba, 'Pedidos', id);
+    assert.match(GLOSSARIO['aprovar-pedido'].texto, /Aguardando aprovação/);
+    assert.match(GLOSSARIO['segunda-preferencia-do-pedido'].texto, /outro horário exato/);
+    assert.match(GLOSSARIO['setimo-voo-local'].texto, /“Registrar na lista de espera”/);
+    assert.match(GLOSSARIO.excecao.texto, /nasce aprovado/);
+  });
+
   it('a missão do pedido vem do curso do aluno, e o 7º voo local pede a confirmação', () => {
     assert.match(GLOSSARIO['missao-do-pedido'].texto, /as missões do programa dele, por fase/);
     assert.equal(GLOSSARIO['setimo-voo-local'].termo, `${LIMITE_DE_VOOS_LOCAIS + 1}º voo local`);

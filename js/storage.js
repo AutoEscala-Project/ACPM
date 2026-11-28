@@ -22,6 +22,7 @@ import { normalizarPainel } from './config-do-painel.js';
 import { normalizarCursos, normalizarCursoDoAluno } from './cursos.js';
 import { normalizarProgramas, programaDoLegado } from './programa.js';
 import { inativo, inativoValeEm, ativosNaData } from './inativos.js';
+import { contagemPorDia } from './agenda.js';
 
 // A recusa de quem só consulta (o Gestor e a Secretaria no modo compartilhado, ou a tela travada depois de um
 // conflito), com o código do servidor
@@ -311,11 +312,16 @@ export const ApiClient = {
     return this.backend.listarSolicitacoes(de, ate);
   },
 
-  // Os pedidos não cancelados de cada dia, de de a ate: { 'AAAA-MM-DD': n } (o calendário do trilho)
+  // Os pedidos não cancelados de cada dia, de de a ate: { 'AAAA-MM-DD': n } (o calendário do trilho), pela contagem do
+  // servidor (D2: sem baixar os pedidos do mês, e sem o limite de 1.000 linhas da leitura); o domingo não tem número
   async contagemDaAgenda(de, ate) {
-    const contagem = {};
-    for (const p of await this.agenda(de, ate)) if (!p.cancelada_em) contagem[p.data] = (contagem[p.data] || 0) + 1;
-    return contagem;
+    return contagemPorDia(await this.backend.solicitacoesPorDia(de, ate));
+  },
+
+  // A escala gravada da data mudou em outro computador depois da leitura deste (D2: antes de um pedido aprovado entrar na
+  // demanda e antes de importar)? No modo local, nunca
+  diaMudou(data) {
+    return this.backend.diaMudou(data);
   },
 
   registrarSolicitacao(dados) {

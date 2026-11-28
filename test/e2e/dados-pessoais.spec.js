@@ -188,7 +188,7 @@ test.describe('Dados pessoais (modo compartilhado)', () => {
     // Nenhuma gravação dos dados pessoais sai da página dela (o servidor, que a recusaria, nem é chamado)
     const gravacoes = [];
     page.on('request', r => { if (r.url().includes('/rpc/salvar_dados_pessoais')) gravacoes.push(r.url()); });
-    await expect(rotulosDasAbas(page, { visiveis: true })).toHaveText(['Agenda', 'Escala', 'Aprovar', 'Alunos', 'Instrutores', 'Cursos']);
+    await expect(rotulosDasAbas(page, { visiveis: true })).toHaveText(['Pedidos', 'Escala', 'Aprovar', 'Alunos', 'Instrutores', 'Cursos']);
     await irPara(page, 'alu');
     // O filtro dos cursos vale para ela (as caixas não ficam desligadas)
     await page.locator('#flt-alu-cur').click();

@@ -121,6 +121,15 @@ export function criarBackendSupabase(cliente, { aoConflito = () => {}, aoErro = 
       return registrando > 0 || Object.keys(emAndamento).length > 0 || Object.keys(pendentes).length > 0;
     },
 
+    // A escala gravada da data mudou em outro computador? A versão de agora (só ela, sem o conteúdo) contra a que a última
+    // leitura deste navegador guardou (0: a data não estava gravada), depois das gravações deste navegador em andamento
+    async diaMudou(data) {
+      await gravacoesConcluidas();
+      const { data: linha, error } = await cliente.from('dias').select('versao').eq('data', data).maybeSingle();
+      if (error) throw new Error(error.message);
+      return (linha ? linha.versao : 0) !== (versoes[`dia:${data}`] ?? 0);
+    },
+
     async listarDias(de, ate) {
       await gravacoesConcluidas();
       const { data, error } = await cliente.from('dias').select('data, conteudo').gte('data', de).lte('data', ate).order('data');

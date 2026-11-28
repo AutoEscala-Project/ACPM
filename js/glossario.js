@@ -19,7 +19,7 @@ export const ABAS_DO_GLOSSARIO = [
   'Escala',
   'Critérios',
   'Demanda',
-  'Agenda',
+  'Pedidos',
   'Recursos',
   'Instrutores',
   'Alunos',
@@ -89,11 +89,13 @@ const TERMOS = {
   'fora-da-ordem': { funcionalidade: 'progresso', aba: 'Demanda', termo: 'Fora da ordem', texto: 'A missão do curso que o programa ainda não libera (falta uma anterior ou a fase não abriu), a já aprovada, a dispensada ou a que o aluno já tem em outro voo do dia. Escolhê-la pede confirmação, e o histórico diz por quê.' },
   'curso-encerrado': { funcionalidade: 'progresso', aba: 'Demanda', termo: 'Curso encerrado', texto: 'O curso do aluno foi encerrado em Cursos. A próxima missão e as outras do curso continuam, mas cada uma pede confirmação, aqui e no agendamento, e o histórico diz que o curso estava encerrado.' },
 
-  // Agenda
-  'missao-do-pedido': { aba: 'Agenda', termo: 'Fase / missão do pedido', texto: 'Para o aluno de um curso, as missões do programa dele, por fase, sem as dispensadas; sem curso, os tipos de missão. A missão do curso traz o recurso e as horas dela e vai com o pedido para a demanda.' },
-  'recurso-do-pedido': { aba: 'Agenda', termo: 'Recurso do pedido', texto: 'O tipo de avião, o simulador ou a sala que a missão permite, escolhido no pedido. Ele decide os horários (os de decolagem dele, em Recursos) e vai com o pedido para a demanda.' },
-  'setimo-voo-local': { aba: 'Agenda', termo: `${LIMITE_DE_VOOS_LOCAIS + 1}º voo local`, texto: `No máximo ${LIMITE_DE_VOOS_LOCAIS} voos locais (Voo Local, Voo Solo e TGL) saem no mesmo horário. O ${LIMITE_DE_VOOS_LOCAIS + 1}º só é registrado com “Registrar mesmo assim”, guarda quem confirmou e voa no horário, a mais.` },
-  excecao: { aba: 'Agenda', termo: 'Exceção da Coordenação', texto: 'Registra o pedido depois do prazo (13:00 da véspera; a segunda, sábado às 10:00). O pedido fica marcado como exceção, para auditoria.' },
+  // Pedidos
+  'aprovar-pedido': { aba: 'Pedidos', termo: 'Aprovar pedido', texto: 'O pedido chega “Aguardando aprovação” (o da secretaria, ou o registrado sem aprovar) e só entra na demanda aprovado. Na data aberta já gravada, ele entra na hora; senão, “Importar” o põe lá. “Retirar aprovação” o devolve a aguardar.' },
+  'segunda-preferencia-do-pedido': { aba: 'Pedidos', termo: '2ª preferência do pedido', texto: 'Opcional: outro horário exato, da mesma lista do recurso, para quando o da 1ª não couber. O Noturno e o Voo Solo têm um horário só.' },
+  'missao-do-pedido': { aba: 'Pedidos', termo: 'Fase / missão do pedido', texto: 'Para o aluno de um curso, as missões do programa dele, por fase, sem as dispensadas; sem curso, os tipos de missão. A missão do curso traz o recurso e as horas dela e vai com o pedido para a demanda.' },
+  'recurso-do-pedido': { aba: 'Pedidos', termo: 'Recurso do pedido', texto: 'O tipo de avião, o simulador ou a sala que a missão permite, escolhido no pedido. Ele decide os horários (os de decolagem dele, em Recursos) e vai com o pedido para a demanda.' },
+  'setimo-voo-local': { aba: 'Pedidos', termo: `${LIMITE_DE_VOOS_LOCAIS + 1}º voo local`, texto: `No máximo ${LIMITE_DE_VOOS_LOCAIS} voos locais (Voo Local, Voo Solo e TGL) saem no mesmo horário. O ${LIMITE_DE_VOOS_LOCAIS + 1}º é registrado com “Registrar mesmo assim”, guarda quem confirmou e voa no horário, a mais; ou com “Registrar na lista de espera”, e espera a vaga do horário.` },
+  excecao: { aba: 'Pedidos', termo: 'Exceção da Coordenação', texto: 'Registra o pedido depois do prazo (13:00 da véspera; a segunda, sábado às 10:00). O pedido nasce aprovado e fica marcado como exceção, para auditoria.' },
 
   // Recursos
   'horario-fechado-na-data': { aba: 'Recursos', termo: 'Horário apagado', texto: 'O horário está fechado nesta data (Escala › Horários fechados nesta data): nesta data, nenhum voo nem aula de Ground da categoria sai nele. Ele continua na lista para as outras datas.' },

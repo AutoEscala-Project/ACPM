@@ -20,6 +20,7 @@ function contexto({ pedidos = [], leitura = 'lidos', out = [], al = [], tot = 0,
   };
 }
 const pedido = (id, extra = {}) => ({ id, data: DATA, aluno: 1000 + id, cancelada_em: null, ...extra });
+const aprovado = (id, extra = {}) => pedido(id, { aprovada_em: '2026-11-10T14:00:00Z', ...extra });
 const cartao = (ctx, id) => linhaDoDia(ctx).find(c => c.id === id);
 const tarefa = (ctx, cartaoId, tarefaId) => cartao(ctx, cartaoId).tarefas.find(t => t.id === tarefaId);
 const voo = n => Array.from({ length: n }, (_, i) => ({ fKey: `${1000 + i}_0_1` }));
@@ -31,7 +32,6 @@ describe('A linha do dia', () => {
 
   // Pedidos (D2): os registrados (não cancelados), os que aguardam aprovação (pedem atenção de hoje em diante), os aprovados
   // e, para quem opera, os aprovados que ainda não estão na demanda (até o G)
-  const aprovado = (id, extra = {}) => pedido(id, { aprovada_em: '2026-11-10T14:00:00Z', ...extra });
   it('Pedidos: os registrados, os que aguardam aprovação, os aprovados e os aprovados fora da demanda', () => {
     const ctx = contexto({ pedidos: [pedido(1), aprovado(2), aprovado(3), aprovado(4, { cancelada_em: '2026-11-10T10:00:00Z' })], importadas: [2] });
     const c = cartao(ctx, 'pedidos');

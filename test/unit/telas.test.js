@@ -17,7 +17,7 @@ describe('Quem vê cada tela', () => {
 
   it('o rótulo de cada tela é o nome dela hoje', () => {
     assert.deepEqual(Object.fromEntries(Object.entries(TELAS).map(([id, t]) => [id, t.rotulo])), {
-      age: 'Agenda', dem: 'Demanda', esc: 'Escala', apr: 'Aprovar', alu: 'Alunos', ins: 'Instrutores', rec: 'Recursos',
+      age: 'Pedidos', dem: 'Demanda', esc: 'Escala', apr: 'Aprovar', alu: 'Alunos', ins: 'Instrutores', rec: 'Recursos',
       cur: 'Cursos', rod: 'Rodízio', bi: 'BI', manual: 'Manual', conta: 'Minha conta'
     });
   });

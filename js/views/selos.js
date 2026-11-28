@@ -1,58 +1,23 @@
-// Os pedidos da data aberta (a linha, o trilho, a Agenda e a Demanda leem daqui) e o selo que ainda não é da linha: o
-// número de pedidos no botão de importar, na Demanda
+// O selo que ainda não é da linha: o número de pedidos aprovados no botão de importar, na Demanda. Os pedidos da data
+// aberta são os do cache (js/solicitacoes-da-data.js); lerPedidosDaData é o nome de antes da leitura dele, que o
+// js/main.js (congelado desde o F2) ainda chama: o G2 o apaga
 import { $ } from '../dom.js';
-import { S, DATA, isGestor, inativoNaDataAberta, stuBy } from '../state.js';
-import { ApiClient } from '../storage.js';
-import { redesenhar } from '../redesenho.js';
+import { S, isGestor, inativoNaDataAberta, stuBy } from '../state.js';
+import { solicitacoesParaImportar } from '../agenda.js';
+import { solicitacoesDaData, lerSolicitacoesDaData } from '../solicitacoes-da-data.js';
 
-// Pedidos da agenda para a data aberta: lidos ao abrir a data e depois de mudanças na agenda. leitura: 'lendo', 'lidos' ou
-// 'erro' (sem conexão: a linha diz que falhou)
-let pedidosDaData = { data: null, lista: null, leitura: 'lendo' };
-let leituras = 0;
-let emCurso = null;
+export const lerPedidosDaData = lerSolicitacoesDaData;
 
-export function lerPedidosDaData() {
-  const leitura = { data: DATA, vez: ++leituras };
-  emCurso = leitura;
-  leitura.fim = ler(leitura);
-  return leitura.fim;
-}
-
-async function ler({ data, vez }) {
-  let lista = null, leitura = 'lidos';
-  try {
-    lista = await ApiClient.agenda(data, data);
-  } catch {
-    leitura = 'erro';
-  }
-  // Outra data aberta, ou uma leitura pedida depois desta (a resposta dela é a que vale)
-  if (vez !== leituras) return;
-  emCurso = null;
-  if (data !== DATA) return;
-  pedidosDaData = { data, lista, leitura };
-  redesenhar('pedidos');
-}
-
-// Os pedidos da data aberta e o estado da leitura (de outra data: ainda lendo)
-export const pedidosDaDataAberta = () => (pedidosDaData.data === DATA ? pedidosDaData : { data: DATA, lista: null, leitura: 'lendo' });
-
-// Os mesmos, depois da leitura em curso (a data que acabou de abrir, um pedido que acabou de ser registrado)
-export async function pedidosDaDataAbertaLidos() {
-  while (emCurso && emCurso.data === DATA) await emCurso.fim;
-  if (pedidosDaDataAberta().leitura === 'lendo') await lerPedidosDaData();
-  return pedidosDaDataAberta();
-}
-
-const pedidosPendentes = () => (pedidosDaDataAberta().lista || [])
-  .filter(s => !s.cancelada_em && !(S.importadas || []).includes(s.id) && !inativoNaDataAberta(stuBy(s.aluno)));
+// Os aprovados que ainda não estão na demanda, sem os do aluno inativo (entram quando ele voltar a ativo)
+const paraImportar = () => solicitacoesParaImportar(solicitacoesDaData().lista, S).filter(s => !inativoNaDataAberta(stuBy(s.aluno)));
 
 // (O número dos aviões parados ou perto da revisão, que a Disponibilidade do dia de Recursos tinha, foi para os pontos das
 // linhas de Recursos e para o trilho no B)
 export function atualizarSelos() {
-  // Na Demanda, o botão diz quantos pedidos há para importar (e só se destaca quando há). Quem consulta não importa
-  const n = isGestor() ? 0 : pedidosPendentes().length;
+  // Na Demanda, o botão diz quantos pedidos aprovados há para importar (e só se destaca quando há). Quem consulta não importa
+  const n = isGestor() ? 0 : paraImportar().length;
   const botao = $('#importar-agenda');
   if (!botao) return;
-  botao.textContent = n ? `Importar ${n} ${n === 1 ? 'pedido' : 'pedidos'} da agenda` : 'Importar da agenda';
+  botao.textContent = n ? `Importar ${n} ${n === 1 ? 'pedido aprovado' : 'pedidos aprovados'}` : 'Importar pedidos aprovados';
   botao.classList.toggle('sec', !n);
 }

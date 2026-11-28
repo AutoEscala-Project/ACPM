@@ -1,9 +1,12 @@
-/* A Agenda de solicitações: o formulário (com a data do pedido) e a lista dos pedidos da data aberta */
+/* Pedidos: a lista e o detalhe são do componente (css/lista.css); aqui, o formulário do pedido novo (no lugar do detalhe,
+   com nada escolhido), os avisos da lista e o que só quem registra vê */
+#agenda-data { margin-block: 0 6px; }
+.agenda-titulo { margin: 0 0 10px; }
 #form-agenda { display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); align-items: start; margin-bottom: 12px; }
 #form-agenda label { display: flex; flex-direction: column; gap: 2px; font-size: 13px; }
-#form-agenda .btn, #form-agenda .x { align-self: end; }
-/* O motivo sob a missão, o recurso e o horário: o que falta escolher, o que saiu e quantos horários a lista tem */
+/* O motivo sob a missão, o recurso e as preferências: o que falta escolher, o que saiu e quantos horários a lista tem */
 #form-agenda .ag-motivo { display: block; margin-top: 2px; color: var(--mu); font-size: 12.5px; }
+#form-agenda .ag-motivo:empty { display: none; }
 #form-agenda optgroup { font-style: normal; }
 /* A missão do curso diz o código, o tipo, o recurso e as horas: o campo dela ocupa duas colunas na tela larga */
 @media (min-width: 900px) { #form-agenda .ag-campo-missao { grid-column: span 2; } }
@@ -11,15 +14,21 @@
 /* O prazo da data escolhida, ao lado do campo dela (embaixo, no celular) */
 #agenda-prazo { margin: 0; grid-column: 2 / -1; }
 @media (max-width: 640px) { #agenda-prazo { grid-column: 1 / -1; } }
-#ag-erro { color: var(--er); margin: 0; grid-column: 1 / -1; }
-#ag-erro:empty { display: none; }
+/* Os botões numa linha só, embaixo dos campos: o principal primeiro */
+#form-agenda .ag-botoes { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+#ag-erro, #agenda-status { margin: 0; grid-column: 1 / -1; }
+#ag-erro { color: var(--er); }
+#ag-erro:empty, #agenda-status:empty { display: none; }
+/* Quem só consulta (o Gestor) não vê o formulário nem as ações de quem registra: com nada escolhido, o detalhe diz para
+   escolher um pedido */
 body:not([data-agenda="edita"]) #form-agenda,
-body:not([data-agenda="edita"]) .agenda-acao { display: none !important; }
-/* Lista do dia: uma linha por pedido; o cancelado esmaecido; a situação na demanda com etiqueta */
-#agenda-lista td { white-space: nowrap; }
-/* A confirmação diz a missão e o recurso: em mais de uma linha, para caber na tabela */
-#agenda-lista .agenda-acao.arm { white-space: normal; text-align: left; }
-#agenda-lista .obs { display: block; max-width: 240px; white-space: normal; color: var(--mu); font-size: 12.5px; }
-#agenda-lista tr.cancel td { color: var(--mu); }
-#agenda-lista tr.cancel td b { font-weight: 500; text-decoration: line-through; }
-#agenda-importar { margin: 10px 0 8px; }
+body:not([data-agenda="edita"]) .agenda-titulo,
+body:not([data-agenda="edita"]) .agenda-acao,
+body:not([data-agenda="edita"]) [data-agenda-acao] { display: none !important; }
+body[data-agenda="edita"] .agenda-so-consulta { display: none; }
+/* Os avisos da lista: um por linha, com o botão ao lado do texto */
+.agenda-aviso p { margin: 0 0 6px; }
+.agenda-aviso p:last-child { margin-bottom: 0; }
+/* O pedido que acabou de ser registrado: a linha marcada */
+#age > li[data-recente] { box-shadow: inset 3px 0 0 var(--ac); }
+@media (forced-colors: active) { #age > li[data-recente] { box-shadow: none; border-left: 3px solid Highlight; } }
