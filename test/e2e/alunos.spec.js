@@ -3,10 +3,12 @@
 // passo A: "Nesta data", "Curso e missões" (a missão anterior e a atual, o resultado sem voo, "Colocar no curso até…" e o
 // ↶ dela), a busca pelo nome completo e o "Apagar os dados pessoais" do aluno inativo
 import {
-  test, comProgresso, expect, abrir, abrirSintetico, abrirComExemplo, irPara, irParaVista, filtrarCursos, confirmar, AGORA, AMANHA, alvosPequenos,
+  test, comProgresso, expect, abrir, abrirSintetico, abrirComExemplo, irPara, filtrarCursos, confirmar, AGORA, AMANHA, alvosPequenos,
   appPronto, dataAberta, diaSeguinte, larguraDaPagina, abrirAluno, campoDoAberto, linhaDoAluno, linhasDosAlunos, nomesNaLista,
-  etiquetasDoAberto, nenhumNaLista, abrirHistorico, campoDaAgenda, prepararContexto, vigiarErros, entrar, abrirEscala, entradasDoHistorico
+  etiquetasDoAberto, nenhumNaLista, abrirHistorico, campoDaAgenda, prepararContexto, vigiarErros, entrar, abrirEscala, entradasDoHistorico, textosDaEscala,
+  medirVazioDoDetalhe, abrirInstrutor, campoDoInstrutor
 } from './fixtures.js';
+import { razaoDeContraste } from '../helpers/contraste.js';
 import { documentosAtuais, criarSupabaseFalso, CONTAS } from './supabase-falso.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
 import { cursosIniciais, novoCurso, percursoDoCurso } from '../../js/programa.js';
@@ -18,7 +20,7 @@ test.describe('Alunos', () => {
     await abrirSintetico(page);
     await irPara(page, 'alu');
     await expect(page.locator('#alu')).toHaveText('Nenhum aluno cadastrado. Clique em “+ Novo aluno” acima para cadastrar.');
-    await expect(page.locator('#det-alu')).toHaveText('Escolha um aluno na lista.');
+    await expect(page.locator('#det-alu .det-vazio-texto')).toHaveText('Escolha um aluno na lista.');
     await page.locator('[data-act="adds"]').click();
     await expect(linhasDosAlunos(page)).toHaveCount(1);
     // O aluno novo abre escolhido, com o nome em foco (selecionado, para digitar por cima)
@@ -48,9 +50,33 @@ test.describe('Alunos', () => {
     await expect(excluir).toHaveText('Confirmar exclusão');
     await excluir.click();
     await expect(page.locator('#alu')).toContainText('Nenhum aluno cadastrado');
-    await expect(page.locator('#det-alu')).toHaveText('Escolha um aluno na lista.');
+    await expect(page.locator('#det-alu .det-vazio-texto')).toHaveText('Escolha um aluno na lista.');
     await expect(page).toHaveURL(/#\/alu$/);
   });
+
+  // linha-fix-escala-sem-caixas (Pedro, 28/11): nada escolhido, o detalhe não fica vazio: no meio do painel, o ícone de
+  // Alunos, o texto maior e, para quem cria, o caminho do aluno novo; nos dois temas, e parado com o movimento reduzido
+  for (const [perfil, url, dica] of [['Operador', './', 'ou use + Novo aluno'], ['Gestor', './?role=gestor', null]]) {
+    test(`nada escolhido, no ${perfil}: o ícone, o texto grande no meio do painel${dica ? ' e a dica do "+ Novo aluno"' : ', sem a dica'}`, async ({ page }) => {
+      await abrirComExemplo(page, { url });
+      await irPara(page, 'alu');
+      const vazio = await medirVazioDoDetalhe(page, 'alu');
+      expect([vazio.icone, vazio.texto, vazio.dica]).toEqual(['#i-aluno', 'Escolha um aluno na lista.', dica]);
+      expect(vazio.tamanho).toBeGreaterThanOrEqual(18);
+      expect(vazio.iconeLargura).toBeGreaterThanOrEqual(40);
+      expect(vazio.foraDoMeio.x).toBeLessThanOrEqual(3);
+      expect(vazio.foraDoMeio.y).toBeLessThanOrEqual(3);
+      expect(vazio.animacao).not.toBe('none');
+      for (const tema of ['light', 'dark']) {
+        await page.evaluate(t => { document.documentElement.dataset.theme = t; }, tema);
+        const { cores } = await medirVazioDoDetalhe(page, 'alu');
+        expect(razaoDeContraste(cores.texto, cores.fundo), tema).toBeGreaterThanOrEqual(4.5);
+        if (dica) expect(razaoDeContraste(cores.dica, cores.fundo), tema).toBeGreaterThanOrEqual(4.5);
+      }
+      await page.emulateMedia({ reducedMotion: 'reduce' });
+      expect((await medirVazioDoDetalhe(page, 'alu')).animacao).toBe('none');
+    });
+  }
 
   test('o nome tem até 80 caracteres, nos alunos e nos instrutores', async ({ page }) => {
     await abrirSintetico(page);
@@ -64,15 +90,14 @@ test.describe('Alunos', () => {
     await expect(page.locator('#det-alu-titulo')).toHaveText(longo.slice(0, 80).trim());
     await irPara(page, 'ins');
     await page.locator('[data-act="addi"]').click();
-    const nome = page.locator('#inst .cd').last().locator('.nm');
+    const nome = campoDoInstrutor(page, 'nm');
     await expect(nome).toHaveAttribute('maxlength', '80');
     await nome.fill(longo);
     await nome.blur();
-    await expect(page.locator('#inst .cd').last().locator('.nm')).toHaveValue(longo.slice(0, 80).trim());
+    await expect(campoDoInstrutor(page, 'nm')).toHaveValue(longo.slice(0, 80).trim());
   });
 
-  // Em Alunos, o peso recusado fica no campo, com a mensagem embaixo dele (o Esc devolve o gravado); em Instrutores (até C),
-  // o aviso e o campo de volta ao peso de antes
+  // Em Alunos e em INVAs, o peso recusado fica no campo, com a mensagem embaixo dele (o Esc devolve o gravado)
   test('o peso vai até 300 kg, nos alunos e nos instrutores: acima disso, não vale', async ({ page }) => {
     await abrirSintetico(page);
     const historico = page.locator('#audit-log-list');
@@ -111,17 +136,17 @@ test.describe('Alunos', () => {
     await expect(erro).toHaveText('');
     await expect(historico).not.toContainText('Peso Novo aluno: 350');
 
-    // Instrutores (a tabela, até C): o aviso e o peso de antes
+    // INVAs (lista e detalhe desde o C): o mesmo, o peso recusado no campo, com a mensagem
     await irPara(page, 'ins');
     await page.locator('[data-act="addi"]').click();
-    const pesoIns = page.locator('#inst .cd').last().locator('[data-f="kg"]');
+    const pesoIns = campoDoInstrutor(page, 'kg');
     await pesoIns.fill('250');
     await pesoIns.blur();
     await expect(historico).toContainText('Peso Novo instrutor: 250 kg');
     await pesoIns.fill('350');
     await pesoIns.blur();
-    await expect(page.locator('.toast')).toHaveText('O peso vai de 1 a 300 kg.');
-    await expect(pesoIns).toHaveValue('250');
+    await expect(pesoIns).toHaveAttribute('aria-invalid', 'true');
+    await expect(historico).not.toContainText('Peso Novo instrutor: 350');
 
     // O peso digitado fica gravado; vazio, a pessoa fica sem peso
     await page.reload();
@@ -166,9 +191,9 @@ test.describe('Alunos', () => {
     await expect(contagem).toHaveText('1 de 3 alunos');
 
     // Um instrutor renomeado
-    await irParaVista(page, 'ins', 'cadastro');
-    await page.locator('#inst .cd[data-id="1"] .nm').fill('Instrutor Um');
-    await page.locator('#inst .cd[data-id="1"] .nm').blur();
+    await abrirInstrutor(page, 1);
+    await campoDoInstrutor(page, 'nm').fill('Instrutor Um');
+    await campoDoInstrutor(page, 'nm').blur();
     await expect(page.locator('#audit-log-list')).toContainText('Instrutor: Instrutor 01 → Instrutor Um');
     await irPara(page, 'alu');
     await expect.poll(() => nomesNaLista(page)).toEqual(['João Silva']);
@@ -875,12 +900,15 @@ test.describe('As limitações do aluno', () => {
     await expect(page.locator('#sec-alu-limitacoes')).toContainText('só no C172');
     // A Escala: o pedido no C152 é recusado, com o motivo
     await abrirEscala(page);
-    await expect(page.locator('#s-esc [data-caixa="erros"] li', { hasText: 'Ana' })).toHaveText('Ana Rejeitado: o aluno só voa no C172 (o pedido está no C152).');
-    // "Pode voar": "+ Horário" põe um das 06:00 à meia-noite, em todas as datas, e o foco no De dele
+    await expect(textosDaEscala(page, 'erros').filter({ hasText: 'Ana' })).toHaveText(['Ana Rejeitado: o aluno só voa no C172 (o pedido está no C152).']);
+    // "Pode voar": "+ Horário" põe um das 06:30 à meia-noite, em todas as datas, e o foco no De dele (Decisão do Pedro, 28/11:
+    // os horários começam às 06:30, como os de decolagem)
     await irPara(page, 'alu');
     await page.locator('#det-alu-lim-mais').click();
     await expect(page.locator('#det-alu-lim-de-0')).toBeFocused();
-    await expect(page.locator('#det-alu-lim-de-0')).toHaveValue('360');
+    await expect(page.locator('#det-alu-lim-de-0')).toHaveValue('390');
+    await expect(page.locator('#det-alu-lim-de-0 option').first()).toHaveText('06:30');
+    await expect(page.locator('#det-alu-lim-ate-0 option').first()).toHaveText('06:40');
     await expect(page.locator('#det-alu-lim-ate-0')).toHaveValue('1440');
     for (const d of [1, 2, 3, 4, 5, 6]) await expect(page.locator(`#det-alu-lim-dia-0-${d}`)).toBeChecked();
     await page.locator('#det-alu-lim-de-0').selectOption('780');
@@ -963,6 +991,21 @@ test.describe('As limitações do aluno', () => {
     // A próxima mudança dos dias desse horário tira o domingo, que a tela não oferece
     await page.locator('#det-alu-lim-dia-0-3').check();
     await expect.poll(() => guardadas(page)).toEqual({ horarios: [{ de: 780, ate: 1080, dias: [1, 3] }, { de: 785, ate: 1085 }] });
+  });
+
+  // Decisão do Pedro, 28/11: os horários começam às 06:30. O que veio gravado começando das 06:00 às 06:29 aparece às 06:30
+  // (o que ficou igual a outro, uma linha só), o que terminava até as 06:30 não aparece, e a primeira mudança grava assim
+  test('"Pode voar" guardado antes das 06:30: o De às 06:30, um só quando fica igual; o que terminava até as 06:30 sai', async ({ page }) => {
+    await abrir(page, { estado: dia({ limitacoes: { horarios: [{ de: 360, ate: 600 }, { de: 390, ate: 600 }, { de: 360, ate: 380 }, { de: 780, ate: 1080, dias: [1] }] } }) });
+    await irPara(page, 'alu');
+    await abrirAluno(page, 1000);
+    await expect(page.locator('#sec-alu-limitacoes-corpo .lim-horario')).toHaveCount(2);
+    await expect(page.locator('#det-alu-lim-de-0')).toHaveValue('390');
+    await expect(page.locator('#det-alu-lim-de-0 option:checked')).toHaveText('06:30');
+    await expect(page.locator('#det-alu-lim-de-0 option', { hasText: '06:00' })).toHaveCount(0);
+    await expect(page.locator('#sec-alu-limitacoes')).toContainText('06:30–10:00; 13:00–18:00 (seg)');
+    await page.locator('#det-alu-lim-ate-0').selectOption('660');
+    await expect.poll(() => guardadas(page)).toEqual({ horarios: [{ de: 390, ate: 660 }, { de: 780, ate: 1080, dias: [1] }] });
   });
 
   for (const largura of [390, 320]) {

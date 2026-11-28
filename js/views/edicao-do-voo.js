@@ -214,7 +214,7 @@ export function desenharEditor({ manter = [] } = {}) {
   // Os pesos: da pessoa, no cadastro
   partes.push(`<div class="voo-pesos">
     <span>Peso do aluno: <b>${aluno && aluno.kg ? `${pesoBr(aluno.kg)} kg` : 'sem peso'}</b> <a class="btn quiet" href="#/alu" data-voo-cadastro>no cadastro (Alunos)</a></span>
-    <span>Peso do INVA: <b>${x && x.kg ? `${pesoBr(x.kg)} kg` : x ? 'sem peso' : '—'}</b> <a class="btn quiet" href="#/ins" data-voo-cadastro>no cadastro (Instrutores)</a></span>
+    <span>Peso do INVA: <b>${x && x.kg ? `${pesoBr(x.kg)} kg` : x ? 'sem peso' : '—'}</b> <a class="btn quiet" href="#/ins" data-voo-cadastro>no cadastro (INVAs)</a></span>
   </div>`);
   // Sugestões: o voo em conflito e o cancelado que ainda pode voar (a gaveta abre no lugar do editor)
   const sugestoes = principal.conflito || cancelamentoAproveitavel(S, principal, { data: DATA, hoje: hojeISO() });

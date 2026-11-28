@@ -1,6 +1,6 @@
 // Revisão de 50 horas em Recursos (no detalhe do avião, "Nesta data"): as horas disponíveis até a revisão (a operadora
 // lança as horas disponíveis, não as horas desde a revisão), o avião que para na escala e a nova data.
-import { test, expect, abrir, irPara, abrirEscala, lerEscala, escolherNoCalendario, horasDoRecurso, campoDoRecurso, linhaDoRecurso } from './fixtures.js';
+import { test, expect, abrir, irPara, abrirEscala, lerEscala, escolherNoCalendario, horasDoRecurso, campoDoRecurso, linhaDoRecurso, textosDaEscala } from './fixtures.js';
 import { aluno, apenas, cenario, instrutor } from '../helpers/montar.js';
 
 // Três voos de 1 h (08:20, 10:10 e 12:40) e só o PP-LJV disponível no C152
@@ -28,7 +28,7 @@ test.describe('Revisão de 50 horas', () => {
     await expect(page.locator('#audit-log-list')).toContainText('PP-LJV: 2 h disponíveis até a revisão de 50 horas');
     await abrirEscala(page);
     expect((await lerEscala(page)).linhas.filter(l => l.includes('PP-LJV'))).toHaveLength(2);
-    await expect(page.locator('#out .al.warn')).toContainText('Aeronave parou para revisão de 50 horas às 11:10 (50 h desde a última revisão).');
+    await expect(textosDaEscala(page, 'avisos').filter({ hasText: 'Aeronave parou para revisão de 50 horas às 11:10 (50 h desde a última revisão).' })).toHaveCount(1);
 
     await irPara(page, 'rec');
     await expect(linhaDoRecurso(page, 'PP-LJV').locator('.lista-l3')).toHaveText('11/11 · parou para a revisão de 50 horas às 11:10');

@@ -119,7 +119,11 @@ describe('O motor com os requisitos e os atributos', () => {
     // Sem ninguém com a habilitação própria, fica fora com o motivo
     const ninguem = escala(comFrota({ ins: [comHab(1, MLTE)], stu: [aluno(1000, mlte)] }, FROTA, { 'PT-JOB': false }));
     assert.deepEqual(ninguem.al.map(a => a.codigo), ['habilitacao-do-aviao']);
-    assert.match(ninguem.al[0].m, /exigem a habilitação própria deles, e nenhum instrutor livre a tem/);
+    // O texto diz onde marcar (C, "texto": a tela é INVAs, e a habilitação fica no detalhe do INVA)
+    assert.equal(ninguem.al[0].m, 'Rejeitado: os PA-34 livres exigem do instrutor uma habilitação que nenhum instrutor livre tem (marque no INVA, em Habilitações).');
+    // Com o INVA escolhido, o nome dele
+    const comEscolhido = escala(comFrota({ ins: [comHab(1, MLTE)], stu: [aluno(1000, { ...mlte, insId: 1 })] }, FROTA, { 'PT-JOB': false }));
+    assert.deepEqual(comEscolhido.al.map(a => [a.codigo, a.m]), [['habilitacao-do-aviao', 'Rejeitado: os PA-34 livres exigem do instrutor uma habilitação que o instrutor escolhido (Instrutor 01) não tem (marque no INVA, em Habilitações).']]);
   });
 
   // Achados da revisão: o aviso do "Priorizar com" e a rejeição do voo IFR dizem o motivo certo
@@ -127,7 +131,7 @@ describe('O motor com os requisitos e os atributos', () => {
     const ins = [comHab(1, MLTE), comHab(2, [...MLTE, 'aviao:PR-VOM'])];
     const { out, al } = escala(comFrota({ ins, stu: [aluno(1000, { mis: 'Multimotor', eq: 'PA-34' }, { voaCom: [1] })] }, FROTA, { 'PT-JOB': false }));
     assert.deepEqual(out.map(o => o.insId), [2]);
-    assert.deepEqual(al.map(a => a.m), ['Sem o instrutor de “Priorizar com” (Instrutor 01: sem a habilitação própria dos aviões livres): o voo ficou com Instrutor 02.']);
+    assert.deepEqual(al.map(a => a.m), ['Sem o instrutor de “Priorizar com” (Instrutor 01: sem a habilitação que os aviões livres exigem): o voo ficou com Instrutor 02.']);
   });
 
   it('com o avião homologado IFR ocupado e o "Só VFR" livre, a rejeição diz que o voo é IFR', () => {

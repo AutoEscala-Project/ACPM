@@ -1,4 +1,4 @@
-import { test, comProgresso, expect, abrirInstrutores, linhaDoAluno, prepararContexto, vigiarErros, irPara, abrirEscala, lerEscala, AMANHA, entrar, URL_APP, abrirHistorico, alternarDisponivel, botaoAprovar, caixaDisponivel, exportar, dataAberta, linhasDosAlunos } from './fixtures.js';
+import { test, comProgresso, expect, abrirInstrutor, campoDoInstrutor, abrirLimitesDaLei, linhaDoAluno, prepararContexto, vigiarErros, irPara, abrirEscala, lerEscala, AMANHA, entrar, URL_APP, abrirHistorico, alternarDisponivel, botaoAprovar, caixaDisponivel, exportar, dataAberta, linhasDosAlunos } from './fixtures.js';
 import { criarSupabaseFalso, instalarSupabaseFalso, documentosAtuais, CONTAS } from './supabase-falso.js';
 import { estadoSintetico } from '../helpers/estado.js';
 import { comExemplo } from '../helpers/exemplo.js';
@@ -78,8 +78,8 @@ test.describe('Modo compartilhado: gravação, conflitos e link da escala', () =
     const cadastro = structuredClone(servidor.banco.get('cadastro').conteudo);
     servidor.alterarPorOutraPessoa('cadastro', { ...cadastro, nid: cadastro.nid + 1, stu: [...cadastro.stu, { ...cadastro.stu[0], id: cadastro.nid, nm: 'Aluno da colega' }] });
     const id = cadastro.ins[0].id, nome = cadastro.ins[0].nm;
-    await abrirInstrutores(page, 'cadastro');
-    const peso = page.locator(`#inst tr[data-id="${id}"] [data-f="kg"]`);
+    await abrirInstrutor(page, id);
+    const peso = campoDoInstrutor(page, 'kg');
     await peso.fill('77');
     await peso.press('Tab');
     await expect(page.locator('#aviso-sync-texto')).toHaveText(
@@ -296,8 +296,7 @@ test.describe('Modo compartilhado: gravação, conflitos e link da escala', () =
     await irPara(page, 'cur');
     await expect(page.locator('#cursos')).toContainText('Só o Administrador muda; aqui é consulta.');
     await expect(page.locator('#cursos [data-act="missao-nova"]')).toHaveCount(0);
-    await irPara(page, 'ins');
-    await page.locator('#s-ins [data-vista-ins="cadastro"]').click();
+    await abrirLimitesDaLei(page);
     await expect(page.locator('#limites-lei [data-limite="vooMesH"]')).toBeDisabled();
     await expect(page.locator('#limites-lei [data-limites-padrao]')).toBeDisabled();
     expect(erros).toEqual([]);

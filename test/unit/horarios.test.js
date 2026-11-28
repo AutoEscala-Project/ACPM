@@ -5,8 +5,11 @@ import assert from 'node:assert/strict';
 import {
   HORARIOS_PADRAO, HORARIOS_INICIAIS, normalizarHorarios, horariosDoTipo, periodoDoMinuto, minutoDaPreferencia, preferenciaValida, paraMinuto,
   preferenciasPadrao, DE_30_EM_30, modeloDosHorarios, descreverHorarios, porPeriodo, impactoDosHorarios, resumoDoImpacto,
-  PRIMEIRO_HORARIO, ULTIMO_HORARIO, fimDaMissao, ajustarPreferencias as ajustarAsPreferencias
+  PRIMEIRO_HORARIO, ULTIMO_HORARIO, fimDaMissao, HORARIO_DO_SOLO, horariosDaMissao, CATEGORIAS_COM_HORARIOS, ajustarPreferencias as ajustarAsPreferencias
 } from '../../js/horarios.js';
+import { disponibilidadeDaSolicitacao, pedidoDaSolicitacao } from '../../js/agenda.js';
+import { importar } from '../helpers/importar.js';
+import { MIS } from '../../js/config.js';
 import { hm } from '../../js/format.js';
 
 describe('Horários de decolagem por categoria', () => {
@@ -22,8 +25,8 @@ describe('Horários de decolagem por categoria', () => {
     assert.equal(hm(HORARIOS_INICIAIS['PA-34'].at(-1)), '16:30');
   });
 
-  it('normaliza: em ordem, sem repetir e só no dia (06:00 às 17:00); categoria sem lista válida recebe a inicial', () => {
-    const h = normalizarHorarios({ C152: [610, 390, 390, 1200, 'x', 300], 'PA-34': [] });
+  it('normaliza: em ordem, sem repetir e só no dia (06:30 às 17:00); categoria sem lista válida recebe a inicial', () => {
+    const h = normalizarHorarios({ C152: [610, 390, 390, 1200, 'x', 300, 359], 'PA-34': [] });
     assert.deepEqual(h.C152, [390, 610]);
     assert.deepEqual(h['PA-34'], HORARIOS_INICIAIS['PA-34']);
     assert.deepEqual(h.C172, HORARIOS_INICIAIS.C172);
@@ -258,8 +261,10 @@ describe('O resumo dos horários e o efeito de uma lista nova', () => {
     assert.equal(ajustado.jan, 'h500|h610');
   });
 
-  it('no editor, os horários vão das 06:00 às 16:30 (o último que cabe um voo de 1 h antes do noturno)', () => {
-    assert.deepEqual([PRIMEIRO_HORARIO, ULTIMO_HORARIO].map(hm), ['06:00', '16:30']);
+  it('no editor, os horários vão das 06:30 (o primeiro horário exato de um pedido) às 16:30 (o último que cabe um voo de 1 h antes do noturno)', () => {
+    assert.deepEqual([PRIMEIRO_HORARIO, ULTIMO_HORARIO].map(hm), ['06:30', '16:30']);
+    // Uma fonte só: o primeiro horário de decolagem é o do Voo Solo, o limite do horário exato do pedido
+    assert.equal(PRIMEIRO_HORARIO, HORARIO_DO_SOLO);
   });
 });
 
@@ -273,5 +278,45 @@ describe('Até quando a missão pode ir', () => {
     assert.equal(fimDaMissao('Simulador', 'Sim. Mono'), 1440);
     assert.equal(fimDaMissao('Simulador', 'Sim. Multi'), 1440);
     assert.equal(fimDaMissao('Ground C152', 'Sala Ground'), 1440);
+  });
+});
+
+// Pedro, 2026-11-28: "booked times should start at 6:30". O editor aceitava das 06:00, e a Agenda oferecia o horário da
+// lista que a importação (o horário exato só das 06:30 às 17:30) depois perdia. O horário guardado das 06:00 às 06:29, que o
+// editor aceitava, não se perde: vira 06:30 (o primeiro do dia), na lista e na preferência
+describe('O primeiro horário do dia: 06:30', () => {
+  it('a lista guardada com um horário das 06:00 às 06:29 fica com as 06:30, sem repetir; antes das 06:00, como sempre, sai', () => {
+    const h = normalizarHorarios({ C152: [360, 500], C172: [360, 375, 390, 420], sim: [389], 'PA-34': [300, 359, 450], ground: [360] });
+    assert.deepEqual(h.C152, [390, 500]);
+    assert.deepEqual(h.C172, [390, 420]);
+    assert.deepEqual(h.sim, [390]);
+    assert.deepEqual(h['PA-34'], [450]);
+    assert.deepEqual(h.ground, [390]);
+    // Normalizar de novo não muda nada
+    assert.deepEqual(normalizarHorarios(h), h);
+  });
+
+  it('a preferência guardada das 06:00 às 06:29 vira 06:30; antes das 06:00, sem preferência', () => {
+    assert.deepEqual([360, 375, 389, 390, 359, 300].map(preferenciaValida), [390, 390, 390, 390, -1, -1]);
+  });
+
+  it('a Agenda e a importação concordam: todo horário que a lista oferece é aceito como horário exato do pedido', () => {
+    const horarios = normalizarHorarios({ C152: [360, 420], C172: [375, 500], sim: [360], 'PA-34': [360, 390], ground: [360, 610] });
+    for (const mis of Object.keys(MIS)) {
+      for (const tipo of MIS[mis].eq) {
+        for (const m of horariosDaMissao(horarios, mis, tipo)) {
+          assert.ok(m >= HORARIO_DO_SOLO, `${mis} no ${tipo}: ${hm(m)}`);
+          assert.equal(disponibilidadeDaSolicitacao({ janela: 'horario', horario: hm(m) }), `h${m}`, `${mis} no ${tipo}: ${hm(m)}`);
+        }
+      }
+    }
+    assert.equal(CATEGORIAS_COM_HORARIOS.length, 5);
+    // O pedido da Agenda no primeiro horário da lista convertida chega à demanda com o horário exato (E: a conciliação,
+    // js/processamento.js, pela importação dos testes)
+    const solicitacao = { id: 9, data: '2026-11-28', aluno: 1000, aluno_nome: 'Aluno 1000', missao: 'Voo Local', recurso: 'C152', janela: 'horario', horario: '06:30', horas: 1, cancelada_em: null };
+    assert.equal(pedidoDaSolicitacao(solicitacao, horarios).jan, 'h390');
+    const estado = { nid: 2000, importadas: [], horarios, stu: [{ id: 1000, nm: 'Aluno 1000', fly: false, mis: 'Voo Local', eq: 'C152', p1: -1, p2: -1, nb: 1, ss: 1, pr: 3 }] };
+    importar(estado, [solicitacao]);
+    assert.deepEqual([estado.stu[0].fly, estado.stu[0].jan, estado.stu[0].p1], [true, 'h390', 390]);
   });
 });

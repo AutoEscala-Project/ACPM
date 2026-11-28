@@ -1,7 +1,7 @@
 // O editor do voo na Escala (F1g, N10): todos os campos de um voo, pela barra do mapa ou pelo "Editar" da Lista. Na escala
 // aprovada, só aquele voo muda e o motor não roda; fora dela, a pergunta (#dlg-refazer) vem antes, e "Salvar e refazer"
 // roda o motor. Nada é gravado antes de "Salvar"; "Cancelar" e o Esc deixam o dia gravado igual
-import { test, expect, abrir, abrirEscala, aprovar, reabrir, lerEscala, abrirHistorico, entradasDoHistorico, abrirCaixa, larguraDaPagina, AMANHA, vigiarErros,
+import { test, expect, abrir, abrirEscala, aprovar, reabrir, lerEscala, abrirHistorico, entradasDoHistorico, abrirAvisosDaEscala, textosDaEscala, larguraDaPagina, AMANHA, vigiarErros,
   editorDoVoo, editarPelaLista, editarPeloMapa, barraDoVoo, botaoEditar, salvarVoo, perguntaDoRefazer, refazer, naoRefazer, diaSeguinte } from './fixtures.js';
 import { aluno, cenario, instrutor, apenas, GROUND_C152 } from '../helpers/montar.js';
 
@@ -14,14 +14,14 @@ const dia = () => cenario({
 });
 const diaGuardado = page => page.evaluate(d => localStorage.getItem(`acpm4_dia_${d}`), AMANHA);
 const linhaDe = (escala, nome) => escala.linhas.find(l => l.includes(`| ${nome} |`));
-const naoEntrou = page => page.locator('#out details.caixa.erros summary');
+const naoEntrou = page => textosDaEscala(page, 'erros');
 
 test.describe('O editor do voo', () => {
   test('na escala aprovada: o horário muda só naquele voo, sem refazer a escala (o pedido que ficou fora continua fora) e sem a pergunta', async ({ page }) => {
     const erros = vigiarErros(page);
     await abrir(page, { estado: dia() });
     await abrirEscala(page);
-    await expect(naoEntrou(page)).toHaveText('1 missão não entrou na escala: Aluno 1003');
+    await expect(naoEntrou(page)).toHaveText([/^Aluno 1003 Rejeitado/]);
     await aprovar(page);
     const antes = await lerEscala(page);
     await editarPelaLista(page, '1000_0_1');
@@ -35,7 +35,7 @@ test.describe('O editor do voo', () => {
     expect(linhaDe(depois, 'Aluno 1001')).toBe(linhaDe(antes, 'Aluno 1001'));
     expect(linhaDe(depois, 'Aluno 1002')).toBe(linhaDe(antes, 'Aluno 1002'));
     // O lugar das 06:30 ficou livre, mas o motor não rodou: o 1003 continua fora
-    await expect(naoEntrou(page)).toHaveText('1 missão não entrou na escala: Aluno 1003');
+    await expect(naoEntrou(page)).toHaveText([/^Aluno 1003 Rejeitado/]);
     await abrirHistorico(page);
     await expect(entradasDoHistorico(page, 'Voo editado: Aluno 1000: 06:30 → 12:40')).toHaveCount(1);
     expect(erros).toEqual([]);
@@ -120,9 +120,7 @@ test.describe('O editor do voo', () => {
     await expect(page.locator('#voo-salvar')).toHaveText('Salvar mesmo assim');
     await salvarVoo(page);
     await expect(editorDoVoo(page)).toBeHidden();
-    const avisos = await abrirCaixa(page, 'avisos');
-    await expect(avisos.locator('li', { hasText: 'Priorizar com' })).toHaveText(['Aluno 1000 Fora do “Priorizar com” de Aluno 1000 (Instrutor 01): o voo foi posto à mão com Instrutor 02.']);
-    await expect(page.locator('#out details.caixa.avisos summary')).toContainText('1 aviso de Priorizar com');
+    await expect(textosDaEscala(page, 'avisos').filter({ hasText: 'Priorizar com' })).toHaveText(['Aluno 1000 Fora do “Priorizar com” de Aluno 1000 (Instrutor 01): o voo foi posto à mão com Instrutor 02.']);
   });
 
   // Revisão do F1h: o voo que o motor deu a outro INVA porque o do “Priorizar com” não vem não vai contra ele: mudar só o
@@ -138,7 +136,7 @@ test.describe('O editor do voo', () => {
     await expect(page.locator('#voo-avisos li', { hasText: 'Priorizar com' })).toHaveCount(0);
     await salvarVoo(page);
     await expect(editorDoVoo(page)).toBeHidden();
-    await expect((await abrirCaixa(page, 'avisos')).locator('li', { hasText: 'Priorizar com' })).toHaveText([motivo]);
+    await expect(textosDaEscala(page, 'avisos').filter({ hasText: 'Priorizar com' })).toHaveText([motivo]);
   });
 
   test('um conflito avisa e pede "Salvar mesmo assim"; salvo, o voo fica em conflito na Escala (na aprovada)', async ({ page }) => {
@@ -157,8 +155,7 @@ test.describe('O editor do voo', () => {
     await expect(page.locator('#voo-erro')).toContainText('para salvar assim mesmo');
     await salvarVoo(page);
     await expect(editorDoVoo(page)).toBeHidden();
-    const conflitos = await abrirCaixa(page, 'conflitos');
-    await expect(conflitos).toContainText('Aluno 1001 Conflito no voo agendado: o avião já está ocupado neste horário.');
+    await expect(textosDaEscala(page, 'conflitos')).toHaveText(['Aluno 1001 Conflito no voo agendado: o avião já está ocupado neste horário.']);
   });
 
   // L (N9): mudar o horário para fora das limitações do aluno avisa e pede "Salvar mesmo assim"; salvo, o voo fica em conflito
@@ -176,8 +173,7 @@ test.describe('O editor do voo', () => {
     await expect(page.locator('#voo-salvar')).toHaveText('Salvar mesmo assim');
     await salvarVoo(page);
     await expect(editorDoVoo(page)).toBeHidden();
-    const conflitos = await abrirCaixa(page, 'conflitos');
-    await expect(conflitos).toContainText('Aluno 1001 Conflito no voo agendado: o horário está fora das limitações do aluno (08:00–09:20).');
+    await expect(textosDaEscala(page, 'conflitos')).toHaveText(['Aluno 1001 Conflito no voo agendado: o horário está fora das limitações do aluno (08:00–09:20).']);
   });
 
   test('na escala aprovada, a alteração fica depois de reabrir (o voo posto à mão), e o Histórico a desfaz sem o motor', async ({ page }) => {
@@ -200,7 +196,7 @@ test.describe('O editor do voo', () => {
     await entradasDoHistorico(page, 'Voo editado: Aluno 1002').getByRole('button', { name: '↶ Reverter' }).click();
     await page.keyboard.press('Escape');
     await expect.poll(async () => linhaDe(await lerEscala(page), 'Aluno 1002')).toContain('10:10–11:10');
-    await expect(naoEntrou(page)).toHaveText('1 missão não entrou na escala: Aluno 1003');
+    await expect(naoEntrou(page)).toHaveText([/^Aluno 1003 Rejeitado/]);
   });
 
   test('o aluno: o voo passa para outro aluno, e o de antes deixa de voar', async ({ page }) => {
@@ -233,7 +229,7 @@ test.describe('O editor do voo', () => {
     await expect(editorDoVoo(page)).toBeHidden();
     expect(linhaDe(await lerEscala(page), 'Aluno 1000')).toContain('[Cancelado]');
     // O motor não rodou: o 1003 continua fora (o cancelado não ocupa o avião, mas nada entra sem o motor)
-    await expect(naoEntrou(page)).toHaveText('1 missão não entrou na escala: Aluno 1003');
+    await expect(naoEntrou(page)).toHaveText([/^Aluno 1003 Rejeitado/]);
   });
 
   test('o Gestor vê os campos como texto, sem "Salvar"', async ({ page }) => {
@@ -292,7 +288,7 @@ test.describe('A pergunta antes de refazer a escala (R6) e a escala aprovada sem
     await page.locator('#out [data-act="rm-fly"][data-id="1002"]').click();
     await expect(perguntaDoRefazer(page)).toBeHidden();
     expect(linhaDe(await lerEscala(page), 'Aluno 1002')).toBeUndefined();
-    await expect(naoEntrou(page)).toHaveText('1 missão não entrou na escala: Aluno 1003');
+    await expect(naoEntrou(page)).toHaveText([/^Aluno 1003 Rejeitado/]);
     await abrirHistorico(page);
     await entradasDoHistorico(page, 'Tirado da escala: Aluno 1002').getByRole('button', { name: '↶ Restaurar' }).click();
     await page.keyboard.press('Escape');
@@ -307,7 +303,7 @@ test.describe('A pergunta antes de refazer a escala (R6) e a escala aprovada sem
     await page.locator('#voo-horario').selectOption('390');
     await salvarVoo(page);
     await salvarVoo(page);
-    const conflitos = await abrirCaixa(page, 'conflitos');
+    const conflitos = await abrirAvisosDaEscala(page, 'conflitos');
     await conflitos.getByRole('button', { name: 'Sugestões' }).click();
     const soltar = page.locator('#painel-reparo button', { hasText: 'Soltar' });
     await expect(soltar).toBeDisabled();

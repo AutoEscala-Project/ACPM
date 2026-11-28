@@ -198,8 +198,8 @@ describe('Um registro só das habilitações', () => {
     const dosGrupos = GRUPOS_DE_HABILITACAO.flatMap(g => g.ids);
     const dosNiveis = Array.from({ length: 9 }, (_, i) => habilitacoesDoNivel(i + 1)).flat();
     const fonte = readFileSync(new URL('../../js/views/instrutores.js', import.meta.url), 'utf8');
-    const grade = fonte.match(/const ORDEM_DA_GRADE = \[([^\]]*)\]/);
-    assert.ok(grade, 'ORDEM_DA_GRADE em js/views/instrutores.js');
+    const grade = fonte.match(/const ORDEM_NA_LINHA = \[([^\]]*)\]/);
+    assert.ok(grade, 'ORDEM_NA_LINHA em js/views/instrutores.js (a ordem das habilitações na linha de INVAs)');
     const daGrade = [...grade[1].matchAll(/'([^']+)'/g)].map(m => m[1]);
     assert.ok(daGrade.length >= 13);
     const dosModelos = Object.values(MODELOS).flatMap(m => m.fases.flatMap(f => f.missoes.flatMap(x => x.exige || [])));
@@ -209,8 +209,9 @@ describe('Um registro só das habilitações', () => {
   });
 
   it('nenhum módulo além de js/habilitacoes.js compara uma lista de habilitações com um id escrito no código', () => {
-    // As exceções, pelo nome: os passos de js/migracoes.js e a marca "Checador" da grade (só exibição, até o C)
-    const PERMITIDOS = [{ arquivo: 'js/migracoes.js' }, { arquivo: 'js/views/instrutores.js', trecho: "startsWith('checa_')" }];
+    // A exceção, pelo nome: os passos de js/migracoes.js (a marca "Checador" da linha de INVAs lê os grupos do checador do
+    // registro: a exceção dela saiu com a grade, no C)
+    const PERMITIDOS = [{ arquivo: 'js/migracoes.js' }];
     assert.deepEqual(comparacoesComIdLiteral("const c = x.hab.includes('c172');"), ["x.hab.includes('c172')"]);
     assert.deepEqual(comparacoesComIdLiteral('ok = (i.hab || []).some(h => h === "ifr") && 1'), ['(i.hab || []).some(h => h === "ifr")']);
     assert.deepEqual(comparacoesComIdLiteral('x.hab.indexOf(`mlte`) >= 0'), ['x.hab.indexOf(`mlte`)']);

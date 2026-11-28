@@ -1,12 +1,4 @@
-/* As gavetas: a moldura, o Histórico e o painel dos dados pessoais */
-/* Painel dos dados pessoais */
-.form-dados { display: flex; flex-direction: column; gap: 10px; overflow-y: auto; }
-.campo-dado { display: flex; flex-direction: column; gap: 4px; }
-.campo-dado label, .campo-dado .rotulo-dado { font-weight: 600; }
-/* Quem só lê (a secretaria): o valor em texto, embaixo do rótulo */
-.campo-dado .valor-dado { overflow-wrap: anywhere; }
-.campo-dado input[aria-invalid="true"] { border-color: var(--er); }
-.campo-dado .erro-campo:empty { display: none; }
+/* As gavetas: a moldura, o Histórico e as Sugestões */
 /* Histórico, BI, Manual e toasts */
 /* Histórico da data: gaveta lateral sobre a aba aberta. As gavetas abertas ficam umas sobre as outras, a que abriu por
    último em cima (--camada, posta por abrirGaveta em js/dom.js) */
@@ -15,9 +7,11 @@
   display: flex; flex-direction: column; gap: 8px; padding: 14px 16px; overflow: hidden;
   background: var(--pn); color: var(--ink); border-left: 1px solid var(--ln); box-shadow: -8px 0 24px rgba(0,0,0,.18);
 }
-/* Com o trilho fixo ao lado, a gaveta abre à esquerda dele (o trilho continua à vista) */
-@media (min-width: 1024px) {
-  body[data-trilho="fixo"] .gaveta { right: calc(max(0px, (100% - var(--teto)) / 2) + 16px + var(--trilho) + var(--vao)); }
+/* A partir de 1280 px, com o trilho ao lado (aberto ou recolhido: --lado), a gaveta abre à esquerda dele (o trilho continua
+   à vista). Entre 1024 e 1279 px ela fica na borda da janela, por cima do trilho: à esquerda dele, cobriria a maior parte
+   da tela */
+@media (min-width: 1280px) {
+  body:not([data-login]) .gaveta { right: calc(max(0px, (100% - var(--teto)) / 2) + 16px + var(--lado) + var(--vao)); }
 }
 .gaveta-cab { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .gaveta-cab h2 { margin: 0; }

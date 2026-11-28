@@ -7,7 +7,8 @@
 import { novoRecurso, MATRICULA, ATRIBUTOS_DO_RECURSO } from './frota.js';
 import { normalizarHabilitacoes } from './habilitacoes.js';
 import { normalizarFixos, fixoPeloStatus, fixosAoReabrir, pinoDeVoltaNaTurma } from './fixos.js';
-import { CATEGORIAS_COM_HORARIOS, normalizarHorarios, INICIOS_DOS_TEMPOS } from './horarios.js';
+import { CATEGORIAS_COM_HORARIOS, normalizarHorarios, horarioGuardado, INICIOS_DOS_TEMPOS } from './horarios.js';
+import { refazerFaixasDoAw, normalizarFaixas, normalizarPausas } from './disponibilidade.js';
 import { normalizarFechamentos } from './fechamentos.js';
 import { disponibilidadeValida, normalizeMissionFields } from './rules.js';
 import { MINUTOS_DO_DIA, MIS, FLIGHT_STATUSES } from './config.js';
@@ -45,9 +46,18 @@ function pedidoDeAntes(p) {
   return pedido;
 }
 
-// A disponibilidade de antes de um instrutor no dia: se ele vem (on) e cada horário do dia (aw); fora disso, null
-const disponibilidadeDeAntes = d => (objeto(d) && idValido(d.insId) && typeof d.on === 'boolean' && Array.isArray(d.aw)
-  && d.aw.length === INICIOS_DOS_TEMPOS.length && d.aw.every(v => typeof v === 'boolean') ? { insId: d.insId, on: d.on, aw: [...d.aw] } : null);
+// As faixas e as pausas de antes de um instrutor (C, "tela"), normalizadas: listas de até 50; fora disso, null
+const LISTA_DE_INTERVALOS = 50;
+const listaDeIntervalos = v => Array.isArray(v) && v.length <= LISTA_DE_INTERVALOS;
+const faixasDeAntes = d => (listaDeIntervalos(d.faixas) && (d.pausas === undefined || listaDeIntervalos(d.pausas))
+  ? { faixas: normalizarFaixas(d.faixas), pausas: normalizarPausas(d.pausas) } : null);
+// A disponibilidade de antes de um instrutor no dia: se ele vem (on) e as faixas e as pausas dele (C, "tela") ou, gravada
+// antes dela, cada horário do dia (aw); fora disso, null
+function disponibilidadeDeAntes(d) {
+  if (!objeto(d) || !idValido(d.insId) || typeof d.on !== 'boolean') return null;
+  if (d.faixas !== undefined) { const f = faixasDeAntes(d); return f ? { insId: d.insId, on: d.on, ...f } : null; }
+  return Array.isArray(d.aw) && d.aw.length === INICIOS_DOS_TEMPOS.length && d.aw.every(v => typeof v === 'boolean') ? { insId: d.insId, on: d.on, aw: [...d.aw] } : null;
+}
 
 // A reversão limpa (só os campos dela), ou null
 const PERIODOS_DE_ANTES = ['manha', 'tarde', 'noite'];
@@ -96,6 +106,11 @@ export function validarReversao(rev, frota) {
     return idCerto && typeof rev.inativo === 'boolean' ? { kind: 'setInativo', de: rev.de, id: rev.id, inativo: rev.inativo, label } : null;
   }
   if (rev.kind === 'setInsOn') return idValido(rev.insId) && typeof rev.val === 'boolean' ? { kind: 'setInsOn', insId: rev.insId, val: rev.val, label } : null;
+  // As faixas de um INVA ("Salvar faixas", um turno): as de antes, normalizadas
+  if (rev.kind === 'setFaixas') {
+    const f = idValido(rev.insId) && faixasDeAntes(rev);
+    return f ? { kind: 'setFaixas', insId: rev.insId, ...f, label } : null;
+  }
   if (rev.kind === 'restaurarFixos') {
     const fixos = rev.fixos && typeof rev.fixos === 'object' ? normalizarFixos(rev.fixos) : {};
     // O reparo também muda o instrutor escolhido dos pedidos: como estavam
@@ -128,8 +143,10 @@ export function validarReversao(rev, frota) {
   // e a reversão continua valendo (N13: não há período do dia)
   if (rev.kind === 'restaurarHorarios') {
     if (!CATEGORIAS_COM_HORARIOS.includes(rev.cat) || !Array.isArray(rev.lista) || !Array.isArray(rev.pedidos) || rev.pedidos.length > 500) return null;
+    // Cada horário da reversão é um da lista guardada, sem repetir; o das 06:00 às 06:29 (gravado antes de 2026-11-28)
+    // volta como 06:30, como na lista guardada
+    if (!rev.lista.length || new Set(rev.lista).size !== rev.lista.length || rev.lista.some(m => horarioGuardado(m) === null)) return null;
     const lista = normalizarHorarios({ [rev.cat]: rev.lista })[rev.cat];
-    if (lista.length !== rev.lista.length) return null;
     const preferencia = v => Number.isInteger(v) && v >= -1 && v <= MINUTOS_DO_DIA;
     const pedidos = rev.pedidos.map(p => (p && typeof p === 'object' && idValido(p.stuId) && Number.isInteger(p.mid) && p.mid >= 0
       && preferencia(p.p1) && preferencia(p.p2) && (p.jan === undefined || disponibilidadeValida(p.jan) || PERIODOS_DE_ANTES.includes(p.jan))
@@ -299,7 +316,10 @@ export function desfazerAgendamento(estado, { stuId, mid, criado, pedido, fixo, 
   } else if (estado.fixos) delete estado.fixos[fKey];
   if (disponibilidade) {
     const x = estado.ins.find(i => i.id === disponibilidade.insId);
-    if (x) Object.assign(x, { on: disponibilidade.on, aw: [...disponibilidade.aw] });
+    // As faixas e as pausas de antes (C, "tela"); a disponibilidade gravada antes dela leva só o aw: o instrutor com as faixas
+    // da data (formato 29) fica com as do aw devolvido
+    if (x && disponibilidade.faixas) Object.assign(x, { on: disponibilidade.on, faixas: normalizarFaixas(disponibilidade.faixas), pausas: normalizarPausas(disponibilidade.pausas) });
+    else if (x) refazerFaixasDoAw(Object.assign(x, { on: disponibilidade.on, aw: [...disponibilidade.aw] }));
   }
   return true;
 }

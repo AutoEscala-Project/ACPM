@@ -16,6 +16,7 @@ import { normalizarLinhaGravada } from '../../js/escala-gravada.js';
 import { noturnosDaVespera, comRepousoDoNoturno } from '../../js/noturno.js';
 import { fixosAoAprovar, fixosAoMudarStatus } from '../../js/fixos.js';
 import { normalizeMissionFields } from '../../js/rules.js';
+import { normalizarLimitacoes } from '../../js/limitacoes.js';
 import { gerarCenario } from '../helpers/cenarios.js';
 import { situacaoPorMissao } from '../../js/resultados.js';
 
@@ -555,7 +556,9 @@ describe('Agendamento: o pedido e o voo fixo', () => {
     assert.equal(validarReversao({ ...reversaoDoAgendamento(antes), criadoComo: { mis: ['Voo Local'], fly: true } }), null);
   });
 
-  it('os pesos digitados vão para o cadastro, um texto do histórico cada; "Marcar disponível" liga o instrutor nos períodos do voo', () => {
+  // C, "tela": "Marcar disponível" põe o voo numa faixa do instrutor (js/disponibilidade.js, comOIntervalo) e não muda
+  // mais o aw; quem ainda não tinha faixas (lido pelo aw) passa a ter as do aw, com o voo
+  it('os pesos digitados vão para o cadastro, um texto do histórico cada; "Marcar disponível" liga o instrutor no horário do voo', () => {
     const estado = doDia();
     estado.ins[1].on = false;
     estado.ins[1].aw = estado.ins[1].aw.map(() => false);
@@ -563,11 +566,22 @@ describe('Agendamento: o pedido e o voo fixo', () => {
     assert.deepEqual(antes.pesos, [{ tipo: 'aluno', id: 1001, nm: 'Aluno 1001', kg: 82.5 }]);
     assert.deepEqual(historicoDosPesos(antes), ['Peso Aluno 1001: 82,5 kg (agendamento)']);
     assert.equal(estado.stu[1].kg, 82.5);
-    assert.deepEqual([estado.ins[1].on, estado.ins[1].aw.map((v, w) => (v ? w : -1)).filter(w => w >= 0)], [true, [2]]);
-    assert.deepEqual(antes.disponibilidade, { insId: 2, on: false, aw: Array(9).fill(false) });
+    assert.deepEqual([estado.ins[1].on, estado.ins[1].faixas, estado.ins[1].pausas], [true, [{ de: 610, ate: 670 }], []]);
+    assert.ok(estado.ins[1].aw.every(v => v === false), 'o aw não muda');
+    assert.deepEqual(antes.disponibilidade, { insId: 2, on: false, faixas: [], pausas: [] });
     // Desfazer devolve a disponibilidade; o peso é da pessoa e fica
     assert.ok(desfazerAgendamento(estado, validarReversao(reversaoDoAgendamento(antes))));
-    assert.deepEqual([estado.ins[1].on, estado.ins[1].aw.some(Boolean), estado.stu[1].kg], [false, false, 82.5]);
+    assert.deepEqual([estado.ins[1].on, estado.ins[1].faixas, estado.ins[1].pausas, estado.stu[1].kg], [false, [], [], 82.5]);
+  });
+
+  it('"Marcar disponível" num instrutor com faixas e o almoço: o voo entra numa faixa, a pausa perde só o que ele toca; desfazer devolve as de antes', () => {
+    const estado = doDia();
+    Object.assign(estado.ins[1], { faixas: [{ de: 390, ate: 640 }, { de: 700, ate: 1050 }], pausas: [{ de: 640, ate: 700 }] });
+    const antes = aplicarAgendamento(estado, null, proposta({ disponibilizar: { insId: 2 } }));
+    assert.deepEqual([estado.ins[1].faixas, estado.ins[1].pausas], [[{ de: 390, ate: 670 }, { de: 700, ate: 1050 }], [{ de: 670, ate: 700 }]]);
+    assert.deepEqual(antes.disponibilidade, { insId: 2, on: true, faixas: [{ de: 390, ate: 640 }, { de: 700, ate: 1050 }], pausas: [{ de: 640, ate: 700 }] });
+    assert.ok(desfazerAgendamento(estado, validarReversao(reversaoDoAgendamento(antes))));
+    assert.deepEqual([estado.ins[1].on, estado.ins[1].faixas, estado.ins[1].pausas], [true, [{ de: 390, ate: 640 }, { de: 700, ate: 1050 }], [{ de: 640, ate: 700 }]]);
   });
 
   it('a prévia é a escala que fica: aplicar no estado e refazer a escala dá a escala simulada', () => {
@@ -1160,6 +1174,23 @@ describe('Agendamento: as alternativas de cada bloqueio', () => {
     assert.ok(item, JSON.stringify(codigos(outroTipo)));
     assert.equal(item.texto, 'O aluno só voa no C172.');
     assert.deepEqual(alternativas(item), []);
+  });
+
+  // Decisão do Pedro, 28/11: os horários do aluno começam às 06:30, e o guardado das 06:00 é lido às 06:30. "Outro horário…"
+  // ainda aceita um horário antes das 06:30: contra o horário lido, ele fica fora dos horários do aluno e pede "Agendar mesmo
+  // assim" (à vista, nunca em silêncio); das 06:30 em diante, nada muda
+  it('o "Outro horário…" antes das 06:30 com um horário do aluno guardado das 06:00: o conflito, à vista', () => {
+    const guardado = { horarios: [{ de: 360, ate: 600 }] };
+    const com = limitacoes => {
+      const estado = doDia();
+      estado.stu = estado.stu.map(s => (s.id === 1001 ? { ...s, limitacoes } : s));
+      return outroHorario => codigos(pararia(agendar(estado, { amb, escolhas: { aluno: 1001, horario: 'outro', outroHorario } }).avaliacao));
+    };
+    const lido = com(normalizarLimitacoes(guardado));
+    assert.ok(lido('06:10').includes('limitacao-de-horario'), JSON.stringify(lido('06:10')));
+    for (const h of ['06:30', '09:50']) assert.ok(!lido(h).includes('limitacao-de-horario'), h);
+    // A regra do início (R4) não muda: sem a leitura, o das 06:00 continua valendo às 06:10
+    assert.ok(!com(guardado)('06:10').includes('limitacao-de-horario'));
   });
 
   it('a alternativa escolhida muda só o campo dela: os outros ficam como o formulário os mostra, e o valor que ele trocou não volta', () => {

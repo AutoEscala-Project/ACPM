@@ -19,7 +19,7 @@ import { registrarDesenho, redesenharPorNome } from '../redesenho.js';
 import { semFalhar } from '../sem-falhar.js';
 import { criarMestreDetalhe } from '../views/mestre-detalhe.js';
 import { modeloDosAlunos, detalheDoAluno, escolhasDe, lembrarEscolha, esquecerEscolhas, erroNasLimitacoes } from '../views/alunos.js';
-import { normalizarLimitacoes, textoDasLimitacoes, DIAS_DAS_LIMITACOES } from '../limitacoes.js';
+import { normalizarLimitacoes, textoDasLimitacoes, DIAS_DAS_LIMITACOES, MINUTOS_DOS_HORARIOS } from '../limitacoes.js';
 import { missoesParaRegistrar, colocacaoDoAluno } from '../views/etapas.js';
 import { aoMudarDadosPessoais } from '../views/dados-pessoais.js';
 import { pessoaEscolhida, apagarDadosPessoais } from '../views/editor-de-dados-pessoais.js';
@@ -31,7 +31,8 @@ const tela = criarMestreDetalhe({
   rotulo: 'Alunos',
   nomes: ['aluno', 'alunos'],
   semItens: 'Nenhum aluno cadastrado. Clique em “+ Novo aluno” acima para cadastrar.',
-  vazio: 'Escolha um aluno na lista.',
+  // Nada escolhido: no meio do detalhe, a pessoa, o texto e, para quem cria, o caminho do aluno novo
+  vazio: { texto: 'Escolha um aluno na lista.', icone: 'i-aluno', dica: 'ou use + Novo aluno' },
   // O filtro dos cursos (o mesmo da Demanda: as marcas valem nas duas telas)
   filtros: [{ criar: aoMudar => criarFiltroDosCursos('flt-alu-cur', aoMudar), valores: item => item.valores.curso }],
   modelo: () => modeloDosAlunos(tela.selecionado()),
@@ -116,11 +117,12 @@ function recusarNasLimitacoes(s, texto, campo) {
   tela.focarNoCampo(campo.replace(/^det-alu-/, ''));
 }
 
-// "+ Horário": das 06:00 à meia-noite, em todas as datas (nada fica de fora até o De e o Até mudarem); o foco no De dele
+// "+ Horário": das 06:30 (o primeiro dos campos, o primeiro horário de decolagem) à meia-noite, em todas as datas (nada fica
+// de fora até o De e o Até mudarem); o foco no De dele
 aoAcionar('lim-mais', (b, { id }) => {
   const s = stuBy(id);
   if (!s) return;
-  const novo = { de: 360, ate: 1440 };
+  const novo = { de: MINUTOS_DOS_HORARIOS[0], ate: MINUTOS_DOS_HORARIOS.at(-1) };
   const horarios = [...horariosDe(s), novo];
   const lista = normalizarLimitacoes(comHorarios(s, horarios));
   const i = lista ? lista.horarios.findIndex(h => h.de === novo.de && h.ate === novo.ate && !h.dias) : -1;

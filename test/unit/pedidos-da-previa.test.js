@@ -81,9 +81,12 @@ describe('Os pedidos da prévia (scripts/pedidos-da-previa.mjs)', () => {
   it('o script: uma data que falhou fica sem pedidos, e a gravação repetida (o transporte) não duplica', { timeout: 120000 }, () => {
     const pasta = mkdtempSync(join(tmpdir(), 'semear-dias-'));
     writeFileSync(join(pasta, 'cadastro.json'), JSON.stringify(separar(estadoSintetico()).cadastro));
-    writeFileSync(join(pasta, 'supabase'), CLI_FALSO, { mode: 0o755 });
+    // O CLI falso por caminho, rodado pelo node (SUPABASE_CLI_JS): nem o PATH nem o sistema decidem; o Supabase CLI de
+    // verdade nunca é chamado, nem com ele instalado e logado (o teste nunca tem caminho para o banco)
+    const cli = join(pasta, 'supabase-falso.cjs');
+    writeFileSync(cli, CLI_FALSO);
     const rodar = env => spawnSync(process.execPath, ['scripts/semear-dias-previa.mjs', '3', '2026-12-01'],
-      { cwd: fileURLToPath(new URL('../../', import.meta.url)), encoding: 'utf8', env: { ...process.env, SECO: '', PATH: `${pasta}:${process.env.PATH}`, ...env } });
+      { cwd: fileURLToPath(new URL('../../', import.meta.url)), encoding: 'utf8', env: { ...process.env, SECO: '', SUPABASE_CLI_JS: cli, ...env } });
     // 1ª vez: a gravação de 03/12 chega ao banco e a resposta se perde (repetida); a de 02/12 falha
     const primeira = rodar({ FALHAR_DATA: '2026-12-02', TRANSPORTE_DATA: '2026-12-03' });
     assert.notEqual(primeira.status, 0, primeira.stdout);
@@ -106,8 +109,7 @@ describe('Os pedidos da prévia (scripts/pedidos-da-previa.mjs)', () => {
 // O Supabase CLI falso do teste do script: guarda os dias e os pedidos num arquivo ao lado. Uma consulta com o dia e os
 // pedidos é uma só (tudo ou nada; o dia que já existe não é gravado, e os pedidos só entram com ele); FALHAR_DATA falha a
 // gravação dessa data sem efeito, TRANSPORTE_DATA a grava e perde a resposta uma vez (o script tenta de novo).
-const CLI_FALSO = `#!/usr/bin/env node
-const fs = require('fs'); const path = require('path');
+const CLI_FALSO = `const fs = require('fs'); const path = require('path');
 const pasta = path.dirname(__filename); const arquivo = path.join(pasta, 'estado.json');
 const E = fs.existsSync(arquivo) ? JSON.parse(fs.readFileSync(arquivo, 'utf8')) : { dias: {}, pedidos: [], seq: 0, perdidas: [] };
 const q = process.argv[process.argv.length - 1];

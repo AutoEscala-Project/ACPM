@@ -2,7 +2,7 @@
 // cursos desligados, o que continua e o que fica guardado (ligar de novo traz tudo de volta). Com elas ligadas, os testes
 // de cada tela (hangar.spec.js, cursos-no-dia.spec.js, agendamento.spec.js, cursos.spec.js e os outros com comHangar ou
 // comProgresso). A prioridade, desligada e ligada: prioridade.spec.js
-import { test, comTodasAsFuncionalidades, expect, irPara, abrirEscala, abrirHistorico, diaSeguinte, entrar, prepararContexto, appPronto, vigiarErros, importarDaAgenda, alternarDisponivel, mudarData, botaoDaData, trilho, avisosDaData, contagemDosAvisos, contagemDoDia, AMANHA, confirmarAgendamento, refazer, campoDoAluno, textoDoProgresso, abrirRecursos, abrirHangar, ordemNoHangar, itemDoHangar, primeiraDaLista, linhasDosPedidos } from './fixtures.js';
+import { test, comTodasAsFuncionalidades, expect, irPara, abrirEscala, abrirHistorico, diaSeguinte, entrar, prepararContexto, appPronto, vigiarErros, importarDaAgenda, alternarDisponivel, mudarData, trilho, avisosDaData, contagemDosAvisos, contagemDoDia, AMANHA, confirmarAgendamento, refazer, campoDoAluno, textoDoProgresso, abrirRecursos, abrirHangar, ordemNoHangar, itemDoHangar, primeiraDaLista, mostrarAvisos, linhasDosPedidos } from './fixtures.js';
 import { FRASES_DAS_FUNCIONALIDADES, FRASES_SEM_AS_FUNCIONALIDADES } from './manual-frases.js';
 import { instalarSupabaseFalso, documentosAtuais, CONTAS } from './supabase-falso.js';
 import { montarGlossario } from '../../js/glossario.js';
@@ -445,13 +445,13 @@ test.describe('Os dois desligados, na linha, no trilho e no endereço', () => {
     documentos.acpm4_agenda = [solicitacao(1, 1000, 'Maria'), solicitacao(2, 1002, 'Ana')];
     await abrirCom(page, documentos);
     const dito = alvo => alvo.evaluate(el => [el.textContent, ...[...el.querySelectorAll('[title], [aria-label]')].flatMap(n => [n.title, n.getAttribute('aria-label')])].join(' '));
-    await botaoDaData(page).click();
+    await mostrarAvisos(page);
     await expect(trilho(page)).toBeVisible();
     await expect(contagemDoDia(page, AMANHA)).toHaveText('2');
     // Os pedidos de antes da aprovação, convertidos neste navegador: aprovados por quem anotou (D1, regra b)
     await expect(avisosDaData(page, '2 pedidos aprovados fora da demanda')).toHaveCount(1);
     await expect(contagemDosAvisos(page)).toBeVisible();
-    for (const [nome, alvo] of [['trilho', trilho(page)], ['botão da data', botaoDaData(page)]]) {
+    for (const [nome, alvo] of [['trilho', trilho(page)]]) {
       expect(await dito(alvo), nome).not.toMatch(/hangar|progresso|próxima|aprovado\b|reprovado/i);
     }
     await irPara(page, 'age');

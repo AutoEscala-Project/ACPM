@@ -1,7 +1,7 @@
 // O dia de operação: "Aprovar escala" fixa os voos. Depois disso, uma alteração não tira ninguém do lugar:
 // o pedido novo entra em volta, e o voo fixo que ficou impossível aparece em conflito. "Reabrir" volta ao normal.
 // Em Voo, Atrasado, Pousou e Cancelado também fixam o voo.
-import { test, comPrioridade, expect, abrir, abrirComExemplo, irPara, abrirEscala, lerEscala, abrirHistorico, alternarVem, aprovar, botaoAprovar, botaoReabrir, caixaVoa, reabrir, refazer } from './fixtures.js';
+import { test, comPrioridade, expect, abrir, abrirComExemplo, irPara, abrirEscala, lerEscala, abrirHistorico, alternarVem, aprovar, botaoAprovar, botaoReabrir, caixaVoa, reabrir, refazer, textosDaEscala } from './fixtures.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
 import { abrirRestricoes, campoDasRestricoes, fecharRestricoes } from './telas/restricoes.js';
 
@@ -49,11 +49,8 @@ test.describe('Escala aprovada', () => {
     await irPara(page, 'ins');
     await alternarVem(page, id, false);
     await abrirEscala(page);
-    // A caixa abre recolhida, só com o título
-    const conflitos = page.locator('#out details.caixa.conflitos');
-    await expect(conflitos).not.toHaveAttribute('open', '');
-    await expect(conflitos.locator('summary')).toHaveText('1 voo em conflito na escala aprovada');
-    await expect(conflitos).toContainText('o instrutor não está disponível');
+    // O conflito fica no trilho, com os avisos da data
+    await expect(textosDaEscala(page, 'conflitos')).toHaveText([/^Aluno 1000 Conflito na escala aprovada: .*o instrutor não está disponível/]);
     await expect(primeiro).toHaveClass(/\bem-conflito\b/);
     await expect(primeiro.locator('.c-instr')).toHaveText(instrutor);
   });

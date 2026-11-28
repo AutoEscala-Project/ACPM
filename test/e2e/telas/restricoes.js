@@ -1,7 +1,7 @@
 // O driver das restrições do voo (G1, dono; aside.gaveta#painel-restricoes): a gaveta, aberta pelo "Restrições" do editor do
 // voo (#dlg-voo), do item do trilho da missão que não entrou e da linha do pedido na Demanda (até o G2), e os campos dela
 import { expect } from '@playwright/test';
-import { trilho, botaoDaData } from './casca.js';
+import { mostrarAvisos } from './casca.js';
 
 export const gavetaDasRestricoes = page => page.locator('#painel-restricoes');
 // Os campos da gaveta aberta para o pedido do aluno (id) e da missão (mid)
@@ -29,9 +29,9 @@ export async function restricoesPeloEditor(page, id, mid = 0) {
 
 // Pelo item do trilho da missão que não entrou (o texto acha o item)
 export const botaoDasRestricoesNoTrilho = (page, texto) => page.locator('#avisos-da-data > li', { hasText: texto }).locator('[data-act="restricoes"]');
-// (com o trilho fechado, o botão da data o abre antes; o trilho sempre à vista, linha-fix-escala-sem-caixas, não precisa)
+// (o trilho está sempre à vista, linha-fix-escala-sem-caixas; com o calendário ou os avisos recolhidos, eles abrem antes)
 export async function restricoesPeloTrilho(page, texto, id, mid = 0) {
-  if (!(await trilho(page).isVisible())) await botaoDaData(page).click();
+  await mostrarAvisos(page);
   await botaoDasRestricoesNoTrilho(page, texto).click();
   await expect(restricoesDoPedido(page, id, mid)).toBeVisible();
   return restricoesDoPedido(page, id, mid);

@@ -3,7 +3,7 @@
 // repouso antes dela é um aviso. No programa do curso, o Noturno pode vir em trechos (a ida, a noite e a volta): é um voo
 // só, oferecido pela noite
 import { test, comProgresso, expect, abrir, irPara, abrirEscala, prepararContexto, vigiarErros, AMANHA, entrar, campoDaAgenda, diaSeguinte, diaAnterior, rotuloDaData, refazer, textoDoProgresso,
-  editarPelaLista, salvarVoo, abrirHistorico, entradasDoHistorico } from './fixtures.js';
+  editarPelaLista, salvarVoo, abrirHistorico, entradasDoHistorico, textosDaEscala } from './fixtures.js';
 import { criarSupabaseFalso, documentosAtuais, CONTAS } from './supabase-falso.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
 import { cursosIniciais, gravarCurso } from '../../js/programa.js';
@@ -56,7 +56,7 @@ test.describe('Noturno de dois dias', () => {
     await expect(volta.locator('.fixo')).toHaveCount(1);
     // A volta não tem "Tirar da escala" nem a troca do instrutor (é o voo de ontem)
     await expect(volta.locator('[data-act="rm-fly"], [data-act="trocar-instrutor"]')).toHaveCount(0);
-    await expect(page.locator('#out details.avisos')).toContainText('9h00 de repouso entre o noturno de ontem (até 21:30) e o translado de volta (07:30)');
+    await expect(textosDaEscala(page, 'avisos').filter({ hasText: '9h00 de repouso entre o noturno de ontem (até 21:30) e o translado de volta (07:30)' })).toHaveCount(1);
 
     // Um voo pedido às 08:20 com o mesmo instrutor vai para depois das 10:10
     await irPara(page, 'dem');

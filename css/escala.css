@@ -3,19 +3,11 @@
 @media (max-width: 1400px) {
   #s-esc .seg .ico { display: none; }
 }
-/* Escala: resumo numa linha, erros e avisos agrupados, uma linha por voo e o mapa como outra visão */
+/* Escala: o resumo numa linha (os números; os alertas ficam no trilho), uma linha por voo e o mapa como outra visão */
 .resumo { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 10px; margin: 0 0 12px; }
 .resumo .st, .resumo .parado { display: flex; gap: 22px; margin: 0; background: var(--pn); border: 1px solid var(--ln); border-radius: 8px; padding: 8px 16px; }
 .resumo .st div, .resumo .parado div { border: 0; padding: 0; background: transparent; font: 400 12.5px 'Barlow', sans-serif; }
 .resumo .st strong, .resumo .parado strong { font: 700 22px 'Barlow Semi Condensed', sans-serif; line-height: 1.05; }
-details.caixa { flex: 1; min-width: 280px; border-radius: 8px; padding: 9px 14px; font-size: 14px; }
-details.caixa summary { cursor: pointer; font-weight: 600; }
-details.caixa ul { margin: 6px 0 2px; padding-left: 18px; }
-details.caixa .al { border: 0; padding: 0; margin: 3px 0; background: transparent; }
-details.caixa.erros { background: var(--er-bg); border: 1px solid var(--er); }
-details.caixa.erros summary { color: var(--er); }
-details.caixa.avisos { background: var(--wa-bg); border: 1px solid var(--wa); }
-details.caixa.avisos summary { color: var(--wa); }
 .tabela-escala table { min-width: 760px; font-size: 14.5px; }
 .tabela-escala td { padding: 7px 10px; }
 /* Uma linha por voo: a duração, o tipo do avião e a turma ficam ao lado, discretos */
@@ -84,7 +76,6 @@ details.caixa.avisos summary { color: var(--wa); }
 @media (max-width: 640px) {
   #s-esc .flt-rotulo, #flt-esc-q { flex: 1 1 140px; min-width: 0; }
   .resumo .st, .resumo .parado { width: 100%; justify-content: space-between; gap: 8px; }
-  details.caixa { min-width: 0; flex-basis: 100%; }
   /* (A lista é .tw.tabela-escala: o "overflow: visible; border: 0; background: transparent" que estava aqui nunca valeu, porque
      a regra de .tw vinha depois em css/app.css e ganhava; saiu na divisão, para a tela continuar igual. O H decide os cartões
      sem a moldura) */
@@ -127,10 +118,7 @@ button.st-detalhe:hover { color: var(--ink); }
 .selo-aprovada { display: inline-flex; align-items: center; gap: 6px; margin-left: 10px; padding: 2px 10px; border-radius: 14px; background: var(--ok-bg); color: var(--ok); font: 600 13px 'Barlow', sans-serif; vertical-align: middle; }
 .selo-aprovada[hidden] { display: none; }
 .ico.fixo { width: 14px; height: 14px; margin-left: 4px; vertical-align: -2px; color: var(--ok); }
-details.caixa.conflitos { background: var(--er-bg); border: 1px solid var(--er); }
-details.caixa.conflitos summary { color: var(--er); }
 .tabela-escala tr.em-conflito td:first-child { box-shadow: inset 3px 0 0 var(--er); }
-details.caixa.conflitos .btn.quiet { padding: 1px 8px; margin-left: 4px; font-size: 13.5px; }
 /* Compactação: os critérios do dia, o tempo parado e a aprovação numa segunda linha da barra da Escala; no celular,
    cada controle ocupa a linha, com o rótulo em cima */
 .bar.compactacao { margin-top: -2px; }
@@ -350,7 +338,6 @@ dialog.dlg-voo [aria-invalid="true"] { border-color: var(--er); box-shadow: 0 0 
 @media (max-width: 640px) {
   button.st-detalhe { min-height: 44px; }
   .ins-btn { min-width: 44px; min-height: 44px; margin: 0; }
-  details.caixa summary { padding: 12px 0; }
   .win-btn { min-height: 44px; }
   /* O "+" que agenda: na linha do mapa e no horário da lista */
   .tl-agendar, .win-agendar { min-width: 44px; min-height: 44px; }

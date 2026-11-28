@@ -23,16 +23,29 @@ export const DE_30_EM_30 = Array.from({ length: 21 }, (_, i) => HORARIO_DO_SOLO 
 export const HORARIOS_INICIAIS = { C152: [...HORARIOS_PADRAO], C172: [...HORARIOS_PADRAO], sim: [...HORARIOS_PADRAO], 'PA-34': DE_30_EM_30, ground: [...HORARIOS_PADRAO] };
 export const CATEGORIAS_COM_HORARIOS = Object.keys(HORARIOS_INICIAIS);
 
-// O primeiro horário de decolagem do dia (06:00)
-export const PRIMEIRO_HORARIO = 6 * 60;
+// O primeiro horário de decolagem do dia (06:30, Pedro em 2026-11-28: "booked times should start at 6:30"): o do Voo Solo,
+// o mesmo limite do horário exato do pedido (js/rules.js), para a lista nunca oferecer um horário que o pedido perde
+export const PRIMEIRO_HORARIO = HORARIO_DO_SOLO;
+// Até 2026-11-28 o editor e a lista guardada aceitavam desde as 06:00. Um horário guardado das 06:00 às 06:29 não se
+// perde: vira o primeiro do dia, na lista, na reversão dela e na preferência do pedido; antes das 06:00, sai como sempre.
+// O De das limitações do aluno (js/limitacoes.js) também (Decisão do Pedro, 28/11)
+const INICIO_ACEITO_ANTES = 6 * 60;
+export const noInicioDoDia = m => (m >= INICIO_ACEITO_ANTES && m < PRIMEIRO_HORARIO ? PRIMEIRO_HORARIO : m);
 
-// Só horários do dia (06:00 às 17:00), em ordem e sem repetir; a categoria sem lista válida recebe a inicial
+// Um horário guardado na lista (06:30 às 17:00; o das 06:00 às 06:29, 06:30), ou null
 const ULTIMO = 17 * 60;
+export function horarioGuardado(m) {
+  if (!Number.isInteger(m)) return null;
+  const minuto = noInicioDoDia(m);
+  return minuto >= PRIMEIRO_HORARIO && minuto <= ULTIMO ? minuto : null;
+}
+
+// Só horários do dia (06:30 às 17:00), em ordem e sem repetir; a categoria sem lista válida recebe a inicial
 export function normalizarHorarios(horarios) {
   const dados = horarios && typeof horarios === 'object' ? horarios : {};
   return Object.fromEntries(CATEGORIAS_COM_HORARIOS.map(cat => {
     const lista = Array.isArray(dados[cat])
-      ? [...new Set(dados[cat].filter(m => Number.isInteger(m) && m >= PRIMEIRO_HORARIO && m <= ULTIMO))].sort((a, b) => a - b)
+      ? [...new Set(dados[cat].map(horarioGuardado).filter(m => m !== null))].sort((a, b) => a - b)
       : [];
     return [cat, lista.length ? lista : [...HORARIOS_INICIAIS[cat]]];
   }));
@@ -70,9 +83,10 @@ export function periodoDoMinuto(minuto) {
 
 // Preferências em minutos; o número da janela (0 a 8) dos dados anteriores ao formato 12 vira o horário da janela
 export const minutoDaPreferencia = p => (!Number.isInteger(p) || p < 0 ? -1 : p <= ULTIMO_TEMPO ? INICIOS_DOS_TEMPOS[p] : p);
-// Uma preferência válida: um horário entre 06:00 e 17:30 (ou a janela antiga); o resto vira "sem preferência"
+// Uma preferência válida: um horário entre 06:30 e 17:30 (ou a janela antiga; a guardada das 06:00 às 06:29, 06:30); o
+// resto vira "sem preferência"
 export function preferenciaValida(p) {
-  const minuto = minutoDaPreferencia(p);
+  const minuto = noInicioDoDia(minutoDaPreferencia(p));
   return minuto >= PRIMEIRO_HORARIO && minuto <= HORARIO_DO_NOTURNO ? minuto : -1;
 }
 
@@ -111,7 +125,7 @@ export function ordenarPelaPreferencia(lista, p1, p2) {
   return [...new Set([p1, p2, ...resto])].filter(m => lista.includes(m));
 }
 
-// O resumo dos horários e o efeito de uma lista nova. No editor, os horários vão das 06:00 às 16:30, o último em que
+// O resumo dos horários e o efeito de uma lista nova. No editor, os horários vão das 06:30 às 16:30, o último em que
 // cabe um voo de 1 h antes do noturno (a lista guardada continua aceitando até as 17:00)
 export const ULTIMO_HORARIO = 16 * 60 + 30;
 

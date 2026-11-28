@@ -313,6 +313,30 @@ describe('Desfazer um voo agendado na Escala', () => {
     assert.deepEqual(estado.fStatus, { '1000_2_1': 'Cancelado' });
   });
 
+  // C (formato 29): a reversão gravada antes da tela do C leva só o aw; num instrutor com as faixas da data, o aw volta e
+  // as faixas voltam com ele (as do aw)
+  it('a disponibilidade de antes da tela do C (só o aw) volta num instrutor com faixas: o aw e as faixas dele', () => {
+    const estado = dia();
+    estado.ins[0] = { ...estado.ins[0], faixas: [{ de: 390, ate: 1440 }], pausas: [] };
+    assert.equal(desfazerAgendamento(estado, validarReversao(MOVIDO, FROTA_INICIAL)), true);
+    assert.deepEqual(estado.ins[0], { id: 5, nm: 'Instrutor 05', kg: 90, on: true, aw: DE_MANHA, faixas: [{ de: 390, ate: 760 }], pausas: [] });
+  });
+
+  // C, "tela": a disponibilidade de antes leva as faixas e as pausas (normalizadas); desfazer as devolve, e o aw fica
+  it('a disponibilidade de antes com as faixas: validada, normalizada, e desfazer devolve as faixas e as pausas', () => {
+    const disponibilidade = { insId: 5, on: false, faixas: [{ de: 500, ate: 610 }, { de: 390, ate: 500 }, { de: 9, ate: 3 }], pausas: [{ de: 720, ate: 780, x: 1 }] };
+    const rev = validarReversao({ ...MOVIDO, disponibilidade }, FROTA_INICIAL);
+    assert.deepEqual(rev.disponibilidade, { insId: 5, on: false, faixas: [{ de: 390, ate: 610 }], pausas: [{ de: 720, ate: 780 }] });
+    const estado = dia();
+    assert.equal(desfazerAgendamento(estado, rev), true);
+    assert.deepEqual(estado.ins[0], { ...dia().ins[0], on: false, faixas: [{ de: 390, ate: 610 }], pausas: [{ de: 720, ate: 780 }] });
+    for (const ruim of [{ ...disponibilidade, faixas: 'x' }, { ...disponibilidade, pausas: 'x' }, { ...disponibilidade, faixas: Array(51).fill({ de: 390, ate: 400 }) }]) {
+      assert.equal(validarReversao({ ...MOVIDO, disponibilidade: ruim }, FROTA_INICIAL), null, JSON.stringify(ruim).slice(0, 80));
+    }
+    // Sem pausas: nenhuma
+    assert.deepEqual(validarReversao({ ...MOVIDO, disponibilidade: { insId: 5, on: true, faixas: [] } }, FROTA_INICIAL).disponibilidade, { insId: 5, on: true, faixas: [], pausas: [] });
+  });
+
   it('o voo movido volta para onde estava: o pedido, o instrutor escolhido e o voo fixo de antes; o status fica', () => {
     const estado = dia();
     assert.equal(desfazerAgendamento(estado, validarReversao(MOVIDO, FROTA_INICIAL)), true);
@@ -719,6 +743,21 @@ describe('A reversão dos horários com um período de antes', () => {
   });
 });
 
+// C, "tela": "Salvar faixas" e os turnos desfazem pelo ↶ (setFaixas): as faixas e as pausas de antes, normalizadas
+describe('Reversão: as faixas de um INVA (setFaixas)', () => {
+  it('o instrutor e as faixas e as pausas de antes, normalizadas; fora do formato, nada', () => {
+    assert.deepEqual(validarReversao({ kind: 'setFaixas', insId: 3, faixas: [{ de: 780, ate: 1050 }, { de: 390, ate: 720 }], pausas: [{ de: 900, ate: 930 }] }, FROTA_INICIAL),
+      { kind: 'setFaixas', insId: 3, faixas: [{ de: 390, ate: 720 }, { de: 780, ate: 1050 }], pausas: [{ de: 900, ate: 930 }], label: '↶ Reverter' });
+    assert.deepEqual(validarReversao({ kind: 'setFaixas', insId: 3, faixas: [], pausas: [], label: '↶ Reverter' }, FROTA_INICIAL),
+      { kind: 'setFaixas', insId: 3, faixas: [], pausas: [], label: '↶ Reverter' });
+    assert.deepEqual(validarReversao({ kind: 'setFaixas', insId: 3, faixas: [{ de: 390, ate: 1440, x: 1 }, { de: 9, ate: 3 }] }, FROTA_INICIAL).faixas, [{ de: 390, ate: 1440 }]);
+    for (const ruim of [{ kind: 'setFaixas', insId: 0, faixas: [] }, { kind: 'setFaixas', insId: 3 }, { kind: 'setFaixas', insId: 3, faixas: 'dia' },
+      { kind: 'setFaixas', insId: 3, faixas: [], pausas: {} }, { kind: 'setFaixas', insId: 3, faixas: Array(51).fill({ de: 390, ate: 400 }) }]) {
+      assert.equal(validarReversao(ruim, FROTA_INICIAL), null, JSON.stringify(ruim).slice(0, 80));
+    }
+  });
+});
+
 // L: as limitações do aluno desfazem pelo ↶ (setLimitacoes): o aluno e as limitações de antes da mudança (normalizadas por
 // js/limitacoes.js), ou null (ele não tinha nenhuma); fora disso, não vale
 describe('setLimitacoes', () => {
@@ -730,10 +769,31 @@ describe('setLimitacoes', () => {
     assert.deepEqual(validarReversao({ kind: 'setLimitacoes', stuId: 1000, antes: { recursos: [] } }, FROTA_INICIAL).antes, null);
   });
 
+  // Decisão do Pedro, 28/11: os horários do aluno começam às 06:30. A reversão gravada antes, com um horário das 06:00,
+  // continua valendo e o põe às 06:30; com um só, que termina até as 06:30, volta como nenhuma (o que ele quer dizer lido hoje)
+  it('as de antes com um horário das 06:00 às 06:29: o horário volta às 06:30; o que termina até as 06:30 não volta', () => {
+    assert.deepEqual(validarReversao({ kind: 'setLimitacoes', stuId: 1000, antes: { horarios: [{ de: 360, ate: 1440 }, { de: 390, ate: 1440 }] } }, FROTA_INICIAL).antes,
+      { horarios: [{ de: 390, ate: 1440 }] });
+    assert.equal(validarReversao({ kind: 'setLimitacoes', stuId: 1000, antes: { horarios: [{ de: 360, ate: 380 }] } }, FROTA_INICIAL).antes, null);
+  });
+
   it('fora do formato: sem o aluno, sem o antes, de outro tipo', () => {
     for (const ruim of [{ kind: 'setLimitacoes', antes: null }, { kind: 'setLimitacoes', stuId: 'x', antes: null }, { kind: 'setLimitacoes', stuId: 1000 },
       { kind: 'setLimitacoes', stuId: 1000, antes: 'C172' }, { kind: 'setLimitacoes', stuId: 1000, antes: [] }]) {
       assert.equal(validarReversao(ruim, FROTA_INICIAL), null, JSON.stringify(ruim));
+    }
+  });
+});
+
+// Pedro, 2026-11-28: os horários começam às 06:30. A reversão gravada com um horário das 06:00 às 06:29 (o editor
+// aceitava) continua valendo: o horário volta como 06:30, como a lista guardada (normalizarHorarios)
+describe('A reversão dos horários com um horário antes das 06:30', () => {
+  it('o horário das 06:00 às 06:29 volta como 06:30, também ao lado das 06:30; antes das 06:00 ou repetido, a reversão não vale', () => {
+    const rev = { kind: 'restaurarHorarios', cat: 'C152', lista: [360, 500], pedidos: [], label: '↶ Reverter' };
+    assert.deepEqual(validarReversao(rev, FROTA_INICIAL).lista, [390, 500]);
+    assert.deepEqual(validarReversao({ ...rev, lista: [360, 390, 500] }, FROTA_INICIAL).lista, [390, 500]);
+    for (const lista of [[300, 500], [359, 500], [500, 500], []]) {
+      assert.equal(validarReversao({ ...rev, lista }, FROTA_INICIAL), null, JSON.stringify(lista));
     }
   });
 });
