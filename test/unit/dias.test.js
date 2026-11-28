@@ -8,6 +8,7 @@ import { gerarCenario } from '../helpers/cenarios.js';
 import { aluno, instrutor, missaoExtra } from '../helpers/montar.js';
 import { estadoSintetico } from '../helpers/estado.js';
 import { blank } from '../../js/rules.js';
+import { normalizarLimitacoes } from '../../js/limitacoes.js';
 import { lerGoldens } from '../helpers/goldens.js';
 
 const goldens = lerGoldens();
@@ -42,6 +43,26 @@ describe('Separar e juntar', () => {
     assert.equal(Object.keys(estado.av).length, 26);
     assert.ok(Object.values(estado.av).every(Boolean));
     assert.deepEqual(estado.win, Array(9).fill(true));
+  });
+
+  // L (formato 31): as limitações do aluno (os tipos de recurso e os horários) são do cadastro, normalizadas na ida e na volta
+  // (js/limitacoes.js); sem nenhuma, o campo não existe
+  it('as limitações do aluno vão e voltam com o cadastro, normalizadas; vazias, saem', () => {
+    const limitacoes = { recursos: ['C172', 'C172'], horarios: [{ de: 780, ate: 1080, dias: [3, 1] }, { de: 9, ate: 3 }] };
+    const estado = normalizado({ ...estadoSintetico(), ins: [instrutor(1, 9)], stu: [
+      aluno(1000, {}, { limitacoes }), aluno(1001, {}, { limitacoes: { recursos: [] } }), aluno(1002, {}, { limitacoes: 'C172' })
+    ] });
+    const esperada = { recursos: ['C172'], horarios: [{ de: 780, ate: 1080, dias: [1, 3] }] };
+    assert.deepEqual(normalizarLimitacoes(limitacoes), esperada);
+    assert.deepEqual(estado.stu.map(s => s.limitacoes), [esperada, undefined, undefined], 'a leitura normaliza');
+    const { cadastro, dia } = separar(estado);
+    assert.deepEqual(cadastro.stu.map(s => s.limitacoes), [esperada, undefined, undefined]);
+    assert.equal(Object.hasOwn(cadastro.stu[1], 'limitacoes'), false);
+    assert.equal(Object.hasOwn(dia.pedidos[1000], 'limitacoes'), false, 'o dia não leva as limitações');
+    // O cadastro gravado fora do app (pela API) chega normalizado ao juntar
+    const sujo = { ...cadastro, stu: [{ ...cadastro.stu[0], limitacoes: { recursos: ['C172', 'x'], horarios: [{ de: 780, ate: 1080, dias: [1, 3] }, null] } }] };
+    assert.deepEqual(juntar(sujo, dia).stu[0].limitacoes, esperada);
+    assert.equal(Object.hasOwn(juntar({ ...cadastro, stu: [{ ...cadastro.stu[0], limitacoes: {} }] }, dia).stu[0], 'limitacoes'), false);
   });
 
   // Q8 (F1d, formato 27): a confirmação do 7º voo local fica no pedido do dia (só true), no principal e na missão extra

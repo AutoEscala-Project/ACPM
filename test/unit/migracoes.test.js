@@ -13,8 +13,8 @@ import { habilitacoesDoNivel } from '../../js/habilitacoes.js';
 describe('Migrações do formato dos dados', () => {
   // O único lugar que fixa o número: cada passo que muda o formato muda este número, o PASSOS de js/migracoes.js e o
   // README ("Formato dos dados"); os outros testes usam ESQUEMA
-  it('o formato dos dados gravados é o 30', () => {
-    assert.equal(ESQUEMA, 30);
+  it('o formato dos dados gravados é o 31', () => {
+    assert.equal(ESQUEMA, 31);
   });
 
   it('dia: renomeia os simuladores na disponibilidade e na escala, sem perder nada', () => {
@@ -397,11 +397,28 @@ describe('versão 30 (E)', () => {
       reabertura: { em: '2026-11-10T21:20:00.000Z', por: 'Operador 01' }, outro: { qualquer: 1 }
     };
     for (const de of [28, 29]) {
-      assert.deepEqual(migrarDia(structuredClone({ ...dia, esquema: de })), { ...dia, esquema: 30 }, `de ${de}`);
+      assert.deepEqual(migrarDia(structuredClone({ ...dia, esquema: de })), { ...dia, esquema: ESQUEMA }, `de ${de}`);
       const cadastro = { nid: 1000, stu: [], ins: [], horarios: { C152: [390, 500] }, outro: 1 };
-      assert.deepEqual(migrarCadastro({ ...cadastro, esquema: de }), { ...cadastro, esquema: 30 }, `de ${de}`);
+      assert.deepEqual(migrarCadastro({ ...cadastro, esquema: de }), { ...cadastro, esquema: ESQUEMA }, `de ${de}`);
     }
     assert.equal(precisaMigrar({ esquema: 29 }), true);
-    assert.equal(precisaMigrar({ esquema: 30 }), false);
+    assert.ok(ESQUEMA >= 30);
+  });
+});
+
+// Versão 31 (L, as limitações do aluno): nada é convertido. O número protege as limitações (stu[].limitacoes: os tipos de
+// recurso e os horários), que a aba do formato 30 tiraria do cadastro ao gravar (o separar dela só conhece bl, voaCom e
+// kg); bl, voaCom e kg ficam onde estão
+describe('versão 31 (L)', () => {
+  test('o cadastro e o dia passam como estão, com as limitações e o que o passo não conhece', () => {
+    const cadastro = {
+      nid: 1001, ins: [], outro: 1,
+      stu: [{ id: 1000, nm: 'Aluno 1000', kg: 80, bl: [2], voaCom: [1], limitacoes: { recursos: ['C172'], horarios: [{ de: 780, ate: 1080, dias: [1, 3] }] } }]
+    };
+    assert.deepEqual(migrarCadastro(structuredClone({ ...cadastro, esquema: 30 })), { ...cadastro, esquema: 31 });
+    const dia = { pedidos: { 1000: { fly: true, mis: 'Voo Local', eq: 'C172', jan: 'h800' } }, outro: { qualquer: 1 } };
+    assert.deepEqual(migrarDia(structuredClone({ ...dia, esquema: 30 })), { ...dia, esquema: 31 });
+    assert.equal(precisaMigrar({ esquema: 30 }), true);
+    assert.equal(precisaMigrar({ esquema: 31 }), false);
   });
 });
