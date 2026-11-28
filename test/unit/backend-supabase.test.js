@@ -547,6 +547,18 @@ describe('Backend Supabase: escala por data e histórico', () => {
     assert.equal(await backend.importarHistorico('2026-11-11', []), 0);
   });
 
+  // G2: a leitura do Histórico de uma data traz as 500 entradas mais novas (eram 200: um dia de pedidos, com as entradas
+  // da conciliação, passava delas)
+  it('histórico: a lista da data traz as 500 entradas mais novas', async () => {
+    const cliente = clienteFalso();
+    const backend = criarBackendSupabase(cliente);
+    for (let i = 0; i < 501; i++) await backend.registrar({ data: '2026-11-11', tipo: 'mod', descricao: `Entrada ${i}` });
+    const lista = await backend.listarHistorico('2026-11-11');
+    assert.equal(lista.length, 500);
+    assert.equal(lista[0].descricao, 'Entrada 500');
+    assert.equal(lista.at(-1).descricao, 'Entrada 1');
+  });
+
   it('as leituras esperam as gravações em andamento deste navegador (não voltam a um conteúdo anterior)', async () => {
     const cliente = clienteFalso({ cadastro: { conteudo: { v: 1 }, versao: 1 } }, { atraso: 15, dias: { '2026-11-11': { conteudo: { v: 1 }, versao: 1 } } });
     const backend = criarBackendSupabase(cliente);
