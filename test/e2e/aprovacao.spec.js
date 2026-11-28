@@ -1,7 +1,7 @@
 // O dia de operação: "Aprovar escala" fixa os voos. Depois disso, uma alteração não tira ninguém do lugar:
 // o pedido novo entra em volta, e o voo fixo que ficou impossível aparece em conflito. "Reabrir" volta ao normal.
 // Em Voo, Atrasado, Pousou e Cancelado também fixam o voo.
-import { test, comPrioridade, expect, abrir, abrirComExemplo, irPara, abrirEscala, lerEscala, abrirHistorico, alternarVem, aprovar, botaoAprovar, botaoReabrir, caixaVoa, reabrir, refazer, textosDaEscala } from './fixtures.js';
+import { test, comPrioridade, expect, abrir, abrirComExemplo, irPara, abrirEscala, lerEscala, abrirHistorico, alternarVem, aprovar, botaoAprovar, botaoReabrir, caixaVoa, reabrir, refazer, textosDaEscala, exportar } from './fixtures.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
 import { abrirRestricoes, campoDasRestricoes, fecharRestricoes } from './telas/restricoes.js';
 
@@ -110,5 +110,71 @@ test.describe('O foco depois de uma ação', () => {
     await expect(botaoReabrir(page)).toBeFocused();
     await reabrir(page);
     await expect(botaoAprovar(page)).toBeFocused();
+  });
+});
+
+// O H: as exportações registradas (d31, d32) e a reabertura registrada (d33). O que o dia gravado guarda
+const diaGravado = page => page.evaluate(() => {
+  const chave = Object.keys(localStorage).find(k => k.startsWith('acpm4_dia_'));
+  return chave ? JSON.parse(localStorage.getItem(chave)) : null;
+});
+const situacao = page => page.locator('#exportacoes-situacao');
+
+test.describe('As exportações e a reabertura registradas', () => {
+  test('exportar o CSV o registra (quando, quem e a impressão): "Exportada", também depois de recarregar; a escala mudada a deixa desatualizada', async ({ page }) => {
+    await abrir(page, { estado: dia() });
+    await abrirEscala(page);
+    await expect(situacao(page)).toHaveCount(0);
+    await exportar(page, 'csv');
+    await expect(situacao(page)).toHaveText('Exportada');
+    const gravado = await diaGravado(page);
+    expect(Object.keys(gravado.exportacoes)).toEqual(['csv']);
+    expect(gravado.exportacoes.csv.impressao).toMatch(/^[0-9a-f]{8}$/);
+    await page.reload();
+    await abrirEscala(page);
+    await expect(situacao(page)).toHaveText('Exportada');
+
+    // O instrutor do Aluno 1000 não vem mais: o voo muda de instrutor, e o CSV exportado ficou para trás
+    const instrutor = (await page.locator('#out tbody tr:not(.win)', { hasText: 'Aluno 1000' }).locator('.c-instr').innerText()).trim();
+    await irPara(page, 'ins');
+    await alternarVem(page, instrutor.endsWith('01') ? 1 : 2, false);
+    await abrirEscala(page);
+    await expect(situacao(page)).toHaveText('A escala mudou depois da exportação: CSV');
+    await expect(situacao(page)).toHaveAttribute('data-exportada', 'false');
+    await exportar(page, 'csv');
+    await expect(situacao(page)).toHaveText('Exportada');
+  });
+
+  test('reabrir fica registrado no dia: quando e quem', async ({ page }) => {
+    await abrir(page, { estado: dia() });
+    await abrirEscala(page);
+    await aprovar(page);
+    expect((await diaGravado(page)).reabertura).toBeNull();
+    await reabrir(page);
+    await expect(botaoAprovar(page)).toBeVisible();
+    const { reabertura, aprovacao } = await diaGravado(page);
+    expect(aprovacao).toBeNull();
+    expect(Date.parse(reabertura.em)).not.toBeNaN();
+  });
+
+  comPrioridade('na escala aprovada, o voo que entrou depois fica sem pino; "Fixar o voo novo" o fixa onde está, sem tirar ninguém do lugar', async ({ page }) => {
+    await abrir(page, { estado: dia() });
+    await abrirEscala(page);
+    await aprovar(page);
+    await expect(page.locator('#btn-fixar-novos')).toHaveCount(0);
+    await irPara(page, 'dem');
+    await page.locator('#onlyfly').uncheck();
+    await caixaVoa(page.locator('#dem tr[data-id="1002"]')).check();
+    await abrirEscala(page);
+    const antes = await linhas(page);
+    await expect(page.locator('#out tbody tr:not(.win) .fixo')).toHaveCount(2);
+    await expect(page.locator('#btn-fixar-novos')).toHaveText('Fixar o voo novo');
+    await page.locator('#btn-fixar-novos').click();
+    await expect(page.locator('#out tbody tr:not(.win) .fixo')).toHaveCount(3);
+    await expect(page.locator('#btn-fixar-novos')).toHaveCount(0);
+    await expect(botaoReabrir(page)).toBeFocused();
+    expect(await linhas(page)).toEqual(antes);
+    await abrirHistorico(page);
+    await expect(page.locator('#historico')).toContainText('Voo novo fixado: Aluno 1002');
   });
 });
