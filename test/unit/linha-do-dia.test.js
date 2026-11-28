@@ -1,4 +1,4 @@
-// A linha do dia (js/linha-do-dia.js): os quatro cartões (Agenda, Demanda, Escala, Aprovar), cada um com o valor dele, o
+// A linha do dia (js/linha-do-dia.js): os quatro cartões (Pedidos, Demanda, Escala, Aprovar), cada um com o valor dele, o
 // estado (o pior das tarefas) e as tarefas, o selo de Recursos e os avisos da data. Dados fictícios, sem o motor
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
@@ -29,36 +29,47 @@ describe('A linha do dia', () => {
     assert.deepEqual(linhaDoDia(contexto()).map(c => [c.id, c.tela]), [['pedidos', 'age'], ['processamento', 'dem'], ['escala', 'esc'], ['aprovar', 'apr']]);
   });
 
-  it('Agenda: os pedidos não cancelados da data; os ainda não importados pedem atenção', () => {
-    const ctx = contexto({ pedidos: [pedido(1), pedido(2), pedido(3, { cancelada_em: '2026-11-10T10:00:00Z' })], importadas: [1] });
+  // Pedidos (D2): os registrados (não cancelados), os que aguardam aprovação (pedem atenção de hoje em diante), os aprovados
+  // e, para quem opera, os aprovados que ainda não estão na demanda (até o G)
+  const aprovado = (id, extra = {}) => pedido(id, { aprovada_em: '2026-11-10T14:00:00Z', ...extra });
+  it('Pedidos: os registrados, os que aguardam aprovação, os aprovados e os aprovados fora da demanda', () => {
+    const ctx = contexto({ pedidos: [pedido(1), aprovado(2), aprovado(3), aprovado(4, { cancelada_em: '2026-11-10T10:00:00Z' })], importadas: [2] });
     const c = cartao(ctx, 'pedidos');
-    assert.equal(c.valor, '2');
+    assert.equal(c.valor, '3');
     assert.equal(c.estado, 'atencao');
     assert.deepEqual(c.tarefas.map(t => [t.id, t.rotulo, t.valor, t.estado]), [
-      ['registrados', 'pedidos da data', '2', 'feito'], ['nao-importados', 'ainda não importados', '1', 'atencao']
+      ['registrados', 'pedidos da data', '3', 'feito'], ['aguardando', 'aguardando aprovação', '1', 'atencao'], ['aprovados', 'aprovados', '2 de 3', 'andamento'],
+      ['fora-da-demanda', 'aprovados fora da demanda', '1', 'atencao']
     ]);
     assert.deepEqual(c.tarefas[0].destino, { tela: 'age' });
   });
 
-  it('Agenda: todos importados, feito; sem pedidos, pendente; a leitura que falhou, falhou', () => {
-    assert.equal(cartao(contexto({ pedidos: [pedido(1)], importadas: [1] }), 'pedidos').estado, 'feito');
+  it('Pedidos: todos aprovados e na demanda, feito; sem pedidos, pendente; a leitura que falhou, falhou', () => {
+    const feito = cartao(contexto({ pedidos: [aprovado(1)], importadas: [1] }), 'pedidos');
+    assert.deepEqual([feito.estado, ...feito.tarefas.map(t => t.estado)], ['feito', 'feito', 'feito', 'feito', 'feito']);
     const vazio = cartao(contexto(), 'pedidos');
-    assert.deepEqual(vazio.tarefas.map(t => t.estado), ['pendente', 'nenhum']);
+    assert.deepEqual(vazio.tarefas.map(t => t.estado), ['pendente', 'nenhum', 'nenhum', 'nenhum']);
     assert.equal(vazio.estado, 'pendente');
     const erro = cartao(contexto({ leitura: 'erro' }), 'pedidos');
-    assert.deepEqual(erro.tarefas.map(t => t.estado), ['falhou', 'falhou']);
+    assert.deepEqual(erro.tarefas.map(t => t.estado), ['falhou', 'falhou', 'falhou', 'falhou']);
     assert.equal(erro.estado, 'falhou');
     assert.equal(erro.valor, '—');
   });
 
-  it('o pedido de um aluno inativo não conta como ainda não importado', () => {
-    const ctx = contexto({ pedidos: [pedido(1)], stu: [{ id: 1001, nm: 'Aluno Fictício', inativo: true }] });
-    assert.equal(tarefa(ctx, 'pedidos', 'nao-importados').valor, '0');
+  it('numa data que já passou, o que aguarda e o aprovado fora da demanda não pedem atenção', () => {
+    const ctx = { ...contexto({ pedidos: [pedido(1), aprovado(2)] }), data: '2026-11-09' };
+    assert.deepEqual(cartao(ctx, 'pedidos').tarefas.map(t => [t.id, t.estado]), [['registrados', 'feito'], ['aguardando', 'nenhum'], ['aprovados', 'andamento'], ['fora-da-demanda', 'nenhum']]);
+    assert.deepEqual(avisosDaData(ctx), []);
   });
 
-  it('quem não opera a escala (Gestor, Secretaria) não vê "ainda não importados"', () => {
-    const ctx = contexto({ pedidos: [pedido(1)], opera: false });
-    assert.deepEqual(cartao(ctx, 'pedidos').tarefas.map(t => t.id), ['registrados']);
+  it('o pedido aprovado de um aluno inativo não conta como fora da demanda', () => {
+    const ctx = contexto({ pedidos: [aprovado(1)], stu: [{ id: 1001, nm: 'Aluno Fictício', inativo: true }] });
+    assert.equal(tarefa(ctx, 'pedidos', 'fora-da-demanda').valor, '0');
+  });
+
+  it('quem não opera a escala (Gestor, Secretaria) não vê "aprovados fora da demanda"', () => {
+    const ctx = contexto({ pedidos: [aprovado(1)], opera: false });
+    assert.deepEqual(cartao(ctx, 'pedidos').tarefas.map(t => t.id), ['registrados', 'aguardando', 'aprovados']);
     assert.equal(cartao(ctx, 'pedidos').estado, 'feito');
   });
 
@@ -221,12 +232,14 @@ describe('Os avisos da data', () => {
     assert.equal(avisosDaData(contexto({ win }))[0].titulo, 'Horários fechados nesta data: 12:40–17:30 · todos os recursos');
   });
 
-  it('os pedidos que ainda não estão na demanda: só para quem opera, e só lidos', () => {
-    const pedidos = [pedido(1), pedido(2), pedido(3, { cancelada_em: 'x' })];
-    assert.deepEqual(avisosDaData(contexto({ pedidos })).map(a => [a.id, a.titulo, a.gravidade, a.destino]), [['nao-importados', '2 pedidos da agenda ainda não estão na demanda', 'aviso', { tela: 'age' }]]);
-    assert.equal(avisosDaData(contexto({ pedidos, importadas: [1] }))[0].titulo, '1 pedido da agenda ainda não está na demanda');
-    assert.deepEqual(avisosDaData(contexto({ pedidos, importadas: [1, 2] })), []);
-    assert.deepEqual(avisosDaData(contexto({ pedidos, opera: false })), []);
+  it('os pedidos que aguardam aprovação (para todos) e os aprovados fora da demanda (só para quem opera), só lidos', () => {
+    const pedidos = [pedido(1), aprovado(2), aprovado(3), pedido(4, { cancelada_em: 'x' })];
+    assert.deepEqual(avisosDaData(contexto({ pedidos })).map(a => [a.id, a.titulo, a.gravidade, a.destino]), [
+      ['fora-da-demanda', '2 pedidos aprovados fora da demanda', 'aviso', { tela: 'age' }], ['pedidos-aguardando', '1 pedido aguardando aprovação', 'aviso', { tela: 'age' }]
+    ]);
+    assert.deepEqual(avisosDaData(contexto({ pedidos, importadas: [2] })).map(a => a.titulo), ['1 pedido aprovado fora da demanda', '1 pedido aguardando aprovação']);
+    assert.deepEqual(avisosDaData(contexto({ pedidos: [aprovado(2)], importadas: [2] })), []);
+    assert.deepEqual(avisosDaData(contexto({ pedidos, opera: false })).map(a => a.id), ['pedidos-aguardando']);
     assert.deepEqual(avisosDaData(contexto({ pedidos, leitura: 'lendo' })), []);
   });
 

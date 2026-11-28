@@ -4,7 +4,9 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { MIS, ALL_EQ_TYPES } from '../../js/config.js';
 import { HORARIOS_INICIAIS } from '../../js/horarios.js';
-import { prazoDaAgendaPermite, primeiraDataAberta, datasParaRegistrar, disponibilidadeDaSolicitacao, pedidoDaSolicitacao, recursosDaMissao, recursoValido, RECURSO_DO_PEDIDO } from '../../js/agenda.js';
+import { prazoDaAgendaPermite, primeiraDataAberta, datasParaRegistrar, disponibilidadeDaSolicitacao, pedidoDaSolicitacao, recursosDaMissao, recursoValido, RECURSO_DO_PEDIDO,
+  situacaoDaSolicitacao, solicitacaoAprovada, resumoDasSolicitacoes, situacaoNaDemanda, solicitacoesParaImportar, prepararEntradaNaDemanda, contagemPorDia, motivoSemEntrada,
+  opcoesDaSegundaPreferencia } from '../../js/agenda.js';
 
 const em = iso => new Date(iso);
 
@@ -243,5 +245,82 @@ describe('Agenda: as missões do curso do aluno (missoesDoAluno)', async () => {
     } finally {
       ligarFuncionalidades(undefined);
     }
+  });
+});
+
+// A página dos pedidos (D2): o estado de cada pedido, o resumo da data, onde o pedido está na demanda (até o G), o que
+// "Importar" traz, a entrada do aprovado na demanda, a contagem do trilho, as cinco condições da entrada na hora e a 2ª
+// preferência do formulário
+describe('Os pedidos e a aprovação (D2)', () => {
+  const linha = (id, extra = {}) => ({ id, data: '2026-11-11', aluno: 1000 + id, aluno_nome: `Aluno ${1000 + id}`, missao: 'Voo Local', janela: 'horario', horario: '08:20', cancelada_em: null, aprovada_em: null, excecao: false, ...extra });
+  const aprovada = (id, extra = {}) => linha(id, { aprovada_em: '2026-11-10T14:00:00Z', aprovada_por: 'Operador', ...extra });
+
+  it('três estados, das colunas: cancelado, aprovado, aguardando aprovação', () => {
+    assert.equal(situacaoDaSolicitacao(linha(1)), 'aguardando');
+    assert.equal(situacaoDaSolicitacao(aprovada(1)), 'aprovada');
+    assert.equal(situacaoDaSolicitacao(linha(1, { cancelada_em: 'x' })), 'cancelada');
+    assert.equal(situacaoDaSolicitacao(aprovada(1, { cancelada_em: 'x' })), 'cancelada', 'o aprovado cancelado é cancelado');
+    assert.equal(situacaoDaSolicitacao(linha(1, { aprovacao_retirada_em: 'x' })), 'aguardando', 'a aprovação retirada volta a aguardar');
+    assert.deepEqual([linha(1), aprovada(2), aprovada(3, { cancelada_em: 'x' })].map(solicitacaoAprovada), [false, true, false]);
+  });
+
+  it('o resumo da data: os registrados (sem os cancelados), os que aguardam, os aprovados, os cancelados e os fora do prazo', () => {
+    const lista = [linha(1), linha(2, { excecao: true, aprovada_em: 'x' }), aprovada(3), linha(4, { cancelada_em: 'x' }), aprovada(5, { cancelada_em: 'x', excecao: true })];
+    assert.deepEqual(resumoDasSolicitacoes(lista), { registradas: 3, aguardando: 1, aprovadas: 2, canceladas: 2, foraDoPrazo: 1 });
+    assert.deepEqual(resumoDasSolicitacoes([]), { registradas: 0, aguardando: 0, aprovadas: 0, canceladas: 0, foraDoPrazo: 0 });
+  });
+
+  // O estado da data: os alunos com o registro do dia (o pedido principal e as missões extras) e as importadas
+  const estado = ({ importadas = [], stu = [] } = {}) => ({ importadas, stu });
+  const comRegistro = (id, extra = {}) => ({ id, nm: `Aluno ${id}`, fly: true, mis: 'Voo Local', extra: [], ...extra });
+
+  it('na demanda: "fora" (nunca importado), "voa" (um registro que voa o leva) e "tirada" (importado, sem registro que voe)', () => {
+    assert.equal(situacaoNaDemanda(aprovada(1), estado()), 'fora');
+    assert.equal(situacaoNaDemanda(aprovada(1), estado({ importadas: [1], stu: [comRegistro(1001, { solicitacao: 1 })] })), 'voa');
+    assert.equal(situacaoNaDemanda(aprovada(1), estado({ importadas: [1], stu: [comRegistro(1001, { extra: [{ mid: 1, fly: true, solicitacao: 1 }] })] })), 'voa', 'numa missão extra');
+    assert.equal(situacaoNaDemanda(aprovada(1), estado({ importadas: [1], stu: [comRegistro(1001, { solicitacao: 1, fly: false })] })), 'tirada', 'o Voa desligado');
+    assert.equal(situacaoNaDemanda(aprovada(1), estado({ importadas: [1], stu: [comRegistro(1001)] })), 'tirada', 'depois de Limpar demanda (o id fica nas importadas)');
+  });
+
+  it('"Importar" traz só os aprovados que nunca entraram na demanda', () => {
+    const lista = [linha(1), aprovada(2), aprovada(3), aprovada(4, { cancelada_em: 'x' }), aprovada(5)];
+    assert.deepEqual(solicitacoesParaImportar(lista, estado({ importadas: [3] })).map(s => s.id), [2, 5]);
+    assert.deepEqual(solicitacoesParaImportar([], estado()), []);
+  });
+
+  it('a entrada do aprovado na demanda: o registro desligado volta a voar; o que saiu da demanda é esquecido e entra de novo; o novo entra', () => {
+    const s = estado({ importadas: [1, 2], stu: [comRegistro(1001, { solicitacao: 1, fly: false, mid: 0, escolhido: 7 }), comRegistro(1002), comRegistro(1003, { fly: false })] });
+    const { religados, paraImportar } = prepararEntradaNaDemanda(s, [aprovada(1), aprovada(2), aprovada(3), linha(9)]);
+    assert.deepEqual(religados.map(x => x.id), [1]);
+    assert.deepEqual({ fly: s.stu[0].fly, mid: s.stu[0].mid, escolhido: s.stu[0].escolhido, solicitacao: s.stu[0].solicitacao }, { fly: true, mid: 0, escolhido: 7, solicitacao: 1 });
+    assert.deepEqual(paraImportar.map(x => x.id), [2, 3], 'o que só ficou nas importadas e o novo; o que aguarda, não');
+    assert.deepEqual(s.importadas, [1], 'o id esquecido entra de novo uma vez só');
+    assert.equal(s.stu[2].fly, false, 'o registro sem pedido da agenda não muda');
+  });
+
+  it('a contagem do trilho: os que aguardam e os aprovados de cada dia, sem domingo', () => {
+    assert.deepEqual(contagemPorDia({ '2026-11-11': { aguardando: 2, aprovadas: 3 }, '2026-11-15': { aguardando: 1, aprovadas: 0 }, '2026-11-12': { aguardando: 0, aprovadas: 1 } }),
+      { '2026-11-11': 5, '2026-11-12': 1 });
+    assert.deepEqual(contagemPorDia({}), {});
+    assert.deepEqual(contagemPorDia(null), {});
+  });
+
+  it('a entrada na hora: só a data aberta, lida e já gravada, com os resultados e os cursos lidos, sem mudança em outro computador', () => {
+    const tudo = { data: '2026-11-11', aberta: '2026-11-11', lida: true, gravada: true, indisponiveis: [], mudou: false };
+    assert.equal(motivoSemEntrada(tudo), null);
+    assert.equal(motivoSemEntrada({ ...tudo, data: '2026-11-12' }), 'outra-data');
+    assert.equal(motivoSemEntrada({ ...tudo, lida: false }), 'nao-lida');
+    assert.equal(motivoSemEntrada({ ...tudo, gravada: false }), 'nao-gravada');
+    for (const falta of ['resultados', 'cursos', 'cursos-pendentes']) assert.equal(motivoSemEntrada({ ...tudo, indisponiveis: [falta] }), 'dados', falta);
+    assert.equal(motivoSemEntrada({ ...tudo, indisponiveis: ['horas'] }), null, 'sem as horas, entra (só os limites da lei ficam sem conferir)');
+    assert.equal(motivoSemEntrada({ ...tudo, mudou: true }), 'mudou');
+  });
+
+  it('a 2ª preferência: os outros horários do recurso; o Noturno e o Voo Solo, nenhum', () => {
+    assert.deepEqual(opcoesDaSegundaPreferencia(['06:30', '08:20', '10:10'], '08:20', 'Voo Local'), ['06:30', '10:10']);
+    assert.deepEqual(opcoesDaSegundaPreferencia(['06:30', '08:20', '10:10'], '', 'Voo Local'), ['06:30', '08:20', '10:10']);
+    assert.deepEqual(opcoesDaSegundaPreferencia(['17:30'], '17:30', 'Noturno'), []);
+    assert.deepEqual(opcoesDaSegundaPreferencia(['06:30', '08:20'], '06:30', 'Voo Solo'), []);
+    assert.deepEqual(opcoesDaSegundaPreferencia([], '', 'Voo Local'), []);
   });
 });

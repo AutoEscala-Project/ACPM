@@ -187,6 +187,13 @@ describe('Backend local: agenda de solicitações', () => {
     assert.deepEqual(await backendLocal.solicitacoesPorDia('2026-11-12', '2026-11-30'), {});
   });
 
+  // Sem servidor, ninguém mais grava as datas deste navegador: a escala nunca mudou em outro computador (D2)
+  it('a escala da data nunca mudou em outro computador', async () => {
+    await backendLocal.gravar('dia:2026-11-11', { esquema: 1 });
+    assert.equal(await backendLocal.diaMudou('2026-11-11'), false);
+    assert.equal(await backendLocal.diaMudou('2026-11-12'), false);
+  });
+
   // A conversão dos pedidos de antes, uma vez (a marca acpm4_agenda_aprovacoes): a regra (a) do banco, sobre os dias deste
   // navegador, e a (b) para todos os pedidos (não há contas: quem usa tem os direitos de operador)
   it('os pedidos de antes da aprovação: convertidos uma vez, pelas regras do banco', async () => {

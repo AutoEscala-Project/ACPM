@@ -1,8 +1,8 @@
 // Agenda de Solicitações no modo compartilhado: a Secretaria registra pedidos (a escala ela só consulta), o
 // Operador usa a exceção da coordenação e o Gestor só consulta. O servidor falso aplica o mesmo prazo do banco.
 import { test, expect, entrar, preencherLogin, irPara, abrirMenuDaConta, AMANHA, URL_APP, botaoDaAba, campoDaAgenda, dataAberta, diaSeguinte, escolherNoCalendario, registrarPedido, contagemDoDia, prepararContexto, vigiarErros, importarDaAgenda, rotuloDaData, rotulosDasAbas,
-  missaoDoCursoNaAgenda } from './fixtures.js';
-import { instalarSupabaseFalso, documentosAtuais, CONTAS } from './supabase-falso.js';
+  missaoDoCursoNaAgenda, enviarDaAgenda, estadoDoFormulario, linhasDosPedidos, linhaDaLista, grupoDosPedidos, aprovarNaLinha, botaoDosPedidos } from './fixtures.js';
+import { instalarSupabaseFalso, criarSupabaseFalso, documentosAtuais, CONTAS } from './supabase-falso.js';
 import { estadoSintetico } from '../helpers/estado.js';
 import { aluno } from '../helpers/montar.js';
 import { cursosIniciais, novoCurso } from '../../js/programa.js';
@@ -420,5 +420,136 @@ test.describe('Agenda de Solicitações (modo compartilhado)', () => {
     const dia = servidor.dias.get('2026-11-12');
     expect(dia && dia.conteudo.pedidos[1000] && dia.conteudo.pedidos[1000].fly).toBeFalsy();
     expect(servidor.dias.get(AMANHA).conteudo.pedidos[1000].fly).toBe(false);
+  });
+});
+
+// A página dos pedidos (D2) no modo compartilhado: "Registrar e aprovar" e "Registrar na lista de espera" só pelo teclado
+// (o aviso, a linha de estado do formulário e a linha do pedido à vista), a Secretaria que registra sem aprovar e o
+// Operador que aprova o pedido dela
+test.describe('A página dos pedidos (modo compartilhado)', () => {
+  // Um pedido já no servidor, com as colunas da aprovação (aprovado: pelo Operador de Teste)
+  const noServidor = (id, extra = {}, { aprovado = true } = {}) => ({
+    ...pedidoDe(id, AMANHA, { recurso: 'C152', horario2: null, missao_do_curso: null, usuario: null, limite_confirmado_por: null, limite_confirmado_em: null }),
+    aprovada_em: aprovado ? '2026-11-10T14:30:00.000Z' : null, aprovada_por: aprovado ? 'Operador de Teste' : null, aprovada_usuario: null,
+    aprovacao_retirada_em: null, aprovacao_retirada_por: null, aprovacao_retirada_usuario: null, ...extra
+  });
+  // Escolhe a opção pelo texto digitado no campo (a busca do próprio campo), e vai para o seguinte com Tab
+  const digitarETab = async (page, texto) => { await page.keyboard.type(texto); await page.keyboard.press('Tab'); };
+  // O formulário inteiro pelo teclado, do Aluno até o botão (a 2ª preferência e a duração ficam como estão)
+  async function preencherPeloTeclado(page, { aluno, horario, por = 'Maria' }) {
+    await campoDaAgenda(page, 'aluno').focus();
+    await digitarETab(page, aluno);
+    await digitarETab(page, 'Voo Local');
+    await digitarETab(page, 'C152');
+    await digitarETab(page, horario);
+    await page.keyboard.press('Tab'); // a 2ª preferência
+    await page.keyboard.press('Tab'); // a duração
+    await digitarETab(page, por);
+    await page.keyboard.press('Tab'); // a observação
+  }
+
+  test('"Registrar e aprovar" só pelo teclado: o aviso, a linha de estado e a linha à vista; dois alunos com o mesmo nome', async ({ page, context }) => {
+    const docs = documentosAtuais({ ...estadoSintetico(), stu: [aluno(1000, { fly: false }, { nm: 'Maria Silva' }), aluno(1001, { fly: false }, { nm: 'Maria Silva' }),
+      ...Array.from({ length: 24 }, (_, i) => aluno(1002 + i, { fly: false }))] }, AMANHA);
+    const servidor = await instalarSupabaseFalso(context, docs);
+    // A outra Maria Silva já tem pedido, e a lista é comprida: a linha nova fica embaixo
+    servidor.solicitacoes.push(noServidor(1, { aluno: 1001, aluno_nome: 'Maria Silva', horario: '06:30' }),
+      ...Array.from({ length: 24 }, (_, i) => noServidor(2 + i, { aluno: 1002 + i, aluno_nome: `Aluno ${1002 + i}`, horario: '06:30' })));
+    await entrar(page, CONTAS.operador);
+    await irPara(page, 'age');
+    await expect(linhasDosPedidos(page)).toHaveCount(25);
+    await preencherPeloTeclado(page, { aluno: 'Maria Silva', horario: '16:20' });
+    await expect(enviarDaAgenda(page)).toBeFocused();
+    await expect(enviarDaAgenda(page)).toHaveText('Registrar e aprovar');
+    await page.keyboard.press('Enter');
+    await expect(page.locator('#toast-box')).toContainText('Pedido registrado e aprovado: já está na demanda.');
+    await expect(estadoDoFormulario(page)).toHaveText('Último pedido: Maria Silva · Voo Local · C152 às 16:20 · aprovado, na demanda.');
+    const novo = servidor.solicitacoes.at(-1);
+    expect([novo.aluno, novo.horario, novo.aprovada_por]).toEqual([1000, '16:20', 'Operador de Teste']);
+    await expect(linhaDaLista(page, novo.id)).toHaveAttribute('data-recente', '');
+    await expect(linhaDaLista(page, novo.id)).toBeInViewport();
+    await expect(page.locator('#age > li[data-recente]')).toHaveCount(1);
+    await expect(linhaDaLista(page, novo.id)).toContainText('16:20');
+    // Entrou na demanda da data (gravada), com o aluno certo
+    await expect.poll(() => servidor.dias.get(AMANHA).conteudo.importadas).toEqual([novo.id]);
+    expect(servidor.dias.get(AMANHA).conteudo.pedidos[1000].solicitacao).toBe(novo.id);
+    // O formulário fica para o próximo, com o foco no Aluno
+    await expect(campoDaAgenda(page, 'aluno')).toHaveValue('');
+  });
+
+  test('"Registrar na lista de espera" pelo teclado, com o aviso dele; a recusa do servidor (o 6º registrado em outro computador) arma os dois botões; "Registrar mesmo assim" ainda registra a confirmação', async ({ browser }) => {
+    const context = await browser.newContext();
+    await prepararContexto(context);
+    const page = await context.newPage();
+    const erros = vigiarErros(page, { statusEsperados: [422] });
+    const docs = documentosAtuais({ ...estadoSintetico(), stu: [aluno(1000, { fly: false }), aluno(1001, { fly: false }), ...Array.from({ length: 6 }, (_, i) => aluno(1010 + i, { fly: false }))] }, AMANHA);
+    const servidor = await instalarSupabaseFalso(context, docs);
+    servidor.solicitacoes.push(...Array.from({ length: 5 }, (_, i) => noServidor(1 + i, { aluno: 1010 + i, aluno_nome: `Aluno ${1010 + i}` })));
+    await entrar(page, CONTAS.operador);
+    await irPara(page, 'age');
+    await expect(linhasDosPedidos(page)).toHaveCount(5);
+    // O 6º, em outro computador: este não leu de novo, e quem recusa é o servidor
+    servidor.solicitacoes.push(noServidor(6, { aluno: 1015, aluno_nome: 'Aluno 1015' }));
+    await preencherPeloTeclado(page, { aluno: 'Aluno 1000', horario: '08:20' });
+    await page.keyboard.press('Enter');
+    await expect(campoDaAgenda(page, 'erro')).toHaveText('Horário cheio: já há 6 voos locais (Voo Local, Voo Solo e TGL) às 08:20, o máximo no mesmo horário (determinação da diretoria). Próximo horário com vaga: 10:10. Para registrar este como o 7º, clique em “Registrar mesmo assim”; para ele esperar uma vaga às 08:20, em “Registrar na lista de espera”.');
+    await expect(enviarDaAgenda(page)).toHaveText('Registrar mesmo assim');
+    await expect(campoDaAgenda(page, 'esperar')).toBeVisible();
+    expect(servidor.solicitacoes).toHaveLength(6);
+    // Pelo teclado: de "Registrar mesmo assim", Tab passa por "Registrar sem aprovar" e chega à lista de espera
+    await expect(enviarDaAgenda(page)).toBeFocused();
+    await page.keyboard.press('Tab');
+    await page.keyboard.press('Tab');
+    await expect(campoDaAgenda(page, 'esperar')).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(page.locator('#toast-box')).toContainText('Pedido registrado na lista de espera das 08:20: já há 6 voos locais.');
+    await expect(estadoDoFormulario(page)).toContainText('Aluno 1000 · Voo Local · C152 às 08:20 · na lista de espera');
+    const espera = servidor.solicitacoes.at(-1);
+    expect([espera.aluno, espera.limite_confirmado_por, Boolean(espera.aprovada_em)]).toEqual([1000, null, true]);
+    await expect(campoDaAgenda(page, 'esperar')).toBeHidden();
+    // O seguinte confirma o 8º: a confirmação fica registrada
+    await preencherPeloTeclado(page, { aluno: 'Aluno 1001', horario: '08:20' });
+    await page.keyboard.press('Enter');
+    await expect(campoDaAgenda(page, 'erro')).toContainText('já há 7 voos locais');
+    await expect(enviarDaAgenda(page)).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(page.locator('#toast-box')).toContainText('Pedido registrado e aprovado: já está na demanda.');
+    const confirmado = servidor.solicitacoes.at(-1);
+    expect([confirmado.aluno, confirmado.limite_confirmado_por]).toEqual([1001, 'Operador de Teste']);
+    expect(erros).toEqual([]);
+    await context.close();
+  });
+
+  test('a Secretaria registra sem aprovar, sem "Aprovar" na lista; o Operador aprova o pedido dela na linha, e ele entra na demanda', async ({ browser }) => {
+    const servidor = criarSupabaseFalso(comAlunos());
+    const abrirComo = async conta => {
+      const context = await browser.newContext();
+      await prepararContexto(context);
+      await servidor.instalar(context);
+      const page = await context.newPage();
+      await entrar(page, conta);
+      await irPara(page, 'age');
+      return { context, page };
+    };
+    const secretaria = await abrirComo(CONTAS.secretaria);
+    await expect(enviarDaAgenda(secretaria.page)).toHaveText('Registrar pedido');
+    await expect(campoDaAgenda(secretaria.page, 'registrar')).toBeHidden();
+    await registrarPedido(secretaria.page, { horario: '08:20' });
+    await expect(secretaria.page.locator('#toast-box')).toContainText('Pedido registrado: aguardando aprovação.');
+    const { id } = servidor.solicitacoes.at(-1);
+    await expect(grupoDosPedidos(secretaria.page, 'aguardando')).toContainText('Aguardando aprovação');
+    await expect(linhaDaLista(secretaria.page, id)).toBeVisible();
+    await expect(aprovarNaLinha(secretaria.page, id)).toBeHidden();
+    await expect(botaoDosPedidos(secretaria.page, 'aprovar-todos')).toBeHidden();
+    expect(servidor.gravacoes).toEqual([]);
+    await secretaria.context.close();
+
+    const operador = await abrirComo(CONTAS.operador);
+    await aprovarNaLinha(operador.page, id).click();
+    await expect(operador.page.locator('#toast-box')).toContainText('Pedido aprovado: já está na demanda.');
+    expect([servidor.solicitacoes.at(-1).aprovada_por]).toEqual(['Operador de Teste']);
+    await expect.poll(() => servidor.dias.get(AMANHA).conteudo.importadas).toEqual([id]);
+    await expect(linhaDaLista(operador.page, id)).toContainText('Aprovado por Operador de Teste às 12:00 · Na demanda');
+    await operador.context.close();
   });
 });

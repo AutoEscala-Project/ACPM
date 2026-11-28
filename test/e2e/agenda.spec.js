@@ -1,7 +1,8 @@
 // A Agenda de Solicitações (modo local): a lista da data aberta, a "Data do pedido" e o prazo das 13:00, o registro com
 // "Registrado por", a exceção da coordenação e o cancelamento. O relógio dos testes está em 10/11/2026, 12:00 em São Paulo.
 import { test, comProgresso, expect, abrir, irPara, abrirEscala, lerEscala, caixaVoa, campoDaAgenda, contagemDoDia, dataAberta, diaAnterior, diaSeguinte, importarDaAgenda, mudarData, registrarPedido,
-  escolherMissaoDoCurso, missaoDoCursoNaAgenda, appPronto, exportar, AMANHA } from './fixtures.js';
+  escolherMissaoDoCurso, missaoDoCursoNaAgenda, appPronto, exportar, AMANHA, linhaDoPedido, entradasDoHistorico, linhasDosPedidos, linhaDaLista, grupoDosPedidos, buscaDosPedidos, aprovarNaLinha,
+  escolherPedido, campoDoDetalhe, acaoDoPedido, botaoDosPedidos, avisoDosPedidos, estadoDoFormulario, botaoDoFormulario } from './fixtures.js';
 import { readFileSync } from 'node:fs';
 import { documentosAtuais } from './supabase-falso.js';
 import { aluno, cenario } from '../helpers/montar.js';
@@ -969,5 +970,224 @@ comProgresso.describe('A missão do curso do pedido, com o progresso ligado', ()
     await page.locator('#agenda-importar').click();
     await expect(page.locator('#toast-box')).toContainText('1 pedido(s) da agenda na demanda.');
     await expect.poll(() => page.evaluate(d => JSON.parse(localStorage.getItem(`acpm4_dia_${d}`)).pedidos[1000]?.etapa, AMANHA)).toBe('NAV-150NM');
+  });
+});
+
+// A página dos pedidos (D2): a lista da data aberta por estado (o componente de lista e detalhe), "Aprovar" na linha do que
+// aguarda, "Aprovar todos", o detalhe só de leitura com "Retirar aprovação", "Cancelar pedido" e "Registrar de novo…", o
+// formulário com a 2ª preferência e os dois botões do 7º voo local, e a entrada do aprovado na demanda: na hora, só na data
+// aberta já gravada; senão, "Importar"
+test.describe('A página dos pedidos', () => {
+  // Os pedidos guardados com as colunas da aprovação (a conversão de antes da aprovação não mexe neles)
+  const comAprovacao = (id, extra = {}) => pedidoGuardado(id, { aprovada_em: null, aprovada_por: null, aprovacao_retirada_em: null, aprovacao_retirada_por: null, horario2: null, ...extra });
+  const aprovadoGuardado = (id, extra = {}) => comAprovacao(id, { aprovada_em: '2026-11-10T14:30:00.000Z', aprovada_por: 'Operador', ...extra });
+  const daMaria = { aluno: 1000, aluno_nome: 'Maria' }, doAluno1001 = { aluno: 1001, aluno_nome: 'Aluno 1001' }, daAna = { aluno: 1002, aluno_nome: 'Ana' };
+  const diaGuardadoDe = (page, data = AMANHA) => page.evaluate(d => JSON.parse(localStorage.getItem(`acpm4_dia_${d}`)), data);
+
+  test('a lista por estado: os que aguardam, com "Aprovar"; os aprovados; os cancelados recolhidos e esmaecidos; o cartão', async ({ page }) => {
+    await abrirComOsCursos(page, { agenda: [
+      comAprovacao(1, daMaria), aprovadoGuardado(2, { ...doAluno1001, horario: '10:10' }),
+      comAprovacao(3, { ...daAna, cancelada_em: '2026-11-10T14:40:00.000Z', cancelada_por: 'Ana' })
+    ] });
+    await expect(page.locator('#s-age h2')).toHaveText('Pedidos');
+    await expect(grupoDosPedidos(page, 'aguardando')).toContainText('Aguardando aprovação');
+    await expect(grupoDosPedidos(page, 'aprovados')).toContainText('Aprovados');
+    await expect(grupoDosPedidos(page, 'cancelados')).toHaveAttribute('aria-expanded', 'false');
+    await expect(linhasDosPedidos(page)).toHaveCount(2);
+    await expect(linhaDaLista(page, 1)).toContainText('Maria');
+    await expect(linhaDaLista(page, 1)).toContainText('Voo Local · C152 · 1 h');
+    await expect(linhaDaLista(page, 1)).toContainText('08:20');
+    await expect(linhaDaLista(page, 1)).toContainText('Registrado por Maria às 11:00');
+    await expect(aprovarNaLinha(page, 1)).toHaveAccessibleName('Aprovar o pedido de Maria (Voo Local · C152 às 08:20)');
+    await expect(aprovarNaLinha(page, 2)).toHaveCount(0);
+    await expect(linhaDaLista(page, 2)).toContainText('Aprovado por Operador às 11:30 · Fora da demanda');
+    await grupoDosPedidos(page, 'cancelados').click();
+    await expect(linhaDaLista(page, 3)).toHaveClass(/\bapagado\b/);
+    await expect(linhaDaLista(page, 3)).toContainText('Cancelado por Ana em 10/11 11:40');
+    await expect(botaoDosPedidos(page, 'aprovar-todos')).toHaveText('Aprovar todos (1)');
+    // O cartão Pedidos: os registrados, os que aguardam (pedem atenção), os aprovados e os aprovados fora da demanda
+    await expect(page.locator('#linha a.tarefa[data-tarefa="aguardando"]')).toHaveAttribute('data-estado', 'atencao');
+    await expect(page.locator('#linha a.tarefa[data-tarefa="aprovados"] .tarefa-valor')).toHaveText('1 de 2');
+    await expect(page.locator('#linha a.tarefa[data-tarefa="fora-da-demanda"] .tarefa-valor')).toHaveText('1');
+    await expect(avisoDosPedidos(page)).toContainText('1 pedido aprovado fora da demanda');
+  });
+
+  test('"Aprovar" na linha: na data aberta já gravada, o pedido entra na demanda na hora, e o Histórico diz', async ({ page }) => {
+    await abrirComOsCursos(page, { agenda: [comAprovacao(1, doAluno1001)] });
+    await aprovarNaLinha(page, 1).click();
+    await expect(page.locator('#toast-box')).toContainText('Pedido aprovado: já está na demanda.');
+    await expect(linhaDaLista(page, 1)).toContainText('Aprovado por Operador às 12:00 · Na demanda');
+    await expect(grupoDosPedidos(page, 'aguardando')).toHaveCount(0);
+    await expect.poll(async () => (await diaGuardadoDe(page)).importadas).toEqual([1]);
+    await expect(entradasDoHistorico(page, 'Pedidos: Aluno 1001 incluído (Voo Local · às 08:20 · 1 h)')).toHaveCount(1);
+    await irPara(page, 'dem');
+    await expect(caixaVoa(linhaDoPedido(page, 1001))).toBeChecked();
+  });
+
+  test('"Aprovar todos" aprova só os que a busca mostra', async ({ page }) => {
+    await abrirComOsCursos(page, { agenda: [comAprovacao(1, daMaria), comAprovacao(2, { ...daAna, horario: '10:10' }), comAprovacao(3, { ...doAluno1001, horario: '12:40' })] });
+    await expect(botaoDosPedidos(page, 'aprovar-todos')).toHaveText('Aprovar todos (3)');
+    await buscaDosPedidos(page).fill('ana');
+    await expect(botaoDosPedidos(page, 'aprovar-todos')).toHaveText('Aprovar os filtrados (1)');
+    await botaoDosPedidos(page, 'aprovar-todos').click();
+    await expect(page.locator('#toast-box')).toContainText('1 pedido aprovado: já está na demanda.');
+    await buscaDosPedidos(page).fill('');
+    await expect(botaoDosPedidos(page, 'aprovar-todos')).toHaveText('Aprovar todos (2)');
+    expect((await agendaGuardada(page)).filter(s => s.aprovada_em).map(s => s.id)).toEqual([2]);
+  });
+
+  test('o detalhe, só de leitura: a missão do curso e o recurso; "Retirar aprovação" pede o segundo clique; "Registrar de novo…" preenche o formulário; "Cancelar pedido"', async ({ page }) => {
+    await abrirComOsCursos(page);
+    await registrarPedido(page, { aluno: 'Maria', codigo: 'NAV-150NM', horario: '08:20', horario2: '10:10', obs: 'Leva o fone' });
+    await expect(page.locator('#toast-box')).toContainText('Pedido registrado e aprovado: já está na demanda.');
+    const { id } = (await agendaGuardada(page)).at(-1);
+    await escolherPedido(page, id);
+    await expect(page.locator('#form-agenda')).toBeHidden();
+    await expect(page.locator('#det-age-titulo')).toHaveText('Maria');
+    await expect(campoDoDetalhe(page, 'Missão')).toHaveText('Navegação');
+    await expect(campoDoDetalhe(page, 'Missão do curso')).toHaveText('NAV-150NM');
+    await expect(campoDoDetalhe(page, 'Recurso')).toHaveText('C152');
+    await expect(campoDoDetalhe(page, '1ª preferência')).toHaveText('08:20');
+    await expect(campoDoDetalhe(page, '2ª preferência')).toHaveText('10:10');
+    await expect(campoDoDetalhe(page, 'Duração')).toHaveText('3 h');
+    await expect(campoDoDetalhe(page, 'Observação')).toHaveText('Leva o fone');
+    await expect(campoDoDetalhe(page, 'Situação')).toHaveText('Aprovado por Maria em 10/11 12:00');
+    await expect(campoDoDetalhe(page, 'Demanda')).toHaveText('Na demanda');
+    // Nada se edita no detalhe
+    await expect(page.locator('#det-age .det input, #det-age .det select')).toHaveCount(0);
+
+    await acaoDoPedido(page, 'retirar').click();
+    await expect(acaoDoPedido(page, 'retirar')).toHaveText('Confirmar retirada');
+    await acaoDoPedido(page, 'retirar').click();
+    await expect(page.locator('#toast-box')).toContainText('Aprovação retirada: o pedido volta a aguardar. O voo continua na demanda: tire-o lá (Voa), se for o caso.');
+    await expect(campoDoDetalhe(page, 'Situação')).toHaveText('Aguardando aprovação');
+    await expect(campoDoDetalhe(page, 'Aprovação retirada')).toHaveText('por Maria em 10/11 12:00');
+    await expect(campoDoDetalhe(page, 'Demanda')).toHaveText('Ainda na demanda');
+
+    await acaoDoPedido(page, 'repetir').click();
+    await expect(page.locator('#form-agenda')).toBeVisible();
+    await expect(campoDaAgenda(page, 'aluno')).toBeFocused();
+    await expect(campoDaAgenda(page, 'aluno')).toHaveValue('1000');
+    await expect(campoDaAgenda(page, 'missao')).toHaveValue(await missaoDoCursoNaAgenda(page, 'NAV-150NM').getAttribute('value'));
+    await expect(campoDaAgenda(page, 'recurso')).toHaveValue('C152');
+    await expect(campoDaAgenda(page, 'horario')).toHaveValue('08:20');
+    await expect(campoDaAgenda(page, 'horario2')).toHaveValue('10:10');
+    await expect(campoDaAgenda(page, 'horas')).toHaveValue('3');
+    await expect(campoDaAgenda(page, 'obs')).toHaveValue('Leva o fone');
+
+    await escolherPedido(page, id);
+    await acaoDoPedido(page, 'cancelar').click();
+    await expect(acaoDoPedido(page, 'cancelar')).toHaveText('Confirmar cancelamento');
+    await acaoDoPedido(page, 'cancelar').click();
+    await expect(page.locator('#toast-box')).toContainText('Pedido cancelado.');
+    await expect(campoDoDetalhe(page, 'Situação')).toHaveText('Cancelado por Maria em 10/11 12:00');
+    await expect(acaoDoPedido(page, 'cancelar')).toHaveCount(0);
+    await expect(acaoDoPedido(page, 'repetir')).toBeVisible();
+  });
+
+  test('registrar e aprovar numa data sem escala gravada não grava a data; "Importar" põe o pedido na demanda', async ({ page }) => {
+    await abrir(page, { estado: comAlunos(), url: './?data=2026-11-12' });
+    await irPara(page, 'age');
+    await registrarPedido(page);
+    await expect(page.locator('#toast-box')).toContainText('Pedido registrado e aprovado. A escala desta data ainda não foi gravada: “Importar” o põe na demanda.');
+    expect(await page.evaluate(() => localStorage.getItem('acpm4_dia_2026-11-12'))).toBeNull();
+    await expect(avisoDosPedidos(page)).toContainText('1 pedido aprovado fora da demanda');
+    await expect(linhaDaLista(page, 'Aluno 1000')).toContainText('· Fora da demanda');
+    await botaoDosPedidos(page, 'importar').click();
+    await expect(page.locator('#toast-box')).toContainText('1 pedido(s) na demanda.');
+    await expect.poll(async () => (await diaGuardadoDe(page, '2026-11-12'))?.importadas).toHaveLength(1);
+    await expect(avisoDosPedidos(page)).toBeHidden();
+    await expect(linhaDaLista(page, 'Aluno 1000')).toContainText('· Na demanda');
+    // O Histórico diz o que entrou, com "Pedidos:"
+    await expect(entradasDoHistorico(page, 'Pedidos: Aluno 1000 incluído (Voo Local · às 06:30 · 1 h)')).toHaveCount(1);
+  });
+
+  test('"Registrar sem aprovar": o pedido aguarda aprovação, fora da demanda; o aviso, a linha de estado e a linha à vista', async ({ page }) => {
+    await abrir(page, { estado: comAlunos() });
+    await irPara(page, 'age');
+    await expect(botaoDoFormulario(page, 'aprovar')).toHaveText('Registrar e aprovar');
+    await expect(botaoDoFormulario(page, 'sem-aprovar')).toHaveText('Registrar sem aprovar');
+    await registrarPedido(page, { botao: 'sem-aprovar', horario: '12:40' });
+    await expect(page.locator('#toast-box')).toContainText('Pedido registrado: aguardando aprovação.');
+    await expect(estadoDoFormulario(page)).toHaveText('Último pedido: Aluno 1000 · Voo Local · C152 às 12:40 · aguardando aprovação.');
+    const { id } = (await agendaGuardada(page)).at(-1);
+    await expect(linhaDaLista(page, id)).toHaveAttribute('data-recente', '');
+    await expect(linhaDaLista(page, id)).toBeInViewport();
+    await expect(linhaDaLista(page, id)).toContainText('Registrado por Maria às 12:00');
+    expect((await diaGuardadoDe(page)).importadas || []).toEqual([]);
+    // Aprovado depois, entra
+    await aprovarNaLinha(page, id).click();
+    await expect(page.locator('#toast-box')).toContainText('Pedido aprovado: já está na demanda.');
+    await expect.poll(async () => (await diaGuardadoDe(page)).importadas).toEqual([id]);
+  });
+
+  test('a 2ª preferência: desligada até a missão e o recurso; os horários do recurso, sem a 1ª; a que deixa de valer sai, e o app diz', async ({ page }) => {
+    await abrir(page, { estado: comAlunos() });
+    await irPara(page, 'age');
+    const segunda = campoDaAgenda(page, 'horario2'), motivo = campoDaAgenda(page, 'horario2-motivo');
+    await expect(segunda).toBeDisabled();
+    await campoDaAgenda(page, 'aluno').selectOption({ label: 'Aluno 1000' });
+    await campoDaAgenda(page, 'missao').selectOption('Voo Local');
+    await expect(segunda).toBeDisabled();
+    await campoDaAgenda(page, 'recurso').selectOption('C152');
+    await expect(segunda).toBeEnabled();
+    await expect(segunda.locator('option')).toHaveText(['—', '06:30', '08:20', '10:10', '11:30', '12:40', '13:40', '14:30', '16:20']);
+    await campoDaAgenda(page, 'horario').selectOption('08:20');
+    await expect(segunda.locator('option')).toHaveText(['—', '06:30', '10:10', '11:30', '12:40', '13:40', '14:30', '16:20']);
+    await segunda.selectOption('10:10');
+    // A 1ª passa a ser a 2ª: a 2ª sai, e o app diz
+    await campoDaAgenda(page, 'horario').selectOption('10:10');
+    await expect(segunda).toHaveValue('');
+    await expect(motivo).toHaveText('A 2ª preferência era 10:10, agora a 1ª: escolha outra, se houver.');
+    // O PA-34 tem outros horários: a 2ª que ele não tem sai
+    await segunda.selectOption('16:20');
+    await campoDaAgenda(page, 'recurso').selectOption('PA-34');
+    await expect(segunda).toHaveValue('');
+    await expect(motivo).toHaveText('A 2ª preferência 16:20 não é um dos horários de Voo Local (PA-34): escolha outra, se houver.');
+    // O Noturno sai sempre às 17:30: sem 2ª preferência
+    await campoDaAgenda(page, 'missao').selectOption('Noturno');
+    await expect(segunda).toBeDisabled();
+    await expect(motivo).toHaveText('Um horário só: sem 2ª preferência.');
+    // Registrada, fica no pedido
+    await registrarPedido(page, { aluno: 'Aluno 1001', horario: '08:20', horario2: '12:40' });
+    await expect(page.locator('#toast-box')).toContainText('Pedido registrado e aprovado');
+    expect((await agendaGuardada(page)).at(-1).horario2).toBe('12:40');
+    await expect(linhaDaLista(page, 'Aluno 1001')).toContainText('Voo Local · C152 · 1 h · 2ª 12:40');
+  });
+
+  test('o 7º voo local: "Registrar na lista de espera" registra sem a confirmação; "Registrar mesmo assim" continua registrando quem confirmou', async ({ page }) => {
+    await abrirComOsCursos(page, { agenda: seisLocais() });
+    const [erro, registrar, esperar] = [campoDaAgenda(page, 'erro'), botaoDoFormulario(page, 'aprovar'), botaoDoFormulario(page, 'esperar')];
+    await expect(esperar).toBeHidden();
+    await registrarPedido(page, { aluno: 'Aluno 1001', horario: '08:20' });
+    await expect(erro).toHaveText('Horário cheio: já há 6 voos locais (Voo Local, Voo Solo e TGL) às 08:20, o máximo no mesmo horário (determinação da diretoria). Próximo horário com vaga: 10:10. Para registrar este como o 7º, clique em “Registrar mesmo assim”; para ele esperar uma vaga às 08:20, em “Registrar na lista de espera”.');
+    await expect(registrar).toHaveText('Registrar mesmo assim');
+    await expect(esperar).toBeVisible();
+    await esperar.click();
+    await expect(page.locator('#toast-box')).toContainText('Pedido registrado na lista de espera das 08:20: já há 6 voos locais.');
+    await expect(esperar).toBeHidden();
+    await expect(registrar).toHaveText('Registrar e aprovar');
+    const espera = (await agendaGuardada(page)).at(-1);
+    expect([espera.aluno, espera.limite_confirmado_por, espera.limite_confirmado_em, Boolean(espera.aprovada_em)]).toEqual([1001, null, null, true]);
+    // A lista de espera é do pedido armado: outro horário a desarma
+    await registrarPedido(page, { aluno: 'Ana', codigo: 'IN-01', horario: '08:20' });
+    await expect(esperar).toBeVisible();
+    await campoDaAgenda(page, 'horario').selectOption('10:10');
+    await expect(esperar).toBeHidden();
+    await campoDaAgenda(page, 'horario').selectOption('08:20');
+    await registrar.click();
+    await expect(erro).toContainText('já há 7 voos locais');
+    await registrar.click();
+    await expect(page.locator('#toast-box')).toContainText('Pedido registrado e aprovado: já está na demanda.');
+    const setimo = (await agendaGuardada(page)).at(-1);
+    expect([setimo.aluno, setimo.limite_confirmado_por, Boolean(setimo.limite_confirmado_em)]).toEqual([1002, 'Maria', true]);
+  });
+
+  test('numa data que já passou: nenhum "Aprovar", e o que aguarda fica "Sem aprovação"', async ({ page }) => {
+    await abrirComOsCursos(page, { agenda: [comAprovacao(1, { ...doAluno1001, data: '2026-11-09' })], url: './?data=2026-11-09' });
+    await expect(linhaDaLista(page, 1)).toContainText('Sem aprovação');
+    await expect(aprovarNaLinha(page, 1)).toHaveCount(0);
+    await expect(botaoDosPedidos(page, 'aprovar-todos')).toBeHidden();
+    await expect(page.locator('#linha a.tarefa[data-tarefa="aguardando"]')).toHaveAttribute('data-estado', 'nenhum');
   });
 });

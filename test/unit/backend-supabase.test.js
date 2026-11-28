@@ -563,6 +563,27 @@ describe('Backend Supabase: escala por data e histórico', () => {
     assert.equal(await backend.gravar('cadastro', { v: 4 }), true, 'a versão lida continua a mais recente');
   });
 
+  // A escala desta data mudou em outro computador (D2: a entrada do pedido aprovado na hora, "Importar")? A versão de
+  // agora contra a que esta leitura guardou; um dia que não estava gravado tem a versão 0. Sem baixar o conteúdo
+  it('a escala da data mudou em outro computador: a versão de agora contra a lida (0 sem dia gravado), depois das gravações deste navegador', async () => {
+    const cliente = clienteFalso({}, { atraso: 10, dias: { '2026-11-11': { conteudo: { v: 1 }, versao: 3 } } });
+    const backend = criarBackendSupabase(cliente);
+    await backend.ler('dia:2026-11-11');
+    assert.equal(await backend.diaMudou('2026-11-11'), false);
+    // A gravação deste navegador em andamento: a pergunta espera por ela (a versão nova é a deste navegador)
+    const gravando = backend.gravar('dia:2026-11-11', { v: 2 });
+    assert.equal(await backend.diaMudou('2026-11-11'), false);
+    assert.equal(await gravando, true);
+    // Outra pessoa grava a data
+    cliente.dias.set('2026-11-11', { conteudo: { v: 9 }, versao: 9 });
+    assert.equal(await backend.diaMudou('2026-11-11'), true);
+    // A data sem dia gravado quando foi lida: um dia gravado depois, em outro computador, é uma mudança
+    assert.equal(await backend.ler('dia:2026-11-12'), null);
+    assert.equal(await backend.diaMudou('2026-11-12'), false);
+    cliente.dias.set('2026-11-12', { conteudo: {}, versao: 1 });
+    assert.equal(await backend.diaMudou('2026-11-12'), true);
+  });
+
   it('agenda: registra e cancela pelas funções do banco, lista por período e repassa o código do erro e o campo', async () => {
     const cliente = clienteFalso();
     const backend = criarBackendSupabase(cliente);
