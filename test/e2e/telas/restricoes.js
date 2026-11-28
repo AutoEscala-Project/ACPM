@@ -1,11 +1,14 @@
 // O driver das restrições do voo (G1, dono; aside.gaveta#painel-restricoes): a gaveta, aberta pelo "Restrições" do editor do
-// voo (#dlg-voo), do item do trilho da missão que não entrou e da linha do pedido na Demanda (até o G2), e os campos dela
+// voo (#dlg-voo), do item do trilho da missão que não entrou e do detalhe do pedido no Processamento (G2), e os campos dela
 import { expect } from '@playwright/test';
 import { mostrarAvisos } from './casca.js';
 
 export const gavetaDasRestricoes = page => page.locator('#painel-restricoes');
 // Os campos da gaveta aberta para o pedido do aluno (id) e da missão (mid)
 export const restricoesDoPedido = (page, id, mid = 0) => page.locator(`#painel-restricoes .restricoes-campos[data-id="${id}"][data-mid="${mid}"]`);
+// Um campo do pedido do aluno (id) e da missão (mid), na gaveta aberta para ele ('eq', 'insId', 'pr', 'p1', 'p2', 'nb'; o
+// Voa e a missão da linha da Demanda saíram no G2)
+export const campoDoPedido = (page, id, campo, { mid = 0 } = {}) => page.locator(`#painel-restricoes .restricoes-campos[data-id="${id}"][data-mid="${mid}"] [data-f="${campo}"]`);
 // Um campo da gaveta (data-f: 'eq', 'insId', 'pr', 'p1', 'p2', 'nb', 'outra-missao')
 export const campoDasRestricoes = (page, campo) => page.locator(`#painel-restricoes [data-f="${campo}"]`);
 // O aviso das limitações (o tipo, o horário) e o botão que confirma
@@ -13,9 +16,17 @@ export const avisoDasRestricoes = page => page.locator('#restricoes-avisos');
 export const confirmarRestricao = page => page.locator('#painel-restricoes [data-act="confirmar-restricao"]');
 export const desistirDaRestricao = page => page.locator('#painel-restricoes [data-act="desistir-restricao"]');
 
-// Abre as restrições do pedido pela linha dele na Demanda (a tela precisa estar aberta) e espera a gaveta dele
+// Abre as restrições do pedido pelo detalhe dele no Processamento (a tela precisa estar aberta: a linha do voo, o detalhe
+// e o "Restrições" dele) e espera a gaveta dele
+// (com a gaveta de outro pedido aberta por cima do detalhe, o "Restrições" é alcançado pelo teclado, como faz quem está com
+// a gaveta aberta)
 export async function abrirRestricoes(page, id, mid = 0) {
-  await page.locator(`#dem tr[data-k="d"][data-id="${id}"][data-mid="${mid}"] [data-act="restricoes"]`).click();
+  await page.locator(`#proc > li.lista-linha[data-proc="${id}_${mid}_1"] .lista-botao`).click();
+  const botao = page.locator(`#det-proc [data-act="restricoes"][data-id="${id}"][data-mid="${mid}"]`);
+  if (await gavetaDasRestricoes(page).isVisible()) {
+    await botao.focus();
+    await page.keyboard.press('Enter');
+  } else await botao.click();
   await expect(restricoesDoPedido(page, id, mid)).toBeVisible();
   return restricoesDoPedido(page, id, mid);
 }
@@ -42,7 +53,7 @@ export async function fecharRestricoes(page) {
   await expect(gavetaDasRestricoes(page)).toBeHidden();
 }
 
-// A próxima missão do programa nas restrições do pedido (abre a gaveta pela linha da Demanda): o texto "Próxima do
+// A próxima missão do programa nas restrições do pedido (abre a gaveta pelo Processamento): o texto "Próxima do
 // programa: …"; e o botão "Usar a do programa" da gaveta aberta
 export async function proximaDoPrograma(page, id, mid = 0) {
   await abrirRestricoes(page, id, mid);

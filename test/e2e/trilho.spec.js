@@ -856,13 +856,13 @@ test.describe('Os avisos da data', () => {
     await expect(item).toBeFocused();
   });
 
-  test('os pedidos da data: quantos aguardam aprovação e quantos aprovados estão fora da demanda (só para quem opera), e a leitura que falhou', async ({ page, context }) => {
+  test('os pedidos da data: quantos aguardam aprovação e quantos aprovados estão fora da escala (só para quem opera, levando ao Processamento), e a leitura que falhou', async ({ page, context }) => {
     const servidor = await instalarSupabaseFalso(context, comAluno());
     servidor.solicitacoes.push(pedido(1, AMANHA), pedido(2, AMANHA), pedido(3, AMANHA, { aprovada_em: '2026-11-10T14:30:00.000Z', aprovada_por: 'Operador de Teste' }));
     await entrar(page, CONTAS.operador);
-    await expect(avisosDaData(page)).toHaveText([/—sem horário1 pedido aprovado fora da demanda, aviso/, /—sem horário2 pedidos aguardando aprovação, aviso/]);
-    await avisosDaData(page, 'aprovado fora da demanda').locator('a').click();
-    await expect(page.locator('#s-age h2')).toBeFocused();
+    await expect(avisosDaData(page)).toHaveText([/—sem horário1 pedido aprovado fora da escala, aviso/, /—sem horário2 pedidos aguardando aprovação, aviso/]);
+    await avisosDaData(page, 'aprovado fora da escala').locator('a').click();
+    await expect(page.locator('#s-proc h2')).toBeFocused();
     await expect(avisosDaData(page, 'aguardando aprovação')).toHaveCount(1);
     // Enquanto outra data abre, a lista continua a da data aberta; aberta, é a dela
     const liberar = servidor.segurarLeiturasDeDias();
@@ -878,7 +878,7 @@ test.describe('Os avisos da data', () => {
   });
 
   for (const [perfil, href] of [['gestor', '#/rec'], ['secretaria', null]]) {
-    test(`o perfil ${perfil} não importa, sem o aviso dos aprovados fora da demanda (o dos que aguardam, sim); o dos aviões ${href ? 'leva a Recursos' : 'fica sem o link, que ele não abre'}`, async ({ page, context }) => {
+    test(`o perfil ${perfil} não atualiza a escala, sem o aviso dos aprovados fora da escala (o dos que aguardam, sim); o dos aviões ${href ? 'leva a Recursos' : 'fica sem o link, que ele não abre'}`, async ({ page, context }) => {
       const estado = comExemplo(estadoSintetico());
       estado.horas = { ...estado.horas, 'PR-MLB': 49.5 };
       const servidor = await instalarSupabaseFalso(context, documentosAtuais(estado, AMANHA));
@@ -888,7 +888,7 @@ test.describe('Os avisos da data', () => {
       await expect(dosAvioes).toHaveCount(1);
       if (href) await expect(dosAvioes.locator('a')).toHaveAttribute('href', href);
       else await expect(dosAvioes.locator('a')).toHaveCount(0);
-      await expect(avisosDaData(page, 'fora da demanda')).toHaveCount(0);
+      await expect(avisosDaData(page, 'fora da escala')).toHaveCount(0);
       await expect(avisosDaData(page, '1 pedido aguardando aprovação')).toHaveCount(1);
     });
   }
@@ -989,7 +989,7 @@ test('Voltar com o servidor lento: o endereço já tem a data aberta', async ({ 
   await abrirMenuDaConta(page);
   await page.locator('#btn-conta').click();
   await expect(page.locator('#s-conta')).toBeVisible();
-  await irPara(page, 'dem');
+  await irPara(page, 'proc');
   await mudarData(page, '2026-11-12');
   let soltar;
   const espera = new Promise(resolve => { soltar = resolve; });

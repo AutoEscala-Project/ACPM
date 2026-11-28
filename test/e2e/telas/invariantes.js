@@ -4,7 +4,7 @@
 import { ABAS, irPara } from './casca.js';
 import { ESTADOS as DE_INSTRUTORES } from './instrutores.js';
 import { ESTADOS as DE_ALUNOS } from './alunos.js';
-import { ESTADOS as DA_DEMANDA } from './demanda.js';
+import { ESTADOS as DO_PROCESSAMENTO } from './processamento.js';
 import { ESTADOS as DE_RECURSOS } from './recursos.js';
 import { ESTADOS as DE_CURSOS } from './cursos.js';
 
@@ -93,7 +93,7 @@ export const semNome = (page, raiz) => page.evaluate(seletor => {
 
 // Os ESTADOS dos drivers, na ordem do passeio: as telas que não são a de abertura de uma aba (as outras vistas, os
 // painéis abertos dos filtros de vários valores, as tabelas que os filtros deixam sem nenhuma linha, outro curso)
-const ESTADOS = [...DE_INSTRUTORES, ...DE_ALUNOS, ...DA_DEMANDA, ...DE_RECURSOS, ...DE_CURSOS];
+const ESTADOS = [...DE_INSTRUTORES, ...DE_ALUNOS, ...DO_PROCESSAMENTO, ...DE_RECURSOS, ...DE_CURSOS];
 
 // Todas as telas: cada aba como ela abre (naAba(aba); sem ela, conferir(`aba ${aba}`)) e, depois, cada estado dos drivers
 // (conferir(nome)). As abas são ABAS, ou as que o teste leu da página (abas: uma aba nova também é conferida). No fim, a

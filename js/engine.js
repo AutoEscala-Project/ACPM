@@ -163,7 +163,7 @@ function equalizarHoras(out, state, limites, historico, almoco) {
     const v = voos.find(o => statusDoVoo(o, state.fStatus) !== 'Cancelado');
     return {
       voos, ...intervaloEfetivo(v, statusDoVoo(v, state.fStatus), (state.fObs || {})[v.fKey]), h: v.h, mis: v.mis, eqType: v.eqType, isGround: v.isGround,
-      // O instrutor escolhido pelo operador (na Demanda ou na Escala) e o do “Priorizar com” do aluno não mudam
+      // O instrutor escolhido pelo operador (nas restrições do voo ou na Escala) e o do “Priorizar com” do aluno não mudam
       presa: voos.some(o => o.fixo || o.insEscolhido || o.insPar || STATUS_EM_ANDAMENTO.includes(statusDoVoo(o, state.fStatus)))
     };
   });

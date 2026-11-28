@@ -1,13 +1,17 @@
 // A gaveta das restrições de um voo (G1, aside.gaveta#painel-restricoes): o que o motor lê para encaixar o pedido (a missão do
 // curso, o tipo de recurso, o instrutor, a prioridade, o horário e a duração), aberta pelo "Restrições" do editor do voo
-// (#dlg-voo), do item do trilho da missão que não entrou e da linha do pedido na Demanda (até o G2). As colunas da Demanda
-// vieram para cá com os mesmos campos (data-f) e o mesmo dono (js/eventos/restricoes-do-voo.js). O voo já posto tem o
+// (#dlg-voo), do item do trilho da missão que não entrou e do detalhe do pedido no Processamento (G2). As colunas da
+// Demanda vieram para cá com os mesmos campos (data-f) e o mesmo dono (js/eventos/restricoes-do-voo.js); o voo tirado da
+// escala tem aqui "Pôr de volta na escala" (G2). O voo já posto tem o
 // lugar, o recurso e o INVA no editor do voo (F1g): aqui, só o pedido. O horário exato do pedido da agenda é mostrado, não
 // editado (N14); o tipo e o horário contra as limitações do aluno ficam na lista, com o motivo, e escolhê-los avisa e pede a
 // confirmação (o aviso numa linha role="status" ligada ao campo); o INVA de "Não escalar com" fica na lista, desligado.
 // Quem só consulta lê o mesmo como texto
 import { GROUND_EQ_TYPE, DURACAO_MAXIMA_H, GROUND_DURATION_H } from '../config.js';
-import { esc, hm, fmtDurLabel } from '../format.js';
+import { esc, hm, fmtDurLabel, hojeISO } from '../format.js';
+import { solicitacaoAprovada } from '../agenda.js';
+import { podeVoltarAEscala, MOTIVO_PARA_NAO_VOLTAR } from '../processamento.js';
+import { solicitacoesDaData } from '../solicitacoes-da-data.js';
 import { isGroundMission, duracaoFixaDaMissao, prioridadeNaTela } from '../rules.js';
 import { ligada } from '../funcionalidades.js';
 import { horariosDaMissao } from '../horarios.js';
@@ -27,9 +31,18 @@ let pendente = null;
 
 export const pendenteDasRestricoes = () => pendente;
 export function marcarPendente(p) { pendente = p; }
-// A gaveta aberta pela Escala (o editor do voo, o item do trilho), não pela linha da Demanda (até o G2): na escala não
-// aprovada, cada mudança dela pergunta antes de refazer (F1g, R6: #dlg-refazer)
+// A gaveta aberta pela Escala (o editor do voo, o item do trilho), não pelo Processamento: na escala não aprovada, cada
+// mudança dela pergunta antes de refazer (F1g, R6: #dlg-refazer)
 export const perguntaAntesNaGaveta = () => Boolean(aberta && aberta.daEscala && !S.aprovacao);
+// A gaveta aberta pelo Processamento (o "Restrições" do detalhe): a resposta de "Pôr de volta na escala" vai também para a
+// linha de estado dele (N6)
+export const abertaPeloProcessamento = () => Boolean(aberta && !aberta.daEscala);
+// O foco na situação do voo, na gaveta redesenhada (o botão que a ação usou saiu com o desenho): o leitor de tela lê onde
+// o voo ficou
+export function focarNaSituacao() {
+  const situacao = $('#painel-restricoes .restricoes-situacao');
+  if (situacao && visivel(situacao)) situacao.focus();
+}
 
 const op = ({ valor, texto, desligada }, atual) => `<option value="${esc(valor)}"${String(valor) === String(atual) ? ' selected' : ''}${desligada ? ' disabled' : ''}>${esc(texto)}</option>`;
 const dica = (nome, rotulo) => `<button type="button" class="dica-btn" data-dica="${nome}" aria-label="O que é ${esc(rotulo)}?" aria-expanded="false"></button>`;
@@ -38,14 +51,23 @@ const dica = (nome, rotulo) => `<button type="button" class="dica-btn" data-dica
 function situacaoDoPedido(stu, d, mid) {
   const fKey = chaveDoVoo(stu.id, mid);
   const voo = RES && Array.isArray(RES.out) ? RES.out.find(o => o.fKey === fKey && !o.trecho) : null;
-  if (!d.fly) return '<p class="restricoes-situacao">Não voa nesta data (o Voa da Demanda está desligado): o app não lê estas restrições.</p>';
+  if (!d.fly) return foraDaEscala(stu, mid);
   if (voo) {
     const editar = isGestor() ? '' : ` <button type="button" class="btn quiet" data-act="editar-voo" data-fkey="${esc(voo.isGround && voo.classKey ? voo.classKey : voo.fKey)}" aria-haspopup="dialog">Editar o voo</button>`;
-    return `<p class="restricoes-situacao"><b>Na escala: ${hm(voo.a)}–${hm(voo.b)}</b> · ${esc(nomeDoRecurso(voo.r))} · ${esc(voo.ins || '')}. `
+    return `<p class="restricoes-situacao" tabindex="-1"><b>Na escala: ${hm(voo.a)}–${hm(voo.b)}</b> · ${esc(nomeDoRecurso(voo.r))} · ${esc(voo.ins || '')}. `
       + `O que está aqui vale para o app encaixar o pedido; o lugar, o recurso e o INVA do voo mudam no editor do voo.${editar}</p>`;
   }
   const recusa = RES ? rejeicoesDosPedidos(estadoDaEscala(), RES).get(fKey) : null;
-  return recusa ? `<p class="restricoes-situacao fora"><b>Fora da escala:</b> ${esc(recusa.m)}</p>` : '';
+  return recusa ? `<p class="restricoes-situacao fora" tabindex="-1"><b>Fora da escala:</b> ${esc(recusa.m)}</p>` : '';
+}
+
+// O voo tirado da escala (G2): o app não lê as restrições; "Pôr de volta na escala" (quem edita), ou por que ele não volta
+function foraDaEscala(stu, mid) {
+  const pode = podeVoltarAEscala(S, solicitacoesDaData().lista, { stuId: stu.id, mid }, { aprovada: solicitacaoAprovada, data: DATA, hoje: hojeISO() });
+  const volta = isGestor() ? '' : pode.ok
+    ? ` <button type="button" class="btn quiet" data-act="por-de-volta" data-id="${esc(stu.id)}" data-mid="${esc(mid)}" aria-label="Pôr de volta na escala: ${esc(stu.nm)}">Pôr de volta na escala</button>`
+    : ` ${esc(MOTIVO_PARA_NAO_VOLTAR[pode.motivo])}`;
+  return `<p class="restricoes-situacao" tabindex="-1">Fora da escala nesta data (tirado da escala): o app não lê estas restrições.${volta}</p>`;
 }
 
 // O horário: o exato do pedido da agenda, mostrado (muda em Pedidos ou no editor do voo, N14); senão, as preferências
@@ -142,7 +164,7 @@ export function desenharRestricoes() {
 export function abrirRestricoes(stuId, mid, { origem = null } = {}) {
   if (!getMissionTarget(stuId, mid)) return false;
   if (!aberta || aberta.stuId !== stuId || aberta.mid !== mid) pendente = null;
-  aberta = { stuId, mid, data: DATA, origem, daEscala: !(origem && origem.closest && origem.closest('#s-dem')) };
+  aberta = { stuId, mid, data: DATA, origem, daEscala: !(origem && origem.closest && origem.closest('#s-proc')) };
   const painel = $('#painel-restricoes');
   painel.innerHTML = '';
   desenharRestricoes();

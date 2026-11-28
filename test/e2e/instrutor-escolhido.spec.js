@@ -1,4 +1,4 @@
-// O instrutor escolhido pelo operador: na Demanda (o app encaixa o voo com ele) e na Escala (o nome do instrutor abre a
+// O instrutor escolhido pelo operador: nas restrições do voo (o app encaixa o voo com ele) e na Escala (o nome do instrutor abre a
 // lista; o voo fica onde está, fixo, com o escolhido, e o resto é refeito em volta). O histórico desfaz
 import { test, expect, abrir, irPara, abrirEscala, abrirHistorico, alternarVem, aprovar, reabrir, editorDoVoo, refazer, textosDaEscala, itensDaEscala, campoDoAluno, abrirAluno, excluirInstrutor } from './fixtures.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
@@ -7,16 +7,16 @@ import { abrirRestricoes, fecharRestricoes } from './telas/restricoes.js';
 // Dois voos às 08:20: o app põe o Instrutor 02 (menos habilitações) com o Aluno 1000 e o Instrutor 01 com o 1001
 const dia = () => cenario({ ins: [instrutor(1, 9), instrutor(2, 1), instrutor(3, 9, { on: false })], stu: [aluno(1000), aluno(1001)] });
 const linha = (page, nome) => page.locator('#out tbody tr:not(.win)', { hasText: nome });
-// O instrutor do pedido, nas restrições dele (G1): a gaveta abre pela linha da Demanda (e fecha antes de outra tela)
+// O instrutor do pedido, nas restrições dele (G1): a gaveta abre pelo detalhe do Processamento (G2; e fecha antes de outra tela)
 const instrutorDoPedido = async (page, id) => (await abrirRestricoes(page, id)).locator('[data-f="insId"]');
 
 test.describe('Instrutor escolhido', () => {
-  test('na Demanda: o voo sai com o escolhido; o histórico volta para o automático', async ({ page }) => {
+  test('nas restrições do voo: o voo sai com o escolhido; o histórico volta para o automático', async ({ page }) => {
     await abrir(page, { estado: dia() });
     await abrirEscala(page);
     await expect(linha(page, 'Aluno 1000').locator('.c-instr')).toHaveText('Instrutor 02');
 
-    await irPara(page, 'dem');
+    await irPara(page, 'proc');
     const campo = await instrutorDoPedido(page, 1000);
     await expect(campo.locator('option')).toHaveText(['Automático', 'Instrutor 01', 'Instrutor 02', 'Instrutor 03 (fora nesta data)']);
     await campo.selectOption({ label: 'Instrutor 01' });
@@ -33,13 +33,13 @@ test.describe('Instrutor escolhido', () => {
     await page.locator('#audit-log-list [data-act="rev-log"]').first().click();
     await page.keyboard.press('Escape');
     await expect(linha(page, 'Aluno 1000').locator('.c-instr')).toHaveText('Instrutor 02');
-    await irPara(page, 'dem');
+    await irPara(page, 'proc');
     await expect(await instrutorDoPedido(page, 1000)).toHaveValue('');
   });
 
   test('o escolhido que não pode voar: o pedido fica fora da escala, com o motivo', async ({ page }) => {
     await abrir(page, { estado: dia() });
-    await irPara(page, 'dem');
+    await irPara(page, 'proc');
     await (await instrutorDoPedido(page, 1000)).selectOption({ label: 'Instrutor 03 (fora nesta data)' });
     await fecharRestricoes(page);
     await abrirEscala(page);
@@ -70,7 +70,7 @@ test.describe('Instrutor escolhido', () => {
     await expect(linha(page, 'Aluno 1000').locator('.c-instr')).toHaveText('Instrutor 01');
     await expect(itensDaEscala(page, 'conflitos')).toHaveCount(0);
 
-    await irPara(page, 'dem');
+    await irPara(page, 'proc');
     await expect(await instrutorDoPedido(page, 1001)).toHaveValue('2');
     await fecharRestricoes(page);
 
@@ -111,7 +111,7 @@ test.describe('Instrutor escolhido', () => {
     await aluno.locator('[data-f="bl"]').selectOption({ label: 'Instrutor 03' });
     await expect(aluno.locator('[data-f="voaCom"] option', { hasText: 'Instrutor 03' })).toHaveCount(0);
 
-    await irPara(page, 'dem');
+    await irPara(page, 'proc');
     await expect((await instrutorDoPedido(page, 1000)).locator('option').first()).toHaveText('Automático (prioriza Instrutor 01)');
     await fecharRestricoes(page);
 
@@ -146,7 +146,7 @@ test.describe('Instrutor escolhido', () => {
     await expect(page.locator('#det-alu .det[data-id="1001"] .tg.par')).toHaveText(/Instrutor 02/);
   });
 
-  test('o voo fixo pela escolha na Escala continua fixo ao mudar o status; "Automático" na Demanda o solta', async ({ page }) => {
+  test('o voo fixo pela escolha na Escala continua fixo ao mudar o status; "Automático" nas restrições o solta', async ({ page }) => {
     await abrir(page, { estado: dia() });
     await abrirEscala(page);
     const voo = linha(page, 'Aluno 1001');
@@ -161,7 +161,7 @@ test.describe('Instrutor escolhido', () => {
     await expect(voo.locator('.fixo')).toHaveAttribute('aria-label', 'Voo fixo: instrutor escolhido na escala');
     await expect(voo.locator('.c-instr')).toHaveText('Instrutor 02');
 
-    await irPara(page, 'dem');
+    await irPara(page, 'proc');
     await (await instrutorDoPedido(page, 1001)).selectOption('');
     await fecharRestricoes(page);
     await abrirEscala(page);
@@ -192,14 +192,14 @@ test.describe('Instrutor escolhido', () => {
     await expect(linha(page, 'Aluno 1000').locator('.c-instr')).toHaveText('Instrutor 02');
     await expect(textosDaEscala(page, 'avisos')).toHaveCount(1);
     await expect(textosDaEscala(page, 'avisos')).toContainText('O instrutor escolhido saiu do cadastro: o voo ficou com Instrutor 02.');
-    await irPara(page, 'dem');
+    await irPara(page, 'proc');
     await expect((await instrutorDoPedido(page, 1000)).locator('option:checked')).toHaveText('Instrutor fora do cadastro (o app escolhe)');
 
     // A data aberta: escolher o Instrutor 01 e excluí-lo do cadastro devolve o pedido ao Automático, sem aviso
     await (await instrutorDoPedido(page, 1000)).selectOption({ label: 'Instrutor 01' });
     await fecharRestricoes(page);
     await excluirInstrutor(page, 1);
-    await irPara(page, 'dem');
+    await irPara(page, 'proc');
     await expect(await instrutorDoPedido(page, 1000)).toHaveValue('');
     await fecharRestricoes(page);
     await abrirEscala(page);
@@ -262,15 +262,15 @@ test.describe('Instrutor escolhido', () => {
     await expect(textosDaEscala(page, 'avisos').filter({ hasText: 'Priorizar com' })).toHaveText([posto]);
   });
 
-  test('o instrutor do dia na Demanda fora do “Priorizar com”: a observação na Escala', async ({ page }) => {
+  test('o instrutor do dia nas restrições fora do “Priorizar com” (o texto do motor ainda diz “na Demanda”): a observação na Escala', async ({ page }) => {
     await abrir(page, { estado: comPriorizar() });
-    await irPara(page, 'dem');
+    await irPara(page, 'proc');
     await (await instrutorDoPedido(page, 1000)).selectOption({ label: 'Instrutor 02' });
     await fecharRestricoes(page);
     await abrirEscala(page, { vista: 'lista' });
     await expect(linha(page, 'Aluno 1000').locator('.c-instr')).toHaveText('Instrutor 02');
     await expect(textosDaEscala(page, 'avisos').filter({ hasText: 'Priorizar com' }))
-      .toHaveText(['Aluno 1000 Fora do “Priorizar com” de Aluno 1000 (Instrutor 01): Instrutor 02 foi escolhido para o dia na Demanda.']);
+      .toHaveText(['Aluno 1000 Fora do “Priorizar com” de Aluno 1000 (Instrutor 01): Instrutor 02 foi escolhido para o dia em Processamento.']);
   });
 
   // No mapa, a barra abre o editor do voo (F1g): o instrutor é um campo dele, com o motivo de cada um; mudar só o instrutor

@@ -4,7 +4,7 @@
 // de filtro, de busca, da agenda, da conta e dos dados pessoais (a secretaria os altera: js/views/dados-pessoais.js decide
 // quem) continuam.
 const CAMPOS = [
-  'main input:not(.flt-ctrl):not(.agenda-campo):not(.conta-campo):not(.dado-campo):not(#onlyfly):not(#bi-dt)',
+  'main input:not(.flt-ctrl):not(.agenda-campo):not(.conta-campo):not(.dado-campo):not(#bi-dt)',
   'main select:not(.flt-ctrl):not(.agenda-campo):not(.conta-campo)'
 ].join(', ');
 

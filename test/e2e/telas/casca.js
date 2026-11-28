@@ -7,7 +7,7 @@ import { estadoSintetico } from '../../helpers/estado.js';
 import { comExemplo } from '../../helpers/exemplo.js';
 
 // As abas, na ordem do app (o Operador e o Administrador veem todas), e as da Secretaria
-export const ABAS = ['age', 'dem', 'esc', 'alu', 'ins', 'rec', 'cur', 'rod', 'bi'];
+export const ABAS = ['age', 'proc', 'esc', 'alu', 'ins', 'rec', 'cur', 'rod', 'bi'];
 export const ABAS_DA_SECRETARIA = ['age', 'esc', 'alu', 'ins', 'cur'];
 
 // O app terminou de abrir: os dados da data foram lidos e as telas desenhadas (js/main.js marca body[data-pronto]).
@@ -51,13 +51,13 @@ export async function entrar(page, conta, { url = URL_APP } = {}) {
   await appPronto(page);
 }
 
-// O link de uma tela na linha ('esc', 'dem'…): o título do cartão da etapa, ou o link dos cadastros, do Rodízio ou do BI
+// O link de uma tela na linha ('esc', 'proc'…): o título do cartão da etapa, ou o link dos cadastros, do Rodízio ou do BI
 export const botaoDaAba = (page, aba) => page.locator(`#linha a[data-nav][href="#/${aba}"]`);
 // Os links das telas na linha, na ordem (com visiveis, só os que aparecem para o perfil)
 export const botoesDasAbas = (page, { visiveis = false } = {}) => page.locator(`#linha a[data-nav]${visiveis ? ':visible' : ''}`);
 // Os nomes das telas na linha, na ordem (com visiveis, só os das que aparecem)
 export const rotulosDasAbas = (page, { visiveis = false } = {}) => page.locator(`#linha a[data-nav]${visiveis ? ':visible' : ''} :is(.estagio-nome, .linha-rotulo)`);
-// As telas que aparecem na linha, pelo id ('esc', 'dem'…)
+// As telas que aparecem na linha, pelo id ('esc', 'proc'…)
 export const abasVisiveis = page => botoesDasAbas(page, { visiveis: true }).evaluateAll(as => as.map(a => a.getAttribute('href').slice(2)));
 
 // Abre a tela pelo link dela na linha (sempre à vista, aberta, recolhida ou na faixa do celular). Com uma gaveta aberta por

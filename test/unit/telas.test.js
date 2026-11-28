@@ -12,12 +12,12 @@ const PERFIS = ['operador', 'administrador', 'gestor', 'secretaria'];
 describe('Quem vê cada tela', () => {
   it('as quatro etapas, na ordem, cada uma com a sua tela', () => {
     assert.deepEqual(ESTAGIOS, ['pedidos', 'processamento', 'escala', 'aprovar']);
-    assert.deepEqual(ESTAGIOS.map(e => Object.keys(TELAS).find(t => TELAS[t].estagio === e)), ['age', 'dem', 'esc', 'apr']);
+    assert.deepEqual(ESTAGIOS.map(e => Object.keys(TELAS).find(t => TELAS[t].estagio === e)), ['age', 'proc', 'esc', 'apr']);
   });
 
   it('o rótulo de cada tela é o nome dela hoje', () => {
     assert.deepEqual(Object.fromEntries(Object.entries(TELAS).map(([id, t]) => [id, t.rotulo])), {
-      age: 'Pedidos', dem: 'Demanda', esc: 'Escala', apr: 'Aprovar', alu: 'Alunos', ins: 'INVAs', rec: 'Recursos',
+      age: 'Pedidos', proc: 'Processamento', esc: 'Escala', apr: 'Aprovar', alu: 'Alunos', ins: 'INVAs', rec: 'Recursos',
       cur: 'Cursos', rod: 'Rodízio', bi: 'BI', manual: 'Manual', conta: 'Minha conta'
     });
   });

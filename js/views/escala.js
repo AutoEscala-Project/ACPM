@@ -498,7 +498,7 @@ export function rOut() {
   if (!RES || (!RES.out.length && !RES.al.length)) {
     // Sem voos, nas vistas do mapa, a grade das linhas livres fica embaixo do texto: o "+" e o clique agendam nela
     const grade = renderVisualTimeline([], linhasLivres(filtrosDaEscala([])));
-    trocarConteudo($('#out'), `<p class="h">Nenhum voo nesta data. Marque quem vai voar na Demanda: a escala é montada automaticamente.</p>${grade}`);
+    trocarConteudo($('#out'), `<p class="h">Nenhum voo nesta data. Os pedidos aprovados entram com Atualizar a escala, no Processamento: a escala é montada automaticamente.</p>${grade}`);
     rCompactacao([]);
     rAprovacao(false);
     atualizarEditorDoVoo();
@@ -526,7 +526,7 @@ export function rOut() {
   rCompactacao(out);
   let h = resumo(out, al, tot);
   const livres = linhasLivres(filtros);
-  if (!voos.length) h += `<p class="h">${tot ? 'Nenhum voo na escala com esses filtros.' : 'Nenhuma missão marcada na Demanda.'}</p>${renderVisualTimeline([], livres)}`;
+  if (!voos.length) h += `<p class="h">${tot ? 'Nenhum voo na escala com esses filtros.' : 'Nenhuma missão pedida nesta data: os pedidos aprovados entram com Atualizar a escala, no Processamento.'}</p>${renderVisualTimeline([], livres)}`;
   else h += tabela(voos, al) + renderVisualTimeline(voos, livres) + (TL_MODE === 'painel' ? painelDoDia(voos) : '');
   trocarConteudo($('#out'), h);
   atualizarEditorDoVoo();

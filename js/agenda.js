@@ -179,13 +179,31 @@ export function aprovarAsDeAntesDaAprovacao(lista, diaDe, { hoje, agora }) {
     if (Object.hasOwn(s, 'aprovada_em')) return s;
     const linha = { ...vazias, ...s };
     if (linha.cancelada_em || linha.aprovada_em || linha.aprovacao_retirada_em) return linha;
-    const dia = diaDe(linha.data);
-    const importada = Boolean(dia) && Array.isArray(dia.importadas) && dia.importadas.includes(linha.id);
-    const registro = importada && dia.pedidos && dia.pedidos[linha.aluno];
-    const levada = Boolean(registro) && (registro.solicitacao === linha.id || (Array.isArray(registro.extra) && registro.extra.some(e => e && e.solicitacao === linha.id)));
-    if (importada && (linha.data < hoje || levada)) return { ...linha, aprovada_em: agora, aprovada_por: 'importação anterior' };
+    const { importada, regraA } = pelaImportacao(linha, diaDe, hoje);
+    if (regraA) return { ...linha, aprovada_em: agora, aprovada_por: 'importação anterior' };
     if (!importada && linha.data >= hoje) return { ...linha, aprovada_em: agora, aprovada_por: linha.registrado_por };
     return linha;
+  });
+}
+
+// A regra (a) da conversão: o pedido está em "importadas" do dia dele (importada) e conta como aprovado pela importação
+// (regraA): numa data que já passou, sempre; de hoje em diante, só quando um registro do aluno (o pedido principal ou uma
+// missão extra) ainda o leva
+function pelaImportacao(linha, diaDe, hoje) {
+  const dia = diaDe(linha.data);
+  const importada = Boolean(dia) && Array.isArray(dia.importadas) && dia.importadas.includes(linha.id);
+  const registro = importada && dia.pedidos && dia.pedidos[linha.aluno];
+  const levada = Boolean(registro) && (registro.solicitacao === linha.id || (Array.isArray(registro.extra) && registro.extra.some(e => e && e.solicitacao === linha.id)));
+  return { importada, regraA: importada && (linha.data < hoje || levada) };
+}
+
+// A regra (a) de novo (G2: a migração 20261129100100_importados_ja_aprovados, aprovar_solicitacoes_de_antes_da_aprovacao
+// (false), para o modo local): o que uma aba de antes do D2 importou depois da conversão do D1 e ainda aguarda fica aprovado
+// por "importação anterior", também com as colunas da aprovação; o cancelado, o aprovado e o de aprovação retirada ficam
+export function aprovarOsImportadosDeNovo(lista, diaDe, { hoje, agora }) {
+  return lista.map(s => {
+    if (s.cancelada_em || s.aprovada_em || s.aprovacao_retirada_em) return s;
+    return pelaImportacao(s, diaDe, hoje).regraA ? { ...s, aprovada_em: agora, aprovada_por: 'importação anterior' } : s;
   });
 }
 
@@ -208,20 +226,9 @@ export function resumoDasSolicitacoes(lista, pedeAtencao = () => true) {
   return resumo;
 }
 
-// O registro do dia que leva o pedido (o principal do aluno ou uma missão extra dele, com solicitacao = o id): null
-function registroDaSolicitacao(estado, s) {
-  const aluno = (estado.stu || []).find(x => x.id === s.aluno);
-  if (!aluno) return null;
-  return [aluno, ...(aluno.extra || [])].find(p => p && p.solicitacao === s.id) || null;
-}
-
-// Onde o pedido está na demanda da data (até o G, que a concilia): 'fora' (nunca importado), 'voa' (importado, e um registro
-// que voa o leva) ou 'tirada' (importado, sem registro que voe: o Voa desligado, ou o registro que "Limpar demanda" tirou)
-export function situacaoNaDemanda(s, estado) {
-  if (!(estado.importadas || []).includes(s.id)) return 'fora';
-  const registro = registroDaSolicitacao(estado, s);
-  return registro && registro.fly ? 'voa' : 'tirada';
-}
+// O pedido (o id) voa no dia: o registro que o leva (o principal de um aluno ou uma missão extra, com solicitacao = o id)
+// voa (G2: o aviso de Pedidos depois de uma ação e o detalhe do pedido)
+export const pedidoVoaNoDia = (estado, id) => (estado.stu || []).some(s => [s, ...(s.extra || [])].some(r => r && r.solicitacao === id && r.fly));
 
 // O que mudou nos pedidos da data entre duas leituras (D3): os novos (não cancelados), os aprovados, os que voltaram a
 // aguardar (a aprovação retirada) e os cancelados, cada pedido uma vez, pelo estado dele agora. O que saiu da leitura (não
@@ -257,9 +264,6 @@ export function textoDasNovidades({ novas, aprovadas, semAprovacao, canceladas }
   return `Pedidos de ${data}: ${partes.join(', ')}.${espera.join('')}`;
 }
 
-// "Importar": os aprovados que nunca entraram na demanda da data
-export const solicitacoesParaImportar = (lista, estado) => (lista || []).filter(s => solicitacaoAprovada(s) && situacaoNaDemanda(s, estado) === 'fora');
-
 // Os pedidos de cada dia do trilho, da contagem do servidor (solicitacoes_por_dia: { data: { aguardando, aprovadas } }): os
 // que aguardam e os aprovados; o domingo não tem número
 export function contagemPorDia(resposta) {
@@ -271,10 +275,11 @@ export function contagemPorDia(resposta) {
   return contagem;
 }
 
-// O aprovado entra na demanda na hora só com as cinco condições: a data dele é a aberta; os dados dela foram lidos; ela já
-// tem escala gravada (a aprovação nunca cria a data: as horas até a revisão e as filas do rodízio ficariam congeladas cedo
-// demais); os resultados e os cursos foram lidos (sem eles a missão do curso não é ligada); a escala não mudou em outro
-// computador. Sem uma delas, o motivo ('outra-data', 'nao-lida', 'nao-gravada', 'dados', 'mudou'), e "Importar" o traz
+// A ação de Pedidos muda a escala na hora (G2, depoisDeMudarPedidos) só com as cinco condições: a data dela é a aberta; os
+// dados dela foram lidos; ela já tem escala gravada (uma aprovação nunca cria a data: as horas até a revisão e as filas do
+// rodízio ficariam congeladas cedo demais); os resultados e os cursos foram lidos (sem eles a missão do curso não é
+// ligada); a escala não mudou em outro computador. Sem uma delas, o motivo ('outra-data', 'nao-lida', 'nao-gravada',
+// 'dados', 'mudou'), e "Atualizar a escala", no Processamento, a faz
 const SEM_ELES_NAO_ENTRA = ['resultados', 'cursos', 'cursos-pendentes'];
 export function motivoSemEntrada({ data, aberta, lida, gravada, indisponiveis = [], mudou = false }) {
   if (data !== aberta) return 'outra-data';

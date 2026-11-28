@@ -40,7 +40,7 @@ export async function textoDoProgresso(page, id) {
   return `${await linha.locator('.lista-meta').textContent()} · ${await linha.locator('.lista-l3').textContent()}`;
 }
 
-// O filtro dos cursos de Alunos ('alu') ou da Demanda ('dem'): os valores são as siglas ('PP', 'PC'…) e 'sem-curso'
+// O filtro dos cursos de Alunos ('alu') ou do Processamento ('proc'): os valores são as siglas ('PP', 'PC'…) e 'sem-curso'
 export const filtrarCursos = (page, aba, valores, opcoes) => marcarNoFiltro(page, `flt-${aba}-cur`, valores, opcoes);
 
 // A lista que os filtros deixam vazia: o item que diz por quê e a contagem já escrita (ela espera a digitação parar)

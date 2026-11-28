@@ -18,7 +18,7 @@ test.describe('A linha e as telas', () => {
   test('cada cartão e cada link abre a tela dele, com o endereço e um só aria-current', async ({ page }) => {
     await abrirComExemplo(page);
     await expect(page).toHaveURL(/#\/esc$/);
-    for (const [tela, secao] of [['age', 's-age'], ['dem', 's-dem'], ['esc', 's-esc'], ['alu', 's-alu'], ['ins', 's-ins'], ['rec', 's-rec'], ['cur', 's-cur'], ['rod', 's-rod'], ['bi', 's-bi']]) {
+    for (const [tela, secao] of [['age', 's-age'], ['proc', 's-proc'], ['esc', 's-esc'], ['alu', 's-alu'], ['ins', 's-ins'], ['rec', 's-rec'], ['cur', 's-cur'], ['rod', 's-rod'], ['bi', 's-bi']]) {
       await botaoDaAba(page, tela).click();
       await expect(page.locator(`#${secao}`)).toBeVisible();
       await expect(page.locator('main#conteudo > section.on')).toHaveCount(1);
@@ -151,19 +151,19 @@ test.describe('A linha e as telas', () => {
     await expect(page).toHaveURL(/#\/manual$/);
   });
 
-  test('uma tela que o perfil não vê volta para a dele: #/conta sem o servidor, #/dem para a Secretaria', async ({ page, context }) => {
+  test('uma tela que o perfil não vê volta para a dele: #/conta sem o servidor, #/proc para a Secretaria', async ({ page, context }) => {
     await abrir(page, { url: './#/conta' });
     await expect(page.locator('#s-esc')).toBeVisible();
     await expect(page).toHaveURL(/#\/esc$/);
 
     await instalarSupabaseFalso(context, documentosAtuais(comExemplo(estadoSintetico()), AMANHA));
-    await entrar(page, CONTAS.secretaria, { url: './?supabase=teste#/dem' });
+    await entrar(page, CONTAS.secretaria, { url: './?supabase=teste#/proc' });
     await expect(page.locator('#s-age')).toBeVisible();
-    await expect(page.locator('#s-dem')).toBeHidden();
+    await expect(page.locator('#s-proc')).toBeHidden();
     await expect(page).toHaveURL(/#\/age$/);
   });
 
-  test('o que cada perfil vê na linha: a Secretaria sem a Demanda, os Recursos, o Rodízio e o BI', async ({ page, context }) => {
+  test('o que cada perfil vê na linha: a Secretaria sem o Processamento, os Recursos, o Rodízio e o BI', async ({ page, context }) => {
     await instalarSupabaseFalso(context, documentosAtuais(comExemplo(estadoSintetico()), AMANHA));
     await entrar(page, CONTAS.secretaria);
     await expect(rotulosDasAbas(page, { visiveis: true })).toHaveText(['Pedidos', 'Escala', 'Aprovar', 'Alunos', 'INVAs', 'Cursos']);
@@ -187,7 +187,7 @@ test.describe('A linha e as telas', () => {
 test.describe('Aprovar', () => {
   test('o cartão mostra a aprovação da Escala, contornada, com o foco no botão e o estado anunciado', async ({ page }) => {
     await abrirComExemplo(page);
-    await irPara(page, 'dem');
+    await irPara(page, 'proc');
     await botaoDaAba(page, 'apr').click();
     await expect(page.locator('#s-esc')).toBeVisible();
     await expect(atual(page)).toHaveAttribute('href', '#/apr');
@@ -244,7 +244,7 @@ test.describe('O desenho da linha', () => {
     expect(fundo).toContain('linear-gradient');
   });
 
-  // .etapa é a etiqueta da missão do curso (na Demanda e na Lista da Escala): os pontos são só de #linha .estagio
+  // .etapa é a etiqueta da missão do curso (no Processamento e na Lista da Escala): os pontos são só de #linha .estagio
   test('a etiqueta da missão do curso (.etapa) não ganha os pontos da linha', async ({ page }) => {
     await abrirComExemplo(page);
     await abrirEscala(page);

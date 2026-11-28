@@ -24,7 +24,7 @@ import './eventos/instrutores.js';
 import './eventos/alunos.js';
 import './eventos/historico.js';
 import './eventos/topo.js';
-import './eventos/demanda.js';
+import './eventos/processamento.js';
 import './eventos/bi.js';
 import './eventos/recursos.js';
 import './eventos/conta.js';
@@ -36,7 +36,7 @@ import './eventos/cursos.js';
 import './eventos/editor-de-dados-pessoais.js';
 import './eventos/inativos.js';
 // O diálogo "Agendar voo" (js/eventos/agendamento.js) vem com a Escala, que o importa; Instrutores traz os limites da lei e
-// o painel dos dados pessoais, e a Demanda, o "Importar da agenda" (test/unit/eventos-ligados.test.js)
+// o painel dos dados pessoais, e o Processamento, as restrições do voo (test/unit/eventos-ligados.test.js)
 import { setRole, abrirData, lerData, dadosPreparados, carregarBI } from './actions.js';
 import { redesenhar } from './redesenho.js';
 import { ehDomingo, primeiraDataAberta } from './agenda.js';
@@ -57,7 +57,7 @@ import { podeEditarAgenda } from './views/agenda.js';
 import { carregarDadosPessoais } from './views/dados-pessoais.js';
 import { dadosPessoaisPendentes } from './views/editor-de-dados-pessoais.js';
 import { rOut } from './views/escala.js';
-import { lerPedidosDaData } from './views/selos.js';
+import { lerSolicitacoesDaData } from './solicitacoes-da-data.js';
 import { diaAbrindo } from './views/trilho.js';
 import { ligarEndereco, mostrarTela, telaAberta, telaFoiEscolhida, destinoDoHash } from './views/telas.js';
 import { telaDeAbertura, dataDeAbertura } from './telas.js';
@@ -161,7 +161,7 @@ window.addEventListener('beforeunload', e => {
   const destino = telaFoiEscolhida() ? { tela: telaAberta(), item: null } : (doEndereco || { tela: telaDeAbertura(ApiClient.perfil), item: null });
   await mostrarTela(destino.tela, { item: destino.item, nativo: Boolean(destino.nativo), historico: 'substituir' });
 
-  lerPedidosDaData();
+  lerSolicitacoesDaData();
   carregarBI();
   // Fim da abertura: daqui em diante, só a pessoa muda a aba. Os testes E2E esperam por esta marca (appPronto, em
   // test/e2e/telas/casca.js)

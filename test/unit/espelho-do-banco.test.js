@@ -13,6 +13,7 @@ import { horariosDaMissao } from '../../js/horarios.js';
 import { hm } from '../../js/format.js';
 import { CASOS_DA_AGENDA } from '../helpers/casos-da-agenda.js';
 import { CASOS_DAS_SOLICITACOES } from '../helpers/casos-das-solicitacoes.js';
+import { CASOS_DOS_IMPORTADOS } from '../helpers/casos-dos-importados.js';
 import { ESQUEMA, FORMATO_DOS_CURSOS, migrarCadastro, antesDosCursosProprios } from '../../js/migracoes.js';
 import { CASOS_DO_PROGRAMA, PROGRAMA, NOTURNO_EM_TRECHOS } from '../helpers/casos-do-programa.js';
 import { LIMITE_DO_EXIGE, ID_DA_HABILITACAO } from '../../js/programa.js';
@@ -391,5 +392,25 @@ describe('O banco espelha o app: a aprovação dos pedidos', () => {
     const deAntes = ['42501', '22023 horas'];
     assert.deepEqual([...doBanco].filter(k => !deAntes.includes(k) && !dosCasos.has(k)).sort(), [], 'recusas sem caso');
     assert.deepEqual([...dosCasos].filter(k => !doBanco.has(k)), [], 'casos com uma recusa que a migração não dá');
+  });
+});
+
+// A regra (a) de novo (G2, a migração #4): o arquivo só chama a conversão do D1 sem a regra dos operadores (nada de esquema
+// muda), e cada caso de test/helpers/casos-dos-importados.js é uma verificação do pgTAP dela, que roda a conversão duas vezes
+describe('O banco espelha o app: os importados já aprovados (G2)', () => {
+  const G2 = ler('supabase/migrations/20261129100100_importados_ja_aprovados.sql');
+  const TESTE = ler('supabase/tests/database/importados-ja-aprovados.test.sql');
+  it('a migração é a conversão do D1, só a regra (a), e nada mais', () => {
+    const comandos = G2.split('\n').filter(l => l.trim() && !l.trim().startsWith('--'));
+    assert.deepEqual(comandos, ['select public.aprovar_solicitacoes_de_antes_da_aprovacao(false);']);
+  });
+  it('o pgTAP roda a conversão duas vezes, com uma verificação por caso, e o plano conta todas', () => {
+    assert.equal([...TESTE.matchAll(/public\.aprovar_solicitacoes_de_antes_da_aprovacao\(false\)/g)].length, 2);
+    const nomes = CASOS_DOS_IMPORTADOS.map(c => c.nome);
+    assert.equal(new Set(nomes).size, nomes.length, 'sem nomes repetidos');
+    assert.deepEqual(nomes.filter(nome => !TESTE.includes(`'${nome}');`)), []);
+    const verificacoes = [...TESTE.matchAll(/^select (?:is|ok|results_eq)\(/gm)].length;
+    assert.equal(Number(/select plan\((\d+)\);/.exec(TESTE)[1]), verificacoes);
+    assert.equal(CASOS_DOS_IMPORTADOS.filter(c => c.aprovado).length, Number(/aprovar_solicitacoes_de_antes_da_aprovacao\(false\), (\d+),/.exec(TESTE)[1]));
   });
 });

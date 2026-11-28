@@ -1,4 +1,4 @@
-import { test, comProgresso, expect, abrirInstrutor, campoDoInstrutor, abrirLimitesDaLei, linhaDoAluno, prepararContexto, vigiarErros, irPara, abrirEscala, lerEscala, AMANHA, entrar, URL_APP, abrirHistorico, alternarDisponivel, botaoAprovar, caixaDisponivel, exportar, dataAberta, linhasDosAlunos } from './fixtures.js';
+import { test, comProgresso, expect, abrirInstrutor, campoDoInstrutor, abrirLimitesDaLei, linhaDoAluno, prepararContexto, vigiarErros, irPara, abrirEscala, lerEscala, AMANHA, entrar, URL_APP, abrirHistorico, alternarDisponivel, recomecarPelosPedidos, aprovar, botaoAprovar, caixaDisponivel, exportar, dataAberta, linhasDosAlunos } from './fixtures.js';
 import { criarSupabaseFalso, instalarSupabaseFalso, documentosAtuais, CONTAS } from './supabase-falso.js';
 import { estadoSintetico } from '../helpers/estado.js';
 import { comExemplo } from '../helpers/exemplo.js';
@@ -198,11 +198,35 @@ test.describe('Modo compartilhado: gravação, conflitos e link da escala', () =
     const erros = vigiarErros(page);
     await entrar(page, CONTAS.operador);
     const versaoDoCadastro = servidor.banco.get('cadastro').versao;
-    await irPara(page, 'dem');
-    await page.locator('#dem [data-act="add-mis"]').first().click();
+    await irPara(page, 'proc');
+    await recomecarPelosPedidos(page);
     await expect.poll(() => servidor.gravacoes.filter(g => g.chave === `dia:${AMANHA}`).length).toBe(1);
     expect(servidor.banco.get('cadastro').versao).toBe(versaoDoCadastro);
     expect(servidor.dias.get(AMANHA).conteudo.pedidos).toBeTruthy();
+    expect(erros).toEqual([]);
+    await contexto.close();
+  });
+
+  // A reabertura fica registrada no dia (formato 30, d33), como a do "Reabrir" da Escala: quando e quem. A revisão cruzada do
+  // H (#113): "Limpar demanda" reabria a escala aprovada sem registrar, e o "Recomeçar pelos pedidos" também
+  test('"Recomeçar pelos pedidos" na escala aprovada grava a reabertura: quando e quem; o Histórico diz reaberta', async ({ browser }) => {
+    const contexto = await novoContexto(browser);
+    const servidor = await instalarSupabaseFalso(contexto, documentosAtuais(comExemplo(estadoSintetico()), AMANHA));
+    const page = await contexto.newPage();
+    const erros = vigiarErros(page);
+    await entrar(page, CONTAS.operador);
+    await abrirEscala(page);
+    await aprovar(page);
+    await expect.poll(() => servidor.dias.get(AMANHA).conteudo.aprovacao).toEqual({ em: '2026-11-10T15:00:00.000Z', por: 'Operador de Teste' });
+    expect(servidor.dias.get(AMANHA).conteudo.reabertura).toBeNull();
+
+    await irPara(page, 'proc');
+    await recomecarPelosPedidos(page);
+    await expect.poll(() => servidor.dias.get(AMANHA).conteudo.aprovacao).toBeNull();
+    expect(servidor.dias.get(AMANHA).conteudo.reabertura).toEqual({ em: '2026-11-10T15:00:00.000Z', por: 'Operador de Teste' });
+    await expect.poll(() => servidor.historico.at(-1)?.descricao).toMatch(/^Pedidos: escala recomeçada.* e escala reaberta$/);
+    await abrirHistorico(page);
+    await expect(page.locator('#audit-log-list .audit-item').first()).toContainText('e escala reaberta');
     expect(erros).toEqual([]);
     await contexto.close();
   });

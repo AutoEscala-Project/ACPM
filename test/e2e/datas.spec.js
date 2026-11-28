@@ -1,6 +1,6 @@
-// Escala por data no modo local: cada data guarda a sua escala, a nova data começa com a demanda vazia,
+// Escala por data no modo local: cada data guarda a sua escala, a nova data começa sem voos,
 // histórico e BI por data, e os dados antigos deste navegador são convertidos na primeira abertura.
-import { test, expect, abrir, abrirSintetico, abrirComExemplo, irPara, abrirEscala, lerEscala, AMANHA, abrirHistorico, alternarDisponivel, caixaDisponivel, caixaVoa, dataAberta, exportar, mudarData, linhasDosAlunos } from './fixtures.js';
+import { test, expect, abrir, abrirSintetico, abrirComExemplo, irPara, abrirEscala, lerEscala, AMANHA, abrirHistorico, alternarDisponivel, caixaDisponivel, voarPeloPedido, dataAberta, exportar, mudarData, linhasDosAlunos } from './fixtures.js';
 import { estadoSintetico } from '../helpers/estado.js';
 import { aluno } from '../helpers/montar.js';
 import { runAllocationEngine } from '../../js/engine.js';
@@ -12,20 +12,19 @@ import { comNomesAntigos } from '../helpers/formato.js';
 const DEPOIS = '2026-11-12';
 
 test.describe('Escala por data', () => {
-  // A demanda é zerada a cada dia; a agenda é o centro dos agendamentos
-  test('cada data tem a sua escala; a nova data começa com a demanda vazia', async ({ page }) => {
+  // Cada data começa sem voos; a agenda é o centro dos agendamentos
+  test('cada data tem a sua escala; a nova data começa sem voos', async ({ page }) => {
     await abrirComExemplo(page);
     await abrirEscala(page);
     const escalaDia11 = await lerEscala(page);
 
-    // A nova data começa sem ninguém voando: a demanda vem da agenda ("Importar da agenda")
+    // A nova data começa sem ninguém voando: os voos vêm dos pedidos (Pedidos, e "Atualizar a escala" no Processamento)
     await mudarData(page, DEPOIS);
     await expect(page.locator('#out')).toContainText('Nenhum voo nesta data.');
-    await irPara(page, 'dem');
-    await expect(page.locator('#cnt')).toContainText('0 missão(ões) marcada(s)');
+    await irPara(page, 'proc');
+    await expect(page.locator('#proc-cnt')).toHaveText('0 na escala · 0 fora · 0 aguardando aprovação');
 
-    await page.locator('#onlyfly').uncheck();
-    await caixaVoa(page.locator('#dem tr[data-k="d"][data-mid="0"]').first()).check();
+    await voarPeloPedido(page, { aluno: 'Aluno 02', horario: '08:20' });
     await abrirEscala(page);
     const escalaDia12 = await lerEscala(page);
     expect(escalaDia12.linhas.length).toBeGreaterThan(0);
@@ -97,11 +96,9 @@ test.describe('Escala por data', () => {
     await abrirComExemplo(page);
     await abrirEscala(page);
     await exportarCsv();
-    // A data nova começa com a demanda vazia: um aluno (um voo de 1 h) entra à mão
+    // A data nova começa sem voos: um aluno (um voo de 1 h) entra pelo pedido (o Aluno 01 volta de BH até as 10:10)
     await mudarData(page, DEPOIS);
-    await irPara(page, 'dem');
-    await page.locator('#onlyfly').uncheck();
-    await caixaVoa(page.locator('#dem tr[data-k="d"][data-mid="0"]').first()).check();
+    await voarPeloPedido(page, { aluno: 'Aluno 02', horario: '08:20' });
     await abrirEscala(page);
     await exportarCsv();
     await irPara(page, 'bi');

@@ -441,7 +441,7 @@ export function foraDoPriorizarCom(state, s, pedido, insId) {
   return pares.some(p => !p.nota) && !pares.some(p => p.x.id === insId);
 }
 
-// O começo do aviso do voo posto à mão (ou com o INVA escolhido na Demanda) fora do “Priorizar com” quando um dele poderia
+// O começo do aviso do voo posto à mão (ou com o INVA escolhido em Processamento) fora do “Priorizar com” quando um dele poderia
 // (o editor do voo pede a confirmação dele: js/edicao-do-voo.js)
 export const INICIO_DO_FORA_DO_PRIORIZAR = 'Fora do “Priorizar com” de ';
 
@@ -450,7 +450,7 @@ const inicioDoSemPar = porque => `Sem o instrutor de “Priorizar com” (${porq
 
 // Os avisos do “Priorizar com” da escala montada (N9, F1h; o código voa-com, um por voo, com a chave dele), depois da
 // divisão das horas e da compactação, com os horários do fim:
-// - o voo posto à mão (o pino agendado, ou o do INVA trocado na Escala) ou com o INVA escolhido para o dia na Demanda fora
+// - o voo posto à mão (o pino agendado, ou o do INVA trocado na Escala) ou com o INVA escolhido para o dia em Processamento fora
 //   do “Priorizar com”, quando um do “Priorizar com” poderia dar o voo: o aviso de que está fora; sem nenhum que possa, o
 //   aviso de sempre, com o motivo como o do motor (o voo com outro INVA não vai contra a limitação);
 // - o voo sem pino que ficou sem o instrutor do “Priorizar com” (semPar: a chave do voo → os nomes e o motivo, da busca do
@@ -516,15 +516,15 @@ export function avisosDoPriorizarCom(state, out, { semPar = new Map() } = {}) {
     // Na ordem dos campos da escala gravada (js/escala-gravada.js)
     const aviso = m => avisos.push({ t: 'warn', s: rotulo, fKey: o.fKey, m, codigo: 'voa-com', stuId: o.stuId, insId: o.insId });
     const pino = Object.hasOwn(fixos, o.fKey) ? fixos[o.fKey] : null;
-    const escolhidoNaDemanda = !pino && Boolean(d.insId && instrutores.has(d.insId));
+    const escolhidoNoProcessamento = !pino && Boolean(d.insId && instrutores.has(d.insId));
     // O Noturno fixo só pelo pino do Noturno (não pela aprovação, pelo status ou pelo operador na Escala)
     const soPeloNoturno = Boolean(pino && pino.noturno && !pino.agendado && !pino.escolhido && !state.aprovacao && !fixoPeloStatus(o.fKey, state.fStatus));
-    if (pino || escolhidoNaDemanda) {
-      if (!(escolhidoNaDemanda || pino.agendado || pino.escolhido || soPeloNoturno) || !ativo(o) || pares.includes(o.insId)) continue;
+    if (pino || escolhidoNoProcessamento) {
+      if (!(escolhidoNoProcessamento || pino.agendado || pino.escolhido || soPeloNoturno) || !ativo(o) || pares.includes(o.insId)) continue;
       if (!capazes.length) aviso(`${inicioDoSemPar(`${lista.map(p => p.x.nm).join(', ')}: ${motivoSemNenhum(lista)}`)}: o voo ficou com ${o.ins}.`);
       else {
         const nomes = pares.map(id => instrutores.get(id).nm).join(', ');
-        const porque = escolhidoNaDemanda ? `${o.ins} foi escolhido para o dia na Demanda`
+        const porque = escolhidoNoProcessamento ? `${o.ins} foi escolhido para o dia em Processamento`
           : soPeloNoturno ? `o Noturno está fixo com ${o.ins} (a volta vai com ele)` : `o voo foi posto à mão com ${o.ins}`;
         aviso(`${INICIO_DO_FORA_DO_PRIORIZAR}${s.nm} (${nomes}): ${porque}.`);
       }
@@ -596,7 +596,7 @@ export function concluirEscala(state, ctx, out, al, { antesDoF1h = false } = {})
   for (const o of out) {
     const d = o.fixo ? null : pedidoDoVoo(o);
     if (!d || !d.insId || ctx.noCadastro.has(d.insId)) continue;
-    al.push({ t: 'warn', s: o.mid ? `${o.s} (${o.mis})` : o.s, m: `O instrutor escolhido saiu do cadastro: o voo ficou com ${o.ins}. Escolha outro na Demanda ou deixe no Automático.`, codigo: 'escolhido-saiu', stuId: o.stuId, insId: o.insId });
+    al.push({ t: 'warn', s: o.mid ? `${o.s} (${o.mis})` : o.s, m: `O instrutor escolhido saiu do cadastro: o voo ficou com ${o.ins}. Escolha outro em Editar o voo (Escala) ou deixe no Automático.`, codigo: 'escolhido-saiu', stuId: o.stuId, insId: o.insId });
   }
   // O 7º voo local confirmado (Q8): cada voo confirmado num horário com mais de 6 voos locais no todo (sem os cancelados)
   // avisa, com o texto do agendado e o lugar dele, depois dos não confirmados do horário, na ordem dos alunos (o que ainda

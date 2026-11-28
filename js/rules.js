@@ -114,8 +114,8 @@ export function comAPrioridadePadrao(estado) {
 
 export const blank = () => ({ fly: false, mis: 'Voo Local', eq: 'C152', p1: HORARIOS_PADRAO[1], p2: HORARIOS_PADRAO[2], nb: 1, ss: 1, pr: PRIORIDADE_PADRAO });
 // O pedido em branco, sem nada do voo de antes: saem a disponibilidade, a missão do curso (o código e o curso), o pedido
-// da agenda e o instrutor escolhido. Assim ficam o pedido que a agenda reaproveita (alvoDoNovoPedido) e o pedido limpo
-// por "Limpar demanda" (js/fixos.js). Muda o pedido e o devolve
+// da agenda e o instrutor escolhido. Assim ficam o pedido que a agenda reaproveita (alvoDoNovoPedido) e o registro que
+// "Recomeçar pelos pedidos" devolve ao pedido ou deixa em branco (js/processamento.js). Muda o pedido e o devolve
 export function deixarEmBranco(pedido) {
   Object.assign(pedido, blank());
   for (const campo of ['jan', 'etapa', 'cursoDaEtapa', 'etapaDoPrograma', 'solicitacao', 'insId', 'limiteConfirmado']) delete pedido[campo];

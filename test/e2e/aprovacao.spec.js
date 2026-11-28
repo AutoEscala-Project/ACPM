@@ -1,7 +1,7 @@
 // O dia de operação: "Aprovar escala" fixa os voos. Depois disso, uma alteração não tira ninguém do lugar:
 // o pedido novo entra em volta, e o voo fixo que ficou impossível aparece em conflito. "Reabrir" volta ao normal.
 // Em Voo, Atrasado, Pousou e Cancelado também fixam o voo.
-import { test, comPrioridade, expect, abrir, abrirComExemplo, irPara, abrirEscala, lerEscala, abrirHistorico, alternarVem, aprovar, botaoAprovar, botaoReabrir, caixaVoa, reabrir, refazer, textosDaEscala } from './fixtures.js';
+import { test, comPrioridade, expect, abrir, abrirComExemplo, irPara, abrirEscala, lerEscala, abrirHistorico, alternarVem, aprovar, botaoAprovar, botaoReabrir, voarPeloPedido, reabrir, refazer, textosDaEscala } from './fixtures.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
 import { abrirRestricoes, campoDasRestricoes, fecharRestricoes } from './telas/restricoes.js';
 
@@ -18,10 +18,8 @@ test.describe('Escala aprovada', () => {
     await expect(page.locator('#out tbody tr:not(.win) .fixo')).toHaveCount(2);
 
     // Pedido novo, prioridade 1 (a mais alta), no mesmo horário do primeiro voo
-    await irPara(page, 'dem');
-    await page.locator('#onlyfly').uncheck();
-    const novo = page.locator('#dem tr[data-id="1002"]');
-    await caixaVoa(novo).check();
+    // (no Processamento, G2: o pedido registrado e aprovado em Pedidos entra na escala aprovada, em volta dos fixos)
+    await voarPeloPedido(page, { aluno: 'Aluno 1002', horario: '08:20' });
     await abrirRestricoes(page, 1002);
     await campoDasRestricoes(page, 'pr').selectOption('1');
     await fecharRestricoes(page);

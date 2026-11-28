@@ -292,9 +292,9 @@ test.describe('O leitor de tela e o teclado', () => {
     await abrirComExemplo(page);
     const atual = page.locator('[aria-current="page"]');
     await expect(atual).toHaveAttribute('href', '#/esc');
-    await irPara(page, 'dem');
+    await irPara(page, 'proc');
     await expect(atual).toHaveCount(1);
-    await expect(atual).toHaveAttribute('href', '#/dem');
+    await expect(atual).toHaveAttribute('href', '#/proc');
     await page.locator('#btn-manual').click();
     await expect(atual).toHaveCount(1);
     await expect(atual).toHaveId('btn-manual');

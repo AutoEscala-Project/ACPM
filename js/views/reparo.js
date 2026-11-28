@@ -134,8 +134,8 @@ export function abrirPainelDoRejeitado(fKey, { focar = true } = {}) {
       <ol class="opcoes-reparo">${opcoesAbertas.map((o, i) => `<li class="${o.insId ? 'instrutor' : 'automatico'}">
         <span>${esc(o.texto)}</span><button type="button" class="btn" data-reparo-aplicar="${i}">Aplicar</button></li>`).join('')}</ol>`
     : soNoPassado
-      ? '<p class="h">Com outro instrutor, o app escala este pedido num horário que já passou. Para um horário mais tarde hoje, agende o voo em <i>+ Agendar voo</i>; senão, o pedido fica recusado até a escolha mudar na Demanda.</p>'
-      : '<p class="h">Nenhum outro instrutor encaixa este pedido sem mudar outro voo. O pedido fica recusado até a escolha mudar na Demanda.</p>'}`;
+      ? '<p class="h">Com outro instrutor, o app escala este pedido num horário que já passou. Para um horário mais tarde hoje, agende o voo em <i>+ Agendar voo</i>; senão, o pedido fica recusado até a escolha mudar nas restrições do voo.</p>'
+      : '<p class="h">Nenhum outro instrutor encaixa este pedido sem mudar outro voo. O pedido fica recusado até a escolha mudar nas restrições do voo.</p>'}`;
   if (focar || painel.hidden) abrirGaveta(painel);
   const primeiro = painel.querySelector('[data-reparo-aplicar]') || painel.querySelector('#btn-fechar-reparo');
   if (focar && primeiro) primeiro.focus();

@@ -1,8 +1,8 @@
 // Agendar um voo na Escala ("+ Agendar voo"): o diálogo sugere a missão do curso, o recurso, o instrutor, o horário e o
 // peso; a conferência roda o motor numa cópia da escala (o conflito não deixa agendar; a regra do curso pede "Agendar
-// mesmo assim"). O voo agendado fica fixo (o cadeado), o pedido aparece na Demanda com a missão do curso, o peso
+// mesmo assim"). O voo agendado fica fixo (o cadeado), o pedido aparece no Processamento com a missão do curso, o peso
 // digitado vai para o cadastro e o Histórico desfaz
-import { test, expect, abrir, irPara, abrirEscala, entrar, AMANHA, abrirHistorico, aprovar, caixaVem, caixaVoa, linhaDoInstrutor, reabrir, relativoDaData, confirmarAgendamento, refazer, campoDoAluno, textosDaEscala, abrirInstrutor, campoDoInstrutor } from './fixtures.js';
+import { test, expect, abrir, irPara, abrirEscala, entrar, AMANHA, abrirHistorico, aprovar, caixaVem, linhaDoProcessamento, linhaDoInstrutor, reabrir, relativoDaData, confirmarAgendamento, refazer, campoDoAluno, textosDaEscala, abrirInstrutor, campoDoInstrutor } from './fixtures.js';
 import { instalarSupabaseFalso, documentosAtuais, CONTAS } from './supabase-falso.js';
 import { aluno, cenario, instrutor, GROUND_C152 } from '../helpers/montar.js';
 import { FROTA_INICIAL } from '../../js/frota.js';
@@ -40,7 +40,7 @@ async function abrirComCurso(page, estado = dia()) {
 
 const dialogo = page => page.locator('#dlg-agendar');
 const voo = (page, nome) => page.locator('#out tbody tr:not(.win)', { hasText: nome });
-const pedido = (page, id, mid = 0) => page.locator(`#dem tr[data-k="d"][data-id="${id}"][data-mid="${mid}"]`);
+const pedido = (page, id, mid = 0) => linhaDoProcessamento(page, `${id}_${mid}_1`);
 // A conferência terminou: a prévia diz o voo que entra
 const conferido = page => expect(page.locator('#agd-previa ul')).toContainText('Entra:');
 
@@ -63,7 +63,7 @@ const historico = async page => {
 };
 
 test.describe('Agendar um voo na Escala', () => {
-  test('pela barra: a próxima missão do curso, o recurso e o instrutor livres e o primeiro horário; o voo fica fixo, vai para a Demanda e o Histórico desfaz', async ({ page }) => {
+  test('pela barra: a próxima missão do curso, o recurso e o instrutor livres e o primeiro horário; o voo fica fixo, vai para o Processamento e o Histórico desfaz', async ({ page }) => {
     await abrirComCurso(page);
     await abrirDialogo(page);
     await expect(dialogo(page)).toHaveAccessibleName('Agendar voo');
@@ -88,9 +88,9 @@ test.describe('Agendar um voo na Escala', () => {
     await expect(linha).toContainText(recurso);
     await expect(linha).toContainText('PP-02');
 
-    // Na Demanda: o pedido voa, com a missão do curso e o instrutor escolhido
-    await irPara(page, 'dem');
-    await expect(caixaVoa(pedido(page, 1001))).toBeChecked();
+    // No Processamento: o voo está na escala, com a missão do curso e o instrutor escolhido
+    await irPara(page, 'proc');
+    await expect(pedido(page, 1001).locator('.lista-l3')).toHaveText(/^Na escala 06:30/);
     await expect(pedido(page, 1001).locator('.etapa')).toHaveText('PP-02');
     await abrirRestricoes(page, 1001);
     await expect(campoDasRestricoes(page, 'insId')).toHaveValue('2');
@@ -102,7 +102,7 @@ test.describe('Agendar um voo na Escala', () => {
     await expect(entrada.locator('.audit-desc')).toHaveText(`Agendado na escala: Maria Silva · PP-02 (Voo Local) · 06:30–07:30 · ${recurso} · Instrutor 02`);
     await entrada.getByRole('button', { name: '↶ Desfazer' }).click();
     await expect(lista).toContainText(`Revertido: Agendado na escala: Maria Silva`);
-    await expect(caixaVoa(pedido(page, 1001))).not.toBeChecked();
+    await expect(pedido(page, 1001)).toHaveCount(0);
     await page.locator('#btn-fechar-historico').click();
     await abrirEscala(page);
     await expect(voo(page, 'Maria Silva')).toHaveCount(0);
@@ -438,7 +438,7 @@ test.describe('Agendar um voo na Escala', () => {
     await expect(relativoDaData(page)).toHaveText('amanhã');
     await page.locator('#btn-agendar').click();
     const grupos = id => page.locator(id).evaluate(s => [...s.querySelectorAll('optgroup')].map(g => `${g.label}: ${[...g.children].map(o => o.textContent).join(' | ')}`).join(' / '));
-    expect(await grupos('#agd-aluno')).toMatch(/^Na demanda de amanhã: Aluno 1000 — PP · próxima PP-02 · voa amanhã às 06:30 \/ /);
+    expect(await grupos('#agd-aluno')).toMatch(/^Na escala de amanhã: Aluno 1000 — PP · próxima PP-02 · voa amanhã às 06:30 \/ /);
     await page.locator('#agd-aluno').selectOption('1000');
     await expect(page.locator('#agd-aluno-info')).toHaveText(/ · já voa amanhã às 06:30 \(PP-01, [A-Z0-9-]+\)$/);
     await expect(page.locator('#agd-missao optgroup').first()).toHaveAttribute('label', 'Voos de amanhã do aluno');
@@ -457,7 +457,7 @@ test.describe('Mover e encaixar o voo de hoje do aluno, as turmas de Ground e as
     await page.locator('#agd-aluno').selectOption(String(stuId));
   }
 
-  test('mover o voo de hoje: fica fixo no horário novo, a Demanda diz "agendado", e desfazer devolve o voo fixo de antes', async ({ page }) => {
+  test('mover o voo de hoje: fica fixo no horário novo, o Processamento diz "agendado", e desfazer devolve o voo fixo de antes', async ({ page }) => {
     // A Maria Silva voa a PP-02 às 08:20 no PR-VOB, fixa pelo Instrutor 02 escolhido na Escala
     const estado = dia({ fixos: { '1001_0_1': { a: 500, b: 560, r: 'PR-VOB', insId: 2, escolhido: true } } });
     Object.assign(estado.stu[1], { fly: true, p1: 500, p2: -1, etapa: 'PP-02', cursoDaEtapa: 'PP', insId: 2 });
@@ -478,9 +478,9 @@ test.describe('Mover e encaixar o voo de hoje do aluno, as turmas de Ground e as
     await expect(linha.locator('.fixo')).toHaveAttribute('aria-label', 'Voo fixo: agendado na escala');
     await expect(linha.locator('select[data-f="fstatus"]')).toBeFocused();
 
-    // Na Demanda: o mesmo pedido (nenhuma missão extra), com a missão do curso e a etiqueta do voo agendado
-    await irPara(page, 'dem');
-    await expect(pedido(page, 1001).locator('.tag[data-dica="voo-agendado"]')).toHaveText('agendado 10:10 · PR-VOB');
+    // No Processamento: o mesmo pedido (nenhuma missão extra), com a missão do curso e o voo agendado
+    await irPara(page, 'proc');
+    await expect(pedido(page, 1001).locator('.lista-l2')).toContainText('agendado 10:10');
     await expect(pedido(page, 1001).locator('.etapa')).toHaveText('PP-02');
     await expect(pedido(page, 1001, 1)).toHaveCount(0);
 
@@ -491,8 +491,8 @@ test.describe('Mover e encaixar o voo de hoje do aluno, as turmas de Ground e as
     await expect(entrada.locator('.audit-badge')).toHaveText('Edição');
     await entrada.getByRole('button', { name: '↶ Desfazer' }).click();
     await expect(lista).toContainText('Revertido: Agendado na escala: Maria Silva');
-    await expect(pedido(page, 1001).locator('.tag[data-dica="voo-agendado"]')).toHaveCount(0);
-    await expect(caixaVoa(pedido(page, 1001))).toBeChecked();
+    await expect(pedido(page, 1001).locator('.lista-l2')).not.toContainText('agendado');
+    await expect(pedido(page, 1001).locator('.lista-l3')).toHaveText(/^Na escala/);
     await page.locator('#btn-fechar-historico').click();
     await abrirEscala(page);
     await expect(voo(page, 'Maria Silva').locator('.c-hr')).toContainText('08:20–09:20');
@@ -521,10 +521,10 @@ test.describe('Mover e encaixar o voo de hoje do aluno, as turmas de Ground e as
     await expect(voo(page, 'Maria Silva').locator('.fixo')).toHaveAttribute('aria-label', 'Voo fixo: agendado na escala');
     await expect(voo(page, 'Aluno 1000').locator('.c-hr')).not.toContainText('06:30');
     // O mesmo pedido: nenhuma missão extra
-    await irPara(page, 'dem');
-    await expect(caixaVoa(pedido(page, 1001))).toBeChecked();
+    await irPara(page, 'proc');
+    await expect(pedido(page, 1001).locator('.lista-l3')).toHaveText(/^Na escala 06:30/);
     await expect(pedido(page, 1001, 1)).toHaveCount(0);
-    await expect(pedido(page, 1001).locator('.tag[data-dica="voo-agendado"]')).toContainText('agendado 06:30 · ');
+    await expect(pedido(page, 1001).locator('.lista-l2')).toContainText('agendado 06:30');
     await expect((await historico(page)).locator('.audit-desc', { hasText: 'Agendado na escala' })).toContainText('(estava fora da escala)');
   });
 

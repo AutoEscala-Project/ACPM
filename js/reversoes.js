@@ -240,13 +240,13 @@ export const VOO_COM_RESULTADO = 'O voo já tem resultado registrado.';
 
 // O voo que um pedido da agenda tomou depois (o voo posto à mão que deu lugar a ele) é o voo do pedido: desfazer o tiraria
 export const DE_UM_PEDIDO = 'Este voo agora é de um pedido da agenda: desfazer o tiraria da escala.';
-// O pedido da agenda que a conciliação tirou da demanda (cancelado ou com a aprovação retirada: o registro sem voar, o id
+// O pedido da agenda que a conciliação tirou da escala (cancelado ou com a aprovação retirada: o registro sem voar, o id
 // fora de importadas) não volta a voar por uma reversão: ela o poria de volta na escala sem o pedido (o E)
-export const SAIU_DA_DEMANDA = 'O pedido da agenda deste voo saiu da demanda (cancelado ou sem a aprovação): desfazer o poria de volta na escala.';
-const saiuDaDemanda = (estado, solicitacao) => Number.isInteger(solicitacao) && !(Array.isArray(estado.importadas) ? estado.importadas : []).includes(solicitacao);
+export const SAIU_DA_ESCALA = 'O pedido da agenda deste voo saiu da escala (cancelado ou sem a aprovação): desfazer o poria de volta nela.';
+const saiuDaEscala = (estado, solicitacao) => Number.isInteger(solicitacao) && !(Array.isArray(estado.importadas) ? estado.importadas : []).includes(solicitacao);
 // O "↶ Restaurar" do Voa (setFly com val true) dos registros dados (o pedido e as missões extras): '' ou o motivo
 export function motivoParaNaoVoltarAVoar(estado, registros) {
-  return registros.some(r => r && !r.fly && saiuDaDemanda(estado, r.solicitacao)) ? SAIU_DA_DEMANDA : '';
+  return registros.some(r => r && !r.fly && saiuDaEscala(estado, r.solicitacao)) ? SAIU_DA_ESCALA : '';
 }
 
 // O pedido da agenda que o agendamento deixou no voo (solicitacao): o do pedido como ele o deixou (criadoComo); sem ele,
@@ -268,9 +268,9 @@ export function motivoParaNaoDesfazer(estado, { stuId, mid, criado, pedido = nul
   const aluno = estado.stu.find(s => s.id === stuId);
   const atual = aluno ? pedidoDoAluno(aluno, mid) : null;
   if (!aluno) return 'O aluno deste voo saiu do cadastro: não há o que desfazer.';
-  if (!criado && !atual) return 'O pedido deste voo saiu da Demanda: não há o que desfazer.';
+  if (!criado && !atual) return 'O pedido deste voo saiu da escala: não há o que desfazer.';
   if (atual && atual.solicitacao !== undefined && atual.solicitacao !== pedidoQueOAgendamentoDeixou({ criado, pedido, criadoComo })) return DE_UM_PEDIDO;
-  if (atual && criadoComo && !mesmoPedido(atual, criadoComo)) return 'O pedido mudou depois do agendamento: desfazer agora mexeria em outro voo. Mude o pedido na Demanda.';
+  if (atual && criadoComo && !mesmoPedido(atual, criadoComo)) return 'O pedido mudou depois do agendamento: desfazer agora mexeria em outro voo. Mude o pedido nas restrições do voo.';
   if (STATUS_EM_ANDAMENTO.includes((estado.fStatus || {})[fKey])) return 'O voo já está em andamento: mude o status em vez de desfazer.';
   if ((estado.indisponiveis || []).includes('resultados')) {
     return 'Sem os resultados dos cursos, o app não confere se o voo já tem resultado: clique em "Tentar de novo" no aviso e desfaça depois.';
@@ -371,12 +371,12 @@ export function agendamentosEmVolta(estado, historico, entrada, frota) {
 // dos cursos lidos, ou com o resultado registrado (o resultado é do voo pelo aluno e pela missão: desfazer tiraria o voo
 // dele); e com o status mudado depois dela (desfazer trocaria o status de agora pelo de antes dela; statusDepois: o que
 // ela deixou). Nem quando um pedido da agenda tomou o registro depois dela (desfazer o tiraria da escala), nem quando o
-// pedido da agenda que ela devolveria voando saiu da demanda depois (cancelado ou sem a aprovação: desfazer o poria de volta)
+// pedido da agenda que ela devolveria voando saiu da escala depois (cancelado ou sem a aprovação: desfazer o poria de volta)
 export function motivoParaNaoDesfazerEdicao(estado, { voos, pedidos }) {
   if (pedidos.some(p => !estado.stu.some(s => s.id === p.stuId))) return 'O aluno deste voo saiu do cadastro: não há o que desfazer.';
   const atual = p => pedidoDoAluno(estado.stu.find(s => s.id === p.stuId), p.mid);
   if (pedidos.some(p => { const a = atual(p); return a && a.solicitacao !== undefined && a.solicitacao !== (p.pedido || {}).solicitacao; })) return DE_UM_PEDIDO;
-  if (pedidos.some(p => p.pedido && p.pedido.fly && saiuDaDemanda(estado, p.pedido.solicitacao) && !((atual(p) || {}).fly && atual(p).solicitacao === p.pedido.solicitacao))) return SAIU_DA_DEMANDA;
+  if (pedidos.some(p => p.pedido && p.pedido.fly && saiuDaEscala(estado, p.pedido.solicitacao) && !((atual(p) || {}).fly && atual(p).solicitacao === p.pedido.solicitacao))) return SAIU_DA_ESCALA;
   const fStatus = estado.fStatus || {};
   if (voos.some(v => STATUS_EM_ANDAMENTO.includes(fStatus[v.fKey]))) return 'O voo já está em andamento: mude o status em vez de desfazer.';
   if ((estado.indisponiveis || []).includes('resultados')) {

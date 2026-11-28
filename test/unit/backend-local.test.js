@@ -11,6 +11,7 @@ import { PROGRAMA, IDS } from '../helpers/casos-do-programa.js';
 import { CASOS_DA_AGENDA, CURSO_DOS_CASOS, pedidoDosCasos, localDosCasos } from '../helpers/casos-da-agenda.js';
 import { CASOS_DAS_SOLICITACOES, AGORA_DOS_CASOS, DATAS_DOS_CASOS, ID_QUE_NAO_EXISTE, linhaDoCaso, pedidoDoPasso, situacaoDoCaso, paraOModoLocal } from '../helpers/casos-das-solicitacoes.js';
 import { cursosIniciais } from '../../js/programa.js';
+import { CASOS_DOS_IMPORTADOS } from '../helpers/casos-dos-importados.js';
 import { CASOS_DOS_DADOS_PESSOAIS, CADASTRO_DOS_CASOS, ALUNO_DOS_CASOS, VERSAO_DOS_CASOS, tabelaDoCaso, versaoLidaDoCaso } from '../helpers/casos-dos-dados-pessoais.js';
 
 beforeEach(() => simularNavegador());
@@ -240,6 +241,61 @@ describe('Backend local: agenda de solicitações', () => {
     localStorage.setItem('acpm4_agenda', JSON.stringify(guardada));
     assert.equal((await backendLocal.listarSolicitacoes(dia(-10), dia(10))).find(s => s.id === 7).aprovada_em, null);
   });
+
+  // G2 (a migração 20261129100100_importados_ja_aprovados no modo local, marca acpm4_agenda_aprovacoes_g): a regra (a) de
+  // novo, uma vez, também nos pedidos que já têm as colunas da aprovação: o que uma aba antiga importou depois do D1 e
+  // ainda aguarda fica aprovado ("importação anterior"); o resto fica como estava
+  it('G2: os importados que ainda aguardam ficam aprovados, uma vez, pela regra (a) de novo', async () => {
+    const hoje = new Date();
+    const dia = n => new Date(hoje.getTime() + n * 864e5).toISOString().slice(0, 10);
+    const colunas = { horario2: null, aprovada_em: null, aprovada_por: null, aprovacao_retirada_em: null, aprovacao_retirada_por: null };
+    const linha = (id, data, extra = {}) => ({ id, data, aluno: 1000 + id, aluno_nome: 'Aluno', missao: 'Voo Local', janela: 'horario', horario: '08:20', horas: 1,
+      recurso: 'C152', observacao: null, registrado_por: 'Maria', registrado_em: hoje.toISOString(), conta: null, excecao: false, cancelada_em: null, cancelada_por: null, ...colunas, ...extra });
+    localStorage.setItem('acpm4_agenda_aprovacoes', '1');
+    localStorage.setItem('acpm4_agenda', JSON.stringify([
+      linha(1, dia(3)), linha(2, dia(3)), linha(3, dia(3), { aprovacao_retirada_em: hoje.toISOString(), aprovacao_retirada_por: 'Ana' }), linha(4, dia(3)),
+      linha(5, dia(-3)), linha(6, dia(3), { aprovada_em: hoje.toISOString(), aprovada_por: 'Ana' })
+    ]));
+    localStorage.setItem(`acpm4_dia_${dia(3)}`, JSON.stringify({ importadas: [1, 3, 4, 6], pedidos: { 1001: { fly: true, solicitacao: 1, extra: [] }, 1003: { solicitacao: 3, extra: [] }, 1006: { solicitacao: 6, extra: [] } } }));
+    localStorage.setItem(`acpm4_dia_${dia(-3)}`, JSON.stringify({ importadas: [5], pedidos: {} }));
+    const porId = async () => Object.fromEntries((await backendLocal.listarSolicitacoes(dia(-10), dia(10))).map(s => [s.id, s.aprovada_por]));
+    // 1: levado por um registro, aguardando: aprovado; 2: não importado; 3: aprovação retirada; 4: só em importadas, sem
+    // registro; 5: data passada, importado: aprovado; 6: já aprovado
+    assert.deepEqual(await porId(), { 1: 'importação anterior', 2: null, 3: null, 4: null, 5: 'importação anterior', 6: 'Ana' });
+    assert.equal(localStorage.getItem('acpm4_agenda_aprovacoes_g'), '1');
+    // Uma vez só
+    const guardada = JSON.parse(localStorage.getItem('acpm4_agenda'));
+    Object.assign(guardada.find(s => s.id === 1), { aprovada_em: null, aprovada_por: null });
+    localStorage.setItem('acpm4_agenda', JSON.stringify(guardada));
+    assert.equal((await porId())[1], null);
+  });
+
+  // Os casos da regra (a) de novo (test/helpers/casos-dos-importados.js), os mesmos do pgTAP da migração do G2: cada um sozinho,
+  // a conversão feita duas vezes (pela marca, a segunda não roda; a função pura, de novo, não muda nada)
+  for (const caso of CASOS_DOS_IMPORTADOS) {
+    it(`caso da regra (a) de novo: ${caso.nome}`, async () => {
+      const { aprovarOsImportadosDeNovo } = await import('../../js/agenda.js');
+      const hoje = new Date();
+      const dia = n => new Date(hoje.getTime() + n * 864e5).toISOString().slice(0, 10);
+      const data = caso.data === 'passada' ? dia(-3) : dia(5);
+      const estado = {
+        aguardando: {}, retirada: { aprovacao_retirada_em: hoje.toISOString(), aprovacao_retirada_por: 'Operador de teste' },
+        cancelada: { cancelada_em: hoje.toISOString(), cancelada_por: 'Maria' }, aprovada: { aprovada_em: hoje.toISOString(), aprovada_por: 'Operador de teste' }
+      }[caso.estado];
+      const linha = { id: 7, data, aluno: 1001, aluno_nome: 'Aluno', missao: 'Voo Local', janela: 'horario', horario: '08:20', horas: 1, recurso: 'C152', observacao: null,
+        registrado_por: 'Maria', registrado_em: hoje.toISOString(), conta: null, excecao: false, cancelada_em: null, cancelada_por: null,
+        horario2: null, aprovada_em: null, aprovada_por: null, aprovacao_retirada_em: null, aprovacao_retirada_por: null, ...estado };
+      const registro = { principal: { 1001: { fly: true, solicitacao: 7, extra: [] } }, extra: { 1001: { fly: true, mis: 'Voo Local', extra: [{ mid: 1, fly: true, solicitacao: 7 }] } } }[caso.registro] || {};
+      localStorage.setItem('acpm4_agenda_aprovacoes', '1');
+      localStorage.setItem('acpm4_agenda', JSON.stringify([linha]));
+      localStorage.setItem(`acpm4_dia_${data}`, JSON.stringify({ importadas: caso.importada ? [7] : [], pedidos: registro }));
+      const [lida] = await backendLocal.listarSolicitacoes(dia(-10), dia(10));
+      const esperado = caso.aprovado ? 'importação anterior' : caso.estado === 'aprovada' ? 'Operador de teste' : null;
+      assert.equal(lida.aprovada_por, esperado);
+      const diaDe = d => JSON.parse(localStorage.getItem(`acpm4_dia_${d}`));
+      assert.deepEqual(aprovarOsImportadosDeNovo([lida], diaDe, { hoje: dia(0), agora: hoje.toISOString() }), [lida], 'de novo, nada muda');
+    });
+  }
 
   // Os casos da aprovação (test/helpers/casos-das-solicitacoes.js) que o modo local faz (só os dos operadores), no relógio
   // dos casos, com a conversão já feita

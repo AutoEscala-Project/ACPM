@@ -1,6 +1,6 @@
 // As frases que o Manual não diz mais e as que ele precisa dizer (app.spec.js, "o botão Manual abre…"), em um bloco por
 // tela: o passo que muda uma tela muda o Manual dela e só o bloco dela aqui (A: Alunos; B: Recursos; C: Instrutores; D2:
-// Pedidos; G1, G2: a Demanda; H: a Escala e Aprovar)
+// Pedidos; G1: as restrições do voo; G2: o Processamento, no lugar da Demanda; H: a Escala e Aprovar)
 
 // Nada das regras e dos nomes antigos ("Desfazer", o botão que a Demanda teve, só nela: o dos dados pessoais, F2, é outro)
 const ANTIGAS = {
@@ -46,7 +46,10 @@ const ANTIGAS = {
   // G1: as colunas do tipo, do instrutor, das preferências, da duração e da prioridade saíram da Demanda para as restrições
   // do pedido, com a missão do curso ("Usar a do programa", "Trocar…")
   demanda: ['Próxima: PP-07 · Usar', 'Outra missão…', 'Missão e Recurso (só aparecem', 'sem os de Não escalar com do aluno',
-    'na Demanda para o dia vale mais'],
+    'na Demanda para o dia vale mais',
+    // G2: a Demanda saiu (o Voa, "+ missão", "Pôr um aluno na demanda", "Limpar demanda", "Importar pedidos aprovados")
+    'Pôr um aluno na demanda', 'Limpar demanda', 'Importar pedidos aprovados', 'Só quem voa', 'Ligue Voa', 'na linha da Demanda',
+    'continua na demanda até Tirar da escala', 'Importar os põe lá', 'saiu da demanda', 'mudou depois na Demanda', 'O filtro dos cursos é um só nas duas telas'],
   // Recursos em duas vistas (não mais em duas partes), com as categorias marcadas na barra
   recursos: ['3 de 26 recursos', 'A aba tem duas partes', 'Escolha uma categoria para ver só a frota dela', 'na Frota, em “Vale para todas as datas”',
     'Veja na aba Recursos se ele está ligado',
@@ -66,18 +69,21 @@ const NOVAS = {
     'ficam nos avisos da data, no trilho, ao lado do calendário', 'os voos com quem está inativo no cadastro (com Refazer a escala',
     // Os horários fechados nesta data, no alto da Escala (B): o bloco, o aviso do trilho e a pergunta
     'no alto da Escala, entre a barra das vistas e a dos critérios', 'Na escala que não está aprovada, Fechar e o ✕ perguntam antes',
-    // O agendamento na Escala (mover e encaixar, as turmas, as alternativas, a prévia, os avisos), o voo agendado na
-    // Demanda, as alterações dos cursos fora do Histórico e o peso aceito
+    // O agendamento na Escala (mover e encaixar, as turmas, as alternativas, a prévia, os avisos), o voo agendado no
+    // Processamento, as alterações dos cursos fora do Histórico e o peso aceito
     'Encaixar o voo', 'Mover o voo', 'Entrar na turma das', 'Horários livres', 'O que muda na escala', 'Agendar mesmo assim',
-    'agendado 10:10 · PR-VOB', 'fora da regra', 'ao lado do nome de cada recurso (ou instrutor)', 'não entram no Histórico da data', 'de 1 a 300 kg',
+    'agendado 10:10', 'fora da regra', 'ao lado do nome de cada recurso (ou instrutor)', 'não entram no Histórico da data', 'de 1 a 300 kg',
     // Acima do limite de voos locais do horário, todo voo local agendado pede a confirmação (não só o 7º)
     'mais de 6 voos locais no mesmo horário',
     // O voo com resultado não é desfeito, também com o progresso desligado
-    'o que já tem resultado nem o pedido que mudou depois na Demanda'],
-  demanda: ['Pôr um aluno na demanda',
+    'o que já tem resultado nem o voo que mudou depois nas restrições'],
+  // G2: o Processamento (a lista com a situação, a lista de espera, "Atualizar a escala", as ações e a resposta delas)
+  processamento: ['Em espera às 08:20 · 1º', 'também o local registrado na lista de espera', 'Atualizar a escala, no aviso do alto',
+    'troca a missão do curso que o programa passou', 'Trazer de volta', 'Pôr de volta na escala', 'Recomeçar pelos pedidos: dois cliques',
+    'marcada pela barra à esquerda e por “agora”', 'quando ele espera na lista de espera ou não coube', 'a secretaria não vê o Processamento',
     // G1: as restrições do pedido, de onde abrem, o que mostram (o horário exato da agenda, o tipo e o horário contra as
     // limitações, o INVA de Não escalar com desligado) e a regra que solta o voo agendado
-    'O resto do pedido fica em Restrições, na linha', 'é a gaveta com o que o app lê para encaixar o pedido na escala',
+    'é a gaveta com o que o app lê para encaixar o pedido na escala',
     'do aviso da missão que não entrou (no trilho)', 'Usar C152 mesmo assim', 'ficam na lista, desligados',
     'sem as preferências: o app só o escala nele', 'A missão que não entrou tem Restrições, embaixo do aviso',
     'a mesma missão, o mesmo tipo e as mesmas horas', 'Restrições, no editor, abre o que o app lê'],
@@ -86,18 +92,18 @@ const NOVAS = {
   // só de leitura com as ações, as duas preferências exatas, os dois botões e o 7º voo local, "Registrar na lista de espera"
   pedidos: ['Data do pedido', 'prazo encerrado', 'as missões do curso dele', 'NAV-150NM · Navegação · C152 · 3 h', '(nenhum ativo)',
     'Aguardando aprovação, Aprovados e Cancelados', 'Aprovar todos (N), que aprova só os que a busca mostra',
-    'O pedido aprovado da data aberta entra na demanda na hora quando a escala dessa data já está gravada', 'Importar os põe lá',
+    'O pedido aprovado da data aberta entra na escala na hora quando a escala dessa data já está gravada', 'Atualizar a escala, no Processamento, o põe lá',
     'O pedido escolhido é só de leitura', 'Registrar de novo…', '2ª preferência é outro horário exato', 'O 7º voo local confirmado vale só para a 1ª preferência',
     'Registrar e aprovar', 'Registrar sem aprovar', 'Com Registrar na lista de espera',
     'Com Registrar mesmo assim, o pedido guarda quem confirmou e quando',
     // E: o cancelado sai pela conciliação, e a vaga vai ao 1º da lista de espera; o voo que fica diz por quê, e reverter não
     // põe de volta o que saiu (a revisão do E)
-    'continua na demanda até Tirar da escala', 'dá a vaga ao 1º da lista de espera daquele horário', 'fica na escala, e o aviso diz por quê',
+    'Cancelar o pedido, ou retirar a aprovação, também se aplica sozinho', 'dá a vaga ao 1º da lista de espera daquele horário', 'fica na escala, e o aviso diz por quê',
     // A decisão do Pedro (2026-11-28): a lista de espera vem antes do pedido de outro horário, e quem entra fica fixo
     'A lista de espera vem antes de um pedido que estava em outro horário', 'o 1º dela que couber entra e fica fixo no lugar',
     // A revisão da decisão: o da lista de outro horário também muda de horário, e os da lista que entraram ficam fixos juntos
     'ou na lista de espera de outro horário', 'os dela que entraram nas outras vagas do mesmo cancelamento ficam fixos também',
-    'não põe de volta o voo de um pedido que saiu da demanda'],
+    'não põe de volta o voo de um pedido que saiu da escala'],
   // A busca sem acentos, quantos aparecem e o "Limpar filtros"; o "Vem" (a data aberta não é sempre hoje); o filtro das
   // habilitações, com várias marcas e a regra ("todas as marcadas"). C: INVAs como lista e detalhe, as faixas ("Pode
   // decolar de … até …"), as pausas ("+ Pausa", "Almoço"), os três turnos, meio dia digitado, a tira, a regra de antes do C
@@ -109,13 +115,13 @@ const NOVAS = {
     // O detalhe sem nada escolhido (linha-fix-escala-sem-caixas, depois do C)
     'ou use + Novo instrutor'],
   // Alunos como lista e detalhe (F2): a escolha no endereço, os campos no lugar, Anterior e Próximo, o filtro dos cursos (a
-  // regra "algum dos marcados"; um só nas duas telas) e os dados pessoais na seção do aluno, com Salvar e Desfazer; o
+  // regra "algum dos marcados"; G2: cada tela com as marcas dela) e os dados pessoais na seção do aluno, com Salvar e Desfazer; o
   // cadastro relido depois de um conflito. A: as seções do detalhe (Nesta data, Curso e missões), o nome completo (também
   // na busca), a secretaria que consulta e "Apagar os dados pessoais". C: sem o cartão de Instrutores no celular
   // L: as limitações do aluno (os tipos e os horários), duras para a escala, e o que os Pedidos desligam
   alunos: ['Não escalar com', 'Só voa no', 'Pode voar', 'a escala nunca passa por cima delas', 'C152 (o aluno só voa no C172)', 'A lista dos alunos fica à esquerda e o aluno escolhido à direita', 'ou use + Novo aluno', '#/alu/1000', '‹ Alunos',
     'gravado ao sair dele', 'Ctrl+, e Ctrl+.', 'Filtro dos cursos', 'aparecem os alunos de algum dos marcados', 'Curso: PP ou PC',
-    'aparecem os pedidos dos alunos de algum dos cursos marcados', 'O filtro dos cursos é um só nas duas telas',
+    'O filtro dos cursos de Alunos tem as marcas dele (o do Processamento tem as suas)',
     'e Desfazer volta ao que está gravado', 'Outra pessoa alterou o cadastro enquanto você editava',
     'desligue Ativo, na linha dele', 'Mostrar inativos', 'Nesta data', 'Sem voo nesta data.', 'Curso e missões', 'Curso matriculado',
     'Nome (na escala)', 'Nome completo', 'o nome completo e o CANAC', 'a secretaria consulta, em texto', 'Apagar os dados pessoais'],

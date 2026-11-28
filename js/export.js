@@ -51,7 +51,7 @@ export function pdf() {
   doc.setFontSize(18); doc.text('Escala de Voo - ACPM', 14, 15);
   doc.setFontSize(11);
   doc.text(`Data da escala: ${dt}     Emitida em: ${new Date().toLocaleString('pt-BR')}`, 14, 22);
-  doc.text(`Missões na demanda: ${tot}     Atendidas: ${tot - rej}     Horas escaladas: ${hrs(out)}     Alertas: ${al.length}`, 14, 28);
+  doc.text(`Missões pedidas: ${tot}     Atendidas: ${tot - rej}     Horas escaladas: ${hrs(out)}     Alertas: ${al.length}`, 14, 28);
 
   const body = [];
   // Os grupos pelo horário de início de cada voo (J, S1), como na Lista

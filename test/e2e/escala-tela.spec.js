@@ -1,5 +1,5 @@
 // Tela da Escala: Lista, Por recurso ou Por instrutor; resumo com erros e avisos agrupados; uma linha por voo.
-import { test, comPrioridade, expect, abrir, abrirComExemplo, abrirEscala, irPara, lerEscala, alternarDisponivel, alvosPequenos, larguraDaPagina, appPronto, AMANHA, prepararContexto, vigiarErros, entrar, importarDaAgenda, abrirAvisosDaEscala, textosDaEscala, itensDaEscala, resumoDaEscala, editorDoVoo, refazer, confirmarAgendamento, aprovar, abrirInstrutor, habilitacaoDoInstrutor } from './fixtures.js';
+import { test, comPrioridade, expect, abrir, abrirComExemplo, abrirEscala, irPara, lerEscala, estadoDoProcessamento, alternarDisponivel, alvosPequenos, larguraDaPagina, appPronto, AMANHA, prepararContexto, vigiarErros, entrar, atualizarAEscala, abrirAvisosDaEscala, textosDaEscala, itensDaEscala, resumoDaEscala, editorDoVoo, refazer, confirmarAgendamento, aprovar, abrirInstrutor, habilitacaoDoInstrutor } from './fixtures.js';
 import { criarSupabaseFalso, documentosAtuais, CONTAS } from './supabase-falso.js';
 import { IDS } from '../helpers/casos-do-programa.js';
 import { cursosIniciais, gravarCurso } from '../../js/programa.js';
@@ -1005,8 +1005,8 @@ test.describe('O que a missão do curso exige do INVA, na Escala', () => {
     }, JSON.stringify({ acpm4_cadastro: cadastro, [`acpm4_dia_${AMANHA}`]: dias[AMANHA], acpm4_cursos: { cursos: semExige, alteracoes: [] } }));
     await page.goto('./');
     await appPronto(page);
-    // A escala gravada (uma alteração da Demanda grava a data), com o voo
-    await irPara(page, 'dem');
+    // A escala gravada (uma alteração das restrições grava a data), com o voo
+    await irPara(page, 'proc');
     // A prioridade, nas restrições do pedido (G1)
     await abrirRestricoes(page, 1000);
     await page.locator('select[aria-label="Prioridade de Aluno 1000"]').selectOption('4');
@@ -1055,7 +1055,7 @@ test.describe('O que a missão do curso exige do INVA, na Escala', () => {
   });
 });
 
-// Q8 (F1d, "limite confirmado"): o 7º voo local do horário confirmado na Agenda ("Registrar mesmo assim") entra na demanda
+// Q8 (F1d, "limite confirmado"): o 7º voo local do horário confirmado na Agenda ("Registrar mesmo assim") entra na escala
 // com a confirmação e voa no horário dele, sem tomar a vaga dos seis; a Escala avisa nele, com o texto do agendado
 test.describe('O 7º voo local confirmado, na Escala', () => {
   const pedido = (id, extra = {}) => ({
@@ -1078,9 +1078,9 @@ test.describe('O 7º voo local confirmado, na Escala', () => {
     }, JSON.stringify({ acpm4_cadastro: cadastro, [`acpm4_dia_${AMANHA}`]: dias[AMANHA], acpm4_agenda: agenda }));
     await page.goto('./');
     await appPronto(page);
-    await irPara(page, 'dem');
-    await importarDaAgenda(page);
-    await expect(page.locator('#toast-box')).toContainText('7');
+    await irPara(page, 'proc');
+    await atualizarAEscala(page);
+    await expect(estadoDoProcessamento(page)).toHaveText('Escala atualizada: entraram Aluno 2001, Aluno 2002, Aluno 2003 e mais 4 · qua 11/11');
     await abrirEscala(page, { vista: 'lista' });
     const linhas = (await lerEscala(page)).linhas.filter(l => /Aluno 20\d\d/.test(l));
     expect(linhas).toHaveLength(7);

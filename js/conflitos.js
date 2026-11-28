@@ -99,3 +99,23 @@ export const FORA_DA_ESCALA = {
   'instrutor-escolhido': 'o instrutor escolhido não serve', 'habilitacao-do-aviao': 'sem a habilitação própria do avião',
   'limitacao-de-recurso': 'o aluno não voa nesse tipo de recurso'
 };
+
+// Onde se resolve cada rejeição do motor (G2: o detalhe do Processamento diz e leva lá): a tela (o id de js/telas.js) e as
+// palavras; restricoes: a gaveta das restrições do voo resolve (o campo das palavras). Um para cada código acima
+const AGENDAR = { tela: 'esc', rotulo: 'Escala: + Agendar voo' };
+const DO_GROUND = { tela: 'esc', rotulo: 'Escala: o Ground do aluno nesta data' };
+export const ONDE_RESOLVER = {
+  'equipamento-da-missao': { tela: 'esc', rotulo: 'Restrições do voo: Tipo de recurso', restricoes: true },
+  'ground-pendente': DO_GROUND, 'ground-antes-do-voo-fixo': DO_GROUND, 'depois-do-ground': DO_GROUND,
+  'so-parafuso': { tela: 'rec', rotulo: 'Recursos: o C152 do Parafuso' }, 'sem-aviao': { tela: 'rec', rotulo: 'Recursos: Disponível nesta data' },
+  revisao: { tela: 'rec', rotulo: 'Recursos: as horas até a revisão' }, 'sala-indisponivel': { tela: 'rec', rotulo: 'Recursos: a Sala Ground nesta data' },
+  'habilitacao-do-aviao': { tela: 'ins', rotulo: 'INVAs: a habilitação própria do avião' },
+  'sem-instrutor-habilitado': { tela: 'ins', rotulo: 'INVAs: as habilitações' },
+  'instrutores-indisponiveis': { tela: 'ins', rotulo: 'INVAs: Vem nesta data e as faixas' }, 'limite-da-lei': { tela: 'ins', rotulo: 'INVAs: os limites da lei' },
+  'disponibilidade-do-aluno': { tela: 'esc', rotulo: 'Restrições do voo: Horário', restricoes: true },
+  'sem-horario': { tela: 'esc', rotulo: 'Escala: os horários fechados nesta data' },
+  'aluno-ocupado': AGENDAR, 'avioes-ocupados': AGENDAR, 'sala-ocupada': AGENDAR, 'instrutores-ocupados': AGENDAR, 'limite-de-locais': AGENDAR,
+  bloqueio: { tela: 'alu', rotulo: 'Alunos: Não escalar com' }, peso: { tela: 'alu', rotulo: 'Alunos: o peso' },
+  'limitacao-de-recurso': { tela: 'alu', rotulo: 'Alunos: Limitações' },
+  'instrutor-escolhido': { tela: 'esc', rotulo: 'Restrições do voo: Instrutor', restricoes: true }
+};

@@ -118,7 +118,7 @@ describe('Os eventos ligados ao carregar', () => {
 
   it('os painéis dos filtros de vários valores existem (o filtro lê #<id>-painel)', () => {
     // (o de Recursos, flt-rec-cat, saiu no B: os grupos por categoria da lista fazem o papel dele)
-    for (const id of ['flt-ins-hab', 'flt-alu-cur', 'flt-dem-cur']) {
+    for (const id of ['flt-ins-hab', 'flt-alu-cur', 'flt-proc-sit', 'flt-proc-cur', 'flt-proc-mis']) {
       assert.match(HTML, new RegExp(`id="${id}"`), id);
       assert.match(HTML, new RegExp(`id="${id}-painel"`), `${id}-painel`);
     }

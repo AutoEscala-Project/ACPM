@@ -1,9 +1,8 @@
 // Atributos dos recursos em Recursos (no detalhe do recurso, "Cadastro · todas as datas": Só VFR, Só Parafuso; a
 // habilitação própria em "Habilitações que o INVA precisa"), a habilitação própria nas habilitações do instrutor (em INVAs)
-// e o simulador com 2 h na Demanda e na Agenda
+// e o simulador com 2 h em Pedidos
 import { test, expect, abrir, irPara, abrirEscala, abrirHistorico, campoDaAgenda, abrirInstrutor, secaoDoInstrutor, habilitacaoDoInstrutor, abrirRecursos, linhaDoRecurso, marcarAtributo, campoDoRecurso, textosDaEscala } from './fixtures.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
-import { abrirRestricoes, campoDasRestricoes, fecharRestricoes } from './telas/restricoes.js';
 
 const linha = (page, nome) => page.locator('#out tbody tr:not(.win)', { hasText: nome });
 
@@ -47,18 +46,9 @@ test.describe('Atributos dos recursos', () => {
     await expect(linha(page, 'Aluno 1000').locator('.c-aviao')).toContainText('PR-VOM');
   });
 
-  test('o simulador começa com 2 h na Demanda e na Agenda', async ({ page }) => {
+  // (A missão da linha da Demanda saiu no G2: a missão é a do pedido, em Pedidos)
+  test('o simulador começa com 2 h em Pedidos', async ({ page }) => {
     await abrir(page, { estado: cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000)] }) });
-    await irPara(page, 'dem');
-    const pedido = page.locator('#dem tr[data-k="d"][data-id="1000"][data-mid="0"]');
-    // A duração, nas restrições do pedido (G1), acompanha a missão mudada na linha
-    await abrirRestricoes(page, 1000);
-    await pedido.locator('[data-f="mis"]').selectOption('Simulador');
-    await expect(campoDasRestricoes(page, 'nb')).toHaveValue('2');
-    await page.locator('#dem tr[data-k="d"][data-id="1000"][data-mid="0"] [data-f="mis"]').selectOption('Voo Local');
-    await expect(campoDasRestricoes(page, 'nb')).toHaveValue('1');
-    await fecharRestricoes(page);
-
     await irPara(page, 'age');
     // A missão espera o aluno (F1c)
     await campoDaAgenda(page, 'aluno').selectOption({ label: 'Aluno 1000' });
