@@ -74,7 +74,9 @@ export function custoDaEscala(out, estado) {
 
 // A busca. Muda os voos de out no lugar (horário, período, instrutor, peso, combustível, avião e a etiqueta da
 // preferência) e devolve quantos movimentos fez
-export function compactar(out, state, { saldo = () => Infinity, posicao = () => 0, limites: limitesDados, historico = () => null, limitesDaBusca = LIMITES_DA_COMPACTACAO } = {}) {
+// almoco: o almoço dos INVAs do motor (#104, js/viabilidade.js): nenhum movimento leva a última hora livre de 11:00 a 14:00
+// de um INVA da guarda (sem ele, a busca fecharia esse buraco como os outros)
+export function compactar(out, state, { saldo = () => Infinity, posicao = () => 0, limites: limitesDados, historico = () => null, limitesDaBusca = LIMITES_DA_COMPACTACAO, almoco = null } = {}) {
   const limites = limitesDados || normalizarLimites(state.limites);
   const { buracos, horarios: regra } = normalizarCriterios(state.criterios);
   const pesos = PESOS_DA_COMPACTACAO[buracos], pesosDaPreferencia = PESOS_DA_COMPACTACAO.preferencia;
@@ -203,7 +205,7 @@ export function compactar(out, state, { saldo = () => Infinity, posicao = () => 
           curso: vooDa(u).curso, recurso: u.isGround ? null : recursoDaFrota(frota, m.r), exige: exigeDa(u.voos)
         }, {
           compromissos, historico: x ? historico(x.id) : null, limites,
-          peso: mudouInstrutor ? { reducaoMaxima: v.comb ? v.comb.reduzirGal : 0, exigirPesoDoInstrutor: true } : null
+          peso: mudouInstrutor ? { reducaoMaxima: v.comb ? v.comb.reduzirGal : 0, exigirPesoDoInstrutor: true } : null, almoco
         });
         if (problemas.length) return false;
       }

@@ -181,6 +181,18 @@ test.describe('Tela da Escala', () => {
     await expect(page.locator('#out details.caixa.avisos summary')).toHaveText('2 avisos: 1 aluno sem peso · 1 instrutor sem peso');
   });
 
+  // O almoço (#104): três pedidos de horário exato (10:10, 11:30 e 12:40) com o único INVA só cabem tirando a hora livre
+  // dele de 11:00 a 14:00; os três entram, o aviso diz quem ficou sem almoço e o que o ocupa, e o resumo conta os INVAs
+  test('o almoço: o voo que só cabe sem ele entra, o aviso diz quem ficou sem almoço, e o resumo conta', async ({ page }) => {
+    const exato = m => ({ p1: m, p2: -1, jan: `h${m}` });
+    await abrir(page, { estado: cenario({ ins: [instrutor(1, 1)], stu: [aluno(1000, exato(610)), aluno(1001, exato(690)), aluno(1002, exato(760))] }) });
+    await abrirEscala(page, { vista: 'lista' });
+    await expect(page.locator('#out tbody tr:not(.win)')).toHaveCount(3);
+    await expect(page.locator('#out details.caixa.avisos summary')).toHaveText('1 aviso: 1 INVA sem almoço');
+    const avisos = await abrirCaixa(page, 'avisos');
+    await expect(avisos.locator('li')).toHaveText(['Instrutor 01 Sem almoço: nenhuma hora livre seguida entre 11:00 e 14:00 (ocupado das 10:10 às 11:10, das 11:30 às 12:30 e das 12:40 às 13:40).']);
+  });
+
   // F1h (N9): dois alunos priorizam o mesmo INVA no mesmo horário. Com a prioridade desligada (o padrão), todos têm a
   // mesma: o primeiro no cadastro fica com ele às 08:20; o outro voa com ele às 10:10, e a escala diz (um aviso por voo, a
   // disputa com os nomes, os horários e a chave que decidiu, sem falar da prioridade); o resumo conta os avisos de

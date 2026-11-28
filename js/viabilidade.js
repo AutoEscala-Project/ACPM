@@ -7,6 +7,7 @@ import { podeFazer, faltaDaMissaoDoCurso, PREFIXO_DA_MISSAO_DO_CURSO } from './h
 import { instrutorVoaNoAviao, habilitacaoQueFalta } from './frota.js';
 import { dentroDosLimites } from './limites.js';
 import { reducaoNecessaria } from './combustivel.js';
+import { tiraOAlmoco } from './almoco.js';
 
 // Dois intervalos (em minutos) se sobrepõem quando um começa antes de o outro terminar; encostar não conta
 export const sobrepoe = (a1, b1, a2, b2) => a1 < b2 && b1 > a2;
@@ -34,8 +35,13 @@ export const folgaAte = (ocupados, a, b) => ocupados.reduce((menor, [x, y]) => M
 // volta do noturno: a lei conta o voo, e o instrutor está ocupado no intervalo maior). jaOcupa: ele já está neste compromisso (o aluno que
 // entra na turma dele), então a ocupação e a lei não mudam. peso: null não confere; reducaoMaxima é o combustível a
 // menos aceito (0: só o tanque cheio) e exigirPesoDoInstrutor recusa o instrutor sem peso quando o peso importa.
+// almoco (#104, só o motor: js/engine.js e a compactação): { guarda, recusou }, os ids dos INVAs com o almoço do motor
+// (js/almoco.js) e o que anota cada recusa (o motor conta para saber se ela mudou alguma coisa, e de quem); a última regra,
+// depois das duras: o compromisso não leva a última hora livre de 11:00 a 14:00 de um INVA da guarda. Sem almoco, não
+// confere (a conferência dos fixos, os candidatos, as sugestões e o instrutor escolhido não o leem: a escolha do operador
+// vale, e a Escala mostra o aviso)
 export function problemasDoInstrutor(x, { mis, tipo, a, b, efetivo = { a, b }, alunos = [], stuKg = 0, curso, recurso, exige },
-  { compromissos = [], historico = null, limites, jaOcupa = false, peso = {}, todos = false }) {
+  { compromissos = [], historico = null, limites, jaOcupa = false, peso = {}, todos = false, almoco = null }) {
   if (!x) return [{ codigo: 'instrutor-saiu' }];
   const { reducaoMaxima = Infinity, exigirPesoDoInstrutor = false } = peso || {};
   const pesoServe = () => {
@@ -49,6 +55,12 @@ export function problemasDoInstrutor(x, { mis, tipo, a, b, efetivo = { a, b }, a
     const lei = dentroDosLimites({ compromissos, novo: { ...efetivo, voo: AIRCRAFT_EQ_TYPES.includes(tipo) }, historico, limites });
     return lei.ok || { motivo: lei.motivo };
   };
+  const ocupados = () => compromissos.map(c => [c.ocupaDe ?? c.a, c.ocupaAte ?? c.b]);
+  const guardaOAlmoco = () => {
+    if (!almoco || jaOcupa || !almoco.guarda.has(x.id) || !tiraOAlmoco(ocupados(), a, b)) return true;
+    almoco.recusou(x.id);
+    return false;
+  };
   const regras = [
     // Ele vem, e o compromisso começa dentro de uma faixa da data sem tocar uma pausa (a regra do início, C), ou nas do aw
     // onde não há faixas
@@ -58,10 +70,11 @@ export function problemasDoInstrutor(x, { mis, tipo, a, b, efetivo = { a, b }, a
     ['habilitacao', () => (!podeFazer(x, mis, tipo) ? false : podeFazer(x, mis, tipo, { curso, recurso, exige }) ||
       { motivo: recurso && !instrutorVoaNoAviao(x, recurso) ? habilitacaoQueFalta(x, recurso)
         : !podeFazer(x, mis, tipo, { curso }) || !faltaDaMissaoDoCurso(x, exige) ? 'curso' : `${PREFIXO_DA_MISSAO_DO_CURSO}${faltaDaMissaoDoCurso(x, exige)}` })],
-    ['instrutor-ocupado', () => jaOcupa || livre(compromissos.map(c => [c.ocupaDe ?? c.a, c.ocupaAte ?? c.b]), a, b)],
+    ['instrutor-ocupado', () => jaOcupa || livre(ocupados(), a, b)],
     ['bloqueio', () => !alunos.some(s => s && (s.bl || []).includes(x.id))],
     ['limite-da-lei', dentroDaLei],
-    ['peso', pesoServe]
+    ['peso', pesoServe],
+    ['almoco', guardaOAlmoco]
   ];
   const problemas = [];
   for (const [codigo, cumpre] of regras) {

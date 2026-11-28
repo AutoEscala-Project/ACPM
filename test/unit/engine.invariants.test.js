@@ -391,7 +391,9 @@ describe('Invariantes da escala aprovada com atrasos e cancelamentos', () => {
 
 // Fora das preferências, o voo vai para o horário mais perto da 1ª. Sem a compactação e sem a divisão das horas
 // (que trocam o instrutor depois), nenhum horário mais perto (ou à mesma distância e mais cedo) servia ao mesmo avião,
-// ao mesmo instrutor e ao aluno (sem a troca de matrículas também: ela muda o avião de outros voos depois)
+// ao mesmo instrutor e ao aluno (sem a troca de matrículas também: ela muda o avião de outros voos depois; e sem o almoço,
+// #104: o horário mais perto que levaria a última hora livre do INVA de 11:00 a 14:00 é pulado, e o almoço tem os testes
+// dele em almoco.test.js)
 describe('O horário mais perto da preferência, em 300 cenários', async () => {
   const { horariosDaMissao, minutoDaPreferencia } = await import('../../js/horarios.js');
   const { disponivelPara } = await import('../../js/disponibilidade.js');
@@ -403,7 +405,7 @@ describe('O horário mais perto da preferência, em 300 cenários', async () => 
     const falhas = [];
     for (const seed of SEEDS) {
       const estado = gerarCenario(seed);
-      const { out } = runAllocationEngine(estado, { compactar: false, dividirHoras: false, trocarMatriculas: false });
+      const { out } = runAllocationEngine(estado, { compactar: false, dividirHoras: false, trocarMatriculas: false, almoco: false });
       for (const o of out.filter(v => !v.isGround && v.baseTag === 'Próximo livre' && v.status !== 'Cancelado')) {
         const { d } = pedidoDe(estado, o);
         const p1 = minutoDaPreferencia(d.p1), p2 = minutoDaPreferencia(d.p2);

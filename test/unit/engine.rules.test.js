@@ -1288,14 +1288,16 @@ describe('As disputas do “Priorizar com”', () => {
 
   // Achado pela busca em cenários aleatórios: antes da compactação, o Aluno 05 está com o Instrutor 06 às 08:20, o horário
   // que a aula de Ground do Aluno 07 pediu; a compactação o leva para as 11:30, e às 08:20 não há mais ninguém com ele: a
-  // frase sai (a do motivo de sempre fica). O Aluno 05 não veio antes na fila (o Ground vem antes dos voos): sem o porquê
+  // frase sai (a do motivo de sempre fica). O Aluno 05 não veio antes na fila (o Ground vem antes dos voos): sem o porquê.
+  // Sem o almoço do motor (#104): com ele, a compactação não leva o voo para as 11:30 (tiraria a hora livre do INVA)
   it('a disputa que a compactação desfaz não é dita (a frase usa os horários do fim)', async () => {
     const { gerarCenario, comEscolhas } = await import('../helpers/cenarios.js');
     const estado = comEscolhas(gerarCenario(86), 86);
-    const disputaDe = opcoes => runAllocationEngine(estado, opcoes).al.filter(a => a.fKey === '1009_0_1').map(a => a.m);
+    const semAlmoco = { almoco: false };
+    const disputaDe = opcoes => runAllocationEngine(estado, { ...semAlmoco, ...opcoes }).al.filter(a => a.fKey === '1009_0_1').map(a => a.m);
     const inicio = 'Sem o instrutor de “Priorizar com” (Instrutor 06: indisponível nos horários possíveis): o voo ficou com Instrutor 05.';
     assert.deepEqual(disputaDe({ compactar: false }), [`${inicio} Aluno 07 e Aluno 05 priorizam Instrutor 06 às 08:20: ficou com Aluno 05.`]);
-    const { out } = runAllocationEngine(estado);
+    const { out } = runAllocationEngine(estado, semAlmoco);
     assert.deepEqual(out.filter(o => o.insId === 6 && o.a < 590 && 500 < o.b), []);
     assert.deepEqual(disputaDe({}), [inicio]);
   });

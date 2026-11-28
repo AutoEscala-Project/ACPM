@@ -30,7 +30,8 @@ describe('O almoço: a hora livre entre 11:00 e 14:00', () => {
     assert.equal(horaLivre([[600, 700], [760, 900]]), true, '11:40–12:40');
     assert.equal(horaLivre([[600, 700], [750, 900]]), false, '50 min só');
     assert.equal(horaLivre([[390, 720], [780, 1050]]), true, '12:00–13:00, encostando nos dois');
-    assert.equal(horaLivre([[600, 790]]), true, '13:10–14:10 não: 13:10–14:00 são 50 min');
+    assert.equal(horaLivre([[600, 790]]), false, 'das 13:10 às 14:00 são 50 min');
+    assert.equal(horaLivre([[600, 780]]), true, '13:00–14:00');
     assert.equal(horaLivre([[600, 781]]), false, 'das 13:01 às 14:00 são 59 min');
     assert.equal(horaLivre([[719, 721]]), true, 'antes e depois: 11:00–11:59 e 12:01–14:00');
     assert.equal(horaLivre([[690, 750], [760, 820]]), false, 'das 11:00 às 11:30, 12:30–12:40 e 13:40–14:00: nenhuma hora');
@@ -109,7 +110,7 @@ describe('O almoço no motor', () => {
     assert.deepEqual(doAlmoco(com), []);
     // A compactação sozinha, com o almoço do INVA: o voo das 13:40 não volta para as 12:40
     const escala = runAllocationEngine(tres(), semCompactar).out.map(o => ({ ...o }));
-    compactar(escala, tres(), { almoco: { guarda: new Set([1]), recusas: 0 } });
+    compactar(escala, tres(), { almoco: { guarda: new Set([1]), recusou: () => {} } });
     assert.ok(horaLivre(escala.map(o => [o.a, o.b])));
   });
 
@@ -148,7 +149,7 @@ describe('O almoço no motor', () => {
   it('o voo fixo que ocupa a janela fica onde está, só com o aviso', () => {
     const e = cenario({ ins: [instrutor(1, 1, DIA_INTEIRO)], stu: [aluno(1000, { p1: 690, p2: -1, nb: 2.5 }), aluno(1001, { p1: 500, p2: -1 })] });
     e.fixos = { '1000_0_1': { a: 690, b: 840, r: 'PP-LJV', insId: 1 } };
-    const r = runAllocationEngine(e);
+    const r = runAllocationEngine(e, semCompactar);
     assert.deepEqual(voos(r), [['Aluno 1001', '08:20', '09:20', 1], ['Aluno 1000', '11:30', '14:00', 1]]);
     assert.ok(r.out.find(o => o.stuId === 1000).fixo);
     assert.deepEqual(doAlmoco(r).map(a => a.s), ['Instrutor 01']);

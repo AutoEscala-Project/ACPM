@@ -16,6 +16,7 @@ import { atualizarAgendamento } from './agendamento.js';
 import { resultadoNaEscala } from './etapas.js';
 import { OPCOES_DE_BURACOS, OPCOES_DE_HORARIOS, normalizarCriterios } from '../criterios.js';
 import { metricasDaEscala } from '../metricas.js';
+import { ehAvisoDoAlmoco } from '../almoco.js';
 import { ligada } from '../funcionalidades.js';
 import { sumUniqueOperationalHours, consolidateTimelineSlots } from '../engine.js';
 import { S, RES, AUDIT_LOG, TL_MODE, HORAS_NAS_COLUNAS, OCULTAR_INDISPONIVEIS, DATA, isGestor, dadoIndisponivel, estadoDaEscala, inativoNaDataAberta, habilitacoesNaoConferidas } from '../state.js';
@@ -353,8 +354,9 @@ function tempoParado(out) {
 
 // Avisos agrupados pelo código: alunos e instrutores sem peso, aviões que param para a revisão, atrasos, instrutores
 // perto do limite da lei, os do “Priorizar com” (um por voo: sem o instrutor, a disputa ou o voo posto à mão fora dele), as
-// voltas do noturno com o avião ou o INVA indisponível (uma por volta) e os voos agendados fora das regras (um por voo).
-// Os avisos sem código (de uma escala gravada antes deles) entram em "outros"
+// voltas do noturno com o avião ou o INVA indisponível (uma por volta), os voos agendados fora das regras (um por voo) e os
+// INVAs sem almoço (#104: o aviso não tem código, e é reconhecido pelo começo do texto). Os outros avisos sem código (de
+// uma escala gravada antes deles) entram em "outros"
 function resumoDosAvisos(avisos) {
   const doCodigo = codigo => avisos.filter(a => a.codigo === codigo);
   const quantos = (lista, campo) => new Set(lista.map(a => a[campo]).filter(id => id !== undefined)).size;
@@ -368,7 +370,8 @@ function resumoDosAvisos(avisos) {
   const repouso = quantos(doCodigo('repouso-do-noturno'), 'insId');
   const voltas = doCodigo('volta-do-noturno').length;
   const foraDaRegra = quantos(avisos.filter(a => CODIGOS_DO_AGENDADO.includes(a.codigo)), 'fKey');
-  const outros = avisos.filter(a => !CODIGOS_DE_AVISO.includes(a.codigo)).length;
+  const semAlmoco = quantos(avisos.filter(ehAvisoDoAlmoco), 'insId');
+  const outros = avisos.filter(a => !CODIGOS_DE_AVISO.includes(a.codigo) && !ehAvisoDoAlmoco(a)).length;
   const partes = [
     semPeso && `${semPeso} ${semPeso === 1 ? 'aluno sem peso' : 'alunos sem peso'}`,
     instrutoresSemPeso && `${instrutoresSemPeso} ${instrutoresSemPeso === 1 ? 'instrutor sem peso' : 'instrutores sem peso'}`,
@@ -380,6 +383,7 @@ function resumoDosAvisos(avisos) {
     repouso && `${repouso} ${repouso === 1 ? 'instrutor' : 'instrutores'} sem o repouso da lei antes da volta do noturno`,
     voltas && `${voltas} ${voltas === 1 ? 'volta do noturno' : 'voltas do noturno'} com o avião ou o INVA indisponível`,
     foraDaRegra && `${foraDaRegra} ${foraDaRegra === 1 ? 'agendamento' : 'agendamentos'} fora da regra`,
+    semAlmoco && `${semAlmoco} ${semAlmoco === 1 ? 'INVA sem almoço' : 'INVAs sem almoço'}`,
     outros && `${outros} ${outros === 1 ? 'outro' : 'outros'}`
   ].filter(Boolean);
   return `${avisos.length} ${avisos.length === 1 ? 'aviso' : 'avisos'}: ${partes.join(' · ')}`;
