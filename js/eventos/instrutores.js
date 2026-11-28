@@ -64,9 +64,6 @@ registrarDesenho('instrutores-na-escala', () => {
   queueMicrotask(() => { escalaPorDesenhar = false; semFalhar(() => tela.desenhar()); });
 }, { em: ['escala'], ordem: 21 });
 registrarDesenho('limites-da-lei', () => tela.desenhar());
-// Recursos pede este nome quando muda a habilitação própria de um recurso: os grupos das habilitações no detalhe (e as
-// opções do filtro) acompanham a frota
-registrarDesenho('habilitacoes-do-instrutor', () => tela.desenhar());
 // O endereço: #/ins/<id> escolhe o instrutor (#/ins/limites, os limites da lei); numa vista só, abre o detalhe
 registrarTela('ins', { aoMostrar: (item, opcoes) => tela.aoMostrar(item, opcoes) });
 // O CANAC da busca e do subtítulo acompanha os dados pessoais
