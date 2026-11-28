@@ -7,27 +7,44 @@ import { codigoValido, siglaValida } from './cursos.js';
 import { chaveDoVoo } from './voo.js';
 
 // Disponibilidade do aluno para o pedido (o horário da agenda da secretaria): o voo só começa nele. "h450" é um horário
-// exato (07:30, em minutos; "h5", dos dados antigos, é a janela 5). Sem disponibilidade, qualquer horário da lista. Desde o
-// J (N12, N13) não há período do dia: o "manha", o "tarde" e o "noite" de antes valem como nenhum (o formato 28 os tira)
+// exato (07:30, em minutos; "h5", dos dados antigos, é a janela 5); com a 2ª preferência (U1, a partir do E), dois:
+// "h500|h610", dois minutos diferentes, cada um válido, o 1º primeiro (a ordem do pedido). Sem disponibilidade, qualquer
+// horário da lista. Desde o J (N12, N13) não há período do dia: o "manha", o "tarde" e o "noite" de antes valem como
+// nenhum (o formato 28 os tira)
 function minutoExato(jan) {
   const horario = /^h(\d{1,4})$/.exec(jan);
   const minuto = horario ? minutoDaPreferencia(+horario[1]) : -1;
   return minuto >= HORARIO_DO_SOLO && minuto <= HORARIO_DO_NOTURNO ? minuto : null;
 }
+// Os minutos exatos do pedido, na ordem dele: [] (nenhum: sem jan, um período de antes do J ou fora do formato), [m] ou
+// [m1, m2]
+export function minutosExatos(jan) {
+  if (typeof jan !== 'string') return [];
+  const partes = jan.split('|');
+  if (partes.length > 2) return [];
+  const minutos = partes.map(minutoExato);
+  if (minutos.includes(null) || (minutos.length === 2 && minutos[0] === minutos[1])) return [];
+  return minutos;
+}
 // O minuto em que o 7º voo local confirmado na Agenda (limiteConfirmado, Q8) passa do limite de 6: o horário exato do
-// pedido (jan); null no pedido não confirmado, sem horário exato ou que não é local. O motor e as Sugestões contam assim
-export const minutoConfirmado = d => (Boolean(d) && MISSOES_LOCAIS.includes(d.mis) && d.limiteConfirmado === true ? minutoExato(d.jan) : null);
+// pedido (jan; com dois, o 1º, o que o servidor contou); null no pedido não confirmado, sem horário exato ou que não é
+// local. O motor e as Sugestões contam assim
+export const minutoConfirmado = d => (Boolean(d) && MISSOES_LOCAIS.includes(d.mis) && d.limiteConfirmado === true ? minutosExatos(d.jan)[0] ?? null : null);
 // O que a disponibilidade permite: uma função do horário de início, ou null (sem disponibilidade: qualquer horário)
 export function disponibilidadeDoAluno(jan) {
-  if (typeof jan !== 'string') return null;
-  const exato = minutoExato(jan);
-  return exato === null ? null : minuto => minuto === exato;
+  const minutos = minutosExatos(jan);
+  return minutos.length ? minuto => minutos.includes(minuto) : null;
 }
 export const disponibilidadeValida = jan => disponibilidadeDoAluno(jan) !== null;
-// A disponibilidade no formato atual ("h5" vira "h820"); inválida: undefined
-export const disponibilidadeAtual = jan =>
-  (minutoExato(jan) !== null ? `h${minutoExato(jan)}` : undefined);
-export const rotuloDaDisponibilidade = jan => (minutoExato(jan) !== null ? `às ${hm(minutoExato(jan))}` : 'Qualquer horário');
+// A disponibilidade no formato atual ("h5" vira "h820"; os dois minutos, "h500|h610"); inválida: undefined
+export function disponibilidadeAtual(jan) {
+  const minutos = minutosExatos(jan);
+  return minutos.length ? minutos.map(m => `h${m}`).join('|') : undefined;
+}
+export const rotuloDaDisponibilidade = jan => {
+  const minutos = minutosExatos(jan);
+  return minutos.length ? minutos.map(m => `às ${hm(m)}`).join(' ou ') : 'Qualquer horário';
+};
 
 // Regra da missão pelo nome, somente entre as missões cadastradas (nomes como "constructor" não contam)
 const missionRule = mis => (Object.hasOwn(MIS, mis) ? MIS[mis] : null);

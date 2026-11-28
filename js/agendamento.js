@@ -15,7 +15,7 @@
 import { MIS, GROUND_EQ_TYPE, GROUND_REG, GROUND_DURATION_MIN, DEFAULT_LIM, MINUTOS_DO_DIA, NOTURNO, MISSOES_LOCAIS, LIMITE_DE_VOOS_LOCAIS } from './config.js';
 import {
   alvoDoNovoPedido, normalizeMissionFields, duracaoFixaDaMissao, duracaoPadraoDaMissao, duracaoValida, duracaoDigitada, isGroundMission,
-  disponibilidadeDoAluno, rotuloDaDisponibilidade, pesoDigitado, ERRO_DA_DURACAO, ERRO_DO_PESO
+  disponibilidadeDoAluno, disponibilidadeValida, rotuloDaDisponibilidade, pesoDigitado, ERRO_DA_DURACAO, ERRO_DO_PESO
 } from './rules.js';
 import { horariosDaMissao, horariosDoTipo, periodoDoMinuto, paraMinuto, INICIOS_DOS_TEMPOS } from './horarios.js';
 import { ocupacaoDaEscala, avioesQueServem, instrutoresQueServem, problemaDoRecurso, problemaDoAluno } from './candidatos.js';
@@ -900,8 +900,13 @@ export function aplicarAgendamento(estado, base, proposta) {
     if (proposta.missao) Object.assign(alvo, { etapa: proposta.missao.codigo, cursoDaEtapa: proposta.missao.sigla });
     else { delete alvo.etapa; delete alvo.cursoDaEtapa; }
   }
+  // O horário exato do pedido que não inclui o horário novo passa a ser ele (N14: a mudança do operador substitui o
+  // horário; fora dos exatos do dia, das 06:30 às 17:30, ele sai); o outro dos dois horários do pedido (U1) o deixa como está
   const permitidas = disponibilidadeDoAluno(alvo.jan);
-  if (permitidas && !permitidas(proposta.a)) delete alvo.jan;
+  if (permitidas && !permitidas(proposta.a)) {
+    if (disponibilidadeValida(`h${proposta.a}`)) alvo.jan = `h${proposta.a}`;
+    else delete alvo.jan;
+  }
   normalizeMissionFields(alvo);
   const ground = isGroundMission(alvo.mis);
   const classKey = !ground ? null : proposta.turma ? proposta.turma.classKey : chaveDaTurmaNova(estado.fixos || {}, fKey, { mis: alvo.mis, a: proposta.a, insId: proposta.insId });
@@ -1121,13 +1126,14 @@ export function avaliarAgendamento({ estado, baseComPesos, base = baseComPesos, 
       avisos.push({ codigo: 'recurso-do-programa', texto: `O programa faz ${m.codigo} no ${m.eq}; o voo vai no ${tipo}, e a missão continua ${m.codigo}.`, resumo: `${m.codigo} no ${tipo}`, campo: 'agd-recurso' });
     }
   }
-  // O voo de hoje que muda de lugar: a disponibilidade do aluno que não inclui o horário novo sai do pedido; o voo fixo
+  // O voo de hoje que muda de lugar: o horário exato do pedido que não inclui o horário novo passa a ser ele (N14); o voo fixo
   // pela escala aprovada (ou pelo status, ou o Noturno) deixa o lugar em que estava fixo
   if (movido) {
     const { jan } = movido.pedido;
     const permitidas = disponibilidadeDoAluno(jan);
     if (permitidas && !permitidas(a)) {
-      avisos.push({ codigo: 'disponibilidade-do-aluno', texto: `${stu.nm} pediu o horário ${rotuloDaDisponibilidade(jan)}: agendado às ${hm(a)}, o pedido fica sem o horário.`, resumo: 'fora da disponibilidade do aluno', campo: 'agd-horario' });
+      const depois = disponibilidadeValida(`h${a}`) ? `o pedido passa a ser às ${hm(a)}` : 'o pedido fica sem o horário';
+      avisos.push({ codigo: 'disponibilidade-do-aluno', texto: `${stu.nm} pediu o horário ${rotuloDaDisponibilidade(jan)}: agendado às ${hm(a)}, ${depois}.`, resumo: 'fora da disponibilidade do aluno', campo: 'agd-horario' });
     }
     const pino = (estado.fixos || {})[fKey];
     const muda = movido.voo && (movido.voo.a !== a || movido.voo.r !== r || movido.voo.insId !== x.id);

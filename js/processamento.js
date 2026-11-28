@@ -2,7 +2,7 @@
 // volta, quem sai e quem fica), a missão do curso com que cada pedido entra e o resumo do que ela fez. Quem a chama é
 // js/entrada-na-demanda.js (os botões de importar e a aprovação em Pedidos, até o G2). Puro: sem DOM, sem relógio, sem
 // rede e sem S; recebe o estado da data e os pedidos e muda só o estado
-import { migrateLegacyMissionName, alvoDoNovoPedido, proximoMid, blank, PRIORIDADE_PADRAO } from './rules.js';
+import { migrateLegacyMissionName, alvoDoNovoPedido, proximoMid, blank, PRIORIDADE_PADRAO, minutosExatos } from './rules.js';
 import { pedidoDaSolicitacao, recursoValido, missaoDoCursoGuardada } from './agenda.js';
 import { indiceDoPrograma } from './programa.js';
 import { proximasMissoes, missoesDoDia } from './progresso.js';
@@ -11,7 +11,7 @@ import { chaveDoVoo, pedidoDoAluno } from './voo.js';
 import { fixoPeloStatus } from './fixos.js';
 import { inativo } from './inativos.js';
 import { intervaloEfetivo } from './status.js';
-import { minutoDaPreferencia, paraMinuto, horariosDaMissao, HORARIO_DO_SOLO, HORARIO_DO_NOTURNO } from './horarios.js';
+import { minutoDaPreferencia, paraMinuto, horariosDaMissao } from './horarios.js';
 import { rejeicoesDosPedidos } from './rejeicoes.js';
 import { hm } from './format.js';
 
@@ -19,20 +19,10 @@ import { hm } from './format.js';
 const pedidosDoAluno = aluno => [aluno, ...(Array.isArray(aluno.extra) ? aluno.extra : [])];
 
 // Os minutos exatos do pedido (jan): "h<minuto>" (o horário da Agenda; o "h5" dos dados antigos é a janela 5) ou, com a
-// 2ª preferência (U1), "h<minuto1>|h<minuto2>", dois minutos diferentes, o 1º primeiro, entre as 06:30 e as 17:30 (os
-// limites de minutoExato, js/rules.js). Sem horário exato (sem jan, um período de antes do J ou um valor fora do formato): nenhum
-export function minutosDoPedido(jan) {
-  if (typeof jan !== 'string') return [];
-  const partes = jan.split('|');
-  if (partes.length > 2) return [];
-  const minutos = partes.map(p => {
-    const h = /^h(\d{1,4})$/.exec(p);
-    const minuto = h ? minutoDaPreferencia(+h[1]) : -1;
-    return minuto >= HORARIO_DO_SOLO && minuto <= HORARIO_DO_NOTURNO ? minuto : null;
-  });
-  if (minutos.includes(null) || (minutos.length === 2 && minutos[0] === minutos[1])) return [];
-  return minutos;
-}
+// 2ª preferência (U1), "h<minuto1>|h<minuto2>", dois minutos diferentes, o 1º primeiro, entre as 06:30 e as 17:30
+// (minutosExatos, js/rules.js, o que o motor e as outras telas leem). Sem horário exato (sem jan, um período de antes do J
+// ou um valor fora do formato): nenhum
+export const minutosDoPedido = jan => minutosExatos(jan);
 
 // O horário do pedido no dia, em minutos: o do voo fixo; senão, o 1º minuto exato do pedido; senão, a 1ª preferência;
 // senão, null (desconhecido)

@@ -240,12 +240,14 @@ export function aplicarEdicao(estado, resultado, voo, valores, { aprovada = Bool
       Object.assign(p, { fly: true, eq: tipo, p1: valores.a, ...(voo.ground ? {} : { nb: valores.minutos / 60 }) });
       if (novo) p.p2 = -1;
       if (valores.a !== voo.valores.a || novo) {
-        // A de um minuto exato vira o minuto novo, enquanto ele é um horário da disponibilidade (das 06:30 às 17:30); fora
-        // disso, ela sai, como a mais larga que não inclui o horário novo
+        // A de um minuto exato (ou dois, U1) vira o minuto novo, enquanto ele é um horário da disponibilidade (das 06:30 às
+        // 17:30); o outro dos dois horários do pedido a deixa como está; fora disso, ela sai, como a mais larga que não
+        // inclui o horário novo
         const permitidas = disponibilidadeDoAluno(p.jan);
-        const exato = typeof p.jan === 'string' && /^h\d+$/.test(p.jan) ? `h${valores.a}` : null;
-        if (exato && disponibilidadeValida(exato)) p.jan = exato;
-        else if (permitidas && !permitidas(valores.a)) { delete p.jan; janSaiu = true; }
+        if (permitidas && !permitidas(valores.a)) {
+          if (disponibilidadeValida(`h${valores.a}`)) p.jan = `h${valores.a}`;
+          else { delete p.jan; janSaiu = true; }
+        }
       }
       // A confirmação do 7º local foi dada para o horário, a missão e o tipo: sai quando um deles muda (como na Demanda)
       if (valores.a !== voo.valores.a || novo || m.missao || outroTipo) delete p.limiteConfirmado;
