@@ -4,7 +4,8 @@
 // da agenda é mostrado, não editado (N14); o tipo e o horário contra as limitações do aluno avisam e pedem a confirmação; o
 // INVA de "Não escalar com" fica na lista, desligado
 import { test, comPrioridade, expect, abrir, abrirEscala, aprovar, lerEscala, irPara, abrirHistorico, entradasDoHistorico, larguraDaPagina, AMANHA,
-  editarPelaLista, editarPeloMapa, editorDoVoo, botaoEditar, avisosDaData, vigiarErros, perguntaDoRefazer, refazer, naoRefazer } from './fixtures.js';
+  editarPelaLista, editarPeloMapa, editorDoVoo, botaoEditar, avisosDaData, vigiarErros, perguntaDoRefazer, refazer, naoRefazer,
+  botaoDosAvisos, botaoDoTrilho, mostrarAvisos, recolherOTrilho } from './fixtures.js';
 import {
   gavetaDasRestricoes, restricoesDoPedido, campoDasRestricoes, avisoDasRestricoes, confirmarRestricao, desistirDaRestricao, abrirRestricoes,
   restricoesPeloEditor, restricoesPeloTrilho, botaoDasRestricoesNoTrilho, fecharRestricoes
@@ -212,6 +213,33 @@ test.describe('A gaveta das restrições', () => {
     await expect(page.locator('#dem tr[data-k="d"][data-id="1000"] [data-act="restricoes"]')).toBeFocused();
     expect((await pedidoGuardado(page, 1000)).nb).toBe(1);
   });
+
+  // O voo sai da escala pela gaveta (o tipo que o aluno não voa): o "Editar" de onde ela abriu sumiu, e o voo também. O
+  // foco vai para o trilho, sempre à vista (linha-fix-escala-sem-caixas, sem o botão da data): o "Restrições" do item da
+  // missão que não entrou; com os avisos recolhidos, o botão deles; com o calendário recolhido, o do alto do trilho
+  for (const [caso, preparar, alvo] of [
+    ['o "Restrições" do item da missão que não entrou', mostrarAvisos, page => botaoDasRestricoesNoTrilho(page, 'Aluno 1001')],
+    ['com os avisos recolhidos, o botão dos avisos', async page => { await mostrarAvisos(page); await botaoDosAvisos(page).click(); }, botaoDosAvisos],
+    ['com o calendário recolhido, o botão do alto do trilho', recolherOTrilho, botaoDoTrilho]
+  ]) {
+    test(`o voo que saiu da escala pela gaveta: o Esc leva o foco ao trilho (${caso})`, async ({ page }) => {
+      const estado = dia();
+      estado.stu[1].eq = 'C172';
+      estado.stu[1].limitacoes = { recursos: ['C172'] };
+      await abrir(page, { estado });
+      await abrirEscala(page);
+      await preparar(page);
+      await editarPelaLista(page, '1001_0_1');
+      await restricoesPeloEditor(page, 1001);
+      await campoDasRestricoes(page, 'eq').selectOption('C152');
+      await refazer(page);
+      await expect(gavetaDasRestricoes(page)).toContainText('Fora da escala:');
+      await expect(botaoEditar(page, '1001_0_1')).toHaveCount(0);
+      await page.keyboard.press('Escape');
+      await expect(gavetaDasRestricoes(page)).toBeHidden();
+      await expect(alvo(page)).toBeFocused();
+    });
+  }
 
   test('a turma de Ground: a gaveta abre no primeiro controle (não numa dica) e o foco volta para o "Editar" do mesmo aluno', async ({ page }) => {
     await abrir(page, { estado: cenario({ ins: [instrutor(1, 9), instrutor(2, 9)], stu: [aluno(1000, GROUND_C152), aluno(1001, GROUND_C152)] }) });
