@@ -28,29 +28,39 @@ function estadoDoCartao(tarefas) {
 const inativoNaData = (item, { data, hoje }) => inativo(item) && inativoValeEm(data, hoje);
 
 // Os pedidos da data (D2): os não cancelados, os que aguardam aprovação, os aprovados e os aprovados fora da demanda
-// (nunca importados; sem os do aluno inativo, que entram quando ele voltar a ativo). Numa data que já passou, o que aguarda
-// e o que ficou fora não pedem mais nada
+// (nunca importados). Só pede atenção o pedido de um aluno do cadastro, ativo na data: o do inativo entra quando ele voltar
+// a ativo (F3: fora dos pendentes) e o de quem não está no cadastro, depois de cadastrado; Pedidos não aprova nenhum dos dois.
+// Numa data que já passou, o que aguarda e o que ficou fora não pedem mais nada
 function contagemDosPedidos(ctx) {
-  const { registradas, aguardando, aprovadas } = resumoDasSolicitacoes(ctx.pedidos);
   const importadas = (ctx.S && ctx.S.importadas) || [];
   const alunos = new Map(((ctx.S && ctx.S.stu) || []).map(s => [s.id, s]));
-  const fora = (ctx.pedidos || []).filter(p => solicitacaoAprovada(p) && !importadas.includes(p.id) && !inativoNaData(alunos.get(p.aluno), ctx));
+  const pedeAtencao = p => { const aluno = alunos.get(p.aluno); return Boolean(aluno) && !inativoNaData(aluno, ctx); };
+  const { registradas, aguardando, aprovadas } = resumoDasSolicitacoes(ctx.pedidos, pedeAtencao);
+  const fora = (ctx.pedidos || []).filter(p => solicitacaoAprovada(p) && !importadas.includes(p.id) && pedeAtencao(p));
   return { p: registradas, aguardando, aprovados: aprovadas, fora: fora.length, passada: Boolean(ctx.hoje) && ctx.data < ctx.hoje };
 }
 
+// O rótulo de cada tarefa vai depois do número (a frase do leitor de tela, "1 aprovado fora da demanda"): concorda com ele
+const ROTULOS_DOS_PEDIDOS = {
+  registrados: n => (n === 1 ? 'pedido da data' : 'pedidos da data'),
+  aguardando: () => 'aguardando aprovação',
+  aprovados: () => 'aprovados',
+  'fora-da-demanda': n => (n === 1 ? 'aprovado fora da demanda' : 'aprovados fora da demanda')
+};
 function tarefasDosPedidos(ctx) {
   const leitura = ctx.leituraDosPedidos;
-  const ids = [['registrados', 'pedidos da data'], ['aguardando', 'aguardando aprovação'], ['aprovados', 'aprovados'], ...(ctx.opera ? [['fora-da-demanda', 'aprovados fora da demanda']] : [])];
-  if (leitura === 'erro') return ids.map(([id, rotulo]) => tarefa(id, rotulo, '—', 'falhou', 'age'));
+  const ids = ['registrados', 'aguardando', 'aprovados', ...(ctx.opera ? ['fora-da-demanda'] : [])];
+  if (leitura === 'erro') return ids.map(id => tarefa(id, ROTULOS_DOS_PEDIDOS[id](null), '—', 'falhou', 'age'));
   const { p, aguardando, aprovados, fora, passada } = contagemDosPedidos(ctx);
-  if (leitura !== 'lidos') return ids.map(([id, rotulo]) => tarefa(id, rotulo, '—', 'nenhum', 'age'));
+  if (leitura !== 'lidos') return ids.map(id => tarefa(id, ROTULOS_DOS_PEDIDOS[id](null), '—', 'nenhum', 'age'));
   const valores = {
     registrados: [p, p ? 'feito' : 'pendente'],
     aguardando: [aguardando, !p || (aguardando && passada) ? 'nenhum' : aguardando ? 'atencao' : 'feito'],
     aprovados: [`${aprovados} de ${p}`, !p ? 'nenhum' : aprovados === p ? 'feito' : 'andamento'],
     'fora-da-demanda': [fora, !p || (fora && passada) ? 'nenhum' : fora ? 'atencao' : 'feito']
   };
-  return ids.map(([id, rotulo]) => tarefa(id, rotulo, ...valores[id], 'age'));
+  const numero = { registrados: p, 'fora-da-demanda': fora };
+  return ids.map(id => tarefa(id, ROTULOS_DOS_PEDIDOS[id](numero[id] ?? null), ...valores[id], 'age'));
 }
 
 function cartaoDosPedidos(ctx) {

@@ -8,8 +8,9 @@ import { solicitacoesDaData, lerSolicitacoesDaData } from '../solicitacoes-da-da
 
 export const lerPedidosDaData = lerSolicitacoesDaData;
 
-// Os aprovados que ainda não estão na demanda, sem os do aluno inativo (entram quando ele voltar a ativo)
-const paraImportar = () => solicitacoesParaImportar(solicitacoesDaData().lista, S).filter(s => !inativoNaDataAberta(stuBy(s.aluno)));
+// Os aprovados que ainda não estão na demanda, só de alunos do cadastro ativos (o do inativo entra quando ele voltar a
+// ativo; o de quem não está no cadastro, depois de cadastrado), como o aviso de Pedidos e o cartão contam
+const paraImportar = () => solicitacoesParaImportar(solicitacoesDaData().lista, S).filter(s => { const aluno = stuBy(s.aluno); return Boolean(aluno) && !inativoNaDataAberta(aluno); });
 
 // (O número dos aviões parados ou perto da revisão, que a Disponibilidade do dia de Recursos tinha, foi para os pontos das
 // linhas de Recursos e para o trilho no B)

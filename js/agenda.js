@@ -184,16 +184,16 @@ export function aprovarAsDeAntesDaAprovacao(lista, diaDe, { hoje, agora }) {
 export const situacaoDaSolicitacao = s => (s.cancelada_em ? 'cancelada' : s.aprovada_em ? 'aprovada' : 'aguardando');
 export const solicitacaoAprovada = s => situacaoDaSolicitacao(s) === 'aprovada';
 
-// O resumo da data: os registrados (sem os cancelados), os que aguardam, os aprovados, os cancelados e os registrados fora
-// do prazo (pela Exceção da Coordenação), sem os cancelados
-export function resumoDasSolicitacoes(lista) {
-  const resumo = { registradas: 0, aguardando: 0, aprovadas: 0, canceladas: 0, foraDoPrazo: 0 };
+// O resumo da data (o cartão Pedidos): os registrados (sem os cancelados), os aprovados e os que aguardam e pedem atenção
+// (pedeAtencao: o pedido que alguém pode aprovar; o do aluno inativo ou fora do cadastro, que Pedidos não aprova, não)
+export function resumoDasSolicitacoes(lista, pedeAtencao = () => true) {
+  const resumo = { registradas: 0, aguardando: 0, aprovadas: 0 };
   for (const s of lista || []) {
     const situacao = situacaoDaSolicitacao(s);
-    if (situacao === 'cancelada') { resumo.canceladas++; continue; }
+    if (situacao === 'cancelada') continue;
     resumo.registradas++;
-    resumo[situacao === 'aprovada' ? 'aprovadas' : 'aguardando']++;
-    if (s.excecao) resumo.foraDoPrazo++;
+    if (situacao === 'aprovada') resumo.aprovadas++;
+    else if (pedeAtencao(s)) resumo.aguardando++;
   }
   return resumo;
 }
