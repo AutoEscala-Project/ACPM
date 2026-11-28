@@ -296,6 +296,33 @@ describe('O almoço no motor', () => {
     }
   });
 
+  // O almoço com o L (as limitações do aluno, duras; a junção do previa): a busca do almoço só muda uma missão pelas regras
+  // do motor, e a limitação do horário do aluno é uma delas. O Instrutor 01 tem a manhã ocupada (06:30 a 10:00 e 10:10 a
+  // 12:10, os dois de horário exato) e o voo de 1 h das 12:40; sem a limitação, o das 12:40 vai para as 13:40 e o 01 fica
+  // com a hora. O aluno das 12:40 limitado às manhãs (06:30 a 13:00) nunca vai para as 13:40: o voo fica às 12:40 e o 01,
+  // sem almoço (com o aviso; nenhum voo fora). Limitado até as 14:00, ele vai para as 13:40 como sem a limitação
+  it('o aluno limitado às manhãs nunca muda para depois do horário dele para guardar o almoço', () => {
+    const estado = limitacoes => cenario({
+      ins: [instrutor(1, 1, DIA_INTEIRO)],
+      stu: [aluno(1000, { p1: 610, p2: -1, nb: 2, jan: 'h610' }), aluno(1002, { p1: 390, p2: -1, nb: 3.5, jan: 'h390' }),
+        aluno(1001, { p1: 760, p2: -1 }, limitacoes ? { limitacoes } : {})]
+    });
+    const doLimitado = r => r.out.filter(o => o.stuId === 1001).map(o => hm(o.a));
+    for (const opcoes of [semCompactar, {}]) {
+      assert.deepEqual(doLimitado(runAllocationEngine(estado(null), { ...opcoes, almoco: false })), ['12:40']);
+      const livre = runAllocationEngine(estado(null), opcoes);
+      assert.deepEqual(doLimitado(livre), ['13:40']);
+      assert.deepEqual(doAlmoco(livre), []);
+      for (const [ate, esperado, semAlmoco] of [[780, '12:40', 1], [840, '13:40', 0]]) {
+        const r = runAllocationEngine(estado({ horarios: [{ de: 390, ate }] }), opcoes);
+        assert.equal(r.out.length, 3, JSON.stringify(voos(r)));
+        assert.deepEqual(doLimitado(r), [esperado], `até ${hm(ate)}`);
+        assert.deepEqual(r.al.filter(a => a.t === 'err'), []);
+        assert.deepEqual(doAlmoco(r).map(a => a.s), semAlmoco ? ['Instrutor 01'] : [], `até ${hm(ate)}`);
+      }
+    }
+  });
+
   it('o instrutor escolhido continua o único da busca: o almoço muda o horário dele, nunca o INVA', () => {
     const e = cenario({
       ins: [instrutor(1, 1, DIA_INTEIRO), instrutor(2, 1, DIA_INTEIRO)],
