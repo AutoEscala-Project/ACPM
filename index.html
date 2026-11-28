@@ -76,21 +76,12 @@
   <symbol id="i-exclamacao" viewBox="0 0 24 24"><path d="M12 5v9"/><path d="M12 18.5h.01"/></symbol>
   <symbol id="i-andamento" viewBox="0 0 24 24"><path d="M12 4a8 8 0 1 1-7.4 5"/></symbol>
   <symbol id="i-grafico" viewBox="0 0 24 24"><path d="M5 20V11M12 20V5M19 20v-6"/></symbol>
-  <symbol id="i-trilho" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16"/></symbol>
   <symbol id="i-busca" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4.2-4.2"/></symbol>
   <symbol id="i-filtro" viewBox="0 0 24 24"><path d="M4 5h16l-6 7.5V19l-4 2v-8.5z"/></symbol>
 </svg>
 
 <header class="topo" data-regiao="topo">
   <h1 class="topo-marca"><img class="topo-logo" src="img/acpm-aguia.png" alt="" width="64" height="24"><span class="topo-titulo">AutoEscala</span></h1>
-  <!-- A data em uso, o contexto de todas as telas: o botão abre o calendário do trilho (ao lado, leva o foco até ele) -->
-  <button type="button" class="topo-data-botao" id="btn-data" aria-controls="trilho" aria-expanded="false">
-    <svg class="ico" aria-hidden="true"><use href="#i-calendario"/></svg>
-    <span class="sr">Data da escala: </span><span id="dt-rotulo"></span>
-    <span class="topo-data-rel" id="dt-rel" hidden></span>
-    <span class="badge-cnt" id="avisos-cnt" hidden></span>
-    <svg class="ico hd-seta" aria-hidden="true"><use href="#i-baixo"/></svg>
-  </button>
   <div class="hd-tools">
     <select class="hd-sel" id="role-sel" aria-label="Perfil de acesso">
       <option value="operador">Operador</option>
@@ -189,21 +180,31 @@
   </div>
 </nav>
 
-<!-- O trilho: o calendário da data aberta (cada dia com os pedidos dele) e os avisos dela. Ao lado da tela ou aberto
-     pelo botão da data (js/views/trilho.js) -->
-<aside class="trilho" id="trilho" aria-label="Data e avisos" data-regiao="trilho" hidden>
-  <div class="trilho-cab">
-    <h2 class="trilho-mes" id="cal-mes" aria-live="polite"></h2>
-    <button type="button" class="x" id="cal-mes-ant" aria-label="Mês anterior" title="Mês anterior"><svg class="ico" aria-hidden="true"><use href="#i-esquerda"/></svg></button>
-    <button type="button" class="x" id="cal-mes-prox" aria-label="Próximo mês" title="Próximo mês"><svg class="ico" aria-hidden="true"><use href="#i-direita"/></svg></button>
-    <button type="button" class="x" id="btn-fixar-trilho" aria-pressed="false" aria-label="Fixar o calendário ao lado da tela" title="Fixar o calendário ao lado da tela"><svg class="ico" aria-hidden="true"><use href="#i-trilho"/></svg></button>
-    <button type="button" class="x" id="btn-fechar-trilho" aria-label="Fechar o calendário" title="Fechar o calendário" hidden><svg class="ico" aria-hidden="true"><use href="#i-fechar"/></svg></button>
+<!-- O trilho: a data em uso, o contexto de todas as telas (o topo não a tem: linha-fix-escala-sem-caixas), sempre à vista,
+     ao lado da tela (a partir de 1024 px) ou em cima dela. No alto, a data aberta, quantos avisos e o botão que recolhe o
+     calendário; embaixo, o calendário (cada dia com os pedidos dele) e os avisos da data, que recolhem no botão deles. Os
+     dois ficam guardados neste navegador (js/views/trilho.js, js/eventos/trilho.js) -->
+<aside class="trilho" id="trilho" aria-label="Data e avisos" data-regiao="trilho">
+  <div class="trilho-topo">
+    <h2 class="trilho-rotulo"><span class="sr">Data da escala: </span><span id="trilho-rotulo"></span> <span class="trilho-rel" id="trilho-rel" hidden></span></h2>
+    <span class="trilho-cnt" id="avisos-cnt" hidden></span>
+    <button type="button" class="x" id="btn-recolher-trilho" aria-expanded="true" aria-controls="trilho-corpo" aria-label="Recolher o calendário" title="Recolher o calendário"><svg class="ico" aria-hidden="true"><use href="#i-baixo"/></svg></button>
   </div>
-  <table class="cal" id="cal" role="grid" aria-labelledby="cal-mes"></table>
-  <div class="trilho-avisos" role="region" aria-labelledby="trilho-data">
-    <h2 class="trilho-data" id="trilho-data"></h2>
-    <ol class="avisos-da-data" id="avisos-da-data" hidden></ol>
-    <p class="h" id="avisos-vazio" hidden>Nada a resolver nesta data.</p>
+  <div class="trilho-corpo" id="trilho-corpo">
+    <div class="trilho-cab">
+      <h2 class="trilho-mes" id="cal-mes" aria-live="polite"></h2>
+      <button type="button" class="x" id="cal-mes-ant" aria-label="Mês anterior" title="Mês anterior"><svg class="ico" aria-hidden="true"><use href="#i-esquerda"/></svg></button>
+      <button type="button" class="x" id="cal-mes-prox" aria-label="Próximo mês" title="Próximo mês"><svg class="ico" aria-hidden="true"><use href="#i-direita"/></svg></button>
+    </div>
+    <table class="cal" id="cal" role="grid" aria-labelledby="cal-mes"></table>
+    <div class="trilho-avisos" role="region" aria-labelledby="trilho-avisos-titulo">
+      <h2 class="trilho-avisos-cab"><button type="button" id="btn-avisos" aria-expanded="true" aria-controls="avisos-corpo" title="Recolher os avisos da data"><svg class="ico" aria-hidden="true"><use href="#i-baixo"/></svg><span id="trilho-avisos-titulo">Avisos</span><span class="trilho-cnt" id="avisos-qtd" hidden></span></button></h2>
+      <div class="avisos-corpo" id="avisos-corpo">
+        <p class="trilho-data" id="trilho-data"></p>
+        <ol class="avisos-da-data" id="avisos-da-data" hidden></ol>
+        <p class="h" id="avisos-vazio" hidden>Nada a resolver nesta data.</p>
+      </div>
+    </div>
   </div>
 </aside>
 
@@ -516,8 +517,10 @@
     <div class="pn" id="manual-rotina">
       <h3>Primeiros passos: a rotina do operador</h3>
       <ol>
-        <li><b>Confira a data no topo.</b> O sistema abre na Escala, na data de amanhã.
-        Para abrir outra data, escolha o dia no calendário: ele fica ao lado da tela quando há largura, ou abre no botão da data, no topo (o botão <i>Fixar o calendário ao lado da tela</i> muda isso, e fica guardado neste computador).
+        <li><b>Confira a data no alto do trilho.</b> O sistema abre na Escala, na data de amanhã.
+        O trilho fica ao lado da tela quando há largura (em cima dela no celular): no alto, a data aberta e quantos avisos ela tem; embaixo, o calendário e os avisos da data.
+        Para abrir outra data, escolha o dia no calendário.
+        <i>Recolher o calendário</i>, o botão no alto do trilho, deixa só a data e o número de avisos (ao lado da tela, numa faixa estreita), e o mesmo botão abre de novo; <i>Avisos</i> recolhe e abre os avisos da data (<i>Recolher os avisos da data</i>); o que você escolher fica guardado neste navegador.
         O número em cada dia é o de pedidos dele, e as setas do calendário mudam só o mês à vista.
         Tudo o que você vê e altera, em qualquer tela, vale para essa data.
         Uma data nova começa com os aviões
@@ -573,7 +576,7 @@
       O link de Recursos mostra os aviões parados ou perto da revisão de 50 horas (em Recursos, o ponto da linha de cada um).</p>
       <p>Embaixo do calendário ficam os avisos da data, primeiro os erros: as missões que não entraram, os conflitos e os outros avisos da escala, os aviões parados ou perto da revisão de 50 horas, os pedidos que ainda não estão na demanda e o que não foi lido.
       O aviso leva à tela onde se resolve, quando você a vê; as horas, os resultados e os cursos que não foram lidos são lidos em <i>Tentar de novo</i>, no alto da página.
-      O botão da data, no topo, diz quantos avisos são.</p>
+      O número no alto do trilho, também com o calendário recolhido, e no cabeçalho dos avisos diz quantos avisos são (vermelho quando um deles é erro).</p>
     </div>
 
     <div class="pn" id="manual-perfis">
@@ -817,7 +820,7 @@
       <p>Duas vistas, com a busca e o filtro das habilitações valendo nas duas.
       Instrutores abre na <i>Disponibilidade do dia</i> (para a Secretaria, no <i>Cadastro</i>), e a vista escolhida fica até a página ser recarregada:</p>
       <ul>
-        <li><b>Disponibilidade do dia:</b> uma linha por instrutor, com o interruptor <i>Vem</i> (quem vem na data aberta no topo, que nem sempre é hoje) e as janelas do dia: azul-claro quando o instrutor está disponível, azul quando ele já tem voo ou aula na escala e listrado quando não vem.
+        <li><b>Disponibilidade do dia:</b> uma linha por instrutor, com o interruptor <i>Vem</i> (quem vem na data aberta no trilho, que nem sempre é hoje) e as janelas do dia: azul-claro quando o instrutor está disponível, azul quando ele já tem voo ou aula na escala e listrado quando não vem.
         Clique numa janela para mudar; <i>Aplicar turno</i> marca várias de uma vez.
         A coluna <i>Mês</i> mostra as horas de voo do instrutor no mês com a escala desta data (em destaque a partir de 90% do limite).</li>
         <li><b>Cadastro:</b> nome, CANAC, peso (em destaque quando falta) e as habilitações.
@@ -850,7 +853,7 @@
       Ao lado, o número diz quantos recursos aparecem (por exemplo, <i>3 de 27 recursos</i>: a frota e a Sala Ground); quando a busca não deixa nenhum, <i>Limpar filtros</i> mostra todos de novo.
       O recurso acrescentado agora continua à vista mesmo fora da busca, até ela mudar.</p>
       <p><b>O detalhe de um recurso</b> tem duas partes.
-      <i>Nesta data</i> (vale para a data aberta no topo; a data seguinte começa com ela): <i>Disponível</i>, as horas disponíveis até a revisão de 50 horas com a barra e <i>Revisão feita</i> (os aviões), o que ele voa na escala da data<span data-funcionalidade="hangar"> e o lugar dele no hangar</span>.
+      <i>Nesta data</i> (vale para a data aberta no trilho; a data seguinte começa com ela): <i>Disponível</i>, as horas disponíveis até a revisão de 50 horas com a barra e <i>Revisão feita</i> (os aviões), o que ele voa na escala da data<span data-funcionalidade="hangar"> e o lugar dele no hangar</span>.
       <i>Cadastro</i> (vale para todas as datas: mudar ali muda também as datas já abertas): a matrícula, o tipo e os atributos, cada um com a caixa dele: <i>Só Parafuso</i> (C152: só voa Parafuso, e o Parafuso no C152 só nele), <i>Só VFR</i> (C172 e PA-34 não homologados IFR, como o PR-CPL: nenhum voo IFR vai para ele, nem o noturno do PC).
       Em <i>Habilitações que o INVA precisa</i>, a do tipo vem fixa (<i>Do tipo: C152</i>); <i>Habilitação própria</i> faz o recurso exigir do instrutor uma habilitação só dele (como o PR-VOM: marque-a nas habilitações de quem voa nele); e <i>Exigir também…</i> abre as caixas das habilitações, por grupo (as mesmas da missão do curso, em Cursos): o instrutor sem uma delas não voa nesse recurso.
       Embaixo, <i>Quem pode operar</i> diz quantos INVAs ativos têm tudo o que ele exige (também para quem só consulta).
@@ -994,7 +997,7 @@
       <h3>Para o gestor</h3>
       <p>Com o perfil Gestor você vê tudo, sem risco de alterar nada: os campos ficam travados.</p>
       <ul>
-        <li><b>Escala do dia:</b> na Escala; para outro dia, escolha no calendário (ao lado da tela, ou no botão da data, no topo).
+        <li><b>Escala do dia:</b> na Escala; para outro dia, escolha no calendário (no trilho, ao lado da tela ou em cima dela).
         Uma data que o operador ainda não preparou começa com a demanda vazia (a demanda vem da agenda).</li>
         <li><b>PDF, CSV e Excel:</b> os mesmos botões do operador, na barra da escala.</li>
         <li><b>BI:</b> horas por recurso, instrutor e missão, no dia, na semana e no mês.</li>

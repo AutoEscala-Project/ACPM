@@ -1,24 +1,70 @@
-/* O trilho (aside#trilho, js/views/trilho.js): o calendário da data aberta, com os pedidos de cada dia, e os avisos dela.
-   Fixo, ao lado da tela; solto, um painel entre a linha e a tela (abaixo de 1024 px, de ponta a ponta) */
+/* O trilho (aside#trilho, js/views/trilho.js): a data aberta, o calendário dela, com os pedidos de cada dia, e os avisos dela.
+   Sempre à vista: ao lado da tela a partir de 1024 px; em cima dela abaixo disso, de ponta a ponta. O calendário recolhe (ao
+   lado, uma faixa estreita; em cima, uma linha) e os avisos recolhem (linha-fix-escala-sem-caixas) */
 #trilho { background: var(--pn); border: 1px solid var(--ln); border-radius: 8px; padding: 10px 12px 12px; margin-bottom: 14px; }
-/* De ponta a ponta, 6 px de cada lado: 320 = 7 × 44 + 12. O título e a linha da data ficam a 16 px, como o resto da página */
+/* De ponta a ponta, 6 px de cada lado: 320 = 7 × 44 + 12. O alto, o título e a linha da data ficam a 16 px, como o resto da
+   página */
 @media (max-width: 1023px) {
   #trilho { border-radius: 0; border-left: 0; border-right: 0; padding: 10px 6px 12px; }
-  #trilho .trilho-mes, #trilho .trilho-avisos { padding-inline: 10px; }
+  #trilho .trilho-topo, #trilho .trilho-mes, #trilho .trilho-avisos { padding-inline: 10px; }
 }
+
+/* O alto, sempre à vista: a data aberta ("quarta-feira, 11/11" e o "amanhã"), quantos avisos e o botão que recolhe */
+#trilho .trilho-topo { display: flex; align-items: center; gap: 6px; min-width: 0; }
+#trilho .trilho-rotulo { flex: 1; min-width: 0; margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; font: 600 16.5px/1.2 'Barlow Semi Condensed', sans-serif; }
+#trilho-rotulo { display: block; min-width: 0; }
+.dt-semana-curta, .abreviada .dt-semana { display: none; }
+.abreviada .dt-semana-curta { display: inline; }
+@media (max-width: 400px) {
+  .dt-semana { display: none; }
+  .dt-semana-curta { display: inline; }
+}
+.trilho-rel { font: 700 12px 'Barlow', sans-serif; background: var(--ye); color: #12263A; border-radius: 10px; padding: 1px 8px; white-space: nowrap; }
+/* Quantos avisos (erros e avisos): âmbar; com um erro, vermelho. O número também no botão dos avisos */
+.trilho-cnt {
+  flex: none; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px; text-align: center;
+  font: 700 12px/20px 'Barlow', sans-serif; background: var(--wa); color: var(--waT);
+}
+.trilho-cnt[data-gravidade="erro"] { background: var(--er); color: var(--erT); }
+#btn-recolher-trilho { flex: none; min-width: 36px; min-height: 36px; display: inline-grid; place-items: center; }
+@media (max-width: 1023px) { #btn-recolher-trilho { min-width: 44px; min-height: 44px; } }
+/* A seta do botão diz para onde o calendário vai: em cima da tela, para cima (recolher) e para baixo (abrir); ao lado,
+   para a direita e para a esquerda */
+#btn-recolher-trilho .ico, #btn-avisos .ico { transition: transform .15s; }
+#btn-recolher-trilho[aria-expanded="true"] .ico { transform: rotate(180deg); }
+@media (min-width: 1024px) {
+  #btn-recolher-trilho[aria-expanded="true"] .ico { transform: rotate(-90deg); }
+  #btn-recolher-trilho[aria-expanded="false"] .ico { transform: rotate(90deg); }
+}
+@media (prefers-reduced-motion: reduce) { #btn-recolher-trilho .ico, #btn-avisos .ico { transition: none; } }
+#trilho .trilho-corpo { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--ln); }
+
+/* Recolhido ao lado da tela: uma faixa estreita, com o botão em cima, o dia da semana abreviado sobre o dd/mm, o "amanhã" e
+   o número de avisos, um embaixo do outro */
+@media (min-width: 1024px) {
+  body[data-trilho="recolhido"] #trilho { padding: 8px 4px; }
+  body[data-trilho="recolhido"] #trilho .trilho-topo { flex-direction: column; gap: 8px; text-align: center; }
+  body[data-trilho="recolhido"] #btn-recolher-trilho { order: -1; }
+  body[data-trilho="recolhido"] #trilho .trilho-rotulo { flex: none; flex-direction: column; gap: 6px; font-size: 15px; }
+  body[data-trilho="recolhido"] #trilho-rotulo .dt-semana, body[data-trilho="recolhido"] #trilho-rotulo .dt-virgula { display: none; }
+  body[data-trilho="recolhido"] #trilho-rotulo :is(.dt-semana-curta, .dt-dia) { display: block; }
+  body[data-trilho="recolhido"] #trilho-rotulo .dt-dia { font-size: 14px; letter-spacing: -.2px; }
+  body[data-trilho="recolhido"] .trilho-rel { padding: 1px 5px; font-size: 11px; }
+}
+
 #trilho .trilho-cab { display: flex; align-items: center; gap: 2px; margin-bottom: 6px; }
 #trilho .trilho-mes { flex: 1; margin: 0; font: 600 16px 'Barlow Semi Condensed', sans-serif; }
 #trilho .trilho-cab .x { min-width: 36px; min-height: 36px; display: inline-grid; place-items: center; }
 @media (max-width: 1023px) { #trilho .trilho-cab .x { min-width: 44px; min-height: 44px; } }
-/* Solto, o calendário não passa de 320 px: à esquerda dos avisos da data a partir de 700 px, em cima deles (no meio) abaixo */
-body[data-trilho="aberto"] #trilho :is(.trilho-cab, #cal) { width: 100%; max-width: 320px; margin-inline: auto; }
-@media (min-width: 700px) {
-  body[data-trilho="aberto"] #trilho { display: grid; grid-template-columns: 320px minmax(0, 1fr); grid-template-rows: auto 1fr; column-gap: 20px; align-items: start; }
-  body[data-trilho="aberto"] #trilho .trilho-avisos { grid-column: 2; grid-row: 1 / 3; border-top: 0; margin-top: 0; }
+/* Em cima da tela, o calendário não passa de 320 px: à esquerda dos avisos da data a partir de 700 px, em cima deles (no
+   meio) abaixo */
+@media (max-width: 1023px) {
+  #trilho :is(.trilho-cab, #cal) { width: 100%; max-width: 320px; margin-inline: auto; }
 }
-/* "Fixar ao lado" só da largura média em diante (abaixo, o trilho nunca fica ao lado) */
-@media (max-width: 1023px) { #trilho #btn-fixar-trilho { display: none; } }
-#btn-fixar-trilho[aria-pressed="true"] { color: var(--ac); background: var(--info-bg); }
+@media (min-width: 700px) and (max-width: 1023px) {
+  #trilho .trilho-corpo:not([hidden]) { display: grid; grid-template-columns: 320px minmax(0, 1fr); grid-template-rows: auto 1fr; column-gap: 20px; align-items: start; }
+  #trilho .trilho-corpo > .trilho-avisos { grid-column: 2; grid-row: 1 / 3; border-top: 0; margin-top: 0; padding-top: 0; }
+}
 
 /* A grade: sete colunas iguais; cada dia um botão quadrado (44 px abaixo de 1024 px). Sem o mínimo de 840 px, as linhas e o
    cabeçalho preso das tabelas do app (css/componentes.css) */
@@ -59,7 +105,16 @@ body[data-trilho="aberto"] #trilho :is(.trilho-cab, #cal) { width: 100%; max-wid
 #cal .cal-dia.hoje .cal-qtd { background: var(--pn); color: var(--ac); }
 
 /* A linha da data aberta e os avisos dela: o horário (ou "—"), a barra da gravidade, o que é e o porquê */
-#trilho .trilho-avisos { border-top: 1px solid var(--ln); margin-top: 10px; padding-top: 8px; min-width: 0; }
+#trilho .trilho-avisos { border-top: 1px solid var(--ln); margin-top: 10px; padding-top: 6px; min-width: 0; }
+/* O cabeçalho dos avisos, que os recolhe, com quantos são */
+#trilho .trilho-avisos-cab { margin: 0 0 4px; font: 600 15px 'Barlow Semi Condensed', sans-serif; }
+#btn-avisos {
+  display: flex; align-items: center; gap: 6px; width: 100%; min-height: 32px; padding: 2px 4px; border: 0; border-radius: 6px;
+  background: transparent; color: var(--ink); font: inherit; text-align: left; cursor: pointer;
+}
+#btn-avisos:hover { background: var(--pn2); }
+#btn-avisos[aria-expanded="false"] .ico { transform: rotate(-90deg); }
+@media (max-width: 1023px) { #btn-avisos { min-height: 44px; } }
 #trilho .trilho-data { margin: 0 0 6px; font: 600 14.5px 'Barlow Semi Condensed', sans-serif; }
 .avisos-da-data { list-style: none; margin: 0; padding: 0; }
 .aviso + .aviso { border-top: 1px solid var(--ln); }

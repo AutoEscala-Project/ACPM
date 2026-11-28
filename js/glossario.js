@@ -110,7 +110,7 @@ const TERMOS = {
   'so-parafuso': { aba: 'Recursos', termo: 'Só Parafuso', texto: 'Avião reservado para a missão de Parafuso no C152: as outras missões não usam ele, e o Parafuso só voa nele. Marque no detalhe do avião, em Recursos.' },
 
   // Instrutores
-  'vem-nesta-data': { aba: 'Instrutores', termo: 'Vem', texto: 'Marcado, o instrutor vem nesta data (a aberta no topo, que nem sempre é hoje) e pode ser escalado nos períodos marcados ao lado.' },
+  'vem-nesta-data': { aba: 'Instrutores', termo: 'Vem', texto: 'Marcado, o instrutor vem nesta data (a aberta no trilho, que nem sempre é hoje) e pode ser escalado nos períodos marcados ao lado.' },
   'voos-do-instrutor': { aba: 'Instrutores', termo: 'Voos', texto: 'Voos e aulas do instrutor na escala desta data, sem os cancelados (a turma de Ground conta uma vez).' },
   'horas-do-mes': { aba: 'Instrutores', termo: 'Mês', texto: 'As horas de voo do instrutor no mês, com a escala desta data. A partir de 90% do limite da lei, a escala avisa.' },
   checador: { aba: 'Instrutores', termo: 'Checador', texto: 'O voo de cheque exige três marcas do checador: o curso (PP ou PC), o motor (MNTE ou MLTE) e as regras (VFR ou IFR). O Cheque PC MLTE IFR, por exemplo, pede PC, MLTE e IFR.' },

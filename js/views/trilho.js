@@ -1,6 +1,7 @@
-// O trilho (aside#trilho): o calendário da data aberta, com os pedidos de cada dia, e os avisos dela. Fica ao lado da tela
-// (fixo: na largura larga, por padrão; na média, quando a pessoa escolhe) ou abre como painel entre a linha e a
-// tela pelo botão da data (#btn-data). Só "Fixar ao lado" fica guardado, por classe de largura (acpm_trilho)
+// O trilho (aside#trilho): a data aberta, o calendário dela, com os pedidos de cada dia, e os avisos dela. Sempre à vista
+// (linha-fix-escala-sem-caixas: o topo não tem mais a data): ao lado da tela a partir de 1024 px, em cima dela abaixo
+// disso. O calendário recolhe (ao lado, uma faixa estreita com a data e o número de avisos; em cima, uma linha) e os avisos
+// recolhem, cada um no botão dele; os dois ficam guardados neste navegador (acpm_trilho, js/eventos/trilho.js)
 import { $, trocarConteudo } from '../dom.js';
 import { dadosLidos } from '../actions.js';
 import { esc, fmtH, hm, hojeISO, rotuloDaData } from '../format.js';
@@ -55,39 +56,39 @@ export function contarComOsDados() {
   if (mesContado !== mesDoTrilho()) lerContagemDosDias();
 }
 
-// O estado do trilho: 'fixo' (ao lado), 'aberto' (o painel) ou 'fechado'
-export const estadoDoTrilho = () => document.body.dataset.trilho || 'fechado';
-
-export function mostrarTrilho(estado) {
-  document.body.dataset.trilho = estado;
-  const trilho = $('#trilho');
-  if (trilho) trilho.hidden = estado === 'fechado';
-  const botao = $('#btn-data');
-  if (botao) {
-    // Fixo, o botão leva o foco ao calendário; solto, ele abre e fecha o painel
-    if (estado === 'fixo') botao.removeAttribute('aria-expanded');
-    else botao.setAttribute('aria-expanded', String(estado === 'aberto'));
-  }
-  const fixar = $('#btn-fixar-trilho');
-  if (fixar) fixar.setAttribute('aria-pressed', String(estado === 'fixo'));
-  const fechar = $('#btn-fechar-trilho');
-  if (fechar) fechar.hidden = estado !== 'aberto';
+// O trilho aberto ou recolhido (body[data-trilho]: a casca dá a ele a largura dele, css/casca.css) e os avisos abertos ou
+// recolhidos. estado: o guardado (js/telas.js, lerPreferencias); sem nada, os dois abertos
+export function mostrarTrilho({ calendario = 'aberto', avisos = 'abertos' } = {}) {
+  const recolhido = calendario === 'recolhido', semAvisos = avisos === 'recolhidos';
+  document.body.dataset.trilho = recolhido ? 'recolhido' : 'aberto';
+  if (!$('#trilho')) return;
+  $('#trilho-corpo').hidden = recolhido;
+  const botao = $('#btn-recolher-trilho');
+  const nome = recolhido ? 'Abrir o calendário' : 'Recolher o calendário';
+  botao.setAttribute('aria-expanded', String(!recolhido));
+  botao.setAttribute('aria-label', nome);
+  botao.title = nome;
+  $('#avisos-corpo').hidden = semAvisos;
+  $('#btn-avisos').setAttribute('aria-expanded', String(!semAvisos));
+  $('#btn-avisos').title = semAvisos ? 'Mostrar os avisos da data' : 'Recolher os avisos da data';
 }
 
-// O nome da data no botão do topo: "quarta-feira, 11/11" e "amanhã" (na tela estreita, "qua., 11/11")
+// O nome da data no alto do trilho: "quarta-feira, 11/11" e "amanhã" (na tela estreita e na faixa do calendário recolhido,
+// "qua., 11/11"; na faixa, o dia da semana em cima do dd/mm)
 export function rRotuloDaData() {
   if (!DATA) return;
   const { semana, semanaCurta, data: diaMes, relativo } = rotuloDaData(DATA, hojeISO());
-  // Igual, o rótulo fica: trocado entre apertar e soltar o mouse, o botão perderia o clique
+  const rotulo = $('#trilho-rotulo');
+  // Igual, o rótulo fica: trocado entre apertar e soltar o mouse, um clique se perderia
   const texto = [semana, diaMes, relativo].join(' ');
-  if ($('#dt-rotulo').dataset.texto === texto) return;
-  $('#dt-rotulo').dataset.texto = texto;
+  if (rotulo.dataset.texto === texto) return;
+  rotulo.dataset.texto = texto;
   const parte = (classe, texto) => Object.assign(document.createElement('span'), { className: classe, textContent: texto });
-  $('#dt-rotulo').replaceChildren(parte('dt-semana', semana), parte('dt-semana-curta', semanaCurta), `, ${diaMes}`);
+  rotulo.replaceChildren(parte('dt-semana', semana), parte('dt-semana-curta', semanaCurta), parte('dt-virgula', ', '), parte('dt-dia', diaMes));
   // Com o ano e o "amanhã" (na virada do ano), o dia da semana abreviado: a data não é cortada ao lado do número de avisos
-  $('#dt-rotulo').classList.toggle('abreviada', Boolean(relativo) && diaMes.length > 5);
-  $('#dt-rel').textContent = relativo;
-  $('#dt-rel').hidden = !relativo;
+  rotulo.classList.toggle('abreviada', Boolean(relativo) && diaMes.length > 5);
+  $('#trilho-rel').textContent = relativo;
+  $('#trilho-rel').hidden = !relativo;
 }
 
 function botaoDoDia(dia, { mes, hoje, parada }) {
@@ -122,8 +123,8 @@ function desenharGrade(html) {
   });
 }
 
-// O calendário do mês à vista, o nome da data no topo, a linha dela (ou da que está abrindo) e os avisos. O topo e a linha
-// dizem "hoje" e "amanhã" juntos, também com a página aberta depois da meia-noite
+// O calendário do mês à vista, o nome da data no alto do trilho, a linha dela (ou da que está abrindo) e os avisos. O alto e a
+// linha dizem "hoje" e "amanhã" juntos, também com a página aberta depois da meia-noite
 export function rTrilho() {
   const trilho = $('#trilho');
   if (!trilho || !DATA) return;
@@ -150,8 +151,8 @@ export function rTrilho() {
 // Os avisos da data aberta, na ordem de js/linha-do-dia.js: o horário e a duração do voo, o que é e o porquê; o que tem destino
 // leva à tela onde se resolve. Os da escala (o grupo: o que eram as caixas do resumo da Escala) trazem a ação deles, embaixo:
 // "Sugestões" (o conflito e a recusa do instrutor escolhido, js/eventos/escala.js) e "Refazer a escala" (os inativos, pelo
-// data-act). No botão da data, quantos são (erros e avisos). Enquanto outra data abre, e antes dos dados da primeira, a
-// lista fica como estava
+// data-act). No alto do trilho e no botão dos avisos, quantos são (erros e avisos; com um erro, o número fica vermelho).
+// Enquanto outra data abre, e antes dos dados da primeira, a lista fica como estava
 const DITO = { erro: 'erro', aviso: 'aviso', info: 'informação' };
 const ATRIBUTO_DA_ACAO = { reparo: 'data-reparo', rejeitado: 'data-rejeitado' };
 function acaoHTML(a) {
@@ -182,9 +183,12 @@ function rAvisos() {
   // Enquanto os pedidos da data não chegam, ainda não se sabe se não há nada
   $('#avisos-vazio').hidden = avisos.length > 0 || contexto.leituraDosPedidos === 'lendo';
   const n = avisos.filter(a => a.gravidade !== 'info').length;
-  const marca = $('#avisos-cnt');
-  marca.hidden = !n;
-  trocarConteudo(marca, n ? `<span aria-hidden="true">${n}</span><span class="sr">, ${n} ${n === 1 ? 'aviso' : 'avisos'} nesta data</span>` : '');
+  const gravidade = avisos.some(a => a.gravidade === 'erro') ? 'erro' : 'aviso';
+  for (const marca of [$('#avisos-cnt'), $('#avisos-qtd')]) {
+    marca.hidden = !n;
+    marca.dataset.gravidade = gravidade;
+    trocarConteudo(marca, n ? `<span aria-hidden="true">${n}</span><span class="sr">, ${n} ${n === 1 ? 'aviso' : 'avisos'} nesta data</span>` : '');
+  }
 }
 
 // O dia do calendário que recebe o foco: o pedido ou a parada do Tab
